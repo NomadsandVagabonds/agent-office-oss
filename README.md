@@ -14,6 +14,9 @@ Running many agent sessions at once is normally a wall of terminals. The Office 
 
 Requires Node 18+ (zero npm dependencies — p5 is vendored locally, offline-first).
 
+`package.json` is marked `"private": true` only to prevent accidental npm
+publishes. The GitHub repo itself is intended to be public and forkable.
+
 ```bash
 # easiest first run
 npm run demo
