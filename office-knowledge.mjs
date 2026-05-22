@@ -13,6 +13,7 @@
 //
 // Usage:
 //   node office-knowledge.mjs refresh
+//   node office-knowledge.mjs watch          (auto-refresh on .md changes)
 //   node office-knowledge.mjs list
 //   node office-knowledge.mjs docs <dept>
 //   node office-knowledge.mjs read <dept> <match...>
@@ -21,17 +22,23 @@
 // off disk — zero daemon edits, works with the daemon down. refresh shells
 // out to knowledge.mjs (single source of truth; never reimplements the walk).
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const KDIR = path.join(HERE, 'public', 'knowledge');
 const argv = process.argv.slice(2);
+// dirs the ingest never reads — don't trigger a refresh on churn inside them
+const WATCH_SKIP = new Set(['node_modules', '.git', 'dist', 'build', '.next',
+  'vendor', '.venv', 'site', '.pytest_cache', 'coverage', '.cache',
+  'codex-inbox', 'worktrees']);
 
 function help() {
   console.log(
     'node office-knowledge.mjs refresh            re-run the ingest\n'
+    + 'node office-knowledge.mjs watch              auto-refresh on .md changes\n'
     + 'node office-knowledge.mjs list               projects in the binder\n'
     + 'node office-knowledge.mjs docs <dept>        docs in one project\n'
     + 'node office-knowledge.mjs read <dept> <q>    print a matching doc'
@@ -70,6 +77,53 @@ if (cmd === 'refresh') {
   }
   console.log('binder refreshed — the office serves the new docs immediately.');
   process.exit(0);
+}
+
+if (cmd === 'watch') {
+  // Run-and-leave: watch the same roots knowledge.mjs walks and re-ingest
+  // (debounced) whenever a .md changes, so the Binder self-refreshes. Sibling
+  // ethos to observe.mjs / watchdog.mjs — no daemon edits, single source of
+  // truth (spawns knowledge.mjs, never reimplements the walk).
+  const PROFILES = path.join(os.homedir(), '.claude', 'agent-office', 'profiles.json');
+  let byCwd = {};
+  try { byCwd = JSON.parse(fs.readFileSync(PROFILES, 'utf8')).byCwd || {}; } catch { /* none */ }
+  const roots = [...new Set([HERE, ...Object.keys(byCwd)])].filter((d) => {
+    try { return fs.statSync(d).isDirectory(); } catch { return false; }
+  });
+  const relevant = (fn) => fn && /\.mdx?$/i.test(fn)
+    && !fn.split(path.sep).some((seg) => WATCH_SKIP.has(seg));
+
+  let timer = null, running = false, dirty = false;
+  const ingest = () => {
+    if (running) { dirty = true; return; }
+    running = true; dirty = false;
+    const r = spawn(process.execPath, [path.join(HERE, 'knowledge.mjs')],
+      { cwd: HERE, stdio: 'ignore' });
+    r.on('exit', (code) => {
+      running = false;
+      const t = new Date().toLocaleTimeString();
+      console.log(`[${t}] binder ` + (code === 0 ? 'refreshed' : `refresh FAILED (exit ${code})`));
+      if (dirty) { timer = setTimeout(ingest, 300); }  // a write landed mid-ingest
+    });
+  };
+  const schedule = () => { if (timer) clearTimeout(timer); timer = setTimeout(ingest, 1500); };
+
+  let watched = 0;
+  for (const root of roots) {
+    try {
+      fs.watch(root, { recursive: true }, (_e, fn) => { if (relevant(fn)) schedule(); });
+      watched += 1;
+    } catch (e) {
+      console.error(`  (can't watch ${root}: ${e && e.message})`);
+    }
+  }
+  if (!watched) {
+    console.error('office-knowledge: nothing watchable. Recursive fs.watch needs '
+      + 'macOS/Windows, or Node 20+ on Linux. Use `refresh` manually meanwhile.');
+    process.exit(1);
+  }
+  console.log(`binder watch — auto-refresh on .md changes across ${watched} root(s). Ctrl-C to stop.`);
+  process.stdin.resume();   // keep alive
 }
 
 if (cmd === 'list') {
@@ -117,6 +171,8 @@ if (cmd === 'read') {
   process.exit(0);
 }
 
-console.error(`office-knowledge: unknown command "${cmd}"`);
-help();
-process.exit(1);
+if (cmd !== 'watch') {   // 'watch' intentionally stays alive (no exit above)
+  console.error(`office-knowledge: unknown command "${cmd}"`);
+  help();
+  process.exit(1);
+}
