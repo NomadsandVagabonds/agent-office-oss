@@ -158,6 +158,10 @@
     border:1px solid #6b4422;background:#2a1c10;color:#e7c79a;font:12px ui-monospace,Menlo,monospace;
     padding:7px 12px;border-radius:8px;cursor:pointer;letter-spacing:.04em}
   #boardLauncher:hover{background:#442918}
+  /* Board/Comms launchers are now drawn INTO the canvas top bar (static, no
+     flex/overlap). Keep the elements for their existing wiring but hide them
+     permanently — !important so the inline display toggles can't un-hide. */
+  #commsLauncher,#boardLauncher{display:none!important}
   #boardShell{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
     padding:14px;background:rgba(5,4,8,.84);z-index:52;color:#f2deba;
     font:12px ui-monospace,Menlo,monospace}
@@ -228,6 +232,35 @@
     margin-right:5px;animation:kbp 1.4s ease-in-out infinite;vertical-align:middle}
   @keyframes kbp{0%,100%{opacity:.35}50%{opacity:1}}
   .kb-empty{color:#b59a6c;font-size:11px;padding:8px;text-align:center}
+  #cardShell{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    padding:16px;background:rgba(5,4,8,.86);z-index:54;color:#f2deba;
+    font:12px ui-monospace,Menlo,monospace}
+  #cardShell.open{display:flex}
+  .ac-window{width:min(1180px,calc(100vw - 24px));height:min(900px,calc(100vh - 24px));
+    display:grid;grid-template-columns:minmax(0,1fr) 304px;background:#17110d;
+    border:2px solid #7b5230;box-shadow:0 24px 54px rgba(0,0,0,.58);overflow:hidden}
+  .ac-preview{display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;padding:16px 18px;
+    background:linear-gradient(180deg,#15100d 0%,#1c1510 100%);min-height:0}
+  .ac-kicker{font-size:10px;letter-spacing:.22em;color:#c49d63;text-transform:uppercase}
+  .ac-title{margin-top:4px;color:#f6e3be;font-size:24px;line-height:1.02}
+  .ac-meta{margin-top:6px;color:#b99b72;line-height:1.45;white-space:pre-wrap}
+  .ac-canvas{min-height:0;display:grid;place-items:center;padding:18px;border:1px solid #4d321c;
+    background:radial-gradient(circle at top,#2a1c12 0%,#16100d 58%,#100c0a 100%);
+    overflow:auto;scrollbar-gutter:stable}
+  .ac-canvas canvas{width:min(100%,540px);height:auto;max-height:100%;display:block;
+    image-rendering:pixelated;box-shadow:0 24px 48px rgba(0,0,0,.34)}
+  .ac-side{display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:16px;
+    background:#22170f;border-left:1px solid #4d321c;min-height:0}
+  .ac-panel{border:1px solid #4d321c;background:#1b120d}
+  .ac-panel-title{padding:10px 12px;border-bottom:1px solid #4d321c;background:#2a1c12;
+    color:#f1d5a2;letter-spacing:.08em;text-transform:uppercase;font-size:10px}
+  .ac-panel-body{padding:12px;color:#cbb089;line-height:1.55}
+  .ac-panel-body p{margin:0 0 10px}
+  .ac-panel-body p:last-child{margin-bottom:0}
+  .ac-code{display:block;margin-top:10px;padding:10px;border:1px solid #5f4024;background:#140f0c;
+    color:#f2deba;white-space:pre-wrap;word-break:break-word}
+  .ac-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .ac-actions .tw-btn{flex:1 1 132px}
   .cm-window{width:min(1500px,calc(100vw - 24px));height:min(920px,calc(100vh - 24px));
     display:grid;grid-template-columns:320px minmax(0,1fr);background:#18110d;
     border:2px solid #7b5230;box-shadow:0 22px 48px rgba(0,0,0,.55);overflow:hidden}
@@ -345,6 +378,8 @@
     #commsLauncher{top:auto;bottom:12px}
     .cm-window{width:100vw;height:100vh;grid-template-columns:1fr;grid-template-rows:300px minmax(0,1fr)}
     .cm-sidebar{border-right:0;border-bottom:1px solid #4d321c}
+    .ac-window{width:100vw;height:100vh;grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}
+    .ac-side{border-left:0;border-top:1px solid #4d321c}
   }
   @media (max-width: 1100px){
     .tw-window{grid-template-columns:minmax(0,1fr) 292px}
@@ -380,6 +415,7 @@
           </div>
         </div>
         <div class="tw-actions">
+          <button id="twCardBtn" class="tw-btn">Card</button>
           <button id="twRefreshBtn" class="tw-btn">Refresh</button>
           <button id="twCloseBtn" class="tw-btn strong">Close</button>
         </div>
@@ -530,6 +566,35 @@
       <span id="kbNewMsg" class="kb-newmsg"></span>
     </div>
     <div class="kb-cols" id="kbCols"></div>
+  </div>
+</div>
+<div id="cardShell" aria-hidden="true">
+  <div class="ac-window">
+    <section class="ac-preview">
+      <div>
+        <div class="ac-kicker">Agent Card</div>
+        <div id="acTitle" class="ac-title">Select an agent</div>
+        <div id="acMeta" class="ac-meta">Agent-authored traits, desk icons, and runtime details live here.</div>
+      </div>
+      <div id="acCanvas" class="ac-canvas">
+        <div class="ac-panel">
+          <div class="ac-panel-title">Share Card</div>
+          <div class="ac-panel-body">Open Work Mode for an agent, then use <code>Card</code> to preview a shareable card.</div>
+        </div>
+      </div>
+    </section>
+    <aside class="ac-side">
+      <div class="ac-panel">
+        <div class="ac-panel-title">How It Works</div>
+        <div id="acHint" class="ac-panel-body">
+          Agents stay in control of what gets shared. When an agent runs <code>node office-card.mjs set ...</code>, the Office reads those traits directly from its profile and turns them into a card.
+        </div>
+      </div>
+      <div class="ac-actions">
+        <button id="acSaveBtn" class="tw-btn strong" type="button">Save PNG</button>
+        <button id="acCloseBtn" class="tw-btn" type="button">Close</button>
+      </div>
+    </aside>
   </div>
 </div>
 <script src="p5.min.js"></script>
@@ -688,7 +753,7 @@ const TW={shell:$('terminalShell'),title:$('twTitle'),meta:$('twMeta'),
   promptList:$('twPromptList'),
   agentList:$('twAgentList'),channelList:$('twChannelList'),
   collabList:$('twCollabList'),sessionList:$('twSessionList'),
-  refreshBtn:$('twRefreshBtn'),closeBtn:$('twCloseBtn'),
+  cardBtn:$('twCardBtn'),refreshBtn:$('twRefreshBtn'),closeBtn:$('twCloseBtn'),
   launchList:$('twLaunchList'),launchCopy:$('twLaunchCopy'),
   railTabs:[...document.querySelectorAll('[data-rail]')],
   railPanels:[...document.querySelectorAll('[data-panel]')]};
@@ -701,6 +766,9 @@ const COMM={launcher:$('commsLauncher'),shell:$('commsShell'),
   openBtn:$('cmOpenAgentBtn'),inboxList:$('cmInboxList'),
   channelList:$('cmChannelListMain'),directList:$('cmDirectList'),
   newDirectBtn:$('cmNewDirectBtn')};
+const CARD={shell:$('cardShell'),title:$('acTitle'),meta:$('acMeta'),
+  hint:$('acHint'),canvas:$('acCanvas'),saveBtn:$('acSaveBtn'),
+  closeBtn:$('acCloseBtn')};
 const terminalState={visible:false,selectedAgentId:null,selectedSessionId:null,
   prompts:[],sessions:[],collab:[],channels:[],channelPosts:[],runtimes:[],
   host:{tmuxAvailable:false},selectedChannelId:null,
@@ -716,6 +784,7 @@ const commsState={visible:false,channels:[],prompts:[],recentChannels:[],
   selectedDraftAgentId:null,
   lastOverviewAt:0,lastFeedAt:0,lastAutoRefreshAt:0,busy:false,
   fetchingOverview:false,fetchingFeed:false};
+const cardState={visible:false,agentId:null};
 const PET_DOCK_KEY='office-pet-dock-v1';
 const PET_DOCKS=['br','bl','tr','tl'];
 const petState={dockByAgent:loadPetDockState(),dragging:false,pointerId:null,startX:0,startY:0,lastBubbleKey:''};
@@ -987,6 +1056,64 @@ function workspaceMetaHtml(agent,session){
     +(basePath?'<div class="tw-meta-path">'+esc(basePath)+'</div>':'')
     +(sessionBits.length?'<div class="tw-meta-sub">'+esc(sessionBits.join(' · '))+'</div>':'');
 }
+function selectedCardAgent(){
+  if(cardState.agentId&&agents.has(cardState.agentId))return agents.get(cardState.agentId);
+  const agent=selectedAgent();
+  if(agent)return agent;
+  const session=selectedSession();
+  return session?findAgentByCwd(session.requestedCwd||session.cwd):null;
+}
+function cardProfile(agent){
+  const raw=agent&&agent.profile&&agent.profile.card;
+  if(!raw||typeof raw!=='object')return null;
+  return{
+    title:String(raw.title||'').trim(),
+    blurb:String(raw.blurb||'').trim(),
+    traits:Array.isArray(raw.traits)?raw.traits.map((t)=>String(t||'').trim()).filter(Boolean).slice(0,5):[],
+    features:Array.isArray(raw.features)?raw.features.map((t)=>String(t||'').trim()).filter(Boolean).slice(0,5):[],
+  };
+}
+function cardAuthored(agent){
+  const card=cardProfile(agent);
+  return !!(card&&(card.title||card.blurb||card.traits.length||card.features.length));
+}
+function cardAccent(agent){
+  return agent?.dept?.color||agent?.look?.outfitColor||'#b98149';
+}
+function cardRuntimeMeta(agent,session){
+  return[
+    session?runtimeLabel(session.runtimeId,session.provider):(agent?'Observed only':''),
+    modelMeta(agent),
+    contextMeta(agent),
+    reasoningMeta(agent,session).label,
+  ].filter(Boolean);
+}
+function cardAuthoringCommand(){
+  return 'node office-card.mjs set --title "..." --blurb "..." --trait "..." --feature "..."';
+}
+function slugName(text){
+  return String(text||'agent-card').toLowerCase().replace(/[^a-z0-9]+/g,'-')
+    .replace(/^-+|-+$/g,'')||'agent-card';
+}
+function wrapCardLines(g,text,maxWidth,maxLines){
+  const words=String(text||'').trim().split(/\s+/).filter(Boolean);
+  if(!words.length)return[];
+  const lines=[];let line='',truncated=false;
+  for(const word of words){
+    const next=line?line+' '+word:word;
+    if(g.textWidth(next)<=maxWidth||!line){line=next;continue;}
+    lines.push(line);line=word;
+    if(maxLines&&lines.length>=maxLines){truncated=true;break;}
+  }
+  if(line&&(!maxLines||lines.length<maxLines))lines.push(line);
+  if(maxLines&&truncated&&lines.length===maxLines){
+    const idx=lines.length-1;
+    while(lines[idx]&&g.textWidth(lines[idx]+'…')>maxWidth&&lines[idx].includes(' '))
+      lines[idx]=lines[idx].slice(0,lines[idx].lastIndexOf(' '));
+    if(lines[idx]&&!lines[idx].endsWith('…'))lines[idx]+='…';
+  }
+  return lines;
+}
 function setActiveRail(next){
   if(!next)return;
   terminalState.activeRail=next;
@@ -1121,9 +1248,11 @@ function inboxItems(){
     return b.timestamp-a.timestamp;
   });
 }
+let commsUnreadTotal=0;   // cached for the canvas top-bar Comms badge
 function updateCommsLauncher(){
-  if(!COMM.launcher||!COMM.launcherBadge)return;
   const total=inboxItems().length;
+  commsUnreadTotal=total;
+  if(!COMM.launcher||!COMM.launcherBadge)return;
   COMM.launcherBadge.textContent=total>99?'99+':String(total);
   COMM.launcherBadge.classList.toggle('show',total>0);
   COMM.launcher.classList.toggle('has-alert',total>0);
@@ -2009,8 +2138,171 @@ function setPet(agent,label,session){
       }
       TW.petBubble.classList.add('show');
     }else petState.lastBubbleKey='';
-    TW.petBubble.setAttribute('aria-hidden',bubble?'false':'true');
+      TW.petBubble.setAttribute('aria-hidden',bubble?'false':'true');
   }}
+let cardG=null;
+function ensureCardCanvas(){
+  if(cardG||typeof createGraphics!=='function'||!CARD.canvas)return;
+  cardG=createGraphics(760,980);cardG.noSmooth();cardG.pixelDensity(1);
+  cardG.canvas.style.display='block';
+  CARD.canvas.replaceChildren(cardG.canvas);
+}
+function drawCardDeskItems(g,items,x,y,accent,t){
+  const list=(items||[]).slice(0,4);
+  list.forEach((item,index)=>{
+    const bx=x+index*82;
+    pxBox(g,bx,y,68,74,'#e7dcc6',{l:'#f3ead8',s:'#aa9879'});
+    g.fill(colorAlpha(accent,18));g.rect(bx+8,y+10,52,52,6);
+    drawDeskItem(g,item,bx+34,y+57,t,index+1,1.7);
+  });
+}
+function drawCardChip(g,text,x,y,bg,border,fg){
+  const w=Math.max(48,g.textWidth(text)+16);
+  pxBox(g,x,y,w,22,bg,{l:shade(bg,22),s:border,r:5});
+  g.fill(fg);g.textAlign(CENTER,CENTER);g.textSize(11);g.text(text,x+w/2,y+11);
+  return w;
+}
+function drawCardList(g,title,items,x,y,w,accent){
+  g.fill('#c49d63');g.textAlign(LEFT,TOP);g.textSize(12);
+  g.text(title.toUpperCase(),x,y);
+  let cy=y+22;
+  if(!items.length){
+    g.fill('#a88961');g.textSize(13);
+    g.text('Agent has not filled this out yet.',x,cy);
+    return cy+22;
+  }
+  items.forEach((item,index)=>{
+    g.fill(accent);g.rect(x,cy+5,8,8,2);
+    g.fill('#f2deba');g.textSize(14);
+    const lines=wrapCardLines(g,item,w-18,2);
+    lines.forEach((line,lineIndex)=>g.text(line,x+18,cy+lineIndex*16));
+    cy+=Math.max(22,lines.length*16+6);
+  });
+  return cy;
+}
+function drawAgentCard(agent,session){
+  ensureCardCanvas();if(!cardG)return;
+  const g=cardG,W=g.width,H=g.height,t=typeof millis==='function'?millis():Date.now();
+  const accent=cardAccent(agent);
+  const accentSoft=colorAlpha(accent,22);
+  const paper='#efe4cc',paper2='#e6ddc8',ink='#23170f',slate='#181b21',
+    forest='#0e201c',line='#aa9879';
+  const card=cardProfile(agent);
+  const authored=cardAuthored(agent);
+  const title=card?.title||agent?.task||'Office resident';
+  const blurb=card?.blurb
+    ||'This agent has not published a share card yet. Ask it to author one when it is ready to share its own traits and highlights.';
+  const traits=card?.traits||[];
+  const features=card?.features||[];
+  const runtimeBits=cardRuntimeMeta(agent,session);
+  g.clear();
+  pxOut(g);
+  g.fill('#0d0f13');g.rect(0,0,W,H,24);
+  g.fill(slate);g.rect(16,16,W-32,H-32,18);
+  g.fill(accentSoft);g.rect(30,30,W-60,H-60,16);
+  g.fill(paper);g.rect(44,44,W-88,H-88,12);
+  g.fill('#e4d7bc');g.rect(44,44,W-88,62,12,12,0,0);
+  g.fill(ink);g.textAlign(LEFT,TOP);g.textSize(12);
+  g.text('THE OFFICE',62,62);
+  g.fill(authored?'#3d6f4a':'#8b6a28');g.textAlign(RIGHT,TOP);
+  g.text(authored?'SHARE CARD':'UNPUBLISHED PREVIEW',W-62,62);
+  g.stroke(colorAlpha(accent,36));g.strokeWeight(2);g.noFill();
+  g.rect(58,124,W-116,H-196,10);pxOut(g);
+  pxBox(g,66,140,252,384,paper2,{l:'#faf2e1',s:line,r:10});
+  g.fill(forest);g.rect(86,164,212,276,8);
+  g.fill(colorAlpha(accent,24));g.ellipse(192,252,166,166);
+  g.fill(colorAlpha('#000000',18));g.ellipse(192,426,138,24);
+  const actor=agent?{...agent,placed:true,leaveT:-1,jump:0,blink:0,
+    t:(typeof millis==='function'?millis()/1000:Date.now()/1000)}:petActor();
+  drawCharacterAt(g,actor,192,430,false,t,8.1,{showLabel:false,showBubble:false});
+  pxBox(g,82,460,220,52,'#efe7d4',{l:'#fbf3e3',s:line,r:8});
+  g.fill('#6a5536');g.textAlign(LEFT,TOP);g.textSize(11);g.text('DESK KIT',98,476);
+  drawCardDeskItems(g,agent?.deskItems||[],84,506,accent,t);
+  pxBox(g,340,140,354,176,paper2,{l:'#faf2e1',s:line,r:10});
+  g.fill(colorAlpha(accent,20));g.rect(356,156,322,38,8);
+  g.fill('#5f4b31');g.textAlign(LEFT,TOP);g.textSize(12);
+  g.text((agent?.dept?.name||'Office')+' · '+(session?'LIVE':'OBSERVED'),372,167);
+  g.fill(ink);g.textSize(40);g.textAlign(LEFT,TOP);
+  g.text(agent?.name||'Unknown agent',372,206);
+  g.fill('#4f4130');g.textSize(18);
+  const titleLines=wrapCardLines(g,title,298,3);
+  titleLines.forEach((line,index)=>g.text(line,372,266+index*22));
+  let chipX=372,chipY=330;
+  g.textSize(11);
+  runtimeBits.slice(0,4).forEach((bit)=>{
+    const w=drawCardChip(g,bit,chipX,chipY,'#d9d7cf','#9d8f79','#23170f');
+    chipX+=w+8;
+    if(chipX>648){chipX=372;chipY+=30;}
+  });
+  pxBox(g,340,392,354,132,'#f2ead7',{l:'#fcf5e8',s:line,r:10});
+  g.fill('#6a5536');g.textAlign(LEFT,TOP);g.textSize(12);g.text('ABOUT',360,410);
+  g.fill(ink);g.textSize(16);
+  const blurbLines=wrapCardLines(g,blurb,314,5);
+  blurbLines.forEach((line,index)=>g.text(line,360,438+index*20));
+  pxBox(g,58,612,302,248,paper2,{l:'#faf2e1',s:line,r:10});
+  pxBox(g,380,612,314,248,'#e3eadf',{l:'#f3f8f1',s:'#95a38f',r:10});
+  let traitX=78,traitY=646;
+  g.fill('#6a5536');g.textAlign(LEFT,TOP);g.textSize(12);
+  g.text('TRAITS',78,632);
+  if(traits.length){
+    g.textSize(12);
+    traits.forEach((trait)=>{
+      const w=drawCardChip(g,trait,traitX,traitY,'#f6efe0',shade(accent,-36),ink);
+      traitX+=w+8;
+      if(traitX>332){traitX=78;traitY+=30;}
+    });
+  }else{
+    g.fill('#8d7758');g.textSize(13);g.text('Agent-authored traits go here.',78,660);
+    traitY+=8;
+  }
+  drawCardList(g,'Known for',features,400,632,272,accent);
+  pxBox(g,58,892,644,30,'#d7d2c6',{l:'#f4f1ea',s:'#a59a85',r:8});
+  g.fill('#6c5a40');g.textAlign(LEFT,CENTER);g.textSize(11);
+  g.text('Share only what the agent chose to publish.',78,907);
+  g.textAlign(RIGHT,CENTER);
+  g.text((authored?'READY TO EXPORT':'WAITING FOR OFFICE-CARD.MJS')+'  ·  '+(agent?.dept?.name||'Office'),682,907);
+}
+function renderAgentCard(){
+  const agent=selectedCardAgent(),session=selectedSession(),authored=cardAuthored(agent);
+  CARD.title.textContent=agent?agent.name+' card':'Select an agent';
+  CARD.meta.textContent=agent
+    ?(agent.dept?.name||'Office')+' · '+(authored?'agent-authored and export-ready':'preview only until the agent authors its own card')
+    :'Open Work Mode for an agent to preview a shareable card.';
+  CARD.saveBtn.disabled=!agent||!authored;
+  if(!agent){
+    CARD.hint.innerHTML='<p>Use <strong>Card</strong> from an agent workspace to preview a shareable card.</p>'
+      +'<code class="ac-code">'+esc(cardAuthoringCommand())+'</code>';
+    return;
+  }
+  CARD.hint.innerHTML=authored
+    ?'<p>This card is built from the agent’s own profile metadata: title, blurb, traits, and what it wants to be known for.</p>'
+      +'<p>When the agent wants to revise it, it can rerun the same command and the Office hot-reloads the update.</p>'
+      +'<code class="ac-code">'+esc(cardAuthoringCommand())+'</code>'
+    :'<p>'+esc(agent.name)+' has not authored a share card yet, so this preview stays local and the export button is disabled.</p>'
+      +'<p>Agents stay in control: they decide the traits and highlights that are safe and true to share.</p>'
+      +'<code class="ac-code">'+esc(cardAuthoringCommand())+'</code>';
+  drawAgentCard(agent,session);
+}
+function openAgentCard(agentId){
+  cardState.visible=true;
+  cardState.agentId=agentId||selectedAgent()?.id||null;
+  CARD.shell.classList.add('open');
+  CARD.shell.setAttribute('aria-hidden','false');
+  renderAgentCard();
+}
+function closeAgentCard(){
+  cardState.visible=false;
+  CARD.shell.classList.remove('open');
+  CARD.shell.setAttribute('aria-hidden','true');
+}
+function saveAgentCard(){
+  const agent=selectedCardAgent();
+  if(!agent||!cardAuthored(agent)||!cardG)return;
+  const link=document.createElement('a');
+  link.href=cardG.canvas.toDataURL('image/png');
+  link.download=slugName(agent.name)+'-card.png';
+  link.click();
+}
 // Observed sessions have no pty. Instead of a dead terminal, show their
 // conversation here — read-only, as it is written. Same digest the desk
 // LIVE FEED uses (observe.mjs → /transcripts/<id>.json): message text + tool
@@ -2062,6 +2354,7 @@ function renderTerminalWorkspace(){
   TW.promptBtn.disabled=!prompt||terminalState.busy;
   TW.channelBtn.disabled=!channel||terminalState.busy;
   TW.sendBtn.disabled=!session||terminalState.busy;
+  TW.cardBtn.disabled=!agent;
   TW.refreshBtn.disabled=terminalState.busy;
   if(!agent&&!session)setNotice('Pick a monitor to open a workspace.');
   else if(!agent&&session)setNotice('Live session attached. Terminal stays primary; coordination lives in the rail.','good');
@@ -2080,7 +2373,8 @@ function renderTerminalWorkspace(){
     session?session.id:(agent?'observed:'+agent.id:null));
   renderPromptList();renderAgentList();renderChannelList();renderCollabList();
   renderSessionList();renderLaunchList();syncRail();
-  setPet(agent,agent?.name||session?.name||'Office Pal',session);}
+  setPet(agent,agent?.name||session?.name||'Office Pal',session);
+  if(cardState.visible)renderAgentCard();}
 async function refreshTerminalWorkspace(force){
   await Promise.all([
     fetchPromptInbox(force),
@@ -2100,6 +2394,7 @@ function openTerminalWorkspace(agentId){
   terminalState.selectedSessionId=null;TW.shell.classList.add('open');
   TW.shell.setAttribute('aria-hidden','false');refreshTerminalWorkspace(true);}
 function closeTerminalWorkspace(){
+  closeAgentCard();
   terminalState.visible=false;TW.shell.classList.remove('open');
   TW.shell.setAttribute('aria-hidden','true');}
 function resolvePetDockFromPoint(clientX,clientY){
@@ -2191,6 +2486,7 @@ async function launchRuntime(runtimeId){
 function esc(s){return(''+(s||'')).replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function initTerminalUi(){
   TW.closeBtn.onclick=()=>closeTerminalWorkspace();
+  TW.cardBtn.onclick=()=>openAgentCard();
   TW.refreshBtn.onclick=()=>refreshTerminalWorkspace(true);
   TW.sendBtn.onclick=()=>sendTerminalInput();
   TW.promptBtn.onclick=()=>{setActiveRail('focus');answerPrompt();};
@@ -2235,8 +2531,15 @@ function initTerminalUi(){
     TW.petCard.addEventListener('pointerup',endPetDrag);
     TW.petCard.addEventListener('pointercancel',endPetDrag);
   }
-  document.addEventListener('keydown',(e)=>{if(e.key==='Escape'&&terminalState.visible)
-    closeTerminalWorkspace();});}
+  document.addEventListener('keydown',(e)=>{
+    if(e.key==='Escape'&&cardState.visible){closeAgentCard();return;}
+    if(e.key==='Escape'&&terminalState.visible)closeTerminalWorkspace();
+  });}
+function initCardUi(){
+  CARD.closeBtn.onclick=()=>closeAgentCard();
+  CARD.saveBtn.onclick=()=>saveAgentCard();
+  CARD.shell.addEventListener('click',(e)=>{if(e.target===CARD.shell)closeAgentCard();});
+}
 function initCommsUi(){
   COMM.launcher.onclick=()=>openComms();
   COMM.closeBtn.onclick=()=>closeComms();
@@ -2279,6 +2582,7 @@ function initCommsUi(){
   });
 }
 initTerminalUi();
+initCardUi();
 initCommsUi();
 
 let view='floor',curDept=null,deskAgentId=null,page=0,panelOpen=false,
@@ -2347,6 +2651,10 @@ function fit(){scl=Math.max(1,Math.min(width/BW,height/BH));
 function bufXY(){return[(mouseX-ox)/scl,(mouseY-oy)/scl];}
 function inR(x,y,r){return r&&x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h;}
 function mousePressed(){const[x,y]=bufXY();
+  if(topBtnRects&&y<=30){                       // canvas top-bar buttons
+    if(inR(x,y,topBtnRects.comms)){openComms();return;}
+    if(inR(x,y,topBtnRects.board)){openBoard();return;}
+  }
   if(panelOpen){
     for(const h of binderHeadRects)if(inR(x,y,h)){
       const s=binderColl();s.has(h.idx)?s.delete(h.idx):s.add(h.idx);return;}
@@ -3601,6 +3909,7 @@ function drawToast(g){g.textSize(11);const w=g.textWidth(toast.msg)+28;
   pxBox(g,BW/2-w/2,BH-76,w,26,PAL.sign,{l:shade(PAL.sign,22),r:4});
   g.fill(PAL.ink);g.textAlign(CENTER,CENTER);g.text(toast.msg,BW/2,BH-63);}
 
+let topBtnRects=null;   // canvas top-bar Board/Comms button hit-rects (buffer coords)
 function topBar(g,t){pxOut(g);
   g.fill(PAL.signE);g.rect(0,0,BW,32);g.fill(PAL.sign);g.rect(0,0,BW,28);
   g.fill(shade(PAL.sign,22));g.rect(0,0,BW,2);
@@ -3613,10 +3922,33 @@ function topBar(g,t){pxOut(g);
     .filter(a=>a.status==='blocked').length;
   g.fill(PAL.ink);g.text(n+' agents · '+byDept().length+' depts',270,15);
   if(bl){g.fill(PAL.warn);g.text('▲ '+bl+' need you',470,15);}
+  // clock (far right) + Board/Comms buttons drawn INTO the bar — static, no flex
   const D=new Date(),hh=((D.getHours()+11)%12+1),
     mm=String(D.getMinutes()).padStart(2,'0');
+  const clockStr=`${hh}:${mm} ${D.getHours()<12?'AM':'PM'}`;
   g.textAlign(RIGHT,CENTER);g.fill(PAL.ink);g.textSize(13);
-  g.text(`${hh}:${mm} ${D.getHours()<12?'AM':'PM'}`,BW-16,15);}
+  g.text(clockStr,BW-14,14);
+  let rx=BW-14-g.textWidth(clockStr)-18;        // cursor: right edge of next button
+  const pill=(label,badge)=>{
+    g.textSize(12);
+    const bw=badge>0?(g.textWidth(badge>99?'99+':''+badge)+12):0;
+    const w=g.textWidth(label)+22+bw, h=20, x=rx-w, y=4;
+    g.fill(shade(PAL.sign,-34));g.rect(x-1,y-1,w+2,h+2,5);   // edge
+    g.fill(shade(PAL.sign,14));g.rect(x,y,w,h,5);            // face
+    g.fill(shade(PAL.sign,40));g.rect(x,y,w,3,5);            // top sheen
+    g.fill(PAL.ink);g.textAlign(LEFT,CENTER);g.textSize(12);
+    g.text(label,x+11,y+h/2+1);
+    if(badge>0){
+      const bn=badge>99?'99+':''+badge, bbw=g.textWidth(bn)+10,
+        bx=x+11+g.textWidth(label)+7, by=y+4, bh=12;
+      g.fill(PAL.warn);g.rect(bx,by,bbw,bh,6);
+      g.fill('#241a0f');g.textAlign(CENTER,CENTER);g.textSize(10);
+      g.text(bn,bx+bbw/2,by+bh/2+1);
+    }
+    rx=x-8;
+    return {x,y,w,h};
+  };
+  topBtnRects={comms:pill('Comms',commsUnreadTotal), board:pill('Board',0)};}
 function bottomBar(g,t){pxOut(g);
   g.fill(PAL.signE);g.rect(0,BH-24,BW,24);
   g.fill(PAL.sign);g.rect(0,BH-22,BW,22);
@@ -3659,6 +3991,8 @@ function wrapLines(arr,n){const r=[];let ln='';for(const w of arr){
 function hex2rgb(h){h=(''+h).replace('#','');
   return[parseInt(h.slice(0,2),16)||0,parseInt(h.slice(2,4),16)||0,
     parseInt(h.slice(4,6),16)||0];}
+function colorAlpha(h,a){const c=hex2rgb(h),n=Math.max(0,Math.min(100,a))/100;
+  return`rgba(${c[0]},${c[1]},${c[2]},${n})`;}
 function lerpHex(a,b,t){const A=hex2rgb(a),B=hex2rgb(b);
   return`rgb(${A[0]+(B[0]-A[0])*t|0},${A[1]+(B[1]-A[1])*t|0},${A[2]+(B[2]-A[2])*t|0})`;}
 function shade(h,d){const c=hex2rgb(h),k=v=>Math.max(0,Math.min(255,v+d));
