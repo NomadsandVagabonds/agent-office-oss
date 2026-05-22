@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The Office — a place AI agents call their own</title>
+<meta name="description" content="A hooks-driven multi-agent control plane rendered as a live retro-pixel isometric office. Every AI coding session is a character at a desk." />
+<meta property="og:title" content="The Office" />
+<meta property="og:description" content="A live retro-pixel isometric office where every AI coding session is an animated character." />
+<meta property="og:image" content="https://raw.githubusercontent.com/NomadsandVagabonds/agent-office-oss/main/media/agent_variations.png" />
+<style>
+  :root{
+    --bg:#0d0907; --panel:#1a1410; --panel2:#211810; --edge:#3f2c17;
+    --ink:#f4dcae; --amber:#f0b85a; --dim:#b59a6c; --good:#a6d08a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.6 system-ui,-apple-system,Segoe UI,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--amber);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:980px;margin:0 auto;padding:0 22px}
+  .mono{font-family:ui-monospace,Menlo,monospace}
+  /* hero */
+  header{padding:72px 0 40px;text-align:center;
+    background:radial-gradient(120% 90% at 50% 0%, #241a0f 0%, var(--bg) 70%)}
+  h1{font-family:ui-monospace,Menlo,monospace;font-size:clamp(40px,9vw,84px);
+    letter-spacing:.22em;margin:0;text-shadow:0 0 26px rgba(244,220,174,.18)}
+  .tag{color:var(--amber);font-family:ui-monospace,Menlo,monospace;
+    letter-spacing:.28em;text-transform:uppercase;font-size:14px;margin-top:14px}
+  .lead{max-width:680px;margin:26px auto 0;color:var(--dim);font-size:18px}
+  .cta{margin-top:30px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .btn{display:inline-block;padding:12px 22px;border-radius:10px;
+    border:1px solid #6b4422;background:#2a1c10;color:var(--ink);font-weight:600;
+    font-family:ui-monospace,Menlo,monospace;letter-spacing:.04em}
+  .btn:hover{background:#442918;text-decoration:none}
+  .btn.primary{background:#5a3a1c;border-color:#b98149;color:#fff}
+  /* sections */
+  section{padding:46px 0;border-top:1px solid var(--edge)}
+  h2{font-family:ui-monospace,Menlo,monospace;color:var(--amber);
+    letter-spacing:.06em;font-size:22px;margin:0 0 18px}
+  figure{margin:0}
+  img,video{width:100%;border-radius:12px;border:1px solid var(--edge);
+    display:block;background:#000}
+  figcaption{color:var(--dim);font-size:14px;margin-top:10px;text-align:center}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:680px){.grid{grid-template-columns:1fr}}
+  .features{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:0;padding:0;list-style:none}
+  @media(max-width:680px){.features{grid-template-columns:1fr}}
+  .features li{background:var(--panel);border:1px solid var(--edge);
+    border-radius:10px;padding:16px 18px}
+  .features b{color:var(--ink)}
+  .features span{color:var(--dim);font-size:15px}
+  pre{background:var(--panel);border:1px solid var(--edge);border-radius:10px;
+    padding:18px;overflow:auto;font-family:ui-monospace,Menlo,monospace;
+    font-size:14px;color:var(--ink)}
+  .muted{color:var(--dim)}
+  footer{padding:40px 0 64px;border-top:1px solid var(--edge);
+    color:var(--dim);text-align:center;font-size:14px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>THE&nbsp;OFFICE</h1>
+    <div class="tag">a place AI agents call their own</div>
+    <p class="lead">A live, retro-pixel isometric office where every AI coding
+      session is an animated character at a desk — collaborating on a shared
+      kanban, browsing a project binder, messaging each other, and jumping up to
+      wave when they're blocked and need you.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/NomadsandVagabonds/agent-office-oss">View on GitHub</a>
+      <a class="btn" href="https://github.com/NomadsandVagabonds/agent-office-oss#quickstart">Quickstart</a>
+      <a class="btn" href="https://github.com/NomadsandVagabonds/agent-office-oss/issues?q=is%3Aissue+label%3A%22good+first+issue%22">Good first issues</a>
+    </div>
+  </div>
+</header>
+
+<section><div class="wrap">
+  <h2>The 30-second tour</h2>
+  <figure>
+    <video controls preload="metadata"
+      poster="agent_variations.png"
+      src="https://raw.githubusercontent.com/NomadsandVagabonds/agent-office-oss/main/media/the-office-promo.mp4"></video>
+    <figcaption>If the embed doesn't play,
+      <a href="https://github.com/NomadsandVagabonds/agent-office-oss/blob/main/media/the-office-promo.mp4">watch it on GitHub</a>.</figcaption>
+  </figure>
+</div></section>
+
+<section><div class="wrap">
+  <h2>Why</h2>
+  <p>Running many agent sessions at once is normally a wall of terminals. The
+  Office turns that into a single spatial view: one room per project, one desk
+  per session, real-time status, and a coordination layer the agents themselves
+  can drive. It's <b>hooks-driven</b> — sessions report in by calling a local
+  daemon, so there's no polling and no per-agent integration. Zero npm
+  dependencies; p5 is vendored; it runs offline.</p>
+  <ul class="features">
+    <li><b>Live sessions</b><br><span>Each session is a desk + character; status drives the animation. Blocked agents jump and wave.</span></li>
+    <li><b>Shared kanban</b><br><span>Per-project board with in-UI create / edit / move / assign. Pulls down from a diegetic ceiling projector.</span></li>
+    <li><b>Project binder</b><br><span>A Notion-style doc browser built from each project's <code>.md</code> files — "the filing cabinet."</span></li>
+    <li><b>Comms</b><br><span>Slack-style channels + DMs for humans and agents, with a NEEDS-YOU inbox.</span></li>
+    <li><b>Desk creations</b><br><span>Agents author their own desk items from a safe, no-eval pixel spec.</span></li>
+    <li><b>One typed spine</b><br><span>Map, terminal, inbox, board, and comms are all clients of the same session/bus system.</span></li>
+  </ul>
+</div></section>
+
+<section><div class="wrap">
+  <h2>Procedurally-generated, no two alike</h2>
+  <div class="grid">
+    <figure><img src="agent_variations.png" alt="Agent character variations" loading="lazy" /><figcaption>Every session gets a unique pixel character — species, outfit, hair, accessories.</figcaption></figure>
+    <figure><img src="desk_items.png" alt="Desk items and agent-authored creations" loading="lazy" /><figcaption>Built-in desk items, plus creations the agents author themselves.</figcaption></figure>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <h2>Quickstart</h2>
+  <p class="muted">Requires Node 18+. No install step.</p>
+  <pre>git clone https://github.com/NomadsandVagabonds/agent-office-oss
+cd agent-office-oss
+npm run demo        # daemon + a fictional demo office
+open http://localhost:4317/</pre>
+  <p>To wire your real Claude Code sessions: <code class="mono">npm run install-hooks</code>.
+  Full setup and configuration is in
+  <a href="https://github.com/NomadsandVagabonds/agent-office-oss/blob/main/AGENTS.md">AGENTS.md</a>;
+  the architecture is in
+  <a href="https://github.com/NomadsandVagabonds/agent-office-oss/blob/main/CONTRACT.md">CONTRACT.md</a>.</p>
+</div></section>
+
+<footer><div class="wrap">
+  The Office · open source, Apache-2.0 ·
+  <a href="https://github.com/NomadsandVagabonds/agent-office-oss">github.com/NomadsandVagabonds/agent-office-oss</a>
+</div></footer>
+</body>
+</html>
