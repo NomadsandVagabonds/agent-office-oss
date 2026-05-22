@@ -67,6 +67,7 @@ node office-knowledge.mjs docs <dept>          # docs in one project
 node office-knowledge.mjs read <dept> <query>  # print a matching doc
 node office-knowledge.mjs refresh              # re-ingest after writing docs
 node office-knowledge.mjs watch                # auto re-ingest on .md changes (run-and-leave)
+node office-knowledge.mjs search <query>      # search across every project's binder
 ```
 
 **Leave a mark** — author a desk item (append-only, validated, no eval):

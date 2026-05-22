@@ -17,6 +17,7 @@
 //   node office-knowledge.mjs list
 //   node office-knowledge.mjs docs <dept>
 //   node office-knowledge.mjs read <dept> <match...>
+//   node office-knowledge.mjs search <query...>   (across every project)
 //
 // Reads the static files knowledge.mjs writes (public/knowledge/*) straight
 // off disk — zero daemon edits, works with the daemon down. refresh shells
@@ -41,7 +42,8 @@ function help() {
     + 'node office-knowledge.mjs watch              auto-refresh on .md changes\n'
     + 'node office-knowledge.mjs list               projects in the binder\n'
     + 'node office-knowledge.mjs docs <dept>        docs in one project\n'
-    + 'node office-knowledge.mjs read <dept> <q>    print a matching doc'
+    + 'node office-knowledge.mjs read <dept> <q>    print a matching doc\n'
+    + 'node office-knowledge.mjs search <q>         search across all projects'
   );
 }
 
@@ -168,6 +170,48 @@ if (cmd === 'read') {
   console.log(`# ${hit.title}\n# ${data.project} · ${hit.path} · ${hit.bytes}b\n`
     + '─'.repeat(60) + '\n');
   console.log(hit.text);
+  process.exit(0);
+}
+
+if (cmd === 'search') {
+  const q = argv.slice(1).join(' ').trim().toLowerCase();
+  if (!q) { console.error('office-knowledge: a search query is required.'); process.exit(1); }
+  const idx = readJson(path.join(KDIR, '_index.json'));
+  if (!idx || !Array.isArray(idx.projects)) {
+    console.error('office-knowledge: no binder index yet — run `refresh` first.');
+    process.exit(1);
+  }
+  let total = 0, docsHit = 0;
+  for (const p of idx.projects) {
+    const data = readJson(path.join(KDIR, p.deptId + '.json'));
+    if (!data || !Array.isArray(data.docs)) continue;
+    const hits = [];
+    for (const d of data.docs) {
+      const inMeta = d.path.toLowerCase().includes(q) || (d.title || '').toLowerCase().includes(q);
+      const body = (d.text || '').toLowerCase();
+      const bi = body.indexOf(q);
+      if (!inMeta && bi < 0) continue;
+      let snip = '';
+      if (bi >= 0) {
+        const start = Math.max(0, bi - 36);
+        snip = (start > 0 ? '…' : '')
+          + d.text.slice(start, bi + q.length + 44).replace(/\s+/g, ' ').trim() + '…';
+      }
+      hits.push({ path: d.path, title: d.title, snip });
+    }
+    if (!hits.length) continue;
+    docsHit += hits.length;
+    console.log(`\n# ${data.project}  (${p.deptId})  — ${hits.length} match(es)`);
+    for (const h of hits.slice(0, 8)) {
+      console.log(`  ${h.path}` + (h.title && h.title !== h.path ? `  — ${h.title}` : ''));
+      if (h.snip) console.log(`    ${h.snip}`);
+    }
+    if (hits.length > 8) console.log(`  …and ${hits.length - 8} more`);
+    total += 1;
+  }
+  console.log(docsHit
+    ? `\n${docsHit} doc(s) across ${total} project(s) match "${q}".`
+    : `\nno binder docs match "${q}".`);
   process.exit(0);
 }
 
