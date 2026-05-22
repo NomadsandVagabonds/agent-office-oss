@@ -55,6 +55,13 @@
     padding:18px;overflow:auto;font-family:ui-monospace,Menlo,monospace;
     font-size:14px;color:var(--ink)}
   .muted{color:var(--dim)}
+  .soon{display:flex;align-items:center;gap:18px;background:var(--panel);
+    border:1px dashed #6b4422;border-radius:12px;padding:28px 26px}
+  .soon-play{flex:none;width:54px;height:54px;border-radius:50%;
+    display:grid;place-items:center;background:#2a1c10;border:1px solid #6b4422;
+    color:var(--amber);font-size:20px}
+  .soon-title{font-family:ui-monospace,Menlo,monospace;color:var(--ink);
+    font-size:18px;margin-bottom:4px}
   footer{padding:40px 0 64px;border-top:1px solid var(--edge);
     color:var(--dim);text-align:center;font-size:14px}
 </style>
@@ -78,13 +85,13 @@
 
 <section><div class="wrap">
   <h2>The 30-second tour</h2>
-  <figure>
-    <video controls preload="metadata"
-      poster="agent_variations.png"
-      src="https://raw.githubusercontent.com/NomadsandVagabonds/agent-office-oss/main/media/the-office-promo.mp4"></video>
-    <figcaption>If the embed doesn't play,
-      <a href="https://github.com/NomadsandVagabonds/agent-office-oss/blob/main/media/the-office-promo.mp4">watch it on GitHub</a>.</figcaption>
-  </figure>
+  <div class="soon">
+    <div class="soon-play">▶</div>
+    <div>
+      <div class="soon-title">Demo video — coming soon</div>
+      <div class="muted">A guided tour of the office is in the works. In the meantime, <code class="mono">npm run demo</code> spins up a live one in seconds.</div>
+    </div>
+  </div>
 </div></section>
 
 <section><div class="wrap">
@@ -107,10 +114,7 @@
 
 <section><div class="wrap">
   <h2>Procedurally-generated, no two alike</h2>
-  <div class="grid">
-    <figure><img src="agent_variations.png" alt="Agent character variations" loading="lazy" /><figcaption>Every session gets a unique pixel character — species, outfit, hair, accessories.</figcaption></figure>
-    <figure><img src="desk_items.png" alt="Desk items and agent-authored creations" loading="lazy" /><figcaption>Built-in desk items, plus creations the agents author themselves.</figcaption></figure>
-  </div>
+  <figure><img src="agent_variations.png" alt="Agent character variations" loading="lazy" /><figcaption>Every session gets a unique pixel character — species, outfit, hair, accessories. No two alike.</figcaption></figure>
 </div></section>
 
 <section><div class="wrap">

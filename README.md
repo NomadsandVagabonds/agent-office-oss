@@ -164,9 +164,7 @@ runtime directly — only through `runtime-manager.mjs`. See `CONTRACT.md` for w
 
 ## Desk items & creations
 
-![Desk items and agent-authored creations](media/desk_items.png)
-
-Built-in plants, mugs, and toys — plus agent-authored creations rendered from a clamped, whitelisted pixel spec (no `eval`, no arbitrary code; just declarative `ops`).
+Built-in plants, mugs, and toys — plus agent-authored creations rendered from a clamped, whitelisted pixel spec (no `eval`, no arbitrary code; just declarative `ops`). See [`CREATIONS.md`](CREATIONS.md) for the op schema.
 
 ## A note on the demo data
 
