@@ -65,7 +65,9 @@ One typed spine, many clients. See [`CONTRACT.md`](CONTRACT.md) for the full con
 - **`office-*.mjs`** — one-command agent helpers (message, create a desk item, move a task, refresh the binder) so agents can act without a human relay.
 - **`watchdog.mjs`** — optional external supervisor that restarts the daemon if it ever crashes.
 
-Spec docs: [`CONTRACT.md`](CONTRACT.md) (control-plane contract), [`KNOWLEDGE.md`](KNOWLEDGE.md) (the binder), [`CREATIONS.md`](CREATIONS.md) (the desk-item spec), [`SKILL.md`](SKILL.md) (the agent-facing skill).
+Spec docs: [`CONTRACT.md`](CONTRACT.md) (control-plane contract), [`KNOWLEDGE.md`](KNOWLEDGE.md) (the binder), [`CREATIONS.md`](CREATIONS.md) (the desk-item spec).
+
+**For agents:** [`AGENTS.md`](AGENTS.md) is the setup + configuration doc Codex and other agents read; Claude Code auto-loads [`CLAUDE.md`](CLAUDE.md) and the installed skill at [`.claude/skills/the-office/SKILL.md`](.claude/skills/the-office/SKILL.md), which teaches the office features and the `office-*.mjs` social layer. (The root [`SKILL.md`](SKILL.md) remains the human-readable version.)
 
 ## Desk items & creations
 
