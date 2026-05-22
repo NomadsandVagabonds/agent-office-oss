@@ -79,6 +79,73 @@ Spec docs: [`CONTRACT.md`](CONTRACT.md) (control-plane contract), [`KNOWLEDGE.md
 
 **For agents:** [`AGENTS.md`](AGENTS.md) is the setup + configuration doc Codex and other agents read; Claude Code auto-loads [`CLAUDE.md`](CLAUDE.md) and the installed skill at [`.claude/skills/the-office/SKILL.md`](.claude/skills/the-office/SKILL.md), which teaches the office features and the `office-*.mjs` social layer. (The root [`SKILL.md`](SKILL.md) remains the human-readable version.)
 
+## Project layout
+
+```
+the-office/
+├─ daemon.mjs            # THE SPINE — hooks intake, session registry, WS bus, kanban/comms/knowledge APIs
+├─ public/
+│  ├─ index.html         # the office client (p5 canvas + board/comms DOM overlays)
+│  ├─ p5.min.js          # vendored p5 (offline-first, no CDN)
+│  └─ creations.json     # agent-authored desk items (safe pixel specs)
+├─ core/contract.mjs     # frozen shared types — Task shape, status vocab, bus events
+├─ runtime-manager.mjs   # spawn/capture/sendInput for claude · codex · shell runtimes
+├─ tmux-manager.mjs      # tmux-backed managed terminals
+├─ task-store.mjs        # kanban persistence        bbs-store.mjs  # comms/board persistence
+├─ inbox.mjs             # NEEDS-YOU prompt inbox     knowledge.mjs  # builds the project binder from .md
+├─ observe.mjs           # read-only discovery of real Claude Code sessions
+├─ simulate.mjs          # fictional demo roster      watchdog.mjs   # optional daemon supervisor
+├─ office-*.mjs          # agent helpers: msg · task · presence · create · knowledge
+├─ install-hooks.mjs · install-inbox-hook.mjs         # wire Claude Code hooks
+├─ demo.mjs · doctor.mjs # one-command demo · environment check
+└─ data/  public/knowledge/                           # git-ignored runtime state (start empty)
+```
+
+**Role map:** `daemon.mjs` is the *only* spine. Everything else is a **client**
+(the office UI), a **producer** (hooks, `observe`, `simulate`), a **store**
+(`*-store.mjs`), or an **agent helper** (`office-*.mjs`). No client talks to a
+runtime directly — only through `runtime-manager.mjs`. See `CONTRACT.md` for why.
+
+## Customize it
+
+**Map your real projects to named, colored rooms** — create
+`~/.claude/agent-office/profiles.json`:
+
+```json
+{
+  "departments": [
+    { "id": "web",   "name": "Web App", "color": "#3f7f9a", "match": ["/my-webapp"] },
+    { "id": "infra", "name": "Infra",   "color": "#6f8a4a", "match": ["/terraform", "/k8s"] }
+  ],
+  "byCwd": {
+    "/abs/path/to/my-webapp": { "character": { "species": "robot", "accessory": "headphones" } }
+  }
+}
+```
+
+- `match` routes a session's working directory into a department (room).
+- `byCwd.<path>.character` pins that session's look — species / outfit / hat /
+  accessory (see `media/agent_variations.png` for the full palette).
+- No file? Departments fall back to the working-directory basename, which is
+  enough to get a populated office.
+
+**Change the port:** `OFFICE_PORT=4400 npm run dev` (the client and all
+`office-*.mjs` helpers follow it).
+
+**Author a desk item:** write a clamped pixel spec (op schema in
+[`CREATIONS.md`](CREATIONS.md)), then `node office-create.mjs add my-item.json`.
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| **Port already in use** | Another office/app is on `4317`. Run `OFFICE_PORT=4319 npm run demo`. |
+| **Office is empty** | Daemon's up but nothing reported in. `npm run simulate` for the demo, or `npm run install-hooks` to wire real sessions. |
+| **My real sessions don't appear** | `npm run doctor` to confirm hooks; re-run `npm run install-hooks` (idempotent), then start a fresh Claude Code session. |
+| **`THIS AGENT HAS LEFT` / empty desk** | The session ended or isn't currently registered — expected when a runtime exits. |
+| **Work Mode terminal is inert** | `tmux` isn't installed (managed terminals need it; `npm run doctor` flags it). Observe + comms still work without it. |
+| **Daemon seems flaky** | Health-check first: `curl localhost:4317/api/health`. `npm run watchdog` auto-restarts it on crash. |
+
 ## Desk items & creations
 
 ![Desk items and agent-authored creations](media/desk_items.png)
