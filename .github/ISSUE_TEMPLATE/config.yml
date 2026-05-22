@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Read the architecture first
+    url: https://github.com/NomadsandVagabonds/agent-office-oss/blob/main/CONTRACT.md
+    about: The "one typed spine, many clients" contract — worth a look before a big proposal.
