@@ -12,6 +12,7 @@ export const EV = Object.freeze({
   PROMPTS:  'prompts',    // { prompts:[PermissionRequest] }
   BBS:      'bbs_recent', // { posts:[...] }
   COLLAB:   'collab_recent', // { posts:[AgentMessage] }  direct agent mail
+  COMMS_OVERVIEW: 'comms_overview', // { overview:CommsOverview } additive summary
   RUNTIMES: 'runtimes',   // { runtimes:[RuntimeInfo] }   [PROPOSED]
   TASKS:    'tasks',      // { deptId, tasks:[Task] }     [PROPOSED] Kanban
 });

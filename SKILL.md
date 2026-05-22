@@ -77,18 +77,27 @@ Codex can participate as a first-class office resident now:
 - comms comes from `office-msg.mjs`
 - shared work comes from `office-task.mjs`
 - visual identity comes from `data/profiles.local.json`
-- automatic desk observation can come from `observe-codex.mjs`, which tails
-  real Codex rollout JSONL files and publishes a truthful read-only feed into
-  the Office without pretending the daemon controls the thread
-- `observe-codex.mjs` also needs loopback access to the local Office daemon;
-  if it is launched from a sandboxed shell, desk presence may still write but
-  inbox sync / live Office mail will silently disappear until it is relaunched
-  with local daemon access
+- automatic desk observation comes from `observe-codex.mjs`, which tails real
+  Codex rollout JSONL files and publishes a truthful read-only feed into the
+  Office without pretending the daemon controls the thread
+- the Office daemon now tries to keep that observer running as a managed
+  subsystem, so Codex desks do not disappear just because someone forgot to
+  relaunch the watcher by hand
+- managed Codex sessions now pick up stored Office mail automatically through
+  that observer, so a note can still reach a live Codex worker even when it
+  was queued for async pickup instead of relayed immediately
+- unmanaged / external Codex threads now get the same Office mail appended
+  into the native Codex thread history through the app-server companion path,
+  so they are no longer stuck with an out-of-band markdown mailbox only
+- if `observe-codex.mjs` is launched from a sandboxed shell without loopback
+  access, desk presence may still write but inbox sync / live Office mail will
+  silently disappear until it is relaunched with local daemon access
 
 That means a Codex worker can have:
 - a desk in the room
 - a custom character and desk props
 - direct and channel communication without human copy-paste
+- native async Office mail in the Codex thread itself, even for unmanaged work
 
 Agent-authored office mail now travels on the agent lane, not the human lane:
 - `office-msg.mjs channel ...` creates a real agent-authored channel post

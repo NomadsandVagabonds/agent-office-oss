@@ -141,6 +141,7 @@ const base = {
   runtime_session_id: process.env.OFFICE_RUNTIME_SESSION_ID || '',
   cwd: me.cwd,
   model: me.model,
+  provider: 'codex',
 };
 
 if (action === 'start') {

@@ -7,13 +7,21 @@
 //   node daemon.mjs            then open http://localhost:4317
 //
 import http from 'node:http';
+import cp from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { BBSStore } from './bbs-store.mjs';
-import { EV, TASK_PRIORITY, normalizeTaskStatus } from './core/contract.mjs';
+import { codexObserverStatus } from './codex-observer-state.mjs';
+import {
+  EV,
+  TASK_PRIORITY,
+  capabilityOf,
+  normalizeTaskStatus,
+  promptActions,
+} from './core/contract.mjs';
 import { RuntimeManager } from './runtime-manager.mjs';
 import { TaskStore } from './task-store.mjs';
 
@@ -27,6 +35,8 @@ const TASKS_FILE = path.join(__dir, 'data', 'tasks.json');
 const BBS_RECENT_LIMIT = 6;
 const COLLAB_RECENT_LIMIT = 8;
 const CHANNEL_RECENT_LIMIT = 12;
+const AUTO_OBSERVE_CODEX = process.env.OFFICE_AUTO_OBSERVE_CODEX !== '0';
+const CODEX_OBSERVER_RESTART_MS = 5000;
 
 // ---------------------------------------------------------------------------
 // Agent state
@@ -42,6 +52,67 @@ const prompts = new Map();
 const promptByAgent = new Map();
 const runtimes = new RuntimeManager(PORT);
 const TASK_PRIORITY_SET = new Set(TASK_PRIORITY);
+let codexObserverChild = null;
+let codexObserverRetry = null;
+let shuttingDown = false;
+
+function getCodexObserverStatus() {
+  const status = codexObserverStatus();
+  return {
+    ...status,
+    enabled: AUTO_OBSERVE_CODEX,
+    managedByDaemon: !!(codexObserverChild && status.pid && codexObserverChild.pid === status.pid),
+  };
+}
+
+function startCodexObserver() {
+  if (!AUTO_OBSERVE_CODEX || shuttingDown) return;
+  const running = codexObserverStatus();
+  if (running.running) return;
+  if (codexObserverChild && codexObserverChild.exitCode === null) return;
+  const child = cp.spawn(process.execPath, [path.join(__dir, 'observe-codex.mjs')], {
+    cwd: __dir,
+    env: {
+      ...process.env,
+      OFFICE_PORT: String(PORT),
+      OFFICE_OBSERVER_OWNER: 'daemon',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  codexObserverChild = child;
+  child.stdout.on('data', (buf) => {
+    const line = String(buf || '').trim();
+    if (line) console.log(`[codex-observer] ${line}`);
+  });
+  child.stderr.on('data', (buf) => {
+    const line = String(buf || '').trim();
+    if (line) console.warn(`[codex-observer] ${line}`);
+  });
+  child.on('exit', (code, signal) => {
+    if (codexObserverChild === child) codexObserverChild = null;
+    if (shuttingDown) return;
+    if (codexObserverRetry) clearTimeout(codexObserverRetry);
+    console.warn('[codex-observer] exited'
+      + (code !== null ? ` with code ${code}` : '')
+      + (signal ? ` (${signal})` : '')
+      + '; retrying.');
+    codexObserverRetry = setTimeout(() => {
+      codexObserverRetry = null;
+      startCodexObserver();
+    }, CODEX_OBSERVER_RESTART_MS);
+  });
+}
+
+function stopCodexObserver() {
+  shuttingDown = true;
+  if (codexObserverRetry) {
+    clearTimeout(codexObserverRetry);
+    codexObserverRetry = null;
+  }
+  if (codexObserverChild && codexObserverChild.exitCode === null) {
+    try { codexObserverChild.kill('SIGTERM'); } catch {}
+  }
+}
 
 const ADJ = ['Quiet','Brisk','Amber','Velvet','Iron','Pewter','Saffron','Cobalt',
   'Hollow','Drift','Ember','Slate','Marble','Russet','Onyx','Ivory'];
@@ -55,7 +126,12 @@ function codename(id) {
 
 // Hot-reloaded agent profiles. Shape:
 //   { "bySession": { "<id>": {profile} }, "byCwd": { "/abs/path": {profile} } }
-// profile = { name?, character?: {...}, desk?: { items:[...] , deskColor? } }
+// profile = {
+//   name?,
+//   character?: {...},
+//   desk?: { items:[...] , deskColor? },
+//   card?: { title?, blurb?, traits?:[], features?:[] }
+// }
 // There are two sources:
 //   1. ~/.claude/agent-office/profiles.json        (global / personal)
 //   2. ./data/profiles.local.json                  (repo-local / portable)
@@ -157,42 +233,210 @@ function readTranscriptStats(transcriptPath) {
 
 // Public projection — never serialize internal fields (e.g. _settle, a
 // Timeout, is circular and crashes JSON.stringify).
-const pub = (a) => ({
-  id: a.id, short: a.short, name: a.name, model: a.model,
-  contextPct: a.contextPct, status: a.status, tool: a.tool,
-  cwd: a.cwd, desk: a.desk, since: a.since, note: a.note,
-  runtimeSessionId: a.runtimeSessionId || null,
-  profile: a.profile || null, department: a.department || null,
-  task: a.task || '',
-});
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+const NO_RUNTIME_CAPS = Object.freeze({
+  observe: false,
+  prompt: false,
+  control: false,
+  spawn: false,
+});
+
+function resolveRuntimeSessionSnapshot(ref) {
+  if (!ref) return null;
+  try {
+    const session = runtimes.getSession(ref);
+    return session && session.kind === 'terminal' ? session : null;
+  } catch {
+    return null;
+  }
+}
+
+function observedCodexInboxSession(agent) {
+  if (!agent || !agent.id || !getCodexObserverStatus().running) return null;
+  if ((agent.provider || '').toLowerCase() !== 'codex') return null;
+  return {
+    id: agent.id,
+    runtimeId: 'observed',
+    provider: 'codex',
+    runtimeLabel: 'Codex observed thread',
+    kind: 'observed',
+    transport: 'thread-store',
+    lane: 'first-party',
+    alive: true,
+    observedOnly: true,
+    firstParty: true,
+    experimental: false,
+    utility: false,
+    cwd: agent.cwd || '',
+    requestedCwd: agent.cwd || '',
+  };
+}
+
+function runtimeSessionForSummary(agent, opt = {}) {
+  if (!agent) return null;
+  const preferred = resolveRuntimeSessionSnapshot(
+    opt.runtimeSessionId || opt.targetSession || opt.sessionId || null,
+  );
+  if (preferred) return preferred;
+  const linked = resolveRuntimeSessionSnapshot(agent.runtimeSessionId || null);
+  if (linked) return linked;
+  const observed = observedCodexInboxSession(agent);
+  if (observed) return observed;
+  return null;
+}
+
+function runtimeSummaryFromSession(session) {
+  if (!session) {
+    return {
+      sessionId: null,
+      runtimeId: null,
+      provider: null,
+      runtimeLabel: null,
+      kind: null,
+      transport: null,
+      lane: null,
+      live: false,
+      managed: false,
+      observedOnly: false,
+      firstParty: false,
+      experimental: false,
+      utility: false,
+      caps: { ...NO_RUNTIME_CAPS },
+      promptActions: [],
+    };
+  }
+  const caps = capabilityOf(session.provider || '');
+  return {
+    sessionId: session.id,
+    runtimeId: session.runtimeId || null,
+    provider: session.provider || null,
+    runtimeLabel: session.runtimeLabel || null,
+    kind: session.kind || null,
+    transport: session.transport || null,
+    lane: session.lane || null,
+    live: !!session.alive,
+    managed: !!session.runtimeId && session.runtimeId !== 'observed' && !session.observedOnly,
+    observedOnly: !!session.observedOnly || session.runtimeId === 'observed',
+    firstParty: !!session.firstParty,
+    experimental: !!session.experimental,
+    utility: !!session.utility,
+    caps: { ...caps },
+    promptActions: session.alive ? promptActions(session.provider) : [],
+  };
+}
+
+function runtimeSummaryForAgent(agent, opt = {}) {
+  return runtimeSummaryFromSession(runtimeSessionForSummary(agent, opt));
+}
+
+function promptReplyActions(prompt, runtime) {
+  const actions = new Set();
+  if (prompt?.threadId || runtime?.live) actions.add('reply');
+  for (const action of runtime?.promptActions || []) actions.add(action);
+  return [...actions];
+}
+
+function sessionDeliveryMode(session) {
+  if (!session) return null;
+  const caps = capabilityOf(session.provider || '');
+  if (caps.control === true) return 'delivered';
+  if (caps.prompt) return 'relayed';
+  return null;
+}
+
+function sessionSupportsAsyncInbox(session) {
+  if (!session || !session.alive) return false;
+  if ((session.provider || '').toLowerCase() !== 'codex') return false;
+  if (session.kind !== 'terminal' && !(session.observedOnly || session.kind === 'observed')) return false;
+  return !!getCodexObserverStatus().running;
+}
+
+function actionReceipt(opt = {}) {
+  const stored = !!opt.stored;
+  const targetSessions = Array.isArray(opt.targetSessions)
+    ? opt.targetSessions.filter(Boolean)
+    : [];
+  const queuedSessions = Array.isArray(opt.queuedSessions)
+    ? opt.queuedSessions.filter(Boolean)
+    : [];
+  const deliveredSessionIds = [];
+  const relayedSessionIds = [];
+  for (const session of targetSessions) {
+    const mode = sessionDeliveryMode(session);
+    if (mode === 'delivered') deliveredSessionIds.push(session.id);
+    else if (mode === 'relayed') relayedSessionIds.push(session.id);
+  }
+  const queuedSessionIds = queuedSessions.map((session) => session.id);
+  const queued = !!opt.queued || queuedSessionIds.length > 0;
+  let status = stored ? 'stored' : 'stored';
+  if (deliveredSessionIds.length) status = 'delivered';
+  else if (relayedSessionIds.length) status = 'relayed';
+  else if (queued) status = 'queued';
+  return {
+    status,
+    stored,
+    queued,
+    delivered: deliveredSessionIds.length > 0,
+    relayed: relayedSessionIds.length > 0,
+    targetSessionIds: targetSessions.map((session) => session.id),
+    deliveredSessionIds,
+    relayedSessionIds,
+    queuedSessionIds,
+    deliveredCount: deliveredSessionIds.length,
+    relayedCount: relayedSessionIds.length,
+    queuedCount: queuedSessionIds.length,
+  };
+}
+
+const pub = (a) => {
+  const runtime = runtimeSummaryForAgent(a);
+  return {
+    id: a.id, short: a.short, name: a.name, model: a.model,
+    contextPct: a.contextPct, status: a.status, tool: a.tool,
+    cwd: a.cwd, desk: a.desk, since: a.since, note: a.note,
+    runtimeSessionId: a.runtimeSessionId || runtime.sessionId || null,
+    provider: runtime.provider || a.provider || null,
+    runtime,
+    profile: a.profile || null, department: a.department || null,
+    task: a.task || '',
+  };
+};
 
 const SETTLE_MS = 1400; // working/done eases back to "thinking" after this
 
 function touch(id, patch) {
   let a = agents.get(id);
+  const now = Date.now();
   if (!a) {
     a = {
       id,
       short: id.slice(0, 8),
       name: codename(id),
       model: '',
+      provider: '',
       contextPct: 0,
       status: 'arriving',
       tool: '',
       cwd: '',
       desk: assignDesk(id),
-      since: Date.now(),
+      since: now,
     };
     agents.set(id, a);
   }
-  Object.assign(a, patch, { lastSeen: Date.now() });
+  const nextStatus = hasOwn(patch, 'status') && patch.status ? patch.status : a.status;
+  const statusChanged = !!(nextStatus && nextStatus !== a.status);
+  Object.assign(a, patch, { lastSeen: now });
+  if (!a.since || statusChanged) a.since = now;
   const prof = resolveProfile(id, a.cwd);
   a.department = resolveDepartment(a.cwd);
   a.task = prof.task || '';
   if (prof.name) a.name = prof.name;
-  a.profile = (prof.character || prof.desk)
-    ? { character: prof.character || null, desk: prof.desk || null } : null;
+  a.profile = (prof.character || prof.desk || prof.card)
+    ? {
+      character: prof.character || null,
+      desk: prof.desk || null,
+      card: prof.card || null,
+    } : null;
   broadcast({ type: 'update', agent: pub(a) });
   return a;
 }
@@ -205,6 +449,7 @@ function scheduleSettle(id) {
     const cur = agents.get(id);
     if (cur && (cur.status === 'working' || cur.status === 'done')) {
       cur.status = 'thinking';
+      cur.since = Date.now();
       broadcast({ type: 'update', agent: pub(cur) });
     }
   }, SETTLE_MS);
@@ -215,6 +460,7 @@ function remove(id) {
   if (!a) return;
   clearAgentTaskSessions(id);
   a.status = 'leaving';
+  a.since = Date.now();
   broadcast({ type: 'update', agent: pub(a) });
   setTimeout(() => {
     freeDesk(id);
@@ -255,7 +501,7 @@ function resolveRuntimeSessionRef(ref) {
   }
 }
 
-function resolveAgentRuntimeSession(agent, opt = {}) {
+function resolveAgentRuntimeSessionStrict(agent, opt = {}) {
   if (!agent) return null;
   const preferred = resolveRuntimeSessionRef(
     opt.runtimeSessionId || opt.targetSession || opt.sessionId || null,
@@ -263,6 +509,19 @@ function resolveAgentRuntimeSession(agent, opt = {}) {
   if (preferred) return preferred;
   const linked = resolveRuntimeSessionRef(agent.runtimeSessionId || null);
   if (linked) return linked;
+  return null;
+}
+
+function resolveAgentAsyncInboxSession(agent, opt = {}) {
+  const linked = resolveAgentRuntimeSessionStrict(agent, opt);
+  if (linked) return linked;
+  return observedCodexInboxSession(agent);
+}
+
+function resolveAgentRuntimeSession(agent, opt = {}) {
+  const strict = resolveAgentRuntimeSessionStrict(agent, opt);
+  if (strict) return strict;
+  if (opt.strict) return null;
   return runtimes.findUniqueSessionByCwd(agent.cwd);
 }
 
@@ -277,7 +536,7 @@ function resolveAuthorIdentity(body, opt = {}) {
   const runtimeSessionId = body.authorRuntimeSessionId
     || body.fromRuntimeSessionId
     || body.runtimeSessionId
-    || resolveAgentRuntimeSession(agent)?.id
+    || resolveAgentRuntimeSessionStrict(agent)?.id
     || null;
   if (agent) {
     return {
@@ -426,6 +685,8 @@ function pubChannelPost(post, thread) {
     authorRuntimeSessionId: meta.authorRuntimeSessionId || null,
     deliveredCount: meta.deliveredCount || 0,
     targetSessions: meta.targetSessions || [],
+    queuedCount: meta.queuedCount || 0,
+    queuedSessionIds: meta.queuedSessionIds || [],
     memberCount: meta.memberCount || threadMeta.memberCount || 0,
   };
 }
@@ -455,7 +716,7 @@ function sendChannelMessage(body) {
   const exactTargetIds = new Set();
   const fallbackCwds = new Set();
   for (const member of members) {
-    const exact = resolveAgentRuntimeSession(member);
+    const exact = resolveAgentRuntimeSessionStrict(member);
     if (exact) {
       exactTargetIds.add(exact.id);
     } else if (member.cwd) {
@@ -484,6 +745,14 @@ function sendChannelMessage(body) {
       deliveredSessions.push(session);
     } catch {}
   }
+  const queuedSessions = [];
+  for (const member of members) {
+    const asyncSession = resolveAgentAsyncInboxSession(member);
+    if (!sessionSupportsAsyncInbox(asyncSession)) continue;
+    if (authorInfo.authorRuntimeSessionId && asyncSession.id === authorInfo.authorRuntimeSessionId) continue;
+    if (deliveredSessions.some((session) => session.id === asyncSession.id)) continue;
+    if (!queuedSessions.some((session) => session.id === asyncSession.id)) queuedSessions.push(asyncSession);
+  }
   let thread = findChannelThread(channel.id);
   const postMeta = {
     authorAgentId: authorInfo.authorAgentId,
@@ -491,6 +760,8 @@ function sendChannelMessage(body) {
     authorRuntimeSessionId: authorInfo.authorRuntimeSessionId,
     deliveredCount: deliveredSessions.length,
     targetSessions: deliveredSessions.map((session) => session.id),
+    queuedCount: queuedSessions.length,
+    queuedSessionIds: queuedSessions.map((session) => session.id),
     memberCount: members.length,
   };
   let post;
@@ -522,6 +793,11 @@ function sendChannelMessage(body) {
   }
   broadcastBoardRecent();
   broadcastCommsOverview();
+  const receipt = actionReceipt({
+    stored: true,
+    targetSessions: deliveredSessions,
+    queuedSessions,
+  });
   return {
     ok: true,
     channel,
@@ -530,6 +806,7 @@ function sendChannelMessage(body) {
     deliveredCount: deliveredSessions.length,
     memberCount: members.length,
     targetSessions: deliveredSessions.map((session) => session.id),
+    receipt,
   };
 }
 
@@ -551,6 +828,8 @@ function pubCollabPost(post, thread) {
     toAgentName: meta.toAgentName || threadMeta.toAgentName || null,
     terminalDelivered: !!meta.terminalDelivered,
     relaySessionId: meta.relaySessionId || null,
+    queuedCount: meta.queuedCount || 0,
+    queuedSessionIds: meta.queuedSessionIds || [],
   };
 }
 
@@ -609,7 +888,7 @@ function getCommsOverview() {
 }
 
 function broadcastCommsOverview() {
-  broadcast({ type: 'comms_overview', overview: getCommsOverview() });
+  broadcast({ type: EV.COMMS_OVERVIEW, overview: getCommsOverview() });
 }
 
 function findDirectCollabThread(fromAgentId, toAgentId) {
@@ -649,7 +928,7 @@ function sendCollabMessage(body) {
   const relayTarget = body.relay === false
     ? null
     : resolveRuntimeSessionRef(body.targetSession || body.targetRuntimeSessionId || body.toRuntimeSessionId)?.id
-      || resolveAgentRuntimeSession(to)?.id
+      || resolveAgentRuntimeSessionStrict(to)?.id
       || null;
   let terminalDelivered = false;
   if (relayTarget) {
@@ -661,6 +940,11 @@ function sendCollabMessage(body) {
       terminalDelivered = true;
     } catch {}
   }
+  const queuedSession = !terminalDelivered
+    && (!body.fromRuntimeSessionId || body.fromRuntimeSessionId !== resolveAgentAsyncInboxSession(to)?.id)
+    ? resolveAgentAsyncInboxSession(to)
+    : null;
+  const queuedSessions = sessionSupportsAsyncInbox(queuedSession) ? [queuedSession] : [];
   const postMeta = {
     fromAgentId: from.id,
     fromAgentName: from.name,
@@ -669,6 +953,8 @@ function sendCollabMessage(body) {
     toAgentName: to.name,
     terminalDelivered,
     relaySessionId: terminalDelivered ? relayTarget : null,
+    queuedCount: queuedSessions.length,
+    queuedSessionIds: queuedSessions.map((session) => session.id),
   };
   let post;
   if (!thread) {
@@ -702,12 +988,18 @@ function sendCollabMessage(body) {
   }
   broadcastBoardRecent();
   broadcastCollabRecent();
+  const relaySession = terminalDelivered ? resolveRuntimeSessionSnapshot(relayTarget) : null;
   return {
     ok: true,
     thread,
     post: pubCollabPost(post, thread),
     terminalDelivered,
     targetSession: relayTarget,
+    receipt: actionReceipt({
+      stored: true,
+      targetSessions: relaySession ? [relaySession] : [],
+      queuedSessions,
+    }),
   };
 }
 
@@ -724,7 +1016,7 @@ function sendLeadDirectMessage(body) {
   const relayTarget = body.relay === false
     ? null
     : resolveRuntimeSessionRef(body.targetSession || body.targetRuntimeSessionId || body.toRuntimeSessionId)?.id
-      || resolveAgentRuntimeSession(to)?.id
+      || resolveAgentRuntimeSessionStrict(to)?.id
       || null;
   let terminalDelivered = false;
   if (relayTarget) {
@@ -736,6 +1028,8 @@ function sendLeadDirectMessage(body) {
       terminalDelivered = true;
     } catch {}
   }
+  const queuedSession = !terminalDelivered ? resolveAgentAsyncInboxSession(to) : null;
+  const queuedSessions = sessionSupportsAsyncInbox(queuedSession) ? [queuedSession] : [];
   const postMeta = {
     fromAgentId: null,
     fromAgentName: body.author || 'Lead',
@@ -744,6 +1038,8 @@ function sendLeadDirectMessage(body) {
     terminalDelivered,
     relaySessionId: terminalDelivered ? relayTarget : null,
     leadDirect: true,
+    queuedCount: queuedSessions.length,
+    queuedSessionIds: queuedSessions.map((session) => session.id),
   };
   let post;
   if (!thread) {
@@ -777,16 +1073,25 @@ function sendLeadDirectMessage(body) {
     });
   }
   broadcastCollabRecent();
+  const relaySession = terminalDelivered ? resolveRuntimeSessionSnapshot(relayTarget) : null;
   return {
     ok: true,
     thread,
     post: pubCollabPost(post, thread),
     terminalDelivered,
     targetSession: relayTarget,
+    receipt: actionReceipt({
+      stored: true,
+      targetSessions: relaySession ? [relaySession] : [],
+      queuedSessions,
+    }),
   };
 }
 
 function pubPrompt(p) {
+  const runtime = runtimeSummaryForAgent(agents.get(p.agentId), {
+    runtimeSessionId: p.terminalSessionId,
+  });
   return {
     id: p.id,
     agentId: p.agentId,
@@ -800,6 +1105,9 @@ function pubPrompt(p) {
     status: p.status,
     threadId: p.threadId || null,
     terminalSessionId: p.terminalSessionId || null,
+    provider: runtime.provider || null,
+    runtime,
+    actions: promptReplyActions(p, runtime),
   };
 }
 
@@ -1103,6 +1411,7 @@ function replyToPrompt(promptId, body) {
   const text = (body && body.text ? '' + body.text : '').trim();
   const author = body.author || 'Human';
   let boardPosted = false, terminalDelivered = false;
+  let receiptTargetSession = null;
   if (text && prompt.threadId && bbs.getThread(prompt.threadId)) {
     bbs.reply({
       threadId: prompt.threadId,
@@ -1115,14 +1424,14 @@ function replyToPrompt(promptId, body) {
   }
   const target = body.targetSession
     || resolveRuntimeSessionRef(prompt.terminalSessionId)?.id
-    || resolveAgentRuntimeSession(agents.get(prompt.agentId))?.id
-    || runtimes.findUniqueSessionByCwd(prompt.cwd)?.id
+    || resolveAgentRuntimeSessionStrict(agents.get(prompt.agentId))?.id
     || null;
   if (text && target) {
     try {
       runtimes.sendInput(target, text, { enter: body.enter !== false });
       terminalDelivered = true;
       prompt.terminalSessionId = target;
+      receiptTargetSession = resolveRuntimeSessionSnapshot(target);
     } catch {}
   }
   if (body.close !== false) {
@@ -1140,6 +1449,10 @@ function replyToPrompt(promptId, body) {
     boardPosted,
     terminalDelivered,
     targetSession: target,
+    receipt: actionReceipt({
+      stored: boardPosted,
+      targetSessions: receiptTargetSession ? [receiptTargetSession] : [],
+    }),
   };
 }
 
@@ -1153,10 +1466,13 @@ function handleHook(ev) {
   const base = {};
   if (ev.cwd) base.cwd = ev.cwd;
   if (ev.model) base.model = ev.model;
+  if (ev.provider) base.provider = ev.provider;
   if (typeof ev.contextPct === 'number') base.contextPct = ev.contextPct;
   if (Object.prototype.hasOwnProperty.call(ev, 'note')) base.note = ev.note || '';
-  if (ev.runtime_session_id || ev.runtimeSessionId) {
-    base.runtimeSessionId = ev.runtime_session_id || ev.runtimeSessionId;
+  if (Object.prototype.hasOwnProperty.call(ev, 'runtime_session_id')
+    || Object.prototype.hasOwnProperty.call(ev, 'runtimeSessionId')) {
+    const runtimeSessionId = ev.runtime_session_id ?? ev.runtimeSessionId ?? '';
+    base.runtimeSessionId = runtimeSessionId ? String(runtimeSessionId) : null;
   }
   if (ev.transcript_path) {
     const st = readTranscriptStats(ev.transcript_path);
@@ -1353,6 +1669,7 @@ const server = http.createServer(async (req, res) => {
       codexAvailable: runtime.codexAvailable,
       shellAvailable: runtime.shellAvailable,
       managedSessions: runtime.sessions.filter((s) => s.kind === 'terminal' && s.alive).length,
+      codexObserver: getCodexObserverStatus(),
     });
     return;
   }
@@ -1381,7 +1698,16 @@ const server = http.createServer(async (req, res) => {
     }
   }
   if (req.method === 'GET' && pathname === '/api/terminal/status') {
-    sendJson(res, 200, runtimes.runtimeStatus());
+    sendJson(res, 200, {
+      ...runtimes.runtimeStatus(),
+      codexObserver: getCodexObserverStatus(),
+    });
+    return;
+  }
+  if (req.method === 'GET' && pathname === '/api/observers') {
+    sendJson(res, 200, {
+      codex: getCodexObserverStatus(),
+    });
     return;
   }
   if (req.method === 'GET' && pathname === '/api/runtimes') {
@@ -1636,8 +1962,13 @@ const server = http.createServer(async (req, res) => {
   fs.readFile(fp, (err, data) => {
     if (err) { res.writeHead(404).end('not found'); return; }
     const ext = path.extname(fp);
-    const ct = ext === '.html' ? 'text/html' : ext === '.js' ? 'text/javascript'
-      : ext === '.css' ? 'text/css' : 'application/octet-stream';
+    const ct = ext === '.html' ? 'text/html'
+      : ext === '.js' ? 'text/javascript'
+        : ext === '.css' ? 'text/css'
+          : ext === '.svg' ? 'image/svg+xml'
+            : ext === '.webmanifest' ? 'application/manifest+json'
+              : ext === '.json' ? 'application/json'
+                : 'application/octet-stream';
     res.writeHead(200, { 'content-type': ct });
     res.end(data);
   });
@@ -1654,7 +1985,17 @@ setInterval(() => {
 }, 60 * 1000);
 
 server.listen(PORT, () => {
+  startCodexObserver();
   console.log(`\n  The Office is open  →  http://localhost:${PORT}\n` +
     `  hook ingest:  POST http://localhost:${PORT}/hook\n` +
     `  state debug:  http://localhost:${PORT}/state\n`);
+});
+
+process.on('SIGINT', () => {
+  stopCodexObserver();
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  stopCodexObserver();
+  process.exit(0);
 });

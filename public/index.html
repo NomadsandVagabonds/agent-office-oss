@@ -1455,6 +1455,44 @@ function commsCardClass(kind,post,opt){
 function commsStamp(text,tone){
   return '<div class="cm-card-stamp'+(tone?' '+tone:'')+'"><i></i><span>'+esc(text)+'</span></div>';
 }
+function queuedCountForMessage(msg){
+  if(!msg)return 0;
+  if(Number.isFinite(msg.queuedCount))return Math.max(0,Number(msg.queuedCount)||0);
+  return Array.isArray(msg.queuedSessionIds)?msg.queuedSessionIds.length:0;
+}
+function directDeliveryState(post){
+  const meta=post&&post.meta?post.meta:post||{};
+  const queued=queuedCountForMessage(meta);
+  if(meta&&meta.terminalDelivered)return{badge:'Relayed',tone:'good',stamp:'Relayed into live terminal',relayed:true,boardOnly:false};
+  if(queued)return{badge:'Queued '+queued,tone:'warn',stamp:'Queued for managed Codex inbox pickup',relayed:false,boardOnly:false};
+  return{badge:'Board only',tone:'warn',stamp:'Stored on board / inbox',relayed:false,boardOnly:true};
+}
+function channelDeliveryState(msg){
+  const delivered=Math.max(0,Number(msg&&msg.deliveredCount)||0);
+  const queued=queuedCountForMessage(msg);
+  if(delivered&&queued)return{
+    badge:'Live '+delivered+' · Queue '+queued,
+    tone:'good',
+    stamp:'Reached '+delivered+' live desk'+(delivered===1?'':'s')+' and queued for '+queued+' managed Codex inbox'+(queued===1?'':'es'),
+    relayed:true,
+    boardOnly:false,
+  };
+  if(delivered)return{
+    badge:'Relayed '+delivered,
+    tone:'good',
+    stamp:'Reached '+delivered+' live desk'+(delivered===1?'':'s'),
+    relayed:true,
+    boardOnly:false,
+  };
+  if(queued)return{
+    badge:'Queued '+queued,
+    tone:'warn',
+    stamp:'Queued for '+queued+' managed Codex inbox'+(queued===1?'':'es'),
+    relayed:false,
+    boardOnly:false,
+  };
+  return{badge:'Board only',tone:'warn',stamp:'Saved for async pickup',relayed:false,boardOnly:true};
+}
 function renderCommsMain(){
   const kind=commsState.selectedKind, prompt=selectedCommsPrompt(),
     channel=selectedCommsChannel(), direct=selectedDirectThread(),
@@ -1510,10 +1548,10 @@ function renderCommsMain(){
   if(kind==='direct'&&direct){
     const posts=Array.isArray(commsState.feed&&commsState.feed.posts)?commsState.feed.posts:[];
     const seenAt=readSeenAt('direct',direct.threadId);
-    COMM.feed.innerHTML=posts.length?posts.map((post)=>'<article class="'+commsCardClass('direct',post,{relayed:!!(post.meta&&post.meta.terminalDelivered),boardOnly:!(post.meta&&post.meta.terminalDelivered),isNew:post.timestamp>seenAt})+'"><div class="cm-card-title"><span>'
-      +esc(post.author)+'</span><span class="cm-pill '+((post.meta&&post.meta.terminalDelivered)?'good':'')+'">'
-      +esc(fmtAgo(post.timestamp))+'</span></div><div class="cm-card-copy">'+fmtBody(post.content)
-      +'</div>'+commsStamp((post.meta&&post.meta.terminalDelivered)?'Relayed into live terminal':'Stored on board / inbox',(post.meta&&post.meta.terminalDelivered)?'good':'warn')+'</article>').join('')
+    COMM.feed.innerHTML=posts.length?posts.map((post)=>{const delivery=directDeliveryState(post);return'<article class="'+commsCardClass('direct',post,{relayed:delivery.relayed,boardOnly:delivery.boardOnly,isNew:post.timestamp>seenAt})+'"><div class="cm-card-title"><span>'
+      +esc(post.author)+'</span><span class="cm-pill '+(delivery.tone==='good'?'good':delivery.tone==='warn'?'warn':'')+'">'
+      +esc(delivery.badge)+'</span></div><div class="cm-card-meta">'+esc(fmtAgo(post.timestamp))+'</div><div class="cm-card-copy">'+fmtBody(post.content)
+      +'</div>'+commsStamp(delivery.stamp,delivery.tone)+'<\/article>';}).join('')
       :'<div class="cm-empty">No posts yet in this direct thread. Use it like a lead DM line for one agent.</div>';
     return;
   }
@@ -1549,11 +1587,11 @@ function renderCommsMain(){
   if(channel){
     const posts=Array.isArray(commsState.feed)?commsState.feed:[];
     const seenAt=readSeenAt('channel',channel.id);
-    COMM.feed.innerHTML=posts.length?posts.map((msg)=>'<article class="'+commsCardClass('channel',msg,{relayed:!!msg.deliveredCount,boardOnly:!msg.deliveredCount,isNew:msg.timestamp>seenAt})+'"><div class="cm-card-title"><span>'
-      +esc(msg.author)+'</span><span class="cm-pill '+(msg.deliveredCount?'good':'warn')+'">'
-      +(msg.deliveredCount?'Relayed '+msg.deliveredCount:'Board only')+'</span></div><div class="cm-card-meta"># '
+    COMM.feed.innerHTML=posts.length?posts.map((msg)=>{const delivery=channelDeliveryState(msg);return'<article class="'+commsCardClass('channel',msg,{relayed:delivery.relayed,boardOnly:delivery.boardOnly,isNew:msg.timestamp>seenAt})+'"><div class="cm-card-title"><span>'
+      +esc(msg.author)+'</span><span class="cm-pill '+(delivery.tone==='good'?'good':delivery.tone==='warn'?'warn':'')+'">'
+      +esc(delivery.badge)+'</span></div><div class="cm-card-meta"># '
       +esc(msg.channelName||channel.name)+' · '+esc(fmtAgo(msg.timestamp))+'</div><div class="cm-card-copy">'
-      +fmtBody(msg.content)+'</div>'+commsStamp(msg.deliveredCount?('Reached '+msg.deliveredCount+' live desk'+(msg.deliveredCount===1?'':'s')):'Saved for async pickup',msg.deliveredCount?'good':'warn')+'</article>').join('')
+      +fmtBody(msg.content)+'</div>'+commsStamp(delivery.stamp,delivery.tone)+'<\/article>';}).join('')
       :'<div class="cm-empty">No posts yet in this channel. Lead with a note and the Office will fan it out to live sessions.</div>';
     return;
   }

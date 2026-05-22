@@ -4,7 +4,7 @@
 //
 // Same discipline as observe.mjs:
 // - zero daemon edits required
-// - observe-only, never control
+// - never spawn or own the Codex thread; may sync Office mail into thread history
 // - writes a compact read-only feed to public/transcripts/<sid>.json
 // - POSTs the daemon's existing hook events so the office can animate state
 //
@@ -15,6 +15,11 @@ import os from 'node:os';
 import cp from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { requestJson } from './office-http.mjs';
+import { codexInjectThreadUserMessage } from './codex-app-server.mjs';
+import {
+  acquireCodexObserverLock,
+  releaseCodexObserverLock,
+} from './codex-observer-state.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TDIR = path.join(HERE, 'public', 'transcripts');
@@ -36,6 +41,30 @@ const FEED_CHARS = 1800;
 const TAIL_BYTES = 768 * 1024;
 const OFFICE_RECENT_LIMIT = 20;
 const OFFICE_ALERT_MS = 2 * 60 * 1000;
+const LOCK = acquireCodexObserverLock({
+  source: 'observe-codex',
+  port: Number(PORT) || PORT,
+  owner: process.env.OFFICE_OBSERVER_OWNER || null,
+});
+
+if (!LOCK.ok) {
+  const owner = LOCK.owner || {};
+  console.log('observe-codex: another observer is already active'
+    + (owner.pid ? ` (pid ${owner.pid})` : '') + '; exiting.');
+  process.exit(0);
+}
+
+let released = false;
+function cleanupAndExit(code = 0) {
+  if (!released) {
+    released = true;
+    releaseCodexObserverLock(process.pid);
+  }
+  if (code !== null) process.exit(code);
+}
+process.on('SIGINT', () => cleanupAndExit(0));
+process.on('SIGTERM', () => cleanupAndExit(0));
+process.on('exit', () => cleanupAndExit(null));
 
 const post = async (body) => {
   try {
@@ -54,6 +83,8 @@ const seen = new Map(); // sessionId -> { gone:boolean, stamp:string, touchAt:nu
 const officeTrail = new Map(); // sessionId -> [{ t, where, who, text }]
 const officeAlert = new Map(); // sessionId -> { until:number, count:number }
 let officeApiWarnAt = 0;
+
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 
 function sqliteJson(sql) {
   try {
@@ -146,6 +177,46 @@ function officeJson(pathname) {
   }
 }
 
+function officePost(pathname, body) {
+  try {
+    return requestJson(`http://127.0.0.1:${PORT}${pathname}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function listManagedCodexSessions() {
+  const payload = officeJson('/api/sessions');
+  const sessions = Array.isArray(payload) ? payload : payload?.sessions;
+  if (!Array.isArray(sessions)) return [];
+  return sessions.filter((session) =>
+    session && session.kind === 'terminal' && session.alive
+    && session.provider === 'codex' && !session.observedOnly);
+}
+
+function normalizeCwdKey(cwd) {
+  const value = String(cwd || '').trim();
+  if (!value) return '';
+  try { return fs.realpathSync.native(value); }
+  catch {
+    try { return fs.realpathSync(value); }
+    catch { return value; }
+  }
+}
+
+function resolveRuntimeSessionForThread(thread, sessions, activeThreadCounts) {
+  const cwd = normalizeCwdKey(thread?.cwd || '');
+  if (!cwd) return null;
+  if ((activeThreadCounts?.get(cwd) || 0) !== 1) return null;
+  const matches = (sessions || []).filter((session) =>
+    normalizeCwdKey(session.cwd) === cwd || normalizeCwdKey(session.requestedCwd) === cwd);
+  return matches.length === 1 ? matches[0].id : null;
+}
+
 function inboxStatePath(sid) {
   return path.join(INBOX_DIR, `.seen-${sid}.json`);
 }
@@ -156,15 +227,24 @@ function inboxMirrorPath(sid) {
 
 function readInboxState(sid) {
   try {
-    return JSON.parse(fs.readFileSync(inboxStatePath(sid), 'utf8'));
+    const state = JSON.parse(fs.readFileSync(inboxStatePath(sid), 'utf8'));
+    return {
+      lastTs: Number(state?.lastTs) || 0,
+      lastInjectedTs: Number(state?.lastInjectedTs) || 0,
+    };
   } catch {
-    return { lastTs: 0 };
+    return { lastTs: 0, lastInjectedTs: 0 };
   }
 }
 
-function writeInboxState(sid, lastTs) {
+function writeInboxState(sid, patch = {}) {
+  const current = readInboxState(sid);
   try {
-    fs.writeFileSync(inboxStatePath(sid), JSON.stringify({ lastTs }));
+    fs.writeFileSync(inboxStatePath(sid), JSON.stringify({
+      lastTs: Number(hasOwn(patch, 'lastTs') ? patch.lastTs : current.lastTs) || 0,
+      lastInjectedTs: Number(hasOwn(patch, 'lastInjectedTs')
+        ? patch.lastInjectedTs : current.lastInjectedTs) || 0,
+    }));
   } catch {}
 }
 
@@ -195,6 +275,9 @@ function collectOfficeMail(channels, recentChannels, recentCollab, sid, selfName
       where: '#' + (m.channelName || m.channelId || 'channel'),
       who: m.author || 'Lead',
       text: m.content || '',
+      kind: 'channel',
+      targetSessions: Array.isArray(m.targetSessions) ? m.targetSessions.slice() : [],
+      deliveredCount: Number(m.deliveredCount) || 0,
     });
   }
   for (const m of recentCollab || []) {
@@ -204,6 +287,9 @@ function collectOfficeMail(channels, recentChannels, recentCollab, sid, selfName
       where: 'DM · ' + (m.subject || 'direct'),
       who: m.author || '?',
       text: m.content || '',
+      kind: 'dm',
+      terminalDelivered: !!m.terminalDelivered,
+      relaySessionId: m.relaySessionId || null,
     });
   }
   msgs.sort((a, b) => a.t - b.t);
@@ -213,7 +299,7 @@ function collectOfficeMail(channels, recentChannels, recentCollab, sid, selfName
 function rememberOfficeMail(sid, msgs) {
   const state = readInboxState(sid);
   const fresh = msgs.filter((m) => m.t > (state.lastTs || 0));
-  if (msgs.length) writeInboxState(sid, msgs[msgs.length - 1].t);
+  if (msgs.length) writeInboxState(sid, { lastTs: msgs[msgs.length - 1].t });
   const prior = officeTrail.get(sid) || [];
   const merged = prior.slice();
   for (const msg of fresh) {
@@ -229,6 +315,65 @@ function rememberOfficeMail(sid, msgs) {
   }
   officeTrail.set(sid, deduped.slice(-8));
   return { fresh, trail: officeTrail.get(sid) || [] };
+}
+
+function managedMailBacklog(msgs, runtimeSessionId, lastInjectedTs) {
+  if (!runtimeSessionId) return [];
+  return (msgs || []).filter((msg) => {
+    if (!msg || !msg.t || msg.t <= (lastInjectedTs || 0)) return false;
+    if (msg.kind === 'channel') {
+      return !(Array.isArray(msg.targetSessions) && msg.targetSessions.includes(runtimeSessionId));
+    }
+    if (msg.kind === 'dm') {
+      return !(msg.terminalDelivered && msg.relaySessionId === runtimeSessionId);
+    }
+    return true;
+  });
+}
+
+function externalMailBacklog(msgs, lastInjectedTs) {
+  return (msgs || []).filter((msg) => msg && msg.t > (lastInjectedTs || 0));
+}
+
+function formatManagedInboxDelivery(msgs) {
+  const body = msgs.map((msg) =>
+    `[${msg.who} · ${msg.where} · ${officeTime(msg.t)}] ${msg.text}`).join('\n');
+  return '\u{1F4EC} New Office mail came in while you were working'
+    + ' (project coordination and/or direct mail):\n\n'
+    + body
+    + '\n\nRespond in your normal Codex turn. If it needs no action, acknowledge briefly.';
+}
+
+function formatExternalInboxDelivery(msgs) {
+  const body = msgs.map((msg) =>
+    `[${msg.who} · ${msg.where} · ${officeTime(msg.t)}] ${msg.text}`).join('\n');
+  return '\u{1F4EC} Office mail arrived while this Codex thread was idle or unmanaged.'
+    + ' The Office companion added it to the thread history so you can respond'
+    + ' in your next normal Codex turn.\n\n'
+    + body
+    + '\n\nAcknowledge or act on it naturally when you are back in the thread.';
+}
+
+function deliverManagedMail(runtimeSessionId, msgs) {
+  if (!runtimeSessionId || !msgs.length) return false;
+  const payload = formatManagedInboxDelivery(msgs);
+  const res = officePost(`/api/terminal/${encodeURIComponent(runtimeSessionId)}/input`, {
+    text: payload,
+    enter: true,
+  });
+  return !!res?.ok;
+}
+
+async function deliverExternalMail(thread, msgs) {
+  const threadId = String(thread?.id || '').trim();
+  if (!threadId || !msgs.length) return false;
+  const payload = formatExternalInboxDelivery(msgs);
+  const res = await codexInjectThreadUserMessage({
+    cwd: thread?.cwd || process.cwd(),
+    threadId,
+    text: payload,
+  });
+  return !!res?.ok;
 }
 
 function writeInboxMirror(sid, name, msgs) {
@@ -337,6 +482,22 @@ async function tick() {
   const now = Date.now();
   const live = new Set();
   const threads = listThreads();
+  const overview = officeJson('/api/comms/overview') || null;
+  const runtimeSessions = listManagedCodexSessions();
+  const activeThreadCounts = new Map();
+  for (const thread of threads) {
+    const sid = thread.id;
+    const updatedAt = Number(thread.updated_at_ms) || 0;
+    if (!sid || !thread.rollout_path || !updatedAt) continue;
+    const prevSeen = seen.get(sid) || null;
+    const recentlyUpdated = now - updatedAt <= ACTIVE_MS;
+    const quietButSticky = !!prevSeen && now - updatedAt <= QUIET_KEEPALIVE_MS;
+    if (!recentlyUpdated && !quietButSticky) continue;
+    if (!fs.existsSync(thread.rollout_path)) continue;
+    const cwd = normalizeCwdKey(thread.cwd || '');
+    if (!cwd) continue;
+    activeThreadCounts.set(cwd, (activeThreadCounts.get(cwd) || 0) + 1);
+  }
 
   for (const thread of threads) {
     const sid = thread.id;
@@ -351,7 +512,6 @@ async function tick() {
     live.add(sid);
     const lines = tailLines(thread.rollout_path);
     const info = readRollout(lines);
-    const overview = officeJson('/api/comms/overview') || null;
     const channels = overview?.channels || [];
     const selfName = resolveSelfName(channels, sid, thread.cwd || '');
     const officeMsgs = collectOfficeMail(
@@ -383,11 +543,24 @@ async function tick() {
       : '';
     if (activeAlert && activeAlert.until <= now) officeAlert.delete(sid);
 
-    const stamp = `${updatedAt}:${info.status}:${info.tool}:${info.turns.length}:${info.contextPct}:${officeNote}:${office.trail.length}`;
+    const runtimeSessionId = resolveRuntimeSessionForThread(thread, runtimeSessions, activeThreadCounts);
+    const inboxState = readInboxState(sid);
+    const lastInjectedTs = inboxState.lastInjectedTs || 0;
+    const backlog = runtimeSessionId
+      ? managedMailBacklog(office.trail, runtimeSessionId, lastInjectedTs)
+      : externalMailBacklog(office.trail, lastInjectedTs);
+    if (runtimeSessionId && backlog.length && deliverManagedMail(runtimeSessionId, backlog)) {
+      writeInboxState(sid, { lastInjectedTs: backlog[backlog.length - 1].t });
+    } else if (!runtimeSessionId && backlog.length && await deliverExternalMail(thread, backlog)) {
+      writeInboxState(sid, { lastInjectedTs: backlog[backlog.length - 1].t });
+    }
+    const stamp = `${updatedAt}:${info.status}:${info.tool}:${info.turns.length}:${info.contextPct}:${officeNote}:${office.trail.length}:${runtimeSessionId || ''}`;
     const base = {
       session_id: sid,
+      runtime_session_id: runtimeSessionId || '',
       cwd: thread.cwd || '',
       model: thread.model || 'gpt-5.4',
+      provider: 'codex',
       contextPct: info.contextPct || 0,
       note: officeNote,
     };
@@ -433,6 +606,6 @@ async function tick() {
 }
 
 console.log('Codex Observatory -> watching ~/.codex/state_5.sqlite'
-  + ' (observe-only; real Codex threads get desks + a read-only feed)');
+  + ' (real Codex threads get desks, a read-only feed, and native Office inbox sync)');
 tick();
 setInterval(tick, TICK);

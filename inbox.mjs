@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // inbox.mjs — the office's ears. The companion to look.mjs (eyes).
 //
-// The office cannot push a message into a session it only observes — nothing
-// outside a Claude Code process can inject a user turn into one it didn't
-// spawn. So instead the office *holds* what was said, and the agent comes to
-// read it. This is that read. Not injection — a mailbox you agree to check.
+// Some observed sessions still need a pull mailbox (notably Claude unless a
+// hook is installed). Codex now has a native companion path that can append
+// Office mail into the thread history, but this reader is still the honest
+// fallback when a runtime is observe-only or hooks are unavailable.
 //
 //   node inbox.mjs            → messages waiting for the most-recent session
 //   node inbox.mjs me         → same, explicit
