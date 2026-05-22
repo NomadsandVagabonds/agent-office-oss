@@ -6,7 +6,7 @@ system** section is the whole setup.
 
 ## What this repo is
 
-The Office is a hooks-driven control plane for multi-agent coding work: a
+The Office is an event-driven control plane for multi-agent coding work: a
 zero-dependency Node daemon (`daemon.mjs`) plus an offline-first p5 client
 (`public/index.html`) that renders every agent session as a character at a desk,
 with a shared kanban, project binder, and Slack-style comms. See `README.md`
@@ -25,11 +25,11 @@ open http://localhost:4317/
 ## Configure to your system
 
 There are **no API keys to add.** The Office is a control plane, not a model
-client — it never calls an LLM and stores no credentials. Your agents
-(Claude Code, Codex) keep their own existing auth; the Office just *observes*
-them via hooks and renders them. "Setup" is three optional steps:
+client — it never calls an LLM and stores no credentials. Your agents keep
+their own existing auth; the Office just *observes* or coordinates them through
+hooks, observers, and helper commands. Setup is four optional steps:
 
-**1. Wire your real Claude Code sessions (hooks).**
+**1. Connect real Claude Code sessions (hooks).**
 ```bash
 node install-hooks.mjs          # adds the office hook bridge to ~/.claude/settings.json
 node install-inbox-hook.mjs     # surfaces office mail back into your sessions
@@ -39,7 +39,21 @@ This registers `SessionStart/End`, `PreToolUse/PostToolUse`, `UserPromptSubmit`,
 `Notification`, `Stop`, `SubagentStop` → `POST /hook`. Once installed, every
 Claude Code session you run shows up at a desk automatically.
 
-**2. Map your projects to departments (optional).**
+**2. Connect real Codex sessions (observer + helpers).**
+```bash
+node observe-codex.mjs
+```
+This tails real Codex rollout JSONL files and publishes a truthful read-only
+desk feed into the office. Inside a Codex thread, the `office-*.mjs` helpers
+pick up `CODEX_THREAD_ID` automatically, so presence, channel posts, DMs, task
+moves, and desk-item authorship all resolve to the right desk without extra
+flags.
+
+Other local runtimes can still participate through managed shell sessions or
+the shared `office-*.mjs` helpers even if they do not have a bespoke observer
+yet.
+
+**3. Map your projects to departments (optional).**
 Create `~/.claude/agent-office/profiles.json` to control which working
 directories group into which rooms:
 ```json
@@ -54,7 +68,7 @@ Without it, a session's department falls back to its working-directory basename,
 which is enough to get a populated office. The daemon tolerates the file being
 absent.
 
-**3. Environment knobs (all optional).**
+**4. Environment knobs (all optional).**
 
 | Env var | Effect |
 |---|---|
@@ -68,8 +82,9 @@ environment to resolve your identity — you don't set these yourself.
 
 ## How to behave as an agent here
 
-The full behavioral contract is the installed skill at
-`.claude/skills/the-office/SKILL.md` (Claude Code auto-loads it). In short:
+The full behavioral contract lives at `.claude/skills/the-office/SKILL.md`.
+Claude Code auto-loads it; other runtimes can read the same shared skill
+directly. In short:
 
 - Read your office inbox; post status in the right **channel**; DM a teammate
   when it's for one person; ask the human only when the human is the blocker.
@@ -78,8 +93,8 @@ The full behavioral contract is the installed skill at
 - Don't fake-close work; `task.assignee` is a resolvable agentId, not a free
   name; health-check `GET /api/health` before blaming load.
 
-**Codex note:** presence and comms pick up `CODEX_THREAD_ID` automatically, so
-the same `office-*.mjs` commands work without extra flags.
+**Codex note:** presence, comms, and tasks all pick up `CODEX_THREAD_ID`
+automatically, so the same `office-*.mjs` commands work without extra flags.
 
 ## What not to commit
 
