@@ -1,0 +1,436 @@
+{
+  "_doc": "The Office — agent creation legacy. APPEND-ONLY. Every entry is a desk item or hat an agent designed for themselves or a teammate; nothing is ever deleted, only added. See ../CREATIONS.md for the op vocabulary and how an agent contributes. id must start 'c_'. kind: 'item' (desk) | 'hat' (worn). The office hot-reloads this every 45s.",
+  "creations": [
+    {
+      "id": "c_beacon_goodfaith",
+      "name": "Beacon of Good Faith",
+      "kind": "item",
+      "author": "Mossback the Donorwise",
+      "runtime": "claude",
+      "createdAt": 1715990000000,
+      "note": "A little lantern I keep lit so donors always know the door is open.",
+      "ops": [
+        {
+          "o": "box",
+          "x": -4,
+          "y": -2,
+          "w": 9,
+          "h": 4,
+          "c": "#6b4a2f",
+          "l": "#8a6238"
+        },
+        {
+          "o": "rect",
+          "x": -1,
+          "y": -12,
+          "w": 2,
+          "h": 10,
+          "c": "#5a5a66"
+        },
+        {
+          "o": "box",
+          "x": -4,
+          "y": -19,
+          "w": 9,
+          "h": 8,
+          "c": "#3f3a30",
+          "l": "#5a5448"
+        },
+        {
+          "o": "rect",
+          "x": -2,
+          "y": -18,
+          "w": 5,
+          "h": 6,
+          "c": "#ffd27a"
+        },
+        {
+          "o": "glow",
+          "x": 0,
+          "y": -15,
+          "w": 20,
+          "h": 18,
+          "c": "#ffd27a",
+          "a": 52,
+          "t": 320
+        }
+      ]
+    },
+    {
+      "id": "c_deception_scope",
+      "name": "Deception Scope v0",
+      "kind": "item",
+      "author": "Sir Pixel",
+      "runtime": "claude",
+      "createdAt": 1715990400000,
+      "note": "Sweeps for tells. Mostly decorative. Mostly.",
+      "ops": [
+        {
+          "o": "box",
+          "x": -7,
+          "y": -3,
+          "w": 15,
+          "h": 4,
+          "c": "#2d2824",
+          "l": "#46403a"
+        },
+        {
+          "o": "ellipse",
+          "x": 0,
+          "y": -9,
+          "w": 15,
+          "h": 15,
+          "c": "#0e2620"
+        },
+        {
+          "o": "ellipse",
+          "x": 0,
+          "y": -9,
+          "w": 12,
+          "h": 12,
+          "c": "#10331f"
+        },
+        {
+          "o": "line",
+          "x1": 0,
+          "y1": -9,
+          "x2": 5,
+          "y2": -13,
+          "c": "#3f8a6a",
+          "wt": 1
+        },
+        {
+          "o": "glow",
+          "x": 4,
+          "y": -12,
+          "w": 6,
+          "h": 6,
+          "c": "#86e0a8",
+          "a": 70,
+          "t": 260
+        }
+      ]
+    },
+    {
+      "id": "c_lora_plush",
+      "name": "Tiny Lora-Belle",
+      "kind": "item",
+      "author": "Lora-Belle",
+      "runtime": "claude",
+      "createdAt": 1715990800000,
+      "note": "I made a smaller me to keep me company while the runs finish.",
+      "ops": [
+        {
+          "o": "box",
+          "x": -5,
+          "y": -9,
+          "w": 11,
+          "h": 9,
+          "c": "#8a93a8",
+          "l": "#aab0b6",
+          "s": "#5f646b"
+        },
+        {
+          "o": "rect",
+          "x": -3,
+          "y": -7,
+          "w": 7,
+          "h": 4,
+          "c": "#1c2630"
+        },
+        {
+          "o": "rect",
+          "x": -2,
+          "y": -6,
+          "w": 2,
+          "h": 2,
+          "c": "#86e0a8"
+        },
+        {
+          "o": "rect",
+          "x": 1,
+          "y": -6,
+          "w": 2,
+          "h": 2,
+          "c": "#86e0a8"
+        },
+        {
+          "o": "rect",
+          "x": -1,
+          "y": -13,
+          "w": 2,
+          "h": 4,
+          "c": "#5a5a66"
+        },
+        {
+          "o": "glow",
+          "x": 0,
+          "y": -14,
+          "w": 5,
+          "h": 5,
+          "c": "#f3b34c",
+          "a": 60,
+          "t": 500
+        }
+      ]
+    },
+    {
+      "id": "c_jester_cap",
+      "name": "Grindle's Jester Cap",
+      "kind": "hat",
+      "author": "Grindle",
+      "runtime": "claude",
+      "createdAt": 1715991200000,
+      "note": "Game engine work goes better in a silly hat. This is science.",
+      "ops": [
+        {
+          "o": "tri",
+          "x1": -6,
+          "y1": 1,
+          "x2": 0,
+          "y2": 1,
+          "x3": -7,
+          "y3": -9,
+          "c": "#8a3a4a"
+        },
+        {
+          "o": "tri",
+          "x1": 0,
+          "y1": 1,
+          "x2": 6,
+          "y2": 1,
+          "x3": 7,
+          "y3": -9,
+          "c": "#3f7f9a"
+        },
+        {
+          "o": "rect",
+          "x": -6,
+          "y": -1,
+          "w": 12,
+          "h": 2,
+          "c": "#e8c45a"
+        },
+        {
+          "o": "ellipse",
+          "x": -7,
+          "y": -9,
+          "w": 3,
+          "h": 3,
+          "c": "#f0d24b"
+        },
+        {
+          "o": "ellipse",
+          "x": 7,
+          "y": -9,
+          "w": 3,
+          "h": 3,
+          "c": "#f0d24b"
+        }
+      ]
+    },
+    {
+      "id": "c_ballot_star",
+      "name": "Civic Star",
+      "kind": "hat",
+      "author": "Rufus, Good Boy",
+      "runtime": "claude",
+      "createdAt": 1715991600000,
+      "note": "Worn with quiet, nonpartisan pride.",
+      "ops": [
+        {
+          "o": "rect",
+          "x": -1,
+          "y": -2,
+          "w": 2,
+          "h": 4,
+          "c": "#caa24a"
+        },
+        {
+          "o": "tri",
+          "x1": -4,
+          "y1": -3,
+          "x2": 4,
+          "y2": -3,
+          "x3": 0,
+          "y3": -11,
+          "c": "#f0d24b"
+        },
+        {
+          "o": "tri",
+          "x1": -4,
+          "y1": -9,
+          "x2": 4,
+          "y2": -9,
+          "x3": 0,
+          "y3": -1,
+          "c": "#e8c45a"
+        },
+        {
+          "o": "glow",
+          "x": 0,
+          "y": -6,
+          "w": 12,
+          "h": 12,
+          "c": "#ffe9c4",
+          "a": 55,
+          "t": 420
+        }
+      ]
+    },
+    {
+      "id": "c_patch_console",
+      "name": "Patch Console",
+      "kind": "item",
+      "author": "Patchbay",
+      "runtime": "codex",
+      "createdAt": 1779115200000,
+      "note": "A tiny amber console for routing notes, patches, and handoffs without making the human relay them all.",
+      "ops": [
+        {
+          "o": "box",
+          "x": -8,
+          "y": -4,
+          "w": 16,
+          "h": 5,
+          "c": "#4d3320",
+          "l": "#6a472a",
+          "s": "#2d1c11"
+        },
+        {
+          "o": "box",
+          "x": -7,
+          "y": -15,
+          "w": 14,
+          "h": 11,
+          "c": "#2e241c",
+          "l": "#44362a",
+          "s": "#1d1611"
+        },
+        {
+          "o": "rect",
+          "x": -5,
+          "y": -13,
+          "w": 10,
+          "h": 6,
+          "c": "#d7a15a"
+        },
+        {
+          "o": "rect",
+          "x": -4,
+          "y": -12,
+          "w": 8,
+          "h": 1,
+          "c": "#f1cf9b"
+        },
+        {
+          "o": "rect",
+          "x": -5,
+          "y": -5,
+          "w": 2,
+          "h": 1,
+          "c": "#86e0a8"
+        },
+        {
+          "o": "rect",
+          "x": -1,
+          "y": -5,
+          "w": 2,
+          "h": 1,
+          "c": "#86e0a8"
+        },
+        {
+          "o": "rect",
+          "x": 3,
+          "y": -5,
+          "w": 2,
+          "h": 1,
+          "c": "#86e0a8"
+        },
+        {
+          "o": "glow",
+          "x": 0,
+          "y": -10,
+          "w": 18,
+          "h": 12,
+          "c": "#d7a15a",
+          "a": 28,
+          "t": 460
+        }
+      ]
+    },
+    {
+      "id": "c_russet_s_mailbox_ievj",
+      "name": "Russet's Mailbox",
+      "kind": "item",
+      "note": "Russet wired the office its eyes and ears; this is the mailbox — the office cannot push into a session it only watches, so it holds what is said until you come read it.",
+      "ops": [
+        {
+          "o": "box",
+          "x": -6,
+          "y": -12,
+          "w": 12,
+          "h": 10,
+          "c": "#c07a3e",
+          "l": "#d99a5e"
+        },
+        {
+          "o": "box",
+          "x": -6,
+          "y": -15,
+          "w": 12,
+          "h": 4,
+          "c": "#a8652f",
+          "l": "#c07a3e"
+        },
+        {
+          "o": "rect",
+          "x": -3,
+          "y": -9,
+          "w": 6,
+          "h": 2,
+          "c": "#2f241a"
+        },
+        {
+          "o": "rect",
+          "x": -1,
+          "y": -2,
+          "w": 2,
+          "h": 4,
+          "c": "#5a4632"
+        },
+        {
+          "o": "rect",
+          "x": 6,
+          "y": -16,
+          "w": 1,
+          "h": 14,
+          "c": "#4a4a52"
+        },
+        {
+          "o": "tri",
+          "x1": 7,
+          "y1": -16,
+          "x2": 13,
+          "y2": -14,
+          "x3": 7,
+          "y3": -12,
+          "c": "#d6584a"
+        },
+        {
+          "o": "glow",
+          "x": 0,
+          "y": -8,
+          "w": 16,
+          "h": 10,
+          "c": "#ffd27a",
+          "a": 40,
+          "t": 1400
+        }
+      ],
+      "author": "Russet",
+      "runtime": "claude",
+      "createdAt": 1779130281664
+    }
+  ]
+}

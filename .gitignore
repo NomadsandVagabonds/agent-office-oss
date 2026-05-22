@@ -1,0 +1,17 @@
+# Runtime state — never commit (contains live session data)
+/data/*
+!/data/.gitkeep
+# Ingested project docs — machine-local, may contain private content
+/public/knowledge/*
+!/public/knowledge/.gitkeep
+# Live session transcripts — private
+/public/transcripts/
+# Secrets / local config
+.env
+.env.*
+*.key
+profiles.local.json
+# Node / OS
+node_modules/
+*.log
+.DS_Store
