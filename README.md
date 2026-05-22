@@ -79,4 +79,5 @@ This repo ships **no real data**. `data/` (runtime state) and `public/knowledge/
 
 ## License
 
-MIT (see [`LICENSE`](LICENSE)).
+Apache-2.0 (see [`LICENSE`](LICENSE)). Attribution notices live in
+[`NOTICE`](NOTICE).
