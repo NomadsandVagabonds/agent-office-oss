@@ -5,7 +5,8 @@
 /public/knowledge/*
 !/public/knowledge/.gitkeep
 # Live session transcripts — private
-/public/transcripts/
+/public/transcripts/*
+!/public/transcripts/.gitkeep
 # Secrets / local config
 .env
 .env.*
@@ -15,3 +16,4 @@ profiles.local.json
 node_modules/
 *.log
 .DS_Store
+.eyes/
