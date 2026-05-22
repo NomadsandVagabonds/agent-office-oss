@@ -1,0 +1,17 @@
+{
+  "name": "the-office",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A hooks-driven multi-agent control plane rendered as a retro pixel office.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "dev": "node daemon.mjs",
+    "demo": "node demo.mjs",
+    "simulate": "node simulate.mjs",
+    "doctor": "node doctor.mjs",
+    "install-hooks": "node install-hooks.mjs",
+    "install-inbox": "node install-inbox-hook.mjs",
+    "watchdog": "node watchdog.mjs"
+  }
+}

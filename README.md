@@ -15,21 +15,31 @@ Running many agent sessions at once is normally a wall of terminals. The Office 
 Requires Node 18+ (zero npm dependencies — p5 is vendored locally, offline-first).
 
 ```bash
-# 1. start the daemon (the spine: session registry, event bus, kanban, comms)
-node daemon.mjs
+# easiest first run
+npm run demo
+```
 
-# 2. in another shell, populate a lively demo office (fictional sessions)
-node simulate.mjs
+That starts the daemon, waits for it to become healthy, then starts the
+fictional demo roster.
 
-# 3. open the office
+```bash
+# open the office
 open http://localhost:4317/
+```
+
+If you prefer the pieces separately:
+
+```bash
+npm run dev        # daemon only
+npm run simulate   # fictional demo office
+npm run doctor     # environment + hooks check
 ```
 
 That's it. The demo roster shows eight fictional departments with agents working, idling, and occasionally getting blocked. To wire your **real** Claude Code sessions, run the hook installer:
 
 ```bash
-node install-hooks.mjs        # registers Claude Code hooks → POST /hook
-node install-inbox-hook.mjs   # surfaces office mail back into your sessions
+npm run install-hooks   # registers Claude Code hooks → POST /hook
+npm run install-inbox   # surfaces office mail back into your sessions
 ```
 
 ## What's in here

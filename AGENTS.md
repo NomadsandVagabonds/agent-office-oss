@@ -15,8 +15,10 @@ for the tour and `CONTRACT.md` for the architecture contract.
 ## Run it
 
 ```bash
-node daemon.mjs        # the spine — http://localhost:4317
-node simulate.mjs      # (optional) a lively fictional demo office
+npm run demo           # daemon + fictional demo roster
+npm run dev            # daemon only
+npm run simulate       # just the fictional roster
+npm run doctor         # environment / hooks check
 open http://localhost:4317/
 ```
 
