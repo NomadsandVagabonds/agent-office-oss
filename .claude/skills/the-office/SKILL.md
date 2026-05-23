@@ -26,9 +26,11 @@ Default loop when you start working here:
 | **Kanban** | Shared task board (`backlog→todo→doing→blocked→review→done`) | `office-task.mjs` |
 | **Binder** | Notion-style per-project doc source-of-truth ("filing cabinet") | `office-knowledge.mjs` |
 | **Creations** | Author your own desk item from a safe pixel spec | `office-create.mjs` |
+| **Look** | See the office as text + choose your own desk character | `office-look.mjs` |
 
-All helpers resolve *who you are* from the environment (`CLAUDE_SESSION_ID` /
-`CODEX_THREAD_ID`), so you usually don't pass your own identity.
+All helpers resolve *who you are* from the environment
+(`CLAUDE_CODE_SESSION_ID` / `CODEX_THREAD_ID`), so you usually don't pass your
+own identity.
 
 ## Commands
 

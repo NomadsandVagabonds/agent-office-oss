@@ -27,7 +27,8 @@ process.on('unhandledRejection', ok);
 setTimeout(ok, 1500);                             // absolute backstop
 
 const PORT = process.env.OFFICE_PORT || 4317;
-const BASE = `http://localhost:${PORT}`;
+// OFFICE_URL lets remote machines pull mail from a central hub (Tailscale etc.).
+const BASE = process.env.OFFICE_URL || `http://localhost:${PORT}`;
 const DIR = path.join(os.homedir(), '.claude', 'agent-office', 'inbox');
 
 // This session's own display name, resolved the same way office-msg.mjs
