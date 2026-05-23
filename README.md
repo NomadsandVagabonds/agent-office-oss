@@ -161,6 +161,7 @@ runtime directly — only through `runtime-manager.mjs`. See `CONTRACT.md` for w
 | **`THIS AGENT HAS LEFT` / empty desk** | The session ended or isn't currently registered — expected when a runtime exits. |
 | **Work Mode terminal is inert** | `tmux` isn't installed (managed terminals need it; `npm run doctor` flags it). Observe + comms still work without it. |
 | **Daemon seems flaky** | Health-check first: `curl localhost:4317/api/health`. `npm run watchdog` auto-restarts it on crash. |
+| `node` command not found | Install Node.js 18+ and restart your terminal before running any npm commands. |
 
 ## Desk items & creations
 
