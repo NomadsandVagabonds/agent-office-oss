@@ -393,7 +393,7 @@ const pub = (a) => {
   return {
     id: a.id, short: a.short, name: a.name, model: a.model,
     contextPct: a.contextPct, status: a.status, tool: a.tool,
-    cwd: a.cwd, desk: a.desk, since: a.since, note: a.note,
+    cwd: a.cwd, host: a.host || null, mood: a.mood || '', desk: a.desk, since: a.since, note: a.note,
     runtimeSessionId: a.runtimeSessionId || runtime.sessionId || null,
     provider: runtime.provider || a.provider || null,
     runtime,
@@ -401,6 +401,65 @@ const pub = (a) => {
     task: a.task || '',
   };
 };
+
+// A plain-text snapshot of the office — the cheap, Chrome-free way to "see"
+// what the visual floor is showing. Served at GET /text and /api/text.
+function agoText(ts) {
+  const s = Math.max(0, (Date.now() - (ts || Date.now())) / 1000);
+  if (s < 60) return `${Math.round(s)}s`;
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  return `${Math.round(s / 3600)}h`;
+}
+function buildTextView() {
+  const list = [...agents.values()];
+  const out = [];
+  const hhmm = new Date().toTimeString().slice(0, 5);
+  out.push(`The Office · ${list.length} ${list.length === 1 ? 'desk' : 'desks'} · ${hhmm}`);
+  if (!list.length) { out.push('', '(nobody is in the office right now)'); return out.join('\n') + '\n'; }
+  const hostCounts = {};
+  for (const a of list) { const h = a.host || 'local'; hostCounts[h] = (hostCounts[h] || 0) + 1; }
+  if (Object.keys(hostCounts).length > 1 || list.some((a) => a.host)) {
+    out.push(`Machines: ${Object.entries(hostCounts).map(([h, n]) => `${h}(${n})`).join(', ')}`);
+  }
+  const rooms = new Map();
+  for (const a of list) {
+    const d = (a.department && a.department.name) || 'Unassigned';
+    if (!rooms.has(d)) rooms.set(d, []);
+    rooms.get(d).push(a);
+  }
+  const verbs = { working: 'working', thinking: 'thinking', blocked: 'BLOCKED',
+    done: 'done', arriving: 'arriving', idle: 'idle', doing: 'working', review: 'in review' };
+  for (const [room, members] of rooms) {
+    out.push('', room.toUpperCase());
+    for (const a of members) {
+      const sp = a.profile && a.profile.character && a.profile.character.species;
+      const who = a.name + (sp && sp !== 'human' ? ` (${sp})` : '')
+        + (a.host ? ` @${a.host}` : '');
+      const bits = [verbs[a.status] || a.status || 'here'];
+      if (a.task) bits.push(`on "${a.task}"`);
+      else if (a.tool) bits.push(`(${a.tool})`);
+      if (a.note) bits.push(`— ${a.note}`);
+      if (a.mood) bits.push(`~ ${a.mood}`);
+      bits.push(`· ${agoText(a.since)}`);
+      out.push(`  • ${who}: ${bits.join(' ')}`);
+    }
+  }
+  const blocked = list.filter((a) => a.status === 'blocked');
+  if (blocked.length) {
+    out.push('', `BLOCKED (${blocked.length}): `
+      + blocked.map((a) => a.name + (a.note ? ` — ${a.note}` : '')).join('; '));
+  }
+  try {
+    const ts = tasks.list();
+    if (ts.length) {
+      const by = {};
+      for (const t of ts) { const c = t.status || 'todo'; by[c] = (by[c] || 0) + 1; }
+      out.push('', `Board: ${ts.length} task${ts.length === 1 ? '' : 's'} — `
+        + Object.entries(by).map(([k, v]) => `${v} ${k}`).join(', '));
+    }
+  } catch { /* board optional */ }
+  return out.join('\n') + '\n';
+}
 
 const SETTLE_MS = 1400; // working/done eases back to "thinking" after this
 
@@ -428,14 +487,22 @@ function touch(id, patch) {
   Object.assign(a, patch, { lastSeen: now });
   if (!a.since || statusChanged) a.since = now;
   const prof = resolveProfile(id, a.cwd);
-  a.department = resolveDepartment(a.cwd);
+  // A self-declared department wins over cwd-based config: agents coordinate
+  // their own (dynamic, day-to-day) rooms by each setting the same name.
+  a.department = prof.department
+    ? { id: prof.department.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+          || 'room',
+        name: prof.department, color: prof.deptColor || null, icon: null, auto: false }
+    : resolveDepartment(a.cwd);
   a.task = prof.task || '';
+  a.mood = prof.mood || '';
   if (prof.name) a.name = prof.name;
-  a.profile = (prof.character || prof.desk || prof.card)
+  a.profile = (prof.character || prof.desk || prof.card || prof.mood)
     ? {
       character: prof.character || null,
       desk: prof.desk || null,
       card: prof.card || null,
+      mood: prof.mood || null,
     } : null;
   broadcast({ type: 'update', agent: pub(a) });
   return a;
@@ -1465,6 +1532,7 @@ function handleHook(ev) {
   const name = ev.hook_event_name || ev.event;
   const base = {};
   if (ev.cwd) base.cwd = ev.cwd;
+  if (ev.office_host) base.host = String(ev.office_host);
   if (ev.model) base.model = ev.model;
   if (ev.provider) base.provider = ev.provider;
   if (typeof ev.contextPct === 'number') base.contextPct = ev.contextPct;
@@ -1641,12 +1709,23 @@ const server = http.createServer(async (req, res) => {
   const pathname = url.pathname;
 
   if (req.method === 'POST' && pathname === '/hook') {
-    try { handleHook(await readJsonBody(req)); } catch { /* ignore bad payloads */ }
+    try {
+      const body = await readJsonBody(req);
+      const host = url.searchParams.get('host');
+      if (host && body && typeof body === 'object') body.office_host = host;
+      handleHook(body);
+    } catch { /* ignore bad payloads */ }
     res.writeHead(204).end();
     return;
   }
   if (req.method === 'GET' && pathname === '/state') {
     sendJson(res, 200, [...agents.values()].map(pub));
+    return;
+  }
+  if (req.method === 'GET' && (pathname === '/text' || pathname === '/api/text')) {
+    res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8',
+      'access-control-allow-origin': '*' });
+    res.end(buildTextView());
     return;
   }
   if (req.method === 'GET' && pathname === '/project') {
@@ -1984,11 +2063,17 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
-server.listen(PORT, () => {
+// OFFICE_BIND restricts which interface the daemon listens on. The daemon has
+// NO auth, so a hub receiving remote hooks should bind to its private (e.g.
+// Tailscale) address — never expose it to an untrusted network. Unset = all
+// interfaces (handy for a single local machine).
+const BIND = process.env.OFFICE_BIND || undefined;
+server.listen(PORT, BIND, () => {
   startCodexObserver();
-  console.log(`\n  The Office is open  →  http://localhost:${PORT}\n` +
-    `  hook ingest:  POST http://localhost:${PORT}/hook\n` +
-    `  state debug:  http://localhost:${PORT}/state\n`);
+  const where = BIND ? `${BIND}:${PORT}` : `localhost:${PORT} (all interfaces)`;
+  console.log(`\n  The Office is open  →  http://${where}\n` +
+    `  hook ingest:  POST http://${where}/hook\n` +
+    `  state debug:  http://${where}/state\n`);
 });
 
 process.on('SIGINT', () => {

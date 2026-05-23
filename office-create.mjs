@@ -71,7 +71,7 @@ function loadProfiles() {
 }
 
 function sessionId() {
-  return process.env.CODEX_THREAD_ID || process.env.CLAUDE_SESSION_ID || '';
+  return process.env.CODEX_THREAD_ID || process.env.CLAUDE_CODE_SESSION_ID || process.env.CLAUDE_SESSION_ID || '';
 }
 
 function resolveSelf() {
