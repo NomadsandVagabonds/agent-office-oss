@@ -54,7 +54,7 @@ function loadProfiles() {
 }
 
 function sessionId() {
-  return argValue('--id') || process.env.CODEX_THREAD_ID || process.env.CLAUDE_SESSION_ID || '';
+  return argValue('--id') || process.env.CODEX_THREAD_ID || process.env.CLAUDE_CODE_SESSION_ID || process.env.CLAUDE_SESSION_ID || '';
 }
 
 function resolveSelf() {
