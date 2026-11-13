@@ -7,6 +7,7 @@ import { createLabels } from './labels.js';
 import { createPicker } from './pick.js';
 import { createNeeds } from './needs.js';
 import { createInspector } from './inspector.js';
+import { createPalette } from './palette.js';
 
 const EMOJI = { wave: '👋', dance: '💃', bow: '🙇', cheer: '🎉', shrug: '🤷', think: '🤔', facepalm: '🤦', nod: '👍', stretch: '🙆',
   highfive: '🙌', salute: '🫡', spin: '🌀', sleep: '💤', laugh: '😄' };
@@ -200,7 +201,7 @@ export function createUI(office) {
   ui.toggleSheet = (name) => (sheet?.name === name ? ui.closeSheet() : ui.openSheet(name));
 
   /* ---- keyboard ----------------------------------------------------------------- */
-  root.append(h('div.hint', h('div', 'drag: move · right-drag: turn · scroll: zoom'), h('div', 'click someone · N: who needs you · Space: whole office')));
+  root.append(h('div.hint', h('div', 'drag: move · right-drag: turn · scroll: zoom'), h('div', 'click someone · N: who needs you · Tab: walk · Ctrl-K: find')));
   const held = new Set();
   window.addEventListener('keydown', (e) => {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '') || document.activeElement?.isContentEditable;
@@ -305,6 +306,8 @@ export function createUI(office) {
     }
     labels.update();
   };
+  ui.palette = createPalette(office, ui);
+  tools.append(h('button.btn.ghost', { title: 'Find anyone or anything (Ctrl-K)', onclick: () => ui.palette.open() }, icon('search')));
   ui.labels = labels; ui.needs = needs; ui.inspector = inspector; ui.picker = picker;
   return ui;
 }

@@ -34,8 +34,21 @@ const lighting = createLighting(stage, { shadowSize: Number(q.get('shadowmap') |
 const screens = createScreens();
 const rig = createCameraRig(stage, {});
 
+// what the person chose, remembered in this browser
+const settings = (() => {
+  let data = {};
+  try { data = JSON.parse(localStorage.getItem('office.settings') || '{}') || {}; } catch { data = {}; }
+  const defaults = { graphics: 'auto', time: 'auto' };
+  const listeners = new Set();
+  return {
+    get: (k) => data[k] ?? defaults[k],
+    set(k, v) { data[k] = v; try { localStorage.setItem('office.settings', JSON.stringify(data)); } catch { /* fine */ } for (const fn of listeners) fn(k, v); },
+    on: (fn) => listeners.add(fn),
+  };
+})();
+
 const office = {
-  stage, net, lighting, screens, rig, q,
+  stage, net, lighting, screens, rig, q, settings,
   world: null,                 // { layout, nav, building, furniture, planKey }
   people: null,
   creations: {},               // id → creation spec
@@ -137,8 +150,10 @@ async function loadCreations() {
 
 /* ---- every frame ----------------------------------------------------------------- */
 const forcedHour = q.has('hour') ? Number(q.get('hour')) : null;
+const FIXED_HOUR = { day: 13, dusk: 18.4, night: 22 };
 function officeHour() {
   if (forcedHour !== null && Number.isFinite(forcedHour)) return forcedHour;
+  if (FIXED_HOUR[settings.get('time')] !== undefined) return FIXED_HOUR[settings.get('time')];
   const tz = net.state.world?.today?.tzOffsetMin;
   const d = new Date(net.now() + (Number.isFinite(tz) ? tz : -new Date().getTimezoneOffset()) * 60000);
   return d.getUTCHours() + d.getUTCMinutes() / 60;
@@ -166,6 +181,26 @@ stage.onFrame((dt, t, frame) => {
   const far = THREE.MathUtils.smoothstep(rig.cur.dist, 14, 60);
   stage.setTilt(0.35 + far * 0.55, 0.5, 0.26 - far * 0.06);
 });
+
+/* ---- graphics: pretty when the machine can, fast when it cannot ------------------------ */
+function applyGraphics() {
+  const mode = settings.get('graphics');
+  if (mode === 'fast') stage.setQuality({ fx: false, pixelRatio: 1 });
+  else stage.setQuality({ fx: q.get('fx') !== '0', pixelRatio: Math.min(window.devicePixelRatio || 1, 2) });
+}
+settings.on((key) => { if (key === 'graphics') applyGraphics(); if (key === 'time') office.clockAt = undefined; });
+if (!q.has('shot')) {
+  applyGraphics();
+  let strikes = 0;
+  setInterval(() => {                                        // falling behind for a while? step the quality down, once
+    if (settings.get('graphics') !== 'auto' || document.hidden || !office.ready) { strikes = 0; return; }
+    strikes = stage.frameMs > 42 ? strikes + 1 : 0;
+    if (strikes < 3) return;
+    strikes = 0;
+    if (stage.quality.pixelRatio > 1) stage.setQuality({ pixelRatio: 1 });
+    else if (stage.quality.fx) { stage.setQuality({ fx: false }); office.ui?.toast('Switched to faster graphics. (Ctrl-K → Graphics to change it back.)'); }
+  }, 2500);
+}
 
 await loadCreations();
 net.connect();

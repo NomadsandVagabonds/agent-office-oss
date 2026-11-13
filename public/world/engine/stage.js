@@ -81,9 +81,10 @@ export function createStage(container, opt = {}) {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     if (composer) {
-      composer.setPixelRatio(pixelRatio);
+      const ratio = renderer.getPixelRatio();
+      composer.setPixelRatio(ratio);
       composer.setSize(w, h);
-      tilt.uniforms.uTexel.value.set(1 / (w * pixelRatio), 1 / (h * pixelRatio));
+      tilt.uniforms.uTexel.value.set(1 / (w * ratio), 1 / (h * ratio));
     }
   }
   resize();
@@ -92,18 +93,36 @@ export function createStage(container, opt = {}) {
   const frameFns = [];
   const clock = new THREE.Clock();
   let running = false, frame = 0;
+  // quality can be turned down while running (see setQuality): post-processing off, fewer pixels
+  const quality = { fx: !!composer, pixelRatio };
+  let lastMs = 16;
   function tick() {
     if (!running) return;
-    const dt = Math.min(0.1, clock.getDelta());
+    const raw = clock.getDelta();
+    const dt = Math.min(0.1, raw);
+    lastMs += (raw * 1000 - lastMs) * 0.05;                    // a slow average: are we keeping up?
     frame += 1;
     for (const fn of frameFns) fn(dt, clock.elapsedTime, frame);
-    if (composer) composer.render(dt); else renderer.render(scene, camera);
+    if (composer && quality.fx) composer.render(dt); else renderer.render(scene, camera);
     requestAnimationFrame(tick);
+  }
+  function setQuality(next = {}) {
+    if (next.pixelRatio && next.pixelRatio !== quality.pixelRatio) {
+      quality.pixelRatio = next.pixelRatio;
+      renderer.setPixelRatio(quality.pixelRatio);
+      if (composer) composer.setPixelRatio(quality.pixelRatio);
+      resize();
+    }
+    if (next.fx !== undefined) quality.fx = !!next.fx && !!composer;
+    return { ...quality };
   }
 
   return {
     renderer, scene, camera, composer, bloom, tilt, size,
     get frame() { return frame; },
+    /** Smoothed milliseconds per frame. */
+    get frameMs() { return lastMs; },
+    quality, setQuality,
     onFrame(fn) { frameFns.push(fn); return () => frameFns.splice(frameFns.indexOf(fn), 1); },
     start() { if (!running) { running = true; clock.start(); requestAnimationFrame(tick); } },
     stop() { running = false; },
