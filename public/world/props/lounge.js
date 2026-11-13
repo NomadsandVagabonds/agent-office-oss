@@ -37,11 +37,11 @@ export function armchair(opt = {}) {
   v.paint(-1, 13, -18, 1, 27, -15, dark);                            // seam down the back
   for (let x = -14; x < 14; x += 3) v.set(x, 11, -16, brass);        // tacks along its foot
   for (const s of [-1, 1]) {
-    const a = s < 0 ? -16 : 11, cx = s * 13;
+    const a = s < 0 ? -16 : 11, cx = s * 13.5;
     v.box(a, 4, -15, a + 5, 19, 8, hide);                            // arm
-    v.cyl('z', cx, 19, -15, 9, 5, hide);                             // rolled over, fat as a bolster
-    v.paint(cx - 4, 22, -2, cx + 4, 24, 9, worn);                    // worn pale where hands rest
-    v.paint(cx - 4, 15, 8, cx + 4, 23, 9, (x, y) => { const d = Math.hypot(x + 0.5 - cx, y + 0.5 - 19); return d < 1 ? brass : d > 2.4 && d < 3.4 ? dark : 0; });   // scroll
+    v.cyl('z', cx, 19.5, -15, 9, 4.6, hide);                         // rolled over, fat as a bolster
+    v.paint(cx - 4, 22, 0, cx + 4, 24, 9, worn); v.paint(cx - 2, 23, -7, cx + 2, 24, 0, worn);      // worn pale where hands rest
+    v.paint(cx - 5, 15, 8, cx + 5, 24, 9, (x, y) => { const d = Math.hypot(x + 0.5 - cx, y - 19); return d < 0.8 ? brass : d > 2.4 && d < 3.4 ? dark : 0; });   // scroll, with a stud at its heart
     for (const y of [6, 9, 12]) { v.set(a, y, 7, brass); v.set(a + 4, y, 7, brass); }                 // nail heads
   }
   v.rbox(-11, 10, -8, 11, 15, 8, 2, lite);                           // seat cushion
@@ -53,7 +53,7 @@ export function armchair(opt = {}) {
   return v;
 }
 
-/** A small round pedestal table: two books and a cup of tea, or (opt.lamp) a little lamp. 20 × 20 × 20. */
+/** A small round pedestal table: two books and a cup of tea, or (opt.lamp) a little lamp instead of the tea. 20 × 20 × 20 (25 tall with the lamp). */
 export function sidetable(opt = {}) {
   const v = new Vox();
   const wood = M(opt.color || WOOD, 2), dark = tone(wood, -0.28), stain = tone(wood, -0.14);
@@ -68,10 +68,13 @@ export function sidetable(opt = {}) {
   layBook(v, -7, 16, -7, 9, 6, '#3f8a72', '+z');
   layBook(v, -6, 18, -7, 6, 5, '#b5483f', '+x');
   if (opt.lamp) {
-    const brass = M(BRASS, 0);
+    const brass = M(BRASS, 0), shade = M('#d9c79c', 3);
     v.cyl('y', 4, 3, 16, 17, 2.6, tone(brass, -0.3));
-    v.cyl('y', 4, 3, 17, 21, 0.8, brass);
-    v.cyl('y', 4, 3, 20, 25, 4.2, glow('#f3d9a4'), 2.6);                             // the shade is lit from inside
+    v.cyl('y', 4, 3, 17, 20, 0.8, brass);
+    v.cyl('y', 4, 3, 19, 20, 2.6, glow('#ffe2a8'));                                  // light spills out underneath …
+    v.cyl('y', 4, 3, 20, 25, 3.6, shade, 2.1);                                       // … a cloth shade …
+    v.paint(1, 20, 0, 7, 21, 6, tone(shade, -0.16));
+    v.box(3, 24, 2, 5, 25, 4, glow('#ffe2a8'));                                      // … and up through the top
   } else {
     const china = M('#efe9dc', 0);
     v.cyl('y', 4, 3, 16, 17, 2.6, china);                                            // saucer
@@ -130,20 +133,20 @@ export function lectern() {
   return v;
 }
 
-// The world at ten degrees a letter: 90°N at the top, 180°W on the left. g and s are land, i is ice.
+// The world at ten degrees a letter: 90°N at the top, 180°W on the left. g is land, i is ice.
 const WORLD = [
   'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
   '.......gggg.iiii..........gggg......',
   '.gggggggg.gg.ii...gggggggggggggggggg',
   '.....gggggggg....g.gggggggggggggggg.',
   '.....ggggggg.....gggggggggggggggg...',
-  '......ssggg......g...gsssssggg.g....',
-  '.......sg.......sssssssssgggggg.....',
-  '........gg......ggssssg..g.gg.g.....',
+  '......ggggg......g...ggggggggg.g....',
+  '.......gg.......ggggggggggggggg.....',
+  '........gg......ggggggg..g.gg.g.....',
   '..........ggg....gggggg.....gg......',
   '..........ggggg....ggg......ggg.gg..',
   '..........ggggg....ggg.g......ggg...',
-  '...........ggg.....ssg.g.....ssssg..',
+  '...........ggg.....ggg.g.....ggggg..',
   '...........gg.......g........g.ggg.g',
   '...........g......................g.',
   '...........g........................',
@@ -152,7 +155,7 @@ const WORLD = [
   'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii',
 ];
 
-/** A floor-standing globe: turned wooden stand, brass meridian, the Atlantic facing the room. 22 × 40 × 22. */
+/** A floor-standing globe: turned wooden stand, brass meridian, the Atlantic facing the room. 22 × 39 × 18. */
 export function globe() {
   const v = new Vox();
   const wood = M(WOOD_DARK, 2), wd = tone(wood, -0.26), wl = tone(wood, 0.16), brass = M(BRASS, 0), bd = tone(brass, -0.3);
@@ -172,7 +175,7 @@ export function globe() {
     const lat = Math.asin((px * st + py * ct) / d) * 180 / Math.PI;
     const lon = Math.atan2(px * ct - py * st, pz) * 180 / Math.PI - 30;
     const c = WORLD[Math.min(17, Math.floor((90 - lat) / 10))][((Math.floor((lon + 180) / 10) % 36) + 36) % 36];
-    return c === 'i' ? ice : c === '.' ? sea : land;
+    return c === 'g' ? land : c === 'i' ? ice : sea;
   });
   v.set(6, CY + 4, 4, M('#d8392f', 0));                              // a pin: we are here
   return v;
@@ -180,7 +183,7 @@ export function globe() {
 
 /* ---- the plaza -------------------------------------------------------------- */
 
-/** A slatted bench on steel hoops, no back, a cushion at one end. Sit facing +z; the origin is mid-seat. 64 × 18 × 20, seat top 16. */
+/** A slatted bench on steel hoops, no back, a cushion at one end. Sit facing +z; the origin is mid-seat. 64 × 19 × 20, seat top 16. */
 export function bench(opt = {}) {
   const v = new Vox();
   const wood = M(opt.color || HONEY, 2), end = tone(wood, -0.24), alt = tone(wood, 0.08), k = M(BLACK, 0);
@@ -217,7 +220,7 @@ export function catbed(opt = {}) {
   v.cyl('y', 0, 0, 0, 1, 8.2, fleece);                               // fleece pad, plump in the middle
   v.cyl('y', 0, 0, 1, 2, 6, fleece);
   for (const [x, y, z, c] of [[-5, 2, -3, fur], [-4, 2, -3, fur], [-4, 2, -4, fur], [-3, 2, -4, white], [-4, 3, -3, fur], [-6, 1, -4, fur],
-    [-10, 5, 1, fur], [6, 1, 4, white]]) v.set(x, y, z, c);                                                     // a tuft of shed fur
+    [-10, 5, 1, fur], [-10, 5, 2, fur], [6, 1, 4, white]]) v.set(x, y, z, c);                                                     // a tuft of shed fur
   const grey = M('#9a9aa6', 3), pink = M('#e8a0a8', 1);              // a toy mouse, left on the rim
   v.box(8, 5, -3, 11, 7, 1, grey); v.box(9, 5, 1, 10, 6, 2, grey);
   v.set(9, 5, 2, pink); v.set(8, 7, 0, pink); v.set(10, 7, 0, pink); v.set(8, 6, 0, k); v.set(10, 6, 0, k);
@@ -258,7 +261,8 @@ export function reception() {
   v.box(-45, 3, 9, 45, T - 2, 15, wood);
   v.box(-48, 0, 9, 48, 3, 15, k);                                                    // plinth
   for (const x of [-45, -14, 17]) { v.carve(x, 7, 14, x + 28, 31, 15); v.paint(x, 7, 13, x + 28, 31, 14, pale); }   // three inset panels
-  v.paint(-8, 17, 13, 8, 23, 14, brass); v.paint(-6, 21, 13, 6, 22, 14, bd); v.paint(-5, 19, 13, 5, 20, 14, bd);    // RECEPTION, engraved
+  v.paint(-9, 16, 13, 9, 24, 14, tone(brass, -0.3)); v.paint(-8, 17, 13, 8, 23, 14, brass);                       // RECEPTION, engraved
+  v.paint(-6, 21, 13, 6, 22, 14, bd); v.paint(-5, 19, 13, 5, 20, 14, bd);
   for (const [x, y, w] of [[24, 7, 3], [29, 8, 2], [-38, 7, 2], [36, 7, 4]]) v.paint(x, y, 13, x + w, y + 1, 14, tone(pale, -0.16));   // scuffs from shoes
   v.box(-48, T - 2, -2, 48, T, 16, (x, y, z) => (y === T - 2 ? deep : z === 15 ? tone(dark, 0.14) : dark));     // the counter
 
@@ -317,13 +321,12 @@ export function bell() {
   return v;
 }
 
-/** The guestbook: an open book on a slim brass stand, pen on a chain. The reader stands on +z. 20 × 40 × 18. */
+/** The guestbook: an open book on a slim brass stand, pen on a chain. The reader stands on +z. 20 × 39 × 19. */
 export function guestbook() {
   const v = new Vox();
   const brass = M(BRASS, 0), bd = tone(brass, -0.32), bl = tone(brass, 0.26), wood = M(WOOD_DARK, 2), wd = tone(wood, -0.26);
   const top = (z) => 36 - Math.floor((z + 9) * 5 / 18);              // the board tilts toward the reader
-  v.cyl('y', 0, 0, 0, 1, 8, bd);                                     // weighted foot
-  v.cyl('y', 0, 0, 1, 2, 7, brass);
+  v.cyl('y', 0, 0, 0, 2, 8, (x, y) => (y ? brass : bd));             // weighted foot
   v.cyl('y', 0, 0, 2, 3, 4.2, brass);
   v.cyl('y', 0, 0, 3, 30, 1.6, brass);                               // column
   v.cyl('y', 0, 0, 15, 17, 2.6, bl);
@@ -341,7 +344,7 @@ export function guestbook() {
     v.box(-9, y, z, 9, y + 1, z + 1, cover);
     if (z > -8 && z < 7) { v.box(-8, y + 1, z, 8, y + 2, z + 1, page); v.box(-7, y + 2, z, -1, y + 3, z + 1, page); v.box(1, y + 2, z, 7, y + 3, z + 1, page); }
   }
-  [[-5, 5], [-3, 4], [-1, 6], [1, 3], [3, 5], [5, 4]].forEach(([z, w]) => v.box(-6, top(z) + 2, z, -6 + w, top(z) + 3, z + 1, ink));   // a full page of names
+  [[-5, 5], [-3, 3], [-1, 5], [1, 2], [3, 4], [5, 3]].forEach(([z, w]) => v.box(-6, top(z) + 2, z, -6 + w, top(z) + 3, z + 1, ink));   // a full page of names
   [[-5, 4], [-3, 5], [-1, 3]].forEach(([z, w]) => v.box(2, top(z) + 2, z, 2 + w, top(z) + 3, z + 1, ink));                        // and room for yours
   for (const [y, z] of [[top(7) + 1, 7], [top(8) + 1, 8], [top(8), 9], [top(8) - 1, 9], [top(8) - 2, 9], [top(8) - 3, 9]]) v.set(-4, y, z, M('#b5483f', 3));   // ribbon
 
@@ -356,17 +359,18 @@ export function guestbook() {
 }
 
 /** The trophy case: glass front on +z, three lit shelves of things people have found. 56 × 60 × 20. */
-export function trophycase(opt = {}) {
+export function trophycase() {
   const v = new Vox();
-  const wood = M(WOOD_DARK, 2), dark = tone(wood, -0.28), pale = tone(wood, 0.2), felt = M(opt.felt || '#2e5a48', 3), brass = M(BRASS, 0), k = M(BLACK, 0);
-  const gl = glass(opt.glass || '#bfe0ea'), gold = M('#e8c45a', 0), goldD = M('#caa24a', 0), goldL = M('#f6e08a', 0), silver = M('#b4bcc8', 0);
+  const wood = M(WOOD_DARK, 2), dark = tone(wood, -0.28), pale = tone(wood, 0.2), felt = M('#244a3b', 3), brass = M(BRASS, 0), k = M(BLACK, 0);
+  const gl = glass('#557780'), gold = M('#f0c744', 0), goldD = M('#c99a2e', 0), goldL = M('#fbe48a', 0), silver = M('#b4bcc8', 0);
   v.box(-28, 0, -10, 28, 60, 9, wood);                               // carcass
   v.paint(-28, 0, -10, 28, 2, 9, dark);                              // plinth
-  v.paint(-28, 59, -10, 28, 60, 9, pale); v.paint(-28, 56, -10, 28, 57, 9, dark);    // cornice
+  v.paint(-26, 59, -8, 26, 60, 7, pale); v.paint(-28, 56, -10, 28, 57, 9, dark);     // a paler top, a shadow under the cornice
   v.carve(-26, 10, -8, 26, 56, 9);                                   // hollow, open at the front
   for (const x of [-26, 1]) { v.paint(x, 3, 8, x + 25, 9, 9, pale); v.box(x + 11, 6, 9, x + 14, 7, 10, brass); }   // two drawers below
-  v.paint(-24, 14, -10, 24, 52, -9, pale);                           // panelled back
-  v.box(-6, 57, 9, 6, 59, 10, brass);                                // plate on the cornice
+  for (const y of [13, 27, 41]) v.paint(-24, y, -10, 24, y + 12, -9, pale);          // panelled back
+  v.paint(15, 4, -10, 23, 8, -9, M(PAPER, 0)); v.paint(16, 5, -10, 22, 6, -9, k);     // asset tag
+  v.paint(-6, 57, 8, 6, 59, 9, brass);                               // plate on the cornice
   v.box(-26, 10, -8, 26, 56, -7, felt);                              // lined in green baize
   v.paint(-26, 9, -8, 26, 10, 8, felt);
   for (const x of [-26, 24]) v.box(x, 10, 8, x + 2, 56, 9, wood);    // door frame
@@ -375,20 +379,19 @@ export function trophycase(opt = {}) {
   v.box(-24, 12, 8, 24, 55, 9, gl);                                  // glass front
   for (const y of [24, 39]) {                                        // glass shelves on brass pins
     v.box(-25, y, -6, 25, y + 1, 7, gl);
-    for (const x of [-26, 25]) for (const z of [-4, 3]) v.set(x, y, z, brass);
+    for (const x of [-26, 25]) v.box(x, y, -1, x + 1, y + 1, 1, brass);
   }
-  v.box(-20, 52, 6, 20, 53, 7, glow('#ffe9b8'));                     // strip light
-  for (const x of [-19, 18]) v.box(x, 53, 6, x + 1, 56, 7, brass);
+  v.box(-14, 52, 6, 14, 53, 7, glow('#f0cf8e'));                     // strip light
+  for (const x of [-13, 12]) v.box(x, 53, 6, x + 1, 56, 7, brass);
 
   // top shelf: the cup, a star, a medal
   v.box(-3, 40, -3, 3, 42, 3, k); v.paint(-2, 40, 2, 2, 41, 3, brass);
   v.cyl('y', 0, 0, 42, 43, 1.6, goldD);
   v.cyl('y', 0, 0, 43, 45, 0.8, gold);
-  v.cyl('y', 0, 0, 45, 46, 1.6, goldD);
-  v.cyl('y', 0, 0, 46, 47, 2.6, gold);
-  v.cyl('y', 0, 0, 47, 52, 3.6, gold);
+  v.cyl('y', 0, 0, 45, 46, 2.6, goldD);
+  v.cyl('y', 0, 0, 46, 52, 3.6, gold);
   v.cyl('y', 0, 0, 51, 52, 2.6, 0); v.cyl('y', 0, 0, 50, 51, 2.6, goldD);
-  v.paint(-3, 47, 1, -1, 51, 4, goldL);
+  v.paint(-3, 47, 1, -1, 51, 4, goldL);                              // where it shines
   for (const s of [-1, 1]) {
     const a = s < 0 ? -6 : 4, b = s < 0 ? -6 : 5;
     v.box(a, 50, -1, a + 2, 51, 1, gold); v.box(b, 48, -1, b + 1, 50, 1, gold); v.box(a, 47, -1, a + 2, 48, 1, goldD);
@@ -417,10 +420,8 @@ export function trophycase(opt = {}) {
 
   // bottom shelf: second place, the red book, a ghost
   v.box(-18, 10, -2, -12, 11, 2, k);
-  v.cyl('y', -15, 0, 11, 13, 0.8, silver);
-  v.cyl('y', -15, 0, 13, 14, 1.6, silver);
-  v.cyl('y', -15, 0, 14, 18, 2.6, silver);
-  v.cyl('y', -15, 0, 17, 18, 1.6, 0);
+  v.box(-16, 11, -1, -14, 13, 1, silver);
+  v.box(-17, 13, -2, -13, 18, 2, silver); v.carve(-16, 17, -1, -14, 18, 1);
   layBook(v, -5, 10, -4, 10, 7, '#b5483f', '+z', 3); v.box(-3, 12, -2, 3, 13, 0, goldD);
   const ghost = M('#f4f1ea', 1);
   v.box(11, 11, -2, 17, 16, 2, ghost); v.box(12, 16, -2, 16, 17, 2, ghost); v.box(13, 17, -1, 15, 18, 1, ghost);
@@ -447,19 +448,20 @@ export function doormat() {
 
 /* ---- on the walls ----------------------------------------------------------- */
 
-/** "The Old Office": a gilt-framed pixel painting of the 2D office. Hangs on a wall (back at z = 0), sticks out toward +z. 44 × 32 × 3. */
+/** "The Old Office": a gilt-framed pixel painting of the 2D office. Hangs on a wall (back at z = 0), sticks out toward +z. 44 × 32 × 4. */
 export function painting() {
   const v = new Vox();
   const gilt = M(BRASS, 0), giltL = tone(gilt, 0.3), giltD = tone(gilt, -0.34);
-  v.box(-22, 0, 0, 22, 32, 2, gilt);                                 // frame
-  v.box(-21, 1, 0, 21, 31, 3, giltL);                                // its ridge
-  v.box(-20, 2, 0, 20, 30, 2, giltD); v.carve(-20, 2, 2, 20, 30, 3); // inner lip
-  v.carve(-19, 3, 1, 19, 29, 3);                                     // the canvas sits back
-  for (const x of [-22, 20]) for (const y of [0, 30]) v.box(x, y, 0, x + 2, y + 2, 3, giltL);          // corner blocks
-  v.box(-5, 0, 0, 5, 2, 3, M('#e9dcc0', 0)); v.paint(-3, 1, 2, 3, 2, 3, M('#6b4a2f', 0));              // title plate
+  v.box(-22, 0, 1, 22, 32, 4, gilt);                                 // frame
+  v.paint(-21, 1, 1, 21, 31, 4, giltL);                              // the bright inner moulding
+  v.box(-20, 2, 1, 20, 30, 3, giltD); v.carve(-20, 2, 3, 20, 30, 4); // a darker lip, one step down
+  v.carve(-19, 3, 2, 19, 29, 4);                                     // the canvas sits back again
+  for (const x of [-22, 20]) for (const y of [0, 30]) v.paint(x, y, 1, x + 2, y + 2, 4, giltL);        // corner blocks
+  v.paint(-5, 0, 1, 5, 2, 4, M('#e9dcc0', 0)); v.paint(-3, 1, 3, 3, 2, 4, M('#6b4a2f', 0));            // title plate
+  v.box(-22, 0, 0, 22, 32, 1, M('#4a3526', 2));                      // backing board, against the wall
 
   // the picture, 38 × 26, x from the left, y from the bottom; `up` raises a thing off the canvas
-  const px = (x, y, w, h, c, up = 0) => v.box(x - 19, y + 3, 0, x - 19 + w, y + 3 + h, 1 + up, c);
+  const px = (x, y, w, h, c, up = 0) => v.box(x - 19, y + 3, 1, x - 19 + w, y + 3 + h, 2 + up, c);
   px(0, 11, 38, 15, '#3f8a82');                                      // teal wall
   px(0, 6, 38, 5, '#a8763f'); px(0, 10, 38, 1, '#7d5630');           // wainscot and its rail
   for (let x = 5; x < 38; x += 6) px(x, 6, 1, 4, '#7d5630');
@@ -497,8 +499,8 @@ export function clock() {
   v.cyl('z', X, Y, 0, 2, 9.4, tone(rim, -0.2));                      // case
   v.cyl('z', X, Y, 0, 3, 8.6, rim);                                  // bezel
   v.cyl('z', X, Y, 2, 3, 7.5, 0);
-  v.cyl('z', X, Y, 0, 2, 7.5, face);                                 // dial
-  const dot = (dx, dy, c = tick) => v.set(-1 + dx, 9 + dy, 1, c);
+  v.cyl('z', X, Y, 1, 2, 7.5, face);                                 // dial
+  const dot = (dx, dy, c = tick) => v.set(Math.floor(X) + dx, Math.floor(Y) + dy, 1, c);
   for (const s of [1, -1]) for (const r of [5, 6]) { dot(0, s * r); dot(s * r, 0); }                   // 12, 3, 6, 9
   for (const sx of [1, -1]) for (const sy of [1, -1]) { dot(sx * 3, sy * 5, M('#7d766b', 0)); dot(sx * 5, sy * 3, M('#7d766b', 0)); }
   dot(0, 0);                                                         // where the hands pivot
@@ -508,7 +510,8 @@ export function clock() {
 /* ---- the catalogue ---------------------------------------------------------- */
 
 export const CATALOGUE = {
-  armchair: { make: (o) => armchair({ color: o?.color || LEATHERS[pick(o, 2)], book: pick(o, 2) ? '#3f7f9a' : '#b5483f' }), variant: (o) => o?.color || String(pick(o, 2)), seat: 15 },
+  armchair: { make: (o) => armchair({ color: o?.color || LEATHERS[pick(o, 3) ? 0 : 1], book: pick(o, 2) ? '#3f7f9a' : '#b5483f' }),
+    variant: (o) => `${o?.color || (pick(o, 3) ? 'green' : 'oxblood')}/${pick(o, 2)}`, seat: 15 },
   sidetable: { make: (o) => sidetable({ lamp: pick(o, 3) === 2 }), variant: (o) => (pick(o, 3) === 2 ? 'lamp' : 'tea') },
   lectern: { make: () => lectern() },
   globe: { make: () => globe() },
@@ -517,7 +520,7 @@ export const CATALOGUE = {
   reception: { make: () => reception() },
   bell: { make: () => bell(), y: RECEPTION_TOP * VOXEL },
   guestbook: { make: () => guestbook() },
-  trophycase: { make: (o) => trophycase({ glass: o?.glass && '#' + o.glass, felt: o?.felt && '#' + o.felt }) },
+  trophycase: { make: () => trophycase() },
   doormat: { make: () => doormat() },
   painting: { make: () => painting(), wall: true, y: 1.25 },
   clock: { make: () => clock(), wall: true, y: 1.75 },

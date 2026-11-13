@@ -314,7 +314,8 @@ export function buildLayout(plan = {}) {
     poi: { kind: 'painting', label: 'a framed pixel painting of the old office', stand: { x: -5.5, z: -6.5 } } });
   put('bookshelf', -7.75, -4.5, 'E', { id: 'shelf-d' });
   put('armchair', -5.6, -4.2, 'E', { id: 'armchair-1', poi: { kind: 'seat', label: 'a reading chair', stand: { x: -5.6, z: -4.2 } } });
-  put('armchair', -3.8, -4.2, 'W', { id: 'armchair-2', poi: { kind: 'seat', label: 'a reading chair', stand: { x: -3.8, z: -4.2 } } });
+  put('armchair', -3.8, -4.2, 'W', { id: 'armchair-2', color: '#6e2a2c',      // oxblood, facing the green one
+    poi: { kind: 'seat', label: 'a reading chair', stand: { x: -3.8, z: -4.2 } } });
   put('sidetable', -4.7, -4.2, 'S');
   put('floorlamp', -6.4, -3.3, 'S');
   put('rug', -4.7, -4.2, 'S', { id: 'rug-library', shape: 'round', size: [3.4, 3.4], color: '#8d3b3b' });
