@@ -27,21 +27,23 @@ function tileTicks(len) {
   return out;
 }
 
-/** The office's furniture catalogue, if it will load (other people are still writing it). */
-export async function loadCatalogue() {
+/**
+ * The office's furniture catalogue, if it will load (other people are still writing it).
+ * Only the recipes are borrowed: each thing is meshed here, for this level, and thrown away with it.
+ */
+export async function loadCatalogue(kit) {
   try {
     const mod = await import('../props/index.js');
+    const PROPS = mod.PROPS || {}, failed = new Set();
     return {
-      has: (type) => mod.hasProp(type),
-      entry: (type) => mod.PROPS[type],
+      has: (type) => !!PROPS[type] && !failed.has(type),
+      entry: (type) => PROPS[type] || null,
       geo(type, o = {}) {
-        if (!mod.hasProp(type)) return null;
-        try {
-          const g = mod.buildProp(type, { id: `${type}:${o.variant ?? 'backrooms'}`, type, ...o });
-          let solid = null, glass = null;
-          for (const m of g.children) { if (m.material.transparent) glass = m.geometry; else solid = m.geometry; }
-          return { solid, glass, bounds: g.userData.bounds };
-        } catch (err) { console.warn('[backrooms] prop', type, err); return null; }
+        const entry = PROPS[type];
+        if (!entry || failed.has(type)) return null;
+        const spec = { id: `${type}:${o.variant ?? 'backrooms'}`, type, ...o };
+        try { return kit.model(`prop:${type}:${entry.variant ? entry.variant(spec) : ''}`, () => entry.make(spec)); }
+        catch (err) { failed.add(type); console.warn('[backrooms] prop', type, err); return null; }
       },
     };
   } catch (err) {
@@ -204,7 +206,7 @@ export async function buildWorld(kit, level, env, tick) {
         else if (Math.random() < 0.012) k = 0.3;
         rt.flickerNow = k;
         rt.u.flick.value += (k - rt.u.flick.value) * 0.6;
-        for (const f of rt.flickers) f.material.color.copy(f.userData.on).multiplyScalar(0.12 + 0.88 * rt.u.flick.value);
+        for (const f of rt.flickers) f.material.color.copy(f.userData.on).multiplyScalar((0.12 + 0.88 * rt.u.flick.value) * (rt.lightsK ?? 1));
       }
       if (!rt.near) continue;
       const p = toLocal(rt.def, me.x, me.z);
@@ -241,6 +243,11 @@ export async function buildWorld(kit, level, env, tick) {
     if (!rt || !rt.floorY) return 0;
     const p = toLocal(rt.def, x, z);
     return rt.floorY(p.x, p.z);
+  };
+  /** Turn a room's ceiling up or down (0 = out, 1 = as built): the tubes, and everything they light. */
+  world.setLights = (rt, k) => {
+    rt.lightsK = k; rt.u.dim.value = Math.max(0.03, k);
+    if (rt.panelMesh) rt.panelMesh.material.color.copy(rt.panelOn).multiplyScalar(Math.max(0.02, k));
   };
   world.dispose = () => { scene.traverse((o) => { if (o.userData.dispose) o.userData.dispose(); }); scene.clear(); };
   return world;
@@ -489,7 +496,7 @@ function roomContext(world, rt) {
       const floorB = opt.floorTex ? c.mapped('floor', opt.floorTex) : c.floor;
       const ceilB = opt.ceilTex ? c.mapped('ceil', opt.ceilTex) : c.ceil;
       const edge = (a, la, b, lb) => 0.76 + 0.24 * smooth(Math.min(a, la - a, b, lb - b) / 0.45);
-      const trim = lin(look.trim);
+      const trim = opt.trim || lin(look.trim);
       if (opt.floor !== false) floorB.grid([-W / 2, 0, -D / 2], [0, 0, 1], [1, 0, 0], ticks(D), ticks(W), (u, v) => [(v + def.cx) / 1.6, (u + def.cz) / 1.6], opt.floorAlb || WHITE, (u, v) => edge(u, D, v, W));
       if (opt.ceiling !== false) ceilB.grid([-W / 2, h, -D / 2], [1, 0, 0], [0, 0, 1], tileTicks(W), tileTicks(D), (u, v) => [(u - W / 2) / TILE, (v - D / 2) / TILE], opt.ceilAlb || WHITE, (u, v) => edge(u, W, v, D));
 
@@ -609,7 +616,11 @@ function roomContext(world, rt) {
       if (vg) add(new THREE.Mesh(vg, kit.surface({ vox: true, room: rt.u, flick: vg.userData.flick })));
       const gg = kit.geometry(c.glass, rt.lights, rt.amb);
       if (gg) add(new THREE.Mesh(gg, kit.surface({ vox: true, room: rt.u, flick: gg.userData.flick, alpha: 0.42 })), 3);
-      for (const [, m] of shining) { const geo = kit.plain(m.batch); if (geo) add(new THREE.Mesh(geo, kit.glowing(m.texture, m.power, m.rgb, m.opt))); }
+      for (const [key, m] of shining) {
+        const geo = kit.plain(m.batch); if (!geo) continue;
+        const mesh = add(new THREE.Mesh(geo, kit.glowing(m.texture, m.power, m.rgb, m.opt)));
+        if (key === 'panel') { rt.panelMesh = mesh; rt.panelOn = mesh.material.color.clone(); }
+      }
       if (c.decals.idx.length) {
         const q = c.decals, geo = kit.own(new THREE.BufferGeometry());
         geo.setAttribute('position', new THREE.Float32BufferAttribute(q.pos, 3));

@@ -28,7 +28,8 @@ const Signal = {
     const mat3 YIQ = mat3(0.299, 0.596, 0.211, 0.587, -0.274, -0.523, 0.114, -0.322, 0.312);
     const mat3 RGB = mat3(1.0, 1.0, 1.0, 0.956, -0.272, -1.106, 0.621, -0.647, 1.703);
     float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
-    vec3 film(vec3 c) { c *= uExposure * uGain; return clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0); }
+    // a gentle shoulder: bright things wash out toward white, the way cheap video does
+    vec3 film(vec3 c) { return 1.0 - exp(-c * (1.3 * uExposure * uGain)); }
     vec3 see(vec2 uv) { return pow(film(texture2D(tDiffuse, clamp(uv, 0.001, 0.999)).rgb), vec3(0.4545)); }
     void main() {
       vec2 uv = vUv;
@@ -56,7 +57,7 @@ const Signal = {
       iq += (YIQ * see(uv - vec2(px * 5.0, 0.0))).yz * 0.22;
       iq += (YIQ * see(uv - vec2(px * 7.5, 0.0))).yz * 0.15;
       iq += (YIQ * see(uv - vec2(px * 10.5, 0.0))).yz * 0.09;
-      iq *= 1.0 + 0.3 * uSoft;
+      iq *= 1.0 + 0.16 * uSoft;
       // noise: fine in the brightness, coarse in the colour, both worse when the gain is up
       float grain = uAmt * (0.6 + 0.9 * (uGain - 1.0) + 1.5 * uTrack);
       y += (hash(vec2(uv.x * uRes.x, line) + frame * 17.0) - 0.5) * 0.06 * grain;
@@ -64,7 +65,7 @@ const Signal = {
       iq += (vec2(hash(cell + frame * 3.0), hash(cell + 71.0 + frame * 7.0)) - 0.5) * 0.045 * grain;
       // dropouts: short white dashes
       float at = hash(vec2(frame, line));
-      float dash = step(0.9988 - 0.006 * uTrack, hash(vec2(line, frame * 1.3))) * step(at, uv.x) * step(uv.x, at + 0.1);
+      float dash = step(0.9994 - 0.006 * uTrack, hash(vec2(line, frame * 1.3))) * step(at, uv.x) * step(uv.x, at + 0.06);
       y = mix(y, 0.92, dash * uAmt);
       y = mix(y, hash(vec2(uv.x * uRes.x * 0.5, line + frame * 5.0)), clamp(band * 0.5 + foot * 0.4, 0.0, 1.0) * uAmt);
       vec3 c = RGB * vec3(y, iq);

@@ -93,7 +93,11 @@ async function visit(office, opt) {
   /* ---- what rooms may call on ------------------------------------------------------ */
   const halfFov = () => Math.atan(Math.tan((FOV * Math.PI) / 360) * camera.aspect);
   const env = {
-    level, cast, who, kit, sound, hud, vhs, builders: BUILDERS, catalogue: await loadCatalogue(),
+    level, cast, who, kit, sound, hud, vhs, renderer, builders: BUILDERS, catalogue: await loadCatalogue(kit),
+    // optional borrowings: if either will not load, the rooms that wanted them make do
+    Avatar: (await import('../avatar/rig.js').catch(() => null))?.Avatar || null,
+    layout: await import('/core/layout.mjs').catch(() => null),
+    plan: office.net?.state?.world?.plan || office.world?.planKey && null || {},
     player: null, world: null, pursuer: null,
     say: (text, o) => hud.say(text, o),
     end: (why) => finish(why),
@@ -176,6 +180,7 @@ async function visit(office, opt) {
     const me = player.me;
     me.frozen = state !== 'play';
     player.update(dt, time);
+    me.slow = 1; me.sinkTo = 0;                              // rooms that slow you or make you stoop say so every frame
     world.update(dt, time, me);
     env.pursuer?.update(dt, time);
     currentUse = state === 'play' ? world.usable(me) : null;

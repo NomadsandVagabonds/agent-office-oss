@@ -76,7 +76,7 @@ function rollLook(R, family, pattern) {
   const wall = hsl(wh + dh, ws + R.range(-0.05, 0.05), wl + dl);
   return {
     family: family.id, pattern,
-    wall, ink: hsl(wh + dh - 4, ws + 0.06, wl + dl - R.range(0.07, 0.11)), pale: hsl(wh + dh, ws - 0.05, wl + dl + 0.06),
+    wall, ink: hsl(wh + dh - 4, ws + 0.08, wl + dl - R.range(0.1, 0.15)), pale: hsl(wh + dh, ws - 0.05, wl + dl + 0.07),
     carpet: hsl(ch + R.range(-6, 6), cs + R.range(-0.03, 0.03), cl + R.range(-0.03, 0.03)),
     trim: hsl(th, ts, tl + R.range(-0.02, 0.02)),
     ceil: hsl(wh, 0.14, 0.80 + R.range(-0.03, 0.02)),
@@ -203,6 +203,7 @@ const PLATES = ['for attendance', 'for remaining calm', 'for the incident', 'for
 const ODD_MONTHS = ['FEBRUARY', 'FEBRUARY', 'SMARCH', 'MONTH 13', 'LATE JUNE', 'THE SAME MONTH', 'NOVEMBER (AGAIN)'];
 const STAIRS = ['FLOOR 1', 'FLOOR 1', 'FLOOR 1 (STILL)', 'FLOOR 1, AGAIN', 'YES, FLOOR 1', 'PLEASE STOP', 'FLOOR 1 — 5 more climbs for a free floor'];
 const CORNER_THINGS = ['nothing', 'cup', 'plant', 'crt', 'sign', 'phone'];
+const SLIDES = ['ANY QUESTIONS?', 'THANK YOU FOR COMING, {NAME}', 'Q & A', 'SLIDE 1 OF 1', 'AGENDA: {NAME}', 'IN SUMMARY'];
 const CHAIR_COLORS = ['#4a7a6a', '#b5483f', '#3f7f9a', '#8a5a8f', '#c9893f', '#5a5a66', '#6f8a4a'];
 
 export const DECK = [
@@ -236,7 +237,7 @@ export const DECK = [
   { id: 'monitor', name: 'Camera 4', landmark: 'the dark cubicles', w: [9, 11], d: [9, 11], ports: ['back'], weight: 1.3, lights: 'dark',
     roll: (R) => ({ rows: R.int(2, 3), live: R.int(0, 5), stranger: R.chance(0.7) }) },
   { id: 'chairs', name: 'Seating Plan', landmark: 'all the chairs', w: [8, 10], d: [8, 10], ports: ['left', 'right'], weight: 1.5, lights: 'normal',
-    roll: (R) => ({ variant: R.pick(['corner', 'corner', 'arch', 'audience', 'ring']), count: R.int(18, 30), color: R.pick(CHAIR_COLORS), odd: R.chance(0.5) ? R.pick(CHAIR_COLORS) : null, corner: R.pick([-1, 1]), thing: R.pick(CORNER_THINGS) }) },
+    roll: (R, o) => ({ variant: R.pick(['corner', 'corner', 'arch', 'audience', 'ring']), count: R.int(18, 30), color: R.pick(CHAIR_COLORS), odd: R.chance(0.5) ? R.pick(CHAIR_COLORS) : null, corner: R.pick([-1, 1]), thing: R.pick(CORNER_THINGS), slide: fill(R.pick(SLIDES), o, R) }) },
   { id: 'cabinets', name: 'Records', landmark: 'the filing cabinets', w: [8, 10], d: [8, 11], ports: ['back'], weight: 1.5, lights: 'dim',
     roll: (R, o) => ({ labels: R.shuffle(CABINET).slice(0, 14).map((t) => fill(t, o, R)), use: R.shuffle(CABINET_USE), open: R.int(0, 9), aisles: R.int(2, 3) }) },
   { id: 'printer', name: 'Print Queue', landmark: 'the printer', w: [6, 8], d: [7, 9], ports: ['left', 'right'], weight: 1.3, lights: 'normal',

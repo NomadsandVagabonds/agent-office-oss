@@ -6,7 +6,7 @@ const RADIUS = 0.22, EYE = 1.1, WALK = 2.05, HURRY = 3.7;
 const TURN = 2.1, MOUSE = 0.0023, PITCH_MAX = 1.25;
 
 export function createPlayer(world, camera, start) {
-  const me = { x: start.x, z: start.z, yaw: start.yaw, pitch: 0, vx: 0, vz: 0, moving: false, speed: 0, room: null, slow: 1, sink: 0, y: 0, step: 0, shake: 1, drop: 0, dropV: 0, frozen: false };
+  const me = { x: start.x, z: start.z, yaw: start.yaw, pitch: 0, vx: 0, vz: 0, moving: false, speed: 0, room: null, slow: 1, sink: 0, sinkTo: 0, y: 0, step: 0, shake: 1, drop: 0, dropV: 0, frozen: false };
   const input = { keys: new Set(), dx: 0, dy: 0 };
   let stride = 0, floor = 0, sway = 0;
   const listeners = { step: null };
@@ -68,6 +68,7 @@ export function createPlayer(world, camera, start) {
     floor = Math.abs(target - floor) > 1.0 ? target : floor + (target - floor) * (1 - Math.exp(-14 * dt));
     // landing: a fall from the ceiling, a bounce
     if (me.drop > 0 || me.dropV !== 0) { me.dropV -= 9 * dt; me.drop += me.dropV * dt; if (me.drop <= 0) { me.drop = 0; me.dropV = me.dropV < -1.2 ? -me.dropV * 0.22 : 0; if (me.dropV > 0) me.drop = 0.001; } }
+    me.sink += (me.sinkTo - me.sink) * (1 - Math.exp(-7 * dt));        // wading, stooping
     const bob = Math.sin(stride * 2) * 0.016 * Math.min(1, me.speed / WALK) * me.shake;
     me.y = floor + EYE - me.sink + bob + me.drop;
     camera.position.set(me.x, me.y, me.z);

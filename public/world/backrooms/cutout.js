@@ -37,7 +37,7 @@ export function cutoutArt(kit, key, look, opt = {}) {
     g.save(); g.translate(w, 0); g.scale(-1, 1); mask(g, CARD); g.restore();      // seen from behind, the outline is mirrored
     g.globalCompositeOperation = 'source-atop';
     g.fillStyle = CARD_DARK;
-    for (let y = 3; y < h; y += 7) g.fillRect(0, y, w, 1);                         // corrugation
+    g.globalAlpha = 0.35; for (let y = 3; y < h; y += 9) g.fillRect(0, y, w, 1); g.globalAlpha = 1;      // corrugation
     g.fillStyle = '#c9a877'; g.fillRect(w * 0.2, h * 0.34, w * 0.6, S * 2);        // a strip of tape
     g.fillStyle = '#5a4026'; g.font = `700 ${S * 2}px ui-monospace, Menlo, Consolas, monospace`; g.textAlign = 'center';
     g.fillText('THIS SIDE', w / 2, h * 0.56); g.fillText('BACK', w / 2, h * 0.56 + S * 2.6);
@@ -56,7 +56,7 @@ export function makeCutout(kit, key, look, opt = {}) {
   face.quad([-w / 2, 0, 0.004], [w / 2, 0, 0.004], [w / 2, h, 0.004], [-w / 2, h, 0.004]);
   rear.quad([w / 2, 0, -0.004], [-w / 2, 0, -0.004], [-w / 2, h, -0.004], [w / 2, h, -0.004]);
   // the strut: a strip of board folded out behind, and the foot it ends in
-  const brown = [0.42, 0.3, 0.17], top = h * 0.62, reach = 0.34, sw = 0.07;
+  const brown = [0.3, 0.21, 0.11], top = h * 0.6, reach = 0.3, sw = 0.09;
   card.quad([-sw, top, -0.006], [sw, top, -0.006], [sw, 0, -reach], [-sw, 0, -reach], brown);
   card.quad([sw, top, -0.006], [-sw, top, -0.006], [-sw, 0, -reach], [sw, 0, -reach], brown);
   card.box(-0.16, 0, -reach - 0.03, 0.16, 0.012, -reach + 0.05, brown, { skip: '-y' });
