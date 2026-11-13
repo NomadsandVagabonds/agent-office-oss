@@ -119,8 +119,9 @@ export function createCameraRig(stage, opt = {}) {
     /** Frame the whole building. */
     overview(instant = false) {
       follow = null;
+      // On a tall, narrow screen a wide building cannot fit; show its middle rather than a speck.
       Object.assign(goal, { x: (bounds.x0 + bounds.x1) / 2, z: (bounds.z0 + bounds.z1) / 2 + 1.5, yaw: 0, pitch: 0.86,
-        dist: fitDistance(bounds.x1 - bounds.x0 + 4, (bounds.z1 - bounds.z0) * 0.9) });
+        dist: Math.min(96, fitDistance(bounds.x1 - bounds.x0 + 4, (bounds.z1 - bounds.z0) * 0.9)) });
       if (instant) { Object.assign(cur, goal); place(); }
     },
     /** Glide to a spot. Any of x, z, dist, yaw, pitch; `follow` keeps tracking a moving thing. */

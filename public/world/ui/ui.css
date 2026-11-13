@@ -132,8 +132,14 @@
 @media (max-width: 1360px) { #ui .topbar .tools .btn .word { display: none; } #ui .topbar .tools .btn:first-child .word { display: inline; } }
 @media (max-width: 980px) { #ui .story { width: calc(100% - 24px); bottom: 150px; } #ui .usehint { bottom: 96px; } }
 @media (max-width: 760px) {
-  #ui .tally .chip span.word, #ui .topbar .clock, #ui .hint, #ui .btn .word { display: none; }
-  #ui .needs { width: calc(100% - 20px); } #ui .side { width: calc(100% - 20px); max-height: 46%; top: auto; bottom: 10px; }
+  #ui .tally .chip span.word, #ui .topbar .clock, #ui .hint, #ui .btn .word, #ui .topbar .tools .btn:first-child .word { display: none; }
+  #ui .topbar { height: auto; flex-wrap: wrap; row-gap: 2px; padding: 6px 8px 4px 12px; }
+  #ui .topbar .tools { margin-left: 0; width: 100%; justify-content: space-between; gap: 0; }
+  #ui .topbar .tools .btn { padding: 0 6px; }
+  #ui .topbar .grow { display: none; }
+  #ui .needs { width: calc(100% - 20px); top: 96px; max-height: 40%; } #ui .side { width: calc(100% - 20px); max-height: 46%; top: auto; bottom: 10px; }
+  #ui .sheet { top: 96px; height: calc(100% - 106px); }
+  #ui .toasts { width: calc(100% - 20px); }
 }
 @media (prefers-reduced-motion: reduce) { #ui * { animation: none !important; transition: none !important; } }
 
