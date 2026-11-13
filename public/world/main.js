@@ -12,6 +12,7 @@ import { createScreens } from './scene/screens.js';
 import { createPeople } from './scene/people.js';
 import { buildDeskItem } from './scene/deskitems.js';
 import { createNet } from './net.js';
+import { createUI } from './ui/index.js';
 import { VOXEL } from './vox/vox.js';
 import { DESK } from './props/office.js';
 import { buildLayout, faceAngle } from '/core/layout.mjs';
@@ -36,6 +37,7 @@ const office = {
   ready: false,
 };
 window.office = office;        // for the console, and for the curious
+office.ui = q.get('ui') === '0' ? null : createUI(office);
 
 /* ---- desk items ---------------------------------------------------------------- */
 function makeItems(agent, group, desk) {
@@ -131,6 +133,7 @@ stage.onFrame((dt, t, frame) => {
   lighting.follow(rig.cur, rig.cur.dist);
   office.world?.building.update(stage.camera, dt);
   office.people?.update(dt);
+  office.ui?.update(dt);
   screens.update(t);
   // the further out you are, the more it looks like a model on a table
   const far = THREE.MathUtils.smoothstep(rig.cur.dist, 14, 60);
@@ -148,6 +151,11 @@ function applyDeepLink() {
   if (q.get('room')) {
     const room = w.layout.roomById.get(q.get('room')) || w.layout.rooms.find((r) => r.deptId === q.get('room'));
     if (room) rig.frame(room.rect, { instant: true });
+  }
+  if (q.get('agent')) {
+    const want = q.get('agent').toLowerCase();
+    const agent = [...net.state.agents.values()].find((a) => a.id === q.get('agent') || a.name.toLowerCase() === want);
+    if (agent) office.ui?.select(agent.id);
   }
   if (q.get('cam')) {
     const [x, z, dist, yaw, pitch] = q.get('cam').split(',').map(Number);

@@ -2,6 +2,10 @@ import cp from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+// Keys a client may press in a pane by name (tmux send-keys names).
+export const SAFE_KEYS = new Set(['Enter', 'Escape', 'Tab', 'BTab', 'BSpace', 'Space', 'Up', 'Down', 'Left', 'Right',
+  'Home', 'End', 'PPage', 'NPage', 'C-c', 'C-d', 'C-l', 'C-r', 'C-u', 'C-a', 'C-e', 'C-z', 'C-o']);
+
 function safeExec(args, opt = {}) {
   return cp.execFileSync(args[0], args.slice(1), {
     encoding: 'utf8',
@@ -211,10 +215,23 @@ export class TmuxManager {
     this.saveManaged();
   }
 
-  capture(id, lines = 220) {
+  /** The pane as text. `ansi` keeps colour escapes (SGR) so a client can paint them. */
+  capture(id, lines = 220, opt = {}) {
     if (!TmuxManager.isAvailable()) throw new Error('tmux is not available');
     const start = String(-Math.max(20, Math.min(4000, Number(lines) || 220)));
-    return safeExec(['tmux', 'capture-pane', '-pt', id, '-S', start]).replace(/\s+$/,'');
+    const args = ['tmux', 'capture-pane', '-p', ...(opt.ansi ? ['-e'] : []), '-t', id, '-S', start];
+    return safeExec(args).replace(/\s+$/,'');
+  }
+
+  /**
+   * Press named keys (Escape, Up, C-c…): the things you cannot type as text —
+   * answering a menu, interrupting a run. Only a fixed set of keys is allowed.
+   */
+  sendKeys(id, keys) {
+    if (!TmuxManager.isAvailable()) throw new Error('tmux is not available');
+    const list = (Array.isArray(keys) ? keys : [keys]).map(String).filter((k) => SAFE_KEYS.has(k)).slice(0, 32);
+    for (const key of list) safeExec(['tmux', 'send-keys', '-t', id, key]);
+    return list.length;
   }
 
   sendInput(id, text, opt = {}) {

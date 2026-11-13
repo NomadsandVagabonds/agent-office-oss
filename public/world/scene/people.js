@@ -92,10 +92,30 @@ export function createPeople(deps) {
     refresh(person, instant);
   }
 
+  // an emote borrows the body for a moment, then real state takes it back
+  const EMOTE = {
+    wave: { pose: 'wave', face: 'happy' }, dance: { pose: 'cheer', face: 'happy', bounce: 0.8, spin: 2 }, bow: { pose: 'bow' },
+    cheer: { pose: 'cheer', face: 'happy', bounce: 0.6 }, shrug: { pose: 'shrug' }, think: { pose: 'think' }, facepalm: { pose: 'facepalm', face: 'worried' },
+    nod: { pose: 'bow', ms: 700 }, stretch: { pose: 'stretch', face: 'happy' }, highfive: { pose: 'wave', face: 'happy', bounce: 0.3 },
+    salute: { pose: 'salute' }, spin: { pose: 'cheer', spin: 1, face: 'dizzy' }, sleep: { pose: 'sleep', face: 'sleep', ms: 5000 }, laugh: { pose: 'shrug', face: 'happy', bounce: 0.35 },
+  };
+  function emote(id, name) {
+    const person = people.get(id), e = EMOTE[name];
+    if (!person || !e || person.walking || !person.place) return;
+    const ms = e.ms || 2600;
+    person.emote = { ...e, until: performance.now() + ms, spinFrom: person.heading, ms, start: performance.now() };
+    refresh(person);
+  }
+
   function refresh(person, instant = false) {
     if (person.walking) return;
-    const s = restState(person), av = person.avatar;
-    if (instant) av.snap(s.pose); else av.setPose(s.pose);
+    const av = person.avatar;
+    let s = restState(person);
+    if (person.emote) {
+      const seated = person.place?.pose === 'sit';
+      s = { pose: person.emote.pose, face: person.emote.face || s.face, bounce: seated ? 0 : person.emote.bounce, seated };
+    }
+    if (instant) { av.setPose(s.pose, { seated: s.seated }); av.update(0, true); } else av.setPose(s.pose, { seated: s.seated });
     av.setExpression(s.face);
     av.bounce = s.bounce || 0;
     if ((s.hold || null) !== person.holding) { person.holding = s.hold || null; av.hold(person.holding); }
@@ -192,7 +212,12 @@ export function createPeople(deps) {
           person.faceGoal = Math.atan2(b.x - a.x, b.z - a.z);
         }
       }
-      const turn = angleDiff(person.heading, person.faceGoal);
+      if (person.emote) {
+        const e = person.emote, now = performance.now();
+        if (now >= e.until || person.walking) { person.emote = null; refresh(person); }
+        else if (e.spin && person.place.pose !== 'sit') person.heading = e.spinFrom + ((now - e.start) / e.ms) * TAU * e.spin;
+      }
+      const turn = person.emote?.spin ? 0 : angleDiff(person.heading, person.faceGoal);
       person.heading += turn * (1 - Math.exp(-(person.walking ? 12 : 8) * dt));
       av.walking += ((person.walking ? 1 : 0) - av.walking) * (1 - Math.exp(-10 * dt));
       av.speed = person.walking ? person.speed / 1.5 : 1;
@@ -204,7 +229,7 @@ export function createPeople(deps) {
 
   return {
     group, people,
-    setAgent, setPlace, remove, update, refresh,
+    setAgent, setPlace, remove, update, refresh, emote,
     /** Where someone is right now (for the camera and labels). */
     positionOf(id) { const p = people.get(id); return p && p.place ? p.pos : null; },
     /** The floor plan changed: keep everyone, re-seat them against the new furniture. */

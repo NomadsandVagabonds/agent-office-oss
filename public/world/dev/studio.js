@@ -1,5 +1,7 @@
 // The prop studio: a neutral room for looking at furniture while you sculpt it.
 //   /world/dev/studio.html?show=desk,chair,sofa        things from the catalogue (props/index.js)
+//   &from=kitchen  load ONE props file (props/kitchen.js) instead of the whole catalogue —
+//                  use this while writing a file, so nobody else's half-finished file gets in your way
 //   &turn=1        quarter turns, to see the sides and back
 //   &cam=wide|close|top|low      &hour=14      &who=1  (a person, for scale)      &fx=0
 // Everything is lit and post-processed exactly like the real office.
@@ -8,7 +10,7 @@ import { createStage } from '../engine/stage.js';
 import { createCameraRig } from '../engine/camera.js';
 import { createLighting } from '../scene/lighting.js';
 import { FLOORS, WALLS, WALL_H, signTexture } from '../scene/textures.js';
-import { PROPS, buildProp } from '../props/index.js';
+import { voxObject } from '../vox/material.js';
 import { Avatar } from '../avatar/rig.js';
 import { resolveLook } from '/core/look.mjs';
 import { VOXEL } from '../vox/vox.js';
@@ -19,7 +21,16 @@ const lighting = createLighting(stage);
 lighting.setHour(Number(q.get('hour') || 14));
 const rig = createCameraRig(stage, { bounds: { x0: -30, z0: -6, x1: 30, z1: 6 } });
 
-const names = (q.get('show') || 'desk,chair,cabinet,plant').split(',').map((s) => s.trim()).filter(Boolean);
+// the whole catalogue, or just one file of it
+let PROPS;
+if (q.get('from')) PROPS = (await import(`/world/props/${q.get('from').replace(/[^a-z0-9_-]/gi, '')}.js`)).CATALOGUE;
+else PROPS = (await import('../props/index.js')).PROPS;
+function buildProp(type, o) {
+  const entry = PROPS[type];
+  return voxObject(() => entry.make(o), { key: `${type}:${entry.variant ? entry.variant(o) : ''}:${o.id}` });
+}
+
+const names = (q.get('show') || 'all').split(',').map((s) => s.trim()).filter(Boolean);
 const list = names.includes('all') ? Object.keys(PROPS) : names;
 const turn = Number(q.get('turn') || 0) * Math.PI / 2;
 const gap = Number(q.get('gap') || 0.5);
@@ -27,10 +38,14 @@ const gap = Number(q.get('gap') || 0.5);
 const items = [];
 let x = 0;
 const stats = {};
-for (const name of list) {
+for (const entry of list) {
+  // "boxes#2" shows another variant of the same kind (a different object id)
+  const [name, tag = 'studio'] = entry.split('#');
   if (!PROPS[name]) { console.error(`no such prop: ${name}`); continue; }
   let node;
-  try { node = buildProp(name, { id: `${name}:studio`, type: name }); } catch (err) { console.error(`prop ${name} failed: ${err.message}`); continue; }
+  const extra = {};
+  for (const [k, val] of q) if (k.startsWith('o.')) extra[k.slice(2)] = Number.isFinite(Number(val)) ? Number(val) : val;   // &o.stage=3 → passed to make()
+  try { node = buildProp(name, { id: `${name}:${tag}`, type: name, ...extra }); } catch (err) { console.error(`prop ${name} failed: ${err.message}`); continue; }
   const b = node.userData.bounds;
   const w = (b.x1 - b.x0) * VOXEL, d = (b.z1 - b.z0) * VOXEL, h = (b.y1 - b.y0) * VOXEL;
   const span = Math.max(w, d);
@@ -40,11 +55,11 @@ for (const name of list) {
   holder.position.set(x + span / 2, PROPS[name].y || 0, 0);
   stage.scene.add(holder);
   // a label on the floor in front
-  const tex = signTexture(`${name}  ${b.x1 - b.x0}×${b.y1 - b.y0}×${b.z1 - b.z0}`, { size: 10 });
+  const tex = signTexture(`${entry}  ${b.x1 - b.x0}×${b.y1 - b.y0}×${b.z1 - b.z0}  ${node.userData.quads}q`, { size: 10 });
   const label = new THREE.Mesh(new THREE.PlaneGeometry(0.2 * tex.userData.aspect, 0.2), new THREE.MeshBasicMaterial({ map: tex }));
   label.rotation.x = -Math.PI / 2; label.position.set(x + span / 2, 0.01, Math.max(d, w) / 2 + 0.45);
   stage.scene.add(label);
-  stats[name] = { size: [b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0], min: [b.x0, b.y0, b.z0], quads: node.userData.quads };
+  stats[entry] = { size: [b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0], min: [b.x0, b.y0, b.z0], quads: node.userData.quads };
   items.push({ name, x: x + span / 2, span, h });
   x += span + gap;
 }

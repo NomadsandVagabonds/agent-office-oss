@@ -209,24 +209,28 @@ export function registerCoreRoutes(router, ctx) {
     try {
       return {
         session: runtimes.getSession(c.params.id),
-        text: runtimes.capture(c.params.id, Number(c.query.get('lines') || 220)),
+        text: runtimes.capture(c.params.id, Number(c.query.get('lines') || 220), { ansi: c.query.get('ansi') === '1' }),
       };
     } catch (err) {
       c.send(500, { error: err.message });
       return undefined;
     }
-  }, { loopbackOnly: true });
+  }, { loopbackOnly: true, about: 'What a managed terminal shows right now (?lines=220&ansi=1 keeps colour escapes).' });
 
   router.post('/api/terminal/:id/input', async (c) => {
     const body = await c.json();
     try {
+      // {text, enter?} types text; {keys:["Escape","Up","C-c"]} presses named keys
+      if (Array.isArray(body.keys) && body.keys.length) {
+        return { ok: true, sessionId: c.params.id, pressed: runtimes.sendKeys(c.params.id, body.keys) };
+      }
       runtimes.sendInput(c.params.id, body.text || '', { enter: body.enter !== false });
       return { ok: true, sessionId: c.params.id };
     } catch (err) {
       c.send(500, { error: err.message });
       return undefined;
     }
-  }, { loopbackOnly: true });
+  }, { loopbackOnly: true, about: 'Type into a managed terminal: {text, enter?} or {keys:["Escape","C-c",…]}.' });
 
   router.delete('/api/terminal/:id', (c) => {
     runtimes.kill(c.params.id);

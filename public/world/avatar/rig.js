@@ -125,6 +125,7 @@ export const POSES = {
 };
 const JOINTS = ['head', 'shoulderL', 'shoulderR', 'elbowL', 'elbowR', 'hipL', 'hipR', 'kneeL', 'kneeR'];
 const SEATED = new Set(['sit', 'type', 'think', 'ask', 'lounge', 'sleep']);
+const LEGS = new Set(['hipL', 'hipR', 'kneeL', 'kneeR']);
 
 export class Avatar {
   /**
@@ -202,6 +203,7 @@ export class Avatar {
     this.seatHeight = 18;        // voxels: where the hips rest when seated
     this.bounce = 0;             // 0..1: hopping (blocked / cheering)
     this.mug = null;
+    this.keepSeat = false;
     this.snap('stand');
   }
 
@@ -222,7 +224,16 @@ export class Avatar {
     }
   }
 
-  setPose(name) { if (POSES[name]) this.poseName = name; }
+  /**
+   * @param {string} name
+   * @param {{seated?:boolean}} [opt]  seated: keep the legs sitting while the
+   *        arms and head do the pose (waving from a chair, a seated shrug)
+   */
+  setPose(name, opt = {}) {
+    if (!POSES[name]) return;
+    this.poseName = name;
+    this.keepSeat = !!opt.seated && !SEATED.has(name);
+  }
 
   /** Jump straight to a pose (no easing) — for the first frame and for stills. */
   snap(name) {
@@ -240,12 +251,12 @@ export class Avatar {
     const k = instant ? 1 : 1 - Math.exp(-10 * dt);
     const c = this.cur;
     for (const j of JOINTS) {
-      const a = c[j], b = target[j];
+      const a = c[j], b = this.keepSeat && LEGS.has(j) ? POSES.sit[j] : target[j];
       a.x += (b.x - a.x) * k; a.y += (b.y - a.y) * k; a.z += (b.z - a.z) * k;
     }
     c.lean += (target.lean - c.lean) * k;
     c.tilt += (target.tilt - c.tilt) * k;
-    const seated = SEATED.has(this.poseName);
+    const seated = SEATED.has(this.poseName) || this.keepSeat;
     c.lift += ((seated ? this.seatHeight - 18 : 0) - c.lift) * k;
 
     const t = this.t;

@@ -272,8 +272,12 @@ export class RuntimeManager {
     this.sessions.delete(id);
   }
 
-  capture(id, lines) {
-    return this.tmux.capture(id, lines);
+  capture(id, lines, opt) {
+    return this.tmux.capture(id, lines, opt);
+  }
+
+  sendKeys(id, keys) {
+    return this.tmux.sendKeys(id, keys);
   }
 
   sendInput(id, text, opt) {
