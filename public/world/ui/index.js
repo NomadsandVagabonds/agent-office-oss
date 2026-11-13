@@ -115,14 +115,23 @@ export function createUI(office) {
     if (e.type !== 'click' || e.button !== 0) return;
     const hit = picker.at(e.x, e.y);
     if (hit?.kind === 'agent') ui.select(hit.id);
+    else if (hit?.kind === 'cat') petCat();
     else if (office.selected) ui.select(null);
   });
+  let pets = 0;
+  async function petCat() {
+    try {
+      await net.api('/api/world/pet', { method: 'POST', body: { name: 'Lead' } });
+      if (++pets === 9) net.api('/api/world/discover', { method: 'POST', body: { secret: 'cat-person', name: 'Lead' } }).catch(() => {});
+    } catch { /* the cat is busy */ }
+  }
   const canvas = office.stage.renderer.domElement;
   let hoverAt = 0;
   canvas.addEventListener('pointermove', (e) => {
     if (e.buttons || performance.now() - hoverAt < 60) return;
     hoverAt = performance.now();
-    canvas.style.cursor = picker.at(e.clientX, e.clientY)?.kind === 'agent' ? 'pointer' : '';
+    const kind = picker.at(e.clientX, e.clientY)?.kind;
+    canvas.style.cursor = kind === 'agent' || kind === 'cat' ? 'pointer' : '';
   });
   canvas.addEventListener('dblclick', (e) => {
     const hit = picker.at(e.clientX, e.clientY);
@@ -213,7 +222,25 @@ export function createUI(office) {
   net.on('fx', (fx) => {
     if (fx.kind === 'say' && fx.id) labels.say(fx.id, fx.text);
     else if (fx.kind === 'emote' && fx.id) { labels.say(fx.id, EMOJI[fx.name] || '✨', 2600, 'emote'); office.people?.emote?.(fx.id, fx.name); }
+    else if (fx.kind === 'plane') office.fx?.plane(fx.from, fx.to, () => { if (fx.to && fx.to !== 'lead') labels.say(fx.to, '✉️', 1800, 'emote'); });
+    else if (fx.kind === 'confetti') {
+      const at = (fx.by && office.people?.positionOf(fx.by)) || roomCentre(fx.deptId);
+      if (at) office.fx?.confetti(at.x, at.z);
+    } else if (fx.kind === 'elevator') office.fx?.lift();
+    else if (fx.kind === 'cat') office.cat?.move(fx);
+    else if (fx.kind === 'pet') {
+      office.cat?.purr();
+      const c = office.cat?.pos;
+      if (c) for (let i = 0; i < 3; i++) setTimeout(() => labels.float(c.x, 0.45, c.z, '♥', { color: '#ff7a9a', ms: 1300 }), i * 160);
+    } else if (fx.kind === 'bell') {
+      const bell = office.world?.layout.objects.find((o) => o.type === 'bell');
+      if (bell) labels.float(bell.x, 1.2, bell.z, 'ding!', { color: '#f0d27a', size: 16 });
+    } else if (fx.kind === 'announce') ui.toast(h('span', h('b', `${fx.by} in ${fx.channel}: `), fx.text), { ms: 8000 });
   });
+  function roomCentre(deptId) {
+    const room = office.world?.layout.rooms.find((r) => r.deptId === deptId);
+    return room ? { x: room.rect.x + room.rect.w / 2, z: room.rect.z + room.rect.d / 2 } : null;
+  }
   net.on('activity', (item) => {
     if (!item?.text || item.kind === 'channel' || item.kind === 'dm') return;      // chatter has its own panel
     const gold = item.kind === 'discovery' || item.kind === 'task-done' || item.kind === 'creation';

@@ -113,5 +113,27 @@ export function createLabels(office, ui) {
     }
   }
 
-  return { update, say };
+  /* ---- floaters: a heart over the cat, a "ding!" over the bell ------------------- */
+  const floaters = [];
+  function float(x, y, z, text, opt = {}) {
+    const el = h('div.floater', text);
+    if (opt.color) el.style.color = opt.color;
+    if (opt.size) el.style.fontSize = opt.size + 'px';
+    layer.append(el);
+    floaters.push({ el, x, y, z, born: performance.now(), ms: opt.ms || 1500, rise: opt.rise ?? 0.7, drift: (Math.random() - 0.5) * 0.3 });
+  }
+  function updateFloaters() {
+    if (!floaters.length) return;
+    const { camera, size } = office.stage;
+    const now = performance.now();
+    for (let i = floaters.length - 1; i >= 0; i--) {
+      const f = floaters[i], t = (now - f.born) / f.ms;
+      if (t >= 1) { f.el.remove(); floaters.splice(i, 1); continue; }
+      v.set(f.x + f.drift * t, f.y + f.rise * t, f.z).project(camera);
+      f.el.style.opacity = String(Math.min(1, (1 - t) * 2.2));
+      f.el.style.transform = `translate(${((v.x * 0.5 + 0.5) * size.w).toFixed(1)}px, ${((-v.y * 0.5 + 0.5) * size.h).toFixed(1)}px) translate(-50%, -50%) scale(${(0.7 + Math.min(1, t * 6) * 0.3).toFixed(2)})`;
+    }
+  }
+
+  return { update() { update(); updateFloaters(); }, say, float };
 }

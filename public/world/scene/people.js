@@ -72,6 +72,8 @@ export function createPeople(deps) {
     const avatar = new Avatar(look, { seed: a.persona || a.id, provider: a.provider || 'unknown' });
     avatar.seatHeight = SIT_H;
     avatar.root.userData.agentId = a.id;
+    const hat = deps.hatFor ? deps.hatFor(look) : null;       // a hat they (or a teammate) made
+    if (hat) avatar.hat.add(hat);
     if (old) {
       avatar.root.position.copy(old.root.position); avatar.root.rotation.y = old.root.rotation.y;
       avatar.snap(old.poseName);

@@ -10,7 +10,10 @@ import { buildBuilding } from './scene/building.js';
 import { furnish } from './scene/furnish.js';
 import { createScreens } from './scene/screens.js';
 import { createPeople } from './scene/people.js';
-import { buildDeskItem } from './scene/deskitems.js';
+import { buildDeskItem, buildHat } from './scene/deskitems.js';
+import { createExhibits } from './scene/exhibits.js';
+import { createFx } from './scene/fx.js';
+import { createCat } from './scene/creatures.js';
 import { createNet } from './net.js';
 import { createUI } from './ui/index.js';
 import { VOXEL } from './vox/vox.js';
@@ -37,6 +40,9 @@ const office = {
   ready: false,
 };
 window.office = office;        // for the console, and for the curious
+office.fx = createFx(office);
+office.exhibits = createExhibits(office);
+office.cat = createCat(office);
 office.ui = q.get('ui') === '0' ? null : createUI(office);
 
 /* ---- desk items ---------------------------------------------------------------- */
@@ -77,6 +83,7 @@ function buildWorld(snapshot) {
   rig.setBounds(layout.bounds);
   if (!office.people) {
     office.people = createPeople({ layout, nav, furniture, screens, now: net.now, makeItems,
+      hatFor: (look) => { const spec = office.creations[look?.accessory]; return spec && spec.kind === 'hat' ? buildHat(spec) : null; },
       itemsChanged: (person, agent) => { const k = itemsKey(agent); if (person.itemsKey === k) return false; person.itemsKey = k; return true; } });
     stage.scene.add(office.people.group);
   } else office.people.rebind(office.world);
@@ -96,6 +103,8 @@ function syncPeople() {
 net.on('world', (snapshot) => {
   buildWorld(snapshot);
   syncPeople();
+  office.cat.place(snapshot.cat);
+  office.exhibits.sync();
   office.ready = true;
   document.body.classList.add('ready');
 });
@@ -105,6 +114,14 @@ net.on('remove', (id) => office.people?.remove(id));
 net.on('place', (id, place) => office.people?.setPlace(id, place));
 net.on('tasks', (deptId, tasks) => office.world?.furniture.boards.get(deptId)?.setTasks(tasks));
 net.on('status', (up) => document.body.classList.toggle('offline', !up));
+net.on('object', (object) => {                       // a team rearranged its shelf
+  if (object?.kind === 'shelf' && net.state.world) { (net.state.world.shelves ||= {})[object.deptId] = object.items; office.exhibits.sync(); }
+});
+net.on('creations', async () => {                    // someone signed a new creation: the gallery moves along one
+  await loadCreations();
+  try { const world = await net.api('/api/world'); if (net.state.world) net.state.world.gallery = world.gallery; } catch { /* next snapshot will have it */ }
+  if (net.state.world) office.exhibits.sync();
+});
 
 async function loadCreations() {
   try {
@@ -133,6 +150,9 @@ stage.onFrame((dt, t, frame) => {
   lighting.follow(rig.cur, rig.cur.dist);
   office.world?.building.update(stage.camera, dt);
   office.people?.update(dt);
+  office.cat.update(dt);
+  office.exhibits.update(dt);
+  office.fx.update(dt);
   office.ui?.update(dt);
   screens.update(t);
   // the further out you are, the more it looks like a model on a table

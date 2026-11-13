@@ -40,6 +40,11 @@ export function createPicker(office) {
       const t = hitPerson(r, person.pos.x, person.pos.z, radius, 1.7);
       if (t < bestT) { bestT = t; best = person; }
     }
+    const cat = office.cat?.pos;
+    if (cat) {
+      const t = hitPerson(r, cat.x, cat.z, 0.3 + Math.min(0.6, office.rig.cur.dist * 0.01), 0.5);
+      if (t < bestT) return { kind: 'cat', x: cat.x, z: cat.z };
+    }
     if (best) return { kind: 'agent', id: best.id, person: best };
     if (r.intersectPlane(floor, hit)) {
       const layout = office.world?.layout;

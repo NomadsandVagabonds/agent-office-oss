@@ -48,13 +48,13 @@
 
 /* top bar */
 #ui .topbar { position: absolute; top: 10px; left: 10px; right: 10px; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 14px; }
-#ui .brand { font: 600 12px/1 var(--mono); letter-spacing: .26em; cursor: pointer; }
+#ui .brand { font: 600 12px/1 var(--mono); letter-spacing: .26em; cursor: pointer; white-space: nowrap; }
 #ui .brand small { letter-spacing: .04em; font-weight: 400; color: var(--dim); margin-left: 8px; }
 #ui .tally { display: flex; gap: 6px; margin-left: 6px; }
 #ui .tally .chip { cursor: pointer; } #ui .tally .chip:hover { background: rgba(255, 255, 255, .13); color: var(--ink); }
 #ui .tally .chip.hot { background: rgba(255, 180, 74, .18); color: var(--blocked); }
 #ui .topbar .tools { margin-left: auto; display: flex; gap: 4px; }
-#ui .topbar .clock { font: 12px/1 var(--mono); color: var(--dim); padding: 0 6px; }
+#ui .topbar .clock { font: 12px/1 var(--mono); color: var(--dim); padding: 0 6px; white-space: nowrap; }
 
 /* labels floating over the world */
 #ui .labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
@@ -76,6 +76,8 @@
 #ui .roomtag:hover { border-color: var(--accent); }
 #ui .roomtag small { display: block; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--dim); margin-top: 2px; }
 #ui .roomtag.hot { border-color: var(--blocked); }
+
+#ui .floater { position: absolute; left: 0; top: 0; font: 600 20px/1 var(--sans); color: #fff; text-shadow: 0 2px 6px rgba(0, 0, 0, .6); pointer-events: none; white-space: nowrap; will-change: transform, opacity; }
 
 /* needs-you tray */
 #ui .needs { position: absolute; top: 64px; right: 10px; width: 330px; max-height: calc(100% - 140px); display: flex; flex-direction: column; gap: 8px; overflow-y: auto; pointer-events: none; padding-bottom: 4px; }

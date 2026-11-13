@@ -274,10 +274,10 @@ export function furnish(layout, building, opt = {}) {
       for (const o of layout.objects) if (o.type === 'floorlamp' && !hidden.has(o.room)) out.push({ x: o.x, y: 1.5, z: o.z, power: 1.5 });
       for (const d of desks.values()) {
         if (!d.owner || !d.holder || d.desk.hot) continue;
-        p.set((O.DESK.lamp[0] - 14) * VOXEL, (O.DESK.lamp[1] + 22) * VOXEL, (O.DESK.lamp[2] - 14) * VOXEL);
+        p.set((O.DESK.lamp[0] - 10) * VOXEL, (O.DESK.lamp[1] + 34) * VOXEL, (O.DESK.lamp[2] - 4) * VOXEL);
         d.holder.updateMatrixWorld(true);
         d.holder.localToWorld(p);
-        out.push({ x: p.x, y: p.y, z: p.z, power: 0.42 });
+        out.push({ x: p.x, y: p.y, z: p.z, power: 0.5 });
       }
       return out;
     },

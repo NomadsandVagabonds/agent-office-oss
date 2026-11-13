@@ -60,7 +60,7 @@ export function createLighting(stage, opt = {}) {
   // Real light for the lamps nearest to wherever you are looking; the rest
   // only glow. A handful of lights is all a miniature needs.
   const lampLights = Array.from({ length: opt.lamps ?? 6 }, () => {
-    const l = new THREE.PointLight('#ffc98a', 0, 8.5, 2);
+    const l = new THREE.PointLight('#ffc98a', 0, 9, 1.5);
     scene.add(l);
     return l;
   });
@@ -112,7 +112,7 @@ export function createLighting(stage, opt = {}) {
         lampLights.forEach((l, i) => {
           const n = near[i];
           l.visible = !!n;
-          if (n) { l.position.set(n.p.x, n.p.y, n.p.z); l.intensity = 9 * look.lamp * (n.p.power || 1); }
+          if (n) { l.position.set(n.p.x, n.p.y, n.p.z); l.intensity = 5 * look.lamp * (n.p.power || 1); }
         });
       }
     },
