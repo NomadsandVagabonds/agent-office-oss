@@ -144,8 +144,8 @@ function sessionFromTerminal(meta, runtime) {
 }
 
 export class RuntimeManager {
-  constructor(port) {
-    this.tmux = new TmuxManager(port);
+  constructor(port, storePath) {
+    this.tmux = new TmuxManager(port, storePath);
     this.sessions = new Map();
   }
 

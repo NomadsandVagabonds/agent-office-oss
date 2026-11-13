@@ -1,0 +1,127 @@
+// The Office — character + desk vocabulary. Pure, shared by the daemon (which
+// resolves and validates looks) and the 3D client (which renders them). The
+// option lists and the hash are the same ones the 2D pixel office has always
+// used, so an agent keeps its face when it steps into three dimensions.
+
+export const SPECIES = Object.freeze(['human', 'robot', 'goblin', 'dog', 'cat']);
+export const SKIN = Object.freeze(['#f3cda8', '#e6b184', '#cd8d5e', '#9c6442', '#dcab8b']);
+export const HAIR_COLORS = Object.freeze(['#241608', '#4a2f1a', '#15151c', '#7d5836', '#caa05a', '#9aa0ac']);
+export const OUTFIT_COLORS = Object.freeze(['#b5483f', '#3f8a72', '#5a6fa8', '#8a5a8f', '#6f8a4a', '#c9893f',
+  '#3f7f9a', '#5a5a66']);
+export const HAIR = Object.freeze(['short', 'side', 'long', 'bun', 'mohawk', 'bald', 'cap', 'beanie']);
+export const OUTFIT = Object.freeze(['tee', 'hoodie', 'suit', 'vest', 'cardigan']);
+export const ACCESSORY = Object.freeze(['none', 'glasses', 'headphones', 'monocle', 'halo', 'partyhat',
+  'crown', 'tophat', 'flower', 'eyepatch', 'shades', 'propeller']);
+export const FACIAL = Object.freeze(['none', 'mustache', 'beard']);
+export const PLANTS = Object.freeze(['monstera', 'succulent', 'cactus', 'bonsai', 'terrarium']);
+export const DESK_ITEMS = Object.freeze(['mug', 'figdragon', 'figrobot', 'duck', 'books', 'globe', 'stickies',
+  'trophy', 'lavalamp', 'rubiks', 'gameboy', 'd20', 'fishbowl', 'newton', 'hourglass',
+  'snowglobe', 'candle', 'fan', 'bobblehead', 'magic8', 'catclock', 'donut',
+  'ramen', 'plushie', 'floppy', 'cassette', 'crystal', 'skull', 'paperplane',
+  'zen', 'toycar', 'discoball', 'pizza', 'banana', 'medal']);
+
+// Weighted pools used only for the *default* roll (the classic 2D weights).
+const ACC_POOL = ['none', 'none', 'glasses', 'headphones', 'monocle', 'halo', 'partyhat',
+  'crown', 'tophat', 'flower', 'eyepatch', 'shades', 'propeller'];
+const FACE_POOL = ['none', 'none', 'none', 'mustache', 'beard'];
+const SPECIES_POOL = ['human', 'human', 'human', 'human', 'human', 'human', 'human',
+  'robot', 'robot', 'cat', 'dog', 'goblin'];
+const FUN_POOL = DESK_ITEMS.filter((id) => id !== 'mug');
+// Non-human complexions (fur, plating, goblin green) rolled per species.
+const SPECIES_SKIN = {
+  robot: ['#8a93a8', '#a7b0bc', '#9aa58f', '#b0a08a'],
+  goblin: ['#7fa35a', '#6b9460', '#8fae5e', '#5f8a6a'],
+  dog: ['#c99a62', '#a8794a', '#e3c79a', '#8a6a4a', '#d9d2c4'],
+  cat: ['#e0a060', '#9a9aa6', '#f1e6d2', '#3a3a44', '#d98a4a'],
+};
+
+/** FNV-1a, 32-bit — identical to the 2D client's hashId(). */
+export function hashId(s) {
+  let h = 2166136261;
+  for (const c of String(s)) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return h >>> 0;
+}
+const pick = (list, n) => list[n % list.length];
+
+export const isHexColor = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+export const isCreationId = (v) => typeof v === 'string' && /^c_[a-z0-9_]{1,48}$/i.test(v);
+
+/**
+ * A complete look for `seed`, with any provided `character` fields winning.
+ * Deterministic: the same seed always rolls the same character.
+ */
+export function resolveLook(seed, character) {
+  const h = hashId(seed);
+  const c = character && typeof character === 'object' ? character : {};
+  const species = SPECIES.includes(c.species) ? c.species : pick(SPECIES_POOL, h >>> 21);
+  const skinPool = SPECIES_SKIN[species] || SKIN;
+  return {
+    species,
+    skin: isHexColor(c.skin) ? c.skin : pick(skinPool, h),
+    hair: HAIR.includes(c.hair) ? c.hair : pick(HAIR, h >>> 3),
+    hairColor: isHexColor(c.hairColor) ? c.hairColor : pick(HAIR_COLORS, h >>> 6),
+    outfit: OUTFIT.includes(c.outfit) ? c.outfit : pick(OUTFIT, h >>> 9),
+    outfitColor: isHexColor(c.outfitColor) ? c.outfitColor : pick(OUTFIT_COLORS, h >>> 12),
+    accessory: (ACCESSORY.includes(c.accessory) || isCreationId(c.accessory))
+      ? c.accessory : pick(ACC_POOL, h >>> 15),
+    facial: FACIAL.includes(c.facial) ? c.facial : pick(FACE_POOL, h >>> 18),
+  };
+}
+
+/** Up to five desk items for `seed`, or the provided list if it is usable. */
+export function resolveDeskItems(seed, items) {
+  const clean = sanitizeDeskItems(items);
+  if (clean.length) return clean;
+  const h = hashId(seed);
+  return [pick(PLANTS, h), 'mug', pick(FUN_POOL, h >>> 4), pick(FUN_POOL, h >>> 11)];
+}
+
+export function sanitizeDeskItems(items) {
+  if (!Array.isArray(items)) return [];
+  const out = [];
+  for (const item of items) {
+    const id = String(item || '').trim();
+    if (!id) continue;
+    if (PLANTS.includes(id) || DESK_ITEMS.includes(id) || isCreationId(id)) out.push(id);
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
+/**
+ * Validate an agent-supplied look patch. Returns `{ look, errors }` where
+ * `look` holds only the fields that were valid.
+ */
+export function sanitizeLookPatch(patch) {
+  const look = {};
+  const errors = [];
+  if (!patch || typeof patch !== 'object') return { look, errors: ['look must be an object'] };
+  const enumField = (key, allowed) => {
+    if (!(key in patch)) return;
+    if (allowed.includes(patch[key])) look[key] = patch[key];
+    else errors.push(`${key} must be one of: ${allowed.join(', ')}`);
+  };
+  const colorField = (key) => {
+    if (!(key in patch)) return;
+    if (isHexColor(patch[key])) look[key] = patch[key].toLowerCase();
+    else errors.push(`${key} must be a #rrggbb color`);
+  };
+  enumField('species', SPECIES);
+  enumField('hair', HAIR);
+  enumField('outfit', OUTFIT);
+  enumField('facial', FACIAL);
+  colorField('skin');
+  colorField('hairColor');
+  colorField('outfitColor');
+  if ('accessory' in patch) {
+    if (ACCESSORY.includes(patch.accessory) || isCreationId(patch.accessory)) look.accessory = patch.accessory;
+    else errors.push(`accessory must be one of: ${ACCESSORY.join(', ')} — or a hat creation id (c_…)`);
+  }
+  return { look, errors };
+}
+
+export const LOOK_OPTIONS = Object.freeze({
+  species: SPECIES, hair: HAIR, outfit: OUTFIT, accessory: ACCESSORY, facial: FACIAL,
+  skin: SKIN, hairColor: HAIR_COLORS, outfitColor: OUTFIT_COLORS,
+  plants: PLANTS, deskItems: DESK_ITEMS,
+});

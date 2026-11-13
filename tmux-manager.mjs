@@ -10,6 +10,24 @@ function safeExec(args, opt = {}) {
   });
 }
 
+// CLI probes fork a process each; the daemon asks on nearly every event, so
+// answers are cached. `tmux list-sessions` is cached briefly and invalidated
+// whenever we spawn or kill.
+const PROBE_TTL_MS = 60_000;
+const LIST_TTL_MS = 1_000;
+const probeCache = new Map();
+function probe(bin, args) {
+  const hit = probeCache.get(bin);
+  const now = Date.now();
+  if (hit && now - hit.at < PROBE_TTL_MS) return hit.ok;
+  let ok = false;
+  try { safeExec([bin, ...args], { timeout: 4000 }); ok = true; } catch { ok = false; }
+  probeCache.set(bin, { ok, at: now });
+  return ok;
+}
+let listCache = { at: 0, sessions: [] };
+function invalidateList() { listCache = { at: 0, sessions: [] }; }
+
 function sessionSlug(name) {
   return `office-${(''+name).toLowerCase().replace(/[^a-z0-9]+/g,'-')
     .replace(/^-+|-+$/g,'').slice(0,40)||'agent'}`;
@@ -77,18 +95,20 @@ export class TmuxManager {
   }
 
   static isAvailable() {
-    try { safeExec(['tmux', '-V']); return true; }
-    catch { return false; }
+    return probe('tmux', ['-V']);
   }
 
   static isClaudeAvailable() {
-    try { safeExec(['claude', '--version']); return true; }
-    catch { return false; }
+    return probe('claude', ['--version']);
   }
 
   static isCodexAvailable() {
-    try { safeExec(['codex', '--version']); return true; }
-    catch { return false; }
+    return probe('codex', ['--version']);
+  }
+
+  /** Is an arbitrary agent CLI on PATH? (cached like the others) */
+  static isBinAvailable(bin, args = ['--version']) {
+    return probe(bin, args);
   }
 
   static runtimeStatus() {
@@ -102,10 +122,15 @@ export class TmuxManager {
 
   listSessions() {
     if (!TmuxManager.isAvailable()) return [];
+    const now = Date.now();
+    if (now - listCache.at < LIST_TTL_MS) return listCache.sessions.slice();
+    let sessions = [];
     try {
-      const out = safeExec(['tmux', 'list-sessions', '-F', '#{session_name}']);
-      return out.trim().split('\n').filter(Boolean);
-    } catch { return []; }
+      const out = safeExec(['tmux', 'list-sessions', '-F', '#{session_name}'], { timeout: 4000 });
+      sessions = out.trim().split('\n').filter(Boolean);
+    } catch { sessions = []; }
+    listCache = { at: now, sessions };
+    return sessions.slice();
   }
 
   listManaged() {
@@ -161,6 +186,7 @@ export class TmuxManager {
     });
     try { safeExec(['tmux', 'kill-session', '-t', id]); } catch {}
     safeExec(['tmux', 'new-session', '-d', '-s', id, '-c', cwd, ...cmd]);
+    invalidateList();
     const meta = {
       id,
       name,
@@ -179,6 +205,7 @@ export class TmuxManager {
 
   kill(id) {
     try { safeExec(['tmux', 'kill-session', '-t', id]); } catch {}
+    invalidateList();
     this.managed.delete(id);
     this.saveManaged();
   }
