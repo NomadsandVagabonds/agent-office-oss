@@ -53,7 +53,10 @@ export function createWalk(office) {
       });
       story.append(input);
       setTimeout(() => input.focus(), 30);
-    } else storyTimer = setTimeout(() => story.classList.add('hidden'), Math.min(14000, 3500 + text.length * 55));
+    } else {
+      if (opt.actions) story.append(h('div.row', { style: { marginTop: '8px' } }, opt.actions.map((a) => h('a.btn.small.primary', { href: a.href || '#', onclick: a.onclick || null }, a.label))));
+      storyTimer = setTimeout(() => story.classList.add('hidden'), Math.min(14000, 3500 + text.length * 55) + (opt.actions ? 6000 : 0));
+    }
   }
 
   /* ---- can I stand here? ---------------------------------------------------------- */
@@ -106,7 +109,7 @@ export function createWalk(office) {
     const unlocked = !!net.state.world?.plan?.unlocked?.backroom;
     for (const poi of layout.pois.values()) {
       if (poi.hidden && !unlocked) continue;
-      if (poi.kind === 'seat' || poi.kind === 'board' || poi.kind === 'shelf' || poi.kind === 'cabinet') continue;   // those have their own panels
+      if (poi.kind === 'seat') continue;
       const d = Math.min(Math.hypot(poi.stand.x - s.x, poi.stand.z - s.z), Math.hypot(poi.look.x - s.x, poi.look.z - s.z) - 0.3);
       if (d < bestD) { bestD = d; best = { thing: poi.id, label: poi.label, kind: poi.kind, x: poi.look.x, z: poi.look.z }; }
     }
@@ -124,7 +127,7 @@ export function createWalk(office) {
       return;
     }
     s.busy = true;
-    s.heading = Math.atan2(target.x - s.x, target.z - s.z);
+    if (s.active) s.heading = Math.atan2(target.x - s.x, target.z - s.z);
     try {
       const r = await net.api('/api/world/lead/use', { method: 'POST', body: { id: me.id, name: me.name, thing: target.thing, arg } });
       if (target.kind === 'console' && arg === undefined) narrate(r.text, { ask: NEEDS_TEXT.console, onAnswer: (v) => use(target, v) });

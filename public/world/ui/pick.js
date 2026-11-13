@@ -45,7 +45,21 @@ export function createPicker(office) {
       const t = hitPerson(r, cat.x, cat.z, 0.3 + Math.min(0.6, office.rig.cur.dist * 0.01), 0.5);
       if (t < bestT) return { kind: 'cat', x: cat.x, z: cat.z };
     }
+    const ghost = office.ghost;
+    if (ghost && hitPerson(r, ghost.x, ghost.z, 0.45, 1.2) < bestT) return { kind: 'ghost' };
     if (best) return { kind: 'agent', id: best.id, person: best };
+    const duck = office.duck;
+    if (duck && hitPerson(r, duck.x, duck.z, 0.16, duck.y + 0.25) < Infinity) return { kind: 'duck', x: duck.x, z: duck.z };
+    // a thing you can use: the nearest box the ray enters
+    const unlocked = !!office.net.state.world?.plan?.unlocked?.backroom;
+    let thing = null, thingT = Infinity;
+    for (const b of office.world?.furniture.hitBoxes() || []) {
+      if (b.poi.hidden && !unlocked) continue;
+      if (!r.intersectBox(b.box, hit)) continue;
+      const t = hit.distanceTo(r.origin);
+      if (t < thingT) { thingT = t; thing = b; }
+    }
+    if (thing) return { kind: 'thing', object: thing.object, poi: thing.poi };
     if (r.intersectPlane(floor, hit)) {
       const layout = office.world?.layout;
       const roomId = layout ? layout.roomAt(hit.x, hit.z) : null;

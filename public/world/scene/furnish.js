@@ -166,6 +166,12 @@ export function furnish(layout, building, opt = {}) {
     holder.position.set(o.x, PROPS[o.type]?.y || 0, o.z);
     holder.rotation.y = faceAngle(o.face);
     holder.userData.object = o;
+    if (o.swings) {                                              // the secret shelf, standing open on its hinge
+      const a = faceAngle(o.face), hw = (o.w || 2) / 2, swing = -1.75;
+      const hx = o.x - Math.cos(a) * hw, hz = o.z + Math.sin(a) * hw;          // the hinge: the shelf's left end
+      holder.rotation.y = a + swing;
+      holder.position.set(hx + Math.cos(a + swing) * hw, 0, hz - Math.sin(a + swing) * hw);
+    }
     nodes.set(o.id, holder);
     if (PROPS[o.type]?.wall) {
       if (!building.attachToWall(holder, o.x, o.z)) group.add(holder);
@@ -264,8 +270,36 @@ export function furnish(layout, building, opt = {}) {
     return g;
   }
 
+  // what can be pointed at: one box per thing that does something
+  let boxes = null;
+  function hitBoxes() {
+    if (boxes) return boxes;
+    boxes = [];
+    for (const o of layout.objects) {
+      if (!o.poi || hidden.has(o.room)) continue;
+      const node = nodes.get(o.id);
+      if (!node) continue;
+      node.updateWorldMatrix(true, true);
+      const box = new THREE.Box3().setFromObject(node);
+      if (box.isEmpty()) continue;
+      box.expandByScalar(0.06);
+      boxes.push({ object: o, poi: o.poi, box });
+    }
+    return boxes;
+  }
+
+  /** The plaza tree grows in stages (0 sprout … 4 grand) as tasks get finished. */
+  function setTreeStage(stage) {
+    const o = layout.objects.find((x) => x.type === 'tree');
+    const holder = o && nodes.get(o.id);
+    if (!holder || !hasProp('tree')) return;
+    while (holder.children.length) holder.remove(holder.children[0]);
+    holder.add(buildProp('tree', { ...o, stage }));
+    boxes = null;
+  }
+
   return {
-    group, nodes, desks, boards,
+    group, nodes, desks, boards, hitBoxes, setTreeStage,
     standIns: [...new Set(standIns)],
     /** Every lamp that is switched on: floor lamps, and the desk lamp of each claimed desk. */
     lamps() {

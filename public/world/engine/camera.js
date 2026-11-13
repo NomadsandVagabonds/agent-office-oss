@@ -16,7 +16,7 @@ export function createCameraRig(stage, opt = {}) {
   const { camera, renderer } = stage;
   const el = renderer.domElement;
   let bounds = opt.bounds || { x0: -30, z0: -12, x1: 30, z1: 12 };
-  const LIMIT = { minDist: 3.2, maxDist: 150, minPitch: 0.16, maxPitch: 1.5 };
+  const LIMIT = { minDist: 3.2, maxDist: 230, minPitch: 0.16, maxPitch: 1.5 };
 
   // where the camera is (cur) and where it is heading (goal)
   const cur = { x: 0, z: 2, yaw: 0, pitch: 0.82, dist: 46, y: 0.6 };
@@ -42,6 +42,7 @@ export function createCameraRig(stage, opt = {}) {
   function clampGoal() {
     goal.dist = clamp(goal.dist, LIMIT.minDist, LIMIT.maxDist);
     goal.pitch = clamp(goal.pitch, LIMIT.minPitch, LIMIT.maxPitch);
+    if (goal.dist > 150) goal.pitch = Math.max(goal.pitch, 0.5);      // far enough out to see the desk: keep looking down at it
     goal.x = clamp(goal.x, bounds.x0 - 4, bounds.x1 + 4);
     goal.z = clamp(goal.z, bounds.z0 - 4, bounds.z1 + 4);
   }

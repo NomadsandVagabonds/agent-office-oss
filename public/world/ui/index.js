@@ -10,6 +10,7 @@ import { createInspector } from './inspector.js';
 
 const EMOJI = { wave: '👋', dance: '💃', bow: '🙇', cheer: '🎉', shrug: '🤷', think: '🤔', facepalm: '🤦', nod: '👍', stretch: '🙆',
   highfive: '🙌', salute: '🫡', spin: '🌀', sleep: '💤', laugh: '😄' };
+const USE_FX = { coffee: ['coffee', '☕'], vend: ['vending', '🍫'], water: ['tree', '💧'], print: ['printer', '📄'], duck: [null, '🦆'] };
 const SHEETS = {
   comms: { title: 'Comms', icon: 'chat', key: 'c', load: () => import('./comms.js') },
   board: { title: 'Board', icon: 'board', key: 'b', load: () => import('./board.js') },
@@ -118,8 +119,32 @@ export function createUI(office) {
     const hit = picker.at(e.x, e.y);
     if (hit?.kind === 'agent') ui.select(hit.id);
     else if (hit?.kind === 'cat') petCat();
+    else if (hit?.kind === 'thing') ui.useThing(hit.object);
+    else if (hit?.kind === 'ghost') office.eggs?.meetGhost();
+    else if (hit?.kind === 'duck') office.walk.use({ thing: 'duck', label: 'a rubber duck', kind: 'duck', x: hit.x, z: hit.z });
     else if (office.selected) ui.select(null);
   });
+  /** Click a thing (or press E at it): some open a panel, the rest answer in words. */
+  ui.useThing = (o) => {
+    const poi = o.poi;
+    if (!poi) return;
+    if (poi.kind === 'board') return ui.openSheet('board', { deptId: o.deptId });
+    if (poi.kind === 'bigboard') return ui.openSheet('board');
+    if (poi.kind === 'cabinet') return ui.openSheet('binder', { deptId: o.deptId });
+    if (poi.kind === 'binder') return ui.openSheet('binder');
+    if (poi.kind === 'trophies') return ui.openSheet('passport');
+    if (poi.kind === 'pedestal') {
+      const c = office.exhibits?.onPedestal(o.index);
+      return office.walk.narrate(c ? `“${c.name}” — made by ${c.author}${c.runtime ? ` (${c.runtime})` : ''}.${c.note ? `\n${c.note}` : ''}` : 'An empty pedestal, waiting for someone to make something.');
+    }
+    if (poi.kind === 'shelf') {
+      const items = (net.state.world?.shelves?.[o.deptId] || []).filter(Boolean).map((id) => office.creations[id]?.name || id);
+      return office.walk.narrate(items.length ? `The team shelf: ${items.join(', ')}.` : 'The team shelf is empty. Agents fill it with: office place <creation>');
+    }
+    if (poi.kind === 'seat') return undefined;
+    if (poi.kind === 'arcade') return import('./arcade.js').then((m) => m.playBugSquash({ office, ui }));
+    return office.walk.use({ thing: poi.id, label: poi.label, kind: poi.kind, x: o.x, z: o.z });
+  };
   async function petCat() {
     try {
       const me = office.walk?.me;
@@ -133,7 +158,7 @@ export function createUI(office) {
     if (e.buttons || performance.now() - hoverAt < 60) return;
     hoverAt = performance.now();
     const kind = picker.at(e.clientX, e.clientY)?.kind;
-    canvas.style.cursor = kind === 'agent' || kind === 'cat' ? 'pointer' : '';
+    canvas.style.cursor = kind && kind !== 'floor' ? 'pointer' : '';
   });
   canvas.addEventListener('dblclick', (e) => {
     const hit = picker.at(e.clientX, e.clientY);
@@ -190,7 +215,13 @@ export function createUI(office) {
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (k === 'Tab') { e.preventDefault(); if (sheet) ui.closeSheet(); office.walk?.toggle(); walkBtn.classList.toggle('on', !!office.walk?.active); return; }
     if (office.walk?.active) {                                   // on the floor: the keyboard moves you
-      if (k === 'e' || k === 'Enter') { e.preventDefault(); office.walk.use(); return; }
+      if (k === 'e' || k === 'Enter') {
+        e.preventDefault();
+        const near = office.walk.state.near;
+        const o = near && office.world?.layout.objects.find((x) => x.poi?.id === near.thing);
+        if (o) ui.useThing(o); else office.walk.use();
+        return;
+      }
       if (k === ' ') { e.preventDefault(); office.walk.hop(); return; }
       if (['w', 'a', 's', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Shift', '=', '+', '-'].includes(k)) { held.add(k); e.preventDefault(); return; }
     }
@@ -249,6 +280,10 @@ export function createUI(office) {
     } else if (fx.kind === 'bell') {
       const bell = office.world?.layout.objects.find((o) => o.type === 'bell');
       if (bell) labels.float(bell.x, 1.2, bell.z, 'ding!', { color: '#f0d27a', size: 16 });
+    } else if (USE_FX[fx.kind]) {                                 // someone made coffee, bought a snack, watered the tree…
+      const [poiId, mark] = USE_FX[fx.kind];
+      const poi = fx.kind === 'duck' ? office.duck : office.world?.layout.pois.get(poiId)?.look;
+      if (poi) labels.float(poi.x, fx.kind === 'water' ? 1.0 : 1.3, poi.z, fx.jam ? '💥' : mark, { size: 22, ms: 1700 });
     } else if (fx.kind === 'announce') ui.toast(h('span', h('b', `${fx.by} in ${fx.channel}: `), fx.text), { ms: 8000 });
   });
   function roomCentre(deptId) {

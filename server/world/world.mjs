@@ -327,7 +327,8 @@ export function createWorld(ctx, file) {
 
   function today() {
     const now = new Date();
-    return { quirks: dayQuirks(now), weather: dayWeather(now), tzOffsetMin: -now.getTimezoneOffset() };
+    return { quirks: dayQuirks(now), weather: dayWeather(now), tzOffsetMin: -now.getTimezoneOffset(),
+      duckDesk: api.text?.duckDesk()?.id || null };       // where today's rubber duck is sitting
   }
 
   function snapshot() {

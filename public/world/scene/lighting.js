@@ -66,7 +66,7 @@ export function createLighting(stage, opt = {}) {
   });
   let lampSpots = [], lampAt = { x: 1e9, z: 1e9 }, lampDirty = true;
 
-  let hour = 14, look = lookAt(hour), extent = 0;
+  let hour = 14, look = lookAt(hour), extent = 0, dim = 0, flick = 0, lastF = 1;
   const dir = new THREE.Vector3(0.5, 1, 0.7).normalize();
 
   function apply() {
@@ -88,6 +88,18 @@ export function createLighting(stage, opt = {}) {
     get hour() { return hour; },
     get night() { return look.night; },
     setHour(h) { if (Math.abs(h - hour) > 1e-3) { hour = h; apply(); } },
+    /** Turn the house lights down (0..1) without touching the clock — for the disco. */
+    setDim(amount) {
+      const f = flick > 0 ? 0.35 + 0.65 * Math.abs(Math.sin(flick * 40)) : 1;
+      if (flick > 0) flick = Math.max(0, flick - 0.016);
+      if (Math.abs(amount - dim) < 0.004 && f === lastF) return;
+      dim = amount; lastF = f;
+      hemi.intensity = look.hemi * (1 - dim * 0.62) * f;
+      sun.intensity = look.power * (1 - dim * 0.8) * f;
+      rim.intensity = look.fill * (1 - dim * 0.5);
+    },
+    /** The lights stutter for a moment. */
+    flicker() { flick = 0.5; },
     /** Where the lamps are: [{x, y, z, power?}]. Call again when lamps come and go. */
     setLamps(list) { lampSpots = list || []; lampDirty = true; },
     /** Keep the shadow map wrapped tightly around whatever the camera is looking at. */

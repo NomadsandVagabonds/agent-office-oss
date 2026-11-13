@@ -15,6 +15,7 @@ import { createExhibits } from './scene/exhibits.js';
 import { createFx } from './scene/fx.js';
 import { createCat } from './scene/creatures.js';
 import { createWalk } from './walk.js';
+import { createEggs } from './eggs.js';
 import { createNet } from './net.js';
 import { createUI } from './ui/index.js';
 import { VOXEL } from './vox/vox.js';
@@ -46,6 +47,8 @@ office.exhibits = createExhibits(office);
 office.cat = createCat(office);
 office.walk = createWalk(office);
 office.ui = q.get('ui') === '0' ? null : createUI(office);
+office.eggs = createEggs(office);
+office.onUsed = (target, result) => office.eggs.used(target, result);
 
 /* ---- desk items ---------------------------------------------------------------- */
 function makeItems(agent, group, desk) {
@@ -154,6 +157,7 @@ stage.onFrame((dt, t, frame) => {
   office.people?.update(dt);
   office.cat.update(dt);
   office.walk.update(dt);
+  office.eggs.update(dt, t);
   office.exhibits.update(dt);
   office.fx.update(dt);
   office.ui?.update(dt);

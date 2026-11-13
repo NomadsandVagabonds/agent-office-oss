@@ -61,7 +61,8 @@ export function createLabels(office, ui) {
     syncRooms();
     const { camera, size } = office.stage;
     const dist = office.rig.cur.dist;
-    const far = dist > 34, map = dist > 46;
+    const far = dist > 34, map = dist > 46 && dist < 112, tiny = dist >= 112;      // tiny: the whole office is a speck on a desk
+    layer.style.opacity = tiny ? '0' : '1';
     const now = performance.now();
     const pending = new Map(office.net.state.prompts.filter((p) => p.status === 'pending').map((p) => [p.agentId, p]));
     const perRoom = new Map();

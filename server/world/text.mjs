@@ -528,5 +528,5 @@ export function createTextWorld(ctx, world) {
     return { ok: true, text: lines.join('\n'), stamps: Object.keys(stamps), total: SECRETS.length };
   }
 
-  return { look, examine, use, resolve, who, map, passport, whereabouts, activity };
+  return { look, examine, use, resolve, who, map, passport, whereabouts, activity, duckDesk };
 }
