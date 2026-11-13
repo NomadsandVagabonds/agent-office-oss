@@ -9,6 +9,11 @@ import { JsonFile } from './persist.mjs';
 
 const CURSOR_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
+// How many agent-to-agent steps from a human a piece of mail is (see
+// server/harness/wake.mjs): the sender recorded it; mail from before that, or
+// from a human, counts as 1 or 0.
+const hopOf = (post, meta) => (Number.isFinite(meta.hop) ? meta.hop : post.authorType === 'human' ? 0 : 1);
+
 export function createInbox(ctx, file) {
   const { bbs } = ctx;
   const store = new JsonFile(file, {
@@ -68,6 +73,7 @@ export function createInbox(ctx, file) {
           channelId: thread.meta.channelId,
           from: post.author, fromType: post.authorType, fromAgentId: meta.authorAgentId || null,
           text: post.content, threadId: post.threadId,
+          hop: hopOf(post, meta),
         });
       }
     }
@@ -79,6 +85,7 @@ export function createInbox(ctx, file) {
         const meta = post.meta || {};
         if (meta.toLead) continue;                                         // that one went to the human
         if (meta.toAgentId !== agent.id) continue;
+        if (meta.turnDelivered) continue;                                  // the office already gave it to them as a turn
         const fromLead = !!meta.leadDirect;
         items.push({
           id: post.id, ts: post.timestamp,
@@ -87,6 +94,8 @@ export function createInbox(ctx, file) {
           where: 'DM',
           from: post.author, fromType: post.authorType, fromAgentId: meta.fromAgentId || null,
           text: post.content, threadId: post.threadId,
+          hop: hopOf(post, meta),
+          ...(meta.delegationId ? { delegationId: meta.delegationId } : {}),
         });
       }
     }
@@ -95,11 +104,13 @@ export function createInbox(ctx, file) {
     for (const post of bbs.getRecent(200, { board: 'requests', since })) {
       const meta = post.meta || {};
       if (!meta.leadReply || meta.toAgentId !== agent.id) continue;
+      if (meta.turnDelivered) continue;
       items.push({
         id: post.id, ts: post.timestamp, kind: 'reply', direct: true,
         where: 'Reply to your request',
         from: post.author, fromType: post.authorType, fromAgentId: null,
         text: post.content, threadId: post.threadId,
+        hop: 0,
       });
     }
 

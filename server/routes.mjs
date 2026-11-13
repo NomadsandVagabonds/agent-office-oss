@@ -98,6 +98,7 @@ export function registerCoreRoutes(router, ctx) {
       codexAvailable: runtime.codexAvailable,
       shellAvailable: runtime.shellAvailable,
       managedSessions: runtime.sessions.filter((s) => s.kind === 'terminal' && s.alive).length,
+      drivenSessions: ctx.harness ? ctx.harness.liveCount() : 0,
       codexObserver: ctx.codexObserver.status(),
       world: ctx.world ? ctx.world.summary() : null,
     };
@@ -108,6 +109,15 @@ export function registerCoreRoutes(router, ctx) {
   router.post('/hook', async (c) => {
     let ev;
     try { ev = await c.json(); } catch { return undefined; }          // bad payloads are ignored
+    // A session the office launched says which one it is (hooks/office-hook.sh
+    // forwards OFFICE_RUNTIME_SESSION_ID). For a driven session the harness
+    // already reports everything from the agent's own stream, so its hooks would
+    // only seat a second avatar; for a terminal it makes the join exact.
+    const launched = String(c.req.headers['x-office-runtime-session'] || '');
+    if (launched && /^[A-Za-z0-9_.:-]{1,80}$/.test(launched)) {
+      if (ctx.harness?.isDriven(launched)) return undefined;
+      if (ev.runtime_session_id === undefined && ev.runtimeSessionId === undefined) ev.runtime_session_id = launched;
+    }
     try { agents.handleHook(ev); } catch (err) { ctx.log.warn('[hook] ' + (err?.message || err)); }
     return undefined;                                                  // 204, always fast
   }, { about: 'Hook/event intake (Claude Code hook JSON, or the same vocabulary from any runtime).' });
@@ -170,10 +180,22 @@ export function registerCoreRoutes(router, ctx) {
     return status ? list.filter((p) => p.status === status) : list;
   }, { about: 'NEEDS-YOU requests (?status=pending|resolved).' });
 
-  const replyPrompt = async (c) => c.result(prompts.reply(c.params.id, await c.json()));
+  const replyPrompt = async (c) => {
+    const body = await c.json();
+    const prompt = prompts.get(c.params.id);
+    const who = { by: 'Lead', via: c.req.headers.origin ? 'browser' : 'api' };
+    if (prompt?.request || body.action !== undefined || body.optionId !== undefined) {
+      // Granting or denying is control, not conversation: this machine only
+      // (unless the operator opened terminals to the network), and never an agent.
+      if (!c.loopback && !cfg.remoteTerminals) throw new HttpError(403, 'permission requests can only be answered on the machine the office runs on');
+      if (ctx.harness?.callerOf(c.req).presented) throw new HttpError(403, 'agents cannot answer permission requests; that is for the human');
+      if (!prompt?.request) throw new HttpError(409, 'this request cannot be granted or denied from the office: its runtime only takes a reply');
+    }
+    return c.result(prompts.reply(c.params.id, body, who));
+  };
   router.post('/api/prompts/:id', replyPrompt, { hidden: true });
   router.post('/api/prompts/:id/reply', replyPrompt,
-    { about: 'Answer a blocked agent: {text, close?, enter?}.' });
+    { about: 'Answer a blocked agent: {text, close?, enter?} — or, when the prompt carries a `request`, {action:once|always|reject} / {optionId}.' });
 
   /* ---- runtimes + terminals (loopback only) --------------------------- */
 

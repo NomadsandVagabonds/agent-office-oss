@@ -28,6 +28,8 @@ import { registerCoreRoutes } from './routes.mjs';
 import { registerKnowledgeRoutes } from './knowledge.mjs';
 import { createWorld } from './world/world.mjs';
 import { registerWorldRoutes } from './world/routes.mjs';
+import { createHarness } from './harness/index.mjs';
+import { registerHarnessRoutes } from './harness/routes.mjs';
 
 function readVersion(root) {
   try { return JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version || '0.0.0'; }
@@ -64,17 +66,21 @@ export function createOffice(config) {
   ctx.profiles = new Profiles(cfg);
   ctx.personas = new Personas(data('personas.json'));
   ctx.codexObserver = createCodexObserver(cfg, log);
-  ctx.runtimeView = createRuntimeView({ runtimes: ctx.runtimes, codexObserver: ctx.codexObserver.status });
+  ctx.runtimeView = createRuntimeView({ runtimes: ctx.runtimes, codexObserver: ctx.codexObserver.status,
+    harness: () => ctx.harness });
   ctx.agents = createAgents(ctx);
   ctx.comms = createComms(ctx);
   ctx.prompts = createPrompts(ctx);
   ctx.taskApi = createTasks(ctx);
   ctx.inbox = createInbox(ctx, data('inbox.json'));
   ctx.activity = createActivity(ctx);
+  // Sessions the office drives itself (ACP, Codex app-server): see docs/HARNESS.md.
+  ctx.harness = createHarness(ctx, data('harness.json'));
   ctx.world = createWorld(ctx, data('world.json'));
 
   const router = new Router();
   registerCoreRoutes(router, ctx);
+  registerHarnessRoutes(router, ctx);
   registerKnowledgeRoutes(router, ctx);
   registerWorldRoutes(router, ctx);
   ctx.router = router;
@@ -106,13 +112,16 @@ export function createOffice(config) {
       client.send({ type: EV.TASKS, deptId, tasks: ctx.taskApi.list({ deptId }) });
     }
     client.send({ type: EV.WORLD, world: ctx.world.snapshot() });
+    client.send({ type: EV.HARNESS, ...ctx.harness.snapshot() });
   });
   hub.on('message', (client, message) => {
     try { ctx.world.onClientMessage(client, message); }
     catch (err) { log.warn('[ws] bad client message: ' + (err?.message || err)); }
+    try { ctx.harness.onClientMessage(client, message); } catch { /* a malformed watch request is ignored */ }
   });
   hub.on('disconnect', (client) => {
     try { ctx.world.onClientGone(client); } catch { /* nothing to clean */ }
+    ctx.harness.onClientGone(client);
   });
 
   // Who is here + what is waiting on the human, so a restart loses neither.
@@ -180,6 +189,8 @@ export function createOffice(config) {
     stopped = true;
     if (sweepTimer) clearInterval(sweepTimer);
     ctx.codexObserver.stop();
+    // Agents the office started end with it: nothing is left working unattended.
+    try { await ctx.harness.stop(); } catch {}
     try { ctx.world.stop(); } catch {}
     try { saveRegistry(); } catch {}
     hub.close();

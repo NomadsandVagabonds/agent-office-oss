@@ -2,8 +2,14 @@
 // agent blocked → prompt opened (+ a help thread on the board) → surfaced to
 // the human → reply relayed to the board and, when the runtime allows, typed
 // into the agent's terminal → resolved.
+//
+// A session the office drives itself (server/harness) adds a second kind: a
+// prompt backed by a request the agent is actually waiting on. Its buttons —
+// allow once, allow for the session, reject — are real: answering resolves the
+// agent's request over its protocol. Such a prompt carries `request`; the
+// actions it offers come from that request and from nowhere else.
 import crypto from 'node:crypto';
-import { classifyBlock } from '../core/contract.mjs';
+import { classifyBlock, requestActions } from '../core/contract.mjs';
 
 const KEEP_RESOLVED = 40;          // resolved prompts kept around for context
 
@@ -35,7 +41,12 @@ export function createPrompts(ctx) {
       terminalSessionId: p.terminalSessionId || null,
       provider: runtime.provider || agent?.provider || null,
       runtime,
-      actions: runtimeView.promptReplyActions(p, runtime),
+      // Backed by a live request: exactly the answers that request offers, plus words.
+      // Otherwise: what the runtime can honour (a reply, at most).
+      actions: p.request
+        ? (p.status === 'pending' ? [...requestActions(p.request), 'reply'] : [])
+        : runtimeView.promptReplyActions(p, runtime),
+      request: p.request || null,
     };
   }
 
@@ -146,20 +157,76 @@ export function createPrompts(ctx) {
     broadcast();
   }
 
-  function reply(promptId, body = {}) {
+  /**
+   * A request a driven agent is blocked on right now (a permission, a
+   * question). Unlike a blocked-agent prompt there may be several per agent,
+   * each with its own card, and none of them outlives the agent's process.
+   */
+  function openRequest(agentId, { kind, message, request }) {
+    const a = ctx.agents.get(agentId);
+    if (!a || !request) return null;
+    const now = Date.now();
+    const prompt = {
+      id: crypto.randomUUID(), agentId, agentName: a.name, cwd: a.cwd, task: a.task || '',
+      message: String(message || '').slice(0, 4000), kind: kind || 'permission',
+      createdAt: now, updatedAt: now, resolvedAt: null, status: 'pending',
+      threadId: null, terminalSessionId: null, request,
+    };
+    prompts.set(prompt.id, prompt);
+    bus.local({ type: 'prompt:opened', prompt });
+    broadcast();
+    return prompt;
+  }
+
+  function resolveRequest(promptId, resolution) {
+    const prompt = prompts.get(promptId);
+    if (!prompt || prompt.status === 'resolved') return;
+    prompt.status = 'resolved';
+    prompt.resolvedAt = Date.now();
+    prompt.updatedAt = prompt.resolvedAt;
+    prompt.resolution = resolution || 'Answered.';
+    prompt.request = { ...prompt.request, pending: false };
+    bus.local({ type: 'prompt:resolved', prompt });
+    broadcast();
+  }
+
+  // Answering a request-backed prompt answers the agent itself.
+  function answerRequest(prompt, body, who) {
+    if (prompt.status !== 'pending') return { error: 'This request has already been answered.', status: 409 };
+    const session = ctx.harness?.session(prompt.request.sessionId);
+    if (!session) return { error: 'The session that asked is gone.', status: 409 };
+    const result = session.answer(prompt.request.id, {
+      action: body.action, optionId: body.optionId, text: body.text ? String(body.text) : '',
+    }, { by: body.author || who.by || 'Lead', via: who.via });
+    if (result.error) return result;
+    const target = ctx.harness.sessionForAgent(prompt.agentId);
+    return {
+      ok: true, prompt: pub(prompt), answered: result.state, sessionGrant: result.sessionGrant || null,
+      followUp: result.followUp || null, boardPosted: false, terminalDelivered: false, turnDelivered: !!result.followUp,
+      targetSession: target?.id || null,
+      receipt: runtimeView.receipt({ stored: false, targetSessions: target ? [target] : [] }),
+    };
+  }
+
+  function reply(promptId, body = {}, who = {}) {
     const prompt = prompts.get(promptId);
     if (!prompt) return { error: 'Prompt not found', status: 404 };
+    if (prompt.request) return answerRequest(prompt, body, who);
     const text = (body.text ? String(body.text) : '').trim();
     const author = body.author || 'Human';
     let boardPosted = false;
     let terminalDelivered = false;
     let receiptTargetSession = null;
+    // A driven agent that asked a question gets its answer as a turn, now —
+    // not as a line typed into a terminal, and not as mail it may never read.
+    const driven = text ? ctx.harness?.deliverHumanNote(ctx.agents.get(prompt.agentId), text, { author }) : null;
     if (text && prompt.threadId && bbs.getThread(prompt.threadId)) {
       bbs.reply({ threadId: prompt.threadId, author, authorType: 'human', content: text,
-        meta: { toAgentId: prompt.agentId, promptId: prompt.id, leadReply: true } });
+        meta: { toAgentId: prompt.agentId, promptId: prompt.id, leadReply: true, ...(driven ? { turnDelivered: true } : {}) } });
       boardPosted = true;
       ctx.comms.broadcastBoardRecent();
     }
+    if (driven) receiptTargetSession = driven.session;
     const target = body.targetSession
       || runtimeView.liveRef(prompt.terminalSessionId)?.id
       || runtimeView.strictSession(ctx.agents.get(prompt.agentId))?.id
@@ -173,12 +240,15 @@ export function createPrompts(ctx) {
       } catch { /* terminal went away — the board copy still stands */ }
     }
     if (body.close !== false) {
+      // Delivering the answer as a turn already moved a driven agent on, which
+      // resolved this prompt; say what really happened, but announce it once.
+      const already = prompt.status === 'resolved';
       prompt.status = 'resolved';
       prompt.resolvedAt = Date.now();
       prompt.updatedAt = prompt.resolvedAt;
       prompt.resolution = text ? 'Human replied from the office.' : 'Dismissed from the office.';
       promptByAgent.delete(prompt.agentId);
-      bus.local({ type: 'prompt:resolved', prompt, reply: text });
+      if (!already) bus.local({ type: 'prompt:resolved', prompt, reply: text });
     } else {
       prompt.updatedAt = Date.now();
     }
@@ -188,7 +258,8 @@ export function createPrompts(ctx) {
       prompt: pub(prompt),
       boardPosted,
       terminalDelivered,
-      targetSession: target,
+      turnDelivered: !!driven,
+      targetSession: target || driven?.session?.id || null,
       receipt: runtimeView.receipt({
         stored: boardPosted,
         targetSessions: receiptTargetSession ? [receiptTargetSession] : [],
@@ -200,7 +271,8 @@ export function createPrompts(ctx) {
 
   function exportState() {
     return {
-      prompts: [...prompts.values()].filter((p) => p.status === 'pending'),
+      // A request-backed prompt dies with the agent process that asked; never restore one.
+      prompts: [...prompts.values()].filter((p) => p.status === 'pending' && !p.request),
       threads: [...requestThreadByAgent.entries()],
     };
   }
@@ -234,7 +306,7 @@ export function createPrompts(ctx) {
 
   return {
     map: prompts,
-    pub, listPublic, open, reply, resolveForAgent, broadcast, exportState, restore,
+    pub, listPublic, open, reply, resolveForAgent, openRequest, resolveRequest, broadcast, exportState, restore,
     pendingIdForAgent: (agentId) => {
       const promptId = promptByAgent.get(agentId);
       return promptId && prompts.has(promptId) ? promptId : null;

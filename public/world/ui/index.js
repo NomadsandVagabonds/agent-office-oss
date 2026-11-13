@@ -145,6 +145,7 @@ export function createUI(office) {
     }
     if (poi.kind === 'seat') return undefined;
     if (poi.kind === 'arcade') return import('./arcade.js').then((m) => m.playBugSquash({ office, ui }));
+    if (poi.kind === 'elevator') return import('../levels/index.js').then((m) => m.callLift(office));      // the floor panel, then a ride
     return office.walk.use({ thing: poi.id, label: poi.label, kind: poi.kind, x: o.x, z: o.z });
   };
   async function petCat() {
@@ -336,5 +337,7 @@ export function createUI(office) {
   ui.extras = createExtras(office, ui);
   tools.append(h('button.btn.ghost', { title: 'Find anyone or anything (Ctrl-K)', onclick: () => ui.palette.open() }, icon('search')));
   ui.labels = labels; ui.needs = needs; ui.inspector = inspector; ui.picker = picker;
+  // /?level=roof — straight to a floor of the lift (core/levels.mjs)
+  if (office.q?.get('level')) import('../levels/index.js').then((m) => m.ride(office, office.q.get('level'), { instant: true })).catch((err) => console.error(err));
   return ui;
 }

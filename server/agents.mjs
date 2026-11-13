@@ -94,6 +94,8 @@ export function createAgents(ctx) {
       joinedAt: a.joinedAt,
       lastSeen: a.lastSeen,
       selfReported: !!a.selfReported,
+      // the office runs this session itself over a structured protocol (server/harness)
+      driven: !!a.driven,
     };
   }
 
@@ -152,7 +154,9 @@ export function createAgents(ctx) {
   // respawn) would empty the office until each session happened to speak.
 
   function exportState() {
-    return [...agents.values()].filter((a) => !a._leaving).map((a) => ({
+    // A driven session is a child process of this daemon: it cannot outlive a
+    // restart, so it is not written down as someone who will still be here.
+    return [...agents.values()].filter((a) => !a._leaving && !a.driven).map((a) => ({
       id: a.id, cwd: a.cwd, model: a.model, provider: a.provider, handle: a.handle || null,
       selfName: a.selfName || null, selfTask: a.selfTask || null, selfReported: !!a.selfReported,
       status: a.status, turn: a.turn, blockKind: a.blockKind || null, note: a.note || '',
@@ -376,9 +380,22 @@ export function createAgents(ctx) {
     return { agent: a, created: !existed };
   }
 
+  /**
+   * State for a session the office drives itself (server/harness). There are
+   * no hooks to wait for: the harness reads the agent's own event stream and
+   * reports what it sees. `settle` eases working/done back to thinking, as the
+   * hook path does.
+   */
+  function drive(id, patch = {}, opt = {}) {
+    const a = touch(id, patch);
+    if (opt.settle) scheduleSettle(id);
+    return a;
+  }
+
   function sweep() {
     const now = Date.now();
     for (const [id, a] of agents) {
+      if (a.driven) continue;                    // here for exactly as long as its process is
       if (now - (a.lastSeen || 0) > cfg.staleAgentMs) {
         bus.local({ type: 'agent:ended', id, stale: true });
         remove(id);
@@ -393,7 +410,7 @@ export function createAgents(ctx) {
     get: (id) => agents.get(id) || null,
     list: () => [...agents.values()],
     listPublic: () => [...agents.values()].map(pub),
-    pub, touch, refresh, seen, remove, resolveRef, handleHook, join, sweep, isPresent,
+    pub, touch, drive, refresh, seen, remove, resolveRef, handleHook, join, sweep, isPresent,
     exportState, restore,
   };
 }

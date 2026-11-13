@@ -190,6 +190,11 @@ export function createComms(ctx) {
     return [...new Set(hits)];
   }
 
+  // How many agent-to-agent steps from a human is something this author says
+  // right now? (0 for the human; the harness knows it for agents it drives;
+  // 1 for everyone else.) The office uses it to stop agents waking each other in a loop.
+  const hopOfAuthor = (agent) => (agent ? (ctx.harness?.hopOf(agent.id) ?? 1) : 0);
+
   function sendChannelMessage(body) {
     const channel = resolveChannelRef(body.channelId || body.channel || body.projectChannel, body.agentId || body.agent);
     if (!channel) return { error: 'channel not found', status: 404 };
@@ -244,6 +249,7 @@ export function createComms(ctx) {
       memberCount: members.length,
       // A mention reaches its target wherever they sit, not just channel members.
       mentions: findMentions(content, agents().list().filter((m) => m.id !== authorInfo.authorAgentId), members),
+      hop: hopOfAuthor(authorInfo.agent),
     };
     let post;
     if (!thread) {
@@ -370,12 +376,13 @@ export function createComms(ctx) {
   }
 
   // An agent writing to the human: lands in that agent's Lead thread.
-  function sendToLead(from, body, content) {
+  function sendToLead(from, body, content, internal = {}) {
     let thread = findLeadDirectThread(from.id);
     const postMeta = {
       fromAgentId: from.id, fromAgentName: from.name,
       toAgentId: null, toAgentName: 'Lead', toLead: true, leadDirect: true,
       terminalDelivered: false, relaySessionId: null, queuedCount: 0, queuedSessionIds: [],
+      ...(internal.delegationId ? { delegationId: internal.delegationId } : {}),
     };
     let post;
     if (!thread) {
@@ -400,14 +407,19 @@ export function createComms(ctx) {
       receipt: runtimeView.receipt({ stored: true }) };
   }
 
-  function sendCollabMessage(body) {
+  /**
+   * @param {object} body      what came off the wire
+   * @param {{hop?:number, delegationId?:string}} [internal]  set only by the office itself
+   *        (a delegated task's result going home) — never read from a request.
+   */
+  function sendCollabMessage(body, internal = {}) {
     const from = agents().resolveRef(body.fromAgentId || body.from || body.authorId || body.author);
     const toRef = body.toAgentId || body.to || body.recipientId || body.recipient;
     const content = cleanContent(body.content || body.text);
     if (from && /^(lead|human|the lead|boss)$/i.test(String(toRef || '').trim())) {
       if (!content) return { error: 'content required', status: 400 };
       agents().seen(from.id);
-      return sendToLead(from, body, content);
+      return sendToLead(from, body, content, internal);
     }
     const to = agents().resolveRef(toRef);
     if (!from || !to) return { error: 'from/to agent not found', status: 404 };
@@ -423,6 +435,10 @@ export function createComms(ctx) {
       ? runtimeView.asyncInboxSession(to)
       : null;
     const queuedSessions = runtimeView.supportsAsyncInbox(queuedSession) ? [queuedSession] : [];
+    // A driven recipient that opted in is not typed at: the office starts a turn
+    // for it (server/harness/wake.mjs). Until then the note is "queued", honestly.
+    const wakes = !terminalDelivered && ctx.harness?.willWake(to.id) ? ctx.harness.sessionForAgent(to.id) : null;
+    if (wakes) queuedSessions.push(wakes);
     const postMeta = {
       fromAgentId: from.id,
       fromAgentName: from.name,
@@ -433,6 +449,8 @@ export function createComms(ctx) {
       relaySessionId: terminalDelivered ? relayTarget : null,
       queuedCount: queuedSessions.length,
       queuedSessionIds: queuedSessions.map((session) => session.id),
+      hop: Number.isFinite(internal.hop) ? internal.hop : hopOfAuthor(from),
+      ...(internal.delegationId ? { delegationId: internal.delegationId } : {}),
     };
     let post;
     if (!thread) {
@@ -488,9 +506,11 @@ export function createComms(ctx) {
     let thread = body.threadId ? bbs.getThread(body.threadId)?.thread || null : null;
     if (!thread) thread = findLeadDirectThread(to.id);
     const subject = thread?.subject || body.subject || `[Lead direct] Lead -> ${to.name}`;
-    const { relayTarget, terminalDelivered } = relayTo(to, body,
+    // The human speaking to an agent the office drives is a turn, not keystrokes.
+    const driven = body.relay === false ? null : ctx.harness?.deliverHumanNote(to, content, { author });
+    const { relayTarget, terminalDelivered } = driven ? { relayTarget: null, terminalDelivered: false } : relayTo(to, body,
       [`[Office lead direct] Lead -> ${to.name}`, content].join('\n'));
-    const queuedSession = !terminalDelivered ? runtimeView.asyncInboxSession(to) : null;
+    const queuedSession = !terminalDelivered && !driven ? runtimeView.asyncInboxSession(to) : null;
     const queuedSessions = runtimeView.supportsAsyncInbox(queuedSession) ? [queuedSession] : [];
     const postMeta = {
       fromAgentId: null,
@@ -502,6 +522,9 @@ export function createComms(ctx) {
       leadDirect: true,
       queuedCount: queuedSessions.length,
       queuedSessionIds: queuedSessions.map((session) => session.id),
+      hop: 0,
+      // Already in front of the agent as a turn: the inbox must not hand it over a second time.
+      ...(driven ? { turnDelivered: true } : {}),
     };
     let post;
     if (!thread) {
@@ -531,13 +554,15 @@ export function createComms(ctx) {
     const pubPost = pubCollabPost(post, thread);
     bus.local({ type: 'comms:dm', from: null, fromLead: true, to, post: pubPost });
     broadcastCollabRecent();
-    const relaySession = terminalDelivered ? runtimeView.snapshot(relayTarget) : null;
+    const relaySession = driven ? driven.session : terminalDelivered ? runtimeView.snapshot(relayTarget) : null;
     return {
       ok: true,
       thread,
       post: pubPost,
       terminalDelivered,
-      targetSession: relayTarget,
+      turnDelivered: !!driven,
+      turnQueued: !!driven?.queued,
+      targetSession: driven ? driven.session.id : relayTarget,
       receipt: runtimeView.receipt({
         stored: true,
         targetSessions: relaySession ? [relaySession] : [],

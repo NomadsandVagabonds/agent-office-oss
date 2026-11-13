@@ -1,11 +1,15 @@
 // The Office — the runtime facet of a Session, as clients are allowed to see
 // it. Everything here is capability-honest: what a client may render is derived
 // from core/contract.mjs CAPS, never assumed.
-import { capabilityOf, promptActions } from '../core/contract.mjs';
+import { capabilityFor, promptActions } from '../core/contract.mjs';
 
 const NO_RUNTIME_CAPS = Object.freeze({ observe: false, prompt: false, control: false, spawn: false });
 
-export function createRuntimeView({ runtimes, codexObserver }) {
+/**
+ * @param {{runtimes:object, codexObserver:()=>object, harness?:()=>object|null}} deps
+ *   `harness` is looked up late: the harness is assembled after this view.
+ */
+export function createRuntimeView({ runtimes, codexObserver, harness = () => null }) {
   function snapshot(ref) {
     if (!ref) return null;
     try {
@@ -45,6 +49,9 @@ export function createRuntimeView({ runtimes, codexObserver }) {
 
   function sessionForSummary(agent, opt = {}) {
     if (!agent) return null;
+    // A session the office drives is its own runtime; no terminal stands behind it.
+    const driven = harness()?.sessionForAgent(agent.id);
+    if (driven) return driven;
     return snapshot(opt.runtimeSessionId || opt.targetSession || opt.sessionId || null)
       || snapshot(agent.runtimeSessionId || null)
       || observedCodexInbox(agent);
@@ -61,7 +68,10 @@ export function createRuntimeView({ runtimes, codexObserver }) {
         promptActions: [],
       };
     }
-    const caps = capabilityOf(session.provider || '');
+    // Capability follows how the session is run: a driven session can be
+    // granted, denied and stopped; the same provider in a terminal is a relay.
+    const caps = capabilityFor(session);
+    const driven = session.kind === 'driven';
     return {
       sessionId: session.id,
       runtimeId: session.runtimeId || null,
@@ -77,7 +87,11 @@ export function createRuntimeView({ runtimes, codexObserver }) {
       experimental: !!session.experimental,
       utility: !!session.utility,
       caps: { ...caps },
-      promptActions: session.alive ? promptActions(session.provider) : [],
+      // For a driven session the grant/deny actions belong to each request it is
+      // waiting on (see prompts.mjs), never to the session as a whole.
+      promptActions: !session.alive ? [] : driven ? ['reply'] : promptActions(session.provider),
+      driven,
+      ...(driven ? { mode: session.mode, wake: session.wake, state: session.state } : {}),
     };
   }
 
@@ -105,7 +119,7 @@ export function createRuntimeView({ runtimes, codexObserver }) {
 
   function deliveryMode(session) {
     if (!session) return null;
-    const caps = capabilityOf(session.provider || '');
+    const caps = capabilityFor(session);
     if (caps.control === true) return 'delivered';
     if (caps.prompt) return 'relayed';
     return null;

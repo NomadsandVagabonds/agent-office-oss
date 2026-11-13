@@ -25,6 +25,10 @@ export const EV = Object.freeze({
   DISCOVERY:    'discovery',     // { secret, by }            someone found something
   CREATIONS:    'creations',     // { count }                 the legacy grew
   ACTIVITY:     'activity',      // { item }                  one journal line
+  // ---- driven sessions (server/harness; additive, see docs/HARNESS.md) ----
+  HARNESS:      'harness',       // { sessions:[DrivenSession], wake }   on connect + whenever one changes
+  TRANSCRIPT:   'transcript',    // { sessionId, agentId, entry }        to clients watching that session
+  DELEGATIONS:  'delegations',   // { delegation }                       a delegated task changed
 });
 
 /* ---- Status vocabulary (single source of truth) ------------------------ */
@@ -98,6 +102,26 @@ export const promptActions = (p) => {
   if (c.control === true) return ['once', 'always', 'reject', 'reply'];
   return c.prompt ? ['reply'] : [];
 };
+
+// A DRIVEN session is one the office runs itself over a structured protocol
+// (ACP, Codex app-server) instead of typing into a terminal. Capability then
+// follows HOW the session is run, not which provider it is: the same Claude is
+// `control:'relay'` in tmux and `control:true` when driven, because only then
+// can the office really answer its permission requests and stop its turns.
+// `control:true` means "can grant, deny and stop when asked" — it does not mean
+// the agent asks before everything; that depends on the mode it runs in.
+export const DRIVEN_CAPS = Object.freeze({ observe: true, prompt: true, control: true, spawn: true });
+const ENDED_CAPS = Object.freeze({ observe: false, prompt: false, control: false, spawn: false });
+export const capabilityFor = (session) => {
+  if (session && session.kind === 'driven') return session.alive ? DRIVEN_CAPS : ENDED_CAPS;   // no process, no power
+  return capabilityOf(session?.provider);
+};
+// What a NEEDS-YOU card may offer. Grant/deny buttons belong to a request an
+// agent is waiting on RIGHT NOW (`prompt.request`), never to a session in general.
+export const GRANT_ACTIONS = Object.freeze(['once', 'always', 'reject']);
+export const requestActions = (request) =>
+  (request && request.pending && Array.isArray(request.choices)
+    ? request.choices.map((c) => c.action).filter((a) => GRANT_ACTIONS.includes(a)) : []);
 
 // Free-text provider labels agents send when they join → a known PROVIDER.
 // Anything unrecognized is 'custom' (self-reporting, powerless), never 'shell'.

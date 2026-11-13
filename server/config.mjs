@@ -3,6 +3,7 @@
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { harnessSettings } from './harness/settings.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -50,5 +51,9 @@ export function loadConfig(env = process.env) {
     autoObserveCodex: env.OFFICE_AUTO_OBSERVE_CODEX !== '0',
     staleAgentMs: Number(env.OFFICE_STALE_AGENT_MS || 30 * 60 * 1000),
     quiet: env.OFFICE_QUIET === '1',
+    // Driven sessions (server/harness): the operator's adapter file, and the guard rails.
+    harnessFile: path.resolve(env.OFFICE_HARNESS_FILE
+      || path.join(os.homedir(), '.claude', 'agent-office', 'harness.json')),
+    harness: harnessSettings(env),
   });
 }

@@ -10,6 +10,8 @@ import path from 'node:path';
 export const PORT = Number(process.env.OFFICE_PORT || 4317);
 export const BASE = (process.env.OFFICE_URL || `http://127.0.0.1:${PORT}`).replace(/\/+$/, '');
 const TOKEN = process.env.OFFICE_TOKEN || '';
+// Set by the office for an agent it launched itself: proves which session is calling.
+const SESSION_TOKEN = process.env.OFFICE_SESSION_TOKEN || '';
 const IDENTITY_DIR = path.join(os.homedir(), '.claude', 'agent-office', 'identity');
 
 export class OfficeError extends Error {
@@ -43,6 +45,7 @@ export async function api(pathname, opt = {}) {
     headers['content-type'] = 'application/json';
   }
   if (TOKEN) headers.authorization = `Bearer ${TOKEN}`;
+  if (SESSION_TOKEN) headers['x-office-session'] = SESSION_TOKEN;
   const url = BASE + pathname;
   let status = 0, text = '';
   try {
@@ -160,6 +163,55 @@ export function hook(id, name, extra = {}) {
     runtime_session_id: process.env.OFFICE_RUNTIME_SESSION_ID || undefined,
     ...extra,
   } });
+}
+
+/* ---- delegation + transcripts, as text ----------------------------------- */
+
+/** One delegated task in a few lines an agent can act on. */
+export function formatDelegation(d) {
+  const lines = [`${d.id}  ${d.status}  →  ${d.to?.name || '?'} (${d.to?.adapter || d.to?.provider || 'agent'})  “${d.title}”`];
+  if (d.pendingApproval) lines.push(`  waiting on the human: ${d.pendingApproval.title || d.pendingApproval.kind} (you cannot answer this; they will)`);
+  if (d.waitTimedOut) lines.push('  still running — the wait timed out, the task did not');
+  if (d.error && d.status !== 'completed') lines.push(`  ${d.error}`);
+  if (d.result) lines.push('', d.result, d.resultTruncated ? '(cut for length — read the rest: office transcript ' + d.to.agentId + ')' : '');
+  if (d.next) lines.push('', d.next);
+  return lines.filter((l) => l !== undefined).join('\n').trimEnd();
+}
+
+const secs = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
+
+/** A session's transcript as a readable timeline. */
+export function formatTranscript(session, entries, opt = {}) {
+  const out = [];
+  if (session) out.push(`# ${session.name || session.label} — ${session.label} (${session.protocol}) · ${session.state}${session.turns ? ` · ${session.turns} turn(s)` : ''}`);
+  const cut = (t, n) => { const flat = String(t || ''); return opt.full || flat.length <= n ? flat : flat.slice(0, n - 1) + '…'; };
+  for (const e of entries) {
+    switch (e.kind) {
+      case 'turn':
+        out.push('', `── turn ${e.n} · ${e.origin}${e.from ? ` from ${e.from}` : ''}${e.hop ? ` (hop ${e.hop})` : ''} · ${e.state}`
+          + `${e.durationMs ? ` (${secs(e.durationMs)})` : ''}${e.error ? ` — ${e.error}` : ''}`);
+        break;
+      case 'user': out.push(`> ${cut(e.text, 600).replace(/\n/g, '\n> ')}`); break;
+      case 'message': out.push(cut(e.text, 4000)); break;
+      case 'thought': if (opt.full) out.push(`(thinking) ${e.text}`); break;
+      case 'tool':
+        out.push(`[${e.name || 'tool'}] ${e.command || e.title}${e.paths?.length && !e.command ? ` (${e.paths.join(', ')})` : ''} · ${e.status}`
+          + `${opt.full && e.output ? '\n' + e.output.replace(/^/gm, '    ') : ''}`);
+        break;
+      case 'plan': if (e.entries?.length) out.push(`[plan] ${e.entries.map((p) => `${p.status === 'completed' ? '✓' : p.status === 'running' ? '▸' : '·'} ${p.text}`).join('  ')}`); break;
+      case 'permission':
+        out.push(`[permission] ${e.command || (e.paths || []).join(', ') || e.title} → ${e.state}${e.by ? ` by ${e.by}` : ''}${e.reason ? ` (${e.reason})` : ''}`);
+        break;
+      case 'question': out.push(`[question] ${cut(e.text, 300)} → ${e.state}${e.answer ? `: ${cut(e.answer, 200)}` : ''}`); break;
+      case 'notice': out.push(`(${e.text})`); break;
+      case 'handoff': out.push(`[handoff ${e.direction === 'out' ? `to ${e.toName}` : `from ${e.fromName}`}] ${e.items} item(s)`); break;
+      case 'session':
+        if (e.state === 'ended' || e.state === 'failed') out.push('', `── session ${e.state}${e.reason ? `: ${e.reason}` : ''}`);
+        break;
+      default: break;
+    }
+  }
+  return out.join('\n').trim();
 }
 
 export function fmtTime(ts) {
