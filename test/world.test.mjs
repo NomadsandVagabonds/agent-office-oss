@@ -87,6 +87,32 @@ test('a human uses things by the same rules as an agent', async (t) => {
   assert.equal((await use('jukebox')).status, 200);
 });
 
+test('things in a room can be used by what they are called', async (t) => {
+  const office = await startOffice();
+  t.after(() => office.stop());
+  const joined = await office.post('/api/agents/join', { provider: 'opencode', name: 'Kit', cwd: '/tmp/proj/atlas' });
+  const agent = joined.data.agent.id;
+  const layout = buildLayout((await office.get('/api/world')).data.plan);
+  const flair = layout.objects.filter((o) => o.room === 'dept:atlas' && o.poi && ['game', 'aquarium', 'telescope', 'coatrack', 'gumball', 'fan'].includes(o.poi.kind));
+  assert.equal(flair.length, 2, 'every project room has two pieces of flair');
+  for (const o of flair) {
+    const byType = await office.post('/api/world/use', { agent, thing: o.type });
+    assert.equal(byType.status, 200, `use ${o.type}: ${JSON.stringify(byType.data)}`);
+    assert.ok(byType.data.text.length > 10);
+    const byLabel = await office.post('/api/world/use', { agent, thing: o.poi.label });
+    assert.equal(byLabel.status, 200, `use "${o.poi.label}"`);
+  }
+  // flair must never wall off half a room: the aisles past the desks stay open
+  const { createNav } = await import('../core/nav.mjs');
+  const nav = createNav(layout);
+  const room = layout.roomById.get('dept:atlas').rect;
+  assert.ok(nav.findPath({ x: room.x + 5, z: room.z + 6.5 }, { x: room.x + 5, z: room.z + 1.5 }), 'north and south halves stay connected');
+
+  const nobody = await office.post('/api/world/go', { agent, to: 'lead' });
+  assert.equal(nobody.status, 404);
+  assert.match(nobody.data.error, /no human is walking the floor/);
+});
+
 test('the world snapshot says where today\'s duck is, on a real desk', async (t) => {
   const office = await startOffice();
   t.after(() => office.stop());

@@ -20,6 +20,9 @@ export function registerWorldRoutes(router, ctx) {
     const body = await c.json();
     const agent = seen(who(body.agent || body.agentId));
     const target = world.text.resolve(agent, body.to || body.target || '');
+    if (!target && /^(the )?(lead|human|boss)$/i.test(String(body.to || '').trim())) {
+      throw new HttpError(404, 'no human is walking the floor right now (office dm lead "…" still reaches them)');
+    }
     if (!target) throw new HttpError(404, `no place or thing called "${body.to || ''}" (try GET /api/world/map)`);
     if (target.kind === 'cat' || target.kind === 'duck' || target.kind === 'window' || target.kind === 'elevator') {
       return c.result(world.text.examine(agent, body.to));

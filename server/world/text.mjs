@@ -138,6 +138,15 @@ export function createTextWorld(ctx, world) {
     const other = ctx.agents.resolveRef(ref);
     if (other && other.id !== agent.id) return { kind: 'agent', agent: other };
     if (L().pois.has(ref)) return poi(ref);
+    // anything else you can see: match what it is called, nearest room first
+    const bare = text.replace(/^(the|a|an|my|our) /, '');
+    const here = world.placeOf(agent.id)?.room || null;
+    const rank = (p) => (p.room === here ? 0 : p.room === ownRoom ? 1 : 2);
+    const visible = [...L().pois.values()]
+      .filter((p) => p.kind !== 'seat' || bare.length > 3)
+      .filter((p) => { const label = norm(p.label).replace(/^(the|a|an) /, ''); return label === bare || p.kind === bare || label.split(' ').includes(bare) || norm(p.id.split(':')[0]) === bare; })
+      .sort((a, b) => rank(a) - rank(b));
+    for (const p of visible) { const hit = poi(p.id); if (hit) return hit; }
     return null;
   }
   function poi(id) {
