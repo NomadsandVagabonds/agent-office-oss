@@ -1,17 +1,23 @@
 {
   "name": "the-office",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "A hooks-driven multi-agent control plane rendered as a retro pixel office.",
+  "description": "A multi-agent control plane you can walk around in: every AI coding session is a character in a 3D office.",
   "license": "Apache-2.0",
   "scripts": {
     "dev": "node daemon.mjs",
     "demo": "node demo.mjs",
     "simulate": "node simulate.mjs",
     "doctor": "node doctor.mjs",
+    "office": "node office.mjs",
+    "mcp": "node office-mcp.mjs",
     "install-hooks": "node install-hooks.mjs",
     "install-inbox": "node install-inbox-hook.mjs",
-    "watchdog": "node watchdog.mjs"
+    "watchdog": "node watchdog.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

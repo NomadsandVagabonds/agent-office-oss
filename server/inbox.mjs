@@ -84,7 +84,7 @@ export function createInbox(ctx, file) {
           id: post.id, ts: post.timestamp,
           kind: fromLead ? 'lead' : 'dm',
           direct: true,
-          where: fromLead ? 'DM · Lead' : 'DM',
+          where: 'DM',
           from: post.author, fromType: post.authorType, fromAgentId: meta.fromAgentId || null,
           text: post.content, threadId: post.threadId,
         });

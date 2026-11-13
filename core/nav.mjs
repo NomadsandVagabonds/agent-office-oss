@@ -143,19 +143,44 @@ export function createNav(layout) {
   }
 
   /**
+   * Where to stand to reach a point. A walkable tile is itself; a point on
+   * furniture (a sofa, a stool) is approached from a free tile beside it in
+   * the same room — never through a wall, and never into a locked room.
+   */
+  function approach(point) {
+    const tx = Math.floor(point.x), tz = Math.floor(point.z);
+    if (walkable(tx, tz)) return { tile: { x: tx, z: tz }, exact: true };
+    const roomId = layout.tiles.get(tileKey(tx, tz));
+    const room = roomId ? layout.roomById.get(roomId) : null;
+    if (!room || room.locked) return null;
+    let best = null, bestD = Infinity;
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dz = -2; dz <= 2; dz++) {
+        const x = tx + dx, z = tz + dz;
+        if (!walkable(x, z)) continue;
+        const other = layout.roomById.get(layout.tiles.get(tileKey(x, z)));
+        if (!other || (other.id !== room.id && !(room.group && other.group === room.group))) continue;
+        const d = (x + 0.5 - point.x) ** 2 + (z + 0.5 - point.z) ** 2;
+        if (d < bestD) { bestD = d; best = { x, z }; }
+      }
+    }
+    return best ? { tile: best, exact: false } : null;
+  }
+
+  /**
    * Waypoints from one point to another (world metres). The first point is
    * `from` itself. Returns null when there is no way through.
    */
   function findPath(from, to) {
-    const a = nearestWalkable(from.x, from.z);
-    const b = nearestWalkable(to.x, to.z);
+    const a = approach(from);
+    const b = approach(to);
     if (!a || !b) return null;
-    const tilesOnPath = tilePath(a, b);
+    const tilesOnPath = tilePath(a.tile, b.tile);
     if (!tilesOnPath) return null;
     const pts = tilesOnPath.map((t) => ({ x: t.x + 0.5, z: t.z + 0.5 }));
-    // If the endpoints are themselves on walkable tiles, start/end exactly there.
-    const fromOk = walkable(Math.floor(from.x), Math.floor(from.z));
-    const toOk = walkable(Math.floor(to.x), Math.floor(to.z));
+    // Endpoints on walkable tiles are used exactly; others get one last step
+    // from the tile beside them (sitting down, standing up).
+    const fromOk = a.exact, toOk = b.exact;
     if (fromOk) pts[0] = { x: from.x, z: from.z };
     else pts.unshift({ x: from.x, z: from.z });
     if (toOk) pts[pts.length - 1] = { x: to.x, z: to.z };
@@ -187,5 +212,5 @@ export function createNav(layout) {
     return metres / speed;
   }
 
-  return { findPath, pathLength, walkSeconds, nearestWalkable, clearLine, stepOpen, walkable };
+  return { findPath, pathLength, walkSeconds, nearestWalkable, approach, clearLine, stepOpen, walkable };
 }

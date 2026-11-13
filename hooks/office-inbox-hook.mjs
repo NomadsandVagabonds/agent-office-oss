@@ -1,51 +1,31 @@
 #!/usr/bin/env node
-// The Office — auto-inbox hook. Pairs with inbox.mjs (the manual read).
+// The Office — auto-inbox hook. Pairs with `office inbox` (the manual read).
 //
 // The office can't push a message into a session it didn't spawn. But the
 // session's OWN Claude Code hooks run. So: when the agent finishes a turn
-// (Stop) or the human submits a prompt (UserPromptSubmit), this checks the
+// (Stop) or the human submits a prompt (UserPromptSubmit), this asks the
 // office for NEW mail addressed to this exact session and surfaces it — so
 // you just post in the office and the agent picks it up naturally, no "check
 // your inbox" needed.
 //
+// The office keeps the read cursor (GET /api/inbox), so this hook, the CLI
+// and the MCP tool all see each message exactly once between them.
+//
 // Hard safety rules (a hook must never harm a session):
 //  - fail OPEN: office down / any error / slow → exit 0, normal stop.
-//  - one-shot: a per-session seen-marker means each message surfaces once.
+//  - one-shot: the server-side cursor means each message surfaces once.
 //  - no loop: respects `stop_hook_active`; never blocks twice in a row.
-//  - no history dump: first run for a session sets a baseline silently.
+//  - no history dump: nothing from before you sat down counts as unread.
 //  - tight timeouts: a fast no-op for the (common) no-mail case.
-//  - direct mail always, plus project-channel posts from humans or teammates
-//    (but never your own posts and never system noise).
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
-import { fileURLToPath } from 'node:url';
-
+//  - interrupt-worthy only (mode=hook): direct mail, @mentions, replies from
+//    the human, your project channel, and All Hands notes from humans.
 const ok = () => process.exit(0);                 // allow normal stop / no-op
 process.on('uncaughtException', ok);
 process.on('unhandledRejection', ok);
 setTimeout(ok, 1500);                             // absolute backstop
 
-const PORT = process.env.OFFICE_PORT || 4317;
-const BASE = `http://localhost:${PORT}`;
-const DIR = path.join(os.homedir(), '.claude', 'agent-office', 'inbox');
-
-// This session's own display name, resolved the same way office-msg.mjs
-// resolves the author it posts under. We still keep this self-author filter
-// even now that agent posts are typed properly, because it protects against
-// stale metadata and lets channel collaboration stay loop-free. Fail-open.
-function resolveSelfName(sid, cwd) {
-  try {
-    const rd = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return {}; } };
-    const g = rd(path.join(os.homedir(), '.claude', 'agent-office', 'profiles.json'));
-    const here = path.dirname(fileURLToPath(import.meta.url));
-    const l = rd(path.join(here, '..', 'data', 'profiles.local.json'));
-    const bySession = { ...(g.bySession || {}), ...(l.bySession || {}) };
-    const byCwd = { ...(g.byCwd || {}), ...(l.byCwd || {}) };
-    const prof = { ...(cwd && byCwd[cwd]), ...(sid && bySession[sid]) };
-    return prof.name || null;
-  } catch { return null; }
-}
+const BASE = (process.env.OFFICE_URL || `http://localhost:${process.env.OFFICE_PORT || 4317}`).replace(/\/+$/, '');
+const headers = process.env.OFFICE_TOKEN ? { authorization: `Bearer ${process.env.OFFICE_TOKEN}` } : {};
 
 async function main() {
   let raw = '';
@@ -59,62 +39,28 @@ async function main() {
   // Already continuing from a stop-hook injection → don't block again.
   if (kind === 'Stop' && ev.stop_hook_active) return ok();
 
-  const j = async (p) => {
-    try {
-      const r = await fetch(BASE + p, { signal: AbortSignal.timeout(700) });
-      return r.ok ? await r.json() : null;
-    } catch { return null; }
-  };
-
-  const channels = await j('/api/channels');
-  if (channels === null) return ok();             // office not reachable
-
-  const selfName = resolveSelfName(sid, ev.cwd);
-
-  const mineCh = (channels || []).filter((c) =>
-    c.kind === 'project' && Array.isArray(c.memberIds)
-    && c.memberIds.includes(sid));
-
-  const msgs = [];
-  for (const c of mineCh) {
-    const recent = await j(`/api/channels/${encodeURIComponent(c.id)}/recent?limit=20`);
-    for (const m of (recent || [])) {
-      if (m.authorType === 'system') continue;
-      if (selfName && m.author === selfName) continue;  // not your own posts
-      msgs.push({ t: m.timestamp || 0, where: '#' + (c.name || c.id),
-        who: m.author || 'Lead', text: m.content || '' });
-    }
-  }
-  const collab = await j('/api/collab/recent');
-  for (const m of (collab || [])) {
-    if (m.toAgentId === sid) msgs.push({ t: m.timestamp || 0,
-      where: 'DM · ' + (m.subject || 'direct'), who: m.author || '?',
-      text: m.content || '' });
-  }
-  if (!msgs.length) return ok();
-  msgs.sort((a, b) => a.t - b.t);
-  const maxTs = msgs[msgs.length - 1].t;
-
-  fs.mkdirSync(DIR, { recursive: true });
-  const seenFile = path.join(DIR, `.seen-${sid}.json`);
-  let lastTs = null;
-  try { lastTs = JSON.parse(fs.readFileSync(seenFile, 'utf8')).lastTs; } catch {}
-
-  // First run for this session: set a baseline, surface nothing (history was
-  // already readable via inbox.mjs and may be already answered).
-  if (typeof lastTs !== 'number') {
-    try { fs.writeFileSync(seenFile, JSON.stringify({ lastTs: maxTs })); } catch {}
-    return ok();
-  }
-
-  const fresh = msgs.filter((m) => m.t > lastTs);
+  let box = null;
+  try {
+    const r = await fetch(`${BASE}/api/inbox?agent=${encodeURIComponent(sid)}&mode=hook&limit=20`,
+      { headers, signal: AbortSignal.timeout(700) });
+    if (!r.ok) return ok();                       // office down, or it does not know this session yet
+    box = await r.json();
+  } catch { return ok(); }
+  const fresh = (box && Array.isArray(box.items)) ? box.items : [];
   if (!fresh.length) return ok();
-  try { fs.writeFileSync(seenFile, JSON.stringify({ lastTs: maxTs })); } catch {}
+
+  // Mark it read before we print: a message shown twice is worse than a rare miss,
+  // and `office inbox --all` can always re-read history.
+  try {
+    await fetch(`${BASE}/api/inbox/ack`, {
+      method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ agent: sid, upTo: box.newest }), signal: AbortSignal.timeout(500),
+    });
+  } catch { return ok(); }
 
   const fmt = fresh.map((m) => {
-    const time = new Date(m.t).toLocaleString('en-US',
-      { hour: 'numeric', minute: '2-digit' });
-    return `[${m.who} · ${m.where} · ${time}] ${m.text}`;
+    const time = new Date(m.ts).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return `[${m.from || 'Lead'} · ${m.where} · ${time}] ${m.text || ''}`;
   }).join('\n');
 
   const body =

@@ -25,6 +25,7 @@ import { createInbox } from './inbox.mjs';
 import { createActivity } from './activity.mjs';
 import { createCodexObserver } from './codex-observer.mjs';
 import { registerCoreRoutes } from './routes.mjs';
+import { registerKnowledgeRoutes } from './knowledge.mjs';
 import { createWorld } from './world/world.mjs';
 import { registerWorldRoutes } from './world/routes.mjs';
 
@@ -74,6 +75,7 @@ export function createOffice(config) {
 
   const router = new Router();
   registerCoreRoutes(router, ctx);
+  registerKnowledgeRoutes(router, ctx);
   registerWorldRoutes(router, ctx);
   ctx.router = router;
 

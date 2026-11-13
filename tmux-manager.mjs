@@ -176,6 +176,7 @@ export class TmuxManager {
     const cmd = this.buildCommand({
       runtimeSessionId: id,
       provider,
+      bin: opts.bin || '',
       task: opts.task || '',
       systemPrompt: opts.systemPrompt || '',
       command: opts.command || '',
@@ -237,6 +238,7 @@ export class TmuxManager {
       OFFICE_PORT: String(this.port),
       OFFICE_RUNTIME_SESSION_ID: opts.runtimeSessionId || '',
       OFFICE_RUNTIME_PROVIDER: opts.provider || '',
+      OFFICE_PROVIDER: opts.provider && opts.provider !== 'shell' ? opts.provider : '',
       ...(opts.env || {}),
     };
     const envCmd = ['env', ...Object.entries(envPairs).map(([k, v]) => `${k}=${v}`)];
@@ -256,6 +258,12 @@ export class TmuxManager {
       if (opts.systemPrompt) cmd.push('--system-prompt', opts.systemPrompt);
       if (opts.task) cmd.push(opts.task);
       return cmd;
+    }
+    // Any other agent CLI the registry names (gemini, opencode, …): launch it
+    // bare. The human or the agent itself gives it its first instruction.
+    if (opts.bin) {
+      if (!TmuxManager.isBinAvailable(opts.bin)) throw new Error(`${opts.bin} CLI is not available`);
+      return [...envCmd, opts.bin, ...(opts.args || [])];
     }
     throw new Error(`Unsupported provider: ${opts.provider}`);
   }

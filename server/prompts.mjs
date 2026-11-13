@@ -14,7 +14,8 @@ export function createPrompts(ctx) {
   const requestThreadByAgent = new Map();
 
   function pub(p) {
-    const runtime = runtimeView.summaryForAgent(ctx.agents.get(p.agentId), {
+    const agent = ctx.agents.get(p.agentId);
+    const runtime = runtimeView.summaryForAgent(agent, {
       runtimeSessionId: p.terminalSessionId,
     });
     return {
@@ -32,7 +33,7 @@ export function createPrompts(ctx) {
       status: p.status,
       threadId: p.threadId || null,
       terminalSessionId: p.terminalSessionId || null,
-      provider: runtime.provider || null,
+      provider: runtime.provider || agent?.provider || null,
       runtime,
       actions: runtimeView.promptReplyActions(p, runtime),
     };

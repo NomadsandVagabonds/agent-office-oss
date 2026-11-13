@@ -30,6 +30,36 @@ const RUNTIMES = Object.freeze([
     note: 'Primary first-party Codex runtime for collaborative coding work.',
   },
   {
+    id: 'gemini',
+    provider: 'gemini',
+    label: 'Gemini CLI',
+    shortLabel: 'Gemini',
+    lane: 'primary',
+    kind: 'terminal',
+    transport: 'tmux',
+    bin: 'gemini',
+    firstParty: true,
+    experimental: true,
+    utility: false,
+    launchable: true,
+    note: 'Gemini CLI in a managed terminal. It reports in through the office CLI or MCP server.',
+  },
+  {
+    id: 'opencode',
+    provider: 'opencode',
+    label: 'opencode',
+    shortLabel: 'opencode',
+    lane: 'primary',
+    kind: 'terminal',
+    transport: 'tmux',
+    bin: 'opencode',
+    firstParty: false,
+    experimental: true,
+    utility: false,
+    launchable: true,
+    note: 'opencode in a managed terminal. It reports in through the office CLI or MCP server.',
+  },
+  {
     id: 'shell',
     provider: 'shell',
     label: 'Shell',
@@ -107,6 +137,11 @@ function availabilityFor(runtime, status) {
       available: status.tmuxAvailable && status.shellAvailable !== false,
       launchable: status.tmuxAvailable && status.shellAvailable !== false,
     };
+  }
+  // Any other terminal runtime is launchable exactly when its CLI is on PATH.
+  if (runtime.bin && runtime.launchable) {
+    const present = status.tmuxAvailable && TmuxManager.isBinAvailable(runtime.bin);
+    return { available: present, launchable: present };
   }
   return {
     available: false,
@@ -219,6 +254,7 @@ export class RuntimeManager {
       cwd: opts.cwd || process.cwd(),
       task: opts.task || '',
       provider: runtime.provider,
+      bin: runtime.bin || '',
       systemPrompt: opts.systemPrompt || '',
       command: opts.command || '',
       args: Array.isArray(opts.args) ? opts.args : [],

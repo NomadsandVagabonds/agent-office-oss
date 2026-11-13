@@ -143,7 +143,8 @@ export function createTextWorld(ctx, world) {
   }
   function room(id) {
     const r = L().roomById.get(id);
-    return r ? { kind: 'room', room: r } : null;
+    // A room nobody has found yet does not exist as far as anyone can tell.
+    return r && !r.locked ? { kind: 'room', room: r } : null;
   }
 
   /* ---- look ------------------------------------------------------------ */

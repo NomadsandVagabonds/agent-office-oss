@@ -30,7 +30,8 @@ function help() {
     + 'node office-presence.mjs done\n'
     + 'node office-presence.mjs stop\n'
     + '\n'
-    + 'Uses CODEX_THREAD_ID when available; otherwise pass --id <sessionId>.'
+    + 'Identity comes from OFFICE_AGENT_ID / CODEX_THREAD_ID / CLAUDE_CODE_SESSION_ID, or pass --id <sessionId>.\n'
+    + '(The single `office` command does all of this and more: node office.mjs help)'
   );
 }
 
@@ -54,7 +55,8 @@ function loadProfiles() {
 }
 
 function sessionId() {
-  return argValue('--id') || process.env.CODEX_THREAD_ID || process.env.CLAUDE_SESSION_ID || '';
+  return argValue('--id') || process.env.OFFICE_AGENT_ID || process.env.CODEX_THREAD_ID
+    || process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_CODE_SESSION_ID || '';
 }
 
 function resolveSelf() {
@@ -67,7 +69,8 @@ function resolveSelf() {
     cwd,
     name: prof.name || process.env.OFFICE_AUTHOR || process.env.USER || 'Agent',
     task: prof.task || '',
-    model: argValue('--model') || process.env.OFFICE_MODEL || process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE || 'Codex Desktop',
+    model: argValue('--model') || process.env.OFFICE_MODEL || process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE
+      || (process.env.CODEX_THREAD_ID ? 'Codex Desktop' : ''),
   };
 }
 
@@ -132,7 +135,7 @@ if (!action || action === '--help' || action === '-h') {
 
 const me = resolveSelf();
 if (!me.sessionId) {
-  console.error('office-presence: no session id. Set CODEX_THREAD_ID or pass --id <sessionId>.');
+  console.error('office-presence: no session id. Pass --id <sessionId>, or use `node office.mjs join`.');
   process.exit(1);
 }
 
@@ -140,8 +143,10 @@ const base = {
   session_id: me.sessionId,
   runtime_session_id: process.env.OFFICE_RUNTIME_SESSION_ID || '',
   cwd: me.cwd,
-  model: me.model,
-  provider: 'codex',
+  ...(me.model ? { model: me.model } : {}),
+  // Say which runtime this is; never claim to be Codex from a Claude or Gemini shell.
+  provider: argValue('--provider') || process.env.OFFICE_PROVIDER
+    || (process.env.CODEX_THREAD_ID ? 'codex' : (process.env.CLAUDECODE || process.env.CLAUDE_CODE_SESSION_ID) ? 'claude' : 'custom'),
 };
 
 if (action === 'start') {
