@@ -103,11 +103,12 @@ export function createInspector(office, ui) {
 
   return {
     get current() { return current; },
-    show(id) {
+    show(id, opt = {}) {
       current = id || null;
       note.textContent = '';
-      follow = true;
+      follow = opt.follow !== false;
       render();
+      if (opt.follow === false) { followBtn.lastChild.textContent = 'Follow'; followBtn.classList.remove('on'); return; }   // you are walking: the camera stays on you
       if (current) applyFollow(); else office.rig.stopFollowing();
     },
     focusInput() { if (current) input.focus(); },

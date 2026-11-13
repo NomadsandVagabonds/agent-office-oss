@@ -14,6 +14,7 @@ import { buildDeskItem, buildHat } from './scene/deskitems.js';
 import { createExhibits } from './scene/exhibits.js';
 import { createFx } from './scene/fx.js';
 import { createCat } from './scene/creatures.js';
+import { createWalk } from './walk.js';
 import { createNet } from './net.js';
 import { createUI } from './ui/index.js';
 import { VOXEL } from './vox/vox.js';
@@ -43,6 +44,7 @@ window.office = office;        // for the console, and for the curious
 office.fx = createFx(office);
 office.exhibits = createExhibits(office);
 office.cat = createCat(office);
+office.walk = createWalk(office);
 office.ui = q.get('ui') === '0' ? null : createUI(office);
 
 /* ---- desk items ---------------------------------------------------------------- */
@@ -151,6 +153,7 @@ stage.onFrame((dt, t, frame) => {
   office.world?.building.update(stage.camera, dt);
   office.people?.update(dt);
   office.cat.update(dt);
+  office.walk.update(dt);
   office.exhibits.update(dt);
   office.fx.update(dt);
   office.ui?.update(dt);

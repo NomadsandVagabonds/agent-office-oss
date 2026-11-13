@@ -15,6 +15,7 @@ import {
 import { createNav, RUN_SPEED, WALK_SPEED } from '../../core/nav.mjs';
 import { SECRETS, dayQuirks, dayWeather, secretById } from '../../core/secrets.mjs';
 import { isCreationId } from '../../core/creations.mjs';
+import { resolveLook, sanitizeLookPatch } from '../../core/look.mjs';
 import { readCreations } from '../creations-store.mjs';
 import { createTextWorld } from './text.mjs';
 
@@ -345,7 +346,7 @@ export function createWorld(ctx, file) {
       cat: { name: state.cat.name, pets: state.cat.pets || 0, x: cat.x, z: cat.z, room: cat.room, state: cat.state },
       guestbook: state.guestbook.slice(-12),
       arcade: state.arcade.slice(0, 8),
-      leads: [...leads.values()],
+      leads: [...leads.values()].map(publicLead),
       today: today(),
       serverTime: Date.now(),
       emotes: EMOTES,
@@ -561,6 +562,17 @@ export function createWorld(ctx, file) {
       errands.set(agent.id, { poi: null, until: place.eta + 5 * 60 * 1000, manual: true, holdUntil });
       return { ok: true, place, text: `You walk over to ${target.agent.name}.` };
     }
+    if (target.kind === 'lead') {
+      const lead = target.lead;
+      const spot = nav.nearestWalkable(lead.x + 0.9, lead.z + 0.3) || { x: Math.floor(lead.x), z: Math.floor(lead.z) };
+      releasePoi(agent.id);
+      const place = setPlace(agent, {
+        at: 'spot', ref: 'lead', x: spot.x + 0.5, z: spot.z + 0.5,
+        face: Math.atan2(lead.x - (spot.x + 0.5), lead.z - (spot.z + 0.5)), pose: 'stand',
+      });
+      errands.set(agent.id, { poi: null, until: place.eta + 5 * 60 * 1000, manual: true, holdUntil });
+      return { ok: true, place, text: `You walk over to ${lead.name}.` };
+    }
     if (target.kind === 'room') {
       const room = target.room;
       if (room.locked) return { error: 'you do not know a way in there', status: 403 };
@@ -648,12 +660,47 @@ export function createWorld(ctx, file) {
 
   /* ---- humans looking around ------------------------------------------- */
 
+  // Humans on the floor. A browser may just be looking (focus), or its owner
+  // may be walking around as an avatar (x, z) — either way agents can tell.
+  const leadActors = new Map();          // lead id → the stand-in "who" for things a human does
+  function leadActor(id, name) {
+    const key = clip(id || 'lead', 48) || 'lead';
+    if (!leadActors.has(key)) leadActors.set(key, { id: `lead:${key}`, name: 'Lead', lead: true, department: null });
+    const actor = leadActors.get(key);
+    if (name) actor.name = clip(name, 32) || 'Lead';
+    if (leadActors.size > 200) leadActors.delete(leadActors.keys().next().value);
+    return actor;
+  }
+  const publicLead = (l) => ({ client: l.client, id: l.id, name: l.name, focus: l.focus || null, look: l.look || null,
+    x: l.x ?? null, z: l.z ?? null, heading: l.heading || 0, moving: !!l.moving, room: l.room || null });
+
   function onClientMessage(client, message) {
     if (message.type === 'lead' || message.type === 'focus') {
+      const prev = leads.get(client.id) || { client: client.id };
       const focus = message.focus && typeof message.focus === 'object'
         ? { kind: clip(message.focus.kind, 16), id: clip(message.focus.id, 80) } : null;
-      leads.set(client.id, { client: client.id, name: clip(message.name || 'Lead', 32), focus, at: Date.now() });
-      fx({ kind: 'lead', client: client.id, name: leads.get(client.id).name, focus });
+      const lead = { ...prev, name: clip(message.name || prev.name || 'Lead', 32), id: clip(message.id || prev.id || client.id, 48), focus, at: Date.now() };
+      if (message.look && typeof message.look === 'object') lead.look = resolveLook(`lead:${lead.id}`, sanitizeLookPatch(message.look).look);
+      leads.set(client.id, lead);
+      fx({ kind: 'lead', ...publicLead(lead) });
+    } else if (message.type === 'walk') {
+      const prev = leads.get(client.id) || { client: client.id, name: 'Lead', id: String(client.id) };
+      const now = Date.now();
+      if (message.off) {                                   // stepped out of walk mode
+        const lead = { ...prev, x: null, z: null, room: null, moving: false, at: now };
+        leads.set(client.id, lead);
+        fx({ kind: 'lead', ...publicLead(lead) });
+        return;
+      }
+      const x = Number(message.x), z = Number(message.z);
+      if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+      const room = layout.roomAt(x, z);
+      if (!room || layout.roomById.get(room)?.locked) return;      // only places that exist
+      if (prev.walkAt && now - prev.walkAt < 90 && message.moving) return;     // a few times a second is plenty
+      const lead = { ...prev, x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100, heading: Number(message.heading) || 0,
+        moving: !!message.moving, room, at: now, walkAt: now };
+      leads.set(client.id, lead);
+      fx({ kind: 'lead', ...publicLead(lead) });
     } else if (message.type === 'ping') {
       client.send({ type: 'pong', t: Date.now() });
     }
@@ -690,7 +737,7 @@ export function createWorld(ctx, file) {
     seatOf: (id) => seatOf.get(id) || null,
     errandOf: (id) => errands.get(id) || null,
     occupantOf: (poiId) => occupants.get(poiId) || null,
-    leads: () => [...leads.values()],
+    leads: () => [...leads.values()].map(publicLead), leadActor,
     cat: () => ({ ...cat, name: state.cat.name, pets: state.cat.pets || 0 }),
     state: () => state,
     today, gallery, placeOnShelf, discover, bumpStat, fx,

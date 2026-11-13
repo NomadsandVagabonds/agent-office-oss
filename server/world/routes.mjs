@@ -62,6 +62,13 @@ export function registerWorldRoutes(router, ctx) {
     return c.result(world.discover(String(body.secret || ''), optionalAgent(body.agent), { name: body.name }));
   }, { about: 'Record a discovery: {secret, agent?, name?}.' });
 
+  router.post('/api/world/lead/use', async (c) => {
+    const body = await c.json();
+    const thing = String(body.thing || '').slice(0, 80);
+    if (!thing) throw new HttpError(400, 'thing required');
+    return c.result(world.text.use(world.leadActor(body.id, body.name), thing, body.arg ? String(body.arg).slice(0, 200) : undefined));
+  }, { about: 'A human uses a thing while walking the floor: {thing, arg?, id?, name?}. Same rules and discoveries as an agent.' });
+
   router.post('/api/world/pet', async (c) => {
     const body = await c.json();
     return c.result(world.petCat(optionalAgent(body.agent), body.name));

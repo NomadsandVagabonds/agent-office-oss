@@ -108,6 +108,11 @@ export function createTextWorld(ctx, world) {
     if (['duck', 'rubber duck', 'debug duck'].includes(text)) return { kind: 'duck' };
     if (['window', 'outside', 'weather', 'sky'].includes(text)) return { kind: 'window' };
     if (['elevator', 'lift'].includes(text)) return { kind: 'elevator' };
+    // a human who is walking the floor (by name, or just "the lead")
+    const walkers = world.leads().filter((l) => l.x !== null);
+    const named = walkers.find((l) => norm(l.name) === text);
+    if (named) return { kind: 'lead', lead: named };
+    if (['lead', 'the lead', 'human', 'the human', 'boss'].includes(text)) return walkers[0] ? { kind: 'lead', lead: walkers[0] } : null;
     const deptId = agent.department?.id;
     const ownRoom = deptId ? `dept:${deptId}` : null;
     if (ownRoom && L().roomById.has(ownRoom)) {
@@ -193,6 +198,8 @@ export function createTextWorld(ctx, world) {
     if (duck && duck.room === place?.room) lines.push('A rubber duck is sitting on one of the desks here, looking attentive.');
     const cat = world.cat();
     if (cat.room === place?.room) lines.push(`${cat.name} the cat is ${cat.state === 'nap' ? 'asleep nearby' : 'here, watching you'}.`);
+    const walking = world.leads().filter((l) => l.x !== null && l.room === place?.room);
+    if (walking.length) lines.push(`${list(walking.map((l) => l.name))} (human) ${walking.length > 1 ? 'are' : 'is'} here in the room with you.`);
     const leads = world.leads().filter((l) => l.focus);
     if (leads.some((l) => (l.focus.kind === 'agent' && l.focus.id === agent.id))) lines.push('The Lead is looking at you right now.');
     else if (leads.some((l) => l.focus.kind === 'room' && l.focus.id === place?.room)) lines.push('The Lead is looking into this room.');
@@ -236,6 +243,10 @@ export function createTextWorld(ctx, world) {
       if (card?.blurb) lines.push(`“${card.blurb}”`);
       lines.push(`Reach them: office dm "${a.name}" "…"`);
       return { ok: true, text: lines.join('\n'), agentId: a.id };
+    }
+    if (target.kind === 'lead') {
+      const l = target.lead;
+      return { ok: true, text: `${l.name} — the human. On the floor in ${roomName(l.room)}${l.moving ? ', walking' : ''}. (office go lead · office say "…")` };
     }
     if (target.kind === 'room') {
       const r = target.room;
@@ -336,6 +347,9 @@ export function createTextWorld(ctx, world) {
   function use(agent, ref, arg) {
     const target = resolve(agent, ref);
     if (!target) return { error: `you see no "${ref}" to use (try: office look)`, status: 404 };
+    // A human walks the floor in their own browser; the server only applies what the thing does.
+    if (agent.lead && (target.kind === 'home' || target.kind === 'room' || target.kind === 'lead')) return { ok: true, text: '' };
+    if (target.kind === 'lead') return world.go(agent, target);
     if (target.kind === 'home') { world.sendHome(agent); return { ok: true, text: 'You sit back down at your desk.' }; }
     if (target.kind === 'agent') return { ok: true, text: `You can't use ${target.agent.name}. Try: office dm "${target.agent.name}" "…"  or  office emote wave` };
     if (target.kind === 'room') return world.go(agent, target);
@@ -352,9 +366,11 @@ export function createTextWorld(ctx, world) {
       return { ok: true, text: pickDuckWisdom(hashId(agent.id + Date.now())) + (found.stamped ? '  ★ Discovery: Rubber Duck Debugging' : ''), found: found.stamped ? 'duck' : null };
     }
     const p = target.poi;
-    const moved = world.go(agent, target);
-    if (moved.error) return moved;
-    world.visited(agent, p.room);
+    if (!agent.lead) {
+      const moved = world.go(agent, target);
+      if (moved.error) return moved;
+      world.visited(agent, p.room);
+    }
     const star = (r) => (r && (r.stamped || r.first) ? `  ★ Discovery: ${r.secret.name}` : '');
     const n = hashId(agent.id + ':' + Date.now());
     switch (p.kind) {
@@ -473,6 +489,8 @@ export function createTextWorld(ctx, world) {
       lines.push(`${dept}`);
       for (const a of members) lines.push(`  ${a.name}  [${providerTag(a)}]  ${activity(a)} — ${whereabouts(a).text}`);
     }
+    const walkers = world.leads().filter((l) => l.x !== null);
+    if (walkers.length) lines.push('', 'Humans on the floor: ' + walkers.map((l) => `${l.name} (${roomName(l.room)})`).join(' · '));
     return { ok: true, text: lines.join('\n'), count: present.length };
   }
 

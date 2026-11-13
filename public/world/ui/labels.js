@@ -8,6 +8,7 @@ export function createLabels(office, ui) {
   ui.root.append(layer);
   const tags = new Map();        // agent id → tag
   const roomTags = new Map();    // room id → { el, room }
+  const leadTags = new Map();    // humans walking the floor
   const v = new THREE.Vector3();
   let roomsFor = null;
 
@@ -97,6 +98,22 @@ export function createLabels(office, ui) {
       const tally = perRoom.get(room) || { here: 0, needs: 0 };
       tally.here++; if (needs) tally.needs++;
       perRoom.set(room, tally);
+    }
+
+    // humans on the floor (you, and anyone else watching this office)
+    const walk = office.walk;
+    const humans = [];
+    if (walk?.active) humans.push({ key: 'me', name: walk.me.name + ' (you)', x: walk.state.x, z: walk.state.z });
+    for (const [client, vis] of walk?.visitors || []) humans.push({ key: 'v' + client, name: vis.name || 'Lead', x: vis.x, z: vis.z });
+    for (const [key, t] of leadTags) if (!humans.some((p) => p.key === key)) { t.el.remove(); leadTags.delete(key); }
+    for (const p of humans) {
+      let t = leadTags.get(p.key);
+      if (!t) { const text = h('span'); t = { el: h('div.tag.lead', h('div.name', h('i.dot', { style: { background: 'var(--accent)' } }), text)), text }; layer.append(t.el); leadTags.set(p.key, t); }
+      if (t.name !== p.name) { t.name = p.name; t.text.textContent = p.name; }
+      v.set(p.x, 1.66, p.z).project(camera);
+      const on = v.z < 1 && Math.abs(v.x) < 1.15 && Math.abs(v.y) < 1.2;
+      t.el.style.display = on ? '' : 'none';
+      if (on) t.el.style.transform = `translate(${((v.x * 0.5 + 0.5) * size.w).toFixed(1)}px, ${((-v.y * 0.5 + 0.5) * size.h).toFixed(1)}px) translate(-50%, -100%)`;
     }
 
     for (const r of roomTags.values()) {

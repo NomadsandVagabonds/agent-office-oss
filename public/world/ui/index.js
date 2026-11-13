@@ -35,6 +35,8 @@ export function createUI(office) {
   root.append(h('div.topbar.glass', brand, tally, h('span.grow'), clockEl, tools));
   const sheetButtons = {};
   tools.append(h('button.btn.ghost', { title: 'Next agent waiting on you (N)', onclick: () => ui.nextNeed() }, icon('inbox'), h('span.word', 'Needs you'), needBadge));
+  const walkBtn = h('button.btn.ghost', { title: 'Walk the floor yourself (Tab)', onclick: () => office.walk?.toggle() }, icon('pin'), h('span.word', 'Walk'));
+  tools.append(walkBtn);
   for (const [name, s] of Object.entries(SHEETS)) {
     sheetButtons[name] = h('button.btn.ghost', { title: `${s.title} (${s.key.toUpperCase()})`, onclick: () => ui.toggleSheet(name) }, icon(s.icon), h('span.word', s.title));
     tools.append(sheetButtons[name]);
@@ -89,7 +91,7 @@ export function createUI(office) {
 
   ui.select = (id) => {
     office.selected = id && net.state.agents.has(id) ? id : null;
-    inspector.show(office.selected);
+    inspector.show(office.selected, { follow: !office.walk?.active });
     ring.visible = !!office.selected;
     net.send({ type: 'focus', name: 'Lead', focus: office.selected ? { kind: 'agent', id: office.selected } : null });
   };
@@ -109,7 +111,7 @@ export function createUI(office) {
     ui.select(null);
     office.rig.frame(room.rect, {});
   };
-  ui.overview = () => { ui.select(null); office.rig.overview(); };
+  ui.overview = () => { if (office.walk?.active) { office.walk.exit(); walkBtn.classList.remove('on'); } ui.select(null); office.rig.overview(); };
 
   office.rig.on((e) => {
     if (e.type !== 'click' || e.button !== 0) return;
@@ -118,11 +120,11 @@ export function createUI(office) {
     else if (hit?.kind === 'cat') petCat();
     else if (office.selected) ui.select(null);
   });
-  let pets = 0;
   async function petCat() {
     try {
-      await net.api('/api/world/pet', { method: 'POST', body: { name: 'Lead' } });
-      if (++pets === 9) net.api('/api/world/discover', { method: 'POST', body: { secret: 'cat-person', name: 'Lead' } }).catch(() => {});
+      const me = office.walk?.me;
+      const r = await net.api('/api/world/lead/use', { method: 'POST', body: { id: me?.id, name: me?.name, thing: 'cat' } });
+      if (office.walk?.active && r?.text) office.walk.narrate(r.text);
     } catch { /* the cat is busy */ }
   }
   const canvas = office.stage.renderer.domElement;
@@ -181,10 +183,17 @@ export function createUI(office) {
       if (typing) document.activeElement.blur();
       else if (sheet) ui.closeSheet();
       else if (office.selected) ui.select(null);
+      else if (office.walk?.active) { office.walk.exit(); walkBtn.classList.remove('on'); }
       return;
     }
     if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (k === 'Tab') { e.preventDefault(); if (sheet) ui.closeSheet(); office.walk?.toggle(); walkBtn.classList.toggle('on', !!office.walk?.active); return; }
+    if (office.walk?.active) {                                   // on the floor: the keyboard moves you
+      if (k === 'e' || k === 'Enter') { e.preventDefault(); office.walk.use(); return; }
+      if (k === ' ') { e.preventDefault(); office.walk.hop(); return; }
+      if (['w', 'a', 's', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Shift', '=', '+', '-'].includes(k)) { held.add(k); e.preventDefault(); return; }
+    }
     if (k === ' ') { e.preventDefault(); ui.overview(); }
     else if (k === 'n') ui.nextNeed();
     else if (k === 'm' && office.selected) { e.preventDefault(); inspector.focusInput(); }
@@ -195,8 +204,13 @@ export function createUI(office) {
   window.addEventListener('blur', () => held.clear());
 
   function steer(dt) {
-    if (!held.size) return;
     const rig = office.rig, g = rig.goal;
+    if (office.walk?.steer(held, dt)) {                          // walking: only zoom is left to the camera keys
+      if (held.has('=') || held.has('+')) g.dist *= Math.exp(-1.4 * dt);
+      if (held.has('-')) g.dist *= Math.exp(1.4 * dt);
+      return;
+    }
+    if (!held.size) return;
     const step = g.dist * 0.9 * dt;
     let fx = 0, fz = 0;
     if (held.has('w') || held.has('ArrowUp')) fz -= 1;
