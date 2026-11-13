@@ -76,40 +76,72 @@ export function voxelGlassMaterial() {
 
 const geometryCache = new Map();
 
-/**
- * Build a renderable object from a voxel model.
- * @param {import('./vox.js').Vox | (() => import('./vox.js').Vox)} model  a Vox, or a function that makes one
- * @param {{key?:string, origin?:[number,number,number], scale?:number, cast?:boolean, receive?:boolean}} [opt]
- *        key: cache the meshed geometry under this name (identical props share GPU buffers)
- * @returns {THREE.Group}  origin at the model's origin, sized in metres
- */
-export function voxObject(model, opt = {}) {
-  let meshed = opt.key ? geometryCache.get(opt.key) : null;
-  if (!meshed) {
-    const vox = typeof model === 'function' ? model() : model;
-    meshed = meshVox(vox, { origin: opt.origin });
-    if (opt.key) geometryCache.set(opt.key, meshed);
-  }
-  const group = new THREE.Group();
-  const scale = opt.scale ?? VOXEL;
+// Distant things are drawn from coarser copies of themselves (see Vox.downsample):
+// beyond LOD.near metres every 2×2×2 block of voxels is one cube, beyond LOD.far
+// every 4×4×4. A voxel is well under a pixel by then, so it reads the same and
+// costs a fraction. Small things stop casting shadows at the coarsest level.
+export const LOD = { near: 30, far: 62, minVoxels: 260 };
+
+function levelGroup(meshed, factor, opt, small) {
+  const g = new THREE.Group();
   if (meshed.solid) {
     const mesh = new THREE.Mesh(meshed.solid, voxelMaterial());
-    mesh.castShadow = opt.cast !== false;
+    mesh.castShadow = opt.cast !== false && !(small && factor >= 4);
     mesh.receiveShadow = opt.receive !== false;
-    group.add(mesh);
+    g.add(mesh);
   }
   if (meshed.glass) {
     const mesh = new THREE.Mesh(meshed.glass, voxelGlassMaterial());
     mesh.renderOrder = 2;
-    group.add(mesh);
+    g.add(mesh);
   }
-  group.scale.setScalar(scale);
+  if (factor !== 1) g.scale.setScalar(factor);
+  return g;
+}
+
+/**
+ * Build a renderable object from a voxel model.
+ * @param {import('./vox.js').Vox | (() => import('./vox.js').Vox)} model  a Vox, or a function that makes one
+ * @param {{key?:string, origin?:[number,number,number], scale?:number, cast?:boolean, receive?:boolean, lod?:boolean}} [opt]
+ *        key: cache the meshed geometry under this name (identical props share GPU buffers)
+ *        lod: false to always draw the full model (default: coarser copies when far away)
+ * @returns {THREE.Group}  origin at the model's origin, sized in metres. Things you add to it are in voxel units.
+ */
+export function voxObject(model, opt = {}) {
+  let entry = opt.key ? geometryCache.get(opt.key) : null;
+  if (!entry) {
+    const vox = typeof model === 'function' ? model() : model;
+    const full = meshVox(vox, { origin: opt.origin });
+    entry = { levels: [full], voxels: vox.size };
+    if (opt.lod !== false && !opt.origin && vox.size >= LOD.minVoxels) {
+      for (const f of [2, 4]) {
+        const coarse = meshVox(vox.downsample(f));
+        if (coarse.solid || coarse.glass) entry.levels.push(coarse); else break;
+      }
+    }
+    if (opt.key) geometryCache.set(opt.key, entry);
+  }
+  const meshed = entry.levels[0];
+  const group = new THREE.Group();
+  const b = meshed.bounds;
+  const small = Math.max(b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0) < 34;          // under ~85 cm in every direction
+  if (entry.levels.length === 1) {
+    for (const child of [...levelGroup(meshed, 1, opt, false).children]) group.add(child);
+  } else {
+    const lod = new THREE.LOD();
+    lod.addLevel(levelGroup(entry.levels[0], 1, opt, small), 0);
+    if (entry.levels[1]) lod.addLevel(levelGroup(entry.levels[1], 2, opt, small), LOD.near);
+    if (entry.levels[2]) lod.addLevel(levelGroup(entry.levels[2], 4, opt, small), LOD.far);
+    group.add(lod);
+  }
+  group.scale.setScalar(opt.scale ?? VOXEL);
   group.userData.bounds = meshed.bounds;
   group.userData.quads = meshed.quads;
+  group.userData.lodQuads = entry.levels.map((l) => l.quads);
   return group;
 }
 
 export function clearGeometryCache() {
-  for (const m of geometryCache.values()) { m.solid?.dispose(); m.glass?.dispose(); }
+  for (const e of geometryCache.values()) for (const m of e.levels) { m.solid?.dispose(); m.glass?.dispose(); }
   geometryCache.clear();
 }

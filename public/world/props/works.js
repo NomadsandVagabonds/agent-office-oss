@@ -59,12 +59,11 @@ function carton(v, x0, y0, z0, w, h, d, opt = {}) {
     v.paint(lx + 1, ly + 2, z1 - 1, lx + 6, ly + 3, z1, M(PAPER, 0));
   }
   if (opt.arrows) {                                                           // this way up ↑↑
-    const ink = tone(card, -0.55);
-    for (const ax of [x1 - 9, x1 - 5]) {
-      const ay = y0 + Math.max(2, (h >> 1) - 3);
-      v.paint(ax + 1, ay + 1, z1 - 1, ax + 2, ay + 5, z1, ink);
-      v.paint(ax, ay + 3, z1 - 1, ax + 3, ay + 4, z1, ink);
-      v.paint(ax, ay, z1 - 1, ax + 3, ay + 1, z1, ink);
+    const ink = tone(card, -0.55), ay = y0 + Math.max(2, (h >> 1) - 3);
+    for (const ax of [x1 - 13, x1 - 7]) {
+      v.paint(ax + 2, ay, z1 - 1, ax + 3, ay + 6, z1, ink);
+      v.paint(ax + 1, ay + 4, z1 - 1, ax + 4, ay + 5, z1, ink);
+      v.paint(ax, ay + 3, z1 - 1, ax + 5, ay + 4, z1, ink);
     }
   }
   if (opt.grip) {                                                             // hand holes in the ends
@@ -73,16 +72,17 @@ function carton(v, x0, y0, z0, w, h, d, opt = {}) {
   }
 }
 
-/** A paint tin standing at (cx, y0, cz): steel can, a paper label, a lid, sometimes a run of paint. */
-function tin(v, cx, y0, cz, r, h, color, drip = false) {
+/** A paint tin with its corner at (x0, y0, z0), w wide: steel can, a paper label, a lid, sometimes a run of paint. */
+function tin(v, x0, y0, z0, w, h, color, drip = false) {
   const st = M('#a9aeb6', 0), label = M(color, 1);
-  v.cyl('y', cx, cz, y0, y0 + h, r, st);
-  v.paint(cx - r - 1, y0 + 1, cz - r - 1, cx + r + 1, y0 + h - 2, cz + r + 1, label);
-  v.cyl('y', cx, cz, y0 + h - 1, y0 + h, r - 1, tone(st, 0.2));               // lid
+  v.rbox(x0, y0, z0, x0 + w, y0 + h, z0 + w, 2, st, 'xz');
+  v.paint(x0, y0 + 1, z0, x0 + w, y0 + h - 2, z0 + w, label);
+  v.paint(x0 + 1, y0 + h - 1, z0 + 1, x0 + w - 1, y0 + h, z0 + w - 1, tone(st, 0.22));             // lid
   if (drip) {
     const p = M(color, 0);
-    v.paint(cx - 1, y0 + h - 2, cz + r - 2, cx + 1, y0 + h, cz + r + 1, p);
-    v.paint(cx, y0 + h - 4, cz + r - 2, cx + 1, y0 + h, cz + r + 1, p);
+    v.paint(x0 + 2, y0 + h - 2, z0 + w - 1, x0 + 4, y0 + h, z0 + w, p);
+    v.paint(x0 + 2, y0 + h - 4, z0 + w - 1, x0 + 3, y0 + h, z0 + w, p);
+    v.paint(x0 + 1, y0 + h - 1, z0 + w - 2, x0 + 4, y0 + h, z0 + w - 1, p);
   }
 }
 
@@ -90,7 +90,7 @@ function tin(v, cx, y0, cz, r, h, color, drip = false) {
 
 const LEAF = M('#5a9450', 2), LEAF_L = M('#7db963', 2), LEAF_D = M('#3f7040', 2);
 const BARK = M('#73543a', 2), BARK_D = tone(BARK, -0.24);
-const SOIL = M('#4a3626', 3), SOIL_L = tone(SOIL, 0.14), SOIL_D = tone(SOIL, -0.22);
+const SOIL = M('#4a3626', 3), SOIL_D = tone(SOIL, -0.22);
 const isLeaf = (c) => c === LEAF || c === LEAF_L || c === LEAF_D;
 /** Bark: long dark furrows down some columns (speckle would cost a quad per voxel). */
 const bark = (x, y, z) => (noise3(x, (y + x * 5 + z * 3) >> 3, z, 7) > 0.8 ? BARK_D : BARK);
@@ -182,12 +182,10 @@ function planter(v, stage) {
       else { v.set(x, 10, z, woodEdge); v.set(x, 11, z, woodEdge); v.set(x, 12, z, fx >= 22 && fz >= 22 ? woodD : wood); }
     }
   }
-  for (const [cx, cz, rx, rz] of [[-12, 9, 6, 4], [11, -12, 5, 7], [13, 14, 4, 3]]) v.ellipsoid(cx, 10, cz, rx, 0.6, rz, SOIL_L);     // lighter mulch
   v.paint(-7, 3, 27, 7, 9, 28, M('#c9a24a', 0));                              // a brass plaque let into the front
   v.paint(-5, 6, 27, 5, 7, 28, M('#6b4a1c', 0)); v.paint(-4, 4, 27, 3, 5, 28, M('#6b4a1c', 0));
   wateringCan(v, -21.5, 13, 21.5);                                            // somebody waters it
-  for (const [x, z] of [[15, 13], [-14, -16]]) v.box(x, 11, z, x + 2, 12, z + 1, M('#9a958a', 1));          // pebbles
-  if (stage >= 1) {                                                           // and grass creeps in at the edges
+  if (stage >= 1 && stage <= 3) {                                             // grass creeps in at the edges, until the shade is too deep
     const g = M('#6aa356', 2);
     for (const [x, z, h] of [[-21, 3, 2], [-21, 5, 3], [13, 21, 3], [21, -7, 2], [-10, -21, 3]]) v.box(x, 11, z, x + 1, 11 + h, z + 1, g);
   }
@@ -256,57 +254,53 @@ function full(v, n = 3) {
 }
 
 function grand(v, n = 4) {
-  puff(v, n, 22, 92, 4, 16, 14, 16, LEAF_D);
-  puff(v, n, -7, 92, -21, 16, 14, 16, LEAF_D);
-  puff(v, n, 0, 110, 0, 24, 28, 23, LEAF);
-  puff(v, n, -15, 93, 17, 16, 14, 16, LEAF);
-  puff(v, n, 10, 123, 6, 12, 13, 12, LEAF_L);
-  puff(v, n, -11, 118, -6, 12, 12, 12, LEAF_L);
+  puff(v, n, -5, 100, -19, 16, 14, 15, LEAF_D);
+  puff(v, n, 21, 96, -5, 15, 13, 15, LEAF_D);
+  puff(v, n, 0, 113, 0, 23, 24, 22, LEAF);
+  puff(v, n, -21, 101, 5, 15, 14, 15, LEAF);
+  puff(v, n, 5, 99, 20, 15, 13, 14, LEAF);
+  puff(v, n, 11, 124, 7, 13, 13, 13, LEAF_L);
+  puff(v, n, -12, 120, -5, 12, 12, 12, LEAF_L);
   // blossom: the tops of the leaf clumps come out pink, in drifts
   const pink = M('#f6c3d0', 2), pinkD = M('#ea9ab4', 2);
   v.remap((x, y, z, c) => {
-    if (!isLeaf(c) || y < 92 || v.has(x, y + 1, z)) return c;
+    if (!isLeaf(c) || y < 100 || v.has(x, y + 1, z)) return c;
     const bx = Math.floor(x / n), by = Math.floor(y / n), bz = Math.floor(z / n);
     if (noise3(bx >> 1, by >> 1, bz >> 1, 11) < 0.52 || noise3(bx, by, bz, 5) < 0.3) return c;
     return noise3(bx, by, bz, 9) > 0.45 ? pink : pinkD;
   });
-  bole(v, 0, 0, 11, 15, 16, 4); bole(v, 0, 0, 15, 21, 14, 3);
-  bole(v, 0, 0, 21, 50, 12, 2); bole(v, 1, 0, 50, 76, 10, 2); bole(v, 1, 0, 76, 104, 6, 1);
-  roots(v, 5, 7, 15, 14.5, 1.7);
-  limb(v, [[3, 68, 0, 2.3], [21, 89, 4, 1.6]]);
-  limb(v, [[0, 70, -2, 2.3], [-7, 89, -20, 1.6]]);
-  limb(v, [[-1, 72, 2, 2.3], [-14, 90, 16, 1.6]]);
+  bole(v, 0, 0, 11, 16, 18, 5);
+  bole(v, 0, 0, 16, 46, 14, 3); bole(v, 1, 0, 46, 76, 12, 2); bole(v, 1, 0, 76, 104, 6, 0);
+  roots(v, 3, 8, 15, 14.5, 1.6);
+  limb(v, [[-4, 79, 1, 2], [-16, 99, 4, 1.5]]);                               // three scaffold boughs under the lower lobes
+  limb(v, [[6, 76, -1, 2], [16, 94, -4, 1.5]]);
+  limb(v, [[2, 78, 5, 2], [4, 97, 16, 1.5]]);
   // fairy lights: wound up the trunk, then scattered through the crown
   const bulb = glow('#ffe7b0'), bulbA = glow('#ffc978');
-  for (let y = 24; y < 72; y += 2) {
-    const a = y * 0.55;
-    for (let s = 12; s > 0; s -= 0.5) {
+  for (let y = 22; y < 76; y += 3) {
+    const a = y * 0.6;
+    for (let s = 13; s > 0; s -= 0.5) {
       const x = Math.floor(0.5 + Math.cos(a) * s), z = Math.floor(0.5 + Math.sin(a) * s);
-      if (v.has(x, y, z)) { v.set(x, y, z, y % 4 ? bulb : bulbA); break; }
+      if (v.has(x, y, z)) { v.set(x, y, z, y % 2 ? bulb : bulbA); break; }
     }
   }
-  const N = 56;
+  const N = 44;
   for (let i = 0; i < N; i++) {
     const t = (i + 0.5) / N, a = i * 2.39996, cy = 1 - 1.5 * t, sy = Math.sqrt(Math.max(0, 1 - cy * cy));
     const dx = Math.cos(a) * sy, dz = Math.sin(a) * sy;
     for (let s = 46; s > 4; s -= 0.5) {
-      const x = Math.floor(dx * s), y = Math.floor(104 + cy * s), z = Math.floor(dz * s);
-      if (v.has(x, y, z)) { if (y > 84) v.set(x, y, z, i % 5 === 2 ? bulbA : bulb); break; }
+      const x = Math.floor(dx * s), y = Math.floor(110 + cy * s), z = Math.floor(dz * s);
+      if (v.has(x, y, z)) { if (y > 90) v.set(x, y, z, i % 5 === 2 ? bulbA : bulb); break; }
     }
   }
-  for (const [x, y, z] of [[23, 13, 6], [-25, 13, -9]]) v.set(x, y, z, pink);          // petals on the rim
 }
 
-/**
- * The office tree, in its planter in the middle of the plaza. It grows as the teams finish
- * tasks: stage 0 a sprout, 1 a sapling, 2 a young tree, 3 a full tree, 4 a grand tree in
- * blossom, hung with lights. The planter is 56 × 56 at every stage; the canopy overhangs it.
- */
+/** The office tree in its 56 × 56 planter. It grows with the work done: stage 0 a sprout … 4 a grand tree in blossom and lights, 72 × 136 × 64. */
 export function tree(opt = {}) {
   const stage = Math.max(0, Math.min(4, Math.round(Number(opt.stage ?? 3)) || 0));
   const v = new Vox();
   planter(v, stage);
-  [sprout, sapling, young, full, grand][stage](v, opt.n || undefined);
+  [sprout, sapling, young, full, grand][stage](v);
   return v;
 }
 
@@ -315,7 +309,7 @@ export function tree(opt = {}) {
 /** The live picture on the big board: centre and size in voxels, in the plane z = BIGBOARD_SCREEN.z facing +z. */
 export const BIGBOARD_SCREEN = Object.freeze({ x: 0, y: 46, z: 2.08, w: 120, h: 56 });
 
-/** The big board — every project at a glance. A wall of a display on two steel feet; the screen faces +z. 128 × 76 × 16. */
+/** The big board — every project at a glance. A wall of a display on two steel feet; the screen faces +z. 124 × 76 × 16. */
 export function bigboard() {
   const v = new Vox();
   const S = BIGBOARD_SCREEN;
@@ -323,12 +317,12 @@ export function bigboard() {
   const sx0 = S.x - S.w / 2, sx1 = S.x + S.w / 2, sy0 = S.y - S.h / 2, sy1 = S.y + S.h / 2;
   for (const s of [-1, 1]) {                                                  // two sturdy feet
     const cx = s * 42;
-    v.rbox(cx - 3, 0, -8, cx + 3, 2, 8, 2, steelD, 'xz');
-    v.box(cx - 2, 2, -6, cx + 2, 3, 6, steel);
-    v.box(cx - 2, 3, -2, cx + 2, sy0 - 4, 2, steel);
-    for (let i = 0; i < 3; i++) { v.box(cx - 1, 3 + i, 2, cx + 1, 4 + i, 5 - i, steel); v.box(cx - 1, 3 + i, -5 + i, cx + 1, 4 + i, -2, steel); }
+    v.rbox(cx - 4, 0, -8, cx + 4, 2, 8, 2, steelD, 'xz');
+    v.box(cx - 3, 2, -6, cx + 3, 3, 6, steel);
+    v.box(cx - 3, 3, -2, cx + 3, sy0 - 4, 2, steel);
+    for (let i = 0; i < 4; i++) { v.box(cx - 1, 3 + i, 2, cx + 1, 4 + i, 6 - i, steelD); v.box(cx - 1, 3 + i, -6 + i, cx + 1, 4 + i, -2, steelD); }     // gussets
     v.box(cx - 2, sy0 - 4, -5, cx + 2, 46, -3, steel);                        // the rail the cabinet hangs on
-    v.paint(cx - 3, 0, 6, cx + 3, 1, 8, k); v.paint(cx - 3, 0, -8, cx + 3, 1, -6, k);
+    v.paint(cx - 4, 0, 6, cx + 4, 1, 8, k); v.paint(cx - 4, 0, -8, cx + 4, 1, -6, k);
   }
   v.box(-40, 7, -1, 40, 9, 1, steelD);                                        // tie bar
   v.rbox(sx0 - 2, sy0 - 4, -3, sx1 + 2, sy1 + 2, 3, 2, shell, 'xy');          // the cabinet
@@ -344,22 +338,22 @@ export function bigboard() {
   v.paint(-33, sy0 - 2, 3, -31, sy0 - 1, 4, M('#9a8430', 0));
   // the back: electronics hump, vents, a service label, and the cable to the floor
   const hump = tone(shell, -0.1);
-  v.rbox(-36, 20, -6, 36, 70, -3, 1, hump, 'xy');
-  for (const y of [61, 63, 65]) for (let x = -28; x < 28; x += 5) v.paint(x, y, -6, x + 3, y + 1, -5, deep);
+  v.box(-36, sy0 - 4, -6, 36, 66, -3, hump);
+  for (const y of [57, 59, 61]) for (let x = -28; x < 28; x += 5) v.paint(x, y, -6, x + 3, y + 1, -5, deep);
   v.paint(-30, 24, -6, -20, 30, -5, M(PAPER, 0));
   v.paint(-28, 27, -6, -22, 28, -5, steelD); v.paint(-28, 25, -6, -24, 26, -5, steelD);
-  v.paint(16, 22, -6, 28, 27, -5, deep);
-  v.tube(22.5, 24.5, -6.5, 22.5, 12, -6.5, 0.7, k);
-  v.tube(22.5, 12, -6.5, 30.5, 0.5, -7.5, 0.7, k);
-  v.box(30, 0, -8, 38, 1, -7, k);
+  v.paint(16, 17, -6, 28, 22, -5, deep);
+  v.tube(22.5, 19.5, -6.5, 22.5, 10, -6.5, 0.7, k);
+  v.tube(22.5, 10, -6.5, 29.5, 0.5, -7.5, 0.7, k);
+  v.box(29, 0, -8, 38, 1, -7, k);
   return v;
 }
 
-/** The office laser printer on its stand: paper tray out the front (+z), a fresh page in the output tray on top. 32 × 36 × 28. */
+/** The office laser printer on its stand: paper tray out the front (+z), a fresh page in the output tray on top. 32 × 34 × 28. */
 export function printer() {
   const v = new Vox();
-  const body = M(CREAM, 0), shade = tone(body, -0.14), deep = tone(body, -0.34), lite = tone(body, 0.14), k = M(BLACK, 0);
-  const wood = M(WOOD, 2), woodD = tone(wood, -0.26), woodL = tone(wood, 0.14), paper = M(PAPER, 0);
+  const body = M(CREAM, 0), shade = tone(body, -0.14), deep = tone(body, -0.34), k = M(BLACK, 0);
+  const wood = M(WOOD, 2), woodD = tone(wood, -0.26), woodL = tone(wood, 0.14), paper = M('#f4efe2', 0);
   // the stand: a small cabinet, open on the left for paper, a door on the right
   v.box(-14, 0, -12, 14, 2, 10, woodD);
   v.box(-15, 2, -13, 15, 15, 11, wood);
@@ -375,21 +369,24 @@ export function printer() {
   v.rbox(-14, 17, -12, 14, 34, 10, 2, body);
   v.carve(-14, 15, -12, 14, 17, 10); v.box(-13, 17, -11, 13, 19, 9, shade);     // a darker foot
   v.paint(-14, 24, 9, 14, 25, 10, shade);                                    // where the top cover meets the base
-  v.box(-11, 19, 10, 11, 21, 14, shade);                                     // the paper tray, pulled out
-  v.box(-10, 20, 10, 10, 22, 13, paper);
-  v.box(-11, 19, 13, 11, 23, 14, body); v.paint(-3, 20, 13, 3, 21, 14, deep);
+  v.box(-11, 19, 10, 11, 21, 14, tone(body, -0.24));                         // the paper tray, pulled out
+  v.box(-10, 20, 10, 10, 22, 13, paper); v.paint(-10, 20, 10, 10, 21, 13, M('#d9d3c4', 0));
+  v.paint(-3, 19, 13, 3, 20, 14, deep);
   v.carve(-9, 31, -7, 7, 34, 7);                                             // output tray
   v.paint(-9, 30, -7, 7, 31, 7, shade);
   v.box(-9, 31, -8, 7, 33, -7, deep);                                        // the slot the page comes out of
   v.box(-8, 31, -6, 6, 32, 8, paper);
   for (const z of [-4, -2, 0, 2, 4]) v.paint(-6, 31, z, z === 4 ? 0 : 4, 32, z + 1, M('#8f8f98', 0));    // it has printed something
   v.box(5, 26, 10, 13, 32, 11, deep);                                        // control panel
-  v.box(6, 29, 11, 10, 31, 12, glow('#b9e8a2'));
-  v.set(11, 30, 11, M('#d9d2c2', 0)); v.set(11, 27, 11, M('#d9d2c2', 0)); v.set(9, 27, 11, M('#d9d2c2', 0)); v.set(7, 27, 11, LED_G);
+  v.box(6, 29, 11, 11, 31, 12, M('#9fb08f', 0));                              // LCD: "READY"
+  v.set(7, 30, 11, M('#4c5a44', 0)); v.set(8, 30, 11, M('#4c5a44', 0)); v.set(9, 29, 11, M('#4c5a44', 0));
+  v.set(12, 30, 11, M('#d9d2c2', 0)); v.set(11, 27, 11, M('#d9d2c2', 0)); v.set(9, 27, 11, M('#d9d2c2', 0)); v.set(7, 27, 11, LED_G);
   v.paint(-12, 30, 9, -7, 31, 10, M(STEEL, 0));                              // badge
   v.box(-12, 25, 10, -8, 29, 11, M('#f2d45c', 0)); v.paint(-11, 27, 10, -9, 28, 11, M('#9a8430', 0));   // "PC LOAD LETTER?"
   for (const y of [22, 24, 26]) { v.paint(-14, y, -8, -13, y + 1, 2, deep); v.paint(13, y, -8, 14, y + 1, 2, deep); }     // vents
-  v.tube(7.5, 22.5, -12.5, 9.5, 2, -13.5, 0.7, k);                           // power
+  v.paint(3, 20, -12, 12, 24, -11, deep);                                    // sockets on the back, a rating plate
+  v.paint(-11, 26, -12, -4, 30, -11, M(PAPER, 0)); v.paint(-10, 28, -12, -5, 29, -11, shade);
+  v.tube(7.5, 21.5, -12.5, 9.5, 2, -13.5, 0.7, k);                           // power
   v.box(9, 0, -14, 14, 1, -13, k);
   return v;
 }
@@ -399,125 +396,111 @@ export function printer() {
 /** Open steel utility shelving, loaded with spares; you take things from the +z side. 100 × 68 × 20. */
 export function shelving() {
   const v = new Vox();
-  const st = M('#7d858f', 0), lite = tone(st, 0.2), dark = tone(st, -0.3), k = M(BLACK, 0);
+  const st = M('#8a9099', 0), lite = tone(st, 0.2), post = M('#646b75', 0), k = M(BLACK, 0), steel = M('#c9ccd2', 0);
   const TOPS = [5, 22, 39, 56];                                               // the top face of each shelf
-  for (const x of [-50, -1, 48]) {
-    for (const z of [-10, 8]) {
-      v.box(x, 0, z, x + 2, 66, z + 2, st);
-      v.box(x, 0, z, x + 2, 1, z + 2, k);
-      v.box(x, 66, z, x + 2, 67, z + 2, k);
-    }
-    for (let y = 3; y < 66; y += 4) v.set(x + (x < 0 ? 1 : 0), y, 9, dark);    // bolt holes up the front posts
+  for (const t of TOPS) { v.box(-50, t - 2, -10, 50, t, 10, st); v.paint(-50, t - 1, -10, 50, t, 10, lite); }
+  for (const x of [-50, -1, 48]) {                                            // angle-iron uprights
+    for (const z of [-10, 9]) { v.box(x, 0, z, x + 2, 68, z + 1, post); v.paint(x, 0, z, x + 2, 1, z + 1, k); }
   }
-  for (const t of TOPS) {
-    v.box(-49, t - 2, -9, 49, t, 9, st);
-    v.paint(-49, t - 1, -9, 49, t, 9, lite);
-    v.paint(-49, t - 2, 8, 49, t, 9, lite);
-  }
-  v.box(-48, 30, -10, 48, 32, -9, dark); v.box(-48, 47, -10, 48, 49, -9, dark);    // tie bars across the back
+  v.box(-48, 29, -10, 48, 31, -9, post);                                      // a tie bar across the back
 
   // bottom shelf: the heavy things
   let y = TOPS[0];
-  carton(v, -46, y, -7, 19, 13, 14, { tape: 'x', label: true });
-  // a red toolbox
-  const red = M('#b5382e', 0);
-  v.rbox(-23, y, -3, -7, y + 7, 6, 1, red, 'xz');
-  v.box(-23, y + 5, -3, -7, y + 6, 6, tone(red, -0.3));
-  v.box(-21, y + 7, 1, -9, y + 8, 2, tone(red, -0.2));
-  v.box(-19, y + 8, 1, -18, y + 10, 2, k); v.box(-12, y + 8, 1, -11, y + 10, 2, k); v.box(-19, y + 10, 1, -11, y + 11, 2, k);
-  v.box(-19, y + 4, 6, -17, y + 6, 7, M('#c9ccd2', 0)); v.box(-13, y + 4, 6, -11, y + 6, 7, M('#c9ccd2', 0));
-  tin(v, 7.5, y, 1.5, 4.5, 8, TEAL, true);
-  tin(v, 18.5, y, -1.5, 4.5, 8, '#e9e3d4');
-  tin(v, 13.5, y + 8, 0.5, 3.5, 6, RED, true);
-  carton(v, 28, y, -8, 18, 10, 15, { tape: 'z', arrows: true });
-  carton(v, 31, y + 10, -5, 11, 4, 10, { tape: 'x', color: '#c79a62' });
+  carton(v, -46, y, -4, 19, 13, 14, { tape: 'x', label: true });
+  const red = M('#b5382e', 0);                                                // a red toolbox
+  v.box(-23, y, -2, -6, y + 7, 7, red);
+  v.paint(-23, y + 5, -2, -6, y + 6, 7, tone(red, -0.3));
+  v.paint(-20, y + 4, 6, -18, y + 6, 7, steel); v.paint(-11, y + 4, 6, -9, y + 6, 7, steel);
+  v.box(-19, y + 7, 2, -18, y + 9, 3, k); v.box(-11, y + 7, 2, -10, y + 9, 3, k); v.box(-19, y + 9, 2, -10, y + 10, 3, k);
+  tin(v, 5, y, 1, 6, 7, TEAL, true);
+  tin(v, 13, y, -3, 6, 7, '#e9e3d4');
+  carton(v, 27, y, -4, 19, 10, 14, { tape: 'z', arrows: true });
 
   // second shelf: a cable drum, toner, paper
   y = TOPS[1];
-  const drum = M(HONEY, 2), cable = M(ORANGE, 1);
-  v.cyl('x', y + 7, 0, -45, -33, 5, cable);
-  for (let x = -44; x < -34; x += 2) v.paint(x, y, -6, x + 1, y + 14, 6, tone(cable, -0.16));
-  v.cyl('x', y + 7, 0, -47, -45, 7, drum); v.cyl('x', y + 7, 0, -33, -31, 7, drum);
-  v.cyl('x', y + 7, 0, -48, -47, 2, k); v.cyl('x', y + 7, 0, -31, -30, 2, k);
-  for (let i = 0; i < 9; i++) v.set(-38, y - 1 - i, 5 + (i > 1 ? 1 : 0) + (i > 4 ? 1 : 0), cable);     // a loose end hangs down
-  const stripes = ['#3fa7c9', '#c94f8a', YELLOW, '#33333a'];
-  for (let i = 0; i < 4; i++) {                                               // toner, one of each colour
-    const x = -26 + i * 7, z0 = i === 2 ? -4 : -7;
-    v.box(x, y, z0, x + 6, y + 12, z0 + 13, M('#ece6d8', 0));
-    v.paint(x, y + 7, z0, x + 6, y + 10, z0 + 13, M(stripes[i], 0));
-    v.paint(x + 1, y + 2, z0 + 12, x + 5, y + 5, z0 + 13, M('#55555e', 0));
+  const ply = M(HONEY, 2), cable = M(ORANGE, 2);
+  v.box(-44, y + 2, -3, -36, y + 10, 7, cable);                               // the cable, wound between …
+  for (const [dx, dy] of [[0, 0], [6, 0], [0, 6], [6, 6]]) v.carve(-44 + dx, y + 2 + dy, -3, -42 + dx, y + 4 + dy, 7);
+  v.paint(-44, y + 2, 0, -36, y + 10, 1, tone(cable, -0.2)); v.paint(-44, y + 2, 4, -36, y + 10, 5, tone(cable, -0.2));
+  v.cyl('z', -40, y + 6, -4, -3, 6, ply); v.cyl('z', -40, y + 6, 7, 8, 6, ply);     // … two plywood cheeks
+  v.paint(-41, y + 5, 7, -39, y + 7, 8, k);
+  for (const [dx, dy] of [[-4, 0], [3, 0], [0, -4], [0, 3]]) v.set(-40 + dx - (dx ? 0 : 1), y + 6 + dy - (dy ? 0 : 1), 7, steel);
+  const stripes = ['#3fa7c9', '#c94f8a', YELLOW];
+  v.box(-25, y, -6, -7, y + 12, 7, M('#ece6d8', 0));                          // toner, one of each colour
+  for (let i = 0; i < 3; i++) {
+    const x = -25 + i * 6;
+    v.paint(x, y + 7, -6, x + 6, y + 10, 7, M(stripes[i], 0));
+    v.paint(x + 1, y + 2, 6, x + 5, y + 5, 7, M('#55555e', 0));
+    if (i) v.paint(x, y, -6, x + 1, y + 12, 7, M('#a59f90', 0));
   }
-  carton(v, 6, y, -7, 16, 11, 14, { tape: 'x', grip: true });
-  for (let i = 0; i < 3; i++) {                                               // reams of paper
-    const x = 27 + (i === 1 ? 1 : 0);
-    v.box(x, y + i * 3, -6, x + 17, y + i * 3 + 3, 6, M('#e9e3d4', 0));
-    v.paint(x, y + i * 3 + 1, -6, x + 17, y + i * 3 + 2, 6, M(TEAL, 0));
-  }
+  v.box(18, y, -6, 36, y + 9, 6, M('#e9e3d4', 0));                            // reams of paper
+  for (let i = 0; i < 3; i++) { v.paint(18, y + i * 3 + 1, -6, 36, y + i * 3 + 2, 6, M(TEAL, 0)); v.paint(18, y + i * 3, -6, 36, y + i * 3 + 1, 6, M('#cfc8b6', 0)); }
 
   // third shelf: parts bins, the spare keyboard
   y = TOPS[2];
-  const bins = [RED, YELLOW, TEAL, TEAL, YELLOW, RED, TEAL];
-  for (let i = 0; i < 7; i++) {
-    const up = i >= 4, x = up ? -42 + (i - 4) * 9 : -46 + i * 9, by = y + (up ? 6 : 0), c = M(bins[i], 0);
-    v.box(x, by, -6, x + 8, by + 6, 6, c);
-    v.carve(x + 1, by + 2, 1, x + 7, by + 6, 6);                              // scooped front
-    v.paint(x + 1, by + 1, 1, x + 7, by + 2, 5, tone(c, -0.45));
-    v.box(x + 2, by + 2, 2, x + 4, by + 3, 4, M('#c9ccd2', 0)); v.set(x + 5, by + 2, 3, M('#c9a24a', 0));    // nuts and bolts
-    v.paint(x + 2, by + 3, -6, x + 6, by + 5, -5, M(PAPER, 0));
+  const bins = [RED, YELLOW, TEAL, TEAL, YELLOW, RED, YELLOW, TEAL];
+  for (let i = 0; i < 8; i++) {
+    const up = i >= 5, x = up ? -42 + (i - 5) * 8 : -46 + i * 8, by = y + (up ? 6 : 0), c = M(bins[i], 0);
+    v.box(x, by, -5, x + 8, by + 6, 7, c);
+    v.paint(x + 1, by + 2, 6, x + 7, by + 5, 7, tone(c, -0.5));               // the open mouth of the bin
+    v.paint(x + 2, by + 2, 6, x + 4, by + 3, 7, steel);                       // nuts and bolts
+    v.paint(x, by, -5, x + 1, by + 6, 7, tone(c, -0.14));
   }
   const cream = M(CREAM, 0);
-  v.rbox(-5, y, 0, 19, y + 2, 9, 1, tone(cream, -0.12), 'xz');                // the spare keyboard, hanging over the edge
-  for (let z = 1; z < 7; z++) for (let x = -4; x < 18; x++) v.set(x, y + 2, z, (x + z) % 2 === 0 || (z === 6 && x >= 3 && x < 11) ? cream : tone(cream, -0.08));
-  for (let i = 0; i < 7; i++) v.set(16 + (i % 2), y - 1 - i, 9, k);            // its curly cable
-  carton(v, 27, y, -7, 19, 12, 14, { tape: 'z', label: true });
+  v.box(3, y, 2, 27, y + 2, 10, tone(cream, -0.14));                          // the spare keyboard
+  v.paint(4, y + 1, 3, 26, y + 2, 9, (x, yy, z) => (z % 2 ? cream : tone(cream, -0.07)));
+  v.paint(11, y + 1, 8, 19, y + 2, 9, cream);
+  v.paint(21, y + 1, 3, 22, y + 2, 9, tone(cream, -0.14)); v.set(4, y + 1, 3, M('#c96a5a', 0));
+  for (let i = 0; i < 4; i++) v.set(25 + (i % 2), y - 1 - i, 10, k);          // its curly cable
+  carton(v, 31, y, -6, 16, 12, 13, { tape: 'z', label: true });
 
   // top shelf: light, awkward things
   y = TOPS[3];
-  carton(v, -45, y, -7, 17, 10, 14, { tape: 'x', arrows: true });
-  v.cyl('x', y + 2.5, -3.5, -24, 2, 2.5, M('#c9a877', 1));                    // rolled plans
-  v.cyl('x', y + 2.5, 2.5, -22, 6, 2.5, M('#5f86b0', 1));
-  v.cyl('x', y + 6.5, -0.5, -23, 3, 2.5, M('#d9cdb0', 1));
-  const hat = M(YELLOW, 0);                                                   // a hard hat
-  v.ellipsoid(14.5, y + 1, 0.5, 6, 7, 6, hat);
-  v.carve(8, y - 8, -7, 22, y, 8);
-  v.cyl('y', 14.5, 0.5, y, y + 1, 7.5, tone(hat, -0.12));
-  v.box(14, y + 1, -5, 15, y + 9, 6, tone(hat, 0.2));
-  carton(v, 28, y, -6, 16, 7, 13, { tape: 'x' });
-  v.ring(36, y + 8, 0.5, 4, 1.2, M(ORANGE, 1), 'y');                          // a coiled extension lead
-  v.box(39, y + 7, -1, 42, y + 9, 2, k);
+  carton(v, -45, y, -4, 17, 10, 14, { tape: 'x', arrows: true });
+  v.box(12, y, -4, 25, y + 9, 5, M('#f4efe2', 0));                            // first aid
+  v.paint(17, y + 2, 4, 20, y + 7, 5, M('#3f8a5a', 0)); v.paint(16, y + 3, 4, 21, y + 6, 5, M('#3f8a5a', 0));
+  v.box(17, y + 9, 0, 20, y + 10, 1, k);
   return v;
 }
 
-/** A stack of cardboard moving boxes; three arrangements (seed 1–3), each with one box left open. About 36 × 34 × 36. */
+/** A stack of cardboard moving boxes; three arrangements (seed 1–3), each with one box left open. At most 34 × 37 × 34. */
 export function boxes(opt = {}) {
   const v = new Vox();
   const seed = ((Math.round(Number(opt.seed) || 1) - 1) % 3 + 3) % 3 + 1;
   const r = rng(seed * 7 + 1), j = () => Math.round(r() * 2) - 1;             // nobody stacks boxes perfectly square
-  const stuff = (x, y, z) => {                                                // what is peeking out of the open one
-    v.ellipsoid(x + 2, y, z + 3, 3, 2, 3, M('#e9e3d4', 3));
-    v.ellipsoid(x + 9, y, z + 6, 3.4, 2.2, 3, M('#e9e3d4', 3));
-    v.cyl('y', x + 9.5, z + 1.5, y - 3, y + 7, 1.6, M('#5f86b0', 1));         // a rolled poster
-    v.box(x + 2, y, z + 8, x + 5, y + 2, z + 11, M('#a5552f', 1));            // and the plant from somebody's desk
-    v.ellipsoid(x + 3, y + 4, z + 9, 3, 2.4, 3, M('#5f9150', 2));
-    v.ellipsoid(x + 5, y + 6, z + 8, 2, 1.6, 2, M('#86c06a', 2));
-  };
+  const packing = (x, y, z) => { v.ellipsoid(x + 2, y, z + 3, 3, 2, 3, M('#e9e3d4', 3)); v.ellipsoid(x + 9, y, z + 7, 3.4, 2.2, 3, M('#e9e3d4', 3)); };
   if (seed === 1) {
     carton(v, -15 + j(), 0, -13, 28, 13, 25, { tape: 'x', label: true, grip: true });
     carton(v, -12, 13, -11 + j(), 22, 11, 20, { tape: 'z', arrows: true, color: '#c29660' });
     carton(v, -9 + j(), 24, -8, 16, 8, 15, { open: true });
-    stuff(-7, 29, -6);
+    const [x, y, z] = [-7, 29, -6];                                           // somebody's desk plant and a rolled poster
+    packing(x, y, z);
+    v.cyl('y', x + 9.5, z + 1.5, y - 3, y + 7, 1.6, M('#5f86b0', 1));
+    v.box(x + 2, y, z + 8, x + 5, y + 2, z + 11, M('#a5552f', 1));
+    v.ellipsoid(x + 3, y + 4, z + 9, 3, 2.4, 3, M('#5f9150', 2));
+    v.ellipsoid(x + 5, y + 6, z + 8, 2, 1.6, 2, M('#86c06a', 2));
   } else if (seed === 2) {
-    carton(v, -17, 0, -12 + j(), 17, 14, 22, { tape: 'z', arrows: true });
+    carton(v, -17, 0, -12 + j(), 17, 14, 22, { tape: 'z', grip: true });
     carton(v, 1, 0, -11, 16, 12, 20 + j(), { tape: 'x', grip: true, color: '#c29660' });
     carton(v, -13 + j(), 14, -10, 18, 10, 18, { open: true, color: '#c29660' });
-    stuff(-11, 21, -8);
+    const [x, y, z] = [-11, 21, -8];                                          // ring binders, standing, and a mug
+    packing(x, y, z);
+    for (const [i, c, h] of [[0, RED, 7], [1, TEAL, 6], [2, YELLOW, 7], [3, '#4a3f35', 5]]) {
+      v.box(x + 5 + i * 2, y - 2, z + 1, x + 7 + i * 2, y + h, z + 10, M(c, 1));
+      v.paint(x + 5 + i * 2, y + 2, z + 9, x + 7 + i * 2, y + 4, z + 10, M(PAPER, 0));
+    }
+    v.box(x, y - 1, z + 11, x + 3, y + 3, z + 14, M('#e9e3d4', 0)); v.set(x + 3, y + 1, z + 12, M('#e9e3d4', 0));
     carton(v, 3, 12, -8 + j(), 13, 7, 14, { tape: 'x', label: true });
   } else {
     carton(v, -16, 0, -15 + j(), 26, 16, 27, { tape: 'x', arrows: true, grip: true });
     carton(v, -12 + j(), 16, -11, 19, 11, 19, { open: true });
-    stuff(-10, 24, -9);
+    const [x, y, z] = [-10, 24, -9];                                          // a banker's lamp, shade and all
+    packing(x, y, z);
+    v.box(x + 6, y - 2, z + 9, x + 8, y + 5, z + 11, M('#c9a24a', 0));
+    v.rbox(x + 2, y + 4, z + 7, x + 13, y + 8, z + 13, 2, M('#3f8a5a', 0), 'yz');
+    v.paint(x + 2, y + 4, z + 7, x + 3, y + 8, z + 13, M('#c9a24a', 0)); v.paint(x + 12, y + 4, z + 7, x + 13, y + 8, z + 13, M('#c9a24a', 0));
     carton(v, 6, 0, 4 + j(), 11, 9, 13, { tape: 'z', label: true, color: '#c29660' });
-    carton(v, -4, 0, 13, 9, 6, 5, { tape: 'x', color: '#c79a62' });
+    carton(v, -5, 0, 13, 10, 6, 5, { tape: 'x', color: '#c79a62' });
   }
   return v;
 }
@@ -545,9 +528,9 @@ export function roomba() {
   v.cyl('y', 0, 0, 1, 4, 7, body);
   const R = (x, z) => Math.hypot(x + 0.5, z + 0.5);
   v.paint(-7, 1, -7, 7, 3, 7, (x, y, z) => (z >= -1 && R(x, z) > 5.8 ? bump : 0));                // bumper round the front half
-  v.paint(-7, 3, -7, 7, 4, 7, (x, y, z) => { const r = R(x, z); return r < 1.2 ? M('#c9ccd2', 0) : r < 2.4 ? LED_G : r < 5 ? lid : r < 5.8 ? k : z >= -1 ? bump : 0; });
+  v.paint(-7, 3, -7, 7, 4, 7, (x, y, z) => { const r = R(x, z); return r < 1 ? k : r < 2.3 ? glow('#4fcf82') : r < 5 ? lid : r < 5.8 ? k : z >= -1 ? bump : 0; });
   v.paint(-3, 2, 5, 3, 3, 7, k);                                              // its eye
-  for (const [x, z] of [[6, 5], [7, 6], [5, 6], [6, 7], [7, 4], [4, 7]]) v.set(x, 0, z, M(YELLOW, 0));     // side brush
+  for (const [x, z] of [[4, 4], [5, 5], [6, 6], [6, 4], [7, 4], [4, 6], [4, 7]]) v.set(x, 0, z, M(YELLOW, 0));     // side brush
   return v;
 }
 
@@ -624,7 +607,8 @@ export function rack() {
   // the door: a frame, a mesh you can see through, a handle
   v.box(-14, 2, 15, 14, 74, 19, frame);
   v.carve(-11, 6, 15, 11, 70, 19);
-  v.box(-11, 6, 17, 11, 70, 18, M('#23252b', 3, { glass: true }));
+  const mesh = M('#23252b', 3, { glass: true }), meshL = M('#5a5e69', 3, { glass: true });
+  v.box(-11, 6, 17, 11, 70, 18, (x, y) => (y & 1 ? meshL : mesh));            // perforated steel: fine lines, and you can see the lights through it
   v.paint(-14, 73, 15, 14, 74, 19, lite);
   v.box(11, 34, 19, 13, 44, 20, steel); v.set(12, 32, 19, steel);
   for (const y of [10, 38, 66]) v.box(-14, y, 19, -13, y + 4, 20, k);         // hinges
@@ -639,15 +623,15 @@ export function rack() {
   v.box(8, 10, -19, 11, 66, -18, M('#b9b3a2', 0));
   for (let y = 13; y < 62; y += 6) v.paint(9, y, -19, 10, y + 2, -18, k);
   v.set(9, 63, -19, LED_R);
-  const wires = [TEAL, YELLOW, '#8a8f96', TEAL, RED];
+  const wires = [TEAL, TEAL, '#9a9da3', YELLOW, TEAL];
   for (let i = 0; i < 5; i++) {
     const x = -6 + i * 2, c = M(wires[i], 1);
     v.box(x, 0, -20, x + 2, 76, -18, c);
     v.box(x, 74, -18, x + 2, 76, -13, c);
   }
-  v.box(-7, 74, -14, 5, 77, -12, k);                                          // the gland they come out of
+  v.box(-7, 74, -14, 5, 76, -12, k);                                          // the gland they come out of
   for (const y of [14, 34, 54]) v.box(-7, y, -20, 5, y + 2, -18, k);          // velcro
-  for (const [y, c] of [[20, TEAL], [28, YELLOW], [44, RED], [50, TEAL]]) v.box(4, y, -19, 8, y + 1, -18, M(c, 1));     // patch leads
+  for (const [y, c] of [[20, YELLOW], [28, TEAL], [44, RED], [50, TEAL]]) v.box(4, y, -19, 8, y + 1, -18, M(c, 1));     // patch leads
   return v;
 }
 
@@ -655,7 +639,7 @@ export function rack() {
 export const CONSOLE_SCREEN = Object.freeze({ x: -5, y: 34.5, z: -4.92, w: 12, h: 7 });
 
 /** The ops console: a sloped control desk with a built-in terminal; you stand at the +z side. 32 × 41 × 24. */
-function opsconsole() {
+export function opsconsole() {
   const v = new Vox();
   const S = CONSOLE_SCREEN;
   const body = M(CREAM, 0), shade = tone(body, -0.14), deep = tone(body, -0.34), k = M(BLACK, 0), dark = M('#33343b', 0);
@@ -694,7 +678,7 @@ function opsconsole() {
   v.cyl('z', 9.5, 35.5, -5, -4, 2.3, M(PAPER, 0));
   v.set(9, 35, -5, k); v.set(10, 36, -5, M(RED, 0)); v.set(11, 37, -5, M(RED, 0));
   v.set(6, 31, -5, LED_G); v.set(9, 31, -5, LED_G); v.set(12, 31, -5, LED_A);
-  v.box(4, 38, -4, 7, 39, -3, M('#f2d45c', 0)); v.box(4, 36, -4, 7, 38, -3, M('#f2d45c', 0));       // sticky note
+  v.box(4, 36, -4, 7, 39, -3, M('#f2d45c', 0));                               // sticky note
   // toggles on the front tread, chunky lit buttons behind them, small keys above
   for (let i = 0; i < 6; i++) {
     const x = -13 + i * 3;
@@ -706,8 +690,6 @@ function opsconsole() {
   v.cyl('y', -11.5, -1.5, 28, 30, 1.5, steel); v.set(-12, 30, -2, M(RED, 0));       // key switch
   // the emergency stop, under its cover
   v.box(7, 25, -4, 14, 29, 3, (x, y, z) => (((x + z + 40) >> 1) & 1 ? M(YELLOW, 0) : k));
-  v.cyl('y', 10.5, -0.5, 29, 31, 1.5, M('#d8392f', 0));
-  v.cyl('y', 10.5, -0.5, 31, 32, 2.5, M('#d8392f', 0));
   v.box(7, 29, -4, 14, 34, 3, glass('#bfe0ea'));
   v.carve(8, 29, -3, 13, 33, 2);
   v.cyl('y', 10.5, -0.5, 29, 31, 1.5, M('#d8392f', 0));
@@ -716,23 +698,23 @@ function opsconsole() {
   v.box(-12, 23, 7, 6, 24, 12, tone(body, -0.12));
   for (let z = 7; z < 11; z++) for (let x = -12; x < 6; x++) v.set(x, 24, z, (x + z) % 2 === 0 ? body : tone(body, -0.08));
   v.box(8, 23, 7, 13, 24, 12, shade);
-  v.sphere(10.5, 24.5, 9.5, 1.7, M(RED, 0));
+  v.sphere(10.5, 24.5, 9.5, 1.7, M(TEAL, 0));
   // the back: vents and the mains lead
   for (const y of [28, 30, 32, 34]) v.paint(-10, y, -11, 10, y + 1, -10, deep);
   v.paint(-12, 5, -11, 12, 20, -10, shade);
   v.tube(-8.5, 8.5, -11.5, -8.5, 1, -11.5, 0.7, k);
   return v;
 }
-export { opsconsole as console };
+export { opsconsole as console };          // its catalogue name (a function called `console` would shadow the real one in here)
 
-/** A floor-standing air conditioner: louvres blow out the +z side, the exhaust duct leaves at the back. 28 × 36 × 28. */
+/** A floor-standing air conditioner: louvres blow out the +z side, the exhaust duct leaves at the back. 26 × 36 × 28. */
 export function acunit() {
   const v = new Vox();
   const body = M('#dedad0', 0), shade = tone(body, -0.13), deep = tone(body, -0.36), dark = M('#33343b', 0), grey = M('#a3a6ac', 0), k = M(BLACK, 0);
-  for (const x of [-11, 9]) for (const z of [-9, 8]) v.box(x, 0, z, x + 2, 2, z + 2, k);          // casters
-  v.rbox(-13, -4, -11, 13, 36, 12, 3, body);
-  v.carve(-13, -4, -11, 13, 2, 12);
-  v.paint(-13, 2, -11, 13, 5, 12, shade);
+  for (const x of [-11, 9]) for (const z of [-7, 8]) v.box(x, 0, z, x + 2, 2, z + 2, k);          // casters
+  v.rbox(-13, -4, -9, 13, 36, 12, 3, body);
+  v.carve(-13, -4, -9, 13, 2, 12);
+  v.paint(-13, 2, -9, 13, 5, 12, shade);
   // front: intake grille below, louvres above, the controls on top of those
   v.paint(-10, 7, 11, 10, 17, 12, M('#b4b1a8', 3));
   v.paint(-10, 7, 11, 10, 8, 12, shade); v.paint(-10, 16, 11, 10, 17, 12, shade);
@@ -740,25 +722,25 @@ export function acunit() {
   v.box(-10, 19, 10, 10, 29, 11, dark);
   for (let y = 20; y < 29; y += 2) v.box(-10, y, 11, 10, y + 1, 13, body);
   v.paint(-9, 30, 11, 9, 34, 12, dark);
-  v.paint(-8, 31, 11, -2, 33, 12, glow('#9fe8d8'));
-  v.set(-6, 32, 11, dark); v.set(-4, 31, 11, dark);
+  v.paint(-7, 31, 11, -2, 33, 12, glow('#7fcfc0'));                           // 18°
+  v.set(-5, 32, 11, dark); v.set(-5, 31, 11, dark); v.set(-3, 32, 11, dark);
   v.set(1, 32, 11, LED_G);
   v.paint(4, 31, 11, 6, 33, 12, grey); v.paint(7, 31, 11, 9, 33, 12, grey);
   v.paint(6, 4, 11, 10, 5, 12, M(STEEL, 0));                                  // badge
   v.box(-5, 15, 13, -4, 21, 14, M(RED, 3)); v.box(2, 16, 13, 3, 21, 14, M(TEAL, 3));     // tell-tale ribbons on the louvre
   // sides: a grip to wheel it about, and slots
   for (const x of [-13, 12]) {
-    v.carve(x, 27, -4, x + 1, 30, 4);
-    v.paint(x < 0 ? x + 1 : x - 1, 27, -4, x < 0 ? x + 2 : x, 30, 4, deep);
-    for (const y of [8, 10, 12, 14]) v.paint(x, y, -6, x + 1, y + 1, 6, deep);
+    v.carve(x, 27, -2, x + 1, 30, 6);
+    v.paint(x < 0 ? x + 1 : x - 1, 27, -2, x < 0 ? x + 2 : x, 30, 6, deep);
+    for (const y of [8, 10, 12, 14]) v.paint(x, y, -4, x + 1, y + 1, 8, deep);
   }
-  // back: the duct stub and the mains lead
-  v.box(-7, 18, -12, 7, 32, -11, shade);
-  v.cyl('z', 0, 25, -14, -12, 5.6, grey);
-  v.paint(-6, 19, -13, 6, 31, -12, tone(grey, -0.2));
-  v.cyl('z', 0, 25, -14, -12, 3.6, dark);
-  v.paint(-9, 6, -11, 9, 14, -10, shade);
-  v.tube(8.5, 9.5, -11.5, 9.5, 1, -12.5, 0.7, k);
+  // back: the stub of the exhaust duct, ribbed like a hose, and the mains lead
+  v.box(-8, 17, -10, 8, 33, -9, shade);
+  v.cyl('z', 0, 25, -14, -10, 5.6, (x, y, z) => (z & 1 ? grey : tone(grey, -0.22)));
+  v.cyl('z', 0, 25, -14, -13, 3.6, 0);
+  v.cyl('z', 0, 25, -13, -12, 3.6, dark);
+  v.paint(-9, 6, -9, 9, 13, -8, shade);
+  v.tube(8.5, 9.5, -9.5, 9.5, 1, -10.5, 0.7, k);
   return v;
 }
 
@@ -769,36 +751,26 @@ export function ladder() {
   const v = new Vox();
   const al = M('#b9bfc8', 0), alD = tone(al, -0.22), cap = M(ORANGE, 0), capD = tone(cap, -0.22), k = M(BLACK, 0);
   const H = 55;
-  const fz = (y) => Math.round(9 - (y / H) * 8), bz = (y) => Math.round(-11 + (y / H) * 8), sx = (y) => Math.round(10 - (y / H) * 3);
+  const fz = (y) => Math.round(9 - (y / H) * 8), bz = (y) => Math.round(-11 + (y / H) * 8);     // the two sides lean together
   for (let y = 0; y < H; y++) {
-    const x = sx(y);
-    for (const s of [-1, 1]) {
-      const x0 = s < 0 ? -x - 2 : x;
-      v.box(x0, y, fz(y), x0 + 2, y + 1, fz(y) + 2, al);                      // front rails
-      v.box(s < 0 ? x0 + 1 : x0, y, bz(y), (s < 0 ? x0 + 1 : x0) + 1, y + 1, bz(y) + 2, alD);     // back legs
+    for (const x of [-11, 9]) {
+      v.box(x, y, fz(y), x + 2, y + 1, fz(y) + 2, al);                        // front rails
+      v.box(x < 0 ? x + 1 : x, y, bz(y), (x < 0 ? x + 1 : x) + 1, y + 1, bz(y) + 2, alD);         // back legs
     }
   }
-  for (const y of [11, 22, 33, 44]) {                                         // treads
-    const x = sx(y);
-    v.box(-x, y, fz(y) - 2, x, y + 2, fz(y) + 2, al);
-    v.paint(-x, y + 1, fz(y) - 2, x, y + 2, fz(y) + 2, (px, py, pz) => (pz & 1 ? alD : 0));
+  for (const y of [11, 22, 33, 44]) {                                         // treads, ribbed so you do not slip
+    v.box(-9, y, fz(y) - 2, 9, y + 2, fz(y) + 2, al);
+    v.paint(-9, y + 1, fz(y) - 2, 9, y + 2, fz(y) + 2, (px, py, pz) => (pz & 1 ? alD : 0));
   }
-  for (const y of [14, 30, 46]) v.box(-sx(y), y, bz(y), sx(y), y + 1, bz(y) + 1, alD);            // braces across the back
-  for (const s of [-1, 1]) {                                                  // spreaders
-    const x = s < 0 ? -sx(27) - 1 : sx(27);
-    v.box(x, 27, bz(27) + 2, x + 1, 28, fz(27), alD);
-    v.set(x, 27, 0, k);
-  }
-  for (const s of [-1, 1]) {                                                  // feet
-    const x0 = s < 0 ? -13 : 9;
-    v.box(x0, 0, 8, x0 + 4, 2, 12, cap);
-    v.box(x0 + (s < 0 ? 1 : 0), 0, -12, x0 + (s < 0 ? 1 : 0) + 3, 2, -9, cap);
-  }
-  v.rbox(-9, H, -5, 9, H + 3, 5, 1, cap, 'xz');                               // top cap
-  v.paint(-9, H, -5, 9, H + 1, 5, capD);
-  tin(v, 2.5, H + 3, -0.5, 3.5, 6, TEAL, true);
-  v.box(-7, H + 3, -1, -2, H + 4, 0, M(HONEY, 2)); v.box(-7, H + 3, -2, -5, H + 4, 1, k);       // the brush
-  v.box(3, 23, 9, 7, 24, 12, M(RED, 3)); v.box(3, 20, 11, 7, 23, 12, M(RED, 3));                  // a rag over a tread
+  for (const y of [14, 30, 46]) v.box(-10, y, bz(y), 10, y + 1, bz(y) + 1, alD);                  // braces across the back
+  for (const x of [-11, 10]) { v.box(x, 27, bz(27) + 2, x + 1, 28, fz(27), alD); v.set(x, 27, 0, k); }     // spreaders
+  for (const x of [-12, 8]) { v.box(x, 0, 8, x + 4, 2, 12, cap); v.box(x < 0 ? x + 1 : x, 0, -12, (x < 0 ? x + 1 : x) + 3, 2, -9, cap); }     // feet
+  v.rbox(-10, H, -5, 10, H + 3, 5, 1, cap, 'xz');                             // top cap
+  v.paint(-10, H, -5, 10, H + 1, 5, capD);
+  tin(v, 1, H + 3, -3, 6, 6, TEAL, true);
+  v.box(-8, H + 3, -1, -3, H + 4, 0, M(HONEY, 2)); v.box(-8, H + 3, -2, -6, H + 4, 1, k);       // the brush
+  const ry = 22, rz = fz(ry);                                                 // a rag over the second tread
+  v.box(3, ry + 2, rz - 1, 7, ry + 3, rz + 2, M(RED, 3)); v.box(3, ry - 1, rz + 2, 7, ry + 3, rz + 3, M(RED, 3));
   return v;
 }
 
@@ -810,34 +782,35 @@ const GLYPHS = {
   T: ['#####', '..#..', '..#..', '..#..', '..#..'],
 };
 
-/** A "VACANT" board for the wall of an empty room, hung a little crooked from one nail. Back at z = 0. 40 × 24 × 2. */
+/** A "VACANT" board for the wall of an empty room, hung crooked from one nail. Back against the wall at z = 0. 40 × 24 × 2. */
 export function vacantsign() {
   const v = new Vox();
   const board = M('#f4efe2', 1), red = M(RED, 1), ink = M('#33343b', 0), twine = M('#8a7a5c', 3);
-  const tilt = (x) => Math.round(x * 0.07);                                   // it hangs a little crooked
+  const tilt = (x) => (x < -11 ? -2 : x < -1 ? -1 : x < 10 ? 0 : 1);         // it hangs crooked; the steps fall between the letters
   for (let x = -20; x < 20; x++) {
-    const dy = tilt(x);
-    v.box(x, 1 + dy, 0, x + 1, 19 + dy, 1, board);
-    v.box(x, 14 + dy, 0, x + 1, 19 + dy, 2, red);                             // header band
-    v.set(x, 1 + dy, 0, tone(board, -0.2));
-    if (x > -17 && x < 16 && (x + 20) % 4 !== 3) v.set(x, 16 + dy, 1, M(PAPER, 0));              // small print
-    if (x > -13 && x < 12 && (x + 20) % 5 !== 0) v.set(x, 3 + dy, 0, tone(board, -0.3));
+    const y0 = 2 + tilt(x);
+    v.box(x, y0, 0, x + 1, y0 + 18, 1, board);
+    v.box(x, y0 + 13, 0, x + 1, y0 + 18, 2, red);                             // header band, a voxel proud of the board
+    v.set(x, y0, 0, tone(board, -0.2));
+    if (x > -17 && x < 16 && (x + 20) % 4 !== 3) v.set(x, y0 + 15, 1, M(PAPER, 0));              // small print
+    if (x > -13 && x < 12 && (x + 20) % 5 !== 0) v.set(x, y0 + 2, 0, tone(board, -0.3));
   }
   let x = -16;
   for (const ch of 'VACANT') {
     const g = GLYPHS[ch];
-    for (let row = 0; row < 5; row++) for (let i = 0; i < g[row].length; i++) if (g[row][i] === '#') v.set(x + i, 10 - row + tilt(x + i), 0, ink);
+    for (let row = 0; row < 5; row++) for (let i = 0; i < g[row].length; i++) if (g[row][i] === '#') v.set(x + i, 10 + tilt(x) - row, 0, ink);
     x += g[0].length + 1;
   }
+  v.set(19, 2 + tilt(19), 0, 0);                                              // a chipped corner
   // the nail and the twine
   v.box(-1, 22, 0, 1, 24, 2, M('#9aa3b0', 0));
-  v.tube(0, 22.5, 0.5, -14.5, 18.5 + tilt(-15), 0.5, 0.5, twine);
-  v.tube(0, 22.5, 0.5, 14.5, 18.5 + tilt(14), 0.5, 0.5, twine);
+  v.tube(0, 22.5, 0.5, -17.5, 18.5, 0.5, 0.5, twine);
+  v.tube(0, 22.5, 0.5, 17.5, 21.5, 0.5, 0.5, twine);
   return v;
 }
 
 export const CATALOGUE = {
-  tree: { make: (o) => tree({ stage: o.stage ?? 3, n: o.n }), variant: (o) => String(o.stage ?? 3) },   // DEV: n
+  tree: { make: (o) => tree({ stage: o.stage ?? 3 }), variant: (o) => String(o.stage ?? 3) },
   bigboard: { make: () => bigboard() },
   printer: { make: () => printer() },
   shelving: { make: () => shelving() },

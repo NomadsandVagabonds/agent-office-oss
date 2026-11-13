@@ -252,6 +252,32 @@ export class Vox {
     return out;
   }
 
+  /**
+   * A coarser copy: every f×f×f block becomes one voxel (so draw the result f
+   * times larger). A block survives if enough of it was filled — thin things
+   * such as chair legs must not vanish — and takes its commonest colour. This
+   * is what distant props are drawn with.
+   */
+  downsample(f = 2, keep = 0.2) {
+    const blocks = new Map();
+    this.each((x, y, z, v) => {
+      const k = key(Math.floor(x / f), Math.floor(y / f), Math.floor(z / f));
+      let b = blocks.get(k);
+      if (!b) { b = { n: 0, tally: new Map() }; blocks.set(k, b); }
+      b.n++;
+      b.tally.set(v, (b.tally.get(v) || 0) + 1);
+    });
+    const out = new Vox();
+    const need = Math.max(1, Math.floor(f * f * f * keep));
+    for (const [k, b] of blocks) {
+      if (b.n < need) continue;
+      let best = 0, bestN = 0;
+      for (const [v, n] of b.tally) if (n > bestN) { best = v; bestN = n; }
+      out.map.set(k, best);
+    }
+    return out;
+  }
+
   clone() { const out = new Vox(); out.map = new Map(this.map); return out; }
   get size() { return this.map.size; }
 }

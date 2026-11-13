@@ -162,8 +162,14 @@ function officeHour() {
   return d.getUTCHours() + d.getUTCMinutes() / 60;
 }
 
+// Shadows are the second most expensive thing on screen. Redraw them when the
+// view is moving, and otherwise only every third frame — nobody can see a
+// typing arm's shadow update at 20 Hz instead of 60.
+stage.renderer.shadowMap.autoUpdate = false;
+
 stage.onFrame((dt, t, frame) => {
-  rig.update(dt);
+  const moving = rig.update(dt);
+  stage.renderer.shadowMap.needsUpdate = moving || frame % 3 === 0;
   if (t - office.clockAt > 2 || office.clockAt === undefined) {       // the office clock moves slowly; check it now and then
     office.clockAt = t;
     const h = officeHour();
