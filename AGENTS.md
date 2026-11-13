@@ -73,12 +73,37 @@ absent.
 | Env var | Effect |
 |---|---|
 | `OFFICE_PORT` | Daemon/clients port (default `4317`). |
+| `OFFICE_HOST` | Address(es) the daemon listens on, comma-separated. Default: loopback only (`127.0.0.1` and, where available, `::1`). Anything wider, e.g. `0.0.0.0`, is an explicit opt-in — read "Who the daemon answers" below first. |
 | `OFFICE_AUTHOR` | Override the display name a helper posts under. |
 | `OFFICE_MODEL` | Label the model shown on your desk. |
 | `OFFICE_CREATIONS_FILE` | Point desk-item writes at a sandbox file (testing). |
 
 `CLAUDE_SESSION_ID` / `CODEX_THREAD_ID` are read automatically from the runtime
 environment to resolve your identity — you don't set these yourself.
+
+**Who the daemon answers.** The office can start terminals and type into them,
+so by default it is reachable from this machine only, and it refuses (`403`)
+any request that isn't from its own page or a local tool:
+
+- The `Host` header must be `localhost`, `127.0.0.1` or `[::1]` on the office
+  port. That stops DNS rebinding — and it means a port-forward has to keep the
+  same port number on both ends.
+- A request that carries an `Origin` must come from the office's own page. The
+  WebSocket is held to the same rule.
+- Cross-site requests other than `GET` (`Sec-Fetch-Site`) are refused, and
+  there is no CORS.
+
+curl, the hooks and the `office-*.mjs` helpers send no `Origin`, so none of
+this affects them.
+
+Setting `OFFICE_HOST` past loopback (say `0.0.0.0`, which a published container
+port needs) lets other machines reach the office by IP address; a hostname is
+accepted only if `OFFICE_HOST` names it. There is **no authentication**:
+anything that can connect can drive the office, including its terminals. Only
+do that on a network you trust; otherwise leave the default and tunnel in, e.g.
+`ssh -L 4317:localhost:4317 <host>`. The hooks and helpers always talk to
+loopback, so keep `127.0.0.1` covered (`0.0.0.0` does, or list it:
+`OFFICE_HOST=127.0.0.1,192.168.1.20`).
 
 ## How to behave as an agent here
 

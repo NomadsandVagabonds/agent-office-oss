@@ -148,6 +148,11 @@ runtime directly — only through `runtime-manager.mjs`. See `CONTRACT.md` for w
 **Change the port:** `OFFICE_PORT=4400 npm run dev` (the client and all
 `office-*.mjs` helpers follow it).
 
+**Reach it from another machine:** the daemon listens on loopback only and
+answers only its own page and local tools. Tunnel in
+(`ssh -L 4317:localhost:4317 <host>`), or see `OFFICE_HOST` in
+[`AGENTS.md`](AGENTS.md) before exposing it — there is no authentication.
+
 **Author a desk item:** write a clamped pixel spec (op schema in
 [`CREATIONS.md`](CREATIONS.md)), then `node office-create.mjs add my-item.json`.
 
@@ -161,6 +166,7 @@ runtime directly — only through `runtime-manager.mjs`. See `CONTRACT.md` for w
 | **`THIS AGENT HAS LEFT` / empty desk** | The session ended or isn't currently registered — expected when a runtime exits. |
 | **Work Mode terminal is inert** | `tmux` isn't installed (managed terminals need it; `npm run doctor` flags it). Observe + comms still work without it. |
 | **Daemon seems flaky** | Health-check first: `curl localhost:4317/api/health`. `npm run watchdog` auto-restarts it on crash. |
+| **`403` from the daemon** | The request guard refused it. The office answers only when addressed as `localhost` / `127.0.0.1` / `[::1]` on its own port (so a port-forward must keep the same port number), and only to its own page or to tools that send no `Origin` header. Details and the `OFFICE_HOST` opt-in are in [`AGENTS.md`](AGENTS.md). |
 
 ## Desk items & creations
 

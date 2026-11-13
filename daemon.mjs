@@ -7,6 +7,7 @@
 //   node daemon.mjs            then open http://localhost:4317
 //
 import http from 'node:http';
+import net from 'node:net';
 import cp from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -26,6 +27,12 @@ import { RuntimeManager } from './runtime-manager.mjs';
 import { TaskStore } from './task-store.mjs';
 
 const PORT = Number(process.env.OFFICE_PORT || 4317);
+// Where to listen. Loopback only unless OFFICE_HOST (comma-separated
+// addresses, e.g. 0.0.0.0) explicitly opts in to more — see "Request guard".
+const OFFICE_HOSTS = [...new Set((process.env.OFFICE_HOST || '').split(',')
+  .map((h) => h.trim().toLowerCase().replace(/^\[(.*)\]$/, '$1'))
+  .filter(Boolean))];
+const LISTEN_HOSTS = OFFICE_HOSTS.length ? OFFICE_HOSTS : ['127.0.0.1', '::1'];
 const __dir = path.dirname(fileURLToPath(import.meta.url));
 const PROFILES_FILE = path.join(os.homedir(), '.claude', 'agent-office',
   'profiles.json');
@@ -1549,6 +1556,14 @@ function broadcast(obj) {
 }
 
 function handleUpgrade(req, socket) {
+  // A WebSocket isn't bound by the same-origin policy, so any page could
+  // otherwise open the bus and read every snapshot. Same guard as HTTP.
+  if (refusal(req)) {
+    socket.on('error', () => {});
+    socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n'
+      + 'Content-Length: 0\r\n\r\n');
+    return;
+  }
   const key = req.headers['sec-websocket-key'];
   if (!key) { socket.destroy(); return; }
   socket.write(
@@ -1634,9 +1649,70 @@ function readJsonBody(req) {
 }
 
 // ---------------------------------------------------------------------------
+// Request guard. The office can start terminals and type into them, so it
+// may only be driven by its own page and by local tools — never by whatever
+// other site is open in the same browser. Checked before any routing:
+//   Host    must be this machine's loopback on our port. A DNS-rebinding
+//           page reaches us under its own hostname, so it stops here.
+//   Origin  when present, must be the very origin the request was sent to.
+//           Browsers attach it to cross-origin fetches, form POSTs and every
+//           WebSocket handshake; curl, the hooks and the office-*.mjs
+//           helpers send none and pass.
+//   Sec-Fetch-Site  on anything but GET must not name another site.
+// There is no CORS: nothing here ever answers access-control-allow-origin.
+// ---------------------------------------------------------------------------
+// The names we answer to: loopback, plus whatever OFFICE_HOST spells out.
+const OWN_NAMES = new Set(['localhost', '127.0.0.1', '[::1]',
+  ...OFFICE_HOSTS.map((h) => (net.isIPv6(h) ? `[${h}]` : h))]);
+// The addresses we ended up listening on, and whether any of them can be
+// reached from another machine. Both are filled in by listen() at startup.
+const listening = [];
+const isLoopback = (addr) => addr === '::1' || addr.startsWith('127.');
+let exposed = false;
+
+// "name[:port]" / "[v6][:port]" → { name, port }, or null if malformed.
+function parseHost(value) {
+  const m = /^(\[[0-9a-f:.]+\]|[a-z0-9.-]+)(?::(\d{1,5}))?$/
+    .exec(String(value ?? '').trim().toLowerCase());
+  return m ? { name: m[1], port: m[2] ? Number(m[2]) : 80 } : null;
+}
+
+function hostAllowed(name) {
+  if (OWN_NAMES.has(name)) return true;
+  // Once OFFICE_HOST reaches past loopback, other machines address the
+  // office by IP (possibly a NAT'd one we can't know). An IP literal can't
+  // be a rebinding hostname, so any is fine; unlisted names stay refused.
+  return exposed && (name.startsWith('[')
+    ? net.isIPv6(name.slice(1, -1)) : net.isIPv4(name));
+}
+
+/** Why this request must be refused, or '' when it may proceed. */
+function refusal(req) {
+  const host = parseHost(req.headers.host);
+  if (!host || host.port !== PORT || !hostAllowed(host.name)) {
+    return 'Host not allowed: the office answers to localhost, 127.0.0.1 or '
+      + `[::1]${exposed ? ' (or an IP address of this machine)' : ''} `
+      + `on port ${PORT}`;
+  }
+  const own = `http://${host.name}${PORT === 80 ? '' : `:${PORT}`}`;
+  const origin = req.headers.origin;
+  if (origin !== undefined && origin !== own) {
+    return 'Cross-origin request refused';
+  }
+  const site = req.headers['sec-fetch-site'];
+  if (req.method !== 'GET' && site !== undefined
+    && site !== 'same-origin' && site !== 'none') {
+    return 'Cross-site request refused';
+  }
+  return '';
+}
+
+// ---------------------------------------------------------------------------
 // HTTP: UI + hook ingest
 // ---------------------------------------------------------------------------
-const server = http.createServer(async (req, res) => {
+async function handleRequest(req, res) {
+  const refused = refusal(req);
+  if (refused) { sendJson(res, 403, { error: refused }); return; }
   const url = new URL(req.url || '/', 'http://x');
   const pathname = url.pathname;
 
@@ -1949,11 +2025,9 @@ const server = http.createServer(async (req, res) => {
     }
   }
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'access-control-allow-origin': '*',
-      'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
-      'access-control-allow-headers': 'content-type',
-    }).end();
+    // Deliberately no access-control-* headers: a cross-origin preflight is
+    // already refused by the guard, and nothing else needs CORS.
+    res.writeHead(204, { allow: 'GET,POST,PATCH,DELETE,OPTIONS' }).end();
     return;
   }
   // static: index.html
@@ -1972,9 +2046,24 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': ct });
     res.end(data);
   });
-});
+}
 
-server.on('upgrade', (req, socket) => handleUpgrade(req, socket));
+// One server per listen address (Node binds one address per server); they
+// share the handlers above, and so the same registry and WebSocket bus.
+function listen(host) {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer(handleRequest);
+    server.on('upgrade', (req, socket) => handleUpgrade(req, socket));
+    server.once('error', reject);
+    server.listen(PORT, host, () => {
+      server.off('error', reject);
+      const { address } = server.address();
+      listening.push(address);
+      exposed ||= !isLoopback(address);
+      resolve();
+    });
+  });
+}
 
 // Sweep stale agents (a session that died without SessionEnd).
 setInterval(() => {
@@ -1984,12 +2073,44 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
-server.listen(PORT, () => {
-  startCodexObserver();
-  console.log(`\n  The Office is open  →  http://localhost:${PORT}\n` +
-    `  hook ingest:  POST http://localhost:${PORT}/hook\n` +
-    `  state debug:  http://localhost:${PORT}/state\n`);
-});
+for (const host of LISTEN_HOSTS) {
+  try {
+    await listen(host);
+  } catch (err) {
+    // The default pair means "whichever loopbacks this machine has" (plenty
+    // of containers have no IPv6). An address asked for by name must bind.
+    if (!OFFICE_HOSTS.length
+      && (err.code === 'EAFNOSUPPORT' || err.code === 'EADDRNOTAVAIL')) continue;
+    console.error(`\n  The Office can't open: ${err.message}\n`
+      + (err.code === 'EADDRINUSE'
+        ? '  Another office or app has that port (set OFFICE_PORT to a free one)'
+          + `${listening.length && OFFICE_HOSTS.length
+            ? ',\n  or two OFFICE_HOST entries cover the same address' : ''}.\n`
+        : ''));
+    process.exit(1);
+  }
+}
+if (!listening.length) {
+  console.error('\n  The Office can\'t open: no loopback address to listen on.\n');
+  process.exit(1);
+}
+
+startCodexObserver();
+console.log(`\n  The Office is open  →  http://localhost:${PORT}\n` +
+  `  hook ingest:  POST http://localhost:${PORT}/hook\n` +
+  `  state debug:  http://localhost:${PORT}/state\n` +
+  `  listening on: ${listening.join(', ')}` +
+  `${exposed ? '' : '  (this machine only)'}\n`);
+if (exposed) {
+  console.warn('  WARNING: OFFICE_HOST makes the office reachable beyond this '
+    + 'machine, and it\n  has no authentication: anything that can connect to '
+    + `port ${PORT} can start\n  terminals here.\n`);
+}
+if (!listening.some((a) => isLoopback(a) || a === '0.0.0.0' || a === '::')) {
+  console.warn('  NOTE: the hooks and office-*.mjs helpers talk to 127.0.0.1 / '
+    + 'localhost.\n  Add 127.0.0.1 to OFFICE_HOST or they will not reach this '
+    + 'daemon.\n');
+}
 
 process.on('SIGINT', () => {
   stopCodexObserver();

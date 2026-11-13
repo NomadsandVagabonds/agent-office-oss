@@ -178,7 +178,10 @@ same zero-daemon-edit, run-and-leave pattern.
   nothing in the spine changes.
 - **Remote / multi-user** — once sessions are drivable across a network, "who
   may drive a session" becomes a real auth requirement (an attachable TTY is a
-  control surface). Single-machine, single-operator today.
+  control surface). Single-machine, single-operator today, and the daemon holds
+  that line itself: it listens on loopback only and a request guard refuses
+  anything that isn't its own page or a local tool (`OFFICE_HOST` and "Who the
+  daemon answers" in `AGENTS.md`).
 
 ## 8. Adoption notes
 
