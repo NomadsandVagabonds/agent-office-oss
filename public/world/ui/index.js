@@ -281,6 +281,12 @@ export function createUI(office) {
     } else if (fx.kind === 'bell') {
       const bell = office.world?.layout.objects.find((o) => o.type === 'bell');
       if (bell) labels.float(bell.x, 1.2, bell.z, 'ding!', { color: '#f0d27a', size: 16 });
+    } else if (fx.kind === 'sticky' && fx.by) labels.say(fx.by, fx.to === 'done' ? '✅' : '📌', 1600, 'emote');
+    else if (fx.kind === 'unveil') {                              // a new creation takes the first pedestal
+      const p = office.world?.layout.objects.find((o) => o.type === 'pedestal' && o.index === 0);
+      if (p) office.fx?.confetti(p.x, p.z, 40, 1.4);
+      const c = office.creations[fx.creationId];
+      ui.toast(c ? `New in the gallery: “${c.name}” by ${c.author}` : 'Something new is in the gallery.', { gold: true, onclick: p ? () => office.rig.flyTo({ x: p.x, z: p.z, dist: 7 }) : null });
     } else if (USE_FX[fx.kind]) {                                 // someone made coffee, bought a snack, watered the tree…
       const [poiId, mark] = USE_FX[fx.kind];
       const poi = fx.kind === 'duck' ? office.duck : office.world?.layout.pois.get(poiId)?.look;

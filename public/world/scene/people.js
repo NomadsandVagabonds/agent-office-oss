@@ -10,6 +10,20 @@ import * as THREE from 'three';
 import { Avatar } from '../avatar/rig.js';
 import { SIT_H } from '../props/office.js';
 import { PROPS } from '../props/index.js';
+import { Vox, M, glow } from '../vox/vox.js';
+import { voxObject } from '../vox/material.js';
+
+/** A sub-agent: a small hovering helper with a screen for a face. */
+function helperBot() {
+  const v = new Vox();
+  const shell = M('#d8d2c2', 0), dark = M('#3a3f4a', 0);
+  v.rbox(-4, 0, -3, 4, 7, 3, 2, shell);
+  v.box(-3, 2, 3, 3, 6, 4, dark);                              // face plate
+  v.set(-2, 4, 4, glow('#7ad0ff')); v.set(1, 4, 4, glow('#7ad0ff'));
+  v.box(-1, 7, -1, 1, 9, 1, dark); v.set(0, 9, 0, glow('#ffb44a'));       // antenna
+  v.box(-5, 2, -1, -4, 4, 1, dark); v.box(4, 2, -1, 5, 4, 1, dark);       // little arms
+  return v;
+}
 import { resolveLook, hashId } from '/core/look.mjs';
 
 const TAU = Math.PI * 2;
@@ -200,6 +214,7 @@ export function createPeople(deps) {
     const person = people.get(id);
     if (!person) return;
     claimDesk(person, null);
+    for (const b of person.bots || []) group.remove(b);
     group.remove(person.avatar.root);
     person.avatar.dispose();
     people.delete(id);
@@ -235,6 +250,17 @@ export function createPeople(deps) {
       av.root.position.set(person.pos.x, 0, person.pos.z);
       av.root.rotation.y = person.heading;
       av.update(dt);
+      // helpers circle whoever spawned them, for as long as they are running
+      const want = Math.min(3, person.agent.subagents || 0);
+      person.bots ||= [];
+      while (person.bots.length < want) { const b = voxObject(helperBot, { key: 'helperbot' }); b.userData.t = Math.random() * 6; group.add(b); person.bots.push(b); }
+      while (person.bots.length > want) group.remove(person.bots.pop());
+      person.bots.forEach((b, i) => {
+        b.userData.t += dt;
+        const a = b.userData.t * 1.1 + (i * Math.PI * 2) / Math.max(1, want);
+        b.position.set(person.pos.x + Math.cos(a) * 0.62, 1.55 + Math.sin(b.userData.t * 2.3 + i) * 0.07, person.pos.z + Math.sin(a) * 0.62);
+        b.rotation.y = -a + Math.PI / 2;
+      });
     }
   }
 
