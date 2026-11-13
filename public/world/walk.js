@@ -206,8 +206,15 @@ export function createWalk(office) {
       if (s.moving) {
         const speed = held.has('Shift') ? RUN : WALK;
         vx = (vx / len) * speed * dt; vz = (vz / len) * speed * dt;
-        if (canStand(s.x + vx, s.z)) s.x += vx;                 // slide along whatever is in the way
-        if (canStand(s.x, s.z + vz)) s.z += vz;
+        const okX = canStand(s.x + vx, s.z), okZ = canStand(s.x, s.z + vz);
+        if (okX) s.x += vx;                                     // slide along whatever is in the way
+        if (okZ) s.z += vz;
+        // …except in one corner, where leaning on the wall long enough gets a different answer
+        const soft = office.softSpot;
+        if (soft && !okX && !okZ && Math.hypot(soft.x - s.x, soft.z - s.z) < 0.75) {
+          s.lean = (s.lean || 0) + dt;
+          if (s.lean > 1.1) { s.lean = 0; office.onNoclip?.(); }
+        } else s.lean = 0;
         const want = Math.atan2(vx, vz);
         let d = (want - s.heading) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU;
         s.heading += d * (1 - Math.exp(-14 * dt));

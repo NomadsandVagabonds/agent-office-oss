@@ -68,6 +68,12 @@ export const SECRETS = Object.freeze([
   { id: 'disco', name: 'Night Fever', icon: '🪩',
     blurb: 'Found the jukebox. Chose correctly.',
     hint: 'There is music somewhere you have not been yet.' },
+  { id: 'noclip', name: 'Out of Bounds', icon: '🟨',
+    blurb: 'Leaned on the wrong corner and fell out of the office.',
+    hint: 'One corner of a room you were not meant to find is less solid than it looks.' },
+  { id: 'way-out', name: 'You Came Back', icon: '🚪',
+    blurb: 'Found the door that leads back to somewhere that makes sense.',
+    hint: 'Wherever you end up, there is always one door that is different.' },
 ]);
 
 const BY_ID = new Map(SECRETS.map((s) => [s.id, s]));

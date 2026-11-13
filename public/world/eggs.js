@@ -227,7 +227,41 @@ export function createEggs(office) {
     if (t > flickerAt) { flickerAt = t + 25 + Math.random() * 50; office.lighting.flicker?.(); }
   }
 
-  net.on('world', () => { treeStage = -1; growTree(net.state.world?.stats?.tasksDone || 0); placeDuck(); });
+  /* ---- out of bounds ----------------------------------------------------------------------- */
+  // The north-west corner of the Back Room is not as solid as the rest. Lean on it.
+  let falling = false;
+  function softSpot() {
+    const lay = office.world?.layout;
+    const room = lay?.roomById.get('backroom');
+    office.softSpot = room && !room.locked ? { x: room.rect.x + 0.3, z: room.rect.z + 0.3 } : null;
+  }
+  office.onNoclip = async () => {
+    if (falling) return;
+    falling = true;
+    found('noclip');
+    document.body.classList.add('noclip');
+    let level = null;
+    try { level = await import('./backrooms/index.js'); } catch { level = null; }
+    if (!level?.enterBackrooms) {
+      say('The wall gives a little, like wet cardboard, and then thinks better of it.');
+      document.body.classList.remove('noclip'); falling = false;
+      return;
+    }
+    office.walk.exit();
+    let result = null;
+    try { result = await level.enterBackrooms(office, { name: office.walk.me.name, seed: Date.now() }); }
+    catch (err) { console.error('[office] backrooms', err); }
+    office.stage.setView(null);
+    document.body.classList.remove('noclip');
+    falling = false;
+    office.rig.flyTo({ x: -4, z: -6.3, dist: 9, yaw: 0, pitch: 0.62 }, { instant: true });      // you come to by the bookshelf
+    office.walk.enter();
+    if (result?.reason === 'exit') { found('way-out'); say('A door. An ordinary door. You are back by the bookshelf, and the carpet is the right colour again.'); }
+    else if (result?.reason === 'caught') say('You wake up by the bookshelf with the distinct feeling of having been filed.');
+    else say('You are back by the bookshelf. Nobody saw anything.');
+  };
+
+  net.on('world', () => { treeStage = -1; growTree(net.state.world?.stats?.tasksDone || 0); placeDuck(); softSpot(); });
 
   let tick = 0;
   return {

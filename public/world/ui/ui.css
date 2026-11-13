@@ -143,3 +143,6 @@
   white-space: pre-wrap; border-color: rgba(240, 184, 96, .35); animation: toastin .2s ease-out; }
 #ui .story .field { margin-top: 8px; font-family: var(--mono); }
 body.walking #ui .hint { display: none; }
+
+/* fallen out of the office: the level has the screen, the office's interface steps aside */
+body.noclip #ui > *:not(.backrooms):not(.story) { display: none !important; }

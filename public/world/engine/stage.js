@@ -61,11 +61,13 @@ export function createStage(container, opt = {}) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 600);
 
-  let composer = null, bloom = null, tilt = null;
+  let composer = null, bloom = null, tilt = null, renderPass = null;
+  let view = null;                         // { scene, camera, render? } while something else has the screen
   if (fx) {
     const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
     composer = new EffectComposer(renderer, target);
-    composer.addPass(new RenderPass(scene, camera));
+    renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
     bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.55, 0.92);
     composer.addPass(bloom);
     tilt = new ShaderPass(TiltShift);
@@ -103,7 +105,9 @@ export function createStage(container, opt = {}) {
     lastMs += (raw * 1000 - lastMs) * 0.05;                    // a slow average: are we keeping up?
     frame += 1;
     for (const fn of frameFns) fn(dt, clock.elapsedTime, frame);
-    if (composer && quality.fx) composer.render(dt); else renderer.render(scene, camera);
+    if (view?.render) view.render(dt);                         // a guest scene that draws itself
+    else if (composer && quality.fx) composer.render(dt);
+    else renderer.render(view ? view.scene : scene, view ? view.camera : camera);
     requestAnimationFrame(tick);
   }
   function setQuality(next = {}) {
@@ -123,6 +127,19 @@ export function createStage(container, opt = {}) {
     /** Smoothed milliseconds per frame. */
     get frameMs() { return lastMs; },
     quality, setQuality,
+    /**
+     * Hand the screen to another scene (a mini-game, a hidden level) and take it
+     * back with setView(null). Pass `render(dt)` to draw it yourself — for
+     * example with your own post-processing; otherwise it goes through the
+     * office's pipeline. Frame callbacks keep running either way.
+     */
+    setView(next) {
+      view = next || null;
+      if (renderPass) { renderPass.scene = view ? view.scene : scene; renderPass.camera = view ? view.camera : camera; }
+      const cam = view ? view.camera : camera;
+      if (cam.isPerspectiveCamera) { cam.aspect = size.w / size.h; cam.updateProjectionMatrix(); }
+    },
+    get view() { return view; },
     onFrame(fn) { frameFns.push(fn); return () => frameFns.splice(frameFns.indexOf(fn), 1); },
     start() { if (!running) { running = true; clock.start(); requestAnimationFrame(tick); } },
     stop() { running = false; },
