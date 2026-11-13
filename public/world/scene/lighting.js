@@ -118,13 +118,13 @@ export function createLighting(stage, opt = {}) {
       rim.position.set(tx - dir.x * 40, 30, tz - 50);
       if (lampDirty || Math.hypot(target.x - lampAt.x, target.z - lampAt.z) > 1.5) {
         lampDirty = false; lampAt = { x: target.x, z: target.z };
-        const near = look.lamp > 0.02
-          ? lampSpots.map((p) => ({ p, d: Math.hypot(p.x - target.x, p.z - target.z) })).sort((a, b) => a.d - b.d).slice(0, lampLights.length)
-          : [];
+        const lit = (p) => (p.always ? Math.max(look.lamp, 0.75) : look.lamp);
+        const near = lampSpots.filter((p) => lit(p) > 0.02)
+          .map((p) => ({ p, d: Math.hypot(p.x - target.x, p.z - target.z) })).sort((a, b) => a.d - b.d).slice(0, lampLights.length);
         lampLights.forEach((l, i) => {
           const n = near[i];
           l.visible = !!n;
-          if (n) { l.position.set(n.p.x, n.p.y, n.p.z); l.intensity = 5 * look.lamp * (n.p.power || 1); }
+          if (n) { l.position.set(n.p.x, n.p.y, n.p.z); l.intensity = 5 * lit(n.p) * (n.p.power || 1); l.color.set(n.p.color || '#ffc98a'); }
         });
       }
     },

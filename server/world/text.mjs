@@ -461,6 +461,25 @@ export function createTextWorld(ctx, world) {
         return { ok: true, text: 'You pick a track. The lights drop, a mirror ball spins up somewhere, and for twenty seconds the whole office forgets it has a backlog.' + star(found), found: found.stamped ? 'disco' : null };
       }
       case 'seat': return { ok: true, text: `You settle into ${p.label}.` };
+      case 'game': {
+        const mine = 1 + (n % 9), theirs = n % 7;
+        return { ok: true, text: /pinball/.test(p.label)
+          ? `You pull the plunger. Bells, lights, a multiball you did not earn. ${(mine * 13_700).toLocaleString('en-US')} points, and TILT.`
+          : `You spin the rods against nobody. ${mine}–${theirs}. The little plastic players look ${mine > theirs ? 'proud' : 'unconvinced'}.` };
+      }
+      case 'aquarium': return { ok: true, text: ['One fish follows your finger along the glass. The other pretends not to know you.',
+        'The fish regard you with the calm of creatures who have never had a deadline.',
+        'Somebody has put a tiny sunken server rack in the gravel. The fish use it.'][n % 3] };
+      case 'telescope': return { ok: true, text: ['Through the eyepiece: a window across the street, and in it, someone looking back through a telescope.',
+        'You find the moon. It is closer than the backlog.', 'It is pointed at the ceiling. The ceiling, magnified, is still the ceiling.'][n % 3] };
+      case 'gumball': return { ok: true, text: `You turn the knob. A ${['red', 'blue', 'green', 'yellow', 'suspiciously grey'][n % 5]} gumball rattles down. ${pickFortune(n >>> 2)}` };
+      case 'coatrack': return { ok: true, text: 'A scarf, a hat, and an umbrella nobody will admit to owning.' };
+      case 'fan': return { ok: true, text: 'You stand in front of the fan and say “aaaaaa”. It makes the sound it always makes. Nobody saw.' };
+      case 'darts': {
+        const score = [1, 5, 20, 20, 3, 60, 50, 0][n % 8];
+        return { ok: true, text: score === 0 ? 'The dart misses the board entirely and sticks in the wall, where it joins several others.'
+          : score === 50 ? 'Bullseye. You look around. Of course nobody was watching.' : `Thunk. ${score}.` };
+      }
       case 'globe': {
         const cities = [['Lisbon', 'Europe/Lisbon'], ['Nairobi', 'Africa/Nairobi'], ['Tokyo', 'Asia/Tokyo'], ['Lima', 'America/Lima'], ['Reykjavik', 'Atlantic/Reykjavik'], ['Auckland', 'Pacific/Auckland'], ['Mumbai', 'Asia/Kolkata']];
         const [city, tz] = cities[n % cities.length];

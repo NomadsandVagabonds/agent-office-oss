@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import { Avatar } from '../avatar/rig.js';
 import { SIT_H } from '../props/office.js';
+import { PROPS } from '../props/index.js';
 import { resolveLook, hashId } from '/core/look.mjs';
 
 const TAU = Math.PI * 2;
@@ -89,6 +90,14 @@ export function createPeople(deps) {
     person.pos.x = p.x; person.pos.z = p.z;
     person.faceGoal = p.face || 0;
     person.atDesk = p.at === 'desk' && p.pose === 'sit';
+    // how high this seat is: an office chair, or whatever they sat down on
+    let seat = SIT_H;
+    if (p.pose === 'sit' && p.at !== 'desk') {
+      const object = layout.objects.find((o) => o.poi?.id === p.ref);
+      const top = object && PROPS[object.type]?.seat;
+      if (top) seat = top + 3;
+    }
+    person.avatar.seatHeight = seat;
     if (person.atDesk) { claimDesk(person, p.ref); furniture.desks.get(p.ref)?.setSeated(true); }
     if (instant) { person.heading = person.faceGoal; }
     refresh(person, instant);

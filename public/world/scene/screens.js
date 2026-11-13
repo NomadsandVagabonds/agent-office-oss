@@ -73,6 +73,16 @@ const KINDS = {
     for (let i = 0; i < 4; i++) R(g, c, 7 + i, 10 + i, 2, 2);
     for (let i = 0; i < 9; i++) R(g, c, 11 + i, 13 - i, 2, 2);
   }, 0),
+  // an arcade cabinet waiting for a coin: bugs wander, the title blinks
+  arcade: () => makeScreen((g, t, frame) => {
+    R(g, '#06140c', 0, 0, W, H);
+    for (let i = 0; i < 4; i++) {
+      const x = Math.round((hash(i * 7 + 1) * 40 + t * (5 + i * 2)) % (W + 6)) - 3, y = 8 + Math.round(hash(i * 13 + 2) * 9 + Math.sin(t * 2 + i) * 1.5);
+      R(g, i === 2 ? '#ffd75a' : '#6fe08a', x, y, 3, 2); R(g, i === 2 ? '#ffd75a' : '#6fe08a', x + (frame & 1 ? -1 : 3), y - 1, 1, 1); R(g, i === 2 ? '#ffd75a' : '#6fe08a', x + (frame & 1 ? 3 : -1), y + 2, 1, 1);
+    }
+    if (frame % 4 < 3) { R(g, '#9ff0b8', 4, 2, 8, 1); R(g, '#9ff0b8', 14, 2, 10, 1); R(g, '#9ff0b8', 4, 4, 5, 1); }       // "BUG SQUASH", more or less
+    if (frame % 6 < 3) R(g, '#ffd75a', 8, 19, 12, 1);                                                                    // INSERT COIN
+  }, 6, 1.5),
   // nobody home: a little square bounces around, changing colour when it hits an edge
   idle: () => makeScreen((g, t) => {
     R(g, '#07080f', 0, 0, W, H);

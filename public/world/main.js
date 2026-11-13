@@ -12,6 +12,7 @@ import { createScreens } from './scene/screens.js';
 import { createPeople } from './scene/people.js';
 import { buildDeskItem, buildHat } from './scene/deskitems.js';
 import { createExhibits } from './scene/exhibits.js';
+import { createDynamics } from './scene/dynamics.js';
 import { createFx } from './scene/fx.js';
 import { createCat } from './scene/creatures.js';
 import { createWalk } from './walk.js';
@@ -57,6 +58,7 @@ const office = {
 window.office = office;        // for the console, and for the curious
 office.fx = createFx(office);
 office.exhibits = createExhibits(office);
+office.dynamics = createDynamics(office);
 office.cat = createCat(office);
 office.walk = createWalk(office);
 office.ui = q.get('ui') === '0' ? null : createUI(office);
@@ -108,6 +110,7 @@ function buildWorld(snapshot) {
   for (const [deptId, tasks] of net.state.tasks) furniture.boards.get(deptId)?.setTasks(tasks);
   if (first) rig.overview(true);
   office.lampsDirty = true; office.clockAt = undefined;
+  office.dynamics.bind();
   return true;
 }
 
@@ -174,6 +177,7 @@ stage.onFrame((dt, t, frame) => {
   office.walk.update(dt);
   office.eggs.update(dt, t);
   office.exhibits.update(dt);
+  office.dynamics.update(dt, t);
   office.fx.update(dt);
   office.ui?.update(dt);
   screens.update(t);

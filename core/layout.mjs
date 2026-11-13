@@ -22,6 +22,8 @@
 //      └────────────┴────────────┴──────┴─▫▫─┴──────┴────────────┴────────────┘
 //                                         S
 
+import { hashId } from './look.mjs';
+
 export const ROOM_W = 10;
 export const ROOM_D = 8;
 export const CORRIDOR_D = 3;          // corridor band is z ∈ [0, 3)
@@ -61,7 +63,19 @@ const PREFAB = {
   painting: [0, 0, false], neon: [0, 0, false], discoball: [0, 0, false],
   coffeemachine: [0, 0, false], bell: [0, 0, false], catbed: [0.6, 0.6, false],
   bench: [1.6, 0.5, true], vacantsign: [0, 0, false],
+  // room flair: every project room gets a couple, so no two teams' rooms feel alike
+  foosball: [1.2, 0.9, true], pinball: [0.7, 1.3, true], aquarium: [1.0, 0.5, true], telescope: [0.6, 0.8, true],
+  coatrack: [0.4, 0.4, true], gumball: [0.4, 0.4, true], fan: [0.5, 0.5, true], dartboard: [0, 0, false],
 };
+
+// What a team might have against its side walls. Chosen per project, stably.
+const FLAIR_BIG = [
+  ['foosball', 'game', 'the foosball table'], ['pinball', 'game', 'a pinball machine'],
+  ['aquarium', 'aquarium', 'the team aquarium'], ['telescope', 'telescope', 'a brass telescope'],
+];
+const FLAIR_SMALL = [
+  ['coatrack', 'coatrack', 'the coat rack'], ['gumball', 'gumball', 'a gumball machine'], ['fan', 'fan', 'a pedestal fan'],
+];
 
 /** slot index → which wing, which side of the corridor, how far out. */
 export function slotInfo(slot) {
@@ -423,6 +437,20 @@ export function buildLayout(plan = {}) {
     put('plant', x0 + 0.5, z0 + 7.5, 'S', { id: `plant:${room.id}` });
     put('floorlamp', x0 + 9.5, z0 + 7.5, 'S', { id: `lamp:${room.id}` });
     put('rug', x0 + 5, z0 + 4, 'S', { id: `rug:${room.id}`, shape: 'rect', size: [8.6, 4.4], color: room.color || null, tint: true });
+    // Flair, against the side walls in the half of the room away from the board.
+    // (The aisles past the ends of the desks stay clear: they are the only way round.)
+    const h = hashId(String(room.deptId));
+    const big = FLAIR_BIG[h % FLAIR_BIG.length], small = FLAIR_SMALL[(h >>> 3) % FLAIR_SMALL.length];
+    const bigWest = ((h >>> 6) & 1) === 0;
+    for (const [flair, west] of [[big, bigWest], [small, !bigWest]]) {
+      const depth = PREFAB[flair[0]][1];
+      put(flair[0], west ? x0 + 0.14 + depth / 2 : x0 + 9.86 - depth / 2, z0 + 6.1, west ? 'E' : 'W',
+        { id: `${flair[0]}:${room.id}`, poi: { kind: flair[1], label: flair[2] } });
+    }
+    if ((h >>> 9) % 2 === 0) {
+      put('dartboard', x0 + 0.06, z0 + 1.9, 'E', { id: `dartboard:${room.id}`,
+        poi: { kind: 'darts', label: 'a dartboard', stand: { x: x0 + 1.6, z: z0 + 1.9 } } });
+    }
     for (let i = 0; i < DESKS_PER_ROOM; i++) {
       const rowA = i < 4;
       const dx = x0 + DESK_X[i % 4];

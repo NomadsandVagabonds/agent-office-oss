@@ -9,9 +9,15 @@
 //   variant(o)  → string       objects with the same variant share one mesh
 //   wall        → true         hangs on a wall (and folds away with it)
 //   y           → metres       height of the origin above the floor
+//   seat        → voxels       height of the seat top, if you can sit on it
+// How to write one: README.md in this folder.
 import { voxObject } from '../vox/material.js';
 import { hashId } from '/core/look.mjs';
 import * as O from './office.js';
+import { CATALOGUE as KITCHEN } from './kitchen.js';
+import { CATALOGUE as LOUNGE } from './lounge.js';
+import { CATALOGUE as WORKS } from './works.js';
+import { CATALOGUE as FUN } from './fun.js';
 
 const nth = (o, n) => hashId(String(o?.id || o?.type || '')) % n;
 
@@ -30,9 +36,10 @@ export const PROPS = {
   planttall: { make: (o) => O.planttall({ seed: 9 + nth(o, 4) }), variant: (o) => String(nth(o, 4)) },
   floorlamp: { make: () => O.floorlamp() },
   bookshelf: { make: (o) => O.bookshelf({ seed: 3 + nth(o, 5) }), variant: (o) => String(nth(o, 5)) },
-  sofa: { make: () => O.sofa() },
+  sofa: { make: () => O.sofa(), seat: 17 },
   pedestal: { make: () => O.pedestal() },
   hottable: { make: () => O.hottable() },
+  ...KITCHEN, ...LOUNGE, ...WORKS, ...FUN,
 };
 
 export const hasProp = (type) => Object.prototype.hasOwnProperty.call(PROPS, type);
