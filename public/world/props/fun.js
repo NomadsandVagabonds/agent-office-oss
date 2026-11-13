@@ -81,7 +81,7 @@ export function arcade(opt = {}) {
   const trim = M(opt.trim || ARCADE_LOOKS[0].trim, 0), steel = M('#565a66', 0);
   // the side profile: how far forward the cheeks and the body between them reach at each height
   const cheek = (y) => (y < 25 ? 11 : y < 27 ? 13 + (y - 25) * 2 : y < 30 ? 16 : y < 34 ? 45 - y : y < 55 ? 11 : y < 56 ? 12 : 13);
-  const inner = (y) => (y < 2 ? 9 : y < 26 ? 10 : y < 27 ? 14 : y < 30 ? 16 : y < 31 ? 13 : y < 32 ? 10 : y < 55 ? 8 : y < 57 ? y - 46 : y < 70 ? 11 : 12);
+  const inner = (y) => (y < 2 ? 9 : y < 26 ? 10 : y < 27 ? 14 : y < 30 ? 16 : y < 31 ? 13 : y < 32 ? 10 : y < 55 ? 9 : y < 57 ? y - 46 : y < 70 ? 11 : 12);
   const rear = (y) => (y < 62 ? -16 : y < 66 ? -14 : y < 70 ? -12 : -10);
   for (let y = 0; y < 72; y++) {
     const b = rear(y);
@@ -107,13 +107,15 @@ export function arcade(opt = {}) {
   text(v, 'BUG', -6, 68, 10, glow(LIT.white));
   text(v, 'SQUASH', -12, 62, 10, glow(LIT.white));
   for (const x of [-13, 7]) bitmap(v, BUG_SMALL, x, 68, 10, 11, glow(LIT.lime));
-  v.paint(-12, 55, 8, 12, 57, 11, (x) => (x & 1 ? k : 0));     // speaker slits under it
+  v.paint(-12, 55, 9, 12, 57, 11, (x) => (x & 1 ? k : 0));     // speaker slits under it
 
-  // screen: plain dark glass, set back in the bezel — and low enough that the marquee does not hide it from above
-  v.carve(-10, 36, 7, 10, 52, 8);
-  v.paint(-10, 36, 6, 10, 52, 7, M('#0c0f17', 0));
-  v.paint(-7, 33, 7, 3, 35, 8, M(PAPER, 0));                   // how-to-play card
-  v.paint(10, 40, 7, 13, 43, 8, M('#f2d45c', 0));              // somebody's high score, on a sticky note
+  // screen: plain dark glass, set back in the bezel, and low enough that the marquee does not hide it from above.
+  // Its face is on an even z and its edges on even x and y, so the coarse far-away copy of the cabinet
+  // (Vox.downsample) keeps the same recess and never covers the live picture.
+  v.carve(-10, 36, 8, 10, 52, 9);
+  v.paint(-10, 36, 7, 10, 52, 8, M('#0c0f17', 0));
+  v.paint(-7, 33, 8, 3, 35, 9, M(PAPER, 0));                   // how-to-play card
+  v.paint(10, 40, 8, 13, 43, 9, M('#f2d45c', 0));              // somebody's high score, on a sticky note
 
   // control panel: joystick, two buttons, player-one start
   v.paint(-14, 28, 15, 14, 29, 16, trim);
@@ -142,7 +144,7 @@ export function arcade(opt = {}) {
   return v;
 }
 /** The arcade's live screen: centre and size in voxels, in the plane z = ARCADE_SCREEN.z facing +z. */
-export const ARCADE_SCREEN = Object.freeze({ x: 0, y: 44, z: 7.08, w: 20, h: 16 });
+export const ARCADE_SCREEN = Object.freeze({ x: 0, y: 44, z: 8.08, w: 20, h: 16 });
 
 /** A 1950s dome-top jukebox: glowing tubes round the arch, a record behind glass, selector buttons. Faces +z. 36 × 60 × 24. */
 export function jukebox() {
@@ -232,12 +234,14 @@ export function beanbag(opt = {}) {
   return v;
 }
 
+// Tube lettering, 10 × 16. Strokes are two voxels thick and sit on even columns and rows wherever they can,
+// so the sign is still the same sign when the engine draws its half-resolution copy from across the building.
 const NEON = {
-  O: ['..#####..', '.#######.', ...Array(12).fill('##.....##'), '.#######.', '..#####..'],
-  P: ['#######..', '########.', ...Array(5).fill('##.....##'), '########.', '#######..', ...Array(7).fill('##.......')],
-  E: ['#########', '#########', ...Array(5).fill('##.......'), '#######..', '#######..', ...Array(5).fill('##.......'), '#########', '#########'],
-  N: ['###....##', '###....##', '####...##', '####...##', '####...##', '##.##..##', '##.##..##', '##.##..##', '##..##.##', '##..##.##',
-    '##..##.##', '##...####', '##...####', '##...####', '##....###', '##....###'],
+  O: ['..######..', '.########.', ...Array(12).fill('##......##'), '.########.', '..######..'],
+  P: ['########..', '#########.', ...Array(4).fill('##......##'), '#########.', '########..', ...Array(8).fill('##........')],
+  E: ['##########', '##########', ...Array(4).fill('##........'), '########..', '########..', ...Array(6).fill('##........'), '##########', '##########'],
+  N: ['###.....##', '###.....##', '####....##', '####....##', ...Array(3).fill('##.##...##'), '##..##..##', '##..##..##',
+    ...Array(3).fill('##...##.##'), '##....####', '##....####', '##.....###', '##.....###'],
   glass: ['############', '############', '.##......##.', '.##......##.', '..##....##..', '..##....##..', '...##..##...', '...##..##...',
     '....####....', '.....##.....', '.....##.....', '.....##.....', '.....##.....', '.....##.....', '..########..', '..########..'],
 };
@@ -251,8 +255,8 @@ export function neon() {
   for (const x of [-31, 29]) for (const y of [1, 25]) v.box(x, y, 1, x + 2, y + 2, 2, M(STEEL, 0));     // mounting studs
   [...'OPEN'].forEach((ch, i) => bitmap(v, NEON[ch], -30 + i * 12, 21, 1, 3, pink));
   bitmap(v, NEON.glass, 19, 21, 1, 3, cyan);
-  v.box(24, 17, 1, 26, 19, 3, glow('#6fd62a'));                 // an olive…
-  for (const [x, y] of [[26, 19], [27, 20], [28, 22], [29, 23]]) v.box(x, y, 1, x + 1, y + 1, 3, glow('#ff9a1f'));   // …on a stick
+  v.box(24, 16, 1, 26, 18, 3, glow('#6fd62a'));                 // an olive…
+  for (let i = 0; i < 5; i++) v.box(26 + i, 18 + i, 1, 27 + i, 19 + i, 3, glow('#ff9a1f'));          // …on a stick
   // the light the tubes throw on the board behind them…
   const spill = new Map([[pink, glow('#3d0a26')], [cyan, glow('#06323a')]]);
   v.paint(-32, 0, 0, 32, 28, 1, (x, y) => {
@@ -476,6 +480,7 @@ export function gumball() {
   v.box(-1, 24, 6, 1, 26, 8, chrome);
   v.box(-2, 24, 7, 2, 26, 8, k);
   v.box(-2, 20, 5, 2, 22, 7, chrome); v.paint(-1, 20, 6, 1, 21, 7, k);
+  v.box(2, 3, 2, 4, 5, 4, M(GUM[1], 0));                        // one that got away
   return v;
 }
 
@@ -631,8 +636,10 @@ export function fan(opt = {}) {
     if (r <= 1.9) { v.box(x, y, 1, x + 1, y + 1, 5, shade); v.set(x, y, 5, body); }
   }
   v.box(-1, CY - 1, 5, 1, CY + 1, 6, M('#3f7f9a', 0));          // badge
-  // lead and plug
-  v.box(-1, 0, -10, 8, 1, -9, k); v.box(7, 0, -9, 8, 1, -6, k); v.box(6, 0, -6, 9, 1, -4, k);
+  // the lead, and the plug somebody pulled out
+  v.box(-1, 0, -10, 6, 1, -9, k);
+  v.box(6, 0, -10, 9, 2, -9, k);
+  v.set(9, 1, -10, M(BRASS, 0));
   return v;
 }
 
