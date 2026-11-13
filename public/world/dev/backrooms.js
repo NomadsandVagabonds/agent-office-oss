@@ -1,0 +1,74 @@
+// The Backrooms, without the office: a stage, a made-up office to borrow names
+// from, and straight into the level.
+//   /world/dev/backrooms.html?seed=7            a whole visit
+//   &room=party        start inside one archetype (any id from the deck; also: exit, start, plain, or a room number)
+//   &x=0&z=2&yaw=0.6&pitch=-0.1   where to stand in that room's own frame (z = depth/2 is the door you came in by; yaw 0 looks in)
+//   &only=a,b          deal these archetypes into the visit      &count=6    how many oddities
+//   &vhs=0|1|2         clean · steady · full camcorder           &mute=1
+//   &pursuer=1|0       force the thing that follows you in or out; &wake=1 has it already awake, in the room with you
+//   &name=Robin        who you are                               &live=1     borrow names from the running office (GET only)
+//   &list=1            print the deck with links                 &map=1      show the floor plan
+// window.__backrooms is the live handle: goto(room, x, z, yaw, pitch), where(), level, world, player.
+import { createStage } from '../engine/stage.js';
+import { enterBackrooms } from '../backrooms/index.js';
+import { DECK } from '../backrooms/gen.js';
+
+const q = new URLSearchParams(location.search);
+const num = (k, d) => (q.has(k) && q.get(k) !== '' && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : d);
+const stage = createStage(document.getElementById('stage'), { fx: q.get('fx') === '1', shadows: false, preserve: true, pixelRatio: num('dpr', 1) });
+stage.start();
+
+const look = (species, outfitColor, accessory, extra) => ({ species, outfitColor, accessory, ...extra });
+const agents = [
+  ['Ivory Marten', look('goblin', '#8a5a8f', 'none', { skin: '#5f8a6a', hair: 'short', outfit: 'cardigan', facial: 'mustache' })],
+  ['Amber Vireo', look('human', '#3f7f9a', 'monocle', { skin: '#cd8d5e', hair: 'side', hairColor: '#9aa0ac', outfit: 'suit' })],
+  ['Ember Numbat', look('robot', '#b5483f', 'none')], ['Olive Heron', look('cat', '#6f8a4a', 'glasses')],
+  ['Slate Okapi', look('human', '#5a6fa8', 'headphones', { hair: 'bun', outfit: 'hoodie' })], ['Coral Tapir', look('dog', '#c9893f', 'partyhat')],
+  ['Dusty Ibis', null], ['Mossy Quoll', null],
+];
+const office = {
+  stage, creations: {},
+  net: { state: {
+    world: { plan: { rooms: ['Webstore', 'Mobile App', 'Api Gateway', 'Data Pipeline', 'Ml Research', 'Infra'].map((name, slot) => ({ slot, deptId: name.toLowerCase().replace(/ /g, '-'), name })) } },
+    agents: new Map(agents.map(([name, character], i) => [`a${i}`, { id: `a${i}`, name, persona: `p:${name}`, profile: { character } }])),
+    tasks: new Map([['webstore', [{ title: 'Cache the product catalogue' }, { title: 'Trim the Docker image' }, { title: 'Fix the flaky checkout test' }]]]),
+  } },
+};
+if (q.get('live')) {
+  try {
+    const [world, list] = await Promise.all([fetch('/api/world').then((r) => r.json()), fetch('/api/agents').then((r) => r.json())]);
+    office.net.state.world = world;
+    office.net.state.agents = new Map((Array.isArray(list) ? list : list.agents || []).map((a) => [a.id, a]));
+  } catch (err) { console.warn('no live office to borrow from', err); }
+}
+
+const dev = document.getElementById('dev'), over = document.getElementById('over');
+if (q.get('list')) dev.innerHTML = DECK.map((a) => `<a href="?seed=${num('seed', 7)}&room=${a.id}">${a.id}</a>  ${a.name}`).join('\n');
+
+let seed = q.get('seed') ?? 7;
+const room = q.get('room');
+const only = (q.get('only') || '').split(',').filter(Boolean);
+if (room && DECK.some((a) => a.id === room) && !only.includes(room)) only.unshift(room);
+
+async function go() {
+  over.style.display = 'none';
+  const result = await enterBackrooms(office, {
+    name: q.get('name') || 'Robin', seed, only: only.length ? only : undefined, count: q.has('count') ? num('count', 7) : undefined,
+    pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined, vhs: q.has('vhs') ? num('vhs', 2) : undefined, mute: q.has('mute') ? q.get('mute') !== '0' : undefined,
+    debug: true,
+    onReady(handle) {
+      if (room) handle.goto(/^\d+$/.test(room) ? Number(room) : room, q.has('x') ? num('x', 0) : undefined, q.has('z') ? num('z', 0) : undefined, num('yaw', 0), num('pitch', 0));
+      else if (q.has('yaw')) { handle.player.me.yaw = num('yaw', 0); handle.player.me.pitch = num('pitch', 0); }
+      if (q.get('wake')) handle.env.pursuer?.wake?.(true);
+      if (q.get('map')) dev.textContent = handle.sketch();
+      console.log(handle.sketch());
+      document.title = 'ready';
+    },
+  });
+  stage.setView(null);
+  document.title = `over: ${result.reason}`;
+  over.style.display = 'grid';
+  over.innerHTML = `<div>the level is over: <b>${result.reason}</b><br>press any key for another visit</div>`;
+  window.addEventListener('keydown', () => { if (!q.has('seed')) seed = Date.now(); else seed = `${seed}+`; go(); }, { once: true });
+}
+go();
