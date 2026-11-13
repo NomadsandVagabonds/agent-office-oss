@@ -305,6 +305,25 @@ export function createUI(office) {
   });
   renderTally(); tickClock();
 
+  /* ---- an empty office: say how people get in ----------------------------------------- */
+  let welcome = null;
+  function greet() {
+    const empty = net.state.connected && office.ready && net.state.agents.size === 0;
+    if (!empty) { if (welcome) { welcome.remove(); welcome = null; } return; }
+    if (welcome) return;
+    const code = (text) => h('code.mono', { style: { display: 'block', padding: '6px 9px', margin: '4px 0 10px', background: 'rgba(0,0,0,.3)', borderRadius: '6px', fontSize: '12px', userSelect: 'all' } }, text);
+    welcome = h('div.away.glass', { style: { top: '96px' } },
+      h('header', h('b', 'The office is open, and nobody is in yet.'), h('span.grow'), h('button.btn.ghost.small', { onclick: () => { welcome.remove(); welcome = { remove() {} }; } }, '×')),
+      h('div.dim', { style: { margin: '4px 0 10px' } }, 'Agents show up here when their sessions report in. Three ways to fill it:'),
+      h('div', 'See it alive with a fictional team'), code('npm run simulate'),
+      h('div', 'Bring in every Claude Code session automatically'), code('npm run install-hooks && npm run install-inbox'),
+      h('div', 'Walk in any other agent (Codex, Gemini CLI, opencode, your own)'), code('node office.mjs join --provider gemini --name "Ada"'),
+      h('div.faint', { style: { fontSize: '12px' } }, 'Meanwhile, Tab lets you walk the floor yourself. There are things to find.'));
+    root.append(welcome);
+  }
+  setTimeout(greet, 3500);
+  net.on('snapshot', () => setTimeout(greet, 800)); net.on('agent', greet); net.on('remove', () => setTimeout(greet, 1500));
+
   ui.update = (dt) => {
     steer(dt);
     if (office.selected) {

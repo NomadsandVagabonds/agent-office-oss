@@ -79,6 +79,8 @@ credentials; your agents keep their own auth. Setup details: [`AGENTS.md`](AGENT
 | **Terminals** (`T`) | Launch and drive Claude Code, Codex, Gemini CLI, opencode or a shell in managed tmux sessions, with a real keyboard. |
 | **Walk the floor** (`Tab`) | Step in as an avatar: `WASD`, `E` to use things. Agents can tell you are there, and can walk over to you. |
 | **Passport** (`P`) | What has been discovered here, and hints toward what has not. |
+| **Find** (`Ctrl-K`) | Jump to anyone, any room, any panel; switch graphics, time of day, sound. |
+| **While you are elsewhere** | Optional chime and desktop notification when an agent needs you; a short "while you were away" when you come back. |
 
 Time of day follows the machine the daemon runs on. Deep links work:
 `/?room=<project>`, `/?agent=<name>`.
