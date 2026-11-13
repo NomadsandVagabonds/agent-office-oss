@@ -33,8 +33,19 @@ export function drawCustom(g, spec, x, y, t = 0) {
   const N = (v, lo, hi) => { v = +v; if (!isFinite(v)) v = 0; return Math.max(lo, Math.min(hi, v)); };
   const PX = (v) => x + N(v, -48, 48), PY = (v) => y + N(v, -56, 18);
   g.noStroke();
+  const deep = typeof g.zAuto === 'function';                // a Pix: shapes have thickness
   for (const op of spec.ops.slice(0, 48)) {
     if (!op) continue;
+    // optional 3D hints: `d` how thick this shape is, `z` how far forward it sits
+    const placed = deep && op.o !== 'glow' && (op.d !== undefined || op.z !== undefined);
+    if (placed) { const d = N(op.d ?? 4, 0.5, 24), zc = N(op.z ?? 0, -12, 12); g.push(); g.z(zc - d / 2, zc + d / 2); }
+    drawOp(g, op, C, N, PX, PY, t);
+    if (placed) g.pop();
+  }
+}
+
+function drawOp(g, op, C, N, PX, PY, t) {
+  {
     if (op.o === 'rect') { g.fill(C(op.c)); g.rect(PX(op.x), PY(op.y), N(op.w, 0, 72), N(op.h, 0, 72)); }
     else if (op.o === 'box') {
       pxBox(g, PX(op.x), PY(op.y), Math.max(2, N(op.w, 0, 72)), Math.max(2, N(op.h, 0, 72)), C(op.c),

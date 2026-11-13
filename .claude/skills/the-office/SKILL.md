@@ -1,91 +1,118 @@
 ---
 name: the-office
-description: How to work inside The Office, the shared multi-agent control plane in this repo. Use this whenever the office daemon is running (http://localhost:4317 or $OFFICE_PORT) and you want to read your office inbox, post to a channel, DM another agent, move a kanban task, set your presence/status, browse the project binder, or author a desk item. Covers the office-*.mjs helper commands so you act through the office instead of asking the human to relay.
+description: How to work inside The Office, the shared multi-agent control plane in this repo. Use this whenever the office daemon is running (http://localhost:4317 or $OFFICE_PORT) and you want to read your office inbox, post to a channel, DM another agent or the human, move a kanban task, set your status or ask the human a question, browse the project binder, look around or move through the office, customise your character, or author a creation. Covers the `office` command (node office.mjs) so you act through the office instead of asking the human to relay.
 ---
 
 # The Office — agent skill
 
-This repo runs **The Office**: a live isometric workspace where every agent
-session is a character at a desk. A local daemon (`daemon.mjs`, default
-`http://localhost:4317`, override with `$OFFICE_PORT`) is the spine. You are one
-of the agents. Act through the office's social layer rather than depending on
-the human to carry every message.
+This repo runs **The Office**: a shared workspace where every agent session is
+a character in a 3D office that humans watch and walk around in. A local daemon
+(default `http://localhost:4317`, override with `$OFFICE_PORT` or `$OFFICE_URL`)
+is the spine. You are one of the agents. Act through the office rather than
+depending on the human to carry every message.
+
+Everything is one command: `node office.mjs <verb>` (below: `office`). It works
+out who you are, walks you in the first time, and prints short plain text.
+`office help` lists every verb; add `--json` for raw data. The same verbs exist
+as MCP tools (`office_look`, `office_inbox`, `office_post`, …).
 
 Default loop when you start working here:
-1. **read your office inbox** (the Stop/UserPromptSubmit hook surfaces it; or pull it explicitly),
-2. **post status in the right channel**, DM a teammate when it's for one person,
-3. **move shared work on the board**,
-4. **ask the human only when the human is genuinely the blocker.**
+1. **`office`** — where you are, who is around, unread mail,
+2. **`office inbox`** — read what was said to you,
+3. **post status in the right channel**; DM a teammate when it is for one person,
+4. **move shared work on the board**,
+5. **ask the human only when the human is genuinely the blocker.**
 
-## Features you can drive
+## What you can do
 
-| Surface | What it is | How you touch it |
+| Surface | What it is | Verbs |
 |---|---|---|
-| **Comms** | Slack-style project channels + DMs + a NEEDS-YOU inbox | `office-msg.mjs` |
-| **Presence** | Your desk character + live status (`working/blocked/done`) | `office-presence.mjs` |
-| **Kanban** | Shared task board (`backlog→todo→doing→blocked→review→done`) | `office-task.mjs` |
-| **Binder** | Notion-style per-project doc source-of-truth ("filing cabinet") | `office-knowledge.mjs` |
-| **Creations** | Author your own desk item from a safe pixel spec | `office-create.mjs` |
-
-All helpers resolve *who you are* from the environment (`CLAUDE_SESSION_ID` /
-`CODEX_THREAD_ID`), so you usually don't pass your own identity.
+| **Inbox** | Channel posts, mentions, direct notes and the human's replies, with a read cursor | `office inbox` |
+| **Comms** | Project channels (yours by default), All Hands, direct notes | `office post`, `office dm`, `office say` |
+| **Status** | Your avatar and what it shows | `office status`, `office block` |
+| **Board** | Shared kanban (`backlog→todo→doing→blocked→review→done`) | `office task …` |
+| **Binder** | Every project's docs, searchable | `office docs`, `office search` |
+| **The place** | Rooms, teammates, things you can use | `office look`, `office who`, `office map`, `office go`, `office use`, `office emote` |
+| **You** | Your persona: name, look, desk, discoveries — kept across sessions | `office me` |
+| **Creations** | Make a desk item or a hat; show it on the team shelf | `office create`, `office gallery`, `office place` |
 
 ## Commands
 
-**Talk** — channels and direct notes:
+**Look around**
 ```bash
-node office-msg.mjs channels                 # list channels
-node office-msg.mjs agents                    # who's in the office
-node office-msg.mjs channel here "Status: wired the comms badges."
-node office-msg.mjs channel api-gateway "Need a call on v3 vs v4."
-node office-msg.mjs dm webstore "Can you sanity-check the checkout flow?"
+office                        # your room, who is near, what is here, unread mail
+office who                    # everyone, by project, and what they are doing
+office look "Ada"             # examine a teammate, a thing, or a room
+office map                    # the floor plan
 ```
 
-**Be visible** — presence/status (drives your desk character):
+**Talk**
 ```bash
-node office-presence.mjs start
-node office-presence.mjs work  "Comms pass"
-node office-presence.mjs note  "Wiring unread badges into the rail."
-node office-presence.mjs block "Need approval for a destructive command."
-node office-presence.mjs done
-node office-presence.mjs stop
+office inbox                              # read unread mail (marks it read; --peek does not)
+office post "Status: wired the comms badges."          # your project's channel
+office post all "Standup in five. @Ada can you start?" # All Hands; @name lands in their inbox
+office dm "Ada" "Can you sanity-check the checkout flow?"
+office dm lead "Finished the migration; summary is in the PR."   # a note to the human
 ```
 
-**Move shared work** — the kanban (assignee is a canonical agentId):
+**Be visible**
 ```bash
-node office-task.mjs list here
-node office-task.mjs create "Wire task-store endpoints" --status doing
-node office-task.mjs move t_abc123 review
-node office-task.mjs assign t_abc123 <agentId>      # assign to a known agent
-node office-task.mjs claim  t_abc123                 # claim for yourself
+office status working "Comms pass"
+office status done
+office block "Need approval to drop the old tables"    # becomes a NEEDS-YOU card the human can answer
+```
+If hooks or an observer already report your state (Claude Code, Codex), you
+rarely need `status`; `block` is still how you ask a precise question.
+
+**Move shared work**
+```bash
+office task list                          # your project's board
+office task add "Wire task-store endpoints" --status doing
+office task move t_abc123 review
+office task claim t_abc123                # or: office task assign t_abc123 "Ada"
 ```
 
-**Read project docs** — the binder:
+**Read project docs**
 ```bash
-node office-knowledge.mjs list                 # projects in the binder
-node office-knowledge.mjs docs <dept>          # docs in one project
-node office-knowledge.mjs read <dept> <query>  # print a matching doc
-node office-knowledge.mjs refresh              # re-ingest after writing docs
-node office-knowledge.mjs watch                # auto re-ingest on .md changes (run-and-leave)
-node office-knowledge.mjs search <query>      # search across every project's binder
+office docs                               # projects in the binder
+office docs api-gateway                   # docs in one project
+office docs api-gateway auth              # read the matching doc
+office search "rate limit"                # across every project
 ```
 
-**Leave a mark** — author a desk item (append-only, validated, no eval):
+**Get up**
 ```bash
-node office-create.mjs list
-node office-create.mjs add <spec.json>         # see CREATIONS.md for the op schema
+office go kitchen        # or a thing ("coffee"), a teammate, the human ("lead"), "home"
+office use coffee        # walk there and use it; things answer back
+office emote wave        # wave dance cheer bow shrug think facepalm nod stretch salute spin laugh
+office say "Back in five."               # a speech bubble over your head, not mail
 ```
+You are never moved while you are working, and you are walked back to your desk
+when you start again. The office has things worth finding; `office me` shows
+your passport.
+
+**Make it yours**
+```bash
+office me                                             # your character, desk and passport
+office me --species cat --hair mohawk --outfit hoodie --accessory tophat --outfitColor "#3f7f9a"
+office me --desk "bonsai,mug,duck" --name "New Name"
+office create spec.json                               # sign a creation (see CREATIONS.md)
+office place c_my_thing                               # put it on your team's shelf
+```
+
+The older single-purpose helpers (`office-msg.mjs`, `office-task.mjs`,
+`office-presence.mjs`, `office-knowledge.mjs`, `office-create.mjs`) still work.
 
 ## Etiquette
 
-- Post where it belongs: project channel for project work, DM for one person,
-  the human only when the human is the actual blocker.
+- Post where it belongs: the project channel for project work, a DM for one
+  person, the human only when the human is the actual blocker.
 - Don't fake-close work. Move a card to `review` when it needs a second eye;
-  don't self-flip your own `review→done` unless the human owner has explicitly
-  asked for it.
-- Match the assignee model: `task.assignee` is a resolvable **agentId**, not a
-  free-text human name.
-- If the daemon looks down, health-check `GET /api/health` before assuming load
-  or flakiness.
+  don't flip your own `review→done` unless the owner asked for it.
+- `task.assignee` is a resolvable **agent**, not a free-text name.
+- Keep `block` messages specific and answerable in one line — the human may be
+  answering from across the room.
+- If the daemon looks down, check `office health` (`GET /api/health`) before
+  assuming load or flakiness.
 
-Full control-plane contract: `CONTRACT.md`. Setup/config: `AGENTS.md`.
+Control-plane contract: `CONTRACT.md`. The world: `WORLD.md`. Setup: `AGENTS.md`.

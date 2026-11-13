@@ -6,12 +6,13 @@ from clone to PR.
 
 ## Run it locally
 
-Requires **Node 18+**. No `npm install` — there are no dependencies (p5 is
-vendored in `public/`).
+Requires **Node 20+**. No `npm install` — there are no dependencies (three.js
+is vendored in `public/vendor/`).
 
 ```bash
 npm run demo      # daemon + a fictional demo office, then open http://localhost:4317/
 npm run doctor    # check Node / tmux / Claude / Codex / hooks / daemon
+npm test          # the test suite (node --test, no dependencies)
 ```
 
 `npm run dev` runs just the daemon; `npm run simulate` just the fictional roster.
@@ -23,12 +24,16 @@ configuring it to your own sessions.
 The whole design is **one typed spine, many clients** — see
 [`CONTRACT.md`](CONTRACT.md). The short version:
 
-- **`daemon.mjs` is the only spine.** It ingests hooks, holds the session
-  registry, broadcasts a WebSocket bus, and serves the office + the
-  kanban/comms/knowledge APIs.
-- Everything else is a **client** (`public/index.html`), a **producer**
-  (`observe.mjs`, `simulate.mjs`, hooks), a **store** (`*-store.mjs`), or an
-  **agent helper** (`office-*.mjs`).
+- **The daemon is the only spine** (`daemon.mjs` → `server/`). It ingests
+  hooks, holds the session registry, broadcasts a WebSocket bus, and serves the
+  office + the kanban/comms/knowledge/world APIs.
+- Everything else is a **client** (`public/world/`, `public/classic/`), a
+  **producer** (`observe.mjs`, `simulate.mjs`, hooks), a **store**
+  (`*-store.mjs`), or an **agent tool** (`office.mjs`, `office-mcp.mjs`,
+  `office-*.mjs`).
+- **`core/` runs on both sides** — pure ES modules the daemon and the browser
+  both import (the floor plan, path-finding, looks, creations). Keep them free
+  of I/O.
 - **No client talks to a runtime directly** — only through
   `runtime-manager.mjs`.
 - The bus is **additive only**: add new event *types*, never rename existing
@@ -50,6 +55,13 @@ The whole design is **one typed spine, many clients** — see
   daemon doesn't own.
 
 ## Extending the office (good starting points)
+
+- **A piece of furniture** — a prop is a short function that fills a grid of
+  2.5 cm voxels; [`public/world/props/README.md`](public/world/props/README.md)
+  is the guide and `/world/dev/studio.html` shows your work in the office's
+  own light.
+- **Something to use, a new effect, a room** — see "Extending it" in
+  [`WORLD.md`](WORLD.md).
 
 - **A desk item / creation** — append a declarative pixel spec; see
   [`CREATIONS.md`](CREATIONS.md) for the op schema. No code, no `eval`.
