@@ -39,7 +39,7 @@ const rig = createCameraRig(stage, {});
 const settings = (() => {
   let data = {};
   try { data = JSON.parse(localStorage.getItem('office.settings') || '{}') || {}; } catch { data = {}; }
-  const defaults = { graphics: 'auto', time: 'auto' };
+  const defaults = { graphics: 'auto', time: 'auto', sound: 'off', notify: 'off' };
   const listeners = new Set();
   return {
     get: (k) => data[k] ?? defaults[k],

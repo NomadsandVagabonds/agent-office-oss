@@ -8,6 +8,7 @@ import { createPicker } from './pick.js';
 import { createNeeds } from './needs.js';
 import { createInspector } from './inspector.js';
 import { createPalette } from './palette.js';
+import { createExtras } from './extras.js';
 
 const EMOJI = { wave: '👋', dance: '💃', bow: '🙇', cheer: '🎉', shrug: '🤷', think: '🤔', facepalm: '🤦', nod: '👍', stretch: '🙆',
   highfive: '🙌', salute: '🫡', spin: '🌀', sleep: '💤', laugh: '😄' };
@@ -313,6 +314,7 @@ export function createUI(office) {
     labels.update();
   };
   ui.palette = createPalette(office, ui);
+  ui.extras = createExtras(office, ui);
   tools.append(h('button.btn.ghost', { title: 'Find anyone or anything (Ctrl-K)', onclick: () => ui.palette.open() }, icon('search')));
   ui.labels = labels; ui.needs = needs; ui.inspector = inspector; ui.picker = picker;
   return ui;

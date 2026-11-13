@@ -146,3 +146,10 @@ body.walking #ui .hint { display: none; }
 
 /* fallen out of the office: the level has the screen, the office's interface steps aside */
 body.noclip #ui > *:not(.backrooms):not(.story) { display: none !important; }
+
+/* while you were away */
+#ui .away { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); width: min(520px, calc(100% - 24px)); padding: 12px 14px; animation: rise .2s ease-out; }
+#ui .away header { display: flex; align-items: center; }
+#ui .away .line { display: flex; gap: 10px; padding: 3px 0; font-size: 12.5px; cursor: default; }
+#ui .away .line[onclick], #ui .away .line:hover { color: var(--ink); }
+#ui .away .line span:first-child { width: 34px; flex: none; text-align: right; }

@@ -49,6 +49,8 @@ export function createPalette(office, ui) {
     for (const [mode, label] of [['auto', 'Time: follow the clock'], ['day', 'Time: always day'], ['dusk', 'Time: always golden hour'], ['night', 'Time: always night']]) {
       out.push({ label, hint: s.get('time') === mode ? 'current' : '', icon: 'gear', run: () => s.set('time', mode) });
     }
+    out.push({ label: s.get('sound') === 'on' ? 'Sound: turn off' : 'Sound: turn on (a chime when someone needs you)', hint: s.get('sound') === 'on' ? 'on' : 'off', icon: 'gear', run: () => s.set('sound', s.get('sound') === 'on' ? 'off' : 'on') });
+    out.push({ label: s.get('notify') === 'on' ? 'Notify me in other tabs: turn off' : 'Notify me when someone needs me (in other tabs)', hint: s.get('notify') === 'on' ? 'on' : 'off', icon: 'gear', run: () => s.set('notify', s.get('notify') === 'on' ? 'off' : 'on') });
     out.push({ label: 'Rename yourself…', hint: office.walk?.me.name || '', icon: 'gear', run: () => {
       const name = window.prompt('What should agents call you?', office.walk?.me.name || 'Lead');
       if (name && name.trim()) { office.walk.setName(name.trim()); ui.toast(`Agents will know you as ${office.walk.me.name}.`); }
