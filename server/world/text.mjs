@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { TASK_STATUS } from '../../core/contract.mjs';
 import { pickDuckWisdom, pickFortune, pickSnack, SECRETS } from '../../core/secrets.mjs';
+import { HOME, visibleLevels } from '../../core/levels.mjs';
 import { readCreations } from '../creations-store.mjs';
 import { hashId } from '../../core/look.mjs';
 
@@ -107,7 +108,7 @@ export function createTextWorld(ctx, world) {
     if (['cat', 'kernel', norm(world.cat().name)].includes(text)) return { kind: 'cat' };
     if (['duck', 'rubber duck', 'debug duck'].includes(text)) return { kind: 'duck' };
     if (['window', 'outside', 'weather', 'sky'].includes(text)) return { kind: 'window' };
-    if (['elevator', 'lift'].includes(text)) return { kind: 'elevator' };
+    if (['elevator', 'lift', 'the lift', 'the elevator', 'call panel', 'call button'].includes(text)) return poi('lift') || { kind: 'elevator' };
     // a human who is walking the floor (by name, or just "the lead")
     const walkers = world.leads().filter((l) => l.x !== null);
     const named = walkers.find((l) => norm(l.name) === text);
@@ -161,6 +162,19 @@ export function createTextWorld(ctx, world) {
     return r && !r.locked ? { kind: 'room', room: r } : null;
   }
 
+  /* ---- the lift -------------------------------------------------------- */
+  // Its floors are core/levels.mjs. Humans ride it (public/world/levels/);
+  // agents, at this stage, can walk up, read the panel and press the button.
+
+  const liftFloors = () => visibleLevels({ quirks: world.today().quirks, found: Object.keys(world.state().discoveries) });
+  const liftPanel = () => liftFloors().map((l) => (l.unmarked
+    ? `  ${l.floor.padEnd(2)} · (no label. The button flickers. It was not there yesterday.)`
+    : `  ${l.floor.padEnd(2)} · ${l.name} — ${l.blurb}${l.id === HOME ? '  ← you are here' : ''}`)).join('\n');
+  const describeLift = () => 'The lift, at the head of the landing. Everyone arrives through it. The panel beside the doors lists where it goes:\n'
+    + liftPanel() + '\nRiding is for humans only at this stage — but you can press the button: office use lift';
+  const callLift = () => 'You press the call button. The doors slide open on an empty car, wait a polite moment, and close again. Inside, the buttons read:\n'
+    + liftPanel() + '\nIt will not take you anywhere yet: riding is for humans only at this stage. Curious what is up there? Ask one — office dm lead "…"';
+
   /* ---- look ------------------------------------------------------------ */
 
   function look(agent, ref) {
@@ -187,6 +201,7 @@ export function createTextWorld(ctx, world) {
       if (p.kind === 'seat' || p.kind === 'pedestal') continue;
       let label = p.label;
       if (p.kind === 'board' && here?.deptId) label += ` (${boardSummary(here.deptId)})`;
+      if (p.kind === 'elevator') label += ` (${liftFloors().length} floors)`;
       if (p.kind === 'shelf' && here?.deptId) {
         const used = (world.state().shelves[here.deptId] || []).filter(Boolean).length;
         label += ` (${used}/6 on display)`;
@@ -281,11 +296,7 @@ export function createTextWorld(ctx, world) {
       const light = hour < 6 ? 'deep night' : hour < 9 ? 'early light' : hour < 17 ? 'daylight' : hour < 20 ? 'golden hour' : 'night, the city lit up';
       return { ok: true, text: `Outside: ${t.weather}, ${light}.` };
     }
-    if (target.kind === 'elevator') {
-      return { ok: true, text: world.today().quirks.includes('friday-13')
-        ? 'The elevator. There is a button for 13 today. There was not one yesterday.'
-        : 'The elevator. Everyone arrives through it. Nobody has seen where it goes.' };
-    }
+    if (target.kind === 'elevator') return { ok: true, text: describeLift() };
     return { ok: true, text: describePoi(agent, target.poi), poi: target.poi.id };
   }
 
@@ -347,6 +358,7 @@ export function createTextWorld(ctx, world) {
         : 'A tall bookshelf. Manuals, style guides, a few novels. One spine is a much brighter red than the rest.';
       case 'painting': return 'A framed pixel painting of the office as it used to be: flat, warm, isometric. It looks almost like you could step into it.';
       case 'hatch': return 'A steel hatch set into the closet floor, half hidden under a mat. There is a keyhole.';
+      case 'elevator': return describeLift();
       default: return `${p.label[0].toUpperCase()}${p.label.slice(1)}.`;
     }
   }
@@ -363,7 +375,7 @@ export function createTextWorld(ctx, world) {
     if (target.kind === 'agent') return { ok: true, text: `You can't use ${target.agent.name}. Try: office dm "${target.agent.name}" "…"  or  office emote wave` };
     if (target.kind === 'room') return world.go(agent, target);
     if (target.kind === 'window') return examine(agent, ref);
-    if (target.kind === 'elevator') return { ok: true, text: 'You press the call button. It lights up, considers you, and goes dark. Not yet.' };
+    if (target.kind === 'elevator') return { ok: true, text: callLift() };
     if (target.kind === 'cat') {
       const r = world.petCat(agent);
       return { ok: true, text: r.text + (r.found?.stamped ? '  ★ Discovery: Cat Person' : ` (${r.yours} from you)`), found: r.found?.secret?.id || null };
@@ -469,6 +481,14 @@ export function createTextWorld(ctx, world) {
         const found = world.discover('disco', agent);
         return { ok: true, text: 'You pick a track. The lights drop, a mirror ball spins up somewhere, and for twenty seconds the whole office forgets it has a backlog.' + star(found), found: found.stamped ? 'disco' : null };
       }
+      case 'elevator': {
+        if (!agent.lead) {                                   // the doors open for whoever pressed, once they have walked over
+          const wait = Math.max(0, (world.placeOf(agent.id)?.eta || 0) - Date.now());
+          const timer = setTimeout(() => world.fx({ kind: 'elevator', dir: 'call', id: agent.id }), wait);
+          if (typeof timer.unref === 'function') timer.unref();
+        }
+        return { ok: true, text: callLift() };
+      }
       case 'seat': return { ok: true, text: `You settle into ${p.label}.` };
       case 'game': {
         const mine = 1 + (n % 9), theirs = n % 7;
@@ -540,6 +560,8 @@ export function createTextWorld(ctx, world) {
         lines.push(`  ${r.kind === 'vacant' ? '(vacant)' : r.name} — ${r.side === 'N' ? 'north' : 'south'} side${r.kind === 'project' ? `, ${n} here` : ''}${mark(r)}`);
       }
     }
+    const floors = liftFloors().filter((l) => l.id !== HOME && !l.unmarked).map((l) => `${l.floor} ${l.name}`);
+    if (floors.length) lines.push('', `The lift (on the landing) also goes to: ${floors.join(' · ')} — humans only, for now.`);
     lines.push('', 'Go anywhere: office go <room|thing|agent>   ·   Use anything: office use <thing>');
     return { ok: true, text: lines.join('\n') };
   }

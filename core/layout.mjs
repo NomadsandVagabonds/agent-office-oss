@@ -66,6 +66,7 @@ const PREFAB = {
   // room flair: every project room gets a couple, so no two teams' rooms feel alike
   foosball: [1.2, 0.9, true], pinball: [0.7, 1.3, true], aquarium: [1.0, 0.5, true], telescope: [0.6, 0.8, true],
   coatrack: [0.4, 0.4, true], gumball: [0.4, 0.4, true], fan: [0.5, 0.5, true], dartboard: [0, 0, false],
+  liftpanel: [0, 0, false],
 };
 
 // What a team might have against its side walls. Chosen per project, stably.
@@ -326,6 +327,8 @@ export function buildLayout(plan = {}) {
   // landing
   put('clock', 0, -7.95, 'S', { id: 'clock', poi: { kind: 'clock', label: 'the wall clock', stand: { x: 0, z: -6.5 } } });
   put('doormat', 0, -7.3, 'S', { id: 'mat-elevator', block: false });
+  // the lift: a sill across the doorway and a call plate beside it (its floors are in levels.mjs)
+  put('liftpanel', 0, -7.94, 'S', { id: 'lift', poi: { kind: 'elevator', label: 'the lift', stand: { x: 0.6, z: -7.25 } } });
 
   // kitchen
   put('counter', 3.5, -7.7, 'S', { id: 'counter' });

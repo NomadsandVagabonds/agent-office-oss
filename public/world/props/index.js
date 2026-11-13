@@ -18,6 +18,7 @@ import { CATALOGUE as KITCHEN } from './kitchen.js';
 import { CATALOGUE as LOUNGE } from './lounge.js';
 import { CATALOGUE as WORKS } from './works.js';
 import { CATALOGUE as FUN } from './fun.js';
+import { CATALOGUE as LIFT } from './lift.js';
 
 const nth = (o, n) => hashId(String(o?.id || o?.type || '')) % n;
 
@@ -39,7 +40,7 @@ export const PROPS = {
   sofa: { make: () => O.sofa(), seat: 17 },
   pedestal: { make: () => O.pedestal() },
   hottable: { make: () => O.hottable() },
-  ...KITCHEN, ...LOUNGE, ...WORKS, ...FUN,
+  ...KITCHEN, ...LOUNGE, ...WORKS, ...FUN, ...LIFT,
 };
 
 export const hasProp = (type) => Object.prototype.hasOwnProperty.call(PROPS, type);
