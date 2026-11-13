@@ -433,7 +433,8 @@ export function buildLayout(plan = {}) {
       desks.push({
         id, room: room.id, index: i, hot: false,
         x: dx, z: dz, face,
-        seat: { x: dx, z: z0 + (rowA ? 2.75 : 5.25), face },
+        // close enough to reach the keyboard, and still on the walkable tile behind the desk
+        seat: { x: dx, z: z0 + (rowA ? 2.95 : 5.05), face },
       });
     }
   }

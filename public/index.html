@@ -1,5 +1,52 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>The Office</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>html,body{height:100%;margin:0;background:#0c0a12;color:#f4ddb4;font:14px ui-monospace,Menlo,monospace;display:grid;place-items:center}a{color:#f3b34c}</style>
-</head><body><div>The 3D office is being built. <a href="/classic/">Open the classic 2D office</a>.</div></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Office</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23262330'/><rect x='3' y='4' width='10' height='7' fill='%23cfc6b0'/><rect x='4' y='5' width='8' height='5' fill='%235fe08a'/><rect x='6' y='11' width='4' height='2' fill='%238a8f96'/></svg>">
+<style>
+  :root { color-scheme: dark; --bg: #1b1622; --ink: #f1ead8; --dim: #9a93a8; --accent: #f0b860; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden;
+    font: 13px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  #stage canvas:active { cursor: grabbing; }
+  #boot { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); transition: opacity .6s ease; z-index: 50; }
+  #boot .card { text-align: center; }
+  #boot h1 { font-size: 15px; letter-spacing: .32em; margin: 0 0 10px; font-weight: 600; }
+  #boot p { margin: 0; color: var(--dim); }
+  #boot .dots::after { content: ''; animation: dots 1.2s steps(4) infinite; }
+  @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+  body.ready #boot { opacity: 0; pointer-events: none; }
+  #offline { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: #3a1c1c; color: #ffb4a8;
+    border: 1px solid #7a3a34; padding: 6px 12px; border-radius: 6px; display: none; z-index: 40; }
+  body.offline.ready #offline { display: block; }
+  noscript, #fallback { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; }
+  a { color: var(--accent); }
+</style>
+<script type="importmap">{ "imports": { "three": "/vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<div id="stage"></div>
+<div id="ui"></div>
+<div id="offline">The office daemon is not answering — reconnecting…</div>
+<div id="boot"><div class="card"><h1>THE OFFICE</h1><p>opening the doors<span class="dots"></span></p>
+  <p style="margin-top:18px;font-size:11px">prefer pixels? <a href="/classic/">the classic 2D office</a> is still here</p></div></div>
+<noscript><div>The Office needs JavaScript. The <a href="/classic/">classic 2D office</a> does too, sorry.</div></noscript>
+<script type="module">
+  // No WebGL2? Say so, and point at the 2D office, which runs anywhere.
+  const probe = document.createElement('canvas').getContext('webgl2');
+  if (!probe) {
+    document.getElementById('boot').innerHTML = '<div class="card"><h1>THE OFFICE</h1><p>This browser cannot draw the 3D office (no WebGL2).</p>'
+      + '<p style="margin-top:12px"><a href="/classic/">Open the classic 2D office instead →</a></p></div>';
+  } else {
+    import('/world/main.js').catch((err) => {
+      console.error(err);
+      document.getElementById('boot').innerHTML = '<div class="card"><h1>THE OFFICE</h1><p>Something went wrong starting up: '
+        + String(err && err.message || err).replace(/[<>&]/g, '') + '</p><p style="margin-top:12px"><a href="/classic/">Open the classic 2D office →</a></p></div>';
+    });
+  }
+</script>
+</body>
+</html>
