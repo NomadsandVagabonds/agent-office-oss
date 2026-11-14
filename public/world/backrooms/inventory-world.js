@@ -4,11 +4,13 @@ import * as THREE from 'three';
 import { Batch, lamp, lightAt, lin } from './kit.js';
 import { toLocal, toWorld } from './gen.js';
 import { INVENTORY_MODELS } from './inventory-items.js';
-import { makeItem } from './inventory-state.js';
+import { makeItem, ITEM_DEFS } from './inventory-state.js';
 
 const REACH = 1.35, MARK_R = .33, MAX_MARKS = 24;
-const ITEM_RADIUS = Object.freeze({ torch: .30, battery: .19, chalk: .16 });
+const ITEM_RADIUS = Object.freeze({ torch: .30, battery: .19, chalk: .16, paper: .31, scissors: .29, snack: .23, balloon: .26 });
+const ITEM_HEIGHT = Object.freeze({ balloon: 1.4 });
 const copy = item => ({ ...item });
+const label = item => item.type === 'paper' ? `Paper × ${item.quantity}` : item.type === 'battery' ? 'Batteries' : ITEM_DEFS[item.type].name;
 
 export function createInventoryWorld(env, model, { onNotice = () => {}, onPickup = () => {} } = {}) {
   const { world, kit } = env, entries = new Map(), geometries = new Map(), marks = [];
@@ -25,25 +27,26 @@ export function createInventoryWorld(env, model, { onNotice = () => {}, onPickup
   };
   // Unlike the general interaction shortcut, even the shortest reach is
   // sampled. A pickup on the other side of a thin wall must stay there.
-  const clearRay = (ax, az, bx, bz, radius = .025, walk = false) => {
+  const clearRay = (ax, az, bx, bz, radius = .025, walk = false, height = 0) => {
     const n = Math.max(2, Math.ceil(Math.hypot(bx - ax, bz - az) / .055));
     let px = ax, pz = az;
     for (let i = 1; i <= n; i++) {
       const x = ax + (bx - ax) * i / n, z = az + (bz - az) * i / n;
-      if (!world.free(x, z, radius, { tall: !walk }) || (walk && !world.passable(px, pz, x, z))) return false;
+      if (!world.free(x, z, radius, { tall: !walk }) || (walk && (!world.passable(px, pz, x, z) || world.headroom(x, z) < height))) return false;
       px = x; pz = z;
     }
     return true;
   };
-  const supported = (rt, p, radius) => {
-    if (world.roomAt(p.wx, p.wz) !== rt || !world.free(p.wx, p.wz, radius) || world.headroom(p.wx, p.wz) < .62) return false;
+  const supported = (rt, p, radius, height = .62) => {
+    if (world.roomAt(p.wx, p.wz) !== rt || !world.free(p.wx, p.wz, radius) || world.headroom(p.wx, p.wz) < height) return false;
     const y = floorAt(p);
     for (const [dx, dz] of [[radius, 0], [-radius, 0], [0, radius], [0, -radius], [radius * .7, radius * .7], [-radius * .7, -radius * .7], [-radius * .7, radius * .7], [radius * .7, -radius * .7]]) {
-      if (world.roomAt(p.wx + dx, p.wz + dz) !== rt || Math.abs(world.floorY(p.wx + dx, p.wz + dz) - y) > .025) return false;
+      if (world.roomAt(p.wx + dx, p.wz + dz) !== rt || world.headroom(p.wx + dx, p.wz + dz) < height
+        || Math.abs(world.floorY(p.wx + dx, p.wz + dz) - y) > .025) return false;
     }
     return dry(rt, p);
   };
-  function groundSpot(radius, mark = false) {
+  function groundSpot(radius, mark = false, height = .62) {
     const me = env.player.me, rt = world.roomAt(me.x, me.z);
     if (!rt || (mark && (me.drop > .02 || me.sinkTo > .05))) return null;
     const local = toLocal(rt.def, me.x, me.z), floor = world.floorY(me.x, me.z);
@@ -52,7 +55,7 @@ export function createInventoryWorld(env, model, { onNotice = () => {}, onPickup
       for (const offset of mark ? [0, -.25, .25] : [0, -.4, .4, -.85, .85, -1.35, 1.35]) {
         const yaw = me.yaw + offset, wx = me.x - Math.sin(yaw) * distance, wz = me.z - Math.cos(yaw) * distance;
         const q = toLocal(rt.def, wx, wz), p = point(rt, q.x, q.z);
-        if (!supported(rt, p, radius) || Math.abs(floorAt(p) - floor) > .24 || !clearRay(me.x, me.z, wx, wz, radius, true)) continue;
+        if (!supported(rt, p, radius, height) || Math.abs(floorAt(p) - floor) > .24 || !clearRay(me.x, me.z, wx, wz, radius, true, height)) continue;
         if (!mark && [...entries.values()].some(e => e.active && e.rt === rt && Math.hypot(e.x - p.x, e.z - p.z) < radius + ITEM_RADIUS[e.item.type])) continue;
         if (mark && marks.some(m => m.rt === rt && Math.hypot(m.x - p.x, m.z - p.z) < .48)) continue;
         return { ...p, rt, yaw: me.yaw - (rt.def.rot * Math.PI) / 2 };
@@ -83,8 +86,13 @@ export function createInventoryWorld(env, model, { onNotice = () => {}, onPickup
     if (!canPickup(e)) return { ok: false, reason: 'out-of-reach' };
     const result = model.add(e.item);
     if (!result.ok) { onNotice(result.reason || 'full'); return result; }
-    e.active = false; e.mesh.visible = false;
-    env.sound.play('clack', { vol: .55 }); onPickup(copy(e.item), result.index);
+    const picked = copy(e.item);
+    if (picked.type === 'paper') picked.quantity = result.accepted;
+    // A full bag may still have room in a paper stack. Only transfer what
+    // fits; the remaining sheets keep their physical identity and location.
+    if (result.remainder) { e.item = copy(result.remainder); e.use.label = label(e.item); }
+    else { e.active = false; e.mesh.visible = false; }
+    env.sound.play('clack', { vol: .55 }); onPickup(picked, result.index);
     return { ...result, id: e.item.id };
   }
   function place(item, p, rotation = -.18) {
@@ -93,7 +101,7 @@ export function createInventoryWorld(env, model, { onNotice = () => {}, onPickup
       const mesh = new THREE.Mesh(itemGeometry(item.type), kit.surface({ vox: true, room: p.rt.u }));
       mesh.name = `inventory-${item.id}`;
       e = { item: copy(item), mesh, active: false };
-      e.use = { r: REACH, label: item.type === 'torch' ? 'Flashlight' : item.type === 'battery' ? 'Batteries' : 'Chalk', inventoryItem: true,
+      e.use = { r: REACH, label: label(item), inventoryItem: true,
         when: () => canPickup(e), use: () => take(e) };
       entries.set(item.id, e);
     }
@@ -102,28 +110,29 @@ export function createInventoryWorld(env, model, { onNotice = () => {}, onPickup
       p.rt.uses.push(e.use); p.rt.group.add(e.mesh);
     }
     Object.assign(e, { item: copy(item), rt: p.rt, x: p.x, z: p.z, y: p.y, wx: p.wx, wz: p.wz, active: true });
-    Object.assign(e.use, { wx: p.wx, wz: p.wz, x: p.x, z: p.z, room: p.rt });
+    Object.assign(e.use, { wx: p.wx, wz: p.wz, x: p.x, z: p.z, room: p.rt, label: label(item) });
     e.mesh.position.set(p.x, p.y + .009, p.z); e.mesh.rotation.y = rotation; e.mesh.visible = true;
     tint(e.mesh, p.rt, p.x, p.y, p.z);
     return { ok: true, id: item.id };
   }
   function spawn(item, { room, x, z, y } = {}) {
     const rt = roomFor(room);
-    if (disposed || !rt || !item?.id || !INVENTORY_MODELS[item.type] || !Number.isFinite(x) || !Number.isFinite(z)) return { ok: false, reason: 'invalid-item' };
+    if (disposed || !rt || !item?.id || !Number.isFinite(x) || !Number.isFinite(z)) return { ok: false, reason: 'invalid-item' };
     try { item = makeItem(item.type, item.id, item); } catch { return { ok: false, reason: 'invalid-item' }; }
+    if (!INVENTORY_MODELS[item.type]) return { ok: false, reason: 'invalid-item' };
     if (entries.has(item.id) || model.read().slots.some(s => s?.id === item.id)) return { ok: false, reason: 'duplicate' };
     const p = { ...point(rt, x, z), rt }, radius = ITEM_RADIUS[item.type];
-    if (!supported(rt, p, radius) || [...entries.values()].some(e => e.active && e.rt === rt && Math.hypot(e.x - p.x, e.z - p.z) < radius + ITEM_RADIUS[e.item.type])) return { ok: false, reason: 'no-space' };
-    if (y !== undefined) {
-      if (!Number.isFinite(y) || y < p.y || y > p.y + 1.1) return { ok: false, reason: 'no-space' };
-      p.y = y;
-    }
+    if (y !== undefined && !Number.isFinite(y)) return { ok: false, reason: 'no-space' };
+    const elevation = y === undefined ? 0 : y - p.y;
+    if (!Number.isFinite(elevation) || elevation < 0 || elevation > 1.1) return { ok: false, reason: 'no-space' };
+    if (!supported(rt, p, radius, (ITEM_HEIGHT[item.type] ?? .62) + elevation) || [...entries.values()].some(e => e.active && e.rt === rt && Math.hypot(e.x - p.x, e.z - p.z) < radius + ITEM_RADIUS[e.item.type])) return { ok: false, reason: 'no-space' };
+    p.y += elevation;
     return place(item, p);
   }
   function dropSelected() {
     const s = model.read(), item = s.slots[s.selected];
     if (!item) return notice('empty');
-    const spot = groundSpot(ITEM_RADIUS[item.type]);
+    const spot = groundSpot(ITEM_RADIUS[item.type], false, ITEM_HEIGHT[item.type]);
     if (disposed || !spot) return notice('no-space');
     // Build/position before removing anything from the bag. Allocation failure
     // cannot destroy the carried item; reuse the same node on later drops.

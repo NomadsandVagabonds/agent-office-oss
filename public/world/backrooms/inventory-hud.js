@@ -129,11 +129,47 @@ function itemIcon(type) {
     poly('18,5 20,2 26,6 24,9', '#faf2d2');
     poly('6,22 12,26 11,29 5,25', '#b8b895');
     rect(17,25,2,2,'#c8c4a5'); rect(22,22,1,1,'#ddd8b7');
+  } else if (type === 'paper') {
+    rect(4,8,23,22,'#918d77'); rect(5,7,23,21,'#b8b19a');
+    rect(3,5,23,21,'#d8d1b9'); rect(5,3,23,21,'#ece5ce');
+    rect(5,3,2,20,'#f6efd9'); rect(7,23,15,1,'#c4bda5');
+    poly('22,17 28,17 28,24 22,24', '#b8b19a');
+    poly('22,17 24,17 24,19 26,19 26,21 28,21 28,24 22,24', '#d8d1b9');
+    poly('22,17 24,17 24,19 26,19 26,21 28,21 22,23', '#f6efd9');
+    rect(9,7,1,12,'#e4ddc5');
+  } else if (type === 'scissors') {
+    poly('6,2 9,3 18,14 16,18 13,14', '#535e58');
+    poly('6,2 8,3 17,14 15,15 12,11', '#c9cfbb');
+    poly('26,2 23,3 14,14 16,18 19,14', '#929d98');
+    poly('26,2 24,3 15,14 17,15 20,11', '#d8dcc8');
+    poly('15,14 17,14 12,21 9,21', '#9e4339');
+    poly('15,14 17,14 24,21 21,21', '#9e4339');
+    for (const x of [3, 20]) {
+      rect(x + 2,19,5,2,'#c06850'); rect(x,21,2,6,'#9e4339');
+      rect(x + 7,21,2,6,'#9e4339'); rect(x + 2,27,5,2,'#78372f');
+      rect(x,22,1,4,'#c06850'); rect(x + 2,26,5,1,'#b45845');
+    }
+    rect(14,14,4,4,'#535e58'); rect(15,14,2,2,'#c9cfbb');
+  } else if (type === 'snack') {
+    rect(7,2,18,4,'#875737'); rect(7,26,18,4,'#875737');
+    for (const x of [7, 11, 15, 19, 23]) { rect(x,2,1,4,'#d1a06a'); rect(x,26,1,4,'#d1a06a'); }
+    rect(5,6,22,20,'#875737'); rect(6,5,20,21,'#b77c49');
+    rect(7,7,2,17,'#d1a06a'); rect(24,9,2,15,'#9a643c');
+    rect(10,10,12,12,'#dbd0a5'); rect(11,10,10,1,'#f0dfb2');
+    rect(12,13,8,2,'#63654a'); rect(14,17,4,3,'#63654a');
+    rect(12,24,9,1,'#d1a06a'); rect(10,6,6,1,'#c89560');
+  } else if (type === 'balloon') {
+    rect(15,22,1,4,'#c6bba1'); rect(14,26,1,3,'#c6bba1'); rect(15,29,1,2,'#c6bba1');
+    poly('11,2 21,2 21,4 24,4 24,7 26,7 26,14 24,14 24,18 21,18 21,20 18,20 18,22 14,22 14,20 11,20 11,18 8,18 8,14 6,14 6,7 8,7 8,4 11,4', '#ad423b');
+    poly('23,6 24,6 24,8 26,8 26,14 24,14 24,18 21,18 21,20 18,20 18,22 16,22 16,19 20,19 20,16 23,16', '#87362f');
+    rect(10,6,3,5,'#d6755e'); rect(11,5,4,2,'#d6755e'); rect(10,7,1,3,'#dfa086');
+    rect(14,22,4,2,'#87362f');
   }
   return svg;
 }
 
 const percent = item => Math.max(0, Math.min(100, Math.ceil((item.charge || 0) / (ITEM_DEFS.torch.maxCharge || 180) * 100)));
+const quantity = item => Math.max(1, Math.min(ITEM_DEFS.paper?.maxStack || 10, Math.floor(item.quantity || 1)));
 const nameOf = item => item ? ITEM_DEFS[item.type]?.name || item.type : 'Empty pocket';
 const text = (el, value) => { if (el.textContent !== value) el.textContent = value; };
 
@@ -187,35 +223,37 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCombine, o
     if (item?.type === 'torch') return `${percent(item)}% charge${snapshot.activeTorch === item.id ? ' · on' : ' · off'}`;
     if (item?.type === 'chalk') return `${item.uses} mark${item.uses === 1 ? '' : 's'} left`;
     if (item?.type === 'battery') return 'Restores charge to 100%';
+    if (item?.type === 'paper') return `${quantity(item)} / ${ITEM_DEFS.paper.maxStack} sheets`;
+    if (item?.type === 'snack') return `Restores ${ITEM_DEFS.snack.healAmount} health`;
     return '';
   }
   function redraw() {
     const selected = snapshot.slots[snapshot.selected];
     for (let i = 0; i < 6; i++) {
-      const item = snapshot.slots[i], slot = slots[i], chosen = i === snapshot.selected;
+      const item = snapshot.slots[i], slot = slots[i], chosen = i === snapshot.selected, conditionText = conditionOf(item);
       slot.button.classList.toggle('is-selected', chosen);
       slot.button.classList.toggle('is-active', !!item && item.id === snapshot.activeTorch);
       slot.button.classList.toggle('is-compatible', compatible(i));
       slot.button.classList.toggle('is-source', i === combineFrom);
       slot.button.classList.toggle('is-muted', combineFrom !== null && i !== combineFrom && !compatible(i));
       slot.button.setAttribute('aria-pressed', chosen ? 'true':'false');
-      slot.button.setAttribute('aria-label', `Slot ${i + 1}: ${nameOf(item)}${item ? ', ' + conditionOf(item) : ''}${compatible(i) ? ', fit battery here' : ''}`);
-      slot.button.title = `${i + 1} · ${nameOf(item)}${item ? ' · ' + conditionOf(item) : ''}`;
+      slot.button.setAttribute('aria-label', `Slot ${i + 1}: ${nameOf(item)}${conditionText ? ', ' + conditionText : ''}${compatible(i) ? ', fit battery here' : ''}`);
+      slot.button.title = `${i + 1} · ${nameOf(item)}${conditionText ? ' · ' + conditionText : ''}`;
       if (slot.type !== (item?.type || null)) { slot.icon.replaceChildren(...(item ? [itemIcon(item.type)] : [])); slot.type = item?.type || null; }
-      text(slot.amount, item?.type === 'chalk' ? String(item.uses) : '');
+      text(slot.amount, item?.type === 'chalk' ? String(item.uses) : item?.type === 'paper' ? String(quantity(item)) : '');
       slot.power.hidden = item?.type !== 'torch';
       if (item?.type === 'torch') slot.fill.style.transform = `scaleX(${percent(item) / 100})`;
     }
-    text(caption, selected ? `${nameOf(selected)}${selected.type === 'torch' ? ' · ' + percent(selected) + '%' : selected.type === 'chalk' ? ' · ' + selected.uses : ''}` : '');
+    text(caption, selected ? `${nameOf(selected)}${selected.type === 'torch' ? ' · ' + percent(selected) + '%' : selected.type === 'chalk' ? ' · ' + selected.uses : selected.type === 'paper' ? ' · ' + quantity(selected) + (quantity(selected) === 1 ? ' sheet' : ' sheets') : ''}` : '');
     text(count, `POCKETS  ${snapshot.slots.filter(Boolean).length} / 6`);
     text(title, nameOf(selected));
     text(description, selected ? ITEM_DEFS[selected.type]?.description || '' : 'Pick up an object to carry it here.');
     text(condition, opened && noticeLeft > 0 ? noticeEl.textContent : conditionOf(selected));
     if (detailType !== (selected?.type || null)) { specimen.replaceChildren(...(selected ? [itemIcon(selected.type)] : [])); detailType = selected?.type || null; }
     const label = selected?.type === 'torch' ? snapshot.activeTorch === selected.id ? 'Switch off' : 'Switch on'
-      : selected?.type === 'battery' ? 'Fit battery' : selected?.type === 'chalk' ? 'Mark floor' : 'Use';
+      : selected?.type === 'battery' ? 'Fit battery' : selected?.type === 'chalk' ? 'Mark floor' : selected?.type === 'snack' ? 'Eat' : 'Use';
     text(useLabel, combineFrom !== null ? 'Cancel' : label);
-    use.disabled = combineFrom === null && (!selected || (selected.type === 'torch' && selected.charge <= 0));
+    use.disabled = combineFrom === null && (!selected || ['paper', 'scissors', 'snack', 'balloon'].includes(selected.type) || (selected.type === 'torch' && selected.charge <= 0));
     drop.disabled = !selected || combineFrom !== null;
     combineNote.hidden = combineFrom === null;
     text(combineNote, combineFrom === null ? '' : snapshot.slots.some((_, i) => compatible(i)) ? 'Choose a flashlight below.' : 'No flashlight needs a battery.');
@@ -228,7 +266,7 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCombine, o
     // Charge changes every frame, but screen text and meters only change at
     // whole percentages. Keep the same buttons so keyboard focus never jumps.
     const key = JSON.stringify([snapshot.selected, snapshot.activeTorch, combineFrom, opened,
-      snapshot.slots.map(item => item ? [item.id, item.type, item.type === 'torch' ? percent(item) : item.uses] : null)]);
+      snapshot.slots.map(item => item ? [item.id, item.type, item.type === 'torch' ? percent(item) : item.type === 'paper' ? quantity(item) : item.uses] : null)]);
     if (key !== signature) { signature = key; redraw(); }
   }
   function setOpen(value) {

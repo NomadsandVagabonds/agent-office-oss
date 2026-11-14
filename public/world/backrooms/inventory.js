@@ -11,6 +11,7 @@ const MESSAGES = {
   incompatible: 'Those items do not fit together', 'full-charge': 'Already fully charged',
   'no-mark-space': 'No dry, clear floor here', 'no-drop-space': 'No clear place to set this down',
   'no-mark': 'No dry, clear floor here', 'no-space': 'No clear place to set this down',
+  'no-use': 'Nothing to use this on here', 'health-unavailable': 'Keep this for when you need it',
 };
 
 export function createInventory(env, { canAct = () => true, onOpen = () => {} } = {}) {
@@ -24,7 +25,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
   };
   const physical = createInventoryWorld(env, model, {
     onNotice: tell,
-    onPickup: item => { refresh(); tell(ITEM_DEFS[item.type]?.name || 'Picked up'); },
+    onPickup: item => { refresh(); tell(item.type === 'paper' ? `Paper +${item.quantity}` : ITEM_DEFS[item.type]?.name || 'Picked up'); },
   });
   function select(index) { if (canAct() && model.select(index)) refresh(); }
   function use() {
@@ -48,6 +49,29 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
     if (!canAct()) return;
     if (accepted(model.combine(from, to))) { view.cancelCombine(); refresh(); tell('Batteries fitted'); }
   }
+  // NPCs interact with the selected pocket, not any matching item somewhere
+  // in the bag. Snapshots are detached; each successful handoff is explicit.
+  function held() {
+    if (disposed) return null;
+    const state = model.read(), item = state.slots[state.selected];
+    return item?.type === 'torch' ? { ...item, lit: state.activeTorch === item.id && item.charge > 0 } : item;
+  }
+  function give(item) {
+    if (disposed || !canAct()) return { ok: false, reason: 'unavailable' };
+    const wasEmpty = !held(), result = model.add(item);
+    if (result.ok) {
+      if (wasEmpty) model.select(result.index);
+      refresh(); env.sound.play('clack', { vol: .45 });
+      tell(result.item.type === 'paper' ? `Paper +${result.accepted}` : ITEM_DEFS[result.item.type].name);
+    }
+    return result; // The giver keeps any rejected item or paper remainder.
+  }
+  function consumeHeld(type, amount = 1) {
+    if (disposed || !canAct()) return { ok: false, reason: 'unavailable' };
+    const result = model.consumeSelected(type, amount);
+    if (result.ok) refresh();
+    return result;
+  }
   const view = createInventoryHud({ host: env.hud.el, onSelect: select, onUse: use, onDrop: drop, onCombine: combine,
     onOpen: open => {
       if (open && !canAct()) { view.setOpen(false); return; }
@@ -63,7 +87,9 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
     if (!rt) return;
     const start = toLocal(rt.def, me.x, me.z), yaw = me.yaw - rt.def.rot * Math.PI / 2;
     const forward = { x: -Math.sin(yaw), z: -Math.cos(yaw) }, right = { x: Math.cos(yaw), z: -Math.sin(yaw) };
-    const items = [makeItem('torch', 'arrival-flashlight', { charge: 54 }), makeItem('battery', 'arrival-batteries'), makeItem('chalk', 'arrival-chalk')];
+    const items = [makeItem('torch', 'arrival-flashlight', { charge: 54 }), makeItem('battery', 'arrival-batteries'), makeItem('chalk', 'arrival-chalk'),
+      makeItem('paper', 'arrival-paper', { quantity: 5 }), makeItem('scissors', 'arrival-scissors'), makeItem('snack', 'arrival-snack'),
+      makeItem('balloon', 'arrival-balloon')];
     const walk = env.world.walkable(rt), seen = walk.flood(rt.def.doors);
     const candidates = [];
     for (let i = 0; i < seen.length; i++) if (seen[i]) {
@@ -72,8 +98,8 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
     }
     candidates.sort((a, b) => a.distance - b.distance);
     items.forEach((item, i) => {
-      const spread = (i - 1) * .62;
-      const desired = { x: start.x + forward.x * .9 + right.x * spread, z: start.z + forward.z * .9 + right.z * spread };
+      const spread = (i % 3 - 1) * .62, distance = .9 + Math.floor(i / 3) * .65;
+      const desired = { x: start.x + forward.x * distance + right.x * spread, z: start.z + forward.z * distance + right.z * spread };
       if (physical.spawn(item, { room: rt.id, ...desired }).ok) return;
       for (const p of candidates) if (physical.spawn(item, { room: rt.id, x: p.x, z: p.z }).ok) return;
       console.warn('[backrooms] no reachable place for inventory supply', item.type);
@@ -81,7 +107,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
   }
   seedSupplies();
   return {
-    model, physical, view, use, drop, combine, select,
+    model, physical, view, use, drop, combine, select, held, give, consumeHeld,
     get isOpen() { return view.isOpen; },
     owns: target => target instanceof Node && view.el.contains(target),
     close: () => view.setOpen(false),
