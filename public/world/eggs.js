@@ -235,22 +235,28 @@ export function createEggs(office) {
     const room = lay?.roomById.get('backroom');
     office.softSpot = room && !room.locked ? { x: room.rect.x + 0.3, z: room.rect.z + 0.3 } : null;
   }
-  office.onNoclip = async () => {
-    if (falling) return;
+  // The same thing is behind a stretch of wall in the basement (levels/basement.js). `via`: the floor whose wall it
+  // was — the lift's own business then where you come to (levels/index.js); with none, it was this corner, and you
+  // come to by the bookshelf. → what the place said as you left it ({ reason, kept }), or null if the wall held.
+  office.onNoclip = async (opt = {}) => {
+    if (falling) return null;
     falling = true;
     document.body.classList.add('noclip');
     let level = null;
     try { level = await import('./backrooms/index.js'); } catch { level = null; }
-    if (!level?.enterBackrooms) { document.body.classList.remove('noclip'); falling = false; return; }      // the wall holds after all
-    office.walk.exit();
+    if (!level?.enterBackrooms) { document.body.classList.remove('noclip'); falling = false; return null; }      // the wall holds after all
+    const upstairs = !opt.via;
+    if (upstairs) office.walk.exit();
     let result = null;
     try { result = await level.enterBackrooms(office, { name: office.walk.me.name, seed: Date.now() }); }
     catch (err) { console.error('[office] backrooms', err); }
     office.stage.setView(null);
     document.body.classList.remove('noclip');
     falling = false;
-    office.rig.flyTo({ x: -4, z: -6.3, dist: 9, yaw: 0, pitch: 0.62 }, { instant: true });      // you come to by the bookshelf
-    office.walk.enter();
+    if (upstairs) {
+      office.rig.flyTo({ x: -4, z: -6.3, dist: 9, yaw: 0, pitch: 0.62 }, { instant: true });      // you come to by the bookshelf
+      office.walk.enter();
+    }
     // Nothing is said about where you have been. The passport simply has a new stamp, now that you are back to look at it.
     const stamps = [found('noclip'), result?.reason === 'exit' ? found('way-out') : null];
     // …except by the purse: what you carried out through the door is the office's now, and it shows it the way it does on every
@@ -261,6 +267,7 @@ export function createEggs(office) {
       if (kept.card) office.game?.flash('card');
       office.game?.show();
     }, 300));
+    return result;
   };
 
   net.on('world', () => { treeStage = -1; growTree(net.state.world?.stats?.tasksDone || 0); placeDuck(); softSpot(); });

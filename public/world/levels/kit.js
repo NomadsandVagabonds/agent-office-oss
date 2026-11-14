@@ -696,7 +696,7 @@ export function createWorld(office, spec = {}) {
     held.clear(); shot = null; me.seat = null;
     hint.classList.add('hidden');
     for (const s of sounds) { try { s.stop?.(0.5); } catch { /* it was only music */ } }
-    if (liftHere && reason !== 'esc' && reason !== 'needs') {           // walk back into the car
+    if (liftHere && reason !== 'esc' && reason !== 'needs' && extra.walk !== false) {           // walk back into the car (unless you left some other way)
       const L = liftHere;
       L.want = 1; L.holdUntil = Infinity;
       await walkTo(L.x + L.fx * 0.9, L.z + L.fz * 0.9, Math.min(0.8, Math.hypot(me.x - L.x, me.z - L.z) / 4 + 0.15));

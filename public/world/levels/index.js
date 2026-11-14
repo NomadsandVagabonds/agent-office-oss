@@ -14,7 +14,7 @@
 // To add one: give it a line in core/levels.mjs (id, the letter on its
 // button, a name, a blurb) and a line in MODULES below. That is all the lift
 // needs to know.
-import { HOME, findLevel, isOpen, isVisible, levelById, levelContext, panelPlate } from '/core/levels.mjs';
+import { HOME, findLevel, isOpen, isVisible, levelById, levelContext, panelPlate, arrivalOf } from '/core/levels.mjs';
 import { curtain } from './curtain.js';
 import { playRide } from './ride.js';
 
@@ -26,9 +26,12 @@ const MODULES = {
   mission: () => import('./mission.js'),
   pasture: () => import('./pasture.js'),
   afterhours: () => import('./afterhours.js'),
+  basement: () => import('./basement.js'),
 };
-// Two floors are not modules of ours: 'office' is the office you are already in,
-// and 'thirteen' hands over to whatever office.onNoclip() opens (see eggs.js).
+// Two floors are not modules of ours: 'office' is the office you are already in, and 'thirteen' is not a
+// floor at all — the car goes up to where it would be, does not stop, and lets you out at the bottom of the
+// shaft. Nobody gets to the place under the office by pressing a button: a floor may say you went through one
+// of its walls ({ reason: 'noclip' }), and then office.onNoclip() is what is on the other side (see eggs.js).
 
 const state = { floor: HOME, riding: false };
 /** Which floor the person is on, and whether the car is moving: { floor, riding }. */
@@ -80,15 +83,26 @@ export async function ride(office, ref, opt = {}) {
   const litBefore = lit(office);
   try {
     while (next && next.id !== HOME) {
-      if (next.id === 'thirteen') return await thirteen(office, from, opt);
+      let fell = false;
+      // a button that does not stop where it says (core/levels.mjs: arrivalOf): the ride up, and then the long one down
+      if (arrivalOf(next) !== next) { from = await thirteen(office, from, opt); next = arrivalOf(next); fell = true; instant = false; }
       const loading = (MODULES[next.id] ? MODULES[next.id]() : Promise.resolve(null)).catch((err) => { console.error(`[lift] ${next.id} would not load`, err); return null; });
       if (instant) await curtain.close(120);
-      else await playRide(office, { from, to: next, plate: panelPlate(context(office), from.id), until: loading, pace: opt.pace });
+      else await playRide(office, { from, to: next, plate: panelPlate(context(office), from.id), until: loading, pace: fell ? (opt.pace || 1) * 0.5 : opt.pace, glitch: fell });
       const mod = await loading;
       state.floor = next.id;
       // somebody has now been to a floor that was only just lit: its button need not glow any more
       if ((context(office).fresh || []).includes(next.id)) office.net.api('/api/world/game/visit', { method: 'POST', body: { floor: next.id } }).catch(() => null);
-      last = await visit(office, mod, next, { from: from.id });
+      last = await visit(office, mod, next, { from: from.id, fell });
+      // through a wall of that floor, and — however it went on the other side — back out of the same wall
+      while (last.reason === 'noclip') {
+        const unwatch = whenShown(office, 0);
+        let other = null;
+        try { other = await office.onNoclip?.({ via: next.id }); } catch (err) { console.error('[lift] through the wall', err); }
+        unwatch();
+        await curtain.close(0);
+        last = await visit(office, mod, next, { from: next.id, back: other?.reason || 'quit' });
+      }
       from = next; instant = false;
       const onward = last.reason === 'lift' ? findLevel(last.to) : null;
       next = onward && isVisible(onward, context(office)) && isOpen(onward, context(office)) ? onward : levelById(HOME);
@@ -101,12 +115,21 @@ export async function ride(office, ref, opt = {}) {
   return home(office, { ...last, litBefore });
 }
 
+/**
+ * Lift the curtain as soon as somebody has the screen — and not before: with nobody on it, what the stage draws is
+ * the office, three floors from where you are. → call it to stop waiting.
+ */
+function whenShown(office, ms = 380) {
+  let watching = true;
+  const stop = office.stage.onFrame(() => { if (watching && office.stage.view) { unwatch(); curtain.open(ms); } });
+  const unwatch = () => { if (watching) { watching = false; stop(); } };
+  return unwatch;
+}
+
 /** One floor: call its enter(), lift the curtain when it has the screen, and take the screen back afterwards. */
 async function visit(office, mod, level, opt) {
   if (typeof mod?.enter !== 'function') return { reason: 'missing', level: level.id };
-  let watching = true;
-  const stop = office.stage.onFrame(() => { if (watching && office.stage.view) { unwatch(); curtain.open(380); } });
-  const unwatch = () => { if (watching) { watching = false; stop(); } };
+  const unwatch = whenShown(office);
   let result = null;
   try { result = await mod.enter(office, { level, ...opt }); } catch (err) { console.error(`[lift] ${level.id}`, err); result = { reason: 'error', error: err }; }
   unwatch();
@@ -147,19 +170,16 @@ function home(office, last = {}) {
   return last;
 }
 
-/** The button that should not be there. The ride is not quite right, and what is behind the doors is not ours to say. */
+/**
+ * The button that should not be there. The ride up is not quite right, the doors open on a floor that is not one —
+ * and then the car lets go. → the level the next ride starts from (thirteen itself: it is a long way down).
+ */
 async function thirteen(office, from, opt) {
   const level = levelById('thirteen');
   const world = office.net.state.world;
   if (world?.today?.quirks?.includes('friday-13')) {
     office.net.api('/api/world/discover', { method: 'POST', body: { secret: 'thirteenth', name: office.walk?.me?.name || 'Lead' } }).catch(() => null);
   }
-  await playRide(office, { from, to: level, plate: panelPlate(context(office), from.id), glitch: true, pace: opt.pace });
-  office.stage.setView(null);
-  document.body.classList.remove('level');
-  state.floor = HOME; state.riding = false;
-  curtain.open(200);
-  try { await office.onNoclip?.(); } catch (err) { console.error('[lift] 13', err); }
-  if (office.walk?.active) return { reason: 'thirteen' };            // the level below took you, and has put you back
-  return home(office, { reason: 'thirteen' });                       // nothing was there: the lift simply brings you home
+  await playRide(office, { from, to: level, plate: panelPlate(context(office), from.id), glitch: true, pace: opt.pace, stay: true });
+  return level;
 }

@@ -15,12 +15,18 @@
 //
 // A floor is generated when it is asked for (floorOf), not before: each is a
 // fresh run of the generator from a seed of its own, told which rooms the
-// floors above it had so that it deals different ones while the deck lasts.
-import { generate, makeRng, MIN_EXIT_STEPS } from './gen.js';
+// floors above it had so that it deals different ones while the deck lasts —
+// and what those rooms taught, so that it deals nothing that takes for granted
+// a thing nobody has yet had the chance to learn.
+import { generate, makeRng, MIN_EXIT_STEPS, DECK, lessonsOf } from './gen.js';
 import { MIN_OUT_STEPS } from './marks.js';
 import { THEMES, THEME_IDS } from './themes.js';
 
 export const MIN_FLOORS = 3, MAX_FLOORS = 5;
+/** What everybody knows before they have seen a single room down here: it is how they got in. */
+export const KNOWN_AT_START = Object.freeze(['lean']);
+/** How many visits in a hundred have a room in them that the place half-remembers from the news (if the deck has any). */
+export const HEADLINE_CHANCE = 0.35;
 /** The fewest doorways anybody walks through between landing and the way out, whatever the visit. */
 export const MIN_VISIT_STEPS = (MIN_FLOORS - 1) * MIN_EXIT_STEPS + MIN_OUT_STEPS;
 
@@ -63,11 +69,16 @@ export function planVisit(seed, opt = {}) {
   // different way round every visit, so that they are spread through the building and the first few are never on one floor
   const round = R.shuffle(themes.map((_, i) => i)), coins = themes.map(() => []);
   (want ? want.coins : []).forEach((n, k) => coins[round[k % depths]].push(n));
+  // Something the place has half-remembered from the news and staged wrongly (a deck entry flagged `headline`): in some
+  // visits, one of them — and never on the floor you land on, which is for finding out where you are. (Rolled from a
+  // source of its own: whether the deck has any such room changes nothing else about a visit.)
+  const stories = DECK.filter((a) => a.headline), RS = R.fork('headline');
+  const story = stories.length && depths > 1 && RS.chance(HEADLINE_CHANCE) ? { arch: RS.pick(stories).id, floor: RS.int(1, depths - 1) } : null;
   const floors = themes.map((theme, i) => ({
     depth: i, seed: i === 0 ? String(seed) : `${seed}/floor:${i}`, theme, label: labels[i], below: i === depths - 1 ? 'G' : labels[i + 1],
-    way: i === depths - 1 ? 'wall' : 'stairs', must: [], mascot: mascot === i, coins: coins[i],
+    way: i === depths - 1 ? 'wall' : 'stairs', must: story && story.floor === i ? [story.arch] : [], mascot: mascot === i, coins: coins[i],
   }));
-  const visit = { seed: String(seed), depths, floors, mascot, card: !!(want && want.card) };
+  const visit = { seed: String(seed), depths, floors, mascot, card: !!(want && want.card), headline: story ? story.arch : null };
   made.set(visit, { opt, levels: [] });
   return visit;
 }
@@ -88,6 +99,8 @@ export function floorOf(visit, i) {
       name: opt.name, projects: opt.projects, agents: opt.agents, tasks: opt.tasks, count: opt.count,
       only: (opt.onlyDepth || 0) === k ? opt.only : undefined,
       theme: f.theme, way: f.way, must: f.must, avoid: memo.levels.flatMap((l) => l.picked),
+      // what the floors above have had the chance to teach: a room that takes more than that for granted is not dealt here
+      known: [...KNOWN_AT_START, ...memo.levels.flatMap((l) => lessonsOf(l))],
       pursuer: f.mascot, loot,
     });
     level.depth = k; level.depths = visit.depths; level.label = f.label; level.below = f.below;

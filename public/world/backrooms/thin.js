@@ -34,7 +34,7 @@ export function thinWall(c, thin, real) {
   const flap = side === 'front' || side === 'back' ? 'x' : 'z', lift = (side === 'front' || side === 'left' ? 1 : -1);
 
   const here = c.toWorld(p.x, p.z), nw = (() => { const o = c.toWorld(p.x + n[0], p.z + n[2]); return [o.x - here.x, o.z - here.z]; })();      // the wall, and the way into the room, in the world
-  let held = 0, through = 0, gust = 0;
+  let held = 0, through = false, gust = 0;
   c.rt.onLeave = () => { env.sound.air?.(0); held = 0; };
   c.tick((dt, t, me) => {
     // the draught: never the same twice, and stronger while somebody is leaning on the wall
@@ -42,15 +42,7 @@ export function thinWall(c, thin, real) {
     const blow = 0.55 + 0.45 * Math.sin(gust * 1.7) * Math.sin(gust * 0.63 + 1) + held * 0.8;
     for (const k of mark.loose) k.node.rotation[k.axis] = k.spin * (Math.sin(t * (2.3 + k.len) + k.phase) * 0.05 + Math.sin(t * 5.1 + k.phase * 2) * 0.018) * blow;
     paper.rotation[flap] = lift * Math.max(0, Math.sin(gust * 2.9) * 0.16 + Math.sin(gust * 7.7) * 0.05) * blow;
-    if (through) {                                                             // going through: no way back, and nothing to see
-      through += dt;
-      // (into the wall as far as the wall is thick, and no further: beyond it there is no floor to be standing on)
-      const w3 = me.world, k = Math.min(1, through / 0.6);
-      env.player.warp(w3.x - nw[0] * dt * 0.95 * (1 - k), w3.z - nw[1] * dt * 0.95 * (1 - k));
-      env.interfere(1);
-      return;
-    }
-    if (!me.inside) return;
+    if (through || !me.inside) return;                                         // (once it has given, the rest is the camcorder's: leaving.js)
     const f = wallFrame(c.room, side, me.x, me.z), d = f.d, off = Math.abs(f.c - at);
     // the camcorder does not like it here: the nearer the wall, the worse the picture
     const near = Math.max(0, 1 - d / 3.4) * Math.max(0, 1 - Math.max(0, off - w / 2) / 2.2);
@@ -61,9 +53,9 @@ export function thinWall(c, thin, real) {
     held = lean(held, dt, pressing(d, f.c - at, w, -push, me.speed));
     if (held > 0.05) { env.interfere(0.45 + 0.55 * Math.min(1, held / LEAN)); env.hud.glitch(0.2); }
     if (held >= LEAN) {
-      through = 0.0001;
-      env.sound.air?.(0); env.sound.play('static', { dur: 1.4, vol: 0.8 }); env.sound.play('thunk');
-      env.end('exit');
+      through = true;
+      env.sound.play('static', { dur: 1.4, vol: 0.8 }); env.sound.play('thunk');
+      env.end('exit', { nx: -nw[0], nz: -nw[1] });
     }
   });
 }

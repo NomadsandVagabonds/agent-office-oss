@@ -197,8 +197,20 @@ const DECK1 = [
   { id: 'nested', name: 'Breakout Rooms', landmark: 'the room inside the room', w: [8, 9], d: [8, 9], ports: ['left', 'right', 'back'], weight: 1.5, lights: 'normal',
     roll: (R, o) => { const pr = R.pick(o.projects).toUpperCase(); return { turn: R.int(0, 3), z: R.range(-0.25, 0.1), plates: R.pick(SUBROOMS).map((t) => t.replace(/\{P\}/g, pr)) }; } },
 ];
-export const DECK = [...DECK1, ...MORE_DECK];
+// (an entry with `on: false` has been retired: it is not in the deck, and nothing else needs to know)
+export const DECK = [...DECK1, ...MORE_DECK].filter((a) => a.on !== false);
 export const ARCHETYPES = Object.fromEntries(DECK.map((a) => [a.id, a]));
+
+// Nothing down here is ever explained, so the only teacher is the order things are met in. A deck entry says what its
+// room is the first place to learn (`teaches`: one thing, at most) and what it takes for granted (`needs`); the visit's
+// plan (plan.js) keeps count of what the floors above have taught, and a room is only dealt where all it needs is known.
+const list = (v) => (v === undefined || v === null ? [] : [].concat(v));
+/** What a room of this archetype teaches, and what it needs to have been taught already: lists of lesson ids. */
+export const lessons = (arch) => ({ teaches: list(arch && arch.teaches), needs: list(arch && arch.needs) });
+/** May this archetype be dealt to somebody who knows `known` (a Set of lesson ids; null: a floor asked for by itself, where anything goes)? */
+export const ready = (arch, known) => !known || lessons(arch).needs.every((n) => known.has(n));
+/** Everything a floor's rooms teach. */
+export const lessonsOf = (level) => [...new Set(level.picked.flatMap((id) => lessons(ARCHETYPES[id]).teaches))];
 
 /* ---- names from the real office (or stand-ins when there is nothing to borrow) ----- */
 
@@ -365,8 +377,10 @@ function build(R, o, opt) {
   /* deal the oddities */
   const want = opt.count || R.int(6, 9);
   let deck = [];
-  // (a room that is only ever there because the visit's plan asked for it — `planned` — is never dealt by chance)
-  { const pool = DECK.filter((a) => !a.planned); while (pool.length) { const pickd = R.weighted(pool, (a) => a.weight * ((a.themes && a.themes[theme.id]) ?? 1)); deck.push(pickd); pool.splice(pool.indexOf(pickd), 1); } }
+  // (a room that is only ever there because the visit's plan asked for it — `planned`, or one staged from the news — is
+  // never dealt by chance; nor is one that takes for granted something the floors above have not taught)
+  const known = opt.known ? new Set(opt.known) : null;
+  { const pool = DECK.filter((a) => !a.planned && !a.headline && ready(a, known)); while (pool.length) { const pickd = R.weighted(pool, (a) => a.weight * ((a.themes && a.themes[theme.id]) ?? 1)); deck.push(pickd); pool.splice(pool.indexOf(pickd), 1); } }
   if (opt.only) { const forced = [].concat(opt.only).map((id) => ARCHETYPES[id]).filter(Boolean); deck = [...forced, ...deck.filter((a) => !forced.includes(a))]; }
   // a floor further down keeps clear of what the floors above it had, for as long as the deck lasts…
   if (opt.avoid && opt.avoid.length) { const had = new Set(opt.avoid); deck = [...deck.filter((a) => !had.has(a.id)), ...deck.filter((a) => had.has(a.id))]; }
@@ -758,8 +772,8 @@ function dress(R, level, o, opt, keeper = false) {
       }
     }
     // one or two things somebody left behind
-    const things = rr.chance(0.8) ? rr.int(1, room.W * room.D > 30 ? 3 : 2) : 0;
-    for (let k = 0; k < things; k++) {
+    const left = rr.chance(0.8) ? rr.int(1, room.W * room.D > 30 ? 3 : 2) : 0;
+    for (let k = 0; k < left; k++) {
       const type = rr.pick(things);
       const item = { type, u: rr(), v: rr(), turn: rr.range(-Math.PI, Math.PI), n: rr.int(3, 9), seed: rr.int(1, 9999) };
       if (type === 'poster') item.text = fill(rr.pick(POSTERS), o, rr);
@@ -884,6 +898,7 @@ const STASH1 = {
 };
 
 export const STASH = { ...STASH1, ...MORE_STASH };
+for (const a of DECK) if (typeof a.stash === 'function') STASH[a.id] = a.stash;       // a room written since keeps its hiding place in its own deck entry
 
 const AROUND = [0, 0, 1, 0, -1, 0, 0, 1, 0, -1, 1, 1, 1, -1, -1, 1, -1, -1];     // a spot, and the eight points round it
 /** What a coin in this room keeps clear of besides walls and pillars: the floor just inside each doorway, and every flight of stairs with its landing. */

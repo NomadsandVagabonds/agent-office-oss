@@ -27,10 +27,14 @@
 //           on while it is away, so that anyone reading the floor plan — the 3D
 //           client, for one — can tell which button was pressed.
 //
-// The building, as the lift sees it: the car park that is not one at the bottom (P), our own
-// floors from 2 to 5 (the office is on 2; 4 and 5 are kept for work modules still to come), other
-// people's floors above that — some of which turn out to be ours, given the right keycard — no
-// 13, and the roof.
+// The building, as the lift sees it: the basement under everything (B: plant, storage, the caretaker),
+// the car park that is not one (P), our own floors from 2 to 5 (the office is on 2; 4 and 5 are kept
+// for work modules still to come), other people's floors above that — some of which turn out to be
+// ours, given the right keycard — no 13, and the roof.
+//
+// Nothing the lift stops at is the place under the office. That is not a floor: nobody rides there.
+// (The button that should not exist does not stop where it says, either — the car lets go and you
+// get out in the basement, like everybody else.)
 
 export const LEVEL_KINDS = Object.freeze(['office', 'place', 'game', 'work']);
 
@@ -42,7 +46,7 @@ export const LEVELS = Object.freeze([
   { id: 'roof', floor: 'R', storey: 14, kind: 'place', name: 'Rooftop Garden',
     blurb: 'Open air above the office: planters, benches, a telescope, and the skyline all round.' },
   { id: 'thirteen', floor: '13', storey: 13, kind: 'place', name: 'Floor Thirteen',
-    blurb: 'Not on the plans. The button was not there yesterday.', unmarked: true,
+    blurb: 'Not on the plans. The button was not there yesterday.', unmarked: true, stops: 'basement',
     hidden: ({ quirks = [], found = [] } = {}) => !(quirks.includes('friday-13') || found.includes('noclip')) },
   { id: 'scranton', floor: '11', storey: 11, kind: 'game', name: 'Scranton Paper Co.', card: true, coins: 3,
     blurb: 'A very ordinary paper company. Reception has a memo about a very ordinary stapler.' },
@@ -56,6 +60,8 @@ export const LEVELS = Object.freeze([
     blurb: 'The office itself: project rooms, the plaza, the kitchen, the library.' },
   { id: 'pasture', floor: 'P', storey: 0, kind: 'place', name: 'The Pasture', car: [-1, -10], card: true, coins: 3,
     blurb: 'Lower ground, where the car park would be. Mind the goats.' },
+  { id: 'basement', floor: 'B', storey: -1, kind: 'place', name: 'Basement',
+    blurb: 'Plant room, cage storage and the caretaker\'s corner. Rather more of it than there is building.' },
 ].map((level) => Object.freeze({ ...level, car: level.car ? Object.freeze(level.car) : undefined })));
 
 // The plate of buttons in the car: rows from the top, two to a row, as on any lift. A string is what is engraved
@@ -69,7 +75,7 @@ export const PLATE = Object.freeze([
   ['6', '7'],
   ['4', '5'],
   ['2', '3'],
-  ['P', null],
+  ['P', 'B'],
 ].map((row) => Object.freeze(row)));
 /** Floors kept for work modules still to come: a blanking plate where the button will be. */
 export const RESERVED = Object.freeze(['4', '5']);
@@ -83,6 +89,13 @@ export function findLevel(ref) {
   if (!text) return null;
   return LEVELS.find((l) => l.id === text || l.floor.toLowerCase() === text) || (text === 'lobby' ? BY_ID.get(HOME) : null) || null;
 }
+
+/**
+ * Where the car lets you out when this floor's button is pressed: the floor itself, for every floor but one (`stops`).
+ * There is no thirteenth storey to stop at — the car goes up to where it would be, lets go, and you get out at the
+ * bottom of the shaft like everybody else.
+ */
+export const arrivalOf = (level) => (level && level.stops ? BY_ID.get(level.stops) || level : level || null);
 
 /** Does the button for this level exist right now? */
 export function isVisible(level, ctx = {}) {

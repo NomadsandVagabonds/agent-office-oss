@@ -3,10 +3,11 @@
 // the same again given the same seed.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { generate, DECK, roomDistances, roomPath, MIN_EXIT_STEPS, EXIT_DEPTH, T, sketch, wallPoint, wallLength, toWorld, floorAt, ceilAt, headAt, fitsAt } from '../public/world/backrooms/gen.js';
+import { generate, DECK, ARCHETYPES, lessons, ready, lessonsOf, roomDistances, roomPath, MIN_EXIT_STEPS, EXIT_DEPTH, T, sketch, wallPoint, wallLength, toWorld, floorAt, ceilAt, headAt, fitsAt } from '../public/world/backrooms/gen.js';
 import { MIN_OUT_STEPS, THIN_W, MARK_W, LEAN, lean, pressing, TAPE_LABELS } from '../public/world/backrooms/marks.js';
-import { planVisit, floorOf, generateVisit, MIN_FLOORS, MAX_FLOORS, MIN_VISIT_STEPS } from '../public/world/backrooms/plan.js';
+import { planVisit, floorOf, generateVisit, MIN_FLOORS, MAX_FLOORS, MIN_VISIT_STEPS, KNOWN_AT_START } from '../public/world/backrooms/plan.js';
 import { THEMES, THEME_IDS } from '../public/world/backrooms/themes.js';
+import { leaving, LEAVE } from '../public/world/backrooms/leaving.js';
 
 const office = {
   name: 'Robin', projects: ['Webstore', 'Mobile App', 'Infra'], agents: ['Ivory Marten', 'Amber Vireo', 'Ember Numbat', 'Olive Heron'],
@@ -344,3 +345,76 @@ test('every tape has something written on it, and the same tape always says the 
     for (const left of [[2], [1, 4], [3, 4]]) for (const [n, label] of labels(generateVisit(seed, { ...office, loot: { coins: left } }))) assert.deepEqual(label, all.get(n), `seed ${seed}: tape ${n} changed its label`);
   }
 });
+
+test('leaving: through the wall, out and up with nothing to stop you, a look back at the floor, and then white', () => {
+  // standing at a wall on the −x side of a room, facing it (yaw: forward is (−sin, −cos))
+  const from = { x: 10, y: 1.1, z: -4, yaw: Math.PI / 2, pitch: -0.1, nx: -1, nz: 0 };
+  const at = (t) => leaving(t, from);
+  assert.deepEqual([at(0).x, at(0).y, at(0).z, at(0).yaw, at(0).pitch, at(0).white, at(0).outside], [10, 1.1, -4, from.yaw, from.pitch, 0, false], 'it starts where you were standing, as you were');
+  assert.deepEqual(at(1.3), at(1.3), 'the same moment is the same picture');
+  // out of the room by the time it says so: past your own width and the wall's thickness
+  assert.ok(at(LEAVE.through).out >= 0.22 + T + 0.2 && at(LEAVE.through).outside);
+  let prev = at(0);
+  for (let t = 1 / 30; t <= LEAVE.over + 0.2; t += 1 / 30) {
+    const p = at(t);
+    assert.ok(p.out >= prev.out && p.y >= prev.y - 1e-9, `never back toward the wall, never down (t=${t.toFixed(2)})`);
+    assert.ok(p.out - prev.out < 1.6 && Math.abs(p.yaw - prev.yaw) < 0.2, `no jump in the picture at t=${t.toFixed(2)}`);
+    assert.ok(Math.abs(p.z - from.z) < 1e-9, 'straight out, the way the wall faces');
+    assert.ok(p.white >= prev.white && p.white <= 1 && p.snow >= 0 && p.snow <= 1 && p.track >= 0 && p.track <= 1);
+    prev = p;
+  }
+  // once it has turned round it is looking back at the floor it left, and down at it
+  const back = at(LEAVE.turn[1] + 0.2), fx = -Math.sin(back.yaw), fz = -Math.cos(back.yaw);
+  assert.ok(fx > 0.98 && Math.abs(fz) < 0.2, 'facing back the way it came');
+  assert.ok(back.pitch < -0.05 && Math.abs(back.roll) < 0.1, 'and down, and level again');
+  assert.ok(back.out > 8 && back.y > from.y + 3, 'from well outside and above the ceilings');
+  assert.equal(at(LEAVE.white[0]).white, 0);
+  assert.equal(at(LEAVE.white[1]).white, 1, 'the picture is gone before the tape is');
+  assert.ok(LEAVE.white[1] <= LEAVE.over && !at(LEAVE.over - 0.01).over && at(LEAVE.over).over);
+});
+
+test('rules stack with depth: no room is dealt that takes for granted what the floors above have not taught', () => {
+  // what an entry may say: one thing it teaches at most, and what it needs — each of which something else can teach
+  for (const arch of DECK) {
+    const { teaches, needs } = lessons(arch);
+    assert.ok(teaches.length <= 1, `${arch.id} teaches ${teaches.length} new things: one to a room`);
+    for (const id of [...teaches, ...needs]) assert.match(id, /^[a-z][a-z0-9-]*$/, `${arch.id}: a lesson is a plain word`);
+    for (const n of needs) {
+      assert.ok(!teaches.includes(n), `${arch.id} cannot need what it is the first to teach`);
+      assert.ok(KNOWN_AT_START.includes(n) || DECK.some((b) => b !== arch && lessons(b).teaches.includes(n)), `${arch.id} needs '${n}', which nothing teaches: it could never be dealt`);
+    }
+    if (arch.headline) assert.equal(needs.length, 0, `${arch.id}: a room staged from the news goes where the plan puts it, and so may take nothing for granted`);
+  }
+  // the rule itself
+  const combo = { id: 'x', needs: ['valve', 'light'] }, single = { id: 'y', teaches: 'valve' };
+  assert.equal(ready(combo, new Set(['valve'])), false, 'one ingredient is not enough');
+  assert.equal(ready(combo, new Set(['light', 'valve', 'lean'])), true);
+  assert.equal(ready(single, new Set()), true, 'a room that needs nothing can be anywhere');
+  assert.equal(ready(combo, null), true, 'a floor asked for by itself (the dev page) is taken to have been taught everything');
+  assert.deepEqual(lessons(single), { teaches: ['valve'], needs: [] });
+  // and every visit keeps to it, floor by floor
+  for (const seed of SEEDS.slice(0, 60)) {
+    const known = new Set(KNOWN_AT_START);
+    for (const level of visitFor(seed).floors) {
+      for (const id of level.picked) for (const n of lessons(ARCHETYPES[id]).needs) assert.ok(known.has(n), `${seed}, floor ${level.depth}: ${id} needs '${n}' before anything has taught it`);
+      for (const id of lessonsOf(level)) known.add(id);
+    }
+  }
+});
+
+test('a room staged from the news: one to a visit at most, never on the floor you land on, and never by chance', () => {
+  const stories = new Set(DECK.filter((a) => a.headline).map((a) => a.id));
+  let seen = 0;
+  for (const seed of SEEDS) {
+    const { visit, floors } = visitFor(seed);
+    const where = floors.flatMap((level) => level.picked.filter((id) => stories.has(id)).map((id) => [level.depth, id]));
+    assert.ok(where.length <= 1, `${seed}: ${where.length} of them in one visit`);
+    assert.ok(where.every(([depth]) => depth > 0), `${seed}: one on the floor you land on`);
+    assert.deepEqual(where.map(([, id]) => id), visit.headline ? [visit.headline] : [], `${seed}: it is there because the plan said so, and only then`);
+    seen += where.length;
+  }
+  if (stories.size) assert.ok(seen > SEEDS.length * 0.15 && seen < SEEDS.length * 0.6, `${seen} visits in ${SEEDS.length} had one`);
+  // a floor asked for by itself never has one unless it is asked for by name
+  for (let i = 0; i < 40; i++) assert.ok(!generate(`alone-${i}`, office).picked.some((id) => stories.has(id)));
+});
+

@@ -1,10 +1,11 @@
 // The Backrooms — the hidden level under the office. Lean on the wrong corner
 // of the Back Room and you fall out of the building into this: yellow rooms
 // that hum, seen through a camcorder, never the same twice — and under them,
-// more floors, each a different kind of place, until the one with the door.
+// more floors, each a different kind of place, until the one with a wall that
+// gives the way the first one did.
 //
 //   const { reason } = await enterBackrooms(office, { name, seed });
-//   reason: 'exit' (you found the door) | 'caught' (something found you) | 'quit' (Esc)
+//   reason: 'exit' (you found the way out) | 'caught' (something found you) | 'quit' (Esc)
 //
 // This file is the conductor. It plans the visit (plan.js), and for each floor
 // in turn generates it (gen.js), builds it (world.js + rooms.js with kit.js)
@@ -14,10 +15,10 @@
 // (input.js) and what is in them. It reads names and faces from the office,
 // and what is still hidden down here (office.game: a keycard, some coins —
 // loot.js). The one thing it ever tells the office is what you were carrying
-// when you left by the door.
+// when you left by the way out.
 import * as THREE from 'three';
 import { resolveLook } from '/core/look.mjs';
-import { sketch, toWorld, toLocal, DECK } from './gen.js';
+import { sketch, toWorld, toLocal, DECK, ARCHETYPES } from './gen.js';
 import { planVisit, floorOf } from './plan.js';
 import { createKit } from './kit.js';
 import { buildWorld, loadCatalogue } from './world.js';
@@ -29,6 +30,7 @@ import { createSound } from './sound.js';
 import { createInput } from './input.js';
 import { createStalkers } from './pursuer.js';
 import { createLoot, lootLeft } from './loot.js';
+import { leaving } from './leaving.js';
 
 const FOV = 62;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -55,6 +57,20 @@ function gather(office, opt) {
 }
 
 let running = false;
+
+// Rooms written since the first deck keep their builder in a file of their own (deck entry: `module`), and that file is
+// only fetched when a floor first has the room on it. One that will not load is built as a plain room, and says so.
+const fetched = new Map();
+async function buildersFor(level) {
+  const need = [...new Set(level.rooms.map((r) => r.arch))].map((id) => ARCHETYPES[id]).filter((a) => a && a.module && !fetched.has(a.id));
+  await Promise.all(need.map(async (a) => {
+    try { const mod = await import(new URL(a.module, import.meta.url).href); fetched.set(a.id, typeof mod.build === 'function' ? mod.build : null); }
+    catch (err) { console.warn(`[backrooms] ${a.id}: ${a.module} would not load — the room will be a plain one`, err); fetched.set(a.id, null); }
+  }));
+  const builders = { ...BUILDERS };
+  for (const [id, build] of fetched) if (build) builders[id] = build;
+  return builders;
+}
 
 /**
  * @param office  the office object (stage, net, …)
@@ -97,8 +113,9 @@ async function visit(office, opt) {
   const Avatar = (await import('../avatar/rig.js').catch(() => null))?.Avatar || null;
   const layout = await import('/core/layout.mjs').catch(() => null);
 
-  // 'loading' → 'falling' → 'play' → ('cut' → 'falling' → 'play')… → 'ending' → 'done'
+  // 'loading' → 'falling' → 'play' → ('cut' → 'falling' → 'play')… → 'ending' (or, by the way out, 'through') → 'done'
   let state = 'loading', cur = null, time = 0, since = 0, ending = 0, reason = null, resolveVisit = null, swapping = false;
+  let out = null;                                         // by the way out: where the camera was when the wall gave, and which way is out
   let pictureKey = '', currentUse = null, light = 0.3, torch = 0, interference = 0, pendingQuit = false, kept = { card: false, coins: [] };
   const u = vhs.uniforms, blank = new THREE.Scene();
   u.uSnow.value = 1;
@@ -134,11 +151,12 @@ async function visit(office, opt) {
     const kit = createKit();
     const f = { level, kit, world: null, player: null, env: null };
     const env = f.env = {
-      level, cast, who, kit, sound, hud, vhs, renderer, builders: BUILDERS, catalogue: await loadCatalogue(kit), Avatar, layout,
+      level, cast, who, kit, sound, hud, vhs, renderer, builders: await buildersFor(level), catalogue: await loadCatalogue(kit), Avatar, layout,
       plan: office.net?.state?.world?.plan || {}, visit: plan, carry,
       player: null, world: null, pursuer: null,
       hatches: new Map(),                       // room id → { drop() }: where a door in a floor lets you out
-      end: (why) => finish(why),
+      /** The visit is over. how: { nx, nz } — the way out through the wall that gave (thin.js), for an 'exit'. */
+      end: (why, how) => finish(why, how),
       /** The floor has given way: the next one down. */
       descend: () => descend(),
       /** Is this spot on screen and not behind a wall? */
@@ -260,6 +278,18 @@ async function visit(office, opt) {
       else if (reason === 'exit') u.uWhite.value = k * k;
       else { u.uSnow.value = clamp((k - 0.42) / 0.45, 0, 1); if (k > 0.45) u.uRoll.value += dt * (0.4 + k * 2.5); interference = Math.max(interference, 0.5 + 0.5 * k); }   // a look at what got you, then snow
       if (k >= 1) conclude();
+    } else if (state === 'through') {
+      // out through the wall, and a look back at the floor you were lost on (leaving.js). From out here nothing is in
+      // the way of any of it: every room is drawn, for the one time in the visit
+      const p = leaving(since, out);
+      if (p.outside && !out.shown) { out.shown = true; for (const rt of world.rooms) rt.group.visible = true; }
+      camera.position.set(p.x, p.y, p.z);
+      camera.rotation.set(p.pitch, p.yaw, p.roll, 'YXZ');
+      u.uWhite.value = p.white; u.uSnow.value = p.snow;
+      interference = Math.max(interference, p.track);
+      sound.setHum(Math.max(0, 1 - since / 1.2));
+      sound.air?.(Math.min(1, since / 0.8) * (1 - p.white));
+      if (p.over) conclude();
     }
   });
 
@@ -275,13 +305,18 @@ async function visit(office, opt) {
     if (opt.debug) delete window.__backrooms;
     resolveVisit({ reason: reason || 'quit', kept });
   }
-  function finish(why) {
-    if (state === 'done' || state === 'ending' || pendingQuit) return;
+  function finish(why, how) {
+    if (state === 'done' || state === 'ending' || state === 'through' || pendingQuit) return;
     reason = why; ending = 0;
     hud.hint(false);
-    if (why === 'exit' && purse) kept = purse.bank();              // carried is only kept by leaving through the door
+    if (why === 'exit' && purse) kept = purse.bank();              // carried is only kept by leaving by the way out
     if (why === 'caught') sound.play('static', { dur: 1.3 });
-    if (state === 'loading' || !cur) pendingQuit = true; else state = 'ending';
+    if (state === 'loading' || !cur) pendingQuit = true;
+    else if (why === 'exit' && how && cur.player) {
+      const me = cur.player.me;
+      out = { x: me.x, y: camera.position.y, z: me.z, yaw: me.yaw, pitch: me.pitch, nx: how.nx, nz: how.nz, shown: false };
+      state = 'through'; since = 0;
+    } else state = 'ending';
   }
   const visitOver = new Promise((resolve) => { resolveVisit = resolve; });
 

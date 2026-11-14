@@ -66,14 +66,15 @@ function stencil(text) {
  * Play one ride and resolve when the screen has gone dark at the other end.
  *
  * @param {object} office
- * @param {{from:object, to:object, plate?:object[][], until?:Promise, pace?:number, glitch?:boolean}} trip
+ * @param {{from:object, to:object, plate?:object[][], until?:Promise, pace?:number, glitch?:boolean, stay?:boolean}} trip
  *        from/to: levels (core/levels.mjs) · plate: the buttons in the car as they stand (panelPlate)
  *        until: do not open the doors before this settles (the next floor is still loading)
  *        pace: 1 is normal; larger is slower (for looking at it) · glitch: this is not a normal floor
+ *        stay: the doors open, nobody gets out, and the lights go (the ride is not over: another follows)
  */
 export function playRide(office, trip) {
   const { from, to } = trip;
-  const pace = trip.pace || 1, glitch = !!trip.glitch;
+  const pace = trip.pace || 1, glitch = !!trip.glitch, stay = !!trip.stay;
   const stage = office.stage;
   const dir = Math.sign(to.storey - from.storey) || 1;
   const TRAVEL = T.travel * (1 + 0.035 * Math.max(0, Math.abs(to.storey - from.storey) - 2));       // a long way takes a little longer
@@ -258,18 +259,24 @@ export function playRide(office, trip) {
       if (phase === 'travel') {
         const k = (at - T.wait - T.close) / TRAVEL;
         storey = from.storey + (to.storey - from.storey) * smoother(k);
-        if (k >= 1 && !waiting) { phase = 'arrive'; arrived = at; sfx('lift-ding'); try { music?.stop?.(0.6); } catch { /* fine */ } setTimeout(() => sfx(VOICE[to.id]), 280); }
+        if (k >= 1 && !waiting) { phase = 'arrive'; arrived = at; sfx(stay ? 'lift-denied' : 'lift-ding'); try { music?.stop?.(0.6); } catch { /* fine */ } if (!stay) setTimeout(() => sfx(VOICE[to.id]), 280); }
       }
       if (phase === 'arrive') {
         const e = at - arrived;
         storey = to.storey; arrow = 0;
         doors = smooth((e - 0.12) / T.open);
         setGlow(to, 1.0 + doors * 0.9);
-        if (e > 0.42) { avatar.walking += (1 - avatar.walking) * (1 - Math.exp(-12 * dt)); avatar.root.position.z -= dt / pace * 1.5; avatar.root.position.x += (0 - avatar.root.position.x) * 0.1; }
-        if (e > 0.12 + T.open * 0.75 && phase !== 'out') { phase = 'out'; curtain.close(T.out * 1000 * Math.min(pace, 3) * 0.7).then(finish); }
+        if (stay) {
+          // the doors part on a floor that is not one: its light, and nothing to step out onto. A moment to take that in; then the lights go
+          if (e > 1.5) { lampLight.intensity = 0; lampMat.color.setScalar(0.02); }
+          if (e > 1.75 && phase !== 'out') { phase = 'out'; curtain.close(60).then(finish); }
+        } else {
+          if (e > 0.42) { avatar.walking += (1 - avatar.walking) * (1 - Math.exp(-12 * dt)); avatar.root.position.z -= dt / pace * 1.5; avatar.root.position.x += (0 - avatar.root.position.x) * 0.1; }
+          if (e > 0.12 + T.open * 0.75 && phase !== 'out') { phase = 'out'; curtain.close(T.out * 1000 * Math.min(pace, 3) * 0.7).then(finish); }
+        }
       } else if (phase === 'out') {
         doors = 1; arrow = 0; storey = to.storey;
-        avatar.walking += (1 - avatar.walking) * (1 - Math.exp(-12 * dt)); avatar.root.position.z -= dt / pace * 1.5;
+        if (!stay) { avatar.walking += (1 - avatar.walking) * (1 - Math.exp(-12 * dt)); avatar.root.position.z -= dt / pace * 1.5; }
       }
       setDoors(doors);
       shaft.position.y = -storey * STOREY;
@@ -285,7 +292,7 @@ export function playRide(office, trip) {
       const sig = `${text}|${arrow}|${color}`;
       if (sig !== shown) { shown = sig; display.set(text, arrow, color); }
       // light, and the little shake of a car that is moving
-      lampLight.intensity = 7 * flick; lampMat.color.set('#fff1d6').multiplyScalar(1.45 * flick);
+      if (!(stay && phase !== 'closing' && phase !== 'travel' && at - arrived > 1.5)) { lampLight.intensity = 7 * flick; lampMat.color.set('#fff1d6').multiplyScalar(1.45 * flick); }
       const moving = phase === 'travel' ? Math.sin(Math.min(1, (at - T.wait - T.close) / TRAVEL) * Math.PI) : 0;
       const shake = (0.004 + (glitch ? 0.012 : 0)) * moving;
       camera.position.set(camAt.x + Math.sin(at * 47) * shake, camAt.y + Math.sin(at * 31) * shake, camAt.z);

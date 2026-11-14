@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { LEVELS, LEVEL_KINDS, HOME, PLATE, RESERVED, levelById, findLevel, isVisible, visibleLevels, levelContext, floorOfPlacement, panelPlate } from '../core/levels.mjs';
+import { LEVELS, LEVEL_KINDS, HOME, PLATE, RESERVED, levelById, findLevel, isVisible, visibleLevels, levelContext, floorOfPlacement, panelPlate, arrivalOf } from '../core/levels.mjs';
 import { buildLayout } from '../core/layout.mjs';
 import { createNav } from '../core/nav.mjs';
 import { SECRETS } from '../core/secrets.mjs';
@@ -126,6 +126,25 @@ test('levels: the thirteenth floor is only there on a Friday the 13th, or once s
   // and it reads straight off a world snapshot
   assert.deepEqual(levelContext({ today: { quirks: ['friday-13'] }, discoveries: { noclip: { byName: 'Robin' } } }), { quirks: ['friday-13'], found: ['noclip'] });
   assert.deepEqual(levelContext(null), { quirks: [], found: [] });
+});
+
+test('levels: the basement is the bottom of the building, and where the button that should not exist lets you out', () => {
+  const basement = findLevel('B');
+  assert.equal(basement.id, 'basement');
+  assert.equal(basement.storey, Math.min(...LEVELS.map((l) => l.storey)), 'the lift stops at nothing under it');
+  assert.ok(!basement.hidden && !basement.card && basement.kind === 'place', 'always there, and it wants no keycard');
+  assert.deepEqual([...PLATE[PLATE.length - 1]], ['P', 'B'], 'its button is on the bottom row, beside P');
+  // every button stops where it says, but one: there is no thirteenth storey, so that car comes down again
+  for (const l of LEVELS) assert.equal(arrivalOf(l), l.id === 'thirteen' ? basement : l, `${l.id} lets you out at ${arrivalOf(l).id}`);
+  assert.equal(arrivalOf(null), null);
+  // Nobody gets to the place under the office by pressing a button. The lift has one way of handing over to it, and
+  // that is in answer to a floor that says you went through one of its walls.
+  const index = fs.readFileSync(path.join(ROOT, 'public', 'world', 'levels', 'index.js'), 'utf8');
+  const calls = [...index.matchAll(/office\.onNoclip\?\.\(/g)];
+  assert.equal(calls.length, 1, 'one hand-over, in one place');
+  const before = index.slice(0, calls[0].index), loop = before.lastIndexOf('while (');
+  assert.match(before.slice(loop, before.indexOf('\n', loop)), /reason === 'noclip'/, '…and only while the floor you were on says so');
+  assert.match(fs.readFileSync(path.join(ROOT, 'public', 'world', 'levels', 'basement.js'), 'utf8'), /leave\('noclip'/, 'the basement has such a wall');
 });
 
 test('levels: every floor has a module behind it that can be entered', () => {

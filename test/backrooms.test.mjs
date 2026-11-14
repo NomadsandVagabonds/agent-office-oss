@@ -217,7 +217,15 @@ test('no empty rooms: every archetype in the deck has somebody to build it', () 
   const dir = new URL('../public/world/backrooms/', import.meta.url);
   const maps = readdirSync(dir).filter((f) => /^rooms\d*\.js$/.test(f)).map((f) => readFileSync(new URL(f, dir), 'utf8')).join('\n').match(/^export const (?:BUILDERS|MORE\d*) = \{[^}]*\};$/gm) || [];
   const registered = new Set(maps.join(' ').match(/'[\w-]+'(?=:)|\b\w+\b(?=\s*[,}])/g).map((k) => k.replace(/'/g, '')));
-  for (const arch of DECK) assert.ok(registered.has(arch.id), `${arch.id} is in the deck but nothing builds it`);
+  for (const arch of DECK) {
+    // a room written since the first deck names the file its builder is in
+    if (arch.module) {
+      assert.match(arch.module, /^\.\/rooms\/[\w-]+\.js$/, `${arch.id}: its builder is a file in rooms/`);
+      assert.match(readFileSync(new URL(arch.module, dir), 'utf8'), /^export function build\s*\(/m, `${arch.module} exports build(c)`);
+      continue;
+    }
+    assert.ok(registered.has(arch.id), `${arch.id} is in the deck but nothing builds it`);
+  }
   for (const kind of ['plain', 'start', 'exit']) assert.ok(registered.has(kind));
 });
 
