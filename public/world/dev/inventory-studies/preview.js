@@ -1,5 +1,6 @@
-// A local visual comparison. All variants use the shipping HUD and item model;
-// none are installed into the normal game. Game time is held for inspection.
+// Archived visual comparison. The normal game now uses the camcorder style.
+// This page keeps the original base beneath its three study skins.
+import { REFERENCE_CSS } from './reference-style.js';
 const frame = document.querySelector('iframe'), q = new URLSearchParams(location.search);
 const variants = new Set(['office', 'paper', 'viewfinder']), modes = new Set(['inspect', 'craft', 'pockets']);
 let theme = variants.has(q.get('theme')) ? q.get('theme') : 'office';
@@ -9,7 +10,7 @@ const descriptions = {
   paper: 'A found-property file: manila stock, a photocopied specimen, blue ink and stamped controls.',
   viewfinder: 'Everything stays on the tape: camera-menu type, selection brackets, and much more of the room.',
 };
-let game, inv, doc, thumbs = {}, observer, paintPending = false;
+let game, inv, doc, observer, paintPending = false;
 const frameWindow = () => frame.contentWindow;
 function updateToolbar() {
   for (const b of document.querySelectorAll('[data-theme]')) b.setAttribute('aria-pressed', String(b.dataset.theme === theme));
@@ -17,24 +18,8 @@ function updateToolbar() {
   document.getElementById('direction').textContent = descriptions[theme];
   const url = new URL(location.href); url.searchParams.set('theme', theme); url.searchParams.set('mode', mode); history.replaceState(null, '', url);
 }
-function replaceIcon(el, type) {
-  if (!el || !thumbs[type] || el.querySelector(`img[data-vox="${type}"]`)) return;
-  const old = el.querySelector('svg.br-inv-icon');
-  if (!old) return;
-  const img = doc.createElement('img'); img.src = thumbs[type]; img.className = 'br-inv-icon';
-  img.dataset.vox = type; img.alt = ''; img.setAttribute('aria-hidden', 'true'); old.replaceWith(img);
-}
 function refreshObjects() {
   if (!inv) return;
-  const state = inv.model.read();
-  doc.querySelectorAll('.br-inv-slot').forEach((el, i) => replaceIcon(el, state.slots[i]?.type));
-  replaceIcon(doc.querySelector('.br-inv-specimen'), state.slots[state.selected]?.type);
-  for (const el of doc.querySelectorAll('.br-inv-ingredient')) {
-    const label = el.getAttribute('aria-label') || '';
-    const type = /Flashlight/.test(label) ? 'torch' : /Paper/.test(label) ? 'paper' : /Lighter/.test(label) ? 'lighter'
-      : /Adhesive/.test(label) ? 'tape' : /Battery/.test(label) ? 'battery' : /Camcorder/.test(label) ? 'camera' : null;
-    replaceIcon(el, type);
-  }
   if (!paintPending) {
     paintPending = true;
     frameWindow().requestAnimationFrame(() => {
@@ -78,6 +63,7 @@ frame.addEventListener('load', async () => {
     // Stop the stage clock only in this comparison page. Native UI actions still
     // use the actual inventory controller; the normal dev game is unaffected.
     win.__stage.stop(); inv = game.inventory;
+    doc.querySelector('style[id^="backrooms-inventory-css-"]').textContent = REFERENCE_CSS;
     win.addEventListener('resize', () => {
       win.__stage.resize(); win.__stage.view?.render(0);
     });
@@ -88,11 +74,6 @@ frame.addEventListener('load', async () => {
       const link = doc.createElement('link'); link.rel = 'stylesheet'; link.href = `/world/dev/inventory-studies/${name}.css`;
       link.onload = resolve; link.onerror = reject; doc.head.append(link);
     })));
-    const module = doc.createElement('script'); module.type = 'module';
-    module.textContent = `import { renderItemThumbnails } from '/world/dev/inventory-studies/thumbnails.js';window.__studyThumbnails=renderItemThumbnails();`;
-    doc.body.append(module);
-    for (let i = 0; i < 100 && !win.__studyThumbnails; i++) await new Promise(resolve => setTimeout(resolve, 50));
-    thumbs = win.__studyThumbnails || {};
     // View the same quiet room; the picture remains deliberately unremarkable.
     game.goto(4, .04, 1.44, 0, -.05); game.player.update(0); inv.update(0, true);
     win.__stage.view.render(.016);

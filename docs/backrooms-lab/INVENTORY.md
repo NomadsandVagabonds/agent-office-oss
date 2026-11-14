@@ -42,6 +42,29 @@ Inspection captures movement and look input and releases pointer lock.
 cooldown, camera power and any emitting flashlight keep advancing. Click the
 scene after closing to resume mouse look. Buttons also support touch.
 
+## Camcorder inventory
+
+The selected visual direction is **Through the lens**, the third inventory
+study. It is now the normal appearance of the `inventory=1` prototype: six
+transparent pockets, viewfinder selection brackets, pixel menu lettering and
+small cursor-led actions. Inspection and the two-input crafting menu share
+the camcorder overlay rather than an opaque equipment panel. Charge, fitted
+tape, mounted-light status and action feedback remain in the selected item's
+readout. The choice changes presentation, not the inventory or crafting rules.
+On portrait phones, opening the menu uses the upper letterbox and moves the
+running REC/battery strip above it. The six pockets and health stay beside
+the picture; long action feedback does not cover the menu's buttons.
+
+`inventory-style.js` owns the production CSS. `inventory-icons.js` renders the
+actual Office voxel props into cached transparent thumbnails, including a
+distinct taped flashlight. Its temporary renderer and geometries are released
+after the render pass; the original SVG icons remain a fallback when rendering
+is unavailable. Fonts are served from the project's vendored font files.
+
+The three-way comparison remains at `/world/dev/inventory-studies.html`.
+It preserves its historical skins and pauses its embedded scene for visual
+review. Use the ordinary Backrooms dev page for gameplay and timing checks.
+
 ## Supplies and combining
 
 Choose **Combine** on a compatible item to open two ingredient boxes. The
@@ -68,8 +91,10 @@ Invalid pairs, stale ingredients and rejected world placement spend nothing.
   item. Only one light can be mounted; it still occupies its original pocket,
   but can emit while another item is held. Mounting does not switch it on.
   **F** prioritizes the mounted light, and only one flashlight can emit at a
-  time. Dropping or giving away the light clears the mount; its tape remains
-  fitted so it can be picked up and mounted again.
+  time. When inspecting a different loose flashlight, its own toggle displays
+  **Q**; clicking that action or pressing Q controls the selected light while
+  F still controls the mount. Dropping or giving away the light clears the
+  mount; its tape remains fitted so it can be picked up and mounted again.
 - **Chalk:** six directional floor marks. Wet, obstructed or uneven ground
   rejects placement without using chalk. The final mark consumes the stub.
   Each floor retains its latest 24 marks until that floor is disposed.
@@ -342,3 +367,17 @@ from sight rays, nearest-fire and height limits, four concurrent fires, and
 and capped placements preserve paper; rising water extinguishes a fire.
 Desktop and 390×844 checks cover both ingredient boxes, quantity controls,
 native Enter/Space and touch activation, focus recovery and overlay spacing.
+
+After the camcorder style was promoted, all 69 focused model, controller and
+input checks passed. The actual connected-game crafting regression also
+passed again, including native prepare/mount/recharge actions, F, a 24-second
+fire, live clocks, floor handover, drop detachment, pirate retreat and flag-off
+behavior. Independent 390×844 phone checks verified every selected flashlight
+action before and after preparation/mounting, native Enter/Space, touch
+ingredients and quantity controls, cancellation, invalid pairs and visible
+long-error feedback. The portrait layout also passed at 390×667: no menu
+overflow or clipped controls, and REC/battery remain separate from the menu.
+The mixed two-flashlight case verifies that the loose light shows Q and its
+button/Q control it, while F controls the other mounted light; selecting the
+mounted light restores the F label.
+No browser errors were observed in these runs.
