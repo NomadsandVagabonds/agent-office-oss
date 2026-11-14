@@ -36,9 +36,10 @@ export function createPalette(office, ui) {
       if (r.locked || r.kind === 'corridor' || r.kind === 'elevator' || r.kind === 'landing' || r.kind === 'vacant') continue;
       out.push({ label: r.name, hint: 'room', icon: 'pin', run: () => ui.gotoRoom(r.id) });
     }
-    const sheet = (name, label, key) => out.push({ label, hint: key, icon: { comms: 'chat', board: 'board', binder: 'book', work: 'term', passport: 'star' }[name], run: () => ui.openSheet(name) });
+    const sheet = (name, label, key) => out.push({ label, hint: key, icon: { comms: 'chat', board: 'board', binder: 'book', work: 'term', passport: 'star', usage: 'eye' }[name], run: () => ui.openSheet(name) });
     sheet('comms', 'Comms — channels and direct lines', 'C'); sheet('board', 'Board — kanban', 'B'); sheet('binder', 'Binder — project docs', 'K');
     sheet('work', 'Terminals', 'T'); sheet('passport', 'Passport — discoveries', 'P');
+    sheet('usage', 'What is left — usage per provider', 'U');
     out.push({ label: office.walk?.active ? 'Step back off the floor' : 'Walk the floor', hint: 'Tab', icon: 'pin', run: () => office.walk?.toggle() });
     out.push({ label: 'The whole office', hint: 'Space', icon: 'home', run: () => ui.overview() });
     out.push({ label: 'Next agent waiting on you', hint: 'N', icon: 'inbox', run: () => ui.nextNeed() });
@@ -49,7 +50,14 @@ export function createPalette(office, ui) {
     for (const [mode, label] of [['auto', 'Time: follow the clock'], ['day', 'Time: always day'], ['dusk', 'Time: always golden hour'], ['night', 'Time: always night']]) {
       out.push({ label, hint: s.get('time') === mode ? 'current' : '', icon: 'gear', run: () => s.set('time', mode) });
     }
-    out.push({ label: s.get('sound') === 'on' ? 'Sound: turn off' : 'Sound: turn on (a chime when someone needs you)', hint: s.get('sound') === 'on' ? 'on' : 'off', icon: 'gear', run: () => s.set('sound', s.get('sound') === 'on' ? 'off' : 'on') });
+    out.push({ label: s.get('sound') === 'on' ? 'Sound: turn off' : 'Sound: turn on (a chime when someone needs you, and the office itself)', hint: s.get('sound') === 'on' ? 'on' : 'off', icon: 'gear', run: () => s.set('sound', s.get('sound') === 'on' ? 'off' : 'on') });
+    if (s.get('sound') === 'on') {                      // what sound.js listens to; each is on, at normal volume, until changed
+      for (const [key, label] of [['music', 'Music'], ['ambience', 'Ambience (room tone, typing)']]) {
+        const on = (s.get(key) ?? 'on') === 'on';
+        out.push({ label: `${label}: turn ${on ? 'off' : 'on'}`, hint: on ? 'on' : 'off', icon: 'gear', run: () => s.set(key, on ? 'off' : 'on') });
+      }
+      for (const level of ['quiet', 'normal', 'loud']) out.push({ label: `Volume: ${level}`, hint: (s.get('volume') ?? 'normal') === level ? 'current' : '', icon: 'gear', run: () => s.set('volume', level) });
+    }
     out.push({ label: s.get('notify') === 'on' ? 'Notify me in other tabs: turn off' : 'Notify me when someone needs me (in other tabs)', hint: s.get('notify') === 'on' ? 'on' : 'off', icon: 'gear', run: () => s.set('notify', s.get('notify') === 'on' ? 'off' : 'on') });
     out.push({ label: 'Rename yourself…', hint: office.walk?.me.name || '', icon: 'gear', run: () => {
       const name = window.prompt('What should agents call you?', office.walk?.me.name || 'Lead');

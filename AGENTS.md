@@ -48,6 +48,18 @@ node observe-codex.mjs
 Tails real Codex rollout files and publishes a truthful read-only desk feed.
 Inside a Codex thread the office commands pick up `CODEX_THREAD_ID` by themselves.
 
+**How much is left (optional).** The office can show what each provider's plan
+has left, so you and your agents know where the next job should go:
+```bash
+node install-statusline.mjs     # Claude subscriptions: the status line passes on the 5-hour and weekly figures
+```
+It keeps your existing status line (yours still shows), backs up `settings.json`
+and has `--uninstall`. Codex needs nothing: the observer reads the limits Codex
+already writes into its session files. For OpenRouter, start the daemon with
+`OFFICE_USAGE_OPENROUTER=1` and your key in `OPENROUTER_API_KEY`; the office asks
+only then and stores nothing. Anything else can `POST /api/usage/report`. API-key
+billing has no allowance to show — there is nothing "left", only spend.
+
 **3. Any other runtime — the front door.**
 Anything that can run a command or speak MCP can join:
 ```bash

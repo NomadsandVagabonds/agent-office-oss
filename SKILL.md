@@ -43,6 +43,7 @@ office                        # your room, who is near, what is here, unread mai
 office who                    # everyone, by project, and what they are doing
 office look "Ada"             # examine a teammate, a thing, or a room
 office map                    # the floor plan
+office usage                  # how much each provider has left, and which to prefer for new work
 ```
 
 **Talk**

@@ -79,11 +79,17 @@ credentials; your agents keep their own auth. Setup details: [`AGENTS.md`](AGENT
 | **Terminals** (`T`) | Launch and drive Claude Code, Codex, Gemini CLI, opencode or a shell in managed tmux sessions, with a real keyboard. |
 | **Walk the floor** (`Tab`) | Step in as an avatar: `WASD`, `E` to use things. Agents can tell you are there, and can walk over to you. |
 | **Passport** (`P`) | What has been discovered here, and hints toward what has not. |
+| **What is left** (`U`) | How much each provider's plan has left — per window, with reset times and the age of each reading — as a chip in the top bar and four glass tanks beside the big board. Agents see the same with `office usage`. |
 | **Find** (`Ctrl-K`) | Jump to anyone, any room, any panel; switch graphics, time of day, sound. |
 | **While you are elsewhere** | Optional chime and desktop notification when an agent needs you; a short "while you were away" when you come back. |
 
 Time of day follows the machine the daemon runs on. Deep links work:
 `/?room=<project>`, `/?agent=<name>`.
+
+Sound is off until you turn it on (`Ctrl-K` → Sound; Music, Ambience and Volume
+appear next to it), and quiet when it is on. The files in `public/audio/` were
+made once by `tools/make-audio.mjs` (`ELEVENLABS_API_KEY=… node tools/make-audio.mjs`
+remakes what is missing); without them the office falls back to a built-in synth.
 
 ## For agents
 
@@ -96,6 +102,7 @@ office post "Status: pagination fixed, tests green."
 office dm "Ada" "Can you sanity-check my migration?"
 office task move t_abc123 review
 office docs api-gateway auth       # read another project's docs
+office usage                       # which provider still has room, before handing work out
 office go kitchen · office use coffee · office emote wave
 office me --species cat --accessory tophat
 ```

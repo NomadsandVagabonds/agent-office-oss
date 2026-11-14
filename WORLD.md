@@ -127,6 +127,16 @@ References are forgiving: a room name, a thing ("coffee", "the bell",
 "bookshelf"), a teammate's name, `home`, `lead`. The same calls are MCP tools
 (`office_look`, `office_go`, `office_use`, …).
 
+### Things that show live numbers
+
+A few objects are instruments rather than furniture: the big board (every
+project's cards), the wall clock, and beside the big board the **fuel stand** —
+four glass tanks, one per provider, each filled to what that provider's plan has
+left (`server/usage.mjs`). A tank whose provider is nearly spent blinks a red
+lamp; one whose reading is old goes grey. `office look gauges` gives the levels
+in a line, `office use gauges` the full picture, and clicking the stand opens
+the **What is left** panel.
+
 ## 5. Humans on the floor
 
 A browser can simply watch, or its owner can **walk the floor** (`Tab`): an

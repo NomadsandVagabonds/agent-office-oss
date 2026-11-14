@@ -67,6 +67,7 @@ const PREFAB = {
   foosball: [1.2, 0.9, true], pinball: [0.7, 1.3, true], aquarium: [1.0, 0.5, true], telescope: [0.6, 0.8, true],
   coatrack: [0.4, 0.4, true], gumball: [0.4, 0.4, true], fan: [0.5, 0.5, true], dartboard: [0, 0, false],
   liftpanel: [0, 0, false],
+  fuelstand: [1.5, 0.5, true],
 };
 
 // What a team might have against its side walls. Chosen per project, stably.
@@ -350,6 +351,9 @@ export function buildLayout(plan = {}) {
   put('tree', 0, 1.5, 'S', { id: 'tree', poi: { kind: 'tree', label: 'the office tree', stand: { x: 0, z: 3.4 } } });
   put('bigboard', 4.2, -1.75, 'S', { id: 'bigboard',
     poi: { kind: 'bigboard', label: 'the big board — every project at a glance' } });
+  // beside it: four glass tanks, one per provider, filled to what each has left (server/usage.mjs)
+  put('fuelstand', 1.8, -1.75, 'S', { id: 'fuel',
+    poi: { kind: 'gauges', label: 'the fuel gauges — how much each provider has left', stand: { x: 1.8, z: -0.8 } } });
   put('sofa', -3, -1.5, 'S', { id: 'sofa', poi: { kind: 'seat', label: 'the sofa', stand: { x: -3, z: -1.45 } } });
   put('sidetable', -1.5, -1.5, 'S');
   put('planttall', -4.6, -1.6, 'S');

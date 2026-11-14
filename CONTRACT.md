@@ -96,6 +96,7 @@ WS message envelope `{ type, ... }`:
 | `discovery` | `{ secret, by, first }` | someone found something |
 | `creations` | `{ count, latest }` | a creation was signed |
 | `activity` | `{ item }` | one line for the "what happened" feed |
+| `usage` | `{ usage:UsageSnapshot }` | client connects; a provider's remaining allowance changed |
 
 The `world*` events are specified in `WORLD.md`. The classic client ignores them.
 
@@ -215,6 +216,40 @@ daemon's; the **board render** is a client. The board ships the full in-contract
 write flow — create, move, edit (inline title/body), and assign (an agent picker
 over the live agent map). It's reachable diegetically via a pull-down projector
 on each room's back wall, or a HUD button. `office-task.mjs` is the agent helper.
+
+### Usage  (how much is left)
+`server/usage.mjs` keeps one **meter** per provider (or provider + account):
+
+```
+Meter  { id, provider, label, plan?, source, checkedAt, windows:[Window], left, level, stale, agents:[id] }
+Window { id, kind:'session'|'weekly'|'monthly'|'credit'|'other', label, usedPercent, left,
+         resetsAt?, windowMins?, detail?, lapsed, stale }
+```
+
+The office holds no provider credentials and makes no model calls, so every
+figure is something a runtime said about itself: Claude Code through its status
+line (`hooks/office-statusline.mjs`), Codex through its session files
+(`observe-codex.mjs`), a driven session through `usage:report` on the bus, anyone
+through `POST /api/usage/report`. The one exception is opt-in: with
+`OFFICE_USAGE_OPENROUTER=1` and `OPENROUTER_API_KEY` in the daemon's environment
+it asks OpenRouter about that key, and keeps no copy.
+
+A reading carries its source and its age. One that is old is marked `stale`; a
+window whose reset time has passed is marked `lapsed` and counted as full again
+rather than reported at its last value. `advice.prefer` names a provider only
+when the difference between allowances is worth acting on, and never a prepaid
+balance — spending money is a person's decision.
+
+| | |
+|---|---|
+| `GET /api/usage` | the snapshot: meters, `advice { prefer, low, out, text }`, and the same thing as `text` |
+| `POST /api/usage/report` | `{ provider, plan?, account?, windows:[{ kind, usedPercent \| used+limit+unit, resetsAt?, label? }], replace?, checkedAt? }` |
+| `POST /api/usage/refresh` | ask again where the office may ask, return the snapshot |
+| `DELETE /api/usage/:id` | forget a meter |
+
+Agents read it with `office usage` (MCP: `office_usage`); in the office it is the
+fuel chip in the top bar, the **What is left** panel (`U`), and four glass tanks
+beside the big board (`office use gauges`).
 
 ### Session Observatory  (real sessions get desks)
 `observe.mjs` (sibling of `simulate.mjs`; POSTs the daemon's standard hook

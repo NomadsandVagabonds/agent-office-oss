@@ -9,7 +9,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { TASK_STATUS } from '../../core/contract.mjs';
 import { pickDuckWisdom, pickFortune, pickSnack, SECRETS } from '../../core/secrets.mjs';
-import { HOME, visibleLevels } from '../../core/levels.mjs';
+import { HOME } from '../../core/levels.mjs';
+import { createFloors } from './floors.mjs';
 import { readCreations } from '../creations-store.mjs';
 import { hashId } from '../../core/look.mjs';
 
@@ -55,6 +56,8 @@ export function createTextWorld(ctx, world) {
   function whereabouts(agent) {
     const place = world.placeOf(agent.id);
     if (!place) return { room: null, text: 'not on the floor' };
+    const off = floors.whereabouts(agent);
+    if (off) return off;
     const moving = Date.now() < place.eta;
     const room = roomName(place.room);
     if (place.at === 'desk') return { room: place.room, text: moving ? `walking to their desk in ${room}` : `at their desk in ${room}` };
@@ -105,6 +108,8 @@ export function createTextWorld(ctx, world) {
     const text = norm(ref);
     if (!text) return null;
     if (['home', 'desk', 'my desk', 'back', 'my seat', 'work'].includes(text)) return { kind: 'home' };
+    const down = floors.resolveHere(agent, text);             // away on another floor: its things come first
+    if (down) return down;
     if (['cat', 'kernel', norm(world.cat().name)].includes(text)) return { kind: 'cat' };
     if (['duck', 'rubber duck', 'debug duck'].includes(text)) return { kind: 'duck' };
     if (['window', 'outside', 'weather', 'sky'].includes(text)) return { kind: 'window' };
@@ -139,6 +144,8 @@ export function createTextWorld(ctx, world) {
     const other = ctx.agents.resolveRef(ref);
     if (other && other.id !== agent.id) return { kind: 'agent', agent: other };
     if (L().pois.has(ref)) return poi(ref);
+    const floor = floors.resolveFloor(text);                  // "the pasture", "mission control": somewhere the lift goes
+    if (floor) return floor;
     // anything else you can see: match what it is called, nearest room first
     const bare = text.replace(/^(the|a|an|my|our) /, '');
     const here = world.placeOf(agent.id)?.room || null;
@@ -163,22 +170,27 @@ export function createTextWorld(ctx, world) {
   }
 
   /* ---- the lift -------------------------------------------------------- */
-  // Its floors are core/levels.mjs. Humans ride it (public/world/levels/);
-  // agents, at this stage, can walk up, read the panel and press the button.
+  // Its floors are core/levels.mjs. Humans ride it in the 3D client
+  // (public/world/levels/); what the lift says to agents, the floors an agent
+  // can ride to, and what those floors are like in words, are in floors.mjs.
 
-  const liftFloors = () => visibleLevels({ quirks: world.today().quirks, found: Object.keys(world.state().discoveries) });
-  const liftPanel = () => liftFloors().map((l) => (l.unmarked
-    ? `  ${l.floor.padEnd(2)} · (no label. The button flickers. It was not there yesterday.)`
-    : `  ${l.floor.padEnd(2)} · ${l.name} — ${l.blurb}${l.id === HOME ? '  ← you are here' : ''}`)).join('\n');
-  const describeLift = () => 'The lift, at the head of the landing. Everyone arrives through it. The panel beside the doors lists where it goes:\n'
-    + liftPanel() + '\nRiding is for humans only at this stage — but you can press the button: office use lift';
-  const callLift = () => 'You press the call button. The doors slide open on an empty car, wait a polite moment, and close again. Inside, the buttons read:\n'
-    + liftPanel() + '\nIt will not take you anywhere yet: riding is for humans only at this stage. Curious what is up there? Ask one — office dm lead "…"';
+  const floors = createFloors(ctx, world);
+  const liftFloors = floors.floors;
+  const { describeLift, callLift } = floors;
+  /** What the glass tanks beside the big board show, in a line. */
+  const gaugesLine = () => {
+    const meters = ctx.usage ? ctx.usage.snapshot().meters.filter((m) => m.left !== null) : [];
+    return meters.length
+      ? `Four glass tanks on a brass stand, one per provider. ${meters.map((m) => `${m.label.split(' · ')[0]}: ${Math.round(m.left)}% left${m.stale ? ' (old reading)' : ''}`).join(' · ')}. (office use gauges for the detail)`
+      : 'Four glass tanks on a brass stand, one per provider. All empty: nobody has told the office what is left yet. (office use gauges)';
+  };
 
   /* ---- look ------------------------------------------------------------ */
 
   function look(agent, ref) {
     if (ref) return examine(agent, ref);
+    const elsewhere = floors.floorOf(agent);                   // took the lift: what they see is that floor
+    if (elsewhere) return floors.look(agent, elsewhere);
     const place = world.placeOf(agent.id);
     const here = place ? L().roomById.get(place.room) : null;
     const now = new Date();
@@ -296,7 +308,7 @@ export function createTextWorld(ctx, world) {
       const light = hour < 6 ? 'deep night' : hour < 9 ? 'early light' : hour < 17 ? 'daylight' : hour < 20 ? 'golden hour' : 'night, the city lit up';
       return { ok: true, text: `Outside: ${t.weather}, ${light}.` };
     }
-    if (target.kind === 'elevator') return { ok: true, text: describeLift() };
+    if (target.kind === 'elevator') return floors.examine(agent, target);
     return { ok: true, text: describePoi(agent, target.poi), poi: target.poi.id };
   }
 
@@ -352,6 +364,7 @@ export function createTextWorld(ctx, world) {
       }
       case 'coffee': return `The coffee machine. ${world.state().stats.coffees || 0} cups brewed here. (office use coffee)`;
       case 'console': return `The ops console. It shows the daemon's vitals and accepts input. (office use console)`;
+      case 'gauges': return gaugesLine();
       case 'rack': return `Server racks, warm and humming. ${world.state().stats.tools || 0} tool calls have passed through this office.`;
       case 'bookshelf': return world.state().unlocked.backroom
         ? 'The bookshelf stands open like a door. Music leaks through.'
@@ -375,7 +388,7 @@ export function createTextWorld(ctx, world) {
     if (target.kind === 'agent') return { ok: true, text: `You can't use ${target.agent.name}. Try: office dm "${target.agent.name}" "…"  or  office emote wave` };
     if (target.kind === 'room') return world.go(agent, target);
     if (target.kind === 'window') return examine(agent, ref);
-    if (target.kind === 'elevator') return { ok: true, text: callLift() };
+    if (target.kind === 'elevator') return floors.use(agent, target, arg);
     if (target.kind === 'cat') {
       const r = world.petCat(agent);
       return { ok: true, text: r.text + (r.found?.stamped ? '  ★ Discovery: Cat Person' : ` (${r.yours} from you)`), found: r.found?.secret?.id || null };
@@ -387,6 +400,7 @@ export function createTextWorld(ctx, world) {
       return { ok: true, text: pickDuckWisdom(hashId(agent.id + Date.now())) + (found.stamped ? '  ★ Discovery: Rubber Duck Debugging' : ''), found: found.stamped ? 'duck' : null };
     }
     const p = target.poi;
+    if (p.kind === 'elevator' && arg) return floors.ride(agent, arg);      // office use lift <floor>
     if (!agent.lead) {
       const moved = world.go(agent, target);
       if (moved.error) return moved;
@@ -514,6 +528,7 @@ export function createTextWorld(ctx, world) {
         const [city, tz] = cities[n % cities.length];
         return { ok: true, text: `You spin the globe and stop it with a finger: ${city}. It is ${new Date().toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' })} there.` };
       }
+      case 'gauges': return { ok: true, text: ctx.usage ? ctx.usage.text() : 'Four glass tanks, all empty.' };
       case 'clock': return { ok: true, text: `It is ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}. The second hand ticks slightly out of time with everything else.` };
       case 'roomba': return { ok: true, text: 'The little vacuum is docked and charging. Its name tag says DUSTIN. It does not acknowledge you.' };
       case 'catbed': return { ok: true, text: `A cushion, thoroughly furred. Property of ${world.cat().name}.` };
@@ -539,6 +554,8 @@ export function createTextWorld(ctx, world) {
     }
     const walkers = world.leads().filter((l) => l.x !== null);
     if (walkers.length) lines.push('', 'Humans on the floor: ' + walkers.map((l) => `${l.name} (${roomName(l.room)})`).join(' · '));
+    const up = floors.humansElsewhere();
+    if (up.length) lines.push('', 'Humans on other floors: ' + up.map((h) => `${h.name} (${h.level.name})`).join(' · '));
     return { ok: true, text: lines.join('\n'), count: present.length };
   }
 

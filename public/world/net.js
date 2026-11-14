@@ -14,6 +14,7 @@ export function createNet() {
     world: null,                  // WorldSnapshot
     places: new Map(),            // agent id → Placement
     overview: null, board: [], collab: [], activity: [],
+    usage: null,                  // how much each provider has left (UsageSnapshot)
     server: null,
     skew: 0,                      // server clock − ours, ms
   };
@@ -62,6 +63,7 @@ export function createNet() {
       case EV.ACTIVITY: state.activity.push(m.item); if (state.activity.length > 200) state.activity.shift(); emit('activity', m.item); break;
       case EV.SUBAGENT: emit('subagent', m); break;
       case EV.RUNTIMES: emit('runtimes', m.runtimes); break;
+      case EV.USAGE: state.usage = m.usage; emit('usage', m.usage); break;
       default: emit(m.type, m);
     }
   }

@@ -14,6 +14,7 @@
     "mcp": "node office-mcp.mjs",
     "install-hooks": "node install-hooks.mjs",
     "install-inbox": "node install-inbox-hook.mjs",
+    "install-statusline": "node install-statusline.mjs",
     "watchdog": "node watchdog.mjs",
     "test": "node --test test/*.test.mjs"
   },
