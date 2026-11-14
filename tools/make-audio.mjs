@@ -37,8 +37,8 @@ const VOICE = {
   lift: { id: 'Xb7hH8MSUJpSbSDYk0k2', room: 'highpass=f=170' },                                                   // Alice — clear, British, professional
   hollow: { id: 'nPczCjzI2devNBz1zQrb', room: 'asetrate=44100*0.9,aresample=44100,aecho=0.8:0.7:70|150|290:0.45|0.3|0.18' },   // Brian — deep; slowed a little, somewhere large and empty
   pa: { id: 'onwK4e9ZLuTAKqWW03F9', room: 'highpass=f=420,lowpass=f=3400,aecho=0.8:0.5:110|230:0.3|0.16' },      // Daniel — steady broadcaster, out of a ceiling speaker
-  // Adam, on the expressive model, told how to say it — then pitched down a little and put in a big hall: an 80s cabinet's announcer
-  arcade: { id: 'pNInz6obpgDQGcFmaJgB', model: 'eleven_v3', settings: { stability: 0 },
+  // Harry — rough and loud — on the expressive model, told how to say it; then pitched down a little and put in a big hall: an 80s cabinet's announcer
+  arcade: { id: 'SOYHLrjzK2X1ezoPC6cr', model: 'eleven_v3', settings: { stability: 0 },
     room: 'asetrate=44100*0.92,aresample=44100,bass=g=6:f=110:w=0.7,acompressor=threshold=-20dB:ratio=5:attack=4:release=90:makeup=4,aecho=0.8:0.88:60|130|260:0.42|0.28|0.14,lowpass=f=7000' },
 };
 // what "the same loudness" means for each kind, and the ceiling nothing may cross (LUFS / dBFS true peak)
@@ -98,7 +98,7 @@ export const MANIFEST = [
   voice('pa-meeting', 'pa', 'Attention please. The three o\'clock meeting has been moved to the ceiling.'),
   voice('pa-cabinet', 'pa', 'Would the owner of a beige filing cabinet please return to it. It misses you.'),
   voice('pa-exit', 'pa', 'A reminder: the exit is exactly where you left it. Thank you.'),
-  voice('arcade-title', 'arcade', '[booming 1980s arcade game announcer, shouting with excitement] BUG SQUASH!'),
+  voice('arcade-title', 'arcade', '[deep booming arcade announcer voice, shouting] BUG SQUASH!'),
 ];
 
 /* ---- asking for a sound ------------------------------------------------------------ */
