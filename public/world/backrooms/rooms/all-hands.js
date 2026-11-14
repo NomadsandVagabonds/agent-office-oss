@@ -65,7 +65,7 @@ function drawKeynoteSlide(g, w, h, slide, p, blackout) {
     P(g, '#8a1616', 0, 0, w, 22);
     P(g, '#8a1616', 0, h - 14, w, 14);
     drawText(g, ['FLOOR MICROPHONE LIVE'], 8, 5, w - 16, 13, { color: '#f2ded8', size: 9 });
-    drawText(g, [`WE HEAR YOU, ${p.visitor}.`, '', 'STEP TO THE MICROPHONE', 'SAY "NO QUESTIONS"'], 12, 32, w - 24, 90, {
+    drawText(g, [`WE HEAR YOU, ${p.visitor}.`, '', 'ANY QUESTIONS?'], 12, 32, w - 24, 90, {
       color: '#f0dad4', size: 12, leading: 1.25,
     });
   } else if (slide === ADJOURNED_SLIDE) {
@@ -265,7 +265,7 @@ export function build(c) {
     const poster = card(c, `ah:poster:${p.project}`, [
       'MANDATORY ALL-HANDS',
       'DO NOT WAKE SEATED STAFF',
-      'USE MIC TO ADJOURN',
+      'QUESTIONS AT THE MIC',
     ], { w: 144, h: 72, bg: '#dfd7be', fg: '#1c1a16', edge: '#6e1c1a', size: 9, pad: 6 });
     c.hang(c.mapped('ah:poster', poster), schedSpot.side, schedSpot.at, 1.48, 0.88, 0.44);
   }

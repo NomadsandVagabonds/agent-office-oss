@@ -1,4 +1,4 @@
-// Set Piece 1: The Re-Org (`cubicle-tetris`)
+// Set piece: The Re-Org (`re-org`)
 // A dim, water-stained Backrooms atrium whose back wall has collapsed into a
 // pitch-black subterranean shaft. Dozens of real hollow 1990s beige/putty office
 // cubicles — complete with internal desks, overturned swivel chairs, dangling
@@ -13,9 +13,9 @@ import {
   pallorLook, mottleHead, stretchHead, eraseNose, hollowSocket, slippedMouth, jointMat,
 } from '../uncanny.js';
 import {
-  TIER_H, SUMMIT_Y, TETRIS_DECKS, SUMMIT_BELL,
-  tetrisFloorY, createBellCascade, stepBellCascade,
-} from './cubicle-tetris/layout.js';
+  TIER_H, SUMMIT_Y, REORG_DECKS, SUMMIT_BELL,
+  reorgFloorY, createBellCascade, stepBellCascade,
+} from './re-org/layout.js';
 
 const TRIM_DARK = [0.16, 0.16, 0.15];
 const STEEL_LEG = [0.28, 0.29, 0.28];
@@ -207,8 +207,8 @@ export function build(c) {
 
   // Open-backed atrium (`halo` void beyond -D/2); `lights: 'dark'` so we control the murky gloom
   c.shell({ walls: ['front', 'left', 'right'] });
-  c.rt.floorY = (x, z) => tetrisFloorY(x, z);
-  c.rt.headY = (x, z) => Math.max(1.85, H - tetrisFloorY(x, z));
+  c.rt.floorY = (x, z) => reorgFloorY(x, z);
+  c.rt.headY = (x, z) => Math.max(1.85, H - reorgFloorY(x, z));
 
   const fabTex = makeBeigeFabricTex(kit);
   const doorTex = makeFallenDoorTex(kit);
@@ -303,7 +303,7 @@ export function build(c) {
   const openDirs = ['south', 'east', 'north', 'west'];
   let bayCount = 0;
 
-  for (const d of TETRIS_DECKS) {
+  for (const d of REORG_DECKS) {
     if (d.kind === 'flat') {
       const levels = Math.round(d.y / TIER_H);
       const nx = Math.max(1, Math.round((d.x1 - d.x0) / 2.2));
@@ -552,7 +552,7 @@ export function build(c) {
       const me = c.env.player?.me;
       if (!me) return false;
       const loc = c.toLocal(me.x, me.z);
-      return tetrisFloorY(loc.x, loc.z) >= SUMMIT_Y - 0.3;
+      return reorgFloorY(loc.x, loc.z) >= SUMMIT_Y - 0.3;
     },
     use: () => {
       const res = stepBellCascade(cascade, { rang: true });

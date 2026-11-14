@@ -444,7 +444,7 @@ export function build(c) {
   if (warnSpot) {
     const sign = card(c, `sc:warn:${p.plenum}`, [
       `FLOOR RUPTURE · SHAFT ${p.plenum}`,
-      'ENGAGE BOTH KNIFE BREAKERS',
+      'SPANS 01 · 02 RETRACTED',
       'DO NOT APPROACH FAR LEDGES',
     ], { w: 196, h: 74, bg: '#cfc5a8', fg: '#1d1712', edge: '#6e1d14', size: 9, pad: 8 });
     framed(c, c.mapped('sc:warn', sign), warnSpot.side, warnSpot.at, 1.50, 1.24, 0.46, null, [0.16, 0.11, 0.08]);

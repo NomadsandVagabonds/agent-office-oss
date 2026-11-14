@@ -21,7 +21,7 @@
 //            rooms is the owner's choice, nobody else's; the plan puts at most one in a visit, never on its first floor.
 
 import { freightStash } from './rooms/dispatch/layout.js';
-import { tetrisStash } from './rooms/cubicle-tetris/layout.js';
+import { reorgStash } from './rooms/re-org/layout.js';
 import { allHandsStash } from './rooms/all-hands/rule.js';
 import { compactorStash } from './rooms/compactor-canyon/rule.js';
 import { serverChasmStash } from './rooms/server-chasm/rule.js';
@@ -123,7 +123,7 @@ export const MORE_DECK = [
     }) },
   // Four set pieces after Gemini's Wave 4: dark, tall, one a part at most.
   {
-    id: 'cubicle-tetris',
+    id: 're-org',
     name: 'The Re-Org',
     landmark: 'the beige cubicles piled into the dark ceiling over the pit',
     w: [15, 17], d: [15, 17], h: [10, 12],
@@ -132,8 +132,8 @@ export const MORE_DECK = [
     weight: 1.05,
     lights: 'dark',
     themes: { yellow: 2.0, fitout: 1.4, night: 1.5 },
-    module: './rooms/cubicle-tetris.js',
-    stash: tetrisStash,
+    module: './rooms/re-org.js',
+    stash: reorgStash,
     roll: (R, o) => ({
       tierCode: R.pick(['5B-CHASM', '5A-APEX', 'T5-NORTH', '5C-LEDGE']),
       dept: o.projects.length ? R.pick(o.projects).slice(0, 14) : R.pick(['Platform', 'Back Office', 'Fulfilment']),

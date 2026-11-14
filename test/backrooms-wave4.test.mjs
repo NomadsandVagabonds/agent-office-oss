@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ARCHETYPES, isBig, generate } from '../public/world/backrooms/gen.js';
 import {
-  TETRIS_DECKS, SUMMIT_Y, SUMMIT_BELL,
-  tetrisStash, tetrisFloorY, createBellCascade, stepBellCascade,
-} from '../public/world/backrooms/rooms/cubicle-tetris/layout.js';
+  REORG_DECKS, SUMMIT_Y, SUMMIT_BELL,
+  reorgStash, reorgFloorY, createBellCascade, stepBellCascade,
+} from '../public/world/backrooms/rooms/re-org/layout.js';
 import {
   QA_SLIDE, ADJOURNED_SLIDE, ALL_HANDS,
   auditoriumFloorY, allHandsStash, createAllHandsState, stepAllHands,
@@ -51,7 +51,7 @@ function floodHeightfield(W, D, floorFn, startPt, freeFn = () => true) {
 }
 
 test('Wave 4 set pieces are registered in ARCHETYPES as set pieces (isBig) and generate cleanly', () => {
-  const ids = ['cubicle-tetris', 'all-hands', 'compactor-canyon', 'server-chasm'];
+  const ids = ['re-org', 'all-hands', 'compactor-canyon', 'server-chasm'];
   for (const id of ids) {
     assert.ok(ARCHETYPES[id], `${id} is in ARCHETYPES`);
     assert.equal(isBig(ARCHETYPES[id]), true, `${id} is recognized as a set piece`);
@@ -61,11 +61,11 @@ test('Wave 4 set pieces are registered in ARCHETYPES as set pieces (isBig) and g
   }
 });
 
-test('cubicle-tetris: pairwise-disjoint heightfield climbs from ground doorways to +4.80m summit within 0.26m steps', () => {
-  // Check pairwise interior disjointness of TETRIS_DECKS
-  for (let i = 0; i < TETRIS_DECKS.length; i++) {
-    for (let j = i + 1; j < TETRIS_DECKS.length; j++) {
-      const a = TETRIS_DECKS[i], b = TETRIS_DECKS[j];
+test('re-org: pairwise-disjoint heightfield climbs from ground doorways to +4.80m summit within 0.26m steps', () => {
+  // Check pairwise interior disjointness of REORG_DECKS
+  for (let i = 0; i < REORG_DECKS.length; i++) {
+    for (let j = i + 1; j < REORG_DECKS.length; j++) {
+      const a = REORG_DECKS[i], b = REORG_DECKS[j];
       const ox = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0);
       const oz = Math.min(a.z1, b.z1) - Math.max(a.z0, b.z0);
       assert.ok(ox <= 1e-6 || oz <= 1e-6, `decks ${a.id} and ${b.id} do not overlap in interior`);
@@ -74,16 +74,16 @@ test('cubicle-tetris: pairwise-disjoint heightfield climbs from ground doorways 
 
   for (const W of [15, 17]) {
     const D = W;
-    const reached = floodHeightfield(W, D, tetrisFloorY, { x: 0, z: D / 2 - 0.5 });
+    const reached = floodHeightfield(W, D, reorgFloorY, { x: 0, z: D / 2 - 0.5 });
     // Reaches side doorways on y = 0
     assert.equal(reached(-W / 2 + 0.5, 0), true, 'reaches left doorway');
     assert.equal(reached(W / 2 - 0.5, 0), true, 'reaches right doorway');
     // Reaches Summit (+4.80 m) & both summit stash zones
-    assert.equal(tetrisFloorY(SUMMIT_BELL.x, SUMMIT_BELL.z), SUMMIT_Y);
+    assert.equal(reorgFloorY(SUMMIT_BELL.x, SUMMIT_BELL.z), SUMMIT_Y);
     assert.equal(reached(2.5, -5.0), true, 'reaches Tier 5 summit pod');
     assert.equal(reached(SUMMIT_BELL.x, -6.4), true, 'reaches cantilevered chasm nose');
     for (const side of [-1, 1]) {
-      const [x0, z0, x1, z1] = tetrisStash({ W, D }, side);
+      const [x0, z0, x1, z1] = reorgStash({ W, D }, side);
       assert.equal(reached((x0 + x1) / 2, (z0 + z1) / 2), true, `reaches summit stash (${side})`);
     }
   }
