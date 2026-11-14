@@ -9,6 +9,11 @@
 // screen goes green, the lights come back and the lift rings for you. If
 // production goes down it rolls back, and you can try again at the racks.
 // The score goes on the same board BUG SQUASH uses.
+//
+// What the night shift left behind (core/game.mjs): the keycard is on the
+// back of the last bug of the wave; two coins are inside gold bugs, which
+// come whether or not you are lucky while there is one still to find; and
+// the third comes out of the printer, if you hit it enough.
 import * as THREE from 'three';
 import { createWorld } from './kit.js';
 import { FLOORS, WALLS, canvasTexture } from '../scene/textures.js';
@@ -17,10 +22,12 @@ import { ARCADE_SCREEN } from '../props/fun.js';
 import { Vox, M, glow, tone, VOXEL } from '../vox/vox.js';
 import { meshVox } from '../vox/mesher.js';
 import { voxelMaterial } from '../vox/material.js';
+import { keycard } from '../props/loot.js';
 
 const ROOM = { x0: -9, z0: -6.5, x1: 9, z1: 6.5, h: 2.7 };
 const WAVE = 16, LIVES = 5, REACH = 1.55, ARC = 0.75, DIM = 0.8;
 const RACK = { x: 0, z: ROOM.z0 + 0.9 }, RACKS = [-2.6, 2.6];      // production: a rack either side of the wall screen
+const PRINTER = { x: -8.3, z: 3.6 }, KNOCKS = 3, FORCED_GOLD = [4, 10];
 const MONO = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 const TAU = Math.PI * 2;
 const turnTo = (from, to) => { let d = (to - from) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
@@ -85,7 +92,8 @@ export async function enter(office) {
     return { x, z, picture, bad: true };
   });
   RACKS.forEach((x, i) => w.prop('rack', x, RACK.z - 0.35, 'S', { id: `after:rack${i}` }));
-  w.prop('planttall', -8.4, -5.9, 'S'); w.prop('cooler', 8.4, -3.5, 'W'); w.prop('printer', -8.3, 3.6, 'E'); w.prop('boxes', 8.2, 5.7, 'S');
+  w.prop('planttall', -8.4, -5.9, 'S'); w.prop('cooler', 8.4, -3.5, 'W'); w.prop('boxes', 8.2, 5.7, 'S');
+  const printer = w.prop('printer', PRINTER.x, PRINTER.z, 'E');
   // the cabinet they came out of: still playable, if you would rather do this in two dimensions
   const cabinet = w.prop('arcade', 7.6, 5.0, 'W', { id: 'after:cabinet' });
   const attract = new THREE.Mesh(w.own(new THREE.PlaneGeometry(ARCADE_SCREEN.w, ARCADE_SCREEN.h)), office.screens.material('arcade'));
@@ -142,24 +150,69 @@ export async function enter(office) {
   w.onClick(swingNow);
   w.onKey((k) => { if (k === ' ' || k === 'e' || k === 'Enter' || k === 'f') swingNow(); });
 
+  /* ---- what is hidden here: it falls out of whatever was carrying it, and lies there until you walk into it -- */
+  const still = () => office.game?.left('afterhours') || { card: false, coins: [] };
+  const lying = new Set(), falls = [];                        // coins out on the floor · things on their way down to it
+  let cardOut = false;
+  const owedCoin = () => still().coins.find((n) => n <= 2 && !lying.has(n)) || 0;      // the next one a gold bug has in it
+  /** A place beside (x, z) that somebody can stand on: toward you, if the thing died on a desk. */
+  function footing(x, z) {
+    for (let k = 0; k <= 1; k += 0.1) { const px = x + (w.me.x - x) * k, pz = z + (w.me.z - z) * k; if (w.free(px, pz)) return [px, pz]; }
+    return [w.me.x, w.me.z];
+  }
+  /** Let go of a coin or the card at `from` [x, y, z]; it lands at `to` [x, z] after `wait` seconds. */
+  function drop(item, n, from, to, wait = 0) {
+    const f = { from, to, t: 0, wait, handle: null };
+    f.handle = w.loot({ item, n, x: from[0], z: from[2], y: from[1], light: true, reach: 0.85, hidden: () => f.wait > 0,
+      onTake: () => { if (item === 'coin') lying.delete(n); else cardOut = false; } });
+    if (!f.handle) return null;
+    if (item === 'coin') lying.add(n); else cardOut = true;
+    falls.push(f);
+    return f.handle;
+  }
+  // percussive maintenance: the printer has had one in it for years
+  let knocks = 0, rattle = 0, jammed = -9, printed = false;
+  function knock() {
+    knocks++; rattle = 0.4;
+    if (knocks >= KNOCKS && !printed) {
+      printed = true;
+      if (drop('coin', 3, [PRINTER.x + 0.1, 0.5, PRINTER.z], footing(PRINTER.x + 1.05, PRINTER.z + 0.3), 0.7)) { w.sfx('printer', { volume: 0.7 }); return; }
+    }
+    if (w.time - jammed > 2.6) { jammed = w.time; w.sfx('printer-jam', { volume: 0.6 }); }
+  }
+
   /* ---- the bugs ------------------------------------------------------------------------------------------ */
   const geo = [[0, false], [1, false], [0, true], [1, true]].map(([f, gold]) => w.own(meshVox(bug(f, gold)).solid));
+  const cardGeo = w.own(meshVox(keycard()).solid);
   const bugs = [], bits = [], tags = [];
   const bitGeo = w.own(new THREE.BoxGeometry(0.05, 0.05, 0.05));
   const bitMat = [w.own(new THREE.MeshBasicMaterial({ color: '#6fe08a', toneMapped: false })), w.own(new THREE.MeshBasicMaterial({ color: '#ffd75a', toneMapped: false }))];
   const fixedTex = w.own(canvasTexture(64, 24, (g) => { g.fillStyle = '#0c2014'; g.fillRect(0, 0, 64, 24); g.fillStyle = '#6fe08a'; g.fillRect(0, 0, 64, 2); g.font = `700 15px ${MONO}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('FIXED', 32, 13); }, { clamp: true }));
   const tagMat = w.own(new THREE.SpriteMaterial({ map: fixedTex, toneMapped: false }));
   function spawn() {
-    const from = R() < 0.25 ? [7.0, 5.0] : VENTS[Math.floor(R() * VENTS.length)], gold = R() < 0.1;
+    const from = R() < 0.25 ? [7.0, 5.0] : VENTS[Math.floor(R() * VENTS.length)];
+    // the last one out has somebody's keycard; a gold one is luck, unless there is a coin still to find
+    const courier = game.spawned === WAVE - 1 && still().card && !cardOut;
+    const gold = !courier && (R() < 0.1 || (FORCED_GOLD.includes(game.spawned) && !!owedCoin()));
     const mesh = new THREE.Mesh(geo[gold ? 2 : 0], flesh);
     mesh.scale.setScalar(VOXEL * 3); mesh.castShadow = true;
     scene.add(mesh);
+    let cargo = null;
+    if (courier) {                                               // strapped to its back like a sail
+      cargo = new THREE.Group();
+      const card = new THREE.Mesh(cardGeo, flesh);
+      card.scale.setScalar(VOXEL * 1.15); card.rotation.x = -0.9; card.position.set(0, 0.25, 0.14);
+      const shine = new THREE.PointLight('#9fd0ff', 1.3, 2.6, 1.6); shine.position.set(0, 0.6, 0);
+      cargo.add(card, shine);
+      scene.add(cargo);
+    }
     const desk = R() < 0.6 ? desks[Math.floor(R() * desks.length)] : null;
-    bugs.push({ mesh, gold, x: from[0], z: from[1], y: -0.12, heading: 0, speed: 1.15 + R() * 0.6 + game.spawned * 0.03, desk, rack: RACKS[Math.floor(R() * RACKS.length)], state: 'up', t: 0.45, wob: R() * 6, frame: 0 });
+    bugs.push({ mesh, gold, cargo, x: from[0], z: from[1], y: -0.12, heading: 0, speed: 1.15 + R() * 0.6 + game.spawned * 0.03, desk, rack: RACKS[Math.floor(R() * RACKS.length)], state: 'up', t: 0.45, wob: R() * 6, frame: 0 });
     game.spawned++;
   }
   function pop(b, fixed) {
     scene.remove(b.mesh); bugs.splice(bugs.indexOf(b), 1);
+    if (b.cargo) scene.remove(b.cargo);
     for (let i = 0; i < (fixed ? 12 : 5); i++) {
       const m = new THREE.Mesh(bitGeo, bitMat[b.gold ? 1 : 0]);
       m.position.set(b.x, b.y + 0.1, b.z); scene.add(m);
@@ -169,7 +222,10 @@ export async function enter(office) {
     const tag = new THREE.Sprite(tagMat); tag.scale.set(0.42, 0.16, 1); tag.position.set(b.x, b.y + 0.3, b.z);
     scene.add(tag); tags.push({ s: tag, t: 0 });
     game.fixed++; game.score += (b.gold ? 250 : 100) + Math.max(0, 60 - Math.round((w.time - game.started) / 2));
-    w.sfx(b.gold ? 'coin' : 'squash');
+    const coin = b.gold ? owedCoin() : 0, up = Math.max(0, b.y);
+    if (coin) drop('coin', coin, [b.x, up, b.z], footing(b.x, b.z));
+    if (b.cargo) drop('card', 0, [b.x, up, b.z], footing(b.x, b.z));
+    w.sfx(b.gold && !coin ? 'coin' : 'squash');                 // a real coin makes its own sound when you pick it up
     status.redraw();
   }
   function start() {
@@ -217,6 +273,8 @@ export async function enter(office) {
           const dx = b.x - me.x, dz = b.z - me.z, d = Math.hypot(dx, dz);
           if (b.state !== 'up' && d < REACH && (d < 0.5 || (dx * fx + dz * fz) / d > ARC)) pop(b, true);
         }
+        const px = PRINTER.x - me.x, pz = PRINTER.z - me.z, pd = Math.hypot(px, pz);
+        if (pd < REACH && (px * fx + pz * fz) / pd > ARC) knock();
       }
     } else hand.rotation.set(-0.25 + Math.sin(t * 1.7) * 0.02, 0.25, -0.35);
     for (const b of [...bugs]) {
@@ -242,7 +300,16 @@ export async function enter(office) {
       const f = Math.floor(b.wob) & 1;
       if (f !== b.frame && go > 0) { b.frame = f; b.mesh.geometry = geo[(b.gold ? 2 : 0) + f]; }
       b.mesh.position.set(b.x, b.y, b.z); b.mesh.rotation.y = b.heading;
+      if (b.cargo) { b.cargo.position.set(b.x, b.y, b.z); b.cargo.rotation.y = b.heading; }
     }
+    for (let i = falls.length - 1; i >= 0; i--) {
+      const f = falls[i];
+      if (f.wait > 0) { f.wait -= dt; continue; }
+      f.t = Math.min(1, f.t + dt / 0.5);
+      f.handle.moveTo(f.from[0] + (f.to[0] - f.from[0]) * f.t, f.from[2] + (f.to[1] - f.from[2]) * f.t, f.from[1] * (1 - f.t) + Math.sin(f.t * Math.PI) * 0.3);
+      if (f.t >= 1) falls.splice(i, 1);
+    }
+    if (rattle > 0) { rattle = Math.max(0, rattle - dt); printer.rotation.z = Math.sin(t * 70) * 0.05 * (rattle / 0.4); printer.position.y = Math.abs(Math.sin(t * 55)) * 0.02 * (rattle / 0.4); }
     for (let i = bits.length - 1; i >= 0; i--) {
       const p = bits[i]; p.life -= dt; p.vy -= 9 * dt;
       p.m.position.x += p.vx * dt; p.m.position.y = Math.max(0.03, p.m.position.y + p.vy * dt); p.m.position.z += p.vz * dt;
@@ -264,6 +331,6 @@ export async function enter(office) {
     exit.intensity = 1.2;
   });
 
-  w.game = game; w.bugs = bugs;                                 // for the console, and for the curious
+  w.game = game; w.bugs = bugs; w.printer = { get knocks() { return knocks; } };     // for the console, and for the curious
   return w.run();
 }

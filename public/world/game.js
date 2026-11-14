@@ -31,7 +31,8 @@ export function createGame(office) {
   function flash(item, count) {
     const root = document.getElementById('ui');
     if (!root) return;
-    if (!purse) { purse = h('div.purse.level'); root.append(purse); }
+    if (!purse) purse = h('div.purse');
+    if (purse.parentNode !== root || purse.nextSibling) root.append(purse);       // over whichever floor you are on
     purse.replaceChildren(item === 'card' ? h('i.card') : h('i.coin'), item === 'card' ? '' : h('b', String(count)));
     purse.classList.remove('show'); void purse.offsetWidth; purse.classList.add('show');
     clearTimeout(purseTimer);
