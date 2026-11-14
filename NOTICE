@@ -21,18 +21,27 @@ licence (public/vendor/LICENSE-three.txt).
 The harness under server/harness/ (and its fake agents under test/fixtures/)
 was written for this project, with T3 Code (https://github.com/pingdotgg/t3code,
 read at commit 08b8689a) as reference: its Agent Client Protocol and Codex
-app-server clients are where the message shapes we speak were learned, and its
-orchestrator design is where the delegation and handoff rules come from. A few
-small pieces follow its logic closely and say so where they are: the redaction
-of an agent's stderr (server/harness/child.mjs, after
+app-server clients are where the message shapes we speak were learned, its
+Claude adapter and the frames it recorded from real runs are what our reading
+of Claude Code's stream-json mode was checked against, and its orchestrator
+design is where the delegation and handoff rules come from. A few small pieces
+follow its logic closely and say so where they are: the redaction of an
+agent's stderr (server/harness/child.mjs, after
 packages/provider-acp/src/server/stderr.ts), the rules of a portable context
 handoff (server/harness/handoff.mjs, after
 apps/server/src/orchestration-v2/ContextHandoffService.ts), the coalescing of
 tool updates (server/harness/acp.mjs, after
-packages/provider-acp/src/server/runtimeModel.ts), and the reading of Codex's
+packages/provider-acp/src/server/runtimeModel.ts), the reading of Codex's
 rate-limit windows (server/usage-sources.mjs, after
-apps/server/src/provider/codexUsageLimits.ts). docs/HARNESS.md lists every
-file consulted. T3 Code is distributed under the MIT licence:
+apps/server/src/provider/codexUsageLimits.ts), and, in the Claude Code adapter
+(server/harness/claude.mjs, after
+apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts and
+apps/server/src/provider/claudeUsageLimits.ts), how a session's mode becomes
+Claude's permission mode, the handing of the MCP server over the pipe instead
+of the command line, the reading of context use and of the allowance frames,
+which endings of a turn count as failures, and which of Claude's permission
+requests always go to a person. docs/HARNESS.md lists every file consulted.
+T3 Code is distributed under the MIT licence:
 
   MIT License
 

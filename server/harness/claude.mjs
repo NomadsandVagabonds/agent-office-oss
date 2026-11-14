@@ -768,7 +768,7 @@ export class ClaudeAdapter extends AgentAdapter {
       const seen = {};
       for (const id of ['five_hour', 'seven_day']) {
         const w = res.rate_limits[id];
-        // Here the share used is a percentage already, and the reset an ISO time.
+        // Here the share used is a percentage already, and the reset an ISO time (T3 Code's claudeUsageResponseToLimits reads it so).
         if (isObject(w) && Number.isFinite(w.utilization)) seen[id] = { used_percentage: w.utilization, resets_at: Date.parse(w.resets_at) / 1000 };
       }
       // What the stream said in the meantime is newer than this answer.
@@ -1166,6 +1166,7 @@ export class ClaudeAdapter extends AgentAdapter {
   #outcome(frame, turn) {
     const why = typeof frame.terminal_reason === 'string' ? frame.terminal_reason : '';
     const stopReason = line(typeof frame.stop_reason === 'string' ? frame.stop_reason : '', 40);
+    // A stop is a stop even where the rest of the result reads as a success (T3 Code's terminalStatusFromResult).
     if (why === 'aborted_streaming' || why === 'aborted_tools') return { status: 'interrupted', stopReason: 'cancelled' };
     // Some reasons are a failure even on a result that otherwise reads as a success (T3 Code's terminalResultError).
     const because = Object.hasOwn(FAILED_BECAUSE, why) ? FAILED_BECAUSE[why] : '';
