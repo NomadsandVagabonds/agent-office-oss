@@ -14,7 +14,7 @@
 import { T, SIDES, wallSpans, wallPoint, toWorld } from './frame.js';
 
 /** The fewest doorways between where you land on the last floor and the wall that gives. */
-export const MIN_OUT_STEPS = 5;
+export const MIN_OUT_STEPS = 8;
 /** How wide the stretch is that gives, and how much plain wall a mark wants round it, metres. */
 export const THIN_W = 1.2, MARK_W = 1.9;
 
@@ -95,7 +95,8 @@ export function thinPlace(rooms, R) {
     const a = wallPoint(room, spot.side, spot.at, 0), b = wallPoint(room, spot.side, spot.at, -1), A = toWorld(room, a.x, a.z), B = toWorld(room, b.x, b.z);
     return (mid.x - A.x) * (B.x - A.x) + (mid.z - A.z) * (B.z - A.z) < -THIN_BEHIND ? 1 : 0.2;
   };
-  const o = R.weighted(options, (k) => (k.room.toExit === near ? 9 : k.room.toExit === near + 1 ? 2 : 0.3) * awkward(k.room) * away(k));
+  // (somewhere further off only now and then: a floor has many plain rooms, and together they would outweigh the near ones)
+  const o = R.weighted(options, (k) => (k.room.toExit === near ? 9 : k.room.toExit === near + 1 ? 2 : 0.04) * awkward(k.room) * away(k));
   return { room: o.room.id, side: o.spot.side, at: o.spot.at, w: THIN_W };
 }
 

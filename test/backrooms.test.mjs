@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { generate, sketch, DECK, ARCHETYPES, SIDES, T, RISE, toWorld, wallLength, wallPoint, floorAt, ceilAt, headAt, fitsAt, stairZones,
-  roomDistances, roomPath, makeRng, MIN_EXIT_STEPS, coinSpots, STASH } from '../public/world/backrooms/gen.js';
+  roomDistances, roomPath, makeRng, MIN_EXIT_STEPS, MIN_ODD, MAX_ODD, MAX_ROOMS, coinSpots, STASH } from '../public/world/backrooms/gen.js';
 
 const office = {
   name: 'Robin', projects: ['Webstore', 'Mobile App', 'Infra'], agents: ['Ivory Marten', 'Amber Vireo', 'Ember Numbat', 'Olive Heron'],
@@ -38,12 +38,12 @@ test('different seeds build different levels', () => {
   assert.ok(exits.size > SEEDS.length * 0.8, 'the way out moves');
 });
 
-test('a floor is 6–9 oddities with no repeats, in 15–25 rooms', () => {
+test('a floor is 5–8 oddities with no repeats, in a building that is mostly plain rooms', () => {
   for (const seed of SEEDS) {
     const level = levelFor(seed);
-    assert.ok(level.picked.length >= 6 && level.picked.length <= 9, `seed ${seed}: ${level.picked.length} oddities`);
+    assert.ok(level.picked.length >= MIN_ODD && level.picked.length <= MAX_ODD, `seed ${seed}: ${level.picked.length} oddities`);
     assert.equal(new Set(level.picked).size, level.picked.length, `seed ${seed}: a room repeats`);
-    assert.ok(level.rooms.length >= 15 && level.rooms.length <= 25, `seed ${seed}: ${level.rooms.length} rooms`);
+    assert.ok(level.rooms.length >= 18 && level.rooms.length <= MAX_ROOMS, `seed ${seed}: ${level.rooms.length} rooms`);
     assert.deepEqual(level.rooms.filter((r) => r.kind === 'special').map((r) => r.arch).sort(), level.picked.slice().sort());
     assert.equal(level.rooms.filter((r) => r.kind === 'start').length, 1);
     assert.equal(level.rooms.filter((r) => r.kind === 'exit').length, 1);

@@ -84,10 +84,11 @@ export function ceilAt(room, x, z) {
   if (s.kind === 'soffit' && Math.abs((s.axis === 'x' ? z : x) - s.at) <= s.t / 2) return s.clear;
   return room.H;
 }
-/** Room to stand up in: ceiling minus floor, or the height of a doorway while you are in it. */
+/** Room to stand up in: ceiling minus floor, or the height of a doorway while you are in it, or of a hole in a wall (`lows`, quiet.js). */
 export function headAt(room, x, z) {
   let head = ceilAt(room, x, z) - floorAt(room, x, z);
   for (const dr of room.doors) { const f = wallFrame(room, dr.side, x, z); if (f.d < 0.2 && Math.abs(f.c - dr.c) <= dr.w / 2 + 0.05) head = Math.min(head, dr.h); }
+  if (room.lows) for (const l of room.lows) if (x >= l.x0 && x <= l.x1 && z >= l.z0 && z <= l.z1) head = Math.min(head, l.h);
   return head;
 }
 /** The floor each flight of door-stairs covers (plus `pad` of landing at its foot), as rectangles in the room's frame. */

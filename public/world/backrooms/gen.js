@@ -28,6 +28,7 @@ import { fill } from './words.js';
 import { MORE_DECK, MORE_STASH } from './deck2.js';
 import { themeOf } from './themes.js';
 import { thinPlace, decoyMarks, TAPE_LABELS } from './marks.js';
+import { vocabulary, motif, fits, sunk } from './quiet.js';
 
 // the room's own frame and the shape of its floor and ceiling are frame.js's; they have always been asked for here
 export { T, WALL_H, DOOR_H, TILE, RISE, RUN, SIDES, toWorld, toLocal, wallLength, wallFrame, wallPoint, floorAt, ceilAt, headAt, stairZones, pinchHalf, fitsAt, wallSpans } from './frame.js';
@@ -128,7 +129,11 @@ const BANNERS = [
 ];
 const CAKE = ['{NAME}', '404', 'v0.0.0', 'SORRY', 'AGAIN', 'YAY?', 'Q4'];
 // The way out is never closer than this many doorways from where you land (and never closer than any other room).
-export const MIN_EXIT_STEPS = 7;
+export const MIN_EXIT_STEPS = 10;
+/** How many oddities a floor is dealt, fewest and most; and the share of its rooms that are plain, least and most. */
+export const MIN_ODD = 5, MAX_ODD = 8, QUIET = Object.freeze([0.7, 0.8]);
+/** The most rooms a floor is ever built of. */
+export const MAX_ROOMS = 44;
 const KANBAN = ['find the exit', 'fix the thing', 'ask {agent}', 'this card', 'move this card', '{name}', 'TODO', 'done?', 'reply to {agent}', 'water the plants (ceiling)'];
 const KANBAN_COLS = [['TO DO', 'TO DO', 'TO DO', 'TO DO'], ['TODO', 'DOING', 'DONE', 'UNDONE'], ['BACKLOG', 'BACKLOG (OLD)', 'BACKLOG (OLDER)', 'ICEBOX'], ['SOON', 'LATER', 'NEVER', 'DONE']];
 const WET = ['CAUTION|WET FLOOR', 'CAUTION|FLOOR', 'CAUTION|DRY FLOOR', 'CAUTION|CAUTION', 'CAUTION|{NAME}', 'CUIDADO|PISO', 'CAUTION|WET SIGN', 'CAUTION|SIGNS', 'CAUTION|CARPET'];
@@ -364,11 +369,19 @@ function build(R, o, opt) {
   }
   const anyStep = () => (R.chance(0.24) ? R.pick([1, 2, 2, 4, 4, 6, 8]) * R.pick([-1, 1]) : 0);
   const cut = theme.rooms || [0.09, 0.28, 0.44, 0.84], tall = theme.heights || [[2.6, 60], [2.2, 9], [2.9, 9], [3.3, 9], [4.4, 5], [1.75, 6]];
+  // The plain rooms of a floor come in a few sizes only, rolled once for the floor: two of each kind (corridor one way,
+  // corridor the other, room, hall), the first far more often than the second, two ceiling heights and two widths of
+  // doorway. So most of them are the same few rooms over and over, and the eye has nothing to go on (quiet.js lays them out).
+  const PS = R.fork('sizes');
+  const two = (f) => { const a = f(); let b = f(); for (let k = 0; k < 6 && b.join() === a.join(); k++) b = f(); return [a, b]; };
+  const sizes = { crawl: two(() => [2, PS.int(3, 5)]), cx: two(() => [PS.int(2, 3), PS.int(4, 7)]), cz: two(() => [PS.int(5, 8), PS.int(2, 3)]),
+    room: two(() => [PS.int(4, 6), PS.int(4, 6)]), hall: two(() => [PS.int(7, 9), PS.int(6, 8)]) };
+  const heights = [PS.weighted(tall.filter((k) => k[0] >= 2.2), (k) => k[1])[0], PS.weighted(tall, (k) => k[1])[0]], widths = [PS.pick([1.5, 2, 2, 2.5]), PS.pick([1.5, 2, 2.5])];
   const plainSpec = () => {
-    const roll = R();
-    if (roll < cut[0]) return { kind: 'plain', lw: 2, ld: R.int(3, 5), dw: 1.2, H: 0.95, crawl: true };          // a crawl space
-    const [lw, ld] = roll < cut[1] ? [R.int(2, 3), R.int(4, 7)] : roll < cut[2] ? [R.int(5, 8), R.int(2, 3)] : roll < cut[3] ? [R.int(4, 6), R.int(4, 6)] : [R.int(7, 9), R.int(6, 8)];
-    return { kind: 'plain', lw, ld, dw: R.pick([1.5, 2, 2, 2.5]), H: R.weighted(tall, (k) => k[1])[0] };
+    const roll = R(), which = R.chance(0.7) ? 0 : 1;
+    if (roll < cut[0]) { const [lw, ld] = sizes.crawl[which]; return { kind: 'plain', lw, ld, dw: 1.2, H: 0.95, crawl: true }; }          // a crawl space
+    const [lw, ld] = sizes[roll < cut[1] ? 'cx' : roll < cut[2] ? 'cz' : roll < cut[3] ? 'room' : 'hall'][which];
+    return { kind: 'plain', lw, ld, dw: widths[R.chance(0.7) ? 0 : 1], H: heights[R.chance(0.78) ? 0 : 1] };
   };
   /** The world side (0..3) of a room that one of its local walls faces. */
   const worldSide = (room, local) => (SIDES.indexOf(local) + room.rot) % 4;
@@ -386,7 +399,7 @@ function build(R, o, opt) {
   const specials = [];
 
   /* deal the oddities */
-  const want = opt.count || R.int(6, 9);
+  const want = opt.count || R.int(MIN_ODD, MAX_ODD);
   let deck = [];
   // (a room that is only ever there because the visit's plan asked for it — `planned`, or one staged from the news — is
   // never dealt by chance; nor is one that takes for granted something the floors above have not taught)
@@ -411,32 +424,56 @@ function build(R, o, opt) {
     }
     return null;
   }
+  /** A run of up to n plain rooms, one opening into the next, from a hub or a port → the rooms made (none: nothing would go). */
+  function run(from, n) {
+    const made = [];
+    for (let at = from; made.length < n;) { const r = connector(at); if (!r) break; made.push(r); at = r; }
+    return made;
+  }
+  /** How few doorways it is from a room to the nearest oddity (up to `most`; more than that is most + 1). */
+  function toOdd(room, most) {
+    const seen = new Set([room.id]); let edge = [room];
+    for (let d = 1; d <= most; d++) {
+      const next = [];
+      for (const r of edge) for (const id of r.links) { const l = links[id], o = rooms[l.a === r.id ? l.b : l.a]; if (seen.has(o.id)) continue; if (o.kind === 'special') return d; seen.add(o.id); next.push(o); }
+      edge = next;
+    }
+    return most + 1;
+  }
+  // Between one oddity and the next there are usually two or three plain rooms, often more: the way from one thing to the
+  // next is long enough to forget which way you came.
+  const runLength = () => R.weighted([[1, 1], [2, 5], [3, 3]], (k) => k[1])[0];
   function placeSpecial(arch, first) {
     const lw = R.int(arch.w[0], arch.w[1]), ld = R.int(arch.d[0], arch.d[1]);
     const spec = { kind: 'special', arch: arch.id, lw, ld, dw: arch.door || 1.8, centred: true, H: arch.h ? Math.round(R.range(arch.h[0], arch.h[1]) * 10) / 10 : WALL_H, halo: arch.halo || null };
     for (let tries = 0; tries < 14; tries++) {
       // where to grow from: usually the newest part of the maze, sometimes an older room (a branch)
-      let hub = null, fresh = false, port = null;
+      let hub = null, fresh = [], port = null;
       const openPorts = ports.filter((p) => !p.used);
       if (first && opt.only) hub = start;
-      else if (openPorts.length && R.chance(0.5)) { port = R.chance(0.7) ? openPorts[openPorts.length - 1] : R.pick(openPorts); hub = connector(port); fresh = !!hub; }
-      else {
+      else if (openPorts.length && R.chance(0.5)) {
+        port = R.chance(0.7) ? openPorts[openPorts.length - 1] : R.pick(openPorts);
+        fresh = run(port, 1);
+        if (fresh.length) fresh.push(...run(fresh[0], runLength() - 1));
+      } else {
         const base = R.chance(0.55) ? hubs[hubs.length - 1] : R.pick(hubs.filter((h) => !h.crawl));
-        if (base !== start && base.links.length < 3 && !base.crawl && R.chance(0.4)) hub = base;
-        else { hub = connector(base); fresh = !!hub; }
+        // (an oddity may hang straight off an old room only where that room is a long way from every other oddity)
+        if (base !== start && base.links.length < 3 && !base.crawl && R.chance(0.4) && toOdd(base, 2) > 2) hub = base;
+        else fresh = run(base, runLength());
       }
+      if (fresh.length) hub = fresh[fresh.length - 1];
       if (!hub) continue;
       for (const side of sides()) {
         const room = attach(hub, side, spec);
         if (!room) continue;
         room.name = arch.name;
         if (!(first && opt.only) && R.chance(0.18)) step(hub, room, R.pick([2, 4, 4]));
-        if (fresh) hubs.push(hub);
+        hubs.push(...fresh);
         if (port) port.used = true;
         for (const local of arch.ports) if (wallLength(room, local) >= 3.2) ports.push({ room, local });
         return room;
       }
-      if (fresh) undo(hub);
+      for (const r of fresh.reverse()) undo(r);
     }
     return null;
   }
@@ -486,12 +523,20 @@ function build(R, o, opt) {
     step(best.from, room, anyStep());
     return room;
   }
-  let extra = R.int(2, 4) + Math.max(0, 13 - rooms.length);
-  for (let guard = 0; extra > 0 && guard < 40 && rooms.length < 24; guard++) {
+  // Most of a floor is plain: between QUIET[0] and QUIET[1] of its rooms (the fire exit, which goes in last, among them).
+  // What is still missing is made up with more of the same — side passages, dead ends that go on for a while, rooms that
+  // close a loop and bring you back somewhere that looks like somewhere you have been.
+  const target = Math.min(MAX_ROOMS - 1, Math.ceil(specials.length / (1 - R.range(QUIET[0] + 0.02, QUIET[1]))) - 1);
+  for (let guard = 0; rooms.length < target && guard < 200; guard++) {
     const open = ports.filter((p) => !p.used);
-    const from = open.length && R.chance(0.35) ? R.pick(open) : R.pick(hubs);
-    const made = (!from.local && R.chance(0.7) && bridge()) || connector(from);
-    if (made) { if (from.local && made.links.some((id) => links[id].a === from.room.id)) from.used = true; hubs.push(made); extra--; }
+    const from = open.length && R.chance(0.3) ? R.pick(open) : R.pick(hubs);
+    let made = !from.local && R.chance(0.45) ? bridge() : null;
+    if (made) { hubs.push(made); continue; }
+    // (now and then a dead end that is a run of rooms, not one)
+    const line = from.local ? run(from, 1) : run(from, R.chance(0.3) ? Math.min(2, target - rooms.length) : 1);
+    if (!line.length) continue;
+    if (from.local && line[0].links.some((id) => links[id].a === from.room.id)) from.used = true;
+    hubs.push(...line);
   }
 
   /* how far everything is from where you land */
@@ -518,9 +563,10 @@ function build(R, o, opt) {
     }
   }
   let loops = 0;
+  const LOOPS = 3 + Math.floor(rooms.length / 12);
   const clearOfStairs = (link) => [rooms[link.a], rooms[link.b]].every((r) => !r.stairs.some((s) => s.link !== link.id && inRect(inner(r, link, 0.7), s, 0.5)));
   for (const s of R.shuffle(shared)) {
-    if (loops >= 3 || !R.chance(0.7)) continue;
+    if (loops >= LOOPS || !R.chance(0.7)) continue;
     const dw = Math.min(R.pick([1.5, 2, 2.5]), s.hi - s.lo);
     const from = Math.min(s.lo + Math.round(R() * (s.hi - s.lo - dw) * 2) / 2, s.hi - dw);
     const link = addLink(s.a, s.b, s.axis, s.at, from, from + dw);
@@ -528,7 +574,7 @@ function build(R, o, opt) {
   }
   // …and an oddity's spare wall that happens to back onto a plain room gets a doorway too
   for (const port of R.shuffle(ports.filter((p) => !p.used))) {
-    if (loops >= 4 || !R.chance(0.6)) continue;
+    if (loops >= LOOPS + 1 || !R.chance(0.6)) continue;
     const side = worldSide(port.room, port.local), dw = Math.min(1.6, wallLength(port.room, port.local) - 1.2);
     const span = portSpan(port.room, port.local, 0, dw), r = port.room;
     const wall = side === 0 ? r.z + r.d : side === 2 ? r.z : side === 1 ? r.x + r.w : r.x;
@@ -562,8 +608,22 @@ function build(R, o, opt) {
     for (const side of sides()) { const made = attach(a.room, side, exitSpec); if (made) { if (R.chance(0.45)) step(a.room, made, R.pick([2, 4, 6])); return made; } }
     return null;
   };
+  // The room before it is a plain one too, put down last of all at the edge of the building: a room, not a corridor,
+  // with outside walls — the stairwell's signs lead here, and on the last floor this is where the wall is looked for.
+  const viaLobby = (a) => {
+    for (let k = 0; k < 4; k++) {
+      const [lw, ld] = sizes[k % 2 ? 'hall' : 'room'][R.chance(0.7) ? 0 : 1], spec = { kind: 'plain', lw, ld, dw: widths[0], H: heights[0] >= 2.3 ? heights[0] : WALL_H };
+      let lobby = null;
+      if (a.local) { const dw = Math.min(1.8, wallLength(a.room, a.local) - 1.2); lobby = attach(a.room, worldSide(a.room, a.local), { ...spec, dw, fixed: portSpan(a.room, a.local, 0, dw) }); }
+      else for (const side of sides()) { lobby = attach(a.room, side, spec); if (lobby) break; }
+      if (!lobby) continue;
+      for (const side of sides()) { const made = attach(lobby, side, exitSpec); if (made) { if (R.chance(0.45)) step(lobby, made, R.pick([2, 4, 6])); return made; } }
+      undo(lobby);
+    }
+    return null;
+  };
   let exit = null;
-  for (const a of anchors) { exit = tryExit(a); if (exit) { if (a.local) a.used = true; break; } }
+  for (const a of anchors) { exit = viaLobby(a) || tryExit(a); if (exit) { if (a.local) a.used = true; break; } }
   if (!exit) return null;
   exit.way = opt.way === 'stairs' ? 'stairs' : 'wall';
   exit.name = 'Fire exit';
@@ -571,8 +631,9 @@ function build(R, o, opt) {
   depth = distances(start);
   for (const room of rooms) room.depth = depth.get(room.id) ?? -1;
   if (rooms.some((r) => r.depth < 0)) return null;
-  if (specials.length < Math.min(6, want) || (opt.only && [].concat(opt.only).some((id) => ARCHETYPES[id] && !specials.some((r) => r.arch === id)))) return null;
+  if (specials.length < Math.min(MIN_ODD, want) || (opt.only && [].concat(opt.only).some((id) => ARCHETYPES[id] && !specials.some((r) => r.arch === id)))) return null;
   if (must.some((a) => !specials.some((r) => r.arch === a.id))) return null;
+  if (1 - specials.length / rooms.length < QUIET[0]) return null;              // (a floor that could not be made quiet enough is dealt again)
 
   /* what kind of hole each doorway is: most are doorways; some you crawl through, some are arches, a few are slits */
   const narrow = (link, w) => { if (link.to - link.from > w) { const mid = (link.from + link.to) / 2; link.from = r4(mid - w / 2); link.to = r4(mid + w / 2); } };
@@ -603,6 +664,9 @@ function build(R, o, opt) {
 /* ---- dressing: wallpaper, lights, the shape of each plain room, the odd thing left in a corner ---------- */
 
 const DRESSING = ['boxes', 'boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'highdoor', 'highdoor'];
+// what the plain-room builder (rooms.js) knows how to put down, of everything a theme may ask for; and how many plain rooms have anything
+const KNOWN_THINGS = new Set(['boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'cabinet', 'shelving', 'armchair', 'globe']);
+export const THING_CHANCE = 0.2;
 const POSTERS = ['HANG IN THERE', 'SYNERGY', 'PERSISTENCE', 'TEAMWORK', 'THIS IS FINE', 'ALIGNMENT', 'YOU ARE DOING GREAT, {NAME}', 'DAYS SINCE LAST INCIDENT: 0'];
 
 function layPanels(R, room, mode) {
@@ -714,10 +778,23 @@ function dress(R, level, o, opt, keeper = false) {
     if (anywhere.length) pursuer = { room: r.pick(anywhere).id, corner: r.int(0, 3), face: r.int(0, 9) };
   }
 
+  // what this floor's plain rooms are made of: a few motifs, the same few things left about, the same wrongnesses (quiet.js)
+  const vocab = vocabulary(R.fork('quiet'), theme.id), mix = vocab.mix;
+  const RT = R.fork('things'), known = things.filter((t) => KNOWN_THINGS.has(t)), kept = [];
+  for (let k = 0; k < 3 && known.length; k++) {
+    const type = RT.pick(known), item = { type, turn: RT.range(-Math.PI, Math.PI), n: RT.int(3, 9), seed: RT.int(1, 9999) };
+    if (type === 'poster') item.text = fill(RT.pick(POSTERS), o, RT);
+    if (type === 'frame') item.who = RT.int(0, 99);
+    kept.push(item);
+  }
+  const footprint = (r) => `${Math.min(r.w, r.d)}x${Math.max(r.w, r.d)}`;
+
   for (const room of rooms) {
     const rr = R.fork('dress:' + room.id);
-    const odd = rr.chance(0.12);                                   // the wallpaper is different in here
-    room.look = rollLook(rr, odd ? rr.weighted(FAMILIES, weightOf) : family, odd || rr.chance(0.12) ? rr.pick(patterns) : pattern, tubes);
+    const quiet = room.kind === 'plain' || room.kind === 'start';
+    // the wallpaper is different in here: now and then in an oddity, hardly ever in a plain room
+    const odd = rr.chance(quiet ? 0.03 : 0.12);
+    room.look = rollLook(rr, odd ? rr.weighted(FAMILIES, weightOf) : family, odd || rr.chance(quiet ? 0.03 : 0.12) ? rr.pick(patterns) : pattern, tubes);
     const arch = room.arch ? ARCHETYPES[room.arch] : null;
     room.light = { dead: rr.range(dead[0], dead[1]), flicker: rr.chance(lit.flicker ?? 0.4) ? 1 : 0, power: rr.range(0.9, 1.1), mode: arch ? arch.lights : rr.weighted(modes, (m) => m[1])[0] };
     // on a dark floor an oddity is not always the one room with its lights on
@@ -725,14 +802,34 @@ function dress(R, level, o, opt, keeper = false) {
     if (room.kind === 'exit') { room.light.dead = 0; room.light.flicker = 0; room.light.mode = 'normal'; }
     if (room.kind === 'start') { room.light.dead = Math.min(room.light.dead, 0.12); room.light.mode = 'normal'; }    // wherever you land, you can see where you are
     room.toExit = toExit.get(room.id);
-    room.pillars = []; room.dress = []; room.sign = null; room.shape = null; room.wins = [];
+    room.pillars = []; room.dress = []; room.sign = null; room.shape = null; room.wins = []; room.quiet = null;
+    // Rooms the same size are laid out the same way: what a plain room is made of is rolled from its footprint (and one of
+    // two ways to a footprint), not from the room. Only which way round it is, and what the doorways leave room for, differ.
+    const rl = quiet ? R.fork(`layout:${footprint(room)}:${rr.int(0, 1)}`) : rr;
 
     if (room.kind === 'plain' && !room.crawl) {
-      // the shape of the room itself
       const lair = pursuer && pursuer.room === room.id;
-      const options = shapesFor(rr, room).filter((s) => !lair || s.kind === 'stepceil');
-      if (options.length && rr.chance(options.every((s) => s.kind === 'stepceil') ? 0.3 : 0.72)) {
-        const { weight: _w, ...shape } = rr.weighted(options, (s) => s.weight);
+      // (near the fire exit a room keeps its walls bare and its floor level: it is where the wall that gives is looked for)
+      const byExit = room.toExit <= 2;
+      let way = lair ? 'shape' : rl.weighted([['bare', mix.bare], ['motif', mix.motif], ['shape', mix.shape]], (k) => k[1])[0];
+      if (byExit && way === 'shape') way = 'bare';
+      const free = vocab.motifs.filter((k) => !byExit || k.kind === 'parallel' || k.kind === 'colonnade' || k.kind === 'return');
+      if (way === 'motif' && free.length) {
+        // one of the floor's motifs, turned to lie along the room (either way round), or across it if the room is square
+        const m = rl.weighted(free, (k) => k.weight), along = room.W > room.D ? 1 : 0, flip = rr.chance(0.5) ? 2 : 0;
+        const turns = Math.abs(room.W - room.D) < 0.01 ? [0, 1, 2, 3].map((k) => (k + flip) % 4) : [(along + flip) % 4, (along + flip + 2) % 4];
+        for (const t of turns) {
+          const plan = motif(room, m, t);
+          if (!plan || !fits(room, plan)) continue;
+          room.pillars.push(...plan.pillars);
+          room.quiet = { kind: m.kind, turn: t };
+          break;
+        }
+      }
+      // the shape of the room itself — the same few kinds over a floor, rolled the same way for rooms the same size
+      const options = way === 'shape' ? shapesFor(rl, room).filter((s) => (lair ? s.kind === 'stepceil' : vocab.shapes.includes(s.kind))) : [];
+      if (options.length && (!lair || rr.chance(0.3))) {
+        const { weight: _w, ...shape } = rl.weighted(options, (s) => s.weight);
         room.shape = shape;
         if (shape.kind === 'slopeceil') room.H = Math.max(shape.h0, shape.h1);
         if (shape.kind === 'stepceil') room.H = Math.max(shape.h1, shape.h2);
@@ -742,34 +839,32 @@ function dress(R, level, o, opt, keeper = false) {
         if (shape.kind === 'forest') {
           const nx = Math.floor((room.W - 1.6) / shape.step) + 1, nz = Math.floor((room.D - 1.6) / shape.step) + 1;
           for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
-            const x = r4((i - (nx - 1) / 2) * shape.step + (shape.jitter ? rr.range(-0.25, 0.25) : 0)), z = r4((j - (nz - 1) / 2) * shape.step + (shape.jitter ? rr.range(-0.25, 0.25) : 0));
+            const x = r4((i - (nx - 1) / 2) * shape.step + (shape.jitter ? rl.range(-0.25, 0.25) : 0)), z = r4((j - (nz - 1) / 2) * shape.step + (shape.jitter ? rl.range(-0.25, 0.25) : 0));
             if (!byDoor(x, z, 1.0)) room.pillars.push({ x, z, w: shape.size, d: shape.size });
           }
         }
       }
     }
     room.panels = layPanels(rr, room, room.light.mode);
-    if (room.kind !== 'plain' && room.kind !== 'start') continue;
+    if (!quiet) continue;
 
-    // a lit arrow over the doorway that leads toward the way out — in some rooms
-    if (room.doors.length >= 2 && !room.crawl && (rr.chance(0.5) || room.toExit === 1)) {
+    // a lit arrow over the doorway that leads toward the way out — in a few rooms (and always in the one before it)
+    if (room.doors.length >= 2 && !room.crawl && (rr.chance(0.22) || room.toExit === 1)) {
       const best = room.doors.slice().sort((p, q) => toExit.get(p.to) - toExit.get(q.to))[0];
       if (toExit.get(best.to) < room.toExit && best.kind !== 'crawl') room.sign = { door: room.doors.indexOf(best), text: rr.pick(['EXIT', 'EXIT', 'EXIT', 'WAY OUT', 'EXIT?', 'EXIT (PROBABLY)']) };
     }
-    if (room.crawl) { if (rr.chance(0.5)) room.dress.push({ type: 'papers', u: rr(), v: rr(), turn: 0, n: rr.int(2, 5), seed: rr.int(1, 9999) }); continue; }
-    // pillars: free-standing, or squarely in front of a doorway
+    if (room.crawl) { if (rr.chance(0.2)) room.dress.push({ type: 'papers', u: rr(), v: rr(), turn: 0, n: rr.int(2, 5), seed: kept.length ? kept[0].seed : 1 }); continue; }
+    // pillars: free-standing, or squarely in front of a doorway — in a bare room, and the same in every bare room its size
     const near = (x, z, gap) => room.doors.some((dr) => { const p = wallPoint(room, dr.side, dr.c, 0); return Math.hypot(x - p.x, z - p.z) < gap + dr.w / 2; });
-    if (!room.shape || room.shape.kind === 'stepceil' || room.shape.kind === 'slopeceil') {
+    if (!room.quiet && (!room.shape || room.shape.kind === 'stepceil' || room.shape.kind === 'slopeceil')) {
       if (room.W >= 4.5 && room.D >= 4.5) {
-        const wantPillars = rr.chance(0.5) ? rr.int(1, room.W * room.D > 40 ? 3 : 1) : 0;
+        const wantPillars = rl.chance(0.4) ? rl.int(1, room.W * room.D > 40 ? 2 : 1) : 0;
         for (let tries = 0; tries < 12 && room.pillars.length < wantPillars; tries++) {
-          const s = rr.pick([0.6, 0.6, 0.8, 1.0]), wide = rr.chance(0.3) ? rr.pick([1.6, 2.2]) : s, flip = rr.chance(0.5);
-          const pw = flip ? wide : s, pd = flip ? s : wide;
-          const x = Math.round(rr.range(-room.W / 2 + 1.5 + pw / 2, room.W / 2 - 1.5 - pw / 2) * 2) / 2, z = Math.round(rr.range(-room.D / 2 + 1.5 + pd / 2, room.D / 2 - 1.5 - pd / 2) * 2) / 2;
-          if (near(x, z, 1.5) || room.pillars.some((p) => Math.abs(p.x - x) < (p.w + pw) / 2 + 1.3 && Math.abs(p.z - z) < (p.d + pd) / 2 + 1.3)) continue;
-          if (stairZones(room).some((s2) => inRect({ x, z }, s2, Math.max(pw, pd) / 2 + 0.3))) continue;
+          const s = rl.pick([0.6, 0.6, 0.8]), x = Math.round(rl.range(-room.W / 2 + 1.5 + s / 2, room.W / 2 - 1.5 - s / 2) * 2) / 2, z = Math.round(rl.range(-room.D / 2 + 1.5 + s / 2, room.D / 2 - 1.5 - s / 2) * 2) / 2;
+          if (near(x, z, 1.5) || room.pillars.some((p) => Math.abs(p.x - x) < (p.w + s) / 2 + 1.3 && Math.abs(p.z - z) < (p.d + s) / 2 + 1.3)) continue;
+          if (stairZones(room).some((s2) => inRect({ x, z }, s2, s / 2 + 0.3))) continue;
           if (room.kind === 'start' && Math.hypot(x, z) < 1.6) continue;
-          room.pillars.push({ x, z, w: pw, d: pd });
+          room.pillars.push({ x, z, w: s, d: s });
         }
       }
       if (room.kind === 'plain' && rr.chance(0.16)) {                // …the wrong place for a pillar
@@ -782,14 +877,37 @@ function dress(R, level, o, opt, keeper = false) {
         }
       }
     }
-    // one or two things somebody left behind
-    const left = rr.chance(0.8) ? rr.int(1, room.W * room.D > 30 ? 3 : 2) : 0;
-    for (let k = 0; k < left; k++) {
-      const type = rr.pick(things);
-      const item = { type, u: rr(), v: rr(), turn: rr.range(-Math.PI, Math.PI), n: rr.int(3, 9), seed: rr.int(1, 9999) };
-      if (type === 'poster') item.text = fill(rr.pick(POSTERS), o, rr);
-      if (type === 'frame') item.who = rr.int(0, 99);
-      room.dress.push(item);
+    // Something somebody left behind — in a few rooms, and always one of the same few things: most plain rooms have nothing
+    if (kept.length && rr.chance(THING_CHANCE)) room.dress.push({ ...rr.weighted(kept, (k) => 3 - kept.indexOf(k)), u: rr(), v: rr() });
+  }
+
+  // The static wrongnesses: the wall with two holes in it, the workstation down in the carpet. Never in one room only:
+  // on a floor that has one at all, it is in two rooms at least, and if there are not two rooms that can take it, in none.
+  for (const kind of vocab.wrong) {
+    const RW = R.fork('wrong:' + kind), able = [];
+    for (const room of rooms) {
+      if (room.kind !== 'plain' || room.crawl || room.shape || (pursuer && pursuer.room === room.id)) continue;
+      if (kind === 'apertures' && room.quiet && room.quiet.kind === 'parallel') {
+        const m = { ...vocab.motifs.find((k) => k.kind === 'parallel'), kind: 'apertures', ...vocab.ap }, plan = motif(room, m, room.quiet.turn);
+        if (plan && fits({ ...room, pillars: [] }, plan)) able.push({ room, plan });
+      }
+      if (kind === 'sunk' && (!room.quiet || room.quiet.kind === 'dogleg' || room.quiet.kind === 'colonnade') && room.W >= 4 && room.D >= 4) {
+        // the same spot in every room it is in: a little off the middle, toward the back, lying across the room
+        const at = vocab.sunk.at, q = room.W >= room.D ? 0 : 1;
+        for (const [x, z] of [[-room.W * at * 0.5, -room.D * at], [room.W * at * 0.5, -room.D * at], [0, room.D * at], [0, 0]]) {
+          const plan = { pillars: [], ...sunk(r4(x), r4(z), q) };
+          if (room.pillars.some((p) => plan.blocks.some((b) => b.x0 < p.x + p.w / 2 + 0.3 && b.x1 > p.x - p.w / 2 - 0.3 && b.z0 < p.z + p.d / 2 + 0.3 && b.z1 > p.z - p.d / 2 - 0.3))) continue;
+          if (plan.blocks.some((b) => Math.abs(b.x0) > room.W / 2 - 0.6 || Math.abs(b.x1) > room.W / 2 - 0.6 || Math.abs(b.z0) > room.D / 2 - 0.6 || Math.abs(b.z1) > room.D / 2 - 0.6)) continue;
+          if (fits(room, plan)) { able.push({ room, plan }); break; }
+        }
+      }
+    }
+    const chosen = able.filter(() => RW.chance(vocab.wrongChance));
+    for (const extra of RW.shuffle(able)) { if (chosen.length >= 2) break; if (!chosen.includes(extra)) chosen.push(extra); }
+    if (chosen.length < 2) continue;
+    for (const { room, plan } of chosen) {
+      if (kind === 'apertures') { room.pillars = plan.pillars; room.lows = plan.lows; room.quiet = { kind: 'apertures', turn: room.quiet.turn }; }
+      else { room.blocks = plan.blocks; room.props = plan.props; room.quiet = { ...(room.quiet || { kind: 'bare', turn: 0 }), sunk: true }; }
     }
   }
   // a floor plan on a wall, somewhere, with a red dot that is not where it should be
@@ -922,6 +1040,7 @@ export function coinFits(room, x, z, r = COIN_R, at = coinClear(room)) {
   if (Math.abs(x) > room.W / 2 - r - 0.2 || Math.abs(z) > room.D / 2 - r - 0.2 || !fitsAt(room, x, z, r + 0.1)) return false;
   for (const p of at.doors) if (Math.hypot(x - p.x, z - p.z) < 1.25) return false;
   for (const q of room.pillars || []) if (Math.abs(x - q.x) < q.w / 2 + r + 0.1 && Math.abs(z - q.z) < q.d / 2 + r + 0.1) return false;
+  for (const b of room.blocks || []) if (x > b.x0 - r - 0.1 && x < b.x1 + r + 0.1 && z > b.z0 - r - 0.1 && z < b.z1 + r + 0.1) return false;
   for (const s of at.stairs) if (x > s.x0 - r && x < s.x1 + r && z > s.z0 - r && z < s.z1 + r) return false;
   for (let k = 0; k < 18; k += 2) if (floorAt(room, x + AROUND[k] * r, z + AROUND[k + 1] * r) !== 0 || headAt(room, x + AROUND[k] * r, z + AROUND[k + 1] * r) < 1.5) return false;
   return true;

@@ -178,6 +178,17 @@ function dressing(c, item) {
   } else if (item.type === 'floordoor') floorDoor(c, item);
   else if (item.type === 'ceildoor') ceilDoor(c);
   else if (item.type === 'map') floorPlan(c);
+  else if (item.type === 'cabinet' || item.type === 'shelving') {
+    // against a wall, backed onto it, the way they always are
+    const w = c.wallSpot(item.type === 'cabinet' ? 0.7 : 1.4, undefined, 0.35, 2.1); if (!w) return;
+    const p = c.wallAt(w.side, w.at, item.type === 'cabinet' ? 0.32 : 0.3);
+    if (!c.clear(p.x, p.z, 0.35)) return;
+    c.reserve(p.x, p.z, item.type === 'cabinet' ? 0.45 : 0.75);
+    c.prop(item.type, p.x, p.z, { rot: p.rot, fallback: item.type === 'cabinet' ? [0.5, 1.3, 0.6] : [1.2, 1.8, 0.45] });
+  } else if (item.type === 'armchair' || item.type === 'globe') {
+    const k = c.corner(0.6, undefined, 1.4); if (!k) return;
+    c.prop(item.type, k.x, k.z, { rot: Math.atan2(-k.x, -k.z), fallback: [0.7, 0.9, 0.7] });
+  }
 }
 
 /** A corridor with a waist: two slanted lengths of wall on either side, in front of the real ones. */
@@ -218,10 +229,35 @@ function nowhereStairs(c, s) {
   } else if (s.top === 'hole') for (const k of [0.2, 0.8]) { const p = wallPoint(room, s.side, s.c, k); c.hole(p.x, p.z, 2); }
 }
 
+/**
+ * A plain room's walls in the room, as the plan has them (gen.js, quiet.js): blocks of wall floor to ceiling, and the
+ * pieces of a partition with holes in it — a header over the hole you can crawl through (you go under it: it is not solid,
+ * the low headroom under it is the plan's `lows`), and the wall under and over the hole you cannot reach.
+ */
+function walls(c) {
+  for (const p of c.room.pillars) {
+    if (p.y0 > 0.01) c.pillar(p.x, p.z, p.w, p.d, { y0: p.y0, solid: false, skirting: false });
+    else c.pillar(p.x, p.z, p.w, p.d, p.h ? { h: p.h, cap: lin(c.look.trim) } : undefined);
+  }
+}
+
+/** The workstation in the carpet: the office's own desk, chair, monitor, keyboard and mouse, full size, sunk where the plan says. */
+function sunken(c) {
+  const ok = (c.room.props || []).every((p) => c.hasProp(p.type));
+  for (const p of c.room.props || []) {
+    if (!ok) break;                                       // (all of it or none: a desk with a crate on it would be a different joke)
+    c.prop(p.type, p.x, p.z, { y: p.y, rot: p.rot, solid: false, shadow: false });
+  }
+  for (const b of c.room.blocks || []) { c.solid(b.x0, b.z0, b.x1, b.z1, { keep: true }); c.reserve((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2, Math.hypot(b.x1 - b.x0, b.z1 - b.z0) / 2 + 0.2); }
+  // the carpet dips a little toward it, the way carpet does over something heavy
+  for (const b of c.room.blocks || []) c.blot((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2, b.x1 - b.x0 + 0.6, b.z1 - b.z0 + 0.6, { rgb: [0.05, 0.04, 0.02], a: 0.22 });
+}
+
 function plain(c) {
   const { room } = c, s = room.shape;
   c.shell();
-  for (const p of room.pillars) c.pillar(p.x, p.z, p.w, p.d);
+  walls(c);
+  if (room.blocks) sunken(c);
   if (s && s.kind === 'pinch') pinchWalls(c, s);
   if (s && s.kind === 'stairs') nowhereStairs(c, s);
   if (room.sign) c.exitSign(room.doors[room.sign.door], room.sign.text);
