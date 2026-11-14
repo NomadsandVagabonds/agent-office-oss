@@ -76,6 +76,7 @@ export function build(c) {
     [W / 2 - 1.55, D / 2 - 2.3],
   ];
 
+  let known = false;
   posts.forEach(([lx, lz], idx) => {
     const home = c.toWorld(clamp(lx, -W / 2 + 1.2, W / 2 - 1.2), clamp(lz, -D / 2 + 1.4, D / 2 - 1.4));
     const rig = makeEfficiencyPartner(c.kit, idx);
@@ -138,6 +139,7 @@ export function build(c) {
       group: rig.group,
       light: (rgb) => rig.light(rgb),
       update(dt, time, me) {
+        if (!known && Math.hypot(me.x - roamer.x, me.z - roamer.z) < 8 && c.env.sees(roamer.x, roamer.z, { radius: 0.5 })) { known = true; c.met('efficiency-partners'); }
         const inRoom = c.world.current() === c.rt;
         const dist = Math.hypot(me.x - roamer.x, me.z - roamer.z);
         const handEmpty = !c.env.hand?.get();
