@@ -28,25 +28,28 @@ export function card(c, key, lines, o = {}) {
 export function scatter(c, x, z, n, spread = 1.2, color) {
   for (let i = 0; i < n; i++) c.paper(clamp(x + c.R.range(-spread, spread), -c.W / 2 + 0.25, c.W / 2 - 0.25), clamp(z + c.R.range(-spread, spread), -c.D / 2 + 0.25, c.D / 2 - 0.25), undefined, color);
 }
-/** A door leaf made of boxes, flat against a wall (or into `batch`, to swing later). → the handle's wall coordinate. */
+/**
+ * A door leaf made of boxes, flat against a wall (or into `batch`, to swing later). → the handle's wall coordinate.
+ * o.k: how thick it all is (1: a door; a door made smaller is thinner too).
+ */
 export function doorLeaf(c, side, at, w, h, rgb, o = {}) {
-  const batch = o.batch, d0 = o.d0 ?? 0.012, d1 = d0 + 0.04, dark = rgb.map((v) => v * 0.72), lite = rgb.map((v) => Math.min(1, v * 1.18));
+  const batch = o.batch, k = o.k ?? 1, d0 = o.d0 ?? 0.012, d1 = d0 + 0.04 * k, dark = rgb.map((v) => v * 0.72), lite = rgb.map((v) => Math.min(1, v * 1.18));
   c.wbox(side, at, w, o.y0 ?? 0.02, h, d0, d1, rgb, { batch });
   const pw = w * 0.34, gap = w * 0.08;
   for (const px of [-pw / 2 - gap / 2, pw / 2 + gap / 2]) for (const [y0, y1] of [[h * 0.09, h * 0.42], [h * 0.48, h * 0.9]]) {
-    c.wbox(side, at + px, pw, y0, y1, d1, d1 + 0.006, dark, { batch });
-    c.wbox(side, at + px, pw - 0.07 * (w / 0.9), y0 + 0.035 * (h / 2), y1 - 0.035 * (h / 2), d1 + 0.006, d1 + 0.011, lite, { batch });
+    c.wbox(side, at + px, pw, y0, y1, d1, d1 + 0.006 * k, dark, { batch });
+    c.wbox(side, at + px, pw - 0.07 * (w / 0.9), y0 + 0.035 * (h / 2), y1 - 0.035 * (h / 2), d1 + 0.006 * k, d1 + 0.011 * k, lite, { batch });
   }
   const hx = (o.hinge === 'right' ? -1 : 1) * (w / 2 - w * 0.09), hy = o.handleY ?? h * 0.47;
-  c.wbox(side, at + hx, w * 0.05, hy - 0.012 * (h / 2), hy + 0.012 * (h / 2), d1, d1 + 0.05, [0.72, 0.68, 0.55], { batch });
-  c.wbox(side, at + hx - Math.sign(hx) * w * 0.06, w * 0.15, hy - 0.012 * (h / 2), hy + 0.012 * (h / 2), d1 + 0.035, d1 + 0.05, [0.78, 0.74, 0.6], { batch });
+  c.wbox(side, at + hx, w * 0.05, hy - 0.012 * (h / 2), hy + 0.012 * (h / 2), d1, d1 + 0.05 * k, [0.72, 0.68, 0.55], { batch });
+  c.wbox(side, at + hx - Math.sign(hx) * w * 0.06, w * 0.15, hy - 0.012 * (h / 2), hy + 0.012 * (h / 2), d1 + 0.035 * k, d1 + 0.05 * k, [0.78, 0.74, 0.6], { batch });
   return hx;
 }
-/** A cream frame around a doorway-sized hole. */
-export function doorFrame(c, side, at, w, h, rgb = lin('#e2d8bd'), depth = 0.05) {
-  c.wbox(side, at - w / 2 - 0.035, 0.07, 0, h + 0.07, 0, depth, rgb);
-  c.wbox(side, at + w / 2 + 0.035, 0.07, 0, h + 0.07, 0, depth, rgb);
-  c.wbox(side, at, w, h, h + 0.07, 0, depth, rgb);
+/** A cream frame around a doorway-sized hole; t is how wide its timber is. */
+export function doorFrame(c, side, at, w, h, rgb = lin('#e2d8bd'), depth = 0.05, t = 0.07) {
+  c.wbox(side, at - w / 2 - t / 2, t, 0, h + t, 0, depth, rgb);
+  c.wbox(side, at + w / 2 + t / 2, t, 0, h + t, 0, depth, rgb);
+  c.wbox(side, at, w, h, h + t, 0, depth, rgb);
 }
 /** A yellow A-frame sign. texts: two lines. */
 export function wetSign(c, x, z, rot, lines, fallen = false) {

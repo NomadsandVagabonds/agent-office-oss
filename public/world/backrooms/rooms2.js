@@ -169,6 +169,10 @@ function keyboardFloor(c) {
   });
 }
 
+// What comes back when the little door is knocked at: the other side of its plaque.
+const TINY_REPLIES = { 'STAFF ONLY': 'SMALLER STAFF ONLY', 'MEETING ROOM 0.3': 'IN A MEETING', 'EXIT (SMALL)': 'NOT YOUR SIZE', MANAGEMENT: 'OUT TO LUNCH', SUPPLIES: 'OUT OF STOCK', 'DO NOT KNOCK': 'WE DID SAY' };
+const STOOP_AT = 1.72;                               // the ceiling height at which somebody your size starts to duck, metres
+
 /** A corridor that is really a funnel: it only looks long. The door at the end is the right size for the end. */
 function tinyDoor(c) {
   const { W, D, H, params: p } = c, kit = c.kit, s1 = p.taper, zin = D / 2;
@@ -207,32 +211,65 @@ function tinyDoor(c) {
     c.light(0, H * sm - 0.14 * sm, zm, tube, 1.05 * Math.pow(sm, 0.8), { axis: [0, -1, 0], floor: 0.24, k: 3.4 * sm * sm, far: 2 + 12 * sm });
   }
   // furniture in pairs, each pair smaller than the last
+  const stood = [];
   [1.6, 4.0, 6.4, 8.8, 11.2, 13.6, 16].forEach((v, i) => {
     if (v > far(zf) - 0.8) return;
     const z = depth(v), k = sc(z), sx = i % 2 ? 1 : -1;
+    stood.push({ z, sx });
     c.prop(i % 3 === 2 ? 'floorlamp' : 'planttall', sx * (W / 2 - 0.42) * k, z, { scale: k, rot: i, solid: k > 0.8, shadow: 0.35, o: { variant: i % 4 }, fallback: [0.4, 1.5, 0.4] });
   });
-  // the door: properly made, properly hung, a quarter of the size
-  const dw = 0.9 * s1, dh = 2.0 * s1;
-  doorFrame(c, 'back', 0, dw, dh, lin('#e2d8bd'), 0.03);
-  doorLeaf(c, 'back', 0, dw - 0.02 * s1, dh - 0.01, lin(p.door), { d0: 0.004, y0: 0.006 });
-  const glowB = new Batch(); c.hang(glowB, 'back', 0, 0.004, dw * 0.9, 0.006, null, WHITE, 0.05);
-  const under = c.add(new THREE.Mesh(kit.plain(glowB), kit.glowing(kit.tex.white(), 1.6, lin('#ffd9a0'))));
+  // …and one thing that is the size it says it is: a sign, standing where you first have to duck. Everything else in
+  // here is a little smaller than the thing before it, so this is the one honest measure of how small that has become.
+  const zs = Math.min(zin - (D * (1 - STOOP_AT / H)) / (1 - s1), D * 0.08 - 0.5);                  // (short of where a coin may hang: gen.js, STASH)
+  const beside = stood.reduce((a, b) => (Math.abs(b.z - zs) < Math.abs(a.z - zs) ? b : a), { z: 99, sx: -1 });
+  const xs = -beside.sx * Math.min(0.45, (W / 2) * sc(zs) - 0.4);
+  wetSign(c, xs, zs, xs > 0 ? -0.22 : 0.22, ['CAUTION', 'LOW', 'CEILING']);
+  c.solid(xs - 0.13, zs - 0.13, xs + 0.13, zs + 0.13);
+  // the door: properly made, properly hung, a quarter of the size — frame, leaf, plaque and all
+  const dw = 0.9 * s1, dh = 2.0 * s1, jamb = 0.07 * s1;
+  doorFrame(c, 'back', 0, dw, dh, lin('#e2d8bd'), 0.05 * s1, jamb);
+  doorLeaf(c, 'back', 0, dw - 0.02 * s1, dh - 0.01 * s1, lin(p.door), { d0: 0.012 * s1, y0: 0.02 * s1, k: s1 });
+  // somebody is in: a line of light under it, and what gets out across the mat
+  const lit = lin('#ffd9a0'), gap = 0.02 * s1;
+  const glowB = new Batch(); c.hang(glowB, 'back', 0, gap / 2, dw * 0.94, gap, null, WHITE, 0.05 * s1);
+  const under = c.add(new THREE.Mesh(kit.plain(glowB), kit.glowing(kit.tex.white(), 1.6, lit)));
+  const spill = kit.tex.custom('doorspill', 32, 32, (g) => {
+    const k = g.createRadialGradient(16, 0, 0, 16, 0, 30);
+    for (const [at, a] of [[0, 1], [0.3, 0.5], [0.65, 0.14], [1, 0]]) k.addColorStop(at, `rgba(255,255,255,${a})`);
+    g.fillStyle = k; g.fillRect(0, 0, 32, 32);
+  }, { clamp: true });
+  spill.magFilter = THREE.LinearFilter;
+  const pool = c.add(new THREE.Mesh(kit.own(new THREE.PlaneGeometry(dw * 2.4, dw * 1.7)), kit.own(new THREE.MeshBasicMaterial({ map: spill, color: new THREE.Color().setRGB(0.5, 0.36, 0.16), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }))));
+  pool.rotation.x = -Math.PI / 2; pool.position.set(0, 0.012, zf + dw * 0.85 + 0.05 * s1); pool.renderOrder = 2;
   c.light(0, 0.03, zf + 0.12, '#ffd9a0', 0.12, { k: 0.05, far: 1.2 });
-  const tex = card(c, 'tiny' + p.sign, [p.sign], { w: 96, h: 24, bg: '#20242a', fg: '#f0e2b0', size: 11 });
-  c.hang(c.mapped('tinysign', tex), 'back', 0, dh + 0.11 * s1 + 0.03, dw * 1.1, dw * 1.1 * 0.25, null, WHITE, 0.01);
+  // the plaque over it — and the other side of the plaque, for anyone who knocks
+  const pw = dw * 1.25, ph = pw * 0.25, py = dh + jamb + 0.03 * s1 + ph / 2;
+  const plate = (words) => card(c, 'tiny' + words, [words], { w: 192, h: 48, bg: '#20242a', fg: '#f0e2b0', size: 22, pad: 14 });
+  c.hang(c.mapped('tinysign', plate(p.sign)), 'back', 0, py, pw, ph, null, WHITE, 0.008);
+  const reply = TINY_REPLIES[p.sign] || 'NO', turned = new Batch();
+  c.hang(turned, 'back', 0, py, pw, ph, null, WHITE, 0.011);
+  const answer = c.dynamic(turned, { map: plate(reply) });
+  answer.visible = false;
   c.prop('doormat', 0, zf + 0.5 * s1, { scale: s1, solid: false, shadow: false, fallback: [0.3, 0.01, 0.2] });
-  // you can only go as far as you fit
+  // you can only go as far as you fit — and long before that you are bent double: the eye keeps well under the ceiling
+  // as it comes down (never along it, which looks like rising), and the last of the way is on hands and knees
   c.rt.clip = (x, z, r) => Math.abs(x) <= (W / 2) * sc(z) - r && H * sc(z) >= 0.74;
   c.tick((dt, t, me) => {
     if (!me.inside) return;
     const head = H * sc(me.z);
-    me.world.sinkTo = Math.max(0, 1.1 - (head - 0.2));
-    me.world.slow = clamp((head - 0.5) / 1.4, 0.35, 1);
+    me.world.sinkTo = Math.max(0, 1.1 - head * (1.1 / STOOP_AT));
+    me.world.slow = clamp((head - 0.2) / 1.2, 0.6, 1);
   });
-  let dark = 0;
-  c.use({ x: 0, z: zf + 0.4, r: 2.0, label: 'knock', use: () => { const w = c.toWorld(0, zf); c.env.play('knock', w.x, w.z, 5); dark = 5; } });
-  c.tick((dt) => { if (dark > 0) { dark -= dt; under.visible = dark <= 0 || dark > 4.4; } });
+  // knock, and whoever is in there puts the light out and turns the plaque round. It comes back when they think you have gone.
+  let hush = 0;
+  c.use({ x: 0, z: zf + 0.4, r: 2.0, label: 'knock', use: () => { const w = c.toWorld(0, zf); c.env.play('knock', w.x, w.z, 5); hush = 6.5; } });
+  c.tick((dt) => {
+    if (hush <= 0) return;
+    hush -= dt;
+    const out = hush > 0 && hush < 5.9;                    // a moment after the knock
+    under.visible = pool.visible = !out;
+    answer.visible = hush > 0 && hush < 5.5;
+  });
 }
 
 /** A dark room lit by vending machines. Every slot of every machine holds the same thing. */
