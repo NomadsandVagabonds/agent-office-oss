@@ -329,6 +329,54 @@ function queue(c, R, item) {
   c.lay(c.mapped('ptape', tapeTex(c.kit)), line.x, line.z, 0.6, 0.048, along(line.U), [[0, 0], [5, 0], [5, 1], [0, 1]], WHITE, 0.007);
 }
 
+// How somebody who cannot draw draws each of them: a few strokes of a marker. (g: a 2-D context, 96 × 96, origin top left.)
+const SKETCH = {
+  pirate(g) {                                                        // a hat with three corners, a beard, two eyes that do not match, arms out
+    g.beginPath(); g.moveTo(20, 34); g.lineTo(48, 12); g.lineTo(76, 34); g.lineTo(20, 34); g.stroke();
+    g.beginPath(); g.arc(48, 46, 13, 0, 6.3); g.stroke();
+    g.beginPath(); g.arc(43, 43, 4, 0, 6.3); g.stroke(); g.fillRect(52, 42, 3, 3);
+    g.beginPath(); g.moveTo(39, 54); g.lineTo(44, 66); g.lineTo(48, 56); g.lineTo(52, 66); g.lineTo(57, 54); g.stroke();
+    g.beginPath(); g.moveTo(48, 60); g.lineTo(48, 82); g.moveTo(22, 62); g.lineTo(74, 66); g.moveTo(48, 82); g.lineTo(40, 94); g.moveTo(48, 82); g.lineTo(57, 94); g.stroke();
+  },
+  shadow(g) {                                                        // scribbled in until the pen went through, and lines coming off it
+    for (let i = 0; i < 26; i++) { g.beginPath(); g.moveTo(34 + (i * 7) % 28, 26 + (i * 11) % 44); g.lineTo(40 + (i * 13) % 26, 30 + (i * 5) % 46); g.stroke(); }
+    for (let a = 0; a < 6.2; a += 0.7) { g.beginPath(); g.moveTo(48 + Math.cos(a) * 30, 50 + Math.sin(a) * 30); g.lineTo(48 + Math.cos(a) * 42, 50 + Math.sin(a) * 42); g.stroke(); }
+  },
+  moth(g) {                                                          // two wings, and the tube it goes round
+    g.strokeRect(22, 14, 52, 8);
+    g.beginPath(); g.moveTo(48, 44); g.quadraticCurveTo(22, 30, 26, 58); g.quadraticCurveTo(40, 60, 48, 48); g.quadraticCurveTo(56, 60, 70, 58); g.quadraticCurveTo(74, 30, 48, 44); g.stroke();
+    g.beginPath(); g.moveTo(48, 40); g.lineTo(48, 64); g.moveTo(48, 40); g.lineTo(42, 32); g.moveTo(48, 40); g.lineTo(54, 32); g.stroke();
+    g.setLineDash([3, 4]); g.beginPath(); g.moveTo(48, 26); g.lineTo(48, 38); g.stroke(); g.setLineDash([]);
+  },
+  porter(g) {                                                        // a man, a mop, and the bucket, which has been drawn twice as carefully as he has
+    g.beginPath(); g.arc(34, 24, 8, 0, 6.3); g.stroke();
+    g.beginPath(); g.moveTo(34, 32); g.lineTo(34, 62); g.moveTo(20, 44); g.lineTo(50, 40); g.moveTo(34, 62); g.lineTo(26, 84); g.moveTo(34, 62); g.lineTo(43, 84); g.moveTo(50, 20); g.lineTo(52, 84); g.stroke();
+    g.beginPath(); g.moveTo(62, 62); g.lineTo(66, 84); g.lineTo(82, 84); g.lineTo(86, 62); g.closePath(); g.stroke();
+    g.beginPath(); g.ellipse(74, 62, 12, 3, 0, 0, 6.3); g.stroke(); g.beginPath(); g.arc(74, 60, 12, 3.3, 6.1); g.stroke();
+  },
+  unknown(g) { g.beginPath(); g.arc(48, 46, 22, 0.4, 5.6); g.stroke(); g.font = '700 30px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.fillText('?', 48, 58); },
+};
+
+/**
+ * A drawing of something that is down here, by somebody who met it, and what they had worked out — as far as they got.
+ * (item.of: which creature — only ever one that is in this visit; item.text: the words. gen.js and plan.js decide both.)
+ */
+function drawing(c, R, item) {
+  const w = c.wallSpot(1.3, undefined, 0.4, 2.0); if (!w) return;
+  const ink = R.pick(['rgba(26,26,30,.95)', 'rgba(150,34,26,.95)', 'rgba(34,48,120,.95)']), draw = SKETCH[item.of] || SKETCH.unknown;
+  const tex = c.kit.tex.custom(`drawn:${item.of}:${ink}`, 96, 96, (g, tw, th) => {
+    g.clearRect(0, 0, tw, th); g.strokeStyle = g.fillStyle = ink; g.lineWidth = 2.4; g.lineCap = 'round'; g.lineJoin = 'round';
+    draw(g);
+  }, { clamp: true });
+  c.keepWall(w.side, w.at - 0.55, w.at + 0.55);
+  hangOn(c, c.mapped(`drawn:${item.of}:${ink}`, tex, { cutout: true }), w.side, w.at, 1.55, 0.62, 0.62, null, WHITE, 0.004);
+  const lines = Array.isArray(item.text) && item.text.length ? item.text : ['SAW SOMETHING'];
+  const words = c.kit.tex.custom(`drawnwords:${lines.join('|')}:${ink}`, 192, 72, (g, tw, th) => { g.clearRect(0, 0, tw, th); drawText(g, lines, 0, 0, tw, th, { color: ink, size: 15, pad: 3, weight: 800, font: '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive' }); }, { clamp: true });
+  hangOn(c, c.mapped(`drawnwords:${lines.join('|')}:${ink}`, words, { cutout: true }), w.side, w.at, 0.98, 1.08, 0.4, null, WHITE, 0.004);
+  const p = c.wallAt(w.side, w.at + R.range(-0.3, 0.3), R.range(0.15, 0.4)), a = R.range(0, 3);                // the marker, with its cap off
+  c.lay(c.flat, p.x, p.z, 0.13, 0.018, a, null, [0.12, 0.12, 0.14], 0.012);
+}
+
 /** What `dressing` (rooms.js) does with a thing of type 'trace'. */
 export function trace(c, item) {
   const R = makeRng(`${c.level.seed}/trace/${c.room.id}/${item.seed}`);
@@ -338,4 +386,5 @@ export function trace(c, item) {
   else if (item.kind === 'measure') measure(c, R);
   else if (item.kind === 'map') wrongMap(c, R, item);
   else if (item.kind === 'queue') queue(c, R, item);
+  else if (item.kind === 'drawing') drawing(c, R, item);
 }
