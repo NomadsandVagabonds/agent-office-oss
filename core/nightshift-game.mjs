@@ -2,12 +2,21 @@
 // Units are metres and seconds. x/y is the side-on play plane; y is feet height.
 // Desks provide cover in a second depth lane; paper boxes are solid platforms.
 // Light geometry and detection share rayToCover(), so visible shadow is safe.
+//
+// The long game (core/game.mjs) hides a keycard and two coins on this floor.
+// The keycard is the access card in Records, the one you came back for: it is
+// the office's once you have clocked out with it. The coins hang where it costs
+// something to reach them, and are kept the moment they are touched. The state
+// carries `left` (what the floor still has to give — createGame() is told) and
+// `took` (what this visit has earned, for the caller to hand to the office).
 
 const freeze = (items) => Object.freeze(items.map((item) => Object.freeze(item)));
 export const PLAYER = Object.freeze({
   radius: 0.21, height: 1.2, crouchHeight: 0.8, speed: 2.8, crouchSpeed: 1.45,
   jumpSpeed: 6.1, gravity: 18, captureSeconds: 1.1, recoverySeconds: 0.85,
 });
+/** A coin is a disc this big, hanging with its middle at (x, y). */
+export const COIN = Object.freeze({ radius: 0.2 });
 export const LEVEL = Object.freeze({
   bounds: Object.freeze({ x0: 0, x1: 46 }), startX: 2, exitX: 44,
   keycardX: 20, breakerX: 33, gateX: 39.2,
@@ -29,21 +38,47 @@ export const LEVEL = Object.freeze({
     { id: 'archives', x: 23.5, y: 4.7, range: 3.7, sweep: 2.9, period: 8.6, rest: 3.2, phase: 1.4, disabledByBreaker: false },
     { id: 'executive', x: 35.5, y: 4.7, range: 4.1, sweep: 2.8, period: 6.9, rest: 3.2, phase: 0.2, disabledByBreaker: true },
   ]),
+  // `n` is the number the office keeps its record by (core/game.mjs: this floor hides two).
+  coins: freeze([
+    // In the first gap between desks, right under the first lamp, too high to walk into:
+    // you stand up where the beam sweeps and jump for it.
+    { n: 1, x: 9.9, y: 1.9 },
+    // Above the archive boxes, out of a jump's reach from the floor: up onto the stack first,
+    // in the open, where the second lamp looks at the start of every scan.
+    { n: 2, x: 27.8, y: 2.62 },
+  ]),
 });
 
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 const EPSILON = 1e-7;
 const OCCLUDERS = [...LEVEL.covers, ...LEVEL.obstacles];
+const COINS = new Map(LEVEL.coins.map((coin) => [coin.n, coin]));
 
-export function createGame() {
+/**
+ * A fresh shift. `left` is what the floor still hides — { card, coins: [n, …] },
+ * as office.game.left('nightshift') gives it. With nothing said (no long game,
+ * a test) the floor hides nothing, and plays exactly the same.
+ */
+export function createGame(left) {
+  const coins = Array.isArray(left?.coins) ? left.coins : [];
   return {
     x: LEVEL.startX, y: 0, vx: 0, vy: 0, facing: 1, grounded: true, crouching: false,
     time: 0, stage: 'playing', exposure: 0, lit: false, cover: null,
     keycard: false, breaker: false, checkpoint: LEVEL.startX, deaths: 0,
     caughtUntil: null, graceUntil: 1.2, finishedAt: null,
     jumpHeld: false, interactHeld: false, event: null,
+    left: { card: !!left?.card, coins: LEVEL.coins.map((coin) => coin.n).filter((n) => coins.includes(n)) },
+    took: { card: false, coins: [] },
     message: 'Clock out quietly. The security lights did not get the memo.',
   };
+}
+
+/**
+ * Start the shift again. What has been taken stays taken: the new shift is
+ * given only what was still left on the floor.
+ */
+export function restart(previous) {
+  return createGame(previous?.left);
 }
 
 /**
@@ -125,12 +160,17 @@ export function objective(state) {
   return 'The last lights are out. Take the service elevator home.';
 }
 
-/** A nearby interaction; the renderer can put its label on the relevant object. */
+/**
+ * What is within reach: { id, label, locked }. `label` is only the name of the
+ * thing (the level kit's chip puts the key in front of it); `locked` says it
+ * will not answer yet. Once you have clocked out, what is left is the lift.
+ */
 export function interactable(state) {
+  if (state.stage === 'won') return { id: 'lift', label: 'the lift', locked: false };
   if (state.stage !== 'playing' || state.y > 0.45) return null;
-  if (!state.keycard && Math.abs(state.x - LEVEL.keycardX) < 1.1) return { id: 'keycard', label: 'E · take keycard' };
-  if (!state.breaker && Math.abs(state.x - LEVEL.breakerX) < 1.1) return { id: 'breaker', label: state.keycard ? 'E · cut security power' : 'KEYCARD REQUIRED' };
-  if (Math.abs(state.x - LEVEL.exitX) < 1.25) return { id: 'exit', label: state.breaker ? 'E · clock out' : 'SECURITY SHUTTER LOCKED' };
+  if (!state.keycard && Math.abs(state.x - LEVEL.keycardX) < 1.1) return { id: 'keycard', label: 'the staff badge', locked: false };
+  if (!state.breaker && Math.abs(state.x - LEVEL.breakerX) < 1.1) return { id: 'breaker', label: 'the security breaker', locked: !state.keycard };
+  if (Math.abs(state.x - LEVEL.exitX) < 1.25) return { id: 'exit', label: 'the time clock', locked: !state.breaker };
   return null;
 }
 
@@ -146,6 +186,22 @@ function interact(state) {
   } else if (near.id === 'exit' && state.breaker) {
     state.stage = 'won'; state.finishedAt = state.time; state.vx = 0; state.vy = 0;
     state.event = 'win'; state.message = 'SHIFT COMPLETE. Please do not reply all.';
+    // Clocking out is what makes the badge yours to keep — once: a card found on an earlier visit is not found again.
+    if (state.left.card) { state.left = { ...state.left, card: false }; state.took = { ...state.took, card: true }; }
+  }
+}
+
+/** Touching a coin takes it, there and then. Nothing afterwards — a catch, a restart — gives it back. */
+function pocket(state) {
+  const top = state.y + (state.crouching ? PLAYER.crouchHeight : PLAYER.height);
+  for (const n of state.left.coins) {
+    const coin = COINS.get(n);
+    const dx = Math.max(Math.abs(state.x - coin.x) - PLAYER.radius, 0);
+    const dy = Math.max(state.y - coin.y, coin.y - top, 0);
+    if (dx * dx + dy * dy > COIN.radius ** 2) continue;
+    state.left = { ...state.left, coins: state.left.coins.filter((k) => k !== n) };
+    state.took = { ...state.took, coins: [...state.took.coins, n] };
+    state.event = 'coin';
   }
 }
 
@@ -184,6 +240,7 @@ function tick(state, axis, dt) {
     return;
   }
   move(state, axis, dt);
+  if (state.left.coins.length) pocket(state);
   state.cover = LEVEL.covers.find((cover) => state.x > cover.x - cover.w / 2 && state.x < cover.x + cover.w / 2 && state.y < cover.h)?.id || null;
   state.lit = isLit(state);
   if (state.time > state.graceUntil) {

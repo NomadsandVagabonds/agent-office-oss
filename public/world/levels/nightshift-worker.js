@@ -9,7 +9,8 @@ export function createWorker(w) {
   root.name = 'nightshift-worker'; torso.name = 'torso';
   w.scene.add(root); root.add(torso);
   function mesh(model, parent) { const node = w.vox(model, 0, 0, 'S'); parent.add(node); return node; }
-  mesh(workerBody, torso);
+  // You came back for your badge: the jacket has no ID on it until the access card is in hand.
+  const jacket = mesh(() => workerBody({ badge: false }), torso), badged = mesh(workerBody, torso);
   const head = mesh(workerHead, torso); head.name = 'head'; head.position.y = 0.425;
   const legs = [-1, 1].map((side) => {
     const hip = new THREE.Group(), knee = new THREE.Group(); root.add(hip); hip.add(knee);
@@ -38,6 +39,7 @@ export function createWorker(w) {
     root.scale.set(state.facing * size, size, size); root.visible = state.stage !== 'caught';
     torso.position.set(hipX, hipY, 0); torso.rotation.z = lean;
     head.rotation.z = -lean - 0.06 * fold;
+    badged.visible = !!state.keycard; jacket.visible = !state.keycard;
 
     // Two-bone IK plants both feet during a crouch and keeps the knees forward.
     for (const { hip, knee, foot, side } of legs) {

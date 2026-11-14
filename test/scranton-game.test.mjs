@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, act, advance, objective, remaining, chillRemaining, inventory,
-  CHILL_SECONDS, CHALLENGE_SECONDS,
+  createGame, act, advance, objective, remaining, chillRemaining, inventory, stepsDone,
+  COIN, COPIES_FOR_COIN, copierPays, cardInJelly,
+  CHILL_SECONDS, CHALLENGE_SECONDS, GAME_STAGES,
 } from '../core/scranton-game.mjs';
+import { hideoutById } from '../core/game.mjs';
 
 const step = (state, action, now) => act(state, action, now).state;
 
@@ -128,4 +130,60 @@ test('gelatin: state is serializable and invalid configuration cannot corrupt a 
   assert.deepEqual(JSON.parse(JSON.stringify(state)), state);
   assert.throws(() => createGame({ mode: 'impossible' }), /Unknown prank mode/);
   for (const now of [NaN, Infinity, -1]) assert.throws(() => advance(state, now), /Game time/);
+});
+
+test('gelatin: the memo ticks a step only once it is really behind you', () => {
+  let state = createGame();
+  assert.equal(stepsDone(state), 0);
+  state = step(state, 'start', 0);
+  assert.equal(stepsDone(state), 0, 'reading the memo is not one of its steps');
+  state = step(state, 'borrow', 1);
+  assert.equal(stepsDone(state), 1);
+  assert.equal(stepsDone(step(state, 'chill', 2)), 1, 'a refused action ticks nothing');
+  state = step(state, 'mix', 2);
+  assert.equal(stepsDone(state), 2);
+  state = step(state, 'chill', 3);
+  assert.equal(stepsDone(state), 2, 'in the fridge is not yet set');
+  state = advance(state, 3 + CHILL_SECONDS);
+  assert.equal(stepsDone(state), 3);
+  state = step(state, 'retrieve', 12);
+  assert.equal(stepsDone(state), 3, 'carrying it is not returning it');
+  state = step(state, 'return', 13);
+  assert.equal(stepsDone(state), 4);
+  const late = advance(step(step(createGame(), { type: 'start', mode: 'challenge' }, 0), 'borrow', 1), CHALLENGE_SECONDS);
+  assert.equal(late.stage, 'lost');
+  assert.equal(stepsDone(late), 0, 'a meeting that ended first starts the sheet again');
+  assert.equal(stepsDone(step(state, { type: 'start', mode: 'relaxed' }, 20)), 0, 'and so does another go');
+  let before = -1;
+  for (const stage of GAME_STAGES.filter((name) => name !== 'lost')) {
+    const done = stepsDone({ stage });
+    assert.ok(Number.isInteger(done) && done >= before && done <= 4, `${stage}: the ticks only ever go forward`);
+    before = done;
+  }
+});
+
+test('gelatin: the keycard is set in the jelly only once the prank is done, and only while the office has it to give', () => {
+  const all = { card: true, coins: [1, 2, 3] };
+  let state = createGame();
+  const along = [state];
+  for (const [action, now] of [['start', 0], ['borrow', 1], ['mix', 2], ['chill', 3]]) along.push(state = step(state, action, now));
+  along.push(state = advance(state, 3 + CHILL_SECONDS));
+  along.push(state = step(state, 'retrieve', 12));
+  for (const before of along) assert.equal(cardInJelly(before, all), false, `${before.stage}: there is no dessert on the desk yet`);
+  const won = step(state, 'return', 13);
+  assert.equal(won.stage, 'won');
+  assert.equal(cardInJelly(won, all), true);
+  assert.equal(cardInJelly(won, { card: true, coins: [] }), true, 'it has nothing to do with the coins');
+  assert.equal(cardInJelly(won, { card: false, coins: [1, 2, 3] }), false, 'found on an earlier visit: only the stapler is in there');
+  for (const none of [undefined, null, {}]) assert.equal(cardInJelly(won, none), false, 'no long game, no card');
+  const lost = advance(step(createGame(), { type: 'start', mode: 'challenge' }, 0), CHALLENGE_SECONDS);
+  assert.equal(cardInJelly(lost, all), false, 'a prank that ran out of meeting sets nothing in anything');
+  assert.equal(cardInJelly(step(won, 'start', 20), all), false, 'and a new attempt clears the desk');
+});
+
+test('gelatin: three coins, counted as the office counts them, and the copier gives its one up on its one copy', () => {
+  assert.deepEqual(Object.values(COIN).sort(), Array.from({ length: hideoutById('scranton').coins }, (_, i) => i + 1));
+  assert.deepEqual(Object.keys(COIN).sort(), ['award', 'conference', 'copier']);
+  assert.deepEqual(Array.from({ length: 40 }, (_, i) => i).filter(copierPays), [COPIES_FOR_COIN], 'once, however long it is argued with');
+  assert.ok(COPIES_FOR_COIN > 1, 'not on the first try');
 });

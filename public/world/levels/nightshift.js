@@ -1,14 +1,26 @@
 // N · Night Shift. A monochrome, side-on office stealth detour.
 // The furniture and employee are actual Vox meshes; the rules run in a pure 2D world.
+//
+// Nothing here is addressed to whoever is playing. The words are the office's
+// own — a door plaque, a lost-property slip, two notices nobody took down, the
+// readouts on its equipment — and the only prompt is the level kit's chip.
+// What a lamp does, what a desk hides and what a breaker wants are there to be
+// watched: a beam that stops at a desk top and goes out, a lever that rattles.
+//
+// The long game (core/game.mjs): the access card in Records is this floor's
+// keycard, handed to the office when you clock out with it, and two coins hang
+// where the rules put them (LEVEL.coins), kept the moment they are touched.
 import * as THREE from 'three';
 import { createWorld } from './kit.js';
-import { Vox, M, glow } from '../vox/vox.js';
-import { LEVEL, createGame, step, lightBeams, beamPolygon, objective } from '/core/nightshift-game.mjs';
-import { silhouetteDesk, filingBank, securityLamp, officeDoor } from './nightshift-props.js';
+import { makePickup } from './loot.js';
+import { Vox, M } from '../vox/vox.js';
+import { LEVEL, createGame, restart, step, lightBeams, beamPolygon, interactable, objective } from '/core/nightshift-game.mjs';
+import { silhouetteDesk, filingBank, securityLamp, officeDoor, staffCard } from './nightshift-props.js';
 import { createWorker } from './nightshift-worker.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const lerp = (a, b, k) => a + (b - a) * k;
+const COIN_SCALE = 1.5;          // of the house coin (22 cm): a third of a metre, in a floor where you are 1.2 m
 
 export async function enter(office) {
   const w = createWorld(office, {
@@ -22,7 +34,9 @@ export async function enter(office) {
   w.light({ sky: '#ffffff', ground: '#555555', hemi: 1.6, sun: '#ffffff', power: 0.65, dir: [-0.5, 1, 1] });
   w.sun.castShadow = false;
   w.bed('office-bed', { volume: 0.07 });
-  let game = createGame(), paused = false, closing = false, cameraX = 6.5, lastEvent = '', lastReadout = '';
+  // What the floor still hides is the office's to say; where nobody keeps score it hides nothing and plays the same.
+  let game = createGame(office.game?.left('nightshift')), paused = false, closing = false, cameraX = 6.5, lastEvent = '', lastReadout = '';
+  let rattle = 0, within = null, cardBanked = false;
   const held = new Set(), dynamicScreens = [], lightNodes = [];
   const basic = (color, more = {}) => w.own(new THREE.MeshBasicMaterial({ color, ...more }));
   const dark = basic('#0b0b0b'), ink = basic('#181818'), mid = basic('#3d3d3d'), silver = basic('#777777'), white = basic('#dddddd');
@@ -92,27 +106,35 @@ export async function enter(office) {
   w.vox(() => officeDoor({ open: true }), LEVEL.exitX, -1.1, 'S');
   lettering('N · NIGHT SHIFT', 1.3, 2.9, { size: 0.2 });
   lettering('EXIT', LEVEL.exitX, 2.9, { size: 0.27 });
-  lettering('E · CLOCK OUT', LEVEL.exitX, 0.48, { size: 0.16, z: 1.05 });
 
-  // Instructions live on luminous office signage, with reminders at each new verb.
-  screen(4.15, 2.65, 3.8, 1.32, (g, W, H) => {
-    g.fillStyle = '#a7a7a7'; g.fillRect(0, 0, W, H); g.fillStyle = '#111111';
-    g.font = `bold ${W * 0.065}px monospace`; g.fillText('NIGHT SHIFT', W * 0.06, H * 0.23);
-    g.font = `${W * 0.039}px monospace`;
-    ['You only came back for your badge.', 'A / D  MOVE      S / ↓  CROUCH', 'SPACE  JUMP     E  USE', 'P PAUSE · R RETRY · ESC LOBBY'].forEach((s, i) => g.fillText(s, W * 0.06, H * (0.43 + i * 0.16)));
+  // What is written up is what this office would have up anyway: a slip on the board by the door (the errand,
+  // as lost property), a department plaque, and two notices nobody took down.
+  screen(4.3, 2.2, 1.6, 1.02, (g, W, H) => {
+    g.fillStyle = '#b4b4b4'; g.fillRect(0, 0, W, H); g.fillStyle = '#8f8f8f'; g.fillRect(0, H - 5, W, 5);
+    g.fillStyle = '#222222'; g.fillRect(W / 2 - 5, 6, 10, 10);                                // the pin
+    g.fillStyle = '#111111'; g.textAlign = 'center';
+    g.font = `bold ${W * 0.1}px monospace`; g.fillText('LOST PROPERTY', W / 2, H * 0.36);
+    g.fillRect(W * 0.1, H * 0.45, W * 0.8, 2);
+    g.font = `${W * 0.07}px monospace`;
+    g.fillText('ONE STAFF BADGE', W / 2, H * 0.66); g.fillText('HANDED IN TO RECORDS', W / 2, H * 0.84);
   });
-  lettering('KEEP TO THE SHADOWS', 9.2, 3.3, { size: 0.22 });
-  lettering('S / ↓  CROUCH IN DESK SHADOWS', 7, 2.05, { size: 0.15 });
-  lettering('WAIT FOR RECALIBRATION · CROSS IN THE DARK', 9.9, 2.5, { size: 0.14 });
-  lettering('SPACE · OVER THE PAPERWORK', 13.9, 1.85, { size: 0.15 });
-  lettering('NO OVERTIME HAS BEEN APPROVED', 25.6, 3.5, { size: 0.2 });
-  lettering('THE LAST ONE OUT GETS THE LIGHTS', 34, 3.6, { size: 0.18 });
+  lettering('RECORDS', LEVEL.keycardX, 3.3, { size: 0.2 });
+  // (each clear of the lamp readout beside it)
+  lettering('NO OVERTIME HAS BEEN APPROVED', 26, 3.5, { size: 0.2 });
+  lettering('THE LAST ONE OUT GETS THE LIGHTS', 32.2, 3.6, { size: 0.18 });
 
-  const card = w.vox(() => new Vox().box(-6, 0, -1, 6, 9, 1, glow('#eeeeee')).box(-4, 5, 1, 1, 8, 2, '#333333').box(-4, 2, 1, 4, 3, 2, '#555555'), LEVEL.keycardX, 0, 'S', { y: 1.03 });
-  const cardLabel = lettering('E · YOUR ACCESS CARD', LEVEL.keycardX, 1.75, { size: 0.17 });
+  // The access card is the house's keycard, in this floor's greys; the breaker has a slot its shape.
+  const card = w.vox(staffCard, LEVEL.keycardX, 1.06, 'S', { y: 1.03 });
   box(LEVEL.breakerX, 0.8, -0.25, 0.65, 0.9, 0.25, ink);
-  const switchLever = box(LEVEL.breakerX, 1.1, -0.05, 0.08, 0.3, 0.08, white);
-  const breakerLabel = lettering('E · SECURITY POWER', LEVEL.breakerX, 1.95, { size: 0.16 });
+  const switchLever = box(LEVEL.breakerX - 0.12, 1.1, -0.05, 0.08, 0.3, 0.08, white);
+  box(LEVEL.breakerX + 0.14, 1.12, -0.1, 0.2, 0.3, 0.04, mid);
+  const slot = box(LEVEL.breakerX + 0.14, 1.25, -0.07, 0.14, 0.03, 0.03, basic('#dddddd'));
+  lettering('SECURITY POWER', LEVEL.breakerX, 1.95, { size: 0.16 });
+  // Beside the way out, the clock you punch.
+  box(LEVEL.exitX - 1.1, 1.0, -0.25, 0.42, 0.52, 0.25, ink);
+  box(LEVEL.exitX - 1.1, 1.3, -0.1, 0.24, 0.13, 0.04, silver);
+  box(LEVEL.exitX - 1.1, 1.12, -0.1, 0.2, 0.03, 0.04, white);
+  lettering('TIME CLOCK', LEVEL.exitX - 1.1, 1.66, { size: 0.12 });
   const gate = new THREE.Group(); w.scene.add(gate);
   for (let i = 0; i < 19; i++) {
     const slat = box(LEVEL.gateX, i * 0.22, 0, 0.18, 0.2, 2.6, i % 2 ? dark : ink); gate.attach(slat);
@@ -142,19 +164,25 @@ export async function enter(office) {
     const mesh = new THREE.Mesh(geo, beamMaterial); mesh.frustumCulled = false; mesh.renderOrder = 1; w.scene.add(mesh);
     const indicators = [];
     for (let i = 0; i < 6; i++) indicators.push(box(light.x - 0.3 + i * 0.12, light.y + 0.33, 0.4, 0.075, 0.07, 0.02, basic('#444444')));
+    // Each lamp's own readout says what a device would: what it is doing and for how much longer. It turns pale
+    // while the lamp is dark. When the system has somebody it says so, in its own words.
     const readout = screen(light.x, 3.7, 2.1, 0.42, (g, W, H) => {
       const beam = lightBeams(game).find((b) => b.id === light.id);
-      g.fillStyle = beam.resting ? '#cecece' : '#171717'; g.fillRect(0, 0, W, H);
-      g.fillStyle = beam.resting ? '#111111' : '#d0d0d0'; g.textAlign = 'center';
-      g.font = `bold ${H * 0.28}px monospace`;
-      g.fillText(beam.resting ? 'RECALIBRATING' : beam.active ? 'SECURITY SCAN' : 'POWER OFF', W / 2, H * 0.39);
-      g.font = `${H * 0.25}px monospace`;
-      g.fillText(beam.resting ? `CROSS NOW · ${beam.restRemaining.toFixed(1)}s` : beam.active ? `DARK IN ${beam.scanRemaining.toFixed(1)}s` : 'SERVICE PASSAGE OPEN', W / 2, H * 0.8);
+      const powered = beam.active || beam.resting, caught = powered && game.stage === 'caught', pale = beam.resting && !caught && !paused;
+      g.fillStyle = pale ? '#cecece' : '#171717'; g.fillRect(0, 0, W, H);
+      g.fillStyle = pale ? '#111111' : '#d0d0d0'; g.textAlign = 'center';
+      if (caught) {
+        g.font = `bold ${H * 0.28}px monospace`; g.fillText('UNAPPROVED OVERTIME', W / 2, H * 0.39);
+        g.font = `${H * 0.25}px monospace`; g.fillText('RETURN TO YOUR STATION', W / 2, H * 0.8);
+        return;
+      }
+      g.font = `bold ${H * 0.46}px monospace`;
+      g.fillText(!powered ? 'NO POWER' : paused ? 'STANDBY' : beam.resting ? `RECAL ${beam.restRemaining.toFixed(1)}` : `SCAN ${beam.scanRemaining.toFixed(1)}`, W / 2, H * 0.67);
     }, 0.1);
     lightNodes.push({ lamp, mesh, indicators, readout, lastReadout: '' });
   }
 
-  // A tiny employee with a bright ID badge: square limbs and a block-built head.
+  // A tiny employee, square limbs and a block-built head; the bright ID badge is on the jacket once it is found.
   const worker = createWorker(w);
 
   // A moving patch of fog is very faint and never hides the playable silhouette.
@@ -163,17 +191,32 @@ export async function enter(office) {
   motesGeo.setAttribute('position', new THREE.BufferAttribute(motePositions, 3));
   const motes = new THREE.Points(motesGeo, w.own(new THREE.PointsMaterial({ color: '#aaaaaa', size: 0.025, transparent: true, opacity: 0.3, depthWrite: false }))); w.scene.add(motes);
 
+  // The board over the way out is the office's reminder, and afterwards the time clock's receipt.
   const status = screen(LEVEL.exitX - 0.1, 3.8, 4.3, 0.65, (g, W, H) => {
+    const won = game.stage === 'won';
     g.fillStyle = '#b5b5b5'; g.fillRect(0, 0, W, H); g.fillStyle = '#111111'; g.textAlign = 'center';
     g.font = `bold ${W * 0.047}px monospace`;
-    g.fillText(game.stage === 'won' ? 'SHIFT COMPLETE. GO HOME.' : 'PLEASE REMEMBER TO CLOCK OUT.', W / 2, H * 0.4);
+    g.fillText(won ? 'SHIFT COMPLETE. GO HOME.' : 'PLEASE REMEMBER TO CLOCK OUT.', W / 2, H * (won ? 0.4 : 0.6));
     g.font = `${W * 0.032}px monospace`;
-    g.fillText(game.stage === 'won' ? `${game.deaths} security encounters · E: lobby · R: replay` : 'Access card + security power required', W / 2, H * 0.77);
+    if (won) g.fillText(`SECURITY ENCOUNTERS: ${game.deaths}`, W / 2, H * 0.77);
   }); dynamicScreens.push(status);
-  const announcement = screen(24, 4.15, 7, 0.4, (g, W, H) => {
-    g.fillStyle = '#151515'; g.fillRect(0, 0, W, H); g.fillStyle = '#c3c3c3'; g.textAlign = 'center'; g.font = `${H * 0.52}px monospace`;
-    g.fillText(paused ? 'SHIFT PAUSED · P TO RESUME' : game.stage === 'caught' ? 'UNAPPROVED OVERTIME. RETURN TO YOUR STATION.' : objective(game).toUpperCase(), W / 2, H * 0.68);
-  }); dynamicScreens.push(announcement);
+
+  // The long game's coins hang where the rules say (LEVEL.coins). They are the house's own coin in its own gold:
+  // the one warm thing on a black-and-white floor, so that it is known for what it is.
+  const coins = new Map();
+  for (const coin of LEVEL.coins) {
+    if (!game.left.coins.includes(coin.n)) continue;
+    const pickup = makePickup('coin', { scale: COIN_SCALE, hover: 0 });
+    pickup.group.position.set(coin.x, coin.y - 4.5 * 0.025 * COIN_SCALE, 1.1);
+    w.scene.add(pickup.group); w.own(pickup);
+    coins.set(coin.n, pickup);
+  }
+  // The one prompt the house allows is the kit's chip: it names whatever the rules say is within reach.
+  const chips = new Map();
+  function chip(near) {
+    if (!chips.has(near.id)) chips.set(near.id, w.thing({ x: game.x, z: 0, label: near.label, reach: 3, hidden: () => within?.id !== near.id }));
+    return chips.get(near.id);
+  }
 
   const controls = new Set(['a', 'd', 's', 'w', 'ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', ' ', 'e', 'p', 'r']);
   function keyDown(e) {
@@ -182,7 +225,7 @@ export async function enter(office) {
     if (!controls.has(k)) return;
     e.preventDefault(); e.stopImmediatePropagation();
     if (!e.repeat && k === 'p') { paused = !paused; held.clear(); }
-    else if (!e.repeat && k === 'r') { game = createGame(); paused = false; held.clear(); }
+    else if (!e.repeat && k === 'r') { game = restart(game); paused = false; held.clear(); }      // what has been taken stays taken
     else if (!e.repeat && k === 'e' && game.stage === 'won') { closing = true; w.leave('esc'); }
     else held.add(k);
   }
@@ -205,11 +248,25 @@ export async function enter(office) {
       crouch: held.has('s') || held.has('ArrowDown'), jump: held.has(' ') || held.has('w') || held.has('ArrowUp'), interact: held.has('e'),
     }, dt);
     w.me.x = game.x; w.me.z = 0; w.avatar.root.visible = false;
-    if (game.event && game.event !== lastEvent) w.sfx(game.stage === 'caught' ? 'sticky' : game.stage === 'won' ? 'bell' : 'coin', { volume: 0.13 });
+    // a coin has the long game's own sound (office.game.take), so the floor adds none of its own for it
+    if (game.event && game.event !== lastEvent && game.event !== 'coin') w.sfx(game.stage === 'caught' ? 'sticky' : game.stage === 'won' ? 'bell' : 'coin', { volume: 0.13 });
+    if (game.event === 'locked' && lastEvent !== 'locked') rattle = 0.4;
     lastEvent = game.event;
-    card.visible = cardLabel.visible = !game.keycard; breakerLabel.visible = !game.breaker;
+    // What this visit has earned goes to the office at once: a coin when it is touched, the keycard when you have
+    // clocked out with it. (The office ignores what it already has; a catch or a restart never hands anything back.)
+    for (const [n, pickup] of coins) {
+      if (!pickup.taken && game.took.coins.includes(n)) { pickup.take(); office.game?.take('nightshift', 'coin', n); }
+      pickup.update(dt, reducedMotion ? 0 : game.time + n * 1.7);
+    }
+    if (game.took.card && !cardBanked) { cardBanked = true; office.game?.take('nightshift', 'card'); }
+    within = paused ? null : interactable(game);
+    if (within) chip(within).x = game.x;
+    card.visible = !game.keycard;
     card.rotation.y = reducedMotion ? 0 : Math.sin(t * 1.6) * 0.25;
-    switchLever.rotation.z = game.breaker ? Math.PI / 2 : 0;
+    // the breaker answers a badge and nothing else: without one the lever only rattles and the slot blinks
+    rattle = Math.max(0, rattle - dt);
+    switchLever.rotation.z = game.breaker ? Math.PI / 2 : rattle > 0 && !reducedMotion ? Math.sin(t * 70) * 0.3 * (rattle / 0.4) : 0;
+    slot.material.color.set(game.breaker ? '#333333' : rattle > 0 && Math.sin(t * 40) > 0 ? '#333333' : '#dddddd');
     gate.position.y = lerp(gate.position.y, game.breaker ? 4.5 : 0, reducedMotion ? 1 : 1 - Math.exp(-dt * 4));
     worker.update(game, dt, reducedMotion);
     beamMaterial.uniforms.clock.value = reducedMotion ? 0 : t;
@@ -226,7 +283,7 @@ export async function enter(office) {
       }
       node.lamp.rotation.z = beam.active ? Math.atan2((beam.left + beam.right) / 2 - beam.x, beam.y) * 0.25 : 0;
       node.indicators.forEach((p, j) => p.material.color.set(game.exposure > j / 6 ? '#eeeeee' : '#333333'));
-      const lampReadout = `${beam.active}:${beam.resting}:${Math.ceil(beam.restRemaining * 10)}:${Math.ceil(beam.scanRemaining * 10)}`;
+      const lampReadout = `${beam.active}:${beam.resting}:${Math.ceil(beam.restRemaining * 10)}:${Math.ceil(beam.scanRemaining * 10)}:${game.stage === 'caught'}:${paused}`;
       if (lampReadout !== node.lastReadout) { node.lastReadout = lampReadout; node.readout.redraw(); }
     }
     const readout = `${game.stage}:${game.keycard}:${game.breaker}:${game.deaths}:${paused}`;
@@ -235,11 +292,10 @@ export async function enter(office) {
     cameraX = lerp(cameraX, clamp(game.x + game.facing * 1.5, halfW - 0.7, 46.7 - halfW), 1 - Math.exp(-dt * 3.2));
     camera.left = -halfW; camera.right = halfW; camera.top = viewHeight / 2; camera.bottom = -viewHeight / 2; camera.updateProjectionMatrix();
     camera.position.set(cameraX + 0.65, 2.3, 30); camera.lookAt(cameraX, 2.1, 0);
-    // The office's overhead announcement follows its own ceiling rail, so it is readable during pause/catch.
-    announcement.mesh.position.x = cameraX;
     motes.position.x = reducedMotion ? 0 : Math.sin(t * 0.05) * 0.18;
   });
   w.own({ dispose: offFrame });
-  w.nightshift = { get state() { return { ...game }; }, get paused() { return paused; }, map: LEVEL };
+  // For the console and for playtests. `objective` is the rules' own account of the errand: never drawn on the floor.
+  w.nightshift = { get state() { return { ...game }; }, get paused() { return paused; }, get objective() { return objective(game); }, map: LEVEL };
   return result;
 }

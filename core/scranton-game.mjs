@@ -75,6 +75,40 @@ export function objective(state) {
   }
 }
 
+/**
+ * How many of the memo's four steps are behind you: the stapler borrowed, the
+ * gelatin mixed, the dessert set, the evidence returned. The memo at reception
+ * ticks them off in pen; nothing else on the floor says where you are.
+ */
+export function stepsDone(state) {
+  switch (state.stage) {
+    case 'borrowed': return 1;
+    case 'mixed': case 'chilling': return 2;
+    case 'set': case 'carrying': return 3;
+    case 'won': return 4;
+    default: return 0;
+  }
+}
+
+/* ---- the long game (core/game.mjs): this floor hides a keycard and three coins ----------------- */
+
+/** Which coin is where. The number is the one the office keeps its record by. None of them needs the prank. */
+export const COIN = Object.freeze({ copier: 1, award: 2, conference: 3 });
+
+/** The copier makes exactly one copy, on this go at it — and something else comes out with the sheet. */
+export const COPIES_FOR_COIN = 4;
+export const copierPays = (copies) => copies === COPIES_FOR_COIN;
+
+/**
+ * Is the keycard set in the gelatin beside the stapler? Only once the prank is
+ * done and the dessert is back on the desk, and only while the office says the
+ * card has not been found: `left` is office.game.left('scranton'), and where
+ * there is no long game at all there is no card.
+ */
+export function cardInJelly(state, left) {
+  return state.stage === 'won' && !!left?.card;
+}
+
 /** Human-readable pocket contents, deliberately separate from the objective. */
 export function inventory(state) {
   switch (state.stage) {

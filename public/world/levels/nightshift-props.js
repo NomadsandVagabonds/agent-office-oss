@@ -1,10 +1,24 @@
 // Night Shift: the office reduced to its silhouettes, still made of 2.5 cm cubes.
 // Front is +z. Furniture stands on y=0; worker limbs use an explicit joint pivot.
 import { Vox, M, glow } from '../vox/vox.js';
+import { keycard } from '../props/loot.js';
 
 const BLACK = M('#101010', 0), CHARCOAL = M('#191919', 1), FACE = M('#252525', 0);
 const EDGE = M('#414141', 0), METAL = M('#777777', 0), PAPER = M('#b9b9b9', 0);
 const WHITE = glow('#dedede');
+
+/**
+ * The access card in Records is the house's own keycard (props/loot.js), so it
+ * is known for what it is — drained of its colour for this floor: the plastic
+ * is the bright thing in the room, the band and the photo are greys.
+ */
+export function staffCard() {
+  return keycard().remap((x, y, z, v) => {
+    const l = Math.round(0.2126 * ((v >> 16) & 255) + 0.7152 * ((v >> 8) & 255) + 0.0722 * (v & 255));
+    const grey = '#' + l.toString(16).padStart(2, '0').repeat(3);
+    return l > 190 ? glow(grey) : M(grey, 0);
+  });
+}
 
 /** 2.50 × 1.55 × 1.00 m; tabletop at .95 m. The knee well remains hollow. */
 export function silhouetteDesk({ screenOn = false } = {}) {
@@ -107,14 +121,14 @@ export function workerHead() {
   return v;
 }
 
-/** Hip-to-collar torso, .35 × .425 × .25 m; small white ID badge on the jacket. */
-export function workerBody() {
+/** Hip-to-collar torso, .35 × .425 × .25 m. `badge`: the small white ID on the jacket — once it has been found. */
+export function workerBody({ badge = true } = {}) {
   const v = new Vox();
   v.box(-7, 0, -4, 7, 16, 4, BLACK);
   v.box(-6, 15, -3, 6, 17, 3, CHARCOAL);
   v.box(-2, 11, 4, 2, 16, 5, METAL);
   v.box(-1, 9, 5, 1, 15, 6, BLACK);
-  v.box(3, 8, 4, 6, 12, 5, WHITE);
+  if (badge) v.box(3, 8, 4, 6, 12, 5, WHITE);
   v.box(-6, 1, 4, 6, 2, 5, FACE);
   return v;
 }

@@ -1,12 +1,28 @@
 // S · Scranton Paper Co. — an affectionate paper-company sitcom detour.
 // All play is local to this visit. No task moves, messages, or real agent work.
 // The same level kit, voxel material, rig and lift as the rest of the building.
+//
+// Nothing here is addressed to whoever is playing: the words are the branch's
+// own (plaques, a memo that is only a memo, a recipe, a wall clock, the copier's
+// display) and the one prompt is the kit's chip. Where you are in the prank is
+// in the room: the stapler in your hand, the fridge's countdown, pen ticks on
+// the memo, the dessert on the desk.
+//
+// The long game (core/game.mjs) hides a keycard and three coins here. The card
+// is set in the gelatin beside the stapler once the prank is done — looking at
+// the evidence gets it out. The coins need no prank: the copier's one copy
+// brings the first with it, the second is under the manager's award, and the
+// third lies behind the conference table.
 import * as THREE from 'three';
 import { createWorld } from './kit.js';
 import { FLOORS, WALLS, canvasTexture } from '../scene/textures.js';
 import { Avatar } from '../avatar/rig.js';
+import { keycard } from '../props/loot.js';
 import { resolveLook } from '/core/look.mjs';
-import { createGame, act, advance, objective, remaining, chillRemaining, inventory } from '/core/scranton-game.mjs';
+import {
+  createGame, act, advance, objective, remaining, chillRemaining, inventory, stepsDone,
+  COIN, copierPays, cardInJelly,
+} from '/core/scranton-game.mjs';
 import { receptionDesk, salesDesk, managerDesk, stapler, gelatinKit, copier, paperStack, trophy, ceilingLight } from './scranton-props.js';
 
 const ROOM = { x0: -10, z0: -7, x1: 10, z1: 7, h: 2.85 };
@@ -16,6 +32,7 @@ const SPOTS = Object.freeze({
 });
 const INK = '#233747', PAPER = '#f0ead7', GREEN = '#396952', RED = '#a14332';
 const BEST_KEY = 'office:scranton:challenge-best:v1';
+const AWARD_UP = 1.7;                 // seconds the manager's award spends off the desk when somebody accepts it
 
 function wrap(g, text, x, y, maxW, lineH) {
   let line = '';
@@ -46,6 +63,10 @@ export async function enter(office) {
   const { scene } = w;
   let game = createGame(), playTime = 0, feedback = 'Please help yourself to a visitor badge. It is mostly adhesive.';
   let best = null, applauseUntil = 0, copies = 0, salesCalls = 0, conferenceSlide = 0, talkingUntil = 0;
+  let awardUp = 0, cardOutAt = 0, guardUntil = 0;
+  // What the floor still hides is the office's to say; where nobody keeps score there is nothing, and all else is the same.
+  const hides = () => office.game?.left('scranton') || null;
+  const reveals = [];
   try { const saved = Number(localStorage.getItem(BEST_KEY)); if (saved > 0 && Number.isFinite(saved)) best = saved; } catch { /* a private browser can still play */ }
   const people = [], statusScreens = [], stations = new Map();
   w.light({ sky: '#f2f2df', ground: '#b4a48c', hemi: 1.75, sun: '#fff4d9', power: 1.25, dir: [-0.6, 1, -0.4] });
@@ -147,6 +168,11 @@ export async function enter(office) {
   plaque('SALES · PLEASE HOLD', -2.8, 0.72, 0.58, { height: 0.11, bg: '#594b32' });
   const bareStapler = w.vox(stapler, 3.32, 0.35, 'S', { y: 0.69 });
   const deskJelly = w.vox(() => stapler({ gelatin: true }), 3.32, 0.35, 'S', { y: 0.69 }); deskJelly.visible = false;
+  // The other thing set in the evidence: the house's keycard, leaning on the stapler inside the jelly, its face
+  // to the aisle. It wobbles with the dessert, and is only there while the office says it has not been found.
+  const jellyCard = w.vox(keycard, 0, 0, 'S', { cast: false }); deskJelly.add(jellyCard);
+  jellyCard.position.set(0.215, 0.085, 0); jellyCard.rotation.set(-0.5, Math.PI / 2, 0, 'YXZ'); jellyCard.scale.setScalar(0.7);
+  jellyCard.visible = false;
   const carriedJelly = w.vox(() => stapler({ gelatin: true }), 0, 0, 'S');
   w.camera.add(carriedJelly); carriedJelly.position.set(0.34, -0.32, -0.75); carriedJelly.scale.setScalar(0.65); carriedJelly.visible = false;
   const carriedStapler = w.vox(stapler, 0, 0, 'S');
@@ -204,13 +230,13 @@ export async function enter(office) {
     if (game.stage === 'set') text = 'IT WOBBLES.';
     g.fillText(text, W * 0.065, H * 0.44);
     g.font = `${W * 0.065}px sans-serif`;
-    wrap(g, game.stage === 'set' ? 'Collect your suspicious dessert.' : 'No fish. No evidence.', W * 0.065, H * 0.63, W * 0.86, H * 0.1);
+    wrap(g, game.stage === 'set' ? 'One suspicious dessert. Unlabelled.' : 'No fish. No evidence.', W * 0.065, H * 0.63, W * 0.86, H * 0.1);
   }, 'W');
   statusScreens.push(fridgeNote);
   const recipe = picture(7.4, 1.65, 6.94, 1.5, 0.8, (g, W, H) => {
     paper(g, W, H, 'OFFICE RECIPE', 'SERVES ONE ASSISTANT MANAGER');
     g.fillStyle = INK; g.font = `${W * 0.045}px sans-serif`;
-    ['1. Borrow one stapler.', '2. Mix at the counter. [E]', '3. Chill 8 seconds in staff fridge.', '4. Return the evidence to its desk.'].forEach((s, i) => g.fillText(s, W * 0.065, H * (0.37 + i * 0.16)));
+    ['1. Borrow one stapler.', '2. Mix at the counter.', '3. Chill 8 seconds in staff fridge.', '4. Return the evidence to its desk.'].forEach((s, i) => g.fillText(s, W * 0.065, H * (0.37 + i * 0.16)));
   }, 'N');
 
   // Fictional staff are actors, never pretend live agent sessions.
@@ -225,37 +251,54 @@ export async function enter(office) {
   staff('accounts', 0, -2.67, 0, { hair: 'short', hairColor: '#241608', outfit: 'cardigan', outfitColor: '#744844' });
   staff('regional-manager', 7.5, -5.5, 0, { hair: 'side', hairColor: '#241608', outfit: 'suit', outfitColor: '#434956' }, 'think');
 
-  // Reception memo is the UI: nothing floats over the office except the kit's E prompt.
+  // The memo at reception is only a memo: what the prank takes, in the branch's own language. Whoever is carrying
+  // it out ticks the steps in pen as they go; when it is over, one way or the other, it is stamped.
+  const MEMO = [
+    'Borrow the stapler from the Assistant to the Regional Manager.',
+    'Kitchenette counter: lemon gelatin, one stapler.',
+    'Staff fridge, eight seconds. Do not eat the evidence.',
+    'Return it to its desk. Maintain plausible deniability.',
+  ];
   const memo = picture(-5.42, 1.65, 4.18, 1.05, 0.76, (g, W, H) => {
     paper(g, W, H, 'OPERATION GELATIN', 'INTERNAL MEMO · PLEASE DO NOT CIRCULATE');
-    g.fillStyle = INK; g.font = `bold ${W * 0.039}px sans-serif`;
-    let y = wrap(g, objective(game), W * 0.065, H * 0.34, W * 0.87, H * 0.09);
-    g.font = `${W * 0.032}px sans-serif`; g.fillStyle = '#646551';
-    y = wrap(g, feedback, W * 0.065, y + H * 0.04, W * 0.87, H * 0.075);
-    g.fillStyle = game.stage === 'won' ? GREEN : RED;
-    g.font = `bold ${W * 0.034}px monospace`;
-    const sec = remaining(game, playTime);
-    const footer = game.stage === 'won' ? 'PRANK COMPLETE. HR HAS QUESTIONS.' : game.stage === 'lost' ? 'MEETING OVER. EVIDENCE RECOVERED.'
-      : sec === null ? 'UNHURRIED MISCHIEF · NO TIMER' : `MEETING ENDS IN ${Math.ceil(sec)}s`;
-    g.fillText(footer, W * 0.065, H * 0.86);
-    g.font = `${W * 0.025}px sans-serif`; g.fillStyle = '#646551';
-    g.fillText('Q: memo  ·  E: put it down  ·  clock pauses while reading', W * 0.065, H * 0.945);
+    g.fillStyle = '#646551'; g.font = `italic ${W * 0.03}px Georgia, serif`;
+    g.fillText('Re: one stapler. Business justification: zero.', W * 0.065, H * 0.305);
+    const done = stepsDone(game), box = H * 0.042;
+    let y = H * 0.4;
+    MEMO.forEach((line, i) => {
+      g.strokeStyle = INK; g.lineWidth = 2; g.strokeRect(W * 0.068, y - box * 0.85, box, box);
+      if (i < done) {                                      // a tick, in pen
+        g.strokeStyle = '#2f4f8f'; g.lineWidth = 4; g.lineCap = 'round'; g.beginPath();
+        g.moveTo(W * 0.068 + box * 0.1, y - box * 0.45); g.lineTo(W * 0.068 + box * 0.42, y - box * 0.02); g.lineTo(W * 0.068 + box * 1.25, y - box * 1.25); g.stroke(); g.lineCap = 'butt';
+      }
+      g.fillStyle = i < done ? '#8b8c7c' : INK; g.font = `${W * 0.029}px sans-serif`;
+      y = wrap(g, line, W * 0.125, y, W * 0.81, H * 0.054) + H * 0.024;
+    });
+    g.fillStyle = '#646551'; g.font = `italic ${W * 0.027}px Georgia, serif`;
+    g.fillText('This is a strictly non-billable activity.', W * 0.065, H * 0.925);
+    if (game.stage === 'won' || game.stage === 'lost') {     // the rubber stamp
+      const won = game.stage === 'won';
+      g.save(); g.translate(W * 0.7, H * 0.765); g.rotate(-0.1); g.globalAlpha = 0.82;
+      g.strokeStyle = g.fillStyle = won ? GREEN : RED; g.lineWidth = 4; g.strokeRect(-W * 0.25, -H * 0.085, W * 0.5, H * 0.165);
+      g.textAlign = 'center'; g.font = `bold ${W * 0.036}px monospace`;
+      g.fillText(won ? 'PRANK COMPLETE.' : 'MEETING OVER.', 0, -H * 0.014);
+      g.fillText(won ? 'HR HAS QUESTIONS.' : 'EVIDENCE RECOVERED.', 0, H * 0.052);
+      g.restore(); g.textAlign = 'left';
+    }
   }, 'S', 640);
   memo.mesh.rotation.x = -0.2;
   w.box(-5.75, 1.22, 4.08, -5.1, 1.28, 4.26, '#786d52');
   statusScreens.push(memo);
-  // A sibling clock is a deliberate opt-in to a timed game.
+  // The clock beside it shows how long the boss's meeting has to run. It is not running until somebody sets it going.
   const timeClock = picture(-4.1, 1.55, 4.16, 0.65, 0.6, (g, W, H) => {
     g.fillStyle = '#304b44'; g.fillRect(0, 0, W, H); g.strokeStyle = '#adc0a5'; g.lineWidth = 5; g.strokeRect(4, 4, W - 8, H - 8);
-    g.fillStyle = '#f1ecd5'; g.textAlign = 'center'; g.font = `bold ${W * 0.09}px sans-serif`; g.fillText('THE BOSS IS', W / 2, H * 0.22); g.fillText('IN A MEETING', W / 2, H * 0.35);
-    g.font = `bold ${W * 0.2}px monospace`; const sec = remaining(game, playTime), whole = Math.ceil(sec ?? 120); g.fillText(`${String(Math.floor(whole / 60)).padStart(2, '0')}:${String(whole % 60).padStart(2, '0')}`, W / 2, H * 0.62);
-    g.font = `${W * 0.075}px sans-serif`; g.fillText('E: TIMED CHALLENGE', W / 2, H * 0.79);
-    g.font = `${W * 0.06}px sans-serif`; g.fillText(best ? `BEST ${best.toFixed(1)}s` : 'OPTIONAL · 120 SECONDS', W / 2, H * 0.91); g.textAlign = 'left';
+    g.fillStyle = '#f1ecd5'; g.textAlign = 'center'; g.font = `bold ${W * 0.09}px sans-serif`; g.fillText('THE BOSS IS', W / 2, H * 0.24); g.fillText('IN A MEETING', W / 2, H * 0.38);
+    g.font = `bold ${W * 0.2}px monospace`; const sec = remaining(game, playTime), whole = Math.ceil(sec ?? 120); g.fillText(`${String(Math.floor(whole / 60)).padStart(2, '0')}:${String(whole % 60).padStart(2, '0')}`, W / 2, H * 0.68);
+    g.font = `${W * 0.06}px sans-serif`; if (best) g.fillText(`BRANCH RECORD ${best.toFixed(1)}s`, W / 2, H * 0.89);
+    g.textAlign = 'left';
   }, 'S', 400);
   w.box(-4.43, 1.22, 4.08, -3.77, 1.86, 4.14, '#304b44');
   statusScreens.push(timeClock);
-  plaque('E: START / RETRY', -5.42, 0.96, 4.39, { height: 0.12, bg: GREEN });
-  plaque('Q: MEMO · WASD: WALK · DRAG: LOOK · E: USE · ESC: LOBBY', -6.9, 1.7, 6.91, { face: 'N', height: 0.13 });
 
   function readMemo() { w.focus([-5.42, 1.85, 5.8], [-5.42, 1.65, 4.18], { fov: 42, alone: true }); }
   function redraw() { for (const s of statusScreens) s.redraw(); }
@@ -265,11 +308,15 @@ export async function enter(office) {
     carriedJelly.visible = ['mixed', 'carrying'].includes(game.stage);
     carriedStapler.visible = game.stage === 'borrowed';
     assistant.setPose(game.stage === 'won' ? 'facepalm' : 'type');
+    const desk = stations.get('stapler');
+    if (desk) desk.label = bareStapler.visible ? 'the stapler' : 'the stapler’s desk';
     redraw();
   }
   function action(type) {
     const result = act(game, type, playTime);
     game = result.state; feedback = result.message;
+    // touching the stapler when no prank is on: its owner has noticed
+    if (result.event === 'denied' && type === 'borrow' && bareStapler.visible) guardUntil = w.time + 1.5;
     if (result.event === 'win') {
       applauseUntil = w.time + 6;
       const elapsed = game.finishedAt - game.startedAt;
@@ -297,30 +344,50 @@ export async function enter(office) {
       use() { if (entry.hidden() || Math.hypot(w.me.x - point.x, w.me.z - point.z) > reach) return; use(); } });
     stations.set(id, entry); return entry;
   }
-  station('memo', SPOTS.memo, 'read / start the prank memo', memo.mesh, () => {
+  // The chip only ever names the thing (the kit puts the key in front of it); what it does is found by doing it.
+  station('memo', SPOTS.memo, 'the memo', memo.mesh, () => {
     if (['ready', 'won', 'lost'].includes(game.stage)) action({ type: 'start', mode: 'relaxed' });
     readMemo();
   }, 1.35);
-  station('challenge', SPOTS.challenge, 'start / restart the 2-minute challenge', timeClock.mesh, () => {
+  station('challenge', SPOTS.challenge, 'the meeting clock', timeClock.mesh, () => {
     if (!['ready', 'won', 'lost'].includes(game.stage)) action('reset');
     action({ type: 'start', mode: 'challenge' }); readMemo();
   }, 1.2);
-  station('stapler', SPOTS.stapler, 'borrow / return the stapler', targetDesk, () => {
+  station('stapler', SPOTS.stapler, 'the stapler', targetDesk, () => {
     action(game.stage === 'carrying' ? 'return' : 'borrow');
   }, 1.5, () => game.stage !== 'won');
-  // The jelly remains clickable after its owner notices it.
+  // The jelly remains clickable after its owner notices it. A close look at it is also what gets the keycard out.
   station('jelly', SPOTS.stapler, 'inspect the evidence', deskJelly, () => {
-    if (game.stage === 'won') { assistant.setPose('facepalm'); w.focus([4.4, 1.6, 1.8], [3.3, 0.84, 0.35], { fov: 42, alone: true }); }
+    if (game.stage !== 'won') return;
+    assistant.setPose('facepalm'); w.focus([4.4, 1.6, 1.8], [3.3, 0.84, 0.35], { fov: 42, alone: true });
+    if (cardInJelly(game, hides()) && !cardOutAt) cardOutAt = w.time + 1.1;
   }, 1.5, () => game.stage === 'won');
-  station('mix', SPOTS.mix, 'mix the gelatin', mixing, () => { action('mix'); });
-  station('fridge', SPOTS.fridge, 'chill / collect the dessert', fridge, () => {
+  station('mix', SPOTS.mix, 'the gelatin kit', mixing, () => { action('mix'); });
+  station('fridge', SPOTS.fridge, 'the staff fridge', fridge, () => {
     if (game.stage === 'mixed') action('chill');
     else action('retrieve');
   });
   station('recipe', { x: 6.15, z: 5.45 }, 'read the recipe', recipe.mesh, () => w.focus([7.4, 1.7, 5.2], [7.4, 1.65, 6.94], { fov: 48, alone: true }), 1.1);
-  station('copier', { x: -7.9, z: -0.7 }, 'negotiate with the copier', copyMachine, () => { copies++; copySlip.redraw(); w.sfx('printer', { volume: 0.3 }); });
+
+  /* ---- what the long game hides here (core/game.mjs), besides the card in the jelly --------------------------- */
+  // A coin that something gives up when it is used: it is there for a moment, then it is yours (and the office's).
+  // opt: rise — it comes up this far as it appears · hidden — not to be seen yet
+  function reveal(n, x, y, z, delay, opt = {}) {
+    const coin = w.loot({ item: 'coin', n, x, z, y, reach: 0, hover: 0.04, scale: 1.1, hidden: opt.hidden });        // null: already found, or no long game
+    if (coin) reveals.push({ coin, x, y, z, rise: opt.rise || 0, t0: w.time, at: w.time + delay });
+  }
+  station('copier', { x: -7.9, z: -0.7 }, 'negotiate with the copier', copyMachine, () => {
+    copies++; copySlip.redraw(); w.sfx('printer', { volume: 0.3 });
+    if (copierPays(copies)) reveal(COIN.copier, -8.05, 0.6, -0.7, 1.0, { rise: 0.36 });        // the one copy it makes: up out of the paper drawer, and not alone
+  });
   station('training', { x: -6.15, z: -4.9 }, 'advance the mandatory training', training.mesh, () => { conferenceSlide++; training.redraw(); w.sfx('sticky', { volume: 0.3 }); });
-  station('award', { x: 8.2, z: -3.5 }, 'accept an extremely local award', award, () => { applauseUntil = w.time + 5; w.sfx('confetti', { volume: 0.3 }); });
+  station('award', { x: 8.2, z: -3.5 }, 'accept an extremely local award', award, () => {
+    applauseUntil = w.time + 5; w.sfx('confetti', { volume: 0.3 });
+    if (awardUp > 0) return;
+    awardUp = AWARD_UP;                                    // picked up, held, put back: and where it stood…
+    reveal(COIN.award, 8.2, 0.7, -4.25, 0.95, { hidden: () => awardUp > AWARD_UP - 0.22 });
+  });
+  w.loot({ item: 'coin', n: COIN.conference, x: -9.35, z: -6.3 });             // on the floor behind the conference table
   const phoneNote = picture(-2.28, 1.1, 0.45, 0.5, 0.35, (g, W, H) => {
     g.fillStyle = '#e7d18b'; g.fillRect(0, 0, W, H); g.fillStyle = '#493b24'; g.font = `${W * 0.085}px sans-serif`;
     wrap(g, ['PAPER. STILL A THING.', 'Your call is important to our quarterly figures.', 'Have you tried turning the paper over?', 'We also sell the other side.'][salesCalls % 4], W * 0.06, H * 0.2, W * 0.88, H * 0.2);
@@ -356,17 +423,38 @@ export async function enter(office) {
     }
     if (Math.floor(playTime) !== lastSecond) { lastSecond = Math.floor(playTime); redraw(); }
     if (deskJelly.visible && !reducedMotion) { deskJelly.scale.x = 1 + Math.sin(t * 4) * 0.025; deskJelly.scale.z = 1 - Math.sin(t * 4) * 0.025; }
+    // The long game: the card shows through the jelly for as long as it is there to be had, and comes out a moment
+    // after somebody has had a close look. What the copier and the award give up is kept after a beat.
+    jellyCard.visible = game.stage === 'won' && cardInJelly(game, hides());
+    if (cardOutAt && t >= cardOutAt) {
+      cardOutAt = 0;
+      if (jellyCard.visible) { const at = jellyCard.getWorldPosition(new THREE.Vector3()); w.loot({ item: 'card', x: at.x, z: at.z, y: at.y, reach: 0, hover: 0, scale: 0.7 })?.take(); }
+    }
+    for (let i = reveals.length - 1; i >= 0; i--) {
+      const r = reveals[i], k = Math.min(1, (t - r.t0) / 0.45);
+      if (r.rise) r.coin.moveTo(r.x, r.z, r.y + r.rise * (reducedMotion ? 1 : k * (2 - k)));
+      if (t >= r.at) { r.coin.take(); reveals.splice(i, 1); }
+    }
+    if (awardUp > 0) {
+      awardUp = Math.max(0, awardUp - dt);
+      const k = reducedMotion ? Number(awardUp > 0) : Math.max(0, Math.min(1, (AWARD_UP - awardUp) / 0.3, awardUp / 0.3));
+      const lift = k * k * (3 - 2 * k);
+      award.position.y = 0.7 + 0.36 * lift; award.rotation.z = 0.2 * lift;
+    }
     for (const person of people) {
       const pose = person.id === 'assistant-to' && game.stage === 'won' ? 'facepalm'
+        : person.id === 'assistant-to' && t < guardUntil ? 'ask'
         : t < applauseUntil ? 'cheer' : person.id === 'sales' && t < talkingUntil ? 'shrug' : person.pose;
       if (person.a.poseName !== pose) person.a.setPose(pose);
       person.a.update(dt);
     }
   });
-  // A compact inspectable record also makes browser playtests use the real interactables.
+  // A compact inspectable record also makes browser playtests use the real interactables. `objective` and
+  // `message` are the rules' own account of where the prank stands: for the console, never drawn on the floor.
   w.scranton = {
     get state() { return { ...game }; }, get clock() { return playTime; },
     get inventory() { return inventory(game); },
+    get objective() { return objective(game); }, get message() { return feedback; },
     spots: SPOTS, stations, readMemo,
   };
   sync();
