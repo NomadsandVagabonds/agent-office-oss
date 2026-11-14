@@ -14,40 +14,39 @@
 //   heights    [[ceiling height, weight]…] for plain rooms
 //   dressing   what somebody left behind, most likely first (the generator's own list if null)
 //   hum        mains hum, Hz (null: rolled)
-//   label      how the floor is painted on the stairwell wall when it is not the last or the last but one
 
 export const THEMES = {
   // the one everybody remembers: mono-yellow, humming, slightly damp
   yellow: { id: 'yellow', families: null, patterns: null, tubes: null, light: { dead: [0.06, 0.3], flicker: 0.4, modes: [['normal', 1]] },
-    rooms: null, heights: null, dressing: null, hum: null, labels: ['3', '4', '5', '6', '2'] },
+    rooms: null, heights: null, dressing: null, hum: null },
 
   // Records. Painted blockwork, lino, long narrow rooms, a tube in every one that is on its way out
   archive: { id: 'archive', families: { records: 12, beige: 3, sage: 2, mint: 1 }, patterns: ['blocks', 'blocks', 'blocks', 'stripes'], tubes: ['#eef6ff', '#f3ffe6', '#eef6ff', '#fffbe9'],
     light: { dead: [0.22, 0.5], flicker: 0.75, modes: [['normal', 5], ['dim', 4], ['one', 1]] },
     rooms: [0.07, 0.42, 0.62, 0.9], heights: [[2.6, 40], [2.2, 30], [2.9, 6], [1.75, 10]],
     dressing: ['boxes', 'boxes', 'boxes', 'cabinet', 'cabinet', 'cabinet', 'papers', 'papers', 'shelving', 'shelving', 'bin', 'clock', 'stain', 'ladder', 'fan', 'tile', 'highdoor', 'trolley'],
-    hum: 50, labels: ['B', 'LG', 'B2', 'RECORDS', '0'] },
+    hum: 50 },
 
   // Out of hours. The same building with the lights off: a panel here and there left on for the cleaners
   night: { id: 'night', families: { blue: 6, yellow: 5, lilac: 2, mint: 2 }, patterns: null, tubes: ['#dfe9ff', '#eef6ff', '#e6f0ff'],
     light: { dead: [0.3, 0.6], flicker: 0.5, modes: [['dark', 9], ['one', 7], ['dim', 3]] },
     rooms: null, heights: null,
     dressing: ['wetsign', 'wetsign', 'bin', 'bin', 'chair', 'plant', 'lamp', 'lamp', 'lamp', 'papers', 'coat', 'fan', 'clock', 'trolley', 'trolley', 'highdoor', 'tile'],
-    hum: 60, labels: ['2', '3', '1½', 'M', '2 (EVE)'] },
+    hum: 60 },
 
   // Being refurbished, and has been for some time: bare board with the joints taped, screed underfoot, half the ceiling still to go in
   fitout: { id: 'fitout', families: { board: 14 }, patterns: ['board'], tubes: ['#fffbe9', '#fff6dc', '#f3ffe6'],
     light: { dead: [0.35, 0.6], flicker: 0.3, modes: [['normal', 6], ['dim', 3], ['one', 1]] },
     rooms: [0.05, 0.2, 0.34, 0.7], heights: [[2.6, 30], [2.9, 20], [3.3, 20], [4.4, 12]],
     dressing: ['ladder', 'ladder', 'ladder', 'tile', 'tile', 'tile', 'boxes', 'boxes', 'rolls', 'rolls', 'rolls', 'trestle', 'trestle', 'bin', 'wetsign', 'worklamp', 'worklamp', 'papers', 'highdoor'],
-    hum: 50, labels: ['2A', '3 (NEW)', 'TBC', '2', '1A'] },
+    hum: 50 },
 
   // The top floor, which is down here as well: panelling, a deep carpet, lamps instead of tubes wherever they could manage it
   exec: { id: 'exec', families: { panel: 12, lilac: 1 }, patterns: ['panel'], tubes: ['#ffeec4', '#fff6dc', '#ffe9b8'],
     light: { dead: [0.15, 0.4], flicker: 0.15, modes: [['normal', 4], ['dim', 5], ['one', 1]] },
     rooms: [0.03, 0.16, 0.3, 0.62], heights: [[2.9, 30], [3.3, 30], [2.6, 20], [4.4, 8]],
     dressing: ['lamp', 'lamp', 'lamp', 'plant', 'plant', 'chair', 'clock', 'clock', 'frame', 'frame', 'frame', 'poster', 'coat', 'coat', 'globe', 'armchair', 'armchair', 'highdoor'],
-    hum: 50, labels: ['PH', '40', 'EXEC', '39', 'TOP'] },
+    hum: 50 },
 };
 
 export const THEME_IDS = Object.keys(THEMES);

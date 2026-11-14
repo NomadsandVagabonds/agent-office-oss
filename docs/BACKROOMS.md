@@ -7,9 +7,15 @@ rooms for it. If you would rather find it yourself, stop reading and go and
 lean on things.
 
 It is a level called the Backrooms: yellow rooms that hum, seen through a
-camcorder, generated from a seed and never the same twice. A visit goes down
-through three to five floors, each a different kind of place, by a stairwell
-at the far end of each. On the last floor there is no door. The fire stairs
+camcorder, generated from a seed and never the same twice. It is one building.
+A visit goes down through three to five parts of it, each a different kind of
+place (the code and this guide still call a part a *floor*; nothing down there
+does, and nothing is numbered). Behind the fire door at the far end of each is
+a way down that cannot be undone: stairs that run out, a hole in the floor, a
+corridor that stops, a post chute. There is no cut and no loading: the part
+below is built while you walk and is really there under the edge, and near a
+seam the carpet and paper of the next part turn up early. On the last part
+there is no door. The fire stairs
 run out at a wall somebody has papered over, taped a door on, and camped
 beside; it gives if you lean on it, the way the first one did. Other walls
 carry the same tape, and are only walls: lean on one and it knocks back. What
@@ -261,8 +267,9 @@ the office is: the seed is the clock, and no building is ever given twice.
 
 | file | what is in it |
 |---|---|
-| `index.js` | the conductor: plans the visit, builds each floor, runs the frame, ends it |
-| `plan.js` | a visit from its seed: how many floors, which kind each is, what is hidden where, what each floor may take for granted |
+| `index.js` | the conductor: plans the visit, builds each part (the one below, ahead of time, hung under the way down), hands you from one to the next mid-fall, runs the frame, ends it |
+| `seam.js` | the ways down and where the next part hangs (pure): `WAYS`, `GAP`, `dropOf`, `hangBelow` |
+| `plan.js` | a visit from its seed: how many floors, which kind each is and how it ends, what is hidden where, what each floor may take for granted |
 | `gen.js` | the generator and the first deck. Pure: no three.js, no DOM. `frame.js` is its geometry |
 | `deck2.js` | the deck, continued: where new rooms' lines go |
 | `rooms/` | one file to a room, for every room written since the first deck |
@@ -270,7 +277,7 @@ the office is: the seed is the clock, and no building is ever given twice.
 | `world.js` | builds a generated floor: the toolbox (`roomContext`), collision, the doorway check |
 | `kit.js` | meshes, baked light, textures |
 | `themes.js` | what each kind of floor is like |
-| `stairwell.js`, `thin.js`, `marks.js`, `leaving.js` | the way down, and the taped door at the bottom of the last of it; the wall that gives and the walls that knock back; where the marks go, and the rule for leaning (`lean`, `answer`); what the camcorder sees as you leave |
+| `stairwell.js` (also the hole, the ledge and the chute), `thin.js`, `marks.js`, `leaving.js` | the way down, and the taped door at the bottom of the last of it; the wall that gives and the walls that knock back; where the marks go, and the rule for leaning (`lean`, `answer`); what the camcorder sees as you leave |
 | `traces.js` | what earlier visitors left |
 | `loot.js` | tapes and the keycard: where they hide, what is kept |
 | `pursuer.js`, `reach.js` | what follows you, and the rule for being within arm's reach of it (pure: the tape tears, and it moves in the torn frames) |

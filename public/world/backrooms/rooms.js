@@ -261,7 +261,6 @@ function plain(c) {
   if (s && s.kind === 'pinch') pinchWalls(c, s);
   if (s && s.kind === 'stairs') nowhereStairs(c, s);
   if (room.sign) c.exitSign(room.doors[room.sign.door], room.sign.text);
-  // the wall that would give, if this is the room it is in — before anything else is hung on it or stood in front of it
   // the wall the plan would have called thin, if this is the room it is in — before anything else is hung on it or stood in front of it
   if (c.level.thin && c.level.thin.room === room.id) thinWall(c, c.level.thin);
   for (const item of room.dress) if (item.type === 'marks') refuses(c, item.side, item.at, marks(c, item));          // (likewise the other walls somebody tried: all of them only walls)
