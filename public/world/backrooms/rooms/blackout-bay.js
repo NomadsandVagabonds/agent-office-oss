@@ -72,14 +72,12 @@ export function build(c) {
     }
   }
 
-  // Assemble 4 uncanny Stand-Ins from the real office's cast
+  // An uncanny Stand-In, assembled from the real office's cast
   const roster = c.env.cast?.length ? c.env.cast : [{ name: c.env.who?.name || 'Staff', look: c.env.who?.look }];
   const standIns = [];
+  // One of them, well into the room and off to one side of the way across (the owner: four was too many, and too quick)
   const anchors = [
-    [-W * 0.24, safeZ - 2.3],
-    [W * 0.25, safeZ - 3.9],
-    [-W * 0.2, -D / 2 + 3.4],
-    [W * 0.22, -D / 2 + 2.3],
+    [(p.cartSide || 1) * W * 0.25, safeZ - 4.4],
   ];
   for (let i = 0; i < anchors.length; i++) {
     const who = roster[(i + p.castOffset) % roster.length];
