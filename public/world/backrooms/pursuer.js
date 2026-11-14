@@ -8,6 +8,10 @@
 // While the office's keycard for this place has not been found (loot.js), the
 // mascot is holding it: on a loop of ribbon, from one hand, held out. Walk up
 // and take it — which it notices, the way it notices being looked at.
+// Stairs are no way of losing it. If it is after you when you leave its
+// floor, then some time after you land on the next one there is a second
+// thump under the same hole in the ceiling (env.carry: what it was doing, and
+// whether the card was still in its hand).
 // Also here: the cardboard colleague who sometimes decides to come along.
 import * as THREE from 'three';
 import { Vox, M } from '../vox/vox.js';
@@ -332,7 +336,26 @@ export function createStalkers(env) {
       if (level.loot?.card) p.give(level.pursuer.face % 2);
     }
     if (pirate?.card) offer(pirate);
+    // it was after you on the floor above: give it time to find the hole
+    if (!pirate && env.carry?.awake) arriving = { wait: env.carry.wait ?? R.range(16, 28), face: env.carry.face || 0, card: !!env.carry.card };
   });
+
+  /** It comes down the way you did: under the hole you fell through, as soon as you are not there to see it land. */
+  let arriving = null;
+  function arrive(dt) {
+    arriving.wait -= dt;
+    if (arriving.wait > 0) return;
+    const at = level.start, me = env.player.me;
+    if (Math.hypot(me.x - at.x, me.z - at.z) < 5 || !hiddenAt(at.x, at.z, 1.2)) return;          // not while you could watch: it waits up there
+    const p = mascot(at.x, at.z, Math.atan2(me.x - at.x, me.z - at.z), false);
+    if (!stand(p, at.x, at.z)) { for (let a = 0; a < 12; a++) { const x = at.x + Math.cos(a * 0.52) * 0.9, z = at.z + Math.sin(a * 0.52) * 0.9; if (stand(p, x, z)) { p.x = x; p.z = z; break; } } }
+    p.face = arriving.face % p.faces.length; p.show();
+    p.state = 'awake'; p.met = 1; p.chase = 0;
+    W().scene.add(p.group);
+    if (arriving.card) { p.give(p.face % 2); offer(p); }
+    env.play('thunk', at.x, at.z, 14);
+    arriving = null;
+  }
 
   /* ---- the card in its hand ---------------------------------------------------------------- */
 
@@ -496,7 +519,14 @@ export function createStalkers(env) {
       if (!env.player || !env.world) return;
       env.clock += dt;
       if (follower) tag(follower, dt);
+      if (arriving) arrive(dt);
       if (pirate) haunt(pirate, dt);
+    },
+    /** What it takes down the stairs after you, if it is after you at all: { awake, face, card } — or null. */
+    carry() {
+      if (arriving) return { awake: true, face: arriving.face, card: arriving.card, wait: Math.max(6, arriving.wait) };
+      if (!pirate || (pirate.state !== 'awake' && pirate.state !== 'rest')) return null;
+      return { awake: true, face: pirate.face, card: !!(pirate.card && pirate.card.held) };
     },
     wake,
     /** Where it is and what it is doing (for the dev page). */

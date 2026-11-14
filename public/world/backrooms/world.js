@@ -7,7 +7,7 @@
 // the game needs afterwards: where you can walk and how high the floor and
 // the ceiling are there, what you can use, what moves.
 import * as THREE from 'three';
-import { T, TILE, RISE, RUN, toWorld, toLocal, wallLength, wallPoint, floorAt, ceilAt, headAt, fitsAt, stairZones, makeRng, roomPath } from './gen.js';
+import { T, TILE, RISE, RUN, toWorld, toLocal, wallLength, wallPoint, wallSpans, floorAt, ceilAt, headAt, fitsAt, stairZones, makeRng, roomPath } from './gen.js';
 import { Batch, lamp, lightAt, lin, ticks, smooth, WHITE } from './kit.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
@@ -309,7 +309,7 @@ function roomContext(world, rt) {
   const { kit, env, level } = world, { def } = rt, { W, D } = def, H = def.H, look = def.look;
   const R = makeRng(`${level.seed}/build/${def.id}`);
   const mapped = new Map(), shining = new Map();
-  const reserved = [];                                    // floor already spoken for: [x, z, radius]
+  const reserved = [], kept = [];                         // floor already spoken for: [x, z, radius] · and wall: [side, from, to]
   const mat = new THREE.Matrix4(), quat = new THREE.Quaternion(), eul = new THREE.Euler(), vec = new THREE.Vector3(), scl = new THREE.Vector3();
   const doorPoint = (dr, off = 0) => wallPoint(def, dr.side, dr.c, off);
   const stairs = stairZones(def, 0.7);
@@ -331,7 +331,7 @@ function roomContext(world, rt) {
     },
     get flat() { return c.mapped('flat', kit.tex.white()); },
     get wall() { return c.mapped('wall', kit.tex.wallpaper(look)); },
-    get floor() { return c.mapped('floor', kit.tex.carpet(look.carpet)); },
+    get floor() { return c.mapped('floor', kit.tex.floor(look)); },
     get ceil() { return c.mapped('ceil', kit.tex.ceiling(look.ceil)); },
 
     toWorld: (x, z) => toWorld(def, x, z),
@@ -358,23 +358,16 @@ function roomContext(world, rt) {
     },
     /** The stretches of a wall with nothing in the way — no doorway, window, stairs or filled-in corner: [[from, to], …]. */
     spans(side, margin = 0.3, minTop = 0) {
-      const half = wallLength(def, side) / 2;
-      const holes = [...def.doors, ...(def.wins || [])].filter((d) => d.side === side).map((d) => [d.c - d.w / 2 - margin, d.c + d.w / 2 + margin]);
-      let bad = null;
-      for (let at = -half; at <= half + 1e-6; at += 0.125) {
-        const p = wallPoint(def, side, at, 0.25);
-        const blocked = Math.abs(floorAt(def, p.x, p.z)) > 0.01 || !fitsAt(def, p.x, p.z, 0.05) || ceilAt(def, p.x, p.z) < minTop
-          || def.pillars.some((q) => Math.abs(p.x - q.x) < q.w / 2 + 0.05 && Math.abs(p.z - q.z) < q.d / 2 + 0.05);
-        if (blocked && !bad) bad = [at - 0.15, at]; else if (blocked) bad[1] = at;
-        if (!blocked && bad) { holes.push([bad[0], bad[1] + 0.15]); bad = null; }
+      const out = [];
+      for (let [a, b] of wallSpans(def, side, margin, minTop)) {
+        // …less whatever stretch of this wall is already spoken for (keepWall)
+        for (const [s, k0, k1] of kept) { if (s !== side || k1 <= a || k0 >= b) continue; if (k0 - a > 0.05) out.push([a, k0]); a = Math.max(a, k1); }
+        if (b - a > 0.05) out.push([a, b]);
       }
-      if (bad) holes.push([bad[0], half]);
-      holes.sort((a, b) => a[0] - b[0]);
-      const out = []; let at = -half + margin;
-      for (const [a, b] of holes) { if (a - at > 0.05) out.push([at, a]); at = Math.max(at, b); }
-      if (half - margin - at > 0.05) out.push([at, half - margin]);
       return out;
     },
+    /** This stretch of a wall is taken: nothing else is to be hung on it. */
+    keepWall(side, from, to) { kept.push([side, from, to]); kept.sort((p, q) => p[1] - q[1]); },
     /** A random stretch of free wall at least `need` long, under at least `minTop` of ceiling → { side, at } (its middle), or null. */
     wallSpot(need, sides = ['back', 'left', 'right', 'front'], margin = 0.35, minTop = 2.25) {
       const options = [];

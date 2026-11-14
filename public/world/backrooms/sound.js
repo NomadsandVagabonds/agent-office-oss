@@ -4,8 +4,8 @@
 // room you are in. It is quiet on purpose, it starts only after you have
 // touched something, and M turns it off.
 export function createSound(level, opt = {}) {
-  let ctx = null, master = null, humGain = null, noiseBuf = null, muted = !!opt.mute, humTarget = 1;
-  const running = [];                        // things to stop at the end
+  let ctx = null, master = null, humGain = null, draught = null, noiseBuf = null, muted = !!opt.mute, humTarget = 1, hum = level.hum || 50;
+  const running = [], mains = [];            // things to stop at the end · the hum's oscillators, to retune
   const loops = new Map();                   // name → { gain, stop }
   const now = () => ctx.currentTime;
 
@@ -21,16 +21,21 @@ export function createSound(level, opt = {}) {
     // the hum: mains, the ballast an octave up, and a breath of air
     humGain = ctx.createGain(); humGain.gain.value = 0; humGain.connect(master);
     humGain.gain.linearRampToValueAtTime(0.05, now() + 2.5);
-    const f = level.hum || 50;
+    const f = hum;
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520; lp.connect(humGain);
     for (const [mult, amp, type, detune] of [[1, 0.5, 'sine', 0], [2, 0.34, 'sawtooth', 3], [2, 0.3, 'sawtooth', -4], [4, 0.1, 'triangle', 6], [7, 0.03, 'sine', 0]]) {
       const o = ctx.createOscillator(), g = ctx.createGain();
       o.type = type; o.frequency.value = f * mult; o.detune.value = detune; g.gain.value = amp;
-      o.connect(g); g.connect(lp); o.start(); running.push(o);
+      o.connect(g); g.connect(lp); o.start(); running.push(o); mains.push([o, mult]);
     }
     const air = ctx.createBufferSource(), airF = ctx.createBiquadFilter(), airG = ctx.createGain();
     air.buffer = noiseBuf; air.loop = true; airF.type = 'bandpass'; airF.frequency.value = 900; airF.Q.value = 0.4; airG.gain.value = 0.045;
     air.connect(airF); airF.connect(airG); airG.connect(humGain); air.start(); running.push(air);
+    // a draught, for where there is one: the same noise through a narrow gap, silent until asked for
+    const dr = ctx.createBufferSource(), drF = ctx.createBiquadFilter();
+    draught = ctx.createGain(); draught.gain.value = 0;
+    dr.buffer = noiseBuf; dr.loop = true; drF.type = 'bandpass'; drF.frequency.value = 1500; drF.Q.value = 2.2;
+    dr.connect(drF); drF.connect(draught); draught.connect(master); dr.start(0, 0.3); running.push(dr);
   }
 
   /** A burst of filtered noise. */
@@ -61,6 +66,7 @@ export function createSound(level, opt = {}) {
   // the small vocabulary of the place; each takes { vol 0..1, pan -1..1 } from how far and which side
   const voice = {
     step: (o = {}) => burst({ vol: 0.07 * (o.vol ?? 1), dur: 0.09, freq: 300 + Math.random() * 120, q: 0.5 }),
+    stone: (o = {}) => { burst({ vol: 0.09 * (o.vol ?? 1), dur: 0.07, freq: 900 + Math.random() * 300, q: 0.7 }); burst({ vol: 0.03 * (o.vol ?? 1), dur: 0.5, freq: 600, q: 0.5, attack: 0.05, when: 0.04 }); },
     wade: (o = {}) => burst({ vol: 0.08 * (o.vol ?? 1), dur: 0.16, freq: 1400 + Math.random() * 900, q: 1.2, type: 'bandpass' }),
     rustle: (o = {}) => burst({ vol: 0.07 * (o.vol ?? 1), pan: o.pan, dur: 0.12, freq: 3200 + Math.random() * 1500, q: 0.9, type: 'bandpass' }),
     tick: (o = {}) => burst({ vol: 0.05 * (o.vol ?? 1), pan: o.pan, dur: 0.025, freq: 3800, q: 2, type: 'highpass', attack: 0.001 }),
@@ -83,6 +89,8 @@ export function createSound(level, opt = {}) {
     dialtone: (o = {}) => { for (const f of [350, 440]) tone({ vol: 0.045 * (o.vol ?? 1), pan: o.pan, dur: 2.6, freq: f, attack: 0.02 }); burst({ vol: 0.1 * (o.vol ?? 1), pan: o.pan, dur: 0.03, freq: 1500, q: 2, type: 'bandpass', when: 2.7 }); },
     shutter: (o = {}) => { burst({ vol: 0.2 * (o.vol ?? 1), dur: 0.04, freq: 2600, q: 2, type: 'bandpass', attack: 0.001 }); burst({ vol: 0.14 * (o.vol ?? 1), dur: 0.05, freq: 1200, q: 2, type: 'bandpass', attack: 0.001, when: 0.09 }); tone({ vol: 0.03 * (o.vol ?? 1), dur: 1.1, freq: 2000, to: 5200, when: 0.12 }); },
     creak: (o = {}) => { tone({ vol: 0.05 * (o.vol ?? 1), pan: o.pan, dur: 0.35, freq: 90 + Math.random() * 30, to: 140, type: 'sawtooth', attack: 0.05 }); burst({ vol: 0.07 * (o.vol ?? 1), pan: o.pan, dur: 0.05, freq: 420, q: 2, type: 'bandpass', when: 0.3 }); },
+    // a ceiling tile that was never meant to be stood on
+    crack: (o = {}) => { burst({ vol: 0.3 * (o.vol ?? 1), dur: 0.12, freq: 1800, q: 0.6, attack: 0.001 }); burst({ vol: 0.2 * (o.vol ?? 1), dur: 0.35, freq: 420, q: 0.8, attack: 0.002, when: 0.03 }); tone({ vol: 0.14 * (o.vol ?? 1), dur: 0.3, freq: 160, to: 60, type: 'triangle', when: 0.02 }); },
     static: (o = {}) => burst({ vol: 0.12 * (o.vol ?? 1), dur: o.dur || 0.9, freq: 4200, q: 0.4, type: 'highpass', attack: 0.05 }),
   };
 
@@ -95,6 +103,10 @@ export function createSound(level, opt = {}) {
     play(name, o) { if (ctx && !muted && voice[name]) { try { voice[name](o); } catch { /* a sound is never worth an error */ } } },
     /** The hum follows the light: louder under a full ceiling, nearly gone in the dark. */
     setHum(k) { humTarget = k; if (humGain) humGain.gain.setTargetAtTime(0.012 + 0.05 * Math.max(0, Math.min(1.4, k)), now(), 0.6); },
+    /** Air coming through somewhere it should not (0…1): a thin whistle, nearer the louder. */
+    air(k) { if (draught && !muted) draught.gain.setTargetAtTime(0.05 * Math.max(0, Math.min(1, k)) ** 2, now(), 0.25); },
+    /** Another floor, another mains: the hum slides to it. */
+    setMains(f) { hum = f || hum; if (ctx) for (const [o, mult] of mains) o.frequency.setTargetAtTime(hum * mult, now(), 0.4); },
     /** The lights stutter: so does the hum. */
     dip(k) { if (humGain && !muted) { humGain.gain.cancelScheduledValues(now()); humGain.gain.setTargetAtTime((0.012 + 0.05 * humTarget) * k, now(), 0.02); } },
     stop() {

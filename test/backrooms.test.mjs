@@ -38,7 +38,7 @@ test('different seeds build different levels', () => {
   assert.ok(exits.size > SEEDS.length * 0.8, 'the way out moves');
 });
 
-test('a visit is 6–9 oddities with no repeats, in 15–25 rooms', () => {
+test('a floor is 6–9 oddities with no repeats, in 15–25 rooms', () => {
   for (const seed of SEEDS) {
     const level = levelFor(seed);
     assert.ok(level.picked.length >= 6 && level.picked.length <= 9, `seed ${seed}: ${level.picked.length} oddities`);
@@ -58,23 +58,23 @@ test('the exit, and every other room, can be reached from where you land', () =>
     assert.equal(dist.size, level.rooms.length, `seed ${seed}: a room is cut off\n${sketch(level)}`);
     const path = roomPath(level, level.start.room, level.exit.room);
     assert.ok(path && path.length >= 3, `seed ${seed}: the way out is too close`);
-    assert.equal(level.rooms[level.exit.room].doors.length, 1, 'the way out is at the end of its own passage');
+    assert.equal(level.rooms[level.exit.room].doors.length, 1, 'the fire exit is a stairwell with one door');
     for (let i = 0; i + 1 < path.length; i++) assert.ok(level.rooms[path[i]].doors.some((d) => d.to === path[i + 1]));
   }
 });
 
-test('the way out is the furthest room there is, and never a short walk', () => {
+test('the fire exit is the furthest room there is, and never a short walk', () => {
   // More seeds than the other tests: this is a promise about every visit, and the generator is cheap.
   let walked = 0, rooms = 0;
   for (let seed = 1; seed <= 400; seed++) {
     const level = seed <= 60 ? levelFor(SEEDS[seed - 1]) : generate(`far-${seed}`, office);
     const dist = roomDistances(level, level.start.room);
     const toExit = dist.get(level.exit.room), furthest = Math.max(...dist.values());
-    assert.equal(toExit, furthest, `seed ${level.seed}: the way out is ${toExit} doorways off, but a room is ${furthest}\n${sketch(level)}`);
-    assert.ok(toExit >= MIN_EXIT_STEPS, `seed ${level.seed}: the way out is only ${toExit} doorways from the landing`);
+    assert.equal(toExit, furthest, `seed ${level.seed}: the fire exit is ${toExit} doorways off, but a room is ${furthest}\n${sketch(level)}`);
+    assert.ok(toExit >= MIN_EXIT_STEPS, `seed ${level.seed}: the fire exit is only ${toExit} doorways from the landing`);
     walked += roomPath(level, level.start.room, level.exit.room).length; rooms += level.rooms.length;
   }
-  // Going straight there, with no wrong turn at all, still takes you through about half the building.
+  // Going straight there, with no wrong turn at all, still takes you through about half the floor.
   assert.ok(walked / rooms > 0.45, `the shortest way out passes ${(100 * walked / rooms).toFixed(0)}% of the rooms`);
 });
 

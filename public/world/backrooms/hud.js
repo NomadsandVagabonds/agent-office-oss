@@ -1,7 +1,7 @@
 // The Backrooms — what the camcorder prints over the picture: a blinking REC,
 // a tape counter that runs, a date stamp from some other decade — and, under
 // the battery, a small picture of each thing of the office's you are carrying
-// (a card, a ring for a coin; nothing until you pick something up). That is
+// (a card, a cassette for each tape; nothing until you pick something up). That is
 // all. Nothing here tells you where you are or what to press; the one concession
 // is a small [E] that appears when there is something in front of you to use
 // (and, on a touch screen, a faint ✕, because there is no Esc). Everything
@@ -24,7 +24,8 @@ const CSS = `
 .backrooms .br-batt i { position: absolute; left: .06em; top: .06em; bottom: .06em; width: 28%; background: currentColor; animation: br-blink 1.6s steps(1) infinite; }
 .backrooms .br-carry { right: 6%; top: calc(6.5% + 1.75em); line-height: 0; letter-spacing: 0; filter: blur(.35px) drop-shadow(0 .08em .1em rgba(0, 0, 0, .8)); }
 .backrooms .br-carry i { display: inline-block; box-sizing: border-box; vertical-align: middle; margin-left: .34em; animation: br-blink .22s steps(1) 4; }
-.backrooms .br-coin { width: .74em; height: .74em; border: .23em solid currentColor; border-radius: 50%; }
+.backrooms .br-tape { width: 1.16em; height: .7em; border: .1em solid currentColor; border-radius: .08em;
+  background: radial-gradient(circle at 30% 58%, currentColor .11em, transparent .13em), radial-gradient(circle at 70% 58%, currentColor .11em, transparent .13em), linear-gradient(currentColor, currentColor) 50% 14% / 70% .1em no-repeat; }
 .backrooms .br-card { position: relative; width: .64em; height: .92em; border: .1em solid currentColor; border-radius: .1em; }
 .backrooms .br-card::before { content: ''; position: absolute; left: 0; right: 0; top: .1em; height: .2em; background: currentColor; }
 .backrooms .br-use { position: absolute; left: 50%; bottom: 21%; transform: translateX(-50%); min-width: 1.5em; padding: .12em .4em; text-align: center; pointer-events: auto; cursor: pointer;
@@ -50,7 +51,7 @@ export function createHud(level) {
   const el = h('div.backrooms', frame, leave);
   root.append(el);
 
-  const st = level.stamp;
+  let st = level.stamp;
   let tape = 0, lastSecond = -1, usable = false, glitch = 0;
   const flagSet = new Set();
 
@@ -69,14 +70,16 @@ export function createHud(level) {
     hint(on) { if (!!on !== usable) { usable = !!on; use.classList.toggle('on', usable); } },
     /** A word in the corner, the way a camcorder notes that its lamp is on. */
     flag(name, on) { if (on) flagSet.add(name); else flagSet.delete(name); flags.textContent = [...flagSet].join('  '); },
-    /** What you are carrying, under the battery: a card, a ring for each coin. Pictures only; nothing is ever written. */
+    /** What you are carrying, under the battery: a card, a cassette for each tape (the office calls them coins). Pictures only; nothing is ever written. */
     carry({ card = false, coins = 0 } = {}) {
       const has = held.querySelector('.br-card');
       if (!card && has) has.remove();
       if (card && !has) held.prepend(h('i.br-card'));
-      for (let n = held.querySelectorAll('.br-coin').length; n > coins; n--) held.lastElementChild.remove();
-      while (held.children.length < (card ? 1 : 0) + coins) held.append(h('i.br-coin'));
+      for (let n = held.querySelectorAll('.br-tape').length; n > coins; n--) held.lastElementChild.remove();
+      while (held.children.length < (card ? 1 : 0) + coins) held.append(h('i.br-tape'));
     },
+    /** The date in the corner belongs to the floor you are on; it loses its place for a moment when that changes. */
+    setStamp(stamp) { if (!stamp) return; st = stamp; glitch = Math.max(glitch, 0.9); lastSecond = -1; },
     setClean(on) { el.classList.toggle('clean', !!on); },
     setTouch(on) { el.classList.toggle('touch', !!on); },
     /** Numbers on the stamp lose their place for a moment. */
