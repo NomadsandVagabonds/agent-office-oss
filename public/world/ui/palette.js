@@ -42,6 +42,7 @@ export function createPalette(office, ui) {
     sheet('usage', 'What is left — usage per provider', 'U');
     sheet('repos', 'Repos — who is on which branch, and in whose way', 'G');
     out.push({ label: office.walk?.active ? 'Step back off the floor' : 'Walk the floor', hint: 'Tab', icon: 'pin', run: () => office.walk?.toggle() });
+    out.push({ label: 'Console — the office as plain text', hint: '`', icon: 'term', run: () => { location.href = '/console/' + (office.selected ? `#a=${encodeURIComponent(office.selected)}` : ''); } });
     out.push({ label: 'The whole office', hint: 'Space', icon: 'home', run: () => ui.overview() });
     out.push({ label: 'Next agent waiting on you', hint: 'N', icon: 'inbox', run: () => ui.nextNeed() });
     const s = office.settings;

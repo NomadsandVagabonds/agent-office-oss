@@ -931,6 +931,46 @@ two self-descriptions above say.
 - A transcript is refused to a browser that is not on the office's machine;
   the panel says so instead of showing an empty page.
 
+### The console (`core/console.mjs`, `public/console/`, `office-chat.mjs`)
+
+The office is a place; sometimes you only want the conversation. The console
+is the same sessions, requests and controls as text, twice over: a page at
+`/console/` (`` ` `` in the office swaps to it; no WebGL is loaded) and
+`office chat` in a terminal. Both are drawn from one module, so they say the
+same things and take the same commands.
+
+- **`core/console.mjs`** is pure — no DOM, no Node. `renderEntry(entry)` turns
+  a transcript entry into lines of `[text, style]` spans (an entry kind it does
+  not know draws nothing: a newer daemon does not break an older console);
+  `parseInput` says what a typed line means; `createConsole(io)` holds which
+  session is on show and everything that can be done to it, given only an
+  `api(path, opt)` and a `watch(sessionId)` from outside. It knows no provider:
+  it calls what `session.controls` names and answers with what
+  `prompt.respond.actions` offers.
+- A typed line is a turn. `/new <agent> [folder]`, `/sessions`, `/switch`,
+  `/stop`, `/end`, `/mode`, `/wake`, `/yes` `/always` `/no [why]`, `/delegate`,
+  `/mail`, `/diff`, `/full`, `/usage`, `/who`, `/dm`, `/task`, `/post`,
+  `/clear`, `/office`, `/help`, `/quit` are the console's own; a line starting
+  with `/` that is not one of those belongs to the agent and is sent as it
+  stands (`//x` sends `/x` even when `x` is one of ours). `/end` and
+  `/mode full` have to be said twice. While a request waits, `y` allows once,
+  `a` allows for the session, `n` refuses, and a number picks one of a
+  question's options; a question (or "I am blocked") takes whatever is typed
+  next as its answer.
+- **The page** lists every project with the agents working in it underneath —
+  face, name, provider, what they are for, and whether they are waiting on you.
+  A driven agent opens as a conversation; one the office only watches opens as
+  what is known about it, with a line to send it a note; a project opens as its
+  board. Requests that are open are drawn with buttons carrying the same keys.
+- **`office chat [session]`** / **`office chat new <agent> [folder]`** — on a
+  terminal the bottom rows are live (the reply as it arrives, tools while they
+  run, the request that is waiting, the line being typed, a status row) and
+  everything above them is written once and scrolls like any other output; it
+  draws with cursor-up and erase-below only, no alternate screen, so the
+  conversation stays in the scrollback. Piped, it is plain lines: it sends what
+  it was given, prints what comes back, and exits when the agent has finished —
+  with status 3 when the agent is waiting for an answer a pipe cannot give.
+
 ### Bus (all additive; `core/contract.mjs` `EV`)
 
 | event | payload | who gets it |
@@ -953,6 +993,9 @@ office delegation [list]                       tasks you delegated, and tasks gi
 office delegation <id> [--wait [seconds]]      status and result
 office delegation cancel <id> [reason]
 office transcript <agent> [--after <seq>] [--limit n] [--full]
+office chat [session]                          the console, in this terminal (/help inside it; Ctrl-C twice leaves)
+office chat new <adapter> [folder]             [--mode] [--model] [--name]   start an agent here and talk to it
+echo "run the tests" | office chat <session>   plain lines; exits when the turn is over (3: it is waiting on an answer)
 ```
 
 ### MCP tools (`office-mcp.mjs`)

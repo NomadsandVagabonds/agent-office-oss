@@ -252,6 +252,8 @@ export function createUI(office) {
       if (['w', 'a', 's', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Shift', '=', '+', '-'].includes(k)) { held.add(k); e.preventDefault(); return; }
     }
     if (k === ' ') { e.preventDefault(); ui.overview(); }
+    // ` swaps to the console: the same office as plain text, on whoever is selected (and ` there swaps back)
+    else if (k === '`') { e.preventDefault(); location.href = '/console/' + (office.selected ? `#a=${encodeURIComponent(office.selected)}` : ''); }
     else if (k === 'n') ui.nextNeed();
     else if (k === 'm' && office.selected) { e.preventDefault(); inspector.focusInput(); }
     else if (['w', 'a', 's', 'd', 'q', 'e', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', '=', '+', '-'].includes(k)) { held.add(k); e.preventDefault(); }

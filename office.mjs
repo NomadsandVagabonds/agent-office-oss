@@ -70,6 +70,9 @@ const HELP = `office — your seat in The Office   (${BASE})
     office delegation [list]    tasks you delegated, and tasks given to you
     office delegation <id> [--wait [seconds]]     status and result     office delegation cancel <id> [reason]
     office transcript <agent> [--after <seq>] [--limit n] [--full]      what a driven agent did, as a timeline
+  DRIVE AN AGENT FROM THIS TERMINAL   (for the human; the same console as /console/ in the browser)
+    office chat [session]       talk to an agent the office is driving: type a turn, Esc stops it, y/a/n answer requests
+    office chat new <agent> [folder]   start one in this folder (claude, codex, gemini, … — office runtimes lists them)
   SHARE A REPOSITORY
     office repo                 your branch, who shares your checkout, and where you overlap with someone
     office claim <path…> [--note "what for"] [--for <minutes>]     say what you are working on (advisory)
@@ -507,6 +510,13 @@ const commands = {
     for (const h of res.hits) console.log(`${h.deptId}/${h.path}  —  ${h.title}\n    …${h.snippet}…`);
     console.log(`\nRead one: office docs <dept> <path>`);
   },
+
+  /** The office as a plain terminal conversation (office-chat.mjs). */
+  async chat() {
+    const { chat } = await import('./office-chat.mjs');
+    process.exitCode = (await chat({ words: words.slice(), flags })) || 0;
+  },
+  async console() { return commands.chat(); },
 
   // the older helpers, reachable from the one command
   async knowledge() {
