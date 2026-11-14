@@ -43,9 +43,10 @@
 </div>
 <script>
 // ?card=title | end | ui | eggs     &beat=0.8606 (a beat of the soundtrack, in seconds)     &bare=1 (no backdrop: to lay over a picture)
+// &name=…  &ver=… (empty for none)  &line=…   try another name without editing this file
 const q = new URLSearchParams(location.search);
 const CARD = q.get('card') || 'title', BEAT = Number(q.get('beat') || 0.860625), BARE = q.get('bare') === '1';
-const TITLE = { name: 'Agent Office', version: 'V2', line: 'An open office where all your agents can collaborate.' };
+const TITLE = { name: q.get('name') || 'Agent Office', version: q.has('ver') ? q.get('ver') : 'V2', line: q.get('line') || 'An open office where all your agents can collaborate.' };
 const SAY = {
   ui: ['A traditional UI', 'for those who hate nice things.'],
   eggs: ['Built-in easter eggs', 'and productivity sucks.'],
@@ -80,8 +81,8 @@ let letters = [], version = null, tag = null, words = [];
 if (CARD === 'title' || CARD === 'end') {
   const lock = el('div', 'lockup'), name = el('span', 'name');
   for (const ch of TITLE.name) { if (ch === ' ') { name.append(el('span', 'sp')); continue; } const s = el('span', 'ch', ch); letters.push(s); name.append(s); }
-  version = el('span', 'v gold', TITLE.version);
-  lock.append(name, version); group.append(lock);
+  if (TITLE.version) version = el('span', 'v gold', TITLE.version);
+  lock.append(name, ...(version ? [version] : [])); group.append(lock);
   if (CARD === 'title') { tag = el('div', '', TITLE.line); tag.id = 'tag'; group.append(tag); }
   // the light crosses the frame where the name is, not where the middle of the card is
   requestAnimationFrame(() => { const r = lock.getBoundingClientRect(), y = r.top + r.height * 0.52; $('streak').style.top = `${y}px`; $('glow').style.top = `${y}px`; });
@@ -110,9 +111,11 @@ function render(t) {
     s.style.opacity = clamp(flash * 1.05); s.style.transform = `scaleX(${0.08 + 0.92 * out5(t / 0.42)}) scaleY(${1 + 2.2 * Math.exp(-t * 9)})`;
     g.style.opacity = clamp(0.25 + 0.75 * flash) * out3(t / 0.3);
     letters.forEach((node, i) => { const mid = (letters.length - 1) / 2; arrive(node, t, 0.05 + Math.abs(i - mid) * 0.022, 0.62, 0, 26, 1.0); node.style.letterSpacing = `${(1 - out5((t - 0.05) / 0.9)) * 0.12}em`; });
-    arrive(version, t, 0.34, 0.7, 0, 30, 1.32);
-    // a light passing over the brass, once
-    version.style.backgroundPosition = `${100 - 100 * io((t - 0.85) / 1.25)}% 0`;
+    if (version) {
+      arrive(version, t, 0.34, 0.7, 0, 30, 1.32);
+      // a light passing over the brass, once
+      version.style.backgroundPosition = `${100 - 100 * io((t - 0.85) / 1.25)}% 0`;
+    }
     if (tag) { const k = out3((t - 0.95) / 0.7); tag.style.opacity = k; tag.style.transform = `translate3d(0, ${(1 - k) * 14}px, 0)`; tag.style.letterSpacing = `${-0.012 + (1 - k) * 0.03}em`; }
   } else {
     let n1 = 0, n2 = 0;
