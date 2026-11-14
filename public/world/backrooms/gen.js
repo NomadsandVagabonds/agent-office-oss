@@ -2,10 +2,13 @@
 // and a few names in, a plain description of one visit out. The same seed
 // always builds the same level; a different seed builds a different one.
 //
-// A visit is a small maze of rectangular rooms on a one-metre grid. Six to
-// nine of them are oddities dealt from the DECK below without repeats; the
-// rest is the connective tissue — plain humming rooms and corridors — plus the
-// room you land in and, somewhere else every time, the door that is different.
+// A floor is a small maze of rectangular rooms on a one-metre grid. Six to
+// nine of them are oddities dealt from the DECK below (and deck2.js) without
+// repeats; the rest is the connective tissue — plain humming rooms and
+// corridors — plus the room you land in and, as far from it as the building
+// goes, the fire exit: a stairwell down to the next floor, or, on the last
+// floor of a visit, the door that is different. A visit is several floors,
+// one under another (plan.js); this file builds one at a time.
 //
 // Rooms are not all boxes: one may sit a few stairs above the next, a doorway
 // may be knee-high, a plain room may have a pit, a beam to duck under, a
@@ -20,11 +23,16 @@
 // `rot` quarter-turns that frame into the world, so the builders (rooms.js)
 // never need to know which way a room ended up facing.
 
-export const T = 0.2;                  // wall thickness, metres
-export const WALL_H = 2.6;             // the usual ceiling
-export const DOOR_H = 2.05;            // top of an ordinary doorway
-export const TILE = 0.6;               // ceiling tile
-export const RISE = 0.1625, RUN = 0.28; // one stair: up, and along
+import { T, WALL_H, DOOR_H, TILE, RISE, RUN, SIDES, toWorld, toLocal, wallLength, wallPoint, floorAt, ceilAt, headAt, stairZones, pinchHalf, fitsAt, wallSpans } from './frame.js';
+import { fill } from './words.js';
+import { MORE_DECK, MORE_STASH } from './deck2.js';
+import { themeOf } from './themes.js';
+import { thinPlace, decoyMarks, TAPE_LABELS } from './marks.js';
+
+// the room's own frame and the shape of its floor and ceiling are frame.js's; they have always been asked for here
+export { T, WALL_H, DOOR_H, TILE, RISE, RUN, SIDES, toWorld, toLocal, wallLength, wallFrame, wallPoint, floorAt, ceilAt, headAt, stairZones, pinchHalf, fitsAt, wallSpans } from './frame.js';
+const r4 = (v) => Math.round(v * 10000) / 10000;
+
 
 /* ---- a small seeded random source ------------------------------------------- */
 
@@ -75,45 +83,29 @@ const FAMILIES = [
   { id: 'beige', weight: 2, wall: [38, 0.30, 0.76], carpet: [35, 0.17, 0.47], trim: [30, 0.30, 0.31] },
   { id: 'lilac', weight: 0.6, wall: [272, 0.20, 0.74], carpet: [282, 0.12, 0.38], trim: [282, 0.16, 0.26] },
   { id: 'mint', weight: 0.8, wall: [160, 0.25, 0.71], carpet: [170, 0.14, 0.38], trim: [170, 0.20, 0.26] },
+  // …and three that are only ever rolled on the floors that ask for them (themes.js): gloss paint over lino, bare board over screed, panelling over a deep carpet
+  { id: 'records', weight: 0, wall: [70, 0.10, 0.74], carpet: [150, 0.10, 0.36], trim: [150, 0.14, 0.22], floor: 'lino' },
+  { id: 'board', weight: 0, wall: [32, 0.10, 0.78], carpet: [40, 0.05, 0.46], trim: [30, 0.06, 0.52], floor: 'screed' },
+  { id: 'panel', weight: 0, wall: [26, 0.44, 0.33], carpet: [152, 0.34, 0.20], trim: [24, 0.46, 0.17], floor: 'plush' },
 ];
 const PATTERNS = ['dots', 'dots', 'dots', 'diamonds', 'stripes', 'trellis', 'sprigs', 'chevrons'];
 const TUBES = ['#fff6dc', '#fff6dc', '#fffbe9', '#f3ffe6', '#ffeec4', '#eef6ff'];
 
-function rollLook(R, family, pattern) {
+function rollLook(R, family, pattern, tubes = TUBES) {
   const [wh, ws, wl] = family.wall, [ch, cs, cl] = family.carpet, [th, ts, tl] = family.trim;
   const dh = R.range(-5, 5), dl = R.range(-0.035, 0.035);
   const wall = hsl(wh + dh, ws + R.range(-0.05, 0.05), wl + dl);
   return {
-    family: family.id, pattern,
+    family: family.id, pattern, floor: family.floor || 'carpet',
     wall, ink: hsl(wh + dh - 4, ws + 0.08, wl + dl - R.range(0.1, 0.15)), pale: hsl(wh + dh, ws - 0.05, wl + dl + 0.07),
     carpet: hsl(ch + R.range(-6, 6), cs + R.range(-0.03, 0.03), cl + R.range(-0.03, 0.03)),
     trim: hsl(th, ts, tl + R.range(-0.02, 0.02)),
     ceil: hsl(wh, 0.14, 0.80 + R.range(-0.03, 0.02)),
-    tube: R.pick(TUBES),
+    tube: R.pick(tubes),
   };
 }
 
-/* ---- the local frame ----------------------------------------------------------- */
-
-const COS = [1, 0, -1, 0], SIN = [0, 1, 0, -1];
-export const SIDES = ['front', 'right', 'back', 'left'];          // local walls, in turning order from +z
-export function toWorld(room, lx, lz) {
-  const c = COS[room.rot], s = SIN[room.rot];
-  return { x: room.cx + lx * c + lz * s, z: room.cz - lx * s + lz * c };
-}
-export function toLocal(room, x, z) {
-  const c = COS[room.rot], s = SIN[room.rot], dx = x - room.cx, dz = z - room.cz;
-  return { x: dx * c - dz * s, z: dx * s + dz * c };
-}
-/** Length of a local wall: front/back run across (W), left/right run deep (D). */
-export const wallLength = (room, side) => (side === 'front' || side === 'back' ? room.W : room.D);
-
 /* ---- words ------------------------------------------------------------------- */
-
-const fill = (text, o, R) => String(text)
-  .replace(/\{name\}/g, o.name).replace(/\{NAME\}/g, o.name.toUpperCase())
-  .replace(/\{agent\}/g, () => R.pick(o.agents)).replace(/\{AGENT\}/g, () => R.pick(o.agents).toUpperCase())
-  .replace(/\{project\}/g, () => R.pick(o.projects)).replace(/\{PROJECT\}/g, () => R.pick(o.projects).toUpperCase());
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
@@ -158,7 +150,7 @@ const PHOTO = [['TEAM PHOTO', 'EVERYBODY LOOK NATURAL'], ['{PROJECT} OFFSITE', '
 const SUBROOMS = [['{P}', '{P} (SUBCOMMITTEE)', 'TASK FORCE'], ['MEETING ROOM 1', 'MEETING ROOM 1A', '1A (i)'], ['BREAKOUT ROOM', 'BREAKOUT ROOM (SMALL)', 'PERSONAL'], ['ALL HANDS', 'SOME HANDS', 'ONE HAND']];
 const CHAIR_COLORS = ['#4a7a6a', '#b5483f', '#3f7f9a', '#8a5a8f', '#c9893f', '#5a5a66', '#6f8a4a'];
 
-export const DECK = [
+const DECK1 = [
   { id: 'cutouts', name: 'The Standees', landmark: 'the cardboard people', w: [7, 10], d: [7, 10], ports: ['back', 'left', 'right'], weight: 2.2, lights: 'normal',
     roll: (R, o) => ({ count: R.int(4, 7), who: R.shuffle(o.agents.map((_, i) => i)), formation: R.pick(['scatter', 'scatter', 'queue', 'ring', 'wall', 'crowd']),
       follower: R.chance(0.4), self: R.chance(0.35), boxes: R.int(1, 3), papers: R.int(4, 10) }) },
@@ -205,6 +197,7 @@ export const DECK = [
   { id: 'nested', name: 'Breakout Rooms', landmark: 'the room inside the room', w: [8, 9], d: [8, 9], ports: ['left', 'right', 'back'], weight: 1.5, lights: 'normal',
     roll: (R, o) => { const pr = R.pick(o.projects).toUpperCase(); return { turn: R.int(0, 3), z: R.range(-0.25, 0.1), plates: R.pick(SUBROOMS).map((t) => t.replace(/\{P\}/g, pr)) }; } },
 ];
+export const DECK = [...DECK1, ...MORE_DECK];
 export const ARCHETYPES = Object.fromEntries(DECK.map((a) => [a.id, a]));
 
 /* ---- names from the real office (or stand-ins when there is nothing to borrow) ----- */
@@ -220,90 +213,11 @@ function names(opt) {
   };
 }
 
-/* ---- heights: the shape of a room's floor and ceiling ------------------------------
-   Rooms are not all flat boxes. A room may sit a few steps above its neighbour (the
-   lower one gets the stairs, inside, rising to the doorway), and a plain room may have
-   a `shape`: a sunken pit, a dais, a stepped or sloping ceiling, a beam to duck under,
-   a staircase that goes nowhere, a pinched waist, a corner filled in. These functions
-   are the one definition of that geometry: world.js walks by them, rooms are built to
-   match them. All take a point in the room's own frame.                               */
-
-const clamp01 = (v) => Math.max(0, Math.min(1, v));
-const r4 = (v) => Math.round(v * 10000) / 10000;
-/** For a point: how far into the room it is from a wall (negative: inside the wall), and where along it. */
-export function wallFrame(room, side, x, z) {
-  if (side === 'front') return { d: room.D / 2 - z, c: x };
-  if (side === 'back') return { d: z + room.D / 2, c: x };
-  if (side === 'left') return { d: x + room.W / 2, c: z };
-  return { d: room.W / 2 - x, c: z };
-}
-/** A point on a wall: `at` along it, `off` metres into the room. */
-export function wallPoint(room, side, at, off = 0) {
-  if (side === 'front') return { x: at, z: room.D / 2 - off };
-  if (side === 'back') return { x: at, z: -room.D / 2 + off };
-  if (side === 'left') return { x: -room.W / 2 + off, z: at };
-  return { x: room.W / 2 - off, z: at };
-}
-/** Height of the floor above the room's own level. */
-export function floorAt(room, x, z) {
-  for (const dr of room.doors) {                       // stairs up to a doorway that is higher than this room
-    if (!(dr.sill > 0.01)) continue;
-    const f = wallFrame(room, dr.side, x, z);
-    if (Math.abs(f.c - dr.c) > dr.w / 2 + 1e-9) continue;
-    if (f.d < 0) return dr.sill;
-    const n = Math.round(dr.sill / RISE), i = Math.floor(f.d / RUN);
-    if (i < n - 1) return r4(dr.sill - (dr.sill / n) * (i + 1));
-  }
-  const s = room.shape;
-  if (!s) return 0;
-  if (s.kind === 'pit' || s.kind === 'dais') {
-    const inside = Math.min(s.w / 2 - Math.abs(x - s.x), s.d / 2 - Math.abs(z - s.z));
-    if (inside <= 0) return 0;
-    return r4((s.kind === 'pit' ? -1 : 1) * Math.min(s.n, Math.floor(inside / 0.3 + 1e-9) + 1) * RISE);
-  }
-  if (s.kind === 'stairs') {
-    const f = wallFrame(room, s.side, x, z);
-    if (Math.abs(f.c - s.c) <= s.w / 2 && f.d >= 0 && f.d < s.n * RUN) return r4((s.n - Math.floor(f.d / RUN)) * RISE);
-  }
-  return 0;
-}
-/** Height of the ceiling above the room's own level. */
-export function ceilAt(room, x, z) {
-  const s = room.shape;
-  if (!s) return room.H;
-  if (s.kind === 'stepceil') return ((s.axis === 'x' ? x : z) - s.at) * s.dir > 0 ? s.h2 : s.h1;
-  if (s.kind === 'slopeceil') { const len = s.axis === 'x' ? room.W : room.D; return s.h0 + (s.h1 - s.h0) * clamp01((s.axis === 'x' ? x : z) / len + 0.5); }
-  if (s.kind === 'soffit' && Math.abs((s.axis === 'x' ? z : x) - s.at) <= s.t / 2) return s.clear;
-  return room.H;
-}
-/** Room to stand up in: ceiling minus floor, or the height of a doorway while you are in it. */
-export function headAt(room, x, z) {
-  let head = ceilAt(room, x, z) - floorAt(room, x, z);
-  for (const dr of room.doors) { const f = wallFrame(room, dr.side, x, z); if (f.d < 0.2 && Math.abs(f.c - dr.c) <= dr.w / 2 + 0.05) head = Math.min(head, dr.h); }
-  return head;
-}
-/** The floor each flight of door-stairs covers (plus `pad` of landing at its foot), as rectangles in the room's frame. */
-export function stairZones(room, pad = 0.9) {
-  return room.doors.filter((d) => d.sill > 0.01).map((d) => {
-    const run = (Math.round(d.sill / RISE) - 1) * RUN, a = wallPoint(room, d.side, d.c - d.w / 2, 0), b = wallPoint(room, d.side, d.c + d.w / 2, run + pad);
-    return { x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z), door: d, run };
-  });
-}
-/** Half the width of a pinched corridor at a point along it. */
-export function pinchHalf(room, v) {
-  const s = room.shape, wide = (s.axis === 'x' ? room.D : room.W) / 2;
-  return s.waist / 2 + (wide - s.waist / 2) * Math.min(1, Math.abs(v - s.at) / s.span);
-}
-/** Does a body of radius r fit here, as far as the room's own shape goes? (Walls and furniture are the world's business.) */
-export function fitsAt(room, x, z, r) {
-  const s = room.shape;
-  if (s && s.kind === 'pinch') return Math.abs(s.axis === 'x' ? z : x) <= pinchHalf(room, s.axis === 'x' ? x : z) - r;
-  return true;
-}
-
 /* ---- the layout -------------------------------------------------------------------- */
 
 const DX = [0, 1, 0, -1], DZ = [1, 0, -1, 0];        // world sides in turning order: +z, +x, −z, −x
+const HALO = -1;                                     // who has a cell of plan that is only being kept empty
+export const EXIT_DEPTH = 7;                         // how deep the stairwell is on the plan, metres
 const MARGIN = 0.5;                                  // a doorway stays this far from a room's corner
 const cellKey = (x, z) => x * 4096 + z;
 const inRect = (p, r, m) => p.x > r.x0 - m && p.x < r.x1 + m && p.z > r.z0 - m && p.z < r.z1 + m;
@@ -311,19 +225,27 @@ const overlaps = (a, b, m) => a.x0 < b.x1 + m && a.x1 > b.x0 - m && a.z0 < b.z1 
 const plain = (r) => r.kind === 'plain' || r.kind === 'start';
 
 function build(R, o, opt) {
-  const rooms = [], links = [], taken = new Map();
-  const fits = (x, z, w, d) => {
+  const rooms = [], links = [], taken = new Map(), theme = themeOf(opt.theme);
+  const fits = (x, z, w, d, halo) => {
     if (Math.abs(x) > 400 || Math.abs(z) > 400) return false;
     for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) if (taken.has(cellKey(x + i, z + j))) return false;
+    if (halo) for (let i = halo.x0; i < halo.x1; i++) for (let j = halo.z0; j < halo.z1; j++) if (taken.has(cellKey(i, j))) return false;
     return true;
   };
-  function addRoom(spec, x, z, w, d, rot) {
+  function addRoom(spec, x, z, w, d, rot, halo) {
     const room = { id: rooms.length, kind: spec.kind, arch: spec.arch || null, x, z, w, d, rot, y: 0, H: spec.H || WALL_H, crawl: !!spec.crawl,
       cx: x + w / 2, cz: z + d / 2, W: (rot % 2 ? d : w) - T, D: (rot % 2 ? w : d) - T, doors: [], links: [], pts: [], stairs: [] };
     rooms.push(room);
     for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) taken.set(cellKey(x + i, z + j), room.id);
+    // the floor plan behind a room with a view is spoken for: nothing else is ever built there (HALO: no room has that number)
+    if (halo) { room.halo = halo; for (let i = halo.x0; i < halo.x1; i++) for (let j = halo.z0; j < halo.z1; j++) if (!taken.has(cellKey(i, j))) taken.set(cellKey(i, j), HALO); }
     return room;
   }
+  /** The plan a room with a view keeps empty: `back` metres beyond its far wall and `side` metres either side, from `lip` metres in. */
+  const haloOf = (h, side, x, z, w, d) => (side === 0 ? { x0: x - h.side, x1: x + w + h.side, z0: z + h.lip, z1: z + d + h.back }
+    : side === 2 ? { x0: x - h.side, x1: x + w + h.side, z0: z - h.back, z1: z + d - h.lip }
+      : side === 1 ? { x0: x + h.lip, x1: x + w + h.back, z0: z - h.side, z1: z + d + h.side }
+        : { x0: x - h.back, x1: x + w - h.lip, z0: z - h.side, z1: z + d + h.side });
   /** The point a little way inside `room` from the middle of a doorway. */
   const inner = (room, link, inset) => {
     const mid = (link.from + link.to) / 2;
@@ -381,8 +303,11 @@ function build(R, o, opt) {
     }
     for (const c of R.shuffle(options)) {
       const x = alongX ? c.at : fixed, z = alongX ? fixed : c.at;
+      // (a halo is checked with the room's own cells still free, and they lie inside it: so those are skipped)
+      let halo = null;
+      if (spec.halo) { halo = haloOf(spec.halo, side, x, z, w, d); let clear = true; for (let i = halo.x0; clear && i < halo.x1; i++) for (let j = halo.z0; j < halo.z1; j++) if (taken.has(cellKey(i, j))) { clear = false; break; } if (!clear) continue; }
       if (!fits(x, z, w, d)) continue;
-      const room = addRoom(spec, x, z, w, d, spec.kind === 'plain' ? 0 : rot);
+      const room = addRoom(spec, x, z, w, d, spec.kind === 'plain' ? 0 : rot, halo);
       room.y = anchor.y;
       addLink(anchor, room, alongX ? 'z' : 'x', wall, c.from, c.to, spec.door ? { door: true } : null);
       return room;
@@ -415,11 +340,12 @@ function build(R, o, opt) {
     if (flight(n > 0 ? anchor : room, links[links.length - 1], Math.abs(n))) room.y = r4(anchor.y + n * RISE);
   }
   const anyStep = () => (R.chance(0.24) ? R.pick([1, 2, 2, 4, 4, 6, 8]) * R.pick([-1, 1]) : 0);
+  const cut = theme.rooms || [0.09, 0.28, 0.44, 0.84], tall = theme.heights || [[2.6, 60], [2.2, 9], [2.9, 9], [3.3, 9], [4.4, 5], [1.75, 6]];
   const plainSpec = () => {
     const roll = R();
-    if (roll < 0.09) return { kind: 'plain', lw: 2, ld: R.int(3, 5), dw: 1.2, H: 0.95, crawl: true };          // a crawl space
-    const [lw, ld] = roll < 0.28 ? [R.int(2, 3), R.int(4, 7)] : roll < 0.44 ? [R.int(5, 8), R.int(2, 3)] : roll < 0.84 ? [R.int(4, 6), R.int(4, 6)] : [R.int(7, 9), R.int(6, 8)];
-    return { kind: 'plain', lw, ld, dw: R.pick([1.5, 2, 2, 2.5]), H: R.weighted([[2.6, 60], [2.2, 9], [2.9, 9], [3.3, 9], [4.4, 5], [1.75, 6]], (k) => k[1])[0] };
+    if (roll < cut[0]) return { kind: 'plain', lw: 2, ld: R.int(3, 5), dw: 1.2, H: 0.95, crawl: true };          // a crawl space
+    const [lw, ld] = roll < cut[1] ? [R.int(2, 3), R.int(4, 7)] : roll < cut[2] ? [R.int(5, 8), R.int(2, 3)] : roll < cut[3] ? [R.int(4, 6), R.int(4, 6)] : [R.int(7, 9), R.int(6, 8)];
+    return { kind: 'plain', lw, ld, dw: R.pick([1.5, 2, 2, 2.5]), H: R.weighted(tall, (k) => k[1])[0] };
   };
   /** The world side (0..3) of a room that one of its local walls faces. */
   const worldSide = (room, local) => (SIDES.indexOf(local) + room.rot) % 4;
@@ -439,8 +365,14 @@ function build(R, o, opt) {
   /* deal the oddities */
   const want = opt.count || R.int(6, 9);
   let deck = [];
-  { const pool = DECK.slice(); while (pool.length) { const pickd = R.weighted(pool, (a) => a.weight); deck.push(pickd); pool.splice(pool.indexOf(pickd), 1); } }
+  // (a room that is only ever there because the visit's plan asked for it — `planned` — is never dealt by chance)
+  { const pool = DECK.filter((a) => !a.planned); while (pool.length) { const pickd = R.weighted(pool, (a) => a.weight * ((a.themes && a.themes[theme.id]) ?? 1)); deck.push(pickd); pool.splice(pool.indexOf(pickd), 1); } }
   if (opt.only) { const forced = [].concat(opt.only).map((id) => ARCHETYPES[id]).filter(Boolean); deck = [...forced, ...deck.filter((a) => !forced.includes(a))]; }
+  // a floor further down keeps clear of what the floors above it had, for as long as the deck lasts…
+  if (opt.avoid && opt.avoid.length) { const had = new Set(opt.avoid); deck = [...deck.filter((a) => !had.has(a.id)), ...deck.filter((a) => had.has(a.id))]; }
+  // …and may insist on a room of its own, somewhere among the ones it would have had anyway
+  const must = [].concat(opt.must || []).map((id) => ARCHETYPES[id]).filter(Boolean);
+  if (must.length) { deck = deck.filter((a) => !must.includes(a)); for (const a of must) deck.splice(R.int(0, Math.min(want - 1, deck.length)), 0, a); }
 
   const sides = () => R.shuffle([0, 1, 2, 3]);
   function connector(from) {                 // a plain room off a hub or a port
@@ -456,7 +388,7 @@ function build(R, o, opt) {
   }
   function placeSpecial(arch, first) {
     const lw = R.int(arch.w[0], arch.w[1]), ld = R.int(arch.d[0], arch.d[1]);
-    const spec = { kind: 'special', arch: arch.id, lw, ld, dw: arch.door || 1.8, centred: true, H: arch.h ? Math.round(R.range(arch.h[0], arch.h[1]) * 10) / 10 : WALL_H };
+    const spec = { kind: 'special', arch: arch.id, lw, ld, dw: arch.door || 1.8, centred: true, H: arch.h ? Math.round(R.range(arch.h[0], arch.h[1]) * 10) / 10 : WALL_H, halo: arch.halo || null };
     for (let tries = 0; tries < 14; tries++) {
       // where to grow from: usually the newest part of the maze, sometimes an older room (a branch)
       let hub = null, fresh = false, port = null;
@@ -485,6 +417,7 @@ function build(R, o, opt) {
   }
   for (const arch of deck) {
     if (specials.length >= want) break;
+    if (arch.halo && specials.some((r) => r.halo)) continue;                 // one room with a view to a floor: it is the landmark
     const room = placeSpecial(arch, specials.length === 0);
     if (room) specials.push(room);
   }
@@ -584,31 +517,37 @@ function build(R, o, opt) {
     const link = addLink(r, other, side % 2 === 0 ? 'z' : 'x', wall, span.from, span.to);
     if (clearOfStairs(link) && flight(other, link, sill(link))) { port.used = true; loops++; } else dropLink();
   }
-  /* the way out: the furthest room from where you land, down its own short passage — often up a few stairs.
-     It goes in last, when every doorway there will ever be is already there, so no shortcut can bring it closer
-     afterwards; and it only ever hangs off a room deep enough that nothing else in the building is further away.
-     A level that has no such spot, or whose furthest room is only a short walk off, is thrown back and dealt again. */
+  /* the fire exit: the furthest room from where you land — a stairwell behind a fire door, often up a few stairs.
+     On every floor of a visit but the last the stairs stop short of the next floor's ceiling, and that is the way on;
+     on the last they have been papered over, and the way out is a wall (`way`: 'stairs' | 'wall' — the same room on the
+     plan either way, so asking for one or the other changes nothing else; the wall is dress()'s business, and marks.js's).
+     It goes in last, when every doorway there will ever be is already there, so no shortcut
+     can bring it closer afterwards; and it only ever hangs off a room deep enough that nothing else in the building
+     is further away. A floor that has no such spot, or whose furthest room is only a short walk off, is thrown back
+     and dealt again. */
   depth = distances(start);
   const deepest = Math.max(...depth.values());
   const far = (room) => Math.hypot(room.x + room.w / 2 - (start.x + start.w / 2), room.z + room.d / 2 - (start.z + start.d / 2));
-  const exitSpec = { kind: 'exit', lw: 3, ld: R.int(3, 5), dw: 1.6, centred: true };
+  const exitSpec = { kind: 'exit', lw: 3, ld: EXIT_DEPTH, dw: 1.2, centred: true, door: true };
   const anchors = [...hubs.filter((h) => h !== start && !h.crawl).map((room) => ({ room })), ...ports.filter((p) => !p.used)]
     .filter((p) => depth.get(p.room.id) + 1 >= Math.max(deepest, MIN_EXIT_STEPS))
     .sort((p, q) => depth.get(q.room.id) - depth.get(p.room.id) || far(q.room) - far(p.room));
   const tryExit = (a) => {
-    if (a.local) { const dw = Math.min(1.6, wallLength(a.room, a.local) - 1.2); return attach(a.room, worldSide(a.room, a.local), { ...exitSpec, dw, fixed: portSpan(a.room, a.local, 0, dw) }); }
+    if (a.local) { const dw = Math.min(1.2, wallLength(a.room, a.local) - 1.2); return attach(a.room, worldSide(a.room, a.local), { ...exitSpec, dw, fixed: portSpan(a.room, a.local, 0, dw) }); }
     for (const side of sides()) { const made = attach(a.room, side, exitSpec); if (made) { if (R.chance(0.45)) step(a.room, made, R.pick([2, 4, 6])); return made; } }
     return null;
   };
   let exit = null;
   for (const a of anchors) { exit = tryExit(a); if (exit) { if (a.local) a.used = true; break; } }
   if (!exit) return null;
-  exit.name = 'Way out';
+  exit.way = opt.way === 'stairs' ? 'stairs' : 'wall';
+  exit.name = 'Fire exit';
 
   depth = distances(start);
   for (const room of rooms) room.depth = depth.get(room.id) ?? -1;
   if (rooms.some((r) => r.depth < 0)) return null;
   if (specials.length < Math.min(6, want) || (opt.only && [].concat(opt.only).some((id) => ARCHETYPES[id] && !specials.some((r) => r.arch === id)))) return null;
+  if (must.some((a) => !specials.some((r) => r.arch === a.id))) return null;
 
   /* what kind of hole each doorway is: most are doorways; some you crawl through, some are arches, a few are slits */
   const narrow = (link, w) => { if (link.to - link.from > w) { const mid = (link.from + link.to) / 2; link.from = r4(mid - w / 2); link.to = r4(mid + w / 2); } };
@@ -729,8 +668,11 @@ function shapesFor(R, room) {
 }
 
 function dress(R, level, o, opt, keeper = false) {
-  const { rooms, links, start, exit } = level;
-  const family = R.weighted(FAMILIES, (f) => f.weight), pattern = R.pick(PATTERNS);
+  const { rooms, links, start, exit } = level, theme = themeOf(opt.theme), lit = theme.light || {};
+  // which wallpapers this floor is hung with, what they are printed with, and how its ceilings behave (themes.js)
+  const weightOf = (f) => (theme.families ? theme.families[f.id] || 0 : f.weight), patterns = theme.patterns || PATTERNS, tubes = theme.tubes || TUBES;
+  const dead = lit.dead || [0.06, 0.3], modes = lit.modes || [['normal', 1]], things = theme.dressing || DRESSING;
+  const family = R.weighted(FAMILIES, weightOf), pattern = R.pick(patterns);
   const toExit = level.distances(exit);
   // something that follows you — in some visits. It stands in a plain room a little way in.
   let pursuer = null;
@@ -750,11 +692,13 @@ function dress(R, level, o, opt, keeper = false) {
   for (const room of rooms) {
     const rr = R.fork('dress:' + room.id);
     const odd = rr.chance(0.12);                                   // the wallpaper is different in here
-    room.look = rollLook(rr, odd ? rr.weighted(FAMILIES, (f) => f.weight) : family, odd || rr.chance(0.12) ? rr.pick(PATTERNS) : pattern);
+    room.look = rollLook(rr, odd ? rr.weighted(FAMILIES, weightOf) : family, odd || rr.chance(0.12) ? rr.pick(patterns) : pattern, tubes);
     const arch = room.arch ? ARCHETYPES[room.arch] : null;
-    room.light = { dead: rr.range(0.06, 0.3), flicker: rr.chance(0.4) ? 1 : 0, power: rr.range(0.9, 1.1), mode: arch ? arch.lights : 'normal' };
-    if (room.kind === 'exit') { room.light.dead = 0; room.light.flicker = 0; }
-    if (room.kind === 'start') room.light.dead = Math.min(room.light.dead, 0.12);
+    room.light = { dead: rr.range(dead[0], dead[1]), flicker: rr.chance(lit.flicker ?? 0.4) ? 1 : 0, power: rr.range(0.9, 1.1), mode: arch ? arch.lights : rr.weighted(modes, (m) => m[1])[0] };
+    // on a dark floor an oddity is not always the one room with its lights on
+    if (arch && arch.lights === 'normal' && lit.odd) room.light.mode = rr.weighted(lit.odd, (m) => m[1])[0];
+    if (room.kind === 'exit') { room.light.dead = 0; room.light.flicker = 0; room.light.mode = 'normal'; }
+    if (room.kind === 'start') { room.light.dead = Math.min(room.light.dead, 0.12); room.light.mode = 'normal'; }    // wherever you land, you can see where you are
     room.toExit = toExit.get(room.id);
     room.pillars = []; room.dress = []; room.sign = null; room.shape = null; room.wins = [];
 
@@ -783,7 +727,7 @@ function dress(R, level, o, opt, keeper = false) {
     if (room.kind !== 'plain' && room.kind !== 'start') continue;
 
     // a lit arrow over the doorway that leads toward the way out — in some rooms
-    if (room.doors.length >= 2 && !room.crawl && rr.chance(0.5)) {
+    if (room.doors.length >= 2 && !room.crawl && (rr.chance(0.5) || room.toExit === 1)) {
       const best = room.doors.slice().sort((p, q) => toExit.get(p.to) - toExit.get(q.to))[0];
       if (toExit.get(best.to) < room.toExit && best.kind !== 'crawl') room.sign = { door: room.doors.indexOf(best), text: rr.pick(['EXIT', 'EXIT', 'EXIT', 'WAY OUT', 'EXIT?', 'EXIT (PROBABLY)']) };
     }
@@ -816,7 +760,7 @@ function dress(R, level, o, opt, keeper = false) {
     // one or two things somebody left behind
     const things = rr.chance(0.8) ? rr.int(1, room.W * room.D > 30 ? 3 : 2) : 0;
     for (let k = 0; k < things; k++) {
-      const type = rr.pick(DRESSING);
+      const type = rr.pick(things);
       const item = { type, u: rr(), v: rr(), turn: rr.range(-Math.PI, Math.PI), n: rr.int(3, 9), seed: rr.int(1, 9999) };
       if (type === 'poster') item.text = fill(rr.pick(POSTERS), o, rr);
       if (type === 'frame') item.who = rr.int(0, 99);
@@ -879,6 +823,11 @@ function dress(R, level, o, opt, keeper = false) {
     for (const { r, rec } of sides) r.wins.push(rec);
   }
 
+  // the thin place — on every floor, though only the last floor's gives — and the other walls somebody tried
+  const thin = thinPlace(rooms, R.fork('thin'));
+  if (!thin) return null;
+  for (const mark of decoyMarks(rooms, R.fork('marks'), thin)) { const { room: id, ...item } = mark; rooms[id].dress.push({ ...item, turn: 0, n: 0 }); }
+
   // "it's past the water coolers": the oddity nearest the way out
   const near = level.specials.slice().sort((a, b) => toExit.get(a.id) - toExit.get(b.id))[0];
   const first = start.doors[0];
@@ -887,9 +836,9 @@ function dress(R, level, o, opt, keeper = false) {
     pursuer, windows,
     hint: near ? ARCHETYPES[near.arch].landmark : 'the plain rooms',
     start: { room: start.id, x: start.cx, z: start.cz, yaw: Math.atan2(-aim.x, -aim.z) },
-    exit: { room: exit.id },
+    exit: { room: exit.id, way: exit.way }, thin,
     stamp: { year: R.int(1991, 1999), month: R.pick(MONTHS), day: R.int(1, 28), hour: R.int(0, 23), minute: R.int(0, 59) },
-    hum: R.pick([50, 50, 60]),
+    hum: theme.hum || R.pick([50, 50, 60]),
   };
 }
 
@@ -908,7 +857,7 @@ const about = (x, z, hx, hz = hx) => [x - hx, z - hz, x + hx, z + hz];
 // Where a coin goes in each oddity: (room, ±1) → [x0, z0, x1, z1] in the room's own frame, or several to try in
 // turn. The generator cannot see furniture — rooms*.js puts that in — so these are the places each builder is known
 // to leave clear; loot.js still checks, once the room stands, that the spot can be walked to (and moves the coin if not).
-export const STASH = {
+const STASH1 = {
   cutouts: (r, s) => about(s * (r.W / 2 - 1), r.D / 2 - 1.05, 0.3),                              // a corner beside the door you came in by: behind you, with all of them watching
   'ceiling-meeting': () => [-1.5, -0.5, -0.9, 0.2],                                             // on the carpet, under one end of the table
   coolers: (r) => [-0.3, r.D / 2 - 9, 0.3, r.D / 2 - 6.6],                                      // a little way into the dark, before the corridor starts again
@@ -933,6 +882,8 @@ export const STASH = {
   nested: (r, s) => { const d = [[0, 1], [1, 0], [0, -1], [-1, 0]][(r.params.turn + 2) % 4];     // in the room inside the room, round the side its own little room opens on
     return about(d[0] * 1.62 + d[1] * s * 1.2, r.params.z + d[1] * 1.62 + d[0] * s * 1.2, 0.05); },
 };
+
+export const STASH = { ...STASH1, ...MORE_STASH };
 
 const AROUND = [0, 0, 1, 0, -1, 0, 0, 1, 0, -1, 1, 1, 1, -1, -1, 1, -1, -1];     // a spot, and the eight points round it
 /** What a coin in this room keeps clear of besides walls and pillars: the floor just inside each doorway, and every flight of stairs with its landing. */
@@ -991,7 +942,8 @@ function coinSpot(room, R, others = []) {
 function wanted(loot) {
   if (!loot || typeof loot !== 'object') return null;
   const coins = [...new Set((Array.isArray(loot.coins) ? loot.coins : []).map((n) => Math.floor(Number(n))).filter((n) => n >= 1))].sort((a, b) => a - b);
-  return loot.card || coins.length ? { card: !!loot.card, coins } : null;
+  // (`tapes`: what the words on the cassettes are rolled from — the visit's seed, so that a tape says the same thing whichever floor it is on)
+  return loot.card || coins.length ? { card: !!loot.card, coins, tapes: loot.tapes } : null;
 }
 
 /** Hide it. → { card, coins: [{ n, room, x, z }] }: each coin in a room, at a spot in that room's own frame. */
@@ -1025,8 +977,10 @@ function stash(level, want, R) {
     }
     if (slots.length >= want.coins.length) break;
   }
-  // the coins still to be found take the hiding places in the order they were chosen
-  loot.coins = slots.map((s, i) => ({ n: want.coins[i], room: s.room, x: s.x, z: s.z }));
+  // the coins still to be found take the hiding places in the order they were chosen. Down here a coin is a video
+  // cassette (loot.js), and somebody has written on each: the same words on the same coin, whichever others are left.
+  const names = { name: level.name, agents: level.cast, projects: level.projects };
+  loot.coins = slots.map((s, i) => { const n = want.coins[i], rl = makeRng(`${want.tapes ?? level.seed}/tape/${n}`); return { n, room: s.room, x: s.x, z: s.z, label: rl.pick(TAPE_LABELS).map((t) => fill(t, names, rl)) }; });
   return loot;
 }
 
@@ -1040,13 +994,14 @@ function stash(level, want, R) {
 export function generate(seed, opt = {}) {
   const o = names(opt), want = wanted(opt.loot);
   const keeper = !!(want && want.card);                  // the keycard is in the mascot's hand: this visit has a mascot
-  for (let attempt = 0; attempt < 40; attempt++) {
+  for (let attempt = 0; attempt < 80; attempt++) {
     const R = makeRng(`backrooms:${seed}:${attempt}`);
     const level = build(R, o, opt);
     if (!level) continue;
     const extra = dress(R.fork('dress'), level, o, keeper ? { ...opt, pursuer: true } : opt, keeper);
+    if (!extra) continue;                                   // (a floor with no wall that could be the thin one is dealt again)
     const rooms = level.rooms.map((r) => { const { links: _l, pts: _p, stairs: _s, ...rest } = r; return rest; });
-    const out = { seed: String(seed), name: o.name, cast: o.agents, projects: o.projects, rooms, links: level.links, picked: level.specials.map((r) => r.arch), ...extra };
+    const out = { seed: String(seed), name: o.name, theme: themeOf(opt.theme).id, cast: o.agents, projects: o.projects, rooms, links: level.links, picked: level.specials.map((r) => r.arch), ...extra };
     if (want) out.loot = stash(out, want, R.fork('loot'));
     return out;
   }

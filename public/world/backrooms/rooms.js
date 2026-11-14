@@ -8,8 +8,11 @@ import { Vox, M } from '../vox/vox.js';
 import { Batch, lin, atlas, drawText, WHITE } from './kit.js';
 import { makeCutout, drawPortrait } from './cutout.js';
 import { TILE, RISE, RUN, wallPoint, pinchHalf } from './gen.js';
-import { P, clamp, turnTo, framed, card, scatter, doorLeaf, doorFrame, wetSign, standee, mugVox } from './bits.js';
+import { P, clamp, turnTo, framed, card, scatter, doorLeaf, doorFrame, wetSign, standee, mugVox, floorPlan } from './bits.js';
+import { marks } from './traces.js';
+import { thinWall } from './thin.js';
 import { MORE } from './rooms2.js';
+import { stairwell } from './stairwell.js';
 
 /* ---- the plain rooms, and what somebody left in them ------------------------------- */
 
@@ -177,29 +180,6 @@ function dressing(c, item) {
   else if (item.type === 'map') floorPlan(c);
 }
 
-/** An evacuation plan of this very level, the right way round for whoever reads it. Mostly accurate. */
-function floorPlan(c) {
-  const w = c.wallSpot(1.3); if (!w) return;
-  const p0 = c.wallAt(w.side, w.at, 0), lv = c.level, me = c.room;
-  let far = 6;
-  for (const r of lv.rooms) far = Math.max(far, Math.abs(r.x - me.cx), Math.abs(r.x + r.w - me.cx), Math.abs(r.z - me.cz), Math.abs(r.z + r.d - me.cz));
-  const S = 150, k = (S / 2 - 6) / far;
-  // map-right is the way the wall runs, map-up is the way you face when reading it
-  const mx = (x, z) => S / 2 + ((x - me.cx) * p0.U[0] + (z - me.cz) * p0.U[2]) * k, my = (x, z) => S / 2 + 12 + ((x - me.cx) * p0.n[0] + (z - me.cz) * p0.n[2]) * k;
-  const tex = c.kit.tex.custom('plan' + me.id, S, S + 24, (g) => {
-    P(g, '#f3efe2', 0, 0, S, S + 24); P(g, '#b5483f', 0, 0, S, 12);
-    drawText(g, ['EVACUATION PLAN'], 0, 0, S, 12, { color: '#fff7e6', size: 9 });
-    const box = (r, fill) => { const xs = [mx(r.x, r.z), mx(r.x + r.w, r.z + r.d)], ys = [my(r.x, r.z), my(r.x + r.w, r.z + r.d)]; const x = Math.min(...xs), y = Math.min(...ys), bw = Math.abs(xs[1] - xs[0]), bh = Math.abs(ys[1] - ys[0]); P(g, '#4a4436', x, y, bw, bh); P(g, fill, x + 1, y + 1, bw - 2, bh - 2); };
-    for (const r of lv.rooms) box(r, r.kind === 'exit' ? '#7fd08f' : r.id === me.id ? '#f6d9a8' : r.kind === 'special' ? '#dcd6c4' : '#ffffff');
-    for (const l of lv.links) { const a = l.axis === 'x' ? [l.at, l.from, l.at, l.to] : [l.from, l.at, l.to, l.at]; const x0 = mx(a[0], a[1]), y0 = my(a[0], a[1]), x1 = mx(a[2], a[3]), y1 = my(a[2], a[3]); P(g, '#ffffff', Math.min(x0, x1) - 1, Math.min(y0, y1) - 1, Math.abs(x1 - x0) + 2, Math.abs(y1 - y0) + 2); }
-    const ex = lv.rooms[lv.exit.room];
-    g.fillStyle = '#1f7a3e'; g.font = '700 7px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.fillText('EXIT', mx(ex.cx, ex.cz), my(ex.cx, ex.cz) + 3);
-    g.fillStyle = '#d8281c'; g.beginPath(); g.arc(mx(me.cx, me.cz), my(me.cx, me.cz), 3, 0, 7); g.fill();
-    drawText(g, ['● YOU ARE HERE (PROBABLY)'], 0, S + 12, S, 12, { color: '#3a3428', size: 7 });
-  }, { clamp: true });
-  framed(c, c.mapped('plan' + me.id, tex), w.side, w.at, 1.25, 0.84, 0.84 * (S + 24) / S, null, [0.55, 0.55, 0.5]);
-}
-
 /** A corridor with a waist: two slanted lengths of wall on either side, in front of the real ones. */
 function pinchWalls(c, s) {
   const { W, D, H, room } = c, alongZ = s.axis === 'z', len = alongZ ? D : W, wide = (alongZ ? W : D) / 2, trim = lin(c.look.trim);
@@ -245,7 +225,10 @@ function plain(c) {
   if (s && s.kind === 'pinch') pinchWalls(c, s);
   if (s && s.kind === 'stairs') nowhereStairs(c, s);
   if (room.sign) c.exitSign(room.doors[room.sign.door], room.sign.text);
-  for (const item of room.dress) dressing(c, item);
+  // the wall that would give, if this is the room it is in — before anything else is hung on it or stood in front of it
+  if (c.level.thin && c.level.thin.room === room.id) thinWall(c, c.level.thin, c.level.exit.way === 'wall');
+  for (const item of room.dress) if (item.type === 'marks') marks(c, item);          // (likewise the walls somebody else tried)
+  for (const item of room.dress) if (item.type !== 'marks') dressing(c, item);
   if (c.level.pursuer?.room === room.id) c.env.lair?.(c);
 }
 
@@ -257,35 +240,6 @@ function start(c) {
   for (const [dx, dz, rot] of [[0.35, 0.2, 0.4], [-0.5, -0.3, 1.9], [0.1, -0.75, 2.8]]) c.lay(c.ceil, hole.x + dx, hole.z + dz, TILE, TILE, rot, [[0, 0], [1, 0], [1, 1], [0, 1]], WHITE, 0.01 + Math.abs(dx) * 0.01);
   c.blot(hole.x, hole.z, 2.2, 2.2, { rgb: [0.3, 0.28, 0.22], a: 0.35 });
   for (const [dx, dz, len] of [[-0.4, 0.3, 0.5], [0.3, -0.2, 0.32], [0.45, 0.45, 0.7]]) c.flat.box(hole.x + dx - 0.008, hole.y - len, hole.z + dz - 0.008, hole.x + dx + 0.008, hole.y, hole.z + dz + 0.008, [0.04, 0.04, 0.04]);
-}
-
-/** The way out: an ordinary office door with light under it. */
-function exit(c) {
-  const { D, kit } = c, z = -D / 2, warm = lin('#ffd9a0'), wood = lin('#8f5d34');
-  c.shell({ sockets: false });
-  doorFrame(c, 'back', 0, 0.96, 2.02);
-  c.shining('beyond', kit.tex.white(), 3.2, [1, 0.96, 0.86]).quad([-0.48, 0, z + 0.004], [0.48, 0, z + 0.004], [0.48, 2.02, z + 0.004], [-0.48, 2.02, z + 0.004]);
-  // the door itself swings, so it is its own mesh, hinged on the left
-  const leaf = new Batch();
-  doorLeaf(c, 'back', 0, 0.94, 2.0, wood, { batch: leaf, d0: 0.014 });
-  const door = c.dynamic(leaf, { pivot: [-0.47, 0, z + 0.02] });
-  const pane = new Batch();
-  pane.quad([-0.19, 1.18, z + 0.067], [0.19, 1.18, z + 0.067], [0.19, 1.76, z + 0.067], [-0.19, 1.76, z + 0.067]);
-  pane.quad([-0.47, 0, z + 0.06], [0.47, 0, z + 0.06], [0.47, 0.022, z + 0.06], [-0.47, 0.022, z + 0.06]);
-  c.after.push(() => { const m = new THREE.Mesh(kit.plain(pane), kit.glowing(kit.tex.white(), 1.7, warm)); m.position.set(0.47, 0, -(z + 0.02)); door.add(m); });
-  c.light(0, 0.12, z + 0.3, warm, 1.0, { k: 0.45, far: 5, wrap: 0.6 });
-  c.light(0, 1.45, z + 0.35, warm, 0.3, { k: 0.8, far: 4 });
-  c.exitSign({ side: 'back', c: 0, w: 1.05 }, 'EXIT');
-  c.prop('doormat', 0, z + 0.62, { solid: false, shadow: false, fallback: [0.9, 0.02, 0.5] });
-  let opening = 0;
-  c.use({ x: 0, z: z + 0.25, r: 1.7, label: 'open the door', when: () => !opening, use: () => { opening = 0.0001; c.env.sound.play('door'); } });
-  c.tick((dt) => {
-    if (!opening) return;
-    opening += dt;
-    const k = Math.min(1, opening / 0.9);
-    door.rotation.y = -1.9 * k * k * (3 - 2 * k);
-    if (opening > 0.45) c.env.end('exit');
-  });
 }
 
 /* ---- the deck, part one ------------------------------------------------------------ */
@@ -605,4 +559,5 @@ function hallOfFame(c) {
   if (W > 3) c.prop('pedestal', 0, -D / 2 + (c.room.doors.some((d) => d.side === 'back') ? 2.2 : 0.7), { fallback: [0.5, 0.9, 0.5] });
 }
 
+const exit = stairwell;                               // the fire exit, and on the last floor the way out (stairwell.js)
 export const BUILDERS = { plain, start, exit, cutouts, 'ceiling-meeting': ceilingMeeting, coolers, party, 'many-doors': manyDoors, 'hall-of-fame': hallOfFame, ...MORE };

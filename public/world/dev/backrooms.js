@@ -1,6 +1,7 @@
 // The Backrooms, without the office: a stage, a made-up office to borrow names
 // from, and straight into the level.
-//   /world/dev/backrooms.html?seed=7            a whole visit
+//   /world/dev/backrooms.html?seed=7            a whole visit: three to five floors, the way out on the last
+//   &depth=2           begin on that floor (0 is where you land)   &depths=3   how many floors this visit has
 //   &room=party        start inside one archetype (any id from the deck; also: exit, start, plain, or a room number)
 //   &x=0&z=2&yaw=0.6&pitch=-0.1   where to stand in that room's own frame (z = depth/2 is the door you came in by; yaw 0 looks in)
 //   &only=a,b          deal these archetypes into the visit      &count=6    how many oddities
@@ -11,7 +12,8 @@
 //   &loot=1            something to find: the keycard (in the mascot's hand) and coins 1–4; &loot=card,1,3 for some of it. There is no
 //                      office here to keep count, so a stand-in does, in this page's memory, and says so on the console: what you leave
 //                      by the door with is gone the next visit (any key), everything else is down there again. Without it: no loot.
-// window.__backrooms is the live handle: goto(room, x, z, yaw, pitch), where(), level, world, player, env (env.pursuer.at()),
+// window.__backrooms is the live handle, always of the floor you are on: goto(room, x, z, yaw, pitch), where(), level, world,
+// player, env (env.pursuer.at()), plan() (the whole visit), descend() (down a floor, from wherever you stand),
 // loot (loot.report(): where the coins are, what is carried). window.__loot is what the stand-in still has down there.
 // Nothing on screen says how to play, on purpose: WASD/arrows, mouse, Shift (hurry), Space (hop), C (crouch, held), E, V (picture), M (sound), Esc.
 import { createStage } from '../engine/stage.js';
@@ -76,6 +78,7 @@ async function go() {
   over.style.display = 'none';
   const result = await enterBackrooms(office, {
     name: q.get('name') || 'Robin', seed, only: only.length ? only : undefined, count: q.has('count') ? num('count', 7) : undefined,
+    depth: q.has('depth') ? num('depth', 0) : undefined, depths: q.has('depths') ? num('depths', 3) : undefined,
     pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined, vhs: q.has('vhs') ? num('vhs', 2) : undefined, mute: q.has('mute') ? q.get('mute') !== '0' : undefined,
     debug: true,
     onReady(handle) {

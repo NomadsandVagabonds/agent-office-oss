@@ -314,6 +314,10 @@ export function createKit() {
       else if (look.pattern === 'diamonds') { for (let y = 4; y < h; y += 16) for (let x = ((y - 4) / 16) % 2 ? 12 : 4; x < w; x += 16) { P(g, ink, x, y - 2, 1, 5); P(g, ink, x - 1, y - 1, 3, 3); P(g, ink, x - 2, y, 5, 1); P(g, pale, x, y, 1, 1); } }
       else if (look.pattern === 'stripes') { for (let x = 2; x < w; x += 8) { P(g, ink, x, 0, 2, h); P(g, pale, x + 3, 0, 1, h); } }
       else if (look.pattern === 'trellis') { for (let i = 0; i < w; i++) { P(g, ink, i, i, 1, 1); P(g, ink, w - 1 - i, i, 1, 1); P(g, ink, (i + 16) % w, i, 1, 1); P(g, ink, (w - 1 - i + 16) % w, i, 1, 1); } for (let y = 0; y < h; y += 16) for (let x = 0; x < w; x += 16) P(g, pale, x + 7, y + 7, 2, 2); }
+      // the three that are not paper at all (themes.js): painted blockwork, bare plasterboard, panelling
+      else if (look.pattern === 'blocks') { for (let y = 0; y < h; y += 8) { P(g, ink, 0, y, w, 1); P(g, pale, 0, y + 1, w, 1); for (let x = (y / 8) % 2 ? 8 : 0; x < w; x += 16) P(g, ink, x, y, 1, 8); } for (let i = 0; i < 30; i++) P(g, shade(wall, -0.07), (r() * w) | 0, (r() * h) | 0, 2, 1); }
+      else if (look.pattern === 'board') { P(g, pale, 14, 0, 4, h); P(g, shade(wall, -0.05), 13, 0, 1, h); P(g, shade(wall, -0.05), 18, 0, 1, h); for (let y = 3; y < h; y += 8) { P(g, ink, 10, y, 1, 1); P(g, ink, 21, y, 1, 1); P(g, ink, 0, y + 4, 1, 1); } }
+      else if (look.pattern === 'panel') { P(g, ink, 0, 0, w, 2); P(g, ink, 0, 0, 2, h); P(g, pale, 2, 2, w - 2, 1); P(g, pale, 2, 2, 1, h - 2); P(g, ink, 6, 6, w - 10, 1); P(g, ink, 6, 6, 1, h - 10); P(g, pale, 6, h - 5, w - 10, 1); P(g, pale, w - 5, 6, 1, h - 10); for (let x = 3; x < w; x += 3) P(g, shade(wall, (r() - 0.5) * 0.09), x, 2, 1, h - 2); }
       else if (look.pattern === 'sprigs') { for (let y = 5; y < h; y += 16) for (let x = ((y - 5) / 16) % 2 ? 13 : 5; x < w; x += 16) { P(g, ink, x, y, 1, 4); P(g, ink, x - 1, y + 1, 3, 1); P(g, pale, x - 1, y - 1, 1, 1); P(g, pale, x + 1, y - 1, 1, 1); P(g, pale, x, y - 2, 1, 1); } }
       else { for (let y = 3; y < h; y += 8) for (let x = 0; x < w; x++) { const k = x % 8; P(g, ink, x, y + (k < 4 ? k : 7 - k), 1, 1); } }
     })),
@@ -323,6 +327,29 @@ export function createKit() {
       const r = lcg(parseInt(color.slice(1), 16));
       for (let i = 0; i < 9; i++) { g.fillStyle = shade(color, -0.05); g.beginPath(); g.ellipse(r() * w, r() * h, 5 + r() * 9, 3 + r() * 6, r() * 3, 0, 7); g.fill(); }
       for (let y = 0; y < h; y += 2) for (let x = (y / 2) & 1 ? 1 : 0; x < w; x += 2) { const n = r(); if (n > 0.66) P(g, shade(color, 0.08), x, y, 1, 1); else if (n < 0.3) P(g, shade(color, -0.1), x, y, 1, 1); }
+    })),
+    /** What is underfoot on this floor of the building: carpet, mostly — but lino in Records, screed where they are still fitting out, and something deeper upstairs. */
+    floor: (look) => (look.floor === 'lino' ? T.lino(look.carpet) : look.floor === 'screed' ? T.screed(look.carpet) : look.floor === 'plush' ? T.plush(look.carpet, look.pale) : T.carpet(look.carpet)),
+    /** Vinyl tiles, 0.4 m, two tones, laid chequerwise and scuffed where people turned. */
+    lino: (color) => tex('lino' + color, () => canvasTexture(64, 64, (g, w, h) => {
+      const r = lcg(parseInt(color.slice(1), 16) + 3);
+      for (let y = 0; y < h; y += 16) for (let x = 0; x < w; x += 16) { P(g, shade(color, ((x + y) / 16) % 2 ? 0.1 : -0.04), x, y, 16, 16); P(g, shade(color, -0.2), x, y, 16, 1); P(g, shade(color, -0.2), x, y, 1, 16); }
+      for (let i = 0; i < 220; i++) P(g, shade(color, (r() - 0.5) * 0.16), (r() * w) | 0, (r() * h) | 0, 1 + ((r() * 3) | 0), 1);
+      for (let i = 0; i < 5; i++) { g.strokeStyle = shade(color, -0.22); g.lineWidth = 1; g.beginPath(); g.arc(r() * w, r() * h, 4 + r() * 9, r() * 6, r() * 6 + 1.2); g.stroke(); }
+    })),
+    /** Bare screed: grey, trowelled, with the dust of whatever has been cut on it. */
+    screed: (color) => tex('screed' + color, () => canvasTexture(64, 64, (g, w, h) => {
+      P(g, color, 0, 0, w, h);
+      const r = lcg(parseInt(color.slice(1), 16) + 9);
+      for (let i = 0; i < 16; i++) { g.fillStyle = shade(color, (r() - 0.5) * 0.12); g.beginPath(); g.ellipse(r() * w, r() * h, 6 + r() * 14, 2 + r() * 5, r() * 3, 0, 7); g.fill(); }
+      for (let i = 0; i < 300; i++) P(g, shade(color, (r() - 0.45) * 0.2), (r() * w) | 0, (r() * h) | 0, 1, 1);
+    })),
+    /** A carpet somebody chose: deep pile, a small motif every 0.4 m. */
+    plush: (color, motif) => tex('plush' + color + motif, () => canvasTexture(64, 64, (g, w, h) => {
+      P(g, color, 0, 0, w, h);
+      const r = lcg(parseInt(color.slice(1), 16) + 21);
+      for (let y = 0; y < h; y += 2) for (let x = (y / 2) & 1 ? 1 : 0; x < w; x += 2) { const n = r(); if (n > 0.6) P(g, shade(color, 0.07), x, y, 1, 1); else if (n < 0.3) P(g, shade(color, -0.14), x, y, 1, 1); }
+      for (let y = 8; y < h; y += 16) for (let x = ((y - 8) / 16) % 2 ? 16 : 8; x < w; x += 16) { P(g, shade(motif, -0.25), x, y - 1, 1, 3); P(g, shade(motif, -0.25), x - 1, y, 3, 1); }
     })),
     /** One 0.6 m ceiling tile: pinholes, and the dark T-bar it rests on. */
     ceiling: (color) => tex('ct' + color, () => canvasTexture(24, 24, (g, w, h) => {

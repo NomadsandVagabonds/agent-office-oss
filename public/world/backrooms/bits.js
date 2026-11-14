@@ -84,3 +84,30 @@ export function standee(c, key, look, x, z, rot, o = {}) {
   return k;
 }
 export const mugVox = (color = '#cf6b4b') => () => { const v = new Vox(); v.cyl('y', 0, 0, 0, 5, 2.4, M(color, 0)); v.carve(-1, 1, -1, 1, 5, 1); v.box(-1, 4, -1, 1, 5, 1, M('#3a2416', 0)); v.box(3, 1, 0, 4, 4, 1, M(color, 0)); v.carve(3, 2, 0, 4, 3, 1); v.box(4, 1, 0, 5, 4, 1, M(color, 0)); return v; };
+/**
+ * An evacuation plan of this very floor, the right way round for whoever reads it. Mostly accurate.
+ * where: { side, at } (default: any free wall) · scribble(g, mx, my): draw on it — mx, my turn a spot of the floor into a spot on the sheet.
+ */
+export function floorPlan(c, where = null, scribble = null) {
+  const w = where || c.wallSpot(1.3); if (!w) return;
+  const p0 = c.wallAt(w.side, w.at, 0), lv = c.level, me = c.room;
+  let far = 6;
+  for (const r of lv.rooms) far = Math.max(far, Math.abs(r.x - me.cx), Math.abs(r.x + r.w - me.cx), Math.abs(r.z - me.cz), Math.abs(r.z + r.d - me.cz));
+  const S = 150, k = (S / 2 - 6) / far;
+  // map-right is the way the wall runs, map-up is the way you face when reading it
+  const mx = (x, z) => S / 2 + ((x - me.cx) * p0.U[0] + (z - me.cz) * p0.U[2]) * k, my = (x, z) => S / 2 + 12 + ((x - me.cx) * p0.n[0] + (z - me.cz) * p0.n[2]) * k;
+  const tex = c.kit.tex.custom('plan' + me.id, S, S + 24, (g) => {
+    P(g, '#f3efe2', 0, 0, S, S + 24); P(g, '#b5483f', 0, 0, S, 12);
+    drawText(g, ['EVACUATION PLAN'], 0, 0, S, 12, { color: '#fff7e6', size: 9 });
+    const box = (r, fill) => { const xs = [mx(r.x, r.z), mx(r.x + r.w, r.z + r.d)], ys = [my(r.x, r.z), my(r.x + r.w, r.z + r.d)]; const x = Math.min(...xs), y = Math.min(...ys), bw = Math.abs(xs[1] - xs[0]), bh = Math.abs(ys[1] - ys[0]); P(g, '#4a4436', x, y, bw, bh); P(g, fill, x + 1, y + 1, bw - 2, bh - 2); };
+    for (const r of lv.rooms) box(r, r.kind === 'exit' ? '#7fd08f' : r.id === me.id ? '#f6d9a8' : r.kind === 'special' ? '#dcd6c4' : '#ffffff');
+    for (const l of lv.links) { const a = l.axis === 'x' ? [l.at, l.from, l.at, l.to] : [l.from, l.at, l.to, l.at]; const x0 = mx(a[0], a[1]), y0 = my(a[0], a[1]), x1 = mx(a[2], a[3]), y1 = my(a[2], a[3]); P(g, '#ffffff', Math.min(x0, x1) - 1, Math.min(y0, y1) - 1, Math.abs(x1 - x0) + 2, Math.abs(y1 - y0) + 2); }
+    const ex = lv.rooms[lv.exit.room];
+    g.fillStyle = '#1f7a3e'; g.font = '700 7px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.fillText('EXIT', mx(ex.cx, ex.cz), my(ex.cx, ex.cz) + 3);
+    g.fillStyle = '#d8281c'; g.beginPath(); g.arc(mx(me.cx, me.cz), my(me.cx, me.cz), 3, 0, 7); g.fill();
+    drawText(g, ['● YOU ARE HERE (PROBABLY)'], 0, S + 12, S, 12, { color: '#3a3428', size: 7 });
+    scribble?.(g, mx, my);                                  // whatever somebody has added to it since, in pen
+  }, { clamp: true });
+  framed(c, c.mapped('plan' + me.id, tex), w.side, w.at, 1.25, 0.84, 0.84 * (S + 24) / S, null, [0.55, 0.55, 0.5]);
+}
+
