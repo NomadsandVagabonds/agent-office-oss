@@ -14,6 +14,11 @@
 //              with one more for every stamp in the passport — so every
 //              secret in the building is worth finding — and the vending
 //              machine in the kitchen takes them.
+//   pay        One place pays for what is carried out of it, every time
+//              somebody gets out: a coin for each spare battery they still
+//              had. That is the only coin there is no end of, so a visit
+//              pays a fixed most, and nothing at all to anybody who did not
+//              leave by the way out.
 //
 // Adding a floor to the game is two words on its line in core/levels.mjs
 // (`card: true, coins: 3`) and, in its module, somewhere to hide them.
@@ -25,7 +30,7 @@ export const STAMP_COINS = 1;
 /** Everywhere that hides a keycard and coins: the card floors of the lift, and the place behind the wall. */
 export const HIDEOUTS = Object.freeze([
   ...LEVELS.filter((l) => l.card).map((l) => Object.freeze({ id: l.id, name: l.name, coins: l.coins || 0, lift: true })),
-  Object.freeze({ id: 'backrooms', name: 'the Backrooms', coins: 4, lift: false }),
+  Object.freeze({ id: 'backrooms', name: 'the Backrooms', coins: 4, lift: false, pays: true }),
 ]);
 const BY_ID = new Map(HIDEOUTS.map((h) => [h.id, h]));
 export const hideoutById = (id) => BY_ID.get(id) || null;
@@ -58,9 +63,18 @@ export function openFloors(order, cards) {
   return order.slice(0, Math.min(order.length, 1 + Math.max(0, Math.floor(cards) || 0)));
 }
 
-/** What is in the jar: coins picked up, a coin a stamp, less what has been spent. Never less than nothing. */
-export function jarOf({ coins = 0, stamps = 0, spent = 0 } = {}) {
-  return Math.max(0, coins + stamps * STAMP_COINS - spent);
+/** What one spare battery is worth when it is carried out, and the most one visit can pay, in coins. */
+export const BATTERY_COINS = 1, VISIT_PAYS_MOST = 12;
+
+/** What a visit pays for what was carried out of it: { batteries } → whole coins. Never more than a visit can pay. */
+export function payFor({ batteries = 0 } = {}) {
+  const n = Math.floor(Number(batteries));
+  return Number.isFinite(n) && n > 0 ? Math.min(VISIT_PAYS_MOST, n * BATTERY_COINS) : 0;
+}
+
+/** What is in the jar: coins picked up, what visits have paid, a coin a stamp, less what has been spent. Never less than nothing. */
+export function jarOf({ coins = 0, stamps = 0, earned = 0, spent = 0 } = {}) {
+  return Math.max(0, coins + earned + stamps * STAMP_COINS - spent);
 }
 
 /* ---- what the machine in the kitchen sells -------------------------------------------- */

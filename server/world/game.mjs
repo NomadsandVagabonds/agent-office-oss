@@ -5,10 +5,12 @@
 // office. The jar is the office's: whoever finds a coin, it goes in the same
 // jar, and what is bought stands where everybody can see it.
 import crypto from 'node:crypto';
-import { HIDEOUTS, PRIZES, STAMP_COINS, dealOrder, findPrize, hideoutById, jarOf, openFloors } from '../../core/game.mjs';
+import { HIDEOUTS, PRIZES, STAMP_COINS, dealOrder, findPrize, hideoutById, jarOf, openFloors, payFor } from '../../core/game.mjs';
 import { levelById } from '../../core/levels.mjs';
 
 const fail = (status, error) => ({ error, status });
+// A visit that pays takes minutes. Two payments this close together are one visit told twice, or not a visit at all.
+const PAY_APART_MS = 45_000, PAID_KEPT = 30;
 
 /**
  * @param {object} ctx
@@ -23,6 +25,9 @@ export function createGame(ctx, state, hooks) {
   g.prizes = g.prizes && typeof g.prizes === 'object' ? g.prizes : {};
   g.visited = Array.isArray(g.visited) ? g.visited : [];
   g.spent = Number.isFinite(g.spent) && g.spent > 0 ? Math.floor(g.spent) : 0;
+  // what visits have paid into the jar (core/game.mjs: `pay`), and the last few of them
+  g.earned = Number.isFinite(g.earned) && g.earned > 0 ? Math.floor(g.earned) : 0;
+  g.paid = Array.isArray(g.paid) ? g.paid.slice(-PAID_KEPT) : [];
   // Which floor is open to begin with, and which each card opens, is drawn once per office — and re-read every start,
   // so a floor added since joins the end of the queue and one that is gone leaves it.
   const before = JSON.stringify(g.order || []);
@@ -34,7 +39,7 @@ export function createGame(ctx, state, hooks) {
   const stamps = () => Object.keys(state.discoveries || {}).length;
   const purse = () => {
     const coins = coinCount(), s = stamps();
-    return { have: jarOf({ coins, stamps: s, spent: g.spent }), found: coins, stamps: s * STAMP_COINS, spent: g.spent };
+    return { have: jarOf({ coins, stamps: s, earned: g.earned, spent: g.spent }), found: coins, earned: g.earned, stamps: s * STAMP_COINS, spent: g.spent };
   };
   const open = () => openFloors(g.order, cardCount());
   const nameOf = (by, extra) => (by ? by.name : String(extra?.name || 'Lead').slice(0, 60));
@@ -91,6 +96,30 @@ export function createGame(ctx, state, hooks) {
     return fail(400, 'item is "card" or "coin"');
   }
 
+  /**
+   * Somebody got out of a place that pays for what is carried out of it. `carried`: { batteries }.
+   * Nothing carried is not an error: the answer says `paid: 0`. Every answer carries the whole view as well.
+   */
+  function earn(hideoutId, carried, by, extra = {}) {
+    const hideout = hideoutById(String(hideoutId || ''));
+    if (!hideout) return fail(404, 'nothing is hidden in a place called that');
+    if (!hideout.pays) return fail(400, `nothing carried out of ${hideout.name} is paid for`);
+    const raw = carried?.batteries, batteries = Math.floor(raw);
+    if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) return fail(400, 'batteries is how many were carried out: a number, none or more');
+    const coins = payFor({ batteries });
+    if (!coins) return { ok: true, ...view(), paid: 0 };
+    const at = Date.now(), last = g.paid[g.paid.length - 1];
+    if (last && at - last.at < PAY_APART_MS) return fail(429, 'the jar was paid for a visit a moment ago: a visit that pays takes longer than that');
+    const who = nameOf(by, extra);
+    g.earned += coins;
+    g.paid.push({ at, by: who, hideout: hideout.id, batteries, coins });
+    if (g.paid.length > PAID_KEPT) g.paid.splice(0, g.paid.length - PAID_KEPT);
+    hooks.save();
+    ctx.activity?.log('loot', `${who} got out of ${hideout.name} with ${batteries} spare batter${batteries === 1 ? 'y' : 'ies'}: ${coins} coin${coins === 1 ? '' : 's'} for the jar`, { hideout: hideout.id, item: 'pay', batteries, coins, agentId: by?.id || null });
+    hooks.changed();
+    return { ok: true, ...view(), paid: coins, batteries };
+  }
+
   /** The panel showed a newly lit floor and somebody rode there: it is not news any more. */
   function visit(floorId) {
     const id = String(floorId || '');
@@ -137,11 +166,11 @@ export function createGame(ctx, state, hooks) {
       lines.push(`  ${h.name}: keycard ${l.card ? `found by ${g.cards[h.id].by}` : 'still hidden'} · ${l.coins.length} of ${n(h.coins, 'coin')} found`);
     }
     if (been.length < HIDEOUTS.length) lines.push(`  …and ${n(HIDEOUTS.length - been.length, 'place')} nobody has found anything in yet.`);
-    lines.push(`The jar: ${n(jar.have, 'coin')} (${jar.found} picked up, ${jar.stamps} from passport stamps — every stamp anyone earns pays ${STAMP_COINS} — ${jar.spent} spent).`);
+    lines.push(`The jar: ${n(jar.have, 'coin')} (${jar.found} picked up, ${jar.earned ? `${jar.earned} paid for what was carried out of ${HIDEOUTS.filter((h) => h.pays).map((h) => h.name).join(' and ')}, ` : ''}${jar.stamps} from passport stamps — every stamp anyone earns pays ${STAMP_COINS} — ${jar.spent} spent).`);
     lines.push('The vending machine in the kitchen:');
     for (const p of shelf().prizes) lines.push(`  ${p.slot}  ${p.name} — ${p.sold ? `bought by ${p.by}; it is on top of the machine` : n(p.price, 'coin')}`);
     return lines.join('\n');
   }
 
-  return { view, collect, visit, buy, shelf, purse, describe };
+  return { view, collect, earn, visit, buy, shelf, purse, describe };
 }
