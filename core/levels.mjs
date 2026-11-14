@@ -43,7 +43,7 @@ export const LEVELS = Object.freeze([
   { id: 'pasture', floor: 'P', storey: -1, kind: 'place', name: 'The Pasture', car: [-1, -10],
     blurb: 'Lower ground, where the car park would be. Mind the goats.' },
   { id: 'afterhours', floor: 'A', storey: -2, kind: 'game', name: 'After Hours', car: [0, -10],
-    blurb: 'The office at night with the build broken, and the bugs out of their cabinet. Take the mallet.' },
+    blurb: 'Containment after closing time. Grab a crowbar, dodge the headcrabs, and restore server power.' },
   { id: 'thirteen', floor: '13', storey: 13, kind: 'place', name: 'Floor Thirteen',
     blurb: 'Not on the plans. The button was not there yesterday.', unmarked: true,
     hidden: ({ quirks = [], found = [] } = {}) => !(quirks.includes('friday-13') || found.includes('noclip')) },

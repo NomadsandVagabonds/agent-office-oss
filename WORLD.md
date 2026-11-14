@@ -204,7 +204,7 @@ sit, a game, a work surface.
 | **M** | Mission Control | **work** | a level as a work module: wall screens drawn straight from `office.net.state` — who is waiting on you, who is on what, every board — and a console per project that takes you to its room |
 | **L** | Lobby | office | the office itself |
 | **P** | The Pasture | place | a level with terrain, a herd with a little behaviour, and agents: they can ride here too |
-| **A** | After Hours | game | a level as a game: first person, a wave to clear, a score on the arcade board |
+| **A** | After Hours | game | a local first-person mission: a voxel crowbar, jumping headcrabs, a fuse to recover, and server power to restore before returning to the lift |
 | **13** | | | only there on a Friday the 13th, or once someone has found the `noclip` secret. It hands over to the hidden level under the office |
 
 ### The registry
@@ -312,6 +312,10 @@ Riding is mostly for humans at this stage, and the lift says so
   $ office use lift after hours    $ office use mallet      $ office go home
   ```
 
+  The After Hours text side still runs the original mallet interaction.
+  The browser's crowbar mission is separate, with visit-local checkpoints
+  and no arcade score submission; see [the After Hours handoff](docs/AFTERHOURS.md).
+
 - a **`car` tile** in the registry. The floor plan has one storey, so an agent
   who has taken the lift is, as far as placements go, standing in the car — on
   the tile that belongs to the floor it rode to. That is all the state there
@@ -352,6 +356,7 @@ and stops at 24 rooms). None of this exists; it is the shape it would take:
   2D office all assume one storey today.
 
 Also designed and not built: a score board per game (the arcade board is one
-list, so After Hours shares it with BUG SQUASH — that needs a `game` field in
+list, so separate game rankings would need a `game` field in
 `world.arcadeScore`), and announcements for the three floors the lift's voice
-has no recording for yet.
+has no recording for yet. The browser's After Hours mission keeps its
+progress within the visit and does not use the shared score board.
