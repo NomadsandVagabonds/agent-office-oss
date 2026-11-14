@@ -3,7 +3,8 @@
 An optional room candidate on `codex/backrooms-expansion-lab`. Fable owns its
 integration and frequency. This is an invented, wordless scene with two unnamed
 figures and unbranded graphics cards; there are no character labels, dialogue,
-flags, shipping claims, quest prompts or combat.
+flags, claims about real shipments, quest prompts or combat. Aged handling
+marks and invented freight labels are part of the crate surfaces.
 
 The room is a tall warehouse that retains office wallpaper, carpet, fluorescent
 ceiling tiles and a familiar packing desk. Wooden pallet crates form a seeded
@@ -12,11 +13,20 @@ an open crate. Arrival briefly startles them. They watch and slowly approach,
 then lose interest and resume work even if the player stays. They never attack,
 block movement, leave their room or change the player's rewards.
 
+The crates use shared, seeded texture atlases for aged timber and handling
+marks: damp end grain, split fibres, replacement boards, old barcode labels,
+overprinted lot stamps, Chinese handling marks and occasional marker graffiti.
+Ink follows individual boards and is interrupted by their seams and braces.
+The passage crate has the same wood wear but no marks that advertise its exit.
+This adds two batched surfaces per room, with no per-label meshes or colliders.
+
 The figures retain the supplied reference outfits: black leather jacket, dark
 tee, swept silver hair and glasses; red botanical dress, long side-parted brown
-hair and earrings. Their original voxel faces have displaced eye sockets,
-offset cheeks and layered mouth/jaw shapes. Long limbs and stiff posing make
-the silhouettes uneasy. Both are unnamed, with no photographic textures.
+hair and earrings. Their heads and layered hair derive from the main Office
+avatar builder, with distinct face silhouettes and warm skin palettes. The
+roughly 1.85 m figures have long limbs, fixed tiny pupils, unequal recessed
+sockets and displaced closed mouths. Their stiff posing makes those familiar
+forms uneasy. Both are unnamed, with no photographic textures.
 
 A large wooden crate near the far wall is closed on its front and sides. Only
 walking behind it reveals the opening. Walk into its interior to emerge in a
@@ -28,13 +38,13 @@ the original entrance also remains possible.
 From the repository root:
 
 ```sh
-node tools/backrooms-offline/preview.mjs --port 44323
+node tools/backrooms-offline/preview.mjs --port 44324
 ```
 
 Open:
 
 ```text
-http://127.0.0.1:44323/world/dev/backrooms.html?seed=713&room=freight&only=freight&pursuer=0&mute=1&vhs=2&loot=1
+http://127.0.0.1:44324/world/dev/backrooms.html?seed=713&room=freight&only=freight&pursuer=0&mute=1&vhs=2&loot=1
 ```
 
 Use `vhs=0` to inspect geometry. Other useful seeds: 22 (smallest footprint),
@@ -47,6 +57,7 @@ reports the current behavior and actor positions. This adds no production HUD.
 
 - `freight-layout.js`: pure maze, crate, workstation and coin-clearance layout.
 - `rooms5.js`: room construction and concealed walk-in passage.
+- `freight-crates.js`: seeded weathered timber and handling-mark atlases.
 - `freight-figures.js`: original articulated voxel figures and GPU models.
 - `freight-behavior.js`: pure attention/choreography state and local navigation.
 - `freight-duo.js`: posing, movement and room lifecycle integration.
@@ -78,8 +89,10 @@ node --test test/backrooms.test.mjs test/freight-behavior.test.mjs test/freight-
 npm test
 ```
 
-All 26 focused Backrooms, freight and voxel tests pass. The final figure pass
-was also inspected in clean and full VHS views with no browser errors/warnings.
+All 26 focused Backrooms, freight and voxel tests pass. The latest figure and
+crate pass was inspected in clean and full VHS views, including carrying and
+embracing. A 110-second simulation completed all eight behavior phases with no
+actor/crate overlaps, browser errors or room-reachability warnings.
 
 Layout checks cover 108 size/seed combinations, including both worker standing
 positions, coin floor, portal interior and the back-only opening. Independent
@@ -89,7 +102,7 @@ repeat crate use, frozen/re-entry state and 120 seconds of character behavior.
 Those builds produced no console errors or room-reachability warnings, and the
 actors completed every phase without crossing crate colliders.
 
-The full repository suite currently reports 232/237 passing (five failed test
+The last full repository suite run reported 232/237 passing (five failed test
 records, including parent suites). Failures are outside Backrooms: a macOS
 `/var` versus `/private/var` path assertion in `console.test.mjs`, the existing
 mail ordering assertion in `harness-wake.test.mjs`, and the status-line reading

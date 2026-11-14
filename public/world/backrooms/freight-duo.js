@@ -13,7 +13,7 @@ export function installFreightDuo(c, { home, loading, pickup, bounds }) {
     rig.group.position.set(home.x + side * 0.32, 0, home.z);
     rig.group.rotation.y = -side * Math.PI / 2;
     c.add(rig.group);
-    return { rig, side, path: [], repath: 0, gait: i * 0.5, moving: false, arrived: true, gpuY: rig.heldGPU.position.y };
+    return { rig, side, path: [], repath: 0, gait: i * 0.5, moving: false, arrived: true, gpuY: rig.heldGPU.position.y, gpuZ: rig.heldGPU.position.z };
   });
   let nav = null;
   const free = (x, z) => {
@@ -84,7 +84,7 @@ export function installFreightDuo(c, { home, loading, pickup, bounds }) {
       const stride = f.moving ? Math.sin(f.gait) * 0.23 : 0;
       const loadingBend = state.phase === 'load' && close ? Math.sin(clamp(state.phaseTime / 4, 0, 1) * Math.PI) : 0;
       rig.heldGPU.position.y = f.gpuY - loadingBend * 0.18;
-      rig.heldGPU.position.z = 0.56 + loadingBend * 0.14;
+      rig.heldGPU.position.z = f.gpuZ + loadingBend * 0.14;
       rig.torso.rotation.x = loadingBend * 0.12;
       const arm = hugging ? -1.3 : carrying ? -1.16 : state.afraid > 0.3 ? -0.35 : -loadingBend * 1.1;
       const ease = 1 - Math.exp(-dt * 5);

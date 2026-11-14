@@ -1,14 +1,18 @@
-// Fictional workers for the freight room: office clothes, adult proportions,
+// Fictional workers for the freight room: the Office's sculpted proportions,
 // and faces assembled one voxel out of register. No names, badges or logos.
 // The caller owns movement and posing. Everything allocated here belongs to
 // the room's kit, including the independently articulated parts.
 import * as THREE from 'three';
 import { Vox, M, tone } from '../vox/vox.js';
 import { Batch, lamp } from './kit.js';
+import { buildCharacter, JOINT } from '../avatar/build.js';
 
 const S = 0.025;
-const SKIN = M('#aaa58e', 2), SHADE = M('#81816b', 2), LID = M('#686b59', 2);
-const INK = M('#242329', 0), EYE = M('#b8b49a', 0), SOLE = M('#24252a', 0);
+const COMPLEXION = {
+  jacket: { hex: '#b78054', skin: M('#b78054', 1), shade: M('#95663f', 1), lid: M('#795638', 1) },
+  broker: { hex: '#c58f70', skin: M('#c58f70', 1), shade: M('#aa7357', 1), lid: M('#8e604c', 1) },
+};
+const INK = M('#242329', 0), EYE = M('#d8c6aa', 0), SOLE = M('#24252a', 0);
 const LEATHER = M('#242629', 1), EDGE = M('#373a3b', 1), METAL = M('#757b79', 0);
 const RED = M('#97382f', 2), RED_DARK = M('#72282a', 2), GOLD = M('#b69b6e', 2), CREAM = M('#c7b58b', 2);
 
@@ -46,6 +50,7 @@ export function addGPU(c, x, y, z, { rot = 0, scale = 1 } = {}) {
 // visibly assembled from blocks. Limbs retain the coarser, slightly stiff cut.
 function jacketTorso() {
   const v = new Vox(), tee = M('#17191b', 3), stitch = M('#454847', 1);
+  const { skin: SKIN } = COMPLEXION.jacket;
   v.rbox(-16, 0, -8, 16, 44, 8, 2, LEATHER, 'xz');
   v.box(-14, 0, -8, 14, 4, 8, M('#202224', 2));
   v.box(-9, 4, 7, 9, 43, 9, tee);
@@ -107,6 +112,7 @@ function floral(x, y, z = 8) {
 
 function brokerTorso() {
   const v = new Vox();
+  const { skin: SKIN } = COMPLEXION.broker;
   // The dress is one garment: fitted waist, gentle skirt flare, knee-length
   // hem. It belongs to the torso rather than swinging independently as pants.
   for (let y = -30; y < 44; y++) {
@@ -123,6 +129,7 @@ function brokerTorso() {
 /** One hanging arm, relative to its shoulder; short sleeves on the dress. */
 function armVox(kind, side) {
   const v = new Vox();
+  const { skin: SKIN, shade: SHADE } = COMPLEXION[kind];
   if (kind === 'jacket') {
     v.rbox(-3, -19, -3, 3, 1, 3, 1, LEATHER, 'xz');
     v.rbox(-2, -23, -2, 2, -18, 2, 1, EDGE);
@@ -146,6 +153,7 @@ function armVox(kind, side) {
 /** Hip at zero, sole at -40: long legs, with bare calves below the dress. */
 function legVox(kind, side) {
   const v = new Vox();
+  const { skin: SKIN, shade: SHADE } = COMPLEXION[kind];
   if (kind === 'jacket') {
     const cloth = M('#36393b', 3);
     v.rbox(-3, -35, -3, 3, 2, 3, 1, cloth, 'xz');
@@ -165,97 +173,113 @@ function legVox(kind, side) {
 }
 
 function headVox(kind) {
-  const v = new Vox(), male = kind === 'jacket';
-  const hair = M(male ? '#adb1b0' : '#3c302a', 2);
-  const fold = M('#53574a', 2), hollow = M('#292e27', 1), lip = M('#888775', 2);
-  // A human head with several parts of its face copied in the wrong place.
-  // The distortion is in the volume: displaced cheek, sunken sockets and
-  // stacked, closed mouth/jaw ridges. No grin, teeth, wounds or cartoon eyes.
-  v.ellipsoid(0, 12, 0, male ? 10 : 9, 12, 8, SKIN);
-  v.rbox(-7, 3, 3, 7, 20, 8, 2, SKIN);
-  v.rbox(-7, 1, 1, 10, 7, 8, 2, SHADE);
-  v.rbox(-5, -2, 2, 11, 3, 9, 1, SKIN);                  // lower jaw slipped right and down
-  v.box(-11, 8, -1, -9, 14, 3, SKIN); v.box(9, 8, -1, 11, 14, 3, SKIN);
-  v.rbox(4, 5, 5, 11, 12, 10, 2, SKIN);                // one stretched, heavy cheek
-  v.rbox(-10, 7, 4, -6, 13, 8, 1, SHADE);
-  // Two recessed eye sockets. The second one sits conspicuously too low;
-  // each pupil remains a small dark mark inside a narrow, dull eye slit.
-  for (const [x, y, drop] of [[-5, 15, 0], [5, 12, 1]]) {
-    v.carve(x - 4, y - 3, 6, x + 4, y + 3, 11);
-    v.rbox(x - 4, y - 3, 6, x + 4, y + 3, 8, 1, LID, 'xy');
-    v.rbox(x - 3, y - 2, 7, x + 3, y + 2, 8, 1, hollow, 'xy');
-    v.box(x - 2, y - drop, 7, x + 2, y + 1 - drop, 8, EYE);
-    v.box(x - 1, y - drop, 7, x, y + 1 - drop, 8, INK);
-    v.box(x - 4, y + 3, 7, x + 3, y + 4, 9, SHADE);
-    v.box(x - 3, y - 4, 7, x + 3, y - 3, 9, fold);
-  }
-  // The bridge begins between the eyes but its tip arrives off-center.
-  v.rbox(-1, 9, 7, 2, 18, 10, 1, SHADE);
-  v.rbox(0, 8, 8, 6, 12, 12, 1, SKIN);
-  v.box(2, 8, 11, 5, 9, 12, fold);
-  // Broad closed lip ridges, duplicated a little lower and farther right.
-  // The dark seams stay nearly straight, so this reads as collapsed anatomy
-  // rather than an enormous smile even at camcorder resolution.
-  v.rbox(-8, 5, 7, 9, 8, 11, 1, lip);
-  v.box(-7, 5, 10, 8, 6, 11, hollow);
-  v.rbox(-7, 2, 7, 11, 5, 12, 1, SKIN);
-  v.box(-5, 2, 11, 10, 3, 12, fold);
-  v.rbox(-4, -1, 5, 11, 2, 10, 1, lip);
-  v.box(-2, -1, 9, 9, 0, 10, SHADE);
-  v.box(8, 4, 9, 11, 6, 11, SHADE);                     // the dragged mouth corner
-  // Weathered creases and scattered dull patches, laid into the skin rather
-  // than a clean full-face decal. Keep the marks broader than a single pixel.
-  v.box(-6, 20, 7, 3, 21, 8, SHADE);
-  v.box(-4, 22, 6, 6, 23, 7, SHADE);
-  v.box(-9, 7, 7, -7, 10, 9, fold);
-  v.box(8, 6, 9, 10, 8, 10, LID);
-  v.box(-6, 8, 8, -4, 10, 9, SHADE);
-  v.box(6, 18, 6, 8, 20, 7, SHADE);
+  const male = kind === 'jacket', { hex, skin, shade, lid } = COMPLEXION[kind];
+  const hairHex = male ? '#858b90' : '#39271f', hair = M(hairHex, 2);
+  const look = { species: 'human', skin: hex, hair: male ? 'side' : 'long', hairColor: hairHex,
+    outfit: male ? 'cardigan' : 'tee', outfitColor: male ? '#242629' : '#97382f', accessory: 'none', facial: 'none' };
+  // Reuse the actual Office skull, rounded hair shell and stepped fringe.
+  // Only double the sculpting grid, so spectacles can have fine rims while
+  // the original broad 18 × 17 × 16 voxel skull remains unmistakable.
+  const source = buildCharacter(look, { seed: `freight-${kind}` }).head, v = new Vox();
+  source.each((x, y, z, color) => {
+    const yy = (y - JOINT.head[1]) * 2;
+    v.box(x * 2, yy, z * 2, x * 2 + 2, yy + 2, z * 2 + 2, color);
+  });
+  const fold = M(male ? '#815638' : '#8e5f4e', 1), hollow = M('#32271f', 1);
   if (male) {
-    // Uneven swept crown with a side part. No horizontal slab or flat top.
-    v.ellipsoid(-1, 22, -1, 10, 5, 8, hair);
-    v.ellipsoid(-4, 24, 0, 7, 4, 7, tone(hair, 0.08));
-    v.box(-10, 10, -5, -8, 23, 3, hair); v.box(8, 10, -5, 10, 22, 2, tone(hair, -0.15));
-    v.rbox(-8, 11, -9, 8, 23, -6, 2, tone(hair, -0.18));
-    for (let x = -9; x < 9; x++) {
-      const y = x < 3 ? 21 + Math.floor((x + 9) / 5) : 23 - Math.floor((x - 3) / 2);
-      v.box(x, y, 5, x + 1, y + 3, 8, x % 3 === 0 ? tone(hair, 0.2) : hair);
-    }
-    for (let k = 0; k < 5; k++) v.tube(3, 26 - k * 0.5, 3 - k, -8, 22 - k * 0.5, 5 - k, 0.45, tone(hair, 0.2));
-    v.tube(3, 22, 6, 5, 25, -2, 0.5, tone(hair, -0.32));   // the dark side-part seam
-    const frame = M('#303434', 0);
-    for (const [x0, x1, y] of [[-10, -1, 12], [1, 10, 9]]) {
-      v.box(x0, y, 9, x1, y + 1, 10, frame); v.box(x0, y + 6, 9, x1, y + 7, 10, frame);
-      v.box(x0, y, 9, x0 + 1, y + 7, 10, frame); v.box(x1 - 1, y, 9, x1, y + 7, 10, frame);
-    }
-    v.box(-1, 16, 9, 0, 17, 10, frame); v.box(0, 15, 9, 2, 16, 10, frame);
-    v.box(-11, 17, -1, -10, 18, 10, frame); v.box(10, 14, -1, 11, 15, 10, frame);
+    // Broad cheeks and forehead, a restrained nose and a small quiet mouth.
+    v.rbox(-15, 6, 10, 15, 16, 16, 3, skin);
+    v.rbox(-12, 1, 5, 13, 7, 14, 3, skin);
+    v.rbox(-2, 12, 15, 3, 20, 19, 1, shade);
+    v.rbox(-3, 10, 16, 4, 13, 20, 1, skin);
   } else {
-    // Long dark-brown hair, side parted and swept over one shoulder.
-    v.ellipsoid(0, 22, -1, 11, 6, 9, hair);
-    v.rbox(-10, -21, -9, 10, 22, -5, 2, hair, 'xz');
-    v.rbox(-12, -24, -6, -8, 22, 6, 2, hair, 'xz');
-    v.rbox(8, -15, -6, 11, 21, 4, 1, hair, 'xz');
-    v.rbox(-11, -34, 6, -5, 5, 11, 2, hair, 'xz');
-    v.rbox(-7, -27, 9, -3, -6, 13, 1, tone(hair, 0.08), 'xz');
-    for (let x = -10; x < 9; x++) {
-      const low = x < 3 ? 16 + Math.floor((x + 10) * 0.5) : 22 - Math.floor((x - 3) * 0.7);
-      v.box(x, low, 5, x + 1, 25, 8, hair);
+    // Softer cheek plane and a tapered chin; the long hair frames the taper.
+    v.carve(-18, 0, 8, -12, 7, 18); v.carve(12, 0, 8, 18, 7, 18);
+    v.rbox(-12, 5, 10, 12, 15, 16, 3, skin);
+    v.rbox(-7, 0, 6, 8, 5, 13, 2, skin);
+    v.rbox(-1, 11, 15, 2, 20, 18, 1, shade);
+    v.rbox(-2, 10, 16, 3, 12, 19, 1, skin);
+  }
+  // Fixed tiny pupils, without the Office avatar's friendly eye sparkle.
+  // Their unequal sockets are real recesses. The man's left eye projects
+  // slightly while its partner has dropped; her larger eye is the sunk one.
+  const eyes = male
+    ? [{ x: -10, y: 18, w: 8, h: 6, z: 19 }, { x: 9, y: 14, w: 6, h: 5, z: 14 }]
+    : [{ x: -10, y: 19, w: 7, h: 6, z: 16 }, { x: 9, y: 16, w: 8, h: 7, z: 13 }];
+  for (const e of eyes) {
+    const { x, y, w, h, z } = e, x0 = x - Math.floor(w / 2), y0 = y - Math.floor(h / 2);
+    v.carve(x0 - 2, y0 - 2, 10, x0 + w + 2, y0 + h + 2, 22);
+    v.rbox(x0 - 2, y0 - 2, 10, x0 + w + 2, y0 + h + 2, 14, 2, lid, 'xy');
+    v.rbox(x0 - 1, y0 - 1, 12, x0 + w + 1, y0 + h + 1, 15, 1, hollow, 'xy');
+    v.rbox(x0, y0, 12, x0 + w, y0 + h, z + 1, 2, EYE);
+    v.box(x, y - 1, z, x + 1, y + 1, z + 1, INK);
+    // Heavy, unequal lower lids read at room scale through the tape effect.
+    v.box(x0 - 1, y0 - 2, 14, x0 + w, y0 - 1, 16, fold);
+    v.box(x0 - 1, y0 + h + 2, 14, x0 + w, y0 + h + 3, 16, male ? M('#696057', 1) : M('#5b3b2c', 1));
+  }
+  if (male) {
+    // One cheek has drawn down and dragged a CLOSED mouth with it. The
+    // short echo is confined to that corner, never bands across the jaw.
+    v.rbox(6, 3, 12, 14, 11, 19, 2, skin);
+    v.box(11, 5, 18, 13, 9, 19, shade);
+    for (let x = -7; x < 10; x++) {
+      const y = 8 - Math.floor((x + 7) / 6);
+      v.box(x, y - 1, 15, x + 1, y + 2, 19, shade);
+      v.set(x, y, 19, hollow);
+      v.set(x, y - 1, 19, skin);
     }
-    for (let k = 0; k < 4; k++) {
-      v.tube(2, 25 - k, 7, -10, 18 - k * 2, 7, 0.45, tone(hair, 0.2));
-      v.tube(-10 + k, 7, 10, -9 + k, -31 + k * 2, 11, 0.45, tone(hair, 0.18));
+    v.rbox(3, 2, 15, 11, 5, 19, 1, skin);
+    v.box(4, 3, 18, 10, 4, 19, fold);
+    v.box(-12, 10, 15, -10, 12, 16, shade);
+    v.decal('+z', -9, 27, 7, 28, tone(skin, -0.09));
+    // A fuller silver side-sweep, built as overlapping rounded voxel masses
+    // on the existing hair shell instead of a flat cap.
+    v.rbox(-19, 30, -15, 17, 38, 10, 5, hair);
+    v.rbox(-16, 35, -11, 10, 41, 8, 4, tone(hair, 0.12));
+    v.rbox(-20, 25, -7, -13, 34, 10, 3, tone(hair, -0.1));
+    for (let k = 0; k < 5; k++) {
+      v.tube(7, 37 - k, 7 - k * 2, -16, 30 - k, 12 - k * 2, 0.65, tone(hair, k % 2 ? 0.18 : -0.1));
     }
-    v.tube(3, 23, 6, 3, 27, -2, 0.5, tone(hair, -0.3));
-    const earring = M('#b8a78b', 0);
-    v.box(10, 7, 2, 11, 11, 3, earring); v.box(10, 5, 2, 12, 7, 4, earring);
-    v.box(-11, 7, 3, -10, 10, 4, earring);
+    v.tube(7, 30, 13, 8, 37, -6, 0.6, tone(hair, -0.28));
+    const frame = M('#282a29', 0);
+    for (const [x0, x1, y, z] of [[-15, -4, 14, 20], [3, 14, 10, 17]]) {
+      v.box(x0, y, z, x1, y + 1, z + 1, frame); v.box(x0, y + 8, z, x1, y + 9, z + 1, frame);
+      v.box(x0, y, z, x0 + 1, y + 9, z + 1, frame); v.box(x1 - 1, y, z, x1, y + 9, z + 1, frame);
+    }
+    v.tube(-4, 19, 20, 3, 16, 17, 0.45, frame);
+    v.box(-19, 20, 0, -18, 21, 20, frame); v.box(18, 16, 0, 19, 17, 17, frame);
+    v.box(-19, 20, 19, -15, 21, 21, frame); v.box(14, 16, 16, 19, 17, 18, frame);
+  } else {
+    const lip = M('#9d6256', 1);
+    // A partial second mouth is printed too far right and slightly forward.
+    // It interrupts the cheek instead of turning the whole chin into stripes.
+    v.rbox(-6, 7, 14, 5, 10, 18, 1, lip);
+    v.box(-5, 8, 17, 5, 9, 18, hollow);
+    v.rbox(3, 5, 13, 14, 12, 19, 2, skin);
+    v.rbox(2, 3, 16, 12, 7, 21, 1, shade);
+    v.box(3, 5, 20, 12, 6, 21, hollow);
+    v.box(4, 3, 20, 11, 5, 21, lip);
+    v.box(12, 7, 18, 14, 11, 19, fold);
+    // Long, layered brown hair across one shoulder; broad stepped strands
+    // keep the Office's silhouette while the sweep distinguishes this head.
+    v.rbox(-22, -19, 5, -15, 22, 15, 3, hair, 'xz');
+    v.rbox(-18, -25, 11, -10, 7, 19, 3, tone(hair, 0.08), 'xz');
+    v.rbox(-13, -20, 14, -7, -1, 20, 2, hair, 'xz');
+    v.rbox(-18, 30, -14, 16, 38, 11, 5, hair);
+    v.rbox(-14, 35, -10, 7, 39, 10, 4, tone(hair, 0.09));
+    for (let k = 0; k < 5; k++) {
+      v.tube(5, 35 - k, 13, -19, 24 - k, 14, 0.6, tone(hair, 0.2));
+      v.tube(-19 + k, 12, 15, -17 + k, -20 + k * 2, 17, 0.6, tone(hair, 0.16));
+    }
+    v.tube(6, 29, 14, 7, 37, -5, 0.6, tone(hair, -0.28));
+    const earring = M('#c2a36d', 0);
+    v.box(19, 8, 4, 20, 13, 6, earring); v.rbox(18, 5, 4, 21, 9, 7, 1, earring);
   }
   return v;
 }
 
 /**
- * Adult-sized articulated figure. Feet are the group origin; forward is +z.
+ * An elongated Office figure. Feet are the group origin; forward is +z.
  * Arms hang from their shoulders, so negative rotation.x lifts them forward.
  * Suggested carrying pose: both arms x=-1.16, heldGPU.visible=true.
  * Returns unattached Groups; the caller adds group to c and owns all behavior.
@@ -267,8 +291,9 @@ export function makeFreightFigure(c, kind = 'jacket') {
   const part = (key, make, at, voxelSize = S) => {
     const group = new THREE.Group(), b = new Batch(true);
     group.name = `freight-${kind}-${key}`;
-    const modelMatrix = new THREE.Matrix4().makeScale(voxelSize, voxelSize, voxelSize);
-    b.addVox(kit.model(`freight:${kind}:${key}:v3`, make).solid, modelMatrix);
+    const scale = Array.isArray(voxelSize) ? voxelSize : [voxelSize, voxelSize, voxelSize];
+    const modelMatrix = new THREE.Matrix4().makeScale(...scale);
+    b.addVox(kit.model(`freight:${kind}:${key}:v5`, make).solid, modelMatrix);
     // Bake the little local rig relative to this joint, so shoes do not
     // receive the head's lighting merely because both models start at zero.
     const jointLights = lights.map((l) => ({ ...l, x: l.x - at[0], y: l.y - at[1], z: l.z - at[2] }));
@@ -277,15 +302,17 @@ export function makeFreightFigure(c, kind = 'jacket') {
     return group;
   };
   const group = new THREE.Group(); group.name = `freight-${kind}`;
-  const hip = 40 * S, shoulder = (kind === 'jacket' ? 62 : 61) * S;
-  const torso = part('torso', kind === 'jacket' ? jacketTorso : brokerTorso, [0, hip, 0], S / 2);
-  const head = part('head', () => headVox(kind), [0, 66 * S, 0], S / 2);
-  head.scale.set(1.16, 1.12, 1.13);                       // faces must survive the distant VHS view
-  const leftArm = part('left-arm', () => armVox(kind, -1), [-10 * S, shoulder, 0]);
-  const rightArm = part('right-arm', () => armVox(kind, 1), [10 * S, shoulder, 0]);
-  const leftLeg = part('left-leg', () => legVox(kind, -1), [-4 * S, hip, 0]);
-  const rightLeg = part('right-leg', () => legVox(kind, 1), [4 * S, hip, 0]);
-  const heldGPU = part('held-gpu', gpuVox, [0, shoulder - 0.35, 0.56]);
+  const hip = 0.78, shoulder = kind === 'jacket' ? 1.24 : 1.225;
+  // About four heads tall: the Office's large sculpted head remains intact,
+  // while joint spacing and a long neck give its familiar body a wrongness.
+  const torso = part('torso', kind === 'jacket' ? jacketTorso : brokerTorso, [0, hip, 0], [S / 2, S * 0.425, S / 2]);
+  const head = part('head', () => headVox(kind), [0, 1.35, 0], S / 2);
+  const armScale = [S * 0.85, S * 0.82, S * 0.9], legScale = [S * 0.9, S * 0.78, S];
+  const leftArm = part('left-arm', () => armVox(kind, -1), [JOINT.shoulderL[0] * S, shoulder, 0], armScale);
+  const rightArm = part('right-arm', () => armVox(kind, 1), [JOINT.shoulderR[0] * S, shoulder, 0], armScale);
+  const leftLeg = part('left-leg', () => legVox(kind, -1), [JOINT.hipL[0] * S, hip, 0], legScale);
+  const rightLeg = part('right-leg', () => legVox(kind, 1), [JOINT.hipR[0] * S, hip, 0], legScale);
+  const heldGPU = part('held-gpu', gpuVox, [0, shoulder - 0.25, 0.50]);
   heldGPU.visible = false;
   group.add(torso, head, leftArm, rightArm, leftLeg, rightLeg, heldGPU);
   // A small contact patch follows the feet; it has no collider or behavior.
@@ -293,7 +320,7 @@ export function makeFreightFigure(c, kind = 'jacket') {
   shadow.rotation.x = -Math.PI / 2; shadow.scale.y = 0.72; shadow.position.y = 0.008;
   group.add(shadow);
   const light = (rgb) => mat.uniforms.uTint.value.set(rgb[0], rgb[1], rgb[2]);
-  const updateLight = () => light(c.sample(group.position.x, group.position.y + 1.2, group.position.z));
+  const updateLight = () => light(c.sample(group.position.x, group.position.y + 1.25, group.position.z));
   c.after.push(updateLight);
   return { group, torso, head, leftArm, rightArm, leftLeg, rightLeg, heldGPU, light, updateLight };
 }

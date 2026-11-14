@@ -4,6 +4,7 @@ import { lin } from './kit.js';
 import { freightLayout } from './freight-layout.js';
 import { installFreightDuo } from './freight-duo.js';
 import { addGPU } from './freight-figures.js';
+import { createFreightWear } from './freight-crates.js';
 
 const tint = (rgb, k) => rgb.map((v) => v * k);
 
@@ -18,7 +19,7 @@ function pallet(c, x, z, w, d, wood) {
 /** The same construction makes ordinary freight, an open packing box, and
  * the hollow crate whose opening is ONLY on the back (-z) face. */
 function crate(c, spec, opt = {}) {
-  const { x, z, w, d, h } = spec, wood = lin(c.params.wood || '#947047'), dark = tint(wood, 0.44), edge = tint(wood, 1.12);
+  const { x, z, w, d, h } = spec, wood = opt.wear?.wood(spec) || lin(c.params.wood || '#947047'), dark = tint(wood, 0.44), edge = tint(wood, 1.12);
   const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2, thick = opt.portal ? spec.thickness : 0.1;
   const box = (...a) => c.flat.box(...a), base = opt.portal ? 0.06 : 0.155;
   if (!opt.portal) pallet(c, x, z, w + 0.02, d + 0.02, wood);
@@ -32,15 +33,17 @@ function crate(c, spec, opt = {}) {
       box(x0, lo, zz, x1, hi, zz + thick, dark);
       for (let i = 0; i < n; i++) { const xx = x0 + i * w / n; box(xx + 0.012, lo + 0.025, zz - (side < 0 ? 0.012 : 0), xx + w / n - 0.012, hi - 0.025, zz + thick + (side > 0 ? 0.012 : 0), tint(wood, 0.88 + ((i + (spec.tone || 0)) % 4) * 0.07)); }
       for (const yy of [lo + 0.08, hi - 0.17]) box(x0 - 0.025, yy, zz - 0.035, x1 + 0.025, yy + 0.12, zz + thick + 0.035, edge);
-      // Nail heads; no labels, stamps or explanatory text.
+      // Real nail heads remain above the rubbed ink and weathered boards.
       for (const xx of [x0 + 0.16, x1 - 0.16]) for (const yy of [lo + 0.14, hi - 0.11]) box(xx - 0.013, yy - 0.013, zz - 0.04, xx + 0.013, yy + 0.013, zz + thick + 0.04, [0.07, 0.064, 0.052]);
+      opt.wear?.face(spec, side > 0 ? '+z' : '-z', lo, hi, n, opt);
     }
     for (const xx of [x0, x1 - thick]) {
       box(xx, lo, z0, xx + thick, hi, z1, tint(wood, 0.78));
       for (let j = 0, m = Math.max(4, Math.round(d / 0.28)); j < m; j++) { const zz = z0 + j * d / m; box(xx - 0.012, lo + 0.025, zz + 0.012, xx + thick + 0.012, hi - 0.025, zz + d / m - 0.012, tint(wood, 0.75 + ((j + 2) % 4) * 0.065)); }
       for (const yy of [lo + 0.08, hi - 0.17]) box(xx - 0.035, yy, z0, xx + thick + 0.035, yy + 0.12, z1, edge);
+      opt.wear?.face(spec, xx === x0 ? '-x' : '+x', lo, hi, Math.max(4, Math.round(d / 0.28)), opt);
     }
-    if (!opt.openTop) box(x0, hi - 0.045, z0, x1, hi + 0.025, z1, tint(wood, 0.82));
+    if (!opt.openTop) { box(x0, hi - 0.045, z0, x1, hi + 0.025, z1, tint(wood, 0.82)); opt.wear?.lid(spec, hi + 0.026); }
     else box(x0 + thick, lo + 0.015, z0 + thick, x1 - thick, lo + 0.07, z1 - thick, dark);
   }
   if (opt.portal) {
@@ -74,14 +77,15 @@ function destination(c) {
 
 function freight(c) {
   const plan = freightLayout(c.room), { work, portal } = plan;
+  const wear = createFreightWear(c);
   c.shell({ sockets: true });
-  for (const k of plan.crates) { crate(c, k); c.shadow(k.x, k.z, k.w, k.d, 0.4); }
+  for (const k of plan.crates) { crate(c, k, { wear }); c.shadow(k.x, k.z, k.w, k.d, 0.4); }
   // Tall supports retain wallpaper and skirting, even up here among freight.
   for (const p of plan.pillars) {
     c.wall.box(p.x - p.w / 2, 0, p.z - p.w / 2, p.x + p.w / 2, p.h, p.z + p.w / 2, [1, 1, 1]);
     c.flat.box(p.x - 0.25, 0, p.z - 0.25, p.x + 0.25, 0.13, p.z + 0.25, lin(c.look.trim));
   }
-  crate(c, portal, { portal: true });
+  crate(c, portal, { portal: true, wear });
 
   // Familiar office furniture, repurposed as a packing bench. All large
   // furniture stays behind the pair's reserved floor; the center is clear.
@@ -92,7 +96,7 @@ function freight(c) {
   c.prop('desklamp', work.table.x + 0.63, work.table.z - 0.22, { y: top, solid: false, shadow: false });
   addGPU(c, work.table.x + 0.28, top + 0.015, work.table.z + 0.04, { rot: 0.15 });
   addGPU(c, work.table.x + 0.28, top + 0.125, work.table.z + 0.04, { rot: 0.08 });
-  crate(c, work.crate, { openTop: true });
+  crate(c, work.crate, { openTop: true, wear });
   for (const dx of [-0.32, 0.32]) for (const dz of [-0.24, 0.18]) addGPU(c, work.crate.x + dx, 0.48, work.crate.z + dz);
   c.prop('cabinet', -c.W / 2 + 1.45, c.D / 2 - 0.5, { rot: Math.PI });
   c.prop('planttall', -1.8, c.D / 2 - 0.55, { solid: false, shadow: 0.2 });
