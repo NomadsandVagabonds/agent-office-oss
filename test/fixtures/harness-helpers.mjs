@@ -22,6 +22,7 @@ export const ADAPTERS = [
   { id: 'gemini', label: 'Gemini CLI', protocol: 'acp', command: ABSENT, provider: 'gemini' },
   { id: 'opencode', label: 'opencode', protocol: 'acp', command: ABSENT, provider: 'opencode' },
   { id: 'codex-acp', label: 'Codex (ACP)', protocol: 'acp', command: ABSENT, provider: 'codex' },
+  { id: 'claude-acp', label: 'Claude Code (ACP)', protocol: 'acp', command: ABSENT, provider: 'claude' },
   // the fakes
   { id: 'fake', label: 'Fake Agent', protocol: 'acp', command: NODE, args: [ACP], provider: 'gemini' },
   { id: 'fake-v2', label: 'Fake Agent v2', protocol: 'acp', command: NODE, args: [ACP, '--v2'], provider: 'gemini', acpVersion: 2 },

@@ -22,7 +22,7 @@ const MAX_ITEMS_IN_MEMORY = 1500;
 const COLD_READ_BYTES = 768 * 1024;
 
 export const ENTRY_KINDS = Object.freeze(['session', 'turn', 'user', 'message', 'thought', 'tool', 'plan',
-  'usage', 'permission', 'question', 'notice', 'handoff']);
+  'usage', 'permission', 'question', 'notice', 'handoff', 'changes']);
 
 function fold(records) {
   const items = new Map();

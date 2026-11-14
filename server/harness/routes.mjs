@@ -46,7 +46,8 @@ export function registerHarnessRoutes(router, ctx) {
     adapters: harness.adapters(),
     catalogErrors: harness.catalog.errors(),
     ...harness.snapshot(),
-    limits: { maxSessions: harness.settings.maxSessions, delegate: { ...harness.settings.delegate } },
+    limits: { maxSessions: harness.settings.maxSessions, delegate: { ...harness.settings.delegate },
+      checkpoints: { ...harness.settings.checkpoints } },
   }), { about: 'Driven sessions: which agents the office can start here, who is running, and the guard rails.' });
 
   router.get('/api/harness/sessions', (c) => ({ sessions: harness.list({ all: c.query.get('all') === '1' }) }),
@@ -126,6 +127,26 @@ export function registerHarnessRoutes(router, ctx) {
     return result;
     // Loopback-only, like a terminal snapshot: it is the same material — commands, paths, output.
   }, { ...local, about: 'What a driven session did, as a timeline (?after=<seq> for what changed since, &limit=). This machine only.' });
+
+  /* ---- what a turn changed ---------------------------------------------------- */
+
+  // File names in one answer, file content in the other: both are read on this machine only, like the
+  // transcript. Reading is not control, so an agent may ask, as it may read a transcript.
+  function changeAnswer(c, result) {
+    if (!result) throw new HttpError(404, 'no such session');
+    if (result.error) throw new HttpError(result.status || 400, result.error);
+    const caller = harness.callerOf(c.req);
+    if (caller.agentId) ctx.agents.seen(caller.agentId);
+    return result;
+  }
+  const asked = (c, names) => Object.fromEntries(names.filter((name) => c.query.has(name)).map((name) => [name, c.query.get(name)]));
+
+  router.get('/api/harness/sessions/:ref/changes', async (c) => changeAnswer(c, await harness.changes(c.params.ref, asked(c, ['turn']))),
+    { ...local, about: 'What each turn of a driven session changed on disk: per turn, the files added, modified, deleted or renamed, with lines added and removed (?turn=n for one turn). From snapshots of its git working tree. This machine only.' });
+
+  router.get('/api/harness/sessions/:ref/diff', async (c) => changeAnswer(c,
+    await harness.diff(c.params.ref, asked(c, ['turn', 'from', 'to', 'path', 'context']))),
+  { ...local, about: 'The unified diff of one turn (?turn=n) or from the start of one turn to the end of a later one (?from=a&to=b); &path= for one file, &context= lines around a change (3). Bounded, with a truncated flag. This machine only.' });
 
   router.post('/api/harness/sessions/:ref/requests/:rid', async (c) => guard(async () => {
     const who = humanOnly(c, 'answer a permission request');

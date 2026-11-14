@@ -31,6 +31,7 @@ import { DrivenSession, SessionError } from './session.mjs';
 import { readTranscriptFile } from './transcript.mjs';
 import { createWake } from './wake.mjs';
 import { createDelegations } from './delegations.mjs';
+import { createCheckpoints } from './checkpoints.mjs';
 import { WAKE_MODES } from './settings.mjs';
 import { line } from './normalize.mjs';
 import { buildHandoff } from './handoff.mjs';
@@ -61,6 +62,12 @@ export function createHarness(ctx, file) {
       record.reason = 'the office restarted';
     }
   }
+
+  // What each turn changed on disk: snapshots of the working tree, kept in the repository itself
+  // (checkpoints.mjs). Whatever it still holds for sessions this office no longer lists is cleaned away now.
+  const checkpoints = createCheckpoints({ settings: settings.checkpoints, dir, file: path.join(cfg.dataDir, 'checkpoints.json'), log,
+    changed: () => changed() });
+  checkpoints.reconcile(new Set(Object.keys(store.data.sessions)));
 
   /* ---- telling clients ----------------------------------------------------- */
 
@@ -96,7 +103,15 @@ export function createHarness(ctx, file) {
       startedAt: record.startedAt, endedAt: record.endedAt || null, reason: record.reason || '', turns: record.turns || 0,
       origin: record.origin || { kind: 'human' }, caps: { observe: true, prompt: false, control: false, spawn: true },
       // All that is left to do with a finished session is read it.
-      controls: { transcript: { method: 'GET', url: `/api/harness/sessions/${record.id}/transcript`, query: ['after', 'limit'] } } };
+      controls: { transcript: { method: 'GET', url: `/api/harness/sessions/${record.id}/transcript`, query: ['after', 'limit'] },
+        ...changeControls(record.id) } };
+  }
+
+  // Where a finished session's file changes are read: the same two entries a live session lists (session.mjs, #controls).
+  function changeControls(id) {
+    const at = `/api/harness/sessions/${id}`, available = checkpoints.recorded(id);
+    return { changes: { method: 'GET', url: `${at}/changes`, query: ['turn'], available },
+      diff: { method: 'GET', url: `${at}/diff`, query: ['turn', 'path', 'from', 'to', 'context'], available } };
   }
 
   function snapshot() {
@@ -165,6 +180,7 @@ export function createHarness(ctx, file) {
       delete store.data.sessions[old.id];
       if (!SESSION_ID.test(old.id)) continue;                       // only ever a file name we made ourselves
       for (const suffix of ['.jsonl', '.jsonl.1', '.jsonl.2', '.trace.jsonl']) fs.rm(path.join(dir, old.id + suffix), { force: true }, () => {});
+      checkpoints.forget(old.id).catch(() => {});                   // …and the snapshots of its turns, out of the repository they are in
     }
     store.save();
   }
@@ -224,6 +240,7 @@ export function createHarness(ctx, file) {
     persist(session);
 
     session.transcript.onEntry((entry) => pushEntry(session, entry));
+    watchChanges(session);
     session.on('changed', () => { persist(session); delegations.onChanged(session); changed(); });
     session.on('offer', (offer) => remember(spec.id, offer));
     session.on('waiting', () => delegations.onChanged(session));
@@ -313,6 +330,52 @@ export function createHarness(ctx, file) {
     };
   }
 
+  /* ---- what a turn changed -------------------------------------------------- */
+
+  // Wires one session to the snapshots of its folder. A turn waits a bounded moment for the snapshot
+  // taken before it (`turn.hold`, honoured in session.mjs), so that what the agent changes can be told
+  // apart from what was already there; a turn that changed something gets a `changes` entry.
+  function watchChanges(session) {
+    const id = session.id;
+    const note = (key, text, extra = {}) => {
+      if (session.live) session.transcript.write({ id: key, kind: 'notice', level: 'info', text, ...extra });
+    };
+    checkpoints.open({ id, cwd: session.record.cwd, note });
+    session.on('turn-started', (turn) => {
+      const hold = checkpoints.turnStarted(id, turn.n);
+      if (hold) turn.hold = hold;
+    });
+    session.on('turn-ended', (turn) => {
+      checkpoints.turnEnded(id, turn.n).then((entry) => {
+        if (!entry) return;
+        session.transcript.write({ id: `turn-${turn.n}:changes`, kind: 'changes', ...entry });
+        // A turn that ended with its session finds the journal already closed: put this line on disk now.
+        if (!session.live) session.transcript.close();
+      }).catch((err) => log.warn(`[harness] ${id}: could not record what turn ${turn.n} changed: ${err?.message || err}`));
+    });
+    session.on('ended', () => { checkpoints.close(id); });
+  }
+
+  /** The id behind anything that names a session: a live one (or its agent), or a finished one this office still lists. */
+  function idOf(ref) {
+    const live = resolve(ref);
+    if (live) return live.id;
+    const id = String(ref || '');
+    return SESSION_ID.test(id) && store.data.sessions[id] ? id : null;          // an id we issued, never a path from the wire
+  }
+
+  /** What each turn of a session changed on disk (`{ turn }` for one). Null for a session nobody knows. */
+  async function changes(ref, opt) {
+    const id = idOf(ref);
+    return id ? checkpoints.changes(id, opt) : null;
+  }
+
+  /** The unified diff of a turn, or of a run of turns (`{ turn }` or `{ from, to }`, and `path`, `context`). */
+  async function diff(ref, opt) {
+    const id = idOf(ref);
+    return id ? checkpoints.diff(id, opt) : null;
+  }
+
   /** How many agent-to-agent steps from a human would something this agent sends now be? */
   function hopOf(agentId) {
     const session = sessions.get(agentId);
@@ -361,6 +424,7 @@ export function createHarness(ctx, file) {
     if (stateTimer) clearTimeout(stateTimer);
     // Sessions first: each one's ending settles the task it was doing, and that has to reach the disk too.
     await Promise.allSettled(liveSessions().map((s) => s.end('the office is shutting down')));
+    await checkpoints.stop();               // the snapshot after a turn that ended just now, and what it says, reach the disk too
     delegations.stop();
     store.flush();
   }
@@ -368,6 +432,7 @@ export function createHarness(ctx, file) {
   return {
     settings, catalog, wake, delegations, adapters, handoffFrom,
     create, resolve, list, describe, transcript, snapshot,
+    changes, diff, checkpoints,
     session: (id) => sessions.get(id) || null,
     sessionForAgent, deliverHumanNote, hopOf, callerOf,
     isDriven: (agentId) => !!sessions.get(agentId)?.live,

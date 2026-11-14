@@ -18,12 +18,15 @@ import fs from 'node:fs';
 import { whichSync, redact } from './child.mjs';
 import { normalizeProvider } from '../../core/contract.mjs';
 
-export const PROTOCOLS = Object.freeze(['acp', 'codex-app-server']);
+export const PROTOCOLS = Object.freeze(['acp', 'codex-app-server', 'claude-stream-json']);
 // What an adapter on each protocol can promise before any session exists. (A running session then says
 // what it really got, in `features`.) Behaviour elsewhere keys off these, never off a provider's name.
 const PROTOCOL_CAPS = Object.freeze({
   acp: { nativeSandbox: false },
   'codex-app-server': { nativeSandbox: true },
+  // Claude Code keeps its own permission mode in step with the session's mode, but that is a policy inside
+  // Claude, not a sandbox: what it was allowed to run, runs with the operator's own rights.
+  'claude-stream-json': { nativeSandbox: false },
 });
 export const MODES = Object.freeze(['ask', 'edits', 'full']);
 export const MODE_RANK = Object.freeze({ ask: 0, edits: 1, full: 2 });
@@ -34,10 +37,12 @@ export const MODE_LABEL = Object.freeze({
 });
 
 // Launch arguments as published in the ACP registry (checked 2026-11) and, for
-// Codex, as T3 Code starts its app-server.
+// Codex, as T3 Code starts its app-server. Claude Code's are not here: its own
+// adapter builds them for each session (claude.mjs), and an entry's `args` are
+// only what the operator wants added to those.
 const BUILTIN = Object.freeze([
-  { id: 'claude', label: 'Claude Code', provider: 'claude', protocol: 'acp', command: 'claude-agent-acp', args: [],
-    note: 'Claude Code through its ACP wrapper. Install once: npm i -g @agentclientprotocol/claude-agent-acp' },
+  { id: 'claude', label: 'Claude Code', provider: 'claude', protocol: 'claude-stream-json', command: 'claude', args: [],
+    note: 'Claude Code in its own stream-json mode: the claude CLI itself, no wrapper.' },
   { id: 'codex', label: 'Codex', provider: 'codex', protocol: 'codex-app-server', command: 'codex', args: ['app-server'],
     note: 'Codex over its own app-server protocol (native sandbox and approvals).' },
   { id: 'gemini', label: 'Gemini CLI', provider: 'gemini', protocol: 'acp', command: 'gemini', args: ['--acp'],
@@ -46,6 +51,8 @@ const BUILTIN = Object.freeze([
     note: 'opencode in ACP mode.' },
   { id: 'codex-acp', label: 'Codex (ACP)', provider: 'codex', protocol: 'acp', command: 'codex-acp', args: [],
     note: 'Codex through its ACP wrapper, for when the app-server is not wanted.' },
+  { id: 'claude-acp', label: 'Claude Code (ACP)', provider: 'claude', protocol: 'acp', command: 'claude-agent-acp', args: [],
+    note: 'Claude Code through its ACP wrapper, for when its own mode is not wanted. Install once: npm i -g @agentclientprotocol/claude-agent-acp' },
 ]);
 
 const ID = /^[a-z0-9][a-z0-9_-]{0,31}$/;

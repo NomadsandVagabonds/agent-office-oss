@@ -30,7 +30,11 @@ export async function startOffice(opt = {}) {
   const cfg = loadConfig({
     OFFICE_PORT: String(port), OFFICE_HOST: '127.0.0.1', OFFICE_DATA_DIR: dir,
     OFFICE_CREATIONS_FILE: creations, OFFICE_PROFILES_FILE: path.join(dir, 'no-profiles.json'),
-    OFFICE_AUTO_OBSERVE_CODEX: '0', OFFICE_QUIET: '1', ...(opt.env || {}),
+    OFFICE_AUTO_OBSERVE_CODEX: '0', OFFICE_QUIET: '1',
+    // A driven session snapshots the git working tree it is in (server/harness/checkpoints.mjs), and a test
+    // that names no folder runs its agent right here, in this checkout: no test may write into the
+    // repository of whoever runs it. The suite about snapshots asks for them, in repositories of its own.
+    OFFICE_CHECKPOINTS: '0', ...(opt.env || {}),
   });
   const office = createOffice(cfg);
   await office.start();

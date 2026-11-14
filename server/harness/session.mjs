@@ -19,6 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { AcpAdapter } from './acp.mjs';
 import { CodexAdapter } from './codex.mjs';
+import { ClaudeAdapter } from './claude.mjs';
 import { Transcript } from './transcript.mjs';
 import { choicesFor, standingAnswer, describeRequest, categoryOf, insideFolder } from './approvals.mjs';
 import { line, text as cleanText, limitWindow } from './normalize.mjs';
@@ -33,7 +34,7 @@ const TOOL_LABEL = Object.freeze({ execute: 'Shell', edit: 'Edit', delete: 'Dele
   search: 'Search', fetch: 'Fetch', think: 'Think', switch_mode: 'Mode' });
 const FILE_KIND = Object.freeze({ edit: 'edit', delete: 'edit', move: 'edit', read: 'read', search: 'read' });
 // One adapter per wire protocol; adding a provider that speaks neither is one more entry here.
-const ADAPTERS = Object.freeze({ acp: AcpAdapter, 'codex-app-server': CodexAdapter });
+const ADAPTERS = Object.freeze({ acp: AcpAdapter, 'codex-app-server': CodexAdapter, 'claude-stream-json': ClaudeAdapter });
 
 // What a human can change on a running session, the adapter method that does it, and the words for it.
 const SETTINGS = Object.freeze({
@@ -320,11 +321,21 @@ export class DrivenSession extends EventEmitter {
     this.#agent({ status: 'thinking', turn: 'active', tool: '', blockKind: null, note: '', subagents: 0 });
     this.#save();
     this.emit('turn-started', turn);
-    try {
-      this.adapter.prompt(this.#frame(item));
-    } catch (err) {
-      this.#turnEnded({ status: 'failed', error: cleanText(err?.message || String(err), 400) });
-    }
+    // A listener may set `turn.hold` — a promise that never rejects and that it bounds itself — to keep
+    // the prompt back for a moment: the office snapshots the working tree before the agent can change it
+    // (checkpoints.mjs). A turn stopped, or a session ended, in that moment is closed without being sent.
+    const go = () => {
+      if (this.turn !== turn) return;
+      turn.hold = null;
+      if (turn.stopRequestedBy || !this.live) { this.#turnEnded({ status: 'interrupted' }); return; }
+      try {
+        this.adapter.prompt(this.#frame(item));
+      } catch (err) {
+        this.#turnEnded({ status: 'failed', error: cleanText(err?.message || String(err), 400) });
+      }
+    };
+    if (!turn.hold) go();
+    else turn.hold.then(go).catch((err) => this.ctx.log.warn(`[harness] ${this.id} could not begin turn ${n}: ${err?.stack || err}`));
   }
 
   /** Stop the turn in flight. Queued turns are dropped too: a stop that restarts itself is not a stop. */
@@ -337,7 +348,7 @@ export class DrivenSession extends EventEmitter {
     }
     this.#note('info', `Stop requested by ${by}${dropped.length ? `; ${dropped.length} waiting turn(s) dropped` : ''}.`);
     this.turn.stopRequestedBy = by;
-    const sent = this.adapter.cancel();
+    const sent = this.adapter.cancel() || !!this.turn.hold;       // still held back: it will now never be sent
     return { interrupted: sent, dropped: dropped.length };
   }
 
@@ -694,8 +705,12 @@ export class DrivenSession extends EventEmitter {
     const pick = (field, value, list, call, extra = {}) => ({ method: 'PATCH', url: at, field, value: value || '',
       options: list.map((x) => x.id), labels: Object.fromEntries(list.map((x) => [x.id, x.name])),
       available: live && typeof this.adapter[call] === 'function' && (list.length > 0 || !!extra.free), ...later, ...extra });
+    // What its turns changed on disk is there to read once the office has snapshots of its folder (checkpoints.mjs).
+    const recorded = !!this.ctx.harness?.checkpoints?.recorded(this.id);
     return {
       transcript: { method: 'GET', url: `${at}/transcript`, query: ['after', 'limit'], watch: { type: 'transcript:watch', sessionId: this.id } },
+      changes: { method: 'GET', url: `${at}/changes`, query: ['turn'], available: recorded },
+      diff: { method: 'GET', url: `${at}/diff`, query: ['turn', 'path', 'from', 'to', 'context'], available: recorded },
       turn: { method: 'POST', url: `${at}/turn`, body: { text: '' }, available: live },
       interrupt: { method: 'POST', url: `${at}/interrupt`, available: live && (!!this.turn || this.queue.length > 0) },
       end: { method: 'DELETE', url: at, available: live },

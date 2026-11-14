@@ -65,6 +65,9 @@ test('driven sessions', async (t) => {
     const at = `/api/harness/sessions/${s.id}`;
     assert.deepEqual(s.controls, {
       transcript: { method: 'GET', url: `${at}/transcript`, query: ['after', 'limit'], watch: { type: 'transcript:watch', sessionId: s.id } },
+      // what its turns changed on disk: always listed, there to read once its folder is in a git repository (this one is not)
+      changes: { method: 'GET', url: `${at}/changes`, query: ['turn'], available: false },
+      diff: { method: 'GET', url: `${at}/diff`, query: ['turn', 'path', 'from', 'to', 'context'], available: false },
       turn: { method: 'POST', url: `${at}/turn`, body: { text: '' }, available: true },
       interrupt: { method: 'POST', url: `${at}/interrupt`, available: false },
       end: { method: 'DELETE', url: at, available: true },
