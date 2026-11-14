@@ -110,8 +110,12 @@ export async function buildWorld(kit, level, env, tick) {
       if (x < b.x0 - 1 || x > b.x1 + 1 || z < b.z0 - 1 || z > b.z1 + 1) continue;
       for (const c of rt.colliders) if ((!opt.tall || c.tall) && hits(c, x, z, r)) return false;
     }
+    // …and whatever is standing about that has a body (pursuer.js). They only ever move while nobody is looking.
+    if (!opt.tall && !opt.ghost) for (const b of world.bodies) if ((x - b.x) * (x - b.x) + (z - b.z) * (z - b.z) < (r + b.r) * (r + b.r)) return false;
     return true;
   };
+  /** Things with a body that are not part of any room: [{ x, z, r }], kept up to date by whoever owns them. */
+  world.bodies = [];
   world.roomAt = (x, z) => {
     for (const rt of rooms) { const d = rt.def; if (x >= d.x && x < d.x + d.w && z >= d.z && z < d.z + d.d) return rt; }
     return null;

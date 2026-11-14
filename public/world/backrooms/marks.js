@@ -9,8 +9,13 @@
 //
 // Somebody was here before and knew that much. They marked the walls they
 // tried: an outline in painter's tape, most of it let go since; a pencilled
-// door; a tally. So the thin place is marked — and so are other walls, which
-// are only walls. What tells them apart is not written anywhere (thin.js).
+// door; a tally. The plan's best guess is marked like that on every floor
+// (`thin`: an outside wall near the fire exit), and so are a few others, and
+// every one of them is only a wall. The wall that gives is the one somebody
+// taped a door on at the very bottom of the last fire stairs, made camp
+// beside, and gave up on (stairwell.js). What tells it from the rest is not
+// written anywhere (thin.js) — and every marked wall answers being leaned on,
+// one way or the other, well inside a second.
 import { T, SIDES, wallSpans, wallPoint, toWorld } from './frame.js';
 
 /** The fewest doorways between where you land on the last floor and the wall that gives. */
@@ -28,6 +33,19 @@ export const LEAN = 1.15;
 export function lean(held, dt, pressed) { return pressed ? held + dt : Math.max(0, held - dt * 2); }
 /** Is a body `d` metres from the wall and `along` it from the middle of a stretch `w` wide, pushing `into` it (0…1) and moving at `speed` m/s, leaning on it? */
 export function pressing(d, along, w, into, speed) { return d < 0.34 && Math.abs(along) < w / 2 && into > 0.55 && speed < 0.6; }
+
+/** How long a wall that is only a wall takes to say so, seconds: sooner than the other kind takes to give. */
+export const REFUSE = 0.42;
+/**
+ * What a marked wall does about being leaned on, for `held` seconds so far. Pure.
+ * A wall that gives: { open: 0…1 } — how far the taped door has let the daylight round its edges, from the first
+ * instant. A wall that is only a wall: { knock: true } once, REFUSE seconds in (`said`: it has answered this lean
+ * already; let go altogether and it will answer the next one).
+ */
+export function answer(gives, held, said = false) {
+  if (gives) return { open: held <= 0 ? 0 : Math.min(1, 0.18 + 0.82 * (held / LEAN)), through: held >= LEAN };
+  return { knock: !said && held >= REFUSE, said: held > 0 && (said || held >= REFUSE) };
+}
 
 const inRect = (p, r) => p.x >= r.x0 && p.x < r.x1 && p.z >= r.z0 && p.z < r.z1;
 

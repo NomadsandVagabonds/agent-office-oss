@@ -8,15 +8,17 @@
 // it does not take your weight. You arrive on the floor below the way you
 // arrived in the first place. On the last floor there is no next flight and
 // no ceiling either: six stairs down, the building has been papered over.
-// Somebody got this far and stayed a while. The way out is not here; it is a
-// wall, somewhere near (thin.js), and they had worked out which.
+// Somebody got this far, taped a door on the paper, kept a tally and stayed a
+// while. They had the right wall (thin.js). They did not lean on it for long
+// enough.
 //
 // Same contract as the builders in rooms.js: the toolbox `c`, the room's own
 // frame, entered through the +z wall — where, this once, there is a real door.
 import * as THREE from 'three';
 import { Batch, lin, drawText, WHITE } from './kit.js';
 import { RISE, RUN, T, makeRng } from './gen.js';
-import { P, doorFrame, floorPlan } from './bits.js';
+import { P, doorFrame, floorPlan, card } from './bits.js';
+import { gives } from './thin.js';
 import { camp, rationList, tallyMark, tapeMark } from './traces.js';
 
 const UP = [0, 1, 0], SLOPE = RISE / RUN;
@@ -181,6 +183,7 @@ function bottomless(c, { zB, yB, back, shadeAt, warm }) {
 /**
  * Where there is nothing under them at all: the stairs go down into a wall with this floor's paper on it, skirting and
  * all, and the carpet has been run up the last of them. Somebody made camp on the landing, and tried this wall first.
+ * It is the wall that gives.
  */
 function paperedOver(c, { zL, zF, yB, back, shadeAt }) {
   const { W, kit, level } = c, look = c.look, k = shadeAt(back), R = makeRng(`${level.seed}/dead-end`);
@@ -189,9 +192,9 @@ function paperedOver(c, { zL, zF, yB, back, shadeAt }) {
   c.flat.box(-W / 2, yB, back + 0.012, W / 2, yB + 0.11, back + 0.034, lin(look.trim).map((v) => v * k));
   const carpet = c.mapped('carpeted', kit.tex.floor(look));
   for (let i = 0; i < 2; i++) { const y = yB + i * RISE, z0 = back + i * RUN; carpet.box(-W / 2, y - RISE, z0, W / 2, y + 0.012, z0 + RUN + 0.012, [k, k, k], { uv: 1.6, skip: '-y-x+x-z' }); }
-  // it was the first wall they tried
-  const wall = { y: yB, at: (at, off = 0) => ({ x: at, z: back + 0.012 + off, n: [0, 0, 1], U: [1, 0, 0] }) };
-  tapeMark(c, wall, 0, R, { roll: true });
+  // it was the first wall they tried, and the right one: they did not lean on it for long enough
+  const wall = { y: yB, at: (at, off = 0) => ({ x: at, z: back + 0.012 + off, n: [0, 0, 1], U: [1, 0, 0] }), to: (me) => ({ d: me.z - back, c: me.x }) };
+  gives(c, wall, 0, tapeMark(c, wall, 0, R, { roll: true, stir: true }));
   tallyMark(c, wall, 0.95, R, 1.5);
 
   // the camp, along the wall the door does not open against
@@ -199,14 +202,13 @@ function paperedOver(c, { zL, zF, yB, back, shadeAt }) {
   camp(c, 0.86, cz, -Math.PI / 2, { narrow: true });
   rationList(c, { side: 'right', at: cz + 0.2, y: 1.2 });
   tallyMark(c, 'right', cz - 0.75, R, 1.42);
-  // and what they had worked out: this floor's own evacuation plan, corrected in red
-  const thin = level.thin, room = thin && level.rooms[thin.room];
-  floorPlan(c, { side: 'left', at: zL + 0.95 }, room && ((g, mx, my) => {
-    const ex = level.rooms[level.exit.room], x = mx(ex.cx, ex.cz), y = my(ex.cx, ex.cz);
-    g.strokeStyle = '#c8281c'; g.lineWidth = 1.6; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(x - 9, y - 4); g.lineTo(x + 9, y + 5); g.moveTo(x - 9, y + 5); g.lineTo(x + 9, y - 4); g.stroke();            // not this
-    const tx = mx(room.cx, room.cz), ty = my(room.cx, room.cz), r = Math.max(7, Math.hypot(room.w, room.d) * 1.6);
-    for (let i = 0; i < 3; i++) { g.beginPath(); g.ellipse(tx + i - 1, ty + (i % 2), r + i * 1.3, r * 0.8 + i, i * 0.4, 0, 6.6); g.stroke(); }     // this, three times round
-    g.beginPath(); g.moveTo(x, y + 8); g.quadraticCurveTo((x + tx) / 2 + 8, (y + ty) / 2 + 10, tx + (x > tx ? r : -r), ty); g.stroke();
-  }));
+  // what they had concluded, on a sheet torn off the same pad
+  const note = card(c, 'gaveup', ['LEANED ON IT.', 'NOTHING.', '', '(GAVE IT A', 'WHOLE SECOND)'], { w: 96, h: 96, bg: '#f4f1e6', fg: '#3a342a', size: 9, pad: 9, weight: 600 });
+  c.hang(c.mapped('gaveup', note), 'right', cz - 0.18, 1.22, 0.22, 0.22, null, WHITE, 0.006);
+  // and this floor's own evacuation plan, with every other wall they tried struck off it in red: all but the one they were sitting beside
+  const tried = level.rooms.filter((r) => r.dress.some((d) => d.type === 'marks') || (level.thin && level.thin.room === r.id));
+  floorPlan(c, { side: 'left', at: zL + 0.95 }, (g, mx, my) => {
+    g.strokeStyle = '#c8281c'; g.lineWidth = 1.5; g.lineCap = 'round';
+    for (const r of tried) { const x = mx(r.cx, r.cz), y = my(r.cx, r.cz), k = Math.max(4, Math.min(8, Math.hypot(r.w, r.d) * 0.7)); g.beginPath(); g.moveTo(x - k, y - k * 0.6); g.lineTo(x + k, y + k * 0.6); g.moveTo(x - k, y + k * 0.6); g.lineTo(x + k, y - k * 0.6); g.stroke(); }
+  });
 }

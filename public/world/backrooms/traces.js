@@ -120,7 +120,7 @@ export function tallyMark(c, wall, at, R, y = 1.35) {
   hangOn(c, c.mapped('tally' + n, tex, { cutout: true }), wall, at, y, 0.9, 0.34, null, WHITE, 0.004);
 }
 
-/** What `dressing` (rooms.js) does with a thing of type 'marks': a wall somebody tried. */
+/** What `dressing` (rooms.js) does with a thing of type 'marks': a wall somebody tried. → the tape on it, if it is tape (its loose ends can be moved: thin.js). */
 export function marks(c, item) {
   const R = makeRng(`${c.level.seed}/mark/${c.room.id}/${item.seed}`);
   c.keepWall(item.side, item.at - 1, item.at + 1);
@@ -128,7 +128,8 @@ export function marks(c, item) {
   if (c.clear(p.x, p.z, 0.35)) c.reserve(p.x, p.z, 0.55);
   if (item.style === 'pencil') { pencilMark(c, item.side, item.at, R); if (R.chance(0.4)) tallyMark(c, item.side, item.at + 0.95, R, 1.5); }
   else if (item.style === 'tally') tallyMark(c, item.side, item.at, R);
-  else { tapeMark(c, item.side, item.at, R); if (R.chance(0.35)) tallyMark(c, item.side, item.at + (R.chance(0.5) ? 0.98 : -0.98), R, 1.5); }
+  else { const mark = tapeMark(c, item.side, item.at, R, { stir: true }); if (R.chance(0.35)) tallyMark(c, item.side, item.at + (R.chance(0.5) ? 0.98 : -0.98), R, 1.5); return mark; }
+  return null;
 }
 
 /* ---- a camp ------------------------------------------------------------------------------------ */
