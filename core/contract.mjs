@@ -31,6 +31,8 @@ export const EV = Object.freeze({
   DELEGATIONS:  'delegations',   // { delegation }                       a delegated task changed
   // ---- how much is left per provider (server/usage.mjs; additive) ----
   USAGE:        'usage',         // { usage:UsageSnapshot }              on connect + whenever a meter changes
+  // ---- who is working where (server/workspace.mjs; additive) ----
+  WORKSPACE:    'workspace',     // { workspace:WorkspaceSnapshot }      on connect + when branches, files, claims or overlaps change
 });
 
 /* ---- Status vocabulary (single source of truth) ------------------------ */

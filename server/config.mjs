@@ -51,6 +51,12 @@ export function loadConfig(env = process.env) {
     autoObserveCodex: env.OFFICE_AUTO_OBSERVE_CODEX !== '0',
     staleAgentMs: Number(env.OFFICE_STALE_AGENT_MS || 30 * 60 * 1000),
     quiet: env.OFFICE_QUIET === '1',
+    // Who is working where (server/workspace.mjs): read-only git in the folders agents work in. Off beyond
+    // loopback unless asked for (OFFICE_GIT=1); OFFICE_GIT=0 turns it off everywhere. Claims work either way.
+    gitProbe: env.OFFICE_GIT === '1' || (env.OFFICE_GIT !== '0' && loopbackOnly),
+    gitEveryMs: Math.max(300, Number(env.OFFICE_GIT_EVERY_MS || 20000)),
+    overlapNotes: env.OFFICE_OVERLAP_NOTES !== '0',
+    worktreeDir: env.OFFICE_WORKTREE_DIR ? path.resolve(env.OFFICE_WORKTREE_DIR) : null,
     // How much is left per provider (server/usage.mjs). The office holds no provider credentials; it only asks
     // OpenRouter about a key when told to, with a key the operator already has in the daemon's environment.
     usage: Object.freeze({

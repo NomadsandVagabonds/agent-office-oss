@@ -17,8 +17,7 @@ import path from 'node:path';
 const MAX_OUT = 4 * 1024 * 1024;
 // fsmonitor and friends are programs named by a repository's own config; a
 // reader has no business starting them.
-const SAFE = ['--no-optional-locks', '-c', 'core.fsmonitor=false', '-c', 'core.quotepath=false',
-  '-c', 'core.untrackedCache=false'];
+const SAFE = ['--no-optional-locks', '-c', 'core.fsmonitor=false', '-c', 'core.quotepath=false'];
 
 function env() {
   return { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C', GIT_PAGER: 'cat' };

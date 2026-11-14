@@ -31,6 +31,7 @@ import { registerWorldRoutes } from './world/routes.mjs';
 import { createHarness } from './harness/index.mjs';
 import { registerHarnessRoutes } from './harness/routes.mjs';
 import { createUsage, registerUsageRoutes } from './usage.mjs';
+import { createWorkspace, registerWorkspaceRoutes } from './workspace.mjs';
 
 function readVersion(root) {
   try { return JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version || '0.0.0'; }
@@ -77,6 +78,8 @@ export function createOffice(config) {
   ctx.activity = createActivity(ctx);
   // How much each provider has left, as far as the runtimes say (the harness reports into it).
   ctx.usage = createUsage(ctx, data('usage.json'));
+  // Which branch and files each agent is in, and where two of them are about to collide.
+  ctx.workspace = createWorkspace(ctx, data('workspace.json'));
   // Sessions the office drives itself (ACP, Codex app-server): see docs/HARNESS.md.
   ctx.harness = createHarness(ctx, data('harness.json'));
   ctx.world = createWorld(ctx, data('world.json'));
@@ -85,6 +88,7 @@ export function createOffice(config) {
   registerCoreRoutes(router, ctx);
   registerHarnessRoutes(router, ctx);
   registerUsageRoutes(router, ctx);
+  registerWorkspaceRoutes(router, ctx);
   registerKnowledgeRoutes(router, ctx);
   registerWorldRoutes(router, ctx);
   ctx.router = router;
@@ -118,6 +122,7 @@ export function createOffice(config) {
     client.send({ type: EV.WORLD, world: ctx.world.snapshot() });
     client.send({ type: EV.HARNESS, ...ctx.harness.snapshot() });
     client.send({ type: EV.USAGE, usage: ctx.usage.snapshot() });
+    client.send({ type: EV.WORKSPACE, workspace: ctx.workspace.snapshot() });
   });
   hub.on('message', (client, message) => {
     try { ctx.world.onClientMessage(client, message); }
@@ -186,6 +191,7 @@ export function createOffice(config) {
     sweepTimer.unref();
     ctx.world.start();
     ctx.usage.start();
+    ctx.workspace.start();
     ctx.codexObserver.start();
     return ctx;
   }
@@ -198,6 +204,7 @@ export function createOffice(config) {
     // Agents the office started end with it: nothing is left working unattended.
     try { await ctx.harness.stop(); } catch {}
     try { ctx.usage.stop(); } catch {}
+    try { ctx.workspace.stop(); } catch {}
     try { ctx.world.stop(); } catch {}
     try { saveRegistry(); } catch {}
     hub.close();
