@@ -12,7 +12,9 @@ export const PORTER = Object.freeze({
   knock: 0.42,      // walk within this of the bucket and it goes over, metres
   dim: 0.22,        // what the room's tubes drop to while it lies there
   turn: 9,          // how fast he turns his back, radians a second: faster than anybody can get round him
-  sway: 26, damp: 2.2,  // the strand off his chin: how hard it is pulled back to hanging straight, and how soon it settles
+  sway: 24, damp: 1.5,  // the runs of clay off his face: how hard each is pulled back to hanging straight, and how soon it settles
+  fling: 1.35,          // …how far a turn of his throws them
+  idle: 0.09,           // …and how much they stir when he is doing nothing at all, radians
   round: 1.1,       // …and how slowly he turns to face you, once there is something the matter
 });
 

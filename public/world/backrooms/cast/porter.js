@@ -31,7 +31,6 @@ function man() {
   [8, 4, 11, 6, 13, 5, 9, 7, 12, 3].forEach((len, i) => { const x = -5 + i, tone = clay[(i * 3 + 1) % 4], z1 = 5 + (i % 3 === 0 ? 2 : 1); v.box(x, 55 - len, 3, x + 1, 55, z1, tone); v.box(x, 54 - len, 4, x + 1, 56 - len, z1 + 1, clay[2]); });
   v.ellipsoid(2, 46, 4, 4.2, 3, 2.6, clay[1]); v.tube(2, 45, 5, 3, 38, 5, 1.2, clay[0]); v.tube(-2, 46, 5, -3, 41, 5, 0.9, clay[3]); v.box(2, 35, 4, 4, 38, 6, clay[2]);
   v.ellipsoid(0, 58, 0, 6, 2.6, 6, cap); v.box(-4, 56, 4, 4, 57, 9, cap);                                   // the cap, peak forward: you will not be seeing that
-  v.box(-5, 49, -5, 5, 54, -3, M('#8a8580', 3));                                                            // grey hair under it, at the back
   return v;
 }
 function mop() { const v = new Vox(); v.tube(8, 3, 20, 7, 30, 8, 0.8, M('#9a7a4a', 1)); return v; }            // held low, at his side: nothing of it in front of his face
@@ -48,7 +47,9 @@ function mopHead() {
   return v;
 }
 /** What hangs off his chin: a rope of the same clay, with a bead at the end of it. (From the point it hangs by.) */
-function strand() { const v = new Vox(), k = M('#c08e68', 3); v.tube(0, 0, 0, 0, -8, 0, 0.9, k); v.ellipsoid(0, -9.5, 0, 1.5, 2, 1.5, M('#d9aa84', 3)); return v; }
+const strand = (len, tone) => () => { const v = new Vox(), k = M(tone, 3); v.tube(0, 0, 0, 0, -len, 0, 0.9, k); v.ellipsoid(0, -len - 1.5, 0, 1.4, 1.9, 1.4, M('#d9aa84', 3)); return v; };
+// the runs of it that hang free: where each hangs from (in his own voxels), how long it is, and how lazily it swings
+const STRANDS = [[2.5, 44, 5.5, 8, '#c08e68', 1], [-3, 45, 5.6, 5, '#8d5f41', 1.5], [4.5, 47, 5.2, 4, '#c08e68', 1.9], [-0.5, 43, 6, 6, '#a9795a', 1.25], [-4.5, 49, 5, 3, '#d9aa84', 2.3]];
 function bucket() { const v = new Vox(), y = M('#d9b21c', 1); v.cyl('y', 0, 0, 0, 10, 5.5, y, 4.6); v.cyl('y', 0, 0, 0, 1, 5.5, y); v.cyl('y', 0, 0, 9, 10, 6, M('#b8960f', 1), 5); return v; }
 function locker() {
   const v = new Vox(), st = M('#7d8a8c', 0);
@@ -60,7 +61,7 @@ function lockerDoor() { const v = new Vox(), st = M('#8b989a', 0); v.box(0, 1, 0
 
 export function create(c) {
   const env = c.env, kit = env.kit;
-  let s = mopping(), parts = null, at = null, b = null, righted = false, over = 0, yaw = 0, sweep = 0, open = 0, known = false, home = null, lit = [1, 1, 1], swing = 0, swingV = 0;
+  let s = mopping(), parts = null, at = null, b = null, righted = false, over = 0, yaw = 0, sweep = 0, open = 0, known = false, home = null, lit = [1, 1, 1];
 
   function ready() {
     if (c.home === null) return;                                    // no room on this floor would do: he is not in tonight
@@ -71,13 +72,13 @@ export function create(c) {
     b = free(0.85, 1.2, 0.3); const l = free(1.6, 2.6, 0.45);
     if (!b || !l) { home = null; return; }
     const mat = kit.surface({ vox: true }), m4 = new THREE.Matrix4().makeScale(S, S, S), lights = [lamp(0.3, 2.6, 0.8, [1.2, 1.2, 1.2], { k: 9, wrap: 0.45, far: 30 })];
-    const mesh = (key, make) => { const q = new Batch(true); q.addVox(kit.model('porter5:' + key, make).solid, m4); return new THREE.Mesh(kit.geometry(q, lights, [0.6, 0.6, 0.6]), mat); };
+    const mesh = (key, make) => { const q = new Batch(true); q.addVox(kit.model('porter6:' + key, make).solid, m4); return new THREE.Mesh(kit.geometry(q, lights, [0.6, 0.6, 0.6]), mat); };
     const y = env.world.floorY(p.x, p.z), g = (x, z, ...kids) => { const o = new THREE.Group(); o.position.set(x, y, z); o.add(...kids); return c.add(o); };
-    const mopM = new THREE.Group(), headM = mesh('mophead', mopHead), dripM = mesh('strand', strand), doorM = mesh('door', lockerDoor), hinge = new THREE.Group();
+    const mopM = new THREE.Group(), headM = mesh('mophead', mopHead), doorM = mesh('door', lockerDoor), hinge = new THREE.Group();
     headM.position.set(8 * S, 0, 20 * S); mopM.add(mesh('mop', mop), headM);
-    dripM.position.set(2.5 * S, 44 * S, 5.5 * S);
+    const drips = STRANDS.map(([x, y, z, len, tone, quick], i) => { const m = mesh('strand' + i, strand(len, tone)); m.position.set(x * S, y * S, z * S); return { m, quick, a: 0, v: 0, off: i * 1.7 }; });
     hinge.position.set(-6.5 * S, 0, 6 * S); hinge.add(doorM);
-    parts = { mat, man: g(p.x, p.z, mesh('man', man), mopM, dripM), mop: mopM, head: headM, drip: dripM, bucket: g(b.x, b.z, mesh('bucket', bucket)), locker: g(l.x, l.z, mesh('locker', locker), hinge), hinge };
+    parts = { mat, man: g(p.x, p.z, mesh('man', man), mopM, ...drips.map((k) => k.m)), mop: mopM, head: headM, drips, bucket: g(b.x, b.z, mesh('bucket', bucket)), locker: g(l.x, l.z, mesh('locker', locker), hinge), hinge };
     parts.locker.rotation.y = Math.atan2(p.x - l.x, p.z - l.z);
     at = p; yaw = c.R.range(-3, 3);
     c.body({ x: p.x, z: p.z, r: 0.3 }); c.body({ x: l.x, z: l.z, r: 0.34 });
@@ -111,8 +112,10 @@ export function create(c) {
       else if (d < 14) yaw += Math.max(-rate * dt, Math.min(rate * dt, turnTo(yaw, want)));
       // what hangs off his chin is slow to follow when he turns, and swings on after he has stopped
       const turned = turnTo(parts.man.rotation.y, yaw) / Math.max(dt, 1e-3);
-      swingV += (-PORTER.sway * swing - PORTER.damp * swingV - turned * 0.9) * dt; swing = Math.max(-1.1, Math.min(1.1, swing + swingV * dt));
-      parts.drip.rotation.z = swing + Math.sin(sweep * 2.4) * 0.05;
+      for (const k of parts.drips) {                                    // (the short ones are quicker about it than the long one)
+        k.v += (-PORTER.sway * k.quick * k.a - PORTER.damp * k.v - turned * PORTER.fling) * dt; k.a = Math.max(-1.3, Math.min(1.3, k.a + k.v * dt));
+        k.m.rotation.z = k.a + Math.sin(sweep * 2.4 * k.quick + k.off) * PORTER.idle; k.m.rotation.x = Math.sin(sweep * 1.7 * k.quick + k.off) * PORTER.idle * 0.6;
+      }
       parts.man.rotation.y = yaw;
       if (s.mode === 'mop') { sweep += dt; if (Math.floor(sweep / 1.3) !== Math.floor((sweep - dt) / 1.3) && d < 9) c.play('shuffle', at.x, at.z, 5); }
       const push = Math.sin(sweep * 2.4);
