@@ -31,6 +31,8 @@ export const HUNT = Object.freeze({
   shutPull: 5,             // how much rather it would try a door somebody has shut than any other way on
   stale: 0.25,             // …and how little it wants the room it has just come out of
   trail: 10,               // how many rooms back it remembers having been in: it would rather try one it has not
+  grab: 2,                 // points of health a grab costs, of four (with no health to take, a grab is the end of the tape)
+  spent: [14, 24],         // seconds after a grab that it keeps away and takes no notice of you
   peek: 0.65,              // how often, when you crawl away from it, it gets down to look through the hole after you
   peekGap: [1.4, 6.5],     // how far from the hole you must be for that, metres: not within its reach, not out of sight of it
   peekTurned: 0.7,         // seconds your back must have been to the hole
@@ -45,7 +47,10 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function noticeTime(d) { return HUNT.notice[0] + (HUNT.notice[1] - HUNT.notice[0]) * clamp(d / HUNT.far, 0, 1); }
 
 /** Knowing nothing: where it starts, and where it ends up every time it has lost you. */
-export function lost() { return { mode: 'wander', last: null, seen: 0, since: 0, t: 0, stuck: 0, blind: false, room: null, from: null, been: [], found: false, gaveUp: false }; }
+export function lost() { return { mode: 'wander', last: null, seen: 0, since: 0, t: 0, stuck: 0, blind: false, spent: 0, room: null, from: null, been: [], found: false, gaveUp: false }; }
+
+/** It has had you, and you are still here: it goes off, and for a while it is not interested. */
+export function spent(rnd = Math.random) { return { ...lost(), spent: HUNT.spent[0] + (HUNT.spent[1] - HUNT.spent[0]) * rnd() }; }
 
 /** Knowing exactly where you are (it was shown: the card taken from its hand, a back turned within its reach). */
 export function shown(me) { return { ...lost(), mode: 'chase', last: { x: me.x, z: me.z, room: me.room } }; }
@@ -67,7 +72,8 @@ export function knows(s, dt, sense, rnd = Math.random) {
   const n = { ...s, found: false, gaveUp: false };
   const inSight = !!sense.los && sense.d <= HUNT.far;
   if (!inSight) n.blind = false;
-  const sees = inSight && !n.blind;
+  n.spent = Math.max(0, (s.spent || 0) - dt);
+  const sees = inSight && !n.blind && !(n.spent > 0);
   n.seen = sees ? s.seen + dt : 0;
   // somewhere it cannot get to (you crawled there): it stands and stares for as long as it would look for you, and then gives it up —
   // and having given you up, it takes no more notice of you until it has lost sight of you and seen you afresh

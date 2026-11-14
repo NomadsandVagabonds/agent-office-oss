@@ -3,8 +3,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateVisit } from '../public/world/backrooms/plan.js';
-import { CAST, SUPPORTING, whoIsDown } from '../public/world/backrooms/cast.js';
-import { HUNT, knows, lost, shown, noticeTime, wayOn, handle, atHandle, getsDown, lying, willPeek } from '../public/world/backrooms/cast/hunt.js';
+import fs from 'node:fs';
+import { CAST, ALL_CAST, SUPPORTING, DISPOSITIONS, ITEMS, ROOM_LESSONS, CAST_LESSONS, whoIsDown, castFor, homeFor } from '../public/world/backrooms/cast.js';
+import { THEME_IDS } from '../public/world/backrooms/themes.js';
+import { HUNT, knows, lost, shown, spent, noticeTime, wayOn, handle, atHandle, getsDown, lying, willPeek } from '../public/world/backrooms/cast/hunt.js';
 import { roomRoute, roomCosts, gridPath, straighten } from '../public/world/backrooms/cast/paths.js';
 import { DOORS, doorPlan, doorRooms, inTheWay } from '../public/world/backrooms/doors.js';
 
@@ -223,4 +225,97 @@ test('a door will not shut on anybody: in the doorway, or up against it, you are
   assert.equal(inTheWay(w, T, 0, 0.55), false, 'a step into the room the doors are in: clear');
   assert.equal(inTheWay(w, T, 0, -(T + 0.55)), false, 'a step into the room beyond: clear');
   assert.equal(inTheWay(w, T, w / 2 + 0.5, 0), false, 'beside the opening');
+});
+
+/* ---- the creature contract (docs/BACKROOMS.md, "Adding a creature") --------------------------------------- */
+
+const DIR = new URL('../public/world/backrooms/', import.meta.url);
+
+test('a creature\'s line in the cast: every field the guide promises, and nothing that hunts by another name', () => {
+  const ids = new Set(), teaches = new Set();
+  assert.equal(ALL_CAST.filter((m) => m.always).length, 1, 'one of them is always down there, and only one');
+  for (const m of ALL_CAST) {
+    const where = `cast: ${m.id}`;
+    assert.match(m.id, /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, where); assert.ok(!ids.has(m.id), `${where}: twice`); ids.add(m.id);
+    for (const k of ['name', 'rule']) assert.ok(typeof m[k] === 'string' && m[k].length > 3, `${where}: ${k}`);
+    assert.ok(DISPOSITIONS.includes(m.disposition), `${where}: disposition`);
+    assert.ok(m.home === 'roams' || m.home === 'room', `${where}: home`);
+    assert.ok(m.always || (m.weight >= 0 && m.weight <= 3), `${where}: weight`);
+    if (m.teaches !== undefined) { assert.ok(CAST_LESSONS[m.teaches], `${where}: teaches a lesson nobody has written down`); assert.ok(!teaches.has(m.teaches), `${where}: ${m.teaches} already has a teacher`); teaches.add(m.teaches); }
+    for (const n of m.needs || []) assert.ok(CAST_LESSONS[n] || ROOM_LESSONS.includes(n), `${where}: needs ${n}`);
+    assert.ok(!(m.needs || []).includes(m.teaches), `${where}: needs what it teaches`);
+    for (const t of Object.keys(m.themes || {})) assert.ok(THEME_IDS.includes(t) && m.themes[t] >= 0, `${where}: themes.${t}`);
+    assert.ok(Array.isArray(m.items) && m.items.every((i) => ITEMS.includes(i)), `${where}: items`);
+    const c = m.caught || {};
+    assert.equal(['hurt', 'ends', 'setback'].filter((k) => k in c).length, 1, `${where}: says one thing about what being caught by it costs`);
+    if ('hurt' in c) assert.ok(Number.isInteger(c.hurt) && c.hurt >= 1 && c.hurt <= 4, `${where}: hurt`);
+    if ('ends' in c) assert.ok(c.ends === true && m.disposition === 'hunts', `${where}: only what hunts may end a visit`);
+    if ('setback' in c) assert.ok(typeof c.setback === 'string' && c.setback.length > 8, `${where}: setback`);
+    if (m.disposition !== 'hunts') assert.ok(!('ends' in c));
+    if (m.home === 'room') assert.ok(m.room && m.room.w >= 3 && m.room.d >= 3 && m.room.w <= 12 && m.room.d <= 12, `${where}: the floor it needs`);
+  }
+  for (const [id, what] of Object.entries(CAST_LESSONS)) { assert.match(id, /^[a-z]+$/); assert.ok(what.length > 12 && !ROOM_LESSONS.includes(id)); }
+});
+
+test('a creature\'s file: named for it, listed, exports create(c), keeps its rule where it can be tested, and reaches for nothing outside', () => {
+  const index = fs.readFileSync(new URL('cast/index.js', DIR), 'utf8');
+  const BANNED = [[/\bfetch\s*\(/, 'the network'], [/XMLHttpRequest|WebSocket|EventSource/, 'the network'], [/localStorage|sessionStorage|indexedDB|document\.cookie/, 'the browser\'s storage'],
+    [/https?:\/\//, 'an address'], [/\bnew\s+Audio\b|\.(mp3|ogg|wav)\b/, 'a sound file'], [/\beval\s*\(|new\s+Function\b/, 'eval'], [/env\.end\s*\(/, 'ending the visit itself (c.hurt does that)']];
+  for (const m of ALL_CAST) {
+    const file = new URL(`cast/${m.id}.js`, DIR);
+    assert.ok(fs.existsSync(file), `cast/${m.id}.js is not there`);
+    const src = fs.readFileSync(file, 'utf8');
+    assert.match(src, /export\s+function\s+create\s*\(\s*c\s*\)/, `cast/${m.id}.js: export function create(c)`);
+    assert.ok(new RegExp(`from\\s+'\\./${m.id}\\.js'`).test(index) && new RegExp(`\\b${m.id.replace(/-(.)/g, (_, ch) => ch.toUpperCase())}\\b`).test(index.split('MAKERS')[1] || ''), `cast/index.js does not list ${m.id}`);
+    for (const [re, what] of BANNED) if (!(m.id === 'pirate' && what.startsWith('ending'))) assert.ok(!re.test(src), `cast/${m.id}.js reaches for ${what}`);
+    for (const spec of [...src.matchAll(/from\s+'([^']+)'/g)].map((k) => k[1])) {
+      assert.ok(spec === 'three' || /^\.\.?\//.test(spec), `cast/${m.id}.js imports ${spec}`);
+      assert.ok(!/^\.\.\/(index|world|player|input|hud|vhs|sound|loot|pursuer)\.js$/.test(spec), `cast/${m.id}.js imports ${spec}: what it needs of the level comes through c`);
+    }
+    // its rule is pure and somewhere a test can run it: its own exports, or a module of rules beside it
+    const pure = [...src.matchAll(/from\s+'(\.\/[a-z-]+\.js|\.\.\/reach\.js)'/g)].map((k) => k[1]);
+    assert.ok(/export\s+(function|const)\s+(?!create\b)\w+/.test(src) || pure.length > 0, `cast/${m.id}.js: no rule a test could run`);
+  }
+});
+
+test('who is on which floor, and in which room: one floor each, the same for the same seed, nothing that needs a lesson where you land', () => {
+  const more = [...CAST,
+    { id: 'roamer', disposition: 'hunts', home: 'roams', weight: 1, needs: ['sight'], items: [] },
+    { id: 'homebody', disposition: 'helps', home: 'room', weight: 1, needs: [], items: [], room: { w: 4, d: 4 }, themes: { yellow: 0 } },
+    { id: 'big', disposition: 'keeps to itself', home: 'room', weight: 1, needs: [], items: [], room: { w: 11, d: 11 } }];
+  let homes = 0, none = 0;
+  for (const seed of SEEDS.slice(0, 30)) {
+    const { visit, floors } = generateVisit(seed, office), cast = castFor(visit, undefined, more);
+    assert.deepEqual(cast, castFor(visit, undefined, more));
+    assert.deepEqual(cast.map((k) => k.id), whoIsDown(seed, more).filter((id) => cast.some((k) => k.id === id)));
+    assert.deepEqual(cast[0], { id: 'pirate', floor: null }, 'the mascot goes where the plan puts him, and down the stairs after you');
+    for (const k of cast.slice(1)) {
+      assert.ok(Number.isInteger(k.floor) && k.floor >= 0 && k.floor < visit.depths);
+      if (k.id === 'roamer') assert.ok(k.floor > 0, 'what takes a lesson for granted is never on the floor you land on');
+      if (k.id === 'homebody') assert.notEqual(visit.floors[k.floor].theme, 'yellow');
+      assert.deepEqual(castFor(visit, k.floor, more).filter((x) => x.id === k.id), [k]);
+      const m = more.find((x) => x.id === k.id), level = floors[k.floor], home = homeFor(level, m);
+      assert.equal(home, homeFor(level, m));
+      if (m.home !== 'room') { assert.equal(home, null); continue; }
+      if (home === null) { none++; continue; }
+      homes++;
+      const r = level.rooms[home];
+      assert.ok(r.kind === 'plain' && !r.crawl && home !== level.start.room && !(level.pursuer && level.pursuer.room === home));
+      assert.ok(Math.max(r.W, r.D) >= m.room.w && Math.min(r.W, r.D) >= m.room.d - 1e-9);
+      assert.ok(roomRoute(level, level.start.room, home).length - 1 >= 3, 'a little way in');
+    }
+    for (let i = 0; i < visit.depths; i++) assert.ok(castFor(visit, i, more).some((k) => k.id === 'pirate'));
+  }
+  assert.ok(homes > 10 && none > 0, `${homes} homes found, ${none} floors with no room that would do`);
+  assert.deepEqual(castFor(null), [{ id: 'pirate', floor: null }]);
+});
+
+test('with health to take, being grabbed costs two of four and it keeps away a while; it is not interested until that is over', () => {
+  assert.equal(HUNT.grab, 2, 'the second time is the last');
+  assert.equal(CAST.find((m) => m.id === 'pirate').caught.hurt, HUNT.grab, 'and the cast says so');
+  for (const r of [0, 0.5, 0.999]) { const s = spent(() => r); assert.ok(s.spent >= HUNT.spent[0] && s.spent <= HUNT.spent[1] && s.mode === 'wander'); }
+  let s = run(spent(() => 0), HUNT.spent[0] - 0.5, { los: true, d: 2, exits: [{ room: 3 }] });
+  assert.equal(s.mode, 'wander', 'in plain sight, a pace away, and it does not care');
+  s = run(s, 1.5, { los: true, d: 2, exits: [{ room: 3 }] });
+  assert.equal(s.mode, 'chase', 'and then it does');
 });
