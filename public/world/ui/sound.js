@@ -220,7 +220,8 @@ export function createSound(office) {
     if (live.size >= 16) return note(name, 'too much at once');
     if (!wake() || (ctx.state !== 'running' && now - askedAt > 1500)) return note(name, 'not started yet');
     last.set(name, now);
-    const one = { name, stopped: false, src: null, amp: null, stop(fade = 0.05) {
+    const one = { name, stopped: false, src: null, amp: null, stop(fadeSeconds) {
+      const fade = Number.isFinite(fadeSeconds) ? Math.max(0, fadeSeconds) : 0.05;
       this.stopped = true; live.delete(this);
       if (!this.amp) return;
       this.amp.gain.setTargetAtTime(0, ctx.currentTime, Math.max(0.005, fade / 4));
@@ -313,7 +314,8 @@ export function createSound(office) {
 
   /** Put `name` in a slot (the one song, the one bed), fading out whatever was there. No name: just empty it. */
   function swap(slot, name, opt) {
-    const { loop = true, volume = 0.5, fade = 0.8 } = opt || {};
+    const number = (v, fallback) => (Number.isFinite(v) ? Math.max(0, v) : fallback);
+    const loop = opt?.loop !== false, volume = number(opt?.volume, 0.5), fade = number(opt?.fade, 0.8);
     const old = slots[slot];
     if (old && old.name === name) { old.handle.volume(volume); return old.handle; }       // already playing: leave it be
     if (old) old.handle.stop(fade);
@@ -329,10 +331,10 @@ export function createSound(office) {
         // a decoded song is big: once nobody wants it, let it go
         if (MIX[name]?.bus !== 'bed') setTimeout(() => { if (![...loops].some((other) => other.name === name)) bank.delete(name); }, over * 1000 + 2000);
       },
-      volume(v, seconds = 0.4) {
+      volume(v, seconds) {
         if (!Number.isFinite(v)) return;
-        it.level = v;
-        if (it.amp) it.amp.gain.setTargetAtTime(v * (MIX[name]?.gain ?? 0.5), ctx.currentTime, Math.max(0.005, seconds / 3));
+        it.level = Math.max(0, v);
+        if (it.amp) it.amp.gain.setTargetAtTime(it.level * (MIX[name]?.gain ?? 0.5), ctx.currentTime, Math.max(0.005, number(seconds, 0.4) / 3));
       },
     };
     loops.add(it); slots[slot] = it;

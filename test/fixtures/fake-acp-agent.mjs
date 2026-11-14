@@ -166,6 +166,8 @@ async function runTurn(promptText) {
         await say(await mcpCall(officeMcp, tool, space === -1 ? {} : JSON.parse(arg.slice(space + 1))));
         break;
       }
+      // An agent that prints its own environment: what it was given must not come back out of the office.
+      case 'leak': await say(`my token is ${office?.token}`); await runTool(`curl -H "x-office-session: ${office?.token}" localhost`); break;
       case 'stop': stopReason = arg || 'end_turn'; break;
       case 'error': error = arg || 'the fake agent failed this turn'; break;
       default: break;

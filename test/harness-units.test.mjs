@@ -10,7 +10,7 @@ import { PassThrough } from 'node:stream';
 import { RpcPeer, RpcError, RpcClosedError, RPC } from '../server/harness/rpc.mjs';
 import { redact, stderrExcerpt, whichSync } from '../server/harness/child.mjs';
 import { parseAdapter } from '../server/harness/catalog.mjs';
-import { choicesFor, standingAnswer, describeRequest, categoryOf } from '../server/harness/approvals.mjs';
+import { choicesFor, standingAnswer, describeRequest, categoryOf, insideFolder } from '../server/harness/approvals.mjs';
 import { buildHandoff, compact } from '../server/harness/handoff.mjs';
 import { Transcript, readTranscriptFile } from '../server/harness/transcript.mjs';
 import { createCredentials } from '../server/harness/credentials.mjs';
@@ -209,6 +209,25 @@ test('approvals: what each button promises, and what a mode answers by itself', 
   assert.match(standingAnswer('full', 'command', new Set()), /full-access/);
   assert.match(standingAnswer('ask', 'command', new Set(['command'])), /you allowed commands/);
   assert.equal(standingAnswer('ask', 'fetch', new Set(['command'])), '', 'a grant covers its own category only');
+  // Standing permission for files stops at the edge of the session's folder.
+  assert.equal(standingAnswer('edits', 'file-change', new Set(), { inside: false }), '');
+  assert.equal(standingAnswer('ask', 'file-change', new Set(['file-change']), { inside: false }), '');
+  assert.match(standingAnswer('full', 'file-change', new Set(), { inside: false }), /full-access/, 'full access is the operator\'s explicit choice');
+  assert.match(standingAnswer('ask', 'command', new Set(['command']), { inside: false }), /you allowed commands/);
+  assert.deepEqual(choicesFor(options, 'file-change', { inside: false }).map((c) => c.action), ['once', 'reject']);
+  assert.deepEqual(choicesFor(options, 'file-change', { inside: true }).map((c) => c.action), ['once', 'always', 'reject']);
+
+  const root = tempDir('office-inside-');
+  fs.mkdirSync(path.join(root, 'src'));
+  fs.symlinkSync(os.tmpdir(), path.join(root, 'link-out'));
+  assert.equal(insideFolder(root, ['src/a.js', path.join(root, 'new', 'deep', 'file.txt'), '.']), true);
+  assert.equal(insideFolder(root, ['src/a.js', '../elsewhere.txt']), false, 'one path outside is enough');
+  assert.equal(insideFolder(root, ['/etc/passwd']), false);
+  assert.equal(insideFolder(root, ['link-out/x.txt']), false, 'a link that leaves the folder is followed');
+  assert.equal(insideFolder(root, ['~/.ssh/config']), false, 'the home directory, as the redactor writes it');
+  assert.equal(insideFolder(root, []), false, 'no path given is not "inside"');
+  assert.equal(insideFolder(root, ['src/a.js', 7]), false);
+  assert.equal(insideFolder('', ['a']), false);
 
   assert.equal(describeRequest({ kind: 'execute', command: 'rm -rf /', title: 'x' }), 'Wants to run: rm -rf /');
   assert.equal(describeRequest({ kind: 'edit', paths: ['a', 'b', 'c', 'd'], title: 'x', detail: 'because' }), 'Wants to change: a, b, c (+1)\nbecause');

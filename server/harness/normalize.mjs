@@ -185,7 +185,7 @@ export function requestCategory(kind, name) {
 }
 
 export const CATEGORY_LABEL = Object.freeze({
-  command: 'commands', 'file-change': 'file changes', 'file-read': 'file reads', fetch: 'web fetches',
+  command: 'commands', 'file-change': 'file changes in its folder', 'file-read': 'file reads in its folder', fetch: 'web fetches',
 });
 export const categoryLabel = (category) => CATEGORY_LABEL[category]
   || (category.startsWith('other:') ? `“${category.slice(6)}”` : 'this kind of request');

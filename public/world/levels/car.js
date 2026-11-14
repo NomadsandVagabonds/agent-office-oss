@@ -87,6 +87,13 @@ export function createLiftDoor(opt = {}) {
   const plate = buildProp('callplate', { id: 'callplate' });
   plate.position.set(half + 0.36, 0.7, 0);
   group.add(plate);
+  // the plate is sculpted showing L (it hangs in the lobby too); here its little window shows this floor
+  const here = ledDisplay(28, 32);
+  const window_ = new THREE.Mesh(own(new THREE.PlaneGeometry(6 * VOXEL, 7 * VOXEL)), here.material);
+  window_.position.set(half + 0.36, 0.7 + 18.5 * VOXEL, 1.06 * VOXEL);
+  group.add(window_);
+  here.set(opt.floor || 'L');
+  own(here);
 
   const display = ledDisplay();
   const screen = new THREE.Mesh(own(new THREE.PlaneGeometry(LIFT_DISPLAY.w * VOXEL, LIFT_DISPLAY.h * VOXEL)), display.material);

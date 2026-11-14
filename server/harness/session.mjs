@@ -19,9 +19,10 @@ import path from 'node:path';
 import { AcpAdapter } from './acp.mjs';
 import { CodexAdapter } from './codex.mjs';
 import { Transcript } from './transcript.mjs';
-import { choicesFor, standingAnswer, describeRequest, categoryOf } from './approvals.mjs';
+import { choicesFor, standingAnswer, describeRequest, categoryOf, insideFolder } from './approvals.mjs';
 import { line, text as cleanText, limitWindow } from './normalize.mjs';
-import { MODE_LABEL } from './catalog.mjs';
+import { MODE_LABEL, MODES } from './catalog.mjs';
+import { WAKE_MODES } from './settings.mjs';
 
 const MAX_PROMPT_CHARS = 120_000;
 const MAX_MESSAGE_CHARS = 48_000;        // one reply, as kept in the transcript
@@ -33,6 +34,21 @@ const FILE_KIND = Object.freeze({ edit: 'edit', delete: 'edit', move: 'edit', re
 
 export class SessionError extends Error {
   constructor(status, message) { super(message); this.status = status; }
+}
+
+// The session's own credential must never be readable back out of what the
+// office shows or keeps: an agent that prints its environment would otherwise
+// publish its token to every teammate who reads its transcript.
+const TOKEN_MASK = '[office session token]';
+function scrub(value, secret) {
+  if (typeof value === 'string') return value.includes(secret) ? value.split(secret).join(TOKEN_MASK) : value;
+  if (Array.isArray(value)) return value.map((v) => scrub(v, secret));
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = scrub(v, secret);
+    return out;
+  }
+  return value;
 }
 
 export class DrivenSession extends EventEmitter {
@@ -48,6 +64,11 @@ export class DrivenSession extends EventEmitter {
     this.id = record.id;
     this.state = 'starting';          // starting → idle ⇄ running → ended | failed
     this.transcript = new Transcript(files.transcript);
+    if (token) {
+      // Scrubbed where text is whole: a streamed reply can carry the token split across two chunks.
+      const write = this.transcript.write.bind(this.transcript);
+      this.transcript.write = (entry, opt) => write(scrub(entry, token), opt);
+    }
     this.queue = [];                  // turns waiting for the current one to finish
     this.turn = null;
     this.turnCount = 0;
@@ -77,12 +98,13 @@ export class DrivenSession extends EventEmitter {
       command: spec.command, args: spec.args, env, cwd: record.cwd, mcpServers, model: record.model || '',
       clientInfo: { name: 'the-office', title: 'The Office', version: ctx.version || '0.0.0' },
       startTimeoutMs: this.cfg.startTimeoutMs, cancelTimeoutMs: this.cfg.cancelTimeoutMs,
-      trace: this.cfg.trace ? this.#tracer(files.trace) : undefined,
+      trace: this.cfg.trace ? this.#tracer(files.trace, token) : undefined,
     };
     this.adapter = spec.protocol === 'codex-app-server'
       ? new CodexAdapter({ ...common, mode: record.mode })
       : new AcpAdapter({ ...common, protocol: spec.acpVersion === 2 ? 2 : 1, modeId: spec.modeId });
-    this.adapter.on('event', (ev) => {
+    this.adapter.on('event', (raw) => {
+      const ev = token ? scrub(raw, token) : raw;
       try { this.#on(ev); }
       catch (err) { ctx.log.warn(`[harness] ${this.id} could not handle ${ev?.type}: ${err?.stack || err}`); }
     });
@@ -93,11 +115,12 @@ export class DrivenSession extends EventEmitter {
   get waiting() { return this.requests.size > 0; }
 
   // Raw frames, for comparing a real agent against what the adapters expect.
-  // Off unless OFFICE_HARNESS_TRACE=1: frames carry everything the agent sees.
-  #tracer(file) {
+  // Off unless OFFICE_HARNESS_TRACE=1: frames carry everything the agent sees
+  // (prompts, file contents in tool results) — except the session's own token.
+  #tracer(file, token) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     return (direction, message) => {
-      const body = JSON.stringify(message);
+      const body = scrub(JSON.stringify(message), token);
       fs.appendFile(file, JSON.stringify({ t: Date.now(), dir: direction, frame: body.length > 6000 ? body.slice(0, 6000) + '…' : body }) + '\n', () => {});
     };
   }
@@ -351,8 +374,9 @@ export class DrivenSession extends EventEmitter {
     if (!windows.length) return;
     const plan = line(typeof ev.plan === 'string' ? ev.plan : '', 40);
     this.limits = { ...(plan ? { plan } : {}), windows, at: Date.now() };
+    // Each report is the whole picture as the adapter knows it (it has merged the provider's partial updates).
     this.ctx.bus.local({ type: 'usage:report', report: { provider: this.record.provider, ...(plan ? { plan } : {}),
-      source: 'driven', agentId: this.id, windows } });
+      source: 'driven', agentId: this.id, replace: true, windows } });
     this.#save();
   }
 
@@ -362,6 +386,8 @@ export class DrivenSession extends EventEmitter {
     const { ev, category, choices } = pending;
     return {
       id: requestId, sessionId: this.id, kind: pending.kind, pending: true, category,
+      // What is being asked, as plain fields: which tool, and the command or the files it concerns.
+      tool: pending.kind === 'question' ? '' : (TOOL_LABEL[ev.kind] || line(ev.name, 40) || 'Tool'), toolKind: ev.kind || '',
       title: ev.title || '', command: ev.command || '', paths: ev.paths || [], detail: ev.detail || '',
       choices: choices.map((c) => ({ action: c.action, label: c.label, ...(c.scope ? { scope: c.scope } : {}) })),
       // The agent's own answers, verbatim, for anyone who wants to pick one by id.
@@ -378,12 +404,14 @@ export class DrivenSession extends EventEmitter {
 
   #permission(ev) {
     const category = categoryOf(ev);
-    const choices = choicesFor(ev.options, category, { nativeSessionAllow: this.adapter.kind === 'codex-app-server' });
+    // Standing permission for files stops at the edge of this session's folder.
+    const inside = insideFolder(this.record.cwd, ev.paths);
+    const choices = choicesFor(ev.options, category, { nativeSessionAllow: this.adapter.kind === 'codex-app-server', inside });
     const entry = { id: `perm:${ev.requestId}`, kind: 'permission', turn: this.turn?.n, category, title: ev.title,
       ...(ev.command ? { command: ev.command } : {}), ...(ev.paths?.length ? { paths: ev.paths } : {}),
       ...(ev.detail ? { detail: ev.detail } : {}) };
     const allow = choices.find((c) => c.action === 'once');
-    const standing = allow ? standingAnswer(this.mode, category, this.grants) : '';
+    const standing = allow ? standingAnswer(this.mode, category, this.grants, { inside }) : '';
     if (standing && this.adapter.answer(ev.requestId, { optionId: allow.optionId })) {
       // Answered by policy, not by a person — and written down so that is never a secret.
       this.transcript.write({ ...entry, state: 'auto-allowed', reason: standing });
@@ -453,10 +481,14 @@ export class DrivenSession extends EventEmitter {
       optionLabel = option.name;
       state = option.kind.startsWith('reject') ? 'rejected' : 'allowed';
     } else {
-      // Bare text on a permission card means "no — do this instead".
-      const action = body.action || (note ? 'reject' : '');
-      const choice = pending.choices.find((c) => c.action === action);
-      if (!choice) return { error: 'answer with action once, always or reject', status: 400, actions: pending.choices.map((c) => c.action) };
+      // A decision has to be said, never guessed: words alone ("yes", "ok then") are not an answer
+      // to a permission request. With a decision, words follow as the agent's next turn.
+      const choice = pending.choices.find((c) => c.action === body.action);
+      if (!choice) {
+        return { error: `this request needs a decision: send action ${pending.choices.map((c) => c.action).join(', ')} (text is optional and follows as the agent's next turn)`,
+          status: 400, actions: pending.choices.map((c) => c.action) };
+      }
+      const action = choice.action;
       decision = choice.optionId ? { optionId: choice.optionId } : { cancelled: true };
       state = action === 'once' ? 'allowed' : action === 'always' ? 'allowed-session' : 'rejected';
       if (action === 'always') grant = pending.category;
@@ -547,6 +579,25 @@ export class DrivenSession extends EventEmitter {
     this.#finish('ended', this.endReason, {});
   }
 
+  // Everything a client can do with this session, each with the call that does
+  // it and whether it applies right now — so a client needs to know nothing
+  // about the adapter behind the session (that Codex's mode is fixed, say).
+  #controls() {
+    const at = `/api/harness/sessions/${this.id}`;
+    const live = this.live, r = this.record;
+    const fixed = !!this.features.nativeSandbox;
+    return {
+      transcript: { method: 'GET', url: `${at}/transcript`, query: ['after', 'limit'], watch: { type: 'transcript:watch', sessionId: this.id } },
+      turn: { method: 'POST', url: `${at}/turn`, body: { text: '' }, available: live },
+      interrupt: { method: 'POST', url: `${at}/interrupt`, available: live && (!!this.turn || this.queue.length > 0) },
+      end: { method: 'DELETE', url: at, available: live },
+      wake: { method: 'PATCH', url: at, field: 'wake', value: r.wake, options: WAKE_MODES.slice(), available: live },
+      mode: { method: 'PATCH', url: at, field: 'mode', value: r.mode, options: MODES.slice(), available: live && !fixed,
+        ...(fixed ? { fixed: 'set when this agent starts: its own sandbox enforces it' } : {}) },
+      deliverMail: { method: 'POST', url: `${at}/mail`, available: live },
+    };
+  }
+
   /** What clients and teammates may know about this session. */
   pub() {
     const r = this.record;
@@ -563,6 +614,7 @@ export class DrivenSession extends EventEmitter {
       origin: r.origin || { kind: 'human' }, usage: this.usage, limits: this.limits,
       // Honest by construction: the office can grant, deny and stop only while it holds the process.
       caps: { observe: true, prompt: this.live, control: this.live, spawn: true },
+      controls: this.#controls(),
     };
   }
 }

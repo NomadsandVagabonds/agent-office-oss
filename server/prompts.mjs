@@ -41,13 +41,57 @@ export function createPrompts(ctx) {
       terminalSessionId: p.terminalSessionId || null,
       provider: runtime.provider || agent?.provider || null,
       runtime,
-      // Backed by a live request: exactly the answers that request offers, plus words.
-      // Otherwise: what the runtime can honour (a reply, at most).
+      // Backed by a live request: exactly the answers that request offers (a
+      // question is answered in words). Otherwise: what the runtime can honour
+      // (a reply, at most). `respond` below spells each one out.
       actions: p.request
-        ? (p.status === 'pending' ? [...requestActions(p.request), 'reply'] : [])
+        ? (p.status !== 'pending' ? [] : p.request.kind === 'question' ? ['reply'] : requestActions(p.request))
         : runtimeView.promptReplyActions(p, runtime),
       request: p.request || null,
+      // The same two things for every prompt, whatever stands behind it, so a
+      // client needs no knowledge of runtimes: what is being asked, as plain
+      // fields, and every way to answer it with the exact call to make.
+      ask: askOf(p),
+      respond: respondOf(p, runtime),
     };
+  }
+
+  function askOf(p) {
+    const r = p.request;
+    return {
+      summary: String(p.message || '').split('\n')[0],
+      tool: r?.tool || '', toolKind: r?.toolKind || '',
+      command: r?.command || '', files: r?.paths || [], detail: r?.detail || '',
+      // what "allow for the session" would cover, when that is on offer
+      category: r && r.kind === 'permission' ? r.category : '',
+      questions: r?.questions || [],
+    };
+  }
+
+  const ACTION_KIND = Object.freeze({ once: 'allow-once', always: 'allow-session', reject: 'reject' });
+
+  function respondOf(p, runtime) {
+    const how = { method: 'POST', url: `/api/prompts/${p.id}/reply`, textField: 'text' };
+    if (p.status !== 'pending') return { ...how, actions: [], reaches: null };
+    if (p.request) {
+      // Backed by a request the agent is waiting on: answering it answers the agent, over its protocol.
+      const actions = p.request.kind === 'question'
+        ? [{ id: 'answer', kind: 'answer', label: 'Answer', text: 'required', body: {} },
+          { id: 'reject', kind: 'decline', label: 'Decline to answer', text: 'none', body: { action: 'reject' } }]
+        : (p.request.choices || []).map((c) => ({ id: c.action, kind: ACTION_KIND[c.action] || c.action, label: c.label,
+          // words sent with a decision follow as the agent's next turn; words alone are refused
+          text: 'optional', body: { action: c.action }, ...(c.scope ? { scope: c.scope, covers: p.request.category } : {}) }));
+      return { ...how, actions, reaches: 'agent', humanOnly: true, thisMachineOnly: true };
+    }
+    // An agent that reported itself blocked: all the office can do is carry words to it.
+    const agent = ctx.agents.get(p.agentId);
+    const reaches = ctx.harness?.isDriven(p.agentId) ? 'turn'
+      : (runtimeView.liveRef(p.terminalSessionId) || runtimeView.strictSession(agent)) ? 'terminal' : 'inbox';
+    const canReply = runtimeView.promptReplyActions(p, runtime).includes('reply');
+    return { ...how, reaches, actions: [
+      ...(canReply ? [{ id: 'reply', kind: 'reply', label: 'Reply', text: 'required', body: {} }] : []),
+      { id: 'dismiss', kind: 'dismiss', label: 'Dismiss', text: 'none', body: { text: '', close: true } },
+    ] };
   }
 
   const listPublic = () => [...prompts.values()].map(pub).sort((a, b) => b.updatedAt - a.updatedAt);

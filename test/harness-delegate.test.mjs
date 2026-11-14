@@ -107,7 +107,7 @@ test('delegation', async (t) => {
   await t.test('a driven agent delegates with its own office tools and is woken with the result', async () => {
     const boss = await h.start('fake', { name: 'Boss', wake: 'results' });
     // Its own turn carries on after delegating; the child finishing does not finish it.
-    const first = await h.turn(boss.id, 'delegate:fake|say:the child did it; sleep:200; tool:echo still mine');
+    const first = await h.turn(boss.id, 'delegate:fake|say:the child did it; sleep:1200; tool:echo still mine');
     const id = /delegate=200:(dg_[a-f0-9]+)/.exec(first.said)[1];
     assert.equal(first.turn.state, 'completed');
     assert.equal(first.entries.find((e) => e.kind === 'tool').command, 'echo still mine');
@@ -331,25 +331,43 @@ test('delegation', async (t) => {
 
   await t.test('when nobody names a provider the office chooses — by remaining allowance, when someone keeps count', async () => {
     const real = h.ctx.usage;
-    t.after(() => { h.ctx.usage = real; });
     const pick = async (advice) => {
       if (advice === undefined) delete h.ctx.usage; else h.ctx.usage = { advice };
-      const d = (await h.post('/api/delegations', { task: 'say:hello', cwd: h.work, wait: true })).data.delegation;
-      assert.equal(d.status, 'completed');
-      return d.to;
+      return h.post('/api/delegations', { task: 'say:hello', cwd: h.work, wait: true });
     };
-    const plain = await pick(undefined);
-    assert.equal(plain.adapter, 'fake', 'without advice: the first agent that can be started here');
-    assert.match(plain.chosenBecause, /first agent that can be started/);
-    const preferred = await pick(() => ({ prefer: 'codex', low: [] }));
-    assert.equal(preferred.adapter, 'fake-codex');
-    assert.equal(preferred.chosenBecause, 'codex has the most allowance left');
-    const avoiding = await pick(() => ({ prefer: null, low: ['gemini', 'opencode'] }));
-    assert.equal(avoiding.adapter, 'fake-codex');
-    assert.match(avoiding.chosenBecause, /gemini, opencode are running low/);
-    assert.equal((await pick(() => ({ prefer: 'claude', low: [] }))).adapter, 'fake', 'a preferred provider that is not installed cannot be chosen');
-    assert.equal((await pick(() => { throw new Error('usage is having a day'); })).adapter, 'fake', 'advice is optional, even when it breaks');
-    assert.equal((await pick(() => ({ prefer: 42, low: 'all of them' }))).adapter, 'fake');
+    const chosen = async (advice) => {
+      const res = await pick(advice);
+      assert.equal(res.data.delegation?.status, 'completed', JSON.stringify(res.data));
+      return res.data.delegation.to;
+    };
+    try {
+      const plain = await chosen(undefined);
+      assert.equal(plain.adapter, 'fake', 'without advice: the first agent that can be started here');
+      assert.match(plain.chosenBecause, /first agent that can be started/);
+      const preferred = await chosen(() => ({ prefer: 'codex', low: [], out: [] }));
+      assert.equal(preferred.adapter, 'fake-codex');
+      assert.equal(preferred.chosenBecause, 'codex has the most allowance left');
+      const avoiding = await chosen(() => ({ prefer: null, low: ['gemini', 'opencode'], out: [] }));
+      assert.equal(avoiding.adapter, 'fake-codex');
+      assert.match(avoiding.chosenBecause, /gemini, opencode are spent or running low/);
+      // A spent provider is never chosen — not even when it is the one "preferred".
+      assert.equal((await chosen(() => ({ prefer: 'gemini', low: [], out: ['gemini', 'opencode'] }))).adapter, 'fake-codex');
+      // Running low is still better than nothing.
+      assert.equal((await chosen(() => ({ prefer: null, low: ['gemini', 'opencode', 'codex'], out: [] }))).adapter, 'fake');
+      const none = await pick(() => ({ prefer: null, low: [], out: ['gemini', 'opencode', 'codex'] }));
+      assert.equal(none.status, 409);
+      assert.match(none.data.error, /every provider that can be started here is out of allowance/);
+      // Naming one is the caller's decision, and stays possible.
+      h.ctx.usage = { advice: () => ({ prefer: null, low: [], out: ['gemini', 'opencode', 'codex'] }) };
+      assert.equal((await h.post('/api/delegations', { to: 'fake', task: 'say:anyway', cwd: h.work, wait: true })).data.delegation.status, 'completed');
+      assert.equal((await chosen(() => ({ prefer: 'claude', low: [], out: [] }))).adapter, 'fake', 'a preferred provider that is not installed cannot be chosen');
+      assert.equal((await chosen(() => { throw new Error('usage is having a day'); })).adapter, 'fake', 'advice is optional, even when it breaks');
+      assert.equal((await chosen(() => ({ prefer: 42, low: 'all of them', out: null }))).adapter, 'fake');
+      // The real usage service, with nothing worth acting on, steers nothing.
+      h.ctx.usage = real;
+      assert.equal(real.advice().prefer, null);
+      assert.equal((await h.post('/api/delegations', { task: 'say:hello', cwd: h.work, wait: true })).data.delegation.to.adapter, 'fake');
+    } finally { h.ctx.usage = real; }
   });
 });
 

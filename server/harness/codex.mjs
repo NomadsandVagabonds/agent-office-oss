@@ -15,6 +15,7 @@
 import { RpcError, RPC } from './rpc.mjs';
 import { AgentAdapter, START_TIMEOUT_MS } from './adapter.mjs';
 import { LIMITS, isObject, line, text, tail, toolStatus, planStatus, limitWindow } from './normalize.mjs';
+import { codexRateLimitsToReport } from '../usage-sources.mjs';
 
 /**
  * How an office mode maps onto Codex's own policy. Codex enforces these itself
@@ -40,36 +41,26 @@ const LEGACY_DECISION = Object.freeze({
   decline: { denied: { rejection: 'The user declined the request.' } }, cancel: 'abort',
 });
 
-// Codex names its allowance windows by position (primary, secondary), not by
-// what they are; what they mean follows their length. When Codex leaves the
-// length out, paid plans are five hours and a week and the free tiers a month.
-// This reading is T3 Code's (apps/server/src/provider/codexUsageLimits.ts).
-const SESSION_MINS = 5 * 60, WEEK_MINS = 7 * 24 * 60, MONTH_MINS = 30 * 24 * 60;
-const LIMIT_LABEL = Object.freeze({ session: 'Session', weekly: 'Weekly', monthly: 'Monthly' });
-
-/** Codex's rate-limit snapshot as the office's allowance windows. Exported for the tests. */
+/**
+ * Codex's rate-limit snapshot as the office's allowance windows. The reading of
+ * primary/secondary (they are positions, not names: what a window means follows
+ * its length) is the office's one shared reading, server/usage-sources.mjs — the
+ * session-file observer and this adapter must not disagree about the same numbers.
+ * Added here: the spend cap the app-server also reports, and a final check of
+ * every number, since all of it came from a child process. Exported for the tests.
+ */
 export function codexLimits(snapshot) {
   if (!isObject(snapshot)) return { plan: '', windows: [] };
-  const plan = line(typeof snapshot.planType === 'string' ? snapshot.planType : '', 40);
-  const monthlyPlan = plan === 'free' || plan === 'go';
-  const windows = [];
-  for (const [id, fallbackMins] of [['primary', monthlyPlan ? MONTH_MINS : SESSION_MINS], ['secondary', WEEK_MINS]]) {
-    const w = snapshot[id];
-    if (!isObject(w)) continue;
-    const mins = Number.isFinite(w.windowDurationMins) && w.windowDurationMins > 0 ? w.windowDurationMins : fallbackMins;
-    const kind = mins >= MONTH_MINS ? 'monthly' : mins >= WEEK_MINS ? 'weekly' : 'session';
-    const window = limitWindow({ id, kind, label: LIMIT_LABEL[kind], usedPercent: w.usedPercent, windowMins: mins,
-      resetsAt: Number.isFinite(w.resetsAt) ? w.resetsAt * 1000 : undefined });        // Codex counts in seconds
-    if (window) windows.push(window);
-  }
+  const report = codexRateLimitsToReport(snapshot);
+  const ms = (v) => (Number.isFinite(v) && v > 0 ? (v < 1e11 ? v * 1000 : v) : undefined);      // Codex counts in seconds
+  const windows = (report?.windows || []).map((w) => limitWindow({ ...w, resetsAt: ms(w.resetsAt) })).filter(Boolean);
   // A spend cap is reported as what is left, not as what is used.
   const cap = snapshot.individualLimit;
   if (isObject(cap) && Number.isFinite(cap.remainingPercent)) {
-    const window = limitWindow({ id: 'individual', kind: 'credit', label: 'Credit limit', usedPercent: 100 - cap.remainingPercent,
-      resetsAt: Number.isFinite(cap.resetsAt) ? cap.resetsAt * 1000 : undefined });
+    const window = limitWindow({ id: 'individual', kind: 'credit', label: 'Credit limit', usedPercent: 100 - cap.remainingPercent, resetsAt: ms(cap.resetsAt) });
     if (window) windows.push(window);
   }
-  return { plan, windows };
+  return { plan: line(typeof snapshot.planType === 'string' ? snapshot.planType : '', 40), windows };
 }
 
 export class CodexAdapter extends AgentAdapter {

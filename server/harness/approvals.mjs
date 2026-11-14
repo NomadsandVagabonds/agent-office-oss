@@ -19,17 +19,65 @@
 //
 // A session's mode decides what the office answers without asking at all:
 //   ask    nothing — every request goes to the human
-//   edits  file changes are allowed; everything else goes to the human
+//   edits  file changes inside the session's folder; everything else goes to the human
 //   full   everything is allowed
 // For ACP agents this is enforced at our end of the wire only: it governs how
 // requests are ANSWERED, not whether the agent asks. Codex additionally gets
 // the matching native sandbox and approval policy (see codex.mjs).
+//
+// Standing permission for files — from the mode or from a session grant —
+// stops at the edge of the session's folder. A request about a file outside it
+// (or one that does not say which file) is always asked, and is never the
+// start of a session-wide grant. T3 Code draws the same line for its
+// workspace-write policy (packages/provider-acp/src/server/clientPolicy.ts).
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { requestCategory, categoryLabel } from './normalize.mjs';
+
+const FILE_CATEGORIES = new Set(['file-change', 'file-read']);
+
+// The real location of a path that may not exist yet: resolve links on the
+// deepest part that does exist, then put the rest back.
+function canonical(target) {
+  let head = target, rest = '';
+  for (let i = 0; i < 64; i++) {
+    try { return path.join(fs.realpathSync(head), rest); }
+    catch {
+      const parent = path.dirname(head);
+      if (parent === head) return target;
+      rest = path.join(path.basename(head), rest);
+      head = parent;
+    }
+  }
+  return target;
+}
+
+/**
+ * Are all of these paths inside `root`, following symlinks? An empty list, or a
+ * path that cannot be placed, is "no": standing permission needs to know where.
+ * Paths come from the agent and may be relative to the folder; a leading "~" is
+ * the home directory (our own redactor writes it that way).
+ */
+export function insideFolder(root, paths) {
+  if (typeof root !== 'string' || !root || !Array.isArray(paths) || !paths.length) return false;
+  const base = canonical(path.resolve(root));
+  return paths.every((p) => {
+    if (typeof p !== 'string' || !p || p.includes('\0')) return false;
+    const absolute = p === '~' || p.startsWith('~/') ? path.join(os.homedir(), p.slice(1)) : path.resolve(base, p);
+    const rel = path.relative(base, canonical(absolute));
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  });
+}
 
 const kindOf = (options, kind) => options.find((o) => o.kind === kind) || null;
 
-/** The actions a human may take on one request, each tied to the option that carries it out. */
-export function choicesFor(options, category, { nativeSessionAllow = false } = {}) {
+/**
+ * The actions a human may take on one request, each tied to the option that carries it out.
+ * `inside` says whether the files concerned are all in the session's folder (see insideFolder);
+ * it only matters for file requests.
+ */
+export function choicesFor(options, category, { nativeSessionAllow = false, inside = true } = {}) {
   const allowOnce = kindOf(options, 'allow_once');
   const allowAlways = kindOf(options, 'allow_always');
   const reject = kindOf(options, 'reject_once');
@@ -37,22 +85,26 @@ export function choicesFor(options, category, { nativeSessionAllow = false } = {
   const choices = [];
   if (allow) {
     choices.push({ action: 'once', label: 'Allow once', optionId: allow.id });
-    choices.push({
-      action: 'always', scope: 'session', category,
-      label: `Allow ${categoryLabel(category)} for this session`,
-      // Codex's own "for session" answer covers only this exact command or patch,
-      // so it is safe to use; the office's memory is what covers the next one.
-      optionId: (nativeSessionAllow && allowAlways ? allowAlways : allow).id,
-    });
+    // A file outside the folder is a decision about that file, not the start of a standing permission.
+    if (!FILE_CATEGORIES.has(category) || inside) {
+      choices.push({
+        action: 'always', scope: 'session', category,
+        label: `Allow ${categoryLabel(category)} for this session`,
+        // Codex's own "for session" answer covers only this exact command or patch,
+        // so it is safe to use; the office's memory is what covers the next one.
+        optionId: (nativeSessionAllow && allowAlways ? allowAlways : allow).id,
+      });
+    }
   }
   choices.push({ action: 'reject', label: 'Reject', optionId: reject ? reject.id : null });
   return choices;
 }
 
 /** Does the session's mode, or something the human already granted, answer this without asking? */
-export function standingAnswer(mode, category, grants) {
+export function standingAnswer(mode, category, grants, { inside = true } = {}) {
   if (mode === 'full') return 'the session runs in full-access mode';
-  if (mode === 'edits' && category === 'file-change') return 'the session accepts edits';
+  if (FILE_CATEGORIES.has(category) && !inside) return '';
+  if (mode === 'edits' && category === 'file-change') return 'the session accepts edits in its folder';
   if (grants.has(category)) return `you allowed ${categoryLabel(category)} for this session`;
   return '';
 }

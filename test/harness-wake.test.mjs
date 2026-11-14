@@ -76,7 +76,7 @@ test('mail that wakes people up', async (t) => {
   });
 
   await t.test('mail never interrupts work in progress; what piled up arrives as one turn', async () => {
-    const n = await h.begin(alice.id, 'sleep:250; say:finished my own work');
+    const n = await h.begin(alice.id, 'sleep:700; say:finished my own work');
     await note(alice.id, 'first thing');
     await note(alice.id, 'second thing [[script]]say:read both[[/script]]');
     await sleep(80);

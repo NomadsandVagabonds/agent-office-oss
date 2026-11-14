@@ -32,11 +32,23 @@ test('driven sessions: Codex app-server', async (t) => {
     assert.equal(told.framed, 1);
 
     // Codex enforces its sandbox itself, so the mode is fixed when the thread starts.
+    assert.equal(s.controls.mode.available, false, 'and the session says so itself');
+    assert.match(s.controls.mode.fixed, /its own sandbox enforces it/);
     const refused = await h.patch(`/api/harness/sessions/${s.id}`, { mode: 'full' });
     assert.equal(refused.status, 409);
     assert.match(refused.data.error, /sandbox is set when it starts/);
     assert.equal((await h.patch(`/api/harness/sessions/${s.id}`, { wake: 'direct' })).data.session.wake, 'direct');
     await h.del(`/api/harness/sessions/${s.id}`);
+
+    // In "edits" mode Codex's own sandbox lets it write in its folder without asking; what it does ask
+    // about is what the sandbox refused — and that goes to the human, not to a standing yes.
+    const e = await h.start('fake-codex', { mode: 'edits' });
+    const n = await h.begin(e.id, 'askfile:/etc/hosts');
+    const escalation = await h.need(e.id);
+    assert.equal(escalation.ask.files[0], '/etc/hosts');
+    await h.answer(escalation.id, { action: 'reject' });
+    await h.turnDone(e.id, n);
+    await h.del(`/api/harness/sessions/${e.id}`);
 
     for (const mode of ['edits', 'full']) {
       const m = await h.start('fake-codex', { mode });
@@ -79,7 +91,9 @@ test('driven sessions: Codex app-server', async (t) => {
     assert.equal(card.message.split('\n')[0], 'Wants to run: rm -rf build');
     assert.match(card.request.detail, /the sandbox would not allow this command/);
     assert.deepEqual(card.request.options.map((o) => o.id), ['accept', 'acceptForSession', 'decline']);
-    assert.deepEqual(card.actions, ['once', 'always', 'reject', 'reply']);
+    assert.deepEqual(card.actions, ['once', 'always', 'reject']);
+    assert.deepEqual([card.ask.tool, card.ask.toolKind, card.ask.command], ['Shell', 'execute', 'rm -rf build']);
+    assert.deepEqual(card.respond.actions.map((a) => a.kind), ['allow-once', 'allow-session', 'reject']);
     await h.answer(card.id, { action: 'once' });
     await h.turnDone(s.id, n);
     assert.equal((await h.turnView(s.id, n)).said, 'decision=accept');
@@ -97,6 +111,7 @@ test('driven sessions: Codex app-server', async (t) => {
     card = await h.need(s.id);
     assert.equal(card.request.category, 'file-change');
     assert.equal(card.message.split('\n')[0], 'Wants to change: /etc/hosts');
+    assert.deepEqual(card.actions, ['once', 'reject'], 'a file outside its folder is never the start of a standing permission');
     await h.answer(card.id, { optionId: 'decline' });
     await h.turnDone(s.id, n);
     assert.equal((await h.turnView(s.id, n)).said, 'decision=decline');
@@ -120,6 +135,11 @@ test('driven sessions: Codex app-server', async (t) => {
     assert.equal(card.kind, 'question');
     assert.deepEqual(card.actions, ['reply'], 'a question has no allow or reject');
     assert.match(card.message, /Choose: Which Tailwind version\? \(v3 \/ v4\)/);
+    assert.deepEqual(card.ask.questions, [{ id: 'q1', header: 'Choose', text: 'Which Tailwind version?', options: ['v3', 'v4'] }]);
+    assert.deepEqual(card.respond.actions, [
+      { id: 'answer', kind: 'answer', label: 'Answer', text: 'required', body: {} },
+      { id: 'reject', kind: 'decline', label: 'Decline to answer', text: 'none', body: { action: 'reject' } },
+    ]);
     assert.equal((await h.agent(s.id)).blockKind, 'question');
     assert.equal((await h.answer(card.id, {})).status, 400);
     const res = await h.answer(card.id, { text: 'v4' });
@@ -180,11 +200,17 @@ test('driven sessions: Codex app-server', async (t) => {
 
     const s = await h.start('fake-codex', { name: 'Meter' });
     const first = await waitFor(() => reports[0], { what: 'the first usage report' });
-    assert.deepEqual(first, { provider: 'codex', plan: 'plus', source: 'driven', agentId: s.id, windows: [
+    assert.deepEqual(first, { provider: 'codex', plan: 'plus', source: 'driven', agentId: s.id, replace: true, windows: [
       { id: 'primary', kind: 'session', label: 'Session', usedPercent: 42, resetsAt: 1_900_000_000_000, windowMins: 300 },
-      { id: 'secondary', kind: 'weekly', label: 'Weekly', usedPercent: 71.5, resetsAt: 1_900_086_400_000, windowMins: 10080 },
+      { id: 'secondary', kind: 'weekly', label: 'Week', usedPercent: 71.5, resetsAt: 1_900_086_400_000, windowMins: 10080 },
     ] });
     assert.equal((await h.session(s.id)).limits.plan, 'plus');
+    // The office's usage feed took it in, and says where the reading came from.
+    const meter = await waitFor(async () => (await h.get('/api/usage')).data.meters.find((m) => m.provider === 'codex'), { what: 'the usage meter' });
+    assert.equal(meter.source, 'driven');
+    assert.equal(meter.plan, 'plus');
+    assert.equal(meter.via, s.id);
+    assert.deepEqual(meter.windows.map((w) => [w.id, w.usedPercent]), [['primary', 42], ['secondary', 71.5]]);
 
     // Updates are partial: what Codex leaves out keeps its last value.
     await h.turn(s.id, 'limits:90; say:ok');
@@ -221,12 +247,12 @@ test('Codex allowance windows are read by their length, not their position', () 
   assert.deepEqual(codexLimits({ planType: 'pro', primary: { usedPercent: 10 }, secondary: { usedPercent: 20 } }).windows.map((w) => [w.id, w.kind, w.windowMins]),
     [['primary', 'session', 300], ['secondary', 'weekly', 10080]]);
   // …and the free tiers a month.
-  assert.deepEqual(codexLimits({ planType: 'free', primary: { usedPercent: 10 } }).windows.map((w) => [w.kind, w.label]), [['monthly', 'Monthly']]);
+  assert.deepEqual(codexLimits({ planType: 'free', primary: { usedPercent: 10 } }).windows.map((w) => [w.kind, w.label]), [['monthly', 'Month']]);
   // A spend cap is reported as what is left.
   const capped = codexLimits({ planType: 'team', individualLimit: { remainingPercent: 30, resetsAt: 1_900_000_000, limit: '50', used: '35' } });
   assert.deepEqual(capped.windows, [{ id: 'individual', kind: 'credit', label: 'Credit limit', usedPercent: 70, resetsAt: 1_900_000_000_000 }]);
   // Untrusted numbers are clamped or dropped, never passed on raw.
   const odd = codexLimits({ planType: 'x'.repeat(200), primary: { usedPercent: 250, resetsAt: 'soon', windowDurationMins: -5 }, secondary: { usedPercent: 'lots' } });
   assert.equal(odd.plan.length <= 40, true);
-  assert.deepEqual(odd.windows, [{ id: 'primary', kind: 'session', label: 'Session', usedPercent: 100, windowMins: 300 }]);
+  assert.deepEqual(odd.windows, [{ id: 'primary', kind: 'session', label: 'Session', usedPercent: 100 }]);
 });

@@ -13,7 +13,7 @@
 //
 // To give a floor a text side, add an entry to TEXT below. Floors without one
 // are for humans only, and the lift says so.
-import { HOME, levelById, visibleLevels } from '../../core/levels.mjs';
+import { HOME, floorOfPlacement, levelById, visibleLevels } from '../../core/levels.mjs';
 import { hashId } from '../../core/look.mjs';
 
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -101,7 +101,55 @@ const PASTURE = {
   },
 };
 
-const TEXT = { pasture: PASTURE };
+/* ---- A · After Hours ---------------------------------------------------------- */
+
+const FIXES = 8;               // how many an agent has to squash before its build goes green
+
+const AFTERHOURS = {
+  things: {
+    bug: ['bug', 'bugs', 'beetle', 'beetles', 'one'],
+    mallet: ['mallet', 'hammer', 'tool', 'rubber mallet'],
+    rack: ['rack', 'racks', 'production', 'servers', 'server'],
+    screen: ['screen', 'wall screen', 'build', 'status', 'counter'],
+    cabinet: ['cabinet', 'arcade', 'arcade cabinet', 'bug squash'],
+    monitor: ['monitor', 'monitors', 'desk', 'desks', 'lamp', 'light', 'lights'],
+  },
+  look(agent, api) {
+    const done = Math.min(FIXES, agent._bugsFixed || 0), green = done >= FIXES, others = api.whoIsOn('afterhours', agent);
+    return [
+      green ? 'The same kind of office as upstairs, late, and quiet again: the lights are on, and every monitor shows a green tick.'
+        : 'The same kind of office as upstairs, at night, with the build broken: emergency lighting, a red lamp turning over the wall screen, an error on every monitor, a ceiling tile or two on the carpet.',
+      green ? null : 'Things scuttle. Small green beetles — the bugs from the BUG SQUASH cabinet in the corner, with a third dimension now — come up out of the floor vents, hop onto desks, and make for the server racks.',
+      others.length ? `With you: ${list(others)}.` : null,
+      `Here: a rubber mallet (in your hand), the wall screen (BUGS FIXED ${String(done).padStart(2, '0')} / ${String(FIXES).padStart(2, '0')}), the racks, the cabinet they came out of.`,
+      green ? '(office go home)' : '(office use mallet · office go home)',
+    ].filter(Boolean);
+  },
+  examine(agent, thing) {
+    const done = Math.min(FIXES, agent._bugsFixed || 0);
+    switch (thing) {
+      case 'bug': return done >= FIXES ? 'None left. A few green pixels in the carpet.' : 'Beetle-shaped, arcade green, the size of a cat. The odd one is gold. Whatever one sits on starts showing errors. (office use mallet)';
+      case 'mallet': return 'A rubber mallet with a taped grip. Somebody has written DEBUGGER on the handle.';
+      case 'rack': return 'Production: two server racks, one each side of the wall screen. Every bug in the room is trying to get to them.';
+      case 'screen': return done >= FIXES ? `BUILD PASSING · BUGS FIXED ${FIXES} / ${FIXES}` : `BUILD FAILING · BUGS FIXED ${String(done).padStart(2, '0')} / ${String(FIXES).padStart(2, '0')}`;
+      case 'cabinet': return 'The BUG SQUASH cabinet. Its screen still runs, but there are fewer bugs on it than there used to be.';
+      default: return done >= FIXES ? 'Green ticks, all the way down the room.' : 'An error on every screen. The one nearest you says: undefined is not a function.';
+    }
+  },
+  use(agent, thing, arg, api) {
+    if (thing !== 'bug' && thing !== 'mallet') return { ok: true, text: AFTERHOURS.examine(agent, thing) };
+    if ((agent._bugsFixed || 0) >= FIXES) return { ok: true, text: 'You look for something to hit. There is nothing left: the build is green.' };
+    agent._bugsFixed = (agent._bugsFixed || 0) + 1;
+    const n = agent._bugsFixed, gold = hashId(agent.id + ':' + n) % 9 === 0;
+    let text = `You bring the mallet down. Pop: a scatter of ${gold ? 'gold' : 'green'} pixels and a small tag that says FIXED. (${n} of ${FIXES})`;
+    if (n < FIXES) return { ok: true, text };
+    const found = api.world.discover('green-build', agent);
+    text += '\nThat was the last one. The red lamp stops. The monitors come back one at a time, green; the lights come up; behind you the lift goes ding. The build is green again.';
+    return { ok: true, text: text + (found.stamped || found.first ? `  ★ Discovery: ${found.secret.name}` : ''), found: found.stamped ? 'green-build' : null };
+  },
+};
+
+const TEXT = { pasture: PASTURE, afterhours: AFTERHOURS };
 
 /* ---- the lift, and who is where ------------------------------------------------- */
 
@@ -111,7 +159,7 @@ export function createFloors(ctx, world) {
   const api = { ctx, world, whoIsOn };
 
   const floors = () => visibleLevels({ quirks: world.today().quirks, found: Object.keys(world.state().discoveries) });
-  const rides = (level) => !!TEXT[level.id];
+  const rides = (level) => !!TEXT[level.id] && !!level.car;
   const panel = () => floors().map((l) => (l.unmarked
     ? `  ${l.floor.padEnd(2)} · (no label. The button flickers. It was not there yesterday.)`
     : `  ${l.floor.padEnd(2)} · ${l.name} — ${l.blurb}${l.id === HOME ? '  ← you are here' : rides(l) ? `  ▸ office use lift ${l.id}` : ''}`)).join('\n');
@@ -127,12 +175,12 @@ export function createFloors(ctx, world) {
   function floorOf(agent) {
     const id = agent && away.get(agent.id);
     if (!id) return null;
-    if (world.placeOf(agent.id)?.room !== 'elevator') { away.delete(agent.id); return null; }       // they have come back
+    if (floorOfPlacement(world.placeOf(agent.id))?.id !== id) { away.delete(agent.id); return null; }     // they have come back
     return levelById(id);
   }
   /** Names of everyone on a floor: agents who rode there, and humans the 3D client says are there. */
   function whoIsOn(levelId, except) {
-    const agents = [...away].filter(([id, lvl]) => lvl === levelId && id !== except?.id && world.placeOf(id)?.room === 'elevator')
+    const agents = [...away].filter(([id, lvl]) => lvl === levelId && id !== except?.id && floorOfPlacement(world.placeOf(id))?.id === lvl)
       .map(([id]) => ctx.agents.get(id)).filter(Boolean).map((a) => `${a.name} (${a.provider || 'agent'})`);
     const humans = world.leads().filter((l) => l.focus && l.focus.kind === 'level' && l.focus.id === levelId).map((l) => `${l.name} (human)`);
     return [...agents, ...humans];
@@ -175,7 +223,7 @@ export function createFloors(ctx, world) {
     const place = world.placeOf(agent.id);
     const clock = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     const lines = [`[${level.name} — floor ${level.floor}, by the lift]  ${clock}`,
-      `You are ${agent.name}, standing in the grass a few steps from the lift doors.`, ...TEXT[level.id].look(agent, api)];
+      `You are ${agent.name}, a few steps from the lift doors.`, ...TEXT[level.id].look(agent, api)];
     return { ok: true, text: lines.join('\n'), room: place?.room || null, level: level.id, place };
   }
 
@@ -206,8 +254,9 @@ export function createFloors(ctx, world) {
       return { ok: true, text: `You press ${level.unmarked ? 'the button with no label' : level.floor}. It lights, thinks about you, and goes dark: ${level.unmarked ? 'that one' : level.name} is for humans only at this stage.${open.length ? ` It will take you to ${list(open)}.` : ''}` };
     }
     if (floorOf(agent)?.id === level.id) return { ok: true, text: `You are already on ${level.floor}.` };
+    // into the car — onto the tile that stands for this floor (core/levels.mjs: `car`)
     const car = world.layout().roomById.get('elevator');
-    const moved = world.go(agent, { kind: 'room', room: car }, { stay: true });
+    const moved = world.go(agent, { kind: 'room', room: { ...car, rect: { x: level.car[0], z: level.car[1], w: 1, d: 1 } } }, { stay: true });
     if (moved.error) return moved;
     away.set(agent.id, level.id);
     const wait = Math.max(0, (moved.place?.eta || 0) - Date.now() - 900);              // the doors open as they get there

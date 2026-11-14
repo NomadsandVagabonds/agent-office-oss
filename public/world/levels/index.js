@@ -23,7 +23,7 @@ const MODULES = {
   roof: () => import('./roof.js'),
   mission: () => import('./mission.js'),
   pasture: () => import('./pasture.js'),
-  arcade: () => import('./arcade.js'),
+  afterhours: () => import('./afterhours.js'),
 };
 // Two floors are not modules of ours: 'lobby' is the office you are already in,
 // and 'thirteen' hands over to whatever office.onNoclip() opens (see eggs.js).

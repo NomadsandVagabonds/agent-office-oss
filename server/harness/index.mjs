@@ -73,7 +73,9 @@ export function createHarness(ctx, file) {
       protocol: record.protocol, cwd: record.cwd, name: record.name || '', model: record.model || '', mode: record.mode,
       modeLabel: MODE_LABEL[record.mode], wake: record.wake, state: record.state, live: false,
       startedAt: record.startedAt, endedAt: record.endedAt || null, reason: record.reason || '', turns: record.turns || 0,
-      origin: record.origin || { kind: 'human' }, caps: { observe: true, prompt: false, control: false, spawn: true } };
+      origin: record.origin || { kind: 'human' }, caps: { observe: true, prompt: false, control: false, spawn: true },
+      // All that is left to do with a finished session is read it.
+      controls: { transcript: { method: 'GET', url: `/api/harness/sessions/${record.id}/transcript`, query: ['after', 'limit'] } } };
   }
 
   function snapshot() {

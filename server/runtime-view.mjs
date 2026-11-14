@@ -91,7 +91,9 @@ export function createRuntimeView({ runtimes, codexObserver, harness = () => nul
       // waiting on (see prompts.mjs), never to the session as a whole.
       promptActions: !session.alive ? [] : driven ? ['reply'] : promptActions(session.provider),
       driven,
-      ...(driven ? { mode: session.mode, wake: session.wake, state: session.state } : {}),
+      // Where a client finds this session's transcript and controls (GET it: the answer lists them).
+      ...(driven ? { mode: session.mode, wake: session.wake, state: session.state,
+        links: { session: `/api/harness/sessions/${session.id}`, transcript: `/api/harness/sessions/${session.id}/transcript` } } : {}),
     };
   }
 

@@ -47,7 +47,8 @@ const angleOf = (face) => (typeof face === 'number' ? face : faceAngle(face));
  *   start       { x, z, heading } — where you appear, if there is no lift() (heading 0 faces +z)
  *   camera      { yaw, pitch, dist, minDist, maxDist, minPitch, maxPitch, fov, height,
  *                 anchor: { x, z, pull } — keep the view centred near a point (a room) instead of on you; pull 0..1
- *                 ceiling: y — never rise above this · inside: { x0, z0, x1, z1 } — never leave this rectangle }
+ *                 ceiling: y — never rise above this · inside: { x0, z0, x1, z1 } — never leave this rectangle
+ *                 first: true — see through your own eyes instead (drag to look; `height` is then eye height) }
  *   background  scene colour · fog { color, near, far }
  *   look        { tilt: 0..1 soft focus, bloom, glow } — how the office's post-processing treats this place
  *   hint        a line of help shown for a few seconds on arrival
@@ -73,7 +74,7 @@ export function createWorld(office, spec = {}) {
   Object.assign(sun.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach, near: 1, far: 140 });
   sun.shadow.camera.updateProjectionMatrix();
   const sunDir = new THREE.Vector3(0.5, 1, 0.6).normalize();
-  scene.add(hemi, sun, sun.target);
+  scene.add(hemi, sun, sun.target, camera);              // the camera is in the scene so a level can hang things on it
 
   /* ---- keeping house -------------------------------------------------------------------- */
   const trash = [];                      // things to dispose() when the level closes
@@ -279,6 +280,7 @@ export function createWorld(office, spec = {}) {
   const goal = { yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist };
   const eye = new THREE.Vector3(me.x, cam.height, me.z);       // what the camera looks at: a point at chest height that follows you
   let shot = null, shotLast = null, shotMix = 0;        // { pos, look, fov } while the camera holds a fixed shot
+  let stride = 0;                                        // how far you have walked, for the bob of a first-person view
 
   /* ---- things you can use ----------------------------------------------------------------- */
   const things = [];
@@ -380,13 +382,14 @@ export function createWorld(office, spec = {}) {
     if (k === 'Tab') { e.preventDefault(); return; }
     if (me.script || closing) return;
     if (KEYS.has(k)) { held.add(k); e.preventDefault(); if (k !== 'Shift' && k !== 'ArrowLeft' && k !== 'ArrowRight') { if (shot) unfocus(); if (me.seat) stand(); } return; }
-    if (k === 'e' || k === 'Enter') { e.preventDefault(); if (shot) unfocus(); else use(); return; }
-    if (k === ' ') { e.preventDefault(); if (!me.seat) me.hop = 1; return; }
+    if (k === 'e' || k === 'Enter') { e.preventDefault(); if (shot) unfocus(); else if (near || !cam.first) use(); else for (const fn of keyFns) fn(k, e); return; }
+    if (k === ' ' && !cam.first) { e.preventDefault(); if (!me.seat) me.hop = 1; return; }
+    if (k === ' ') e.preventDefault();
     if (k === 'n') { if (!needs.classList.contains('hidden')) leave('needs'); return; }
     for (const fn of keyFns) fn(k, e);
   }
   function keyup(e) { held.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key); if (!typing(e) && !busy()) e.stopPropagation(); }
-  const keyFns = [];
+  const keyFns = [], clickFns = [];
   const blur = () => held.clear();
 
   // the pointer: drag to look round, wheel to lean in, click a thing to use it
@@ -416,8 +419,8 @@ export function createWorld(office, spec = {}) {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy);
     if (shot) return;
-    goal.yaw -= dx * 0.006;
-    goal.pitch = clamp(goal.pitch + dy * 0.005, cam.minPitch, cam.maxPitch);
+    goal.yaw -= dx * (cam.first ? 0.004 : 0.006);
+    goal.pitch = clamp(goal.pitch + dy * (cam.first ? 0.003 : 0.005), cam.minPitch, cam.maxPitch);
   }
   function pointerup(e) {
     if (!drag) return;
@@ -426,7 +429,7 @@ export function createWorld(office, spec = {}) {
     if (!click || me.script || closing) return;
     if (shot) { unfocus(); return; }
     const entry = pick(e);
-    if (entry) use(entry);
+    if (entry) use(entry); else for (const fn of clickFns) fn(e);
   }
   function wheel(e) {
     if (busy()) return;
@@ -448,8 +451,16 @@ export function createWorld(office, spec = {}) {
   function stand() { me.seat = null; }
 
   function placeCamera(dt, instant) {
-    const k = instant ? 1 : ease(7, dt);
+    const k = instant ? 1 : ease(cam.first ? 18 : 7, dt);
     cam.yaw += (goal.yaw - cam.yaw) * k; cam.pitch += (goal.pitch - cam.pitch) * k;
+    if (cam.first && !shot && shotMix < 0.002) {                // through your own eyes
+      eye.set(me.x, cam.height + floorY(me.x, me.z) + Math.sin(stride) * 0.018 * avatar.walking, me.z);
+      camera.position.copy(eye);
+      camera.rotation.set(-cam.pitch, cam.yaw, 0, 'YXZ');
+      if (Math.abs(camera.fov - cam.fov) > 0.01) { camera.fov = cam.fov; camera.updateProjectionMatrix(); }
+      avatar.root.visible = false;
+      return;
+    }
     cam.dist *= Math.exp(Math.log(goal.dist / cam.dist) * k);
     const at = me.seat || me, pull = cam.anchor ? cam.anchor.pull ?? 0.6 : 0;
     const tx = at.x + ((cam.anchor?.x ?? 0) - at.x) * pull, tz = at.z + ((cam.anchor?.z ?? 0) - at.z) * pull;
@@ -492,6 +503,7 @@ export function createWorld(office, spec = {}) {
     vx = (vx / len) * speed * dt; vz = (vz / len) * speed * dt;
     if (free(me.x + vx, me.z)) me.x += vx;                    // slide along whatever is in the way
     if (free(me.x, me.z + vz)) me.z += vz;
+    stride += speed * dt * 3.2;
     me.heading += turnTo(me.heading, Math.atan2(vx, vz)) * ease(14, dt);
     avatar.speed = speed / 1.5;
   }
@@ -636,7 +648,8 @@ export function createWorld(office, spec = {}) {
   const api = {
     office, level, scene, camera, root, me, cam: goal, look, avatar, hemi, sun, floorY,
     get time() { return t; },
-    get lift() { return liftHere?.door || null; },
+    /** This floor's lift doorway (see car.js), once lift() or room({ lift }) has stood it somewhere. */
+    get liftDoor() { return liftHere?.door || null; },
     add, floor, wall, box, room, prop, vox, sign, screen, lamp, light, lift,
     block, free, thing, seat, use, sfx, music, own, focus, unfocus, walkTo,
     /** Is the camera holding a fixed shot (see focus)? */
@@ -649,6 +662,8 @@ export function createWorld(office, spec = {}) {
     on(event, fn) { const off = net.on(event, fn); subs.push(off); return off; },
     /** Keys the kit does not use itself: fn(key, event). */
     onKey(fn) { keyFns.push(fn); },
+    /** A click on nothing in particular: fn(event). */
+    onClick(fn) { clickFns.push(fn); },
     /** Hand the keyboard to something of your own (a game, a dialog) for as long as the promise takes. */
     async hold(promise) { modal++; held.clear(); try { return await promise; } finally { modal--; } },
     run, leave,

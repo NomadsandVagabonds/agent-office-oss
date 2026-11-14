@@ -195,8 +195,7 @@ async function main() {
   const keep = value('--keep');
   for (const dir of [OUT, keep]) if (dir) fs.mkdirSync(dir, { recursive: true });
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'office-audio-'));      // nothing half-made is ever left in public/audio
-  const before = has('--polish') ? null : await credits();
-  let made = 0, asked = 0;
+  let made = 0, asked = 0, before = null;
   for (const item of MANIFEST) {
     if (only && !only.has(item.name)) continue;
     const file = path.join(OUT, `${item.name}.mp3`);
@@ -205,7 +204,10 @@ async function main() {
     if (has('--polish') ? !kept : fs.existsSync(file) && !has('--force')) continue;
     process.stdout.write(`${item.kind.padEnd(6)} ${item.name} … `);
     try {
-      if (!kept || (has('--force') && !has('--polish'))) { fs.writeFileSync(raw, await generate(item)); asked++; }
+      if (!kept || (has('--force') && !has('--polish'))) {
+        if (!asked++) before = await credits();
+        fs.writeFileSync(raw, await generate(item));
+      }
       polish(raw, file, item, tmp);
       made++;
       console.log(`${(fs.statSync(file).size / 1024).toFixed(0)} KB`);

@@ -1,15 +1,16 @@
 // The lift: its floors are well formed, the hidden one keeps to its rule,
-// every floor has a module behind it, and the daemon tells agents about the
-// same floors the panel shows humans.
+// every floor has a module behind it, the daemon tells agents about the same
+// floors the panel shows humans — and an agent can ride to the ones that have
+// a text side.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { LEVELS, LEVEL_KINDS, HOME, levelById, findLevel, isVisible, visibleLevels, levelContext } from '../core/levels.mjs';
+import { LEVELS, LEVEL_KINDS, HOME, levelById, findLevel, isVisible, visibleLevels, levelContext, floorOfPlacement } from '../core/levels.mjs';
 import { buildLayout } from '../core/layout.mjs';
 import { createNav } from '../core/nav.mjs';
 import { SECRETS } from '../core/secrets.mjs';
-import { ROOT, startOffice } from './helpers.mjs';
+import { ROOT, sleep, startOffice } from './helpers.mjs';
 
 test('levels: the registry is well formed', () => {
   assert.ok(LEVELS.length >= 4);
@@ -29,7 +30,25 @@ test('levels: the registry is well formed', () => {
   const home = levelById(HOME);
   assert.ok(home && home.kind === 'office' && home.storey === 0 && !home.hidden, 'the lobby is the office, and is always there');
   assert.equal(LEVELS.filter((l) => l.kind === 'office').length, 1);
-  assert.deepEqual(['L', 'R', 'A', 'M', '13'].filter((f) => !LEVELS.some((l) => l.floor === f)), [], 'the floors the lift was built for');
+  assert.deepEqual(['L', 'R', 'M', 'P', 'A', '13'].filter((f) => !LEVELS.some((l) => l.floor === f)), [], 'the floors the lift was built for');
+  for (const kind of ['place', 'work', 'game']) assert.ok(LEVELS.some((l) => l.kind === kind), `there is a sample ${kind}`);
+});
+
+test('levels: where an agent stands in the car says which floor it rode to', () => {
+  const car = buildLayout({}).roomById.get('elevator').rect;
+  const spots = LEVELS.filter((l) => l.car);
+  assert.ok(spots.length >= 1, 'at least one floor agents can ride to');
+  assert.equal(new Set(spots.map((l) => l.car.join(','))).size, spots.length, 'one tile each');
+  for (const l of spots) {
+    const [x, z] = l.car;
+    assert.ok(x >= car.x && x < car.x + car.w && z >= car.z && z < car.z + car.d, `${l.id}: its tile is inside the car`);
+    assert.equal(floorOfPlacement({ room: 'elevator', x: x + 0.5, z: z + 0.5 }).id, l.id);
+    assert.equal(floorOfPlacement({ room: 'elevator', x: x + 0.5, z: z + 0.5, leaving: true }), null, 'someone leaving the building is not on a floor');
+  }
+  const arrival = buildLayout({}).spots.elevator;
+  assert.equal(floorOfPlacement({ room: 'elevator', x: arrival.x, z: arrival.z }), null, 'where everybody arrives is no floor in particular');
+  assert.equal(floorOfPlacement({ room: 'plaza', x: -0.5, z: -9.5 }), null);
+  assert.equal(floorOfPlacement(null), null);
 });
 
 test('levels: floors are found by id or by what is on the button', () => {
@@ -53,6 +72,7 @@ test('levels: the thirteenth floor is only there on a Friday the 13th, or once s
   assert.ok(floors({ quirks: [], found: ['noclip'] }).includes('13'), 'there once the noclip secret has been found');
   assert.equal(isVisible(thirteen, { quirks: new Set(['friday-13']) }), true, 'any iterable will do');
   assert.ok(SECRETS.some((s) => s.id === 'noclip'), 'the rule names a discovery that exists');
+  for (const id of ['air-mail', 'headcount', 'green-build']) assert.ok(SECRETS.some((s) => s.id === id), `the floors' own discovery ${id} is in the catalogue`);
   // everything else is always on the panel, in the same order
   const always = LEVELS.filter((l) => !l.hidden).map((l) => l.floor);
   assert.deepEqual(floors({}), always);
@@ -144,4 +164,72 @@ test('levels: the daemon tells agents which floors the lift serves, and that rid
 
   const map = await office.get(`/api/world/map?agent=${agent}`);
   assert.match(map.data.text, /The lift .*Rooftop Garden.*Mission Control/);
+});
+
+test('levels: an agent can take the lift to a floor with a text side, look round, and come back', async (t) => {
+  const office = await startOffice();
+  t.after(() => office.stop());
+  const join = async (name) => (await office.post('/api/agents/join', { provider: 'gemini', name, cwd: '/tmp/proj/atlas' })).data.agent.id;
+  const ada = await join('Ada'), bo = await join('Bo');
+  const use = (agent, thing, arg) => office.post('/api/world/use', { agent, thing, arg });
+  const look = (agent, at = '') => office.get(`/api/world/look?agent=${agent}&at=${encodeURIComponent(at)}`);
+  const placeOf = async (agent) => (await office.get('/api/world')).data.places.find((p) => p.id === agent);
+
+  // a floor with no text side is for humans, and the lift says so without moving anybody
+  const roof = await use(ada, 'lift', 'roof');
+  assert.equal(roof.status, 200);
+  assert.match(roof.data.text, /humans only/);
+  assert.equal(floorOfPlacement(await placeOf(ada)), null);
+  assert.equal((await use(ada, 'lift', 'penthouse')).status, 404);
+
+  // the pasture has one
+  const ride = await use(ada, 'lift', 'pasture');
+  assert.equal(ride.status, 200, JSON.stringify(ride.data));
+  assert.equal(ride.data.level, 'pasture');
+  assert.match(ride.data.text, /The Pasture/);
+  assert.equal(floorOfPlacement(await placeOf(ada)).id, 'pasture', 'on the floor plan they are in the car, on the pasture\'s tile');
+  const there = await look(ada);
+  assert.equal(there.data.level, 'pasture');
+  assert.match(there.data.text, /meadow/);
+  assert.match(there.data.text, /goats/);
+  assert.match((await office.get('/api/world/who')).data.text, /Ada .*The Pasture/);
+
+  // things down there can be looked at and used by name
+  assert.match((await look(ada, 'clipboard')).data.text, /HEADCOUNT/);
+  assert.match((await look(ada, 'the big one')).data.text, /facing you/);
+  assert.match((await use(ada, 'goat')).data.text, /You hold out a hand/);
+  const count = await use(ada, 'goats', 'count');
+  assert.equal(count.data.found, 'headcount');
+  assert.match(count.data.text, /21/);
+  assert.equal((await office.get('/api/world')).data.secrets.find((s) => s.id === 'headcount').found, true);
+  assert.equal((await office.post('/api/world/go', { agent: ada, to: 'goat' })).status, 200, 'going to a thing on another floor is answered, not an error');
+
+  // company: another agent, and a human whose browser says they are on that floor
+  assert.match((await use(bo, 'p')).data?.error || '', /no "p"/, 'a bare letter is not a place…');
+  assert.equal((await use(bo, 'lift', 'P')).data.level, 'pasture', '…but it is a button');
+  assert.match((await look(ada)).data.text, /With you: Bo \(gemini\)/);
+  const ws = new WebSocket(`ws://127.0.0.1:${office.port}`);
+  t.after(() => ws.close());
+  await new Promise((resolve, reject) => { ws.addEventListener('open', resolve); ws.addEventListener('error', () => reject(new Error('websocket failed'))); });
+  ws.send(JSON.stringify({ type: 'focus', id: 'tester', name: 'Robin', focus: { kind: 'level', id: 'pasture' } }));
+  await sleep(120);
+  assert.match((await look(ada)).data.text, /Robin \(human\)/);
+  assert.match((await office.get('/api/world/who')).data.text, /Humans on other floors: Robin \(The Pasture\)/);
+
+  // and home again
+  const back = await office.post('/api/world/go', { agent: ada, to: 'home' });
+  assert.equal(back.status, 200);
+  const home = await look(ada);
+  assert.equal(home.data.level, undefined);
+  assert.equal(home.data.room, 'dept:atlas');
+  assert.match((await look(bo)).data.text, /meadow/, 'Bo is still down there');
+  assert.doesNotMatch((await look(bo)).data.text, /Ada/);
+
+  // the game floor, in words: enough swings and the build goes green
+  assert.equal((await use(ada, 'lift', 'after hours')).data.level, 'afterhours');
+  let last = null;
+  for (let i = 0; i < 8; i++) last = await use(ada, 'mallet');
+  assert.match(last.data.text, /build is green again/);
+  assert.equal(last.data.found, 'green-build');
+  assert.match((await look(ada)).data.text, /green tick/);
 });

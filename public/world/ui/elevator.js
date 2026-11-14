@@ -31,7 +31,7 @@ export function openFloorPanel(office, opt = {}) {
         onclick: () => press(i), onmouseenter: () => select(i),
       },
       h('span.cap', odd ? '' : level.floor),
-      odd ? h('div.tag.blank') : h('div.tag',
+      odd ? h('div.plate.blank') : h('div.plate',
         h('b', level.name, level.id === here.id ? h('i.here', 'you are here') : null),
         h('small', level.blurb), h('span.kind', KIND[level.kind] || level.kind)));
       return row;

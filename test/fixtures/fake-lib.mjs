@@ -42,7 +42,7 @@ export function readLines(onLine) {
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const VERBS = new Set(['say', 'think', 'tool', 'edit', 'ask', 'askfile', 'question', 'plan', 'usage', 'sleep', 'slow', 'ignore-cancel',
-  'crash', 'garbage', 'noise', 'report', 'dm', 'delegate', 'post', 'stop', 'error', 'http', 'read', 'limits', 'mcp']);
+  'crash', 'garbage', 'noise', 'report', 'dm', 'delegate', 'post', 'stop', 'error', 'http', 'read', 'limits', 'mcp', 'leak']);
 
 /** "say:hi; tool:ls" → [{verb:'say',arg:'hi'},{verb:'tool',arg:'ls'}] */
 export function parseScript(prompt) {

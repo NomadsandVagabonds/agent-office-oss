@@ -80,6 +80,9 @@ export const SECRETS = Object.freeze([
   { id: 'headcount', name: 'All Present', icon: '🐐',
     blurb: 'Found the one the clipboard always misses.',
     hint: 'Somewhere below the lobby, a headcount is always one short.' },
+  { id: 'green-build', name: 'Green Again', icon: '🔨',
+    blurb: 'Went down after hours and fixed every last bug. The build is green again.',
+    hint: 'The build breaks at night. Somebody has to go down there with a mallet.' },
 ]);
 
 const BY_ID = new Map(SECRETS.map((s) => [s.id, s]));

@@ -19,7 +19,7 @@ const T = { wait: 0.2, close: 0.75, travel: 2.7, open: 0.7, out: 0.45 };    // s
 // What the announcer has a recording of (tools/make-audio.mjs). Floors without one arrive on the ding alone.
 const VOICE = { lobby: 'lift-lobby', roof: 'lift-roof', thirteen: 'lift-13' };
 // The light that comes through the doors when they open on each floor.
-const GLOW = { lobby: '#ffdcae', mission: '#5f8fe0', arcade: '#e05fc0', thirteen: '#d8c45a' };
+const GLOW = { lobby: '#ffdcae', mission: '#5f8fe0', pasture: '#d8f0c0', afterhours: '#e0503a', thirteen: '#d8c45a' };
 
 const smooth = (x) => { const t = Math.max(0, Math.min(1, x)); return t * t * (3 - 2 * t); };
 const smoother = (x) => { const t = Math.max(0, Math.min(1, x)); return t * t * t * (t * (t * 6 - 15) + 10); };

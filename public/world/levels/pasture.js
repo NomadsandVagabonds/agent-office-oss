@@ -16,6 +16,7 @@ import { Vox, M, glow, tone, noise3, VOXEL } from '../vox/vox.js';
 import { meshVox } from '../vox/mesher.js';
 import { voxelMaterial } from '../vox/material.js';
 import { resolveLook, hashId } from '/core/look.mjs';
+import { floorOfPlacement } from '/core/levels.mjs';
 
 const ROOM = { x0: -22, z0: -16, x1: 22, z1: 16, h: 4.6 };
 const DOOR = { x: ROOM.x0, z: 6 };                    // the lift, in the west wall
@@ -272,7 +273,7 @@ export async function enter(office) {
       if (n < 4) { g.moveTo(gx + n * cw * 0.055, gy); g.lineTo(gx + n * cw * 0.055 + 2, gy + ch * 0.11); } else { g.moveTo(gx - cw * 0.03, gy + ch * 0.09); g.lineTo(gx + cw * 0.21, gy + ch * 0.02); }
       g.stroke();
     }
-    g.font = `700 ${Math.round(ch * 0.2)}px ui-monospace, Menlo, Consolas, monospace`; g.fillText(String(HERD), cw / 2, ch * 0.72);
+    g.fillStyle = '#2a3a6a'; g.font = `700 ${Math.round(ch * 0.2)}px ui-monospace, Menlo, Consolas, monospace`; g.fillText(String(HERD), cw / 2, ch * 0.72);
     g.font = `italic ${Math.round(ch * 0.06)}px Georgia, serif`; g.fillStyle = '#5a6a9a'; g.fillText('counted twice', cw / 2, ch * 0.88);
     if (found) { g.fillStyle = '#b5483f'; g.font = `italic 700 ${Math.round(ch * 0.1)}px Georgia, serif`; g.save(); g.translate(cw * 0.78, ch * 0.66); g.rotate(-0.2); g.fillText(`${HERD + 1}?`, 0, 0); g.restore(); }
   }, { ppm: 1100, gain: 0.82 });
@@ -385,8 +386,8 @@ export async function enter(office) {
     const here = new Set();
     for (const [id, place] of net.state.places) {
       const agent = net.state.agents.get(id);
-      // standing in the car and not on the way out of the building: they got out at this floor
-      if (!agent || place.room !== 'elevator' || place.leaving || net.now() < place.eta) continue;
+      // where they stand in the car says which button they pressed (core/levels.mjs): this floor's
+      if (!agent || floorOfPlacement(place)?.id !== 'pasture' || net.now() < place.eta) continue;
       here.add(id);
       if (guests.has(id)) continue;
       const h = hashId(id), x = -17.5 + (h % 5) * 1.25, z = 2.2 + ((h >>> 4) % 6) * 1.2;
@@ -516,6 +517,7 @@ export async function enter(office) {
   });
 
   syncGuests();
+  w.goats = goats;                                              // for the console, and for the curious
   w.music('pasture-bed', { volume: 0.5 });
   return w.run();
 }

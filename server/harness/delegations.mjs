@@ -123,18 +123,25 @@ export function createDelegations({ ctx, settings, file, harness, wake }) {
 
   // Nobody named a provider: choose among the agents that can be started here,
   // following whoever keeps count of the operator's allowance (ctx.usage, when
-  // it exists) — the provider with the most left first, never one running low
-  // while another is not. Without that advice it is simply the first available.
+  // it exists): never a provider that is spent, the one with the most left when
+  // the difference is worth acting on, and one that is not running low over one
+  // that is. Without that advice it is simply the first agent available.
   function pickAdapter() {
     const available = harness.catalog.list().filter((a) => a.available);
     if (!available.length) throw new SessionError(409, 'no agent can be started here: none of the known adapters is installed (GET /api/harness)');
     let advice = null;
     try { advice = ctx.usage?.advice?.() || null; } catch { advice = null; }
-    const low = new Set(Array.isArray(advice?.low) ? advice.low.filter((p) => typeof p === 'string') : []);
-    const preferred = typeof advice?.prefer === 'string' ? available.find((a) => a.provider === advice.prefer) : null;
-    const chosen = preferred || available.find((a) => !low.has(a.provider)) || available[0];
+    const names = (list) => new Set(Array.isArray(list) ? list.filter((p) => typeof p === 'string') : []);
+    const low = names(advice?.low), out = names(advice?.out);
+    const usable = available.filter((a) => !out.has(a.provider));
+    if (!usable.length) {
+      throw new SessionError(409, `every provider that can be started here is out of allowance for now (${[...out].join(', ')}); name one explicitly if you want to try anyway`);
+    }
+    const preferred = typeof advice?.prefer === 'string' ? usable.find((a) => a.provider === advice.prefer) : null;
+    const chosen = preferred || usable.find((a) => !low.has(a.provider)) || usable[0];
+    const passedOver = [...out, ...low].filter((p) => p !== chosen.provider);
     const why = preferred ? `${chosen.provider} has the most allowance left`
-      : low.size && !low.has(chosen.provider) ? `${[...low].join(', ')} ${low.size === 1 ? 'is' : 'are'} running low`
+      : passedOver.length && available.some((a) => passedOver.includes(a.provider)) ? `${passedOver.join(', ')} ${passedOver.length === 1 ? 'is' : 'are'} spent or running low`
         : 'the first agent that can be started here';
     return { adapter: harness.catalog.get(chosen.id), why };
   }

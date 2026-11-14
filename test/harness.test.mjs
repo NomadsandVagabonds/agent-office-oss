@@ -60,9 +60,21 @@ test('driven sessions', async (t) => {
     assert.equal(s.mode, 'ask');
     assert.equal(s.wake, 'off', 'nobody is woken by mail unless a human says so');
     assert.deepEqual(s.caps, { observe: true, prompt: true, control: true, spawn: true });
+    // What can be done with it, and the call for each: nothing here depends on which agent it is.
+    const at = `/api/harness/sessions/${s.id}`;
+    assert.deepEqual(s.controls, {
+      transcript: { method: 'GET', url: `${at}/transcript`, query: ['after', 'limit'], watch: { type: 'transcript:watch', sessionId: s.id } },
+      turn: { method: 'POST', url: `${at}/turn`, body: { text: '' }, available: true },
+      interrupt: { method: 'POST', url: `${at}/interrupt`, available: false },
+      end: { method: 'DELETE', url: at, available: true },
+      wake: { method: 'PATCH', url: at, field: 'wake', value: 'off', options: ['off', 'results', 'direct'], available: true },
+      mode: { method: 'PATCH', url: at, field: 'mode', value: 'ask', options: ['ask', 'edits', 'full'], available: true },
+      deliverMail: { method: 'POST', url: `${at}/mail`, available: true },
+    });
 
     const a = await h.agent(s.id);
     assert.equal(a.name, 'Ada');
+    assert.deepEqual(a.runtime.links, { session: at, transcript: `${at}/transcript` }, 'the agent itself says where its session is');
     assert.equal(a.driven, true);
     assert.equal(a.provider, 'gemini');
     assert.equal(a.model, 'fake-large');
@@ -147,15 +159,41 @@ test('driven sessions', async (t) => {
     assert.equal(second.framed, 1, 'later requests are passed through as they are');
     // What a person reads in the transcript is what they typed, not the framing.
     assert.equal((await h.entry(s.id, 'turn-1:user')).text, 'report');
+    // The token it was given identifies it to the office; it never comes back out of the office's own records.
+    const token = h.ctx.harness.session(s.id).adapter.opt.env.OFFICE_SESSION_TOKEN;
+    assert.ok(token.length >= 40);
+    const leaked = await h.turn(s.id, 'leak');
+    assert.equal(leaked.said, 'my token is [office session token]');
+    assert.equal(leaked.entries.find((e) => e.kind === 'tool').command, 'curl -H "x-office-session: [office session token]" localhost');
+    assert.ok(!JSON.stringify(await h.entries(s.id)).includes(token));
     await h.del(`/api/harness/sessions/${s.id}`);
+    const onDisk = await waitFor(() => { try { return fs.readFileSync(path.join(h.dir, 'harness', `${s.id}.jsonl`), 'utf8'); } catch { return ''; } },
+      { what: 'the transcript file' });
+    assert.ok(onDisk.includes('my token is [office session token]') && !onDisk.includes(token));
 
-    const plain = await startHarnessOffice({ env: { OFFICE_HARNESS_MCP: '0' } });
+    const plain = await startHarnessOffice({ env: { OFFICE_HARNESS_MCP: '0', OFFICE_HARNESS_TRACE: '1' } });
     try {
       const p = await plain.start('fake');
       const told = JSON.parse((await plain.turn(p.id, 'report')).said);
       assert.deepEqual(told.mcp, [], 'OFFICE_HARNESS_MCP=0 keeps the office tools out');
       assert.equal(p.features.officeTools, false);
     } finally { await plain.stop(); }
+
+    // OFFICE_HARNESS_TRACE=1 keeps the raw frames beside the transcript, for comparing a real agent with what
+    // the adapter expects — everything the agent saw, except its token.
+    const traced = await startHarnessOffice({ env: { OFFICE_HARNESS_TRACE: '1' } });
+    try {
+      const p = await traced.start('fake');
+      await traced.turn(p.id, 'say:traced');
+      const secret = traced.ctx.harness.session(p.id).adapter.opt.env.OFFICE_SESSION_TOKEN;
+      const frames = await waitFor(() => { try { return fs.readFileSync(path.join(traced.dir, 'harness', `${p.id}.trace.jsonl`), 'utf8'); } catch { return ''; } },
+        { what: 'the trace file' });
+      const rows = frames.trim().split('\n').map((r) => JSON.parse(r));
+      assert.deepEqual([rows[0].dir, JSON.parse(rows[0].frame).method], ['out', 'initialize']);
+      assert.ok(rows.some((r) => r.dir === 'in' && r.frame.includes('agent_message_chunk')));
+      assert.ok(frames.includes('OFFICE_SESSION_TOKEN') && !frames.includes(secret));
+      assert.ok(frames.includes('[office session token]'));
+    } finally { await traced.stop(); }
   });
 
   await t.test('a permission request becomes a NEEDS-YOU card, and each answer resolves it the right way', async (t2) => {
@@ -166,9 +204,18 @@ test('driven sessions', async (t) => {
       const card = await h.need(s.id);
       assert.equal(card.kind, 'permission');
       assert.equal(card.message, 'Wants to run: rm -rf build');
-      assert.deepEqual(card.actions, ['once', 'always', 'reject', 'reply']);
+      assert.deepEqual(card.actions, ['once', 'always', 'reject']);
       assert.equal(card.request.command, 'rm -rf build');
       assert.equal(card.request.category, 'command');
+      // What is asked and how to answer it are spelled out, so a client needs no knowledge of the runtime.
+      assert.deepEqual(card.ask, { summary: 'Wants to run: rm -rf build', tool: 'Shell', toolKind: 'execute', command: 'rm -rf build',
+        files: [], detail: '', category: 'command', questions: [] });
+      assert.deepEqual(card.respond, { method: 'POST', url: `/api/prompts/${card.id}/reply`, textField: 'text', reaches: 'agent', humanOnly: true, thisMachineOnly: true,
+        actions: [
+          { id: 'once', kind: 'allow-once', label: 'Allow once', text: 'optional', body: { action: 'once' } },
+          { id: 'always', kind: 'allow-session', label: 'Allow commands for this session', text: 'optional', body: { action: 'always' }, scope: 'session', covers: 'command' },
+          { id: 'reject', kind: 'reject', label: 'Reject', text: 'optional', body: { action: 'reject' } },
+        ] });
       assert.deepEqual(card.request.choices.map((c) => c.action), ['once', 'always', 'reject']);
       assert.deepEqual(card.request.options.map((o) => o.id), ['allow-once', 'allow-always', 'reject-once']);
       const blocked = await h.agent(s.id);
@@ -177,11 +224,14 @@ test('driven sessions', async (t) => {
       assert.equal((await h.session(s.id)).state, 'waiting');
       assert.equal((await h.entry(s.id, 'perm:' + card.request.id)).state, 'asked');
 
-      const res = await h.answer(card.id, { action: 'once' });
+      // The answer is the action's own body, posted to the prompt's own URL.
+      const once = card.respond.actions.find((a) => a.kind === 'allow-once');
+      const res = await h.post(card.respond.url, once.body);
       assert.equal(res.status, 200);
       assert.equal(res.data.answered, 'allowed');
       assert.equal(res.data.prompt.status, 'resolved');
       assert.deepEqual(res.data.prompt.actions, []);
+      assert.deepEqual(res.data.prompt.respond.actions, []);
       await h.turnDone(s.id, n);
       assert.equal((await h.turnView(s.id, n)).said, 'outcome=allow-once');
       const perm = await h.entry(s.id, 'perm:' + card.request.id);
@@ -220,6 +270,9 @@ test('driven sessions', async (t) => {
       assert.equal((await h.answer(card.id, { optionId: 'not-an-option' })).status, 400);
       assert.equal((await h.answer(card.id, {})).status, 400, 'an empty answer is not a dismissal');
       assert.equal((await h.answer(card.id, { action: 'maybe' })).status, 400);
+      const words = await h.answer(card.id, { text: 'yes' });
+      assert.equal(words.status, 400, 'words alone are never taken for a decision');
+      assert.match(words.data.error, /needs a decision: send action once, always, reject/);
       assert.equal((await h.need(s.id)).id, card.id, 'a bad answer leaves the request waiting');
       const res = await h.answer(card.id, { optionId: 'allow-always' });
       assert.equal(res.data.answered, 'allowed');
@@ -252,14 +305,28 @@ test('driven sessions', async (t) => {
       const fileCard = await h.need(s.id);
       assert.equal(fileCard.request.category, 'file-change');
       assert.equal(fileCard.message, 'Wants to change: src/secret.js');
-      await h.answer(fileCard.id, { action: 'reject' });
+      assert.deepEqual([fileCard.ask.tool, fileCard.ask.toolKind, fileCard.ask.files, fileCard.ask.command], ['Edit', 'edit', ['src/secret.js'], '']);
+      assert.equal(fileCard.respond.actions[1].label, 'Allow file changes in its folder for this session');
+      await h.answer(fileCard.id, { action: 'always' });
       await h.turnDone(s.id, m);
-      assert.equal((await h.turnView(s.id, m)).said, 'outcome=reject-once');
+      assert.equal((await h.turnView(s.id, m)).said, 'outcome=allow-once');
+      assert.equal((await h.turn(s.id, 'askfile:src/other.js')).said, 'outcome=allow-once', 'the next file in the folder is allowed');
+
+      // That standing permission stops at the edge of the session's folder — however the path is spelled.
+      fs.symlinkSync(path.dirname(h.work), path.join(h.work, 'way-out'));
+      for (const outside of ['/etc/hosts', '../sibling/notes.txt', 'way-out/escaped.txt']) {
+        const k = await h.begin(s.id, `askfile:${outside}`);
+        const card = await h.need(s.id);
+        assert.deepEqual(card.actions, ['once', 'reject'], `${outside}: asked, and not offered as a session-wide grant`);
+        assert.equal((await h.answer(card.id, { action: 'always' })).status, 400);
+        await h.answer(card.id, { action: 'reject' });
+        await h.turnDone(s.id, k);
+      }
     });
 
     await t2.test('only the human answers: not another agent, not a page from elsewhere', async () => {
       const other = await h.start('fake', { name: 'Mallory' });
-      const n = await h.begin(s.id, 'askfile:deploy.yaml');
+      const n = await h.begin(s.id, 'askfile:/srv/deploy.yaml');      // outside its folder: no standing permission covers it
       const card = await h.need(s.id);
       const tried = await h.turn(other.id, `http:POST /api/prompts/${card.id}/reply {"action":"once"}`);
       assert.match(tried.said, /^http=403:/);
@@ -284,6 +351,9 @@ test('driven sessions', async (t) => {
       const card = await h.need('hooked-1');
       assert.equal(card.request, null);
       assert.ok(!card.actions.includes('once'), 'no grant button the office could not honour');
+      assert.deepEqual(card.respond.actions.map((a) => [a.kind, a.text]), [['reply', 'required'], ['dismiss', 'none']]);
+      assert.equal(card.respond.reaches, 'inbox', 'and it says where words to this agent end up');
+      assert.equal(card.ask.summary, 'Claude needs your permission to use Bash');
       assert.equal((await h.answer(card.id, { action: 'once' })).status, 409);
       await h.hook({ session_id: 'hooked-1', hook_event_name: 'SessionEnd' });
     });
@@ -301,6 +371,12 @@ test('driven sessions', async (t) => {
     const card = await h.need(edits.id);                       // a command is still the human's call
     await h.answer(card.id, { action: 'reject' });
     await h.turnDone(edits.id, n);
+    // "Edits freely" means in its own folder: anywhere else it asks.
+    const o = await h.begin(edits.id, 'askfile:/etc/hosts');
+    const outside = await h.need(edits.id);
+    assert.equal(outside.ask.files[0], '/etc/hosts');
+    await h.answer(outside.id, { action: 'reject' });
+    await h.turnDone(edits.id, o);
 
     // The human can widen or narrow an ACP session while it runs; it is written down.
     const patched = await h.patch(`/api/harness/sessions/${edits.id}`, { mode: 'full' });
@@ -319,6 +395,7 @@ test('driven sessions', async (t) => {
     assert.equal((await h.agent(s.id)).turn, 'active');
     const live = (await h.turnView(s.id, n)).entries.find((e) => e.kind === 'message');
     assert.equal(live.streaming, true, 'a reply is readable while it is still being written');
+    assert.equal((await h.session(s.id)).controls.interrupt.available, true);
     const stop = await h.post(`/api/harness/sessions/${s.id}/interrupt`);
     assert.equal(stop.data.interrupted, true);
     const ended = await h.turnDone(s.id, n);
@@ -402,7 +479,7 @@ test('driven sessions', async (t) => {
 
   await t.test('turns wait their turn; a failed turn and a turn that hit a limit are reported as such', async () => {
     const s = await h.start('fake', { name: 'Queue' });
-    const n = await h.begin(s.id, 'sleep:150; say:first');
+    const n = await h.begin(s.id, 'sleep:500; say:first');
     const queued = await h.post(`/api/harness/sessions/${s.id}/turn`, { text: 'say:second' });
     assert.equal(queued.data.queued, true);
     assert.equal(queued.data.position, 1);
@@ -433,6 +510,8 @@ test('driven sessions', async (t) => {
     assert.equal(res.data.session.state, 'ended');
     assert.equal(res.data.session.reason, 'ended from the office');
     assert.deepEqual(res.data.session.caps, { observe: true, prompt: false, control: false, spawn: true });
+    assert.deepEqual(Object.entries(res.data.session.controls).filter(([, c]) => c.available).map(([name]) => name), [], 'nothing can be done to a finished session');
+    assert.equal(res.data.session.controls.transcript.url, `/api/harness/sessions/${s.id}/transcript`, '…but it can still be read');
     await waitFor(() => !alive(pid), { what: 'the process to be gone' });
     assert.equal((await h.entry(s.id, 'session')).state, 'ended');
     assert.ok(!(await h.activity()).some((e) => e.kind === 'agent-crash' && /Brief/.test(e.text)), 'an ending we asked for is not a crash');
@@ -515,6 +594,7 @@ test('driven sessions', async (t) => {
     const card = await h.need(s.id);
     assert.equal(card.request, null);
     assert.deepEqual(card.actions, ['reply']);
+    assert.equal(card.respond.reaches, 'turn', 'words to a driven agent arrive as a turn');
     const reply = await h.answer(card.id, { text: 'say:postgres it is' });
     assert.equal(reply.data.turnDelivered, true);
     await h.turnDone(s.id, 2);
