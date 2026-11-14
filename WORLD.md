@@ -365,6 +365,13 @@ the person playing (`core/game.mjs` is the whole of the rules; it is pure):
   office's best, by what they beat it by; a visit that was no better, or that
   ended any other way, pays nothing. Going back is worth it. Going back for
   the same again is not.
+- **The card.** The same place hands whoever leaves it a form, however they
+  left: what they did, what it scored, what was new to this office, what the
+  jar gained, and whether the tape was kept. The office keeps the record
+  (`core/runs.mjs` is the rules: the best score, every kind of room and
+  resident anybody has met, and the tapes of the visits that got out — a
+  tape is the seed its building was made from, kept so that it can be walked
+  again; nobody keeps the tape of a visit that ended any other way).
 - **The vending machine.** Walk up to it in the kitchen: behind the glass are
   eight things the jar can buy, each bought once. What comes out stands on top
   of the machine from then on, where everybody can see it. The last place on
@@ -380,6 +387,7 @@ snapshot, and
 GET  /api/world/game            what is lit, what has been found where, the jar, the machine's shelf (and `text`, in words)
 POST /api/world/game/collect    { hideout, item: 'card' | 'coin', n?, name? }
 POST /api/world/game/earn       { hideout, batteries, name? }   got out of a place that pays: the jar gains what that beats the best by
+POST /api/world/game/run        { hideout, run, name? }         a visit there is over, however it ended: answers with its card
 POST /api/world/game/visit      { floor }          a newly lit floor has been ridden to
 POST /api/world/game/buy        { prize | slot, name? }
 ```

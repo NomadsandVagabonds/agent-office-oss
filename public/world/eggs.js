@@ -263,8 +263,9 @@ export function createEggs(office) {
     // other floor — once the office has heard all of it. (A stamp earned on the way has its own sound; otherwise this is the sound.)
     const kept = result?.kept;
     // (and whoever got out by the way out is paid for the spare batteries they still had: core/game.mjs, `pay`)
-    const paid = result?.reason === 'exit' && kept?.batteries > 0 ? office.game?.earn?.('backrooms', { batteries: kept.batteries }) : null;
-    if (kept?.card || kept?.coins?.length || paid) Promise.all([Promise.all([kept.told, paid]), ...stamps]).then(([, ...earned]) => setTimeout(() => {
+    // (…unless the visit's own card has already told the office how it went, batteries and all: core/runs.mjs)
+    const paid = !result?.card && result?.reason === 'exit' && kept?.batteries > 0 ? office.game?.earn?.('backrooms', { batteries: kept.batteries }) : null;
+    if (kept?.card || kept?.coins?.length || paid || result?.card?.coins?.paid) Promise.all([Promise.all([kept.told, paid]), ...stamps]).then(([, ...earned]) => setTimeout(() => {
       if (!earned.some((r) => r?.first)) { try { office.sound?.play?.(kept.card ? 'discovery' : 'coin'); } catch { /* only a sound */ } }
       if (kept.card) office.game?.flash('card');
       office.game?.show();

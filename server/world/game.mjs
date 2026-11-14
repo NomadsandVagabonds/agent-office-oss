@@ -7,6 +7,7 @@
 import crypto from 'node:crypto';
 import { HIDEOUTS, PRIZES, STAMP_COINS, dealOrder, findPrize, hideoutById, jarOf, openFloors, payFor } from '../../core/game.mjs';
 import { levelById } from '../../core/levels.mjs';
+import { cleanRecord, cleanRun, settleRun } from '../../core/runs.mjs';
 
 const fail = (status, error) => ({ error, status });
 const PAID_KEPT = 30;                    // how many visits that were worth something are remembered
@@ -28,6 +29,8 @@ export function createGame(ctx, state, hooks) {
   // and the last few visits that were worth anything
   g.earned = Number.isFinite(g.earned) && g.earned > 0 ? Math.floor(g.earned) : 0;
   g.paid = Array.isArray(g.paid) ? g.paid.slice(-PAID_KEPT) : [];
+  // the office's record of visits to the place that pays (core/runs.mjs): its best, what has been seen, the tapes kept
+  g.record = cleanRecord(g.record);
   // Which floor is open to begin with, and which each card opens, is drawn once per office — and re-read every start,
   // so a floor added since joins the end of the queue and one that is gone leaves it.
   const before = JSON.stringify(g.order || []);
@@ -60,6 +63,12 @@ export function createGame(ctx, state, hooks) {
       }])),
       coins: purse(),
       prizes: PRIZES.filter((p) => g.prizes[p.id]).map((p) => p.id),
+      // visits to the place that pays: how many, how many got out, the best, how much of it has been seen, the tapes kept
+      visits: {
+        n: g.record.runs, out: g.record.out, best: g.record.best,
+        seen: { rooms: Object.keys(g.record.rooms).length, cast: Object.keys(g.record.cast).length },
+        tapes: g.record.tapes.map((t) => ({ ...t })),
+      },
     };
   }
 
@@ -107,18 +116,44 @@ export function createGame(ctx, state, hooks) {
     if (!hideout.pays) return fail(400, `nothing carried out of ${hideout.name} is paid for`);
     const raw = carried?.batteries, batteries = Math.floor(raw);
     if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) return fail(400, 'batteries is how many were carried out: a number, none or more');
-    const worth = payFor({ batteries }), coins = Math.max(0, worth - g.earned);
+    const { worth, paid } = pay(hideout, batteries, nameOf(by, extra), by);
     if (!worth) return { ok: true, ...view(), paid: 0, best: g.earned };
-    const who = nameOf(by, extra);
+    hooks.save();
+    if (paid) hooks.changed();
+    return { ok: true, ...view(), paid, batteries, best: g.earned };
+  }
+
+  /** What the jar gains for what was carried out: the office is paid what that beats its best by. → { worth, paid } */
+  function pay(hideout, batteries, who, by) {
+    const worth = payFor({ batteries }), coins = Math.max(0, worth - g.earned);
+    if (!worth) return { worth: 0, paid: 0 };
     g.paid.push({ at: Date.now(), by: who, hideout: hideout.id, batteries, worth, coins });
     if (g.paid.length > PAID_KEPT) g.paid.splice(0, g.paid.length - PAID_KEPT);
-    if (coins) g.earned = worth;
-    hooks.save();
     if (coins) {
+      g.earned = worth;
       ctx.activity?.log('loot', `${who} got out of ${hideout.name} with ${batteries} spare batter${batteries === 1 ? 'y' : 'ies'}, the most anybody has: ${coins} coin${coins === 1 ? '' : 's'} for the jar`, { hideout: hideout.id, item: 'pay', batteries, coins, agentId: by?.id || null });
-      hooks.changed();
     }
-    return { ok: true, ...view(), paid: coins, batteries, best: g.earned };
+    return { worth, paid: coins };
+  }
+
+  /**
+   * A visit to the place that pays is over, however it ended. `report` is what the visit says of itself
+   * (core/runs.mjs: cleanRun). The office enters it in its record and answers with the card: what it scored,
+   * whether that is a new best, what was met for the first time, what the jar gained, whether the tape is kept.
+   */
+  function run(hideoutId, report, by, extra = {}) {
+    const hideout = hideoutById(String(hideoutId || ''));
+    if (!hideout) return fail(404, 'nothing is hidden in a place called that');
+    if (!hideout.pays) return fail(400, `no record is kept of visits to ${hideout.name}`);
+    if (!report || typeof report !== 'object' || Array.isArray(report)) return fail(400, 'run is what the visit says of itself: { reason, seed, seconds, parts, rooms, cast, batteries, card, hearts }');
+    const who = nameOf(by, extra), visit = cleanRun(report);
+    const settled = settleRun(g.record, visit, { at: Date.now(), by: who });
+    g.record = settled.record;
+    const coins = visit.reason === 'exit' ? pay(hideout, visit.batteries, who, by) : { worth: 0, paid: 0 };
+    hooks.save();
+    if (visit.reason === 'exit') ctx.activity?.log('visit', `${who} got out of ${hideout.name}: ${settled.card.score} points${settled.card.best.beaten ? ', the best yet' : ''}`, { hideout: hideout.id, score: settled.card.score, agentId: by?.id || null });
+    hooks.changed();
+    return { ok: true, ...view(), card: { ...settled.card, coins: { carried: visit.batteries, worth: coins.worth, paid: coins.paid, best: g.earned } } };
   }
 
   /** The panel showed a newly lit floor and somebody rode there: it is not news any more. */
@@ -173,5 +208,5 @@ export function createGame(ctx, state, hooks) {
     return lines.join('\n');
   }
 
-  return { view, collect, earn, visit, buy, shelf, purse, describe };
+  return { view, collect, earn, run, visit, buy, shelf, purse, describe };
 }
