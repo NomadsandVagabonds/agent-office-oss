@@ -143,6 +143,18 @@ test('game: coins do not come back, the passport pays into the same jar, and the
   assert.equal((await game()).shelf.find((p) => p.id === cheap.id).by, 'Lead');
   const feed = (await office.get('/api/activity?limit=40')).data;
   assert.ok((feed.items || feed.activity || feed).some((e) => e.kind === 'prize' && /^Lead bought .+ from the vending machine$/.test(e.text)));
+
+  // an agent that is asked how the game is going can say — how much, never where, and nothing of a place nobody has been
+  const words = (await game()).text;
+  assert.match(words, new RegExp(`The Pasture: keycard still hidden · ${pasture.coins} of ${pasture.coins} coins found`));
+  assert.match(words, new RegExp(`The jar: ${jar.have - cheap.price} coins? \\(${pasture.coins} picked up`));
+  assert.match(words, new RegExp(`${cheap.slot}  ${cheap.name.replace(/[()]/g, '\\$&')} — bought by Lead`));
+  assert.match(words, new RegExp(`${dear.slot}  .+ — ${dear.price} coins`));
+  const unseen = HIDEOUTS.filter((h) => h.id !== 'pasture' && !(got.open || []).includes(h.id));
+  for (const h of unseen) assert.ok(!words.includes(h.name), `${h.name} has not been found, so it is not named`);
+  assert.match(words, new RegExp(`and ${unseen.length} places? nobody has found anything in yet`));
+  const cli = await office.get('/api/world/game');
+  assert.equal(typeof cli.data.text, 'string');
 });
 
 test('game: everything the machine sells has a shape, and a place of its own on top of the machine', async () => {
