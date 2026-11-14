@@ -43,7 +43,9 @@ test('how much: a battery pack to every few rooms, a snack or two, at most one t
     assert.ok(of('torch').length <= 1 && of('chalk').length <= 1);
     for (const t of of('torch')) assert.ok(t.charge >= SUPPLY.torchCharge[0] && t.charge <= SUPPLY.torchCharge[1] && t.charge < ITEM_DEFS.torch.maxCharge, 'a found torch is never a full one');
     for (const s of plan) { const { id, type, rooms, ...made } = s; assert.doesNotThrow(() => makeItem(type, id, made), `${id} is something the pockets know`); }
-    assert.ok(plan.every((s) => ['battery', 'snack', 'torch', 'chalk'].includes(s.type)), 'nothing else, unless somebody wants it');
+    assert.ok(of('paper').length >= SUPPLY.stacks[0] && of('paper').length <= SUPPLY.stacks[1] && of('lighter').length <= 1 && of('tape').length <= 1);
+    for (const p of of('paper')) assert.ok(p.quantity >= SUPPLY.paper[0] && p.quantity <= SUPPLY.paper[1]);
+    assert.ok(plan.every((s) => ['battery', 'snack', 'torch', 'chalk', 'paper', 'lighter', 'tape'].includes(s.type)), 'nothing else, unless somebody wants it');
   }
 });
 
@@ -52,22 +54,24 @@ test('how often: a torch more often than not where you land, less so further dow
   const part = (seed, depth) => ({ seed: `often-${seed}`, depth, start: { room: 0 }, exit: { room: 23 },
     rooms: Array.from({ length: 24 }, (_, id) => ({ id, kind: id === 0 ? 'start' : id === 23 ? 'exit' : 'plain', dress: [] })) });
   const share = (depth, type) => { let n = 0; for (let s = 0; s < 1000; s++) n += planSupplies(part(s, depth)).filter((x) => x.type === type).length; return n / 1000; };
-  const top = share(0, 'torch'), low = share(2, 'torch'), chalk = share(1, 'chalk');
+  const top = share(0, 'torch'), low = share(2, 'torch'), chalk = share(1, 'chalk'), lighter = share(1, 'lighter'), tape = share(1, 'tape');
+  assert.ok(Math.abs(lighter - SUPPLY.lighter) < 0.06, `a lighter in ${Math.round(lighter * 100)} of 100`);
+  assert.ok(Math.abs(tape - SUPPLY.tape) < 0.06, `tape in ${Math.round(tape * 100)} of 100`);
   assert.ok(Math.abs(top - SUPPLY.torch[0]) < 0.06, `a torch where you land in ${Math.round(top * 100)} of 100`);
   assert.ok(Math.abs(low - SUPPLY.torch[1]) < 0.06, `a torch further down in ${Math.round(low * 100)} of 100`);
   assert.ok(Math.abs(chalk - SUPPLY.chalk) < 0.06, `chalk in ${Math.round(chalk * 100)} of 100`);
 });
 
-test('anything else is only there for somebody: what a creature on the floor cares about, one of each', () => {
-  const level = floors(1)[0];
-  const types = (wanted) => planSupplies(level, wanted).map((s) => s.type).filter((t) => !['battery', 'snack', 'torch', 'chalk'].includes(t)).sort();
+test('anything else is only there for somebody: what a creature or a resident on the part cares about, one of each', () => {
+  const level = floors(1)[0], ABOUT = ['battery', 'snack', 'torch', 'chalk', 'paper', 'lighter', 'tape'];
+  const types = (wanted) => planSupplies(level, wanted).map((s) => s.type).filter((t) => !ABOUT.includes(t)).sort();
   assert.deepEqual(types([]), []);
-  assert.deepEqual(types(['battery', 'torch']), [], 'what is about anyway is not left twice');
-  assert.deepEqual(types(['paper', 'balloon', 'paper', 'scissors']), ['balloon', 'paper', 'scissors']);
-  assert.deepEqual(types(['a-stapler', undefined, 7]), [], 'only things the pockets know');
-  const paper = planSupplies(level, ['paper']).find((s) => s.type === 'paper');
-  assert.ok(Number.isInteger(paper.quantity) && paper.quantity >= SUPPLY.paper[0] && paper.quantity <= SUPPLY.paper[1] && paper.quantity <= ITEM_DEFS.paper.maxStack);
-  // (and what the cast says it cares about is always something that can be left)
+  assert.deepEqual(types(['battery', 'torch', 'paper']), [], 'what is about anyway is not left twice');
+  assert.deepEqual(types(['balloon', 'scissors', 'balloon']), ['balloon', 'scissors']);
+  assert.deepEqual(types(['a-stapler', 'pink-slip', undefined, 7]), [], 'only things that can be left lying (a pink slip is only ever handed to you)');
+  // what is lying about does not move when somebody is added who wants something
+  assert.deepEqual(planSupplies(level, ['balloon']).filter((s) => s.type !== 'balloon'), planSupplies(level, []));
+  // (and what the cast says it cares about is always something that can be carried)
   for (const m of CAST) for (const t of m.items || []) assert.ok(ITEMS.includes(t) && ITEM_DEFS[t], `${m.id} cares about ${t}`);
 });
 

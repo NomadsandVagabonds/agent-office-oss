@@ -10,6 +10,10 @@
 //   snacks          one or two to a part of the building
 //   a torch         likely where you land, less so further down, never full
 //   chalk           in about half the parts
+//   paper           a stack or two to a part: it burns (crafting.js), and
+//                   there is somebody down here who will take it instead of you
+//   a lighter, tape in about half the parts each: with paper, a fire; with a
+//                   torch, a torch that will stay on the camcorder
 //   anything else   only where somebody on this floor wants it (cast.js: what
 //                   a creature cares about). Nothing is clutter.
 import { makeRng } from './gen.js';
@@ -21,12 +25,15 @@ export const SUPPLY = Object.freeze({
   torch: Object.freeze([0.7, 0.4]), // the chance of a torch: in the part you land in · in any part below it
   torchCharge: Object.freeze([45, 150]),   // seconds of light left in one (a full one is 180): fewest, most
   chalk: 0.5,                       // the chance of a piece of chalk in a part
-  paper: Object.freeze([3, 6]),     // sheets in a stack of paper, where somebody wants paper
+  paper: Object.freeze([3, 5]),     // sheets in a stack of paper
+  stacks: Object.freeze([1, 2]),    // stacks of paper to a part
+  lighter: 0.5,                     // the chance of a lighter in a part (it is kept: one is enough for a visit)
+  tape: 0.4,                        // the chance of a roll of tape in a part
   choices: 4,                       // rooms offered for each thing, in order: the first with clear floor gets it
 });
 /** What is about whether or not anybody wants it: the rest only turns up for somebody. */
-const ALWAYS = new Set(['battery', 'snack', 'torch', 'chalk']);
-const KNOWN = new Set(['torch', 'battery', 'chalk', 'paper', 'scissors', 'snack', 'balloon']);
+const ALWAYS = new Set(['battery', 'snack', 'torch', 'chalk', 'paper', 'lighter', 'tape']);
+const KNOWN = new Set(['torch', 'battery', 'chalk', 'paper', 'scissors', 'snack', 'balloon', 'lighter', 'tape']);
 
 /**
  * What the residents of a part's rooms care about: the `items` of the deck line of every room on it.
@@ -67,8 +74,11 @@ export function planSupplies(level, wanted = []) {
   for (let n = 0, most = R.int(SUPPLY.snacks[0], SUPPLY.snacks[1]); n < most; n++) leave('snack', n);
   if (R.chance(SUPPLY.torch[(level.depth ?? 0) > 0 ? 1 : 0])) leave('torch', 0, { charge: R.int(SUPPLY.torchCharge[0], SUPPLY.torchCharge[1]) });
   if (R.chance(SUPPLY.chalk)) leave('chalk', 0);
-  for (const type of [...new Set(wanted)].filter((t) => KNOWN.has(t) && !ALWAYS.has(t)).sort()) {
-    leave(type, 0, type === 'paper' ? { quantity: R.int(SUPPLY.paper[0], SUPPLY.paper[1]) } : {});
-  }
+  // (what was added later draws from a source of its own, so that what was already lying about in a building stays where it was)
+  const RC = R.fork('crafting');
+  for (let n = 0, most = RC.int(SUPPLY.stacks[0], SUPPLY.stacks[1]); n < most; n++) leave('paper', n, { quantity: RC.int(SUPPLY.paper[0], SUPPLY.paper[1]) });
+  if (RC.chance(SUPPLY.lighter)) leave('lighter', 0);
+  if (RC.chance(SUPPLY.tape)) leave('tape', 0);
+  for (const type of [...new Set(wanted)].filter((t) => KNOWN.has(t) && !ALWAYS.has(t)).sort()) leave(type, 0);
   return out;
 }

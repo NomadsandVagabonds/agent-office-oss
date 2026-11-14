@@ -1,0 +1,180 @@
+/* Study A — Office equipment. Preview-only skin for the real inventory DOM.
+   Enamel, label tape and brass keycaps come from The Office's own ui.css. */
+.br-inventory[data-study="office"] {
+  --oe-board:#14201c; --oe-well:#0d1713; --oe-raised:#24392f;
+  --oe-edge:#080d0b; --oe-brass:#cfa84e; --oe-brass-hi:#ecd08a; --oe-brass-lo:#8a6c28;
+  --oe-ink:#efe9d6; --oe-dim:#a8b4a6; --oe-tape:#14110f;
+  color:var(--oe-ink); font:400 13px/1.4 "IBM Plex Sans",sans-serif;
+}
+.br-inventory[data-study="office"] button { border-radius:2px; }
+.br-inventory[data-study="office"] button:focus-visible { outline:2px solid var(--oe-brass-hi); outline-offset:3px; }
+.br-inventory[data-study="office"] button:disabled { opacity:.4; }
+.br-inventory[data-study="office"] .br-inv-icon { object-fit:contain; image-rendering:pixelated; }
+
+/* Six open equipment wells. Only the chosen pocket gets the brass lip. */
+.br-inventory[data-study="office"] .br-inv-pack { width:min(402px,calc(100% - 28px)); }
+.br-inventory[data-study="office"] .br-inv-bar {
+  gap:3px; padding:7px 6px 5px; background:var(--oe-board); border:2px solid var(--oe-edge);
+  box-shadow:inset 0 2px var(--oe-brass),4px 4px 0 #080d0b99;
+}
+.br-inventory[data-study="office"] .br-inv-slot {
+  border:0; border-radius:0; padding:8px 4px 7px; background:var(--oe-well);
+  box-shadow:inset 0 2px 0 #080d0b,inset 0 -2px 0 #34483d;
+}
+.br-inventory[data-study="office"] .br-inv-slot:hover { background:#24382d; }
+.br-inventory[data-study="office"] .br-inv-slot.is-selected {
+  background:#304a3b; box-shadow:inset 0 -4px var(--oe-brass),inset 0 1px #5a725f;
+}
+.br-inventory[data-study="office"] .br-inv-slot.is-compatible { background:#293e2e; box-shadow:inset 0 -2px var(--oe-brass); }
+.br-inventory[data-study="office"] .br-inv-slot.is-compatible::after { color:var(--oe-brass-hi); font-family:"Pixelify Sans",monospace; }
+.br-inventory[data-study="office"] .br-inv-slot.is-source { opacity:.8; }
+.br-inventory[data-study="office"] .br-inv-slot.is-muted { opacity:.45; }
+.br-inventory[data-study="office"] .br-inv-number {
+  top:-3px; left:3px; min-width:13px; height:13px; box-sizing:border-box; padding:0 3px;
+  color:#c7cbb8; background:#26372e; text-shadow:none; font:400 10px/13px "IBM Plex Mono",monospace;
+}
+.br-inventory[data-study="office"] .br-inv-slot.is-selected .br-inv-number { color:#231905; background:var(--oe-brass); }
+.br-inventory[data-study="office"] .br-inv-icon-wrap .br-inv-icon { max-width:46px; }
+.br-inventory[data-study="office"] .br-inv-count { bottom:6px; color:var(--oe-ink); font:600 12px/1 "Pixelify Sans",monospace; }
+.br-inventory[data-study="office"] .br-inv-power { bottom:7px; left:6px; right:6px; height:3px; background:#080d0b; }
+.br-inventory[data-study="office"] .br-inv-power i { background:#8eac7a; }
+.br-inventory[data-study="office"] .br-inv-slot.is-active .br-inv-power i { background:var(--oe-brass-hi); }
+.br-inventory[data-study="office"] .br-inv-slot.is-active::before { background:var(--oe-brass-hi); box-shadow:none; }
+.br-inventory[data-study="office"] .br-inv-mount { bottom:12px; color:var(--oe-brass-hi); font-family:"IBM Plex Mono",monospace; }
+.br-inventory[data-study="office"] .br-inv-meta { bottom:calc(100% + 9px); gap:10px; }
+.br-inventory[data-study="office"] .br-inv-caption {
+  padding:2px 6px; background:var(--oe-tape); color:var(--oe-ink); text-shadow:none;
+  font:400 11px/15px "IBM Plex Mono",monospace; letter-spacing:.02em;
+}
+.br-inventory[data-study="office"] .br-inv-heart .heart-body { fill:#2d3d32; stroke:var(--oe-edge); }
+.br-inventory[data-study="office"] .br-inv-heart .heart-shine { fill:#58715d; }
+.br-inventory[data-study="office"] .br-inv-heart.is-filled .heart-body { fill:#cc715a; }
+.br-inventory[data-study="office"] .br-inv-heart.is-filled .heart-shine { fill:#f3c39b; }
+
+/* The object belongs to the equipment tray, without an icon card around it. */
+.br-inventory[data-study="office"] .br-inv-panel,
+.br-inventory[data-study="office"].has-health .br-inv-panel {
+  display:grid; grid-template-columns:minmax(0,1fr) 154px; column-gap:12px;
+  width:min(480px,calc(100% - 28px)); padding:14px 18px 13px;
+  bottom:calc(2.5% + 120px); max-height:calc(100% - 145px);
+  background:var(--oe-board); border:2px solid var(--oe-edge);
+  box-shadow:inset 0 3px var(--oe-brass),inset 0 4px var(--oe-brass-lo),5px 5px 0 #080d0b99;
+}
+.br-inventory[data-study="office"] .br-inv-panel-head {
+  grid-column:1 / -1; grid-row:1; min-height:20px; margin:0 0 10px; padding:0; border:0;
+}
+.br-inventory[data-study="office"] .br-inv-eyebrow {
+  padding:2px 6px; background:var(--oe-tape); color:#c4d0bd;
+  font:400 10px/14px "IBM Plex Mono",monospace; letter-spacing:.13em;
+}
+.br-inventory[data-study="office"] .br-inv-close {
+  width:24px; height:24px; margin:-2px -4px -2px 0; background:transparent; color:var(--oe-dim);
+  font-family:"Pixelify Sans",monospace!important;
+}
+.br-inventory[data-study="office"] .br-inv-close:hover { color:var(--oe-ink); background:var(--oe-raised); }
+.br-inventory[data-study="office"] .br-inv-detail,
+.br-inventory[data-study="office"] .br-inv-detail > div:last-child { display:contents; }
+.br-inventory[data-study="office"] .br-inv-specimen {
+  grid-column:2; grid-row:2 / 5; width:154px; min-height:126px; align-self:center;
+  background:transparent; box-shadow:none;
+}
+.br-inventory[data-study="office"] .br-inv-specimen .br-inv-icon { width:154px; height:136px; max-width:none; }
+.br-inventory[data-study="office"] .br-inv-title {
+  grid-column:1; grid-row:2; margin:0 0 6px; align-self:end;
+  color:var(--oe-ink); font:600 32px/1 "Pixelify Sans",monospace; letter-spacing:-.02em;
+}
+.br-inventory[data-study="office"] .br-inv-description {
+  grid-column:1; grid-row:3; margin:0; align-self:start;
+  color:var(--oe-dim); font:400 12px/1.4 "IBM Plex Sans",sans-serif;
+}
+.br-inventory[data-study="office"] .br-inv-condition {
+  grid-column:1; grid-row:4; align-self:start; justify-self:start; margin:9px 0 0; min-height:0; padding:3px 6px;
+  background:var(--oe-tape); color:var(--oe-brass-hi); font:400 11px/15px "IBM Plex Mono",monospace;
+}
+.br-inventory[data-study="office"] .br-inv-condition:empty { display:none; }
+.br-inventory[data-study="office"] .br-inv-actions {
+  grid-column:1 / -1; grid-row:5; justify-content:flex-start; gap:7px; margin:12px 0 0; padding-top:10px; border-top:1px solid #31473a;
+}
+.br-inventory[data-study="office"] .br-inv-action {
+  flex:0 0 auto; min-height:32px; padding:2px 11px 5px; border:2px solid var(--oe-edge); background:var(--oe-raised);
+  color:var(--oe-ink); box-shadow:inset 0 -3px #0d1713,inset 0 1px #3f5545;
+  font:400 17px/1 "Pixelify Sans",monospace!important;
+}
+.br-inventory[data-study="office"] .br-inv-action:hover:enabled { background:#344b3c; }
+.br-inventory[data-study="office"] .br-inv-action.primary {
+  flex:0 0 auto; min-width:100px; color:#231905!important; border-color:var(--oe-edge); background:var(--oe-brass);
+  box-shadow:inset 0 -3px var(--oe-brass-lo),inset 0 1px var(--oe-brass-hi);
+}
+.br-inventory[data-study="office"] .br-inv-action.primary:hover:enabled { background:var(--oe-brass-hi); }
+.br-inventory[data-study="office"] .br-inv-action:active:enabled { padding-top:5px; padding-bottom:2px; box-shadow:inset 0 2px #080d0b88; }
+.br-inventory[data-study="office"] .br-inv-action kbd {
+  display:inline-block; min-width:17px; margin-left:7px; padding:2px 3px; opacity:1; border:1px solid #080d0b66;
+  border-bottom-width:2px; border-radius:2px; background:#080d0b22; color:inherit; font:400 10px/1 "IBM Plex Mono",monospace;
+}
+
+/* Crafting is the same bench with exactly two shallow sockets. */
+.br-inventory[data-study="office"] .br-inv-crafting { grid-column:1 / -1; }
+.br-inventory[data-study="office"].is-combining .br-inv-panel-head { margin-bottom:10px; padding:0; }
+.br-inventory[data-study="office"] .br-inv-camera-choice {
+  padding:3px 7px 5px; border:2px solid var(--oe-edge); background:var(--oe-raised); color:var(--oe-brass-hi)!important;
+  box-shadow:inset 0 -2px #0d1713; font:400 13px/1 "Pixelify Sans",monospace!important;
+}
+.br-inventory[data-study="office"] .br-inv-ingredients { grid-template-columns:minmax(0,1fr) 14px minmax(0,1fr); gap:10px; }
+.br-inventory[data-study="office"] .br-inv-plus { color:var(--oe-brass); font:400 24px/1 "Pixelify Sans",monospace; }
+.br-inventory[data-study="office"] .br-inv-ingredient {
+  height:67px; gap:10px; padding:6px 9px; border:2px solid var(--oe-edge); background:var(--oe-well);
+  box-shadow:inset 0 -2px #31473a;
+}
+.br-inventory[data-study="office"] .br-inv-ingredient.is-focused { border-color:var(--oe-edge); box-shadow:inset 0 -3px var(--oe-brass); }
+.br-inventory[data-study="office"] .br-inv-ingredient .br-inv-icon { width:47px; height:47px; max-width:none; }
+.br-inventory[data-study="office"] .br-inv-ingredient-label { font:400 16px/1.1 "Pixelify Sans",monospace; }
+.br-inventory[data-study="office"] .br-inv-ingredient-label strong { font-weight:400; }
+.br-inventory[data-study="office"] .br-inv-ingredient-label small { margin-top:5px; color:var(--oe-dim); font:400 10px/1.2 "IBM Plex Sans",sans-serif; }
+.br-inventory[data-study="office"] .br-inv-ingredient-clear { color:var(--oe-dim); right:5px; top:2px; font-size:12px; }
+.br-inventory[data-study="office"] .br-inv-result { margin-top:11px; min-height:34px; }
+.br-inventory[data-study="office"] .br-inv-result-title { color:var(--oe-ink); font:400 20px/1.1 "Pixelify Sans",monospace; }
+.br-inventory[data-study="office"] .br-inv-result-description { margin-top:3px; color:var(--oe-dim); font:400 11px/1.3 "IBM Plex Sans",sans-serif; }
+.br-inventory[data-study="office"] .br-inv-result.is-invalid .br-inv-result-title { color:#c7cdb9; font:400 12px/1.4 "IBM Plex Sans",sans-serif; }
+.br-inventory[data-study="office"] .br-inv-paper-count { gap:5px; }
+.br-inventory[data-study="office"] .br-inv-paper-count button { border:2px solid var(--oe-edge); background:var(--oe-raised); box-shadow:inset 0 -2px #0d1713; font-family:"Pixelify Sans",monospace!important; }
+.br-inventory[data-study="office"] .br-inv-paper-count output { font:400 16px/1 "Pixelify Sans",monospace; color:var(--oe-brass-hi); }
+.br-inventory[data-study="office"].is-combining .br-inv-actions { margin-top:10px; padding-top:9px; justify-content:flex-end; }
+.br-inventory[data-study="office"] .br-inv-notice { background:var(--oe-tape); border:0; box-shadow:3px 3px var(--oe-edge); color:var(--oe-ink); font:400 13px/1.35 "IBM Plex Sans",sans-serif; }
+
+/* A phone's 4:3 picture leaves only one shallow tray above the pockets. */
+@container (max-width:520px) {
+  .br-inventory[data-study="office"] .br-inv-pack { width:min(330px,calc(100% - 24px)); bottom:2%; }
+  .br-inventory[data-study="office"] .br-inv-bar { padding:5px 4px 4px; gap:3px; }
+  .br-inventory[data-study="office"] .br-inv-icon-wrap .br-inv-icon { max-width:37px; }
+  .br-inventory[data-study="office"] .br-inv-caption { font-size:10px; line-height:14px; }
+  .br-inventory[data-study="office"] .br-inv-panel,
+  .br-inventory[data-study="office"].has-health .br-inv-panel {
+    bottom:calc(2% + 95px); max-height:calc(100% - 117px); width:calc(100% - 24px);
+    grid-template-columns:minmax(0,1fr) 83px; column-gap:8px; padding:7px 10px 6px;
+  }
+  .br-inventory[data-study="office"] .br-inv-panel-head { min-height:15px; margin-bottom:5px; }
+  .br-inventory[data-study="office"] .br-inv-eyebrow { font-size:8px; line-height:11px; padding:1px 4px; }
+  .br-inventory[data-study="office"] .br-inv-close { width:20px; height:20px; margin:-3px -3px -2px 0; }
+  .br-inventory[data-study="office"] .br-inv-specimen { width:83px; min-height:72px; }
+  .br-inventory[data-study="office"] .br-inv-specimen .br-inv-icon { width:80px; height:74px; }
+  .br-inventory[data-study="office"] .br-inv-title { font-size:27px; line-height:27px; margin-bottom:3px; }
+  .br-inventory[data-study="office"] .br-inv-description { font-size:11px; line-height:13px; }
+  .br-inventory[data-study="office"] .br-inv-condition { margin-top:5px; padding:1px 4px; font-size:9px; line-height:13px; }
+  .br-inventory[data-study="office"] .br-inv-actions { margin-top:7px; padding-top:6px; gap:5px; }
+  .br-inventory[data-study="office"] .br-inv-action { min-height:29px; padding:2px 8px 4px; font-size:15px!important; }
+  .br-inventory[data-study="office"] .br-inv-action.primary { min-width:88px; }
+  .br-inventory[data-study="office"] .br-inv-action kbd { font-size:9px; padding:1px 2px; margin-left:5px; min-width:14px; }
+  .br-inventory[data-study="office"].is-combining .br-inv-panel-head { margin-bottom:4px; }
+  .br-inventory[data-study="office"] .br-inv-camera-choice { font-size:12px!important; padding:2px 6px 4px; }
+  .br-inventory[data-study="office"] .br-inv-ingredients { gap:7px; grid-template-columns:minmax(0,1fr) 10px minmax(0,1fr); }
+  .br-inventory[data-study="office"].is-combining .br-inv-ingredient { height:40px; gap:7px; padding:3px 6px; }
+  .br-inventory[data-study="office"] .br-inv-ingredient .br-inv-icon { width:31px; height:31px; }
+  .br-inventory[data-study="office"] .br-inv-ingredient-label { font-size:14px; }
+  .br-inventory[data-study="office"] .br-inv-ingredient-label small { margin-top:2px; font-size:9px; }
+  .br-inventory[data-study="office"].is-combining .br-inv-result { margin-top:4px; min-height:28px; }
+  .br-inventory[data-study="office"] .br-inv-result-title { font-size:18px; }
+  .br-inventory[data-study="office"] .br-inv-result-description { margin-top:1px; font-size:10px; line-height:12px; }
+  .br-inventory[data-study="office"] .br-inv-result.is-invalid .br-inv-result-title { font-size:11px; }
+  .br-inventory[data-study="office"].is-combining .br-inv-actions { margin-top:3px; padding-top:3px; }
+  .br-inventory[data-study="office"].is-combining .br-inv-action { min-height:28px; padding:2px 9px 4px; font-size:15px!important; }
+}
