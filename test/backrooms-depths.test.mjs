@@ -3,8 +3,8 @@
 // the same again given the same seed.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { generate, DECK, ARCHETYPES, lessons, ready, lessonsOf, roomDistances, roomPath, MIN_EXIT_STEPS, EXIT_DEPTH, T, sketch, wallPoint, wallLength, toWorld, floorAt, ceilAt, headAt, fitsAt } from '../public/world/backrooms/gen.js';
-import { MIN_OUT_STEPS, THIN_W, MARK_W, LEAN, REFUSE, lean, pressing, answer, TAPE_LABELS } from '../public/world/backrooms/marks.js';
+import { generate, DECK, ARCHETYPES, LESSONS, lessons, ready, lessonsOf, roomDistances, roomPath, MIN_EXIT_STEPS, EXIT_DEPTH, T, sketch, wallPoint, wallLength, toWorld, floorAt, ceilAt, headAt, fitsAt } from '../public/world/backrooms/gen.js';
+import { MIN_OUT_STEPS, THIN_W, MARK_W, LEAN, REFUSE, MARK_STYLES, PRINT_CHANCE, PRINTED, lean, pressing, answer, TAPE_LABELS } from '../public/world/backrooms/marks.js';
 import { REACH, calm, beside, closeness, grabChance } from '../public/world/backrooms/reach.js';
 import { planVisit, floorOf, generateVisit, MIN_FLOORS, MAX_FLOORS, MIN_VISIT_STEPS, KNOWN_AT_START } from '../public/world/backrooms/plan.js';
 import { THEMES, THEME_IDS } from '../public/world/backrooms/themes.js';
@@ -317,25 +317,36 @@ test('every floor has the wall the plan would call thin — a bare, marked stret
   assert.ok(near / floors > 0.65, `the thin place is within two doorways of the fire exit on ${Math.round(100 * near / floors)}% of floors`);
 });
 
-test('other walls carry the same kind of marks, and are only walls', () => {
+test('what people left on walls is rare and honest; what the place fakes is printed, and there is far less of either than of plain wall', () => {
   const styles = new Set();
-  let marked = 0;
+  let crossed = 0, wrongway = 0, printed = 0, floors = 0;
   for (const seed of SEEDS) {
-    const { floors } = visitFor(seed);
-    floors.forEach((level, i) => {
-      const list = level.rooms.flatMap((r) => r.dress.filter((d) => d.type === 'marks').map((d) => ({ r, d })));
-      assert.ok(list.length >= 1 && list.length <= 4, `seed ${seed}, floor ${i}: ${list.length} marked walls`);
+    const { floors: all } = visitFor(seed);
+    all.forEach((level, i) => {
+      const list = level.rooms.flatMap((r) => r.dress.filter((d) => d.type === 'marks').map((d) => ({ r, d }))), where = `seed ${seed}, floor ${i}`;
+      floors++;
+      assert.ok(list.filter((k) => k.d.style === 'crossed').length <= 1, `${where}: more than one taped door that is only a wall`);
+      assert.ok(list.filter((k) => k.d.style === 'wrongway').length <= 2, `${where}: ${list.length} marked walls`);
       for (const { r, d } of list) {
-        assert.ok(r.id !== level.thin.room, `seed ${seed}, floor ${i}: a decoy in the room with the real one`);
+        assert.ok(MARK_STYLES.includes(d.style), `${where}: ${d.style}`);
+        assert.ok(r.id !== level.thin.room, `${where}: a person's mark in the room with the place's`);
         assert.ok((r.kind === 'plain' || r.kind === 'start') && !r.crawl);
         assert.ok(Math.abs(d.at) + MARK_W / 2 <= wallLength(r, d.side) / 2 - 0.3);
         for (const o of [...r.doors, ...r.wins]) if (o.side === d.side) assert.ok(Math.abs(o.c - d.at) >= (o.w + MARK_W) / 2 + 0.3, `seed ${seed}: a mark across a doorway`);
-        styles.add(d.style); marked++;
+        // WRONG WAY is true: the room it is in goes nowhere
+        if (d.style === 'wrongway') { assert.equal(r.doors.length, 1, `${where}: WRONG WAY in a room with ${r.doors.length} doorways`); assert.notEqual(r.id, level.exit.room); wrongway++; } else crossed++;
+        styles.add(d.style);
       }
+      assert.equal(typeof level.thin.print, 'boolean');
+      if (level.thin.print) printed++;
     });
   }
-  assert.deepEqual([...styles].sort(), ['pencil', 'tally', 'tape']);
-  assert.ok(marked > SEEDS.length * 6);
+  assert.deepEqual([...styles].sort(), MARK_STYLES.slice().sort());
+  // "a couple of fakeout doors are fine": a door that is only a wall — taped and crossed out by a person, or printed by the place — is on fewer than one floor in two of each kind
+  assert.ok(crossed / floors < 0.5 && crossed / floors > 0.15, `a crossed-out door on ${crossed} of ${floors} floors`);
+  assert.ok(Math.abs(printed / floors - PRINT_CHANCE) < 0.12, `a printed door on ${printed} of ${floors} floors`);
+  assert.ok(wrongway > floors * 0.3, `WRONG WAY on ${wrongway} dead ends in ${floors} floors`);
+  assert.ok(PRINTED.length > 40 && !LESSONS.printed && !DECK.some((a) => lessons(a).needs.includes('printed')), 'the difference is taught by walls, not by a room: no room may take it for granted');
 });
 
 test('leaning: against the stretch, still pushing, for as long as it took to get in', () => {

@@ -9,13 +9,15 @@
 //
 // Somebody was here before and knew that much. They marked the walls they
 // tried: an outline in painter's tape, most of it let go since; a pencilled
-// door; a tally. The plan's best guess is marked like that on every floor
-// (`thin`: an outside wall near the fire exit), and so are a few others, and
-// every one of them is only a wall. The wall that gives is the one somebody
-// taped a door on at the very bottom of the last fire stairs, made camp
-// beside, and gave up on (stairwell.js). What tells it from the rest is not
-// written anywhere (thin.js) — and every marked wall answers being leaned on,
-// one way or the other, well inside a second.
+// door; a tally. What people left is made by hand and is mostly right: the
+// wall that gives is the one somebody taped a door on at the very bottom of
+// the last fire stairs, made camp beside, and gave up on (stairwell.js); a
+// failed attempt elsewhere is rare and says so (NOT HERE, WRONG WAY). What
+// the place makes is an imitation: on some floors the wall the plan would
+// have called thin (`thin`: an outside wall near the fire exit) has a taped
+// door printed into its paper, flat, and again one repeat along. That one is
+// a lie. Every marked wall answers being leaned on, one way or the other,
+// well inside a second (thin.js).
 import { T, SIDES, wallSpans, wallPoint, toWorld } from './frame.js';
 
 /** The fewest doorways between where you land on the last floor and the wall that gives. */
@@ -93,12 +95,13 @@ function places(rooms, room, need, outer) {
  * The stretch of wall that would give. A plain room you can stand up in, at least MIN_OUT_STEPS doorways from the
  * landing, and as near the fire exit as there is one — the place its signs have been leading to all along is the
  * place to start looking.
+ * `taken(room)`: rooms that are spoken for (something an earlier visitor left is in them: gen.js).
  * @returns {{room:number, side:string, at:number, w:number}|null}  in that room's own frame; null: this floor has no such wall
  */
-export function thinPlace(rooms, R) {
+export function thinPlace(rooms, R, taken = () => false) {
   const options = [];
   for (const room of rooms) {
-    if (room.kind !== 'plain' || room.crawl || room.depth < MIN_OUT_STEPS || room.H < 2.3) continue;
+    if (room.kind !== 'plain' || room.crawl || room.depth < MIN_OUT_STEPS || room.H < 2.3 || taken(room)) continue;
     const spots = places(rooms, room, MARK_W, true);
     if (spots.length) options.push({ room, spot: R.pick(spots) });
   }
@@ -118,25 +121,44 @@ export function thinPlace(rooms, R) {
   return { room: o.room.id, side: o.spot.side, at: o.spot.at, w: THIN_W };
 }
 
-const STYLES = ['tape', 'tape', 'tape', 'pencil', 'pencil', 'tally'];
 
 /**
- * The other walls somebody tried: a few to a floor, anywhere a wall is bare. Each is a thing left in a room, like the
- * rest of what is left in rooms: { room, type: 'marks', side, at, style, seed }.
+ * What a person left on a wall, looking for the way out. People's marks are made by hand, sit on the surface, and are
+ * mostly right: a failed attempt is rare, and says that it failed.
+ *   crossed    a door in tape, crossed out in the same tape, and NOT HERE under it — one to a floor at most, on fewer than half
+ *   wrongway   a cross and WRONG WAY, in a room with one doorway: it is a dead end, and somebody has saved you the walk
+ * Each is a thing left in a room: { room, type: 'marks', side, at, style, seed }. (What the place itself puts on a wall
+ * is another thing altogether — printed, flat, repeating, and a lie: see `thin.print`, and thin.js.)
  */
-export function decoyMarks(rooms, R, thin) {
-  const able = rooms.filter((r) => (r.kind === 'plain' || r.kind === 'start') && !r.crawl && r.H >= 2.3 && !(thin && r.id === thin.room));
+export const MARK_STYLES = Object.freeze(['crossed', 'wrongway']);
+export function decoyMarks(rooms, R, thin, taken = () => false) {
+  const able = rooms.filter((r) => (r.kind === 'plain' || r.kind === 'start') && !r.crawl && r.H >= 2.3 && !(thin && r.id === thin.room) && !taken(r));
   const out = [];
-  for (const room of R.shuffle(able)) {
-    if (out.length >= 4) break;
-    if (!R.chance(out.length < 2 ? 0.9 : 0.4)) continue;
+  if (R.chance(0.4)) for (const room of R.shuffle(able.filter((r) => r.doors.length > 1))) {
     const spots = places(rooms, room, MARK_W, false);
     if (!spots.length) continue;
     const spot = R.pick(spots);
-    out.push({ room: room.id, type: 'marks', side: spot.side, at: spot.at, style: R.pick(STYLES), seed: R.int(1, 9999) });
+    out.push({ room: room.id, type: 'marks', side: spot.side, at: spot.at, style: 'crossed', seed: R.int(1, 9999) });
+    break;
+  }
+  // dead ends: on the wall you face as you come in, or whichever wall there is
+  for (const room of R.shuffle(able.filter((r) => r.doors.length === 1 && r.kind === 'plain'))) {
+    if (out.filter((m) => m.style === 'wrongway').length >= 2) break;
+    if (!R.chance(0.55)) continue;
+    const spots = places(rooms, room, MARK_W, false), facing = { front: 'back', back: 'front', left: 'right', right: 'left' }[room.doors[0].side];
+    if (!spots.length) continue;
+    const spot = spots.find((k) => k.side === facing) || R.pick(spots);
+    out.push({ room: room.id, type: 'marks', side: spot.side, at: spot.at, style: 'wrongway', seed: R.int(1, 9999) });
   }
   return out;
 }
+/**
+ * What the walls teach, in a sentence. (It is a lesson in the guide's sense, but not one a room teaches, so it is not
+ * on gen.js's LESSONS, which is for what rooms may take for granted of each other. No room may take this for granted.)
+ */
+export const PRINTED = 'what people left is made by hand, sits on the surface, and is mostly right; what the place makes is printed flat into the paper, too regular, repeats — and lies';
+/** How often the place fakes a taped door on the wall the plan would have called thin: printed into the paper. */
+export const PRINT_CHANCE = 0.45;
 
 /* ---- what is written on a tape (loot.js hangs them; gen.js says which is where) ---------------------- */
 

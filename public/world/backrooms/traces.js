@@ -15,7 +15,8 @@
 import { Vox, M } from '../vox/vox.js';
 import { Batch, WHITE } from './kit.js';
 import { makeRng } from './gen.js';
-import { P, card } from './bits.js';
+import { P, card, standee } from './bits.js';
+import { drawText } from './kit.js';
 
 const TAPE = '#3f74bf';                              // painter's tape: the blue kind
 const on = (c, wall, at, off = 0) => (typeof wall === 'string' ? c.wallAt(wall, at, off) : wall.at(at, off));
@@ -120,16 +121,25 @@ export function tallyMark(c, wall, at, R, y = 1.35) {
   hangOn(c, c.mapped('tally' + n, tex, { cutout: true }), wall, at, y, 0.9, 0.34, null, WHITE, 0.004);
 }
 
-/** What `dressing` (rooms.js) does with a thing of type 'marks': a wall somebody tried. → the tape on it, if it is tape (its loose ends can be moved: thin.js). */
+/**
+ * What `dressing` (rooms.js) does with a thing of type 'marks': something a person left on a wall, and honest.
+ * → the tape on it, if there is a taped door (its loose ends can be moved: thin.js).
+ */
 export function marks(c, item) {
-  const R = makeRng(`${c.level.seed}/mark/${c.room.id}/${item.seed}`);
+  const R = makeRng(`${c.level.seed}/mark/${c.room.id}/${item.seed}`), tape = c.mapped('ptape', tapeTex(c.kit));
   c.keepWall(item.side, item.at - 1, item.at + 1);
   const p = c.wallAt(item.side, item.at, 0.5);
   if (c.clear(p.x, p.z, 0.35)) c.reserve(p.x, p.z, 0.55);
-  if (item.style === 'pencil') { pencilMark(c, item.side, item.at, R); if (R.chance(0.4)) tallyMark(c, item.side, item.at + 0.95, R, 1.5); }
-  else if (item.style === 'tally') tallyMark(c, item.side, item.at, R);
-  else { const mark = tapeMark(c, item.side, item.at, R, { stir: true }); if (R.chance(0.35)) tallyMark(c, item.side, item.at + (R.chance(0.5) ? 0.98 : -0.98), R, 1.5); return mark; }
-  return null;
+  const cross = (y, r) => { strip(c, tape, item.side, item.at, -r, y - r, r, y + r, 0.048, WHITE, 0.012); strip(c, tape, item.side, item.at, -r, y + r, r, y - r, 0.048, WHITE, 0.013); };
+  const says = (key, lines, y) => {
+    const tex = c.kit.tex.custom('says:' + key, 160, 44, (g, tw, th) => { g.clearRect(0, 0, tw, th); drawText(g, lines, 0, 0, tw, th, { color: 'rgba(30,30,34,.95)', size: 20, pad: 4, weight: 800, font: '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive' }); }, { clamp: true });
+    hangOn(c, c.mapped('says:' + key, tex, { cutout: true }), item.side, item.at, y, 0.8, 0.22, null, WHITE, 0.005);
+  };
+  if (item.style === 'wrongway') { cross(1.5, 0.3); says('wrongway', ['WRONG WAY'], 1.02); return null; }
+  // a door somebody taped, leaned on, and crossed out
+  const mark = tapeMark(c, item.side, item.at, R, { stir: true });
+  cross(1.1, 0.42); says('nothere', ['NOT HERE'], 2.22);
+  return mark;
 }
 
 /* ---- a camp ------------------------------------------------------------------------------------ */
@@ -176,4 +186,156 @@ export function rationList(c, where) {
   const y = where.y ?? 1.25;
   hangOn(c, c.mapped('rations', tex), where.side, where.at, y, 0.24, 0.3, null, WHITE, 0.006);
   strip(c, c.mapped('ptape', tapeTex(c.kit)), where.side, where.at, -0.05, y + 0.15, 0.05, y + 0.15, 0.04, WHITE, 0.008);
+}
+
+/* ---- what was left in a room ----------------------------------------------------------------------- */
+
+// Six things an earlier visitor may have left (gen.js `TRACES` says which rooms: two or three to a floor, far apart, in
+// rooms with nothing else in them). None can be used, none moves, none is explained. Each bails out quietly if the
+// room has not the wall or the floor for it: a room with nothing in it is never wrong.
+
+/** Something written straight on the wall, in pencil. */
+function scrawl(c, key, lines, side, at, y, w = 0.6, h = 0.2, ink = 'rgba(58,54,48,.92)') {
+  const tex = c.kit.tex.custom('scrawl:' + key, 160, Math.round((160 * h) / w), (g, tw, th) => { g.clearRect(0, 0, tw, th); drawText(g, lines, 0, 0, tw, th, { color: ink, size: lines.length > 1 ? 12 : 15, pad: 4, weight: 600, font: '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive' }); }, { clamp: true });
+  hangOn(c, c.mapped('scrawl:' + key, tex, { cutout: true }), side, at, y, w, h, null, WHITE, 0.004);
+}
+/** A sheet of paper stuck to a wall with a bit of the blue tape. */
+function sheet(c, key, tex, side, at, y, w, h) {
+  hangOn(c, c.mapped(key, tex), side, at, y, w, h, null, WHITE, 0.006);
+  strip(c, c.mapped('ptape', tapeTex(c.kit)), side, at, -0.05, y + h / 2, 0.05, y + h / 2, 0.04, WHITE, 0.008);
+}
+const along = (U) => Math.atan2(-U[2], U[0]);                 // the turn that lays something on the floor along a wall
+
+/** A camp left in a hurry: the bed, the lamp still on — and a shoe, and their papers, most of the way to the door. */
+function leftInAHurry(c, R) {
+  const k = c.corner(1.3, undefined, 1.6) || c.spot(1.15, { head: 1.6 });
+  if (!k) return;
+  const rot = Math.abs(k.x) > Math.abs(k.z) ? Math.PI / 2 : 0;
+  camp(c, k.x, k.z, rot, {});
+  const door = c.room.doors.slice().sort((a, b) => { const p = c.doorPoint(a, 0.8), q = c.doorPoint(b, 0.8); return Math.hypot(p.x - k.x, p.z - k.z) - Math.hypot(q.x - k.x, q.z - k.z); })[0];
+  if (!door) return;
+  const d = c.doorPoint(door, 1.1);
+  for (let i = 1; i <= 4; i++) { const t = i / 5, x = k.x + (d.x - k.x) * t + R.range(-0.25, 0.25), z = k.z + (d.z - k.z) * t + R.range(-0.25, 0.25); if (c.clear(x, z, 0.12)) c.paper(x, z); }
+  const sx = k.x + (d.x - k.x) * 0.8, sz = k.z + (d.z - k.z) * 0.8;
+  c.model('shoe', shoe, sx, sz, { rot: R.range(-3, 3), solid: false, shadow: 0.3 });                     // the other one
+}
+
+/** Arrows in tape on one wall, each sure of itself, no two agreeing. */
+function arrows(c, R) {
+  const w = c.wallSpot(2.7, undefined, 0.4, 2.2); if (!w) return;
+  const tape = c.mapped('ptape', tapeTex(c.kit)), y = 1.38;
+  c.keepWall(w.side, w.at - 1.35, w.at + 1.35);
+  const says = [['THIS WAY'], ['NO. THIS WAY'], ['SEE FIRST ARROW']];
+  [-0.86, 0, 0.86].forEach((u, i) => {
+    const dir = i % 2 ? -1 : 1, tip = u + dir * 0.26, lean = R.range(-0.04, 0.04);
+    strip(c, tape, w.side, w.at, u - dir * 0.26, y + lean, tip, y - lean, 0.048);
+    strip(c, tape, w.side, w.at, tip, y - lean, tip - dir * 0.15, y - lean + 0.12, 0.048);
+    strip(c, tape, w.side, w.at, tip, y - lean, tip - dir * 0.15, y - lean - 0.12, 0.048);
+    scrawl(c, 'arrow' + i, says[i], w.side, w.at + u, y - 0.3, 0.62, 0.16);
+  });
+  const f = c.wallAt(w.side, w.at + R.range(-0.9, 0.9), R.range(0.25, 0.5));
+  c.model('taperoll', tapeRoll, f.x, f.z, { solid: false, shadow: 0.3, rot: R.range(0, 3) });
+}
+
+/** A note that stops. The pen is on the carpet under it. */
+function note(c, R, item) {
+  const w = c.wallSpot(0.7, undefined, 0.4, 2.0); if (!w) return;
+  const lines = Array.isArray(item.text) && item.text.length ? item.text : ['IF YOU FIND THIS:', 'THE WAY OUT IS', 'DEFINITELY PAST THE'];
+  const tex = card(c, 'note:' + lines.join('|'), [...lines, ''], { w: 128, h: 128, bg: '#f4f1e6', fg: '#2f2a22', size: 10, pad: 10, weight: 600 });
+  c.keepWall(w.side, w.at - 0.35, w.at + 0.35);
+  sheet(c, 'note:' + item.seed, tex, w.side, w.at, 1.42, 0.27, 0.27);
+  const p = c.wallAt(w.side, w.at + R.range(-0.15, 0.25), R.range(0.14, 0.4)), a = R.range(0, 3);
+  c.lay(c.flat, p.x, p.z, 0.14, 0.012, a, null, [0.1, 0.15, 0.45], 0.011);                               // the pen
+  c.lay(c.flat, p.x + Math.cos(a) * 0.075, p.z - Math.sin(a) * 0.075, 0.02, 0.012, a, null, [0.75, 0.75, 0.78], 0.012);
+}
+
+/** A tape measure run out along a wall, as far as it goes. Somebody wrote down what it said, and what the plan says. */
+function measure(c, R) {
+  let best = null;
+  for (const side of ['back', 'left', 'right', 'front']) for (const [a, b] of c.spans(side, 0.3, 0)) if (b - a >= 2.6 && (!best || b - a > best.b - best.a)) best = { side, a, b };
+  if (!best) return;
+  // (a five-metre tape, a three, or the two-metre one off somebody's keys: whichever this wall is longer than)
+  const len = best.b - best.a >= 5.6 ? 5 : best.b - best.a >= 3.6 ? 3 : 2, from = best.a + 0.25, to = from + len, yellow = [0.92, 0.74, 0.1], p0 = c.wallAt(best.side, from, 0.16), p1 = c.wallAt(best.side, to, 0.16), rot = along(p0.U);
+  c.lay(c.flat, (p0.x + p1.x) / 2, (p0.z + p1.z) / 2, len, 0.022, rot, null, yellow, 0.007);
+  for (let m = 0.5; m < len; m += 0.5) { const q = c.wallAt(best.side, from + m, 0.16); c.lay(c.flat, q.x, q.z, m % 1 ? 0.006 : 0.012, 0.022, rot, null, [0.08, 0.08, 0.08], 0.0085); }
+  c.flat.box(p0.x - 0.045, 0, p0.z - 0.045, p0.x + 0.045, 0.075, p0.z + 0.045, yellow, { skip: '-y' });                 // the case
+  c.flat.box(p0.x - 0.03, 0.075, p0.z - 0.03, p0.x + 0.03, 0.08, p0.z + 0.03, [0.1, 0.1, 0.1]);
+  c.lay(c.flat, p1.x, p1.z, 0.012, 0.05, rot, null, [0.7, 0.7, 0.72], 0.009);                                           // the hook, and nothing to hook it to
+  c.keepWall(best.side, to - 0.5, to + 0.5);
+  scrawl(c, 'measure' + len, [`${len}.00 m`, `(PLAN SAYS ${len - 1}.40)`], best.side, to, 0.5, 0.56, 0.2);
+  const t = c.wallAt(best.side, to, 0.002);
+  c.flat.box(t.x - Math.abs(t.U[0]) * 0.003 - 0.001, 0.12, t.z - Math.abs(t.U[2]) * 0.003 - 0.001, t.x + Math.abs(t.U[0]) * 0.003 + 0.001, 0.34, t.z + Math.abs(t.U[2]) * 0.003 + 0.001, [0.2, 0.19, 0.17]);   // a pencil line up the wall where it ends
+}
+
+/** A map somebody drew from memory. It is wrong, and it has been corrected, and the corrections are wrong. */
+function wrongMap(c, R, item) {
+  const w = c.wallSpot(0.9, undefined, 0.4, 2.0); if (!w) return;
+  const tex = c.kit.tex.custom('wrongmap:' + item.seed, 160, 120, (g, tw, th) => {
+    P(g, '#f1ecdc', 0, 0, tw, th);
+    let s = item.seed * 7919 + 13; const r = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+    g.strokeStyle = 'rgba(40,44,70,.9)'; g.lineWidth = 1.2; g.lineJoin = 'round';
+    const boxes = [];
+    let x = 18, y = 46;
+    for (let i = 0; i < 7; i++) {
+      const bw = 16 + r() * 16, bh = 12 + r() * 12;
+      g.beginPath(); g.moveTo(x + r() * 2, y + r() * 2); g.lineTo(x + bw + r() * 2, y + r() * 2); g.lineTo(x + bw + r() * 2, y + bh + r() * 2); g.lineTo(x + r() * 2, y + bh + r() * 2); g.closePath(); g.stroke();
+      boxes.push([x + bw / 2, y + bh / 2]);
+      if (i % 3 === 2) { y += (r() < 0.5 ? -1 : 1) * (bh + 6); y = Math.max(22, Math.min(th - 36, y)); } else x += bw + 3;
+      if (x > tw - 34) { x = 20 + r() * 20; y = y < th / 2 ? y + 34 : y - 34; }
+    }
+    g.font = '700 7px ui-monospace, Menlo, Consolas, monospace'; g.fillStyle = 'rgba(40,44,70,.95)'; g.textAlign = 'center';
+    g.fillText('YOU ARE HERE', boxes[1][0], boxes[1][1] + 2); g.fillText('YOU ARE HERE', boxes[5][0], boxes[5][1] + 2);
+    // the exit, three times, the first two struck out
+    g.strokeStyle = g.fillStyle = 'rgba(190,40,30,.95)';
+    for (const [i, cross] of [[3, true], [6, true], [0, false]]) {
+      const [bx, by] = boxes[i]; g.fillText('EXIT', bx, by - 6);
+      if (cross) { g.beginPath(); g.moveTo(bx - 10, by - 10); g.lineTo(bx + 10, by - 5); g.stroke(); }
+    }
+    g.beginPath(); g.moveTo(boxes[0][0] - 6, boxes[0][1]); g.lineTo(4, boxes[0][1] + 8); g.lineTo(9, boxes[0][1] + 3); g.moveTo(4, boxes[0][1] + 8); g.lineTo(10, boxes[0][1] + 10); g.stroke();   // …and an arrow off the edge of the paper
+    g.fillStyle = 'rgba(40,44,70,.95)'; g.textAlign = 'left'; g.fillText('NOT TO SCALE (OR ANYTHING)', 8, th - 6);
+    g.strokeStyle = 'rgba(120,80,40,.35)'; g.lineWidth = 2; g.beginPath(); g.arc(tw - 26, 22, 11, 0.4, 6.1); g.stroke();                                                                       // where the cup stood
+  }, { clamp: true });
+  c.keepWall(w.side, w.at - 0.45, w.at + 0.45);
+  sheet(c, 'wrongmap:' + item.seed, tex, w.side, w.at, 1.4, 0.46, 0.345);
+  // the two before it, on the carpet
+  for (let i = 0; i < 2; i++) { const p = c.wallAt(w.side, w.at + R.range(-0.5, 0.5), R.range(0.2, 0.6)); if (c.clear(p.x, p.z, 0.1)) c.paper(p.x, p.z); }
+}
+
+/** A queue of cardboard colleagues at a bare wall. There is nothing on the wall. They are waiting anyway. */
+function queue(c, R, item) {
+  const cast = c.env.cast || [];
+  if (!cast.length) return;
+  // (a few goes at finding a wall with room in front of it for three of them in single file)
+  let w = null, head = null, n = null, spots = [];
+  for (let tries = 0; tries < 10 && spots.length < 3; tries++) {
+    w = c.wallSpot(1.3, undefined, 0.5, 2.0); if (!w) return;
+    head = c.wallAt(w.side, w.at, 0.85); n = head.n; spots = [];
+    for (let i = 0; i < Math.max(3, Math.min(5, item.n || 4)); i++) {
+      const x = head.x + n[0] * i * 0.62, z = head.z + n[2] * i * 0.62;
+      if (!c.clear(x, z, 0.3)) break;
+      spots.push([x + R.range(-0.05, 0.05), z + R.range(-0.05, 0.05)]);
+    }
+  }
+  if (spots.length < 3) return;
+  c.keepWall(w.side, w.at - 0.65, w.at + 0.65);
+  const order = R.shuffle(cast.map((_, i) => i));
+  spots.forEach(([x, z], i) => {
+    const who = cast[order[i % order.length]];
+    standee(c, 'queue:' + who.name, who.look, x, z, Math.atan2(-n[0], -n[2]) + R.range(-0.06, 0.06), { watch: false });
+    c.reserve(x, z, 0.35);
+  });
+  // where to stand, in tape, in front of the one at the front
+  const line = c.wallAt(w.side, w.at, 0.5);
+  c.lay(c.mapped('ptape', tapeTex(c.kit)), line.x, line.z, 0.6, 0.048, along(line.U), [[0, 0], [5, 0], [5, 1], [0, 1]], WHITE, 0.007);
+}
+
+/** What `dressing` (rooms.js) does with a thing of type 'trace'. */
+export function trace(c, item) {
+  const R = makeRng(`${c.level.seed}/trace/${c.room.id}/${item.seed}`);
+  if (item.kind === 'camp') leftInAHurry(c, R);
+  else if (item.kind === 'arrows') arrows(c, R);
+  else if (item.kind === 'note') note(c, R, item);
+  else if (item.kind === 'measure') measure(c, R);
+  else if (item.kind === 'map') wrongMap(c, R, item);
+  else if (item.kind === 'queue') queue(c, R, item);
 }

@@ -87,7 +87,7 @@ left in it (about one in sixteen): an empty room is the point.
 | oddity | a room from the deck: one idea, a few metres across | five to eight a floor, none twice in a visit while the deck lasts |
 | set piece | an oddity that says `big: true`, or has a view (`halo`) | one a floor at most |
 | placed by the plan | a room that says `planned: true` and is put where the visit's plan decides. So far one: the hallway that is not sure where it leads (`rooms/unsure-hall.js`), below wherever the cardboard people were | one in most visits, two in a long one now and then, never where you land |
-| from the news | a room the place has half-remembered from the headlines and staged wrongly (`headline: true`). Wordless and unnamed. **Only the owner decides which stories become rooms** | one a visit at most, in about a third of visits, never on the floor you land on |
+| from the news | a room the place has half-remembered from the headlines and staged wrongly (`headline: true`). Wordless and unnamed. **Only the owner decides which stories become rooms.** So far one: Dispatch (`rooms/dispatch.js`, after Codex's) | one a visit at most, in about a third of visits, never on the floor you land on |
 
 ## Adding a room
 
@@ -465,7 +465,7 @@ the office is: the seed is the clock, and no building is ever given twice.
 | `kit.js` | meshes, baked light, textures |
 | `themes.js` | what each kind of floor is like |
 | `stairwell.js` (also the hole, the ledge and the chute), `thin.js`, `marks.js`, `leaving.js` | the way down, and the taped door at the bottom of the last of it; the wall that gives and the walls that knock back; where the marks go, and the rule for leaning (`lean`, `answer`); what the camcorder sees as you leave |
-| `traces.js` | what earlier visitors left |
+| `traces.js` | what earlier visitors left: the marks on walls, the camp, and six things found in plain rooms (`TRACES` in `gen.js`: a camp left in a hurry, arrows that disagree, a note that stops, a tape measure run out, a map that is wrong, a queue at a bare wall) — two or three to a floor at most, far apart, in rooms with nothing else in them and no oddity next door |
 | `loot.js` | tapes and the keycard: where they hide, what is kept |
 | `cast.js`, `cast/` | who is down here (pure: the cast, who is dealt into a visit, on which floor, in which room) · one file to a creature, `cast/index.js` listing them; `cast/pirate.js` is the mascot; `cast/hunt.js` its rules (pure); `cast/paths.js` and `cast/walk.js` how anything gets about |
 | `pursuer.js`, `reach.js` | the cast's conductor on a floor (and the cardboard colleague) · the rule for being within arm's reach of the mascot (pure: the tape tears, and it moves in the torn frames) |
