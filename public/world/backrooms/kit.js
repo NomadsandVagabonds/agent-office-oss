@@ -439,9 +439,9 @@ export function createKit() {
 
   /* voxel models sculpted for this level only (the office's own catalogue is borrowed, never owned) */
   const models = new Map();
-  function model(key, make) {
+  function model(key, make, opt = {}) {
     if (!models.has(key)) {
-      const meshed = meshVox(make());
+      const meshed = meshVox(make(), opt);
       own(meshed.solid); own(meshed.glass);
       models.set(key, { solid: meshed.solid, glass: meshed.glass, bounds: meshed.bounds });
     }

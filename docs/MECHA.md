@@ -8,8 +8,7 @@ The wall carries a cog logo, **MECHA**, and the owner's slogan:
 
 The satire is aimed at the company extracting work from people to replace
 them. The professionals remain recognizable as people. Their distorted
-features, elongated necks and repeated motions belong to the Backrooms' visual
-language. Gantries, head cradles, restraints, clouded reservoirs and heavy
+features and repeated motions belong to the Backrooms' visual language. Gantries, head cradles, restraints, clouded reservoirs and heavy
 umbilical cables connect their bodies to the apparatus without gore. Ceiling
 feeds converge on the mainframe. Small pools of sickly light leave the rows
 in shadow; this room disables the automatic camcorder torch (`noTorch`).
@@ -19,7 +18,13 @@ in shadow; this room disables the automatic camcorder torch (`noTorch`).
 Twenty-four occupied cages fill four banks of six. Eight workstations have
 interactive training circuits: two lawyers, two accountants, two physicians
 and two psychiatrists. Sixteen additional workers and their machinery form
-the static background shifts. Displays across the room report replacement
+the static background shifts. All twenty-four start from the native Office
+human builder, with eight appearances: varied skin tones, sculpted hair, ears,
+noses, collars, lapels and rounded hands remain visible beneath the machinery.
+Small cheek and jaw distortions, held-open tired eyes and asymmetric seated
+postures make them recognizably human. The active workers breathe, turn their
+heads and move shoulders and elbows independently; reduced motion suppresses
+repetitive motion while preserving their response to camera diversion. Displays across the room report replacement
 percentages. Reaching 100% does not release a worker; the company continues
 extracting their work.
 
@@ -99,6 +104,12 @@ does not replace the full Backrooms with a separate level.
 
 Source base: `372b12a`. Working branch: `codex/mecha-training-floor`.
 
+The human pass follows the avatar-derived approach in Gemini's
+`gemini/backrooms-wave3` commit `aeb938081cd980dcbb4cb32a816a83b2c41c3fc7`,
+particularly Audit Pod, Safety Corridor and Shredding Bay. The room imports
+the existing `avatar/build.js` directly; it does not require merging the
+other rooms or the new uncanny helper module.
+
 The room's `MORE_DECK` entry uses `planned: true`, so normal random visits do
 not deal it. The existing dev page turns `room=mecha` into a forced archetype
 through its `only` option. No generator, player or development-page changes
@@ -113,13 +124,13 @@ must preserve a route between every doorway in every interaction state.
 
 ## Current revision validation
 
-The expanded room was measured in the browser at three seeds:
+The human-model revision was measured in the browser at three seeds:
 
 | Seed | Triangles | Meshes | Lights | Occupied cages | Wardens |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 713 | 104,738 | 42 | 14 | 24 | 3 |
-| 22 | 103,840 | 42 | 13 | 24 | 3 |
-| 41 | 102,806 | 42 | 13 | 24 | 3 |
+| 713 | 116,138 | 42 | 14 | 24 | 3 |
+| 22 | 115,136 | 42 | 13 | 24 | 3 |
+| 41 | 114,258 | 42 | 13 | 24 | 3 |
 
 All three are within the set-piece budget and built without browser errors or
 a flattened-room fallback. Collision-grid traversal reached all 17 interaction
@@ -136,18 +147,28 @@ Camera diversion redirected all three wardens and allowed an authorization to
 be collected after the worker rested. This also passed with reduced motion
 enabled; **Escape** ended the visit normally.
 
-All **43 focused tests** passed, covering MECHA's training rules, security
-countdown, navigation, Backrooms room contracts and generation.
+All **42 focused tests** passed, covering MECHA's training rules, security
+countdown, navigation, Backrooms room contracts and generation, plus native
+voxel primitives and the optional AO meshing mode.
 
-Conditioning-rig geometry checks passed across five rotations and two variants:
-486 triangles per rig, with finite vertices and no zero-area triangles. The
-rigs and ceiling feeds share existing room batches and add no meshes or lights.
+The rigs and ceiling feeds share existing room batches and add no meshes or
+lights. Short flexible hose ends share each active worker's body batch and
+follow the actual crown, nape and spine sockets. Browser checks measure the
+rendered hose ends against their fixed feeds and moving sockets during work,
+relief, head turns and reduced motion; errors remain below 0.01 mm.
+
+Active workers still use two meshes each. Their shoulders and elbows animate
+within vertex ranges at 24 Hz, while breathing and hose movement remain smooth.
+The native voxel mesher has an opt-in `ao:false` mode for this dense crowd; it
+preserves surfaces and materials while merging coplanar faces. All existing
+callers retain the original AO behavior. Focused tests compare default output,
+surface coverage, material channels, glass, origins and source immutability.
 Guard navigation checks passed for cage-bank detours, rotated rooms, thin
 barriers, wall-hugging targets, disconnected areas and a collider closing after
 the route graph was built. Navigation uses a .25m grid and .36m guard radius;
 every movement shortcut is checked against the full collision geometry.
 
-The full repository suite was rerun after the signage cleanup: **362 of 365
+The full repository suite was rerun for the human-model revision: **364 of 367
 checks passed**. The three failed entries represent two issues previously
 reproduced on untouched base `372b12a`: the console's `/private/var` versus
 `/var` temporary-path comparison, and an undefined usage reading's `source`.

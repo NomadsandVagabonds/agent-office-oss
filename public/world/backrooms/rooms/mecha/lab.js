@@ -64,10 +64,19 @@ function cuboid(batch, point, x0, y0, z0, x1, y1, z1, color) {
  * room-space points returned by createWorker. All low parts stay in the cage. */
 export function buildConditioningRig(c, { x, z, rot = 0, variant = 0, attachments = null }) {
   const point = transform(x, z, rot), batch = c.flat;
+  const localPort = name => {
+    const p = attachments?.[name];
+    if (!p) return null;
+    const dx = p[0] - x, dz = p[2] - z, co = Math.cos(rot), si = Math.sin(rot);
+    return [dx * co - dz * si, p[1], dx * si + dz * co];
+  };
+  const nape = localPort('nape');
+  const templeY = nape ? nape[1] + .045 : 1.55;
+  const templeZ = nape ? nape[2] + .19 : .15;
   const b = (...args) => cuboid(batch, point, ...args);
   const pipe = (path, radius, color, port) => {
     const vertices = path.map(point);
-    if (port && attachments?.[port]) vertices[vertices.length - 1] = attachments[port];
+    if (port && attachments?.[port]) vertices[vertices.length - 1] = attachments.anchors?.[port] || attachments[port];
     hose(batch, vertices, radius, color);
   };
   const side = Math.abs(Math.trunc(variant)) % 2 ? -1 : 1;
@@ -82,8 +91,8 @@ export function buildConditioningRig(c, { x, z, rot = 0, variant = 0, attachment
 
   // The head is still legible: temple pads sit beside it; nothing covers eyes.
   for (const sign of [-1, 1]) {
-    b(sign * .30 - .027,1.525,-.39,sign * .30 + .027,1.58,.15,C.bronze);
-    b(sign * .30 - .038,1.49,.10,sign * .30 + .038,1.62,.19,C.hose);
+    b(sign * .30 - .027,templeY-.025,-.39,sign * .30 + .027,templeY+.03,templeZ,C.bronze);
+    b(sign * .30 - .038,templeY-.06,templeZ-.05,sign * .30 + .038,templeY+.07,templeZ+.04,C.hose);
     b(sign * .37 - .025,.70,-.12,sign * .37 + .025,1.025,.29,C.edge);
   }
   b(-.395,.955,.235,.395,1.025,.29,C.hose);
@@ -105,9 +114,13 @@ export function buildConditioningRig(c, { x, z, rot = 0, variant = 0, attachment
     b(sign * .43-.014,1.16,-.31,sign * .43+.014,1.94,-.282,C.bronze);
     b(sign * .43-.07,1.15,-.36,sign * .43+.07,1.35,-.24,C.iron);
   }
-  b(-.04,1.775,.19,.08,1.827,.29,C.edge);
-  b(.025,1.47,-.012,.115,1.55,.07,C.olive);
-  b(-.04,.85,-.11,.07,.94,-.04,C.iron);
+  // Occupied chairs use the sockets sculpted onto the actual human; the
+  // empty visitor chair keeps its own waiting contacts.
+  if (!attachments) {
+    b(-.04,1.775,.19,.08,1.827,.29,C.edge);
+    b(.025,1.47,-.012,.115,1.55,.07,C.olive);
+    b(-.04,.85,-.11,.07,.94,-.04,C.iron);
+  }
 
   // These terminate at actual cranial and back ports, not somewhere nearby.
   pipe([[0,2.58,-.40],[.04,2.22,-.37],[.17,2.13,-.14],[.21,1.99,.14],[.12,1.88,.28],PORTS.crown],.042,C.bronze,'crown');
