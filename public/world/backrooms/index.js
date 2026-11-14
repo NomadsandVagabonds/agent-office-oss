@@ -71,9 +71,8 @@ async function visit(office, opt) {
   const vhs = createVhs(renderer, camera, { bloom: stage.quality?.fx !== false, level: opt.vhs ?? saved.vhs ?? 2 });
   const sound = createSound(level, { mute: opt.mute ?? saved.mute ?? false });
   let finish = () => {};
-  const hud = createHud(level, { onLeave: () => finish('quit') });
+  const hud = createHud(level);
   hud.setClean(vhs.level === 0);
-  hud.banner('TRACKING');
   document.activeElement?.blur?.();
 
   let state = 'loading', world = null, player = null, time = 0, ending = 0, reason = null, resolveVisit = null;
@@ -97,9 +96,9 @@ async function visit(office, opt) {
     // optional borrowings: if either will not load, the rooms that wanted them make do
     Avatar: (await import('../avatar/rig.js').catch(() => null))?.Avatar || null,
     layout: await import('/core/layout.mjs').catch(() => null),
-    plan: office.net?.state?.world?.plan || office.world?.planKey && null || {},
+    plan: office.net?.state?.world?.plan || {},
     player: null, world: null, pursuer: null,
-    say: (text, o) => hud.say(text, o),
+    hatches: new Map(),                       // room id → { drop() }: where a door in a floor lets you out
     end: (why) => finish(why),
     /** Is this spot on screen and not behind a wall? */
     sees(x, z, o = {}) {
@@ -136,32 +135,59 @@ async function visit(office, opt) {
     keys()?.add(k);
     if (k === 'Escape') finish('quit');
     else if (k === 'v') setPicture((vhs.level + 2) % 3);
-    else if (k === 'm') { sound.setMute(!sound.muted); hud.flag('MUTE', sound.muted); prefs.save({ ...prefs.load(), mute: sound.muted }); }
-    else if ((k === 'e' || k === 'Enter') && state === 'play' && currentUse) { const use = currentUse; try { use.use(use); } catch (err) { console.warn('[backrooms] use', err); } }
+    else if (k === 'm') { sound.setMute(!sound.muted); prefs.save({ ...prefs.load(), mute: sound.muted }); }
+    else if (k === 'e' || k === 'Enter') useIt();
   };
   const onKeyUp = (e) => { e.stopPropagation(); keys()?.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key); if (e.key === 'Shift') keys()?.delete('Shift'); };
-  let dragging = false;
+  const useIt = () => { if (state === 'play' && currentUse) { const use = currentUse; try { use.use(use); } catch (err) { console.warn('[backrooms] use', err); } } };
+  // a mouse looks (locked, or dragged); a finger that lands low on the left is a thumb stick, any other finger looks
+  let dragging = false, stickId = null, stickAt = null;
+  const looks = new Map();
   const onPointerDown = (e) => {
     e.stopPropagation();
     sound.start();
-    if (e.target?.closest?.('.br-leave')) { finish('quit'); return; }
+    if (e.pointerType === 'touch') {
+      hud.setTouch(true);
+      if (e.target === hud.leave) { finish('quit'); return; }
+      if (e.target === hud.use) { useIt(); return; }
+      if (stickId === null && e.clientX < stage.size.w * 0.4 && e.clientY > stage.size.h * 0.45) { stickId = e.pointerId; stickAt = { x: e.clientX, y: e.clientY }; }
+      else looks.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      return;
+    }
+    if (e.target === hud.use) { useIt(); return; }
     dragging = true;
     if (state !== 'done' && document.pointerLockElement !== canvas) { try { canvas.requestPointerLock?.()?.catch?.(() => {}); } catch { /* no pointer lock: arrows still turn */ } }
   };
-  const onPointerUp = (e) => { e.stopPropagation(); dragging = false; };
+  const onPointerMove = (e) => {
+    e.stopPropagation();
+    if (e.pointerType !== 'touch' || !player) return;
+    if (e.pointerId === stickId) {
+      const reach = Math.max(46, Math.min(stage.size.w, stage.size.h) * 0.11), dx = (e.clientX - stickAt.x) / reach, dy = (e.clientY - stickAt.y) / reach, len = Math.max(1, Math.hypot(dx, dy));
+      player.input.stick.x = dx / len; player.input.stick.y = -dy / len;
+    } else if (looks.has(e.pointerId)) {
+      const last = looks.get(e.pointerId);
+      player.input.dx += (e.clientX - last.x) * 2.6; player.input.dy += (e.clientY - last.y) * 2.6;
+      last.x = e.clientX; last.y = e.clientY;
+    }
+  };
+  const onPointerUp = (e) => {
+    e.stopPropagation();
+    dragging = false;
+    if (e.pointerId === stickId) { stickId = null; if (player) { player.input.stick.x = 0; player.input.stick.y = 0; } }
+    looks.delete(e.pointerId);
+  };
   const onMouseMove = (e) => {
     e.stopPropagation();
     if (!player || (document.pointerLockElement !== canvas && !dragging)) return;
     player.input.dx += e.movementX || 0; player.input.dy += e.movementY || 0;
   };
-  const swallow = (e) => { e.stopPropagation(); if (e.type === 'contextmenu') e.preventDefault(); };
-  const onLock = () => hud.setLocked(document.pointerLockElement === canvas);
-  const onBlur = () => { keys()?.clear(); dragging = false; };
+  const swallow = (e) => { e.stopPropagation(); if (e.type === 'contextmenu' || e.type === 'touchmove') e.preventDefault(); };
+  const onBlur = () => { keys()?.clear(); dragging = false; stickId = null; looks.clear(); if (player) { player.input.stick.x = 0; player.input.stick.y = 0; } };
   const listeners = [['keydown', onKeyDown], ['keyup', onKeyUp], ['pointerdown', onPointerDown], ['pointerup', onPointerUp], ['pointercancel', onPointerUp],
-    ['mousemove', onMouseMove], ['pointermove', swallow], ['wheel', swallow], ['click', swallow], ['dblclick', swallow], ['contextmenu', swallow]];
-  for (const [type, fn] of listeners) window.addEventListener(type, fn, true);
-  document.addEventListener('pointerlockchange', onLock);
+    ['mousemove', onMouseMove], ['pointermove', onPointerMove], ['wheel', swallow], ['click', swallow], ['dblclick', swallow], ['contextmenu', swallow], ['touchstart', swallow], ['touchmove', swallow]];
+  for (const [type, fn] of listeners) window.addEventListener(type, fn, { capture: true, passive: false });
   window.addEventListener('blur', onBlur);
+  if (window.matchMedia?.('(pointer: coarse)').matches) hud.setTouch(true);
 
   function setPicture(lv) {
     vhs.setLevel(lv);
@@ -169,7 +195,6 @@ async function visit(office, opt) {
     if (player) player.me.shake = lv === 2 ? 1 : lv === 1 ? 0.5 : 0.25;
     pictureKey = '';
     prefs.save({ ...prefs.load(), vhs: lv });
-    hud.say(['Picture: clean. No tape, no wobble.', 'Picture: steady. The tape behaves itself.', 'Picture: as recorded.'][lv], { ms: 1800 });
   }
 
   /* ---- the loop ---------------------------------------------------------------------- */
@@ -184,7 +209,7 @@ async function visit(office, opt) {
     world.update(dt, time, me);
     env.pursuer?.update(dt, time);
     currentUse = state === 'play' ? world.usable(me) : null;
-    hud.hint(currentUse ? (typeof currentUse.label === 'function' ? currentUse.label() : currentUse.label) : null);
+    hud.hint(!!currentUse);
 
     // the camcorder copes with the dark: more gain (and more noise), then its little lamp
     const here = world.current();
@@ -203,7 +228,7 @@ async function visit(office, opt) {
 
     if (state === 'falling') {
       u.uSnow.value = Math.max(0, u.uSnow.value - dt / 0.8);
-      if (time > 1.25) { state = 'play'; hud.recording(); hud.say(level.intro); hud.help(['W A S D  walk     mouse or ← →  look     Shift  hurry', 'E  use     V  picture     M  sound     Esc  give up', document.pointerLockElement === canvas ? '' : 'click for mouse look']); }
+      if (time > 1.25) { state = 'play'; hud.recording(); }
     } else if (state === 'ending') {
       ending += dt;
       const k = clamp(ending / END[reason], 0, 1);
@@ -220,7 +245,6 @@ async function visit(office, opt) {
     state = 'done';
     off();
     for (const [type, fn] of listeners) window.removeEventListener(type, fn, true);
-    document.removeEventListener('pointerlockchange', onLock);
     window.removeEventListener('blur', onBlur);
     if (document.pointerLockElement === canvas) document.exitPointerLock?.();
     hud.remove(); sound.stop();
@@ -233,7 +257,7 @@ async function visit(office, opt) {
   finish = (why) => {
     if (state === 'done' || state === 'ending' || pendingQuit) return;
     reason = why; ending = 0;
-    hud.hint(null); hud.say(null); hud.banner(why === 'quit' ? 'STOP ■' : '');
+    hud.hint(false);
     if (why === 'caught') sound.play('static', { dur: 1.3 });
     if (state === 'loading') pendingQuit = true; else state = 'ending';
   };
@@ -242,7 +266,7 @@ async function visit(office, opt) {
   /* ---- build, then begin ------------------------------------------------------------- */
   try {
     let breath = performance.now();                       // build as fast as the machine allows, but keep the static moving
-    world = await buildWorld(kit, level, env, async () => { if (performance.now() - breath > 14) { await frame(); breath = performance.now(); } });
+    world = await buildWorld(kit, level, env, async () => { if (performance.now() - breath > 40) { await frame(); breath = performance.now(); } });
     env.world = world;
   } catch (err) {
     console.error('[backrooms] could not build', err);
@@ -258,9 +282,6 @@ async function visit(office, opt) {
   for (const fn of env.ready || []) fn();
   world.enter(world.roomAt(player.me.x, player.me.z));
   vhs.setScene(world.scene);
-  hud.banner('');
-  hud.flag('MUTE', sound.muted);
-  onLock();
   state = 'falling';
 
   // a way for the dev page (and the curious) to poke at it

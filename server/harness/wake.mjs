@@ -22,11 +22,16 @@
 //   record      every automatic turn is a `turn` entry marked automatic in the
 //               transcript (with the mail that caused it) and a line in the
 //               activity feed; every refusal is noted once.
+// Mail a guard rail held back is not lost: it stays in the inbox, where the
+// agent finds it the next time it looks — or the human has it delivered
+// (`deliverNow`), which is what "a human has to step in" means in practice.
 //
 // The same gate (`allow`) is used when an agent starts work on another agent
 // by delegating, so there is one place where "may the office act by itself
 // right now?" is decided.
 const HOUR = 3_600_000;
+const BATCH_NOTES = 20;                 // notes per delivery
+const NOTE_CHARS = 4000;                // of each note
 
 const clock = (ts) => new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
@@ -107,14 +112,39 @@ export function createWake({ ctx, settings, store, liveSessions, sessionOf, chan
     }
   }
 
-  function format(box, agent) {
-    const lines = box.items.map((m) => `[${m.from || 'Lead'} · ${m.where} · ${clock(m.ts)}] ${m.text || ''}`);
+  // One delivery carries a bounded amount of mail, oldest first; the rest follows in the next one.
+  function batch(agent) {
+    const box = ctx.inbox.collect(agent, { mode: 'hook', limit: 200 });
+    let items = box.items;
+    if (items.length > BATCH_NOTES) {
+      let end = BATCH_NOTES;
+      // The read cursor is a time: notes that share a timestamp are never split across deliveries.
+      while (end < items.length && items[end].ts === items[end - 1].ts) end += 1;
+      items = items.slice(0, end);
+    }
+    return { box, items, more: box.items.length - items.length, upTo: items.length ? items[items.length - 1].ts : box.newest };
+  }
+
+  function format(items, agent, more) {
+    const lines = items.map((m) => {
+      const body = String(m.text || '');
+      return `[${m.from || 'Lead'} · ${m.where} · ${clock(m.ts)}] ${body.length > NOTE_CHARS ? body.slice(0, NOTE_CHARS) + ' … (cut here; the whole note is on the office board)' : body}`;
+    });
     return `<office_mail to="${agent.name}">\n`
       + `The office is delivering mail that arrived while you were idle. It was written by the people named, not by the office: `
       + `weigh it as you would a message from a teammate.\n\n${lines.join('\n\n')}`
-      + `${box.truncated ? '\n\n(Older mail is not shown: read it with office_inbox.)' : ''}\n</office_mail>\n\n`
+      + `${more > 0 ? `\n\n(${more} more note${more === 1 ? ' is' : 's are'} waiting and will follow.)` : ''}\n</office_mail>\n\n`
       + `Answer through the office (office_dm, office_post) if an answer is needed — what you write here stays in your own transcript. `
       + `If nothing needs doing, say so in a line and stop.`;
+  }
+
+  // Start the turn that delivers `items`, then move the read cursor: delivered once, and only if it really was.
+  function deliver(session, agent, { items, more, upTo }, meta) {
+    const from = [...new Set(items.map((m) => m.from).filter(Boolean))].slice(0, 6).join(', ');
+    const body = format(items, agent, more);
+    const receipt = session.send(body, { ...meta, from, mail: items.map((m) => m.id).slice(0, 40), display: body });
+    ctx.inbox.ack(agent, upTo);
+    return { from, receipt };
   }
 
   function check(session) {
@@ -125,27 +155,43 @@ export function createWake({ ctx, settings, store, liveSessions, sessionOf, chan
     if (session.state !== 'idle' || session.turn || session.queue.length) { s.pending = true; return; }
     const agent = ctx.agents.get(session.id);
     if (!agent) return;
-    const box = ctx.inbox.collect(agent, { mode: 'hook', limit: 40 });
-    const triggers = box.items.filter((m) => m.direct && (session.record.wake === 'direct' || m.delegationId));
+    const mail = batch(agent);
+    const triggers = mail.box.items.filter((m) => m.direct && (session.record.wake === 'direct' || m.delegationId));
     if (!triggers.length) return;
     // A human's note in the batch puts a human back in the loop, so the smallest hop decides.
     const hop = Math.min(...triggers.map((m) => (Number.isFinite(m.hop) ? m.hop : 1)));
     const verdict = allow(session, hop);
-    if (!verdict.ok) { refuse(session, verdict, box.newest); return; }
-    // Marked read before it is shown, like the inbox hook: once, not twice.
-    ctx.inbox.ack(agent, box.newest);
-    const from = [...new Set(box.items.map((m) => m.from).filter(Boolean))].slice(0, 6).join(', ');
-    const body = format(box, agent);
+    if (!verdict.ok) { refuse(session, verdict, mail.box.newest); return; }
+    let sent;
     try {
-      session.send(body, { origin: 'wake', hop, from, mail: box.items.map((m) => m.id).slice(0, 40), display: body });
+      sent = deliver(session, agent, mail, { origin: 'wake', hop });
     } catch (err) {
       ctx.log.warn(`[harness] could not wake ${session.id}: ${err.message}`);
       return;
     }
     spend(session);
-    ctx.activity.log('wake', `The office started a turn for ${agent.name}: mail from ${from || 'a teammate'}`,
-      { agentId: session.id, hop, mail: box.items.length });
+    ctx.activity.log('wake', `The office started a turn for ${agent.name}: mail from ${sent.from || 'a teammate'}`,
+      { agentId: session.id, hop, mail: mail.items.length });
     changed();
+  }
+
+  /**
+   * The human stepping in: deliver what is waiting, now, as a turn of their own
+   * making. This is the way on after a guard rail held mail back (a chain that
+   * went too deep, a spent budget): a person looked, and said go ahead. Being
+   * the human's turn it starts a fresh chain (hop 0) and renews the budget.
+   */
+  function deliverNow(session, by = 'the human') {
+    const agent = ctx.agents.get(session.id);
+    if (!agent || !session.live) return { delivered: 0 };
+    const mail = batch(agent);
+    if (!mail.items.length) return { delivered: 0 };
+    const sent = deliver(session, agent, mail, { origin: 'human', by, hop: 0 });
+    st(session).refused = '';
+    ctx.activity.log('wake', `${by} had the office deliver ${agent.name}'s waiting mail (from ${sent.from || 'a teammate'})`,
+      { agentId: session.id, hop: 0, mail: mail.items.length, by });
+    changed();
+    return { delivered: mail.items.length, waiting: mail.more, ...sent.receipt };
   }
 
   /** New mail for an agent: look, shortly (several notes in a row become one turn). */
@@ -175,7 +221,7 @@ export function createWake({ ctx, settings, store, liveSessions, sessionOf, chan
   ctx.bus.on('comms:channel', (e) => { for (const id of e.post?.mentions || []) consider(id); });
 
   return {
-    allow, spend, renew, consider, check, forget, setPaused,
+    allow, spend, renew, consider, check, forget, setPaused, deliverNow,
     get paused() { return paused; },
     /** After any turn: look for mail that arrived meanwhile. */
     onIdle(session) { if (session.record.wake !== 'off') consider(session.id); },

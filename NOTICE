@@ -5,3 +5,7 @@ Originally developed by Justin Miller.
 
 This NOTICE file is provided for attribution purposes only and does not
 modify the Apache License, Version 2.0.
+
+The audio under public/audio/ was generated with ElevenLabs (sound effects,
+music and stock voices) on the project owner's account, by
+tools/make-audio.mjs, and is distributed under the licence terms of that plan.

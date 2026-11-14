@@ -30,6 +30,7 @@ import { createWorld } from './world/world.mjs';
 import { registerWorldRoutes } from './world/routes.mjs';
 import { createHarness } from './harness/index.mjs';
 import { registerHarnessRoutes } from './harness/routes.mjs';
+import { createUsage, registerUsageRoutes } from './usage.mjs';
 
 function readVersion(root) {
   try { return JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version || '0.0.0'; }
@@ -74,6 +75,8 @@ export function createOffice(config) {
   ctx.taskApi = createTasks(ctx);
   ctx.inbox = createInbox(ctx, data('inbox.json'));
   ctx.activity = createActivity(ctx);
+  // How much each provider has left, as far as the runtimes say (the harness reports into it).
+  ctx.usage = createUsage(ctx, data('usage.json'));
   // Sessions the office drives itself (ACP, Codex app-server): see docs/HARNESS.md.
   ctx.harness = createHarness(ctx, data('harness.json'));
   ctx.world = createWorld(ctx, data('world.json'));
@@ -81,6 +84,7 @@ export function createOffice(config) {
   const router = new Router();
   registerCoreRoutes(router, ctx);
   registerHarnessRoutes(router, ctx);
+  registerUsageRoutes(router, ctx);
   registerKnowledgeRoutes(router, ctx);
   registerWorldRoutes(router, ctx);
   ctx.router = router;
@@ -113,6 +117,7 @@ export function createOffice(config) {
     }
     client.send({ type: EV.WORLD, world: ctx.world.snapshot() });
     client.send({ type: EV.HARNESS, ...ctx.harness.snapshot() });
+    client.send({ type: EV.USAGE, usage: ctx.usage.snapshot() });
   });
   hub.on('message', (client, message) => {
     try { ctx.world.onClientMessage(client, message); }
@@ -180,6 +185,7 @@ export function createOffice(config) {
     sweepTimer = setInterval(() => ctx.agents.sweep(), 60 * 1000);
     sweepTimer.unref();
     ctx.world.start();
+    ctx.usage.start();
     ctx.codexObserver.start();
     return ctx;
   }
@@ -191,6 +197,7 @@ export function createOffice(config) {
     ctx.codexObserver.stop();
     // Agents the office started end with it: nothing is left working unattended.
     try { await ctx.harness.stop(); } catch {}
+    try { ctx.usage.stop(); } catch {}
     try { ctx.world.stop(); } catch {}
     try { saveRegistry(); } catch {}
     hub.close();

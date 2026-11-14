@@ -22,8 +22,8 @@ export class OfficeError extends Error {
   }
 }
 
-function viaCurl(url, method, headers, body) {
-  const args = ['-s', '-m', '8', '-X', method];
+function viaCurl(url, method, headers, body, timeoutMs = 8000) {
+  const args = ['-s', '-m', String(Math.max(1, Math.ceil(timeoutMs / 1000))), '-X', method];
   for (const [k, v] of Object.entries(headers)) args.push('-H', `${k}: ${v}`);
   if (body !== undefined) args.push('--data-binary', body);
   args.push('-w', '\n%{http_code}', url);
@@ -52,7 +52,7 @@ export async function api(pathname, opt = {}) {
     const res = await fetch(url, { method, headers, body, signal: AbortSignal.timeout(opt.timeoutMs || 8000) });
     status = res.status; text = await res.text();
   } catch (err) {
-    try { ({ status, text } = viaCurl(url, method, headers, body)); }
+    try { ({ status, text } = viaCurl(url, method, headers, body, opt.timeoutMs)); }
     catch { throw new OfficeError(`cannot reach the office at ${BASE} — is the daemon running? (node daemon.mjs)`, 0); }
     if (!status) throw new OfficeError(`cannot reach the office at ${BASE} — is the daemon running? (node daemon.mjs)`, 0);
   }
@@ -166,6 +166,46 @@ export function hook(id, name, extra = {}) {
 }
 
 /* ---- delegation + transcripts, as text ----------------------------------- */
+
+const DELEGATION_DONE = new Set(['completed', 'failed', 'cancelled', 'interrupted']);
+
+/**
+ * Wait for a delegated task: until it finishes, needs the human, or `seconds`
+ * have passed. The daemon holds one request for under a minute, so a longer
+ * wait is several of them. Waiting never cancels the task.
+ */
+export async function waitForDelegation(id, seconds) {
+  const until = Date.now() + Math.max(1, Number(seconds) || 30) * 1000;
+  for (;;) {
+    const left = Math.max(500, Math.min(40_000, until - Date.now()));
+    const { delegation } = await api(`/api/delegations/${encodeURIComponent(id)}?wait=1&timeoutMs=${left}`, { timeoutMs: left + 8000 });
+    if (DELEGATION_DONE.has(delegation.status) || delegation.pendingApproval || Date.now() >= until - 250) return delegation;
+  }
+}
+
+/** Which agents the office can start, who it is driving, and whether it may act by itself right now. */
+export function formatHarness(h) {
+  const lines = ['Agents the office can start here  (office delegate <adapter> <task…>)'];
+  for (const a of h.adapters) {
+    lines.push(`  ${a.id.padEnd(12)} ${a.label} · ${a.protocol}${a.available ? '' : '  — not installed'}`
+      + `${!a.available && a.note ? `\n${' '.repeat(15)}${a.note}` : ''}`);
+  }
+  if (h.sessions?.length) {
+    lines.push('', 'Driven by the office now');
+    for (const s of h.sessions) {
+      lines.push(`  ${s.name || s.label} (${s.adapter}) · ${s.state}${s.pending?.length ? ' on the human' : ''} · ${s.modeLabel} · wake ${s.wake}   ${s.id}`);
+    }
+  }
+  const w = h.wake || {};
+  lines.push('', w.paused ? 'Automatic turns are PAUSED by the human: the office will not start work by itself (delegation by agents included).'
+    : `Automatic turns are on. A chain of agents handing work to agents stops after ${w.limits?.maxHops ?? '?'} steps; then a human decides.`);
+  const d = h.limits?.delegate;
+  if (d) {
+    lines.push(d.enabled ? `Delegated work runs in mode "${d.maxMode}" at most (never broader than yours); ${d.maxActive} at once, ${d.maxPerHour} an hour.`
+      : 'Delegation is switched off on this office.');
+  }
+  return lines.join('\n');
+}
 
 /** One delegated task in a few lines an agent can act on. */
 export function formatDelegation(d) {

@@ -26,6 +26,7 @@ const MIME = {
   '.gif': 'image/gif',
   '.webp': 'image/webp',
   '.ico': 'image/x-icon',
+  '.mp3': 'audio/mpeg',
   '.txt': 'text/plain; charset=utf-8',
   '.md': 'text/markdown; charset=utf-8',
   '.woff2': 'font/woff2',

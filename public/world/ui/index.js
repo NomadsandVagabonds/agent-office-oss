@@ -9,6 +9,7 @@ import { createNeeds } from './needs.js';
 import { createInspector } from './inspector.js';
 import { createPalette } from './palette.js';
 import { createExtras } from './extras.js';
+import { createFuelChip } from './usage.js';
 
 const EMOJI = { wave: '👋', dance: '💃', bow: '🙇', cheer: '🎉', shrug: '🤷', think: '🤔', facepalm: '🤦', nod: '👍', stretch: '🙆',
   highfive: '🙌', salute: '🫡', spin: '🌀', sleep: '💤', laugh: '😄' };
@@ -19,6 +20,8 @@ const SHEETS = {
   binder: { title: 'Binder', icon: 'book', key: 'k', load: () => import('./binder.js') },
   work: { title: 'Terminals', icon: 'term', key: 't', load: () => import('./terminal.js') },
   passport: { title: 'Passport', icon: 'star', key: 'p', load: () => import('./passport.js') },
+  // no button of its own: the fuel chip in the top bar and the tanks beside the big board open it
+  usage: { title: 'What is left', icon: 'eye', key: 'u', hidden: true, load: () => import('./usage.js') },
 };
 
 export function createUI(office) {
@@ -35,12 +38,14 @@ export function createUI(office) {
   const tools = h('div.tools');
   const needBadge = h('span.badge.hidden', '0');
   const brand = h('div.brand', { title: 'Back to the whole office (Space)', onclick: () => ui.overview() }, 'THE OFFICE');
-  root.append(h('div.topbar.glass', brand, tally, h('span.grow'), clockEl, tools));
+  const fuelChip = createFuelChip(office, ui);
+  root.append(h('div.topbar.glass', brand, tally, fuelChip, h('span.grow'), clockEl, tools));
   const sheetButtons = {};
   tools.append(h('button.btn.ghost', { title: 'Next agent waiting on you (N)', onclick: () => ui.nextNeed() }, icon('inbox'), h('span.word', 'Needs you'), needBadge));
   const walkBtn = h('button.btn.ghost', { title: 'Walk the floor yourself (Tab)', onclick: () => office.walk?.toggle() }, icon('pin'), h('span.word', 'Walk'));
   tools.append(walkBtn);
   for (const [name, s] of Object.entries(SHEETS)) {
+    if (s.hidden) continue;
     sheetButtons[name] = h('button.btn.ghost', { title: `${s.title} (${s.key.toUpperCase()})`, onclick: () => ui.toggleSheet(name) }, icon(s.icon), h('span.word', s.title));
     tools.append(sheetButtons[name]);
   }
@@ -144,6 +149,7 @@ export function createUI(office) {
       return office.walk.narrate(items.length ? `The team shelf: ${items.join(', ')}.` : 'The team shelf is empty. Agents fill it with: office place <creation>');
     }
     if (poi.kind === 'seat') return undefined;
+    if (poi.kind === 'gauges') return ui.openSheet('usage');
     if (poi.kind === 'arcade') return import('./arcade.js').then((m) => m.playBugSquash({ office, ui }));
     if (poi.kind === 'elevator') return import('../levels/index.js').then((m) => m.callLift(office));      // the floor panel, then a ride
     return office.walk.use({ thing: poi.id, label: poi.label, kind: poi.kind, x: o.x, z: o.z });

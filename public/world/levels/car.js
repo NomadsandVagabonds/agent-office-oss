@@ -127,8 +127,9 @@ export function createLiftDoor(opt = {}) {
     add(quad(shellMat, [-half, CAR.doorH, 0], [half, CAR.doorH, 0], [half, SH, 0], [-half, SH, 0], [su(W - half), CAR.doorH / 2.6, su(W + half), sv]));
   }
   const capMat = own(new THREE.MeshLambertMaterial({ color: '#5a626e' }));
-  const cap = new THREE.Mesh(own(new THREE.BoxGeometry(CAR.w + 0.16, 0.14, D + 0.26)), capMat);
-  cap.position.set(0, SH + 0.07, -D / 2 - 0.05); cap.castShadow = true;
+  const eave = opt.front === false ? 0 : 0.08;                  // set into a wall, the shaft's roof stops at the wall
+  const cap = new THREE.Mesh(own(new THREE.BoxGeometry(CAR.w + 0.16, 0.14, D + 0.18 + eave)), capMat);
+  cap.position.set(0, SH + 0.07, -(D + 0.18 - eave) / 2 - 0.01 * (eave ? 0 : 1)); cap.castShadow = true;
   const motor = new THREE.Mesh(own(new THREE.BoxGeometry(1.1, 0.45, 1.0)), own(new THREE.MeshLambertMaterial({ color: '#6d7582' })));
   motor.position.set(0.2, SH + 0.36, -D / 2); motor.castShadow = true;
   group.add(cap, motor);

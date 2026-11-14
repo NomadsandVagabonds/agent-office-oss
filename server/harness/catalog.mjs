@@ -54,8 +54,9 @@ export function parseAdapter(raw) {
   if (!PROTOCOLS.includes(protocol)) return { error: `adapter ${id}: protocol must be one of ${PROTOCOLS.join(', ')}` };
   const command = typeof raw.command === 'string' ? raw.command.trim() : '';
   if (!command || command.length > 1024 || command.includes('\0')) return { error: `adapter ${id}: command is required` };
-  const args = Array.isArray(raw.args) ? raw.args : [];
-  if (args.length > 64 || args.some((a) => typeof a !== 'string' || a.length > 2048 || a.includes('\0'))) {
+  // A mistyped "args" must not quietly become "no arguments": for most agents that starts their interactive UI.
+  const args = raw.args === undefined ? [] : raw.args;
+  if (!Array.isArray(args) || args.length > 64 || args.some((a) => typeof a !== 'string' || a.length > 2048 || a.includes('\0'))) {
     return { error: `adapter ${id}: args must be a short list of strings` };
   }
   const env = {};

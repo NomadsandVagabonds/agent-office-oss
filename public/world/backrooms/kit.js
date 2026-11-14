@@ -49,13 +49,16 @@ export class Batch {
 
   /**
    * A flat sheet: origin o, unit edge directions U and V, cut at the distances in us and vs.
-   * It faces U × V. uvOf(u, v) → [s, t]; aoOf(u, v) → 0..1 darkening for creases.
+   * It faces U × V. uvOf(u, v) → [s, t]; aoOf(u, v) → 0..1 darkening for creases;
+   * liftOf, if given, moves each vertex to its own height.
    */
-  grid(o, U, V, us, vs, uvOf, alb = WHITE, aoOf = null) {
+  grid(o, U, V, us, vs, uvOf, alb = WHITE, aoOf = null, liftOf = null) {
     const nx = U[1] * V[2] - U[2] * V[1], ny = U[2] * V[0] - U[0] * V[2], nz = U[0] * V[1] - U[1] * V[0];
     const base = this.verts, nu = us.length, nv = vs.length;
     for (const v of vs) for (const u of us) {
-      this.pos.push(o[0] + U[0] * u + V[0] * v, o[1] + U[1] * u + V[1] * v, o[2] + U[2] * u + V[2] * v);
+      const x = o[0] + U[0] * u + V[0] * v, z = o[2] + U[2] * u + V[2] * v;
+      // liftOf(u, v, x, z) → the height this vertex really sits at (sloping ceilings, walls cut to fit them)
+      this.pos.push(x, liftOf ? liftOf(u, v, x, z) : o[1] + U[1] * u + V[1] * v, z);
       this.nor.push(nx, ny, nz);
       const t = uvOf ? uvOf(u, v) : null;
       this.uv.push(t ? t[0] : 0, t ? t[1] : 0);

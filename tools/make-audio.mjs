@@ -19,6 +19,7 @@
 // the voices are ElevenLabs' stock ones. Every take is different: look at
 // (and listen to) what comes back before you commit it.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -39,13 +40,14 @@ const VOICE = {
   arcade: { id: 'IKne3meq5aSn9XLyUdCD', room: 'acrusher=bits=8:samples=4:mode=log:aa=1:mix=0.8,lowpass=f=4800' },   // Charlie — hyped, out of a cabinet's speech chip
 };
 // what "the same loudness" means for each kind, and the ceiling nothing may cross (LUFS / dBFS true peak)
-const LEVEL = { shot: -18, bed: -24, music: -20, peak: -1.5 };
+const LEVEL = { shot: -18, bed: -20, music: -20, peak: -1.5 };
 
 const sfx = (name, text, seconds, extra = {}) => ({ name, kind: 'sfx', text, seconds, ...extra });
 const music = (name, text, seconds, extra = {}) => ({ name, kind: 'music', text, seconds, ...extra });
 const voice = (name, who, text, extra = {}) => ({ name, kind: 'voice', who, text, ...extra });
 
 // extra: influence (how literally to take the prompt), fx (an ffmpeg filter chain), tail (seconds of fade at the end), loop, mono, stability.
+// A bed is mono: wide hiss does not survive a small stereo MP3, and it is played far too quietly for width to matter.
 // Music is asked for in whole bars — 16 at 120 BPM is 32 s — and says its bpm, so that a song comes round on a bar line when it repeats.
 export const MANIFEST = [
   // ---- things that happen in the office
@@ -71,10 +73,11 @@ export const MANIFEST = [
   sfx('goat-1', 'A single bleat of an adult goat, close, clean, no background', 1.2, { influence: 0.6 }),
   sfx('goat-2', 'A single short, deeper, slightly grumpy bleat of a billy goat, close, clean, no background', 1.0, { influence: 0.6 }),
   sfx('goat-3', 'A single high-pitched bleat of a small baby kid goat, close, clean, no background', 0.9, { influence: 0.6 }),
+  sfx('goat-bell', 'One single strike of a small cowbell: a short, dull metallic clonk that dies away quickly, clean, no background', 0.8, { influence: 0.7 }),
   // ---- beds that loop
-  sfx('office-bed', 'Quiet office room tone: steady soft air conditioning and ventilation hiss, calm and constant, no voices, no distinct events', 20, { loop: true, fx: 'highpass=f=120,highpass=f=120,highshelf=f=700:g=8' }),
-  sfx('backrooms-hum', 'Constant fluorescent tube light buzz with a low mains electrical hum in an empty carpeted room, eerie and steady', 12, { loop: true }),
-  sfx('pasture-bed', 'Quiet indoor meadow ambience: a soft ventilation hum under faint rustling grass, an occasional small distant goat bell, calm and steady, no voices', 16, { loop: true }),
+  sfx('office-bed', 'Quiet office room tone: steady soft air conditioning and ventilation hiss, calm and constant, no voices, no distinct events', 20, { loop: true, mono: true, fx: 'highpass=f=120,highpass=f=120,highshelf=f=700:g=8' }),
+  sfx('backrooms-hum', 'Constant fluorescent tube light buzz with a low mains electrical hum in an empty carpeted room, eerie and steady', 12, { loop: true, mono: true }),
+  sfx('pasture-bed', 'Calm quiet room tone: a soft ventilation hum, a very faint rustle of dry grass and straw, now and then one tiny distant metal bell tinkle, steady and sparse', 16, { loop: true, mono: true, fx: 'highpass=f=120,highpass=f=120' }),
   // ---- music
   music('elevator-muzak', 'Cheesy elevator muzak at 120 BPM: light bossa nova lounge instrumental with a vibraphone melody, soft nylon guitar, gentle brushed drums and upright bass, pleasant and slightly corny, 1960s easy listening', 32, { bpm: 120 }),
   music('jukebox-disco', 'Joyful 1970s disco funk instrumental at 120 BPM that starts straight into the groove: four on the floor drums, bouncy slap bass, bright string stabs, wah guitar and hand claps, very danceable', 32, { bpm: 120 }),
@@ -141,13 +144,13 @@ function loudness(file) {
 }
 
 /**
- * One raw take → public/audio. One-shots lose the dead air around them and are heard in their voice's room; loops
- * and songs keep exactly the length that was asked for, so that they come round on the beat. Loudness is set with
- * a single fixed gain, so tails and seams survive it.
+ * One raw take → public/audio. A one-shot loses the dead air around it and is heard in its voice's room; a loop
+ * keeps exactly the length that was asked for and a song ends on a bar line, so that both come round cleanly.
+ * Loudness is set with a single fixed gain, so tails and seams survive it. `tmp` is somewhere to work.
  */
-function polish(raw, out, item) {
+function polish(raw, out, item, tmp) {
   const loop = !!item.loop, song = item.kind === 'music', shot = !loop && !song;
-  const a = `${out}.a.wav`, b = `${out}.b.wav`;
+  const a = path.join(tmp, 'a.wav'), b = path.join(tmp, 'b.wav');
   try {
     // 1 · decode, and find what was asked for. A stream that does not say how much codec delay it carries still has it in front;
     //     and a song that trails off comes round at the first bar line after which it stays quiet, not after the silence
@@ -169,14 +172,15 @@ function polish(raw, out, item) {
     const first = [exact, `volume=${(-3 - loudness(a).peak).toFixed(1)}dB`,
       ...(shot ? ['apad=pad_dur=1.5', 'highpass=f=45,highpass=f=45', item.fx, head, cut(room ? -42 : -55), ...(room ? ['apad=pad_dur=1.5', room, cut(-55)] : [])]
         : loop && item.fx ? [`aloop=loop=1:size=${n}`, item.fx, `atrim=start_sample=${n},asetpts=N/SR/TB`] : [item.fx])].filter(Boolean);
-    must(['-i', a, '-af', first.join(','), '-ac', shot || item.mono ? '1' : '2', '-c:a', 'pcm_f32le', '-f', 'wav', b]);
+    const mono = shot || !!item.mono;
+    must(['-i', a, '-af', first.join(','), '-ac', mono ? '1' : '2', '-c:a', 'pcm_f32le', '-f', 'wav', b]);
     // 3 · one gain to the target loudness, kept under the ceiling
     const now = loudness(b);
     const gain = Math.min(shot ? LEVEL.shot - now.M : (loop ? LEVEL.bed : LEVEL.music) - now.I, LEVEL.peak - now.peak);
     // 4 · take the click off both ends (a loop that was made seamless is left alone), and encode
     const fades = loop ? [] : [`afade=t=in:d=${shot ? 0.004 : 0.008}`, `areverse,afade=t=in:d=${item.tail ?? (shot ? 0.08 : faded ? 0.25 : 0.008)},areverse`];
     must(['-i', b, '-af', [...fades, `volume=${gain.toFixed(2)}dB`].join(','), '-map_metadata', '-1', '-ar', '44100',
-      '-c:a', 'libmp3lame', '-b:a', song ? (item.mono ? '80k' : '112k') : loop ? '80k' : '64k', '-f', 'mp3', out]);
+      '-c:a', 'libmp3lame', '-b:a', song ? (mono ? '80k' : '112k') : mono ? '64k' : '80k', '-f', 'mp3', out]);
   } finally { for (const f of [a, b]) fs.rmSync(f, { force: true }); }
 }
 
@@ -190,27 +194,29 @@ async function main() {
   const only = value('--only') ? new Set(value('--only').split(',')) : null;
   const keep = value('--keep');
   for (const dir of [OUT, keep]) if (dir) fs.mkdirSync(dir, { recursive: true });
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'office-audio-'));      // nothing half-made is ever left in public/audio
   const before = has('--polish') ? null : await credits();
-  let made = 0;
+  let made = 0, asked = 0;
   for (const item of MANIFEST) {
     if (only && !only.has(item.name)) continue;
     const file = path.join(OUT, `${item.name}.mp3`);
-    const raw = keep ? path.join(keep, `${item.name}.mp3`) : `${file}.raw`;
+    const raw = path.join(keep || tmp, `${item.name}.mp3`);
     const kept = !!keep && fs.existsSync(raw);
     if (has('--polish') ? !kept : fs.existsSync(file) && !has('--force')) continue;
     process.stdout.write(`${item.kind.padEnd(6)} ${item.name} … `);
     try {
-      if (!kept || (has('--force') && !has('--polish'))) fs.writeFileSync(raw, await generate(item));
-      polish(raw, file, item);
+      if (!kept || (has('--force') && !has('--polish'))) { fs.writeFileSync(raw, await generate(item)); asked++; }
+      polish(raw, file, item, tmp);
       made++;
       console.log(`${(fs.statSync(file).size / 1024).toFixed(0)} KB`);
     } catch (err) {
       console.log(`FAILED — ${err.message}`);
       if (err.fatal) { console.log('Stopping: the account will not make any more.'); break; }
-    } finally { if (!keep) fs.rmSync(raw, { force: true }); }
+    }
   }
-  const after = before === null ? null : await credits();
-  console.log(`\n${made} file(s) written to public/audio/${before !== null && after !== null ? ` · credits used: ${after - before}` : ''}`);
+  fs.rmSync(tmp, { recursive: true, force: true });
+  const after = asked ? await credits() : null;
+  console.log(`\n${made} file(s) written to public/audio/${before !== null && after !== null ? ` · ${asked} asked for · credits used so far: ${after - before} (the account's counter runs a minute behind)` : ''}`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) await main();

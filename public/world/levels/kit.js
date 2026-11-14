@@ -5,7 +5,7 @@
 //     const w = createWorld(office, { id: 'pond', bounds: { x0: -5, z0: -4, x1: 5, z1: 4 } });
 //     w.floor(-5, -4, 5, 4, FLOORS.grass());
 //     w.prop('bench', 0, -2, 'S');
-//     w.thing({ x: 2, z: 1, label: 'the pond', use: () => 'A koi looks up at you, unimpressed.' });
+//     w.thing({ x: 2, z: 1, label: 'the pond', use: () => ripple() });
 //     w.lift(0, -4, 'S');                  // where you arrive, and the way back
 //     return w.run();                      // resolves when you leave: { reason, to? }
 //   }
@@ -14,12 +14,16 @@
 // that follows and that you can drag round), what you may not walk through,
 // the "E" hint, the chip that says where you are, Esc, and the cleaning up.
 // A level adds what is there and what it does.
+//
+// House rule: a level does not talk over itself. No caption boxes; if there
+// are words, they are IN the world — on a sign (w.sign), a screen (w.screen),
+// a label, the lift's own display.
 import * as THREE from 'three';
 import { Avatar } from '../avatar/rig.js';
 import { buildProp, hasProp, PROPS } from '../props/index.js';
 import { voxObject, voxelUniforms } from '../vox/material.js';
 import { VOXEL } from '../vox/vox.js';
-import { WALL_H } from '../scene/textures.js';
+import { WALL_H, signTexture } from '../scene/textures.js';
 import { h } from '../ui/dom.js';
 import { resolveLook } from '/core/look.mjs';
 import { faceAngle, faceVector } from '/core/layout.mjs';
@@ -39,8 +43,11 @@ const angleOf = (face) => (typeof face === 'number' ? face : faceAngle(face));
  * @param {object} spec
  *   id          the level's id in core/levels.mjs (the chip reads its floor and name from there)
  *   bounds      { x0, z0, x1, z1 } — where the floor is; you cannot walk off it
+ *   floorY      (x, z) → height of the ground there, for a level with hills (default: flat, 0)
  *   start       { x, z, heading } — where you appear, if there is no lift() (heading 0 faces +z)
- *   camera      { yaw, pitch, dist, minDist, maxDist, minPitch, maxPitch, fov, height }
+ *   camera      { yaw, pitch, dist, minDist, maxDist, minPitch, maxPitch, fov, height,
+ *                 anchor: { x, z, pull } — keep the view centred near a point (a room) instead of on you; pull 0..1
+ *                 ceiling: y — never rise above this · inside: { x0, z0, x1, z1 } — never leave this rectangle }
  *   background  scene colour · fog { color, near, far }
  *   look        { tilt: 0..1 soft focus, bloom, glow } — how the office's post-processing treats this place
  *   hint        a line of help shown for a few seconds on arrival
@@ -54,6 +61,7 @@ export function createWorld(office, spec = {}) {
   const cam = { yaw: 0, pitch: 0.42, dist: 8.5, minDist: 3, maxDist: 16, minPitch: 0.08, maxPitch: 1.35, fov: 36, height: 0.9, ...(spec.camera || {}) };
   const camera = new THREE.PerspectiveCamera(cam.fov, stage.size.w / stage.size.h, 0.2, spec.far || 900);
   const look = { tilt: 0.25, bloom: null, glow: null, ...(spec.look || {}) };
+  const floorY = typeof spec.floorY === 'function' ? spec.floorY : () => 0;
 
   /* ---- light: a sky, a sun with shadows that follows you ----------------------------------- */
   const hemi = new THREE.HemisphereLight('#e3ecff', '#8a7560', 1.3);
@@ -150,7 +158,7 @@ export function createWorld(office, spec = {}) {
     const holder = new THREE.Group();
     holder.add(node);
     if (opt.scale) holder.scale.setScalar(opt.scale);
-    add(holder, x, z, face, opt.y ?? PROPS[type].y ?? 0);
+    add(holder, x, z, face, (opt.y ?? PROPS[type].y ?? 0) + floorY(x, z));
     holder.userData.type = type;
     if (opt.solid !== false && !PROPS[type].wall) {
       const b = node.userData.bounds, k = VOXEL * (opt.scale || 1);
@@ -165,9 +173,21 @@ export function createWorld(office, spec = {}) {
     node.traverse((o) => { if (o.geometry) own(o.geometry); });
     const holder = new THREE.Group();
     holder.add(node);
-    add(holder, x, z, face, opt.y || 0);
+    add(holder, x, z, face, (opt.y || 0) + floorY(x, z));
     if (opt.solid) { const b = node.userData.bounds; blockLocal(x, z, angleOf(face), [b.x0 * VOXEL, b.z0 * VOXEL, b.x1 * VOXEL, b.z1 * VOXEL]); }
     return holder;
+  }
+  /**
+   * Words, in the world: a small painted plaque. Returns a mesh `height` metres
+   * tall facing +z — hang it with w.add(sign, x, z, face, y).
+   * opt: height (0.22) · bg · fg · accent · size (the font, in texture pixels)
+   */
+  function sign(text, opt = {}) {
+    const tex = own(signTexture(String(text), { size: opt.size || 11, bg: opt.bg, fg: opt.fg, accent: opt.accent }));
+    const hgt = opt.height || 0.22;
+    const mesh = new THREE.Mesh(own(new THREE.PlaneGeometry(hgt * tex.userData.aspect, hgt)), own(new THREE.MeshLambertMaterial({ map: tex })));
+    mesh.receiveShadow = true;
+    return mesh;
   }
   /**
    * A live picture: a canvas on a glowing panel, redrawn when you ask.
@@ -257,7 +277,7 @@ export function createWorld(office, spec = {}) {
   const me = { x: spec.start?.x ?? 0, z: spec.start?.z ?? 0, heading: spec.start?.heading ?? 0, moving: false, hop: 0, seat: null, frozen: false, script: null };
   const held = new Set();
   const goal = { yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist };
-  const eye = new THREE.Vector3(me.x, cam.height, me.z);
+  const eye = new THREE.Vector3(me.x, cam.height, me.z);       // what the camera looks at: a point at chest height that follows you
   let shot = null, shotLast = null, shotMix = 0;        // { pos, look, fov } while the camera holds a fixed shot
 
   /* ---- things you can use ----------------------------------------------------------------- */
@@ -265,8 +285,8 @@ export function createWorld(office, spec = {}) {
   let near = null;
   /**
    * Something to press E at (or click).
-   *   { x, z, label, use(world, thing) → text?, reach?, object?: what to click, hidden?: () => boolean }
-   * If use() returns a string, it is said aloud.
+   *   { x, z, label, use(world, thing), reach?, object?: what to click, hidden?: () => boolean }
+   * `label` is the only caption there is ("E the telescope"); what happens next is up to use().
    */
   function thing(spec2) {
     const entry = { reach: REACH, ...spec2 };
@@ -279,20 +299,17 @@ export function createWorld(office, spec = {}) {
     return thing({ x: holder.position.x, z: holder.position.z, label, object: holder, reach: opt.reach ?? 1.5,
       use() {
         const a = holder.rotation.y, dx = opt.dx || 0;
-        me.seat = { x: holder.position.x + Math.cos(a) * dx, z: holder.position.z - Math.sin(a) * dx, heading: a + (opt.turn || 0), top };
-        return opt.say || null;
+        me.seat = { x: holder.position.x + Math.cos(a) * dx, z: holder.position.z - Math.sin(a) * dx, y: holder.position.y, heading: a + (opt.turn || 0), top };
+        opt.onSit?.();
       } });
   }
   function use(entry = near) {
     if (!entry || me.script || closing) return;
     if (!me.seat && !shot) me.heading = Math.atan2(entry.x - me.x, entry.z - me.z) || me.heading;
-    let said = null;
-    try { said = entry.use?.(api, entry); } catch (err) { console.error(`[level ${level.id}]`, err); }
-    if (typeof said === 'string' && said) say(said);
+    try { entry.use?.(api, entry); } catch (err) { console.error(`[level ${level.id}]`, err); }
   }
 
-  /* ---- words ------------------------------------------------------------------------------ */
-  const say = (text, opt) => office.walk?.narrate?.(text, opt);
+  /* ---- sound ------------------------------------------------------------------------------ */
   const sfx = (name, opt) => { try { return office.sound?.play?.(name, opt) ?? null; } catch { return null; } };
   /** Start a loop of music; it stops by itself when the level closes. */
   function music(name, opt = {}) {
@@ -420,10 +437,12 @@ export function createWorld(office, spec = {}) {
 
   /* ---- the camera: follows you, or holds a shot ------------------------------------------------ */
   const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
-  /** Fly the camera to a fixed shot — to read a screen, to look through a telescope. Any step, E or Esc lets go. */
+  /**
+   * Fly the camera to a fixed shot — to read a screen, to look through a telescope. Any step, E or Esc lets go.
+   * opt: fov · alone: true to leave yourself out of the picture · onLeave()
+   */
   function focus(pos, lookAt, opt = {}) {
-    shot = { pos: new THREE.Vector3(...pos), look: new THREE.Vector3(...lookAt), fov: opt.fov || cam.fov, onLeave: opt.onLeave || null };
-    if (opt.hint) say(opt.hint);
+    shot = { pos: new THREE.Vector3(...pos), look: new THREE.Vector3(...lookAt), fov: opt.fov || cam.fov, alone: !!opt.alone, onLeave: opt.onLeave || null };
   }
   function unfocus() { const s = shot; shot = null; s?.onLeave?.(); }
   function stand() { me.seat = null; }
@@ -432,10 +451,15 @@ export function createWorld(office, spec = {}) {
     const k = instant ? 1 : ease(7, dt);
     cam.yaw += (goal.yaw - cam.yaw) * k; cam.pitch += (goal.pitch - cam.pitch) * k;
     cam.dist *= Math.exp(Math.log(goal.dist / cam.dist) * k);
-    const at = me.seat || me;
-    eye.x += (at.x - eye.x) * k; eye.z += (at.z - eye.z) * k;
+    const at = me.seat || me, pull = cam.anchor ? cam.anchor.pull ?? 0.6 : 0;
+    const tx = at.x + ((cam.anchor?.x ?? 0) - at.x) * pull, tz = at.z + ((cam.anchor?.z ?? 0) - at.z) * pull;
+    eye.x += (tx - eye.x) * k; eye.z += (tz - eye.z) * k;
+    eye.y += (cam.height + floorY(at.x, at.z) - eye.y) * (instant ? 1 : ease(5, dt));
     const cp = Math.cos(cam.pitch);
-    camPos.set(eye.x + Math.sin(cam.yaw) * cp * cam.dist, cam.height + Math.sin(cam.pitch) * cam.dist, eye.z + Math.cos(cam.yaw) * cp * cam.dist);
+    camPos.set(eye.x + Math.sin(cam.yaw) * cp * cam.dist, eye.y + Math.sin(cam.pitch) * cam.dist, eye.z + Math.cos(cam.yaw) * cp * cam.dist);
+    if (cam.inside) { camPos.x = clamp(camPos.x, cam.inside.x0, cam.inside.x1); camPos.z = clamp(camPos.z, cam.inside.z0, cam.inside.z1); }
+    camPos.y = Math.max(camPos.y, floorY(camPos.x, camPos.z) + 0.35);        // never under a hill
+    if (cam.ceiling) camPos.y = Math.min(camPos.y, cam.ceiling);
     camLook.copy(eye);
     let fov = cam.fov;
     if (shot) shotLast = shot;
@@ -447,6 +471,7 @@ export function createWorld(office, spec = {}) {
     }
     camera.position.copy(camPos); camera.lookAt(camLook);
     if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
+    avatar.root.visible = !(shot?.alone && shotMix > 0.35);
   }
 
   /* ---- every frame ------------------------------------------------------------------------------ */
@@ -499,11 +524,11 @@ export function createWorld(office, spec = {}) {
     if (me.hop > 0) { me.hop = Math.max(0, me.hop - dt * 2.2); avatar.bounce = Math.sin(me.hop * Math.PI); } else avatar.bounce = 0;
     if (me.seat) {
       if (avatar.poseName !== 'lounge') { avatar.seatHeight = me.seat.top + 3; avatar.setPose('lounge'); }
-      avatar.root.position.set(me.seat.x, 0, me.seat.z);
+      avatar.root.position.set(me.seat.x, me.seat.y || 0, me.seat.z);
       me.heading += turnTo(me.heading, me.seat.heading) * ease(10, dt);
     } else {
       if (avatar.poseName !== 'stand') avatar.setPose('stand');
-      avatar.root.position.set(me.x, 0, me.z);
+      avatar.root.position.set(me.x, floorY(me.x, me.z), me.z);
     }
     avatar.root.rotation.y = me.heading;
     avatar.update(dt);
@@ -523,8 +548,8 @@ export function createWorld(office, spec = {}) {
     for (const fn of frames) fn(dt, t);
     placeCamera(dt);
     // the sun follows you, so its shadows stay sharp where you are
-    sun.target.position.set(eye.x, 0, eye.z);
-    sun.position.set(eye.x + sunDir.x * 60, sunDir.y * 60, eye.z + sunDir.z * 60);
+    sun.target.position.set(eye.x, eye.y - cam.height, eye.z);
+    sun.position.set(eye.x + sunDir.x * 60, eye.y + sunDir.y * 60, eye.z + sunDir.z * 60);
     // this place's share of the office's post-processing (the office sets its own again when you leave)
     stage.setTilt(look.tilt, 0.5, 0.3);
     if (stage.bloom && look.bloom !== null) stage.bloom.strength = look.bloom;
@@ -559,11 +584,15 @@ export function createWorld(office, spec = {}) {
         L.open = L.want = 1; L.holdUntil = 1.5;
         walkTo(tx, tz, 0.95);
       }
-      eye.set(me.x, cam.height, me.z);
-      avatar.root.position.set(me.x, 0, me.z); avatar.root.rotation.y = me.heading;
+      eye.set(me.x, cam.height + floorY(me.x, me.z), me.z);
+      if (cam.anchor) { eye.x += (cam.anchor.x - eye.x) * (cam.anchor.pull ?? 0.6); eye.z += (cam.anchor.z - eye.z) * (cam.anchor.pull ?? 0.6); }
+      avatar.root.position.set(me.x, floorY(me.x, me.z), me.z); avatar.root.rotation.y = me.heading;
+      // the daemon hears which floor this person is on, so agents can tell (text.mjs reads it)
+      net.send({ type: 'focus', id: who.id, name: who.name, focus: { kind: 'level', id: level.id } });
       placeCamera(0, true);
       offFrame = stage.onFrame(frame);
       stage.setView({ scene, camera });
+      office.level = api;                                    // for the console, and for the curious
     });
   }
   /**
@@ -593,6 +622,8 @@ export function createWorld(office, spec = {}) {
     window.removeEventListener('blur', blur);
     for (const off of subs) { try { off(); } catch { /* already gone */ } }
     for (const s of sounds) { try { s.stop?.(0); } catch { /* fine */ } }
+    net.send({ type: 'focus', id: who.id, name: who.name, focus: null });
+    if (office.level === api) office.level = null;
     root.remove();
     stage.setView(null);
     if (stage.bloom && before.bloom !== undefined) stage.bloom.strength = before.bloom;
@@ -603,13 +634,17 @@ export function createWorld(office, spec = {}) {
   }
 
   const api = {
-    office, level, scene, camera, root, me, cam: goal, avatar, hemi, sun,
+    office, level, scene, camera, root, me, cam: goal, look, avatar, hemi, sun, floorY,
     get time() { return t; },
     get lift() { return liftHere?.door || null; },
-    add, floor, wall, box, room, prop, vox, screen, lamp, light, lift,
-    block, free, thing, seat, use, say, sfx, music, own, focus, unfocus, walkTo,
+    add, floor, wall, box, room, prop, vox, sign, screen, lamp, light, lift,
+    block, free, thing, seat, use, sfx, music, own, focus, unfocus, walkTo,
+    /** Is the camera holding a fixed shot (see focus)? */
+    get focused() { return !!shot; },
+    /** Is the person hurrying (Shift held)? */
+    get hurrying() { return held.has('Shift'); },
     /** Run fn(dt, t) every frame while the level is open. */
-    onFrame(fn) { frames.push(fn); return () => frames.splice(frames.indexOf(fn), 1); },
+    onFrame(fn) { frames.push(fn); return () => { const i = frames.indexOf(fn); if (i >= 0) frames.splice(i, 1); }; },
     /** Listen to the daemon (office.net events: 'agent', 'prompts', 'tasks', 'activity', 'fx', …) until the level closes. */
     on(event, fn) { const off = net.on(event, fn); subs.push(off); return off; },
     /** Keys the kit does not use itself: fn(key, event). */

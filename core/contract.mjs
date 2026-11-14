@@ -29,6 +29,8 @@ export const EV = Object.freeze({
   HARNESS:      'harness',       // { sessions:[DrivenSession], wake }   on connect + whenever one changes
   TRANSCRIPT:   'transcript',    // { sessionId, agentId, entry }        to clients watching that session
   DELEGATIONS:  'delegations',   // { delegation }                       a delegated task changed
+  // ---- how much is left per provider (server/usage.mjs; additive) ----
+  USAGE:        'usage',         // { usage:UsageSnapshot }              on connect + whenever a meter changes
 });
 
 /* ---- Status vocabulary (single source of truth) ------------------------ */

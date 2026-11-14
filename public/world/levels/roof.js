@@ -5,7 +5,8 @@
 // What is real up here: the hour (office.lighting.hour) and today's weather;
 // the flue by the lift puffs when somebody downstairs makes coffee; and every
 // note the agents pass each other crosses the sky as a paper plane. The rest
-// is somewhere nice to sit.
+// is somewhere nice to sit. Nothing up here is explained: there are a few
+// signs, and one note.
 import * as THREE from 'three';
 import { createWorld } from './kit.js';
 import { FLOORS, WALLS, canvasTexture } from '../scene/textures.js';
@@ -159,7 +160,7 @@ function skylineTexture(seed) {
 export async function enter(office) {
   const w = createWorld(office, {
     id: 'roof', bounds: DECK, far: 1200, shadows: 17,
-    camera: { fov: 40, pitch: 0.17, dist: 9.5, yaw: 0.42, minPitch: 0.03, maxPitch: 1.2, maxDist: 16, height: 1.0 },
+    camera: { fov: 42, pitch: 0.13, dist: 9, yaw: -0.4, minPitch: 0.03, maxPitch: 1.2, maxDist: 16, height: 1.0 },
     fog: { color: '#d5e9f5', near: 45, far: 300 },
     look: { tilt: 0.18 },
     hint: 'WASD to walk · drag to look round · E to sit, to look, to use · Esc back to the office',
@@ -185,11 +186,13 @@ export async function enter(office) {
   const LIFT = { x: -5.6, z: -3.5 };
   w.lift(LIFT.x, LIFT.z, 'S', { shell: WALLS.brick() });
   w.prop('doormat', LIFT.x, LIFT.z + 0.75, 'S', { solid: false });
+  w.add(w.sign('ROOF GARDEN', { height: 0.3, accent: '#6f8a4a' }), LIFT.x - 1.212, LIFT.z - 0.95, 'W', 1.55);
+  w.add(w.sign('KITCHEN FLUE', { height: 0.16, bg: '#4a4a50', fg: '#d8d2c2' }), -2.9, DECK.z0 + 0.012, 'S', 0.3);
   // a rubber duck for a weathervane
   const vane = new THREE.Group();
   const duck = buildDeskItem('duck', 'office-duck');
-  duck.scale.multiplyScalar(4.5);
-  duck.position.y = 0.5;
+  duck.scale.multiplyScalar(2.6);
+  duck.position.y = 0.52;
   vane.add(duck);
   const stick = new THREE.Mesh(w.own(new THREE.BoxGeometry(0.04, 0.6, 0.04)), w.own(new THREE.MeshLambertMaterial({ color: '#3a3340' })));
   stick.position.y = 0.25;
@@ -211,58 +214,45 @@ export async function enter(office) {
     [-8.45, -1.2, 'E', 80, 'grass', 19], [-3.55, 0.2, 'E', 64, 'hedge', 21],
   ];
   for (const [x, z, face, len, kind, seed] of beds) w.vox(() => planter({ len, kind, seed }), x, z, face, { solid: true });
-  const tree = w.prop('tree', 2.2, 0.6, 'S', { o: { stage: 4 }, footprint: [1.45, 1.45] });
-  w.thing({ x: 2.2, z: 0.6, label: 'the roof tree', object: tree, reach: 1.9,
-    use: () => 'The roof tree. Somebody carried it up in the lift as a sapling; the planter has had to be replaced twice since. It hums slightly when the string lights are on.' });
+  w.prop('tree', 2.2, 0.6, 'S', { o: { stage: 4 }, footprint: [1.45, 1.45] });
   w.prop('tree', -7.6, 5.0, 'S', { o: { stage: 2 }, footprint: [1.45, 1.45], id: 'roof:tree2' });
   w.prop('planttall', -3.2, -2.9, 'S'); w.prop('planttall', 7.2, 4.5, 'S', { id: 'roof:pt2' }); w.prop('plant', 7.2, -2.9, 'S'); w.prop('plant', -4.0, 5.9, 'S', { id: 'roof:p2' });
 
   /* ---- somewhere to sit ----------------------------------------------------------------------------- */
-  w.seat(w.prop('bench', -8.3, 2.6, 'W'), 'the sunset bench', { dx: 0.35, say: 'You sit down facing west. This is where the sun goes.' });
-  w.seat(w.prop('bench', 8.3, 1.0, 'E', { id: 'roof:bench2' }), 'the morning bench', { dx: 0.35, say: 'You sit down facing east. First light gets here before it gets to the office.' });
-  w.seat(w.prop('bench', 1.6, 5.9, 'S', { id: 'roof:bench3' }), 'a bench', { dx: 0.35, say: 'You sit, and the city gets on with it without you for a minute.' });
+  w.seat(w.prop('bench', -8.3, 2.6, 'W'), 'the sunset bench', { dx: 0.35 });
+  w.seat(w.prop('bench', 8.3, 1.0, 'E', { id: 'roof:bench2' }), 'the sunrise bench', { dx: 0.35 });
+  w.seat(w.prop('bench', 1.6, 5.9, 'S', { id: 'roof:bench3' }), 'a bench', { dx: 0.35 });
   w.prop('cafetable', 5.4, 2.6, 'S');
-  w.seat(w.prop('stool', 4.6, 2.6, 'E'), 'a stool', { say: 'You perch.' });
-  w.seat(w.prop('stool', 6.2, 2.6, 'W', { id: 'roof:stool2' }), 'a stool', { say: 'You perch.' });
+  w.seat(w.prop('stool', 4.6, 2.6, 'E'), 'a stool');
+  w.seat(w.prop('stool', 6.2, 2.6, 'W', { id: 'roof:stool2' }), 'a stool');
   const blanket = new THREE.Mesh(w.own(new THREE.PlaneGeometry(1.9, 1.5)), w.own(new THREE.MeshLambertMaterial({ map: w.own(gingham()) })));
   blanket.rotation.x = -Math.PI / 2; blanket.rotation.z = 0.2; blanket.receiveShadow = true;
   w.add(blanket, -6.5, 2.4, 0, 0.03).rotation.set(-Math.PI / 2, 0, 0.2);
-  w.seat(w.prop('beanbag', -6.9, 3.9, 'E'), 'a beanbag', { say: 'You sink into the beanbag. Getting up is a problem for later.' });
-  w.seat(w.prop('beanbag', -5.6, 1.5, 'S', { id: 'roof:bb2' }), 'a beanbag', { say: 'You sink into the beanbag. Getting up is a problem for later.' });
+  w.seat(w.prop('beanbag', -6.9, 3.9, 'E'), 'a beanbag');
+  w.seat(w.prop('beanbag', -5.6, 1.5, 'S', { id: 'roof:bb2' }), 'a beanbag');
 
   /* ---- string lights ---------------------------------------------------------------------------------- */
   const POLES = [[-3.5, -3.2], [7.5, -3.2], [7.5, 4.8], [-3.5, 4.8]];
   for (const [x, z] of POLES) w.vox(pole, x, z, 'S', { solid: true });
   const TOP = 2.62, runs = [[0, 1], [1, 2], [2, 3], [3, 0], [0, 2], [1, 3]];
-  const bulbAt = [];
-  const wire = [];
-  for (const [a, b] of runs) {
-    const [ax, az] = POLES[a], [bx, bz] = POLES[b], len = Math.hypot(bx - ax, bz - az), n = Math.round(len / 0.5);
-    for (let i = 0; i <= n; i++) {
-      const t = i / n, y = TOP - 0.5 * (len / 11) * 4 * t * (1 - t);
-      const p = [ax + (bx - ax) * t, y, az + (bz - az) * t];
-      if (i) wire.push(...wire.slice(-3), ...p); else wire.push(...p);
-      if (i > 0 && i < n) bulbAt.push(p);
-    }
-    wire.splice(wire.length - 3, 3);                           // segments are pairs; drop the dangling start
-  }
-  const wireGeo = w.own(new THREE.BufferGeometry());
-  const segs = [];
-  for (const [a, b] of runs) {
+  const bulbAt = [], segs = [];
+  for (const [a, b] of runs) {                                 // each run hangs in a shallow curve; a bulb every half metre
     const [ax, az] = POLES[a], [bx, bz] = POLES[b], len = Math.hypot(bx - ax, bz - az), n = Math.round(len / 0.5);
     let prev = null;
     for (let i = 0; i <= n; i++) {
       const t = i / n, p = [ax + (bx - ax) * t, TOP - 0.5 * (len / 11) * 4 * t * (1 - t), az + (bz - az) * t];
       if (prev) segs.push(...prev, ...p);
+      if (i > 0 && i < n) bulbAt.push(p);
       prev = p;
     }
   }
+  const wireGeo = w.own(new THREE.BufferGeometry());
   wireGeo.setAttribute('position', new THREE.Float32BufferAttribute(segs, 3));
   scene.add(new THREE.LineSegments(wireGeo, w.own(new THREE.LineBasicMaterial({ color: '#2b2430' }))));
   const bulbMat = w.own(new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }));
-  const bulbs = new THREE.InstancedMesh(w.own(new THREE.SphereGeometry(0.05, 6, 5)), bulbMat, bulbAt.length);
+  const bulbs = new THREE.InstancedMesh(w.own(new THREE.SphereGeometry(0.038, 6, 5)), bulbMat, bulbAt.length);
   const m4 = new THREE.Matrix4(), tint = new THREE.Color();
-  bulbAt.forEach((p, i) => { m4.makeTranslation(p[0], p[1] - 0.05, p[2]); bulbs.setMatrixAt(i, m4); bulbs.setColorAt(i, tint.set(['#ffd9a0', '#ffe9c4', '#ffc98a', '#ffb4a0'][i % 4])); });
+  bulbAt.forEach((p, i) => { m4.makeTranslation(p[0], p[1] - 0.045, p[2]); bulbs.setMatrixAt(i, m4); bulbs.setColorAt(i, tint.set(['#ffc880', '#ffd9a0', '#ffb870', '#ffa890'][i % 4])); });
   bulbs.frustumCulled = false;
   scene.add(bulbs);
   const lamps = [[2, -3.0], [7.2, 0.8], [2, 4.6], [-3.2, 0.8], [2.2, 0.8]].map(([x, z]) => w.lamp(x, 2.2, z, '#ffc98a', 0, 9));
@@ -285,9 +275,7 @@ export async function enter(office) {
     use() {
       mask.style.opacity = '1';
       friend.setPose('wave'); friend.setExpression('happy');
-      w.focus([SCOPE.x + 0.3, 1.5, DECK.z0 - 0.5], [FRIEND.x + 0.35, FRIEND.y + 0.7, FRIEND.z], { fov: 5.2, onLeave: () => { mask.style.opacity = '0'; friend.setPose('stand'); friend.setExpression('neutral'); } });
-      return sky.night ? 'You find the roof across the way. Somebody is up there too, with a telescope of their own. They wave. Behind them, more stars than the office ceiling has tiles.'
-        : 'You find the roof across the way. Somebody is up there too, with a telescope of their own. They wave.';
+      w.focus([SCOPE.x + 0.3, 1.5, DECK.z0 - 0.5], [FRIEND.x + 0.35, FRIEND.y + 0.7, FRIEND.z], { fov: 5.2, alone: true, onLeave: () => { mask.style.opacity = '0'; friend.setPose('stand'); friend.setExpression('neutral'); } });
     } });
 
   /* ---- one small thing: a note that never arrived ---------------------------------------------------------- */
@@ -296,11 +284,29 @@ export async function enter(office) {
   const lost = new THREE.Mesh(planeGeo, paper);
   lost.castShadow = true; lost.scale.setScalar(1.5);
   w.add(lost, 8.72, 5.3, 0, 0.07).rotation.set(0.12, -0.9, 0.5);
-  w.thing({ x: 8.5, z: 5.2, label: 'a paper plane', object: lost, reach: 1.1,
-    use() {
-      const name = office.walk?.me?.name || 'Lead';
-      office.net.api('/api/world/discover', { method: 'POST', body: { secret: 'air-mail', name } }).catch(() => null);
-      return 'A paper plane, wedged between the planter and the parapet. It must have missed its inbox on the way up.\nUnfolded, it reads: “whoever finds this — you are doing fine. — a previous session”';
+  const noteTex = w.own(canvasTexture(320, 200, (g, cw, ch) => {
+    g.fillStyle = '#fbf7ea'; g.fillRect(0, 0, cw, ch);
+    g.strokeStyle = 'rgba(120,110,90,.35)'; g.lineWidth = 1;                              // where it was folded
+    for (const [x0, y0, x1, y1] of [[cw / 2, 0, cw / 2, ch], [0, 0, cw / 2, ch * 0.6], [cw, 0, cw / 2, ch * 0.6], [0, ch * 0.6, cw, ch * 0.6]]) { g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); }
+    g.fillStyle = '#2a3a6a'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = 'italic 25px Georgia, "Times New Roman", serif';
+    g.fillText('whoever finds this —', cw / 2, 62); g.fillText('you are doing fine.', cw / 2, 100);
+    g.font = 'italic 17px Georgia, "Times New Roman", serif'; g.textAlign = 'right';
+    g.fillText('— a previous session', cw - 30, 152);
+  }, { clamp: true }));
+  noteTex.magFilter = THREE.LinearFilter;
+  const noteMat = w.own(new THREE.MeshBasicMaterial({ map: noteTex, toneMapped: false }));        // unlit: it has to be readable at any hour
+  const note = new THREE.Mesh(w.own(new THREE.PlaneGeometry(0.6, 0.375)), noteMat);
+  note.visible = false;
+  w.add(note, 8.3, 5.55, 0, 0.022).rotation.set(-Math.PI / 2, 0, 0.06);
+  const letter = w.thing({ x: 8.5, z: 5.2, label: 'a paper plane', object: lost, reach: 1.15,
+    use() {                                                     // it unfolds; what it says is written on it
+      if (!note.visible) {
+        note.visible = true; lost.visible = false;
+        letter.label = 'the note'; letter.object = note;
+        office.net.api('/api/world/discover', { method: 'POST', body: { secret: 'air-mail', name: office.walk?.me?.name || 'Lead' } }).catch(() => null);
+      }
+      w.focus([8.3, 0.95, 5.95], [8.3, 0, 5.52], { fov: 34, alone: true });
     } });
 
   /* ---- the city ------------------------------------------------------------------------------------------------ */
@@ -349,7 +355,7 @@ export async function enter(office) {
     }
   }
   // three rings: neighbours, the middle distance, and towers
-  const rings = [[10, 30, 46, -5, 12, 10, 18], [16, 56, 96, 4, 44, 12, 22], [22, 104, 175, 14, 84, 14, 26]];
+  const rings = [[9, 34, 52, -9, 4, 10, 18], [15, 62, 108, -2, 26, 12, 22], [24, 116, 190, 8, 78, 14, 26]];
   for (const [count, r0, r1, top0, top1, w0, w1] of rings) {
     for (let i = 0; i < count; i++) {
       const a = ((i + R() * 0.7) / count) * Math.PI * 2, d = r0 + R() * (r1 - r0);
@@ -477,9 +483,10 @@ export async function enter(office) {
     w.look.glow = L.glow; w.look.bloom = L.bloom + sky.lit * 0.12;
     for (const m of sides) m.emissiveIntensity = sky.lit * 1.5;
     const on = Math.max(L.lamp, overcast > 0.6 ? 0.5 : 0);
-    bulbMat.color.setScalar(on > 0.05 ? 0.9 + on * 1.1 : 0.42);
+    bulbMat.color.setScalar(on > 0.05 ? 1.0 + on * 0.5 : 0.4);
     for (const l of lamps) l.intensity = 4.2 * on;
     for (const b of beacons) b.visible = sky.lit > 0.2;
+    noteMat.color.setScalar(sky.night ? 0.5 : 0.78);
   }
   applyHour(office.lighting?.hour ?? 14);
 

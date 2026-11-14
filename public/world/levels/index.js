@@ -22,6 +22,7 @@ import { playRide } from './ride.js';
 const MODULES = {
   roof: () => import('./roof.js'),
   mission: () => import('./mission.js'),
+  pasture: () => import('./pasture.js'),
   arcade: () => import('./arcade.js'),
 };
 // Two floors are not modules of ours: 'lobby' is the office you are already in,
@@ -32,7 +33,7 @@ const state = { floor: HOME, riding: false };
 export const lift = state;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const say = (office, text, opt) => office.walk?.narrate?.(text, opt);
+const toast = (office, text) => office.ui?.toast?.(text);          // only for when something did not work; a ride explains itself
 const sfx = (office, name) => { try { return office.sound?.play?.(name) ?? null; } catch { return null; } };
 const context = (office) => levelContext(office.net?.state?.world);
 
@@ -65,8 +66,8 @@ export async function ride(office, ref, opt = {}) {
   const first = findLevel(ref);
   if (state.riding) return null;
   if (!(await ready(office))) return null;
-  if (!first || !isVisible(first, context(office))) { say(office, `The lift has no button for “${ref}”.`); return null; }
-  if (first.id === HOME) { say(office, 'That is this floor. The lift waits, politely.'); return null; }
+  if (!first || !isVisible(first, context(office))) { toast(office, `The lift has no button for “${ref}”.`); return null; }
+  if (first.id === HOME) return null;
 
   state.riding = true;
   document.body.classList.add('level');
@@ -115,17 +116,18 @@ function home(office, last = {}) {
   document.body.classList.remove('level');
   state.floor = HOME; state.riding = false;
   const spot = office.world?.layout.spots.landing || { x: 0, z: -7.3 };
+  // a level may send you somewhere in particular: { reason: 'goto', agent } or { reason: 'goto', room }
   const agent = last.reason === 'goto' && office.net.state.agents.has(last.agent) ? last.agent : null;
-  if (last.reason === 'needs' || agent) {
+  const room = last.reason === 'goto' && office.world?.layout.roomById.has(last.room) ? last.room : null;
+  if (office.ui && (last.reason === 'needs' || agent || room)) {
     office.rig.flyTo({ x: spot.x, z: spot.z + 3, dist: 16, yaw: 0, pitch: 0.8 }, { instant: true });
-    if (agent) (office.ui?.focusNeed || office.ui?.select)?.(agent); else office.ui?.nextNeed?.();
+    if (agent) office.ui.focusNeed(agent); else if (room) office.ui.gotoRoom(room); else office.ui.nextNeed();
   } else {
     office.rig.flyTo({ x: spot.x, z: spot.z, dist: 9, yaw: 0, pitch: 0.62 }, { instant: true });
     office.walk?.enter?.();
     if (office.walk?.state) office.walk.state.heading = 0;                // facing the room, the doors behind you
-    say(office, last.reason === 'missing' ? 'The doors open on bare concrete and a sign: THIS FLOOR IS NOT BUILT YET. The lift brings you back.'
-      : last.reason === 'error' ? 'Something on that floor went wrong (the console has the details). The lift has brought you back.'
-        : 'Lobby. The doors slide shut behind you.  (WASD to walk · Tab to step back out)');
+    if (last.reason === 'missing') toast(office, 'That floor is not built yet. The lift has brought you back.');
+    else if (last.reason === 'error') toast(office, 'Something on that floor went wrong (the console has the details). The lift has brought you back.');
   }
   office.fx?.lift?.(2400);
   curtain.open(380);
@@ -146,7 +148,5 @@ async function thirteen(office, from, opt) {
   curtain.open(200);
   try { await office.onNoclip?.(); } catch (err) { console.error('[lift] 13', err); }
   if (office.walk?.active) return { reason: 'thirteen' };            // the level below took you, and has put you back
-  home(office, { reason: 'thirteen' });
-  say(office, 'The doors open on a breeze-block wall with 13 stencilled on it in red. Nothing else. They close again, and the lift takes you back down without being asked.');
-  return { reason: 'thirteen' };
+  return home(office, { reason: 'thirteen' });                       // nothing was there: the lift simply brings you home
 }

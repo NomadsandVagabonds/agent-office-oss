@@ -77,6 +77,12 @@ export function createSound(level, opt = {}) {
     whir: (o = {}) => { tone({ vol: 0.035 * (o.vol ?? 1), pan: o.pan, dur: 0.5, freq: 520, to: 610, type: 'sawtooth', attack: 0.08 }); burst({ vol: 0.04 * (o.vol ?? 1), pan: o.pan, dur: 0.5, freq: 2600, q: 1, type: 'bandpass', attack: 0.1 }); },
     // an old telephone: two tones beaten together, twice
     ring: (o = {}) => { for (const w of [0, 0.5]) for (const f of [440, 480]) { tone({ vol: 0.07 * (o.vol ?? 1), pan: o.pan, dur: 0.4, freq: f, type: 'triangle', when: w }); tone({ vol: 0.02 * (o.vol ?? 1), pan: o.pan, dur: 0.4, freq: f * 4.02, when: w }); } },
+    squeak: (o = {}) => { tone({ vol: 0.09 * (o.vol ?? 1), pan: o.pan, dur: 0.16, freq: 820 + Math.random() * 200, to: 1500, type: 'triangle' }); tone({ vol: 0.05 * (o.vol ?? 1), pan: o.pan, dur: 0.12, freq: 1400, to: 900, type: 'triangle', when: 0.17 }); },
+    knock: (o = {}) => { for (const w of [0, 0.16, 0.32]) { tone({ vol: 0.2 * (o.vol ?? 1), pan: o.pan, dur: 0.07, freq: 190, to: 120, type: 'triangle', when: w }); burst({ vol: 0.08 * (o.vol ?? 1), pan: o.pan, dur: 0.03, freq: 900, when: w, attack: 0.001 }); } },
+    rattle: (o = {}) => { for (let i = 0; i < 5; i++) burst({ vol: 0.11 * (o.vol ?? 1), pan: o.pan, dur: 0.035, freq: 700 + Math.random() * 500, q: 3, type: 'bandpass', attack: 0.001, when: i * 0.07 }); },
+    dialtone: (o = {}) => { for (const f of [350, 440]) tone({ vol: 0.045 * (o.vol ?? 1), pan: o.pan, dur: 2.6, freq: f, attack: 0.02 }); burst({ vol: 0.1 * (o.vol ?? 1), pan: o.pan, dur: 0.03, freq: 1500, q: 2, type: 'bandpass', when: 2.7 }); },
+    shutter: (o = {}) => { burst({ vol: 0.2 * (o.vol ?? 1), dur: 0.04, freq: 2600, q: 2, type: 'bandpass', attack: 0.001 }); burst({ vol: 0.14 * (o.vol ?? 1), dur: 0.05, freq: 1200, q: 2, type: 'bandpass', attack: 0.001, when: 0.09 }); tone({ vol: 0.03 * (o.vol ?? 1), dur: 1.1, freq: 2000, to: 5200, when: 0.12 }); },
+    creak: (o = {}) => { tone({ vol: 0.05 * (o.vol ?? 1), pan: o.pan, dur: 0.35, freq: 90 + Math.random() * 30, to: 140, type: 'sawtooth', attack: 0.05 }); burst({ vol: 0.07 * (o.vol ?? 1), pan: o.pan, dur: 0.05, freq: 420, q: 2, type: 'bandpass', when: 0.3 }); },
     static: (o = {}) => burst({ vol: 0.12 * (o.vol ?? 1), dur: o.dur || 0.9, freq: 4200, q: 0.4, type: 'highpass', attack: 0.05 }),
   };
 

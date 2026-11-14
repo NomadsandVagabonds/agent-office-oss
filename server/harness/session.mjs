@@ -20,7 +20,7 @@ import { AcpAdapter } from './acp.mjs';
 import { CodexAdapter } from './codex.mjs';
 import { Transcript } from './transcript.mjs';
 import { choicesFor, standingAnswer, describeRequest, categoryOf } from './approvals.mjs';
-import { line, text as cleanText } from './normalize.mjs';
+import { line, text as cleanText, limitWindow } from './normalize.mjs';
 import { MODE_LABEL } from './catalog.mjs';
 
 const MAX_PROMPT_CHARS = 120_000;
@@ -58,6 +58,7 @@ export class DrivenSession extends EventEmitter {
     this.itemSeq = 0;
     this.filesSeen = new Set();
     this.usage = null;
+    this.limits = null;               // the provider's own account of the operator's allowance, when it gives one
     this.features = {};
     this.endReason = '';
     const port = ctx.port || ctx.cfg.port;
@@ -256,6 +257,7 @@ export class DrivenSession extends EventEmitter {
         this.transcript.write({ id: 'plan', kind: 'plan', turn: this.turn?.n, entries: ev.entries || [], ...(ev.note ? { note: ev.note } : {}) });
         break;
       case 'usage': this.#usage(ev); break;
+      case 'limits': this.#limits(ev); break;
       case 'mode':
         this.record.agentMode = ev.modeId;
         this.#note('info', `The agent switched to its “${ev.modeId}” mode.`);
@@ -339,6 +341,19 @@ export class DrivenSession extends EventEmitter {
     if (this.usage.used >= 0 && this.usage.size > 0) {
       this.#agent({ contextPct: Math.max(0, Math.min(100, Math.round((this.usage.used / this.usage.size) * 100))) });
     }
+  }
+
+  // What the provider says is left of the operator's allowance. The office never
+  // asks a provider's API for this itself (it holds no credentials): it passes on
+  // what the agent's own CLI reports, for whoever keeps the tally (ctx.usage).
+  #limits(ev) {
+    const windows = (Array.isArray(ev.windows) ? ev.windows : []).map(limitWindow).filter(Boolean).slice(0, 8);
+    if (!windows.length) return;
+    const plan = line(typeof ev.plan === 'string' ? ev.plan : '', 40);
+    this.limits = { ...(plan ? { plan } : {}), windows, at: Date.now() };
+    this.ctx.bus.local({ type: 'usage:report', report: { provider: this.record.provider, ...(plan ? { plan } : {}),
+      source: 'driven', agentId: this.id, windows } });
+    this.#save();
   }
 
   /* ---- permission requests and questions ----------------------------------- */
@@ -477,11 +492,13 @@ export class DrivenSession extends EventEmitter {
       ...(ev.stopReason ? { stopReason: ev.stopReason } : {}), ...(ev.error ? { error: ev.error } : {}),
       ...(turn.stopRequestedBy ? { stoppedBy: turn.stopRequestedBy } : {}) });
     if (ev.stopReason === 'max_tokens' || ev.stopReason === 'max_turn_requests') {
-      this.#note('warn', `The agent stopped because it hit a limit (${ev.stopReason}); its work may be unfinished.`);
+      this.#note('warn', `The agent stopped because it hit a limit (${ev.stopReason}); its work may be unfinished.`, { turn: turn.n });
     }
     if (this.usage) this.transcript.write({ id: 'usage', kind: 'usage', ...this.usage });
     this.lastTurn = { n: turn.n, status: ev.status, text: turn.text, error: ev.error || '', endedAt,
-      origin: turn.origin, hop: turn.hop, delegationId: turn.delegationId };
+      origin: turn.origin, hop: turn.hop, delegationId: turn.delegationId,
+      // Why a turn that did not finish was stopped: someone asked, or the whole session was being ended.
+      stoppedBy: turn.stopRequestedBy || '', ending: this.endReason || '' };
     if (!this.live) return;
     this.state = 'idle';
     this.record.state = 'idle';
@@ -543,7 +560,7 @@ export class DrivenSession extends EventEmitter {
       turn: this.turn ? { n: this.turn.n, origin: this.turn.origin, startedAt: this.turn.startedAt, hop: this.turn.hop } : null,
       pending: [...this.requests].map(([id, p]) => ({ id, promptId: p.promptId, kind: p.kind, category: p.category, title: p.ev.title || '' })),
       grants: [...this.grants], features: this.features, nativeRef: r.nativeRef || '',
-      origin: r.origin || { kind: 'human' }, usage: this.usage,
+      origin: r.origin || { kind: 'human' }, usage: this.usage, limits: this.limits,
       // Honest by construction: the office can grant, deny and stop only while it holds the process.
       caps: { observe: true, prompt: this.live, control: this.live, spawn: true },
     };

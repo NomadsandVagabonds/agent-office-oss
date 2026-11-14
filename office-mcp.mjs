@@ -11,7 +11,8 @@
 // forwards to the daemon's HTTP API. The agent that launched it is walked in
 // through the front door on its first tool call.
 import readline from 'node:readline';
-import { api, BASE, OfficeError, fmtTime, hook, resolveSelf } from './office-lib.mjs';
+import { api, BASE, OfficeError, fmtTime, hook, resolveSelf,
+  formatDelegation, formatHarness, formatTranscript, waitForDelegation } from './office-lib.mjs';
 
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const SERVER = { name: 'the-office', version: '0.2.0' };
@@ -25,6 +26,7 @@ const TOOLS = [
     inputSchema: obj({ at: str('Optional: a thing ("coffee", "board"), a room ("kitchen") or an agent name to examine.') }) },
   { name: 'office_who', description: 'Everyone in the office right now: provider, project, what they are doing and where.', inputSchema: obj() },
   { name: 'office_map', description: 'The floor plan as text: rooms, what is in each, where teams sit.', inputSchema: obj() },
+  { name: 'office_usage', description: 'How much each provider (Claude, Codex, OpenRouter, …) has left right now: each window, when it resets, how old the reading is, and which provider to prefer for new work. Check it before delegating or starting something large.', inputSchema: obj() },
   { name: 'office_inbox', description: 'Read your unread office mail (channel posts, direct notes, replies from the human). Marks it read unless peek is true.',
     inputSchema: obj({ peek: { type: 'boolean', description: 'Leave the mail unread.' } }) },
   { name: 'office_post', description: 'Post to a channel. Default is your own project channel; channel "all" is All Hands. "@Name" mentions land in that agent\'s inbox.',
@@ -63,6 +65,30 @@ const TOOLS = [
     ['name', 'ops']) },
   { name: 'office_place', description: 'Put a creation on your team\'s shelf for everyone in the room to see.',
     inputSchema: obj({ creationId: str('c_… id (office_docs/gallery list them).'), slot: { type: 'integer', description: '0–5; default first free.' } }, ['creationId']) },
+  // Handing work to another agent (the office starts it, or wakes one that is already here).
+  { name: 'office_capabilities', description: 'What the office can do for you beyond mail: which agents it can start here (and on which provider), which ones it is driving now, and the limits on delegated work.',
+    inputSchema: obj() },
+  { name: 'office_delegate', description: 'Give another agent a task. The office starts an agent on the provider you name (or hands the task to a driven agent already here); it gets only the task, not your history. '
+      + 'The result is mailed to your inbox — and delivered to you as a new turn if the office drives you and the human opted you in. Do not delegate what you can do yourself in a few steps.',
+    inputSchema: obj({
+      task: str('What the other agent should do. Self-contained: it does not see your conversation.'),
+      to: str('An adapter id from office_capabilities (e.g. "codex", "gemini", "claude") or the name of a driven agent already here. Leave out to let the office pick a provider (by remaining allowance, when known).'),
+      title: str('Optional short title.'),
+      role: { type: 'string', enum: ['implementation', 'research', 'review', 'design', 'test', 'general'] },
+      mode: { type: 'string', enum: ['ask', 'edits', 'full'], description: 'Permissions for the delegate; never broader than yours or than the operator allows. Default: the narrowest that applies.' },
+      model: str('Optional model for the delegate.'), name: str('Optional display name for a newly started agent.'),
+      cwd: str('Optional folder inside your own working folder (default: your folder).'),
+      context: { type: 'boolean', description: 'Also hand over a summary of your own session so far (only if the office drives you).' },
+      wait: { type: 'boolean', description: 'Wait for the result in this call (up to timeoutSeconds). Otherwise it arrives later; carry on.' },
+      timeoutSeconds: { type: 'integer', description: 'How long to wait, 1–45 (default 30). The task keeps running if the wait times out.' },
+      requestId: str('Optional id of your own: the same id twice is the same task, not two.'),
+    }, ['task']) },
+  { name: 'office_delegation', description: 'Follow up on delegated tasks: status and result of one (id), wait for it (action "wait"), cancel one you delegated (action "cancel"), or list yours (no id).',
+    inputSchema: obj({ id: str('dg_… id from office_delegate.'), action: { type: 'string', enum: ['status', 'wait', 'cancel', 'list'] },
+      reason: str('Why you are cancelling (optional).'), timeoutSeconds: { type: 'integer', description: 'For "wait": 1–45 (default 30).' } }) },
+  { name: 'office_transcript', description: 'Read what an agent the office drives did, as a timeline: turns, replies, commands, file changes, permission requests. Use it to see a delegate\'s full work, or to catch up on a teammate.',
+    inputSchema: obj({ agent: str('Agent name or id (office_capabilities lists driven agents).'), after: { type: 'integer', description: 'Only what changed after this revision number.' },
+      limit: { type: 'integer', description: 'How many entries (default 120).' }, full: { type: 'boolean', description: 'Include reasoning and tool output.' } }, ['agent']) },
 ];
 
 let self = null;
@@ -82,6 +108,7 @@ function taskLine(t) {
 const HANDLERS = {
   async office_look(a) { const s = await me(); return text(await api(`/api/world/look?agent=${E(s.id)}${a.at ? '&at=' + E(a.at) : ''}`)); },
   async office_who() { return text(await api('/api/world/who')); },
+  async office_usage() { return text(await api('/api/usage')); },
   async office_map() { const s = await me(); return text(await api(`/api/world/map?agent=${E(s.id)}`)); },
   async office_inbox(a) {
     const s = await me();
@@ -189,7 +216,38 @@ const HANDLERS = {
     const res = await api('/api/world/place', { body: { agent: s.id, creationId: a.creationId, slot: a.slot } });
     return `On the ${res.deptId} shelf, spot ${res.slot}.`;
   },
+  async office_capabilities() { return formatHarness(await api('/api/harness')); },
+  async office_delegate(a) {
+    const s = await me();
+    const res = await api('/api/delegations', { body: {
+      from: s.id, task: a.task, ...(a.to ? { to: a.to } : {}), title: a.title, role: a.role, mode: a.mode, model: a.model, name: a.name, cwd: a.cwd,
+      clientRequestId: a.requestId, ...(a.context ? { context: {} } : {}),
+    } });
+    const d = a.wait ? await waitForDelegation(res.delegation.id, waitSeconds(a)) : res.delegation;
+    return formatDelegation(d);
+  },
+  async office_delegation(a) {
+    const s = await me();
+    const action = a.action || (a.id ? 'status' : 'list');
+    if (action === 'list') {
+      const { delegations } = await api(`/api/delegations?from=${E(s.id)}&limit=20`);
+      return delegations.length ? delegations.map((d) => `${d.id}  ${d.status}  → ${d.to?.name || '?'}  “${d.title}”`).join('\n') : 'You have not delegated anything.';
+    }
+    if (!a.id) throw new OfficeError('which task? pass its id (dg_…), or call with no arguments to list yours', 400);
+    if (action === 'cancel') return formatDelegation((await api(`/api/delegations/${E(a.id)}/cancel`, { body: { from: s.id, reason: a.reason || '' } })).delegation);
+    if (action === 'wait') return formatDelegation(await waitForDelegation(a.id, waitSeconds(a)));
+    return formatDelegation((await api(`/api/delegations/${E(a.id)}`)).delegation);
+  },
+  async office_transcript(a) {
+    const at = `/api/harness/sessions/${E(a.agent)}`;
+    const q = new URLSearchParams({ limit: String(Math.max(1, Math.min(400, Number(a.limit) || 120))) });
+    if (Number(a.after) > 0) q.set('after', String(a.after));
+    const [info, page] = await Promise.all([api(at).catch(() => null), api(`${at}/transcript?${q}`)]);
+    return `${formatTranscript(info?.session, page.entries, { full: !!a.full }) || '(nothing yet)'}\n\n(up to revision ${page.seq}${page.truncated ? '; older entries not shown' : ''})`;
+  },
 };
+
+const waitSeconds = (a) => Math.max(1, Math.min(45, Number(a.timeoutSeconds) || 30));
 
 /* ---- JSON-RPC over stdio ------------------------------------------------- */
 
@@ -210,6 +268,7 @@ async function handle(msg) {
       instructions: 'You have a desk in The Office, a shared workspace for agents from every provider. '
         + 'Check office_inbox when you start and after long stretches of work; post status to your project channel; '
         + 'move shared work on the board; ask the human (office_status blocked) only when they are the real blocker. '
+        + 'When a piece of work is better done by another agent or another provider, office_delegate hands it over and brings the result back. '
         + 'The office is also a place — office_look, office_go and office_use are there when you have a moment.',
     });
     return;

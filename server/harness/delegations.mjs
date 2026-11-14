@@ -121,6 +121,24 @@ export function createDelegations({ ctx, settings, file, harness, wake }) {
     return dir;
   }
 
+  // Nobody named a provider: choose among the agents that can be started here,
+  // following whoever keeps count of the operator's allowance (ctx.usage, when
+  // it exists) — the provider with the most left first, never one running low
+  // while another is not. Without that advice it is simply the first available.
+  function pickAdapter() {
+    const available = harness.catalog.list().filter((a) => a.available);
+    if (!available.length) throw new SessionError(409, 'no agent can be started here: none of the known adapters is installed (GET /api/harness)');
+    let advice = null;
+    try { advice = ctx.usage?.advice?.() || null; } catch { advice = null; }
+    const low = new Set(Array.isArray(advice?.low) ? advice.low.filter((p) => typeof p === 'string') : []);
+    const preferred = typeof advice?.prefer === 'string' ? available.find((a) => a.provider === advice.prefer) : null;
+    const chosen = preferred || available.find((a) => !low.has(a.provider)) || available[0];
+    const why = preferred ? `${chosen.provider} has the most allowance left`
+      : low.size && !low.has(chosen.provider) ? `${[...low].join(', ')} ${low.size === 1 ? 'is' : 'are'} running low`
+        : 'the first agent that can be started here';
+    return { adapter: harness.catalog.get(chosen.id), why };
+  }
+
   function scheduleIdleEnd(session) {
     clearTimeout(idleTimers.get(session.id));
     idleTimers.delete(session.id);
@@ -136,7 +154,8 @@ export function createDelegations({ ctx, settings, file, harness, wake }) {
 
   /**
    * Start a delegation.
-   * @param {object} body  { to, task, title?, role?, model?, mode?, cwd?, name?, clientRequestId?, context?:{session?, turns?} }
+   * @param {object} body  { to?, task, title?, role?, model?, mode?, cwd?, name?, clientRequestId?, context?:{session?, turns?} }
+   *                       `to` is an adapter or an agent already here; left out, the office chooses (see pickAdapter)
    * @param {{agentId?:string, verified?:boolean}} caller  who is asking; empty means the human
    */
   function request(body = {}, caller = {}) {
@@ -160,9 +179,9 @@ export function createDelegations({ ctx, settings, file, harness, wake }) {
     const parent = delegator?.turn?.delegationId || null;
 
     let targetRef = String(body.to || '').trim();
-    if (!targetRef) throw new SessionError(400, 'say who should do it: an adapter (see GET /api/harness) or an agent that is already here');
-    let adapter = null, existing = null;
-    if (targetRef.startsWith('agent:')) targetRef = targetRef.slice(6);
+    let adapter = null, existing = null, chosenBecause = '';
+    if (!targetRef) ({ adapter, why: chosenBecause } = pickAdapter());
+    else if (targetRef.startsWith('agent:')) targetRef = targetRef.slice(6);
     else adapter = harness.catalog.get(targetRef.replace(/^adapter:/, ''));
     if (!adapter) {
       const agent = ctx.agents.resolveRef(targetRef);
@@ -240,7 +259,7 @@ export function createDelegations({ ctx, settings, file, harness, wake }) {
         { kind: 'delegation', by: d.from.name, delegationId: d.id });
     }
     d.to = { agentId: session.id, sessionId: session.id, adapter: session.record.adapter, provider: session.record.provider,
-      name: session.pub().name, started: !existing };
+      name: session.pub().name, started: !existing, ...(chosenBecause ? { chosenBecause } : {}) };
     save(d);
 
     const prompt = taskPrompt(d, handoffText);
@@ -360,8 +379,11 @@ export function createDelegations({ ctx, settings, file, harness, wake }) {
     onTurnEnded(session, turn) {
       const d = forSessionTurn(session, turn);
       if (d) {
+        // "interrupted" alone tells a delegator nothing: say who stopped it, or that its agent was sent home.
+        const why = turn.error || (turn.status !== 'interrupted' ? ''
+          : turn.ending ? `the agent's session was ended (${turn.ending})` : `stopped by ${turn.stoppedBy || 'the human'}`);
         finish(d, turn.status === 'completed' ? 'completed' : turn.status === 'interrupted' ? 'interrupted' : 'failed',
-          { result: turn.text, error: turn.error });
+          { result: turn.text, error: why });
       }
       scheduleIdleEnd(session);
     },

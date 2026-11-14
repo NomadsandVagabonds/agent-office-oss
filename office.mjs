@@ -13,7 +13,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { api, BASE, OfficeError, fmtTime, hook, join, resolveSelf } from './office-lib.mjs';
+import { api, BASE, OfficeError, fmtTime, hook, join, resolveSelf,
+  formatDelegation, formatHarness, formatTranscript, waitForDelegation } from './office-lib.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -57,6 +58,15 @@ const HELP = `office — your seat in The Office   (${BASE})
     office block <what you need from the human>
     office docs [dept] [query]  the binder: list projects, list docs, or read one
     office search <query>       search every project's docs
+  HAND WORK TO ANOTHER AGENT
+    office runtimes             which agents the office can start here, and who it is driving
+    office usage                how much each provider has left (windows, resets) and which one to prefer
+    office delegate <adapter|agent|any> <task…>   give another agent a task; the result comes back to your inbox
+          [--wait [seconds]] [--title "…"] [--role review] [--mode ask|edits|full] [--model m] [--name n]
+          [--cwd dir] [--context [turns]] [--id <your-request-id>]      ("any": the office picks a provider)
+    office delegation [list]    tasks you delegated, and tasks given to you
+    office delegation <id> [--wait [seconds]]     status and result     office delegation cancel <id> [reason]
+    office transcript <agent> [--after <seq>] [--limit n] [--full]      what a driven agent did, as a timeline
   MOVE
     office go <place|thing|agent|home> [--stay]
     office use <thing> [text]   coffee, bell, guestbook, board, vending, …
@@ -133,6 +143,11 @@ const commands = {
   async map() {
     const self = await resolveSelf({ join: false }).catch(() => ({ id: '' }));
     out(await api(`/api/world/map${self.id ? '?agent=' + encodeURIComponent(self.id) : ''}`));
+  },
+
+  /** How much is left on each provider, as far as the runtimes have said. */
+  async usage() {
+    out(await api('/api/usage'));
   },
 
   async passport() {
@@ -236,6 +251,74 @@ const commands = {
     if (!message) throw new OfficeError('block on what? Say what you need from the human.', 400);
     await hook(self.id, 'Notification', { message });
     console.log('Flagged: the human will see this in NEEDS YOU. Their reply arrives in your inbox.');
+  },
+
+  /* ---- handing work to another agent (server/harness) ---------------------- */
+
+  async runtimes() {
+    const h = await api('/api/harness');
+    if (flags.json) return out(h);
+    console.log(formatHarness(h));
+  },
+  async harness() { return commands.runtimes(); },
+
+  async delegate() {
+    const self = await me();
+    let to = typeof flags.to === 'string' ? flags.to : (words.shift() || '');
+    if (['any', 'auto', '-'].includes(to.toLowerCase())) to = '';     // the office chooses, by remaining allowance when it knows
+    const task = rest() || stdinText();
+    if (!task) throw new OfficeError('usage: office delegate <adapter|agent|any> <task…> [--wait [seconds]]   (office runtimes lists who can be started)', 400);
+    const word = (key) => (typeof flags[key] === 'string' ? flags[key] : undefined);
+    const res = await api('/api/delegations', { body: {
+      from: self.id, ...(to ? { to } : {}), task, title: word('title'), role: word('role'), mode: word('mode'), model: word('model'),
+      name: word('name'), cwd: word('cwd') ? path.resolve(word('cwd')) : undefined, clientRequestId: word('id'),
+      // --context hands the delegate a summary of your own session (driven sessions only), optionally the last N turns
+      ...(flags.context ? { context: { turns: Number(flags.context) || 0 } } : {}),
+    } });
+    let d = res.delegation;
+    if (flags.wait) d = await waitForDelegation(d.id, flags.wait === true ? 45 : Number(flags.wait));
+    if (flags.json) return out({ delegation: d });
+    console.log(formatDelegation(d));
+  },
+
+  async delegation() {
+    const self = await me();
+    const sub = (words[0] || 'list').toLowerCase();
+    if (sub === 'list' || sub === 'ls') {
+      const [mine, forMe] = await Promise.all([
+        api(`/api/delegations?from=${encodeURIComponent(self.id)}&limit=20`),
+        api(`/api/delegations?to=${encodeURIComponent(self.id)}&limit=10`),
+      ]);
+      if (flags.json) return out({ delegated: mine.delegations, received: forMe.delegations });
+      const row = (d) => `  ${d.id}  ${d.status.padEnd(11)} ${d.from.name} → ${d.to?.name || '?'}  “${d.title}”`;
+      console.log(mine.delegations.length ? 'You delegated\n' + mine.delegations.map(row).join('\n') : 'You have not delegated anything (office delegate <adapter|agent> <task…>).');
+      if (forMe.delegations.length) console.log('\nGiven to you\n' + forMe.delegations.map(row).join('\n'));
+      return;
+    }
+    if (sub === 'cancel') {
+      const id = words[1];
+      if (!id) throw new OfficeError('usage: office delegation cancel <id> [reason]', 400);
+      const res = await api(`/api/delegations/${encodeURIComponent(id)}/cancel`, { body: { from: self.id, reason: words.slice(2).join(' ') } });
+      return flags.json ? out(res) : console.log(formatDelegation(res.delegation));
+    }
+    const id = words[0];
+    const d = flags.wait ? await waitForDelegation(id, flags.wait === true ? 45 : Number(flags.wait))
+      : (await api(`/api/delegations/${encodeURIComponent(id)}`)).delegation;
+    if (flags.json) return out({ delegation: d });
+    console.log(formatDelegation(d));
+  },
+  async delegations() { words.unshift('list'); return commands.delegation(); },
+
+  async transcript() {
+    const ref = rest();
+    if (!ref) throw new OfficeError('usage: office transcript <agent|session id> [--after <seq>] [--limit n] [--full]   (office runtimes lists driven agents)', 400);
+    const q = new URLSearchParams({ limit: String(Number(flags.limit) || 200) });
+    if (flags.after && flags.after !== true) q.set('after', String(flags.after));
+    const at = `/api/harness/sessions/${encodeURIComponent(ref)}`;
+    const [info, page] = await Promise.all([api(at).catch(() => null), api(`${at}/transcript?${q}`)]);
+    if (flags.json) return out({ session: info?.session || null, ...page });
+    console.log(formatTranscript(info?.session, page.entries, { full: !!flags.full }) || '(nothing yet)');
+    console.log(`\n(up to revision ${page.seq}${page.truncated ? '; older entries not shown — raise --limit' : ''}. What changed since: office transcript ${ref} --after ${page.seq})`);
   },
 
   async task() {

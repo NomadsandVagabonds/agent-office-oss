@@ -32,6 +32,14 @@ export function cutoutArt(kit, key, look, opt = {}) {
   const front = kit.tex.custom(`cut:${key}:f`, w, h, (g) => {
     mask(g, '#efe9d8');
     g.drawImage(sp.canvas, sp.sx, sp.sy, sp.sw, sp.sh, PAD * S, PAD * S, sp.sw, sp.sh);
+    if (opt.name) {                               // whoever it is, printed along the foot of the board
+      let size = S * 2;
+      const font = (px) => `700 ${px}px ui-monospace, Menlo, Consolas, monospace`;
+      g.font = font(size);
+      while (size > 6 && g.measureText(opt.name.toUpperCase()).width > w - S * 5) g.font = font(--size);
+      g.fillStyle = '#4a4336'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(opt.name.toUpperCase(), w / 2, h - (PAD * S) / 2 + 1);
+    }
   }, { clamp: true });
   const back = kit.tex.custom(`cut:${key}:b`, w, h, (g) => {
     g.save(); g.translate(w, 0); g.scale(-1, 1); mask(g, CARD); g.restore();      // seen from behind, the outline is mirrored

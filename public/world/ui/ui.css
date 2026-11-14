@@ -172,10 +172,10 @@ body.level #ui > *:not(.level):not(.story):not(.liftveil):not(.liftpanel) { disp
 #ui .level-chip .btn { color: var(--dim); }
 #ui .level-needs { position: absolute; top: 12px; right: 12px; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; cursor: pointer;
   color: var(--blocked); border-color: rgba(255, 180, 74, .45); font-weight: 600; }
-#ui .level-help { position: absolute; left: 50%; top: 24px; transform: translateX(-50%); font: 11px/1.6 var(--mono); color: var(--dim); text-shadow: 0 1px 2px #000;
-  white-space: nowrap; pointer-events: none; transition: opacity 1.4s; }
+#ui .level-help { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); padding: 3px 12px; border-radius: 9px; background: rgba(20, 16, 26, .6);
+  font: 11px/1.6 var(--mono); color: #cfc8d8; white-space: nowrap; pointer-events: none; transition: opacity 1.4s; }
 #ui .level-help.gone { opacity: 0; }
-@media (max-width: 900px) { #ui .level-help { top: 62px; } #ui .level-chip .btn { display: none; } }
+@media (max-width: 900px) { #ui .level-chip .btn { display: none; } }
 
 /* its floor panel: dark steel, round buttons, an amber display */
 #ui .liftveil { position: absolute; inset: 0; background: rgba(10, 8, 14, .5); pointer-events: auto; cursor: default; animation: liftveil .18s ease-out; }

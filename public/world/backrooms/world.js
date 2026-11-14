@@ -1,11 +1,13 @@
 // The Backrooms — the world: turns a generated level (gen.js) into rooms you
-// can stand in. For every room it builds the shell (carpet, wallpaper with
-// holes for the doorways, a drop ceiling with its tube panels), hands a
-// builder (rooms.js) a small toolbox to furnish it, bakes the light, and keeps
-// what the game needs afterwards: where you can walk, what you can use, what
-// moves.
+// can stand in. For every room it builds the shell — carpet, wallpaper with
+// holes for the doorways and windows, a drop ceiling with its tube panels,
+// and whatever the room's shape calls for: stairs up to a doorway, a pit, a
+// ceiling that steps or slopes, a beam to duck under — hands a builder
+// (rooms.js) a small toolbox to furnish it, bakes the light, and keeps what
+// the game needs afterwards: where you can walk and how high the floor and
+// the ceiling are there, what you can use, what moves.
 import * as THREE from 'three';
-import { T, DOOR_H, TILE, toWorld, toLocal, wallLength, makeRng, roomDistances, roomPath } from './gen.js';
+import { T, TILE, RISE, RUN, toWorld, toLocal, wallLength, wallPoint, floorAt, ceilAt, headAt, fitsAt, stairZones, makeRng, roomPath } from './gen.js';
 import { Batch, lamp, lightAt, lin, ticks, smooth, WHITE } from './kit.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
@@ -16,16 +18,11 @@ const WALLS = {
   left: { n: [1, 0, 0], U: [0, 0, -1], o: (W, D) => [-W / 2, 0, D / 2], s: (c, W, D) => D / 2 - c },
   right: { n: [-1, 0, 0], U: [0, 0, 1], o: (W, D) => [W / 2, 0, -D / 2], s: (c, W, D) => c + D / 2 },
 };
-const UP = [0, 1, 0];
-const PAPER = [0.93, 0.91, 0.84];
-
-/** Vertex positions across a ceiling so that every tile seam has a row of vertices. */
-function tileTicks(len) {
-  const out = [0];
-  for (let p = Math.ceil((-len / 2 + 0.05) / TILE) * TILE; p < len / 2 - 0.05; p += TILE) out.push(p + len / 2);
-  out.push(len);
-  return out;
-}
+const UP = [0, 1, 0], VOX = 0.025, STEP = 0.26, HEAD = 0.62;
+const P = (g, col, x, y, w, h) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+/** Vertex positions from a to b with one at every ceiling-tile seam (seams are at multiples of TILE). */
+const tiles = (a, b) => { const out = [0]; for (let p = Math.ceil((a + 0.05) / TILE) * TILE; p < b - 0.05; p += TILE) out.push(p - a); out.push(b - a); return out; };
 
 /**
  * The office's furniture catalogue, if it will load (other people are still writing it).
@@ -55,7 +52,7 @@ export async function loadCatalogue(kit) {
 /**
  * @param kit    from createKit()
  * @param level  from generate()
- * @param env    { catalogue, builders, say, cast, … } — what rooms may call on
+ * @param env    { catalogue, builders, cast, … } — what rooms may call on
  * @param tick   awaited between rooms, so the loading picture keeps moving
  */
 export async function buildWorld(kit, level, env, tick) {
@@ -64,7 +61,7 @@ export async function buildWorld(kit, level, env, tick) {
   const rooms = level.rooms.map((def) => ({
     def, id: def.id, group: new THREE.Group(), u: { flick: { value: 1 }, dim: { value: 1 } },
     lights: [], amb: [0, 0, 0], level: 0, colliders: [], uses: [], zones: [], ticks: [], flickers: [],
-    clip: null, floorY: null, onEnter: null, slow: null,
+    clip: null, floorY: null, headY: null, fold: false, flat: false, onEnter: null,
     rect: { x0: def.x + T / 2, z0: def.z + T / 2, x1: def.x + def.w - T / 2, z1: def.z + def.d - T / 2 },
   }));
   const throats = level.links.map((link) => ({ link, open: !link.door, a: link.a, b: link.b }));
@@ -76,12 +73,12 @@ export async function buildWorld(kit, level, env, tick) {
     const lit = def.panels.filter((p) => p.state !== 'dead').length;
     rt.level = 0.03 + Math.min(0.4, (2.5 * lit * def.light.power) / (def.W * def.D));
     rt.amb = tube.map((c, i) => c * rt.level * (0.55 + 0.45 * wall[i] / top));
-    rt.group.position.set(def.cx, 0, def.cz);
+    rt.group.position.set(def.cx, def.y || 0, def.cz);
     rt.group.rotation.y = (def.rot * Math.PI) / 2;
     scene.add(rt.group);
   }
 
-  /* ---- can a circle stand here? --------------------------------------------------- */
+  /* ---- can a body stand here? ------------------------------------------------------ */
   const hits = (c, x, z, r) => {
     if (c.on === false) return false;
     if (c.r !== undefined) return (x - c.x) ** 2 + (z - c.z) ** 2 < (r + c.r) ** 2;
@@ -96,16 +93,18 @@ export async function buildWorld(kit, level, env, tick) {
     }
     return false;
   };
+  const inWindow = (x, z) => level.windows.some((w) => (w.axis === 'x' ? Math.abs(x - w.at) <= T / 2 + 0.03 && z >= w.from && z <= w.to : Math.abs(z - w.at) <= T / 2 + 0.03 && x >= w.from && x <= w.to));
+  /** Is there floor for a circle of radius r here, clear of walls and furniture? opt.tall: only what blocks the view counts. */
   world.free = (x, z, r = 0.22, opt = {}) => {
     let inside = false;
     for (const rt of rooms) {
       const b = rt.rect;
       if (x < b.x0 + r || x > b.x1 - r || z < b.z0 + r || z > b.z1 - r) continue;
-      if (rt.clip) { const p = toLocal(rt.def, x, z); if (!rt.clip(p.x, p.z, r)) continue; }
+      const p = toLocal(rt.def, x, z);
+      if (rt.clip ? !rt.clip(p.x, p.z, r) : !fitsAt(rt.def, p.x, p.z, r)) continue;
       inside = true; break;
     }
-    if (!inside && !world.inThroat(x, z, r)) return false;
-    if (opt.walls) return true;
+    if (!inside && !world.inThroat(x, z, r) && !(opt.tall && inWindow(x, z))) return false;
     for (const rt of rooms) {
       const b = rt.rect;
       if (x < b.x0 - 1 || x > b.x1 + 1 || z < b.z0 - 1 || z > b.z1 + 1) continue;
@@ -117,7 +116,28 @@ export async function buildWorld(kit, level, env, tick) {
     for (const rt of rooms) { const d = rt.def; if (x >= d.x && x < d.x + d.w && z >= d.z && z < d.z + d.d) return rt; }
     return null;
   };
-  /** Can one point see another? Walls and tall furniture block; chairs do not. */
+  /** Height of the floor here, in the world. */
+  world.floorY = (x, z) => {
+    const rt = world.roomAt(x, z);
+    if (!rt) return 0;
+    if (rt.flat) return rt.def.y;
+    const p = toLocal(rt.def, x, z);
+    return rt.def.y + (rt.floorY ? rt.floorY(p.x, p.z) : floorAt(rt.def, p.x, p.z));
+  };
+  /** How much room there is to stand up in here. */
+  world.headroom = (x, z) => {
+    const rt = world.roomAt(x, z);
+    if (!rt || rt.flat) return 9;
+    const p = toLocal(rt.def, x, z);
+    return rt.headY ? rt.headY(p.x, p.z) : headAt(rt.def, p.x, p.z);
+  };
+  /** May a walker go from one spot to the next? The floor may not jump by more than a stair, and there must be room to crawl. */
+  world.passable = (x0, z0, x1, z1) => {
+    if (world.headroom(x1, z1) < HEAD) return false;
+    if (Math.abs(world.floorY(x1, z1) - world.floorY(x0, z0)) <= STEP) return true;
+    return !!(world.roomAt(x1, z1)?.fold && world.roomAt(x0, z0)?.fold);            // rooms that fold space keep their own counsel
+  };
+  /** Can one point see another? Walls and tall furniture block; chairs, doorways and windows do not. */
   world.los = (ax, az, bx, bz) => {
     const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(len / 0.25));
     for (let i = 1; i < n; i++) { const t = i / n; if (!world.free(ax + (bx - ax) * t, az + (bz - az) * t, 0.02, { tall: true })) return false; }
@@ -125,7 +145,6 @@ export async function buildWorld(kit, level, env, tick) {
   };
   world.openLink = (id) => { throats[id].open = true; };
   world.path = (a, b) => roomPath(level, a, b);
-  world.distances = (from) => roomDistances(level, from);
   /** The middle of the doorway between two neighbouring rooms, in the world. */
   world.doorway = (a, b) => {
     const th = throats.find((t) => (t.a === a && t.b === b) || (t.a === b && t.b === a));
@@ -133,52 +152,71 @@ export async function buildWorld(kit, level, env, tick) {
     const l = th.link, mid = (l.from + l.to) / 2;
     return l.axis === 'x' ? { x: l.at, z: mid, open: th.open, nx: 1, nz: 0 } : { x: mid, z: l.at, open: th.open, nx: 0, nz: 1 };
   };
+  // what can be seen from where: through doorways, and through windows
+  const sight = rooms.map((rt) => [...new Set([...rt.def.doors.map((d) => d.to), ...(rt.def.wins || []).map((w) => w.to)])]);
+  world.distances = (from) => {
+    const dist = new Map([[from, 0]]), queue = [from];
+    while (queue.length) { const cur = queue.shift(); for (const n of sight[cur]) if (!dist.has(n)) { dist.set(n, dist.get(cur) + 1); queue.push(n); } }
+    return dist;
+  };
 
   /* ---- build ---------------------------------------------------------------------- */
+  world.timing = [];                           // [what, milliseconds] — where the loading time went
   for (const rt of rooms) {
+    const t0 = performance.now();
     const builder = env.builders[rt.def.kind === 'special' ? rt.def.arch : rt.def.kind] || env.builders.plain;
     let ctx = roomContext(world, rt);
     try { builder(ctx); }
     catch (err) {
       console.warn(`[backrooms] ${rt.def.arch || rt.def.kind} would not build — leaving it plain`, err);
       rt.group.clear(); rt.colliders.length = 0; rt.uses.length = 0; rt.zones.length = 0; rt.ticks.length = 0; rt.flickers.length = 0; rt.lights.length = 0;
-      rt.clip = null; rt.floorY = null; rt.slow = null;
+      rt.clip = null; rt.floorY = null; rt.headY = null; rt.fold = false;
       ctx = roomContext(world, rt); ctx.shell();
     }
+    const t1 = performance.now();
     ctx.finish();
+    world.timing.push([`${rt.def.arch || rt.def.kind}#${rt.id}`, Math.round(t1 - t0), Math.round(performance.now() - t1)]);
     if (tick) await tick(rt.id + 1, rooms.length);
   }
+  const tCheck = performance.now();
 
-  // furniture must never wall a doorway off: if it does, that room's furniture stops being solid
+  // nothing may wall a doorway off. Walk every room the way the player would; if a doorway cannot be reached,
+  // first its furniture stops being solid, and if that is not enough its floor is treated as flat.
   for (const rt of rooms) {
     const { def } = rt;
-    if (def.doors.length < 2 || !rt.colliders.length) continue;
-    const inner = (dr) => {
-      const w = WALLS[dr.side], o = w.o(def.W, def.D), s = w.s(dr.c, def.W, def.D);
-      return toWorld(def, o[0] + w.U[0] * s + w.n[0] * 0.5, o[2] + w.U[2] * s + w.n[2] * 0.5);
-    };
-    const cell = 0.25, b = rt.rect, nx = Math.ceil((b.x1 - b.x0) / cell), nz = Math.ceil((b.z1 - b.z0) / cell);
-    const key = (p) => Math.floor((p.x - b.x0) / cell) + nx * Math.floor((p.z - b.z0) / cell);
-    const seen = new Set(), queue = [];
-    const from = inner(def.doors[0]);
-    seen.add(key(from)); queue.push(key(from));
-    while (queue.length) {
-      const k = queue.pop(), i = k % nx, j = Math.floor(k / nx);
-      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const ii = i + di, jj = j + dj, kk = ii + nx * jj;
-        if (ii < 0 || jj < 0 || ii >= nx || jj >= nz || seen.has(kk)) continue;
-        if (!world.free(b.x0 + (ii + 0.5) * cell, b.z0 + (jj + 0.5) * cell, 0.23)) continue;
-        seen.add(kk); queue.push(kk);
+    if (def.doors.length < 2 || (!rt.colliders.length && !def.shape && !rt.clip && !rt.floorY && def.doors.every((d) => !(d.sill > 0.01)))) continue;
+    const cell = 0.125, r = 0.225, nx = Math.ceil(def.W / cell), nz = Math.ceil(def.D / cell);
+    const key = (p) => Math.floor((p.x + def.W / 2) / cell) + nx * Math.floor((p.z + def.D / 2) / cell);
+    const floor = (x, z) => (rt.flat ? 0 : rt.floorY ? rt.floorY(x, z) : floorAt(def, x, z)), head = (x, z) => (rt.flat ? 9 : rt.headY ? rt.headY(x, z) : headAt(def, x, z));
+    const local = rt.colliders.map((c) => { const a = toLocal(def, c.x0, c.z0), b = toLocal(def, c.x1, c.z1); return { c, x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z) }; });
+    const free = (x, z) => Math.abs(x) <= def.W / 2 - r && Math.abs(z) <= def.D / 2 - r && (rt.clip ? rt.clip(x, z, r) : fitsAt(def, x, z, r)) && head(x, z) >= HEAD
+      && !local.some((q) => { if (q.c.on === false) return false; const dx = x - clamp(x, q.x0, q.x1), dz = z - clamp(z, q.z0, q.z1); return dx * dx + dz * dz < r * r; });
+    const reaches = () => {
+      const from = wallPoint(def, def.doors[0].side, def.doors[0].c, 0.3), seen = new Uint8Array(nx * nz), queue = [key(from)];
+      seen[queue[0]] = 1;
+      while (queue.length) {
+        const k = queue.pop(), i = k % nx, j = (k - i) / nx, hx = -def.W / 2 + (i + 0.5) * cell, hz = -def.D / 2 + (j + 0.5) * cell, hy = floor(hx, hz);
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const ii = i + di, jj = j + dj, kk = ii + nx * jj;
+          if (ii < 0 || jj < 0 || ii >= nx || jj >= nz || seen[kk]) continue;
+          const tx = hx + di * cell, tz = hz + dj * cell;
+          if (!free(tx, tz) || (!rt.fold && Math.abs(floor(tx, tz) - hy) > STEP)) continue;
+          seen[kk] = 1; queue.push(kk);
+        }
       }
-    }
-    if (def.doors.some((dr) => !seen.has(key(inner(dr))))) {
-      console.warn(`[backrooms] furniture blocked a doorway in ${def.arch || def.kind} — made it soft`);
-      for (const c of rt.colliders) if (!c.keep) c.on = false;
-    }
+      return def.doors.every((dr) => seen[key(wallPoint(def, dr.side, dr.c, 0.3))]);
+    };
+    if (reaches()) continue;
+    console.warn(`[backrooms] a doorway of ${def.arch || def.kind} #${def.id} could not be reached — its furniture is no longer solid`);
+    for (const c of rt.colliders) if (!c.keep) c.on = false;
+    if (!reaches()) { for (const c of rt.colliders) c.on = false; rt.flat = true; rt.clip = () => true; console.warn(`[backrooms] …nor even then: room #${def.id} is now flat and empty to walk in`); }
+    if (tick) await tick(rooms.length, rooms.length);
   }
 
+  world.timing.push(['no-trap check', Math.round(performance.now() - tCheck), 0]);
+
   /* ---- while you play ------------------------------------------------------------- */
-  let current = null, shown = new Set();
+  let current = null;
   world.current = () => current;
   /** Which rooms are drawn and which are alive, given where the player is. */
   world.enter = (rt) => {
@@ -186,8 +224,7 @@ export async function buildWorld(kit, level, env, tick) {
     const before = current;
     current = rt;
     const dist = world.distances(rt.id);
-    shown = new Set();
-    for (const r of rooms) { const d = dist.get(r.id); r.group.visible = d <= 3; r.near = d <= 1; if (r.group.visible) shown.add(r.id); }
+    for (const r of rooms) { const d = dist.get(r.id); r.group.visible = d <= 3; r.near = d <= 1; }
     before?.onLeave?.();
     rt.visits = (rt.visits || 0) + 1;
     rt.onEnter?.(rt.visits);
@@ -238,16 +275,17 @@ export async function buildWorld(kit, level, env, tick) {
     }
     return best;
   };
-  world.floorY = (x, z) => {
-    const rt = world.roomAt(x, z);
-    if (!rt || !rt.floorY) return 0;
-    const p = toLocal(rt.def, x, z);
-    return rt.floorY(p.x, p.z);
-  };
   /** Turn a room's ceiling up or down (0 = out, 1 = as built): the tubes, and everything they light. */
   world.setLights = (rt, k) => {
     rt.lightsK = k; rt.u.dim.value = Math.max(0.03, k);
     if (rt.panelMesh) rt.panelMesh.material.color.copy(rt.panelOn).multiplyScalar(Math.max(0.02, k));
+  };
+  /** The light falling on a spot of the world (for things that wander between rooms). */
+  world.lightAt = (x, z, y = 1) => {
+    const rt = world.roomAt(x, z);
+    if (!rt) return [0.2, 0.2, 0.2];
+    const p = toLocal(rt.def, x, z), k = rt.u.dim.value;
+    return lightAt(rt.lights, rt.amb, p.x, y, p.z, 0, 1, 0).map((v) => v * k);
   };
   world.dispose = () => { scene.traverse((o) => { if (o.userData.dispose) o.userData.dispose(); }); scene.clear(); };
   return world;
@@ -261,7 +299,8 @@ function roomContext(world, rt) {
   const mapped = new Map(), shining = new Map();
   const reserved = [];                                    // floor already spoken for: [x, z, radius]
   const mat = new THREE.Matrix4(), quat = new THREE.Quaternion(), eul = new THREE.Euler(), vec = new THREE.Vector3(), scl = new THREE.Vector3();
-  const doorPoint = (dr, off = 0) => { const w = WALLS[dr.side], o = w.o(W, D), s = w.s(dr.c, W, D); return { x: o[0] + w.U[0] * s + w.n[0] * off, z: o[2] + w.U[2] * s + w.n[2] * off }; };
+  const doorPoint = (dr, off = 0) => wallPoint(def, dr.side, dr.c, off);
+  const stairs = stairZones(def, 0.7);
 
   const c = {
     world, kit, env, level, room: def, rt, R, W, D, H, look, params: def.params || {},
@@ -285,6 +324,9 @@ function roomContext(world, rt) {
 
     toWorld: (x, z) => toWorld(def, x, z),
     toLocal: (x, z) => toLocal(def, x, z),
+    /** Height of this room's ceiling, and of its floor, at a spot (above the room's own level). */
+    ceilAt: (x, z) => ceilAt(def, x, z),
+    floorAt: (x, z) => floorAt(def, x, z),
 
     /** A baked light. power 1 ≈ one ceiling panel. */
     light(x, y, z, color, power = 1, opt = {}) {
@@ -293,7 +335,7 @@ function roomContext(world, rt) {
       rt.lights.push(l);
       return l;
     },
-    /** The light at a spot, for things that are added after the bake. Call from finish hooks or ticks. */
+    /** The light at a spot, for things that are added after the bake. */
     sample: (x, y, z, nx = 0, ny = 1, nz = 0) => lightAt(rt.lights, rt.amb, x, y, z, nx, ny, nz),
 
     /* ---- where things can go ---------------------------------------------------- */
@@ -302,46 +344,61 @@ function roomContext(world, rt) {
       const w = WALLS[side], o = w.o(W, D), s = w.s(at, W, D);
       return { x: o[0] + w.U[0] * s + w.n[0] * off, z: o[2] + w.U[2] * s + w.n[2] * off, rot: Math.atan2(w.n[0], w.n[2]), n: w.n, U: w.U };
     },
-    /** The stretches of a wall with no doorway in them: [[from, to], …] along the wall's coordinate. */
-    spans(side, margin = 0.3) {
+    /** The stretches of a wall with nothing in the way — no doorway, window, stairs or filled-in corner: [[from, to], …]. */
+    spans(side, margin = 0.3, minTop = 0) {
       const half = wallLength(def, side) / 2;
-      const holes = def.doors.filter((d) => d.side === side).map((d) => [d.c - d.w / 2 - margin, d.c + d.w / 2 + margin]).sort((a, b) => a[0] - b[0]);
+      const holes = [...def.doors, ...(def.wins || [])].filter((d) => d.side === side).map((d) => [d.c - d.w / 2 - margin, d.c + d.w / 2 + margin]);
+      let bad = null;
+      for (let at = -half; at <= half + 1e-6; at += 0.125) {
+        const p = wallPoint(def, side, at, 0.25);
+        const blocked = Math.abs(floorAt(def, p.x, p.z)) > 0.01 || !fitsAt(def, p.x, p.z, 0.05) || ceilAt(def, p.x, p.z) < minTop
+          || def.pillars.some((q) => Math.abs(p.x - q.x) < q.w / 2 + 0.05 && Math.abs(p.z - q.z) < q.d / 2 + 0.05);
+        if (blocked && !bad) bad = [at - 0.15, at]; else if (blocked) bad[1] = at;
+        if (!blocked && bad) { holes.push([bad[0], bad[1] + 0.15]); bad = null; }
+      }
+      if (bad) holes.push([bad[0], half]);
+      holes.sort((a, b) => a[0] - b[0]);
       const out = []; let at = -half + margin;
       for (const [a, b] of holes) { if (a - at > 0.05) out.push([at, a]); at = Math.max(at, b); }
       if (half - margin - at > 0.05) out.push([at, half - margin]);
       return out;
     },
-    /** A random stretch of free wall at least `need` long → { side, at } (its middle), or null. */
-    wallSpot(need, sides = ['back', 'left', 'right', 'front'], margin = 0.35) {
+    /** A random stretch of free wall at least `need` long, under at least `minTop` of ceiling → { side, at } (its middle), or null. */
+    wallSpot(need, sides = ['back', 'left', 'right', 'front'], margin = 0.35, minTop = 2.25) {
       const options = [];
-      for (const side of sides) for (const [a, b] of c.spans(side, margin)) if (b - a >= need) options.push({ side, a, b });
+      for (const side of sides) for (const [a, b] of c.spans(side, margin, minTop)) if (b - a >= need) options.push({ side, a, b });
       if (!options.length) return null;
       const o = R.pick(options);
       return { side: o.side, at: R.range(o.a + need / 2, o.b - need / 2) };
     },
     reserve(x, z, r) { reserved.push([x, z, r]); },
-    /** Is this bit of floor free — clear of doorways' approaches and of what was put down before? */
-    clear(x, z, r = 0.4) {
+    /** Is this bit of floor free — level, clear of doorways' approaches, stairs, pillars and what was put down before? */
+    clear(x, z, r = 0.4, head = 0) {
       if (Math.abs(x) > W / 2 - r || Math.abs(z) > D / 2 - r) return false;
       for (const dr of def.doors) { const p = doorPoint(dr, 0.6); if (Math.hypot(x - p.x, z - p.z) < r + 0.55 + dr.w / 2) return false; }
       for (const [px, pz, pr] of reserved) if (Math.hypot(x - px, z - pz) < r + pr) return false;
+      for (const s of stairs) if (x > s.x0 - r && x < s.x1 + r && z > s.z0 - r && z < s.z1 + r) return false;
+      for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) {
+        if (Math.abs(floorAt(def, x + dx, z + dz)) > 0.01 || !fitsAt(def, x + dx, z + dz, 0.05)) return false;
+        if (head && ceilAt(def, x + dx, z + dz) < head) return false;
+      }
       return true;
     },
-    /** A random free spot for something of radius r (and reserve it), or null. */
+    /** A random free spot for something of radius r (and reserve it), or null. opt.head: ceiling it needs above it. */
     spot(r = 0.4, opt = {}) {
       const pad = opt.pad ?? 0.15;
       for (let tries = 0; tries < (opt.tries || 40); tries++) {
         const x = R.range(-W / 2 + r + pad, W / 2 - r - pad), z = R.range(-D / 2 + r + pad, D / 2 - r - pad);
         if (opt.near && Math.hypot(x - opt.near[0], z - opt.near[1]) > opt.near[2]) continue;
-        if (!c.clear(x, z, r)) continue;
+        if (!c.clear(x, z, r, opt.head)) continue;
         reserved.push([x, z, r]);
         return { x, z };
       }
       return null;
     },
     /** A corner with no doorway crowding it → { x, z, sx, sz } (sx, sz: which corner), or null. */
-    corner(inset = 0.6, pick) {
-      const all = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sz]) => ({ sx, sz, x: sx * (W / 2 - inset), z: sz * (D / 2 - inset) })).filter((k) => c.clear(k.x, k.z, inset * 0.7));
+    corner(inset = 0.6, pick, head = 0) {
+      const all = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sz]) => ({ sx, sz, x: sx * (W / 2 - inset), z: sz * (D / 2 - inset) })).filter((k) => c.clear(k.x, k.z, inset * 0.7, head));
       if (!all.length) return null;
       const k = pick !== undefined ? all[pick % all.length] : R.pick(all);
       reserved.push([k.x, k.z, inset]);
@@ -370,7 +427,7 @@ function roomContext(world, rt) {
     },
     /**
      * Put a meshed voxel model down. opt: rot (about y), y, flip (hang it from height y, upside down),
-     * scale (number or [x,y,z]), tint, mono, solid, shadow, tall, tilt:[rx,rz], mirror, batch.
+     * scale (number or [x,y,z]), tint, mono, solid, shadow, tall, tilt:[rx,rz], quat, mirror, batch.
      * → its footprint { x0, z0, x1, z1, top, w, d, h } in room coordinates.
      */
     place(geo, x, z, opt = {}) {
@@ -389,9 +446,8 @@ function roomContext(world, rt) {
         x0 = Math.min(x0, vec.x); x1 = Math.max(x1, vec.x); z0 = Math.min(z0, vec.z); z1 = Math.max(z1, vec.z); y0 = Math.min(y0, vec.y); y1 = Math.max(y1, vec.y);
       }
       const foot = { x0, z0, x1, z1, top: y1, bottom: y0, w: x1 - x0, d: z1 - z0, h: y1 - y0, x, z };
-      const grounded = y0 < 0.3;
       if (opt.solid !== false && y0 < 1.0 && y1 > 0.25) c.solid(x0 + 0.03, z0 + 0.03, x1 - 0.03, z1 - 0.03, { tall: opt.tall ?? y1 > 1.25 });
-      if (opt.shadow !== false && grounded) c.shadow((x0 + x1) / 2, (z0 + z1) / 2, foot.w, foot.d, opt.shadow || 0.45);
+      if (opt.shadow !== false && y0 < 0.3) c.shadow((x0 + x1) / 2, (z0 + z1) / 2, foot.w, foot.d, opt.shadow || 0.45);
       return foot;
     },
     /** Something from the office's catalogue (desk, chair, cooler…), or a plain crate if it is not there. */
@@ -418,7 +474,7 @@ function roomContext(world, rt) {
       batch.quad([p.x - U[0] * hw, y - hh, p.z - U[2] * hw], [p.x + U[0] * hw, y - hh, p.z + U[2] * hw], [p.x + U[0] * hw, y + hh, p.z + U[2] * hw], [p.x - U[0] * hw, y + hh, p.z - U[2] * hw], alb, uv);
       return p;
     },
-    /** A flat picture lying on the floor (or at height y), turned by rot. */
+    /** A flat picture lying on the floor (or at height y, or face down on the ceiling), turned by rot. */
     lay(batch, x, z, w, d, rot = 0, uv = null, alb = WHITE, y = 0.008, down = false) {
       const cs = Math.cos(rot), sn = Math.sin(rot), hw = w / 2, hd = d / 2;
       const pt = (lx, lz) => [x + lx * cs + lz * sn, y, z - lx * sn + lz * cs];
@@ -437,10 +493,10 @@ function roomContext(world, rt) {
       return c.prop(type, p.x, p.z, { rot: p.rot, y: opt.y ?? entry?.y ?? 1.4, solid: false, shadow: false, fallback: [0.4, 0.4, 0.05], ...opt });
     },
     /** A missing ceiling tile: a black square where one should be (x, z snapped to the tile grid). */
-    hole(x, z, tiles = 1) {
-      const sx = Math.round(x / TILE - 0.5) * TILE, sz = Math.round(z / TILE - 0.5) * TILE, k = TILE * tiles;
-      c.flat.quad([sx, H - 0.004, sz], [sx + k, H - 0.004, sz], [sx + k, H - 0.004, sz + k], [sx, H - 0.004, sz + k], [0.004, 0.004, 0.004]);
-      return { x: sx + k / 2, z: sz + k / 2 };
+    hole(x, z, n = 1) {
+      const sx = Math.round(x / TILE - 0.5) * TILE, sz = Math.round(z / TILE - 0.5) * TILE, k = TILE * n, y = ceilAt(def, sx + k / 2, sz + k / 2) - 0.004;
+      c.flat.quad([sx, y, sz], [sx + k, y, sz], [sx + k, y, sz + k], [sx, y, sz + k], [0.004, 0.004, 0.004]);
+      return { x: sx + k / 2, z: sz + k / 2, y };
     },
     /**
      * Something that will move: its own mesh, lit by this room's bake. Author the batch in room
@@ -460,12 +516,11 @@ function roomContext(world, rt) {
       return holder;
     },
     /** A sheet of paper on the floor. */
-    paper(x, z, rot = R.range(-3, 3), color) { c.lay(c.mapped('paper' + (color || ''), kit.tex.paper(color)), x, z, 0.21, 0.297, rot, null, WHITE, 0.006 + R() * 0.004); },
-    /** A free-standing upright picture facing `rot` (0 = toward +z), seen from both sides. */
+    paper(x, z, rot = R.range(-3, 3), color) { c.lay(c.mapped('paper' + (color || ''), kit.tex.paper(color)), x, z, 0.21, 0.297, rot, null, WHITE, floorAt(def, x, z) + 0.006 + R() * 0.004); },
+    /** A free-standing upright picture facing `rot` (0 = toward +z). */
     board(batch, x, y, z, w, h, rot = 0, uv = null, alb = WHITE) {
       const cs = Math.cos(rot), sn = Math.sin(rot), hw = w / 2, hh = h / 2;
-      const a = [x - cs * hw, y - hh, z + sn * hw], b = [x + cs * hw, y - hh, z - sn * hw], cc = [x + cs * hw, y + hh, z - sn * hw], d = [x - cs * hw, y + hh, z + sn * hw];
-      batch.quad(a, b, cc, d, alb, uv);
+      batch.quad([x - cs * hw, y - hh, z + sn * hw], [x + cs * hw, y - hh, z - sn * hw], [x + cs * hw, y + hh, z - sn * hw], [x - cs * hw, y + hh, z + sn * hw], alb, uv);
     },
 
     /* ---- things that happen -------------------------------------------------------- */
@@ -481,72 +536,162 @@ function roomContext(world, rt) {
     zone(spec) { rt.zones.push({ in: false, ...spec }); return spec; },
     /** Runs every frame while you are in this room or next door: fn(dt, t, me) with me in room coordinates. */
     tick(fn) { rt.ticks.push(fn); },
-    say: (text, opt) => env.say(text, opt),
     /** Is a point of this room on the player's screen right now? */
     seen(x, z, opt) { const p = toWorld(def, x, z); return env.sees(p.x, p.z, opt); },
 
     /* ---- the shell ------------------------------------------------------------------- */
     /**
-     * Floor, ceiling with its panels, four walls with their doorways, skirting, sockets.
-     * opt: { H, floor:false, ceiling:false, walls:false|[sides], wallTex, floorTex, ceilTex, panels:false, skirting:false, sockets:false, floorAlb, wallAlb }
+     * Floor, ceiling with its panels, four walls with their doorways and windows, skirting, sockets —
+     * and whatever the room's shape adds: stairs up to a raised doorway, a pit or a dais, a ceiling in two heights
+     * or on a slope, a beam hung across.
+     * opt: { H (a flat ceiling at this height, ignoring the shape), floor:false, ceiling:false, walls:false|[sides],
+     *        wallTex, floorTex, ceilTex, panels:false, skirting:false, sockets:false, floorAlb, wallAlb, ceilAlb, trim }
      */
     shell(opt = {}) {
-      const h = opt.H ?? H;
+      const s = opt.H !== undefined ? null : def.shape, hNom = opt.H ?? H;
+      const top = (x, z) => (opt.H !== undefined ? opt.H : ceilAt(def, x, z));
       const wallB = opt.wallTex ? c.mapped('wall', opt.wallTex) : c.wall;
       const floorB = opt.floorTex ? c.mapped('floor', opt.floorTex) : c.floor;
       const ceilB = opt.ceilTex ? c.mapped('ceil', opt.ceilTex) : c.ceil;
       const edge = (a, la, b, lb) => 0.76 + 0.24 * smooth(Math.min(a, la - a, b, lb - b) / 0.45);
-      const trim = opt.trim || lin(look.trim);
-      if (opt.floor !== false) floorB.grid([-W / 2, 0, -D / 2], [0, 0, 1], [1, 0, 0], ticks(D), ticks(W), (u, v) => [(v + def.cx) / 1.6, (u + def.cz) / 1.6], opt.floorAlb || WHITE, (u, v) => edge(u, D, v, W));
-      if (opt.ceiling !== false) ceilB.grid([-W / 2, h, -D / 2], [1, 0, 0], [0, 0, 1], tileTicks(W), tileTicks(D), (u, v) => [(u - W / 2) / TILE, (v - D / 2) / TILE], opt.ceilAlb || WHITE, (u, v) => edge(u, W, v, D));
+      const trim = opt.trim || lin(look.trim), wAlb = opt.wallAlb || WHITE, fAlb = opt.floorAlb || WHITE;
 
+      /* the floor: flat, or stepping down into a pit, or up onto a dais */
+      if (opt.floor !== false) {
+        const rect = (x0, z0, x1, z1, y) => { if (x1 - x0 > 0.005 && z1 - z0 > 0.005) floorB.grid([x0, y, z0], [0, 0, 1], [1, 0, 0], ticks(z1 - z0), ticks(x1 - x0), (u, v) => [(x0 + v + def.cx) / 1.6, (z0 + u + def.cz) / 1.6], fAlb, (u, v) => edge(z0 + u + D / 2, D, x0 + v + W / 2, W)); };
+        const frame = (o, i, y) => { rect(o.x0, o.z0, o.x1, i.z0, y); rect(o.x0, i.z1, o.x1, o.z1, y); rect(o.x0, i.z0, i.x0, i.z1, y); rect(i.x1, i.z0, o.x1, i.z1, y); };
+        const all = { x0: -W / 2, z0: -D / 2, x1: W / 2, z1: D / 2 };
+        if (s && (s.kind === 'pit' || s.kind === 'dais')) {
+          const sign = s.kind === 'pit' ? -1 : 1, inset = (k) => ({ x0: s.x - s.w / 2 + 0.3 * k, z0: s.z - s.d / 2 + 0.3 * k, x1: s.x + s.w / 2 - 0.3 * k, z1: s.z + s.d / 2 - 0.3 * k });
+          frame(all, inset(0), 0);
+          for (let k = 1; k <= s.n; k++) {
+            const o = inset(k - 1), y = sign * k * RISE, lo = Math.min(y, y - sign * RISE), inward = sign < 0;
+            if (k < s.n) frame(o, inset(k), y); else rect(o.x0, o.z0, o.x1, o.z1, y);
+            // the risers: four low walls of carpet between this level and the one outside it
+            const up = [0, RISE], ruv = (u, v) => [u / 1.6, v / 1.6], dark = () => 0.72;
+            const face = (org, U, len) => floorB.grid(org, U, UP, ticks(len, 1, 0), up, ruv, fAlb, dark);
+            if (inward) { face([o.x0, lo, o.z1], [0, 0, -1], o.z1 - o.z0); face([o.x1, lo, o.z0], [0, 0, 1], o.z1 - o.z0); face([o.x0, lo, o.z0], [1, 0, 0], o.x1 - o.x0); face([o.x1, lo, o.z1], [-1, 0, 0], o.x1 - o.x0); }
+            else { face([o.x0, lo, o.z0], [0, 0, 1], o.z1 - o.z0); face([o.x1, lo, o.z1], [0, 0, -1], o.z1 - o.z0); face([o.x1, lo, o.z0], [-1, 0, 0], o.x1 - o.x0); face([o.x0, lo, o.z1], [1, 0, 0], o.x1 - o.x0); }
+          }
+        } else rect(all.x0, all.z0, all.x1, all.z1, 0);
+      }
+
+      /* the ceiling: one sheet, two sheets at different heights, or a slope — and perhaps a beam under it */
+      if (opt.ceiling !== false) {
+        const cAlb = opt.ceilAlb || WHITE;
+        const sheet = (x0, z0, x1, z1, yOf) => { if (x1 - x0 > 0.01 && z1 - z0 > 0.01) ceilB.grid([x0, 0, z0], [1, 0, 0], [0, 0, 1], tiles(x0, x1), tiles(z0, z1), (u, v) => [(x0 + u) / TILE, (z0 + v) / TILE], cAlb, (u, v) => edge(x0 + u + W / 2, W, z0 + v + D / 2, D), (u, v, x, z) => yOf(x, z)); };
+        if (s && s.kind === 'stepceil') {
+          const hNeg = s.dir > 0 ? s.h1 : s.h2, hPos = s.dir > 0 ? s.h2 : s.h1, lo = Math.min(hNeg, hPos), rows = ticks(Math.abs(hPos - hNeg), 0.45, 0.08), buv = (u, v) => [u / 0.8, (lo + v) / 0.8], shade = () => 0.86;
+          if (s.axis === 'x') {
+            sheet(-W / 2, -D / 2, s.at, D / 2, () => hNeg); sheet(s.at, -D / 2, W / 2, D / 2, () => hPos);
+            if (hPos > hNeg) wallB.grid([s.at, lo, D / 2], [0, 0, -1], UP, ticks(D), rows, buv, wAlb, shade); else wallB.grid([s.at, lo, -D / 2], [0, 0, 1], UP, ticks(D), rows, buv, wAlb, shade);
+          } else {
+            sheet(-W / 2, -D / 2, W / 2, s.at, () => hNeg); sheet(-W / 2, s.at, W / 2, D / 2, () => hPos);
+            if (hPos > hNeg) wallB.grid([-W / 2, lo, s.at], [1, 0, 0], UP, ticks(W), rows, buv, wAlb, shade); else wallB.grid([W / 2, lo, s.at], [-1, 0, 0], UP, ticks(W), rows, buv, wAlb, shade);
+          }
+        } else sheet(-W / 2, -D / 2, W / 2, D / 2, s && s.kind === 'slopeceil' ? top : () => hNom);
+        if (s && s.kind === 'soffit') {
+          const lo = s.at - s.t / 2, hi = s.at + s.t / 2, y = s.clear, rows = ticks(hNom - y, 0.45, 0.08), buv = (u, v) => [u / 0.8, (y + v) / 0.8], under = () => 0.8;
+          if (s.axis === 'x') {
+            ceilB.grid([-W / 2, y, lo], [1, 0, 0], [0, 0, 1], tiles(-W / 2, W / 2), tiles(lo, hi), (u, v) => [(-W / 2 + u) / TILE, (lo + v) / TILE], cAlb, under);
+            wallB.grid([-W / 2, y, hi], [1, 0, 0], UP, ticks(W), rows, buv, wAlb); wallB.grid([W / 2, y, lo], [-1, 0, 0], UP, ticks(W), rows, buv, wAlb);
+          } else {
+            ceilB.grid([lo, y, -D / 2], [1, 0, 0], [0, 0, 1], tiles(lo, hi), tiles(-D / 2, D / 2), (u, v) => [(lo + u) / TILE, (-D / 2 + v) / TILE], cAlb, under);
+            wallB.grid([hi, y, D / 2], [0, 0, -1], UP, ticks(D), rows, buv, wAlb); wallB.grid([lo, y, -D / 2], [0, 0, 1], UP, ticks(D), rows, buv, wAlb);
+          }
+        }
+      }
+
+      /* the walls: each is cut to the ceiling above it, with holes for doorways (some up a few stairs) and windows */
       const sides = opt.walls === false ? [] : (opt.walls || ['back', 'front', 'left', 'right']);
       let run = 0;
       for (const side of ['back', 'right', 'front', 'left']) {
         const w = WALLS[side], len = wallLength(def, side), o = w.o(W, D), U = w.U, n = w.n;
-        const at = (s, y = 0, out = 0) => [o[0] + U[0] * s - n[0] * out, y, o[2] + U[2] * s - n[2] * out];
-        const doors = def.doors.filter((d) => d.side === side).map((d) => ({ a: w.s(d.c, W, D) - d.w / 2, b: w.s(d.c, W, D) + d.w / 2 })).sort((p, q) => p.a - q.a);
+        const at = (sv, y = 0, out = 0) => [o[0] + U[0] * sv - n[0] * out, y, o[2] + U[2] * sv - n[2] * out];
+        const topS = (sv) => top(o[0] + U[0] * sv + n[0] * 0.03, o[2] + U[2] * sv + n[2] * 0.03);
+        const holes = [
+          ...def.doors.filter((d) => d.side === side).map((d) => ({ a: w.s(d.c, W, D) - d.w / 2, b: w.s(d.c, W, D) + d.w / 2, y0: d.sill, y1: d.sill + d.h, c: d.c, w: d.w, door: d })),
+          ...(def.wins || []).filter((d) => d.side === side).map((d) => ({ a: w.s(d.c, W, D) - d.w / 2, b: w.s(d.c, W, D) + d.w / 2, y0: d.y0, y1: d.y1, c: d.c, w: d.w, win: d })),
+        ].sort((p, q) => p.a - q.a);
         const start = run; run += len;
         if (!sides.includes(side)) continue;
-        const uvw = (s0) => (u, v) => [(start + s0 + u) / 0.8, v / 0.8];
-        const crease = (s0) => (u, v) => (0.8 + 0.2 * smooth(Math.min(v, h - v) / 0.4)) * (0.86 + 0.14 * smooth(Math.min(s0 + u, len - s0 - u) / 0.4));
-        let from = 0;
-        const stretch = (a, b) => {
+        /** One piece of wall from a to b along it, from `bot` up to topOf(s). Cut wherever the ceiling jumps. */
+        const piece = (a, b, bot, topOf, skirt) => {
           if (b - a < 0.01) return;
-          wallB.grid(at(a), U, UP, ticks(b - a), ticks(h, 0.45), uvw(a), opt.wallAlb || WHITE, crease(a));
-          if (opt.skirting !== false) {
-            const p = at(a), q = at(b), k = 0.022;
-            c.flat.box(Math.min(p[0], q[0] + n[0] * k), 0, Math.min(p[2], q[2] + n[2] * k), Math.max(p[0], q[0] + n[0] * k), 0.11, Math.max(p[2], q[2] + n[2] * k), trim, { skip: '-y' });
+          const cuts = [a];
+          let prev = topOf(a + 0.002);
+          for (let sv = a + 0.1; sv < b; sv += 0.1) {
+            const cur = topOf(sv);
+            if (Math.abs(cur - prev) > 0.12) { let lo = sv - 0.1, hi = sv; for (let i = 0; i < 12; i++) { const mid = (lo + hi) / 2; if (Math.abs(topOf(mid) - prev) > 0.06) hi = mid; else lo = mid; } cuts.push(hi); }
+            prev = cur;
+          }
+          cuts.push(b);
+          for (let i = 0; i + 1 < cuts.length; i++) {
+            const p = cuts[i], q = cuts[i + 1];
+            if (q - p < 0.005) continue;
+            const here = (u) => topOf(clamp(p + u, p + 0.003, q - 0.003)), tall = here((q - p) / 2) - bot;
+            if (tall < 0.02) continue;
+            const rows = ticks(tall, 0.45, Math.min(0.16, tall / 3.2)).map((y) => y / tall);
+            wallB.grid(at(p), U, UP, ticks(q - p), rows, (u, v) => [(start + p + u) / 0.8, (bot + v * (here(u) - bot)) / 0.8], wAlb,
+              (u, v) => { const t = here(u), y = bot + v * (t - bot); return (0.8 + 0.2 * smooth(Math.min(bot > 0.01 ? 9 : y, t - y) / 0.4)) * (0.86 + 0.14 * smooth(Math.min(p + u, len - p - u) / 0.4)); },
+              (u, v) => bot + v * (here(u) - bot));
+            if (skirt && opt.skirting !== false) {
+              const e0 = at(p), e1 = at(q), k = 0.022;
+              c.flat.box(Math.min(e0[0], e1[0] + n[0] * k), 0, Math.min(e0[2], e1[2] + n[2] * k), Math.max(e0[0], e1[0] + n[0] * k), 0.11, Math.max(e0[2], e1[2] + n[2] * k), trim, { skip: '-y' });
+            }
           }
         };
-        for (const d of doors) {
-          stretch(from, d.a);
-          // above the doorway, the two cheeks of the opening, its underside, and the strip of floor between rooms
-          wallB.grid(at(d.a, DOOR_H), U, UP, ticks(d.b - d.a), ticks(h - DOOR_H, 0.45, 0.1), (u, v) => [(start + d.a + u) / 0.8, (DOOR_H + v) / 0.8], opt.wallAlb || WHITE, (u, v) => 0.84 + 0.16 * smooth((h - DOOR_H - v) / 0.3));
-          const cheek = ticks(DOOR_H, 0.5), depth = [0, T / 2];
-          wallB.grid(at(d.a), [-n[0], 0, -n[2]], UP, depth, cheek, (u, v) => [(start + d.a + u) / 0.8, v / 0.8], opt.wallAlb || WHITE, (u, v) => 0.82 + 0.1 * smooth(v / 0.4));
-          wallB.grid(at(d.b, 0, T / 2), n, UP, depth, cheek, (u, v) => [(start + d.b - T / 2 + u) / 0.8, v / 0.8], opt.wallAlb || WHITE, (u, v) => 0.82 + 0.1 * smooth(v / 0.4));
-          wallB.grid(at(d.a, DOOR_H, T / 2), U, n, ticks(d.b - d.a), depth, (u, v) => [(start + d.a + u) / 0.8, (DOOR_H + v) / 0.8], opt.wallAlb || WHITE, () => 0.7);
-          floorB.grid(at(d.a, 0, T / 2), n, U, depth, ticks(d.b - d.a), (u, v) => [(u + def.cx) / 1.6, (v + def.cz) / 1.6], opt.floorAlb || WHITE, () => 0.86);
-          if (opt.skirting !== false) for (const [s, dir] of [[d.a, 1], [d.b, -1]]) {
-            const p = at(s), q = at(s, 0, T / 2), k = 0.022 * dir;
-            c.flat.box(Math.min(p[0], q[0] + U[0] * k), 0, Math.min(p[2], q[2] + U[2] * k), Math.max(p[0], q[0] + U[0] * k), 0.11, Math.max(p[2], q[2] + U[2] * k), trim, { skip: '-y' });
+        let from = 0;
+        for (const hole of holes) {
+          piece(from, hole.a, 0, topS, true);
+          piece(hole.a, hole.b, 0, () => hole.y0, true);                               // under a window, or under a doorway that is up some stairs
+          piece(hole.a, hole.b, hole.y1, topS, false);                                 // above it
+          // the two cheeks of the opening, its underside, and what you step (or lean) on
+          const tall = hole.y1 - hole.y0, cheek = ticks(tall, 0.5, Math.min(0.16, tall / 3.2)), depth = [0, T / 2], cuv = (s0) => (u, v) => [(start + s0 + u) / 0.8, (hole.y0 + v) / 0.8], shade = (u, v) => 0.82 + 0.1 * smooth(v / 0.4);
+          wallB.grid(at(hole.a, hole.y0), [-n[0], 0, -n[2]], UP, depth, cheek, cuv(hole.a), wAlb, shade);
+          wallB.grid(at(hole.b, hole.y0, T / 2), n, UP, depth, cheek, cuv(hole.b - T / 2), wAlb, shade);
+          wallB.grid(at(hole.a, hole.y1, T / 2), U, n, ticks(hole.b - hole.a), depth, (u, v) => [(start + hole.a + u) / 0.8, (hole.y1 + v) / 0.8], wAlb, () => 0.7);
+          if (hole.door) {
+            floorB.grid(at(hole.a, hole.y0, T / 2), n, U, depth, ticks(hole.b - hole.a), (u, v) => [(u + def.cx) / 1.6, (v + def.cz) / 1.6], fAlb, () => 0.86);
+            if (opt.skirting !== false && hole.y0 < 0.01) for (const [sv, dir] of [[hole.a, 1], [hole.b, -1]]) {
+              const e0 = at(sv), e1 = at(sv, 0, T / 2), k = 0.022 * dir;
+              c.flat.box(Math.min(e0[0], e1[0] + U[0] * k), 0, Math.min(e0[2], e1[2] + U[2] * k), Math.max(e0[0], e1[0] + U[0] * k), 0.11, Math.max(e0[2], e1[2] + U[2] * k), trim, { skip: '-y' });
+            }
+            // stairs, inside this room, up to a doorway that is higher than its floor
+            if (hole.y0 > 0.01) {
+              const steps = Math.round(hole.y0 / RISE), rise = hole.y0 / steps, wood = trim.map((v) => Math.min(1, v * 1.5 + 0.05));
+              for (let i = 0; i < steps - 1; i++) {
+                c.wbox(side, hole.c, hole.w, 0, hole.y0 - rise * (i + 1), i * RUN, (i + 1) * RUN, wood, { skip: '-y' });
+                c.wbox(side, hole.c, hole.w, hole.y0 - rise * (i + 1) - 0.022, hole.y0 - rise * (i + 1) + 0.002, (i + 1) * RUN - 0.03, (i + 1) * RUN + 0.012, trim);
+              }
+            }
+          } else {
+            // a window: a sill to lean on, a painted frame, a bar across the middle
+            const cream = lin('#e2d8bd'), cy = (hole.y0 + hole.y1) / 2;
+            wallB.grid(at(hole.a, hole.y0, T / 2), n, U, depth, ticks(hole.b - hole.a), null, cream, () => 0.9);
+            c.wbox(side, hole.c, hole.w + 0.16, hole.y0 - 0.05, hole.y0, 0, 0.07, cream);
+            c.wbox(side, hole.c, hole.w + 0.12, hole.y1, hole.y1 + 0.06, 0, 0.03, cream);
+            for (const sx of [-1, 1]) c.wbox(side, hole.c + sx * (hole.w / 2 + 0.03), 0.06, hole.y0, hole.y1, 0, 0.03, cream);
+            if (def.id < hole.win.to) { c.wbox(side, hole.c, 0.04, hole.y0, hole.y1, -T / 2 - 0.015, -T / 2 + 0.015, cream); c.wbox(side, hole.c, hole.w, cy - 0.02, cy + 0.02, -T / 2 - 0.015, -T / 2 + 0.015, cream); }
           }
-          from = d.b;
+          from = hole.b;
         }
-        stretch(from, len);
+        piece(from, len, 0, topS, true);
       }
+      for (const z of stairs) for (let k = 0; k <= z.run + 0.7; k += 0.45) { const p = wallPoint(def, z.door.side, z.door.c, k); reserved.push([p.x, p.z, z.door.w / 2 + 0.25]); }
 
       // the tubes: lit ones shine and light the room, dead ones are just grey, a few cannot decide
       if (opt.panels !== false) {
         const tube = lin(look.tube), on = c.shining('panel', kit.tex.panel(true), 2.5, tube), dead = c.mapped('dead', kit.tex.panel(false));
-        const boost = def.light.power * (h > 3 ? (h / 2.6) ** 1.5 : 1);
+        const uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
         for (const p of def.panels) {
-          const o = [p.x - TILE / 2, h - 0.006, p.z - TILE], uv = (u, v) => [u / TILE, v / (TILE * 2)];
-          if (p.state === 'dead') { dead.grid(o, [1, 0, 0], [0, 0, 1], [0, TILE], [0, TILE * 2], uv); continue; }
-          rt.lights.push(lamp(p.x, h - 0.14, p.z, tube.map((v) => v * 1.05 * boost), { axis: [0, -1, 0], floor: 0.24, flick: p.state === 'flicker', k: 3.4 * (h > 3 ? h / 2.6 : 1), far: 14 * (h > 3 ? h / 2.6 : 1) }));
-          if (p.state === 'on') { on.grid(o, [1, 0, 0], [0, 0, 1], [0, TILE], [0, TILE * 2], uv); continue; }
-          const b = new Batch(); b.grid(o, [1, 0, 0], [0, 0, 1], [0, TILE], [0, TILE * 2], uv);
+          const corner = (dx, dz) => [p.x + dx, top(p.x + dx * 0.98, p.z + dz * 0.98) - 0.006, p.z + dz];
+          const q = [corner(-TILE / 2, -TILE), corner(TILE / 2, -TILE), corner(TILE / 2, TILE), corner(-TILE / 2, TILE)];
+          if (p.state === 'dead') { dead.quad(q[0], q[1], q[2], q[3], WHITE, uv); continue; }
+          const y = top(p.x, p.z), head = clamp((y - floorAt(def, p.x, p.z)) / 2.6, 0.3, 2.5);
+          rt.lights.push(lamp(p.x, y - 0.14, p.z, tube.map((v) => v * 1.05 * def.light.power * Math.pow(head, 1.5)), { axis: [0, -1, 0], floor: 0.24, flick: p.state === 'flicker', k: 3.4 * (head < 1 ? head * head : head), far: 14 * Math.max(0.5, head) }));
+          if (p.state === 'on') { on.quad(q[0], q[1], q[2], q[3], WHITE, uv); continue; }
+          const b = new Batch(); b.quad(q[0], q[1], q[2], q[3], WHITE, uv);
           const mesh = new THREE.Mesh(kit.plain(b), kit.glowing(kit.tex.panel(true), 2.5, tube));
           mesh.userData.on = mesh.material.color.clone();
           rt.flickers.push(mesh); rt.group.add(mesh);
@@ -557,11 +702,11 @@ function roomContext(world, rt) {
         const other = world.rooms[dr.to], gap = other.level - rt.level;
         if (gap < 0.05) continue;
         const p = doorPoint(dr, -0.3), n = WALLS[dr.side].n;
-        rt.lights.push(lamp(p.x, 1.45, p.z, lin(other.def.look.tube).map((v) => v * gap * 5.5 * (dr.w / 1.8)), { axis: n, floor: 0.1, k: 3.2, wrap: 0.4 }));
+        rt.lights.push(lamp(p.x, dr.sill + Math.min(1.45, dr.h * 0.7), p.z, lin(other.def.look.tube).map((v) => v * gap * 5.5 * (dr.w / 1.8) * Math.min(1, dr.h / 2)), { axis: n, floor: 0.1, k: 3.2, wrap: 0.4 }));
       }
       // wall sockets, low down, here and there
-      if (opt.sockets !== false) for (let i = 0, nSock = R.int(1, 3); i < nSock; i++) {
-        const spot = c.wallSpot(0.5); if (!spot) break;
+      if (opt.sockets !== false && !def.crawl) for (let i = 0, nSock = R.int(1, 3); i < nSock; i++) {
+        const spot = c.wallSpot(0.5, undefined, 0.35, 0.6); if (!spot) break;
         c.socket(spot.side, spot.at);
       }
       return c;
@@ -577,19 +722,21 @@ function roomContext(world, rt) {
       part(-0.012, 0.022, 0.008, 0.026, 0.011, [0.12, 0.11, 0.1]); part(0.012, 0.022, 0.008, 0.026, 0.011, [0.12, 0.11, 0.1]);
       part(-0.012, -0.026, 0.008, 0.026, 0.011, [0.12, 0.11, 0.1]); part(0.012, -0.026, 0.008, 0.026, 0.011, [0.12, 0.11, 0.1]);
     },
-    /** A full-height block of wall standing in the room (wallpapered, skirted, solid). */
+    /** A block of wall standing in the room, floor to ceiling unless opt.h says otherwise (wallpapered, skirted, solid). */
     pillar(x, z, w, d, opt = {}) {
-      const h = opt.h ?? H, wb = opt.batch || c.wall, trim = lin(look.trim);
-      const faces = [[[x - w / 2, 0, z + d / 2], [1, 0, 0], w], [[x + w / 2, 0, z + d / 2], [0, 0, -1], d], [[x + w / 2, 0, z - d / 2], [-1, 0, 0], w], [[x - w / 2, 0, z - d / 2], [0, 0, 1], d]];
+      const full = Math.max(ceilAt(def, x - w / 2, z - d / 2), ceilAt(def, x + w / 2, z - d / 2), ceilAt(def, x - w / 2, z + d / 2), ceilAt(def, x + w / 2, z + d / 2));
+      const h = opt.h ?? full, y0 = opt.y0 || 0, wb = opt.batch || c.wall, trim = lin(look.trim);
+      const faces = [[[x - w / 2, y0, z + d / 2], [1, 0, 0], w], [[x + w / 2, y0, z + d / 2], [0, 0, -1], d], [[x + w / 2, y0, z - d / 2], [-1, 0, 0], w], [[x - w / 2, y0, z - d / 2], [0, 0, 1], d]];
       let run = 0;
       for (const [o, U, len] of faces) {
         const start = run; run += len;
-        wb.grid(o, U, UP, ticks(len, 0.5, 0.1), ticks(h, 0.45), (u, v) => [(start + u) / 0.8, v / 0.8], opt.alb || WHITE, (u, v) => 0.82 + 0.18 * smooth(Math.min(v, h - v) / 0.4));
+        wb.grid(o, U, UP, ticks(len, 0.5, Math.min(0.1, len / 3.2)), ticks(h - y0, 0.45, Math.min(0.16, (h - y0) / 3.2)), (u, v) => [(start + u) / 0.8, (y0 + v) / 0.8], opt.alb || WHITE, (u, v) => 0.82 + 0.18 * smooth(Math.min(y0 > 0.01 ? 9 : v, h - y0 - v) / 0.4));
       }
-      if (h < H - 0.01) c.flat.box(x - w / 2, h - 0.001, z - d / 2, x + w / 2, h, z + d / 2, opt.cap || [0.5, 0.45, 0.36], { skip: '-y' });
-      if (opt.skirting !== false) c.flat.box(x - w / 2 - 0.02, 0, z - d / 2 - 0.02, x + w / 2 + 0.02, 0.11, z + d / 2 + 0.02, trim, { skip: '-y' });
-      if (opt.solid !== false) c.solid(x - w / 2, z - d / 2, x + w / 2, z + d / 2, { tall: h > 1.25, keep: true });
-      reserved.push([x, z, Math.max(w, d) / 2 + 0.2]);
+      if (h < full - 0.01) c.flat.box(x - w / 2, h - 0.001, z - d / 2, x + w / 2, h, z + d / 2, opt.cap || [0.5, 0.45, 0.36], { skip: '-y' });
+      if (y0 > 0.01) c.ceil.grid([x - w / 2, y0, z - d / 2], [1, 0, 0], [0, 0, 1], [0, w], [0, d], (u, v) => [(x - w / 2 + u) / TILE, (z - d / 2 + v) / TILE], WHITE, () => 0.75);
+      if (opt.skirting !== false && y0 < 0.01) c.flat.box(x - w / 2 - 0.02, 0, z - d / 2 - 0.02, x + w / 2 + 0.02, 0.11, z + d / 2 + 0.02, trim, { skip: '-y' });
+      if (opt.solid !== false && y0 < 1.0) c.solid(x - w / 2, z - d / 2, x + w / 2, z + d / 2, { tall: h > 1.25, keep: true });
+      reserved.push([x, z, Math.hypot(w, d) / 2 + 0.15]);
     },
     /** A lit green sign over a doorway. */
     exitSign(dr, text = 'EXIT') {
@@ -598,7 +745,7 @@ function roomContext(world, rt) {
         g.fillStyle = '#eafff0'; g.font = `700 ${text.length > 8 ? 9 : text.length > 5 ? 11 : 14}px ui-monospace, Menlo, Consolas, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
         g.fillText(text, w / 2, h / 2 + 1);
       }, { clamp: true });
-      const y = Math.min(H - 0.2, DOOR_H + 0.26), w = Math.min(dr.w - 0.2, 0.82);
+      const p0 = doorPoint(dr, 0.05), y = Math.min(ceilAt(def, p0.x, p0.z) - 0.2, (dr.sill || 0) + (dr.h || 2.05) + 0.26), w = Math.min(dr.w - 0.2, 0.82);
       const p = c.hang(c.shining('exit' + text, tex, 1.9), dr.side, dr.c, y, w, w * 20 / 64, null, WHITE, 0.035);
       c.light(p.x + p.n[0] * 0.2, y, p.z + p.n[2] * 0.2, '#58e08c', 0.3, { k: 0.9, far: 4 });
       const hw = w / 2 + 0.02, U = p.U, n = p.n, cx = p.x - n[0] * 0.02, cz = p.z - n[2] * 0.02;
@@ -638,6 +785,4 @@ function roomContext(world, rt) {
   return c;
 }
 
-const VOX = 0.025;
-const P = (g, col, x, y, w, h) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
-export { WALLS, PAPER };
+export { WALLS };

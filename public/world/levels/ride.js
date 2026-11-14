@@ -84,7 +84,7 @@ export function playRide(office, trip) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#0b0a10');
   const camera = new THREE.PerspectiveCamera(33, stage.size.w / stage.size.h, 0.3, 80);
-  const camAt = new THREE.Vector3(0, 1.72, 4.9), camLook = new THREE.Vector3(0, 1.16, -0.9);
+  const camAt = new THREE.Vector3(0, 1.78, 6.1), camLook = new THREE.Vector3(0, 1.22, -0.9);
   scene.add(new THREE.HemisphereLight('#aab4d8', '#33313c', 0.62));
   const fill = new THREE.DirectionalLight('#9fb0ff', 0.55);
   fill.position.set(1.5, 3, 5);

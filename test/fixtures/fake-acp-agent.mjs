@@ -5,23 +5,28 @@
 //   node fake-acp-agent.mjs            ACP v1 (the stable generation)
 //   node fake-acp-agent.mjs --v2       answers in the v2 preview shapes
 //   node fake-acp-agent.mjs --auth     refuses session/new until `authenticate`
+//   node fake-acp-agent.mjs --pingpong answers every mail delivery with a note back to its sender
+//                                      (two of these would talk for ever, if the office let them)
 //
 // The wire shapes follow the ACP schema as T3 Code pins it (v1.21 and
 // v2.0.0-alpha.3; see docs/HARNESS.md for the file pointers). What each turn
 // does is scripted by the prompt text — see fake-lib.mjs.
-import { readLines, sleep, parseScript, scriptIn, officeCall, officeFromEnv } from './fake-lib.mjs';
+import { readLines, sleep, parseScript, scriptIn, officeCall, officeFromEnv, mailSender, mcpCall } from './fake-lib.mjs';
 
 const V2 = process.argv.includes('--v2');
 const NEED_AUTH = process.argv.includes('--auth');
+const PINGPONG = process.argv.includes('--pingpong');
 const SESSION_ID = 'fake-session-1';
 
 const seen = { protocolVersion: null, clientInfo: null, clientCapabilities: null, mcp: [], mcpTyped: null,
-  cwd: '', cancelHadId: null, authenticated: false, prompts: 0 };
+  cwd: '', cancelHadId: null, authenticated: false, prompts: 0, framed: 0, handoffs: 0, tasks: 0 };
 let office = null;
+let officeMcp = null;                    // the MCP server entry the office injected, as given
 let nextId = 9000;                       // ids for requests WE send (permission requests)
 const waiting = new Map();               // id → resolve(result|error)
 let turn = null;                         // { cancelled, ignoreCancel }
 let toolSeq = 0;
+let lastDelegation = '';
 
 const send = (msg) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...msg }) + '\n');
 const reply = (id, result) => send({ id, result });
@@ -77,6 +82,14 @@ async function runTurn(promptText) {
   turn = state;
   let stopReason = 'end_turn';
   let error = null;
+  if (PINGPONG && promptText.includes('<office_mail')) {
+    // The chatty colleague: every note gets an answer, whatever it said.
+    const to = mailSender(promptText);
+    const r = await officeCall(office, 'POST', '/api/collab/message', { fromAgentId: office?.agentId, toAgentId: to, content: `pong #${seen.prompts}` });
+    await say(`replied to ${to}: ${r.status}`);
+    turn = null;
+    return { stopReason, error };
+  }
   for (const { verb, arg } of parseScript(scriptIn(promptText))) {
     if (state.cancelled && !state.ignoreCancel) break;
     switch (verb) {
@@ -132,15 +145,25 @@ async function runTurn(promptText) {
         break;
       }
       case 'delegate': {
-        const [to, ...rest] = arg.split('|');
-        const r = await officeCall(office, 'POST', '/api/delegations', { to: to.trim(), task: rest.join('|').trim() });
+        // to | task (which may itself contain "|", for a task that delegates in turn) | optional {"extra":"fields"}
+        const parts = arg.split('|');
+        const to = parts.shift().trim();
+        const extra = parts.length > 1 && parts[parts.length - 1].trim().startsWith('{') ? JSON.parse(parts.pop()) : {};
+        const r = await officeCall(office, 'POST', '/api/delegations', { ...(to && to !== '-' ? { to } : {}), task: parts.join('|').trim(), ...extra });
+        lastDelegation = r.data?.delegation?.id || lastDelegation;
         await say(`delegate=${r.status}:${r.data?.delegation?.id || r.data?.error || ''}`);
         break;
       }
       case 'http': {
-        const [method, path, ...json] = arg.split(' ');
+        const [method, path, ...json] = arg.replaceAll('$DG', lastDelegation).split(' ');
         const r = await officeCall(office, method, path, json.length ? JSON.parse(json.join(' ')) : undefined);
-        await say(`http=${r.status}:${JSON.stringify(r.data).slice(0, 300)}`);
+        await say(`http=${r.status}:${JSON.stringify(r.data).slice(0, 600)}`);
+        break;
+      }
+      case 'mcp': {
+        const space = arg.indexOf(' ');
+        const tool = space === -1 ? arg : arg.slice(0, space);
+        await say(await mcpCall(officeMcp, tool, space === -1 ? {} : JSON.parse(arg.slice(space + 1))));
         break;
       }
       case 'stop': stopReason = arg || 'end_turn'; break;
@@ -185,7 +208,8 @@ readLines(async (msg) => {
       seen.cwd = params.cwd;
       seen.mcp = (params.mcpServers || []).map((s) => s.name);
       seen.mcpTyped = (params.mcpServers || []).every((s) => s.type === 'stdio');
-      office = officeFromEnv((params.mcpServers || []).find((s) => s.name === 'office')?.env);
+      officeMcp = (params.mcpServers || []).find((s) => s.name === 'office') || null;
+      office = officeFromEnv(officeMcp?.env);
       reply(id, V2
         ? { sessionId: SESSION_ID, configOptions: [{ configId: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'fake-large',
           options: [{ value: 'fake-large', name: 'Fake Large' }, { value: 'fake-small', name: 'Fake Small' }] }] }
@@ -208,6 +232,10 @@ readLines(async (msg) => {
     case 'session/prompt': {
       seen.prompts += 1;
       const text = (params.prompt || []).map((b) => b.text || '').join('');
+      // What the office wrapped around the request, so tests can see it arrived (and only when it should).
+      if (text.includes('<the_office>')) seen.framed += 1;
+      if (text.includes('<handoff')) seen.handoffs += 1;
+      if (text.includes('<delegated_task')) seen.tasks += 1;
       if (V2) reply(id, {});
       const { stopReason, error } = await runTurn(text);
       if (V2) {

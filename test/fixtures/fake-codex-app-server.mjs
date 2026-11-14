@@ -6,10 +6,15 @@
 // Method names and payload shapes follow the schema T3 Code generates from
 // Codex (see docs/HARNESS.md for the pointers). What each turn does is
 // scripted by the prompt text — see fake-lib.mjs.
+//
+//   node fake-codex-app-server.mjs               a ChatGPT-plan account: answers account/rateLimits/read
+//   node fake-codex-app-server.mjs --no-limits   an older Codex that does not know that method
 import { readLines, sleep, parseScript, scriptIn, officeCall, officeFromEnv } from './fake-lib.mjs';
 
 const THREAD_ID = 'thr_fake_1';
-const seen = { clientInfo: null, optOut: null, initialized: false, thread: null, turns: 0, interrupts: 0 };
+const NO_LIMITS = process.argv.includes('--no-limits');
+const RESET_AT = 1_900_000_000;           // epoch SECONDS, as Codex reports them
+const seen = { clientInfo: null, optOut: null, initialized: false, thread: null, turns: 0, interrupts: 0, limitsRead: 0, limitsParams: undefined, framed: 0 };
 let office = null;
 let nextRequestId = 10000;
 const waiting = new Map();
@@ -111,6 +116,18 @@ async function runTurn(turnId, promptText) {
         notify('thread/tokenUsage/updated', { threadId: THREAD_ID, turnId, tokenUsage: { last: b, total: b, modelContextWindow: size } });
         break;
       }
+      case 'limits': {
+        // Updates are partial: only what changed is sent. "model:NN" is one model's own limit, which is not the account's.
+        if (arg.startsWith('model:')) {
+          notify('account/rateLimits/updated', { rateLimits: { limitId: 'codex_other_model', primary: { usedPercent: Number(arg.slice(6)), windowDurationMins: 300 } } });
+          break;
+        }
+        const [primary, secondary] = arg.split('/').map((v) => (v === '' || v === undefined ? NaN : Number(v)));
+        notify('account/rateLimits/updated', { rateLimits: { limitId: 'codex',
+          ...(Number.isFinite(primary) ? { primary: { usedPercent: primary, windowDurationMins: 300, resetsAt: RESET_AT } } : {}),
+          ...(Number.isFinite(secondary) ? { secondary: { usedPercent: secondary, windowDurationMins: 10080, resetsAt: RESET_AT + 86400 } } : {}) } });
+        break;
+      }
       case 'sleep': { const until = Date.now() + (Number(arg) || 50); while (Date.now() < until && !state.cancelled) await sleep(10); break; }
       case 'slow': {
         const id = `msg_${++itemSeq}`;
@@ -174,9 +191,22 @@ readLines(async (msg) => {
       const turnId = `turn_${seen.turns}`;
       turn = { id: turnId, cancelled: false, pendingRequestId: null };
       const text = (params.input || []).map((b) => b.text || '').join('');
+      if (text.includes('<the_office>')) seen.framed += 1;
       reply(id, { turn: { id: turnId, status: 'inProgress', items: [] } });
       notify('turn/started', { threadId: THREAD_ID, turn: { id: turnId, status: 'inProgress', items: [] } });
       await runTurn(turnId, text);
+      return;
+    }
+    case 'account/rateLimits/read': {
+      if (NO_LIMITS) { fail(id, -32601, `Unhandled request: ${method}`); return; }
+      seen.limitsRead += 1;
+      seen.limitsParams = msg.params === undefined ? 'absent' : msg.params;
+      const snapshot = { limitId: 'codex', limitName: null, planType: 'plus',
+        primary: { usedPercent: 42, windowDurationMins: 300, resetsAt: RESET_AT },
+        secondary: { usedPercent: 71.5, windowDurationMins: 10080, resetsAt: RESET_AT + 86400 },
+        credits: { hasCredits: false, unlimited: false, balance: null } };
+      reply(id, { rateLimits: snapshot, rateLimitsByLimitId: { codex: snapshot,
+        codex_other_model: { limitId: 'codex_other_model', primary: { usedPercent: 99, windowDurationMins: 300 } } } });
       return;
     }
     case 'turn/interrupt':

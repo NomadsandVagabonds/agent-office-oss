@@ -1,22 +1,33 @@
-// The Backrooms — you. A camera at chibi eye height that walks, turns, and
-// cannot leave the level: a position is only ever accepted if the world says a
-// body fits there (world.free), tried one axis at a time so you slide along
-// walls instead of sticking to them.
+// The Backrooms — you. A camera at chibi eye height that walks, turns, climbs
+// stairs, ducks under whatever is low, and cannot leave the level: a step is
+// only ever taken if the world says a body fits there (world.free), the floor
+// does not jump by more than a stair (world.passable), and you are already
+// stooped low enough for the ceiling ahead. Tried one axis at a time, so you
+// slide along walls instead of sticking to them.
 const RADIUS = 0.22, EYE = 1.1, WALK = 2.05, HURRY = 3.7;
 const TURN = 2.1, MOUSE = 0.0023, PITCH_MAX = 1.25;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export function createPlayer(world, camera, start) {
-  const me = { x: start.x, z: start.z, yaw: start.yaw, pitch: 0, vx: 0, vz: 0, moving: false, speed: 0, room: null, slow: 1, sink: 0, sinkTo: 0, y: 0, step: 0, shake: 1, drop: 0, dropV: 0, frozen: false };
-  const input = { keys: new Set(), dx: 0, dy: 0 };
-  let stride = 0, floor = 0, sway = 0;
+  const me = { x: start.x, z: start.z, yaw: start.yaw, pitch: 0, vx: 0, vz: 0, moving: false, speed: 0, slow: 1, sink: 0, sinkTo: 0, duck: 0, y: 0, step: 0, shake: 1, drop: 0, dropV: 0, frozen: false };
+  // keys held, mouse movement since last frame, and a thumb stick (x: right, y: forward, each −1…1)
+  const input = { keys: new Set(), dx: 0, dy: 0, stick: { x: 0, y: 0 } };
+  let stride = 0, floor = world.floorY(start.x, start.z), sway = 0, duck = 0;
   const listeners = { step: null };
 
+  /** Is there room to be at (x, z)? If the only thing wrong is that you are standing too tall, start ducking. */
+  function fits(x, z) {
+    if (!world.free(x, z, RADIUS) || !world.passable(me.x, me.z, x, z)) return false;
+    const head = world.headroom(x, z);
+    if (EYE - me.sink > head - 0.1) { duck = Math.max(duck, EYE - (head - 0.2)); return false; }
+    return true;
+  }
   function move(dx, dz) {
-    const dist = Math.hypot(dx, dz), n = Math.max(1, Math.ceil(dist / 0.07));
+    const dist = Math.hypot(dx, dz), n = Math.max(1, Math.ceil(dist / 0.06));
     for (let i = 0; i < n; i++) {
       const sx = dx / n, sz = dz / n;
-      if (world.free(me.x + sx, me.z, RADIUS)) me.x += sx; else me.vx = 0;
-      if (world.free(me.x, me.z + sz, RADIUS)) me.z += sz; else me.vz = 0;
+      if (fits(me.x + sx, me.z)) me.x += sx; else me.vx *= 0.5;
+      if (fits(me.x, me.z + sz)) me.z += sz; else me.vz *= 0.5;
     }
   }
   /** If something closed around you (a teleport, a door), step out to the nearest free spot. */
@@ -28,7 +39,7 @@ export function createPlayer(world, camera, start) {
     }
   }
 
-  function update(dt, t) {
+  function update(dt) {
     const k = input.keys;
     // looking
     me.yaw -= input.dx * MOUSE; me.pitch -= input.dy * MOUSE;
@@ -39,7 +50,7 @@ export function createPlayer(world, camera, start) {
       if (k.has('PageUp')) me.pitch += 1.2 * dt;
       if (k.has('PageDown')) me.pitch -= 1.2 * dt;
     }
-    me.pitch = Math.max(-PITCH_MAX, Math.min(PITCH_MAX, me.pitch));
+    me.pitch = clamp(me.pitch, -PITCH_MAX, PITCH_MAX);
     // walking
     let f = 0, s = 0;
     if (!me.frozen) {
@@ -47,15 +58,22 @@ export function createPlayer(world, camera, start) {
       if (k.has('s') || k.has('ArrowDown')) f -= 1;
       if (k.has('d')) s += 1;
       if (k.has('a')) s -= 1;
+      f += input.stick.y; s += input.stick.x;
     }
-    const len = Math.hypot(f, s) || 1, top = (k.has('Shift') ? HURRY : WALK) * me.slow;
+    const push = Math.hypot(f, s), len = Math.max(1, push);
+    const eyeNow = EYE - me.sink, crouch = clamp((eyeNow - 0.45) / (EYE - 0.45), 0, 1);
+    const top = (k.has('Shift') || Math.hypot(input.stick.x, input.stick.y) > 0.92 ? HURRY : WALK) * me.slow * (0.42 + 0.58 * crouch);
     const sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
     const wx = ((-sin * f + cos * s) / len) * top, wz = ((-cos * f - sin * s) / len) * top;
-    const ease = 1 - Math.exp(-(f || s ? 9 : 12) * dt);
+    const ease = 1 - Math.exp(-(push ? 9 : 12) * dt);
     me.vx += (wx - me.vx) * ease; me.vz += (wz - me.vz) * ease;
     const bx = me.x, bz = me.z;
+    // how low the ceiling is here, and a pace ahead: duck before you get there
+    duck = Math.max(0, EYE - (world.headroom(me.x, me.z) - 0.2));
+    if (push) { const ax = me.x + (wx / top) * 0.32, az = me.z + (wz / top) * 0.32; if (world.free(ax, az, RADIUS * 0.6)) duck = Math.max(duck, EYE - (world.headroom(ax, az) - 0.2)); }
     if (Math.abs(me.vx) + Math.abs(me.vz) > 0.002) move(me.vx * dt, me.vz * dt);
     unstick();
+    me.duck = duck;
     const went = Math.hypot(me.x - bx, me.z - bz);
     me.speed = went / Math.max(dt, 1e-4);
     me.moving = me.speed > 0.25;
@@ -65,10 +83,11 @@ export function createPlayer(world, camera, start) {
     if (beat !== me.step) { me.step = beat; listeners.step?.(me); }
     sway += dt;
     const target = world.floorY(me.x, me.z);
-    floor = Math.abs(target - floor) > 1.0 ? target : floor + (target - floor) * (1 - Math.exp(-14 * dt));
+    floor = Math.abs(target - floor) > 1.0 ? target : floor + (target - floor) * (1 - Math.exp(-13 * dt));
     // landing: a fall from the ceiling, a bounce
     if (me.drop > 0 || me.dropV !== 0) { me.dropV -= 9 * dt; me.drop += me.dropV * dt; if (me.drop <= 0) { me.drop = 0; me.dropV = me.dropV < -1.2 ? -me.dropV * 0.22 : 0; if (me.dropV > 0) me.drop = 0.001; } }
-    me.sink += (me.sinkTo - me.sink) * (1 - Math.exp(-7 * dt));        // wading, stooping
+    const want = Math.min(EYE - 0.42, Math.max(me.sinkTo, duck));
+    me.sink += (want - me.sink) * (1 - Math.exp(-(want > me.sink ? 12 : 6) * dt));        // wading, stooping, crawling
     const bob = Math.sin(stride * 2) * 0.016 * Math.min(1, me.speed / WALK) * me.shake;
     me.y = floor + EYE - me.sink + bob + me.drop;
     camera.position.set(me.x, me.y, me.z);

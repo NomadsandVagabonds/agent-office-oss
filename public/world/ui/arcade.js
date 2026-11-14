@@ -1,6 +1,7 @@
 // BUG SQUASH — the cabinet in the Back Room, playable. Thirty seconds, bugs
 // crawl across a little green screen, you squash them. Scores go on the same
-// board agents post to (POST /api/world/arcade).
+// board agents post to (POST /api/world/arcade). With sound on: a coin, the
+// title, a tune while the clock runs, and a squish for every bug.
 import { h } from './dom.js';
 
 const W = 160, H = 120, SECONDS = 30;
@@ -26,6 +27,13 @@ export function playBugSquash({ office, ui }) {
 
   let bugs = [], splats = [], score = 0, combo = 0, t0 = performance.now(), last = t0, over = false, raf = 0, spawnAt = 0;
   const top = office.net.state.world?.arcade?.[0]?.score || 0;
+  const sound = office.sound;
+  let tune = null;
+  function insertCoin() {
+    sound?.play('coin');
+    setTimeout(() => { if (box.isConnected && !over) sound?.play('arcade-title'); }, 500);
+    tune = sound?.music('arcade-chiptune', { volume: 0.35, fade: 0.3 }) || null;
+  }
 
   function spawn(now) {
     const edge = Math.floor(Math.random() * 4);
@@ -67,6 +75,7 @@ export function playBugSquash({ office, ui }) {
 
   async function finish() {
     over = true;
+    tune?.stop(1.2); tune = null;
     const me = office.walk?.me;
     try {
       const r = await office.net.api('/api/world/arcade', { method: 'POST', body: { score, name: me?.name || 'Lead' } });
@@ -85,19 +94,21 @@ export function playBugSquash({ office, ui }) {
       if (Math.abs(b.x - x) < 6.5 && Math.abs(b.y - y) < 5.5) {
         bugs.splice(i, 1); splats.push({ x: b.x, y: b.y, life: 0.7, gold: b.gold });
         combo++; score += (b.gold ? 250 : 40) + Math.min(60, combo * 5); got = true;
+        sound?.play('squash', { rate: b.gold ? 1.5 : 0.9 + Math.min(combo, 12) * 0.035 });      // a streak climbs
         break;
       }
     }
     if (!got) combo = 0;
   }
-  function close() { cancelAnimationFrame(raf); window.removeEventListener('keydown', key, true); box.remove(); }
+  function close() { cancelAnimationFrame(raf); window.removeEventListener('keydown', key, true); box.remove(); tune?.stop(0.4); tune = null; }
   function key(e) {
     if (e.key === 'Escape') { e.stopPropagation(); close(); }
-    else if (e.key === 'Enter' && over) { e.stopPropagation(); bugs = []; splats = []; score = 0; combo = 0; over = false; t0 = performance.now(); foot.textContent = 'click the bugs · Esc to walk away'; foot.style.color = ''; }
+    else if (e.key === 'Enter' && over) { e.stopPropagation(); bugs = []; splats = []; score = 0; combo = 0; over = false; t0 = performance.now(); foot.textContent = 'click the bugs · Esc to walk away'; foot.style.color = ''; insertCoin(); }
     else if (e.key.length === 1 || e.key.startsWith('Arrow')) e.stopPropagation();          // the game has the keyboard
   }
   canvas.addEventListener('pointerdown', hit);
   window.addEventListener('keydown', key, true);
   raf = requestAnimationFrame(draw);
+  insertCoin();
   return { close };
 }

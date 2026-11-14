@@ -83,9 +83,7 @@ function stressPool(c) {
   }
   const k = c.corner(0.7);
   if (k) { const lad = c.prop('ladder', k.x, k.z, { rot: Math.atan2(-k.x, -k.z), fallback: [0.5, 1.6, 0.5] }); c.prop('chair', k.x, k.z, { y: lad.top - 0.02, rot: Math.atan2(-k.x, -k.z), solid: false, shadow: false, o: { color: '#b5483f' } }); }
-  const say = cycle(['You squeeze one. It squeaks. So does the one next to it, which you did not touch.', `There must be thousands. Each has been squeezed, by the look of it, exactly once.`, 'Warm. As if somebody only just got out.']);
-  c.use({ x: 0, z: z1 + 0.5, r: 1.3, label: p.fill === 'balls' ? 'squeeze a stress ball' : p.fill === 'peanuts' ? 'pick up a packing peanut' : 'pick up a shred', use: () => { c.env.sound.play('wade'); c.say(p.fill === 'balls' ? say() : p.fill === 'peanuts' ? 'A packing peanut. Somewhere, something very large arrived safely.' : 'A strip of paper. It says "…onfidential" and then stops.'); } });
-  c.rt.onEnter = (n) => { if (n === 1) c.say(p.fill === 'balls' ? 'A swimming pool of stress balls. The stress has to go somewhere.' : p.fill === 'peanuts' ? 'A swimming pool, filled to the brim with packing peanuts.' : 'A swimming pool of shredded paper. Somebody had a lot to get rid of.'); };
+  c.use({ x: 0, z: z1 + 0.5, r: 1.3, label: p.fill === 'balls' ? 'squeeze a stress ball' : p.fill === 'peanuts' ? 'pick up a packing peanut' : 'pick up a shred', use: () => c.env.sound.play(p.fill === 'balls' ? 'squeak' : 'rustle') });
 }
 
 /** The floor is a keyboard. The far wall is a screen. You type by walking. */
@@ -152,7 +150,7 @@ function keyboardFloor(c) {
     if (/^(YES|NO|OK)$/.test(cmd)) return ['NOTED.'];
     return ['BAD COMMAND OR FILE NAME'];
   };
-  let cur = null, typed = 0;
+  let cur = null;
   c.tick((dt, t, me) => {
     const was = blink < 0.5; blink = (blink + dt) % 1;
     const k = me.inside ? keyAt(me.x, me.z, 0.06) : null;
@@ -163,14 +161,12 @@ function keyboardFloor(c) {
         if (k.ch === '\n') { const cmd = input.trim().toUpperCase(); lines.push(`${p.prompt} ${input}`, ...run(cmd)); input = ''; }
         else if (k.ch === '\b') input = input.slice(0, -1);
         else if (input.length < 24) input += k.ch;
-        if (++typed === 4) c.say('Every key you step on arrives on the wall. Somebody is going to have to press ENTER.');
         draw();
       }
     }
     for (const key of keys) { const want = key === cur ? 1 : 0; if (key.down !== want) { key.down += (want - key.down) * Math.min(1, dt * 22); if (Math.abs(key.down - want) < 0.01) key.down = want; key.node.position.y = -key.down * 0.05; } }
     if (me.inside && was !== (blink < 0.5)) draw();
   });
-  c.rt.onEnter = (n) => { if (n === 1) c.say('The floor has letters on it. The far wall is waiting for input.'); };
 }
 
 /** A corridor that is really a funnel: it only looks long. The door at the end is the right size for the end. */
@@ -220,7 +216,8 @@ function tinyDoor(c) {
   const dw = 0.9 * s1, dh = 2.0 * s1;
   doorFrame(c, 'back', 0, dw, dh, lin('#e2d8bd'), 0.03);
   doorLeaf(c, 'back', 0, dw - 0.02 * s1, dh - 0.01, lin(p.door), { d0: 0.004, y0: 0.006 });
-  c.hang(c.shining('underdoor', kit.tex.white(), 1.6, lin('#ffd9a0')), 'back', 0, 0.004, dw * 0.9, 0.006, null, WHITE, 0.05);
+  const glowB = new Batch(); c.hang(glowB, 'back', 0, 0.004, dw * 0.9, 0.006, null, WHITE, 0.05);
+  const under = c.add(new THREE.Mesh(kit.plain(glowB), kit.glowing(kit.tex.white(), 1.6, lin('#ffd9a0'))));
   c.light(0, 0.03, zf + 0.12, '#ffd9a0', 0.12, { k: 0.05, far: 1.2 });
   const tex = card(c, 'tiny' + p.sign, [p.sign], { w: 96, h: 24, bg: '#20242a', fg: '#f0e2b0', size: 11 });
   c.hang(c.mapped('tinysign', tex), 'back', 0, dh + 0.11 * s1 + 0.03, dw * 1.1, dw * 1.1 * 0.25, null, WHITE, 0.01);
@@ -233,9 +230,9 @@ function tinyDoor(c) {
     me.world.sinkTo = Math.max(0, 1.1 - (head - 0.2));
     me.world.slow = clamp((head - 0.5) / 1.4, 0.35, 1);
   });
-  const say = cycle(p.use);
-  c.use({ x: 0, z: zf + 0.4, r: 2.0, label: 'try the little door', use: () => { c.env.sound.play('click'); c.say(say()); } });
-  c.rt.onEnter = (n) => { if (n === 1) c.say('A long corridor. Or a short one, getting smaller.'); };
+  let dark = 0;
+  c.use({ x: 0, z: zf + 0.4, r: 2.0, label: 'knock', use: () => { const w = c.toWorld(0, zf); c.env.play('knock', w.x, w.z, 5); dark = 5; } });
+  c.tick((dt) => { if (dark > 0) { dark -= dt; under.visible = dark <= 0 || dark > 4.4; } });
 }
 
 /** A dark room lit by vending machines. Every slot of every machine holds the same thing. */
@@ -256,20 +253,27 @@ function vending(c) {
   const body = lin('#2b2f38'), glowB = c.shining('vendfront', front, 1.25), MW = 0.96, MH = 1.78, MD = 0.7;
   const sides = p.both ? [-1, 1] : [R.pick([-1, 1])];
   const n = Math.max(2, Math.floor((D - 2.4) / 1.12)), sulk = R.chance(0.5) ? R.int(1, n - 1) : -1;
+  const bought = [], itemGeo = kit.own(new THREE.BoxGeometry(0.07, 0.09, 0.07)), itemMat = kit.own(new THREE.MeshBasicMaterial({ color: p.color }));
+  itemMat.color.multiplyScalar(0.5);
   let count = 0;
   for (const sx of sides) for (let i = 0; i < n; i++, count++) {
     const z = D / 2 - 1.5 - i * 1.12, xw = sx * W / 2, xf = xw - sx * MD, turned = sx === sides[0] && i === sulk;
     c.flat.box(Math.min(xw, xf), 0, z - MW / 2, Math.max(xw, xf), MH, z + MW / 2, body, { skip: '-y' });
     c.solid(Math.min(xw, xf), z - MW / 2, Math.max(xw, xf), z + MW / 2, { tall: true });
     c.shadow((xw + xf) / 2, z, MD, MW, 0.5);
-    if (turned) { for (let v = 0; v < 6; v++) c.flat.box(xf - sx * 0.004 - 0.004, 0.5 + v * 0.07, z - 0.3, xf - sx * 0.004 + 0.004, 0.53 + v * 0.07, z + 0.3, [0.05, 0.05, 0.06]); c.use({ x: xf - sx * 0.3, z, r: 1.1, label: 'look at the machine', use: () => c.say('This one has turned to face the wall. You decide not to ask.') }); continue; }
+    if (turned) { for (let v = 0; v < 6; v++) c.flat.box(xf - sx * 0.004 - 0.004, 0.5 + v * 0.07, z - 0.3, xf - sx * 0.004 + 0.004, 0.53 + v * 0.07, z + 0.3, [0.05, 0.05, 0.06]); continue; }
     const x = xf - sx * 0.006, a = sx < 0 ? z + MW / 2 : z - MW / 2, b = sx < 0 ? z - MW / 2 : z + MW / 2;
     glowB.quad([x, 0.02, a], [x, 0.02, b], [x, MH - 0.02, b], [x, MH - 0.02, a]);
     c.light(xf - sx * 0.45, 1.05, z, p.glow, 0.42, { k: 1.1, far: 5.5, wrap: 0.5 });
-    const say = cycle([p.say, `It has ${p.item.toLowerCase()} in every slot. So do the others.`, 'You press A1. It considers this. It gives you A1.']);
-    c.use({ x: xf - sx * 0.3, z, r: 1.15, label: `buy ${p.item.toLowerCase()}`, use: () => { c.env.sound.play('thunk'); c.say(say()); } });
+    c.use({ x: xf - sx * 0.3, z, r: 1.15, label: `buy ${p.item.toLowerCase()}`, use: () => {
+      const w = c.toWorld(xf, z); c.env.play('thunk', w.x, w.z, 5);
+      if (bought.length >= 24) return;
+      const item = new THREE.Mesh(itemGeo, itemMat), k = bought.length;
+      item.position.set(xf - sx * (0.16 + (k % 4) * 0.11 + Math.random() * 0.03), 0.045, z + ((k * 7) % 5 - 2) * 0.13);
+      item.rotation.y = k * 1.3;
+      c.add(item); bought.push(item);
+    } });
   }
-  c.rt.onEnter = (k) => { if (k === 1) c.say(`${count} vending machines. They are all very keen that you should have ${p.item.toLowerCase()}.`); };
 }
 
 /** Office plants, growing the only way left to them: down through the ceiling. */
@@ -309,12 +313,8 @@ function ceilingPlants(c) {
     const s = c.spot(0.35);
     if (s) {
       c.model('wateringcan', () => { const v = new Vox(), tin = M('#5f8a8f', 0); v.cyl('y', 0, 0, 0, 9, 4.5, tin); v.carve(-3, 2, -3, 3, 9, 3); v.tube(4, 5, 0, 10, 9, 0, 0.8, tin); v.box(10, 8, -1, 12, 10, 1, tin); v.ring(-5, 5, 0, 3, 0.7, tin, 'z'); return v; }, s.x, s.z, { rot: R.range(0, 6), solid: false });
-      c.use({ x: s.x, z: s.z, r: 1.2, label: 'pick up the watering can', use: () => c.say('Full. You would have to pour it upwards.') });
     }
   }
-  const say = cycle(['The soil is dry on top. That is, on the bottom.', 'It has been watered recently. From below, presumably.', 'A leaf comes off in your hand and falls up a little before it remembers.']);
-  if (spots[0]) for (const s of spots.slice(0, 5)) c.use({ x: s.x, z: s.z, r: 1.0, cone: -1, when: () => c.env.player.me.pitch > 0.1, label: 'touch the plant', use: () => c.say(say()) });
-  c.rt.onEnter = (n) => { if (n === 1) c.say('Somebody upstairs has not been watering the plants. The plants have come down to say so.'); };
 }
 
 /** A telephone on the floor, ringing. It stops the moment you could answer it. */
@@ -352,11 +352,11 @@ function phone(c) {
     const d = Math.hypot(me.x - px, me.z - pz);
     if (!armed && (!me.inside || d > 5.5)) { armed = true; told = true; }
     if (armed && d > 2.15) { ring -= dt; if (ring <= 0) { ring = 3.2; shake = 1.0; c.env.play('ring', here.x, here.z, 9); } }
-    else { if (armed && me.inside && shake > 0 && !told) { told = true; c.say('The moment you are close enough to answer it, it stops.'); } ring = 0.5; shake = 0; }
+    else { ring = 0.5; shake = 0; }
     if (shake > 0) { shake -= dt; const on = shake > 0.55 || (shake > 0.1 && shake < 0.5); set.rotation.z = on ? Math.sin(t * 70) * 0.05 : 0; set.position.y = on ? Math.abs(Math.sin(t * 35)) * 0.012 : 0; }
     else if (set.rotation.z) { set.rotation.z = 0; set.position.y = 0; }
   });
-  c.use({ x: px, z: pz, r: 1.4, label: 'pick up the phone', use: () => { armed = false; c.env.sound.play('click'); c.say(p.lines[n++ % p.lines.length]); } });
+  c.use({ x: px, z: pz, r: 1.4, label: 'pick up the phone', use: () => { armed = false; c.env.play('dialtone', here.x, here.z, 6); } });
 }
 
 /** A great many chairs with one idea between them. */
@@ -364,7 +364,6 @@ function chairs(c) {
   const { W, D, H, R, params: p } = c;
   c.shell();
   const chair = (x, z, rot, o = {}) => c.prop('chair', x, z, { rot, o: { color: o.color || p.color }, ...o });
-  let line = 'Chairs.';
   if (p.variant === 'corner') {
     const cx = p.corner * (W / 2 - 0.5), cz = -D / 2 + 0.5;
     c.reserve(cx, cz, 1.3);
@@ -382,8 +381,6 @@ function chairs(c) {
     else if (p.thing === 'crt') { c.prop('crt', cx, cz, { rot: Math.atan2(-cx, -cz), solid: false }); c.light(cx - p.corner * 0.4, 0.3, cz + 0.4, '#8fd6a8', 0.25, { k: 0.5, far: 3 }); }
     else if (p.thing === 'sign') wetSign(c, cx, cz, Math.atan2(-cx, -cz), ['CAUTION', 'CORNER']);
     else if (p.thing === 'phone') c.flat.box(cx - 0.12, 0, cz - 0.1, cx + 0.12, 0.07, cz + 0.1, [0.5, 0.12, 0.1]);
-    line = p.thing === 'nothing' ? 'Every chair is pointed at the corner. There is nothing in the corner. You look anyway; it seems rude not to.' : 'Every chair is pointed at the corner, and at the one small thing in it.';
-    c.use({ x: cx - p.corner * 0.5, z: cz + 0.5, r: 1.4, label: 'look at the corner', use: () => c.say(p.thing === 'nothing' ? 'A corner. Two walls and a floor, meeting, as arranged.' : 'It is not obvious what it did to deserve the attention.') });
   } else if (p.variant === 'arch') {
     // two leaning towers of chairs that meet at the top; you can walk under
     const cz = -0.3, tier = 0.4;
@@ -394,8 +391,6 @@ function chairs(c) {
     c.prop('chair', 0, cz, { y: H - 0.02, flip: true, rot: 0, solid: false, shadow: false, o: { color: p.odd || p.color } });
     c.reserve(0, cz, 1.9);
     for (let i = 0; i < Math.min(8, p.count - 13); i++) { const sx = i % 2 ? 1 : -1, z = cz + 1.1 + Math.floor(i / 2) * 0.95; if (z < D / 2 - 0.9 && c.clear(sx * 1.25, z, 0.35)) chair(sx * 1.25, z, sx > 0 ? -Math.PI / 2 : Math.PI / 2); }
-    line = 'An arch, made of chairs. It is holding up nothing, which is the most a chair can hold up from there.';
-    c.use({ x: 0, z: cz + 0.6, r: 1.6, label: 'look at the arch', use: () => c.say('Load-bearing chairs. You walk under it the way you would walk under a ladder.') });
   } else if (p.variant === 'audience') {
     const cols = Math.max(3, Math.floor((W - 2.4) / 0.85)), rowsN = Math.min(4, Math.max(2, Math.floor((D - 4.2) / 1.0)));
     for (let r = 0; r < rowsN; r++) for (let i = 0; i < cols; i++) {
@@ -407,17 +402,12 @@ function chairs(c) {
     const tex = card(c, 'slide' + p.slide, p.slide.length > 14 ? p.slide.split(/ (?=[^ ]*$)/) : [p.slide], { w: 160, h: 100, bg: '#f6f6f0', fg: '#23262e', size: 20, pad: 18 });
     c.hang(c.shining('slide', tex, 1.25), 'back', 0.6, 1.5, 2.6, 1.62, null, WHITE, 0.012);
     c.light(0.6, 1.5, -D / 2 + 0.8, '#f4f6ff', 0.35, { k: 1.4, far: 6, axis: [0, 0, 1], floor: 0.3 });
-    line = 'They are waiting for the presentation. You have not prepared one.';
-    c.use({ x: -W / 2 + 1.6, z: -D / 2 + 1.6, r: 1.3, label: 'stand at the lectern', use: () => c.say('Notes, in your handwriting. They say: "open with a joke".') });
   } else {
     const r = Math.min(W, D) / 2 - 1.5, n = Math.min(p.count, Math.floor((Math.PI * 2 * r) / 0.78));
     for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2, x = Math.sin(a) * r, z = Math.cos(a) * r - 0.2; if (c.clear(x, z, 0.3)) chair(x, z, a + R.range(-0.03, 0.03), p.odd && i === 2 ? { color: p.odd } : {}); }
     chair(0, -0.2, 0, { color: p.odd || p.color });
     c.reserve(0, -0.2, r + 0.4);
-    line = 'A ring of chairs with their backs to one chair. Nobody is being picked for anything.';
-    c.use({ x: 0, z: -0.2, r: 1.2, label: 'look at the middle chair', use: () => c.say('It faces the door you came in by. It was expecting somebody.') });
   }
-  c.rt.onEnter = (n) => { if (n === 1) c.say(line); };
 }
 
 /** Wet floor signs. The floor is dry. */
@@ -447,8 +437,6 @@ function wetFloor(c) {
   c.tick((dt, t, me) => { drip -= dt; if (drip < 0 && me.inside) { drip = 1.4 + Math.random() * 2; c.env.play('click', here.x, here.z, 3); } });
   const k = c.corner(0.5);
   if (k) { c.flat.box(k.x - 0.14, 0, k.z - 0.14, k.x + 0.14, 0.26, k.z + 0.14, [0.85, 0.7, 0.1]); c.flat.box(k.x - 0.015, 0, k.z + 0.16, k.x + 0.015, 1.3, k.z + 0.19, [0.55, 0.4, 0.22]); c.flat.box(k.x - 0.14, 0, k.z + 0.1, k.x + 0.14, 0.09, k.z + 0.26, [0.8, 0.78, 0.7]); c.solid(k.x - 0.15, k.z - 0.15, k.x + 0.15, k.z + 0.26); }
-  c.use({ x: px, z: pz, r: 1.1, label: 'look at the puddle', use: () => c.say('The only wet part of the floor is the only part without a sign. You feel personally responsible.') });
-  c.rt.onEnter = (k2) => { if (k2 === 1) c.say(`${n} signs say the floor is wet. The floor is completely dry.`); };
 }
 
 export const MORE = { 'stress-pool': stressPool, 'keyboard-floor': keyboardFloor, 'tiny-door': tinyDoor, vending, 'ceiling-plants': ceilingPlants, phone, chairs, 'wet-floor': wetFloor, ...MORE2 };

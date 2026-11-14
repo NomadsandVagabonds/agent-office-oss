@@ -138,6 +138,20 @@ export function createHarness(ctx, file) {
     store.save();
   }
 
+  // The office is full. An agent that was started for one delegated task, has
+  // finished it and is only lingering in case someone has more for it, gives up
+  // its seat — the one idle longest first. Nobody a human started is ever sent
+  // home this way, and nobody with work in hand.
+  function makeRoom() {
+    const spare = liveSessions().filter((s) => !s.leaving && s.record.origin?.kind === 'delegation'
+      && s.state === 'idle' && !s.turn && !s.queue.length && s.lastTurn)
+      .sort((a, b) => a.lastTurn.endedAt - b.lastTurn.endedAt)[0];
+    if (!spare) return false;
+    spare.leaving = true;
+    spare.end('its delegated work was done, and the office needed the seat').catch(() => {});
+    return true;
+  }
+
   /**
    * Create a driven session and start it in the background. Returns at once;
    * `session.ready` settles when the agent has answered (or failed to).
@@ -151,7 +165,7 @@ export function createHarness(ctx, file) {
     if (!catalog.locate(spec)) {
       throw new SessionError(409, `${spec.label} cannot be started here: “${spec.command}” is not installed.${spec.note ? ' ' + spec.note : ''}`);
     }
-    if (liveSessions().length >= settings.maxSessions) {
+    if (liveSessions().filter((s) => !s.leaving).length >= settings.maxSessions && !makeRoom()) {
       throw new SessionError(429, `the office is already driving ${settings.maxSessions} agents; end one first (OFFICE_HARNESS_MAX_SESSIONS)`);
     }
     const cwd = path.resolve(typeof input.cwd === 'string' && input.cwd.trim() ? input.cwd.trim() : process.cwd());
@@ -286,8 +300,9 @@ export function createHarness(ctx, file) {
 
   async function stop() {
     if (stateTimer) clearTimeout(stateTimer);
-    delegations.stop();
+    // Sessions first: each one's ending settles the task it was doing, and that has to reach the disk too.
     await Promise.allSettled(liveSessions().map((s) => s.end('the office is shutting down')));
+    delegations.stop();
     store.flush();
   }
 

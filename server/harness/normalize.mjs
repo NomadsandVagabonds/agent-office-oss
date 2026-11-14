@@ -13,6 +13,8 @@
 //   tool           { id, kind, title, status, command?, paths?, output?, exitCode? }
 //   plan           { entries:[{ text, status }], note? }
 //   usage          { used?, size?, cost? }       context occupancy, when the agent reports it
+//   limits         { plan?, windows:[{ id, kind, label?, usedPercent, resetsAt?, windowMins? }] }
+//                                                what is left of the operator's allowance with this provider
 //   mode           { modeId }
 //   info           { title }
 //   notice         { level, text }
@@ -40,6 +42,8 @@ export const LIMITS = Object.freeze({
 export const TOOL_STATUS = Object.freeze(['pending', 'running', 'completed', 'failed']);
 export const TOOL_KINDS = Object.freeze(['read', 'edit', 'delete', 'move', 'search', 'execute', 'think', 'fetch', 'switch_mode', 'other']);
 export const OPTION_KINDS = Object.freeze(['allow_once', 'allow_always', 'reject_once', 'reject_always']);
+
+export const LIMIT_KINDS = Object.freeze(['session', 'weekly', 'monthly', 'credit']);
 
 export const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -185,3 +189,23 @@ export const CATEGORY_LABEL = Object.freeze({
 });
 export const categoryLabel = (category) => CATEGORY_LABEL[category]
   || (category.startsWith('other:') ? `“${category.slice(6)}”` : 'this kind of request');
+
+/**
+ * One allowance window, as the office passes it on (`usage:report`): a percentage
+ * used between 0 and 100, when it resets (epoch ms) and how long it is (minutes).
+ * Anything that is not a sane number is left out rather than guessed.
+ */
+export function limitWindow(w) {
+  if (!isObject(w) || !Number.isFinite(w.usedPercent)) return null;
+  const id = line(typeof w.id === 'string' ? w.id : '', 40);
+  if (!id) return null;
+  const label = line(typeof w.label === 'string' ? w.label : '', 60);
+  return {
+    id,
+    kind: LIMIT_KINDS.includes(w.kind) ? w.kind : 'session',
+    ...(label ? { label } : {}),
+    usedPercent: Math.max(0, Math.min(100, Math.round(w.usedPercent * 10) / 10)),
+    ...(Number.isFinite(w.resetsAt) && w.resetsAt > 0 ? { resetsAt: Math.round(w.resetsAt) } : {}),
+    ...(Number.isFinite(w.windowMins) && w.windowMins > 0 ? { windowMins: Math.round(w.windowMins) } : {}),
+  };
+}

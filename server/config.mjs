@@ -51,6 +51,13 @@ export function loadConfig(env = process.env) {
     autoObserveCodex: env.OFFICE_AUTO_OBSERVE_CODEX !== '0',
     staleAgentMs: Number(env.OFFICE_STALE_AGENT_MS || 30 * 60 * 1000),
     quiet: env.OFFICE_QUIET === '1',
+    // How much is left per provider (server/usage.mjs). The office holds no provider credentials; it only asks
+    // OpenRouter about a key when told to, with a key the operator already has in the daemon's environment.
+    usage: Object.freeze({
+      openRouterKey: env.OFFICE_USAGE_OPENROUTER === '1' ? (String(env.OPENROUTER_API_KEY || '').trim() || null) : null,
+      openRouterUrl: String(env.OFFICE_USAGE_OPENROUTER_URL || 'https://openrouter.ai/api/v1/key'),
+      openRouterEveryMs: Number(env.OFFICE_USAGE_EVERY_MS || 5 * 60 * 1000),
+    }),
     // Driven sessions (server/harness): the operator's adapter file, and the guard rails.
     harnessFile: path.resolve(env.OFFICE_HARNESS_FILE
       || path.join(os.homedir(), '.claude', 'agent-office', 'harness.json')),

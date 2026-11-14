@@ -7,65 +7,120 @@ import * as THREE from 'three';
 import { Vox, M } from '../vox/vox.js';
 import { Batch, lin, atlas, drawText, WHITE } from './kit.js';
 import { makeCutout, drawPortrait } from './cutout.js';
-import { TILE } from './gen.js';
+import { TILE, RISE, RUN, wallPoint, pinchHalf } from './gen.js';
 import { P, clamp, turnTo, cycle, framed, card, scatter, doorLeaf, doorFrame, wetSign, standee, mugVox } from './bits.js';
 import { MORE } from './rooms2.js';
 
 /* ---- the plain rooms, and what somebody left in them ------------------------------- */
 
-const BOX_LINES = (c) => [
-  `Boxes of ${c.level.projects[0]} merchandise. All of it size medium.`,
-  'Cables. Every one of them the other kind.',
-  'Lanyards, thousands, each for a conference that has not happened.',
-  `A box marked "${c.level.name.toUpperCase()} — DESK". It is empty and has always been yours.`,
-];
+/** A door where a door has no business being: `w` wide on a wall, its foot at y0, its head at y1. */
+function wallDoor(c, side, at, w, y0, y1, rgb) {
+  const cream = lin('#e2d8bd'), dark = rgb.map((v) => v * 0.72), h = y1 - y0;
+  c.wbox(side, at - w / 2 - 0.035, 0.07, y0 - 0.02, y1 + 0.07, 0, 0.05, cream); c.wbox(side, at + w / 2 + 0.035, 0.07, y0 - 0.02, y1 + 0.07, 0, 0.05, cream);
+  c.wbox(side, at, w, y1, y1 + 0.07, 0, 0.05, cream); c.wbox(side, at, w + 0.14, y0 - 0.06, y0, 0, 0.07, cream);
+  c.wbox(side, at, w - 0.02, y0, y1 - 0.005, 0.012, 0.052, rgb);
+  if (h > 0.9) for (const px of [-w * 0.21, w * 0.21]) for (const [a, b] of [[0.09, 0.42], [0.48, 0.9]]) c.wbox(side, at + px, w * 0.34, y0 + h * a, y0 + h * b, 0.052, 0.058, dark);
+  c.wbox(side, at + w * 0.38, 0.14, y0 + Math.min(0.95, h * 0.47) - 0.012, y0 + Math.min(0.95, h * 0.47) + 0.012, 0.052, 0.1, [0.74, 0.7, 0.56]);
+}
+
+/** A door lying in the carpet. Open it and step in, and you come out of a ceiling somewhere else. */
+function floorDoor(c, item) {
+  const s = c.spot(0.95, { head: 1.6 }); if (!s) return;
+  const { kit } = c, wood = lin('#7a5230'), cream = lin('#e2d8bd'), w = 0.86, l = 1.9, x0 = s.x - w / 2, z0 = s.z - l / 2;
+  for (const [a, b, e, f] of [[x0 - 0.07, z0 - 0.07, x0 + w + 0.07, z0], [x0 - 0.07, z0 + l, x0 + w + 0.07, z0 + l + 0.07], [x0 - 0.07, z0, x0, z0 + l], [x0 + w, z0, x0 + w + 0.07, z0 + l]]) c.flat.box(a, 0, b, e, 0.03, f, cream, { skip: '-y' });
+  c.flat.quad([x0, 0.004, z0 + l], [x0 + w, 0.004, z0 + l], [x0 + w, 0.004, z0], [x0, 0.004, z0], [0.003, 0.003, 0.003]);
+  const leaf = new Batch();
+  leaf.box(x0 + 0.01, 0.008, z0 + 0.01, x0 + w - 0.01, 0.036, z0 + l - 0.01, wood);
+  for (const px of [0.09, 0.5]) for (const pz of [0.1, 0.52]) leaf.box(x0 + w * px, 0.036, z0 + l * pz, x0 + w * (px + 0.38), 0.042, z0 + l * (pz + 0.36), wood.map((v) => v * 0.72));
+  leaf.box(x0 + w - 0.2, 0.036, z0 + l * 0.48, x0 + w - 0.06, 0.07, z0 + l * 0.5, [0.74, 0.7, 0.56]);
+  const door = c.dynamic(leaf, { pivot: [x0, 0.02, s.z] });
+  let open = 0, fell = false;
+  const here = c.toWorld(s.x, s.z);
+  c.use({ x: s.x, z: s.z, r: 1.5, cone: -1, label: 'open', when: () => !open && c.env.player.me.pitch < -0.25, use: () => {
+    if (c.env.hatches.has(item.to)) { open = 0.0001; c.env.play('door', here.x, here.z, 5); } else c.env.play('rattle', here.x, here.z, 5);
+  } });
+  c.tick((dt, t, me) => {
+    if (!open) return;
+    if (open < 1) { open = Math.min(1, open + dt / 0.7); door.rotation.z = 1.9 * open * open * (3 - 2 * open); }
+    else if (!fell && me.inside && Math.abs(me.x - s.x) < w / 2 - 0.1 && Math.abs(me.z - s.z) < l / 2 - 0.15) { fell = true; c.env.hatches.get(item.to)?.drop(); }
+    else if (fell && !me.inside) { fell = false; open = 0; door.rotation.z = 0; }
+  });
+  void kit;
+}
+
+/** The other end of a door in a floor: a door in a ceiling, with nothing under it but carpet. */
+function ceilDoor(c, item) {
+  const s = c.spot(0.9, { head: 2.1 }); if (!s) return;
+  const wood = lin('#7a5230'), cream = lin('#e2d8bd'), w = 0.86, l = 1.9, x0 = s.x - w / 2, z0 = s.z - l / 2, y = c.ceilAt(s.x, s.z);
+  for (const [a, b, e, f] of [[x0 - 0.07, z0 - 0.07, x0 + w + 0.07, z0], [x0 - 0.07, z0 + l, x0 + w + 0.07, z0 + l + 0.07], [x0 - 0.07, z0, x0, z0 + l], [x0 + w, z0, x0 + w + 0.07, z0 + l]]) c.flat.box(a, y - 0.04, b, e, y, f, cream);
+  c.flat.quad([x0, y - 0.003, z0], [x0 + w, y - 0.003, z0], [x0 + w, y - 0.003, z0 + l], [x0, y - 0.003, z0 + l], [0.003, 0.003, 0.003]);
+  const leaf = new Batch();
+  leaf.box(x0 + 0.01, y - 0.04, z0 + 0.01, x0 + w - 0.01, y - 0.012, z0 + l - 0.01, wood);
+  for (const px of [0.09, 0.5]) for (const pz of [0.1, 0.52]) leaf.box(x0 + w * px, y - 0.046, z0 + l * pz, x0 + w * (px + 0.38), y - 0.04, z0 + l * (pz + 0.36), wood.map((v) => v * 0.72));
+  leaf.box(x0 + w - 0.2, y - 0.075, z0 + l * 0.48, x0 + w - 0.06, y - 0.04, z0 + l * 0.5, [0.74, 0.7, 0.56]);
+  const door = c.dynamic(leaf, { pivot: [x0, y - 0.02, s.z] });
+  let swing = 0;
+  const here = c.toWorld(s.x, s.z);
+  // whoever steps into the matching floor door arrives here, from above
+  c.env.hatches.set(c.room.id, { drop: () => {
+    const pl = c.env.player;
+    pl.warp(here.x, here.z);
+    pl.me.sink = 0; pl.me.drop = Math.max(0.4, y - pl.EYE - 0.25); pl.me.dropV = -0.5; pl.me.pitch = Math.min(pl.me.pitch, -0.05);
+    c.world.enter(c.rt);
+    c.env.interfere(1); c.env.sound.play('thunk');
+    swing = 0.0001;
+  } });
+  c.tick((dt) => {
+    if (!swing) return;
+    swing += dt;
+    const k = swing < 0.35 ? swing / 0.35 : swing < 3 ? 1 : Math.max(0, 1 - (swing - 3) / 1.2);
+    door.rotation.z = -1.45 * k * k * (3 - 2 * k);
+    if (swing > 4.2) { swing = 0; door.rotation.z = 0; }
+  });
+  void item;
+}
 
 function dressing(c, item) {
   const R = c.R;
   if (item.type === 'boxes') {
-    const s = c.spot(0.65); if (!s) return;
+    const s = c.spot(0.65, { head: 1.0 }); if (!s) return;
     c.prop('boxes', s.x, s.z, { rot: item.turn, o: { variant: item.seed % 3 }, fallback: [0.8, 0.7, 0.8] });
     scatter(c, s.x, s.z, item.n);
-    const say = cycle(R.shuffle(BOX_LINES(c)));
-    c.use({ x: s.x, z: s.z, r: 1.35, label: 'look in the boxes', use: () => c.say(say()) });
   } else if (item.type === 'chair') {
-    const w = c.wallSpot(1.2); if (!w) return;
+    const w = c.wallSpot(1.2, undefined, 0.35, 1.2); if (!w) return;
     const p = c.wallAt(w.side, w.at, 0.55);
-    if (!c.clear(p.x, p.z, 0.4)) return;
+    if (!c.clear(p.x, p.z, 0.4, 1.1)) return;
     c.reserve(p.x, p.z, 0.45);
     c.prop('chair', p.x, p.z, { rot: p.rot + Math.PI + R.range(-0.15, 0.15), o: { color: R.pick(['#4a7a6a', '#b5483f', '#5a5a66']) } });
-    c.use({ x: p.x, z: p.z, r: 1.2, label: 'look at the chair', use: () => c.say('A chair, facing the wall. The seat is still warm.') });
   } else if (item.type === 'plant') {
-    const k = c.corner(0.55); if (!k) return;
-    c.prop(R.chance(0.5) ? 'planttall' : 'plant', k.x, k.z, { rot: item.turn, tint: [0.8, 0.66, 0.42], o: { variant: item.seed % 4 } });
-    c.use({ x: k.x, z: k.z, r: 1.3, label: 'look at the plant', use: () => c.say('The plant is plastic. It is also dying.') });
+    const tall = R.chance(0.5), k = c.corner(0.55, undefined, tall ? 1.8 : 1.0); if (!k) return;
+    c.prop(tall ? 'planttall' : 'plant', k.x, k.z, { rot: item.turn, tint: [0.8, 0.66, 0.42], o: { variant: item.seed % 4 } });
   } else if (item.type === 'lamp') {
-    const k = c.corner(0.5); if (!k) return;
+    const k = c.corner(0.5, undefined, 1.8); if (!k) return;
     c.prop('floorlamp', k.x, k.z, { rot: item.turn });
     c.light(k.x, 1.5, k.z, '#ffca82', 0.55, { k: 1.3, far: 6 });
     c.shining('lampglow', c.kit.tex.blob(), 1.4, lin('#ffca82'), { transparent: true, depthWrite: false }).quad([k.x - 0.2, 1.36, k.z + 0.2], [k.x + 0.2, 1.36, k.z + 0.2], [k.x + 0.2, 1.36, k.z - 0.2], [k.x - 0.2, 1.36, k.z - 0.2]);
   } else if (item.type === 'bin') {
-    const k = c.corner(0.45) || c.spot(0.4); if (!k) return;
+    const k = c.corner(0.45, undefined, 0.8) || c.spot(0.4, { head: 0.8 }); if (!k) return;
     c.prop('bin', k.x, k.z, { rot: item.turn });
-    for (let i = 0; i < item.n; i++) { const x = k.x + R.range(-0.7, 0.7), z = k.z + R.range(-0.7, 0.7); if (Math.abs(x) < c.W / 2 - 0.1 && Math.abs(z) < c.D / 2 - 0.1) c.flat.ball(x, 0.035, z, 0.035, [0.9, 0.88, 0.8], 0.8, 5); }
-    c.use({ x: k.x, z: k.z, r: 1.2, label: 'look in the bin', use: () => c.say('Every ball of paper in it is the same first draft.') });
+    for (let i = 0; i < item.n; i++) { const x = k.x + R.range(-0.7, 0.7), z = k.z + R.range(-0.7, 0.7); if (c.clear(x, z, 0.05)) c.flat.ball(x, 0.035, z, 0.035, [0.9, 0.88, 0.8], 0.8, 5); }
   } else if (item.type === 'wetsign') {
-    const s = c.spot(0.4); if (!s) return;
+    const s = c.spot(0.4, { head: 0.8 }); if (!s) return;
     wetSign(c, s.x, s.z, item.turn, ['CAUTION', 'WET FLOOR']);
     c.blot(s.x + 0.5, s.z + 0.3, 1.3, 0.9, { rgb: [0.05, 0.04, 0.02], a: 0.35 });
   } else if (item.type === 'papers') {
     const s = c.spot(0.5); if (s) scatter(c, s.x, s.z, item.n + 3, 1.0);
   } else if (item.type === 'stain') {
-    const s = c.spot(0.5); if (!s) return;
-    c.blot(s.x, s.z, 1.5, 1.2, { rgb: [0.2, 0.12, 0.03], a: 0.5, y: c.H - 0.004, down: true });
-    c.blot(s.x, s.z, 0.7, 0.6, { rgb: [0.14, 0.08, 0.02], a: 0.5, y: c.H - 0.005, down: true });
+    const s = c.spot(0.5, { head: 0.5 }); if (!s) return;
+    const y = c.ceilAt(s.x, s.z);
+    c.blot(s.x, s.z, 1.5, 1.2, { rgb: [0.2, 0.12, 0.03], a: 0.5, y: y - 0.004, down: true });
+    c.blot(s.x, s.z, 0.7, 0.6, { rgb: [0.14, 0.08, 0.02], a: 0.5, y: y - 0.005, down: true });
     c.blot(s.x, s.z, 1.1, 1.0, { rgb: [0.03, 0.03, 0.02], a: 0.42 });
     c.flat.box(s.x - 0.13, 0, s.z - 0.13, s.x + 0.13, 0.22, s.z + 0.13, [0.25, 0.4, 0.6]);
     c.flat.box(s.x - 0.11, 0.2, s.z - 0.11, s.x + 0.11, 0.221, s.z + 0.11, [0.12, 0.16, 0.2]);
     c.solid(s.x - 0.13, s.z - 0.13, s.x + 0.13, s.z + 0.13);
     let wait = 1 + R() * 2;
     c.tick((dt, t, me) => { wait -= dt; if (wait < 0 && me.inside) { wait = 1.6 + Math.random() * 2.2; const p = c.toWorld(s.x, s.z); c.env.play('click', p.x, p.z, 3); } });
-    c.use({ x: s.x, z: s.z, r: 1.2, label: 'look in the bucket', use: () => c.say('The bucket is nearly full. It has been nearly full for a long time.') });
   } else if (item.type === 'poster') {
     const w = c.wallSpot(1.3); if (!w) return;
     const tex = c.kit.tex.custom('poster' + item.text, 72, 96, (g, tw, th) => {
@@ -84,24 +139,28 @@ function dressing(c, item) {
       P(g, '#efe9d8', 0, 0, tw, th); drawPortrait(g, who.look, 6, 14, 52, 52, { bg: '#b9c7c4', creations: c.env.who.creations });
       drawText(g, ['EMPLOYEE OF THE MONTH'], 0, 2, tw, 11, { size: 5, pad: 2 }); drawText(g, [who.name.toUpperCase()], 0, 68, tw, 14, { size: 7, pad: 4 });
     }, { clamp: true });
-    const p = framed(c, c.mapped('eotm' + who.name, tex), w.side, w.at, 1.3, 0.5, 0.66);
-    c.use({ x: p.x, z: p.z, r: 1.4, label: 'look at the portrait', use: () => c.say(`${who.name}, employee of the month. It does not say which month.`) });
+    framed(c, c.mapped('eotm' + who.name, tex), w.side, w.at, 1.3, 0.5, 0.66);
   } else if (item.type === 'ladder') {
-    const s = c.spot(0.6); if (!s) return;
+    const s = c.spot(0.6, { head: 1.75 }); if (!s) return;
     const hole = c.hole(s.x, s.z);
     c.prop('ladder', hole.x, hole.z + 0.15, { rot: item.turn, fallback: [0.5, 1.6, 0.5] });
-    c.use({ x: hole.x, z: hole.z, r: 1.3, label: 'look up the ladder', use: () => c.say('Above the tiles: more tiles, facing down at you, and above those, presumably, more.') });
   } else if (item.type === 'coat') {
-    const k = c.corner(0.45); if (k) c.prop('coatrack', k.x, k.z, { rot: item.turn, fallback: [0.3, 1.6, 0.3] });
+    const k = c.corner(0.45, undefined, 1.8); if (k) c.prop('coatrack', k.x, k.z, { rot: item.turn, fallback: [0.3, 1.6, 0.3] });
   } else if (item.type === 'fan') {
-    const k = c.corner(0.5) || c.spot(0.4); if (k) c.prop('fan', k.x, k.z, { rot: Math.atan2(-k.x, -k.z), fallback: [0.4, 1.3, 0.4] });
+    const k = c.corner(0.5, undefined, 1.5) || c.spot(0.4, { head: 1.5 }); if (k) c.prop('fan', k.x, k.z, { rot: Math.atan2(-k.x, -k.z), fallback: [0.4, 1.3, 0.4] });
   } else if (item.type === 'tile') {
     const s = c.spot(0.6); if (!s) return;
     const hole = c.hole(s.x, s.z);
     c.lay(c.ceil, hole.x + 0.2, hole.z - 0.1, TILE, TILE, item.turn, [[0, 0], [1, 0], [1, 1], [0, 1]], WHITE, 0.012);
     c.blot(hole.x + 0.2, hole.z - 0.1, 1.0, 1.0, { a: 0.3 });
-    c.flat.box(hole.x - 0.01, c.H - 0.45, hole.z - 0.01, hole.x + 0.01, c.H, hole.z + 0.01, [0.05, 0.05, 0.05]);
-  } else if (item.type === 'map') floorPlan(c);
+    c.flat.box(hole.x - 0.01, hole.y - 0.45, hole.z - 0.01, hole.x + 0.01, hole.y, hole.z + 0.01, [0.05, 0.05, 0.05]);
+  } else if (item.type === 'highdoor') {
+    const w = c.wallSpot(1.3, undefined, 0.4, 2.5); if (!w) return;
+    const p = c.wallAt(w.side, w.at, 0.05), y0 = R.range(0.9, 1.35), y1 = Math.min(y0 + 1.95, c.ceilAt(p.x, p.z) - 0.1);
+    if (y1 - y0 > 0.6) wallDoor(c, w.side, w.at, 0.86, y0, y1, lin(R.pick(['#7a5230', '#5a6a7a', '#6a4a3a', '#8a3a34'])));
+  } else if (item.type === 'floordoor') floorDoor(c, item);
+  else if (item.type === 'ceildoor') ceilDoor(c, item);
+  else if (item.type === 'map') floorPlan(c);
 }
 
 /** An evacuation plan of this very level, the right way round for whoever reads it. Mostly accurate. */
@@ -116,7 +175,7 @@ function floorPlan(c) {
   const tex = c.kit.tex.custom('plan' + me.id, S, S + 24, (g) => {
     P(g, '#f3efe2', 0, 0, S, S + 24); P(g, '#b5483f', 0, 0, S, 12);
     drawText(g, ['EVACUATION PLAN'], 0, 0, S, 12, { color: '#fff7e6', size: 9 });
-    const box = (r, fill) => { const xs = [mx(r.x, r.z), mx(r.x + r.w, r.z + r.d)], ys = [my(r.x, r.z), my(r.x + r.w, r.z + r.d)]; const x = Math.min(...xs), y = Math.min(...ys), bw = Math.abs(xs[1] - xs[0]), bh = Math.abs(ys[1] - ys[0]); P(g, '#4a4436', x, y, bw, bh); P(g, fill, x + 1, y + 1, bw - 2, bh - 2); return [x, y, bw, bh]; };
+    const box = (r, fill) => { const xs = [mx(r.x, r.z), mx(r.x + r.w, r.z + r.d)], ys = [my(r.x, r.z), my(r.x + r.w, r.z + r.d)]; const x = Math.min(...xs), y = Math.min(...ys), bw = Math.abs(xs[1] - xs[0]), bh = Math.abs(ys[1] - ys[0]); P(g, '#4a4436', x, y, bw, bh); P(g, fill, x + 1, y + 1, bw - 2, bh - 2); };
     for (const r of lv.rooms) box(r, r.kind === 'exit' ? '#7fd08f' : r.id === me.id ? '#f6d9a8' : r.kind === 'special' ? '#dcd6c4' : '#ffffff');
     for (const l of lv.links) { const a = l.axis === 'x' ? [l.at, l.from, l.at, l.to] : [l.from, l.at, l.to, l.at]; const x0 = mx(a[0], a[1]), y0 = my(a[0], a[1]), x1 = mx(a[2], a[3]), y1 = my(a[2], a[3]); P(g, '#ffffff', Math.min(x0, x1) - 1, Math.min(y0, y1) - 1, Math.abs(x1 - x0) + 2, Math.abs(y1 - y0) + 2); }
     const ex = lv.rooms[lv.exit.room];
@@ -124,16 +183,56 @@ function floorPlan(c) {
     g.fillStyle = '#d8281c'; g.beginPath(); g.arc(mx(me.cx, me.cz), my(me.cx, me.cz), 3, 0, 7); g.fill();
     drawText(g, ['● YOU ARE HERE (PROBABLY)'], 0, S + 12, S, 12, { color: '#3a3428', size: 7 });
   }, { clamp: true });
-  const p = framed(c, c.mapped('plan' + me.id, tex), w.side, w.at, 1.25, 0.84, 0.84 * (S + 24) / S, null, [0.55, 0.55, 0.5]);
-  c.use({ x: p.x, z: p.z, r: 1.5, label: 'read the evacuation plan', use: () => c.say('In case of fire, remain calm and proceed to the EXIT. In case of no fire, also do that.') });
+  framed(c, c.mapped('plan' + me.id, tex), w.side, w.at, 1.25, 0.84, 0.84 * (S + 24) / S, null, [0.55, 0.55, 0.5]);
+}
+
+/** A corridor with a waist: two slanted lengths of wall on either side, in front of the real ones. */
+function pinchWalls(c, s) {
+  const { W, D, H, room } = c, alongZ = s.axis === 'z', len = alongZ ? D : W, wide = (alongZ ? W : D) / 2, trim = lin(c.look.trim);
+  const rows = [0, 0.16, 0.7, 1.3, 1.9, H - 0.16, H], n = Math.ceil(len / 0.3);
+  for (let i = 0; i < n; i++) {
+    const v0 = -len / 2 + (i / n) * len, v1 = -len / 2 + ((i + 1) / n) * len, h0 = pinchHalf(room, v0), h1 = pinchHalf(room, v1);
+    if (h0 > wide - 0.004 && h1 > wide - 0.004) continue;
+    for (const sx of [-1, 1]) {
+      const at = (v, h, y) => (alongZ ? [sx * h, y, v] : [v, y, sx * h]);
+      // which end comes first decides which way the quad faces: always into the corridor
+      const flip = alongZ ? sx < 0 : sx > 0, a0 = flip ? v1 : v0, a1 = flip ? v0 : v1, ha = flip ? h1 : h0, hb = flip ? h0 : h1;
+      for (let k = 0; k + 1 < rows.length; k++) {
+        const y0 = rows[k], y1 = rows[k + 1], ao = k === 0 || k === rows.length - 2 ? 0.84 : 1;
+        c.wall.quad(at(a0, ha, y0), at(a1, hb, y0), at(a1, hb, y1), at(a0, ha, y1), WHITE, [[a0 / 0.8, y0 / 0.8], [a1 / 0.8, y0 / 0.8], [a1 / 0.8, y1 / 0.8], [a0 / 0.8, y1 / 0.8]], ao);
+      }
+      const k2 = 0.022;
+      c.flat.quad(at(a0, ha - k2, 0), at(a1, hb - k2, 0), at(a1, hb - k2, 0.11), at(a0, ha - k2, 0.11), trim);
+    }
+  }
+}
+
+/** Stairs that climb toward the ceiling and stop: at a door too high to use, at a hole, or at nothing. */
+function nowhereStairs(c, s) {
+  const { room } = c, wood = lin(c.look.trim).map((v) => Math.min(1, v * 1.5 + 0.05)), trim = lin(c.look.trim), topY = s.n * RISE;
+  for (let i = 0; i < s.n; i++) {
+    const y = (s.n - i) * RISE;
+    c.wbox(s.side, s.c, s.w, 0, y, i * RUN, (i + 1) * RUN, wood, { skip: '-y' });
+    c.wbox(s.side, s.c, s.w, y - 0.022, y + 0.002, (i + 1) * RUN - 0.03, (i + 1) * RUN + 0.012, trim);
+  }
+  for (let k = 0; k <= s.n * RUN + 0.8; k += 0.45) { const p = wallPoint(room, s.side, s.c, k); c.reserve(p.x, p.z, s.w / 2 + 0.3); }
+  const top = wallPoint(room, s.side, s.c, 0.05), ceil = c.ceilAt(top.x, top.z);
+  if (s.top === 'door' && ceil - topY > 0.5) {
+    wallDoor(c, s.side, s.c, Math.min(0.86, s.w - 0.16), topY, Math.min(topY + 1.95, ceil - 0.02), lin('#7a5230'));
+    const at = wallPoint(room, s.side, s.c, 0.3), here = c.toWorld(at.x, at.z);
+    c.use({ x: at.x, z: at.z, r: 0.9, label: 'try the door', use: () => c.env.play('rattle', here.x, here.z, 4) });
+  } else if (s.top === 'hole') for (const k of [0.2, 0.8]) { const p = wallPoint(room, s.side, s.c, k); c.hole(p.x, p.z, 2); }
 }
 
 function plain(c) {
+  const { room } = c, s = room.shape;
   c.shell();
-  for (const p of c.room.pillars) c.pillar(p.x, p.z, p.w, p.d);
-  if (c.room.sign) c.exitSign(c.room.doors[c.room.sign.door], c.room.sign.text);
-  for (const item of c.room.dress) dressing(c, item);
-  if (c.level.pursuer?.room === c.room.id) c.env.lair?.(c);
+  for (const p of room.pillars) c.pillar(p.x, p.z, p.w, p.d);
+  if (s && s.kind === 'pinch') pinchWalls(c, s);
+  if (s && s.kind === 'stairs') nowhereStairs(c, s);
+  if (room.sign) c.exitSign(room.doors[room.sign.door], room.sign.text);
+  for (const item of room.dress) dressing(c, item);
+  if (c.level.pursuer?.room === room.id) c.env.lair?.(c);
 }
 
 /** Where you land: a hole in the ceiling above you, and the tiles you brought down. */
@@ -143,8 +242,7 @@ function start(c) {
   const hole = c.hole(0, 0, 2);
   for (const [dx, dz, rot] of [[0.35, 0.2, 0.4], [-0.5, -0.3, 1.9], [0.1, -0.75, 2.8]]) c.lay(c.ceil, hole.x + dx, hole.z + dz, TILE, TILE, rot, [[0, 0], [1, 0], [1, 1], [0, 1]], WHITE, 0.01 + Math.abs(dx) * 0.01);
   c.blot(hole.x, hole.z, 2.2, 2.2, { rgb: [0.3, 0.28, 0.22], a: 0.35 });
-  for (const [dx, dz, len] of [[-0.4, 0.3, 0.5], [0.3, -0.2, 0.32], [0.45, 0.45, 0.7]]) c.flat.box(hole.x + dx - 0.008, c.H - len, hole.z + dz - 0.008, hole.x + dx + 0.008, c.H, hole.z + dz + 0.008, [0.04, 0.04, 0.04]);
-  c.use({ x: hole.x, z: hole.z, r: 1.0, cone: -1, label: 'look up', when: () => c.env.player.me.pitch > 0.5, use: () => c.say('The hole you came through. It is too high, and it is getting smaller.') });
+  for (const [dx, dz, len] of [[-0.4, 0.3, 0.5], [0.3, -0.2, 0.32], [0.45, 0.45, 0.7]]) c.flat.box(hole.x + dx - 0.008, hole.y - len, hole.z + dz - 0.008, hole.x + dx + 0.008, hole.y, hole.z + dz + 0.008, [0.04, 0.04, 0.04]);
 }
 
 /** The way out: an ordinary office door with light under it. */
@@ -166,7 +264,7 @@ function exit(c) {
   c.exitSign({ side: 'back', c: 0, w: 1.05 }, 'EXIT');
   c.prop('doormat', 0, z + 0.62, { solid: false, shadow: false, fallback: [0.9, 0.02, 0.5] });
   let opening = 0;
-  c.use({ x: 0, z: z + 0.25, r: 1.7, label: 'open the door', when: () => !opening, use: () => { opening = 0.0001; c.env.sound.play('door'); c.say(null); } });
+  c.use({ x: 0, z: z + 0.25, r: 1.7, label: 'open the door', when: () => !opening, use: () => { opening = 0.0001; c.env.sound.play('door'); } });
   c.tick((dt) => {
     if (!opening) return;
     opening += dt;
@@ -174,17 +272,9 @@ function exit(c) {
     door.rotation.y = -1.9 * k * k * (3 - 2 * k);
     if (opening > 0.45) c.env.end('exit');
   });
-  c.rt.onEnter = (n) => { if (n === 1) c.say('A door. An ordinary door, with light under it.'); };
 }
 
 /* ---- the deck, part one ------------------------------------------------------------ */
-
-const FRONT_LINES = (name) => [
-  `Cardboard. ${name}, printed a little larger than life, smiling at something just behind you.`,
-  `It is ${name}. The eyes are printed on. You checked.`,
-  `${name}, in cardboard. Somebody has been dusting it.`,
-];
-const BACK_LINE = 'From behind: plain board and a fold-out strut. Somebody has written THIS SIDE BACK on it, to be safe.';
 
 /** Cardboard colleagues that have moved when you look back. */
 function cutouts(c) {
@@ -206,17 +296,12 @@ function cutouts(c) {
   spots.forEach(([x, z, rot], i) => {
     const self = p.self && i === n - 1;
     const who = self ? { name: c.level.name, look: c.env.who.look } : cast[p.who[i % p.who.length] % cast.length];
-    const g = makeCutout(c.kit, (self ? 'self:' : 'who:') + who.name, who.look, { creations: c.env.who.creations });
+    const g = makeCutout(c.kit, (self ? 'self:' : 'who:') + who.name, who.look, { creations: c.env.who.creations, name: who.name });
     c.add(g); c.reserve(x, z, 0.4);
     const k = { g, x, z, rot, unseen: 0, name: who.name, self, i };
-    const say = cycle(self ? [`It is you, in cardboard, about a hand taller than you remember being.`] : FRONT_LINES(who.name));
-    k.use = c.use({ x, z, r: 1.3, label: self ? 'look at yourself' : `look at ${who.name}`, use: () => {
-      const me = c.toLocal(c.env.player.me.x, c.env.player.me.z);
-      c.say(Math.sin(k.rot) * (me.x - k.x) + Math.cos(k.rot) * (me.z - k.z) > 0 ? say() : BACK_LINE);
-    } });
     people.push(k);
   });
-  const put = (k) => { k.g.position.set(k.x, 0, k.z); k.g.rotation.y = k.rot; k.g.userData.light(c.sample(k.x, 1.0, k.z)); const w = c.toWorld(k.x, k.z); k.use.wx = w.x; k.use.wz = w.z; };
+  const put = (k) => { k.g.position.set(k.x, 0, k.z); k.g.rotation.y = k.rot; k.g.userData.light(c.sample(k.x, 1.0, k.z)); };
   c.after.push(() => people.forEach(put));
   for (let i = 0; i < p.boxes; i++) { const s = c.spot(0.65); if (s) { c.prop('boxes', s.x, s.z, { rot: R.range(0, 6), o: { variant: i }, fallback: [0.8, 0.7, 0.8] }); scatter(c, s.x, s.z, 3); } }
   { const s = c.spot(0.4); if (s) scatter(c, s.x, s.z, p.papers, 1.6); }
@@ -278,9 +363,6 @@ function ceilingMeeting(c) {
     c.wbox(spot.side, spot.at, 1.2, H - 0.3, H - 0.26, 0, 0.08, [0.45, 0.47, 0.5]);
   }
   if (p.stray) { c.reserve(cx + 0.3, cz + 0.2, 0.5); c.prop('chair', cx + 0.3, cz + 0.2, { rot: R.range(0, 6), o: { color: p.color } }); c.paper(cx - 0.4, cz + 0.5); }
-  const say = cycle(['A meeting, bolted to the ceiling. The chairs are pushed back as if everyone just stood up.', 'There is coffee in the mugs. It is not coming out.', 'The minutes are stuck to the table. They are blank on both sides.']);
-  c.use({ x: cx, z: cz, r: 2.0, cone: -1, label: 'look up at the meeting', when: () => c.env.player.me.pitch > 0.15, use: () => c.say(say()) });
-  c.rt.onEnter = (n) => { if (n === 1) c.say('You have the feeling you are late for something, and under it.'); };
   return table;
 }
 
@@ -315,10 +397,6 @@ function coolers(c) {
     if (z > lit0 - 1 && sx === rows[0]) list.push({ x: sx * (W / 2 - 0.3), z, i, foot });
   }
   const live = list[Math.min(list.length - 1, p.bubbling)];
-  for (const k of list) {
-    if (k === live) continue;
-    c.use({ x: k.x * 0.8, z: k.z, r: 1.1, label: 'try the cooler', use: () => c.say('Empty. The seal on the bottle has never been broken.') });
-  }
   // the one that works: bubbles climbing the bottle, a glug now and then
   const bubbles = [];
   if (live) {
@@ -332,18 +410,24 @@ function coolers(c) {
       if (glug < 0 && me.inside) { glug = 2.5 + Math.random() * 3; const w = c.toWorld(live.x, live.z); c.env.play('glug', w.x, w.z, 4); }
     });
     c.flat.box(live.x * 0.72 - 0.03, 0, live.z + 0.2, live.x * 0.72 + 0.03, 0.07, live.z + 0.26, [0.92, 0.9, 0.84]);
-    const say = cycle(['Glug. You take a paper cup. The water is room temperature. So is everything.', 'Glug. It is the only one that works. It seems embarrassed about it.']);
-    c.use({ x: live.x * 0.8, z: live.z, r: 1.2, label: 'take a cup of water', use: () => { const w = c.toWorld(live.x, live.z); c.env.play('glug', w.x, w.z, 4); c.say(say()); } });
+    // every cup you take ends up on the carpet with the others
+    const cups = [], cupGeo = kit.own(new THREE.CylinderGeometry(0.034, 0.024, 0.075, 8)), cupMat = kit.own(new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    c.after.push(() => { const L = c.sample(live.x * 0.6, 0.1, live.z); cupMat.color.setRGB(0.93 * L[0], 0.91 * L[1], 0.85 * L[2]); });
+    c.use({ x: live.x * 0.8, z: live.z, r: 1.2, label: 'take a cup of water', use: () => {
+      const w = c.toWorld(live.x, live.z); c.env.play('glug', w.x, w.z, 4);
+      if (cups.length >= 14) return;
+      const cup = new THREE.Mesh(cupGeo, cupMat), n = cups.length, tipped = n % 4 === 3;
+      cup.position.set(live.x * 0.62 - Math.sign(live.x) * (n % 3) * 0.085, tipped ? 0.03 : 0.038, live.z + 0.3 + Math.floor(n / 3) * 0.085);
+      if (tipped) cup.rotation.z = Math.PI / 2;
+      c.add(cup); cups.push(cup);
+    } });
   }
   // walk into the dark for as long as you like: the corridor is patient
-  let told = false;
   c.zone({ x0: -W / 2, x1: W / 2, z0: -D / 2, z1: lit0 - 6.2, stay: (dt, me) => {
     if (Math.cos(me.yaw) < 0.25) return;                                   // only while you face the dark: nothing may be seen to jump
     const w = c.toWorld(me.x, me.z + 2.4), pl = c.env.player;
     if (c.world.free(w.x, w.z, 0.22)) pl.warp(w.x, w.z);
-    if (!told) { told = true; c.say('The corridor goes on. So do the coolers. You have stopped being sure which of you is moving.'); }
   } });
-  c.rt.onEnter = (n) => { if (n === 1) c.say('Water coolers. A number of them.'); };
 }
 
 /** A party for you. It has been ready for some time. */
@@ -405,11 +489,7 @@ function party(c) {
     if (!c.clear(x, z, 0.4)) return;
     c.reserve(x, z, 0.45);
     standee(c, 'party:' + who.name, { ...who.look, accessory: 'partyhat' }, x, z, Math.atan2(-x, 1));
-    c.use({ x, z, r: 1.2, label: `look at ${who.name}`, use: () => c.say(`${who.name}, in cardboard and a paper hat, mid-cheer. The cheer is for you.`) });
   });
-  const say = cycle([`The icing says ${p.cake}. It is your handwriting.`, p.candles ? 'The candles have never been lit. The wax is dusty.' : 'No candles. It is, after all, your 0th.', 'One slice is missing. The knife is clean.']);
-  c.use({ x: 0, z: tz + 0.5, r: 1.5, label: 'look at the cake', use: () => c.say(say()) });
-  c.rt.onEnter = (n) => { if (n === 1) c.say(`Somebody has gone to some trouble. "${p.banner[0]}", it says.`); };
 }
 
 /** A room of doors. Each has a status. One of them is OK. */
@@ -418,9 +498,11 @@ function manyDoors(c) {
   c.shell({ sockets: false });
   const tone = lin(p.color), DW = 0.9, DH = 2.02;
   const real = c.room.doors.find((d) => d.door) || null;
-  const plates = atlas(kit, 'codes' + c.room.id, 40, 18, p.codes.length + 1, (g, i, w, h) => {
+  const plates = atlas(kit, 'codes' + c.room.id, 80, 34, p.codes.length + 1, (g, i, w, h) => {
+    const it = i === p.codes.length ? { code: '200', words: 'OK' } : p.codes[i];
     P(g, '#1c1f24', 0, 0, w, h); P(g, '#c8b98a', 1, 1, w - 2, h - 2); P(g, '#1c1f24', 2, 2, w - 4, h - 4);
-    drawText(g, [i === p.codes.length ? '200' : p.codes[i].code], 0, 0, w, h, { color: '#f0e2b0', size: 12, pad: 4 });
+    drawText(g, [it.code], 2, 2, w - 4, 19, { color: '#f0e2b0', size: 17, pad: 4 });
+    drawText(g, [it.words], 2, 20, w - 4, 11, { color: '#c8b98a', size: 8, pad: 4 });
   });
   const plateB = c.mapped('codes', plates.texture);
   let n = 0;
@@ -431,10 +513,14 @@ function manyDoors(c) {
       const code = p.codes[n % p.codes.length];
       doorFrame(c, side, at, DW, DH);
       const pt = c.wallAt(side, at, 0.3);
-      c.hang(plateB, side, at, DH + 0.2, 0.3, 0.135, plates.uv(isReal ? p.codes.length : n % p.codes.length), WHITE, 0.012);
+      c.hang(plateB, side, at, DH + 0.24, 0.6, 0.255, plates.uv(isReal ? p.codes.length : n % p.codes.length), WHITE, 0.012);
       if (!isReal) {
-        doorLeaf(c, side, at, DW - 0.02, DH - 0.01, tone.map((v) => v * (0.9 + (n % 3) * 0.06)), { hinge: n % 2 ? 'right' : 'left' });
-        c.use({ x: pt.x, z: pt.z, r: 1.2, label: `try door ${code.code}`, use: () => { c.env.sound.play('click'); c.say(code.say); } });
+        const fake = new Batch(), right = n % 2 === 1;
+        doorLeaf(c, side, at, DW - 0.02, DH - 0.01, tone.map((v) => v * (0.9 + (n % 3) * 0.06)), { batch: fake, hinge: right ? 'right' : 'left' });
+        const pin = c.wallAt(side, at + (right ? 1 : -1) * (DW / 2 - 0.01), 0.03), node = c.dynamic(fake, { pivot: [pin.x, 0, pin.z] });
+        let rattle = 0;
+        c.use({ x: pt.x, z: pt.z, r: 1.2, label: `try door ${code.code}`, use: () => { rattle = 0.45; const w = c.toWorld(pt.x, pt.z); c.env.play('rattle', w.x, w.z, 4); } });
+        c.tick((dt, t) => { if (rattle <= 0) return; rattle -= dt; node.rotation.y = rattle > 0 ? Math.sin(t * 46) * 0.022 * (rattle / 0.45) * (right ? 1 : -1) : 0; });
         continue;
       }
       // the real one: a leaf that swings, light under it, and a doorway behind
@@ -446,7 +532,7 @@ function manyDoors(c) {
       const bar = c.solid(Math.min(a.x, b.x), Math.min(a.z, b.z), Math.max(a.x, b.x), Math.max(a.z, b.z), { tall: true, keep: true });
       c.hang(c.shining('underdoor', kit.tex.white(), 1.5, lin(c.world.rooms[real.to].def.look.tube)), side, at, 0.012, DW - 0.06, 0.02, null, WHITE, 0.06);
       let open = 0;
-      c.use({ x: pt.x, z: pt.z, r: 1.3, label: 'try door 200', when: () => !open, use: () => { open = 0.0001; bar.on = false; c.world.openLink(real.link); c.env.sound.play('door'); c.say('200. OK.'); } });
+      c.use({ x: pt.x, z: pt.z, r: 1.3, label: 'try door 200', when: () => !open, use: () => { open = 0.0001; bar.on = false; c.world.openLink(real.link); c.env.sound.play('door'); } });
       c.tick((dt) => { if (!open || open >= 1) return; open = Math.min(1, open + dt / 0.8); door.rotation.y = -1.7 * open * open * (3 - 2 * open); });
     }
   }
@@ -455,7 +541,6 @@ function manyDoors(c) {
   const sign = c.mapped('correct', tex, { side: THREE.DoubleSide });
   c.board(sign, 0, 2.2, 0.4, 1.3, 0.4, 0);
   for (const x of [-0.5, 0.5]) c.flat.box(x - 0.006, 2.4, 0.394, x + 0.006, c.H, 0.406, [0.2, 0.2, 0.2]);
-  c.rt.onEnter = (n) => { if (n === 1) c.say(`Doors. ${p.per * 3} of them, each with a number. You have met some of these numbers before.`); };
 }
 
 /** A corridor of framed colleagues, every one of them employee of the same month. */
@@ -492,9 +577,6 @@ function hallOfFame(c) {
     const name = i < n ? cast[p.order[p.frames[i].who % p.order.length] % cast.length].name : c.level.name;
     const k = { x: pt.x, z: pt.z, at, eyes, passed: false, shut: false };
     list.push(k);
-    c.use({ x: pt.x, z: pt.z, r: 1.15, label: i < n ? `look at ${name}` : 'look at the last frame',
-      use: () => c.say(i < n ? (k.shut ? `${name}, ${p.frames[i].plate}. The eyes are shut. They were not shut on the way in.` : `${name}: employee of the month, ${p.frames[i].plate}. The eyes do not follow you. You checked twice.`)
-        : p.last === 'empty' ? `An empty frame. The plate already says ${c.level.name.toUpperCase()}.` : p.last === 'mirror' ? 'It is the back of your head. You turn round. So does it.' : `It is you. Employee of the month, for leaning.`) });
   }
   // walk past a portrait, and behind your back it closes its eyes
   c.tick((dt, t, me) => {
@@ -507,7 +589,6 @@ function hallOfFame(c) {
     }
   });
   if (W > 3) c.prop('pedestal', 0, -D / 2 + (c.room.doors.some((d) => d.side === 'back') ? 2.2 : 0.7), { fallback: [0.5, 0.9, 0.5] });
-  c.rt.onEnter = (n2) => { if (n2 === 1) c.say(`Employee of the Month. The month, in every case, is ${p.month}.`); };
 }
 
 export const BUILDERS = { plain, start, exit, cutouts, 'ceiling-meeting': ceilingMeeting, coolers, party, 'many-doors': manyDoors, 'hall-of-fame': hallOfFame, ...MORE };

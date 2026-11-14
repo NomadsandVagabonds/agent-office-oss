@@ -14,7 +14,7 @@
 // docs/HARNESS.md for how to check it.
 import { RpcError, RPC } from './rpc.mjs';
 import { AgentAdapter, START_TIMEOUT_MS } from './adapter.mjs';
-import { LIMITS, isObject, line, text, tail, toolStatus, planStatus } from './normalize.mjs';
+import { LIMITS, isObject, line, text, tail, toolStatus, planStatus, limitWindow } from './normalize.mjs';
 
 /**
  * How an office mode maps onto Codex's own policy. Codex enforces these itself
@@ -40,6 +40,38 @@ const LEGACY_DECISION = Object.freeze({
   decline: { denied: { rejection: 'The user declined the request.' } }, cancel: 'abort',
 });
 
+// Codex names its allowance windows by position (primary, secondary), not by
+// what they are; what they mean follows their length. When Codex leaves the
+// length out, paid plans are five hours and a week and the free tiers a month.
+// This reading is T3 Code's (apps/server/src/provider/codexUsageLimits.ts).
+const SESSION_MINS = 5 * 60, WEEK_MINS = 7 * 24 * 60, MONTH_MINS = 30 * 24 * 60;
+const LIMIT_LABEL = Object.freeze({ session: 'Session', weekly: 'Weekly', monthly: 'Monthly' });
+
+/** Codex's rate-limit snapshot as the office's allowance windows. Exported for the tests. */
+export function codexLimits(snapshot) {
+  if (!isObject(snapshot)) return { plan: '', windows: [] };
+  const plan = line(typeof snapshot.planType === 'string' ? snapshot.planType : '', 40);
+  const monthlyPlan = plan === 'free' || plan === 'go';
+  const windows = [];
+  for (const [id, fallbackMins] of [['primary', monthlyPlan ? MONTH_MINS : SESSION_MINS], ['secondary', WEEK_MINS]]) {
+    const w = snapshot[id];
+    if (!isObject(w)) continue;
+    const mins = Number.isFinite(w.windowDurationMins) && w.windowDurationMins > 0 ? w.windowDurationMins : fallbackMins;
+    const kind = mins >= MONTH_MINS ? 'monthly' : mins >= WEEK_MINS ? 'weekly' : 'session';
+    const window = limitWindow({ id, kind, label: LIMIT_LABEL[kind], usedPercent: w.usedPercent, windowMins: mins,
+      resetsAt: Number.isFinite(w.resetsAt) ? w.resetsAt * 1000 : undefined });        // Codex counts in seconds
+    if (window) windows.push(window);
+  }
+  // A spend cap is reported as what is left, not as what is used.
+  const cap = snapshot.individualLimit;
+  if (isObject(cap) && Number.isFinite(cap.remainingPercent)) {
+    const window = limitWindow({ id: 'individual', kind: 'credit', label: 'Credit limit', usedPercent: 100 - cap.remainingPercent,
+      resetsAt: Number.isFinite(cap.resetsAt) ? cap.resetsAt * 1000 : undefined });
+    if (window) windows.push(window);
+  }
+  return { plan, windows };
+}
+
 export class CodexAdapter extends AgentAdapter {
   /**
    * @param {{command:string, args?:string[], env?:object, cwd:string, clientInfo:object,
@@ -55,6 +87,8 @@ export class CodexAdapter extends AgentAdapter {
     this.byRpcId = new Map();         // Codex request id → our request id (for serverRequest/resolved)
     this.requestSeq = 0;
     this.model = '';
+    this.rateLimits = null;           // Codex's last allowance snapshot, merged from partial updates
+    this.limitsSent = '';             // what we last reported, so a repeat is not news
   }
 
   async start() {
@@ -98,6 +132,7 @@ export class CodexAdapter extends AgentAdapter {
     }
     this.threadId = started.thread.id.slice(0, 200);
     this.model = line(started.model || started.thread.model || this.opt.model || '', 80);
+    this.#readLimits();
     return {
       protocol: 'codex-app-server',
       nativeSessionId: this.threadId,
@@ -105,6 +140,39 @@ export class CodexAdapter extends AgentAdapter {
       model: this.model, models: [], modeId: '', modes: [],
       features: { interrupt: true, resume: true, images: true, officeTools, nativeSandbox: true },
     };
+  }
+
+  /* ---- the operator's allowance -------------------------------------------- */
+
+  // Asked once, when the session starts, and never waited for: a Codex that is
+  // too old to know the method, or signed in with an API key, simply has no
+  // answer. After that Codex tells us itself (account/rateLimits/updated).
+  #readLimits() {
+    const before = this.rateLimits;
+    this.peer.request('account/rateLimits/read', null, { timeoutMs: 10_000 }).then((res) => {
+      if (!isObject(res)) return;
+      const byId = isObject(res.rateLimitsByLimitId) ? res.rateLimitsByLimitId.codex : null;
+      // An update that arrived while we were asking is newer than this answer.
+      if (this.rateLimits === before) this.#limits(isObject(byId) ? byId : res.rateLimits);
+    }, () => {});
+  }
+
+  #limits(update) {
+    if (!isObject(update)) return;
+    // A snapshot for one model's own limit must not overwrite the main allowance.
+    if (typeof update.limitId === 'string' && update.limitId && update.limitId !== 'codex') return;
+    // Updates are partial: a field Codex leaves out keeps its earlier value.
+    const merged = { ...(this.rateLimits || {}) };
+    for (const key of ['planType', 'primary', 'secondary', 'individualLimit']) {
+      if (update[key] !== undefined) merged[key] = update[key];
+    }
+    this.rateLimits = merged;
+    const limits = codexLimits(merged);
+    if (!limits.windows.length) return;
+    const key = JSON.stringify(limits);
+    if (key === this.limitsSent) return;
+    this.limitsSent = key;
+    this._emit({ type: 'limits', ...(limits.plan ? { plan: limits.plan } : {}), windows: limits.windows });
   }
 
   /* ---- turns -------------------------------------------------------------- */
@@ -290,6 +358,9 @@ export class CodexAdapter extends AgentAdapter {
         this._emit({ type: 'usage', ...(Number.isFinite(used) && used >= 0 ? { used } : {}), ...(Number.isFinite(size) && size > 0 ? { size } : {}) });
         return;
       }
+      case 'account/rateLimits/updated':
+        this.#limits(params.rateLimits);
+        return;
       case 'serverRequest/resolved': {
         // Codex settles its own requests when their turn ends; nobody is waiting for our answer any more.
         const requestId = this.byRpcId.get(String(params.requestId));

@@ -137,6 +137,12 @@ export function registerHarnessRoutes(router, ctx) {
 
   /* ---- mail that wakes ------------------------------------------------------ */
 
+  router.post('/api/harness/sessions/:ref/mail', (c) => guard(async () => {
+    const who = humanOnly(c, 'have mail delivered to another agent');
+    const session = need(c.params.ref);
+    return { ok: true, ...wake.deliverNow(session, who.by), session: harness.describe(session.id) };
+  }), { ...local, about: 'Deliver an agent\'s waiting office mail now, as a turn (the human stepping in after a guard rail held it).' });
+
   router.get('/api/harness/wake', () => ({ paused: wake.paused, limits: wake.limits(),
     sessions: harness.list().map((s) => ({ id: s.id, name: s.name, ...s.wakeStats })) }),
   { about: 'Automatic turns: paused or not, the limits, and each session\'s budget.' });
@@ -175,7 +181,7 @@ export function registerHarnessRoutes(router, ctx) {
     const result = delegations.request(body, delegator(c, body));
     if (body.wait) return { ok: true, delegation: await delegations.wait(result.id, body.timeoutMs) };
     return { ok: true, delegation: result };
-  }), { ...local, about: 'Give another agent a task: {to:<adapter|agent>, task, from?, title?, role?, model?, mode?, cwd?, context?:{session?,turns?}, wait?, timeoutMs?}.' });
+  }), { ...local, about: 'Give another agent a task: {task, to?:<adapter|agent> (left out: the office picks, by remaining allowance when known), from?, title?, role?, model?, mode?, cwd?, context?:{session?,turns?}, wait?, timeoutMs?}.' });
 
   router.get('/api/delegations/:id', (c) => guard(async () => {
     const d = delegations.get(c.params.id);
