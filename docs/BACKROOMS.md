@@ -69,10 +69,15 @@ room between them. Tests hold both.
 Plain rooms are not written one at a time, and they are meant to be hard to
 tell apart. Each floor has a small vocabulary (`quiet.js`, after Codex's
 quiet-maze study): two or three wall-and-pillar motifs, turned and used again
-and again, and one or two things that are quietly wrong, repeated in several
-rooms and never the mark of one — a partition with a hole at crawl height and
-another at head height, a whole workstation sunk in the carpet. Nothing in a
-plain room can be used.
+and again; one way its corridors are lined, or not; and one or two things that
+are quietly wrong, repeated in several rooms and never the mark of one — a
+partition with a hole at crawl height and another at head height, a whole
+workstation sunk in the carpet. Each kind of floor repeats in its own way
+(`TELLS`): partitions and doglegs in the yellow, bay after bay and corridors of
+piers in records, almost nothing at all out of hours, columns and half-built
+stud walls where it is being fitted out, screens with a return on them on the
+top floor. Nothing in a plain room can be used, and hardly any has anything
+left in it (about one in sixteen): an empty room is the point.
 
 | kind | what it is | how often |
 |---|---|---|

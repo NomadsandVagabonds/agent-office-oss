@@ -5,7 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { generate, sketch, DECK, ARCHETYPES, SIDES, T, RISE, toWorld, wallLength, wallPoint, floorAt, ceilAt, headAt, fitsAt, stairZones,
-  roomDistances, roomPath, makeRng, MIN_EXIT_STEPS, MIN_ODD, MAX_ODD, MAX_ROOMS, coinSpots, STASH } from '../public/world/backrooms/gen.js';
+  roomDistances, roomPath, makeRng, MIN_EXIT_STEPS, MIN_ODD, MAX_ODD, MAX_ROOMS, coinSpots, STASH, THING_CHANCE } from '../public/world/backrooms/gen.js';
+import { layoutOf, standable, TELLS, HALLS, NARROW, LOW, HIGH } from '../public/world/backrooms/quiet.js';
+import { THEME_IDS } from '../public/world/backrooms/themes.js';
 
 const office = {
   name: 'Robin', projects: ['Webstore', 'Mobile App', 'Infra'], agents: ['Ivory Marten', 'Amber Vireo', 'Ember Numbat', 'Olive Heron'],
@@ -407,4 +409,110 @@ test('in an oddity a coin has a place of its own, where the builder leaves the f
   }
   // (a room that is never dealt by chance is not in these buildings at all: its place is checked where it is dealt)
   for (const arch of DECK) if (!arch.planned) assert.ok(seen.get(arch.id) >= 5, `${arch.id}: only ${seen.get(arch.id) || 0} coins in 250 buildings`);
+});
+
+/* ---- the plain rooms: a small vocabulary that repeats (quiet.js) ------------------------------------------------ */
+
+const QUIET_SEEDS = Array.from({ length: 30 }, (_, i) => `quiet-${i}`);
+const quietFloors = new Map();
+const floorsOf = (theme) => { if (!quietFloors.has(theme)) quietFloors.set(theme, QUIET_SEEDS.map((seed) => generate(seed, { theme, way: 'stairs' }))); return quietFloors.get(theme); };
+const walkable = (level) => level.rooms.filter((r) => r.kind === 'plain' && !r.crawl);
+const kindOf = (r) => (r.quiet ? r.quiet.kind : r.shape ? 'shape' : 'none');
+
+test('plain rooms repeat: on every floor the same few layouts come round again and again', () => {
+  for (const theme of THEME_IDS) {
+    let top = 0, rooms = 0;
+    for (const level of floorsOf(theme)) {
+      const plain = walkable(level), lay = new Map();
+      for (const r of plain) lay.set(layoutOf(r), (lay.get(layoutOf(r)) || 0) + 1);
+      const counts = [...lay.values()].sort((a, b) => b - a);
+      assert.ok(counts[0] >= 2, `${theme}, ${level.seed}: no two plain rooms are laid out alike`);
+      assert.ok(lay.size <= plain.length * 0.85, `${theme}, ${level.seed}: ${lay.size} layouts in ${plain.length} rooms — nearly every room is one of a kind`);
+      top += counts.slice(0, 3).reduce((a, b) => a + b, 0); rooms += plain.length;
+    }
+    assert.ok(top / rooms >= 0.5, `${theme}: the three commonest layouts of a floor are only ${Math.round((100 * top) / rooms)}% of its plain rooms`);
+  }
+});
+
+test('each kind of floor repeats in its own way', () => {
+  const share = (theme, kinds) => { let n = 0, all = 0; for (const level of floorsOf(theme)) for (const r of walkable(level)) { all++; if (kinds.includes(kindOf(r)) || (kinds.includes('none') && r.quiet && r.quiet.kind === 'bare')) n++; } return n / all; };
+  assert.deepEqual(Object.keys(TELLS).sort(), THEME_IDS.slice().sort(), 'every kind of floor has something that gives it away');
+  for (const theme of THEME_IDS) {
+    const own = share(theme, TELLS[theme]);
+    assert.ok(own >= 0.08, `${theme}: only ${Math.round(own * 100)}% of its plain rooms are ${TELLS[theme].join(' or ')}`);
+    for (const other of THEME_IDS) if (other !== theme) assert.ok(own > share(other, TELLS[theme]), `${theme} is told by ${TELLS[theme].join(' and ')}, and ${other} has more of them`);
+  }
+  // …and corridors are part of it: somewhere, a floor's narrow rooms are lined, and somewhere they are not
+  const lined = new Set(THEME_IDS.flatMap((theme) => floorsOf(theme).flatMap((level) => walkable(level).filter((r) => r.quiet && HALLS.includes(r.quiet.kind)).map((r) => r.quiet.kind))));
+  assert.deepEqual([...lined].sort(), HALLS.slice().sort());
+  for (const theme of THEME_IDS) for (const level of floorsOf(theme)) for (const r of walkable(level)) if (r.quiet && r.quiet.kind === 'nibs') assert.ok(Math.min(r.W, r.D) < NARROW, 'piers down both walls are for corridors');
+});
+
+test('the wrongnesses are never the mark of one room, and the wall with two holes does turn up', () => {
+  let withHoles = 0, sunkFloors = 0, floors = 0;
+  for (const theme of THEME_IDS) for (const level of floorsOf(theme)) {
+    const holes = walkable(level).filter((r) => r.quiet && r.quiet.kind === 'apertures'), desks = walkable(level).filter((r) => r.blocks && r.blocks.length);
+    assert.ok(holes.length !== 1 && desks.length !== 1, `${theme}, ${level.seed}: ${holes.length} holed walls and ${desks.length} sunk desks — one of anything is a landmark`);
+    floors++; if (holes.length) withHoles++; if (desks.length) sunkFloors++;
+    for (const r of holes) {
+      // the hole you can crawl through is a real way through: a body fits in it, ducking; the one at head height is wall at floor level
+      assert.equal(r.lows.length, 1);
+      const l = r.lows[0], mid = { x: (l.x0 + l.x1) / 2, z: (l.z0 + l.z1) / 2 };
+      assert.equal(l.h, LOW); assert.ok(LOW >= 0.62 && LOW < 1, 'low enough to have to crawl, high enough to get through');
+      assert.ok(standable(r, mid.x, mid.z), `${theme}, ${level.seed}: nobody fits in the hole`);
+      assert.ok(headAt(r, mid.x, mid.z) <= LOW + 1e-9, 'and you do have to duck');
+      const high = r.pillars.filter((p) => p.wrong === 'high');
+      assert.ok(high.some((p) => p.h === HIGH[0]) && high.some((p) => p.y0 === HIGH[1]), 'the other hole is out of reach: wall under it, wall over it');
+      for (const p of high) if (p.h) assert.equal(standable(r, p.x, p.z), false);
+    }
+  }
+  assert.ok(withHoles / floors > 0.2 && withHoles / floors < 0.7, `the wall with two holes is on ${withHoles} of ${floors} floors`);
+  assert.ok(sunkFloors / floors > 0.2 && sunkFloors / floors < 0.7, `the sunk workstation is on ${sunkFloors} of ${floors} floors`);
+});
+
+test('no layout can trap anybody: every doorway of every laid-out room is reached on foot — and the crawl hole is never the only way', () => {
+  for (const theme of THEME_IDS) for (const level of floorsOf(theme)) for (const r of walkable(level)) {
+    if (!r.quiet && !(r.blocks && r.blocks.length)) continue;
+    const where = `${theme}, ${level.seed}, room ${r.id} (${layoutOf(r)})`;
+    for (const sealed of [false, true]) {
+      if (sealed && !(r.lows && r.lows.length)) continue;
+      // (sealed: the low hole bricked up, to show that the ordinary way round both ends of the wall is still there)
+      const plan = { pillars: r.pillars.concat(sealed ? r.lows.map((l) => ({ x: (l.x0 + l.x1) / 2, z: (l.z0 + l.z1) / 2, w: l.x1 - l.x0, d: l.z1 - l.z0 })) : []), lows: r.lows || [], blocks: r.blocks || [] };
+      const cell = 0.125, nx = Math.ceil(r.W / cell), nz = Math.ceil(r.D / cell);
+      const at = (i, j) => ({ x: -r.W / 2 + (i + 0.5) * cell, z: -r.D / 2 + (j + 0.5) * cell }), key = (p) => Math.floor((p.x + r.W / 2) / cell) + nx * Math.floor((p.z + r.D / 2) / cell);
+      const starts = r.doors.map((d) => key(wallPoint(r, d.side, d.c, 0.5))), seen = new Uint8Array(nx * nz), queue = [starts[0]];
+      seen[starts[0]] = 1;
+      while (queue.length) {
+        const k = queue.pop(), i = k % nx, j = (k - i) / nx, here = at(i, j);
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const ii = i + di, jj = j + dj, kk = ii + nx * jj;
+          if (ii < 0 || jj < 0 || ii >= nx || jj >= nz || seen[kk]) continue;
+          const there = at(ii, jj);
+          if (!standable({ ...r, pillars: [], lows: [], blocks: [] }, there.x, there.z, plan) || Math.abs(floorAt(r, there.x, there.z) - floorAt(r, here.x, here.z)) > 0.26) continue;
+          seen[kk] = 1; queue.push(kk);
+        }
+      }
+      assert.ok(starts.every((k) => seen[k] === 1), `${where}: a doorway cannot be reached${sealed ? ' without crawling' : ''}`);
+    }
+  }
+});
+
+test('an empty room is the point: hardly any plain room has something left in it, and the way to the way down is mostly plain rooms', () => {
+  assert.ok(THING_CHANCE <= 0.08);
+  for (const theme of THEME_IDS) {
+    let withThing = 0, rooms = 0;
+    for (const level of floorsOf(theme)) {
+      const plain = level.rooms.filter((r) => r.kind === 'plain' || r.kind === 'start');
+      const left = plain.filter((r) => r.dress.some((d) => !['marks', 'map', 'floordoor', 'ceildoor'].includes(d.type))).length;
+      assert.ok(left / plain.length <= 0.35, `${theme}, ${level.seed}: something left in ${left} of ${plain.length} plain rooms`);
+      withThing += left; rooms += plain.length;
+      // from where you land to the way down: runs of plain rooms, with the oddities between them
+      const path = roomPath(level, level.start.room, level.exit.room).map((id) => level.rooms[id]);
+      let run = 0, best = 0, quiet = 0;
+      for (const r of path) { if (r.kind !== 'special') { run++; quiet++; best = Math.max(best, run); } else run = 0; }
+      assert.ok(best >= 2, `${theme}, ${level.seed}: never two plain rooms running on the way down`);
+      assert.ok(quiet / path.length >= 0.6, `${theme}, ${level.seed}: only ${quiet} of the ${path.length} rooms on the way down are plain`);
+    }
+    assert.ok(withThing / rooms <= 0.12, `${theme}: something has been left in ${Math.round((100 * withThing) / rooms)}% of plain rooms`);
+  }
 });
