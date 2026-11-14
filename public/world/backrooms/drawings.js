@@ -14,6 +14,7 @@ export const WARNINGS = Object.freeze({
     ['THE ONE IN THE HAT', 'ONLY MOVES WHEN YOU', 'ARE NOT LOOKING. SO'],
     ['HAT MAN: IF HE CANT', 'SEE YOU HE DOESNT', 'KNOW WHERE YOU'],
     ['DONT STAND NEXT TO', 'HIM. EVEN IF YOU ARE', 'WATCHING. HE'],
+    ['HE WONT GO PAST A', 'FIRE. I LIT PAPER IN', 'THE DOORWAY AND HE'],
   ],
   shadow: [
     ['DO NOT LOOK AT THE', 'DARK ONE. I LOOKED', 'AND THE CAMERA'],
@@ -22,6 +23,7 @@ export const WARNINGS = Object.freeze({
   moth: [
     ['THE MOTH IS ALRIGHT.', 'IT WAITS AT A LIGHT.', 'I THINK IT IS GOING'],
     ['FOLLOW THE MOTH??', 'EVERY LIGHT IT PICKS', 'IS NEARER THE'],
+    ['DONT LIGHT A FIRE', 'NEAR THE MOTH. IT', 'WENT STRAIGHT INTO'],
   ],
   porter: [
     ['MIND HIS BUCKET.', 'IF YOU KNOCK IT OVER', 'PUT IT BACK OR HE'],
@@ -43,6 +45,11 @@ export const WARNINGS = Object.freeze({
   'stand-ins': [
     ['KEEP THE TORCH ON', 'IT. IT ONLY MOVES', 'WHEN THE LIGHT IS'],
     ['NOT WITHOUT A LIGHT.', 'IT GOES RED AND THEN', 'YOU ARE BACK AT'],
+  ],
+  'mecha-warden': [
+    ['THE RED BUTTON ON', 'THE BIG MACHINE STOPS', 'THEM. I GOT AS FAR AS'],
+    ['TURN A CAMERA ROUND', 'AND THEY ALL GO AND', 'LOOK AT IT. THEN YOU'],
+    ['THE EMPTY CAGE IS', 'FOR YOU. THE ONES IN', 'WIGS PUT YOU IN'],
   ],
   'floor-warden': [
     ['WALK. DO NOT RUN.', 'HE ONLY MINDS IF YOU', 'RUN. THE SCISSORS'],

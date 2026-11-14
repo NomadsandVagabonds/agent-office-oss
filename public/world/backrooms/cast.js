@@ -40,6 +40,8 @@ export const CAST_LESSONS = Object.freeze({
  *   needs        lessons it takes for granted (CAST_LESSONS or ROOM_LESSONS). One that needs anything is never on the floor you land on
  *   themes       { yellow, archive, night, fitout, exec } → a multiplier on how likely each kind of floor is to be its floor. 0 keeps it off one
  *   items        the things a visitor might carry that change what it does (ITEMS) — so that whoever writes an item knows who is waiting for it
+ *   fire         what a fire lit by the visitor is to it (cast/fire.rule.js FIRE_WAYS): 'fears' (will not go near one, and backs off from one
+ *                lit beside it) | 'ignores' | 'drawn' (goes to it). Its own rule does it, with c.fire(x, z)
  *   caught       what it costs to be got by it: { hurt: points of health } (and with no health system, a creature that hunts ends the visit) ·
  *                { ends: true } only for one that hunts · { setback: 'in a sentence' } for the rest
  *   room         for home 'room': { w, d } the least floor it needs, metres; far: the fewest doorways from where you land (default 3)
@@ -47,15 +49,15 @@ export const CAST_LESSONS = Object.freeze({
  */
 export const ALL_CAST = Object.freeze([
   Object.freeze({ id: 'pirate', name: 'The mascot', rule: 'It only moves while nobody is looking at it — and it only knows where you are while it can see you.',
-    disposition: 'hunts', home: 'roams', always: true, weight: 1, teaches: 'sight', needs: [], items: [], caught: { hurt: 2 } }),
+    disposition: 'hunts', home: 'roams', always: true, weight: 1, teaches: 'sight', needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 2 } }),
   Object.freeze({ id: 'shadow', name: 'The shadow', rule: 'Look straight at it and it goes off like a flashbulb, and half your battery goes with it.',
-    disposition: 'hunts', home: 'roams', weight: 1, teaches: 'averted', needs: [], items: ['battery', 'torch'],
+    disposition: 'hunts', home: 'roams', weight: 1, teaches: 'averted', needs: [], items: ['battery', 'torch'], fire: 'ignores',
     caught: { setback: 'the room goes dark for a while, and half the camcorder\'s charge is gone' } }),
-  Object.freeze({ id: 'moth', name: 'The desk moth', rule: 'It goes to the next light, and waits there for you — and the next light is always nearer the way down.',
-    disposition: 'helps', home: 'roams', weight: 1, teaches: 'led', needs: [], items: ['torch'],
+  Object.freeze({ id: 'moth', name: 'The desk moth', rule: 'It goes to the next light, and waits there for you — and the next light is always nearer the way down. (A fire is a light too, and it does not come back from one.)',
+    disposition: 'helps', home: 'roams', weight: 1, teaches: 'led', needs: [], items: ['torch', 'paper', 'lighter'], fire: 'drawn',
     caught: { setback: 'none: lose it and it is still going round the last tube you saw it at' } }),
   Object.freeze({ id: 'porter', name: 'The night porter', rule: 'Leave his bucket alone — and if you have not, stand it up again, because until you do he is looking at you.',
-    disposition: 'keeps to itself', home: 'room', weight: 1, teaches: 'tidy', needs: [], items: ['battery'], room: { w: 5, d: 5 },
+    disposition: 'keeps to itself', home: 'room', weight: 1, teaches: 'tidy', needs: [], items: ['battery'], fire: 'ignores', room: { w: 5, d: 5 },
     caught: { setback: 'his room goes dim, and if you walk out on it every pair of doors on the floor is shut' } }),
 ]);
 export const CAST = Object.freeze(ALL_CAST.filter((m) => m.on !== false));

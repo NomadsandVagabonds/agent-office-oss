@@ -1,16 +1,23 @@
-// The Backrooms — what it sounds like down here. Nothing is loaded: every
-// sound is a few oscillators and a second of noise. A mains hum with the buzz
-// of a tired ballast, carpet under your feet, and the small noises of whatever
-// room you are in. It is quiet on purpose, it starts only after you have
-// touched something, and M turns it off.
+// The Backrooms — what it sounds like down here. Every sound but one is a few
+// oscillators and a second of noise: a mains hum with the buzz of a tired
+// ballast, carpet under your feet, and the small noises of whatever room you
+// are in. The one thing loaded is the owner's music (music/room4.mp3, beside
+// this file): mostly air, played low and round and round under everything
+// else, and done without if it will not load. All of it is quiet on purpose,
+// starts only after you have touched something, and M turns it off.
+
+/** How loud the music is, against a small sound's 0.1 to 0.2: under them, never over. */
+export const MUSIC_GAIN = 0.4;
+const MUSIC = new URL('./music/room4.mp3', import.meta.url);
 export function createSound(level, opt = {}) {
   let ctx = null, master = null, humGain = null, draught = null, noiseBuf = null, muted = !!opt.mute, humTarget = 1, hum = level.hum || 50;
+  let music = null;                          // the <audio> the music comes out of, once there is one
   const running = [], mains = [];            // things to stop at the end · the hum's oscillators, to retune
   const loops = new Map();                   // name → { gain, stop }
   const now = () => ctx.currentTime;
 
   function start() {
-    if (ctx) { if (ctx.state === 'suspended') ctx.resume().catch(() => {}); return; }
+    if (ctx) { if (ctx.state === 'suspended') ctx.resume().catch(() => {}); if (music?.paused) music.play().catch(() => {}); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     try { ctx = new AC(); } catch { ctx = null; return; }
@@ -36,6 +43,21 @@ export function createSound(level, opt = {}) {
     draught = ctx.createGain(); draught.gain.value = 0;
     dr.buffer = noiseBuf; dr.loop = true; drF.type = 'bandpass'; drF.frequency.value = 1500; drF.Q.value = 2.2;
     dr.connect(drF); drF.connect(draught); draught.connect(master); dr.start(0, 0.3); running.push(dr);
+    startMusic();
+  }
+
+  /** The music: one file, streamed, looped, through the same master as everything else (so M silences it too). */
+  function startMusic() {
+    if (music || opt.music === false || typeof Audio === 'undefined') return;
+    try {
+      const el = new Audio(MUSIC.href);
+      el.loop = true; el.preload = 'auto';
+      const g = ctx.createGain(); g.gain.value = 0;
+      ctx.createMediaElementSource(el).connect(g); g.connect(master);
+      g.gain.linearRampToValueAtTime(MUSIC_GAIN, now() + 6);                      // it comes up slowly, after the hum
+      music = el;
+      el.play().catch(() => { /* no music, then: the place has its own noises */ });
+    } catch { music = null; }
   }
 
   /** A burst of filtered noise. */
@@ -142,6 +164,8 @@ export function createSound(level, opt = {}) {
     start,
     get on() { return !!ctx && !muted; },
     get muted() { return muted; },
+    /** Is the music going? (for the dev page and the tests) */
+    get music() { return music ? { playing: !music.paused, at: music.currentTime } : null; },
     setMute(m) { muted = !!m; if (master) master.gain.setTargetAtTime(muted ? 0 : 0.5, now(), 0.05); },
     /** Play one of the small sounds by name. */
     play(name, o) { if (ctx && !muted && voice[name]) { try { voice[name](o); } catch { /* a sound is never worth an error */ } } },
@@ -156,6 +180,7 @@ export function createSound(level, opt = {}) {
     stop() {
       for (const n of running) { try { n.stop(); } catch { /* already stopped */ } }
       running.length = 0; loops.clear();
+      if (music) { try { music.pause(); music.removeAttribute('src'); music.load(); } catch { /* gone anyway */ } music = null; }
       if (ctx) { const c = ctx; ctx = null; c.close().catch(() => {}); }
     },
   };

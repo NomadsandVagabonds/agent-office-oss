@@ -119,9 +119,19 @@ export function createInput(o) {
     while (Math.abs(wheel) >= 40) { const step = Math.sign(wheel); wheel -= step * 40; o.wheel(step); }
   };
   const swallow = (e) => { if (owns(e)) return; e.stopPropagation(); if (e.type === 'contextmenu' || e.type === 'touchmove') e.preventDefault(); };
+  // Esc with the mouse held never reaches the page: the browser takes that key to let the mouse go. So a mouse let go
+  // while the page still has the visitor (not the bag opening, which lets it go on purpose; not another window taking
+  // over, which a moment's wait tells apart) is that Esc, and Esc leaves.
+  let held = false;
   const onPointerLockChange = () => {
-    if (document.pointerLockElement !== canvas) clear();
-    else if (blocked()) { clear(); document.exitPointerLock?.(); } // A pending lock request finished after the bag opened.
+    const mine = document.pointerLockElement === canvas, was = held;
+    held = mine;
+    if (!mine) {
+      clear();
+      if (was && live && !blocked()) setTimeout(() => {
+        if (live && !blocked() && document.pointerLockElement !== canvas && (document.hasFocus?.() ?? true) && !document.hidden) o.quit();
+      }, 120);
+    } else if (blocked()) { clear(); document.exitPointerLock?.(); } // A pending lock request finished after the bag opened.
   };
   const listeners = [['keydown', onKeyDown], ['keyup', onKeyUp], ['pointerdown', onPointerDown], ['pointerup', onPointerUp], ['pointercancel', onPointerUp],
     ['mousemove', onMouseMove], ['pointermove', onPointerMove], ['wheel', onWheel], ['click', swallow], ['dblclick', swallow], ['contextmenu', swallow], ['touchstart', swallow], ['touchmove', swallow]];

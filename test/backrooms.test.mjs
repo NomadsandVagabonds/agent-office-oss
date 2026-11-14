@@ -266,7 +266,7 @@ test('something follows you in some visits, not all', () => {
 /* ---- what is hidden down here (core/game.mjs): a keycard in the mascot's hand, and coins ---------------- */
 
 const ALL = { card: true, coins: [1, 2, 3, 4] };
-const withLoot = (seed, loot = ALL) => generate(seed, { ...office, loot });
+const withLoot = (seed, loot = ALL, opt = {}) => generate(seed, { ...office, ...opt, loot });
 const coinFloor = new WeakMap();
 const hasCoinFloor = (r) => { if (!coinFloor.has(r)) coinFloor.set(r, coinSpots(r).length > 0); return coinFloor.get(r); };
 /** The rooms a coin may be in at all, and those of them that are on no shortest way from the landing to the way out. */
@@ -399,20 +399,30 @@ test('only the coins still to be found are hidden, and what is left takes the sa
 test('in an oddity a coin has a place of its own, where the builder leaves the floor clear', () => {
   for (const arch of DECK) assert.equal(typeof STASH[arch.id], 'function', `${arch.id} has no place for a coin: one would land wherever the generator supposes there is floor`);
   const seen = new Map();
-  for (let i = 0; i < 250; i++) {
-    const level = withLoot(`deck-${i}`), first = new Set();
+  const check = (level) => {
+    const first = new Set();
     for (const c of level.loot.coins) {
       const r = level.rooms[c.room];
       if (!r.arch || first.has(r.id)) continue;                  // (a second coin in the same room has to go somewhere else)
       first.add(r.id);
       const zones = [-1, 1].flatMap((side) => { const lay = STASH[r.arch](r, side); return Array.isArray(lay[0]) ? lay : [lay]; });
       for (const [x0, z0, x1, z1] of zones) assert.ok(x0 <= x1 && z0 <= z1 && x0 > -r.W / 2 && x1 < r.W / 2 && z0 > -r.D / 2 && z1 < r.D / 2, `${r.arch} (${r.W} × ${r.D}): its place is not inside the room`);
-      assert.ok(zones.some(([x0, z0, x1, z1]) => c.x >= x0 - 0.01 && c.x <= x1 + 0.01 && c.z >= z0 - 0.01 && c.z <= z1 + 0.01), `seed deck-${i}: the coin in ${r.arch} is at ${c.x}, ${c.z}, not in its place`);
+      assert.ok(zones.some(([x0, z0, x1, z1]) => c.x >= x0 - 0.01 && c.x <= x1 + 0.01 && c.z >= z0 - 0.01 && c.z <= z1 + 0.01), `seed ${level.seed}: the coin in ${r.arch} is at ${c.x}, ${c.z}, not in its place`);
       seen.set(r.arch, (seen.get(r.arch) || 0) + 1);
     }
-  }
-  // (a room that is never dealt by chance — placed by the plan, or from the news — is not in these buildings at all: its place is checked where it is dealt)
+  };
+  for (let i = 0; i < 250; i++) check(withLoot(`deck-${i}`));
   for (const arch of DECK) if (!arch.planned && !arch.headline) assert.ok(seen.get(arch.id) >= 5, `${arch.id}: only ${seen.get(arch.id) || 0} coins in 250 buildings`);
+  // a room that is never dealt by chance (placed by the plan, or from the news) is not in those buildings at all: ask for
+  // each by name, and hold where its coin goes to the same
+  for (const arch of DECK) if (arch.planned || arch.headline) {
+    for (let i = 0; i < 100; i++) {
+      const level = withLoot(`asked-${arch.id}-${i}`, ALL, { only: arch.id });
+      assert.ok(level.rooms.some((r) => r.arch === arch.id), `${arch.id}: asked for by name, and not there`);
+      check(level);
+    }
+    assert.ok(seen.get(arch.id) >= 5, `${arch.id}: only ${seen.get(arch.id) || 0} coins in 100 buildings that had it`);
+  }
 });
 
 /* ---- the plain rooms: a small vocabulary that repeats (quiet.js) ------------------------------------------------ */

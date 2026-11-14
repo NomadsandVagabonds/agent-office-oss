@@ -103,6 +103,39 @@ test('late pointer lock is released while UI is open, and disposal removes every
   h.input.dispose(); assert.equal(h.window.listenerCount, 0); assert.equal(h.document.listenerCount, 0);
 });
 
+test('Esc with the mouse held never reaches the page: the mouse let go while the page still has the visitor is that Esc, and leaves', async t => {
+  const h = setup(t), wait = () => new Promise(resolve => setTimeout(resolve, 180));
+  h.document.hasFocus = () => true;
+  // never held: nothing was let go
+  h.document.emit('pointerlockchange'); await wait(); assert.equal(h.calls.quit, 0);
+  // held, then let go by the browser (its own answer to Esc)
+  h.document.pointerLockElement = h.canvas; h.document.emit('pointerlockchange');
+  h.document.pointerLockElement = null; h.document.emit('pointerlockchange');
+  assert.equal(h.calls.quit, 0, 'not at once: another window taking over lets the mouse go too, and says so a moment later');
+  await wait(); assert.equal(h.calls.quit, 1);
+  // let go because another window took over: not leaving
+  h.document.pointerLockElement = h.canvas; h.document.emit('pointerlockchange');
+  h.document.hasFocus = () => false; h.document.pointerLockElement = null; h.document.emit('pointerlockchange');
+  await wait(); assert.equal(h.calls.quit, 1);
+  // let go because the page was put away
+  h.document.hasFocus = () => true; h.document.hidden = true;
+  h.document.pointerLockElement = h.canvas; h.document.emit('pointerlockchange');
+  h.document.pointerLockElement = null; h.document.emit('pointerlockchange');
+  await wait(); assert.equal(h.calls.quit, 1); h.document.hidden = false;
+  // let go by the bag opening, which lets it go on purpose
+  h.document.pointerLockElement = h.canvas; h.document.emit('pointerlockchange');
+  h.ui.blocked = true; h.document.pointerLockElement = null; h.document.emit('pointerlockchange');
+  await wait(); assert.equal(h.calls.quit, 1); h.ui.blocked = false;
+  // taken hold of again before the moment is up: still playing
+  h.document.pointerLockElement = h.canvas; h.document.emit('pointerlockchange');
+  h.document.pointerLockElement = null; h.document.emit('pointerlockchange');
+  h.document.pointerLockElement = h.canvas; h.document.emit('pointerlockchange');
+  await wait(); assert.equal(h.calls.quit, 1);
+  // and nothing is said after the level has gone
+  h.document.pointerLockElement = null; h.document.emit('pointerlockchange'); h.input.dispose();
+  await wait(); assert.equal(h.calls.quit, 1);
+});
+
 test('world keyboard, locked mouse, touch use and wheel controls retain upstream behavior', t => {
   const h = setup(t);
   h.window.emit('keydown', { key:'W' }); assert.equal(h.input.state.keys.has('w'), true);

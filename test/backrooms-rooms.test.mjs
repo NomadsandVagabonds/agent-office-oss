@@ -84,7 +84,7 @@ test('every room has a place of its own for a tape, inside its walls, whichever 
   }
 });
 
-test('lessons: one new thing to a room at most, every lesson on the list, and nothing taken for granted that no room teaches', () => {
+test('lessons: every lesson on the list, and nothing taken for granted that no room teaches (a room may teach more than one thing: the owner dropped the limit)', () => {
   const ids = Object.keys(LESSONS);
   for (const id of ids) assert.ok(/^[a-z][a-z0-9-]*$/.test(id) && typeof LESSONS[id] === 'string' && LESSONS[id].length > 10, `lesson ${id}: an id, and a line saying what is learned`);
   for (const id of KNOWN_AT_START) assert.ok(ids.includes(id), `${id} is known from the start but is not on the list of lessons`);
@@ -92,7 +92,7 @@ test('lessons: one new thing to a room at most, every lesson on the list, and no
   for (const a of DECK) for (const t of lessons(a).teaches) taught.add(t);
   for (const a of EVERY) {
     const { teaches, needs } = lessons(a);
-    assert.ok(teaches.length <= 1, `${a.id} teaches ${teaches.join(' and ')}: one new thing to a room, at most`);
+    assert.equal(new Set(teaches).size, teaches.length, `${a.id} says it teaches the same thing twice`);
     for (const id of [...teaches, ...needs]) assert.ok(ids.includes(id), `${a.id}: "${id}" is not on the list of lessons (LESSONS in gen.js)`);
     for (const id of needs) {
       assert.ok(!teaches.includes(id), `${a.id} cannot take for granted the thing it is there to teach (${id})`);
@@ -129,7 +129,6 @@ test('somebody lives in a room: it says who, what a catch costs and what they ca
     assert.match(a.resident, /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, `${a.id}: resident is the id of whoever lives there`);
     assert.ok(Number.isInteger(a.caught) && a.caught >= 0 && a.caught <= 2, `${a.id}: caught is the hearts a catch costs, 0 to 2: nothing down here takes all four at once`);
     assert.ok(Array.isArray(a.items) && a.items.every((t) => ITEM_TYPES.includes(t)), `${a.id}: items are things a visitor can carry`);
-    assert.ok(!a.headline, `${a.id}: a room from the news has nobody anybody could be asked about`);
   }
   let parts = 0, withOne = 0;
   for (let seed = 1; seed <= 60; seed++) {

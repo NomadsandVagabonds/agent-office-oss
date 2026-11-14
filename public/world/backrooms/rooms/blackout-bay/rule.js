@@ -48,6 +48,7 @@ export function stepBlackout(s, o) {
     dt,
     inDark = false,
     hasFlashlight = false,
+    byFire = false,
     px = 0,
     pz = 0,
     yaw = 0,
@@ -60,16 +61,18 @@ export function stepBlackout(s, o) {
     return { state: { red: 0, caught: false, frozen: still, ...(grace > 0 ? { grace } : {}) }, red: 0, caught: false, speeds: targets.map(() => 0), frozen: still };
   }
 
-  // Without a flashlight in the blackout zone, the screen floods red and kills you
-  if (inDark && !hasFlashlight) {
+  // Without a light in the blackout zone, the screen floods red and kills you. (A torch is a light; so is paper burning
+  // within sight of where you stand, for as long as it burns. And a Stand-In that can see a fire is held by it, torch or no torch.)
+  if (inDark && !hasFlashlight && !byFire) {
     red = Math.min(1, red + dt / BLACKOUT.redFillSeconds);
     if (!caught && red >= 1) caught = true;
+    const held = targets.map((t) => !!t.fire);
     return {
-      state: { red, caught, frozen: targets.map(() => false) },
+      state: { red, caught, frozen: held },
       red,
       caught,
-      speeds: targets.map(() => BLACKOUT.stalkSpeed * 1.35),
-      frozen: targets.map(() => false),
+      speeds: held.map((h) => (h ? 0 : BLACKOUT.stalkSpeed * 1.35)),
+      frozen: held,
     };
   }
 
@@ -80,7 +83,7 @@ export function stepBlackout(s, o) {
   for (let i = 0; i < targets.length; i++) {
     const t = targets[i];
     const d = Math.hypot(t.x - px, t.z - pz);
-    const litByTorch = hasFlashlight && (t.los !== false) && isInBeam(px, pz, yaw, t.x, t.z);
+    const litByTorch = !!t.fire || (hasFlashlight && (t.los !== false) && isInBeam(px, pz, yaw, t.x, t.z));
     frozen.push(litByTorch);
     if (!inDark) {
       speeds.push(0);
