@@ -9,10 +9,13 @@ lean on things.
 It is a level called the Backrooms: yellow rooms that hum, seen through a
 camcorder, generated from a seed and never the same twice. A visit goes down
 through three to five floors, each a different kind of place, by a stairwell
-at the far end of each. On the last floor there is no door. There is a
-stretch of wall that somebody has marked with tape, and it gives if you lean
-on it, the way the first one did. What you find on the way (tapes, a keycard)
-is only yours if you get out. In some visits something follows you.
+at the far end of each. On the last floor there is no door. The fire stairs
+run out at a wall somebody has papered over, taped a door on, and camped
+beside; it gives if you lean on it, the way the first one did. Other walls
+carry the same tape, and are only walls: lean on one and it knocks back. What
+you find on the way (tapes, a keycard) is only yours if you get out. In some
+visits something follows you: a shop dummy for as long as you watch it from
+across a room, and not safe to stand beside, watched or not.
 
 Everything is in `public/world/backrooms/`. Nothing in it needs a build step,
 a dependency or the network.
@@ -266,10 +269,10 @@ the office is: the seed is the clock, and no building is ever given twice.
 | `world.js` | builds a generated floor: the toolbox (`roomContext`), collision, the doorway check |
 | `kit.js` | meshes, baked light, textures |
 | `themes.js` | what each kind of floor is like |
-| `stairwell.js`, `thin.js`, `marks.js`, `leaving.js` | the way down, the wall that gives, the marks on it and on walls that are only walls, and what the camcorder sees as you leave |
+| `stairwell.js`, `thin.js`, `marks.js`, `leaving.js` | the way down, and the taped door at the bottom of the last of it; the wall that gives and the walls that knock back; where the marks go, and the rule for leaning (`lean`, `answer`); what the camcorder sees as you leave |
 | `traces.js` | what earlier visitors left |
 | `loot.js` | tapes and the keycard: where they hide, what is kept |
-| `pursuer.js` | what follows you |
+| `pursuer.js`, `reach.js` | what follows you, and the rule for being within arm's reach of it (pure: the tape tears, and it moves in the torn frames) |
 | `player.js`, `input.js`, `hud.js`, `vhs.js`, `sound.js` | walking, keys and touch, the camcorder, the tape, the hum |
 | `../levels/basement.js` | the floor above it all, and the wall |
 | `../dev/backrooms.js` | the level's own page |

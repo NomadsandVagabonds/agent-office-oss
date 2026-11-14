@@ -4,7 +4,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generate, DECK, ARCHETYPES, lessons, ready, lessonsOf, roomDistances, roomPath, MIN_EXIT_STEPS, EXIT_DEPTH, T, sketch, wallPoint, wallLength, toWorld, floorAt, ceilAt, headAt, fitsAt } from '../public/world/backrooms/gen.js';
-import { MIN_OUT_STEPS, THIN_W, MARK_W, LEAN, lean, pressing, TAPE_LABELS } from '../public/world/backrooms/marks.js';
+import { MIN_OUT_STEPS, THIN_W, MARK_W, LEAN, REFUSE, lean, pressing, answer, TAPE_LABELS } from '../public/world/backrooms/marks.js';
+import { REACH, calm, beside, closeness, grabChance } from '../public/world/backrooms/reach.js';
 import { planVisit, floorOf, generateVisit, MIN_FLOORS, MAX_FLOORS, MIN_VISIT_STEPS, KNOWN_AT_START } from '../public/world/backrooms/plan.js';
 import { THEMES, THEME_IDS } from '../public/world/backrooms/themes.js';
 import { leaving, LEAVE } from '../public/world/backrooms/leaving.js';
@@ -261,7 +262,7 @@ function walked(r) {
   return { has: (p) => seen[key(p)] === 1 };
 }
 
-test('every floor has a thin place — a bare stretch of outside wall you can walk up to — and only the last floor\'s gives', () => {
+test('every floor has the wall the plan would call thin — a bare, marked stretch of outside wall you can walk up to — and only the last floor ends at the wall that gives', () => {
   let near = 0, floors = 0;
   for (const seed of SEEDS) {
     const { visit, floors: all } = visitFor(seed);
@@ -291,6 +292,8 @@ test('every floor has a thin place — a bare stretch of outside wall you can wa
         }
       }
       assert.equal(level.exit.way === 'wall', i === visit.depths - 1);
+      // the wall that gives is the taped door at the bottom of the last fire stairs: never a shorter walk than the plan's guess was allowed to be
+      if (level.exit.way === 'wall') assert.ok(level.rooms[level.exit.room].depth >= MIN_OUT_STEPS && level.exit.room !== t.room, `${where}: the way out is ${level.rooms[level.exit.room].depth} doorways in`);
       floors++; if (r.toExit <= 2) near++;
     });
   }
@@ -418,3 +421,65 @@ test('a room staged from the news: one to a visit at most, never on the floor yo
   for (let i = 0; i < 40; i++) assert.ok(!generate(`alone-${i}`, office).picked.some((id) => stories.has(id)));
 });
 
+
+test('a marked wall that is leaned on answers inside half a second, whichever kind of wall it is', () => {
+  assert.ok(REFUSE < 0.5 && REFUSE < LEAN, 'a wall that is only a wall says so before the other kind would have given');
+  // the one that gives: something to see from the first instant, more of it the longer you lean, and through at LEAN
+  assert.equal(answer(true, 0).open, 0);
+  assert.ok(answer(true, 1 / 30).open > 0.15, 'the first frame of a lean already shows');
+  let prev = 0;
+  for (let h = 1 / 30; h < LEAN; h += 1 / 30) { const a = answer(true, h); assert.ok(a.open > prev && a.open <= 1 && !a.through); prev = a.open; }
+  assert.equal(answer(true, LEAN).through, true);
+  assert.equal(answer(true, LEAN).open, 1);
+  // the ones that do not: one knock per lean, and nothing until you have let go altogether and leaned again
+  let held = 0, said = false, knocks = 0, at = null;
+  const step = (pressed) => { held = lean(held, 1 / 30, pressed); const a = answer(false, held, said); said = a.said; if (a.knock) { knocks++; at ??= held; } };
+  for (let i = 0; i < 90; i++) step(true);
+  assert.equal(knocks, 1, 'three seconds of leaning is one refusal, not a drum roll');
+  assert.ok(at >= REFUSE && at < 0.5);
+  for (let i = 0; i < 4; i++) step(false);
+  for (let i = 0; i < 30; i++) step(true);
+  assert.equal(knocks, 1, 'easing off for a moment is the same lean');
+  for (let i = 0; i < 90; i++) step(false);
+  for (let i = 0; i < 30; i++) step(true);
+  assert.equal(knocks, 2, 'let go and lean again, and it says so again');
+});
+
+test('within arm\'s reach of what follows you: across a room it is a dummy; running past costs a frame; standing beside it, it has you', () => {
+  const dt = 1 / 30, dice = (...v) => { let i = 0; return () => v[Math.min(i++, v.length - 1)]; };
+  const stand = (d, rnd, secs = 6) => { let s = calm(), tears = 0; for (let t = dt; t <= secs; t += dt) { s = beside(s, dt, d, rnd); if (s.tear) tears++; if (s.grab) return { at: t, tears }; } return { at: null, tears }; };
+  assert.ok(REACH.touch < REACH.arm && REACH.arm < 1.6, 'arm\'s reach is an arm, not a room');
+  // watched from anywhere outside its reach, for as long as you like: nothing
+  for (const d of [REACH.arm, REACH.arm + 0.01, 3, 12, Infinity]) assert.deepEqual(stand(d, () => 0, 30), { at: null, tears: 0 }, `at ${d} m it is a shop dummy`);
+  // standing at arm's length: a warning first, always, and then it has you — in a second or two, whatever the dice say
+  for (const d of [REACH.arm - 0.02, 1.1, 0.9]) for (const rnd of [() => 0, () => 0.5, () => 0.999]) {
+    let s = calm(), first = null, seen = 0;
+    for (let t = dt; t <= 0.5; t += dt) { s = beside(s, dt, d, rnd); if (s.tear) { first ??= t; seen++; assert.equal(s.grab, false, `at ${d} m the first tear is only a warning`); } }
+    assert.ok(first !== null && first <= REACH.first + dt + 1e-9 && seen === 1, 'the tape tears almost as soon as you are in reach, once');
+    const got = stand(d, rnd);
+    assert.ok(got.at >= 0.55 && got.at <= 3.2 && got.tears >= 2 && got.tears <= REACH.last, `at ${d} m it had you after ${got.at} s and ${got.tears} tears`);
+  }
+  // running past (well under a second inside its reach, not touching): one torn frame, and you are still there — every time
+  for (const rnd of [() => 0, () => 0.3, () => 0.999]) {
+    let s = calm(), tears = 0;
+    for (let t = 0; t < 0.5; t += dt) { s = beside(s, dt, 0.9, rnd); if (s.tear) tears++; assert.equal(s.grab, false); }
+    assert.equal(tears, 1, 'running past costs one tear');
+  }
+  // touching it: sometimes that is all it takes
+  assert.equal(closeness(REACH.touch), 1); assert.equal(closeness(REACH.arm), 0);
+  assert.ok(grabChance(1, 1) > 0.2 && grabChance(1, 1) < 0.6 && grabChance(1, 0.99) === 0);
+  assert.equal(stand(REACH.touch, () => 0).tears, 1, 'up against it, with the dice against you, the first tear is the last');
+  assert.ok(stand(REACH.touch, () => 0.999).at < stand(REACH.arm - 0.02, () => 0.999).at, 'and it is quicker about it the nearer you are');
+  for (let n = 1; n < REACH.last; n++) for (const c of [0, 0.5, 1]) assert.ok(grabChance(n + 1, c) >= grabChance(n, c) && grabChance(n, 1) >= grabChance(n, 0), 'each tear is worse than the last, and nearer is worse');
+  assert.equal(grabChance(REACH.last, 0), 1);
+  // step back out and wait, and it forgets; step back for a moment and it has not
+  let s = calm();
+  for (let t = 0; t < 0.4; t += dt) s = beside(s, dt, 1, () => 0.999);
+  assert.equal(s.tears, 1);
+  for (let t = 0; t < REACH.forget - 0.5; t += dt) s = beside(s, dt, 5, () => 0.999);
+  assert.equal(s.tears, 1, 'not forgotten yet');
+  for (let t = 0; t < 1; t += dt) s = beside(s, dt, 5, () => 0.999);
+  assert.deepEqual([s.tears, s.next], [0, REACH.first]);
+  // and the rule is only the rule: the same dice, the same story
+  assert.deepEqual(stand(1, dice(0.9, 0.2, 0.9, 0.7, 0.1, 0.4)), stand(1, dice(0.9, 0.2, 0.9, 0.7, 0.1, 0.4)));
+});

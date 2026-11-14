@@ -10,7 +10,7 @@ import { makeCutout, drawPortrait } from './cutout.js';
 import { TILE, RISE, RUN, wallPoint, pinchHalf } from './gen.js';
 import { P, clamp, turnTo, framed, card, scatter, doorLeaf, doorFrame, wetSign, standee, mugVox, floorPlan } from './bits.js';
 import { marks } from './traces.js';
-import { thinWall } from './thin.js';
+import { thinWall, refuses } from './thin.js';
 import { MORE } from './rooms2.js';
 import { stairwell } from './stairwell.js';
 
@@ -262,8 +262,9 @@ function plain(c) {
   if (s && s.kind === 'stairs') nowhereStairs(c, s);
   if (room.sign) c.exitSign(room.doors[room.sign.door], room.sign.text);
   // the wall that would give, if this is the room it is in — before anything else is hung on it or stood in front of it
-  if (c.level.thin && c.level.thin.room === room.id) thinWall(c, c.level.thin, c.level.exit.way === 'wall');
-  for (const item of room.dress) if (item.type === 'marks') marks(c, item);          // (likewise the walls somebody else tried)
+  // the wall the plan would have called thin, if this is the room it is in — before anything else is hung on it or stood in front of it
+  if (c.level.thin && c.level.thin.room === room.id) thinWall(c, c.level.thin);
+  for (const item of room.dress) if (item.type === 'marks') refuses(c, item.side, item.at, marks(c, item));          // (likewise the other walls somebody tried: all of them only walls)
   for (const item of room.dress) if (item.type !== 'marks') dressing(c, item);
   if (c.level.pursuer?.room === room.id) c.env.lair?.(c);
 }
