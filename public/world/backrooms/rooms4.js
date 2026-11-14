@@ -6,6 +6,7 @@ import { Vox, M } from '../vox/vox.js';
 import { lin, drawText, WHITE } from './kit.js';
 import { headAt } from './gen.js';
 import { P, card, framed, standee, mugVox } from './bits.js';
+import { MORE4 } from './rooms5.js';
 
 /* ---- the museum --------------------------------------------------------------------- */
 
@@ -194,4 +195,4 @@ function nested(c) {
   };
 }
 
-export const MORE3 = { museum, photo, nested };
+export const MORE3 = { museum, photo, nested, ...MORE4 };
