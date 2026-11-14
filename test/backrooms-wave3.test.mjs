@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { ITEM_IDS, kindOf, createHandOver, isPaper, isBalloon, isFlashlight } from '../public/world/backrooms/items.js';
 import { CABLE, createCableState, stepCable, releaseCable } from '../public/world/backrooms/rooms/cable-drop/rule.js';
 import { SHREDDER, createShredderState, stepShredder, releaseShredder } from '../public/world/backrooms/rooms/shredding-bay/rule.js';
-import { PARTY, createPartyState, stepParty } from '../public/world/backrooms/rooms/mandatory-fun/rule.js';
+import { PARTY, createPartyState, stepParty, releaseParty } from '../public/world/backrooms/rooms/mandatory-fun/rule.js';
 import { BLACKOUT, createBlackoutState, stepBlackout, isInBeam } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
 import { WARDEN, createWardenState, stepWarden } from '../public/world/backrooms/rooms/safety-corridor/rule.js';
 import { PARTNER, createPartnerState, stepPartner } from '../public/world/backrooms/rooms/audit-pod/rule.js';
@@ -249,4 +249,12 @@ test('the Retention Clerk lets go: after the rollers she is content for a while 
   for (let t = 0; t < 3600; t += 1) s = stepShredder(s, { dt: 1, dist: 0.2, insideRoom: true, clearLine: true }).state;
   assert.equal(s.phase, 'leaving');
   assert.ok(SHREDDER.hurts === 2 && SHREDDER.respite >= 8);
+});
+
+test('the Fun Committee lets go: after somebody has been made to join in, the circle forms up and leaves them be for a while, wherever they stand', () => {
+  let s = releaseParty({ ...createPartyState(), mode: 'swarming', caught: true }), r = null;
+  for (let t = 0; t < PARTY.pause - 0.3; t += 0.1) { r = stepParty(s, { dt: 0.1, insideRoom: true, pastThreshold: true, holdingBalloon: false, minDist: 0.1 }); s = r.state; assert.ok(!r.caught && !r.triggeredSwarm && s.mode === 'idle'); assert.equal(r.speed, PARTY.returnSpeed); }
+  for (let t = 0; t < 0.6; t += 0.1) { r = stepParty(s, { dt: 0.1, insideRoom: true, pastThreshold: true, holdingBalloon: false, minDist: 3 }); s = r.state; }
+  assert.equal(s.mode, 'swarming', 'and then the music is off again');
+  assert.ok(PARTY.hurts === 1 && PARTY.pause >= 5);
 });

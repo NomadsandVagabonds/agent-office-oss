@@ -8,6 +8,8 @@ export const PARTY = Object.freeze({
   returnSpeed: 1.8,
   catchRadius: 0.65,
   hornEvery: 3.8,
+  hurts: 1,                  // hearts it costs to be made to join in, where there are hearts
+  pause: 7,                  // seconds they go back to their circle and leave you be, after that
 });
 
 export const createPartyState = () => ({
@@ -22,6 +24,9 @@ export const createPartyState = () => ({
  * @param s  state from createPartyState()
  * @param o  { dt, insideRoom, pastThreshold, holdingBalloon, minDist }
  */
+/** They had somebody, who is still here: the circle forms up again and for a while nobody is asked to join. */
+export function releaseParty(s) { return { ...s, mode: 'idle', caught: false, pause: PARTY.pause }; }
+
 export function stepParty(s, o) {
   const {
     dt,
@@ -33,6 +38,10 @@ export function stepParty(s, o) {
 
   let { mode, hornTimer, dancePhase, caught } = s;
   let horn = false, triggeredSwarm = false;
+  if (s.pause > 0) {
+    const pause = s.pause - dt;
+    return { state: { mode: 'idle', hornTimer, dancePhase, caught: false, ...(pause > 0 ? { pause } : {}) }, horn, triggeredSwarm, caught: false, speed: PARTY.returnSpeed };
+  }
 
   if (holdingBalloon && insideRoom) {
     if (mode !== 'partying') {

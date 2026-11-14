@@ -8,7 +8,7 @@ import { Vox, M } from '../../vox/vox.js';
 import { lin } from '../kit.js';
 import { clamp, turnTo, card, framed } from '../bits.js';
 import { placePickup } from '../hand.js';
-import { createPartyState, stepParty } from './mandatory-fun/rule.js';
+import { PARTY, createPartyState, stepParty, releaseParty } from './mandatory-fun/rule.js';
 import { buildCommitteeMember } from './mandatory-fun/rig.js';
 
 function cakeVox() {
@@ -119,7 +119,7 @@ export function build(c) {
     addMember('circle', i, mx, mz, a + Math.PI, a);
   }
 
-  let rule = createPartyState();
+  let rule = createPartyState(), known = false;
 
   c.tick((dt, time, me) => {
     const holdingBalloon = !!c.env.hand?.hasBalloon();
@@ -130,6 +130,7 @@ export function build(c) {
       if (d < minDist) minDist = d;
     }
 
+    if (!known && me.inside && minDist < 9 && members.some((m) => c.seen(m.x, m.z, { radius: 0.5 }))) { known = true; c.met('fun-committee'); }
     const res = stepParty(rule, {
       dt,
       insideRoom: me.inside,
@@ -192,7 +193,10 @@ export function build(c) {
       if (res.caught) {
         c.env.play('partyhorn', centerW.x, centerW.z, 8);
         c.env.interfere(1);
-        c.env.end('caught');
+        // made to join in: a heart where there are hearts — and if that was not the last, they form up again and leave you be a while
+        if (!known) { known = true; c.met('fun-committee'); }
+        const hit = c.hurt(PARTY.hurts);
+        if (!hit.ended) { rule = releaseParty(rule); if (hit.landed) { c.env.hud.glitch(0.5); c.survived('fun-committee'); } }
       }
     } else {
       // Idle or resetting: bodies hold the circle while every neck twists toward the threshold/visitor
