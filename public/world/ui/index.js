@@ -18,10 +18,12 @@ const SHEETS = {
   comms: { title: 'Comms', icon: 'chat', key: 'c', load: () => import('./comms.js') },
   board: { title: 'Board', icon: 'board', key: 'b', load: () => import('./board.js') },
   binder: { title: 'Binder', icon: 'book', key: 'k', load: () => import('./binder.js') },
-  work: { title: 'Terminals', icon: 'term', key: 't', load: () => import('./terminal.js') },
+  work: { title: 'Sessions', icon: 'term', key: 't', load: () => import('./terminal.js') },
   passport: { title: 'Passport', icon: 'star', key: 'p', load: () => import('./passport.js') },
   // no button of its own: the fuel chip in the top bar and the tanks beside the big board open it
   usage: { title: 'What is left', icon: 'eye', key: 'u', hidden: true, load: () => import('./usage.js') },
+  // opened from an agent's card, a red thread on the floor, or Ctrl-K
+  repos: { title: 'Repos', icon: 'pin', key: 'g', hidden: true, load: () => import('./repos.js') },
 };
 
 export function createUI(office) {
@@ -321,11 +323,12 @@ export function createUI(office) {
   }
   // The ticker carries what an orchestrator would want to glance at; chatter, card shuffling and
   // requests have their own places (Comms, the Board, the in-tray).
-  const TICKER = new Set(['join', 'leave', 'task-done', 'discovery', 'creation', 'usage', 'overlap']);
+  const TICKER = new Set(['join', 'leave', 'task-done', 'discovery', 'creation', 'usage', 'overlap', 'review']);
   net.on('activity', (item) => {
     if (!item?.text || !TICKER.has(item.kind)) return;
     const gold = item.kind === 'discovery' || item.kind === 'task-done' || item.kind === 'creation';
-    ui.toast(item.text, { gold, onclick: item.agentId && net.state.agents.has(item.agentId) ? () => ui.select(item.agentId) : null });
+    ui.toast(item.text, { gold, onclick: item.kind === 'review' && item.taskId ? () => ui.openSheet('board', { deptId: item.deptId, taskId: item.taskId })
+      : item.agentId && net.state.agents.has(item.agentId) ? () => ui.select(item.agentId) : null });
   });
   renderTally(); tickClock();
 

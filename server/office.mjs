@@ -32,6 +32,7 @@ import { createHarness } from './harness/index.mjs';
 import { registerHarnessRoutes } from './harness/routes.mjs';
 import { createUsage, registerUsageRoutes } from './usage.mjs';
 import { createWorkspace, registerWorkspaceRoutes } from './workspace.mjs';
+import { createReviews, registerReviewRoutes } from './reviews.mjs';
 
 function readVersion(root) {
   try { return JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version || '0.0.0'; }
@@ -83,12 +84,15 @@ export function createOffice(config) {
   // Sessions the office drives itself (ACP, Codex app-server): see docs/HARNESS.md.
   ctx.harness = createHarness(ctx, data('harness.json'));
   ctx.world = createWorld(ctx, data('world.json'));
+  // What a card in Review is actually offering, what was found, and what the human decided.
+  ctx.reviews = createReviews(ctx, data('reviews.json'));
 
   const router = new Router();
   registerCoreRoutes(router, ctx);
   registerHarnessRoutes(router, ctx);
   registerUsageRoutes(router, ctx);
   registerWorkspaceRoutes(router, ctx);
+  registerReviewRoutes(router, ctx);
   registerKnowledgeRoutes(router, ctx);
   registerWorldRoutes(router, ctx);
   ctx.router = router;

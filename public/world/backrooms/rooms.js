@@ -8,7 +8,7 @@ import { Vox, M } from '../vox/vox.js';
 import { Batch, lin, atlas, drawText, WHITE } from './kit.js';
 import { makeCutout, drawPortrait } from './cutout.js';
 import { TILE, RISE, RUN, wallPoint, pinchHalf } from './gen.js';
-import { P, clamp, turnTo, cycle, framed, card, scatter, doorLeaf, doorFrame, wetSign, standee, mugVox } from './bits.js';
+import { P, clamp, turnTo, framed, card, scatter, doorLeaf, doorFrame, wetSign, standee, mugVox } from './bits.js';
 import { MORE } from './rooms2.js';
 
 /* ---- the plain rooms, and what somebody left in them ------------------------------- */
@@ -23,10 +23,26 @@ function wallDoor(c, side, at, w, y0, y1, rgb) {
   c.wbox(side, at + w * 0.38, 0.14, y0 + Math.min(0.95, h * 0.47) - 0.012, y0 + Math.min(0.95, h * 0.47) + 0.012, 0.052, 0.1, [0.74, 0.7, 0.56]);
 }
 
+/** Somewhere a door could lie flat (0.86 × 1.9 m, long side deep): open floor if there is any, else any level patch beside the way through. */
+function hatchSpot(c, head) {
+  const open = c.spot(0.95, { head });
+  if (open) return open;
+  const { W, D, room } = c, level = (x, z) => Math.abs(c.floorAt(x, z)) < 0.01 && c.ceilAt(x, z) >= head;
+  for (let tries = 0; tries < 60; tries++) {
+    const x = c.R.range(-W / 2 + 0.65, W / 2 - 0.65), z = c.R.range(-D / 2 + 1.15, D / 2 - 1.15);
+    if (![[0, 0], [-0.43, -0.95], [0.43, -0.95], [-0.43, 0.95], [0.43, 0.95]].every(([dx, dz]) => level(x + dx, z + dz))) continue;
+    if (room.pillars.some((q) => Math.abs(x - q.x) < q.w / 2 + 0.55 && Math.abs(z - q.z) < q.d / 2 + 1.05)) continue;
+    if (room.doors.some((dr) => { const p = c.doorPoint(dr, 0.3); return Math.abs(x - p.x) < 0.43 + dr.w / 2 && Math.abs(z - p.z) < 1.25; })) continue;
+    c.reserve(x, z, 0.95);
+    return { x, z };
+  }
+  return null;
+}
+
 /** A door lying in the carpet. Open it and step in, and you come out of a ceiling somewhere else. */
 function floorDoor(c, item) {
-  const s = c.spot(0.95, { head: 1.6 }); if (!s) return;
-  const { kit } = c, wood = lin('#7a5230'), cream = lin('#e2d8bd'), w = 0.86, l = 1.9, x0 = s.x - w / 2, z0 = s.z - l / 2;
+  const s = hatchSpot(c, 1.6); if (!s) return;
+  const wood = lin('#7a5230'), cream = lin('#e2d8bd'), w = 0.86, l = 1.9, x0 = s.x - w / 2, z0 = s.z - l / 2;
   for (const [a, b, e, f] of [[x0 - 0.07, z0 - 0.07, x0 + w + 0.07, z0], [x0 - 0.07, z0 + l, x0 + w + 0.07, z0 + l + 0.07], [x0 - 0.07, z0, x0, z0 + l], [x0 + w, z0, x0 + w + 0.07, z0 + l]]) c.flat.box(a, 0, b, e, 0.03, f, cream, { skip: '-y' });
   c.flat.quad([x0, 0.004, z0 + l], [x0 + w, 0.004, z0 + l], [x0 + w, 0.004, z0], [x0, 0.004, z0], [0.003, 0.003, 0.003]);
   const leaf = new Batch();
@@ -45,12 +61,11 @@ function floorDoor(c, item) {
     else if (!fell && me.inside && Math.abs(me.x - s.x) < w / 2 - 0.1 && Math.abs(me.z - s.z) < l / 2 - 0.15) { fell = true; c.env.hatches.get(item.to)?.drop(); }
     else if (fell && !me.inside) { fell = false; open = 0; door.rotation.z = 0; }
   });
-  void kit;
 }
 
 /** The other end of a door in a floor: a door in a ceiling, with nothing under it but carpet. */
-function ceilDoor(c, item) {
-  const s = c.spot(0.9, { head: 2.1 }); if (!s) return;
+function ceilDoor(c) {
+  const s = hatchSpot(c, 2.1); if (!s) return;
   const wood = lin('#7a5230'), cream = lin('#e2d8bd'), w = 0.86, l = 1.9, x0 = s.x - w / 2, z0 = s.z - l / 2, y = c.ceilAt(s.x, s.z);
   for (const [a, b, e, f] of [[x0 - 0.07, z0 - 0.07, x0 + w + 0.07, z0], [x0 - 0.07, z0 + l, x0 + w + 0.07, z0 + l + 0.07], [x0 - 0.07, z0, x0, z0 + l], [x0 + w, z0, x0 + w + 0.07, z0 + l]]) c.flat.box(a, y - 0.04, b, e, y, f, cream);
   c.flat.quad([x0, y - 0.003, z0], [x0 + w, y - 0.003, z0], [x0 + w, y - 0.003, z0 + l], [x0, y - 0.003, z0 + l], [0.003, 0.003, 0.003]);
@@ -77,7 +92,6 @@ function ceilDoor(c, item) {
     door.rotation.z = -1.45 * k * k * (3 - 2 * k);
     if (swing > 4.2) { swing = 0; door.rotation.z = 0; }
   });
-  void item;
 }
 
 function dressing(c, item) {
@@ -159,7 +173,7 @@ function dressing(c, item) {
     const p = c.wallAt(w.side, w.at, 0.05), y0 = R.range(0.9, 1.35), y1 = Math.min(y0 + 1.95, c.ceilAt(p.x, p.z) - 0.1);
     if (y1 - y0 > 0.6) wallDoor(c, w.side, w.at, 0.86, y0, y1, lin(R.pick(['#7a5230', '#5a6a7a', '#6a4a3a', '#8a3a34'])));
   } else if (item.type === 'floordoor') floorDoor(c, item);
-  else if (item.type === 'ceildoor') ceilDoor(c, item);
+  else if (item.type === 'ceildoor') ceilDoor(c);
   else if (item.type === 'map') floorPlan(c);
 }
 

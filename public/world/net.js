@@ -15,6 +15,8 @@ export function createNet() {
     places: new Map(),            // agent id → Placement
     overview: null, board: [], collab: [], activity: [],
     usage: null,                  // how much each provider has left (UsageSnapshot)
+    harness: null,                // the sessions the office drives itself: { sessions, wake, delegations }
+    workspace: null,              // who is in which checkout, and where two of them overlap
     server: null,
     skew: 0,                      // server clock − ours, ms
   };
@@ -64,6 +66,8 @@ export function createNet() {
       case EV.SUBAGENT: emit('subagent', m); break;
       case EV.RUNTIMES: emit('runtimes', m.runtimes); break;
       case EV.USAGE: state.usage = m.usage; emit('usage', m.usage); break;
+      case EV.HARNESS: state.harness = m; emit('harness', m); break;
+      case EV.WORKSPACE: state.workspace = m.workspace; emit('workspace', m.workspace); break;
       default: emit(m.type, m);
     }
   }

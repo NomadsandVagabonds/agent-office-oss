@@ -3,6 +3,7 @@
 // however odd its floor or ceiling — can trap whoever walks into it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
 import { generate, sketch, DECK, ARCHETYPES, SIDES, T, RISE, toWorld, wallLength, wallPoint, floorAt, ceilAt, headAt, fitsAt, stairZones,
   roomDistances, roomPath, makeRng } from '../public/world/backrooms/gen.js';
 
@@ -196,6 +197,15 @@ test('every archetype in the deck can be generated', () => {
   }
 });
 
+test('no empty rooms: every archetype in the deck has somebody to build it', () => {
+  // the builders need a browser, so read how they are registered instead: export const BUILDERS / MORE… = { id, 'an-id': fn, … }
+  const dir = new URL('../public/world/backrooms/', import.meta.url);
+  const maps = readdirSync(dir).filter((f) => /^rooms\d*\.js$/.test(f)).map((f) => readFileSync(new URL(f, dir), 'utf8')).join('\n').match(/^export const (?:BUILDERS|MORE\d*) = \{[^}]*\};$/gm) || [];
+  const registered = new Set(maps.join(' ').match(/'[\w-]+'(?=:)|\b\w+\b(?=\s*[,}])/g).map((k) => k.replace(/'/g, '')));
+  for (const arch of DECK) assert.ok(registered.has(arch.id), `${arch.id} is in the deck but nothing builds it`);
+  for (const kind of ['plain', 'start', 'exit']) assert.ok(registered.has(kind));
+});
+
 test('the names of the real office end up in the level, and nothing else leaks in', () => {
   let found = { project: false, agent: false, name: false };
   for (const seed of SEEDS.slice(0, 40)) {
@@ -204,7 +214,7 @@ test('the names of the real office end up in the level, and nothing else leaks i
     if (/Webstore|Mobile App|Infra/i.test(text)) found.project = true;
     if (/Ivory Marten|IVORY MARTEN|Amber Vireo|AMBER VIREO/.test(text)) found.agent = true;
     if (/ROBIN|Robin/.test(text)) found.name = true;
-    assert.ok(!/\{(name|agent|project)\}/i.test(text), 'no unfilled blanks');
+    assert.ok(!/\{[a-z]+\}/i.test(text), 'no unfilled blanks');
   }
   assert.deepEqual(found, { project: true, agent: true, name: true });
 });
@@ -215,4 +225,11 @@ test('something follows you in some visits, not all', () => {
   const level = generate(11, { ...office, pursuer: true });
   assert.ok(level.pursuer && level.rooms[level.pursuer.room].kind === 'plain' && level.pursuer.room !== level.start.room);
   assert.equal(generate(11, { ...office, pursuer: false }).pursuer, null);
+  // asking for it, or for none, changes nothing else about where the rooms are
+  for (const seed of SEEDS.slice(0, 20)) {
+    const plan = sketch(levelFor(seed));
+    for (const pursuer of [true, false]) assert.equal(sketch(generate(seed, { ...office, pursuer })), plan, `seed ${seed}`);
+    const lair = levelFor(seed).pursuer && levelFor(seed).rooms[levelFor(seed).pursuer.room];
+    if (lair) assert.ok(!lair.crawl && lair.H >= 2.5 && (!lair.shape || lair.shape.kind === 'stepceil'), 'it has room to stand up where it lives');
+  }
 });

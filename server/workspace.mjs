@@ -25,6 +25,7 @@ import { EV } from '../core/contract.mjs';
 import { HttpError } from './http.mjs';
 import { JsonFile } from './persist.mjs';
 import * as G from './git.mjs';
+import { leaveNotice } from './notices.mjs';
 
 const MIN = 60 * 1000, HOUR = 60 * MIN;
 const WINDOW_MS = 30 * MIN;              // an edit this recent counts as "is working on it"
@@ -440,16 +441,8 @@ export function createWorkspace(ctx, file) {
     const times = (noteTimes.get(agent.id) || []).filter((t) => now - t < HOUR);
     if (times.length >= NOTES_PER_HOUR) return false;
     times.push(now); noteTimes.set(agent.id, times);
-    try {
-      const { bbs } = ctx, key = `office:${agent.id}`;
-      const thread = bbs.getThreads('collab').find((t) => t.meta?.kind === 'office-notice' && t.meta?.participantKey === key) || null;
-      const meta = { toAgentId: agent.id, toAgentName: agent.name, fromAgentName: 'Office', officeNote: true };
-      if (thread) bbs.reply({ threadId: thread.id, author: 'Office', authorType: 'system', content: text, meta });
-      else bbs.createThread({ board: 'collab', subject: `Office notices for ${agent.name}`, author: 'Office', authorType: 'system', content: text,
-        meta: { kind: 'office-notice', participantKey: key, participants: ['office', agent.id], ...meta }, postMeta: meta });
-      ctx.comms.broadcastCollabRecent();
-      return true;
-    } catch (err) { log.warn('[workspace] could not leave a note: ' + (err?.message || err)); return false; }
+    try { return leaveNotice(ctx, agent, text); }
+    catch (err) { log.warn('[workspace] could not leave a note: ' + (err?.message || err)); return false; }
   }
 
   /* ---- reading it back ------------------------------------------------------------------ */
@@ -499,7 +492,9 @@ export function createWorkspace(ctx, file) {
     const abs = canon(p, opt.cwd || agent?.cwd);
     if (!abs) return { ok: false, path: p, items: [], warnings: [], text: 'That is not a path the office can place.' };
     const now = Date.now(), mine = agent ? whereOf(agent) : null;
-    const rel = (mine && relTo(mine.root, abs)) || abs;
+    // Until git has been read for this folder (the first seconds of a session), name the file as the agent itself would: from where it stands.
+    const here = opt.cwd || agent?.cwd;
+    const rel = (mine && relTo(mine.root, abs)) || (here && path.isAbsolute(here) && relTo(here, abs)) || abs;
     const items = [], warnings = [];
     for (const a of present()) {
       if (agent && a.id === agent.id) continue;

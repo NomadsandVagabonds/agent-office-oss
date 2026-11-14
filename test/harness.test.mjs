@@ -465,6 +465,16 @@ test('driven sessions', async (t) => {
     assert.equal(listed.state, 'failed');
     assert.ok(!(await h.get('/api/harness/sessions')).data.sessions.some((x) => x.id === s.id));
 
+    // A session nobody named keeps the name the office gave it, so the list of finished ones stays readable.
+    const anon = await h.start('fake');
+    assert.ok(anon.name, 'the office named it');
+    await h.del(`/api/harness/sessions/${anon.id}`);
+    const kept = await waitFor(async () => {
+      const x = (await h.get('/api/harness/sessions?all=1')).data.sessions.find((y) => y.id === anon.id);
+      return x && x.state === 'ended' ? x : null;
+    }, { what: 'the unnamed session to end' });
+    assert.equal(kept.name, anon.name);
+
     // A crash while the agent waits on the human takes the card with it.
     const w = await h.start('fake', { name: 'Waity' });
     await h.begin(w.id, 'ask:true; crash:5');

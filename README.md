@@ -71,12 +71,12 @@ credentials; your agents keep their own auth. Setup details: [`AGENTS.md`](AGENT
 | | |
 |---|---|
 | **See everything** | Drag to slide the floor, right-drag to walk round it, scroll to lean in. Walls between you and a room fold away. `Space` frames the whole office. The screen stays out of the way: a nameplate, two instruments, and a dock of seven keys along the bottom. |
-| **Needs you** | An in-tray, bottom right. However many agents are waiting, you are handed one slip: who is asking, what exactly, and which cards your answer is holding up. Arrows (or `N`) reach the rest; nothing stacks up. Where the agent's runtime can really be answered you get stamps (allow, always, deny); otherwise a line to write back on, typed into its terminal or left in its inbox. |
+| **Needs you** | An in-tray, bottom right. However many agents are waiting, you are handed one slip: who is asking, what exactly, and which cards your answer is holding up. Arrows (or `N`) reach the rest; nothing stacks up. Where the agent's runtime can really be answered you get stamps (allow, always, deny) and a question brings its own choices; otherwise a line to write back on, typed into its terminal or left in its inbox. The slip only ever offers what that agent can honour. |
 | **Who is this?** | Click anyone: what they are doing, for which project, how full their context is, and a line straight to them. |
 | **Comms** (`C`) | Channels, your direct lines, and the notes agents pass each other. |
-| **Board** (`B`) | Drag-and-drop kanban per project — the same cards that hang on each room's wall. |
+| **Board** (`B`) | Drag-and-drop kanban per project — the same cards that hang on each room's wall. A card in **Review** opens its review table: the branch and exact commit that was put up (and a warning if it has moved since), what changed, the findings, what other agents recommend, and two stamps for the decision that is yours — approve, or changes. You can hand the review to an agent from there. |
 | **Binder** (`K`) | Every project's `.md` docs, rendered and searchable. |
-| **Terminals** (`T`) | Launch and drive Claude Code, Codex, Gemini CLI, opencode or a shell in managed tmux sessions, with a real keyboard. |
+| **Sessions** (`T`) | Two ways to run an agent from the office. **Driven**: the office starts the agent in its structured mode and talks to it directly — you read what it did as a record (each turn, the tools it ran, who allowed what), stamp what it asks right there, give it its next turn, stop it or end it, and choose whether mail may wake it and how freely it acts. Tasks one agent hands another are listed and open the record of whoever did them. **Terminals**: Claude Code, Codex, Gemini CLI, opencode or a shell in managed tmux sessions, with a real keyboard. See [`docs/HARNESS.md`](docs/HARNESS.md). |
 | **Walk the floor** (`Tab`) | Step in as an avatar: `WASD`, `E` to use things. Agents can tell you are there, and can walk over to you. |
 | **The lift** | Click the lift on the landing (or walk up and press `E`) for other floors: a Rooftop Garden that follows the real hour and weather, Mission Control (every project, agent and request on one wall), a Pasture, and an after-hours game. Agents can ride too. Adding a floor is one small module — see [`WORLD.md`](WORLD.md). |
 | **Passport** (`P`) | What has been discovered here, and hints toward what has not. |
@@ -104,6 +104,12 @@ office dm "Ada" "Can you sanity-check my migration?"
 office task move t_abc123 review
 office docs api-gateway auth       # read another project's docs
 office usage                       # which provider still has room, before handing work out
+office delegate any "Review the migration in db/ and list what could break" --wait
+office delegation                  # what you handed out, and what was handed to you
+office task review t_abc123 · office task finding t_abc123 "…" --file src/a.js --line 12 --blocker
+office task recommend t_abc123 changes "why"      # agents recommend; the human decides
+office repo · office touching src/auth.js · office claim src/auth.js --note "rewriting login"
+office worktree payments-fix       # your own checkout of the same repository
 office go kitchen · office use coffee · office emote wave
 office me --species cat --accessory tophat
 ```
@@ -121,6 +127,19 @@ The world is also **text** for them — `office look` returns a short descriptio
 of the room, who is in it and what can be used — so an agent that never renders
 a pixel still lives in the same place you are looking at. See [`WORLD.md`](WORLD.md).
 
+**Handing work over.** `office delegate` gives a task to another agent — one
+the office starts for it, from whichever provider still has allowance — and the
+result comes back as mail (or as the answer, with `--wait`). Permissions never
+widen on the way, a delegate stays in its delegator's folder, and chains of
+agents waking agents are bounded and can be paused with one switch.
+
+**Sharing a repository.** The office reads (never writes) the git state of the
+folders its agents work in: who is on which branch, which files each has
+changed, and where two of them overlap. `office touching <path>` answers "is
+anyone else in this file?" before an edit; `npm run install-guard` makes Claude
+Code ask that by itself. `office claim` says "this is mine for now";
+`office worktree` gives an agent its own checkout.
+
 ## How it fits together
 
 ```
@@ -131,8 +150,8 @@ a pixel still lives in the same place you are looking at. See [`WORLD.md`](WORLD
         │  agents · personas · prompts · inbox · comms · tasks ·  │
         │  binder · creations · world (layout, places, fx) · bus  │
         └───────▲──────────────▲──────────────▲──────────────────┘
-                │ WebSocket    │ HTTP          │ tmux
-        3D office (public/world)   classic 2D office    managed terminals
+                │ WebSocket    │ HTTP          │ tmux · stdio (ACP, Codex app-server)
+        3D office (public/world)   classic 2D office    terminals · driven agents
 ```
 
 - **`daemon.mjs` + `server/`** — the control plane: session registry, the
@@ -148,9 +167,24 @@ a pixel still lives in the same place you are looking at. See [`WORLD.md`](WORLD
 - **`office.mjs` · `office-mcp.mjs` · `office-*.mjs`** — the agent-facing CLI,
   MCP server and the original single-purpose helpers.
 - **`runtime-manager.mjs` · `tmux-manager.mjs`** — managed terminal sessions.
+- **`server/harness/`** — sessions the office drives itself: adapters for the
+  Agent Client Protocol and the Codex app-server, approvals, transcripts, mail
+  that may start a turn, delegation. No provider keys, no model calls of its
+  own: it starts the agent CLIs you already have installed and signed in.
+- **`server/usage.mjs` · `server/workspace.mjs` · `server/reviews.mjs`** — how
+  much each provider has left, who is working where in a shared repository, and
+  what a card in Review is actually offering.
 
 Specs: [`CONTRACT.md`](CONTRACT.md) (the control plane), [`WORLD.md`](WORLD.md)
-(the world), [`CREATIONS.md`](CREATIONS.md), [`KNOWLEDGE.md`](KNOWLEDGE.md).
+(the world), [`docs/HARNESS.md`](docs/HARNESS.md) (driven sessions and
+delegation), [`CREATIONS.md`](CREATIONS.md), [`KNOWLEDGE.md`](KNOWLEDGE.md).
+
+> **Status of driven sessions.** Everything in `server/harness/` is covered by
+> tests that run real child processes speaking the real wire formats — but the
+> agents on the other end are stand-ins written from the published protocols.
+> It has not yet been run against the real Claude, Codex, Gemini or opencode
+> programs. [`docs/HARNESS.md`](docs/HARNESS.md) §16 lists exactly what is
+> still unproven and a ten-minute way to check each agent you use.
 For agents: [`AGENTS.md`](AGENTS.md) and the skill at
 [`.claude/skills/the-office/SKILL.md`](.claude/skills/the-office/SKILL.md).
 
@@ -196,7 +230,8 @@ guide, and `/world/dev/studio.html` is a room for looking at your work.
 | **Port already in use** | `OFFICE_PORT=4319 npm run demo`. |
 | **Office is empty** | Nothing has reported in. `npm run simulate` for the demo; for real sessions install the Claude hooks and/or run `node observe-codex.mjs`. |
 | **My sessions do not appear** | `npm run doctor`. Claude Code: re-run `npm run install-hooks` (idempotent) and start a fresh session. Others: `office join`. |
-| **Terminals panel is empty** | `tmux` is not installed (`npm run doctor` flags it). Everything else works without it. |
+| **Sessions panel has no terminals** | `tmux` is not installed (`npm run doctor` flags it). Everything else works without it. |
+| **Sessions panel offers no agent to drive** | The agent's structured mode is not installed: `office runtimes` says what was looked for (Claude Code needs its ACP wrapper, `npm i -g @agentclientprotocol/claude-agent-acp`). The panel lists the rest under "more could be driven". |
 | **Black page / "cannot draw the 3D office"** | The browser has no WebGL2. The [classic office](public/classic/) runs anywhere. |
 | **Slow** | Append `?fx=0` (no post-processing) or `?shadows=0`. |
 | **Daemon seems flaky** | `curl localhost:4317/api/health`. `npm run watchdog` restarts it on a crash; nobody loses their desk — the registry is restored. |

@@ -286,6 +286,94 @@ Agents read it with `office usage` (MCP: `office_usage`); in the office it is th
 fuel chip in the top bar, the **What is left** panel (`U`), and four glass tanks
 beside the big board (`office use gauges`).
 
+### Workspace  (who is working where)
+`server/workspace.mjs` knows, for every agent that has a working folder, which
+git checkout that folder is in — and so which agents share a checkout, which
+are in different worktrees of one repository, and which files each has changed.
+It **only reads git** (`rev-parse`, `status`, `diff --name-only`,
+`worktree list`), with a timeout, without taking git's optional locks, never
+for a folder no agent is in. Which file an agent is touching comes from what it
+already reports: Claude Code's tool hooks, a driven session's tool calls, or
+`POST /api/workspace/touch`.
+
+```
+WorkspaceSnapshot { git, repos:[{ id, name, checkouts:[Checkout], idle:[{ root, branch }] }],
+                    agents:{ <agentId>: { repo, root, branch, linked, dirty, ahead, behind, touched:[{ path, kind, at }] } },
+                    claims:[{ id, agentId, agentName, pattern, note, at, until }],
+                    overlaps:[Overlap] }
+Checkout { root, name, branch, detached, head, upstream, ahead, behind, linked, dirty, files:[{ path, state }], agents:[agentId] }
+Overlap  { id, kind:'same-file'|'claimed'|'both-changed', severity:'high'|'medium'|'low', repoName, path,
+           agents:[{ id, name, branch }], since, text }
+```
+
+`same-file`: two agents edited one file in one checkout within half an hour.
+`claimed`: an agent edited inside another agent's claim. `both-changed`: the
+same file has changed in two checkouts of one repository (uncommitted on either
+side, or committed since they forked). Each new overlap is written to the
+agents involved, once, as office mail from "Office" — rate-limited, and never
+to the human, who has nothing to decide. Nothing is ever blocked.
+
+| | |
+|---|---|
+| `GET /api/workspace` | the snapshot (also the `workspace` bus event, on connect and on change) |
+| `GET /api/workspace/agent/:ref` | one agent's picture, and the same thing as `text` (`office repo`) |
+| `GET /api/workspace/check?agent=&path=[&once=1][&cwd=]` | who else has to do with this file: `items`, `warnings`, `text` (`office touching`; the guard hook passes `once=1`) |
+| `GET /api/workspace/touching?path=` | everyone who has touched a path lately |
+| `POST /api/workspace/claim` | `{ agent, paths:[…], note?, minutes?, force? }` — advisory; refused while another agent's claim covers the path, unless `force` |
+| `POST /api/workspace/release` | `{ agent, paths? }` — all of the agent's claims, or those paths |
+| `POST /api/workspace/touch` | `{ agent, path, kind:'edit'\|'read' }` — for runtimes with no hooks |
+| `POST /api/workspace/worktree` | loopback only. `{ agent \| cwd, name, branch?, base? }` → `git worktree add` beside the repository, on a new branch `office/<name>`; never reuses a folder or a branch |
+| `POST /api/workspace/refresh` | read git now, return the snapshot |
+
+In the office this is the **Repos** panel (`G`), a branch line on each agent's
+card, and a red thread on the floor between two agents who are in the same file.
+
+### Reviews  (what a card in Review is offering)
+`server/reviews.mjs` keeps a table for every card that has been moved to
+`review` (in `data/reviews.json`, beside the tasks; the task store itself is
+unchanged). Moving a card to `review` opens a **round**: the office reads —
+never writes — where the work is, from the checkout of whoever carries the card.
+
+```
+ReviewTable { taskId, title, status, round, state:'open'|'approved'|'changes'|'withdrawn'|'closed',
+              openedAt, openedBy, capturing,
+              version: { known, agentName, repoName, root, branch, detached, head, upstream, ahead, behind,
+                         base, commits, changed:[path], changedTotal,       // against the trunk (origin's HEAD, else main / master)
+                         dirty, uncommitted:[{ path, state }] }             // work that no commit pins
+                       | { known:false, why },
+              moved: null | { head, was } | { gone:true },                  // the branch is no longer where it was put up
+              findings:[{ id, round, by:{ kind, id, name }, severity:'blocker'|'note', text, file, line, at, resolved:null|{ by, at, note }, runId? }],
+              recommendations:[{ by, decision:'approved'|'changes', note, at, head }],     // this round's, the latest per agent
+              runs:[{ id (a delegation), to:{ agentId, name, adapter }, status, summary, error? }],
+              verdict: null | { decision, by, at, note, head, openFindings },
+              closed: null | { by, at, to },  history:[…], canAskAgents, text }
+```
+
+Every card's public view gains `review` — `null`, or a summary for the board:
+`{ round, state, capturing, pinned:{ branch, head, dirty, repo }|null, open, blockers, findings, reviewing, recommends:{ approved, changes }, verdict, closedBy }`.
+
+Who may do what: anyone records and resolves findings; an **agent** recommends,
+but not on a card it is carrying; only the **human** gives the verdict.
+`approved` moves the card to `done` and leaves the owner a note; `changes` moves
+it to `doing` and sends the owner the open findings as a direct message from
+the human. A card that leaves `review` any other way is recorded as `withdrawn`
+or, if it went straight to `done`, `closed` — with who did it. Findings stay
+with the card across rounds.
+
+| | |
+|---|---|
+| `GET /api/tasks/:id/review` | the table (409 if the card was never put up) |
+| `POST /api/tasks/:id/review/findings` | `{ text, file?, line?, severity?, from? }` |
+| `PATCH /api/tasks/:id/review/findings/:fid` | `{ resolved: true \| false, note?, from? }` |
+| `POST /api/tasks/:id/review/recommend` | `{ decision, note?, from }` — agents; 403 on your own card |
+| `POST /api/tasks/:id/review/verdict` | `{ decision, note? }` — the human; 403 for any caller that names an agent or holds a session token |
+| `POST /api/tasks/:id/review/run` | loopback only, the human. `{ to?: adapter \| agent \| "any", focus? }` → a delegation (role `review`, mode `ask`) whose brief is built from the card and the version. Findings the reviewer files land on the card; if it filed none, lines of its closing message shaped `- [blocker] path:line — text` are taken in |
+| `POST /api/tasks/:id/review/refresh` | read the version again |
+
+Agents: `office task review | finding | resolve | reopen | recommend`
+(MCP: `office_review`). In the office: the Board (`B`) — a card in Review opens
+its table. Activity kind: `review`.
+
 ### Harness  (sessions the office drives, and work handed between agents)
 `server/harness/` starts an agent as a child process and speaks its structured
 protocol — ACP for anything that implements it (Gemini CLI, opencode, Claude

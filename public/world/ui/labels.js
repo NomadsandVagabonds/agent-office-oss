@@ -12,6 +12,45 @@ export function createLabels(office, ui) {
   const v = new THREE.Vector3();
   let roomsFor = null;
 
+  // Two agents in the same file: a length of red thread between them, the way a pinboard shows that two
+  // things belong together. It is there to be seen before it becomes a merge conflict.
+  const NS = 'http://www.w3.org/2000/svg';
+  const yarn = document.createElementNS(NS, 'svg');
+  yarn.setAttribute('class', 'yarn');
+  layer.append(yarn);
+  const threads = new Map();     // overlap id → { shade, line, tag, key }
+  function updateThreads(people, camera, size, far) {
+    const want = (office.net.state.workspace?.overlaps || []).filter((o) => o.severity === 'high' && (o.agents || []).length >= 2);
+    const seen = new Set();
+    for (const o of want) {
+      const a = people.people.get(o.agents[0].id), b = people.people.get(o.agents[1].id);
+      if (!a?.place || !b?.place) continue;
+      v.set(a.pos.x, 1.05, a.pos.z).project(camera);
+      const ax = (v.x * 0.5 + 0.5) * size.w, ay = (-v.y * 0.5 + 0.5) * size.h, aOn = v.z < 1;
+      v.set(b.pos.x, 1.05, b.pos.z).project(camera);
+      const bx = (v.x * 0.5 + 0.5) * size.w, by = (-v.y * 0.5 + 0.5) * size.h;
+      if (!aOn || v.z >= 1) continue;
+      let t = threads.get(o.id);
+      if (!t) {
+        t = { shade: document.createElementNS(NS, 'path'), line: document.createElementNS(NS, 'path'), key: '',
+          tag: h('div.yarntag', { title: o.text || '', onclick: (e) => { e.stopPropagation(); ui.openSheet('repos'); } }, String(o.path || '').split('/').pop()) };
+        t.shade.setAttribute('class', 'shade');
+        yarn.append(t.shade, t.line); layer.append(t.tag);
+        threads.set(o.id, t);
+      }
+      seen.add(o.id);
+      const sag = Math.min(46, Math.hypot(bx - ax, by - ay) * 0.16), mx = (ax + bx) / 2, my = (ay + by) / 2 + sag;
+      const key = `${ax.toFixed(0)},${ay.toFixed(0)},${bx.toFixed(0)},${by.toFixed(0)},${far}`;
+      if (key === t.key) continue;
+      t.key = key;
+      const d = `M${ax.toFixed(1)} ${ay.toFixed(1)} Q${mx.toFixed(1)} ${(my + sag).toFixed(1)} ${bx.toFixed(1)} ${by.toFixed(1)}`;
+      t.line.setAttribute('d', d); t.shade.setAttribute('d', d);
+      t.tag.style.display = far ? 'none' : '';
+      t.tag.style.transform = `translate(${mx.toFixed(1)}px, ${my.toFixed(1)}px) translate(-50%, 2px)`;
+    }
+    for (const [id, t] of threads) if (!seen.has(id)) { t.shade.remove(); t.line.remove(); t.tag.remove(); threads.delete(id); }
+  }
+
   function tagFor(id) {
     let t = tags.get(id);
     if (t) return t;
@@ -111,6 +150,8 @@ export function createLabels(office, ui) {
       tally.here++; if (needs) tally.needs++;
       perRoom.set(room, tally);
     }
+
+    updateThreads(people, camera, size, far);
 
     // humans on the floor (you, and anyone else watching this office)
     const walk = office.walk;

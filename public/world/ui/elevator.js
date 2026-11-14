@@ -81,10 +81,12 @@ export function openFloorPanel(office, opt = {}) {
       window.removeEventListener('keydown', key, true);
       window.removeEventListener('keyup', key, true);
       veil.remove(); panel.remove();
+      office.ui?.needs?.cover(false);
       resolve(level);
     }
     window.addEventListener('keydown', key, true);
     window.addEventListener('keyup', key, true);
+    office.ui?.needs?.cover(true);                     // the in-tray waits as a tab while you choose a floor
     select(index);
   });
   return open;

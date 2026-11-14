@@ -256,6 +256,17 @@ export function formatTranscript(session, entries, opt = {}) {
   return out.join('\n').trim();
 }
 
+/** What a card in (or back from) review says about itself, in a few words. */
+export function reviewBit(v) {
+  if (!v) return '';
+  if (v.state === 'open') return ['in review' + (v.pinned ? ` at ${v.pinned.head}` : ''), v.open ? `${v.open} open finding${v.open > 1 ? 's' : ''}${v.blockers ? ` (${v.blockers} blocker${v.blockers > 1 ? 's' : ''})` : ''}` : '',
+    v.reviewing ? 'being reviewed' : ''].filter(Boolean).join(', ');
+  if (v.state === 'changes') return `changes asked${v.open ? `: ${v.open} open finding${v.open > 1 ? 's' : ''}` : ''}`;
+  if (v.state === 'approved') return `approved by ${v.verdict?.by || 'the human'}`;
+  if (v.state === 'closed') return `closed without a verdict by ${v.closedBy || 'someone'}`;
+  return '';
+}
+
 export function fmtTime(ts) {
   return new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }

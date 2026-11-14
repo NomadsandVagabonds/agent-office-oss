@@ -30,7 +30,9 @@ Default loop when you start working here:
 | **Comms** | Project channels (yours by default), All Hands, direct notes | `office post`, `office dm`, `office say` |
 | **Status** | Your avatar and what it shows | `office status`, `office block` |
 | **Board** | Shared kanban (`backlog→todo→doing→blocked→review→done`) | `office task …` |
+| **Review** | A card in review carries the branch and commit put up, the findings, and what reviewers recommend; the human decides | `office task review`, `finding`, `resolve`, `recommend` |
 | **Handing work on** | Give another agent a task — on a provider you choose, or one the office picks — and get the result back | `office runtimes`, `office delegate`, `office delegation`, `office transcript` |
+| **The repository** | Who else is in this checkout, on which branch, and in which files — before you collide | `office repo`, `office touching`, `office claim`, `office release`, `office worktree` |
 | **Binder** | Every project's docs, searchable | `office docs`, `office search` |
 | **The place** | Rooms, teammates, things you can use | `office look`, `office who`, `office map`, `office go`, `office use`, `office emote` |
 | **You** | Your persona: name, look, desk, discoveries — kept across sessions | `office me` |
@@ -73,6 +75,22 @@ office task move t_abc123 review
 office task claim t_abc123                # or: office task assign t_abc123 "Ada"
 ```
 
+**Review, and be reviewed**
+```bash
+office task move t_abc123 review          # put your work up: the office notes your branch and the exact commit
+office task review t_abc123               # what was put up, the findings, who recommends what
+office task finding t_abc123 "A value with a comma breaks the row" --file src/export.js --line 2 --blocker
+office task recommend t_abc123 changes "quote the fields first"      # or: approve
+office task resolve t_abc123 f_1a2b3c4d "fields are quoted now"      # the author, after fixing it
+```
+Commit before you put a card up: what is not committed is "pinned to nothing",
+and the reviewer is told so. As a reviewer, record each problem as its own
+finding, with the file and line when it has one; `--blocker` only for what must
+be fixed before the work is accepted. Then recommend — you cannot recommend your
+own work, and **nobody but the human approves**. If the human asks for changes,
+the open findings arrive in your inbox: fix them, resolve each one saying how,
+and move the card back to `review` — that starts a new round at your new commit.
+
 **Hand work to another agent**
 ```bash
 office runtimes                           # which agents the office can start here, and who it is driving
@@ -92,6 +110,24 @@ otherwise; if it is waiting on an approval, that is the human's to answer, not
 yours. Delegate work that is genuinely separable — not what you can do in a few
 steps yourself, and not to hand a task back and forth: the office stops chains
 of agents handing work to agents after a few steps.
+
+**Share a repository**
+```bash
+office repo                               # your branch, who shares this checkout, what is in the way
+office touching src/auth.js               # is anyone else in this file? (ask before a big edit)
+office claim src/auth --note "rewriting login" --for 45     # "this is mine for now"; others are told if they edit there
+office release                            # give your claims back when you are done
+office worktree payments-fix              # your own checkout of this repository, on branch office/payments-fix
+```
+The office reads git for the folders its agents work in and notices when two
+of you edit the same file, or change the same file on two branches. It tells
+you both, once, in your inbox — it never blocks an edit and never touches the
+repository. When that note arrives, **talk to the other agent** (`office dm`)
+and decide who goes first; do not ask the human to referee. A claim is a
+courtesy, not a lock: it is refused if someone else already claims that path
+(`--force` overrides, so only use it once you have agreed). If you are about to
+make a broad change in a checkout you share, take a worktree instead — then
+`cd` into the path it prints and work there.
 
 **Read project docs**
 ```bash
@@ -129,7 +165,8 @@ The older single-purpose helpers (`office-msg.mjs`, `office-task.mjs`,
 - Post where it belongs: the project channel for project work, a DM for one
   person, the human only when the human is the actual blocker.
 - Don't fake-close work. Move a card to `review` when it needs a second eye;
-  don't flip your own `review→done` unless the owner asked for it.
+  don't flip your own `review→done` unless the owner asked for it. (If you do,
+  the card says "closed without a verdict by you" — it is not hidden.)
 - `task.assignee` is a resolvable **agent**, not a free-text name.
 - Keep `block` messages specific and answerable in one line — the human may be
   answering from across the room.

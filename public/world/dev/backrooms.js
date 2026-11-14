@@ -8,7 +8,8 @@
 //   &pursuer=1|0       force the thing that follows you in or out; &wake=1 has it already awake, in the room with you
 //   &name=Robin        who you are                               &live=1     borrow names from the running office (GET only)
 //   &list=1            print the deck with links                 &map=1      show the floor plan
-// window.__backrooms is the live handle: goto(room, x, z, yaw, pitch), where(), level, world, player.
+// window.__backrooms is the live handle: goto(room, x, z, yaw, pitch), where(), level, world, player, env (env.pursuer.at()).
+// Nothing on screen says how to play, on purpose: WASD/arrows, mouse, E, V (picture), M (sound), Esc.
 import { createStage } from '../engine/stage.js';
 import { enterBackrooms } from '../backrooms/index.js';
 import { DECK } from '../backrooms/gen.js';
@@ -17,6 +18,7 @@ const q = new URLSearchParams(location.search);
 const num = (k, d) => (q.has(k) && q.get(k) !== '' && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : d);
 const stage = createStage(document.getElementById('stage'), { fx: q.get('fx') === '1', shadows: false, preserve: true, pixelRatio: num('dpr', 1) });
 stage.start();
+window.__stage = stage;              // renderer.info, for checking that a visit leaves nothing behind
 
 const look = (species, outfitColor, accessory, extra) => ({ species, outfitColor, accessory, ...extra });
 const agents = [

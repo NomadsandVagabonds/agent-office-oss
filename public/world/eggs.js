@@ -238,15 +238,10 @@ export function createEggs(office) {
   office.onNoclip = async () => {
     if (falling) return;
     falling = true;
-    found('noclip');
     document.body.classList.add('noclip');
     let level = null;
     try { level = await import('./backrooms/index.js'); } catch { level = null; }
-    if (!level?.enterBackrooms) {
-      say('The wall gives a little, like wet cardboard, and then thinks better of it.');
-      document.body.classList.remove('noclip'); falling = false;
-      return;
-    }
+    if (!level?.enterBackrooms) { document.body.classList.remove('noclip'); falling = false; return; }      // the wall holds after all
     office.walk.exit();
     let result = null;
     try { result = await level.enterBackrooms(office, { name: office.walk.me.name, seed: Date.now() }); }
@@ -256,9 +251,9 @@ export function createEggs(office) {
     falling = false;
     office.rig.flyTo({ x: -4, z: -6.3, dist: 9, yaw: 0, pitch: 0.62 }, { instant: true });      // you come to by the bookshelf
     office.walk.enter();
-    if (result?.reason === 'exit') { found('way-out'); say('A door. An ordinary door. You are back by the bookshelf, and the carpet is the right colour again.'); }
-    else if (result?.reason === 'caught') say('You wake up by the bookshelf with the distinct feeling of having been filed.');
-    else say('You are back by the bookshelf. Nobody saw anything.');
+    // Nothing is said about where you have been. The passport simply has a new stamp, now that you are back to look at it.
+    found('noclip');
+    if (result?.reason === 'exit') found('way-out');
   };
 
   net.on('world', () => { treeStage = -1; growTree(net.state.world?.stats?.tasksDone || 0); placeDuck(); softSpot(); });

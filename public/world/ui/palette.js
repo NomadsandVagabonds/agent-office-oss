@@ -36,10 +36,11 @@ export function createPalette(office, ui) {
       if (r.locked || r.kind === 'corridor' || r.kind === 'elevator' || r.kind === 'landing' || r.kind === 'vacant') continue;
       out.push({ label: r.name, hint: 'room', icon: 'pin', run: () => ui.gotoRoom(r.id) });
     }
-    const sheet = (name, label, key) => out.push({ label, hint: key, icon: { comms: 'chat', board: 'board', binder: 'book', work: 'term', passport: 'star', usage: 'eye' }[name], run: () => ui.openSheet(name) });
+    const sheet = (name, label, key) => out.push({ label, hint: key, icon: { comms: 'chat', board: 'board', binder: 'book', work: 'term', passport: 'star', usage: 'eye', repos: 'pin' }[name], run: () => ui.openSheet(name) });
     sheet('comms', 'Comms — channels and direct lines', 'C'); sheet('board', 'Board — kanban', 'B'); sheet('binder', 'Binder — project docs', 'K');
-    sheet('work', 'Terminals', 'T'); sheet('passport', 'Passport — discoveries', 'P');
+    sheet('work', 'Sessions — agents and terminals', 'T'); sheet('passport', 'Passport — discoveries', 'P');
     sheet('usage', 'What is left — usage per provider', 'U');
+    sheet('repos', 'Repos — who is on which branch, and in whose way', 'G');
     out.push({ label: office.walk?.active ? 'Step back off the floor' : 'Walk the floor', hint: 'Tab', icon: 'pin', run: () => office.walk?.toggle() });
     out.push({ label: 'The whole office', hint: 'Space', icon: 'home', run: () => ui.overview() });
     out.push({ label: 'Next agent waiting on you', hint: 'N', icon: 'inbox', run: () => ui.nextNeed() });

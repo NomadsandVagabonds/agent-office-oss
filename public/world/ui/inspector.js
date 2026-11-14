@@ -4,6 +4,7 @@ import { h, ago, icon, shortPath, replace } from './dom.js';
 import { paintFlatCharacter } from '../art/character.js';
 import { PROVIDER_COLORS } from '../avatar/build.js';
 
+const DRIVEN_MODE = { ask: 'asks first', edits: 'edits freely', full: 'free hand' };
 const STATUS_TEXT = { arriving: 'arriving', thinking: 'thinking', working: 'working', blocked: 'waiting on you', done: 'finished', leaving: 'leaving' };
 
 function mugshot(look) {
@@ -32,11 +33,18 @@ export function createInspector(office, ui) {
   const sendBtn = h('button.btn.primary.small', icon('send'), 'Send');
   const note = h('div.dim', { style: { fontSize: '12px' } });
   const followBtn = h('button.btn.small', { onclick: () => { follow = !follow; applyFollow(); } }, icon('eye'), h('span', 'Following'));
+  // where its work can be read: the record of a session the office drives, or its terminal
+  const workBtn = h('button.btn.small.hidden', { onclick: () => {
+    const a = current && office.net.state.agents.get(current);
+    const rt = a?.runtime;
+    if (rt?.kind === 'driven') ui.openSheet('work', { driven: rt.sessionId });
+    else if (rt?.sessionId) ui.openSheet('work', { sessionId: rt.sessionId });
+  } }, icon('term'), h('span', 'Record'));
 
   panel.append(
     h('header', mugSlot, h('div.grow', title, sub), h('button.btn.ghost.small', { title: 'Close (Esc)', onclick: () => ui.select(null) }, icon('close'))),
     h('div.body.scroll', status, facts, h('div', h('div.row', { style: { marginBottom: '4px', fontSize: '12px' } }, h('span.faint.grow', 'context window'), h('span.mono.dim', { id: 'ctxpct' })), meter),
-      h('div', input, h('div.row', { style: { marginTop: '6px' } }, sendBtn, followBtn, h('span.grow'), note))),
+      h('div', input, h('div.row', { style: { marginTop: '6px', flexWrap: 'wrap' } }, sendBtn, followBtn, workBtn, h('span.grow'), note))),
   );
 
   async function send() {
@@ -47,7 +55,7 @@ export function createInspector(office, ui) {
       const res = await office.net.api('/api/comms/direct-message', { method: 'POST', body: { toAgentId: current, content: text } });
       input.value = '';
       const live = res?.receipt?.delivered || res?.terminalDelivered || res?.delivered;
-      note.textContent = live ? 'Delivered to their terminal.' : 'In their inbox — read on their next turn.';
+      note.textContent = res?.turnDelivered ? 'They have it: it starts their next turn.' : live ? 'Delivered to their terminal.' : 'In their inbox — read on their next turn.';
     } catch (err) { note.textContent = `Could not send: ${err.message}`; }
     sendBtn.disabled = false;
   }
@@ -80,12 +88,25 @@ export function createInspector(office, ui) {
       h('span.faint.mono', ago(a.since, office.net.now())));
     const place = office.net.state.places.get(a.id);
     const room = place && office.world?.layout.roomById.get(place.room);
+    const rt = a.runtime || null, driven = rt?.kind === 'driven';
+    const ws = office.net.state.workspace;
+    const git = ws?.agents?.[a.id] || null;
+    const clash = (ws?.overlaps || []).find((o) => (o.agents || []).some((x) => x.id === a.id)) || null;
+    const hosted = !driven && rt?.managed && rt?.sessionId && rt?.kind === 'terminal';
+    workBtn.classList.toggle('hidden', !(driven || hosted));
+    workBtn.lastChild.textContent = driven ? 'Record' : 'Terminal';
+    workBtn.title = driven ? 'Read what it has done, and give it its next turn' : 'Open its terminal';
     const rows = [
       ['doing', a.task || (a.status === 'working' && a.tool ? `using ${a.tool}` : '—')],
       needs && a.note ? ['asks', a.note] : null,
       ['project', a.department?.name || '—'],
       ['where', room ? `${room.name}${place.at === 'desk' ? ' · at their desk' : place.at?.startsWith('poi:') ? ` · ${place.ref}` : ''}` : '—'],
       ['folder', shortPath(a.cwd) || '—'],
+      git ? ['branch', h('a.link', { title: 'Who else is in this repository (G)', onclick: () => ui.openSheet('repos') },
+        [git.branch || (git.detached ? 'detached' : 'no branch yet'), git.linked ? 'own checkout' : '', git.dirty ? `${git.dirty} changed` : '', git.ahead ? `${git.ahead} ahead` : '', git.behind ? `${git.behind} behind` : ''].filter(Boolean).join(' · '))] : null,
+      clash ? ['clash', h('a.link.warn', { title: clash.text || '', onclick: () => ui.openSheet('repos') },
+        `${clash.agents.filter((x) => x.id !== a.id).map((x) => x.name).join(', ')} ${clash.kind === 'claimed' ? 'has claimed' : 'is also in'} ${String(clash.path || '').split('/').pop()}`)] : null,
+      driven ? ['runs', `driven by the office · ${DRIVEN_MODE[rt.mode] || rt.mode || ''}`.replace(/ · $/, '')] : null,
       ['tools used', String(a.toolCount || 0) + (a.subagents ? ` · ${a.subagents} helper${a.subagents > 1 ? 's' : ''} running` : '')],
       ['here since', ago(a.joinedAt, office.net.now())],
     ].filter(Boolean);
@@ -98,6 +119,7 @@ export function createInspector(office, ui) {
 
   office.net.on('agent', (a) => { if (a.id === current) render(); });
   office.net.on('place', (id) => { if (id === current) render(); });
+  office.net.on('workspace', () => { if (current) render(); });
   office.net.on('remove', (id) => { if (id === current) ui.select(null); });
   setInterval(() => { if (current) render(); }, 15000);
 
