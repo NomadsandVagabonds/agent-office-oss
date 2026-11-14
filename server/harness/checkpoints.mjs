@@ -19,8 +19,8 @@
 //   - the index is a file of the office's own, one per session
 //     (GIT_INDEX_FILE). The owner's index is not read either: reading a split
 //     index is enough to change the time of its shared half;
-//   - no ref is written anywhere. `git write-tree` names a tree, and the office
-//     keeps the names in its own record;
+//   - no ref is written into the repository, and none is needed: `git
+//     write-tree` names a tree, and the office keeps the names in its own record;
 //   - no program the repository's config names is started: hooks are pointed at
 //     nowhere (`git add` would otherwise run post-index-change), the file-system
 //     monitor is off, content filters are switched off (git-lfs's "clean" writes
@@ -84,6 +84,8 @@ const SUMMARIES_KEPT = 300;
 const STAT_AT_ONCE = 32;
 const SLOW_IN_A_ROW = 2;
 const GRACE_SECONDS = 3600;              // objects younger than this are never cleaned away: a snapshot may be using them
+const KEEP = 'refs/office/keep';         // in the office's own directory, and only while it tidies up there
+const SIZE_FRESH_MS = 30_000;            // how long a measure of what is kept is believed
 
 /** The office's name for a repository: its object directory is kept under this. */
 export const repoKey = (commonDir) => crypto.createHash('sha256').update(String(commonDir)).digest('hex').slice(0, 16);
@@ -262,7 +264,7 @@ const kept = (snap) => ({ tree: snap.tree, ...(snap.head ? { head: snap.head } :
 /* ---- the store ------------------------------------------------------------------ */
 
 const NOTHING = Object.freeze({ files: Object.freeze([]), count: 0, additions: 0, deletions: 0, truncated: false });
-const SWITCHED_OFF = 'this office is not recording what turns change (OFFICE_CHECKPOINTS=1 turns that on; OFFICE_GIT=0 turns it off)';
+const SWITCHED_OFF = 'this office is not recording what turns change (it was started with OFFICE_CHECKPOINTS=0 or OFFICE_GIT=0)';
 const NO_RECORD = 'the office has no snapshots of this session';
 
 /**
@@ -283,6 +285,9 @@ export function createCheckpoints({ settings, dir, file, log = console, changed 
   const live = new Map();               // session id → what a session needs while it lives in this process
   const running = new Set();            // every git we have started and not yet seen end
   const summaries = new Map();          // "<key>:<tree>:<tree>" → what differs; trees never change, so neither does this
+  const sizes = new Map();              // repository key → { bytes, files, at }: what the office keeps for it, as last measured
+  const toldKept = new Set();           // repositories whose size has been told to a session since this office started
+  const tidying = new Map();            // repository key → the tidying under way there (one at a time)
   const git = (cwd, args, opt = {}) => runGit(cwd, args, { timeout: QUERY_MS, ...opt, track: running });
   // Questions about snapshots are asked of the office's own directory and of nothing else: they are
   // answered the same whether the repository has moved on, been rewritten, or is gone.
@@ -479,6 +484,7 @@ export function createCheckpoints({ settings, dir, file, log = console, changed 
       const tree = oidOf(written);
       if (!tree) return failed('write the snapshot', written);
       st.tree = tree;
+      if (first) announce(st).catch(() => {});       // not waited for: it is a count of files, and no turn should stand behind it
       return taken(tree, head, added.code === 1 ? why(added) : '');
     } catch (err) {
       return { skip: `the snapshot failed: ${line(err?.message || String(err), 200)}`, code: 'git' };
@@ -507,24 +513,97 @@ export function createCheckpoints({ settings, dir, file, log = console, changed 
   /* ---- keeping house: all of it among the office's own files --------------------------- */
 
   /**
+   * How much the office keeps for one repository: the files of its object
+   * directory, added up. It is someone's disk, so it is measured rather than guessed.
+   */
+  async function measure(key) {
+    const root = path.join(storeOf(key), 'objects');
+    const entries = await fs.promises.readdir(root, { recursive: true, withFileTypes: true }).catch(() => []);
+    const list = entries.filter((entry) => entry.isFile()).map((entry) => path.join(entry.parentPath || entry.path || root, entry.name));
+    let bytes = 0, files = 0, next = 0;
+    const worker = async () => {
+      while (next < list.length) {
+        // The size is in hand before it is added: several of these run at once, and none may add to a stale sum.
+        try { const info = await fs.promises.stat(list[next++]); bytes += info.size; files += 1; } catch { /* gone meanwhile */ }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(STAT_AT_ONCE, list.length) }, worker));
+    const kept = { bytes, files, at: Date.now() };
+    sizes.set(key, kept);
+    return kept;
+  }
+
+  /** The last measure if it is recent, else a new one. */
+  async function stored(key) {
+    const known = sizes.get(key);
+    const kept = known && Date.now() - known.at < SIZE_FRESH_MS ? known : await measure(key);
+    return { bytes: kept.bytes, files: kept.files };
+  }
+
+  /**
+   * The first snapshot of a repository has been taken. If what the office now keeps
+   * for it is a lot, the session that caused it is told — once per repository, in a
+   * sentence: that there is a copy, how big, and where.
+   */
+  async function announce(st) {
+    if (toldKept.has(st.key)) return;
+    const kept = await measure(st.key);
+    if (kept.bytes <= settings.noticeBytes || toldKept.has(st.key)) return;
+    toldKept.add(st.key);
+    st.note('n:changes:kept', `To tell what turns change, the office keeps its own copy of this folder's files: ${size(kept.bytes)} so far, in ${line(storeOf(st.key), 300)}.`);
+  }
+
+  /**
    * Let go of what no kept snapshot needs in one repository's object directory —
    * the whole directory once no session uses it. Objects younger than an hour are
    * left alone: a snapshot being taken right now may be made of them.
    */
-  async function sweep(key) {
+  function sweep(key) {
+    const next = (tidying.get(key) || Promise.resolve()).then(() => tidy(key))
+      .catch((err) => { log.warn(`[checkpoints] could not tidy ${storeOf(key)}: ${err?.message || err}`); });
+    tidying.set(key, next);
+    return next;
+  }
+
+  async function tidy(key) {
     if (!STORE_KEY.test(String(key))) return;
     const at = storeOf(key);
     const users = Object.values(store.data.sessions).filter((rec) => rec.key === key);
     const here = [...live.values()].filter((st) => st.key === key);
     if (!users.length && !here.length) {
       await fs.promises.rm(at, { recursive: true, force: true });
+      sizes.delete(key);
       return;
     }
     if (!fs.existsSync(path.join(at, 'objects'))) return;
     const needed = new Set();
     for (const rec of users) for (const turn of rec.turns) for (const snap of [turn.start, turn.end]) if (snap?.tree) needed.add(snap.tree);
     for (const st of here) if (st.tree) needed.add(st.tree);            // what a live session's index is made of
-    await git(null, [`--git-dir=${at}`, 'prune', `--expire=${graceSeconds > 0 ? `${graceSeconds}.seconds.ago` : 'now'}`, ...needed], { timeout: 3 * QUERY_MS });
+    // Every command here is given the office's own directory and no other.
+    const own = (args, opt = {}) => git(null, [`--git-dir=${at}`, ...args], { timeout: 3 * QUERY_MS, ...opt });
+    const failed = (what, r) => { log.warn(`[checkpoints] could not tidy ${at}: git could not ${what} (${why(r)}); nothing was removed`); };
+    // There can be tens of thousands of trees to keep — every turn of every session on record — and a
+    // command line has room for far fewer. So they are named to git as one tree that lists them, held by
+    // one ref in the office's own directory for as long as the pruning takes. The ref is the only one the
+    // office ever writes, it is never in the repository, and it is gone again a moment later.
+    await own(['update-ref', '-d', KEEP]);                              // left by a tidying that was cut short
+    if (needed.size) {
+      const known = await own(['cat-file', '--batch-check'], { input: [...needed].join('\n') + '\n', maxOut: Math.max(LIST_BYTES, needed.size * 128) });
+      if (!known.ok) { failed('look up the trees to keep', known); return; }
+      // A tree on record whose objects are no longer there cannot be kept, and must not stop the rest.
+      const listing = known.out.split('\n').map((row) => /^([0-9a-f]+) tree \d+$/.exec(row)?.[1]).filter(Boolean)
+        .map((tree, i) => `040000 tree ${tree}\tt${i}\n`).join('');
+      if (listing) {
+        const made = await own(['mktree'], { input: listing });
+        if (!oidOf(made)) { failed('list the trees to keep', made); return; }
+        const held = await own(['update-ref', '--no-deref', KEEP, oidOf(made)]);
+        if (!held.ok) { failed('hold on to the trees to keep', held); return; }
+      }
+    }
+    const pruned = await own(['prune', `--expire=${graceSeconds > 0 ? `${graceSeconds}.seconds.ago` : 'now'}`]);
+    await own(['update-ref', '-d', KEEP]);
+    if (!pruned.ok) failed('clear out what is no longer needed', pruned);
+    sizes.delete(key);
   }
 
   /* ---- a session's life -------------------------------------------------------------- */
@@ -769,8 +848,8 @@ export function createCheckpoints({ settings, dir, file, log = console, changed 
       total.files += v.count - v.files.length;
     }
     total.files += paths.size;
-    return { sessionId: id, recorded: true, root: rec.root, store: storeOf(rec.key), turns, total, keeps: settings.maxTurns,
-      ...(rec.off ? { off: rec.off } : {}) };
+    return { sessionId: id, recorded: true, root: rec.root, store: storeOf(rec.key), stored: await stored(rec.key), turns, total,
+      keeps: settings.maxTurns, ...(rec.off ? { off: rec.off } : {}) };
   }
 
   /**

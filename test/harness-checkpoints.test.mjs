@@ -16,6 +16,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { startHarnessOffice as startOffice, waitFor, sleep } from './fixtures/harness-helpers.mjs';
 import { ROOT, tempDir } from './helpers.mjs';
@@ -37,10 +38,12 @@ const startHarnessOffice = (opt = {}) => startOffice({ ...opt, env: { OFFICE_CHE
 // its pid first, so a test can see that stopping a snapshot stopped the program too.
 const realGit = usable ? execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim() : 'git';
 const tools = fs.realpathSync(tempDir('office-changes-tools-'));
-const SLOW = path.join(tools, 'slow'), PIDS = path.join(tools, 'pids');
+const SLOW = path.join(tools, 'slow'), PIDS = path.join(tools, 'pids'), ARGC = path.join(tools, 'argc');
 if (usable) {
   fs.writeFileSync(path.join(tools, 'git'), ['#!/bin/sh', `if [ -f '${SLOW}' ]; then`, `  read sub secs < '${SLOW}'`,
-    `  case " $* " in *" $sub "*) echo $$ >> '${PIDS}'; sleep "$secs";; esac`, 'fi', `exec '${realGit}' "$@"`, ''].join('\n'), { mode: 0o755 });
+    `  case " $* " in *" $sub "*) echo $$ >> '${PIDS}'; sleep "$secs";; esac`, 'fi',
+    // …and how many arguments a pruning was given, for the test about how many trees it can be asked to keep
+    `case " $* " in *" prune "*) echo "$#" >> '${ARGC}';; esac`, `exec '${realGit}' "$@"`, ''].join('\n'), { mode: 0o755 });
   process.env.PATH = `${tools}${path.delimiter}${process.env.PATH}`;
 }
 const dawdle = (subcommand, seconds) => fs.writeFileSync(SLOW, `${subcommand} ${seconds}\n`);
@@ -110,6 +113,9 @@ const brief = (files) => files.map((f) => [f.status, f.path, f.additions, f.dele
 /** Ask the office's own object directory, as a person could. */
 const inStore = (store, ...args) => execFileSync(realGit, ['--git-dir', store, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 const objectsIn = (store) => { try { return fs.readdirSync(path.join(store, 'objects'), { recursive: true }).filter((name) => /[0-9a-f]{38}$/.test(name)).length; } catch { return 0; } };
+/** What the office's directory for one repository weighs: every file under `objects`, added up. */
+const weightOf = (store) => fs.readdirSync(path.join(store, 'objects'), { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile())
+  .reduce((sum, entry) => sum + fs.statSync(path.join(entry.parentPath, entry.name)).size, 0);
 /** Is the content of this file, as it is on disk now, among the objects the office holds? */
 const holds = (store, work, file) => spawnSync(realGit, ['--git-dir', store, 'cat-file', '-e', git(work, 'hash-object', file).trim()]).status === 0;
 
@@ -162,17 +168,17 @@ test('checkpoints: reading what git says, and the settings', () => {
   assert.match(repoKey('/some/repo/.git'), /^[a-f0-9]{16}$/);
   assert.notEqual(repoKey('/some/repo/.git'), repoKey('/some/other/.git'));
 
-  // Off unless the operator asks for it; every limit has a default and cannot be pushed out of range.
+  // On unless the operator says otherwise; every limit has a default and cannot be pushed out of range.
   const d = harnessSettings({}).checkpoints;
-  assert.deepEqual(d, { enabled: false, holdMs: 3000, timeoutMs: 30000, maxTreeFiles: 50000, maxTreeBytes: 512 * 1024 * 1024,
-    maxFiles: 5000, maxBytes: 100 * 1024 * 1024, maxTurns: 100, diffBytes: 512 * 1024 });
-  const odd = harnessSettings({ OFFICE_CHECKPOINTS: '1', OFFICE_CHECKPOINTS_HOLD_MS: '0', OFFICE_CHECKPOINTS_TIMEOUT_MS: 'soon', OFFICE_CHECKPOINTS_MAX_FILES: '-4',
+  assert.deepEqual(d, { enabled: true, holdMs: 3000, timeoutMs: 30000, maxTreeFiles: 50000, maxTreeBytes: 512 * 1024 * 1024,
+    maxFiles: 5000, maxBytes: 100 * 1024 * 1024, maxTurns: 100, diffBytes: 512 * 1024, noticeBytes: 64 * 1024 * 1024 });
+  const odd = harnessSettings({ OFFICE_CHECKPOINTS_HOLD_MS: '0', OFFICE_CHECKPOINTS_TIMEOUT_MS: 'soon', OFFICE_CHECKPOINTS_MAX_FILES: '-4',
     OFFICE_CHECKPOINTS_MAX_BYTES: '1', OFFICE_CHECKPOINTS_MAX_TURNS: '999999', OFFICE_CHECKPOINTS_DIFF_BYTES: '9e99',
-    OFFICE_CHECKPOINTS_MAX_TREE_FILES: '0', OFFICE_CHECKPOINTS_MAX_TREE_BYTES: 'huge' }).checkpoints;
+    OFFICE_CHECKPOINTS_MAX_TREE_FILES: '0', OFFICE_CHECKPOINTS_MAX_TREE_BYTES: 'huge', OFFICE_CHECKPOINTS_NOTICE_BYTES: '-1' }).checkpoints;
   assert.deepEqual(odd, { enabled: true, holdMs: 100, timeoutMs: 30000, maxTreeFiles: 1, maxTreeBytes: 512 * 1024 * 1024,
-    maxFiles: 1, maxBytes: 1024, maxTurns: 10000, diffBytes: 16 * 1024 * 1024 });
+    maxFiles: 1, maxBytes: 1024, maxTurns: 10000, diffBytes: 16 * 1024 * 1024, noticeBytes: 0 });
   assert.equal(harnessSettings({ OFFICE_CHECKPOINTS: '0' }).checkpoints.enabled, false);
-  assert.equal(harnessSettings({ OFFICE_CHECKPOINTS: '1', OFFICE_GIT: '0' }).checkpoints.enabled, false, 'no git at all means none of this either');
+  assert.equal(harnessSettings({ OFFICE_GIT: '0' }).checkpoints.enabled, false, 'no git at all means none of this either');
 });
 
 test('checkpoints: every git call is bounded in time and in output, and stopped with what it started', { skip: !usable }, async () => {
@@ -220,9 +226,12 @@ test('checkpoints: what each turn changed', { skip: !usable }, async (t) => {
     assert.equal(store, path.join(h.dir, 'harness', 'checkpoints', repoKey(path.join(work, '.git'))));
     assert.equal(cps.storeOf(s.id), store);
     assert.ok(objectsIn(store) >= 6, 'the first snapshot stored every file that is not ignored');
-    assert.ok(!(await h.entries(s.id)).some((e) => e.kind === 'notice' && /not being recorded/.test(e.text)), 'nothing to explain here');
+    // …and how much that is, is part of the answer: it is the owner's disk.
+    assert.deepEqual(empty.stored, { bytes: weightOf(store), files: objectsIn(store) });
+    assert.ok(empty.stored.bytes > 100 && empty.stored.bytes < 10_000);
+    assert.ok(!(await h.entries(s.id)).some((e) => e.kind === 'notice'), 'nothing to explain here: the folder is recorded, and what is kept for it is small');
     assert.deepEqual((await h.get('/api/harness')).data.limits.checkpoints, { enabled: true, holdMs: 3000, timeoutMs: 30000, maxTreeFiles: 50000,
-      maxTreeBytes: 536870912, maxFiles: 5000, maxBytes: 104857600, maxTurns: 100, diffBytes: 524288 });
+      maxTreeBytes: 536870912, maxFiles: 5000, maxBytes: 104857600, maxTurns: 100, diffBytes: 524288, noticeBytes: 67108864 });
   });
 
   await t.test('a tracked edit, a new file, a deletion, a rename and a binary file — and nothing that is ignored', async () => {
@@ -552,14 +561,20 @@ test('checkpoints: nothing is written into the repository', { skip: !usable }, a
     assert.deepEqual(everything(path.join(work, '.git')), before);
   });
 
-  await t.test('and no command the office runs could: it has none that writes a ref, and borrows no objects', () => {
+  await t.test('and no command the office runs could: none writes a ref there, and no objects are borrowed', () => {
     const source = fs.readFileSync(path.join(ROOT, 'server', 'harness', 'checkpoints.mjs'), 'utf8');
     const commands = [...source.matchAll(/\[\s*'(?:-c',\s*'[^']*',\s*')*([a-z][a-z-]+)'/g)].map((m) => m[1]);
-    for (const banned of ['update-ref', 'symbolic-ref', 'commit', 'commit-tree', 'checkout', 'checkout-index', 'reset', 'restore', 'stash', 'clean',
-      'read-tree', 'gc', 'repack', 'pack-refs', 'config-set', 'branch', 'tag', 'worktree', 'merge', 'rebase', 'fetch', 'pull', 'push', 'rm', 'mv']) {
+    for (const banned of ['symbolic-ref', 'commit', 'commit-tree', 'checkout', 'checkout-index', 'reset', 'restore', 'stash', 'clean',
+      'read-tree', 'gc', 'repack', 'pack-refs', 'branch', 'tag', 'worktree', 'merge', 'rebase', 'fetch', 'pull', 'push', 'rm', 'mv']) {
       assert.ok(!commands.includes(banned), `no "git ${banned}"`);
     }
     assert.ok(commands.includes('write-tree') && commands.includes('add') && commands.includes('diff-tree'), 'the reading of the source found the commands it does run');
+    // The one ref the office ever writes is in its own directory, while it tidies up there: every command that
+    // could write or remove a ref or an object by name is given that directory explicitly (`own`), and no other.
+    const writers = source.split('\n').filter((row) => /'(?:update-ref|prune|mktree)'/.test(row));
+    assert.equal(writers.length, 5);
+    for (const row of writers) assert.match(row, /\bown\(\['(?:update-ref|prune|mktree)'/, row.trim());
+    assert.match(source, /const own = \(args, opt = \{\}\) => git\(null, \[`--git-dir=\$\{at\}`, \.\.\.args\]/);
     assert.ok(!/GIT_ALTERNATE_OBJECT_DIRECTORIES\s*=|env\.GIT_ALTERNATE_OBJECT_DIRECTORIES/.test(source));
   });
 });
@@ -600,7 +615,69 @@ test('checkpoints: the office\'s own files are all a snapshot is, and they are t
   await cps.forget(b);
   assert.equal(fs.existsSync(store), false);
   assert.deepEqual(fs.readdirSync(path.join(data, 'harness')).filter((name) => name !== 'checkpoints'), []);
+
+  await t.test('however many trees are on record: git is not handed them on its command line', async () => {
+    // At its caps the office can have tens of thousands of trees to keep. Naming each one to `git prune` as an
+    // argument fails outright past the system's limit, and then nothing would ever be cleaned. So: more trees
+    // than that limit has room for.
+    const limit = Number(execFileSync('getconf', ['ARG_MAX'], { encoding: 'utf8' }));
+    const many = Math.min(140_000, 2 * Math.ceil((limit / 41 + 1000) / 2));
+    const data2 = tempDir('office-changes-many-data-');
+    const key = repoKey(path.join(work, '.git'));
+    const store2 = path.join(data2, 'harness', 'checkpoints', key);
+    fs.mkdirSync(path.dirname(store2), { recursive: true });
+    execFileSync(realGit, ['init', '-q', '--bare', '--template=', store2]);
+    const put = (text) => execFileSync(realGit, ['--git-dir', store2, 'hash-object', '-w', '--stdin'], { input: text, encoding: 'utf8' }).trim();
+    const there = (id) => spawnSync(realGit, ['--git-dir', store2, 'cat-file', '-e', id]).status === 0;
+    const blob = put('in every tree\n'), stray = put('needed by nothing\n');
+    const trees = plantTrees(store2, blob, many);
+    const turns = [];
+    for (let i = 0; i < many; i += 2) turns.push({ n: i / 2 + 1, at: 1, start: { tree: trees[i], at: 1, ms: 1 }, end: { tree: trees[i + 1], at: 1, ms: 1 } });
+    const record = (list) => ({ root: work, repo: path.join(work, '.git'), key, at: 1, turns: list });
+    fs.writeFileSync(path.join(data2, 'checkpoints.json'), JSON.stringify({ v: 1, sessions: {
+      d_cccccccccccc: record(turns), d_dddddddddddd: record([]), d_eeeeeeeeeeee: record([]) } }));
+    if (many * 41 > limit) {
+      const direct = spawnSync(realGit, ['--git-dir', store2, 'prune', '--expire=now', ...trees]);
+      assert.equal(direct.error?.code, 'E2BIG', 'naming every tree as an argument cannot even be started here');
+    }
+    const warnings = [];
+    const big = createCheckpoints({ settings, dir: path.join(data2, 'harness'), file: path.join(data2, 'checkpoints.json'), log: { warn: (m) => warnings.push(m) }, graceSeconds: 0 });
+    try {
+      fs.rmSync(ARGC, { force: true });
+      assert.equal(await big.forget('d_dddddddddddd'), true);
+      assert.deepEqual(warnings, []);
+      assert.equal(there(stray), false, 'what nothing needed is gone');
+      assert.ok(there(blob) && there(trees[0]) && there(trees[many / 2]) && there(trees[many - 1]), 'and the trees on record are still there');
+      assert.ok(objectsIn(store2) >= many + 1);
+      assert.equal(inStore(store2, 'for-each-ref').trim(), '', 'the one ref it held them by is gone again');
+      assert.ok(Number(fs.readFileSync(ARGC, 'utf8').trim().split('\n').pop()) < 20, 'git was given the same few arguments it would be for one tree');
+      assert.equal((await big.changes('d_cccccccccccc', { turn: 1 })).turns[0].count, 1, 'a snapshot kept through it can still be read');
+
+      // A tidying that fails says so — it must not go quiet and leave the directory to grow unnoticed.
+      fs.rmSync(path.join(store2, 'HEAD'));
+      assert.equal(await big.forget('d_eeeeeeeeeeee'), true);
+      assert.equal(warnings.length, 1);
+      assert.match(warnings[0], /^\[checkpoints\] could not tidy \S+: git could not look up the trees to keep \(.+\); nothing was removed$/);
+    } finally { await big.stop(); }
+  });
 });
+
+/** Many small trees, written straight into an object directory of ours — git itself takes seconds to make this many one by one. */
+function plantTrees(store, blob, count) {
+  const inside = Buffer.from(blob, 'hex');
+  const folders = new Set();
+  const ids = [];
+  for (let i = 0; i < count; i++) {
+    const body = Buffer.concat([Buffer.from(`100644 f${i}\0`), inside]);
+    const whole = Buffer.concat([Buffer.from(`tree ${body.length}\0`), body]);
+    const id = crypto.createHash('sha1').update(whole).digest('hex');
+    const folder = path.join(store, 'objects', id.slice(0, 2));
+    if (!folders.has(folder)) { fs.mkdirSync(folder, { recursive: true }); folders.add(folder); }
+    fs.writeFileSync(path.join(folder, id.slice(2)), zlib.deflateSync(whole, { level: 1 }));
+    ids.push(id);
+  }
+  return ids;
+}
 
 test('checkpoints: a snapshot that would cost too much is skipped, and says why', { skip: !usable }, async (t) => {
   await t.test('one turn\'s worth: too large, or too many', async () => {
@@ -1088,20 +1165,44 @@ test('checkpoints: how much is kept, for how long, and what a restart leaves', {
     } finally { await second.stop(); }
   });
 
-  await t.test('not asked for, nothing is looked at and nothing is kept', async () => {
+  await t.test('when what the office keeps for a repository is a lot, the session that caused it is told — once, in a sentence', async () => {
+    const work = repo('office-changes-told-');
+    write(work, 'data.txt', crypto.randomBytes(6000).toString('hex'));        // 12 KB that do not shrink to nothing
+    const h = await startHarnessOffice({ work, env: { OFFICE_CHECKPOINTS_NOTICE_BYTES: '4096' } });
+    try {
+      const s = await h.start('fake', { name: 'First' });
+      const told = await waitFor(async () => (await h.entries(s.id)).find((e) => e.kind === 'notice' && /keeps its own copy/.test(e.text)), { what: 'the notice' });
+      const got = await changes(h, s.id);
+      assert.match(told.text, /^To tell what turns change, the office keeps its own copy of this folder's files: \d+ KB so far, in \S+\/harness\/checkpoints\/[a-f0-9]{16}\.$/);
+      assert.ok(told.text.endsWith(` in ${got.store}.`), 'where it says is where it is');
+      assert.deepEqual(got.stored, { bytes: weightOf(got.store), files: objectsIn(got.store) });
+      assert.ok(got.stored.bytes > 4096 && got.stored.files >= 6);
+      assert.equal(told.text.match(/: (\d+) KB so far/)[1], String(Math.round(got.stored.bytes / 1024)), 'and how much it says is how much there is');
+      await quietTurn(h, s.id);
+      // A second session in the same repository adds next to nothing, and is not told what the first was.
+      const again = await h.start('fake', { name: 'Second' });
+      await h.ctx.harness.checkpoints.settled(again.id);
+      await quietTurn(h, again.id);
+      assert.ok(!(await h.entries(again.id)).some((e) => e.kind === 'notice'));
+      assert.equal((await h.entries(s.id)).filter((e) => e.kind === 'notice').length, 1);
+      assert.deepEqual((await changes(h, again.id)).stored, got.stored);
+    } finally { await h.stop(); }
+  });
+
+  await t.test('switched off, nothing is looked at and nothing is kept', async () => {
     const work = repo('office-changes-off-');
     const before = everything(path.join(work, '.git'));
-    // As any other suite starts an office: without asking. (test/helpers.mjs says OFFICE_CHECKPOINTS=0; an
-    // office started with nothing said is the same.)
+    // As every other suite starts an office: test/helpers.mjs says OFFICE_CHECKPOINTS=0, so that a test which
+    // names no folder cannot have this checkout copied.
     const h = await startOffice({ work });
     try {
       assert.equal(h.cfg.harness.checkpoints.enabled, false);
       const s = await h.start('fake', { name: 'Unwatched' });
       await turnThat(h, s.id, () => write(work, 'unseen.txt', 'x\n'));
       const got = await changes(h, s.id);
-      assert.deepEqual([got.recorded, got.reason], [false, 'this office is not recording what turns change (OFFICE_CHECKPOINTS=1 turns that on; OFFICE_GIT=0 turns it off)']);
+      assert.deepEqual([got.recorded, got.reason], [false, 'this office is not recording what turns change (it was started with OFFICE_CHECKPOINTS=0 or OFFICE_GIT=0)']);
       assert.equal((await h.session(s.id)).controls.changes.available, false);
-      assert.ok(!(await h.entries(s.id)).some((e) => e.kind === 'notice' && /record/.test(e.text)), 'the operator did not ask for it; no session needs telling');
+      assert.ok(!(await h.entries(s.id)).some((e) => e.kind === 'notice' && /record/.test(e.text)), 'how the office was started is not news to every session');
       assert.equal(fs.existsSync(path.join(h.dir, 'harness', 'checkpoints')), false);
       assert.equal(fs.existsSync(path.join(h.dir, 'harness', `${s.id}.index`)), false);
       assert.equal((await h.get('/api/harness')).data.limits.checkpoints.enabled, false);

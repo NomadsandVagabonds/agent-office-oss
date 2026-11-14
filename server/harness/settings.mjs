@@ -49,8 +49,7 @@ export function harnessSettings(env = {}) {
     // the office's own — nothing is written into the repository. Each number bounds what that may cost:
     // how long a turn waits, how long git may run, how much is copied, how much is kept.
     checkpoints: Object.freeze({
-      // Off unless asked for (OFFICE_CHECKPOINTS=1) while this is still being reviewed; OFFICE_GIT=0 means no git at all, this included.
-      enabled: env.OFFICE_CHECKPOINTS === '1' && env.OFFICE_GIT !== '0',
+      enabled: env.OFFICE_CHECKPOINTS !== '0' && env.OFFICE_GIT !== '0',     // OFFICE_GIT=0 means no git at all, this included
       holdMs: int(env, 'OFFICE_CHECKPOINTS_HOLD_MS', 3_000, 100, 60_000),            // how long a turn waits for the snapshot taken before it
       timeoutMs: int(env, 'OFFICE_CHECKPOINTS_TIMEOUT_MS', 30_000, 200, 600_000),    // one snapshot, all its git calls together
       // The first snapshot of a folder copies every file that is not ignored: how big a folder is taken at all.
@@ -61,6 +60,8 @@ export function harnessSettings(env = {}) {
       maxBytes: int(env, 'OFFICE_CHECKPOINTS_MAX_BYTES', 100 * 1024 * 1024, 1024, 64 * 1024 * 1024 * 1024),
       maxTurns: int(env, 'OFFICE_CHECKPOINTS_MAX_TURNS', 100, 1, 10_000),            // turns kept per session
       diffBytes: int(env, 'OFFICE_CHECKPOINTS_DIFF_BYTES', 512 * 1024, 1024, 16 * 1024 * 1024),   // diff text one answer carries
+      // The copy is the owner's disk: past this much kept for one repository, the session that made it is told.
+      noticeBytes: int(env, 'OFFICE_CHECKPOINTS_NOTICE_BYTES', 64 * 1024 * 1024, 0, 1024 * 1024 * 1024 * 1024),
     }),
   });
 }
