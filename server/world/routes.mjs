@@ -59,6 +59,20 @@ export function registerWorldRoutes(router, ctx) {
     return c.result(world.placeOnShelf(agent, body.creationId === null ? null : String(body.creationId || ''), slot));
   }, { about: 'Put a creation on your team shelf: {agent, creationId, slot?} (creationId:null clears a slot).' });
 
+  /* ---- the long game: keycards, the coin jar, the machine (core/game.mjs) ---- */
+  router.get('/api/world/game', () => ({ ...world.game.view(), shelf: world.game.shelf().prizes }),
+    { about: 'The long game: which lift buttons are lit, keycards and coins found, what is in the jar, what the vending machine sells.' });
+  router.post('/api/world/game/collect', async (c) => {
+    const body = await c.json();
+    return c.result(world.game.collect(body.hideout || body.level, body.item, body.n, optionalAgent(body.agent), { name: body.name }));
+  }, { about: 'Pick up something hidden on a floor: {hideout, item:"card"|"coin", n? (which coin), name?}.' });
+  router.post('/api/world/game/visit', async (c) => c.result(world.game.visit((await c.json()).floor)),
+    { about: 'A newly lit floor has been ridden to: {floor}.' });
+  router.post('/api/world/game/buy', async (c) => {
+    const body = await c.json();
+    return c.result(world.game.buy(body.prize || body.slot, optionalAgent(body.agent), { name: body.name }));
+  }, { about: 'Buy from the vending machine with coins from the jar: {prize: id or shelf code ("B2"), name?}.' });
+
   // Things a human does with a click (an agent may pass its id to get credit).
   router.post('/api/world/discover', async (c) => {
     const body = await c.json();

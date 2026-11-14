@@ -17,6 +17,10 @@
 //   hidden  optional rule: a pure function of { quirks, found } that returns true
 //           while the button should not exist. `quirks` is today's calendar
 //           (dayQuirks in secrets.mjs), `found` the ids of discoveries anyone has made.
+//   card    this floor is one of the games: its button stays dark until a keycard opens it
+//           (one of them, drawn by lot, is open from the start — see core/game.mjs), and it
+//           hides a keycard of its own, which opens another
+//   coins   how many coins are hidden there (they do not come back once taken)
 //   unmarked  the button has no engraving and the plate beside it is blank
 //   car     [x, z] — set on floors an AGENT can ride to (they need a text side too:
 //           server/world/floors.mjs). It is the tile of the lift car the agent stands
@@ -30,9 +34,9 @@ export const HOME = 'lobby';
 
 // In the order they appear on the panel: top of the building first.
 export const LEVELS = Object.freeze([
-  { id: 'nightshift', floor: 'N', storey: 4, kind: 'game', name: 'Night Shift',
+  { id: 'nightshift', floor: 'N', storey: 4, kind: 'game', name: 'Night Shift', card: true, coins: 2,
     blurb: 'The office in black and white. Stay out of the security lights. Clock out.' },
-  { id: 'scranton', floor: 'S', storey: 3, kind: 'game', name: 'Scranton Paper Co.',
+  { id: 'scranton', floor: 'S', storey: 3, kind: 'game', name: 'Scranton Paper Co.', card: true, coins: 3,
     blurb: 'A very ordinary paper company. Reception has a memo about a very ordinary stapler.' },
   { id: 'roof', floor: 'R', storey: 2, kind: 'place', name: 'Rooftop Garden',
     blurb: 'Open air above the office: planters, benches, a telescope, and the skyline all round.' },
@@ -40,9 +44,9 @@ export const LEVELS = Object.freeze([
     blurb: 'A dim room of live wall screens: who is waiting on the human, every board, who is on what.' },
   { id: 'lobby', floor: 'L', storey: 0, kind: 'office', name: 'Lobby',
     blurb: 'The office itself: project rooms, the plaza, the kitchen, the library.' },
-  { id: 'pasture', floor: 'P', storey: -1, kind: 'place', name: 'The Pasture', car: [-1, -10],
+  { id: 'pasture', floor: 'P', storey: -1, kind: 'place', name: 'The Pasture', car: [-1, -10], card: true, coins: 3,
     blurb: 'Lower ground, where the car park would be. Mind the goats.' },
-  { id: 'afterhours', floor: 'A', storey: -2, kind: 'game', name: 'After Hours', car: [0, -10],
+  { id: 'afterhours', floor: 'A', storey: -2, kind: 'game', name: 'After Hours', car: [0, -10], card: true, coins: 3,
     blurb: 'The office at night with the build broken, and the bugs out of their cabinet. Take the mallet.' },
   { id: 'thirteen', floor: '13', storey: 13, kind: 'place', name: 'Floor Thirteen',
     blurb: 'Not on the plans. The button was not there yesterday.', unmarked: true,
@@ -69,6 +73,21 @@ export function isVisible(level, ctx = {}) {
 /** The buttons on the panel right now, top floor first. */
 export const visibleLevels = (ctx = {}) => LEVELS.filter((l) => isVisible(l, ctx));
 
+/**
+ * Has this floor's button been lit? Floors that need no keycard always are. `ctx.open` is the list of card
+ * floors the office has opened; where nobody has said (an older daemon, a page still loading) nothing is held back.
+ */
+export function isOpen(level, ctx = {}) {
+  if (!level) return false;
+  return !level.card || !Array.isArray(ctx.open) || ctx.open.includes(level.id);
+}
+
+/** What the panel shows: the floors you can ride to, and how many buttons are still dark. */
+export function panelLevels(ctx = {}) {
+  const all = visibleLevels(ctx);
+  return { levels: all.filter((l) => isOpen(l, ctx)), dark: all.filter((l) => !isOpen(l, ctx)).length };
+}
+
 /** Which floor an agent's placement says it has ridden to (see `car`), or null if it is simply in the office. */
 export function floorOfPlacement(place) {
   if (!place || place.room !== 'elevator' || place.leaving) return null;
@@ -77,5 +96,6 @@ export function floorOfPlacement(place) {
 
 /** What the hidden rules look at, read from a world snapshot (GET /api/world, or the `world` event). */
 export function levelContext(world) {
-  return { quirks: world?.today?.quirks || [], found: Object.keys(world?.discoveries || {}) };
+  return { quirks: world?.today?.quirks || [], found: Object.keys(world?.discoveries || {}),
+    open: Array.isArray(world?.game?.open) ? world.game.open : undefined, fresh: world?.game?.fresh || [] };
 }

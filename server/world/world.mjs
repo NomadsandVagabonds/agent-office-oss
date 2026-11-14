@@ -18,6 +18,7 @@ import { isCreationId } from '../../core/creations.mjs';
 import { resolveLook, sanitizeLookPatch } from '../../core/look.mjs';
 import { readCreations } from '../creations-store.mjs';
 import { createTextWorld } from './text.mjs';
+import { createGame } from './game.mjs';
 
 const TICK_MS = 4000;
 const IDLE_BEFORE_ERRAND_MS = 25_000;
@@ -339,6 +340,8 @@ export function createWorld(ctx, file) {
       shelves: state.shelves,
       gallery: gallery(),
       discoveries: state.discoveries,
+      // keycards, the coin jar, what has been bought (core/game.mjs)
+      game: game.view(),
       secrets: SECRETS.map((s) => (state.discoveries[s.id]
         ? { id: s.id, name: s.name, icon: s.icon, blurb: s.blurb, found: true,
           by: state.discoveries[s.id].byName, at: state.discoveries[s.id].at }
@@ -731,7 +734,11 @@ export function createWorld(ctx, file) {
     store.flush();
   }
 
+  // The long game: found keycards light the lift's dark buttons, coins fill the office's jar.
+  const game = createGame(ctx, state, { save, changed: () => broadcastWorld() });
+
   const api = {
+    game,
     start, stop, snapshot, summary, plan, knownDepartments, closeRoom,
     layout: () => layout, nav: () => nav,
     placeOf: (id) => places.get(id) || null,

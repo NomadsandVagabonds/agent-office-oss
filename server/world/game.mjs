@@ -1,0 +1,126 @@
+// The Office — the long game's record: which keycards have been found, which
+// coins have been picked up, what has been bought. The rules are in
+// core/game.mjs; this is the office's memory of them, kept in the world store
+// so that it outlives browsers and is the same for everyone looking at this
+// office. The jar is the office's: whoever finds a coin, it goes in the same
+// jar, and what is bought stands where everybody can see it.
+import crypto from 'node:crypto';
+import { HIDEOUTS, PRIZES, STAMP_COINS, dealOrder, findPrize, hideoutById, jarOf, openFloors } from '../../core/game.mjs';
+import { levelById } from '../../core/levels.mjs';
+
+const fail = (status, error) => ({ error, status });
+
+/**
+ * @param {object} ctx
+ * @param {object} state   the world store's data (this keeps its part under `state.game`)
+ * @param {{save:()=>void, changed:()=>void}} hooks   changed: tell everyone the world is different
+ */
+export function createGame(ctx, state, hooks) {
+  const rand = () => crypto.randomInt(0, 2 ** 31) / 2 ** 31;
+  const g = state.game && typeof state.game === 'object' ? state.game : (state.game = {});
+  g.cards = g.cards && typeof g.cards === 'object' ? g.cards : {};
+  g.coins = g.coins && typeof g.coins === 'object' ? g.coins : {};
+  g.prizes = g.prizes && typeof g.prizes === 'object' ? g.prizes : {};
+  g.visited = Array.isArray(g.visited) ? g.visited : [];
+  g.spent = Number.isFinite(g.spent) && g.spent > 0 ? Math.floor(g.spent) : 0;
+  // Which floor is open to begin with, and which each card opens, is drawn once per office — and re-read every start,
+  // so a floor added since joins the end of the queue and one that is gone leaves it.
+  const before = JSON.stringify(g.order || []);
+  g.order = dealOrder(g.order, rand);
+  if (JSON.stringify(g.order) !== before) hooks.save();
+
+  const cardCount = () => HIDEOUTS.filter((h) => g.cards[h.id]).length;
+  const coinCount = () => HIDEOUTS.reduce((n, h) => n + Object.keys(g.coins[h.id] || {}).filter((k) => Number(k) >= 1 && Number(k) <= h.coins).length, 0);
+  const stamps = () => Object.keys(state.discoveries || {}).length;
+  const purse = () => {
+    const coins = coinCount(), s = stamps();
+    return { have: jarOf({ coins, stamps: s, spent: g.spent }), found: coins, stamps: s * STAMP_COINS, spent: g.spent };
+  };
+  const open = () => openFloors(g.order, cardCount());
+  const nameOf = (by, extra) => (by ? by.name : String(extra?.name || 'Lead').slice(0, 60));
+
+  /** What everyone may know: which buttons are lit, what has been found where, what is in the jar, what has been bought. */
+  function view() {
+    const lit = open();
+    return {
+      open: lit,
+      dark: g.order.length - lit.length,
+      // lit, but nobody has ridden there yet: the panel makes something of these
+      fresh: lit.filter((id) => !g.visited.includes(id)),
+      cards: HIDEOUTS.filter((h) => g.cards[h.id]).map((h) => h.id),
+      spare: Math.max(0, 1 + cardCount() - g.order.length),
+      loot: Object.fromEntries(HIDEOUTS.map((h) => [h.id, {
+        card: !!g.cards[h.id], of: h.coins,
+        coins: Object.keys(g.coins[h.id] || {}).map(Number).filter((n) => n >= 1 && n <= h.coins).sort((a, b) => a - b),
+      }])),
+      coins: purse(),
+      prizes: PRIZES.filter((p) => g.prizes[p.id]).map((p) => p.id),
+    };
+  }
+
+  /**
+   * Somebody picked something up. `item` is 'card' or 'coin' (with `n`, 1…the number hidden there).
+   * Picking up what is already gone is not an error: the answer says `taken: false`.
+   * Every answer carries the whole view as well, so the caller need not ask again.
+   */
+  function collect(hideoutId, item, n, by, extra = {}) {
+    const hideout = hideoutById(String(hideoutId || ''));
+    if (!hideout) return fail(404, 'nothing is hidden in a place called that');
+    const who = nameOf(by, extra), at = Date.now();
+    if (item === 'card') {
+      if (g.cards[hideout.id]) return { ok: true, ...view(), taken: false, item: 'card' };
+      const litBefore = open();
+      g.cards[hideout.id] = { at, by: who };
+      hooks.save();
+      const opened = open().find((id) => !litBefore.includes(id)) || null;
+      const floor = opened ? levelById(opened) : null;
+      ctx.activity?.log('loot', `${who} found a keycard in ${hideout.name}`, { hideout: hideout.id, item: 'card', agentId: by?.id || null, ...(opened ? { opened } : {}) });
+      hooks.changed();
+      return { ok: true, ...view(), taken: true, item: 'card', opened: floor ? { id: floor.id, floor: floor.floor, name: floor.name } : null };
+    }
+    if (item === 'coin') {
+      const k = Math.floor(Number(n));
+      if (!(k >= 1 && k <= hideout.coins)) return fail(400, `${hideout.name} hides ${hideout.coins} coin${hideout.coins === 1 ? '' : 's'}: say which, 1 to ${hideout.coins}`);
+      g.coins[hideout.id] = g.coins[hideout.id] || {};
+      if (g.coins[hideout.id][k]) return { ok: true, ...view(), taken: false, item: 'coin', n: k };
+      g.coins[hideout.id][k] = { at, by: who };
+      hooks.save();
+      hooks.changed();
+      return { ok: true, ...view(), taken: true, item: 'coin', n: k };
+    }
+    return fail(400, 'item is "card" or "coin"');
+  }
+
+  /** The panel showed a newly lit floor and somebody rode there: it is not news any more. */
+  function visit(floorId) {
+    const id = String(floorId || '');
+    if (!g.order.includes(id) || g.visited.includes(id)) return { ok: true, ...view(), first: false };
+    g.visited.push(id);
+    hooks.save(); hooks.changed();
+    return { ok: true, ...view(), first: true };
+  }
+
+  /** Put coins in the machine. */
+  function buy(ref, by, extra = {}) {
+    const prize = findPrize(ref);
+    if (!prize) return fail(404, `the machine has nothing at “${String(ref || '').slice(0, 20)}”`);
+    if (g.prizes[prize.id]) return fail(409, `${prize.slot} is empty: ${prize.name} has already been bought`);
+    const jar = purse();
+    if (jar.have < prize.price) return fail(402, `${prize.name} costs ${prize.price}; the jar has ${jar.have}`);
+    const who = nameOf(by, extra);
+    g.prizes[prize.id] = { at: Date.now(), by: who };
+    g.spent += prize.price;
+    hooks.save();
+    ctx.activity?.log('prize', `${who} bought ${prize.name.replace(/^A |^The /, (m) => m.toLowerCase())} from the vending machine`, { prize: prize.id, agentId: by?.id || null });
+    hooks.changed();
+    return { ok: true, ...view(), prize: { id: prize.id, slot: prize.slot, name: prize.name, blurb: prize.blurb, price: prize.price } };
+  }
+
+  /** The machine's shelf, as anyone may read it. */
+  function shelf() {
+    const jar = purse();
+    return { coins: jar, prizes: PRIZES.map((p) => ({ id: p.id, slot: p.slot, name: p.name, blurb: p.blurb, price: p.price, sold: !!g.prizes[p.id], by: g.prizes[p.id]?.by || null })) };
+  }
+
+  return { view, collect, visit, buy, shelf, purse };
+}
