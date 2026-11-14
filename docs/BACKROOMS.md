@@ -424,10 +424,9 @@ cast: { met, survived }, hearts }`. A creature tells the count about itself:
 each time it had somebody and they got away.
 
 Before it resolves, the visit shows the card (`scorecard.js`): a wall of the
-yellow paper with the score printed into it in the paper's own ink, a picture
-beside every line, and a strip of somebody's painter's tape across the corner
-saying how it ended. (`opt.scorecard === false` for none; the dev page shows
-it only with `&card=1`, so that a script is never left waiting.) What
+yellow paper with the score printed into it in the paper's own ink and a
+picture beside every line. (`opt.scorecard === false` for none; the dev page
+shows it only with `&card=1`, so that a script is never left waiting.) What
 the lines are worth is `POINTS` in `core/runs.mjs`; the first four are earned
 however the visit ended, the rest only by getting out. The office keeps the
 best score, every kind of room and resident anybody has met, and the tape

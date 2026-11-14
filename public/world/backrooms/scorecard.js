@@ -2,8 +2,7 @@
 // how it went: what they did down there, what it scored, what was new to this
 // office, what the jar gained, and whether the tape was kept. Nobody hands it
 // to them. It is on the wall: printed into the wallpaper in the wallpaper's
-// own ink, the way the place prints everything it makes, with a strip of
-// somebody's painter's tape across the corner saying how it ended.
+// own ink, the way the place prints everything it makes.
 //
 //   const card = await showScorecard({ office, reason, kept, run, name });
 //
@@ -50,8 +49,8 @@ function icon(id, title) {
 
 /* ---- what the form says ---------------------------------------------------------------------- */
 
-// How it ended, in the words of whoever stuck the tape up.
-const ENDED = { exit: 'BACK AT YOUR DESK', caught: 'INDEFINITELY', battery: 'BATTERY FLAT', quit: 'LEFT EARLY' };
+// How it ended, for whoever is having the wall read to them. (The wall itself does not say: what is printed on it does.)
+const ENDED = { exit: 'back at your desk', caught: 'indefinitely', battery: 'battery flat', quit: 'left early' };
 const LINES = {
   room: 'Rooms walked into', kind: 'Rooms worth mentioning', part: 'Parts of the building', survived: 'Got away from',
   out: 'Left by the way out', pace: 'Time on the tape', card: 'Keycard brought back', battery: 'Spare batteries', heart: 'Still in one piece',
@@ -96,16 +95,11 @@ const CSS = `
 .brc-box small { grid-column: 2 / -1; font-size: .84em; opacity: .7; margin-top: -.22em; }
 .brc-seed { font-weight: 500 !important; opacity: .85; overflow: hidden; text-overflow: ellipsis; max-width: 13em; }
 .brc-foot { margin-top: 1.1em; font-size: .68em; letter-spacing: .3em; font-weight: 700; opacity: .5; }
-.brc-tape { position: absolute; right: -.6em; top: .5em; padding: .32em 1.1em .3em; background: #3f74c4; color: #f6f2df; font-size: .98em; font-weight: 700; letter-spacing: .12em; white-space: nowrap;
-  transform: rotate(5deg); filter: drop-shadow(0 2px 2px rgba(40,30,0,.35)); opacity: .97;
-  clip-path: polygon(0 12%, 2% 0, 4% 14%, 6% 2%, 100% 0, 98% 22%, 100% 44%, 98% 64%, 100% 100%, 5% 100%, 3% 86%, 1% 100%, 0 80%, 2% 60%, 0 40%);
-  animation: brc-tape .28s .7s cubic-bezier(.2,1.5,.4,1) both; }
 .brc-go { position: absolute; right: .2em; bottom: -.1em; opacity: 0; color: #4a3a10; animation: brc-blink 1.1s 1.5s steps(1) infinite; }
 @keyframes brc-in { from { opacity: 0; } }
-@keyframes brc-tape { from { opacity: 0; transform: rotate(5deg) translateY(-10px) scale(1.15); } }
 @keyframes brc-blink { 0% { opacity: .8; } 50% { opacity: 0; } }
-@media (max-width: 30em) { .brc-veil { font-size: 12.5px; padding: 14px 14px 13vh; } .brc-title { font-size: 2.4em; } .brc-tape { font-size: .88em; right: -.3em; top: .1em; } }
-@media (prefers-reduced-motion: reduce) { .brc-form, .brc-tape { animation: none; } .brc-go { animation: none; opacity: .8; } }
+@media (max-width: 30em) { .brc-veil { font-size: 12.5px; padding: 14px 14px 13vh; } .brc-title { font-size: 2.4em; } }
+@media (prefers-reduced-motion: reduce) { .brc-form { animation: none; } .brc-go { animation: none; opacity: .8; } }
 `;
 
 const el = (tag, cls, ...kids) => { const e = document.createElement(tag); if (cls) e.className = cls; e.append(...kids.filter((k) => k !== null && k !== undefined && k !== false)); return e; };
@@ -142,9 +136,9 @@ function draw(card, who) {
     el('div', `brc-best${card.best?.beaten ? ' new' : ''}`, card.best?.beaten ? (card.best.was ? `THE BEST YET · WAS ${num(card.best.was)}` : 'THE BEST YET') : `BEST ${num(card.best?.score)}`),
     box,
     el('div', 'brc-foot', `PATTERN 13/B · ${String(who || '').toUpperCase().slice(0, 24)}`));
-  form.setAttribute('role', 'dialog'); form.setAttribute('aria-modal', 'true'); form.setAttribute('aria-label', `Out of Office, ${ended.toLowerCase()}: ${num(card.score)} points`); form.tabIndex = -1;
-  // (the tape is somebody's, not the wall's: it sits on the paper, and is not printed into it)
-  return el('div', 'brc-veil', el('div', 'brc-wrap', form, el('div', 'brc-tape', ended), el('div', 'brc-go', '▸')));
+  form.setAttribute('role', 'dialog'); form.setAttribute('aria-modal', 'true'); form.setAttribute('aria-label', `Out of Office, ${ended}: ${num(card.score)} points`); form.tabIndex = -1;
+  // (the mark that says it can be put down is not printed: it sits outside what is multiplied into the paper)
+  return el('div', 'brc-veil', el('div', 'brc-wrap', form, el('div', 'brc-go', '▸')));
 }
 
 /* ---- the record, where there is no office to keep it ------------------------------------------ */
