@@ -41,6 +41,7 @@ import { middle, THIN_BEHIND } from './marks.js';
 import { hangBelow, goesDown } from './seam.js';
 import { createInventory } from './inventory.js';
 import { createSurvival } from './survival.js';
+import { createTally } from './tally.js';
 
 const FOV = 62;
 const OWN_LAMP = 0.3;                                    // the camcorder's own lamp, beside a torch: how much of one it is
@@ -88,7 +89,8 @@ async function buildersFor(level) {
  * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, depths?:number, depth?:number, inventory?:boolean, scorecard?:boolean, debug?:boolean, dev?:object, onReady?:Function}} [opt]
  *        depths: how many floors (default: by the seed) · depth: which floor to begin on (default: the top one)
  *        inventory: false for a visit without pockets, hearts or a battery that runs down · dev.supplies: one of everything where you land
- * @returns {Promise<{reason:'exit'|'caught'|'battery'|'quit', kept:{card:boolean, coins:number[], batteries:number, told?:Promise<void>}}>}  kept: what you brought out (nothing,
+ * @returns {Promise<{reason:'exit'|'caught'|'battery'|'quit', kept:{card:boolean, coins:number[], batteries:number, told?:Promise<void>}, run:object, card:object|null}>}
+ *          run: what the visit came to (tally.js) · card: the scorecard, once put down (opt.scorecard === false: none) · kept: what you brought out (nothing,
  *          unless you left by the door); kept.told settles once the office has been told of it
  */
 export async function enterBackrooms(office, opt = {}) {
@@ -129,16 +131,7 @@ async function visit(office, opt) {
   //   held: somebody got to a way down before the part under it was built — the tape struggles until it is
   //   drop: between two parts of the building, falling, with both of them in the picture
   let state = 'loading', cur = null, time = 0, since = 0, ending = 0, reason = null, resolveVisit = null;
-  // what the visit will say of itself when it is over (core/runs.mjs: cleanRun; the card that is made of it: scorecard.js)
-  const tally = { played: 0, parts: 1, rooms: 0, kinds: new Set(), met: new Set(), survived: 0, hearts: null };
-  /** A part of the building is being let go of: count what somebody walked into there (once: its rooms are gone after this). */
-  const countRooms = (f) => {
-    if (!f?.world || f.counted) return;
-    f.counted = true;
-    for (const rt of f.world.rooms) if (rt.visits) { tally.rooms++; if (rt.def.kind === 'special' && rt.def.arch) tally.kinds.add(rt.def.arch); }
-  };
-  /** What a creature tells the count about itself (cast.js): seen for the first time · had somebody, and they got away. */
-  const runHooks = { met: (id) => { tally.met.add(String(id)); }, survived: () => { tally.survived++; } };
+  const tally = createTally({ seed, of: plan.depths });     // what the visit came to, for the card at the end (tally.js)
   let ahead = null;                                       // the part below, being built or built: { index, f, failed }
   let above = null;                                       // the part just left, still hanging over you: { f, until }
   let hold = false, landed = -1, heldAt = null;           // a room has the controls (a chute) · seconds since you came down in a new part · where you went over, while held
@@ -206,7 +199,6 @@ async function visit(office, opt) {
     const f = { level, kit, world: null, player: null, env: null };
     const env = f.env = {
       level, cast, who, kit, sound, hud, vhs, renderer, builders: await buildersFor(level), catalogue: await loadCatalogue(kit), Avatar, layout,
-      run: runHooks,
       plan: office.net?.state?.world?.plan || {}, visit: plan, carry,
       player: null, world: null, pursuer: null,
       hatches: new Map(),                       // room id → { drop() }: where a door in a floor lets you out
@@ -254,6 +246,8 @@ async function visit(office, opt) {
         drain: share => available() ? survival.camera.drain(share) : { ok: false, reason: 'unavailable' },
       };
     }
+    /** What creatures tell the visit, for the card at the end: this one was met; this one was got away from. */
+    env.run = { met: (id) => tally.met(id), survived: (id) => tally.survived(id) };
     createStalkers(env);
     env.loot = purse;
     purse?.hang(env);
@@ -285,7 +279,7 @@ async function visit(office, opt) {
   }
   function letGo(f) {
     if (!f) return;
-    countRooms(f);
+    if (f.player) tally.part(f.world);                    // (a part somebody was in is counted as it goes: after this it is gone)
     inventory?.forget(f.env);
     f.env.pursuer?.dispose?.();
     f.world?.scene.removeFromParent();
@@ -302,7 +296,7 @@ async function visit(office, opt) {
     currentUse = null; since = 0; hold = false; landed = -1;
     cur = f;
     purse?.attend(f.env);
-    tally.parts = Math.max(tally.parts, (f.level.depth | 0) + 1);            // how far down somebody has got
+    tally.at(f.level.depth);                              // how far down somebody has got
     if (!f.world.scene.parent) root.add(f.world.scene);
     f.world.scene.position.set(0, 0, 0); f.world.scene.visible = true;
     const player = f.player = f.env.player = createPlayer(f.world, camera, from || f.level.start, input.state);
@@ -348,17 +342,19 @@ async function visit(office, opt) {
     old.world.scene.position.set(x - me.x, -o.y, z - me.z);
     if (above) letGo(above.f);
     above = { f: old, until: time + 6 };
+    tally.way();
     hud.hint(false);
     land(f, from);
     interference = Math.max(interference, 0.7);
   }
 
   /* ---- the loop ---------------------------------------------------------------------- */
+  // how long each ending takes — and one nobody has told this file about takes as long as being caught
   const END = { quit: 0.4, caught: 1.8, exit: 1.4, battery: 1.2 };
   const off = stage.onFrame((dt) => {
     if (state === 'loading' || state === 'done') return;
     time += dt; since += dt;
-    if (state === 'play') tally.played += dt;
+    tally.tick(dt, state === 'play');
     hud.update(dt);
     interference *= Math.exp(-4 * dt);
     u.uTrack.value = interference;
@@ -376,6 +372,7 @@ async function visit(office, opt) {
     // the part below: begun once you have found your feet in this one, and only drawn from where it could be seen
     if (state === 'play' && !ahead && since > 4 && goesDown(cur.level.exit.way)) prepare();
     if (ahead?.f) { const at = world.current(); ahead.f.world.scene.visible = !!at && (at.def.toExit ?? 9) <= 1; }
+    if (env.below) for (const m of env.below) m.visible = !ahead?.f;          // (the stand-in at the bottom of a drop, until the real rooms are there)
     if (landed >= 0) landed += dt;
     purse?.update(dt, time, state === 'play');
     inventory?.update(dt, clocksRun());
@@ -417,7 +414,7 @@ async function visit(office, opt) {
       if (landed > 0.45) { state = 'play'; since = 0; hud.recording(); }
     } else if (state === 'ending') {
       ending += dt;
-      const k = clamp(ending / END[reason], 0, 1);
+      const k = clamp(ending / (END[reason] ?? END.caught), 0, 1);
       if (reason === 'quit' || reason === 'battery') u.uBlack.value = k;
       else if (reason === 'exit') u.uWhite.value = k * k;
       else { u.uSnow.value = clamp((k - 0.42) / 0.45, 0, 1); if (k > 0.45) u.uRoll.value += dt * (0.4 + k * 2.5); interference = Math.max(interference, 0.5 + 0.5 * k); }   // a look at what got you, then snow
@@ -440,13 +437,13 @@ async function visit(office, opt) {
   function conclude() {
     if (state === 'done') return;
     state = 'done';
-    const health = cur?.env?.health?.read?.();
-    if (health) tally.hearts = { left: health.current, of: health.max };
     off();
     inventory?.dispose();
     survival?.dispose();
     input.dispose();
     hud.remove(); sound.stop();
+    // (how much of them is left, if there is such a thing as health down here this visit: the cast's business)
+    const h = cur?.env.health?.read?.(), hearts = h ? { left: h.left ?? h.current, of: h.of ?? h.max } : null;
     letGo(cur); cur = null;
     if (above) { letGo(above.f); above = null; }
     if (ahead?.f) letGo(ahead.f);
@@ -454,18 +451,13 @@ async function visit(office, opt) {
     vhs.dispose();
     renderer.setRenderTarget(null);
     if (opt.debug) delete window.__backrooms;
-    // everything of the visit's is gone from the page; what is left of it is what it counted, and the card says that
-    const why = reason || 'quit';
-    const run = {
-      seed: String(seed), seconds: Math.round(tally.played), parts: { reached: Math.min(tally.parts, plan.depths), of: plan.depths },
-      rooms: { explored: tally.rooms, kinds: [...tally.kinds] }, cast: { met: [...tally.met], survived: tally.survived },
-      ...(tally.hearts ? { hearts: tally.hearts } : {}),
-    };
-    const done = (card) => resolveVisit({ reason: why, kept, run, card });
+    // Everything of the visit's is gone from the page. What it came to is written up on a card (scorecard.js), however
+    // it ended and whoever started it, and the visit is over when the card has been put down.
+    const why = reason || 'quit', run = tally.report(hearts), done = (card) => resolveVisit({ reason: why, kept, run, card });
     // (no card for a visit that was told not to show one, or that was stopped before it had really begun)
-    if (opt.scorecard === false || (why === 'quit' && tally.played < 2)) { done(null); return; }
+    if (opt.scorecard === false || (why === 'quit' && run.seconds < 2)) { done(null); return; }
     import('./scorecard.js').then((m) => m.showScorecard({ office, reason: why, kept, run, name: who.name }))
-      .then(done, (err) => { console.warn('[backrooms] the card would not show', err); done(null); });
+      .then(done, (err) => { console.warn('[backrooms] the card would not come up', err); done(null); });
   }
   function finish(why, how) {
     if (state === 'done' || state === 'ending' || state === 'through' || pendingQuit) return;

@@ -400,12 +400,16 @@ function build(R, o, opt) {
   const specials = [];
 
   /* deal the oddities */
-  const want = opt.count || R.int(MIN_ODD, MAX_ODD);
+  // (a part of a visit is told exactly which oddities it has — `hand`, plan.js: a visit shows part of the deck, and no
+  // room twice — and how many rooms it is to be; a floor asked for by itself deals its own, five to eight of them)
+  const hand = Array.isArray(opt.hand) ? opt.hand.map((id) => ARCHETYPES[id]).filter(Boolean) : null;
+  const want = hand ? Math.max(1, hand.length) : opt.count || R.int(MIN_ODD, MAX_ODD);
   let deck = [];
   // (a room that is only ever there because the visit's plan asked for it — `planned`, or one staged from the news — is
   // never dealt by chance; nor is one that takes for granted something the floors above have not taught)
   const known = opt.known ? new Set(opt.known) : null;
-  { const pool = DECK.filter((a) => !a.planned && !a.headline && ready(a, known)); while (pool.length) { const pickd = R.weighted(pool, (a) => a.weight * ((a.themes && a.themes[theme.id]) ?? 1)); deck.push(pickd); pool.splice(pool.indexOf(pickd), 1); } }
+  if (hand) deck = hand.slice();
+  else { const pool = DECK.filter((a) => !a.planned && !a.headline && ready(a, known)); while (pool.length) { const pickd = R.weighted(pool, (a) => a.weight * ((a.themes && a.themes[theme.id]) ?? 1)); deck.push(pickd); pool.splice(pool.indexOf(pickd), 1); } }
   if (opt.only) { const forced = [].concat(opt.only).map((id) => ARCHETYPES[id]).filter(Boolean); deck = [...forced, ...deck.filter((a) => !forced.includes(a))]; }
   // a floor further down keeps clear of what the floors above it had, for as long as the deck lasts…
   if (opt.avoid && opt.avoid.length) { const had = new Set(opt.avoid); deck = [...deck.filter((a) => !had.has(a.id)), ...deck.filter((a) => had.has(a.id))]; }
@@ -527,10 +531,11 @@ function build(R, o, opt) {
   // Most of a floor is plain: between QUIET[0] and QUIET[1] of its rooms (the fire exit, which goes in last, among them).
   // What is still missing is made up with more of the same — side passages, dead ends that go on for a while, rooms that
   // close a loop and bring you back somewhere that looks like somewhere you have been.
-  const target = Math.min(MAX_ROOMS - 1, Math.ceil(specials.length / (1 - R.range(QUIET[0] + 0.02, QUIET[1]))) - 1);
+  const target = Math.min(MAX_ROOMS - 1, Math.max((opt.rooms | 0) - 1, Math.ceil(specials.length / (1 - R.range(QUIET[0] + 0.02, QUIET[1]))) - 1));
   for (let guard = 0; rooms.length < target && guard < 200; guard++) {
     const open = ports.filter((p) => !p.used);
-    const from = open.length && R.chance(0.3) ? R.pick(open) : R.pick(hubs);
+    // (a part with few oddities in it is mostly this: it grows on from its newest room as often as not, so that it is long as well as wide)
+    const from = hand && R.chance(0.5) ? hubs[hubs.length - 1] : open.length && R.chance(0.3) ? R.pick(open) : R.pick(hubs);
     let made = !from.local && R.chance(0.45) ? bridge() : null;
     if (made) { hubs.push(made); continue; }
     // (now and then a dead end that is a run of rooms, not one)
@@ -632,7 +637,7 @@ function build(R, o, opt) {
   depth = distances(start);
   for (const room of rooms) room.depth = depth.get(room.id) ?? -1;
   if (rooms.some((r) => r.depth < 0)) return null;
-  if (specials.length < Math.min(MIN_ODD, want) || (opt.only && [].concat(opt.only).some((id) => ARCHETYPES[id] && !specials.some((r) => r.arch === id)))) return null;
+  if (specials.length < (hand ? Math.max(hand.length ? 1 : 0, hand.length - 1) : Math.min(MIN_ODD, want)) || (opt.only && [].concat(opt.only).some((id) => ARCHETYPES[id] && !specials.some((r) => r.arch === id)))) return null;
   if (must.some((a) => !specials.some((r) => r.arch === a.id))) return null;
   if (1 - specials.length / rooms.length < QUIET[0]) return null;              // (a floor that could not be made quiet enough is dealt again)
 
@@ -793,7 +798,8 @@ function dress(R, level, o, opt, keeper = false) {
   if (opt.pursuer === undefined) pursuer = rolled;
   else if (opt.pursuer) pursuer = rolled || pickLair(R.fork('pursuer'));
   // …and while it is holding the keycard there has to be one, even in a building with no room it would have chosen
-  if (!pursuer && keeper) {
+  // (likewise when the visit's plan has said it stands on this part — `mascot`: a part with no room of the height it likes still has it)
+  if (!pursuer && (keeper || opt.mascot === true)) {
     const plainer = rooms.filter((r) => r.kind === 'plain' && !r.crawl), roomy = plainer.filter((r) => r.depth >= 1 && r.W >= 2.8 && r.D >= 2.8 && r.H >= 2.2);
     const r = R.fork('keeper'), anywhere = roomy.length ? roomy : plainer;
     if (anywhere.length) pursuer = { room: r.pick(anywhere).id, corner: r.int(0, 3), face: r.int(0, 9) };

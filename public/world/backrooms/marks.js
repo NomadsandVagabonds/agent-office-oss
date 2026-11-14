@@ -72,6 +72,16 @@ function outside(rooms, room, side, at, w) {
   return true;
 }
 
+/** Is there something built in the room in front of this stretch of its wall, so that nobody could stand at it? */
+function blocked(room, side, at, need) {
+  for (let k = -0.5; k <= 0.5001; k += 0.125) for (const off of [0.25, 0.6]) {
+    const p = wallPoint(room, side, at + k * need, off);
+    for (const q of room.pillars || []) if (!(q.y0 > 0.62) && Math.abs(p.x - q.x) < q.w / 2 + 0.3 && Math.abs(p.z - q.z) < q.d / 2 + 0.3) return true;
+    for (const q of room.blocks || []) if (p.x > q.x0 - 0.3 && p.x < q.x1 + 0.3 && p.z > q.z0 - 0.3 && p.z < q.z1 + 0.3) return true;
+  }
+  return false;
+}
+
 /** Where on a room's walls a mark `need` metres wide could go: [{ side, at }], at most one to a wall (the middle of its longest free stretch). */
 function places(rooms, room, need, outer) {
   const out = [];
@@ -83,6 +93,7 @@ function places(rooms, room, need, outer) {
       const mid = (a + b) / 2, reach = (b - a - need) / 2;
       search: for (let d = 0; d <= reach + 1e-6; d += 0.25) for (const s of d ? [-1, 1] : [1]) {
         const at = Math.round((mid + s * d) * 100) / 100;
+        if (blocked(room, side, at, need)) continue;                       // (a pier or a partition stands in front of it: quiet.js)
         if (!outer || outside(rooms, room, side, at, need)) { best = { side, at, len: b - a }; break search; }
       }
     }
