@@ -21,6 +21,10 @@
 //            rooms is the owner's choice, nobody else's; the plan puts at most one in a visit, never on its first floor.
 
 import { freightStash } from './rooms/dispatch/layout.js';
+import { tetrisStash } from './rooms/cubicle-tetris/layout.js';
+import { allHandsStash } from './rooms/all-hands/rule.js';
+import { compactorStash } from './rooms/compactor-canyon/rule.js';
+import { serverChasmStash } from './rooms/server-chasm/rule.js';
 import { fill } from './words.js';
 
 const cornerStash = (r, side) => (side < 0
@@ -117,6 +121,84 @@ export const MORE_DECK = [
       canisters: R.int(3, 6),
       stamp: fill('ROUTED FOR {NAME}', o, R).toUpperCase(),
     }) },
+  // Four set pieces after Gemini's Wave 4: dark, tall, one a part at most.
+  {
+    id: 'cubicle-tetris',
+    name: 'The Re-Org',
+    landmark: 'the beige cubicles piled into the dark ceiling over the pit',
+    w: [15, 17], d: [15, 17], h: [10, 12],
+    ports: ['left', 'right'],
+    halo: { back: 17, side: 8, lip: 12 },
+    weight: 1.05,
+    lights: 'dark',
+    themes: { yellow: 2.0, fitout: 1.4, night: 1.5 },
+    module: './rooms/cubicle-tetris.js',
+    stash: tetrisStash,
+    roll: (R, o) => ({
+      tierCode: R.pick(['5B-CHASM', '5A-APEX', 'T5-NORTH', '5C-LEDGE']),
+      dept: o.projects.length ? R.pick(o.projects).slice(0, 14) : R.pick(['Platform', 'Back Office', 'Fulfilment']),
+      swayVariant: R.int(0, 5),
+    }),
+  },
+  {
+    id: 'all-hands',
+    name: 'Mandatory All-Hands',
+    landmark: 'the dark slope of office chairs facing the projector',
+    w: [18, 22], d: [20, 24], h: [8, 9],
+    ports: ['left', 'right'],
+    big: true,
+    weight: 1.05,
+    lights: 'dark',
+    themes: { exec: 2.4, yellow: 1.4, night: 1.6 },
+    module: './rooms/all-hands.js',
+    stash: allHandsStash,
+    roll: (R, o) => ({
+      project: (o.projects.length ? R.pick(o.projects) : R.pick(['Q4 Alignment', 'Core Platform', 'Synergy 2.0'])).slice(0, 18).toUpperCase(),
+      blocker: (o.tasks.length ? R.pick(o.tasks) : R.pick(['Trim the build image', 'Close Q3 headcount gap', 'Deprecate legacy auth'])).slice(0, 26).toUpperCase(),
+      owner: (o.agents.length ? R.pick(o.agents) : 'UNASSIGNED').slice(0, 16).toUpperCase(),
+      visitor: String(o.name || 'COLLEAGUE').slice(0, 14).toUpperCase(),
+    }),
+  },
+  {
+    id: 'compactor-canyon',
+    name: 'The Compactor Canyon',
+    landmark: 'the towering rolling archive stacks piercing the ceiling',
+    w: [15, 18], d: [17, 20], h: [8, 10],
+    ports: ['back', 'left', 'right'],
+    big: true,
+    weight: 1.05,
+    lights: 'dark',
+    themes: { archive: 2.5, yellow: 1.1, night: 1.5 },
+    module: './rooms/compactor-canyon.js',
+    stash: compactorStash,
+    roll: (R) => ({
+      initialSlot: R.pick([1, 4]),
+      series: R.pick(['REC-90', 'LEDGER-B', 'ARCH-07', 'SEC-14']),
+    }),
+  },
+  {
+    id: 'server-chasm',
+    name: 'The Cooling Chasm',
+    landmark: 'the collapsed floor over the cable shaft',
+    w: [12, 14], d: [13, 15], h: [9, 11],
+    ports: [],
+    halo: { back: 18, side: 9, lip: 2 },
+    weight: 1.0,
+    lights: 'dark',
+    themes: { night: 2.2, fitout: 1.8, archive: 1.1 },
+    module: './rooms/server-chasm.js',
+    stash: serverChasmStash,
+    roll: (R, o) => {
+      const a = o.agents.length ? R.pick(o.agents) : 'NODE-01';
+      const rest = o.agents.filter((x) => x !== a);
+      const b = rest.length ? R.pick(rest) : 'NODE-02';
+      return {
+        plenum: R.pick(['04-NORTH', '09-DEEP', 'SUB-12', 'CRYO-B']),
+        nodeA: a.slice(0, 12).toUpperCase(),
+        nodeB: b.slice(0, 12).toUpperCase(),
+      };
+    },
+  },
   // Dispatch (after Codex's): the first room from the news. Wordless and unnamed. One a visit at most, where the plan puts it.
   { id: 'dispatch', name: 'Dispatch', landmark: 'the wooden shipping crates', w: [18, 20], d: [20, 20], h: [5, 6], ports: [], weight: 0.45, lights: 'dim',
     headline: true, big: true, module: './rooms/dispatch.js', stash: (r) => freightStash(r),
