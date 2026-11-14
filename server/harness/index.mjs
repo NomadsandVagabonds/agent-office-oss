@@ -1,13 +1,14 @@
 // The Office — the harness: sessions the office drives itself.
 //
 // Next to the tmux lane (a terminal the office types into and reads back) this
-// is the structured lane: an agent runs as a child process speaking ACP or the
-// Codex app-server protocol, and the office starts it, sends it turns, streams
-// what it does, answers its permission requests, stops it and ends it. See
-// docs/HARNESS.md for the design and what it was learned from.
+// is the structured lane: an agent runs as a child process speaking ACP, the
+// Codex app-server protocol or Claude Code's stream-json, and the office
+// starts it, sends it turns, streams what it does, answers its permission
+// requests, stops it and ends it. See docs/HARNESS.md for the design and what
+// it was learned from.
 //
 //   catalog.mjs      which agents can be driven, and how to start each
-//   rpc.mjs child.mjs adapter.mjs acp.mjs codex.mjs normalize.mjs
+//   rpc.mjs child.mjs adapter.mjs acp.mjs codex.mjs claude.mjs normalize.mjs
 //                    process + protocol → one vocabulary of events
 //   session.mjs      one driven session: turns, transcript, approvals, its desk
 //   approvals.mjs    what "once / for the session / reject" mean
@@ -65,9 +66,9 @@ export function createHarness(ctx, file) {
 
   // What each turn changed on disk: snapshots of the working tree, kept among the office's own files and
   // never in the repository (checkpoints.mjs). What it still holds for sessions this office no longer lists
-  // is cleaned away now.
-  const checkpoints = createCheckpoints({ settings: settings.checkpoints, dir, file: path.join(cfg.dataDir, 'checkpoints.json'), log,
-    changed: () => changed() });
+  // is cleaned away now. The office's data directory is never part of a snapshot, wherever it is (`own`).
+  const checkpoints = createCheckpoints({ settings: settings.checkpoints, dir, file: path.join(cfg.dataDir, 'checkpoints.json'),
+    own: [cfg.dataDir, dir], log, changed: () => changed() });
   checkpoints.reconcile(new Set(Object.keys(store.data.sessions)));
 
   /* ---- telling clients ----------------------------------------------------- */

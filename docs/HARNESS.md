@@ -147,8 +147,8 @@ Built in this order, each slice usable on its own:
 
 1. **Driven sessions.** A provider-adapter layer (`server/harness/`) with one
    uniform session interface — start, send a turn, a stream of events, answer a
-   request, interrupt, end — and two adapters behind it: ACP and Codex
-   app-server. A driven session *is* an agent in the office: it gets a desk and
+   request, interrupt, end — and three adapters behind it: ACP, Codex
+   app-server, and Claude Code's own stream-json mode. A driven session *is* an agent in the office: it gets a desk and
    a persona like anyone else, and its status, current tool, turn and context
    meter are driven from the stream (no hooks involved).
 2. **Real approvals.** An agent's permission request becomes a NEEDS-YOU prompt
@@ -248,7 +248,7 @@ one is easy to break by accident.
    delivered mail in `<office_mail>` (each the `user` entry of its turn), a
    handoff in `<handoff>` (a `handoff` entry on both sides).
 5. **Tests replay provider frames at the transport boundary.** Our fake agents
-   (`test/fixtures/fake-acp-agent.mjs`, `fake-codex-app-server.mjs`) are real
+   (`test/fixtures/fake-acp-agent.mjs`, `fake-codex-app-server.mjs`, `fake-claude.mjs`) are real
    child processes speaking each protocol from the agent's side; everything
    above the pipe — adapter, session, prompts, wake, delegation, HTTP — is the
    production code. They are our version of T3's replay transcripts, with the
@@ -302,7 +302,7 @@ plan { entries:[{ text, status }], note? }
 usage { used?, size?, cost? }                    context occupancy
 limits { plan?, windows:[…] }                    the provider account's allowance
 mode { modeId }      info { title }      notice { level, text }
-permission { requestId, kind, title, name, detail, command?, paths?, options:[{ id, name, kind }] }
+permission { requestId, kind, title, name, detail, command?, paths?, manual?, options:[{ id, name, kind }] }
 question { requestId, questions:[{ id, header, text, options }] }
 permission.gone { requestId, reason }
 turn.ended { status: completed | interrupted | failed, stopReason?, error? }
@@ -319,17 +319,28 @@ is still readable.
 **Modes.** One office-level setting per session says how much it may do
 without asking, whatever the provider:
 
-| mode | the office answers without asking | Codex additionally runs with |
-| --- | --- | --- |
-| `ask` (default) | nothing | `approvalPolicy: untrusted`, `sandbox: read-only` |
-| `edits` | file changes inside the session's folder | `on-request`, `workspace-write` |
-| `full` | everything | `never`, `danger-full-access` |
+| mode | the office answers without asking | Codex additionally runs with | Claude Code is put in its mode |
+| --- | --- | --- | --- |
+| `ask` (default) | nothing | `approvalPolicy: untrusted`, `sandbox: read-only` | `default` |
+| `edits` | file changes inside the session's folder | `on-request`, `workspace-write` | `acceptEdits` |
+| `full` | everything — except a request marked `manual` | `never`, `danger-full-access` | `bypassPermissions` |
 
 For an ACP agent the mode is enforced at our end of the wire only: it decides
 how requests are *answered*, not whether the agent asks (that is the agent's
 own mode, which `modeId` in an adapter entry can set). For Codex the sandbox is
-real and is fixed when the thread starts, so its mode cannot be changed
-afterwards — the session's `controls.mode` says so.
+real; it is set when the thread starts and, since a turn carries its policy,
+can be changed for the next turn (section 14). Claude Code has no sandbox but a
+permission mode of its own, which is kept in step with the session's: it
+decides what Claude asks about at all, and the office answers the rest
+(section 7.5).
+
+**A request the agent insists a person sees.** `manual: true` on a
+`permission` event marks a request the agent itself puts to a person whatever
+mode it is in — a safety check of its own, a rule of the operator's that says
+"ask", a plan to approve. The session answers such a request by no mode and no
+grant, and does not offer "always" for it. An adapter sets the flag only on the
+agent's own say-so, and says why in `detail`: somebody who chose "acts without
+asking" must be able to see why they are being asked.
 
 **The first turn.** ACP has no system prompt, so what a launched agent needs
 to know rides on its first turn, fenced off from the request:
@@ -366,8 +377,10 @@ it in would go round all of them.
 
 ## 7. The wire protocols
 
-Both are newline-delimited JSON on the child's stdin/stdout. `rpc.mjs` is the
-one implementation: requests carry `id` and `method`, notifications `method`
+All three are newline-delimited JSON on the child's stdin/stdout. ACP and
+Codex's app-server are JSON-RPC and share `rpc.mjs`; Claude Code's stream is
+not, and has its own reader with the same limits (7.5). `rpc.mjs` is the one
+JSON-RPC implementation: requests carry `id` and `method`, notifications `method`
 only, responses `id` with `result` or `error`. What it will not do for an
 untrusted peer: parse a line over 16 MiB, hold more than 32 requests from the
 agent open, continue after a line that looks like a frame and is not one (a
@@ -881,11 +894,17 @@ the operator's explicit choice and has no such edge.
 A decision has to be said. Words alone — "yes", "ok then" — are refused with a
 message naming the actions, never guessed at. Words sent *with* a decision
 follow as the agent's next turn (a permission answer has no channel for text).
-A question from the agent (Codex's `requestUserInput`) is the one request
-answered in words.
+A question from the agent (Codex's `requestUserInput`, Claude Code's
+`AskUserQuestion`) is the one request answered in words.
+
+Claude Code offers two answers, allow and deny, and is never handed a rule of
+its own: "for the session" is remembered by the office. A request it marks as
+one a person has to see (`manual`, section 6) is asked every time, in every
+mode, as once or reject only.
 
 A request disappears when the agent stops waiting — the turn was stopped, the
-process died, Codex resolved it itself — and the prompt is resolved saying so.
+process died, Codex resolved it itself, Claude withdrew it — and the prompt is
+resolved saying so.
 Request-backed prompts are never restored after a daemon restart: the process
 that asked is gone.
 
@@ -926,6 +945,7 @@ Entry kinds and their main fields:
 | `question` | `text`, `state`, `answer` |
 | `notice` | `level`, `text`, `wake` (why an automatic turn was not started) |
 | `handoff` | `direction` (in, out), `fromName` or `toName`, `items`, `omitted`, `turns`, `text` |
+| `changes` | `turn`, `files: [{ path, status, from, additions, deletions, binary }]` (at most 20), `more`, `additions`, `deletions` — what the turn did to the files on disk (section 9a) |
 
 Everything an agent sent passes the redactor (`child.mjs`) before it is stored
 or shown — replies, commands, paths, titles, output: the home directory becomes
@@ -943,8 +963,8 @@ The transcript says what an agent *said* it did (a `tool` entry: "Edit
 src/a.js"). This says what happened to the files. For a session whose folder is
 inside a git repository, the office takes a snapshot of the working tree before
 each turn and another after it (`checkpoints.mjs`); "what did turn n change?"
-is the difference between the two. It is off unless the office is started with
-`OFFICE_CHECKPOINTS=1`.
+is the difference between the two. It is on unless the office is started with
+`OFFICE_CHECKPOINTS=0`.
 
 The outline is T3 Code's checkpointing (`apps/server/src/checkpointing/`, and
 the capture in `apps/server/src/vcs/GitVcsDriver.ts`): a private index, tree
@@ -966,10 +986,11 @@ What that takes, each point with the reason it is there:
 | --- | --- | --- |
 | objects | `GIT_OBJECT_DIRECTORY=<data>/harness/checkpoints/<key>/objects` — one directory per repository (`<key>`: 16 hex digits of a hash of the repository's git directory), holding **every** object of a snapshot, not only the new ones | The repository's own objects cannot be borrowed as "alternates". Asked to write an object it already has, git updates that object's time — `utime` on the loose file or on its pack — wherever it finds it, so the first snapshot would touch the owner's packs. (Tried: only the new objects went to the office's directory, and a pack and a loose object in `.git/objects` came back with a new time.) |
 | index | `GIT_INDEX_FILE=<data>/harness/<session id>.index` — one per session, kept while the session lives, removed when it ends | The owner's index is not written, and not read either: reading a split index is enough to change the time of `.git/sharedindex.*`. Ours is never written as a split index (`core.splitIndex=false`): that would put a shared index file into the repository and could expire the one the owner's index depends on (found by T3). |
-| refs | none are written, anywhere. `git write-tree` prints the id of a tree; the ids are kept in `<data>/checkpoints.json` | |
+| refs | none in the repository. `git write-tree` prints the id of a tree; the ids are kept in `<data>/checkpoints.json` | The one ref the office ever writes is `refs/office/keep` in its **own** directory, for as long as a tidying there takes (below). |
 | hooks | `-c core.hooksPath=<the null device>` on every call | `git add` runs `post-index-change`. |
 | other programs | `-c core.fsmonitor=false`; every content filter the repository's config names is switched off for the call (`-c filter.<name>.clean= … -c filter.<name>.required=false`); a diff runs with `--no-ext-diff --no-textconv` | No program the repository names is started. git-lfs's "clean" filter, for one, writes into `.git/lfs`. |
 | a repository inside the folder | left out, whole: `:(top,exclude,literal)<path>` for each one `git ls-files --others` shows (as a name ending in `/`) | To record a submodule, a clone or another worktree as git would — the commit it is on — `git add` and `git diff-files` run `git status` *inside* it, with that repository's own config and filters. |
+| the office's own files | where the data directory is inside the checkout, it is left out by name (`:(top,exclude,literal)<path>`, ignored or not); a checkout that *is* the data directory is not recorded | They are no part of anybody's turn — and a snapshot that takes in the directory it is stored in stores its own objects again, every time. (Tried, with the data directory in a 30-file repository and not ignored: six turns that changed nothing left 13,645 objects.) |
 | inherited environment | `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_NAMESPACE`, `GIT_PREFIX`, `GIT_EXTERNAL_DIFF`, `GIT_DIFF_OPTS` are cleared | A daemon started from inside a git hook would otherwise act on that hook's repository. (T3 clears the same.) |
 
 Every call is an argument array (never a shell), with `--no-optional-locks`,
@@ -988,10 +1009,11 @@ once per repository — a bare repository of the office's own, objects and nothi
 a snapshot — in the checkout (-C <root>), with the two variables above
   git rev-parse --verify --quiet HEAD                    read: where HEAD is (told when it moved during a turn)
   git config -z --name-only --get-regexp '^filter\..*'   read: which content filters to switch off
-  git ls-files -z --others --exclude-standard            files our index has never seen        ┐ counted and weighed
-  git diff-files -z --name-only --ignore-submodules=all  files whose stat data no longer match ┘ before anything is stored
-  git add -A --ignore-errors -- . [:(top,exclude,literal)<inner repository> …]
+  git ls-files -z --others --exclude-standard [<not ours>]            files our index has never seen        ┐ counted and weighed
+  git diff-files -z --name-only --ignore-submodules=all [<not ours>]  files whose stat data no longer match ┘ before anything is stored
+  git add -A --ignore-errors -- . [:(top,exclude,literal)<inner repository> …] [:(top,exclude,literal)<data directory>]
   git write-tree                                         → the tree's id
+      <not ours>, where the office's data directory is inside the checkout:  -- . :(top,exclude,literal)<data directory>
 
 the first snapshot only — files that are committed *and* ignored (added with -f), which `add -A` would pass by
   git ls-tree -r -z --name-only <HEAD>                   read, from the repository's objects
@@ -1002,10 +1024,27 @@ a question — asked of the office's directory alone
   git --git-dir=<store> diff-tree -r -z -M --raw --numstat --no-ext-diff --no-textconv <tree> <tree>
   git --git-dir=<store> diff-tree -r -p -M --no-ext-diff --no-textconv --no-color -U<n> <tree> <tree> [-- <path>]
 
-forgetting — among the office's own files
-  git --git-dir=<store> prune --expire=3600.seconds.ago <tree> …   what no kept snapshot needs (objects under an hour old are left: a snapshot may be using them)
-  rm -r <store>                                                    once no session uses that repository
+forgetting — among the office's own files, and nowhere else
+  git --git-dir=<store> cat-file --batch-check           stdin: every tree on record → which of them are still there
+  git --git-dir=<store> mktree                           stdin: one line for each → one tree that lists them all
+  git --git-dir=<store> update-ref --no-deref refs/office/keep <that tree>
+  git --git-dir=<store> prune --expire=3600.seconds.ago  what no kept snapshot needs goes (objects under an hour old stay: a snapshot may be using them)
+  git --git-dir=<store> update-ref -d refs/office/keep
+  rm -r <store>                                          instead of all that, once no session uses that repository
+
+counting — how much of the disk the office's directory takes
+  git --git-dir=<store> count-objects -v
 ```
+
+The trees to keep are the start and the end of every turn on record, of every
+session in that repository: some 25,000 at the default caps (128 sessions, 100
+turns each), more when `OFFICE_CHECKPOINTS_MAX_TURNS` is raised. They are not
+named on `git prune`'s command line. That has room for about 51,000 ids on
+this Linux, half as many on macOS, fewer again when the ids are SHA-256 — and
+past it git cannot be started at all, so nothing would ever be removed again.
+One tree lists them, one ref of the office's own holds that tree while `prune`
+runs, and the ref is removed. A tidying that fails removes nothing and is a
+line in the office's log (`[checkpoints] could not tidy …`).
 
 `add -A` is what puts untracked files in a snapshot and leaves ignored ones
 out. If nothing is listed by `ls-files` and `diff-files`, nothing has moved
@@ -1019,9 +1058,10 @@ other, and are tested as such).
 tracked or not, staged or not, as it is on disk (no content filter; git's own
 line-ending conversion still applies). The whole checkout, not only the
 session's folder: a session in `src/` that edits `../README.md` has that on
-record. Not in it: ignored files (unless committed), and repositories inside
-the folder. A session whose own folder is ignored by its repository is not
-recorded at all — git would never look into it.
+record. Not in it: ignored files (unless committed), repositories inside the
+folder, and the office's own data directory. A session whose own folder is
+ignored by its repository is not recorded at all — git would never look into
+it.
 
 **What a snapshot says.** What the working tree looked like — not who wrote
 it. Edits a person or another agent makes in the same checkout while a turn
@@ -1044,13 +1084,14 @@ used as a "before": that turn has no record, and says why.
 
 | setting | default | meaning |
 | --- | --- | --- |
-| `OFFICE_CHECKPOINTS` | off | `1` switches snapshots on. (`OFFICE_GIT=0` switches every use of git off, this included.) |
+| `OFFICE_CHECKPOINTS` | on | `0` switches snapshots off. (`OFFICE_GIT=0` switches every use of git off, this included.) |
 | `OFFICE_CHECKPOINTS_HOLD_MS` | 3000 | how long a turn waits for the snapshot before it |
 | `OFFICE_CHECKPOINTS_TIMEOUT_MS` | 30000 | one snapshot, all its git calls together. Past it git is stopped, and snapshots are given up for that session — asked again it would take as long again |
 | `OFFICE_CHECKPOINTS_MAX_TREE_FILES` · `_MAX_TREE_BYTES` | 50000 · 512 MB | how big a folder is recorded at all: its files that are not ignored, counted and weighed before the first snapshot stores anything. Over: the folder is not recorded |
 | `OFFICE_CHECKPOINTS_MAX_FILES` · `_MAX_BYTES` | 5000 · 100 MB | what one later snapshot takes in: files new or changed since the last. Over: that snapshot is skipped; the next one is tried again |
 | `OFFICE_CHECKPOINTS_MAX_TURNS` | 100 | turns kept per session |
 | `OFFICE_CHECKPOINTS_DIFF_BYTES` | 512 KB | diff text in one answer; cut at a line, with `truncated: true` |
+| `OFFICE_CHECKPOINTS_NOTICE_BYTES` | 64 MB | how much the office may keep for one repository before it says so (below) |
 
 Fixed: an answer lists at most 500 files of a turn (the counts stay true), a
 transcript entry 20; a list of names from git is read up to 8 MiB; a question
@@ -1062,32 +1103,57 @@ Why a turn or a session has no record is said once, in the transcript, as a
 
 ```
 What turns change in this folder is not being recorded: /srv/notes is not inside a git repository.
+What turns change in this folder is not being recorded: it is where the office keeps its own files.
 What turns change in this folder is not being recorded: it has 81,234 files that are not ignored, and the office takes snapshots of folders with up to 50,000 (OFFICE_CHECKPOINTS_MAX_TREE_FILES).
 No record of what turn 7 changed: its new and changed files come to more than 100 MB (OFFICE_CHECKPOINTS_MAX_BYTES); the largest seen is data/dump.sql, 212 MB.
 File changes are no longer being recorded for this session: a snapshot of this folder took longer than 30,000 ms (OFFICE_CHECKPOINTS_TIMEOUT_MS).
 ```
 
+**The copy is on someone's disk, and says so.** What the office keeps for a
+repository is counted by git, in the office's own directory: the space its
+files occupy, which is what `du` shows and, for many small files, far more
+than their lengths added up (20,000 small objects: 0.7 MB of lengths, 80 MB of
+disk). The count is in every answer to `changes` (`stored`), and it is looked
+at after every snapshot that stored something: when it passes
+`OFFICE_CHECKPOINTS_NOTICE_BYTES`, the session whose snapshot took it there
+gets one `notice` — once per repository for as long as the office runs,
+whichever session it is:
+
+```
+To tell what turns change, the office keeps its own copy of this folder's files: 122 MB so far, in /home/me/agent-office/data/harness/checkpoints/5b1c9e0f7a2d4c68.
+```
+
+Nothing stops the copy growing past that. The caps are per snapshot (100 MB)
+and per session (100 turns), not per repository: a session that rewrites a
+90 MB file every turn has the office store it again every turn, and what its
+oldest turns needed is let go only when the session ends.
+
 **What it costs.** Measured on the machine this was built on (4 cores, ext4,
-git 2.43), with `data/` on the same disk:
+git 2.43), with `data/` on the same disk and nothing else running; with other
+work keeping all four cores busy, the same took up to twice as long.
 
 | | 50 files | a copy of this repository (328 tracked files, 8.7 MB not ignored) | 20,000 files, 146 MB |
 | --- | --- | --- | --- |
-| the first snapshot of a repository | 64 ms | 349 ms | 6.0 s |
-| kept by the office after it | 0.4 MB | 6.6 MB | 123 MB (random text; code compresses better) |
-| a turn waits for the snapshot before it | 11 ms | 11 ms | 28 ms |
-| the snapshot after a turn that changed nothing | 12 ms | 11 ms | 30 ms |
-| …after a turn that changed 4 files, with the comparison | 27 ms | 29 ms | 96 ms |
-| the first snapshot of a later session in the same repository | 35 ms | 92 ms | 1.5 s |
+| the first snapshot of a repository | 49 ms | 308 ms | 6.6 s |
+| the office's directory after it, as `du` has it | 0.5 MB | 6.7 MB | 123 MB (random text; code compresses better) |
+| a turn waits for the snapshot before it | 10 ms | 11 ms | 32 ms |
+| the snapshot after a turn that changed nothing | 12 ms | 12 ms | 34 ms |
+| …after a turn that changed 4 files, with the comparison | 25 ms | 30 ms | 93 ms |
+| the first snapshot of a later session in the same repository | 30 ms | 65 ms | 1.2 s |
+| `changes` for 12 turns, the first time (it counts what is kept) · again | 0.7 · 0.2 ms | 0.7 · 0.2 ms | 34 · 0.2 ms |
+| forgetting a session's snapshots | 34 ms | 63 ms | 0.7 s |
 
 The first snapshot of a repository is the price of touching nothing: every
 file that is not ignored is read and stored once, compressed, on the office's
 side (about 25 MB a second here). After it, a snapshot is four git processes
-when nothing moved and six when something did, and only what is new is
-stored — for this session and for later ones in the same repository. The
-office's directory grows with what turns change; it shrinks when a session's
-record is pruned (with its transcript, after 120 newer finished sessions) and
-when turns pass the cap. It is never packed. It holds copies of working files,
-so it is as private as the repository itself (`data/` is never committed).
+when nothing moved and six when something did — plus, until the size of that
+repository's copy has been said once, one that counts it and that nothing
+waits for — and only what is new is stored, for this session and for later
+ones in the same repository. The office's directory grows with what turns
+change; it shrinks when a session's record is pruned (with its transcript,
+after 120 newer finished sessions) and when a session that passed the cap on
+turns ends. It is never packed. It holds copies of working files, so it is as
+private as the repository itself (`data/` is never committed).
 
 **Reading it.** Both routes are loopback-only, like the transcript — one is
 file names, the other file content. An agent may read them, as it may read a
@@ -1099,7 +1165,8 @@ transcript. A session lists them in `controls` (`changes`, `diff`), with
 ```jsonc
 { "sessionId": "d_3f9c0a1b2c4d", "recorded": true,
   "root": "/home/me/code/app",                                  // the checkout the snapshots are of
-  "store": "/…/data/harness/checkpoints/5b1c9e0f7a2d4c68",      // where the office keeps their objects
+  "store": "/…/data/harness/checkpoints/5b1c9e0f7a2d4c68",      // where the office keeps their objects…
+  "stored": { "bytes": 6303744, "objects": 397 },               // …and how much of the disk that takes, for every session in this repository together
   "turns": [
     { "turn": 1, "at": 1794665312495,                           // when the turn began
       "files": [
@@ -1120,8 +1187,10 @@ transcript. A session lists them in `controls` (`changes`, `diff`), with
 
 Also, where they apply: on a turn, `head: { from, to }` (HEAD moved while it
 ran) and `partial: "…"` (git could not read some file, in its words); on the
-answer, `off: "…"` (snapshots were given up for this session, and why). A
-session without a record answers
+answer, `off: "…"` (snapshots were given up for this session, and why).
+`stored` is left out when git cannot count the directory — no number rather
+than a wrong one; it does not include the directories themselves (at most 256
+of them, about 1 MB). A session without a record answers
 `{ sessionId, recorded: false, reason, turns: [], total }`.
 
 `GET /api/harness/sessions/:ref/diff?turn=n[&path=…][&context=3]`, or
@@ -1331,7 +1400,9 @@ ctx.bus.local({ type: 'usage:report', report: {
             { id: 'secondary', kind: 'weekly', label: 'Week', usedPercent: 71.5, resetsAt: 1900086400000, windowMins: 10080 }] } })
 ```
 
-Today only the Codex adapter can: it sends `account/rateLimits/read` once when
+Two adapters can. Claude Code is asked once (`get_usage`) and followed from
+`rate_limit_event`; its windows are `five_hour` and `seven_day`, under the ids
+the status-line bridge uses. Codex sends `account/rateLimits/read` once when
 the thread starts (not waited for — an older Codex, or one signed in with an API
 key, simply has no answer) and follows `account/rateLimits/updated`, merging its
 partial updates. The reading of `primary`/`secondary` is the office's one shared
@@ -1369,6 +1440,8 @@ token.
 | `POST /api/harness/sessions/:ref/interrupt` *human* | → `{ ok, interrupted, dropped, session }` |
 | `DELETE /api/harness/sessions/:ref` *human* | → `{ ok, session }` — ends the whole process group |
 | `GET /api/harness/sessions/:ref/transcript[?after=<seq>&limit=]` *loopback* | → `{ sessionId, entries, truncated, seq, live }` |
+| `GET /api/harness/sessions/:ref/changes[?turn=n]` *loopback* | → `{ sessionId, recorded: true, root, store, stored: { bytes, objects }, turns: [{ turn, at, files: [{ path, status, from?, additions, deletions, binary }], count, additions, deletions, truncated, trees, skipped?, pending?, head?, partial? }], total: { turns, files, additions, deletions }, keeps, off? }`, or `{ sessionId, recorded: false, reason, turns: [], total }` — what each turn did to the files on disk (section 9a) |
+| `GET /api/harness/sessions/:ref/diff?turn=n[&path=&context=]` or `?from=a&to=b[&path=&context=]` *loopback* | → `{ sessionId, turn?, from, to, context, path?, diff, truncated }` — the unified diff of a turn, or from the start of turn *a* to the end of turn *b*; 400, 404, 409 or 410 with the reason when there is none to give (section 9a) |
 | `POST /api/harness/sessions/:ref/requests/:rid` *human* | `{ action \| optionId, text? }` → `{ ok, state, sessionGrant, followUp, session }` |
 | `POST /api/harness/sessions/:ref/mail` *human* | → `{ ok, delivered, waiting, … }` — deliver waiting mail now |
 | `GET /api/harness/wake` | → `{ paused, limits, sessions: [{ id, name, mode, budget, usedThisHour, held }] }` |
@@ -1431,6 +1504,9 @@ still there.
 "controls": {
   "transcript":  { "method": "GET",    "url": "/api/harness/sessions/d_…/transcript", "query": ["after", "limit"],
                    "watch": { "type": "transcript:watch", "sessionId": "d_…" } },
+  "changes":     { "method": "GET",    "url": "/api/harness/sessions/d_…/changes", "query": ["turn"], "available": true },
+  "diff":        { "method": "GET",    "url": "/api/harness/sessions/d_…/diff", "query": ["turn", "path", "from", "to", "context"],
+                   "available": true },               // both false where no snapshots are kept of this session (section 9a)
   "turn":        { "method": "POST",   "url": "/api/harness/sessions/d_…/turn", "body": { "text": "" }, "available": true },
   "interrupt":   { "method": "POST",   "url": "/api/harness/sessions/d_…/interrupt", "available": true },
   "end":         { "method": "DELETE", "url": "/api/harness/sessions/d_…", "available": true },
@@ -1462,6 +1538,7 @@ rides on the next turn rather than taking effect at once.
 | --- | --- | --- |
 | ACP | `models.availableModels`, `modes.availableModes`, or `configOptions` of category `model`, `mode`, `thought_level` (the effort) | `session/set_model`, `session/set_mode`, `session/set_config_option`; the agent's answer and any `config_option_update` are read back, because one choice can change another (a smaller model that cannot think as hard) |
 | Codex | `model/list` (each model with the efforts it supports and its default); its two collaboration modes | nothing is sent at once: the next `turn/start` carries `model`, `effort`, `collaborationMode` — and, for access, `approvalPolicy` + `sandboxPolicy`, so a running Codex can be tightened or loosened without ending it |
+| Claude Code | the models its `initialize` answer listed, each with its efforts; its own permission modes, as far as the session's mode allows | at once, each a request Claude answers: `set_model`, `apply_flag_settings { effortLevel }`, `set_permission_mode`. For access, `set_permission_mode` too: tightening has to be accepted by Claude before the session's mode changes |
 
 `mode` is the office's own word for how freely an agent acts (ask, edits,
 full); `agentMode` is one of the agent's own ways of working (plan, and
@@ -1627,9 +1704,15 @@ echo "run the tests" | office chat <session>   plain lines; exits when the turn 
 | `OFFICE_DELEGATE` | on | `0` switches delegation off |
 | `OFFICE_DELEGATE_MAX_MODE` | `ask` | the broadest mode delegated work may run with |
 | `OFFICE_DELEGATE_MAX_ACTIVE` · `_MAX_PER_HOUR` · `_IDLE_END_MS` · `_WAIT_CAP_MS` | 4 · 12 · 900000 · 50000 | the limits in section 11 |
+| `OFFICE_CHECKPOINTS` | on | `0`: take no snapshots of what turns change — the office then keeps no copy of any working file (`OFFICE_GIT=0` does the same, with every other use of git) |
+| `OFFICE_CHECKPOINTS_HOLD_MS` · `_TIMEOUT_MS` · `_MAX_TREE_FILES` · `_MAX_TREE_BYTES` · `_MAX_FILES` · `_MAX_BYTES` · `_MAX_TURNS` · `_DIFF_BYTES` · `_NOTICE_BYTES` | 3000 · 30000 · 50000 · 512 MB · 5000 · 100 MB · 100 · 512 KB · 64 MB (the sizes are given in bytes) | the limits in section 9a |
 
 On disk, under the data directory (never committed): `harness.json` (sessions
-and the pause switch), `harness/<id>.jsonl` (transcripts), `delegations.json`.
+and the pause switch), `harness/<id>.jsonl` (transcripts), `delegations.json`,
+`checkpoints.json` (which trees are the snapshots of which turn),
+`harness/<id>.index` (a live session's index) and
+`harness/checkpoints/<key>/` (the objects of one repository's snapshots: a
+copy of its working files, section 9a).
 
 ## 15. Security position
 
@@ -1710,6 +1793,13 @@ different OS user.
    everyone who may read the office.
 6. Rate limits per credential rather than per agent name.
 
+Two things that are Claude Code's own: started with `--print` it skips its
+workspace trust dialog (its `--help`: "Only use this in directories you
+trust"), so a driven Claude should be started only in folders the operator
+would open in Claude Code anyway; and its permission mode is a policy inside
+Claude, not a sandbox — a command it was allowed to run runs with the
+operator's own rights.
+
 ## 16. What is tested, and what has only met fakes
 
 `npm test` runs these against the real daemon, in-process, with real child
@@ -1737,6 +1827,23 @@ processes (`test/harness*.test.mjs`, helpers in `test/fixtures/`):
   the stream; approvals as Codex decisions; a question; interrupt and a
   withdrawn request; failure and crash; the allowance (asked once, partial
   updates merged, model-specific limits ignored, taken in by the usage feed).
+- **`harness-claude.test.mjs`** — the command line for each mode (and as
+  root); the handshake, which spends nothing; the stream, tools, each
+  permission answer, a question, a plan; requests that reach a person in every
+  mode (a safety check, an ask rule) and are never the start of a grant; the
+  session's mode moving Claude's own, with tightening never taken on trust;
+  interrupt, also one that is ignored; failure and crash; usage and the
+  allowance; the office tools handed over the pipe, and the session's token in
+  no argument, transcript or trace; the wire by itself (split frames, noise,
+  giants, a flood, a silent Claude).
+- **`harness-settings.test.mjs`** — model, effort, the agent's own mode and
+  access for ACP (both generations) and Codex: only what the agent listed can
+  be chosen; a change is put to the agent and recorded; Codex's choices ride on
+  the next turn and what it reports is believed over what it was asked; a
+  conversation carried on with another agent by a recorded handoff.
+- **`console.test.mjs`** — what a typed line means, every transcript entry as
+  lines, the commands, and `office chat` on an emulated terminal and through a
+  pipe.
 - **`harness-wake.test.mjs`** — off by default; direct; mentions but not
   chatter; never mid-turn; the pause switch and who holds it; rate, gap,
   budget; two agents answering each other stop at the chain limit, also when
@@ -1776,7 +1883,7 @@ these are **not yet known to be true of the real programs**:
 - how a real model reacts to the first-turn framing and to `<office_mail>`,
   `<delegated_task>`, `<handoff>` — in particular whether it ends a delegated
   turn with a usable result as its final message;
-- Claude Code through `claude-agent-acp`: that the office hooks stay quiet
+- Claude Code through its wrapper (`claude-acp`): that the office hooks stay quiet
   (the `x-office-runtime-session` header), and how its own permission modes
   interact with the office's.
 
@@ -1794,8 +1901,13 @@ these are **not yet known to be true of the real programs**:
 permission traffic volume; whether the default limits (3 hops, 12 an hour, a
 budget of 20) are sensible for real teams.
 
+*Claude Code, natively* — section 7.5 ends with its list: the exact command
+line, that the handshake spends nothing, the answers to `set_model` and
+`set_permission_mode`, and above all that an ordinary request is not marked
+`manual` (if it were, every request would go to a person).
+
 **How to check against a real CLI** (each step costs a few tokens; the owner
-decides when):
+decides when; for `claude`, steps 3 and 4 cost nothing):
 
 1. Make sure the agent is installed and signed in — run it once in a terminal.
 2. Start a scratch office with tracing on, in a scratch repository:
@@ -1824,7 +1936,7 @@ out from the code:
 | what T3 Code does | here |
 | --- | --- |
 | One adapter interface, several providers; Codex over its app-server; any ACP agent | **built** (sections 6–7): `acp`, `codex-app-server`; an operator's own entry for anything else that speaks ACP |
-| Claude Code driven natively (no wrapper) | **being built**: a `claude` adapter over its stream-json mode, with the same approvals and the same controls. Until it lands Claude is driven through its ACP wrapper |
+| Claude Code driven natively (no wrapper) | **built** (section 7.5), and so far it has met only its fake; the wrapper is still there as `claude-acp` |
 | Approvals as real requests: once, for the session, reject; questions answered in words | **built** (section 8) |
 | Runtime modes (supervised … full access), enforced by the agent where it can | **built**: `mode` ask / edits / full; for Codex it is now a per-turn policy, so it can be changed while the agent runs, and what Codex reports is believed over what was asked (section 14) |
 | Model, reasoning effort and plan mode chosen in the composer | **built** (section 14): `controls.model`, `effort`, `agentMode`, read from the agent itself — no catalogue of ours — with the bar under the console's prompt and `/model`, `/effort`, `/mode` |
@@ -1877,4 +1989,7 @@ go through its developer-message channel rather than the first-turn framing; a
 finished session's record is read whole rather than paged; a long streamed
 reply is redrawn in the 3D client rather than appended to (the console already
 appends); the 3D client's session panel does not yet show the model, effort
-and own-mode controls that the console does.
+and own-mode controls that the console does; a Claude Code session nobody
+chose a model for shows none until its first turn; Claude's `auto` mode is
+recognised but not offered; the first-turn framing could go to Claude as an
+appended system prompt instead.

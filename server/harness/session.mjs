@@ -386,7 +386,13 @@ export class DrivenSession extends EventEmitter {
         if (!(this.setting?.name === 'agentMode' && this.setting.value === ev.modeId)) this.#note('info', `The agent switched to its “${ev.modeId}” mode.`);
         this.#save();
         break;
-      case 'settings': this.#readSettings(); this.#save(); break;
+      case 'settings': {
+        const had = this.record.model;
+        this.#readSettings();
+        if (this.record.model !== had) this.#agent({ model: this.record.model });      // its desk shows what it now runs on
+        this.#save();
+        break;
+      }
       case 'access':
         // The agent's own account of how freely it runs is not what the office asked for. Its account is the
         // true one, so that is what is shown — and the difference is said out loud.

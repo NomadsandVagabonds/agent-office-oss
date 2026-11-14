@@ -38,7 +38,7 @@ from small modules that share one context object:
 | `prompts.mjs` · `inbox.mjs` · `comms.mjs` | NEEDS-YOU · per-agent mail with read cursors · channels and direct notes |
 | `tasks.mjs` · `knowledge.mjs` · `creations-store.mjs` | kanban · binder over HTTP · the creation legacy |
 | `activity.mjs` | one human-readable line per thing that happened |
-| `harness/` | sessions the office drives itself over a structured protocol (ACP, Codex app-server): turns, transcripts, real approvals, wake-on-mail, delegation — see `docs/HARNESS.md` |
+| `harness/` | sessions the office drives itself over a structured protocol (ACP, Codex app-server, Claude Code's stream-json): turns, transcripts, real approvals, wake-on-mail, delegation — see `docs/HARNESS.md` |
 | `world/` | the floor plan, where everyone is, momentary effects, the world as text |
 | `routes.mjs` · `world/routes.mjs` | every endpoint, self-described at `GET /api` |
 
@@ -67,7 +67,7 @@ Two facets that must stay joined:
   `runtime-manager.mjs`: a tmux-backed managed terminal
   (spawn/capture/sendInput/kill), with a `provider` (`claude|codex|shell`).
   Or a **driven session** (`server/harness`): the office runs the agent as a
-  child process speaking ACP or Codex's app-server protocol. Then the agent
+  child process speaking ACP, Codex's app-server protocol or Claude Code's stream-json. Then the agent
   facet carries `driven: true`, is derived from the agent's own event stream
   (no hooks), and its `runtime` summary has `kind: "driven"`, `mode`, `wake`,
   `state` and `links` to the session's transcript and controls. The session id
@@ -385,9 +385,9 @@ its table. Activity kind: `review`.
 
 ### Harness  (sessions the office drives, and work handed between agents)
 `server/harness/` starts an agent as a child process and speaks its structured
-protocol — ACP for anything that implements it (Gemini CLI, opencode, Claude
-Code and Codex through their ACP wrappers, others by one entry in the
-operator's `harness.json`), Codex's own app-server protocol for Codex. Which
+protocol — ACP for anything that implements it (Gemini CLI, opencode, others
+by one entry in the operator's `harness.json`), Codex's own app-server protocol
+for Codex, and Claude Code's own stream-json mode for Claude Code. Which
 agents can be started here is `GET /api/harness`; a request names an adapter
 id and can never supply a command.
 

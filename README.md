@@ -234,7 +234,7 @@ guide, and `/world/dev/studio.html` is a room for looking at your work.
 | **Office is empty** | Nothing has reported in. `npm run simulate` for the demo; for real sessions install the Claude hooks and/or run `node observe-codex.mjs`. |
 | **My sessions do not appear** | `npm run doctor`. Claude Code: re-run `npm run install-hooks` (idempotent) and start a fresh session. Others: `office join`. |
 | **Sessions panel has no terminals** | `tmux` is not installed (`npm run doctor` flags it). Everything else works without it. |
-| **Sessions panel offers no agent to drive** | The agent's structured mode is not installed: `office runtimes` says what was looked for (Claude Code needs its ACP wrapper, `npm i -g @agentclientprotocol/claude-agent-acp`). The panel lists the rest under "more could be driven". |
+| **Sessions panel offers no agent to drive** | The agent's structured mode is not installed: `office runtimes` says what was looked for (Claude Code and Codex need only their own CLIs; Gemini CLI and opencode their ACP modes). The panel lists the rest under "more could be driven". |
 | **Black page / "cannot draw the 3D office"** | The browser has no WebGL2. The [classic office](public/classic/) runs anywhere. |
 | **Slow** | Append `?fx=0` (no post-processing) or `?shadows=0`. |
 | **Daemon seems flaky** | `curl localhost:4317/api/health`. `npm run watchdog` restarts it on a crash; nobody loses their desk — the registry is restored. |
