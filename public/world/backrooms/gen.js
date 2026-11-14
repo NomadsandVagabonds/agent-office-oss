@@ -225,6 +225,7 @@ export const LESSONS = Object.freeze({
   belonging: 'carry what they are carrying and you are one of them',
   beam: 'some things stop where a light is pointed at them',
   pace: 'some things only mind how fast you are going',
+  tape: 'a tape deck plays you back: where you stood, and where you were looking',
   pointed: 'something in a room may tell you which doorway is nearer the way down, if you work it',
 });
 /** Is this archetype a set piece — a room with a view (`halo`), or one that says so (`big`)? A floor has one at most. */

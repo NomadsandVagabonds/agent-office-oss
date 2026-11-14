@@ -229,6 +229,12 @@ export const MORE_DECK = [
       tableSide: R.pick([-1, 1]),
     }),
   },
+  // The tape rooms (docs/backrooms-lab/TAPE.md). Optional, dead ends, nobody has to work them out. Cover: a desk that
+  // wants somebody at it and looking at its screen, a shutter that is up while it has that, and a deck that plays you back.
+  { id: 'cover', name: 'Cover', landmark: 'the desk that wants looking at', w: [10, 11], d: [8, 9], ports: [], weight: 0.9, lights: 'normal',
+    teaches: 'tape', module: './rooms/cover.js',
+    stash: (r) => { const s = r.params.side, x = s * (r.W / 2 - 1.0); return [Math.min(x - 0.4, x + 0.4), r.D / 2 - 1.5, Math.max(x - 0.4, x + 0.4), r.D / 2 - 0.7]; },
+    roll: (R) => ({ side: R.pick([-1, 1]), deskZ: +R.range(-0.4, 0.8).toFixed(2), seconds: R.int(9, 12) }) },
 ];
 
 // Where a tape goes in an entry that does not say so itself: (room, ±1) → [x0, z0, x1, z1] in the room's own frame.
