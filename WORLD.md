@@ -202,24 +202,26 @@ sit, a game, a work surface.
 | | floor | kind | what it is there to show |
 |---|---|---|---|
 | **R** | Rooftop Garden | place | a level can simply be somewhere: the office's clock and weather in the sky, steam from the flue when someone downstairs makes coffee, every agent-to-agent note crossing overhead as a paper plane |
-| **13** | | | only there on a Friday the 13th, or once someone has found the `noclip` secret; until then a blanking plate. It hands over to the hidden level under the office |
+| **13** | | | only there on a Friday the 13th, or once someone has found the `noclip` secret; until then a blanking plate. It does not stop where it says: there is no thirteenth storey, so the car goes up to where one would be, opens its doors on nothing, and lets you out at the bottom of the shaft (`stops` in the registry) |
 | **11** | Scranton Paper Co. | game | a level as a caper: a room full of small things to pick up, carry and use on each other (`docs/SCRANTON.md`) |
 | **9** | Night Shift | game | a level with a camera and a look of its own: side on, black and white, light you must stay out of (`docs/NIGHTSHIFT.md`) |
 | **7** | After Hours | game | a level as a game: first person, a wave to clear, a score on the arcade board |
 | **3** | Mission Control | **work** | a level as a work module: wall screens drawn straight from `office.net.state` — who is waiting on you, who is on what, every board — and a console per project that takes you to its room |
 | **2** | The Office | office | the office itself |
 | **P** | The Pasture | place | a level with terrain, a herd with a little behaviour, and agents: they can ride here too |
+| **B** | Basement | place | a floor that is exactly what it says on the button: plant, cage storage, the caretaker's corner. And a level that hands over to something that is not a level at all (`{ reason: 'noclip' }`, below) |
 
 **The building.** Floors 2 to 5 are ours: the office is on 2, Mission Control on
 3, and 4 and 5 are kept for work modules still to come (a blanking plate on the
 panel until one moves in). Above that the floors are other people's — most of
 them, anyway — then no 13, then the roof; at the bottom is the car park that
-is not one. `PLATE` in `core/levels.mjs` is the panel's layout, row by row.
+is not one, and under that the basement. `PLATE` in `core/levels.mjs` is the
+panel's layout, row by row.
 
 7, 9, 11 and P are the office's **game floors**: their buttons are red, and
 only buzz, until a keycard has lit them (see *The long game* below). So are 6,
 8, 10 and 12 — but nobody of ours is behind those, and no keycard there is yet
-opens them: they are where the next floors go. R, 2 and 3 are always open.
+opens them: they are where the next floors go. R, 2, 3 and B are always open.
 
 **What a button looks like** is all the panel says. Plain: press it. Lit green:
 the car is here. Red: it wants a keycard. Brass, with a winking ring: lit since
@@ -239,7 +241,8 @@ what is engraved (`11` is two keys); `Esc` steps back.
 { id: 'roof', floor: 'R', storey: 14, kind: 'place', name: 'Rooftop Garden', blurb: '…',   // blurb: for agents; the panel says nothing
   hidden: ({ quirks, found }) => …,   // optional: a pure rule that hides the button
   card: true, coins: 3,               // optional: a game floor — it needs a keycard, and hides one, and this many coins
-  car: [x, z] }                       // optional: agents may ride here (see below)
+  car: [x, z],                        // optional: agents may ride here (see below)
+  stops: 'basement' }                 // optional: the button does not stop where it says — `arrivalOf(level)` is where you get out
 ```
 
 `visibleLevels({ quirks, found })` is every floor of ours that exists today, and
@@ -269,9 +272,16 @@ person leaves:
 | `{ reason: 'lift', to: 'mission' }` | rides on to that floor |
 | `{ reason: 'needs' }` | brings them home to the next agent waiting on them |
 | `{ reason: 'goto', agent }` · `{ reason: 'goto', room }` | brings them home to that agent's question, or to that room |
+| `{ reason: 'noclip' }` | hands over to what is under the office (`office.onNoclip({ via })`), and afterwards calls `enter()` again with `opt.back` — `'exit'`, `'caught'` or `'quit'`: how it went on the other side — so the floor can put them back out of the same wall |
 
 Nothing else is required. A level that is one full-screen game need not touch
 anything below.
+
+Nobody gets to the place under the office by pressing a button. The only way
+the lift ever hands over to it is in answer to a floor that says somebody went
+through one of its walls, and a test holds the lift to that. With the kit,
+leaving that way is `w.leave('noclip', { walk: false })`: not by the lift, so
+nobody walks back to the car first.
 
 ### The kit
 

@@ -31,6 +31,15 @@ export function pressing(d, along, w, into, speed) { return d < 0.34 && Math.abs
 
 const inRect = (p, r) => p.x >= r.x0 && p.x < r.x1 && p.z >= r.z0 && p.z < r.z1;
 
+/** How far behind the wall that gives the middle of the floor has to be for the look back to take in the floor, metres (leaving.js). */
+export const THIN_BEHIND = 4;
+/** The middle of everything built on a floor: { x, z } in the world. */
+export function middle(rooms) {
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const r of rooms) { x0 = Math.min(x0, r.x); x1 = Math.max(x1, r.x + r.w); z0 = Math.min(z0, r.z); z1 = Math.max(z1, r.z + r.d); }
+  return { x: (x0 + x1) / 2, z: (z0 + z1) / 2 };
+}
+
 /** Is there nothing built behind this stretch of a room's wall — no other room, and nobody's view? */
 function outside(rooms, room, side, at, w) {
   for (let k = -0.5; k <= 0.5001; k += 0.25) for (const off of [-(T + 0.4), -(T + 1.5)]) {
@@ -79,7 +88,14 @@ export function thinPlace(rooms, R) {
   const near = Math.min(...options.map((o) => o.room.toExit));
   // (a room with a beam across it or a forest of pillars in it hides its walls: only if there is nowhere better)
   const awkward = (r) => (r.shape && (r.shape.kind === 'soffit' || r.shape.kind === 'forest') ? 0.04 : 1);
-  const o = R.weighted(options, (k) => (k.room.toExit === near ? 9 : k.room.toExit === near + 1 ? 2 : 0.3) * awkward(k.room));
+  // (and a wall with the rest of the floor behind you as you lean on it, for choice: what you see from the far side of
+  // it is the floor you were lost on, and from a wall that faces back over the plan most of that is under your feet)
+  const mid = middle(rooms);
+  const away = ({ room, spot }) => {
+    const a = wallPoint(room, spot.side, spot.at, 0), b = wallPoint(room, spot.side, spot.at, -1), A = toWorld(room, a.x, a.z), B = toWorld(room, b.x, b.z);
+    return (mid.x - A.x) * (B.x - A.x) + (mid.z - A.z) * (B.z - A.z) < -THIN_BEHIND ? 1 : 0.2;
+  };
+  const o = R.weighted(options, (k) => (k.room.toExit === near ? 9 : k.room.toExit === near + 1 ? 2 : 0.3) * awkward(k.room) * away(k));
   return { room: o.room.id, side: o.spot.side, at: o.spot.at, w: THIN_W };
 }
 

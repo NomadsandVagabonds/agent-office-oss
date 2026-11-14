@@ -31,6 +31,7 @@ import { createInput } from './input.js';
 import { createStalkers } from './pursuer.js';
 import { createLoot, lootLeft } from './loot.js';
 import { leaving } from './leaving.js';
+import { middle } from './marks.js';
 
 const FOV = 62;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -314,7 +315,8 @@ async function visit(office, opt) {
     if (state === 'loading' || !cur) pendingQuit = true;
     else if (why === 'exit' && how && cur.player) {
       const me = cur.player.me;
-      out = { x: me.x, y: camera.position.y, z: me.z, yaw: me.yaw, pitch: me.pitch, nx: how.nx, nz: how.nz, shown: false };
+      const mid = middle(cur.level.rooms);                 // of the floor being left: what there is to look back at
+      out = { x: me.x, y: camera.position.y, z: me.z, yaw: me.yaw, pitch: me.pitch, nx: how.nx, nz: how.nz, cx: mid.x, cz: mid.z, shown: false };
       state = 'through'; since = 0;
     } else state = 'ending';
   }

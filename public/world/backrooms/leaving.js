@@ -7,6 +7,8 @@
 // visit see the floor you were lost on from outside: all of it, lit, getting
 // smaller. Then whatever is out here is brighter than the camcorder can do
 // anything about.
+import { THIN_BEHIND } from './marks.js';
+
 const smooth = (v) => { const t = Math.max(0, Math.min(1, v)); return t * t * (3 - 2 * t); };
 const TAU = Math.PI * 2;
 const wrap = (a) => { let d = a % TAU; if (d > Math.PI) d -= TAU; if (d <= -Math.PI) d += TAU; return d; };
@@ -30,7 +32,7 @@ export function leaving(t, from) {
   const x = from.x + from.nx * out, z = from.z + from.nz * out, y = from.y + up;
   // looking the way you were going, and then back
   const k = smooth((t - LEAVE.turn[0]) / (LEAVE.turn[1] - LEAVE.turn[0]));
-  const behind = from.cx !== undefined && (from.cx - from.x) * from.nx + (from.cz - from.z) * from.nz < -4;
+  const behind = from.cx !== undefined && (from.cx - from.x) * from.nx + (from.cz - from.z) * from.nz < -THIN_BEHIND;
   const tx = behind ? from.cx : from.x - from.nx * 7, tz = behind ? from.cz : from.z - from.nz * 7, ty = 1;
   // (round by way of straight back, always over the same shoulder: half a turn, and then however far off that the middle is)
   const round = Math.PI + wrap(Math.atan2(-(tx - x), -(tz - z)) - from.yaw - Math.PI);
