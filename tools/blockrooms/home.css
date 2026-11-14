@@ -149,44 +149,45 @@ kbd { display: inline-block; min-width: 1.7em; text-align: center; font: 700 13p
 .btn { display: inline-block; margin-top: 18px; font: 700 17px var(--comic); color: #000 !important; background: #c9c4a6; border: 4px outset #fff; padding: 8px 18px; text-decoration: none; }
 .btn:active { border-style: inset; }
 
-/* the sponsors: somebody else's idea of a good time */
-.sponsors { color: #fff; text-align: center;
+/* the backers (SPONSORS, on the page): somebody else's idea of a good time */
+.backers { color: #fff; text-align: center;
   background:
     radial-gradient(circle at 12px 12px, #ff5ad6 0 2px, transparent 3px) 0 0 / 96px 96px,
     radial-gradient(circle at 60px 52px, #4fd6e8 0 2px, transparent 3px) 0 0 / 96px 96px,
     radial-gradient(circle at 34px 80px, #ffd83a 0 1.5px, transparent 2.5px) 0 0 / 96px 96px,
     repeating-linear-gradient(45deg, #1a0a2a 0 12px, #23103a 12px 24px); }
 .banner.neon { color: #ff5ad6; text-shadow: 0 0 10px #ff2ab8, 3px 3px 0 #2a0a3a; }
-.adrow { background: #050507; padding: 10px 8px 0; text-align: center; }
-.adwall { display: flex; flex-direction: column; align-items: center; gap: 16px; margin-top: 16px; }
-.ad { display: inline-block; width: min(468px, 94vw); height: 60px; position: relative; overflow: hidden; border: 2px outset #b8bcc0; text-align: left; cursor: pointer; text-decoration: none; background: #111; color: #fff; vertical-align: top; }
-.ad .f { position: absolute; inset: 0; display: flex; align-items: center; gap: 10px; padding: 0 10px; opacity: 0; transition: none; }
-.ad .f.on { opacity: 1; }
-.ad .f b, .ad .f span { line-height: 1.05; }
-.ad .cta { position: absolute; right: 6px; bottom: 4px; font: 700 10px Arial, Helvetica, sans-serif; background: #ffd83a; color: #000; padding: 2px 5px; animation: blink .8s steps(1) infinite; }
-.ad .tag { position: absolute; left: 3px; top: 1px; font: 400 8px Arial, Helvetica, sans-serif; color: rgba(255, 255, 255, .55); letter-spacing: .1em; }
-.ad-mecha { background: linear-gradient(#22242a, #050507); font-family: var(--fat); }
-.ad-mecha .f b { font-size: 27px; letter-spacing: .34em; color: #e9e6d6; margin-right: 10px; vertical-align: -2px; }
-.ad-mecha .f span { font: 700 11px Arial, Helvetica, sans-serif; color: #ff8a1f; text-transform: uppercase; letter-spacing: .08em; }
-.ad-mecha .f .slogan { display: block; font: 400 13.5px/1.1 Helvetica, Arial, sans-serif; color: #e9e6d6; letter-spacing: 0; text-transform: none; margin: 1px 0 2px; }
-.ad-neo { background: linear-gradient(90deg, #14245e, #2a52be 60%, #14245e); }
-.ad-neo .f b { font: 400 24px var(--fat); color: #ffd83a; text-shadow: 2px 2px 0 #000; }
-.ad-neo .f span { font: 700 13px var(--comic); color: #fff; }
-.ad-free { background: repeating-linear-gradient(90deg, #ffd83a 0 30px, #ff8a1f 30px 60px); color: #000; animation: free .5s steps(2) infinite; }
+.plugrow { background: #050507; padding: 10px 8px 0; text-align: center; }
+.plugwall { display: flex; flex-direction: column; align-items: center; gap: 16px; margin-top: 16px; }
+.plug { display: inline-block; width: min(468px, 94vw); height: 60px; position: relative; overflow: hidden; border: 2px outset #b8bcc0; text-align: left; cursor: default; text-decoration: none; background: #111; color: #fff; vertical-align: top; }
+.plug[role="button"] { cursor: pointer; }
+.plug .f { position: absolute; inset: 0; display: flex; align-items: center; gap: 10px; padding: 0 10px; opacity: 0; transition: none; }
+.plug .f.on { opacity: 1; }
+.plug .f b, .plug .f span { line-height: 1.05; }
+.plug .cta { position: absolute; right: 6px; bottom: 4px; font: 700 10px Arial, Helvetica, sans-serif; background: #ffd83a; color: #000; padding: 2px 5px; animation: blink .8s steps(1) infinite; }
+.plug .tag { position: absolute; left: 3px; top: 1px; font: 400 8px Arial, Helvetica, sans-serif; color: rgba(255, 255, 255, .55); letter-spacing: .1em; }
+.plug-mecha { background: linear-gradient(#22242a, #050507); font-family: var(--fat); }
+.plug-mecha .f b { font-size: 27px; letter-spacing: .34em; color: #e9e6d6; margin-right: 10px; vertical-align: -2px; }
+.plug-mecha .f span { font: 700 11px Arial, Helvetica, sans-serif; color: #ff8a1f; text-transform: uppercase; letter-spacing: .08em; }
+.plug-mecha .f .slogan { display: block; font: 400 13.5px/1.1 Helvetica, Arial, sans-serif; color: #e9e6d6; letter-spacing: 0; text-transform: none; margin: 1px 0 2px; }
+.plug-neo { background: linear-gradient(90deg, #14245e, #2a52be 60%, #14245e); }
+.plug-neo .f b { font: 400 24px var(--fat); color: #ffd83a; text-shadow: 2px 2px 0 #000; }
+.plug-neo .f span { font: 700 13px var(--comic); color: #fff; }
+.plug-free { background: repeating-linear-gradient(90deg, #ffd83a 0 30px, #ff8a1f 30px 60px); color: #000; animation: free .5s steps(2) infinite; }
 @keyframes free { 50% { filter: hue-rotate(40deg) saturate(1.4); } }
-.ad-free .f b { font: 400 22px var(--fat); color: #e0241b; text-shadow: 1px 1px 0 #fff; }
-.ad-free .f span { font: 700 12px Arial, Helvetica, sans-serif; }
-.ad-water { background: linear-gradient(#bfefff, #4fd6e8); color: #14245e; }
-.ad-water .f b { font: italic 700 22px var(--serif); }
-.ad-water .f span { font: 700 13px Arial, Helvetica, sans-serif; }
-.ad-card { background: #d9b98a; color: #4a2a14; border-style: dashed; border-color: #a57d4c; }
-.ad-card .f b { font: 700 21px var(--comic); }
-.ad-card .f span { font: 400 13px var(--serif); }
-.ad.wall.small { height: 60px; border: 2px inset #b99a2a; cursor: pointer; }
-.ad.wall.small .strip.a { width: 70px; left: 40px; top: 12px; }
-.ad.wall.small .strip.b { width: 7px; height: 40px; left: 41px; top: 14px; }
-.ad.wall.small .strip.c { width: 7px; height: 26px; left: 104px; top: 12px; }
-.ad.wall.small.leaning { animation: lean .12s steps(2) infinite; }
+.plug-free .f b { font: 400 22px var(--fat); color: #e0241b; text-shadow: 1px 1px 0 #fff; }
+.plug-free .f span { font: 700 12px Arial, Helvetica, sans-serif; }
+.plug-water { background: linear-gradient(#bfefff, #4fd6e8); color: #14245e; }
+.plug-water .f b { font: italic 700 22px var(--serif); }
+.plug-water .f span { font: 700 13px Arial, Helvetica, sans-serif; }
+.plug-card { background: #d9b98a; color: #4a2a14; border-style: dashed; border-color: #a57d4c; }
+.plug-card .f b { font: 700 21px var(--comic); }
+.plug-card .f span { font: 400 13px var(--serif); }
+.plug.wall.small { height: 60px; border: 2px inset #b99a2a; cursor: pointer; }
+.plug.wall.small .strip.a { width: 70px; left: 40px; top: 12px; }
+.plug.wall.small .strip.b { width: 7px; height: 40px; left: 41px; top: 14px; }
+.plug.wall.small .strip.c { width: 7px; height: 26px; left: 104px; top: 12px; }
+.plug.wall.small.leaning { animation: lean .12s steps(2) infinite; }
 @keyframes lean { 50% { transform: translateX(1px); } }
 
 /* the book: ruled, with a margin */
@@ -266,10 +267,10 @@ kbd { display: inline-block; min-width: 1.7em; text-align: center; font: 700 13p
   .float.f9, .float.f10, .float.f11, .float.f12 { display: block; transform: scale(.75); }
   .void { min-height: 0; padding-bottom: 64px; }
   .midi { top: auto; bottom: 8px; }
-  .ad .f { gap: 7px; padding: 0 7px; }
-  .ad .f b { font-size: 15px !important; letter-spacing: .02em !important; text-shadow: none !important; }
-  .ad .f span, .ad .f .slogan { font-size: 10.5px !important; }
-  .ad .cta, .ad .tag { display: none; }
+  .plug .f { gap: 7px; padding: 0 7px; }
+  .plug .f b { font-size: 15px !important; letter-spacing: .02em !important; text-shadow: none !important; }
+  .plug .f span, .plug .f .slogan { font-size: 10.5px !important; }
+  .plug .cta, .plug .tag { display: none; }
   .signin input[type="text"] { font-size: 17px; }
   .signin label { min-width: 0; text-align: left; display: block; margin: 6px 0 2px; }
   .enter { font-size: 36px; }
@@ -278,7 +279,7 @@ kbd { display: inline-block; min-width: 1.7em; text-align: center; font: 700 13p
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .blink, .new, .enter, .ad .cta, .ad-free, .wall.leaning, .ad-lean.leaning, .rainbow { animation: none; }
+  .blink, .new, .enter, .plug .cta, .plug-free, .wall.leaning, .plug-lean.leaning, .rainbow { animation: none; }
   .marquee span { animation: none; padding-left: 0; white-space: normal; }
   .marquee { white-space: normal; }
   .leaf { transition: none; }

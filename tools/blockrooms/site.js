@@ -2,7 +2,8 @@
 // office here: nobody upstairs, no lift, no basement, no jar. This stands in
 // for all of it with as little as the level needs — an invented team to borrow
 // names and faces from, a count of whether the keycard has been brought out,
-// and one building after another, none of them twice.
+// and a building nobody has had before. One a visit: when it is over there is
+// the card, and after the card the front page.
 //
 // One thing a site can do that the office cannot: a building somebody got out
 // of can be handed on. Its tape is an address (…/?tape=<seed>). Whoever opens
@@ -79,6 +80,8 @@ function address(seed) {
 
 /* ---- the book ------------------------------------------------------------------------------------ */
 
+/** The front page: where a visit begins, and where it ends. */
+const HOME = './';
 const ME = 'blockrooms:me';
 /** Who this visitor signed in as (or, if they did not, a made-up name), their message, and whether they sign the book: all set on the front page. */
 function me() {
@@ -112,16 +115,17 @@ async function run() {
       import('./world/engine/stage.js'), import('./world/backrooms/index.js'), import('./world/backrooms/scorecard.js'), import('./world/backrooms/gen.js')]);
     office.stage = createStage(document.getElementById('stage'), { fx: false, shadows: false, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5) });
     office.stage.start();
-    // the tape this address names, if it names one: the first building walked. After that, a new one each time —
-    // unless the card for a kept tape is put down by its number, which is asking for that building again
+    // the tape this address names, if it names one, is the building walked; with none, one nobody has had. When it
+    // is over the card comes up, and after the card the front page — unless the card for a kept tape is put down by
+    // its number, which is asking for that building again
     const q = new URLSearchParams(location.search);
     let next = asSeed(q.get('tape')) || null;
     // (for whoever is checking the site and not playing it: ?debug hands a script the level's own handle, and lets it ask
     // for a shorter building, a part to begin on, a quiet one)
     const whole = (k) => (q.has(k) && Number.isFinite(Number(q.get(k))) ? Math.floor(Number(q.get(k))) : undefined);
     const dev = q.has('debug') ? { debug: true, depths: whole('depths'), depth: whole('depth'), mute: q.has('mute') ? true : undefined, pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined } : {};
-    // an advert on the front page is a door: ?room=<a room of the deck> is a building with that room where you land
-    // (the first one only; a room nobody has built yet is no room, and the door is an ordinary door)
+    // ?room=<a room of the deck> is a building with that room where you land (for looking at one room; nothing on
+    // the front page leads here. A room nobody has built yet is no room, and the door is an ordinary door)
     let room = !next && q.get('room') && Object.hasOwn(ARCHETYPES, q.get('room')) ? q.get('room') : null;
     for (;;) {
       const seed = next || fresh();
@@ -136,7 +140,11 @@ async function run() {
         ...(mine ? { replay: true, pursuer: typeof mine.mascot === 'boolean' ? mine.mascot : undefined } : {}),
       });
       room = null;
-      if (result?.card?.again) next = asSeed(result.card.again) || null;
+      // A card put down by its tape's number is asking for that building again. Put down any other way, the visit is
+      // over and so is this page: back to the front page, where the door and the high scores are. (The owner: Esc ends
+      // the game, then the score, then the home page. Never straight into another building.)
+      next = result?.card?.again ? asSeed(result.card.again) || null : null;
+      if (!next) { location.assign(HOME); return; }
       address(next);
       office.stage.setView(null);
       await pause(1100);

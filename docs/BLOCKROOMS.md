@@ -8,13 +8,22 @@ level keeps its own.
 Nothing here is a second copy of the game. The site is the same modules,
 copied out by a script, with a small page round them that stands in for the
 office: an invented team to borrow names and faces from, a keycard that is
-always down there to find, and one building after another.
+always down there to find, and a building nobody has had before.
 
 In front of that is a home page, and it is 1998: "The Unofficial Home Page
 of Paranormal Office Phenomena", with what a home page had then. A door
 marked ENTER, a visitor counter, high scores and a guestbook, a webring,
-spoof banner adverts that are links into the level, screenshots, and a
-bottom that keeps going.
+spoof banner adverts, screenshots, and a bottom that keeps going.
+
+**Only a door starts the game** (the owner's rule for this page): the door,
+the ENTER buttons, a tape somebody chooses, and the wall at the bottom for
+whoever leans on it. The adverts and the screenshots are pictures. An advert
+that dropped a visitor into the level without a word was not wanted; one of
+them opens a window of its own (the store), and more may later.
+
+**Nothing on it is called an advert where a browser can see** (no `ad`,
+`ads`, `sponsor` in a class, an id or an attribute): blockers hide by name,
+and one of these was being hidden. They are `plug`s in the markup.
 
 **The words on it are plain on purpose** (the owner's rule for this page):
 what somebody would really have typed on a home page in 1998, which is
@@ -38,6 +47,7 @@ plain files and can be served by anything.
 | `world/`, `core/` | every module the level imports, found by reading the imports (`tools/backrooms-sample/stage.mjs`), any file a module keeps beside itself and asks for by its own address (the level's music, `world/backrooms/music/`), and the rules of the book (`core/book.mjs`) |
 | `vendor/` | three.js and the add-ons the level uses, the fonts it asks for, and their licences |
 | `shots/` | pictures from inside, for the home page (`tools/blockrooms/shots/`: taken through the level's own camcorder) |
+| `muzak.mp3` | the home page's music when its MUSIC switch is on: the lift's music from the office (`public/audio/elevator-muzak.mp3`) |
 | `og.jpg` | the picture a link to the site is shown with |
 | `robots.txt` | |
 
@@ -73,10 +83,10 @@ build takes it from `SITE_ORIGIN` (`https://…`), or, on Vercel, from
 | Address | What happens |
 |---|---|
 | `/` | the home page |
-| `/play` | a building nobody has had before, then another when that one ends |
+| `/play` | a building nobody has had before. When it ends, however it ends (the way out, caught, a flat battery, Esc), the card comes up; put down, it leaves for the home page. Esc is one press, mouse held or not |
 | `/play?tape=<seed>` | that building first. A finished visit keeps its tape (its seed); while the card for it is on the wall the address bar shows this address, so copying it hands the building on. (`/?tape=` from before there was a home page goes straight through.) |
 | the tape's number on the card | a link to the same address; choosing it walks the building again |
-| `/play?room=<a room of the deck>` | a building with that room where you land: what the adverts and the pictures on the home page lead to. A room that does not exist is an ordinary door |
+| `/play?room=<a room of the deck>` | a building with that room where you land, for looking at one room. Nothing on the home page leads here. A room that does not exist is an ordinary door |
 | `/play?debug` (with `depths=`, `depth=`, `mute`, `pursuer=0`) | for checking, not playing: exposes the level's handle as `window.__backrooms` and allows a shorter building |
 | `/api/book` | the visitors' book (below) |
 

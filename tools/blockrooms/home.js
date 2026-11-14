@@ -30,7 +30,7 @@ if (new URLSearchParams(location.search).has('tape')) location.replace(PLAY + lo
 /* ---- pictures ------------------------------------------------------------------------------------ */
 drawLogo($('logo'));
 $('top').style.backgroundImage = `url(${voidTile()})`;
-document.querySelector('.adrow').style.backgroundImage = $('top').style.backgroundImage;
+document.querySelector('.plugrow').style.backgroundImage = $('top').style.backgroundImage;
 
 /* ---- signing: a name and a message ----------------------------------------------------------------- */
 const ME = 'blockrooms:me';
@@ -120,15 +120,18 @@ async function book() {
 }
 
 /* ---- the adverts ----------------------------------------------------------------------------------- */
-// (MECHA's slogan is MECHA's own, as it is on the wall of its training floor)
+// Pictures, not doors: nothing here starts the game (the owner: an advert that drops you into the level without a
+// word is not wanted; they may open windows of their own later). The one that does anything opens the store's window.
+// Nothing about them is called "ad" where a browser can see it (class, id, attribute): a blocker hides by name, and
+// one of these was being hidden. (MECHA's slogan is MECHA's own, as it is on the wall of its training floor.)
 const ADS = [
-  { cls: 'ad-free', href: PLAY, sprite: ['battery', 'spin'], cta: 'CLICK HERE', frames: [['CONGRATULATIONS!!!', 'YOU ARE VISITOR NUMBER {hits}'], ['FREE BATTERY', 'CLICK HERE']] },
-  { cls: 'ad-mecha', href: `${PLAY}?room=mecha`, sprite: ['cog', 'turn'], cta: 'APPLY', slogan: 'Profiting from the world’s misery so you don’t have to', frames: [['MECHA', 'now hiring']] },
-  { cls: 'ad-neo', store: true, sprite: ['pirate', ''], cta: 'STORE', frames: [['CAP’N’S NEOCLOUD', 'GRAPHICS CARDS BY THE HOUR']] },
-  { cls: 'ad-water', href: `${PLAY}?room=coolers`, sprite: ['cooler', ''], cta: 'CLICK HERE', frames: [['Hydration Corridor™', 'WATER COOLERS']] },
+  { cls: 'plug-free', sprite: ['battery', 'spin'], cta: 'CLICK HERE', frames: [['CONGRATULATIONS!!!', 'YOU ARE VISITOR NUMBER {hits}'], ['FREE BATTERY', 'CLICK HERE']] },
+  { cls: 'plug-mecha', sprite: ['cog', 'turn'], cta: 'APPLY', slogan: 'Profiting from the world’s misery so you don’t have to', frames: [['MECHA', 'now hiring']] },
+  { cls: 'plug-neo', store: true, sprite: ['pirate', ''], cta: 'STORE', frames: [['CAP’N’S NEOCLOUD', 'GRAPHICS CARDS BY THE HOUR']] },
+  { cls: 'plug-water', sprite: ['cooler', ''], cta: 'CLICK HERE', frames: [['Hydration Corridor™', 'WATER COOLERS']] },
   // (the owner's line)
-  { cls: 'ad-card', href: `${PLAY}?room=cutouts`, sprite: ['standee', ''], cta: 'ORDER NOW', frames: [['Cardboard Colleagues', 'Unlike your wife, we will never leave you']] },
-  { cls: 'ad-lean', lean: true, frames: [] },
+  { cls: 'plug-card', sprite: ['standee', ''], cta: 'ORDER NOW', frames: [['Cardboard Colleagues', 'Unlike your wife, we will never leave you']] },
+  { cls: 'plug-lean', lean: true, frames: [] },
 ];
 /** Hold something down for as long as the wall takes, and it gives. */
 const LEAN = 1150;
@@ -155,12 +158,12 @@ function tapedWall(cls, label) {
   leanOn(wall, through, (k) => { sink.style.opacity = String(k * 0.85); wall.style.setProperty('--drop', `${k * 34}px`); });
   return wall;
 }
-for (const slot of document.querySelectorAll('.ad[data-ad]')) {
-  const ad = ADS[Number(slot.dataset.ad) % ADS.length];
-  if (ad.lean) { slot.replaceWith(tapedWall('ad wall small', 'A wall with painter’s tape on it. Press and hold.')); continue; }
-  const node = el(ad.href ? 'a' : 'div', `ad ${ad.cls}`);
-  if (ad.href) node.href = ad.href; else { node.tabIndex = 0; node.setAttribute('role', 'button'); }
-  node.setAttribute('aria-label', `Advertisement: ${ad.frames.map((f) => f.filter(Boolean).join('. ')).join('. ')}${ad.slogan ? `. ${ad.slogan}` : ''}`);
+for (const slot of document.querySelectorAll('.plug[data-plug]')) {
+  const ad = ADS[Number(slot.dataset.plug) % ADS.length];
+  if (ad.lean) { slot.replaceWith(tapedWall('plug wall small', 'A wall with painter’s tape on it. Press and hold.')); continue; }
+  const node = el('div', `plug ${ad.cls}`);
+  if (ad.store) { node.tabIndex = 0; node.setAttribute('role', 'button'); } else node.setAttribute('role', 'img');
+  node.setAttribute('aria-label', `Spoof advert: ${ad.frames.map((f) => f.filter(Boolean).join('. ')).join('. ')}${ad.slogan ? `. ${ad.slogan}` : ''}`);
   const frames = ad.frames.map(([big, small], i) => {
     const pic = el('i'); pic.dataset.sprite = ad.sprite[0]; if (ad.sprite[1]) pic.dataset.fx = ad.sprite[1]; pic.dataset.scale = '3';
     const parts = small.split('{hits}'), line = el('span', '', parts[0]);
@@ -251,36 +254,18 @@ if (typeof IntersectionObserver === 'function') {
 }
 
 /* ---- music --------------------------------------------------------------------------------------- */
-// A short tune of the page's own, two voices, played by the page. Off until asked for.
-const TUNE = {
-  lead: [64, 67, 0, 72, 0, 71, 67, 0, 69, 0, 72, 76, 0, 74, 72, 0, 69, 72, 0, 77, 0, 76, 72, 0, 74, 0, 71, 67, 0, 69, 71, 0],
-  bass: [36, 0, 0, 43, 0, 0, 48, 0, 33, 0, 0, 40, 0, 0, 45, 0, 29, 0, 0, 36, 0, 0, 41, 0, 31, 0, 0, 38, 0, 0, 43, 0],
-};
-let audio = null, timer = 0;
+// The lift's music, from the office upstairs (public/audio/elevator-muzak.mp3; the build puts it beside the page as
+// muzak.mp3), round and round. Off until asked for, and off again when the page is put away.
+let audio = null;
+const says = (on) => { const btn = $('midi'); btn.setAttribute('aria-pressed', String(on)); btn.textContent = on ? 'MUSIC: ON' : 'MUSIC: OFF'; };
 function music(on) {
-  const btn = $('midi');
-  clearInterval(timer);
-  if (!on) { audio?.close?.(); audio = null; btn.setAttribute('aria-pressed', 'false'); btn.textContent = 'MUSIC: OFF'; return; }
-  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-  audio = new AC();
-  const out = audio.createGain(); out.gain.value = 0.05; out.connect(audio.destination);
-  const step = 60 / 104 / 2; let next = audio.currentTime + 0.08, i = 0;
-  const note = (midi, type, at, len, vol) => {
-    const o = audio.createOscillator(), g = audio.createGain();
-    o.type = type; o.frequency.value = 440 * 2 ** ((midi - 69) / 12);
-    g.gain.setValueAtTime(vol, at); g.gain.exponentialRampToValueAtTime(0.001, at + len);
-    o.connect(g); g.connect(out); o.start(at); o.stop(at + len + 0.02);
-  };
-  timer = setInterval(() => {
-    if (!audio) return;
-    while (next < audio.currentTime + 0.25) {
-      const k = i % TUNE.lead.length;
-      if (TUNE.lead[k]) note(TUNE.lead[k], 'square', next, step * 1.6, 0.5);
-      if (TUNE.bass[k]) note(TUNE.bass[k], 'triangle', next, step * 2.4, 1);
-      next += step; i++;
-    }
-  }, 60);
-  btn.setAttribute('aria-pressed', 'true'); btn.textContent = 'MUSIC: ON';
+  if (audio) { audio.pause(); audio = null; }
+  if (on) {
+    const a = new Audio('./muzak.mp3');
+    a.loop = true; a.volume = 0.5; audio = a;
+    a.play().catch(() => { if (audio === a) { audio = null; says(false); } });       // no sound to be had: the switch goes back
+  }
+  says(!!audio);
 }
 $('midi').addEventListener('click', () => music(!audio));
 document.addEventListener('visibilitychange', () => { if (document.hidden && audio) music(false); });

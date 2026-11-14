@@ -35,7 +35,7 @@ test('the site is two whole pages with everything they ask for beside them, and 
   }
   assert.ok(page.includes('<script type="module" src="./site.js"></script>') && home.includes('<script type="module" src="./home.js"></script>'));
   assert.ok(!files.some((f) => /^(data|public|server|test|tools|docs|hooks|api)\//.test(f) || /knowledge|transcripts|\.env/.test(f)), 'something of the office\'s own is in the site');
-  const expected = /^(index\.html|play\.html|site\.js|home\.js|home\.css|art\.js|robots\.txt|og\.jpg|shots\/[\w-]+\.jpg|(world|core|vendor)\/.+)$/;
+  const expected = /^(index\.html|play\.html|site\.js|home\.js|home\.css|art\.js|robots\.txt|og\.jpg|muzak\.mp3|shots\/[\w-]+\.jpg|(world|core|vendor)\/.+)$/;
   assert.ok(files.every((f) => expected.test(f)), `a file nobody expected: ${files.find((f) => !expected.test(f))}`);
 
   // the import map: three.js and the office's two roots, all beside the page, all there
@@ -77,14 +77,24 @@ test('the front page is the caretaker\'s: every picture it shows is there, every
   assert.ok(shots.length >= 4, 'pictures from inside');
   for (const [, src, alt] of shots) { assert.ok(fs.existsSync(path.join(out, src)), `${src} is shown and is not there`); assert.ok(alt.length > 20, `${src} says nothing to somebody who cannot see it`); }
   for (const id of new Set([...script.matchAll(/\$\('([\w-]+)'\)/g)].map((m) => m[1]))) assert.ok(new RegExp(`id="${id}"`).test(home), `home.js reaches for #${id}, which the page does not have`);
-  for (const [, to] of home.matchAll(/href="(\.\/play[^"]*)"/g)) assert.match(to, /^\.\/play(\?room=[a-z-]+)?$/);
+  // Only a door starts the game: the door, an ENTER button, a tape somebody chooses (home.js), the wall for whoever leans
+  // on it. An advert is a picture and so is a screenshot (the owner: nothing drops a visitor into the level without a word).
+  for (const [, to] of home.matchAll(/href="(\.\/play[^"]*)"/g)) assert.equal(to, './play');
+  assert.ok(!/<a\b[^>]*>\s*<img\b/.test(home), 'a picture on the front page is a link');
+  const adverts = script.slice(script.indexOf('const ADS = ['), script.indexOf('];', script.indexOf('const ADS = [')));
+  assert.ok(adverts.includes('plug-card') && !/href|\broom\b|PLAY/.test(adverts), 'an advert leads into the game');
+  assert.ok(!/\?room=/.test(home + script), 'the front page sends somebody to a room');
+  // …and nothing about an advert is called one where a browser can see it: blockers hide by name (ad, ads, sponsor), and did
+  const css = fs.readFileSync(path.join(out, 'home.css'), 'utf8');
+  for (const [where, text] of [['index.html', home.replace(/>[^<]*</g, '><')], ['home.css', css.replace(/\/\*[\s\S]*?\*\//g, '')], ['home.js', script.replace(/\/\/.*$/gm, '')]]) {
+    assert.ok(!/(^|[^a-z])ads?[-_ ."'\]]|[-_.#"' ]ads?([^a-z]|$)|adrow|adwall|advert[a-z]*[-_="]|sponsor/i.test(text.replace(/const ADS\b|\bADS\b|ad\.[a-z]+|\bad\b(?= [=?:)]|\))|const ad\b|Spoof advert/g, '')), `${where} names something the way a blocker hides it`);
+  }
   assert.ok(home.includes('<a class="door" href="./play" id="door">'), 'the door is a link: it works with nothing switched on');
   assert.ok(home.includes('<span id="updated">14 November 1998</span>'), 'last updated: the day it was built, of the year it has been for some time');
   assert.ok(home.includes('Profiting from the world') === false && script.includes('Profiting from the world’s misery so you don’t have to'), 'MECHA\'s slogan is MECHA\'s own, as it is on its wall');
-  // a room an advert or a picture leads to is a room of the deck (one that has not been built yet is an ordinary door: site.js)
-  const rooms = new Set([...home.matchAll(/\?room=([a-z-]+)/g), ...script.matchAll(/\?room=([a-z-]+)/g)].map((m) => m[1]));
-  const deck = fs.readFileSync(path.join(ROOT, 'public/world/backrooms/gen.js'), 'utf8') + fs.readFileSync(path.join(ROOT, 'public/world/backrooms/deck2.js'), 'utf8');
-  for (const id of rooms) if (id !== 'mecha') assert.ok(deck.includes(`id: '${id}'`), `?room=${id}: no such room`);
+  // its music, when it is switched on, is the lift's from the office upstairs: a file beside the page, asked of nobody else
+  assert.ok(script.includes("new Audio('./muzak.mp3')") && fs.statSync(path.join(out, 'muzak.mp3')).size > 100000, 'the front page\'s music is not there');
+  assert.deepEqual(fs.readFileSync(path.join(out, 'muzak.mp3')), fs.readFileSync(path.join(ROOT, 'public/audio/elevator-muzak.mp3')));
   // what a stranger typed is put on the page as text, never as markup
   assert.ok(!/innerHTML|insertAdjacentHTML|outerHTML|document\.write/.test(script), 'home.js writes markup');
 });
@@ -123,13 +133,17 @@ test('where the site is, is given when it is built and written down nowhere', (t
   }
 });
 
-test('the page\'s own script: a building nobody has had each time, a tape from the address first, and a kept one played back', () => {
+test('the page\'s own script: a building nobody has had, a tape from the address first, a kept one played back, and after the card the front page', () => {
   const src = fs.readFileSync(path.join(ROOT, 'tools/blockrooms/site.js'), 'utf8');
   assert.match(src, /brand: \{ over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false \}/, 'the card is headed BlockRooms here, and has no jar on it: there is no office to spend a coin in');
   assert.match(src, /let next = asSeed\(q\.get\('tape'\)\) \|\| null;/);
   assert.match(src, /const mine = next \? keptTapes\(\)\.find\(\(t\) => t\.seed === seed\) : null;/);
   assert.match(src, /\.\.\.\(mine \? \{ replay: true, pursuer: typeof mine\.mascot === 'boolean' \? mine\.mascot : undefined \} : \{\}\)/, 'only a tape this browser has kept is played back; somebody else\'s is a building like any other');
-  assert.match(src, /if \(result\?\.card\?\.again\) next = /, 'the card put down by its tape\'s number is asking for that building again');
+  // when a visit is over (the way out, caught, a flat battery, Esc) the card comes up, and after the card the front page:
+  // never straight into another building. Only a card put down by its tape's number asks for a building again
+  assert.match(src, /next = result\?\.card\?\.again \? asSeed\(result\.card\.again\) \|\| null : null;\n      if \(!next\) \{ location\.assign\(HOME\); return; \}/, 'a visit that is over does not go home');
+  assert.match(src, /const HOME = '\.\/';/);
+  assert.ok(!/fresh\(\)/.test(src.slice(src.indexOf('room = null;'))), 'a building nobody asked for is begun after the card');
   // it talks to its own site's book and to nobody else, and says two things: that somebody went in, and (unless they
   // have said not to, and never for a tape played back) what a visit that got out came to
   assert.deepEqual([...src.matchAll(/fetch\(([^,)]+)/g)].map((m) => m[1].trim()), ["'./api/book'"]);
@@ -137,7 +151,7 @@ test('the page\'s own script: a building nobody has had each time, a tape from t
   assert.match(src, /if \(!mine\) tell\(\{ do: 'in' \}\);/);
   assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit'\) return null;\n  const who = me\(\);\n  if \(!who\.sign\) return null;/);
   assert.match(src, /tell\(\{ do: 'sign', name: who\.name, message: who\.message, run: report \}\)/);
-  assert.match(src, /let room = !next && q\.get\('room'\) && Object\.hasOwn\(ARCHETYPES, q\.get\('room'\)\) \? q\.get\('room'\) : null;/, 'an advert\'s room is a room of the deck, or it is an ordinary door');
+  assert.match(src, /let room = !next && q\.get\('room'\) && Object\.hasOwn\(ARCHETYPES, q\.get\('room'\)\) \? q\.get\('room'\) : null;/, 'a room asked for by name is a room of the deck, or it is an ordinary door');
 });
 
 test('what the host is told matches what is built, and only the branch that is for the public is deployed', () => {

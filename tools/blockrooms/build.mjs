@@ -20,6 +20,7 @@
 //   vendor/      three.js and the add-ons the level uses, the fonts it asks
 //                for, and the licences they are under
 //   shots/       pictures from inside, for the front page
+//   muzak.mp3    the front page's music when it is switched on: the lift's, from the office (public/audio/)
 //   og.jpg       the picture a link to the site is shown with, if there is one
 //                beside this file
 //   robots.txt
@@ -90,6 +91,8 @@ export function build(out, opt = {}) {
     for (const name of fs.readdirSync(shots).filter((f) => /^[\w-]+\.jpg$/.test(f)).sort()) { fs.copyFileSync(path.join(shots, name), path.join(out, 'shots', name)); extra.push(`shots/${name}`); }
   }
   const picture = copy('og.jpg');
+  // the front page's music, when it is switched on: the lift's, from the office upstairs
+  fs.copyFileSync(path.join(HERE, '..', '..', 'public', 'audio', 'elevator-muzak.mp3'), path.join(out, 'muzak.mp3')); extra.push('muzak.mp3');
   put('robots.txt', 'User-agent: *\nAllow: /\n');
 
   // the modules the level needs before it can show anything, asked for all at once (rooms that live in files of their
