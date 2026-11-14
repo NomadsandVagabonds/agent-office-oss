@@ -17,6 +17,7 @@ import { createFx } from './scene/fx.js';
 import { createCat } from './scene/creatures.js';
 import { createWalk } from './walk.js';
 import { createGame } from './game.js';
+import { createPrizes } from './scene/prizes.js';
 import { createEggs } from './eggs.js';
 import { createNet } from './net.js';
 import { createUI } from './ui/index.js';
@@ -63,6 +64,7 @@ office.dynamics = createDynamics(office);
 office.cat = createCat(office);
 office.walk = createWalk(office);
 office.game = createGame(office);          // keycards and coins: what is still hidden where, and picking it up
+office.prizes = createPrizes(office);      // what the coins bought, on the stand by the vending machine
 office.ui = q.get('ui') === '0' ? null : createUI(office);
 office.eggs = createEggs(office);
 office.onUsed = (target, result) => office.eggs.used(target, result);
@@ -128,6 +130,7 @@ net.on('world', (snapshot) => {
   syncPeople();
   office.cat.place(snapshot.cat);
   office.exhibits.sync();
+  office.prizes.sync();
   office.ready = true;
   document.body.classList.add('ready');
 });
@@ -185,6 +188,7 @@ stage.onFrame((dt, t, frame) => {
   office.walk.update(dt);
   office.eggs.update(dt, t);
   office.exhibits.update(dt);
+  office.prizes.update(dt);
   office.dynamics.update(dt, t);
   office.fx.update(dt);
   office.ui?.update(dt);

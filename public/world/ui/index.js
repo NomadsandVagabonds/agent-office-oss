@@ -166,6 +166,7 @@ export function createUI(office) {
     if (poi.kind === 'gauges') return ui.openSheet('usage');
     if (poi.kind === 'arcade') return import('./arcade.js').then((m) => m.playBugSquash({ office, ui }));
     if (poi.kind === 'elevator') return import('../levels/index.js').then((m) => m.callLift(office));      // the floor panel, then a ride
+    if (poi.kind === 'vending' && net.state.world?.game) return import('./vending.js').then((m) => m.openVending({ office }));   // its front: what coins buy
     return office.walk.use({ thing: poi.id, label: poi.label, kind: poi.kind, x: o.x, z: o.z });
   };
   async function petCat() {

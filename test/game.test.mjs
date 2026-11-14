@@ -144,3 +144,25 @@ test('game: coins do not come back, the passport pays into the same jar, and the
   const feed = (await office.get('/api/activity?limit=40')).data;
   assert.ok((feed.items || feed.activity || feed).some((e) => e.kind === 'prize' && /^Lead bought .+ from the vending machine$/.test(e.text)));
 });
+
+test('game: everything the machine sells has a shape, and a place of its own on top of the machine', async () => {
+  const { PRIZE_MODELS, PRIZE_PARTS, PRIZE_SPOTS } = await import('../public/world/props/prizes.js');
+  const codes = new Set(PRIZES.map((p) => p.slot));
+  assert.equal(codes.size, PRIZES.length, 'no two prizes share a place behind the glass');
+  assert.ok(PRIZES.every((p) => /^[A-C][1-3]$/.test(p.slot)) && !codes.has('C3'), 'three rows of three, and the last place is what it gives away');
+  assert.equal(typeof PRIZE_MODELS.snack, 'function');
+  const boxes = [];
+  for (const p of PRIZES) {
+    assert.equal(typeof PRIZE_MODELS[p.id], 'function', `${p.id} has a model`);
+    const vox = PRIZE_MODELS[p.id](), b = vox.bounds(), at = PRIZE_SPOTS[p.id];
+    assert.ok(vox.size > 20 && b.y0 === 0, `${p.id} stands on the ground it is given`);
+    assert.ok(Array.isArray(at) && at.length === 3, `${p.id} has a place`);
+    assert.equal(at[1], 70, 'on top of the machine, which is 70 voxels tall');
+    const box = { id: p.id, x0: b.x0 + at[0], x1: b.x1 + at[0], z0: b.z0 + at[2], z1: b.z1 + at[2] };
+    assert.ok(box.x0 >= -22 && box.x1 <= 22 && box.z0 >= -16 && box.z1 <= 15, `${p.id} is on the machine, give or take a nose (${JSON.stringify(box)})`);
+    for (const o of boxes) assert.ok(box.x1 <= o.x0 || o.x1 <= box.x0 || box.z1 <= o.z0 || o.z1 <= box.z0, `${p.id} and ${o.id} do not stand in each other`);
+    boxes.push(box);
+    // a prize that comes in pieces is the same prize
+    if (PRIZE_PARTS[p.id]) for (const part of PRIZE_PARTS[p.id]) assert.ok(part.make().size > 0 && ['still', 'head', 'frame'].includes(part.role));
+  }
+});
