@@ -131,6 +131,8 @@ export function buildFloodMark(c) {
       if (splash <= 0) { const at = c.toWorld(me.x, me.z); c.env.play('wade', at.x, at.z, 5); splash = .4; }
     }
     if (state.exposure > 1.8 && c.env.player) {
+      const hit = c.env.health?.damage(1);
+      if (hit && (!hit.ok || hit.dead)) return;
       const home = state.checkpoint, at = c.toWorld(home.x, home.z), body = c.env.player.me;
       c.env.player.warp(at.x, at.z);
       body.vx = body.vz = body.drop = body.dropV = body.sink = body.sinkTo = 0;

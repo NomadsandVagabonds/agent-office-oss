@@ -2,7 +2,7 @@
 // No rendering, world effects, storage or clocks live in this model.
 export const ITEM_DEFS = Object.freeze({
   torch: Object.freeze({ name: 'Flashlight', description: 'A worn hand torch. Its narrow beam reaches into the unlit corners.', useLabel: 'Switch on', maxCharge: 180 }),
-  battery: Object.freeze({ name: 'Battery pack', description: 'A pair of heavy cells wrapped together. Fits the flashlight.', useLabel: 'Fit batteries' }),
+  battery: Object.freeze({ name: 'Battery pack', description: 'A pair of heavy cells wrapped together. Fits the camera or flashlight.', useLabel: 'Fit batteries' }),
   chalk: Object.freeze({ name: 'Chalk', description: 'A short piece of white chalk. Leave a mark to recognize a place again.', useLabel: 'Mark floor', maxUses: 6 }),
   paper: Object.freeze({ name: 'Paper', description: 'Blank office paper, warm from a printer you cannot hear.', useLabel: 'Use', maxStack: 10 }),
   scissors: Object.freeze({ name: 'Scissors', description: 'Heavy steel scissors with chipped red handles. The hinge is still stiff.', useLabel: 'Use' }),
@@ -102,7 +102,7 @@ export function createInventory({ size = 6 } = {}) {
     if (selected !== index) { selected = index; revision++; }
     return true;
   }
-  function useSelected({ canMark = true } = {}) {
+  function useSelected({ canMark = true, heal } = {}) {
     const item = slots[selected];
     if (!item) return fail('empty');
     if (item.type === 'battery') return { ok: true, action: 'combine', item: copy(item), index: selected };
@@ -124,7 +124,18 @@ export function createInventory({ size = 6 } = {}) {
       revision++;
       return { ok: true, action: 'mark', item: used, index: selected };
     }
-    return fail(item.type === 'snack' ? 'health-unavailable' : 'no-use');
+    if (item.type === 'snack') {
+      if (typeof heal !== 'function') return fail('health-unavailable');
+      const index = selected;
+      const result = heal(ITEM_DEFS.snack.healAmount);
+      if (result?.ok !== true || !Number.isSafeInteger(result.amount) || result.amount <= 0) {
+        return fail(result?.reason || 'health-unavailable');
+      }
+      slots[index] = null;
+      revision++;
+      return { ok: true, action: 'heal', amount: result.amount, item: copy(item), index };
+    }
+    return fail('no-use');
   }
 
   /** Give only the currently held object or sheets, never search other pockets. */

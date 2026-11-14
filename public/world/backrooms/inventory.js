@@ -3,7 +3,7 @@
 import { createInventory as createModel, makeItem, ITEM_DEFS } from './inventory-state.js';
 import { createInventoryHud } from './inventory-hud.js';
 import { createInventoryWorld } from './inventory-world.js';
-import { toLocal } from './gen.js';
+import { toLocal, makeRng } from './gen.js';
 
 const MESSAGES = {
   empty: 'Empty slot', full: 'All six slots are full', duplicate: 'Already carrying that',
@@ -12,16 +12,19 @@ const MESSAGES = {
   'no-mark-space': 'No dry, clear floor here', 'no-drop-space': 'No clear place to set this down',
   'no-mark': 'No dry, clear floor here', 'no-space': 'No clear place to set this down',
   'no-use': 'Nothing to use this on here', 'health-unavailable': 'Keep this for when you need it',
+  'full-health': 'Health is full', dead: 'Too late', depleted: 'The camera has stopped',
 };
+const BATTERY_ROOM_INTERVAL = 4; // Starting point for supply-density playtests.
 
 export function createInventory(env, { canAct = () => true, onOpen = () => {} } = {}) {
   const model = createModel();
   let disposed = false;
   const tell = value => view.notice(MESSAGES[value] || value || 'Cannot use that here');
-  const refresh = () => view.update(model.read());
+  const snapshot = () => ({ ...model.read(), health: env.health?.read(), camera: env.camera?.read() });
+  const refresh = () => view.update(snapshot());
   const accepted = result => {
     if (!result?.ok) { tell(result?.reason); return false; }
-    env.sound.play('clack', { vol: .45 }); refresh(); return true;
+    env.sound.play(result.action === 'heal' ? 'rustle' : 'clack', { vol: .45 }); refresh(); return true;
   };
   const physical = createInventoryWorld(env, model, {
     onNotice: tell,
@@ -37,9 +40,10 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
       const placed = physical.mark();
       if (!placed.ok) { tell(placed.reason || 'no-mark-space'); return; }
     }
-    const result = model.useSelected();
+    const result = model.useSelected({ heal: env.health?.heal });
     if (!accepted(result)) return;
     if (result.action === 'combine') view.beginCombine(snapshot.selected);
+    if (result.action === 'heal') tell(`+${result.amount} health`);
   }
   function drop() {
     if (!canAct()) return;
@@ -48,6 +52,17 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
   function combine(from, to) {
     if (!canAct()) return;
     if (accepted(model.combine(from, to))) { view.cancelCombine(); refresh(); tell('Batteries fitted'); }
+  }
+  function rechargeCamera(from) {
+    if (disposed || !canAct()) return;
+    const item = Number.isInteger(from) ? model.read().slots[from] : null;
+    if (item?.type !== 'battery' || !env.camera) { tell('incompatible'); return; }
+    // Recharge and removal are synchronous. A full/depleted camera never
+    // spends the pack, and a successful transfer cannot run twice.
+    const result = env.camera.recharge();
+    if (!result.ok) { tell(result.reason); return; }
+    model.remove(item.id); view.cancelCombine(); refresh();
+    env.sound.play('clack', { vol: .45 }); tell('Camera recharged');
   }
   // NPCs interact with the selected pocket, not any matching item somewhere
   // in the bag. Snapshots are detached; each successful handoff is explicit.
@@ -72,7 +87,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
     if (result.ok) refresh();
     return result;
   }
-  const view = createInventoryHud({ host: env.hud.el, onSelect: select, onUse: use, onDrop: drop, onCombine: combine,
+  const view = createInventoryHud({ host: env.hud.el, onSelect: select, onUse: use, onDrop: drop, onCombine: combine, onRecharge: rechargeCamera,
     onOpen: open => {
       if (open && !canAct()) { view.setOpen(false); return; }
       onOpen(open);
@@ -106,8 +121,25 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
     });
   }
   seedSupplies();
+  // Scattered packs are deterministic and separate from the room generator.
+  // Pick one room per small group, then fall back within that group if its
+  // floor has no dry, reachable place. Never put a pack behind a collider.
+  const random = makeRng(`inventory-batteries:${env.level.seed}`);
+  const rooms = env.world.rooms.filter(rt => rt.id !== env.level.start.room && rt.def.kind !== 'exit');
+  for (let start = 0; start < rooms.length; start += BATTERY_ROOM_INTERVAL) {
+    let placed = false;
+    for (const rt of random.shuffle(rooms.slice(start, start + BATTERY_ROOM_INTERVAL))) {
+      const walk = env.world.walkable(rt), seen = walk.flood(rt.def.doors), cells = [];
+      for (let i = 0; i < seen.length; i++) if (seen[i]) cells.push(i);
+      for (const cell of random.shuffle(cells).slice(0, 256)) {
+        const p = walk.at(cell);
+        if (physical.spawn(makeItem('battery', `scattered-battery-${rt.id}`), { room: rt.id, x: p.x, z: p.z }).ok) { placed = true; break; }
+      }
+      if (placed) break;
+    }
+  }
   return {
-    model, physical, view, use, drop, combine, select, held, give, consumeHeld,
+    model, physical, view, use, drop, combine, rechargeCamera, select, held, give, consumeHeld,
     get isOpen() { return view.isOpen; },
     owns: target => target instanceof Node && view.el.contains(target),
     close: () => view.setOpen(false),
@@ -129,7 +161,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
       view.el.inert = !canAct(); physical.update(dt); refresh(); view.tick(dt);
     },
     torchPower() { return model.read().activeTorch ? 1 : 0; },
-    report: () => ({ ...model.read(), open: view.isOpen, world: physical.report() }),
+    report: () => ({ ...snapshot(), open: view.isOpen, world: physical.report() }),
     dispose() { if (disposed) return; disposed = true; view.destroy(); physical.dispose(); model.clear(); },
   };
 }

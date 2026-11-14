@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ITEM_DEFS, makeItem, createInventory, normalizeItemType } from '../public/world/backrooms/inventory-state.js';
+import { createHealth } from '../public/world/backrooms/health-state.js';
 
 const item = (type, id, data) => makeItem(type, id, data);
 const unchanged = (model, operation, reason) => {
@@ -198,7 +199,7 @@ test('invalid paper quantities do not create, inflate or mutate carried stacks',
   assert.equal(model.read().slots[0].quantity, 4);
 });
 
-test('paper, scissors and snacks can be carried and inspected without inventing use or health effects', () => {
+test('paper and scissors have no use, and snacks need a health callback before they can be eaten', () => {
   const model = createInventory();
   for (const type of ['paper', 'scissors', 'snack']) {
     const added = model.add(item(type, type));
@@ -214,6 +215,41 @@ test('paper, scissors and snacks can be carried and inspected without inventing 
   unchanged(model, () => model.combine(1, 0), 'incompatible');
   const snack = model.remove('snack'); assert.equal(snack.type, 'snack');
   assert.equal(model.add(snack).ok, true);
+});
+
+test('snacks heal one point and consume only the held snack after actual healing', () => {
+  const model = createInventory(), health = createHealth();
+  model.add(item('snack', 'first')); model.add(item('snack', 'second'));
+  unchanged(model, () => model.useSelected({ heal: health.heal }), 'full-health');
+  health.damage();
+  const used = model.useSelected({ heal: health.heal });
+  assert.deepEqual(used, { ok: true, action: 'heal', amount: 1, item: { id: 'first', type: 'snack' }, index: 0 });
+  assert.equal(health.read().current, 4); assert.equal(model.read().slots[0], null);
+  assert.equal(model.read().slots[1].id, 'second');
+  unchanged(model, () => model.useSelected({ heal: health.heal }), 'empty');
+  model.select(1);
+  unchanged(model, () => model.useSelected({ heal: health.heal }), 'full-health');
+  assert.equal(health.read().current, 4);
+});
+
+test('dead, rejected or unavailable healing never wastes a snack', () => {
+  const model = createInventory(), health = createHealth(); model.add(item('snack', 'kept'));
+  health.damage(4);
+  unchanged(model, () => model.useSelected({ heal: health.heal }), 'dead');
+  assert.equal(health.read().current, 0);
+  unchanged(model, () => model.useSelected({ heal: () => ({ ok: false, reason: 'paused' }) }), 'paused');
+  for (const heal of [null, true, undefined, () => undefined, () => ({ ok: 'yes', amount: 1 }), () => ({ ok: true, amount: 0 }), () => ({ ok: true, amount: NaN })]) {
+    unchanged(model, () => model.useSelected({ heal }), 'health-unavailable');
+  }
+});
+
+test('healing consumes the original held snack even if feedback changes selection', () => {
+  const model = createInventory(), health = createHealth();
+  model.add(item('snack', 'held')); model.add(item('scissors', 'other')); health.damage();
+  const result = model.useSelected({ heal: amount => { model.select(1); return health.heal(amount); } });
+  assert.equal(result.index, 0); assert.equal(result.item.id, 'held');
+  assert.equal(model.read().slots[0], null); assert.equal(model.read().slots[1].id, 'other');
+  assert.equal(model.read().selected, 1); assert.equal(health.read().current, 4);
 });
 
 test('explicit room aliases normalize to canonical types without creating paper variants', () => {

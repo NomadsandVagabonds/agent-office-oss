@@ -2,6 +2,7 @@
 // object is inspected; only the selected pocket and its possible actions expand.
 import { h } from '../ui/dom.js';
 import { ITEM_DEFS } from './inventory-state.js';
+import { CAMERA_TUNING } from './camera-state.js';
 
 const CSS = `
 .backrooms:has(.br-inventory) .br-frame { container:br-inventory-picture / size; }
@@ -15,9 +16,21 @@ const CSS = `
 .br-inventory button:focus-visible { outline:2px solid #fff0bc; outline-offset:3px; }
 .br-inventory button:disabled { cursor:default; opacity:.4; }
 .br-inv-pack { position:absolute; left:50%; bottom:2.5%; transform:translateX(-50%); width:min(396px,calc(100% - 28px)); pointer-events:auto; }
-.br-inv-caption { position:absolute; bottom:calc(100% + 9px); left:50%; transform:translateX(-50%); max-width:100%; white-space:nowrap; font-size:12px; text-align:center; color:#eee5cd;
+.br-inv-meta { position:absolute; bottom:calc(100% + 9px); left:4px; right:4px; display:flex; align-items:center; justify-content:center; gap:12px; }
+.br-inv-caption { max-width:100%; white-space:nowrap; font-size:12px; text-align:center; color:#eee5cd;
   text-shadow:1px 2px #171712,-1px -1px #171712,1px -1px #171712,-1px 1px #171712; }
 .br-inv-caption:empty { display:none; }
+.br-inventory.has-health .br-inv-caption { margin-left:auto; text-align:right; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.br-inv-health { display:flex; gap:3px; flex:none; margin-right:auto; height:15px; }
+.br-inv-health[hidden] { display:none; }
+.br-inv-heart { display:block; width:18px; height:15px; overflow:visible; }
+.br-inv-heart .heart-body { fill:#423e34; stroke:#161610; stroke-width:1.5; stroke-linejoin:miter; }
+.br-inv-heart .heart-shine { fill:#625747; }
+.br-inv-heart.is-filled .heart-body { fill:#b66b58; }
+.br-inv-heart.is-filled .heart-shine { fill:#e3aa86; }
+.br-inv-health.is-low .is-filled .heart-body { fill:#d0755d; }
+.br-inv-health.is-low .is-filled .heart-shine { fill:#ffe0ae; }
+.br-inventory.has-health .br-inv-panel { bottom:calc(2.5% + 111px); max-height:calc(100% - 137px); }
 .br-inv-bar { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:4px; padding:5px; background:#1b1a16;
   box-shadow:0 0 0 2px #100f0c,inset 0 2px #8a8066,inset 2px 0 #6a6251,inset -2px 0 #332e25,inset 0 -2px #332e25; }
 .br-inv-slot { position:relative; display:grid; place-items:center; min-width:0; aspect-ratio:1; padding:8px 5px 10px; border:2px solid #514b3c; background:#302e27;
@@ -56,8 +69,12 @@ const CSS = `
 .br-inv-action.primary { flex:1; color:#211f17; border-color:#dfc88d; background:#d2bc82; box-shadow:inset 1px 1px #f4dfa5,inset -1px -1px #8d794d; }
 .br-inv-action.primary:hover:enabled { background:#e4cc8c; }
 .br-inv-action kbd { font:inherit; font-size:10px; opacity:.65; margin-left:9px; }
-.br-inv-combine-note { margin:12px 0 0; color:#e8cf91; font-size:12px; }
-.br-inv-combine-note[hidden] { display:none; }
+.br-inv-action[hidden] { display:none; }
+.br-inv-camera { flex:1; display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px!important; }
+.br-inv-camera small { font-size:10px; font-weight:400; white-space:nowrap; }
+.br-inv-camera:enabled { color:#211f17; border-color:#dfc88d; background:#d2bc82; box-shadow:inset 1px 1px #f4dfa5,inset -1px -1px #8d794d; }
+.br-inv-camera:hover:enabled { background:#e4cc8c; }
+.br-inventory.is-combining .br-inv-action.primary { flex:none; color:#eee5cd; border-color:#8e8267; background:#39382d; box-shadow:inset 1px 1px #605d48,inset -1px -1px #171b14; }
 .br-inv-notice { position:absolute; left:50%; bottom:calc(2.5% + 120px); transform:translateX(-50%); width:max-content; max-width:calc(100% - 36px); padding:7px 11px;
   color:#f4e6c3; background:#25251ce8; border:1px solid #7c735a; text-align:center; font-size:12px; opacity:0; transition:opacity .12s ease; }
 .br-inv-notice.on { opacity:1; }
@@ -69,6 +86,7 @@ const CSS = `
   .br-inv-slot { padding:7px 4px 9px; }
   .br-inv-icon { max-width:32px; }
   .br-inv-panel { bottom:calc(2% + 79px); padding:12px; max-height:calc(100% - 90px); }
+  .br-inventory.has-health .br-inv-panel { bottom:calc(2% + 91px); max-height:calc(100% - 102px); }
   .br-inv-detail { grid-template-columns:62px minmax(0,1fr); gap:13px; }
   .br-inv-specimen { width:62px; min-height:72px; }
   .br-inv-specimen .br-inv-icon { width:56px; height:56px; }
@@ -88,6 +106,10 @@ const CSS = `
   .br-inv-title { font-size:17px; }
   .br-inv-condition { margin-top:5px; }
   .br-inv-actions { margin-top:9px; }
+  .br-inventory.has-health .br-inv-panel { padding-top:8px; padding-bottom:8px; }
+  .br-inventory.has-health .br-inv-panel-head { margin-bottom:4px; }
+  .br-inventory.has-health .br-inv-condition { margin-top:3px; }
+  .br-inventory.has-health .br-inv-actions { margin-top:7px; }
 }
 @media (prefers-reduced-motion:reduce) { .br-inv-notice { transition:none; } }
 `;
@@ -170,10 +192,20 @@ function itemIcon(type) {
 
 const percent = item => Math.max(0, Math.min(100, Math.ceil((item.charge || 0) / (ITEM_DEFS.torch.maxCharge || 180) * 100)));
 const quantity = item => Math.max(1, Math.min(ITEM_DEFS.paper?.maxStack || 10, Math.floor(item.quantity || 1)));
+const remainingTime = seconds => { const whole = Math.max(0, Math.ceil(seconds || 0)); return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`; };
 const nameOf = item => item ? ITEM_DEFS[item.type]?.name || item.type : 'Empty pocket';
 const text = (el, value) => { if (el.textContent !== value) el.textContent = value; };
 
-export function createInventoryHud({ host, onSelect, onUse, onDrop, onCombine, onOpen } = {}) {
+function heartIcon() {
+  const svg = document.createElementNS(NS, 'svg'), body = document.createElementNS(NS, 'polygon'), shine = document.createElementNS(NS, 'rect');
+  svg.setAttribute('viewBox', '-1 -1 12 10'); svg.setAttribute('class', 'br-inv-heart');
+  svg.setAttribute('shape-rendering', 'crispEdges'); svg.setAttribute('aria-hidden', 'true');
+  body.setAttribute('class', 'heart-body'); body.setAttribute('points', '1,0 4,0 4,1 6,1 6,0 9,0 9,1 10,1 10,4 9,4 9,5 8,5 8,6 7,6 7,7 6,7 6,8 4,8 4,7 3,7 3,6 2,6 2,5 1,5 1,4 0,4 0,1 1,1');
+  for (const [key, value] of Object.entries({ class:'heart-shine', x:2, y:1, width:2, height:1 })) shine.setAttribute(key, value);
+  svg.append(body, shine); return svg;
+}
+
+export function createInventoryHud({ host, onSelect, onUse, onDrop, onCombine, onRecharge, onOpen } = {}) {
   const id = ++instance;
   const style = h('style', { id:`backrooms-inventory-css-${id}` }, CSS); document.head.append(style);
   const titleId = `br-inventory-title-${id}`;
@@ -185,15 +217,18 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCombine, o
   const useLabel = h('span'), dropLabel = h('span', 'Drop');
   const use = h('button.br-inv-action.primary', { type:'button' }, useLabel, h('kbd', { 'aria-hidden':'true' }, 'Q'));
   const drop = h('button.br-inv-action', { type:'button' }, dropLabel, h('kbd', { 'aria-hidden':'true' }, 'G'));
-  const combineNote = h('p.br-inv-combine-note', { hidden:true }, 'Choose a flashlight');
+  const cameraTime = h('small');
+  const recharge = h('button.br-inv-action.br-inv-camera', { type:'button', hidden:true }, h('span', `Camera +${remainingTime(CAMERA_TUNING.batterySeconds)}`), cameraTime);
   const panel = h('section.br-inv-panel', { hidden:true, 'aria-labelledby':titleId },
     h('div.br-inv-panel-head', count, close),
     h('div.br-inv-detail', specimen, h('div', title, description, condition)),
-    h('div.br-inv-actions', use, drop), combineNote);
+    h('div.br-inv-actions', use, drop, recharge));
   const caption = h('div.br-inv-caption');
+  const hearts = Array.from({ length:4 }, heartIcon);
+  const health = h('div.br-inv-health', { hidden:true, role:'img', 'aria-label':'Health 4 of 4' }, ...hearts);
   const bar = h('div.br-inv-bar', { role:'group', 'aria-label':'Six inventory slots' });
   const noticeEl = h('div.br-inv-notice', { role:'status', 'aria-live':'polite', 'aria-atomic':'true' });
-  const el = h('div.br-inventory', { 'aria-label':'Inventory' }, panel, h('div.br-inv-pack', caption, bar), noticeEl);
+  const el = h('div.br-inventory', { 'aria-label':'Inventory' }, panel, h('div.br-inv-pack', h('div.br-inv-meta', health, caption), bar), noticeEl);
   (host || document.body).append(el);
   let snapshot = { slots:Array(6).fill(null), selected:0, activeTorch:null, revision:0 };
   let opened = false, combineFrom = null, combineId = null, noticeLeft = 0, previousFocus = null, disposed = false, detailType = null, signature = '';
@@ -209,26 +244,39 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCombine, o
   function activateSlot(i) {
     if (disposed) return;
     if (combineFrom !== null) {
+      if (blocked()) return;
       const result = onCombine?.(combineFrom, i);
       if (result?.ok) cancelCombine();
       return;
     }
     onSelect?.(i); setOpen(true);
   }
+  const blocked = () => !!snapshot.health?.dead || !!snapshot.camera?.depleted;
+  const canRecharge = () => !blocked() && !!snapshot.camera && snapshot.camera.remaining > 0 && snapshot.camera.remaining < snapshot.camera.capacity;
+  const canEat = () => !blocked() && !!snapshot.health && snapshot.health.current > 0 && snapshot.health.current < snapshot.health.max;
   function compatible(i) {
     const item = snapshot.slots[i];
-    return combineFrom !== null && i !== combineFrom && item?.type === 'torch' && item.charge < (ITEM_DEFS.torch.maxCharge || 180);
+    return !blocked() && combineFrom !== null && i !== combineFrom && item?.type === 'torch' && item.charge < (ITEM_DEFS.torch.maxCharge || 180);
   }
   function conditionOf(item) {
     if (item?.type === 'torch') return `${percent(item)}% charge${snapshot.activeTorch === item.id ? ' · on' : ' · off'}`;
     if (item?.type === 'chalk') return `${item.uses} mark${item.uses === 1 ? '' : 's'} left`;
-    if (item?.type === 'battery') return 'Restores charge to 100%';
+    if (item?.type === 'battery') return 'Fits flashlight or camera';
     if (item?.type === 'paper') return `${quantity(item)} / ${ITEM_DEFS.paper.maxStack} sheets`;
-    if (item?.type === 'snack') return `Restores ${ITEM_DEFS.snack.healAmount} health`;
+    if (item?.type === 'snack') return snapshot.health && snapshot.health.current >= snapshot.health.max ? 'Health is full' : `Restores ${ITEM_DEFS.snack.healAmount} health`;
     return '';
   }
   function redraw() {
     const selected = snapshot.slots[snapshot.selected];
+    health.hidden = !snapshot.health; el.classList.toggle('has-health', !!snapshot.health);
+    el.classList.toggle('is-combining', combineFrom !== null);
+    if (snapshot.health) {
+      const current = Math.max(0, Math.min(4, snapshot.health.current));
+      const label = `Health ${current} of ${snapshot.health.max}`;
+      if (health.getAttribute('aria-label') !== label) { health.setAttribute('aria-label', label); health.title = label; }
+      health.classList.toggle('is-low', current === 1);
+      hearts.forEach((heart, i) => heart.classList.toggle('is-filled', i < current));
+    }
     for (let i = 0; i < 6; i++) {
       const item = snapshot.slots[i], slot = slots[i], chosen = i === snapshot.selected, conditionText = conditionOf(item);
       slot.button.classList.toggle('is-selected', chosen);
@@ -248,24 +296,28 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCombine, o
     text(count, `POCKETS  ${snapshot.slots.filter(Boolean).length} / 6`);
     text(title, nameOf(selected));
     text(description, selected ? ITEM_DEFS[selected.type]?.description || '' : 'Pick up an object to carry it here.');
-    text(condition, opened && noticeLeft > 0 ? noticeEl.textContent : conditionOf(selected));
+    text(condition, opened && noticeLeft > 0 ? noticeEl.textContent : combineFrom !== null
+      ? snapshot.slots.some((_, i) => compatible(i)) ? 'Or choose a flashlight below.' : 'No flashlight needs a battery.' : conditionOf(selected));
     if (detailType !== (selected?.type || null)) { specimen.replaceChildren(...(selected ? [itemIcon(selected.type)] : [])); detailType = selected?.type || null; }
     const label = selected?.type === 'torch' ? snapshot.activeTorch === selected.id ? 'Switch off' : 'Switch on'
       : selected?.type === 'battery' ? 'Fit battery' : selected?.type === 'chalk' ? 'Mark floor' : selected?.type === 'snack' ? 'Eat' : 'Use';
     text(useLabel, combineFrom !== null ? 'Cancel' : label);
-    use.disabled = combineFrom === null && (!selected || ['paper', 'scissors', 'snack', 'balloon'].includes(selected.type) || (selected.type === 'torch' && selected.charge <= 0));
-    drop.disabled = !selected || combineFrom !== null;
-    combineNote.hidden = combineFrom === null;
-    text(combineNote, combineFrom === null ? '' : snapshot.slots.some((_, i) => compatible(i)) ? 'Choose a flashlight below.' : 'No flashlight needs a battery.');
+    use.disabled = blocked() || (combineFrom === null && (!selected || ['paper', 'scissors', 'balloon'].includes(selected.type) || (selected.type === 'snack' && !canEat()) || (selected.type === 'torch' && selected.charge <= 0)));
+    drop.disabled = blocked() || !selected || combineFrom !== null; drop.hidden = combineFrom !== null;
+    recharge.hidden = combineFrom === null; recharge.disabled = !canRecharge();
+    text(cameraTime, snapshot.camera ? `${remainingTime(snapshot.camera.remaining)} left` : 'Unavailable');
+    recharge.setAttribute('aria-label', snapshot.camera ? `Add ${CAMERA_TUNING.batterySeconds} seconds to camera; ${remainingTime(snapshot.camera.remaining)} remaining${snapshot.camera.remaining >= snapshot.camera.capacity ? ', battery full' : ''}` : 'Camera unavailable');
     if (opened && document.activeElement?.disabled && el.contains(document.activeElement)) slots[snapshot.selected].button.focus();
   }
   function update(next) {
     if (disposed || !next) return;
     snapshot = next;
     if (combineFrom !== null && snapshot.slots[combineFrom]?.id !== combineId) { combineFrom = null; combineId = null; }
-    // Charge changes every frame, but screen text and meters only change at
-    // whole percentages. Keep the same buttons so keyboard focus never jumps.
+    // Show whole charge percentages and camera seconds; cooldown ticks do not
+    // touch the health label. Keep the same buttons so focus never jumps.
     const key = JSON.stringify([snapshot.selected, snapshot.activeTorch, combineFrom, opened,
+      snapshot.health ? [snapshot.health.current, snapshot.health.max, snapshot.health.dead] : null,
+      snapshot.camera ? [Math.ceil(snapshot.camera.remaining), snapshot.camera.capacity, snapshot.camera.depleted, snapshot.camera.remaining >= snapshot.camera.capacity] : null,
       snapshot.slots.map(item => item ? [item.id, item.type, item.type === 'torch' ? percent(item) : item.type === 'paper' ? quantity(item) : item.uses] : null)]);
     if (key !== signature) { signature = key; redraw(); }
   }
@@ -280,7 +332,7 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCombine, o
       onOpen?.(true); redraw();
       queueMicrotask(() => {
         if (!opened || disposed) return;
-        const target = combineFrom !== null ? slots.find((_, i) => compatible(i))?.button : null;
+        const target = combineFrom !== null ? canRecharge() ? recharge : slots.find((_, i) => compatible(i))?.button : null;
         (target || (!use.disabled ? use : slots[snapshot.selected].button)).focus();
       });
     } else {
@@ -292,16 +344,16 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCombine, o
     }
   }
   function beginCombine(index = snapshot.selected) {
-    if (snapshot.slots[index]?.type !== 'battery') return false;
+    if (blocked() || snapshot.slots[index]?.type !== 'battery') return false;
     combineFrom = index; combineId = snapshot.slots[index].id;
     setOpen(true); redraw();
-    const target = slots.find((_, i) => compatible(i));
-    (target?.button || use).focus(); return true;
+    (canRecharge() ? recharge : slots.find((_, i) => compatible(i))?.button || use).focus(); return true;
   }
   function cancelCombine() { const had = combineFrom !== null; combineFrom = null; combineId = null; redraw(); return had; }
   close.addEventListener('click', () => setOpen(false));
   use.addEventListener('click', () => { if (combineFrom !== null) cancelCombine(); else onUse?.(); });
   drop.addEventListener('click', () => onDrop?.());
+  recharge.addEventListener('click', () => { if (combineFrom === null || !canRecharge()) return; const result = onRecharge?.(combineFrom); if (result?.ok) cancelCombine(); });
   function handleKey(e) {
     if (disposed || e.ctrlKey || e.metaKey || e.altKey) return false;
     const key = e.key.toLowerCase();

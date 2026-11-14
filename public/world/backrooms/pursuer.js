@@ -281,7 +281,7 @@ export function createStalkers(env) {
 
   function mascot(x, z, yaw, onPlinth) {
     pirate = Object.assign(makePirate(env.kit, R, level.pursuer?.face || 0), {
-      x, z, yaw, r: 0.26, tall: TALL, speed: 1.9, state: 'still', plinth: onPlinth, home: { x, z, yaw },
+      x, z, yaw, r: 0.26, tall: TALL, speed: 1.9, state: 'still', plinth: onPlinth, home: { x, z, yaw, plinth: onPlinth },
       met: 0, unseen: 0, rolled: false, chase: 0, rest: 0, noise: 0.5, tearIn: 2 + R() * 3, tearFor: 0, lit: 0,
       patience: R.range(2.2, 4.5), wakeAt: R.range(150, 260), stamina: R.range(60, 95), catchT: 0,
     });
@@ -441,17 +441,27 @@ export function createStalkers(env) {
         const now = Math.hypot(me.x - p.x, me.z - p.z);
         if (now < 6.5) env.interfere(0.42 * (1 - now / 6.5));
         if (now < 0.9 && Math.abs(w.floorY(p.x, p.z) - w.floorY(me.x, me.z)) < 0.6) {          // got you
-          const k = 0.62 / Math.max(now, 0.05);
-          const nx = me.x - (me.x - p.x) * k, nz = me.z - (me.z - p.z) * k;
-          if (w.free(nx, nz, 0.1)) { p.x = nx; p.z = nz; }
-          p.yaw = Math.atan2(me.x - p.x, me.z - p.z); p.state = 'caught'; p.catchT = 0;
-          p.hold(7);
-          if (p.card && !p.card.held && env.loot?.carried.card) {       // …and it has its card back: held up between you, where the tape cannot miss it
-            p.card.held = p.card.back = true; p.card.hang.visible = true; env.loot.forfeit();
-            p.arms[p.card.side].rotation.set(-2.5, 0, p.card.side ? -0.35 : 0.35); p.plumb();
+          const hit = env.health?.damage(1);
+          if (hit?.ok && !hit.dead) {
+            // A surviving encounter breaks its pursuit. The player keeps
+            // control, and the mascot cannot hit again during this retreat.
+            if (!elsewhere(p)) { p.x = p.home.x; p.z = p.home.z; p.yaw = p.home.yaw; p.plinth = p.home.plinth; }
+            p.state = 'rest'; p.rest = 14 + Math.random() * 10; p.chase = p.catchT = p.idle = p.tearFor = p.unseen = 0;
+            p.to = p.leg = null; p.rolled = false; p.hold(0);
+            env.interfere(.85); env.hud.glitch(.6); env.sound.play('thunk');
+          } else if (!hit || hit.ok) {
+            const k = 0.62 / Math.max(now, 0.05);
+            const nx = me.x - (me.x - p.x) * k, nz = me.z - (me.z - p.z) * k;
+            if (w.free(nx, nz, 0.1)) { p.x = nx; p.z = nz; }
+            p.yaw = Math.atan2(me.x - p.x, me.z - p.z); p.state = 'caught'; p.catchT = 0;
+            p.hold(7);
+            if (p.card && !p.card.held && env.loot?.carried.card) {       // …and it has its card back: held up between you, where the tape cannot miss it
+              p.card.held = p.card.back = true; p.card.hang.visible = true; env.loot.forfeit();
+              p.arms[p.card.side].rotation.set(-2.5, 0, p.card.side ? -0.35 : 0.35); p.plumb();
+            }
+            env.sound.play('thunk');
+            if (!hit) env.end('caught');                           // optional health already ended a fatal hit
           }
-          env.sound.play('thunk');
-          env.end('caught');
         } else if (p.chase > p.stamina && now > 8) { p.state = 'rest'; p.rest = 28 + Math.random() * 25; p.stamina = 45 + Math.random() * 40; }
       }
     }

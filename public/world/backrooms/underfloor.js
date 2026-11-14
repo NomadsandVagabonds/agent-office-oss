@@ -75,6 +75,12 @@ export function buildUnderfloor(c) {
       me.world.slow = .2; c.env.interfere(.48);
       state.pending.remaining -= dt;
       if (state.pending.remaining <= 0) {
+        const hit = c.env.health?.damage(1);
+        if (hit && (!hit.ok || hit.dead)) {
+          state.pending = null;
+          if (!hit.dead) me.world.slow = 1;
+          return;
+        }
         const safe = c.toWorld(state.pending.safe.x, state.pending.safe.z);
         c.env.player.warp(safe.x, safe.z); me.world.vx = me.world.vz = 0;
         state.recoveries++; state.pending = null;

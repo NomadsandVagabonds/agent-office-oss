@@ -3,7 +3,7 @@
 // that hum, seen through a camcorder, never the same twice.
 //
 //   const { reason } = await enterBackrooms(office, { name, seed });
-//   reason: 'exit' (you found the door) | 'caught' (something found you) | 'quit' (Esc)
+//   reason: 'exit' (the door) | 'caught' (something found you) | 'battery' (power lost) | 'quit' (Esc)
 //
 // This file is the conductor: it generates a level (gen.js), builds it
 // (world.js + rooms.js with kit.js), takes the screen through the stage's
@@ -25,6 +25,7 @@ import { createSound } from './sound.js';
 import { createStalkers } from './pursuer.js';
 import { createLoot, lootLeft } from './loot.js';
 import { createInventory } from './inventory.js';
+import { createSurvival } from './survival.js';
 
 const FOV = 62;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -55,7 +56,7 @@ let running = false;
 /**
  * @param office  the office object (stage, net, …)
  * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, dev?:object, onReady?:Function}} [opt]
- * @returns {Promise<{reason:'exit'|'caught'|'quit', kept:{card:boolean, coins:number[], told?:Promise<void>}}>}  kept: what you brought out (nothing,
+ * @returns {Promise<{reason:'exit'|'caught'|'battery'|'quit', kept:{card:boolean, coins:number[], told?:Promise<void>}}>}  kept: what you brought out (nothing,
  *          unless you left by the door); kept.told settles once the office has been told of it
  */
 export async function enterBackrooms(office, opt = {}) {
@@ -224,11 +225,12 @@ async function visit(office, opt) {
   }
 
   /* ---- the loop ---------------------------------------------------------------------- */
-  const END = { quit: 0.4, caught: 1.8, exit: 1.4 };
+  const END = { quit: 0.4, caught: 1.8, exit: 1.4, battery: 1.2 };
   const off = stage.onFrame((dt) => {
     if (state === 'loading' || state === 'done') return;
     const inspecting = !!env.inventory?.isOpen;
     if (!inspecting) time += dt;
+    env.survival?.update(dt, state === 'play' && !inspecting);
     const me = player.me;
     me.frozen = state !== 'play' || inspecting;
     if (!inspecting) {
@@ -265,7 +267,7 @@ async function visit(office, opt) {
     } else if (state === 'ending') {
       ending += dt;
       const k = clamp(ending / END[reason], 0, 1);
-      if (reason === 'quit') u.uBlack.value = k;
+      if (reason === 'quit' || reason === 'battery') u.uBlack.value = k;
       else if (reason === 'exit') u.uWhite.value = k * k;
       else { u.uSnow.value = clamp((k - 0.42) / 0.45, 0, 1); if (k > 0.45) u.uRoll.value += dt * (0.4 + k * 2.5); interference = Math.max(interference, 0.5 + 0.5 * k); }   // a look at what got you, then snow
       if (k >= 1) conclude();
@@ -281,6 +283,7 @@ async function visit(office, opt) {
     window.removeEventListener('blur', onBlur);
     if (document.pointerLockElement === canvas) document.exitPointerLock?.();
     env.inventory?.dispose();
+    env.survival?.dispose();
     hud.remove(); sound.stop();
     env.pursuer?.dispose?.();
     world?.dispose(); kit.dispose(); vhs.dispose();
@@ -295,6 +298,7 @@ async function visit(office, opt) {
     hud.hint(false);
     if (why === 'exit' && env.loot) kept = env.loot.bank();        // carried is only kept by leaving through the door
     if (why === 'caught') sound.play('static', { dur: 1.3 });
+    if (why === 'battery') { hud.flag('BATTERY', true); sound.play('static', { dur: .25, vol: .4 }); }
     if (state === 'loading') pendingQuit = true; else state = 'ending';
   };
   const visitOver = new Promise((resolve) => { resolveVisit = resolve; });
@@ -312,13 +316,19 @@ async function visit(office, opt) {
   if (pendingQuit) { conclude(); return visitOver; }
   player = createPlayer(world, camera, level.start);
   env.player = player;
-  if (opt.debug && opt.dev?.inventory) env.inventory = createInventory(env, {
-    canAct: () => state === 'play',
-    onOpen(open) {
-      onBlur(); player.input.dx = player.input.dy = 0; player.me.vx = player.me.vz = 0;
-      if (open && document.pointerLockElement === canvas) document.exitPointerLock?.();
-    },
-  });
+  if (opt.debug && opt.dev?.inventory) {
+    env.survival = createSurvival(env, {
+      canAct: () => state === 'play', isPaused: () => !!env.inventory?.isOpen, onEnd: why => finish(why),
+    });
+    env.health = env.survival.health; env.camera = env.survival.camera;
+    env.inventory = createInventory(env, {
+      canAct: () => state === 'play',
+      onOpen(open) {
+        onBlur(); player.input.dx = player.input.dy = 0; player.me.vx = player.me.vz = 0;
+        if (open && document.pointerLockElement === canvas) document.exitPointerLock?.();
+      },
+    });
+  }
   player.me.shake = vhs.level === 2 ? 1 : vhs.level === 1 ? 0.5 : 0.25;
   player.me.drop = 1.3;
   player.on('step', () => sound.play(world.current()?.footstep || 'step'));
@@ -329,7 +339,8 @@ async function visit(office, opt) {
 
   // a way for the dev page (and the curious) to poke at it
   const handle = {
-    level, world, player, vhs, hud, env, loot: env.loot, inventory: env.inventory, sketch: () => sketch(level), deck: DECK.map((a) => a.id),
+    level, world, player, vhs, hud, env, loot: env.loot, inventory: env.inventory, health: env.health, camera: env.camera,
+    sketch: () => sketch(level), deck: DECK.map((a) => a.id),
     /** Stand in a room: by archetype id or room number; x, z in the room's own frame (default: just inside its door). */
     goto(which, x, z, yaw, pitch = 0) {
       const def = level.rooms.find((r) => r.arch === which || r.kind === which || r.id === which);
