@@ -48,6 +48,10 @@ dogleg with a nearly identical side bay. Repeat these motifs across multiple
 spaces, with restrained differences. These are structural candidates, not new
 named attractions in the oddity deck. The proposed Waiting Room is deferred.
 
+The first [quiet maze study](QUIET_MAZE.md) now provides nine connected rooms
+using three repeated partition layouts, available only in the dev preview.
+It is a geometry and atmosphere candidate, not a change to default pacing.
+
 Gemini's room/creature/item slate is a useful catalogue of optional contributions.
 Keep its modular organization, but distinguish authored and tested candidates
 from proposed mechanics. Its hostile encounters, item dependencies and new

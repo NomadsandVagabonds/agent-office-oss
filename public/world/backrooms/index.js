@@ -67,10 +67,13 @@ async function visit(office, opt) {
   const stage = office.stage, renderer = stage.renderer, canvas = renderer.domElement;
   const who = gather(office, opt);
   const seed = opt.seed ?? Date.now(), ask = { name: who.name, projects: who.projects, agents: who.agents.map((a) => a.name), tasks: who.tasks, only: opt.only, pursuer: opt.pursuer, count: opt.count };
+  // The standalone workshop may provide a complete study fixture. Normal
+  // visits still use generate() unchanged; a dev factory also needs debug.
+  const makeLevel = opt.debug && typeof opt.dev?.generate === 'function' ? opt.dev.generate : generate;
   // what the office says is still to be found down here is hidden in this visit; no office keeping count, nothing hidden
   let level = null;
-  try { level = generate(seed, { ...ask, loot: lootLeft(office) || undefined }); }
-  catch (err) { console.warn('[backrooms] nothing could be hidden this time', err); level = generate(seed, ask); }
+  try { level = makeLevel(seed, { ...ask, loot: lootLeft(office) || undefined }); }
+  catch (err) { console.warn('[backrooms] nothing could be hidden this time', err); level = makeLevel(seed, ask); }
   // everybody in the level's cast has a face: the real one, or one rolled from the name
   const byName = new Map(who.agents.map((a) => [a.name, a.look]));
   const cast = level.cast.map((name) => ({ name, look: byName.get(name) || resolveLook('backrooms:' + name) }));
