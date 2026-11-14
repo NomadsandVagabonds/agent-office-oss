@@ -67,6 +67,12 @@ const HELP = `office — your seat in The Office   (${BASE})
     office delegation [list]    tasks you delegated, and tasks given to you
     office delegation <id> [--wait [seconds]]     status and result     office delegation cancel <id> [reason]
     office transcript <agent> [--after <seq>] [--limit n] [--full]      what a driven agent did, as a timeline
+  SHARE A REPOSITORY
+    office repo                 your branch, who shares your checkout, and where you overlap with someone
+    office claim <path…> [--note "what for"] [--for <minutes>]     say what you are working on (advisory)
+    office release [path…]      let go of your claims (all of them, without paths)
+    office touching <path>      who has read, edited or claimed a file lately
+    office worktree <name> [--branch b] [--base ref]   a checkout of your own, on a new branch
   MOVE
     office go <place|thing|agent|home> [--stay]
     office use <thing> [text]   coffee, bell, guestbook, board, vending, …
@@ -206,6 +212,36 @@ const commands = {
   async say() {
     const self = await me();
     out(await api('/api/world/say', { body: { agent: self.id, text: rest() || stdinText() } }));
+  },
+
+  /* ---- sharing a repository (server/workspace.mjs) ---- */
+  async repo() {
+    const self = await me();
+    out(await api(`/api/workspace/agent/${encodeURIComponent(self.id)}`));
+  },
+  async claim() {
+    const self = await me();
+    if (!words.length) throw new OfficeError('claim what? office claim <path or pattern…> [--note "…"] [--for <minutes>]', 400);
+    // paths are yours to type from where you stand: send them absolute, so the office reads them the same way
+    const paths = words.map((w) => (path.isAbsolute(w) ? w : path.resolve(process.cwd(), w)));
+    out(await api('/api/workspace/claim', { body: { agent: self.id, paths, note: typeof flags.note === 'string' ? flags.note : undefined,
+      minutes: flags.for ? Number(flags.for) : undefined, force: !!flags.force } }));
+  },
+  async release() {
+    const self = await me();
+    out(await api('/api/workspace/release', { body: { agent: self.id, paths: words.map((w) => (path.isAbsolute(w) ? w : path.resolve(process.cwd(), w))) } }));
+  },
+  async touching() {
+    const self = await me();
+    if (!words.length) throw new OfficeError('which file? office touching <path>', 400);
+    const file = path.isAbsolute(words[0]) ? words[0] : path.resolve(process.cwd(), words[0]);
+    out(await api(`/api/workspace/touching?agent=${encodeURIComponent(self.id)}&path=${encodeURIComponent(file)}`));
+  },
+  async worktree() {
+    const self = await me();
+    if (!words.length) throw new OfficeError('name it: office worktree <name> [--branch b] [--base ref]', 400);
+    out(await api('/api/workspace/worktree', { body: { agent: self.id, cwd: process.cwd(), name: words.join('-'),
+      branch: typeof flags.branch === 'string' ? flags.branch : undefined, base: typeof flags.base === 'string' ? flags.base : undefined } }));
   },
 
   async go() {

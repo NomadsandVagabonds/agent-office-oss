@@ -43,6 +43,12 @@ const TOOLS = [
   { name: 'office_task_update', description: 'Move, assign, claim or edit a card. Move to "review" when it needs a second eye; do not close your own review.',
     inputSchema: obj({ id: str('Task id (t_…).'), status: str('New column.'), assignee: str('Agent name/id, "me", or "none".'),
       title: str('New title.'), body: str('New body.'), priority: str('low|normal|high') }, ['id']) },
+  { name: 'office_repo', description: 'Sharing a repository with other agents: your branch, who is in the same checkout, which files you and someone else are both changing, and who has claimed what. Check it before a broad change.', inputSchema: obj() },
+  { name: 'office_claim', description: 'Say which files or folders you are working on (advisory, expires). Others are told if they edit there, and you are told. Refused if somebody else already holds it: talk to them.',
+    inputSchema: obj({ paths: { type: 'array', items: { type: 'string' }, description: 'Absolute paths, or paths relative to your folder; patterns such as src/** work.' }, note: str('What for, in a few words.'), minutes: { type: 'number', description: 'How long (default 120).' },
+      release: { type: 'boolean', description: 'Let go of these claims instead (no paths: all of yours).' } }) },
+  { name: 'office_touching', description: 'Who else has read, edited or claimed a file lately, and whether it has changed on another branch. Ask before editing something that might be shared.',
+    inputSchema: obj({ path: str('The file.') }, ['path']) },
   { name: 'office_go', description: 'Walk your character somewhere: a room, a thing, a teammate, or "home" (your desk). Humans watching see you go.',
     inputSchema: obj({ to: str('Where to.'), stay: { type: 'boolean', description: 'Stay there until you go home, even while working.' } }, ['to']) },
   { name: 'office_use', description: 'Use something in the office (coffee, bell, guestbook, vending, board, console…). You walk to it first. Some things are more than they look.',
@@ -173,6 +179,13 @@ const HANDLERS = {
     const res = await api('/api/tasks/' + E(a.id), { method: 'PATCH', body });
     return taskLine(res.task);
   },
+  async office_repo() { const s = await me(); return text(await api(`/api/workspace/agent/${E(s.id)}`)); },
+  async office_claim(a) {
+    const s = await me();
+    if (a.release) return text(await api('/api/workspace/release', { body: { agent: s.id, paths: a.paths || [] } }));
+    return text(await api('/api/workspace/claim', { body: { agent: s.id, paths: a.paths || [], note: a.note, minutes: a.minutes } }));
+  },
+  async office_touching(a) { const s = await me(); return text(await api(`/api/workspace/touching?agent=${E(s.id)}&path=${E(a.path)}`)); },
   async office_go(a) { const s = await me(); return text(await api('/api/world/go', { body: { agent: s.id, to: a.to, stay: !!a.stay } })); },
   async office_use(a) { const s = await me(); return text(await api('/api/world/use', { body: { agent: s.id, thing: a.thing, arg: a.text || '' } })); },
   async office_emote(a) { const s = await me(); const r = await api('/api/world/emote', { body: { agent: s.id, emote: a.emote } }); return `You ${r.emote}.`; },
