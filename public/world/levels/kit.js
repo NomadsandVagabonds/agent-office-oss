@@ -531,11 +531,18 @@ export function createWorld(office, spec = {}) {
     eye.x += (tx - eye.x) * k; eye.z += (tz - eye.z) * k;
     eye.y += (cam.height + floorY(at.x, at.z) - eye.y) * (instant ? 1 : ease(5, dt));
     const cp = Math.cos(cam.pitch);
-    camPos.set(eye.x + Math.sin(cam.yaw) * cp * cam.dist, eye.y + Math.sin(cam.pitch) * cam.dist, eye.z + Math.cos(cam.yaw) * cp * cam.dist);
-    if (cam.inside) { camPos.x = clamp(camPos.x, cam.inside.x0, cam.inside.x1); camPos.z = clamp(camPos.z, cam.inside.z0, cam.inside.z1); }
-    camPos.y = Math.max(camPos.y, floorY(camPos.x, camPos.z) + 0.35);        // never under a hill
-    if (cam.ceiling) camPos.y = Math.min(camPos.y, cam.ceiling);
-    camLook.copy(eye);
+    if (cam.first) {
+      // a level seen through your own eyes holds a shot too (w.focus): it leaves from where you stand and comes back
+      // to it, looking the way you were looking — not by way of a camera on a pole eight metres behind you
+      camPos.copy(eye);
+      camLook.set(eye.x - Math.sin(cam.yaw) * cp, eye.y - Math.sin(cam.pitch), eye.z - Math.cos(cam.yaw) * cp);
+    } else {
+      camPos.set(eye.x + Math.sin(cam.yaw) * cp * cam.dist, eye.y + Math.sin(cam.pitch) * cam.dist, eye.z + Math.cos(cam.yaw) * cp * cam.dist);
+      if (cam.inside) { camPos.x = clamp(camPos.x, cam.inside.x0, cam.inside.x1); camPos.z = clamp(camPos.z, cam.inside.z0, cam.inside.z1); }
+      camPos.y = Math.max(camPos.y, floorY(camPos.x, camPos.z) + 0.35);        // never under a hill
+      if (cam.ceiling) camPos.y = Math.min(camPos.y, cam.ceiling);
+      camLook.copy(eye);
+    }
     let fov = cam.fov;
     if (shot) shotLast = shot;
     shotMix = instant ? (shot ? 1 : 0) : shotMix + ((shot ? 1 : 0) - shotMix) * ease(4.5, dt);
@@ -546,7 +553,8 @@ export function createWorld(office, spec = {}) {
     }
     camera.position.copy(camPos); camera.lookAt(camLook);
     if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
-    avatar.root.visible = !(shot?.alone && shotMix > 0.35);
+    // through your own eyes you are not in the picture until the camera has stepped back from where your head is
+    avatar.root.visible = cam.first ? !shot?.alone && camPos.distanceTo(eye) > 0.8 : !(shot?.alone && shotMix > 0.35);
   }
 
   /* ---- every frame ------------------------------------------------------------------------------ */
