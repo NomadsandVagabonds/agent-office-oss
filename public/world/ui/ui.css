@@ -359,6 +359,11 @@ body.level #ui > *:not(.level):not(.story):not(.liftveil):not(.liftpanel):not(.p
 /* the one that should not be there: no engraving, a blank strip of tape put on crooked, a light with a loose wire */
 #ui .liftpanel .floorrow.fresh .cap { color: var(--accent-ink); background: var(--brass); box-shadow: inset 0 -4px 0 var(--brass-lo), 0 0 0 0 rgba(236, 208, 138, .7); animation: liftfresh 1.5s ease-out infinite; }
 @keyframes liftfresh { to { box-shadow: inset 0 -4px 0 var(--brass-lo), 0 0 0 12px rgba(236, 208, 138, 0); } }
+#ui .liftpanel .pips { display: inline-flex; align-items: flex-end; gap: 4px; margin-left: 12px; vertical-align: -2px; }
+#ui .liftpanel .pips i { width: 8px; height: 8px; border: 2px solid #4d5a52; }
+#ui .liftpanel .pips i.got { background: #f2c64a; border-color: #b98a1e; }
+#ui .liftpanel .pips i.card { width: 8px; height: 11px; margin-right: 3px; }
+#ui .liftpanel .pips i.card.got { background: #f3eedd; border-color: #17130c; box-shadow: inset 0 3px 0 #3f8fd0; }
 #ui .liftpanel .cardreader { display: flex; align-items: center; gap: 14px; margin-top: 12px; padding: 9px 8px 9px 11px; background: #0a0c0a; border: 2px solid var(--edge); box-shadow: inset 0 3px 0 rgba(0, 0, 0, .6); cursor: pointer; }
 #ui .liftpanel .cardreader .slot { flex: none; width: 38px; height: 6px; background: #000; border: 2px solid var(--brass-lo); box-shadow: 0 0 0 2px #17130c; }
 #ui .liftpanel .cardreader .lamps { display: flex; gap: 7px; }

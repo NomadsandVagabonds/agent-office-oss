@@ -7,7 +7,10 @@
 // Floors that need a keycard are not on the plate until one has lit them.
 // What stands for them is a card reader at the bottom with a row of unlit
 // lamps, one per floor still dark. A floor lit since you last rode glows
-// until somebody goes there. None of this is explained either.
+// until somebody goes there. Beside the name of each game floor is a row of
+// pips — one shaped like a card, one for each coin hidden there — that fill
+// in as those are found, so a floor with nothing left in it looks finished.
+// None of this is explained either.
 //
 //   const level = await openFloorPanel(office, { current: 'lobby' });   // a level, or null if you stepped back
 import { h } from './dom.js';
@@ -27,6 +30,12 @@ export function openFloorPanel(office, opt = {}) {
   const ctx = levelContext(office.net?.state?.world);
   const { levels, dark } = panelLevels(ctx);
   const fresh = new Set(ctx.fresh || []);
+  const loot = office.net?.state?.world?.game?.loot || {};
+  // what a game floor still hides, as pips: the keycard, then its coins
+  const pips = (level) => {
+    const l = level.card ? loot[level.id] : null;
+    return l ? h('span.pips', h('i.card' + (l.card ? '.got' : '')), Array.from({ length: l.of }, (_, i) => h('i' + ((l.coins || []).includes(i + 1) ? '.got' : '')))) : null;
+  };
   const parent = opt.parent || document.getElementById('ui') || document.body;
   let index = Math.max(0, levels.findIndex((l) => l.id === here.id));
   let pressed = false;
@@ -41,7 +50,7 @@ export function openFloorPanel(office, opt = {}) {
       h('span.cap', odd ? '' : level.floor),
       odd ? h('div.plate.blank') : h('div.plate',
         h('b', level.name, level.id === here.id ? h('i.here', 'you are here') : null),
-        h('small', level.blurb), h('span.kind', KIND[level.kind] || level.kind)));
+        h('small', level.blurb), h('span.kind', KIND[level.kind] || level.kind), pips(level)));
       return row;
     });
     // the reader: a slot, and a lamp for every floor that is still dark
