@@ -25,6 +25,7 @@ export const WALL_H = 2.6;             // the usual ceiling
 export const DOOR_H = 2.05;            // top of an ordinary doorway
 export const TILE = 0.6;               // ceiling tile
 export const RISE = 0.1625, RUN = 0.28; // one stair: up, and along
+import { WORKSHOP_DECK, WORKSHOP_STASH } from './workshop/deck.js';
 
 /* ---- a small seeded random source ------------------------------------------- */
 
@@ -204,6 +205,7 @@ export const DECK = [
     roll: (R, o) => ({ banner: R.pick(PHOTO).map((t) => fill(t, o, R)), who: R.shuffle(o.agents.map((_, i) => i)), back: R.int(4, 5), front: R.pick([4, 6]), drop: R.pick(['#5d7a9a', '#7a6a8a', '#6a8a7a', '#8a8478']) }) },
   { id: 'nested', name: 'Breakout Rooms', landmark: 'the room inside the room', w: [8, 9], d: [8, 9], ports: ['left', 'right', 'back'], weight: 1.5, lights: 'normal',
     roll: (R, o) => { const pr = R.pick(o.projects).toUpperCase(); return { turn: R.int(0, 3), z: R.range(-0.25, 0.1), plates: R.pick(SUBROOMS).map((t) => t.replace(/\{P\}/g, pr)) }; } },
+  ...WORKSHOP_DECK,
 ];
 export const ARCHETYPES = Object.fromEntries(DECK.map((a) => [a.id, a]));
 
@@ -932,6 +934,7 @@ export const STASH = {
   photo: (r) => about(0, -r.D / 2 + 1.3, 0.08),                                                 // on the cross of tape: your place in the photograph
   nested: (r, s) => { const d = [[0, 1], [1, 0], [0, -1], [-1, 0]][(r.params.turn + 2) % 4];     // in the room inside the room, round the side its own little room opens on
     return about(d[0] * 1.62 + d[1] * s * 1.2, r.params.z + d[1] * 1.62 + d[0] * s * 1.2, 0.05); },
+  ...WORKSHOP_STASH,
 };
 
 const AROUND = [0, 0, 1, 0, -1, 0, 0, 1, 0, -1, 1, 1, 1, -1, -1, 1, -1, -1];     // a spot, and the eight points round it
