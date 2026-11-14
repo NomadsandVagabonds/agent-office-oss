@@ -18,8 +18,8 @@ import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { startHarnessOffice as startOffice, waitFor, sleep } from './fixtures/harness-helpers.mjs';
-import { ROOT, tempDir } from './helpers.mjs';
+import { startHarnessOffice as startAnOffice, waitFor, sleep } from './fixtures/harness-helpers.mjs';
+import { ROOT, tempDir as makeTempDir } from './helpers.mjs';
 import { createCheckpoints, parseChanges, parseShortstat, repoKey, runGit } from '../server/harness/checkpoints.mjs';
 import { harnessSettings } from '../server/harness/settings.mjs';
 import { ENTRY_KINDS } from '../server/harness/transcript.mjs';
@@ -29,8 +29,16 @@ process.env.GIT_CONFIG_GLOBAL = os.devNull;
 process.env.GIT_CONFIG_SYSTEM = os.devNull;
 
 const usable = process.platform !== 'win32' && spawnSync('git', ['--version']).status === 0;
+
+// This suite fills its temporary folders with real repositories, copies of them, and once with tens of
+// thousands of objects — a few hundred megabytes a run. They are removed when it is done.
+const scratch = [];
+const tempDir = (prefix) => { const dir = makeTempDir(prefix); scratch.push(dir); return dir; };
+process.on('exit', () => { for (const dir of scratch) { try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* still there, then */ } } });
+
 // Test offices do not snapshot anything unless asked (test/helpers.mjs): a test that names no folder runs
 // its agent in this checkout, and no test may write into it. Here every session is given a repository of its own.
+const startOffice = (opt = {}) => startAnOffice({ ...opt, dir: opt.dir || tempDir('office-changes-data-') });
 const startHarnessOffice = (opt = {}) => startOffice({ ...opt, env: { OFFICE_CHECKPOINTS: '1', ...(opt.env || {}) } });
 
 // A `git` of our own in front of the real one. It does what git does, but can be told to dawdle — a file
