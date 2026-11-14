@@ -98,8 +98,8 @@ New rooms go in `MORE_DECK` in `deck2.js`.
 | `id` | required | lower-case words joined by hyphens. It is also the file name and what the dev page calls the room |
 | `name` | required | its title on the dev page's plan. Never shown in the level |
 | `landmark` | required | how somebody lost down here would give directions past it: "the board with one card" |
-| `w`, `d` | required | `[fewest, most]` whole metres: across the wall you come in by, and deep. 3 to 20 |
-| `h` | | `[lowest, highest]` ceiling in metres, if not the usual one. 2.3 to 9 |
+| `w`, `d` | required | `[fewest, most]` whole metres: across the wall you come in by, and deep. 3 to 20; a set piece (`big`) may go to 28 |
+| `h` | | `[lowest, highest]` ceiling in metres, if not the usual one. 2.3 to 9; a set piece may go to 12 |
 | `ports` | required | which of `back`, `left`, `right` may be given one more doorway, in the middle of the wall, so that the room can lie on a path. `[]` makes it a dead end. Never `front`: that is the way in |
 | `weight` | required | how often it is dealt. 1 is ordinary; 3 at most |
 | `lights` | required | what the ceiling does: `normal` (as the floor's theme has it), `dim` (about half the tubes out), `entry` (lit only near the door you came in by), `one` (a single tube), `dark` (none: the room lights itself) |
@@ -138,9 +138,10 @@ looking toward `back` at `z = −D/2`. The generator turns the room to face
 whichever way the plan needs; you never see that.
 
 A room may import `three`, the level's own modules (`../kit.js`, `../bits.js`,
-`../gen.js`, …), the voxel kit (`../../vox/`) and the office's props
-(`../../props/`). Nothing else, nothing from the network, and it keeps nothing
-in the browser's storage. A test reads the file to see. A room too big for one
+`../gen.js`, …), the voxel kit (`../../vox/`), the office's props
+(`../../props/`) and the office's people (`../../avatar/`, for a figure built
+the way the colleagues upstairs are). Nothing else, nothing from the network,
+and it keeps nothing in the browser's storage. A test reads the file to see. A room too big for one
 file keeps the rest in a folder of its own, `rooms/<id>/`, and imports it from
 there (`./<id>/crates.js`): `rooms/` itself holds one file to a room and
 nothing that is nobody's.
