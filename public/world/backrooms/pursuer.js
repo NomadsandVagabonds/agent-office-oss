@@ -3,11 +3,15 @@
 // dummy, arms held out from its sides, with a face that did not come out right
 // and is not the same face the next time you look. Once you have met it and
 // turned your back it comes after you, but only ever while you are not
-// looking: watch it and it is a mannequin. Walk into it while you watch and it
-// was never there. Let it reach you from behind and the tape ends ('caught').
+// looking: watch it and it is a mannequin. Across a room. It has a body, and
+// nobody walks through it; and the camcorder cannot hold a picture inside
+// arm's reach of it. There the tape tears, and it moves in the torn frames
+// (reach.js): run past and you lose a frame, stand beside it and it has you,
+// watched or not. Let it reach you from behind and the tape ends ('caught').
 // While the office's keycard for this place has not been found (loot.js), the
 // mascot is holding it: on a loop of ribbon, from one hand, held out. Walk up
-// and take it — which it notices, the way it notices being looked at.
+// and take it — from inside its reach, so be quick — which it notices, the
+// way it notices being looked at.
 // Stairs are no way of losing it. If it is after you when you leave its
 // floor, then some time after you land on the next one there is a second
 // thump under the same hole in the ceiling (env.carry: what it was doing, and
@@ -19,9 +23,10 @@ import { keycard } from '../props/loot.js';
 import { Batch, lamp, lin, drawText } from './kit.js';
 import { makeRng, RISE, RUN } from './gen.js';
 import { P, clamp, turnTo } from './bits.js';
+import { REACH, calm, beside } from './reach.js';
 
 const SC = 1.25, S = 0.025 * SC;                 // sculpted chunkier than the furniture: one voxel is 3.1 cm
-const TALL = 1.62, PLINTH = 0.16;
+const TALL = 1.62, PLINTH = 0.16, BODY = 0.3;        // BODY: how much floor it takes up, as a radius (with yours, that is REACH.touch)
 const SKIN = '#7ea04a', SKIN_D = '#56733a', BEARD = '#1e1a1c', FELT = '#4d311d', BRAID = '#b39245', COAT = '#b9923a', SHIRT = '#2c8a79';
 const BELT = '#221a16', GOLD = '#e2ba48', SASH = '#7f7392', BOOT = '#2b1d15', CLOTH = '#393843';
 const CARD = 0.02;                               // metres to a voxel of the keycard in its hand: a size down from the office's, or it would be a placard
@@ -199,7 +204,7 @@ export function createStalkers(env) {
   const level = env.level, R = makeRng(`${level.seed}/pursuer`);
   const W = () => env.world;
   const hiddenAt = (x, z, r = 0.6) => !env.sees(x, z, { radius: r, margin: 0.2, far: 40 });
-  const stand = (a, x, z) => W().free(x, z, a.r) && W().headroom(x, z) >= a.tall;
+  const stand = (a, x, z) => W().free(x, z, a.r, { ghost: true }) && W().headroom(x, z) >= a.tall;
   const shy = (rt) => !rt || rt.fold || !!rt.clip || rt.def.crawl || rt.def.H < 1.7;      // rooms it will not stop in
   const run = (d) => (d && d.sill > 0.01 ? (Math.round(d.sill / RISE) - 1) * RUN : 0);
   let pirate = null, follower = null;
@@ -288,6 +293,7 @@ export function createStalkers(env) {
       x, z, yaw, r: 0.26, tall: TALL, speed: 1.9, state: 'still', plinth: onPlinth, home: { x, z, yaw },
       met: 0, unseen: 0, rolled: false, chase: 0, rest: 0, noise: 0.5, tearIn: 2 + R() * 3, tearFor: 0, lit: 0,
       patience: R.range(2.2, 4.5), wakeAt: R.range(150, 260), stamina: R.range(60, 95), catchT: 0,
+      near: calm(), body: { x, z, r: BODY },
     });
     pirate.group.position.set(x, onPlinth ? PLINTH : 0, z); pirate.group.rotation.y = yaw;
     return pirate;
@@ -362,7 +368,7 @@ export function createStalkers(env) {
   const hand = new THREE.Vector3();
   /** Something to press E at: the card, wherever the hand holding it has got to. Taking it is noticed. */
   function offer(p) {
-    p.card.use = { r: 1.2, wx: p.x, wz: p.z, room: null, when: () => p.card.held && p.state !== 'caught' && p.group.visible,
+    p.card.use = { r: 0.85, wx: p.x, wz: p.z, room: null, when: () => p.card.held && p.state !== 'caught' && p.group.visible,
       use: () => {
         p.card.held = false; p.card.hang.visible = false;             // (the arm stays where it was: it is being watched)
         env.loot?.pocket('card');
@@ -395,20 +401,28 @@ export function createStalkers(env) {
     p.state = 'awake'; p.chase = 0; p.met = 1;
     return true;
   }
-  /** Somewhere else entirely, out of sight. */
-  function elsewhere(p) {
-    const me = env.player.me, here = W().roomAt(me.x, me.z), dist = W().distances(here.id);
-    const rooms = W().rooms.filter((rt) => !shy(rt) && (dist.get(rt.id) ?? 9) >= 2);
-    for (let i = 0; i < 60 && rooms.length; i++) {
-      const rt = rooms[Math.floor(Math.random() * rooms.length)], x = rt.rect.x0 + 0.6 + Math.random() * (rt.rect.x1 - rt.rect.x0 - 1.2), z = rt.rect.z0 + 0.6 + Math.random() * (rt.rect.z1 - rt.rect.z0 - 1.2);
-      if (stand(p, x, z) && hiddenAt(x, z, 1)) { p.x = x; p.z = z; p.plinth = false; p.to = null; p.leg = null; return true; }
+  /** It has you: face to face, its card back in its hand if you had taken it, and the tape ends. */
+  function seize(p) {
+    const w = W(), me = env.player.me, now = Math.hypot(me.x - p.x, me.z - p.z);
+    const k = REACH.touch / Math.max(now, 0.05);
+    const nx = me.x - (me.x - p.x) * k, nz = me.z - (me.z - p.z) * k;
+    if (w.free(nx, nz, 0.1, { ghost: true })) { p.x = nx; p.z = nz; }
+    p.plinth = false;
+    p.yaw = Math.atan2(me.x - p.x, me.z - p.z); p.state = 'caught'; p.catchT = 0;
+    p.hold(7);
+    if (p.card && !p.card.held && env.loot?.carried.card) {       // …and it has its card back: held up between you, where the tape cannot miss it
+      p.card.held = p.card.back = true; p.card.hang.visible = true; env.loot.forfeit();
+      p.arms[p.card.side].rotation.set(-2.5, 0, p.card.side ? -0.35 : 0.35); p.plumb();
     }
-    return false;
+    p.group.position.set(p.x, w.floorY(p.x, p.z), p.z); p.group.rotation.y = p.yaw;
+    env.sound.play('thunk');
+    env.end('caught');
   }
 
   function haunt(p, dt) {
     const w = W(), me = env.player.me, dx = me.x - p.x, dz = me.z - p.z, d = Math.hypot(dx, dz);
     p.group.visible = drawn(p);
+    if (!w.bodies.includes(p.body)) w.bodies.push(p.body);            // it has a body: nobody walks through it
     if (p.state === 'caught') {                                       // the last thing on the tape
       p.catchT += dt;
       me.yaw += turnTo(me.yaw, Math.atan2(dx, dz)) * (1 - Math.exp(-16 * dt));
@@ -425,13 +439,26 @@ export function createStalkers(env) {
       // a bad frame now and then: for an instant the head is not where it was
       p.tearIn -= dt;
       if (p.tearIn < 0 && d < 9) { p.tearIn = 1.2 + Math.random() * 4.5; p.tearFor = 0.06 + Math.random() * 0.1; env.interfere(0.3); }
-      // walk into it with your eyes open and it was never there
-      if (p.state === 'awake' && d < 0.62) {
-        env.interfere(1); env.hud.glitch(0.8); env.sound.play('static', { dur: 0.3, vol: 0.7 });
-        if (!elsewhere(p)) { p.x = p.home.x; p.z = p.home.z; }
-        p.state = 'rest'; p.rest = 14 + Math.random() * 10; p.tearFor = 0;
+      // inside arm's reach the tape will not hold: it tears, and it moves in the torn frames (reach.js)
+      const n = p.near = beside(p.near, dt, d);
+      if (d < REACH.arm + 1.4) env.interfere(Math.max(n.noise * 0.75, 0.3 * (1 - (d - REACH.arm) / 1.4)));
+      if (n.tear) {
+        env.interfere(1); env.hud.glitch(0.5); env.sound.play('static', { dur: 0.22, vol: 0.8 }); env.play('creak', p.x, p.z, 4);
+        p.tearFor = 0.16; p.tearIn = 1.5;
+        p.face = (p.face + 1 + Math.floor(Math.random() * (p.faces.length - 1))) % p.faces.length;
+        if (p.state !== 'awake') { p.state = 'awake'; p.chase = 0; p.met = 1; }          // it has noticed
+        // a little nearer, an arm a little higher
+        if (p.plinth && n.tears >= 2) {
+          const x = p.home.x + (dx / d) * 0.8, z = p.home.z + (dz / d) * 0.8;
+          if (stand(p, x, z) && Math.hypot(me.x - x, me.z - z) > REACH.touch) { p.x = x; p.z = z; p.plinth = false; }
+        } else if (!p.plinth && d > REACH.touch + 0.04) stride(p, me.x, me.z, Math.min(0.3, d - REACH.touch - 0.02));
+        if (!p.plinth) p.yaw = Math.atan2(me.x - p.x, me.z - p.z);
+        p.hold(n.tears <= 1 ? 3 + Math.floor(Math.random() * 2) : n.tears === 2 ? 5 : 7 + Math.floor(Math.random() * 2), p.plinth ? clamp(turnTo(p.yaw, toMe), -1.3, 1.3) : 0);
+        if (n.grab) seize(p);
       }
     } else {
+      p.near = beside(p.near, dt, Infinity);                            // (unwatched it needs no torn frames to move in)
+      if (d < REACH.arm && p.state !== 'awake' && p.group.visible) { p.state = 'awake'; p.chase = 0; p.met = 1; }       // …and a back turned this close is all the invitation it needs
       p.unseen += dt;
       const step = dt;
       if (p.unseen > 0.3 && !p.rolled) {                              // every time you look back: another face, another way of standing
@@ -464,17 +491,7 @@ export function createStalkers(env) {
         const now = Math.hypot(me.x - p.x, me.z - p.z);
         if (now < 6.5) env.interfere(0.42 * (1 - now / 6.5));
         if (now < 0.9 && Math.abs(w.floorY(p.x, p.z) - w.floorY(me.x, me.z)) < 0.6) {          // got you
-          const k = 0.62 / Math.max(now, 0.05);
-          const nx = me.x - (me.x - p.x) * k, nz = me.z - (me.z - p.z) * k;
-          if (w.free(nx, nz, 0.1)) { p.x = nx; p.z = nz; }
-          p.yaw = Math.atan2(me.x - p.x, me.z - p.z); p.state = 'caught'; p.catchT = 0;
-          p.hold(7);
-          if (p.card && !p.card.held && env.loot?.carried.card) {       // …and it has its card back: held up between you, where the tape cannot miss it
-            p.card.held = p.card.back = true; p.card.hang.visible = true; env.loot.forfeit();
-            p.arms[p.card.side].rotation.set(-2.5, 0, p.card.side ? -0.35 : 0.35); p.plumb();
-          }
-          env.sound.play('thunk');
-          env.end('caught');
+          seize(p);
         } else if (p.chase > p.stamina && now > 8) { p.state = 'rest'; p.rest = 28 + Math.random() * 25; p.stamina = 45 + Math.random() * 40; }
       }
     }
@@ -483,6 +500,7 @@ export function createStalkers(env) {
     if (slip !== p.slip || !seen) { p.slip = slip; p.show(); }
     p.group.position.set(p.x, w.floorY(p.x, p.z) + (p.plinth ? PLINTH : 0), p.z);
     p.group.rotation.y = p.yaw;
+    p.body.x = p.x; p.body.z = p.z;
     if (p.card?.use && p.card.held) reach(p);
     p.lit -= dt;
     if (p.lit < 0 && p.group.visible) { p.lit = 0.2; p.light(w.lightAt(p.x, p.z, 1.0)); }
@@ -533,6 +551,6 @@ export function createStalkers(env) {
     at() { return pirate ? { x: pirate.x, z: pirate.z, state: pirate.state, room: W()?.roomAt(pirate.x, pirate.z)?.id ?? null, face: pirate.face, pose: pirate.pose, card: pirate.card ? pirate.card.held : null } : null; },
     get follower() { return follower ? { x: follower.x, z: follower.z } : null; },
     get figure() { return pirate; },
-    dispose() { pirate?.group.removeFromParent(); follower?.g.removeFromParent(); pirate = null; follower = null; },
+    dispose() { if (pirate) { const i = W()?.bodies.indexOf(pirate.body); if (i >= 0) W().bodies.splice(i, 1); } pirate?.group.removeFromParent(); follower?.g.removeFromParent(); pirate = null; follower = null; },
   };
 }

@@ -21,11 +21,13 @@ test('a deck entry says what the generator needs to know, and none of it is out 
     const say = (what) => `${a.id}: ${what}`;
     assert.match(a.id, /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, say('an id is lower-case words joined by hyphens'));
     for (const key of ['name', 'landmark']) assert.ok(typeof a[key] === 'string' && a[key].trim().length > 1, say(`it has a ${key}`));
+    // (a set piece — `big`, or a room with a view — may be larger than anything else: it is the only one on its floor)
+    const most = isBig(a) ? 28 : 20, tallest = isBig(a) ? 12 : 9;
     for (const key of ['w', 'd']) {
       assert.ok(Array.isArray(a[key]) && a[key].length === 2 && a[key].every(Number.isInteger), say(`${key} is [fewest, most] whole metres`));
-      assert.ok(a[key][0] >= 3 && a[key][0] <= a[key][1] && a[key][1] <= 20, say(`${key} is between 3 and 20 metres, smaller first`));
+      assert.ok(a[key][0] >= 3 && a[key][0] <= a[key][1] && a[key][1] <= most, say(`${key} is between 3 and ${most} metres, smaller first`));
     }
-    if (a.h !== undefined) assert.ok(Array.isArray(a.h) && a.h.length === 2 && a.h[0] >= 2.3 && a.h[0] <= a.h[1] && a.h[1] <= 9, say('h is [lowest, highest] ceiling: 2.3 to 9 metres'));
+    if (a.h !== undefined) assert.ok(Array.isArray(a.h) && a.h.length === 2 && a.h[0] >= 2.3 && a.h[0] <= a.h[1] && a.h[1] <= tallest, say(`h is [lowest, highest] ceiling: 2.3 to ${tallest} metres`));
     assert.ok(Array.isArray(a.ports) && a.ports.every((p) => ['back', 'left', 'right'].includes(p)) && new Set(a.ports).size === a.ports.length, say('ports are walls that may take one more doorway: back, left, right (never front: that is the way in)'));
     assert.ok(Number.isFinite(a.weight) && a.weight > 0 && a.weight <= 3, say('weight is how often it is dealt: above 0, 3 at most'));
     assert.ok(['normal', 'entry', 'dim', 'dark', 'one'].includes(a.lights), say('lights is normal, entry, dim, dark or one'));
@@ -63,7 +65,7 @@ test('a room in a file of its own: the file is named for it, exports build(c), b
     }
     // what it imports is the level's own modules, the voxel kit, and three
     for (const [, from] of src.matchAll(/^import\s[^'"]*['"]([^'"]+)['"]/gm)) {
-      assert.ok(from === 'three' || /^\.\.\/(?!\.\.\/)[\w./-]+\.js$/.test(from) || /^\.\.\/\.\.\/(vox|props)\/[\w./-]+\.js$/.test(from) || /^\.\/[\w./-]+\.js$/.test(from), `${module} imports ${from}: a room uses three, the level's own modules (../), the voxel kit (../../vox/) and the office's props (../../props/)`);
+      assert.ok(from === 'three' || /^\.\.\/(?!\.\.\/)[\w./-]+\.js$/.test(from) || /^\.\.\/\.\.\/(vox|props|avatar)\/[\w./-]+\.js$/.test(from) || /^\.\/[\w./-]+\.js$/.test(from), `${module} imports ${from}: a room uses three, the level's own modules (../), the voxel kit (../../vox/), the office's props (../../props/) and its people (../../avatar/)`);
     }
   }
   for (const f of files) assert.ok(named.has(`./rooms/${f}`), `rooms/${f} is nobody's: no deck entry names it`);

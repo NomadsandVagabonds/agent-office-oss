@@ -9,10 +9,13 @@ lean on things.
 It is a level called the Backrooms: yellow rooms that hum, seen through a
 camcorder, generated from a seed and never the same twice. A visit goes down
 through three to five floors, each a different kind of place, by a stairwell
-at the far end of each. On the last floor there is no door. There is a
-stretch of wall that somebody has marked with tape, and it gives if you lean
-on it, the way the first one did. What you find on the way (tapes, a keycard)
-is only yours if you get out. In some visits something follows you.
+at the far end of each. On the last floor there is no door. The fire stairs
+run out at a wall somebody has papered over, taped a door on, and camped
+beside; it gives if you lean on it, the way the first one did. Other walls
+carry the same tape, and are only walls: lean on one and it knocks back. What
+you find on the way (tapes, a keycard) is only yours if you get out. In some
+visits something follows you: a shop dummy for as long as you watch it from
+across a room, and not safe to stand beside, watched or not.
 
 Everything is in `public/world/backrooms/`. Nothing in it needs a build step,
 a dependency or the network.
@@ -95,8 +98,8 @@ New rooms go in `MORE_DECK` in `deck2.js`.
 | `id` | required | lower-case words joined by hyphens. It is also the file name and what the dev page calls the room |
 | `name` | required | its title on the dev page's plan. Never shown in the level |
 | `landmark` | required | how somebody lost down here would give directions past it: "the board with one card" |
-| `w`, `d` | required | `[fewest, most]` whole metres: across the wall you come in by, and deep. 3 to 20 |
-| `h` | | `[lowest, highest]` ceiling in metres, if not the usual one. 2.3 to 9 |
+| `w`, `d` | required | `[fewest, most]` whole metres: across the wall you come in by, and deep. 3 to 20; a set piece (`big`) may go to 28 |
+| `h` | | `[lowest, highest]` ceiling in metres, if not the usual one. 2.3 to 9; a set piece may go to 12 |
 | `ports` | required | which of `back`, `left`, `right` may be given one more doorway, in the middle of the wall, so that the room can lie on a path. `[]` makes it a dead end. Never `front`: that is the way in |
 | `weight` | required | how often it is dealt. 1 is ordinary; 3 at most |
 | `lights` | required | what the ceiling does: `normal` (as the floor's theme has it), `dim` (about half the tubes out), `entry` (lit only near the door you came in by), `one` (a single tube), `dark` (none: the room lights itself) |
@@ -135,9 +138,10 @@ looking toward `back` at `z = −D/2`. The generator turns the room to face
 whichever way the plan needs; you never see that.
 
 A room may import `three`, the level's own modules (`../kit.js`, `../bits.js`,
-`../gen.js`, …), the voxel kit (`../../vox/`) and the office's props
-(`../../props/`). Nothing else, nothing from the network, and it keeps nothing
-in the browser's storage. A test reads the file to see. A room too big for one
+`../gen.js`, …), the voxel kit (`../../vox/`), the office's props
+(`../../props/`) and the office's people (`../../avatar/`, for a figure built
+the way the colleagues upstairs are). Nothing else, nothing from the network,
+and it keeps nothing in the browser's storage. A test reads the file to see. A room too big for one
 file keeps the rest in a folder of its own, `rooms/<id>/`, and imports it from
 there (`./<id>/crates.js`): `rooms/` itself holds one file to a room and
 nothing that is nobody's.
@@ -250,8 +254,8 @@ copies the level's own page (`tools/backrooms-sample/index.html`: one screen,
 nothing on it but the level) and every module it needs into one folder that
 anything can serve. It follows the imports, and includes every room that lives
 in a file of its own. three.js comes from a CDN there, at the vendored
-version. The first tape on that page is always seed 7; after that, a different
-building every time.
+version. Every tape on that page is a different building, as every visit from
+the office is: the seed is the clock, and no building is ever given twice.
 
 ## Where things are
 
@@ -266,10 +270,10 @@ building every time.
 | `world.js` | builds a generated floor: the toolbox (`roomContext`), collision, the doorway check |
 | `kit.js` | meshes, baked light, textures |
 | `themes.js` | what each kind of floor is like |
-| `stairwell.js`, `thin.js`, `marks.js`, `leaving.js` | the way down, the wall that gives, the marks on it and on walls that are only walls, and what the camcorder sees as you leave |
+| `stairwell.js`, `thin.js`, `marks.js`, `leaving.js` | the way down, and the taped door at the bottom of the last of it; the wall that gives and the walls that knock back; where the marks go, and the rule for leaning (`lean`, `answer`); what the camcorder sees as you leave |
 | `traces.js` | what earlier visitors left |
 | `loot.js` | tapes and the keycard: where they hide, what is kept |
-| `pursuer.js` | what follows you |
+| `pursuer.js`, `reach.js` | what follows you, and the rule for being within arm's reach of it (pure: the tape tears, and it moves in the torn frames) |
 | `player.js`, `input.js`, `hud.js`, `vhs.js`, `sound.js` | walking, keys and touch, the camcorder, the tape, the hum |
 | `../levels/basement.js` | the floor above it all, and the wall |
 | `../dev/backrooms.js` | the level's own page |
