@@ -8,8 +8,11 @@ marks and invented freight labels are part of the crate surfaces.
 
 The room is a tall warehouse that retains office wallpaper, carpet, fluorescent
 ceiling tiles and a familiar packing desk. Wooden pallet crates form a seeded
-maze. The two workers alternate between embracing, collecting GPUs and loading
-an open crate. Arrival briefly startles them. They watch and slowly approach,
+maze. A tall, lopsided heap of graphics cards buries the packing desk and tipped
+office furniture. Loose cards spill around its base, with an accessible low
+edge where the workers collect them. The two workers alternate between
+embracing, collecting GPUs and loading an open crate. Arrival briefly startles
+them. They watch and slowly approach,
 then lose interest and resume work even if the player stays. They never attack,
 block movement, leave their room or change the player's rewards.
 
@@ -58,6 +61,7 @@ reports the current behavior and actor positions. This adds no production HUD.
 - `freight-layout.js`: pure maze, crate, workstation and coin-clearance layout.
 - `rooms5.js`: room construction and concealed walk-in passage.
 - `freight-crates.js`: seeded weathered timber and handling-mark atlases.
+- `freight-hoard.js`: batched, tilted GPU heap and buried catalogue furniture.
 - `freight-figures.js`: original articulated voxel figures and GPU models.
 - `freight-behavior.js`: pure attention/choreography state and local navigation.
 - `freight-duo.js`: posing, movement and room lifecycle integration.
@@ -76,6 +80,13 @@ at their workstation before advancing, so a GPU cannot disappear mid-route.
 Room-local grid routes respect static crate collision; figures remain
 non-solid, stop short of the player and use a short follow leash. Ending freezes
 the choreography, and leaving cancels attention. GPU/model counts are fixed.
+
+The hoard contains 494 individual cards and four buried/protruding catalogue
+props, rising to 3.68 m. It has a reserved footprint behind the pickup line,
+separate from the open loading crate. Rotated models are fitted to that
+footprint before batching; the heap uses one static collider and the existing
+voxel batch. The cards share one cached model (211,432 GPU triangles total),
+with no individual draw calls or per-frame physics.
 
 The expanded deck exposed an existing decorative-pillar placement issue at
 seed 15851: a pillar in front of a level doorway overlapped another doorway's
@@ -101,6 +112,12 @@ maximum footprints, actual player-controller traversal, blocked front entry,
 repeat crate use, frozen/re-entry state and 120 seconds of character behavior.
 Those builds produced no console errors or room-reachability warnings, and the
 actors completed every phase without crossing crate colliders.
+
+The enlarged hoard was rechecked across all four rotations, including the
+minimum and maximum room footprints. The workers completed their routines,
+both back-entry portal uses worked, and the closed front remained blocked.
+The final heap bounds fit the authored footprint and ceiling clearance;
+its cards and furniture add no new geometry batches or textures.
 
 The last full repository suite run reported 232/237 passing (five failed test
 records, including parent suites). Failures are outside Backrooms: a macOS

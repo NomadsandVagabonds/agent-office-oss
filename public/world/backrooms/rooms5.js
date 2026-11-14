@@ -5,6 +5,7 @@ import { freightLayout } from './freight-layout.js';
 import { installFreightDuo } from './freight-duo.js';
 import { addGPU } from './freight-figures.js';
 import { createFreightWear } from './freight-crates.js';
+import { installFreightHoard } from './freight-hoard.js';
 
 const tint = (rgb, k) => rgb.map((v) => v * k);
 
@@ -89,13 +90,13 @@ function freight(c) {
 
   // Familiar office furniture, repurposed as a packing bench. All large
   // furniture stays behind the pair's reserved floor; the center is clear.
-  const desk = c.prop('desk', work.table.x, work.table.z, { rot: Math.PI });
+  const desk = c.prop('desk', work.table.x, work.table.z, { rot: Math.PI, solid: false });
   const top = desk?.top || 0.75;
   c.prop('crt', work.table.x - 0.48, work.table.z - 0.06, { y: top, rot: Math.PI, solid: false, shadow: false });
   c.prop('keyboard', work.table.x - 0.4, work.table.z + 0.24, { y: top + 0.01, rot: Math.PI, solid: false, shadow: false });
   c.prop('desklamp', work.table.x + 0.63, work.table.z - 0.22, { y: top, solid: false, shadow: false });
-  addGPU(c, work.table.x + 0.28, top + 0.015, work.table.z + 0.04, { rot: 0.15 });
-  addGPU(c, work.table.x + 0.28, top + 0.125, work.table.z + 0.04, { rot: 0.08 });
+  const hoard = installFreightHoard(c, work);
+  c.solid(work.hoard.x0, work.hoard.z0, work.hoard.x1, work.hoard.z1, { tall: true });
   crate(c, work.crate, { openTop: true, wear });
   for (const dx of [-0.32, 0.32]) for (const dz of [-0.24, 0.18]) addGPU(c, work.crate.x + dx, 0.48, work.crate.z + dz);
   c.prop('cabinet', -c.W / 2 + 1.45, c.D / 2 - 0.5, { rot: Math.PI });
@@ -104,7 +105,7 @@ function freight(c) {
   // Packing debris is texture and silhouette, not a carpet of colliders.
   for (let i = 0; i < 7; i++) c.paper(work.crate.x + c.R.range(-0.8, 0.8), work.crate.z + c.R.range(0.75, 1.0), c.R.range(-0.8, 0.8));
 
-  const state = c.rt.freight = { layout: plan, maze: { crates: plan.crates, cell: plan.cell, open: plan.open }, work, portal: { ...portal, target: null, armed: false, uses: 0 }, validation: null, duo: null };
+  const state = c.rt.freight = { layout: plan, maze: { crates: plan.crates, cell: plan.cell, open: plan.open }, work, hoard, portal: { ...portal, target: null, armed: false, uses: 0 }, validation: null, duo: null };
   state.duo = installFreightDuo(c, work);
   let cooldown = 0;
   const beforeLeave = c.rt.onLeave;

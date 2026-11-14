@@ -35,6 +35,12 @@ test('freight keeps its work floor, hidden crate and loot reachable across sizes
     const targets = { home: work.home, pickup: work.pickup, loading: work.loading, crateEntry: portal.entry, crateInterior: { x: portal.x, z: portal.z }, coin: { x: (x0 + x1) / 2, z: (z0 + z1) / 2 } };
     for (const [name, p] of Object.entries(targets)) assert.ok(walk.reaches(p), `${W}×${D} seed ${seed}: ${name} is reachable with radius .25`);
     for (const p of [work.home, work.pickup, work.loading]) for (const dx of [-0.46, 0.46]) assert.ok(walk.reaches({ x: p.x + dx, z: p.z }), `space for both workers at ${JSON.stringify(p)}`);
+    const heap = work.hoard, box = work.crate;
+    assert.ok(heap.x0 > -W / 2 && heap.x1 < W / 2 && heap.z0 > -D / 2 && heap.z1 < D / 2 && heap.h < room.H,
+      'the GPU hoard fits inside the room and below the ceiling');
+    assert.ok(heap.x1 < box.x - box.w / 2, 'the hoard leaves the open loading crate unobstructed');
+    for (const c of layout.crates) assert.ok(c.x1 <= heap.x0 || c.x0 >= heap.x1 || c.z1 <= heap.z0 || c.z0 >= heap.z1,
+      'maze freight does not occupy the GPU hoard');
     assert.ok(layout.crates.length >= 25, 'the maze remains substantial');
     for (const c of layout.crates) assert.ok(c.x0 > -W / 2 && c.x1 < W / 2 && c.z0 > -D / 2 && c.z1 < D / 2, 'freight stays within the room');
     assert.equal(walk.free(portal.x, portal.outer.z1), false, 'front face is closed');

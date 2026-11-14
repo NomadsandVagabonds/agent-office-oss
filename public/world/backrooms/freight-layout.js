@@ -27,8 +27,15 @@ export function freightLayout(room, seed = room.params?.layoutSeed ?? 0) {
   open[1][0] = true;
 
   const bounds = { x0: -W / 2 + 1.2, x1: -0.8, z0: D / 2 - 6.4, z1: D / 2 - 1.25 };
+  // A furniture-supported GPU landslide behind the packing edge. Its front
+  // stays .8 m behind the workers' pickup line; its east side clears the
+  // open loading crate. Reserve the whole silhouette before dealing freight.
+  const hoard = { x0: -W / 2 + 0.18, x1: -W / 2 + 4.55, z0: D / 2 - 10.7, z1: D / 2 - 6.85,
+    h: Math.min(3.7, H - 0.8), peak: { x: -W / 2 + 2.7, z: D / 2 - 8.7 } };
+  hoard.x = (hoard.x0 + hoard.x1) / 2; hoard.z = (hoard.z0 + hoard.z1) / 2;
+  hoard.w = hoard.x1 - hoard.x0; hoard.d = hoard.z1 - hoard.z0;
   const work = {
-    bounds,
+    bounds, hoard,
     home: { x: -W / 2 + 4.0, z: D / 2 - 3.5 },
     loading: { x: -W / 2 + 5.4, z: D / 2 - 6.05 },
     pickup: { x: -W / 2 + 2.65, z: D / 2 - 6.05 },
@@ -45,6 +52,7 @@ export function freightLayout(room, seed = room.params?.layoutSeed ?? 0) {
     { x0: portal.outer.x0, x1: portal.outer.x1, z0: portal.outer.z1 - portal.thickness, z1: portal.outer.z1 },
   ];
   const reserved = [
+    hoard,
     { x0: -W / 2 + 0.5, x1: -0.35, z0: D / 2 - 9.1, z1: D / 2 },
     { x0: -1.2, x1: 1.2, z0: D / 2 - 4.3, z1: D / 2 },
     { x0: portal.outer.x0 - 0.95, x1: portal.outer.x1 + 0.95, z0: -D / 2, z1: portal.outer.z1 + 0.95 },
@@ -62,6 +70,7 @@ export function freightLayout(room, seed = room.params?.layoutSeed ?? 0) {
   // Columns rise from already-solid stacks, never from a walking lane.
   const pillars = crates.filter((c, i) => i % 9 === 3 && Math.abs(c.x) > 2).slice(0, 4).map((c) => ({ x: c.x, z: c.z, h: H, w: 0.42 }));
   const solids = [...crates.map(({ x0, z0, x1, z1 }) => ({ x0, z0, x1, z1 })), ...portal.solids,
+    { x0: hoard.x0, z0: hoard.z0, x1: hoard.x1, z1: hoard.z1 },
     rect(work.table.x, work.table.z, 1.6, 0.8), rect(work.crate.x, work.crate.z, work.crate.w, work.crate.d)];
   return { seed: String(seed), cell, columns, rows, open, crates, pillars, portal, work, solids, stash: freightStash(room), entry: { x: 0, z: D / 2 - 0.7 } };
 }
