@@ -319,6 +319,11 @@ export function createWorld(office, spec = {}) {
     if (handle) sounds.push(handle);
     return handle;
   }
+  /** The room tone of this place (the office's own stops while a level has the screen); gone again when the level closes. */
+  let hasBed = false;
+  function bed(name, opt = {}) {
+    try { office.sound?.ambience?.(name, { volume: 0.4, fade: 1.2, ...opt }); hasBed = true; } catch { /* only sound */ }
+  }
 
   /* ---- the lift: where you arrive, and the way back ------------------------------------------ */
   let liftHere = null;
@@ -658,6 +663,7 @@ export function createWorld(office, spec = {}) {
     window.removeEventListener('blur', blur);
     for (const off of subs) { try { off(); } catch { /* already gone */ } }
     for (const s of sounds) { try { s.stop?.(0); } catch { /* fine */ } }
+    if (hasBed) { try { office.sound?.ambience?.(null, { fade: 0.6 }); } catch { /* fine */ } }
     net.send({ type: 'focus', id: who.id, name: who.name, focus: null });
     if (office.level === api) office.level = null;
     root.remove();
@@ -675,7 +681,7 @@ export function createWorld(office, spec = {}) {
     /** This floor's lift doorway (see car.js), once lift() or room({ lift }) has stood it somewhere. */
     get liftDoor() { return liftHere?.door || null; },
     add, floor, wall, box, room, prop, vox, sign, screen, lamp, light, lift,
-    block, free, thing, seat, use, sfx, music, own, focus, unfocus, walkTo,
+    block, free, thing, seat, use, sfx, music, bed, own, focus, unfocus, walkTo,
     /** Is the camera holding a fixed shot (see focus)? */
     get focused() { return !!shot; },
     /** Is the person hurrying (Shift held)? */

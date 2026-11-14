@@ -29,11 +29,11 @@ const turnTo = (from, to) => { let d = (to - from) % TAU; if (d > Math.PI) d -= 
 const BUG = [['.#.#.#.', '#######', '.#####.', '#######', '.#.#.#.'], ['#.#.#.#', '.#####.', '#######', '.#####.', '#.#.#.#']];
 /** That sprite, given a back: a domed shell, the same legs, two lit eyes. Faces +z. 7 × 4 × 5 (drawn three times life size). */
 function bug(frame, gold) {
-  const v = new Vox(), body = M(gold ? '#ffd75a' : '#6fe08a', 0), dark = tone(body, -0.38), lite = tone(body, 0.3);
+  const v = new Vox(), body = M(gold ? '#ffd75a' : '#6fe08a', 0), dark = tone(body, -0.38);
   BUG[frame].forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === '#') v.set(i - 3, 0, j - 2, j === 0 || j === 4 || i === 0 || i === 6 ? dark : body); });
-  v.box(-2, 1, -1, 3, 2, 2, body); v.box(-1, 2, -1, 2, 3, 1, glow(lite));                // the shell, lit like the screen it came off
+  v.box(-2, 1, -1, 3, 2, 2, body); v.box(-1, 2, -1, 2, 3, 1, glow(body));                // the shell, lit like the screen it came off
   v.box(-2, 1, 1, 3, 2, 2, dark);
-  v.set(-1, 1, 2, glow('#f4fff0')); v.set(1, 1, 2, glow('#f4fff0'));                      // eyes
+  v.set(-1, 1, 2, glow('#d8ffe0')); v.set(1, 1, 2, glow('#d8ffe0'));                      // eyes
   return v;
 }
 /** A rubber mallet for percussive debugging. The handle runs along +y; the head is at the top. 10 × 30 × 6. */
@@ -56,7 +56,7 @@ export async function enter(office) {
   const w = createWorld(office, {
     id: 'afterhours', background: '#07070b', shadows: 11,
     camera: { first: true, fov: 62, yaw: 0, pitch: 0.06, minPitch: -0.7, maxPitch: 0.8, height: 1.08 },
-    grade: { tilt: 0, bloom: 0.5, glow: 2.1 },
+    grade: { tilt: 0, bloom: 0.45, glow: 1.5 },
   });
   const { scene, camera } = w;
   const R = Math.random;

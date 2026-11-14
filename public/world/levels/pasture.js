@@ -517,6 +517,6 @@ export async function enter(office) {
 
   syncGuests();
   w.goats = goats;                                              // for the console, and for the curious
-  w.music('pasture-bed', { volume: 0.5 });
+  w.bed('pasture-bed', { volume: 0.5 });
   return w.run();
 }

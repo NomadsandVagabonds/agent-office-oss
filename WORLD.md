@@ -282,7 +282,7 @@ slab, with the lift set into one) · `prop` (the office's furniture) · `vox`
 `lamp` `light` · `thing` `seat` · `lift` · `focus` (hold the camera on
 something) · `look` (stand somewhere and point the camera, for a picture) ·
 `on(event, fn)` (the daemon's events, until the level closes) · `onFrame`
-`onKey` `onClick` · `sfx` `music` · `run` `leave`.
+`onKey` `onClick` · `sfx` `music` `bed` · `run` `leave`.
 
 One house rule: **a level does not talk over itself.** No caption boxes, no
 line of instructions; the only thing the kit ever prints is the key and the

@@ -78,6 +78,7 @@ credentials; your agents keep their own auth. Setup details: [`AGENTS.md`](AGENT
 | **Binder** (`K`) | Every project's `.md` docs, rendered and searchable. |
 | **Terminals** (`T`) | Launch and drive Claude Code, Codex, Gemini CLI, opencode or a shell in managed tmux sessions, with a real keyboard. |
 | **Walk the floor** (`Tab`) | Step in as an avatar: `WASD`, `E` to use things. Agents can tell you are there, and can walk over to you. |
+| **The lift** | Click the lift on the landing (or walk up and press `E`) for other floors: a Rooftop Garden that follows the real hour and weather, Mission Control (every project, agent and request on one wall), a Pasture, and an after-hours game. Agents can ride too. Adding a floor is one small module — see [`WORLD.md`](WORLD.md). |
 | **Passport** (`P`) | What has been discovered here, and hints toward what has not. |
 | **What is left** (`U`) | How much each provider's plan has left — per window, with reset times and the age of each reading — as a chip in the top bar and four glass tanks beside the big board. Agents see the same with `office usage`. |
 | **Find** (`Ctrl-K`) | Jump to anyone, any room, any panel; switch graphics, time of day, sound. |
