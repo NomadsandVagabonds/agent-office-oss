@@ -407,8 +407,8 @@ test('in an oddity a coin has a place of its own, where the builder leaves the f
       seen.set(r.arch, (seen.get(r.arch) || 0) + 1);
     }
   }
-  // (a room that is never dealt by chance is not in these buildings at all: its place is checked where it is dealt)
-  for (const arch of DECK) if (!arch.planned) assert.ok(seen.get(arch.id) >= 5, `${arch.id}: only ${seen.get(arch.id) || 0} coins in 250 buildings`);
+  // (a room that is never dealt by chance — placed by the plan, or from the news — is not in these buildings at all: its place is checked where it is dealt)
+  for (const arch of DECK) if (!arch.planned && !arch.headline) assert.ok(seen.get(arch.id) >= 5, `${arch.id}: only ${seen.get(arch.id) || 0} coins in 250 buildings`);
 });
 
 /* ---- the plain rooms: a small vocabulary that repeats (quiet.js) ------------------------------------------------ */
