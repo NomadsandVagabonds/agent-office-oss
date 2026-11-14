@@ -20,6 +20,8 @@
 // `rot` quarter-turns that frame into the world, so the builders (rooms.js)
 // never need to know which way a room ended up facing.
 
+import { freightStash } from './freight-layout.js';
+
 export const T = 0.2;                  // wall thickness, metres
 export const WALL_H = 2.6;             // the usual ceiling
 export const DOOR_H = 2.05;            // top of an ordinary doorway
@@ -159,6 +161,8 @@ const SUBROOMS = [['{P}', '{P} (SUBCOMMITTEE)', 'TASK FORCE'], ['MEETING ROOM 1'
 const CHAIR_COLORS = ['#4a7a6a', '#b5483f', '#3f7f9a', '#8a5a8f', '#c9893f', '#5a5a66', '#6f8a4a'];
 
 export const DECK = [
+  { id: 'freight', name: 'Dispatch', landmark: 'the wooden shipping crates', w: [18, 22], d: [22, 26], h: [5, 6], ports: [], weight: 0.45, lights: 'dim',
+    roll: (R) => ({ layoutSeed: R.int(1, 0x7fffffff), wood: R.pick(['#9b7950', '#8b7350', '#a0875d']) }) },
   { id: 'cutouts', name: 'The Standees', landmark: 'the cardboard people', w: [7, 10], d: [7, 10], ports: ['back', 'left', 'right'], weight: 2.2, lights: 'normal',
     roll: (R, o) => ({ count: R.int(4, 7), who: R.shuffle(o.agents.map((_, i) => i)), formation: R.pick(['scatter', 'scatter', 'queue', 'ring', 'wall', 'crowd']),
       follower: R.chance(0.4), self: R.chance(0.35), boxes: R.int(1, 3), papers: R.int(4, 10) }) },
@@ -808,8 +812,11 @@ function dress(R, level, o, opt, keeper = false) {
         const pw = Math.min(dr.w + 0.3, span - 1.9);
         if (!(dr.sill > 0.01) && deep >= 3.2 && pw >= 0.6 && dr.kind !== 'crawl') {
           const p = wallPoint(room, dr.side, dr.c, 1.35), along = dr.side === 'front' || dr.side === 'back';
-          if (!room.pillars.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 1.6) && room.doors.every((d2) => d2 === dr || Math.hypot(wallPoint(room, d2.side, d2.c, 0.7).x - p.x, wallPoint(room, d2.side, d2.c, 0.7).z - p.z) > pw / 2 + 0.9))
-            room.pillars.push({ x: p.x, z: p.z, w: along ? pw : 0.5, d: along ? 0.5 : pw });
+          const pillar = { x: p.x, z: p.z, w: along ? pw : 0.5, d: along ? 0.5 : pw };
+          // This door may be level while a neighbouring doorway has stairs.
+          const onStairs = stairZones(room).some((s) => pillar.x + pillar.w / 2 > s.x0 && pillar.x - pillar.w / 2 < s.x1 && pillar.z + pillar.d / 2 > s.z0 && pillar.z - pillar.d / 2 < s.z1);
+          if (!onStairs && !room.pillars.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 1.6) && room.doors.every((d2) => d2 === dr || Math.hypot(wallPoint(room, d2.side, d2.c, 0.7).x - p.x, wallPoint(room, d2.side, d2.c, 0.7).z - p.z) > pw / 2 + 0.9))
+            room.pillars.push(pillar);
         }
       }
     }
@@ -909,6 +916,7 @@ const about = (x, z, hx, hz = hx) => [x - hx, z - hz, x + hx, z + hz];
 // turn. The generator cannot see furniture — rooms*.js puts that in — so these are the places each builder is known
 // to leave clear; loot.js still checks, once the room stands, that the spot can be walked to (and moves the coin if not).
 export const STASH = {
+  freight: freightStash,
   cutouts: (r, s) => about(s * (r.W / 2 - 1), r.D / 2 - 1.05, 0.3),                              // a corner beside the door you came in by: behind you, with all of them watching
   'ceiling-meeting': () => [-1.5, -0.5, -0.9, 0.2],                                             // on the carpet, under one end of the table
   coolers: (r) => [-0.3, r.D / 2 - 9, 0.3, r.D / 2 - 6.6],                                      // a little way into the dark, before the corridor starts again

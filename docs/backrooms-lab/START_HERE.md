@@ -1,5 +1,15 @@
 # Backrooms: offline contributor kit
 
+**Reading this inside the local Git checkout?** The instructions below describe
+the exported ZIP. In the checkout, code is at the repository root (there is no
+`source/` wrapper), and the equivalent preview command is
+`node tools/backrooms-offline/preview.mjs`. Do not run the ZIP return helper in
+the checkout; it expects the exported source manifest. The local branch may
+contain newer work than the pinned kit: Dispatch occupies `rooms5.js`, so inspect
+the current builder chain before choosing a filename for Carbon Copy. Use a
+separate working copy for parallel implementation and leave Dispatch's files to
+its current author.
+
 This is a pinned copy of Agent Office for an offline contributor. Fable leads the
 Backrooms game. We are making optional, self-contained rooms and creatures for
 Fable to choose from. Your first assignment is **Carbon Copy**, described in

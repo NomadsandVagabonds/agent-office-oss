@@ -10,6 +10,7 @@ import { makeCutout, drawPortrait } from './cutout.js';
 import { TILE, RISE, RUN, wallPoint, pinchHalf } from './gen.js';
 import { P, clamp, turnTo, framed, card, scatter, doorLeaf, doorFrame, wetSign, standee, mugVox } from './bits.js';
 import { MORE } from './rooms2.js';
+import { MORE4 } from './rooms5.js';
 
 /* ---- the plain rooms, and what somebody left in them ------------------------------- */
 
@@ -605,4 +606,4 @@ function hallOfFame(c) {
   if (W > 3) c.prop('pedestal', 0, -D / 2 + (c.room.doors.some((d) => d.side === 'back') ? 2.2 : 0.7), { fallback: [0.5, 0.9, 0.5] });
 }
 
-export const BUILDERS = { plain, start, exit, cutouts, 'ceiling-meeting': ceilingMeeting, coolers, party, 'many-doors': manyDoors, 'hall-of-fame': hallOfFame, ...MORE };
+export const BUILDERS = { plain, start, exit, cutouts, 'ceiling-meeting': ceilingMeeting, coolers, party, 'many-doors': manyDoors, 'hall-of-fame': hallOfFame, ...MORE, ...MORE4 };
