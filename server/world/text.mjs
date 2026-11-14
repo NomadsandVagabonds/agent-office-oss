@@ -363,6 +363,13 @@ export function createTextWorld(ctx, world) {
         return `The office tree: ${size}. It grows a little every time a task is finished (${done} so far).`;
       }
       case 'coffee': return `The coffee machine. ${world.state().stats.coffees || 0} cups brewed here. (office use coffee)`;
+      case 'vending': {
+        // what the humans' coins have bought stands on top of it, where agents can see it too (core/game.mjs)
+        const shelf = world.game.shelf(), have = shelf.coins.have;
+        const bought = shelf.prizes.filter((x) => x.sold).map((x) => x.name.replace(/^A |^The /, (m) => m.toLowerCase()));
+        return `The vending machine: BYTES, in lit letters. What is at the bottom is free (office use vending); the rest it wants coins for, and the office's jar has ${have === 1 ? '1 coin' : `${have} coins`} in it (office game).`
+          + (bought.length ? ` Standing on top of the machine: ${list(bought)}.` : '');
+      }
       case 'console': return `The ops console. It shows the daemon's vitals and accepts input. (office use console)`;
       case 'gauges': return gaugesLine();
       case 'rack': return `Server racks, warm and humming. ${world.state().stats.tools || 0} tool calls have passed through this office.`;

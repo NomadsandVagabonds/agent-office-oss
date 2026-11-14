@@ -153,8 +153,10 @@ test('game: coins do not come back, the passport pays into the same jar, and the
   const unseen = HIDEOUTS.filter((h) => h.id !== 'pasture' && !(got.open || []).includes(h.id));
   for (const h of unseen) assert.ok(!words.includes(h.name), `${h.name} has not been found, so it is not named`);
   assert.match(words, new RegExp(`and ${unseen.length} places? nobody has found anything in yet`));
-  const cli = await office.get('/api/world/game');
-  assert.equal(typeof cli.data.text, 'string');
+  // and what was bought stands where an agent can see it
+  const machine = (await office.get(`/api/world/look?agent=${ada}&at=vending`)).data.text;
+  assert.match(machine, /Standing on top of the machine: /);
+  assert.ok(machine.includes(cheap.name.replace(/^A |^The /, (m) => m.toLowerCase())), machine);
 });
 
 test('game: everything the machine sells has a shape, and a place of its own on top of the machine', async () => {
