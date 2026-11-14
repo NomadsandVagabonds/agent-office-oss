@@ -314,25 +314,79 @@ test('driven sessions: Claude Code, natively', async (t) => {
     await h.turnDone(e.id, n);
     assert.equal((await h.turnView(e.id, n)).said, 'write=deny in acceptEdits');
 
-    // What Claude raises as a safety check of its own (a write under .git, say) is not an ordinary edit: neither
-    // the mode nor "file changes for this session" answers it, though the file is in the folder.
+    // What Claude raises as a safety check of its own (a write under .git, say) is one it insists a person sees:
+    // neither the mode nor "file changes for this session" answers it, though the file is in the folder.
     n = await h.begin(e.id, 'guard:.git/hooks/pre-commit');
     card = await h.need(e.id);
-    assert.deepEqual([card.request.category, card.ask.tool, card.ask.files], ['other:write (flagged by claude)', 'Write (flagged by Claude)', ['.git/hooks/pre-commit']]);
-    assert.equal(card.message, 'Wants permission: Write .git/hooks/pre-commit\nClaude requested permissions to edit .git/hooks/pre-commit which is a sensitive file. — flagged by Claude’s own safety check, so no standing permission covers it');
+    assert.deepEqual([card.request.category, card.ask.tool, card.ask.files], ['file-change', 'Edit', ['.git/hooks/pre-commit']]);
+    assert.equal(card.message, 'Wants to change: .git/hooks/pre-commit\nClaude’s own safety check: Claude requested permissions to edit .git/hooks/pre-commit which is a sensitive file. It is put to a person in every mode.',
+      'the request says in so many words why it is being asked');
+    assert.deepEqual(card.actions, ['once', 'reject'], 'and it is never the start of a standing permission');
+    assert.equal((await h.answer(card.id, { action: 'always' })).status, 400);
     await h.answer(card.id, { action: 'once' });
     await h.turnDone(e.id, n);
     assert.equal((await h.turnView(e.id, n)).said, 'guard=allow');
     await end(e.id);
 
-    // full: Claude asks about nothing; if a rule of the operator's makes it ask anyway, the office says yes —
-    // to its safety checks too, because full means everything, and each one is written down.
+    // full: Claude asks about nothing an ordinary rule covers; where something makes it ask anyway, the office says yes…
     const f = await h.start('fake-claude', { name: 'Fully', mode: 'full' });
-    const ran = await h.turn(f.id, 'run:make; ask:rm -rf build; guard:.git/config');
-    assert.equal(ran.said, 'run=allow in bypassPermissions\ndecision=allow\nguard=allow');
-    assert.deepEqual(ran.entries.filter((x) => x.kind === 'permission').map((x) => [x.state, x.reason, x.category]),
-      [['auto-allowed', 'the session runs in full-access mode', 'command'], ['auto-allowed', 'the session runs in full-access mode', 'other:write (flagged by claude)']]);
+    const ran = await h.turn(f.id, 'run:make; ask:rm -rf build');
+    assert.equal(ran.said, 'run=allow in bypassPermissions\ndecision=allow');
+    assert.deepEqual(ran.entries.filter((x) => x.kind === 'permission').map((x) => [x.state, x.reason]), [['auto-allowed', 'the session runs in full-access mode']]);
+    // …except to what Claude insists a person sees even while it bypasses everything else: its own safety
+    // checks, and a rule of the operator's own that says "ask". Full mode does not overrule the operator.
+    // Somebody who chose "acts without asking" is told on the request itself why they are asked anyway.
+    for (const [step, summary, why, said] of [
+      ['guard:.git/config', 'Wants to change: .git/config', 'Claude’s own safety check: Claude requested permissions to edit .git/config which is a sensitive file. It is put to a person in every mode.', 'guard=allow'],
+      ['rule:git push origin main', 'Wants to run: git push origin main', 'A rule of yours says to ask before this: Bash(git push:*) (in your Claude settings). It is put to a person in every mode.', 'rule=allow'],
+    ]) {
+      n = await h.begin(f.id, step);
+      card = await h.need(f.id);
+      assert.equal(card.message, `${summary}\n${why}`);
+      assert.equal(card.request.detail, why);
+      assert.deepEqual(card.actions, ['once', 'reject']);
+      await h.answer(card.id, { action: 'once' });
+      await h.turnDone(f.id, n);
+      assert.equal((await h.turnView(f.id, n)).said, said);
+      assert.equal((await h.turnView(f.id, n)).entries.find((x) => x.kind === 'permission').state, 'allowed');
+    }
+    // Each reason Claude can give for insisting, in the words the person reads…
+    for (const [fields, why] of [
+      [{ decision_reason_type: 'hook', decision_reason: 'Blocked by the pre-push hook' }, 'A hook of yours says to ask before this: Blocked by the pre-push hook.'],
+      [{ decision_reason_type: 'sandboxOverride' }, 'Claude wants to run this outside its own sandbox.'],
+      [{ decision_reason_type: 'classifier', decision_reason: 'This looks like sending data away' }, 'Claude’s own classifier would not pass this by itself: This looks like sending data away.'],
+      [{ decision_reason_type: 'subcommandResults', classifier_approvable: false, decision_reason: '\u001b[31mDangerous rm\u001b[0m of a directory' }, 'Claude’s own safety check: Dangerous rm of a directory.'],
+      [{ default_to_no: true }, 'Claude’s own safety check asks for a person here.'],
+      [{ decision_reason_type: 'rule' }, 'A rule of yours says to ask before this.'],
+      [{ matched_ask_rule: { source: 'projectSettings', tool_name: 'Bash' }, decision_reason: 'Runs a deploy' }, 'A rule of yours says to ask before this: Bash (in this project’s Claude settings). Runs a deploy.'],
+    ]) {
+      n = await h.begin(f.id, `flag:${JSON.stringify(fields)}`);
+      card = await h.need(f.id);
+      assert.equal(card.request.detail, `${why} It is put to a person in every mode.`);
+      await h.answer(card.id, { action: 'reject' });
+      await h.turnDone(f.id, n);
+    }
+    // …and the reasons that are ordinary: those the mode answers as before.
+    for (const fields of [{ decision_reason_type: 'other', decision_reason: 'This command requires approval' }, { decision_reason_type: 'workingDir' },
+      { decision_reason_type: 'safetyCheck'.toUpperCase() }, { classifier_approvable: true }, { default_to_no: 'yes' }, { matched_ask_rule: 'nonsense' }]) {
+      const ordinary = await h.turn(f.id, `flag:${JSON.stringify(fields)}`);
+      assert.equal(ordinary.said, 'flag=allow', JSON.stringify(fields));
+      assert.equal(ordinary.entries.find((x) => x.kind === 'permission').state, 'auto-allowed');
+    }
     await end(f.id);
+
+    // The same under a grant: "commands for this session" does not cover what an ask rule singles out.
+    const g = await h.start('fake-claude', { name: 'Granted' });
+    n = await h.begin(g.id, 'ask:npm test');
+    await h.answer((await h.need(g.id)).id, { action: 'always' });
+    await h.turnDone(g.id, n);
+    assert.equal((await h.turn(g.id, 'ask:npm run lint')).entries.find((x) => x.kind === 'permission').state, 'auto-allowed');
+    n = await h.begin(g.id, 'rule:git push origin main');
+    card = await h.need(g.id);
+    await h.answer(card.id, { action: 'reject' });
+    await h.turnDone(g.id, n);
+    assert.equal((await h.turnView(g.id, n)).said, 'rule=deny');
+    await end(g.id);
 
     // Claude's own "dontAsk" mode refuses by itself; the office is told, and shows it.
     const d = await h.start('fake-claude', { name: 'Dont', agentMode: 'dontAsk' });
@@ -421,8 +475,9 @@ test('driven sessions: Claude Code, natively', async (t) => {
     // Leaving plan mode is Claude's own tool: the plan is shown, the human decides, and Claude says where it went.
     const n = await h.begin(s.id, 'planmode:1. Rename the module. 2. Run the tests.');
     const card = await h.need(s.id);
-    assert.equal(card.message, 'Wants permission: Leave plan mode and carry out the plan');
-    assert.equal((await h.entry(s.id, 'plan')).note, '1. Rename the module. 2. Run the tests.');
+    assert.equal(card.message, 'Wants permission: Leave plan mode and carry out the plan\nClaude has a plan and asks to carry it out. It is put to a person in every mode.');
+    assert.deepEqual(card.actions, ['once', 'reject']);
+    assert.equal((await h.entry(s.id, 'plan')).note, '1. Rename the module. 2. Run the tests.', 'read from the request to approve it, where this Claude puts it');
     await h.answer(card.id, { action: 'once' });
     await h.turnDone(s.id, n);
     assert.equal((await h.turnView(s.id, n)).said, 'plan=allow now default');
@@ -507,6 +562,15 @@ test('driven sessions: Claude Code, natively', async (t) => {
     assert.deepEqual((await told(p.id)).modeRequests, ['plan', 'default', 'plan']);
     assert.deepEqual((await notices(p.id)).slice(0, 2), ['Its own mode set to “Plan” by Lead.', 'Mode set to “ask” by Lead.'], 'it ended where it was, so nothing says it moved');
     assert.equal((await h.session(p.id)).live, true);
+    // A plan is for a person to read: even a session that allows everything does not approve one by itself.
+    await set(p.id, { mode: 'full' });
+    await set(p.id, { agentMode: 'plan' });
+    n = await h.begin(p.id, 'planmode:Delete the old module.');
+    card = await h.need(p.id);
+    assert.equal((await h.entry(p.id, 'plan')).note, 'Delete the old module.');
+    await h.answer(card.id, { action: 'reject' });
+    await h.turnDone(p.id, n);
+    assert.equal((await h.turnView(p.id, n)).said, 'plan=deny now plan', 'declined, it goes on planning');
     await end(p.id);
 
     // A Claude that will not be made more careful: the change is refused and the session keeps saying what is true.

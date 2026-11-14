@@ -373,6 +373,44 @@ function resultText(content) {
 // of the harness treats every provider's requests alike. There is no "always" among them on purpose: what
 // Claude itself proposes for that can be a whole rule, or a change of its own mode, and can outlive the
 // session. "For the session" is remembered by the office instead (approvals.mjs).
+// Where a rule of Claude's is kept, in words. The names are Claude's own (PermissionUpdateDestination in the
+// SDK's types, plus the two tiers nobody writes a rule to from inside a session).
+const RULE_SOURCE = Object.freeze({
+  userSettings: 'your Claude settings', projectSettings: 'this project’s Claude settings', localSettings: 'your Claude settings for this project',
+  policySettings: 'your organisation’s policy', flagSettings: 'this session’s settings', cliArg: 'this session’s command line', session: 'this session',
+});
+const sentence = (words) => (/[.!?…]$/.test(words) ? words : `${words}.`);
+
+/**
+ * Why a request is one a person has to see whatever the session's mode — as a sentence that person can read
+ * on the request itself — or '' for an ordinary request. Read from SDKControlPermissionRequest:
+ * decision_reason_type (in the CLI, an "ask" whose reason is "rule" is always one of the operator's ask
+ * rules), matched_ask_rule, classifier_approvable, default_to_no and requires_user_interaction.
+ */
+function insistence(request, why) {
+  const reason = typeof request.decision_reason_type === 'string' ? request.decision_reason_type : '';
+  const rule = isObject(request.matched_ask_rule) ? request.matched_ask_rule : null;
+  const said = why ? `: ${sentence(why)}` : '.';
+  if (rule || reason === 'rule') {
+    const name = rule && typeof rule.tool_name === 'string' ? line(rule.tool_name, 80) : '';
+    const content = rule && typeof rule.rule_content === 'string' ? line(rule.rule_content, 200) : '';
+    const where = rule && typeof rule.source === 'string' && Object.hasOwn(RULE_SOURCE, rule.source) ? ` (in ${RULE_SOURCE[rule.source]})` : '';
+    if (!name) return `A rule of yours says to ask before this${said}`;
+    return `A rule of yours says to ask before this: ${name}${content ? `(${content})` : ''}${where}.${why ? ` ${sentence(why)}` : ''}`;
+  }
+  if (reason === 'hook') return `A hook of yours says to ask before this${said}`;
+  if (reason === 'sandboxOverride') return `Claude wants to run this outside its own sandbox${said}`;
+  if (reason === 'classifier') return `Claude’s own classifier would not pass this by itself${said}`;
+  if (reason === 'safetyCheck' || request.classifier_approvable === false || request.default_to_no === true) {
+    return `Claude’s own safety check${why ? `: ${sentence(why)}` : ' asks for a person here.'}`;
+  }
+  // A plan is made to be read before it is carried out: approving it is never a matter of policy.
+  if (request.tool_name === 'ExitPlanMode') return 'Claude has a plan and asks to carry it out.';
+  // "One-tap approve must not be offered": the request is itself the conversation with a person.
+  if (request.requires_user_interaction === true) return `Claude says a person has to look at this one${said}`;
+  return '';
+}
+
 const APPROVAL_OPTIONS = Object.freeze([
   { id: 'allow', name: 'Allow', kind: 'allow_once' },
   { id: 'deny', name: 'Reject', kind: 'reject_once' },
@@ -413,6 +451,7 @@ export class ClaudeAdapter extends AgentAdapter {
     this.streamed = new Map();        // "<message id>:<text|thinking>:<n>" → characters already passed on
     this.snapshots = new Map();       // message id → how many text and thinking blocks have arrived whole
     this.framesSeen = new Set();
+    this.plansShown = new Set();      // plan-mode exits whose plan has been shown
     this.context = { used: undefined, size: 0, cost: undefined };
     this.windows = {};                // the allowance, merged from partial reports, in the status-line shape
     this.limitsSent = '';
@@ -866,16 +905,18 @@ export class ClaudeAdapter extends AgentAdapter {
     if (outside && !paths.includes(outside) && paths.length < LIMITS.paths) paths.push(outside);
     // Why Claude asks, in its words (it may carry terminal colours: they are stripped), and who is asking.
     const why = text(typeof request.decision_reason === 'string' ? request.decision_reason : '', 600).replace(/\s+/g, ' ').trim();
-    // Some asks Claude raises as a check of its own — a write to its settings or under .git, a command its
-    // classifier would not pass — and would put to a person even where it asks about little else. Such a
-    // request is reported as a kind of its own, so that no standing permission for "file changes" or
-    // "commands" answers it: only a session in full mode still does, because there everything is allowed.
-    const flagged = request.decision_reason_type === 'safetyCheck' || request.decision_reason_type === 'classifier'
-      || request.classifier_approvable === false || request.default_to_no === true;
-    const detail = [why, outside ? `outside its folder: ${outside}` : '', typeof request.agent_id === 'string' && request.agent_id ? 'asked by a sub-agent' : '',
-      flagged ? 'flagged by Claude’s own safety check, so no standing permission covers it' : ''].filter(Boolean).join(' — ');
-    return this.#ask(controlId, { type: 'permission', kind: flagged ? 'other' : tool.kind, toolId, title: tool.title,
-      name: flagged ? `${tool.name} (flagged by Claude)` : tool.name, detail, command: tool.command, paths, options: APPROVAL_OPTIONS }, { input, echo });
+    // Some asks are ones Claude puts to a person whatever mode it is in: a check of its own (a write to its
+    // settings or under .git, a dangerous removal, a command that would leave its sandbox, something its
+    // classifier would not pass), or a rule or a hook of the operator's own that says "ask". Those are marked
+    // `manual`, and the session answers none of them by its mode or by a grant: they are why Claude still asks
+    // at all in its bypass mode. T3 Code draws the same line (requiresClaudeApproval: "CLI-forwarded requests
+    // need a person's decision even under bypass"). The request says why in so many words, because somebody
+    // who chose "acts without asking" is otherwise left to wonder why they are being asked.
+    const insists = insistence(request, why);
+    const detail = [insists ? `${insists} It is put to a person in every mode.` : why, outside ? `outside its folder: ${outside}` : '',
+      typeof request.agent_id === 'string' && request.agent_id ? 'asked by a sub-agent' : ''].filter(Boolean).join(' — ');
+    return this.#ask(controlId, { type: 'permission', kind: tool.kind, toolId, title: tool.title, name: tool.name, detail,
+      command: tool.command, paths, options: APPROVAL_OPTIONS, ...(insists ? { manual: true } : {}) }, { input, echo });
   }
 
   // Claude's question to the person is a tool of its own, and its answer is that tool's input, completed.
@@ -1011,13 +1052,21 @@ export class ClaudeAdapter extends AgentAdapter {
     if (name === 'AskUserQuestion') return null;           // shown as the question it is
     if (name === 'TodoWrite') { this.#todos(input); return null; }
     if (!id) return null;
-    const known = this.tools.get(id);
-    if (known) return known;
-    if (name === 'ExitPlanMode' && typeof input.plan === 'string' && input.plan.trim()) this._emit({ type: 'plan', entries: [], note: text(input.plan, 4000) });
-    const tool = { id, ...describeTool(name, input, server), status: 'running', output: '' };
-    this.tools.set(id, tool);
-    if (this.tools.size > MAX_TRACKED_TOOLS) this.tools.delete(this.tools.keys().next().value);
-    this._emit({ type: 'tool', ...tool });
+    let tool = this.tools.get(id);
+    if (!tool) {
+      tool = { id, ...describeTool(name, input, server), status: 'running', output: '' };
+      this.tools.set(id, tool);
+      if (this.tools.size > MAX_TRACKED_TOOLS) this.tools.delete(this.tools.keys().next().value);
+      this._emit({ type: 'tool', ...tool });
+    }
+    // The plan Claude wants to carry out. The tool's own input need not hold it (its type declares no such
+    // field); the request to approve it does, which is where T3 Code reads it too (claudeProposedPlan). It is
+    // shown once, with whichever of the two brings it first.
+    if (name === 'ExitPlanMode' && typeof input.plan === 'string' && input.plan.trim() && !this.plansShown.has(id)) {
+      this.plansShown.add(id);
+      if (this.plansShown.size > MAX_REMEMBERED) this.plansShown.delete(this.plansShown.values().next().value);
+      this._emit({ type: 'plan', entries: [], note: text(input.plan, 4000) });
+    }
     return tool;
   }
 

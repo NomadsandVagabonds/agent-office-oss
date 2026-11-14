@@ -517,12 +517,16 @@ export class DrivenSession extends EventEmitter {
     const category = categoryOf(ev);
     // Standing permission for files stops at the edge of this session's folder.
     const inside = insideFolder(this.record.cwd, ev.paths);
-    const choices = choicesFor(ev.options, category, { nativeSessionAllow: !!this.features.exactSessionAllow, inside });
+    // A request its agent marks `manual` is one the agent itself insists a person sees (a safety check of its
+    // own, a rule of the operator's that says "ask"): no mode and no session grant answers it, and it is never
+    // the start of a grant.
+    const choices = choicesFor(ev.options, category, { nativeSessionAllow: !!this.features.exactSessionAllow, inside })
+      .filter((c) => !(ev.manual && c.action === 'always'));
     const entry = { id: `perm:${ev.requestId}`, kind: 'permission', turn: this.turn?.n, category, title: ev.title,
       ...(ev.command ? { command: ev.command } : {}), ...(ev.paths?.length ? { paths: ev.paths } : {}),
       ...(ev.detail ? { detail: ev.detail } : {}) };
     const allow = choices.find((c) => c.action === 'once');
-    const standing = allow ? standingAnswer(this.mode, category, this.grants, { inside }) : '';
+    const standing = allow && !ev.manual ? standingAnswer(this.mode, category, this.grants, { inside }) : '';
     if (standing && this.adapter.answer(ev.requestId, { optionId: allow.optionId })) {
       // Answered by policy, not by a person — and written down so that is never a secret.
       this.transcript.write({ ...entry, state: 'auto-allowed', reason: standing });

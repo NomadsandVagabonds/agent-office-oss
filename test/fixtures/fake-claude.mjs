@@ -30,6 +30,8 @@
 //                          wake:hold:text is still in the middle of that turn when the next message arrives
 //   withdraw:cmd           ask about a command, then stop waiting for the answer by itself (control_cancel_request)
 //   guard:path             a file write Claude raises as a safety check of its own (as for .git or its settings)
+//   rule:cmd               a command one of the operator's own "ask" rules makes Claude ask about, in any mode
+//   flag:{json}            ask about a command with exactly these extra fields on the request (its stated reason)
 //   child                  start a process of its own that outlives the turn, and say its pid
 //   retry  compact  local:text  denied:Tool  authfail  elicit  hookcb  dup      smaller things the stream can say
 import { spawn } from 'node:child_process';
@@ -324,7 +326,7 @@ const inside = (target) => { const rel = path.relative(state.cwd, path.resolve(s
 
 /* ---- a turn ---------------------------------------------------------------------- */
 
-const EXTRA = new Set(['write', 'run', 'sub', 'planmode', 'fetch', 'mcptool', 'hook', 'wake', 'withdraw', 'guard', 'child', 'retry', 'compact', 'local', 'denied', 'authfail', 'elicit', 'hookcb', 'dup']);
+const EXTRA = new Set(['write', 'run', 'sub', 'planmode', 'fetch', 'mcptool', 'hook', 'wake', 'withdraw', 'guard', 'rule', 'flag', 'child', 'retry', 'compact', 'local', 'denied', 'authfail', 'elicit', 'hookcb', 'dup']);
 function steps(promptText) {
   return parseScript(scriptIn(promptText)).map((step) => {
     // A step fake-lib does not know comes back as something to say; pick this fake's own steps out of those.
@@ -430,7 +432,10 @@ async function runTurn(uuid, promptText) {
         break;
       }
       case 'planmode': {
-        const d = await useTool('ExitPlanMode', { plan: arg || 'Do the thing.' }, 'ask', { output: 'User has approved your plan.' });
+        // The plan is in the request to approve it; the call's own input holds it only on an older Claude.
+        const plan = arg || 'Do the thing.';
+        const d = await useTool('ExitPlanMode', OLD ? { plan } : {}, 'ask', { output: 'User has approved your plan.',
+          request: { input: { plan }, requires_user_interaction: true } });
         if (d.behavior === 'allow' && !d.stopped) setMode(state.prePlanMode || 'default');
         if (!d.stopped) await say(`plan=${d.behavior} now ${state.mode}`);
         break;
@@ -487,6 +492,19 @@ async function runTurn(uuid, promptText) {
         const d = await useTool('Write', { file_path: arg, content: 'x' }, 'ask', { output: `File created at ${arg}`,
           request: { decision_reason: `Claude requested permissions to edit ${arg} which is a sensitive file.`, decision_reason_type: 'safetyCheck', classifier_approvable: true } });
         if (!d.stopped) await say(`guard=${d.behavior}`);
+        break;
+      }
+      case 'rule': {
+        // An "ask" rule in the operator's settings: Claude asks even in its bypass mode, and names the rule.
+        const d = await useTool('Bash', { command: arg }, 'ask', { output: `ran: ${arg}`,
+          request: { decision_reason_type: 'rule', decision_reason_rule_source: 'userSettings',
+            matched_ask_rule: { source: 'userSettings', tool_name: 'Bash', rule_content: `${arg.split(' ').slice(0, 2).join(' ')}:*` } } });
+        if (!d.stopped) await say(`rule=${d.behavior}`);
+        break;
+      }
+      case 'flag': {
+        const d = await useTool('Bash', { command: 'true' }, 'ask', { output: 'ran: true', request: JSON.parse(arg || '{}') });
+        if (!d.stopped) await say(`flag=${d.behavior}`);
         break;
       }
       case 'child': {
