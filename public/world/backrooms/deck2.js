@@ -16,7 +16,14 @@
 //   headline true: the place has half-remembered something from the news and staged it wrongly. Which stories become
 //            rooms is the owner's choice, nobody else's; the plan puts at most one in a visit, never on its first floor.
 
-export const MORE_DECK = [];
+export const MORE_DECK = [
+  { id: 'mecha', name: 'MECHA Training Floor', landmark: 'the people in cages training their replacements',
+    w: [24, 26], d: [24, 26], h: [5.6, 5.6], ports: ['left', 'right', 'back'], weight: 0.6,
+    lights: 'dark', big: true, planned: true, module: './rooms/mecha.js',
+    stash: (r) => [-3.6, r.D / 2 - 1.6, -2.6, r.D / 2 - 0.8],
+    roll: (R) => ({ percentages: [97.8, 84.2, 92.6, 76.4, 99.5, 88.1, 95.2, 81.7].map(n => +(n + R.range(-0.3, 0.3)).toFixed(1)),
+      batch: R.int(104, 980), variation: R.int(0, 4) }) },
+];
 
 // Where a tape goes in an entry that does not say so itself: (room, ±1) → [x0, z0, x1, z1] in the room's own frame.
 export const MORE_STASH = {};

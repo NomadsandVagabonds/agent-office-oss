@@ -260,7 +260,7 @@ test('something follows you in some visits, not all', () => {
 /* ---- what is hidden down here (core/game.mjs): a keycard in the mascot's hand, and coins ---------------- */
 
 const ALL = { card: true, coins: [1, 2, 3, 4] };
-const withLoot = (seed, loot = ALL) => generate(seed, { ...office, loot });
+const withLoot = (seed, loot = ALL, opt = {}) => generate(seed, { ...office, ...opt, loot });
 const coinFloor = new WeakMap();
 const hasCoinFloor = (r) => { if (!coinFloor.has(r)) coinFloor.set(r, coinSpots(r).length > 0); return coinFloor.get(r); };
 /** The rooms a coin may be in at all, and those of them that are on no shortest way from the landing to the way out. */
@@ -393,17 +393,32 @@ test('only the coins still to be found are hidden, and what is left takes the sa
 test('in an oddity a coin has a place of its own, where the builder leaves the floor clear', () => {
   for (const arch of DECK) assert.equal(typeof STASH[arch.id], 'function', `${arch.id} has no place for a coin: one would land wherever the generator supposes there is floor`);
   const seen = new Map();
-  for (let i = 0; i < 250; i++) {
-    const level = withLoot(`deck-${i}`), first = new Set();
+  const check = (level) => {
+    const first = new Set();
     for (const c of level.loot.coins) {
       const r = level.rooms[c.room];
       if (!r.arch || first.has(r.id)) continue;                  // (a second coin in the same room has to go somewhere else)
       first.add(r.id);
       const zones = [-1, 1].flatMap((side) => { const lay = STASH[r.arch](r, side); return Array.isArray(lay[0]) ? lay : [lay]; });
       for (const [x0, z0, x1, z1] of zones) assert.ok(x0 <= x1 && z0 <= z1 && x0 > -r.W / 2 && x1 < r.W / 2 && z0 > -r.D / 2 && z1 < r.D / 2, `${r.arch} (${r.W} × ${r.D}): its place is not inside the room`);
-      assert.ok(zones.some(([x0, z0, x1, z1]) => c.x >= x0 - 0.01 && c.x <= x1 + 0.01 && c.z >= z0 - 0.01 && c.z <= z1 + 0.01), `seed deck-${i}: the coin in ${r.arch} is at ${c.x}, ${c.z}, not in its place`);
+      assert.ok(zones.some(([x0, z0, x1, z1]) => c.x >= x0 - 0.01 && c.x <= x1 + 0.01 && c.z >= z0 - 0.01 && c.z <= z1 + 0.01), `seed ${level.seed}: the coin in ${r.arch} is at ${c.x}, ${c.z}, not in its place`);
       seen.set(r.arch, (seen.get(r.arch) || 0) + 1);
     }
+  };
+  for (let i = 0; i < 250; i++) {
+    const level = withLoot(`deck-${i}`);
+    assert.ok(level.rooms.every((r) => !ARCHETYPES[r.arch]?.planned), `seed deck-${i}: a planned room was dealt by chance`);
+    check(level);
   }
-  for (const arch of DECK) assert.ok(seen.get(arch.id) >= 5, `${arch.id}: only ${seen.get(arch.id) || 0} coins in 250 buildings`);
+  for (const arch of DECK.filter((a) => !a.planned)) assert.ok(seen.get(arch.id) >= 5, `${arch.id}: only ${seen.get(arch.id) || 0} coins in 250 buildings`);
+  // Planned rooms deliberately never appear in that sample. Ask for each one,
+  // then hold its real loot placements to exactly the same stash checks.
+  for (const arch of DECK.filter((a) => a.planned)) {
+    for (let i = 0; i < 100; i++) {
+      const level = withLoot(`planned-${arch.id}-${i}`, ALL, { only: arch.id });
+      assert.ok(level.rooms.some((r) => r.arch === arch.id), `${arch.id}: the explicitly requested room is missing`);
+      check(level);
+    }
+    assert.ok(seen.get(arch.id) >= 5, `${arch.id}: only ${seen.get(arch.id) || 0} coins in 100 requested buildings`);
+  }
 });
