@@ -7,10 +7,11 @@ export const ITEM_DEFS = Object.freeze({
   paper: Object.freeze({ name: 'Paper', description: 'Blank office paper, warm from a printer you cannot hear.', useLabel: 'Use', maxStack: 10 }),
   scissors: Object.freeze({ name: 'Scissors', description: 'Heavy steel scissors with chipped red handles. The hinge is still stiff.', useLabel: 'Use' }),
   snack: Object.freeze({ name: 'Wrapped snack', description: 'A sealed oat bar. The wrapper has no date.', useLabel: 'Eat', healAmount: 1 }),
+  'pink-slip': Object.freeze({ name: 'Pink slip', description: 'FORM HR-404, Notice of Redundancy. The name on it is yours; the date is last week.', useLabel: 'Use' }),
   balloon: Object.freeze({ name: 'Red balloon', description: 'A red balloon on a curling string. It tugs upward without a breeze.', useLabel: 'Use' }),
 });
 const ITEM_ALIASES = Object.freeze({
-  'loose-papers': 'paper', 'pink-slip': 'paper', 'red-balloon': 'balloon', 'facilities-flashlight': 'torch',
+  'loose-papers': 'paper', 'red-balloon': 'balloon', 'facilities-flashlight': 'torch',
 });
 
 /** Explicit room-authoring names share the same small set of carried types. */

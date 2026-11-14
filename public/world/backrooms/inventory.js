@@ -5,8 +5,8 @@
 import { createInventory as createModel, makeItem, ITEM_DEFS } from './inventory-state.js';
 import { createInventoryHud } from './inventory-hud.js';
 import { createInventoryWorld } from './inventory-world.js';
-import { toLocal, makeRng } from './gen.js';
-import { planSupplies } from './supplies.js';
+import { toLocal, makeRng, ARCHETYPES } from './gen.js';
+import { planSupplies, wantedByRooms } from './supplies.js';
 import { CAST, castFor } from './cast.js';
 
 const MESSAGES = {
@@ -139,7 +139,8 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
   // clear place gets it. Never behind a collider; and a thing with nowhere to go is simply not there.
   function scatter(floor) {
     const { env, physical, id } = floor, random = makeRng(id('supplies'));
-    const wanted = castFor(env.visit, env.level.depth ?? 0).flatMap(m => CAST.find(k => k.id === m.id)?.items || []);
+    // …for whoever is dealt to this part: the cast, and the residents of its rooms (a deck line's `items`)
+    const wanted = [...castFor(env.visit, env.level.depth ?? 0).flatMap(m => CAST.find(k => k.id === m.id)?.items || []), ...wantedByRooms(env.level, ARCHETYPES)];
     for (const { id: key, type, rooms, ...made } of planSupplies(env.level, wanted)) {
       let placed = false;
       for (const roomId of rooms) {
@@ -156,16 +157,34 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     }
   }
 
+  // What a room put down for somebody to find (c.leave: world.js): where the room said, or on the nearest clear floor to
+  // it if a thing cannot lie there after all. The room is told when it is picked up.
+  function leftByRooms(floor) {
+    const { env, physical, id } = floor;
+    for (const rt of env.world.rooms) (rt.left || []).forEach((l, i) => {
+      const key = id(`left:${rt.id}:${i}`), make = () => makeItem(l.type, key, { quantity: l.quantity, charge: l.charge });
+      let ok = false;
+      try {
+        ok = physical.spawn(make(), { room: rt.id, x: l.x, z: l.z, ...(l.y ? { y: l.y } : {}) }).ok;
+        for (let ring = 0; ring < 14 && !ok; ring++) for (let k = 0; k < 8 && !ok; k++) {
+          const a = k * 0.785 + ring * 0.4, r = 0.3 + ring * 0.2;
+          ok = physical.spawn(make(), { room: rt.id, x: l.x + Math.cos(a) * r, z: l.z + Math.sin(a) * r }).ok;
+        }
+      } catch { ok = false; }
+      if (ok && l.taken) floor.taken.set(key, l.taken);
+    });
+  }
+
   /** Build-time ownership: the floor can be visible below us without having
    * a player yet. Its supply meshes stay in its scene when the seam moves it. */
   function hang(next) {
     if (disposed || !next?.world || !next.kit || retired.has(next)) return null;
     if (floors.has(next)) return floors.get(next).facade;
     const prefix = `inventory:${JSON.stringify([String(next.level.seed), next.level.depth ?? 0])}:`;
-    const floor = { env: next, id: key => prefix + key, physical: null, facade: null };
+    const floor = { env: next, id: key => prefix + key, physical: null, facade: null, taken: new Map() };
     floor.physical = createInventoryWorld(next, model, {
       canAct: () => available(floor), onNotice: tell,
-      onPickup: item => { refresh(); tell(item.type === 'paper' ? `Paper +${item.quantity}` : ITEM_DEFS[item.type]?.name || 'Picked up'); },
+      onPickup: item => { refresh(); try { floor.taken.get(item.id)?.(item); } catch { /* a room's own affair */ } floor.taken.delete(item.id); tell(item.type === 'paper' ? `Paper +${item.quantity}` : ITEM_DEFS[item.type]?.name || 'Picked up'); },
     });
     // NPCs keep this floor-scoped handle. A stale handle from the part above
     // cannot inspect or mutate what somebody now carries on the next floor.
@@ -178,7 +197,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
       count: type => !disposed && active === floor ? count(type) : 0,
     };
     floors.set(next, floor); next.inventory = floor.facade;
-    try { scatter(floor); }
+    try { scatter(floor); leftByRooms(floor); }
     catch (err) { forget(next); throw err; }
     return floor.facade;
   }

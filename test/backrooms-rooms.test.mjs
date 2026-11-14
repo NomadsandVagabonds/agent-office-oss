@@ -120,3 +120,25 @@ test('pacing: two rooms in three are plain on every floor, no doorway from one o
   }
   assert.ok(floors > 100 && least < 1);
 });
+
+test('somebody lives in a room: it says who, what a catch costs and what they care about, and a part of the building has one such room at most', () => {
+  const ITEM_TYPES = ['torch', 'battery', 'chalk', 'paper', 'pink-slip', 'scissors', 'snack', 'balloon'];
+  const lived = EVERY.filter((a) => a.resident !== undefined);
+  assert.equal(new Set(lived.map((a) => a.resident)).size, lived.length, 'no two rooms have the same resident');
+  for (const a of lived) {
+    assert.match(a.resident, /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, `${a.id}: resident is the id of whoever lives there`);
+    assert.ok(Number.isInteger(a.caught) && a.caught >= 0 && a.caught <= 2, `${a.id}: caught is the hearts a catch costs, 0 to 2: nothing down here takes all four at once`);
+    assert.ok(Array.isArray(a.items) && a.items.every((t) => ITEM_TYPES.includes(t)), `${a.id}: items are things a visitor can carry`);
+    assert.ok(!a.headline, `${a.id}: a room from the news has nobody anybody could be asked about`);
+  }
+  let parts = 0, withOne = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const visit = planVisit(`lived-${seed}`, office);
+    for (let i = 0; i < visit.depths; i++) {
+      const here = floorOf(visit, i).rooms.filter((r) => r.arch && ARCHETYPES[r.arch].resident);
+      parts++; if (here.length) withOne++;
+      assert.ok(here.length <= 1, `seed lived-${seed}, part ${i}: ${here.map((r) => r.arch).join(' and ')} on one part`);
+    }
+  }
+  if (lived.length) assert.ok(withOne > 0 && withOne < parts, `rooms with residents are dealt, and not to every part (${withOne} of ${parts})`);
+});

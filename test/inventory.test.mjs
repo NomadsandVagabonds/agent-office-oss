@@ -253,20 +253,22 @@ test('healing consumes the original held snack even if feedback changes selectio
 });
 
 test('explicit room aliases normalize to canonical types without creating paper variants', () => {
-  const aliases = { 'loose-papers': 'paper', 'pink-slip': 'paper', 'red-balloon': 'balloon', 'facilities-flashlight': 'torch' };
+  const aliases = { 'loose-papers': 'paper', 'red-balloon': 'balloon', 'facilities-flashlight': 'torch' };
   for (const [alias, canonical] of Object.entries(aliases)) {
     assert.equal(normalizeItemType(alias), canonical);
     assert.equal(normalizeItemType(canonical), canonical);
     assert.equal(makeItem(alias, alias).type, canonical);
   }
   assert.equal(makeItem('facilities-flashlight', 'lamp', { charge: 12 }).charge, 12);
+  // the pink slip is its own thing (FORM HR-404), one to a pocket: it never joins a stack of paper
   const pink = makeItem('pink-slip', 'slip', { quantity: 2, variant: 'pink', label: 'pink slip' });
-  assert.deepEqual(pink, { id: 'slip', type: 'paper', quantity: 2 });
+  assert.deepEqual(pink, { id: 'slip', type: 'pink-slip' });
   const model = createInventory();
   model.add(makeItem('loose-papers', 'loose', { quantity: 8 })); model.add(pink);
-  assert.deepEqual(model.read().slots[0], { id: 'loose', type: 'paper', quantity: 10 });
-  assert.equal(model.read().slots.filter(Boolean).length, 1);
-  assert.throws(() => makeItem('pink-slip', 'too-many', { quantity: 11 }), RangeError);
+  assert.deepEqual(model.read().slots[0], { id: 'loose', type: 'paper', quantity: 8 });
+  assert.deepEqual(model.read().slots[1], { id: 'slip', type: 'pink-slip' });
+  assert.equal(model.read().slots.filter(Boolean).length, 2);
+  assert.throws(() => makeItem('paper', 'too-many', { quantity: 11 }), RangeError);
   assert.equal(model.add({ id: 'too-many', type: 'loose-papers', quantity: 11 }).reason, 'invalid-item');
   for (const unknown of ['Paper', 'pink slip', 'pink-slips', 'red_balloon', ' torch ', '__proto__', 'constructor', {}, undefined, null]) {
     assert.equal(normalizeItemType(unknown), null);
@@ -277,7 +279,8 @@ test('explicit room aliases normalize to canonical types without creating paper 
 test('a held paper stack gives exactly one sheet and rejects requests aimed at other pockets', () => {
   const model = createInventory();
   model.add(item('paper', 'held-paper', { quantity: 4 })); model.add(item('scissors', 'tool'));
-  const handed = model.consumeSelected('pink-slip');
+  unchanged(model, () => model.consumeSelected('pink-slip'), 'wrong-item');          // (paper is not a pink slip: what eats either asks for what is held — items.js)
+  const handed = model.consumeSelected('loose-papers');
   assert.deepEqual(handed, { ok: true, action: 'consume', item: { id: 'held-paper', type: 'paper', quantity: 1 }, index: 0 });
   assert.equal(model.read().slots[0].quantity, 3);
   handed.item.quantity = 100;

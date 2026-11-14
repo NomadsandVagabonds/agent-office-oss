@@ -91,6 +91,50 @@ export function createSound(level, opt = {}) {
     creak: (o = {}) => { tone({ vol: 0.05 * (o.vol ?? 1), pan: o.pan, dur: 0.35, freq: 90 + Math.random() * 30, to: 140, type: 'sawtooth', attack: 0.05 }); burst({ vol: 0.07 * (o.vol ?? 1), pan: o.pan, dur: 0.05, freq: 420, q: 2, type: 'bandpass', when: 0.3 }); },
     // a ceiling tile that was never meant to be stood on
     crack: (o = {}) => { burst({ vol: 0.3 * (o.vol ?? 1), dur: 0.12, freq: 1800, q: 0.6, attack: 0.001 }); burst({ vol: 0.2 * (o.vol ?? 1), dur: 0.35, freq: 420, q: 0.8, attack: 0.002, when: 0.03 }); tone({ vol: 0.14 * (o.vol ?? 1), dur: 0.3, freq: 160, to: 60, type: 'triangle', when: 0.02 }); },
+    // a cheerful five-note corridor whistle, slightly flat on the turn
+    whistle: (o = {}) => {
+      const notes = [[784, 880, 0, 0.22], [988, 988, 0.24, 0.18], [880, 784, 0.44, 0.22], [659, 698, 0.68, 0.2], [784, 772, 0.9, 0.34]];
+      for (const [f0, f1, w, d] of notes) {
+        tone({ vol: 0.065 * (o.vol ?? 1), pan: o.pan, dur: d, freq: f0, to: f1, type: 'sine', attack: 0.03, when: w });
+        burst({ vol: 0.014 * (o.vol ?? 1), pan: o.pan, dur: d, freq: f0 * 2, q: 5, type: 'bandpass', attack: 0.03, when: w });
+      }
+    },
+    // cross-cut rollers taking a sheaf of paper
+    shred: (o = {}) => {
+      tone({ vol: 0.08 * (o.vol ?? 1), pan: o.pan, dur: 1.05, freq: 145, to: 118, type: 'sawtooth', attack: 0.04 });
+      burst({ vol: 0.14 * (o.vol ?? 1), pan: o.pan, dur: 0.95, freq: 2400, q: 1.1, type: 'bandpass', attack: 0.03 });
+      for (let i = 0; i < 6; i++) burst({ vol: 0.09 * (o.vol ?? 1), pan: o.pan, dur: 0.07, freq: 3400 + i * 180, q: 2.2, type: 'bandpass', when: 0.08 + i * 0.13 });
+    },
+    // a safety marshall's pea whistle
+    peawhistle: (o = {}) => {
+      for (let i = 0; i < 4; i++) {
+        tone({ vol: 0.11 * (o.vol ?? 1), pan: o.pan, dur: 0.13, freq: 2820, to: 2940, type: 'triangle', attack: 0.008, when: i * 0.09 });
+        tone({ vol: 0.07 * (o.vol ?? 1), pan: o.pan, dur: 0.13, freq: 2995, to: 2860, type: 'sine', attack: 0.008, when: i * 0.09 });
+      }
+      burst({ vol: 0.06 * (o.vol ?? 1), pan: o.pan, dur: 0.42, freq: 3100, q: 3.5, type: 'bandpass', attack: 0.01 });
+    },
+    // long chrome shears closing on air
+    snip: (o = {}) => {
+      burst({ vol: 0.15 * (o.vol ?? 1), pan: o.pan, dur: 0.045, freq: 3600, q: 3.2, type: 'bandpass', attack: 0.001 });
+      tone({ vol: 0.09 * (o.vol ?? 1), pan: o.pan, dur: 0.11, freq: 1380, to: 720, type: 'triangle', attack: 0.001, when: 0.01 });
+    },
+    // a tired paper party-horn
+    partyhorn: (o = {}) => {
+      for (const f of [311, 370, 466]) tone({ vol: 0.042 * (o.vol ?? 1), pan: o.pan, dur: 0.48, freq: f, to: f * 0.96, type: 'sawtooth', attack: 0.04 });
+      burst({ vol: 0.04 * (o.vol ?? 1), pan: o.pan, dur: 0.45, freq: 1100, q: 2.5, type: 'bandpass', attack: 0.03 });
+    },
+    // two brisk clicks of a retractable pen
+    penclick: (o = {}) => {
+      for (const w of [0, 0.085]) {
+        burst({ vol: 0.13 * (o.vol ?? 1), pan: o.pan, dur: 0.018, freq: 4100, q: 3.5, type: 'bandpass', attack: 0.001, when: w });
+        tone({ vol: 0.05 * (o.vol ?? 1), pan: o.pan, dur: 0.025, freq: 1900, to: 900, type: 'triangle', attack: 0.001, when: w });
+      }
+    },
+    // live patch cabling waking out of the plenum
+    buzz: (o = {}) => {
+      tone({ vol: 0.11 * (o.vol ?? 1), pan: o.pan, dur: 0.45, freq: 120, to: 92, type: 'sawtooth', attack: 0.01 });
+      burst({ vol: 0.12 * (o.vol ?? 1), pan: o.pan, dur: 0.22, freq: 2900, q: 1.8, type: 'bandpass', attack: 0.003 });
+    },
     static: (o = {}) => burst({ vol: 0.12 * (o.vol ?? 1), dur: o.dur || 0.9, freq: 4200, q: 0.4, type: 'highpass', attack: 0.05 }),
   };
 

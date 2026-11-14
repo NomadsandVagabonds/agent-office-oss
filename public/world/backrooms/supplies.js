@@ -29,6 +29,14 @@ const ALWAYS = new Set(['battery', 'snack', 'torch', 'chalk']);
 const KNOWN = new Set(['torch', 'battery', 'chalk', 'paper', 'scissors', 'snack', 'balloon']);
 
 /**
+ * What the residents of a part's rooms care about: the `items` of the deck line of every room on it.
+ * (A thing only somebody hands out — a pink slip — is nobody's to find lying about, and is not in KNOWN.)
+ */
+export function wantedByRooms(level, archetypes) {
+  return [...new Set(level.rooms.flatMap((r) => (r.arch && archetypes[r.arch] && archetypes[r.arch].items) || []))];
+}
+
+/**
  * The rooms something may be left in: anywhere but where you land, the way down, and a room an earlier visitor has
  * left something in (nothing else is ever put in one of those: gen.js).
  */

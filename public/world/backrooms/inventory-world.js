@@ -7,7 +7,7 @@ import { INVENTORY_MODELS } from './inventory-items.js';
 import { makeItem, ITEM_DEFS } from './inventory-state.js';
 
 const REACH = 1.35, MARK_R = .33, MAX_MARKS = 24;
-const ITEM_RADIUS = Object.freeze({ torch: .30, battery: .19, chalk: .16, paper: .31, scissors: .29, snack: .23, balloon: .26 });
+const ITEM_RADIUS = Object.freeze({ torch: .30, battery: .19, chalk: .16, paper: .31, 'pink-slip': .28, scissors: .29, snack: .23, balloon: .26 });
 const ITEM_HEIGHT = Object.freeze({ balloon: 1.4 });
 const copy = item => ({ ...item });
 const label = item => item.type === 'paper' ? `Paper × ${item.quantity}` : item.type === 'battery' ? 'Batteries' : ITEM_DEFS[item.type].name;

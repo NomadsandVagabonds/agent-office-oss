@@ -35,6 +35,8 @@ import { createHud } from './hud.js';
 import { createSound } from './sound.js';
 import { createInput } from './input.js';
 import { createStalkers } from './pursuer.js';
+import { createHand } from './hand.js';
+import { createDenizens } from './denizens.js';
 import { createLoot, lootLeft } from './loot.js';
 import { leaving } from './leaving.js';
 import { middle, THIN_BEHIND } from './marks.js';
@@ -137,7 +139,7 @@ async function visit(office, opt) {
   let hold = false, landed = -1, heldAt = null;           // a room has the controls (a chute) · seconds since you came down in a new part · where you went over, while held
   let going = null;
   let out = null;                                         // by the way out: where the camera was when the wall gave, and which way is out
-  let pictureKey = '', currentUse = null, light = 0.3, torch = 0, interference = 0, pendingQuit = false, kept = { card: false, coins: [], batteries: 0 };
+  let pictureKey = '', currentUse = null, light = 0.3, torch = 0, interference = 0, redWash = 0, pendingQuit = false, kept = { card: false, coins: [], batteries: 0 };
   let inventory = null, survival = null;
   const canAct = () => state === 'play' && !hold && !going;
   // A real fall and a chute consume recording time. Waiting for a part to
@@ -249,6 +251,9 @@ async function visit(office, opt) {
     /** What creatures tell the visit, for the card at the end: this one was met; this one was got away from. */
     env.run = { met: (id) => tally.met(id), survived: (id) => tally.survived(id) };
     createStalkers(env);
+    // the residents of rooms (denizens.js), and the visitor's hand as they ask after it; the picture washed red (0…1) by a room that does that
+    createHand(env); createDenizens(env);
+    env.red = (k) => { redWash = Math.max(redWash, k); };
     env.loot = purse;
     purse?.hang(env);
     let breath = performance.now();                       // build as fast as the machine allows, but keep the static moving
@@ -282,6 +287,7 @@ async function visit(office, opt) {
     if (f.player) tally.part(f.world);                    // (a part somebody was in is counted as it goes: after this it is gone)
     inventory?.forget(f.env);
     f.env.pursuer?.dispose?.();
+    f.env.denizens?.dispose?.();
     f.world?.scene.removeFromParent();
     f.world?.dispose(); f.kit.dispose();
   }
@@ -368,7 +374,8 @@ async function visit(office, opt) {
     player.update(dt, time);
     me.slow = 1; me.sinkTo = 0;                              // rooms that slow you or make you stoop say so every frame
     world.update(dt, time, me);
-    if (state !== 'held' && state !== 'drop') env.pursuer?.update(dt, time);          // (nothing gets you while the building has you)
+    if (state !== 'held' && state !== 'drop') { env.pursuer?.update(dt, time); env.denizens?.update(dt, time); }          // (nothing gets you while the building has you)
+    redWash *= Math.exp(-3.2 * dt); u.uRed.value = clamp(redWash, 0, 1);
     // the part below: begun once you have found your feet in this one, and only drawn from where it could be seen
     if (state === 'play' && !ahead && since > 4 && goesDown(cur.level.exit.way)) prepare();
     if (ahead?.f) { const at = world.current(); ahead.f.world.scene.visible = !!at && (at.def.toExit ?? 9) <= 1; }
