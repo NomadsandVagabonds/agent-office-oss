@@ -27,6 +27,31 @@ export const WARNINGS = Object.freeze({
     ['MIND HIS BUCKET.', 'IF YOU KNOCK IT OVER', 'PUT IT BACK OR HE'],
     ['THE MAN WITH THE MOP', 'IS FINE UNLESS YOU', 'KICK THE'],
   ],
+  // the residents of rooms (deck2.js `resident`)
+  'trunk-line': [
+    ['DONT WALK UNDER THE', 'CABLES. GO ROUND.', 'IT DROPPED ON'],
+    ['THE WIRES ARE ALIVE', 'SHUT THE DOOR ON IT', 'IT CANT WORK THE'],
+  ],
+  'retention-clerk': [
+    ['SHE WANTS PAPER.', 'ANY PAPER. GIVE HER', 'SOME OR SHE PUTS'],
+    ['IF YOU HEAR WHISTLING', 'HAVE A SHEET READY', 'I DIDNT AND MY ARM'],
+  ],
+  'fun-committee': [
+    ['TAKE A RED BALLOON IN', 'WITH YOU. THEY THINK', 'YOU ARE ONE OF'],
+    ['NO BALLOON = THEY ALL', 'TURN ROUND. I RAN.', 'THE HATS ARE'],
+  ],
+  'stand-ins': [
+    ['KEEP THE TORCH ON', 'THEM. THE ONES YOU', 'ARE NOT LIGHTING'],
+    ['NOT WITHOUT A LIGHT.', 'IT GOES RED AND THEN', 'YOU ARE BACK AT'],
+  ],
+  'floor-warden': [
+    ['WALK. DO NOT RUN.', 'HE ONLY MINDS IF YOU', 'RUN. THE SCISSORS'],
+    ['IF HE CHASES KEEP', 'GOING. HE CANT KEEP', 'IT UP. HE FALLS ON'],
+  ],
+  'efficiency-partners': [
+    ['THE TWO IN SUITS ARE', 'HARMLESS. THEY GAVE', 'ME A PINK'],
+    ['TAKE THE PINK FORM.', 'THE SHREDDER LADY', 'WILL HAVE IT IF'],
+  ],
 });
 /** Somebody we have no drawing lessons for yet: they saw it, and that is all they got down. */
 const UNKNOWN = [['SAW SOMETHING IN', 'HERE. DID NOT STAY', 'TO FIND OUT WHAT IT']];

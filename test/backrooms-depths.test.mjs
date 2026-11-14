@@ -695,6 +695,17 @@ test('drawings on the walls: only ever of something that is in this visit, on it
       assert.ok(!/[.!?…]$/.test(lines[lines.length - 1].trim()), `${m.id}: "${lines[lines.length - 1]}" — they finished the sentence`);
     }
   }
+  // …and the same for whoever lives in a room (deck2.js `resident`): words of their own, not the room's landmark
+  const residents = DECK.filter((a) => a.resident);
+  assert.ok(residents.length >= 6);
+  for (const a of residents) {
+    assert.ok(Array.isArray(WARNINGS[a.resident]) && WARNINGS[a.resident].length >= 2, `nobody has drawn ${a.resident}`);
+    for (const lines of WARNINGS[a.resident]) {
+      assert.ok(lines.length >= 2 && lines.length <= 4 && lines.every((l) => l.length <= 22 && l === l.toUpperCase()), `${a.resident}: ${JSON.stringify(lines)}`);
+      assert.ok(!norm(lines.join(' ')).includes(norm(a.landmark)), `${a.resident}: the wall quotes the deck`);
+      assert.ok(!/[.!?…]$/.test(lines[lines.length - 1].trim()), `${a.resident}: "${lines[lines.length - 1]}" — they finished the sentence`);
+    }
+  }
   const R = { pick: (l) => l[0] };
   assert.deepEqual(warningFor('pirate', R), WARNINGS.pirate[0]);
   assert.ok(warningFor('somebody-new', R).length >= 2, 'a creature nobody has words for yet still gets an honest scrawl');
@@ -709,6 +720,13 @@ test('drawings on the walls: only ever of something that is in this visit, on it
       assert.ok(drawings.length <= 1, `seed ${seed}, part ${i}: ${drawings.length} drawings`);
       for (const d of drawings) {
         withOne++;
+        const lives = residents.find((a) => a.resident === d.of);
+        if (lives) {                                              // somebody who lives in a room: that room is in this part or the next
+          assert.ok([floors[i], floors[i + 1]].some((l) => l && l.picked.includes(lives.id)), `seed ${seed}, part ${i}: a drawing of ${d.of}, whose room is not here or below`);
+          assert.ok(WARNINGS[d.of].some((lines) => JSON.stringify(lines) === JSON.stringify(d.text)));
+          drawnOf.set(d.of, (drawnOf.get(d.of) || 0) + 1);
+          continue;
+        }
         const who = company.find((m) => m.id === d.of);
         assert.ok(who, `seed ${seed}, part ${i}: a drawing of ${d.of}, who is not in this visit`);
         const at = who.floor === null ? visit.mascot : who.floor;
@@ -720,4 +738,5 @@ test('drawings on the walls: only ever of something that is in this visit, on it
   }
   assert.ok(withOne / parts > 0.3 && withOne / parts < 0.7, `a drawing on ${withOne} of ${parts} parts`);
   for (const m of CAST) assert.ok(drawnOf.get(m.id) > 0, `${m.id} is never drawn`);
+  for (const a of residents) assert.ok(drawnOf.get(a.resident) > 0, `${a.resident} is never drawn`);
 });

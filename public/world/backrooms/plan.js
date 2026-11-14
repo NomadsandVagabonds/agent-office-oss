@@ -164,7 +164,9 @@ export function floorOf(visit, i) {
       hand: f.hand, rooms: f.rooms,
       // who an earlier visitor might have drawn on a wall here: whoever is on this part or the one below (the mascot from the
       // part above his own onward: he follows people down). Never anybody who is not in the visit
-      drawn: castFor(visit).filter((m) => (m.floor === null ? visit.mascot !== null && k >= visit.mascot - 1 : m.floor === k || m.floor === k + 1)).map((m) => m.id),
+      // …nor a resident whose room is not in this part's hand or the next one's (deck2.js `resident`)
+      drawn: [...castFor(visit).filter((m) => (m.floor === null ? visit.mascot !== null && k >= visit.mascot - 1 : m.floor === k || m.floor === k + 1)).map((m) => m.id),
+        ...[f, visit.floors[k + 1]].flatMap((p) => (p ? p.hand : [])).map((id) => ARCHETYPES[id] && ARCHETYPES[id].resident).filter(Boolean)],
       bleed: { prev: f.prev && { theme: f.prev, paper: `${visit.seed}/${k - 1}` }, next: f.next && { theme: f.next, paper: `${visit.seed}/${k + 1}` } },
       // what the floors above have had the chance to teach: a room that takes more than that for granted is not dealt here
       known,
