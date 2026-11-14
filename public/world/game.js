@@ -7,6 +7,10 @@
 //   office.game.left('pasture')            → { card: true, coins: [1, 3] }   what has not been taken yet
 //   office.game.take('pasture', 'coin', 3) → Promise<answer>                 it is yours (and gone from the floor)
 //   office.game.view()                     → what the office says (open floors, the jar, prizes), or null
+//
+// The purse also shows whenever the jar has more in it than it last said, however
+// that came about: a stamp in somebody's passport pays a coin (core/game.mjs), and
+// that is the one place a person can see that it does.
 import { h } from './ui/dom.js';
 import { hideoutById } from '/core/game.mjs';
 
@@ -14,6 +18,8 @@ export function createGame(office) {
   const net = office.net;
   const taken = new Set();                 // 'pasture:coin:2' — picked up here, not yet confirmed back
   let purse = null, purseTimer = null;
+  let jar = null;                          // what the purse last said is in the jar (null: it has not said anything yet)
+  let last = { item: null, at: 0 }, next = null, nextTimer = null;
   const key = (hideout, item, n) => `${hideout}:${item}:${item === 'coin' ? n : 0}`;
   const view = () => net.state.world?.game || null;
 
@@ -27,10 +33,23 @@ export function createGame(office) {
     return { card: !(loot?.card) && !taken.has(key(hideoutId, 'card')), coins };
   }
 
-  /** The purse: a coin and how many are in the jar, or a keycard, shown for a moment and then gone. */
+  /**
+   * The purse: a coin and how many are in the jar, or a keycard, shown for a moment and then gone. A card and a coin
+   * never talk over each other: whichever is showing is given time to be read, and the other follows it.
+   */
   function flash(item, count) {
     const root = document.getElementById('ui');
     if (!root) return;
+    const now = Date.now(), wait = last.item && last.item !== item ? 1100 - (now - last.at) : 0;
+    if (wait > 0) {
+      next = [item, count];
+      clearTimeout(nextTimer);
+      nextTimer = setTimeout(() => { const n = next; next = null; if (n) flash(n[0], n[1]); }, wait);
+      return;
+    }
+    if (next && next[0] === item) { next = null; clearTimeout(nextTimer); }
+    last = { item, at: now };
+    if (item === 'coin') jar = count;
     if (!purse) purse = h('div.purse');
     if (purse.parentNode !== root || purse.nextSibling) root.append(purse);       // over whichever floor you are on
     purse.replaceChildren(item === 'card' ? h('i.card') : h('i.coin'), item === 'card' ? '' : h('b', String(count)));
@@ -63,5 +82,18 @@ export function createGame(office) {
     }
   }
 
-  return { view, left, take, flash };
+  /**
+   * Has the jar more in it than the purse last said? Then it says so: a stamp was earned (by anybody), or something
+   * was carried out of a place that keeps its own count until you leave. Not while that place has the screen — the
+   * purse could not be seen — so whatever arrived meanwhile is shown when you are back.
+   */
+  function show() {
+    const have = view()?.coins?.have;
+    if (typeof have !== 'number') return;
+    if (jar === null || have < jar) { jar = have; return; }
+    if (have > jar && !document.body.classList.contains('noclip')) flash('coin', have);
+  }
+  net.on?.('world', show);
+
+  return { view, left, take, flash, show };
 }

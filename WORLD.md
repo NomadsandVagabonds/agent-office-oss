@@ -318,7 +318,11 @@ the person playing (`core/game.mjs` is the whole of the rules; it is pure):
 - **Coins.** Each of those places hides a few (15 in all). A coin taken is gone
   for good — the office remembers which — and goes into **one jar for the whole
   office**. Every stamp in anybody's passport (§6) pays a coin into the same
-  jar, which is what ties the older secrets to the newer ones.
+  jar, which is what ties the older secrets to the newer ones. Whenever the jar
+  gains something a small purse shows for a moment, with a coin and what the
+  jar now holds — for a coin picked up, and just the same for a stamp, whoever
+  earned it. That is the only place it is ever said that a secret is worth a
+  coin.
 - **The vending machine.** Walk up to it in the kitchen: behind the glass are
   eight things the jar can buy, each bought once. What comes out stands on top
   of the machine from then on, where everybody can see it. The last place on
