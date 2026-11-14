@@ -248,6 +248,26 @@ Nothing else is needed, and nothing else should change: a room that needs a
 change to the generator, the player or the toolbox says so in words instead of
 making it.
 
+## How a visit ends, and the card
+
+A visit resolves with `{ reason, kept, run }`. `reason` is `'exit'` (out by
+the wall), `'caught'`, `'battery'` (the camcorder ran flat) or `'quit'`.
+`kept` is what was carried out (`card`, `batteries`); `run` is what the visit
+counted: `{ seed, seconds, parts: { reached, of }, rooms: { explored, kinds },
+cast: { met, survived }, hearts }`. A creature tells the count about itself:
+`env.run?.met(id)` the first time it is really seen, `env.run?.survived(id)`
+each time it had somebody and they got away.
+
+Before it resolves, the visit shows the card (`scorecard.js`): a form with a
+line and a picture for everything, and a rubber stamp for how it went. What
+the lines are worth is `POINTS` in `core/runs.mjs`; the first four are earned
+however the visit ended, the rest only by getting out. The office keeps the
+best score, every kind of room and resident anybody has met, and the tape
+(the seed) of each visit that got out; on the level's own page, where there
+is no office, the browser keeps the same record by the same rules. The jar
+is paid for spare batteries only when a visit brings out more than any
+before it (`payFor` in `core/game.mjs`).
+
 ## The level on a page of its own
 
 To show somebody the level without an office to run it in:
