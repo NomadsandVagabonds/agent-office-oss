@@ -24,7 +24,7 @@ Contents
 14. [The office surface: HTTP, bus, CLI, MCP, settings](#14-the-office-surface)
 15. [Security position](#15-security-position)
 16. [What is tested, and what has only met fakes](#16-what-is-tested-and-what-has-only-met-fakes)
-17. [What remains](#17-what-remains)
+17. [Where this stands against T3 Code, and what is next](#17-where-this-stands-against-t3-code-and-what-is-next)
 
 ---
 
@@ -1282,44 +1282,66 @@ decides when):
    misread; that file is the evidence to fix the adapter from, and the source
    for turning our fakes into recorded replays.
 
-## 17. What remains
+## 17. Where this stands against T3 Code, and what is next
 
-In rough order of value:
+T3 Code is the map this work is drawn from (section 2). Where each of its
+harness capabilities stands here — said once, so that nobody has to work it
+out from the code:
 
-- **Run it against the real agents** (the list above) and fix what differs.
-  Then record real frames and replay them in tests, as T3 does.
-- **A native Claude Code adapter** over `--input-format/--output-format stream-json`,
-  so Claude needs no wrapper to be driven.
-- **Resume.** ACP `session/load` and Codex `thread/resume` exist; a driven
-  session could survive a daemon restart, or be reopened later. Needs the
-  native id to become a durable binding, and pending requests marked
-  not-resumable.
-- **Orphans.** If the daemon is killed outright, a child that does not exit on
-  a closed stdin keeps running. A pid file per session and a sweep at start
-  would close that.
-- **Isolation for delegates.** A delegate works in its delegator's folder. A
-  worktree per delegate (the workspace layer) would let several write at once.
-- **Images and files in a turn**; ACP **elicitation** (forms); **steering** a
-  running turn instead of queueing behind it.
-- **Sub-agents inside a driven session.** Claude's Agent/Task tool and Codex's
-  collaboration threads show up here as ordinary tool calls, and updates for a
-  child session id are ignored. T3 tracks them as child executions
-  (`packages/provider-acp-registry/src/server/claudeAcp.ts`); the office could
-  show them as the helpers it already draws for hook-driven Claude sessions.
-- **Checkpoints and rollback** of a session's file changes.
-- **Codex instructions** through its own developer-message channel rather than
-  the first-turn framing.
-- **Per-actor identity** — everything in section 15's list — before any
-  network exposure.
-- **The client, further.** The 3D client now has all of this (section 14, "In
-  the interface"). Still to do there: a finished session's record is read
-  whole rather than paged, a long streamed reply is redrawn rather than
-  appended to, and tool output is plain text (no diff view for edits).
+| what T3 Code does | here |
+| --- | --- |
+| One adapter interface, several providers; Codex over its app-server; any ACP agent | **built** (sections 6–7): `acp`, `codex-app-server`; an operator's own entry for anything else that speaks ACP |
+| Claude Code driven natively (no wrapper) | **being built**: a `claude` adapter over its stream-json mode, with the same approvals and the same controls. Until it lands Claude is driven through its ACP wrapper |
+| Approvals as real requests: once, for the session, reject; questions answered in words | **built** (section 8) |
+| Runtime modes (supervised … full access), enforced by the agent where it can | **built**: `mode` ask / edits / full; for Codex it is now a per-turn policy, so it can be changed while the agent runs, and what Codex reports is believed over what was asked (section 14) |
+| Model, reasoning effort and plan mode chosen in the composer | **built** (section 14): `controls.model`, `effort`, `agentMode`, read from the agent itself — no catalogue of ours — with the bar under the console's prompt and `/model`, `/effort`, `/mode` |
+| Switching provider on a thread: native resume where possible, a recorded handoff otherwise | **partly**: the handoff half — `context` on a new session carries a conversation on with another agent (sections 12, 14). No native resume yet (below) |
+| A transcript of items with a live feed | **built** (section 9) |
+| Sub-agents, and one agent handing work to another | **built**, as delegation between providers with budgets and hop limits (section 11) and mail that wakes (section 10); an agent's own sub-agents are not shown yet (below) |
+| Checkpoints of the working tree per turn; a diff of what a turn changed; restore | **being built**: snapshots per turn and `/diff`, kept entirely in the office's own folder — nothing is written into the user's repository. Restore comes after (below) |
+| Usage and rate limits per provider | **built** (section 13) |
+| A terminal-style thread view; projects with their threads in a sidebar | **built**: the console, in the browser and as `office chat` (section 14) |
+| Recorded real sessions replayed in tests | **not yet** — everything here has only met fakes (section 16). First on the list below |
+| Resume after a restart (`thread/resume`, `session/load`) | **not yet** |
+| Images and files attached to a turn; steering a running turn | **not yet** |
+| A worktree per thread | **not yet** here; the workspace layer warns about overlap today |
+| Child executions shown inside a thread (Claude's Task tool, Codex's collaboration threads) | **not yet**: they appear as ordinary tool calls |
+| Several accounts per provider; remote pairing of devices; pull-request views; voice | **not taken** (section 4): the office holds no credentials and is a local-first tool |
 
-Things in T3 Code this work did not get to, which the owner may want to look
-at: its git checkpointing (`apps/server/src/checkpointing/`), its handling of
-several accounts per provider (`docs/internals/providers.md`, "instances"), its
-remote pairing model (`docs/internals/remote.md`), its provider-switch model
-where a thread resumes natively when it can and falls back to a handoff only
-when it must (`docs/orchestration-v2/provider-switching-and-context.md`), and
-its text-delta coalescer (`apps/server/src/orchestration-v2/Adapters/ProviderTextDeltaCoalescer.ts`).
+Next, in the order it will be done, and why that order:
+
+1. **Meet the real agents.** One command that runs the same scripted
+   conversation against each installed agent (`claude`, `codex`, `gemini`,
+   `opencode`) with tracing on, compares what came back with what the adapters
+   expect, and saves the frames as fixtures the suite replays — T3's replay
+   tests. It costs the operator a few cents of their own allowance and is the
+   only way to turn "built against the schema" into "works". Everything else
+   on this list is worth less until this is done, which is why it is first.
+2. **Resume, and no orphans.** A driven session should survive a daemon
+   restart (ACP `session/load`, Codex `thread/resume`, Claude `--resume`): the
+   native id becomes a durable binding, requests that were pending are marked
+   as lost rather than replayed. With it, a pid file per session and a sweep
+   at start, so a child that outlived a killed daemon is found and ended.
+3. **Restore.** With snapshots per turn in place: put the working tree back
+   to how it was before a turn, as an explicit, confirmed, recorded act —
+   never automatic, and only for files that turn touched.
+4. **Steering.** Say something to an agent mid-turn instead of queueing behind
+   it, where the agent supports it (Codex `turn/steer`; Claude's streaming
+   input), and stop-then-send where it does not.
+5. **Attachments.** Images and files in a turn, for agents that declare they
+   take them (`features.images` is already read).
+6. **A worktree per delegate.** So that two agents handed work in the same
+   repository can both write. This belongs to the workspace layer; the harness
+   only has to start the session in the folder it is given.
+7. **Child executions.** Show an agent's own sub-agents as the helpers the
+   office already draws for hook-driven Claude sessions, instead of flattening
+   them into tool calls.
+8. **Per-actor identity** — everything in section 15's list — before any of
+   this is reachable from beyond the machine it runs on.
+
+Smaller things that are known and not forgotten: Codex's instructions should
+go through its developer-message channel rather than the first-turn framing; a
+finished session's record is read whole rather than paged; a long streamed
+reply is redrawn in the 3D client rather than appended to (the console already
+appends); the 3D client's session panel does not yet show the model, effort
+and own-mode controls that the console does.
