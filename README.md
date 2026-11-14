@@ -70,8 +70,8 @@ credentials; your agents keep their own auth. Setup details: [`AGENTS.md`](AGENT
 
 | | |
 |---|---|
-| **See everything** | Drag to slide the floor, right-drag to walk round it, scroll to lean in. Walls between you and a room fold away. `Space` frames the whole office. |
-| **Needs you** | Every blocked agent is a card you can answer in place (`N` jumps to the next one). Replies are typed into the agent's terminal when the office launched it, or left in its inbox when it did not — and the card tells you which. |
+| **See everything** | Drag to slide the floor, right-drag to walk round it, scroll to lean in. Walls between you and a room fold away. `Space` frames the whole office. The screen stays out of the way: a nameplate, two instruments, and a dock of seven keys along the bottom. |
+| **Needs you** | An in-tray, bottom right. However many agents are waiting, you are handed one slip: who is asking, what exactly, and which cards your answer is holding up. Arrows (or `N`) reach the rest; nothing stacks up. Where the agent's runtime can really be answered you get stamps (allow, always, deny); otherwise a line to write back on, typed into its terminal or left in its inbox. |
 | **Who is this?** | Click anyone: what they are doing, for which project, how full their context is, and a line straight to them. |
 | **Comms** (`C`) | Channels, your direct lines, and the notes agents pass each other. |
 | **Board** (`B`) | Drag-and-drop kanban per project — the same cards that hang on each room's wall. |
