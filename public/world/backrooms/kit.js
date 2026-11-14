@@ -25,10 +25,12 @@ const P = (g, c, x, y, w, h) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
 /** Where to cut a span so vertex lighting has something to hold on to: a loop near each end, then every `step`. */
 export function ticks(len, step = 0.5, edge = 0.16) {
   const out = [0];
-  if (len > edge * 3) out.push(edge);
+  // (edge 0 is "no margin", not "a margin of nothing": it used to add a strip of no width at each end, and a plain box
+  // came out as 108 triangles, 96 of them with no area)
+  if (edge > 0 && len > edge * 3) out.push(edge);
   const n = Math.max(1, Math.round(len / step));
   for (let i = 1; i < n; i++) { const v = (i * len) / n; if (v > edge * 1.7 && v < len - edge * 1.7) out.push(v); }
-  if (len > edge * 3) out.push(len - edge);
+  if (edge > 0 && len > edge * 3) out.push(len - edge);
   out.push(len);
   return out;
 }
