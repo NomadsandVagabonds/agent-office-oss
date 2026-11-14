@@ -51,20 +51,24 @@ These are the owner's, and every room is held to them.
 
 ## The shape of a floor
 
-A floor is 15 to 25 rooms. Six to nine of them are **oddities** (the rooms in
-the deck); the rest are **plain rooms**: wallpaper, carpet, tubes, a pillar or
-two, something somebody left behind. Measured over 225 floors, between 55% and
-68% of a floor's rooms are plain, and no oddity ever opens straight into
-another: there is always at least one plain room between them. A test holds
-every floor to more plain rooms than oddities, and holds the second rule
-exactly. The target is 60–80% plain, and the generator is being moved toward
-the upper end of that, with plain rooms that repeat until no one of them can
-be told from another.
+A floor is 20 to 40 rooms, about 30 as a rule. Five to eight of them are
+**oddities** (the rooms in the deck); the rest are **plain rooms**. Measured
+over 225 floors, between 73% and 81% of a floor's rooms are plain, and no
+oddity ever opens straight into another: there is always at least one plain
+room between them. Tests hold both.
+
+Plain rooms are not written one at a time, and they are meant to be hard to
+tell apart. Each floor has a small vocabulary (`quiet.js`, after Codex's
+quiet-maze study): two or three wall-and-pillar motifs, turned and used again
+and again, and one or two things that are quietly wrong, repeated in several
+rooms and never the mark of one — a partition with a hole at crawl height and
+another at head height, a whole workstation sunk in the carpet. Nothing in a
+plain room can be used.
 
 | kind | what it is | how often |
 |---|---|---|
-| plain | the connective rooms. Not written one at a time: the generator makes them from a wallpaper, proportions, pillars and whatever somebody left behind | most of every floor |
-| oddity | a room from the deck: one idea, a few metres across | six to nine a floor, none twice in a visit while the deck lasts |
+| plain | the connective rooms: a wallpaper, a carpet, tubes, and a layout from the floor's small vocabulary | three quarters of every floor |
+| oddity | a room from the deck: one idea, a few metres across | five to eight a floor, none twice in a visit while the deck lasts |
 | set piece | an oddity that says `big: true`, or has a view (`halo`) | one a floor at most |
 | from the news | a room the place has half-remembered from the headlines and staged wrongly (`headline: true`). Wordless and unnamed. **Only the owner decides which stories become rooms** | one a visit at most, in about a third of visits, never on the floor you land on |
 
@@ -233,6 +237,21 @@ If you can push a branch, push one. If you cannot, send back, as text:
 Nothing else is needed, and nothing else should change: a room that needs a
 change to the generator, the player or the toolbox says so in words instead of
 making it.
+
+## The level on a page of its own
+
+To show somebody the level without an office to run it in:
+
+```
+node tools/backrooms-sample/stage.mjs <folder>
+```
+
+copies the level's own page (`tools/backrooms-sample/index.html`: one screen,
+nothing on it but the level) and every module it needs into one folder that
+anything can serve. It follows the imports, and includes every room that lives
+in a file of its own. three.js comes from a CDN there, at the vendored
+version. The first tape on that page is always seed 7; after that, a different
+building every time.
 
 ## Where things are
 

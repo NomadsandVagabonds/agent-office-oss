@@ -102,7 +102,7 @@ test('lessons: one new thing to a room at most, every lesson on the list, and no
   for (const id of ids) assert.ok(taught.has(id) || EVERY.some((a) => a.on === false && lessons(a).teaches.includes(id)), `lesson ${id} is on the list, but no room teaches it`);
 });
 
-test('pacing: more plain rooms than oddities on every floor, no doorway from one oddity straight into another, one set piece to a floor', () => {
+test('pacing: two rooms in three are plain on every floor, no doorway from one oddity straight into another, one set piece to a floor', () => {
   let floors = 0, least = 1;
   for (let seed = 1; seed <= 40; seed++) {
     const visit = planVisit(`pace-${seed}`, office);
@@ -111,7 +111,7 @@ test('pacing: more plain rooms than oddities on every floor, no doorway from one
       floors++;
       const quiet = 1 - odd.length / level.rooms.length;
       least = Math.min(least, quiet);
-      assert.ok(quiet >= 0.5, `seed pace-${seed}, floor ${i}: only ${Math.round(quiet * 100)}% of its rooms are plain`);
+      assert.ok(quiet >= 0.65, `seed pace-${seed}, floor ${i}: only ${Math.round(quiet * 100)}% of its rooms are plain`);
       for (const r of odd) for (const d of r.doors) assert.notEqual(level.rooms[d.to].kind, 'special', `seed pace-${seed}, floor ${i}: ${r.arch} opens straight into ${level.rooms[d.to].arch}`);
       assert.ok(odd.filter((r) => isBig(ARCHETYPES[r.arch])).length <= 1, `seed pace-${seed}, floor ${i}: more than one set piece`);
     }

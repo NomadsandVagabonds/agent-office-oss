@@ -1,0 +1,100 @@
+<title>Backrooms Sample</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one screen, nothing on it but the level. No card, no instructions: you are simply there. One look only — a tape is dark. */
+:root {
+  color-scheme: dark;
+  --tape: #0a0a08;                      /* an unrecorded tape */
+  --osd: #f1ead8;                       /* camcorder lettering */
+  --rec: #ff3a26;
+}
+html, body { height: 100%; }
+body { background: var(--tape); color: var(--osd); font: 400 14px/1.4 ui-monospace, Menlo, Consolas, monospace; overflow: hidden; }
+#stage, #ui { position: fixed; inset: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+#ui { pointer-events: none; z-index: 2; }
+[hidden] { display: none !important; }
+
+/* only ever seen if the tape cannot be read at all */
+#fault { position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 9;
+  margin: 0; color: var(--rec); letter-spacing: .06em; overflow-wrap: anywhere; }
+</style>
+
+<div id="stage"></div>
+<div id="ui"></div>
+<p id="fault" role="alert" hidden></p>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.min.js",
+  "/vendor/three-addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+  "/core/": "./core/"
+} }
+</script>
+<script type="module">
+const fault = document.getElementById('fault');
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Somebody has to work upstairs: an invented team for the level to borrow names and faces from.
+const look = (species, outfitColor, accessory, extra) => ({ species, outfitColor, accessory, ...extra });
+const team = [
+  ['Ivory Marten', look('goblin', '#8a5a8f', 'none', { skin: '#5f8a6a', hair: 'short', outfit: 'cardigan', facial: 'mustache' })],
+  ['Amber Vireo', look('human', '#3f7f9a', 'monocle', { skin: '#cd8d5e', hair: 'side', hairColor: '#9aa0ac', outfit: 'suit' })],
+  ['Ember Numbat', look('robot', '#b5483f', 'none')], ['Olive Heron', look('cat', '#6f8a4a', 'glasses')],
+  ['Slate Okapi', look('human', '#5a6fa8', 'headphones', { hair: 'bun', outfit: 'hoodie' })], ['Coral Tapir', look('dog', '#c9893f', 'partyhat')],
+  ['Dusty Ibis', null], ['Mossy Quoll', null],
+];
+const office = {
+  stage: null, creations: {},
+  net: { state: {
+    world: { plan: { rooms: ['Webstore', 'Mobile App', 'Api Gateway', 'Data Pipeline', 'Ml Research', 'Infra'].map((name, slot) => ({ slot, deptId: name.toLowerCase().replace(/ /g, '-'), name })) } },
+    agents: new Map(team.map(([name, character], i) => [`a${i}`, { id: `a${i}`, name, persona: `p:${name}`, profile: { character } }])),
+    tasks: new Map([['webstore', [{ title: 'Cache the product catalogue' }, { title: 'Trim the Docker image' }, { title: 'Fix the flaky checkout test' }]]]),
+  } },
+};
+
+// Upstairs, the office keeps count of what has been carried out of here by the door: a keycard and four coins, and nothing
+// brought out is ever down here again. There is no office on this page, so the page keeps count, for as long as the browser
+// lets it — and once everything has been brought out it forgets, so there is always something down here to find.
+const EVERY = [1, 2, 3, 4], KEPT = 'backrooms-sample:kept';
+let kept = { card: false, coins: [] };
+try {
+  const was = JSON.parse(localStorage.getItem(KEPT) || 'null');
+  if (was && Array.isArray(was.coins)) kept = { card: !!was.card, coins: EVERY.filter((n) => was.coins.includes(n)) };
+} catch { /* nothing remembered: everything is still down there */ }
+const remember = () => { try { localStorage.setItem(KEPT, JSON.stringify(kept)); } catch { /* until the page closes, then */ } };
+office.game = {
+  left(place) {
+    if (place !== 'backrooms') return { card: false, coins: [] };
+    if (kept.card && kept.coins.length === EVERY.length) { kept = { card: false, coins: [] }; remember(); }
+    return { card: !kept.card, coins: EVERY.filter((n) => !kept.coins.includes(n)) };
+  },
+  async take(place, item, n) {
+    if (place !== 'backrooms') return null;
+    if (item === 'card') kept.card = true; else if (EVERY.includes(n) && !kept.coins.includes(n)) kept.coins.push(n);
+    remember();
+    return { taken: true };
+  },
+};
+
+// One tape after another. The first is always the same building; after that, a different one every time.
+// Finding the door, being found, or stopping the tape all lead to the next.
+async function run() {
+  try {
+    const [{ createStage }, { enterBackrooms }] = await Promise.all([import('./world/engine/stage.js'), import('./world/backrooms/index.js')]);
+    office.stage = createStage(document.getElementById('stage'), { fx: false, shadows: false, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5) });
+    office.stage.start();
+    for (let visit = 0; ; visit++) {
+      const seed = visit === 0 ? '7' : String(100 + Math.floor(Math.random() * 99000));
+      await enterBackrooms(office, { name: 'Employee', seed });
+      office.stage.setView(null);
+      await pause(1100);
+    }
+  } catch (err) {
+    console.error(err);
+    fault.textContent = 'NO SIGNAL — ' + String((err && err.message) || err).slice(0, 160);
+    fault.hidden = false;
+  }
+}
+run();
+</script>
