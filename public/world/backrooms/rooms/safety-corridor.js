@@ -8,7 +8,7 @@ import { lin } from '../kit.js';
 import { clamp, turnTo, card, framed, wetSign } from '../bits.js';
 import { buildItemProp } from '../hand.js';
 import { stepWalker, routeToward } from '../denizens.js';
-import { createWardenState, stepWarden } from './safety-corridor/rule.js';
+import { WARDEN, createWardenState, stepWarden, releaseWarden } from './safety-corridor/rule.js';
 import { makeFloorWarden } from './safety-corridor/rig.js';
 
 export function build(c) {
@@ -68,6 +68,7 @@ export function build(c) {
   const remnant = buildItemProp(c.kit, 'papers', { view: false });
   remnant.visible = false;
 
+  let known = false;
   const roamer = c.env.denizens?.add({
     x: wpA.x, z: wpA.z, r: 0.26, tall: 1.45, heading: 0,
     group: rig.group,
@@ -76,6 +77,7 @@ export function build(c) {
       const inRoom = c.world.current() === c.rt;
       const dist = Math.hypot(me.x - roamer.x, me.z - roamer.z);
       const clearLine = c.world.los(roamer.x, roamer.z, me.x, me.z);
+      if (!known && dist < 9 && c.env.sees(roamer.x, roamer.z, { radius: 0.5 })) { known = true; c.met('floor-warden'); }
 
       const res = stepWarden(rule, {
         dt,
@@ -92,6 +94,7 @@ export function build(c) {
       }
       if (res.snipped) c.env.play('snip', roamer.x, roamer.z, 9);
       if (res.trippedNow) {
+        c.survived('floor-warden');                                   // (outrun for as long as it takes: that is getting away from him)
         c.env.play('crack', roamer.x, roamer.z, 10);
         c.env.play('thunk', roamer.x, roamer.z, 10);
         c.env.interfere(0.6);
@@ -127,7 +130,10 @@ export function build(c) {
       if (res.caught) {
         c.env.play('snip', roamer.x, roamer.z, 8);
         c.env.interfere(1);
-        c.env.end('caught');
+        // the scissors: two hearts where there are hearts — and if that was not the last of them, he has made his point and goes back to his rounds
+        if (!known) { known = true; c.met('floor-warden'); }
+        const hit = c.hurt(WARDEN.hurts);
+        if (!hit.ended) { rule = releaseWarden(rule); if (hit.landed) { c.env.hud.glitch(0.6); c.survived('floor-warden'); } }
       }
     },
     dispose() {

@@ -7,7 +7,7 @@ import { CABLE, createCableState, stepCable, releaseCable } from '../public/worl
 import { SHREDDER, createShredderState, stepShredder, releaseShredder } from '../public/world/backrooms/rooms/shredding-bay/rule.js';
 import { PARTY, createPartyState, stepParty, releaseParty } from '../public/world/backrooms/rooms/mandatory-fun/rule.js';
 import { BLACKOUT, createBlackoutState, stepBlackout, releaseBlackout, isInBeam } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
-import { WARDEN, createWardenState, stepWarden } from '../public/world/backrooms/rooms/safety-corridor/rule.js';
+import { WARDEN, createWardenState, stepWarden, releaseWarden } from '../public/world/backrooms/rooms/safety-corridor/rule.js';
 import { PARTNER, createPartnerState, stepPartner } from '../public/world/backrooms/rooms/audit-pod/rule.js';
 
 test('the hand, as a resident asks after it: the selected pocket in the words a room uses; a pink slip is paper to a shredder and still a pink slip', () => {
@@ -267,4 +267,13 @@ test('Blackout Bay lets go: after the dark has had somebody, nothing stirs and n
   for (let t = 0; t < BLACKOUT.redFillSeconds + 0.6; t += 0.1) { r = stepBlackout(s, { dt: 0.1, inDark: true, hasFlashlight: false, px: 0, pz: 0, yaw: 0, targets }); s = r.state; }
   assert.ok(r.caught, 'stay in the dark without a light and it has you again');
   assert.ok(BLACKOUT.hurts === 2 && BLACKOUT.grace >= 3);
+});
+
+test('the Floor Warden lets go: after the scissors he is back on his rounds and deaf to running for a few seconds, and then he is not', () => {
+  let s = releaseWarden({ ...createWardenState(), phase: 'chasing', caught: true, chaseTimer: 3 }), r = null;
+  assert.equal(s.phase, 'patrol'); assert.equal(s.caught, false);
+  for (let t = 0; t < WARDEN.calm - 0.3; t += 0.1) { r = stepWarden(s, { dt: 0.1, dist: 1, playerSpeed: 3.7, insideRoom: true, clearLine: true }); s = r.state; assert.ok(s.phase === 'patrol' && !r.blewWhistle && !r.caught, 'run right past him: nothing'); }
+  for (let t = 0; t < 0.6; t += 0.1) { r = stepWarden(s, { dt: 0.1, dist: 5, playerSpeed: 3.7, insideRoom: true, clearLine: true }); s = r.state; }
+  assert.equal(s.phase, 'chasing');
+  assert.ok(WARDEN.hurts === 2 && WARDEN.calm >= 4);
 });

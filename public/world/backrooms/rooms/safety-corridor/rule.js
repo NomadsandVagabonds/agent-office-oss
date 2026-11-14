@@ -13,6 +13,8 @@ export const WARDEN = Object.freeze({
   evadeDuration: 8.0,
   tripDuration: 0.85,
   snipEvery: 0.27,
+  hurts: 2,                  // hearts the scissors cost, where there are hearts
+  calm: 6,                   // seconds he goes back to his rounds and notices nothing, having made his point
 });
 
 export const createWardenState = () => ({
@@ -29,6 +31,9 @@ export const createWardenState = () => ({
  * @param s  state from createWardenState()
  * @param o  { dt, dist, playerSpeed, insideRoom, clearLine }
  */
+/** The scissors had somebody, who is still here: he has made his point, and goes back to his rounds. */
+export function releaseWarden(s) { return { ...s, phase: 'patrol', caught: false, chaseTimer: 0, calm: WARDEN.calm }; }
+
 export function stepWarden(s, o) {
   const {
     dt,
@@ -50,7 +55,8 @@ export function stepWarden(s, o) {
   }
 
   if (phase === 'patrol') {
-    const noticedRun = playerSpeed > WARDEN.runSpeedThreshold && (insideRoom || (dist < WARDEN.hearRadius && clearLine));
+    const calm = s.calm > 0 ? s.calm - dt : 0, more = calm > 0 ? { calm } : {};
+    const noticedRun = !(calm > 0) && playerSpeed > WARDEN.runSpeedThreshold && (insideRoom || (dist < WARDEN.hearRadius && clearLine));
     if (noticedRun) {
       phase = 'chasing';
       chaseTimer = 0;
@@ -63,7 +69,7 @@ export function stepWarden(s, o) {
       };
     }
     return {
-      state: { phase, chaseTimer, tripTimer, snipTimer, patrolDir, caught },
+      state: { phase, chaseTimer, tripTimer, snipTimer, patrolDir, caught, ...more },
       blewWhistle, snipped, trippedNow, despawned, caught,
       speed: WARDEN.patrolSpeed, tripProgress: 0,
     };
