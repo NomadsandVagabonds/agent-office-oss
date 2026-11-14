@@ -104,22 +104,28 @@ export function createReviews(ctx, file) {
 
   /* ---- the lifecycle of a card ------------------------------------------------------- */
 
-  function open(task, by) {
+  /** Find out where the work is and put it on the table. Reading git takes a moment; the card says so meanwhile. */
+  function read(task, r, moverId) {
+    const round = r.round;
+    r.capturing = true;
+    capture(task, moverId).then((version) => {
+      const cur = reviews[task.id];
+      if (!cur || cur.round !== round) return;
+      cur.version = version; delete cur.capturing;
+      save(); told(task.deptId);
+    }).catch((err) => { delete r.capturing; log.warn('[reviews] could not read the version: ' + (err?.message || err)); told(task.deptId); });
+  }
+
+  function open(task, by, opt = {}) {
     let r = reviews[task.id];
     const now = Date.now();
     if (!r) r = reviews[task.id] = { taskId: task.id, deptId: task.deptId, round: 0, state: 'open', findings: [], runs: [], recommendations: [], history: [], version: null, verdict: null };
     if (r.verdict || r.closed) r.history.push({ round: r.round, verdict: r.verdict, closed: r.closed || null });
     r.round += 1; r.state = 'open'; r.deptId = task.deptId;
-    r.openedAt = now; r.openedBy = by; r.verdict = null; r.closed = null; r.version = null; r.capturing = true;
+    r.openedAt = opt.at || now; r.openedBy = by; r.verdict = null; r.closed = null; r.version = null;
     save();
-    say('review', `${by.name} put “${task.title}” up for review`, { taskId: task.id, deptId: task.deptId, agentId: by.id || undefined });
-    // Reading git takes a moment; the card is in Review meanwhile and says so.
-    capture(task, by.id).then((version) => {
-      const cur = reviews[task.id];
-      if (!cur || cur.round !== r.round) return;
-      cur.version = version; delete cur.capturing;
-      save(); told(task.deptId);
-    }).catch((err) => { delete r.capturing; log.warn('[reviews] could not read the version: ' + (err?.message || err)); told(task.deptId); });
+    if (!opt.quiet) say('review', `${by.name} put “${task.title}” up for review`, { taskId: task.id, deptId: task.deptId, agentId: by.id || undefined });
+    if (!opt.later) read(task, r, by.id);
     return r;
   }
 
@@ -148,7 +154,7 @@ export function createReviews(ctx, file) {
     if (!task) throw new HttpError(404, 'no such card');
     let r = reviews[taskId];
     // A card that was already in Review before the office kept tables gets one the first time anybody asks.
-    if (!r && task.status === 'review') r = open(task, { kind: 'human', id: null, name: ctx.agents.resolveRef(task.assignee || '')?.name || task.assigneeName || 'Somebody' });
+    if (!r && task.status === 'review') r = open(task, { kind: 'human', id: null, name: ctx.agents.resolveRef(task.assignee || '')?.name || task.assigneeName || 'Somebody' }, { quiet: true });
     if (!r) throw new HttpError(409, `“${task.title}” has not been put up for review (move it to review first)`);
     return { task, r };
   }
@@ -331,6 +337,7 @@ export function createReviews(ctx, file) {
   /** The whole table for one card. */
   async function table(taskId) {
     const { task, r } = need(taskId);
+    if (r.state === 'open' && !r.version && !r.capturing) read(task, r, null);       // a table made at start-up reads its version when first looked at
     const moved = r.state === 'open' ? await drift(r).catch(() => null) : null;
     return {
       taskId: task.id, title: task.title, status: task.status, deptId: task.deptId, assignee: task.assignee || null, assigneeName: ctx.agents.resolveRef(task.assignee || '')?.name || task.assigneeName || null,
@@ -359,6 +366,14 @@ export function createReviews(ctx, file) {
     if (r.verdict?.note) lines.push(`  “${r.verdict.note}”`);
     return lines.join('\n');
   }
+
+  // Cards that were in Review before the office kept tables (or while it was off) get one each, quietly:
+  // the board can then say they are waiting. Where the work is gets read when somebody first looks.
+  try {
+    for (const task of ctx.tasks.list({ status: 'review' })) {
+      if (!reviews[task.id]) open(task, { kind: 'human', id: null, name: task.assigneeName || 'Somebody' }, { quiet: true, later: true, at: task.updatedAt });
+    }
+  } catch (err) { log.warn('[reviews] could not make tables for cards already in review: ' + (err?.message || err)); }
 
   return { summary, table, addFinding, resolveFinding, recommend, decide, startRun, capture,
     recapture: async (taskId) => { const { task, r } = need(taskId); r.version = await capture(task, null); save(); told(task.deptId); return r.version; },

@@ -177,6 +177,26 @@ test('reviews: leaving Review without a verdict is on the record as exactly that
   assert.equal((await office.get(`/api/tasks/${b.id}/review`)).status, 404);
 });
 
+test('reviews: cards already in Review when the office starts get a table without a fuss', async (t) => {
+  const dir = tempDir('office-review-old-');
+  // A board from before the office kept review tables: tasks.json with a card in review, and no reviews.json.
+  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify({ tasks: [
+    { id: 't_old1', deptId: 'demo', title: 'From before', body: '', status: 'review', priority: 'normal', assignee: null, assigneeName: 'Ada', createdBy: 'human', createdAt: 1000, updatedAt: 2000, sessionId: null, promptId: null, dependsOn: [] },
+    { id: 't_old2', deptId: 'demo', title: 'Still being done', body: '', status: 'doing', priority: 'normal', assignee: null, createdBy: 'human', createdAt: 1000, updatedAt: 2000, sessionId: null, promptId: null, dependsOn: [] }] }));
+  const office = await startOffice({ dir, env: { OFFICE_GIT: '0' } });
+  t.after(() => office.stop());
+  const cards = (await office.get('/api/tasks?deptId=demo')).data.tasks;
+  const old = cards.find((x) => x.id === 't_old1').review;
+  assert.deepEqual([old.round, old.state, old.pinned, old.capturing, old.open], [1, 'open', null, false, 0]);
+  assert.equal(cards.find((x) => x.id === 't_old2').review, null);
+  const feed = (await office.get('/api/activity?limit=20')).data;
+  assert.ok(!(feed.items || feed.activity || feed).some((e) => /up for review/.test(e.text)), 'nothing is announced for a card nobody just moved');
+  // Looked at for the first time: now the office goes and reads where the work is.
+  const first = await settled(office, 't_old1');
+  assert.deepEqual([first.openedBy.name, first.openedAt, first.version.known], ['Ada', 2000, false]);
+  assert.equal((await office.post('/api/tasks/t_old1/review/verdict', { decision: 'approved' })).data.task.status, 'done');
+});
+
 test('reviews: the human hands the review to an agent, and what it found comes back onto the card', async (t) => {
   const h = await startHarnessOffice();
   t.after(() => h.stop());
