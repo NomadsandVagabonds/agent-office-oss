@@ -1,6 +1,6 @@
 // The Backrooms — the wall that gives, and the walls that do not. Somebody
-// marked walls in tape down here, looking for the way out, and every mark
-// looks the same. One of them is at the bottom of the last fire stairs,
+// marked walls in tape down here, looking for the way out. People's marks are
+// by hand and mostly right; the place prints its own. One real door is at the bottom of the last fire stairs,
 // where the building has been papered over: a door in painter's tape, a
 // tally, a camp on the landing. That one gives if it is leaned on for as
 // long as the one upstairs took. The rest are only walls.
@@ -37,14 +37,28 @@ function leaning(c, wall, at, w, nw, me) {
 }
 
 /**
- * The plan's best guess, in a plain room: an outside wall near the fire exit, taped like the rest. It is only a wall
- * (what was once the way out; the taped door at the bottom of the last stairs is, now).
+ * The wall the plan would have called thin, in a plain room near the fire exit. On some floors (`thin.print`) the
+ * place has put a taped door on it — its own idea of one: printed into the wallpaper, flat, every outline exactly
+ * like the last, and again one repeat along, and again. No loose ends, no roll, no draught. It is only a wall.
  */
 export function thinWall(c, thin) {
-  const R = makeRng(`${c.level.seed}/thin`), p = c.wallAt(thin.side, thin.at, 0);
-  c.keepWall(thin.side, thin.at - MARK_W / 2 - 0.2, thin.at + MARK_W / 2 + 0.2);
-  c.reserve(p.x + p.n[0] * 0.7, p.z + p.n[2] * 0.7, 1.0);                      // nothing gets left in front of it
-  refuses(c, thin.side, thin.at, tapeMark(c, thin.side, thin.at, R, { stir: true, roll: true }));
+  if (!thin.print) return;
+  const { kit } = c, pitch = 1.6, spans = c.spans(thin.side, 0.2, 0);
+  const fits = (at) => spans.some(([a, b]) => at - 0.5 >= a && at + 0.5 <= b);
+  const copies = [-2, -1, 0, 1, 2].map((k) => thin.at + k * pitch).filter(fits);
+  if (copies.length < 2) return;                                               // (one would not read as print: better nothing)
+  const ink = '#5f7fae', tex = kit.tex.custom('printdoor', 64, 128, (g, w, h) => {
+    g.clearRect(0, 0, w, h); g.fillStyle = ink;
+    g.fillRect(3, 2, 3, h - 3); g.fillRect(3, 2, w - 6, 3); g.fillRect(w - 6, 2, 3, 58);           // the left side, the top, and the right as far as it "let go": the same on every one
+    g.fillRect(w - 6, 96, 3, h - 97);
+    g.globalAlpha = 0.5; for (let y = 6; y < h; y += 8) g.fillRect(3, y, 3, 1);                     // a halftone, where tape would have a weave
+  }, { clamp: true });
+  const batch = c.mapped('printdoor', tex, { cutout: true });
+  c.keepWall(thin.side, Math.min(...copies) - 0.6, Math.max(...copies) + 0.6);
+  for (const at of copies) c.hang(batch, thin.side, at, 1.0, 0.92, 2.0, null, [0.86, 0.86, 0.8], 0.003);
+  const p = c.wallAt(thin.side, thin.at, 0);
+  c.reserve(p.x + p.n[0] * 0.7, p.z + p.n[2] * 0.7, 1.0);
+  for (const at of copies) refuses(c, thin.side, at, null);
 }
 
 /**

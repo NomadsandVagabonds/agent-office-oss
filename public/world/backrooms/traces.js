@@ -121,16 +121,25 @@ export function tallyMark(c, wall, at, R, y = 1.35) {
   hangOn(c, c.mapped('tally' + n, tex, { cutout: true }), wall, at, y, 0.9, 0.34, null, WHITE, 0.004);
 }
 
-/** What `dressing` (rooms.js) does with a thing of type 'marks': a wall somebody tried. → the tape on it, if it is tape (its loose ends can be moved: thin.js). */
+/**
+ * What `dressing` (rooms.js) does with a thing of type 'marks': something a person left on a wall, and honest.
+ * → the tape on it, if there is a taped door (its loose ends can be moved: thin.js).
+ */
 export function marks(c, item) {
-  const R = makeRng(`${c.level.seed}/mark/${c.room.id}/${item.seed}`);
+  const R = makeRng(`${c.level.seed}/mark/${c.room.id}/${item.seed}`), tape = c.mapped('ptape', tapeTex(c.kit));
   c.keepWall(item.side, item.at - 1, item.at + 1);
   const p = c.wallAt(item.side, item.at, 0.5);
   if (c.clear(p.x, p.z, 0.35)) c.reserve(p.x, p.z, 0.55);
-  if (item.style === 'pencil') { pencilMark(c, item.side, item.at, R); if (R.chance(0.4)) tallyMark(c, item.side, item.at + 0.95, R, 1.5); }
-  else if (item.style === 'tally') tallyMark(c, item.side, item.at, R);
-  else { const mark = tapeMark(c, item.side, item.at, R, { stir: true }); if (R.chance(0.35)) tallyMark(c, item.side, item.at + (R.chance(0.5) ? 0.98 : -0.98), R, 1.5); return mark; }
-  return null;
+  const cross = (y, r) => { strip(c, tape, item.side, item.at, -r, y - r, r, y + r, 0.048, WHITE, 0.012); strip(c, tape, item.side, item.at, -r, y + r, r, y - r, 0.048, WHITE, 0.013); };
+  const says = (key, lines, y) => {
+    const tex = c.kit.tex.custom('says:' + key, 160, 44, (g, tw, th) => { g.clearRect(0, 0, tw, th); drawText(g, lines, 0, 0, tw, th, { color: 'rgba(30,30,34,.95)', size: 20, pad: 4, weight: 800, font: '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive' }); }, { clamp: true });
+    hangOn(c, c.mapped('says:' + key, tex, { cutout: true }), item.side, item.at, y, 0.8, 0.22, null, WHITE, 0.005);
+  };
+  if (item.style === 'wrongway') { cross(1.5, 0.3); says('wrongway', ['WRONG WAY'], 1.02); return null; }
+  // a door somebody taped, leaned on, and crossed out
+  const mark = tapeMark(c, item.side, item.at, R, { stir: true });
+  cross(1.1, 0.42); says('nothere', ['NOT HERE'], 2.22);
+  return mark;
 }
 
 /* ---- a camp ------------------------------------------------------------------------------------ */

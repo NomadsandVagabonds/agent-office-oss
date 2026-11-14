@@ -27,7 +27,7 @@ import { T, WALL_H, DOOR_H, TILE, RISE, RUN, SIDES, toWorld, toLocal, wallLength
 import { fill, wrap } from './words.js';
 import { MORE_DECK, MORE_STASH } from './deck2.js';
 import { themeOf, THEMES } from './themes.js';
-import { thinPlace, decoyMarks, TAPE_LABELS } from './marks.js';
+import { thinPlace, decoyMarks, TAPE_LABELS, PRINT_CHANCE } from './marks.js';
 import { goesDown } from './seam.js';
 import { vocabulary, motif, fits, pruned, sunk, NARROW, HALLS } from './quiet.js';
 
@@ -1035,6 +1035,7 @@ function dress(R, level, o, opt, keeper = false) {
   // the thin place — on every floor, though only the last floor's gives — and the other walls somebody tried
   const thin = thinPlace(rooms, R.fork('thin'), traced);
   if (!thin) return null;
+  thin.print = R.fork('print').chance(PRINT_CHANCE);                  // (on some floors the place has faked a taped door there, in print)
   for (const mark of decoyMarks(rooms, R.fork('marks'), thin, traced)) { const { room: id, ...item } = mark; rooms[id].dress.push({ ...item, turn: 0, n: 0 }); }
 
   // Near a seam the parts run into each other: it is one building, and it changes as you go. The last rooms before
