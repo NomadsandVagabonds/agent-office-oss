@@ -11,7 +11,7 @@ import { Batch } from './kit.js';
 import { coin } from '../props/loot.js';
 
 const HIDEOUT = 'backrooms';
-const SIZE = 1.1, HOVER = 0.5, REACH = 0.6;        // a coin's scale (1 is the office's: 22 cm across) · how high it hangs · how near takes it
+const SIZE = 1.3, HOVER = 0.5, REACH = 0.6;        // a coin's scale (1 is the office's: 22 cm across) · how high it hangs · how near takes it
 const VOX = 0.025;
 
 /** What the office says is still down here → { card, coins: [numbers] }, or null: nothing left, or no office keeping count. */
@@ -52,12 +52,29 @@ export function createLoot(env, office) {
     return { x, z, y: walk.floor(x, z), moved };
   }
 
-  /** One coin, turning in the air: its own small mesh, lit by its room like everything else in it. */
+  /** A pool of light that is brightest in the middle and gone by the edge. */
+  const glow = () => {
+    const t = kit.tex.custom('coinshine', 32, 32, (g) => {
+      const k = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+      for (const [at, a] of [[0, 1], [0.22, 0.52], [0.5, 0.17], [0.78, 0.04], [1, 0]]) k.addColorStop(at, `rgba(255,255,255,${a})`);
+      g.fillStyle = k; g.fillRect(0, 0, 32, 32);
+    }, { clamp: true });
+    t.magFilter = THREE.LinearFilter;
+    return t;
+  };
+  /** One coin, turning in the air: its own small mesh, lit by its room like everything else in it — and a little of its own light on the carpet. */
+  let shine = null;
   function hang(c, k) {
     const at = settle(c, k), y = at.y + HOVER, s = VOX * SIZE, b = new Batch(true);
     b.addVox(kit.model('loot:coin', coin).solid, new THREE.Matrix4().compose(new THREE.Vector3(at.x, y, at.z), new THREE.Quaternion(), new THREE.Vector3(s, s, s)));
     const node = c.dynamic(b, { pivot: [at.x, y, at.z] }), w = c.toWorld(at.x, at.z);
-    coins.push({ n: k.n, rt: c.rt, node, y, x: at.x, z: at.z, wx: w.x, wz: w.z, wy: c.room.y + at.y, phase: k.n * 1.7, gone: 0, moved: at.moved });
+    let pool = null;
+    if (c.room.arch !== 'stress-pool') {                      // (out in the ball pit there is no carpet under it to light)
+      shine ||= [kit.own(new THREE.PlaneGeometry(1.7, 1.7)), kit.own(new THREE.MeshBasicMaterial({ map: glow(), color: new THREE.Color().setRGB(0.34, 0.23, 0.045), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }))];
+      pool = c.add(new THREE.Mesh(shine[0], shine[1]));
+      pool.rotation.x = -Math.PI / 2; pool.position.set(at.x, at.y + 0.016, at.z); pool.renderOrder = 2;
+    }
+    coins.push({ n: k.n, rt: c.rt, node, pool, y, x: at.x, z: at.z, wx: w.x, wz: w.z, wy: c.room.y + at.y, phase: k.n * 1.7, gone: 0, moved: at.moved });
   }
 
   /** world.js calls this for every room once its furniture is in. */
@@ -88,6 +105,7 @@ export function createLoot(env, office) {
           k.node.position.y = k.y + Math.sin(t * 2.4 + k.phase) * 0.05;
           if (!playing || !k.rt.near || Math.hypot(me.x - k.wx, me.z - k.wz) > REACH || Math.abs(env.world.floorY(me.x, me.z) - k.wy) > 0.7) continue;
           k.gone = 1e-6;
+          if (k.pool) k.pool.visible = false;
           pocket('coin', k.n);
         } else {                                              // taken: it leaps, spins and is gone, as on every other floor
           k.gone = Math.min(1, k.gone + dt / 0.55);

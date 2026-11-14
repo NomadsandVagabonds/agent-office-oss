@@ -389,7 +389,7 @@ export function createStalkers(env) {
     if (p.state === 'caught') {                                       // the last thing on the tape
       p.catchT += dt;
       me.yaw += turnTo(me.yaw, Math.atan2(dx, dz)) * (1 - Math.exp(-16 * dt));
-      me.pitch += (0.27 - me.pitch) * (1 - Math.exp(-12 * dt));
+      me.pitch += ((p.card?.back ? 0.08 : 0.27) - me.pitch) * (1 - Math.exp(-12 * dt));
       p.slip = Math.random() < 0.3; p.show();
       env.interfere(1);
       return;
@@ -446,9 +446,9 @@ export function createStalkers(env) {
           if (w.free(nx, nz, 0.1)) { p.x = nx; p.z = nz; }
           p.yaw = Math.atan2(me.x - p.x, me.z - p.z); p.state = 'caught'; p.catchT = 0;
           p.hold(7);
-          if (p.card && !p.card.held && env.loot?.carried.card) {       // …and it has its card back: held up beside its face, where the tape cannot miss it
-            p.card.held = true; p.card.hang.visible = true; env.loot.forfeit();
-            p.arms[p.card.side].rotation.set(0.2, 0, p.card.side ? 2.95 : -2.95); p.plumb();
+          if (p.card && !p.card.held && env.loot?.carried.card) {       // …and it has its card back: held up between you, where the tape cannot miss it
+            p.card.held = p.card.back = true; p.card.hang.visible = true; env.loot.forfeit();
+            p.arms[p.card.side].rotation.set(-2.5, 0, p.card.side ? -0.35 : 0.35); p.plumb();
           }
           env.sound.play('thunk');
           env.end('caught');
