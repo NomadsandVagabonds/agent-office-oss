@@ -1,8 +1,9 @@
 // Out of Office — the card at the end. However a visit ends, somebody is told
 // how it went: what they did down there, what it scored, what was new to this
-// office, what the jar gained, and whether the tape was kept. Nobody hands it
-// to them. It is on the wall: printed into the wallpaper in the wallpaper's
-// own ink, the way the place prints everything it makes.
+// office, what the jar gained, and whether the tape was kept (or, of a kept
+// tape played back, that it was one). Nobody hands it to them. It is on the
+// wall: printed into the wallpaper in the wallpaper's own ink, the way the
+// place prints everything it makes.
 //
 //   const card = await showScorecard({ office, reason, kept, run, name });
 //
@@ -113,9 +114,14 @@ function draw(card, who) {
     rows.append(icon(l.id), el('span', zero.trim(), LINES[l.id] || l.id),
       el('span', `n${zero}`, l.id === 'pace' ? clock(l.count) : l.id === 'out' ? '' : `× ${num(l.count)}`), el('span', `p${zero}`, num(l.points)));
   }
-  const box = el('div', 'brc-box');
+  const box = el('div', 'brc-box'), replay = !!card.replay;
+  // a kept tape played back: it says so where the jar would have been, because nothing is paid for it
+  if (replay) {
+    box.append(icon('tape'), el('span', '', 'Played back from the shelf'), el('span', 'v', `× ${num(card.tape?.plays || 1)}`));
+    box.append(el('small', '', 'Nothing is paid for a building that has been walked before.'));
+  }
   // what the jar gained: only for more than the office has been paid for before
-  if (out) {
+  else if (out) {
     const c = card.coins || { carried: 0, worth: 0, paid: 0, best: 0 };
     box.append(icon('coin'), el('span', '', 'Paid into the jar'), el('span', 'v', icon('battery', 'spare batteries'), `× ${num(c.carried)}`, '→', icon('coin', 'coins'), `+ ${num(c.paid)}`));
     if (c.worth > 0 && !c.paid) box.append(el('small', '', `The jar has been paid for ${num(c.best)} before. Bring out more than that.`));
@@ -125,18 +131,21 @@ function draw(card, who) {
   box.append(icon('fresh'), el('span', '', 'New to this office'), el('span', 'v', icon('room', 'kinds of room'), `+ ${num(fresh.rooms.length)}`, icon('survived', 'residents'), `+ ${num(fresh.cast.length)}`));
   box.append(el('small', '', `On record: ${num(seen.rooms)} kind${seen.rooms === 1 ? '' : 's'} of room, ${num(seen.cast)} resident${seen.cast === 1 ? '' : 's'}.`));
   // the tape
-  box.append(icon('tape'), el('span', '', card.tape?.kept ? 'Tape kept' : 'Tape not recovered'), el('span', 'v brc-seed', card.tape?.kept ? `№ ${card.tape.seed}` : '—'));
+  box.append(icon('tape'), el('span', '', replay ? 'Tape back on the shelf' : card.tape?.kept ? 'Tape kept' : 'Tape not recovered'), el('span', 'v brc-seed', card.tape?.kept ? `№ ${card.tape.seed}` : '—'));
   if (!card.tape?.kept) box.append(el('small', '', 'That building is gone.'));
+  // (a tape played back is measured against the first time it was walked, not against the office's best: it cannot beat that)
+  const best = replay ? `PLAYED BACK · FIRST TIME ${num(card.tape?.first?.score)}`
+    : card.best?.beaten ? (card.best.was ? `THE BEST YET · WAS ${num(card.best.was)}` : 'THE BEST YET') : `BEST ${num(card.best?.score)}`;
 
   const form = el('div', 'brc-form',
     el('div', 'brc-over', 'AGENT OFFICE'),
     el('div', 'brc-title', 'Out of Office'),
     rows,
     el('div', 'brc-total', el('span', '', 'POINTS'), el('span', '', num(card.score))),
-    el('div', `brc-best${card.best?.beaten ? ' new' : ''}`, card.best?.beaten ? (card.best.was ? `THE BEST YET · WAS ${num(card.best.was)}` : 'THE BEST YET') : `BEST ${num(card.best?.score)}`),
+    el('div', `brc-best${card.best?.beaten ? ' new' : ''}`, best),
     box,
     el('div', 'brc-foot', `PATTERN 13/B · ${String(who || '').toUpperCase().slice(0, 24)}`));
-  form.setAttribute('role', 'dialog'); form.setAttribute('aria-modal', 'true'); form.setAttribute('aria-label', `Out of Office, ${ended}: ${num(card.score)} points`); form.tabIndex = -1;
+  form.setAttribute('role', 'dialog'); form.setAttribute('aria-modal', 'true'); form.setAttribute('aria-label', `Out of Office, ${replay ? 'a tape played back, ' : ''}${ended}: ${num(card.score)} points`); form.tabIndex = -1;
   // (the mark that says it can be put down is not printed: it sits outside what is multiplied into the paper)
   return el('div', 'brc-veil', el('div', 'brc-wrap', form, el('div', 'brc-go', '▸')));
 }
@@ -148,7 +157,7 @@ function local(report, who) {
   try { kept = JSON.parse(localStorage.getItem(KEPT) || 'null'); } catch { /* nothing remembered */ }
   const record = cleanRecord(kept?.record || emptyRecord()), earned = Math.max(0, Math.floor(Number(kept?.earned) || 0));
   const run = cleanRun(report), settled = settleRun(record, run, { at: Date.now(), by: who });
-  const worth = run.reason === 'exit' ? payFor({ batteries: run.batteries }) : 0, paid = Math.max(0, worth - earned);
+  const worth = run.reason === 'exit' && !settled.card.replay ? payFor({ batteries: run.batteries }) : 0, paid = Math.max(0, worth - earned);
   try { localStorage.setItem(KEPT, JSON.stringify({ record: settled.record, earned: Math.max(earned, worth) })); } catch { /* until the page closes, then */ }
   return { ...settled.card, coins: { carried: run.batteries, worth, paid, best: Math.max(earned, worth) } };
 }
@@ -156,7 +165,7 @@ function local(report, who) {
 /**
  * Show the card for a visit that is over, and resolve when it has been put down (any key, a click, a tap).
  * @param {{office?:object, reason:string, kept?:object, run?:object, name?:string}} o
- *        run: { seed, seconds, parts: { reached, of }, rooms: { explored, kinds }, cast: { met, survived }, hearts? } — what index.js counted
+ *        run: { seed, seconds, parts: { reached, of }, rooms: { explored, kinds }, cast: { met, survived }, hearts?, edition? } — what index.js counted
  * @returns {Promise<object>} the card as it was shown (core/runs.mjs: settleRun, with `coins`)
  */
 export async function showScorecard(o = {}) {

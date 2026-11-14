@@ -180,6 +180,27 @@ export function floorOf(visit, i) {
   return memo.levels[i];
 }
 
+/**
+ * Which make of the building this is: a few letters and digits that are the same for as long as a seed gives the same
+ * building, and change when it would not (a room added to the deck, a rule of the generator altered). A tape that is
+ * kept says which make it was shot in (core/runs.mjs), so that whoever plays it back later can tell whether what they
+ * are about to walk is what was walked. Worked out once, from a building nobody visits: its plan and its first two parts.
+ */
+let make = null;
+export function edition() {
+  if (make) return make;
+  const visit = planVisit('which make of the building is this', { name: 'Nobody' });
+  const parts = [0, 1].filter((i) => i < visit.depths).map((i) => {
+    const level = floorOf(visit, i);
+    return [level.rooms.map((r) => [r.arch || r.kind, r.x, r.z, r.w, r.d, r.H]), level.links.length, level.start, level.exit];
+  });
+  const text = JSON.stringify([visit.depths, visit.floors.map((f) => [f.theme, f.way, f.hand, f.rooms, f.mascot]), parts]);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  make = (h >>> 0).toString(36);
+  return make;
+}
+
 /** Every floor of a visit, top to bottom (for the tests, and for anybody who wants to read a whole building). */
 export function generateVisit(seed, opt = {}) {
   const visit = planVisit(seed, opt);
