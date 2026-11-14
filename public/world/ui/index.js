@@ -323,11 +323,12 @@ export function createUI(office) {
   }
   // The ticker carries what an orchestrator would want to glance at; chatter, card shuffling and
   // requests have their own places (Comms, the Board, the in-tray).
-  const TICKER = new Set(['join', 'leave', 'task-done', 'discovery', 'creation', 'usage', 'overlap']);
+  const TICKER = new Set(['join', 'leave', 'task-done', 'discovery', 'creation', 'usage', 'overlap', 'review']);
   net.on('activity', (item) => {
     if (!item?.text || !TICKER.has(item.kind)) return;
     const gold = item.kind === 'discovery' || item.kind === 'task-done' || item.kind === 'creation';
-    ui.toast(item.text, { gold, onclick: item.agentId && net.state.agents.has(item.agentId) ? () => ui.select(item.agentId) : null });
+    ui.toast(item.text, { gold, onclick: item.kind === 'review' && item.taskId ? () => ui.openSheet('board', { deptId: item.deptId, taskId: item.taskId })
+      : item.agentId && net.state.agents.has(item.agentId) ? () => ui.select(item.agentId) : null });
   });
   renderTally(); tickClock();
 

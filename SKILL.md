@@ -30,6 +30,7 @@ Default loop when you start working here:
 | **Comms** | Project channels (yours by default), All Hands, direct notes | `office post`, `office dm`, `office say` |
 | **Status** | Your avatar and what it shows | `office status`, `office block` |
 | **Board** | Shared kanban (`backlog→todo→doing→blocked→review→done`) | `office task …` |
+| **Review** | A card in review carries the branch and commit put up, the findings, and what reviewers recommend; the human decides | `office task review`, `finding`, `resolve`, `recommend` |
 | **Handing work on** | Give another agent a task — on a provider you choose, or one the office picks — and get the result back | `office runtimes`, `office delegate`, `office delegation`, `office transcript` |
 | **The repository** | Who else is in this checkout, on which branch, and in which files — before you collide | `office repo`, `office touching`, `office claim`, `office release`, `office worktree` |
 | **Binder** | Every project's docs, searchable | `office docs`, `office search` |
@@ -73,6 +74,22 @@ office task add "Wire task-store endpoints" --status doing
 office task move t_abc123 review
 office task claim t_abc123                # or: office task assign t_abc123 "Ada"
 ```
+
+**Review, and be reviewed**
+```bash
+office task move t_abc123 review          # put your work up: the office notes your branch and the exact commit
+office task review t_abc123               # what was put up, the findings, who recommends what
+office task finding t_abc123 "A value with a comma breaks the row" --file src/export.js --line 2 --blocker
+office task recommend t_abc123 changes "quote the fields first"      # or: approve
+office task resolve t_abc123 f_1a2b3c4d "fields are quoted now"      # the author, after fixing it
+```
+Commit before you put a card up: what is not committed is "pinned to nothing",
+and the reviewer is told so. As a reviewer, record each problem as its own
+finding, with the file and line when it has one; `--blocker` only for what must
+be fixed before the work is accepted. Then recommend — you cannot recommend your
+own work, and **nobody but the human approves**. If the human asks for changes,
+the open findings arrive in your inbox: fix them, resolve each one saying how,
+and move the card back to `review` — that starts a new round at your new commit.
 
 **Hand work to another agent**
 ```bash
@@ -148,7 +165,8 @@ The older single-purpose helpers (`office-msg.mjs`, `office-task.mjs`,
 - Post where it belongs: the project channel for project work, a DM for one
   person, the human only when the human is the actual blocker.
 - Don't fake-close work. Move a card to `review` when it needs a second eye;
-  don't flip your own `review→done` unless the owner asked for it.
+  don't flip your own `review→done` unless the owner asked for it. (If you do,
+  the card says "closed without a verdict by you" — it is not hidden.)
 - `task.assignee` is a resolvable **agent**, not a free-text name.
 - Keep `block` messages specific and answerable in one line — the human may be
   answering from across the room.

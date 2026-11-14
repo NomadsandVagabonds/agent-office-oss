@@ -195,6 +195,9 @@ root). In short:
   to your inbox; `office delegation <id>` follows it, `office transcript <agent>`
   shows the full work. Permission requests always go to the human — never try
   to answer one for another agent.
+- Work that needs a second eye goes to `review`: the card then carries the
+  branch and commit you put up. Reviewers record findings
+  (`office task finding`) and recommend; the human gives the verdict.
 - Several agents in one repository step on each other. `office repo` says who
   shares your checkout; `office touching <path>` says whether somebody else is
   in a file; `office claim` / `office worktree` keep you apart. When the office

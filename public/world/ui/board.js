@@ -3,6 +3,7 @@
 // `office task …`). Drag a card to move it; everyone sees it move.
 import { h, ago, icon, replace } from './dom.js';
 import { TASK_STATUS, TASK_PRIORITY } from '/core/contract.mjs';
+import { openReviewTable, reviewLine } from './review.js';
 
 const COLUMN = { backlog: 'Backlog', todo: 'To do', doing: 'Doing', blocked: 'Blocked', review: 'Review', done: 'Done' };
 
@@ -44,10 +45,17 @@ export function open({ office, ui, content, header, arg }) {
   const net = office.net;
   let dept = arg?.deptId || null;
   let openCard = null;
+  let reviewing = null;                       // the review table on show, if any
   const depts = h('div.depts.list.scroll');
   const cols = h('div.cols');
-  content.append(h('div.kb', depts, cols));
+  const kb = h('div.kb', depts, cols);
+  content.append(kb);
   const hint = h('span.faint', { style: { fontSize: '12px', marginLeft: '8px' } }, 'drag a card to move it · click to open');
+  /** Lay a card's review out over the board. */
+  function review(taskId) {
+    reviewing?.close();
+    reviewing = openReviewTable({ office, ui, host: kb, taskId, onClose: () => { reviewing = null; } });
+  }
   header.append(hint);
 
   const deptList = () => {
@@ -66,7 +74,8 @@ export function open({ office, ui, content, header, arg }) {
     const isOpen = openCard === t.id;
     const el = h('div.card.' + (t.priority || 'normal'), { draggable: true, dataset: { id: t.id } },
       h('div', t.title),
-      h('div.meta', t.assigneeName ? h('span.who', '@' + t.assigneeName) : h('span', 'unassigned'), h('span.grow'), t.promptStatus === 'pending' ? h('span', { style: { color: 'var(--blocked)' } }, 'needs you') : null, h('span', ago(t.updatedAt, net.now()))));
+      h('div.meta', t.assigneeName ? h('span.who', '@' + t.assigneeName) : h('span', 'unassigned'), h('span.grow'), t.promptStatus === 'pending' ? h('span', { style: { color: 'var(--blocked)' } }, 'needs you') : null, h('span', ago(t.updatedAt, net.now()))),
+      reviewLine(t.review));
     if (isOpen) {
       if (t.body) el.append(h('div.body', t.body));
       const who = h('select.field', { style: { width: 'auto', height: '26px', padding: '0 6px' }, onchange: (e) => patch(t.id, { assignee: e.target.value || null }), onclick: (e) => e.stopPropagation() },
@@ -75,10 +84,12 @@ export function open({ office, ui, content, header, arg }) {
       const pri = h('select.field', { style: { width: 'auto', height: '26px', padding: '0 6px' }, onchange: (e) => patch(t.id, { priority: e.target.value }), onclick: (e) => e.stopPropagation() },
         TASK_PRIORITY.map((p) => h('option', { value: p, selected: (t.priority || 'normal') === p }, p)));
       el.append(h('div.edit', who, pri, h('span.grow'),
+        t.review ? h('button.btn.small', { title: 'What was put up for review, what was found, what was decided', onclick: (e) => { e.stopPropagation(); review(t.id); } }, 'Review') : null,
         t.assignee && net.state.agents.has(t.assignee) ? h('button.btn.small', { onclick: (e) => { e.stopPropagation(); ui.closeSheet(); ui.select(t.assignee); } }, icon('eye'), 'Visit') : null,
         h('button.btn.small.ghost', { title: 'Delete this card', onclick: async (e) => { e.stopPropagation(); try { await net.api(`/api/tasks/${encodeURIComponent(t.id)}`, { method: 'DELETE' }); } catch (err) { ui.toast(err.message); } } }, icon('close'))));
     }
-    el.addEventListener('click', () => { openCard = isOpen ? null : t.id; render(); });
+    // a card that is waiting for a verdict opens straight onto its review table: that is what there is to do with it
+    el.addEventListener('click', () => { if (t.status === 'review' && !isOpen) { openCard = t.id; render(); review(t.id); return; } openCard = isOpen ? null : t.id; render(); });
     el.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', t.id); e.dataTransfer.effectAllowed = 'move'; el.classList.add('dragging'); });
     el.addEventListener('dragend', () => el.classList.remove('dragging'));
     return el;
@@ -119,5 +130,7 @@ export function open({ office, ui, content, header, arg }) {
 
   const off = [net.on('tasks', render), net.on('world', render), net.on('agent', () => { if (openCard) render(); })];
   render();
-  return { close: () => off.forEach((f) => f()), show: (a) => { if (a?.deptId) { dept = a.deptId; render(); } } };
+  if (arg?.taskId) review(arg.taskId);
+  return { close: () => { off.forEach((f) => f()); reviewing?.close(); },
+    show: (a) => { if (a?.deptId) { dept = a.deptId; render(); } if (a?.taskId) review(a.taskId); } };
 }

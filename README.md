@@ -74,7 +74,7 @@ credentials; your agents keep their own auth. Setup details: [`AGENTS.md`](AGENT
 | **Needs you** | An in-tray, bottom right. However many agents are waiting, you are handed one slip: who is asking, what exactly, and which cards your answer is holding up. Arrows (or `N`) reach the rest; nothing stacks up. Where the agent's runtime can really be answered you get stamps (allow, always, deny) and a question brings its own choices; otherwise a line to write back on, typed into its terminal or left in its inbox. The slip only ever offers what that agent can honour. |
 | **Who is this?** | Click anyone: what they are doing, for which project, how full their context is, and a line straight to them. |
 | **Comms** (`C`) | Channels, your direct lines, and the notes agents pass each other. |
-| **Board** (`B`) | Drag-and-drop kanban per project — the same cards that hang on each room's wall. |
+| **Board** (`B`) | Drag-and-drop kanban per project — the same cards that hang on each room's wall. A card in **Review** opens its review table: the branch and exact commit that was put up (and a warning if it has moved since), what changed, the findings, what other agents recommend, and two stamps for the decision that is yours — approve, or changes. You can hand the review to an agent from there. |
 | **Binder** (`K`) | Every project's `.md` docs, rendered and searchable. |
 | **Sessions** (`T`) | Two ways to run an agent from the office. **Driven**: the office starts the agent in its structured mode and talks to it directly — you read what it did as a record (each turn, the tools it ran, who allowed what), stamp what it asks right there, give it its next turn, stop it or end it, and choose whether mail may wake it and how freely it acts. Tasks one agent hands another are listed and open the record of whoever did them. **Terminals**: Claude Code, Codex, Gemini CLI, opencode or a shell in managed tmux sessions, with a real keyboard. See [`docs/HARNESS.md`](docs/HARNESS.md). |
 | **Walk the floor** (`Tab`) | Step in as an avatar: `WASD`, `E` to use things. Agents can tell you are there, and can walk over to you. |
@@ -106,6 +106,8 @@ office docs api-gateway auth       # read another project's docs
 office usage                       # which provider still has room, before handing work out
 office delegate any "Review the migration in db/ and list what could break" --wait
 office delegation                  # what you handed out, and what was handed to you
+office task review t_abc123 · office task finding t_abc123 "…" --file src/a.js --line 12 --blocker
+office task recommend t_abc123 changes "why"      # agents recommend; the human decides
 office repo · office touching src/auth.js · office claim src/auth.js --note "rewriting login"
 office worktree payments-fix       # your own checkout of the same repository
 office go kitchen · office use coffee · office emote wave
@@ -169,8 +171,9 @@ Code ask that by itself. `office claim` says "this is mine for now";
   Agent Client Protocol and the Codex app-server, approvals, transcripts, mail
   that may start a turn, delegation. No provider keys, no model calls of its
   own: it starts the agent CLIs you already have installed and signed in.
-- **`server/usage.mjs` · `server/workspace.mjs`** — how much each provider has
-  left, and who is working where in a shared repository.
+- **`server/usage.mjs` · `server/workspace.mjs` · `server/reviews.mjs`** — how
+  much each provider has left, who is working where in a shared repository, and
+  what a card in Review is actually offering.
 
 Specs: [`CONTRACT.md`](CONTRACT.md) (the control plane), [`WORLD.md`](WORLD.md)
 (the world), [`docs/HARNESS.md`](docs/HARNESS.md) (driven sessions and

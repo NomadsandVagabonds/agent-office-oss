@@ -35,6 +35,8 @@ export function ago(ts, now = Date.now()) {
   if (s < 86400) return `${Math.round(s / 3600)}h`;
   return `${Math.round(s / 86400)}d`;
 }
+/** "5m ago", or "just now" — for a sentence that says when something happened. */
+export function since(ts, now = Date.now()) { const a = ago(ts, now); return a === 'just now' ? a : `${a} ago`; }
 export function clock(ts) { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
 export const shortPath = (p) => String(p || '').replace(/^\/(home|Users)\/[^/]+/, '~');
 

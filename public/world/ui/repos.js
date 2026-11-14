@@ -3,7 +3,7 @@
 // what has changed. Above the cards, the places where two agents are in each
 // other's way — the same thing the red threads on the floor point at.
 // The office only reads git; nothing on this panel can change a repository.
-import { h, replace, shortPath, ago } from './dom.js';
+import { h, replace, shortPath, since } from './dom.js';
 
 const css = `
 #ui .rp { flex: 1 1 auto; min-width: 0; padding: 16px 18px 24px; }
@@ -54,7 +54,7 @@ export function open({ office, ui, content }) {
     const [before, after] = o.path && o.text?.includes(o.path) ? o.text.split(o.path) : [o.text || '', ''];
     return h(`div.clash.${o.severity || 'low'}`,
       h('div.grow', h('p', before, o.path && o.text?.includes(o.path) ? h('code', o.path) : null, after),
-        h('small', `noticed ${ago(o.since, now)} ago · both have been told`),
+        h('small', `noticed ${since(o.since, now)} · both have been told`),
         h('div.who', (o.agents || []).map((a) => h('a', { title: 'Go to their desk', onclick: () => ui.select(a.id) }, a.name)))));
   }
 

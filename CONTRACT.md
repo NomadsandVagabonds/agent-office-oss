@@ -328,6 +328,52 @@ to the human, who has nothing to decide. Nothing is ever blocked.
 In the office this is the **Repos** panel (`G`), a branch line on each agent's
 card, and a red thread on the floor between two agents who are in the same file.
 
+### Reviews  (what a card in Review is offering)
+`server/reviews.mjs` keeps a table for every card that has been moved to
+`review` (in `data/reviews.json`, beside the tasks; the task store itself is
+unchanged). Moving a card to `review` opens a **round**: the office reads —
+never writes — where the work is, from the checkout of whoever carries the card.
+
+```
+ReviewTable { taskId, title, status, round, state:'open'|'approved'|'changes'|'withdrawn'|'closed',
+              openedAt, openedBy, capturing,
+              version: { known, agentName, repoName, root, branch, detached, head, upstream, ahead, behind,
+                         base, commits, changed:[path], changedTotal,       // against the trunk (origin's HEAD, else main / master)
+                         dirty, uncommitted:[{ path, state }] }             // work that no commit pins
+                       | { known:false, why },
+              moved: null | { head, was } | { gone:true },                  // the branch is no longer where it was put up
+              findings:[{ id, round, by:{ kind, id, name }, severity:'blocker'|'note', text, file, line, at, resolved:null|{ by, at, note }, runId? }],
+              recommendations:[{ by, decision:'approved'|'changes', note, at, head }],     // this round's, the latest per agent
+              runs:[{ id (a delegation), to:{ agentId, name, adapter }, status, summary, error? }],
+              verdict: null | { decision, by, at, note, head, openFindings },
+              closed: null | { by, at, to },  history:[…], canAskAgents, text }
+```
+
+Every card's public view gains `review` — `null`, or a summary for the board:
+`{ round, state, capturing, pinned:{ branch, head, dirty, repo }|null, open, blockers, findings, reviewing, recommends:{ approved, changes }, verdict, closedBy }`.
+
+Who may do what: anyone records and resolves findings; an **agent** recommends,
+but not on a card it is carrying; only the **human** gives the verdict.
+`approved` moves the card to `done` and leaves the owner a note; `changes` moves
+it to `doing` and sends the owner the open findings as a direct message from
+the human. A card that leaves `review` any other way is recorded as `withdrawn`
+or, if it went straight to `done`, `closed` — with who did it. Findings stay
+with the card across rounds.
+
+| | |
+|---|---|
+| `GET /api/tasks/:id/review` | the table (409 if the card was never put up) |
+| `POST /api/tasks/:id/review/findings` | `{ text, file?, line?, severity?, from? }` |
+| `PATCH /api/tasks/:id/review/findings/:fid` | `{ resolved: true \| false, note?, from? }` |
+| `POST /api/tasks/:id/review/recommend` | `{ decision, note?, from }` — agents; 403 on your own card |
+| `POST /api/tasks/:id/review/verdict` | `{ decision, note? }` — the human; 403 for any caller that names an agent or holds a session token |
+| `POST /api/tasks/:id/review/run` | loopback only, the human. `{ to?: adapter \| agent \| "any", focus? }` → a delegation (role `review`, mode `ask`) whose brief is built from the card and the version. Findings the reviewer files land on the card; if it filed none, lines of its closing message shaped `- [blocker] path:line — text` are taken in |
+| `POST /api/tasks/:id/review/refresh` | read the version again |
+
+Agents: `office task review | finding | resolve | reopen | recommend`
+(MCP: `office_review`). In the office: the Board (`B`) — a card in Review opens
+its table. Activity kind: `review`.
+
 ### Harness  (sessions the office drives, and work handed between agents)
 `server/harness/` starts an agent as a child process and speaks its structured
 protocol — ACP for anything that implements it (Gemini CLI, opencode, Claude
