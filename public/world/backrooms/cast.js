@@ -23,6 +23,8 @@ export const CAST_LESSONS = Object.freeze({
   sight: 'What follows you only knows where you are while it can see you.',
   doors: 'Some doors can be shut, and what is behind you has to stop and open them.',
   averted: 'Some things are better not looked at.',
+  led: 'Something that waits for you to catch up is going somewhere.',
+  tidy: 'What you knock over, you can stand up again.',
 });
 
 /**
@@ -49,6 +51,12 @@ export const ALL_CAST = Object.freeze([
   Object.freeze({ id: 'shadow', name: 'The shadow', rule: 'Look straight at it and it goes off like a flashbulb, and half your battery goes with it.',
     disposition: 'hunts', home: 'roams', weight: 1, teaches: 'averted', needs: [], items: ['battery', 'torch'],
     caught: { setback: 'the room goes dark for a while, and half the camcorder\'s charge is gone' } }),
+  Object.freeze({ id: 'moth', name: 'The desk moth', rule: 'It goes to the next light, and waits there for you — and the next light is always nearer the way down.',
+    disposition: 'helps', home: 'roams', weight: 1, teaches: 'led', needs: [], items: ['torch'],
+    caught: { setback: 'none: lose it and it is still going round the last tube you saw it at' } }),
+  Object.freeze({ id: 'porter', name: 'The night porter', rule: 'Leave his bucket alone — and if you have not, stand it up again, because until you do he is looking at you.',
+    disposition: 'keeps to itself', home: 'room', weight: 1, teaches: 'tidy', needs: [], items: ['battery'], room: { w: 5, d: 5 },
+    caught: { setback: 'his room goes dim, and if you walk out on it every pair of doors on the floor is shut' } }),
 ]);
 export const CAST = Object.freeze(ALL_CAST.filter((m) => m.on !== false));
 /** How many of the others turn up in one visit, at most. */

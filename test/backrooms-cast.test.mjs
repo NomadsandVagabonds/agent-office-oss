@@ -9,6 +9,8 @@ import { THEME_IDS } from '../public/world/backrooms/themes.js';
 import { HUNT, knows, lost, shown, spent, noticeTime, wayOn, handle, atHandle, getsDown, lying, willPeek } from '../public/world/backrooms/cast/hunt.js';
 import { roomRoute, roomCosts, gridPath, straighten } from '../public/world/backrooms/cast/paths.js';
 import { SHADOW, away, watched, drained } from '../public/world/backrooms/cast/shadow.rule.js';
+import { MOTH, resting, flits } from '../public/world/backrooms/cast/moth.rule.js';
+import { PORTER, mopping, minds, facesYou } from '../public/world/backrooms/cast/porter.rule.js';
 import { DOORS, doorPlan, doorRooms, inTheWay } from '../public/world/backrooms/doors.js';
 
 const office = { name: 'Robin', projects: ['Atlas', 'Harbor'], agents: ['Ivory Marten', 'Amber Vireo', 'Ember Numbat'], tasks: ['Ship the thing', 'Fix the other thing'] };
@@ -349,4 +351,46 @@ test('the shadow: out of the corner of your eye for as long as you like; in the 
   s = watched(lurk(), dt, { placed: true, looked: false, d: SHADOW.touch - 0.1 }); assert.ok(s.burst);
   // what it takes
   assert.equal(drained(300), 150); assert.equal(SHADOW.drain, 0.5);
+});
+
+test('the desk moth: it waits at a light until you have seen it and come up to it, then it is off to the next; a lit torch is a better light than any', () => {
+  const far = { d: 9, seen: true, next: true }, near = { d: MOTH.near - 0.5, seen: true, next: true };
+  let s = resting();
+  for (let t = 0; t < 60; t += dt) { s = flits(s, dt, far); assert.equal(s.mode, 'round'); }
+  // walked up to without ever having been looked at: it stays (it does not lead somebody who has not noticed it)
+  s = resting(); for (let t = 0; t < 10; t += dt) s = flits(s, dt, { ...near, seen: false });
+  assert.equal(s.mode, 'round');
+  // seen, and come up to: off it goes, once, and it is not interested in you until it has got there
+  s = resting(); let moves = 0;
+  for (let t = 0; t < 5; t += dt) { s = flits(s, dt, near); if (s.moved) moves++; }
+  assert.equal(s.mode, 'fly'); assert.equal(moves, 1);
+  s = flits(s, dt, { ...near, there: true }); assert.equal(s.mode, 'round'); assert.equal(s.seen, 0, 'and it waits to be noticed again');
+  // at the end of the way there is nowhere further: it goes round the last light for good
+  s = resting(); for (let t = 0; t < 20; t += dt) s = flits(s, dt, { ...near, next: false });
+  assert.equal(s.mode, 'round');
+  // a lit torch: it goes round you, and leads nowhere; put it out and it goes back to its tube
+  s = flits(resting(), dt, { ...near, torch: true }); assert.equal(s.mode, 'pester');
+  for (let t = 0; t < 20; t += dt) { s = flits(s, dt, { ...near, torch: true }); assert.ok(s.mode === 'pester' && !s.moved); }
+  s = flits(s, dt, near); assert.equal(s.mode, 'round');
+});
+
+test('the night porter: nothing, unless you knock his bucket over; then the room, then the doors — and standing it up again puts it right, and opens his locker once', () => {
+  const idle = { bucket: 3, moving: true, inRoom: true };
+  let s = mopping();
+  for (let t = 0; t < 120; t += dt) { s = minds(s, dt, idle); assert.equal(s.mode, 'mop'); }
+  s = minds(s, dt, { ...idle, bucket: PORTER.knock - 0.05, moving: false }); assert.equal(s.mode, 'mop', 'standing beside it is not knocking it');
+  s = minds(s, dt, { ...idle, bucket: PORTER.knock - 0.05 }); assert.ok(s.mode === 'upset' && s.knocked);
+  let events = 0; for (let t = 0; t < 30; t += dt) { s = minds(s, dt, { ...idle, bucket: 0.1 }); if (s.knocked || s.lockUp || s.gift) events++; }
+  assert.equal(s.mode, 'upset'); assert.equal(events, 0, 'it stays as it is for as long as you stay');
+  // walk out on it: he locks up, once
+  let locks = 0; for (let t = 0; t < 10; t += dt) { s = minds(s, dt, { ...idle, inRoom: false }); if (s.lockUp) locks++; }
+  assert.equal(s.mode, 'shut'); assert.equal(locks, 1);
+  // come back and stand it up: mopping again, and the locker is open — the first time only
+  s = minds(s, dt, { ...idle, righted: true }); assert.ok(s.mode === 'mop' && s.righted && s.gift && s.thanked);
+  s = minds(s, dt, { ...idle, bucket: 0.1 }); s = minds(s, dt, { ...idle, righted: true });
+  assert.ok(s.mode === 'mop' && !s.gift, 'he is not paying you to keep knocking it over');
+  assert.ok(PORTER.dim > 0.1 && PORTER.dim < 0.5, 'dim, not dark: a setback, not a trap');
+  // his back while he mops; what he has for a face for as long as the bucket is on its side, turned to you slowly
+  assert.equal(facesYou(mopping()), false); assert.equal(facesYou({ ...mopping(), mode: 'upset' }), true); assert.equal(facesYou({ ...mopping(), mode: 'shut' }), true);
+  assert.ok(PORTER.round < 2 && PORTER.turn > 6.7, 'he turns to you slowly, and away faster than anybody can run round him');
 });
