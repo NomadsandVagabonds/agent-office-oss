@@ -35,9 +35,14 @@ These are the owner's, and every room is held to them.
 1. **Nothing is explained.** No captions, no instructions, no control hints,
    nothing on screen but the camcorder. Words live in the world: on signs,
    screens, labels, sticky notes.
-2. **One new thing to learn per room.** A room may ask for as much as it
-   likes, as long as at most one thing in it is something the visitor has had
-   no chance to learn yet. Rules already met may come back and combine.
+2. **A room may ask for more than one new thing.** This rule used to hold
+   every room to at most one thing the visitor had had no chance to learn.
+   The owner has dropped that: "I am unconvinced this 'one new rule' thing is
+   even necessary. We are targeting adults with this game... we shouldn't
+   think the player is dumb." A room should still say what it teaches and
+   what it takes for granted (rule 3), so the plan can deal the plainest
+   rooms first. A puzzle may borrow the shape of a well-loved mechanic; it
+   may never be a recreation of a particular game's level, look or name.
 3. **Rules stack with depth.** Since nothing is explained, the only teacher is
    the order things are met in. A room says what it is the first place to
    learn (`teaches`) and what it takes for granted (`needs`), and the visit's

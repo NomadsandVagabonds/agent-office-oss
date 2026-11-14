@@ -84,7 +84,7 @@ test('every room has a place of its own for a tape, inside its walls, whichever 
   }
 });
 
-test('lessons: one new thing to a room at most, every lesson on the list, and nothing taken for granted that no room teaches', () => {
+test('lessons: every lesson on the list, and nothing taken for granted that no room teaches (a room may teach more than one thing: the owner dropped the limit)', () => {
   const ids = Object.keys(LESSONS);
   for (const id of ids) assert.ok(/^[a-z][a-z0-9-]*$/.test(id) && typeof LESSONS[id] === 'string' && LESSONS[id].length > 10, `lesson ${id}: an id, and a line saying what is learned`);
   for (const id of KNOWN_AT_START) assert.ok(ids.includes(id), `${id} is known from the start but is not on the list of lessons`);
@@ -92,7 +92,7 @@ test('lessons: one new thing to a room at most, every lesson on the list, and no
   for (const a of DECK) for (const t of lessons(a).teaches) taught.add(t);
   for (const a of EVERY) {
     const { teaches, needs } = lessons(a);
-    assert.ok(teaches.length <= 1, `${a.id} teaches ${teaches.join(' and ')}: one new thing to a room, at most`);
+    assert.equal(new Set(teaches).size, teaches.length, `${a.id} says it teaches the same thing twice`);
     for (const id of [...teaches, ...needs]) assert.ok(ids.includes(id), `${a.id}: "${id}" is not on the list of lessons (LESSONS in gen.js)`);
     for (const id of needs) {
       assert.ok(!teaches.includes(id), `${a.id} cannot take for granted the thing it is there to teach (${id})`);
