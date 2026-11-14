@@ -133,7 +133,10 @@ whichever way the plan needs; you never see that.
 A room may import `three`, the level's own modules (`../kit.js`, `../bits.js`,
 `../gen.js`, …), the voxel kit (`../../vox/`) and the office's props
 (`../../props/`). Nothing else, nothing from the network, and it keeps nothing
-in the browser's storage. A test reads the file to see.
+in the browser's storage. A test reads the file to see. A room too big for one
+file keeps the rest in a folder of its own, `rooms/<id>/`, and imports it from
+there (`./<id>/crates.js`): `rooms/` itself holds one file to a room and
+nothing that is nobody's.
 
 ### 3. The toolbox
 
