@@ -4,7 +4,12 @@
 // does not jump by more than a stair (world.passable), and you are already
 // stooped low enough for the ceiling ahead. Tried one axis at a time, so you
 // slide along walls instead of sticking to them.
+//
+// Space is a small hop and C (held) a crouch. Neither is needed to get
+// anywhere: you still duck by yourself under anything low, and a hop clears
+// nothing a step would not. They are there because hands expect them.
 const RADIUS = 0.22, EYE = 1.1, WALK = 2.05, HURRY = 3.7;
+const HOP = 2.75, GRAVITY = 9, CROUCH = 0.5;      // take-off speed (m/s: about 0.4 m of air), and how far a held crouch lowers the eye
 const TURN = 2.1, MOUSE = 0.0023, PITCH_MAX = 1.25;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -12,7 +17,7 @@ export function createPlayer(world, camera, start) {
   const me = { x: start.x, z: start.z, yaw: start.yaw, pitch: 0, vx: 0, vz: 0, moving: false, speed: 0, slow: 1, sink: 0, sinkTo: 0, duck: 0, y: 0, step: 0, shake: 1, drop: 0, dropV: 0, frozen: false };
   // keys held, mouse movement since last frame, and a thumb stick (x: right, y: forward, each −1…1)
   const input = { keys: new Set(), dx: 0, dy: 0, stick: { x: 0, y: 0 } };
-  let stride = 0, floor = world.floorY(start.x, start.z), sway = 0, duck = 0;
+  let stride = 0, floor = world.floorY(start.x, start.z), sway = 0, duck = 0, hopHeld = false;
   const listeners = { step: null };
 
   /** Is there room to be at (x, z)? If the only thing wrong is that you are standing too tall, start ducking. */
@@ -51,6 +56,10 @@ export function createPlayer(world, camera, start) {
       if (k.has('PageDown')) me.pitch -= 1.2 * dt;
     }
     me.pitch = clamp(me.pitch, -PITCH_MAX, PITCH_MAX);
+    // a hop: one per press, from the ground, and not while stooped under something
+    const hop = !me.frozen && k.has(' ');
+    if (hop && !hopHeld && me.drop === 0 && me.dropV === 0 && me.sink < 0.12 && me.sinkTo < 0.05) { me.dropV = HOP; me.drop = 0.001; listeners.step?.(me); }
+    hopHeld = hop;
     // walking
     let f = 0, s = 0;
     if (!me.frozen) {
@@ -85,8 +94,14 @@ export function createPlayer(world, camera, start) {
     const target = world.floorY(me.x, me.z);
     floor = Math.abs(target - floor) > 1.0 ? target : floor + (target - floor) * (1 - Math.exp(-13 * dt));
     // landing: a fall from the ceiling, a bounce
-    if (me.drop > 0 || me.dropV !== 0) { me.dropV -= 9 * dt; me.drop += me.dropV * dt; if (me.drop <= 0) { me.drop = 0; me.dropV = me.dropV < -1.2 ? -me.dropV * 0.22 : 0; if (me.dropV > 0) me.drop = 0.001; } }
-    const want = Math.min(EYE - 0.42, Math.max(me.sinkTo, duck));
+    if (me.drop > 0 || me.dropV !== 0) {
+      me.dropV -= GRAVITY * dt; me.drop += me.dropV * dt;
+      // a ceiling stops a hop short
+      const room = world.headroom(me.x, me.z) - 0.12 - (EYE - me.sink);
+      if (me.dropV > 0 && me.drop > room) { me.drop = Math.max(0, room); me.dropV = 0; }
+      if (me.drop <= 0) { const hit = me.dropV; me.drop = 0; me.dropV = hit < -1.2 ? -hit * 0.22 : 0; if (me.dropV > 0) me.drop = 0.001; if (hit < -2) listeners.step?.(me); }
+    }
+    const want = Math.min(EYE - 0.42, Math.max(me.sinkTo, duck, !me.frozen && k.has('c') ? CROUCH : 0));
     me.sink += (want - me.sink) * (1 - Math.exp(-(want > me.sink ? 12 : 6) * dt));        // wading, stooping, crawling
     const bob = Math.sin(stride * 2) * 0.016 * Math.min(1, me.speed / WALK) * me.shake;
     me.y = floor + EYE - me.sink + bob + me.drop;

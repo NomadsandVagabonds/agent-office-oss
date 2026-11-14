@@ -261,7 +261,7 @@ export function createStalkers(env) {
     return pirate;
   }
 
-  /** Where it lives: a plinth, a notice, tape on the carpet. Called by the plain room the level chose for it. */
+  /** Where it lives: a plinth, a name plate, tape on the carpet. Called by the plain room the level chose for it. */
   env.lair = (c) => {
     const k = c.corner(1.1, level.pursuer.corner, 2.0) || c.spot(0.85, { head: 2.0 }) || { x: 0, z: 0 };
     const yaw = Math.hypot(k.x, k.z) > 0.5 ? Math.atan2(-k.x, -k.z) : 0, fx = Math.sin(yaw), fz = Math.cos(yaw);
@@ -275,17 +275,15 @@ export function createStalkers(env) {
       const x = k.x + dx, z = k.z + dz;
       if (Math.abs(x) < c.W / 2 - 0.1 && Math.abs(z) < c.D / 2 - 0.1) c.lay(tape, x, z, 1.96, 0.055, rot, [[0, 0], [12, 0], [12, 1], [0, 1]], [1, 1, 1], 0.007);
     }
-    // the notice, on a post beside it
+    // its name, on a post beside it — and nothing about how it behaves: that is for you to find out
     const sx = k.x + fz * 0.78 + fx * 0.62, sz = k.z - fx * 0.78 + fz * 0.62;
-    const tex = c.kit.tex.custom('mascot', 128, 92, (g) => {
-      P(g, '#1b1a17', 0, 0, 128, 92); P(g, '#c9a24a', 2, 2, 124, 88); P(g, '#f0e7cf', 4, 4, 120, 84);
+    const tex = c.kit.tex.custom('mascot', 128, 48, (g) => {
+      P(g, '#1b1a17', 0, 0, 128, 48); P(g, '#c9a24a', 2, 2, 124, 44); P(g, '#f0e7cf', 4, 4, 120, 40);
       drawText(g, ['CAPT. LEGACY'], 4, 6, 120, 24, { size: 15 });
       drawText(g, [`TEAM MASCOT  ·  EST. ${level.stamp.year}`], 4, 30, 120, 12, { size: 7, weight: 400 });
-      P(g, '#b5483f', 10, 46, 108, 1);
-      drawText(g, ['PLEASE DO NOT', 'TURN YOUR BACK', 'ON THE MASCOT'], 4, 49, 120, 38, { size: 10, color: '#8a2a22' });
     }, { clamp: true });
-    c.board(c.mapped('mascot', tex), sx + fx * 0.012, 0.98, sz + fz * 0.012, 0.6, 0.43, yaw);
-    c.board(c.flat, sx - fx * 0.012, 0.98, sz - fz * 0.012, 0.64, 0.47, yaw + Math.PI, null, [0.1, 0.1, 0.1]);
+    c.board(c.mapped('mascot', tex), sx + fx * 0.012, 0.875, sz + fz * 0.012, 0.6, 0.225, yaw);
+    c.board(c.flat, sx - fx * 0.012, 0.875, sz - fz * 0.012, 0.64, 0.265, yaw + Math.PI, null, [0.1, 0.1, 0.1]);
     c.flat.box(sx - 0.02, 0, sz - 0.02, sx + 0.02, 0.76, sz + 0.02, [0.55, 0.5, 0.36], { skip: '-y' });
     c.flat.box(sx - 0.14, 0, sz - 0.14, sx + 0.14, 0.025, sz + 0.14, [0.3, 0.28, 0.22], { skip: '-y' });
     c.solid(sx - 0.06, sz - 0.06, sx + 0.06, sz + 0.06);

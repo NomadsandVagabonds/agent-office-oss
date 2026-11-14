@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { generate, sketch, DECK, ARCHETYPES, SIDES, T, RISE, toWorld, wallLength, wallPoint, floorAt, ceilAt, headAt, fitsAt, stairZones,
-  roomDistances, roomPath, makeRng } from '../public/world/backrooms/gen.js';
+  roomDistances, roomPath, makeRng, MIN_EXIT_STEPS } from '../public/world/backrooms/gen.js';
 
 const office = {
   name: 'Robin', projects: ['Webstore', 'Mobile App', 'Infra'], agents: ['Ivory Marten', 'Amber Vireo', 'Ember Numbat', 'Olive Heron'],
@@ -61,6 +61,21 @@ test('the exit, and every other room, can be reached from where you land', () =>
     assert.equal(level.rooms[level.exit.room].doors.length, 1, 'the way out is at the end of its own passage');
     for (let i = 0; i + 1 < path.length; i++) assert.ok(level.rooms[path[i]].doors.some((d) => d.to === path[i + 1]));
   }
+});
+
+test('the way out is the furthest room there is, and never a short walk', () => {
+  // More seeds than the other tests: this is a promise about every visit, and the generator is cheap.
+  let walked = 0, rooms = 0;
+  for (let seed = 1; seed <= 400; seed++) {
+    const level = seed <= 60 ? levelFor(SEEDS[seed - 1]) : generate(`far-${seed}`, office);
+    const dist = roomDistances(level, level.start.room);
+    const toExit = dist.get(level.exit.room), furthest = Math.max(...dist.values());
+    assert.equal(toExit, furthest, `seed ${level.seed}: the way out is ${toExit} doorways off, but a room is ${furthest}\n${sketch(level)}`);
+    assert.ok(toExit >= MIN_EXIT_STEPS, `seed ${level.seed}: the way out is only ${toExit} doorways from the landing`);
+    walked += roomPath(level, level.start.room, level.exit.room).length; rooms += level.rooms.length;
+  }
+  // Going straight there, with no wrong turn at all, still takes you through about half the building.
+  assert.ok(walked / rooms > 0.45, `the shortest way out passes ${(100 * walked / rooms).toFixed(0)}% of the rooms`);
 });
 
 test('rooms never overlap, and every doorway is a real hole in both walls', () => {

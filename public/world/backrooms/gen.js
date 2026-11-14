@@ -131,6 +131,8 @@ const BANNERS = [
   ['IT\'S A DEPLOY!', 'HAPPY BIRTHDAY {PROJECT}'], ['{NAME}', '1 DAY WITHOUT LEAVING'], ['THANK YOU FOR', 'YOUR SERVICE REQUEST'], ['SURPRISE', 'WE KNEW YOU WERE COMING'],
 ];
 const CAKE = ['{NAME}', '404', 'v0.0.0', 'SORRY', 'AGAIN', 'YAY?', 'Q4'];
+// The way out is never closer than this many doorways from where you land (and never closer than any other room).
+export const MIN_EXIT_STEPS = 7;
 const KANBAN = ['find the exit', 'fix the thing', 'ask {agent}', 'this card', 'move this card', '{name}', 'TODO', 'done?', 'reply to {agent}', 'water the plants (ceiling)'];
 const KANBAN_COLS = [['TO DO', 'TO DO', 'TO DO', 'TO DO'], ['TODO', 'DOING', 'DONE', 'UNDONE'], ['BACKLOG', 'BACKLOG (OLD)', 'BACKLOG (OLDER)', 'ICEBOX'], ['SOON', 'LATER', 'NEVER', 'DONE']];
 const WET = ['CAUTION|WET FLOOR', 'CAUTION|FLOOR', 'CAUTION|DRY FLOOR', 'CAUTION|CAUTION', 'CAUTION|{NAME}', 'CUIDADO|PISO', 'CAUTION|WET SIGN', 'CAUTION|SIGNS', 'CAUTION|CARPET'];
@@ -539,20 +541,6 @@ function build(R, o, opt) {
   };
   let depth = distances(start);
 
-  /* the way out: far from the start, down its own short passage — often up a few stairs */
-  const exitSpec = { kind: 'exit', lw: 3, ld: R.int(3, 5), dw: 1.6, centred: true };
-  let exit = null;
-  const anchors = [...hubs.filter((h) => h !== start && !h.crawl).map((room) => ({ room })), ...ports.filter((p) => !p.used)]
-    .sort((p, q) => depth.get(q.room.id) - depth.get(p.room.id));
-  const tryExit = (a) => {
-    if (a.local) { const dw = Math.min(1.6, wallLength(a.room, a.local) - 1.2); return attach(a.room, worldSide(a.room, a.local), { ...exitSpec, dw, fixed: portSpan(a.room, a.local, 0, dw) }); }
-    for (const side of sides()) { const made = attach(a.room, side, exitSpec); if (made) { if (R.chance(0.45)) step(a.room, made, R.pick([2, 4, 6])); return made; } }
-    return null;
-  };
-  for (const a of [...R.shuffle(anchors.slice(0, 3)), ...anchors.slice(3), { room: start }]) { exit = tryExit(a); if (exit) { if (a.local) a.used = true; break; } }
-  if (!exit) return null;
-  exit.name = 'Way out';
-
   /* a couple of extra doorways between plain rooms that happen to share a wall: loops */
   const sill = (link) => Math.round(Math.abs(rooms[link.a].y - rooms[link.b].y) / RISE);
   const lowerOf = (link) => (rooms[link.a].y <= rooms[link.b].y ? rooms[link.a] : rooms[link.b]);
@@ -592,6 +580,27 @@ function build(R, o, opt) {
     const link = addLink(r, other, side % 2 === 0 ? 'z' : 'x', wall, span.from, span.to);
     if (clearOfStairs(link) && flight(other, link, sill(link))) { port.used = true; loops++; } else dropLink();
   }
+  /* the way out: the furthest room from where you land, down its own short passage — often up a few stairs.
+     It goes in last, when every doorway there will ever be is already there, so no shortcut can bring it closer
+     afterwards; and it only ever hangs off a room deep enough that nothing else in the building is further away.
+     A level that has no such spot, or whose furthest room is only a short walk off, is thrown back and dealt again. */
+  depth = distances(start);
+  const deepest = Math.max(...depth.values());
+  const far = (room) => Math.hypot(room.x + room.w / 2 - (start.x + start.w / 2), room.z + room.d / 2 - (start.z + start.d / 2));
+  const exitSpec = { kind: 'exit', lw: 3, ld: R.int(3, 5), dw: 1.6, centred: true };
+  const anchors = [...hubs.filter((h) => h !== start && !h.crawl).map((room) => ({ room })), ...ports.filter((p) => !p.used)]
+    .filter((p) => depth.get(p.room.id) + 1 >= Math.max(deepest, MIN_EXIT_STEPS))
+    .sort((p, q) => depth.get(q.room.id) - depth.get(p.room.id) || far(q.room) - far(p.room));
+  const tryExit = (a) => {
+    if (a.local) { const dw = Math.min(1.6, wallLength(a.room, a.local) - 1.2); return attach(a.room, worldSide(a.room, a.local), { ...exitSpec, dw, fixed: portSpan(a.room, a.local, 0, dw) }); }
+    for (const side of sides()) { const made = attach(a.room, side, exitSpec); if (made) { if (R.chance(0.45)) step(a.room, made, R.pick([2, 4, 6])); return made; } }
+    return null;
+  };
+  let exit = null;
+  for (const a of anchors) { exit = tryExit(a); if (exit) { if (a.local) a.used = true; break; } }
+  if (!exit) return null;
+  exit.name = 'Way out';
+
   depth = distances(start);
   for (const room of rooms) room.depth = depth.get(room.id) ?? -1;
   if (rooms.some((r) => r.depth < 0)) return null;
