@@ -5,7 +5,7 @@
 import { createInventory as createModel, makeItem, ITEM_DEFS } from './inventory-state.js';
 import { createInventoryHud } from './inventory-hud.js';
 import { createInventoryWorld } from './inventory-world.js';
-import { toLocal, makeRng, ARCHETYPES } from './gen.js';
+import { toLocal, makeRng, ARCHETYPES, STASH } from './gen.js';
 import { planSupplies, wantedByRooms } from './supplies.js';
 import { CAST, castFor } from './cast.js';
 
@@ -146,6 +146,18 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
       for (const roomId of rooms) {
         const rt = env.world.rooms.find(r => r.id === roomId);
         if (!rt) continue;
+        // An oddity says where something may be hidden in it (its deck line's `stash`): that is where its thing goes,
+        // if a thing can lie there — the place its author chose, not wherever the floor happens to be clear.
+        const stash = rt.def.arch ? STASH[rt.def.arch] : null;
+        if (stash) {
+          try {
+            const lay = stash(rt.def, random.chance(0.5) ? 1 : -1), zones = Array.isArray(lay[0]) ? lay : [lay];
+            for (const z of random.shuffle(zones)) for (let k = 0; k < 6 && !placed; k++) {
+              placed = physical.spawn(makeItem(type, id(key), made), { room: rt.id, x: random.range(z[0], z[2]), z: random.range(z[1], z[3]) }).ok;
+            }
+          } catch { /* a room's own arithmetic: the floor will do */ }
+          if (placed) break;
+        }
         const walk = env.world.walkable(rt), seen = walk.flood(rt.def.doors), cells = [];
         for (let i = 0; i < seen.length; i++) if (seen[i]) cells.push(i);
         for (const cell of random.shuffle(cells).slice(0, 256)) {

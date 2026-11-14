@@ -32,7 +32,9 @@ export const STAMP_COINS = 1;
 export const HIDEOUTS = Object.freeze([
   ...LEVELS.filter((l) => l.card).map((l) => Object.freeze({ id: l.id, name: l.name, coins: l.coins || 0, lift: true })),
   // (what the place under the office is called where anybody can read it: its card says so, and so does the office's feed)
-  Object.freeze({ id: 'backrooms', name: 'Out of Office', coins: 4, lift: false, pays: true }),
+  // It hides no coins of its own any more (it had four, as video cassettes): what it pays in is what is carried out of
+  // it — spare battery packs (`pays`, below). An office that had found some of the four keeps them: nothing is taken back.
+  Object.freeze({ id: 'backrooms', name: 'Out of Office', coins: 0, lift: false, pays: true }),
 ]);
 const BY_ID = new Map(HIDEOUTS.map((h) => [h.id, h]));
 export const hideoutById = (id) => BY_ID.get(id) || null;

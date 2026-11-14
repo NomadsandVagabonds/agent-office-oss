@@ -350,7 +350,8 @@ the person playing (`core/game.mjs` is the whole of the rules; it is pure):
   floor you have been to, one for its keycard and one for each coin, filled in
   as they are found; the passport (§6) has an outline for every keycard there
   is, and the jar.
-- **Coins.** Each of those places hides a few (15 in all). A coin taken is gone
+- **Coins.** Each of the lift's card floors hides a few (11 in all; the place
+  behind the wall hides none, it pays: below). A coin taken is gone
   for good — the office remembers which — and goes into **one jar for the whole
   office**. Every stamp in anybody's passport (§6) pays a coin into the same
   jar, which is what ties the older secrets to the newer ones. Whenever the jar
