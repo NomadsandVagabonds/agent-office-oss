@@ -5,25 +5,28 @@ import { h, icon, replace } from './dom.js';
 
 const css = `
 #ui .bd { display: flex; flex: 1 1 auto; min-width: 0; }
-#ui .bd .nav { width: 270px; flex: none; border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+#ui .bd .nav { width: 270px; flex: none; border-right: 2px solid var(--edge); display: flex; flex-direction: column; }
 #ui .bd .nav .search { padding: 10px 10px 4px; }
 #ui .bd .nav .item small { display: block; color: var(--faint); font: 11px/1.3 var(--mono); }
 #ui .bd .nav .item .snip { display: block; color: var(--dim); font-size: 11.5px; margin-top: 2px; white-space: normal; }
-#ui .bd .doc { flex: 1 1 auto; min-width: 0; padding: 18px 26px 40px; }
-#ui .md { max-width: 760px; line-height: 1.6; font-size: 13.5px; }
-#ui .md h1, #ui .md h2, #ui .md h3, #ui .md h4 { font-family: var(--sans); line-height: 1.25; margin: 1.3em 0 .5em; }
-#ui .md h1 { font-size: 22px; margin-top: 0; } #ui .md h2 { font-size: 17px; padding-bottom: 4px; border-bottom: 1px solid var(--line); } #ui .md h3 { font-size: 14.5px; } #ui .md h4 { font-size: 13px; color: var(--dim); }
+/* you read on paper */
+#ui .bd .doc { flex: 1 1 auto; min-width: 0; padding: 24px 32px 44px; background: var(--paper); color: var(--paper-ink); scrollbar-color: rgba(42, 36, 32, .4) transparent; }
+#ui .bd .doc::-webkit-scrollbar-thumb { background: rgba(42, 36, 32, .35); }
+#ui .bd .doc .dim, #ui .bd .doc .faint, #ui .bd .doc .empty { color: var(--paper-dim); }
+#ui .md { max-width: 720px; line-height: 1.62; font-size: 14px; }
+#ui .md h1, #ui .md h2, #ui .md h3, #ui .md h4 { font-family: var(--display); font-weight: 600; letter-spacing: .01em; line-height: 1.2; margin: 1.3em 0 .5em; }
+#ui .md h1 { font-size: 28px; margin-top: 0; } #ui .md h2 { font-size: 21px; padding-bottom: 4px; border-bottom: 2px solid var(--paper-ink); } #ui .md h3 { font-size: 17px; } #ui .md h4 { font-size: 15px; color: var(--paper-dim); }
 #ui .md p { margin: .6em 0; } #ui .md ul, #ui .md ol { margin: .5em 0; padding-left: 1.5em; } #ui .md li { margin: .15em 0; }
-#ui .md code { font: 12px/1.4 var(--mono); background: rgba(255, 255, 255, .08); padding: 1px 5px; border-radius: 4px; }
-#ui .md pre { background: rgba(0, 0, 0, .35); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; }
+#ui .md code { font: 12.5px/1.4 var(--mono); background: rgba(42, 36, 32, .09); padding: 1px 5px; }
+#ui .md pre { background: #fffaf0; border: 2px dashed var(--paper-line); padding: 10px 12px; overflow-x: auto; }
 #ui .md pre code { background: none; padding: 0; white-space: pre; }
-#ui .md blockquote { margin: .6em 0; padding: 2px 12px; border-left: 3px solid var(--line-2); color: var(--dim); }
-#ui .md a { color: var(--accent); text-decoration: none; } #ui .md a:hover { text-decoration: underline; }
-#ui .md hr { border: 0; border-top: 1px solid var(--line); margin: 1.2em 0; }
+#ui .md blockquote { margin: .6em 0; padding: 2px 12px; border-left: 4px solid var(--paper-line); color: var(--paper-dim); }
+#ui .md a { color: var(--pen); text-decoration: underline; text-underline-offset: 2px; } #ui .md a:hover { color: #000; }
+#ui .md hr { border: 0; border-top: 2px dashed var(--paper-line); margin: 1.2em 0; }
 #ui .md table { border-collapse: collapse; margin: .7em 0; font-size: 12.5px; display: block; overflow-x: auto; }
-#ui .md th, #ui .md td { border: 1px solid var(--line-2); padding: 4px 9px; text-align: left; vertical-align: top; }
-#ui .md th { background: rgba(255, 255, 255, .05); }
-#ui .md mark { background: rgba(240, 184, 96, .35); color: inherit; border-radius: 2px; }
+#ui .md th, #ui .md td { border: 1px solid var(--paper-line); padding: 4px 9px; text-align: left; vertical-align: top; }
+#ui .md th { background: rgba(42, 36, 32, .07); }
+#ui .md mark { background: #ffe27a; color: inherit; }
 `;
 
 /* ---- a small, safe Markdown renderer: builds DOM nodes, never HTML strings --------- */

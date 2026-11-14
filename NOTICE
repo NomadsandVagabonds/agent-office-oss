@@ -9,3 +9,11 @@ modify the Apache License, Version 2.0.
 The audio under public/audio/ was generated with ElevenLabs (sound effects,
 music and stock voices) on the project owner's account, by
 tools/make-audio.mjs, and is distributed under the licence terms of that plan.
+
+The typefaces under public/vendor/fonts/ are Pixelify Sans (Copyright 2021
+The Pixelify Sans Project Authors) and IBM Plex Sans and IBM Plex Mono
+(Copyright 2018 IBM Corp.), each under the SIL Open Font License 1.1. The
+licence texts are beside the files.
+
+three.js under public/vendor/ is Copyright 2010-2025 Three.js Authors, MIT
+licence (public/vendor/LICENSE-three.txt).

@@ -6,14 +6,14 @@ import { h, ago, replace } from './dom.js';
 const css = `
 #ui .pp { flex: 1 1 auto; min-width: 0; padding: 16px 18px 24px; }
 #ui .pp .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
-#ui .pp .stamp { display: flex; gap: 10px; padding: 10px 12px; border-radius: 9px; border: 1px dashed var(--line-2); min-height: 74px; }
+#ui .pp .stamp { display: flex; gap: 10px; padding: 10px 12px; border: 2px dashed var(--line-2); min-height: 76px; }
 #ui .pp .stamp .ic { font-size: 26px; line-height: 1; width: 34px; text-align: center; flex: none; filter: grayscale(1) opacity(.35); }
-#ui .pp .stamp.found { border-style: solid; border-color: rgba(240, 184, 96, .45); background: rgba(240, 184, 96, .07); }
+#ui .pp .stamp.found { border-style: solid; border-color: var(--brass); background: rgba(226, 184, 92, .1); }
 #ui .pp .stamp.found .ic { filter: none; }
-#ui .pp .stamp b { display: block; font-weight: 600; margin-bottom: 2px; }
+#ui .pp .stamp b { display: block; font: 600 16px/1.15 var(--display); margin-bottom: 3px; }
 #ui .pp .stamp small { color: var(--dim); font-size: 12px; line-height: 1.35; display: block; }
 #ui .pp .stamp .by { color: var(--faint); font: 11px/1.3 var(--mono); margin-top: 4px; }
-#ui .pp h3 { font: 600 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--faint); margin: 22px 0 8px; }
+#ui .pp h3 { font: 400 14px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--faint); margin: 22px 0 8px; }
 #ui .pp .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
 #ui .pp .line { display: flex; gap: 8px; padding: 3px 0; font-size: 12.5px; } #ui .pp .line span:first-child { flex: 1 1 auto; min-width: 0; }
 `;

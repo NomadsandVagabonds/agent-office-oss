@@ -47,12 +47,21 @@ export function createLabels(office, ui) {
     for (const r of roomTags.values()) r.el.remove();
     roomTags.clear();
     for (const room of layout.rooms) {
-      if (room.locked || room.kind === 'corridor' || room.kind === 'elevator' || room.kind === 'landing' || room.kind === 'vacant') continue;
+      if (room.locked || !room.deptId) continue;                 // teams' rooms get a name; the kitchen knows it is the kitchen
       const sub = h('small');
       const el = h('div.roomtag', { onclick: (e) => { e.stopPropagation(); ui.gotoRoom(room.id); } }, room.name, sub);
       layer.append(el);
       roomTags.set(room.id, { el, sub, room });
     }
+  }
+
+  /** Move a tag — but only touch the page when it actually moved: with the camera still, that is never. */
+  function place(t, on, p, size, anchor = '-100%') {
+    const tf = on ? `translate(${((p.x * 0.5 + 0.5) * size.w).toFixed(1)}px, ${((-p.y * 0.5 + 0.5) * size.h).toFixed(1)}px) translate(-50%, ${anchor})` : '';
+    if (tf === t.tf) return;
+    if (t.tf === undefined || !tf !== !t.tf) t.el.style.display = on ? '' : 'none';
+    if (tf) t.el.style.transform = tf;
+    t.tf = tf;
   }
 
   function update() {
@@ -61,7 +70,9 @@ export function createLabels(office, ui) {
     syncRooms();
     const { camera, size } = office.stage;
     const dist = office.rig.cur.dist;
-    const far = dist > 34, map = dist > 46 && dist < 112, tiny = dist >= 112;      // tiny: the whole office is a speck on a desk
+    // Names are for when you are close enough to care who is who. Further out each person is a pip of
+    // colour; from across the building only the people who need you say anything at all.
+    const near = dist < 17, far = dist > 34, map = dist > 46 && dist < 112, tiny = dist >= 112;      // tiny: the whole office is a speck on a desk
     layer.style.opacity = tiny ? '0' : '1';
     const now = performance.now();
     const pending = new Map(office.net.state.prompts.filter((p) => p.status === 'pending').map((p) => [p.agentId, p]));
@@ -74,12 +85,13 @@ export function createLabels(office, ui) {
       const idle = a.turn === 'idle' && a.status !== 'blocked';
       const prompt = pending.get(a.id);
       const needs = !!prompt || (a.status === 'blocked' && a.blockKind !== 'idle');
-      const key = `${a.name}|${a.status}|${idle}|${needs}|${office.selected === a.id}|${far}`;
+      const named = near || needs || office.selected === a.id || office.hovered === a.id;
+      const key = `${a.name}|${a.status}|${idle}|${needs}|${office.selected === a.id}|${named}|${far}`;
       if (key !== t.key) {
         t.key = key;
         t.text.textContent = a.name;
         t.dot.className = 'dot ' + (needs ? 'blocked' : idle ? '' : a.status);
-        t.el.className = 'tag' + (far ? ' far' : '') + (idle ? ' idle' : '') + (office.selected === a.id ? ' selected' : '');
+        t.el.className = 'tag' + (named ? '' : far ? ' bare' : ' pip') + (idle ? ' idle' : '') + (office.selected === a.id ? ' selected' : '');
         t.name.title = `${a.name} — ${needs ? 'needs you' : a.status}`;
       }
       // what is over their head: something they said, else "needs you"
@@ -93,8 +105,7 @@ export function createLabels(office, ui) {
       }
       v.set(person.pos.x, person.atDesk || person.place.pose === 'sit' ? 1.5 : 1.62, person.pos.z).project(camera);
       const on = v.z < 1 && Math.abs(v.x) < 1.15 && Math.abs(v.y) < 1.2;
-      t.el.style.display = on ? '' : 'none';
-      if (on) t.el.style.transform = `translate(${((v.x * 0.5 + 0.5) * size.w).toFixed(1)}px, ${((-v.y * 0.5 + 0.5) * size.h).toFixed(1)}px) translate(-50%, -100%)`;
+      place(t, on, v, size);
       const room = person.place.room;
       const tally = perRoom.get(room) || { here: 0, needs: 0 };
       tally.here++; if (needs) tally.needs++;
@@ -113,21 +124,19 @@ export function createLabels(office, ui) {
       if (t.name !== p.name) { t.name = p.name; t.text.textContent = p.name; }
       v.set(p.x, 1.66, p.z).project(camera);
       const on = v.z < 1 && Math.abs(v.x) < 1.15 && Math.abs(v.y) < 1.2;
-      t.el.style.display = on ? '' : 'none';
-      if (on) t.el.style.transform = `translate(${((v.x * 0.5 + 0.5) * size.w).toFixed(1)}px, ${((-v.y * 0.5 + 0.5) * size.h).toFixed(1)}px) translate(-50%, -100%)`;
+      place(t, on, v, size);
     }
 
     for (const r of roomTags.values()) {
-      if (!map) { r.el.style.display = 'none'; continue; }
+      if (!map) { place(r, false, v, size, '-50%'); continue; }
       const { rect } = r.room;
       v.set(rect.x + rect.w / 2, 0, rect.z + rect.d * 0.86).project(camera);
       const on = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
-      r.el.style.display = on ? '' : 'none';
-      if (!on) continue;
+      if (!on) { place(r, false, v, size, '-50%'); continue; }
       const tally = perRoom.get(r.room.id);
-      const line = tally ? `${tally.here} here${tally.needs ? ` · ${tally.needs} need${tally.needs > 1 ? '' : 's'} you` : ''}` : '';
+      const line = tally?.needs ? `${tally.needs} need${tally.needs > 1 ? '' : 's'} you` : '';        // a head count is noise; this is not
       if (r.line !== line) { r.line = line; r.sub.textContent = line; r.sub.style.display = line ? '' : 'none'; r.el.classList.toggle('hot', !!tally?.needs); }
-      r.el.style.transform = `translate(${((v.x * 0.5 + 0.5) * size.w).toFixed(1)}px, ${((-v.y * 0.5 + 0.5) * size.h).toFixed(1)}px) translate(-50%, -50%)`;
+      place(r, true, v, size, '-50%');
     }
   }
 

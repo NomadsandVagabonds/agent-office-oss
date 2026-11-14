@@ -5,25 +5,26 @@
 import { h, replace } from './dom.js';
 
 const css = `
-#ui .fuel { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); cursor: pointer; font: 600 10px/1 var(--mono); letter-spacing: .06em; color: var(--dim); }
-#ui .fuel:hover { border-color: var(--line-2); color: var(--ink); }
-#ui .fuel .cell { display: inline-flex; align-items: center; gap: 3px; }
-#ui .fuel .bar { width: 18px; height: 6px; border-radius: 2px; background: rgba(255, 255, 255, .1); overflow: hidden; }
-#ui .fuel .bar i { display: block; height: 100%; background: var(--working); }
+#ui .fuel { display: inline-flex; align-items: center; gap: 9px; height: 38px; padding: 0 11px; background: #090f0d; border: 2px solid var(--edge); box-shadow: inset 0 3px 0 rgba(0, 0, 0, .6), var(--shadow);
+  cursor: pointer; font: 400 15px/1 var(--display); color: #9a7436; }
+#ui .fuel:hover { color: #ffc66b; }
+#ui .fuel .cell { display: inline-flex; align-items: flex-end; gap: 4px; height: 22px; }
+#ui .fuel .bar { display: flex; align-items: flex-end; width: 8px; height: 22px; background: rgba(255, 255, 255, .09); }      /* a small tank */
+#ui .fuel .bar i { display: block; width: 100%; background: var(--working); }
 #ui .fuel .low .bar i { background: var(--blocked); } #ui .fuel .critical .bar i, #ui .fuel .out .bar i { background: var(--danger); }
 #ui .fuel .stale .bar i { background: var(--idle); }
 #ui .fuel .critical, #ui .fuel .out { color: var(--danger); }
 #ui .use { flex: 1 1 auto; min-width: 0; padding: 16px 18px 24px; }
-#ui .use .advice { margin: 0 0 14px; padding: 10px 12px; border-radius: 9px; background: rgba(240, 184, 96, .08); border: 1px solid rgba(240, 184, 96, .3); }
+#ui .use .advice { margin: 0 0 14px; padding: 10px 12px; background: rgba(226, 184, 92, .1); border: 2px solid var(--brass-lo); }
 #ui .use .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px; }
-#ui .use .meter-card { display: grid; gap: 10px; align-content: start; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line-2); min-width: 0; }
+#ui .use .meter-card { display: grid; gap: 10px; align-content: start; padding: 12px 14px; border: 2px solid var(--edge); background: var(--board-2); min-width: 0; }
 #ui .use .meter-card.stale { opacity: .72; }
 #ui .use .meter-card header { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-#ui .use .meter-card header b { font-weight: 600; font-size: 14px; }
-#ui .use .plan { font: 600 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); border: 1px solid rgba(240, 184, 96, .4); padding: 3px 6px; border-radius: 5px; }
+#ui .use .meter-card header b { font: 600 17px/1.1 var(--display); }
+#ui .use .plan { font: 600 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); border: 2px solid var(--brass-lo); padding: 2px 6px 3px; }
 #ui .use .win { display: grid; grid-template-columns: minmax(5.2em, max-content) 1fr; gap: 4px 10px; align-items: center; font-size: 12.5px; }
 #ui .use .win .lab { color: var(--dim); }
-#ui .use .win .track { height: 9px; border-radius: 3px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+#ui .use .win .track { height: 10px; background: #0b1411; border: 2px solid var(--edge); overflow: hidden; }
 #ui .use .win .track i { display: block; height: 100%; background: var(--working); }
 #ui .use .win.low .track i { background: var(--blocked); } #ui .use .win.critical .track i { background: var(--danger); }
 #ui .use .win.old .track i { background: var(--idle); }
@@ -49,7 +50,7 @@ export function createFuelChip(office, ui) {
     const meters = (usage?.meters || []).filter((m) => m.left !== null).slice(0, 5);
     el.classList.toggle('hidden', !meters.length);
     replace(el, meters.map((m) => h(`span.cell.${m.stale ? 'stale' : m.level}`, { title: `${m.label}: ${Math.round(m.left)}% left${m.stale ? ' (old reading)' : ''}` },
-      SHORT[m.provider] || m.provider[0].toUpperCase(), h('span.bar', h('i', { style: { width: `${Math.max(4, m.left)}%` } })))));
+      SHORT[m.provider] || m.provider[0].toUpperCase(), h('span.bar', h('i', { style: { height: `${Math.max(6, m.left)}%` } })))));
     el.title = usage?.text || 'How much each provider has left (U)';
   }
   office.net.on('usage', render);

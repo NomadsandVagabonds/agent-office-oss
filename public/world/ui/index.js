@@ -32,23 +32,30 @@ export function createUI(office) {
   const net = office.net;
   const ui = { root, office };
 
-  /* ---- top bar ------------------------------------------------------------------ */
-  const tally = h('div.tally');
-  const clockEl = h('span.clock');
-  const tools = h('div.tools');
-  const needBadge = h('span.badge.hidden', '0');
-  const brand = h('div.brand', { title: 'Back to the whole office (Space)', onclick: () => ui.overview() }, 'THE OFFICE');
-  const fuelChip = createFuelChip(office, ui);
-  root.append(h('div.topbar.glass', brand, tally, fuelChip, h('span.grow'), clockEl, tools));
+  /* ---- the edges of the screen ------------------------------------------------------
+     Top left: the nameplate and who is in. Top right: two instruments. Bottom centre: a
+     dock of seven keys. Bottom right: the in-tray (needs.js). Bottom left: one line of
+     what just happened. Everything else is the room. */
+  const census = h('div.census');
+  const dayEl = h('small'), clockEl = h('span');
+  const brand = h('div.nameplate', { title: 'The whole office (Space)', onclick: () => ui.overview() }, 'THE OFFICE');
+  root.append(h('div.hud-tl', brand, census));
+  root.append(h('div.hud-tr', createFuelChip(office, ui), h('div.lcd', dayEl, clockEl)));
+  const dock = h('div.dock.glass');
+  root.append(dock);
+  const dockKey = (glyph, label, hot, onclick) => {
+    const key = h('button.key', { type: 'button', 'aria-label': label, onclick }, icon(glyph), h('kbd', hot), h('span.tip', label));
+    dock.append(key);
+    return key;
+  };
   const sheetButtons = {};
-  tools.append(h('button.btn.ghost', { title: 'Next agent waiting on you (N)', onclick: () => ui.nextNeed() }, icon('inbox'), h('span.word', 'Needs you'), needBadge));
-  const walkBtn = h('button.btn.ghost', { title: 'Walk the floor yourself (Tab)', onclick: () => office.walk?.toggle() }, icon('pin'), h('span.word', 'Walk'));
-  tools.append(walkBtn);
   for (const [name, s] of Object.entries(SHEETS)) {
     if (s.hidden) continue;
-    sheetButtons[name] = h('button.btn.ghost', { title: `${s.title} (${s.key.toUpperCase()})`, onclick: () => ui.toggleSheet(name) }, icon(s.icon), h('span.word', s.title));
-    tools.append(sheetButtons[name]);
+    sheetButtons[name] = dockKey(s.icon, s.title, s.key.toUpperCase(), () => ui.toggleSheet(name));
   }
+  dock.append(h('span.sep'));
+  const walkBtn = dockKey('pin', 'Walk the floor', 'Tab', () => { office.walk?.toggle(); walkBtn.classList.toggle('on', !!office.walk?.active); });
+  dockKey('search', 'Find anyone or anything', '/', () => ui.palette.open());
 
   function renderTally() {
     const c = { working: 0, thinking: 0, needs: 0, idle: 0 };
@@ -58,33 +65,38 @@ export function createUI(office) {
       else if (a.status === 'working') c.working++;
       else c.thinking++;
     }
-    const chip = (n, cls, word, title, onclick) => (n ? h('span.chip' + (cls === 'blocked' ? '.hot' : ''), { title, onclick }, h('i.dot.' + cls), String(n), h('span.word', ' ' + word)) : null);
-    tally.replaceChildren(...[
-      chip(c.needs, 'blocked', c.needs === 1 ? 'needs you' : 'need you', 'Waiting on you — click to visit', () => ui.nextNeed()),
-      chip(c.working, 'working', 'working', 'Mid-task', () => ui.cycle((a) => a.status === 'working' && a.turn !== 'idle')),
-      chip(c.thinking, 'thinking', 'thinking', 'Thinking', () => ui.cycle((a) => a.status === 'thinking' && a.turn !== 'idle')),
-      chip(c.idle, 'idle', 'idle', 'Finished their turn', () => ui.cycle((a) => a.turn === 'idle' || a.status === 'done')),
+    // three numbers, at most: who needs you, who is at work, who has finished
+    const n = (count, cls, word, title, onclick) => (count ? h('span.n' + (cls === 'blocked' ? '.hot' : ''), { title, onclick }, h('i.dot.' + cls), h('b', String(count)), h('span.word', word)) : null);
+    census.replaceChildren(...[
+      n(c.needs, 'blocked', c.needs === 1 ? 'needs you' : 'need you', 'Waiting on you (N)', () => ui.nextNeed()),
+      n(c.working + c.thinking, 'working', 'at work', 'Mid-task: click to visit each in turn', () => ui.cycle((a) => (a.status === 'working' || a.status === 'thinking') && a.turn !== 'idle')),
+      n(c.idle, 'idle', 'idle', 'Finished their turn: click to visit each in turn', () => ui.cycle((a) => a.turn === 'idle' || a.status === 'done')),
     ].filter(Boolean));
-    if (!net.state.agents.size) tally.append(h('span.chip', 'nobody here yet'));
+    if (!net.state.agents.size) census.append(h('span', 'nobody in yet'));
   }
-  ui.setNeedCount = (n) => { needBadge.textContent = String(n); needBadge.classList.toggle('hidden', !n); document.title = n ? `(${n}) The Office` : 'The Office'; };
+  ui.setNeedCount = (n) => { document.title = n ? `(${n}) The Office` : 'The Office'; };
   function tickClock() {
     const tz = net.state.world?.today?.tzOffsetMin;
     const d = new Date(net.now() + (Number.isFinite(tz) ? tz + new Date().getTimezoneOffset() : 0) * 60000);
-    clockEl.textContent = `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]} ${clock(d.getTime())}`;
+    dayEl.textContent = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+    clockEl.textContent = clock(d.getTime());
   }
   setInterval(tickClock, 10000);
 
-  /* ---- toasts ------------------------------------------------------------------- */
-  const toasts = h('div.toasts');
-  root.append(toasts);
+  /* ---- the ticker: one line of what just happened ------------------------------------
+     It replaces itself and fades; it never stacks. (ui.toast keeps its name: a lot calls it.) */
+  const ticker = h('div.ticker');
+  root.append(ticker);
+  let tickerTimer = 0;
   ui.toast = (content, opt = {}) => {
-    const el = h('div.toast.glass' + (opt.gold ? '.gold' : ''), content);
-    if (opt.onclick) { el.style.cursor = 'pointer'; el.style.pointerEvents = 'auto'; el.onclick = opt.onclick; }
-    toasts.prepend(el);
-    while (toasts.children.length > 5) toasts.lastChild.remove();
-    setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 650); }, opt.ms || 5200);
-    return el;
+    ticker.replaceChildren(...(Array.isArray(content) ? content : [content]).map((c) => (c instanceof Node ? c : document.createTextNode(String(c)))));
+    ticker.className = 'ticker on' + (opt.gold ? ' gold' : '');
+    ticker.title = ticker.textContent;
+    ticker.onclick = opt.onclick || null;
+    ticker.style.cursor = opt.onclick ? 'pointer' : 'default';
+    clearTimeout(tickerTimer);
+    tickerTimer = setTimeout(() => ticker.classList.remove('on'), opt.ms || 5200);
+    return ticker;
   };
 
   /* ---- selection ---------------------------------------------------------------- */
@@ -166,7 +178,8 @@ export function createUI(office) {
   canvas.addEventListener('pointermove', (e) => {
     if (e.buttons || performance.now() - hoverAt < 60) return;
     hoverAt = performance.now();
-    const kind = picker.at(e.clientX, e.clientY)?.kind;
+    const hit = picker.at(e.clientX, e.clientY), kind = hit?.kind;
+    office.hovered = kind === 'agent' ? hit.id : null;           // labels.js shows a name for whoever is under the pointer
     canvas.style.cursor = kind && kind !== 'floor' ? 'pointer' : '';
   });
   canvas.addEventListener('dblclick', (e) => {
@@ -183,6 +196,7 @@ export function createUI(office) {
     sheet.el.remove();
     sheetButtons[sheet.name]?.classList.remove('on');
     sheet = null;
+    needs.cover(false);
   };
   ui.openSheet = async (name, arg) => {
     const spec = SHEETS[name];
@@ -195,6 +209,7 @@ export function createUI(office) {
       h('button.btn.ghost.small', { title: 'Close (Esc)', onclick: () => ui.closeSheet() }, icon('close'))), content);
     root.append(el);
     sheet = { name, el, api: null };
+    needs.cover(true);
     sheetButtons[name]?.classList.add('on');
     try {
       const mod = await spec.load();
@@ -209,7 +224,6 @@ export function createUI(office) {
   ui.toggleSheet = (name) => (sheet?.name === name ? ui.closeSheet() : ui.openSheet(name));
 
   /* ---- keyboard ----------------------------------------------------------------- */
-  root.append(h('div.hint', h('div', 'drag: move · right-drag: turn · scroll: zoom'), h('div', 'click someone · N: who needs you · Tab: walk · Ctrl-K: find')));
   const held = new Set();
   window.addEventListener('keydown', (e) => {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '') || document.activeElement?.isContentEditable;
@@ -305,8 +319,11 @@ export function createUI(office) {
     const room = office.world?.layout.rooms.find((r) => r.deptId === deptId);
     return room ? { x: room.rect.x + room.rect.w / 2, z: room.rect.z + room.rect.d / 2 } : null;
   }
+  // The ticker carries what an orchestrator would want to glance at; chatter, card shuffling and
+  // requests have their own places (Comms, the Board, the in-tray).
+  const TICKER = new Set(['join', 'leave', 'task-done', 'discovery', 'creation', 'usage', 'overlap']);
   net.on('activity', (item) => {
-    if (!item?.text || item.kind === 'channel' || item.kind === 'dm') return;      // chatter has its own panel
+    if (!item?.text || !TICKER.has(item.kind)) return;
     const gold = item.kind === 'discovery' || item.kind === 'task-done' || item.kind === 'creation';
     ui.toast(item.text, { gold, onclick: item.agentId && net.state.agents.has(item.agentId) ? () => ui.select(item.agentId) : null });
   });
@@ -341,7 +358,6 @@ export function createUI(office) {
   };
   ui.palette = createPalette(office, ui);
   ui.extras = createExtras(office, ui);
-  tools.append(h('button.btn.ghost', { title: 'Find anyone or anything (Ctrl-K)', onclick: () => ui.palette.open() }, icon('search')));
   ui.labels = labels; ui.needs = needs; ui.inspector = inspector; ui.picker = picker;
   // /?level=roof — straight to a floor of the lift (core/levels.mjs)
   if (office.q?.get('level')) import('../levels/index.js').then((m) => m.ride(office, office.q.get('level'), { instant: true })).catch((err) => console.error(err));
