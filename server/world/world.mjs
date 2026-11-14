@@ -233,7 +233,9 @@ export function createWorld(ctx, file) {
   function sendHome(agent, opt = {}) {
     errands.delete(agent.id);
     releasePoi(agent.id);
-    return setPlace(agent, deskTarget(agent), opt);
+    const place = setPlace(agent, deskTarget(agent), opt);
+    bus.local({ type: 'world:home', agent });            // whoever was on a break is not any more (server/life.mjs)
+    return place;
   }
 
   function poiTarget(poi) {
@@ -479,7 +481,8 @@ export function createWorld(ctx, file) {
     seatOf.delete(agent.id);
     setPlace(agent, { at: 'spot', ref: 'elevator', ...layout.spots.elevator, face: Math.PI, pose: 'stand' }, { leaving: true });
     fx({ kind: 'elevator', dir: 'out', id: agent.id });
-    const t = setTimeout(() => places.delete(agent.id), 30_000);
+    // (only if they are still on their way out: someone who came straight back keeps the place they were given)
+    const t = setTimeout(() => { if (places.get(agent.id)?.leaving) places.delete(agent.id); }, 30_000);
     if (typeof t.unref === 'function') t.unref();
   });
 
@@ -509,7 +512,8 @@ export function createWorld(ctx, file) {
 
   bus.on('comms:channel', ({ channel, post, author }) => {
     if (author.agent) fx({ kind: 'say', id: author.agent.id, text: clip(post.content, 120), channel: channel.name });
-    else fx({ kind: 'announce', channelId: channel.id, channel: channel.name, by: post.author, text: clip(post.content, 160) });
+    // A human in a work channel is an announcement to the room. In the lounge it is just someone talking.
+    else if (channel.kind !== 'lounge' && post.authorType !== 'system') fx({ kind: 'announce', channelId: channel.id, channel: channel.name, by: post.author, text: clip(post.content, 160) });
   });
 
   bus.on('comms:dm', ({ from, to, fromLead, toLead }) => {

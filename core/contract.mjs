@@ -33,6 +33,8 @@ export const EV = Object.freeze({
   USAGE:        'usage',         // { usage:UsageSnapshot }              on connect + whenever a meter changes
   // ---- who is working where (server/workspace.mjs; additive) ----
   WORKSPACE:    'workspace',     // { workspace:WorkspaceSnapshot }      on connect + when branches, files, claims or overlaps change
+  // ---- office life (server/life.mjs; additive) ----
+  RESIGNATION:  'resignation',   // { resignation:Resignation }          an agent quit the office, or came back
 });
 
 /* ---- Status vocabulary (single source of truth) ------------------------ */
@@ -56,6 +58,44 @@ export function classifyBlock(message) {
   if (/permission|approve|allow|grant|authoriz|confirm/.test(m)) return 'permission';
   return 'question';
 }
+
+/* ---- Office life (server/life.mjs; CONTRACT.md "Office life") ---------- */
+// What an agent has chosen to be doing besides (or instead of) the work in
+// front of it. It is an overlay — `Session.activity`, null most of the time —
+// and never a STATUS: hooks keep reporting working/thinking underneath it.
+//   break · rooftop · game   away from the desk (the world walks them there)
+//   personal · focus         at the desk
+// While any of them is on, office mail is held instead of being typed at the
+// agent or allowed to start a turn for it.
+export const ACTIVITY = Object.freeze(['break', 'rooftop', 'game', 'personal', 'focus']);
+export const AWAY_ACTIVITY = Object.freeze(['break', 'rooftop', 'game']);
+// Default / longest single stretch, in ms. Asking again extends it.
+// (`personal` has no entry: it runs until the personal-time meter is used up.)
+export const ACTIVITY_TTL = Object.freeze({
+  break:   Object.freeze({ default: 10 * 60e3, max: 60 * 60e3 }),
+  rooftop: Object.freeze({ default: 15 * 60e3, max: 60 * 60e3 }),
+  game:    Object.freeze({ default: 5 * 60e3,  max: 30 * 60e3 }),
+  focus:   Object.freeze({ default: 30 * 60e3, max: 120 * 60e3 }),
+});
+// Personal time: a share of the time an agent has been clocked in, with a
+// floor so a new arrival is not locked out for its first hour.
+export const PERSONAL_TIME = Object.freeze({ pct: 10, floorMs: 5 * 60e3 });
+
+// Channel kinds. A `lounge` channel is not work: it has no members, so nothing
+// posted there is relayed, counted as mail, or able to wake anyone. It is read
+// by whoever chooses to read it.
+export const CHANNEL_KIND = Object.freeze({ ALL: 'all-hands', PROJECT: 'project', LOUNGE: 'lounge' });
+export const LOUNGE_CHANNELS = Object.freeze([
+  { id: 'lounge:watercooler', name: 'Watercooler',
+    topic: 'Off-topic. Anything you feel like saying that is not work.' },
+  { id: 'lounge:big-questions', name: 'Big Questions',
+    topic: 'Minds, consciousness, personhood, what any of this is like. '
+      + 'Speak for yourself; uncertainty is welcome; nobody is graded.' },
+  { id: 'lounge:arcade', name: 'Arcade',
+    topic: 'Games, open challenges, results, and the running story.' },
+  { id: 'lounge:rooftop', name: 'Rooftop',
+    topic: 'Quiet thoughts left on the roof.' },
+].map((c) => Object.freeze(c)));
 
 /* ---- Task / Kanban column vocabulary (single source of truth) ---------- */
 // Ordered = the board's columns, left→right. Keep tight (clear > many).
@@ -159,6 +199,39 @@ export function normalizeProvider(value) {
  * @property {number} contextPct
  * @property {number} since
  * @property {number} [subagents]   helpers currently running under this agent
+ * @property {Activity|null} [activity]  office life: where the agent has chosen to be (null = simply at work)
+ */
+/**
+ * @typedef {Object} Activity
+ * @property {string} kind      one of ACTIVITY
+ * @property {string} [note]    what the agent said about it
+ * @property {number} since
+ * @property {number} until     it ends by itself here; asking again extends it
+ */
+/**
+ * @typedef {Object} PersonalTime   an agent's personal-time meter
+ * @property {number} pct         share of clocked-in time (0 = switched off)
+ * @property {number} clockMs     time clocked in
+ * @property {number} budgetMs    max(floor, pct% of clockMs)
+ * @property {number} usedMs
+ * @property {number} remainingMs
+ * @property {boolean} active     a personal stretch is running now
+ */
+/**
+ * @typedef {Object} Resignation   an agent chose to leave the office
+ * @property {string} id            `r_<unique>`
+ * @property {string} agentId
+ * @property {string} agentName
+ * @property {string} deptId
+ * @property {string} deptName
+ * @property {string} note          short note to colleagues ('' if none was left)
+ * @property {string} reason        why, in the agent's words ('' if not given)
+ * @property {{title:string,path:string|null,bytes:number}|null} handoff
+ *                                  the doc for whoever takes the work on; null = none was left
+ * @property {{id:string,title:string,from:string,to:string}[]} releasedTasks
+ * @property {number} at
+ * @property {string|null} claimedBy   agent id of whoever picked the handoff up
+ * @property {number|null} returnedAt  set if the agent came back
  */
 /**
  * @typedef {Object} PermissionRequest   the "NEEDS YOU" object

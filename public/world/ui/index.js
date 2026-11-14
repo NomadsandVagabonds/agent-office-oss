@@ -326,10 +326,15 @@ export function createUI(office) {
   }
   // The ticker carries what an orchestrator would want to glance at; chatter, card shuffling and
   // requests have their own places (Comms, the Board, the in-tray).
-  const TICKER = new Set(['join', 'leave', 'task-done', 'discovery', 'creation', 'usage', 'overlap', 'review']);
+  const TICKER = new Set(['join', 'leave', 'task-done', 'discovery', 'creation', 'usage', 'overlap', 'review', 'resigned', 'returned']);
   net.on('activity', (item) => {
     if (!item?.text || !TICKER.has(item.kind)) return;
     const gold = item.kind === 'discovery' || item.kind === 'task-done' || item.kind === 'creation';
+    // Somebody quit: that is worth more than a passing line. It stays a while, and leads to what they wrote.
+    if (item.kind === 'resigned') {
+      ui.toast(h('span', h('b', item.text), ' — read their note'), { ms: 14000, onclick: () => ui.openSheet('comms', { resignation: item.resignationId }) });
+      return;
+    }
     ui.toast(item.text, { gold, onclick: item.kind === 'review' && item.taskId ? () => ui.openSheet('board', { deptId: item.deptId, taskId: item.taskId })
       : item.agentId && net.state.agents.has(item.agentId) ? () => ui.select(item.agentId) : null });
   });

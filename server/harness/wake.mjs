@@ -155,6 +155,9 @@ export function createWake({ ctx, settings, store, liveSessions, sessionOf, chan
     if (session.state !== 'idle' || session.turn || session.queue.length) { s.pending = true; return; }
     const agent = ctx.agents.get(session.id);
     if (!agent) return;
+    // On a break, on the roof, in focus…: it asked not to be disturbed, and a turn started for it is exactly
+    // that. The mail waits; when it comes back (`life:back`, below) this is asked again.
+    if (ctx.life?.holdsMail(agent)) { s.pending = true; return; }
     const mail = batch(agent);
     const triggers = mail.box.items.filter((m) => m.direct && (session.record.wake === 'direct' || m.delegationId));
     if (!triggers.length) return;
@@ -218,6 +221,7 @@ export function createWake({ ctx, settings, store, liveSessions, sessionOf, chan
 
   // What wakes: a direct note, a mention, the result of a delegated task.
   ctx.bus.on('comms:dm', (e) => { if (e.to?.id) consider(e.to.id); });
+  ctx.bus.on('life:back', (e) => { if (e.id) consider(e.id); });      // mail that was held while they were away
   ctx.bus.on('comms:channel', (e) => { for (const id of e.post?.mentions || []) consider(id); });
 
   return {

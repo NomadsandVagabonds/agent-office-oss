@@ -1,6 +1,7 @@
 // The Office — name tags, speech bubbles and room names, floating over the 3D
 // world as plain DOM so they stay crisp, clickable and readable at any zoom.
 import * as THREE from 'three';
+import { lifeOf } from './life.js';
 import { h } from './dom.js';
 
 export function createLabels(office, ui) {
@@ -125,13 +126,14 @@ export function createLabels(office, ui) {
       const prompt = pending.get(a.id);
       const needs = !!prompt || (a.status === 'blocked' && a.blockKind !== 'idle');
       const named = near || needs || office.selected === a.id || office.hovered === a.id;
-      const key = `${a.name}|${a.status}|${idle}|${needs}|${office.selected === a.id}|${named}|${far}`;
+      const life = lifeOf(a, office.net.now());
+      const key = `${a.name}|${a.status}|${idle}|${needs}|${office.selected === a.id}|${named}|${far}|${life?.kind || ''}`;
       if (key !== t.key) {
         t.key = key;
         t.text.textContent = a.name;
-        t.dot.className = 'dot ' + (needs ? 'blocked' : idle ? '' : a.status);
-        t.el.className = 'tag' + (named ? '' : far ? ' bare' : ' pip') + (idle ? ' idle' : '') + (office.selected === a.id ? ' selected' : '');
-        t.name.title = `${a.name} — ${needs ? 'needs you' : a.status}`;
+        t.dot.className = 'dot ' + (needs ? 'blocked' : idle || life?.away ? '' : a.status);
+        t.el.className = 'tag' + (named ? '' : far ? ' bare' : ' pip') + (idle || life?.away ? ' idle' : '') + (office.selected === a.id ? ' selected' : '');
+        t.name.title = `${a.name} — ${needs ? 'needs you' : life ? life.label : a.status}`;
       }
       // what is over their head: something they said, else "needs you"
       if (t.said && now > t.said.until) t.said = null;

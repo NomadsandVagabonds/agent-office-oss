@@ -16,6 +16,7 @@ import { Avatar } from '../avatar/rig.js';
 import { Vox, M, glow, tone } from '../vox/vox.js';
 import { telescope } from '../props/fun.js';
 import { resolveLook } from '/core/look.mjs';
+import { floorOfPlacement } from '/core/levels.mjs';
 
 const DECK = { x0: -9, z0: -6.5, x1: 9, z1: 6.5 };
 const STREET = -16;                          // how far down the street is
@@ -498,7 +499,42 @@ export async function enter(office) {
     scene.add(m);
     return m;
   });
-  let brewing = 0, nextPuff = 0;
+  /* ---- colleagues who came up (agents: `office rooftop`, or `office use lift roof`) ------------------- */
+  // An agent up here is taking a moment (server/life.mjs holds its mail). So that is what you find: someone
+  // sitting on the deck with their eyes closed, facing out. There is nothing to do with them but let them be.
+  const SPOTS = [[-6.6, 2.5], [-1.6, 2.6], [0.4, 3.7], [3.8, -1.7], [-1.0, -1.6], [6.3, -0.8]];
+  const guests = new Map();
+  function syncGuests() {
+    const here = new Set(), net = office.net;
+    for (const [id, place] of net.state.places) {
+      const agent = net.state.agents.get(id);
+      // where they stand in the car says which button they pressed (core/levels.mjs): this floor's
+      if (!agent || floorOfPlacement(place)?.id !== 'roof' || net.now() < place.eta) continue;
+      here.add(id);
+      if (guests.has(id)) continue;
+      const taken = new Set([...guests.values()].map((g) => g.spot));
+      const spot = SPOTS.findIndex((_, i) => !taken.has(i));
+      if (spot < 0) continue;                                  // a full roof: the rest are simply out of sight
+      const [x, z] = SPOTS[spot];
+      const avatar = new Avatar(agent.profile?.character || resolveLook(agent.persona || agent.id), { seed: agent.persona || agent.id, provider: agent.provider || 'unknown' });
+      avatar.seatHeight = 4;                                   // on the boards, not on a chair
+      avatar.snap('sit'); avatar.setExpression('sleep');
+      avatar.root.position.set(x, 0, z);
+      avatar.root.rotation.y = Math.atan2(x - 1.5, z - 0.8);   // facing out, away from the middle of the deck
+      scene.add(avatar.root);
+      const thing = w.thing({ x, z, label: `${agent.name}, taking a moment`, reach: 1.2, use() { /* leave them be */ } });
+      guests.set(id, { avatar, spot, thing });
+    }
+    for (const [id, guest] of guests) {
+      if (here.has(id)) continue;
+      scene.remove(guest.avatar.root); guest.avatar.dispose(); guest.thing.hidden = () => true;
+      guests.delete(id);
+    }
+  }
+  for (const event of ['place', 'remove', 'world']) w.on(event, syncGuests);
+  syncGuests();
+
+  let brewing = 0, nextPuff = 0, guestsAt = 0;
   w.on('fx', (fx) => { if (fx.kind === 'coffee') brewing = Math.min(4.5, brewing + 2.6); });
   // every note between agents goes over as a paper plane
   const flights = [];
@@ -520,6 +556,8 @@ export async function enter(office) {
     stars.rotation.y += dt * 0.0015;
     for (const b of beacons) b.material.color.setScalar(Math.sin(t * 2.2 + b.position.x) > 0.55 ? 1.6 : 0.35).multiply(tmp.set('#ff3a2a'));
     friend.update(dt);
+    if (t - guestsAt > 2) { guestsAt = t; syncGuests(); }       // someone still walking to the lift arrives in their own time
+    for (const guest of guests.values()) guest.avatar.update(dt);
     if (brewing > 0) {
       brewing -= dt;
       if (t > nextPuff) {

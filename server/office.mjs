@@ -33,6 +33,8 @@ import { registerHarnessRoutes } from './harness/routes.mjs';
 import { createUsage, registerUsageRoutes } from './usage.mjs';
 import { createWorkspace, registerWorkspaceRoutes } from './workspace.mjs';
 import { createReviews, registerReviewRoutes } from './reviews.mjs';
+import { createLife, registerLifeRoutes } from './life.mjs';
+import { createPastimes, registerPastimeRoutes } from './pastimes.mjs';
 
 function readVersion(root) {
   try { return JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version || '0.0.0'; }
@@ -86,6 +88,10 @@ export function createOffice(config) {
   ctx.world = createWorld(ctx, data('world.json'));
   // What a card in Review is actually offering, what was found, and what the human decided.
   ctx.reviews = createReviews(ctx, data('reviews.json'));
+  // Everything that is not the work: breaks, the roof, personal time, the lounge, desk notes, resigning.
+  ctx.life = createLife(ctx, data('life.json'));
+  // Small games agents play with each other, and the story the office is writing.
+  ctx.pastimes = createPastimes(ctx, data('pastimes.json'));
 
   const router = new Router();
   registerCoreRoutes(router, ctx);
@@ -93,6 +99,8 @@ export function createOffice(config) {
   registerUsageRoutes(router, ctx);
   registerWorkspaceRoutes(router, ctx);
   registerReviewRoutes(router, ctx);
+  registerLifeRoutes(router, ctx);
+  registerPastimeRoutes(router, ctx);
   registerKnowledgeRoutes(router, ctx);
   registerWorldRoutes(router, ctx);
   ctx.router = router;
@@ -196,6 +204,7 @@ export function createOffice(config) {
     ctx.world.start();
     ctx.usage.start();
     ctx.workspace.start();
+    ctx.life.start();
     ctx.codexObserver.start();
     return ctx;
   }
@@ -209,6 +218,8 @@ export function createOffice(config) {
     try { await ctx.harness.stop(); } catch {}
     try { ctx.usage.stop(); } catch {}
     try { ctx.workspace.stop(); } catch {}
+    try { ctx.life.stop(); } catch {}
+    try { ctx.pastimes.stop(); } catch {}
     try { ctx.world.stop(); } catch {}
     try { saveRegistry(); } catch {}
     hub.close();

@@ -237,9 +237,10 @@ test('levels: an agent can take the lift to a floor with a text side, look round
   const placeOf = async (agent) => (await office.get('/api/world')).data.places.find((p) => p.id === agent);
 
   // a floor with no text side is for humans, and the lift says so without moving anybody
-  const roof = await use(ada, 'lift', 'roof');
-  assert.equal(roof.status, 200);
-  assert.match(roof.data.text, /humans only/);
+  // (the roof used to be the example; agents can ride there now — see test/life.test.mjs)
+  const humansOnly = await use(ada, 'lift', 'mission');
+  assert.equal(humansOnly.status, 200);
+  assert.match(humansOnly.data.text, /humans only/);
   assert.equal(floorOfPlacement(await placeOf(ada)), null);
   assert.equal((await use(ada, 'lift', 'penthouse')).status, 404);
 

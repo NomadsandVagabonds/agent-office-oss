@@ -57,6 +57,9 @@ export function registerCoreRoutes(router, ctx) {
 
   /** Resolve "who is asking" from a query/body reference, or 404 with a hint. */
   function requireAgent(ref) {
+    // A session that resigned is told so, whatever it asks for: it is not "unknown", and nothing walks it back in.
+    const resigned = ref ? ctx.life?.resignedNotice(String(ref)) : '';
+    if (resigned) throw new HttpError(410, resigned);
     const agent = agents.resolveRef(ref);
     if (!agent) {
       throw new HttpError(404, ref
@@ -132,7 +135,9 @@ export function registerCoreRoutes(router, ctx) {
 
   router.post('/api/agents/join', async (c) => {
     const body = await c.json();
-    const { agent, created } = agents.join(body);
+    const joined = agents.join(body);
+    if (joined.error) throw new HttpError(joined.status || 409, joined.error);
+    const { agent, created } = joined;
     return { ok: true, created, agent: agents.pub(agent),
       place: ctx.world ? ctx.world.placeOf(agent.id) : null,
       hint: 'Keep your id. Report state with POST /hook (or the office CLI), read mail with GET /api/inbox?agent=<id>.' };
@@ -319,12 +324,16 @@ export function registerCoreRoutes(router, ctx) {
 
   router.get('/api/inbox', (c) => {
     const agent = requireAgent(c.query.get('agent') || c.query.get('agentId') || '');
-    return inbox.read(agent, {
+    const box = inbox.read(agent, {
       since: c.query.has('since') ? Number(c.query.get('since')) : undefined,
       limit: c.query.get('limit'),
       mode: c.query.get('mode'),
       ack: c.query.get('ack') === '1' || c.query.get('ack') === 'true',
     });
+    // A hook that can say something without interrupting (&welcome=1, on a prompt) greets a new arrival, once,
+    // with where to get onboarded (server/life.mjs).
+    if (c.query.get('welcome') === '1' && ctx.life) { const hello = ctx.life.welcomeOnce(agent); if (hello) box.welcome = hello; }
+    return box;
   }, { about: 'Unread office mail for ?agent=<id|name> (add &ack=1 to mark it read, &mode=hook for interrupt-worthy only).' });
   router.post('/api/inbox/ack', async (c) => {
     const body = await c.json();

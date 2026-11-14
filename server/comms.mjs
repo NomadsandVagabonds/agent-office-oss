@@ -2,7 +2,7 @@
 // Lead's direct line. Every message is stored first (the board is the source
 // of truth), then relayed into a live terminal only where the runtime's
 // capabilities allow it. The receipt says which of those actually happened.
-import { EV } from '../core/contract.mjs';
+import { CHANNEL_KIND, EV } from '../core/contract.mjs';
 import { relayPayloadForSession } from './runtime-view.mjs';
 
 const BBS_RECENT_LIMIT = 6;
@@ -11,6 +11,10 @@ const CHANNEL_RECENT_LIMIT = 12;
 const MAX_MESSAGE = 8000;
 
 const projectChannelId = (deptId) => `project:${deptId}`;
+// What a channel's thread on the board is filed as. Lounge threads are a kind of their own, so nothing that
+// reads "the channels" for mail (the inbox, an observer, the classic client) ever picks up lounge chatter.
+const WORK_THREAD = 'project-channel';
+const LOUNGE_THREAD = 'lounge-channel';
 
 function cleanContent(value) {
   return String(value ?? '').replace(/\r/g, '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '')
@@ -68,7 +72,8 @@ export function createComms(ctx) {
       });
     }
     groups.sort((a, b) => a.name.localeCompare(b.name));
-    return [allHandsChannel(), ...groups];
+    // …and the lounge: channels that are not work (server/life.mjs).
+    return [allHandsChannel(), ...groups, ...(ctx.life?.lounges() || [])];
   }
 
   function resolveChannelRef(ref, fallbackAgentId) {
@@ -94,7 +99,7 @@ export function createComms(ctx) {
 
   function findChannelThread(channelId) {
     return bbs.getThreads('channels').find((thread) =>
-      thread.meta?.kind === 'project-channel' && thread.meta?.channelId === channelId) || null;
+      (thread.meta?.kind === WORK_THREAD || thread.meta?.kind === LOUNGE_THREAD) && thread.meta?.channelId === channelId) || null;
   }
 
   function channelMembers(channel) {
@@ -129,14 +134,22 @@ export function createComms(ctx) {
       queuedSessionIds: meta.queuedSessionIds || [],
       memberCount: meta.memberCount || threadMeta.memberCount || 0,
       mentions: meta.mentions || [],
+      // office life (server/life.mjs): held for people who asked not to be disturbed · a lounge post · a farewell
+      heldCount: meta.heldCount || 0,
+      lounge: threadMeta.kind === LOUNGE_THREAD,
+      postKind: meta.postKind || null,
+      resignationId: meta.resignationId || null,
     };
   }
 
+  // Without a channel: the feed across channels — work ones, or with { lounge:true } the lounge. Kept apart so
+  // that chatter never crowds work out of a list of recent posts.
   function getChannelRecent(channelId, limit = CHANNEL_RECENT_LIMIT, opt = {}) {
     const thread = channelId ? findChannelThread(channelId) : null;
     if (channelId && !thread) return [];
     if (!channelId) {
-      const threads = bbs.getThreads('channels').filter((item) => item.meta?.kind === 'project-channel');
+      const wanted = opt.lounge ? LOUNGE_THREAD : WORK_THREAD;
+      const threads = bbs.getThreads('channels').filter((item) => item.meta?.kind === wanted);
       const threadMap = new Map(threads.map((item) => [item.id, item]));
       return bbs.getRecent(limit, { board: 'channels', threadIds: threads.map((item) => item.id), since: opt.since })
         .map((post) => pubChannelPost(post, threadMap.get(post.threadId)));
@@ -195,18 +208,29 @@ export function createComms(ctx) {
   // 1 for everyone else.) The office uses it to stop agents waking each other in a loop.
   const hopOfAuthor = (agent) => (agent ? (ctx.harness?.hopOf(agent.id) ?? 1) : 0);
 
-  function sendChannelMessage(body) {
+  /**
+   * @param {object} body      what came off the wire
+   * @param {{postKind?:string, resignationId?:string}} [internal]  set only by the office itself (a farewell
+   *        is tagged as one) — never read from a request.
+   */
+  function sendChannelMessage(body, internal = {}) {
     const channel = resolveChannelRef(body.channelId || body.channel || body.projectChannel, body.agentId || body.agent);
     if (!channel) return { error: 'channel not found', status: 404 };
     const content = cleanContent(body.content || body.text);
     if (!content) return { error: 'content required', status: 400 };
     const authorInfo = resolveAuthorIdentity(body, { fallbackAuthor: 'Lead', fallbackType: 'human' });
+    const isLounge = channel.kind === CHANNEL_KIND.LOUNGE;
     const members = channelMembers(channel);
     const sessions = runtimes.listSessions().filter((session) => session.alive);
     const targets = new Map();
     const exactTargetIds = new Set();
     const fallbackCwds = new Set();
+    // Anyone on a break, on the roof, in focus… has asked not to be disturbed: the post is stored and reaches
+    // them through their inbox, not typed into their terminal (server/life.mjs).
+    const held = members.filter((member) => ctx.life?.holdsMail(member));
+    const heldSessionIds = new Set(held.map((member) => runtimeView.strictSession(member)?.id).filter(Boolean));
     for (const member of members) {
+      if (held.includes(member)) continue;
       const exact = runtimeView.strictSession(member);
       if (exact) exactTargetIds.add(exact.id);
       else if (member.cwd) fallbackCwds.add(member.cwd);
@@ -215,6 +239,7 @@ export function createComms(ctx) {
       for (const session of sessions) {
         if (session.kind !== 'terminal') continue;
         if (authorInfo.authorRuntimeSessionId && session.id === authorInfo.authorRuntimeSessionId) continue;
+        if (heldSessionIds.has(session.id)) continue;                  // not by way of a shared folder either
         if (exactTargetIds.has(session.id)) { targets.set(session.id, session); continue; }
         if (!fallbackCwds.has(session.cwd) && !fallbackCwds.has(session.requestedCwd)) continue;
         targets.set(session.id, session);
@@ -231,6 +256,7 @@ export function createComms(ctx) {
     }
     const queuedSessions = [];
     for (const member of members) {
+      if (held.includes(member)) continue;
       const asyncSession = runtimeView.asyncInboxSession(member);
       if (!runtimeView.supportsAsyncInbox(asyncSession)) continue;
       if (authorInfo.authorRuntimeSessionId && asyncSession.id === authorInfo.authorRuntimeSessionId) continue;
@@ -248,8 +274,12 @@ export function createComms(ctx) {
       queuedSessionIds: queuedSessions.map((session) => session.id),
       memberCount: members.length,
       // A mention reaches its target wherever they sit, not just channel members.
-      mentions: findMentions(content, agents().list().filter((m) => m.id !== authorInfo.authorAgentId), members),
+      // (Nobody is "mentioned" in the lounge: a name said there is conversation, not a summons.)
+      mentions: isLounge ? [] : findMentions(content, agents().list().filter((m) => m.id !== authorInfo.authorAgentId), members),
       hop: hopOfAuthor(authorInfo.agent),
+      heldCount: held.length,
+      ...(internal.postKind ? { postKind: internal.postKind } : {}),
+      ...(internal.resignationId ? { resignationId: internal.resignationId } : {}),
     };
     let post;
     if (!thread) {
@@ -260,7 +290,7 @@ export function createComms(ctx) {
         authorType: authorInfo.authorType,
         content,
         meta: {
-          kind: 'project-channel',
+          kind: isLounge ? LOUNGE_THREAD : WORK_THREAD,
           channelId: channel.id,
           channelName: channel.name,
           memberCount: members.length,
@@ -359,7 +389,7 @@ export function createComms(ctx) {
     thread.meta?.kind === 'lead-direct' && thread.meta?.toAgentId === toAgentId) || null;
 
   function relayTo(agent, body, text) {
-    const relayTarget = body.relay === false
+    const relayTarget = body.relay === false || body.hold
       ? null
       : runtimeView.liveRef(body.targetSession || body.targetRuntimeSessionId || body.toRuntimeSessionId)?.id
         || runtimeView.strictSession(agent)?.id
@@ -429,15 +459,17 @@ export function createComms(ctx) {
     let thread = body.threadId ? bbs.getThread(body.threadId)?.thread || null : null;
     if (!thread) thread = findDirectCollabThread(from.id, to.id);
     const subject = thread?.subject || body.subject || `${from.name} ↔ ${to.name}`;
-    const { relayTarget, terminalDelivered } = relayTo(to, body, formatCollabRelay(from, to, subject, content));
-    const queuedSession = !terminalDelivered
+    // On a break, in focus…: a teammate's note is stored for them, not typed at them (server/life.mjs).
+    const held = !!ctx.life?.holdsMail(to);
+    const { relayTarget, terminalDelivered } = relayTo(to, { ...body, hold: held }, formatCollabRelay(from, to, subject, content));
+    const queuedSession = !terminalDelivered && !held
       && (!body.fromRuntimeSessionId || body.fromRuntimeSessionId !== runtimeView.asyncInboxSession(to)?.id)
       ? runtimeView.asyncInboxSession(to)
       : null;
     const queuedSessions = runtimeView.supportsAsyncInbox(queuedSession) ? [queuedSession] : [];
     // A driven recipient that opted in is not typed at: the office starts a turn
     // for it (server/harness/wake.mjs). Until then the note is "queued", honestly.
-    const wakes = !terminalDelivered && ctx.harness?.willWake(to.id) ? ctx.harness.sessionForAgent(to.id) : null;
+    const wakes = !terminalDelivered && !held && ctx.harness?.willWake(to.id) ? ctx.harness.sessionForAgent(to.id) : null;
     if (wakes) queuedSessions.push(wakes);
     const postMeta = {
       fromAgentId: from.id,
@@ -451,6 +483,7 @@ export function createComms(ctx) {
       queuedSessionIds: queuedSessions.map((session) => session.id),
       hop: Number.isFinite(internal.hop) ? internal.hop : hopOfAuthor(from),
       ...(internal.delegationId ? { delegationId: internal.delegationId } : {}),
+      ...(held ? { held: true } : {}),
     };
     let post;
     if (!thread) {
@@ -586,6 +619,11 @@ export function createComms(ctx) {
       recentChannels: getChannelRecent(null, 18),
       recentCollab: getCollabRecent(null, 14),
       directThreads: getDirectThreadSummaries(18),
+      // office life (server/life.mjs): lounge chatter, who has left, and whose mail is being held —
+      // an observer that delivers mail by itself reads `holdingMail` and waits.
+      recentLounge: getChannelRecent(null, 12, { lounge: true }),
+      resignations: ctx.life ? ctx.life.resignations({ limit: 12 }).map((r) => ctx.life.pubResignation(r)) : [],
+      holdingMail: ctx.life ? ctx.life.holding() : [],
       stats: {
         liveAgents: live.length,
         blockedAgents: live.filter((a) => a.status === 'blocked').length,

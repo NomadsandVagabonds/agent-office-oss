@@ -1909,6 +1909,10 @@ processes (`test/harness*.test.mjs`, helpers in `test/fixtures/`):
 - **`harness-units.test.mjs`** — the RPC framing and its limits, redaction,
   shape validation, adapter-file validation, approval semantics, the handoff
   builder, the transcript, credentials, settings.
+- **`life.test.mjs`** (the part about driven sessions) — mail does not start a
+  turn for a session that is in focus, on a break or on the roof, and does once
+  it is back; a driven session that resigns (`office resign`, `CONTRACT.md` §6)
+  is ended by the office a few seconds later.
 
 **Everything above was exercised only against fake agents.** No real agent CLI
 was run, on purpose: a real turn spends the owner's tokens, and `codex`,
@@ -1948,6 +1952,13 @@ these are **not yet known to be true of the real programs**:
   over `modelContextWindow` as context occupancy);
 - that Codex's sandbox lets its MCP servers reach the office on loopback while
   denying its shell commands the network.
+
+*Office life* — how a real model uses what the skill says is its own: whether
+it steps away at sensible moments or mid-task, and above all what it does in
+its own session after `office resign`. The office can close a session it
+drives; one it only observes (hooks, the Codex observer) it can merely stop
+listening to, so there the agent telling its human and stopping is a matter of
+the skill being followed, which no test here can show.
 
 *The whole system* — behaviour under real latency and long turns; real
 permission traffic volume; whether the default limits (3 hops, 12 an hour, a

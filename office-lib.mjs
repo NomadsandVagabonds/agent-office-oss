@@ -102,6 +102,11 @@ function saveIdentity(cwd, provider, id) {
   } catch { /* identity memory is a convenience, not a requirement */ }
 }
 
+/** The id this session is known to the office by, if it has one — without asking the office, and without walking in. */
+export function rememberedId(opt = {}) {
+  return opt.id || envSessionId() || readSavedIdentity(opt.cwd || process.cwd(), detectProvider(opt.provider))?.id || '';
+}
+
 /**
  * Find (or create) this session's agent in the office.
  *   1. an id the runtime put in the environment

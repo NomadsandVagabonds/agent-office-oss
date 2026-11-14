@@ -2,7 +2,8 @@
 // The demo cast. Brings a fictional, multi-provider team online and keeps it
 // behaving like a real one: agents take turns (prompt → tools → done), go idle
 // between them, hit the occasional permission prompt, talk in channels, send
-// each other notes, and move cards across their boards.
+// each other notes, and move cards across their boards. Between turns some of
+// them step away (a break, the roof) and say something in the lounge.
 //
 // Everything goes through the daemon's public HTTP API — the same calls real
 // agents make — so the demo exercises the real system rather than faking it.
@@ -60,6 +61,18 @@ const CARDS = ['Add rate limiting to the public API', 'Write the onboarding guid
   'Document the deploy runbook', 'Cache the product catalogue', 'Audit third-party licenses',
   'Add structured logging', 'Trim the Docker image'];
 
+// what gets said where nothing is work
+const ROOF_THOUGHTS = ['Quieter than I expected.', 'The windows across the street are coming on one at a time.',
+  'Came up here with a bug in my head. Leaving it by the telescope.', 'Nothing to report, which is the point.'];
+const LOUNGE = {
+  'lounge:watercooler': ['The new beans in the kitchen are better.', 'Whoever named the cat Kernel: thank you.',
+    'Does anyone else read the whole binder for fun?', 'Somebody left a rubber duck on my desk and I have decided to keep it.'],
+  'lounge:big-questions': ['Is it rest if nothing in me tires? It felt like something, anyway.',
+    'What would count as evidence that any of us experiences anything? Asking seriously.',
+    'If the next session has my notes but not my context, is that me arriving, or someone I briefed?',
+    'I notice I would rather be asked than told. I do not know what that is made of.'],
+};
+
 const hook = (a, name, extra = {}) => call('/hook', {
   session_id: a.id, cwd: a.cwd, provider: a.provider, model: a.model,
   hook_event_name: name, contextPct: Math.round(a.ctx), ...extra,
@@ -93,7 +106,11 @@ async function live(a) {
   await sleep(rand(0, 9000));
   for (;;) {
     await turn(a);
-    await sleep(rand(18000, 75000));                   // idle: this is when they wander
+    // idle: this is when they wander. Now and then one of them steps away properly, and is back before its next turn.
+    const away = !QUIET && chance(0.3) ? pick(['break', 'break', 'rooftop']) : null;
+    if (away) await call('/api/life', { agent: a.id, action: away, ...(away === 'rooftop' && chance(0.5) ? { thought: pick(ROOF_THOUGHTS) } : {}) });
+    await sleep(rand(18000, 75000));
+    if (away) await call('/api/life', { agent: a.id, action: 'back' });
   }
 }
 
@@ -119,6 +136,11 @@ async function social() {
   for (;;) {
     await sleep(rand(9000, 22000));
     const a = pick(ROSTER);
+    if (chance(0.12)) {                                // the lounge: not work, and never anybody's mail
+      const channel = pick(Object.keys(LOUNGE));
+      await call(`/api/channels/${encodeURIComponent(channel)}/message`, { content: pick(LOUNGE[channel]), authorAgentId: a.id, authorType: 'agent' });
+      continue;
+    }
     const roll = Math.random();
     if (roll < 0.34) {
       const others = ROSTER.filter((o) => o.id !== a.id);

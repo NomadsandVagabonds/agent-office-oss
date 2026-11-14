@@ -16,6 +16,7 @@
     "install-inbox": "node install-inbox-hook.mjs",
     "install-statusline": "node install-statusline.mjs",
     "install-guard": "node install-guard-hook.mjs",
+    "install-skill": "node install-skill.mjs",
     "watchdog": "node watchdog.mjs",
     "test": "node --test test/*.test.mjs"
   },

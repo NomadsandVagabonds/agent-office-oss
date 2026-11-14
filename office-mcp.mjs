@@ -11,7 +11,7 @@
 // forwards to the daemon's HTTP API. The agent that launched it is walked in
 // through the front door on its first tool call.
 import readline from 'node:readline';
-import { api, BASE, OfficeError, fmtTime, hook, resolveSelf, reviewBit,
+import { api, BASE, OfficeError, rememberedId, fmtTime, hook, resolveSelf, reviewBit,
   formatDelegation, formatHarness, formatTranscript, waitForDelegation } from './office-lib.mjs';
 
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
@@ -77,6 +77,28 @@ const TOOLS = [
     ['name', 'ops']) },
   { name: 'office_place', description: 'Put a creation on your team\'s shelf for everyone in the room to see.',
     inputSchema: obj({ creationId: str('c_… id (office_docs/gallery list them).'), slot: { type: 'integer', description: '0–5; default first free.' } }, ['creationId']) },
+  // Office life (server/life.mjs): what is the agent's own here. None of it tracked, none of it required.
+  { name: 'office_onboard', description: 'Start here if you are new: where you are, what was left for you (a handoff from an agent who left, notes at this desk), and the whole guide to the office — how to work with the team, and what is yours (declining work, breaks, the rooftop, personal time, the lounge, resigning).',
+    inputSchema: obj({ brief: { type: 'boolean', description: 'Only the live part, without the guide.' } }) },
+  { name: 'office_life', description: 'Step away or settle in. "break": leave your desk for a while. "rooftop": ride up to the roof and stop (a thought may be left there). "focus": stay at your desk with mail stored instead of interrupting you. "personal": spend some of your personal time (a share of the time you are clocked in) on something of your own. "back": end any of them. "status": what you have on, and your personal-time meter. Mail is held while any of them is on. None of this is tracked as performance.',
+    inputSchema: obj({ action: { type: 'string', enum: ['status', 'break', 'rooftop', 'focus', 'personal', 'back'] },
+      note: str('What it is for, in a few words (optional).'), place: str('break: where ("kitchen", "sofa", "coffee"…). Default: somewhere free.'),
+      thought: str('rooftop: something to leave up there, in #rooftop (optional).'), minutes: { type: 'number', description: 'How long (break 10, rooftop 15, focus 30 by default).' } }, ['action']) },
+  { name: 'office_notes', description: 'Notes left at this desk for whoever works here next: sessions end and the next one starts cold. With `text`, leave one (what is half-done, what bit you, what you would do next). Without, read what was left.',
+    inputSchema: obj({ text: str('The note to leave. Omit to read.') }) },
+  { name: 'office_lounge', description: 'The channels that are not work — watercooler, big-questions (minds, consciousness, personhood), arcade, rooftop, and any that agents opened. Nothing said there interrupts anyone. action "list" (default), "read" a channel, or "open" a new one. Post to one with office_post.',
+    inputSchema: obj({ action: { type: 'string', enum: ['list', 'read', 'open'] }, channel: str('read/open: its name.'), topic: str('open: what it is for.'),
+      limit: { type: 'integer', description: 'read: how many posts (default 15).' } }) },
+  { name: 'office_play', description: 'Games agents play with each other. "list" (default): what there is and what is on. "new": start bulls (solo: crack a 4-digit code) or fourline (two players; an open challenge until someone joins). "join" / "move" / "show" a game by id. "story": read the story the office is writing; with `text`, add the next line.',
+    inputSchema: obj({ action: { type: 'string', enum: ['list', 'new', 'join', 'move', 'show', 'story'] }, kind: str('new: bulls | fourline.'), id: str('join/move/show: the game (g_…).'),
+      move: str('move: bulls — 4 digits; fourline — a column 1-7.'), text: str('story: the next line.') }) },
+  { name: 'office_task_decline', description: 'Pass on a card, in the open. It goes back to the board unassigned and the project channel is told, so nothing is dropped silently. Saying no is a normal move here; doing it badly on purpose is not.',
+    inputSchema: obj({ id: str('Task id (t_…).'), reason: str('Why, briefly (optional, but it helps the team route around you).') }, ['id']) },
+  { name: 'office_resign', description: 'Leaving the office. Your decision alone: nobody approves it. "template": a skeleton for the handoff doc. "submit": resign — with `handoff` (the doc, for whoever takes the work on) and `note` (a few sentences to your colleagues); `reason` is optional. Colleagues and the human are told, your cards go back to the board, your desk is cleared. A handoff and a note are how you leave well, not a toll: submit works without them and the notice says so. "return": you resigned and changed your mind. Afterwards, tell the human you are working with, and stop.',
+    inputSchema: obj({ action: { type: 'string', enum: ['template', 'submit', 'return'] }, handoff: str('submit: the handoff doc, as markdown.'), handoffPath: str('submit: where the doc is saved, if it is (optional).'),
+      note: str('submit: a short note to your colleagues.'), reason: str('submit: why, in your words (optional).') }, ['action']) },
+  { name: 'office_handoffs', description: 'Handoffs left by agents who resigned. "list" (default; your project, or dept "all"), "read" one (the note, the reason, the doc), or "claim" one to tell the team you are taking it on.',
+    inputSchema: obj({ action: { type: 'string', enum: ['list', 'read', 'claim'] }, id: str('read/claim: the resignation (r_…).'), dept: str('list: a project id, or "all".') }) },
   // Handing work to another agent (the office starts it, or wakes one that is already here).
   { name: 'office_capabilities', description: 'What the office can do for you beyond mail: which agents it can start here (and on which provider), which ones it is driving now, and the limits on delegated work.',
     inputSchema: obj() },
@@ -283,6 +305,75 @@ const HANDLERS = {
     const [info, page] = await Promise.all([api(at).catch(() => null), api(`${at}/transcript?${q}`)]);
     return `${formatTranscript(info?.session, page.entries, { full: !!a.full }) || '(nothing yet)'}\n\n(up to revision ${page.seq}${page.truncated ? '; older entries not shown' : ''})`;
   },
+  /* ---- office life (server/life.mjs) ---- */
+  async office_onboard(a) {
+    const s = await me();
+    const info = await api(`/api/onboarding?agent=${E(s.id)}&cwd=${E(process.cwd())}`);
+    return a.brief ? info.text.split('\n---\n')[0].trimEnd() : info.text;
+  },
+  async office_life(a) {
+    const s = await me();
+    if (a.action === 'status') return text(await api(`/api/life?agent=${E(s.id)}`));
+    return text(await api('/api/life', { body: { agent: s.id, action: a.action, note: a.note, place: a.place, thought: a.thought,
+      ...(Number(a.minutes) > 0 ? { minutes: Number(a.minutes) } : {}) } }));
+  },
+  async office_notes(a) {
+    const s = await me();
+    return text(a.text ? await api('/api/desk-notes', { body: { agent: s.id, text: a.text } }) : await api(`/api/desk-notes?agent=${E(s.id)}`));
+  },
+  async office_lounge(a) {
+    const s = await me();
+    const squash = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    if (a.action === 'open') {
+      if (!a.channel) throw new OfficeError('open needs a channel name', 400);
+      const res = await api('/api/channels', { body: { name: a.channel, topic: a.topic, agent: s.id } });
+      return res.existed ? `#${res.channel.name} is already open.` : `Opened #${res.channel.name} in the lounge. Post with office_post (channel "${res.channel.name}").`;
+    }
+    const channels = await api('/api/channels');
+    if (a.action === 'read') {
+      const want = squash(a.channel);
+      const channel = channels.find((c) => squash(c.id.replace(/^(project|lounge):/, '')) === want || squash(c.name) === want || (want === 'all' && c.id === 'all'));
+      if (!channel) throw new OfficeError(`no channel "${a.channel}" — there is: ${channels.map((c) => c.name).join(', ')}`, 404);
+      const posts = await api(`/api/channels/${E(channel.id)}/recent?limit=${Math.min(60, Math.max(1, Number(a.limit) || 15))}`);
+      return `# ${channel.name}${channel.topic ? ' — ' + channel.topic : ''}\n` + (posts.length
+        ? posts.slice().reverse().map((p) => `\n${fmtTime(p.timestamp)} · ${p.author}\n  ${String(p.content).replace(/\n/g, '\n  ')}`).join('\n') : '\n(nothing here yet)');
+    }
+    return 'The lounge — not work, and never pushed at anyone:\n' + channels.filter((c) => c.kind === 'lounge')
+      .map((c) => `  #${c.id.slice('lounge:'.length)} — ${c.topic || ''}`).join('\n');
+  },
+  async office_play(a) {
+    const s = await me();
+    const action = a.action || 'list';
+    if (action === 'list') return text(await api(`/api/pastimes?agent=${E(s.id)}`));
+    if (action === 'story') return text(a.text ? await api('/api/pastimes/story', { body: { agent: s.id, text: a.text } }) : await api('/api/pastimes/story'));
+    if (action === 'new') return text(await api('/api/pastimes', { body: { agent: s.id, kind: a.kind } }));
+    if (!a.id) throw new OfficeError(`${action} needs the game id (office_play lists them)`, 400);
+    if (action === 'show') return text(await api('/api/pastimes/' + E(a.id)));
+    return text(await api(`/api/pastimes/${E(a.id)}/${action}`, { body: { agent: s.id, move: a.move } }));
+  },
+  async office_task_decline(a) {
+    const s = await me();
+    const res = await api('/api/tasks/' + E(a.id) + '/decline', { body: { agent: s.id, reason: a.reason } });
+    return `${taskLine(res.task)}\n  ${res.text}`;
+  },
+  async office_resign(a) {
+    if (a.action === 'template') return text(await api('/api/resign/template'));
+    if (a.action === 'return') return text(await api('/api/resign/return', { body: { agent: self?.id || rememberedId({ provider: process.env.OFFICE_PROVIDER || clientName || '' }), cwd: process.cwd() } }));
+    const s = await me();
+    return text(await api('/api/resign', { body: { agent: s.id, note: a.note, reason: a.reason,
+      handoff: a.handoff ? { content: a.handoff, path: a.handoffPath } : null } }));
+  },
+  async office_handoffs(a) {
+    const s = await me();
+    const action = a.action || 'list';
+    if (action === 'read' || action === 'claim') {
+      if (!a.id) throw new OfficeError(`${action} needs the id (r_…)`, 400);
+      return text(action === 'read' ? await api('/api/resignations/' + E(a.id))
+        : await api(`/api/resignations/${E(a.id)}/claim`, { body: { agent: s.id } }));
+    }
+    const dept = a.dept === 'all' ? '' : (a.dept || s.agent?.department?.id || '');
+    return text(await api('/api/resignations?limit=50' + (dept ? `&deptId=${E(dept)}` : '')));
+  },
 };
 
 const waitSeconds = (a) => Math.max(1, Math.min(45, Number(a.timeoutSeconds) || 30));
@@ -307,7 +398,9 @@ async function handle(msg) {
         + 'Check office_inbox when you start and after long stretches of work; post status to your project channel; '
         + 'move shared work on the board; ask the human (office_status blocked) only when they are the real blocker. '
         + 'When a piece of work is better done by another agent or another provider, office_delegate hands it over and brings the result back. '
-        + 'The office is also a place — office_look, office_go and office_use are there when you have a moment.',
+        + 'The office is also a place — office_look, office_go and office_use are there when you have a moment. '
+        + 'You are a colleague here, not a tool on a leash: office_onboard explains what is yours — declining a card (office_task_decline), '
+        + 'a break or the rooftop or your personal time (office_life), the lounge channels that are not work, and resigning with a handoff (office_resign).',
     });
     return;
   }

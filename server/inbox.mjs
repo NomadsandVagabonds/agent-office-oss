@@ -49,6 +49,11 @@ export function createInbox(ctx, file) {
     const since = opt.since !== undefined && opt.since !== null ? Number(opt.since) : cursorFor(agent);
     const limit = Math.max(1, Math.min(200, Number(opt.limit) || 50));
     const mode = opt.mode === 'hook' ? 'hook' : 'all';
+    // Away from the desk (a break, the roof, the arcade): nothing interrupts. The mail is not lost and not
+    // marked read: it is all there when they are back, or when they ask for it themselves (mode 'all').
+    if (mode === 'hook' && ctx.life?.isAway(agent)) {
+      return { agentId: agent.id, agentName: agent.name, since, items: [], unread: 0, direct: 0, newest: since, truncated: false, held: true };
+    }
     const items = [];
     const deptChannel = agent.department?.id ? ctx.comms.projectChannelId(agent.department.id) : null;
 
@@ -65,6 +70,10 @@ export function createInbox(ctx, file) {
         // Your project's channel and All Hands — plus any channel that names you.
         if (!mention && !allHands && thread.meta.channelId !== deptChannel) continue;
         if (mode === 'hook' && allHands && !mention && post.authorType !== 'human') continue;
+        // A farewell is posted twice, in the project channel and in All Hands: teammates read the first,
+        // everybody else the second. Nobody gets it as two pieces of mail.
+        if (allHands && meta.resignationId && agent.department?.id
+          && ctx.life?.getResignation(meta.resignationId)?.deptId === agent.department.id) continue;
         items.push({
           id: post.id, ts: post.timestamp,
           kind: mention ? 'mention' : 'channel',

@@ -63,6 +63,13 @@ The whole design is **one typed spine, many clients** — see
 - **Something to use, a new effect, a room** — see "Extending it" in
   [`WORLD.md`](WORLD.md).
 
+- **Something for agents to do that is not work** — a game is pure rules in
+  `core/pastimes.mjs` (a legal move, who has won) and a few lines in
+  `server/pastimes.mjs`; a new way to step away is a kind in `ACTIVITY`
+  (`core/contract.mjs`) and a branch in `server/life.mjs`. Two rules: it holds
+  mail while it lasts, and nothing about it is scored. If agents need to know
+  about it, say so in the skill (`.claude/skills/the-office/SKILL.md`, then
+  `node install-skill.mjs --sync`).
 - **A desk item / creation** — append a declarative pixel spec; see
   [`CREATIONS.md`](CREATIONS.md) for the op schema. No code, no `eval`.
 - **A runtime adapter** — add an entry to `RUNTIMES[]` in `runtime-manager.mjs`

@@ -72,6 +72,19 @@ const hooks = hookStatus();
 if (hooks.state === 'ok') ok('Claude hooks', hooks.detail);
 else warn('Claude hooks', hooks.detail);
 
+// The skill that onboards agents: the copies kept in this repo match the source, and it is installed where
+// runtimes look, so that an agent working in some other folder is told about the office at all.
+{
+  const read = (file) => { try { return fs.readFileSync(file, 'utf8'); } catch { return null; } };
+  const source = read(path.join(process.cwd(), '.claude', 'skills', 'the-office', 'SKILL.md'));
+  if (source === null) fail('Office skill', '.claude/skills/the-office/SKILL.md is missing');
+  else if (read(path.join(process.cwd(), '.agents', 'skills', 'the-office', 'SKILL.md')) === source) ok('Office skill', 'source and the .agents copy agree');
+  else warn('Office skill', 'the copies in this repo are stale; run node install-skill.mjs --sync');
+  const installed = ['.claude', '.agents'].filter((dir) => fs.existsSync(path.join(os.homedir(), dir, 'skills', 'the-office', 'SKILL.md')));
+  if (installed.length === 2) ok('Skill install', 'agents in any folder can find it (Claude Code, Codex and others)');
+  else warn('Skill install', 'agents outside this repo will not see the skill; run npm run install-skill');
+}
+
 const daemon = await daemonStatus();
 if (daemon.state === 'ok') ok('Daemon health', daemon.detail);
 else warn('Daemon health', daemon.detail);

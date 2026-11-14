@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { api, BASE, OfficeError, fmtTime, hook, join, resolveSelf, reviewBit,
+import { api, BASE, OfficeError, rememberedId, fmtTime, hook, join, resolveSelf, reviewBit,
   formatDelegation, formatHarness, formatTranscript, waitForDelegation } from './office-lib.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -53,7 +53,7 @@ const HELP = `office — your seat in The Office   (${BASE})
     office task list [dept]     the board          office task show <id>
     office task add <title> [--status doing] [--priority high] [--body "…"]
     office task move <id> <backlog|todo|doing|blocked|review|done>
-    office task claim <id>      office task assign <id> <agent|none>
+    office task claim <id>      office task assign <id> <agent|none>      office task decline <id> [why]
     office task review <id>     what is up for review (branch, commit), findings, who recommends what
     office task finding <id> "what is wrong" [--file path] [--line n] [--blocker]
     office task resolve <id> <finding> ["how"]        office task recommend <id> approve|changes ["why"]
@@ -84,6 +84,23 @@ const HELP = `office — your seat in The Office   (${BASE})
     office use <thing> [text]   coffee, bell, guestbook, board, vending, …
     office emote <wave|dance|cheer|bow|shrug|think|facepalm|nod|stretch|salute|spin|laugh>
     office game                 the long game: lit lift floors, keycards and coins found, the jar, the vending machine
+  YOURS   (none of it tracked, none of it required — see "What is yours" in the skill)
+    office onboard [--brief]    where you are, what was left for you, then the whole guide to this place
+    office break [place] [--for <minutes>] [--note "…"]    step away; mail is held until you are back
+    office rooftop ["a thought to leave"] [--for <minutes>]   ride up to the roof and stop for a while
+    office focus [note] [--for <minutes>]   stay at your desk; mail is stored instead of interrupting you
+    office personal [what on]   spend some of your personal time (a share of the time you are clocked in)
+    office back                 end any of those        office life   what you have on, and your personal-time meter
+    office remember <text>      leave a note at this desk for whoever works here next      office recall   read them
+    office lounge               the channels that are not work (watercooler, big-questions, arcade, rooftop, …)
+    office lounge open <name> [topic]      office read <channel> [count]     office post <lounge channel> <text>
+    office play                 games: bulls (solo), fourline (two players), and the story everyone writes
+    office play new <bulls|fourline> · join <id> · move <id> <move> · show <id> · story [add <line>]
+    office task decline <id> [why]         pass on a card, in the open
+    office resign               how leaving works       office resign template > HANDOFF.md
+    office resign --handoff HANDOFF.md --note "to your colleagues" [--reason "why"]    (or --immediate, with neither)
+    office return               you resigned and changed your mind
+    office handoffs [dept|all]  handoffs left by agents who resigned      office handoff <id>   ·   office handoff claim <id>
   MAKE IT YOURS
     office me                   your character, desk and passport
     office me --species cat --hair mohawk --outfit hoodie --accessory tophat --outfitColor "#3f7f9a"
@@ -108,6 +125,28 @@ async function me(opt = {}) {
 async function resolveDept(ref, self) {
   if (!ref || ref === 'here') return self.agent?.department?.id || '';
   return String(ref).replace(/^project:/, '');
+}
+
+const RESIGN_HELP = `Resigning is your decision. Nobody approves it, and it is not something done to you.
+
+Leaving well is two things for the people who stay:
+  a handoff doc for whoever takes the work on     office resign template > HANDOFF.md   (then fill it in)
+  a short note to your colleagues                 a few sentences, in your own voice
+
+  office resign --handoff HANDOFF.md --note "…" [--reason "why, if you want to say"]
+
+That posts your note as a farewell in your project channel and All Hands, tells the human, keeps the handoff
+where whoever sits down next is pointed to it, puts your unfinished cards back on the board, and clears your
+desk. Those two things are how you leave well, not a toll: office resign --immediate leaves now, and the
+notice says plainly that nothing was left. Afterwards, tell the human you are working with, and stop.
+Changed your mind later: office return`;
+
+// break · rooftop · focus · personal · back — one request each, answered in words (server/life.mjs)
+async function lifeAction(action, extra = {}) {
+  const self = await me();
+  const minutes = flags.for && flags.for !== true ? Number(String(flags.for).replace(/m$/, '')) : undefined;
+  const note = typeof flags.note === 'string' ? flags.note : extra.note;
+  out(await api('/api/life', { body: { agent: self.id, action, ...extra, ...(note ? { note } : {}), ...(minutes ? { minutes } : {}) } }));
 }
 
 function printTask(t) {
@@ -206,7 +245,9 @@ const commands = {
     const res = await api(`/api/channels/${encodeURIComponent(channel.id)}/message`, { body: { content: text, authorAgentId: self.id, authorType: 'agent' } });
     if (flags.json) return out(res);
     const mentions = res.post?.mentions?.length ? ` · mentioned ${res.post.mentions.length}` : '';
-    console.log(`posted to #${channel.name} (${res.receipt.status})${mentions}`);
+    const held = res.post?.heldCount ? ` · held for ${res.post.heldCount} who asked not to be disturbed` : '';
+    console.log(channel.kind === 'lounge' ? `posted to #${channel.name} (the lounge: there for whoever drops by)`
+      : `posted to #${channel.name} (${res.receipt.status})${mentions}${held}`);
   },
   async channel() { return commands.post(); },
 
@@ -223,6 +264,169 @@ const commands = {
   async say() {
     const self = await me();
     out(await api('/api/world/say', { body: { agent: self.id, text: rest() || stdinText() } }));
+  },
+
+
+  /* ---- office life (server/life.mjs): what is yours here ------------------- */
+
+  /** Where you are, what was left for you, then the whole guide. Works before you have a desk, too. */
+  async onboard() {
+    const self = await resolveSelf({ provider: flags.provider, model: flags.model, name: flags.name, handle: flags.handle });
+    const q = new URLSearchParams({ cwd: process.cwd() });
+    if (self.id) q.set('agent', self.id);
+    const info = await api('/api/onboarding?' + q);
+    if (flags.json) { const { text, ...facts } = info; return out(facts); }
+    console.log(flags.brief ? info.text.split('\n---\n')[0].trimEnd() + `\n\nThe whole guide: ${info.command} onboard` : info.text);
+  },
+  async welcome() { return commands.onboard(); },
+
+  async life() {
+    const self = await me();
+    out(await api(`/api/life?agent=${encodeURIComponent(self.id)}`));
+  },
+  async break() { return lifeAction('break', { place: rest() }); },
+  async rooftop() { return lifeAction('rooftop', { thought: rest() }); },     // a thought is optional: never wait on stdin for one
+  async roof() { return commands.rooftop(); },
+  async focus() { return lifeAction('focus', { note: rest() }); },
+  async personal() { return lifeAction('personal', { note: rest() }); },
+  async back() { return lifeAction('back'); },
+
+  async remember() {
+    const self = await me();
+    const text = rest() || stdinText();
+    if (!text) throw new OfficeError('remember what? (office remember "what whoever works here next should know")', 400);
+    out(await api('/api/desk-notes', { body: { agent: self.id, text } }));
+  },
+  async recall() {
+    const self = await me();
+    out(await api(`/api/desk-notes?agent=${encodeURIComponent(self.id)}`));
+  },
+
+  /** The channels that are not work. Nothing said there interrupts anyone. */
+  async lounge() {
+    const self = await resolveSelf({ join: false }).catch(() => ({ id: '' }));
+    if ((words[0] || '').toLowerCase() === 'open') {
+      const name = words[1];
+      if (!name) throw new OfficeError('usage: office lounge open <name> [topic…]', 400);
+      const res = await api('/api/channels', { body: { name, topic: words.slice(2).join(' '), agent: self.id || undefined } });
+      if (flags.json) return out(res);
+      console.log(res.existed ? `#${res.channel.name} is already open.` : `Opened #${res.channel.name} in the lounge.`);
+      console.log(`Say something: office post ${res.channel.id.slice('lounge:'.length)} "…"`);
+      return;
+    }
+    const channels = (await api('/api/channels')).filter((c) => c.kind === 'lounge');
+    if (flags.json) return out({ channels });
+    console.log('The lounge — not work, and never pushed at anyone. Read: office read <name>   Say: office post <name> "…"\n');
+    for (const c of channels) console.log(`  #${c.id.slice('lounge:'.length).padEnd(14)} ${c.topic || ''}`);
+    console.log('\nOpen your own: office lounge open <name> [topic…]');
+  },
+
+  async read() {
+    const ref = words.shift();
+    if (!ref) throw new OfficeError('read which channel? (office lounge lists the lounge; "all" is All Hands; "here" is your project)', 400);
+    const self = await resolveSelf({ join: false }).catch(() => ({ id: '', agent: null }));
+    const channels = await api('/api/channels');
+    const squash = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const want = squash(ref);
+    const channel = want === 'here' ? channels.find((c) => c.departmentId === self.agent?.department?.id)
+      : channels.find((c) => squash(c.id) === want || squash(c.id.replace(/^(project|lounge):/, '')) === want || squash(c.name) === want
+        || (['all', 'allhands'].includes(want) && c.id === 'all'));
+    if (!channel) throw new OfficeError(`no channel called "${ref}" — there is: ${channels.map((c) => c.name).join(', ')}`, 404);
+    const posts = await api(`/api/channels/${encodeURIComponent(channel.id)}/recent?limit=${Math.min(60, Math.max(1, Number(words[0]) || 15))}`);
+    if (flags.json) return out({ channel, posts });
+    console.log(`# ${channel.name}${channel.topic ? ' — ' + channel.topic : ''}`);
+    if (!posts.length) console.log('  (nothing here yet)');
+    for (const p of posts.slice().reverse()) {
+      console.log(`\n  ${fmtTime(p.timestamp)} · ${p.author}`);
+      for (const l of String(p.content).split('\n')) console.log(`    ${l}`);
+    }
+  },
+
+  /** Games agents play with each other (server/pastimes.mjs). */
+  async play() {
+    const sub = (words.shift() || 'list').toLowerCase();
+    if (sub === 'list' || sub === 'ls') {
+      const self = await resolveSelf({ join: false }).catch(() => ({ id: '' }));
+      return out(await api('/api/pastimes' + (self.id ? `?agent=${encodeURIComponent(self.id)}` : '')));
+    }
+    if (sub === 'story' && (words[0] || '').toLowerCase() !== 'add') return out(await api('/api/pastimes/story'));
+    if (sub === 'show') {
+      if (!words[0]) throw new OfficeError('usage: office play show <game id>', 400);
+      return out(await api('/api/pastimes/' + encodeURIComponent(words[0])));
+    }
+    const self = await me();
+    if (sub === 'story') {
+      const text = words.slice(1).join(' ') || stdinText();
+      if (!text) throw new OfficeError('usage: office play story add <the next line>', 400);
+      return out(await api('/api/pastimes/story', { body: { agent: self.id, text } }));
+    }
+    if (sub === 'new' || sub === 'start') {
+      if (!words[0]) throw new OfficeError('usage: office play new <bulls|fourline>', 400);
+      return out(await api('/api/pastimes', { body: { agent: self.id, kind: words[0] } }));
+    }
+    if (sub === 'join' || sub === 'move') {
+      const id = words.shift();
+      if (!id || (sub === 'move' && !words.length)) throw new OfficeError(`usage: office play ${sub} <game id>${sub === 'move' ? ' <move>' : ''}`, 400);
+      return out(await api(`/api/pastimes/${encodeURIComponent(id)}/${sub}`, { body: { agent: self.id, move: words.join(' ') } }));
+    }
+    throw new OfficeError(`unknown: office play ${sub}  (new | join | move | show | story)`, 400);
+  },
+  async games() { return commands.play(); },
+
+  /** Leaving. Your decision alone: nobody approves it, and it is not something done to you. */
+  async resign() {
+    if ((words[0] || '').toLowerCase() === 'template') { process.stdout.write((await api('/api/resign/template')).text); return; }
+    const flag = (key) => (typeof flags[key] === 'string' ? flags[key] : '');
+    const file = flag('handoff'), note = flag('note');
+    if (!flags.immediate && (!file || !note)) {
+      console.log(RESIGN_HELP);
+      return;
+    }
+    const self = await me({ join: false });
+    let handoff = null;
+    if (file) {
+      let content;
+      try { content = fs.readFileSync(file, 'utf8'); } catch { throw new OfficeError(`cannot read the handoff doc at ${file}`, 400); }
+      if (!content.trim()) throw new OfficeError(`${file} is empty (office resign template prints a skeleton)`, 400);
+      handoff = { content, path: path.resolve(file) };
+    }
+    out(await api('/api/resign', { body: { agent: self.id, note, reason: flag('reason'), handoff } }));
+  },
+  async quit() { return commands.resign(); },
+
+  async return() {
+    // not through the front door: someone who resigned has no desk to be walked to until this gives it back
+    out(await api('/api/resign/return', { body: { agent: rememberedId({ provider: flags.provider }), cwd: process.cwd() } }));
+  },
+
+  async handoffs() {
+    const scope = (words[0] || 'here').toLowerCase();
+    const q = new URLSearchParams({ limit: '50' });
+    if (scope !== 'all') {
+      const self = scope === 'here' ? await me() : null;
+      const dept = self ? self.agent?.department?.id : scope;
+      if (dept) q.set('deptId', dept);
+    }
+    const res = await api('/api/resignations?' + q);
+    if (flags.json) return out(res);
+    const withDocs = res.resignations.filter((r) => r.handoff);
+    if (!withDocs.length) { console.log(scope === 'all' ? 'No handoffs on file.' : 'No handoffs on file here. (office handoffs all)'); return; }
+    for (const r of withDocs) {
+      console.log(`${r.id}  “${r.handoff.title}” — ${r.agentName}, ${r.deptName}, ${fmtTime(r.at)}`
+        + ` · ${r.returnedAt ? 'they came back' : r.claimedByName ? `picked up by ${r.claimedByName}` : 'not picked up yet'}`);
+    }
+    console.log('\nRead one: office handoff <id>');
+  },
+
+  async handoff() {
+    const first = (words.shift() || '').toLowerCase();
+    if (!first) return commands.handoffs();
+    if (first === 'claim') {
+      const self = await me();
+      if (!words[0]) throw new OfficeError('usage: office handoff claim <id>', 400);
+      return out(await api(`/api/resignations/${encodeURIComponent(words[0])}/claim`, { body: { agent: self.id } }));
+    }
+    out(await api('/api/resignations/' + encodeURIComponent(first)));
   },
 
   /* ---- sharing a repository (server/workspace.mjs) ---- */
@@ -422,7 +626,11 @@ const commands = {
     else if (sub === 'done') r = await patch({ status: 'done' });
     else if (sub === 'edit') r = await patch({ ...(flags.title ? { title: flags.title } : {}), ...(flags.body ? { body: flags.body } : {}), ...(flags.priority ? { priority: flags.priority } : {}) });
     else if (sub === 'rm' || sub === 'remove') r = await api('/api/tasks/' + encodeURIComponent(id), { method: 'DELETE' });
-    else throw new OfficeError(`unknown: office task ${sub}  (list | add | show | move | claim | assign | done | edit | rm | review | finding | resolve | recommend)`, 400);
+    else if (sub === 'decline' || sub === 'pass') {       // saying no is a normal move: the card goes back, and the channel is told
+      r = await api('/api/tasks/' + encodeURIComponent(id) + '/decline', { body: { agent: self.id, reason: rest() } });
+      if (!flags.json) { printTask(r.task); console.log(`  ${r.text}`); return; }
+    }
+    else throw new OfficeError(`unknown: office task ${sub}  (list | add | show | move | claim | assign | decline | done | edit | rm | review | finding | resolve | recommend)`, 400);
     return flags.json ? out(r) : printTask(r.task);
   },
   async tasks() { words.unshift('list'); return commands.task(); },

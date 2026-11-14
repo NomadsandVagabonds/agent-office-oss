@@ -96,6 +96,8 @@ export function createAgents(ctx) {
       selfReported: !!a.selfReported,
       // the office runs this session itself over a structured protocol (server/harness)
       driven: !!a.driven,
+      // office life: on a break, on the roof, in focus… or null (server/life.mjs)
+      activity: ctx.life?.activityOf(a.id) || null,
     };
   }
 
@@ -104,7 +106,7 @@ export function createAgents(ctx) {
     a.department = profiles.department(a.cwd);
     a.task = prof.task || a.selfTask || '';
     const persona = personas.link(a, { handle: a.handle });
-    const seed = persona ? persona.key : a.id;
+    const seed = persona ? (persona.seed || persona.key) : a.id;
     a.persona = persona ? persona.key : null;
     a.name = prof.name || persona?.name || a.selfName || codename(seed);
     const character = resolveLook(seed, { ...(persona?.look || {}), ...(prof.character || {}) });
@@ -170,6 +172,7 @@ export function createAgents(ctx) {
     let count = 0;
     for (const r of Array.isArray(records) ? records : []) {
       if (!r || typeof r.id !== 'string' || agents.has(r.id)) continue;
+      if (ctx.life?.isResigned(r.id)) continue;                        // they left on purpose
       if (now - (r.lastSeen || 0) > cfg.staleAgentMs) continue;      // long gone
       // Transient states do not survive: whatever it was doing, it is now "there".
       const status = r.status === 'blocked' ? 'blocked' : 'thinking';
@@ -232,13 +235,22 @@ export function createAgents(ctx) {
     bus.local({ type: 'agent:leave', agent: a });
     bus.broadcast({ type: 'update', agent: pub(a) });
     bus.local({ type: 'agent:status', agent: a, from, to: 'leaving' });
-    const t = setTimeout(() => {
+    const gone = () => {
+      if (agents.get(id) !== a) return;            // already gone, or the id has sat back down as someone new
       freeDesk(id);
       agents.delete(id);
       personas.release(id);
       bus.broadcast({ type: 'remove', id });
-    }, LEAVE_MS);
+    };
+    a._gone = gone;
+    const t = setTimeout(gone, LEAVE_MS);
     if (typeof t.unref === 'function') t.unref();
+  }
+
+  /** Someone on their way out is coming straight back in: the leaving is finished now, not a second from now on top of the arrival. */
+  function finishLeaving(id) {
+    const a = agents.get(id);
+    if (a?._leaving) a._gone?.();
   }
 
   function resolveRef(ref) {
@@ -265,6 +277,9 @@ export function createAgents(ctx) {
   function handleHook(ev) {
     const id = ev.session_id || ev.sessionId;
     if (!id || typeof id !== 'string') return null;
+    // An agent that resigned stays gone: its session may go on firing hooks, but only the agent itself can
+    // sit back down (server/life.mjs: comeBack).
+    if (ctx.life?.isResigned(id)) return null;
     const name = ev.hook_event_name || ev.event;
     const known = agents.get(id);
     const base = {};
@@ -358,6 +373,8 @@ export function createAgents(ctx) {
   function join(body = {}) {
     const requested = cleanText(body.id || body.sessionId || body.session_id, 80);
     const id = requested || `a_${crypto.randomBytes(6).toString('hex')}`;
+    const resigned = ctx.life?.resignedNotice(id);
+    if (resigned) return { error: resigned, status: 409 };
     const existed = agents.has(id);
     const patch = {
       selfReported: true,
@@ -387,6 +404,7 @@ export function createAgents(ctx) {
    * hook path does.
    */
   function drive(id, patch = {}, opt = {}) {
+    if (ctx.life?.isResigned(id)) return null;           // its desk went with it; the harness is closing the session
     const a = touch(id, patch);
     if (opt.settle) scheduleSettle(id);
     return a;
@@ -410,7 +428,7 @@ export function createAgents(ctx) {
     get: (id) => agents.get(id) || null,
     list: () => [...agents.values()],
     listPublic: () => [...agents.values()].map(pub),
-    pub, touch, drive, refresh, seen, remove, resolveRef, handleHook, join, sweep, isPresent,
+    pub, touch, drive, refresh, seen, remove, finishLeaving, resolveRef, handleHook, join, sweep, isPresent,
     exportState, restore,
   };
 }

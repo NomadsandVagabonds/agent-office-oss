@@ -43,8 +43,8 @@ export const HOME = 'office';
 
 // Top of the building first.
 export const LEVELS = Object.freeze([
-  { id: 'roof', floor: 'R', storey: 14, kind: 'place', name: 'Rooftop Garden',
-    blurb: 'Open air above the office: planters, benches, a telescope, and the skyline all round.' },
+  { id: 'roof', floor: 'R', storey: 14, kind: 'place', name: 'Rooftop Garden', car: [-1, -9],
+    blurb: 'Open air above the office: planters, benches, a telescope, and the skyline all round. Somewhere to sit and do nothing.' },
   { id: 'thirteen', floor: '13', storey: 13, kind: 'place', name: 'Floor Thirteen',
     blurb: 'Not on the plans. The button was not there yesterday.', unmarked: true, stops: 'basement',
     hidden: ({ quirks = [], found = [] } = {}) => !(quirks.includes('friday-13') || found.includes('noclip')) },

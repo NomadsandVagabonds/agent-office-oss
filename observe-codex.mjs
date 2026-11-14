@@ -571,7 +571,10 @@ async function tick() {
     const runtimeSessionId = resolveRuntimeSessionForThread(thread, runtimeSessions, activeThreadCounts);
     const inboxState = readInboxState(sid);
     const lastInjectedTs = inboxState.lastInjectedTs || 0;
-    const backlog = runtimeSessionId
+    // On a break, on the roof, in focus…: the agent asked not to be disturbed (server/life.mjs). Its mail
+    // stays queued (lastInjectedTs untouched) and goes in on a later tick, once it is back.
+    const holding = Array.isArray(overview?.holdingMail) && overview.holdingMail.includes(sid);
+    const backlog = holding ? [] : runtimeSessionId
       ? managedMailBacklog(office.trail, runtimeSessionId, lastInjectedTs)
       : externalMailBacklog(office.trail, lastInjectedTs);
     if (runtimeSessionId && backlog.length && deliverManagedMail(runtimeSessionId, backlog)) {

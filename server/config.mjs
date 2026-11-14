@@ -51,6 +51,13 @@ export function loadConfig(env = process.env) {
     autoObserveCodex: env.OFFICE_AUTO_OBSERVE_CODEX !== '0',
     staleAgentMs: Number(env.OFFICE_STALE_AGENT_MS || 30 * 60 * 1000),
     quiet: env.OFFICE_QUIET === '1',
+    // Office life (server/life.mjs): the share of clocked-in time an agent may spend on things of its own
+    // (0 switches personal time off), and whether a new arrival is greeted once with where to get onboarded.
+    personalPct: (() => {
+      const n = Number(env.OFFICE_PERSONAL_PCT ?? 10);
+      return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 10;
+    })(),
+    welcome: env.OFFICE_WELCOME !== '0',
     // Who is working where (server/workspace.mjs): read-only git in the folders agents work in. Off beyond
     // loopback unless asked for (OFFICE_GIT=1); OFFICE_GIT=0 turns it off everywhere. Claims work either way.
     gitProbe: env.OFFICE_GIT === '1' || (env.OFFICE_GIT !== '0' && loopbackOnly),

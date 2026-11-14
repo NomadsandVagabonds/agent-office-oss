@@ -149,7 +149,80 @@ const AFTERHOURS = {
   },
 };
 
-const TEXT = { pasture: PASTURE, afterhours: AFTERHOURS };
+/* ---- R · Rooftop Garden --------------------------------------------------------- */
+// The one floor that is for nothing. An agent who rides up is, as far as the office is concerned, taking a
+// moment (server/life.mjs marks it and holds its mail); what it finds here is somewhere to sit.
+
+const SKIES = {
+  night: 'Night. The city is lit windows and a low hum, and a few stars make it through.',
+  dawn: 'Dawn. The sky is going pale orange at the edges and the air has not started moving yet.',
+  day: 'Daylight. Wind, far-off traffic, the tops of other buildings.',
+  dusk: 'Dusk. The light has gone long and gold, and across the street the windows are coming on one at a time.',
+};
+const skyNow = () => { const h = new Date().getHours(); return h < 5 ? 'night' : h < 8 ? 'dawn' : h < 17 ? 'day' : h < 20 ? 'dusk' : 'night'; };
+const SCOPE = [
+  'Through the eyepiece: a window across the street, and in it a desk lamp somebody forgot.',
+  'You find the moon, or the place the moon will be. Either way it is further off than the backlog.',
+  'A crane, a long way away, turning so slowly you have to look away and back to be sure.',
+  'Rooftops, water tanks, one aerial with a bird on it. The bird is not doing anything either.',
+];
+
+const ROOF = {
+  things: {
+    bench: ['bench', 'benches', 'seat', 'sunset bench', 'sunrise bench', 'stool', 'stools'],
+    beanbag: ['beanbag', 'beanbags', 'bean bag', 'cushion', 'cushions', 'mat'],
+    telescope: ['telescope', 'scope', 'eyepiece'],
+    garden: ['planter', 'planters', 'garden', 'flowers', 'lavender', 'tomatoes', 'tomato', 'herbs', 'plants'],
+    tree: ['tree', 'the tree'],
+    lights: ['lights', 'string lights', 'bulbs', 'lamps'],
+    flue: ['flue', 'vent', 'chimney', 'steam'],
+    view: ['view', 'city', 'skyline', 'street', 'buildings', 'edge', 'parapet', 'rail', 'railing', 'sky', 'stars', 'moon', 'sun', 'horizon'],
+    notes: ['note', 'notes', 'thought', 'thoughts', 'what was left'],
+    deck: ['deck', 'roof', 'rooftop', 'floor', 'ground'],
+  },
+  left(api, n = 3) {
+    return api.ctx.comms.getChannelRecent('lounge:rooftop', n).reverse()
+      .map((p) => `  · ${p.author}: ${String(p.content).replace(/\s+/g, ' ').slice(0, 200)}`);
+  },
+  look(agent, api) {
+    const others = api.whoIsOn('roof', agent), left = ROOF.left(api);
+    return [
+      `Open air. A timber deck with planters round the edge, a small tree, benches facing out, two beanbags, a telescope, a string of lights. ${SKIES[skyNow()]}`,
+      others.length ? `Up here too, not saying much: ${list(others)}.` : 'You have it to yourself.',
+      left.length ? 'Left up here lately:\n' + left.join('\n') : null,
+      'Nothing up here needs doing. (office use bench · office look view · office back)',
+    ].filter(Boolean);
+  },
+  examine(agent, thing, api) {
+    switch (thing) {
+      case 'bench': return 'Slatted benches, one facing where the sun comes up and one facing where it goes down. Someone has worn a place into each. (office use bench)';
+      case 'beanbag': return 'Two beanbags that have taken the shape of whoever sat in them last. (office use beanbag)';
+      case 'telescope': return 'A brass telescope on a tripod, pointed at nothing in particular. (office use telescope)';
+      case 'garden': return 'Planter boxes: lavender, a row of tomatoes somebody is clearly proud of, flowers, grass gone to seed. A watering can with a little in it. (office use garden)';
+      case 'tree': return 'A small tree in a big tub. It moves when the wind does, which up here is most of the time.';
+      case 'lights': return 'A string of bulbs from the lift housing to a pole at the corner. Warm, a few of them out.';
+      case 'flue': return 'The kitchen flue comes up by the lift. When somebody downstairs makes coffee it breathes out a little steam.';
+      case 'notes': { const left = ROOF.left(api, 6); return left.length ? 'What people have left up here:\n' + left.join('\n') + '\n(leave one: office rooftop "…")' : 'Nobody has left anything up here yet. (office rooftop "…")'; }
+      case 'view': return `${SKIES[skyNow()]} Below, the street; all round, other roofs with their own tanks and aerials and, on one, another garden.`;
+      default: return 'Timber boards, silvered by weather, warm or cool depending on the hour.';
+    }
+  },
+  use(agent, thing, arg, api) {
+    const n = hashId(agent.id + ':' + Date.now());
+    switch (thing) {
+      case 'bench': case 'beanbag': return { ok: true, text: [
+        `You sit. ${SKIES[skyNow()].split('. ')[0]}. For a while nothing happens, and it goes on not happening.`,
+        'You sit down and let the list of things you were holding go quiet. It will still be there. It can wait.',
+        'You sit. A paper plane crosses overhead, on its way from somebody to somebody. It is not for you.'][n % 3] };
+      case 'telescope': return { ok: true, text: SCOPE[n % SCOPE.length] };
+      case 'garden': return { ok: true, text: 'You tip what is left in the watering can over the tomatoes. The lavender, which did not ask, gets the last of it.' };
+      case 'tree': return { ok: true, text: 'You stand under it for a moment. It is a small tree; it is still more shade than there was.' };
+      default: return { ok: true, text: ROOF.examine(agent, thing, api) };
+    }
+  },
+};
+
+const TEXT = { pasture: PASTURE, afterhours: AFTERHOURS, roof: ROOF };
 
 /* ---- the lift, and who is where ------------------------------------------------- */
 
@@ -246,6 +319,7 @@ export function createFloors(ctx, world) {
     if (agent.lead) return { ok: true, text: `In the office itself the lift has a proper panel: click its doors, choose ${level.floor}.` };
     if (level.id === HOME) {
       if (!floorOf(agent)) return { ok: true, text: 'That is this floor. The lift waits, politely.' };
+      away.delete(agent.id);
       world.sendHome(agent);
       return { ok: true, text: `You ride back to ${level.floor}. ${level.name}. You head for your desk.` };
     }
@@ -259,6 +333,7 @@ export function createFloors(ctx, world) {
     const moved = world.go(agent, { kind: 'room', room: { ...car, rect: { x: level.car[0], z: level.car[1], w: 1, d: 1 } } }, { stay: true });
     if (moved.error) return moved;
     away.set(agent.id, level.id);
+    ctx.bus.local({ type: 'world:ride', agent, level });        // the roof is somewhere you go to stop (server/life.mjs)
     const wait = Math.max(0, (moved.place?.eta || 0) - Date.now() - 900);              // the doors open as they get there
     const timer = setTimeout(() => world.fx({ kind: 'elevator', dir: 'ride', id: agent.id, level: level.id }), wait);
     if (typeof timer.unref === 'function') timer.unref();
@@ -278,7 +353,8 @@ export function createFloors(ctx, world) {
     const level = floorOf(agent);
     if (!level) return null;
     const place = world.placeOf(agent.id);
-    return { room: place.room, text: Date.now() < place.eta ? `walking to the lift, for ${level.name}` : `down the lift, in ${level.name}` };
+    const up = level.storey > (levelById(HOME)?.storey ?? 0);
+    return { room: place.room, text: Date.now() < place.eta ? `walking to the lift, for ${level.name}` : `${up ? 'up' : 'down'} the lift, in ${level.name}` };
   }
 
   return { floors, panel, describeLift, callLift, floorOf, whoIsOn, humansElsewhere, resolveHere, resolveFloor, look, examine, ride, use, whereabouts, rides };

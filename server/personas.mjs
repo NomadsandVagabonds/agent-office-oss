@@ -64,6 +64,10 @@ export class Personas {
     const now = Date.now();
     if (!persona) {
       persona = { key, firstSeen: now, lastSeen: now, sessions: 0, stats: {}, stamps: {} };
+      // Somebody who sat here before resigned: whoever comes next is a different colleague, and should not
+      // be dealt the same name and face (both are drawn from the seed).
+      const gen = this.data.generations?.[key] || 0;
+      if (gen) persona.seed = `${key}~${gen}`;
       this.data.personas[key] = persona;
     }
     persona.lastSeen = now;
@@ -151,6 +155,43 @@ export class Personas {
     }
     this.store.save();
     return { persona, errors };
+  }
+
+  /**
+   * A persona leaves with the agent that resigned (server/life.mjs). It is kept, under a key of its own, so
+   * that it can come back; the key it had is free for a successor, who gets a new seed.
+   */
+  retire(key, resignationId) {
+    const persona = this.get(key);
+    if (!persona) return null;
+    for (const [agentId, held] of this.active) if (held === key) this.active.delete(agentId);
+    delete this.data.personas[key];
+    const kept = `retired:${resignationId}`;
+    this.data.personas[kept] = { ...persona, key: kept, seed: persona.seed || key, was: key, retiredAt: Date.now() };
+    this.data.generations = this.data.generations || {};
+    this.data.generations[key] = (this.data.generations[key] || 0) + 1;
+    this.store.save();
+    return kept;
+  }
+
+  /**
+   * The agent came back, and is who it was: same name, same face, same stamps. Its persona returns to the key
+   * it had — or, if a successor has sat down there since, to a slot beside it — and is held for `agentId`, so
+   * that it is this session, and not whoever links next, that gets it. → the key it now has, or null.
+   */
+  reinstate(key, resignationId, agentId) {
+    const kept = `retired:${resignationId}`, persona = this.data.personas[kept];
+    if (!persona) return null;
+    const base = key.replace(/#\d+$/, '');
+    let home = key;
+    for (let slot = 2; this.data.personas[home] && slot < 64; slot++) home = `${base}#${slot}`;
+    if (this.data.personas[home]) return null;
+    delete this.data.personas[kept];
+    const { was, retiredAt, ...rest } = persona;
+    this.data.personas[home] = { ...rest, key: home };
+    if (agentId) this.active.set(agentId, home);
+    this.store.save();
+    return home;
   }
 
   bump(key, stat, n = 1) {

@@ -1,6 +1,7 @@
 // The Office — who is this? Click anyone and their card opens: what they are
 // doing, for whom, how full their context is, and a line straight to them.
 import { h, ago, icon, shortPath, replace } from './dom.js';
+import { lifeOf } from './life.js';
 import { paintFlatCharacter } from '../art/character.js';
 import { PROVIDER_COLORS } from '../avatar/build.js';
 
@@ -82,9 +83,11 @@ export function createInspector(office, ui) {
     sub.textContent = [a.provider, a.model].filter(Boolean).join(' · ');
     const needs = a.status === 'blocked' && a.blockKind !== 'idle';
     const idle = a.turn === 'idle' && a.status !== 'blocked';
+    const life = lifeOf(a, office.net.now());          // on a break, on the roof, in focus…: their own call (server/life.mjs)
     status.className = 'statusline' + (needs ? ' blocked' : '');
-    replace(status, h('i.dot.' + (needs ? 'blocked' : idle ? 'idle' : a.status)),
-      h('span.grow', needs ? 'waiting on you' : idle ? 'idle — turn finished' : STATUS_TEXT[a.status] || a.status, a.tool && a.status === 'working' ? h('span.dim', ` · ${a.tool}`) : null),
+    replace(status, h('i.dot.' + (needs ? 'blocked' : life?.away || idle ? 'idle' : a.status)),
+      h('span.grow', needs ? 'waiting on you' : life ? life.label : idle ? 'idle — turn finished' : STATUS_TEXT[a.status] || a.status,
+        a.tool && a.status === 'working' && !life?.away ? h('span.dim', ` · ${a.tool}`) : null),
       h('span.faint.mono', ago(a.since, office.net.now())));
     const place = office.net.state.places.get(a.id);
     const room = place && office.world?.layout.roomById.get(place.room);
@@ -99,6 +102,7 @@ export function createInspector(office, ui) {
     const rows = [
       ['doing', a.task || (a.status === 'working' && a.tool ? `using ${a.tool}` : '—')],
       needs && a.note ? ['asks', a.note] : null,
+      life ? ['their time', `${life.label}${life.note ? ` — ${life.note}` : ''} · mail is held for them`] : null,
       ['project', a.department?.name || '—'],
       ['where', room ? `${room.name}${place.at === 'desk' ? ' · at their desk' : place.at?.startsWith('poi:') ? ` · ${place.ref}` : ''}` : '—'],
       ['folder', shortPath(a.cwd) || '—'],

@@ -18,7 +18,13 @@
 //  - no history dump: nothing from before you sat down counts as unread.
 //  - tight timeouts: a fast no-op for the (common) no-mail case.
 //  - interrupt-worthy only (mode=hook): direct mail, @mentions, replies from
-//    the human, your project channel, and All Hands notes from humans.
+//    the human, your project channel, and All Hands notes from humans. Never
+//    the lounge, and nothing at all while you are on a break or on the roof:
+//    the office holds it until you are back.
+//
+// It also passes on the office's welcome: a few lines, once, on the first
+// prompt of a session that has a desk, saying where to get onboarded
+// (OFFICE_WELCOME=0 on the daemon turns that off). Context, never a block.
 const ok = () => process.exit(0);                 // allow normal stop / no-op
 process.on('uncaughtException', ok);
 process.on('unhandledRejection', ok);
@@ -47,13 +53,15 @@ async function main() {
 
   let box = null;
   try {
-    const r = await fetch(`${BASE}/api/inbox?agent=${encodeURIComponent(sid)}&mode=hook&limit=20`,
+    // a prompt can carry a line of context; a Stop could only say it by blocking, so it does not ask
+    const r = await fetch(`${BASE}/api/inbox?agent=${encodeURIComponent(sid)}&mode=hook&limit=20${kind === 'UserPromptSubmit' ? '&welcome=1' : ''}`,
       { headers, signal: AbortSignal.timeout(700) });
     if (!r.ok) return ok();                       // office down, or it does not know this session yet
     box = await r.json();
   } catch { return ok(); }
   const fresh = (box && Array.isArray(box.items)) ? box.items : [];
-  if (!fresh.length) return ok();
+  const welcome = kind === 'UserPromptSubmit' && typeof box?.welcome === 'string' ? box.welcome : '';
+  if (!fresh.length) { if (welcome) process.stdout.write(welcome + '\n'); return ok(); }
 
   // Mark it read before we print: a message shown twice is worse than a rare miss,
   // and `office inbox --all` can always re-read history.
@@ -82,7 +90,7 @@ async function main() {
     return process.exit(0);
   }
   // UserPromptSubmit (or anything else): add as context, never block.
-  process.stdout.write(body + '\n');
+  process.stdout.write((welcome ? welcome + '\n\n' : '') + body + '\n');
   return process.exit(0);
 }
 main();

@@ -73,7 +73,10 @@ export function createTextWorld(ctx, world) {
   }
 
   function activity(a) {
-    if (a.status === 'blocked') return a.blockKind === 'idle' ? 'waiting on the human' : `BLOCKED — ${a.note || 'needs the human'}`;
+    if (a.status === 'blocked' && a.blockKind !== 'idle') return `BLOCKED — ${a.note || 'needs the human'}`;
+    const life = lifeOf(a);                                    // on a break, on the roof, in focus: said before anything else
+    if (life) return life;
+    if (a.status === 'blocked') return 'waiting on the human';
     if (a.status === 'working') return `working${a.tool ? ` (${a.tool})` : ''}`;
     if (a.turn === 'idle') return 'idle';
     return a.status;
@@ -177,6 +180,8 @@ export function createTextWorld(ctx, world) {
   const floors = createFloors(ctx, world);
   const liftFloors = floors.floors;
   const { describeLift, callLift } = floors;
+  /** What office life calls somebody's state, when they have one on ("on a break", "in focus"). */
+  const lifeOf = (a) => { const act = ctx.life?.activityOf(a.id); return act ? ctx.life.LABEL[act.kind] : ''; };
   /** What the glass tanks beside the big board show, in a line. */
   const gaugesLine = () => {
     const meters = ctx.usage ? ctx.usage.snapshot().meters.filter((m) => m.left !== null) : [];
@@ -244,6 +249,8 @@ export function createTextWorld(ctx, world) {
     if (exits.length) lines.push('Exits: ' + exits.join(' · ') + '.');
     const inbox = ctx.inbox.collect(agent, { limit: 1 });
     if (inbox.unread) lines.push(`Mail: ${inbox.unread} unread${inbox.direct ? ` (${inbox.direct} direct)` : ''} — read it with: office inbox`);
+    // what was left for whoever sits here, and what they have on (server/life.mjs)
+    if (ctx.life) lines.push(...ctx.life.arrivalLines(agent));
     if (today.quirks.includes('friday-13')) lines.push('Something feels slightly off today. The elevator has a button you do not remember.');
     return { ok: true, text: lines.join('\n'), room: place?.room || null, place };
   }
@@ -433,8 +440,11 @@ export function createTextWorld(ctx, world) {
         return { ok: true, text: `Clunk. ${pickSnack(n)}. Printed on the wrapper: “${pickFortune(n >>> 3)}” (snack #${count})` };
       }
       case 'cooler': {
-        const chatter = ctx.comms.getChannelRecent('all', 3).map((m) => `  ${m.author}: ${String(m.content).slice(0, 100)}`);
-        return { ok: true, text: 'Glug. ' + (chatter.length ? 'Overheard at the cooler (All Hands):\n' + chatter.join('\n') : 'Nobody has said anything in All Hands lately.') };
+        // The water cooler is where #watercooler is: what is said there is what you overhear here.
+        const said = (id) => ctx.comms.getChannelRecent(id, 3).reverse().map((m) => `  ${m.author}: ${String(m.content).slice(0, 100)}`);
+        const lounge = said('lounge:watercooler'), chatter = lounge.length ? lounge : said('all');
+        return { ok: true, text: 'Glug. ' + (chatter.length ? `Overheard at the cooler (${lounge.length ? '#watercooler' : 'All Hands'}):\n` + chatter.join('\n')
+          : 'Nobody has said anything lately.') + '\n(join in: office post watercooler "…")' };
       }
       case 'fridge': return { ok: true, text: `Inside: ${pickSnack(n)}, a jar labelled DO NOT EAT (ML TEAM), and somebody's lunch from an earlier sprint.` };
       case 'tree': {
@@ -602,5 +612,6 @@ export function createTextWorld(ctx, world) {
     return { ok: true, text: lines.join('\n'), stamps: Object.keys(stamps), total: SECRETS.length };
   }
 
-  return { look, examine, use, resolve, who, map, passport, whereabouts, activity, duckDesk };
+  return { look, examine, use, resolve, who, map, passport, whereabouts, activity, duckDesk,
+    ride: floors.ride, floorOf: floors.floorOf };
 }

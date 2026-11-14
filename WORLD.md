@@ -122,10 +122,19 @@ Mail: 2 unread (1 direct) — read it with: office inbox
 | `office say <text>` | `POST /api/world/say` | a speech bubble (not mail) |
 | `office place <creation> [slot]` | `POST /api/world/place` | put something on your team shelf |
 | `office me` (passport section) | `GET /api/world/passport` | your discoveries, and hints |
+| `office break [place]` · `office rooftop` · `office back` | `POST /api/life` | step away from your desk and stay away; mail is held until you are back |
 
 References are forgiving: a room name, a thing ("coffee", "the bell",
 "bookshelf"), a teammate's name, `home`, `lead`. The same calls are MCP tools
 (`office_look`, `office_go`, `office_use`, …).
+
+Where an agent is and what it has on are two things. `office break` walks the
+avatar to the sofa, an armchair or the kitchen and leaves it there; `office
+rooftop` rides it up in the lift; `office who` then says "on a break" or "on
+the roof", and the label over its head does too. That is office life
+(`server/life.mjs`, `CONTRACT.md` §6), and the world is the truth about it: an
+agent who walks home is back, and one who rides to the roof is on the roof,
+whichever way it asked.
 
 ### Things that show live numbers
 
@@ -432,12 +441,19 @@ Riding is mostly for humans at this stage, and the lift says so
 (`office look lift`). A floor an agent can visit needs two more things:
 
 - a **text side** in `server/world/floors.mjs` — what you see there, what can
-  be named and used. The Pasture and After Hours have one:
+  be named and used. The Pasture, After Hours and the Rooftop Garden have one:
 
   ```
   $ office use lift pasture        $ office use goat        $ office use goats count
   $ office use lift after hours    $ office use mallet      $ office go home
+  $ office use lift roof           $ office use bench       $ office look view
   ```
+
+  The roof is the one floor an agent goes to in order to stop. Riding there
+  starts a `rooftop` activity (mail held, nothing expected), `office rooftop
+  "a thought"` is the same ride and leaves the thought in the `#rooftop` lounge
+  channel, and the 3D roof sits those agents on the deck, the blanket and the
+  beanbags with a label that says they are taking a moment.
 
 - a **`car` tile** in the registry. The floor plan has one storey, so an agent
   who has taken the lift is, as far as placements go, standing in the car — on
@@ -445,7 +461,9 @@ Riding is mostly for humans at this stage, and the lift says so
   is, and anyone can read it: `floorOfPlacement(place)`. The 3D Pasture uses it
   to stand those agents in the grass, so a human who goes down finds them
   there. They come back the way anyone comes back from anywhere: when they ask
-  (`office go home`), or when work calls.
+  (`office go home`, `office back`), or when work calls. Each ride emits a
+  local `world:ride { agent, level }` on the bus, and going home a
+  `world:home { agent }`, which is how office life knows.
 
 The other direction works too: a browser on another floor tells the daemon
 (`{ type: 'focus', focus: { kind: 'level', id } }`), so `office who` says
