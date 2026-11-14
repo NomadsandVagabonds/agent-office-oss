@@ -30,6 +30,7 @@ import { faceAngle, faceVector } from '/core/layout.mjs';
 import { HOME, levelById } from '/core/levels.mjs';
 import { CAR, createLiftDoor, quad } from './car.js';
 import { curtain } from './curtain.js';
+import { makePickup } from './loot.js';
 
 const RADIUS = 0.24, WALK = 2.3, RUN = 4.4, REACH = 1.35, TAU = Math.PI * 2;
 const STUB = 0.42, WALL_T = 0.14;
@@ -310,6 +311,46 @@ export function createWorld(office, spec = {}) {
     try { entry.use?.(api, entry); } catch (err) { console.error(`[level ${level.id}]`, err); }
   }
 
+  /* ---- things to find (core/game.mjs): a coin or the keycard, lying where you put it -------------- */
+  const pickups = [];
+  /**
+   * Hide a coin or this floor's keycard here. It turns in the air until somebody walks into it; then it is
+   * theirs, the office is told, and it never comes back. Returns null if it has already been taken — so a
+   * floor can simply call this for everything it hides, every visit.
+   *   { item: 'coin'|'card', n: which coin (1…), x, z, y?: above the ground, reach?: 0.75,
+   *     hidden?: () => boolean (not there yet), light?: true on a dark floor, onTake?: (answer) => void }
+   * The handle: { group, taken, moveTo(x, z, y?), take() — give it to them now, wherever they are }.
+   */
+  function loot(o) {
+    const item = o.item === 'card' ? 'card' : 'coin', n = item === 'coin' ? Math.floor(o.n) : 0;
+    const still = office.game?.left(level.id);
+    if (!still || (item === 'card' ? !still.card : !still.coins.includes(n))) return null;
+    const p = makePickup(item, { light: o.light, hover: o.hover, scale: o.scale });
+    const entry = { p, x: o.x, z: o.z, y: o.y || 0, reach: o.reach ?? 0.75, hidden: o.hidden || null, onTake: o.onTake || null, item, n };
+    scene.add(p.group);
+    const handle = {
+      group: p.group, get taken() { return p.taken; },
+      moveTo(x, z, y) { entry.x = x; entry.z = z; if (y !== undefined) entry.y = y; },
+      take() {
+        if (p.taken) return;
+        p.take();
+        Promise.resolve(office.game?.take(level.id, item, n)).then((answer) => { try { entry.onTake?.(answer); } catch (err) { console.error(`[level ${level.id}]`, err); } });
+      },
+    };
+    entry.handle = handle;
+    pickups.push(entry);
+    return handle;
+  }
+  function lootStep(dt) {
+    for (let i = pickups.length - 1; i >= 0; i--) {
+      const e = pickups[i], away = !!e.hidden?.();
+      e.p.group.visible = !away && !e.p.gone;
+      e.p.group.position.set(e.x, floorY(e.x, e.z) + e.y, e.z);
+      if (!away && !e.p.taken && !closing && Math.hypot(e.x - me.x, e.z - me.z) < e.reach) e.handle.take();
+      if (!e.p.update(dt, t + i * 1.7)) { e.p.dispose(); pickups.splice(i, 1); }
+    }
+  }
+
   /* ---- sound ------------------------------------------------------------------------------ */
   const sfx = (name, opt) => { try { return office.sound?.play?.(name, opt) ?? null; } catch { return null; } };
   /** Start a loop of music; it stops by itself when the level closes. */
@@ -581,6 +622,7 @@ export function createWorld(office, spec = {}) {
       if (n) { hint.replaceChildren(h('kbd', 'E'), ' ', n.label); hint.classList.remove('hidden'); } else hint.classList.add('hidden');
     }
     for (const fn of frames) fn(dt, t);
+    if (pickups.length) lootStep(dt);
     placeCamera(dt);
     // the sun follows you, so its shadows stay sharp where you are
     sun.target.position.set(eye.x, eye.y - cam.height, eye.z);
@@ -671,6 +713,7 @@ export function createWorld(office, spec = {}) {
     if (stage.bloom && before.bloom !== undefined) stage.bloom.strength = before.bloom;
     voxelUniforms.uGlow.value = before.glow;
     avatar.dispose();
+    for (const e of pickups.splice(0)) e.p.dispose();
     for (const x of trash) { try { x.dispose?.(); } catch { /* best effort */ } }
     scene.traverse((o) => { if (o.isLight && o.shadow?.map) o.shadow.map.dispose(); });
   }
@@ -681,7 +724,7 @@ export function createWorld(office, spec = {}) {
     /** This floor's lift doorway (see car.js), once lift() or room({ lift }) has stood it somewhere. */
     get liftDoor() { return liftHere?.door || null; },
     add, floor, wall, box, room, prop, vox, sign, screen, lamp, light, lift,
-    block, free, thing, seat, use, sfx, music, bed, own, focus, unfocus, walkTo,
+    block, free, thing, seat, use, sfx, music, bed, own, focus, unfocus, walkTo, loot,
     /** Is the camera holding a fixed shot (see focus)? */
     get focused() { return !!shot; },
     /** Is the person hurrying (Shift held)? */

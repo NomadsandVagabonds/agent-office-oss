@@ -14,7 +14,7 @@
 // To add one: give it a line in core/levels.mjs (id, the letter on its
 // button, a name, a blurb) and a line in MODULES below. That is all the lift
 // needs to know.
-import { HOME, findLevel, isVisible, levelById, levelContext, visibleLevels } from '/core/levels.mjs';
+import { HOME, findLevel, isOpen, isVisible, levelById, levelContext, visibleLevels } from '/core/levels.mjs';
 import { curtain } from './curtain.js';
 import { playRide } from './ride.js';
 
@@ -77,6 +77,7 @@ export async function ride(office, ref, opt = {}) {
   office.ui?.select?.(null);
   office.walk?.exit?.();
   let from = levelById(HOME), next = first, last = { reason: 'exit' }, instant = !!opt.instant;
+  const litBefore = lit(office);
   try {
     while (next && next.id !== HOME) {
       if (next.id === 'thirteen') return await thirteen(office, from, opt);
@@ -85,17 +86,19 @@ export async function ride(office, ref, opt = {}) {
       else await playRide(office, { from, to: next, floors: visibleLevels(context(office)), until: loading, pace: opt.pace });
       const mod = await loading;
       state.floor = next.id;
+      // somebody has now been to a floor that was only just lit: its button need not glow any more
+      if ((context(office).fresh || []).includes(next.id)) office.net.api('/api/world/game/visit', { method: 'POST', body: { floor: next.id } }).catch(() => null);
       last = await visit(office, mod, next, { from: from.id });
       from = next; instant = false;
       const onward = last.reason === 'lift' ? findLevel(last.to) : null;
-      next = onward && isVisible(onward, context(office)) ? onward : levelById(HOME);
+      next = onward && isVisible(onward, context(office)) && isOpen(onward, context(office)) ? onward : levelById(HOME);
     }
     if (last.reason !== 'missing') await playRide(office, { from, to: levelById(HOME), floors: visibleLevels(context(office)), pace: (opt.pace || 1) * (last.reason === 'lift' ? 1 : 0.6) });
   } catch (err) {
     console.error('[lift]', err);
     last = { reason: 'error', error: err };
   }
-  return home(office, last);
+  return home(office, { ...last, litBefore });
 }
 
 /** One floor: call its enter(), lift the curtain when it has the screen, and take the screen back afterwards. */
@@ -111,6 +114,9 @@ async function visit(office, mod, level, opt) {
   office.stage.setView(null);
   return result && typeof result === 'object' ? result : { reason: 'exit' };
 }
+
+/** How many game floors are lit, as the office has it now. */
+const lit = (office) => (context(office).open || []).length;
 
 /** Back in the office: on the landing, in walk mode — or straight to whoever needs you, if that is why you left. */
 function home(office, last = {}) {
@@ -133,6 +139,11 @@ function home(office, last = {}) {
   }
   office.fx?.lift?.(2400);
   curtain.open(380);
+  // A keycard found down there has lit a button up here. Nothing says so: the doors simply stay open on the
+  // panel, with one more floor on it than there was.
+  if (last.litBefore !== undefined && lit(office) > last.litBefore && !['needs', 'goto', 'error', 'missing'].includes(last.reason)) {
+    setTimeout(() => { if (!state.riding && state.floor === HOME) callLift(office).catch((err) => console.error('[lift]', err)); }, 900);
+  }
   return last;
 }
 

@@ -4,9 +4,14 @@
 // strip of label tape beside its button. Click one — or arrows and Enter, or
 // simply the letter on it; Esc steps back. (It does not say so: lifts do not.)
 //
+// Floors that need a keycard are not on the plate until one has lit them.
+// What stands for them is a card reader at the bottom with a row of unlit
+// lamps, one per floor still dark. A floor lit since you last rode glows
+// until somebody goes there. None of this is explained either.
+//
 //   const level = await openFloorPanel(office, { current: 'lobby' });   // a level, or null if you stepped back
 import { h } from './dom.js';
-import { HOME, levelById, levelContext, visibleLevels } from '/core/levels.mjs';
+import { HOME, levelById, levelContext, panelLevels } from '/core/levels.mjs';
 
 const KIND = { office: 'the office', place: 'a place', game: 'games', work: 'a work module' };
 let open = null;
@@ -19,7 +24,9 @@ let open = null;
 export function openFloorPanel(office, opt = {}) {
   if (open) return open;
   const here = levelById(opt.current || HOME) || levelById(HOME);
-  const levels = visibleLevels(levelContext(office.net?.state?.world));
+  const ctx = levelContext(office.net?.state?.world);
+  const { levels, dark } = panelLevels(ctx);
+  const fresh = new Set(ctx.fresh || []);
   const parent = opt.parent || document.getElementById('ui') || document.body;
   let index = Math.max(0, levels.findIndex((l) => l.id === here.id));
   let pressed = false;
@@ -27,7 +34,7 @@ export function openFloorPanel(office, opt = {}) {
   open = new Promise((resolve) => {
     const rows = levels.map((level, i) => {
       const odd = !!level.unmarked;
-      const row = h('div.floorrow' + (level.id === here.id ? '.here' : '') + (odd ? '.odd' : ''), {
+      const row = h('div.floorrow' + (level.id === here.id ? '.here' : '') + (odd ? '.odd' : '') + (fresh.has(level.id) && level.id !== here.id ? '.fresh' : ''), {
         role: 'button', title: odd ? '' : `${level.floor} — ${level.name}`,
         onclick: () => press(i), onmouseenter: () => select(i),
       },
@@ -37,9 +44,12 @@ export function openFloorPanel(office, opt = {}) {
         h('small', level.blurb), h('span.kind', KIND[level.kind] || level.kind)));
       return row;
     });
+    // the reader: a slot, and a lamp for every floor that is still dark
+    const reader = dark > 0 ? h('div.cardreader', { role: 'button', onclick: () => { reader.classList.remove('nudge'); void reader.offsetWidth; reader.classList.add('nudge'); } },
+      h('span.slot'), h('span.lamps', Array.from({ length: dark }, () => h('i')))) : null;
     const panel = h('div.liftpanel.glass',
       h('div.led', h('b', here.unmarked ? '' : here.floor), h('span', 'this car is at', h('br'), h('strong', here.name))),
-      h('div.floors', rows));
+      h('div.floors', rows), reader);
     const veil = h('div.liftveil', { onclick: () => finish(null) });
     parent.append(veil, panel);
 

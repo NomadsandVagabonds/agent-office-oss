@@ -96,6 +96,8 @@ export function floorOfPlacement(place) {
 
 /** What the hidden rules look at, read from a world snapshot (GET /api/world, or the `world` event). */
 export function levelContext(world) {
+  const game = Array.isArray(world?.game?.open) ? world.game : null;
   return { quirks: world?.today?.quirks || [], found: Object.keys(world?.discoveries || {}),
-    open: Array.isArray(world?.game?.open) ? world.game.open : undefined, fresh: world?.game?.fresh || [] };
+    // which card floors are lit, and which of those nobody has ridden to yet (core/game.mjs) — where the office keeps score at all
+    ...(game ? { open: game.open, fresh: Array.isArray(game.fresh) ? game.fresh : [] } : {}) };
 }

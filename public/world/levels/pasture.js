@@ -8,6 +8,13 @@
 // the clipboard (it is one short — the one it misses is somewhere), try the
 // very small door. Agents can come down here too (`office use lift pasture`,
 // see server/world/text.mjs): whoever has is standing in the grass.
+//
+// What is hidden here (core/game.mjs): the bucket gives you three handfuls,
+// and a goat you feed leaves something behind a little later. What is in it
+// is for whoever looks: a coin in the first; and by the third goat, the
+// keycard one of them ate (LANYARDS MUST BE WORN AT ALL TIMES). A second coin
+// lies behind the one on the hill, and the very small door gives up a third
+// to anybody who keeps trying it.
 import * as THREE from 'three';
 import { createWorld } from './kit.js';
 import { WALLS, canvasTexture } from '../scene/textures.js';
@@ -193,6 +200,13 @@ function hatch() {
   for (const x of [-11, 10]) for (const y of [1, 22]) v.set(x, y, 1, tone(frame, -0.3));
   return v;
 }
+/** What a goat leaves behind: a few pellets — and, once, the corner of something it should not have eaten. 9 × 6 × 9. */
+function droppings(card = false) {
+  const v = new Vox(), dark = M('#3b2c1e', 1), mid = tone(dark, 0.14);
+  [[0, 0, 2.2], [3, 1, 1.7], [-3, 1, 1.6], [1, -3, 1.6], [-2, -2, 1.5], [0, 2, 1.4], [2, -1, 1.3]].forEach(([x, z, r], i) => v.sphere(x, Math.round(r * 0.8), z, r, i % 2 ? mid : dark));
+  if (card) { const cream = M('#f3eedd', 0); v.box(-1, 2, -1, 4, 6, 0, cream); v.box(-1, 5, -1, 4, 6, 0, glow('#3f8fd0')); v.box(3, 2, -1, 4, 6, 0, tone(cream, -0.18)); }
+  return v;
+}
 function heart() {
   const v = new Vox(), c = M('#ff7a9a', 0);
   for (const [y, x0, x1] of [[5, -3, -1], [5, 1, 3], [4, -4, 4], [3, -4, 4], [2, -3, 3], [1, -2, 2], [0, -1, 1]]) v.box(x0, y, 0, x1, y + 1, 1, c);
@@ -285,8 +299,16 @@ export async function enter(office) {
       w.focus([-19.6 + Math.sin(a) * 1.15, y + 1.05, 8.9 + Math.cos(a) * 1.15], [-19.6, y + 1.0, 8.9], { fov: 34, alone: true });
     } });
   let rattle = 0, jiggle = 0;
-  w.thing({ x: -19.4, z: 3.3, label: 'the feed bucket', object: pail, reach: 1.3, use() { rattle = 8; jiggle = 0.6; call(3); } });
-  w.thing({ x: -4, z: ROOM.z0 + 0.5, label: 'a very small door', object: little, reach: 1.3, use() { little.userData.shake = 0.5; } });
+  /* what is hidden down here (core/game.mjs): see the top of this file */
+  let feed = 0, fed = 0, tries = 0, cardLeft = false;
+  const piles = [];
+  w.thing({ x: -19.4, z: 3.3, label: 'the feed bucket', object: pail, reach: 1.3, use() { rattle = 8; jiggle = 0.6; call(3); feed = 3; } });
+  w.thing({ x: -4, z: ROOM.z0 + 0.5, label: 'a very small door', object: little, reach: 1.3,
+    use() {
+      little.userData.shake = 0.5;
+      if (++tries === 3) w.loot({ item: 'coin', n: 3, x: -4, z: ROOM.z0 + 0.95 });       // somebody on the other side has had enough
+    } });
+  w.loot({ item: 'coin', n: 2, x: HILLS[0][0] + 1.2, z: HILLS[0][1] - 0.55 });           // behind the one on the hill, where the door cannot see
 
   /* ---- the herd ---------------------------------------------------------------------------------------- */
   const flesh = voxelMaterial();
@@ -320,7 +342,8 @@ export async function enter(office) {
       friendly: false, hop: 0 };
     if (spec.kid) g.head.scale.setScalar(1.18);
     scene.add(root);
-    g.thing = w.thing({ x, z, label: spec.lanyard ? 'a goat with a lanyard' : spec.kid ? 'a kid' : 'a goat', reach: 1.2, hidden: () => g.state === 'trot' || g.state === 'hide', use: () => pet(g) });
+    g.thing = w.thing({ x, z, label: spec.lanyard ? 'a goat with a lanyard' : spec.kid ? 'a kid' : 'a goat', reach: 1.2, hidden: () => g.state === 'trot' || g.state === 'hide',
+      use: () => (feed > 0 && !g.fed ? give(g) : pet(g)) });
     goats.push(g);
     return g;
   }
@@ -365,6 +388,31 @@ export async function enter(office) {
     g.state = 'pet'; g.t = 2.4; g.hop = 1;
     love(g.x, ground(g.x, g.z) + 0.75 * g.size, g.z);
     bleat(0.7);
+  }
+  /** A handful from the bucket: it eats, it is pleased, and in a little while it will have left something. */
+  function give(g) {
+    feed--; fed++;
+    g.fed = fed; g.state = 'eat'; g.t = 2.8; g.hop = 1;
+    g.leaveAt = w.time + 6 + R() * 4;
+    love(g.x, ground(g.x, g.z) + 0.75 * g.size, g.z);
+    bleat(0.75);
+  }
+  /** It stops, it thinks about something else, it walks on. What it left can be looked through (E). */
+  function leave(g) {
+    g.leaveAt = 0; g.hop = 1;
+    const still = office.game?.left('pasture') || { card: false, coins: [] };
+    const x = g.x - Math.sin(g.heading) * 0.42 * g.size, z = g.z - Math.cos(g.heading) * 0.42 * g.size;
+    // the first goat fed leaves a coin; by the third, the card that one of them ate has worked its way through
+    const holds = g.fed >= 3 && still.card && !cardLeft ? 'card' : g.fed === 1 && still.coins.includes(1) ? 'coin' : null;
+    if (holds === 'card') cardLeft = true;
+    const pile = { x, z, holds, done: false, squash: 0, node: w.vox(() => droppings(holds === 'card'), x, z, R() * TAU) };
+    pile.thing = w.thing({ x, z, label: 'what the goat left', object: pile.node, reach: 1.0, hidden: () => pile.done,
+      use() {
+        pile.done = true; pile.squash = 0.35;
+        w.sfx('sticky');
+        if (pile.holds) w.loot({ item: pile.holds, n: 1, x: pile.x, z: pile.z, reach: 0 })?.take();
+      } });
+    piles.push(pile);
   }
   /** Some of them answer: n goats nearby look up and say so. */
   function call(n) {
@@ -439,7 +487,7 @@ export async function enter(office) {
             net.api('/api/world/discover', { method: 'POST', body: { secret: 'headcount', name: office.walk?.me?.name || 'Lead' } }).catch(() => null);
           }
         }
-      } else if (g.state !== 'trot' && g.state !== 'pet' && ((hurrying && dist < 4) || (me.moving && dist < 0.95 && !g.friendly))) {
+      } else if (g.state !== 'trot' && g.state !== 'pet' && g.state !== 'eat' && ((hurrying && dist < 4) || (me.moving && dist < 0.95 && !g.friendly))) {
         g.state = 'trot'; g.t = 1.2 + R() * 1.4;                 // too fast, too close: off it goes
         g.tx = g.x - (dx / dist) * 6 + (R() - 0.5) * 3; g.tz = g.z - (dz / dist) * 6 + (R() - 0.5) * 3;
         if (R() < 0.3) bleat(0.4);
@@ -450,7 +498,9 @@ export async function enter(office) {
       if (g.state === 'graze') { nod = 1.05; if (g.t <= 0) choose(g); } else if (g.state === 'look') {
         nod = -0.2; face = dist < 8 ? Math.atan2(dx, dz) : g.heading + g.look;
         if (g.t <= 0) choose(g);
-      } else if (g.state === 'pet') { nod = -0.35; face = Math.atan2(dx, dz); if (g.t <= 0) { g.state = 'look'; g.t = 2; } } else if (g.state === 'follow') {
+      } else if (g.state === 'pet') { nod = -0.35; face = Math.atan2(dx, dz); if (g.t <= 0) { g.state = 'look'; g.t = 2; } } else if (g.state === 'eat') {
+        if (g.t <= 0) { g.state = 'look'; g.t = 2.5; }                                         // head down in your hand, and not to be hurried
+      } else if (g.state === 'follow') {
         g.tx = me.x; g.tz = me.z; face = Math.atan2(dx, dz); nod = dist < 2 ? -0.3 : 0;
         want = dist > 1.35 ? (rattle > 0 ? 1.7 : 0.85) : 0;
         if (g.t <= 0 || dist > 16) choose(g);
@@ -461,6 +511,7 @@ export async function enter(office) {
       }
       if (face !== null) g.heading += turnTo(g.heading, face) * (1 - Math.exp(-(want > 1 ? 9 : 4) * dt));
       g.speed += (want - g.speed) * (1 - Math.exp(-6 * dt));
+      if (g.leaveAt && t > g.leaveAt && g.state !== 'eat' && g.state !== 'pet' && g.state !== 'trot') leave(g);
       if (g.speed > 0.02) {
         const nx = g.x + Math.sin(g.heading) * g.speed * dt, nz = g.z + Math.cos(g.heading) * g.speed * dt;
         if (w.free(nx, nz)) { g.x = nx; g.z = nz; } else if (g.state !== 'follow') { g.state = 'look'; g.t = 1; }
@@ -491,7 +542,8 @@ export async function enter(office) {
       g.phase += dt * (4 + g.speed * 7);
       const stride = Math.min(1, g.speed / 0.5) * 0.55;
       g.front.rotation.x = Math.sin(g.phase) * stride; g.hind.rotation.x = -Math.sin(g.phase) * stride;
-      const goalNod = g.state === 'graze' ? 1.05 + Math.sin(t * 5 + g.phase) * 0.05 : g.state === 'look' || g.state === 'pet' ? -0.25 : g.state === 'follow' ? -0.2 : 0.1;
+      const goalNod = g.state === 'graze' ? 1.05 + Math.sin(t * 5 + g.phase) * 0.05 : g.state === 'eat' ? 0.55 + Math.sin(t * 15) * 0.14
+        : g.state === 'look' || g.state === 'pet' ? -0.25 : g.state === 'follow' ? -0.2 : 0.1;
       g.nod += (goalNod - g.nod) * (1 - Math.exp(-5 * dt));
       g.head.rotation.x = g.nod;
       g.thing.x = g.x; g.thing.z = g.z;
@@ -506,6 +558,7 @@ export async function enter(office) {
       if (guest.wave > 0) { guest.wave -= dt; if (guest.wave <= 0) { guest.avatar.setPose('stand'); guest.avatar.setExpression('neutral'); } }
       guest.avatar.update(dt);
     }
+    for (const pile of piles) if (pile.squash > 0) { pile.squash = Math.max(0, pile.squash - dt); pile.node.scale.y = 0.45 + 0.55 * (pile.squash / 0.35); }
     for (let i = hearts.length - 1; i >= 0; i--) {
       const hrt = hearts[i];
       hrt.t += dt / 1.3;
@@ -516,7 +569,7 @@ export async function enter(office) {
   });
 
   syncGuests();
-  w.goats = goats;                                              // for the console, and for the curious
+  w.goats = goats; w.piles = piles;                             // for the console, and for the curious
   w.bed('pasture-bed', { volume: 0.5 });
   return w.run();
 }
