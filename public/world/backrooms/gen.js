@@ -24,12 +24,12 @@
 // never need to know which way a room ended up facing.
 
 import { T, WALL_H, DOOR_H, TILE, RISE, RUN, SIDES, toWorld, toLocal, wallLength, wallPoint, floorAt, ceilAt, headAt, stairZones, pinchHalf, fitsAt, wallSpans } from './frame.js';
-import { fill } from './words.js';
+import { fill, wrap } from './words.js';
 import { MORE_DECK, MORE_STASH } from './deck2.js';
 import { themeOf, THEMES } from './themes.js';
 import { thinPlace, decoyMarks, TAPE_LABELS } from './marks.js';
 import { goesDown } from './seam.js';
-import { vocabulary, motif, fits, pruned, sunk, NARROW } from './quiet.js';
+import { vocabulary, motif, fits, pruned, sunk, NARROW, HALLS } from './quiet.js';
 
 // the room's own frame and the shape of its floor and ceiling are frame.js's; they have always been asked for here
 export { T, WALL_H, DOOR_H, TILE, RISE, RUN, SIDES, toWorld, toLocal, wallLength, wallFrame, wallPoint, floorAt, ceilAt, headAt, stairZones, pinchHalf, fitsAt, wallSpans } from './frame.js';
@@ -668,6 +668,17 @@ const DRESSING = ['boxes', 'boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 
 // what the plain-room builder (rooms.js) knows how to put down, of everything a theme may ask for; and how many plain rooms have anything
 const KNOWN_THINGS = new Set(['boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'cabinet', 'shelving', 'armchair', 'globe']);
 export const THING_CHANCE = 0.06;
+/** What an earlier visitor may have left in a plain room (traces.js builds them): a floor has two or three, each a different one. */
+export const TRACES = Object.freeze(['camp', 'arrows', 'note', 'measure', 'map', 'queue']);
+// Notes that stop. Nobody finishes a sentence down here: something always comes up.
+const NOTES = [
+  ['IF YOU FIND THIS:', 'THE WAY OUT IS', 'DEFINITELY PAST THE'],
+  ['DAY 3. I HAVE WORKED', 'OUT WHAT THE HUM IS.', 'IT IS'],
+  ['{AGENT} — GONE TO', 'LOOK FOR THE STAIRS.', 'BACK IN'],
+  ['DO NOT, WHATEVER', 'YOU DO, TURN YOUR', 'BACK ON THE'],
+  ['TO WHOEVER TOOK MY', 'STAPLER: I KNOW IT', 'WAS YOU, AND I'],
+  ['MINUTES OF THE', '{PROJECT} STAND-UP.', 'PRESENT: ME. ITEM 1:'],
+];
 const POSTERS = ['HANG IN THERE', 'SYNERGY', 'PERSISTENCE', 'TEAMWORK', 'THIS IS FINE', 'ALIGNMENT', 'YOU ARE DOING GREAT, {NAME}', 'DAYS SINCE LAST INCIDENT: 0'];
 
 function layPanels(R, room, mode) {
@@ -940,12 +951,37 @@ function dress(R, level, o, opt, keeper = false) {
       else { room.blocks = plan.blocks; room.props = plan.props; room.quiet = { ...(room.quiet || { kind: 'bare', turn: 0 }), sunk: true }; }
     }
   }
+  // What earlier visitors left (traces.js): you are not the first, and most of the others did not get out. Two or
+  // three to a floor at most, each a different thing, in plain rooms with nothing else in them — off the way from the
+  // landing to the way down for choice, never next door to an oddity (an event needs empty rooms round it), never in a room
+  // with anything else in it (what is placed after this keeps out of these rooms: the plan on the wall, the doors in
+  // the floor, the marked walls, the wall the plan calls thin), never
+  // within three doorways of another (out of each other's sight), never the first room or the last. All of it from a source of its own.
+  {
+    const RTr = R.fork('traces'), onWay = new Set(roomPath({ rooms, links }, start.id, exit.id) || []);
+    const next = (r) => r.doors.map((d) => rooms[d.to]);
+    const able = RTr.shuffle(rooms.filter((r) => r.kind === 'plain' && !r.crawl && !r.shape && !r.dress.length && !(r.blocks && r.blocks.length) && !(r.quiet && r.quiet.kind === 'apertures')
+      && r.depth >= 1 && r.toExit >= 2 && r.H >= 2.4 && Math.min(r.W, r.D) >= 2.6 && Math.max(r.W, r.D) >= 3.6 && !(pursuer && pursuer.room === r.id) && next(r).every((n) => n.kind !== 'special')));
+    able.sort((p, q) => (onWay.has(p.id) ? 1 : 0) - (onWay.has(q.id) ? 1 : 0));
+    const kinds = RTr.shuffle(TRACES.slice()), placed = [], want = RTr.int(2, 3);
+    for (const room of able) {
+      if (placed.length >= want) break;
+      const dist = level.distances(room);
+      if (placed.some((q) => (dist.get(q.id) ?? 99) < 3)) continue;
+      const kind = kinds[placed.length % kinds.length], item = { type: 'trace', kind, seed: RTr.int(1, 9999), turn: 0, n: RTr.int(3, 5) };
+      if (kind === 'note') item.text = RTr.pick(NOTES).flatMap((line) => wrap(fill(line, o, RTr), 22));        // (a long name takes a line to itself)
+      if (kind === 'queue' && Math.min(room.W, room.D) < 3.4) continue;
+      room.dress.push(item); placed.push(room);
+    }
+  }
+  const traced = (r) => r.dress.some((d) => d.type === 'trace');
+
   // a floor plan on a wall, somewhere, with a red dot that is not where it should be
-  const mapRooms = rooms.filter((r) => r.kind === 'plain' && !r.crawl && r.depth >= 1);
+  const mapRooms = rooms.filter((r) => r.kind === 'plain' && !r.crawl && r.depth >= 1 && !traced(r));
   for (const room of R.shuffle(mapRooms).slice(0, R.int(1, 2))) room.dress.push({ type: 'map', u: R(), v: R(), turn: 0, n: 0, seed: R.int(1, 9999) });
 
   // a door in the floor of one room is a door in the ceiling of another
-  const hatchRooms = R.shuffle(rooms.filter((r) => r.kind === 'plain' && !r.crawl && r.W >= 3.4 && r.D >= 3.4 && r.H >= 2.4));
+  const hatchRooms = R.shuffle(rooms.filter((r) => r.kind === 'plain' && !r.crawl && r.W >= 3.4 && r.D >= 3.4 && r.H >= 2.4 && !traced(r)));
   for (let k = 0, pairs = R.pick([0, 1, 1, 2]); k < pairs && hatchRooms.length >= 2; k++) {
     const a = hatchRooms.pop(), b = hatchRooms.pop();
     a.dress.unshift({ type: 'floordoor', to: b.id, turn: 0, n: 0, seed: R.int(1, 9999) });
@@ -997,9 +1033,9 @@ function dress(R, level, o, opt, keeper = false) {
   }
 
   // the thin place — on every floor, though only the last floor's gives — and the other walls somebody tried
-  const thin = thinPlace(rooms, R.fork('thin'));
+  const thin = thinPlace(rooms, R.fork('thin'), traced);
   if (!thin) return null;
-  for (const mark of decoyMarks(rooms, R.fork('marks'), thin)) { const { room: id, ...item } = mark; rooms[id].dress.push({ ...item, turn: 0, n: 0 }); }
+  for (const mark of decoyMarks(rooms, R.fork('marks'), thin, traced)) { const { room: id, ...item } = mark; rooms[id].dress.push({ ...item, turn: 0, n: 0 }); }
 
   // Near a seam the parts run into each other: it is one building, and it changes as you go. The last rooms before
   // the way down have the next part's carpet (and, right at the door, its wallpaper); the room you land in and the

@@ -283,7 +283,7 @@ building every time.
 | `kit.js` | meshes, baked light, textures |
 | `themes.js` | what each kind of floor is like |
 | `stairwell.js` (also the hole, the ledge and the chute), `thin.js`, `marks.js`, `leaving.js` | the way down, and the taped door at the bottom of the last of it; the wall that gives and the walls that knock back; where the marks go, and the rule for leaning (`lean`, `answer`); what the camcorder sees as you leave |
-| `traces.js` | what earlier visitors left |
+| `traces.js` | what earlier visitors left: the marks on walls, the camp, and six things found in plain rooms (`TRACES` in `gen.js`: a camp left in a hurry, arrows that disagree, a note that stops, a tape measure run out, a map that is wrong, a queue at a bare wall) — two or three to a floor at most, far apart, in rooms with nothing else in them and no oddity next door |
 | `loot.js` | tapes and the keycard: where they hide, what is kept |
 | `pursuer.js`, `reach.js` | what follows you, and the rule for being within arm's reach of it (pure: the tape tears, and it moves in the torn frames) |
 | `player.js`, `input.js`, `hud.js`, `vhs.js`, `sound.js` | walking, keys and touch, the camcorder, the tape, the hum |

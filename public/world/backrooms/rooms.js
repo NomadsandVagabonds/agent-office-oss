@@ -9,7 +9,7 @@ import { Batch, lin, atlas, drawText, WHITE } from './kit.js';
 import { makeCutout, drawPortrait } from './cutout.js';
 import { TILE, RISE, RUN, wallPoint, pinchHalf } from './gen.js';
 import { P, clamp, turnTo, framed, card, scatter, doorLeaf, doorFrame, wetSign, standee, mugVox, floorPlan } from './bits.js';
-import { marks } from './traces.js';
+import { marks, trace } from './traces.js';
 import { thinWall, refuses } from './thin.js';
 import { MORE } from './rooms2.js';
 import { stairwell } from './stairwell.js';
@@ -99,6 +99,7 @@ function ceilDoor(c) {
 
 function dressing(c, item) {
   const R = c.R;
+  if (item.type === 'trace') { trace(c, item); return; }                   // something an earlier visitor left (traces.js)
   if (item.type === 'boxes') {
     const s = c.spot(0.65, { head: 1.0 }); if (!s) return;
     c.prop('boxes', s.x, s.z, { rot: item.turn, o: { variant: item.seed % 3 }, fallback: [0.8, 0.7, 0.8] });

@@ -93,12 +93,13 @@ function places(rooms, room, need, outer) {
  * The stretch of wall that would give. A plain room you can stand up in, at least MIN_OUT_STEPS doorways from the
  * landing, and as near the fire exit as there is one — the place its signs have been leading to all along is the
  * place to start looking.
+ * `taken(room)`: rooms that are spoken for (something an earlier visitor left is in them: gen.js).
  * @returns {{room:number, side:string, at:number, w:number}|null}  in that room's own frame; null: this floor has no such wall
  */
-export function thinPlace(rooms, R) {
+export function thinPlace(rooms, R, taken = () => false) {
   const options = [];
   for (const room of rooms) {
-    if (room.kind !== 'plain' || room.crawl || room.depth < MIN_OUT_STEPS || room.H < 2.3) continue;
+    if (room.kind !== 'plain' || room.crawl || room.depth < MIN_OUT_STEPS || room.H < 2.3 || taken(room)) continue;
     const spots = places(rooms, room, MARK_W, true);
     if (spots.length) options.push({ room, spot: R.pick(spots) });
   }
@@ -124,8 +125,8 @@ const STYLES = ['tape', 'tape', 'tape', 'pencil', 'pencil', 'tally'];
  * The other walls somebody tried: a few to a floor, anywhere a wall is bare. Each is a thing left in a room, like the
  * rest of what is left in rooms: { room, type: 'marks', side, at, style, seed }.
  */
-export function decoyMarks(rooms, R, thin) {
-  const able = rooms.filter((r) => (r.kind === 'plain' || r.kind === 'start') && !r.crawl && r.H >= 2.3 && !(thin && r.id === thin.room));
+export function decoyMarks(rooms, R, thin, taken = () => false) {
+  const able = rooms.filter((r) => (r.kind === 'plain' || r.kind === 'start') && !r.crawl && r.H >= 2.3 && !(thin && r.id === thin.room) && !taken(r));
   const out = [];
   for (const room of R.shuffle(able)) {
     if (out.length >= 4) break;

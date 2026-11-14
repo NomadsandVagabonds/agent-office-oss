@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { generate, sketch, DECK, ARCHETYPES, SIDES, T, RISE, toWorld, wallLength, wallPoint, floorAt, ceilAt, headAt, fitsAt, stairZones,
-  roomDistances, roomPath, makeRng, MIN_EXIT_STEPS, MIN_ODD, MAX_ODD, MAX_ROOMS, coinSpots, STASH, THING_CHANCE } from '../public/world/backrooms/gen.js';
+  roomDistances, roomPath, makeRng, MIN_EXIT_STEPS, MIN_ODD, MAX_ODD, MAX_ROOMS, coinSpots, STASH, THING_CHANCE, TRACES } from '../public/world/backrooms/gen.js';
 import { layoutOf, standable, TELLS, HALLS, NARROW, LOW, HIGH } from '../public/world/backrooms/quiet.js';
 import { THEME_IDS } from '../public/world/backrooms/themes.js';
 
@@ -503,8 +503,9 @@ test('an empty room is the point: hardly any plain room has something left in it
     let withThing = 0, rooms = 0;
     for (const level of floorsOf(theme)) {
       const plain = level.rooms.filter((r) => r.kind === 'plain' || r.kind === 'start');
+      // (what an earlier visitor left — two or three to a floor — is counted with the things: it is the same promise)
       const left = plain.filter((r) => r.dress.some((d) => !['marks', 'map', 'floordoor', 'ceildoor'].includes(d.type))).length;
-      assert.ok(left / plain.length <= 0.35, `${theme}, ${level.seed}: something left in ${left} of ${plain.length} plain rooms`);
+      assert.ok(left / plain.length <= 0.4, `${theme}, ${level.seed}: something left in ${left} of ${plain.length} plain rooms`);
       withThing += left; rooms += plain.length;
       // from where you land to the way down: runs of plain rooms, with the oddities between them
       const path = roomPath(level, level.start.room, level.exit.room).map((id) => level.rooms[id]);
@@ -513,6 +514,36 @@ test('an empty room is the point: hardly any plain room has something left in it
       assert.ok(best >= 2, `${theme}, ${level.seed}: never two plain rooms running on the way down`);
       assert.ok(quiet / path.length >= 0.6, `${theme}, ${level.seed}: only ${quiet} of the ${path.length} rooms on the way down are plain`);
     }
-    assert.ok(withThing / rooms <= 0.12, `${theme}: something has been left in ${Math.round((100 * withThing) / rooms)}% of plain rooms`);
+    assert.ok(withThing / rooms <= 0.2, `${theme}: something has been left in ${Math.round((100 * withThing) / rooms)}% of plain rooms`);
   }
+});
+
+test('what earlier visitors left: two or three to a floor at most, each a different thing, far apart, in rooms with nothing else in them and no oddity next door', () => {
+  const seen = new Map(), perFloor = [0, 0, 0, 0];
+  for (const theme of THEME_IDS) for (const level of floorsOf(theme)) {
+    const rooms = level.rooms.filter((r) => r.dress.some((d) => d.type === 'trace')), where = `${theme}, ${level.seed}`;
+    assert.ok(rooms.length <= 3, `${where}: ${rooms.length} traces on one floor`);
+    perFloor[rooms.length]++;
+    const kinds = rooms.map((r) => r.dress[0].kind);
+    assert.equal(new Set(kinds).size, kinds.length, `${where}: the same thing twice (${kinds})`);
+    for (const r of rooms) {
+      const item = r.dress[0];
+      assert.ok(TRACES.includes(item.kind), `${where}: ${item.kind}`);
+      seen.set(item.kind, (seen.get(item.kind) || 0) + 1);
+      assert.equal(r.dress.length, 1, `${where}, room ${r.id}: something else is in the room with it`);
+      assert.ok(r.kind === 'plain' && !r.crawl && !r.shape && r.id !== level.start.room && r.id !== level.thin.room && r.toExit >= 2, `${where}, room ${r.id}`);
+      assert.ok(!(level.pursuer && level.pursuer.room === r.id), `${where}: in the mascot's room`);
+      for (const d of r.doors) assert.notEqual(level.rooms[d.to].kind, 'special', `${where}, room ${r.id}: next door to ${level.rooms[d.to].arch}`);
+      const dist = roomDistances(level, r.id);
+      for (const o of rooms) if (o !== r) assert.ok(dist.get(o.id) >= 3, `${where}: rooms ${r.id} and ${o.id} are ${dist.get(o.id)} doorways apart`);
+      if (item.kind === 'note') {
+        assert.ok(Array.isArray(item.text) && item.text.length >= 3 && item.text.length <= 6 && item.text.every((l) => typeof l === 'string' && l.length <= 24), `${where}: ${JSON.stringify(item.text)}`);
+        assert.ok(!/[.!?…—]$/.test(item.text[item.text.length - 1].trim()), `${where}: "${item.text[item.text.length - 1]}" — the note finishes its sentence`);
+        assert.ok(!/[{}]/.test(item.text.join('')), `${where}: a blank nobody filled in`);
+      }
+    }
+  }
+  assert.deepEqual([...seen.keys()].sort(), TRACES.slice().sort(), 'every kind of thing turns up somewhere');
+  const floors = perFloor.reduce((a, b) => a + b, 0);
+  assert.ok(perFloor[0] / floors < 0.2 && (perFloor[2] + perFloor[3]) / floors > 0.6, `floors with none, one, two, three: ${perFloor}`);
 });
