@@ -904,6 +904,33 @@ The rest of a session's public view: `id` (= `agentId`), `adapter`, `label`,
 (`[{ id, promptId, kind, category, title }]`), `grants`, `features`, `nativeRef`,
 `origin`, `usage`, `limits`, `caps`, `wakeStats`.
 
+### In the interface (`public/world/ui/`)
+
+Nothing in the client knows which agent is on the other end; it draws what the
+two self-descriptions above say.
+
+- **`answers.js`** turns a prompt's `ask` and `respond.actions` into controls:
+  stamps for `allow-once` / `allow-session` / `reject` (with a line saying what
+  "always" covers, in the daemon's own words), the agent's own choices for a
+  question (one tap answers a single question; several questions get a line
+  each and are sent together, one answer per line, in order), a write-back line
+  wherever an action's `text` is `optional` or `required`, and the
+  `decline` / `dismiss` action for the caller to place.
+- **`needs.js`** — the in-tray — shows one request at a time on a slip built
+  from that, and links to the session's record.
+- **`terminal.js`** — the Sessions panel (`T`) — lists driven sessions (live,
+  and the last few finished), the tmux terminals, and recent delegations;
+  starts an agent from any adapter that is `available`; holds the office-wide
+  pause switch for automatic turns.
+- **`driven.js`** draws a session's transcript as a record and follows it live
+  (`transcript:watch`), with the same answer controls inline on every request
+  that is still open, and the session's `controls` underneath: a turn, stop,
+  end (asks twice), `wake`, `mode` (asks twice before `full`; shown fixed, with
+  the reason, when `available` is false), and "deliver its mail" when
+  `wakeStats.held` says mail is being held back.
+- A transcript is refused to a browser that is not on the office's machine;
+  the panel says so instead of showing an empty page.
+
 ### Bus (all additive; `core/contract.mjs` `EV`)
 
 | event | payload | who gets it |
@@ -1168,9 +1195,10 @@ In rough order of value:
   the first-turn framing.
 - **Per-actor identity** — everything in section 15's list — before any
   network exposure.
-- **The client.** The data is all on the bus and self-describing (`ask`,
-  `respond`, `controls`); the 3D client's cards, transcript view and session
-  controls are being built on it separately.
+- **The client, further.** The 3D client now has all of this (section 14, "In
+  the interface"). Still to do there: a finished session's record is read
+  whole rather than paged, a long streamed reply is redrawn rather than
+  appended to, and tool output is plain text (no diff view for edits).
 
 Things in T3 Code this work did not get to, which the owner may want to look
 at: its git checkpointing (`apps/server/src/checkpointing/`), its handling of
