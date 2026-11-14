@@ -396,6 +396,15 @@ const SKETCH = {
       g.strokeRect(x + 12, 38, 9, 13);
     }
   },
+  'mecha-warden'(g) {                                                 // a square man with a square head and hair that is not his; a cage with nobody in it; a button, gone over and over
+    g.strokeRect(14, 14, 18, 16); g.fillRect(19, 20, 3, 3); g.fillRect(25, 20, 3, 3);
+    g.beginPath(); g.moveTo(11, 16); g.lineTo(13, 9); g.lineTo(34, 7); g.lineTo(36, 15); g.stroke();
+    g.strokeRect(12, 32, 22, 26);
+    g.beginPath(); g.moveTo(17, 58); g.lineTo(17, 86); g.moveTo(29, 58); g.lineTo(29, 86); g.moveTo(12, 36); g.lineTo(5, 56); g.moveTo(34, 36); g.lineTo(41, 56); g.stroke();
+    g.strokeRect(50, 40, 38, 46);
+    for (let x = 57; x < 88; x += 7) { g.beginPath(); g.moveTo(x, 40); g.lineTo(x, 86); g.stroke(); }
+    for (let i = 0; i < 5; i++) { g.beginPath(); g.arc(69, 20, 5 + i * 1.6, i, i + 5.6); g.stroke(); }
+  },
   unknown(g) { g.beginPath(); g.arc(48, 46, 22, 0.4, 5.6); g.stroke(); g.font = '700 30px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.fillText('?', 48, 58); },
 };
 

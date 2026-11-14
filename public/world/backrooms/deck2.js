@@ -117,10 +117,18 @@ export const MORE_DECK = [
       canisters: R.int(3, 6),
       stamp: fill('ROUTED FOR {NAME}', o, R).toUpperCase(),
     }) },
-  // Dispatch (after Codex's): the first room from the news. Wordless and unnamed. One a visit at most, where the plan puts it.
+  // Dispatch (after Codex's): the first room from the news. Wordless and unnamed (as such a room is, unless the owner has said what is written in it). One a visit at most, where the plan puts it.
   { id: 'dispatch', name: 'Dispatch', landmark: 'the wooden shipping crates', w: [18, 20], d: [20, 20], h: [5, 6], ports: [], weight: 0.45, lights: 'dim',
     headline: true, big: true, module: './rooms/dispatch.js', stash: (r) => freightStash(r),
-    roll: (R) => ({ layoutSeed: R.int(1, 0x7fffffff), wood: R.pick(['#9b7950', '#8b7350', '#a0875d']) }) },  // Rooms with somebody living in them (after Gemini's third pack). A part of the building gets one of these at most
+    roll: (R) => ({ layoutSeed: R.int(1, 0x7fffffff), wood: R.pick(['#9b7950', '#8b7350', '#a0875d']) }) },
+  // MECHA (Codex's training floor): the second room from the news, and the one whose words the owner has written. Its
+  // wardens stay in it (resident), and ten seconds in its empty cage cost two hearts. docs/MECHA.md has the room.
+  { id: 'mecha', name: 'MECHA Training Floor', landmark: 'the people in cages training their replacements',
+    w: [24, 26], d: [24, 26], h: [5.6, 5.6], ports: ['left', 'right', 'back'], weight: 0.6,
+    lights: 'dark', headline: true, big: true, module: './rooms/mecha.js', resident: 'mecha-warden', caught: 2, items: [],
+    stash: (r) => [-3.6, r.D / 2 - 1.6, -2.6, r.D / 2 - 0.8],
+    roll: (R) => ({ percentages: [97.8, 84.2, 92.6, 76.4, 99.5, 88.1, 95.2, 81.7].map(n => +(n + R.range(-0.3, 0.3)).toFixed(1)),
+      batch: R.int(104, 980), variation: R.int(0, 4) }) },  // Rooms with somebody living in them (after Gemini's third pack). A part of the building gets one of these at most
   // (plan.js). resident: who it is, for the count of a visit · items: what they care about that a visitor might carry
   // (supplies.js leaves such things about on that part) · caught: the hearts it costs to be got by them.
   {
