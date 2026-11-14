@@ -20,6 +20,8 @@ import { playRide } from './ride.js';
 
 /** Where each floor's module lives; loaded the first time somebody rides there. */
 const MODULES = {
+  nightshift: () => import('./nightshift.js'),
+  scranton: () => import('./scranton.js'),
   roof: () => import('./roof.js'),
   mission: () => import('./mission.js'),
   pasture: () => import('./pasture.js'),
