@@ -100,5 +100,14 @@ export function placePickup(c, kind, x, z, y = 0, opt = {}) {
   const type = KINDS[kind];
   let slot = type ? kind : null;
   if (type) c.leave(type, x, z, { y, quantity: opt.quantity ?? (type === 'paper' ? 3 : 1), taken: () => { slot = null; opt.onTake?.(kind, null); } });
+  // a visit without pockets: the thing itself lies there, and E puts it in the one hand there is (items.js)
+  if (type) {
+    const prop = buildItemProp(c.kit, kind), w = c.toWorld(x, z);
+    prop.position.set(x, y, z); prop.visible = false; c.add(prop);
+    c.after.push(() => prop.userData.light(c.sample(x, y + 0.3, z).map((v) => Math.max(0.2, v))));
+    c.tick(() => { prop.visible = !c.env.inventory && slot === kind; });
+    c.use({ x, z, r: opt.r ?? 1.5, cone: opt.cone ?? 0.45, when: () => !c.env.inventory && slot === kind && c.env.hand?.get() === null,
+      use: () => { if (c.env.hand.give(kind) === null) { slot = null; c.env.play(isPaper(kind) ? 'rustle' : 'click', w.x, w.z, 4); opt.onTake?.(kind, null); } } });
+  }
   return { get: () => slot, set(next) { if (KINDS[next]) { slot = next; c.leave(KINDS[next], x, z, { y }); } else slot = null; } };
 }

@@ -19,10 +19,15 @@ test('the hand, as a resident asks after it: the selected pocket in the words a 
   assert.ok(isPaper('papers') && isPaper('pink-slip') && !isPaper('balloon'));
   assert.ok(isBalloon('balloon') && !isBalloon('papers') && isFlashlight('flashlight') && !isFlashlight('pink-slip'));
   assert.equal(kindOf({ type: 'paper' }), 'papers'); assert.equal(kindOf({ type: 'torch' }), 'flashlight'); assert.equal(kindOf({ type: 'snack' }), null); assert.equal(kindOf(null), null);
-  // no pockets at all: an empty hand, and nothing breaks
+  // no pockets at all: an empty hand to begin with, and nothing breaks
   const none = createHandOver(() => null);
   assert.equal(none.there(), false); assert.equal(none.get(), null); assert.ok(!none.hasPaper() && !none.hasBalloon() && !none.hasFlashlight());
-  assert.equal(none.consume(isPaper), null); assert.equal(none.give('pink-slip'), 'pink-slip', 'nowhere to put it: it stays where it was');
+  assert.equal(none.consume(isPaper), null);
+  // …but a visit without pockets still has a hand, which holds one thing: no room that wants something carried is impossible there
+  assert.equal(none.give('flashlight'), null); assert.ok(none.hasFlashlight(), 'with no pockets there is no switch: a torch in the hand is on');
+  assert.equal(none.give('papers'), 'papers', 'the hand is full: it stays where it was');
+  assert.equal(none.consume(isPaper), null); assert.equal(none.consume(isFlashlight), 'flashlight'); assert.equal(none.get(), null);
+  assert.equal(none.give('pink-slip'), null); assert.ok(none.hasPaper()); assert.equal(none.consume(isPaper), 'pink-slip');
   // a stack of paper: one sheet at a time
   let p = pockets({ id: 'a', type: 'paper', quantity: 2 }), hand = createHandOver(() => p);
   assert.ok(hand.hasPaper() && hand.has('papers') && !hand.hasBalloon());

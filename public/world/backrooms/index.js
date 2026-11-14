@@ -395,7 +395,7 @@ async function visit(office, opt) {
     // …which with pockets is a weak one, enough not to walk into the furniture: a torch in the hand is the light, and
     // it works wherever its owner switches it on
     const lamp = light < 0.11 && !here?.noTorch ? 1 : 0;
-    const wantTorch = inventory ? Math.max(inventory.torchPower(), lamp * OWN_LAMP) : lamp;
+    const wantTorch = inventory ? Math.max(inventory.torchPower(), lamp * OWN_LAMP) : Math.max(lamp, env.hand?.hasFlashlight?.() ? 1 : 0);          // (no pockets: a torch in the hand is simply on)
     torch += (wantTorch - torch) * (1 - Math.exp(-3 * dt));
     cur.kit.shared.uTorch.value = torch * 1.5;
     hud.flag('LIGHT', torch > 0.5);
