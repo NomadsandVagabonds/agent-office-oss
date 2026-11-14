@@ -308,8 +308,7 @@ export async function enter(office) {
     carriedJelly.visible = ['mixed', 'carrying'].includes(game.stage);
     carriedStapler.visible = game.stage === 'borrowed';
     assistant.setPose(game.stage === 'won' ? 'facepalm' : 'type');
-    const desk = stations.get('stapler');
-    if (desk) desk.label = bareStapler.visible ? 'the stapler' : 'the stapler’s desk';
+    rename('stapler', bareStapler.visible ? 'the stapler' : 'the stapler’s desk');
     redraw();
   }
   function action(type) {
@@ -340,10 +339,12 @@ export async function enter(office) {
   }
   function station(id, point, label, object, use, reach = 1.5, available = () => true) {
     const entry = w.thing({ ...point, label, object, reach,
-      hidden: () => !available() || !clearPath(point),
+      hidden: () => entry.renamed > 0 || !available() || !clearPath(point),
       use() { if (entry.hidden() || Math.hypot(w.me.x - point.x, w.me.z - point.z) > reach) return; use(); } });
     stations.set(id, entry); return entry;
   }
+  // The kit reads a chip's words as you come within reach, so a thing renamed while you stand at it steps away for two frames.
+  function rename(id, label) { const entry = stations.get(id); if (entry && entry.label !== label) { entry.label = label; entry.renamed = 2; } }
   // The chip only ever names the thing (the kit puts the key in front of it); what it does is found by doing it.
   station('memo', SPOTS.memo, 'the memo', memo.mesh, () => {
     if (['ready', 'won', 'lost'].includes(game.stage)) action({ type: 'start', mode: 'relaxed' });
@@ -430,6 +431,7 @@ export async function enter(office) {
       cardOutAt = 0;
       if (jellyCard.visible) { const at = jellyCard.getWorldPosition(new THREE.Vector3()); w.loot({ item: 'card', x: at.x, z: at.z, y: at.y, reach: 0, hover: 0, scale: 0.7 })?.take(); }
     }
+    for (const entry of stations.values()) if (entry.renamed > 0) entry.renamed--;
     for (let i = reveals.length - 1; i >= 0; i--) {
       const r = reveals[i], k = Math.min(1, (t - r.t0) / 0.45);
       if (r.rise) r.coin.moveTo(r.x, r.z, r.y + r.rise * (reducedMotion ? 1 : k * (2 - k)));
@@ -439,7 +441,7 @@ export async function enter(office) {
       awardUp = Math.max(0, awardUp - dt);
       const k = reducedMotion ? Number(awardUp > 0) : Math.max(0, Math.min(1, (AWARD_UP - awardUp) / 0.3, awardUp / 0.3));
       const lift = k * k * (3 - 2 * k);
-      award.position.y = 0.7 + 0.36 * lift; award.rotation.z = 0.2 * lift;
+      award.position.set(8.2 + 0.32 * lift, 0.7 + 0.36 * lift, -4.25); award.rotation.z = 0.2 * lift;      // up and to one side, clear of what was under it
     }
     for (const person of people) {
       const pose = person.id === 'assistant-to' && game.stage === 'won' ? 'facepalm'

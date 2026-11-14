@@ -207,7 +207,7 @@ export async function enter(office) {
   for (const coin of LEVEL.coins) {
     if (!game.left.coins.includes(coin.n)) continue;
     const pickup = makePickup('coin', { scale: COIN_SCALE, hover: 0 });
-    pickup.group.position.set(coin.x, coin.y - 4.5 * 0.025 * COIN_SCALE, 1.1);
+    pickup.group.position.set(coin.x, coin.y - 4.5 * 0.025 * COIN_SCALE, 1.16);          // just in front of the lane you walk in
     w.scene.add(pickup.group); w.own(pickup);
     coins.set(coin.n, pickup);
   }
