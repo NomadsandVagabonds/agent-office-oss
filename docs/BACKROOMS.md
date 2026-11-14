@@ -511,6 +511,7 @@ the office is: the seed is the clock, and no building is ever given twice.
 | `plan.js` | a visit from its seed: how many floors, which kind each is and how it ends, what is hidden where, what each floor may take for granted |
 | `gen.js` | the generator and the first deck. Pure: no three.js, no DOM. `frame.js` is its geometry |
 | `deck2.js` | the deck, continued: where new rooms' lines go |
+| `rooms/vestibule.js`, `rooms/copiers.js`, `rooms/quiet-zone.js`, `rooms/mailroom.js` | four ordinary rooms dealt by chance: revolving doors that carry you (one of them out of the ceiling), photocopiers of which one prints the way on, a soundproofed room that shuts if you run in it and opens when you stand still, and a brass tube that sends a canister down whichever pipe leads toward the way down |
 | `rooms/` | one file to a room, for every room written since the first deck |
 | `rooms.js` … `rooms4.js` | the first deck's builders, and the plain room |
 | `world.js` | builds a generated floor: the toolbox (`roomContext`), collision, the doorway check |
