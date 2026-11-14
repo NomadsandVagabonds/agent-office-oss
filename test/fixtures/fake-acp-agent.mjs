@@ -19,7 +19,17 @@ const PINGPONG = process.argv.includes('--pingpong');
 const SESSION_ID = 'fake-session-1';
 
 const seen = { protocolVersion: null, clientInfo: null, clientCapabilities: null, mcp: [], mcpTyped: null,
-  cwd: '', cancelHadId: null, authenticated: false, prompts: 0, framed: 0, handoffs: 0, tasks: 0 };
+  cwd: '', cancelHadId: null, authenticated: false, prompts: 0, framed: 0, handoffs: 0, tasks: 0,
+  // what it was told to run with, as it stands now (the small model cannot think as hard as the large one)
+  settings: { model: 'fake-large', effort: 'medium', mode: 'default' } };
+const MODELS = [{ id: 'fake-large', name: 'Fake Large' }, { id: 'fake-small', name: 'Fake Small' }];
+const effortsNow = () => (seen.settings.model === 'fake-small' ? ['low', 'medium'] : ['low', 'medium', 'high']);
+// The session's choices as config options: v2 has nothing else; v1 uses one for the level of effort only.
+const configOptions = () => [
+  ...(V2 ? [{ configId: 'model', name: 'Model', category: 'model', type: 'select', currentValue: seen.settings.model, options: MODELS.map((m) => ({ value: m.id, name: m.name })) }] : []),
+  { configId: 'effort', name: 'Thinking', category: 'thought_level', type: 'select', currentValue: seen.settings.effort,
+    options: effortsNow().map((e) => ({ value: e, name: e[0].toUpperCase() + e.slice(1) })) },
+];
 let office = null;
 let officeMcp = null;                    // the MCP server entry the office injected, as given
 let nextId = 9000;                       // ids for requests WE send (permission requests)
@@ -125,6 +135,7 @@ async function runTurn(promptText) {
         while (!state.cancelled || state.ignoreCancel) { chunk('.'); await sleep(25); }
         break;
       case 'ignore-cancel': state.ignoreCancel = true; break;
+      case 'mode': seen.settings.mode = arg; update({ sessionUpdate: 'current_mode_update', currentModeId: arg }); break;
       case 'crash':
         process.stderr.write('warming up\nError: boom (the fake agent was told to crash)\n    at fake (fake.js:1:1)\n');
         await sleep(20);
@@ -213,21 +224,32 @@ readLines(async (msg) => {
       officeMcp = (params.mcpServers || []).find((s) => s.name === 'office') || null;
       office = officeFromEnv(officeMcp?.env);
       reply(id, V2
-        ? { sessionId: SESSION_ID, configOptions: [{ configId: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'fake-large',
-          options: [{ value: 'fake-large', name: 'Fake Large' }, { value: 'fake-small', name: 'Fake Small' }] }] }
-        : { sessionId: SESSION_ID,
-          modes: { currentModeId: 'default', availableModes: [{ id: 'default', name: 'Default' }, { id: 'yolo', name: 'YOLO' }] },
-          models: { currentModelId: 'fake-large', availableModels: [{ modelId: 'fake-large', name: 'Fake Large' }, { modelId: 'fake-small', name: 'Fake Small' }] } });
+        ? { sessionId: SESSION_ID, configOptions: configOptions() }
+        : { sessionId: SESSION_ID, configOptions: configOptions(),
+          modes: { currentModeId: 'default', availableModes: [{ id: 'default', name: 'Default' }, { id: 'plan', name: 'Plan' }, { id: 'yolo', name: 'YOLO' }] },
+          models: { currentModelId: 'fake-large', availableModels: MODELS.map((m) => ({ modelId: m.id, name: m.name })) } });
       return;
     case 'session/set_model':
-      if (!['fake-large', 'fake-small'].includes(params.modelId)) { fail(id, -32602, 'unknown model'); return; }
+      if (!MODELS.some((m) => m.id === params.modelId)) { fail(id, -32602, 'unknown model'); return; }
+      seen.settings.model = params.modelId;
       reply(id, {});
+      // a model that cannot think as hard drops to what it can, and says so, as a real agent would
+      if (!effortsNow().includes(seen.settings.effort)) { seen.settings.effort = 'medium'; update({ sessionUpdate: 'config_option_update', configOptions: configOptions() }); }
       return;
     case 'session/set_config_option':
-      if (!['fake-large', 'fake-small'].includes(params.value)) { fail(id, -32602, 'unknown model'); return; }
-      reply(id, { configOptions: [] });
+      if (params.configId === 'effort') {
+        if (!effortsNow().includes(params.value)) { fail(id, -32602, `this model thinks at ${effortsNow().join(', ')}`); return; }
+        seen.settings.effort = params.value;
+      } else {
+        if (!MODELS.some((m) => m.id === params.value)) { fail(id, -32602, 'unknown model'); return; }
+        seen.settings.model = params.value;
+        if (!effortsNow().includes(seen.settings.effort)) seen.settings.effort = 'medium';
+      }
+      reply(id, { configOptions: configOptions() });       // the whole list again: one choice can change another
       return;
     case 'session/set_mode':
+      if (!['default', 'plan', 'yolo'].includes(params.modeId)) { fail(id, -32602, 'unknown mode'); return; }
+      seen.settings.mode = params.modeId;
       reply(id, {});
       update({ sessionUpdate: 'current_mode_update', currentModeId: params.modeId });
       return;

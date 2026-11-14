@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { COMMANDS, choicesOf, complete, createConsole, markdown, parseInput, renderDiff, renderEntry, settled, shortFolder, width, wordsAction, wrap, STYLES } from '../core/console.mjs';
+import { COMMANDS, choicesOf, complete, createConsole, markdown, optionsOf, parseInput, renderDiff, renderEntry, resolveOption, settled, shortFolder, width, wordsAction, wrap, STYLES } from '../core/console.mjs';
 import { ROOT, sleep } from './helpers.mjs';
 import { startHarnessOffice, waitFor } from './fixtures/harness-helpers.mjs';
 import { TinyTerm, fakeTerminal } from './fixtures/tiny-term.mjs';
@@ -35,7 +35,7 @@ test('console: what a typed line means', () => {
   assert.deepEqual(parseInput('/compact'), { kind: 'turn', text: '/compact' });
   assert.deepEqual(parseInput('//mode is the name of my variable'), { kind: 'turn', text: '/mode is the name of my variable' });
   assert.deepEqual(complete('/se'), ['sessions']);
-  assert.deepEqual(complete('/m'), ['mode', 'mail']);
+  assert.deepEqual(complete('/m'), ['model', 'mode', 'mail']);
   assert.deepEqual(complete('/mode f'), [], 'only the command itself is completed');
   assert.equal(new Set(COMMANDS.flatMap((c) => [c.name, ...(c.alias || [])])).size, COMMANDS.reduce((n, c) => n + 1 + (c.alias || []).length, 0), 'no name means two things');
 });
@@ -241,6 +241,69 @@ test('console: typing gives a turn, answers what is waiting, and asks twice befo
   assert.deepEqual(bad.calls.pop(), ['WATCH', null]);
 });
 
+test('console: a model, an effort and the agent\'s own mode are picked from what the agent itself offers', async () => {
+  const h = harnessed({ 'GET /api/harness/sessions/d_1/transcript': { entries: [], seq: 0 } });
+  const at = '/api/harness/sessions/d_1';
+  const pickOf = (field, value, labels, extra = {}) => ({ method: 'PATCH', url: at, field, value, options: Object.keys(labels), labels, available: true, ...extra });
+  const offers = { model: pickOf('model', 'fake-large', { 'fake-large': 'Fake Large', 'fake-small': 'Fake Small' }), effort: pickOf('effort', 'medium', { low: 'Low', medium: 'Medium', high: 'High' }),
+    // this agent has a mode of its own that is called what one of the office's is called
+    agentMode: pickOf('agentMode', 'default', { default: 'Default', plan: 'Plan', ask: 'Ask' }) };
+  const having = (extra = {}) => h.session({ effort: 'medium', agentMode: 'default', ...extra, controls: { ...h.session().controls, ...offers, ...(extra.controls || {}) } });
+  h.con.harness({ sessions: [having()], adapters: [{ id: 'fake', label: 'Fake Agent', available: true }, { id: 'codex', label: 'Codex', available: false }] });
+  await h.con.open('ada');
+  h.calls.length = 0;
+
+  await h.con.submit('/model');
+  assert.equal(h.said.pop(), 'model: Fake Large (fake-large)\n  ▸ fake-large  Fake Large\n    fake-small  Fake Small');
+  await h.con.submit('/model fake-small');                 // by its id
+  await h.con.submit('/model Fake Large');                 // by the agent's name for it
+  await h.con.submit('/effort hi');                        // by the unmistakable start of either
+  await h.con.submit('/model fake');
+  assert.equal(h.said.pop(), '"fake" is not one of fake-large, fake-small.', 'two begin like that: neither is guessed');
+  await h.con.submit('/mode plan');                        // not one of the office's three words: one of the agent's own
+  await h.con.submit('/mode own:ask');                     // the agent's own "ask", said so
+  await h.con.submit('/mode ask');                         // the office's: how freely it may act
+  await h.con.submit('/mode sideways');
+  assert.equal(h.said.pop(), '"sideways" is not one of ask, edits, full — nor one of its own (default, plan, ask).');
+  await h.con.submit('/mode');
+  assert.deepEqual(h.said.slice(-2), ['It: ask. One of ask, edits, full.', 'its own mode: Default (default)\n  ▸ default  Default\n    plan  Plan\n    ask  Ask']);
+  assert.deepEqual(h.calls, [['PATCH', at, { model: 'fake-small' }], ['PATCH', at, { model: 'fake-large' }], ['PATCH', at, { effort: 'high' }],
+    ['PATCH', at, { agentMode: 'plan' }], ['PATCH', at, { agentMode: 'ask' }], ['PATCH', at, { mode: 'ask' }]]);
+
+  // an agent that takes any model is sent what was typed; one that offers no choice says so
+  h.con.harness({ sessions: [having({ state: 'running', controls: { model: { ...offers.model, free: true, applies: 'next-turn' }, effort: { ...offers.effort, options: [], labels: {}, available: false } } })] });
+  h.calls.length = 0;
+  await h.con.submit('/model my-own-finetune');
+  assert.equal(h.said.pop(), 'model: my-own-finetune — from the next turn');
+  await h.con.submit('/effort high');
+  assert.equal(h.said.pop(), 'This agent offers no choice of effort.');
+  assert.deepEqual(h.calls, [['PATCH', at, { model: 'my-own-finetune' }]]);
+  assert.deepEqual([resolveOption(offers.model, 'FAKE-SMALL'), resolveOption(offers.model, 'fake small'), resolveOption(offers.model, 'x'), resolveOption({ ...offers.model, free: true }, ' x '), resolveOption(offers.model, '')],
+    ['fake-small', 'fake-small', null, 'x', null]);
+  assert.deepEqual(optionsOf({ options: ['a', 'b'], labels: { a: 'A' } }), [{ id: 'a', label: 'A' }, { id: 'b', label: 'b' }]);
+
+  // what a half-typed line could become: the command, then the first word it takes
+  h.con.harness({ sessions: [having({ agentMode: 'plan' })] });
+  const labels = (text) => h.con.complete(text).map((o) => o.label);
+  assert.deepEqual(labels('/mo'), ['/model', '/mode']);
+  assert.deepEqual(h.con.complete('/sw')[0], { kind: 'command', text: '/switch ', label: '/switch', hint: '<number|name> — talk to another session', more: true });
+  assert.equal(h.con.complete('/model')[0].more, false, 'a command whose word is optional can be sent as it stands');
+  assert.deepEqual(h.con.complete('/model '), [{ kind: 'word', text: '/model fake-large', label: 'fake-large', hint: 'Fake Large' }, { kind: 'word', text: '/model fake-small', label: 'fake-small', hint: 'Fake Small' }]);
+  assert.deepEqual(labels('/mode '), ['ask', 'edits', 'full', 'default', 'plan'], 'the office\'s three, then the agent\'s own that are not called the same');
+  assert.deepEqual([labels('/mode p'), labels('/effort '), labels('/wake r'), labels('/new '), labels('/delegate '), labels('/switch a')], [['plan'], ['low', 'medium', 'high'], ['results'], ['fake'], ['any', 'fake'], ['Ada']]);
+  assert.deepEqual([labels('/model fake-small'), labels('/help me'), labels('hello'), labels('/nope ')], [[], [], [], []]);
+
+  // the line at the bottom says what it runs on; a screen that shows that elsewhere asks for the short form
+  const line = (spans) => spans.map(([t]) => t).join('');
+  assert.equal(line(h.con.status()[0]), 'Ada  Fake Agent · fake-large · medium · ask  Plan mode  idle');
+  assert.equal(line(h.con.status({ brief: true })[0]), 'Ada  idle');
+
+  // carrying this conversation on with another agent
+  h.calls.length = 0;
+  await h.con.submit('/new fake --context --model fake-small --effort low');
+  assert.deepEqual(h.calls[0], ['POST', '/api/harness/sessions', { adapter: 'fake', cwd: '/work/app', model: 'fake-small', effort: 'low', context: { session: 'd_1' } }]);
+});
+
 test('console: the pretend terminal behaves like one', () => {
   const t = new TinyTerm(10, 3);
   t.write('ab\r\ncd\r\nef\r\ngh');
@@ -293,7 +356,7 @@ test('console: office chat, through a pipe and on a terminal', async (t) => {
     const all = () => term.term.text();
     await waitFor(() => /◆ Fake Agent/.test(screen()), { what: 'the session to be on screen' });
     assert.deepEqual([term.term.cursor().row, term.term.cursor().x], ['>', 2], 'the cursor waits at the prompt');
-    assert.match(term.term.screen().filter(Boolean).pop(), /^Bo {2}Fake Agent · fake-large · ask {2}idle/, 'and the last row says where things stand');
+    assert.match(term.term.screen().filter(Boolean).pop(), /^Bo {2}Fake Agent · fake-large · medium · ask {2}idle/, 'and the last row says where things stand: who, on what, how hard, how freely');
 
     // typing, with an edit in the middle of the line
     await term.type('say: helo');
@@ -320,6 +383,16 @@ test('console: office chat, through a pipe and on a terminal', async (t) => {
     assert.equal(term.term.cursor().row, '> /sessions');
     await term.press('enter');
     await waitFor(() => /▸ Bo {2}Fake Agent/.test(all()), { what: 'the list of sessions' });
+
+    // …and the word after it: the model, from what this agent offers. The office puts the change to the agent and writes it down.
+    await term.type('/mod'); await term.press('tab');
+    assert.equal(term.term.cursor().row, '> /mod', 'two commands begin like that: Tab lists them and takes neither');
+    assert.match(all(), /\/model {2}\/mode/);
+    await term.type('el fake-s'); await term.press('tab');
+    assert.equal(term.term.cursor().row, '> /model fake-small');
+    await term.press('enter');
+    await waitFor(() => /model: Fake Small \(fake-small\)/.test(all()) && /Model set to “Fake Small” by Lead\./.test(all()), { what: 'the model to change' });
+    await waitFor(() => /^Bo {2}Fake Agent · fake-small · medium · ask {2}idle/.test(term.term.screen().filter(Boolean).pop()), { what: 'the status row to say so' });
 
     // Esc stops a turn in flight
     await term.type('slow'); await term.press('enter');

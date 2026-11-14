@@ -17,3 +17,5 @@ node_modules/
 *.log
 .DS_Store
 .eyes/
+# Worktrees that helper agents work in
+.claude/worktrees/

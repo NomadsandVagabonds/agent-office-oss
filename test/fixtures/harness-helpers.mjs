@@ -29,6 +29,7 @@ export const ADAPTERS = [
   { id: 'chatty', label: 'Chatty Agent', protocol: 'acp', command: NODE, args: [ACP, '--pingpong'], provider: 'opencode' },
   { id: 'fake-codex', label: 'Fake Codex', protocol: 'codex-app-server', command: NODE, args: [CODEX], provider: 'codex' },
   { id: 'fake-codex-old', label: 'Fake Codex (old)', protocol: 'codex-app-server', command: NODE, args: [CODEX, '--no-limits'], provider: 'codex' },
+  { id: 'fake-codex-stubborn', label: 'Fake Codex (stubborn)', protocol: 'codex-app-server', command: NODE, args: [CODEX, '--stubborn'], provider: 'codex' },
 ];
 
 /** Poll until `fn` returns something truthy (it may be async). */

@@ -464,8 +464,16 @@ T3's generated schema for `codex-rs/app-server-protocol`.
                       config: { "mcp_servers.office": { command, args, env } } }
 ← result            { thread: { id, … }, model, … }
 
-→ turn/start        { threadId, input: [{ type: "text", text }] }
+→ turn/start        { threadId, input: [{ type: "text", text }],
+                      model?, effort?, approvalPolicy?, sandboxPolicy?: { type: readOnly | workspaceWrite | dangerFullAccess },
+                      collaborationMode?: { mode: "default" | "plan", settings: { model, reasoning_effort? } } }
+                                               only what somebody chose since the thread started; Codex keeps it for the thread
 ← result            { turn: { id, status: "inProgress" } }
+← thread/settings/updated { threadSettings: { model, effort?, approvalPolicy, sandboxPolicy, collaborationMode } }
+                                               what the thread runs with, in Codex's own words
+
+→ model/list        { cursor? }                (once, after the thread starts; never waited for; pages followed)
+← result            { data: [{ model, displayName, hidden, defaultReasoningEffort, supportedReasoningEfforts: [{ reasoningEffort }] }], nextCursor? }
 ← turn/started      { threadId, turn: { id } }
 ← item/started | item/completed   { threadId, turnId, item: { id, type, … } }
        type: agentMessage { text } · commandExecution { command, status, exitCode?, aggregatedOutput? }
@@ -499,6 +507,11 @@ soon as the id is known. Requests the office does not serve (token refresh,
 dynamic tools, MCP elicitation) are answered "method not found". Notifications
 for another `threadId` (a sub-agent's) are ignored. A limits snapshot for a
 model-specific `limitId` never overwrites the account's main allowance.
+`collaborationMode` is not in the generated `turn/start` type but is what the
+wire accepts (T3's client adds it by hand; so do we), and once a mode was ever
+chosen it is sent with every turn, both ways: leaving Plan is something Codex
+has to be told as well. `thread/settings/updated` is believed over what was
+asked for — see "Model, effort, the agent's own mode, access" in section 14.
 
 ### 7.4 Which agents, and how they are started
 
@@ -814,11 +827,11 @@ token.
 
 | method and path | body → answer |
 | --- | --- |
-| `GET /api/harness` | → `{ enabled, adapters: [{ id, label, provider, protocol, available, note, modes, caps }], catalogErrors, sessions, wake: { paused, limits }, delegations: { active }, limits }` |
+| `GET /api/harness` | → `{ enabled, adapters: [{ id, label, provider, protocol, available, note, modes, caps, offers }], catalogErrors, sessions, wake: { paused, limits }, delegations: { active }, limits }` — `offers` is what that agent said it has the last time it ran here (`{ models: [{ id, name }], modelFree, efforts, modes, at }`), or `null` if it never has |
 | `GET /api/harness/sessions[?all=1]` | → `{ sessions }` (live; `all=1` adds finished ones) |
-| `POST /api/harness/sessions` *human* | `{ adapter, cwd?, name?, handle?, model?, mode?, wake?, text?, waitMs? }` → `{ ok, starting, session, agent }` |
+| `POST /api/harness/sessions` *human* | `{ adapter, cwd?, name?, handle?, model?, effort?, agentMode?, mode?, wake?, text?, waitMs?, context?: { session, turns? } }` → `{ ok, starting, session, agent }` — `context` carries another session's work over as a recorded handoff (section 12) |
 | `GET /api/harness/sessions/:ref` | → `{ session }` — `:ref` is the session id or anything that names its agent |
-| `PATCH /api/harness/sessions/:ref` *human* | `{ wake?, mode? }` → `{ ok, session }` (409 for `mode` when the sandbox is the agent's own) |
+| `PATCH /api/harness/sessions/:ref` *human* | `{ wake?, mode?, model?, effort?, agentMode? }` → `{ ok, session }` — the last three are whatever the agent itself offers (`session.controls`); 400 for a value it did not list, 409 where it offers no choice, 502 with its own words when it refuses |
 | `POST /api/harness/sessions/:ref/turn` *human* | `{ text }` → `{ ok, queued, turn \| position, session }` |
 | `POST /api/harness/sessions/:ref/interrupt` *human* | → `{ ok, interrupted, dropped, session }` |
 | `DELETE /api/harness/sessions/:ref` *human* | → `{ ok, session }` — ends the whole process group |
@@ -891,15 +904,64 @@ still there.
   "wake":        { "method": "PATCH",  "url": "/api/harness/sessions/d_…", "field": "wake", "value": "off",
                    "options": ["off", "results", "direct"], "available": true },
   "mode":        { "method": "PATCH",  "url": "/api/harness/sessions/d_…", "field": "mode", "value": "ask",
-                   "options": ["ask", "edits", "full"], "available": false, "fixed": "set when this agent starts: its own sandbox enforces it" },
+                   "options": ["ask", "edits", "full"], "labels": { "ask": "asks before it acts", … }, "available": true,
+                   "applies": "next-turn" },          // or: "available": false, "fixed": "set when this agent starts: …"
+  "model":       { "method": "PATCH",  "url": "/api/harness/sessions/d_…", "field": "model", "value": "gpt-5.4",
+                   "options": ["gpt-5.4", "gpt-5.4-mini"], "labels": { "gpt-5.4": "GPT-5.4", … }, "available": true,
+                   "free": true, "applies": "next-turn" },
+  "effort":      { …, "field": "effort", "value": "medium", "options": ["low", "medium", "high"], "labels": { … }, "available": true },
+  "agentMode":   { …, "field": "agentMode", "value": "default", "options": ["default", "plan"], "labels": { … }, "available": true },
   "deliverMail": { "method": "POST",   "url": "/api/harness/sessions/d_…/mail", "available": true }
 }
 ```
 
+**Model, effort, the agent's own mode, access.** Four things a person may want
+to change about a running agent, and one rule for all of them: the office
+offers only what the agent itself said it has. There is no catalogue of models
+in this repository — such lists are wrong within weeks — so `options` is
+whatever the agent listed when it started (and whenever it says so again), and
+`labels` are its own names for them. A control with `available: false` cannot
+be changed (no options, or no way to tell this agent); `free: true` means the
+agent takes any name, listed or not; `applies: "next-turn"` means the choice
+rides on the next turn rather than taking effect at once.
+
+| | where the options come from | how a change is made |
+| --- | --- | --- |
+| ACP | `models.availableModels`, `modes.availableModes`, or `configOptions` of category `model`, `mode`, `thought_level` (the effort) | `session/set_model`, `session/set_mode`, `session/set_config_option`; the agent's answer and any `config_option_update` are read back, because one choice can change another (a smaller model that cannot think as hard) |
+| Codex | `model/list` (each model with the efforts it supports and its default); its two collaboration modes | nothing is sent at once: the next `turn/start` carries `model`, `effort`, `collaborationMode` — and, for access, `approvalPolicy` + `sandboxPolicy`, so a running Codex can be tightened or loosened without ending it |
+
+`mode` is the office's own word for how freely an agent acts (ask, edits,
+full); `agentMode` is one of the agent's own ways of working (plan, and
+whatever else it calls them). For an ACP agent `mode` only decides how the
+office answers its requests, so it changes at once and needs no agent; for an
+agent that enforces it itself the agent is told first, and a refusal leaves
+the office's mode as it was.
+
+What the agent then reports is believed over what it was asked: when Codex's
+`thread/settings/updated` says the thread runs under a different sandbox than
+the office asked for, the session shows what Codex says and writes a warning
+into its record — least of all may an agent that did not take a narrower mode
+be shown as if it had. Every change a person makes is a `notice` in the
+transcript (`Model set to “GPT-5.4” by Lead.`, with "It applies from the next
+turn." where that is so), and a mode the agent switches by itself is recorded
+as that.
+
+Because the office keeps no list of its own, it remembers each adapter's last
+word: `adapters[].offers` in `GET /api/harness`. That is what lets a model be
+chosen before a session exists; an agent that has never run here has
+`offers: null`, and starts on its own default.
+
+**Carrying a conversation on with another agent.** `POST /api/harness/sessions`
+with `context: { session, turns? }` starts the new agent with a handoff built
+from that session's record (section 12) — live or finished. It is written into
+both transcripts as a `handoff` entry (the exact words on the receiving side),
+and goes in front of the first thing a person says to the new agent, once. A
+reference to nothing starts nothing.
+
 An agent's own record points there: `agent.runtime.links = { session, transcript }`.
 The rest of a session's public view: `id` (= `agentId`), `adapter`, `label`,
-`provider`, `protocol`, `cwd`, `name`, `model`, `mode`, `modeLabel`, `agentMode`,
-`wake`, `state` (`starting | idle | running | waiting | ended | failed`), `live`,
+`provider`, `protocol`, `cwd`, `name`, `model`, `effort`, `mode`, `modeLabel`,
+`agentMode`, `wake`, `state` (`starting | idle | running | waiting | ended | failed`), `live`,
 `startedAt`, `endedAt`, `reason`, `turns`, `queued`, `turn`, `pending`
 (`[{ id, promptId, kind, category, title }]`), `grants`, `features`, `nativeRef`,
 `origin`, `usage`, `limits`, `caps`, `wakeStats`.
@@ -948,7 +1010,7 @@ same things and take the same commands.
   it calls what `session.controls` names and answers with what
   `prompt.respond.actions` offers.
 - A typed line is a turn. `/new <agent> [folder]`, `/sessions`, `/switch`,
-  `/stop`, `/end`, `/mode`, `/wake`, `/yes` `/always` `/no [why]`, `/delegate`,
+  `/stop`, `/end`, `/model`, `/effort`, `/mode`, `/wake`, `/yes` `/always` `/no [why]`, `/delegate`,
   `/mail`, `/diff`, `/full`, `/usage`, `/who`, `/dm`, `/task`, `/post`,
   `/clear`, `/office`, `/help`, `/quit` are the console's own; a line starting
   with `/` that is not one of those belongs to the agent and is sent as it
@@ -956,12 +1018,23 @@ same things and take the same commands.
   `/mode full` have to be said twice. While a request waits, `y` allows once,
   `a` allows for the session, `n` refuses, and a number picks one of a
   question's options; a question (or "I am blocked") takes whatever is typed
-  next as its answer.
+  next as its answer. `/model`, `/effort` and `/mode` take an option's id, the
+  agent's name for it, or the unmistakable start of either (Tab completes
+  them); `/mode ask|edits|full` is the office's, any other word is one of the
+  agent's own modes (`/mode plan`; `own:ask` for an agent whose own mode shares
+  a name with one of the three). `/new <agent> --context` carries the
+  conversation on show over to the new agent.
 - **The page** lists every project with the agents working in it underneath —
   face, name, provider, what they are for, and whether they are waiting on you.
   A driven agent opens as a conversation; one the office only watches opens as
   what is known about it, with a line to send it a note; a project opens as its
   board. Requests that are open are drawn with buttons carrying the same keys.
+  Under the prompt is a bar of what the session's `controls` offer: the agent
+  and its model (its menu also lists every other agent, to carry the
+  conversation on with — the ones not installed greyed out), the effort, the
+  agent's own mode, and how freely it may act (full access has to be chosen
+  twice). On a project's page the same bar names the agent that typing a line
+  would start there.
 - **`office chat [session]`** / **`office chat new <agent> [folder]`** — on a
   terminal the bottom rows are live (the reply as it arrives, tools while they
   run, the request that is waiting, the line being typed, a status row) and

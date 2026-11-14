@@ -35,6 +35,14 @@ const FILE_KIND = Object.freeze({ edit: 'edit', delete: 'edit', move: 'edit', re
 // One adapter per wire protocol; adding a provider that speaks neither is one more entry here.
 const ADAPTERS = Object.freeze({ acp: AcpAdapter, 'codex-app-server': CodexAdapter });
 
+// What a human can change on a running session, the adapter method that does it, and the words for it.
+const SETTINGS = Object.freeze({
+  model: { call: 'setModel', word: 'model', said: 'Model' },
+  effort: { call: 'setEffort', word: 'effort', said: 'Effort' },
+  agentMode: { call: 'setMode', word: 'own mode', said: 'Its own mode' },
+  mode: { call: 'setAccess', word: 'mode', said: 'Mode' },
+});
+
 export class SessionError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -86,6 +94,9 @@ export class DrivenSession extends EventEmitter {
     this.usage = null;
     this.limits = null;               // the provider's own account of the operator's allowance, when it gives one
     this.features = {};
+    // What the agent itself says it offers (models, efforts, its own modes); empty until it has started.
+    this.offer = { models: [], modelFree: false, efforts: [], modes: [] };
+    this.setting = null;              // { name, value } while a human's change is on its way to the agent
     this.endReason = '';
     const port = ctx.port || ctx.cfg.port;
     const officeEnv = {
@@ -101,13 +112,14 @@ export class DrivenSession extends EventEmitter {
       : [];
     const common = {
       command: spec.command, args: spec.args, env, cwd: record.cwd, mcpServers, model: record.model || '',
+      effort: record.effort || '', agentMode: record.agentMode || '',
       clientInfo: { name: 'the-office', title: 'The Office', version: ctx.version || '0.0.0' },
       startTimeoutMs: this.cfg.startTimeoutMs, cancelTimeoutMs: this.cfg.cancelTimeoutMs,
       trace: this.cfg.trace ? this.#tracer(files.trace, token) : undefined,
     };
     // The one place a protocol picks code. Each adapter takes what it understands from the same options.
     const Adapter = ADAPTERS[spec.protocol] || AcpAdapter;
-    this.adapter = new Adapter({ ...common, mode: record.mode, protocol: spec.acpVersion === 2 ? 2 : 1, modeId: spec.modeId });
+    this.adapter = new Adapter({ ...common, mode: record.mode, protocol: spec.acpVersion === 2 ? 2 : 1, modeId: record.agentMode || spec.modeId });
     this.adapter.on('event', (raw) => {
       const ev = token ? scrub(raw, token) : raw;
       try { this.#on(ev); }
@@ -162,6 +174,7 @@ export class DrivenSession extends EventEmitter {
     r.model = info.model || r.model || '';
     r.agentMode = info.modeId || '';
     this.features = info.features || {};
+    this.#readSettings();
     this.state = 'idle';
     r.state = 'idle';
     this.transcript.write({ id: 'session', state: 'started', protocol: r.protocol, agent: r.agent, model: r.model,
@@ -170,6 +183,61 @@ export class DrivenSession extends EventEmitter {
     this.#save();
     this.#next();
     return this;
+  }
+
+  /* ---- model, effort, the agent's own mode, how freely it acts ----------------- */
+
+  // What the agent offers and runs with, in its own words (adapter.settings()), cut to what is safe to show.
+  #readSettings() {
+    let now = {};
+    try { now = this.adapter.settings() || {}; } catch { now = {}; }
+    const list = (v, max) => (Array.isArray(v) ? v : []).filter((x) => x && typeof x.id === 'string' && x.id).slice(0, max)
+      .map((x) => ({ id: x.id.slice(0, 200), name: line(x.name, 80) || x.id.slice(0, 80) }));
+    this.offer = { models: list(now.models, 60), modelFree: !!now.modelFree, efforts: list(now.efforts, 12), modes: list(now.modes, 24) };
+    const r = this.record;
+    if (typeof now.model === 'string' && now.model) r.model = now.model.slice(0, 200);
+    r.effort = typeof now.effort === 'string' ? now.effort.slice(0, 40) : '';
+    if (typeof now.modeId === 'string') r.agentMode = now.modeId.slice(0, 200);
+    this.emit('offer', this.offer);
+  }
+
+  /**
+   * Change something about a running session. Every one of these is only what the agent itself offers
+   * (`controls` says which, with the options): what it cannot do is refused, in words, rather than pretended.
+   * @param {'model'|'effort'|'agentMode'|'mode'} name   `mode` is the office's ask/edits/full; `agentMode` is the agent's own
+   * @param {string} value
+   * @param {{by?:string}} [who]
+   */
+  async set(name, value, who = {}) {
+    if (!this.live) throw new SessionError(409, 'this session has ended');
+    const control = SETTINGS[name] ? this.#controls()[name] : null;
+    if (!control) throw new SessionError(400, `a session has no setting called “${line(name, 40)}”`);
+    const word = SETTINGS[name].word;
+    const v = typeof value === 'string' ? value.trim().slice(0, 200) : '';
+    if (!v) throw new SessionError(400, `${word}: say which`);
+    if (!control.available) throw new SessionError(409, control.fixed ? `this agent's ${word} is ${control.fixed}` : `this agent offers no choice of ${word}`);
+    if (!control.options.includes(v) && !control.free) throw new SessionError(400, `${word} must be one of ${control.options.join(', ')}`);
+    if (v === control.value) return { changed: false };
+    const by = line(who.by, 60) || 'the human';
+    const r = this.record;
+    const act = this.adapter[SETTINGS[name].call];
+    // The office's own mode needs no agent to change (it decides how requests are answered) — unless the agent
+    // enforces something of its own by it, in which case the agent is told first, and a refusal changes nothing.
+    if (name !== 'mode' || typeof act === 'function') {
+      this.setting = { name, value: v };
+      try { await act.call(this.adapter, v); }
+      catch (err) { throw new SessionError(502, `${r.label} did not take that: ${cleanText(err?.message || String(err), 300)}`); }
+      finally { this.setting = null; }
+      if (!this.live) throw new SessionError(409, 'this session has ended');
+    }
+    if (name === 'mode') r.mode = v; else this.#readSettings();
+    // Said where the work is, by whom, and from when: a model that changed between two turns is part of the record.
+    const later = control.applies === 'next-turn' ? (this.turn ? ' It applies from the next turn.' : '') : '';
+    this.#note('info', `${SETTINGS[name].said} set to “${control.labels?.[v] && name !== 'mode' ? control.labels[v] : v}” by ${by}.${later}`);
+    this.transcript.write({ id: 'session', model: r.model, mode: r.mode, modeLabel: MODE_LABEL[r.mode] });
+    if (name === 'model') this.#agent({ model: r.model });
+    this.#save();
+    return { changed: true };
   }
 
   /* ---- turns -------------------------------------------------------------- */
@@ -189,6 +257,13 @@ export class DrivenSession extends EventEmitter {
     const item = { text: body, origin: meta.origin || 'human', by: meta.by || null, from: meta.from || null,
       hop: Number.isFinite(meta.hop) ? meta.hop : 0, display: meta.display, delegationId: meta.delegationId || null,
       mail: meta.mail || null, onDropped: meta.onDropped || null, queuedAt: Date.now() };
+    // Context a person carried over from another session goes in front of the first thing they say here. What
+    // is shown as their turn is what they typed; the exact words handed over are the `handoff` entry above it.
+    if (this.carried && item.origin === 'human') {
+      item.display = item.display ?? body;
+      item.text = `${this.carried}\n\n${body}`;
+      this.carried = null;
+    }
     if (this.state === 'idle' && !this.turn && !this.queue.length) {
       this.#begin(item);
       return { queued: false, turn: this.turnCount };
@@ -201,6 +276,9 @@ export class DrivenSession extends EventEmitter {
     this.#save();
     return { queued: true, position: this.queue.indexOf(item) + 1 };
   }
+
+  /** Background for this session's first turn from a person: a handoff built from another session's record. */
+  carry(handoffText) { this.carried = typeof handoffText === 'string' && handoffText ? handoffText : null; }
 
   #next() {
     if (this.state !== 'idle' || this.turn || !this.queue.length) return;
@@ -290,8 +368,21 @@ export class DrivenSession extends EventEmitter {
       case 'usage': this.#usage(ev); break;
       case 'limits': this.#limits(ev); break;
       case 'mode':
+        // An agent told to change its mode often says so again itself, a moment later: what is already known is not news.
+        if (ev.modeId === this.record.agentMode) break;
         this.record.agentMode = ev.modeId;
-        this.#note('info', `The agent switched to its “${ev.modeId}” mode.`);
+        // When a person asked for it, set() says so; this line is for a change the agent made by itself.
+        if (!(this.setting?.name === 'agentMode' && this.setting.value === ev.modeId)) this.#note('info', `The agent switched to its “${ev.modeId}” mode.`);
+        this.#save();
+        break;
+      case 'settings': this.#readSettings(); this.#save(); break;
+      case 'access':
+        // The agent's own account of how freely it runs is not what the office asked for. Its account is the
+        // true one, so that is what is shown — and the difference is said out loud.
+        if (!MODES.includes(ev.mode) || ev.mode === this.record.mode) break;
+        this.#note('warn', `${this.record.label} reports that it ${MODE_LABEL[ev.mode]} (“${ev.mode}”), not “${line(ev.asked, 20) || this.record.mode}” as it was asked. The office shows what it reports.`);
+        this.record.mode = ev.mode;
+        this.transcript.write({ id: 'session', mode: ev.mode, modeLabel: MODE_LABEL[ev.mode] });
         this.#save();
         break;
       case 'info': this.record.title = ev.title; this.#save(); break;
@@ -595,16 +686,25 @@ export class DrivenSession extends EventEmitter {
   // about the adapter behind the session (that Codex's mode is fixed, say).
   #controls() {
     const at = `/api/harness/sessions/${this.id}`;
-    const live = this.live, r = this.record;
-    const fixed = !!this.features.nativeSandbox;
+    const live = this.live, r = this.record, o = this.offer;
+    // An agent whose own sandbox enforces the mode can change it only if it has a way to be told.
+    const fixed = !!this.features.nativeSandbox && typeof this.adapter.setAccess !== 'function';
+    const later = this.adapter.perTurn ? { applies: 'next-turn' } : {};
+    // A choice among what the agent itself listed: ids in `options`, its names for them in `labels`.
+    const pick = (field, value, list, call, extra = {}) => ({ method: 'PATCH', url: at, field, value: value || '',
+      options: list.map((x) => x.id), labels: Object.fromEntries(list.map((x) => [x.id, x.name])),
+      available: live && typeof this.adapter[call] === 'function' && (list.length > 0 || !!extra.free), ...later, ...extra });
     return {
       transcript: { method: 'GET', url: `${at}/transcript`, query: ['after', 'limit'], watch: { type: 'transcript:watch', sessionId: this.id } },
       turn: { method: 'POST', url: `${at}/turn`, body: { text: '' }, available: live },
       interrupt: { method: 'POST', url: `${at}/interrupt`, available: live && (!!this.turn || this.queue.length > 0) },
       end: { method: 'DELETE', url: at, available: live },
       wake: { method: 'PATCH', url: at, field: 'wake', value: r.wake, options: WAKE_MODES.slice(), available: live },
-      mode: { method: 'PATCH', url: at, field: 'mode', value: r.mode, options: MODES.slice(), available: live && !fixed,
-        ...(fixed ? { fixed: 'set when this agent starts: its own sandbox enforces it' } : {}) },
+      mode: { method: 'PATCH', url: at, field: 'mode', value: r.mode, options: MODES.slice(), labels: { ...MODE_LABEL }, available: live && !fixed,
+        ...(fixed ? { fixed: 'set when this agent starts: its own sandbox enforces it' } : typeof this.adapter.setAccess === 'function' ? later : {}) },
+      model: pick('model', r.model, o.models, 'setModel', o.modelFree ? { free: true } : {}),
+      effort: pick('effort', r.effort, o.efforts, 'setEffort'),
+      agentMode: pick('agentMode', r.agentMode, o.modes, 'setMode'),
       deliverMail: { method: 'POST', url: `${at}/mail`, available: live },
     };
   }
@@ -615,7 +715,7 @@ export class DrivenSession extends EventEmitter {
     return {
       id: this.id, agentId: this.id, adapter: r.adapter, label: r.label, provider: r.provider, protocol: r.protocol,
       cwd: r.cwd, name: this.ctx.agents.get(this.id)?.name || r.name || '', model: r.model || '',
-      mode: r.mode, modeLabel: MODE_LABEL[r.mode], agentMode: r.agentMode || '', wake: r.wake,
+      mode: r.mode, modeLabel: MODE_LABEL[r.mode], agentMode: r.agentMode || '', effort: r.effort || '', wake: r.wake,
       state: this.waiting && this.state === 'running' ? 'waiting' : this.state, live: this.live,
       startedAt: r.startedAt, endedAt: r.endedAt || null, reason: r.reason || '',
       turns: this.turnCount, queued: this.queue.length,

@@ -59,6 +59,13 @@ export class AcpAdapter extends AgentAdapter {
     this.model = '';
     this.modelOption = null;         // the session config option that selects the model, if any
     this.modeOption = null;
+    this.efforts = [];               // how hard it thinks, where the agent offers the choice (a "thought_level" option)
+    this.effort = '';
+    this.effortOption = null;
+  }
+
+  settings() {
+    return { model: this.model, models: this.models, effort: this.effort, efforts: this.efforts, modeId: this.modeId, modes: this.modes };
   }
 
   /* ---- starting ----------------------------------------------------------- */
@@ -97,6 +104,9 @@ export class AcpAdapter extends AgentAdapter {
     if (this.opt.model && this.opt.model !== this.model) {
       await this.setModel(this.opt.model).catch((err) => this._notice('warn',
         `The agent did not accept the model “${this.opt.model}”; it runs on its default. (${err.message})`));
+    }
+    if (this.opt.effort && this.opt.effort !== this.effort) {
+      await this.setEffort(this.opt.effort).catch((err) => this._notice('warn', `The agent did not accept the effort “${this.opt.effort}”. (${err.message})`));
     }
     return {
       protocol: `acp/${this.generation}`,
@@ -183,12 +193,16 @@ export class AcpAdapter extends AgentAdapter {
       const current = typeof raw.currentValue === 'string' ? raw.currentValue.slice(0, 200) : '';
       if (raw.category === 'model' && (!this.modelOption || this.modelOption === id)) { this.modelOption = id; this.models = flat; this.model = current; }
       if (raw.category === 'mode' && (this.modeOption === id || (!this.modeOption && !this.modes.length))) { this.modeOption = id; this.modes = flat; this.modeId = current; }
+      if (raw.category === 'thought_level' && (!this.effortOption || this.effortOption === id)) { this.effortOption = id; this.efforts = flat; this.effort = current; }
     }
   }
 
-  #setOption(configId, value) {
-    return this.peer.request('session/set_config_option', { sessionId: this.sessionId, configId, value,
+  // Setting one option can change the others (a different model thinks at different levels), so the agent
+  // answers with the whole list again; read it rather than assume.
+  async #setOption(configId, value) {
+    const res = await this.peer.request('session/set_config_option', { sessionId: this.sessionId, configId, value,
       ...(this.generation === 2 ? { type: 'id' } : {}) }, { timeoutMs: 20_000 });
+    if (isObject(res)) this.#readConfigOptions(res.configOptions);
   }
 
   async setModel(model) {
@@ -199,10 +213,18 @@ export class AcpAdapter extends AgentAdapter {
     this.model = value;
   }
 
+  async setEffort(effort) {
+    const value = String(effort).slice(0, 200);
+    if (!this.effortOption) throw new Error('this agent does not offer a choice of effort');
+    await this.#setOption(this.effortOption, value);
+    this.effort = value;
+  }
+
   async setMode(modeId) {
     const value = String(modeId).slice(0, 200);
     if (this.modeOption) await this.#setOption(this.modeOption, value);
-    else await this.peer.request('session/set_mode', { sessionId: this.sessionId, modeId: value }, { timeoutMs: 20_000 });
+    else if (this.modes.length) await this.peer.request('session/set_mode', { sessionId: this.sessionId, modeId: value }, { timeoutMs: 20_000 });
+    else throw new Error('this agent has no modes of its own');
     this.modeId = value;
     this._emit({ type: 'mode', modeId: value });
   }
@@ -357,10 +379,11 @@ export class AcpAdapter extends AgentAdapter {
         return;
       }
       case 'current_mode_update':
-        if (typeof u.currentModeId === 'string') { this.modeId = u.currentModeId.slice(0, 200); this._emit({ type: 'mode', modeId: this.modeId }); }
+        if (typeof u.currentModeId === 'string' && u.currentModeId.slice(0, 200) !== this.modeId) { this.modeId = u.currentModeId.slice(0, 200); this._emit({ type: 'mode', modeId: this.modeId }); }
         return;
       case 'config_option_update':
         this.#readConfigOptions(u.configOptions);
+        this._emit({ type: 'settings' });
         return;
       case 'session_info_update':
         if (typeof u.title === 'string' && u.title.trim()) this._emit({ type: 'info', title: line(u.title, 120) });

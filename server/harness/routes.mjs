@@ -43,7 +43,7 @@ export function registerHarnessRoutes(router, ctx) {
 
   router.get('/api/harness', () => ({
     enabled: harness.settings.enabled,
-    adapters: harness.catalog.list(),
+    adapters: harness.adapters(),
     catalogErrors: harness.catalog.errors(),
     ...harness.snapshot(),
     limits: { maxSessions: harness.settings.maxSessions, delegate: { ...harness.settings.delegate } },
@@ -55,7 +55,10 @@ export function registerHarnessRoutes(router, ctx) {
   router.post('/api/harness/sessions', async (c) => guard(async () => {
     humanOnly(c, 'start another agent directly (delegate a task instead: POST /api/delegations)');
     const body = await c.json();
+    // Carrying a conversation on with another agent: the summary is built first, so a bad reference starts nothing.
+    const handoff = body.context ? harness.handoffFrom(body.context) : null;
     const session = harness.create(body, { kind: 'human' });
+    handoff?.attach(session);
     // Most agents answer within a second or two; do not hold the request for a slow one.
     const outcome = await Promise.race([
       session.ready.then(() => 'ready', (err) => err),
@@ -64,7 +67,7 @@ export function registerHarnessRoutes(router, ctx) {
     if (outcome instanceof Error) throw outcome;
     if (typeof body.text === 'string' && body.text.trim()) session.send(body.text, { origin: 'human', by: 'Lead' });
     return { ok: true, starting: outcome === 'starting', session: harness.describe(session.id), agent: ctx.agents.pub(ctx.agents.get(session.id)) };
-  }), { ...local, about: 'Start a driven session: {adapter, cwd?, name?, model?, mode?:ask|edits|full, wake?:off|results|direct, text?}.' });
+  }), { ...local, about: 'Start a driven session: {adapter, cwd?, name?, model?, effort?, agentMode?, mode?:ask|edits|full, wake?:off|results|direct, text?, context?:{session, turns?}} — context carries the work of another session over, as a recorded handoff. What an adapter offers for model, effort and agentMode is in GET /api/harness (adapters[].offers), once it has run here.' });
 
   router.get('/api/harness/sessions/:ref', (c) => {
     const session = harness.describe(c.params.ref);
@@ -73,7 +76,7 @@ export function registerHarnessRoutes(router, ctx) {
   }, { about: 'One driven session, by its id or its agent\'s name.' });
 
   router.patch('/api/harness/sessions/:ref', async (c) => guard(async () => {
-    humanOnly(c, 'change how an agent is woken or what it may do');
+    const who = humanOnly(c, 'change how an agent is woken, what it may do or what it runs on');
     const session = need(c.params.ref);
     const body = await c.json();
     if (body.wake !== undefined) {
@@ -82,20 +85,15 @@ export function registerHarnessRoutes(router, ctx) {
       session.transcript.write({ id: `n:wake:${Date.now().toString(36)}`, kind: 'notice', level: 'info',
         text: `Wake set to “${body.wake}” by the human.` });
     }
-    if (body.mode !== undefined) {
-      if (!['ask', 'edits', 'full'].includes(body.mode)) throw new HttpError(400, 'mode must be ask, edits or full');
-      if (session.features.nativeSandbox && body.mode !== session.record.mode) {
-        // Its sandbox was fixed when it started; pretending to change it would be a lie.
-        throw new HttpError(409, 'this agent\'s sandbox is set when it starts; end it and start another to change its mode');
-      }
-      session.record.mode = body.mode;
-      session.transcript.write({ id: `n:mode:${Date.now().toString(36)}`, kind: 'notice', level: 'info',
-        text: `Mode set to “${body.mode}” by the human.` });
+    // The session knows what its agent can really change, and refuses the rest in words (session.controls
+    // says the same thing ahead of time). Each change is written into its record.
+    for (const name of ['mode', 'model', 'effort', 'agentMode']) {
+      if (body[name] !== undefined) await session.set(name, body[name], who);
     }
     session.emit('changed');
     if (body.wake && body.wake !== 'off') wake.consider(session.id);
     return { ok: true, session: harness.describe(session.id) };
-  }), { ...local, about: 'Change a driven session: {wake?:off|results|direct, mode?:ask|edits|full}.' });
+  }), { ...local, about: 'Change a driven session: {wake?:off|results|direct, mode?:ask|edits|full, model?, effort?, agentMode?} — the last three are whatever the agent itself offers (session.controls lists the options).' });
 
   router.post('/api/harness/sessions/:ref/turn', async (c) => guard(async () => {
     const who = humanOnly(c, 'give another agent a turn directly (send it a note, or delegate a task)');

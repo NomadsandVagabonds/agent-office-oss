@@ -9,6 +9,11 @@
 // like, what a typed line means — is core/console.mjs, shared with the terminal
 // (`office chat`), so the two never disagree.
 //
+// Under the prompt, a bar of the choices the agent itself offers — its model
+// (and who else the conversation could be carried on with), how hard it thinks,
+// its own mode, how freely it may act. Nothing in it is a list of ours: an
+// agent that has not said what it offers shows only its name.
+//
 // Keys: Enter sends (Shift+Enter for a new line), Esc stops the turn in flight,
 // y / a / n answer a waiting request, Alt+↑↓ walks the rail, Ctrl+B hides it,
 // ` on an empty line swaps to the office itself. /help lists the commands.
@@ -16,10 +21,10 @@ import { createNet } from '/world/net.js';
 import { h, clear, since, shortPath } from '/world/ui/dom.js';
 import { paintFlatCharacter } from '/world/art/character.js';
 import { resolveLook } from '/core/look.mjs';
-import { COMMANDS, choicesOf, complete, createConsole, parseInput, shortFolder } from '/core/console.mjs';
+import { choicesOf, createConsole, optionsOf, parseInput, shortFolder } from '/core/console.mjs';
 
 const $ = (id) => document.getElementById(id);
-const rail = $('rail'), head = $('head'), feed = $('feed'), liveEl = $('live'), input = $('input'), statusEl = $('status');
+const rail = $('rail'), head = $('head'), feed = $('feed'), liveEl = $('live'), input = $('input'), statusEl = $('status'), bar = $('bar'), foot = $('foot');
 const COLUMNS = ['backlog', 'todo', 'doing', 'blocked', 'review', 'done'];
 const PROVIDER = { claude: 'claude', codex: 'codex', gemini: 'gemini', opencode: 'opencode', custom: 'agent' };
 const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -77,7 +82,7 @@ con.on('say', (lines) => {
   feed.append(h('div.blk.sys.air', lines.map((l) => h('div.ln', spans(l)))));
   stick(was || true);
 });
-con.on('state', () => { drawStatus(); drawHead(); });
+con.on('state', () => { drawStatus(); drawHead(); drawBar(); });
 
 /* ---- who is here -------------------------------------------------------------------------------- */
 const agents = () => [...net.state.agents.values()];
@@ -184,7 +189,8 @@ function show(kind, id, opt = {}) {
   else { con.leave(); if (kind === 'project') drawBoard(); else if (kind === 'agent') drawAgent(); else drawNone(); }
   document.body.classList.remove('rail');
   railFollow = true;
-  drawRail(); drawHead(); drawStatus(); placeholder();
+  openPop('');
+  drawRail(); drawHead(); drawStatus(); drawBar(); placeholder();
   input.focus();
 }
 
@@ -193,7 +199,7 @@ function drawHead() {
   if (view.kind === 'session' || view.kind === 'agent') {
     const a = net.state.agents.get(view.id), s = sessionOf(view.id);
     const name = a?.name || s?.name || s?.label || view.id;
-    const about = [s?.label || PROVIDER[a?.provider] || a?.provider, s?.model || a?.model, s ? s.modeLabel : 'watched, not driven', shortFolder(shortPath(s?.cwd || a?.cwd || ''))].filter(Boolean).join(' · ');
+    const about = (s ? [shortFolder(shortPath(s.cwd || ''))] : [PROVIDER[a?.provider] || a?.provider, a?.model, 'watched, not driven', shortFolder(shortPath(a?.cwd || ''))]).filter(Boolean).join(' · ');
     bits.push(a ? face(a) : null, h('div.t', h('b', name), h('span', about)));
   } else if (view.kind === 'project') {
     const p = projects().find((x) => x.id === view.id);
@@ -278,7 +284,7 @@ function waitingOnYou() {
 }
 function drawStatus() {
   const s = view.kind === 'session' ? con.session() : null;
-  const left = view.kind === 'session' ? con.status()[0] : [[view.kind === 'project' ? '/task <title> adds a card · /post <text> says it in the channel' : '', 'dim']];
+  const left = view.kind === 'session' ? con.status({ brief: true })[0] : [[view.kind === 'project' ? '/task <title> adds a card · /post <text> says it in the channel' : '', 'dim']];
   clear(statusEl.querySelector('.l')).append(...spans(net.state.connected || !net.state.everConnected ? left : [['the office is not answering — trying again', 'err']]));
   const waiting = waitingOnYou();
   clear(statusEl.querySelector('.r')).append(...(waiting.length ? [...waiting.slice(0, 4).flatMap((w, i) => [i ? ', ' : '', h('button.s-ask', { type: 'button', onclick: () => show(sessionOf(w.id) ? 'session' : 'agent', w.id) }, w.name)]),
@@ -294,20 +300,22 @@ setInterval(() => { const s = view.kind === 'session' ? con.session() : null; if
 function placeholder() {
   const s = con.session();
   input.placeholder = view.kind === 'session' ? (!con.live() ? 'this session has ended — /new starts another' : con.pending() ? 'y allow · a allow for the session · n refuse — or type' : s?.state === 'running' ? 'next turn (it starts when this one ends)' : '')
-    : view.kind === 'agent' ? 'a note to this agent' : view.kind === 'project' ? '/task <title>' : '/new <agent>';
+    : view.kind === 'agent' ? 'a note to this agent' : view.kind === 'project' ? (canStart() ? `what should ${picked().label} do here?` : '/task <title>') : '/new <agent>';
 }
 const fit = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, innerHeight * 0.4) + 'px'; };
 
 /* -- the list of commands that opens as you type a slash -- */
 let menu = null;
+const menuOptions = () => (input.value.startsWith('/') && !input.value.includes('\n') ? con.complete(input.value) : []);
+/** Take one of the menu's lines. A word after a command is never taken by Enter alone: only once you have moved onto it. */
+const take = (o) => { input.value = o.text; menuAt = 0; fit(); drawMenu(); };
 function drawMenu() {
-  const options = input.value.startsWith('/') && !/\s/.test(input.value) ? complete(input.value) : [];
+  const options = menuOptions();
   menu?.remove(); menu = null;
-  if (!options.length || (options.length === 1 && '/' + options[0] === input.value)) return;
-  menuAt = Math.min(menuAt, options.length - 1);
-  menu = h('div.menu', options.map((name, i) => { const c = COMMANDS.find((x) => x.name === name); return h(`div${i === menuAt ? '.on' : ''}`, { onmousedown: (e) => { e.preventDefault(); input.value = `/${name} `; drawMenu(); fit(); } }, h('b', `/${name}`), h('span', `${c.args ? c.args + ' — ' : ''}${c.about}`)); }));
-  $('foot').insertBefore(menu, $('entry'));
-  return options;
+  if (!options.length || (options.length === 1 && options[0].text.trim() === input.value.trim() && options[0].kind === 'command')) return;
+  menuAt = Math.max(options[0].kind === 'word' ? -1 : 0, Math.min(menuAt, options.length - 1));
+  menu = h('div.menu', options.map((o, i) => h(`div${i === menuAt ? '.on' : ''}`, { onmousedown: (e) => { e.preventDefault(); take(o); } }, h('b', o.label), h('span', o.hint || ''))));
+  foot.insertBefore(menu, $('entry'));
 }
 
 async function send() {
@@ -330,9 +338,147 @@ async function send() {
       if (waiting) await con.answer(waiting, waiting.respond.actions.find((x) => x.text === 'required'), what.text);
       else { const r = await net.api('/api/comms/direct-message', { method: 'POST', body: { toAgentId: view.id, content: what.text } }); con.say([['note → ', 'dim'], [r?.post?.toAgentName || a?.name || 'the agent', '']]); }
     } catch (err) { con.say([['✗ ', 'err'], [err.message, 'err']]); }
-  } else con.say(view.kind === 'project' ? 'On a board, /task <title> adds a card and /post <text> says something in the channel.' : 'Pick an agent on the left, or /new <agent>.');
+  } else if (view.kind === 'project' && canStart()) await startHere(what.text);
+  else con.say(view.kind === 'project' ? 'On a board, /task <title> adds a card and /post <text> says something in the channel.' : 'Pick an agent on the left, or /new <agent>.');
   placeholder();
 }
+
+/* ---- the bar under the prompt: who it is said to, on which model, how hard, in which mode, how freely ---------- */
+const MODE_SHORT = { ask: 'asks first', edits: 'edits freely', full: 'full access' };
+const MODE_WORDS = { ask: 'every action is yours to allow', edits: 'asks for everything else', full: 'acts without asking' };
+let pick = { adapter: '', model: '', mode: 'ask', ...store.get('pick', {}) };      // who a new agent would be, where nobody is on show
+let pop = null;                                      // the menu that is open: { name, el, wide: the agent whose models are unfolded }
+let armed = { what: '', until: 0 };                  // full access has to be chosen twice
+
+const shown = () => (view.kind === 'session' && con.live() ? con.session() : null);
+const here = () => (view.kind === 'project' ? projects().find((p) => p.id === view.id) || null : null);
+const picked = () => adapters.find((a) => a.id === pick.adapter && a.available) || adapters.find((a) => a.available) || null;
+const canStart = () => !!here()?.cwd && !!picked();
+const nameIn = (control, id) => control?.labels?.[id] || id || '';
+const oops = (err) => con.say([['✗ ', 'err'], [err.message, 'err']]);
+
+function drawBar() {
+  const s = shown(), chips = [];
+  const chip = (name, kids, title, cls = '') => h(`button.chip.${name}${pop?.name === name ? '.open' : ''}${cls}`, { type: 'button', title, dataset: { chip: name },
+    onclick: (e) => { e.stopPropagation(); openPop(pop?.name === name ? '' : name, e.detail === 0); } }, kids, h('i', '⌄'));
+  if (s) {
+    const c = s.controls || {};
+    chips.push(chip('agent', [h('b', s.label || s.adapter), s.model ? h('span', nameIn(c.model, s.model)) : null], 'Its model — or carry this conversation on with another agent'));
+    if (optionsOf(c.effort).length) chips.push(chip('effort', h('span', nameIn(c.effort, s.effort) || 'effort'), 'How hard it thinks'));
+    if (optionsOf(c.agentMode).length) chips.push(chip('own', h('span', nameIn(c.agentMode, s.agentMode) || 'mode'), 'Its own mode'));
+    chips.push(chip('mode', h('span', MODE_SHORT[s.mode] || s.mode), c.mode?.fixed ? `How freely it may act — ${c.mode.fixed}` : 'How freely it may act', s.mode === 'full' ? '.full' : ''));
+  } else if (canStart()) {
+    const a = picked();
+    chips.push(chip('agent', [h('b', a.label), pick.model && pick.adapter === a.id ? h('span', (a.offers?.models || []).find((m) => m.id === pick.model)?.name || pick.model) : null], 'Which agent to start here'));
+    chips.push(chip('mode', h('span', MODE_SHORT[pick.mode] || pick.mode), 'How freely it may act', pick.mode === 'full' ? '.full' : ''));
+  }
+  clear(bar).append(...chips);
+  if (pop) { if (bar.querySelector(`[data-chip="${pop.name}"]`)) drawPop(); else openPop(''); }
+}
+
+function openPop(name, byKey = false) {
+  if (!name && !pop) return;
+  pop?.el.remove();
+  pop = name ? { name, wide: '', el: h('div', { id: 'pop', role: 'menu', onclick: (e) => e.stopPropagation(), onkeydown: (e) => {
+    const items = [...pop.el.querySelectorAll('.it:not([disabled])')], at = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus(); }
+    else if (e.key === 'Escape') { e.preventDefault(); openPop(''); input.focus(); }
+  } }) } : null;
+  if (pop) foot.append(pop.el);
+  drawBar();
+  if (pop && byKey) pop.el.querySelector('.it:not([disabled])')?.focus();
+}
+
+function drawPop() {
+  const chipEl = bar.querySelector(`[data-chip="${pop.name}"]`), scroll = pop.el.scrollTop, had = [...pop.el.querySelectorAll('.it')].indexOf(document.activeElement);
+  clear(pop.el).append(...popRows(pop.name).filter(Boolean));
+  const box = foot.getBoundingClientRect(), at = chipEl.getBoundingClientRect();
+  pop.el.style.bottom = `${Math.round(box.bottom - at.top + 6)}px`;
+  pop.el.style.left = `${Math.max(8, Math.min(Math.round(at.left - box.left), Math.round(box.width - pop.el.offsetWidth - 8)))}px`;
+  pop.el.scrollTop = scroll;
+  if (had >= 0) pop.el.querySelectorAll('.it')[had]?.focus();
+}
+
+function popRows(name) {
+  const s = shown(), c = s?.controls || {};
+  const it = (label, o = {}) => h(`button.it${o.on ? '.on' : ''}${o.sub ? '.sub' : ''}${o.warn ? '.warn' : ''}`, { type: 'button', role: 'menuitem', disabled: !!o.off, title: o.title || '',
+    onclick: (e) => { e.stopPropagation(); o.run?.(); } }, h('span.tick', o.on ? '✓' : ''), h('span.l', label), o.hint ? h('span.h', o.hint) : null);
+  if (name === 'effort') return optionsOf(c.effort).map((o) => it(o.label, { on: o.id === s.effort, off: c.effort.available === false, run: () => setControl('effort', o.id) }));
+  if (name === 'own') return optionsOf(c.agentMode).map((o) => it(o.label, { on: o.id === s.agentMode, off: c.agentMode.available === false, run: () => setControl('agentMode', o.id) }));
+  if (name === 'mode') {
+    const value = s ? s.mode : pick.mode, off = !!s && c.mode?.available === false;
+    return ['ask', 'edits', 'full'].map((id) => {
+      const again = armed.what === id && Date.now() < armed.until;
+      return it(MODE_SHORT[id], { on: id === value, off, title: off ? c.mode.fixed || '' : '', warn: again, hint: again ? 'again to confirm' : MODE_WORDS[id], run: () => chooseMode(id) });
+    });
+  }
+  // the agent: its own models first; then who else there is — to carry this conversation on with, or, with nobody on show, to start
+  const rows = [];
+  if (s) {
+    const models = optionsOf(c.model);
+    if (models.length) rows.push(h('div.cap', s.label), ...models.map((o) => it(o.label, { on: o.id === s.model, off: c.model.available === false, run: () => setControl('model', o.id) })));
+    if (c.model?.free && c.model.available !== false) rows.push(it('another model…', { run: () => { openPop(''); input.value = '/model '; input.focus(); fit(); drawMenu(); } }));
+    rows.push(h('div.cap', 'carry on with'));
+  }
+  // what can be started first; what is not installed after it, greyed, so that it is known to exist
+  for (const a of [...adapters.filter((x) => x.available), ...adapters.filter((x) => !x.available)]) {
+    const models = a.offers?.models || [], open = pop.wide === a.id, chosen = !s && picked()?.id === a.id;
+    rows.push(it(a.label, { on: chosen, off: !a.available, title: a.available ? '' : (a.note || 'not installed'), hint: a.available ? (models.length ? (open ? '▾' : '▸') : '') : 'not installed',
+      run: () => { if (models.length) { pop.wide = open ? '' : a.id; if (s) drawPop(); else choose(a.id, pick.adapter === a.id ? pick.model : '', true); } else if (s) carryOn(a.id); else choose(a.id, ''); } }));
+    if (open) rows.push(it('its own default', { sub: true, on: chosen && !pick.model, run: () => (s ? carryOn(a.id) : choose(a.id, '')) }),
+      ...models.map((m) => it(m.name || m.id, { sub: true, on: chosen && pick.model === m.id, run: () => (s ? carryOn(a.id, m.id) : choose(a.id, m.id)) })));
+  }
+  return rows;
+}
+
+/** With nobody on show: who a new agent here would be. */
+function choose(adapter, model, stay = false) {
+  pick = { ...pick, adapter, model }; store.set('pick', pick);
+  if (stay) drawBar(); else openPop('');
+  placeholder(); input.focus();
+}
+
+async function chooseMode(id) {
+  const s = shown();
+  if (id === 'full' && (s ? s.mode : pick.mode) !== 'full' && !(armed.what === 'full' && Date.now() < armed.until)) { armed = { what: 'full', until: Date.now() + 6000 }; drawPop(); return; }
+  armed = { what: '', until: 0 };
+  if (s) await setControl('mode', id); else { pick = { ...pick, mode: id }; store.set('pick', pick); openPop(''); drawBar(); input.focus(); }
+}
+
+/** Change one of the things the session on show offers a choice of. What it then runs with is written into its record by the office. */
+async function setControl(name, id) {
+  const s = shown(), c = s?.controls?.[name];
+  openPop('');
+  input.focus();
+  if (!c || id === c.value) return;
+  try {
+    const res = await net.api(c.url, { method: c.method || 'PATCH', body: { [c.field || name]: id } });
+    if (res?.session) con.harness({ sessions: con.state.sessions.map((x) => (x.id === res.session.id ? res.session : x)) });
+  } catch (err) { oops(err); }
+}
+
+/** The same conversation, another agent: it starts in the same folder with a summary of this session handed over, on the record of both. */
+async function carryOn(adapter, model = '') {
+  const s = shown();
+  openPop('');
+  if (!s) return;
+  try {
+    // a new agent never starts wider than "edits": full access is something a person turns on, and twice
+    const res = await net.api('/api/harness/sessions', { method: 'POST', body: { adapter, cwd: s.cwd, ...(model ? { model } : {}), mode: s.mode === 'full' ? 'edits' : s.mode, context: { session: s.id } } });
+    if (res?.session) { con.harness({ sessions: [...con.state.sessions.filter((x) => x.id !== res.session.id), res.session] }); show('session', res.session.id); }
+  } catch (err) { oops(err); }
+}
+
+/** On a project's page, what is typed starts an agent on it: the one the bar names, with that as its first turn. */
+async function startHere(text) {
+  const p = here(), a = picked();
+  if (!p || !a) return;
+  try {
+    const res = await net.api('/api/harness/sessions', { method: 'POST', body: { adapter: a.id, cwd: p.cwd, ...(pick.model && pick.adapter === a.id ? { model: pick.model } : {}), mode: pick.mode, text } });
+    if (res?.session) { con.harness({ sessions: [...con.state.sessions.filter((x) => x.id !== res.session.id), res.session] }); show('session', res.session.id); }
+  } catch (err) { oops(err); }
+}
+document.addEventListener('click', () => openPop(''));
 
 function toggleRail() {
   if (matchMedia('(max-width: 760px)').matches) document.body.classList.toggle('rail');
@@ -348,23 +494,24 @@ function walk(dir) {
   if (next.startsWith('p:')) show('project', id); else show(sessionOf(id) ? 'session' : 'agent', id);
 }
 
-input.addEventListener('input', () => { menuAt = 0; fit(); drawMenu(); });
+input.addEventListener('input', () => { menuAt = -1; openPop(''); fit(); drawMenu(); });
 input.addEventListener('keydown', (e) => {
-  const options = menu ? complete(input.value) : [];
+  const options = menu ? menuOptions() : [];
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
-    if (menu && options[menuAt] && '/' + options[menuAt] !== input.value.trim()) { input.value = `/${options[menuAt]} `; drawMenu(); fit(); if (COMMANDS.find((c) => c.name === options[menuAt])?.args) return; }
+    const o = menu ? options[menuAt] : null;
+    if (o && o.text.trim() !== input.value.trim()) { take(o); if (o.more) return; }
     send();
-  } else if (e.key === 'Tab' && menu && options.length) { e.preventDefault(); input.value = `/${options[menuAt]} `; drawMenu(); fit(); }
+  } else if (e.key === 'Tab' && menu && options.length) { e.preventDefault(); take(options[Math.max(0, menuAt)]); }
   else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.altKey) { e.preventDefault(); walk(e.key === 'ArrowUp' ? -1 : 1); }
-  else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && menu) { e.preventDefault(); menuAt = (menuAt + (e.key === 'ArrowUp' ? -1 : 1) + options.length) % options.length; drawMenu(); }
+  else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && menu) { e.preventDefault(); menuAt = (Math.max(e.key === 'ArrowUp' ? 0 : -1, menuAt) + (e.key === 'ArrowUp' ? -1 : 1) + options.length) % options.length; drawMenu(); }
   else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !input.value.includes('\n') && (histAt !== -1 || !input.value || e.key === 'ArrowUp' && input.selectionStart === 0)) {
     if (!typed.length) return;
     e.preventDefault();
     if (histAt === -1) draft = input.value;
     histAt = Math.max(-1, Math.min(typed.length - 1, histAt + (e.key === 'ArrowUp' ? 1 : -1)));
     input.value = histAt === -1 ? draft : typed[histAt]; fit();
-  } else if (e.key === 'Escape') { e.preventDefault(); if (input.value) { input.value = ''; fit(); drawMenu(); } else if (view.kind === 'session') con.stop(); }
+  } else if (e.key === 'Escape') { e.preventDefault(); if (pop) openPop(''); else if (input.value) { input.value = ''; fit(); drawMenu(); } else if (view.kind === 'session') con.stop(); }
   else if (!input.value && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
     // on an empty line: one key answers what is waiting, and ` swaps to the office
     if (e.key === '`') { e.preventDefault(); location.href = '/'; return; }
@@ -386,7 +533,9 @@ net.on('snapshot', railSoon); net.on('agent', (a) => { railSoon(); if (view.id =
 net.on('tasks', () => { railSoon(); });
 net.on('usage', (u) => { con.usage(u); railSoon(); });
 net.on('prompts', (p) => { con.prompts(p); placeholder(); drawStatus(); if (view.kind === 'agent') drawAgent(); });
-net.on('harness', (m) => { con.harness(m); railSoon(); placeholder(); if (view.kind === 'agent' && sessionOf(view.id)) show('session', view.id); });
+let offersTimer = null;
+const offersSoon = () => { clearTimeout(offersTimer); offersTimer = setTimeout(async () => { try { adapters = (await net.api('/api/harness')).adapters || adapters; drawBar(); placeholder(); } catch { /* as it was, then */ } }, 900); };
+net.on('harness', (m) => { con.harness(m); railSoon(); placeholder(); offersSoon(); if (view.kind === 'agent' && sessionOf(view.id)) show('session', view.id); });
 net.on('transcript', (m) => con.entry(m.sessionId, m.entry));
 net.on('status', async (ok) => {
   drawStatus();
@@ -411,6 +560,6 @@ function begin() {
 }
 
 if (store.get('norail', false)) document.body.classList.add('norail');
-drawRail(); drawHead(); drawNone(); drawStatus(); placeholder();
+drawRail(); drawHead(); drawNone(); drawStatus(); drawBar(); placeholder();
 net.connect();
 input.focus();

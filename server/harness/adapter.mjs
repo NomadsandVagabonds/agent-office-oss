@@ -40,6 +40,21 @@ export class AgentAdapter extends EventEmitter {
 
   /* ---- for subclasses to implement ---------------------------------------- */
   _onRequest() { throw new Error('not implemented'); }
+
+  /**
+   * What the agent itself offers and what is current — never a catalogue of our own: a model, an effort or a
+   * mode is listed here only because the agent said it has it.
+   *   { model, models: [{ id, name, efforts?: [{id,name}], defaultEffort? }], modelFree?,
+   *     effort, efforts: [{ id, name }], modeId, modes: [{ id, name }] }
+   * `modes` are the agent's OWN modes (plan, and whatever else it calls them), not the office's ask/edits/full.
+   * An adapter emits `{ type: 'settings' }` whenever this has changed on the agent's say-so.
+   *
+   * What can be changed on a running session is whichever of these the adapter defines:
+   *   setModel(id)  setEffort(id)  setMode(id)  setAccess('ask'|'edits'|'full')
+   * each resolving once the agent has accepted it (or it is stored to go out with the next turn) and rejecting
+   * with a sentence a person can read. One that is not defined cannot be done, and the session says so.
+   */
+  settings() { return { model: '', models: [], effort: '', efforts: [], modeId: '', modes: [] }; }
   _onNotification() {}
   /** Answer every request the agent is still waiting on; it will get no better answer now. */
   _settlePending() {}

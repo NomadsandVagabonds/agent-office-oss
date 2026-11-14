@@ -259,12 +259,14 @@ export const wordsAction = (prompt) => (prompt?.respond?.actions || []).find((a)
 /* ---- what a typed line means ------------------------------------------------------------------ */
 
 export const COMMANDS = Object.freeze([
-  { name: 'new', args: '<agent> [folder]', about: 'start an agent here (--mode ask|edits|full  --model name  --name name)' },
+  { name: 'new', args: '<agent> [folder]', about: 'start an agent here (--model name  --effort level  --mode ask|edits|full  --name name; --context carries this conversation over to it)' },
   { name: 'sessions', alias: ['ls'], about: 'who the office is driving, and what could be started' },
   { name: 'switch', alias: ['s'], args: '<number|name>', about: 'talk to another session' },
   { name: 'stop', about: 'stop the turn in flight (Esc does the same)' },
   { name: 'end', about: 'end this session: its process is stopped' },
-  { name: 'mode', args: '<ask|edits|full>', about: 'how freely it may act' },
+  { name: 'model', args: '[name]', about: 'which model it runs on (alone: what it offers)' },
+  { name: 'effort', args: '[level]', about: 'how hard it thinks' },
+  { name: 'mode', args: '<ask|edits|full | one of its own>', about: 'how freely it may act — or one of the agent\'s own modes, such as plan' },
   { name: 'wake', args: '<off|results|direct>', about: 'what may start a turn by itself' },
   { name: 'yes', alias: ['y'], about: 'allow what is being asked, once' },
   { name: 'always', alias: ['a'], about: 'allow that kind of thing for the rest of the session' },
@@ -313,6 +315,26 @@ export function complete(partial) {
   const m = /^\/([\w?-]*)$/.exec(String(partial || ''));
   if (!m) return [];
   return COMMANDS.map((c) => c.name).filter((n) => n.startsWith(m[1].toLowerCase()));
+}
+
+/* ---- a choice among what the agent offers ----------------------------------------------------------- */
+
+/** The options of one of a session's controls (model, effort, agentMode, mode…), each with the agent's own name for it. */
+export const optionsOf = (control) => (control?.options || []).map((id) => ({ id, label: control.labels?.[id] || id }));
+
+/**
+ * Which option somebody meant: its id, the agent's name for it, or the unmistakable start of either. Where the agent
+ * takes anything (`free`), what was typed is passed on as it stands. null: none of them.
+ */
+export function resolveOption(control, typed) {
+  const want = String(typed ?? '').trim().toLowerCase();
+  if (!want) return null;
+  const all = optionsOf(control);
+  const exact = all.find((o) => o.id.toLowerCase() === want) || all.find((o) => o.label.toLowerCase() === want);
+  if (exact) return exact.id;
+  const near = all.filter((o) => o.id.toLowerCase().startsWith(want) || o.label.toLowerCase().startsWith(want));
+  if (near.length === 1) return near[0].id;
+  return control?.free ? String(typed).trim() : null;
 }
 
 /* ---- the console itself --------------------------------------------------------------------------- */
@@ -527,7 +549,10 @@ export function createConsole(io) {
       const cwd = words[1] || io.cwd || session()?.cwd || undefined;
       try {
         const res = await io.api('/api/harness/sessions', { method: 'POST', body: { adapter, ...(cwd ? { cwd } : {}),
-          ...(typeof flags.mode === 'string' ? { mode: flags.mode } : {}), ...(typeof flags.model === 'string' ? { model: flags.model } : {}), ...(typeof flags.name === 'string' ? { name: flags.name } : {}) } });
+          ...(typeof flags.mode === 'string' ? { mode: flags.mode } : {}), ...(typeof flags.model === 'string' ? { model: flags.model } : {}), ...(typeof flags.name === 'string' ? { name: flags.name } : {}),
+          ...(typeof flags.effort === 'string' ? { effort: flags.effort } : {}), ...(typeof flags['agent-mode'] === 'string' ? { agentMode: flags['agent-mode'] } : {}),
+          // carrying this conversation on with another agent: the office hands over a summary of it, on the record
+          ...(flags.context && session() ? { context: { session: session().id, ...(typeof flags.context === 'string' && Number(flags.context) > 0 ? { turns: Number(flags.context) } : {}) } } : {}) } });
         if (res?.session) { if (!state.sessions.some((s) => s.id === res.session.id)) state.sessions = [...state.sessions, res.session]; await open(res.session); }
       } catch (err) { fail(err); }
     },
@@ -546,7 +571,20 @@ export function createConsole(io) {
       if (!twice('end:' + s.id)) { say([[`End ${label(s)}? Its process is stopped and it cannot be resumed. `, 'warn'], ['/end', 'key'], [' again to go ahead.', 'warn']]); return; }
       try { await call(c); } catch (err) { fail(err); }
     },
-    async mode({ words }) { await setting('mode', MODES, words[0], 'It'); },
+    async model({ rest }) { await choice('model', 'model', rest); },
+    async effort({ words }) { await choice('effort', 'effort', words[0]); },
+    // Two things are called a mode: how freely the office lets it act (ask, edits, full), and the agent's own ways
+    // of working (plan, and whatever else it calls them). The three words are the office's; anything else is the
+    // agent's — and "own:ask" reaches an agent's own mode that happens to share one of those names.
+    async mode({ words, rest }) {
+      const s = session(), own = s?.controls?.agentMode, has = optionsOf(own).length > 0;
+      if (!s) { say('No session.'); return; }
+      if (!rest) { await setting('mode', MODES, undefined, 'It'); if (has) await choice('agentMode', 'its own mode'); return; }
+      const mine = /^own:/i.test(rest) ? rest.slice(4).trim() : '';
+      if (!mine && MODES.includes(words[0])) { await setting('mode', MODES, words[0], 'It'); return; }
+      if (has && resolveOption(own, mine || rest)) { await choice('agentMode', 'its own mode', mine || rest); return; }
+      say(`"${rest}" is not one of ${MODES.join(', ')}${has ? ` — nor one of its own (${own.options.join(', ')})` : ''}.`);
+    },
     async wake({ words }) { await setting('wake', WAKES, words[0], 'It wakes'); },
     async yes() { if (!(await choose('y'))) say('Nothing is waiting for a yes.'); },
     async always() { if (!(await choose('a'))) say('Nothing here can be allowed for the session.'); },
@@ -617,6 +655,54 @@ export function createConsole(io) {
       ...state.adapters.flatMap((a, i) => [[a.id, a.available ? '' : 'dim'], [a.available ? '' : ' (not installed)', 'dim'], [i < state.adapters.length - 1 ? ', ' : '', 'dim']])]];
   }
 
+  /** Show, or change, one of the things the agent itself offers a choice of: its model, how hard it thinks, its own mode. */
+  async function choice(name, word, typed) {
+    const s = session(), c = s?.controls?.[name];
+    if (!s) { say('No session.'); return; }
+    const all = optionsOf(c);
+    const named = (id) => { const l = c?.labels?.[id]; return l && l !== id ? `${l} (${id})` : id; };
+    if (!typed) {
+      if (!c || (!all.length && !c.value)) { say(`This agent has not said what ${word} it offers.`); return; }
+      say([[`${word}: `, 'dim'], [c.value ? named(c.value) : 'its default', 'bold']],
+        ...all.map((o) => [[o.id === c.value ? '  ▸ ' : '    ', 'say'], [o.id, 'key'], [o.label !== o.id ? `  ${o.label}` : '', 'dim']]),
+        ...(c.free ? ['    …or any other name the agent knows.'] : []),
+        ...(c.available === false ? [c.fixed ? `It is ${c.fixed}.` : 'It cannot be changed for this session.'] : []));
+      return;
+    }
+    if (!c || c.available === false) { say(c?.fixed ? `That is ${c.fixed}.` : `This agent offers no choice of ${word}.`); return; }
+    const id = resolveOption(c, typed);
+    if (!id) { say(`"${typed}" is not one of ${c.options.join(', ')}.`); return; }
+    try {
+      await io.api(c.url, { method: c.method || 'PATCH', body: { [c.field || name]: id } });
+      say(`${word}: ${named(id)}${c.applies === 'next-turn' && s.state === 'running' ? ' — from the next turn' : ''}`);
+    } catch (err) { fail(err); }
+  }
+
+  /**
+   * What a half-typed line could become: [{ kind, text, label, hint }] — `text` is the whole line as it would then
+   * read. A command's name first (kind 'command'; `more` when it cannot be sent without a word after it); after the
+   * name, the first word it takes (kind 'word': a model, an effort, a mode, an agent, a session).
+   */
+  function completions(typed) {
+    const text = String(typed || '');
+    const names = complete(text);
+    if (names.length) return names.map((n) => { const c = BY_NAME.get(n); return { kind: 'command', text: `/${n} `, label: `/${n}`, hint: `${c.args ? c.args + ' — ' : ''}${c.about}`, more: /^</.test(c.args || '') }; });
+    const m = /^\/([a-zA-Z?][\w-]*)\s+(.*)$/.exec(text);
+    const cmd = m ? BY_NAME.get(m[1].toLowerCase()) : null;
+    if (!cmd) return [];
+    const s = session(), of = (c) => optionsOf(c).map((o) => ({ id: o.id, hint: o.label !== o.id ? o.label : '' }));
+    const options = cmd.name === 'model' ? of(s?.controls?.model)
+      : cmd.name === 'effort' ? of(s?.controls?.effort)
+        : cmd.name === 'mode' ? [...MODES.map((id) => ({ id, hint: s?.controls?.mode?.labels?.[id] || '' })), ...of(s?.controls?.agentMode).filter((o) => !MODES.includes(o.id))]
+          : cmd.name === 'wake' ? WAKES.map((id) => ({ id, hint: '' }))
+            : cmd.name === 'new' ? state.adapters.filter((a) => a.available).map((a) => ({ id: a.id, hint: a.label }))
+              : cmd.name === 'delegate' ? [{ id: 'any', hint: 'whoever has the most allowance left' }, ...state.adapters.filter((a) => a.available).map((a) => ({ id: a.id, hint: a.label }))]
+                : cmd.name === 'switch' ? state.sessions.map((x) => ({ id: label(x), hint: `${x.label}${x.model ? ' · ' + x.model : ''}` }))
+                  : [];
+    const part = m[2].toLowerCase();
+    return options.filter((o) => o.id.toLowerCase().startsWith(part) && o.id.toLowerCase() !== part).map((o) => ({ kind: 'word', text: `/${m[1]} ${o.id}`, label: o.id, hint: o.hint }));
+  }
+
   async function setting(name, allowed, value, verb) {
     const s = session(), c = s?.controls?.[name];
     if (!s || !c) { say('No session.'); return; }
@@ -636,8 +722,8 @@ export function createConsole(io) {
     return run[input.name](input);
   }
 
-  /** What the line at the bottom says: [left spans, right spans]. */
-  function status() {
+  /** What the line at the bottom says: [left spans, right spans]. `brief` leaves out what a screen shows elsewhere (agent, model, effort, mode). */
+  function status({ brief = false } = {}) {
     const s = session();
     const others = state.sessions.filter((x) => x.id !== state.current && x.state === 'waiting');
     const left = [];
@@ -645,8 +731,11 @@ export function createConsole(io) {
     else {
       const u = entries.get('usage') || [...entries.values()].filter((e) => e.kind === 'usage').pop() || (s.usage ? { ...s.usage } : null);
       const pct = u && u.size > 0 ? Math.round((u.used / u.size) * 100) : null;
-      left.push([label(s), 'bold'], [`  ${[s.label !== label(s) ? s.label : '', s.model, s.mode].filter(Boolean).join(' · ')}`, 'dim'],
-        [`  ${STATE_WORD[s.state] || s.state || ''}`, s.state === 'waiting' ? 'ask' : s.state === 'running' ? 'ok' : s.state === 'failed' ? 'err' : 'dim']);
+      // its own mode is worth a word only when it is not the ordinary one
+      const own = s.agentMode && !/^default$/i.test(s.agentMode) ? `${s.controls?.agentMode?.labels?.[s.agentMode] || s.agentMode} mode` : '';
+      left.push([label(s), 'bold']);
+      if (!brief) left.push([`  ${[s.label !== label(s) ? s.label : '', s.model, s.effort, s.mode].filter(Boolean).join(' · ')}`, 'dim'], ...(own ? [[`  ${own}`, 'tool']] : []));
+      left.push([`  ${STATE_WORD[s.state] || s.state || ''}`, s.state === 'waiting' ? 'ask' : s.state === 'running' ? 'ok' : s.state === 'failed' ? 'err' : 'dim']);
       if (s.queued) left.push([`  ${s.queued} waiting`, 'dim']);
       if (pct !== null) left.push([`  context ${pct}%`, pct >= 85 ? 'warn' : 'dim']);
       if (s.wakeStats?.held) left.push(['  mail held', 'warn']);
@@ -667,6 +756,6 @@ export function createConsole(io) {
   return {
     state, on, session, live: () => live(session()), status, pending: () => openPrompts()[0] || null,
     blocks: () => [...blocks.values()],
-    harness, prompts, usage, entry, open, leave, find, submit, key, stop, answer, say,
+    harness, prompts, usage, entry, open, leave, find, submit, key, stop, answer, say, complete: completions,
   };
 }

@@ -33,6 +33,7 @@ import { createWake } from './wake.mjs';
 import { createDelegations } from './delegations.mjs';
 import { WAKE_MODES } from './settings.mjs';
 import { line } from './normalize.mjs';
+import { buildHandoff } from './handoff.mjs';
 
 const KEEP_ENDED = 120;                 // how many finished sessions stay listed
 const SESSION_ID = /^d_[a-f0-9]{12}$/;
@@ -64,6 +65,25 @@ export function createHarness(ctx, file) {
   /* ---- telling clients ----------------------------------------------------- */
 
   const liveSessions = () => [...sessions.values()].filter((s) => s.live);
+
+  // What each agent said it offers (models, efforts, its own modes) the last time it ran here. The office
+  // keeps no catalogue of its own — model lists go stale in weeks — so this is how a choice can be made
+  // before the next session starts: from the agent's own last word, with its date.
+  function remember(adapterId, offer) {
+    if (!offer.models.length && !offer.efforts.length && !offer.modes.length) return;
+    const offers = store.data.offers || (store.data.offers = {});
+    const { at: _at, ...had } = offers[adapterId] || {};
+    if (JSON.stringify(had) === JSON.stringify(offer)) return;
+    offers[adapterId] = { ...offer, at: Date.now() };
+    store.save();
+    changed();
+  }
+
+  /** The agents that can be started here, each with what it last said it offers (`offers`, or null if it never ran). */
+  function adapters() {
+    const offers = store.data.offers || {};
+    return catalog.list().map((a) => ({ ...a, offers: offers[a.id] || null }));
+  }
 
   function pubSession(session) {
     return { ...session.pub(), wakeStats: wake.stats(session) };
@@ -192,6 +212,7 @@ export function createHarness(ctx, file) {
     const record = {
       id, adapter: spec.id, label: spec.label, provider: spec.provider, protocol: spec.protocol, cwd,
       name: line(input.name, 32), handle: line(input.handle, 40), model: line(input.model, 200), task: line(input.task, 140),
+      effort: line(input.effort, 40), agentMode: line(input.agentMode, 200),
       mode, wake: wakeMode, state: 'starting', startedAt: Date.now(), endedAt: null, reason: '', turns: 0,
       origin: { kind: origin.kind || 'human', ...(origin.by ? { by: line(origin.by, 60) } : {}),
         ...(origin.delegationId ? { delegationId: origin.delegationId } : {}) },
@@ -204,6 +225,7 @@ export function createHarness(ctx, file) {
 
     session.transcript.onEntry((entry) => pushEntry(session, entry));
     session.on('changed', () => { persist(session); delegations.onChanged(session); changed(); });
+    session.on('offer', (offer) => remember(spec.id, offer));
     session.on('waiting', () => delegations.onChanged(session));
     session.on('turn-started', (turn) => {
       if (turn.origin === 'human') wake.renew(session);        // a human is supervising again
@@ -266,6 +288,31 @@ export function createHarness(ctx, file) {
     return { sessionId: id, ...readTranscriptFile(path.join(dir, `${id}.jsonl`), opt) };
   }
 
+  /**
+   * A summary of what one session did, for another to start from — when a person carries a conversation on
+   * with a different agent. Built from the first session's record (it may have ended), never from anything
+   * native to its provider; `attach` writes it down on both sides and puts it in front of the new session's
+   * first turn. Built before the new session is started, so that a bad reference starts nothing.
+   */
+  function handoffFrom(context) {
+    const ref = typeof context === 'string' ? context : (context && typeof context.session === 'string' ? context.session : '');
+    const from = describe(ref);
+    const record = from ? transcript(from.id, { limit: 1000 }) : null;
+    if (!from || !record) throw new SessionError(400, 'context can only be carried over from a session the office drives or drove (it needs a record): {context: {session, turns?}}');
+    const turns = Number(context?.turns) > 0 ? Math.min(50, Number(context.turns)) : 0;
+    const name = from.name || from.label;
+    const built = buildHandoff(record.entries, { from: name, provider: from.provider, sessionId: from.id, turns });
+    return {
+      attach(session) {
+        const key = `handoff:${session.id}`;
+        const meta = { items: built.items, omitted: built.omitted, turns: built.turns };
+        session.transcript.write({ id: key, kind: 'handoff', direction: 'in', fromSessionId: from.id, fromName: name, ...meta, text: built.text });
+        sessions.get(from.id)?.transcript.write({ id: key, kind: 'handoff', direction: 'out', toName: session.pub().name || session.record.label, ...meta });
+        session.carry(built.text);
+      },
+    };
+  }
+
   /** How many agent-to-agent steps from a human would something this agent sends now be? */
   function hopOf(agentId) {
     const session = sessions.get(agentId);
@@ -319,7 +366,7 @@ export function createHarness(ctx, file) {
   }
 
   return {
-    settings, catalog, wake, delegations,
+    settings, catalog, wake, delegations, adapters, handoffFrom,
     create, resolve, list, describe, transcript, snapshot,
     session: (id) => sessions.get(id) || null,
     sessionForAgent, deliverHumanNote, hopOf, callerOf,

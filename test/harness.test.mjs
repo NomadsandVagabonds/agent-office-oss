@@ -69,7 +69,12 @@ test('driven sessions', async (t) => {
       interrupt: { method: 'POST', url: `${at}/interrupt`, available: false },
       end: { method: 'DELETE', url: at, available: true },
       wake: { method: 'PATCH', url: at, field: 'wake', value: 'off', options: ['off', 'results', 'direct'], available: true },
-      mode: { method: 'PATCH', url: at, field: 'mode', value: 'ask', options: ['ask', 'edits', 'full'], available: true },
+      mode: { method: 'PATCH', url: at, field: 'mode', value: 'ask', options: ['ask', 'edits', 'full'], available: true,
+        labels: { ask: 'asks before it acts', edits: 'edits freely, asks for the rest', full: 'acts without asking' } },
+      // what the agent itself offers — its models, how hard it thinks, its own modes — under the names it gave them
+      model: { method: 'PATCH', url: at, field: 'model', value: 'fake-large', options: ['fake-large', 'fake-small'], labels: { 'fake-large': 'Fake Large', 'fake-small': 'Fake Small' }, available: true },
+      effort: { method: 'PATCH', url: at, field: 'effort', value: 'medium', options: ['low', 'medium', 'high'], labels: { low: 'Low', medium: 'Medium', high: 'High' }, available: true },
+      agentMode: { method: 'PATCH', url: at, field: 'agentMode', value: 'default', options: ['default', 'plan', 'yolo'], labels: { default: 'Default', plan: 'Plan', yolo: 'YOLO' }, available: true },
       deliverMail: { method: 'POST', url: `${at}/mail`, available: true },
     });
 
@@ -395,7 +400,7 @@ test('driven sessions', async (t) => {
     const patched = await h.patch(`/api/harness/sessions/${edits.id}`, { mode: 'full' });
     assert.equal(patched.data.session.mode, 'full');
     assert.equal((await h.turn(edits.id, 'ask:curl example.com')).said, 'outcome=allow-once');
-    assert.ok((await h.entries(edits.id)).some((e) => e.kind === 'notice' && /Mode set to .full. by the human/.test(e.text)));
+    assert.ok((await h.entries(edits.id)).some((e) => e.kind === 'notice' && /Mode set to .full. by Lead/.test(e.text)));
     assert.equal((await h.patch(`/api/harness/sessions/${edits.id}`, { mode: 'everything' })).status, 400);
     await h.del(`/api/harness/sessions/${edits.id}`);
   });

@@ -18,7 +18,11 @@
     <div id="feed" tabindex="-1"></div>
     <footer id="foot">
       <div id="live"></div>
-      <div id="entry"><span class="mark">&gt;</span><textarea id="input" rows="1" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Say something to the agent, or type a command"></textarea></div>
+      <div id="entry">
+        <div class="line"><span class="mark">&gt;</span><textarea id="input" rows="1" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Say something to the agent, or type a command"></textarea></div>
+        <!-- who this is said to, on which model, how hard it thinks, in which of its own modes, how freely it may act -->
+        <div id="bar"></div>
+      </div>
       <div id="status"><span class="l"></span><span class="r"></span></div>
     </footer>
   </main>

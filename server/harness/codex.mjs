@@ -29,6 +29,17 @@ export const CODEX_MODES = Object.freeze({
   full: { approvalPolicy: 'never', sandbox: 'danger-full-access' },
 });
 
+// The same three, as a turn carries them. Codex takes its policy per turn too and keeps it as the thread's
+// default from then on, which is what lets a human tighten (or loosen) a running Codex without ending it.
+export const CODEX_TURN_POLICY = Object.freeze({
+  ask: { approvalPolicy: 'untrusted', sandboxPolicy: { type: 'readOnly' } },
+  edits: { approvalPolicy: 'on-request', sandboxPolicy: { type: 'workspaceWrite' } },
+  full: { approvalPolicy: 'never', sandboxPolicy: { type: 'dangerFullAccess' } },
+});
+const SANDBOX_MODE = Object.freeze({ readOnly: 'ask', workspaceWrite: 'edits', dangerFullAccess: 'full' });
+// Codex's own two ways of working ("collaboration modes"). It brings the instructions for each itself.
+const CODEX_AGENT_MODES = Object.freeze([{ id: 'default', name: 'Default' }, { id: 'plan', name: 'Plan' }]);
+
 // The three answers Codex understands, offered as options with ids of our own
 // so that the rest of the harness treats every provider's requests alike.
 const APPROVAL_OPTIONS = Object.freeze([
@@ -68,8 +79,8 @@ export class CodexAdapter extends AgentAdapter {
   /**
    * @param {{command:string, args?:string[], env?:object, cwd:string, clientInfo:object,
    *          mcpServers?:Array<{name:string, command:string, args:string[], env:object}>,
-   *          model?:string, mode?:'ask'|'edits'|'full', startTimeoutMs?:number, cancelTimeoutMs?:number,
-   *          trace?:Function}} opt
+   *          model?:string, effort?:string, agentMode?:string, mode?:'ask'|'edits'|'full',
+   *          startTimeoutMs?:number, cancelTimeoutMs?:number, trace?:Function}} opt
    */
   constructor(opt) {
     super(opt, { kind: 'codex-app-server', dialect: 'bare' });
@@ -79,6 +90,15 @@ export class CodexAdapter extends AgentAdapter {
     this.byRpcId = new Map();         // Codex request id → our request id (for serverRequest/resolved)
     this.requestSeq = 0;
     this.model = '';
+    this.models = [];                 // what `model/list` said this Codex offers: [{ id, name, efforts, defaultEffort }]
+    this.effort = '';                 // '' is "the model's own default"
+    this.modeId = 'default';          // Codex's collaboration mode
+    this.access = CODEX_MODES[opt.mode] ? opt.mode : 'ask';
+    // What somebody has chosen since the thread started. Only those ride on a turn; everything else stays
+    // exactly as Codex's own configuration has it.
+    this.chosen = { model: false, effort: false, mode: false, access: false };
+    this.unsent = new Set();          // …and which of those no turn has carried yet
+    this.perTurn = true;              // for whoever describes this session: a change applies from the next turn
     this.rateLimits = null;           // Codex's last allowance snapshot, merged from partial updates
     this.limitsSent = '';             // what we last reported, so a repeat is not news
   }
@@ -124,16 +144,123 @@ export class CodexAdapter extends AgentAdapter {
     }
     this.threadId = started.thread.id.slice(0, 200);
     this.model = line(started.model || started.thread.model || this.opt.model || '', 80);
+    this.effort = line(typeof started.reasoningEffort === 'string' ? started.reasoningEffort : '', 40);
+    // thread/start has no place for these two; they go out with the first turn.
+    if (this.opt.effort) { this.effort = line(this.opt.effort, 40); this.chosen.effort = true; }
+    if (this.opt.agentMode === 'plan') { this.modeId = 'plan'; this.chosen.mode = true; }
     this.#readLimits();
+    this.#readModels();
     return {
       protocol: 'codex-app-server',
       nativeSessionId: this.threadId,
       agent: { name: 'Codex', version: line(String(init?.userAgent || '').split(' ')[0].split('/')[1] || '', 40) },
-      model: this.model, models: [], modeId: '', modes: [],
+      model: this.model, models: this.models, modeId: this.modeId, modes: CODEX_AGENT_MODES,
       // exactSessionAllow: Codex's own "accept for session" covers only that exact command or patch, so it is
       // safe to send for the office's "for the session" (whose memory covers the next one). Declared, not assumed.
       features: { interrupt: true, resume: true, images: true, officeTools, nativeSandbox: true, exactSessionAllow: true },
     };
+  }
+
+  /* ---- model, effort, mode, access ------------------------------------------ */
+
+  // Asked once and never waited for, like the allowance: an older Codex has no such method, and a session
+  // must not fail to start over a list. Whatever arrives is announced as `settings`.
+  #readModels(cursor = '', found = [], pages = 0) {
+    this.peer.request('model/list', cursor ? { cursor } : {}, { timeoutMs: 10_000 }).then((res) => {
+      if (!isObject(res) || !Array.isArray(res.data)) return;
+      for (const m of res.data.filter(isObject)) {
+        const id = line(typeof m.model === 'string' ? m.model : m.id, 200);
+        if (!id || m.hidden === true || found.some((x) => x.id === id)) continue;
+        const efforts = (Array.isArray(m.supportedReasoningEfforts) ? m.supportedReasoningEfforts : []).filter(isObject)
+          .map((e) => line(e.reasoningEffort, 40)).filter(Boolean).slice(0, 12).map((e) => ({ id: e, name: e }));
+        found.push({ id, name: line(m.displayName, 80) || id, efforts, defaultEffort: line(typeof m.defaultReasoningEffort === 'string' ? m.defaultReasoningEffort : '', 40) });
+      }
+      if (typeof res.nextCursor === 'string' && res.nextCursor && pages < 5 && found.length < 60) { this.#readModels(res.nextCursor, found, pages + 1); return; }
+      this.models = found.slice(0, 60);
+      this._emit({ type: 'settings' });
+    }, () => {});
+  }
+
+  settings() {
+    const current = this.models.find((m) => m.id === this.model);
+    return {
+      model: this.model, models: this.models, modelFree: true,     // Codex takes any model its provider knows, listed or not
+      effort: this.effort || current?.defaultEffort || '', efforts: current?.efforts || [],
+      modeId: this.modeId, modes: CODEX_AGENT_MODES,
+    };
+  }
+
+  // None of these needs a request of its own: Codex takes them with a turn and keeps them for the thread.
+  // So each is stored here, goes out with the next turn, and is confirmed (or corrected) by what Codex then
+  // says the thread runs with — see #confirmed.
+  async setModel(model) {
+    const value = line(model, 200);
+    if (!value) throw new Error('a model needs a name');
+    this.model = value;
+    this.chosen.model = true; this.unsent.add('model');
+    const efforts = this.models.find((m) => m.id === value)?.efforts || [];
+    // An effort the new model does not have would fail its first turn: fall back to that model's own default.
+    if (this.effort && efforts.length && !efforts.some((e) => e.id === this.effort)) this.effort = '';
+  }
+
+  async setEffort(effort) {
+    const value = line(effort, 40);
+    const efforts = this.models.find((m) => m.id === this.model)?.efforts || [];
+    if (!value || (efforts.length && !efforts.some((e) => e.id === value))) {
+      throw new Error(efforts.length ? `this model thinks at ${efforts.map((e) => e.id).join(', ')}` : 'an effort needs a name');
+    }
+    this.effort = value;
+    this.chosen.effort = true; this.unsent.add('effort');
+  }
+
+  async setMode(modeId) {
+    if (!CODEX_AGENT_MODES.some((m) => m.id === modeId)) throw new Error(`Codex's own modes are ${CODEX_AGENT_MODES.map((m) => m.id).join(' and ')}`);
+    if (!this.model) throw new Error('Codex did not say which model it runs, and its modes are set per model');
+    this.modeId = modeId;
+    this.chosen.mode = true; this.unsent.add('mode');
+    this._emit({ type: 'mode', modeId });
+  }
+
+  async setAccess(mode) {
+    if (!CODEX_TURN_POLICY[mode]) throw new Error('mode must be ask, edits or full');
+    this.access = mode;
+    this.chosen.access = true; this.unsent.add('access');
+  }
+
+  #turnParams(promptText) {
+    const c = this.chosen, policy = CODEX_TURN_POLICY[this.access];
+    this.unsent.clear();
+    return {
+      threadId: this.threadId, input: [{ type: 'text', text: String(promptText) }],
+      ...(c.model && this.model ? { model: this.model } : {}),
+      ...(c.effort && this.effort ? { effort: this.effort } : {}),
+      ...(c.access ? { approvalPolicy: policy.approvalPolicy, sandboxPolicy: policy.sandboxPolicy } : {}),
+      // Told both ways, and every turn once it was ever chosen: leaving Plan is something Codex has to hear too.
+      ...(c.mode && this.model ? { collaborationMode: { mode: this.modeId,
+        settings: { model: this.model, ...(this.effort ? { reasoning_effort: this.effort } : {}) } } } : {}),
+    };
+  }
+
+  // What Codex itself says the thread runs with. It is believed over what was asked for: a Codex that did
+  // not take a change must not be shown as if it had — least of all when it was asked to be more careful.
+  #confirmed(st) {
+    if (!isObject(st)) return;
+    // A choice no turn has carried yet is not contradicted by settings that predate it.
+    const waiting = this.unsent;
+    let changed = false;
+    const model = line(typeof st.model === 'string' ? st.model : '', 200);
+    if (model && model !== this.model && !waiting.has('model')) { this.model = model; changed = true; }
+    const effort = line(typeof st.effort === 'string' ? st.effort : '', 40);
+    if (effort && effort !== this.effort && !waiting.has('effort')) { this.effort = effort; changed = true; }
+    const mode = isObject(st.collaborationMode) ? st.collaborationMode.mode : '';
+    if (CODEX_AGENT_MODES.some((m) => m.id === mode) && mode !== this.modeId && !waiting.has('mode')) { this.modeId = mode; this._emit({ type: 'mode', modeId: mode }); }
+    const access = isObject(st.sandboxPolicy) ? SANDBOX_MODE[st.sandboxPolicy.type] : undefined;
+    if (access && access !== this.access && !waiting.has('access')) {
+      const asked = this.access;
+      this.access = access;
+      this._emit({ type: 'access', mode: access, asked });
+    }
+    if (changed) this._emit({ type: 'settings' });
   }
 
   /* ---- the operator's allowance -------------------------------------------- */
@@ -174,9 +301,7 @@ export class CodexAdapter extends AgentAdapter {
   prompt(promptText) {
     if (!this.threadId) throw new Error('Codex is not running');
     const turn = this._beginTurn({ id: '', streamed: new Set() });
-    this.peer.request('turn/start', {
-      threadId: this.threadId, input: [{ type: 'text', text: String(promptText) }],
-    }).then((res) => {
+    this.peer.request('turn/start', this.#turnParams(promptText)).then((res) => {
       if (isObject(res?.turn) && typeof res.turn.id === 'string') turn.id = turn.id || res.turn.id;
       // A stop pressed before Codex had registered the turn would otherwise be lost.
       if (turn.cancelRequested && this.turn === turn) this.#sendInterrupt(turn);
@@ -354,6 +479,9 @@ export class CodexAdapter extends AgentAdapter {
       }
       case 'account/rateLimits/updated':
         this.#limits(params.rateLimits);
+        return;
+      case 'thread/settings/updated':
+        this.#confirmed(params.threadSettings);
         return;
       case 'serverRequest/resolved': {
         // Codex settles its own requests when their turn ends; nobody is waiting for our answer any more.
