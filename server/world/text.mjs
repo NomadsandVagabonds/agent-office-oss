@@ -252,7 +252,7 @@ export function createTextWorld(ctx, world) {
     if (!here) return [];
     const names = L().rooms.filter((r) => r.kind === 'project').map((r) => r.name);
     const commons = ['Plaza', 'Library', 'Kitchen', 'Foyer', 'Server Room', 'Supply Closet'];
-    if (world.state().unlocked.backroom) commons.push('The Back Room');
+    if (world.state().unlocked.backroom) commons.push('The Speakeasy');
     const out = [];
     if (here.kind === 'project' || here.kind === 'vacant') out.push(`the corridor (${here.side === 'N' ? 'south' : 'north'})`);
     out.push(...commons.filter((n) => n !== here.name));
@@ -453,7 +453,7 @@ export function createTextWorld(ctx, world) {
         return r.error ? r : { ok: true, text: `You sign the guestbook: “${r.entry.text}”` + star(r.found), found: r.found?.stamped ? 'guest' : null };
       }
       case 'bookshelf': {
-        if (world.state().unlocked.backroom) return { ok: true, text: 'The shelf is already open. Go on through: office go backroom' };
+        if (world.state().unlocked.backroom) return { ok: true, text: 'The shelf is already open. Go on through: office go speakeasy' };
         const found = world.discover('red-book', agent);
         return { ok: true, text: 'You tip the red book toward you. Something clicks behind the wall, and the whole shelf swings inward on a hinge nobody mentioned. There is a room back there.' + star(found), found: 'red-book' };
       }
@@ -569,7 +569,7 @@ export function createTextWorld(ctx, world) {
       const pois = [...lay.pois.values()].filter((p) => p.room === id && !['seat', 'pedestal'].includes(p.kind)).map((p) => p.id);
       lines.push(`  ${r.name}${mark(r)}${pois.length ? ` — ${pois.join(', ')}` : ''}`);
     }
-    if (world.state().unlocked.backroom) lines.push(`  The Back Room${mark(lay.roomById.get('backroom'))} — arcade-1, jukebox`);
+    if (world.state().unlocked.backroom) lines.push(`  The Speakeasy${mark(lay.roomById.get('backroom'))} — arcade-1, jukebox`);
     for (const wing of ['W', 'E']) {
       lines.push('', `${wing === 'W' ? 'West' : 'East'} wing:`);
       for (const r of lay.rooms.filter((x) => x.wing === wing)) {
@@ -578,7 +578,7 @@ export function createTextWorld(ctx, world) {
       }
     }
     const floors = liftFloors().filter((l) => l.id !== HOME && !l.unmarked).map((l) => `${l.floor} ${l.name}`);
-    if (floors.length) lines.push('', `The lift (on the landing) also goes to: ${floors.join(' · ')} — humans only, for now.`);
+    if (floors.length) lines.push('', `The lift (on the landing) also goes to: ${floors.join(' · ')}. (office look lift)`);
     lines.push('', 'Go anywhere: office go <room|thing|agent>   ·   Use anything: office use <thing>');
     return { ok: true, text: lines.join('\n') };
   }

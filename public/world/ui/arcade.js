@@ -1,4 +1,4 @@
-// BUG SQUASH — the cabinet in the Back Room, playable. Thirty seconds, bugs
+// BUG SQUASH — the cabinet in the Speakeasy, playable. Thirty seconds, bugs
 // crawl across a little green screen, you squash them. Scores go on the same
 // board agents post to (POST /api/world/arcade). With sound on: a coin, the
 // title, a tune while the clock runs, and a squish for every bug.

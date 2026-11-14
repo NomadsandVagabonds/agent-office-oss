@@ -1,6 +1,6 @@
-// The Office — props for fun: the Back Room and room flair.
+// The Office — props for fun: the Speakeasy and room flair.
 //
-// The Back Room is the arcade lounge hidden behind a bookshelf (purple walls,
+// The Speakeasy is the arcade lounge hidden behind a bookshelf (purple walls,
 // pink neon): two cabinets, a jukebox, beanbags, a neon sign and a mirror ball.
 // The rest is flair — each project room gets two of these, so that no two
 // teams' rooms look alike.
@@ -24,7 +24,7 @@ const CHROME = '#c3c8d0', BRASS = '#c9a24a', PAPER = '#f1ead8', RED = '#d0392f';
 const LIT = Object.freeze({
   pink: '#e8248a', amber: '#e88a00', cyan: '#00a8c0', lime: '#48b018', red: '#b01810', yellow: '#e0ac00', white: '#fff3c0',
 });
-/** …and deeper ones for big lit surfaces, which must also survive the Back Room's own lamps shining on them. */
+/** …and deeper ones for big lit surfaces, which must also survive the Speakeasy's own lamps shining on them. */
 const DEEP = Object.freeze({ pink: '#b01868', amber: '#b86a00', cyan: '#007f94' });
 
 /** Stamp a small bitmap — rows of text, top row first, '.' is empty — onto the slab z0..z1. `ink` is a colour or (char) => colour. */
@@ -63,7 +63,7 @@ function rod(v, p, d, t0, t1, r, color) {
   }
 }
 
-/* ================================ the Back Room ================================ */
+/* ================================ the Speakeasy ================================ */
 
 const BUG = ['.#.....#.', '..#...#..', '#.#####.#', '.#######.', '#########', '.#######.', '#.#####.#', '...###...'];
 const BUG_SMALL = ['#.#.#', '.###.', '#####', '.###.', '#.#.#'];

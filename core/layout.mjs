@@ -196,7 +196,7 @@ export function buildLayout(plan = {}) {
   addRoom('closet', 'closet', 'Supply Closet', { x: -8, z: 7, w: 4, d: 4 });
   addRoom('server', 'server', 'Server Room', { x: 4, z: 7, w: 4, d: 4 });
   addRoom('elevator', 'elevator', 'Elevator', { x: -1, z: -10, w: 2, d: 2 });
-  addRoom('backroom', 'backroom', 'The Back Room', { x: -8, z: -12, w: 7, d: 4 },
+  addRoom('backroom', 'backroom', 'The Speakeasy', { x: -8, z: -12, w: 7, d: 4 },
     { secret: true, locked: !unlocked.backroom });
 
   const bySlot = new Map(assigned.map((r) => [r.slot, r]));
@@ -329,7 +329,7 @@ export function buildLayout(plan = {}) {
   put('clock', 0, -7.95, 'S', { id: 'clock', poi: { kind: 'clock', label: 'the wall clock', stand: { x: 0, z: -6.5 } } });
   put('doormat', 0, -7.3, 'S', { id: 'mat-elevator', block: false });
   // the lift: a sill across the doorway and a call plate beside it (its floors are in levels.mjs)
-  put('liftpanel', 0, -7.94, 'S', { id: 'lift', poi: { kind: 'elevator', label: 'the lift', stand: { x: 0.6, z: -7.25 } } });
+  put('liftpanel', 0, -7.94, 'S', { id: 'lift', poi: { kind: 'elevator', label: 'the lift', stand: { x: 0, z: -7.3 } } });
 
   // kitchen
   put('counter', 3.5, -7.7, 'S', { id: 'counter' });
@@ -393,7 +393,7 @@ export function buildLayout(plan = {}) {
   put('console', 5.3, 10.55, 'N', { id: 'console', poi: { kind: 'console', label: 'the ops console' } });
   put('acunit', 4.5, 10.5, 'N');
 
-  // the back room (furniture exists either way; you just cannot get to it)
+  // the speakeasy behind the bookshelf (furniture exists either way; you just cannot get to it)
   put('arcade', -6.6, -11.5, 'S', { id: 'arcade-1', poi: { kind: 'arcade', label: 'an arcade cabinet: BUG SQUASH', hidden: true } });
   put('arcade', -5.5, -11.5, 'S', { id: 'arcade-2', poi: { kind: 'arcade', label: 'an arcade cabinet: BUG SQUASH', hidden: true } });
   put('jukebox', -2.2, -11.6, 'S', { id: 'jukebox', poi: { kind: 'jukebox', label: 'a jukebox', hidden: true } });

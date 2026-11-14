@@ -228,7 +228,7 @@ export function createEggs(office) {
   }
 
   /* ---- out of bounds ----------------------------------------------------------------------- */
-  // The north-west corner of the Back Room is not as solid as the rest. Lean on it.
+  // The north-west corner of the Speakeasy is not as solid as the rest. Lean on it.
   let falling = false;
   function softSpot() {
     const lay = office.world?.layout;

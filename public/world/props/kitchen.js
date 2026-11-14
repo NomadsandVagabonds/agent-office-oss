@@ -557,7 +557,7 @@ export function stool(opt = {}) {
   return v;
 }
 
-/* ---- the back room's fridge ----------------------------------------------------------- */
+/* ---- the speakeasy's fridge ----------------------------------------------------------- */
 
 /** A black mini fridge covered in stickers, door facing +z, two cans left on top. 24 × 30 × 24. */
 export function minifridge() {

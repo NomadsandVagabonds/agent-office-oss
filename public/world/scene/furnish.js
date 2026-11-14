@@ -308,7 +308,7 @@ export function furnish(layout, building, opt = {}) {
       for (const o of layout.objects) {
         if (hidden.has(o.room)) continue;
         if (o.type === 'floorlamp') out.push({ x: o.x, y: 1.5, z: o.z, power: 1.5 });
-        // the Back Room has no windows: its neon and machines are the light, day and night
+        // the Speakeasy has no windows: its neon and machines are the light, day and night
         else if (o.type === 'neon') out.push({ x: o.x, y: 1.9, z: o.z + 0.5, power: 1.5, color: '#ff6fb0', always: true });
         else if (o.type === 'jukebox') out.push({ x: o.x, y: 1.2, z: o.z + 0.7, power: 1.0, color: '#ffb86a', always: true });
         else if (o.type === 'arcade' && o.id === 'arcade-1') out.push({ x: o.x + 0.55, y: 1.5, z: o.z + 0.9, power: 0.9, color: '#8fb8ff', always: true });

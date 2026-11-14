@@ -73,7 +73,7 @@ export function createExtras(office, ui) {
     const used = office.onUsed;
     office.onUsed = (target, result) => { used?.(target, result); if (target?.kind === 'console' && /hollow voice/i.test(result?.text || '')) hollow(); };
   });
-  // leaning on the soft corner of the Back Room: the floor gives way
+  // leaning on the soft corner of the Speakeasy: the floor gives way
   let falling = false;
   new MutationObserver(() => { const was = falling; falling = document.body.classList.contains('noclip'); if (falling && !was) sound.play('noclip'); })
     .observe(document.body, { attributes: true, attributeFilter: ['class'] });
