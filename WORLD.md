@@ -224,11 +224,11 @@ R, M and L are always there.
   car: [x, z] }                       // optional: agents may ride here (see below)
 ```
 
-`visibleLevels({ quirks, found })` is every button that exists today;
-`panelLevels({ quirks, found, open })` is the panel as a person sees it — the
-same, less the game floors no keycard has lit yet, and how many of those there
-are. The daemon and the client both ask, so agents are told about exactly the
-buttons a human sees.
+`visibleLevels({ quirks, found })` is every button that exists today, and is
+what the daemon reads out to agents; `panelLevels({ quirks, found, open })` is
+the panel as a person sees it — the same, less the game floors no keycard has
+lit yet, and how many of those there are. Keycards are the humans' game: they
+hold back nobody but the person standing at the panel.
 
 ### The contract
 
