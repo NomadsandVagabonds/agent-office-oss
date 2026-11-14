@@ -21,6 +21,7 @@ import { DECK } from '../backrooms/gen.js';
 
 const q = new URLSearchParams(location.search);
 const study = q.get('study') === 'quiet' ? await import('../backrooms/quiet-study.js') : null;
+const studyRoom = study ? (await import('../backrooms/quiet-room.js')).buildQuietRoom : null;
 const num = (k, d) => (q.has(k) && q.get(k) !== '' && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : d);
 const stage = createStage(document.getElementById('stage'), { fx: q.get('fx') === '1', shadows: false, preserve: true, pixelRatio: num('dpr', 1) });
 stage.start();
@@ -80,7 +81,7 @@ async function go() {
     name: q.get('name') || 'Robin', seed, only: only.length ? only : undefined, count: q.has('count') ? num('count', 7) : undefined,
     pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined, vhs: q.has('vhs') ? num('vhs', 2) : undefined, mute: q.has('mute') ? q.get('mute') !== '0' : undefined,
     debug: true,
-    dev: study ? { generate: study.generateQuietStudy } : undefined,
+    dev: study ? { generate: study.generateQuietStudy, builders: { plain: studyRoom } } : undefined,
     onReady(handle) {
       if (room) handle.goto(/^\d+$/.test(room) ? Number(room) : room, q.has('x') ? num('x', 0) : undefined, q.has('z') ? num('z', 0) : undefined, num('yaw', 0), num('pitch', 0));
       else if (q.has('yaw')) { handle.player.me.yaw = num('yaw', 0); handle.player.me.pitch = num('pitch', 0); }

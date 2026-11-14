@@ -15,7 +15,7 @@ Its visual language is specific:
 
 The humor is an ordinary office habit taken one impossible step too far: a party prepared for you, an employee portrait that closes its eyes, a phone that stops ringing when you approach. Mundane first, wrong second. The room should communicate through arrangement, timing, sound and physical behavior. **Do not add explanatory signs, captions, dialogue boxes or tutorial overlays.** A short existing-style interaction prompt, such as `E · print`, is enough. Existing rooms sometimes contain diegetic labels; that is not a requirement to add more.
 
-Quiet gaps matter. A strange room should be a discovery in an otherwise believable, empty place. Do not fill every corner with jokes, creatures or effects. New encounters can be harmless, neutral or friendly without becoming bright mascot attractions.
+Quiet gaps matter. A distinctive encounter should be a discovery in a mostly quiet, repeating place. That connective space can itself be strange. Do not fill every corner with jokes, creatures or effects. New encounters can be harmless, neutral or friendly without becoming bright mascot attractions.
 
 ## Pacing direction — 14 November 2026
 
@@ -24,16 +24,19 @@ make the player doubt whether they have been somewhere before. A recognizable
 set piece is also a navigation landmark; a succession of excellent set pieces
 can make the building easier to remember and less unsettling.
 
-Use roughly **75% ordinary space, 20% small anomalies and 5% major set pieces**
-as an initial design study within that target, not a hard generation rule or a
-measured result. The user specified the 60–80% range; this finer split is a
-workshop proposal for Fable to assess.
+**Clarification:** generic means repetitive and difficult to identify, not
+realistic or free of anomalies. Strange proportions, misplaced openings and
+partly submerged office furniture can belong to this background when they
+recur without a unique event, palette or occupant. Most of this detail should
+be static. The workshop does not prescribe a separate numerical quota for
+static anomalies; the earlier 75/20/5 subdivision is superseded by this
+clarification.
 
 | Role | What the player encounters | Authoring constraint |
 | --- | --- | --- |
-| Ordinary maze | Repeated yellow wallpaper, carpet, fluorescent grids, pillars, offset openings, doglegs and empty bays | No unique palette, named occupant, puzzle, explanatory sign, or mandatory event. It must work when nothing happens. |
-| Small anomaly | A slightly wrong chair position, a damp patch, a gap in the ceiling grid, or an unexplained sound | Sparse, ambiguous and reusable. Avoid a unique visual fingerprint in every room. |
-| Major set piece | A room such as Dispatch, a memorable creature, or a major spatial impossibility | Rare punctuation. Adding candidates to the library does not imply dealing more of them into each run. |
+| Repetitive maze | Repeated wallpaper, carpet, grids, awkward proportions, offset openings, doglegs and empty bays | It must work when nothing happens. No unique palette, occupant, explanatory sign, puzzle or mandatory event. |
+| Static wrongness within the maze | High and low wall openings, partial walls, office furniture disappearing into carpet | Repeat the same details. Keep ordinary routes open and match visual openings to collision; this still counts as connective space. |
+| Major set piece | A room such as Dispatch, a memorable creature, or a distinctive spatial showpiece | Rare punctuation. A physical impossibility alone does not make an entire room a set piece. |
 
 Judge this mix along exploration routes as well as across the whole generated
 map. Large rooms, detours and dwell time change the experience; room count and
@@ -50,6 +53,7 @@ named attractions in the oddity deck. The proposed Waiting Room is deferred.
 
 The first [quiet maze study](QUIET_MAZE.md) now provides nine connected rooms
 using three repeated partition layouts, available only in the dev preview.
+Some copies include repeated static wall cuts or submerged workstations.
 It is a geometry and atmosphere candidate, not a change to default pacing.
 
 Gemini's room/creature/item slate is a useful catalogue of optional contributions.

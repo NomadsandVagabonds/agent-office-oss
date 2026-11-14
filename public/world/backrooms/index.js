@@ -104,7 +104,9 @@ async function visit(office, opt) {
   /* ---- what rooms may call on ------------------------------------------------------ */
   const halfFov = () => Math.atan(Math.tan((FOV * Math.PI) / 360) * camera.aspect);
   const env = {
-    level, cast, who, kit, sound, hud, vhs, renderer, builders: BUILDERS, catalogue: await loadCatalogue(kit),
+    level, cast, who, kit, sound, hud, vhs, renderer,
+    builders: opt.debug && opt.dev?.builders ? { ...BUILDERS, ...opt.dev.builders } : BUILDERS,
+    catalogue: await loadCatalogue(kit),
     // optional borrowings: if either will not load, the rooms that wanted them make do
     Avatar: (await import('../avatar/rig.js').catch(() => null))?.Avatar || null,
     layout: await import('/core/layout.mjs').catch(() => null),

@@ -78,9 +78,14 @@ export function generateQuietStudy(seed, opt = {}) {
     const variant = (row + col) % 3, turn = (phase + row + col * 2) % 4;
     const { pillars, probes } = quietMazeLayout({ W: room.W, D: room.D, variant, turn });
     room.pillars = pillars;
-    room.quietStudy = { variant, turn, probes };
+    room.quietStudy = { variant, turn, probes, detail: null };
     return room;
   });
+
+  // Repeated static wrongness belongs in the connective fabric too. Both
+  // copies use the same motif-local composition; no room gets its own event.
+  for (const room of rooms.filter(r => r.id !== 0 && r.quietStudy.variant === 0)) room.quietStudy.detail = 'apertures';
+  for (const room of R.fork('still-details').shuffle(rooms.filter(r => r.quietStudy.variant === 1)).slice(0, 2)) room.quietStudy.detail = 'sunken';
 
   // A normal exit annex, outside the nine-room study. Its local front faces west
   // toward room 8; the existing exit builder puts the actual exit on its back wall.
@@ -102,6 +107,6 @@ export function generateQuietStudy(seed, opt = {}) {
     rooms, links, picked: [], pursuer: null, windows: [], hint: 'the plain rooms',
     start: { room: 0, x: spawn.x, z: spawn.z, yaw: turn * Math.PI / 2 }, exit: { room: 9 },
     stamp: { ...base.stamp }, hum: base.hum,
-    quietStudy: { version: 1, rooms: 9, motifs: 3 },
+    quietStudy: { version: 2, rooms: 9, motifs: 3 },
   };
 }

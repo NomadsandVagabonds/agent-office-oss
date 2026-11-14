@@ -50,6 +50,15 @@ test('nine repeated quiet rooms share one palette and ceiling without set-piece 
       repeats[room.quietStudy.variant]++;
     }
     assert.deepEqual(repeats, [3, 3, 3]);
+    const details = lv.rooms.slice(0, 9).map(r => r.quietStudy.detail);
+    assert.equal(details.filter(d => d === 'apertures').length, 2);
+    assert.equal(details.filter(d => d === 'sunken').length, 2);
+    assert.equal(details.filter(d => d === null).length, 5);
+    assert.equal(lv.rooms[0].quietStudy.detail, null, 'entry remains unadorned');
+    for (const room of lv.rooms.slice(0, 9)) {
+      if (room.quietStudy.detail === 'apertures') assert.equal(room.quietStudy.variant, 0);
+      if (room.quietStudy.detail === 'sunken') assert.equal(room.quietStudy.variant, 1);
+    }
   }
 });
 
