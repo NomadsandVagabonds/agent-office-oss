@@ -1,0 +1,10 @@
+#!/bin/bash
+# studio <checkout> [port] — a clean daemon to direct scenes in: its own data folder, nothing observed, nothing probed.
+#   <checkout> is a checkout of the office to film (the upgraded branch). Stand-in agents for the console's takes are
+#   read from <data>/adapters.json when it exists (see rig/stand-in.mjs).
+here="$(cd "$(dirname "$0")" && pwd)"
+checkout="${1:?path to a checkout of the office}"; port="${2:-4410}"
+data="${PROMO_DATA:-$here/../out/studio-data-$port}"
+mkdir -p "$data" && data="$(cd "$data" && pwd)"
+[ -f "$data/creations.json" ] || cp "$checkout/public/creations.json" "$data/creations.json"
+cd "$checkout" && OFFICE_PORT=$port OFFICE_DATA_DIR="$data" OFFICE_AUTO_OBSERVE_CODEX=0 OFFICE_GIT=0 OFFICE_PROFILES_FILE="$data/profiles.json" OFFICE_CREATIONS_FILE="$data/creations.json" OFFICE_HARNESS_FILE="$data/adapters.json" PROMO_CHECKOUT="$checkout" exec node daemon.mjs
