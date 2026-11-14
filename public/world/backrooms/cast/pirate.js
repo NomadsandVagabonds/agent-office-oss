@@ -401,7 +401,7 @@ export function create(c) {
   function breakOff(p) {
     env.interfere(1); env.hud.glitch(0.7); env.sound.play('static', { dur: 0.5 }); env.sound.play('thunk');
     p.down = null; p.cross = null; p.near = calm(); p.handle = null; p.got = null; p.plinth = false; walk.forget(p);
-    p.know = spent();
+    p.know = spent(); p.hunted = false; c.survived();
     for (const e of walk.exits(p).sort(() => Math.random() - 0.5)) {
       const at = walk.spotIn(p, e.room);
       if (hiddenAt(at.x, at.z, 0.8) && stand(p, at.x, at.z)) { p.x = at.x; p.z = at.z; break; }
@@ -436,6 +436,8 @@ export function create(c) {
     const k = p.know = knows(k0, dt, { los, d, me: { x: me.x, z: me.z, room: w.roomAt(me.x, me.z)?.id ?? null }, room: w.roomAt(p.x, p.z)?.id ?? null,
       at: !!got.there, cannot: !!got.cannot, exits: choosing ? walk.exits(p) : null });
     if (k.mode !== k0.mode || k.room !== k0.room) { p.got = null; p.handle = null; }
+    if (k.mode === 'chase') p.hunted = true;
+    if (k.gaveUp && p.hunted) { p.hunted = false; c.survived(); }                                  // it was after you, and it has lost you
     if (k.found) { env.interfere(0.6); env.hud.glitch(0.25); env.play('seek', p.x, p.z, 10); }      // it has seen you: the tape knows before you do
     if (p.cross) {
       const c = p.cross;
@@ -500,7 +502,7 @@ export function create(c) {
     }
     if (seen) {
       p.unseen = 0; p.rolled = false;
-      if (d < 12) p.met += dt;
+      if (d < 12) { p.met += dt; if (!p.known && p.met > 0.4) { p.known = true; c.met(); } }
       // a bad frame now and then: for an instant the head is not where it was
       p.tearIn -= dt;
       if (p.tearIn < 0 && d < 9) { p.tearIn = 1.2 + Math.random() * 4.5; p.tearFor = 0.06 + Math.random() * 0.1; env.interfere(0.3); }

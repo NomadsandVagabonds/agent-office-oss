@@ -17,8 +17,9 @@
 import * as THREE from 'three';
 import { Batch, lin, drawText, WHITE } from './kit.js';
 import { RISE, RUN, T, makeRng } from './gen.js';
-import { P, doorFrame, floorPlan, card } from './bits.js';
+import { P, doorFrame, floorPlan, card, wetSign } from './bits.js';
 import { gives } from './thin.js';
+import { GAP, flight, holeIn, ledgeAt, ductIn } from './seam.js';
 import { camp, rationList, tallyMark, tapeMark } from './traces.js';
 
 const UP = [0, 1, 0], SLOPE = RISE / RUN;
@@ -41,26 +42,16 @@ const tileBack = (kit) => kit.tex.custom('tileback', 24, 24, (g, w, h) => {
   P(g, '#55524a', 0, 0, w, 2); P(g, '#55524a', 0, 0, 2, h); P(g, '#c9c5b8', 2, 2, w - 2, 1);
 }, { clamp: false });
 
-/** What is painted on the landing wall: this floor, and what the arrow says is under it. */
-function floorPlate(c, label, below) {
-  return c.kit.tex.custom(`floor:${label}>${below}`, 96, 128, (g, w, h) => {
-    P(g, '#2f5d4a', 0, 0, w, h); P(g, '#e9e4d2', 3, 3, w - 6, 1); P(g, '#e9e4d2', 3, h - 4, w - 6, 1); P(g, '#e9e4d2', 3, 3, 1, h - 6); P(g, '#e9e4d2', w - 4, 3, 1, h - 6);
-    drawText(g, ['FLOOR'], 0, 8, w, 14, { color: '#e9e4d2', size: 11, pad: 10 });
-    drawText(g, [label], 0, 22, w, 58, { color: '#f4f0e0', size: label.length > 3 ? 20 : label.length > 1 ? 34 : 54, pad: 12 });
-    g.fillStyle = '#e9e4d2'; g.beginPath(); g.moveTo(w / 2 - 9, 86); g.lineTo(w / 2 + 9, 86); g.lineTo(w / 2, 97); g.fill();
-    drawText(g, [below], 0, 100, w, 22, { color: '#e9e4d2', size: below.length > 3 ? 11 : 17, pad: 12 });
-  }, { clamp: true });
-}
-
 export function stairwell(c) {
-  const { W, D, kit, room, level } = c, down = room.way === 'stairs';
-  const dr = room.doors[0], zF = D / 2, zL = zF - (down ? 1.3 : 3.0);        // the front wall, and where the landing ends
-  const n = down ? 16 : 6, yB = -n * RISE, zB = zL - n * RUN;                // how many stairs, how far down, where they end
-  const back = down ? -D / 2 : zB;                                            // …and where the well does
+  const { W, D, kit, room } = c;
+  if (room.way === 'hole' || room.way === 'ledge' || room.way === 'chute') { corridor(c, room.way); return; }
+  const down = room.way === 'stairs';
+  // the front wall, where the landing ends, how many stairs, how far down, where they end, and where the well does (seam.js)
+  const { zF, zL, n, yB, zB, back } = flight(D, down);
   const drop = down ? 2.8 : 0.45, reach = drop / SLOPE;                       // the soffit follows the flight down, and then stops
   const floorY = (z) => (z >= zL ? 0 : -Math.min(n, Math.floor((zL - z) / RUN + 1e-6) + 1) * RISE);
   const ceilY = (z) => 2.6 - SLOPE * Math.max(0, Math.min(reach, zL + 0.6 - z));
-  const con = concrete(kit), grey = [0.8, 0.8, 0.78], other = c.world.rooms[dr.to];
+  const con = concrete(kit), grey = [0.8, 0.8, 0.78];
   const tube = lin('#eef6ff'), warm = lin('#ffd9a0');
 
   c.rt.floorY = (x, z) => floorY(z);
@@ -112,9 +103,71 @@ export function stairwell(c) {
   for (const x of [-0.08, 0.08]) c.flat.box(x - 0.006, ly - 0.012, lz - 0.12, x + 0.006, ly - 0.004, lz + 0.12, [0.12, 0.12, 0.12]);
   c.light(0, 2.42, lz, tube, 0.75, { axis: [0, -1, 0], floor: 0.3, k: 2.0, far: 7, flick: true });
   c.light(0, 2.3, lz, tube, 0.3, { axis: [0, -1, 0], floor: 0.3, k: 2.0, far: 7 });
-  // what is painted on the wall, where you cannot miss it
-  c.hang(c.mapped('floorplate', floorPlate(c, String(level.label ?? '1'), String(level.below ?? 'G'))), 'right', zF - 0.66, 1.5, 0.6, 0.8, null, WHITE, 0.012);
 
+  fireDoor(c);
+
+  if (down) bottomless(c, { zB, yB, back, shadeAt, warm });
+  else paperedOver(c, { zL, zF, yB, back, shadeAt });
+}
+
+/** Where the stairs run out: the top of somebody else's ceiling, and the light of their room coming up round the edges of it. */
+function bottomless(c, { zB, yB, back, shadeAt, warm }) {
+  const { W, kit } = c, y = yB + 0.004, k = shadeAt(back) * 1.6;
+  c.mapped('tileback', tileBack(kit)).grid([-W / 2, y, back], [0, 0, 1], [1, 0, 0], [0, zB - back], [0, W], (u, v) => [v / 0.6, u / 0.6], [k, k, k]);
+  // the back of a light fitting, and the gaps the light gets through
+  const fx = 0.3, fz = (back + zB) / 2;
+  c.flat.box(fx - 0.3, y, fz - 0.42, fx + 0.3, y + 0.09, fz + 0.42, [0.3, 0.3, 0.29]);
+  const leak = c.shining('leak', kit.tex.white(), 2.6, warm);
+  for (const [x0, z0, x1, z1] of [[fx - 0.33, fz - 0.45, fx + 0.33, fz - 0.42], [fx - 0.33, fz + 0.42, fx + 0.33, fz + 0.45], [fx - 0.33, fz - 0.45, fx - 0.3, fz + 0.45], [fx + 0.3, fz - 0.45, fx + 0.33, fz + 0.45], [-W / 2 + 0.3, back + 0.28, -W / 2 + 0.9, back + 0.3]])
+    leak.quad([x0, y + 0.002, z1], [x1, y + 0.002, z1], [x1, y + 0.002, z0], [x0, y + 0.002, z0]);
+  c.light(fx, yB + 0.25, fz, warm, 0.5, { k: 0.7, far: 4.5, wrap: 0.8 });
+  for (const [x, z] of [[-0.9, back + 0.25], [0.95, zB - 0.2], [-0.2, fz]]) c.flat.box(x - 0.005, y, z - 0.005, x + 0.005, y + 2.2, z + 0.005, [0.2, 0.2, 0.2]);          // the wires it all hangs from
+  // …and it was never meant to be stood on
+  let gone = false;
+  c.zone({ x0: -W / 2, x1: W / 2, z0: back, z1: zB - 0.06, enter: () => {
+    if (gone) return;
+    gone = true;
+    c.env.sound.play('crack'); c.env.interfere(1);
+    const at = c.toWorld(0, (back + zB) / 2); c.env.descend?.(at);
+  } });
+}
+
+/**
+ * Where there is nothing under them at all: the stairs go down into a wall with this floor's paper on it, skirting and
+ * all, and the carpet has been run up the last of them. Somebody made camp on the landing, and tried this wall first.
+ * It is the wall that gives.
+ */
+function paperedOver(c, { zL, zF, yB, back, shadeAt }) {
+  const { W, kit, level } = c, look = c.look, k = shadeAt(back), R = makeRng(`${level.seed}/dead-end`);
+  const top = 2.6 - 0.45, rows = [0, 0.16, 0.7, 1.4, 2.1, top - yB - 0.16, top - yB];
+  c.mapped('papered', kit.tex.wallpaper(look)).grid([-W / 2, yB, back + 0.012], [1, 0, 0], [0, 1, 0], [0, 0.16, W / 2, W - 0.16, W], rows, (u, v) => [u / 0.8, v / 0.8], [k, k, k], (u, v) => (v < 0.2 ? 0.8 : 1));
+  c.flat.box(-W / 2, yB, back + 0.012, W / 2, yB + 0.11, back + 0.034, lin(look.trim).map((v) => v * k));
+  const carpet = c.mapped('carpeted', kit.tex.floor(look));
+  for (let i = 0; i < 2; i++) { const y = yB + i * RISE, z0 = back + i * RUN; carpet.box(-W / 2, y - RISE, z0, W / 2, y + 0.012, z0 + RUN + 0.012, [k, k, k], { uv: 1.6, skip: '-y-x+x-z' }); }
+  // it was the first wall they tried, and the right one: they did not lean on it for long enough
+  const wall = { y: yB, at: (at, off = 0) => ({ x: at, z: back + 0.012 + off, n: [0, 0, 1], U: [1, 0, 0] }), to: (me) => ({ d: me.z - back, c: me.x }) };
+  gives(c, wall, 0, tapeMark(c, wall, 0, R, { roll: true, stir: true }));
+  tallyMark(c, wall, 0.95, R, 1.5);
+
+  // the camp, along the wall the door does not open against
+  const cz = zL + 1.3;
+  camp(c, 0.86, cz, -Math.PI / 2, { narrow: true });
+  rationList(c, { side: 'right', at: cz + 0.2, y: 1.2 });
+  tallyMark(c, 'right', cz - 0.75, R, 1.42);
+  // what they had concluded, on a sheet torn off the same pad
+  const note = card(c, 'gaveup', ['LEANED ON IT.', 'NOTHING.', '', '(GAVE IT A', 'WHOLE SECOND)'], { w: 96, h: 96, bg: '#f4f1e6', fg: '#3a342a', size: 9, pad: 9, weight: 600 });
+  c.hang(c.mapped('gaveup', note), 'right', cz - 0.18, 1.22, 0.22, 0.22, null, WHITE, 0.006);
+  // and this floor's own evacuation plan, with every other wall they tried struck off it in red: all but the one they were sitting beside
+  const tried = level.rooms.filter((r) => r.dress.some((d) => d.type === 'marks') || (level.thin && level.thin.room === r.id));
+  floorPlan(c, { side: 'left', at: zL + 0.95 }, (g, mx, my) => {
+    g.strokeStyle = '#c8281c'; g.lineWidth = 1.5; g.lineCap = 'round';
+    for (const r of tried) { const x = mx(r.cx, r.cz), y = my(r.cx, r.cz), k = Math.max(4, Math.min(8, Math.hypot(r.w, r.d) * 0.7)); g.beginPath(); g.moveTo(x - k, y - k * 0.6); g.lineTo(x + k, y + k * 0.6); g.moveTo(x - k, y + k * 0.6); g.lineTo(x + k, y - k * 0.6); g.stroke(); }
+  });
+}
+
+/** The fire door every part of the building ends at: steel, a bar to push, and a notice. What is behind it differs. */
+function fireDoor(c) {
+  const { D, kit } = c, dr = c.room.doors[0], zF = D / 2, other = c.world.rooms[dr.to];
   /* ---- the door: steel, a bar to push, and a notice --------------------------------------------- */
   const dw = dr.w - 0.05, dh = dr.h - 0.02, zd = zF + T / 2, steelDoor = lin('#6f7a80'), bar = [0.7, 0.72, 0.7];
   const leaf = new Batch(), hx = dr.c - dw / 2;
@@ -153,62 +206,111 @@ export function stairwell(c) {
     open = Math.min(1, open + dt / 1.1);
     door.rotation.y = sticker.rotation.y = 1.75 * open * open * (3 - 2 * open);
   });
-
-  if (down) bottomless(c, { zB, yB, back, shadeAt, warm });
-  else paperedOver(c, { zL, zF, yB, back, shadeAt });
 }
 
-/** Where the stairs run out: the top of somebody else's ceiling, and the light of their room coming up round the edges of it. */
-function bottomless(c, { zB, yB, back, shadeAt, warm }) {
-  const { W, kit } = c, y = yB + 0.004, k = shadeAt(back) * 1.6;
-  c.mapped('tileback', tileBack(kit)).grid([-W / 2, y, back], [0, 0, 1], [1, 0, 0], [0, zB - back], [0, W], (u, v) => [v / 0.6, u / 0.6], [k, k, k]);
-  // the back of a light fitting, and the gaps the light gets through
-  const fx = 0.3, fz = (back + zB) / 2;
-  c.flat.box(fx - 0.3, y, fz - 0.42, fx + 0.3, y + 0.09, fz + 0.42, [0.3, 0.3, 0.29]);
-  const leak = c.shining('leak', kit.tex.white(), 2.6, warm);
-  for (const [x0, z0, x1, z1] of [[fx - 0.33, fz - 0.45, fx + 0.33, fz - 0.42], [fx - 0.33, fz + 0.42, fx + 0.33, fz + 0.45], [fx - 0.33, fz - 0.45, fx - 0.3, fz + 0.45], [fx + 0.3, fz - 0.45, fx + 0.33, fz + 0.45], [-W / 2 + 0.3, back + 0.28, -W / 2 + 0.9, back + 0.3]])
-    leak.quad([x0, y + 0.002, z1], [x1, y + 0.002, z1], [x1, y + 0.002, z0], [x0, y + 0.002, z0]);
-  c.light(fx, yB + 0.25, fz, warm, 0.5, { k: 0.7, far: 4.5, wrap: 0.8 });
-  for (const [x, z] of [[-0.9, back + 0.25], [0.95, zB - 0.2], [-0.2, fz]]) c.flat.box(x - 0.005, y, z - 0.005, x + 0.005, y + 2.2, z + 0.005, [0.2, 0.2, 0.2]);          // the wires it all hangs from
-  // …and it was never meant to be stood on
-  let gone = false;
-  c.zone({ x0: -W / 2, x1: W / 2, z0: back, z1: zB - 0.06, enter: () => {
-    if (gone) return;
-    gone = true;
-    c.env.sound.play('crack'); c.env.interfere(1);
-    c.env.descend?.();
-  } });
+/* ---- the other things a fire door can have behind it ------------------------------------------------ */
+
+/** One upright or sloping flat thing, facing the way `n` points whatever order its corners come in. */
+function facing(batch, q, n, alb, uv) {
+  const ax = q[1][0] - q[0][0], ay = q[1][1] - q[0][1], az = q[1][2] - q[0][2], bx = q[3][0] - q[0][0], by = q[3][1] - q[0][1], bz = q[3][2] - q[0][2];
+  if ((ay * bz - az * by) * n[0] + (az * bx - ax * bz) * n[1] + (ax * by - ay * bx) * n[2] < 0) { q = [q[1], q[0], q[3], q[2]]; if (uv) uv = [uv[1], uv[0], uv[3], uv[2]]; }
+  batch.quad(q[0], q[1], q[2], q[3], alb, uv);
 }
 
 /**
- * Where there is nothing under them at all: the stairs go down into a wall with this floor's paper on it, skirting and
- * all, and the carpet has been run up the last of them. Somebody made camp on the landing, and tried this wall first.
- * It is the wall that gives.
+ * A square pit through the building under [x0, z0, x1, z1]: the edge of the slab, then whatever the part below is
+ * papered with, running down to where its ceiling would be. Seen from inside only.
  */
-function paperedOver(c, { zL, zF, yB, back, shadeAt }) {
-  const { W, kit, level } = c, look = c.look, k = shadeAt(back), R = makeRng(`${level.seed}/dead-end`);
-  const top = 2.6 - 0.45, rows = [0, 0.16, 0.7, 1.4, 2.1, top - yB - 0.16, top - yB];
-  c.mapped('papered', kit.tex.wallpaper(look)).grid([-W / 2, yB, back + 0.012], [1, 0, 0], [0, 1, 0], [0, 0.16, W / 2, W - 0.16, W], rows, (u, v) => [u / 0.8, v / 0.8], [k, k, k], (u, v) => (v < 0.2 ? 0.8 : 1));
-  c.flat.box(-W / 2, yB, back + 0.012, W / 2, yB + 0.11, back + 0.034, lin(look.trim).map((v) => v * k));
-  const carpet = c.mapped('carpeted', kit.tex.floor(look));
-  for (let i = 0; i < 2; i++) { const y = yB + i * RISE, z0 = back + i * RUN; carpet.box(-W / 2, y - RISE, z0, W / 2, y + 0.012, z0 + RUN + 0.012, [k, k, k], { uv: 1.6, skip: '-y-x+x-z' }); }
-  // it was the first wall they tried, and the right one: they did not lean on it for long enough
-  const wall = { y: yB, at: (at, off = 0) => ({ x: at, z: back + 0.012 + off, n: [0, 0, 1], U: [1, 0, 0] }), to: (me) => ({ d: me.z - back, c: me.x }) };
-  gives(c, wall, 0, tapeMark(c, wall, 0, R, { roll: true, stir: true }));
-  tallyMark(c, wall, 0.95, R, 1.5);
+function shaft(c, x0, z0, x1, z1, top, sides = 'wesn') {
+  const { kit, level } = c, con = c.mapped('slab', concrete(kit)), look = level.shaft || c.look, paper = c.mapped('shaftpaper', kit.tex.wallpaper(look));
+  const slab = 0.36, deep = GAP - 2.75, walls = { w: [[x0, z1], [x0, z0], [1, 0, 0]], e: [[x1, z0], [x1, z1], [-1, 0, 0]], n: [[x0, z0], [x1, z0], [0, 0, 1]], s: [[x1, z1], [x0, z1], [0, 0, -1]] };
+  for (const k of sides) {
+    const [a, b, n] = walls[k], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    facing(con, [[a[0], top - slab, a[1]], [b[0], top - slab, b[1]], [b[0], top, b[1]], [a[0], top, a[1]]], n, [0.5, 0.5, 0.48], [[0, 0], [len / 0.8, 0], [len / 0.8, slab / 0.8], [0, slab / 0.8]]);
+    // (darker toward the middle of the drop, and lit again from the room it comes out over)
+    for (let i = 0, rows = 6; i < rows; i++) {
+      const ya = top - slab - (deep * i) / rows, yb = top - slab - (deep * (i + 1)) / rows, k2 = 0.16 + 0.5 * Math.abs(i - (rows - 1) * 0.45) / rows + (i === rows - 1 ? 0.3 : 0);
+      facing(paper, [[a[0], yb, a[1]], [b[0], yb, b[1]], [b[0], ya, b[1]], [a[0], ya, a[1]]], n, [k2, k2, k2], [[0, yb / 0.8], [len / 0.8, yb / 0.8], [len / 0.8, ya / 0.8], [0, ya / 0.8]]);
+    }
+    con.box(Math.min(a[0], b[0]) - 0.001, top - slab - 0.05, Math.min(a[1], b[1]) - 0.001, Math.max(a[0], b[0]) + 0.001, top - slab, Math.max(a[1], b[1]) + 0.001, [0.2, 0.2, 0.2], { uv: 0.8 });
+  }
+}
 
-  // the camp, along the wall the door does not open against
-  const cz = zL + 1.3;
-  camp(c, 0.86, cz, -Math.PI / 2, { narrow: true });
-  rationList(c, { side: 'right', at: cz + 0.2, y: 1.2 });
-  tallyMark(c, 'right', cz - 0.75, R, 1.42);
-  // what they had concluded, on a sheet torn off the same pad
-  const note = card(c, 'gaveup', ['LEANED ON IT.', 'NOTHING.', '', '(GAVE IT A', 'WHOLE SECOND)'], { w: 96, h: 96, bg: '#f4f1e6', fg: '#3a342a', size: 9, pad: 9, weight: 600 });
-  c.hang(c.mapped('gaveup', note), 'right', cz - 0.18, 1.22, 0.22, 0.22, null, WHITE, 0.006);
-  // and this floor's own evacuation plan, with every other wall they tried struck off it in red: all but the one they were sitting beside
-  const tried = level.rooms.filter((r) => r.dress.some((d) => d.type === 'marks') || (level.thin && level.thin.room === r.id));
-  floorPlan(c, { side: 'left', at: zL + 0.95 }, (g, mx, my) => {
-    g.strokeStyle = '#c8281c'; g.lineWidth = 1.5; g.lineCap = 'round';
-    for (const r of tried) { const x = mx(r.cx, r.cz), y = my(r.cx, r.cz), k = Math.max(4, Math.min(8, Math.hypot(r.w, r.d) * 0.7)); g.beginPath(); g.moveTo(x - k, y - k * 0.6); g.lineTo(x + k, y + k * 0.6); g.moveTo(x - k, y + k * 0.6); g.lineTo(x + k, y - k * 0.6); g.stroke(); }
-  });
+/** A notice in the house style of fire notices. */
+function greenSign(c, key, lines, side, at, y, w = 0.62) {
+  const tex = c.kit.tex.custom('green:' + key, 112, 56, (g, tw, th) => {
+    P(g, '#1f8a4e', 0, 0, tw, th); P(g, '#eafff0', 2, 2, tw - 4, 1); P(g, '#eafff0', 2, th - 3, tw - 4, 1);
+    drawText(g, lines, 0, 3, tw, th - 6, { color: '#eafff0', size: lines.length > 1 ? 12 : 15, pad: 8 });
+  }, { clamp: true });
+  c.hang(c.mapped('green:' + key, tex), side, at, y, w, w / 2, null, WHITE, 0.012);
+}
+
+function corridor(c, way) {
+  const { W, D, H, kit, level } = c, zF = D / 2, next = level.shaft || c.look, glow = lin(next.tube || '#fff6dc');
+  c.shell({ floor: false });
+  const floor = (x0, z0, x1, z1) => { if (x1 - x0 > 0.01 && z1 - z0 > 0.01) c.floor.grid([x0, 0, z0], [0, 0, 1], [1, 0, 0], [0, z1 - z0], [0, x1 - x0], (u, v) => [(x0 + v) / 1.6, (z0 + u) / 1.6], WHITE); };
+  const edge = lin(c.look.trim).map((v) => v * 0.6);
+  let gone = false;
+  const over = (x, z) => { if (gone) return; gone = true; const at = c.toWorld(x, z); c.env.play('rustle', at.x, at.z, 4); c.env.descend?.(at); };
+
+  if (way === 'hole') {
+    // the middle of the floor has gone, some time ago, and somebody has done what the procedure says to do about it
+    const [x0, z0, x1, z1] = holeIn(W, D);
+    floor(-W / 2, z1, W / 2, zF); floor(-W / 2, -D / 2, W / 2, z0); floor(-W / 2, z0, x0, z1); floor(x1, z0, W / 2, z1);
+    shaft(c, x0, z0, x1, z1, 0);
+    for (const [a0, b0, a1, b1] of [[x0 - 0.03, z0 - 0.03, x1 + 0.03, z0], [x0 - 0.03, z1, x1 + 0.03, z1 + 0.03], [x0 - 0.03, z0, x0, z1], [x1, z0, x1 + 0.03, z1]]) c.flat.box(a0, 0, b0, a1, 0.012, b1, edge);
+    for (const [x, len] of [[x0 + 0.3, 0.5], [x1 - 0.25, 0.35], [0.1, 0.6]]) c.flat.box(x - 0.008, -0.22, z0, x + 0.008, -0.2, z0 + len, [0.22, 0.14, 0.1]);          // what the floor was reinforced with
+    wetSign(c, x0 + 0.25, z1 + 0.75, 0.3, ['CAUTION', 'FLOOR']);
+    wetSign(c, x1 - 0.1, z1 + 0.3, 1.1, ['CAUTION', 'FLOOR'], true);
+    greenSign(c, 'assembly', ['ASSEMBLY POINT', '▼'], 'back', 0, 1.6);
+    c.light(0, -0.6, (z0 + z1) / 2, glow, 0.5, { k: 0.8, far: 4, wrap: 0.8 });
+    c.zone({ x0: x0 + 0.12, z0: z0 + 0.12, x1: x1 - 0.12, z1: z1 - 0.12, enter: (me) => over(me.x, me.z) });
+  } else if (way === 'ledge') {
+    // the corridor stops. The walls and the ceiling carry on for a bit, out of habit
+    const zE = ledgeAt(D);
+    floor(-W / 2, zE, W / 2, zF);
+    shaft(c, -W / 2, -D / 2, W / 2, zE, 0);
+    c.flat.box(-W / 2, 0, zE - 0.03, W / 2, 0.012, zE, edge);
+    for (const x of [-0.8, 0.35, 0.9]) c.flat.box(x - 0.008, -0.22, zE - 0.35 - Math.abs(x) * 0.2, x + 0.008, -0.2, zE, [0.22, 0.14, 0.1]);          // what the floor was reinforced with
+    if (c.hasProp('chair')) c.prop('chair', 0.45, zE + 0.5, { rot: Math.PI + 0.2, solid: false });                                              // somebody sat and looked at it for a while
+    greenSign(c, 'step', ['MIND THE STEP'], 'right', zE + 1.1, 1.5);
+    c.light(0, -0.8, zE - 1.4, glow, 0.6, { k: 0.8, far: 5, wrap: 0.8 });
+    c.zone({ x0: -W / 2, z0: -D / 2, x1: W / 2, z1: zE - 0.3, enter: (me) => over(me.x, Math.min(me.z, zE - 0.6)) });
+  } else {
+    // a chute for the internal post, big enough to get into, and nothing that says not to
+    const d = ductIn(D), steel = [0.42, 0.44, 0.46], dark = [0.16, 0.17, 0.18], slope = d.y1 / (d.wall - d.z1);
+    const yAt = (z) => (z >= d.wall ? 0 : Math.max(d.y1, (d.wall - z) * slope));
+    floor(-W / 2, d.wall, W / 2, zF);
+    for (const sx of [-1, 1]) c.pillar(sx * (W / 2 + d.half) / 2, d.wall - 0.1, W / 2 - d.half, 0.2);
+    c.wall.box(-d.half, d.top, d.wall - 0.2, d.half, H, d.wall, WHITE, { uv: 0.8, skip: '+y-x+x' });
+    for (const [a0, b0, a1, b1] of [[-d.half - 0.06, 0, -d.half, d.top + 0.06], [d.half, 0, d.half + 0.06, d.top + 0.06], [-d.half, d.top, d.half, d.top + 0.06]]) c.flat.box(a0, b0, d.wall, a1, b1, d.wall + 0.03, steel);
+    // the duct: four sides of folded steel, a seam every arm's length, going down into the dark
+    const steelB = c.flat, seams = Math.round((d.wall - d.z1) / 0.6);
+    for (let i = 0; i < seams; i++) {
+      const za = d.wall - ((d.wall - d.z1) * i) / seams, zb = d.wall - ((d.wall - d.z1) * (i + 1)) / seams, ya = yAt(za), yb = yAt(zb), k = Math.max(0.12, 0.8 - i * 0.11), col = (i % 2 ? steel : steel.map((v) => v * 0.9)).map((v) => v * k);
+      facing(steelB, [[-d.half, ya, za], [d.half, ya, za], [d.half, yb, zb], [-d.half, yb, zb]], [0, 1, 0], col);
+      facing(steelB, [[-d.half, ya + d.top, za], [d.half, ya + d.top, za], [d.half, yb + d.top, zb], [-d.half, yb + d.top, zb]], [0, -1, 0], col.map((v) => v * 0.8));
+      for (const sx of [-1, 1]) facing(steelB, [[sx * d.half, ya, za], [sx * d.half, yb, zb], [sx * d.half, yb + d.top, zb], [sx * d.half, ya + d.top, za]], [-sx, 0, 0], col.map((v) => v * 0.9));
+      c.flat.box(-d.half, ya - 0.001, za - 0.012, d.half, ya + 0.006, za, dark);
+    }
+    const tex = card(c, 'post', ['INTERNAL POST', 'NEXT COLLECTION:', '—'], { w: 96, h: 56, bg: '#1f8a4e', fg: '#eafff0', size: 9, pad: 6, weight: 700 });
+    c.mapped('postsign', tex).quad([-0.34, 1.32, d.wall + 0.012], [0.34, 1.32, d.wall + 0.012], [0.34, 1.72, d.wall + 0.012], [-0.34, 1.72, d.wall + 0.012]);
+    c.light(0, d.y1 + 0.3, d.z1 - 0.3, glow, 0.35, { k: 0.8, far: 3.5, wrap: 0.8 });
+    c.rt.floorY = (x, z) => yAt(z);
+    c.rt.headY = (x, z) => (z >= d.wall + 0.12 ? H : d.top);
+    c.rt.clip = (x, z, r) => (z >= d.wall + r ? Math.abs(x) <= W / 2 - r && z <= zF - r : Math.abs(x) <= d.half - Math.min(r, 0.2) && z >= -D / 2 + r);
+    // once you are in, it has you: the controls are not yours again until the carpet
+    let sliding = 0;
+    c.tick((dt, t, me) => {
+      if (gone || !me.inside) return;
+      if (!sliding) { if (me.z < d.wall - 0.25) { sliding = 0.0001; c.env.hold?.(true); const at = c.toWorld(0, d.wall); c.env.play('slide', at.x, at.z, 5); } return; }
+      sliding += dt;
+      const z = me.z - (1.6 + sliding * 7) * dt, x = me.x * Math.exp(-6 * dt), at = c.toWorld(x, z);
+      c.env.player.warp(at.x, at.z);
+      c.env.interfere(0.35);
+      if (Math.floor((me.z - d.z1) / 0.6) !== Math.floor((z - d.z1) / 0.6)) c.env.play('clack', at.x, at.z, 4);
+      if (z < d.z1 - 0.25) over(0, d.z1 - 0.5);
+    });
+  }
+  fireDoor(c);
 }

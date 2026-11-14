@@ -30,7 +30,7 @@ export function createStalkers(env) {
     /** Seeded: for what the creature is (which room, which face). What happens while somebody is playing may use Math.random. */
     R: makeRng(`${level.seed}/cast/${member.id}`),
     /** What it left for itself on the floor above (its own carry()), or null. */
-    carried: member.id === 'pirate' ? env.carry : env.carry?.others?.[member.id] ?? null,
+    get carried() { return member.id === 'pirate' ? env.carry : env.carry?.others?.[member.id] ?? null; },
     /** Is this spot off the visitor's screen, or behind a wall? · Is the room this thing stands in being drawn at all? */
     hidden: hiddenAt, drawn,
     /** The visitor: { x, z, yaw, pitch, speed, moving … } (player.js), and which room they are in. */
@@ -56,6 +56,9 @@ export function createStalkers(env) {
       if (member.disposition === 'hunts') { env.end('caught'); return { landed: true, dead: true, ended: true }; }
       return { landed: false, dead: false, ended: false };
     },
+    /** For the count kept of a visit: the visitor has really seen it, for the first time (say so once) · it had them, and they got away (each time). */
+    met: () => env.run?.met?.(member.id),
+    survived: () => env.run?.survived?.(member.id),
     /** Take a share (0…1) of whatever charge the camcorder's battery has left, where it has one. → { ok } */
     drain: (share) => env.camera?.drain?.(share) ?? { ok: false },
     /** What the visitor is holding (inventory, when there is one): { type, … } or null · take n of it: → whether that was done. */

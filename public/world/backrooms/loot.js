@@ -63,6 +63,7 @@ export function createLoot(office, { hud, sound }) {
   const game = office.game;
   const carried = { card: false, coins: [] };
   let kept = null, coins = [], env = null, kit = null, shine = null, hidden = null;
+  const sets = new WeakMap();
   const show = () => hud.carry({ card: carried.card, coins: carried.coins.length });
 
   /**
@@ -127,13 +128,25 @@ export function createLoot(office, { hud, sound }) {
    * is in), and the ones on the floor above are forgotten along with it.
    */
   function hang(next) {
-    env = next; kit = next.kit; coins = []; shine = null; hidden = next.level.loot || null;
-    env.stash = hidden ? (c) => {
-      for (const k of hidden.coins) {
+    // (the part below is built while this one is still being walked, so each keeps its own: `attend` says which is underfoot)
+    const mine = { env: next, kit: next.kit, coins: [], shine: null, hidden: next.level.loot || null };
+    sets.set(next, mine);
+    next.stash = mine.hidden ? (c) => {
+      const was = [env, kit, coins, shine, hidden];
+      [env, kit, coins, shine, hidden] = [mine.env, mine.kit, mine.coins, mine.shine, mine.hidden];
+      for (const k of mine.hidden.coins) {
         if (k.room !== c.room.id) continue;
         try { hangOne(c, k); } catch (err) { console.warn('[backrooms] a coin would not hang', err); }
       }
+      mine.shine = shine;
+      [env, kit, coins, shine, hidden] = was;
     } : null;
+    if (!env) attend(next);
+  }
+  /** This is the part somebody is in now. */
+  function attend(next) {
+    const mine = sets.get(next); if (!mine) return;
+    ({ env, kit, coins, shine, hidden } = mine);
   }
 
   /** Something is picked up: carried from now on, not yet kept. (The card: pursuer.js, when it is taken out of the mascot's hand.) */
@@ -144,7 +157,7 @@ export function createLoot(office, { hud, sound }) {
   }
 
   return {
-    carried, pocket, hang,
+    carried, pocket, hang, attend,
     /** It has its card back. */
     forfeit() { if (carried.card) { carried.card = false; show(); } },
     update(dt, t, playing) {

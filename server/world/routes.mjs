@@ -69,7 +69,7 @@ export function registerWorldRoutes(router, ctx) {
   router.post('/api/world/game/earn', async (c) => {
     const body = await c.json();
     return c.result(world.game.earn(body.hideout, { batteries: body.batteries }, optionalAgent(body.agent), { name: body.name }));
-  }, { about: 'Somebody got out of a place that pays for what is carried out of it: {hideout, batteries (how many spare ones), name?}.' });
+  }, { about: 'Somebody got out of a place that pays for what is carried out of it: {hideout, batteries (how many spare ones), name?}. The jar gains only what that beats the best so far by.' });
   router.post('/api/world/game/visit', async (c) => c.result(world.game.visit((await c.json()).floor)),
     { about: 'A newly lit floor has been ridden to: {floor}.' });
   router.post('/api/world/game/buy', async (c) => {

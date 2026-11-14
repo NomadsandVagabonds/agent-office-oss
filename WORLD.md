@@ -359,10 +359,12 @@ the person playing (`core/game.mjs` is the whole of the rules; it is pure):
   earned it. That is the only place it is ever said that a secret is worth a
   coin.
 - **Pay.** One place — the one the lift does not go to — pays for what is
-  carried out of it, every time somebody gets out by its proper way: a coin
-  for each spare battery they still had (`payFor` in `core/game.mjs`; a visit
-  pays a fixed most, and nothing to anybody who was caught or gave up). It is
-  the only coin there is no end of, which is what makes going back worth it.
+  carried out of it by its proper way: a coin for each spare battery somebody
+  still had (`payFor` in `core/game.mjs`), but only for more of them than the
+  office has been paid for before. The jar gains when somebody beats the
+  office's best, by what they beat it by; a visit that was no better, or that
+  ended any other way, pays nothing. Going back is worth it. Going back for
+  the same again is not.
 - **The vending machine.** Walk up to it in the kitchen: behind the glass are
   eight things the jar can buy, each bought once. What comes out stands on top
   of the machine from then on, where everybody can see it. The last place on
@@ -377,7 +379,7 @@ snapshot, and
 ```
 GET  /api/world/game            what is lit, what has been found where, the jar, the machine's shelf (and `text`, in words)
 POST /api/world/game/collect    { hideout, item: 'card' | 'coin', n?, name? }
-POST /api/world/game/earn       { hideout, batteries, name? }   got out of a place that pays for what is carried out
+POST /api/world/game/earn       { hideout, batteries, name? }   got out of a place that pays: the jar gains what that beats the best by
 POST /api/world/game/visit      { floor }          a newly lit floor has been ridden to
 POST /api/world/game/buy        { prize | slot, name? }
 ```

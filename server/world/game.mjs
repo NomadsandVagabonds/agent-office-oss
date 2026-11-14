@@ -9,8 +9,7 @@ import { HIDEOUTS, PRIZES, STAMP_COINS, dealOrder, findPrize, hideoutById, jarOf
 import { levelById } from '../../core/levels.mjs';
 
 const fail = (status, error) => ({ error, status });
-// A visit that pays takes minutes. Two payments this close together are one visit told twice, or not a visit at all.
-const PAY_APART_MS = 45_000, PAID_KEPT = 30;
+const PAID_KEPT = 30;                    // how many visits that were worth something are remembered
 
 /**
  * @param {object} ctx
@@ -25,7 +24,8 @@ export function createGame(ctx, state, hooks) {
   g.prizes = g.prizes && typeof g.prizes === 'object' ? g.prizes : {};
   g.visited = Array.isArray(g.visited) ? g.visited : [];
   g.spent = Number.isFinite(g.spent) && g.spent > 0 ? Math.floor(g.spent) : 0;
-  // what visits have paid into the jar (core/game.mjs: `pay`), and the last few of them
+  // what the best visit so far was worth, which is what has been paid into the jar for visits (core/game.mjs: `pay`),
+  // and the last few visits that were worth anything
   g.earned = Number.isFinite(g.earned) && g.earned > 0 ? Math.floor(g.earned) : 0;
   g.paid = Array.isArray(g.paid) ? g.paid.slice(-PAID_KEPT) : [];
   // Which floor is open to begin with, and which each card opens, is drawn once per office — and re-read every start,
@@ -98,7 +98,8 @@ export function createGame(ctx, state, hooks) {
 
   /**
    * Somebody got out of a place that pays for what is carried out of it. `carried`: { batteries }.
-   * Nothing carried is not an error: the answer says `paid: 0`. Every answer carries the whole view as well.
+   * The office pays what that beats its best by: `paid` (0 for a visit that was no better, which is not an error),
+   * and `best`, what the best is now. Every answer carries the whole view as well.
    */
   function earn(hideoutId, carried, by, extra = {}) {
     const hideout = hideoutById(String(hideoutId || ''));
@@ -106,18 +107,18 @@ export function createGame(ctx, state, hooks) {
     if (!hideout.pays) return fail(400, `nothing carried out of ${hideout.name} is paid for`);
     const raw = carried?.batteries, batteries = Math.floor(raw);
     if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) return fail(400, 'batteries is how many were carried out: a number, none or more');
-    const coins = payFor({ batteries });
-    if (!coins) return { ok: true, ...view(), paid: 0 };
-    const at = Date.now(), last = g.paid[g.paid.length - 1];
-    if (last && at - last.at < PAY_APART_MS) return fail(429, 'the jar was paid for a visit a moment ago: a visit that pays takes longer than that');
+    const worth = payFor({ batteries }), coins = Math.max(0, worth - g.earned);
+    if (!worth) return { ok: true, ...view(), paid: 0, best: g.earned };
     const who = nameOf(by, extra);
-    g.earned += coins;
-    g.paid.push({ at, by: who, hideout: hideout.id, batteries, coins });
+    g.paid.push({ at: Date.now(), by: who, hideout: hideout.id, batteries, worth, coins });
     if (g.paid.length > PAID_KEPT) g.paid.splice(0, g.paid.length - PAID_KEPT);
+    if (coins) g.earned = worth;
     hooks.save();
-    ctx.activity?.log('loot', `${who} got out of ${hideout.name} with ${batteries} spare batter${batteries === 1 ? 'y' : 'ies'}: ${coins} coin${coins === 1 ? '' : 's'} for the jar`, { hideout: hideout.id, item: 'pay', batteries, coins, agentId: by?.id || null });
-    hooks.changed();
-    return { ok: true, ...view(), paid: coins, batteries };
+    if (coins) {
+      ctx.activity?.log('loot', `${who} got out of ${hideout.name} with ${batteries} spare batter${batteries === 1 ? 'y' : 'ies'}, the most anybody has: ${coins} coin${coins === 1 ? '' : 's'} for the jar`, { hideout: hideout.id, item: 'pay', batteries, coins, agentId: by?.id || null });
+      hooks.changed();
+    }
+    return { ok: true, ...view(), paid: coins, batteries, best: g.earned };
   }
 
   /** The panel showed a newly lit floor and somebody rode there: it is not news any more. */
@@ -166,7 +167,7 @@ export function createGame(ctx, state, hooks) {
       lines.push(`  ${h.name}: keycard ${l.card ? `found by ${g.cards[h.id].by}` : 'still hidden'} · ${l.coins.length} of ${n(h.coins, 'coin')} found`);
     }
     if (been.length < HIDEOUTS.length) lines.push(`  …and ${n(HIDEOUTS.length - been.length, 'place')} nobody has found anything in yet.`);
-    lines.push(`The jar: ${n(jar.have, 'coin')} (${jar.found} picked up, ${jar.earned ? `${jar.earned} paid for what was carried out of ${HIDEOUTS.filter((h) => h.pays).map((h) => h.name).join(' and ')}, ` : ''}${jar.stamps} from passport stamps — every stamp anyone earns pays ${STAMP_COINS} — ${jar.spent} spent).`);
+    lines.push(`The jar: ${n(jar.have, 'coin')} (${jar.found} picked up, ${jar.earned ? `${jar.earned} for the most anybody has carried out of ${HIDEOUTS.filter((h) => h.pays).map((h) => h.name).join(' and ')}, ` : ''}${jar.stamps} from passport stamps — every stamp anyone earns pays ${STAMP_COINS} — ${jar.spent} spent).`);
     lines.push('The vending machine in the kitchen:');
     for (const p of shelf().prizes) lines.push(`  ${p.slot}  ${p.name} — ${p.sold ? `bought by ${p.by}; it is on top of the machine` : n(p.price, 'coin')}`);
     return lines.join('\n');

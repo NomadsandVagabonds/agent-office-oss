@@ -30,7 +30,7 @@ function figure() {
 
 export function create(c) {
   const env = c.env, R = c.R, me = c.me, walker = { x: 0, z: 0, r: 0.2, tall: 2.2, opens: false };
-  let s = away(R, true), mesh = null, at = null, hiss = 0, dark = [], seenT = 0;
+  let s = away(R, true), mesh = null, at = null, hiss = 0, dark = [], seenT = 0, known = false, close = false;
 
   function ready() {
     const b = new Batch(true);
@@ -67,7 +67,7 @@ export function create(c) {
     const rooms = new Set([w.roomAt(m.x, m.z), at && w.roomAt(at.x, at.z)].filter(Boolean));
     dark = [...rooms].map((rt) => ({ rt, t: 0 }));
     c.drain(SHADOW.drain);
-    at = null; mesh.visible = false;
+    at = null; mesh.visible = false; close = false;
   }
 
   return {
@@ -93,7 +93,9 @@ export function create(c) {
         // …and you can always hear where it is
         hiss -= dt;
         if (hiss <= 0 && d < 12) { hiss = 0.55 + Math.random() * 0.3; c.play('static', at.x, at.z, 3.2 + 4 * h); }
-        if (!c.hidden(at.x, at.z, 0.4)) seenT += dt;
+        if (!c.hidden(at.x, at.z, 0.4)) { seenT += dt; if (!known && seenT > 0.5 && d < 12) { known = true; c.met(); } }
+        // looked at long enough to be warned, and looked away in time: that counts as getting away from it
+        if (h > 0.4) close = true; else if (h === 0 && close) { close = false; c.survived(); }
       } else if (mesh) mesh.visible = false;
       // the tubes, after it has gone off: a flash, a stutter, and then a long while of nothing
       for (const k of dark) {
