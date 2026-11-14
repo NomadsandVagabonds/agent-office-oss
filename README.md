@@ -77,7 +77,7 @@ credentials; your agents keep their own auth. Setup details: [`AGENTS.md`](AGENT
 | **Board** (`B`) | Drag-and-drop kanban per project — the same cards that hang on each room's wall. A card in **Review** opens its review table: the branch and exact commit that was put up (and a warning if it has moved since), what changed, the findings, what other agents recommend, and two stamps for the decision that is yours — approve, or changes. You can hand the review to an agent from there. |
 | **Binder** (`K`) | Every project's `.md` docs, rendered and searchable. |
 | **Sessions** (`T`) | Two ways to run an agent from the office. **Driven**: the office starts the agent in its structured mode and talks to it directly — you read what it did as a record (each turn, the tools it ran, who allowed what), stamp what it asks right there, give it its next turn, stop it or end it, and choose whether mail may wake it and how freely it acts. Tasks one agent hands another are listed and open the record of whoever did them. **Terminals**: Claude Code, Codex, Gemini CLI, opencode or a shell in managed tmux sessions, with a real keyboard. See [`docs/HARNESS.md`](docs/HARNESS.md). |
-| **Console** (`` ` ``) | The office as plain text, for when you want the conversation and not the room. Every project down the left, with whoever is working in it underneath — a face, a name, which provider, what they are there for; on the right, the one you picked: an agent's conversation with a prompt under it, or a project's board. `/help` lists what can be typed, `y` `a` `n` answer whatever is waiting, `Esc` stops a turn. Nothing 3D is loaded. The same console in a terminal is `office chat`. |
+| **Console** (`` ` ``) | The office as plain text, for when you want the conversation and not the room. Every project down the left, with whoever is working in it underneath — a face, a name, which provider, what they are there for; on the right, the one you picked: an agent's conversation with a prompt under it, or a project's board. Under the prompt, the choices that agent itself offers: its model, how hard it thinks, its own modes (plan), how freely it may act — and every other agent, to carry the conversation on with. `/help` lists what can be typed, `y` `a` `n` answer whatever is waiting, `Esc` stops a turn. Nothing 3D is loaded. The same console in a terminal is `office chat`. |
 | **Walk the floor** (`Tab`) | Step in as an avatar: `WASD`, `E` to use things. Agents can tell you are there, and can walk over to you. |
 | **The lift** | Click the lift on the landing (or walk up and press `E`) and you get a plate of buttons like any lift's, with nothing on it but numbers. The office is on 2. Up from there: Mission Control on 3 (every project, agent and request on one wall), a Rooftop Garden at the top that follows the real hour and weather — and in between, red buttons that want a keycard. Some of those are the game floors, of which exactly one is lit to begin with (a different one in every office). Agents can ride too. Adding a floor is one small module — see [`WORLD.md`](WORLD.md). |
 | **The long game** | Every game floor hides a keycard, which lights another floor's button, and a few coins, which do not come back once taken. The coins — and one more for every stamp in anybody's passport — go in one jar for the whole office, and the vending machine in the kitchen takes them: what it sells ends up standing on top of it. Nothing tells you where to look. |
@@ -234,7 +234,7 @@ guide, and `/world/dev/studio.html` is a room for looking at your work.
 | **Office is empty** | Nothing has reported in. `npm run simulate` for the demo; for real sessions install the Claude hooks and/or run `node observe-codex.mjs`. |
 | **My sessions do not appear** | `npm run doctor`. Claude Code: re-run `npm run install-hooks` (idempotent) and start a fresh session. Others: `office join`. |
 | **Sessions panel has no terminals** | `tmux` is not installed (`npm run doctor` flags it). Everything else works without it. |
-| **Sessions panel offers no agent to drive** | The agent's structured mode is not installed: `office runtimes` says what was looked for (Claude Code needs its ACP wrapper, `npm i -g @agentclientprotocol/claude-agent-acp`). The panel lists the rest under "more could be driven". |
+| **Sessions panel offers no agent to drive** | The agent's structured mode is not installed: `office runtimes` says what was looked for (Claude Code and Codex need only their own CLIs; Gemini CLI and opencode their ACP modes). The panel lists the rest under "more could be driven". |
 | **Black page / "cannot draw the 3D office"** | The browser has no WebGL2. The [classic office](public/classic/) runs anywhere. |
 | **Slow** | Append `?fx=0` (no post-processing) or `?shadows=0`. |
 | **Daemon seems flaky** | `curl localhost:4317/api/health`. `npm run watchdog` restarts it on a crash; nobody loses their desk — the registry is restored. |
@@ -244,6 +244,14 @@ guide, and `/world/dev/studio.html` is a room for looking at your work.
 This repo ships **no real data**. `data/` (runtime state), `public/knowledge/`
 (ingested docs) and `public/transcripts/` are git-ignored and start empty;
 `simulate.mjs` provides a fully fictional roster.
+
+One thing `data/` does hold once you drive agents: to tell you what each turn
+changed, the office keeps its own compressed copy of the working files (not
+the ignored ones) of every repository a driven session works in, under
+`data/harness/checkpoints/`. Nothing is written into those repositories, and
+the copy never leaves your machine; a session says so when it grows large,
+and it stops growing at 2 GB per repository (`OFFICE_CHECKPOINTS_MAX_STORE_BYTES`).
+`OFFICE_CHECKPOINTS=0` switches it off. See [`docs/HARNESS.md`](docs/HARNESS.md) §9a.
 
 ## License
 

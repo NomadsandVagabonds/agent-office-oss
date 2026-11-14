@@ -31,12 +31,9 @@ test('driven sessions: Codex app-server', async (t) => {
     assert.deepEqual(told.office, { url: true, agentId: s.id, token: true });
     assert.equal(told.framed, 1);
 
-    // Codex enforces its sandbox itself, so the mode is fixed when the thread starts.
-    assert.equal(s.controls.mode.available, false, 'and the session says so itself');
-    assert.match(s.controls.mode.fixed, /its own sandbox enforces it/);
-    const refused = await h.patch(`/api/harness/sessions/${s.id}`, { mode: 'full' });
-    assert.equal(refused.status, 409);
-    assert.match(refused.data.error, /sandbox is set when it starts/);
+    // Codex enforces its sandbox itself; a change of mode rides on its next turn (test/harness-settings.test.mjs).
+    assert.deepEqual([s.controls.mode.available, s.controls.mode.applies, s.controls.mode.fixed], [true, 'next-turn', undefined]);
+    assert.equal(told.lastTurn && Object.keys(told.lastTurn).length, 0, 'a turn carries nothing nobody chose: Codex runs as it is configured');
     assert.equal((await h.patch(`/api/harness/sessions/${s.id}`, { wake: 'direct' })).data.session.wake, 'direct');
     await h.del(`/api/harness/sessions/${s.id}`);
 

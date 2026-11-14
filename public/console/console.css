@@ -99,15 +99,41 @@ body.norail #rail { display: none; }
 .s-key { color: var(--accent); font-weight: 600; }
 
 /* ---- the bottom: what is still happening, the line you are typing, and one line of state ---------------- */
-#foot { flex: none; padding: 0 22px 10px; }
+.blk.changes { cursor: pointer; border-radius: 5px; } .blk.changes:hover { background: #1f1e1b; }
+#foot { flex: none; padding: 0 22px 10px; position: relative; }
 #live { color: var(--dim); min-height: 0; white-space: pre-wrap; }
 #live .spin { color: var(--say); }
-#entry { display: flex; gap: 1ch; align-items: flex-start; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: #1c1b18; }
+#entry { margin-top: 6px; padding: 8px 10px 7px; border: 1px solid var(--line); border-radius: 7px; background: #1c1b18; }
+#entry .line { display: flex; gap: 1ch; align-items: flex-start; }
 #entry:focus-within { border-color: #4a4638; }
 #entry .mark { color: var(--user); font-weight: 600; }
 #input { flex: 1 1 auto; min-width: 0; max-height: 40vh; padding: 0; border: 0; outline: 0; resize: none; background: transparent; color: var(--ink); font: inherit; line-height: 1.55; }
 #input::placeholder { color: var(--faint); }
-#status { display: flex; gap: 12px; margin-top: 6px; font-size: 12px; color: var(--dim); min-height: 1.5em; }
+/* the bar under the prompt: every choice the agent itself offers, as a word you can press */
+#bar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; margin: 7px 0 0 -6px; font: 12.5px/1 var(--sans); }
+#bar:empty { display: none; }
+#bar .chip { display: inline-flex; align-items: baseline; gap: 6px; max-width: 100%; padding: 5px 7px; border-radius: 6px; color: var(--dim); white-space: nowrap; }
+#bar .chip:hover, #bar .chip.open { background: var(--rail-on); color: var(--ink); }
+#bar .chip b { font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
+#bar .chip span { overflow: hidden; text-overflow: ellipsis; }
+#bar .chip i { font: 10px/1 var(--mono); font-style: normal; color: var(--faint); }
+#bar .chip.full { color: var(--warn); }
+#bar .chip[disabled] { cursor: default; opacity: .7; }
+#bar .sep { width: 1px; height: 14px; background: var(--line); margin: 0 2px; }
+#pop { position: absolute; z-index: 5; min-width: 216px; max-width: min(360px, calc(100vw - 28px)); max-height: 52vh; overflow-y: auto; padding: 5px; border: 1px solid #3a372f; border-radius: 9px;
+  background: #211f1c; box-shadow: 0 10px 34px rgba(0, 0, 0, .5); font: 13px/1.3 var(--sans); scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+#pop .cap { padding: 7px 9px 3px; font: 600 10.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+#pop .cap:not(:first-child) { margin-top: 5px; border-top: 1px solid var(--line); padding-top: 10px; }
+#pop .it { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: baseline; column-gap: 7px; width: 100%; padding: 6px 9px; border-radius: 6px; text-align: left; color: var(--ink); }
+#pop .it:hover:not([disabled]), #pop .it:focus-visible { background: var(--rail-on); outline: 0; }
+#pop .it[disabled] { color: var(--faint); cursor: default; }
+#pop .it .tick { color: var(--accent); font: 12px/1 var(--mono); }
+#pop .it .l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#pop .it .h { font-size: 11.5px; color: var(--faint); white-space: nowrap; }
+#pop .it.sub { padding-left: 26px; }
+#pop .it.sub .l { color: var(--dim); } #pop .it.sub.on .l, #pop .it.sub:hover .l { color: var(--ink); }
+#pop .it.warn .h { color: var(--warn); }
+#status { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 6px; font-size: 12px; color: var(--dim); min-height: 1.5em; }
 #status .l { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #status .r { flex: none; } #status .r button { font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 #hints { position: absolute; left: 0; right: 0; bottom: 100%; }

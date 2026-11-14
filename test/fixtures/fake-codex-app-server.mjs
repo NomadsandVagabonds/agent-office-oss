@@ -8,13 +8,25 @@
 // scripted by the prompt text — see fake-lib.mjs.
 //
 //   node fake-codex-app-server.mjs               a ChatGPT-plan account: answers account/rateLimits/read
-//   node fake-codex-app-server.mjs --no-limits   an older Codex that does not know that method
+//   node fake-codex-app-server.mjs --no-limits   an older Codex that does not know that method (nor model/list)
+//   node fake-codex-app-server.mjs --stubborn    takes a turn's sandbox override without applying it, and says what it really runs with
 import { readLines, sleep, parseScript, scriptIn, officeCall, officeFromEnv } from './fake-lib.mjs';
 
 const THREAD_ID = 'thr_fake_1';
 const NO_LIMITS = process.argv.includes('--no-limits');
+const STUBBORN = process.argv.includes('--stubborn');
+const EFFORTS = (list) => list.map((reasoningEffort) => ({ reasoningEffort, description: '' }));
+const MODELS = [
+  { id: 'gpt-fake', model: 'gpt-fake', displayName: 'GPT Fake', description: '', hidden: false, isDefault: true, defaultReasoningEffort: 'medium', supportedReasoningEfforts: EFFORTS(['low', 'medium', 'high']) },
+  { id: 'gpt-fake-mini', model: 'gpt-fake-mini', displayName: 'GPT Fake Mini', description: '', hidden: false, isDefault: false, defaultReasoningEffort: 'low', supportedReasoningEfforts: EFFORTS(['low', 'medium']) },
+  { id: 'gpt-internal', model: 'gpt-internal', displayName: 'Internal', description: '', hidden: true, isDefault: false, defaultReasoningEffort: 'low', supportedReasoningEfforts: [] },
+];
+// What the thread runs with, as Codex itself would report it.
+const thread = { model: 'gpt-fake', effort: null, approvalPolicy: 'untrusted', sandboxPolicy: { type: 'readOnly' }, mode: 'default' };
+const SANDBOX = { 'read-only': 'readOnly', 'workspace-write': 'workspaceWrite', 'danger-full-access': 'dangerFullAccess' };
 const RESET_AT = 1_900_000_000;           // epoch SECONDS, as Codex reports them
-const seen = { clientInfo: null, optOut: null, initialized: false, thread: null, turns: 0, interrupts: 0, limitsRead: 0, limitsParams: undefined, framed: 0 };
+const seen = { clientInfo: null, optOut: null, initialized: false, thread: null, turns: 0, interrupts: 0, limitsRead: 0, limitsParams: undefined, framed: 0,
+  modelLists: 0, lastTurn: null };
 let office = null;
 let nextRequestId = 10000;
 const waiting = new Map();
@@ -179,6 +191,9 @@ readLines(async (msg) => {
       seen.thread = { cwd: params.cwd, model: params.model || null, approvalPolicy: params.approvalPolicy, sandbox: params.sandbox,
         configKeys: Object.keys(config) };
       office = officeFromEnv(config['mcp_servers.office']?.env);
+      thread.model = params.model || 'gpt-fake';
+      thread.approvalPolicy = params.approvalPolicy || 'untrusted';
+      thread.sandboxPolicy = { type: SANDBOX[params.sandbox] || 'readOnly' };
       reply(id, { thread: { id: THREAD_ID, cwd: params.cwd, cliVersion: '0.0.1', createdAt: Date.now(), updatedAt: Date.now(), ephemeral: false,
         modelProvider: 'fake', preview: '', projectId: null, sessionId: 'sess_fake', source: 'appServer', status: { type: 'idle' }, turns: [] },
       model: params.model || 'gpt-fake', modelProvider: 'fake', cwd: params.cwd,
@@ -192,9 +207,30 @@ readLines(async (msg) => {
       turn = { id: turnId, cancelled: false, pendingRequestId: null };
       const text = (params.input || []).map((b) => b.text || '').join('');
       if (text.includes('<the_office>')) seen.framed += 1;
+      // What this turn carried besides its text; a turn's choices become the thread's from then on.
+      const { threadId: _t, input: _i, ...carried } = params;
+      seen.lastTurn = carried;
+      if (Object.keys(carried).length) {
+        if (carried.model) thread.model = carried.model;
+        if (carried.effort) thread.effort = carried.effort;
+        if (carried.approvalPolicy && !STUBBORN) thread.approvalPolicy = carried.approvalPolicy;
+        if (carried.sandboxPolicy && !STUBBORN) thread.sandboxPolicy = carried.sandboxPolicy;
+        if (carried.collaborationMode) thread.mode = carried.collaborationMode.mode;
+        notify('thread/settings/updated', { threadId: THREAD_ID, threadSettings: { model: thread.model, modelProvider: 'fake', effort: thread.effort,
+          approvalPolicy: thread.approvalPolicy, approvalsReviewer: 'user', sandboxPolicy: thread.sandboxPolicy, cwd: seen.thread?.cwd || '/',
+          collaborationMode: { mode: thread.mode, settings: { model: thread.model, reasoning_effort: thread.effort } } } });
+      }
       reply(id, { turn: { id: turnId, status: 'inProgress', items: [] } });
       notify('turn/started', { threadId: THREAD_ID, turn: { id: turnId, status: 'inProgress', items: [] } });
       await runTurn(turnId, text);
+      return;
+    }
+    case 'model/list': {
+      if (NO_LIMITS) { fail(id, -32601, `Unhandled request: ${method}`); return; }
+      seen.modelLists += 1;
+      // two pages, so that whoever asks has to follow the cursor
+      if (!params.cursor) reply(id, { data: MODELS.slice(0, 1), nextCursor: 'page-2' });
+      else reply(id, { data: MODELS.slice(1), nextCursor: null });
       return;
     }
     case 'account/rateLimits/read': {

@@ -18,7 +18,8 @@
 //   mode           { modeId }
 //   info           { title }
 //   notice         { level, text }
-//   permission     { requestId, kind, title, detail, command?, paths?, toolId?, options:[{id,name,kind}] }
+//   permission     { requestId, kind, title, detail, command?, paths?, toolId?, manual?, options:[{id,name,kind}] }
+//                  manual: the agent itself insists a person sees this one — no mode and no grant answers it
 //   permission.gone{ requestId, reason }         the agent stopped waiting for an answer
 //   question       { requestId, questions:[{ id, header, text, options:[label] }] }
 //   turn.ended     { status:'completed'|'interrupted'|'failed', stopReason?, error? }

@@ -19,7 +19,7 @@
 import readline from 'node:readline';
 import os from 'node:os';
 import { api, BASE, OfficeError } from './office-lib.mjs';
-import { createConsole, choicesOf, complete, parseInput, wrap, width, wordsAction } from './core/console.mjs';
+import { createConsole, choicesOf, parseInput, wrap, width, wordsAction } from './core/console.mjs';
 
 const ANSI = { dim: '2', bold: '1', user: '1', say: '38;5;215', tool: '1', ok: '32', err: '31', warn: '33', ask: '1;33', code: '36', head: '1;4', add: '32', del: '31', key: '1;36' };
 const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -262,7 +262,7 @@ export async function chat({ words = [], flags = {}, input = process.stdin, outp
   catch (err) { throw err instanceof OfficeError ? err : new OfficeError(String(err?.message || err), 0); }
 
   const first = (words[0] || '').toLowerCase();
-  if (first === 'new') await con.submit(`/new ${words.slice(1).join(' ')}${typeof flags.mode === 'string' ? ` --mode ${flags.mode}` : ''}${typeof flags.model === 'string' ? ` --model ${flags.model}` : ''}${typeof flags.name === 'string' ? ` --name ${flags.name}` : ''}`);
+  if (first === 'new') await con.submit(`/new ${words.slice(1).join(' ')}${typeof flags.mode === 'string' ? ` --mode ${flags.mode}` : ''}${typeof flags.model === 'string' ? ` --model ${flags.model}` : ''}${typeof flags.name === 'string' ? ` --name ${flags.name}` : ''}${typeof flags.effort === 'string' ? ` --effort ${flags.effort}` : ''}`);
   else if (words.length) { if (!(await con.open(words.join(' ')))) { /* said so */ } }
   else {
     const s = [...con.state.sessions].filter((x) => x.live !== false).sort((a, b) => (b.turn?.startedAt || b.startedAt || 0) - (a.turn?.startedAt || a.startedAt || 0))[0];
@@ -357,9 +357,10 @@ export async function chat({ words = [], flags = {}, input = process.stdin, outp
       schedule(); return;
     }
     if (name === 'tab') {
-      const options = complete(line);
-      if (options.length === 1) setLine(`/${options[0]} `);
-      else if (options.length > 1) emitRows([[[options.map((o) => '/' + o).join('  '), 'dim']]]);
+      // a command's name, then the first word it takes: a model, an effort, a mode, an agent, a session
+      const options = con.complete(line);
+      if (options.length === 1) setLine(options[0].text);
+      else if (options.length > 1) emitRows([[[options.map((o) => o.label).join('  '), 'dim']]]);
       schedule(); return;
     }
     if (!str || key.ctrl || (key.meta && name !== 'return')) return;

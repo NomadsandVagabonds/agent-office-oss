@@ -16,6 +16,7 @@
 //   mcp:office_who {}  start the MCP server the office injected and call one of its tools
 //   limits:80/40       (Codex) report the account's allowance: primary/secondary percent used
 //   stop:max_tokens    end with that stop reason error:msg        fail the turn
+//   mode:plan          (ACP) switch to one of its own modes, unasked
 // Anything that is not a step is said back as plain text, so a real-looking
 // prompt ("please fix the tests") produces a real-looking turn.
 
@@ -42,7 +43,7 @@ export function readLines(onLine) {
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const VERBS = new Set(['say', 'think', 'tool', 'edit', 'ask', 'askfile', 'question', 'plan', 'usage', 'sleep', 'slow', 'ignore-cancel',
-  'crash', 'garbage', 'noise', 'report', 'dm', 'delegate', 'post', 'stop', 'error', 'http', 'read', 'limits', 'mcp', 'leak']);
+  'crash', 'garbage', 'noise', 'report', 'dm', 'delegate', 'post', 'stop', 'error', 'http', 'read', 'limits', 'mcp', 'leak', 'mode']);
 
 /** "say:hi; tool:ls" → [{verb:'say',arg:'hi'},{verb:'tool',arg:'ls'}] */
 export function parseScript(prompt) {
@@ -69,6 +70,7 @@ export function scriptIn(prompt) {
   if (marked) return marked[1];
   const framed = /<request>\n([\s\S]*)\n<\/request>/.exec(body);
   if (framed) body = framed[1];
+  body = body.replace(/^<handoff [\s\S]*?<\/handoff>\s*/, '');      // context handed over is background, not the request
   const task = /<delegated_task [^>]*>\n([\s\S]*?)\n<\/delegated_task>/.exec(body);
   if (task) body = task[1];
   return body;

@@ -102,7 +102,8 @@ started here:
 | `codex` | `codex` | Codex app-server |
 | `gemini` | `gemini` | ACP (`gemini --acp`) |
 | `opencode` | `opencode` | ACP (`opencode acp`) |
-| `claude` | `claude-agent-acp` (`npm i -g @agentclientprotocol/claude-agent-acp`) | ACP |
+| `claude` | `claude` | its own stream-json mode: the CLI itself, no wrapper |
+| `claude-acp` | `claude-agent-acp` (`npm i -g @agentclientprotocol/claude-agent-acp`) | ACP, for when Claude's own mode is not wanted |
 | `codex-acp` | `codex-acp` | ACP |
 
 Any other agent that speaks ACP is one entry in
@@ -221,8 +222,8 @@ root). In short:
   headless Chromium with software WebGL works; `/world/dev/studio.html` is a
   neutral room for props.
 - **Tests never run a real agent.** The harness is tested against the fake
-  agents in `test/fixtures/` (they speak ACP and Codex's app-server protocol
-  from the agent's side), so no test spends anyone's tokens. Keep it that way,
+  agents in `test/fixtures/` (they speak ACP, Codex's app-server protocol and
+  Claude Code's stream-json from the agent's side), so no test spends anyone's tokens. Keep it that way,
   and say in `docs/HARNESS.md` §16 what a change has only met fakes for.
 
 ## What not to commit
