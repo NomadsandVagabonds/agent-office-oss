@@ -116,7 +116,7 @@ Lighting is vertex baked, not a system of runtime shadow-casting point lights. M
 
 `tick`/zone `me` is `{x,z,inside,yaw,moving,speed,world}`; `me.world` is the actual player state. Timers in `tick` pause when the room is distant. Zones are also skipped then; do not rely on a zone's `leave` firing immediately after a distant warp. Use room lifecycle callbacks for state that must reset on departure.
 
-For a hostile room-local creature, guard contact logic with `me.inside && !me.world.frozen`. An earned capture can call `c.env.end('caught')`. There is no general health/combat/inventory API. Space is a small hop and C crouches; the hop cannot clear an obstacle that ordinary movement cannot step over. Keep required interactions usable without jumping.
+For a hostile room-local creature, guard contact logic with `me.inside && !me.world.frozen`. An earned capture can call `c.env.end('caught')`. The baseline has no general health/combat/inventory API. An opt-in workshop inventory now exists; see [INVENTORY.md](INVENTORY.md) for its scoped item API. Space is a small hop and C crouches; the hop cannot clear an obstacle that ordinary movement cannot step over. Keep required interactions usable without jumping.
 
 `c.dynamic` does **not** move a `c.solid` collider. Likewise, `c.use` caches `wx/wz` at registration; a moving interaction must update the returned record's world coordinates. Creature meshes are not automatically collidable or damaging. Do not replace `env.pursuer`, `env.lair`, `env.adopt`, `env.stash`, or `env.ready`: existing enemies, the follower and loot use those hooks. Keep new creatures local unless cross-room behavior is explicitly requested.
 

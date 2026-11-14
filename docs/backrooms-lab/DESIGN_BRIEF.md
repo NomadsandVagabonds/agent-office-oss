@@ -149,3 +149,12 @@ Keep doorway approaches and a continuous walking route open in every state. The 
 ## Inspiration and originality
 
 The requested reference is the [Backrooms community wiki](https://backrooms.fandom.com/). It is useful for mood, liminal spaces and the idea that entities need not all attack. Different interpretations exist; do not imply our room is canon or part of a film adaptation. The Carbon Copy starter is an original office anomaly. Do not copy wiki prose, images, meshes, named creatures or audio into it. Record any specific outside references and asset licenses in the handoff; all-new geometry made with the project's own primitives is preferred.
+
+### Inventory workshop — explicit UI direction
+
+The user requested a Minecraft-inspired, always-visible six-slot bar with
+carry, inspect, use and drop actions, plus very basic combinations such as
+batteries into a flashlight. This is a specific exception to the earlier
+no-new-HUD preference. The [optional inventory prototype](INVENTORY.md)
+implements those actions and one battery recipe; production adoption and
+supply frequency remain Fable's choices.

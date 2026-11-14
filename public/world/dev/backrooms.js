@@ -9,6 +9,7 @@
 //   &name=Robin        who you are                               &live=1     borrow names from the running office (GET only)
 //   &list=1            print the deck with links                 &map=1      show the floor plan
 //   &study=quiet       optional repeated-maze study (no oddities, pursuer or loot); leaves the normal generator alone
+//   &inventory=1       optional six-slot supplies: E pickup, 1–6 select, Q use, G drop, Tab/I inspect
 //   &loot=1            something to find: the keycard (in the mascot's hand) and coins 1–4; &loot=card,1,3 for some of it. There is no
 //                      office here to keep count, so a stand-in does, in this page's memory, and says so on the console: what you leave
 //                      by the door with is gone the next visit (any key), everything else is down there again. Without it: no loot.
@@ -35,6 +36,7 @@ if (studyId === 'quiet') {
   };
   studyDev = { generate: (seed, opt) => generateFeatureStudy(studyId, seed, opt), builders: { [studyId]: await builders[studyId]() } };
 }
+if (q.get('inventory') === '1') studyDev = { ...studyDev, inventory: true };
 const num = (k, d) => (q.has(k) && q.get(k) !== '' && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : d);
 const stage = createStage(document.getElementById('stage'), { fx: q.get('fx') === '1', shadows: false, preserve: true, pixelRatio: num('dpr', 1) });
 stage.start();

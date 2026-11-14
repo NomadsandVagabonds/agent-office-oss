@@ -66,7 +66,7 @@ export function createHud(level) {
     /** Sit the overlay on the picture: { x, y, w, h } in CSS pixels. */
     layout(p) { for (const [k, v] of [['--px', p.x], ['--py', p.y], ['--pw', p.w], ['--ph', p.h]]) el.style.setProperty(k, `${v}px`); },
     /** Show (or hide) the [E]: there is something here to use. */
-    hint(on) { if (!!on !== usable) { usable = !!on; use.classList.toggle('on', usable); } },
+    hint(on, label = 'E') { if (!!on !== usable) { usable = !!on; use.classList.toggle('on', usable); } if (on && use.textContent !== label) use.textContent = label; },
     /** A word in the corner, the way a camcorder notes that its lamp is on. */
     flag(name, on) { if (on) flagSet.add(name); else flagSet.delete(name); flags.textContent = [...flagSet].join('  '); },
     /** What you are carrying, under the battery: a card, a ring for each coin. Pictures only; nothing is ever written. */

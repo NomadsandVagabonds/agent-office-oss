@@ -1,0 +1,113 @@
+// Visit-local supplies. Reward coins and the escape keycard remain in loot.js.
+// No rendering, world effects, storage or clocks live in this model.
+export const ITEM_DEFS = Object.freeze({
+  torch: Object.freeze({ name: 'Flashlight', description: 'A worn hand torch. Its narrow beam reaches into the unlit corners.', useLabel: 'Switch on', maxCharge: 180 }),
+  battery: Object.freeze({ name: 'Battery pack', description: 'A pair of heavy cells wrapped together. Fits the flashlight.', useLabel: 'Fit batteries' }),
+  chalk: Object.freeze({ name: 'Chalk', description: 'A short piece of white chalk. Leave a mark to recognize a place again.', useLabel: 'Mark floor', maxUses: 6 }),
+});
+const slotNumber = (n, size) => Number.isInteger(n) && n >= 0 && n < size;
+const copy = item => item ? { ...item } : null;
+
+/** Create the small serializable record carried into, out of, and around a slot. */
+export function makeItem(type, id, overrides = {}) {
+  if (!Object.hasOwn(ITEM_DEFS, type) || typeof id !== 'string' || !id.trim()) {
+    throw new TypeError('An inventory item needs a known type and a nonempty string id.');
+  }
+  const item = { id, type }, definition = ITEM_DEFS[type];
+  if (type === 'torch') {
+    const charge = overrides.charge ?? definition.maxCharge;
+    if (!Number.isFinite(charge) || charge < 0 || charge > definition.maxCharge) throw new RangeError('Invalid flashlight charge.');
+    item.charge = charge;
+  } else if (type === 'chalk') {
+    const uses = overrides.uses ?? definition.maxUses;
+    if (!Number.isInteger(uses) || uses < 0 || uses > definition.maxUses) throw new RangeError('Invalid chalk uses.');
+    item.uses = uses;
+  }
+  return item;
+}
+
+/**
+ * Each object occupies one numbered slot. Mutations never leak references;
+ * dropped items can be re-added with their remaining charge or chalk intact.
+ */
+export function createInventory({ size = 6 } = {}) {
+  if (!Number.isInteger(size) || size < 1 || size > 6) throw new RangeError('Inventory has one to six slots.');
+  const slots = Array(size).fill(null);
+  let selected = 0, activeTorch = null, revision = 0;
+  const fail = reason => ({ ok: false, reason });
+
+  function add(value) {
+    let item;
+    try { item = makeItem(value?.type, value?.id, value); }
+    catch { return fail('invalid-item'); }
+    if (slots.some(other => other?.id === item.id)) return fail('duplicate');
+    const index = slots.indexOf(null);
+    if (index < 0) return fail('full');
+    slots[index] = item; revision++;
+    return { ok: true, index, item: copy(item) };
+  }
+  function remove(id) {
+    if (typeof id !== 'string' || !id.trim()) return null;
+    const index = slots.findIndex(item => item?.id === id);
+    if (index < 0) return null;
+    const item = slots[index]; slots[index] = null;
+    if (activeTorch === id) activeTorch = null;
+    revision++;
+    return copy(item);
+  }
+  function select(index) {
+    if (!slotNumber(index, size)) return false;
+    if (selected !== index) { selected = index; revision++; }
+    return true;
+  }
+  function useSelected({ canMark = true } = {}) {
+    const item = slots[selected];
+    if (!item) return fail('empty');
+    if (item.type === 'battery') return { ok: true, action: 'combine', item: copy(item), index: selected };
+    if (item.type === 'torch') {
+      if (activeTorch === item.id) {
+        activeTorch = null; revision++;
+        return { ok: true, action: 'torch-off', item: copy(item), index: selected };
+      }
+      if (item.charge <= 0) return fail('empty-charge');
+      activeTorch = item.id; revision++;
+      return { ok: true, action: 'torch-on', item: copy(item), index: selected };
+    }
+    if (item.uses <= 0) return fail('empty-chalk');
+    if (!canMark) return fail('no-mark-space');
+    item.uses--;
+    const used = copy(item);
+    if (item.uses === 0) slots[selected] = null;
+    revision++;
+    return { ok: true, action: 'mark', item: used, index: selected };
+  }
+  function combine(fromIndex, toIndex) {
+    if (!slotNumber(fromIndex, size) || !slotNumber(toIndex, size)) return fail('invalid-slot');
+    const source = slots[fromIndex], target = slots[toIndex];
+    if (fromIndex === toIndex || source?.type !== 'battery' || target?.type !== 'torch') return fail('incompatible');
+    if (target.charge >= ITEM_DEFS.torch.maxCharge) return fail('full-charge');
+    target.charge = ITEM_DEFS.torch.maxCharge;
+    slots[fromIndex] = null;
+    if (selected === fromIndex) selected = toIndex;
+    revision++;
+    return { ok: true, action: 'recharge', index: toIndex, item: copy(target), consumed: copy(source) };
+  }
+  function tick(dt) {
+    if (!Number.isFinite(dt) || dt <= 0 || activeTorch === null) return { changed: false, depleted: false };
+    const item = slots.find(item => item?.id === activeTorch);
+    if (!item) { activeTorch = null; revision++; return { changed: true, depleted: false }; }
+    item.charge = Math.max(0, item.charge - dt);
+    const depleted = item.charge === 0;
+    if (depleted) activeTorch = null;
+    revision++;
+    return { changed: true, depleted };
+  }
+  function clear() {
+    if (!slots.some(Boolean) && selected === 0 && activeTorch === null) return;
+    slots.fill(null); selected = 0; activeTorch = null; revision++;
+  }
+  return {
+    add, remove, select, useSelected, combine, tick, clear,
+    read: () => ({ slots: slots.map(copy), selected, activeTorch, revision }),
+  };
+}

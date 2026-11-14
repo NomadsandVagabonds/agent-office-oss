@@ -24,6 +24,7 @@ import { createHud } from './hud.js';
 import { createSound } from './sound.js';
 import { createStalkers } from './pursuer.js';
 import { createLoot, lootLeft } from './loot.js';
+import { createInventory } from './inventory.js';
 
 const FOV = 62;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -146,6 +147,8 @@ async function visit(office, opt) {
     e.stopPropagation();
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (e.metaKey || e.ctrlKey || e.altKey || /^F\d+$/.test(k)) return;      // the browser's own shortcuts stay the browser's
+    if (state === 'play' && env.inventory?.handleKey(e)) { e.preventDefault(); sound.start(); return; }
+    if (env.inventory?.isOpen) return;                     // focus/Enter belong to the inspection buttons
     e.preventDefault();
     sound.start();
     if (e.repeat) return;
@@ -161,7 +164,9 @@ async function visit(office, opt) {
   let dragging = false, stickId = null, stickAt = null;
   const looks = new Map();
   const onPointerDown = (e) => {
+    if (env.inventory?.owns(e.target)) return;
     e.stopPropagation();
+    if (env.inventory?.isOpen) return;
     sound.start();
     if (e.pointerType === 'touch') {
       hud.setTouch(true);
@@ -176,7 +181,9 @@ async function visit(office, opt) {
     if (state !== 'done' && document.pointerLockElement !== canvas) { try { canvas.requestPointerLock?.()?.catch?.(() => {}); } catch { /* no pointer lock: arrows still turn */ } }
   };
   const onPointerMove = (e) => {
+    if (env.inventory?.owns(e.target)) return;
     e.stopPropagation();
+    if (env.inventory?.isOpen) return;
     if (e.pointerType !== 'touch' || !player) return;
     if (e.pointerId === stickId) {
       const reach = Math.max(46, Math.min(stage.size.w, stage.size.h) * 0.11), dx = (e.clientX - stickAt.x) / reach, dy = (e.clientY - stickAt.y) / reach, len = Math.max(1, Math.hypot(dx, dy));
@@ -188,6 +195,7 @@ async function visit(office, opt) {
     }
   };
   const onPointerUp = (e) => {
+    if (env.inventory?.owns(e.target)) return;
     e.stopPropagation();
     dragging = false;
     if (e.pointerId === stickId) { stickId = null; if (player) { player.input.stick.x = 0; player.input.stick.y = 0; } }
@@ -195,10 +203,11 @@ async function visit(office, opt) {
   };
   const onMouseMove = (e) => {
     e.stopPropagation();
+    if (env.inventory?.isOpen) return;
     if (!player || (document.pointerLockElement !== canvas && !dragging)) return;
     player.input.dx += e.movementX || 0; player.input.dy += e.movementY || 0;
   };
-  const swallow = (e) => { e.stopPropagation(); if (e.type === 'contextmenu' || e.type === 'touchmove') e.preventDefault(); };
+  const swallow = (e) => { if (env.inventory?.owns(e.target)) return; e.stopPropagation(); if (e.type === 'contextmenu' || e.type === 'touchmove') e.preventDefault(); };
   const onBlur = () => { keys()?.clear(); dragging = false; stickId = null; looks.clear(); if (player) { player.input.stick.x = 0; player.input.stick.y = 0; } };
   const listeners = [['keydown', onKeyDown], ['keyup', onKeyUp], ['pointerdown', onPointerDown], ['pointerup', onPointerUp], ['pointercancel', onPointerUp],
     ['mousemove', onMouseMove], ['pointermove', onPointerMove], ['wheel', swallow], ['click', swallow], ['dblclick', swallow], ['contextmenu', swallow], ['touchstart', swallow], ['touchmove', swallow]];
@@ -218,23 +227,29 @@ async function visit(office, opt) {
   const END = { quit: 0.4, caught: 1.8, exit: 1.4 };
   const off = stage.onFrame((dt) => {
     if (state === 'loading' || state === 'done') return;
-    time += dt;
+    const inspecting = !!env.inventory?.isOpen;
+    if (!inspecting) time += dt;
     const me = player.me;
-    me.frozen = state !== 'play';
-    player.update(dt, time);
-    me.slow = 1; me.sinkTo = 0;                              // rooms that slow you or make you stoop say so every frame
-    world.update(dt, time, me);
-    env.pursuer?.update(dt, time);
-    env.loot?.update(dt, time, state === 'play');
-    currentUse = state === 'play' ? world.usable(me) : null;
-    hud.hint(!!currentUse);
+    me.frozen = state !== 'play' || inspecting;
+    if (!inspecting) {
+      player.update(dt, time);
+      me.slow = 1; me.sinkTo = 0;                            // rooms reapply slowing/stooping each active frame
+      world.update(dt, time, me);
+      env.pursuer?.update(dt, time);
+      env.loot?.update(dt, time, state === 'play');
+    }
+    env.inventory?.update(dt, state === 'play' && !inspecting);
+    currentUse = state === 'play' && !inspecting ? world.usable(me) : null;
+    hud.hint(!!currentUse, currentUse?.inventoryItem ? `E · ${currentUse.label}` : 'E');
 
     // the camcorder copes with the dark: more gain (and more noise), then its little lamp
     const here = world.current();
     const lvl = here ? here.level * here.u.dim.value : 0.3;
     light += (lvl - light) * (1 - Math.exp(-2.2 * dt));
     u.uGain.value = clamp(Math.pow(0.3 / Math.max(light, 0.04), 0.55), 0.9, 2.3);
-    const wantTorch = light < 0.11 && !here?.noTorch ? 1 : 0;
+    // An optional carried flashlight uses the same native beam shader. Without
+    // the workshop inventory the ordinary automatic camcorder lamp is intact.
+    const wantTorch = env.inventory ? env.inventory.torchPower() : light < 0.11 && !here?.noTorch ? 1 : 0;
     torch += (wantTorch - torch) * (1 - Math.exp(-3 * dt));
     kit.shared.uTorch.value = torch * 1.5;
     hud.flag('LIGHT', torch > 0.5);
@@ -265,6 +280,7 @@ async function visit(office, opt) {
     for (const [type, fn] of listeners) window.removeEventListener(type, fn, true);
     window.removeEventListener('blur', onBlur);
     if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+    env.inventory?.dispose();
     hud.remove(); sound.stop();
     env.pursuer?.dispose?.();
     world?.dispose(); kit.dispose(); vhs.dispose();
@@ -275,6 +291,7 @@ async function visit(office, opt) {
   finish = (why) => {
     if (state === 'done' || state === 'ending' || pendingQuit) return;
     reason = why; ending = 0;
+    env.inventory?.close();
     hud.hint(false);
     if (why === 'exit' && env.loot) kept = env.loot.bank();        // carried is only kept by leaving through the door
     if (why === 'caught') sound.play('static', { dur: 1.3 });
@@ -295,6 +312,13 @@ async function visit(office, opt) {
   if (pendingQuit) { conclude(); return visitOver; }
   player = createPlayer(world, camera, level.start);
   env.player = player;
+  if (opt.debug && opt.dev?.inventory) env.inventory = createInventory(env, {
+    canAct: () => state === 'play',
+    onOpen(open) {
+      onBlur(); player.input.dx = player.input.dy = 0; player.me.vx = player.me.vz = 0;
+      if (open && document.pointerLockElement === canvas) document.exitPointerLock?.();
+    },
+  });
   player.me.shake = vhs.level === 2 ? 1 : vhs.level === 1 ? 0.5 : 0.25;
   player.me.drop = 1.3;
   player.on('step', () => sound.play(world.current()?.footstep || 'step'));
@@ -305,7 +329,7 @@ async function visit(office, opt) {
 
   // a way for the dev page (and the curious) to poke at it
   const handle = {
-    level, world, player, vhs, hud, env, loot: env.loot, sketch: () => sketch(level), deck: DECK.map((a) => a.id),
+    level, world, player, vhs, hud, env, loot: env.loot, inventory: env.inventory, sketch: () => sketch(level), deck: DECK.map((a) => a.id),
     /** Stand in a room: by archetype id or room number; x, z in the room's own frame (default: just inside its door). */
     goto(which, x, z, yaw, pitch = 0) {
       const def = level.rooms.find((r) => r.arch === which || r.kind === which || r.id === which);
