@@ -418,7 +418,7 @@ warned before it costs them anything.
 
 ## What a visitor carries
 
-Six pockets, four hearts, and a camcorder that runs on batteries (Codex's
+Six pockets, four health points, and a camcorder that runs on batteries (Codex's
 work: `inventory*.js`, `survival.js`; its own notes are
 `docs/backrooms-lab/INVENTORY.md`). They belong to the visit, not to any one
 part of the building, and they are on unless a visit is started with
@@ -428,7 +428,9 @@ part of the building, and they are on unless a visit is started with
   When it is flat the visit is over (`'battery'`). A battery pack puts two
   minutes back, up to six minutes forty. The clock runs while you are in
   play and while you fall; it does not stop for an open pocket.
-- **Hearts.** Four. Being caught costs what the creature's line says
+- **Health.** One camcorder heart with four horizontal layers, filled from
+  the bottom: white at four or three points, red at two or one, an empty
+  outline at zero. Being caught costs what the creature's line says
   (`caught: { hurt: 2 }` for the mascot), not the whole visit; a snack puts
   one back. After a hit there is a moment in which nothing else lands.
 - **Nobody is handed anything.** What is lying about is decided by the seed
@@ -443,7 +445,11 @@ part of the building, and they are on unless a visit is started with
   for (`core/game.mjs`).
 - **Light.** The camcorder's own lamp still comes on in the dark, but it is a
   weak one. A torch in the hand is the light, wherever it is switched on,
-  for as long as its own charge lasts.
+  for as long as its own charge lasts. Its held model glows only when that
+  particular torch is on, even if another torch is mounted and lit.
+- **The held model.** On narrow pictures, it fits above the pocket bar and
+  its caption, with room to bob while walking. This uses the actual picture
+  size in both VHS and clean modes. Opening inspection or crafting hides it.
 - **Nothing is written on the picture but `E`.** What a thing is, it has to
   look like; its name is said once it is in a pocket.
 

@@ -69,6 +69,13 @@ frame.addEventListener('load', async () => {
     });
     const style = doc.createElement('style');
     style.textContent = `@font-face{font-family:'Pixelify Sans';src:url('/vendor/fonts/pixelify-sans-400.woff2')}@font-face{font-family:'Pixelify Sans';src:url('/vendor/fonts/pixelify-sans-600.woff2');font-weight:600}@font-face{font-family:'IBM Plex Sans';src:url('/vendor/fonts/ibm-plex-sans-400.woff2')}@font-face{font-family:'IBM Plex Sans';src:url('/vendor/fonts/ibm-plex-sans-600.woff2');font-weight:600}@font-face{font-family:'IBM Plex Mono';src:url('/vendor/fonts/ibm-plex-mono-400.woff2')}@font-face{font-family:'IBM Plex Mono';src:url('/vendor/fonts/ibm-plex-mono-600.woff2');font-weight:600} #dev{display:none}.br-inv-icon{object-fit:contain;image-rendering:pixelated}.br-inv-notice{pointer-events:none}@media(max-width:520px){.backrooms:has(.br-inventory[data-study].is-open) .br-osd.bl{visibility:hidden}}`;
+    // The historical skins predate the single layered heart. Let their ink
+    // colors carry through without painting an opaque heart over its layers.
+    style.textContent += `
+      .br-inventory[data-study] .br-inv-health .br-inv-heart { width:22px; height:17px; }
+      .br-inventory[data-study] .br-inv-health .br-inv-heart .heart-body { fill:none; stroke:currentColor; stroke-width:1; stroke-opacity:.65; }
+      .br-inventory[data-study] .br-inv-health.is-low { color:#de746b; }
+    `;
     doc.head.append(style);
     await Promise.all([...variants].map(name => new Promise((resolve, reject) => {
       const link = doc.createElement('link'); link.rel = 'stylesheet'; link.href = `/world/dev/inventory-studies/${name}.css`;
