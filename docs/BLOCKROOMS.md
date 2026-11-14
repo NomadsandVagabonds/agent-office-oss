@@ -194,6 +194,7 @@ git push origin <commit>:blockrooms-live
 - **The book against a real store.** Its tests run against a stand-in; the
   REST calls follow Upstash's documentation and have not been run against a
   live database from here.
-- **Signing from the level itself.** The home page, the book's function and
-  the card's extra line are each checked; a whole visit of three parts, out by
-  the wall and into the book, has not been played end to end by anybody yet.
+- **Signing, against a real store.** A whole visit of three parts, out by the
+  wall and into the book with a typed name and message, has been played end
+  to end on the built site, with `serve.mjs` keeping the book. Not yet with
+  the real function and the real store behind it.
