@@ -1031,6 +1031,7 @@ forgetting — among the office's own files, and nowhere else
   git --git-dir=<store> update-ref --no-deref refs/office/keep <that tree>
   git --git-dir=<store> prune --expire=3600.seconds.ago  what no kept snapshot needs goes (objects under an hour old stay: a snapshot may be using them)
   git --git-dir=<store> update-ref -d refs/office/keep
+  rm <store>/objects/<that tree>                         the list has served
   rm -r <store>                                          instead of all that, once no session uses that repository
 
 counting — how much of the disk the office's directory takes
@@ -1044,8 +1045,11 @@ named on `git prune`'s command line. That has room for about 51,000 ids on
 this Linux, half as many on macOS, fewer again when the ids are SHA-256 — and
 past it git cannot be started at all, so nothing would ever be removed again.
 One tree lists them, one ref of the office's own holds that tree while `prune`
-runs, and the ref is removed. A tidying that fails removes nothing and is a
-line in the office's log (`[checkpoints] could not tidy …`).
+runs, and then both are removed. (The list's first entry is named `.git`, a
+name git never takes into a tree it writes from a folder: so the list cannot
+be a snapshot's tree as well, and removing it removes nothing else.) A tidying
+that fails removes nothing and is a line in the office's log
+(`[checkpoints] could not tidy …`).
 
 `add -A` is what puts untracked files in a snapshot and leaves ignored ones
 out. If nothing is listed by `ls-files` and `diff-files`, nothing has moved
@@ -1093,6 +1097,7 @@ used as a "before": that turn has no record, and says why.
 | `OFFICE_CHECKPOINTS_MAX_TURNS` | 100 | turns kept per session |
 | `OFFICE_CHECKPOINTS_DIFF_BYTES` | 512 KB | diff text in one answer; cut at a line, with `truncated: true` |
 | `OFFICE_CHECKPOINTS_NOTICE_BYTES` | 64 MB | how much the office may keep for one repository before it says so (below) |
+| `OFFICE_CHECKPOINTS_MAX_STORE_BYTES` | 2 GB | how much the office keeps for one repository at most; `0` for no cap. At it, snapshots end for the sessions in that repository (below) |
 
 Fixed: an answer lists at most 500 files of a turn (the counts stay true), a
 transcript entry 20; a list of names from git is read up to 8 MiB; a question
@@ -1108,6 +1113,7 @@ What turns change in this folder is not being recorded: it is where the office k
 What turns change in this folder is not being recorded: it has 81,234 files that are not ignored, and the office takes snapshots of folders with up to 50,000 (OFFICE_CHECKPOINTS_MAX_TREE_FILES).
 No record of what turn 7 changed: its new and changed files come to more than 100 MB (OFFICE_CHECKPOINTS_MAX_BYTES); the largest seen is data/dump.sql, 212 MB.
 File changes are no longer being recorded for this session: a snapshot of this folder took longer than 30,000 ms (OFFICE_CHECKPOINTS_TIMEOUT_MS).
+File changes are no longer being recorded for this session: the office already keeps 2.1 GB for this repository, in /home/me/agent-office/data/harness/checkpoints/5b1c9e0f7a2d4c68, and keeps no more than 2.0 GB (OFFICE_CHECKPOINTS_MAX_STORE_BYTES); what it has recorded stays readable.
 ```
 
 **The copy is on someone's disk, and says so.** What the office keeps for a
@@ -1124,11 +1130,24 @@ whichever session it is:
 To tell what turns change, the office keeps its own copy of this folder's files: 122 MB so far, in /home/me/agent-office/data/harness/checkpoints/5b1c9e0f7a2d4c68.
 ```
 
-Nothing stops the copy growing past that. The caps are per snapshot (100 MB)
-and per session (100 turns), not per repository: a session that rewrites a
-90 MB file every turn has the office store it again every turn, and holds
-about 125 turns' worth of it — or an hour's, if that is more — before the
-oldest are cleared out.
+And it has a cap: `OFFICE_CHECKPOINTS_MAX_STORE_BYTES`, counted the same way.
+A session that rewrites a 90 MB file every turn has the office store it again
+every turn, and what its oldest turns needed is cleared out only some 125
+turns or an hour later; the cap is what keeps that, or anything like it, from
+filling a disk. Before a snapshot stores anything, the count is looked at.
+Over the cap, what no kept turn needs is cleared out first — that may be all
+that is in the way, and then recording goes on. Still over, snapshots end for
+that session with the last sentence above, and for each other session in the
+same repository when it next has something to store; a session that starts
+there is not recorded and is told the same. Nothing on record is given up to
+make room, and all of it stays readable. Recording starts again, for sessions
+started from then on, once the copy is under the cap: when finished sessions
+are pruned, or when the directory is removed (below).
+
+The count is looked at before storing, not during: the copy can pass the cap
+by what one snapshot stores — at most `OFFICE_CHECKPOINTS_MAX_BYTES`, or
+`_MAX_TREE_BYTES` for the first snapshot of a session — for each session
+storing at that moment.
 
 The copy may be taken away. Removing `<data>/harness/checkpoints/<key>/` (or
 all of `checkpoints/`) while the office runs loses the snapshots taken so far
@@ -1151,16 +1170,15 @@ work keeping all four cores busy, the same took up to twice as long.
 | the snapshot after a turn that changed nothing | 12 ms | 12 ms | 34 ms |
 | …after a turn that changed 4 files, with the comparison | 25 ms | 30 ms | 93 ms |
 | the first snapshot of a later session in the same repository | 30 ms | 65 ms | 1.2 s |
-| `changes` for 12 turns, the first time (it counts what is kept) · again | 0.7 · 0.2 ms | 0.7 · 0.2 ms | 34 · 0.2 ms |
+| `changes` for 12 turns · when the last count of what is kept is over 30 s old and is taken again first | 0.7 ms · 10 ms | 0.7 ms · 10 ms | 0.7 ms · 35 ms |
 | forgetting a session's snapshots | 34 ms | 63 ms | 0.7 s |
 
 The first snapshot of a repository is the price of touching nothing: every
 file that is not ignored is read and stored once, compressed, on the office's
 side (about 25 MB a second here). After it, a snapshot is four git processes
-when nothing moved and six when something did — plus, until the size of that
-repository's copy has been said once, one that counts it and that nothing
-waits for — and only what is new is stored, for this session and for later
-ones in the same repository. The office's directory grows with what turns
+when nothing moved and six when something did — plus one that counts the
+copy afterwards, which nothing waits for — and only what is new is stored,
+for this session and for later ones in the same repository. The office's directory grows with what turns
 change; it shrinks when a session's record is pruned (with its transcript,
 after 120 newer finished sessions) and, for a session past its cap on turns,
 after every 25 turns more and when it ends. It is never packed. It holds
@@ -1718,6 +1736,7 @@ echo "run the tests" | office chat <session>   plain lines; exits when the turn 
 | `OFFICE_DELEGATE_MAX_ACTIVE` · `_MAX_PER_HOUR` · `_IDLE_END_MS` · `_WAIT_CAP_MS` | 4 · 12 · 900000 · 50000 | the limits in section 11 |
 | `OFFICE_CHECKPOINTS` | on | `0`: take no snapshots of what turns change — the office then keeps no copy of any working file (`OFFICE_GIT=0` does the same, with every other use of git) |
 | `OFFICE_CHECKPOINTS_HOLD_MS` · `_TIMEOUT_MS` · `_MAX_TREE_FILES` · `_MAX_TREE_BYTES` · `_MAX_FILES` · `_MAX_BYTES` · `_MAX_TURNS` · `_DIFF_BYTES` · `_NOTICE_BYTES` | 3000 · 30000 · 50000 · 512 MB · 5000 · 100 MB · 100 · 512 KB · 64 MB (the sizes are given in bytes) | the limits in section 9a |
+| `OFFICE_CHECKPOINTS_MAX_STORE_BYTES` | 2 GB (in bytes) | the most the office keeps of one repository's working files; at it, sessions there stop being recorded and say so. `0`: no cap (section 9a) |
 
 On disk, under the data directory (never committed): `harness.json` (sessions
 and the pause switch), `harness/<id>.jsonl` (transcripts), `delegations.json`,

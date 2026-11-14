@@ -49,6 +49,9 @@
 // stopped when it runs out, their output is bounded, and before anything is
 // stored the files are counted and weighed against a budget. Over budget, the
 // snapshot is skipped with the reason, and the turn goes ahead without it.
+// What the office keeps for one repository is counted too, as the disk counts
+// it, and has a cap: at it nothing more is stored there, and the sessions in
+// that repository are told that their turns are no longer recorded.
 //
 // A snapshot says what the working tree looked like, not who wrote it. Edits a
 // person or another agent makes in the same checkout while a turn runs, and
@@ -90,6 +93,7 @@ const GRACE_SECONDS = 3600;              // objects younger than this are never 
 const KEEP = 'refs/office/keep';         // in the office's own directory, and only while it tidies up there
 const SIZE_FRESH_MS = 30_000;            // how long a count of what is kept is believed
 const TIDY_EVERY = 25;                   // a running session past its cap on turns: tidy up after every so many more
+const RETIDY_MS = 60_000;                // a tidying that did not bring a directory under its cap is not tried again sooner
 
 /** The office's name for a repository: its object directory is kept under this. */
 export const repoKey = (commonDir) => crypto.createHash('sha256').update(String(commonDir)).digest('hex').slice(0, 16);
@@ -250,6 +254,7 @@ const namesOf = (r) => (r && (r.ok || r.truncated) ? r.out.split('\0').filter(Bo
 const oidOf = (r) => (r?.ok && OID.test(r.out.trim()) ? r.out.trim() : '');
 const say = (n) => n.toLocaleString('en-US');
 function size(bytes) {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(bytes >= 10 * 1024 ** 3 ? 0 : 1)} GB`;
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
   return bytes >= 1024 ? `${Math.round(bytes / 1024)} KB` : `${bytes} bytes`;
 }
@@ -298,6 +303,10 @@ export function createCheckpoints({ settings, dir, file, own: officeFolders = [p
   const toldKept = new Set();           // repositories whose size has been told to a session since this office started
   const tidying = new Map();            // repository key → the tidying under way there (one at a time)
   const made = new Map();               // repository key → how many times its object directory was made since this office started
+  const moves = new Map();              // repository key → how many times something was stored there or removed: a count taken across one is not kept
+  const fullAt = new Map();             // repository key → when a tidying last left it over its cap
+  /** Something was stored in a repository's directory, or removed from it: what was counted before no longer holds. */
+  const touched = (key) => { moves.set(key, (moves.get(key) || 0) + 1); sizes.delete(key); };
   const git = (cwd, args, opt = {}) => runGit(cwd, args, { timeout: QUERY_MS, ...opt, track: running });
   // Questions about snapshots are asked of the office's own directory and of nothing else: they are
   // answered the same whether the repository has moved on, been rewritten, or is gone.
@@ -423,7 +432,7 @@ export function createCheckpoints({ settings, dir, file, own: officeFolders = [p
   async function capture(st) {
     if (st.off) return { skip: st.off, code: 'off' };
     const began = Date.now();
-    const until = began + settings.timeoutMs;
+    let until = began + settings.timeoutMs, aside = 0;       // `aside`: time that was not the snapshot's (see the cap, below)
     const left = () => Math.max(1, until - Date.now());
     let first = !st.warm;                  // nothing of this tree is in our index yet: every file is new to it
     const failed = (what, r) => (r.timedOut
@@ -434,7 +443,7 @@ export function createCheckpoints({ settings, dir, file, own: officeFolders = [p
       const ms = Date.now() - began;
       // The first snapshot reads every file and may be slow once. A second slow one in a row means the
       // folder is too big to look over while a turn waits.
-      st.slow = ms > settings.holdMs ? st.slow + 1 : 0;
+      st.slow = ms - aside > settings.holdMs ? st.slow + 1 : 0;
       if (st.slow >= SLOW_IN_A_ROW) {
         switchOff(st, `${SLOW_IN_A_ROW} snapshots in a row took longer than a turn waits (${say(settings.holdMs)} ms; OFFICE_CHECKPOINTS_HOLD_MS)`);
       }
@@ -463,14 +472,14 @@ export function createCheckpoints({ settings, dir, file, own: officeFolders = [p
       if (first) fs.rmSync(st.index, { force: true });
 
       // The office's own files, where they are kept inside this checkout, are named to git as left out.
-      const aside = st.keepOut.map((folder) => `:(top,exclude,literal)${folder}`);
-      const rest = aside.length ? ['--', '.', ...aside] : [];
+      const apart = st.keepOut.map((folder) => `:(top,exclude,literal)${folder}`);
+      const rest = apart.length ? ['--', '.', ...apart] : [];
       const notOurs = (name) => !st.keepOut.some((folder) => name === folder || name.startsWith(`${folder}/`));
       // What a snapshot would take in: files our index has never seen and — once it has seen the tree —
       // files whose stat data no longer matches. Counted and weighed before anything is stored.
       const [fresh, stale, tracked] = await Promise.all([
-        git(st.root, ['ls-files', '-z', '--others', '--exclude-standard', ...rest], mine({ patterns: aside.length > 0 })),
-        first ? null : git(st.root, ['diff-files', '-z', '--name-only', '--ignore-submodules=all', ...rest], mine({ patterns: aside.length > 0 })),
+        git(st.root, ['ls-files', '-z', '--others', '--exclude-standard', ...rest], mine({ patterns: apart.length > 0 })),
+        first ? null : git(st.root, ['diff-files', '-z', '--name-only', '--ignore-submodules=all', ...rest], mine({ patterns: apart.length > 0 })),
         first && head ? ignoredButTracked(st, head, left()) : [],
       ]);
       for (const r of [fresh, stale]) if (r && !r.ok && !r.truncated) return failed('look at the folder', r);
@@ -500,11 +509,19 @@ export function createCheckpoints({ settings, dir, file, own: officeFolders = [p
             + (weight.largest ? `; the largest seen is ${redact(weight.largest.name, 200)}, ${size(weight.largest.size)}` : ''), code: 'bytes' };
         }
       }
+      // Something would be stored now. Not if the office already keeps as much for this repository as it
+      // may: then this session's snapshots end here. (Clearing out first can take a while; that is not
+      // the snapshot being slow, and does not count against it.)
+      const paused = Date.now();
+      const over = await full(st);
+      aside = Date.now() - paused;
+      until += aside;
+      if (over) return switchOff(st, over);
       // A repository inside the folder shows in that list as a name ending in "/" (git does not look
       // inside it to list files). It is kept out of the snapshot by name, so that git never has reason to.
       const inner = names.filter((name) => name.endsWith('/')).map((name) => `:(top,exclude,literal)${name.slice(0, -1)}`);
       // --ignore-errors: one unreadable file costs that file and not the snapshot. Git then exits 1 and has said which.
-      const added = await git(st.root, ['add', '-A', '--ignore-errors', '--', '.', ...inner, ...aside], mine({ patterns: inner.length + aside.length > 0 }));
+      const added = await git(st.root, ['add', '-A', '--ignore-errors', '--', '.', ...inner, ...apart], mine({ patterns: inner.length + apart.length > 0 }));
       if (added.timedOut || (!added.ok && added.code !== 1)) return failed('read the working tree', added);
       if (extra.length) await git(st.root, ['update-index', '--add', '--remove', '-z', '--stdin'], mine({ input: extra.join('\0') + '\0' }));
       if (/adding embedded git repository/.test(added.err)) {
@@ -527,8 +544,8 @@ export function createCheckpoints({ settings, dir, file, own: officeFolders = [p
       }
       st.tree = tree;
       st.written = true;
-      sizes.delete(st.key);                 // more may be kept now than when it was last counted
-      announce(st).catch(() => {});         // not waited for: no turn should stand behind a count
+      touched(st.key);                      // more may be kept now than when it was last counted
+      recount(st).catch(() => {});          // not waited for: no turn should stand behind a count
       return taken(tree, head, added.code === 1 ? why(added) : '');
     } catch (err) {
       return { skip: `the snapshot failed: ${line(err?.message || String(err), 200)}`, code: 'git' };
@@ -564,7 +581,7 @@ export function createCheckpoints({ settings, dir, file, own: officeFolders = [p
    * → { bytes, objects }, or null when it cannot be counted.
    */
   async function measure(key) {
-    const at = storeOf(key);
+    const at = storeOf(key), move = moves.get(key) || 0;
     let kept = { bytes: 0, objects: 0 };                     // no directory, nothing kept
     if (fs.existsSync(path.join(at, 'objects'))) {
       const counted = await git(null, [`--git-dir=${at}`, 'count-objects', '-v']);
@@ -572,7 +589,8 @@ export function createCheckpoints({ settings, dir, file, own: officeFolders = [p
       const n = (name) => Number(new RegExp(`^${name}: (\\d+)$`, 'm').exec(counted.out)?.[1] || 0);
       kept = { bytes: (n('size') + n('size-pack') + n('size-garbage')) * 1024, objects: n('count') + n('in-pack') };
     }
-    sizes.set(key, { ...kept, at: Date.now() });
+    // A count during which something was stored or removed is an answer, but not one to remember.
+    if ((moves.get(key) || 0) === move) sizes.set(key, { ...kept, at: Date.now() });
     return kept;
   }
 
@@ -584,18 +602,42 @@ export function createCheckpoints({ settings, dir, file, own: officeFolders = [p
   }
 
   /**
-   * A snapshot has stored something. If what the office now keeps for this
-   * repository is a lot, the session that took it is told — once per repository
-   * for as long as this office runs, in a sentence: that there is a copy, how
-   * big, and where.
+   * A snapshot has stored something: what the office keeps for this repository is
+   * counted again (the next snapshot's look at the cap reads that count). If it
+   * has become a lot, the session that took the snapshot is told — once per
+   * repository for as long as this office runs, in a sentence: that there is a
+   * copy, how big, and where.
    */
-  async function announce(st) {
-    if (toldKept.has(st.key)) return;
+  async function recount(st) {
+    if (toldKept.has(st.key) && !settings.maxStoreBytes) return;     // nothing left to say, and no cap to watch
     const kept = await measure(st.key);
     if (!kept || kept.bytes <= settings.noticeBytes || toldKept.has(st.key)) return;
     toldKept.add(st.key);
     const said = st.note('n:changes:kept', `To tell what turns change, the office keeps its own copy of this folder's files: ${size(kept.bytes)} so far, in ${line(storeOf(st.key), 300)}.`);
     if (said === false) toldKept.delete(st.key);          // its session had ended: the next one to add to it is told instead
+  }
+
+  /**
+   * The cap on what the office keeps for one repository, looked at before a
+   * snapshot stores anything. Over it, what no kept turn needs is cleared out
+   * first: that may be all that is in the way. Still over, this session's
+   * snapshots end — and so do those of each other session in that repository,
+   * when it next has something to store. Nothing on record is given up to make
+   * room, and what is on record stays readable.
+   * → '' to go on, or why not, as the rest of a sentence.
+   */
+  async function full(st) {
+    const cap = settings.maxStoreBytes;
+    if (!cap) return '';
+    let kept = sizes.get(st.key) || await measure(st.key);
+    if (kept && kept.bytes > cap && Date.now() - (fullAt.get(st.key) || 0) > RETIDY_MS) {
+      await sweep(st.key);
+      kept = await measure(st.key);
+      if (kept && kept.bytes > cap) fullAt.set(st.key, Date.now());
+    }
+    if (!kept || kept.bytes <= cap) { fullAt.delete(st.key); return ''; }
+    return `the office already keeps ${size(kept.bytes)} for this repository, in ${line(storeOf(st.key), 300)}, and keeps no more than ${size(cap)} `
+      + '(OFFICE_CHECKPOINTS_MAX_STORE_BYTES); what it has recorded stays readable';
   }
 
   /**
@@ -617,7 +659,7 @@ export function createCheckpoints({ settings, dir, file, own: officeFolders = [p
     const here = [...live.values()].filter((st) => st.key === key);
     if (!users.length && !here.length) {
       await fs.promises.rm(at, { recursive: true, force: true });
-      sizes.delete(key);
+      touched(key);
       return;
     }
     if (!fs.existsSync(path.join(at, 'objects'))) return;
@@ -632,23 +674,29 @@ export function createCheckpoints({ settings, dir, file, own: officeFolders = [p
     // one ref in the office's own directory for as long as the pruning takes. The ref is the only one the
     // office ever writes, it is never in the repository, and it is gone again a moment later.
     await own(['update-ref', '-d', KEEP]);                              // left by a tidying that was cut short
+    let list = '';                                                      // the tree that lists them, once made
     if (needed.size) {
       const known = await own(['cat-file', '--batch-check'], { input: [...needed].join('\n') + '\n', maxOut: Math.max(LIST_BYTES, needed.size * 128) });
       if (!known.ok) { failed('look up the trees to keep', known); return; }
       // A tree on record whose objects are no longer there cannot be kept, and must not stop the rest.
+      // The first is listed under a name no snapshot's tree can hold (git never takes a `.git` in), so the
+      // list is no snapshot's tree either: it is ours alone, and can be removed by name when it has served.
       const listing = known.out.split('\n').map((row) => /^([0-9a-f]+) tree \d+$/.exec(row)?.[1]).filter(Boolean)
-        .map((tree, i) => `040000 tree ${tree}\tt${i}\n`).join('');
+        .map((tree, i) => `040000 tree ${tree}\t${i ? `t${i}` : '.git'}\n`).join('');
       if (listing) {
         const listed = await own(['mktree'], { input: listing });
-        if (!oidOf(listed)) { failed('list the trees to keep', listed); return; }
-        const held = await own(['update-ref', '--no-deref', KEEP, oidOf(listed)]);
+        list = oidOf(listed);
+        if (!list) { failed('list the trees to keep', listed); return; }
+        const held = await own(['update-ref', '--no-deref', KEEP, list]);
         if (!held.ok) { failed('hold on to the trees to keep', held); return; }
       }
     }
     const pruned = await own(['prune', `--expire=${graceSeconds > 0 ? `${graceSeconds}.seconds.ago` : 'now'}`]);
     await own(['update-ref', '-d', KEEP]);
+    // The list itself would otherwise lie there until a tidying an hour from now: one more object each time.
+    if (list) await fs.promises.rm(path.join(at, 'objects', list.slice(0, 2), list.slice(2)), { force: true }).catch(() => {});
     if (!pruned.ok) failed('clear out what is no longer needed', pruned);
-    sizes.delete(key);
+    touched(key);
   }
 
   /* ---- a session's life -------------------------------------------------------------- */

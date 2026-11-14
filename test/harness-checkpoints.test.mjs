@@ -18,8 +18,8 @@ import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { startHarnessOffice as startAnOffice, waitFor, sleep } from './fixtures/harness-helpers.mjs';
-import { ROOT, tempDir as makeTempDir } from './helpers.mjs';
+import { startHarnessOffice as startOffice, waitFor, sleep } from './fixtures/harness-helpers.mjs';
+import { ROOT, tempDir } from './helpers.mjs';
 import { createCheckpoints, parseChanges, parseShortstat, repoKey, runGit } from '../server/harness/checkpoints.mjs';
 import { harnessSettings } from '../server/harness/settings.mjs';
 import { ENTRY_KINDS } from '../server/harness/transcript.mjs';
@@ -29,16 +29,10 @@ process.env.GIT_CONFIG_GLOBAL = os.devNull;
 process.env.GIT_CONFIG_SYSTEM = os.devNull;
 
 const usable = process.platform !== 'win32' && spawnSync('git', ['--version']).status === 0;
-
-// This suite fills its temporary folders with real repositories, copies of them, and once with tens of
-// thousands of objects — a few hundred megabytes a run. They are removed when it is done.
-const scratch = [];
-const tempDir = (prefix) => { const dir = makeTempDir(prefix); scratch.push(dir); return dir; };
-process.on('exit', () => { for (const dir of scratch) { try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* still there, then */ } } });
-
 // Test offices do not snapshot anything unless asked (test/helpers.mjs): a test that names no folder runs
 // its agent in this checkout, and no test may write into it. Here every session is given a repository of its own.
-const startOffice = (opt = {}) => startAnOffice({ ...opt, dir: opt.dir || tempDir('office-changes-data-') });
+// (The folders this suite fills — real repositories, the office's copies of them, once 52,000 objects — are
+// removed with every other temporary folder when the test process ends: test/helpers.mjs, tempDir.)
 const startHarnessOffice = (opt = {}) => startOffice({ ...opt, env: { OFFICE_CHECKPOINTS: '1', ...(opt.env || {}) } });
 
 // A `git` of our own in front of the real one. It does what git does, but can be told to dawdle — a file
@@ -187,12 +181,15 @@ test('checkpoints: reading what git says, and the settings', () => {
   // On unless the operator says otherwise; every limit has a default and cannot be pushed out of range.
   const d = harnessSettings({}).checkpoints;
   assert.deepEqual(d, { enabled: true, holdMs: 3000, timeoutMs: 30000, maxTreeFiles: 50000, maxTreeBytes: 512 * 1024 * 1024,
-    maxFiles: 5000, maxBytes: 100 * 1024 * 1024, maxTurns: 100, diffBytes: 512 * 1024, noticeBytes: 64 * 1024 * 1024 });
+    maxFiles: 5000, maxBytes: 100 * 1024 * 1024, maxTurns: 100, diffBytes: 512 * 1024, noticeBytes: 64 * 1024 * 1024,
+    maxStoreBytes: 2 * 1024 * 1024 * 1024 });
   const odd = harnessSettings({ OFFICE_CHECKPOINTS_HOLD_MS: '0', OFFICE_CHECKPOINTS_TIMEOUT_MS: 'soon', OFFICE_CHECKPOINTS_MAX_FILES: '-4',
     OFFICE_CHECKPOINTS_MAX_BYTES: '1', OFFICE_CHECKPOINTS_MAX_TURNS: '999999', OFFICE_CHECKPOINTS_DIFF_BYTES: '9e99',
-    OFFICE_CHECKPOINTS_MAX_TREE_FILES: '0', OFFICE_CHECKPOINTS_MAX_TREE_BYTES: 'huge', OFFICE_CHECKPOINTS_NOTICE_BYTES: '-1' }).checkpoints;
+    OFFICE_CHECKPOINTS_MAX_TREE_FILES: '0', OFFICE_CHECKPOINTS_MAX_TREE_BYTES: 'huge', OFFICE_CHECKPOINTS_NOTICE_BYTES: '-1',
+    OFFICE_CHECKPOINTS_MAX_STORE_BYTES: '-5' }).checkpoints;
   assert.deepEqual(odd, { enabled: true, holdMs: 100, timeoutMs: 30000, maxTreeFiles: 1, maxTreeBytes: 512 * 1024 * 1024,
-    maxFiles: 1, maxBytes: 1024, maxTurns: 10000, diffBytes: 16 * 1024 * 1024, noticeBytes: 0 });
+    maxFiles: 1, maxBytes: 1024, maxTurns: 10000, diffBytes: 16 * 1024 * 1024, noticeBytes: 0, maxStoreBytes: 0 });
+  assert.equal(harnessSettings({ OFFICE_CHECKPOINTS_MAX_STORE_BYTES: '0' }).checkpoints.maxStoreBytes, 0, 'no cap, for whoever wants none');
   assert.equal(harnessSettings({ OFFICE_CHECKPOINTS: '0' }).checkpoints.enabled, false);
   assert.equal(harnessSettings({ OFFICE_GIT: '0' }).checkpoints.enabled, false, 'no git at all means none of this either');
 });
@@ -247,7 +244,8 @@ test('checkpoints: what each turn changed', { skip: !usable }, async (t) => {
     assert.ok(empty.stored.bytes > 0 && empty.stored.bytes < 1024 * 1024);
     assert.ok(!(await h.entries(s.id)).some((e) => e.kind === 'notice'), 'nothing to explain here: the folder is recorded, and what is kept for it is small');
     assert.deepEqual((await h.get('/api/harness')).data.limits.checkpoints, { enabled: true, holdMs: 3000, timeoutMs: 30000, maxTreeFiles: 50000,
-      maxTreeBytes: 536870912, maxFiles: 5000, maxBytes: 104857600, maxTurns: 100, diffBytes: 524288, noticeBytes: 67108864 });
+      maxTreeBytes: 536870912, maxFiles: 5000, maxBytes: 104857600, maxTurns: 100, diffBytes: 524288, noticeBytes: 67108864,
+      maxStoreBytes: 2147483648 });
   });
 
   await t.test('a tracked edit, a new file, a deletion, a rename and a binary file — and nothing that is ignored', async () => {
@@ -1355,6 +1353,92 @@ test('checkpoints: how much is kept, for how long, and what a restart leaves', {
       assert.ok(now.bytes >= kept.bytes);
       assert.ok(notice.text.includes(`: ${(now.bytes / (1024 * 1024)).toFixed(1)} MB so far, in `), notice.text);
     } finally { await next.stop(); }
+  });
+
+  await t.test('a cap on what the office keeps for one repository: at it, snapshots end there, and what was recorded stays readable', async () => {
+    const work = repo('office-changes-full-');
+    const before = everything(path.join(work, '.git'));
+    const cap = 300 * 1024, each = 110 * 1024;
+    const rewrite = () => write(work, 'big.bin', crypto.randomBytes(each));
+    const notices = async (h, id) => (await h.entries(id)).filter((e) => e.kind === 'notice').map((e) => e.text);
+    const h = await startHarnessOffice({ work, env: { OFFICE_CHECKPOINTS_MAX_STORE_BYTES: String(cap) } });
+    try {
+      assert.equal((await h.get('/api/harness')).data.limits.checkpoints.maxStoreBytes, cap);
+      const a = await h.start('fake', { name: 'Rewriter' });
+      const beside = await h.start('fake', { name: 'Beside' });       // in the same repository all along
+      await quietTurn(h, beside.id);
+      // A session that keeps rewriting a file. Three versions go in: the copy was under the cap each time one was to be stored.
+      for (let i = 0; i < 3; i++) await turnThat(h, a.id, rewrite);
+      const three = await changes(h, a.id);
+      assert.equal(three.off, undefined);
+      assert.ok(three.stored.bytes > cap && three.stored.bytes <= cap + each + 16 * 1024,
+        `it is looked at before storing, so it can be passed by one snapshot's worth and no more (${three.stored.bytes} kept, ${cap} the cap)`);
+      // The fourth is not stored: the session is told once, in a sentence, and what it has on record still answers.
+      await turnThat(h, a.id, rewrite);
+      const got = await changes(h, a.id);
+      const why = `the office already keeps ${got.stored.bytes / 1024} KB for this repository, in ${got.store}, and keeps no more than 300 KB `
+        + '(OFFICE_CHECKPOINTS_MAX_STORE_BYTES); what it has recorded stays readable';
+      assert.equal(got.off, why);
+      assert.deepEqual(await notices(h, a.id), [`File changes are no longer being recorded for this session: ${why}.`]);
+      assert.deepEqual(got.stored, three.stored, 'nothing more was stored, and nothing was thrown away to make room');
+      assert.deepEqual(got.turns.map((turn) => [turn.turn, turn.count, turn.skipped]), [[1, 1, undefined], [2, 1, undefined], [3, 1, undefined], [4, 0, why]]);
+      assert.match((await diffOf(h, a.id, 'turn=2')).diff, /^diff --git a\/big\.bin b\/big\.bin\n/);
+      assert.equal((await diffOf(h, a.id, 'from=1&to=3')).truncated, false);
+      assert.equal((await h.session(a.id)).controls.changes.available, true);
+      await turnThat(h, a.id, rewrite);
+      assert.deepEqual([(await changes(h, a.id)).turns.length, (await notices(h, a.id)).length], [4, 1], 'later turns are not on record, and it is not said again');
+
+      // The session beside it is told when it next has something to store — the folder has changed under it.
+      await quietTurn(h, beside.id);
+      const other = await changes(h, beside.id);
+      assert.equal(other.off, why);
+      assert.deepEqual(await notices(h, beside.id), [`File changes are no longer being recorded for this session: ${why}.`]);
+      assert.deepEqual(other.turns.map((turn) => [turn.turn, turn.count, turn.skipped]), [[1, 0, undefined], [2, 0, why]]);
+      // And one that starts there now is not recorded at all, and told why.
+      const late = await h.start('fake', { name: 'Late' });
+      await h.ctx.harness.checkpoints.settled(late.id);
+      await quietTurn(h, late.id);
+      const none = await changes(h, late.id);
+      assert.deepEqual([none.recorded, none.reason], [false, why]);
+      assert.deepEqual(await notices(h, late.id), [`What turns change in this folder is not being recorded: ${why}.`]);
+      assert.equal((await h.session(late.id)).controls.changes.available, false);
+      assert.deepEqual((await changes(h, a.id)).stored, three.stored);
+    } finally { await h.stop(); }
+    assert.deepEqual(everything(path.join(work, '.git')), before);
+  });
+
+  await t.test('at the cap, clearing out what no kept turn needs comes first: where that is enough, recording goes on', async () => {
+    // The same rewriting, by a session that keeps two turns: most of what it has stored is needed by no turn on record.
+    const work = repo('office-changes-room-');
+    const cap = 420 * 1024, each = 110 * 1024;
+    const run = async (maxStoreBytes, turns) => {
+      const data = tempDir('office-changes-room-data-');
+      const said = [], warnings = [], weights = [];
+      const cps = createCheckpoints({ settings: { ...harnessSettings({}).checkpoints, maxTurns: 2, maxStoreBytes }, dir: path.join(data, 'harness'),
+        file: path.join(data, 'checkpoints.json'), log: { warn: (m) => warnings.push(m) }, graceSeconds: 0 });
+      try {
+        const id = 'd_999999999999';
+        assert.equal(await cps.open({ id, cwd: work, note: (key, text) => { said.push(text); return true; } }), true);
+        for (let n = 1; n <= turns; n++) {
+          await cps.turnStarted(id, n);
+          await cps.settled(id);
+          write(work, 'big.bin', crypto.randomBytes(each));
+          assert.equal((await cps.turnEnded(id, n))?.files[0].path, 'big.bin', `turn ${n} is on record`);
+          await cps.settled(id);
+          weights.push(weightOf(cps.storeOf(id)));
+        }
+        const got = await cps.changes(id);
+        assert.deepEqual([got.off, got.turns.map((turn) => [turn.turn, turn.count]), said, warnings], [undefined, [[turns - 1, 1], [turns, 1]], [], []]);
+        assert.match((await cps.diff(id, { turn: turns })).diff, /^diff --git a\/big\.bin b\/big\.bin\n/);
+        return weights;
+      } finally { await cps.stop(); }
+    };
+    const capped = await run(cap, 12);
+    assert.ok(Math.max(...capped) <= cap + each + 16 * 1024, `never past the cap by more than one snapshot's worth (${Math.max(...capped)} at most)`);
+    assert.ok(capped.some((weight, i) => i > 0 && weight < capped[i - 1]), 'room was made, more than once');
+    // With no cap (0) nothing is cleared out on its account: the same turns leave it all there until the session's own tidying.
+    const free = await run(0, 6);
+    assert.ok(free.every((weight, i) => i === 0 || weight > free[i - 1]) && free.at(-1) > cap + each + 16 * 1024);
   });
 
   await t.test('the copy can be taken away while sessions run: the next snapshot starts over, and turns are on record again', async () => {

@@ -60,8 +60,10 @@ export function harnessSettings(env = {}) {
       maxBytes: int(env, 'OFFICE_CHECKPOINTS_MAX_BYTES', 100 * 1024 * 1024, 1024, 64 * 1024 * 1024 * 1024),
       maxTurns: int(env, 'OFFICE_CHECKPOINTS_MAX_TURNS', 100, 1, 10_000),            // turns kept per session
       diffBytes: int(env, 'OFFICE_CHECKPOINTS_DIFF_BYTES', 512 * 1024, 1024, 16 * 1024 * 1024),   // diff text one answer carries
-      // The copy is the owner's disk: past this much kept for one repository, the session that made it is told.
+      // The copy is the owner's disk: past this much kept for one repository, the session that made it is told…
       noticeBytes: int(env, 'OFFICE_CHECKPOINTS_NOTICE_BYTES', 64 * 1024 * 1024, 0, 1024 * 1024 * 1024 * 1024),
+      // …and past this much nothing more is stored for it: sessions there stop being recorded. 0: no cap.
+      maxStoreBytes: int(env, 'OFFICE_CHECKPOINTS_MAX_STORE_BYTES', 2 * 1024 * 1024 * 1024, 0, 1024 * 1024 * 1024 * 1024),
     }),
   });
 }
