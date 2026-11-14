@@ -37,7 +37,9 @@ const VOICE = {
   lift: { id: 'Xb7hH8MSUJpSbSDYk0k2', room: 'highpass=f=170' },                                                   // Alice — clear, British, professional
   hollow: { id: 'nPczCjzI2devNBz1zQrb', room: 'asetrate=44100*0.9,aresample=44100,aecho=0.8:0.7:70|150|290:0.45|0.3|0.18' },   // Brian — deep; slowed a little, somewhere large and empty
   pa: { id: 'onwK4e9ZLuTAKqWW03F9', room: 'highpass=f=420,lowpass=f=3400,aecho=0.8:0.5:110|230:0.3|0.16' },      // Daniel — steady broadcaster, out of a ceiling speaker
-  arcade: { id: 'IKne3meq5aSn9XLyUdCD', room: 'highpass=f=180,lowpass=f=5200,acrusher=bits=10:samples=2:mode=log:aa=1:mix=0.25,aecho=0.8:0.6:38:0.22' },   // Charlie — hyped, out of a cabinet's speech chip
+  // Adam, on the expressive model, told how to say it — then pitched down a little and put in a big hall: an 80s cabinet's announcer
+  arcade: { id: 'pNInz6obpgDQGcFmaJgB', model: 'eleven_v3', settings: { stability: 0 },
+    room: 'asetrate=44100*0.92,aresample=44100,bass=g=6:f=110:w=0.7,acompressor=threshold=-20dB:ratio=5:attack=4:release=90:makeup=4,aecho=0.8:0.88:60|130|260:0.42|0.28|0.14,lowpass=f=7000' },
 };
 // what "the same loudness" means for each kind, and the ceiling nothing may cross (LUFS / dBFS true peak)
 const LEVEL = { shot: -18, bed: -20, music: -20, peak: -1.5 };
@@ -61,7 +63,8 @@ export const MANIFEST = [
   sfx('printer', 'An office laser printer printing a single page: rollers whirring and paper feeding out right from the start, close and steady', 3.2, { tail: 0.25 }),
   sfx('printer-jam', 'An office printer jamming: gears grinding and paper crumpling, then a sad error beep', 2.4),
   sfx('paper-plane', 'A light paper airplane whooshing past, quick soft swish', 0.9, { fx: 'highpass=f=250' }),
-  sfx('confetti', 'A party popper going off: one sharp cork-like pop, then paper streamers and confetti fluttering down. Close, dry and cheerful. No hiss, no music', 1.6, { influence: 0.6 }),
+  sfx('confetti', 'A champagne cork popping: one loud, round pop with body. Close microphone, dry room, nothing else', 0.8, { influence: 0.7,
+    under: { text: 'Paper streamers and confetti softly fluttering and landing on a wooden floor, light paper rustle, no pop, no music', seconds: 1.6, influence: 0.6, delay: 0.11, gain: 2.5 }, tail: 0.3 }),          // the paper is far quieter than the pop as it comes back
   sfx('sticky', 'A paper sticky note being peeled off and pressed onto a board, small paper tap', 0.7),
   sfx('purr', 'A contented cat purring, close, warm and steady', 3.0, { tail: 0.6 }),
   sfx('duck', 'A single squeak of a rubber duck bath toy', 0.6, { influence: 0.7, fx: 'lowpass=f=4000' }),
@@ -95,7 +98,7 @@ export const MANIFEST = [
   voice('pa-meeting', 'pa', 'Attention please. The three o\'clock meeting has been moved to the ceiling.'),
   voice('pa-cabinet', 'pa', 'Would the owner of a beige filing cabinet please return to it. It misses you.'),
   voice('pa-exit', 'pa', 'A reminder: the exit is exactly where you left it. Thank you.'),
-  voice('arcade-title', 'arcade', 'Bug Squash!'),
+  voice('arcade-title', 'arcade', '[booming 1980s arcade game announcer, shouting with excitement] BUG SQUASH!'),
 ];
 
 /* ---- asking for a sound ------------------------------------------------------------ */
@@ -113,10 +116,24 @@ async function call(pathname, body) {
   return null;
 }
 
-function generate(item) {
-  if (item.kind === 'sfx') return call('/v1/sound-generation', { text: item.text, duration_seconds: item.seconds, prompt_influence: item.influence ?? 0.4, loop: !!item.loop });
+async function generate(item, tmp) {
+  if (item.kind === 'sfx') {
+    const top = await call('/v1/sound-generation', { text: item.text, duration_seconds: item.seconds, prompt_influence: item.influence ?? 0.4, loop: !!item.loop });
+    if (!item.under) return top;
+    // Two takes, one laid under the other: asked for "a pop, then paper falling", the model gives one or the other.
+    const u = item.under;
+    const under = await call('/v1/sound-generation', { text: u.text, duration_seconds: u.seconds, prompt_influence: u.influence ?? 0.5, loop: false });
+    const a = path.join(tmp, 'top.mp3'), b = path.join(tmp, 'under.mp3'), mix = path.join(tmp, 'mix.mp3');
+    fs.writeFileSync(a, top); fs.writeFileSync(b, under);
+    const lead = 'silenceremove=start_periods=1:start_threshold=-40dB:start_silence=0.005', ms = Math.round((u.delay ?? 0.1) * 1000);
+    must(['-i', a, '-i', b, '-filter_complex', `[0]${lead}[t];[1]${lead},adelay=${ms}|${ms},volume=${u.gain ?? 0.75}[u];[t][u]amix=inputs=2:normalize=0:duration=longest`,
+      '-c:a', 'libmp3lame', '-b:a', '192k', '-f', 'mp3', mix]);
+    return fs.readFileSync(mix);
+  }
   if (item.kind === 'music') return call('/v1/music', { prompt: item.text, music_length_ms: Math.round(item.seconds * 1000), force_instrumental: true });
-  return call(`/v1/text-to-speech/${VOICE[item.who].id}`, { text: item.text, model_id: 'eleven_multilingual_v2', voice_settings: { stability: item.stability ?? 0.5, similarity_boost: 0.75 } });
+  const v = VOICE[item.who];
+  return call(`/v1/text-to-speech/${v.id}`, { text: item.text, model_id: v.model || 'eleven_multilingual_v2',
+    voice_settings: v.settings || { stability: item.stability ?? 0.5, similarity_boost: 0.75 } });
 }
 
 async function credits() {
@@ -206,7 +223,7 @@ async function main() {
     try {
       if (!kept || (has('--force') && !has('--polish'))) {
         if (!asked++) before = await credits();
-        fs.writeFileSync(raw, await generate(item));
+        fs.writeFileSync(raw, await generate(item, tmp));
       }
       polish(raw, file, item, tmp);
       made++;
