@@ -207,9 +207,15 @@ and the same world as text for agents. See `WORLD.md`.
 
 The snapshot's `game` is the office's long game (`core/game.mjs`,
 `server/world/game.mjs`): `{ open: [level ids lit], dark, fresh, cards, spare,
-loot: { <hideout>: { card, of, coins: [n…] } }, coins: { have, found, stamps,
-spent }, prizes: [ids bought] }`. It changes through
-`POST /api/world/game/collect | visit | buy` and is broadcast with the world —
+loot: { <hideout>: { card, of, coins: [n…] } }, coins: { have, found, earned,
+stamps, spent }, prizes: [ids bought] }` (`earned`: what the best visit to
+the one place that pays was worth, which is all that visits are ever paid; a
+client that predates it adds up a jar that is short by that much and is
+otherwise unaffected), and `visits: { n, out, best, seen: { rooms, cast },
+tapes: [{ seed, at, by, score, seconds }] }` — the office's record of visits
+to that place (`core/runs.mjs`), written by `POST /api/world/game/run`, which
+answers with the visit's card. It changes through
+`POST /api/world/game/collect | earn | visit | buy` and is broadcast with the world —
 as is a first stamp in the passport (`POST /api/world/discover`), which pays a
 coin into the jar; a client that predates it sees every floor lit, as before.
 Additive only.

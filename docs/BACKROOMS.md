@@ -20,8 +20,10 @@ run out at a wall somebody has papered over, taped a door on, and camped
 beside; it gives if you lean on it, the way the first one did. Other walls
 carry the same tape, and are only walls: lean on one and it knocks back. What
 you find on the way (tapes, a keycard) is only yours if you get out. In some
-visits something follows you: a shop dummy for as long as you watch it from
-across a room, and not safe to stand beside, watched or not.
+visit something follows you: a shop dummy for as long as you watch it from
+across a room, and not safe to stand beside, watched or not. It only knows
+where you are while it can see you, some doors can be shut on it, and it
+cannot crawl. Others turn up with it, a different few each visit.
 
 Everything is in `public/world/backrooms/`. Nothing in it needs a build step,
 a dependency or the network.
@@ -110,8 +112,8 @@ New rooms go in `MORE_DECK` in `deck2.js`.
 | `id` | required | lower-case words joined by hyphens. It is also the file name and what the dev page calls the room |
 | `name` | required | its title on the dev page's plan. Never shown in the level |
 | `landmark` | required | how somebody lost down here would give directions past it: "the board with one card" |
-| `w`, `d` | required | `[fewest, most]` whole metres: across the wall you come in by, and deep. 3 to 20 |
-| `h` | | `[lowest, highest]` ceiling in metres, if not the usual one. 2.3 to 9 |
+| `w`, `d` | required | `[fewest, most]` whole metres: across the wall you come in by, and deep. 3 to 20; a set piece (`big`) may go to 28 |
+| `h` | | `[lowest, highest]` ceiling in metres, if not the usual one. 2.3 to 9; a set piece may go to 12 |
 | `ports` | required | which of `back`, `left`, `right` may be given one more doorway, in the middle of the wall, so that the room can lie on a path. `[]` makes it a dead end. Never `front`: that is the way in |
 | `weight` | required | how often it is dealt. 1 is ordinary; 3 at most |
 | `lights` | required | what the ceiling does: `normal` (as the floor's theme has it), `dim` (about half the tubes out), `entry` (lit only near the door you came in by), `one` (a single tube), `dark` (none: the room lights itself) |
@@ -150,9 +152,10 @@ looking toward `back` at `z = −D/2`. The generator turns the room to face
 whichever way the plan needs; you never see that.
 
 A room may import `three`, the level's own modules (`../kit.js`, `../bits.js`,
-`../gen.js`, …), the voxel kit (`../../vox/`) and the office's props
-(`../../props/`). Nothing else, nothing from the network, and it keeps nothing
-in the browser's storage. A test reads the file to see. A room too big for one
+`../gen.js`, …), the voxel kit (`../../vox/`), the office's props
+(`../../props/`) and the office's people (`../../avatar/`, for a figure built
+the way the colleagues upstairs are). Nothing else, nothing from the network,
+and it keeps nothing in the browser's storage. A test reads the file to see. A room too big for one
 file keeps the rest in a folder of its own, `rooms/<id>/`, and imports it from
 there (`./<id>/crates.js`): `rooms/` itself holds one file to a room and
 nothing that is nobody's.
@@ -191,9 +194,8 @@ Things to know before they bite:
 - **A creature that lives in one room is part of that room's file**: its model
   (`c.dynamic`), its behaviour (`c.tick`), its sounds. Keep its rule in a pure
   function at the top of the file so that it can be read and tested. Anything
-  that roams between rooms is not open yet (the thing that follows you is
-  `pursuer.js`, and a shared way of walking the floor comes with the next
-  creatures).
+  that roams between rooms, or that should turn up in some visits and not
+  others, is a member of the cast: see *Adding a creature*.
 - **A room's own hazard sets somebody back; it does not end the visit.** Put
   them back at the door, take a moment from them, turn the lights out. Ending
   a visit is for the things that hunt.
@@ -253,6 +255,184 @@ Nothing else is needed, and nothing else should change: a room that needs a
 change to the generator, the player or the toolbox says so in words instead of
 making it.
 
+## Adding a creature
+
+A creature is three things: a line in the cast, which is pure data; a file
+that builds it and works it; and one rule, kept where a test can run it.
+`cast/pirate.js`, its line in `cast.js` and its rules in `cast/hunt.js` are
+the worked example. The mascot is in every visit; everybody else is dealt
+from the visit's seed, two at most, a different two each time.
+
+### What a creature is
+
+- **One rule, never stated, and not somebody else's.** A creature is a rule
+  you can learn by watching what it does. "It only moves while nobody is
+  looking" is the mascot's. Write yours down in a sentence (`rule`) before you
+  write anything else; if it takes two sentences it is two creatures.
+- **Fair.** The danger can be read before it costs anything: a sound, a
+  posture, a change in the picture. Only something that `hunts` may take
+  health or end a visit. Everything else sets the visitor back, or helps.
+- **Ours.** No names, looks or behaviours from anybody's wiki, film or game.
+  They are of this office: colleagues, facilities, things from a workplace
+  that has gone wrong.
+- **Cheap.** A few thousand triangles, lit by where it stands (`c.light`), a
+  handful of meshes. No new audio files: `sound.js` voices only.
+- **Seeded.** Which visit it is in, which floor and which room are decided by
+  the seed and nothing else. `Math.random` is for what happens while somebody
+  is playing.
+
+### 1. The line in the cast
+
+In `ALL_CAST` in `cast.js`:
+
+```js
+{ id: 'pirate', name: 'The mascot', rule: 'It only moves while nobody is looking at it — and it only knows where you are while it can see you.',
+  disposition: 'hunts', home: 'roams', always: true, weight: 1, teaches: 'sight', needs: [], items: [], caught: { hurt: 2 } },
+```
+
+| field | | |
+|---|---|---|
+| `id` | required | lower-case words joined by hyphens. Also the file, `cast/<id>.js` |
+| `name`, `rule` | required | for the dev page and this guide. Never shown in the level |
+| `disposition` | required | `hunts` · `keeps to itself` · `helps` |
+| `home` | required | `roams` (walks the floor) · `room` (lives in one plain room, which `homeFor()` chooses and hands you as `c.home`) |
+| `weight` | required | how often it is dealt: 1 is ordinary, 3 at most, 0 never. (`always` is the mascot's and nobody else's) |
+| `teaches` | | the one lesson it is the first place to learn: an id in `CAST_LESSONS`, where you add a line saying what is learned |
+| `needs` | | lessons it takes for granted, the cast's or the rooms' (`lean`, `unwatched`). A creature that needs anything is never on the floor you land on |
+| `themes` | | `{ yellow, archive, night, fitout, exec }` → a multiplier on how likely each kind of floor is to be its floor. 0 keeps it off one |
+| `items` | required | which things a visitor may be carrying change what it does (`ITEMS`: `torch`, `battery`, `chalk`, `paper`, `scissors`, `snack`, `balloon`). `[]` for none. This is how whoever writes an item finds out who is waiting for it |
+| `caught` | required | what it costs to be got by it. `{ hurt: n }` points of health, of four · `{ ends: true }` the tape ends, whatever health there is (only for `hunts`) · `{ setback: 'in a sentence' }` for the rest |
+| `room` | for `home: 'room'` | `{ w, d }` the least floor it needs, metres (3 to 12), and `far`, the fewest doorways from where you land (default 3) |
+| `on` | | `false`: retired. Leave the line and the file |
+
+Then one line in `cast/index.js`, so that the level (and the page it is staged
+on for showing) can find the file.
+
+### 2. The file
+
+`cast/<id>.js` exports one function. Its rule is pure and lives in a module
+beside it that imports nothing a test cannot (`cast/<id>.rule.js`; no
+three.js, no DOM), with tests against a made-up clock. `cast/shadow.js` and
+`cast/shadow.rule.js` are the short example; `cast/pirate.js` with
+`cast/hunt.js` and `reach.js` the long one.
+
+```js
+// cast/<id>.rule.js
+export const RULE = Object.freeze({ near: 2.5 });
+/** One moment of it. Pure: state in, state out. */
+export function minds(s, dt, sense, rnd = Math.random) { … }
+
+// cast/<id>.js
+import { RULE, minds } from './<id>.rule.js';
+export function create(c) {
+  let me = null;
+  return {
+    ready() { … },             // the floor is built and somebody is standing on it: take your place
+    update(dt, t) { … },       // every frame
+    carry() { return null; },  // what you want handed to yourself on the next floor down (c.carried there), if anything
+    at() { return { … }; },    // where you are and what you are doing, for the dev page and for scripts
+    dispose() { … },           // take your objects out of the scene
+  };
+}
+```
+
+`create(c)` is called before the floor is built, for every creature on that
+floor; `ready()` once it is up. A creature that throws is left out, and the
+level says so (`check=1`: `said` must be empty).
+
+It may import `three`, the voxel kit (`../../vox/`), the office's props
+(`../../props/`), and the level's pure modules and kit (`../gen.js`,
+`../kit.js`, `../bits.js`, `../reach.js`, `./hunt.js`, `./paths.js`). Not the
+world, the player, the camcorder or the sound: what it needs of those comes
+through `c`. It never calls `env.end`: being caught is `c.hurt`.
+
+### 3. The toolbox
+
+| for | use |
+|---|---|
+| who and where | `c.member` its line · `c.home` its room's id (or null) · `c.R` the seeded source · `c.carried` what it left itself upstairs |
+| the visitor | `c.me()` → `{ x, z, yaw, pitch, speed, moving }` · `c.room(x, z)` which room that is · `c.held()` what they are holding (`{ type, … }` or null: there may be no inventory at all) · `c.take(type, n)` · `c.give(item)` |
+| seeing | `c.hidden(x, z, r)` that spot is off their screen or behind a wall · `c.los(ax, az, bx, bz)` a line of sight between two spots, whichever way anybody is facing · `c.drawn(thing)` its room is being drawn at all |
+| getting about | `c.walk.go(walker, { x, z }, metres, keep)` → `{ went, door, cannot, there }` · `c.walk.exits(walker)` · `c.walk.spotIn(walker, room)` · `c.walk.steps(walker, { x, z })` · `c.walk.stand(walker, x, z)` |
+| being there | `c.add(object)` into the scene, in world coordinates · `c.body({ x, z, r })` a body nobody walks through · `c.light(x, z)` the light falling there · `c.play(name, x, z, reach)` |
+| catching them | `c.hurt(n)` → `{ landed, dead, ended }` · `c.drain(share)` takes that share of the camcorder's charge, where it has a battery |
+| the rest | `c.env`: `env.doors`, `env.interfere(0…1)`, `env.hud.glitch(seconds)`, `env.kit` for models and textures |
+
+A **walker** is any object `{ x, z, r, tall, opens }`: where it is, its
+radius, the headroom it needs, and whether it can work a door handle. That is
+all the difference there is between something that is stopped by a shut door
+and slips through a crawl hole (`{ tall: 0.6, opens: false }`) and something
+that opens doors and cannot crawl (the mascot: `{ tall: 1.62, opens: true }`).
+`go` never teleports and never decides anything: it takes the walker some of
+the way, by whatever rooms lie between, and says what stopped it — `door` (a
+shut pair it is standing at: `env.doors.open(door, 'it')` when your creature
+has earned it), `cannot` (no way there at all for this walker), `there` (as
+near as its body will go).
+
+Things to know before they bite:
+
+- **Doors are everybody's.** A few doorways a floor have a pair of fire doors
+  that anybody can shut and open (`doors.js`, `doorleaf.js`). Shut, the
+  doorway is wall to walking and to sight. `env.doors.at(linkId)`,
+  `.shut(door, who)`, `.open(door, who)`, `.watched(door)`, `door.isShut`,
+  `door.news` (shut by the visitor since anything last opened it). Do not
+  build doors of your own.
+- **Health may not be there.** `c.hurt(n)` takes n points where there is a
+  health system and says whether the hit counted (it will not, for a moment
+  after the last one) and whether it was the last of them, in which case the
+  visit is already ending and you do nothing more. Where there is none, a
+  creature that `hunts` ends the visit and anything else does nothing. After a
+  hit that was survived, let go: back off, or go away for a while (the mascot
+  keeps away for 14 to 24 seconds and takes no notice of you until then).
+- **Items may not be there either.** `c.held()` is null where there is no
+  inventory. A creature has to make sense with empty hands.
+- **Never where it can be seen arriving,** if its rule involves not being
+  watched: move, then check `c.hidden` at where it got to, and put it back if
+  it would have walked into view. The mascot does this every frame.
+- **A creature that lives in one room and is in every visit that room is in**
+  is still part of that room's file. The cast is for what roams, and for what
+  should be somewhere different, or nowhere, each time.
+
+### 4. Trying it
+
+```
+/world/dev/backrooms.html?seed=7&vhs=0&mute=1&check=1
+```
+
+`window.__backrooms.env.pursuer.cast()` is everybody on the floor and what
+each says of itself (`at()`); `.of('<id>')` is one of them. `plan()` and
+`castFor` in `cast.js` say which floor yours is on for a seed; `&depth=` lands
+you there. Then `npm test`: `test/backrooms-cast.test.mjs` holds every line of
+the table above and reads your file, and it is where your rule's own test goes.
+
+### 5. Handing it over
+
+A branch if you can push one. Otherwise, as text: the line for `ALL_CAST` (and
+for `CAST_LESSONS` if it teaches something), the line for `cast/index.js`,
+`cast/<id>.js` whole, its tests, the addresses you looked at it from, and two
+sentences: what its rule is, and how somebody who has not worked it out yet is
+warned before it costs them anything.
+
+## How a visit ends, and the card
+
+A visit resolves with `{ reason, kept, run }`. `reason` is `'exit'` (out by
+the wall), `'caught'`, `'battery'` (the camcorder ran flat) or `'quit'`.
+`kept` is what was carried out (`card`, `batteries`); `run` is what the visit
+counted: `{ seed, seconds, parts: { reached, of }, rooms: { explored, kinds },
+cast: { met, survived }, hearts }`. A creature tells the count about itself:
+`env.run?.met(id)` the first time it is really seen, `env.run?.survived(id)`
+each time it had somebody and they got away.
+
+Before it resolves, the visit shows the card (`scorecard.js`): a form with a
+line and a picture for everything, and a rubber stamp for how it went. What
+the lines are worth is `POINTS` in `core/runs.mjs`; the first four are earned
+however the visit ended, the rest only by getting out. The office keeps the
+best score, every kind of room and resident anybody has met, and the tape
+(the seed) of each visit that got out; on the level's own page, where there
+is no office, the browser keeps the same record by the same rules. The jar
+is paid for spare batteries only when a visit brings out more than any
+before it (`payFor` in `core/game.mjs`).
+
 ## The level on a page of its own
 
 To show somebody the level without an office to run it in:
@@ -265,8 +445,8 @@ copies the level's own page (`tools/backrooms-sample/index.html`: one screen,
 nothing on it but the level) and every module it needs into one folder that
 anything can serve. It follows the imports, and includes every room that lives
 in a file of its own. three.js comes from a CDN there, at the vendored
-version. The first tape on that page is always seed 7; after that, a different
-building every time.
+version. Every tape on that page is a different building, as every visit from
+the office is: the seed is the clock, and no building is ever given twice.
 
 ## Where things are
 
@@ -285,7 +465,9 @@ building every time.
 | `stairwell.js` (also the hole, the ledge and the chute), `thin.js`, `marks.js`, `leaving.js` | the way down, and the taped door at the bottom of the last of it; the wall that gives and the walls that knock back; where the marks go, and the rule for leaning (`lean`, `answer`); what the camcorder sees as you leave |
 | `traces.js` | what earlier visitors left: the marks on walls, the camp, and six things found in plain rooms (`TRACES` in `gen.js`: a camp left in a hurry, arrows that disagree, a note that stops, a tape measure run out, a map that is wrong, a queue at a bare wall) — two or three to a floor at most, far apart, in rooms with nothing else in them and no oddity next door |
 | `loot.js` | tapes and the keycard: where they hide, what is kept |
-| `pursuer.js`, `reach.js` | what follows you, and the rule for being within arm's reach of it (pure: the tape tears, and it moves in the torn frames) |
+| `cast.js`, `cast/` | who is down here (pure: the cast, who is dealt into a visit, on which floor, in which room) · one file to a creature, `cast/index.js` listing them; `cast/pirate.js` is the mascot; `cast/hunt.js` its rules (pure); `cast/paths.js` and `cast/walk.js` how anything gets about |
+| `pursuer.js`, `reach.js` | the cast's conductor on a floor (and the cardboard colleague) · the rule for being within arm's reach of the mascot (pure: the tape tears, and it moves in the torn frames) |
+| `doors.js`, `doorleaf.js` | which doorways have a pair of fire doors (pure) · the doors themselves |
 | `player.js`, `input.js`, `hud.js`, `vhs.js`, `sound.js` | walking, keys and touch, the camcorder, the tape, the hum |
 | `../levels/basement.js` | the floor above it all, and the wall |
 | `../dev/backrooms.js` | the level's own page |

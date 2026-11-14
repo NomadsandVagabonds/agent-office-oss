@@ -6,6 +6,8 @@
 //
 //   office.game.left('pasture')            → { card: true, coins: [1, 3] }   what has not been taken yet
 //   office.game.take('pasture', 'coin', 3) → Promise<answer>                 it is yours (and gone from the floor)
+//   office.game.earn('backrooms', { batteries: 3 }) → Promise<answer>        got out of a place that pays for what is carried out
+//   office.game.report('backrooms', run)   → Promise<card>                   a visit there is over: the office's card for it
 //   office.game.view()                     → what the office says (open floors, the jar, prizes), or null
 //
 // The purse also shows whenever the jar has more in it than it last said, however
@@ -83,6 +85,39 @@ export function createGame(office) {
   }
 
   /**
+   * Somebody got out of a place that pays for what is carried out of it (core/game.mjs: `pay`). Resolves with the
+   * office's answer ({ paid, best, coins, … }: paid is what this beat the office's best by, which may be nothing) or
+   * null if it could not be told; the purse shows a fuller jar by itself.
+   */
+  async function earn(hideoutId, carried = {}) {
+    if (!(carried.batteries > 0)) return null;
+    try {
+      const answer = await net.api('/api/world/game/earn', { method: 'POST', body: { hideout: hideoutId, batteries: carried.batteries, name: office.walk?.me?.name || 'Lead' } });
+      if (net.state.world && answer?.open) net.state.world.game = { ...(net.state.world.game || {}), ...answer };    // the bus says the same a moment later
+      return answer;
+    } catch (err) {
+      console.warn('[game] the jar could not be paid:', err.message);
+      return null;
+    }
+  }
+
+  /**
+   * A visit to the place that pays is over, however it ended. `run` is what the visit says of itself (core/runs.mjs).
+   * Resolves with the office's card for it — score, best, what was new, what the jar gained, the tape — or null if
+   * the office could not be asked (whoever shows the card then makes do with what it can work out itself).
+   */
+  async function report(hideoutId, run) {
+    try {
+      const answer = await net.api('/api/world/game/run', { method: 'POST', body: { hideout: hideoutId, run, name: office.walk?.me?.name || 'Lead' } });
+      if (net.state.world && answer?.open) { const { card, ...rest } = answer; net.state.world.game = { ...(net.state.world.game || {}), ...rest }; }    // the bus says the same a moment later
+      return answer?.card || null;
+    } catch (err) {
+      console.warn('[game] the office could not be told how that went:', err.message);
+      return null;
+    }
+  }
+
+  /**
    * Has the jar more in it than the purse last said? Then it says so: a stamp was earned (by anybody), or something
    * was carried out of a place that keeps its own count until you leave. Not while that place has the screen — the
    * purse could not be seen — so whatever arrived meanwhile is shown when you are back.
@@ -95,5 +130,5 @@ export function createGame(office) {
   }
   net.on?.('world', show);
 
-  return { view, left, take, flash, show };
+  return { view, left, take, earn, report, flash, show };
 }

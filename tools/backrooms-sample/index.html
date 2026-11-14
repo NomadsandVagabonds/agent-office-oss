@@ -77,15 +77,15 @@ office.game = {
   },
 };
 
-// One tape after another. The first is always the same building; after that, a different one every time.
-// Finding the door, being found, or stopping the tape all lead to the next.
+// One tape after another, and never the same building twice: every tape is generated from a seed nobody will be given
+// again. Finding the way out, being found, or stopping the tape all lead to the next — and the one before is gone.
 async function run() {
   try {
     const [{ createStage }, { enterBackrooms }] = await Promise.all([import('./world/engine/stage.js'), import('./world/backrooms/index.js')]);
     office.stage = createStage(document.getElementById('stage'), { fx: false, shadows: false, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5) });
     office.stage.start();
     for (let visit = 0; ; visit++) {
-      const seed = visit === 0 ? '7' : String(100 + Math.floor(Math.random() * 99000));
+      const seed = `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e9).toString(36)}-${visit}`;
       await enterBackrooms(office, { name: 'Employee', seed });
       office.stage.setView(null);
       await pause(1100);

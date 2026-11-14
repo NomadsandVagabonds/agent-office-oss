@@ -22,6 +22,7 @@ import { generate, makeRng, MIN_EXIT_STEPS, DECK, ARCHETYPES, lessons, lessonsOf
 import { MIN_OUT_STEPS } from './marks.js';
 import { THEME_IDS } from './themes.js';
 import { WAYS } from './seam.js';
+import { whoIsDown } from './cast.js';
 
 export const MIN_FLOORS = 3, MAX_FLOORS = 5;
 /** What everybody knows before they have seen a single room down here: it is how they got in. */
@@ -63,7 +64,7 @@ export function planVisit(seed, opt = {}) {
   const ways = themes.map((_, i) => (i === depths - 1 ? 'wall' : order[i % order.length]));
   // the mascot: in some visits, on one floor — less often the one you land on. While the office's keycard is still to be
   // found there always is one, because it is holding it.
-  const chance = R.chance(0.62), at = R.weighted(themes.map((_, i) => i), (i) => (i === 0 && depths > 1 ? 1 : 2));
+  const chance = R.chance(0.62) || whoIsDown(seed).includes('pirate'), at = R.weighted(themes.map((_, i) => i), (i) => (i === 0 && depths > 1 ? 1 : 2));
   const mascot = (want && want.card) || opt.pursuer === true || (opt.pursuer === undefined && chance) ? at : null;
   // the coins still to be found, smallest first, take the visit's hiding places in order — and those go round the floors, a
   // different way round every visit, so that they are spread through the building and the first few are never on one floor
