@@ -100,4 +100,30 @@ function balloon() {
   v.paint(-7, 46, 5, -6, 49, 8, M('#dfa086', 0));
   return v;
 }
-export const INVENTORY_MODELS = Object.freeze({ torch, battery, chalk, paper, scissors, snack, balloon });
+function lighter() {
+  const v = new Vox(), red = M('#995344', 1), edge = M('#c08062', 1), steel = M('#9da49b', 0), soot = M('#3c413a', 1);
+  // A scuffed pocket lighter laid flat, with its striker and metal hood exposed.
+  v.rbox(-3, 0, -3, 3, 3, 7, 1, red, 'xz');
+  v.box(-3, 1, -7, 3, 3, -3, steel);
+  v.box(-2, 0, -7, 2, 1, -3, soot);
+  v.box(-3, 3, -6, -2, 4, -3, steel); v.box(2, 3, -6, 3, 4, -3, steel);
+  v.box(-1, 3, -6, 1, 4, -4, soot);
+  v.box(-2, 3, -3, 2, 4, -1, soot);
+  for (const x of [-2, 0, 2]) v.box(x, 3, -3, x + 1, 4, -2, steel);
+  v.paint(-2, 2, 0, -1, 3, 5, edge); v.paint(1, 2, 4, 3, 3, 5, M('#794235', 1));
+  v.box(-2, 0, 6, 2, 1, 7, edge);
+  return v;
+}
+function tape() {
+  const v = new Vox(), silver = M('#89918b', 1), rim = M('#b6bcb0', 1), card = M('#b7a47b', 2), inside = M('#736c57', 2);
+  // Duct tape, with a real cardboard center and the end folded back on itself.
+  v.cyl('y', 0, 0, 0, 4, 6, silver);
+  v.cyl('y', 0, 0, 3, 4, 5.7, rim);
+  v.cyl('y', 0, 0, 0, 4, 3.5, card);
+  for (let x = -3; x <= 3; x++) for (let z = -3; z <= 3; z++) if (Math.hypot(x + .5, z + .5) < 2.4) v.carve(x, 0, z, x + 1, 4, z + 1);
+  v.paint(-3, 0, -2, -2, 3, 2, inside);
+  v.box(3, 0, 3, 8, 1, 6, silver); v.box(6, 1, 3, 8, 2, 6, rim);
+  v.box(7, 2, 3, 8, 3, 5, silver);
+  return v;
+}
+export const INVENTORY_MODELS = Object.freeze({ torch, battery, chalk, paper, scissors, snack, balloon, lighter, tape });

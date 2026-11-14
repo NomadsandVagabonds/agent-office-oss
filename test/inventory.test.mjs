@@ -199,14 +199,21 @@ test('invalid paper quantities do not create, inflate or mutate carried stacks',
   assert.equal(model.read().slots[0].quantity, 4);
 });
 
-test('paper and scissors have no use, and snacks need a health callback before they can be eaten', () => {
+test('paper opens combining, scissors have no use, and snacks need a health callback', () => {
   const model = createInventory();
   for (const type of ['paper', 'scissors', 'snack']) {
     const added = model.add(item(type, type));
     assert.equal(added.ok, true); assert.equal(added.accepted, 1); assert.equal(added.remainder, null);
     model.select(added.index);
-    unchanged(model, () => model.useSelected(), type === 'snack' ? 'health-unavailable' : 'no-use');
-    unchanged(model, () => model.useSelected({ canMark: false }), type === 'snack' ? 'health-unavailable' : 'no-use');
+    if (type === 'paper') {
+      const before = model.read();
+      assert.equal(model.useSelected().action, 'combine');
+      assert.equal(model.useSelected({ canMark: false }).action, 'combine');
+      assert.deepEqual(model.read(), before);
+    } else {
+      unchanged(model, () => model.useSelected(), type === 'snack' ? 'health-unavailable' : 'no-use');
+      unchanged(model, () => model.useSelected({ canMark: false }), type === 'snack' ? 'health-unavailable' : 'no-use');
+    }
     assert.equal(Object.hasOwn(model.read().slots[added.index], 'uses'), false);
     assert.ok(ITEM_DEFS[type].name && ITEM_DEFS[type].description);
   }

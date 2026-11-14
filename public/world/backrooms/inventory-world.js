@@ -5,9 +5,10 @@ import { Batch, lamp, lightAt, lin } from './kit.js';
 import { toLocal, toWorld } from './gen.js';
 import { INVENTORY_MODELS } from './inventory-items.js';
 import { makeItem, ITEM_DEFS } from './inventory-state.js';
+import { createInventoryFire, FIRE } from './inventory-fire.js';
 
 const REACH = 1.35, MARK_R = .33, MAX_MARKS = 24;
-const ITEM_RADIUS = Object.freeze({ torch: .30, battery: .19, chalk: .16, paper: .31, scissors: .29, snack: .23, balloon: .26 });
+const ITEM_RADIUS = Object.freeze({ torch: .30, battery: .19, chalk: .16, paper: .31, scissors: .29, snack: .23, balloon: .26, lighter: .20, tape: .26 });
 const ITEM_HEIGHT = Object.freeze({ balloon: 1.4 });
 const copy = item => ({ ...item });
 const label = item => item.type === 'paper' ? `Paper × ${item.quantity}` : item.type === 'battery' ? 'Batteries' : ITEM_DEFS[item.type].name;
@@ -33,17 +34,20 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
     let px = ax, pz = az;
     for (let i = 1; i <= n; i++) {
       const x = ax + (bx - ax) * i / n, z = az + (bz - az) * i / n;
-      if (!world.free(x, z, radius, { tall: !walk }) || (walk && (!world.passable(px, pz, x, z) || world.headroom(x, z) < height))) return false;
+      if (!world.free(x, z, radius, { tall: !walk, ghost: !walk }) || (walk && (!world.passable(px, pz, x, z) || world.headroom(x, z) < height))) return false;
       px = x; pz = z;
     }
     return true;
   };
+  const fires = createInventoryFire(env, { canAct: available, clearRay, isDry: f => dry(f.rt, f) });
   const supported = (rt, p, radius, height = .62) => {
     if (world.roomAt(p.wx, p.wz) !== rt || !world.free(p.wx, p.wz, radius) || world.headroom(p.wx, p.wz) < height) return false;
     const y = floorAt(p);
     for (const [dx, dz] of [[radius, 0], [-radius, 0], [0, radius], [0, -radius], [radius * .7, radius * .7], [-radius * .7, -radius * .7], [-radius * .7, radius * .7], [radius * .7, -radius * .7]]) {
       if (world.roomAt(p.wx + dx, p.wz + dz) !== rt || world.headroom(p.wx + dx, p.wz + dz) < height
         || Math.abs(world.floorY(p.wx + dx, p.wz + dz) - y) > .025) return false;
+      const local = toLocal(rt.def, p.wx + dx, p.wz + dz);
+      if (!dry(rt, { ...local, y: y - rt.def.y })) return false;
     }
     return dry(rt, p);
   };
@@ -58,6 +62,7 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
         const yaw = me.yaw + offset, wx = me.x - Math.sin(yaw) * distance, wz = me.z - Math.cos(yaw) * distance;
         const q = toLocal(rt.def, wx, wz), p = point(rt, q.x, q.z);
         if (!supported(rt, p, radius, height) || Math.abs(floorAt(p) - floor) > .24 || !clearRay(me.x, me.z, wx, wz, radius, true, height)) continue;
+        if (fires.occupied(p.wx, p.wz, radius, floorAt(p))) continue;
         if (!mark && [...entries.values()].some(e => e.active && e.rt === rt && Math.hypot(e.x - p.x, e.z - p.z) < radius + ITEM_RADIUS[e.item.type])) continue;
         if (mark && marks.some(m => m.rt === rt && Math.hypot(m.x - p.x, m.z - p.z) < .48)) continue;
         return { ...p, rt, yaw: me.yaw - (rt.def.rot * Math.PI) / 2 };
@@ -125,6 +130,7 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
     if (!INVENTORY_MODELS[item.type]) return { ok: false, reason: 'invalid-item' };
     if (entries.has(item.id) || model.read().slots.some(s => s?.id === item.id)) return { ok: false, reason: 'duplicate' };
     const p = { ...point(rt, x, z), rt }, radius = ITEM_RADIUS[item.type];
+    if (fires.occupied(p.wx, p.wz, radius, floorAt(p))) return { ok: false, reason: 'no-space' };
     if (y !== undefined && !Number.isFinite(y)) return { ok: false, reason: 'no-space' };
     const elevation = y === undefined ? 0 : y - p.y;
     if (!Number.isFinite(elevation) || elevation < 0 || elevation > 1.1) return { ok: false, reason: 'no-space' };
@@ -171,18 +177,30 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
     env.sound.play('rustle', { vol: .6 });
     return { ok: true, number: markCount, room: p.rt.id, x: p.x, z: p.z };
   }
+  function ignite(spec) {
+    const checked = fires.request(spec);
+    if (!checked.ok) return checked;
+    const p = groundSpot(FIRE.footprint, false, FIRE.height);
+    if (!p) return { ok: false, reason: 'no-fire-space' };
+    const result = fires.ignite(p, checked);
+    if (result.ok) env.sound.play('rustle', { vol: .6 });
+    return result;
+  }
   return {
-    spawn, dropSelected, canMark: () => !disposed && !!groundSpot(MARK_R, true), mark,
-    update() {
+    spawn, dropSelected, canMark: () => !disposed && !!groundSpot(MARK_R, true), mark, ignite,
+    fire: Object.freeze({ threatAt: fires.threatAt }),
+    update(dt = 0) {
       if (disposed) return;
+      fires.update(dt);
       for (const e of entries.values()) if (e.active && e.rt.near) tint(e.mesh, e.rt, e.x, e.y, e.z);
       for (const m of marks) if (m.rt.near) tint(m.mesh, m.rt, m.x, m.y, m.z);
     },
     report: () => ({ items: [...entries.values()].map(e => ({ ...copy(e.item), room: e.rt.id, x: e.x, y: e.y, z: e.z, wx: e.wx, wz: e.wz, active: e.active })),
-      marks: marks.map(m => ({ number: m.number, room: m.rt.id, x: m.x, y: m.y, z: m.z })), marksMade: markCount }),
+      marks: marks.map(m => ({ number: m.number, room: m.rt.id, x: m.x, y: m.y, z: m.z })), marksMade: markCount, fires: fires.report() }),
     dispose() {
       if (disposed) return;
       disposed = true;
+      fires.dispose();
       for (const e of entries.values()) { e.rt.uses = e.rt.uses.filter(u => u !== e.use); e.mesh.removeFromParent(); }
       for (const m of marks) m.mesh.removeFromParent();
       entries.clear(); marks.length = 0; geometries.clear(); arrowGeometry = null;

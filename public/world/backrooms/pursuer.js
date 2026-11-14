@@ -24,6 +24,7 @@ import { Batch, lamp, lin, drawText } from './kit.js';
 import { makeRng, RISE, RUN } from './gen.js';
 import { P, clamp, turnTo } from './bits.js';
 import { REACH, calm, beside } from './reach.js';
+import { retreatFromFire } from './fire-fear.js';
 
 const SC = 1.25, S = 0.025 * SC;                 // sculpted chunkier than the furniture: one voxel is 3.1 cm
 const TALL = 1.62, PLINTH = 0.16, BODY = 0.3;        // BODY: how much floor it takes up, as a radius (with yours, that is REACH.touch)
@@ -433,7 +434,9 @@ export function createStalkers(env) {
     }
     const seen = p.group.visible && env.sees(p.x, p.z, { radius: 0.6, margin: 0.18, far: 40 });
     const toMe = Math.atan2(dx, dz);
-    if (seen) {
+    const afraid = retreatFromFire(env, p, dt, { stand, stride });
+    if (afraid) p.near = calm();
+    else if (seen) {
       p.unseen = 0; p.rolled = false;
       if (d < 12) p.met += dt;
       // a bad frame now and then: for an instant the head is not where it was
@@ -548,7 +551,7 @@ export function createStalkers(env) {
     },
     wake,
     /** Where it is and what it is doing (for the dev page). */
-    at() { return pirate ? { x: pirate.x, z: pirate.z, state: pirate.state, room: W()?.roomAt(pirate.x, pirate.z)?.id ?? null, face: pirate.face, pose: pirate.pose, card: pirate.card ? pirate.card.held : null } : null; },
+    at() { return pirate ? { x: pirate.x, z: pirate.z, state: pirate.state, fleeing: !!pirate.fireFear?.left, room: W()?.roomAt(pirate.x, pirate.z)?.id ?? null, face: pirate.face, pose: pirate.pose, card: pirate.card ? pirate.card.held : null } : null; },
     get follower() { return follower ? { x: follower.x, z: follower.z } : null; },
     get figure() { return pirate; },
     dispose() { if (pirate) { const i = W()?.bodies.indexOf(pirate.body); if (i >= 0) W().bodies.splice(i, 1); } pirate?.group.removeFromParent(); follower?.g.removeFromParent(); pirate = null; follower = null; },

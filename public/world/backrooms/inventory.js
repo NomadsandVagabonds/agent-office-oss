@@ -15,6 +15,16 @@ const MESSAGES = {
   'no-use': 'Nothing to use this on here', 'health-unavailable': 'Keep this for when you need it',
   'full-health': 'Health is full', dead: 'Too late', depleted: 'The camera has stopped',
   unavailable: 'Cannot do that right now',
+  'missing-input': 'Choose two ingredients', 'stale-input': 'That item is no longer in the pocket',
+  'duplicate-input': 'Choose two different ingredients', 'invalid-amount': 'Choose how many sheets to burn',
+  insufficient: 'Not enough paper', 'no-fire-space': 'No clear, dry place for a fire',
+  'fire-limit': 'Too many fires are still burning here', 'no-light': 'Select a flashlight or mount one on the camera',
+  'already-prepared': 'This flashlight already has tape', 'already-mounted': 'The camera already has a flashlight',
+  'mount-occupied': 'The camera already has a flashlight', 'not-prepared': 'Wrap the flashlight with tape first',
+  'invalid-input': 'Choose an item from a pocket or the camcorder', 'invalid-item': 'Cannot use this item',
+  'camera-unavailable': 'The camera is unavailable', 'invalid-fire': 'Choose one to ten sheets',
+  'fire-unavailable': 'Cannot light a fire here', 'effect-failed': 'Could not combine those items',
+  busy: 'Finish combining these items first',
 };
 const BATTERY_ROOM_INTERVAL = 4; // Starting point for supply-density playtests.
 
@@ -53,6 +63,25 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
     if (!available()) return unavailable();
     if (accepted(model.combine(from, to))) { view.cancelCombine(); refresh(); tell('Batteries fitted'); }
   }
+  function craft(refs, options = {}) {
+    if (!available()) return unavailable();
+    const result = model.craft(refs, {
+      paperCount: options.paperCount, camera: env.camera,
+      ignite: recipe => active.physical.ignite(recipe),
+    });
+    if (!accepted(result)) return result;
+    view.cancelCombine(); refresh();
+    tell(result.recipe === 'paper-fire' ? 'Paper is burning'
+      : result.recipe === 'tape-torch' ? 'Flashlight taped'
+      : result.recipe === 'mount-torch' ? 'Light mounted · F to switch'
+      : result.recipe === 'camera-battery' ? 'Camera recharged' : 'Batteries fitted');
+    return result;
+  }
+  function toggleLight() {
+    if (!available()) return unavailable();
+    const result = model.toggleLight();
+    accepted(result); return result;
+  }
   function rechargeCamera(from) {
     if (!available()) return unavailable();
     const item = Number.isInteger(from) ? model.read().slots[from] : null;
@@ -71,7 +100,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
     const state = model.read(), item = state.slots[state.selected];
     return item?.type === 'torch' ? { ...item, lit: state.activeTorch === item.id && item.charge > 0 } : item;
   }
-  const torchPower = () => !disposed && model.read().activeTorch ? 1 : 0;
+  const torchPower = () => disposed ? 0 : model.torchPower();
   function give(item) {
     if (!available()) return unavailable();
     const wasEmpty = !held(), result = model.add(item);
@@ -88,7 +117,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
     if (result.ok) refresh();
     return result;
   }
-  const view = createInventoryHud({ host: env.hud.el, onSelect: select, onUse: use, onDrop: drop, onCombine: combine, onRecharge: rechargeCamera,
+  const view = createInventoryHud({ host: env.hud.el, onSelect: select, onUse: use, onDrop: drop, onCraft: craft,
     onOpen: open => {
       if (open && !available()) { view.setOpen(false); return; }
       onOpen(open);
@@ -105,7 +134,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
     const forward = { x: -Math.sin(yaw), z: -Math.cos(yaw) }, right = { x: Math.cos(yaw), z: -Math.sin(yaw) };
     const items = [makeItem('torch', id('arrival-flashlight'), { charge: 54 }), makeItem('battery', id('arrival-batteries')), makeItem('chalk', id('arrival-chalk')),
       makeItem('paper', id('arrival-paper'), { quantity: 5 }), makeItem('scissors', id('arrival-scissors')), makeItem('snack', id('arrival-snack')),
-      makeItem('balloon', id('arrival-balloon'))];
+      makeItem('balloon', id('arrival-balloon')), makeItem('lighter', id('arrival-lighter')), makeItem('tape', id('arrival-tape'))];
     const walk = env.world.walkable(rt), seen = walk.flood(rt.def.doors);
     const candidates = [];
     for (let i = 0; i < seen.length; i++) if (seen[i]) {
@@ -141,6 +170,24 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
       }
     }
   }
+  function scatterCrafting(floor) {
+    const { env, physical, id } = floor, random = makeRng(id('crafting-supplies'));
+    const rooms = env.world.rooms.filter(rt => rt.id !== env.level.start.room && rt.def.kind !== 'exit');
+    const supplies = [makeItem('lighter', id('scattered-lighter')), makeItem('tape', id('scattered-tape')),
+      ...Array.from({ length: Math.max(1, Math.ceil(rooms.length / 8)) }, (_, i) => makeItem('paper', id(`scattered-paper-${i}`), { quantity: random.int(3, 5) }))];
+    for (const item of supplies) {
+      let placed = false;
+      for (const rt of random.shuffle(rooms)) {
+        const walk = env.world.walkable(rt), seen = walk.flood(rt.def.doors), cells = [];
+        for (let i = 0; i < seen.length; i++) if (seen[i]) cells.push(i);
+        for (const cell of random.shuffle(cells).slice(0, 64)) {
+          const p = walk.at(cell);
+          if (physical.spawn(item, { room: rt.id, x: p.x, z: p.z }).ok) { placed = true; break; }
+        }
+        if (placed) break;
+      }
+    }
+  }
 
   /** Build-time ownership: the floor can be visible below us without having
    * a player yet. Its supply meshes stay in its scene when the seam moves it. */
@@ -157,13 +204,14 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
     // cannot inspect or mutate what somebody now carries on the next floor.
     floor.facade = {
       physical: floor.physical,
+      fire: { threatAt: (...point) => !disposed && active === floor ? floor.physical.fire.threatAt(...point) : null },
       held: () => available(floor) ? held() : null,
       torchPower: () => !disposed && active === floor ? torchPower() : 0,
       give: item => available(floor) ? give(item) : unavailable(),
       consumeHeld: (type, amount = 1) => available(floor) ? consumeHeld(type, amount) : unavailable(),
     };
     floors.set(next, floor); next.inventory = floor.facade;
-    try { scatter(floor); }
+    try { scatter(floor); scatterCrafting(floor); }
     catch (err) { forget(next); throw err; }
     return floor.facade;
   }
@@ -188,13 +236,14 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
     if (next.inventory === floor.facade) delete next.inventory;
   }
   return {
-    model, view, use, drop, combine, rechargeCamera, select, held, give, consumeHeld, hang, attend, forget,
+    model, view, use, drop, combine, rechargeCamera, craft, toggleLight, select, held, give, consumeHeld, hang, attend, forget,
     get physical() { return active?.physical || null; },
     get isOpen() { return view.isOpen; },
     owns: target => target instanceof Node && view.el.contains(target),
     close: () => view.setOpen(false),
     handleKey(e) {
       if (!available()) return false;
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'f') { if (!e.repeat) toggleLight(); return true; }
       if (view.handleKey(e)) return true;
       if (view.isOpen) return false; // Native focused-button activation stays native.
       const k = e.key.toLowerCase();
@@ -208,7 +257,10 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {} } 
         const { depleted } = model.tick(dt);
         if (depleted) { tell('Flashlight battery empty'); env.sound.play('clack', { vol: .3 }); }
       }
-      view.el.inert = !available(); active?.physical.update(dt); refresh(); view.tick(dt);
+      // The part above can still be in view during a fall. Its fire keeps
+      // burning until that floor is retired; the carried model still ticks once.
+      for (const floor of floors.values()) floor.physical.update(playing ? dt : 0);
+      view.el.inert = !available(); refresh(); view.tick(dt);
     },
     torchPower,
     report: () => ({ ...snapshot(), open: view.isOpen, floor: active?.env.level.depth ?? null,
