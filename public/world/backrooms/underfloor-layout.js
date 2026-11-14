@@ -1,10 +1,9 @@
-// Original workshop encounter: floor plans and the walker's cadence, without a renderer.
-export const UNDERFLOOR = Object.freeze({ ceiling: 0.98, bayHead: 0.86, cadence: 6.4, lead: 2.0, press: 1.15, cycle: 38.4 });
-const ORDER = [0, 1, 2, 2, 1, 0];
+// The structural crawl route and conservative head clearances, without a renderer.
+export const UNDERFLOOR = Object.freeze({ ceiling: 0.98, bayHead: 0.86, flex: 0.16 });
 export const inRect = (p, b, pad = 0) => p.x >= b.x0 + pad && p.x <= b.x1 - pad && p.z >= b.z0 + pad && p.z <= b.z1 - pad;
 
 export function underfloorPlan(W = 11.8, D = 19.8) {
-  if (W < 9 || D < 18) throw new RangeError('Underfloor Walker needs a broad room at least 18m deep.');
+  if (!Number.isFinite(W) || !Number.isFinite(D) || W < 9 || D < 18) throw new RangeError('Underfloor Walker needs a broad room at least 18m deep.');
   const end = D / 2 - 2.3, zs = [end - 2.8, 0, -end + 2.8];
   const lane = { x0: -1.3, z0: -end, x1: 1.3, z1: end };
   const shelters = zs.map((z, id) => ({ id, x0: id === 1 ? 1.3 : -3.8, x1: id === 1 ? 3.8 : -1.3, z0: z - 1.1, z1: z + 1.1,
@@ -21,24 +20,37 @@ export function underfloorPlan(W = 11.8, D = 19.8) {
   return { W, D, end, lane, shelters, crossings, solids, entry: { x: 0, z: end + 1.1 }, exit: { x: 0, z: -end - 1.1 } };
 }
 
-/** Each step has two seconds of creaking/dust before weight reaches the boards. */
-export function walkerAt(time) {
-  const t = Math.max(0, time), step = Math.floor(t / UNDERFLOOR.cadence), phase = t - step * UNDERFLOOR.cadence;
-  const active = ORDER[step % ORDER.length], warning = phase < UNDERFLOOR.lead;
-  const down = phase - UNDERFLOOR.lead;
-  const pressure = down >= 0 && down < UNDERFLOOR.press ? Math.sin(Math.PI * down / UNDERFLOOR.press) : 0;
-  return { step, active, phase, warning, pressure, striking: pressure > 0.55,
-    lift: warning ? 0.8 * (1 - phase / UNDERFLOOR.lead) : phase < 3.4 ? 0 : Math.min(0.8, (phase - 3.4) * 0.5) };
+/** Exact, disjoint deck rectangles. The moving spans and fixed roof share edges,
+ * never faces; an aperture is a real hole all the way through the upper floor. */
+export function underfloorSurfacePlan(plan) {
+  const fixed = [], apertures = [], patches = [], grateHalf = .60;
+  let z = -plan.end;
+  for (const crossing of [...plan.crossings].sort((a, b) => a.z0 - b.z0)) {
+    if (crossing.z0 > z) fixed.push({ x0: -plan.W / 2, x1: plan.W / 2, z0: z, z1: crossing.z0 });
+    fixed.push({ x0: -plan.W / 2, x1: crossing.x0, z0: crossing.z0, z1: crossing.z1 });
+    fixed.push({ x0: crossing.x1, x1: plan.W / 2, z0: crossing.z0, z1: crossing.z1 });
+    z = crossing.z1;
+  }
+  if (z < plan.end) fixed.push({ x0: -plan.W / 2, x1: plan.W / 2, z0: z, z1: plan.end });
+  // Preserve encounter order rather than the z ordering used for the fixed roof.
+  for (const b of plan.crossings) {
+    const a = { id: b.id, x0: -grateHalf, x1: grateHalf, z0: b.z - grateHalf, z1: b.z + grateHalf };
+    apertures.push(a);
+    patches.push([
+      { x0: b.x0, x1: b.x1, z0: b.z0, z1: a.z0 },
+      { x0: b.x0, x1: b.x1, z0: a.z1, z1: b.z1 },
+      { x0: b.x0, x1: a.x0, z0: a.z0, z1: a.z1 },
+      { x0: a.x1, x1: b.x1, z0: a.z0, z1: a.z1 },
+    ]);
+  }
+  return { fixed, patches, apertures, bottom: UNDERFLOOR.ceiling, top: 1.15, pierTop: .96,
+    handSlot: { x0: -.18, x1: .18 }, headerBottom: UNDERFLOOR.bayHead };
 }
 
-export function underfloorHead(plan, x, z, step = walkerAt(0)) {
+export function underfloorHead(plan, x, z, step = { active: 0, pressure: 0 }) {
   // The entrance beam reaches .16m outside the deck. Start ducking before
   // the player's body reaches it, in either travel direction.
   if (Math.abs(z) > plan.end + 0.16 + 0.225) return 3.2;
   const b = plan.crossings[step.active];
-  return inRect({ x, z }, b, -0.22) ? UNDERFLOOR.ceiling - step.pressure * 0.16 : UNDERFLOOR.bayHead;
-}
-
-export function underfloorRisk(plan, x, z, step) {
-  return step.striking && inRect({ x, z }, plan.crossings[step.active], 0.02);
+  return inRect({ x, z }, b, -0.22) ? UNDERFLOOR.ceiling - Math.max(0, Math.min(1, step.pressure)) * UNDERFLOOR.flex : UNDERFLOOR.bayHead;
 }

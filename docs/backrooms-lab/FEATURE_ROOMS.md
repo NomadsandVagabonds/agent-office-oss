@@ -6,7 +6,7 @@ room deck or the proposed 60–80% repetitive connective space.
 
 | Study | Main experience | Room card |
 | --- | --- | --- |
-| `underfloor` | Crawl between reinforced refuges while weight crosses the boards overhead. | [Underfloor Walker](UNDERFLOOR.md) |
+| `underfloor` | Crawl beneath a shadow inhabitant that peers and reaches through damaged grates. | [Underfloor Walker](UNDERFLOOR.md) |
 | `flood-mark` | Read the receding water to follow a crooked path between dry islands. | [Flood-Mark Hall](FLOOD_MARK.md) |
 | `window-court` | Navigate an immense enclosed court and choose whether to follow a neutral figure. | [Window Court](WINDOW_COURT.md) |
 
@@ -54,3 +54,20 @@ audit, and keep temporary effects local to their room.
   no warnings or errors after the dev-page wiring changed.
 - Eye-level VHS screenshots were inspected. Timing, tension and whether the
   guide's offer feels uncanny still need human playtesting.
+
+## Underfloor shadow encounter follow-up
+
+The Underfloor prototype now has a continuous, articulated upstairs inhabitant
+with grate-only sight, a telegraphed reach, dodging and refuge recovery. It also
+replaces the overlapping deck/masonry surfaces and encloses the upper office.
+The other two candidate rooms and production generator are unchanged.
+
+All 12 Underfloor tests pass, including cover, warning time, catches, dodges,
+frame-rate consistency and disjoint deck geometry. The full suite reports
+275/276 passing; the same baseline status-line failure above remains.
+Browser checks at seeds 713, 22 and 41 retain every structural collider,
+reachable doorway and free floor cell without warnings or fallback. The
+actual player completed the crawl through all refuges with zero recoveries,
+dodged a committed reach, and deliberately triggered one correct checkpoint
+recovery. Frozen timing, refuge safety, leaving during a pending grab and the
+normal exit also passed. Clean and VHS views were inspected at crawl height.
