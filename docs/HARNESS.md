@@ -213,9 +213,10 @@ it reads and edits (`agent:file` on the local bus) so that layer can see them.
 - **Downloading agents.** T3 can install registry agents (`npx`, binaries).
   The office only ever runs what is already on `PATH`; commands come from a
   catalog file the operator owns, never from a request.
-- **Checkpoints, rollback, fork, resume.** Real features in T3
-  (`apps/server/src/checkpointing/`), each a project of its own. A driven
-  session here does not survive the daemon, and says so.
+- **Rollback, fork, resume.** Real features in T3, each a project of its own.
+  Snapshots per turn are taken (section 9a) — kept out of the user's
+  repository, unlike T3's — but nothing is put back from them yet, and a
+  driven session does not survive the daemon, and says so.
 - **Remote access, pairing, peer links** (`docs/internals/remote.md`). The
   office stays a loopback service; see [Security position](#15-security-position).
 
@@ -1804,6 +1805,14 @@ different OS user.
    everyone who may read the office.
 6. Rate limits per credential rather than per agent name.
 
+What turns changed (`…/changes`, `…/diff`) is read on this machine only and,
+like a transcript, by any agent on it: a diff is file content. The office's
+copy of a repository's working files that are not ignored — untracked ones
+included — lives under `<data>/harness/checkpoints/` with the data directory's
+permissions, until its sessions are pruned or it is deleted (it may be, at any
+time). No program the repository's config names is run for a snapshot, and a
+requested path reaches git only after `--`, as a literal.
+
 Two things that are Claude Code's own: started with `--print` it skips its
 workspace trust dialog (its `--help`: "Only use this in directories you
 trust"), so a driven Claude should be started only in folders the operator
@@ -1838,6 +1847,19 @@ processes (`test/harness*.test.mjs`, helpers in `test/fixtures/`):
   the stream; approvals as Codex decisions; a question; interrupt and a
   withdrawn request; failure and crash; the allowance (asked once, partial
   updates merged, model-specific limits ignored, taken in by the usage feed).
+- **`harness-checkpoints.test.mjs`** — real git in temporary repositories:
+  what each turn changed (an edit, a new file, a deletion, a rename, a binary
+  file; ignored files left out); diffs by turn, range, path and context; that
+  nothing is written into the repository (every path, size and time under
+  `.git`, with a dirty index, a stash, hooks, filters, a split index, a stopped
+  merge, a worktree, a submodule, SHA-256, a data directory inside the
+  repository); the budgets and their notices; slow and hopeless snapshots; a
+  stop or an end while a turn waits for its snapshot; two sessions in one
+  repository, subfolders, folders outside any repository, repositories inside
+  the folder; odd file names; the cap on turns, a restart, pruning, 52,000
+  trees, the copy removed mid-session; refusal from another machine. Not
+  exercised: Windows, macOS, a machine without git, network file systems, a git
+  older than 2.43, real agents.
 - **`harness-claude.test.mjs`** — the command line for each mode (and as
   root); the handshake, which spends nothing; the stream, tools, each
   permission answer, a question, a plan; requests that reach a person in every
@@ -1954,7 +1976,7 @@ out from the code:
 | Switching provider on a thread: native resume where possible, a recorded handoff otherwise | **partly**: the handoff half — `context` on a new session carries a conversation on with another agent (sections 12, 14). No native resume yet (below) |
 | A transcript of items with a live feed | **built** (section 9) |
 | Sub-agents, and one agent handing work to another | **built**, as delegation between providers with budgets and hop limits (section 11) and mail that wakes (section 10); an agent's own sub-agents are not shown yet (below) |
-| Checkpoints of the working tree per turn; a diff of what a turn changed; restore | **being built**: snapshots per turn and `/diff`, kept entirely in the office's own folder — nothing is written into the user's repository. Restore comes after (below) |
+| Checkpoints of the working tree per turn; a diff of what a turn changed; restore | **built**, except restore (section 9a): a snapshot before and after every turn, `…/changes`, `…/diff`, a `changes` entry in the transcript, `/diff` in the console — all kept among the office's own files, nothing written into the user's repository |
 | Usage and rate limits per provider | **built** (section 13) |
 | A terminal-style thread view; projects with their threads in a sidebar | **built**: the console, in the browser and as `office chat` (section 14) |
 | Recorded real sessions replayed in tests | **not yet** — everything here has only met fakes (section 16). First on the list below |

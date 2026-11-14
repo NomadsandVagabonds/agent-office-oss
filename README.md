@@ -245,6 +245,13 @@ This repo ships **no real data**. `data/` (runtime state), `public/knowledge/`
 (ingested docs) and `public/transcripts/` are git-ignored and start empty;
 `simulate.mjs` provides a fully fictional roster.
 
+One thing `data/` does hold once you drive agents: to tell you what each turn
+changed, the office keeps its own compressed copy of the working files (not
+the ignored ones) of every repository a driven session works in, under
+`data/harness/checkpoints/`. Nothing is written into those repositories, and
+the copy never leaves your machine; a session says so when it grows large.
+`OFFICE_CHECKPOINTS=0` switches it off. See [`docs/HARNESS.md`](docs/HARNESS.md) §9a.
+
 ## License
 
 Apache-2.0 (see [`LICENSE`](LICENSE)); notices in [`NOTICE`](NOTICE). three.js

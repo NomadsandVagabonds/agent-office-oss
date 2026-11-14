@@ -17,8 +17,14 @@ export function freePort() {
   });
 }
 
+const made = new Set();
+// A suite leaves nothing behind: every folder made here goes when the test process does. (Thousands of
+// them, some with a whole repository inside, used to pile up in the temp directory, run after run.)
+process.once('exit', () => { for (const dir of made) { try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* still in use: the OS will have it */ } } });
 export function tempDir(prefix = 'office-test-') {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  made.add(dir);
+  return dir;
 }
 
 /** Start an isolated office. Returns { base, port, dir, ctx, stop, restart, get, post, patch, del }. */
