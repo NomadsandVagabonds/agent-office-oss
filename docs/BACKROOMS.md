@@ -250,8 +250,8 @@ copies the level's own page (`tools/backrooms-sample/index.html`: one screen,
 nothing on it but the level) and every module it needs into one folder that
 anything can serve. It follows the imports, and includes every room that lives
 in a file of its own. three.js comes from a CDN there, at the vendored
-version. The first tape on that page is always seed 7; after that, a different
-building every time.
+version. Every tape on that page is a different building, as every visit from
+the office is: the seed is the clock, and no building is ever given twice.
 
 ## Where things are
 
