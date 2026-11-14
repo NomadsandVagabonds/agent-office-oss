@@ -11,6 +11,8 @@
 // and from each room that lives in a file of its own (those are fetched by
 // name when a floor has them, so nothing imports them). three.js is not
 // copied: the page takes it from a CDN at the version of the vendored copy.
+// A font a module asks for by its address in the office is copied too, with
+// its licence, and the staged module asks for it beside the page.
 // Prints the files it staged, one to a line, relative to the folder.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -44,16 +46,33 @@ walk(path.join(ROOT, 'public/world/dev/backrooms.js'));
 for (const room of under(path.join(ROOT, 'public/world/backrooms/rooms'))) walk(room);
 if (missing.length) { console.error('imported, but not there:\n  ' + missing.join('\n  ')); process.exit(1); }
 
+// A module may ask for one of the office's own fonts by its address in the office (/vendor/fonts/…, in a style it writes
+// into the page). The page this goes on is not at the root of anything, so the staged copy asks for the font beside the
+// page instead, and the font comes along with its licence.
+const FONT = /\/vendor\/fonts\/([\w.-]+\.woff2)/g, fonts = new Set();
+
 const staged = [];
-for (const dir of ['world', 'core']) fs.rmSync(path.join(out, dir), { recursive: true, force: true });
+for (const dir of ['world', 'core', 'vendor']) fs.rmSync(path.join(out, dir), { recursive: true, force: true });
 for (const file of [...seen].sort()) {
   const from = rel(file);
   if (from.startsWith('public/world/dev/')) continue;                             // the dev page itself is not the sample's page
   const to = from.startsWith('public/world/') ? 'world/' + from.slice('public/world/'.length) : from.startsWith('core/') ? from : null;
   if (!to) { console.error(`do not know where ${from} goes`); process.exit(1); }
   fs.mkdirSync(path.dirname(path.join(out, to)), { recursive: true });
-  fs.copyFileSync(file, path.join(out, to));
+  const src = fs.readFileSync(file, 'utf8'), asked = [...src.matchAll(FONT)].map((m) => m[1]);
+  if (asked.length) { for (const name of asked) fonts.add(name); fs.writeFileSync(path.join(out, to), src.replace(FONT, './vendor/fonts/$1')); }
+  else fs.copyFileSync(file, path.join(out, to));
   staged.push(to);
+}
+if (fonts.size) {
+  const dir = path.join(ROOT, 'public/vendor/fonts');
+  fs.mkdirSync(path.join(out, 'vendor/fonts'), { recursive: true });
+  const licences = fs.readdirSync(dir).filter((f) => /^LICENSE-.*\.txt$/.test(f) && [...fonts].some((name) => name.startsWith(f.slice('LICENSE-'.length, -'.txt'.length))));
+  for (const name of [...fonts, ...licences].sort()) {
+    if (!fs.existsSync(path.join(dir, name))) { console.error(`asked for, but not vendored: vendor/fonts/${name}`); process.exit(1); }
+    fs.copyFileSync(path.join(dir, name), path.join(out, 'vendor/fonts', name));
+    staged.push('vendor/fonts/' + name);
+  }
 }
 fs.copyFileSync(path.join(HERE, 'index.html'), path.join(out, 'index.html'));
 console.log(['index.html', ...staged].join('\n'));
