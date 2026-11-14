@@ -445,6 +445,15 @@ async function runTurn(uuid, promptText) {
         emit({ type: 'system', subtype: 'task_started', task_id: 'a1b2c3', tool_use_id: agent, description: 'Look into it', task_type: 'local_agent', subagent_type: 'general-purpose' });
         // The sub-agent's frames name the call that started it. Its words are its own; its tool calls are work in this folder.
         const child = `toolu_fake_${++toolSeq}`;
+        if (state.partials) {
+          // …streamed too, each event naming the same call.
+          const aside = (event) => emit({ type: 'stream_event', event, parent_tool_use_id: agent });
+          aside({ type: 'message_start', message: { model: 'claude-fake-helper-1', id: `msg_sub_${toolSeq}`, type: 'message', role: 'assistant', content: [],
+            usage: { input_tokens: 77_000, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 1 } } });
+          aside({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } });
+          aside({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'the sub-agent talking to itself' } });
+          aside({ type: 'content_block_stop', index: 0 });
+        }
         emit({ type: 'assistant', parent_tool_use_id: agent, subagent_type: 'general-purpose',
           message: { model: 'claude-fake-helper-1', id: `msg_sub_${toolSeq}`, type: 'message', role: 'assistant', stop_reason: null,
             content: [{ type: 'text', text: 'the sub-agent talking to itself' }, { type: 'tool_use', id: child, name: 'Bash', input: { command: arg }, caller: { type: 'direct' } }] } });
@@ -619,6 +628,8 @@ async function runTurn(uuid, promptText) {
         break;
       case 'stop':
         if (arg === 'max_turns') ending = { subtype: 'error_max_turns', is_error: true, stop_reason: null, errors: ['Reached maximum number of turns (1)'], terminal_reason: 'max_turns' };
+        // A way of ending that is a failure although the result's own subtype says success (stop:why:prompt_too_long).
+        else if (arg.startsWith('why:')) ending = { ...ending, terminal_reason: arg.slice(4) };
         else ending = { ...ending, stop_reason: arg || 'end_turn' };
         break;
       case 'error':

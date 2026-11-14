@@ -187,6 +187,7 @@ test('driven sessions: Claude Code, natively', async (t) => {
     assert.deepEqual(tools.map((e) => [e.name, e.title, e.status]), [['Agent', 'Look into it', 'completed'], ['Shell', 'npm test', 'completed']]);
     assert.equal(tools[0].output, 'The sub-agent reports: done.');
     assert.ok(!JSON.stringify(sub.entries).includes('talking to itself'));
+    assert.ok((await h.entry(s.id, 'usage')).used < 5000, 'nor is what the sub-agent\'s own requests carry counted as this conversation\'s context');
 
     // A turn Claude starts by itself (a background task reporting back) answers nothing the office asked:
     // it ends no turn of ours, and what it said is noted rather than shown as a reply.
@@ -708,6 +709,10 @@ test('driven sessions: Claude Code, natively', async (t) => {
     assert.equal((await h.turn(s.id, 'say:half an answ; stop:max_tokens')).turn.stopReason, 'max_tokens');
     const refusal = await h.turn(s.id, 'stop:refusal');
     assert.deepEqual([refusal.turn.state, refusal.turn.error], ['failed', 'the model declined to continue']);
+    // …and ways of ending that are failures although the result's own subtype says success.
+    const full = await h.turn(s.id, 'say:and then; stop:why:prompt_too_long');
+    assert.deepEqual([full.turn.state, full.turn.error], ['failed', 'Claude stopped: the conversation no longer fits the model’s context window.'], 'the reply is not mistaken for the error');
+    assert.equal((await h.turn(s.id, 'say:paused; stop:why:hook_stopped')).turn.state, 'completed', 'a reason this adapter does not know as a failure is not one');
 
     const n = await h.begin(s.id, 'tool:make; crash:4');
     assert.equal((await h.turnDone(s.id, n)).state, 'failed');

@@ -188,12 +188,16 @@ it reads and edits (`agent:file` on the local bus) so that layer can see them.
   took designs and protocol knowledge and wrote the code from scratch; the few
   places that follow T3's logic closely say so in a comment and `NOTICE`
   carries its MIT notice.
-- **The Claude Agent SDK adapter.** T3 drives Claude through the SDK, which is
-  a dependency. Here Claude Code is driven through its ACP wrapper
-  (`claude-agent-acp`), if the operator has installed it. Claude Code also has
-  a native `--output-format stream-json` mode; an adapter for it would need
-  no wrapper, but we had no schema for it we could verify, so it is left for
-  later rather than guessed.
+- **The Claude Agent SDK as a dependency.** T3 drives Claude through the SDK.
+  The SDK is itself a client of the CLI's own structured mode
+  (`claude --print --input-format stream-json --output-format stream-json`),
+  so the office speaks that mode directly (`claude.mjs`,
+  [section 7.5](#75-claude-code-natively)): no dependency, and no wrapper for
+  the operator to install. The shapes were checked against the type
+  definitions the SDK publishes, the CLI's own `--help` and the frames T3
+  recorded from real runs; the SDK's code is not used, copied or installed.
+  Claude Code through its ACP wrapper is still there under the id
+  `claude-acp`, for anyone who prefers it.
 - **ACP v2 by default.** v2 is an alpha (`2.0.0-alpha.3`). We ask for v1 and
   understand v2 answers; an adapter entry can opt in with `"acpVersion": 2`.
 - **ACP's filesystem and terminal client capabilities.** We advertise neither.
@@ -519,22 +523,27 @@ Built in (`catalog.mjs`); each is offered only if its command is on `PATH`:
 
 | id | protocol | command | note |
 | --- | --- | --- | --- |
-| `claude` | acp | `claude-agent-acp` | Claude Code through its ACP wrapper (`npm i -g @agentclientprotocol/claude-agent-acp`) |
+| `claude` | claude-stream-json | `claude` + what the session needs (section 7.5) | Claude Code in its own stream-json mode: the CLI itself, no wrapper |
 | `codex` | codex-app-server | `codex app-server` | native sandbox and approvals |
 | `gemini` | acp | `gemini --acp` | |
 | `opencode` | acp | `opencode acp` | |
 | `codex-acp` | acp | `codex-acp` | Codex through its ACP wrapper |
+| `claude-acp` | acp | `claude-agent-acp` | Claude Code through its ACP wrapper (`npm i -g @agentclientprotocol/claude-agent-acp`), for when its own mode is not wanted |
 
 Launch arguments are the ones published in the ACP registry
 (`https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json`,
-read 2026-11-13) and, for Codex, the ones T3 uses. Anything else that speaks
-ACP is one entry in the operator's file (`~/.claude/agent-office/harness.json`,
-or `$OFFICE_HARNESS_FILE`):
+read 2026-11-13) and, for Codex, the ones T3 uses. Claude Code's are not in
+the catalog: its adapter builds them for each session (section 7.5), and an
+entry's `args` for that protocol are only what the operator wants put in
+front of them. Anything else that speaks ACP is one entry in the operator's
+file (`~/.claude/agent-office/harness.json`, or `$OFFICE_HARNESS_FILE`):
 
 ```json
 { "adapters": [
   { "id": "goose", "label": "Goose", "protocol": "acp", "command": "goose", "args": ["acp"] },
-  { "id": "claude", "label": "Claude Code", "protocol": "acp", "command": "/opt/tools/claude-agent-acp" }
+  { "id": "claude", "label": "Claude Code", "protocol": "claude-stream-json", "command": "/opt/claude/bin/claude",
+    "args": ["--add-dir", "/srv/shared-notes"] },
+  { "id": "claude-acp", "label": "Claude Code (ACP)", "protocol": "acp", "command": "/opt/tools/claude-agent-acp" }
 ] }
 ```
 
@@ -542,12 +551,298 @@ Other entries from the registry that should work the same way — none tried:
 GitHub Copilot (`copilot --acp`), Cursor (`cursor-agent acp`), goose
 (`goose acp`), Qwen Code (`qwen --acp`), Kiro (`kiro-cli acp`).
 
-Fields: `id`, `label`, `protocol` (`acp` | `codex-app-server`), `command`,
-`args`, `env`, `provider` (which office provider it counts as), `note`,
-`modeId` (an agent mode to select at start), `acpVersion: 2`, `mcp: false` (do
-not inject the office tools), `preamble: false`. An entry with the id of a
-built-in replaces it. A bad entry is refused and reported in `GET /api/harness`
-(`catalogErrors`); the rest still load.
+Fields: `id`, `label`, `protocol` (`acp` | `codex-app-server` |
+`claude-stream-json`), `command`, `args`, `env`, `provider` (which office
+provider it counts as), `note`, `modeId` (an ACP agent's mode to select at
+start), `acpVersion: 2`, `mcp: false` (do not inject the office tools),
+`preamble: false`. An entry with the id of a built-in replaces it. A bad entry
+is refused and reported in `GET /api/harness` (`catalogErrors`); the rest
+still load.
+
+### 7.5 Claude Code, natively
+
+Claude Code has a structured mode of its own, the one its Agent SDK is a
+client of: one JSON object per line each way, but not JSON-RPC. Every frame
+has a `type`; a request is a `control_request` with a `request_id` and gets
+exactly one `control_response`; Claude asks things of us on the same stream.
+`claude.mjs` has its own reader for it (`StreamJsonWire`) with `rpc.mjs`'s
+limits (16 MiB a line, 32 requests held open, 40 lines of noise) and one
+deliberate difference: a line that starts like a frame and does not parse is
+counted as noise and skipped, as Claude's own SDK skips it, instead of ending
+the session — the program on the other side loads other people's plugins.
+What that risks is a lost frame, so every request of ours has a deadline.
+
+**Nothing here has met a real turn.** A real turn spends the operator's
+tokens, so the adapter has only ever talked to the fake. Each line below says
+where its shape was checked:
+
+- **S** — the type definitions shipped in `@anthropic-ai/claude-agent-sdk`
+  0.3.321 (which says it is built for Claude Code 2.1.321): `sdk.d.ts`,
+  `sdk-tools.d.ts`, and for the SDK's own launch line the text of `sdk.mjs`.
+  Read as text; the package was never installed, imported or run, and none of
+  it is in this repository.
+- **H** — `claude --help` of the CLI installed here, 2.1.325.
+- **T** — T3 Code at commit `08b8689a`: its adapter
+  (`apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts`), its
+  reading of the allowance (`apps/server/src/provider/claudeUsageLimits.ts`),
+  and the frames it recorded from real runs
+  (`apps/server/src/orchestration-v2/testkit/fixtures/*/claude_transcript.ndjson`,
+  SDK 0.2.111 to 0.3.276).
+- **B** — text found inside the installed 2.1.325 binary with `grep`. Never
+  run; minified; not an interface anybody promised. Named wherever a claim
+  rests on it alone.
+- **A** — assumed. Nothing checked it.
+
+The command line is built for each session (`claudeLaunch`), after whatever
+the catalog entry's own `args` are:
+
+```
+claude --print --input-format stream-json --output-format stream-json    H: both formats "only work with --print"
+       --verbose                                 S: on the SDK's own launch line (sdk.mjs)
+       --include-partial-messages                H: "partial message chunks as they arrive"
+       --permission-prompt-tool stdio            S: what the SDK passes when it has a permission callback; H names the flag
+                                                    only in the text of --permission-prompts (whose default, "host", is this)
+       --session-id <a uuid the office chose>    H
+       --permission-mode default | acceptEdits | bypassPermissions | plan | dontAsk
+                                                 S PermissionMode; H lists these and "auto", with "manual" where the
+                                                    wire says "default" (B: "manual" is read as "default")
+       [--allow-dangerously-skip-permissions]    H; only together with bypassPermissions
+       [--model <name>] [--effort <level>]       H; only when somebody chose one
+```
+
+No prompt is ever an argument, and there is no `--mcp-config`. `→` is from
+the office, `←` from Claude; a `control_request` is written
+`{ type, request_id, request: { subtype, … } }` and shown here by its subtype.
+
+```
+→ initialize        { title }                                              S SDKControlRequest, SDKControlInitializeRequest
+← control_response  { response: { subtype: "success", request_id, response } | { subtype: "error", request_id, error } }
+                                                                           S SDKControlResponse, ControlResponse, ControlErrorResponse
+     its answer:    { models: [{ value, displayName, resolvedModel?, supportedEffortLevels? }],
+                      account: { subscriptionType?, … }, claude_code_version?, … }
+                                                                           S SDKControlInitializeResponse, ModelInfo, AccountInfo
+→ mcp_set_servers   { servers: { office: { type: "stdio", command, args, env } } }
+← result            { added: [name], removed: [name], errors: { name: text } }   S SDKControlMcpSetServersRequest, McpSetServersResult
+→ get_usage         { skip_behaviors: true }        once, after the handshake; never waited for      S (marked "Experimental")
+← result            { subscription_type, rate_limits_available,
+                      rate_limits: { five_hour?, seven_day?: { utilization (0–100), resets_at (ISO) }, … } }
+                                                                           S SDKControlGetUsageResponse; T claudeUsageLimits.ts
+
+→ user              { message: { role: "user", content: text }, parent_tool_use_id: null, uuid }
+                                                                           S SDKUserMessage; T builds the same message
+← system/init       { session_id, model, permissionMode, claude_code_version, mcp_servers: [{ name, status }], effort?, … }
+                                               at the start of every turn  S SDKSystemMessage; T recorded
+← system/status     { status: "requesting" | "compacting" | null, permissionMode?, compact_result?, compact_error? }
+                                                                           S SDKStatusMessage; T recorded
+← stream_event      { parent_tool_use_id, event: message_start { message: { id, usage } }
+                        | content_block_start { index, content_block: { type: text | thinking | tool_use } }
+                        | content_block_delta { index, delta: text_delta { text } | thinking_delta { thinking } | … }
+                        | content_block_stop { index } | message_delta { usage } | message_stop }
+                                                                           S SDKPartialAssistantMessage; T recorded
+← assistant         { uuid, parent_tool_use_id, error?, message: { id, model, content: [one finished block], usage } }
+                                    one per block, all with the same message.id; T recorded: it arrives before the
+                                    block's content_block_stop, and a tool_use block before the question about it
+                                                                           S SDKAssistantMessage (its own comment says so)
+← user              { parent_tool_use_id, message: { content: [{ type: "tool_result", tool_use_id, content: text | blocks, is_error? }] } }
+                                                                           S SDKUserMessage; T recorded
+← rate_limit_event  { rate_limit_info: { status, rateLimitType?, utilization? (0–1), resetsAt? (epoch seconds),
+                                         overageStatus?, isUsingOverage? } }
+                                    S SDKRateLimitInfo; T claudeUsageLimits.ts ("Stream utilization is 0-1");
+                                    the recorded ones carry only { status: "allowed" }
+                    …and unifiedWindows: { five_hour | seven_day: { utilization, resetsAt } }       B only
+← result            { subtype: success | error_during_execution | error_max_turns | …, is_error, result?, errors?,
+                      stop_reason, terminal_reason?, total_cost_usd, modelUsage: { [model]: { contextWindow, … } },
+                      user_message_uuid(s)?, origin?, startup_failure_reason? }
+                                    exactly one per turn                   S SDKResultSuccess, SDKResultError, ModelUsage,
+                                                                             TerminalReason, SDKMessageOrigin; T recorded
+← system/compact_boundary { compact_metadata: { pre_tokens, post_tokens? } } · system/api_retry { attempt, error }
+  · system/local_command_output { content } · system/permission_denied { tool_name, message }
+  · auth_status { error? } · keep_alive                                    S, each under its own type name
+
+← can_use_tool      { tool_name, input, tool_use_id, blocked_path?, decision_reason?, decision_reason_type?,
+                      matched_ask_rule?: { source, tool_name, rule_content? }, classifier_approvable?, default_to_no?,
+                      requires_user_interaction?, mcp_server?: { name }, agent_id?, permission_suggestions? }
+                                    Claude waits for the answer            S SDKControlPermissionRequest; T recorded three,
+                                                                             as its SDK callback was handed them
+→ result            { behavior: "allow", updatedInput, toolUseID }   or   { behavior: "deny", message, interrupt?, toolUseID }
+                                                                           S PermissionResult
+     a question:    tool_name "AskUserQuestion", input: { questions: [{ question, header, options: [{ label }] }] }
+                    → allow, updatedInput: { …input, answers: { [the question's own text]: answer } }
+                                                                           S AskUserQuestionInput; T answers it the same way
+← control_cancel_request { request_id }         Claude stopped waiting for our answer                S SDKControlCancelRequest
+← elicitation       { mcp_server_name, message, … }   → { action: "decline" }    S; declining is the SDK's own default (sdk.mjs)
+← any other request (hook_callback, mcp_message, request_user_dialog, …)   → an error naming the subtype
+                                                                           B: the CLI answers a subtype it does not know the same way
+
+→ interrupt         {}                           → { still_queued: [] }  (an older Claude: {})      S SDKControlInterruptRequest/Response
+→ set_permission_mode { mode }                   → { mode }      S the request; B the answer
+→ set_model         { model }                    → { model }     S the request; B the answer
+→ apply_flag_settings { settings: { effortLevel } }   → {}       S the request and the comment on Query.applyFlagSettings
+→ control_cancel_request { request_id }          a request of ours ran out of time                  S
+```
+
+What the adapter does with it, where it is not obvious:
+
+- **Nothing is spent before the first turn.** The handshake is control
+  requests only; no model is called until a `user` message is written. The
+  `title` on `initialize` makes Claude skip the request it would otherwise
+  make to name the conversation (S, the field's own comment).
+- **The conversation id is the office's choice** (`--session-id`), so
+  `nativeRef` is known before Claude has said a word and is what
+  `claude --resume` would name. If `system/init` reports another, the
+  transcript says so.
+- **The office tools go over the pipe.** `mcp_set_servers` after `initialize`
+  carries the MCP server with the session token in its `env`. A command line
+  is readable by every user of the machine and a file would outlive a crash,
+  so there is neither. T does the same and says why ("Send MCP credentials
+  over stdin to keep them out of SDK argv"). When Claude cannot start the
+  server its error text is not repeated — it is Claude's to word, and might
+  quote the entry it was given — and the session is marked as having no
+  office tools.
+- **A reply is said once.** Text and reasoning are passed on as they stream;
+  the same block then arrives whole as an `assistant` frame, which is matched
+  to what was streamed by message id and position and adds only what is
+  missing — so a Claude that does not stream at all reads the same. The same
+  frame delivered twice (same `uuid`) is dropped.
+- **Sub-agents.** A frame with `parent_tool_use_id` belongs to a sub-agent:
+  its tool calls are work in this session's folder and are shown; its words
+  and its token counts are not this conversation's and are not.
+- **Tools** are reported from the finished `tool_use` block (its input is
+  complete then) and closed by the `tool_result` that names it. Kinds come
+  from Claude's own tool names (S `sdk-tools.d.ts`: `Bash`, `Read`, `Edit`,
+  `Write`, `NotebookEdit`, `Glob`, `Grep`, `WebFetch`, `WebSearch`, …);
+  `mcp__server__tool` is shown as `server: tool`; anything else is `other`
+  under its own name. `TodoWrite` is the plan, not a tool. `AskUserQuestion`
+  is a question. The plan Claude wants approved (`ExitPlanMode`) is read from
+  the request to approve it as well as from the call (T reads it from the
+  request; S declares no `plan` field on the call).
+- **Context use** is what the latest request carried in — fresh, cache-written
+  and cache-read input — plus what it has written so far (T
+  `claudeProviderTurnTokenUsage`). The window it is measured against is in no
+  frame before the turn's `result`, under the model that holds the
+  conversation (`modelUsage`; helper models are listed there too).
+  `total_cost_usd` is passed on as Claude's own estimate, not a bill. After a
+  summary the figure is `compact_metadata.post_tokens`.
+- **The plan's allowance** is asked for once (`get_usage`, percentages and
+  ISO times) and then followed from `rate_limit_event` (fractions and epoch
+  seconds). Reports are partial, so a window Claude leaves out keeps its last
+  value. Only `five_hour` and `seven_day` are passed on, under the ids, kinds
+  and labels the status-line bridge already uses (`usage-sources.mjs`); a
+  model's own weekly window is not the account's allowance.
+- **Whose result it is.** A turn ends with the `result` that names the `user`
+  message that began it (`user_message_uuids`). Claude also takes turns by
+  itself, when work of its own in the background reports back: that turn has
+  its own `system/init` and a `result` with no message named and
+  `origin.kind: "task-notification"`. It ends no turn of ours, and what it
+  said is noted. (T recorded both in one run, `claude_background_monitor_wake`.)
+  A Claude too old to name the message ends the turn with any result not
+  marked that way (A: the best that can be done there).
+- **How a turn ended.** `terminal_reason` `aborted_streaming` or
+  `aborted_tools` is an interrupt (T `terminalStatusFromResult`). A `success`
+  with `is_error` is a failure whose text is `result` — an expired login looks
+  like that (T recorded), and gets advice to run `claude` once in a terminal.
+  Eleven `terminal_reason`s are failures whatever else the result says (the
+  list is T's, `terminalResultError`). `error_max_turns` is a finished turn
+  that hit a limit. Lines beginning `[ede_diagnostic]` are Claude's telemetry
+  and are not shown (T leaves them out too).
+- **Stopping.** What Claude was waiting on is answered first (`deny` with
+  `interrupt: true`), then `interrupt` is sent; its answer only acknowledges
+  it, and the turn's real end is its `result`. If none comes within
+  `OFFICE_HARNESS_CANCEL_TIMEOUT_MS` the process group is ended.
+- **A Claude that will not start.** Where it explains itself in a `result`
+  with `startup_failure_reason` (S), that text is the reason given; otherwise
+  the last line of stderr.
+- **What an entry may not pass:** the flags the adapter sets itself (the
+  protocol, the conversation, how freely it acts — `--print`,
+  `--permission-mode`, `--dangerously-skip-permissions`, `--session-id`,
+  `--resume` and their relatives). Such an entry is refused before anything
+  starts.
+- **`-p` skips the workspace trust dialog** (H: "Only use this in directories
+  you trust"). A driven Claude loads the settings, hooks and MCP servers of
+  the folder it is started in without asking anybody.
+- **The office's own tools are asked about like any others.** They reach
+  Claude as `mcp__office__…`, so in `ask` and `edits` each is a request the
+  person can allow for the session. An operator who would rather not be asked
+  adds a rule of Claude's own to the entry's `args` (`--allowedTools
+  mcp__office`; the rule syntax is Claude's, and that it covers a server
+  handed over this way is A).
+
+**Modes.** Claude has a permission mode of its own, and no sandbox. The
+session's mode is applied twice: it chooses Claude's mode, which decides what
+Claude asks about at all (the mapping is T's,
+`permissionModeForClaudeRuntimePolicy`), and it decides how the office
+answers what Claude still asks, exactly as for an ACP agent.
+
+| mode | Claude is started with | so Claude asks about | and the office answers |
+| --- | --- | --- | --- |
+| `ask` | `--permission-mode default` | whatever changes or runs something, unless a rule of the operator's allows it | nothing by itself |
+| `edits` | `acceptEdits` | commands, fetches, other tools; files outside its folder | yes to file changes inside the folder |
+| `full` | `bypassPermissions` and `--allow-dangerously-skip-permissions` | next to nothing | yes |
+
+Neither half is a wall: a command Claude was allowed to run runs with the
+operator's own rights, so the catalog says `nativeSandbox: false` and means
+it. What each half guarantees:
+
+- **Some requests always reach a person** (`manual` on the permission event,
+  honoured by `session.mjs`): the ones Claude itself puts to a person
+  whatever its mode — a safety check of its own (`decision_reason_type:
+  "safetyCheck"`, `classifier_approvable: false`, `default_to_no`), a rule or
+  a hook of the operator's that says "ask" (`"rule"`, `matched_ask_rule`,
+  `"hook"`), a command leaving its sandbox, a plan to approve, and whatever
+  else it marks `requires_user_interaction`. No mode and no session grant
+  answers them, "always" is not offered, and the request says
+  why in a sentence ("A rule of yours says to ask before this: Bash(git
+  push:*)"). They are the reason Claude asks at all in its bypass mode (B:
+  its table of safety checks marks some `bypassImmune`), so `full` means
+  "everything Claude would not itself insist on asking a person". T draws the
+  same line (`requiresClaudeApproval`: "CLI-forwarded requests need a
+  person's decision even under bypass"). S for the fields; B for "an ask
+  whose reason is `rule` is always one of the operator's ask rules".
+- **"For the session" is the office's memory.** Claude is answered `allow`
+  each time and never handed `updatedPermissions`: what it suggests for
+  "always" can be a rule in a settings file, or a change of its own mode.
+- **As root, `full` is one step short.** Claude refuses to start in, or able
+  to enter, its bypass mode as root unless it is told it is in a sandbox
+  (`IS_SANDBOX=1`; B, with the words of the refusal). There it is started in
+  `acceptEdits`, asks about the rest, and the office answers; the transcript
+  says so.
+- **Changing the session's mode** (`setAccess`) moves Claude with
+  `set_permission_mode`. Tightening is put to Claude first and has to be
+  accepted — a session never says `ask` while Claude still bypasses — and
+  that includes a broader mode somebody chose for it, and plan mode (which
+  remembers where to return to: Claude is taken out and put back, so that it
+  returns to a mode within the new one). Loosening cannot fail: a Claude that
+  will not go further keeps asking and the office answers. A Claude started
+  without `--allow-dangerously-skip-permissions` cannot enter its bypass mode
+  later (S says the mode "requires" the flag; B: `set_permission_mode` is
+  refused with those words), so a session loosened to `full` stays in
+  `acceptEdits` with the office answering.
+- **Claude's own modes** (`agentMode`) are `default`, `plan`, `dontAsk`,
+  `acceptEdits` and `bypassPermissions`, each offered only up to what the
+  session's mode allows. If Claude is found in a mode that goes further —
+  `system/status` and each turn's `system/init` carry its mode (S; that every
+  change is announced is A) — it is put back at once; one that will not go
+  back is ended. Its `auto` mode is recognised and not offered:
+  nothing about how an account gets it, or is refused it, has been checked.
+- **Model and effort.** The models offered are the ones `initialize` listed,
+  and any other name can be typed (H: `--model` takes an alias or a full
+  name). `set_model` is believed by its answer. Effort has no request of its
+  own: it is the setting `effortLevel`, merged with `apply_flag_settings`.
+  Claude need not report it back on this transport (S: `system/init.effort`
+  is "absent on hosts that do not publish it"); it is read when it is there,
+  and otherwise the office shows what was last set, and stops claiming it
+  when a model that does not list that level is chosen. Until Claude has
+  named its model in a first `system/init`, a session nobody chose a model
+  for shows none.
+
+Not confirmed by anything but the fake, and the first things to look at in a
+trace of a real session (`OFFICE_HARNESS_TRACE=1`): that 2.1.325 starts with
+exactly this command line and answers `initialize` before any `user`
+message; that `mcp_set_servers` connects a stdio server handed over this way;
+that `get_usage` answers on a subscription login; `unifiedWindows` (B only);
+the answers to `set_permission_mode` and `set_model` (B only); and that an
+ordinary request carries no `decision_reason_type` that would make it
+`manual`.
 
 ## 8. Approvals
 

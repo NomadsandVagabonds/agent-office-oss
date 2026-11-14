@@ -17,11 +17,12 @@
 // here), the CLI's own `--help` (2.1.325), and T3 Code's Claude adapter with the
 // frames it recorded from real runs (apps/server/src/orchestration-v2/Adapters/
 // ClaudeAdapterV2.ts and testkit/fixtures; MIT, © 2026 T3 Tools Inc. — see
-// NOTICE). Three things below follow T3's logic closely and say so where they
+// NOTICE). Some things below follow T3's logic closely and say so where they
 // are: how an office mode becomes a Claude permission mode, handing the MCP
-// server over the pipe rather than the command line, and the reading of the
-// usage and allowance frames. docs/HARNESS.md §7.5 names every message with
-// where it was checked, and what a first real run still has to confirm.
+// server over the pipe rather than the command line, the reading of the usage
+// and allowance frames, which endings of a turn are failures, and which of
+// Claude's questions always go to a person. docs/HARNESS.md §7.5 names every
+// message with where it was checked, and what a first real run has to confirm.
 import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { StringDecoder } from 'node:string_decoder';
@@ -46,9 +47,10 @@ const OWN_MODES = Object.freeze([
   { id: 'plan', name: 'Plan', reach: 0 },
   { id: 'dontAsk', name: 'Don’t ask', reach: 0 },
   { id: 'acceptEdits', name: 'Accept edits', reach: 1 },
-  // Known, so that a Claude found in it is placed, but not offered. What its classifier hands on to a person
-  // would be answered by a session in full mode without anybody seeing it, which makes it the bypass mode by
-  // another name. It is worth offering once a request can be marked as one a person must see (HARNESS.md §7.5).
+  // Known, so that a Claude found in it is placed (it acts on its own classifier's judgement, which goes
+  // further than accepting edits), but not offered: whether an account may use it at all is Claude's to say,
+  // and nothing about how it starts, or refuses to, has been checked. What its classifier hands on to a person
+  // does reach one, in every mode (`manual`, below).
   { id: 'auto', name: 'Auto', reach: 2, offered: false },
   { id: 'bypassPermissions', name: 'Bypass permissions', reach: 2 },
 ]);
@@ -66,6 +68,22 @@ const WIRE_ARGS = Object.freeze(['--print', '--input-format', 'stream-json', '--
 const RESERVED_ARGS = new Set(['-p', '--print', '--input-format', '--output-format', '--permission-mode', '--permission-prompt-tool',
   '--permission-prompts', '--dangerously-skip-permissions', '--allow-dangerously-skip-permissions',
   '--session-id', '-r', '--resume', '-c', '--continue', '--fork-session']);
+
+// Ways a turn ends that are a failure whatever else its result says, in words (TerminalReason in the SDK's
+// types; which of them count is T3 Code's reading, terminalResultError).
+const FAILED_BECAUSE = Object.freeze({
+  api_error: 'it gave up after repeated errors from its API',
+  model_error: 'the model returned an error',
+  prompt_too_long: 'the conversation no longer fits the model’s context window',
+  blocking_limit: 'the conversation no longer fits the model’s context window, or the plan’s allowance is used up',
+  rapid_refill_breaker: 'its context filled up again too quickly after it was summarised',
+  image_error: 'an image in the conversation could not be processed',
+  malformed_tool_use_exhausted: 'it gave up after repeated malformed tool calls',
+  budget_exhausted: 'the budget set for the turn was used up',
+  structured_output_retry_exhausted: 'it could not produce the structured output it was asked for',
+  tool_deferred_unavailable: 'a tool call that had been put off can no longer be made',
+  turn_setup_failed: 'it could not start the turn',
+});
 
 const CONTROL_TIMEOUT_MS = 20_000;
 const MAX_TRACKED_TOOLS = 400;
@@ -516,7 +534,7 @@ export class ClaudeAdapter extends AgentAdapter {
         : 'Claude Code was not started able to bypass its permission checks: it asks, and the office answers for it.');
     }
     if (this.opt.agentMode && this.opt.agentMode !== this.modeId) {
-      this._notice('warn', `Claude was not started in its “${line(this.opt.agentMode, 40)}” mode: that is not one of its modes, or it goes further than this session's “${this.access}” mode allows. It runs in “${this.modeId}”.`);
+      this._notice('warn', `Claude was not started in its “${line(this.opt.agentMode, 40)}” mode: that is not a mode the office starts it in, or it goes further than this session's “${this.access}” mode allows. It runs in “${this.modeId}”.`);
     }
     const officeTools = await this.#offerTools(timeoutMs);
     this.ready = true;
@@ -1149,17 +1167,21 @@ export class ClaudeAdapter extends AgentAdapter {
     const why = typeof frame.terminal_reason === 'string' ? frame.terminal_reason : '';
     const stopReason = line(typeof frame.stop_reason === 'string' ? frame.stop_reason : '', 40);
     if (why === 'aborted_streaming' || why === 'aborted_tools') return { status: 'interrupted', stopReason: 'cancelled' };
-    if (frame.subtype === 'success' && frame.is_error !== true) {
+    // Some reasons are a failure even on a result that otherwise reads as a success (T3 Code's terminalResultError).
+    const because = Object.hasOwn(FAILED_BECAUSE, why) ? FAILED_BECAUSE[why] : '';
+    if (frame.subtype === 'success' && frame.is_error !== true && !because) {
       if (stopReason === 'refusal') return { status: 'failed', error: 'the model declined to continue' };
       return { status: 'completed', stopReason: stopReason || 'end_turn' };
     }
     if (frame.subtype === 'error_max_turns') return { status: 'completed', stopReason: 'max_turn_requests' };
     if (turn.cancelRequested) return { status: 'interrupted', stopReason: 'cancelled' };
-    // An API failure ends a turn as "success" with is_error set and the error as its text; the other endings list their errors.
-    const said = frame.subtype === 'success' ? (typeof frame.result === 'string' ? frame.result : '')
+    // An API failure ends a turn as "success" with is_error set and the error as its text (without is_error
+    // that text is the reply, not an error); the other endings list their errors.
+    const said = frame.subtype === 'success' ? (frame.is_error === true && typeof frame.result === 'string' ? frame.result : '')
       // Lines starting "[ede_diagnostic]" are Claude's own telemetry, not something to show a person (T3 Code leaves them out too).
       : (Array.isArray(frame.errors) ? frame.errors : []).filter((e) => typeof e === 'string' && e && !e.startsWith('[ede_diagnostic]')).join('; ');
-    return { status: 'failed', error: text(said, 600) || `Claude stopped the turn (${line(why || String(frame.subtype || ''), 60) || 'it gave no reason'})` };
+    return { status: 'failed', error: text(said, 600) || (because ? `Claude stopped: ${because}.`
+      : `Claude stopped the turn (${line(why || String(frame.subtype || ''), 60) || 'it gave no reason'})`) };
   }
 
   #system(frame) {
