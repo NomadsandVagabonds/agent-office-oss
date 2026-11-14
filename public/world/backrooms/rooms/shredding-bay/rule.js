@@ -9,6 +9,8 @@ export const SHREDDER = Object.freeze({
   catchRadius: 0.88,
   shredTime: 2.1,
   pullTime: 0.72,
+  hurts: 2,                 // hearts the rollers cost, where there are hearts
+  respite: 12,              // seconds she is content, on her way back to her place, after having had some of somebody
 });
 
 export const createShredderState = () => ({
@@ -23,6 +25,9 @@ export const createShredderState = () => ({
  * @param s  state from createShredderState()
  * @param o  { dt, dist, insideRoom, holdingPaper, offeredPaper, clearLine }
  */
+/** The rollers had hold of somebody, and they are still here: she lets go, pleased enough, and wheels it back to where she stands. */
+export function releaseShredder(s) { return { ...s, phase: 'leaving', caught: false, timer: 0, whistleTimer: 0.2, rest: SHREDDER.respite }; }
+
 export function stepShredder(s, o) {
   const { dt, dist, insideRoom = false, holdingPaper = false, offeredPaper = false, clearLine = true } = o;
   let whistled = false, atePaper = false, grabbed = false, caught = s.caught;
@@ -70,7 +75,10 @@ export function stepShredder(s, o) {
   if (phase === 'leaving') {
     whistleTimer -= dt;
     if (whistleTimer <= 0) { whistleTimer = SHREDDER.whistleEvery * 1.4; whistled = true; }
-    return { state: { phase, timer, whistleTimer, caught }, whistled, atePaper, grabbed, caught, speed: SHREDDER.leaveSpeed, pullProgress: 0 };
+    // (after paper she is done with you for good; after a taste of you, only for a while)
+    const rest = s.rest > 0 ? s.rest - dt : undefined;
+    if (rest !== undefined && rest <= 0) return { state: { phase: 'waiting', timer: 0.6, whistleTimer: 1.1, caught: false }, whistled, atePaper, grabbed, caught: false, speed: 0, pullProgress: 0 };
+    return { state: { phase, timer, whistleTimer, caught, ...(rest !== undefined ? { rest } : {}) }, whistled, atePaper, grabbed, caught, speed: SHREDDER.leaveSpeed, pullProgress: 0 };
   }
 
   // phase === 'pulling': dragging the visitor down into the cross-cut jaws

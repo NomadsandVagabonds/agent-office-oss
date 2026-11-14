@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 
 import { ITEM_IDS, kindOf, createHandOver, isPaper, isBalloon, isFlashlight } from '../public/world/backrooms/items.js';
 import { CABLE, createCableState, stepCable, releaseCable } from '../public/world/backrooms/rooms/cable-drop/rule.js';
-import { SHREDDER, createShredderState, stepShredder } from '../public/world/backrooms/rooms/shredding-bay/rule.js';
+import { SHREDDER, createShredderState, stepShredder, releaseShredder } from '../public/world/backrooms/rooms/shredding-bay/rule.js';
 import { PARTY, createPartyState, stepParty } from '../public/world/backrooms/rooms/mandatory-fun/rule.js';
 import { BLACKOUT, createBlackoutState, stepBlackout, isInBeam } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
 import { WARDEN, createWardenState, stepWarden } from '../public/world/backrooms/rooms/safety-corridor/rule.js';
@@ -235,4 +235,18 @@ test('the Trunk Line lets go: after a strangle that was survived it hangs back f
   for (let t = 0; t < 0.5; t += 0.05) { r = stepCable(s, { dt: 0.05, distToDrop: 5, distToCreature: 4, insideRoom: true, clearLine: true }); s = r.state; }
   assert.equal(s.phase, 'hunting'); assert.ok(r.speed > 0);
   assert.ok(CABLE.hurts === 1 && CABLE.recoil >= 4);
+});
+
+test('the Retention Clerk lets go: after the rollers she is content for a while and goes home, and then she is waiting again; after paper she is done for good', () => {
+  let s = releaseShredder({ ...createShredderState(), phase: 'pulling', caught: true, timer: SHREDDER.pullTime });
+  assert.equal(s.phase, 'leaving'); assert.equal(s.caught, false);
+  let r = null;
+  for (let t = 0; t < SHREDDER.respite - 0.5; t += 0.1) { r = stepShredder(s, { dt: 0.1, dist: 0.2, insideRoom: true, holdingPaper: false, clearLine: true }); s = r.state; assert.ok(!r.grabbed && !r.caught && s.phase === 'leaving', 'right beside her, empty-handed, and she is not interested'); }
+  for (let t = 0; t < 1; t += 0.1) { r = stepShredder(s, { dt: 0.1, dist: 6, insideRoom: false, clearLine: true }); s = r.state; }
+  assert.ok(s.phase === 'waiting' || s.phase === 'following', 'and then she is');
+  // fed paper: leaving, and still leaving an hour later
+  s = { ...createShredderState(), phase: 'leaving' };
+  for (let t = 0; t < 3600; t += 1) s = stepShredder(s, { dt: 1, dist: 0.2, insideRoom: true, clearLine: true }).state;
+  assert.equal(s.phase, 'leaving');
+  assert.ok(SHREDDER.hurts === 2 && SHREDDER.respite >= 8);
 });

@@ -192,6 +192,7 @@ export function build(c) {
           // round your neck: a heart where there are hearts, and if that was not the last of them it lets go and hangs back
           c.env.play('buzz', roamer.x, roamer.z, 6);
           c.env.interfere(1);
+          if (!known) { known = true; c.met('trunk-line'); }
           const hit = c.hurt(CABLE.hurts);
           if (!hit.ended) { rule = releaseCable(rule); if (hit.landed) { c.env.hud.glitch(0.5); c.survived('trunk-line'); } }
         }

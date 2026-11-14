@@ -9,7 +9,7 @@ import { lin, WHITE } from '../kit.js';
 import { clamp, turnTo, card, framed, scatter } from '../bits.js';
 import { placePickup, isPaper } from '../hand.js';
 import { stepWalker, routeToward } from '../denizens.js';
-import { createShredderState, stepShredder } from './shredding-bay/rule.js';
+import { SHREDDER, createShredderState, stepShredder, releaseShredder } from './shredding-bay/rule.js';
 import { makeRetentionClerk } from './shredding-bay/rig.js';
 
 function shredBinVox() {
@@ -90,7 +90,7 @@ export function build(c) {
 
   const rig = makeRetentionClerk(c.kit);
   let rule = createShredderState();
-  let offeredPaper = false;
+  let offeredPaper = false, known = false;
   let hostRt = c.rt;
 
   const feedUse = c.use({
@@ -98,8 +98,7 @@ export function build(c) {
     label: 'feed paper to shredder',
     when: () => rule.phase === 'following' && !!c.env.hand?.hasPaper(),
     use: () => {
-      const ate = c.env.hand?.consume(isPaper);
-      if (ate) offeredPaper = true;
+      if (c.env.hand?.hasPaper()) offeredPaper = true;          // (the sheet is taken when she takes it, below: one, not two)
     },
   });
 
@@ -124,6 +123,7 @@ export function build(c) {
       const dist = Math.hypot(me.x - roamer.x, me.z - roamer.z);
       const clearLine = c.world.los(roamer.x, roamer.z, me.x, me.z);
       const holdingPaper = !!c.env.hand?.hasPaper();
+      if (!known && dist < 9 && c.env.sees(roamer.x, roamer.z, { radius: 0.5 })) { known = true; c.met('retention-clerk'); }
 
       const res = stepShredder(rule, {
         dt, dist, insideRoom: inRoom, holdingPaper, offeredPaper, clearLine,
@@ -138,6 +138,7 @@ export function build(c) {
         c.env.play('whistle', roamer.x, roamer.z, 9);
       }
       if (res.grabbed) {
+        if (!known) { known = true; c.met('retention-clerk'); }          // (if you had not seen her before, you have now)
         c.env.play('shred', roamer.x, roamer.z, 9);
         c.env.play('crack', roamer.x, roamer.z, 8);
         c.env.interfere(0.85);
@@ -169,7 +170,11 @@ export function build(c) {
         me.pitch = -0.42 * res.pullProgress;
         me.sinkTo = 0.48 * res.pullProgress;
         c.env.interfere(0.55 + 0.45 * res.pullProgress);
-        if (res.caught) c.env.end('caught');
+        if (res.caught) {
+          // through the rollers: two hearts where there are hearts — and if that was not the last of them she lets go and wheels it home
+          const hit = c.hurt(SHREDDER.hurts);
+          if (!hit.ended) { rule = releaseShredder(rule); me.pitch = 0; if (hit.landed) { c.env.hud.glitch(0.6); c.survived('retention-clerk'); } }
+        }
       }
 
       syncUseRoom(roamer.x, roamer.z, rig.group.rotation.y);
