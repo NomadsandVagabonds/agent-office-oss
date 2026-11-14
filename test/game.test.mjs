@@ -169,9 +169,9 @@ test('game: coins do not come back, the passport pays into the same jar, and the
   assert.ok(machine.includes(cheap.name.replace(/^A |^The /, (m) => m.toLowerCase())), machine);
 });
 
-test('game: getting out of the place that pays turns spare batteries into coins — a fixed most a visit, and only there', async (t) => {
-  // the rule
-  assert.deepEqual([0, 1, 5, VISIT_PAYS_MOST, VISIT_PAYS_MOST + 30].map((n) => payFor({ batteries: n })), [0, BATTERY_COINS, 5 * BATTERY_COINS, VISIT_PAYS_MOST, VISIT_PAYS_MOST], 'a coin a battery, up to the most a visit pays');
+test('game: the place that pays, pays for beating the office\'s best — spare batteries carried out, and never the same ones twice', async (t) => {
+  // the rule: what a haul is worth
+  assert.deepEqual([0, 1, 5, VISIT_PAYS_MOST, VISIT_PAYS_MOST + 30].map((n) => payFor({ batteries: n })), [0, BATTERY_COINS, 5 * BATTERY_COINS, VISIT_PAYS_MOST, VISIT_PAYS_MOST], 'a coin a battery, up to the most a visit can be worth');
   assert.deepEqual([-1, 2.9, 'three', null, undefined, NaN, Infinity].map((n) => payFor({ batteries: n })), [0, 2 * BATTERY_COINS, 0, 0, 0, 0, 0], 'whole batteries only');
   assert.equal(payFor(), 0);
   assert.equal(jarOf({ coins: 2, earned: 3, stamps: 1, spent: 4 }), 2 + 3 + STAMP_COINS - 4);
@@ -183,28 +183,36 @@ test('game: getting out of the place that pays turns spare batteries into coins 
   const earn = (hideout, batteries, name = 'Lead') => office.post('/api/world/game/earn', { hideout, batteries, name });
   const stamps = (await game()).coins.stamps;
 
-  // nothing carried out is nothing paid, and no record of a visit
+  // nothing carried out is nothing paid
   const none = (await earn('backrooms', 0)).data;
-  assert.deepEqual([none.ok, none.paid, none.coins.earned], [true, 0, 0]);
+  assert.deepEqual([none.ok, none.paid, none.best, none.coins.earned], [true, 0, 0, 0]);
   for (const bad of [-1, 'lots', null]) assert.equal((await earn('backrooms', bad)).status, 400, `batteries: ${bad}`);
   assert.equal((await earn('pasture', 3)).status, 400, 'a floor of the lift pays nothing for what is carried off it');
   assert.equal((await earn('nowhere', 3)).status, 404);
 
-  const paid = (await earn('backrooms', 3)).data;
-  assert.deepEqual([paid.paid, paid.batteries, paid.coins], [3 * BATTERY_COINS, 3, { have: 3 * BATTERY_COINS + stamps, found: 0, earned: 3 * BATTERY_COINS, stamps, spent: 0 }]);
-  // told twice (a page reloaded as it left, a script): one visit is paid once
-  const again = await earn('backrooms', 3);
-  assert.equal(again.status, 429);
-  assert.equal((await game()).coins.earned, 3 * BATTERY_COINS);
-  // it is the same jar: the machine takes what a visit paid
-  const cheap = PRIZES.find((p) => p.price <= paid.coins.have);
-  if (cheap) assert.equal((await office.post('/api/world/game/buy', { prize: cheap.id, name: 'Lead' })).data.coins.have, paid.coins.have - cheap.price);
-  // everybody hears about it, in words that do not say where anything is
-  const feed = (await office.get('/api/activity?limit=40')).data;
-  assert.ok((feed.items || feed.activity || feed).some((e) => e.kind === 'loot' && /^Lead got out of the Backrooms with 3 spare batteries: 3 coins for the jar$/.test(e.text)));
-  assert.match((await game()).text, /3 paid for what was carried out of the Backrooms/);
-  // and it outlives the daemon, like the rest of the record
-  assert.equal((await office.get('/api/world')).data.game.coins.earned, 3 * BATTERY_COINS);
+  // the first visit that brings anything out sets the best, and is paid all of it
+  const first = (await earn('backrooms', 3)).data;
+  assert.deepEqual([first.paid, first.best, first.batteries, first.coins], [3, 3, 3, { have: 3 + stamps, found: 0, earned: 3, stamps, spent: 0 }]);
+  // the same again, or less, is worth nothing: it cannot be farmed (and telling the office twice about one visit costs nothing either)
+  for (const n of [3, 3, 2, 1]) { const r = (await earn('backrooms', n)).data; assert.deepEqual([r.ok, r.paid, r.best, r.coins.earned], [true, 0, 3, 3], `${n} again`); }
+  // beating it pays the difference, whoever does it
+  const better = (await earn('backrooms', 5, 'Robin')).data;
+  assert.deepEqual([better.paid, better.best, better.coins.earned, better.coins.have], [2, 5, 5, 5 + stamps]);
+  // and nobody is ever paid for more than a visit can be worth
+  const silly = (await earn('backrooms', 100000)).data;
+  assert.deepEqual([silly.paid, silly.best], [VISIT_PAYS_MOST - 5, VISIT_PAYS_MOST]);
+  assert.equal((await earn('backrooms', 100000)).data.paid, 0);
+
+  // it is the same jar: the machine takes what visits were paid
+  const jar = (await game()).coins, cheap = PRIZES.find((p) => p.price <= jar.have);
+  assert.equal((await office.post('/api/world/game/buy', { prize: cheap.id, name: 'Lead' })).data.coins.have, jar.have - cheap.price);
+  // everybody hears when the best is beaten, in words that do not say where anything is — and not otherwise
+  const feed = (await office.get('/api/activity?limit=60')).data, said = (feed.items || feed.activity || feed).filter((e) => e.kind === 'loot').map((e) => e.text);
+  assert.ok(said.includes('Lead got out of the Backrooms with 3 spare batteries, the most anybody has: 3 coins for the jar'), said.join(' / '));
+  assert.ok(said.includes('Robin got out of the Backrooms with 5 spare batteries, the most anybody has: 2 coins for the jar'));
+  assert.equal(said.length, 3, 'three visits beat the best; the others were not news');
+  assert.match((await game()).text, new RegExp(`${VISIT_PAYS_MOST} for the most anybody has carried out of the Backrooms`));
+  assert.equal((await office.get('/api/world')).data.game.coins.earned, VISIT_PAYS_MOST);
 });
 
 test('game: everything the machine sells has a shape, and a place of its own on top of the machine', async () => {

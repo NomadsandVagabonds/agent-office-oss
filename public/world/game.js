@@ -85,7 +85,8 @@ export function createGame(office) {
 
   /**
    * Somebody got out of a place that pays for what is carried out of it (core/game.mjs: `pay`). Resolves with the
-   * office's answer ({ paid, coins, … }) or null if it could not be told; the purse shows the fuller jar by itself.
+   * office's answer ({ paid, best, coins, … }: paid is what this beat the office's best by, which may be nothing) or
+   * null if it could not be told; the purse shows a fuller jar by itself.
    */
   async function earn(hideoutId, carried = {}) {
     if (!(carried.batteries > 0)) return null;
