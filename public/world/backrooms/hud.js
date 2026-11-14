@@ -22,6 +22,8 @@ const CSS = `
 .backrooms .br-batt { display: inline-block; width: 1.5em; height: .7em; border: .1em solid currentColor; vertical-align: -.05em; margin-left: .6em; position: relative; }
 .backrooms .br-batt::after { content: ''; position: absolute; right: -.26em; top: .12em; width: .12em; height: .3em; background: currentColor; }
 .backrooms .br-batt i { position: absolute; left: .06em; top: .06em; bottom: .06em; width: 28%; background: currentColor; animation: br-blink 1.6s steps(1) infinite; }
+.backrooms .br-batt.is-managed i { width:calc(100% - .12em); transform-origin:left; animation:none; }
+.backrooms .br-batt.is-managed.is-low i { animation:br-blink 1.6s steps(1) infinite; }
 .backrooms .br-carry { right: 6%; top: calc(6.5% + 1.75em); line-height: 0; letter-spacing: 0; filter: blur(.35px) drop-shadow(0 .08em .1em rgba(0, 0, 0, .8)); }
 .backrooms .br-carry i { display: inline-block; box-sizing: border-box; vertical-align: middle; margin-left: .34em; animation: br-blink .22s steps(1) 4; }
 .backrooms .br-tape { width: 1.16em; height: .7em; border: .1em solid currentColor; border-radius: .08em;
@@ -35,7 +37,7 @@ const CSS = `
 .backrooms .br-leave { position: absolute; right: 10px; top: 8px; width: 34px; height: 34px; display: none; place-items: center; pointer-events: auto; font: 400 18px/1 ui-monospace, Menlo, Consolas, monospace; color: #fff; opacity: .28; }
 .backrooms.touch .br-leave { display: grid; }
 .backrooms.clean .br-osd { display: none; }
-@media (prefers-reduced-motion: reduce) { .backrooms .br-dot, .backrooms .br-batt i, .backrooms .br-carry i { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .backrooms .br-dot, .backrooms .br-batt i, .backrooms .br-batt.is-managed.is-low i, .backrooms .br-carry i { animation: none; } }
 `;
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -47,12 +49,13 @@ export function createHud(level) {
   const mode = h('span', 'PLAY ▶'), dot = h('span.br-dot', { style: { display: 'none' } });
   const counter = h('span', '0:00:00'), stamp = h('div.br-osd.bl'), flags = h('div.br-osd.brr'), held = h('div.br-osd.br-carry');
   const use = h('div.br-use', 'E'), leave = h('div.br-leave', '✕');
-  const frame = h('div.br-frame', h('div.br-osd.tl', dot, mode), h('div.br-osd.tr', 'SP  ', counter, h('span.br-batt', h('i'))), held, stamp, flags, use);
+  const batteryFill = h('i'), battery = h('span.br-batt', batteryFill);
+  const frame = h('div.br-frame', h('div.br-osd.tl', dot, mode), h('div.br-osd.tr', 'SP  ', counter, battery), held, stamp, flags, use);
   const el = h('div.backrooms', frame, leave);
   root.append(el);
 
   let st = level.stamp;
-  let tape = 0, lastSecond = -1, usable = false, glitch = 0;
+  let tape = 0, lastSecond = -1, usable = false, glitch = 0, batterySignature = '';
   const flagSet = new Set();
 
   function renderStamp(seconds) {
@@ -67,9 +70,26 @@ export function createHud(level) {
     /** Sit the overlay on the picture: { x, y, w, h } in CSS pixels. */
     layout(p) { for (const [k, v] of [['--px', p.x], ['--py', p.y], ['--pw', p.w], ['--ph', p.h]]) el.style.setProperty(k, `${v}px`); },
     /** Show (or hide) the [E]: there is something here to use. */
-    hint(on) { if (!!on !== usable) { usable = !!on; use.classList.toggle('on', usable); } },
+    hint(on, label = 'E') { if (!!on !== usable) { usable = !!on; use.classList.toggle('on', usable); } if (on && use.textContent !== label) use.textContent = label; },
     /** A word in the corner, the way a camcorder notes that its lamp is on. */
     flag(name, on) { if (on) flagSet.add(name); else flagSet.delete(name); flags.textContent = [...flagSet].join('  '); },
+    /** The existing camcorder glyph is also the run's remaining battery. */
+    battery(snapshot) {
+      if (!snapshot) {
+        if (!batterySignature) return;
+        batterySignature = ''; battery.classList.remove('is-managed', 'is-low'); batteryFill.style.transform = '';
+        for (const name of ['role', 'aria-label', 'title']) battery.removeAttribute(name);
+        return;
+      }
+      const fraction = Math.max(0, Math.min(1, snapshot.fraction ?? snapshot.remaining / snapshot.capacity));
+      const percentage = Math.round(fraction * 100), seconds = Math.max(0, Math.ceil(snapshot.remaining));
+      const low = fraction <= .25, signature = `${percentage}:${seconds}:${low}`;
+      if (signature === batterySignature) return;
+      batterySignature = signature; battery.classList.add('is-managed'); battery.classList.toggle('is-low', low);
+      batteryFill.style.transform = `scaleX(${percentage / 100})`;
+      const label = `Camera battery ${percentage}%, ${Math.floor(seconds / 60)}:${pad(seconds % 60)} remaining`;
+      battery.setAttribute('role', 'img'); battery.setAttribute('aria-label', label); battery.title = label;
+    },
     /** What you are carrying, under the battery: a card, a cassette for each tape (the office calls them coins). Pictures only; nothing is ever written. */
     carry({ card = false, coins = 0 } = {}) {
       const has = held.querySelector('.br-card');

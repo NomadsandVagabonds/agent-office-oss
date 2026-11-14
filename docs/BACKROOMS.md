@@ -416,6 +416,55 @@ for `CAST_LESSONS` if it teaches something), the line for `cast/index.js`,
 sentences: what its rule is, and how somebody who has not worked it out yet is
 warned before it costs them anything.
 
+## What a visitor carries
+
+Six pockets, four hearts, and a camcorder that runs on batteries (Codex's
+work: `inventory*.js`, `survival.js`; its own notes are
+`docs/backrooms-lab/INVENTORY.md`). They belong to the visit, not to any one
+part of the building, and they are on unless a visit is started with
+`inventory: false`.
+
+- **The clock.** The camcorder lands three quarters charged: five minutes.
+  When it is flat the visit is over (`'battery'`). A battery pack puts two
+  minutes back, up to six minutes forty. The clock runs while you are in
+  play and while you fall; it does not stop for an open pocket.
+- **Hearts.** Four. Being caught costs what the creature's line says
+  (`caught: { hurt: 2 }` for the mascot), not the whole visit; a snack puts
+  one back. After a hit there is a moment in which nothing else lands.
+- **Nobody is handed anything.** What is lying about is decided by the seed
+  (`supplies.js`, pure): a battery pack to every four rooms or so, a snack or
+  two to a part, a torch more often than not where you land, chalk in about
+  half the parts — and anything else (paper, scissors, a balloon) only on a
+  floor where somebody wants it, which is the `items` of the cast dealt to
+  that floor. Nothing is left where you land, at the way down, or in a room
+  an earlier visitor left something in.
+- **Spare packs are the currency.** The packs still in your pockets when you
+  leave by the way out are `kept.batteries`, which is what the office pays
+  for (`core/game.mjs`).
+- **Light.** The camcorder's own lamp still comes on in the dark, but it is a
+  weak one. A torch in the hand is the light, wherever it is switched on,
+  for as long as its own charge lasts.
+- **Nothing is written on the picture but `E`.** What a thing is, it has to
+  look like; its name is said once it is in a pocket.
+
+What a room or a creature may do with them, through `c.env` (a creature has
+the same through its own toolbox: `c.hurt`, `c.drain`, `c.held`, `c.take`,
+`c.give`):
+
+| | |
+|---|---|
+| `env.health` | `read()` → `{ current, max, dead }` · `damage(n)` → `{ ok, dead }` · `heal(n)` |
+| `env.camera` | `read()` → `{ remaining, capacity, fraction }` · `recharge(seconds)` · `drain(share)` takes that share of what is left (it never stops the tape by itself: the clock does that) |
+| `env.inventory` | `held()` the thing in the selected pocket, or null · `give(item)` · `consumeHeld(type, n)` · `count(type)` · `physical.spawn(item, { room, x, z })` to leave something on the floor |
+
+All of them refuse (`{ ok: false, reason: 'unavailable' }`) from a part of
+the building the visitor is not in, and while nobody can act (a fall, a
+chute, the end). Check that they are there before using them: a visit can be
+run without.
+
+On the dev page: `&inventory=0` for a visit without; `&supplies=1` for one of
+everything on the floor where you land, for looking at them.
+
 ## How a visit ends, and the card
 
 A visit resolves with `{ reason, kept, run }`. `reason` is `'exit'` (out by
@@ -470,6 +519,9 @@ the office is: the seed is the clock, and no building is ever given twice.
 | `stairwell.js` (also the hole, the ledge and the chute), `thin.js`, `marks.js`, `leaving.js` | the way down, and the taped door at the bottom of the last of it; the wall that gives and the walls that knock back; where the marks go, and the rule for leaning (`lean`, `answer`); what the camcorder sees as you leave |
 | `traces.js` | what earlier visitors left: the marks on walls, the camp, and six things found in plain rooms (`TRACES` in `gen.js`: a camp left in a hurry, arrows that disagree, a note that stops, a tape measure run out, a map that is wrong, a queue at a bare wall) — two or three to a floor at most, far apart, in rooms with nothing else in them and no oddity next door |
 | `loot.js` | tapes and the keycard: where they hide, what is kept |
+| `inventory.js`, `inventory-state.js`, `inventory-world.js`, `inventory-hud.js`, `inventory-items.js` | what a visitor carries: the controller · the pockets (pure) · things on the floor, picking up, putting down, chalk marks · the bar, the hearts and the inspection card · the models |
+| `survival.js`, `health-state.js`, `camera-state.js` | the visit's hearts and the camcorder's battery, and who may touch them when · each of them (pure) |
+| `supplies.js` | what is lying about in a part of the building, and in which rooms (pure, by the seed) |
 | `cast.js`, `cast/` | who is down here (pure: the cast, who is dealt into a visit, on which floor, in which room) · one file to a creature, `cast/index.js` listing them; `cast/pirate.js` is the mascot; `cast/hunt.js` its rules (pure); `cast/paths.js` and `cast/walk.js` how anything gets about |
 | `pursuer.js`, `reach.js` | the cast's conductor on a floor (and the cardboard colleague) · the rule for being within arm's reach of the mascot (pure: the tape tears, and it moves in the torn frames) |
 | `doors.js`, `doorleaf.js` | which doorways have a pair of fire doors (pure) · the doors themselves |

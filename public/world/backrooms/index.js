@@ -5,7 +5,7 @@
 // one with a wall that gives the way the first one did.
 //
 //   const { reason } = await enterBackrooms(office, { name, seed });
-//   reason: 'exit' (you found the way out) | 'caught' (something found you) | 'quit' (Esc)
+//   reason: 'exit' (you found the way out) | 'caught' (something found you) | 'battery' (the camcorder ran flat) | 'quit' (Esc)
 //   …and with it `kept` (what was carried out), `run` (what the visit counted: core/runs.mjs) and `card` (what the
 //   card at the end said, or null if none was shown: scorecard.js; opt.scorecard === false for none)
 //
@@ -39,8 +39,11 @@ import { createLoot, lootLeft } from './loot.js';
 import { leaving } from './leaving.js';
 import { middle, THIN_BEHIND } from './marks.js';
 import { hangBelow, goesDown } from './seam.js';
+import { createInventory } from './inventory.js';
+import { createSurvival } from './survival.js';
 
 const FOV = 62;
+const OWN_LAMP = 0.3;                                    // the camcorder's own lamp, beside a torch: how much of one it is
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const frame = () => new Promise((r) => requestAnimationFrame(r));
 const prefs = {
@@ -82,13 +85,14 @@ async function buildersFor(level) {
 
 /**
  * @param office  the office object (stage, net, …)
- * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, depths?:number, depth?:number, debug?:boolean, onReady?:Function}} [opt]
+ * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, depths?:number, depth?:number, inventory?:boolean, scorecard?:boolean, debug?:boolean, dev?:object, onReady?:Function}} [opt]
  *        depths: how many floors (default: by the seed) · depth: which floor to begin on (default: the top one)
- * @returns {Promise<{reason:'exit'|'caught'|'quit', kept:{card:boolean, coins:number[], told?:Promise<void>}}>}  kept: what you brought out (nothing,
+ *        inventory: false for a visit without pockets, hearts or a battery that runs down · dev.supplies: one of everything where you land
+ * @returns {Promise<{reason:'exit'|'caught'|'battery'|'quit', kept:{card:boolean, coins:number[], batteries:number, told?:Promise<void>}}>}  kept: what you brought out (nothing,
  *          unless you left by the door); kept.told settles once the office has been told of it
  */
 export async function enterBackrooms(office, opt = {}) {
-  if (running) return { reason: 'quit', kept: { card: false, coins: [] } };
+  if (running) return { reason: 'quit', kept: { card: false, coins: [], batteries: 0 } };
   running = true;
   try { return await visit(office, opt); } finally { running = false; }
 }
@@ -138,8 +142,14 @@ async function visit(office, opt) {
   let ahead = null;                                       // the part below, being built or built: { index, f, failed }
   let above = null;                                       // the part just left, still hanging over you: { f, until }
   let hold = false, landed = -1, heldAt = null;           // a room has the controls (a chute) · seconds since you came down in a new part · where you went over, while held
+  let going = null;
   let out = null;                                         // by the way out: where the camera was when the wall gave, and which way is out
-  let pictureKey = '', currentUse = null, light = 0.3, torch = 0, interference = 0, pendingQuit = false, kept = { card: false, coins: [] };
+  let pictureKey = '', currentUse = null, light = 0.3, torch = 0, interference = 0, pendingQuit = false, kept = { card: false, coins: [], batteries: 0 };
+  let inventory = null, survival = null;
+  const canAct = () => state === 'play' && !hold && !going;
+  // A real fall and a chute consume recording time. Waiting for a part to
+  // build does not; neither do arrival static or the final leaving picture.
+  const clocksRun = () => state === 'play' || state === 'drop';
   const u = vhs.uniforms, blank = new THREE.Scene();
   // everything that is built hangs in this: the part you are in at the origin, the part below it under its way down
   const root = new THREE.Scene();
@@ -156,13 +166,31 @@ async function visit(office, opt) {
   stage.setView({ scene: blank, camera, render });
 
   /* ---- hands ----------------------------------------------------------------------- */
-  const useIt = () => { if (state === 'play' && currentUse) { const use = currentUse; try { use.use(use); } catch (err) { console.warn('[backrooms] use', err); } } };
+  const useIt = () => { if (canAct() && !inventory?.isOpen && currentUse) { const use = currentUse; try { use.use(use); } catch (err) { console.warn('[backrooms] use', err); } } };
   const input = createInput({ canvas, stage, hud, sound,
+    owns: target => !!inventory?.owns(target),
+    interceptKey: event => !!inventory?.handleKey(event),
+    blocked: () => !!inventory?.isOpen,
     quit: () => finish('quit'), use: useIt, click: () => {}, wheel: () => {},
     key(k) {
       if (k === 'v') setPicture((vhs.level + 2) % 3);
       else if (k === 'm') { sound.setMute(!sound.muted); prefs.save({ ...prefs.load(), mute: sound.muted }); }
     } });
+  // Six pockets, four hearts, and a camcorder battery that runs down (inventory.js, survival.js): the visit's, not any
+  // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.
+  if (opt.inventory !== false) {
+    survival = createSurvival({ hud, sound, interfere(k) { interference = Math.max(interference, k); } }, {
+      canAct, onEnd: why => finish(why),
+    });
+    inventory = createInventory({ hud, sound, health: survival.health, camera: survival.camera }, {
+      canAct, review: !!opt.dev?.supplies,
+      onOpen(open) {
+        input.clear();
+        if (cur?.player) cur.player.me.vx = cur.player.me.vz = 0;
+        if (open && document.pointerLockElement === canvas) document.exitPointerLock?.();
+      },
+    });
+  }
   function setPicture(lv) {
     vhs.setLevel(lv);
     hud.setClean(lv === 0);
@@ -183,11 +211,11 @@ async function visit(office, opt) {
       player: null, world: null, pursuer: null,
       hatches: new Map(),                       // room id → { drop() }: where a door in a floor lets you out
       /** The visit is over. how: { nx, nz } — the way out through the wall that gave (thin.js), for an 'exit'. */
-      end: (why, how) => finish(why, how),
+      end: (why, how) => { if (cur === f && canAct()) finish(why, how); },
       /** Somebody has gone over an edge they cannot come back from: on down into the next part. at: { x, z } where, in this part's world. */
-      descend: (at) => descend(false, at || {}),
+      descend: (at) => cur === f && descend(false, at || {}),
       /** A room is carrying somebody (a chute): their hands are off the controls until it lets go. */
-      hold: (on) => { hold = !!on; },
+      hold: (on) => { if (cur === f) hold = !!on; },
       /** Is this spot on screen and not behind a wall? */
       sees(x, z, o = {}) {
         const me = f.player?.me; if (!me) return false;
@@ -209,11 +237,29 @@ async function visit(office, opt) {
       /** More static on the tape (0..1), for a moment; things that interfere call this every frame. */
       interfere(k) { interference = Math.max(interference, k); },
     };
+    if (survival) {
+      // Two parts can be alive at a seam. Old or prebuilt room callbacks
+      // may read the visit's resources, but only the current part can act.
+      const available = () => cur === f && canAct();
+      const deniedHealth = () => ({ ok: false, reason: 'unavailable', dead: survival.health.read().dead, health: survival.health.read() });
+      env.health = {
+        read: survival.health.read,
+        damage: amount => available() ? survival.health.damage(amount) : deniedHealth(),
+        heal: amount => available() ? survival.health.heal(amount) : deniedHealth(),
+      };
+      env.camera = {
+        read: survival.camera.read,
+        recharge: seconds => available() ? survival.camera.recharge(seconds) : { ok: false, reason: 'unavailable' },
+        /** Something down here takes a share (0…1) of the charge that is left (the cast's c.drain). */
+        drain: share => available() ? survival.camera.drain(share) : { ok: false, reason: 'unavailable' },
+      };
+    }
     createStalkers(env);
     env.loot = purse;
     purse?.hang(env);
     let breath = performance.now();                       // build as fast as the machine allows, but keep the static moving
     f.world = env.world = await buildWorld(kit, level, env, pace || (async () => { if (performance.now() - breath > 40) { await frame(); breath = performance.now(); } }));
+    inventory?.hang(env);
     return f;
   }
   /** The part below this one, built while somebody is still finding their way to it: a room, then a breath, then a room. */
@@ -240,6 +286,7 @@ async function visit(office, opt) {
   function letGo(f) {
     if (!f) return;
     countRooms(f);
+    inventory?.forget(f.env);
     f.env.pursuer?.dispose?.();
     f.world?.scene.removeFromParent();
     f.world?.dispose(); f.kit.dispose();
@@ -249,12 +296,17 @@ async function visit(office, opt) {
    * (`from`: the body you had in the part above, already in this part's coordinates): exactly where you were, and falling.
    */
   function land(f, from) {
+    // Arrival callbacks belong to a fall already, before they see a player.
+    // They cannot hurt it or overwrite an ending during the handover.
+    state = from ? 'drop' : 'falling';
+    currentUse = null; since = 0; hold = false; landed = -1;
     cur = f;
     purse?.attend(f.env);
     tally.parts = Math.max(tally.parts, (f.level.depth | 0) + 1);            // how far down somebody has got
     if (!f.world.scene.parent) root.add(f.world.scene);
     f.world.scene.position.set(0, 0, 0); f.world.scene.visible = true;
     const player = f.player = f.env.player = createPlayer(f.world, camera, from || f.level.start, input.state);
+    inventory?.attend(f.env);
     const me = player.me;
     me.shake = vhs.level === 2 ? 1 : vhs.level === 1 ? 0.5 : 0.25;
     if (from) { me.pitch = from.pitch; me.drop = Math.max(0.01, from.y - (f.world.floorY(me.x, me.z) + player.EYE)); me.dropV = Math.min(from.dropV, -0.4); }
@@ -265,8 +317,6 @@ async function visit(office, opt) {
     vhs.setScene(root);
     if (f.level !== first) hud.setStamp(f.level.stamp);
     sound.setMains(f.level.hum);
-    currentUse = null; since = 0; hold = false; landed = -1;
-    state = from ? 'drop' : 'falling';
   }
   /**
    * Over the edge. If the part below is there (it nearly always is: it has been building since you landed in this
@@ -276,13 +326,13 @@ async function visit(office, opt) {
   function descend(force, at) {
     if ((state !== 'play' && state !== 'held') || !cur) return false;
     if (cur.level.depth >= plan.depths - 1 || (!force && !goesDown(cur.level.exit.way))) return false;
+    inventory?.close();
     if (!ahead) prepare();
     if (ahead.failed) { reason = 'quit'; conclude(); return false; }
     if (!ahead.f) { if (state !== 'held') { state = 'held'; since = 0; hud.hint(false); sound.play('static', { dur: 1.1 }); } heldAt = at || null; return true; }
     going = { at };                                       // (at the top of the next frame: this one is half way through the part being left)
     return true;
   }
-  let going = null;
   function handover(at) {
     const old = cur, f = ahead.f, me = old.player.me, o = f.world.scene.position.clone();
     ahead = null;
@@ -296,6 +346,7 @@ async function visit(office, opt) {
     const from = { x, z, yaw: me.yaw, pitch: me.pitch, y: (at ? camera.position.y : old.world.floorY(me.x, me.z) + old.player.EYE) - o.y, dropV: me.dropV || 0 };
     // what was here is up there now, for as long as it can still be seen
     old.world.scene.position.set(x - me.x, -o.y, z - me.z);
+    if (above) letGo(above.f);
     above = { f: old, until: time + 6 };
     hud.hint(false);
     land(f, from);
@@ -303,7 +354,7 @@ async function visit(office, opt) {
   }
 
   /* ---- the loop ---------------------------------------------------------------------- */
-  const END = { quit: 0.4, caught: 1.8, exit: 1.4 };
+  const END = { quit: 0.4, caught: 1.8, exit: 1.4, battery: 1.2 };
   const off = stage.onFrame((dt) => {
     if (state === 'loading' || state === 'done') return;
     time += dt; since += dt;
@@ -315,6 +366,7 @@ async function visit(office, opt) {
     if (!cur) { u.uSnow.value = 1; return; }                  // before the first part is up: nothing but snow
     if (going && ahead?.f && (state === 'play' || state === 'held')) { const g = going; going = null; handover(g.at); }
     if (above && (time > above.until || (landed > 1.2 && state === 'play'))) { letGo(above.f); above = null; }
+    survival?.update(dt, clocksRun());
     const { world, player, env } = cur, me = player.me;
     me.frozen = state !== 'play' || hold;
     player.update(dt, time);
@@ -326,15 +378,19 @@ async function visit(office, opt) {
     if (ahead?.f) { const at = world.current(); ahead.f.world.scene.visible = !!at && (at.def.toExit ?? 9) <= 1; }
     if (landed >= 0) landed += dt;
     purse?.update(dt, time, state === 'play');
-    currentUse = state === 'play' ? world.usable(me) : null;
-    hud.hint(!!currentUse);
+    inventory?.update(dt, clocksRun());
+    currentUse = canAct() && !inventory?.isOpen ? world.usable(me) : null;
+    hud.hint(!!currentUse);                               // (only ever the [E]: what a thing is, is for looking at it to say)
 
     // the camcorder copes with the dark: more gain (and more noise), then its little lamp
     const here = world.current();
     const lvl = here ? here.level * here.u.dim.value : 0.3;
     light += (lvl - light) * (1 - Math.exp(-2.2 * dt));
     u.uGain.value = clamp(Math.pow(0.3 / Math.max(light, 0.04), 0.55), 0.9, 2.3);
-    const wantTorch = light < 0.11 && !here?.noTorch ? 1 : 0;
+    // …which with pockets is a weak one, enough not to walk into the furniture: a torch in the hand is the light, and
+    // it works wherever its owner switches it on
+    const lamp = light < 0.11 && !here?.noTorch ? 1 : 0;
+    const wantTorch = inventory ? Math.max(inventory.torchPower(), lamp * OWN_LAMP) : lamp;
     torch += (wantTorch - torch) * (1 - Math.exp(-3 * dt));
     cur.kit.shared.uTorch.value = torch * 1.5;
     hud.flag('LIGHT', torch > 0.5);
@@ -362,7 +418,7 @@ async function visit(office, opt) {
     } else if (state === 'ending') {
       ending += dt;
       const k = clamp(ending / END[reason], 0, 1);
-      if (reason === 'quit') u.uBlack.value = k;
+      if (reason === 'quit' || reason === 'battery') u.uBlack.value = k;
       else if (reason === 'exit') u.uWhite.value = k * k;
       else { u.uSnow.value = clamp((k - 0.42) / 0.45, 0, 1); if (k > 0.45) u.uRoll.value += dt * (0.4 + k * 2.5); interference = Math.max(interference, 0.5 + 0.5 * k); }   // a look at what got you, then snow
       if (k >= 1) conclude();
@@ -387,6 +443,8 @@ async function visit(office, opt) {
     const health = cur?.env?.health?.read?.();
     if (health) tally.hearts = { left: health.current, of: health.max };
     off();
+    inventory?.dispose();
+    survival?.dispose();
     input.dispose();
     hud.remove(); sound.stop();
     letGo(cur); cur = null;
@@ -412,10 +470,13 @@ async function visit(office, opt) {
   function finish(why, how) {
     if (state === 'done' || state === 'ending' || state === 'through' || pendingQuit) return;
     reason = why; ending = 0;
+    inventory?.close();
     hud.hint(false);
-    if (why === 'exit' && purse) kept = purse.bank();              // carried is only kept by leaving by the way out
-    if (why === 'exit') kept.batteries = Math.max(0, Math.floor(cur?.env?.inventory?.count?.('battery') ?? 0));       // (spare ones are what the office pays for: core/game.mjs)
+    // carried is only kept by leaving by the way out: the card and the tapes (loot.js), and the spare battery packs in
+    // your pockets, which are what the office pays for (core/game.mjs)
+    if (why === 'exit') kept = { ...kept, ...purse?.bank(), batteries: inventory?.count('battery') ?? 0 };
     if (why === 'caught') sound.play('static', { dur: 1.3 });
+    if (why === 'battery') { hud.flag('BATTERY', true); sound.play('static', { dur: .25, vol: .4 }); }
     if (state === 'loading' || !cur) pendingQuit = true;
     else if (why === 'exit' && how && cur.player) {
       const me = cur.player.me;
@@ -445,7 +506,7 @@ async function visit(office, opt) {
   const handle = {
     vhs, hud, plan: () => plan, deck: DECK.map((a) => a.id),
     get level() { return cur?.level; }, get world() { return cur?.world; }, get player() { return cur?.player; }, get env() { return cur?.env; },
-    get state() { return state; }, loot: purse,
+    get state() { return state; }, loot: purse, inventory, health: survival?.health, camera: survival?.camera, survival,
     sketch: () => (cur ? sketch(cur.level) : ''),
     /** Stand in a room: by archetype id or room number; x, z in the room's own frame (default: just inside its door). */
     goto(which, x, z, yaw, pitch = 0) {
@@ -467,7 +528,7 @@ async function visit(office, opt) {
     /** On down into the next part now, wherever you are standing. */
     descend: () => descend(true, null),
     /** The part below, if it is built yet (and where it hangs). */
-    get ahead() { return ahead?.f ? { level: ahead.f.level, world: ahead.f.world, at: ahead.f.world.scene.position } : null; },
+    get ahead() { return ahead?.f ? { level: ahead.f.level, world: ahead.f.world, env: ahead.f.env, at: ahead.f.world.scene.position } : null; },
     root,
     finish: (why) => finish(why),
   };

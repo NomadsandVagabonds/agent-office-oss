@@ -7,10 +7,11 @@
 // low on the left is a thumb stick, any other finger looks.
 
 /**
- * @param {{ canvas, stage, hud, sound, key(k), use(), quit(), click(), wheel(step) }} o
+ * @param {{ canvas, stage, hud, sound, key(k), use(), quit(), click(), wheel(step), owns(target)?, interceptKey(event)?, blocked()? }} o
  *        key: a key went down (once, not on repeat) · use: E, Enter, or a tap on the [E] · click: the mouse button, while it is looking
- *        wheel: ±1 for each notch
- * @returns {{ state: {keys:Set, dx:number, dy:number, stick:{x:number,y:number}}, dispose() }}
+ *        wheel: ±1 for each notch · owns: native UI events pass through to their target
+ *        interceptKey: UI consumed this key · blocked: UI owns the hands, while the visit keeps running
+ * @returns {{ state: {keys:Set, dx:number, dy:number, stick:{x:number,y:number}}, clear(), dispose() }}
  */
 export function createInput(o) {
   const { canvas, stage, hud, sound } = o;
@@ -18,12 +19,23 @@ export function createInput(o) {
   const keys = state.keys;
   let dragging = false, stickId = null, stickAt = null, wheel = 0, live = true, press = null;
   const looks = new Map();
+  const owns = e => !!o.owns?.(e.target);
+  const blocked = () => !!o.blocked?.();
+  function clear() {
+    keys.clear(); state.dx = state.dy = 0; state.stick.x = state.stick.y = 0;
+    dragging = false; stickId = null; stickAt = null; press = null; wheel = 0; looks.clear();
+  }
 
   const onKeyDown = (e) => {
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
-    e.stopPropagation();
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-    if (e.metaKey || e.ctrlKey || e.altKey || /^F\d+$/.test(k)) return;      // the browser's own shortcuts stay the browser's
+    if (e.metaKey || e.ctrlKey || e.altKey || /^F\d+$/.test(k)) { if (!owns(e)) e.stopPropagation(); return; }
+    if (o.interceptKey?.(e)) { e.stopPropagation(); e.preventDefault(); sound.start(); return; }
+    // Enter and Space must reach an owned button's native activation behavior.
+    // The UI stops their bubbling locally after its own handlers have run.
+    if (owns(e)) return;
+    e.stopPropagation();
+    if (blocked()) { e.preventDefault(); clear(); return; }
     e.preventDefault();
     sound.start();
     if (e.repeat) return;
@@ -32,12 +44,18 @@ export function createInput(o) {
     else if (k === 'e' || k === 'Enter') o.use();
     else o.key(k);
   };
-  const onKeyUp = (e) => { e.stopPropagation(); keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key); if (e.key === 'Shift') keys.delete('Shift'); };
+  const onKeyUp = (e) => {
+    keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key);
+    if (e.key === 'Shift') keys.delete('Shift');
+    if (!owns(e)) e.stopPropagation();
+  };
   const onPointerDown = (e) => {
-    e.stopPropagation();
     sound.start();
+    if (e.pointerType === 'touch') hud.setTouch(true);
+    if (owns(e)) { clear(); return; }
+    e.stopPropagation();
+    if (blocked()) { clear(); return; }
     if (e.pointerType === 'touch') {
-      hud.setTouch(true);
       if (e.target === hud.leave) { o.quit(); return; }
       if (e.target === hud.use) { o.use(); return; }
       if (hud.owns?.(e.target)) { hud.tap?.(e.target); return; }                // something of the camcorder's own that can be touched
@@ -51,10 +69,19 @@ export function createInput(o) {
     if (document.pointerLockElement === canvas) { if (e.button === 0) o.click(); press = null; }
     else press = e.button === 0 ? { x: e.clientX, y: e.clientY, t: performance.now(), first: !press } : null;
     dragging = true;
-    if (live && document.pointerLockElement !== canvas) { try { canvas.requestPointerLock?.()?.catch?.(() => {}); } catch { /* no pointer lock: arrows still turn */ } }
+    if (live && document.pointerLockElement !== canvas) {
+      const ownerDocument = canvas.ownerDocument || document;
+      try {
+        canvas.requestPointerLock?.()?.then?.(() => {
+          if ((!live || blocked()) && ownerDocument.pointerLockElement === canvas) ownerDocument.exitPointerLock?.();
+        })?.catch?.(() => {});
+      } catch { /* no pointer lock: arrows still turn */ }
+    }
   };
   const onPointerMove = (e) => {
+    if (owns(e)) return;
     e.stopPropagation();
+    if (blocked()) { clear(); return; }
     if (e.pointerType !== 'touch') return;
     if (e.pointerId === stickId) {
       const reach = Math.max(46, Math.min(stage.size.w, stage.size.h) * 0.11), dx = (e.clientX - stickAt.x) / reach, dy = (e.clientY - stickAt.y) / reach, len = Math.max(1, Math.hypot(dx, dy));
@@ -66,37 +93,50 @@ export function createInput(o) {
     }
   };
   const onPointerUp = (e) => {
-    e.stopPropagation();
-    if (e.pointerType !== 'touch' && press && document.pointerLockElement !== canvas && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 5 && performance.now() - press.t < 320) o.click();
+    const pendingPress = press; press = null;
     dragging = false;
-    if (e.pointerId === stickId) { stickId = null; state.stick.x = 0; state.stick.y = 0; }
+    if (e.pointerId === stickId) { stickId = null; stickAt = null; state.stick.x = 0; state.stick.y = 0; }
     looks.delete(e.pointerId);
+    // A finger released over a UI button must still release its old thumb stick.
+    if (owns(e)) return;
+    e.stopPropagation();
+    if (blocked()) { clear(); return; }
+    if (e.type !== 'pointercancel' && e.pointerType !== 'touch' && pendingPress && document.pointerLockElement !== canvas && Math.hypot(e.clientX - pendingPress.x, e.clientY - pendingPress.y) < 5 && performance.now() - pendingPress.t < 320) o.click();
   };
   const onMouseMove = (e) => {
+    if (owns(e)) return;
     e.stopPropagation();
+    if (blocked()) { clear(); return; }
     if (document.pointerLockElement !== canvas && !dragging) return;
     state.dx += e.movementX || 0; state.dy += e.movementY || 0;
   };
   const onWheel = (e) => {
+    if (owns(e)) return; // Native inspection scrolling; its own root stops bubbling.
     e.stopPropagation(); e.preventDefault();
+    if (blocked()) { clear(); return; }
     // a notch is a notch, whatever the mouse calls it; a trackpad's dribble adds up to one
     wheel += e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
     while (Math.abs(wheel) >= 40) { const step = Math.sign(wheel); wheel -= step * 40; o.wheel(step); }
   };
-  const swallow = (e) => { e.stopPropagation(); if (e.type === 'contextmenu' || e.type === 'touchmove') e.preventDefault(); };
-  const onBlur = () => { keys.clear(); dragging = false; stickId = null; looks.clear(); state.stick.x = 0; state.stick.y = 0; };
+  const swallow = (e) => { if (owns(e)) return; e.stopPropagation(); if (e.type === 'contextmenu' || e.type === 'touchmove') e.preventDefault(); };
+  const onPointerLockChange = () => {
+    if (document.pointerLockElement !== canvas) clear();
+    else if (blocked()) { clear(); document.exitPointerLock?.(); } // A pending lock request finished after the bag opened.
+  };
   const listeners = [['keydown', onKeyDown], ['keyup', onKeyUp], ['pointerdown', onPointerDown], ['pointerup', onPointerUp], ['pointercancel', onPointerUp],
     ['mousemove', onMouseMove], ['pointermove', onPointerMove], ['wheel', onWheel], ['click', swallow], ['dblclick', swallow], ['contextmenu', swallow], ['touchstart', swallow], ['touchmove', swallow]];
   for (const [type, fn] of listeners) window.addEventListener(type, fn, { capture: true, passive: false });
-  window.addEventListener('blur', onBlur);
+  window.addEventListener('blur', clear);
+  document.addEventListener('pointerlockchange', onPointerLockChange);
   if (window.matchMedia?.('(pointer: coarse)').matches) hud.setTouch(true);
 
   return {
-    state,
+    state, clear,
     dispose() {
-      live = false;
+      live = false; clear();
       for (const [type, fn] of listeners) window.removeEventListener(type, fn, true);
-      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('blur', clear);
+      document.removeEventListener('pointerlockchange', onPointerLockChange);
       if (document.pointerLockElement === canvas) document.exitPointerLock?.();
     },
   };
