@@ -11,6 +11,8 @@ import { THEMES, THEME_IDS } from '../public/world/backrooms/themes.js';
 import { WAYS, GAP, goesDown, dropOf, hangBelow, flight, holeIn, ledgeAt, ductIn } from '../public/world/backrooms/seam.js';
 import { AWAY, settled, unsure } from '../public/world/backrooms/rooms/unsure-hall/rule.js';
 import { HALL, HAND, PART_ROOMS } from '../public/world/backrooms/plan.js';
+import { createTally } from '../public/world/backrooms/tally.js';
+import { cleanRun } from '../core/runs.mjs';
 import { leaving, LEAVE } from '../public/world/backrooms/leaving.js';
 
 const office = {
@@ -648,4 +650,30 @@ test('the visit\'s hand: a visit shows 40–70% of the deck, in an order of its 
   assert.equal(orders.size, SEEDS.length, 'no two visits have the same rooms in the same order');
   // every room in the deck gets its turn, and none is in every visit
   for (const a of DECK) { const n = shown.get(a.id) || 0; assert.ok(n > 0, `${a.id} is never dealt`); assert.ok(n < SEEDS.length, `${a.id} is in every visit`); }
+});
+
+test('what a visit came to: time in play, parts reached, rooms walked into, who was met — in the shape the card is filled in from', () => {
+  const t = createTally({ seed: 'visit-9', of: 4 });
+  // only time in play is on the clock
+  for (let i = 0; i < 300; i++) t.tick(0.1, true);
+  for (let i = 0; i < 50; i++) t.tick(0.1, false);
+  // a part is counted when it is let go, once, however often it is asked about
+  const first = { rooms: [{ visits: 3, def: { kind: 'start' } }, { visits: 1, def: { kind: 'plain' } }, { visits: 0, def: { kind: 'plain' } }, { visits: 2, def: { kind: 'special', arch: 'cutouts' } }, { visits: 1, def: { kind: 'exit' } }] };
+  t.part(first); t.part(first); t.way();
+  const second = { rooms: [{ visits: 1, def: { kind: 'start' } }, { visits: 1, def: { kind: 'special', arch: 'vending' } }, { visits: 4, def: { kind: 'special', arch: 'cutouts' } }, { def: { kind: 'plain' } }] };
+  t.met('pirate'); t.met('pirate'); t.survived('shadow'); t.survived('pirate'); t.met(''); t.met(7);
+  t.part(second); t.part(null);
+  const run = t.report({ left: 2, of: 3 });
+  assert.deepEqual(run, { seed: 'visit-9', seconds: 30, parts: { reached: 2, of: 4 }, rooms: { explored: 7, kinds: ['cutouts', 'vending'] }, cast: { met: ['pirate', 'shadow'], survived: 2 }, hearts: { left: 2, of: 3 } });
+  assert.equal(JSON.stringify(run), JSON.stringify(t.report({ left: 2, of: 3 })), 'plain data, and the same each time it is asked for');
+  assert.equal('hearts' in t.report(), false, 'no health this visit, no line for it');
+  // it is what the office's rules expect: nothing in it is cut or changed by them
+  for (const reason of ['exit', 'caught', 'quit', 'battery']) {
+    const clean = cleanRun({ ...run, reason });
+    for (const k of ['seed', 'seconds', 'parts', 'rooms', 'cast', 'hearts']) assert.deepEqual(clean[k], run[k], `${reason}: ${k}`);
+  }
+  // however many ways down the conductor reports, nobody reaches more parts than there are
+  const far = createTally({ seed: 1, of: 3 }); for (let i = 0; i < 9; i++) far.way();
+  assert.deepEqual(far.report().parts, { reached: 3, of: 3 });
+  assert.equal(far.report().seed, '1');
 });
