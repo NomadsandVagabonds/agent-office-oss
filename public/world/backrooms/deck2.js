@@ -3,7 +3,7 @@
 // walls that may take one more doorway, how the ceiling behaves, and `roll`,
 // which decides everything the builder (rooms5.js onward) needs to know.
 //
-// What an entry here may carry that the first deck never did (WORLD.md, "Adding a room", has every field):
+// What an entry here may carry that the first deck never did (docs/BACKROOMS.md, "Adding a room", has every field):
 //   module   './rooms/<id>.js' — the file its builder is in (`export function build(c)`), fetched the first time a
 //            floor has the room on it. A room is then its own files and one line here.
 //   stash    (room, ±1) → [x0, z0, x1, z1]: where a tape may hang, in the room's own frame (see STASH in gen.js)

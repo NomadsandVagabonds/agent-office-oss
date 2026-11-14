@@ -151,7 +151,7 @@ const SUBROOMS = [['{P}', '{P} (SUBCOMMITTEE)', 'TASK FORCE'], ['MEETING ROOM 1'
 const CHAIR_COLORS = ['#4a7a6a', '#b5483f', '#3f7f9a', '#8a5a8f', '#c9893f', '#5a5a66', '#6f8a4a'];
 
 const DECK1 = [
-  { id: 'cutouts', name: 'The Standees', landmark: 'the cardboard people', w: [7, 10], d: [7, 10], ports: ['back', 'left', 'right'], weight: 2.2, lights: 'normal',
+  { id: 'cutouts', name: 'The Standees', landmark: 'the cardboard people', w: [7, 10], d: [7, 10], ports: ['back', 'left', 'right'], weight: 2.2, lights: 'normal', teaches: 'unwatched',
     roll: (R, o) => ({ count: R.int(4, 7), who: R.shuffle(o.agents.map((_, i) => i)), formation: R.pick(['scatter', 'scatter', 'queue', 'ring', 'wall', 'crowd']),
       follower: R.chance(0.4), self: R.chance(0.35), boxes: R.int(1, 3), papers: R.int(4, 10) }) },
   { id: 'ceiling-meeting', name: 'Standing Meeting', landmark: 'the meeting on the ceiling', w: [7, 9], d: [6, 8], ports: ['back', 'left', 'right'], weight: 1.4, lights: 'normal',
@@ -186,6 +186,7 @@ const DECK1 = [
     roll: (R, o) => { const n = R.int(6, 10); const month = R.pick(ODD_MONTHS);
       return { month, frames: Array.from({ length: n }, (_, i) => ({ who: i % Math.max(1, o.agents.length), plate: R.pick(PLATES) })), order: R.shuffle(o.agents.map((_, i) => i)), last: R.pick(['empty', 'you', 'mirror']), wood: R.pick(['#6a4a2a', '#2b2b33', '#b89a5a']) }; } },
   { id: 'kanban', name: 'The Board', landmark: 'the board with one card', w: [8, 10], d: [6, 7], ports: ['left', 'right'], weight: 1.3, lights: 'normal',
+    module: './rooms/kanban.js', stash: (r) => [-r.W / 2 + 1.2, -r.D / 2 + 0.7, -0.6, -r.D / 2 + 1.25],            // under the board, with the cards that fell off it
     roll: (R, o) => ({ text: o.tasks.length && R.chance(0.6) ? R.pick(o.tasks) : fill(R.pick(KANBAN), o, R), cols: R.pick(KANBAN_COLS), cards: R.int(44, 70), spill: R.int(14, 34), notes: R.some(['#f2d45c', '#f29a8c', '#9fd6a0', '#9cc4ea', '#e6b0e0'], R.int(1, 3)) }) },
   { id: 'lift', name: 'Going Up', landmark: 'the lift', w: [5, 7], d: [4, 5], ports: [], weight: 1.2, lights: 'normal',
     roll: (R, o) => ({ sign: R.pick(LIFT_SIGNS), floors: R.shuffle(FLOORS).slice(0, 7), behind: R.shuffle(['bricks', 'bricks', 'cutout', 'poster', 'bricks']), who: R.int(0, Math.max(0, o.agents.length - 1)), doors: R.pick(['#8d949c', '#b0a58a', '#7a8a9a']) }) },
@@ -205,6 +206,16 @@ export const ARCHETYPES = Object.fromEntries(DECK.map((a) => [a.id, a]));
 // room is the first place to learn (`teaches`: one thing, at most) and what it takes for granted (`needs`); the visit's
 // plan (plan.js) keeps count of what the floors above have taught, and a room is only dealt where all it needs is known.
 const list = (v) => (v === undefined || v === null ? [] : [].concat(v));
+/**
+ * What there is to learn down here so far, by id. A room that is the first place to learn one says so (`teaches`), and a
+ * room that takes one for granted says that (`needs`). A new lesson is a line here, and a room that teaches it.
+ */
+export const LESSONS = Object.freeze({
+  lean: 'a stretch of wall that somebody has marked may give, if it is leaned on for as long as it takes (known from the start: it is how you got in)',
+  unwatched: 'some things only move while nobody is looking at them',
+});
+/** Is this archetype a set piece — a room with a view (`halo`), or one that says so (`big`)? A floor has one at most. */
+export const isBig = (arch) => !!(arch && (arch.big || arch.halo));
 /** What a room of this archetype teaches, and what it needs to have been taught already: lists of lesson ids. */
 export const lessons = (arch) => ({ teaches: list(arch && arch.teaches), needs: list(arch && arch.needs) });
 /** May this archetype be dealt to somebody who knows `known` (a Set of lesson ids; null: a floor asked for by itself, where anything goes)? */
@@ -431,7 +442,7 @@ function build(R, o, opt) {
   }
   for (const arch of deck) {
     if (specials.length >= want) break;
-    if (arch.halo && specials.some((r) => r.halo)) continue;                 // one room with a view to a floor: it is the landmark
+    if (isBig(arch) && specials.some((r) => isBig(ARCHETYPES[r.arch]))) continue;      // one set piece to a floor — a room with a view, or one that says it is `big`: it is the landmark
     const room = placeSpecial(arch, specials.length === 0);
     if (room) specials.push(room);
   }
@@ -889,7 +900,6 @@ const STASH1 = {
     : about(s * (r.W / 2 - 0.95), -r.D / 2 + 0.95, 0.2)),                                       // (a ring) outside it, in a far corner
   'wet-floor': (r) => about(r.params.puddle[0] * r.W, r.params.puddle[1] * r.D, 0.25),          // in the one wet patch
   'hall-of-fame': (r) => (r.doors.some((d) => d.side === 'back') ? [-0.3, -r.D / 2 + 3.2, 0.3, -r.D / 2 + 4.4] : [-0.3, -r.D / 2 + 1.6, 0.3, -r.D / 2 + 2.6]),   // the far end, by the last frame
-  kanban: (r) => [-r.W / 2 + 1.2, -r.D / 2 + 0.7, -0.6, -r.D / 2 + 1.25],                       // under the board, with the cards that fell off it
   lift: (r) => [-0.3, -r.D / 2 + 0.75, 0.3, -r.D / 2 + 1],                                      // on the mat, waiting for the lift
   museum: (r, s) => (s > 0 ? [2.1, 2.35, r.W / 2 - 0.7, r.D / 2 - 0.7] : [-r.W / 2 + 0.7, 2.35, -2.1, r.D / 2 - 0.7]),   // a corner by the door: behind you while you look at the exhibits
   photo: (r) => about(0, -r.D / 2 + 1.3, 0.08),                                                 // on the cross of tape: your place in the photograph

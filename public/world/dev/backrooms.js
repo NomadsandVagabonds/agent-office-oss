@@ -9,6 +9,8 @@
 //   &pursuer=1|0       force the thing that follows you in or out; &wake=1 has it already awake, in the room with you
 //   &name=Robin        who you are                               &live=1     borrow names from the running office (GET only)
 //   &list=1            print the deck with links                 &map=1      show the floor plan
+//   &check=1           once the floor is up, one line on the console that a script can read — `[check] {…}`: for every oddity on it, how
+//                      long it took to build, what it put down (meshes, triangles, solids, lights…), and everything the level warned about
 //   &loot=1            something to find: the keycard (in the mascot's hand) and coins 1–4; &loot=card,1,3 for some of it. There is no
 //                      office here to keep count, so a stand-in does, in this page's memory, and says so on the console: what you leave
 //                      by the door with is gone the next visit (any key), everything else is down there again. Without it: no loot.
@@ -18,6 +20,25 @@
 // Nothing on screen says how to play, on purpose: WASD/arrows, mouse, Shift (hurry), Space (hop), C (crouch, held), E, V (picture), M (sound), Esc.
 import { createStage } from '../engine/stage.js';
 import { enterBackrooms } from '../backrooms/index.js';
+
+// &check=1: listen from the start, so that nothing said while the floor was being built is missed
+const said = [];
+if (new URLSearchParams(location.search).get('check')) {
+  const warn = console.warn.bind(console);
+  console.warn = (...args) => { said.push(args.map((a) => (a && a.message) || String(a)).join(' ').slice(0, 300)); warn(...args); };
+}
+/** What a floor's oddities cost and contain, for whoever is checking a room they wrote. */
+function check(handle) {
+  const { world, level } = handle;
+  const rooms = world.rooms.filter((rt) => rt.def.kind === 'special').map((rt) => {
+    let meshes = 0, triangles = 0;
+    rt.group.traverse((o) => { if (!o.isMesh || !o.geometry) return; meshes++; const g = o.geometry; triangles += Math.round((g.index ? g.index.count : g.attributes.position ? g.attributes.position.count : 0) / 3); });
+    const timing = world.timing.find(([what]) => what === `${rt.def.arch}#${rt.id}`) || [];
+    return { arch: rt.def.arch, room: rt.id, size: [rt.def.W, rt.def.D, rt.def.H], buildMs: timing[1], bakeMs: timing[2], meshes, triangles,
+      solids: rt.colliders.length, lights: rt.lights.length, uses: rt.uses.length, zones: rt.zones.length, ticks: rt.ticks.length };
+  });
+  return { seed: String(level.seed), floor: level.depth, rooms, said };
+}
 import { DECK } from '../backrooms/gen.js';
 
 const q = new URLSearchParams(location.search);
@@ -87,6 +108,7 @@ async function go() {
       if (q.get('wake')) handle.env.pursuer?.wake?.(true);
       if (q.get('map')) dev.textContent = handle.sketch();
       console.log(handle.sketch());
+      if (q.get('check')) console.log('[check] ' + JSON.stringify(check(handle)));
       document.title = 'ready';
     },
   });

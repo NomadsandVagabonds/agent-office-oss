@@ -183,6 +183,9 @@ rubber duck is sitting.
   Old clients ignore kinds they do not know.
 - **A new room**: add it in `buildLayout`. Keep the function pure and
   deterministic — both sides must agree on every wall.
+- **What is under the office**: it has a guide of its own for whoever adds
+  rooms to it, `docs/BACKROOMS.md`. That file gives the place away, so find
+  the place first.
 
 ## 8. Levels — where the lift goes
 
