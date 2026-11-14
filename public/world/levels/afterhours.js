@@ -17,7 +17,7 @@ export async function enter(office) {
   });
   const { camera, scene, root } = w;
   camera.near = 0.05; camera.far = 90; camera.updateProjectionMatrix();
-  w.light({ sky: '#a5c1d3', ground: '#4d443b', hemi: 1.15, sun: '#a4bccc', power: 0.8, dir: [-0.6, 1, 0.4] });
+  w.light({ sky: '#a7aacb', ground: '#69513d', hemi: 1.2, sun: '#b0bad2', power: 0.65, dir: [-0.6, 1, 0.4] });
   w.bed('office-bed', { volume: 0.1 });
   let game = createGame(), yaw = game.yaw, pitch = 0.05;
   let paused = false, closing = false, locked = false, lockDenied = false, lockPending = false;
@@ -40,20 +40,26 @@ export async function enter(office) {
   const hand = new THREE.Group(); camera.add(hand);
   const tool = w.vox(crowbar, 0, 0, 'S', { cast: false, receive: false }); hand.add(tool); tool.scale.setScalar(0.76);
   const glove = w.vox(gloveHand, 0, 0, 'S', { cast: false, receive: false }); hand.add(glove); glove.scale.setScalar(0.74);
-  const wrist = new THREE.Group(); camera.add(wrist); wrist.position.set(-0.33, -0.31, -0.61); wrist.rotation.set(-0.1, 0.16, 0.06);
+  const wrist = new THREE.Group(); camera.add(wrist); wrist.position.set(-0.4, -0.36, -0.66); wrist.rotation.set(-0.1, 0.16, 0.06); wrist.scale.setScalar(.74);
   const casing = w.box(-0.18, -0.09, -0.025, 0.18, 0.09, 0.025, '#293d43', { cast: false }); wrist.add(casing); casing.position.set(0, 0, 0);
   const vitals = w.screen(0.33, 0.16, (g, W, H) => {
     g.fillStyle = '#102027'; g.fillRect(0, 0, W, H);
-    g.fillStyle = game.health <= 40 ? '#ffb85b' : '#b5e4cf'; g.font = `bold ${H * 0.25}px monospace`;
-    g.fillText(`HEALTH ${String(game.health).padStart(3, '0')}`, W * 0.06, H * 0.29);
-    for (let i = 0; i < 10; i++) { g.fillStyle = game.health > i * 10 ? '#a4d7c1' : '#294047'; g.fillRect(W * (0.06 + i * 0.087), H * 0.38, W * 0.066, H * 0.11); }
-    g.fillStyle = '#e4d6ae'; g.font = `${H * 0.145}px monospace`;
-    const remaining = game.enemies.filter(e => e.room === 'servers' && e.state !== 'dead').length;
-    const line = game.stage === 'dead' ? 'DOWN · R: CHECKPOINT' : game.stage === 'won' ? 'CONTAINED · E: LOBBY' : paused ? 'PAUSED · CLICK / P' : game.power ? 'RETURN TO THE LIFT' : game.hasFuse ? remaining ? `PRODUCTION: ${remaining} HOSTILES` : 'RESTORE SERVER POWER' : 'FIND MAINTENANCE FUSE';
-    g.fillText(line, W * 0.06, H * 0.7);
-    g.fillStyle = '#82a7ac'; g.font = `${H * 0.12}px monospace`;
-    const near = interactable(game);
-    g.fillText(near ? `E: ${near.label.toUpperCase()}` : `${game.hasFuse ? 'FUSE READY' : 'FUSE MISSING'} · ${game.kills} CLEARED`, W * 0.06, H * 0.91, W * 0.88);
+    g.fillStyle = game.health <= 40 ? '#ffb85b' : '#b5e4cf';
+    g.fillRect(W * .07, H * .19, W * .075, H * .07); g.fillRect(W * .095, H * .14, W * .025, H * .17);
+    g.font = `bold ${H * .36}px monospace`; g.fillText(String(game.health).padStart(3, '0'), W * .19, H * .38);
+    for (let i = 0; i < 10; i++) { g.fillStyle = game.health > i * 10 ? '#a4d7c1' : '#294047'; g.fillRect(W * (.07 + i * .087), H * .46, W * .066, H * .08); }
+    // Equipment indicators replace mission prose: fuse, power, extraction.
+    const near = interactable(game), icon = (x, lit, nearby, draw) => {
+      g.save(); g.translate(W * x, H * .75); g.scale(H * .18, H * .18);
+      g.strokeStyle = g.fillStyle = lit ? '#b5e4cf' : nearby ? '#e4c078' : '#527078'; g.lineWidth = .13; draw(); g.restore();
+    };
+    icon(.19, game.hasFuse, near?.kind === 'fuse', () => { g.strokeRect(-.4, -.55, .8, 1.1); g.fillRect(-.4, -.7, .8, .18); g.fillRect(-.4, .52, .8, .18); });
+    icon(.48, game.power, near?.kind === 'panel', () => { g.beginPath(); g.moveTo(.12, -.7); g.lineTo(-.42, .08); g.lineTo(.02, .08); g.lineTo(-.12, .7); g.lineTo(.45, -.13); g.lineTo(0, -.13); g.closePath(); g.fill(); });
+    icon(.78, game.stage === 'won', game.power, () => { g.strokeRect(-.4, -.6, .8, 1.2); g.fillRect(.16, -.02, .12, .12); });
+    if (paused || game.stage !== 'playing') {
+      g.fillStyle = '#e4d6ae'; g.font = `${H * .22}px monospace`;
+      g.fillText(game.stage === 'dead' ? 'R ↻' : game.stage === 'won' ? 'E ↗' : 'Ⅱ', W * .67, H * .34);
+    }
   }, { ppm: 1000, gain: 0.9 });
   wrist.add(vitals.mesh); vitals.mesh.position.set(0, 0, 0.027);
   const lamp = new THREE.SpotLight('#e5e3c8', 10, 17, Math.PI / 6.5, 0.65, 1.2);
@@ -63,12 +69,14 @@ export async function enter(office) {
   const chipGeo = w.own(new THREE.BoxGeometry(0.07, 0.07, 0.07));
   const chipMats = ['#b5a57b', '#716044', '#c7c1a1'].map(color => w.own(new THREE.MeshLambertMaterial({ color })));
   function burst(event) {
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < (event.killed ? 8 : 3); i++) {
       const m = new THREE.Mesh(chipGeo, chipMats[i % chipMats.length]);
       m.position.set(event.x || 0, (event.y || 0) + 0.25, event.z || 0); scene.add(m);
       const a = i * 2.39996; particles.push({ m, vx: Math.sin(a) * 1.5, vz: Math.cos(a) * 1.5, vy: 1.2 + (i % 3) * 0.35, life: 0.55 });
     }
   }
+  const scarGeo = w.own(new THREE.BoxGeometry(.12, .018, .026));
+  const scarMat = w.own(new THREE.MeshLambertMaterial({ color: '#614837' }));
   function creature(enemy) {
     const node = new THREE.Group(); scene.add(node);
     const body = w.vox(headcrabBody, 0, 0, 'S'); node.add(body);
@@ -77,7 +85,11 @@ export async function enter(office) {
       const limb = w.vox(() => headcrabLeg({ side: j.side, front: j.front }), 0, 0, 'S'); joint.add(limb);
       return { joint, side: j.side, front: j.front };
     });
-    const result = { node, body, legs }; creatures.set(enemy.id, result); return result;
+    const scar = new THREE.Group(); body.add(scar);
+    for (const [x, z, angle] of [[-.04, -.035, -.45], [.035, -.01, .55]]) {
+      const chip = new THREE.Mesh(scarGeo, scarMat); chip.position.set(x, .444, z); chip.rotation.y = angle; scar.add(chip);
+    }
+    const result = { node, body, legs, scar }; creatures.set(enemy.id, result); return result;
   }
 
   const modal = () => !!root.querySelector('.liftpanel, .arcade, [data-modal]');
@@ -176,7 +188,7 @@ export async function enter(office) {
       if (held.has('ArrowLeft')) yaw += dt * 1.7;
       if (held.has('ArrowRight')) yaw -= dt * 1.7;
       for (const event of game !== previous ? game.events : []) {
-        if (event.type === 'hit') { hitUntil = game.time + 0.14; burst(event); w.sfx('squash', { volume: 0.28 }); }
+        if (event.type === 'hit') { hitUntil = game.time + 0.14; burst(event); w.sfx(event.killed ? 'squash' : 'sticky', { volume: event.killed ? .28 : .24 }); }
         else if (event.type === 'hurt') { hurtUntil = game.time + 0.28; w.sfx('sticky', { volume: 0.4 }); }
         else if (event.type === 'windup') w.sfx('printer-jam', { volume: 0.1 });
         else if (event.type === 'swing') w.sfx('sticky', { volume: 0.1 });
@@ -206,11 +218,13 @@ export async function enter(office) {
       const c = creatures.get(enemy.id) || creature(enemy); c.node.visible = enemy.state !== 'dead';
       if (!c.node.visible) continue;
       c.node.position.set(enemy.x, enemy.y, enemy.z); c.node.rotation.y = enemy.heading || 0;
-      const windup = enemy.state === 'windup', airborne = enemy.state === 'leap';
-      c.body.position.y = windup ? -0.11 : 0; c.body.rotation.x = airborne ? -0.2 : windup ? 0.12 : 0;
+      const windup = enemy.state === 'windup', recoiling = enemy.state === 'knockback', airborne = enemy.state === 'leap';
+      c.scar.visible = enemy.health === 1;
+      c.body.position.y = windup ? -0.11 : 0; c.body.rotation.x = recoiling ? -.48 : airborne ? -0.2 : windup ? 0.12 : 0;
+      c.body.rotation.z = recoiling ? Math.sin(game.time * 24) * .09 : 0;
       for (const leg of c.legs) {
-        leg.joint.rotation.z = leg.side * (windup ? 0.42 : airborne ? -0.38 : Math.sin(game.time * 11 + (leg.front ? 0 : Math.PI)) * 0.13);
-        leg.joint.rotation.x = airborne ? (leg.front ? -0.65 : 0.5) : 0;
+        leg.joint.rotation.z = leg.side * (windup ? 0.42 : recoiling ? -.62 : airborne ? -0.38 : Math.sin(game.time * 13.2 + (leg.front ? 0 : Math.PI)) * 0.13);
+        leg.joint.rotation.x = recoiling ? (leg.front ? -.9 : -.25) : airborne ? (leg.front ? -0.65 : 0.5) : 0;
       }
     }
     for (let i = particles.length - 1; i >= 0; i--) {

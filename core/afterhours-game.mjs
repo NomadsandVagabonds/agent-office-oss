@@ -30,16 +30,34 @@ export const LEVEL = Object.freeze({
     wall('shortcut', -1.2, -2.1, 1.2, -1.9, { gate: true, kind: 'shutter' }),
   ]),
   obstacles: freeze([
+    { id: 'reception-desk', kind: 'desk', x0: -4.35, x1: -1.9, z0: 9.2, z1: 10.2, h: .86 },
+    { id: 'reception-chair', kind: 'chair', x0: -3.45, x1: -2.75, z0: 10.4, z1: 11.1, h: .9 },
+    { id: 'reception-books', kind: 'bookshelf', x0: -4.7, x1: -2.05, z0: 13.2, z1: 13.75, h: 1.8 },
+    { id: 'lobby-sofa', kind: 'sofa', x0: 2.35, x1: 4.35, z0: 10.5, z1: 11.4, h: .9 },
+    { id: 'lobby-plant', kind: 'plant', x0: 3.8, x1: 4.55, z0: 12.4, z1: 13.2, h: 1.4 },
+    { id: 'lobby-table', kind: 'cafetable', x0: 2.5, x1: 3.7, z0: 11.9, z1: 12.7, h: .5 },
     { id: 'desk-a', kind: 'desk', x0: -7.8, x1: -5.6, z0: 4.1, z1: 5.2, h: .86 },
     { id: 'desk-b', kind: 'desk', x0: -3.7, x1: -1.5, z0: 4.1, z1: 5.2, h: .86 },
     { id: 'desk-c', kind: 'desk', x0: -7.8, x1: -5.6, z0: .1, z1: 1.2, h: .86 },
     { id: 'desk-d', kind: 'desk', x0: -3.7, x1: -1.5, z0: .1, z1: 1.2, h: .86 },
+    { id: 'desk-a-chair', kind: 'chair', x0: -7.05, x1: -6.35, z0: 3.2, z1: 3.9, h: .9 },
+    { id: 'desk-b-chair', kind: 'chair', x0: -2.95, x1: -2.25, z0: 3.2, z1: 3.9, h: .9 },
+    { id: 'desk-c-chair', kind: 'chair', x0: -7.05, x1: -6.35, z0: -.8, z1: -.1, h: .9 },
+    { id: 'desk-d-chair', kind: 'chair', x0: -2.95, x1: -2.25, z0: -.8, z1: -.1, h: .9 },
+    { id: 'partition-west', kind: 'partition', x0: -8.05, x1: -5.35, z0: 2.45, z1: 2.55, h: 1.25 },
+    { id: 'partition-east', kind: 'partition', x0: -3.95, x1: -1.25, z0: 2.45, z1: 2.55, h: 1.25 },
+    { id: 'breakroom-counter', kind: 'counter', x0: 10.7, x1: 11.7, z0: 2, z1: 6.7, h: 1.25 },
+    { id: 'breakroom-fridge', kind: 'fridge', x0: 10.7, x1: 11.7, z0: 6.8, z1: 7.7, h: 1.8 },
+    { id: 'breakroom-table', kind: 'cafetable', x0: 8.2, x1: 9.5, z0: 5.8, z1: 7.1, h: .8 },
+    { id: 'breakroom-stool-west', kind: 'stool', x0: 7.45, x1: 8.05, z0: 6.15, z1: 6.75, h: .6 },
+    { id: 'breakroom-stool-east', kind: 'stool', x0: 9.65, x1: 10.25, z0: 6.15, z1: 6.75, h: .6 },
     { id: 'shipping-crate', kind: 'crate', x0: 5.1, x1: 8.4, z0: -1.4, z1: -.55, h: .48 },
     { id: 'shipping-cabinet', kind: 'cabinet', x0: 8.4, x1: 11.9, z0: -1.4, z1: -.55, h: 1.8 },
     { id: 'spare-parts', kind: 'crate', x0: 8.2, x1: 9.6, z0: -4.4, z1: -3.5, h: .35 },
     { id: 'rack-west', kind: 'rack', x0: -9, x1: -7.6, z0: -9.5, z1: -5, h: 2.2 },
     { id: 'rack-middle', kind: 'rack', x0: -4, x1: -2.6, z0: -14, z1: -8, h: 2.2 },
     { id: 'rack-east', kind: 'rack', x0: .7, x1: 2, z0: -13.2, z1: -9.4, h: 2.2 },
+    { id: 'power-cabinet', kind: 'panel', x0: -7.5, x1: -6.5, z0: -12.3, z1: -12.1, h: 1.75 },
   ]),
   interactables: freeze([
     { id: 'fuse', kind: 'fuse', x: 10, z: -6, label: 'take the power fuse' },
@@ -50,7 +68,7 @@ export const LEVEL = Object.freeze({
   ]),
   spawns: freeze([
     { id: 'crab-1', room: 'bullpen', x: -6.7, z: 6.2 },
-    { id: 'crab-2', room: 'bullpen', x: -6.6, z: -1 },
+    { id: 'crab-2', room: 'bullpen', x: -6.6, z: -1.5 },
     { id: 'crab-3', room: 'bullpen', x: 2.4, z: .2 },
     { id: 'crab-4', room: 'maintenance', x: 9.7, z: 4.8 },
     { id: 'crab-5', room: 'maintenance', x: 6.9, z: -3.1 },
@@ -63,6 +81,7 @@ export const LEVEL = Object.freeze({
 
 const EPS = 1e-7, clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const enemyRadius = .34, enemyHeight = .46;
+const enemySpeed = 1.5, leapSpeedScale = 1.2;
 const boxes = (state) => [...LEVEL.walls.filter((b) => !b.gate || !state.power), ...LEVEL.obstacles];
 export const roomAt = (x, z) => LEVEL.rooms.find((r) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) || null;
 
@@ -94,7 +113,7 @@ function rayBox(from, to, b) {
 export function lineClear(state, from, to) { return !boxes(state).some((b) => rayBox(from, to, b)); }
 const emit = (s, type, data = {}) => s.events.push({ type, ...data });
 const freshEnemy = (p, i) => ({ ...p, x: p.x, y: 0, z: p.z, vx: 0, vy: 0, vz: 0,
-  heading: 0, state: 'dormant', stateT: 0, health: 1, hasHit: false,
+  heading: 0, state: 'dormant', stateT: 0, health: 2, hasHit: false,
   cooldown: .15 + i % 3 * .25, path: [], pathClock: 0, targetX: p.x, targetZ: p.z });
 export function createGame() {
   return { ...LEVEL.start, y: 0, pitch: 0, vx: 0, vy: 0, vz: 0, grounded: true,
@@ -205,8 +224,18 @@ function strike(s) {
   }
   hits.sort((a, b) => a.d - b.d);
   if (!hits.length) { emit(s, 'miss'); return; }
-  const { e } = hits[0]; e.state = 'dead'; e.health = 0; s.kills++;
-  emit(s, 'hit', { id: e.id, x: e.x, y: e.y + .25, z: e.z });
+  const { e, d } = hits[0]; e.health = Math.max(0, e.health - 1);
+  if (e.health === 0) {
+    e.state = 'dead'; e.vx = e.vy = e.vz = 0; s.kills++;
+  } else {
+    // The first hit interrupts even an airborne attack and physically shoves
+    // the crab away. This state cannot deal damage, including after landing.
+    const dx = d > EPS ? (e.x - s.x) / d : fx, dz = d > EPS ? (e.z - s.z) / d : fz;
+    e.state = 'knockback'; e.stateT = 0; e.hasHit = true;
+    e.vx = dx * 4.4; e.vz = dz * 4.4; e.vy = 3.4;
+    e.path = []; e.pathClock = 0; e.cooldown = .45;
+  }
+  emit(s, 'hit', { id: e.id, x: e.x, y: e.y + .25, z: e.z, health: e.health, killed: e.health === 0 });
 }
 
 // Small deterministic grid navigation routes stalking enemies around desks and racks.
@@ -249,26 +278,29 @@ function enemyStep(s, e, dt) {
     if (e.stateT <= EPS) {
       e.state = 'leap'; e.vy = 6.4; e.hasHit = false;
       const dx = e.targetX - e.x, dz = e.targetZ - e.z, norm = Math.max(1, Math.hypot(dx, dz) / 3.6);
-      e.vx = dx / .75 / norm; e.vz = dz / .75 / norm;
+      e.vx = dx / .75 / norm * leapSpeedScale; e.vz = dz / .75 / norm * leapSpeedScale;
       emit(s, 'leap', { id: e.id, x: e.x, z: e.z });
     }
     return;
   }
-  if (e.state === 'leap') {
+  if (e.state === 'leap' || e.state === 'knockback') {
+    const knockedBack = e.state === 'knockback';
     const before = e.y;
     e.vy -= 17 * dt; let y = Math.max(0, e.y + e.vy * dt);
+    if (y + enemyHeight > LEVEL.ceiling) { y = LEVEL.ceiling - enemyHeight; e.vy = Math.min(0, e.vy); }
     const nx = e.x + e.vx * dt, nz = e.z + e.vz * dt;
     if (isFree(s, nx, nz, y, enemyRadius, enemyHeight)) { e.x = nx; e.z = nz; }
     else { e.vx = e.vz = 0; }
     const floor = enemyFloor(s, e, before, y); e.y = Math.max(floor, y);
-    if (!e.hasHit && s.time >= s.hurtUntil && Math.hypot(s.x - e.x, s.z - e.z) < PLAYER.radius + .35
+    if (knockedBack) { const drag = Math.exp(-2.2 * dt); e.vx *= drag; e.vz *= drag; }
+    if (!knockedBack && !e.hasHit && s.time >= s.hurtUntil && Math.hypot(s.x - e.x, s.z - e.z) < PLAYER.radius + .35
       && e.y + .4 > s.y + .05 && e.y < s.y + PLAYER.height
       && lineClear(s, { x: e.x, y: e.y + .3, z: e.z }, { x: s.x, y: s.y + .8, z: s.z })) {
       e.hasHit = true; s.health = Math.max(0, s.health - PLAYER.damage); s.hurtUntil = s.time + PLAYER.immunity;
       emit(s, 'hurt', { id: e.id, value: PLAYER.damage, x: e.x, z: e.z });
       if (!s.health) { s.stage = 'dead'; emit(s, 'dead'); return; }
     }
-    if (e.y <= floor + EPS && e.vy < 0) { e.state = 'recover'; e.stateT = .85; e.vx = e.vy = e.vz = 0; }
+    if (e.y <= floor + EPS && e.vy < 0) { e.state = 'recover'; e.stateT = knockedBack ? .35 : .85; e.vx = e.vy = e.vz = 0; }
     return;
   }
   if (e.state === 'recover') { if (e.stateT <= EPS) { e.state = 'stalk'; e.cooldown = .25; } return; }
@@ -283,7 +315,7 @@ function enemyStep(s, e, dt) {
   if (!target && visible) target = { x: s.x, z: s.z };
   if (!target) return;
   const dx = target.x - e.x, dz = target.z - e.z, length = Math.hypot(dx, dz); if (length < .05) return;
-  const speed = Math.min(length / dt, 1.25), vx = dx / length * speed * dt, vz = dz / length * speed * dt;
+  const speed = Math.min(length / dt, enemySpeed), vx = dx / length * speed * dt, vz = dz / length * speed * dt;
   if (isFree(s, e.x + vx, e.z, e.y, enemyRadius, enemyHeight)) e.x += vx;
   if (isFree(s, e.x, e.z + vz, e.y, enemyRadius, enemyHeight)) e.z += vz;
   if (e.y > 0) {

@@ -5,6 +5,11 @@ physical jumping, and nine headcrabs across three connected combat rooms.
 It replaces the browser's mallet wave game. **Night Shift (N)** remains the
 separate monochrome stealth floor.
 
+The space is another floor of the main agent office: the same wood panelling,
+warm carpet, CRT workstations, chairs, bookshelves, plants, and kitchenette,
+with a maze of furnished rooms and a server wing. Scene signs, floor arrows,
+instruction posters, and textual mission screens have been removed.
+
 The current development preview is
 `http://127.0.0.1:44319/?level=afterhours` on branch `codex/after-hours-fps`.
 The lift's **A · After Hours** button reaches the same floor.
@@ -12,7 +17,7 @@ The lift's **A · After Hours** button reaches the same floor.
 ## Mission
 
 1. Leave the safe reception area and cross Operations.
-2. Take the east doorway into Maintenance. Jump the low shipping crates,
+2. Take the east doorway into the office's break-room and storage wing. Jump the low moving boxes,
    then collect the spare fuse with **E**.
 3. Enter Server Control through Maintenance, clear its three headcrabs,
    and use **E** at the power panel.
@@ -25,8 +30,11 @@ limited retry count, or requirement to hunt every optional enemy.
 
 Headcrabs crouch before committing to a jump toward the player's position
 at the start of the tell. Sidestep that position, then strike during their
-landing recovery. A crowbar hit defeats one headcrab; its reach, direction,
-impact timing, and walls all matter. Each leap can damage the player once.
+landing recovery. The first crowbar hit knocks a headcrab backwards in a
+short, harmless hop; the second defeats it. Knockback interrupts an attack
+and collides with walls and furniture. Reach, direction, and impact timing
+still matter. Stalking and leap travel are 20% faster than the first FPS
+version, with the same readable windup. Each leap damages the player once.
 
 ## Controls
 
@@ -43,9 +51,10 @@ impact timing, and walls all matter. Each leap can damage the player once.
 | Pause / resume | **P** |
 | Release mouse / return to work | **Esc** releases locked mouse and pauses; press again to take the lift home |
 
-Losing focus pauses the mission. The wrist terminal shows health and the
-current objective; instructions, route signs, and interaction hints live
-in the room. Reduced motion disables camera bob and damage shake.
+Losing focus pauses the mission. The smaller wrist terminal shows health
+and fuse/power/extraction icons. Equipment glows and panel indicators carry
+mission feedback without in-world prose. Reduced motion disables camera
+bob and damage shake.
 
 ## Modules and state
 
@@ -55,7 +64,7 @@ in the room. Reduced motion disables camera bob and damage shake.
 - `public/world/levels/afterhours.js`: first-person camera, input, animation,
   sound, wrist terminal, pause, and level lifecycle through the shared kit.
 - `public/world/levels/afterhours-scene.js`: room geometry, furnishing,
-  lighting, signs, and power/mission feedback.
+  lighting, familiar office furniture, and power/mission indicators.
 - `public/world/levels/afterhours-props.js`: original Vox crowbar, glove,
   headcrab parts, and mission props.
 - `test/afterhours-game.test.mjs`: deterministic rules and route checks.
@@ -95,16 +104,19 @@ from this browser mission.
 ## Verification baseline
 
 On 14 November 2026, `node --test test/afterhours-game.test.mjs` passed all
-13 tests: movement and collision; the required jump and ceiling clearance;
-melee timing/range/arc/line of sight; dodgeable enemy leaps, damage immunity,
-and recovery; mission order; checkpoints; first aid; and route reachability.
+15 tests: movement and collision; the required jump and ceiling clearance;
+two-hit melee timing/range/arc/line of sight; collision-safe harmless knockback;
+the 20% speed increase; dodgeable leaps, damage immunity, and recovery;
+mission order; checkpoints; first aid; and furnished-route reachability.
 A separate simulation completed the live-enemy mission using movement,
 aiming, attacks, dodges, and interactions, with no teleport or retry.
 
-`npm test` reported **212 passed / 213 total**. The remaining failure is the
-existing `test/usage.test.mjs:197` status-line bridge assertion
-(`meter.source` is undefined), outside this change. Full run log:
-`/private/tmp/afterhours-full-test.log`.
+The final `npm test` run reported **212 passed / 215 total**: the existing
+`test/usage.test.mjs:197` status-line bridge assertion (`meter.source` is
+undefined), and a transient wake-order assertion in `test/harness-wake.test.mjs`
+counted again at its parent suite. All 14 wake tests passed when rerun alone;
+all 15 FPS tests passed throughout. Full run log:
+`/private/tmp/afterhours-office-revision-test.log`.
 
 Browser verification completed the mission using actual WASD, drag-look,
 crowbar, jump, and interaction inputs: fuse collected, server room cleared,
@@ -112,6 +124,12 @@ power restored, shortcut opened, and lift extraction reached. Separate
 checks verified death freezes movement, R restores the checkpoint, pause
 freezes time, Escape returns to the lobby, and re-entry starts fresh.
 The successful preview and lifecycle runs reported no browser errors.
+
+The furnished revision also completed a full browser run, observing each
+defeated crab at one remaining hit before it died, then verifying extraction
+and a fresh re-entry. Its first-hit recoil was inspected in the rendered
+scene. Reception, workstations, and the kitchenette were visually checked;
+the environment contains no text-drawing or sign calls.
 
 The drag-look path is explicitly tested with pointer lock denied. A separate
 normal Chrome window verified native mouse capture, mouse look, click to
