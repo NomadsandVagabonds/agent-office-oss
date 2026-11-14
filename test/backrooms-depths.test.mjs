@@ -3,14 +3,14 @@
 // the same again given the same seed.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { generate, DECK, ARCHETYPES, LESSONS, lessons, ready, lessonsOf, roomDistances, roomPath, MIN_EXIT_STEPS, EXIT_DEPTH, T, sketch, wallPoint, wallLength, toWorld, floorAt, ceilAt, headAt, fitsAt } from '../public/world/backrooms/gen.js';
+import { generate, MAX_ODD, MAX_ROOMS, DECK, ARCHETYPES, LESSONS, lessons, ready, lessonsOf, roomDistances, roomPath, MIN_EXIT_STEPS, EXIT_DEPTH, T, sketch, wallPoint, wallLength, toWorld, floorAt, ceilAt, headAt, fitsAt } from '../public/world/backrooms/gen.js';
 import { MIN_OUT_STEPS, THIN_W, MARK_W, LEAN, REFUSE, MARK_STYLES, PRINT_CHANCE, PRINTED, lean, pressing, answer, TAPE_LABELS } from '../public/world/backrooms/marks.js';
 import { REACH, calm, beside, closeness, grabChance } from '../public/world/backrooms/reach.js';
 import { planVisit, floorOf, generateVisit, MIN_FLOORS, MAX_FLOORS, MIN_VISIT_STEPS, KNOWN_AT_START } from '../public/world/backrooms/plan.js';
 import { THEMES, THEME_IDS } from '../public/world/backrooms/themes.js';
 import { WAYS, GAP, goesDown, dropOf, hangBelow, flight, holeIn, ledgeAt, ductIn } from '../public/world/backrooms/seam.js';
 import { AWAY, settled, unsure } from '../public/world/backrooms/rooms/unsure-hall/rule.js';
-import { HALL } from '../public/world/backrooms/plan.js';
+import { HALL, HAND, PART_ROOMS } from '../public/world/backrooms/plan.js';
 import { leaving, LEAVE } from '../public/world/backrooms/leaving.js';
 
 const office = {
@@ -602,7 +602,7 @@ test('the hallway is rare, is never where you land, and only ever comes after th
   for (const seed of SEEDS) {
     const { visit, floors } = visitFor(seed);
     const at = floors.map((l, i) => (l.picked.includes(HALL) ? i : -1)).filter((i) => i >= 0);
-    assert.ok(at.length <= 2, `seed ${seed}: ${at.length} of them in one visit`);
+    assert.ok(at.length <= 1, `seed ${seed}: ${at.length} of them in one visit (no room is in a visit twice)`);
     counts[at.length]++;
     for (const i of at) {
       assert.ok(i > 0, `seed ${seed}: in the part you land in`);
@@ -616,5 +616,36 @@ test('the hallway is rare, is never where you land, and only ever comes after th
     }
     assert.equal(visit.depths, floors.length);
   }
-  assert.ok(counts[1] > counts[2] && counts[1] + counts[2] > SEEDS.length * 0.5, `visits with none, one, two: ${counts}`);
+  assert.ok(counts[2] === 0 && counts[1] > SEEDS.length * 0.5 && counts[0] > SEEDS.length * 0.1, `visits with none, one, two: ${counts}`);
+});
+
+test('the visit\'s hand: a visit shows 40–70% of the deck, in an order of its own, and never a room twice', () => {
+  const orders = new Set(), shown = new Map();
+  let least = 1, most = 0;
+  assert.deepEqual([...HAND], [0.4, 0.7]);
+  for (const seed of SEEDS) {
+    const { visit, floors } = visitFor(seed), all = floors.flatMap((l) => l.picked);
+    // never twice — and what was built is what the plan dealt, part for part (a room that would not fit anywhere may be missing: no more than one a part)
+    assert.equal(new Set(all).size, all.length, `seed ${seed}: a room twice in one visit (${all})`);
+    assert.equal(new Set(visit.hand).size, visit.hand.length);
+    assert.deepEqual(visit.hand.slice().sort(), visit.floors.flatMap((f) => f.hand).sort());
+    floors.forEach((level, i) => {
+      const hand = visit.floors[i].hand;
+      for (const id of level.picked) assert.ok(hand.includes(id), `seed ${seed}, part ${i}: ${id} was not in this part's hand`);
+      assert.ok(level.picked.length >= hand.length - 1, `seed ${seed}, part ${i}: dealt ${hand}, built ${level.picked}`);
+      assert.ok(hand.length >= 1 && hand.length <= MAX_ODD, `seed ${seed}, part ${i}: ${hand.length} oddities`);
+      // long enough to get lost in, however few of its rooms are oddities; and mostly plain
+      assert.ok(level.rooms.length >= PART_ROOMS[0] && level.rooms.length <= MAX_ROOMS, `seed ${seed}, part ${i}: ${level.rooms.length} rooms`);
+      assert.ok(1 - level.picked.length / level.rooms.length >= 0.7, `seed ${seed}, part ${i}: only ${level.rooms.length - level.picked.length} of ${level.rooms.length} rooms are plain`);
+      for (const id of level.picked) shown.set(id, (shown.get(id) || 0) + 1);
+    });
+    const share = visit.hand.length / DECK.length;
+    assert.ok(share >= HAND[0] - 1e-9 && share <= HAND[1] + 1e-9, `seed ${seed}: the hand is ${visit.hand.length} of ${DECK.length} rooms`);
+    least = Math.min(least, all.length / DECK.length); most = Math.max(most, all.length / DECK.length);
+    orders.add(all.join('>'));
+  }
+  assert.ok(least >= HAND[0] - 2 / DECK.length && most <= HAND[1] + 1e-9, `visits showed between ${Math.round(least * 100)}% and ${Math.round(most * 100)}% of the deck`);
+  assert.equal(orders.size, SEEDS.length, 'no two visits have the same rooms in the same order');
+  // every room in the deck gets its turn, and none is in every visit
+  for (const a of DECK) { const n = shown.get(a.id) || 0; assert.ok(n > 0, `${a.id} is never dealt`); assert.ok(n < SEEDS.length, `${a.id} is in every visit`); }
 });

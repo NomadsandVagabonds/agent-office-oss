@@ -18,7 +18,7 @@
 // floors above it had so that it deals different ones while the deck lasts —
 // and what those rooms taught, so that it deals nothing that takes for granted
 // a thing nobody has yet had the chance to learn.
-import { generate, makeRng, MIN_EXIT_STEPS, DECK, ARCHETYPES, lessons, lessonsOf } from './gen.js';
+import { generate, makeRng, MIN_EXIT_STEPS, DECK, ARCHETYPES, lessons, lessonsOf, isBig } from './gen.js';
 import { MIN_OUT_STEPS } from './marks.js';
 import { THEME_IDS } from './themes.js';
 import { WAYS } from './seam.js';
@@ -34,6 +34,59 @@ export const MIN_VISIT_STEPS = (MIN_FLOORS - 1) * MIN_EXIT_STEPS + MIN_OUT_STEPS
 
 /** The room the plan deals by hand, below wherever its lesson was taught (deck2.js). */
 export const HALL = 'unsure-hall';
+/** How many visits in a hundred have the hallway in them (and, so that they can, the room that teaches what it needs). */
+export const HALL_CHANCE = 0.7;
+/**
+ * A visit's hand: the share of the deck it shows, least and most. Which rooms, and in what order, is the seed's
+ * business; no room is ever in a visit twice. (The owner: "if we only use 40-70% of rooms each time in a scrambled
+ * order it keeps players on their toes." The number follows the deck: it grows as rooms are contributed.)
+ */
+export const HAND = Object.freeze([0.4, 0.7]);
+/** How many rooms a part has, however few of them are oddities: long enough to get lost in. */
+export const PART_ROOMS = Object.freeze([20, 28]);
+
+/**
+ * Deal a visit's hand across its parts. → one list of deck ids per part. Nothing before what it needs (a room that
+ * takes a lesson for granted goes in a part below the one that teaches it), nothing on a kind of floor it is never at
+ * home on, one set piece to a part; the room from the news where the plan has put it; the hallway, in some visits,
+ * below the cardboard people.
+ */
+function dealHand(R, themes, story) {
+  const depths = themes.length, N = DECK.length;
+  const size = Math.max(depths, R.int(Math.ceil(N * HAND[0]), Math.floor(N * HAND[1])));
+  const hands = themes.map(() => []), at = new Map();
+  // how many each part gets: as near equal as it goes, the odd ones wherever the seed says
+  const cap = themes.map(() => Math.floor(size / depths));
+  for (const i of R.shuffle(themes.map((_, k) => k)).slice(0, size - cap[0] * depths)) cap[i]++;
+  const total = () => hands.reduce((n, h) => n + h.length, 0);
+  const taught = (n, i) => KNOWN_AT_START.includes(n) || [...at].some(([id, p]) => p < i && lessons(ARCHETYPES[id]).teaches.includes(n));
+  const fits = (a, i, strict = true) => (!strict || hands[i].length < cap[i]) && ((a.themes && a.themes[themes[i]]) ?? 1) > 0
+    && !(isBig(a) && hands[i].some((id) => isBig(ARCHETYPES[id]))) && lessons(a).needs.every((n) => taught(n, i));
+  const put = (a, i) => { hands[i].push(a.id); at.set(a.id, i); };
+  if (story && ARCHETYPES[story.arch]) put(ARCHETYPES[story.arch], story.floor);
+  // the hallway, and the room that has to come before it
+  const hall = ARCHETYPES[HALL], RH = R.fork('hall');
+  if (hall && depths > 1 && RH.chance(HALL_CHANCE)) {
+    const teachers = DECK.filter((a) => !a.planned && !a.headline && lessons(hall).needs.some((n) => lessons(a).teaches.includes(n)));
+    const teacher = teachers.length ? RH.pick(teachers) : null, early = teacher ? themes.map((_, i) => i).filter((i) => i < depths - 1 && fits(teacher, i, false)) : [];
+    if (early.length) {
+      put(teacher, RH.pick(early));
+      const late = themes.map((_, i) => i).filter((i) => fits(hall, i, false) && !(story && story.floor === i));
+      if (late.length) put(hall, RH.pick(late));
+    }
+  }
+  // the rest of the hand, in the order the seed draws them — a room that cannot go anywhere yet waits for the next round
+  let pool = DECK.filter((a) => !a.planned && !a.headline && !at.has(a.id));
+  const order = [];
+  while (pool.length) { const a = R.weighted(pool, (k) => k.weight); order.push(a); pool = pool.filter((k) => k !== a); }
+  for (let round = 0; round < 2; round++) for (const a of order) {
+    if (total() >= size) break;
+    if (at.has(a.id)) continue;
+    const parts = themes.map((_, i) => i).filter((i) => fits(a, i));
+    if (parts.length) put(a, R.weighted(parts, (i) => ((a.themes && a.themes[themes[i]]) ?? 1) * (cap[i] - hands[i].length)));
+  }
+  return hands.map((h) => R.shuffle(h));
+}
 
 const made = new WeakMap();                 // visit → the floors generated so far
 
@@ -75,13 +128,16 @@ export function planVisit(seed, opt = {}) {
   // source of its own: whether the deck has any such room changes nothing else about a visit.)
   const stories = DECK.filter((a) => a.headline), RS = R.fork('headline');
   const story = stories.length && depths > 1 && RS.chance(HEADLINE_CHANCE) ? { arch: RS.pick(stories).id, floor: RS.int(1, depths - 1) } : null;
+  // which rooms this visit has, and which part each is in (a source of its own: the hand moves nothing else)
+  const hands = dealHand(R.fork('hand'), themes, story), RP = R.fork('rooms');
   const floors = themes.map((theme, i) => ({
     depth: i, seed: i === 0 ? String(seed) : `${seed}/floor:${i}`, theme,
     // (what the part above was like and what the part below will be: near a seam the one turns up in the other)
     prev: i ? themes[i - 1] : null, next: i < depths - 1 ? themes[i + 1] : null,
-    way: ways[i], must: story && story.floor === i ? [story.arch] : [], mascot: mascot === i, coins: coins[i],
+    way: ways[i], hand: hands[i], rooms: RP.int(PART_ROOMS[0], PART_ROOMS[1]),
+    must: hands[i].filter((id) => ARCHETYPES[id].planned || ARCHETYPES[id].headline), mascot: mascot === i, coins: coins[i],
   }));
-  const visit = { seed: String(seed), depths, floors, mascot, card: !!(want && want.card), headline: story ? story.arch : null };
+  const visit = { seed: String(seed), depths, floors, mascot, card: !!(want && want.card), headline: story ? story.arch : null, hand: hands.flat() };
   made.set(visit, { opt, levels: [] });
   return visit;
 }
@@ -97,22 +153,18 @@ export function floorOf(visit, i) {
   if (i < 0 || i >= visit.depths) throw new Error(`backrooms: there is no floor ${i} in this visit`);
   for (let k = memo.levels.length; k <= i; k++) {
     const f = visit.floors[k], opt = memo.opt, first = memo.levels[0];
-    // The hallway that is not sure where it leads: one in a visit, two in a long one now and then — and only below
-    // wherever the cardboard people were, who are how anybody learns that things change while nobody looks. Which part
-    // that is cannot be known until the parts above it exist, so it is settled here, as each is made.
     const known = [...KNOWN_AT_START, ...memo.levels.flatMap((l) => lessonsOf(l))];
-    const halls = memo.levels.filter((l) => l.picked.includes(HALL)).length, RH = makeRng(`visit:${visit.seed}/hall:${k}`);
-    const hall = k > 0 && ARCHETYPES[HALL] && lessons(ARCHETYPES[HALL]).needs.every((n) => known.includes(n)) && !f.must.length
-      && (halls === 0 ? RH.chance(k === visit.depths - 1 ? 1 : 0.6) : halls === 1 && visit.depths >= 4 && RH.chance(0.25));
     const loot = f.coins.length || (visit.card && f.mascot) ? { card: visit.card && f.mascot, coins: f.coins, tapes: visit.seed } : undefined;
     const level = generate(f.seed, {
       name: opt.name, projects: opt.projects, agents: opt.agents, tasks: opt.tasks, count: opt.count,
       only: (opt.onlyDepth || 0) === k ? opt.only : undefined,
-      theme: f.theme, way: f.way, paper: `${visit.seed}/${k}`, must: hall ? [...f.must, HALL] : f.must,
-      bleed: { prev: f.prev && { theme: f.prev, paper: `${visit.seed}/${k - 1}` }, next: f.next && { theme: f.next, paper: `${visit.seed}/${k + 1}` } }, avoid: memo.levels.flatMap((l) => l.picked),
+      theme: f.theme, way: f.way, paper: `${visit.seed}/${k}`, must: f.must,
+      // the rooms of the visit's hand that are in this part, and how long the part is, whatever it holds
+      hand: f.hand, rooms: f.rooms,
+      bleed: { prev: f.prev && { theme: f.prev, paper: `${visit.seed}/${k - 1}` }, next: f.next && { theme: f.next, paper: `${visit.seed}/${k + 1}` } },
       // what the floors above have had the chance to teach: a room that takes more than that for granted is not dealt here
       known,
-      pursuer: f.mascot, loot,
+      pursuer: f.mascot, mascot: f.mascot, loot,
     });
     level.depth = k; level.depths = visit.depths;
     // the tape is older the further down it was shot: every floor's date is some years before the one above
