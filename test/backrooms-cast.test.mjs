@@ -101,11 +101,13 @@ test('somewhere it cannot get to: it stares for a while, gives you up, and takes
 test('which way it wanders: anywhere, but rather through a door somebody has shut, and rather not back the way it came', () => {
   assert.equal(wayOn([], 1), null);
   assert.equal(wayOn([{ room: 7 }], 7), 7, 'a dead end: back is the only way');
-  const tally = (exits, from) => { const n = new Map(); for (let i = 0; i < 4000; i++) { const r = wayOn(exits, from, () => (i + 0.5) / 4000); n.set(r, (n.get(r) || 0) + 1); } return n; };
+  const tally = (exits, from, been) => { const n = new Map(); for (let i = 0; i < 4000; i++) { const r = wayOn(exits, from, () => (i + 0.5) / 4000, been); n.set(r, (n.get(r) || 0) + 1); } return n; };
   const even = tally([{ room: 1 }, { room: 2 }, { room: 3 }], null);
   for (const r of [1, 2, 3]) assert.ok(Math.abs(even.get(r) - 4000 / 3) < 40);
   const back = tally([{ room: 1 }, { room: 2 }, { room: 3 }], 2);
   assert.ok(back.get(2) < back.get(1) * 0.4);
+  const been = tally([{ room: 1 }, { room: 2 }, { room: 3 }], null, [3, 9, 1]);
+  assert.ok(been.get(2) > been.get(3) && been.get(3) > been.get(1), 'the room it does not remember, then the one it was in longest ago');
   const shut = tally([{ room: 1 }, { room: 2, shut: true }, { room: 3 }], null);
   assert.ok(shut.get(2) > shut.get(1) * 3, 'a door it left open and finds shut is something it has seen');
 });

@@ -1,22 +1,36 @@
-// The Backrooms — what follows you. In some visits there is a mascot on a
-// plinth somewhere in the level: a goblin dressed as a pirate, stiff as a shop
-// dummy, arms held out from its sides, with a face that did not come out right
-// and is not the same face the next time you look. Once you have met it and
-// turned your back it comes after you, but only ever while you are not
-// looking: watch it and it is a mannequin. Across a room. It has a body, and
-// nobody walks through it; and the camcorder cannot hold a picture inside
-// arm's reach of it. There the tape tears, and it moves in the torn frames
-// (reach.js): run past and you lose a frame, stand beside it and it has you,
-// watched or not. Let it reach you from behind and the tape ends ('caught').
+// The Backrooms — what follows you. In every visit there is a mascot on a
+// plinth somewhere in the level (cast.js: he is the one who is always down
+// here): a goblin dressed as a pirate, stiff as a shop dummy, arms held out
+// from its sides, with a face that did not come out right and is not the same
+// face the next time you look. Once you have met it and turned your back it
+// comes after you, but only ever while you are not looking: watch it and it is
+// a mannequin. Across a room. It has a body, and nobody walks through it; and
+// the camcorder cannot hold a picture inside arm's reach of it. There the tape
+// tears, and it moves in the torn frames (reach.js): run past and you lose a
+// frame, stand beside it and it has you, watched or not. Let it reach you from
+// behind and the tape ends ('caught').
+//
+// It hunts by what it sees (cast/hunt.js). While it has a line of sight to you
+// it knows where you are; lose it — a corner, something tall, a pair of doors
+// pulled shut (doors.js) — and it goes to where it last saw you, looks, and
+// then walks the floor a room at a time with nothing to go on. The tape feels
+// it knowing: static while it has you, a clean picture once it has not. A shut
+// door it can open, slowly, and you hear it at the handle; but that is moving,
+// so not while you watch the door. And it walks (cast/walk.js): it cannot get
+// through anything it could not stand up in. Crawl away from it and, some of
+// the time, once your back is turned, it is flat on the carpet with its face
+// in the hole.
+//
 // While the office's keycard for this place has not been found (loot.js), the
 // mascot is holding it: on a loop of ribbon, from one hand, held out. Walk up
 // and take it — from inside its reach, so be quick — which it notices, the
 // way it notices being looked at.
-// Stairs are no way of losing it. If it is after you when you leave its
-// floor, then some time after you land on the next one there is a second
-// thump under the same hole in the ceiling (env.carry: what it was doing, and
-// whether the card was still in its hand).
-// Also here: the cardboard colleague who sometimes decides to come along.
+// Stairs are no way of losing it, though they are slower for it if it had
+// already lost you: some time after you land on the next floor there is a
+// second thump under the same hole in the ceiling (env.carry: what it was
+// doing, and whether the card was still in its hand).
+// Also here: the cardboard colleague who sometimes decides to come along, and
+// who cannot open a door.
 import * as THREE from 'three';
 import { Vox, M } from '../vox/vox.js';
 import { keycard } from '../props/loot.js';

@@ -34,7 +34,7 @@ export function hangDoors(env) {
   const tex = kit.tex.custom('doorleaf', 128, 64, (g) => {
     g.fillStyle = '#ffffff'; g.fillRect(0, 0, 64, 64);
     g.fillStyle = '#1d4f9c'; g.fillRect(64, 0, 64, 64); g.fillStyle = '#f4f6f8'; g.fillRect(66, 2, 60, 60); g.fillStyle = '#1d4f9c'; g.fillRect(68, 4, 56, 56);
-    drawText(g, ['FIRE DOOR', 'KEEP', 'SHUT'], 68, 6, 56, 52, { color: '#f4f6f8', size: 13 });
+    drawText(g, ['FIRE DOOR', 'KEEP', 'SHUT'], 68, 6, 56, 52, { color: '#f4f6f8', size: 13, pad: 0 });
   }, { clamp: true });
   const SIGN = [[0.52, 0.02], [0.98, 0.02], [0.98, 0.98], [0.52, 0.98]];
   const steel = [0.52, 0.53, 0.52], dark = [0.1, 0.1, 0.1];
@@ -61,8 +61,8 @@ export function hangDoors(env) {
         if (face === side) box(f, f - face * 0.004, L - 0.2, L - 0.08, 1.0, 1.32, steel);
         else { box(f, f + face * 0.045, L - 0.15, L - 0.12, 0.92, 1.3, steel); }
         // …and the sign, at eye level
-        const p0 = at(f + face * 0.002, L / 2 + face * 0.11), p1 = at(f + face * 0.002, L / 2 - face * 0.11);
-        b.quad([p0[0], 1.42, p0[1]], [p1[0], 1.42, p1[1]], [p1[0], 1.62, p1[1]], [p0[0], 1.62, p0[1]], [1, 1, 1], SIGN);
+        const p0 = at(f + face * 0.002, L / 2 + face * 0.16), p1 = at(f + face * 0.002, L / 2 - face * 0.16);
+        b.quad([p0[0], 1.36, p0[1]], [p1[0], 1.36, p1[1]], [p1[0], 1.68, p1[1]], [p0[0], 1.68, p0[1]], [1, 1, 1], SIGN);
       }
       const pv = at(a0, 0), holder = new THREE.Group();
       holder.position.set(pv[0], 0, pv[1]); rt.group.add(holder);

@@ -30,6 +30,7 @@ export const HUNT = Object.freeze({
   rattle: 1.15,            // …and how often, in those seconds, you hear it
   shutPull: 5,             // how much rather it would try a door somebody has shut than any other way on
   stale: 0.25,             // …and how little it wants the room it has just come out of
+  trail: 10,               // how many rooms back it remembers having been in: it would rather try one it has not
   peek: 0.65,              // how often, when you crawl away from it, it gets down to look through the hole after you
   peekGap: [1.4, 6.5],     // how far from the hole you must be for that, metres: not within its reach, not out of sight of it
   peekTurned: 0.7,         // seconds your back must have been to the hole
@@ -44,7 +45,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function noticeTime(d) { return HUNT.notice[0] + (HUNT.notice[1] - HUNT.notice[0]) * clamp(d / HUNT.far, 0, 1); }
 
 /** Knowing nothing: where it starts, and where it ends up every time it has lost you. */
-export function lost() { return { mode: 'wander', last: null, seen: 0, since: 0, t: 0, stuck: 0, blind: false, room: null, from: null, found: false, gaveUp: false }; }
+export function lost() { return { mode: 'wander', last: null, seen: 0, since: 0, t: 0, stuck: 0, blind: false, room: null, from: null, been: [], found: false, gaveUp: false }; }
 
 /** Knowing exactly where you are (it was shown: the card taken from its hand, a back turned within its reach). */
 export function shown(me) { return { ...lost(), mode: 'chase', last: { x: me.x, z: me.z, room: me.room } }; }
@@ -96,7 +97,7 @@ export function knows(s, dt, sense, rnd = Math.random) {
   }
   // wandering: a room, a while in it, another room
   if (n.room === null || sense.cannot) {
-    const next = wayOn(sense.exits || [], s.from, rnd);
+    const next = wayOn(sense.exits || [], s.from, rnd, s.been);
     if (next === null) { n.room = null; return n; }
     n.room = next; n.arrived = false; n.t = HUNT.linger[0] + (HUNT.linger[1] - HUNT.linger[0]) * rnd();
     return n;
@@ -104,15 +105,17 @@ export function knows(s, dt, sense, rnd = Math.random) {
   if (sense.room === n.room && sense.at) n.arrived = true;
   if (n.arrived) {
     n.t = s.t - dt;
-    if (n.t <= 0) { n.from = sense.room; n.room = null; }
+    if (n.t <= 0) { n.from = sense.room; n.room = null; n.been = [...s.been.filter((r) => r !== sense.room), sense.room].slice(-HUNT.trail); }
   }
   return n;
 }
 
-/** Which room to wander into next: any of them, but rather through a door somebody has shut, and rather not back the way it came. */
-export function wayOn(exits, from, rnd = Math.random) {
+/** Which room to wander into next: any of them, but rather through a door somebody has shut, rather not back the way it came, and rather somewhere it has not just been. */
+export function wayOn(exits, from, rnd = Math.random, been = []) {
   if (!exits.length) return null;
-  const weight = (e) => (e.shut ? HUNT.shutPull : 1) * (e.room === from && exits.length > 1 ? HUNT.stale : 1);
+  // the longer ago it was in a room, the more it would like another look; one it does not remember at all, most
+  const fresh = (room) => { const i = been.lastIndexOf(room); return i < 0 ? 4 : 0.5 + (been.length - 1 - i) * 0.25; };
+  const weight = (e) => (e.shut ? HUNT.shutPull : 1) * (e.room === from && exits.length > 1 ? HUNT.stale : 1) * (been.length ? fresh(e.room) : 1);
   let total = 0;
   for (const e of exits) total += weight(e);
   let roll = rnd() * total;
