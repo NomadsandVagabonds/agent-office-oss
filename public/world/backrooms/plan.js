@@ -18,7 +18,7 @@
 // floors above it had so that it deals different ones while the deck lasts —
 // and what those rooms taught, so that it deals nothing that takes for granted
 // a thing nobody has yet had the chance to learn.
-import { generate, makeRng, MIN_EXIT_STEPS, DECK, lessonsOf } from './gen.js';
+import { generate, makeRng, MIN_EXIT_STEPS, DECK, ARCHETYPES, lessons, lessonsOf } from './gen.js';
 import { MIN_OUT_STEPS } from './marks.js';
 import { THEME_IDS } from './themes.js';
 import { WAYS } from './seam.js';
@@ -30,6 +30,9 @@ export const KNOWN_AT_START = Object.freeze(['lean']);
 export const HEADLINE_CHANCE = 0.35;
 /** The fewest doorways anybody walks through between landing and the way out, whatever the visit. */
 export const MIN_VISIT_STEPS = (MIN_FLOORS - 1) * MIN_EXIT_STEPS + MIN_OUT_STEPS;
+
+/** The room the plan deals by hand, below wherever its lesson was taught (deck2.js). */
+export const HALL = 'unsure-hall';
 
 const made = new WeakMap();                 // visit → the floors generated so far
 
@@ -93,14 +96,21 @@ export function floorOf(visit, i) {
   if (i < 0 || i >= visit.depths) throw new Error(`backrooms: there is no floor ${i} in this visit`);
   for (let k = memo.levels.length; k <= i; k++) {
     const f = visit.floors[k], opt = memo.opt, first = memo.levels[0];
+    // The hallway that is not sure where it leads: one in a visit, two in a long one now and then — and only below
+    // wherever the cardboard people were, who are how anybody learns that things change while nobody looks. Which part
+    // that is cannot be known until the parts above it exist, so it is settled here, as each is made.
+    const known = [...KNOWN_AT_START, ...memo.levels.flatMap((l) => lessonsOf(l))];
+    const halls = memo.levels.filter((l) => l.picked.includes(HALL)).length, RH = makeRng(`visit:${visit.seed}/hall:${k}`);
+    const hall = k > 0 && ARCHETYPES[HALL] && lessons(ARCHETYPES[HALL]).needs.every((n) => known.includes(n)) && !f.must.length
+      && (halls === 0 ? RH.chance(k === visit.depths - 1 ? 1 : 0.6) : halls === 1 && visit.depths >= 4 && RH.chance(0.25));
     const loot = f.coins.length || (visit.card && f.mascot) ? { card: visit.card && f.mascot, coins: f.coins, tapes: visit.seed } : undefined;
     const level = generate(f.seed, {
       name: opt.name, projects: opt.projects, agents: opt.agents, tasks: opt.tasks, count: opt.count,
       only: (opt.onlyDepth || 0) === k ? opt.only : undefined,
-      theme: f.theme, way: f.way, paper: `${visit.seed}/${k}`, must: f.must,
+      theme: f.theme, way: f.way, paper: `${visit.seed}/${k}`, must: hall ? [...f.must, HALL] : f.must,
       bleed: { prev: f.prev && { theme: f.prev, paper: `${visit.seed}/${k - 1}` }, next: f.next && { theme: f.next, paper: `${visit.seed}/${k + 1}` } }, avoid: memo.levels.flatMap((l) => l.picked),
       // what the floors above have had the chance to teach: a room that takes more than that for granted is not dealt here
-      known: [...KNOWN_AT_START, ...memo.levels.flatMap((l) => lessonsOf(l))],
+      known,
       pursuer: f.mascot, loot,
     });
     level.depth = k; level.depths = visit.depths;

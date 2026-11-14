@@ -17,6 +17,8 @@
 //   bays       short stubs from one wall at even spacing: a row of empty bays, a lane along the open side
 //   colonnade  a line of square columns down the room, one of them missing
 //   return     a parallel wall with a short arm at one end: an L you walk round
+//   nibs       (corridors) shallow piers in pairs down both walls at even spacing: a corridor of frames
+//   baffle     (corridors) stubs from alternate walls, most of the way across: you walk it in a slalom
 //   apertures  (wrong) a parallel wall with two holes in it: one at carpet level, 0.85 m high, that you can crawl
 //              through, and one at head height, 1.7 to 2.3 m, that you cannot. The ordinary way round its ends stays.
 //   sunk       (wrong) a whole workstation — desk, chair, monitor, keyboard, mouse — full size and perfectly still,
@@ -41,6 +43,9 @@ const VOXEL = 0.025;
 const r4 = (v) => Math.round(v * 10000) / 10000;
 
 export const MOTIFS = ['parallel', 'dogleg', 'bays', 'colonnade', 'return'];
+/** The motifs a corridor can take (a plain room less than NARROW across): a floor has one of them, or none. */
+export const HALLS = ['nibs', 'baffle'];
+export const NARROW = 4;
 export const WRONG = ['apertures', 'sunk'];
 
 /* ---- turning: a motif is drawn in its own frame (u across, v along), then turned into the room's ---- */
@@ -65,13 +70,32 @@ const dims = (room, t) => (t % 2 ? { A: room.D, B: room.W } : { A: room.W, B: ro
 
 /* ---- the vocabulary of a floor ------------------------------------------------------------------------ */
 
+// Each kind of floor repeats in its own way: which motifs it is made of, how much of it is bare, what its corridors
+// do, and which few shapes its rooms take.
+//   mix    [bare, motif, shape] as [lo, hi] each: the share of rooms that are one or the other
+//   hall   what its corridors are lined with (weights; 'none': bare corridors)
 const THEME_QUIET = {
-  yellow: { motifs: [['parallel', 3], ['dogleg', 3], ['bays', 1.5], ['colonnade', 1]], wrong: ['apertures', 'sunk'] },
-  archive: { motifs: [['bays', 4], ['parallel', 2.5], ['colonnade', 1]], wrong: ['apertures', 'sunk'] },
-  night: { motifs: [['dogleg', 3], ['return', 2.5], ['parallel', 1.5]], wrong: ['sunk', 'apertures'] },
-  fitout: { motifs: [['colonnade', 3.5], ['parallel', 2.5], ['return', 1]], wrong: ['apertures', 'sunk'] },
-  exec: { motifs: [['return', 3], ['bays', 2.5], ['dogleg', 1]], wrong: ['sunk', 'apertures'] },
+  // the one everybody remembers: partitions and doglegs, about half of it bare
+  yellow: { motifs: [['parallel', 3], ['dogleg', 3], ['bays', 1.5], ['colonnade', 1]], wrong: ['apertures', 'sunk'],
+    mix: [[0.26, 0.36], [0.44, 0.54], [0.14, 0.22]], hall: [['nibs', 2], ['baffle', 1.5], ['none', 1.5]], shapes: ['ell', 'pinch', 'forest', 'stepceil', 'slopeceil', 'pit', 'dais', 'soffit', 'stairs'] },
+  // records: bay after bay after bay, and corridors of piers
+  archive: { motifs: [['bays', 5], ['parallel', 2], ['colonnade', 1]], wrong: ['apertures', 'sunk'],
+    mix: [[0.14, 0.22], [0.6, 0.7], [0.1, 0.16]], hall: [['nibs', 5], ['none', 1]], shapes: ['soffit', 'stepceil', 'stairs', 'pinch'] },
+  // out of hours: mostly nothing at all, and now and then a wall you have to go round in the dark
+  night: { motifs: [['dogleg', 3], ['return', 2.5], ['parallel', 1.5]], wrong: ['sunk', 'apertures'],
+    mix: [[0.46, 0.56], [0.28, 0.36], [0.12, 0.18]], hall: [['none', 4], ['baffle', 1]], shapes: ['pit', 'dais', 'slopeceil', 'stepceil'] },
+  // being fitted out: columns where the walls will go, and stud partitions half way across the corridors
+  fitout: { motifs: [['colonnade', 4.5], ['parallel', 2], ['return', 1]], wrong: ['apertures', 'sunk'],
+    mix: [[0.2, 0.28], [0.5, 0.6], [0.16, 0.24]], hall: [['baffle', 4], ['nibs', 1], ['none', 1]], shapes: ['forest', 'stepceil', 'stairs', 'ell'] },
+  // the top floor: screens with a return on them, alcoves, pilasters
+  exec: { motifs: [['return', 4], ['bays', 2.5], ['dogleg', 1]], wrong: ['sunk', 'apertures'],
+    mix: [[0.2, 0.3], [0.5, 0.6], [0.14, 0.2]], hall: [['nibs', 3], ['none', 2]], shapes: ['dais', 'soffit', 'ell', 'pinch', 'slopeceil'] },
 };
+/**
+ * What gives a kind of floor away: the layouts there are more of on it than on any other kind ('none': a room with
+ * nothing built in it at all). For the tests, and for anybody describing one.
+ */
+export const TELLS = Object.freeze({ yellow: ['parallel', 'dogleg'], archive: ['nibs', 'bays'], night: ['none'], fitout: ['colonnade', 'baffle'], exec: ['return'] });
 
 /**
  * What the plain rooms of one floor are made of. Rolled once a floor, from its own source.
@@ -89,15 +113,19 @@ export function vocabulary(R, themeId) {
     colonnade: () => ({ every: R.pick([1.6, 1.8, 2.0]), size: R.pick([0.4, 0.5]), missing: R.int(0, 2), off: R.pick([0, 0.18]) }),
     return: () => ({ off: R.pick([0.16, 0.22]), gap: R.pick([1.1, 1.3]), arm: R.pick([1.0, 1.3]) }),
   };
+  // (what a floor's corridors do is rolled from a source of its own, so that it moves nothing a floor always had)
+  const RH = R.fork('hall'), hall = RH.weighted(q.hall, (k) => k[1])[0];
+  const halls = { nibs: () => ({ every: RH.pick([1.6, 1.9, 2.2]), phase: RH.pick([0, 0.5]) }), baffle: () => ({ every: RH.pick([1.9, 2.3]), reach: RH.pick([0.5, 0.56]) }) };
   // the wrongnesses this floor has: each that the theme knows, more often than not, and none at all now and then
   const wrong = q.wrong.filter((_, i) => R.chance(i === 0 ? 0.8 : 0.55));
   return {
     motifs: motifs.map(([kind, weight]) => ({ kind, weight, ...params[kind]() })),
     wrong,
-    mix: { bare: R.range(0.28, 0.4), motif: R.range(0.4, 0.52), shape: R.range(0.14, 0.24) },
+    mix: { bare: R.range(...q.mix[0]), motif: R.range(...q.mix[1]), shape: R.range(...q.mix[2]) },
+    hall: hall === 'none' ? null : { kind: hall, ...halls[hall]() },
     wrongChance: R.pick([0.22, 0.28]),
     // the few shapes this floor's plain rooms take (gen.js shapesFor): three of them, the same three all over the floor
-    shapes: R.some(['ell', 'pinch', 'forest', 'stepceil', 'slopeceil', 'pit', 'dais', 'soffit', 'stairs'], 3),
+    shapes: R.some(q.shapes, 3),
     ap: { at: R.pick([0.25, 0.3]), flip: R.chance(0.5) },
     sunk: { at: R.pick([0.3, 0.36]) },
   };
@@ -114,13 +142,13 @@ export function motif(room, m, t) {
   const P = (u0, v0, u1, v1, extra) => out.pillars.push(rect(u0, v0, u1, v1, t, extra));
   const H = room.H;
   if (m.kind === 'parallel' || m.kind === 'return' || m.kind === 'apertures') {
-    if (A < 4.4 || B < (m.kind === 'apertures' ? 6.2 : 4.4)) return null;
+    if (A < (m.kind === 'apertures' ? 3.4 : 4.4) || B < (m.kind === 'apertures' ? 5.6 : 4.4)) return null;
     const u = -A / 2 + Math.max(1.35, A * (0.5 - (m.off ?? 0.2))), gap = m.gap ?? 1.2, v0 = -B / 2 + gap, v1 = B / 2 - gap;
     if (u + WALL / 2 > A / 2 - 1.35 || v1 - v0 < 2) return null;
     if (m.kind === 'apertures') {
       // two holes, a quarter of the way in from either end: the low one first, the high one after it
-      const len = v1 - v0, w = 1.2, a = v0 + len * (m.at ?? 0.27) - w / 2, b = v1 - len * (m.at ?? 0.27) - w / 2;
-      if (a - v0 < 0.5 || b - (a + w) < 0.6 || v1 - (b + w) < 0.5 || H < HIGH[1] + 0.2) return null;
+      const len = v1 - v0, w = len < 4 ? 1.0 : 1.2, a = v0 + len * (m.at ?? 0.27) - w / 2, b = v1 - len * (m.at ?? 0.27) - w / 2;
+      if (a - v0 < 0.3 || b - (a + w) < 0.4 || v1 - (b + w) < 0.3 || H < HIGH[1] + 0.2) return null;
       const [lo, hi] = m.flip ? [b, a] : [a, b];
       P(u - WALL / 2, v0, u + WALL / 2, Math.min(lo, hi));
       P(u - WALL / 2, lo, u + WALL / 2, lo + w, { y0: LOW, wrong: 'low' });                 // the lintel over the hole you crawl through
@@ -156,7 +184,27 @@ export function motif(room, m, t) {
     if (n < 3) return null;
     const missing = Math.min(n - 1, 1 + (m.missing ?? 0));
     for (let i = 0; i < n; i++) { if (i === missing) continue; const v = (i - (n - 1) / 2) * every; P(u - s / 2, v - s / 2, u + s / 2, v + s / 2); }
+  } else if (m.kind === 'nibs') {
+    // a corridor: piers in pairs, one each side, the same distance apart all the way down
+    if (A < 1.7 || A >= NARROW || B < 4.4) return null;
+    const dp = A >= 2.4 ? 0.3 : 0.2, every = m.every ?? 1.9, n = Math.floor((B - 1.6) / every) + 1, shift = (m.phase ?? 0) * every * 0.5;
+    if (n < 2) return null;
+    for (let i = 0; i < n; i++) {
+      const v = (i - (n - 1) / 2) * every + shift;
+      if (Math.abs(v) > B / 2 - 0.5) continue;
+      P(-A / 2, v - 0.12, -A / 2 + dp, v + 0.12); P(A / 2 - dp, v - 0.12, A / 2, v + 0.12);
+    }
+  } else if (m.kind === 'baffle') {
+    // a corridor: a stub from one wall, then one from the other, each leaving a body's width and a bit
+    if (A < 2.6 || A >= NARROW + 0.6 || B < 5) return null;
+    const reach = Math.min(A - 1.3, A * (m.reach ?? 0.52)), every = m.every ?? 2.1, n = Math.floor((B - 2.6) / every) + 1;
+    if (n < 2 || reach < 0.8) return null;
+    for (let i = 0; i < n; i++) {
+      const v = (i - (n - 1) / 2) * every;
+      if (i % 2) P(A / 2 - reach, v - WALL / 2, A / 2, v + WALL / 2); else P(-A / 2, v - WALL / 2, -A / 2 + reach, v + WALL / 2);
+    }
   } else return null;
+  if (!out.pillars.length) return null;
   return out;
 }
 
@@ -237,6 +285,19 @@ export function fits(room, plan) {
     }
   }
   return starts.every((k) => seen[k] === 1);
+}
+
+/**
+ * A motif that is the same small thing over and over (piers, stubs, columns) does not have to be given up because one
+ * of them would stand in a doorway: that one is left out, as a builder would have. → the plan without them, or null if
+ * too few are left for it to read as a row of anything.
+ */
+export function pruned(room, plan, least = 3) {
+  const zones = [];
+  for (const d of room.doors) { const a = wallPoint(room, d.side, d.c - d.w / 2 - 0.35, 0), b = wallPoint(room, d.side, d.c + d.w / 2 + 0.35, 1.15); zones.push({ x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z) }); }
+  zones.push(...stairZones(room, 0.6));
+  const pillars = plan.pillars.filter((p) => { const q = box(p); return !zones.some((k) => q.x1 > k.x0 && q.x0 < k.x1 && q.z1 > k.z0 && q.z0 < k.z1); });
+  return pillars.length >= least ? { ...plan, pillars } : null;
 }
 
 /** A room's layout in a word, for the tests and the plan: its size (smaller side first) and what is in it. */

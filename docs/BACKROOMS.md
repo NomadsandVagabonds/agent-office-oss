@@ -69,16 +69,22 @@ room between them. Tests hold both.
 Plain rooms are not written one at a time, and they are meant to be hard to
 tell apart. Each floor has a small vocabulary (`quiet.js`, after Codex's
 quiet-maze study): two or three wall-and-pillar motifs, turned and used again
-and again, and one or two things that are quietly wrong, repeated in several
-rooms and never the mark of one — a partition with a hole at crawl height and
-another at head height, a whole workstation sunk in the carpet. Nothing in a
-plain room can be used.
+and again; one way its corridors are lined, or not; and one or two things that
+are quietly wrong, repeated in several rooms and never the mark of one — a
+partition with a hole at crawl height and another at head height, a whole
+workstation sunk in the carpet. Each kind of floor repeats in its own way
+(`TELLS`): partitions and doglegs in the yellow, bay after bay and corridors of
+piers in records, almost nothing at all out of hours, columns and half-built
+stud walls where it is being fitted out, screens with a return on them on the
+top floor. Nothing in a plain room can be used, and hardly any has anything
+left in it (about one in sixteen): an empty room is the point.
 
 | kind | what it is | how often |
 |---|---|---|
 | plain | the connective rooms: a wallpaper, a carpet, tubes, and a layout from the floor's small vocabulary | three quarters of every floor |
 | oddity | a room from the deck: one idea, a few metres across | five to eight a floor, none twice in a visit while the deck lasts |
 | set piece | an oddity that says `big: true`, or has a view (`halo`) | one a floor at most |
+| placed by the plan | a room that says `planned: true` and is put where the visit's plan decides. So far one: the hallway that is not sure where it leads (`rooms/unsure-hall.js`), below wherever the cardboard people were | one in most visits, two in a long one now and then, never where you land |
 | from the news | a room the place has half-remembered from the headlines and staged wrongly (`headline: true`). Wordless and unnamed. **Only the owner decides which stories become rooms** | one a visit at most, in about a third of visits, never on the floor you land on |
 
 ## Adding a room

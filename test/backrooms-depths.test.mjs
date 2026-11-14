@@ -9,6 +9,8 @@ import { REACH, calm, beside, closeness, grabChance } from '../public/world/back
 import { planVisit, floorOf, generateVisit, MIN_FLOORS, MAX_FLOORS, MIN_VISIT_STEPS, KNOWN_AT_START } from '../public/world/backrooms/plan.js';
 import { THEMES, THEME_IDS } from '../public/world/backrooms/themes.js';
 import { WAYS, GAP, goesDown, dropOf, hangBelow, flight, holeIn, ledgeAt, ductIn } from '../public/world/backrooms/seam.js';
+import { AWAY, settled, unsure } from '../public/world/backrooms/rooms/unsure-hall/rule.js';
+import { HALL } from '../public/world/backrooms/plan.js';
 import { leaving, LEAVE } from '../public/world/backrooms/leaving.js';
 
 const office = {
@@ -127,7 +129,8 @@ test('the floors of a visit are different places: a kind each, and rooms you hav
     const had = new Set();
     floors.forEach((level, i) => {
       assert.equal(new Set(level.picked).size, level.picked.length, `seed ${seed}, floor ${i}: a room twice on one floor`);
-      const fresh = DECK.length - had.size, again = level.picked.filter((id) => had.has(id)).length;
+      // (a room the plan places by hand may come twice in a long visit: that is the plan's business, and has a test of its own)
+      const fresh = DECK.length - had.size, again = level.picked.filter((id) => had.has(id) && !ARCHETYPES[id].planned).length;
       // only a floor the unused deck could not fill takes anything it has dealt before (two to spare, for rooms that would not fit anywhere)
       if (fresh >= level.picked.length + 2) assert.equal(again, 0, `seed ${seed}, floor ${i}: ${again} rooms from the floors above, with ${fresh} still unused`);
       if (i < 2) assert.equal(again, 0, `seed ${seed}: the second floor repeats the first`);
@@ -548,4 +551,57 @@ test('near a seam the parts run into each other, and that changes nothing but ho
     assert.deepEqual(strip(bled), strip(plain), `seed ${seed}, ${theme}`);
     assert.equal(plain.shaft, null);
   }
+});
+
+test('the hallway that is not sure where it leads: only while nobody looks and nobody is in it, once per look away, and round to the first room again', () => {
+  const dt = 1 / 30;
+  const run = (s, secs, watched, occupied, n) => { let turns = 0; for (let t = 0; t < secs; t += dt) { s = unsure(s, dt, watched, occupied, n); if (s.turned) turns++; } return [s, turns]; };
+  for (const n of [2, 3, 4]) {
+    // nobody has ever seen it: it has nothing to be different from, and stays as it is
+    let [s, turns] = run(settled(), 30, false, false, n);
+    assert.deepEqual([s.face, turns], [0, 0], 'a room nobody has looked at does not change behind their backs');
+    // watched, or stood in, for as long as you like: never
+    [s, turns] = run(s, 30, true, false, n); assert.equal(turns, 0, 'it never changes while somebody is looking');
+    [s, turns] = run(s, 30, false, true, n); assert.equal(turns, 0, 'nor while somebody is in it, looking or not');
+    // look away, look back; look away, look back: one room on each time, and after n of them the room you started with
+    const seen = [];
+    s = settled();
+    for (let i = 0; i < n * 2; i++) {
+      [s] = run(s, 1, true, false, n); seen.push(s.face);
+      [s, turns] = run(s, 5, false, false, n);
+      assert.equal(turns, 1, 'however long you look away, it is one room on: you have to look back before it will change again');
+    }
+    assert.deepEqual(seen, Array.from({ length: n * 2 }, (_, i) => i % n), `${n} rooms, in order, and round again`);
+    // a glance at your feet is not long enough
+    [s] = run(settled(), 1, true, false, n);
+    [s, turns] = run(s, AWAY - 2 * dt, false, false, n);
+    assert.equal(turns, 0);
+    [s, turns] = run(s, 1, true, false, n); assert.equal(turns, 0);
+  }
+  assert.equal(unsure({ face: 0, away: 9, seen: true }, 1, false, false, 1).turned, false, 'a hallway with only one end is only a hallway');
+  assert.ok(AWAY >= 0.25 && AWAY <= 0.8);
+});
+
+test('the hallway is rare, is never where you land, and only ever comes after the cardboard people', () => {
+  const hall = ARCHETYPES[HALL];
+  assert.ok(hall && hall.planned && lessons(hall).needs.includes('unwatched'), 'it takes the cardboard people for granted, and is never dealt by chance');
+  const counts = [0, 0, 0];
+  for (const seed of SEEDS) {
+    const { visit, floors } = visitFor(seed);
+    const at = floors.map((l, i) => (l.picked.includes(HALL) ? i : -1)).filter((i) => i >= 0);
+    assert.ok(at.length <= 2, `seed ${seed}: ${at.length} of them in one visit`);
+    counts[at.length]++;
+    for (const i of at) {
+      assert.ok(i > 0, `seed ${seed}: in the part you land in`);
+      assert.ok(floors.slice(0, i).some((l) => l.picked.includes('cutouts')), `seed ${seed}, part ${i}: before anybody has met the cardboard people`);
+      assert.equal(floors[i].picked.filter((id) => id === HALL).length, 1);
+      const room = floors[i].rooms.find((r) => r.arch === HALL);
+      // where a tape may hide in it: inside the room, in the far end, on the way through that every room it can be keeps clear
+      const [x0, z0, x1, z1] = hall.stash(room, 1);
+      assert.ok(x0 < x1 && z0 < z1 && x0 > -room.W / 2 && x1 < room.W / 2 && z0 > -room.D / 2 + 1 && z1 < 0, `seed ${seed}: its hiding place is at ${[x0, z0, x1, z1]}`);
+      assert.ok(room.params.faces.length >= 1 && room.params.faces.length <= 3 && new Set(room.params.faces).size === room.params.faces.length, 'two to four rooms at the end of it, the first being more of the hallway');
+    }
+    assert.equal(visit.depths, floors.length);
+  }
+  assert.ok(counts[1] > counts[2] && counts[1] + counts[2] > SEEDS.length * 0.5, `visits with none, one, two: ${counts}`);
 });

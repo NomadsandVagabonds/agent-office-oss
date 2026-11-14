@@ -29,7 +29,7 @@ import { MORE_DECK, MORE_STASH } from './deck2.js';
 import { themeOf, THEMES } from './themes.js';
 import { thinPlace, decoyMarks, TAPE_LABELS } from './marks.js';
 import { goesDown } from './seam.js';
-import { vocabulary, motif, fits, sunk } from './quiet.js';
+import { vocabulary, motif, fits, pruned, sunk, NARROW } from './quiet.js';
 
 // the room's own frame and the shape of its floor and ceiling are frame.js's; they have always been asked for here
 export { T, WALL_H, DOOR_H, TILE, RISE, RUN, SIDES, toWorld, toLocal, wallLength, wallFrame, wallPoint, floorAt, ceilAt, headAt, stairZones, pinchHalf, fitsAt, wallSpans } from './frame.js';
@@ -667,7 +667,7 @@ function build(R, o, opt) {
 const DRESSING = ['boxes', 'boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'highdoor', 'highdoor'];
 // what the plain-room builder (rooms.js) knows how to put down, of everything a theme may ask for; and how many plain rooms have anything
 const KNOWN_THINGS = new Set(['boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'cabinet', 'shelving', 'armchair', 'globe']);
-export const THING_CHANCE = 0.2;
+export const THING_CHANCE = 0.06;
 const POSTERS = ['HANG IN THERE', 'SYNERGY', 'PERSISTENCE', 'TEAMWORK', 'THIS IS FINE', 'ALIGNMENT', 'YOU ARE DOING GREAT, {NAME}', 'DAYS SINCE LAST INCIDENT: 0'];
 
 function layPanels(R, room, mode) {
@@ -824,17 +824,27 @@ function dress(R, level, o, opt, keeper = false) {
       let way = lair ? 'shape' : rl.weighted([['bare', mix.bare], ['motif', mix.motif], ['shape', mix.shape]], (k) => k[1])[0];
       if (byExit && way === 'shape') way = 'bare';
       const free = vocab.motifs.filter((k) => !byExit || k.kind === 'parallel' || k.kind === 'colonnade' || k.kind === 'return');
-      if (way === 'motif' && free.length) {
-        // one of the floor's motifs, turned to lie along the room (either way round), or across it if the room is square
-        const m = rl.weighted(free, (k) => k.weight), along = room.W > room.D ? 1 : 0, flip = rr.chance(0.5) ? 2 : 0;
+      const narrow = Math.min(room.W, room.D) < NARROW;
+      const lay = (m) => {
+        // turned to lie along the room (either way round), or any way at all if the room is square
+        const along = room.W > room.D ? 1 : 0, flip = rr.chance(0.5) ? 2 : 0;
         const turns = Math.abs(room.W - room.D) < 0.01 ? [0, 1, 2, 3].map((k) => (k + flip) % 4) : [(along + flip) % 4, (along + flip + 2) % 4];
         for (const t of turns) {
-          const plan = motif(room, m, t);
+          const whole = motif(room, m, t), plan = whole && (m.kind === 'nibs' || m.kind === 'bays' || m.kind === 'colonnade' || m.kind === 'baffle') ? pruned(room, whole, m.kind === 'baffle' ? 2 : 3) : whole;
           if (!plan || !fits(room, plan)) continue;
           room.pillars.push(...plan.pillars);
           room.quiet = { kind: m.kind, turn: t };
-          break;
+          return true;
         }
+        return false;
+      };
+      if (narrow) {
+        // a corridor: lined the way this floor's corridors are, or not at all (never at the last door: that wall is looked at)
+        if (way === 'motif' && vocab.hall && !byExit) lay(vocab.hall);
+      } else if (way === 'motif' && free.length) {
+        // one of the floor's motifs — and if the one it rolled will not go in a room this size with these doorways, the next
+        const first = rl.weighted(free, (k) => k.weight);
+        for (const m of [first, ...free.filter((k) => k !== first)]) if (lay(m)) break;
       }
       // the shape of the room itself — the same few kinds over a floor, rolled the same way for rooms the same size
       const options = way === 'shape' ? shapesFor(rl, room).filter((s) => (lair ? s.kind === 'stepceil' : vocab.shapes.includes(s.kind))) : [];
@@ -897,9 +907,19 @@ function dress(R, level, o, opt, keeper = false) {
     const RW = R.fork('wrong:' + kind), able = [];
     for (const room of rooms) {
       if (room.kind !== 'plain' || room.crawl || room.shape || (pursuer && pursuer.room === room.id)) continue;
-      if (kind === 'apertures' && room.quiet && room.quiet.kind === 'parallel') {
-        const m = { ...vocab.motifs.find((k) => k.kind === 'parallel'), kind: 'apertures', ...vocab.ap }, plan = motif(room, m, room.quiet.turn);
-        if (plan && fits({ ...room, pillars: [] }, plan)) able.push({ room, plan });
+      if (kind === 'apertures') {
+        // in place of a partition this floor already has (a parallel wall, or the long side of a return) — or, in a
+        // room with nothing in it at all, as the one wall it has
+        const was = room.quiet && (room.quiet.kind === 'parallel' || room.quiet.kind === 'return') ? room.quiet : null;
+        const empty = !room.quiet && !room.pillars.length && room.toExit > 2 && Math.min(room.W, room.D) >= 3.4;
+        if (was || empty) {
+          const like = vocab.motifs.find((k) => k.kind === (was ? was.kind : 'parallel')) || vocab.motifs.find((k) => k.kind === 'parallel') || {};
+          const m = { off: like.off, gap: like.gap, kind: 'apertures', ...vocab.ap };
+          for (const t of was ? [was.turn] : [room.W > room.D ? 1 : 0, room.W > room.D ? 3 : 2]) {
+            const plan = motif(room, m, t);
+            if (plan && fits({ ...room, pillars: [] }, plan)) { able.push({ room, plan, turn: t }); break; }
+          }
+        }
       }
       if (kind === 'sunk' && (!room.quiet || room.quiet.kind === 'dogleg' || room.quiet.kind === 'colonnade') && room.W >= 4 && room.D >= 4) {
         // the same spot in every room it is in: a little off the middle, toward the back, lying across the room
@@ -915,8 +935,8 @@ function dress(R, level, o, opt, keeper = false) {
     const chosen = able.filter(() => RW.chance(vocab.wrongChance));
     for (const extra of RW.shuffle(able)) { if (chosen.length >= 2) break; if (!chosen.includes(extra)) chosen.push(extra); }
     if (chosen.length < 2) continue;
-    for (const { room, plan } of chosen) {
-      if (kind === 'apertures') { room.pillars = plan.pillars; room.lows = plan.lows; room.quiet = { kind: 'apertures', turn: room.quiet.turn }; }
+    for (const { room, plan, turn } of chosen) {
+      if (kind === 'apertures') { room.pillars = plan.pillars; room.lows = plan.lows; room.quiet = { kind: 'apertures', turn }; }
       else { room.blocks = plan.blocks; room.props = plan.props; room.quiet = { ...(room.quiet || { kind: 'bare', turn: 0 }), sunk: true }; }
     }
   }
