@@ -30,6 +30,9 @@ const IMPORTS = /(?:import|export)\s+(?:[^'"()]*?\s+from\s+)?['"]([^'"]+)['"]|im
 // into the page). The page this goes on is not at the root of anything, so the staged copy asks for the font beside the
 // page instead, and the font comes along with its licence.
 const FONT = /\/vendor\/fonts\/([\w.-]+\.woff2)/g;
+// A module may keep a file of its own beside it and say where by its own address: new URL('./music/x.mp3', import.meta.url).
+// Such a file goes where the module goes.
+const ASSET = /new URL\('(\.\/[\w./-]+\.(?:mp3|ogg|png|jpg|webp))',\s*import\.meta\.url\)/g;
 
 /**
  * Stage the level into `out`.
@@ -75,6 +78,12 @@ export function stage(out, opt = {}) {
     if (asked.length) { for (const name of asked) fonts.add(name); fs.writeFileSync(path.join(out, to), src.replace(FONT, './vendor/fonts/$1')); }
     else fs.copyFileSync(file, path.join(out, to));
     staged.push(to); placed.set(file, to);
+    for (const m of src.matchAll(ASSET)) {
+      const asset = path.resolve(path.dirname(file), m[1]), at = path.posix.join(path.posix.dirname(to), m[1]);
+      if (!fs.existsSync(asset)) throw new Error(`asked for, but not there: ${rel(asset)}`);
+      fs.mkdirSync(path.dirname(path.join(out, at)), { recursive: true });
+      fs.copyFileSync(asset, path.join(out, at)); staged.push(at);
+    }
   }
   if (fonts.size) {
     const dir = path.join(ROOT, 'public/vendor/fonts');
