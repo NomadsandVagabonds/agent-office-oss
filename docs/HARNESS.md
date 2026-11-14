@@ -642,6 +642,244 @@ unchanged). The session's own token is replaced by
 work — commands, paths, output — and should be treated like the terminal it
 replaces. `OFFICE_HARNESS_TOOL_OUTPUT=0` keeps tool output out of it.
 
+## 9a. What a turn changed
+
+The transcript says what an agent *said* it did (a `tool` entry: "Edit
+src/a.js"). This says what happened to the files. For a session whose folder is
+inside a git repository, the office takes a snapshot of the working tree before
+each turn and another after it (`checkpoints.mjs`); "what did turn n change?"
+is the difference between the two. It is off unless the office is started with
+`OFFICE_CHECKPOINTS=1`.
+
+The outline is T3 Code's checkpointing (`apps/server/src/checkpointing/`, and
+the capture in `apps/server/src/vcs/GitVcsDriver.ts`): a private index, tree
+snapshots, diffs between them, a turn that waits a bounded moment for the
+snapshot before it. T3 keeps its snapshots as hidden refs and objects inside
+the user's repository. That is the one part not taken.
+
+**It uses git, and writes nothing into the repository.** Someone who never
+asked for snapshots can list their `.git` before a session and after it and
+find no difference. This is tested as stated: every path under `.git` with its
+size and modification time (folders too), `git for-each-ref` and
+`git count-objects -v` are compared across a session with several changing
+turns — with a dirty index, a stash, a merge stopped on a conflict, a split
+index, a linked worktree, a submodule and a SHA-256 repository.
+
+What that takes, each point with the reason it is there:
+
+| | how | why |
+| --- | --- | --- |
+| objects | `GIT_OBJECT_DIRECTORY=<data>/harness/checkpoints/<key>/objects` — one directory per repository (`<key>`: 16 hex digits of a hash of the repository's git directory), holding **every** object of a snapshot, not only the new ones | The repository's own objects cannot be borrowed as "alternates". Asked to write an object it already has, git updates that object's time — `utime` on the loose file or on its pack — wherever it finds it, so the first snapshot would touch the owner's packs. (Tried: only the new objects went to the office's directory, and a pack and a loose object in `.git/objects` came back with a new time.) |
+| index | `GIT_INDEX_FILE=<data>/harness/<session id>.index` — one per session, kept while the session lives, removed when it ends | The owner's index is not written, and not read either: reading a split index is enough to change the time of `.git/sharedindex.*`. Ours is never written as a split index (`core.splitIndex=false`): that would put a shared index file into the repository and could expire the one the owner's index depends on (found by T3). |
+| refs | none are written, anywhere. `git write-tree` prints the id of a tree; the ids are kept in `<data>/checkpoints.json` | |
+| hooks | `-c core.hooksPath=<the null device>` on every call | `git add` runs `post-index-change`. |
+| other programs | `-c core.fsmonitor=false`; every content filter the repository's config names is switched off for the call (`-c filter.<name>.clean= … -c filter.<name>.required=false`); a diff runs with `--no-ext-diff --no-textconv` | No program the repository names is started. git-lfs's "clean" filter, for one, writes into `.git/lfs`. |
+| a repository inside the folder | left out, whole: `:(top,exclude,literal)<path>` for each one `git ls-files --others` shows (as a name ending in `/`) | To record a submodule, a clone or another worktree as git would — the commit it is on — `git add` and `git diff-files` run `git status` *inside* it, with that repository's own config and filters. |
+| inherited environment | `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_NAMESPACE`, `GIT_PREFIX`, `GIT_EXTERNAL_DIFF`, `GIT_DIFF_OPTS` are cleared | A daemon started from inside a git hook would otherwise act on that hook's repository. (T3 clears the same.) |
+
+Every call is an argument array (never a shell), with `--no-optional-locks`,
+`GIT_TERMINAL_PROMPT=0` and `-c safe.bareRepository=explicit`, a timeout, and a
+bound on its output — the way `server/git.mjs` reads git for the workspace
+view, plus what writing needs. git is started as the leader of its own process
+group, so stopping it stops whatever it had started.
+
+**The commands.** `<root>` is the top of the checkout the session's folder is
+in; `<store>` is the office's directory for that repository.
+
+```
+once per repository — a bare repository of the office's own, objects and nothing else
+  git init -q --bare --template= <store>
+
+a snapshot — in the checkout (-C <root>), with the two variables above
+  git rev-parse --verify --quiet HEAD                    read: where HEAD is (told when it moved during a turn)
+  git config -z --name-only --get-regexp '^filter\..*'   read: which content filters to switch off
+  git ls-files -z --others --exclude-standard            files our index has never seen        ┐ counted and weighed
+  git diff-files -z --name-only --ignore-submodules=all  files whose stat data no longer match ┘ before anything is stored
+  git add -A --ignore-errors -- . [:(top,exclude,literal)<inner repository> …]
+  git write-tree                                         → the tree's id
+
+the first snapshot only — files that are committed *and* ignored (added with -f), which `add -A` would pass by
+  git ls-tree -r -z --name-only <HEAD>                   read, from the repository's objects
+  git check-ignore --no-index -z --stdin                 which of them the ignore rules cover
+  git update-index --add --remove -z --stdin             into our index
+
+a question — asked of the office's directory alone
+  git --git-dir=<store> diff-tree -r -z -M --raw --numstat --no-ext-diff --no-textconv <tree> <tree>
+  git --git-dir=<store> diff-tree -r -p -M --no-ext-diff --no-textconv --no-color -U<n> <tree> <tree> [-- <path>]
+
+forgetting — among the office's own files
+  git --git-dir=<store> prune --expire=3600.seconds.ago <tree> …   what no kept snapshot needs (objects under an hour old are left: a snapshot may be using them)
+  rm -r <store>                                                    once no session uses that repository
+```
+
+`add -A` is what puts untracked files in a snapshot and leaves ignored ones
+out. If nothing is listed by `ls-files` and `diff-files`, nothing has moved
+since the last snapshot and its tree is reused: no `add`, no `write-tree`. A
+path a caller names (`?path=`) goes to git after `--` with
+`GIT_LITERAL_PATHSPECS=1`, so it is that path — never an option, never a
+pattern (`-rf`, `--help`, `star*.txt` and `:(top)x` are file names like any
+other, and are tested as such).
+
+**What is in a snapshot.** Every file in the checkout that git would take:
+tracked or not, staged or not, as it is on disk (no content filter; git's own
+line-ending conversion still applies). The whole checkout, not only the
+session's folder: a session in `src/` that edits `../README.md` has that on
+record. Not in it: ignored files (unless committed), and repositories inside
+the folder. A session whose own folder is ignored by its repository is not
+recorded at all — git would never look into it.
+
+**What a snapshot says.** What the working tree looked like — not who wrote
+it. Edits a person or another agent makes in the same checkout while a turn
+runs are among that turn's changes; so are files a `git checkout` or a
+`git pull` replaces (when HEAD moved during a turn, the answer says so:
+`head: { from, to }`). What changes *between* turns belongs to no turn.
+
+**When.** A first snapshot is taken as soon as the session exists, while the
+agent starts — it is the one that reads every file. Then one before each turn
+and one after it. The turn waits for the one before it: the prompt is sent
+when the snapshot is in, or after `OFFICE_CHECKPOINTS_HOLD_MS`, whichever is
+first (`turn.hold`, honoured in `session.mjs`; T3 does the same — "the
+provider turn waits on the baseline"). Without that wait a fast agent's first
+writes would be part of its own "before". A turn stopped while it waits is
+never sent; a turn that starts while the previous turn's last snapshot is
+still being taken shares it. A snapshot that arrives after the wait is not
+used as a "before": that turn has no record, and says why.
+
+**Limits.** A snapshot is never allowed to become expensive without saying so.
+
+| setting | default | meaning |
+| --- | --- | --- |
+| `OFFICE_CHECKPOINTS` | off | `1` switches snapshots on. (`OFFICE_GIT=0` switches every use of git off, this included.) |
+| `OFFICE_CHECKPOINTS_HOLD_MS` | 3000 | how long a turn waits for the snapshot before it |
+| `OFFICE_CHECKPOINTS_TIMEOUT_MS` | 30000 | one snapshot, all its git calls together. Past it git is stopped, and snapshots are given up for that session — asked again it would take as long again |
+| `OFFICE_CHECKPOINTS_MAX_TREE_FILES` · `_MAX_TREE_BYTES` | 50000 · 512 MB | how big a folder is recorded at all: its files that are not ignored, counted and weighed before the first snapshot stores anything. Over: the folder is not recorded |
+| `OFFICE_CHECKPOINTS_MAX_FILES` · `_MAX_BYTES` | 5000 · 100 MB | what one later snapshot takes in: files new or changed since the last. Over: that snapshot is skipped; the next one is tried again |
+| `OFFICE_CHECKPOINTS_MAX_TURNS` | 100 | turns kept per session |
+| `OFFICE_CHECKPOINTS_DIFF_BYTES` | 512 KB | diff text in one answer; cut at a line, with `truncated: true` |
+
+Fixed: an answer lists at most 500 files of a turn (the counts stay true), a
+transcript entry 20; a list of names from git is read up to 8 MiB; a question
+about snapshots has 10 s; two snapshots in a row that each take longer than a
+turn waits end snapshots for that session.
+
+Why a turn or a session has no record is said once, in the transcript, as a
+`notice` — and in the answer to `changes` every time:
+
+```
+What turns change in this folder is not being recorded: /srv/notes is not inside a git repository.
+What turns change in this folder is not being recorded: it has 81,234 files that are not ignored, and the office takes snapshots of folders with up to 50,000 (OFFICE_CHECKPOINTS_MAX_TREE_FILES).
+No record of what turn 7 changed: its new and changed files come to more than 100 MB (OFFICE_CHECKPOINTS_MAX_BYTES); the largest seen is data/dump.sql, 212 MB.
+File changes are no longer being recorded for this session: a snapshot of this folder took longer than 30,000 ms (OFFICE_CHECKPOINTS_TIMEOUT_MS).
+```
+
+**What it costs.** Measured on the machine this was built on (4 cores, ext4,
+git 2.43), with `data/` on the same disk:
+
+| | 50 files | a copy of this repository (328 tracked files, 8.7 MB not ignored) | 20,000 files, 146 MB |
+| --- | --- | --- | --- |
+| the first snapshot of a repository | 64 ms | 349 ms | 6.0 s |
+| kept by the office after it | 0.4 MB | 6.6 MB | 123 MB (random text; code compresses better) |
+| a turn waits for the snapshot before it | 11 ms | 11 ms | 28 ms |
+| the snapshot after a turn that changed nothing | 12 ms | 11 ms | 30 ms |
+| …after a turn that changed 4 files, with the comparison | 27 ms | 29 ms | 96 ms |
+| the first snapshot of a later session in the same repository | 35 ms | 92 ms | 1.5 s |
+
+The first snapshot of a repository is the price of touching nothing: every
+file that is not ignored is read and stored once, compressed, on the office's
+side (about 25 MB a second here). After it, a snapshot is four git processes
+when nothing moved and six when something did, and only what is new is
+stored — for this session and for later ones in the same repository. The
+office's directory grows with what turns change; it shrinks when a session's
+record is pruned (with its transcript, after 120 newer finished sessions) and
+when turns pass the cap. It is never packed. It holds copies of working files,
+so it is as private as the repository itself (`data/` is never committed).
+
+**Reading it.** Both routes are loopback-only, like the transcript — one is
+file names, the other file content. An agent may read them, as it may read a
+transcript. A session lists them in `controls` (`changes`, `diff`), with
+`available: false` where there is no record.
+
+`GET /api/harness/sessions/:ref/changes[?turn=n]`
+
+```jsonc
+{ "sessionId": "d_3f9c0a1b2c4d", "recorded": true,
+  "root": "/home/me/code/app",                                  // the checkout the snapshots are of
+  "store": "/…/data/harness/checkpoints/5b1c9e0f7a2d4c68",      // where the office keeps their objects
+  "turns": [
+    { "turn": 1, "at": 1794665312495,                           // when the turn began
+      "files": [
+        { "path": "gone.txt",     "status": "deleted",  "additions": 0, "deletions": 1, "binary": false },
+        { "path": "logo.png",     "status": "added",    "additions": 0, "deletions": 0, "binary": true },
+        { "path": "new-name.txt", "status": "renamed",  "from": "old-name.txt", "additions": 0, "deletions": 0, "binary": false },
+        { "path": "src/a.js",     "status": "modified", "additions": 2, "deletions": 1, "binary": false } ],
+      "count": 4, "additions": 2, "deletions": 2,                // of the whole turn, also when `files` is cut
+      "truncated": false,
+      "trees": { "start": "0c541856…", "end": "a4e746b0…" } },   // ids in the office's directory
+    { "turn": 2, "at": 1794665313880, "files": [], "count": 0, "additions": 0, "deletions": 0, "truncated": false,
+      "skipped": "its new and changed files come to more than 100 MB (OFFICE_CHECKPOINTS_MAX_BYTES); the largest seen is data/dump.sql, 212 MB" },
+    { "turn": 3, "at": 1794665319002, "files": [], "count": 0, "additions": 0, "deletions": 0, "truncated": false,
+      "pending": true, "trees": { "start": "a4e746b0…" } } ],    // still running
+  "total": { "turns": 1, "files": 4, "additions": 2, "deletions": 2 },   // its turns' changes added up, each file once
+  "keeps": 100 }
+```
+
+Also, where they apply: on a turn, `head: { from, to }` (HEAD moved while it
+ran) and `partial: "…"` (git could not read some file, in its words); on the
+answer, `off: "…"` (snapshots were given up for this session, and why). A
+session without a record answers
+`{ sessionId, recorded: false, reason, turns: [], total }`.
+
+`GET /api/harness/sessions/:ref/diff?turn=n[&path=…][&context=3]`, or
+`?from=a&to=b` — from the start of turn *a* to the end of turn *b*, which
+includes whatever anyone did in between.
+
+```jsonc
+{ "sessionId": "d_3f9c0a1b2c4d", "turn": 1, "from": 1, "to": 1, "context": 3, "path": "src/a.js",
+  "diff": "diff --git a/src/a.js b/src/a.js\nindex 26b8d7a..3f545d3 100644\n--- a/src/a.js\n+++ b/src/a.js\n@@ -1,3 +1,4 @@\n export const a = 1;\n-export const b = 2;\n+export const b = 22;\n export const c = 3;\n+export const d = 4;\n",
+  "truncated": false }
+```
+
+`path` is as `changes` spells it; a folder gives everything under it; a
+renamed file asked for by its new name is shown as the rename. An empty `diff`
+means nothing changed. Refusals carry the reason: 400 (a turn, `context` or
+`path` that makes no sense), 404 (no such session, no record of that turn, or
+a session that is not recorded), 409 (the turn is still running, or one of its
+snapshots was skipped), 410 (the snapshots can no longer be read — the
+office's own files are gone).
+
+**In the transcript**, a turn that changed something gets one more entry when
+its last snapshot is in — so any client can say "3 files changed" without
+asking again. A turn that changed nothing writes nothing.
+
+```jsonc
+{ "id": "turn-1:changes", "kind": "changes", "turn": 1,
+  "files": [ { "path": "src/a.js", "status": "modified", "additions": 2, "deletions": 1 } ],   // at most 20; `from` on a rename, `binary: true` on a binary file
+  "more": 3,                                                    // files not listed
+  "additions": 2, "deletions": 2 }                              // of the whole turn
+```
+
+Paths in the entry pass the redactor like every path in a transcript; the
+exact names are in the `changes` answer. For turns queued back to back the
+entry can land after the next turn's opening entries — it carries its turn.
+
+**What it does not know or do.**
+
+- Who changed a file (above), and anything inside a nested repository.
+- Ignored files: build output, and whatever else `.gitignore` covers.
+- File names that are not UTF-8 are listed with replacement characters, and
+  cannot be asked for by `path`.
+- With filters off, a file kept by git-lfs is snapshotted whole and counts
+  against the limits; a file git-crypt would encrypt is stored as it is on
+  disk.
+- A program the agent left running can still write after the turn has ended.
+  That shows up before the next turn starts, as nobody's change.
+- It does not restore anything. Each turn keeps both of its trees, which is
+  what putting files back will need (section 17).
+
+Not exercised: Windows (process groups and the tests' slow-git wrapper are
+POSIX); a machine without git (the path exists — "git is not installed
+here" — but no test removes git); a repository on a network file system.
+
 ## 10. Mail that wakes people up
 
 Office mail normally waits until the recipient looks. For a driven session that

@@ -63,8 +63,9 @@ export function createHarness(ctx, file) {
     }
   }
 
-  // What each turn changed on disk: snapshots of the working tree, kept in the repository itself
-  // (checkpoints.mjs). Whatever it still holds for sessions this office no longer lists is cleaned away now.
+  // What each turn changed on disk: snapshots of the working tree, kept among the office's own files and
+  // never in the repository (checkpoints.mjs). What it still holds for sessions this office no longer lists
+  // is cleaned away now.
   const checkpoints = createCheckpoints({ settings: settings.checkpoints, dir, file: path.join(cfg.dataDir, 'checkpoints.json'), log,
     changed: () => changed() });
   checkpoints.reconcile(new Set(Object.keys(store.data.sessions)));
@@ -180,7 +181,7 @@ export function createHarness(ctx, file) {
       delete store.data.sessions[old.id];
       if (!SESSION_ID.test(old.id)) continue;                       // only ever a file name we made ourselves
       for (const suffix of ['.jsonl', '.jsonl.1', '.jsonl.2', '.trace.jsonl']) fs.rm(path.join(dir, old.id + suffix), { force: true }, () => {});
-      checkpoints.forget(old.id).catch(() => {});                   // …and the snapshots of its turns, out of the repository they are in
+      checkpoints.forget(old.id).catch(() => {});                   // …and the snapshots of its turns: files of the office's own, too
     }
     store.save();
   }

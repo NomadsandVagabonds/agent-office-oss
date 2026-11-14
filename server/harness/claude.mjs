@@ -46,9 +46,13 @@ const OWN_MODES = Object.freeze([
   { id: 'plan', name: 'Plan', reach: 0 },
   { id: 'dontAsk', name: 'Don’t ask', reach: 0 },
   { id: 'acceptEdits', name: 'Accept edits', reach: 1 },
-  { id: 'auto', name: 'Auto', reach: 2 },
+  // Known, so that a Claude found in it is placed, but not offered. What its classifier hands on to a person
+  // would be answered by a session in full mode without anybody seeing it, which makes it the bypass mode by
+  // another name. It is worth offering once a request can be marked as one a person must see (HARNESS.md §7.5).
+  { id: 'auto', name: 'Auto', reach: 2, offered: false },
   { id: 'bypassPermissions', name: 'Bypass permissions', reach: 2 },
 ]);
+const OFFERED = Object.freeze(OWN_MODES.filter((m) => m.offered !== false));
 const REACH = Object.freeze({ ask: 0, edits: 1, full: 2 });
 // A mode this file has never heard of is taken to go further than anything, so that it is never left standing.
 const reachOf = (modeId) => OWN_MODES.find((m) => m.id === modeId)?.reach ?? 3;
@@ -78,7 +82,7 @@ export function claudeLaunch({ access = 'ask', agentMode = '', model = '', effor
   let modeId = CLAUDE_MODES[access] || CLAUDE_MODES.ask;
   if (modeId === 'bypassPermissions' && !bypass) modeId = 'acceptEdits';
   // A mode of its own that somebody chose for it (plan, say) is taken when it stays within what the session allows.
-  const own = OWN_MODES.find((m) => m.id === agentMode);
+  const own = OFFERED.find((m) => m.id === agentMode);
   if (own && own.reach <= ceiling && (own.id !== 'bypassPermissions' || bypass)) modeId = own.id;
   return {
     modeId, bypass,
@@ -546,7 +550,7 @@ export class ClaudeAdapter extends AgentAdapter {
       effort: this.effort, efforts: this.#modelRow()?.efforts || [],
       modeId: this.modeId,
       // Its own modes, as far as the session's mode lets it go — and bypass only if this process can enter it at all.
-      modes: OWN_MODES.filter((m) => m.reach <= ceiling && (m.id !== 'bypassPermissions' || this.mayBypass)).map(({ id, name }) => ({ id, name })),
+      modes: OFFERED.filter((m) => m.reach <= ceiling && (m.id !== 'bypassPermissions' || this.mayBypass)).map(({ id, name }) => ({ id, name })),
     };
   }
 
@@ -597,8 +601,8 @@ export class ClaudeAdapter extends AgentAdapter {
 
   /** Claude's OWN mode. Any of them, as long as it does not go further than the session's mode allows. */
   async setMode(modeId) {
-    const mode = OWN_MODES.find((m) => m.id === modeId);
-    if (!mode) throw new Error(`Claude's own modes are ${OWN_MODES.map((m) => m.id).join(', ')}`);
+    const mode = OFFERED.find((m) => m.id === modeId);
+    if (!mode) throw new Error(`Claude's own modes are ${OFFERED.map((m) => m.id).join(', ')}`);
     if (mode.reach > REACH[this.access]) throw new Error(`its “${mode.id}” mode goes further than this session's “${this.access}” mode allows; change the session's mode first`);
     if (mode.id === 'bypassPermissions' && !this.mayBypass) throw new Error('this Claude was not started able to bypass its permission checks');
     await this.#putInMode(mode.id);
@@ -862,10 +866,16 @@ export class ClaudeAdapter extends AgentAdapter {
     if (outside && !paths.includes(outside) && paths.length < LIMITS.paths) paths.push(outside);
     // Why Claude asks, in its words (it may carry terminal colours: they are stripped), and who is asking.
     const why = text(typeof request.decision_reason === 'string' ? request.decision_reason : '', 600).replace(/\s+/g, ' ').trim();
-    const detail = [why, outside ? `outside its folder: ${outside}` : '', typeof request.agent_id === 'string' && request.agent_id ? 'asked by a sub-agent' : '']
-      .filter(Boolean).join(' — ');
-    return this.#ask(controlId, { type: 'permission', kind: tool.kind, toolId, title: tool.title, name: tool.name, detail,
-      command: tool.command, paths, options: APPROVAL_OPTIONS }, { input, echo });
+    // Some asks Claude raises as a check of its own — a write to its settings or under .git, a command its
+    // classifier would not pass — and would put to a person even where it asks about little else. Such a
+    // request is reported as a kind of its own, so that no standing permission for "file changes" or
+    // "commands" answers it: only a session in full mode still does, because there everything is allowed.
+    const flagged = request.decision_reason_type === 'safetyCheck' || request.decision_reason_type === 'classifier'
+      || request.classifier_approvable === false || request.default_to_no === true;
+    const detail = [why, outside ? `outside its folder: ${outside}` : '', typeof request.agent_id === 'string' && request.agent_id ? 'asked by a sub-agent' : '',
+      flagged ? 'flagged by Claude’s own safety check, so no standing permission covers it' : ''].filter(Boolean).join(' — ');
+    return this.#ask(controlId, { type: 'permission', kind: flagged ? 'other' : tool.kind, toolId, title: tool.title,
+      name: flagged ? `${tool.name} (flagged by Claude)` : tool.name, detail, command: tool.command, paths, options: APPROVAL_OPTIONS }, { input, echo });
   }
 
   // Claude's question to the person is a tool of its own, and its answer is that tool's input, completed.

@@ -262,7 +262,7 @@ const kept = (snap) => ({ tree: snap.tree, ...(snap.head ? { head: snap.head } :
 /* ---- the store ------------------------------------------------------------------ */
 
 const NOTHING = Object.freeze({ files: Object.freeze([]), count: 0, additions: 0, deletions: 0, truncated: false });
-const SWITCHED_OFF = 'this office is not recording what turns change (it does when it is started with OFFICE_CHECKPOINTS=1)';
+const SWITCHED_OFF = 'this office is not recording what turns change (OFFICE_CHECKPOINTS=1 turns that on; OFFICE_GIT=0 turns it off)';
 const NO_RECORD = 'the office has no snapshots of this session';
 
 /**
@@ -304,7 +304,7 @@ export function createCheckpoints({ settings, dir, file, log = console, changed 
   }
 
   async function place(st) {
-    if (!settings.enabled) return refuse(st, SWITCHED_OFF, { quiet: true });       // the operator's choice needs no announcing
+    if (!settings.enabled) return refuse(st, SWITCHED_OFF, { quiet: true });       // how the office was started needs no announcing to every session
     if (!(await gitAvailable())) return refuse(st, 'git is not installed here');
     const where = await locate(st.cwd);
     if (!where) return refuse(st, `${line(st.cwd, 300)} is not inside a git repository`);

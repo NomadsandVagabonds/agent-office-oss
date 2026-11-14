@@ -26,8 +26,11 @@
 //   sub:cmd                a sub-agent that runs a command        planmode:text   leave plan mode with this plan
 //   fetch:url              a web fetch (asks)                     mcptool:name    a call to one of the office's tools (asks)
 //   hook:Event             run the office's Claude hook script, as Claude Code runs its hooks
-//   wake:text              after this turn, start one of its own (a background task reporting back)
+//   wake:text              after this turn, start one of its own (a background task reporting back);
+//                          wake:hold:text is still in the middle of that turn when the next message arrives
 //   withdraw:cmd           ask about a command, then stop waiting for the answer by itself (control_cancel_request)
+//   guard:path             a file write Claude raises as a safety check of its own (as for .git or its settings)
+//   child                  start a process of its own that outlives the turn, and say its pid
 //   retry  compact  local:text  denied:Tool  authfail  elicit  hookcb  dup      smaller things the stream can say
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -89,6 +92,7 @@ const seen = { args: claudeArgs, initialize: null, mcp: [], turns: 0, framed: 0,
 let office = null;
 let officeMcp = null;                    // the office's MCP server entry, exactly as it was handed over
 let turn = null;                         // { uuid, cancelled, ignoreCancel, pending, message, lastText, wake }
+let ownTurn = null;                      // the words of a turn Claude started by itself and has not finished
 let requestSeq = 0, messageSeq = 0, toolSeq = 0, lastDelegation = '';
 const waiting = new Map();               // our control request id → resolve(response payload | { cancelled })
 let lastAssistant = null;
@@ -320,7 +324,7 @@ const inside = (target) => { const rel = path.relative(state.cwd, path.resolve(s
 
 /* ---- a turn ---------------------------------------------------------------------- */
 
-const EXTRA = new Set(['write', 'run', 'sub', 'planmode', 'fetch', 'mcptool', 'hook', 'wake', 'withdraw', 'retry', 'compact', 'local', 'denied', 'authfail', 'elicit', 'hookcb', 'dup']);
+const EXTRA = new Set(['write', 'run', 'sub', 'planmode', 'fetch', 'mcptool', 'hook', 'wake', 'withdraw', 'guard', 'child', 'retry', 'compact', 'local', 'denied', 'authfail', 'elicit', 'hookcb', 'dup']);
 function steps(promptText) {
   return parseScript(scriptIn(promptText)).map((step) => {
     // A step fake-lib does not know comes back as something to say; pick this fake's own steps out of those.
@@ -342,8 +346,18 @@ function result(fields) {
   emit({ ...base, ...fields });
 }
 
+// How a turn nobody asked for ends: a result that names no message of the host's, marked as a background task's.
+function endOwnTurn() {
+  const words = ownTurn;
+  ownTurn = null;
+  result({ subtype: 'success', is_error: false, api_error_status: null, stop_reason: 'end_turn', terminal_reason: 'completed', result: words,
+    origin: { kind: 'task-notification' } });
+}
+
 async function runTurn(uuid, promptText) {
   const mine = turn = { uuid, cancelled: false, ignoreCancel: false, pending: null, during: '', message: null, lastText: '', wake: '' };
+  // A message that arrives while Claude is in a turn of its own waits for that turn's end, which comes first.
+  if (ownTurn !== null) endOwnTurn();
   emit({ type: 'system', subtype: 'init', cwd: state.cwd, tools: ['Agent', 'AskUserQuestion', 'Bash', 'Edit', 'Read', 'Write', 'TodoWrite', 'WebFetch'],
     mcp_servers: seen.mcp.map((name) => ({ name, status: REFUSE_MCP ? 'failed' : 'connected', source: 'dynamic' })), model: state.model, permissionMode: state.mode,
     slash_commands: [], apiKeySource: 'none', claude_code_version: '9.9.9-fake', output_style: 'default', agents: [], skills: [], plugins: [],
@@ -468,6 +482,19 @@ async function runTurn(uuid, promptText) {
         break;
       case 'local': emit({ type: 'system', subtype: 'local_command_output', content: arg }); break;
       case 'denied': emit({ type: 'system', subtype: 'permission_denied', tool_name: arg || 'Bash', tool_use_id: 'toolu_none', message: 'A deny rule matches this call.' }); break;
+      case 'guard': {
+        // A write Claude asks about whatever mode it is in: its own safety check, which no mode of its own waives.
+        const d = await useTool('Write', { file_path: arg, content: 'x' }, 'ask', { output: `File created at ${arg}`,
+          request: { decision_reason: `Claude requested permissions to edit ${arg} which is a sensitive file.`, decision_reason_type: 'safetyCheck', classifier_approvable: true } });
+        if (!d.stopped) await say(`guard=${d.behavior}`);
+        break;
+      }
+      case 'child': {
+        // Something Claude left running (a dev server, an MCP server): it shares our process group.
+        const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+        await say(`child=${child.pid}`);
+        break;
+      }
       case 'withdraw': {
         // Claude stops waiting by itself — a hook of its own decided first, say — and tells the host so.
         const id = callTool('Bash', { command: arg || 'true' });
@@ -600,12 +627,14 @@ async function runTurn(uuid, promptText) {
   if (mine.wake) {
     // A turn of its own: a background task has reported back, Claude answers it, and nobody asked.
     await sleep(30);
+    if (turn) return;                                          // the next message came first
+    const hold = mine.wake.startsWith('hold:');
+    ownTurn = hold ? mine.wake.slice(5).trim() : mine.wake;
     emit({ type: 'system', subtype: 'init', cwd: state.cwd, tools: [], mcp_servers: [], model: state.model, permissionMode: state.mode, slash_commands: [], apiKeySource: 'none',
       claude_code_version: '9.9.9-fake', output_style: 'default' });
     emit({ type: 'assistant', parent_tool_use_id: null, message: { model: state.model, id: `msg_wake_${++messageSeq}`, type: 'message', role: 'assistant', stop_reason: null,
-      content: [{ type: 'text', text: mine.wake }], usage: usageNow(1) } });
-    result({ subtype: 'success', is_error: false, api_error_status: null, stop_reason: 'end_turn', terminal_reason: 'completed', result: mine.wake,
-      origin: { kind: 'task-notification' } });
+      content: [{ type: 'text', text: ownTurn }], usage: usageNow(1) } });
+    if (!hold) endOwnTurn();                                   // otherwise it ends when the next message arrives
   }
 }
 

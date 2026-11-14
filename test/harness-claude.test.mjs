@@ -118,8 +118,10 @@ test('driven sessions: Claude Code, natively', async (t) => {
     // Its own modes: taken within the session's mode, never beyond it, never one nobody has heard of.
     assert.equal(claudeLaunch({ sessionId: id, access: 'ask', agentMode: 'plan' }).modeId, 'plan');
     assert.equal(claudeLaunch({ sessionId: id, access: 'ask', agentMode: 'acceptEdits' }).modeId, 'default');
+    assert.equal(claudeLaunch({ sessionId: id, access: 'full', agentMode: 'acceptEdits' }).modeId, 'acceptEdits');
+    // Its "auto" mode is not one the office starts it in (see the adapter: under a full session it would be bypass by another name).
     assert.equal(claudeLaunch({ sessionId: id, access: 'edits', agentMode: 'auto' }).modeId, 'acceptEdits');
-    assert.equal(claudeLaunch({ sessionId: id, access: 'full', agentMode: 'auto' }).modeId, 'auto');
+    assert.equal(claudeLaunch({ sessionId: id, access: 'full', agentMode: 'auto' }).modeId, 'bypassPermissions');
     assert.equal(claudeLaunch({ sessionId: id, access: 'full', agentMode: 'yolo' }).modeId, 'bypassPermissions');
     assert.equal(claudeLaunch({ sessionId: id, access: 'nonsense' }).modeId, 'default', 'a mode nobody knows is the most careful one');
     assert.deepEqual(tail({ model: 'opus', effort: 'max' }).slice(4), ['--model', 'opus', '--effort', 'max']);
@@ -193,6 +195,13 @@ test('driven sessions: Claude Code, natively', async (t) => {
     await waitFor(async () => (await notices(s.id)).some((x) => x === 'Claude went on by itself after work in the background finished, and said: the build finished'), { what: 'the note about the turn Claude took by itself' });
     assert.equal((await h.session(s.id)).state, 'idle');
     assert.equal((await h.turn(s.id, 'say:still in step')).said, 'still in step', 'and the next turn is still the office\'s');
+    // The same when the office gives a turn while Claude is still in the middle of its own: the first result
+    // that arrives is the end of Claude's turn, not of the one just given, and must not be taken for it.
+    await h.turn(s.id, 'say:started another; wake:hold:the tests passed');
+    await sleep(120);
+    const over = await h.turn(s.id, 'sleep:60; say:mine, whole');
+    assert.deepEqual([over.turn.state, over.said], ['completed', 'mine, whole']);
+    assert.ok((await notices(s.id)).includes('Claude went on by itself after work in the background finished, and said: the tests passed'));
 
     // An MCP server asking the person for input, and a callback the office never registered: both answered, neither left hanging.
     const odd = await h.turn(s.id, 'elicit; hookcb');
@@ -304,13 +313,25 @@ test('driven sessions: Claude Code, natively', async (t) => {
     await h.answer(card.id, { action: 'reject' });
     await h.turnDone(e.id, n);
     assert.equal((await h.turnView(e.id, n)).said, 'write=deny in acceptEdits');
+
+    // What Claude raises as a safety check of its own (a write under .git, say) is not an ordinary edit: neither
+    // the mode nor "file changes for this session" answers it, though the file is in the folder.
+    n = await h.begin(e.id, 'guard:.git/hooks/pre-commit');
+    card = await h.need(e.id);
+    assert.deepEqual([card.request.category, card.ask.tool, card.ask.files], ['other:write (flagged by claude)', 'Write (flagged by Claude)', ['.git/hooks/pre-commit']]);
+    assert.equal(card.message, 'Wants permission: Write .git/hooks/pre-commit\nClaude requested permissions to edit .git/hooks/pre-commit which is a sensitive file. — flagged by Claude’s own safety check, so no standing permission covers it');
+    await h.answer(card.id, { action: 'once' });
+    await h.turnDone(e.id, n);
+    assert.equal((await h.turnView(e.id, n)).said, 'guard=allow');
     await end(e.id);
 
-    // full: Claude asks about nothing; if a rule of the operator's makes it ask anyway, the office says yes.
+    // full: Claude asks about nothing; if a rule of the operator's makes it ask anyway, the office says yes —
+    // to its safety checks too, because full means everything, and each one is written down.
     const f = await h.start('fake-claude', { name: 'Fully', mode: 'full' });
-    const ran = await h.turn(f.id, 'run:make; ask:rm -rf build');
-    assert.equal(ran.said, 'run=allow in bypassPermissions\ndecision=allow');
-    assert.deepEqual(ran.entries.filter((x) => x.kind === 'permission').map((x) => [x.state, x.reason]), [['auto-allowed', 'the session runs in full-access mode']]);
+    const ran = await h.turn(f.id, 'run:make; ask:rm -rf build; guard:.git/config');
+    assert.equal(ran.said, 'run=allow in bypassPermissions\ndecision=allow\nguard=allow');
+    assert.deepEqual(ran.entries.filter((x) => x.kind === 'permission').map((x) => [x.state, x.reason, x.category]),
+      [['auto-allowed', 'the session runs in full-access mode', 'command'], ['auto-allowed', 'the session runs in full-access mode', 'other:write (flagged by claude)']]);
     await end(f.id);
 
     // Claude's own "dontAsk" mode refuses by itself; the office is told, and shows it.
@@ -412,7 +433,8 @@ test('driven sessions: Claude Code, natively', async (t) => {
     assert.deepEqual([far.status, far.data.error], [400, 'own mode must be one of default, plan, dontAsk']);
     const adapter = h.ctx.harness.session(s.id).adapter;
     await assert.rejects(adapter.setMode('bypassPermissions'), /its “bypassPermissions” mode goes further than this session's “ask” mode allows; change the session's mode first/);
-    await assert.rejects(adapter.setMode('yolo'), /Claude's own modes are default, plan, dontAsk, acceptEdits, auto, bypassPermissions/);
+    await assert.rejects(adapter.setMode('yolo'), /Claude's own modes are default, plan, dontAsk, acceptEdits, bypassPermissions/);
+    await assert.rejects(adapter.setMode('auto'), /Claude's own modes are/, 'its auto mode is known, and not offered');
     assert.deepEqual((await told(s.id)).modeRequests, ['plan'], 'neither was ever put to Claude');
     await end(s.id);
 
@@ -447,7 +469,7 @@ test('driven sessions: Claude Code, natively', async (t) => {
 
     // full → ask while Claude bypasses its checks: Claude is brought back first, and only then does the session say "ask".
     const f = await h.start('fake-claude', { name: 'Tighten', mode: 'full' });
-    assert.deepEqual(f.controls.agentMode.options, ['default', 'plan', 'dontAsk', 'acceptEdits', 'auto', 'bypassPermissions']);
+    assert.deepEqual(f.controls.agentMode.options, ['default', 'plan', 'dontAsk', 'acceptEdits', 'bypassPermissions']);
     assert.equal((await h.turn(f.id, 'run:make')).said, 'run=allow in bypassPermissions');
     const ask = await set(f.id, { mode: 'ask' });
     assert.deepEqual([ask.status, ask.data.session.mode, ask.data.session.agentMode], [200, 'ask', 'default']);
@@ -528,6 +550,14 @@ test('driven sessions: Claude Code, natively', async (t) => {
     assert.equal((await h.session(s.id)).live, true);
     await end(s.id);
 
+    // Its "auto" mode acts on its own judgement: fine under a session that allows everything, too far under any other.
+    const a = await h.start('fake-claude', { name: 'Auto', mode: 'full' });
+    await h.turn(a.id, 'mode:auto; say:on my own judgement');
+    assert.equal((await h.session(a.id)).agentMode, 'auto');
+    assert.deepEqual(await notices(a.id, 'warn'), []);
+    assert.equal((await set(a.id, { mode: 'edits' })).data.session.agentMode, 'acceptEdits', 'and it does not survive the session being tightened');
+    await end(a.id);
+
     // One that will not come back is ended: better no agent than one that runs with more than the session shows.
     for (const adapter of ['fake-claude-sticky', 'fake-claude-stubborn']) {
       const x = await h.start(adapter, { name: adapter === 'fake-claude-sticky' ? 'Sticky' : 'Stubborn' });
@@ -574,6 +604,14 @@ test('driven sessions: Claude Code, natively', async (t) => {
     assert.match(dead.reason, /did not stop when asked/);
     assert.ok((await notices(s.id, 'warn')).includes('Claude did not confirm the stop; its process was ended.'));
     await waitFor(() => { try { process.kill(pid, 0); return false; } catch { return true; } }, { what: 'the process to be gone' });
+
+    // Ending a session ends everything Claude started, not only Claude.
+    const g = await h.start('fake-claude', { name: 'Parent' });
+    const left = Number(/^child=(\d+)$/.exec((await h.turn(g.id, 'child')).said)[1]);
+    const alive = (p) => { try { process.kill(p, 0); return true; } catch { return false; } };
+    assert.ok(alive(left));
+    await end(g.id);
+    await waitFor(() => !alive(left), { what: 'what Claude left running to be gone' });
 
     // An older Claude says less about why a turn ended; a stop is still a stop.
     const old = await h.start('fake-claude-old', { name: 'Elder' });
