@@ -209,7 +209,7 @@ export function createReviews(ctx, file) {
     save();
     // The card moves because of the verdict; the listener above sees a card whose review is no longer open, and leaves it alone.
     const moved = ctx.taskApi.update(task.id, { status: decision === 'approved' ? 'done' : 'doing', author: by.name });
-    say('review', decision === 'approved' ? `${by.name} approved “${task.title}”` : `${by.name} asked for changes on “${task.title}” (${plural(open.length, 'open finding')})`, { taskId: task.id, deptId: task.deptId });
+    say('review-verdict', decision === 'approved' ? `${by.name} approved “${task.title}”` : `${by.name} asked for changes on “${task.title}” (${plural(open.length, 'open finding')})`, { taskId: task.id, deptId: task.deptId });
     const owner = ctx.agents.resolveRef(task.assignee || '');
     if (owner) {
       try {
@@ -272,7 +272,7 @@ export function createReviews(ctx, file) {
     r.runs.push(run);
     if (r.runs.length > 20) r.runs.splice(0, r.runs.length - 20);
     save(); told(task.deptId);
-    say('review', `${run.to.name || 'An agent'} was asked to review “${task.title}”`, { taskId: task.id, deptId: task.deptId, agentId: run.to.agentId || undefined });
+    say('review-run', `${run.to.name || 'An agent'} was asked to review “${task.title}”`, { taskId: task.id, deptId: task.deptId, agentId: run.to.agentId || undefined });
     return run;
   }
 

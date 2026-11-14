@@ -97,6 +97,24 @@ async function live(a) {
   }
 }
 
+// A card in Review is looked at by a colleague, and then decided — in this demo by a stand-in for you, who says so in its name.
+const FINDINGS = [
+  ['The error path is not covered by a test', false], ['This retries forever when the server says no', true], ['Name says "list" but it returns a map', false],
+  ['The limit is hard-coded here and in the config', false], ['A request without a token still gets through', true], ['The log line prints the whole payload', false],
+];
+async function review(t, a) {
+  const at = `/api/tasks/${encodeURIComponent(t.id)}/review`;
+  const peer = t.assignee && t.assignee !== a.id;
+  if (peer && chance(0.45)) {
+    const [text, blocker] = pick(FINDINGS);
+    await call(`${at}/findings`, { text, from: a.id, ...(blocker ? { severity: 'blocker' } : {}) });
+  } else if (peer && chance(0.4)) {
+    await call(`${at}/recommend`, { decision: t.review?.blockers ? 'changes' : 'approved', from: a.id });
+  } else {
+    await call(`${at}/verdict`, { decision: t.review?.blockers ? 'changes' : 'approved', author: 'Demo lead' });
+  }
+}
+
 async function social() {
   for (;;) {
     await sleep(rand(9000, 22000));
@@ -118,7 +136,8 @@ async function social() {
         await call('/api/tasks', { title: pick(CARDS), deptId: a.dept, status: chance(0.5) ? 'todo' : 'backlog', ...who });
       } else {
         const t = pick(open);
-        const next = { backlog: 'todo', todo: 'doing', doing: 'review', blocked: 'doing', review: 'done' }[t.status] || 'doing';
+        if (t.status === 'review') { await review(t, a); continue; }
+        const next = { backlog: 'todo', todo: 'doing', doing: 'review', blocked: 'doing' }[t.status] || 'doing';
         await call(`/api/tasks/${encodeURIComponent(t.id)}`,
           { status: next, ...(next === 'doing' ? { assignee: a.id } : {}), ...who }, 'PATCH');
       }
