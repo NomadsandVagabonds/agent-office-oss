@@ -225,7 +225,7 @@ test('the coins still to be found take the same hiding places in the same order,
   }
 });
 
-test('something follows you in some visits, not all — and never from more than one floor', () => {
+test('something follows you in every visit (cast.js: the mascot is the one who is always down there) — and never from more than one floor', () => {
   let with_ = 0, onTop = 0;
   for (const seed of SEEDS) {
     const { visit, floors } = visitFor(seed);
@@ -234,7 +234,9 @@ test('something follows you in some visits, not all — and never from more than
     if (lairs) { with_++; assert.ok(floors[visit.mascot].pursuer, 'on the floor the plan says'); if (visit.mascot === 0) onTop++; }
     assert.equal(generateVisit(seed, { ...office, pursuer: false }).floors.filter((l) => l.pursuer).length, 0);
   }
-  assert.ok(with_ > SEEDS.length * 0.3 && with_ < SEEDS.length * 0.9, `${with_} of ${SEEDS.length}`);
+  // (a floor in fifty has no corner for his plinth; there he is stood in a plain room when the floor is built — pursuer.js — so the plan is still kept)
+  assert.ok(with_ >= SEEDS.length * 0.95, `${with_} of ${SEEDS.length}`);
+  for (const seed of SEEDS) assert.ok(visitFor(seed).visit.mascot !== null, `seed ${seed}: a visit he is not in`);
   assert.ok(onTop < with_ * 0.45, `it is on the floor you land on in ${onTop} of ${with_}`);
 });
 
