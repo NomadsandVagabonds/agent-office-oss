@@ -17,6 +17,73 @@ The humor is an ordinary office habit taken one impossible step too far: a party
 
 Quiet gaps matter. A strange room should be a discovery in an otherwise believable, empty place. Do not fill every corner with jokes, creatures or effects. New encounters can be harmless, neutral or friendly without becoming bright mascot attractions.
 
+## Pacing direction — 14 November 2026
+
+The user's target is **60–80% generic, unsettling maze space**. Similar rooms
+make the player doubt whether they have been somewhere before. A recognizable
+set piece is also a navigation landmark; a succession of excellent set pieces
+can make the building easier to remember and less unsettling.
+
+Use roughly **75% ordinary space, 20% small anomalies and 5% major set pieces**
+as an initial design study within that target, not a hard generation rule or a
+measured result. The user specified the 60–80% range; this finer split is a
+workshop proposal for Fable to assess.
+
+| Role | What the player encounters | Authoring constraint |
+| --- | --- | --- |
+| Ordinary maze | Repeated yellow wallpaper, carpet, fluorescent grids, pillars, offset openings, doglegs and empty bays | No unique palette, named occupant, puzzle, explanatory sign, or mandatory event. It must work when nothing happens. |
+| Small anomaly | A slightly wrong chair position, a damp patch, a gap in the ceiling grid, or an unexplained sound | Sparse, ambiguous and reusable. Avoid a unique visual fingerprint in every room. |
+| Major set piece | A room such as Dispatch, a memorable creature, or a major spatial impossibility | Rare punctuation. Adding candidates to the library does not imply dealing more of them into each run. |
+
+Judge this mix along exploration routes as well as across the whole generated
+map. Large rooms, detours and dwell time change the experience; room count and
+floor area are only proxies. Do not put an anomaly at every fixed number of
+doors. Allow quiet stretches, similar branches and returns to familiar-looking
+spaces. Disorientation should come from repeated architecture and limited
+sightlines, while every required route remains physically traversable.
+
+**Next workshop priority:** ordinary maze variations using the existing material
+family and proportions: an offset doorway, an interrupted pillar aisle, and a
+dogleg with a nearly identical side bay. Repeat these motifs across multiple
+spaces, with restrained differences. These are structural candidates, not new
+named attractions in the oddity deck. The proposed Waiting Room is deferred.
+
+Gemini's room/creature/item slate is a useful catalogue of optional contributions.
+Keep its modular organization, but distinguish authored and tested candidates
+from proposed mechanics. Its hostile encounters, item dependencies and new
+guidance systems are integration choices for Fable; they should not become
+requirements of our quiet maze work. Work only in the assigned checkout so
+parallel branches remain independent.
+
+Before proposing runtime tuning, measure the current snapshot and give Fable
+the source, sampling method and limitations. Shared generation, exit policy,
+pursuit and persistence remain Fable's integration decisions. This direction
+does not silently change their defaults.
+
+### Baseline check
+
+On workshop source revision `b26deb8`, 200 default visits (`i * 7919 + 13`,
+`i = 0…199`, no forced room/count options) produced these medians:
+
+| Measurement | Median |
+| --- | ---: |
+| Ordinary/start rooms as a share of rooms, excluding the exit | 60.0% |
+| Ordinary/start interior rectangle area, excluding the exit | 36.2% |
+| Special rooms along a shortest doorway route, excluding the exit | 33.3% |
+
+74 of the 200 visits had less than 60% ordinary rooms. The ordinary room share
+ranged from 50.0% to 66.7%. Larger special rooms account for much of the nominal
+area: adding a few tiny connectors alone would not create a predominantly
+ordinary environment. A larger candidate library also does not automatically
+increase the count dealt into a run; the current default remains 6–9 oddities.
+
+Reproduce with `node tools/backrooms-offline/audit-pacing.mjs`; add `--details`
+for the per-visit records. The audit also compares directed floor-hatch routes
+and checks differences between equally short routes. Planned hatches may not
+all survive furnishing, and other runtime warps are excluded. Rectangle area
+does not subtract furniture. These are generator measurements, not evidence
+of experienced time, perceptual sameness or actual navigation difficulty.
+
 ## What is already here
 
 There are 19 special archetypes, plus the plain, starting and exit rooms. Use this list to avoid repeating an existing premise.
