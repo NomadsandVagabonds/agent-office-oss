@@ -7,6 +7,10 @@
 //
 //   const card = await showScorecard({ office, reason, kept, run, name });
 //
+// A page that is not the office may give the card its own heading (`brand`)
+// and say where a kept tape can be found again (`share`: the number on the
+// card is then a link to it, and choosing it is asking to walk it again).
+//
 // reason, kept and run are what the visit resolves with (index.js). The rules
 // are not here: what a visit scored and what is kept of it is core/runs.mjs,
 // and what was carried out is worth what core/game.mjs says. The office keeps
@@ -95,6 +99,8 @@ const CSS = `
 .brc-box .v .brc-ic { width: 1.25em; height: 1.25em; }
 .brc-box small { grid-column: 2 / -1; font-size: .84em; opacity: .7; margin-top: -.22em; }
 .brc-seed { font-weight: 500 !important; opacity: .85; overflow: hidden; text-overflow: ellipsis; max-width: 13em; }
+a.brc-seed { color: inherit; text-decoration: underline dotted; text-underline-offset: .22em; cursor: pointer; }
+a.brc-seed:focus-visible { outline: 2px solid currentColor; outline-offset: .15em; }
 .brc-foot { margin-top: 1.1em; font-size: .68em; letter-spacing: .3em; font-weight: 700; opacity: .5; }
 .brc-go { position: absolute; right: .2em; bottom: -.1em; opacity: 0; color: #4a3a10; animation: brc-blink 1.1s 1.5s steps(1) infinite; }
 @keyframes brc-in { from { opacity: 0; } }
@@ -105,8 +111,12 @@ const CSS = `
 
 const el = (tag, cls, ...kids) => { const e = document.createElement(tag); if (cls) e.className = cls; e.append(...kids.filter((k) => k !== null && k !== undefined && k !== false)); return e; };
 
-/** The card, printed on the wall. → the element (not yet shown). */
-function draw(card, who) {
+/** What is printed at the head of the card, unless whoever shows it says otherwise — and whether there is a jar to be paid into (jar: false where there is no office, and so nothing to spend a coin on). */
+const BRAND = Object.freeze({ over: 'AGENT OFFICE', title: 'Out of Office', jar: true });
+
+/** The card, printed on the wall. → the element (not yet shown). opt: { brand: { over, title, jar }, share: (seed) => href } */
+function draw(card, who, opt = {}) {
+  const brand = { ...BRAND, ...(opt.brand || {}) };
   const out = card.reason === 'exit', ended = ENDED[card.reason] || ENDED.quit;
   const rows = el('div', 'brc-rows');
   for (const l of card.lines) {
@@ -121,7 +131,7 @@ function draw(card, who) {
     box.append(el('small', '', 'Nothing is paid for a building that has been walked before.'));
   }
   // what the jar gained: only for more than the office has been paid for before
-  else if (out) {
+  else if (out && brand.jar !== false) {
     const c = card.coins || { carried: 0, worth: 0, paid: 0, best: 0 };
     box.append(icon('coin'), el('span', '', 'Paid into the jar'), el('span', 'v', icon('battery', 'spare batteries'), `× ${num(c.carried)}`, '→', icon('coin', 'coins'), `+ ${num(c.paid)}`));
     if (c.worth > 0 && !c.paid) box.append(el('small', '', `The jar has been paid for ${num(c.best)} before. Bring out more than that.`));
@@ -131,30 +141,38 @@ function draw(card, who) {
   box.append(icon('fresh'), el('span', '', 'New to this office'), el('span', 'v', icon('room', 'kinds of room'), `+ ${num(fresh.rooms.length)}`, icon('survived', 'residents'), `+ ${num(fresh.cast.length)}`));
   box.append(el('small', '', `On record: ${num(seen.rooms)} kind${seen.rooms === 1 ? '' : 's'} of room, ${num(seen.cast)} resident${seen.cast === 1 ? '' : 's'}.`));
   // the tape
-  box.append(icon('tape'), el('span', '', replay ? 'Tape back on the shelf' : card.tape?.kept ? 'Tape kept' : 'Tape not recovered'), el('span', 'v brc-seed', card.tape?.kept ? `№ ${card.tape.seed}` : '—'));
+  // (where there is somewhere a kept tape can be found again, its number is the way there)
+  const href = card.tape?.kept && typeof opt.share === 'function' ? opt.share(card.tape.seed) : null;
+  const number = href ? el('a', 'v brc-seed', `№ ${card.tape.seed}`) : el('span', 'v brc-seed', card.tape?.kept ? `№ ${card.tape.seed}` : '—');
+  if (href) { number.href = href; number.setAttribute('aria-label', `Tape ${card.tape.seed}: walk this building again`); }
+  box.append(icon('tape'), el('span', '', replay ? 'Tape back on the shelf' : card.tape?.kept ? 'Tape kept' : 'Tape not recovered'), number);
   if (!card.tape?.kept) box.append(el('small', '', 'That building is gone.'));
   // (a tape played back is measured against the first time it was walked, not against the office's best: it cannot beat that)
   const best = replay ? `PLAYED BACK · FIRST TIME ${num(card.tape?.first?.score)}`
     : card.best?.beaten ? (card.best.was ? `THE BEST YET · WAS ${num(card.best.was)}` : 'THE BEST YET') : `BEST ${num(card.best?.score)}`;
 
   const form = el('div', 'brc-form',
-    el('div', 'brc-over', 'AGENT OFFICE'),
-    el('div', 'brc-title', 'Out of Office'),
+    el('div', 'brc-over', brand.over),
+    el('div', 'brc-title', brand.title),
     rows,
     el('div', 'brc-total', el('span', '', 'POINTS'), el('span', '', num(card.score))),
     el('div', `brc-best${card.best?.beaten ? ' new' : ''}`, best),
     box,
     el('div', 'brc-foot', `PATTERN 13/B · ${String(who || '').toUpperCase().slice(0, 24)}`));
-  form.setAttribute('role', 'dialog'); form.setAttribute('aria-modal', 'true'); form.setAttribute('aria-label', `Out of Office, ${replay ? 'a tape played back, ' : ''}${ended}: ${num(card.score)} points`); form.tabIndex = -1;
+  form.setAttribute('role', 'dialog'); form.setAttribute('aria-modal', 'true'); form.setAttribute('aria-label', `${brand.title}, ${replay ? 'a tape played back, ' : ''}${ended}: ${num(card.score)} points`); form.tabIndex = -1;
   // (the mark that says it can be put down is not printed: it sits outside what is multiplied into the paper)
   return el('div', 'brc-veil', el('div', 'brc-wrap', form, el('div', 'brc-go', '▸')));
 }
 
 /* ---- the record, where there is no office to keep it ------------------------------------------ */
 
+const remembered = () => { try { return JSON.parse(localStorage.getItem(KEPT) || 'null'); } catch { return null; /* nothing remembered */ } };
+
+/** The tapes this browser has kept, newest first (core/runs.mjs): for a page with no office to ask which buildings can be walked again. */
+export const keptTapes = () => cleanRecord(remembered()?.record || emptyRecord()).tapes;
+
 function local(report, who) {
-  let kept = null;
-  try { kept = JSON.parse(localStorage.getItem(KEPT) || 'null'); } catch { /* nothing remembered */ }
+  const kept = remembered();
   const record = cleanRecord(kept?.record || emptyRecord()), earned = Math.max(0, Math.floor(Number(kept?.earned) || 0));
   const run = cleanRun(report), settled = settleRun(record, run, { at: Date.now(), by: who });
   const worth = run.reason === 'exit' && !settled.card.replay ? payFor({ batteries: run.batteries }) : 0, paid = Math.max(0, worth - earned);
@@ -164,9 +182,11 @@ function local(report, who) {
 
 /**
  * Show the card for a visit that is over, and resolve when it has been put down (any key, a click, a tap).
- * @param {{office?:object, reason:string, kept?:object, run?:object, name?:string}} o
+ * @param {{office?:object, reason:string, kept?:object, run?:object, name?:string, brand?:{over?:string, title?:string, jar?:boolean}, share?:(seed:string)=>string}} o
  *        run: { seed, seconds, parts: { reached, of }, rooms: { explored, kinds }, cast: { met, survived }, hearts?, edition? } — what index.js counted
- * @returns {Promise<object>} the card as it was shown (core/runs.mjs: settleRun, with `coins`)
+ *        brand: what is printed at the head of the card (default: the office's) · share: where a kept tape can be found again
+ * @returns {Promise<object>} the card as it was shown (core/runs.mjs: settleRun, with `coins`) — and `again`: the tape's
+ *          seed, if it was put down by choosing the tape's number (only where there is a `share`)
  */
 export async function showScorecard(o = {}) {
   const who = o.name || o.office?.walk?.me?.name || 'Visitor';
@@ -178,19 +198,25 @@ export async function showScorecard(o = {}) {
   // (on the page itself, not in the office's own interface: that steps aside for as long as somebody is out of the
   // building, and takes everything in it out of sight with it)
   const root = document.body;
-  const style = el('style', '', CSS), veil = draw(card, who), form = veil.querySelector('.brc-form');
+  const style = el('style', '', CSS), veil = draw(card, who, { brand: o.brand, share: o.share }), form = veil.querySelector('.brc-form');
+  const number = veil.querySelector('a.brc-seed');
   document.head.append(style); root.append(veil);
   try { form.focus({ preventScroll: true }); } catch { /* it will take a click, then */ }
+  let again = false;
   await new Promise((done) => {
     let armed = false;
     const arm = setTimeout(() => { armed = true; }, 900);                    // nobody puts it down before they have seen it
     const put = (e) => {
       if (!armed || (e.type === 'keydown' && ['Shift', 'Control', 'Alt', 'Meta', 'Tab'].includes(e.key))) return;
+      if (e.type === 'pointerup' && e.button > 0) return;                   // (another button is asking the browser something: for the link's address, say)
+      // put down by its tape's number (a click on it, or Enter with it chosen): that is asking for the same building again
+      again = !!number && (e.type === 'keydown' ? e.key === 'Enter' && document.activeElement === number : number.contains(e.target));
       e.preventDefault(); e.stopPropagation();
       clearTimeout(arm); window.removeEventListener('keydown', put, true); veil.removeEventListener('pointerup', put);
       veil.remove(); style.remove(); done();
     };
+    number?.addEventListener('click', (e) => e.preventDefault());           // (it is a way of asking, not somewhere to go: the page is already there)
     window.addEventListener('keydown', put, true); veil.addEventListener('pointerup', put);
   });
-  return card;
+  return again ? { ...card, again: card.tape.seed } : card;
 }

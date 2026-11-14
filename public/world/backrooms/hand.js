@@ -22,8 +22,8 @@ export function createHand(env) {
  * (One to a part of the building: whichever was drawn last is the one on the picture.)
  */
 export function createHandView(env, camera) {
-  const kit = env.kit, root = new THREE.Group(), made = new Map(), at = new THREE.Vector3();
-  let shown = null, type = null, t = 0, swing = 0;
+  const kit = env.kit, root = new THREE.Group(), made = new Map(), at = new THREE.Vector3(), rest = new THREE.Vector3();
+  let shown = null, type = null, t = 0, swing = 0, layoutKey = '';
   root.visible = false;
   /** FORM HR-404, as a sheet of paper held up: the one thing down here that is meant to be read. */
   function slip() {
@@ -53,6 +53,36 @@ export function createHandView(env, camera) {
     mesh.rotation.set(0.25, kind === 'torch' ? 2.5 : -0.6, kind === 'paper' ? -0.2 : 0);
     return { mesh, mat, hold: kind === 'balloon' ? [0.24, -0.2, -0.56] : [0.2, -0.12, -0.5] };
   }
+  function fitPicture() {
+    const p = env.vhs.picture, focal = p.h * camera.projectionMatrix.elements[5] / 2;
+    const key = `${type}:${p.w}:${p.h}:${focal}`;
+    if (key === layoutKey) return;
+    layoutKey = key; rest.fromArray(shown.hold); shown.mesh.scale.setScalar(1);
+    if (p.w > 520 || p.h <= 1) return;
+    // The narrow HUD has 54px pockets, a 10px gap and a 17px caption band.
+    // Keep a further 12px clear, plus room for walking bob and balloon sway.
+    const pad = 10, right = p.w * .94 - pad, top = p.h * .16 + pad;
+    const bottom = p.h * (p.h <= 430 ? .96 : .97) - 54 - 10 - 17 - 12 - pad;
+    if (!shown.bounds) {
+      shown.mesh.geometry.computeBoundingBox();
+      shown.bounds = new THREE.Box3();
+      const r = shown.mesh.rotation;
+      for (const z of type === 'balloon' ? [-.09, 0, .21] : [r.z]) {
+        const turn = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(r.x, r.y, z));
+        shown.bounds.union(shown.mesh.geometry.boundingBox.clone().applyMatrix4(turn));
+      }
+      shown.extent = shown.bounds.getSize(new THREE.Vector3());
+    }
+    const b = shown.bounds, size = shown.extent, depth = -shown.hold[2], near = Math.max(0, b.max.z);
+    const width = Math.max(1, p.w * .38 - pad * 2), height = Math.max(1, bottom - top);
+    // Fit against the nearest depth so perspective cannot push a corner into
+    // the HUD. Only this small mesh scales; its distance from the camera stays put.
+    const scale = Math.min(1, width * depth / (size.x * focal + width * near), height * depth / (size.y * focal + height * near));
+    shown.mesh.scale.setScalar(scale);
+    rest.x = (right - p.w / 2) / focal * (depth - b.max.z * scale) - b.max.x * scale;
+    const bottomY = (p.h / 2 - bottom) / focal;
+    rest.y = bottomY * (depth - (bottomY < 0 ? b.max.z : b.min.z) * scale) - b.min.y * scale;
+  }
   const view = {
     /** Every frame, for the part somebody is in. show: false while the bag is open, somebody is being carried, or the tape is ending. */
     update(dt, show) {
@@ -66,14 +96,15 @@ export function createHandView(env, camera) {
       if (!shown) return;
       if (!root.parent) env.world.scene.add(root);
       camera.userData.hand = view;
+      fitPicture();
       const me = env.player.me, pace = Math.min(1, (me.speed || 0) / 2);
       t += dt * (1 + pace * 5); swing += (pace - swing) * (1 - Math.exp(-6 * dt));
       root.position.copy(camera.position).sub(env.world.scene.position); root.quaternion.copy(camera.quaternion);
-      at.set(shown.hold[0] + Math.sin(t * 1.1) * 0.006 * swing, shown.hold[1] + Math.abs(Math.sin(t * 1.1)) * 0.014 * swing + Math.sin(t * 0.35) * 0.003, shown.hold[2]);
+      at.set(rest.x + Math.sin(t * 1.1) * 0.006 * swing, rest.y + Math.abs(Math.sin(t * 1.1)) * 0.014 * swing + Math.sin(t * 0.35) * 0.003, rest.z);
       shown.mesh.position.copy(at);
       if (type === 'balloon') shown.mesh.rotation.z = Math.sin(t * 0.5) * 0.09 + swing * 0.12;
       // lit by where you are standing — and a torch that is switched on is its own light
-      const L = env.world.lightAt(me.x, me.z, 1.2), on = type === 'torch' && (env.inventory?.torchPower?.() ?? 0) > 0, k = on ? 2.4 : 1.25, floor = on ? 0.5 : 0.16;
+      const L = env.world.lightAt(me.x, me.z, 1.2), on = type === 'torch' && item.lit, k = on ? 2.4 : 1.25, floor = on ? 0.5 : 0.16;
       shown.mat.uniforms.uTint.value.set(Math.max(floor, L[0] * k) * (on ? 1.1 : 1), Math.max(floor, L[1] * k), Math.max(floor, L[2] * k) * (on ? 0.85 : 1));
     },
     dispose() { root.removeFromParent(); if (camera.userData.hand === view) camera.userData.hand = null; },

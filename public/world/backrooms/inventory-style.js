@@ -79,25 +79,24 @@ export const INVENTORY_CSS = `
   display: flex;
   flex: none;
   margin-right: auto;
-  height: 15px; gap: 5px; }
+  height: 17px;
+  color: var(--vf-ink);
+}
 .br-inventory .br-inv-heart {
   display: block;
   overflow: visible;
-  width: 15px;
-  height: 13px;
+  width: 22px;
+  height: 17px;
   filter: drop-shadow(1px 1px 0 #151c12);
 }
 .br-inventory .br-inv-heart .heart-body {
   stroke-linejoin: miter;
-  fill: #1b261a6b;
-  stroke: var(--vf-soft);
-  stroke-width: .7;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-opacity: .65;
 }
-.br-inventory .br-inv-heart .heart-shine { fill: transparent; }
-.br-inventory .br-inv-heart.is-filled .heart-body { fill: var(--vf-green); }
-.br-inventory .br-inv-heart.is-filled .heart-shine { fill: var(--vf-ink); }
-.br-inventory .br-inv-health.is-low .is-filled .heart-body { fill: #d87966; }
-.br-inventory .br-inv-health.is-low .is-filled .heart-shine { fill: #f3bba1; }
+.br-inventory .br-inv-health.is-low { color: #de746b; }
 .br-inventory .br-inv-bar {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
