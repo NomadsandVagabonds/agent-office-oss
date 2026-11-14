@@ -111,6 +111,7 @@ export class AcpAdapter extends AgentAdapter {
         images: !!(this.generation === 2 ? init.capabilities?.session?.prompt?.image : init.agentCapabilities?.promptCapabilities?.image),
         officeTools: created.withMcp,
         nativeSandbox: false,     // the office's mode only governs how requests are ANSWERED; the agent's own mode decides what it asks
+        exactSessionAllow: false, // an ACP agent's "always allow" may be broad and outlive the session: never sent for a session grant
       },
     };
   }

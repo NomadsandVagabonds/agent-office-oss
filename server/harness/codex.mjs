@@ -15,6 +15,7 @@
 import { RpcError, RPC } from './rpc.mjs';
 import { AgentAdapter, START_TIMEOUT_MS } from './adapter.mjs';
 import { LIMITS, isObject, line, text, tail, toolStatus, planStatus, limitWindow } from './normalize.mjs';
+import { redact } from './child.mjs';
 import { codexRateLimitsToReport } from '../usage-sources.mjs';
 
 /**
@@ -129,7 +130,9 @@ export class CodexAdapter extends AgentAdapter {
       nativeSessionId: this.threadId,
       agent: { name: 'Codex', version: line(String(init?.userAgent || '').split(' ')[0].split('/')[1] || '', 40) },
       model: this.model, models: [], modeId: '', modes: [],
-      features: { interrupt: true, resume: true, images: true, officeTools, nativeSandbox: true },
+      // exactSessionAllow: Codex's own "accept for session" covers only that exact command or patch, so it is
+      // safe to send for the office's "for the session" (whose memory covers the next one). Declared, not assumed.
+      features: { interrupt: true, resume: true, images: true, officeTools, nativeSandbox: true, exactSessionAllow: true },
     };
   }
 
@@ -257,7 +260,7 @@ export class CodexAdapter extends AgentAdapter {
       case 'item/fileChange/requestApproval':
         return this.#ask(id, approval({
           kind: 'edit', toolId: line(params.itemId, 200), title: 'Change files', name: 'apply_patch',
-          paths: tracked?.paths?.length ? tracked.paths : (typeof params.grantRoot === 'string' ? [params.grantRoot.slice(0, 1024)] : []),
+          paths: tracked?.paths?.length ? tracked.paths : (typeof params.grantRoot === 'string' ? [redact(params.grantRoot, 1024)] : []),
         }), (choice) => ({ decision: choice }));
       case 'item/permissions/requestApproval':
         return this.#ask(id, approval({
@@ -273,7 +276,7 @@ export class CodexAdapter extends AgentAdapter {
       case 'applyPatchApproval':
         return this.#ask(id, approval({
           kind: 'edit', toolId: line(params.callId, 200), title: 'Change files', name: 'apply_patch',
-          paths: isObject(params.fileChanges) ? Object.keys(params.fileChanges).slice(0, LIMITS.paths).map((p) => p.slice(0, 1024)) : [],
+          paths: isObject(params.fileChanges) ? Object.keys(params.fileChanges).slice(0, LIMITS.paths).map((p) => redact(p, 1024)) : [],
         }), (choice) => ({ decision: LEGACY_DECISION[choice] ?? 'abort' }));
       case 'item/tool/requestUserInput': {
         const questions = (Array.isArray(params.questions) ? params.questions : []).filter(isObject).slice(0, 8).map((q) => ({
@@ -392,7 +395,7 @@ export class CodexAdapter extends AgentAdapter {
         break;
       case 'fileChange': {
         const paths = (Array.isArray(item.changes) ? item.changes : []).filter(isObject)
-          .map((c) => (typeof c.path === 'string' ? c.path.slice(0, 1024) : '')).filter(Boolean).slice(0, LIMITS.paths);
+          .map((c) => (typeof c.path === 'string' ? redact(c.path, 1024) : '')).filter(Boolean).slice(0, LIMITS.paths);
         tool = { kind: 'edit', name: 'apply_patch', title: paths.length ? `Edit ${paths.length === 1 ? paths[0] : `${paths.length} files`}` : 'Edit files',
           command: '', paths, output: '' };
         break;

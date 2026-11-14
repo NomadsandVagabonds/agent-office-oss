@@ -37,7 +37,7 @@ const VOICE = {
   lift: { id: 'Xb7hH8MSUJpSbSDYk0k2', room: 'highpass=f=170' },                                                   // Alice — clear, British, professional
   hollow: { id: 'nPczCjzI2devNBz1zQrb', room: 'asetrate=44100*0.9,aresample=44100,aecho=0.8:0.7:70|150|290:0.45|0.3|0.18' },   // Brian — deep; slowed a little, somewhere large and empty
   pa: { id: 'onwK4e9ZLuTAKqWW03F9', room: 'highpass=f=420,lowpass=f=3400,aecho=0.8:0.5:110|230:0.3|0.16' },      // Daniel — steady broadcaster, out of a ceiling speaker
-  arcade: { id: 'IKne3meq5aSn9XLyUdCD', room: 'acrusher=bits=8:samples=4:mode=log:aa=1:mix=0.8,lowpass=f=4800' },   // Charlie — hyped, out of a cabinet's speech chip
+  arcade: { id: 'IKne3meq5aSn9XLyUdCD', room: 'highpass=f=180,lowpass=f=5200,acrusher=bits=10:samples=2:mode=log:aa=1:mix=0.25,aecho=0.8:0.6:38:0.22' },   // Charlie — hyped, out of a cabinet's speech chip
 };
 // what "the same loudness" means for each kind, and the ceiling nothing may cross (LUFS / dBFS true peak)
 const LEVEL = { shot: -18, bed: -20, music: -20, peak: -1.5 };
@@ -61,7 +61,7 @@ export const MANIFEST = [
   sfx('printer', 'An office laser printer printing a single page: rollers whirring and paper feeding out right from the start, close and steady', 3.2, { tail: 0.25 }),
   sfx('printer-jam', 'An office printer jamming: gears grinding and paper crumpling, then a sad error beep', 2.4),
   sfx('paper-plane', 'A light paper airplane whooshing past, quick soft swish', 0.9, { fx: 'highpass=f=250' }),
-  sfx('confetti', 'Party popper pop with a burst of confetti and a small sparkle', 1.4),
+  sfx('confetti', 'A party popper going off: one sharp cork-like pop, then paper streamers and confetti fluttering down. Close, dry and cheerful. No hiss, no music', 1.6, { influence: 0.6 }),
   sfx('sticky', 'A paper sticky note being peeled off and pressed onto a board, small paper tap', 0.7),
   sfx('purr', 'A contented cat purring, close, warm and steady', 3.0, { tail: 0.6 }),
   sfx('duck', 'A single squeak of a rubber duck bath toy', 0.6, { influence: 0.7, fx: 'lowpass=f=4000' }),
@@ -81,7 +81,7 @@ export const MANIFEST = [
   // ---- music
   music('elevator-muzak', 'Cheesy elevator muzak at 120 BPM: light bossa nova lounge instrumental with a vibraphone melody, soft nylon guitar, gentle brushed drums and upright bass, pleasant and slightly corny, 1960s easy listening', 32, { bpm: 120 }),
   music('jukebox-disco', 'Joyful 1970s disco funk instrumental at 120 BPM that starts straight into the groove: four on the floor drums, bouncy slap bass, bright string stabs, wah guitar and hand claps, very danceable', 32, { bpm: 120 }),
-  music('arcade-chiptune', 'Energetic 8-bit chiptune arcade game music, catchy square wave melody with fast arpeggios, classic console style', 32, { bpm: 120, mono: true }),
+  music('arcade-chiptune', 'A bouncy, friendly 8-bit chiptune loop for a small arcade game: a clear hummable square-wave lead, a simple triangle-wave bass line, light noise-channel drums. Major key, playful rather than frantic, like a 1980s home console title screen', 32, { bpm: 120, mono: true }),
   music('rooftop-lofi', 'Calm lo-fi hip hop instrumental at 80 BPM, warm electric piano chords, soft dusty drums and vinyl crackle, a relaxed evening on a city rooftop', 36, { bpm: 80 }),
   // ---- voices
   voice('lift-lobby', 'lift', 'Lobby.'),

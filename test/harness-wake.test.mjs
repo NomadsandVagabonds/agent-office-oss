@@ -226,6 +226,51 @@ test('wake guard rails', async (t) => {
     } finally { await h.stop(); }
   });
 
+  await t.test('chain length is carried through an agent the office does not drive', async () => {
+    const h = await startHarnessOffice();
+    try {
+      // Carol runs somewhere else (her hooks report her); Dana is driven and answers whatever she is sent.
+      await h.hook({ session_id: 'carol-1', cwd: h.work, hook_event_name: 'SessionStart' });
+      const carol = await h.agent('carol-1');
+      const dana = await h.start('fake', { name: 'Dana', wake: 'direct' });
+      const write = (text) => h.post('/api/collab/message', { fromAgentId: 'carol-1', toAgentId: dana.id, content: `${text} [[script]]dm:${carol.name}|answer to ${text}[[/script]]` });
+      // What Carol's inbox hook (or `office inbox`) does: read the mail and mark it read.
+      const carolReads = async () => (await h.get('/api/inbox?agent=carol-1&ack=1')).data.items;
+      const hopOfTurn = async (n) => (await h.turnDone(dana.id, n)).hop;
+
+      await write('one');                                   // Carol → Dana: step 1
+      assert.equal(await hopOfTurn(1), 1);
+      const first = await waitFor(async () => { const items = await carolReads(); return items.length ? items : null; }, { what: 'Dana\'s first answer' });
+      assert.equal(first[0].hop, 2);
+      await write('two');                                   // sent right after reading step 2, so it is step 3 — not step 1 again
+      assert.equal(await hopOfTurn(2), 3);
+      const second = await waitFor(async () => { const items = await carolReads(); return items.length ? items : null; }, { what: 'Dana\'s second answer' });
+      assert.equal(second[0].hop, 4);
+      await write('three');                                 // step 5: past the limit, so Dana is not woken
+      assert.equal((await h.inbox(dana.id)).items[0].hop, 5);
+      await waitFor(async () => (await h.session(dana.id)).wakeStats.held === 'hops', { what: 'the chain to be stopped' });
+      assert.equal((await h.session(dana.id)).turns, 2);
+
+      // A person typing to Carol (her own runtime's hook says so) starts a fresh chain.
+      await h.hook({ session_id: 'carol-1', hook_event_name: 'UserPromptSubmit' });
+      await write('four');
+      const woke = await h.turnDone(dana.id, 3);
+      assert.equal(woke.hop, 1);
+      assert.equal(woke.mail.length, 2, 'what was held is delivered along with it');
+
+      // An agent's own word for "a human prompted me" does not reset the count.
+      const joined = (await h.post('/api/agents/join', { id: 'erin-1', provider: 'custom', cwd: h.work, name: 'Erin' })).data.agent;
+      assert.equal(joined.selfReported, true);
+      await h.post('/api/collab/message', { fromAgentId: dana.id, toAgentId: 'erin-1', content: 'ping' });   // from Dana's last turn (step 1): step 2
+      assert.equal((await h.get('/api/inbox?agent=erin-1&ack=1')).data.items[0].hop, 2);
+      await h.hook({ session_id: 'erin-1', hook_event_name: 'UserPromptSubmit' });
+      const fromErin = await h.post('/api/collab/message', { fromAgentId: 'erin-1', toAgentId: dana.id, content: 'pong' });
+      assert.equal(fromErin.status, 200);
+      const turn = await h.turnDone(dana.id, 4);
+      assert.equal(turn.hop, 3);
+    } finally { await h.stop(); }
+  });
+
   await t.test('wake can be made the default by the operator, and the limits are theirs to set', async () => {
     const h = await startHarnessOffice({ env: { OFFICE_WAKE_DEFAULT: 'direct', OFFICE_WAKE_MAX_HOPS: '1' } });
     try {

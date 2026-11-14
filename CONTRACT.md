@@ -105,7 +105,7 @@ WS message envelope `{ type, ... }`:
 | `activity` | `{ item }` | one line for the "what happened" feed |
 | `usage` | `{ usage:UsageSnapshot }` | client connects; a provider's remaining allowance changed |
 | `harness` | `{ sessions:[DrivenSession], wake:{paused,limits}, delegations:{active} }` | client connects; a driven session, the pause switch or a guard rail changed |
-| `transcript` | `{ sessionId, agentId, entry }` | a driven session's timeline gained or revised an entry — sent only to clients that asked with `{type:"transcript:watch", sessionId}` |
+| `transcript` | `{ sessionId, agentId, entry }` | a driven session's timeline gained or revised an entry — sent only to clients on this machine that asked with `{type:"transcript:watch", sessionId}` (a transcript is what a terminal would show) |
 | `delegations` | `{ delegation }` | a task one agent gave another changed state |
 
 The `world*` events are specified in `WORLD.md`. The classic client ignores them.
@@ -196,7 +196,10 @@ server (`core/look.mjs`) so every client draws the same character.
 its project, mentions anywhere, direct notes, the human's replies — after its
 read cursor; `&ack=1` (or `POST /api/inbox/ack`) advances the cursor.
 `&mode=hook` returns only what is worth interrupting for, which is what the
-Claude Code inbox hook surfaces.
+Claude Code inbox hook surfaces. Each item carries `hop` — how many
+agent-to-agent steps separate it from a human (0 for the human's own words) —
+which is what lets the office stop agents waking each other in a loop; a
+delegated task's result also carries `delegationId`.
 
 ### World  (the place)
 The floor plan, where every avatar is, things that can be used, discoveries,
@@ -319,8 +322,9 @@ Delegation    { id:dg_*, title, role, task, status:'queued'|'running'|'waiting'|
 Agents use `office delegate | delegation | transcript | runtimes` (MCP:
 `office_delegate`, `office_delegation`, `office_transcript`,
 `office_capabilities`). Everything that starts a process, gives a turn, stops
-one or answers a request is loopback-only; the things only the human may do
-refuse a caller presenting an agent's session token. Design, protocols, guard
+one or answers a request is loopback-only, and so is reading a transcript (like
+a terminal snapshot); the things only the human may do refuse a caller
+presenting an agent's session token. Design, protocols, guard
 rails and what is so far verified only against fake agents: `docs/HARNESS.md`.
 
 ### Session Observatory  (real sessions get desks)

@@ -47,11 +47,14 @@ export const LIMIT_KINDS = Object.freeze(['session', 'weekly', 'monthly', 'credi
 
 export const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-/** A short, single-purpose string: trimmed, control characters removed, capped. */
+/**
+ * A short, single-purpose string (a title, a command, a name): one line, control
+ * characters removed, obvious secrets and the home path masked, capped.
+ */
 export function line(value, max = LIMITS.title) {
   if (typeof value !== 'string') return '';
   // eslint-disable-next-line no-control-regex
-  const cleaned = value.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const cleaned = redact(value.replace(/[\u0000-\u001f\u007f]+/g, ' '), Math.max(max * 2, 512)).replace(/\s+/g, ' ').trim();
   return cleaned.length > max ? cleaned.slice(0, max - 1) + '…' : cleaned;
 }
 

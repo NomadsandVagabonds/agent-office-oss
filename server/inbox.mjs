@@ -128,17 +128,53 @@ export function createInbox(ctx, file) {
     };
   }
 
+  /* ---- how far from a human is what this agent says next? ----------------- */
+  // The office stops chains of agents waking agents after a few steps (see
+  // server/harness/wake.mjs). For a session it drives it knows the step from the
+  // turn. For any other agent it knows only this: what the agent has just read.
+  // So what an agent reads colours what it says next — a reply sent soon after
+  // reading mail that was n steps from a human counts as step n+1. Without this
+  // a chain could launder itself through any agent the office does not drive.
+  // Memory only: it is a guard rail, not a record.
+  const READ_HOP_TTL_MS = 15 * 60 * 1000;
+  const readHops = new Map();          // agent id → { hop, at }
+
+  function noteRead(agentId, items) {
+    if (!items.length) return;
+    // What was addressed to the agent decides; a human's note among it puts a human back in the loop.
+    const direct = items.filter((i) => i.direct);
+    const hop = Math.min(...(direct.length ? direct : items).map((i) => (Number.isFinite(i.hop) ? i.hop : 1)));
+    readHops.delete(agentId);
+    readHops.set(agentId, { hop, at: Date.now() });
+    if (readHops.size > 500) readHops.delete(readHops.keys().next().value);
+  }
+
+  /** Steps from a human of the mail this agent last read, if that was recent; otherwise 0. */
+  function readHop(agentId) {
+    const hit = readHops.get(agentId);
+    return hit && Date.now() - hit.at < READ_HOP_TTL_MS ? hit.hop : 0;
+  }
+
+  // A prompt typed by a person (seen through the runtime's own hooks) starts a fresh chain. An agent's
+  // word for it does not: self-reported status goes through the same event and must not reset the count.
+  ctx.bus.on('agent:prompted', (e) => {
+    const agent = ctx.agents.get(e.id);
+    if (agent && !agent.selfReported) readHops.delete(e.id);
+  });
+
   function read(agent, opt = {}) {
     const result = collect(agent, opt);
-    if (opt.ack && result.items.length) setCursor(agent.id, result.newest);
+    if (opt.ack && result.items.length) { setCursor(agent.id, result.newest); noteRead(agent.id, result.items); }
     ctx.agents.seen(agent.id);
     return result;
   }
 
   function ack(agent, upTo) {
-    setCursor(agent.id, upTo ?? Date.now());
+    const until = upTo ?? Date.now();
+    noteRead(agent.id, collect(agent, { limit: 200 }).items.filter((i) => i.ts <= until));
+    setCursor(agent.id, until);
     return { ok: true, agentId: agent.id, cursor: cursors[agent.id].ts };
   }
 
-  return { collect, read, ack, cursorFor, flush: () => store.flush() };
+  return { collect, read, ack, cursorFor, readHop, flush: () => store.flush() };
 }

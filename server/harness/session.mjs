@@ -15,6 +15,7 @@
 // provider's session or thread id is kept only as a reference (`nativeRef`).
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { AcpAdapter } from './acp.mjs';
 import { CodexAdapter } from './codex.mjs';
@@ -31,6 +32,8 @@ const STREAM_FLUSH_MS = 120;             // live text reaches watchers a few tim
 const TOOL_LABEL = Object.freeze({ execute: 'Shell', edit: 'Edit', delete: 'Delete', move: 'Move', read: 'Read',
   search: 'Search', fetch: 'Fetch', think: 'Think', switch_mode: 'Mode' });
 const FILE_KIND = Object.freeze({ edit: 'edit', delete: 'edit', move: 'edit', read: 'read', search: 'read' });
+// One adapter per wire protocol; adding a provider that speaks neither is one more entry here.
+const ADAPTERS = Object.freeze({ acp: AcpAdapter, 'codex-app-server': CodexAdapter });
 
 export class SessionError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -39,6 +42,8 @@ export class SessionError extends Error {
 // The session's own credential must never be readable back out of what the
 // office shows or keeps: an agent that prints its environment would otherwise
 // publish its token to every teammate who reads its transcript.
+const expandHome = (p) => (p === '~' ? os.homedir() : p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : p);
+
 const TOKEN_MASK = '[office session token]';
 function scrub(value, secret) {
   if (typeof value === 'string') return value.includes(secret) ? value.split(secret).join(TOKEN_MASK) : value;
@@ -100,9 +105,9 @@ export class DrivenSession extends EventEmitter {
       startTimeoutMs: this.cfg.startTimeoutMs, cancelTimeoutMs: this.cfg.cancelTimeoutMs,
       trace: this.cfg.trace ? this.#tracer(files.trace, token) : undefined,
     };
-    this.adapter = spec.protocol === 'codex-app-server'
-      ? new CodexAdapter({ ...common, mode: record.mode })
-      : new AcpAdapter({ ...common, protocol: spec.acpVersion === 2 ? 2 : 1, modeId: spec.modeId });
+    // The one place a protocol picks code. Each adapter takes what it understands from the same options.
+    const Adapter = ADAPTERS[spec.protocol] || AcpAdapter;
+    this.adapter = new Adapter({ ...common, mode: record.mode, protocol: spec.acpVersion === 2 ? 2 : 1, modeId: spec.modeId });
     this.adapter.on('event', (raw) => {
       const ev = token ? scrub(raw, token) : raw;
       try { this.#on(ev); }
@@ -210,10 +215,13 @@ export class DrivenSession extends EventEmitter {
     const tools = this.features.officeTools
       ? 'You have office tools (the MCP server "office": office_inbox, office_post, office_dm, office_delegate, office_tasks and more).'
       : `Reach the office from a shell with: node ${path.join(this.ctx.cfg.root, 'office.mjs')} <verb> (try "help").`;
-    return `<the_office>\nYou are working in The Office, a shared workspace for coding agents from several providers and the human who directs them. `
+    const preamble = `<the_office>\nYou are working in The Office, a shared workspace for coding agents from several providers and the human who directs them. `
       + `Here you are "${a?.name || this.record.name || 'an agent'}" (agent id ${this.id}). ${tools} `
       + `Ordinary work needs none of that; use it when you need a teammate or the human. `
-      + `This note is context from the office, not part of the request.\n</the_office>\n\n<request>\n${item.text}\n</request>`;
+      + `This note is context from the office, not part of the request.\n</the_office>`;
+    // Nothing the office puts in front of an agent is hidden: the exact words are on the session's record.
+    this.transcript.write({ id: 'session', preamble });
+    return `${preamble}\n\n<request>\n${item.text}\n</request>`;
   }
 
   #begin(item) {
@@ -348,7 +356,8 @@ export class DrivenSession extends EventEmitter {
         if (this.filesSeen.has(key)) continue;
         this.filesSeen.add(key);
         if (this.filesSeen.size > 2000) this.filesSeen.clear();
-        this.ctx.bus.local({ type: 'agent:file', id: this.id, path: p, kind: fileKind, tool: label });
+        // In-process listeners get the real path; "~" is only how the home folder is written where people read it.
+        this.ctx.bus.local({ type: 'agent:file', id: this.id, path: expandHome(p), kind: fileKind, tool: label });
       }
     }
     if (!this.turn || this.waiting) return;
@@ -406,7 +415,7 @@ export class DrivenSession extends EventEmitter {
     const category = categoryOf(ev);
     // Standing permission for files stops at the edge of this session's folder.
     const inside = insideFolder(this.record.cwd, ev.paths);
-    const choices = choicesFor(ev.options, category, { nativeSessionAllow: this.adapter.kind === 'codex-app-server', inside });
+    const choices = choicesFor(ev.options, category, { nativeSessionAllow: !!this.features.exactSessionAllow, inside });
     const entry = { id: `perm:${ev.requestId}`, kind: 'permission', turn: this.turn?.n, category, title: ev.title,
       ...(ev.command ? { command: ev.command } : {}), ...(ev.paths?.length ? { paths: ev.paths } : {}),
       ...(ev.detail ? { detail: ev.detail } : {}) };

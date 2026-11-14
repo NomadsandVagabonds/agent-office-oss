@@ -332,8 +332,8 @@ export function createStalkers(env) {
     p.group.visible = drawn(p);
     if (p.state === 'caught') {                                       // the last thing on the tape
       p.catchT += dt;
-      me.yaw += turnTo(me.yaw, Math.atan2(-dx, -dz)) * (1 - Math.exp(-16 * dt));
-      me.pitch += (0.2 - me.pitch) * (1 - Math.exp(-10 * dt));
+      me.yaw += turnTo(me.yaw, Math.atan2(dx, dz)) * (1 - Math.exp(-16 * dt));
+      me.pitch += (0.27 - me.pitch) * (1 - Math.exp(-12 * dt));
       p.slip = Math.random() < 0.3; p.show();
       env.interfere(1);
       return;
@@ -368,7 +368,7 @@ export function createStalkers(env) {
         if (p.state === 'still' ? (p.met > 0.6 && p.unseen > p.patience && far) || env.clock > p.wakeAt : p.rest < 0) { p.state = 'awake'; p.chase = 0; }
       } else if (p.state === 'awake') {
         p.chase += dt;
-        p.speed = d > 6 ? 2.0 : 1.3;
+        p.speed = d > 5.5 ? 1.85 : 1.05;                                // it hurries only while it is far behind
         if (p.plinth && p.unseen > 0.45) {                              // down off its plinth, on whichever side is free
           for (const turn of [0, 0.7, -0.7, 1.4, -1.4, 2.2, -2.2, Math.PI]) {
             const x = p.home.x + Math.sin(p.home.yaw + turn) * 0.95, z = p.home.z + Math.cos(p.home.yaw + turn) * 0.95;

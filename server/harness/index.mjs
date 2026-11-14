@@ -269,7 +269,8 @@ export function createHarness(ctx, file) {
   /** How many agent-to-agent steps from a human would something this agent sends now be? */
   function hopOf(agentId) {
     const session = sessions.get(agentId);
-    if (!session?.live) return 1;                   // not ours to know: treat it as the first step of a chain
+    // Not ours to know from a turn: one step past the mail it has just read, if any (server/inbox.mjs).
+    if (!session?.live) return 1 + (ctx.inbox?.readHop(agentId) || 0);
     const turn = session.turn || session.lastTurn;
     return (turn ? turn.hop || 0 : 0) + 1;
   }

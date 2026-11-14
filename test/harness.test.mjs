@@ -128,12 +128,20 @@ test('driven sessions', async (t) => {
     assert.equal(a.toolCount, 3);
     // …and the files it touched are announced for the workspace layer.
     assert.deepEqual(files.map((f) => [f.id, f.path, f.kind, f.tool]), [[s.id, 'src/a.js', 'edit', 'Edit'], [s.id, 'README.md', 'read', 'Read']]);
+    // A file under the home folder is written "~/…" where people read it, and announced in-process by its real path.
+    const inHome = path.join(os.homedir(), 'some-project', 'notes.md');
+    h.ctx.bus.on('agent:file', onFile);
+    const home = await h.turn(s.id, `edit:${inHome}`);
+    h.ctx.bus.off('agent:file', onFile);
+    assert.deepEqual(home.entries.find((e) => e.kind === 'tool').paths, ['~/some-project/notes.md']);
+    assert.equal(files.at(-1).path, inHome);
 
     // Reading: revisions are numbered, so "what changed since" is one query.
     const all = (await h.get(`/api/harness/sessions/${s.id}/transcript`)).data;
     assert.equal(all.live, true);
     assert.ok(all.entries.every((e, i) => i === 0 || e.at >= all.entries[i - 1].at));
     const t2 = await h.turn(s.id, 'say:second');
+    assert.equal(t2.said, 'second');
     const since = (await h.get(`/api/harness/sessions/${s.id}/transcript?after=${all.seq}`)).data;
     assert.ok(since.entries.length >= 3);
     assert.ok(since.entries.every((e) => e.seq > all.seq));
@@ -158,8 +166,12 @@ test('driven sessions', async (t) => {
     const second = JSON.parse((await h.turn(s.id, 'report')).said);
     assert.equal(second.prompts, 2);
     assert.equal(second.framed, 1, 'later requests are passed through as they are');
-    // What a person reads in the transcript is what they typed, not the framing.
+    // What a person reads in the transcript is what they typed; the framing is on the record too, not hidden.
     assert.equal((await h.entry(s.id, 'turn-1:user')).text, 'report');
+    const preamble = (await h.entry(s.id, 'session')).preamble;
+    assert.ok(preamble.startsWith('<the_office>') && preamble.endsWith('</the_office>'));
+    assert.match(preamble, new RegExp(`Here you are "Hedy" \\(agent id ${s.id}\\)`));
+    assert.match(preamble, /not part of the request/);
     // The token it was given identifies it to the office; it never comes back out of the office's own records.
     const token = h.ctx.harness.session(s.id).adapter.opt.env.OFFICE_SESSION_TOKEN;
     assert.ok(token.length >= 40);

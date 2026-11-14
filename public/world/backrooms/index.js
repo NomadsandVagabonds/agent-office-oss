@@ -201,7 +201,7 @@ async function visit(office, opt) {
   }
 
   /* ---- the loop ---------------------------------------------------------------------- */
-  const END = { quit: 0.4, caught: 1.5, exit: 1.4 };
+  const END = { quit: 0.4, caught: 1.8, exit: 1.4 };
   const off = stage.onFrame((dt) => {
     if (state === 'loading' || state === 'done') return;
     time += dt;
@@ -237,7 +237,7 @@ async function visit(office, opt) {
       const k = clamp(ending / END[reason], 0, 1);
       if (reason === 'quit') u.uBlack.value = k;
       else if (reason === 'exit') u.uWhite.value = k * k;
-      else { u.uSnow.value = Math.min(1, k * 1.6); u.uRoll.value += dt * (0.4 + k * 2.5); interference = 1; }
+      else { u.uSnow.value = clamp((k - 0.42) / 0.45, 0, 1); if (k > 0.45) u.uRoll.value += dt * (0.4 + k * 2.5); interference = Math.max(interference, 0.5 + 0.5 * k); }   // a look at what got you, then snow
       if (k >= 1) conclude();
     }
     hud.update(dt);

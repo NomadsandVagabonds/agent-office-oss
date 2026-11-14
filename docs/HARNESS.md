@@ -185,7 +185,7 @@ it reads and edits (`agent:file` on the local bus) so that layer can see them.
 - **T3's stack.** T3 Code is TypeScript on Effect with an event-sourced
   orchestrator, SQLite projections and a large dependency tree. The Office is
   plain ES modules on Node built-ins with no dependencies and no build step. We
-  took designs and protocol knowledge and wrote the code from scratch; the two
+  took designs and protocol knowledge and wrote the code from scratch; the few
   places that follow T3's logic closely say so in a comment and `NOTICE`
   carries its MIT notice.
 - **The Claude Agent SDK adapter.** T3 drives Claude through the SDK, which is
@@ -228,18 +228,21 @@ one is easy to break by accident.
 2. **Behaviour follows declared capabilities, never a provider's name.** The
    catalog and each session say what they can do (`caps`, `features`,
    `controls`); code asks "does this session have a native sandbox?", not "is
-   this Codex?". The only place a protocol is named is the line that picks an
-   adapter. (`docs/orchestration-v2/provider-capability-system.md`)
+   this Codex?". A protocol is named in exactly two tables: the one that maps
+   it to its adapter (`session.mjs`) and the one that says what an adapter on
+   it can promise before a session exists (`catalog.mjs`).
+   (`docs/orchestration-v2/provider-capability-system.md`)
 3. **A child's completion never completes its parent.** A delegate and its
    delegator are separate sessions with separate turns and transcripts, joined
    only by the delegation record. The result arrives as mail — a new turn at
    most — never as the end of the delegator's own turn.
    (`docs/orchestration-v2/README.md`, invariant 3)
 4. **Provider switches and handoffs are explicit artifacts, not prompt tricks.**
-   Whatever the office adds to what an agent reads is visible and recorded: the
-   first-turn framing is fenced in `<the_office>`, a delegated task in
-   `<delegated_task>`, delivered mail in `<office_mail>`, a handoff in
-   `<handoff>` — and each is a transcript entry.
+   Whatever the office adds to what an agent reads is fenced, named and on the
+   record: the first-turn framing in `<the_office>` (kept as `preamble` on the
+   transcript's `session` entry), a delegated task in `<delegated_task>` and
+   delivered mail in `<office_mail>` (each the `user` entry of its turn), a
+   handoff in `<handoff>` (a `handoff` entry on both sides).
 5. **Tests replay provider frames at the transport boundary.** Our fake agents
    (`test/fixtures/fake-acp-agent.mjs`, `fake-codex-app-server.mjs`) are real
    child processes speaking each protocol from the agent's side; everything
@@ -341,7 +344,8 @@ office, not part of the request.
 
 Later turns are passed through unchanged; a turn starting with `/` (an agent's
 own slash command) is never wrapped; an adapter entry can switch the framing
-off (`"preamble": false`). The transcript shows what the person typed.
+off (`"preamble": false`). The transcript shows what the person typed, and
+keeps the exact framing on the `session` entry (`preamble`).
 
 **The environment an agent is started with:** the operator's own environment
 (the agent uses the operator's login — the office holds no credentials and
@@ -602,7 +606,7 @@ Entry kinds and their main fields:
 
 | kind | fields |
 | --- | --- |
-| `session` | `state` (starting, started, ended, failed), `adapter`, `protocol`, `cwd`, `mode`, `wake`, `agent`, `model`, `reason`, `exit` |
+| `session` | `state` (starting, started, ended, failed), `adapter`, `protocol`, `cwd`, `mode`, `wake`, `agent`, `model`, `preamble`, `reason`, `exit` |
 | `turn` | `n`, `state` (running, completed, interrupted, failed), `origin` (human, wake, delegation), `automatic`, `by`, `from`, `hop`, `mail`, `delegationId`, `durationMs`, `tools`, `stopReason`, `error`, `stoppedBy` |
 | `user` | `turn`, `origin`, `text` — what was asked, as the asker wrote it |
 | `message` | `turn`, `text`, `streaming` |
@@ -615,9 +619,12 @@ Entry kinds and their main fields:
 | `notice` | `level`, `text`, `wake` (why an automatic turn was not started) |
 | `handoff` | `direction` (in, out), `fromName` or `toName`, `items`, `omitted`, `turns`, `text` |
 
-Everything written passes the redactor (`child.mjs`): the home directory
-becomes `~`, obvious credentials are masked, control characters are dropped,
-long output keeps only its tail. The session's own token is replaced by
+Everything an agent sent passes the redactor (`child.mjs`) before it is stored
+or shown — replies, commands, paths, titles, output: the home directory becomes
+`~`, obvious credentials (bearer tokens, `api_key=…`, the common key prefixes)
+are masked, control characters are dropped, long output keeps only its tail. So
+does what a person typed into a turn, as it is recorded (the agent receives it
+unchanged). The session's own token is replaced by
 `[office session token]` wherever it appears. It is still a record of real
 work — commands, paths, output — and should be treated like the terminal it
 replaces. `OFFICE_HARNESS_TOOL_OUTPUT=0` keeps tool output out of it.
@@ -650,6 +657,16 @@ automatic turn — and every delegation an agent starts — passes one gate:
 | rate | a minimum gap between automatic turns, and a cap per hour, per session | `OFFICE_WAKE_MIN_GAP_MS` (20 s), `OFFICE_WAKE_MAX_PER_HOUR` (12) |
 | budget | so many automatic turns per session, renewed when a human gives it a turn | `OFFICE_WAKE_BUDGET` (20) |
 | record | every automatic turn is a `turn` entry marked `automatic` with the mail that caused it, and a line in the activity feed; every refusal is a `notice` in the transcript, once | — |
+
+How the step count is known. For a session the office drives, from the turn it
+is in. For any other agent — a Claude Code session reporting through hooks, an
+agent that joined over MCP — the office cannot see turns, so it uses the one
+thing it does see: what that agent has just read. A note sent within fifteen
+minutes of reading mail that was *n* steps from a human counts as step *n*+1
+(`server/inbox.mjs`); a prompt typed by a person, as reported by the runtime's
+own hooks, starts a fresh chain, and an agent's own say-so does not. Without
+this a chain could launder itself through any agent the office does not drive.
+It is a heuristic: where it is wrong the budget and the hourly cap still hold.
 
 Also: mail never interrupts a running turn (it is delivered when the session is
 next idle, several notes as one turn, oldest first, at most 20 notes of 4,000
@@ -778,7 +795,9 @@ standard message for an account's allowance, so an ACP session reports nothing
 rather than a guess. (`usage_update` in ACP is context-window occupancy — that
 drives the agent's context meter, not this.)
 
-The office does not ask any provider's API itself: it holds no credentials.
+The harness never asks a provider's API itself: it holds no credentials. (The
+usage service has one opt-in exception of its own, for an OpenRouter key the
+operator puts in the daemon's environment; see `CONTRACT.md`.)
 
 ## 14. The office surface
 
@@ -958,6 +977,11 @@ What the harness adds, and how each is held:
   ids sent back are only ones the agent offered; nothing from an agent is ever
   parsed as HTML by the daemon; an agent's request for anything we did not
   offer is refused.
+- **Reading what an agent did.** A transcript is the same material a terminal
+  shows, so it is held the same way: over HTTP and over the socket it is given
+  only to this machine (unless `OFFICE_REMOTE_TERMINALS=1`). It is cleaned of
+  obvious credentials and of the home path before it is stored, but it is a
+  record of real commands, paths and output.
 - **Process ownership.** Each agent leads its own process group; ending a
   session, stopping the daemon, or the daemon exiting ends the group. (A daemon
   killed with SIGKILL cannot do this; an ACP agent exits when its stdin closes,
@@ -1039,8 +1063,8 @@ processes (`test/harness*.test.mjs`, helpers in `test/fixtures/`):
   updates merged, model-specific limits ignored, taken in by the usage feed).
 - **`harness-wake.test.mjs`** — off by default; direct; mentions but not
   chatter; never mid-turn; the pause switch and who holds it; rate, gap,
-  budget; two agents answering each other stop at the chain limit; the human's
-  "deliver now".
+  budget; two agents answering each other stop at the chain limit, also when
+  one of them is not driven by the office; the human's "deliver now".
 - **`harness-delegate.test.mjs`** — by the human, by a claimed agent, by a
   driven agent through its real injected MCP server; wait, timeout, a pending
   approval; cancel, including nested; the mode ceiling; folder confinement;

@@ -148,6 +148,8 @@ test('what a child says is cleaned before it is shown or stored', () => {
   assert.equal(stderrExcerpt('just\nsome\nlines\n'), 'lines');
   assert.equal(stderrExcerpt(''), '');
   assert.equal(line('  a\n\tb\u0000  c  ', 100), 'a b c');
+  assert.equal(line(`curl -H "Authorization: Bearer abcdefgh12345678" ${home}/x`, 200), 'curl -H "Authorization: Bearer [redacted]" ~/x',
+    'a command is cleaned like everything else an agent says');
   assert.equal(line(42), '');
   assert.equal(line('x'.repeat(20), 10).length, 10);
   assert.equal(text(123), '');

@@ -19,6 +19,12 @@ import { whichSync, redact } from './child.mjs';
 import { normalizeProvider } from '../../core/contract.mjs';
 
 export const PROTOCOLS = Object.freeze(['acp', 'codex-app-server']);
+// What an adapter on each protocol can promise before any session exists. (A running session then says
+// what it really got, in `features`.) Behaviour elsewhere keys off these, never off a provider's name.
+const PROTOCOL_CAPS = Object.freeze({
+  acp: { nativeSandbox: false },
+  'codex-app-server': { nativeSandbox: true },
+});
 export const MODES = Object.freeze(['ask', 'edits', 'full']);
 export const MODE_RANK = Object.freeze({ ask: 0, edits: 1, full: 2 });
 export const MODE_LABEL = Object.freeze({
@@ -133,7 +139,7 @@ export function createCatalog(cfg, log) {
       caps: {
         observe: true, prompt: true, control: true, spawn: !!resolved,
         approvals: true, interrupt: true,
-        nativeSandbox: adapter.protocol === 'codex-app-server',
+        nativeSandbox: PROTOCOL_CAPS[adapter.protocol].nativeSandbox,
         officeTools: adapter.mcp !== false && cfg.harness.injectMcp,
         resume: false,
       },
