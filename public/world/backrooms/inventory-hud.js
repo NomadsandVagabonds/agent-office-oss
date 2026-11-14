@@ -108,13 +108,22 @@ const remainingTime = seconds => { const whole = Math.max(0, Math.ceil(seconds |
 const nameOf = item => item ? ITEM_DEFS[item.type]?.name || item.type : 'Empty pocket';
 const text = (el, value) => { if (el.textContent !== value) el.textContent = value; };
 
-function heartIcon() {
-  const svg = document.createElementNS(NS, 'svg'), body = document.createElementNS(NS, 'polygon'), shine = document.createElementNS(NS, 'rect');
-  svg.setAttribute('viewBox', '-1 -1 12 10'); svg.setAttribute('class', 'br-inv-heart');
+function heartIcon(id) {
+  const svg = document.createElementNS(NS, 'svg'), body = document.createElementNS(NS, 'polygon');
+  svg.setAttribute('viewBox', '-1 -1 22 18'); svg.setAttribute('class', 'br-inv-heart');
   svg.setAttribute('shape-rendering', 'crispEdges'); svg.setAttribute('aria-hidden', 'true');
-  body.setAttribute('class', 'heart-body'); body.setAttribute('points', '1,0 4,0 4,1 6,1 6,0 9,0 9,1 10,1 10,4 9,4 9,5 8,5 8,6 7,6 7,7 6,7 6,8 4,8 4,7 3,7 3,6 2,6 2,5 1,5 1,4 0,4 0,1 1,1');
-  for (const [key, value] of Object.entries({ class:'heart-shine', x:2, y:1, width:2, height:1 })) shine.setAttribute(key, value);
-  svg.append(body, shine); return svg;
+  body.setAttribute('class', 'heart-body'); body.setAttribute('points', '2,0 8,0 8,2 12,2 12,0 18,0 18,2 20,2 20,8 18,8 18,10 16,10 16,12 14,12 14,14 12,14 12,16 8,16 8,14 6,14 6,12 4,12 4,10 2,10 2,8 0,8 0,2 2,2');
+  const defs = document.createElementNS(NS, 'defs'), clip = document.createElementNS(NS, 'clipPath'), shape = body.cloneNode();
+  shape.removeAttribute('class');
+  clip.id = `br-health-shape-${id}`; clip.append(shape); defs.append(clip); svg.append(defs);
+  // One layer per health point, filled from the bottom. The narrow gaps stay
+  // visible even at full health, so the four-point scale needs no extra text.
+  const layers = Array.from({ length:4 }, (_, i) => {
+    const layer = document.createElementNS(NS, 'rect');
+    for (const [key, value] of Object.entries({ class:'heart-layer', x:0, y:(3 - i) * 4 + .4, width:20, height:3.2, fill:'currentColor', 'clip-path':`url(#${clip.id})` })) layer.setAttribute(key, value);
+    svg.append(layer); return layer;
+  });
+  svg.append(body); return { svg, layers };
 }
 
 export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onOpen } = {}) {
@@ -154,8 +163,8 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
   const panel = h('section.br-inv-panel', { hidden:true, 'aria-labelledby':titleId },
     h('div.br-inv-panel-head', count, cameraChoice, close), detail, inspectActions, craftView);
   const caption = h('div.br-inv-caption');
-  const hearts = Array.from({ length:4 }, heartIcon);
-  const health = h('div.br-inv-health', { hidden:true, role:'img', 'aria-label':'Health 4 of 4' }, ...hearts);
+  const heart = heartIcon(id);
+  const health = h('div.br-inv-health', { hidden:true, role:'img', 'aria-label':'Health 4 of 4' }, heart.svg);
   const bar = h('div.br-inv-bar', { role:'group', 'aria-label':'Six inventory slots' });
   const noticeEl = h('div.br-inv-notice', { role:'status', 'aria-live':'polite', 'aria-atomic':'true' });
   const meta = h('div.br-inv-meta', health, caption), pack = h('div.br-inv-pack', meta, bar);
@@ -299,8 +308,8 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
       const current = Math.max(0, Math.min(4, snapshot.health.current));
       const label = `Health ${current} of ${snapshot.health.max}`;
       if (health.getAttribute('aria-label') !== label) health.setAttribute('aria-label', label);
-      health.classList.toggle('is-low', current === 1);
-      hearts.forEach((heart, i) => heart.classList.toggle('is-filled', i < current));
+      health.classList.toggle('is-low', current > 0 && current <= 2);
+      heart.layers.forEach((layer, i) => layer.setAttribute('visibility', i < current ? 'visible' : 'hidden'));
     }
     for (let i = 0; i < 6; i++) {
       const item = snapshot.slots[i], slot = slots[i], chosen = i === snapshot.selected, conditionText = conditionOf(item);

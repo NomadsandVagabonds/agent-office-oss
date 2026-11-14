@@ -140,6 +140,7 @@ export function createGame(ctx, state, hooks) {
    * A visit to the place that pays is over, however it ended. `report` is what the visit says of itself
    * (core/runs.mjs: cleanRun). The office enters it in its record and answers with the card: what it scored,
    * whether that is a new best, what was met for the first time, what the jar gained, whether the tape is kept.
+   * A visit to a building whose tape is on the shelf is that tape played back (`card.replay`): scored, and paid nothing.
    */
   function run(hideoutId, report, by, extra = {}) {
     const hideout = hideoutById(String(hideoutId || ''));
@@ -149,9 +150,11 @@ export function createGame(ctx, state, hooks) {
     const who = nameOf(by, extra), visit = cleanRun(report);
     const settled = settleRun(g.record, visit, { at: Date.now(), by: who });
     g.record = settled.record;
-    const coins = visit.reason === 'exit' ? pay(hideout, visit.batteries, who, by) : { worth: 0, paid: 0 };
+    // (a kept tape played back is paid nothing, whatever was carried out of it: the office decides which visits those
+    // are, from the tapes it has, and not the visitor)
+    const coins = visit.reason === 'exit' && !settled.card.replay ? pay(hideout, visit.batteries, who, by) : { worth: 0, paid: 0 };
     hooks.save();
-    if (visit.reason === 'exit') ctx.activity?.log('visit', `${who} is back from ${hideout.name}: ${settled.card.score} points${settled.card.best.beaten ? ', the best yet' : ''}`, { hideout: hideout.id, score: settled.card.score, agentId: by?.id || null });
+    if (visit.reason === 'exit' && !settled.card.replay) ctx.activity?.log('visit', `${who} is back from ${hideout.name}: ${settled.card.score} points${settled.card.best.beaten ? ', the best yet' : ''}`, { hideout: hideout.id, score: settled.card.score, agentId: by?.id || null });
     hooks.changed();
     return { ok: true, ...view(), card: { ...settled.card, coins: { carried: visit.batteries, worth: coins.worth, paid: coins.paid, best: g.earned } } };
   }

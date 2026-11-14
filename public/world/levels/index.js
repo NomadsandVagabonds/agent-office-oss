@@ -95,13 +95,15 @@ export async function ride(office, ref, opt = {}) {
       if ((context(office).fresh || []).includes(next.id)) office.net.api('/api/world/game/visit', { method: 'POST', body: { floor: next.id } }).catch(() => null);
       last = await visit(office, mod, next, { from: from.id, fell });
       // through a wall of that floor, and — however it went on the other side — back out of the same wall
+      // (or into a tape that floor keeps, `tape`: the same place, as it was when somebody got out of it — and back to
+      // wherever the tape was being watched, `played`)
       while (last.reason === 'noclip') {
-        const unwatch = whenShown(office, 0);
+        const unwatch = whenShown(office, 0), tape = last.tape || null;
         let other = null;
-        try { other = await office.onNoclip?.({ via: next.id }); } catch (err) { console.error('[lift] through the wall', err); }
+        try { other = await office.onNoclip?.({ via: next.id, tape }); } catch (err) { console.error('[lift] through the wall', err); }
         unwatch();
         await curtain.close(0);
-        last = await visit(office, mod, next, { from: next.id, back: other?.reason || 'quit' });
+        last = await visit(office, mod, next, { from: next.id, back: other?.reason || 'quit', played: !!tape });
       }
       from = next; instant = false;
       const onward = last.reason === 'lift' ? findLevel(last.to) : null;
