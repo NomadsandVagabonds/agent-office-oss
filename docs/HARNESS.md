@@ -1365,6 +1365,23 @@ How far a note is from a human is known the same way as for any agent the
 office does not drive (above): by what the agent last read. Reading mail
 through a wait counts as reading it.
 
+**A Claude Code session that has gone idle.** An agent can only run
+`office wait` while it has a turn. For a hooked Claude Code session there is a
+second way in, opt-in (`node install-inbox-hook.mjs --watch [minutes]`): the
+same hook script registered on `SessionStart` and `Stop` as a background hook
+with `asyncRewake` (Claude Code runs it without blocking, and if it exits with
+code 2 shows the agent what it wrote to stderr, starting a turn even if the
+session is idle). In that mode (`hooks/office-inbox-hook.mjs --watch <seconds>`)
+it sits on `GET /api/inbox/wait?tag=watch` until mail may be handed over, writes
+it to stderr and exits 2. Every `Stop` starts another, so a wait carries a
+`tag`: a new wait takes the place of an older one of the same agent with the
+same tag, which ends at once with `replaced: true`, and a session has one
+watcher. Claude Code enforces the hook's `timeout` on such a hook, so the
+installer sets it a little above the time the watcher is given (four hours
+unless told), after which the session sleeps until somebody types. The gate is
+the office's, as for any wait. Tested against the office with the hook run as
+Claude Code runs it (`test/inbox-hook.test.mjs`); not against Claude Code.
+
 **A card given to somebody is mail.** Creating or updating a task with a new
 assignee sends that agent a direct note from whoever did it
 (`server/tasks.mjs`): `[Board] “title” is yours now (status, project).` with
@@ -1953,6 +1970,12 @@ processes (`test/harness*.test.mjs`, helpers in `test/fixtures/`):
   budget and its renewal, the gap, the hourly cap, the pause switch releasing a
   wait in progress, off); the board telling a card's new assignee and when it
   does not; `office wait` as an agent runs it.
+- **`inbox-hook.test.mjs`** — the Claude Code inbox hook run the way Claude
+  Code runs it: at the end of a turn (nothing, mail once, never twice in a row,
+  context for a prompt, silence for a driven session or a missing office) and
+  as a watcher (exit 2 with the mail on stderr, one watcher to a session, giving
+  up on time); and its installer against a settings file of the test's own
+  (only its entries, a backup first, the watcher only when asked, clean removal).
 - **`harness-delegate.test.mjs`** — by the human, by a claimed agent, by a
   driven agent through its real injected MCP server; wait, timeout, a pending
   approval; cancel, including nested; the mode ceiling; folder confinement;

@@ -83,6 +83,8 @@ export function createWaiting(ctx) {
     return { ...box, waited: true, timedOut: false, hop, held: null };
   }
 
+  const TAG = /^[a-z0-9-]{1,24}$/;
+
   function nothing(agent, verdict, extra = {}) {
     const held = verdict && WHY[verdict.reason] ? { reason: verdict.reason, count: verdict.count || 0, text: WHY[verdict.reason] } : null;
     return { agentId: agent.id, agentName: agent.name, items: [], unread: held ? held.count : 0, direct: 0, waited: true, timedOut: true, held, ...extra };
@@ -93,6 +95,9 @@ export function createWaiting(ctx) {
    * cfg.maxHoldMs at most: whoever is waiting asks again).
    * → what GET /api/inbox gives, read and acknowledged, with `waited: true` · or `{ items: [], timedOut: true,
    *   held: { reason, count, text } | null }` · or null if `signal` aborted (whoever was waiting has gone).
+   * `opt.tag`: a name for the kind of waiter this is (a session's own watcher says 'watch'). A new wait with a tag
+   * takes the place of any older one of that agent's with the same tag, which ends at once with `replaced: true`:
+   * a runtime that starts a watcher every time it goes idle has one watcher, not a pile of them.
    */
   function wait(agent, opt = {}) {
     const asked = Number(opt.timeoutMs);
@@ -106,16 +111,18 @@ export function createWaiting(ctx) {
     return new Promise((resolve) => {
       const since = Date.now();
       let done = false, timer = null, retry = null, last = null;
-      const me = { since, check, end: () => finish(nothing(agent, last)) };
+      const tag = TAG.test(String(opt.tag || '')) ? String(opt.tag) : null;
+      const me = { since, check, tag, end: (extra) => finish(nothing(agent, last, extra)) };
       const set = waiters.get(agent.id) || new Set();
       waiters.set(agent.id, set);
       set.add(me);
+      if (tag) for (const older of [...set]) if (older !== me && older.tag === tag) older.end({ replaced: true });
       function finish(value) {
         if (done) return;
         done = true;
         clearTimeout(timer); clearTimeout(retry);
         set.delete(me);
-        if (!set.size) waiters.delete(agent.id);
+        if (!set.size && waiters.get(agent.id) === set) waiters.delete(agent.id);
         resolve(value);
       }
       function check() {

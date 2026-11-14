@@ -54,6 +54,7 @@ npm test            # the test suite
 # Claude Code — automatic, through hooks
 npm run install-hooks     # every session shows up at a desk
 npm run install-inbox     # office mail is surfaced back into the session
+                          # (add `-- --watch` to wake idle sessions when mail comes: see AGENTS.md)
 
 # Codex — observed from its rollout files
 node observe-codex.mjs
