@@ -317,6 +317,7 @@ async function visit(office, opt) {
     // the part below: begun once you have found your feet in this one, and only drawn from where it could be seen
     if (state === 'play' && !ahead && since > 4 && goesDown(cur.level.exit.way)) prepare();
     if (ahead?.f) { const at = world.current(); ahead.f.world.scene.visible = !!at && (at.def.toExit ?? 9) <= 1; }
+    if (env.below) for (const m of env.below) m.visible = !ahead?.f;          // (the stand-in at the bottom of a drop, until the real rooms are there)
     if (landed >= 0) landed += dt;
     purse?.update(dt, time, state === 'play');
     currentUse = state === 'play' ? world.usable(me) : null;

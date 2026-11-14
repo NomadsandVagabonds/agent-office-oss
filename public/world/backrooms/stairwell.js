@@ -236,6 +236,17 @@ function shaft(c, x0, z0, x1, z1, top, sides = 'wesn') {
   }
 }
 
+/**
+ * What is at the bottom of a drop before the part below has been hung there: a floor in its carpet, lit, so that
+ * nobody who gets to an edge early ever looks down into black. The conductor puts it away once the real rooms are in
+ * (`env.below`: index.js).
+ */
+function standIn(c, x0, z0, x1, z1, y) {
+  const look = c.level.shaft || c.look, b = new Batch(), m = 1.6;
+  b.quad([x0 - m, y, z1 + m], [x1 + m, y, z1 + m], [x1 + m, y, z0 - m], [x0 - m, y, z0 - m], [0.5, 0.5, 0.5], [[(x0 - m) / 1.6, (z1 + m) / 1.6], [(x1 + m) / 1.6, (z1 + m) / 1.6], [(x1 + m) / 1.6, (z0 - m) / 1.6], [(x0 - m) / 1.6, (z0 - m) / 1.6]]);
+  (c.env.below ||= []).push(c.dynamic(b, { map: c.kit.tex.floor(look), unlit: true }));
+}
+
 /** A notice in the house style of fire notices. */
 function greenSign(c, key, lines, side, at, y, w = 0.62) {
   const tex = c.kit.tex.custom('green:' + key, 112, 56, (g, tw, th) => {
@@ -257,7 +268,7 @@ function corridor(c, way) {
     // the middle of the floor has gone, some time ago, and somebody has done what the procedure says to do about it
     const [x0, z0, x1, z1] = holeIn(W, D);
     floor(-W / 2, z1, W / 2, zF); floor(-W / 2, -D / 2, W / 2, z0); floor(-W / 2, z0, x0, z1); floor(x1, z0, W / 2, z1);
-    shaft(c, x0, z0, x1, z1, 0);
+    shaft(c, x0, z0, x1, z1, 0); standIn(c, x0, z0, x1, z1, -GAP + 0.03);
     for (const [a0, b0, a1, b1] of [[x0 - 0.03, z0 - 0.03, x1 + 0.03, z0], [x0 - 0.03, z1, x1 + 0.03, z1 + 0.03], [x0 - 0.03, z0, x0, z1], [x1, z0, x1 + 0.03, z1]]) c.flat.box(a0, 0, b0, a1, 0.012, b1, edge);
     for (const [x, len] of [[x0 + 0.3, 0.5], [x1 - 0.25, 0.35], [0.1, 0.6]]) c.flat.box(x - 0.008, -0.22, z0, x + 0.008, -0.2, z0 + len, [0.22, 0.14, 0.1]);          // what the floor was reinforced with
     wetSign(c, x0 + 0.25, z1 + 0.75, 0.3, ['CAUTION', 'FLOOR']);
@@ -269,7 +280,7 @@ function corridor(c, way) {
     // the corridor stops. The walls and the ceiling carry on for a bit, out of habit
     const zE = ledgeAt(D);
     floor(-W / 2, zE, W / 2, zF);
-    shaft(c, -W / 2, -D / 2, W / 2, zE, 0);
+    shaft(c, -W / 2, -D / 2, W / 2, zE, 0); standIn(c, -W / 2, -D / 2, W / 2, zE, -GAP + 0.03);
     c.flat.box(-W / 2, 0, zE - 0.03, W / 2, 0.012, zE, edge);
     for (const x of [-0.8, 0.35, 0.9]) c.flat.box(x - 0.008, -0.22, zE - 0.35 - Math.abs(x) * 0.2, x + 0.008, -0.2, zE, [0.22, 0.14, 0.1]);          // what the floor was reinforced with
     if (c.hasProp('chair')) c.prop('chair', 0.45, zE + 0.5, { rot: Math.PI + 0.2, solid: false });                                              // somebody sat and looked at it for a while
@@ -296,6 +307,7 @@ function corridor(c, way) {
     const tex = card(c, 'post', ['INTERNAL POST', 'NEXT COLLECTION:', '—'], { w: 96, h: 56, bg: '#1f8a4e', fg: '#eafff0', size: 9, pad: 6, weight: 700 });
     c.mapped('postsign', tex).quad([-0.34, 1.32, d.wall + 0.012], [0.34, 1.32, d.wall + 0.012], [0.34, 1.72, d.wall + 0.012], [-0.34, 1.72, d.wall + 0.012]);
     c.light(0, d.y1 + 0.3, d.z1 - 0.3, glow, 0.35, { k: 0.8, far: 3.5, wrap: 0.8 });
+    standIn(c, -d.half, d.z1 - 1.2, d.half, d.z1, d.y1 - GAP + 0.03);
     c.rt.floorY = (x, z) => yAt(z);
     c.rt.headY = (x, z) => (z >= d.wall + 0.12 ? H : d.top);
     c.rt.clip = (x, z, r) => (z >= d.wall + r ? Math.abs(x) <= W / 2 - r && z <= zF - r : Math.abs(x) <= d.half - Math.min(r, 0.2) && z >= -D / 2 + r);
