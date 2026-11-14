@@ -1125,8 +1125,15 @@ To tell what turns change, the office keeps its own copy of this folder's files:
 
 Nothing stops the copy growing past that. The caps are per snapshot (100 MB)
 and per session (100 turns), not per repository: a session that rewrites a
-90 MB file every turn has the office store it again every turn, and what its
-oldest turns needed is let go only when the session ends.
+90 MB file every turn has the office store it again every turn, and holds
+about 125 turns' worth of it — or an hour's, if that is more — before the
+oldest are cleared out.
+
+The copy may be taken away. Removing `<data>/harness/checkpoints/<key>/` (or
+all of `checkpoints/`) while the office runs loses the snapshots taken so far
+— their turns then answer "can no longer be read" — and nothing else: the
+next snapshot of each session in that repository finds the directory gone,
+makes it again and starts over, as a first snapshot does.
 
 **What it costs.** Measured on the machine this was built on (4 cores, ext4,
 git 2.43), with `data/` on the same disk and nothing else running; with other
@@ -1151,9 +1158,10 @@ repository's copy has been said once, one that counts it and that nothing
 waits for — and only what is new is stored, for this session and for later
 ones in the same repository. The office's directory grows with what turns
 change; it shrinks when a session's record is pruned (with its transcript,
-after 120 newer finished sessions) and when a session that passed the cap on
-turns ends. It is never packed. It holds copies of working files, so it is as
-private as the repository itself (`data/` is never committed).
+after 120 newer finished sessions) and, for a session past its cap on turns,
+after every 25 turns more and when it ends. It is never packed. It holds
+copies of working files, so it is as private as the repository itself
+(`data/` is never committed).
 
 **Reading it.** Both routes are loopback-only, like the transcript — one is
 file names, the other file content. An agent may read them, as it may read a

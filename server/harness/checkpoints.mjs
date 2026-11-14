@@ -89,6 +89,7 @@ const SLOW_IN_A_ROW = 2;
 const GRACE_SECONDS = 3600;              // objects younger than this are never cleaned away: a snapshot may be using them
 const KEEP = 'refs/office/keep';         // in the office's own directory, and only while it tidies up there
 const SIZE_FRESH_MS = 30_000;            // how long a count of what is kept is believed
+const TIDY_EVERY = 25;                   // a running session past its cap on turns: tidy up after every so many more
 
 /** The office's name for a repository: its object directory is kept under this. */
 export const repoKey = (commonDir) => crypto.createHash('sha256').update(String(commonDir)).digest('hex').slice(0, 16);
@@ -295,6 +296,7 @@ export function createCheckpoints({ settings, dir, file, own = [path.dirname(fil
   const sizes = new Map();              // repository key → { bytes, objects, at }: what the office keeps for it, as last counted
   const toldKept = new Set();           // repositories whose size has been told to a session since this office started
   const tidying = new Map();            // repository key → the tidying under way there (one at a time)
+  const made = new Map();               // repository key → how many times its object directory was made since this office started
   const git = (cwd, args, opt = {}) => runGit(cwd, args, { timeout: QUERY_MS, ...opt, track: running });
   // Questions about snapshots are asked of the office's own directory and of nothing else: they are
   // answered the same whether the repository has moved on, been rewritten, or is gone.
@@ -331,12 +333,13 @@ export function createCheckpoints({ settings, dir, file, own = [path.dirname(fil
     // The office's own files are no part of anybody's turn, and a snapshot that took in the directory it is
     // stored in would store its own objects again, every time. Where the office keeps its files inside this
     // checkout, they are left out by name; a checkout that *is* where the office keeps them is not recorded.
-    const keepOut = [];
+    const keepOut = [], here = real(st.cwd);
     for (const folder of own.map(real)) {
       const at = path.relative(where.root, folder);
       const within = at !== '' && at !== '..' && !at.startsWith(`..${path.sep}`) && !path.isAbsolute(at);
+      // Left out, the folder this session works in would have every turn seem to change nothing.
+      if (within ? contains(folder, here) : (at === '' || contains(real(dir), where.root))) return refuse(st, 'it is where the office keeps its own files');
       if (within) keepOut.push(at.split(path.sep).join('/'));
-      else if (at === '' || contains(real(dir), where.root)) return refuse(st, 'it is where the office keeps its own files');
     }
     const format = await git(where.root, ['rev-parse', '--show-object-format'], { timeout: 4000 });
     st.root = where.root;
@@ -367,13 +370,18 @@ export function createCheckpoints({ settings, dir, file, own = [path.dirname(fil
 
   /* ---- a snapshot ------------------------------------------------------------------ */
 
-  /** The office's object directory for this repository: a bare repository with nothing in it but objects. */
+  /**
+   * The office's object directory for this repository: a bare repository with nothing in it but objects.
+   * → null, or git's refusal. Each time it has to be made is counted: whatever an index believed was in it is not.
+   */
   async function room(st) {
     const at = storeOf(st.key);
     if (fs.existsSync(path.join(at, 'HEAD')) && fs.existsSync(path.join(at, 'objects'))) return null;
     fs.mkdirSync(stores, { recursive: true });
-    const made = await git(null, ['init', '-q', '--bare', '--template=', ...(st.sha256 ? ['--object-format=sha256'] : []), at]);
-    return made.ok ? null : made;
+    const init = await git(null, ['init', '-q', '--bare', '--template=', ...(st.sha256 ? ['--object-format=sha256'] : []), at]);
+    if (!init.ok) return init;
+    made.set(st.key, (made.get(st.key) || 0) + 1);
+    return null;
   }
 
   /** How much the named files weigh on disk, stopping once it is plainly too much. */
@@ -416,7 +424,7 @@ export function createCheckpoints({ settings, dir, file, own = [path.dirname(fil
     const began = Date.now();
     const until = began + settings.timeoutMs;
     const left = () => Math.max(1, until - Date.now());
-    const first = !st.warm;                // nothing of this tree is in our index yet: every file is new to it
+    let first = !st.warm;                  // nothing of this tree is in our index yet: every file is new to it
     const failed = (what, r) => (r.timedOut
       // Asked again it would only take as long again: what makes later snapshots quick is a finished one.
       ? switchOff(st, `${first ? 'a first snapshot of it' : 'a snapshot of this folder'} took longer than ${say(settings.timeoutMs)} ms (OFFICE_CHECKPOINTS_TIMEOUT_MS)`)
@@ -436,6 +444,9 @@ export function createCheckpoints({ settings, dir, file, own = [path.dirname(fil
       fs.rmSync(`${st.index}.lock`, { force: true });           // left behind by a git we had to stop
       const unmade = await room(st);
       if (unmade) return failed('make room for snapshots', unmade);
+      // The directory was made anew since our index was filled — somebody removed it, to have the disk back
+      // perhaps. Nothing the index believes is stored there is: this snapshot starts over, like a first one.
+      if (st.warm && st.madeAt !== (made.get(st.key) || 0)) { st.warm = false; st.tree = ''; st.written = false; first = true; }
       // Two things are asked of the repository itself, and only read: where HEAD points (told beside a
       // turn's changes when it moved), and which content filters its config names (so they can be switched off).
       const [headRun, named] = await Promise.all([
@@ -481,7 +492,7 @@ export function createCheckpoints({ settings, dir, file, own = [path.dirname(fil
           return { skip: `${uncounted ? 'more than ' : ''}${say(names.length)} new or changed files is more than one snapshot takes in `
             + `(${say(settings.maxFiles)}; OFFICE_CHECKPOINTS_MAX_FILES)`, code: 'files' };
         }
-        if (st.tree && !names.length) return taken(st.tree, head);          // nothing moved since the last one
+        if (st.written && !names.length) return taken(st.tree, head);       // nothing moved since the last one
         const weight = await weigh(st.root, names, settings.maxBytes);
         if (weight.bytes > settings.maxBytes) {
           return { skip: `its new and changed files come to more than ${size(settings.maxBytes)} (OFFICE_CHECKPOINTS_MAX_BYTES)`
@@ -502,11 +513,19 @@ export function createCheckpoints({ settings, dir, file, own = [path.dirname(fil
         if (links.length) await git(st.root, ['update-index', '--force-remove', '-z', '--stdin'], mine({ input: links.join('\0') + '\0' }));
       }
       st.warm = true;
-      st.tree = '';
+      st.madeAt = made.get(st.key) || 0;
+      // The index has moved on from the tree last written. (That tree is still named in `st.tree` meanwhile:
+      // most of what the index holds is in it, and a tidying must not take those objects for unneeded.)
+      st.written = false;
       const written = await git(st.root, ['write-tree'], mine());
       const tree = oidOf(written);
-      if (!tree) return failed('write the snapshot', written);
+      if (!tree) {
+        // An object the index counts on is not there (lost, or cleared away): the next snapshot starts over.
+        if (!written.timedOut) st.warm = false;
+        return failed('write the snapshot', written);
+      }
       st.tree = tree;
+      st.written = true;
       sizes.delete(st.key);                 // more may be kept now than when it was last counted
       announce(st).catch(() => {});         // not waited for: no turn should stand behind a count
       return taken(tree, head, added.code === 1 ? why(added) : '');
@@ -574,7 +593,8 @@ export function createCheckpoints({ settings, dir, file, own = [path.dirname(fil
     const kept = await measure(st.key);
     if (!kept || kept.bytes <= settings.noticeBytes || toldKept.has(st.key)) return;
     toldKept.add(st.key);
-    st.note('n:changes:kept', `To tell what turns change, the office keeps its own copy of this folder's files: ${size(kept.bytes)} so far, in ${line(storeOf(st.key), 300)}.`);
+    const said = st.note('n:changes:kept', `To tell what turns change, the office keeps its own copy of this folder's files: ${size(kept.bytes)} so far, in ${line(storeOf(st.key), 300)}.`);
+    if (said === false) toldKept.delete(st.key);          // its session had ended: the next one to add to it is told instead
   }
 
   /**
@@ -635,14 +655,15 @@ export function createCheckpoints({ settings, dir, file, own = [path.dirname(fil
   /**
    * A session has been created. Finds out whether its folder can be recorded and
    * takes a first snapshot at leisure, so the first turn does not pay for it.
-   * @param {{id:string, cwd:string, note?:(key:string, text:string, extra?:object)=>void}} session
+   * @param {{id:string, cwd:string, note?:(key:string, text:string, extra?:object)=>(boolean|void)}} session
+   *   `note` writes a notice into the session's record; false from it means nobody could be told any more
    * @returns {Promise<boolean>} whether this session's changes are being recorded
    */
   function open({ id, cwd, note }) {
     if (!SESSION_ID.test(String(id)) || live.has(id)) return Promise.resolve(false);
     const st = { id, cwd, note: typeof note === 'function' ? note : () => {}, root: '', key: '', sha256: false, keepOut: [],
       index: path.join(dir, `${id}.index`), off: '', placed: false, warm: false, tree: '', flying: null, slow: 0,
-      told: new Set(), holds: new Set(), closed: false, trimmed: false, chain: null };
+      written: false, madeAt: 0, told: new Set(), holds: new Set(), closed: false, trimmed: 0, untidy: false, chain: null };
     live.set(id, st);
     st.chain = place(st)
       .catch((err) => { refuse(st, `the office could not look at the folder (${line(err?.message || String(err), 160)})`); })
@@ -683,7 +704,12 @@ export function createCheckpoints({ settings, dir, file, own = [path.dirname(fil
         code = 'late';
         turn.skipped = `the snapshot before it was not ready when the turn began (it took ${say(snap.ms)} ms; a turn waits ${say(settings.holdMs)} ms: OFFICE_CHECKPOINTS_HOLD_MS)`;
       } else turn.start = kept(snap);
-      if (rec.turns.length > settings.maxTurns) { rec.turns.splice(0, rec.turns.length - settings.maxTurns); st.trimmed = true; }
+      if (rec.turns.length > settings.maxTurns) {
+        // Turns past the cap are let go, and every so often what only they needed is cleared out (not waited for).
+        st.trimmed += rec.turns.length - settings.maxTurns;
+        rec.turns.splice(0, rec.turns.length - settings.maxTurns);
+        if (st.trimmed >= TIDY_EVERY) { st.trimmed = 0; st.untidy = false; sweep(st.key); } else st.untidy = true;
+      }
       store.save();
       free();                                  // the agent may go: where it starts from is on record
       tell(st, turn, code);
@@ -746,7 +772,7 @@ export function createCheckpoints({ settings, dir, file, own = [path.dirname(fil
       for (const suffix of ['', '.lock']) { try { fs.rmSync(st.index + suffix, { force: true }); } catch { /* not there */ } }
       live.delete(id);
       store.save();
-      if (st.trimmed) await sweep(st.key);     // turns past the cap were let go while it ran: their objects can go too
+      if (st.untidy) await sweep(st.key);      // turns past the cap were let go while it ran: their objects can go too
     });
   }
 
@@ -936,10 +962,10 @@ export function createCheckpoints({ settings, dir, file, own = [path.dirname(fil
 
   /* ---- for the harness --------------------------------------------------------------------- */
 
-  /** Wait until everything asked of a session's snapshots so far has been done. */
+  /** Wait until everything asked of a session's snapshots so far has been done — a tidying it set off included. */
   function settled(id) {
     const st = live.get(id);
-    return st ? st.chain.then(() => undefined) : Promise.resolve();
+    return st ? st.chain.then(() => tidying.get(st.key)).then(() => undefined) : Promise.resolve();
   }
 
   async function stop() {

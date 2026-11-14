@@ -339,8 +339,11 @@ export function createHarness(ctx, file) {
   // apart from what was already there; a turn that changed something gets a `changes` entry.
   function watchChanges(session) {
     const id = session.id;
+    // A notice goes into the session's record while it has one being written; false says nobody was told.
     const note = (key, text, extra = {}) => {
-      if (session.live) session.transcript.write({ id: key, kind: 'notice', level: 'info', text, ...extra });
+      if (!session.live) return false;
+      session.transcript.write({ id: key, kind: 'notice', level: 'info', text, ...extra });
+      return true;
     };
     checkpoints.open({ id, cwd: session.record.cwd, note });
     session.on('turn-started', (turn) => {

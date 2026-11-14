@@ -624,6 +624,60 @@ test('checkpoints: the office\'s own files are all a snapshot is, and they are t
   assert.equal(fs.existsSync(store), false);
   assert.deepEqual(fs.readdirSync(path.join(data, 'harness')).filter((name) => name !== 'checkpoints'), []);
 
+  await t.test('a session that runs on past its cap on turns is tidied up after as it goes, not only when it ends', async () => {
+    const lasting = repo('office-changes-long-');
+    const data1 = tempDir('office-changes-long-data-');
+    const warnings = [];
+    const long = createCheckpoints({ settings: { ...settings, maxTurns: 2 }, dir: path.join(data1, 'harness'), file: path.join(data1, 'checkpoints.json'),
+      log: { warn: (m) => warnings.push(m) }, graceSeconds: 0 });
+    try {
+      const id = 'd_ffffffffffff';
+      assert.equal(await long.open({ id, cwd: lasting }), true);
+      const kept = [];
+      for (let n = 1; n <= 54; n++) {
+        await long.turnStarted(id, n);
+        await long.settled(id);
+        write(lasting, 'log.txt', `a line of turn ${n}\n`.repeat(n));
+        await long.turnEnded(id, n);
+        kept.push(objectsIn(long.storeOf(id)));
+      }
+      // Every turn stores a file and a tree: 108 objects by now, were nothing let go before the session ends.
+      assert.ok(kept[26] < kept[25], `after 25 turns past the cap what only they needed is cleared out (${kept[25]} → ${kept[26]})`);
+      assert.ok(Math.max(...kept) < 70 && kept.at(-1) < 30, `never more than some 27 turns' worth (${Math.max(...kept)} at most, ${kept.at(-1)} at the end)`);
+      assert.deepEqual(warnings, []);
+      assert.equal(inStore(long.storeOf(id), 'for-each-ref').trim(), '');
+      const now = await long.changes(id);
+      assert.deepEqual(now.turns.map((turn) => [turn.turn, brief(turn.files)]), [[53, [['modified', 'log.txt', 53, 52]]], [54, [['modified', 'log.txt', 54, 53]]]]);
+      assert.match((await long.diff(id, { turn: 54 })).diff, /\+a line of turn 54\n$/, 'and what the kept turns need is all still there');
+    } finally { await long.stop(); }
+  });
+
+  await t.test('a notice nobody could be given is given to the next session that adds to the copy', async () => {
+    const shared = repo('office-changes-heard-');
+    const data1 = tempDir('office-changes-heard-data-');
+    const each = createCheckpoints({ settings: { ...settings, noticeBytes: 0 }, dir: path.join(data1, 'harness'), file: path.join(data1, 'checkpoints.json'),
+      log: { warn() {} }, graceSeconds: 0 });
+    try {
+      const heard = [];
+      const first = 'd_111111111111', second = 'd_222222222222';
+      // The first session's record is already closed when the count comes in: its note says so.
+      await each.open({ id: first, cwd: shared, note: () => false });
+      await each.settled(first);
+      await sleep(150);
+      await each.open({ id: second, cwd: shared, note: (key, text) => { heard.push([key, text]); return true; } });
+      await each.settled(second);
+      await waitFor(() => heard.length > 0, { what: 'the notice' });
+      for (let n = 1; n <= 2; n++) {
+        await each.turnStarted(second, n);
+        write(shared, `more-${n}.txt`, 'more\n'.repeat(n));
+        await each.turnEnded(second, n);
+      }
+      await sleep(150);
+      assert.deepEqual(heard.map(([key]) => key), ['n:changes:kept'], 'once');
+      assert.match(heard[0][1], /^To tell what turns change, the office keeps its own copy of this folder's files: \d+ KB so far, in /);
+    } finally { await each.stop(); }
+  });
+
   await t.test('however many trees are on record: git is not handed them on its command line', async () => {
     // At its caps the office can have tens of thousands of trees to keep. Naming each one to `git prune` as an
     // argument fails outright past the system's limit, and then nothing would ever be cleaned. So: more trees
@@ -970,6 +1024,11 @@ test('checkpoints: sessions and the folders they are in', { skip: !usable }, asy
       assert.doesNotMatch(inStore(store, 'ls-tree', '-r', '--name-only', got.turns[1].trees.end), /office-data/);
       // (What git itself makes of that folder is its owner's business. Asked without `git status`, which rewrites the index.)
       assert.match(git(housed, 'ls-files', '--others', '--exclude-standard', '--directory'), /^office-data\/$/m);
+      // A session working inside that folder would have every turn seem to change nothing. It is told instead.
+      fs.mkdirSync(path.join(data, 'scratch'));
+      const within = await inside.start('fake', { name: 'Further in', cwd: path.join(data, 'scratch') });
+      await inside.ctx.harness.checkpoints.settled(within.id);
+      assert.deepEqual([(await changes(inside, within.id)).recorded, (await changes(inside, within.id)).reason], [false, 'it is where the office keeps its own files']);
     } finally { await inside.stop(); }
     assert.deepEqual(everything(path.join(housed, '.git')), before);
 
@@ -1276,6 +1335,35 @@ test('checkpoints: how much is kept, for how long, and what a restart leaves', {
       assert.ok(now.bytes >= kept.bytes);
       assert.ok(notice.text.includes(`: ${(now.bytes / (1024 * 1024)).toFixed(1)} MB so far, in `), notice.text);
     } finally { await next.stop(); }
+  });
+
+  await t.test('the copy can be taken away while sessions run: the next snapshot starts over, and turns are on record again', async () => {
+    const work = repo('office-changes-reclaim-');
+    const before = everything(path.join(work, '.git'));
+    const h = await startHarnessOffice({ work });
+    try {
+      const a = await h.start('fake', { name: 'One' });
+      const b = await h.start('fake', { name: 'Other' });
+      const early = await turnThat(h, a.id, () => write(work, 'one.txt', 'first\n'));
+      await quietTurn(h, b.id);
+      const store = h.ctx.harness.checkpoints.storeOf(a.id);
+      // The owner read where the copy is, and wants the disk back.
+      fs.rmSync(store, { recursive: true, force: true });
+      const later = await turnThat(h, b.id, () => write(work, 'two.txt', 'second\n'));
+      const last = await turnThat(h, a.id, () => write(work, 'three.txt', 'third\n'));
+      const ofB = await changes(h, b.id), ofA = await changes(h, a.id);
+      assert.deepEqual(brief(ofB.turns.find((turn) => turn.turn === later).files), [['added', 'two.txt', 1, 0]]);
+      assert.deepEqual(brief(ofA.turns.find((turn) => turn.turn === last).files), [['added', 'three.txt', 1, 0]]);
+      assert.match((await diffOf(h, a.id, `turn=${last}`)).diff, /\+third\n$/);
+      assert.ok(holds(store, work, 'README.md') && holds(store, work, 'three.txt'), 'everything was stored again');
+      assert.deepEqual(ofA.stored, { bytes: weightOf(store), objects: objectsIn(store) });
+      // What was taken before it went is gone with it, and says so.
+      const gone = await h.get(`/api/harness/sessions/${a.id}/diff?turn=${early}`);
+      assert.equal(gone.status, 410);
+      assert.match(gone.data.error, /^the snapshots of turn \d+ can no longer be read \(/);
+      assert.ok(!(await h.entries(a.id)).concat(await h.entries(b.id)).some((e) => e.kind === 'notice'), 'neither session had a snapshot fail over it');
+    } finally { await h.stop(); }
+    assert.deepEqual(everything(path.join(work, '.git')), before);
   });
 
   await t.test('switched off, nothing is looked at and nothing is kept', async () => {
