@@ -5,6 +5,7 @@
 // shut against it.
 import { makeRng, toWorld } from './gen.js';
 import { buildItemProp, isPaper } from './hand.js';
+import { populateAbsorbed } from './absorbed.js';
 import * as THREE from 'three';
 
 /**
@@ -128,6 +129,7 @@ export function createDenizens(env) {
 
   (env.ready || (env.ready = [])).push(() => {
     scatterStrayItems(env, R);
+    populateAbsorbed(env, R.fork('absorbed'));
     for (const d of list) if (d.group && !d.group.parent) env.world.scene.add(d.group);
   });
 
@@ -152,7 +154,7 @@ export function createDenizens(env) {
           const nearEnough = !distMap || !rt || (distMap.get(rt.id) ?? 99) <= 3;
           d.group.visible = nearEnough && !d.gone && d.visible !== false;
           d.group.position.set(d.x, (d.y ?? world.floorY(d.x, d.z)) + (d.lift || 0), d.z);
-          d.light?.(world.lightAt(d.x, d.z, 1.0));
+          d.light?.(d.sampleLight ? d.sampleLight(world) : world.lightAt(d.x, d.z, 1.0));
         }
       }
     },
