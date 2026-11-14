@@ -51,6 +51,8 @@ export function answerControls(p, send, opt = {}) {
   const write = answers.find((a) => WRITES.includes(a.kind)) || null;
   const wave = answers.find((a) => WAVES_OFF.includes(a.kind)) || null;
   const decisions = answers.filter((a) => STAMP[a.kind]);
+  // an answer of a kind this client has never heard of is still an answer: offer it in the daemon's own words
+  const others = answers.filter((a) => !STAMP[a.kind] && !WRITES.includes(a.kind) && !WAVES_OFF.includes(a.kind) && a.label && a.text !== 'required');
   const questions = (p.ask?.questions || []).filter((q) => q && q.text);
   const goes = GOES[p.respond?.reaches] || '';
   const withText = (body, text) => ({ ...body, [field]: text });
@@ -69,6 +71,7 @@ export function answerControls(p, send, opt = {}) {
     const lasting = decisions.find((a) => a.kind === 'allow-session');
     if (lasting?.label && !opt.compact) nodes.push(h('p.scope', h('b', 'Always'), ' = ', lowerFirst(lasting.label)));
   }
+  if (others.length) nodes.push(h('div.stamps', others.map((a) => h('button.inkstamp.plain', { type: 'button', title: a.label, onclick: () => send(a.body || {}, 'SENT', 'sent') }, h('span', a.label)))));
 
   if (write && questions.length > 1) {
     // several questions: one line each, sent together in the order they were asked
