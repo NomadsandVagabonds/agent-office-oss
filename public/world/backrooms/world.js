@@ -245,6 +245,11 @@ export async function buildWorld(kit, level, env, tick) {
     rt.visits = (rt.visits || 0) + 1;
     rt.onEnter?.(rt.visits);
   };
+  /** Before anybody is in this part: draw what is round a spot (the place they will come down), so that it can be seen from above. */
+  world.glimpse = (x, z, reach) => {
+    const at = world.roomAt(x, z), dist = at ? world.distances(at.id) : new Map();
+    for (const r of rooms) r.group.visible = (dist.get(r.id) ?? 99) <= 3 || Math.hypot(r.def.cx - x, r.def.cz - z) <= reach;
+  };
   world.update = (dt, t, me) => {
     const here = world.roomAt(me.x, me.z);
     if (here) world.enter(here);

@@ -1,15 +1,19 @@
 // The Backrooms — the hidden level under the office. Lean on the wrong corner
 // of the Back Room and you fall out of the building into this: yellow rooms
 // that hum, seen through a camcorder, never the same twice — and under them,
-// more floors, each a different kind of place, until the one with a wall that
-// gives the way the first one did.
+// more of the same building, each part a different kind of place, until the
+// one with a wall that gives the way the first one did.
 //
 //   const { reason } = await enterBackrooms(office, { name, seed });
 //   reason: 'exit' (you found the way out) | 'caught' (something found you) | 'quit' (Esc)
 //
-// This file is the conductor. It plans the visit (plan.js), and for each floor
-// in turn generates it (gen.js), builds it (world.js + rooms.js with kit.js)
-// and, when you go through the ceiling of the next, lets go of it. What lasts
+// This file is the conductor. It plans the visit (plan.js), and for each part
+// of the building in turn generates it (gen.js) and builds it (world.js +
+// rooms.js with kit.js). It is one building: the part below is built while
+// you are still walking toward the way down, and hung in the same picture
+// under the place you will drop from (seam.js), so that there is never a
+// moment at which the world is not there. When you have landed in it, the
+// part you left is let go of. What lasts
 // the whole visit is kept here: the screen (through the stage's setView), the
 // camcorder (vhs.js) and its overlay (hud.js), the sound, your hands
 // (input.js) and what is in them. It reads names and faces from the office,
@@ -32,6 +36,7 @@ import { createStalkers } from './pursuer.js';
 import { createLoot, lootLeft } from './loot.js';
 import { leaving } from './leaving.js';
 import { middle, THIN_BEHIND } from './marks.js';
+import { hangBelow, goesDown } from './seam.js';
 
 const FOV = 62;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -114,11 +119,19 @@ async function visit(office, opt) {
   const Avatar = (await import('../avatar/rig.js').catch(() => null))?.Avatar || null;
   const layout = await import('/core/layout.mjs').catch(() => null);
 
-  // 'loading' → 'falling' → 'play' → ('cut' → 'falling' → 'play')… → 'ending' (or, by the way out, 'through') → 'done'
-  let state = 'loading', cur = null, time = 0, since = 0, ending = 0, reason = null, resolveVisit = null, swapping = false;
+  // 'loading' → 'falling' → 'play' → (['held' →] 'drop' → 'play')… → 'ending' (or, by the way out, 'through') → 'done'
+  //   held: somebody got to a way down before the part under it was built — the tape struggles until it is
+  //   drop: between two parts of the building, falling, with both of them in the picture
+  let state = 'loading', cur = null, time = 0, since = 0, ending = 0, reason = null, resolveVisit = null;
+  let ahead = null;                                       // the part below, being built or built: { index, f, failed }
+  let above = null;                                       // the part just left, still hanging over you: { f, until }
+  let hold = false, landed = -1, heldAt = null;           // a room has the controls (a chute) · seconds since you came down in a new part · where you went over, while held
   let out = null;                                         // by the way out: where the camera was when the wall gave, and which way is out
   let pictureKey = '', currentUse = null, light = 0.3, torch = 0, interference = 0, pendingQuit = false, kept = { card: false, coins: [] };
   const u = vhs.uniforms, blank = new THREE.Scene();
+  // everything that is built hangs in this: the part you are in at the origin, the part below it under its way down
+  const root = new THREE.Scene();
+  root.background = new THREE.Color(0x000000);
   u.uSnow.value = 1;
 
   /* ---- the screen is ours from here ---------------------------------------------- */
@@ -148,7 +161,7 @@ async function visit(office, opt) {
 
   /* ---- a floor: everything that is built for it and thrown away with it ---------------- */
   const halfFov = () => Math.atan(Math.tan((FOV * Math.PI) / 360) * camera.aspect);
-  async function build(level, carry) {
+  async function build(level, carry, pace) {
     const kit = createKit();
     const f = { level, kit, world: null, player: null, env: null };
     const env = f.env = {
@@ -158,8 +171,10 @@ async function visit(office, opt) {
       hatches: new Map(),                       // room id → { drop() }: where a door in a floor lets you out
       /** The visit is over. how: { nx, nz } — the way out through the wall that gave (thin.js), for an 'exit'. */
       end: (why, how) => finish(why, how),
-      /** The floor has given way: the next one down. */
-      descend: () => descend(),
+      /** Somebody has gone over an edge they cannot come back from: on down into the next part. at: { x, z } where, in this part's world. */
+      descend: (at) => descend(false, at || {}),
+      /** A room is carrying somebody (a chute): their hands are off the controls until it lets go. */
+      hold: (on) => { hold = !!on; },
       /** Is this spot on screen and not behind a wall? */
       sees(x, z, o = {}) {
         const me = f.player?.me; if (!me) return false;
@@ -185,50 +200,91 @@ async function visit(office, opt) {
     env.loot = purse;
     purse?.hang(env);
     let breath = performance.now();                       // build as fast as the machine allows, but keep the static moving
-    f.world = env.world = await buildWorld(kit, level, env, async () => { if (performance.now() - breath > 40) { await frame(); breath = performance.now(); } });
+    f.world = env.world = await buildWorld(kit, level, env, pace || (async () => { if (performance.now() - breath > 40) { await frame(); breath = performance.now(); } }));
     return f;
+  }
+  /** The part below this one, built while somebody is still finding their way to it: a room, then a breath, then a room. */
+  function prepare() {
+    if (ahead || !cur || state === 'done') return;
+    const index = cur.level.depth + 1, over = cur;
+    if (index >= plan.depths) return;
+    const mine = ahead = { index, f: null, failed: false };
+    const pace = async () => { await frame(); await frame(); await frame(); };
+    (async () => {
+      try {
+        const f = await build(floor(index), null, pace);
+        if (ahead !== mine || state === 'done') { letGo(f); return; }
+        // hung where it will be landed in: under this part's way down
+        const at = hangBelow(over.level, f.level);
+        f.world.scene.position.set(at.x, at.y, at.z);
+        f.world.scene.visible = false;
+        f.world.glimpse(f.level.start.x, f.level.start.z, 15);
+        root.add(f.world.scene);
+        mine.f = f;
+      } catch (err) { console.error('[backrooms] the part below would not build', err); mine.failed = true; }
+    })();
   }
   function letGo(f) {
     if (!f) return;
     f.env.pursuer?.dispose?.();
+    f.world?.scene.removeFromParent();
     f.world?.dispose(); f.kit.dispose();
   }
-  /** You are on this floor now, somewhere under a hole in its ceiling. */
-  function land(f) {
+  /**
+   * You are in this part now. The first time: somewhere under a hole in its ceiling, out of the static. After that
+   * (`from`: the body you had in the part above, already in this part's coordinates): exactly where you were, and falling.
+   */
+  function land(f, from) {
     cur = f;
-    const player = f.player = f.env.player = createPlayer(f.world, camera, f.level.start, input.state);
-    player.me.shake = vhs.level === 2 ? 1 : vhs.level === 1 ? 0.5 : 0.25;
-    player.me.drop = 1.3;
+    purse?.attend(f.env);
+    if (!f.world.scene.parent) root.add(f.world.scene);
+    f.world.scene.position.set(0, 0, 0); f.world.scene.visible = true;
+    const player = f.player = f.env.player = createPlayer(f.world, camera, from || f.level.start, input.state);
+    const me = player.me;
+    me.shake = vhs.level === 2 ? 1 : vhs.level === 1 ? 0.5 : 0.25;
+    if (from) { me.pitch = from.pitch; me.drop = Math.max(0.01, from.y - (f.world.floorY(me.x, me.z) + player.EYE)); me.dropV = Math.min(from.dropV, -0.4); }
+    else me.drop = 1.3;
     player.on('step', () => sound.play(f.world.current()?.footstep || 'step'));
     for (const fn of f.env.ready || []) fn();
-    f.world.enter(f.world.roomAt(player.me.x, player.me.z));
-    vhs.setScene(f.world.scene);
+    f.world.enter(f.world.roomAt(me.x, me.z) || f.world.rooms[f.level.start.room]);
+    vhs.setScene(root);
     if (f.level !== first) hud.setStamp(f.level.stamp);
     sound.setMains(f.level.hum);
-    currentUse = null; since = 0;
-    state = 'falling';
+    currentUse = null; since = 0; hold = false; landed = -1;
+    state = from ? 'drop' : 'falling';
   }
-  /** Through the ceiling of the next floor down. The tape cuts; what was above is let go of while the next is built. */
-  function descend(force) {
-    if (state !== 'play' || swapping || !cur) return false;
-    if (cur.level.depth >= plan.depths - 1 || (!force && cur.level.exit.way !== 'stairs')) return false;
-    state = 'cut'; since = 0;
-    hud.hint(false);
-    sound.play('static', { dur: 1.1 });
+  /**
+   * Over the edge. If the part below is there (it nearly always is: it has been building since you landed in this
+   * one), nothing is cut: which part is "here" changes under you, and you carry on falling. If it is not, you are
+   * held where you are, under static, until it is.
+   */
+  function descend(force, at) {
+    if ((state !== 'play' && state !== 'held') || !cur) return false;
+    if (cur.level.depth >= plan.depths - 1 || (!force && !goesDown(cur.level.exit.way))) return false;
+    if (!ahead) prepare();
+    if (ahead.failed) { reason = 'quit'; conclude(); return false; }
+    if (!ahead.f) { if (state !== 'held') { state = 'held'; since = 0; hud.hint(false); sound.play('static', { dur: 1.1 }); } heldAt = at || null; return true; }
+    going = { at };                                       // (at the top of the next frame: this one is half way through the part being left)
     return true;
   }
-  async function swap() {
-    swapping = true;
-    const old = cur, carry = old.env.pursuer?.carry?.() || null, next = old.level.depth + 1;
-    cur = null; vhs.setScene(blank);
-    letGo(old);
-    let f = null;
-    try { f = await build(floor(next), carry); }
-    catch (err) { console.error('[backrooms] the next floor would not build', err); swapping = false; reason = 'quit'; conclude(); return; }
-    swapping = false;
-    if (state === 'done') { letGo(f); return; }
-    if (pendingQuit) { cur = f; conclude(); return; }
-    land(f);
+  let going = null;
+  function handover(at) {
+    const old = cur, f = ahead.f, me = old.player.me, o = f.world.scene.position.clone();
+    ahead = null;
+    f.env.carry = old.env.pursuer?.carry?.() || null;
+    // the same body, in the coordinates of the part below — and never more than a stride from the middle of the hole it comes down through
+    const st = f.level.start;
+    let x = me.x - o.x, z = me.z - o.z;
+    if (!at) { x = st.x; z = st.z; }                       // (from wherever you stood: the dev page's descend)
+    const off = Math.hypot(x - st.x, z - st.z);
+    if (off > 0.55) { x = st.x + ((x - st.x) / off) * 0.55; z = st.z + ((z - st.z) / off) * 0.55; }
+    const from = { x, z, yaw: me.yaw, pitch: me.pitch, y: (at ? camera.position.y : old.world.floorY(me.x, me.z) + old.player.EYE) - o.y, dropV: me.dropV || 0 };
+    // what was here is up there now, for as long as it can still be seen
+    old.world.scene.position.set(x - me.x, -o.y, z - me.z);
+    above = { f: old, until: time + 6 };
+    hud.hint(false);
+    land(f, from);
+    interference = Math.max(interference, 0.7);
   }
 
   /* ---- the loop ---------------------------------------------------------------------- */
@@ -240,13 +296,19 @@ async function visit(office, opt) {
     interference *= Math.exp(-4 * dt);
     u.uTrack.value = interference;
     if (interference > 0.5) hud.glitch(0.3);
-    if (!cur) { u.uSnow.value = 1; return; }                  // between floors: nothing but snow
+    if (!cur) { u.uSnow.value = 1; return; }                  // before the first part is up: nothing but snow
+    if (going && ahead?.f && (state === 'play' || state === 'held')) { const g = going; going = null; handover(g.at); }
+    if (above && (time > above.until || (landed > 1.2 && state === 'play'))) { letGo(above.f); above = null; }
     const { world, player, env } = cur, me = player.me;
-    me.frozen = state !== 'play';
+    me.frozen = state !== 'play' || hold;
     player.update(dt, time);
     me.slow = 1; me.sinkTo = 0;                              // rooms that slow you or make you stoop say so every frame
     world.update(dt, time, me);
     env.pursuer?.update(dt, time);
+    // the part below: begun once you have found your feet in this one, and only drawn from where it could be seen
+    if (state === 'play' && !ahead && since > 4 && goesDown(cur.level.exit.way)) prepare();
+    if (ahead?.f) { const at = world.current(); ahead.f.world.scene.visible = !!at && (at.def.toExit ?? 9) <= 1; }
+    if (landed >= 0) landed += dt;
     purse?.update(dt, time, state === 'play');
     currentUse = state === 'play' ? world.usable(me) : null;
     hud.hint(!!currentUse);
@@ -266,12 +328,21 @@ async function visit(office, opt) {
     if (state === 'falling') {
       u.uSnow.value = Math.max(0, u.uSnow.value - dt / 0.8);
       if (since > 1.25) { state = 'play'; hud.recording(); }
-    } else if (state === 'cut') {
-      // the ceiling you were standing on goes, and the picture with it
-      u.uSnow.value = Math.min(1, since / 0.28);
-      me.drop -= dt * (1.2 + since * 9);
+    } else if (state === 'held') {
+      // the part below is not built yet: the tape cannot make anything of where you are until it is
+      u.uSnow.value = Math.min(0.92, since / 0.5);
       interference = 1;
-      if (since > 0.3) swap();
+      if (ahead?.failed) { reason = 'quit'; conclude(); }
+      else if (ahead?.f) { u.uSnow.value = 0.5; going = { at: heldAt }; }
+    } else if (state === 'drop') {
+      // between two parts of the building, with both of them in the picture; then carpet
+      if (u.uSnow.value > 0) u.uSnow.value = Math.max(0, u.uSnow.value - dt / 0.5);
+      if (landed < 0 && me.drop <= 0.02 && me.dropV >= 0) {
+        landed = 0;
+        sound.play('thunk'); sound.play('static', { dur: 0.5, vol: 0.6 });
+        interference = 1; u.uSnow.value = Math.max(u.uSnow.value, 0.4); hud.glitch(0.6);
+      }
+      if (landed > 0.45) { state = 'play'; since = 0; hud.recording(); }
     } else if (state === 'ending') {
       ending += dt;
       const k = clamp(ending / END[reason], 0, 1);
@@ -301,6 +372,9 @@ async function visit(office, opt) {
     input.dispose();
     hud.remove(); sound.stop();
     letGo(cur); cur = null;
+    if (above) { letGo(above.f); above = null; }
+    if (ahead?.f) letGo(ahead.f);
+    ahead = null;
     vhs.dispose();
     renderer.setRenderTarget(null);
     if (opt.debug) delete window.__backrooms;
@@ -360,8 +434,11 @@ async function visit(office, opt) {
       const me = cur.player.me, rt = cur.world.roomAt(me.x, me.z), p = rt ? toLocal(rt.def, me.x, me.z) : null;
       return { floor: cur.level.depth, room: rt?.def.arch || rt?.def.kind, id: rt?.id, x: p && +p.x.toFixed(2), z: p && +p.z.toFixed(2), yaw: +(me.yaw - (rt ? (rt.def.rot * Math.PI) / 2 : 0)).toFixed(2) };
     },
-    /** Go down a floor now, wherever you are standing. */
-    descend: () => descend(true),
+    /** On down into the next part now, wherever you are standing. */
+    descend: () => descend(true, null),
+    /** The part below, if it is built yet (and where it hangs). */
+    get ahead() { return ahead?.f ? { level: ahead.f.level, world: ahead.f.world, at: ahead.f.world.scene.position } : null; },
+    root,
     finish: (why) => finish(why),
   };
   if (opt.debug) window.__backrooms = handle;

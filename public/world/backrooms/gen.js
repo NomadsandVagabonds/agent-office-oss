@@ -26,8 +26,9 @@
 import { T, WALL_H, DOOR_H, TILE, RISE, RUN, SIDES, toWorld, toLocal, wallLength, wallPoint, floorAt, ceilAt, headAt, stairZones, pinchHalf, fitsAt, wallSpans } from './frame.js';
 import { fill } from './words.js';
 import { MORE_DECK, MORE_STASH } from './deck2.js';
-import { themeOf } from './themes.js';
+import { themeOf, THEMES } from './themes.js';
 import { thinPlace, decoyMarks, TAPE_LABELS } from './marks.js';
+import { goesDown } from './seam.js';
 import { vocabulary, motif, fits, sunk } from './quiet.js';
 
 // the room's own frame and the shape of its floor and ceiling are frame.js's; they have always been asked for here
@@ -625,7 +626,7 @@ function build(R, o, opt) {
   let exit = null;
   for (const a of anchors) { exit = viaLobby(a) || tryExit(a); if (exit) { if (a.local) a.used = true; break; } }
   if (!exit) return null;
-  exit.way = opt.way === 'stairs' ? 'stairs' : 'wall';
+  exit.way = goesDown(opt.way) ? opt.way : 'wall';
   exit.name = 'Fire exit';
 
   depth = distances(start);
@@ -971,6 +972,32 @@ function dress(R, level, o, opt, keeper = false) {
   if (!thin) return null;
   for (const mark of decoyMarks(rooms, R.fork('marks'), thin)) { const { room: id, ...item } = mark; rooms[id].dress.push({ ...item, turn: 0, n: 0 }); }
 
+  // Near a seam the parts run into each other: it is one building, and it changes as you go. The last rooms before
+  // the way down have the next part's carpet (and, right at the door, its wallpaper); the room you land in and the
+  // ones round it still have the ceiling and some of the paper of the part above. Rolled from a source of its own,
+  // and nothing but looks: asking for it moves no wall.
+  const bleed = opt.bleed || {}, RB = R.fork('bleed');
+  const lookOf = (id, rr) => { const t = themeOf(id), w = (f) => (t.families ? t.families[f.id] || 0 : f.weight); return rollLook(rr, rr.weighted(FAMILIES, w), rr.pick(t.patterns || PATTERNS), t.tubes || TUBES); };
+  let shaft = null;
+  if (bleed.next && THEMES[bleed.next]) {
+    const into = lookOf(bleed.next, RB.fork('next'));
+    shaft = into;
+    for (const room of rooms) {
+      if (room.kind !== 'plain' || !(room.toExit <= 2)) continue;
+      room.look = { ...room.look, carpet: into.carpet, floor: into.floor, trim: room.toExit <= 1 ? into.trim : room.look.trim,
+        ...(room.toExit <= 1 ? { family: into.family, pattern: into.pattern, wall: into.wall, ink: into.ink, pale: into.pale } : {}) };
+      room.bleed = 'next';
+    }
+  }
+  if (bleed.prev && THEMES[bleed.prev]) {
+    const from = lookOf(bleed.prev, RB.fork('prev'));
+    for (const room of rooms) {
+      if ((room.kind !== 'plain' && room.kind !== 'start') || room.depth > 1 || room.bleed) continue;
+      room.look = { ...room.look, ceil: from.ceil, ...(room.depth === 0 ? { family: from.family, pattern: from.pattern, wall: from.wall, ink: from.ink, pale: from.pale, trim: from.trim } : {}) };
+      room.bleed = 'prev';
+    }
+  }
+
   // "it's past the water coolers": the oddity nearest the way out
   const near = level.specials.slice().sort((a, b) => toExit.get(a.id) - toExit.get(b.id))[0];
   const first = start.doors[0];
@@ -979,7 +1006,7 @@ function dress(R, level, o, opt, keeper = false) {
     pursuer, windows,
     hint: near ? ARCHETYPES[near.arch].landmark : 'the plain rooms',
     start: { room: start.id, x: start.cx, z: start.cz, yaw: Math.atan2(-aim.x, -aim.z) },
-    exit: { room: exit.id, way: exit.way }, thin,
+    exit: { room: exit.id, way: exit.way }, thin, shaft,
     stamp: { year: R.int(1991, 1999), month: R.pick(MONTHS), day: R.int(1, 28), hour: R.int(0, 23), minute: R.int(0, 59) },
     hum: theme.hum || R.pick([50, 50, 60]),
   };

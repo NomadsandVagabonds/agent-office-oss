@@ -8,6 +8,7 @@ import { MIN_OUT_STEPS, THIN_W, MARK_W, LEAN, REFUSE, lean, pressing, answer, TA
 import { REACH, calm, beside, closeness, grabChance } from '../public/world/backrooms/reach.js';
 import { planVisit, floorOf, generateVisit, MIN_FLOORS, MAX_FLOORS, MIN_VISIT_STEPS, KNOWN_AT_START } from '../public/world/backrooms/plan.js';
 import { THEMES, THEME_IDS } from '../public/world/backrooms/themes.js';
+import { WAYS, GAP, goesDown, dropOf, hangBelow, flight, holeIn, ledgeAt, ductIn } from '../public/world/backrooms/seam.js';
 import { leaving, LEAVE } from '../public/world/backrooms/leaving.js';
 
 const office = {
@@ -20,7 +21,7 @@ const visits = new Map();
 const visitFor = (seed, opt = office) => { const k = seed + JSON.stringify(opt.loot || 0); if (!visits.has(k)) visits.set(k, generateVisit(seed, opt)); return visits.get(k); };
 
 test('a visit is planned from its seed: three to five floors, yellow on top, the wall that gives only on the last', () => {
-  const sizes = new Map(), orders = new Set(), under = new Set();
+  const sizes = new Map(), orders = new Set(), under = new Set(), ways = new Set();
   for (const seed of SEEDS) {
     const plan = planVisit(seed, office);
     assert.deepEqual(plan, planVisit(seed, office), `seed ${seed}: the same seed plans the same visit`);
@@ -29,12 +30,17 @@ test('a visit is planned from its seed: three to five floors, yellow on top, the
     assert.equal(plan.floors.length, plan.depths);
     assert.equal(plan.floors[0].theme, 'yellow', 'you always land in the yellow');
     assert.equal(new Set(plan.floors.map((f) => f.theme)).size, plan.depths, `seed ${seed}: two floors of one kind`);
-    assert.equal(new Set(plan.floors.map((f) => f.label)).size, plan.depths, `seed ${seed}: two floors with the same number painted on the wall`);
+    // one building: nothing in the plan numbers or names a part of it, and every part but the last ends in a way down that is its own while there are ways left
+    assert.ok(!JSON.stringify(plan).match(/"(label|below)"/), `seed ${seed}: the plan numbers its parts`);
+    const downs = plan.floors.slice(0, -1).map((f) => f.way);
+    assert.equal(new Set(downs).size, Math.min(downs.length, WAYS.length), `seed ${seed}: the same way down twice (${downs})`);
+    downs.forEach((w) => ways.add(w));
     plan.floors.forEach((f, i) => {
       assert.equal(f.depth, i);
       assert.ok(THEMES[f.theme], `${f.theme} is a kind of floor`);
-      assert.equal(f.way, i === plan.depths - 1 ? 'wall' : 'stairs', `seed ${seed}: floor ${i} ends in ${f.way}`);
-      assert.equal(f.below, i === plan.depths - 1 ? 'G' : plan.floors[i + 1].label, 'the arrow on the wall points at the floor that is really under this one');
+      assert.equal(goesDown(f.way), i < plan.depths - 1, `seed ${seed}: part ${i} ends in ${f.way}`);
+      if (i === plan.depths - 1) assert.equal(f.way, 'wall');
+      assert.equal(f.prev, i ? plan.floors[i - 1].theme : null); assert.equal(f.next, i < plan.depths - 1 ? plan.floors[i + 1].theme : null);
     });
     sizes.set(plan.depths, (sizes.get(plan.depths) || 0) + 1);
     orders.add(plan.floors.map((f) => f.theme).join('>'));
@@ -42,6 +48,7 @@ test('a visit is planned from its seed: three to five floors, yellow on top, the
   }
   for (let n = MIN_FLOORS; n <= MAX_FLOORS; n++) assert.ok(sizes.get(n) > 5, `visits of ${n} floors: ${sizes.get(n) || 0} in ${SEEDS.length}`);
   assert.deepEqual([...under].sort(), THEME_IDS.filter((id) => id !== 'yellow').sort(), 'every kind of floor turns up under the yellow one');
+  assert.deepEqual([...ways].sort(), [...WAYS].sort(), 'every way down turns up somewhere');
   assert.ok(orders.size > 30, `only ${orders.size} different buildings in ${SEEDS.length} visits`);
   // nothing in a plan says how to play, and asking for a number of floors gets that number
   assert.equal(planVisit(3, { ...office, depths: 4 }).depths, 4);
@@ -57,7 +64,7 @@ test('a floor is the same floor again whenever it is asked for, in any order', (
       assert.deepEqual(floorOf(again, i), floors[i], `seed ${seed}, floor ${i}`);
       assert.equal(JSON.stringify(floors[i]), JSON.stringify(floorOf(again, i)), 'plain data');
       assert.equal(floors[i].depth, i); assert.equal(floors[i].depths, visit.depths);
-      assert.equal(floors[i].theme, visit.floors[i].theme); assert.equal(floors[i].label, visit.floors[i].label);
+      assert.equal(floors[i].theme, visit.floors[i].theme); assert.equal('label' in floors[i] || 'below' in floors[i], false, 'no part of the building has a number');
       assert.equal(floors[i].exit.way, visit.floors[i].way);
     }
     assert.throws(() => floorOf(again, again.depths), /no floor/);
@@ -100,10 +107,14 @@ test('the way out is earned: every floor ends at a fire exit in its furthest roo
 test('asking for a floor to be the last, or not, changes nothing else about it', () => {
   for (const seed of [1, 7, 'tuesday', 44]) {
     for (const theme of THEME_IDS) {
-      const door = generate(seed, { ...office, theme }), stairs = generate(seed, { ...office, theme, way: 'stairs' });
-      assert.equal(door.exit.way, 'wall'); assert.equal(stairs.exit.way, 'stairs');
+      const door = generate(seed, { ...office, theme });
+      assert.equal(door.exit.way, 'wall');
       const strip = (level) => JSON.parse(JSON.stringify(level, (k, v) => (k === 'way' || k === 'name' ? undefined : v)));
-      assert.deepEqual(strip(stairs), strip(door), `seed ${seed}, ${theme}`);
+      for (const way of WAYS) {
+        const down = generate(seed, { ...office, theme, way });
+        assert.equal(down.exit.way, way); assert.equal(down.rooms[down.exit.room].way, way);
+        assert.deepEqual(strip(down), strip(door), `seed ${seed}, ${theme}, ${way}`);
+      }
     }
   }
 });
@@ -123,7 +134,8 @@ test('the floors of a visit are different places: a kind each, and rooms you hav
       repeats += again > 0 ? 1 : 0; floorsSeen++;
       level.picked.forEach((id) => had.add(id));
       // a floor looks like what it is
-      const theme = THEMES[level.theme], plain = level.rooms.filter((r) => r.kind === 'plain');
+      // (but for the few rooms at a seam, which are on their way to being the part above or the part below)
+      const theme = THEMES[level.theme], plain = level.rooms.filter((r) => r.kind === 'plain' && !r.bleed);
       if (theme.families) {
         const own = plain.filter((r) => (theme.families[r.look.family] || 0) > 0).length;
         assert.equal(own, plain.length, `seed ${seed}, floor ${i} (${level.theme}): a plain room in wallpaper from another kind of floor`);
@@ -482,4 +494,54 @@ test('within arm\'s reach of what follows you: across a room it is a dummy; runn
   assert.deepEqual([s.tears, s.next], [0, REACH.first]);
   // and the rule is only the rule: the same dice, the same story
   assert.deepEqual(stand(1, dice(0.9, 0.2, 0.9, 0.7, 0.1, 0.4)), stand(1, dice(0.9, 0.2, 0.9, 0.7, 0.1, 0.4)));
+});
+
+test('one building: every part but the last ends at a way down, and the part below hangs with its landing spot directly under it', () => {
+  for (const seed of SEEDS.slice(0, 40)) {
+    const { visit, floors } = visitFor(seed);
+    floors.forEach((level, i) => {
+      const room = level.rooms[level.exit.room], where = `seed ${seed}, part ${i} (${room.way})`;
+      assert.equal(room.way, visit.floors[i].way);
+      if (i === visit.depths - 1) { assert.equal(goesDown(room.way), false); return; }
+      // the drop is inside the room behind the fire door, further in than the door, and nowhere else
+      const d = dropOf(room);
+      assert.ok(Math.abs(d.x) < room.W / 2 - 0.3 && d.z > -room.D / 2 + 0.2 && d.z < room.D / 2 - 1.5 && d.y <= 0, `${where}: the drop is at ${JSON.stringify(d)}`);
+      // …and the next part hangs so that where you land is straight down from it, a storey and a slab below, clear of every ceiling up here
+      const next = floors[i + 1], at = hangBelow(level, next), top = toWorld(room, d.x, d.z);
+      assert.ok(Math.abs(next.start.x + at.x - top.x) < 1e-9 && Math.abs(next.start.z + at.z - top.z) < 1e-9, `${where}: the landing is not under the drop`);
+      assert.ok(Math.abs(room.y + d.y - at.y - GAP) < 1e-9, `${where}: ${room.y + d.y - at.y} m down`);
+      assert.ok(GAP > next.rooms[next.start.room].H + 0.6, 'the room you land in fits under the floor you left');
+    });
+  }
+  // the geometry the builders share: stairs that end short of the back wall, a hole with floor all round it, a ledge with floor to stand on, a duct with a way in
+  for (const D of [EXIT_DEPTH - T, EXIT_DEPTH + 1 - T]) {            // (the room behind the fire door is always this deep)
+    const f = flight(D, true), h = holeIn(2.8, D), z = ledgeAt(D), duct = ductIn(D);
+    assert.ok(f.zB > f.back + 0.5 && f.zL < f.zF && f.yB < -2);
+    assert.ok(h[0] > -1.4 + 0.4 && h[2] < 1.4 - 0.4 && h[1] > -D / 2 + 0.5 && h[3] < D / 2 - 2, 'floor on every side of the hole, and room to stop inside the door');
+    assert.ok(z < D / 2 - 2 && z > -D / 2 + 2);
+    assert.ok(duct.wall < D / 2 - 2 && duct.z1 > -D / 2 + 0.6 && duct.z1 < duct.wall - 2 && duct.y1 < -1 && duct.top >= 0.9);
+  }
+});
+
+test('near a seam the parts run into each other, and that changes nothing but how rooms look', () => {
+  for (const seed of SEEDS.slice(0, 40)) {
+    const { visit, floors } = visitFor(seed);
+    floors.forEach((level, i) => {
+      const where = `seed ${seed}, part ${i}`, into = level.rooms.filter((r) => r.bleed === 'next'), from = level.rooms.filter((r) => r.bleed === 'prev');
+      if (i < visit.depths - 1) {
+        assert.ok(level.shaft && into.length >= 1, `${where}: nothing of the part below turns up before the way down`);
+        for (const r of into) { assert.ok(r.kind === 'plain' && r.toExit <= 2, `${where}: room ${r.id}`); assert.equal(r.look.carpet, level.shaft.carpet); assert.equal(r.look.floor, level.shaft.floor); }
+        assert.ok(into.some((r) => r.look.wall === level.shaft.wall), `${where}: the room at the door is not papered like the part below`);
+      } else assert.equal(into.length, 0, `${where}: there is nothing below the last part`);
+      if (i > 0) assert.ok(from.some((r) => r.id === level.start.room), `${where}: the room you land in remembers nothing of the part above`);
+      else assert.equal(from.length, 0);
+      assert.ok(into.length + from.length <= 9, `${where}: ${into.length + from.length} rooms are somebody else's colour: it is a seam, not a redecoration`);
+    });
+  }
+  const strip = (level) => JSON.parse(JSON.stringify(level, (k, v) => (k === 'look' || k === 'bleed' || k === 'shaft' ? undefined : v)));
+  for (const seed of [1, 7, 'tuesday']) for (const theme of THEME_IDS) {
+    const plain = generate(seed, { ...office, theme, way: 'hole' }), bled = generate(seed, { ...office, theme, way: 'hole', bleed: { prev: 'night', next: 'exec' } });
+    assert.deepEqual(strip(bled), strip(plain), `seed ${seed}, ${theme}`);
+    assert.equal(plain.shaft, null);
+  }
 });
