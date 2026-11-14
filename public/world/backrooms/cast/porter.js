@@ -2,8 +2,9 @@
 // cap, mopping a carpet that has never been wet, beside a yellow bucket and a
 // steel locker. Whichever way you come at him, he has his back to you: he is
 // not hiding anything, he is busy. Leave the bucket alone and that is all there
-// is to him. Knock it over and he stops, and the tubes in his room sink, and
-// stay sunk; walk out with it still on its side and he locks up for the night:
+// is to him. Knock it over and he stops, and turns round — slowly — and has no
+// face: it has run, like clay left too near the heat, down over where the
+// features were and off the chin. The tubes in his room sink, and stay sunk; walk out with it still on its side and he locks up for the night:
 // every pair of doors on the floor is shut behind you. Stand it up again (E)
 // and he goes back to his mopping — and the first time, his locker is open.
 // The rule is minds(), in porter.rule.js.
@@ -11,7 +12,7 @@ import * as THREE from 'three';
 import { Vox, M } from '../../vox/vox.js';
 import { Batch, lamp } from '../kit.js';
 import { turnTo } from '../bits.js';
-import { PORTER, mopping, minds } from './porter.rule.js';
+import { PORTER, mopping, minds, facesYou } from './porter.rule.js';
 
 const S = 0.03;
 function man() {
@@ -21,11 +22,19 @@ function man() {
   v.box(-1, 14, -5, 1, 44, -4, M('#57402a', 2));                                                            // its back seam
   for (const sx of [-1, 1]) { v.rbox(sx > 0 ? 7 : -10, 28, -2, sx > 0 ? 10 : -7, 46, 3, 1, coat); v.tube(sx * 8.5, 29, 1, sx * 6, 24, 7, 1.6, coat); v.box(sx * 6 - 1, 22, 6, sx * 6 + 1, 25, 9, skin); }
   v.box(-2, 46, -2, 2, 49, 2, skin); v.ellipsoid(0, 54, 0, 5, 5.5, 5, skin);
+  // the face: no features, only clay that has run. A brow that has slumped over where the eyes were, two hollows dragged down out of
+  // true, runs of it down the front, each a different length, and the jaw sagged off to one side and on to his collar
+  const clay = [M('#c08e68', 3), M('#8d5f41', 3), M('#d9aa84', 3), M('#6d4a33', 3)];
+  v.box(-4, 44, 3, 4, 55, 4, clay[3]);                                                                        // what is under it, where it has run thin
+  v.ellipsoid(-1, 56, 4, 4.6, 1.8, 2.2, clay[2]);
+  v.carve(-4, 53, 4, -2, 55, 6); v.carve(1, 51, 4, 3, 54, 6);
+  [8, 4, 11, 6, 13, 5, 9, 7, 12, 3].forEach((len, i) => { const x = -5 + i, tone = clay[(i * 3 + 1) % 4], z1 = 5 + (i % 3 === 0 ? 2 : 1); v.box(x, 55 - len, 3, x + 1, 55, z1, tone); v.box(x, 54 - len, 4, x + 1, 56 - len, z1 + 1, clay[2]); });
+  v.ellipsoid(2, 46, 4, 4.2, 3, 2.6, clay[1]); v.tube(2, 45, 5, 3, 38, 5, 1.2, clay[0]); v.tube(-2, 46, 5, -3, 41, 5, 0.9, clay[3]); v.box(2, 35, 4, 4, 38, 6, clay[2]);
   v.ellipsoid(0, 58, 0, 6, 2.6, 6, cap); v.box(-4, 56, 4, 4, 57, 9, cap);                                   // the cap, peak forward: you will not be seeing that
   v.box(-5, 49, -5, 5, 54, -3, M('#8a8580', 3));                                                            // grey hair under it, at the back
   return v;
 }
-function mop() { const v = new Vox(); v.tube(0, 2, 22, 0, 44, 8, 0.8, M('#9a7a4a', 1)); v.rbox(-6, 0, 18, 6, 3, 27, 1, M('#c9c6b8', 3)); return v; }
+function mop() { const v = new Vox(); v.tube(8, 2, 20, 7, 30, 8, 0.8, M('#9a7a4a', 1)); v.rbox(2, 0, 16, 14, 3, 25, 1, M('#c9c6b8', 3)); return v; }            // held low, at his side: nothing of it in front of his face
 function bucket() { const v = new Vox(), y = M('#d9b21c', 1); v.cyl('y', 0, 0, 0, 10, 5.5, y, 4.6); v.cyl('y', 0, 0, 0, 1, 5.5, y); v.cyl('y', 0, 0, 9, 10, 6, M('#b8960f', 1), 5); return v; }
 function locker() {
   const v = new Vox(), st = M('#7d8a8c', 0);
@@ -48,7 +57,7 @@ export function create(c) {
     b = free(0.85, 1.2, 0.3); const l = free(1.6, 2.6, 0.45);
     if (!b || !l) { home = null; return; }
     const mat = kit.surface({ vox: true }), m4 = new THREE.Matrix4().makeScale(S, S, S), lights = [lamp(0.3, 2.6, 0.8, [1.2, 1.2, 1.2], { k: 9, wrap: 0.45, far: 30 })];
-    const mesh = (key, make) => { const q = new Batch(true); q.addVox(kit.model('porter:' + key, make).solid, m4); return new THREE.Mesh(kit.geometry(q, lights, [0.6, 0.6, 0.6]), mat); };
+    const mesh = (key, make) => { const q = new Batch(true); q.addVox(kit.model('porter3:' + key, make).solid, m4); return new THREE.Mesh(kit.geometry(q, lights, [0.6, 0.6, 0.6]), mat); };
     const y = env.world.floorY(p.x, p.z), g = (x, z, ...kids) => { const o = new THREE.Group(); o.position.set(x, y, z); o.add(...kids); return c.add(o); };
     const mopM = mesh('mop', mop), doorM = mesh('door', lockerDoor), hinge = new THREE.Group();
     hinge.position.set(-6.5 * S, 0, 6 * S); hinge.add(doorM);
@@ -80,9 +89,10 @@ export function create(c) {
       parts.bucket.rotation.z = over * 1.5; parts.bucket.position.y = env.world.floorY(b.x, b.z) + over * 0.16;
       open += ((s.thanked ? 1 : 0) - open) * (1 - Math.exp(-3 * dt)); parts.hinge.rotation.y = -open * 1.9;
       // his back to you, always; and while there is nothing the matter, the mop goes to and fro
-      const want = Math.atan2(at.x - m.x, at.z - m.z);
-      if (c.hidden(at.x, at.z, 0.5)) yaw = want;                       // (unwatched, he simply has it to you already)
-      else if (d < 14) yaw += Math.max(-PORTER.turn * dt, Math.min(PORTER.turn * dt, turnTo(yaw, want)));
+      // …and with the bucket on its side he turns round, at his own pace, and keeps what he has for a face on you
+      const front = facesYou(s), want = front ? Math.atan2(m.x - at.x, m.z - at.z) : Math.atan2(at.x - m.x, at.z - m.z), rate = front ? PORTER.round : PORTER.turn;
+      if (!front && c.hidden(at.x, at.z, 0.5)) yaw = want;             // (unwatched, he simply has his back to you already)
+      else if (d < 14) yaw += Math.max(-rate * dt, Math.min(rate * dt, turnTo(yaw, want)));
       parts.man.rotation.y = yaw;
       if (s.mode === 'mop') { sweep += dt; if (Math.floor(sweep / 1.3) !== Math.floor((sweep - dt) / 1.3) && d < 9) c.play('shuffle', at.x, at.z, 5); }
       parts.mop.position.z = Math.sin(sweep * 2.4) * 0.12; parts.mop.rotation.y = Math.sin(sweep * 2.4) * 0.12;

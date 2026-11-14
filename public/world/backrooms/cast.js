@@ -54,7 +54,7 @@ export const ALL_CAST = Object.freeze([
   Object.freeze({ id: 'moth', name: 'The desk moth', rule: 'It goes to the next light, and waits there for you — and the next light is always nearer the way down.',
     disposition: 'helps', home: 'roams', weight: 1, teaches: 'led', needs: [], items: ['torch'],
     caught: { setback: 'none: lose it and it is still going round the last tube you saw it at' } }),
-  Object.freeze({ id: 'porter', name: 'The night porter', rule: 'Leave his bucket alone — and if you have not, stand it up again.',
+  Object.freeze({ id: 'porter', name: 'The night porter', rule: 'Leave his bucket alone — and if you have not, stand it up again, because until you do he is looking at you.',
     disposition: 'keeps to itself', home: 'room', weight: 1, teaches: 'tidy', needs: [], items: ['battery'], room: { w: 5, d: 5 },
     caught: { setback: 'his room goes dim, and if you walk out on it every pair of doors on the floor is shut' } }),
 ]);

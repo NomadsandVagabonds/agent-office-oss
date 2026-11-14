@@ -10,7 +10,7 @@ import { HUNT, knows, lost, shown, spent, noticeTime, wayOn, handle, atHandle, g
 import { roomRoute, roomCosts, gridPath, straighten } from '../public/world/backrooms/cast/paths.js';
 import { SHADOW, away, watched, drained } from '../public/world/backrooms/cast/shadow.rule.js';
 import { MOTH, resting, flits } from '../public/world/backrooms/cast/moth.rule.js';
-import { PORTER, mopping, minds } from '../public/world/backrooms/cast/porter.rule.js';
+import { PORTER, mopping, minds, facesYou } from '../public/world/backrooms/cast/porter.rule.js';
 import { DOORS, doorPlan, doorRooms, inTheWay } from '../public/world/backrooms/doors.js';
 
 const office = { name: 'Robin', projects: ['Atlas', 'Harbor'], agents: ['Ivory Marten', 'Amber Vireo', 'Ember Numbat'], tasks: ['Ship the thing', 'Fix the other thing'] };
@@ -390,4 +390,7 @@ test('the night porter: nothing, unless you knock his bucket over; then the room
   s = minds(s, dt, { ...idle, bucket: 0.1 }); s = minds(s, dt, { ...idle, righted: true });
   assert.ok(s.mode === 'mop' && !s.gift, 'he is not paying you to keep knocking it over');
   assert.ok(PORTER.dim > 0.1 && PORTER.dim < 0.5, 'dim, not dark: a setback, not a trap');
+  // his back while he mops; what he has for a face for as long as the bucket is on its side, turned to you slowly
+  assert.equal(facesYou(mopping()), false); assert.equal(facesYou({ ...mopping(), mode: 'upset' }), true); assert.equal(facesYou({ ...mopping(), mode: 'shut' }), true);
+  assert.ok(PORTER.round < 2 && PORTER.turn > 6.7, 'he turns to you slowly, and away faster than anybody can run round him');
 });
