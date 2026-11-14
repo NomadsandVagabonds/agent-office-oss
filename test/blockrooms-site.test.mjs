@@ -48,7 +48,7 @@ test('the site is two whole pages with everything they ask for beside them, and 
   // (a room's file is fetched when a building has that room: only what the deck itself reads from one is asked for at once)
   const rooms = files.filter((f) => f.startsWith('world/backrooms/rooms/'));
   assert.ok(preloads.length > 40 && preloads.includes('site.js') && preloads.includes('world/backrooms/index.js'), 'the level\'s own modules are asked for at once');
-  assert.ok(rooms.length > 20 && preloads.filter((f) => rooms.includes(f)).length <= 4 && !preloads.includes('world/backrooms/rooms/kanban.js'), 'rooms in files of their own are not');
+  assert.ok(rooms.length > 20 && preloads.filter((f) => rooms.includes(f)).every((f) => /^world\/backrooms\/rooms\/[^/]+\/[^/]+\.js$/.test(f)) && preloads.filter((f) => rooms.includes(f)).length <= 12 && !preloads.includes('world/backrooms/rooms/kanban.js'), 'rooms in files of their own are not');
   assert.equal(new Set(preloads).size, preloads.length);
   for (const f of preloads) assert.ok(files.includes(f), `asked for at once, and not there: ${f}`);
   for (const f of files.filter((n) => /\.m?js$/.test(n))) {
