@@ -31,7 +31,8 @@ export const STAMP_COINS = 1;
 /** Everywhere that hides a keycard and coins: the card floors of the lift, and the place behind the wall. */
 export const HIDEOUTS = Object.freeze([
   ...LEVELS.filter((l) => l.card).map((l) => Object.freeze({ id: l.id, name: l.name, coins: l.coins || 0, lift: true })),
-  Object.freeze({ id: 'backrooms', name: 'the Backrooms', coins: 4, lift: false, pays: true }),
+  // (what the place under the office is called where anybody can read it: its card says so, and so does the office's feed)
+  Object.freeze({ id: 'backrooms', name: 'Out of Office', coins: 4, lift: false, pays: true }),
 ]);
 const BY_ID = new Map(HIDEOUTS.map((h) => [h.id, h]));
 export const hideoutById = (id) => BY_ID.get(id) || null;

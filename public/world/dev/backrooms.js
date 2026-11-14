@@ -9,6 +9,8 @@
 //   &pursuer=1|0       force the thing that follows you in or out; &wake=1 has it already awake, in the room with you
 //   &name=Robin        who you are                               &live=1     borrow names from the running office (GET only)
 //   &list=1            print the deck with links                 &map=1      show the floor plan
+//   &card=1            show the card at the end of the visit, as the office and the sample page do (here it is off unless asked for,
+//                      so that a script is never left waiting for somebody to put it down)
 //   &check=1           once the floor is up, one line on the console that a script can read — `[check] {…}`: for every oddity on it, how
 //                      long it took to build, what it put down (meshes, triangles, solids, lights…), and everything the level warned about
 //   &loot=1            something to find: the keycard (in the mascot's hand) and coins 1–4; &loot=card,1,3 for some of it. There is no
@@ -102,7 +104,7 @@ async function go() {
     name: q.get('name') || 'Robin', seed, only: only.length ? only : undefined, count: q.has('count') ? num('count', 7) : undefined,
     depth: q.has('depth') ? num('depth', 0) : undefined, depths: q.has('depths') ? num('depths', 3) : undefined,
     pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined, vhs: q.has('vhs') ? num('vhs', 2) : undefined, mute: q.has('mute') ? q.get('mute') !== '0' : undefined,
-    debug: true,
+    debug: true, scorecard: q.get('card') === '1',
     onReady(handle) {
       if (room) handle.goto(/^\d+$/.test(room) ? Number(room) : room, q.has('x') ? num('x', 0) : undefined, q.has('z') ? num('z', 0) : undefined, num('yaw', 0), num('pitch', 0));
       else if (q.has('yaw')) { handle.player.me.yaw = num('yaw', 0); handle.player.me.pitch = num('pitch', 0); }

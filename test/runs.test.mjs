@@ -84,7 +84,7 @@ test('runs: the office keeps the record, pays the jar only for beating its best,
   const world = (await office.get('/api/world')).data.game;
   assert.deepEqual([world.visits.n, world.visits.out, world.visits.tapes.map((t) => t.seed), world.coins.earned], [4, 3, ['tape-3', 'tape-2', 'tape-1'], 4]);
   const feed = (await office.get('/api/activity?limit=60')).data, said = (feed.items || feed.activity || feed).map((e) => e.text);
-  assert.ok(said.some((s) => new RegExp(`^Lead got out of the Backrooms: ${out.card.score} points, the best yet$`).test(s)), said.join(' / '));
-  assert.ok(said.some((s) => /^Robin got out of the Backrooms: \d+ points$/.test(s)));
+  assert.ok(said.some((s) => new RegExp(`^Lead is back from Out of Office: ${out.card.score} points, the best yet$`).test(s)), said.join(' / '));
+  assert.ok(said.some((s) => /^Robin is back from Out of Office: \d+ points$/.test(s)));
   assert.ok(!said.some((s) => /caught|gone/.test(s)), 'a visit that did not get out is nobody else\'s business');
 });

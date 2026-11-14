@@ -131,7 +131,7 @@ export function createGame(ctx, state, hooks) {
     if (g.paid.length > PAID_KEPT) g.paid.splice(0, g.paid.length - PAID_KEPT);
     if (coins) {
       g.earned = worth;
-      ctx.activity?.log('loot', `${who} got out of ${hideout.name} with ${batteries} spare batter${batteries === 1 ? 'y' : 'ies'}, the most anybody has: ${coins} coin${coins === 1 ? '' : 's'} for the jar`, { hideout: hideout.id, item: 'pay', batteries, coins, agentId: by?.id || null });
+      ctx.activity?.log('loot', `${who} came back from ${hideout.name} with ${batteries} spare batter${batteries === 1 ? 'y' : 'ies'}, the most anybody has: ${coins} coin${coins === 1 ? '' : 's'} for the jar`, { hideout: hideout.id, item: 'pay', batteries, coins, agentId: by?.id || null });
     }
     return { worth, paid: coins };
   }
@@ -151,7 +151,7 @@ export function createGame(ctx, state, hooks) {
     g.record = settled.record;
     const coins = visit.reason === 'exit' ? pay(hideout, visit.batteries, who, by) : { worth: 0, paid: 0 };
     hooks.save();
-    if (visit.reason === 'exit') ctx.activity?.log('visit', `${who} got out of ${hideout.name}: ${settled.card.score} points${settled.card.best.beaten ? ', the best yet' : ''}`, { hideout: hideout.id, score: settled.card.score, agentId: by?.id || null });
+    if (visit.reason === 'exit') ctx.activity?.log('visit', `${who} is back from ${hideout.name}: ${settled.card.score} points${settled.card.best.beaten ? ', the best yet' : ''}`, { hideout: hideout.id, score: settled.card.score, agentId: by?.id || null });
     hooks.changed();
     return { ok: true, ...view(), card: { ...settled.card, coins: { carried: visit.batteries, worth: coins.worth, paid: coins.paid, best: g.earned } } };
   }
@@ -202,7 +202,7 @@ export function createGame(ctx, state, hooks) {
       lines.push(`  ${h.name}: keycard ${l.card ? `found by ${g.cards[h.id].by}` : 'still hidden'} · ${l.coins.length} of ${n(h.coins, 'coin')} found`);
     }
     if (been.length < HIDEOUTS.length) lines.push(`  …and ${n(HIDEOUTS.length - been.length, 'place')} nobody has found anything in yet.`);
-    lines.push(`The jar: ${n(jar.have, 'coin')} (${jar.found} picked up, ${jar.earned ? `${jar.earned} for the most anybody has carried out of ${HIDEOUTS.filter((h) => h.pays).map((h) => h.name).join(' and ')}, ` : ''}${jar.stamps} from passport stamps — every stamp anyone earns pays ${STAMP_COINS} — ${jar.spent} spent).`);
+    lines.push(`The jar: ${n(jar.have, 'coin')} (${jar.found} picked up, ${jar.earned ? `${jar.earned} for the most anybody has brought back from ${HIDEOUTS.filter((h) => h.pays).map((h) => h.name).join(' and ')}, ` : ''}${jar.stamps} from passport stamps — every stamp anyone earns pays ${STAMP_COINS} — ${jar.spent} spent).`);
     lines.push('The vending machine in the kitchen:');
     for (const p of shelf().prizes) lines.push(`  ${p.slot}  ${p.name} — ${p.sold ? `bought by ${p.by}; it is on top of the machine` : n(p.price, 'coin')}`);
     return lines.join('\n');

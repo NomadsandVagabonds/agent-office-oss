@@ -208,10 +208,10 @@ test('game: the place that pays, pays for beating the office\'s best — spare b
   assert.equal((await office.post('/api/world/game/buy', { prize: cheap.id, name: 'Lead' })).data.coins.have, jar.have - cheap.price);
   // everybody hears when the best is beaten, in words that do not say where anything is — and not otherwise
   const feed = (await office.get('/api/activity?limit=60')).data, said = (feed.items || feed.activity || feed).filter((e) => e.kind === 'loot').map((e) => e.text);
-  assert.ok(said.includes('Lead got out of the Backrooms with 3 spare batteries, the most anybody has: 3 coins for the jar'), said.join(' / '));
-  assert.ok(said.includes('Robin got out of the Backrooms with 5 spare batteries, the most anybody has: 2 coins for the jar'));
+  assert.ok(said.includes('Lead came back from Out of Office with 3 spare batteries, the most anybody has: 3 coins for the jar'), said.join(' / '));
+  assert.ok(said.includes('Robin came back from Out of Office with 5 spare batteries, the most anybody has: 2 coins for the jar'));
   assert.equal(said.length, 3, 'three visits beat the best; the others were not news');
-  assert.match((await game()).text, new RegExp(`${VISIT_PAYS_MOST} for the most anybody has carried out of the Backrooms`));
+  assert.match((await game()).text, new RegExp(`${VISIT_PAYS_MOST} for the most anybody has brought back from Out of Office`));
   assert.equal((await office.get('/api/world')).data.game.coins.earned, VISIT_PAYS_MOST);
 });
 
