@@ -254,8 +254,14 @@ export function build(c) {
         g.fillStyle='#576e55';g.fillRect(22,160,340,9);g.fillStyle='#adbc8c';g.fillRect(22,160,340*w.percent/100,9);
       }else if(i===24){
         const security=patrol.state(),caught=security.phase==='captured'||security.phase==='gameover';
-        g.fillStyle=caught?'#e99a69':'#d7dfbd';g.font='bold 38px monospace';g.fillText(state.visitor.awake||caught?'YOU':'VACANT',192,52);
-        g.font='bold 73px monospace';g.fillText(caught?`00:${String(Math.ceil(security.remaining)).padStart(2,'0')}`:`${state.visitor.percent.toFixed(1)}%`,192,144);
+        g.fillStyle=caught?'#e99a69':'#d7dfbd';
+        if(caught){
+          // Capture timing stays internal. The cage only identifies its occupant.
+          g.font='bold 73px monospace';g.fillText('YOU',192,122);
+        }else{
+          g.font='bold 38px monospace';g.fillText(state.visitor.awake?'YOU':'VACANT',192,52);
+          g.font='bold 73px monospace';g.fillText(`${state.visitor.percent.toFixed(1)}%`,192,144);
+        }
       }else if(i===25){
         g.fillStyle='#cddab2';fitText(g,'TECHNODETERMINISM',192,52,342,32);
         g.fillStyle=state.complete?'#9ca98a':'#e0c395';g.font='bold 88px monospace';g.fillText(state.complete?'OFF':'ON',192,151);

@@ -57,8 +57,9 @@ Approaching it wakes its camera; voluntarily entering starts recording the
 visitor's replacement percentage, and the visitor can still walk out.
 
 If a warden catches the visitor, they are transported into this cage, its gate
-closes and a ten-second induction countdown begins. Movement is held during
-these ten active seconds, followed by a local game over. **Escape** can still
+closes and an internal ten-second capture timer begins. The monitor shows only
+YOU, with no visible countdown. Movement is held during these ten active
+seconds, followed by a local game over. **Escape** can still
 end the visit. The development page offers another visit on any key after
 game over; this starts fresh rather than resuming the captured state.
 
@@ -88,7 +89,8 @@ toggles sound. **Escape** leaves the visit; the browser may first consume it
 to release the pointer, in which case press it again.
 Cages carry only a profession name, a replacement percentage and its progress
 bar. Camera plates use arrows; the mainframe shows TECHNODETERMINISM ON/OFF;
-the visitor cage shows VACANT/YOU and a percentage or capture countdown.
+the visitor cage shows VACANT/YOU and a percentage before capture, then only
+YOU while captured. The capture timer is internal.
 There are no instructional placards, task descriptions or fine print. Loose
 papers, the red button and physical camera levers carry the interactions.
 The MECHA logo and the requested company slogan remain on the wall.
@@ -140,8 +142,12 @@ is intentional: the visitor cage's open gate, which becomes solid on capture.
 Keyboard **E** activated the red shutdown button at all three seeds, completing
 training shutdown and turning off all three wardens' eyes. An actual collision
 capture transported the player to the visitor cage, closed the gate and held
-them in place despite a held **W** key. The ten-second security countdown ended
+them in place despite a held **W** key. The internal ten-second capture timer ended
 with `over: caught`; pressing a key started a fresh visit with patrol restored.
+A canvas-text check verified that both capture displays show only **YOU**,
+with no visible clock, remaining seconds or replacement percentage after capture.
+The timer continued internally, and capture, game over and retry passed again
+after removing the visible countdown and its per-second display updates.
 
 Camera diversion redirected all three wardens and allowed an authorization to
 be collected after the worker rested. This also passed with reduced motion
@@ -168,11 +174,13 @@ barriers, wall-hugging targets, disconnected areas and a collider closing after
 the route graph was built. Navigation uses a .25m grid and .36m guard radius;
 every movement shortcut is checked against the full collision geometry.
 
-The full repository suite was rerun for the human-model revision: **364 of 367
-checks passed**. The three failed entries represent two issues previously
+The full repository suite was rerun for the final countdown revision: **363 of
+367 checks passed**. Three failed entries represent two issues previously
 reproduced on untouched base `372b12a`: the console's `/private/var` versus
-`/var` temporary-path comparison, and an undefined usage reading's `source`.
-The third failed entry is the console parent test. No MECHA test failed.
+`/var` temporary-path comparison (including its parent test), and an undefined
+usage reading's `source`. An unchanged Claude trace fixture also failed once
+when reading a frame's `request.subtype`; its focused rerun passed. No MECHA
+test failed.
 
 The live inspection handle is `window.__backrooms`. It exposes `goto`,
 `where`, `level`, `world`, `player`, `env`, `plan` and `descend` on the

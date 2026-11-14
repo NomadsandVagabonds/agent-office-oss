@@ -37,7 +37,7 @@ export function createPatrol(c,{visitor,rows,outerX,diversion=()=>null,onChange=
     if(security.phase==='captured')c.env.hold(me.inside);
     if(security.phase==='gameover'&&before.phase!=='gameover'){
       onChange(security);c.env.end('caught');
-    }else if(Math.ceil(before.remaining)!==Math.ceil(security.remaining))onChange(security);
+    }
     for(const g of guards){
       g.moving=false;
       if(me.inside&&security.phase==='patrol'&&!me.world.frozen){
