@@ -59,9 +59,16 @@ visitor's replacement percentage, and the visitor can still walk out.
 If a warden catches the visitor, they are transported into this cage, its gate
 closes and an internal ten-second capture timer begins. The monitor shows only
 YOU, with no visible countdown. Movement is held during these ten active
-seconds, followed by a local game over. **Escape** can still
-end the visit. The development page offers another visit on any key after
-game over; this starts fresh rather than resuming the captured state.
+seconds. **Escape** can still end the visit.
+
+In the building those ten seconds cost two hearts (`CAPTURE_HEARTS`, the deck's
+`caught: 2`), through the room contract's `c.hurt`, as being caught does
+anywhere down there. If they were not the visitor's last, the gate opens, the
+monitor reads VACANT until they have walked away from the cage, and the wardens
+return to their rounds and take no notice of them for eight seconds
+(`MERCY_SECONDS`). If they were the last, the conductor ends the visit and
+shows its card; the room never ends a visit itself. A visit without hearts
+(`inventory=0`) ends at the first capture.
 
 Normal doorways remain available while the visitor is free. Neither helping
 the workers nor shutdown is required to continue the Backrooms visit. The
