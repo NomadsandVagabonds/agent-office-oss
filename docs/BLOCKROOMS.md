@@ -189,8 +189,11 @@ git push origin <commit>:blockrooms-live
   have not been re-checked on a real phone since pockets and crafting landed.
 - **Real graphics hardware.** Everything here was checked under software
   rendering, which shows that it works and nothing about how fast.
-- **On Vercel itself.** The build and the built site are tested locally; the
-  first deploy is the first time Vercel has seen this configuration.
+- **The function, on Vercel.** The level's own site (the build without the
+  home page) has deployed from `blockrooms-live` with this `vercel.json` and
+  serves every file of the build that was tested. The home page's release
+  adds `api/book.mjs`, and that will be the first time Vercel has built a
+  function from this repository.
 - **The book against a real store.** Its tests run against a stand-in; the
   REST calls follow Upstash's documentation and have not been run against a
   live database from here.
