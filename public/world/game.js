@@ -6,6 +6,7 @@
 //
 //   office.game.left('pasture')            → { card: true, coins: [1, 3] }   what has not been taken yet
 //   office.game.take('pasture', 'coin', 3) → Promise<answer>                 it is yours (and gone from the floor)
+//   office.game.earn('backrooms', { batteries: 3 }) → Promise<answer>        got out of a place that pays for what is carried out
 //   office.game.view()                     → what the office says (open floors, the jar, prizes), or null
 //
 // The purse also shows whenever the jar has more in it than it last said, however
@@ -83,6 +84,22 @@ export function createGame(office) {
   }
 
   /**
+   * Somebody got out of a place that pays for what is carried out of it (core/game.mjs: `pay`). Resolves with the
+   * office's answer ({ paid, coins, … }) or null if it could not be told; the purse shows the fuller jar by itself.
+   */
+  async function earn(hideoutId, carried = {}) {
+    if (!(carried.batteries > 0)) return null;
+    try {
+      const answer = await net.api('/api/world/game/earn', { method: 'POST', body: { hideout: hideoutId, batteries: carried.batteries, name: office.walk?.me?.name || 'Lead' } });
+      if (net.state.world && answer?.open) net.state.world.game = { ...(net.state.world.game || {}), ...answer };    // the bus says the same a moment later
+      return answer;
+    } catch (err) {
+      console.warn('[game] the jar could not be paid:', err.message);
+      return null;
+    }
+  }
+
+  /**
    * Has the jar more in it than the purse last said? Then it says so: a stamp was earned (by anybody), or something
    * was carried out of a place that keeps its own count until you leave. Not while that place has the screen — the
    * purse could not be seen — so whatever arrived meanwhile is shown when you are back.
@@ -95,5 +112,5 @@ export function createGame(office) {
   }
   net.on?.('world', show);
 
-  return { view, left, take, flash, show };
+  return { view, left, take, earn, flash, show };
 }

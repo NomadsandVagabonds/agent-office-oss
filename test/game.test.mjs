@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { startOffice, tempDir, sleep } from './helpers.mjs';
-import { HIDEOUTS, PRIZES, COINS_HIDDEN, STAMP_COINS, cardFloors, dealOrder, findPrize, jarOf, openFloors } from '../core/game.mjs';
+import { HIDEOUTS, PRIZES, COINS_HIDDEN, STAMP_COINS, BATTERY_COINS, VISIT_PAYS_MOST, cardFloors, dealOrder, findPrize, jarOf, openFloors, payFor } from '../core/game.mjs';
 import { LEVELS, levelContext, panelLevels, isOpen, levelById } from '../core/levels.mjs';
 import { SECRETS } from '../core/secrets.mjs';
 
@@ -64,7 +64,7 @@ test('game: one floor is open to begin with, and each keycard opens exactly one 
   assert.ok(floors.includes(start.open[0]));
   assert.deepEqual([start.dark, start.cards, start.spare, start.fresh], [floors.length - 1, [], 0, start.open]);
   assert.deepEqual((await office.get('/api/world')).data.game.open, start.open, 'and the world everyone is sent says the same');
-  assert.deepEqual(start.coins, { have: 0, found: 0, stamps: 0, spent: 0 });
+  assert.deepEqual(start.coins, { have: 0, found: 0, earned: 0, stamps: 0, spent: 0 });
 
   // the card hidden on the open floor lights one more button — once
   const first = (await pick(start.open[0], 'card')).data;
@@ -110,7 +110,7 @@ test('game: coins do not come back, the passport pays into the same jar, and the
   const buy = (prize) => office.post('/api/world/game/buy', { prize, name: 'Lead' });
   const pasture = HIDEOUTS.find((h) => h.id === 'pasture');
 
-  assert.deepEqual((await coin('pasture', 1)).data.coins, { have: 1, found: 1, stamps: 0, spent: 0 });
+  assert.deepEqual((await coin('pasture', 1)).data.coins, { have: 1, found: 1, earned: 0, stamps: 0, spent: 0 });
   assert.deepEqual([(await coin('pasture', 1)).data.taken, (await game()).coins.have], [false, 1], 'the same coin twice is one coin');
   for (const bad of [0, pasture.coins + 1, 'two', -1, 1.5 + pasture.coins]) assert.equal((await coin('pasture', bad)).status, 400, `coin ${bad}`);
   for (let n = 2; n <= pasture.coins; n++) await coin('pasture', n);
@@ -134,7 +134,7 @@ test('game: coins do not come back, the passport pays into the same jar, and the
   await sleep(120);
   assert.equal(await stamped(), had + 2);
   const jar = (await game()).coins;
-  assert.deepEqual(jar, { have: pasture.coins + (had + 2) * STAMP_COINS, found: pasture.coins, stamps: (had + 2) * STAMP_COINS, spent: 0 });
+  assert.deepEqual(jar, { have: pasture.coins + (had + 2) * STAMP_COINS, found: pasture.coins, earned: 0, stamps: (had + 2) * STAMP_COINS, spent: 0 });
   assert.equal(heard[told - 1], jar.have, 'each new stamp is heard by every browser as a fuller jar');
   assert.ok(told >= 2 && heard.length === told, 'and a stamp somebody already had changes nothing, so nothing is sent');
 
@@ -167,6 +167,44 @@ test('game: coins do not come back, the passport pays into the same jar, and the
   const machine = (await office.get(`/api/world/look?agent=${ada}&at=vending`)).data.text;
   assert.match(machine, /Standing on top of the machine: /);
   assert.ok(machine.includes(cheap.name.replace(/^A |^The /, (m) => m.toLowerCase())), machine);
+});
+
+test('game: getting out of the place that pays turns spare batteries into coins — a fixed most a visit, and only there', async (t) => {
+  // the rule
+  assert.deepEqual([0, 1, 5, VISIT_PAYS_MOST, VISIT_PAYS_MOST + 30].map((n) => payFor({ batteries: n })), [0, BATTERY_COINS, 5 * BATTERY_COINS, VISIT_PAYS_MOST, VISIT_PAYS_MOST], 'a coin a battery, up to the most a visit pays');
+  assert.deepEqual([-1, 2.9, 'three', null, undefined, NaN, Infinity].map((n) => payFor({ batteries: n })), [0, 2 * BATTERY_COINS, 0, 0, 0, 0, 0], 'whole batteries only');
+  assert.equal(payFor(), 0);
+  assert.equal(jarOf({ coins: 2, earned: 3, stamps: 1, spent: 4 }), 2 + 3 + STAMP_COINS - 4);
+  assert.deepEqual(HIDEOUTS.filter((h) => h.pays).map((h) => h.id), ['backrooms'], 'one place pays, and the lift does not go there');
+
+  const office = await startOffice();
+  t.after(() => office.stop());
+  const game = async () => (await office.get('/api/world/game')).data;
+  const earn = (hideout, batteries, name = 'Lead') => office.post('/api/world/game/earn', { hideout, batteries, name });
+  const stamps = (await game()).coins.stamps;
+
+  // nothing carried out is nothing paid, and no record of a visit
+  const none = (await earn('backrooms', 0)).data;
+  assert.deepEqual([none.ok, none.paid, none.coins.earned], [true, 0, 0]);
+  for (const bad of [-1, 'lots', null]) assert.equal((await earn('backrooms', bad)).status, 400, `batteries: ${bad}`);
+  assert.equal((await earn('pasture', 3)).status, 400, 'a floor of the lift pays nothing for what is carried off it');
+  assert.equal((await earn('nowhere', 3)).status, 404);
+
+  const paid = (await earn('backrooms', 3)).data;
+  assert.deepEqual([paid.paid, paid.batteries, paid.coins], [3 * BATTERY_COINS, 3, { have: 3 * BATTERY_COINS + stamps, found: 0, earned: 3 * BATTERY_COINS, stamps, spent: 0 }]);
+  // told twice (a page reloaded as it left, a script): one visit is paid once
+  const again = await earn('backrooms', 3);
+  assert.equal(again.status, 429);
+  assert.equal((await game()).coins.earned, 3 * BATTERY_COINS);
+  // it is the same jar: the machine takes what a visit paid
+  const cheap = PRIZES.find((p) => p.price <= paid.coins.have);
+  if (cheap) assert.equal((await office.post('/api/world/game/buy', { prize: cheap.id, name: 'Lead' })).data.coins.have, paid.coins.have - cheap.price);
+  // everybody hears about it, in words that do not say where anything is
+  const feed = (await office.get('/api/activity?limit=40')).data;
+  assert.ok((feed.items || feed.activity || feed).some((e) => e.kind === 'loot' && /^Lead got out of the Backrooms with 3 spare batteries: 3 coins for the jar$/.test(e.text)));
+  assert.match((await game()).text, /3 paid for what was carried out of the Backrooms/);
+  // and it outlives the daemon, like the rest of the record
+  assert.equal((await office.get('/api/world')).data.game.coins.earned, 3 * BATTERY_COINS);
 });
 
 test('game: everything the machine sells has a shape, and a place of its own on top of the machine', async () => {

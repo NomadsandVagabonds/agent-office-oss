@@ -358,6 +358,11 @@ the person playing (`core/game.mjs` is the whole of the rules; it is pure):
   jar now holds — for a coin picked up, and just the same for a stamp, whoever
   earned it. That is the only place it is ever said that a secret is worth a
   coin.
+- **Pay.** One place — the one the lift does not go to — pays for what is
+  carried out of it, every time somebody gets out by its proper way: a coin
+  for each spare battery they still had (`payFor` in `core/game.mjs`; a visit
+  pays a fixed most, and nothing to anybody who was caught or gave up). It is
+  the only coin there is no end of, which is what makes going back worth it.
 - **The vending machine.** Walk up to it in the kitchen: behind the glass are
   eight things the jar can buy, each bought once. What comes out stands on top
   of the machine from then on, where everybody can see it. The last place on
@@ -372,6 +377,7 @@ snapshot, and
 ```
 GET  /api/world/game            what is lit, what has been found where, the jar, the machine's shelf (and `text`, in words)
 POST /api/world/game/collect    { hideout, item: 'card' | 'coin', n?, name? }
+POST /api/world/game/earn       { hideout, batteries, name? }   got out of a place that pays for what is carried out
 POST /api/world/game/visit      { floor }          a newly lit floor has been ridden to
 POST /api/world/game/buy        { prize | slot, name? }
 ```
@@ -409,6 +415,10 @@ proper way out (`office.game.take(id, item, n, { quiet: true })`, then; the
 purse shows it once you are back). Caught, or gone any other way, and it is
 all where it was. One of the lift's floors does the same with its keycard
 alone. Use it sparingly: it is what makes a place one with something to lose.
+
+The same place is the one that pays (`pays: true` on its line in `HIDEOUTS`):
+what its visit resolves with may carry `kept.batteries`, a count, and the
+office turns that into coins once (`office.game.earn(id, { batteries })`).
 
 **Putting something new in the machine** is a line in `PRIZES`
 (`core/game.mjs`: a code behind the glass, a price, a name, a few words for
