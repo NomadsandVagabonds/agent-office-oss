@@ -1,0 +1,545 @@
+/* Study B — Found property. Preview only; the live inventory is untouched. */
+.br-inventory[data-study="paper"] {
+  --paper-stock: #eee7d2;
+  --paper-light: #faf4e5;
+  --paper-ink: #223e54;
+  --paper-faint: #63747a;
+  --paper-rule: #a5b2ad;
+  --paper-red: #963f32;
+  color: var(--paper-ink);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.br-inventory[data-study="paper"] button {
+  border-radius: 0;
+  text-shadow: none;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.br-inventory[data-study="paper"] button:focus-visible {
+  outline: 2px solid var(--paper-red);
+  outline-offset: 3px;
+}
+.br-inventory[data-study="paper"] button:disabled {
+  opacity: .48;
+}
+.br-inventory[data-study="paper"] .br-inv-pack {
+  bottom: 2.5%;
+  width: min(480px, calc(100% - 28px));
+}
+.br-inventory[data-study="paper"] .br-inv-meta {
+  left: 1px;
+  right: 0;
+  bottom: calc(100% + 8px);
+  min-height: 22px;
+  gap: 12px;
+  align-items: center;
+}
+.br-inventory[data-study="paper"] .br-inv-caption {
+  padding: 3px 8px 4px;
+  background: var(--paper-ink);
+  color: var(--paper-light);
+  font-family: "Pixelify Sans", monospace;
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 1.1;
+  letter-spacing: .035em;
+  text-shadow: none;
+}
+.br-inventory[data-study="paper"] .br-inv-health {
+  height: 19px;
+  gap: 5px;
+}
+.br-inventory[data-study="paper"] .br-inv-heart {
+  width: 20px;
+  height: 17px;
+}
+.br-inventory[data-study="paper"] .br-inv-heart .heart-body {
+  fill: var(--paper-stock);
+  stroke: var(--paper-ink);
+  stroke-width: 1.2;
+}
+.br-inventory[data-study="paper"] .br-inv-heart .heart-shine {
+  fill: #b8b8a4;
+}
+.br-inventory[data-study="paper"] .br-inv-heart.is-filled .heart-body {
+  fill: var(--paper-red);
+  stroke: #4f2b2a;
+}
+.br-inventory[data-study="paper"] .br-inv-heart.is-filled .heart-shine {
+  fill: #d3a38a;
+}
+.br-inventory[data-study="paper"] .br-inv-bar {
+  gap: 0;
+  padding: 5px 7px 6px;
+  background: var(--paper-stock);
+  border: 0;
+  border-top: 2px solid var(--paper-ink);
+  box-shadow: 0 3px 0 #a29b87, 0 5px 13px #161d1d40;
+}
+.br-inventory[data-study="paper"] .br-inv-slot {
+  aspect-ratio: 1.05;
+  padding: 10px 8px 13px;
+  border: 0;
+  border-right: 1px dashed #76898a80;
+  background: transparent;
+  box-shadow: none;
+}
+.br-inventory[data-study="paper"] .br-inv-slot:last-child {
+  border-right-color: transparent;
+}
+.br-inventory[data-study="paper"] .br-inv-slot:hover {
+  background: #faf4e58c;
+}
+.br-inventory[data-study="paper"] .br-inv-slot.is-selected {
+  background: var(--paper-light);
+  box-shadow: inset 0 0 0 2px var(--paper-red);
+}
+.br-inventory[data-study="paper"] .br-inv-slot.is-compatible {
+  background: #d7dfd9;
+  box-shadow: inset 0 -2px 0 var(--paper-ink);
+}
+.br-inventory[data-study="paper"] .br-inv-slot.is-compatible::after {
+  color: var(--paper-ink);
+  right: 5px;
+  top: 1px;
+}
+.br-inventory[data-study="paper"] .br-inv-slot.is-source {
+  opacity: .74;
+  background: #e0dfc9;
+  box-shadow: inset 0 0 0 1px var(--paper-rule);
+}
+.br-inventory[data-study="paper"] .br-inv-slot.is-muted {
+  opacity: .42;
+}
+.br-inventory[data-study="paper"] .br-inv-number,
+.br-inventory[data-study="paper"] .br-inv-slot.is-selected .br-inv-number {
+  top: 3px;
+  left: 6px;
+  color: var(--paper-ink);
+  font-size: 10px;
+  text-shadow: none;
+}
+.br-inventory[data-study="paper"] .br-inv-icon {
+  max-width: 49px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: saturate(.32) contrast(1.16);
+}
+.br-inventory[data-study="paper"] .br-inv-count,
+.br-inventory[data-study="paper"] .br-inv-mount {
+  color: var(--paper-ink);
+  text-shadow: none;
+  font-weight: 600;
+  background: var(--paper-stock);
+  padding: 1px 2px;
+}
+.br-inventory[data-study="paper"] .br-inv-count {
+  right: 5px;
+  bottom: 6px;
+}
+.br-inventory[data-study="paper"] .br-inv-mount {
+  right: 5px;
+  bottom: 12px;
+}
+.br-inventory[data-study="paper"] .br-inv-power {
+  left: 8px;
+  right: 8px;
+  bottom: 5px;
+  height: 2px;
+  background: #a5b2ad8c;
+}
+.br-inventory[data-study="paper"] .br-inv-power i,
+.br-inventory[data-study="paper"] .br-inv-slot.is-active .br-inv-power i {
+  background: var(--paper-ink);
+}
+.br-inventory[data-study="paper"] .br-inv-slot.is-active::before {
+  right: 7px;
+  top: 6px;
+  background: var(--paper-red);
+  box-shadow: none;
+}
+
+.br-inventory[data-study="paper"] .br-inv-panel,
+.br-inventory[data-study="paper"].has-health .br-inv-panel {
+  bottom: calc(2.5% + 126px);
+  width: min(480px, calc(100% - 28px));
+  max-height: calc(100% - 170px);
+  padding: 19px 22px 20px;
+  border: 0;
+  color: var(--paper-ink);
+  background-color: var(--paper-stock);
+  background-image: linear-gradient(90deg, transparent 13px, #963f3240 13px, #963f3240 14px, transparent 14px),
+    repeating-linear-gradient(0deg, transparent 0, transparent 25px, #829c9a10 25px, #829c9a10 26px);
+  box-shadow: 3px 4px 0 #c3bba5, 0 8px 30px #121d2040;
+  scrollbar-color: var(--paper-rule) var(--paper-stock);
+}
+.br-inventory[data-study="paper"] .br-inv-panel-head {
+  margin: 0 0 22px;
+  padding: 0 0 10px;
+  min-height: 27px;
+  border-bottom: 1px solid var(--paper-ink);
+  gap: 8px;
+}
+.br-inventory[data-study="paper"] .br-inv-eyebrow {
+  display: inline-block;
+  padding: 4px 7px 3px;
+  background: var(--paper-ink);
+  color: var(--paper-light);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: .14em;
+  transform: rotate(-.6deg);
+  white-space: nowrap;
+}
+.br-inventory[data-study="paper"] .br-inv-close {
+  width: 36px;
+  height: 36px;
+  margin: -4px -9px -5px 0;
+  background: transparent;
+  color: var(--paper-ink);
+  font-weight: 400;
+}
+.br-inventory[data-study="paper"] .br-inv-close:hover {
+  background: #223e5410;
+}
+.br-inventory[data-study="paper"] .br-inv-detail {
+  grid-template-columns: 126px minmax(0, 1fr);
+  gap: 23px;
+  align-items: center;
+}
+.br-inventory[data-study="paper"] .br-inv-specimen {
+  width: 124px;
+  min-height: 134px;
+  background: var(--paper-light);
+  background-image: repeating-linear-gradient(0deg, transparent 0, transparent 2px, #223e5406 2px, #223e5406 3px);
+  border: 0;
+  border-bottom: 16px solid var(--paper-light);
+  box-sizing: border-box;
+  box-shadow: 1px 2px 0 #b2b6a7;
+  transform: rotate(-3deg);
+}
+.br-inventory[data-study="paper"] .br-inv-specimen .br-inv-icon {
+  width: 106px;
+  height: 106px;
+  max-width: none;
+  filter: grayscale(.78) contrast(1.25);
+}
+.br-inventory[data-study="paper"] .br-inv-title {
+  margin: 0 0 9px;
+  color: var(--paper-ink);
+  font-family: "Pixelify Sans", monospace;
+  font-size: 29px;
+  font-weight: 600;
+  line-height: .98;
+  letter-spacing: -.025em;
+}
+.br-inventory[data-study="paper"] .br-inv-description {
+  color: #3b4d53;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+.br-inventory[data-study="paper"] .br-inv-condition {
+  margin-top: 12px;
+  min-height: 17px;
+  color: var(--paper-red);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .015em;
+}
+.br-inventory[data-study="paper"] .br-inv-actions {
+  gap: 9px;
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--paper-rule);
+}
+.br-inventory[data-study="paper"] .br-inv-action {
+  min-height: 40px;
+  padding: 9px 15px;
+  border: 1px solid var(--paper-ink);
+  background: transparent;
+  color: var(--paper-ink);
+  box-shadow: none;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+.br-inventory[data-study="paper"] .br-inv-action:hover:enabled {
+  background: #223e5410;
+}
+.br-inventory[data-study="paper"] .br-inv-action.primary {
+  border-color: var(--paper-ink);
+  background: var(--paper-ink);
+  color: var(--paper-light);
+  box-shadow: none;
+}
+.br-inventory[data-study="paper"] .br-inv-action.primary:hover:enabled {
+  background: #34586d;
+}
+.br-inventory[data-study="paper"] .br-inv-action kbd {
+  margin-left: 8px;
+  font-size: 9px;
+}
+.br-inventory[data-study="paper"] .br-inv-camera-choice {
+  min-height: 32px;
+  padding: 5px 7px;
+  border: 1px solid #63747a;
+  background: transparent;
+  color: var(--paper-ink) !important;
+  font-weight: 600;
+}
+.br-inventory[data-study="paper"] .br-inv-camera-choice:hover {
+  background: #223e5410;
+}
+.br-inventory[data-study="paper"].is-combining .br-inv-panel-head {
+  margin-bottom: 17px;
+  padding-bottom: 9px;
+}
+.br-inventory[data-study="paper"] .br-inv-ingredients {
+  grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr);
+  gap: 8px;
+}
+.br-inventory[data-study="paper"] .br-inv-plus {
+  color: var(--paper-red);
+  font-family: "Pixelify Sans", monospace;
+  font-size: 23px;
+}
+.br-inventory[data-study="paper"] .br-inv-ingredient {
+  height: 83px;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 1px dashed #75898a;
+  background: #faf4e582;
+  box-shadow: none;
+  color: var(--paper-ink);
+}
+.br-inventory[data-study="paper"] .br-inv-ingredient.is-focused {
+  border: 1px solid var(--paper-red);
+  box-shadow: inset 0 -2px 0 var(--paper-red);
+  background: var(--paper-light);
+}
+.br-inventory[data-study="paper"] .br-inv-ingredient .br-inv-icon {
+  width: 43px;
+  height: 43px;
+  max-width: none;
+  filter: grayscale(.55) contrast(1.2);
+}
+.br-inventory[data-study="paper"] .br-inv-ingredient-label {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 12px;
+  line-height: 1.2;
+}
+.br-inventory[data-study="paper"] .br-inv-ingredient-label strong {
+  font-weight: 600;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.br-inventory[data-study="paper"] .br-inv-ingredient-label small {
+  margin-top: 5px;
+  color: var(--paper-faint);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+  line-height: 1.2;
+}
+.br-inventory[data-study="paper"] .br-inv-ingredient-clear {
+  right: 5px;
+  top: 3px;
+  color: var(--paper-red);
+  font-size: 12px;
+}
+.br-inventory[data-study="paper"] .br-inv-result {
+  margin-top: 16px;
+  min-height: 54px;
+  gap: 12px;
+  align-items: center;
+}
+.br-inventory[data-study="paper"] .br-inv-result-title {
+  color: var(--paper-ink);
+  font-family: "Pixelify Sans", monospace;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.br-inventory[data-study="paper"] .br-inv-result-description {
+  margin-top: 5px;
+  color: #3b4d53;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.br-inventory[data-study="paper"] .br-inv-result.is-invalid .br-inv-result-title {
+  color: var(--paper-red);
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.br-inventory[data-study="paper"] .br-inv-paper-count {
+  gap: 5px;
+}
+.br-inventory[data-study="paper"] .br-inv-paper-count button {
+  width: 30px;
+  height: 34px;
+  border: 1px solid var(--paper-rule);
+  color: var(--paper-ink);
+  background: var(--paper-light);
+}
+.br-inventory[data-study="paper"] .br-inv-paper-count output {
+  min-width: 17px;
+  color: var(--paper-red);
+  font-size: 13px;
+  font-weight: 600;
+}
+.br-inventory[data-study="paper"].is-combining .br-inv-actions {
+  margin-top: 15px;
+}
+.br-inventory[data-study="paper"] .br-inv-notice {
+  padding: 8px 13px;
+  border: 0;
+  background: var(--paper-light);
+  color: var(--paper-ink);
+  box-shadow: 2px 2px 0 #b9af94;
+  font-size: 11px;
+  transform: translateX(-50%) rotate(-.6deg);
+}
+
+@container (max-width: 520px) {
+  .br-inventory[data-study="paper"] .br-inv-pack {
+    width: calc(100% - 24px);
+  }
+  .br-inventory[data-study="paper"] .br-inv-bar {
+    padding: 4px 4px 5px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-slot {
+    padding: 10px 5px 12px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-icon {
+    max-width: 40px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-panel,
+  .br-inventory[data-study="paper"].has-health .br-inv-panel {
+    width: calc(100% - 24px);
+    bottom: calc(2.5% + 108px);
+    /* A portrait phone has room above the letterboxed camera picture. Keep
+       the form together instead of hiding its actions in that picture's
+       much shorter container. The sheet still scrolls in short landscapes. */
+    max-height: min(480px, calc(100dvh - 130px));
+    padding: 16px;
+    background-position: -5px 0, 0 0;
+  }
+  .br-inventory[data-study="paper"] .br-inv-panel-head {
+    margin-bottom: 17px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-detail {
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 17px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-specimen {
+    width: 91px;
+    min-height: 110px;
+    border-bottom-width: 13px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-specimen .br-inv-icon {
+    width: 81px;
+    height: 81px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-title {
+    font-size: 25px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-description {
+    font-size: 13px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-action {
+    min-height: 42px;
+    padding: 9px 11px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-actions {
+    margin-top: 18px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-ingredients {
+    gap: 6px;
+    grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr);
+  }
+  .br-inventory[data-study="paper"] .br-inv-ingredient {
+    height: 86px;
+    gap: 6px;
+    padding: 8px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-ingredient .br-inv-icon {
+    width: 32px;
+    height: 32px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-ingredient-label {
+    font-size: 11px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-ingredient-label small {
+    font-size: 8px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-result {
+    gap: 8px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-result-title {
+    font-size: 20px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-paper-count {
+    gap: 3px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-paper-count button {
+    width: 28px;
+    height: 36px;
+  }
+}
+
+@container (max-height: 430px) {
+  .br-inventory[data-study="paper"] .br-inv-panel,
+  .br-inventory[data-study="paper"].has-health .br-inv-panel {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-panel-head {
+    margin-bottom: 12px;
+    padding-bottom: 5px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-detail {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 17px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-specimen {
+    width: 72px;
+    min-height: 78px;
+    border-bottom-width: 8px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-specimen .br-inv-icon {
+    width: 63px;
+    height: 63px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-title {
+    font-size: 23px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-condition {
+    margin-top: 5px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-actions,
+  .br-inventory[data-study="paper"].is-combining .br-inv-actions {
+    margin-top: 10px;
+    padding-top: 9px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-ingredient {
+    height: 63px;
+  }
+  .br-inventory[data-study="paper"] .br-inv-result {
+    min-height: 38px;
+    margin-top: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .br-inventory[data-study="paper"] button {
+    transition: none;
+  }
+}
