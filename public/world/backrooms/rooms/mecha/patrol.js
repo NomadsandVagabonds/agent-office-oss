@@ -1,10 +1,11 @@
 // Three local wardens; their route graph respects every cage and room wall.
 import { createGuard } from './guards.js';
 import { createLabNavigation } from './navigation.js';
-import { createSecurity, stepSecurity } from './security.js';
+import { createSecurity, stepSecurity, releaseSecurity, CAPTURE_HEARTS, MERCY_SECONDS } from './security.js';
 
-export function createPatrol(c,{visitor,rows,outerX,diversion=()=>null,onChange=()=>{}}){
-  let security=createSecurity(),clock=0,entered=false;
+export function createPatrol(c,{visitor,rows,outerX,diversion=()=>null,onChange=()=>{},onRelease=()=>{}}){
+  let security=createSecurity(),clock=0,entered=false,mercy=0,known=false;
+  const meet=()=>{if(!known){known=true;c.met('mecha-warden');}};
   const nav=createLabNavigation(c),gap=(2.8+outerX)/2;
   const guards=[{x:0,z:rows[2],lane:0},{x:-gap,z:rows[0],lane:-gap},{x:gap,z:rows[3],lane:gap}].map((p,id)=>({
     ...p,id,yaw:id===1?Math.PI:0,model:createGuard(c,{id,x:p.x,z:p.z,variant:id}),
@@ -18,6 +19,7 @@ export function createPatrol(c,{visitor,rows,outerX,diversion=()=>null,onChange=
     return true;
   }
   function capture(){
+    meet();
     security=stepSecurity(security,0,{caught:true});
     const p=c.toWorld(visitor.x,visitor.z+.5),player=c.env.player;
     player.warp(p.x,p.z,Math.atan2(-.98,-(visitor.d/2-.05-.5))+c.room.rot*Math.PI/2);
@@ -36,8 +38,20 @@ export function createPatrol(c,{visitor,rows,outerX,diversion=()=>null,onChange=
     security=stepSecurity(security,dt,{inside:me.inside});
     if(security.phase==='captured')c.env.hold(me.inside);
     if(security.phase==='gameover'&&before.phase!=='gameover'){
-      onChange(security);c.env.end('caught');
+      // Ten seconds in the cage cost hearts, as being caught does everywhere in the building. The visit ends only
+      // if they were the last (the conductor does that, through c.hurt); otherwise the gate opens and the wardens
+      // go back to their rounds, and for a few seconds take no notice.
+      c.env.hold(false);
+      const hit=c.hurt(CAPTURE_HEARTS);
+      if(!hit.ended){
+        security=releaseSecurity(security);mercy=MERCY_SECONDS;
+        for(const g of guards){g.acquire=0;g.lastSeen=-100;g.seen=null;g.repath=0;}
+        onRelease();
+        if(hit.landed){c.env.hud?.glitch?.(.6);c.survived('mecha-warden');}
+      }
+      onChange(security);
     }
+    if(me.inside&&!me.world.frozen)mercy=Math.max(0,mercy-dt);
     for(const g of guards){
       g.moving=false;
       if(me.inside&&security.phase==='patrol'&&!me.world.frozen){
@@ -45,7 +59,8 @@ export function createPatrol(c,{visitor,rows,outerX,diversion=()=>null,onChange=
         const facing=(Math.sin(g.yaw)*dx+Math.cos(g.yaw)*dz)/d;
         const a=c.toWorld(g.x,g.z),b=c.toWorld(me.x,me.z);
         const distraction=diversion();
-        const sees=clock>2.5&&!distraction&&d<7.8&&(facing>.1||d<1.55)&&c.world.los(a.x,a.z,b.x,b.z);
+        if(!known&&d<9&&c.seen(g.x,g.z,{radius:.5}))meet();
+        const sees=clock>2.5&&mercy<=0&&!distraction&&d<7.8&&(facing>.1||d<1.55)&&c.world.los(a.x,a.z,b.x,b.z);
         g.acquire=sees?Math.min(1,g.acquire+dt):Math.max(0,g.acquire-dt*2);
         if(g.acquire>=.55){g.lastSeen=clock;g.seen={x:me.x,z:me.z};}
         const chase=clock-g.lastSeen<4.5;
@@ -64,7 +79,7 @@ export function createPatrol(c,{visitor,rows,outerX,diversion=()=>null,onChange=
           g.x=x;g.z=z;g.yaw=Math.atan2(dx,dz);g.moving=true;left-=step;
           if(step>=d-.001)g.route.shift();
         }
-        if(clock>2.5&&distance(g,me)<.62&&thinClear(g,me)){capture();}
+        if(clock>2.5&&mercy<=0&&distance(g,me)<.62&&thinClear(g,me)){capture();}
       }
       g.model.update({x:g.x,z:g.z,yaw:g.yaw,time:t,moving:g.moving,disabled:security.phase==='disabled'});
     }

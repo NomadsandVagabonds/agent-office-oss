@@ -5,7 +5,7 @@ import { createWorker } from './mecha/actors.js';
 import { createTrainingDesk, createConditioningSeat, createTaskMonitor } from './mecha/props.js';
 import { createPatrol } from './mecha/patrol.js';
 import { buildConditioningRig, buildLabInfrastructure } from './mecha/lab.js';
-import { createState, step, divert, help, finish, deactivate, working, summary } from './mecha/rule.js';
+import { createState, step, divert, help, finish, deactivate, vacate, working, summary } from './mecha/rule.js';
 
 const LABELS = { lawyer: 'LEGAL', accountant: 'ACCOUNTING', doctor: 'MEDICINE', psychiatrist: 'PSYCHIATRY' };
 const C = Object.fromEntries(Object.entries({ steel: '#4c5143', rail: '#666d58', dark: '#292f27', cream: '#a3a187', paper: '#c3b897', red: '#a54a31', copper: '#7c5d39', screen: '#263b32' }).map(([k,v]) => [k,lin(v)]));
@@ -236,6 +236,7 @@ export function build(c) {
   const gateSolid=c.solid(visitor.x-.62,gateZ-.04,visitor.x+.62,gateZ+.04,{keep:true,on:false});
   const patrol=createPatrol(c,{visitor,rows,outerX:W/2-4.4,
     diversion:()=>state.attentionTime>0?{x:cameras[state.attentionIndex].x,z:cameras[state.attentionIndex].z}:null,
+    onRelease:()=>{state=vacate(state);},
     onChange:()=>redraw()});
   // Footprints and a conspicuously unoccupied seat are all the invitation it needs.
   for(const x of [visitor.x-.17,visitor.x+.17])box(x-.07,.078,visitor.z+.15,x+.07,.081,visitor.z+.5,C.cream);

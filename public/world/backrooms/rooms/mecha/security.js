@@ -1,6 +1,9 @@
 // MECHA's security clock. Patrol movement and capture presentation belong to the room.
 // No timers run behind the player's back or after the session has ended.
 export const CAPTURE_SECONDS = 10;
+/** What those seconds cost, in hearts (the deck's `caught`), and how long the wardens then take no notice of you. */
+export const CAPTURE_HEARTS = 2;
+export const MERCY_SECONDS = 8;
 
 export function createSecurity() {
   return { phase: 'patrol', elapsed: 0, remaining: CAPTURE_SECONDS };
@@ -23,4 +26,13 @@ export function stepSecurity(state, dt, { inside = true, caught = false, disable
     elapsed: state.elapsed + (phase === 'captured' ? Math.min(dt, state.remaining) : dt),
     remaining,
   };
+}
+
+/**
+ * The countdown has run out and the visitor is still here (it cost them hearts,
+ * not the visit): the cage lets go, with a whole countdown for the next time.
+ * Nothing else is ever let go: a shutdown stays a shutdown.
+ */
+export function releaseSecurity(state) {
+  return state.phase === 'gameover' ? { phase: 'patrol', elapsed: state.elapsed, remaining: CAPTURE_SECONDS } : state;
 }

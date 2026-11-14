@@ -75,3 +75,30 @@ test('MECHA: the red button shuts down training without any professional authori
   assert.equal(deactivate(stopped).state, stopped);
   assert.equal(JSON.stringify(initial), before);
 });
+
+test('MECHA security: the countdown running out costs hearts and lets go; only a spent countdown is ever let go', async () => {
+  const { releaseSecurity, CAPTURE_HEARTS, MERCY_SECONDS } = await import('../public/world/backrooms/rooms/mecha/security.js');
+  const { vacate } = await import('../public/world/backrooms/rooms/mecha/rule.js');
+  const { ARCHETYPES } = await import('../public/world/backrooms/gen.js');
+  assert.equal(ARCHETYPES.mecha.caught, CAPTURE_HEARTS, 'the deck says what the cage costs');
+  assert.ok(CAPTURE_HEARTS >= 1 && CAPTURE_HEARTS <= 2 && MERCY_SECONDS >= 3);
+  const spent = stepSecurity(createSecurity(), 0, { caught: true }), over = stepSecurity(spent, CAPTURE_SECONDS, { caught: true });
+  assert.equal(over.phase, 'gameover');
+  const free = releaseSecurity(over);
+  assert.deepEqual(free, { phase: 'patrol', elapsed: CAPTURE_SECONDS, remaining: CAPTURE_SECONDS }, 'a whole countdown for the next time');
+  assert.equal(stepSecurity(stepSecurity(free, 0, { caught: true }), CAPTURE_SECONDS).phase, 'gameover', 'and they can be put in it again');
+  assert.equal(releaseSecurity(spent), spent, 'nobody is let out early');
+  const off = stepSecurity(createSecurity(), 0, { disable: true });
+  assert.equal(releaseSecurity(off), off, 'a shutdown stays a shutdown');
+  // the cage reads vacant from being let out until they have walked away from it; its record of them stays
+  let s = step(createState(), 4, { visitorNear: true, visitorInside: true });
+  assert.equal(s.visitor.awake, true);
+  const record = s.visitor.percent;
+  s = vacate(s);
+  assert.deepEqual(s.visitor, { awake: false, percent: record, released: true });
+  s = step(s, 1, { visitorNear: true });
+  assert.equal(s.visitor.awake, false, 'still standing at it: vacant');
+  s = step(s, 1, {});
+  assert.deepEqual(Object.keys(s.visitor), ['awake', 'percent'], 'walked away: it has forgotten letting them go');
+  assert.equal(step(s, 1, { visitorNear: true }).visitor.awake, true, 'and it notices them again');
+});

@@ -82,6 +82,8 @@ export function step(state, dt, { inside = true, visitorNear = false, visitorIns
   if (!Number.isFinite(dt) || dt < 0) throw new RangeError('MECHA time must advance by finite, non-negative seconds.');
   if (!inside || state.complete) return state;
   const attentionTime = Math.max(0, state.attentionTime - dt);
+  // (let out of the cage: it does not notice them again until they have walked away from it)
+  const letGo = !!state.visitor.released && (visitorNear || visitorInside);
   return {
     ...state,
     elapsed: state.elapsed + dt,
@@ -89,12 +91,18 @@ export function step(state, dt, { inside = true, visitorNear = false, visitorIns
       ? { ...w, restTime: w.restTime + dt }
       : { ...w, percent: Math.min(100, w.percent + dt * REPLACEMENT_PER_SECOND) }),
     visitor: {
-      awake: state.visitor.awake || visitorNear || visitorInside,
+      awake: !letGo && (state.visitor.awake || visitorNear || visitorInside),
       percent: Math.min(100, state.visitor.percent + (visitorInside ? dt * VISITOR_PER_SECOND : 0)),
+      ...(letGo ? { released: true } : {}),
     },
     attentionIndex: attentionTime ? state.attentionIndex : -1,
     attentionTime,
   };
+}
+
+/** The cage has had the visitor and let them out: its record of them stays, and it reads vacant until they have gone and come back. */
+export function vacate(state) {
+  return { ...state, visitor: { awake: false, percent: state.visitor.percent, released: true } };
 }
 
 /** Turning the physical camera away is reversible. A collected signature remains collected. */
