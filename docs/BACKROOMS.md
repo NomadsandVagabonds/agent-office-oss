@@ -19,7 +19,7 @@ there is no door. The fire stairs
 run out at a wall somebody has papered over, taped a door on, and camped
 beside; it gives if you lean on it, the way the first one did. Other walls
 carry the same tape, and are only walls: lean on one and it knocks back. What
-you find on the way (tapes, a keycard) is only yours if you get out. In some
+you find on the way (battery packs, a keycard) is only yours if you get out. In some
 visit something follows you: a shop dummy for as long as you watch it from
 across a room, and not safe to stand beside, watched or not. It only knows
 where you are while it can see you, some doors can be shut on it, and it
@@ -119,7 +119,7 @@ New rooms go in `MORE_DECK` in `deck2.js`.
 | `lights` | required | what the ceiling does: `normal` (as the floor's theme has it), `dim` (about half the tubes out), `entry` (lit only near the door you came in by), `one` (a single tube), `dark` (none: the room lights itself) |
 | `roll(R, o)` | required | everything the room decides from the seed, returned as plain data (numbers, strings, lists). `R` is the seeded source: `R()`, `R.range(a, b)`, `R.int(a, b)`, `R.pick(list)`, `R.some(list, n)`, `R.shuffle(list)`, `R.chance(p)`, `R.weighted(list, weightOf)`. `o` is the office: `o.name` (the visitor), `o.projects`, `o.agents`, `o.tasks`, any of which may be nearly empty. The builder reads the result as `c.params` |
 | `module` | required for a new room | `'./rooms/<id>.js'`. Fetched the first time a floor has the room on it |
-| `stash(r, side)` | required | where a tape may be hidden: `[x0, z0, x1, z1]` (or a list of them) in the room's own frame, strictly inside its walls. `r` is the room as generated (`r.W`, `r.D`, `r.params`), `side` is −1 or 1 for rooms that have a left and a right. Your builder leaves that patch of floor clear |
+| `stash(r, side)` | required | the room's hiding place, where whatever the seed leaves in this room is put (a battery pack, a snack; it used to be a cassette): `[x0, z0, x1, z1]` (or a list of them) in the room's own frame, strictly inside its walls. `r` is the room as generated (`r.W`, `r.D`, `r.params`), `side` is −1 or 1 for rooms that have a left and a right. Your builder leaves that patch of floor clear |
 | `teaches` | | the id of the one lesson this room is the first place to learn (`LESSONS` in `gen.js`) |
 | `needs` | | lesson ids it takes for granted. It is only dealt on a floor below rooms that taught them all, so a room that needs anything but `lean` is never on the floor you land on |
 | `themes` | | `{ yellow, archive, night, fitout, exec }` → a multiplier on `weight` for that kind of floor. 0 keeps it off one |
@@ -511,6 +511,7 @@ the office is: the seed is the clock, and no building is ever given twice.
 | `plan.js` | a visit from its seed: how many floors, which kind each is and how it ends, what is hidden where, what each floor may take for granted |
 | `gen.js` | the generator and the first deck. Pure: no three.js, no DOM. `frame.js` is its geometry |
 | `deck2.js` | the deck, continued: where new rooms' lines go |
+| `rooms/vestibule.js`, `rooms/copiers.js`, `rooms/quiet-zone.js`, `rooms/mailroom.js` | four ordinary rooms dealt by chance: revolving doors that carry you (one of them out of the ceiling), photocopiers of which one prints the way on, a soundproofed room that shuts if you run in it and opens when you stand still, and a brass tube that sends a canister down whichever pipe leads toward the way down |
 | `rooms/` | one file to a room, for every room written since the first deck |
 | `rooms.js` … `rooms4.js` | the first deck's builders, and the plain room |
 | `world.js` | builds a generated floor: the toolbox (`roomContext`), collision, the doorway check |
@@ -518,7 +519,7 @@ the office is: the seed is the clock, and no building is ever given twice.
 | `themes.js` | what each kind of floor is like |
 | `stairwell.js` (also the hole, the ledge and the chute), `thin.js`, `marks.js`, `leaving.js` | the way down, and the taped door at the bottom of the last of it; the wall that gives and the walls that knock back; where the marks go, and the rule for leaning (`lean`, `answer`); what the camcorder sees as you leave |
 | `traces.js` | what earlier visitors left: the marks on walls, the camp, and six things found in plain rooms (`TRACES` in `gen.js`: a camp left in a hurry, arrows that disagree, a note that stops, a tape measure run out, a map that is wrong, a queue at a bare wall, and a crude drawing of something that is really down here this visit, with what its artist had worked out about it, as far as they got: `drawings.js`) — two or three to a floor at most, far apart, in rooms with nothing else in them and no oddity next door |
-| `loot.js` | tapes and the keycard: where they hide, what is kept |
+| `loot.js` | the keycard: who holds it, what is kept (and the cassettes that used to be the office's coins down here; none are dealt now: spare battery packs are the currency) |
 | `inventory.js`, `inventory-state.js`, `inventory-world.js`, `inventory-hud.js`, `inventory-items.js` | what a visitor carries: the controller · the pockets (pure) · things on the floor, picking up, putting down, chalk marks · the bar, the hearts and the inspection card · the models |
 | `survival.js`, `health-state.js`, `camera-state.js` | the visit's hearts and the camcorder's battery, and who may touch them when · each of them (pure) |
 | `supplies.js` | what is lying about in a part of the building, and in which rooms (pure, by the seed) |

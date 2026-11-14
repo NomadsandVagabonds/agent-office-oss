@@ -10,10 +10,11 @@
 > this note is the prototype as it was handed over.
 
 This optional prototype adds a Minecraft-inspired six-slot bar, carry/inspect/
-use/drop actions, basic battery fitting, four-point health and limited camera
-power. The integration branch, `codex/backrooms-inventory-connected`, is based
-on Fable's connected-building and payout work through `2df6bd1`. It enables
-these systems together only for `opt.debug && opt.dev.inventory`.
+use/drop actions, two-input crafting, four-point health and limited camera
+power. The crafting branch, `codex/backrooms-crafting`, builds on the published
+inventory integration at `266bb8e`, which includes Fable's connected-building
+and payout work through `2df6bd1`. It enables these systems together only for
+`opt.debug && opt.dev.inventory`.
 
 ## Play it
 
@@ -27,12 +28,13 @@ query string on that server's port. Add `depth=1` or `depth=2` to start below
 the first floor. Without `inventory=1`, the existing HUD and automatic
 camcorder lamp remain in use.
 
-Seven supplies appear near the initial arrival: a partly charged flashlight,
+Nine supplies appear near the initial arrival: a partly charged flashlight,
 a battery pack, chalk, five sheets of paper, scissors, a wrapped snack and a
-red balloon. They are issued once per visit, including when a debug visit
-starts below depth zero. They are not reissued at a floor transition. There
-are six pockets, so fitting a battery or dropping an object makes room for
-another. Extra packs are scattered through reachable rooms on each floor.
+red balloon, plus a lighter and adhesive tape. They are issued once per visit,
+including when a debug visit starts below depth zero. They are not reissued at
+a floor transition. There are six pockets, so fitting a battery or dropping
+an object makes room for another. Extra packs, lighter, tape and paper are
+scattered through reachable rooms on each floor.
 
 | Control | Action |
 | --- | --- |
@@ -40,43 +42,88 @@ another. Extra packs are scattered through reachable rooms on each floor.
 | 1–6 | Select a numbered pocket |
 | Tab / I, or click a pocket | Inspect the selected object |
 | Q, or the inspection button | Use the object |
+| F | Toggle the mounted flashlight, or the selected loose flashlight |
 | G, or Drop | Put the selected object on clear nearby floor |
 | Escape | Cancel combining, then close inspection; with inventory closed, leave the visit |
 
 Inspection captures movement and look input and releases pointer lock.
 **Opening an item card does not pause the world:** hazards, physics, the hit
-cooldown and both batteries keep advancing. Click the scene after closing to
-resume mouse look. Buttons also support touch.
+cooldown, camera power and any emitting flashlight keep advancing. Click the
+scene after closing to resume mouse look. Buttons also support touch.
+
+## Camcorder inventory
+
+The selected visual direction is **Through the lens**, the third inventory
+study. It is now the normal appearance of the `inventory=1` prototype: six
+transparent pockets, viewfinder selection brackets, pixel menu lettering and
+small cursor-led actions. Inspection and the two-input crafting menu share
+the camcorder overlay rather than an opaque equipment panel. Charge, fitted
+tape, mounted-light status and action feedback remain in the selected item's
+readout. The choice changes presentation, not the inventory or crafting rules.
+On portrait phones, opening the menu uses the upper letterbox and moves the
+running REC/battery strip above it. The six pockets and health stay beside
+the picture; long action feedback does not cover the menu's buttons.
+
+`inventory-style.js` owns the production CSS. `inventory-icons.js` renders the
+actual Office voxel props into cached transparent thumbnails, including a
+distinct taped flashlight. Its temporary renderer and geometries are released
+after the render pass; the original SVG icons remain a fallback when rendering
+is unavailable. Fonts are served from the project's vendored font files.
+
+The three-way comparison remains at `/world/dev/inventory-studies.html`.
+It preserves its historical skins and pauses its embedded scene for visual
+review. Use the ordinary Backrooms dev page for gameplay and timing checks.
 
 ## Supplies and combining
 
+Choose **Combine** on a compatible item to open two ingredient boxes. The
+selected item fills the first box; choose another pocket or the built-in
+camera for the second. The preview describes the result, and **Craft** performs
+it. Either ingredient order works. For a paper fire, the minus/plus controls
+choose one to ten sheets from the selected stack, starting at one sheet.
+Invalid pairs, stale ingredients and rejected world placement spend nothing.
+
 - **Flashlight:** switching it on uses the native beam shader. A full charge
-  lasts 180 seconds of running simulation; the arrival light starts at 30%.
-  It can stay on while another pocket is selected. Dropping it switches it
-  off and preserves its remaining charge.
-- **Battery pack + flashlight:** select the pack, choose **Fit battery**, then
-  select a flashlight. One pack restores the light to 100%. A full light or
-  incompatible pair consumes nothing. There is no crafting grid or automatic
-  combination.
-- **Battery pack + camera:** the same panel offers **Camera +2:00**. One pack
-  adds up to 120 seconds, capped at full capacity. A full or depleted camera
-  refuses the pack. The camera does not occupy a pocket.
+  lasts 180 seconds of actual illumination; the arrival light starts at 30%.
+  A loose flashlight emits only while its pocket is selected. Selecting
+  another pocket hides its beam and stops its drain; selecting it again
+  restores the armed light. Dropping switches it off and preserves charge.
+- **Battery pack + flashlight:** one pack restores the light to 100%. A full
+  light refuses the pack without consuming it.
+- **Battery pack + camera:** one pack adds up to 120 seconds, capped at full
+  capacity. A full or depleted camera refuses the pack. The built-in camera
+  appears as a crafting target and does not occupy a pocket.
+- **Tape + flashlight:** consumes the tape to prepare that same flashlight
+  for mounting. Its identity, charge and switch state stay intact. An already
+  prepared light refuses another roll.
+- **Prepared flashlight + camera:** mounts the light without spending either
+  item. Only one light can be mounted; it still occupies its original pocket,
+  but can emit while another item is held. Mounting does not switch it on.
+  **F** prioritizes the mounted light, and only one flashlight can emit at a
+  time. When inspecting a different loose flashlight, its own toggle displays
+  **Q**; clicking that action or pressing Q controls the selected light while
+  F still controls the mount. Dropping or giving away the light clears the
+  mount; its tape remains fitted so it can be picked up and mounted again.
 - **Chalk:** six directional floor marks. Wet, obstructed or uneven ground
   rejects placement without using chalk. The final mark consumes the stub.
   Each floor retains its latest 24 marks until that floor is disposed.
 - **Paper:** up to ten sheets per pocket. Pickups fill existing stacks first;
   any sheets that do not fit remain on the floor. Dropping places the whole
   selected stack. Pink slips and loose papers share ordinary paper stacks.
+- **Paper + lighter:** places a small voxel fire on clear, dry ground. Each
+  sheet burns for eight seconds, so the chosen stack contributes 8–80 seconds.
+  Only those sheets are consumed after placement succeeds; the lighter stays
+  in its pocket. There is no fuel meter on the lighter.
 - **Scissors:** carry, inspect and drop. There is no generic cutting action.
 - **Wrapped snack:** eating consumes the selected snack only after restoring
   one health point. Full health or a finished visit consumes nothing.
 - **Red balloon:** occupies one pocket and can be offered to NPC rules as the
   selected item. Placement checks its height and nearby ceiling clearance.
 
-Non-paper objects occupy one slot each. IDs, charge, chalk uses and paper
-counts survive drops and floor handovers. Drops check the route and footprint
-so objects cannot pass through walls or across an unsupported edge. There is
-no hunger system or persistent supply inventory between visits.
+Non-paper objects occupy one slot each. IDs, charge, fitted tape, chalk uses
+and paper counts survive drops and floor handovers. Drops check the route and
+footprint so objects cannot pass through walls or across an unsupported edge.
+There is no hunger system or persistent supply inventory between visits.
 
 ## Visit ownership and floor ownership
 
@@ -86,16 +133,21 @@ and disposes them once at the end. Building a floor ahead or keeping the old
 floor visible above does not create or tick another inventory or survival
 controller.
 
-Physical supplies and chalk belong to individual floor scenes and kits:
+Physical supplies, chalk and fires belong to individual floor scenes and kits:
 
 - `inventory.hang(env)` creates that floor's physical adapter, scoped NPC
-  facade and scattered packs after its world is built. A floor can be hung
+  facade and scattered supplies after its world is built. A floor can be hung
   below the current one before it has a player.
 - `inventory.attend(env)` makes a landed floor active after its player exists.
   It preserves the carried records and seeds the starter supplies only if
   this is the visit's first arrival.
 - `inventory.forget(env)` removes a retired floor's meshes and interaction
   records before its kit is disposed. It does not empty the carried pockets.
+
+Placed fires keep burning while their old floor remains visible above. They
+are disposed with that floor, not carried to the next one. Their timers follow
+the same running/frozen visit states as the camera; they are advanced once
+per live physical adapter rather than once per inventory model.
 
 Generated supply IDs include both the floor seed and depth. Room authors must
 also choose stable IDs unique across the visit for their own items; the spawn
@@ -120,7 +172,7 @@ blinking below one quarter. Depletion fades to black and ends the visit as
 `battery`, without banking loot. The carried flashlight replaces the
 automatic camcorder lamp while the prototype is enabled.
 
-| Visit state | Camera, flashlight and hit-cooldown clocks | Damage and supply actions |
+| Visit state | Camera, emitting flashlight, fire and hit-cooldown clocks | Damage and supply actions |
 | --- | --- | --- |
 | `play`, including item inspection | Run | Allowed |
 | `play` while a chute holds the controls | Run | Blocked |
@@ -142,24 +194,53 @@ back within that group when needed. Locations are seeded; packs do not
 respawn. This is an initial density for route playtests, not a guarantee that
 a player passes a pack every four rooms.
 
-The pirate is **unchanged from upstream `2df6bd1`**. Fable's cast session owns
-its health integration. The original Underfloor and Flood-Mark health hooks
-remain on `codex/backrooms-expansion-lab` at `2959758`; those candidate rooms
-are not imported into this inventory-only branch. Existing cast behavior
-therefore remains the upstream behavior until its owner integrates health.
+Crafting supplies use a separate seeded scatter pass. Each floor tries to
+place one lighter, one tape roll and a three-to-five-sheet paper stack per
+eight eligible rooms, with at least one paper stack. Arrival and exit rooms
+are excluded. Placement searches reachable clear floor; supplies are not
+guaranteed if no suitable location exists and do not respawn.
+
+## Paper fires and pursuit
+
+`FIRE_SECONDS_PER_SHEET = 8` in `crafting.js` is shared by the model, preview
+and world placement. A floor supports four simultaneous fires, with a
+0.45-unit placement radius and 1.1-unit overhead clearance. Fire has stepped
+voxel flames, embers, smoke and a warm floor glow. It does not spread or deal
+damage. Water extinguishes it, and its final second fades out. Rejected wet,
+blocked or unsupported ground, insufficient headroom and the fire limit leave
+the paper and lighter untouched.
+
+A hostile pirate within six units of a visible fire retreats, including while
+watched. The query rejects obstructed sightlines and a different floor height.
+`fire-fear.js` moves it away at 2.7 units per second and remembers the last
+fire for 1.5 seconds after losing sight. Movement still checks walls and drop
+edges; a blocked retreat holds off pursuit instead of running the normal
+attack in the same frame. Friendly cutouts do not react, and a fire cannot
+undo an already-caught state.
+
+The pirate change is this small fear hook only. Fable's cast session still
+owns its health integration; its existing attack and ending behavior remains
+upstream-owned. The original Underfloor and Flood-Mark health hooks remain on
+`codex/backrooms-expansion-lab` at `2959758`; those candidate rooms are not
+imported into this inventory branch.
 
 ## Room and NPC interface
 
 The pure model's `read()` returns a detached
-`{slots, selected, activeTorch, revision}` snapshot. The visit controller owns
-that model; floor NPCs receive the smaller `env.inventory` facade:
+`{slots, selected, activeTorch, mountedTorch, revision}` snapshot.
+`activeTorch` is the armed lamp ID; emission also requires that it is selected
+or mounted. A torch record's `prepared` flag survives drops, while the mount
+belongs to the visit model and clears when that item leaves the pockets.
+The visit controller owns that model; floor NPCs receive the smaller
+`env.inventory` facade:
 
 - `held()` returns a detached copy of the selected item, or `null` when the
   floor cannot act. A selected flashlight includes `lit`. Possession in a
   different pocket is not holding an item.
 - `torchPower()` reports the active beam for the current floor, or zero for
-  an inactive floor. The light can remain on while another item is selected;
-  a cone test also needs the player's position and direction.
+  an inactive floor. A mounted light can remain on while another item is
+  selected; a loose light cannot. A cone test also needs the player's position
+  and direction.
 - `consumeHeld('paper', 1)` spends exactly one selected sheet. Wrong selection
   or insufficient quantity changes nothing. Acknowledge a handoff only after
   the returned result has `ok: true`.
@@ -170,6 +251,19 @@ that model; floor NPCs receive the smaller `env.inventory` facade:
 - `physical.spawn(makeItem(type, stableId, overrides), {room: id, x, z})`
   places a floor-owned object at room-local coordinates. Invalid or duplicate
   records and unsuitable locations are rejected.
+- `fire.threatAt(x, z, y)` returns the nearest visible active fire in range,
+  with its world position, radius and remaining time, or `null`. Inactive
+  floor facades cannot expose a threat to the current cast. Actors decide
+  their own response; the query itself does not move or damage anything.
+
+Crafting uses stable references `{slot, id}` or the virtual
+`CAMERA_INPUT = {device: 'camera'}`. `previewCraft(snapshot, refs, {paperCount})`
+describes a pair without mutation. `model.craft(refs, {paperCount, camera,
+ignite})` revalidates those references and consumes ingredients only after a
+synchronous recharge or placement succeeds. Reentrant mutation is blocked
+during that callback. The controller supplies the current floor's guarded
+camera and fire services. Legacy battery `combine` and `rechargeCamera` entry
+points remain available.
 
 | Accepted room alias | Canonical type |
 | --- | --- |
@@ -194,7 +288,8 @@ Only the visit loop advances these resources. Eating and recharging work
 while inspecting during normal play.
 
 Debug access: `__backrooms.inventory.report()` includes carried contents,
-selection, light, health, camera, active floor, physical objects and chalk.
+selection, light, health, camera, active floor, physical objects, chalk and
+fires.
 `__backrooms.inventory.model.read()` exposes the pure inventory snapshot.
 After the dev visit ends, `window.__backroomsResult` contains its receipt.
 
@@ -217,10 +312,12 @@ than reporting and paying the same visit through both paths.
 
 ## Files and verification
 
-- `inventory-state.js`: pure records, stacks, selected-item consumption and
-  atomic battery fitting.
+- `inventory-state.js`, `crafting.js`: pure records, stacks, held/mounted light
+  state, recipe previews and atomic ingredient consumption.
 - `inventory-items.js`, `inventory-world.js`: native voxel props, pickups,
   drops, chalk and floor resource ownership.
+- `inventory-fire.js`: floor-owned voxel fires, placement limits and visible
+  threat queries. `fire-fear.js`, `pursuer.js`: the pirate's retreat hook.
 - `inventory-hud.js`, `inventory.js`: pockets, inspection, combining, the NPC
   facade and visit/floor lifecycle.
 - `health-state.js`, `camera-state.js`, `survival.js`: resource rules, action
@@ -228,19 +325,21 @@ than reporting and paying the same visit through both paths.
 - `index.js`, `input.js`, `hud.js`: conductor integration, input routing and
   the existing camcorder gauge.
 
-All 47 focused inventory/health/camera/survival/input tests pass. They cover item
-capacity, identity and detached snapshots; paper remainders; selected-item
-handoffs; atomic fitting/healing; depletion; and transition timing, grace and
-one-time endings, plus native input routing and pointer-lock cleanup.
+The focused pass covers **63/63** inventory, crafting, health, camera, survival
+and fire-response tests. These exercise stale and duplicate inputs, safe
+reentry, rejected placement, exact paper consumption,
+camera/flashlight fitting, tape and mounting, held-versus-mounted charge
+drain, health/depletion, one-time endings and safe retreat. The earlier six
+input tests cover native routing and pointer-lock cleanup.
 
-The final full suite with `TMPDIR=/private/tmp` and loopback access reported **395/396
-passing**. The sole failure is the known status-line bridge case at
+The full suite with `TMPDIR=/private/tmp` and loopback access reports
+**417/418 passing**. The sole failure is the known status-line bridge case at
 `test/usage.test.mjs:197`, reading `source` from an undefined meter. No unrelated
-code was changed to address it. Syntax checks pass for all 17 JavaScript/test
-files in this integration.
+code was changed to address it. The new pure crafting and inventory modules
+also pass syntax checks.
 
-The connected-world browser regression passed with no browser errors. It
-covers real E pickups on floors zero and one; camera, torch and grace advancing
+The previous connected-world browser regression passed with no browser errors.
+It covers real E pickups on floors zero and one; camera, torch and grace advancing
 while inspecting; and a single resource tick with an ahead floor, then again
 while the previous floor is visible above. Carried IDs, paper counts, chalk
 uses and health survive handover.
@@ -254,9 +353,40 @@ asynchronous build. Exiting through the actual leaving sequence returns
 exactly two loose packs alongside the original coin and `told` receipt, once.
 With the flag absent, no inventory HUD is created.
 
-The normal dev page also passed live desktop and 390×844 mobile checks:
+Before the new crafting panel, the normal dev page also passed live desktop
+and 390×844 mobile checks:
 selected-item caption, hearts, E prompt, feedback, LIGHT and date do not
 overlap. Native Enter, Escape and touch combining work; inspection keeps the
 camera draining while movement/look input stays blocked. A live descent
 preserves the same inventory HUD, health and lit torch and updates the date
 stamp for the lower floor. No browser errors were observed.
+
+The crafting/fire browser regression also passed in the real connected game,
+with no browser errors. It covers **F** for selected and mounted lights;
+native Enter to prepare and mount; cancelling without consumption; camera
+recharge; a three-sheet, 24-second fire; continued clocks with the bag open;
+and carried state across an actual two-floor handover. Dropping a mounted
+light clears its mount while preserving fitted tape and charge. The original
+plinth pirate retreats more than two units during the half-second test,
+including its initial step off the plinth. Flag-off behavior remains intact.
+
+The physical-fire harness verifies short wall occlusion, actor-body exclusion
+from sight rays, nearest-fire and height limits, four concurrent fires, and
+80 expiry/reuse cycles without new rig allocations. Wet, blocked, low-ceiling
+and capped placements preserve paper; rising water extinguishes a fire.
+Desktop and 390×844 checks cover both ingredient boxes, quantity controls,
+native Enter/Space and touch activation, focus recovery and overlay spacing.
+
+After the camcorder style was promoted, all 69 focused model, controller and
+input checks passed. The actual connected-game crafting regression also
+passed again, including native prepare/mount/recharge actions, F, a 24-second
+fire, live clocks, floor handover, drop detachment, pirate retreat and flag-off
+behavior. Independent 390×844 phone checks verified every selected flashlight
+action before and after preparation/mounting, native Enter/Space, touch
+ingredients and quantity controls, cancellation, invalid pairs and visible
+long-error feedback. The portrait layout also passed at 390×667: no menu
+overflow or clipped controls, and REC/battery remain separate from the menu.
+The mixed two-flashlight case verifies that the loose light shows Q and its
+button/Q control it, while F controls the other mounted light; selecting the
+mounted light restores the F label.
+No browser errors were observed in these runs.

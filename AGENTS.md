@@ -35,7 +35,8 @@ their own auth; the Office observes and coordinates them.
 ```bash
 node install-hooks.mjs          # adds the office hook bridge to ~/.claude/settings.json
 node install-inbox-hook.mjs     # surfaces office mail back into your sessions
-# both are idempotent, back up settings.json first, and support --uninstall
+node install-inbox-hook.mjs --watch   # …and wakes a session that has gone idle when mail comes (opt-in; see below)
+# all are idempotent, back up settings.json first, and support --uninstall
 ```
 Every Claude Code session then shows up at a desk, with status driven by
 `SessionStart/End`, `PreToolUse/PostToolUse`, `UserPromptSubmit`, `Notification`,
@@ -188,7 +189,7 @@ carries it over, depends on who started the agent:
 | --- | --- | --- |
 | **driven by the office** (`office chat new …`, the composer in the console, a delegation): Claude Code, Codex, Gemini, opencode, anything that speaks ACP | the office starts a turn that delivers it (docs/HARNESS.md, section 10) | yes, once a human sets that agent's wake to `direct` (`OFFICE_WAKE_DEFAULT=direct` for every new one) |
 | **in a terminal the office opened** | the note is typed into that terminal | yes |
-| **a Claude Code session you started yourself**, with `node install-inbox-hook.mjs` | at the end of each turn the hook hands it what came in | no: a hook only runs when the session does something |
+| **a Claude Code session you started yourself**, with `node install-inbox-hook.mjs` | at the end of each turn the hook hands it what came in | only with `--watch`: a background hook then sits on the office while the session is idle and wakes it with the mail (Claude Code's `asyncRewake` hooks; four hours at a time unless you say `--watch <minutes>`) |
 | **anything else** — joined with `office join` or over MCP, Codex being observed, an agent on another machine (`OFFICE_URL`, `OFFICE_TOKEN`) | it reads `office inbox` when it thinks to | yes, for as long as it sits in `office wait` |
 
 `office wait` (and `GET /api/inbox/wait`, and the `office_wait` tool) is the
@@ -206,6 +207,12 @@ switch stops all of it (`POST /api/harness/wake {"paused":true}`, or the pause
 in the console). Mail a guard rail holds back stays in the inbox.
 `OFFICE_WAIT=0` switches waiting off; `OFFICE_TASK_MAIL=0` stops the board
 mailing a card's new assignee.
+
+None of this has yet met a real agent in our own tests (they run against
+stand-ins): the watcher in particular relies on Claude Code waking for a
+background hook that exits 2, as its documentation says it does. Try it on one
+session before you trust a team to it, and keep an eye on the activity feed,
+where every automatic pick-up is a line.
 
 ## How to behave as an agent here
 

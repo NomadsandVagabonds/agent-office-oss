@@ -3,7 +3,9 @@
 // third pack) ask about "the hand": is there paper in it, a balloon, a torch
 // that is lit. There is one set of pockets (inventory*.js) and the hand is the
 // selected one; this is the small translation between the two, so that a rule
-// can be written and tested against either.
+// can be written and tested against either. A visit run without pockets still
+// has a hand: it holds one thing, picked up where a room left it, so that no
+// room which wants something carried is impossible there.
 //
 //   what a room calls it     what is in the pocket (inventory-state.js)
 //   'papers'                 paper (a stack of sheets)
@@ -27,26 +29,28 @@ export const isFlashlight = (kind) => kind === 'flashlight';
  * @param prefix     something unique to this part of the building, for the ids of what is handed over
  */
 export function createHandOver(inventory, prefix = 'hand') {
-  let n = 0;
-  const held = () => inventory()?.held?.() ?? null, get = () => kindOf(held());
+  let n = 0, bare = null;               // (bare: the one thing a visitor without pockets can carry — see below)
+  const held = () => inventory()?.held?.() ?? null, get = () => (inventory() ? kindOf(held()) : bare);
   return {
-    /** Are there pockets at all? (A room has to make sense without.) */
+    /** Are there pockets at all? A visit can be run without: then the hand is a hand, and holds one thing. */
     there: () => !!inventory(),
     get, has: (kind) => get() === kind,
     hasPaper: () => isPaper(get()),
     hasBalloon: () => isBalloon(get()),
-    /** A torch in the hand that is switched on: possession alone is not light. */
-    hasFlashlight: () => isFlashlight(get()) && (inventory()?.torchPower?.() ?? 0) > 0,
+    /** A torch in the hand that is switched on: possession alone is not light. (With no pockets there is no switch: it is on.) */
+    hasFlashlight: () => isFlashlight(get()) && (inventory() ? (inventory().torchPower?.() ?? 0) > 0 : true),
     /** Put one of something into the visitor's pockets. → null if it went in, or the kind back if there was no room for it. */
     give(kind) {
-      const type = KINDS[kind]; if (!type) return kind;
-      const got = inventory()?.give?.({ id: `${prefix}:${kind}:${n++}`, type, quantity: 1 });
+      if (!KINDS[kind]) return kind;
+      if (!inventory()) { if (bare !== null) return kind; bare = kind; return null; }
+      const got = inventory().give?.({ id: `${prefix}:${kind}:${n++}`, type: KINDS[kind], quantity: 1 });
       return got && got.ok ? null : kind;
     },
     /** (As give: with pockets, taking one thing no longer means putting another down.) */
     swap(kind = null) { return kind === null ? null : this.give(kind); },
     /** If what is in the hand satisfies `pred`, one of it is taken. → its kind, or null. */
     consume(pred = Boolean) {
+      if (!inventory()) { const was = bare; if (!was || !pred(was)) return null; bare = null; return was; }
       const item = held(), kind = kindOf(item);
       if (!kind || !pred(kind)) return null;
       return inventory().consumeHeld(item.type, 1)?.ok ? kind : null;

@@ -53,25 +53,23 @@ const office = {
   } },
 };
 
-// Upstairs, the office keeps count of what has been carried out of here by the door: a keycard and four coins, and nothing
-// brought out is ever down here again. There is no office on this page, so the page keeps count, for as long as the browser
-// lets it — and once everything has been brought out it forgets, so there is always something down here to find.
-const EVERY = [1, 2, 3, 4], KEPT = 'backrooms-sample:kept';
-let kept = { card: false, coins: [] };
-try {
-  const was = JSON.parse(localStorage.getItem(KEPT) || 'null');
-  if (was && Array.isArray(was.coins)) kept = { card: !!was.card, coins: EVERY.filter((n) => was.coins.includes(n)) };
-} catch { /* nothing remembered: everything is still down there */ }
+// Upstairs, the office keeps count of what has been carried out of here by the door: its keycard, which once brought
+// out is never down here again. There is no office on this page, so the page keeps count, for as long as the browser
+// lets it — and once the card has been brought out it forgets, so there is always something down here to find.
+// (The four cassettes that used to hang down here are gone: spare battery packs are what a visit is paid for now.)
+const KEPT = 'backrooms-sample:kept';
+let kept = { card: false };
+try { const was = JSON.parse(localStorage.getItem(KEPT) || 'null'); if (was) kept = { card: !!was.card }; } catch { /* nothing remembered: it is still down there */ }
 const remember = () => { try { localStorage.setItem(KEPT, JSON.stringify(kept)); } catch { /* until the page closes, then */ } };
 office.game = {
   left(place) {
     if (place !== 'backrooms') return { card: false, coins: [] };
-    if (kept.card && kept.coins.length === EVERY.length) { kept = { card: false, coins: [] }; remember(); }
-    return { card: !kept.card, coins: EVERY.filter((n) => !kept.coins.includes(n)) };
+    if (kept.card) { kept = { card: false }; remember(); }
+    return { card: !kept.card, coins: [] };
   },
-  async take(place, item, n) {
+  async take(place, item) {
     if (place !== 'backrooms') return null;
-    if (item === 'card') kept.card = true; else if (EVERY.includes(n) && !kept.coins.includes(n)) kept.coins.push(n);
+    if (item === 'card') kept.card = true;
     remember();
     return { taken: true };
   },

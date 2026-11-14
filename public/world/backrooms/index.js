@@ -35,7 +35,7 @@ import { createHud } from './hud.js';
 import { createSound } from './sound.js';
 import { createInput } from './input.js';
 import { createStalkers } from './pursuer.js';
-import { createHand } from './hand.js';
+import { createHand, createHandView } from './hand.js';
 import { createDenizens } from './denizens.js';
 import { createLoot, lootLeft } from './loot.js';
 import { leaving } from './leaving.js';
@@ -252,7 +252,7 @@ async function visit(office, opt) {
     env.run = { met: (id) => tally.met(id), survived: (id) => tally.survived(id) };
     createStalkers(env);
     // the residents of rooms (denizens.js), and the visitor's hand as they ask after it; the picture washed red (0…1) by a room that does that
-    createHand(env); createDenizens(env);
+    createHand(env); createHandView(env, camera); createDenizens(env);
     env.red = (k) => { redWash = Math.max(redWash, k); };
     env.loot = purse;
     purse?.hang(env);
@@ -287,7 +287,7 @@ async function visit(office, opt) {
     if (f.player) tally.part(f.world);                    // (a part somebody was in is counted as it goes: after this it is gone)
     inventory?.forget(f.env);
     f.env.pursuer?.dispose?.();
-    f.env.denizens?.dispose?.();
+    f.env.denizens?.dispose?.(); f.env.handView?.dispose?.();
     f.world?.scene.removeFromParent();
     f.world?.dispose(); f.kit.dispose();
   }
@@ -383,6 +383,7 @@ async function visit(office, opt) {
     if (landed >= 0) landed += dt;
     purse?.update(dt, time, state === 'play');
     inventory?.update(dt, clocksRun());
+    env.handView?.update(dt, canAct() && !inventory?.isOpen);          // (what is in the selected pocket, in the corner of the picture)
     currentUse = canAct() && !inventory?.isOpen ? world.usable(me) : null;
     hud.hint(!!currentUse);                               // (only ever the [E]: what a thing is, is for looking at it to say)
 
@@ -394,7 +395,7 @@ async function visit(office, opt) {
     // …which with pockets is a weak one, enough not to walk into the furniture: a torch in the hand is the light, and
     // it works wherever its owner switches it on
     const lamp = light < 0.11 && !here?.noTorch ? 1 : 0;
-    const wantTorch = inventory ? Math.max(inventory.torchPower(), lamp * OWN_LAMP) : lamp;
+    const wantTorch = inventory ? Math.max(inventory.torchPower(), lamp * OWN_LAMP) : Math.max(lamp, env.hand?.hasFlashlight?.() ? 1 : 0);          // (no pockets: a torch in the hand is simply on)
     torch += (wantTorch - torch) * (1 - Math.exp(-3 * dt));
     cur.kit.shared.uTorch.value = torch * 1.5;
     hud.flag('LIGHT', torch > 0.5);

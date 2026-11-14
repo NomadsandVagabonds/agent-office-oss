@@ -354,6 +354,48 @@ const SKETCH = {
     g.beginPath(); g.moveTo(62, 62); g.lineTo(66, 84); g.lineTo(82, 84); g.lineTo(86, 62); g.closePath(); g.stroke();
     g.beginPath(); g.ellipse(74, 62, 12, 3, 0, 0, 6.3); g.stroke(); g.beginPath(); g.arc(74, 60, 12, 3.3, 6.1); g.stroke();
   },
+  // the residents of rooms (deck2.js `resident`)
+  'trunk-line'(g) {                                                  // a ceiling, a knot of loops hanging from it, and an arrow saying go round
+    g.beginPath(); g.moveTo(10, 12); g.lineTo(86, 12); g.stroke();
+    for (let i = 0; i < 5; i++) { g.beginPath(); g.moveTo(34 + i * 7, 12); g.bezierCurveTo(20 + i * 9, 40, 70 - i * 8, 44, 40 + i * 5, 70 - i * 4); g.stroke(); }
+    g.beginPath(); g.arc(48, 40, 9, 0, 6.3); g.stroke();
+    g.beginPath(); g.moveTo(14, 84); g.quadraticCurveTo(20, 56, 12, 30); g.moveTo(12, 30); g.lineTo(8, 38); g.moveTo(12, 30); g.lineTo(18, 37); g.stroke();
+  },
+  'retention-clerk'(g) {                                              // a small round woman with glasses, and a box with teeth, which got more of the pen
+    g.beginPath(); g.arc(28, 26, 9, 0, 6.3); g.stroke(); g.strokeRect(22, 23, 5, 4); g.strokeRect(29, 23, 5, 4);
+    g.beginPath(); g.moveTo(28, 35); g.lineTo(28, 66); g.moveTo(28, 44); g.lineTo(52, 50); g.moveTo(28, 66); g.lineTo(22, 86); g.moveTo(28, 66); g.lineTo(35, 86); g.stroke();
+    g.strokeRect(52, 44, 30, 36);
+    g.beginPath(); g.moveTo(54, 52); for (let x = 54; x < 80; x += 4) { g.lineTo(x + 2, 58); g.lineTo(x + 4, 52); } g.stroke();
+    g.beginPath(); g.arc(58, 84, 4, 0, 6.3); g.stroke(); g.beginPath(); g.arc(76, 84, 4, 0, 6.3); g.stroke();
+  },
+  'fun-committee'(g) {                                                // three of them in pointed hats, holding hands, and one balloon
+    for (const x of [22, 48, 74]) {
+      g.beginPath(); g.arc(x, 44, 7, 0, 6.3); g.stroke();
+      g.beginPath(); g.moveTo(x - 6, 38); g.lineTo(x, 22); g.lineTo(x + 6, 38); g.stroke();
+      g.beginPath(); g.moveTo(x - 4, 46); g.lineTo(x + 4, 46); g.moveTo(x, 51); g.lineTo(x, 72); g.moveTo(x, 72); g.lineTo(x - 5, 88); g.moveTo(x, 72); g.lineTo(x + 5, 88); g.stroke();
+    }
+    g.beginPath(); g.moveTo(22, 60); g.lineTo(74, 60); g.stroke();
+    g.beginPath(); g.ellipse(86, 16, 7, 9, 0, 0, 6.3); g.stroke(); g.beginPath(); g.moveTo(86, 25); g.quadraticCurveTo(80, 40, 84, 58); g.stroke();
+  },
+  'stand-ins'(g) {                                                    // a torch and its beam; one of them in it, standing; one outside it, scribbled dark and nearer
+    g.strokeRect(6, 62, 16, 8);
+    g.beginPath(); g.moveTo(22, 62); g.lineTo(88, 34); g.moveTo(22, 70); g.lineTo(88, 82); g.stroke();
+    g.beginPath(); g.arc(70, 46, 6, 0, 6.3); g.stroke(); g.beginPath(); g.moveTo(70, 52); g.lineTo(70, 72); g.moveTo(62, 58); g.lineTo(78, 58); g.stroke();
+    for (let i = 0; i < 14; i++) { g.beginPath(); g.moveTo(34 + (i * 5) % 12, 8 + (i * 7) % 30); g.lineTo(38 + (i * 3) % 12, 12 + (i * 11) % 30); g.stroke(); }
+  },
+  'floor-warden'(g) {                                                 // a hard hat, a stick man running, and scissors bigger than he is
+    g.beginPath(); g.arc(30, 24, 8, 0, 6.3); g.stroke(); g.beginPath(); g.arc(30, 22, 10, 3.14, 6.28); g.stroke(); g.beginPath(); g.moveTo(18, 22); g.lineTo(42, 22); g.stroke();
+    g.beginPath(); g.moveTo(30, 32); g.lineTo(34, 58); g.moveTo(34, 58); g.lineTo(22, 78); g.moveTo(34, 58); g.lineTo(48, 74); g.moveTo(31, 42); g.lineTo(50, 46); g.stroke();
+    g.beginPath(); g.moveTo(50, 46); g.lineTo(90, 26); g.moveTo(50, 46); g.lineTo(90, 62); g.stroke();
+    g.beginPath(); g.arc(46, 40, 5, 0, 6.3); g.stroke(); g.beginPath(); g.arc(46, 52, 5, 0, 6.3); g.stroke();
+  },
+  'efficiency-partners'(g) {                                          // two the same, in ties, each holding out a rectangle
+    for (const x of [28, 66]) {
+      g.beginPath(); g.arc(x, 22, 8, 0, 6.3); g.stroke();
+      g.beginPath(); g.moveTo(x, 30); g.lineTo(x, 64); g.moveTo(x, 64); g.lineTo(x - 6, 88); g.moveTo(x, 64); g.lineTo(x + 6, 88); g.moveTo(x, 32); g.lineTo(x - 2, 46); g.lineTo(x, 50); g.lineTo(x + 2, 46); g.lineTo(x, 32); g.moveTo(x, 40); g.lineTo(x + 14, 44); g.stroke();
+      g.strokeRect(x + 12, 38, 9, 13);
+    }
+  },
   unknown(g) { g.beginPath(); g.arc(48, 46, 22, 0.4, 5.6); g.stroke(); g.font = '700 30px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.fillText('?', 48, 58); },
 };
 

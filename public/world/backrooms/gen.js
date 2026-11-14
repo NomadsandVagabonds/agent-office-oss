@@ -225,6 +225,7 @@ export const LESSONS = Object.freeze({
   belonging: 'carry what they are carrying and you are one of them',
   beam: 'some things stop where a light is pointed at them',
   pace: 'some things only mind how fast you are going',
+  pointed: 'something in a room may tell you which doorway is nearer the way down, if you work it',
 });
 /** Is this archetype a set piece — a room with a view (`halo`), or one that says so (`big`)? A floor has one at most. */
 export const isBig = (arch) => !!(arch && (arch.big || arch.halo));
@@ -907,6 +908,7 @@ function dress(R, level, o, opt, keeper = false) {
           if (near(x, z, 1.5) || room.pillars.some((p) => Math.abs(p.x - x) < (p.w + s) / 2 + 1.3 && Math.abs(p.z - z) < (p.d + s) / 2 + 1.3)) continue;
           if (stairZones(room).some((s2) => inRect({ x, z }, s2, s / 2 + 0.3))) continue;
           if (room.kind === 'start' && Math.hypot(x, z) < 1.6) continue;
+          if (!fits(room, { pillars: [{ x, z, w: s, d: s }] })) continue;       // (never where it would cut a doorway off: with a flight of steps beside it, it can)
           room.pillars.push({ x, z, w: s, d: s });
         }
       }
@@ -915,8 +917,12 @@ function dress(R, level, o, opt, keeper = false) {
         const pw = Math.min(dr.w + 0.3, span - 1.9);
         if (!(dr.sill > 0.01) && deep >= 3.2 && pw >= 0.6 && dr.kind !== 'crawl') {
           const p = wallPoint(room, dr.side, dr.c, 1.35), along = dr.side === 'front' || dr.side === 'back';
-          if (!room.pillars.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 1.6) && room.doors.every((d2) => d2 === dr || Math.hypot(wallPoint(room, d2.side, d2.c, 0.7).x - p.x, wallPoint(room, d2.side, d2.c, 0.7).z - p.z) > pw / 2 + 0.9))
-            room.pillars.push({ x: p.x, z: p.z, w: along ? pw : 0.5, d: along ? 0.5 : pw });
+          // (in the way, but never in the way of everything: a pier that would wall a doorway off — it can, with another
+          // doorway's steps beside it — is not built. Found on one seed in sixty once the deck had grown.)
+          const pier = { x: p.x, z: p.z, w: along ? pw : 0.5, d: along ? 0.5 : pw };
+          if (!room.pillars.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 1.6) && room.doors.every((d2) => d2 === dr || Math.hypot(wallPoint(room, d2.side, d2.c, 0.7).x - p.x, wallPoint(room, d2.side, d2.c, 0.7).z - p.z) > pw / 2 + 0.9)
+            && fits(room, { pillars: [pier] }))
+            room.pillars.push(pier);
         }
       }
     }

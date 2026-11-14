@@ -5,7 +5,7 @@
 import { createInventory as createModel, makeItem, ITEM_DEFS } from './inventory-state.js';
 import { createInventoryHud } from './inventory-hud.js';
 import { createInventoryWorld } from './inventory-world.js';
-import { toLocal, makeRng, ARCHETYPES } from './gen.js';
+import { toLocal, makeRng, ARCHETYPES, STASH } from './gen.js';
 import { planSupplies, wantedByRooms } from './supplies.js';
 import { CAST, castFor } from './cast.js';
 
@@ -18,6 +18,16 @@ const MESSAGES = {
   'no-use': 'Nothing to use this on here', 'health-unavailable': 'Keep this for when you need it',
   'full-health': 'Health is full', dead: 'Too late', depleted: 'The camera has stopped',
   unavailable: 'Cannot do that right now',
+  'missing-input': 'Choose two ingredients', 'stale-input': 'That item is no longer in the pocket',
+  'duplicate-input': 'Choose two different ingredients', 'invalid-amount': 'Choose how many sheets to burn',
+  insufficient: 'Not enough paper', 'no-fire-space': 'No clear, dry place for a fire',
+  'fire-limit': 'Too many fires are still burning here', 'no-light': 'Select a flashlight or mount one on the camera',
+  'already-prepared': 'This flashlight already has tape', 'already-mounted': 'The camera already has a flashlight',
+  'mount-occupied': 'The camera already has a flashlight', 'not-prepared': 'Wrap the flashlight with tape first',
+  'invalid-input': 'Choose an item from a pocket or the camcorder', 'invalid-item': 'Cannot use this item',
+  'camera-unavailable': 'The camera is unavailable', 'invalid-fire': 'Choose one to ten sheets',
+  'fire-unavailable': 'Cannot light a fire here', 'effect-failed': 'Could not combine those items',
+  busy: 'Finish combining these items first',
 };
 
 /**
@@ -60,6 +70,25 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     if (!available()) return unavailable();
     if (accepted(model.combine(from, to))) { view.cancelCombine(); refresh(); tell('Batteries fitted'); }
   }
+  function craft(refs, options = {}) {
+    if (!available()) return unavailable();
+    const result = model.craft(refs, {
+      paperCount: options.paperCount, camera: env.camera,
+      ignite: recipe => active.physical.ignite(recipe),
+    });
+    if (!accepted(result)) return result;
+    view.cancelCombine(); refresh();
+    tell(result.recipe === 'paper-fire' ? 'Paper is burning'
+      : result.recipe === 'tape-torch' ? 'Flashlight taped'
+      : result.recipe === 'mount-torch' ? 'Light mounted · F to switch'
+      : result.recipe === 'camera-battery' ? 'Camera recharged' : 'Batteries fitted');
+    return result;
+  }
+  function toggleLight() {
+    if (!available()) return unavailable();
+    const result = model.toggleLight();
+    accepted(result); return result;
+  }
   function rechargeCamera(from) {
     if (!available()) return unavailable();
     const item = Number.isInteger(from) ? model.read().slots[from] : null;
@@ -78,7 +107,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     const state = model.read(), item = state.slots[state.selected];
     return item?.type === 'torch' ? { ...item, lit: state.activeTorch === item.id && item.charge > 0 } : item;
   }
-  const torchPower = () => !disposed && model.read().activeTorch ? 1 : 0;
+  const torchPower = () => disposed ? 0 : model.torchPower();
   /** How many of something are being carried, in any pocket: loose battery packs, sheets of paper, anything else by the piece. */
   function count(type) {
     if (disposed) return 0;
@@ -100,7 +129,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     if (result.ok) refresh();
     return result;
   }
-  const view = createInventoryHud({ host: env.hud.el, onSelect: select, onUse: use, onDrop: drop, onCombine: combine, onRecharge: rechargeCamera,
+  const view = createInventoryHud({ host: env.hud.el, onSelect: select, onUse: use, onDrop: drop, onCraft: craft,
     onOpen: open => {
       if (open && !available()) { view.setOpen(false); return; }
       onOpen(open);
@@ -117,7 +146,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     const forward = { x: -Math.sin(yaw), z: -Math.cos(yaw) }, right = { x: Math.cos(yaw), z: -Math.sin(yaw) };
     const items = [makeItem('torch', id('arrival-flashlight'), { charge: 54 }), makeItem('battery', id('arrival-batteries')), makeItem('chalk', id('arrival-chalk')),
       makeItem('paper', id('arrival-paper'), { quantity: 5 }), makeItem('scissors', id('arrival-scissors')), makeItem('snack', id('arrival-snack')),
-      makeItem('balloon', id('arrival-balloon'))];
+      makeItem('balloon', id('arrival-balloon')), makeItem('lighter', id('arrival-lighter')), makeItem('tape', id('arrival-tape'))];
     const walk = env.world.walkable(rt), seen = walk.flood(rt.def.doors);
     const candidates = [];
     for (let i = 0; i < seen.length; i++) if (seen[i]) {
@@ -146,6 +175,18 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
       for (const roomId of rooms) {
         const rt = env.world.rooms.find(r => r.id === roomId);
         if (!rt) continue;
+        // An oddity says where something may be hidden in it (its deck line's `stash`): that is where its thing goes,
+        // if a thing can lie there — the place its author chose, not wherever the floor happens to be clear.
+        const stash = rt.def.arch ? STASH[rt.def.arch] : null;
+        if (stash) {
+          try {
+            const lay = stash(rt.def, random.chance(0.5) ? 1 : -1), zones = Array.isArray(lay[0]) ? lay : [lay];
+            for (const z of random.shuffle(zones)) for (let k = 0; k < 6 && !placed; k++) {
+              placed = physical.spawn(makeItem(type, id(key), made), { room: rt.id, x: random.range(z[0], z[2]), z: random.range(z[1], z[3]) }).ok;
+            }
+          } catch { /* a room's own arithmetic: the floor will do */ }
+          if (placed) break;
+        }
         const walk = env.world.walkable(rt), seen = walk.flood(rt.def.doors), cells = [];
         for (let i = 0; i < seen.length; i++) if (seen[i]) cells.push(i);
         for (const cell of random.shuffle(cells).slice(0, 256)) {
@@ -156,7 +197,6 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
       }
     }
   }
-
   // What a room put down for somebody to find (c.leave: world.js): where the room said, or on the nearest clear floor to
   // it if a thing cannot lie there after all. The room is told when it is picked up.
   function leftByRooms(floor) {
@@ -190,6 +230,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     // cannot inspect or mutate what somebody now carries on the next floor.
     floor.facade = {
       physical: floor.physical,
+      fire: { threatAt: (...point) => !disposed && active === floor ? floor.physical.fire.threatAt(...point) : null },
       held: () => available(floor) ? held() : null,
       torchPower: () => !disposed && active === floor ? torchPower() : 0,
       give: item => available(floor) ? give(item) : unavailable(),
@@ -222,13 +263,14 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     if (next.inventory === floor.facade) delete next.inventory;
   }
   return {
-    model, view, use, drop, combine, rechargeCamera, select, held, give, consumeHeld, count, hang, attend, forget,
+    model, view, use, drop, combine, rechargeCamera, craft, toggleLight, select, held, give, consumeHeld, count, hang, attend, forget,
     get physical() { return active?.physical || null; },
     get isOpen() { return view.isOpen; },
     owns: target => target instanceof Node && view.el.contains(target),
     close: () => view.setOpen(false),
     handleKey(e) {
       if (!available()) return false;
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'f') { if (!e.repeat) toggleLight(); return true; }
       if (view.handleKey(e)) return true;
       if (view.isOpen) return false; // Native focused-button activation stays native.
       const k = e.key.toLowerCase();
@@ -242,7 +284,10 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
         const { depleted } = model.tick(dt);
         if (depleted) { tell('Flashlight battery empty'); env.sound.play('clack', { vol: .3 }); }
       }
-      view.el.inert = !available(); active?.physical.update(dt); refresh(); view.tick(dt);
+      // The part above can still be in view during a fall. Its fire keeps
+      // burning until that floor is retired; the carried model still ticks once.
+      for (const floor of floors.values()) floor.physical.update(playing ? dt : 0);
+      view.el.inert = !available(); refresh(); view.tick(dt);
     },
     torchPower,
     report: () => ({ ...snapshot(), open: view.isOpen, floor: active?.env.level.depth ?? null,

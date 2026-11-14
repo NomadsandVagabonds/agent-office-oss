@@ -10,7 +10,8 @@ import { SECRETS } from '../core/secrets.mjs';
 test('game: the rules — what is hidden where, how floors open, what a jar holds', () => {
   const floors = cardFloors();
   assert.ok(floors.length >= 2, 'there is something to open');
-  for (const h of HIDEOUTS) assert.ok(h.coins >= 2 && h.coins <= 4, `${h.id} hides ${h.coins} coins: two to four`);
+  // (a lift floor hides two to four; the place that pays hides none: what comes out of it is what was carried out)
+  for (const h of HIDEOUTS) assert.ok(h.pays ? h.coins === 0 : h.coins >= 2 && h.coins <= 4, `${h.id} hides ${h.coins} coins`);
   assert.deepEqual(HIDEOUTS.filter((h) => h.lift).map((h) => h.id), LEVELS.filter((l) => l.card).map((l) => l.id));
   assert.ok(HIDEOUTS.some((h) => !h.lift), 'and one place the lift does not go');
   for (const id of ['roof', 'mission', 'office']) assert.ok(!levelById(id).card, `${id} is never locked`);
