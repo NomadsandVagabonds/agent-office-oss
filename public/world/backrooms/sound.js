@@ -9,24 +9,31 @@
 /** How loud the music is, against a small sound's 0.1 to 0.2: under them, never over. */
 export const MUSIC_GAIN = 0.4;
 const MUSIC = new URL('./music/room4.mp3', import.meta.url);
+const volume = (value, fallback = 1) => Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback;
 export function createSound(level, opt = {}) {
-  let ctx = null, master = null, humGain = null, draught = null, noiseBuf = null, muted = !!opt.mute, humTarget = 1, hum = level.hum || 50;
+  let ctx = null, master = null, effects = null, musicBus = null, humGain = null, draught = null, noiseBuf = null, muted = !!opt.mute, paused = false, humTarget = 1, hum = level.hum || 50;
+  let musicVolume = volume(opt.musicVolume), sfxVolume = volume(opt.sfxVolume);
   let music = null;                          // the <audio> the music comes out of, once there is one
   const running = [], mains = [];            // things to stop at the end · the hum's oscillators, to retune
   const loops = new Map();                   // name → { gain, stop }
   const now = () => ctx.currentTime;
 
   function start() {
+    if (paused) return;
     if (ctx) { if (ctx.state === 'suspended') ctx.resume().catch(() => {}); if (music?.paused) music.play().catch(() => {}); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     try { ctx = new AC(); } catch { ctx = null; return; }
     master = ctx.createGain(); master.gain.value = muted ? 0 : 0.5; master.connect(ctx.destination);
+    // Each dial sits after its sounds' own envelopes: changing it never changes the balance within a room,
+    // restarts the music's fade-in, or unmutes something the visitor has turned off with M.
+    effects = ctx.createGain(); effects.gain.value = sfxVolume; effects.connect(master);
+    musicBus = ctx.createGain(); musicBus.gain.value = musicVolume; musicBus.connect(master);
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const data = noiseBuf.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
     // the hum: mains, the ballast an octave up, and a breath of air
-    humGain = ctx.createGain(); humGain.gain.value = 0; humGain.connect(master);
+    humGain = ctx.createGain(); humGain.gain.value = 0; humGain.connect(effects);
     humGain.gain.linearRampToValueAtTime(0.05, now() + 2.5);
     const f = hum;
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520; lp.connect(humGain);
@@ -42,18 +49,18 @@ export function createSound(level, opt = {}) {
     const dr = ctx.createBufferSource(), drF = ctx.createBiquadFilter();
     draught = ctx.createGain(); draught.gain.value = 0;
     dr.buffer = noiseBuf; dr.loop = true; drF.type = 'bandpass'; drF.frequency.value = 1500; drF.Q.value = 2.2;
-    dr.connect(drF); drF.connect(draught); draught.connect(master); dr.start(0, 0.3); running.push(dr);
+    dr.connect(drF); drF.connect(draught); draught.connect(effects); dr.start(0, 0.3); running.push(dr);
     startMusic();
   }
 
-  /** The music: one file, streamed, looped, through the same master as everything else (so M silences it too). */
+  /** The music: one file, streamed and looped, through its own dial and then the master (so M silences it too). */
   function startMusic() {
     if (music || opt.music === false || typeof Audio === 'undefined') return;
     try {
       const el = new Audio(MUSIC.href);
       el.loop = true; el.preload = 'auto';
       const g = ctx.createGain(); g.gain.value = 0;
-      ctx.createMediaElementSource(el).connect(g); g.connect(master);
+      ctx.createMediaElementSource(el).connect(g); g.connect(musicBus);
       g.gain.linearRampToValueAtTime(MUSIC_GAIN, now() + 6);                      // it comes up slowly, after the hum
       music = el;
       el.play().catch(() => { /* no music, then: the place has its own noises */ });
@@ -62,7 +69,7 @@ export function createSound(level, opt = {}) {
 
   /** A burst of filtered noise. */
   function burst({ vol = 0.2, pan = 0, dur = 0.08, freq = 800, q = 0.8, type = 'lowpass', attack = 0.004, when = 0 }) {
-    if (!ctx || muted) return;
+    if (!ctx || muted || paused) return;
     const src = ctx.createBufferSource(), flt = ctx.createBiquadFilter(), g = ctx.createGain();
     src.buffer = noiseBuf; src.loopStart = Math.random() * 0.5; src.loop = true;
     flt.type = type; flt.frequency.value = freq; flt.Q.value = q;
@@ -73,7 +80,7 @@ export function createSound(level, opt = {}) {
   }
   /** A decaying tone. */
   function tone({ vol = 0.15, pan = 0, dur = 0.4, freq = 440, type = 'sine', to = null, attack = 0.005, when = 0 }) {
-    if (!ctx || muted) return;
+    if (!ctx || muted || paused) return;
     const o = ctx.createOscillator(), g = ctx.createGain(), t = now() + when;
     o.type = type; o.frequency.setValueAtTime(freq, t);
     if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
@@ -81,8 +88,8 @@ export function createSound(level, opt = {}) {
     o.connect(g); out(g, pan); o.start(t); o.stop(t + dur + 0.05);
   }
   function out(node, pan) {
-    if (pan && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); node.connect(p); p.connect(master); }
-    else node.connect(master);
+    if (pan && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); node.connect(p); p.connect(effects); }
+    else node.connect(effects);
   }
 
   // the small vocabulary of the place; each takes { vol 0..1, pan -1..1 } from how far and which side
@@ -162,26 +169,42 @@ export function createSound(level, opt = {}) {
 
   return {
     start,
-    get on() { return !!ctx && !muted; },
+    get on() { return !!ctx && !muted && !paused; },
     get muted() { return muted; },
+    get paused() { return paused; },
+    get musicVolume() { return musicVolume; },
+    get sfxVolume() { return sfxVolume; },
     /** Is the music going? (for the dev page and the tests) */
     get music() { return music ? { playing: !music.paused, at: music.currentTime } : null; },
     setMute(m) { muted = !!m; if (master) master.gain.setTargetAtTime(muted ? 0 : 0.5, now(), 0.05); },
+    setMusicVolume(value) { musicVolume = volume(value, musicVolume); if (musicBus) musicBus.gain.setTargetAtTime(musicVolume, now(), 0.05); },
+    setSfxVolume(value) { sfxVolume = volume(value, sfxVolume); if (effects) effects.gain.setTargetAtTime(sfxVolume, now(), 0.05); },
+    /** The menu holds the tape still: resume the same music and oscillators, without creating another set. */
+    setPaused(value) {
+      const next = !!value;
+      if (paused === next) return;
+      paused = next;
+      if (!ctx) return;
+      if (paused) { music?.pause(); ctx.suspend().catch(() => {}); }
+      else { ctx.resume().catch(() => {}); if (music?.paused) music.play().catch(() => {}); }
+    },
     /** Play one of the small sounds by name. */
-    play(name, o) { if (ctx && !muted && voice[name]) { try { voice[name](o); } catch { /* a sound is never worth an error */ } } },
+    play(name, o) { if (ctx && !muted && !paused && voice[name]) { try { voice[name](o); } catch { /* a sound is never worth an error */ } } },
     /** The hum follows the light: louder under a full ceiling, nearly gone in the dark. */
     setHum(k) { humTarget = k; if (humGain) humGain.gain.setTargetAtTime(0.012 + 0.05 * Math.max(0, Math.min(1.4, k)), now(), 0.6); },
     /** Air coming through somewhere it should not (0…1): a thin whistle, nearer the louder. */
-    air(k) { if (draught && !muted) draught.gain.setTargetAtTime(0.05 * Math.max(0, Math.min(1, k)) ** 2, now(), 0.25); },
+    air(k) { if (draught && !muted && !paused) draught.gain.setTargetAtTime(0.05 * Math.max(0, Math.min(1, k)) ** 2, now(), 0.25); },
     /** Another floor, another mains: the hum slides to it. */
     setMains(f) { hum = f || hum; if (ctx) for (const [o, mult] of mains) o.frequency.setTargetAtTime(hum * mult, now(), 0.4); },
     /** The lights stutter: so does the hum. */
-    dip(k) { if (humGain && !muted) { humGain.gain.cancelScheduledValues(now()); humGain.gain.setTargetAtTime((0.012 + 0.05 * humTarget) * k, now(), 0.02); } },
+    dip(k) { if (humGain && !muted && !paused) { humGain.gain.cancelScheduledValues(now()); humGain.gain.setTargetAtTime((0.012 + 0.05 * humTarget) * k, now(), 0.02); } },
     stop() {
       for (const n of running) { try { n.stop(); } catch { /* already stopped */ } }
       running.length = 0; loops.clear();
       if (music) { try { music.pause(); music.removeAttribute('src'); music.load(); } catch { /* gone anyway */ } music = null; }
       if (ctx) { const c = ctx; ctx = null; c.close().catch(() => {}); }
+      master = effects = musicBus = humGain = draught = noiseBuf = null;
+      mains.length = 0;
     },
   };
 }

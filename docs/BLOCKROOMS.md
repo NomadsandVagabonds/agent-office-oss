@@ -83,7 +83,7 @@ build takes it from `SITE_ORIGIN` (`https://…`), or, on Vercel, from
 | Address | What happens |
 |---|---|
 | `/` | the home page |
-| `/play` | a building nobody has had before. When it ends, however it ends (the way out, caught, a flat battery, Esc), the card comes up; put down, it leaves for the home page. Esc is one press, mouse held or not |
+| `/play` | a building nobody has had before. Esc opens the camcorder menu, mouse held or not. Give Up ends the recording and shows its score, as do the way out, being caught or a flat battery. The card stays until **Return to homepage** is chosen, or a kept tape is played again |
 | `/play?tape=<seed>` | that building first. A finished visit keeps its tape (its seed); while the card for it is on the wall the address bar shows this address, so copying it hands the building on. (`/?tape=` from before there was a home page goes straight through.) |
 | the tape's number on the card | a link to the same address; choosing it walks the building again |
 | `/play?room=<a room of the deck>` | a building with that room where you land, for looking at one room. Nothing on the home page leads here. A room that does not exist is an ordinary door |
@@ -95,11 +95,24 @@ a visit says REC, nothing is hidden in it, and it scores but cannot beat the
 best and is paid nothing (`core/runs.mjs`). A tape from somebody else is a
 building like any other, walked for the first time.
 
+## The camcorder menu
+
+Esc opens the transparent camcorder menu. Resume returns to the recording;
+Controls lists the keyboard and touch controls; Settings adjusts music and
+sound effects separately, look sensitivity, inverted vertical look and the
+VHS picture. Difficulty is shown as unavailable until its gameplay exists.
+The recording, batteries and hazards pause while the menu is open.
+
+Give Up ends the visit and brings up its score. On this site, a score stays
+on screen until **Return to homepage** is chosen or a kept tape is selected
+to play again. An accidental click or a key still held from play does not
+close it. The Office's own scorecard retains its usual return behavior.
+
 ## What is kept, and where
 
 In the visitor's own browser (`localStorage`): whether the keycard has been
 brought out, the record of visits (best score, kinds of room and residents
-met, up to twelve tapes), the two camcorder settings, and the name and note
+met, up to twelve tapes), the camcorder's picture, sound and look settings, and the name and note
 they sign with. No cookies, no analytics, no accounts, and no request to
 anywhere but this site.
 

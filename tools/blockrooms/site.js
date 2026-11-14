@@ -135,14 +135,15 @@ async function run() {
       next = null;
       if (!mine) tell({ do: 'in' });                      // (he keeps count of who goes in. A tape played back is nobody going anywhere)
       const result = await enterBackrooms(office, {
-        name: 'Employee', seed, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: sign, ...dev,
+        name: 'Employee', seed, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: sign,
+        home: { label: 'Return to homepage' }, ...dev,
         ...(room ? { only: [room] } : {}),
         ...(mine ? { replay: true, pursuer: typeof mine.mascot === 'boolean' ? mine.mascot : undefined } : {}),
       });
       room = null;
-      // A card put down by its tape's number is asking for that building again. Put down any other way, the visit is
-      // over and so is this page: back to the front page, where the door and the high scores are. (The owner: Esc ends
-      // the game, then the score, then the home page. Never straight into another building.)
+      // A card put down by its tape's number asks for that building again. Its return button takes the visitor to
+      // the front page, where the door and high scores are. Esc opens the menu; Give Up ends the recording, then
+      // the score stays until the visitor chooses what to do. Never straight into another building.
       next = result?.card?.again ? asSeed(result.card.again) || null : null;
       if (!next) { location.assign(HOME); return; }
       address(next);

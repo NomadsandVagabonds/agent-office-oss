@@ -47,7 +47,9 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
   function update(dt) {
     const k = input.keys;
     // looking
-    me.yaw -= input.dx * MOUSE; me.pitch -= input.dy * MOUSE;
+    const sensitivity = input.sensitivity ?? 1;
+    me.yaw -= input.dx * MOUSE * sensitivity;
+    me.pitch -= input.dy * MOUSE * sensitivity * (input.invertY ? -1 : 1);
     input.dx = 0; input.dy = 0;
     if (!me.frozen) {
       if (k.has('ArrowLeft')) me.yaw += TURN * dt;

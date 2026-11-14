@@ -18,6 +18,8 @@ const CSS = `
 .backrooms .tl { left: 6%; top: 6.5%; } .backrooms .tr { right: 6%; top: 6.5%; text-align: right; }
 .backrooms .bl { left: 6%; bottom: 8%; } .backrooms .brr { right: 6%; bottom: 8%; text-align: right; font-size: .8em; }
 .backrooms .br-dot { display: inline-block; width: .62em; height: .62em; border-radius: 50%; background: #ff2a1a; margin-right: .4em; box-shadow: 0 0 .5em #ff2a1a; animation: br-blink 1.1s steps(1) infinite; }
+.backrooms.is-paused .br-dot, .backrooms.is-paused .br-batt i { animation-play-state: paused; }
+.backrooms.is-paused .br-inventory, .backrooms.is-paused .br-leave { visibility: hidden; }
 @keyframes br-blink { 0% { opacity: 1; } 55% { opacity: 0; } }
 .backrooms .br-batt { display: inline-block; width: 1.5em; height: .7em; border: .1em solid currentColor; vertical-align: -.05em; margin-left: .6em; position: relative; }
 .backrooms .br-batt::after { content: ''; position: absolute; right: -.26em; top: .12em; width: .12em; height: .3em; background: currentColor; }
@@ -55,7 +57,7 @@ export function createHud(level) {
   root.append(el);
 
   let st = level.stamp;
-  let tape = 0, lastSecond = -1, usable = false, glitch = 0, batterySignature = '';
+  let tape = 0, lastSecond = -1, usable = false, glitch = 0, batterySignature = '', recording = false, paused = false;
   const flagSet = new Set();
 
   function renderStamp(seconds) {
@@ -104,7 +106,8 @@ export function createHud(level) {
     setTouch(on) { el.classList.toggle('touch', !!on); },
     /** Numbers on the stamp lose their place for a moment. */
     glitch(seconds = 0.6) { glitch = Math.max(glitch, seconds); },
-    recording() { mode.textContent = 'REC'; dot.style.display = ''; },
+    recording() { recording = true; if (!paused) { mode.textContent = 'REC'; dot.style.display = ''; } },
+    setPaused(on) { paused = !!on; el.classList.toggle('is-paused', paused); mode.textContent = paused ? 'PAUSE Ⅱ' : recording ? 'REC' : 'PLAY ▶'; dot.style.display = recording && !paused ? '' : 'none'; },
     update(dt) {
       tape += dt;
       if (glitch > 0) { glitch -= dt; renderStamp(Math.floor(tape)); }

@@ -7,17 +7,17 @@
 // low on the left is a thumb stick, any other finger looks.
 
 /**
- * @param {{ canvas, stage, hud, sound, key(k), use(), quit(), click(), wheel(step), owns(target)?, interceptKey(event)?, blocked()? }} o
+ * @param {{ canvas, stage, hud, sound, key(k), use(), menu(), click(), wheel(step), owns(target)?, interceptKey(event)?, blocked()? }} o
  *        key: a key went down (once, not on repeat) · use: E, Enter, or a tap on the [E] · click: the mouse button, while it is looking
  *        wheel: ±1 for each notch · owns: native UI events pass through to their target
  *        interceptKey: UI consumed this key · blocked: UI owns the hands, while the visit keeps running
- * @returns {{ state: {keys:Set, dx:number, dy:number, stick:{x:number,y:number}}, clear(), dispose() }}
+ * @returns {{ state: {keys:Set, dx:number, dy:number, stick:{x:number,y:number}}, clear(), capture(), release(), dispose() }}
  */
 export function createInput(o) {
   const { canvas, stage, hud, sound } = o;
   const state = { keys: new Set(), dx: 0, dy: 0, stick: { x: 0, y: 0 } };
   const keys = state.keys;
-  let dragging = false, stickId = null, stickAt = null, wheel = 0, live = true, press = null;
+  let dragging = false, stickId = null, stickAt = null, wheel = 0, live = true, press = null, held = false;
   const looks = new Map();
   const owns = e => !!o.owns?.(e.target);
   const blocked = () => !!o.blocked?.();
@@ -25,12 +25,34 @@ export function createInput(o) {
     keys.clear(); state.dx = state.dy = 0; state.stick.x = state.stick.y = 0;
     dragging = false; stickId = null; stickAt = null; press = null; wheel = 0; looks.clear();
   }
+  function capture() {
+    if (!live || blocked() || document.pointerLockElement === canvas) return;
+    const ownerDocument = canvas.ownerDocument || document;
+    try {
+      canvas.requestPointerLock?.()?.then?.(() => {
+        if ((!live || blocked()) && ownerDocument.pointerLockElement === canvas) ownerDocument.exitPointerLock?.();
+      })?.catch?.(() => {});
+    } catch { /* drag-to-look and keyboard turning still work */ }
+  }
+  // A deliberate release is not Esc, even if its event arrives after the UI
+  // has already closed. This also clears a held movement key before pausing.
+  function release() {
+    held = false; clear();
+    if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+  }
 
   const onKeyDown = (e) => {
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (e.metaKey || e.ctrlKey || e.altKey || /^F\d+$/.test(k)) { if (!owns(e)) e.stopPropagation(); return; }
     if (o.interceptKey?.(e)) { e.stopPropagation(); e.preventDefault(); sound.start(); return; }
+    // Esc still opens the menu if focus stayed on its launcher after resume.
+    // Owned buttons keep their native activation keys, not the pause key.
+    if (k === 'Escape') {
+      e.stopPropagation(); e.preventDefault();
+      if (!e.repeat) { sound.start(); o.menu(); }
+      return;
+    }
     // Enter and Space must reach an owned button's native activation behavior.
     // The UI stops their bubbling locally after its own handlers have run.
     if (owns(e)) return;
@@ -40,8 +62,7 @@ export function createInput(o) {
     sound.start();
     if (e.repeat) return;
     keys.add(k);
-    if (k === 'Escape') o.quit();
-    else if (k === 'e' || k === 'Enter') o.use();
+    if (k === 'e' || k === 'Enter') o.use();
     else o.key(k);
   };
   const onKeyUp = (e) => {
@@ -56,7 +77,7 @@ export function createInput(o) {
     e.stopPropagation();
     if (blocked()) { clear(); return; }
     if (e.pointerType === 'touch') {
-      if (e.target === hud.leave) { o.quit(); return; }
+      if (e.target === hud.leave) { o.menu(); return; }
       if (e.target === hud.use) { o.use(); return; }
       if (hud.owns?.(e.target)) { hud.tap?.(e.target); return; }                // something of the camcorder's own that can be touched
       if (stickId === null && e.clientX < stage.size.w * 0.4 && e.clientY > stage.size.h * 0.45) { stickId = e.pointerId; stickAt = { x: e.clientX, y: e.clientY }; }
@@ -69,14 +90,7 @@ export function createInput(o) {
     if (document.pointerLockElement === canvas) { if (e.button === 0) o.click(); press = null; }
     else press = e.button === 0 ? { x: e.clientX, y: e.clientY, t: performance.now(), first: !press } : null;
     dragging = true;
-    if (live && document.pointerLockElement !== canvas) {
-      const ownerDocument = canvas.ownerDocument || document;
-      try {
-        canvas.requestPointerLock?.()?.then?.(() => {
-          if ((!live || blocked()) && ownerDocument.pointerLockElement === canvas) ownerDocument.exitPointerLock?.();
-        })?.catch?.(() => {});
-      } catch { /* no pointer lock: arrows still turn */ }
-    }
+    capture();
   };
   const onPointerMove = (e) => {
     if (owns(e)) return;
@@ -121,15 +135,14 @@ export function createInput(o) {
   const swallow = (e) => { if (owns(e)) return; e.stopPropagation(); if (e.type === 'contextmenu' || e.type === 'touchmove') e.preventDefault(); };
   // Esc with the mouse held never reaches the page: the browser takes that key to let the mouse go. So a mouse let go
   // while the page still has the visitor (not the bag opening, which lets it go on purpose; not another window taking
-  // over, which a moment's wait tells apart) is that Esc, and Esc leaves.
-  let held = false;
+  // over, which a moment's wait tells apart) is that Esc, and opens the menu.
   const onPointerLockChange = () => {
     const mine = document.pointerLockElement === canvas, was = held;
     held = mine;
     if (!mine) {
       clear();
       if (was && live && !blocked()) setTimeout(() => {
-        if (live && !blocked() && document.pointerLockElement !== canvas && (document.hasFocus?.() ?? true) && !document.hidden) o.quit();
+        if (live && !blocked() && document.pointerLockElement !== canvas && (document.hasFocus?.() ?? true) && !document.hidden) o.menu();
       }, 120);
     } else if (blocked()) { clear(); document.exitPointerLock?.(); } // A pending lock request finished after the bag opened.
   };
@@ -141,7 +154,7 @@ export function createInput(o) {
   if (window.matchMedia?.('(pointer: coarse)').matches) hud.setTouch(true);
 
   return {
-    state, clear,
+    state, clear, capture, release,
     dispose() {
       live = false; clear();
       for (const [type, fn] of listeners) window.removeEventListener(type, fn, true);
