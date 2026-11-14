@@ -165,8 +165,12 @@ test('stairs, crawl doors and windows: the geometry between rooms adds up', () =
 
 test('no room can trap you: every doorway of every plain room can be walked to from every other', () => {
   const kinds = new Set();
-  for (const seed of SEEDS) {
-    const level = levelFor(seed);
+  const SHAPES = ['ell', 'pinch', 'forest', 'stepceil', 'slopeceil', 'pit', 'dais', 'soffit', 'stairs'];
+  // the sixty visits every test here walks — and then on, for as long as some kind of room has not turned up yet (a waist
+  // needs a long narrow room with all its doorways at the ends: about one plain room in four hundred), every one checked
+  const walked = function* () { yield* SEEDS; for (let i = 0; i < 400 && SHAPES.some((k) => !kinds.has(k)); i++) yield 900001 + i * 104729; };
+  for (const seed of walked()) {
+    const level = SEEDS.includes(seed) ? levelFor(seed) : generate(seed, office);
     for (const r of level.rooms) {
       if (r.kind !== 'plain' && r.kind !== 'start') continue;
       if (r.shape) kinds.add(r.shape.kind);
@@ -192,7 +196,7 @@ test('no room can trap you: every doorway of every plain room can be walked to f
       for (const z of stairZones(r, 0.6)) assert.ok(!r.pillars.some((q) => q.x + q.w / 2 > z.x0 && q.x - q.w / 2 < z.x1 && q.z + q.d / 2 > z.z0 && q.z - q.d / 2 < z.z1), `seed ${seed}: a pillar stands on the stairs`);
     }
   }
-  for (const kind of ['ell', 'pinch', 'forest', 'stepceil', 'slopeceil', 'pit', 'dais', 'soffit', 'stairs']) assert.ok(kinds.has(kind), `sixty visits and no ${kind}`);
+  for (const kind of SHAPES) assert.ok(kinds.has(kind), `four hundred and sixty visits and no ${kind}`);
 });
 
 test('every archetype in the deck can be generated', () => {

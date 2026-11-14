@@ -35,10 +35,8 @@ test('nothing is left where you land, at the way down, or in a room an earlier v
   assert.ok(traced > 10, 'the floors tried had traces on them');
 });
 
-test('how much: a battery pack to every few rooms, a snack or two, a torch more often than not where you land, and every one can be made', () => {
-  const all = floors(40);
-  let torchTop = 0, tops = 0, torchLow = 0, lows = 0, chalk = 0;
-  for (const level of all) {
+test('how much: a battery pack to every few rooms, a snack or two, at most one torch and one chalk, and every one can be made', () => {
+  for (const level of floors(40)) {
     const plan = planSupplies(level), of = (type) => plan.filter((s) => s.type === type);
     assert.equal(of('battery').length, Math.ceil(supplyRooms(level).length / SUPPLY.batteryEvery));
     assert.ok(of('snack').length >= SUPPLY.snacks[0] && of('snack').length <= SUPPLY.snacks[1]);
@@ -46,12 +44,18 @@ test('how much: a battery pack to every few rooms, a snack or two, a torch more 
     for (const t of of('torch')) assert.ok(t.charge >= SUPPLY.torchCharge[0] && t.charge <= SUPPLY.torchCharge[1] && t.charge < ITEM_DEFS.torch.maxCharge, 'a found torch is never a full one');
     for (const s of plan) { const { id, type, rooms, ...made } = s; assert.doesNotThrow(() => makeItem(type, id, made), `${id} is something the pockets know`); }
     assert.ok(plan.every((s) => ['battery', 'snack', 'torch', 'chalk'].includes(s.type)), 'nothing else, unless somebody wants it');
-    if ((level.depth ?? 0) === 0) { tops++; torchTop += of('torch').length; } else { lows++; torchLow += of('torch').length; }
-    chalk += of('chalk').length;
   }
-  assert.ok(torchTop / tops > 0.5 && torchTop / tops < 0.9, `a torch where you land in ${torchTop} of ${tops}`);
-  assert.ok(torchLow / lows > 0.2 && torchLow / lows < 0.6, `a torch further down in ${torchLow} of ${lows}`);
-  assert.ok(chalk / all.length > 0.3 && chalk / all.length < 0.7);
+});
+
+test('how often: a torch more often than not where you land, less so further down, chalk in about half the parts', () => {
+  // (the chances are the plan's own arithmetic, so it is asked about a thousand made-up parts: enough to hold it to its margins)
+  const part = (seed, depth) => ({ seed: `often-${seed}`, depth, start: { room: 0 }, exit: { room: 23 },
+    rooms: Array.from({ length: 24 }, (_, id) => ({ id, kind: id === 0 ? 'start' : id === 23 ? 'exit' : 'plain', dress: [] })) });
+  const share = (depth, type) => { let n = 0; for (let s = 0; s < 1000; s++) n += planSupplies(part(s, depth)).filter((x) => x.type === type).length; return n / 1000; };
+  const top = share(0, 'torch'), low = share(2, 'torch'), chalk = share(1, 'chalk');
+  assert.ok(Math.abs(top - SUPPLY.torch[0]) < 0.06, `a torch where you land in ${Math.round(top * 100)} of 100`);
+  assert.ok(Math.abs(low - SUPPLY.torch[1]) < 0.06, `a torch further down in ${Math.round(low * 100)} of 100`);
+  assert.ok(Math.abs(chalk - SUPPLY.chalk) < 0.06, `chalk in ${Math.round(chalk * 100)} of 100`);
 });
 
 test('anything else is only there for somebody: what a creature on the floor cares about, one of each', () => {
