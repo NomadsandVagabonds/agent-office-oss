@@ -36,7 +36,7 @@ const startHarnessOffice = (opt = {}) => startOffice({ ...opt, env: { OFFICE_CHE
 // A `git` of our own in front of the real one. It does what git does, but can be told to dawdle — a file
 // naming a subcommand and a number of seconds — which is how a slow snapshot is made on purpose. It notes
 // its pid first, so a test can see that stopping a snapshot stopped the program too.
-const realGit = usable ? execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim() : 'git';
+const realGit = (usable && spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout?.trim()) || 'git';
 const tools = fs.realpathSync(tempDir('office-changes-tools-'));
 const SLOW = path.join(tools, 'slow'), PIDS = path.join(tools, 'pids'), ARGC = path.join(tools, 'argc');
 if (usable) {
@@ -113,9 +113,12 @@ const brief = (files) => files.map((f) => [f.status, f.path, f.additions, f.dele
 /** Ask the office's own object directory, as a person could. */
 const inStore = (store, ...args) => execFileSync(realGit, ['--git-dir', store, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 const objectsIn = (store) => { try { return fs.readdirSync(path.join(store, 'objects'), { recursive: true }).filter((name) => /[0-9a-f]{38}$/.test(name)).length; } catch { return 0; } };
-/** What the office's directory for one repository weighs: every file under `objects`, added up. */
-const weightOf = (store) => fs.readdirSync(path.join(store, 'objects'), { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile())
-  .reduce((sum, entry) => sum + fs.statSync(path.join(entry.parentPath, entry.name)).size, 0);
+/**
+ * How much of the disk the office's directory for one repository takes: the space every file under
+ * `objects` occupies — which is what `du` says, not their lengths added up — in whole KiB, as git counts it.
+ */
+const weightOf = (store) => Math.floor(fs.readdirSync(path.join(store, 'objects'), { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile())
+  .reduce((sum, entry) => sum + fs.statSync(path.join(entry.parentPath, entry.name)).blocks * 512, 0) / 1024) * 1024;
 /** Is the content of this file, as it is on disk now, among the objects the office holds? */
 const holds = (store, work, file) => spawnSync(realGit, ['--git-dir', store, 'cat-file', '-e', git(work, 'hash-object', file).trim()]).status === 0;
 
@@ -140,8 +143,13 @@ async function quietTurn(h, id, text = 'say:nothing to change') {
   return t.n;
 }
 
-// What this checkout's own repository holds under the office's name, before any of this ran.
-const hereBefore = usable ? git(ROOT, 'for-each-ref', 'refs/office') : '';
+// What this checkout's own repository holds under the office's name, before any of this ran. A copy of the
+// project that is not a checkout — an archive, an export — is in no repository at all: null, and nothing to prove.
+const refsHere = () => {
+  const asked = usable ? spawnSync(realGit, ['-C', ROOT, 'for-each-ref', 'refs/office'], { encoding: 'utf8' }) : null;
+  return asked && asked.status === 0 ? asked.stdout : null;
+};
+const hereBefore = refsHere();
 
 test('checkpoints: reading what git says, and the settings', () => {
   // The two halves of `diff-tree -z --raw --numstat`, as git writes them: a change, an addition whose name
@@ -227,8 +235,8 @@ test('checkpoints: what each turn changed', { skip: !usable }, async (t) => {
     assert.equal(cps.storeOf(s.id), store);
     assert.ok(objectsIn(store) >= 6, 'the first snapshot stored every file that is not ignored');
     // …and how much that is, is part of the answer: it is the owner's disk.
-    assert.deepEqual(empty.stored, { bytes: weightOf(store), files: objectsIn(store) });
-    assert.ok(empty.stored.bytes > 100 && empty.stored.bytes < 10_000);
+    assert.deepEqual(empty.stored, { bytes: weightOf(store), objects: objectsIn(store) });
+    assert.ok(empty.stored.bytes > 0 && empty.stored.bytes < 1024 * 1024);
     assert.ok(!(await h.entries(s.id)).some((e) => e.kind === 'notice'), 'nothing to explain here: the folder is recorded, and what is kept for it is small');
     assert.deepEqual((await h.get('/api/harness')).data.limits.checkpoints, { enabled: true, holdMs: 3000, timeoutMs: 30000, maxTreeFiles: 50000,
       maxTreeBytes: 536870912, maxFiles: 5000, maxBytes: 104857600, maxTurns: 100, diffBytes: 524288, noticeBytes: 67108864 });
@@ -620,7 +628,7 @@ test('checkpoints: the office\'s own files are all a snapshot is, and they are t
     // At its caps the office can have tens of thousands of trees to keep. Naming each one to `git prune` as an
     // argument fails outright past the system's limit, and then nothing would ever be cleaned. So: more trees
     // than that limit has room for.
-    const limit = Number(execFileSync('getconf', ['ARG_MAX'], { encoding: 'utf8' }));
+    const limit = Number(spawnSync('getconf', ['ARG_MAX'], { encoding: 'utf8' }).stdout) || 2 * 1024 * 1024;
     const many = Math.min(140_000, 2 * Math.ceil((limit / 41 + 1000) / 2));
     const data2 = tempDir('office-changes-many-data-');
     const key = repoKey(path.join(work, '.git'));
@@ -651,7 +659,9 @@ test('checkpoints: the office\'s own files are all a snapshot is, and they are t
       assert.ok(objectsIn(store2) >= many + 1);
       assert.equal(inStore(store2, 'for-each-ref').trim(), '', 'the one ref it held them by is gone again');
       assert.ok(Number(fs.readFileSync(ARGC, 'utf8').trim().split('\n').pop()) < 20, 'git was given the same few arguments it would be for one tree');
-      assert.equal((await big.changes('d_cccccccccccc', { turn: 1 })).turns[0].count, 1, 'a snapshot kept through it can still be read');
+      const after = await big.changes('d_cccccccccccc', { turn: 1 });
+      assert.equal(after.turns[0].count, 1, 'a snapshot kept through it can still be read');
+      assert.deepEqual(after.stored, { bytes: weightOf(store2), objects: objectsIn(store2) }, 'and what is kept was counted again after the clearing out');
 
       // A tidying that fails says so — it must not go quiet and leave the directory to grow unnoticed.
       fs.rmSync(path.join(store2, 'HEAD'));
@@ -659,6 +669,15 @@ test('checkpoints: the office\'s own files are all a snapshot is, and they are t
       assert.equal(warnings.length, 1);
       assert.match(warnings[0], /^\[checkpoints\] could not tidy \S+: git could not look up the trees to keep \(.+\); nothing was removed$/);
     } finally { await big.stop(); }
+
+    // …and a directory git cannot count is not given a number by the next office: none is better than a wrong one.
+    const next = createCheckpoints({ settings, dir: path.join(data2, 'harness'), file: path.join(data2, 'checkpoints.json'), log: { warn() {} }, graceSeconds: 0 });
+    try {
+      const unread = await next.changes('d_cccccccccccc', { turn: 1 });
+      assert.match(unread.turns[0].skipped, /^its snapshots can no longer be read \(/);
+      assert.equal('stored' in unread, false);
+      assert.equal(unread.store, store2, 'where it is, is still said');
+    } finally { await next.stop(); }
   });
 });
 
@@ -1118,6 +1137,7 @@ test('checkpoints: how much is kept, for how long, and what a restart leaves', {
       assert.deepEqual(lost.turns.map((turn) => [turn.turn, turn.count]), [[1, 0], [2, 0]]);
       assert.match(lost.turns[0].skipped, /^its snapshots can no longer be read \(/);
       assert.equal(lost.turns[1].skipped, undefined, 'a turn that changed nothing needs nothing read to say so');
+      assert.deepEqual(lost.stored, { bytes: 0, objects: 0 }, 'and nothing is what the office now keeps for it');
       const gone = await blind.get(`${at}/diff?turn=1`);
       assert.equal(gone.status, 410);
       assert.match(gone.data.error, /^the snapshots of turn 1 can no longer be read \(/);
@@ -1165,28 +1185,53 @@ test('checkpoints: how much is kept, for how long, and what a restart leaves', {
     } finally { await second.stop(); }
   });
 
-  await t.test('when what the office keeps for a repository is a lot, the session that caused it is told — once, in a sentence', async () => {
+  await t.test('when what the office keeps for a repository becomes a lot, the session whose snapshot made it so is told — once, in a sentence', async () => {
     const work = repo('office-changes-told-');
-    write(work, 'data.txt', crypto.randomBytes(6000).toString('hex'));        // 12 KB that do not shrink to nothing
-    const h = await startHarnessOffice({ work, env: { OFFICE_CHECKPOINTS_NOTICE_BYTES: '4096' } });
+    const dir = tempDir('office-changes-data-');
+    const limit = 256 * 1024;
+    const env = { OFFICE_CHECKPOINTS_NOTICE_BYTES: String(limit) };
+    const told = async (h, id) => (await h.entries(id)).filter((e) => e.kind === 'notice' && /keeps its own copy/.test(e.text));
+    const h = await startHarnessOffice({ dir, work, env });
+    let kept;
     try {
       const s = await h.start('fake', { name: 'First' });
-      const told = await waitFor(async () => (await h.entries(s.id)).find((e) => e.kind === 'notice' && /keeps its own copy/.test(e.text)), { what: 'the notice' });
-      const got = await changes(h, s.id);
-      assert.match(told.text, /^To tell what turns change, the office keeps its own copy of this folder's files: \d+ KB so far, in \S+\/harness\/checkpoints\/[a-f0-9]{16}\.$/);
-      assert.ok(told.text.endsWith(` in ${got.store}.`), 'where it says is where it is');
-      assert.deepEqual(got.stored, { bytes: weightOf(got.store), files: objectsIn(got.store) });
-      assert.ok(got.stored.bytes > 4096 && got.stored.files >= 6);
-      assert.equal(told.text.match(/: (\d+) KB so far/)[1], String(Math.round(got.stored.bytes / 1024)), 'and how much it says is how much there is');
       await quietTurn(h, s.id);
-      // A second session in the same repository adds next to nothing, and is not told what the first was.
+      const small = (await changes(h, s.id)).stored;
+      assert.ok(small.bytes > 0 && small.bytes < limit);
+      assert.deepEqual(await told(h, s.id), [], 'a few small files are not worth a word');
+
+      // A turn leaves 600 KB that do not shrink. The office's copy of them is on the owner's disk: it says so.
+      await turnThat(h, s.id, () => write(work, 'data.bin', crypto.randomBytes(600 * 1024)));
+      const [notice] = await waitFor(async () => { const all = await told(h, s.id); return all.length ? all : null; }, { what: 'the notice' });
+      const got = await changes(h, s.id);
+      assert.match(notice.text, /^To tell what turns change, the office keeps its own copy of this folder's files: \d+ KB so far, in \S+\/harness\/checkpoints\/[a-f0-9]{16}\.$/);
+      assert.ok(notice.text.endsWith(` in ${got.store}.`), 'where it says is where it is');
+      assert.deepEqual(got.stored, { bytes: weightOf(got.store), objects: objectsIn(got.store) });
+      assert.ok(got.stored.bytes > 600 * 1024);
+      assert.equal(notice.text.match(/: (\d+) KB so far/)[1], String(Math.round(got.stored.bytes / 1024)), 'and how much it says is how much there is');
+
+      // More comes, from this session and from a second one in the same repository: it has been said.
+      await turnThat(h, s.id, () => write(work, 'more.bin', crypto.randomBytes(300 * 1024)));
       const again = await h.start('fake', { name: 'Second' });
-      await h.ctx.harness.checkpoints.settled(again.id);
-      await quietTurn(h, again.id);
-      assert.ok(!(await h.entries(again.id)).some((e) => e.kind === 'notice'));
-      assert.equal((await h.entries(s.id)).filter((e) => e.kind === 'notice').length, 1);
-      assert.deepEqual((await changes(h, again.id)).stored, got.stored);
+      await turnThat(h, again.id, () => write(work, 'yet-more.bin', crypto.randomBytes(300 * 1024)));
+      await sleep(200);
+      assert.equal((await told(h, s.id)).length, 1);
+      assert.deepEqual(await told(h, again.id), []);
+      kept = (await changes(h, again.id)).stored;
+      assert.deepEqual(kept, { bytes: weightOf(got.store), objects: objectsIn(got.store) }, 'the count follows what is stored');
+      assert.ok(kept.bytes >= got.stored.bytes + 600 * 1024);
+      assert.deepEqual((await changes(h, s.id)).stored, kept, 'one repository, one copy: every session in it is given the same count');
     } finally { await h.stop(); }
+
+    // Once for as long as an office runs. The next one says it again, to the first session whose snapshot adds to it.
+    const next = await startHarnessOffice({ dir, work, env });
+    try {
+      const s = await next.start('fake', { name: 'Third' });
+      const [notice] = await waitFor(async () => { const all = await told(next, s.id); return all.length ? all : null; }, { what: 'the notice of the next office' });
+      const now = (await changes(next, s.id)).stored;
+      assert.ok(now.bytes >= kept.bytes);
+      assert.ok(notice.text.includes(`: ${(now.bytes / (1024 * 1024)).toFixed(1)} MB so far, in `), notice.text);
+    } finally { await next.stop(); }
   });
 
   await t.test('switched off, nothing is looked at and nothing is kept', async () => {
@@ -1254,8 +1299,10 @@ test('checkpoints: from another machine neither the list of changes nor a diff i
   } finally { await opened.stop(); }
 });
 
-test('checkpoints: none of this was about the checkout the tests are run from', { skip: !usable }, () => {
+test('checkpoints: none of this was about the checkout the tests are run from', {
+  skip: !usable || (hereBefore === null && 'the project is not in a git repository here (an archive, an export): there is no checkout this could have been about'),
+}, () => {
   // Every repository above was a temporary one. This one — where a session that names no folder would be
   // working — has the same refs under the office's name as before the suite began: none that this suite made.
-  assert.equal(git(ROOT, 'for-each-ref', 'refs/office'), hereBefore);
+  assert.equal(refsHere(), hereBefore);
 });

@@ -85,7 +85,7 @@ const STAT_AT_ONCE = 32;
 const SLOW_IN_A_ROW = 2;
 const GRACE_SECONDS = 3600;              // objects younger than this are never cleaned away: a snapshot may be using them
 const KEEP = 'refs/office/keep';         // in the office's own directory, and only while it tidies up there
-const SIZE_FRESH_MS = 30_000;            // how long a measure of what is kept is believed
+const SIZE_FRESH_MS = 30_000;            // how long a count of what is kept is believed
 
 /** The office's name for a repository: its object directory is kept under this. */
 export const repoKey = (commonDir) => crypto.createHash('sha256').update(String(commonDir)).digest('hex').slice(0, 16);
@@ -285,7 +285,7 @@ export function createCheckpoints({ settings, dir, file, log = console, changed 
   const live = new Map();               // session id → what a session needs while it lives in this process
   const running = new Set();            // every git we have started and not yet seen end
   const summaries = new Map();          // "<key>:<tree>:<tree>" → what differs; trees never change, so neither does this
-  const sizes = new Map();              // repository key → { bytes, files, at }: what the office keeps for it, as last measured
+  const sizes = new Map();              // repository key → { bytes, objects, at }: what the office keeps for it, as last counted
   const toldKept = new Set();           // repositories whose size has been told to a session since this office started
   const tidying = new Map();            // repository key → the tidying under way there (one at a time)
   const git = (cwd, args, opt = {}) => runGit(cwd, args, { timeout: QUERY_MS, ...opt, track: running });
@@ -484,7 +484,8 @@ export function createCheckpoints({ settings, dir, file, log = console, changed 
       const tree = oidOf(written);
       if (!tree) return failed('write the snapshot', written);
       st.tree = tree;
-      if (first) announce(st).catch(() => {});       // not waited for: it is a count of files, and no turn should stand behind it
+      sizes.delete(st.key);                 // more may be kept now than when it was last counted
+      announce(st).catch(() => {});         // not waited for: no turn should stand behind a count
       return taken(tree, head, added.code === 1 ? why(added) : '');
     } catch (err) {
       return { skip: `the snapshot failed: ${line(err?.message || String(err), 200)}`, code: 'git' };
@@ -513,42 +514,42 @@ export function createCheckpoints({ settings, dir, file, log = console, changed 
   /* ---- keeping house: all of it among the office's own files --------------------------- */
 
   /**
-   * How much the office keeps for one repository: the files of its object
-   * directory, added up. It is someone's disk, so it is measured rather than guessed.
+   * How much of the disk the office's directory for one repository takes, as git
+   * counts it there (`count-objects`: the space its files occupy, which for many
+   * small files is a good deal more than their lengths added up). It is someone's
+   * disk, so it is counted rather than guessed.
+   * → { bytes, objects }, or null when it cannot be counted.
    */
   async function measure(key) {
-    const root = path.join(storeOf(key), 'objects');
-    const entries = await fs.promises.readdir(root, { recursive: true, withFileTypes: true }).catch(() => []);
-    const list = entries.filter((entry) => entry.isFile()).map((entry) => path.join(entry.parentPath || entry.path || root, entry.name));
-    let bytes = 0, files = 0, next = 0;
-    const worker = async () => {
-      while (next < list.length) {
-        // The size is in hand before it is added: several of these run at once, and none may add to a stale sum.
-        try { const info = await fs.promises.stat(list[next++]); bytes += info.size; files += 1; } catch { /* gone meanwhile */ }
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(STAT_AT_ONCE, list.length) }, worker));
-    const kept = { bytes, files, at: Date.now() };
-    sizes.set(key, kept);
+    const at = storeOf(key);
+    let kept = { bytes: 0, objects: 0 };                     // no directory, nothing kept
+    if (fs.existsSync(path.join(at, 'objects'))) {
+      const counted = await git(null, [`--git-dir=${at}`, 'count-objects', '-v']);
+      if (!counted.ok) { sizes.delete(key); return null; }
+      const n = (name) => Number(new RegExp(`^${name}: (\\d+)$`, 'm').exec(counted.out)?.[1] || 0);
+      kept = { bytes: (n('size') + n('size-pack') + n('size-garbage')) * 1024, objects: n('count') + n('in-pack') };
+    }
+    sizes.set(key, { ...kept, at: Date.now() });
     return kept;
   }
 
-  /** The last measure if it is recent, else a new one. */
+  /** The last count if nothing has been stored or removed since and it is recent, else a new one. */
   async function stored(key) {
     const known = sizes.get(key);
-    const kept = known && Date.now() - known.at < SIZE_FRESH_MS ? known : await measure(key);
-    return { bytes: kept.bytes, files: kept.files };
+    if (known && Date.now() - known.at < SIZE_FRESH_MS) return { bytes: known.bytes, objects: known.objects };
+    return measure(key);
   }
 
   /**
-   * The first snapshot of a repository has been taken. If what the office now keeps
-   * for it is a lot, the session that caused it is told — once per repository, in a
-   * sentence: that there is a copy, how big, and where.
+   * A snapshot has stored something. If what the office now keeps for this
+   * repository is a lot, the session that took it is told — once per repository
+   * for as long as this office runs, in a sentence: that there is a copy, how
+   * big, and where.
    */
   async function announce(st) {
     if (toldKept.has(st.key)) return;
     const kept = await measure(st.key);
-    if (kept.bytes <= settings.noticeBytes || toldKept.has(st.key)) return;
+    if (!kept || kept.bytes <= settings.noticeBytes || toldKept.has(st.key)) return;
     toldKept.add(st.key);
     st.note('n:changes:kept', `To tell what turns change, the office keeps its own copy of this folder's files: ${size(kept.bytes)} so far, in ${line(storeOf(st.key), 300)}.`);
   }
@@ -848,7 +849,9 @@ export function createCheckpoints({ settings, dir, file, log = console, changed 
       total.files += v.count - v.files.length;
     }
     total.files += paths.size;
-    return { sessionId: id, recorded: true, root: rec.root, store: storeOf(rec.key), stored: await stored(rec.key), turns, total,
+    // Where the office keeps this repository's snapshots, and how much of the disk that takes (left out when it cannot be counted).
+    const kept = await stored(rec.key);
+    return { sessionId: id, recorded: true, root: rec.root, store: storeOf(rec.key), ...(kept ? { stored: kept } : {}), turns, total,
       keeps: settings.maxTurns, ...(rec.off ? { off: rec.off } : {}) };
   }
 
