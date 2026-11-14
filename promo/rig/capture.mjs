@@ -13,6 +13,7 @@
 //     setup(arg),                    runs IN THE PAGE once, before the first frame (may be async)
 //     tick(t, i, arg),               runs IN THE PAGE before each frame; t in seconds from the start of the take
 //     arg,                           plain data handed to setup and tick
+//     html,                          a file to serve at `url` instead of asking the daemon for it (the title cards)
 //     dsf,                           device pixels per CSS pixel (the page is laid out at size / dsf)
 //     actions, pointer,              a hand on the mouse and keyboard, on the take's clock (see hand() below)
 //     answers,                       { 'POST /api/…*': json } — requests answered here instead of by the daemon
@@ -74,6 +75,11 @@ if (shot.storage) await context.addInitScript((data) => { try { for (const [k, v
 await context.addInitScript({ content: `window.__PROMO = ${JSON.stringify(config)};` });
 await context.addInitScript({ path: path.join(HERE, 'inject.js') });
 
+// a page of the film's own (the title cards): served from this file at the shot's address, so it shares the office's origin
+if (shot.html) {
+  const body = fs.readFileSync(path.resolve(path.dirname(path.resolve(file)), shot.html), 'utf8');
+  await page.route((u) => u.pathname === shot.url.split('?')[0], (route) => route.fulfill({ status: 200, contentType: 'text/html', body }));
+}
 const started = Date.now();
 await page.goto(base + shot.url, { waitUntil: 'load' });
 const frame = (ms, hold) => page.evaluate(([m, h]) => window.__vt.frame(m, h), [ms, hold]);
@@ -120,7 +126,9 @@ if (acts.length && shot.pointer !== false) {
   }, [pointer.x, pointer.y]);
   await page.mouse.move(pointer.x, pointer.y);
 }
-const boxOf = (spec) => page.evaluate(({ css, text, nth }) => {
+// a target is something on the page ({ css, text?, nth?, px?, py? }) or a point worked out in the page
+// ({ at: 'js' } → [x, y] in CSS pixels: where something in the 3D office is on screen, say)
+const boxOf = (spec) => spec.at ? page.evaluate(spec.at).then((p) => (Array.isArray(p) ? { x: p[0], y: p[1], w: 0, h: 0 } : null)) : page.evaluate(({ css, text, nth }) => {
   const all = [...document.querySelectorAll(css || '*')].filter((el) => !text || (el.innerText || el.textContent || '').trim().toLowerCase().includes(String(text).toLowerCase()));
   const smallest = text && !css ? all.filter((el) => !all.some((o) => o !== el && el.contains(o))) : all;
   const el = smallest[nth || 0];

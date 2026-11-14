@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// The few things the cut puts on screen that the office did not draw itself: the end plate, and the commands an agent
-// typed, on label tape. They are set in the office's own type and colours (public/world/ui/ui.css) by a browser, so
-// they match what is next to them; each is written as a transparent PNG for the edit to lay over a take.
+// The captions: the command an agent typed, on label tape, for the takes where it is not obvious that an agent did it.
+// They are set in the office's own type and colours (public/world/ui/ui.css) by a browser, so they match what is next to
+// them; each is written as a transparent PNG for the edit to lay over a take. (The title cards are titles/titles.html.)
 //
 //   node rig/cards.mjs [outdir] [base]        base: any running office (for its fonts), default http://localhost:4410
 import { createRequire } from 'node:module';
@@ -37,6 +37,18 @@ body { width: 1920px; height: 1080px; position: relative; overflow: hidden; -web
 .tape.cmd b { color: var(--brass-hi); font-weight: 600; margin-right: 14px; }
 .end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 44px; }
 .end .tape { font-size: 40px; padding: 16px 28px 19px; }
+/* a full card: the colour the office is before its doors open */
+.card { position: absolute; inset: 0; background: #1b1622; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 48px; }
+.card::after { content: ''; position: absolute; inset: 0; background: radial-gradient(120% 90% at 50% 45%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, .42) 100%); }
+.name { display: flex; align-items: stretch; gap: 22px; }
+/* the version, on a keycap (what the dock's buttons are) */
+.cap { display: flex; align-items: center; justify-content: center; min-width: 152px; height: 152px; padding: 0 26px 10px; border: 8px solid var(--edge); background: var(--board-2); color: var(--brass-hi);
+  font: 600 76px/1 "Pixelify Sans", monospace; letter-spacing: .04em; box-shadow: 16px 16px 0 rgba(0, 0, 0, .42), inset 0 -14px 0 rgba(0, 0, 0, .34), inset 0 5px 0 rgba(255, 255, 255, .08); }
+.card .tape { font-size: 44px; padding: 16px 30px 20px; }
+/* a section card: two strips out of the label maker */
+.strips { display: flex; flex-direction: column; align-items: flex-start; gap: 18px; }
+.strips .tape { font-size: 66px; padding: 20px 36px 26px; box-shadow: 12px 12px 0 rgba(0, 0, 0, .42); }
+.strips .tape + .tape { margin-left: 92px; }
 .shade { position: absolute; inset: 0; background: rgba(9, 8, 14, .56); }
 .caption { position: absolute; left: 64px; bottom: 60px; }
 `;
@@ -54,12 +66,9 @@ const COMMANDS = {
   coffee: 'office use coffee',
   jukebox: 'office use jukebox',
   lift: 'office use lift pasture',
+  resign: 'office resign --handoff HANDOFF.md --note "Out of context…"',
 };
-const CARDS = {
-  end: page(`<div class="shade"></div><div class="end"><div class="plate">THE OFFICE</div><div class="tape">github.com/NomadsandVagabonds/agent-office-oss</div></div>`),
-  plate: page(`<div class="end"><div class="plate">THE OFFICE</div></div>`),
-  ...Object.fromEntries(Object.entries(COMMANDS).map(([k, text]) => [`cmd-${k}`, page(`<div class="caption"><span class="tape cmd"><b>$</b>${esc(text)}</span></div>`)])),
-};
+const CARDS = Object.fromEntries(Object.entries(COMMANDS).map(([k, text]) => [`cmd-${k}`, page(`<div class="caption"><span class="tape cmd"><b>$</b>${esc(text)}</span></div>`)]));
 
 const browser = await chromium.launch();
 const context = await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });

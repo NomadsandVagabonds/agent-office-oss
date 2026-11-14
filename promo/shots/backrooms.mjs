@@ -1,6 +1,6 @@
 // Under the office. Every shot is the level's own camcorder; the hand holding it is scripted.
 //   rig/film shots/backrooms.mjs --shot standees
-import { backroomsShot, TRUNK, LAB, WORKSHOP } from './lib.mjs';
+import { backroomsShot, TRUNK, LAB, WORKSHOP, LATEST } from './lib.mjs';
 
 export const shots = {
   // you fall in
@@ -51,6 +51,11 @@ export const shots = {
   // the fire exit: down the stairs, and the floor at the bottom is a ceiling
   stairs: backroomsShot({ room: 'exit', at: { z: 2.9, yaw: 0, pitch: -0.1 }, seconds: 10,
     path: [[0, { yaw: 0, pitch: -0.18, fwd: 0.9 }], [10, { yaw: 0, pitch: -0.1, fwd: 0.9 }]] }),
+
+  // the party, with the banner I like best: seed 37 hangs CONGRATULATIONS / ON YOUR INCIDENT over a cake that says SORRY
+  // (stood to one side: from the middle, the cake's own little sign covers half the banner)
+  cake: backroomsShot({ base: LATEST, seed: 37, room: 'party', at: { x: 2.1, yaw: 0.3, pitch: 0.0 }, seconds: 5,
+    path: [[0, { yaw: 0.4, pitch: -0.04, fwd: 0.22, side: 0 }], [5, { yaw: 0.27, pitch: 0.02, fwd: 0.22, side: 0.08 }, 'io']] }),
 
   // further down: the floors are not the same floor
   archive: backroomsShot({ seed: 7, room: 'start', query: { depth: 1 }, at: { yaw: 0, pitch: 0 }, seconds: 5.5,

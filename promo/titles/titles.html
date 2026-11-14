@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>titles</title>
+<style>
+  /* The film's cards. Type on black, the way a product is announced: one thought at a time, large, and lit.
+     The gold is the office's brass (ui.css: --brass, --brass-hi, --brass-lo); nothing else is borrowed from the interface. */
+  :root { --hi: #f7e7b4; --brass: #d9b45c; --lo: #8a6c28; }
+  html, body { margin: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+  body { font-family: "Inter Display", "Inter", "Helvetica Neue", Arial, sans-serif; color: #fff; -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; }
+  #stage { position: absolute; inset: 0; overflow: hidden; }
+  #back { position: absolute; inset: 0; background: radial-gradient(70% 62% at 50% 46%, #1a1524 0%, #0b0910 46%, #000 100%); }
+  #bokeh { position: absolute; inset: -80px; width: calc(100% + 160px); height: calc(100% + 160px); filter: blur(34px); opacity: .9; }
+  #group { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; will-change: transform; }
+  /* the light that the title comes out of */
+  #streak { position: absolute; left: 50%; top: 50%; width: 150%; height: 3px; margin-left: -75%; opacity: 0; transform-origin: 50% 50%;
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(247,231,180,.0) 18%, rgba(247,231,180,.95) 44%, #fff 50%, rgba(247,231,180,.95) 56%, rgba(247,231,180,0) 82%, rgba(255,255,255,0) 100%);
+    box-shadow: 0 0 22px 5px rgba(236, 208, 138, .55), 0 0 90px 22px rgba(207, 168, 78, .28); }
+  #glow { position: absolute; left: 50%; top: 50%; width: 1500px; height: 520px; margin: -260px 0 0 -750px; opacity: 0;
+    background: radial-gradient(closest-side, rgba(236, 208, 138, .30), rgba(207, 168, 78, .08) 55%, rgba(0, 0, 0, 0) 100%); }
+  .lockup { display: flex; align-items: baseline; gap: .26em; font-size: 204px; font-weight: 600; letter-spacing: -.038em; line-height: 1; white-space: nowrap; }
+  .lockup .ch { display: inline-block; will-change: transform, filter, opacity; }
+  .lockup .sp { display: inline-block; width: .24em; }
+  .gold { background: linear-gradient(100deg, var(--lo) 0%, var(--brass) 22%, var(--hi) 46%, #fffaf0 50%, var(--hi) 54%, var(--brass) 78%, var(--lo) 100%);
+    background-size: 260% 100%; background-position: 100% 0; -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lockup .v { display: inline-block; font-weight: 700; letter-spacing: -.045em; padding-right: .06em; will-change: transform, filter, opacity; }
+  #tag { margin-top: 50px; font-size: 54px; font-weight: 400; letter-spacing: -.014em; color: rgba(255, 255, 255, .74); white-space: nowrap; opacity: 0; }
+  /* a statement: two lines, the second one lit */
+  .say { display: flex; flex-direction: column; align-items: center; gap: 14px; font-size: 112px; font-weight: 600; letter-spacing: -.036em; line-height: 1.06; white-space: nowrap; }
+  .say .w { display: inline-block; margin-right: .245em; will-change: transform, filter, opacity; }
+  .say .w:last-child { margin-right: 0; }
+  .say .l2 .w { padding-bottom: .12em; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="back"></div>
+  <canvas id="bokeh" width="520" height="310"></canvas>
+  <div id="glow"></div>
+  <div id="group"></div>
+  <div id="streak"></div>
+</div>
+<script>
+// ?card=title | end | ui | eggs     &beat=0.8606 (a beat of the soundtrack, in seconds)     &bare=1 (no backdrop: to lay over a picture)
+const q = new URLSearchParams(location.search);
+const CARD = q.get('card') || 'title', BEAT = Number(q.get('beat') || 0.860625), BARE = q.get('bare') === '1';
+const TITLE = { name: 'Agent Office', version: 'V2', line: 'An open office where all your agents can collaborate.' };
+const SAY = {
+  ui: ['A traditional UI', 'for those who hate nice things.'],
+  eggs: ['Built-in easter eggs', 'and productivity sucks.'],
+};
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const out3 = (k) => 1 - (1 - clamp(k)) ** 3, out5 = (k) => 1 - (1 - clamp(k)) ** 5, io = (k) => { k = clamp(k); return k * k * (3 - 2 * k); };
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+const group = $('group');
+if (BARE) { $('back').style.display = 'none'; $('bokeh').style.display = 'none'; }
+
+/* ---- out of focus, a long way behind the type: a few warm lights and a few cold ones, drifting ---- */
+const dots = [];
+{ let s = CARD.length * 7919 + 13; const r = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+  for (let i = 0; i < 26; i++) dots.push({ x: r(), y: 0.12 + r() * 0.76, rad: 7 + r() * 26, a: 0.05 + r() * 0.14, vx: (r() - 0.5) * 0.012, vy: (r() - 0.5) * 0.004, ph: r() * 6.28,
+    c: r() < 0.62 ? [236, 200, 120] : r() < 0.5 ? [150, 130, 230] : [255, 150, 110] }); }
+const bokeh = $('bokeh').getContext('2d');
+function drawBokeh(t, amount) {
+  const W = 520, H = 310;
+  bokeh.clearRect(0, 0, W, H);
+  bokeh.globalCompositeOperation = 'lighter';
+  for (const d of dots) {
+    const x = ((d.x + d.vx * t + 1) % 1) * W, y = (d.y + d.vy * t) * H, a = d.a * amount * (0.75 + 0.25 * Math.sin(t * 0.9 + d.ph));
+    const g = bokeh.createRadialGradient(x, y, 0, x, y, d.rad);
+    g.addColorStop(0, `rgba(${d.c[0]},${d.c[1]},${d.c[2]},${a})`); g.addColorStop(0.7, `rgba(${d.c[0]},${d.c[1]},${d.c[2]},${a * 0.8})`); g.addColorStop(1, `rgba(${d.c[0]},${d.c[1]},${d.c[2]},0)`);
+    bokeh.fillStyle = g; bokeh.beginPath(); bokeh.arc(x, y, d.rad, 0, 6.2832); bokeh.fill();
+  }
+}
+
+/* ---- what is on the card ---- */
+let letters = [], version = null, tag = null, words = [];
+if (CARD === 'title' || CARD === 'end') {
+  const lock = el('div', 'lockup'), name = el('span', 'name');
+  for (const ch of TITLE.name) { if (ch === ' ') { name.append(el('span', 'sp')); continue; } const s = el('span', 'ch', ch); letters.push(s); name.append(s); }
+  version = el('span', 'v gold', TITLE.version);
+  lock.append(name, version); group.append(lock);
+  if (CARD === 'title') { tag = el('div', '', TITLE.line); tag.id = 'tag'; group.append(tag); }
+  // the light crosses the frame where the name is, not where the middle of the card is
+  requestAnimationFrame(() => { const r = lock.getBoundingClientRect(), y = r.top + r.height * 0.52; $('streak').style.top = `${y}px`; $('glow').style.top = `${y}px`; });
+} else {
+  const say = el('div', 'say');
+  (SAY[CARD] || SAY.ui).forEach((line, n) => { const row = el('div', n ? 'l2' : 'l1'); for (const w of line.split(' ')) { const s = el('span', 'w' + (n ? ' gold' : ''), w); words.push({ s, line: n }); row.append(s); } say.append(row); });
+  group.append(say);
+}
+
+/** A thing arriving: out of a blur, from a little below, at `at` seconds, over `dur`. */
+function arrive(node, t, at, dur, rise = 26, blur = 22, scaleFrom = 1) {
+  const k = out5((t - at) / dur), o = clamp((t - at) / (dur * 0.55));
+  node.style.opacity = o;
+  node.style.transform = `translate3d(0, ${(1 - k) * rise}px, 0) scale(${scaleFrom + (1 - scaleFrom) * k})`;
+  node.style.filter = k < 0.999 ? `blur(${(1 - k) * blur}px)` : 'none';
+}
+
+function render(t) {
+  drawBokeh(t, CARD === 'title' || CARD === 'end' ? out3(t / 1.2) : 0.55 * out3(t / 0.6));
+  // everything leans in, slowly, for as long as the card is up
+  group.style.transform = `scale(${1 + 0.014 * t})`;
+  if (letters.length) {
+    // the light: a line across the frame at the hit, which the name comes out of
+    const s = $('streak'), g = $('glow');
+    const flash = t < 0.09 ? t / 0.09 : Math.exp(-(t - 0.09) * 3.4);
+    s.style.opacity = clamp(flash * 1.05); s.style.transform = `scaleX(${0.08 + 0.92 * out5(t / 0.42)}) scaleY(${1 + 2.2 * Math.exp(-t * 9)})`;
+    g.style.opacity = clamp(0.25 + 0.75 * flash) * out3(t / 0.3);
+    letters.forEach((node, i) => { const mid = (letters.length - 1) / 2; arrive(node, t, 0.05 + Math.abs(i - mid) * 0.022, 0.62, 0, 26, 1.0); node.style.letterSpacing = `${(1 - out5((t - 0.05) / 0.9)) * 0.12}em`; });
+    arrive(version, t, 0.34, 0.7, 0, 30, 1.32);
+    // a light passing over the brass, once
+    version.style.backgroundPosition = `${100 - 100 * io((t - 0.85) / 1.25)}% 0`;
+    if (tag) { const k = out3((t - 0.95) / 0.7); tag.style.opacity = k; tag.style.transform = `translate3d(0, ${(1 - k) * 14}px, 0)`; tag.style.letterSpacing = `${-0.012 + (1 - k) * 0.03}em`; }
+  } else {
+    let n1 = 0, n2 = 0;
+    for (const w of words) {
+      const at = w.line ? BEAT + (n2++) * 0.055 : 0.02 + (n1++) * 0.06;
+      arrive(w.s, t, at, 0.5, 30, 20, 1.0);
+      if (w.line) w.s.style.backgroundPosition = `${100 - 100 * io((t - BEAT - 0.15) / 1.1)}% 0`;
+    }
+  }
+}
+let t0 = null;
+window.__start = () => { t0 = performance.now(); };
+function loop() { render(t0 === null ? 0 : (performance.now() - t0) / 1000); requestAnimationFrame(loop); }
+document.fonts.ready.then(() => { render(0); window.__ready = true; loop(); });
+</script>
+</body>
+</html>

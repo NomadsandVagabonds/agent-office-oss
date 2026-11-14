@@ -14,7 +14,7 @@ export function officeShot(o) {
     name: o.name, base: o.base || STUDIO,
     url: `/?shot=1&hour=${o.hour ?? 13}${o.query || ''}`,
     tape: o.tape ? `../tapes/${o.tape}.json` : undefined, tapeStart: o.start || 0,
-    size: [1920, 1080], fps: 30, seconds: o.seconds, pre: o.pre, settle: o.settle,
+    size: [1920, 1080], fps: 30, seconds: o.seconds, pre: o.pre, settle: o.settle, actions: o.actions, pointer: o.pointer,
     blind: 'office.stage.setView({ scene: office.stage.scene, camera: office.stage.camera, render() {} })', unblind: 'office.stage.setView(null)',
     storage: { 'office.settings': { graphics: 'auto', time: 'auto', sound: 'off', notify: 'off' }, ...(o.storage || {}) },
     arg: { keys: o.keys, follow: o.follow || '', chrome: o.chrome || [], events: o.events || [], select: o.select || '' },
@@ -22,7 +22,9 @@ export function officeShot(o) {
       document.getElementById('boot')?.remove();
       const hide = { plate: '.hud-tl', clock: '.hud-tr', dock: '.dock', tray: '.intray', labels: '.labels', ticker: '.ticker' };
       const css = Object.entries(hide).filter(([k]) => !arg.chrome.includes(k)).map(([, sel]) => `#ui ${sel} { display: none !important; }`).join('\n');
-      document.head.appendChild(Object.assign(document.createElement('style'), { textContent: css + '\n#ui .toasts, #ui .toast { display: none !important; }\n* { cursor: none !important; }' }));
+      // the passing line at the bottom-left (the ticker shows the same events as toasts do) stays out unless asked for
+      const quiet = arg.chrome.includes('ticker') ? '' : '\n#ui .toasts, #ui .toast { display: none !important; }';
+      document.head.appendChild(Object.assign(document.createElement('style'), { textContent: css + quiet + '\n* { cursor: none !important; }' }));
       window.__fired = new Set();
       const first = arg.keys[0][1];
       office.rig.flyTo(first, { instant: true });
@@ -42,6 +44,7 @@ export function officeShot(o) {
 }
 
 export const TRUNK = 'http://localhost:4401';     // the upgraded office (the Backrooms with floors)
+export const LATEST = 'http://localhost:4412';    // the newest build: office life (resigning), the basement, the Backrooms as they are now
 export const LAB = 'http://localhost:4402';       // codex/backrooms-expansion-lab (Dispatch, the quiet maze)
 export const FPS = 'http://localhost:4403';       // codex/after-hours-fps
 export const WORKSHOP = 'http://localhost:4404';  // gemini/backrooms-workshop
@@ -100,7 +103,7 @@ export function levelShot(o) {
     url: `/?shot=1&level=${o.level}&hour=${o.hour ?? 13}${o.query || ''}`,
     tape: o.tape ? `../tapes/${o.tape}.json` : undefined, tapeStart: o.start || 0,
     ready: '!!(window.office && office.ready && office.level && office.stage.view)',
-    settle: o.settle ?? 1.5, afterSetup: o.afterSetup ?? 0.3, pre: o.pre,
+    settle: o.settle ?? 1.5, afterSetup: o.afterSetup ?? 0.3, pre: o.pre, t0: o.t0,
     size: [1920, 1080], fps: 30, seconds: o.seconds,
     arg: { at: o.at || null, keys: o.keys || [], hold: o.hold || [], events: o.events || [], chrome: o.chrome ?? true },
     setup(arg) {

@@ -1,6 +1,6 @@
 // The office floor: every shot here plays back one of the tapes made by scenes/office.mjs.
 //   rig/film shots/office.mjs --shot hero            (add --still 1,3 to check a framing first)
-import { officeShot } from './lib.mjs';
+import { officeShot, LATEST } from './lib.mjs';
 
 const ADA_DESK = { x: -12.15, z: -4.75 };
 
@@ -103,6 +103,46 @@ export const shots = {
       const g = window.__tgt || arg.keys[0][1];
       office.rig.flyTo({ ...arg.keys[0][1], x: g.x, z: g.z }, { instant: true });      // so the walls in the way fold as they would for this view
     };
+    return s;
+  })(),
+
+  /* ---- somebody resigns (the newest build; tape 09, with the removal held back: see scenes/resign.mjs) ---- */
+  // office resign --handoff HANDOFF.md --note "…": the farewell in her own words, and she gets up
+  resignDesk: officeShot({ base: LATEST, tape: '09-resign-walkout', start: 0.9, seconds: 5, chrome: ['labels'],
+    keys: [[0, { x: -12.5, z: -5.7, dist: 6.4, yaw: 0.5, pitch: 0.44 }], [5, { x: -13.4, z: -5.5, dist: 7.0, yaw: 0.36, pitch: 0.44 }, 'io']] }),
+  // …and walks out the way she came in (the same framing as her first shot). The doors are opened for her here:
+  // the office opens them when a departure begins, which is twenty seconds before she gets to them.
+  resignWalk: officeShot({ base: LATEST, tape: '09-resign-walkout', start: 0.9, pre: 17.6, seconds: 7.5, chrome: [],
+    keys: [[0, { x: -0.6, z: -5.4, dist: 9.5, yaw: 0.1, pitch: 0.4 }], [7.5, { x: 0, z: -6.4, dist: 8.2, yaw: 0, pitch: 0.36 }, 'io']],
+    events: [[0, "(() => { let done = false; office.stage.onFrame(() => { const p = office.people.positionOf('promo-ada'); if (!done && p && p.z < -6.2 && Math.abs(p.x) < 1.5) { done = true; office.fx.lift(3200); } }); })()"]] }),
+  // what the human gets: a line that stays, and behind it the note and the handoff
+  resignNote: (() => {
+    const s = officeShot({ base: LATEST, tape: '09-resign-walkout', start: 1.6, seconds: 7, query: '&dpr=1.5', chrome: ['ticker'],
+      keys: [[0, { x: -12.6, z: -4.4, dist: 9.5, yaw: 0.3, pitch: 0.52 }], [7, { x: -12.6, z: -4.4, dist: 9.0, yaw: 0.22, pitch: 0.52 }, 'io']],
+      pointer: [760, 500],
+      actions: [{ at: 1.3, click: { css: '#ui .ticker' }, dur: 0.8 }, { at: 3.0, hover: { css: '#ui .sheet', px: 0.74, py: 0.8 }, dur: 0.9 }] });
+    s.dsf = 1.5;
+    return s;
+  })(),
+
+  /* ---- what you do with it: one take to end on ----
+     Click somebody and their card opens (what they are doing, for which project, how full their context is, a line
+     straight to them); click the board on their wall and it is the kanban, with the card she is working on going to
+     Review and then Done while you look at it. */
+  features: (() => {
+    // where something in the room is on screen, for the hand
+    const SCREEN = (x, y, z) => `(() => { const c = office.stage.camera, v = new c.position.constructor(${x}, ${y}, ${z}).project(c); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; })()`;
+    const ADA = `(() => { const p = office.people.positionOf('promo-ada'), c = office.stage.camera, v = new c.position.constructor(p.x, 0.95, p.z).project(c); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; })()`;
+    const s = officeShot({ tape: '03-collab', start: 20.9, seconds: 7.6, query: '&dpr=1.5', chrome: ['plate', 'clock', 'dock', 'labels'],
+      keys: [[0, { x: -13, z: -5.6, dist: 8.6, yaw: 0.06, pitch: 0.38 }], [7.6, { x: -13, z: -5.7, dist: 8.2, yaw: 0.0, pitch: 0.38 }, 'io']],
+      pointer: [900, 560],
+      actions: [
+        { at: 0.35, click: { at: ADA }, dur: 0.6 },
+        { at: 3.35, key: 'Escape' },
+        { at: 3.4, click: { at: SCREEN(-13, 1.55, -7.9) }, dur: 0.6 },
+        { at: 4.4, hover: { css: '#ui .sheet', px: 0.84, py: 0.86 }, dur: 0.8 },
+      ] });
+    s.dsf = 1.5;
     return s;
   })(),
 

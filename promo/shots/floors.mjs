@@ -1,6 +1,6 @@
 // The lift, and where it goes.
 //   rig/film shots/floors.mjs --shot liftRoof
-import { officeShot, levelShot, STUDIO, FPS } from './lib.mjs';
+import { officeShot, levelShot, STUDIO, FPS, LATEST } from './lib.mjs';
 
 const LANDING = { x: 0, z: -6.7, dist: 6.6, yaw: 0, pitch: 0.34 };
 const CALL = "import('/world/levels/index.js').then((m) => m.callLift(office))";
@@ -8,7 +8,7 @@ const HIDE_POINTER = "(() => { const p = document.getElementById('promo-pointer'
 
 /** The landing, the plate of buttons, a hand choosing one, and the ride. */
 function liftShot(o) {
-  const shot = officeShot({ tape: '08-lift', start: 1, seconds: o.seconds, hour: o.hour ?? 13, chrome: [],
+  const shot = officeShot({ base: o.base, tape: o.tape || '08-lift', start: 1, seconds: o.seconds, hour: o.hour ?? 13, chrome: [],
     keys: [[0, { ...LANDING, dist: 8.2, pitch: 0.4 }], [1.6, LANDING, 'io']], events: [[0.5, CALL]] });
   shot.pointer = [1180, 760];
   shot.actions = o.actions;
@@ -18,6 +18,14 @@ function liftShot(o) {
 export const shots = {
   // press R
   liftRoof: liftShot({ seconds: 13, hour: 18.3, actions: [
+    { at: 1.9, hover: { css: '.liftpanel .lbtn', text: '3' }, dur: 0.55 },
+    { at: 2.8, hover: { css: '.liftpanel .lbtn', text: '11' }, dur: 0.45 },
+    { at: 3.6, click: { css: '.liftpanel .lbtn', text: 'R' }, dur: 0.5 },
+    { at: 4.3, js: HIDE_POINTER },
+  ] }),
+
+  // the same, on the newest build: its plate has a B at the bottom
+  liftRoof2: liftShot({ base: LATEST, tape: '10-quiet', seconds: 13, hour: 18.3, actions: [
     { at: 1.9, hover: { css: '.liftpanel .lbtn', text: '3' }, dur: 0.55 },
     { at: 2.8, hover: { css: '.liftpanel .lbtn', text: '11' }, dur: 0.45 },
     { at: 3.6, click: { css: '.liftpanel .lbtn', text: 'R' }, dur: 0.5 },
@@ -69,6 +77,17 @@ export const shots = {
     s.setup = function setup() { document.getElementById('boot')?.remove(); document.head.appendChild(Object.assign(document.createElement('style'), { textContent: '* { cursor: none !important; }' })); window.__held = new Set(); window.__fired = new Set(); };
     return s;
   })(),
+
+  // B — the basement: plant, cages, the caretaker's corner
+  basement: levelShot({ base: LATEST, level: 'basement', seconds: 5,
+    at: { x: -4.5, z: -1.5, heading: 1.57 }, keys: [[0, { yaw: 0.95, pitch: 0.34, dist: 8.5 }], [5, { yaw: 0.55, pitch: 0.3, dist: 7.5 }, 'io']],
+    hold: [[0.4, 4.6, 'd']] }),
+
+  // …and round the back of the cages, the stretch of wall that is not as solid as the rest. Lean on it.
+  // (t0 fixes the take's calendar: the place behind the wall is built from the time you fall into it)
+  wall: levelShot({ base: LATEST, level: 'basement', seconds: 11, t0: Number(process.env.WALL_T0 || 1794680000000),
+    at: { x: 5.4, z: -8.25, heading: 1.57 }, keys: [[0, { yaw: -1.5708, pitch: 0.27, dist: 4.4 }]],
+    hold: [[0.3, 2.15, 'w'], [2.2, 14, 'a']] }),
 
   // 7 — after hours (the crowbar version, from its own branch): somebody has to go down there
   crowbar: {
