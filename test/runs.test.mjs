@@ -88,3 +88,13 @@ test('runs: the office keeps the record, pays the jar only for beating its best,
   assert.ok(said.some((s) => /^Robin is back from Out of Office: \d+ points$/.test(s)));
   assert.ok(!said.some((s) => /caught|gone/.test(s)), 'a visit that did not get out is nobody else\'s business');
 });
+
+test('the card is put on the page itself, not inside the office\'s interface, which is out of sight while somebody is out of the building', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../public/world/backrooms/scorecard.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../public/world/ui/ui.css', import.meta.url), 'utf8');
+  // (ui.css hides everything in #ui but the level's own picture while the office has stepped aside: a card in there is never seen)
+  assert.match(css, /body\.noclip #ui > \*:not\(/);
+  assert.ok(!/getElementById\(['"]ui['"]\)/.test(src), 'scorecard.js reaches for #ui');
+  assert.match(src, /const root = document\.body;/);
+});

@@ -25,6 +25,7 @@
 
 import { T, WALL_H, DOOR_H, TILE, RISE, RUN, SIDES, toWorld, toLocal, wallLength, wallPoint, floorAt, ceilAt, headAt, stairZones, pinchHalf, fitsAt, wallSpans } from './frame.js';
 import { fill, wrap } from './words.js';
+import { warningFor } from './drawings.js';
 import { MORE_DECK, MORE_STASH } from './deck2.js';
 import { themeOf, THEMES } from './themes.js';
 import { thinPlace, decoyMarks, TAPE_LABELS, PRINT_CHANCE } from './marks.js';
@@ -679,7 +680,7 @@ const DRESSING = ['boxes', 'boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 
 const KNOWN_THINGS = new Set(['boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'cabinet', 'shelving', 'armchair', 'globe']);
 export const THING_CHANCE = 0.06;
 /** What an earlier visitor may have left in a plain room (traces.js builds them): a floor has two or three, each a different one. */
-export const TRACES = Object.freeze(['camp', 'arrows', 'note', 'measure', 'map', 'queue']);
+export const TRACES = Object.freeze(['camp', 'arrows', 'note', 'measure', 'map', 'queue', 'drawing']);
 // Notes that stop. Nobody finishes a sentence down here: something always comes up.
 const NOTES = [
   ['IF YOU FIND THIS:', 'THE WAY OUT IS', 'DEFINITELY PAST THE'],
@@ -974,7 +975,11 @@ function dress(R, level, o, opt, keeper = false) {
     const able = RTr.shuffle(rooms.filter((r) => r.kind === 'plain' && !r.crawl && !r.shape && !r.dress.length && !(r.blocks && r.blocks.length) && !(r.quiet && r.quiet.kind === 'apertures')
       && r.depth >= 1 && r.toExit >= 2 && r.H >= 2.4 && Math.min(r.W, r.D) >= 2.6 && Math.max(r.W, r.D) >= 3.6 && !(pursuer && pursuer.room === r.id) && next(r).every((n) => n.kind !== 'special')));
     able.sort((p, q) => (onWay.has(p.id) ? 1 : 0) - (onWay.has(q.id) ? 1 : 0));
-    const kinds = RTr.shuffle(TRACES.slice()), placed = [], want = RTr.int(2, 3);
+    const kinds = RTr.shuffle(TRACES.filter((k) => k !== 'drawing')), placed = [], want = RTr.int(2, 3);
+    // a drawing of something that is down here — only ever of something that is (`drawn`: who, from the visit's plan:
+    // whoever is on this part or the one below it). On most parts that have anybody to draw, it is the first thing placed.
+    const drawn = (Array.isArray(opt.drawn) ? opt.drawn : []).filter((id) => typeof id === 'string' && id);
+    if (drawn.length && RTr.fork('drawing').chance(0.6)) kinds.unshift('drawing');
     for (const room of able) {
       if (placed.length >= want) break;
       const dist = level.distances(room);
@@ -982,6 +987,7 @@ function dress(R, level, o, opt, keeper = false) {
       const kind = kinds[placed.length % kinds.length], item = { type: 'trace', kind, seed: RTr.int(1, 9999), turn: 0, n: RTr.int(3, 5) };
       if (kind === 'note') item.text = RTr.pick(NOTES).flatMap((line) => wrap(fill(line, o, RTr), 22));        // (a long name takes a line to itself)
       if (kind === 'queue' && Math.min(room.W, room.D) < 3.4) continue;
+      if (kind === 'drawing') { const RD = RTr.fork('drawing:' + room.id); item.of = RD.pick(drawn); item.text = warningFor(item.of, RD); }
       room.dress.push(item); placed.push(room);
     }
   }

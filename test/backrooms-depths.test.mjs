@@ -11,6 +11,8 @@ import { THEMES, THEME_IDS } from '../public/world/backrooms/themes.js';
 import { WAYS, GAP, goesDown, dropOf, hangBelow, flight, holeIn, ledgeAt, ductIn } from '../public/world/backrooms/seam.js';
 import { AWAY, settled, unsure } from '../public/world/backrooms/rooms/unsure-hall/rule.js';
 import { HALL, HAND, PART_ROOMS } from '../public/world/backrooms/plan.js';
+import { WARNINGS, warningFor } from '../public/world/backrooms/drawings.js';
+import { CAST, castFor } from '../public/world/backrooms/cast.js';
 import { createTally } from '../public/world/backrooms/tally.js';
 import { cleanRun } from '../core/runs.mjs';
 import { leaving, LEAVE } from '../public/world/backrooms/leaving.js';
@@ -676,4 +678,46 @@ test('what a visit came to: time in play, parts reached, rooms walked into, who 
   const far = createTally({ seed: 1, of: 3 }); for (let i = 0; i < 9; i++) far.way();
   assert.deepEqual(far.report().parts, { reached: 3, of: 3 });
   assert.equal(far.report().seed, '1');
+});
+
+test('drawings on the walls: only ever of something that is in this visit, on its part or the one above, in a frightened person\'s own unfinished words', () => {
+  // the words: every creature has some, none is the deck's own line, and nobody got to the end of a sentence
+  const norm = (t) => t.toLowerCase().replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+  for (const m of CAST) {
+    assert.ok(Array.isArray(WARNINGS[m.id]) && WARNINGS[m.id].length >= 2, `nobody has drawn ${m.id}: there is nothing on the walls to learn it from`);
+    for (const lines of WARNINGS[m.id]) {
+      const said = norm(lines.join(' ')), rule = norm(m.rule);
+      assert.ok(lines.length >= 2 && lines.length <= 4 && lines.every((l) => l.length <= 22 && l === l.toUpperCase()), `${m.id}: ${JSON.stringify(lines)}`);
+      assert.ok(!said.includes(rule) && !rule.includes(said), `${m.id}: the wall quotes the deck`);
+      // (not the deck's sentence with a word changed either: no run of five words is shared)
+      const words = rule.split(' ');
+      for (let i = 0; i + 5 <= words.length; i++) assert.ok(!said.includes(words.slice(i, i + 5).join(' ')), `${m.id}: "${words.slice(i, i + 5).join(' ')}" is the deck's own wording`);
+      assert.ok(!/[.!?…]$/.test(lines[lines.length - 1].trim()), `${m.id}: "${lines[lines.length - 1]}" — they finished the sentence`);
+    }
+  }
+  const R = { pick: (l) => l[0] };
+  assert.deepEqual(warningFor('pirate', R), WARNINGS.pirate[0]);
+  assert.ok(warningFor('somebody-new', R).length >= 2, 'a creature nobody has words for yet still gets an honest scrawl');
+  // the walls: who is drawn where
+  const drawnOf = new Map();
+  let parts = 0, withOne = 0;
+  for (const seed of SEEDS) {
+    const { visit, floors } = visitFor(seed), company = castFor(visit);
+    floors.forEach((level, i) => {
+      parts++;
+      const drawings = level.rooms.flatMap((r) => r.dress.filter((d) => d.type === 'trace' && d.kind === 'drawing'));
+      assert.ok(drawings.length <= 1, `seed ${seed}, part ${i}: ${drawings.length} drawings`);
+      for (const d of drawings) {
+        withOne++;
+        const who = company.find((m) => m.id === d.of);
+        assert.ok(who, `seed ${seed}, part ${i}: a drawing of ${d.of}, who is not in this visit`);
+        const at = who.floor === null ? visit.mascot : who.floor;
+        assert.ok(who.floor === null ? i >= at - 1 : at === i || at === i + 1, `seed ${seed}, part ${i}: a drawing of ${d.of}, who is on part ${at}`);
+        assert.ok((WARNINGS[d.of] || []).some((lines) => JSON.stringify(lines) === JSON.stringify(d.text)), `seed ${seed}: ${JSON.stringify(d.text)}`);
+        drawnOf.set(d.of, (drawnOf.get(d.of) || 0) + 1);
+      }
+    });
+  }
+  assert.ok(withOne / parts > 0.3 && withOne / parts < 0.7, `a drawing on ${withOne} of ${parts} parts`);
+  for (const m of CAST) assert.ok(drawnOf.get(m.id) > 0, `${m.id} is never drawn`);
 });

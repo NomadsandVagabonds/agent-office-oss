@@ -543,7 +543,8 @@ test('what earlier visitors left: two or three to a floor at most, each a differ
       }
     }
   }
-  assert.deepEqual([...seen.keys()].sort(), TRACES.slice().sort(), 'every kind of thing turns up somewhere');
+  // (a drawing is of somebody who is down here, and a floor asked for by itself has nobody: that one is the visit's — backrooms-depths)
+  assert.deepEqual([...seen.keys()].sort(), TRACES.filter((k) => k !== 'drawing').sort(), 'every kind of thing turns up somewhere');
   const floors = perFloor.reduce((a, b) => a + b, 0);
   assert.ok(perFloor[0] / floors < 0.2 && (perFloor[2] + perFloor[3]) / floors > 0.6, `floors with none, one, two, three: ${perFloor}`);
 });

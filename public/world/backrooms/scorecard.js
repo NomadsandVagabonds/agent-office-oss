@@ -62,8 +62,8 @@ const clock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 // somewhere overhead, the skirting and a strip of carpet under it — seen the way everything down there is seen, on tape.
 const DIAMOND = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44'%3E%3Cpath d='M22 15l4 7-4 7-4-7z' fill='none' stroke='%23b99f3c' stroke-opacity='.5' stroke-width='1.3'/%3E%3C/svg%3E\")";
 const CSS = `
-.brc-veil { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; overflow: auto; box-sizing: border-box; padding: 20px 16px 13vh;
-  color: #4a3a10; font: 500 14px/1.4 "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif; font-variant-numeric: tabular-nums;
+.brc-veil { position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; overflow: auto; box-sizing: border-box; padding: 20px 16px 13vh;
+  color: #4a3a10; font: 500 clamp(14px, 1.15vw + .4vh, 20px)/1.4 "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif; font-variant-numeric: tabular-nums;
   background:
     linear-gradient(180deg, transparent calc(100% - 11vh), #5b4127 calc(100% - 11vh), #6d4f31 calc(100% - 10.4vh), #5b4127 calc(100% - 7.6vh), #2f2413 calc(100% - 7.6vh), #2f2413 calc(100% - 7.2vh), #6f6a50 calc(100% - 7.2vh), #5f5a44 100%),
     radial-gradient(120% 70% at 50% -12%, rgba(255,252,224,.55), rgba(255,252,224,0) 62%),
@@ -166,7 +166,9 @@ export async function showScorecard(o = {}) {
   if (o.office?.game?.report) card = await o.office.game.report(HIDEOUT, report);
   if (!card) card = local(report, who);
 
-  const root = document.getElementById('ui') || document.body;
+  // (on the page itself, not in the office's own interface: that steps aside for as long as somebody is out of the
+  // building, and takes everything in it out of sight with it)
+  const root = document.body;
   const style = el('style', '', CSS), veil = draw(card, who), form = veil.querySelector('.brc-form');
   document.head.append(style); root.append(veil);
   try { form.focus({ preventScroll: true }); } catch { /* it will take a click, then */ }
