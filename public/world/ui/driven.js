@@ -13,7 +13,7 @@ import { h, replace, shortPath } from './dom.js';
 import { answerControls } from './answers.js';
 
 const css = `
-#ui .dv { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+#ui .dv { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 #ui .dv .feed { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 38px 20px; background-color: var(--paper); color: var(--paper-ink);
   background-image: radial-gradient(circle at 12px 10px, var(--paper-3) 0 3px, transparent 3.6px), radial-gradient(circle at calc(100% - 12px) 10px, var(--paper-3) 0 3px, transparent 3.6px),
     linear-gradient(90deg, transparent 25px, var(--paper-line) 25px 26px, transparent 26px calc(100% - 26px), var(--paper-line) calc(100% - 26px) calc(100% - 25px), transparent calc(100% - 25px));

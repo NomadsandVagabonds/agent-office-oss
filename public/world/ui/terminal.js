@@ -28,7 +28,12 @@ const css = `
 #ui .tm .autos { display: flex; align-items: center; gap: 8px; padding: 0 12px 10px; font: 11px/1 var(--mono); color: var(--faint); }
 #ui .tm .autos.paused { color: var(--blocked); }
 #ui .tm .keys .btn { font-family: var(--mono); font-size: 12px; }
-@media (max-width: 720px) { #ui .tm { flex-direction: column; } #ui .tm .nav { width: auto; max-height: 42%; border-right: 0; border-bottom: 2px solid var(--edge); } }
+#ui .tm .main { min-height: 0; }
+@media (max-width: 720px) {
+  #ui .tm { flex-direction: column; }
+  #ui .tm .nav { display: block; width: auto; flex: none; max-height: 34%; overflow-y: auto; border-right: 0; border-bottom: 2px solid var(--edge); }
+  #ui .tm .nav .list { overflow: visible; }
+}
 #ui .tm .main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; background: #0d0b12; }
 #ui .tm .screen { flex: 1 1 auto; margin: 0; padding: 10px 12px; overflow: auto; font: 12.5px/1.35 var(--mono); color: #d8d2c4; white-space: pre; outline: none; tab-size: 8; }
 #ui .tm .screen:focus { box-shadow: inset 0 0 0 1px var(--accent); }
@@ -224,7 +229,9 @@ export function open({ office, ui, content, header, arg }) {
       ready.length ? h('div.row', ready.map((a) => h('button.btn.small', { type: 'button', title: `Start ${a.label} and talk to it from here${a.note ? ` — ${a.note}` : ''}`, onclick: (e) => drive(a, cwd.value.trim(), e.currentTarget) }, icon('plus'), a.label))) : null,
       able.length ? h('div.row', able.map((r) => h('button.btn.small.ghost', { type: 'button', title: `${r.note || r.label} — in a terminal`, onclick: () => spawn(r, cwd.value.trim()) }, icon('term'), r.shortLabel || r.label))) : null,
       ready.length || able.length ? null : h('div.faint', { style: { fontSize: '12px' } }, status?.error && harnessOff ? status.error : 'Nothing that can be started was found on this machine.'),
-      absent.length && !harnessOff ? h('details', h('summary', `${absent.length} more could be driven`), absent.map((a) => h('p', h('b', a.label), a.note ? ` — ${a.note}` : ' — not installed here'))) : null,
+      absent.length && !harnessOff ? h('details', h('summary', `${absent.length} more could be driven`),
+        h('p', 'Not found on this machine. Once one is installed and signed in, it appears above:'),
+        absent.map((a) => h('p', h('b', a.label), a.note ? ` — ${a.note}` : ''))) : null,
       harnessNote ? h('div.faint', { style: { fontSize: '12px' } }, harnessNote) : null);
 
     const d = drivenId ? findDriven(drivenId) : null;
