@@ -365,6 +365,14 @@ the person playing (`core/game.mjs` is the whole of the rules; it is pure):
   office's best, by what they beat it by; a visit that was no better, or that
   ended any other way, pays nothing. Going back is worth it. Going back for
   the same again is not.
+- **Pockets, hearts and the tape.** In that place a visitor has six pockets,
+  four hearts, and a camcorder that runs on batteries: five minutes when you
+  land, two more for each pack you feed it, and when it is flat the visit is
+  over. Nobody is handed anything; what is lying about is decided by the
+  seed. Being caught costs hearts before it costs the visit. The packs you
+  do not use are the ones the office pays for, so every pack is a choice
+  between more time and more coins. (`docs/BACKROOMS.md`, "What a visitor
+  carries".)
 - **The card.** The same place tells whoever leaves it how it went, however
   they left: what they did, what it scored, what was new to this office, what
   the jar gained, and whether the tape was kept. The office keeps the record
