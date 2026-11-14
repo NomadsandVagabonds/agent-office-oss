@@ -22,7 +22,7 @@ import { generate, makeRng, MIN_EXIT_STEPS, DECK, ARCHETYPES, lessons, lessonsOf
 import { MIN_OUT_STEPS } from './marks.js';
 import { THEME_IDS } from './themes.js';
 import { WAYS } from './seam.js';
-import { whoIsDown } from './cast.js';
+import { whoIsDown, castFor } from './cast.js';
 
 export const MIN_FLOORS = 3, MAX_FLOORS = 5;
 /** What everybody knows before they have seen a single room down here: it is how they got in. */
@@ -160,7 +160,10 @@ export function floorOf(visit, i) {
       only: (opt.onlyDepth || 0) === k ? opt.only : undefined,
       theme: f.theme, way: f.way, paper: `${visit.seed}/${k}`, must: f.must,
       // the rooms of the visit's hand that are in this part, and how long the part is, whatever it holds
-      hand: f.hand, rooms: f.rooms,
+hand: f.hand, rooms: f.rooms,
+      // who an earlier visitor might have drawn on a wall here: whoever is on this part or the one below (the mascot from the
+      // part above his own onward: he follows people down). Never anybody who is not in the visit
+      drawn: castFor(visit).filter((m) => (m.floor === null ? visit.mascot !== null && k >= visit.mascot - 1 : m.floor === k || m.floor === k + 1)).map((m) => m.id),
       bleed: { prev: f.prev && { theme: f.prev, paper: `${visit.seed}/${k - 1}` }, next: f.next && { theme: f.next, paper: `${visit.seed}/${k + 1}` } },
       // what the floors above have had the chance to teach: a room that takes more than that for granted is not dealt here
       known,
