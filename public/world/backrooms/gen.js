@@ -143,6 +143,13 @@ const PLATES = ['for attendance', 'for remaining calm', 'for the incident', 'for
 const ODD_MONTHS = ['FEBRUARY', 'FEBRUARY', 'SMARCH', 'MONTH 13', 'LATE JUNE', 'THE SAME MONTH', 'NOVEMBER (AGAIN)'];
 const CORNER_THINGS = ['nothing', 'cup', 'plant', 'crt', 'sign', 'phone'];
 const SLIDES = ['ANY QUESTIONS?', 'THANK YOU FOR COMING, {NAME}', 'Q & A', 'SLIDE 1 OF 1', 'AGENDA: {NAME}', 'IN SUMMARY'];
+const EXHIBITS = [['mouse', 'MOUSE', 'ball missing since the merger'], ['keyboard', 'KEYBOARD', 'the E has gone'], ['mug', 'MUG', 'not yours'], ['desklamp', 'DESK LAMP', 'saw everything'],
+  ['crt', 'MONITOR', 'still warm'], ['stapler', 'STAPLER', 'on loan from {agent}'], ['chair', 'THE GOOD CHAIR', 'do not sit'], ['plant', 'PLANT', 'watered once, by {agent}'],
+  ['bin', 'RECYCLING', 'contains the roadmap'], ['empty', 'WORK-LIFE BALANCE', 'on loan'], ['empty', 'THE DEADLINE', 'removed for cleaning'], ['empty', '{PROJECT} DOCS', 'artist\'s impression'],
+  ['paper', 'A PRINTED EMAIL', 'reply-all, c. 1998'], ['empty', 'INBOX ZERO', 'never exhibited']];
+const WINGS = ['THE {PROJECT} WING', 'MUSEUM OF {PROJECT}', 'THE {AGENT} BEQUEST', 'GALLERY 0'];
+const PHOTO = [['TEAM PHOTO', 'EVERYBODY LOOK NATURAL'], ['{PROJECT} OFFSITE', '(ON SITE)'], ['COMPANY PHOTO', 'PLEASE REMAIN STILL'], ['SMILE', 'IT IS MANDATORY'], ['TEAM PHOTO', 'RETAKE 4,112'], ['FAMILY PORTRAIT', '{PROJECT}']];
+const SUBROOMS = [['{P}', '{P} (SUBCOMMITTEE)', 'TASK FORCE'], ['MEETING ROOM 1', 'MEETING ROOM 1A', '1A (i)'], ['BREAKOUT ROOM', 'BREAKOUT ROOM (SMALL)', 'PERSONAL'], ['ALL HANDS', 'SOME HANDS', 'ONE HAND']];
 const CHAIR_COLORS = ['#4a7a6a', '#b5483f', '#3f7f9a', '#8a5a8f', '#c9893f', '#5a5a66', '#6f8a4a'];
 
 export const DECK = [
@@ -184,6 +191,13 @@ export const DECK = [
     roll: (R, o) => ({ text: o.tasks.length && R.chance(0.6) ? R.pick(o.tasks) : fill(R.pick(KANBAN), o, R), cols: R.pick(KANBAN_COLS), cards: R.int(44, 70), spill: R.int(14, 34), notes: R.some(['#f2d45c', '#f29a8c', '#9fd6a0', '#9cc4ea', '#e6b0e0'], R.int(1, 3)) }) },
   { id: 'lift', name: 'Going Up', landmark: 'the lift', w: [5, 7], d: [4, 5], ports: [], weight: 1.2, lights: 'normal',
     roll: (R, o) => ({ sign: R.pick(LIFT_SIGNS), floors: R.shuffle(FLOORS).slice(0, 7), behind: R.shuffle(['bricks', 'bricks', 'cutout', 'poster', 'bricks']), who: R.int(0, Math.max(0, o.agents.length - 1)), doors: R.pick(['#8d949c', '#b0a58a', '#7a8a9a']) }) },
+  { id: 'museum', name: 'The Collection', landmark: 'the museum', w: [8, 9], d: [7, 8], ports: ['left', 'right'], weight: 1.6, lights: 'normal',
+    roll: (R, o) => ({ wing: fill(R.pick(WINGS), o, R).toUpperCase(), rope: R.pick(['#8a2a2a', '#2a4a7a', '#6a2a6a']),
+      items: R.shuffle(EXHIBITS).slice(0, 6).map(([type, title, note]) => ({ type, title: fill(title, o, R), note: fill(note, o, R) })) }) },
+  { id: 'photo', name: 'Team Photo', landmark: 'the team photo', w: [7, 8], d: [7, 9], ports: ['left', 'right'], weight: 1.6, lights: 'normal',
+    roll: (R, o) => ({ banner: R.pick(PHOTO).map((t) => fill(t, o, R)), who: R.shuffle(o.agents.map((_, i) => i)), back: R.int(4, 5), front: R.pick([4, 6]), drop: R.pick(['#5d7a9a', '#7a6a8a', '#6a8a7a', '#8a8478']) }) },
+  { id: 'nested', name: 'Breakout Rooms', landmark: 'the room inside the room', w: [8, 9], d: [8, 9], ports: ['left', 'right', 'back'], weight: 1.5, lights: 'normal',
+    roll: (R, o) => { const pr = R.pick(o.projects).toUpperCase(); return { turn: R.int(0, 3), z: R.range(-0.25, 0.1), plates: R.pick(SUBROOMS).map((t) => t.replace(/\{P\}/g, pr)) }; } },
 ];
 export const ARCHETYPES = Object.fromEntries(DECK.map((a) => [a.id, a]));
 
@@ -693,6 +707,8 @@ function shapesFor(R, room) {
     const a = wallPoint(room, side, c - w / 2, 0), b = wallPoint(room, side, c + w / 2, n * RUN);
     if (!clearOf(Math.min(a.x, b.x), Math.min(a.z, b.z), Math.max(a.x, b.x), Math.max(a.z, b.z), 0.6)) continue;
     if (doors.some((d) => d.sill > 0.01 && d.side === side)) continue;
+    // …and never across the foot of the real stairs, the ones that go up to a doorway
+    if (stairZones(room, 1.0).some((q) => Math.min(a.x, b.x) < q.x1 + 0.3 && Math.max(a.x, b.x) > q.x0 - 0.3 && Math.min(a.z, b.z) < q.z1 + 0.3 && Math.max(a.z, b.z) > q.z0 - 0.3)) continue;
     out.push({ kind: 'stairs', side, c, w, n, top: R.pick(['door', 'door', 'wall', 'hole']), weight: 3 });
     break;
   }

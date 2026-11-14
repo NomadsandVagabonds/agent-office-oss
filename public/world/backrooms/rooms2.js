@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { Vox, M, glow } from '../vox/vox.js';
 import { Batch, lin, atlas, drawText, ticks, smooth, WHITE } from './kit.js';
 import { TILE } from './gen.js';
-import { P, clamp, cycle, framed, card, scatter, doorLeaf, doorFrame, wetSign, standee, mugVox } from './bits.js';
+import { P, clamp, framed, card, doorLeaf, doorFrame, wetSign } from './bits.js';
 import { MORE2 } from './rooms3.js';
 
 /** A pool, full to the brim with stress balls (or packing peanuts, or shredded paper). You can wade in. */
@@ -346,11 +346,11 @@ function phone(c) {
     c.flat.quad([a[0] + nx, 0.012, a[1] + nz], [a[0] - nx, 0.012, a[1] - nz], [b[0] - nx, 0.012, b[1] - nz], [b[0] + nx, 0.012, b[1] + nz], cord);
   }
   c.socket(w[2], w[2] === 'back' ? w[0] : w[1], 0.12);
-  let armed = true, ring = 0.6, shake = 0, told = false, n = 0;
+  let armed = true, ring = 0.6, shake = 0, n = 0;
   const here = c.toWorld(px, pz);
   c.tick((dt, t, me) => {
     const d = Math.hypot(me.x - px, me.z - pz);
-    if (!armed && (!me.inside || d > 5.5)) { armed = true; told = true; }
+    if (!armed && (!me.inside || d > 5.5)) armed = true;
     if (armed && d > 2.15) { ring -= dt; if (ring <= 0) { ring = 3.2; shake = 1.0; c.env.play('ring', here.x, here.z, 9); } }
     else { ring = 0.5; shake = 0; }
     if (shake > 0) { shake -= dt; const on = shake > 0.55 || (shake > 0.1 && shake < 0.5); set.rotation.z = on ? Math.sin(t * 70) * 0.05 : 0; set.position.y = on ? Math.abs(Math.sin(t * 35)) * 0.012 : 0; }
@@ -440,4 +440,3 @@ function wetFloor(c) {
 }
 
 export const MORE = { 'stress-pool': stressPool, 'keyboard-floor': keyboardFloor, 'tiny-door': tinyDoor, vending, 'ceiling-plants': ceilingPlants, phone, chairs, 'wet-floor': wetFloor, ...MORE2 };
-void framed; void scatter; void standee; void mugVox; void doorLeaf;

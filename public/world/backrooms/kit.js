@@ -14,7 +14,6 @@ import { canvasTexture, shade } from '../scene/textures.js';
 import { meshVox } from '../vox/mesher.js';
 import { VOXEL } from '../vox/vox.js';
 
-export const PPM = 40;                         // texture pixels per metre, same as the office upstairs
 const GLOW = 2.3;                              // how hard a self-lit voxel shines
 
 const tmpColor = new THREE.Color();

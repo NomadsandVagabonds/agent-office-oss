@@ -192,7 +192,7 @@ export async function buildWorld(kit, level, env, tick) {
     const free = (x, z) => Math.abs(x) <= def.W / 2 - r && Math.abs(z) <= def.D / 2 - r && (rt.clip ? rt.clip(x, z, r) : fitsAt(def, x, z, r)) && head(x, z) >= HEAD
       && !local.some((q) => { if (q.c.on === false) return false; const dx = x - clamp(x, q.x0, q.x1), dz = z - clamp(z, q.z0, q.z1); return dx * dx + dz * dz < r * r; });
     const reaches = () => {
-      const from = wallPoint(def, def.doors[0].side, def.doors[0].c, 0.3), seen = new Uint8Array(nx * nz), queue = [key(from)];
+      const from = wallPoint(def, def.doors[0].side, def.doors[0].c, 0.5), seen = new Uint8Array(nx * nz), queue = [key(from)];
       seen[queue[0]] = 1;
       while (queue.length) {
         const k = queue.pop(), i = k % nx, j = (k - i) / nx, hx = -def.W / 2 + (i + 0.5) * cell, hz = -def.D / 2 + (j + 0.5) * cell, hy = floor(hx, hz);
@@ -204,7 +204,7 @@ export async function buildWorld(kit, level, env, tick) {
           seen[kk] = 1; queue.push(kk);
         }
       }
-      return def.doors.every((dr) => seen[key(wallPoint(def, dr.side, dr.c, 0.3))]);
+      return def.doors.every((dr) => seen[key(wallPoint(def, dr.side, dr.c, 0.5))]);          // half a metre in: clear of a door that is still shut
     };
     if (reaches()) continue;
     console.warn(`[backrooms] a doorway of ${def.arch || def.kind} #${def.id} could not be reached — its furniture is no longer solid`);

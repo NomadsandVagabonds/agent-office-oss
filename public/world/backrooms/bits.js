@@ -8,8 +8,6 @@ import { makeCutout } from './cutout.js';
 export const P = (g, col, x, y, w, h) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const turnTo = (from, to) => { let d = (to - from) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
-/** Lines of text, one per call, round and round. */
-export const cycle = (lines) => { let i = 0; return () => lines[i++ % lines.length]; };
 
 /** A slab of wood behind a picture: reads as a frame. */
 export function framed(c, batch, side, at, y, w, h, uv, wood = [0.2, 0.12, 0.06], alb = WHITE) {

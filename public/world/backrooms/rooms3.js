@@ -3,8 +3,9 @@
 // the talking. Same contract as rooms.js.
 import * as THREE from 'three';
 import { Batch, lin, atlas, drawText, WHITE } from './kit.js';
-import { P, card, framed, standee } from './bits.js';
+import { P, card } from './bits.js';
 import { cutoutArt } from './cutout.js';
+import { MORE3 } from './rooms4.js';
 
 const wrap = (text, width) => { const out = ['']; for (const word of String(text).split(/\s+/)) { if ((out[out.length - 1] + ' ' + word).trim().length > width && out[out.length - 1]) out.push(word); else out[out.length - 1] = (out[out.length - 1] + ' ' + word).trim(); } return out; };
 
@@ -119,7 +120,6 @@ function lift(c) {
     const k = open * open * (3 - 2 * open) * (OW / 2 - 0.03);
     left.position.x = -k; right.position.x = k;
   });
-  void R; void framed; void standee;
 }
 
-export const MORE2 = { kanban, lift };
+export const MORE2 = { kanban, lift, ...MORE3 };
