@@ -294,3 +294,21 @@ test('levels: an agent can take the lift to a floor with a text side, look round
   assert.equal(last.data.found, 'green-build');
   assert.match((await look(ada)).data.text, /green tick/);
 });
+
+test('levels: someone on their way back to their desk can turn round and take the lift again', async (t) => {
+  const office = await startOffice();
+  t.after(() => office.stop());
+  const join = async (name) => (await office.post('/api/agents/join', { provider: 'gemini', name, cwd: '/tmp/proj/atlas' })).data.agent.id;
+  await join('Ada');
+  const bo = await join('Bo');                  // the second desk in the room: the line from the lift to it crosses a wall early
+  const ride = () => office.post('/api/world/use', { agent: bo, thing: 'lift', arg: 'pasture' });
+  assert.equal((await ride()).data.level, 'pasture');
+  await office.post('/api/world/go', { agent: bo, to: 'home' });
+  // On paper a walker is on the straight line between where they were and where they are going, and that
+  // line runs through walls. A second into the walk home, the lift used to answer "there is no way into
+  // Elevator from here".
+  await sleep(1300);
+  const again = await ride();
+  assert.equal(again.status, 200, JSON.stringify(again.data));
+  assert.equal(again.data.level, 'pasture');
+});

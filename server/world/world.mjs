@@ -580,7 +580,12 @@ export function createWorld(ctx, file) {
       if (room.locked) return { error: 'you do not know a way in there', status: 403 };
       const cx = room.rect.x + room.rect.w / 2, cz = room.rect.z + room.rect.d / 2;
       const tile = nav.nearestWalkable(cx, cz + (room.kind === 'project' ? 2.6 : 0), 8);
-      if (!tile || !nav.findPath(currentPosition(agent.id) || layout.spots.plaza, { x: tile.x + 0.5, z: tile.z + 0.5 })) {
+      const here = currentPosition(agent.id) || layout.spots.plaza;
+      const wayFrom = (from) => !!tile && !!nav.findPath(from, { x: tile.x + 0.5, z: tile.z + 0.5 });
+      // Someone in mid-walk is, on paper, on the straight line between where they were and where they are
+      // going, and that line can run through a wall. Then the way is judged from the nearest bit of floor.
+      const nearby = () => { const t = nav.nearestWalkable(here.x, here.z, 8); return !!t && wayFrom({ x: t.x + 0.5, z: t.z + 0.5 }); };
+      if (!wayFrom(here) && !nearby()) {
         return { error: `there is no way into ${room.name} from here`, status: 409 };
       }
       releasePoi(agent.id);
