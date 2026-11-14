@@ -139,7 +139,8 @@ test('the page\'s own script: a building nobody has had, a tape from the address
   assert.match(src, /let next = asSeed\(q\.get\('tape'\)\) \|\| null;/);
   assert.match(src, /const mine = next \? keptTapes\(\)\.find\(\(t\) => t\.seed === seed\) : null;/);
   assert.match(src, /\.\.\.\(mine \? \{ replay: true, pursuer: typeof mine\.mascot === 'boolean' \? mine\.mascot : undefined \} : \{\}\)/, 'only a tape this browser has kept is played back; somebody else\'s is a building like any other');
-  // when a visit is over (the way out, caught, a flat battery, Esc) the card comes up, and after the card the front page:
+  assert.match(src, /home: \{ label: 'Return to homepage' \}/, 'the score has an explicit way back to the home page');
+  // when a visit is over (the way out, caught, a flat battery, Give Up) the card comes up, and after the card the front page:
   // never straight into another building. Only a card put down by its tape's number asks for a building again
   assert.match(src, /next = result\?\.card\?\.again \? asSeed\(result\.card\.again\) \|\| null : null;\n      if \(!next\) \{ location\.assign\(HOME\); return; \}/, 'a visit that is over does not go home');
   assert.match(src, /const HOME = '\.\/';/);

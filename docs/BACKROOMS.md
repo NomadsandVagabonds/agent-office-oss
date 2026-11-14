@@ -34,7 +34,9 @@ These are the owner's, and every room is held to them.
 
 1. **Nothing is explained.** No captions, no instructions, no control hints,
    nothing on screen but the camcorder. Words live in the world: on signs,
-   screens, labels, sticky notes.
+   screens, labels, sticky notes. The owner's requested Esc menu is the
+   exception: its Controls page explains the hands and the inventory, over
+   the paused camcorder picture. Room puzzles still explain themselves.
 2. **A room may ask for more than one new thing.** This rule used to hold
    every room to at most one thing the visitor had had no chance to learn.
    The owner has dropped that: "I am unconvinced this 'one new rule' thing is
@@ -424,6 +426,30 @@ for `CAST_LESSONS` if it teaches something), the line for `cast/index.js`,
 `cast/<id>.js` whole, its tests, the addresses you looked at it from, and two
 sentences: what its rule is, and how somebody who has not worked it out yet is
 warned before it costs them anything.
+
+## The camcorder menu
+
+Esc opens the transparent camcorder menu; with the mouse captured, the
+browser's release of the mouse opens the same menu. A Menu button gives
+touch screens the same controls. Esc closes a submenu first, then resumes;
+in the inventory it still closes the current card before opening the menu.
+
+The menu pauses the whole visit: its tally, creatures and room hazards,
+both batteries, hit cooldown, fire, falls, and the handover between parts.
+Audio pauses at the same point. Opening the inventory alone does **not**
+pause any of these. Resume clears held input and takes the mouse again when
+the browser allows it.
+
+Settings are remembered in `office.backrooms`: separate music and effects
+levels, master mute, look sensitivity, inverted vertical look, and the
+existing three picture modes. Defaults and saved-value validation live in
+`core/backrooms-settings.mjs`; old saves with only mute and VHS still work.
+Difficulty is visibly unavailable at Normal until it has real game rules.
+
+Give Up confirms ending the recording and shows the scorecard, including
+for a visit shorter than two seconds. The standalone site gives that card
+a Return to homepage button; the Office keeps its return-to-work behavior.
+The end reason remains `quit`, so giving up cannot count as escaping.
 
 ## What a visitor carries
 
