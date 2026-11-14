@@ -1,5 +1,9 @@
 # Out of Office: twelve puzzle rooms
 
+> **Withdrawn as puzzles.** The owner read these and was not convinced they would be a joy to solve: most are
+> "notice the odd thing and collect". Do not build from this file. What replaced it is `TAPE.md`, beside it.
+> The research and the audit of the deck below still stand.
+
 A proposal. Nothing here is built. Each room has one rule that nobody states,
 an answer the seed moves, and a door you can walk out of without solving
 anything. None has a key, a code, a fuse or a card. The owner picks; rooms are
