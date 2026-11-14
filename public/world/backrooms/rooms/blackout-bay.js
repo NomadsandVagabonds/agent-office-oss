@@ -109,13 +109,14 @@ export function build(c) {
 
     const targets = standIns.map((s) => {
       const sw = c.toWorld(s.x, s.z);
-      return { x: s.x, z: s.z, los: c.world.los(meW.x, meW.z, sw.x, sw.z) };
+      return { x: s.x, z: s.z, los: c.world.los(meW.x, meW.z, sw.x, sw.z), fire: !!c.fire(s.x, s.z) };          // (a fire it can see holds it as the beam does)
     });
 
     const res = stepBlackout(rule, {
       dt,
       inDark,
       hasFlashlight,
+      byFire: !!c.fire(me.x, me.z),          // paper burning within sight is light enough to stand in
       px: me.x,
       pz: me.z,
       yaw: me.yaw,

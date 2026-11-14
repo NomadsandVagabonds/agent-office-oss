@@ -16,6 +16,7 @@
 //   resident the id of whoever lives in the room, if somebody does (one such room to a part of the building, at most)
 //   items    what that resident cares about that a visitor might be carrying (inventory item types)
 //   caught   how many hearts it costs to be got by them
+//   fire     what a fire lit by the visitor is to them, where it is anything: 'fears' | 'drawn' (cast/fire.rule.js; the room's rule does it, with c.fire)
 //   doors    'own': the room hangs doors of its own on its doorways, so the floor's fire doors (doors.js) keep off them
 //   headline true: the place has half-remembered something from the news and staged it wrongly. Which stories become
 //            rooms is the owner's choice, nobody else's; the plan puts at most one in a visit, never on its first floor.
@@ -186,7 +187,7 @@ export const MORE_DECK = [
   },
   {
     id: 'blackout-bay',
-    resident: 'stand-ins', items: ['torch'], teaches: 'beam', caught: 2,
+    resident: 'stand-ins', items: ['torch'], teaches: 'beam', caught: 2, fire: 'fears',
     name: 'Blackout Bay',
     landmark: 'the pitch-dark room with the flashlight',
     w: [8, 10], d: [10, 12],

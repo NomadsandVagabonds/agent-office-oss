@@ -3,7 +3,8 @@
 // on your side, and it does not know it: it only wants the next light. But the
 // next light is always one room nearer the way down, and it waits there, going
 // round, until you have come up to it. Lose it and it is still going round the
-// last tube you saw it at. Hold a lit torch and it wants that instead.
+// last tube you saw it at. Hold a lit torch and it wants that instead. Light a
+// fire where it can see it and it wants that most of all, and has it.
 // The rule is flits(), in moth.rule.js.
 import * as THREE from 'three';
 import { toWorld, ceilAt, roomPath } from '../gen.js';
@@ -44,15 +45,24 @@ export function create(c) {
   return {
     ready,
     update(dt) {
-      if (!group) return;
+      if (!group || s.mode === 'gone') return;
+      const fire = c.fire(walker.x, walker.z), atFire = !!fire && Math.hypot(walker.x - fire.x, walker.z - fire.z) < 0.8;
       const m = c.me(), d = Math.hypot(walker.x - m.x, walker.z - m.z), held = c.held();
       const seen = !c.hidden(walker.x, walker.z, 0.3) && d < 14;
       if (seen && d < 8 && !known) { known = true; c.met(); }
-      s = flits(s, dt, { d, seen, torch: !!(held && held.type === 'torch' && held.lit), next: onward(room) !== null, there: !!to && !!to.done });
+      s = flits(s, dt, { d, seen, torch: !!(held && held.type === 'torch' && held.lit), next: onward(room) !== null, there: !!to && !!to.done, fire: !!fire, atFire });
+      if (s.burnt) { c.play('static', walker.x, walker.z, 6); c.play('tick', walker.x, walker.z, 8); group.visible = false; return; }
       if (s.moved) { to = lampOf(onward(room)); c.play('rustle', walker.x, walker.z, 5); }
       phase += dt;
       let tx, tz, ty;
-      if (s.mode === 'fly' && to) {
+      if (s.mode === 'flame' && fire) {
+        // to the fire, and round it: nearer and lower the longer it has been at it
+        c.walk.go(walker, fire, MOTH.speed * dt, 0.3);
+        room = c.room(walker.x, walker.z) ?? room; lamp = { room, x: walker.x, z: walker.z, y: 1.5 }; to = null;
+        const k = Math.min(1, (s.heat || 0) / MOTH.burn), r = atFire ? 0.5 - 0.38 * k : 0.2;
+        tx = (atFire ? fire.x : walker.x) + Math.cos(phase * (5 + 6 * k)) * r; tz = (atFire ? fire.z : walker.z) + Math.sin(phase * (5 + 6 * k)) * r;
+        ty = atFire ? 1.1 - 0.75 * k : 1.3;
+      } else if (s.mode === 'fly' && to) {
         const got = c.walk.go(walker, to, MOTH.speed * dt);
         if (got.door && Math.random() < dt * 3) c.play('tick', walker.x, walker.z, 5);          // against a shut door, like a moth at a window
         room = c.room(walker.x, walker.z) ?? room; ty = to.y - 0.25;

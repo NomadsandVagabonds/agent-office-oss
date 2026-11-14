@@ -210,12 +210,17 @@ damage. Water extinguishes it, and its final second fades out. Rejected wet,
 blocked or unsupported ground, insufficient headroom and the fire limit leave
 the paper and lighter untouched.
 
-A hostile pirate within six units of a visible fire retreats, including while
-watched. The query rejects obstructed sightlines and a different floor height.
-`fire-fear.js` moves it away at 2.7 units per second and remembers the last
-fire for 1.5 seconds after losing sight. Movement still checks walls and drop
+What a creature does about a fire is its own rule, through the cast's contract
+(`docs/BACKROOMS.md`, "Adding a creature": the `fire` field and `c.fire`). The
+mascot fears one: it will not go within three metres of a fire it can see, so a
+fire in a doorway is a door it does not pass until the paper has burnt, and one
+lit beside it sends it backing off at 2.7 metres a second, including while
+watched, for 1.5 seconds after it is clear. The query rejects obstructed
+sightlines and a different floor height. Movement still checks walls and drop
 edges; a blocked retreat holds off pursuit instead of running the normal
-attack in the same frame. Friendly cutouts do not react, and a fire cannot
+attack in the same frame. (`cast/fire.rule.js`, after the retreat hook first
+written here as `fire-fear.js`.) The desk moth is drawn to a fire and does not
+survive it; the Stand-Ins are held by one as by a beam. Friendly cutouts do not react, and a fire cannot
 undo an already-caught state.
 
 The pirate change is this small fear hook only. Fable's cast session still
@@ -317,7 +322,7 @@ than reporting and paying the same visit through both paths.
 - `inventory-items.js`, `inventory-world.js`: native voxel props, pickups,
   drops, chalk and floor resource ownership.
 - `inventory-fire.js`: floor-owned voxel fires, placement limits and visible
-  threat queries. `fire-fear.js`, `pursuer.js`: the pirate's retreat hook.
+  threat queries. `cast/fire.rule.js`, `cast/pirate.js`: the mascot's fear of one.
 - `inventory-hud.js`, `inventory.js`: pockets, inspection, combining, the NPC
   facade and visit/floor lifecycle.
 - `health-state.js`, `camera-state.js`, `survival.js`: resource rules, action
