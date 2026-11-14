@@ -29,6 +29,8 @@ import { createHud } from './hud.js';
 import { createSound } from './sound.js';
 import { createInput } from './input.js';
 import { createStalkers } from './pursuer.js';
+import { createHand } from './hand.js';
+import { createDenizens } from './denizens.js';
 import { createLoot, lootLeft } from './loot.js';
 import { leaving } from './leaving.js';
 import { middle, THIN_BEHIND } from './marks.js';
@@ -117,7 +119,7 @@ async function visit(office, opt) {
   // 'loading' → 'falling' → 'play' → ('cut' → 'falling' → 'play')… → 'ending' (or, by the way out, 'through') → 'done'
   let state = 'loading', cur = null, time = 0, since = 0, ending = 0, reason = null, resolveVisit = null, swapping = false;
   let out = null;                                         // by the way out: where the camera was when the wall gave, and which way is out
-  let pictureKey = '', currentUse = null, light = 0.3, torch = 0, interference = 0, pendingQuit = false, kept = { card: false, coins: [] };
+  let pictureKey = '', currentUse = null, light = 0.3, torch = 0, interference = 0, redWash = 0, pendingQuit = false, kept = { card: false, coins: [] };
   const u = vhs.uniforms, blank = new THREE.Scene();
   u.uSnow.value = 1;
 
@@ -148,13 +150,13 @@ async function visit(office, opt) {
 
   /* ---- a floor: everything that is built for it and thrown away with it ---------------- */
   const halfFov = () => Math.atan(Math.tan((FOV * Math.PI) / 360) * camera.aspect);
-  async function build(level, carry) {
+  async function build(level, carry, heldItem = null) {
     const kit = createKit();
     const f = { level, kit, world: null, player: null, env: null };
     const env = f.env = {
       level, cast, who, kit, sound, hud, vhs, renderer, builders: await buildersFor(level), catalogue: await loadCatalogue(kit), Avatar, layout,
       plan: office.net?.state?.world?.plan || {}, visit: plan, carry,
-      player: null, world: null, pursuer: null,
+      player: null, world: null, pursuer: null, hand: null, denizens: null,
       hatches: new Map(),                       // room id → { drop() }: where a door in a floor lets you out
       /** The visit is over. how: { nx, nz } — the way out through the wall that gave (thin.js), for an 'exit'. */
       end: (why, how) => finish(why, how),
@@ -180,7 +182,11 @@ async function visit(office, opt) {
       play(name, x, z, reach) { const at = x === undefined ? {} : env.hear(x, z, reach); if (at.vol === undefined || at.vol > 0.02) sound.play(name, at); },
       /** More static on the tape (0..1), for a moment; things that interfere call this every frame. */
       interfere(k) { interference = Math.max(interference, k); },
+      /** Wash the picture crimson (0..1), for blackout hazards. */
+      red(k) { redWash = Math.max(redWash, k); },
     };
+    createHand(env, camera, heldItem);
+    createDenizens(env);
     createStalkers(env);
     env.loot = purse;
     purse?.hang(env);
@@ -190,6 +196,8 @@ async function visit(office, opt) {
   }
   function letGo(f) {
     if (!f) return;
+    f.env.hand?.dispose?.();
+    f.env.denizens?.dispose?.();
     f.env.pursuer?.dispose?.();
     f.world?.dispose(); f.kit.dispose();
   }
@@ -219,11 +227,11 @@ async function visit(office, opt) {
   }
   async function swap() {
     swapping = true;
-    const old = cur, carry = old.env.pursuer?.carry?.() || null, next = old.level.depth + 1;
+    const old = cur, carry = old.env.pursuer?.carry?.() || null, held = old.env.hand?.get?.() || null, next = old.level.depth + 1;
     cur = null; vhs.setScene(blank);
     letGo(old);
     let f = null;
-    try { f = await build(floor(next), carry); }
+    try { f = await build(floor(next), carry, held); }
     catch (err) { console.error('[backrooms] the next floor would not build', err); swapping = false; reason = 'quit'; conclude(); return; }
     swapping = false;
     if (state === 'done') { letGo(f); return; }
@@ -238,7 +246,9 @@ async function visit(office, opt) {
     time += dt; since += dt;
     hud.update(dt);
     interference *= Math.exp(-4 * dt);
+    if (state !== 'ending') redWash *= Math.exp(-3.2 * dt);
     u.uTrack.value = interference;
+    u.uRed.value = clamp(redWash, 0, 1);
     if (interference > 0.5) hud.glitch(0.3);
     if (!cur) { u.uSnow.value = 1; return; }                  // between floors: nothing but snow
     const { world, player, env } = cur, me = player.me;
@@ -246,7 +256,9 @@ async function visit(office, opt) {
     player.update(dt, time);
     me.slow = 1; me.sinkTo = 0;                              // rooms that slow you or make you stoop say so every frame
     world.update(dt, time, me);
+    env.denizens?.update(dt, time);
     env.pursuer?.update(dt, time);
+    env.hand?.update(dt, time);
     purse?.update(dt, time, state === 'play');
     currentUse = state === 'play' ? world.usable(me) : null;
     hud.hint(!!currentUse);
@@ -258,8 +270,9 @@ async function visit(office, opt) {
     u.uGain.value = clamp(Math.pow(0.3 / Math.max(light, 0.04), 0.55), 0.9, 2.3);
     const wantTorch = light < 0.11 && !here?.noTorch ? 1 : 0;
     torch += (wantTorch - torch) * (1 - Math.exp(-3 * dt));
-    cur.kit.shared.uTorch.value = torch * 1.5;
-    hud.flag('LIGHT', torch > 0.5);
+    const handTorch = env.hand?.torchPower?.() || 0;
+    cur.kit.shared.uTorch.value = Math.max(torch * 1.5, handTorch);
+    hud.flag('LIGHT', torch > 0.5 || handTorch > 0);
     sound.setHum(light / 0.3);
     if (here?.flickers.length && here.flickerNow < 0.5 && Math.random() < 0.3) sound.play('tick', { vol: 0.7 });
 
