@@ -12,7 +12,7 @@ import { handle } from './book-api.mjs';
 import { memoryStore } from './book-store.mjs';
 
 const root = path.resolve(process.argv[2] || 'dist'), port = Number(process.argv[3]) || 4478;
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.jpg': 'image/jpeg', '.png': 'image/png' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8', '.mp3': 'audio/mpeg', '.woff2': 'font/woff2', '.jpg': 'image/jpeg', '.png': 'image/png' };
 const ctx = { store: process.env.BOOK === '0' ? null : memoryStore(), salt: 'local' };
 
 http.createServer(async (req, res) => {

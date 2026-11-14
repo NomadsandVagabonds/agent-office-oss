@@ -35,7 +35,7 @@ plain files and can be served by anything.
 | `index.html` | the home page (`home.html`, with `home.css`, `home.js` and `art.js`). Small, and with nothing of the level in it, so it is there at once |
 | `play.html` | the page the level is played on (`page.html`), with its head, its import map, its content policy and the list of modules to fetch at once filled in. Served as `/play` |
 | `site.js` | that page's script |
-| `world/`, `core/` | every module the level imports, found by reading the imports (`tools/backrooms-sample/stage.mjs`), and the rules of the book (`core/book.mjs`) |
+| `world/`, `core/` | every module the level imports, found by reading the imports (`tools/backrooms-sample/stage.mjs`), any file a module keeps beside itself and asks for by its own address (the level's music, `world/backrooms/music/`), and the rules of the book (`core/book.mjs`) |
 | `vendor/` | three.js and the add-ons the level uses, the fonts it asks for, and their licences |
 | `shots/` | pictures from inside, for the home page (`tools/blockrooms/shots/`: taken through the level's own camcorder) |
 | `og.jpg` | the picture a link to the site is shown with |

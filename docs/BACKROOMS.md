@@ -281,7 +281,9 @@ from the visit's seed, two at most, a different two each time.
   They are of this office: colleagues, facilities, things from a workplace
   that has gone wrong.
 - **Cheap.** A few thousand triangles, lit by where it stands (`c.light`), a
-  handful of meshes. No new audio files: `sound.js` voices only.
+  handful of meshes. No new audio files: `sound.js` voices only. (The one
+  file the level does load is the owner's own music, `music/room4.mp3`,
+  played low under everything by `sound.js`. That was the owner's to add.)
 - **Seeded.** Which visit it is in, which floor and which room are decided by
   the seed and nothing else. `Math.random` is for what happens while somebody
   is playing.
@@ -539,6 +541,6 @@ the office is: the seed is the clock, and no building is ever given twice.
 | `cast.js`, `cast/` | who is down here (pure: the cast, who is dealt into a visit, on which floor, in which room) · one file to a creature, `cast/index.js` listing them; `cast/pirate.js` is the mascot; `cast/hunt.js` its rules (pure); `cast/paths.js` and `cast/walk.js` how anything gets about |
 | `pursuer.js`, `reach.js` | the cast's conductor on a floor (and the cardboard colleague) · the rule for being within arm's reach of the mascot (pure: the tape tears, and it moves in the torn frames) |
 | `doors.js`, `doorleaf.js` | which doorways have a pair of fire doors (pure) · the doors themselves |
-| `player.js`, `input.js`, `hud.js`, `vhs.js`, `sound.js` | walking, keys and touch, the camcorder, the tape, the hum |
+| `player.js`, `input.js`, `hud.js`, `vhs.js`, `sound.js` | walking, keys and touch, the camcorder, the tape, the hum (and, from `music/`, the owner's music under it) |
 | `../levels/basement.js` | the floor above it all, and the wall |
 | `../dev/backrooms.js` | the level's own page |
