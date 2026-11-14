@@ -29,6 +29,7 @@ import { registerKnowledgeRoutes } from './knowledge.mjs';
 import { createWorld } from './world/world.mjs';
 import { registerWorldRoutes } from './world/routes.mjs';
 import { createHarness } from './harness/index.mjs';
+import { createWaiting } from './waiting.mjs';
 import { registerHarnessRoutes } from './harness/routes.mjs';
 import { createUsage, registerUsageRoutes } from './usage.mjs';
 import { createWorkspace, registerWorkspaceRoutes } from './workspace.mjs';
@@ -83,6 +84,8 @@ export function createOffice(config) {
   ctx.workspace = createWorkspace(ctx, data('workspace.json'));
   // Sessions the office drives itself (ACP, Codex app-server): see docs/HARNESS.md.
   ctx.harness = createHarness(ctx, data('harness.json'));
+  // An agent that is waiting on somebody sits on the office instead of on a human (same guard rails as the harness's wake).
+  ctx.waiting = createWaiting(ctx);
   ctx.world = createWorld(ctx, data('world.json'));
   // What a card in Review is actually offering, what was found, and what the human decided.
   ctx.reviews = createReviews(ctx, data('reviews.json'));
@@ -206,6 +209,7 @@ export function createOffice(config) {
     if (sweepTimer) clearInterval(sweepTimer);
     ctx.codexObserver.stop();
     // Agents the office started end with it: nothing is left working unattended.
+    try { ctx.waiting.stop(); } catch {}
     try { await ctx.harness.stop(); } catch {}
     try { ctx.usage.stop(); } catch {}
     try { ctx.workspace.stop(); } catch {}

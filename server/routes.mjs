@@ -331,6 +331,16 @@ export function registerCoreRoutes(router, ctx) {
     const agent = requireAgent(body.agent || body.agentId || '');
     return inbox.ack(agent, body.upTo);
   }, { about: 'Advance your read cursor: {agent, upTo?}.' });
+  router.get('/api/inbox/wait', async (c) => {
+    const agent = requireAgent(c.query.get('agent') || c.query.get('agentId') || '');
+    // whoever is waiting may hang up: the wait ends with them, and nothing is marked read for nobody
+    const gone = new AbortController();
+    c.res.on('close', () => { if (!c.res.writableEnded) gone.abort(); });
+    const out = await ctx.waiting.wait(agent, { timeoutMs: c.query.has('timeoutMs') ? Number(c.query.get('timeoutMs')) : undefined, signal: gone.signal });
+    return out === null ? undefined : out;                 // (nobody is there to be told)
+  }, { about: 'Hold until there is mail worth waking ?agent=<id|name> for (a direct note, a mention, a human in its channels), then hand it over read; &timeoutMs= (50 s at most: ask again). Same guard rails as mail that wakes a driven session.' });
+  router.get('/api/inbox/waiting', () => ({ waiting: ctx.waiting.list(), limits: ctx.waiting.limits() }),
+    { about: 'Who is sitting on the office waiting for mail right now.' });
 
   /* ---- tasks ---------------------------------------------------------- */
 

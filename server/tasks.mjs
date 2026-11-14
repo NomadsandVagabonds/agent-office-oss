@@ -114,7 +114,40 @@ export function createTasks(ctx) {
     if (assigneeAgent) task.assigneeName = assigneeAgent.name;
     bus.local({ type: 'task:created', task, by: authorInfo });
     broadcast(task.deptId);
-    return { ok: true, task: pub(task) };
+    const told = body.notify === false ? null : tellAssignee(task, null, authorInfo);
+    return { ok: true, task: pub(task), ...(told ? { told } : {}) };
+  }
+
+  /**
+   * A card has been given to somebody: tell them. It used to be that the only way to find out was to look at the
+   * board, so work handed over sat until its new owner happened to. The note is ordinary direct mail from whoever
+   * did it (so it is read once, waits in the inbox, ends a wait, and wakes a driven agent by the usual rules; from
+   * the human it is the human talking, which a driven agent takes as a turn). Nobody is told of a card they took
+   * themselves, and `notify: false` on the request keeps the board quiet (an import, a tidy-up).
+   * → { to, how } or null
+   */
+  function tellAssignee(task, before, authorInfo) {
+    if (ctx.cfg.taskMail === false || !task.assignee) return null;
+    if (before && before.assignee === task.assignee) return null;                       // it was theirs already
+    const to = ctx.agents.get(task.assignee);
+    if (!to) return null;
+    const byAgent = authorInfo.authorType === 'agent' && authorInfo.agent ? authorInfo.agent : null;
+    if (byAgent && byAgent.id === to.id) return null;                                   // they took it themselves
+    let dept = task.deptId;
+    try { dept = ctx.comms.getChannels().find((c) => c.departmentId === task.deptId)?.name || dept; } catch { /* the id will do */ }
+    const content = `[Board] “${String(task.title).slice(0, 160)}” is yours now (${task.status}, ${dept}).`
+      + `${task.body ? `\n${String(task.body).slice(0, 600)}` : ''}`
+      + `\nCard ${task.id}. When you start: office task move ${task.id} doing — and done, or blocked with a word on why, when that is true.`;
+    try {
+      const sent = byAgent
+        ? ctx.comms.sendCollabMessage({ fromAgentId: byAgent.id, toAgentId: to.id, content })
+        : ctx.comms.sendLeadDirectMessage({ toAgentId: to.id, content });
+      if (sent && sent.error) return null;
+      return { to: to.id, toName: to.name, how: sent?.receipt?.status || (sent?.delivered ? 'delivered' : 'stored') };
+    } catch (err) {
+      ctx.log?.warn?.(`[tasks] could not tell ${to.name} about ${task.id}: ${err.message}`);
+      return null;
+    }
   }
 
   function update(taskId, body) {
@@ -163,7 +196,8 @@ export function createTasks(ctx) {
     bus.local({ type: 'task:updated', task: updated, before, by: authorInfo });
     if (before.deptId !== updated.deptId) broadcast(before.deptId);
     broadcast(updated.deptId);
-    return { ok: true, task: pub(updated) };
+    const told = body.notify === false ? null : tellAssignee(updated, before, authorInfo);
+    return { ok: true, task: pub(updated), ...(told ? { told } : {}) };
   }
 
   function remove(taskId) {

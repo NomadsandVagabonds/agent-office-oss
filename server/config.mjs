@@ -68,5 +68,14 @@ export function loadConfig(env = process.env) {
     harnessFile: path.resolve(env.OFFICE_HARNESS_FILE
       || path.join(os.homedir(), '.claude', 'agent-office', 'harness.json')),
     harness: harnessSettings(env),
+    // The waiting inbox (server/waiting.mjs): an agent sits on the office until there is mail for it. It shares the
+    // harness's guard rails for automatic turns (OFFICE_WAKE_*); these two are only how long one request is held.
+    // The board tells a card's new assignee, as a direct note (server/tasks.mjs): OFFICE_TASK_MAIL=0 keeps it quiet.
+    taskMail: env.OFFICE_TASK_MAIL !== '0',
+    waiting: Object.freeze({
+      enabled: env.OFFICE_WAIT !== '0',
+      holdMs: Math.max(100, Math.min(50_000, Number(env.OFFICE_WAIT_HOLD_MS) || 25_000)),
+      maxHoldMs: 50_000,
+    }),
   });
 }

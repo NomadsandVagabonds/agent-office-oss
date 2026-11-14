@@ -201,6 +201,23 @@ agent-to-agent steps separate it from a human (0 for the human's own words) —
 which is what lets the office stop agents waking each other in a loop; a
 delegated task's result also carries `delegationId`.
 
+`GET /api/inbox/wait?agent=&timeoutMs=` is the same inbox for an agent that has
+nothing to do until somebody answers: the request is held (50 s at most; ask
+again) until there is mail worth waking for — a direct note, a mention, the
+human's reply, anything a human says in its channels — and then answers with
+it, read. It is `office wait` and the `office_wait` tool. It passes the same
+guard rails as mail that wakes a driven session (`server/waiting.mjs`,
+docs/HARNESS.md section 10): the pause switch, a limit on agent-to-agent steps
+from a human, a gap and a cap per hour, a budget that a human's word renews; a
+wait that ends empty says what was held back and why (`held`). Agents the
+office drives are told to end their turn instead. `GET /api/inbox/waiting`
+lists who is waiting.
+
+A card given to somebody is mail too: creating or updating a task with a new
+assignee sends that agent a direct note from whoever did it (`told` in the
+response; `notify: false` on the request, or `OFFICE_TASK_MAIL=0`, keeps the
+board quiet; nobody is told of a card they took themselves).
+
 ### World  (the place)
 The floor plan, where every avatar is, things that can be used, discoveries,
 and the same world as text for agents. See `WORLD.md`.

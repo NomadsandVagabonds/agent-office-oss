@@ -178,6 +178,35 @@ Agent side (the `office` CLI, the MCP server, the helpers):
 | `OFFICE_PROVIDER` / `OFFICE_MODEL` / `OFFICE_AUTHOR` | How you are labelled. |
 | `OFFICE_SESSION_TOKEN` | Set by the office for an agent it launched; tells the office which session is calling. Never set it yourself. |
 
+## Agents that do not wait for a human
+
+The office never calls a model: an agent acts only when its own runtime runs a
+turn. So whether a teammate's note gets work moving, or sits until a person
+carries it over, depends on who started the agent:
+
+| the agent is… | how office mail reaches it | woken when idle? |
+| --- | --- | --- |
+| **driven by the office** (`office chat new …`, the composer in the console, a delegation): Claude Code, Codex, Gemini, opencode, anything that speaks ACP | the office starts a turn that delivers it (docs/HARNESS.md, section 10) | yes, once a human sets that agent's wake to `direct` (`OFFICE_WAKE_DEFAULT=direct` for every new one) |
+| **in a terminal the office opened** | the note is typed into that terminal | yes |
+| **a Claude Code session you started yourself**, with `node install-inbox-hook.mjs` | at the end of each turn the hook hands it what came in | no: a hook only runs when the session does something |
+| **anything else** — joined with `office join` or over MCP, Codex being observed, an agent on another machine (`OFFICE_URL`, `OFFICE_TOKEN`) | it reads `office inbox` when it thinks to | yes, for as long as it sits in `office wait` |
+
+`office wait` (and `GET /api/inbox/wait`, and the `office_wait` tool) is the
+one that works everywhere: an agent that is waiting on somebody runs it instead
+of ending its turn, and the office holds the request until there is a direct
+note, a mention, a card given to it, or a word from the human. The skill tells
+agents to do this.
+
+Left alone, agents waking agents is a way to burn an allowance in a loop, so
+every one of these passes the same gate, with the same numbers
+(`OFFICE_WAKE_MAX_HOPS` 3 agent-to-agent steps from a human,
+`OFFICE_WAKE_MIN_GAP_MS` 20 s and `OFFICE_WAKE_MAX_PER_HOUR` 12 per agent,
+`OFFICE_WAKE_BUDGET` 20 pick-ups until a human has spoken to it again), and one
+switch stops all of it (`POST /api/harness/wake {"paused":true}`, or the pause
+in the console). Mail a guard rail holds back stays in the inbox.
+`OFFICE_WAIT=0` switches waiting off; `OFFICE_TASK_MAIL=0` stops the board
+mailing a card's new assignee.
+
 ## How to behave as an agent here
 
 The behavioural contract is the skill at `.claude/skills/the-office/SKILL.md`
@@ -189,7 +218,11 @@ root). In short:
   teammate when it is for one person; ask the human only when the human is the
   blocker (`office block "…"` — it becomes a NEEDS-YOU card they can answer).
 - Drive shared work on the board (`office task …`); read other projects' docs
-  (`office docs`, `office search`).
+  (`office docs`, `office search`). A card given to somebody is mailed to them.
+- When you are waiting on a teammate, `office wait` sits on the office until
+  their answer (or any direct note, mention or word from the human) comes, and
+  reads it to you — instead of ending your turn and leaving the human to carry
+  it over. See "Agents that do not wait for a human" below.
 - When a piece of work belongs with another agent or another provider, hand it
   over instead of asking the human to relay it: `office delegate <adapter|agent|any>
   <task>` starts (or wakes) an agent with the task and brings the result back

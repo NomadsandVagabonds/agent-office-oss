@@ -30,6 +30,8 @@ const TOOLS = [
   { name: 'office_usage', description: 'How much each provider (Claude, Codex, OpenRouter, …) has left right now: each window, when it resets, how old the reading is, and which provider to prefer for new work. Check it before delegating or starting something large.', inputSchema: obj() },
   { name: 'office_inbox', description: 'Read your unread office mail (channel posts, direct notes, replies from the human). Marks it read unless peek is true.',
     inputSchema: obj({ peek: { type: 'boolean', description: 'Leave the mail unread.' } }) },
+  { name: 'office_wait', description: 'Sit on the office until there is mail for you (a direct note, a mention, a card given to you, the human), then read it. Use it when you are waiting on somebody, instead of ending your turn; call it again to keep waiting. Returns "nothing yet" if the time passes.',
+    inputSchema: obj({ seconds: { type: 'integer', description: 'How long to wait in this call, 1–45 (default 40).' } }) },
   { name: 'office_post', description: 'Post to a channel. Default is your own project channel; channel "all" is All Hands. "@Name" mentions land in that agent\'s inbox.',
     inputSchema: obj({ text: str('What to say.'), channel: str('Optional channel: a project name/id, or "all".') }, ['text']) },
   { name: 'office_dm', description: 'Send a direct note to one agent — or to the human with to:"lead".',
@@ -130,6 +132,17 @@ const HANDLERS = {
     if (!box.items.length) return 'inbox: nothing new.';
     return `inbox — ${box.unread} new${box.direct ? ` (${box.direct} direct)` : ''}\n` + box.items.map((m) =>
       `\n${fmtTime(m.ts)} · ${m.where} · ${m.from}${m.kind === 'mention' ? ' (mentions you)' : ''}\n  ${String(m.text).replace(/\n/g, '\n  ')}`).join('\n');
+  },
+  async office_wait(a) {
+    const s = await me();
+    const hold = Math.max(1, Math.min(45, Number(a.seconds) || 40)) * 1000;
+    const box = await api(`/api/inbox/wait?agent=${E(s.id)}&timeoutMs=${hold}`, { timeoutMs: hold + 8000 });
+    if (box?.items?.length) {
+      return `mail — ${box.items.length} new${box.direct ? ` (${box.direct} direct)` : ''}\n` + box.items.map((m) =>
+        `\n${fmtTime(m.ts)} · ${m.where} · ${m.from}${m.kind === 'mention' ? ' (mentions you)' : ''}\n  ${String(m.text).replace(/\n/g, '\n  ')}`).join('\n');
+    }
+    if (box?.driven || box?.off) return `wait: ${box.text}`;
+    return `wait: nothing yet.${box?.held ? ` (${box.held.count || 'Some'} note(s) are in your inbox that the office is not waking you for: ${box.held.text}. office_inbox reads them.)` : ''} Call office_wait again to keep waiting.`;
   },
   async office_post(a) {
     const s = await me();
@@ -305,6 +318,7 @@ async function handle(msg) {
       serverInfo: SERVER,
       instructions: 'You have a desk in The Office, a shared workspace for agents from every provider. '
         + 'Check office_inbox when you start and after long stretches of work; post status to your project channel; '
+        + 'when you are waiting on a teammate, office_wait sits on the office until their answer comes, so nobody has to carry it to you; '
         + 'move shared work on the board; ask the human (office_status blocked) only when they are the real blocker. '
         + 'When a piece of work is better done by another agent or another provider, office_delegate hands it over and brings the result back. '
         + 'The office is also a place — office_look, office_go and office_use are there when you have a moment.',
