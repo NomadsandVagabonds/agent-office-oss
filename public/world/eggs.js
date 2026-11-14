@@ -238,6 +238,8 @@ export function createEggs(office) {
   // The same thing is behind a stretch of wall in the basement (levels/basement.js). `via`: the floor whose wall it
   // was — the lift's own business then where you come to (levels/index.js); with none, it was this corner, and you
   // come to by the bookshelf. → what the place said as you left it ({ reason, kept }), or null if the wall held.
+  // `tape`: { seed, mascot? } — not a wall at all, but one of the tapes the office keeps of visits that got out
+  // (core/runs.mjs), played back: the same building, with nothing of the office's in it and nothing paid for it.
   office.onNoclip = async (opt = {}) => {
     if (falling) return null;
     falling = true;
@@ -248,7 +250,9 @@ export function createEggs(office) {
     const upstairs = !opt.via;
     if (upstairs) office.walk.exit();
     let result = null;
-    try { result = await level.enterBackrooms(office, { name: office.walk.me.name, seed: Date.now() }); }
+    const tape = opt.tape && typeof opt.tape.seed === 'string' && opt.tape.seed ? opt.tape : null;
+    const visit = tape ? { seed: tape.seed, replay: true, pursuer: typeof tape.mascot === 'boolean' ? tape.mascot : undefined } : { seed: Date.now() };
+    try { result = await level.enterBackrooms(office, { name: office.walk.me.name, ...visit }); }
     catch (err) { console.error('[office] backrooms', err); }
     office.stage.setView(null);
     document.body.classList.remove('noclip');
@@ -258,13 +262,14 @@ export function createEggs(office) {
       office.walk.enter();
     }
     // Nothing is said about where you have been. The passport simply has a new stamp, now that you are back to look at it.
-    const stamps = [found('noclip'), result?.reason === 'exit' ? found('way-out') : null];
+    // (a tape played back is nowhere anybody has not already been)
+    const stamps = tape ? [] : [found('noclip'), result?.reason === 'exit' ? found('way-out') : null];
     // …except by the purse: what you carried out through the door is the office's now, and it shows it the way it does on every
     // other floor — once the office has heard all of it. (A stamp earned on the way has its own sound; otherwise this is the sound.)
     const kept = result?.kept;
     // (and whoever got out by the way out is paid for the spare batteries they still had: core/game.mjs, `pay`)
     // (…unless the visit's own card has already told the office how it went, batteries and all: core/runs.mjs)
-    const paid = !result?.card && result?.reason === 'exit' && kept?.batteries > 0 ? office.game?.earn?.('backrooms', { batteries: kept.batteries }) : null;
+    const paid = !tape && !result?.card && result?.reason === 'exit' && kept?.batteries > 0 ? office.game?.earn?.('backrooms', { batteries: kept.batteries }) : null;
     if (kept?.card || kept?.coins?.length || paid || result?.card?.coins?.paid) Promise.all([Promise.all([kept.told, paid]), ...stamps]).then(([, ...earned]) => setTimeout(() => {
       if (!earned.some((r) => r?.first)) { try { office.sound?.play?.(kept.card ? 'discovery' : 'coin'); } catch { /* only a sound */ } }
       if (kept.card) office.game?.flash('card');

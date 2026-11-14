@@ -42,7 +42,8 @@ export function createHandView(env, camera) {
     const b = new Batch(); b.quad([-0.085, -0.11, 0], [0.085, -0.11, 0], [0.085, 0.11, 0], [-0.085, 0.11, 0]);
     const mat = kit.surface({ map: tex, side: THREE.DoubleSide }), mesh = new THREE.Mesh(kit.geometry(b, [], [1, 1, 1]), mat);
     mesh.rotation.set(-0.12, -0.5, 0.1);
-    return { mesh, mat, hold: [0.17, -0.035, -0.42] };
+    // (near enough to read, far enough not to stand between the visitor and the room: about a ninth of the picture, in its corner)
+    return { mesh, mat, hold: [0.215, -0.085, -0.56] };
   }
   function model(kind) {
     if (kind === 'pink-slip') return slip();

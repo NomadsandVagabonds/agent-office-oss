@@ -25,7 +25,7 @@
 import * as THREE from 'three';
 import { resolveLook } from '/core/look.mjs';
 import { sketch, toWorld, toLocal, DECK, ARCHETYPES } from './gen.js';
-import { planVisit, floorOf } from './plan.js';
+import { planVisit, floorOf, edition } from './plan.js';
 import { createKit } from './kit.js';
 import { buildWorld, loadCatalogue } from './world.js';
 import { BUILDERS } from './rooms.js';
@@ -88,8 +88,9 @@ async function buildersFor(level) {
 
 /**
  * @param office  the office object (stage, net, …)
- * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, depths?:number, depth?:number, inventory?:boolean, scorecard?:boolean, debug?:boolean, dev?:object, onReady?:Function}} [opt]
+ * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, depths?:number, depth?:number, inventory?:boolean, scorecard?:boolean, replay?:boolean, debug?:boolean, dev?:object, onReady?:Function}} [opt]
  *        depths: how many floors (default: by the seed) · depth: which floor to begin on (default: the top one)
+ *        replay: this is a kept tape being played back (seed: the tape's; pursuer: whether the mascot was in it): nothing of the office's is hidden in it
  *        inventory: false for a visit without pockets, hearts or a battery that runs down · dev.supplies: one of everything where you land
  * @returns {Promise<{reason:'exit'|'caught'|'battery'|'quit', kept:{card:boolean, coins:number[], batteries:number, told?:Promise<void>}, run:object, card:object|null}>}
  *          run: what the visit came to (tally.js) · card: the scorecard, once put down (opt.scorecard === false: none) · kept: what you brought out (nothing,
@@ -107,7 +108,8 @@ async function visit(office, opt) {
   const seed = opt.seed ?? Date.now();
   const ask = { name: who.name, projects: who.projects, agents: who.agents.map((a) => a.name), tasks: who.tasks, only: opt.only, onlyDepth: opt.depth | 0, pursuer: opt.pursuer, count: opt.count, depths: opt.depths };
   // what the office says is still to be found down here is hidden in this visit; no office keeping count, nothing hidden
-  const left = lootLeft(office);
+  // (and nothing in a tape that is being played back: what was to be found in that building was found, or was not)
+  const left = opt.replay ? null : lootLeft(office);
   let plan = planVisit(seed, { ...ask, loot: left || undefined });
   const floor = (i) => {
     try { return floorOf(plan, i); }
@@ -123,6 +125,8 @@ async function visit(office, opt) {
   const sound = createSound(first, { mute: opt.mute ?? saved.mute ?? false });
   const hud = createHud(first);
   hud.setClean(vhs.level === 0);
+  // the picture says REC once you are on your feet — unless this is a tape being played back: that one goes on saying PLAY
+  const rec = () => { if (!opt.replay) hud.recording(); };
   document.activeElement?.blur?.();
   const purse = left ? createLoot(office, { hud, sound }) : null;
   // borrowed if they will load; the rooms that wanted them make do if not
@@ -404,7 +408,7 @@ async function visit(office, opt) {
 
     if (state === 'falling') {
       u.uSnow.value = Math.max(0, u.uSnow.value - dt / 0.8);
-      if (since > 1.25) { state = 'play'; hud.recording(); }
+      if (since > 1.25) { state = 'play'; rec(); }
     } else if (state === 'held') {
       // the part below is not built yet: the tape cannot make anything of where you are until it is
       u.uSnow.value = Math.min(0.92, since / 0.5);
@@ -419,7 +423,7 @@ async function visit(office, opt) {
         sound.play('thunk'); sound.play('static', { dur: 0.5, vol: 0.6 });
         interference = 1; u.uSnow.value = Math.max(u.uSnow.value, 0.4); hud.glitch(0.6);
       }
-      if (landed > 0.45) { state = 'play'; since = 0; hud.recording(); }
+      if (landed > 0.45) { state = 'play'; since = 0; rec(); }
     } else if (state === 'ending') {
       ending += dt;
       const k = clamp(ending / (END[reason] ?? END.caught), 0, 1);
@@ -462,6 +466,9 @@ async function visit(office, opt) {
     // Everything of the visit's is gone from the page. What it came to is written up on a card (scorecard.js), however
     // it ended and whoever started it, and the visit is over when the card has been put down.
     const why = reason || 'quit', run = tally.report(hearts), done = (card) => resolveVisit({ reason: why, kept, run, card });
+    // (what whoever plays this tape back will need to be given the same building: was the mascot in it, and which make
+    // of the place was it — plan.js. Only a visit that got out has a tape to say it on.)
+    if (why === 'exit') { run.mascot = plan.mascot !== null; try { run.edition = edition(); } catch { /* the tape does not say */ } }
     // (no card for a visit that was told not to show one, or that was stopped before it had really begun)
     if (opt.scorecard === false || (why === 'quit' && run.seconds < 2)) { done(null); return; }
     import('./scorecard.js').then((m) => m.showScorecard({ office, reason: why, kept, run, name: who.name }))

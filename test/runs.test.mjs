@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { startOffice } from './helpers.mjs';
-import { ENDINGS, POINTS, TAPES_KEPT, cleanRecord, cleanRun, emptyRecord, scoreRun, settleRun } from '../core/runs.mjs';
+import { ENDINGS, POINTS, TAPES_KEPT, cleanRecord, cleanRun, emptyRecord, isReplay, scoreRun, settleRun } from '../core/runs.mjs';
 
 const visit = (over = {}) => ({ reason: 'exit', seed: 'tape-1', seconds: 400, parts: { reached: 3, of: 3 }, rooms: { explored: 40, kinds: ['kanban', 'party'] },
   cast: { met: ['pirate'], survived: 2 }, batteries: 3, card: true, hearts: { left: 2, of: 4 }, ...over });
@@ -48,11 +48,10 @@ test('runs: the record — the best, what was met for the first time, and a tape
   assert.deepEqual([second.fresh, second.seen, second.best.beaten, second.best.was, second.tape, second.runs], [{ rooms: ['vending'], cast: [] }, { rooms: 3, cast: 1 }, true, first.score, { kept: true, seed: 'tape-A' }, { n: 2, out: 1 }]);
   const worse = enter({ reason: 'quit', seed: 'lost-2', rooms: { explored: 1, kinds: [] }, cast: { met: [], survived: 0 }, parts: { reached: 1, of: 3 } }, 3);
   assert.deepEqual([worse.best, worse.tape.kept, record.best], [{ score: second.score, was: second.score, beaten: false }, false, second.score]);
-  // the office keeps so many tapes, newest first; walking the same building again keeps one tape of it
+  // the office keeps so many tapes, newest first: when there are more, the oldest goes
   for (let i = 0; i < TAPES_KEPT + 3; i++) enter({ seed: `tape-${i}` }, 10 + i);
-  enter({ seed: 'tape-5' }, 99);
   assert.equal(record.tapes.length, TAPES_KEPT);
-  assert.deepEqual([record.tapes[0].seed, record.tapes[0].at, record.tapes.filter((t) => t.seed === 'tape-5').length, record.tapes.some((t) => t.seed === 'tape-A')], ['tape-5', 99, 1, false]);
+  assert.deepEqual([record.tapes[0].seed, record.tapes[0].at, record.tapes.some((t) => t.seed === 'tape-A'), record.tapes.some((t) => t.seed === 'tape-2')], [`tape-${TAPES_KEPT + 2}`, 10 + TAPES_KEPT + 2, false, false]);
   assert.ok(!cleanRun(visit({ seed: '' })).seed && settleRun(record, cleanRun(visit({ seed: '' })), { at: 5 }).card.tape.kept === false, 'a visit that does not say which building it was has no tape to keep');
   // settling changes nothing it was given, and a record that has been through storage is the same record
   const before = JSON.stringify(record);
@@ -61,6 +60,34 @@ test('runs: the record — the best, what was met for the first time, and a tape
   assert.deepEqual(cleanRecord(JSON.parse(before)), record);
   assert.deepEqual(cleanRecord({ runs: 'many', best: -4, rooms: { 'Bad Id': 1, ok: 'yesterday', fine: 3 }, cast: null, tapes: [{ seed: '' }, { nothing: 1 }, { seed: 'x', score: 2.9 }] }),
     { runs: 0, out: 0, best: 0, rooms: { fine: 3 }, cast: {}, tapes: [{ seed: 'x', at: 0, by: '', score: 2, seconds: 0 }] });
+});
+
+test('runs: a kept tape played back is scored, and changes nothing but what was met for the first time and how often it has been played', () => {
+  let record = emptyRecord();
+  const enter = (over, at = 1, by = 'Lead') => { const s = settleRun(record, cleanRun(visit(over)), { at, by }); record = s.record; return s.card; };
+  const first = enter({ seed: 'tape-A', edition: 'abc123', mascot: true }, 10);
+  enter({ seed: 'tape-B', mascot: false }, 20, 'Robin');
+  assert.deepEqual(record.tapes, [{ seed: 'tape-B', at: 20, by: 'Robin', score: first.score, seconds: 400, mascot: false }, { seed: 'tape-A', at: 10, by: 'Lead', score: first.score, seconds: 400, edition: 'abc123', mascot: true }],
+    'a tape says what whoever plays it back needs to be given the same building: which make of the place it was, and whether the mascot was in it');
+  assert.equal(isReplay(record, cleanRun(visit({ seed: 'tape-A' }))), true);
+  assert.equal(isReplay(record, cleanRun(visit({ seed: 'tape-C' }))), false);
+  assert.equal(isReplay(record, cleanRun(visit({ seed: '' }))), false, 'a visit that does not say which building it was is not a tape of anything');
+  // played back, and better than anything before: more rooms, a new kind, everything brought out
+  const before = JSON.parse(JSON.stringify(record));
+  const again = enter({ seed: 'tape-A', seconds: 90, rooms: { explored: 80, kinds: ['kanban', 'party', 'vending'] }, cast: { met: ['pirate', 'moth'], survived: 3 }, batteries: 9, card: true }, 30, 'Somebody Else');
+  assert.ok(again.score > first.score, 'it is scored like any other visit');
+  assert.deepEqual([again.replay, again.best, again.runs, again.tape], [true, { score: first.score, was: first.score, beaten: false }, { n: 2, out: 2 }, { kept: true, seed: 'tape-A', plays: 1, first: { at: 10, by: 'Lead', score: first.score } }],
+    'it cannot beat the best, it is not another visit, and the tape is still the tape of the first time');
+  assert.deepEqual([again.fresh, again.seen], [{ rooms: ['vending'], cast: ['moth'] }, { rooms: 3, cast: 2 }], 'what is met for the first time on a tape is still met: that only happens once');
+  assert.deepEqual([record.runs, record.out, record.best, record.tapes.map((t) => [t.seed, t.at, t.by, t.score, t.plays || 0])], [before.runs, before.out, before.best, [['tape-B', 20, 'Robin', first.score, 0], ['tape-A', 10, 'Lead', first.score, 1]]]);
+  // however it ends, and however often: it stays where it is on the shelf
+  const caught = enter({ seed: 'tape-A', reason: 'caught' }, 40);
+  assert.deepEqual([caught.replay, caught.reason, caught.tape.plays, record.tapes[1].plays, record.tapes[0].seed], [true, 'caught', 2, 2, 'tape-B']);
+  // what a tape says of its building survives storage, and nothing that is not one of those things does
+  assert.deepEqual(cleanRecord(JSON.parse(JSON.stringify(record))), record);
+  assert.deepEqual(cleanRecord({ tapes: [{ seed: 'x', plays: 2.7, edition: 'Not One!', mascot: 'yes', extra: 1 }, { seed: 'y', plays: -3, edition: 'ok9', mascot: false }] }).tapes,
+    [{ seed: 'x', at: 0, by: '', score: 0, seconds: 0, plays: 2 }, { seed: 'y', at: 0, by: '', score: 0, seconds: 0, edition: 'ok9', mascot: false }]);
+  assert.deepEqual([cleanRun(visit({ edition: 'wuuhge', mascot: true })).edition, cleanRun(visit({ edition: '../x' })).edition, 'mascot' in cleanRun(visit({ mascot: 1 }))], ['wuuhge', undefined, false]);
 });
 
 test('runs: the office keeps the record, pays the jar only for beating its best, and says so on the card', async (t) => {
@@ -80,13 +107,21 @@ test('runs: the office keeps the record, pays the jar only for beating its best,
   const again = (await run(visit({ seed: 'tape-2' }), 'Robin')).data;
   assert.deepEqual([again.card.coins, again.card.best.beaten, again.card.fresh], [{ carried: 3, worth: 3, paid: 0, best: 3 }, false, { rooms: [], cast: [] }]);
   assert.deepEqual((await run(visit({ seed: 'tape-3', batteries: 4 }))).data.card.coins, { carried: 4, worth: 4, paid: 1, best: 4 });
+  // a building whose tape the office has, walked again with every pocket full: scored, and paid nothing, whatever whoever
+  // reports it says it was (it is the office that knows which buildings it has tapes of)
+  const best = (await office.get('/api/world')).data.game.visits.best;
+  const replay = (await run(visit({ seed: 'tape-1', batteries: 40, rooms: { explored: 90, kinds: ['kanban', 'party', 'vending'] } }), 'Robin')).data;
+  assert.deepEqual([replay.card.replay, replay.card.coins, replay.card.best.beaten, replay.card.tape.plays, replay.card.fresh.rooms, replay.coins.earned, replay.visits.n, replay.visits.best],
+    [true, { carried: 40, worth: 0, paid: 0, best: 4 }, false, 1, ['vending'], 4, 4, best]);
+  assert.ok(replay.card.score > best, 'it would have been the best yet, had it been a visit');
   // whoever is told about the office is told this too, and it is still there after a restart of the page
   const world = (await office.get('/api/world')).data.game;
-  assert.deepEqual([world.visits.n, world.visits.out, world.visits.tapes.map((t) => t.seed), world.coins.earned], [4, 3, ['tape-3', 'tape-2', 'tape-1'], 4]);
+  assert.deepEqual([world.visits.n, world.visits.out, world.visits.tapes.map((t) => [t.seed, t.plays || 0]), world.coins.earned], [4, 3, [['tape-3', 0], ['tape-2', 0], ['tape-1', 1]], 4]);
   const feed = (await office.get('/api/activity?limit=60')).data, said = (feed.items || feed.activity || feed).map((e) => e.text);
   assert.ok(said.some((s) => new RegExp(`^Lead is back from Out of Office: ${out.card.score} points, the best yet$`).test(s)), said.join(' / '));
   assert.ok(said.some((s) => /^Robin is back from Out of Office: \d+ points$/.test(s)));
   assert.ok(!said.some((s) => /caught|gone/.test(s)), 'a visit that did not get out is nobody else\'s business');
+  assert.equal(said.filter((s) => /^Robin is back from Out of Office/.test(s)).length, 1, 'and nor is a tape played back');
 });
 
 test('the card is put on the page itself, not inside the office\'s interface, which is out of sight while somebody is out of the building', async () => {

@@ -16,6 +16,13 @@
 //               the building was made from, so that the same building can
 //               be walked again. Nobody keeps the tape of a visit that
 //               ended any other way. That building is gone.
+//   playing a   Walking a kept tape again is not a visit to anywhere new.
+//   tape back   It is scored, and the card says what it was; but it cannot
+//               beat the best, nothing is paid for it, and the tape stays
+//               the tape of the first time. What is met for the first time
+//               on it is still met: that only ever happens once. Which
+//               visits are tapes is not for the visitor to say: a visit to
+//               a building whose tape is on the shelf is one.
 //
 // Coins are not decided here: what was carried out is worth what
 // core/game.mjs says (`payFor`), and the jar is paid what that beats the
@@ -41,7 +48,7 @@ const ids = (list, most) => [...new Set((Array.isArray(list) ? list : []).filter
 /**
  * A visit as it was reported, made safe to keep: every number whole and in range, every id an id, nothing else.
  * report: { reason, seed, seconds, parts: { reached, of }, rooms: { explored, kinds: [ids] }, cast: { met: [ids], survived },
- *           batteries, card, hearts: { left, of } }
+ *           batteries, card, hearts: { left, of }, edition?, mascot? }
  * Anything missing is nothing. Only a visit that ended by the way out carries anything out of it.
  */
 export function cleanRun(report = {}) {
@@ -60,8 +67,17 @@ export function cleanRun(report = {}) {
     batteries: out ? whole(r.batteries, 0, 200) : 0,
     card: out && r.card === true,
     hearts,
+    // (of the building itself, for whoever plays its tape back: which make of the place it was, and whether the mascot was in it)
+    ...(edition(r.edition) ? { edition: edition(r.edition) } : {}),
+    ...(typeof r.mascot === 'boolean' ? { mascot: r.mascot } : {}),
   };
 }
+
+/** Which make of the building a tape is of (plan.js: `edition`): a few letters and digits, or nothing. */
+const edition = (v) => (typeof v === 'string' && /^[a-z0-9]{1,16}$/.test(v) ? v : '');
+
+/** Is this visit a tape being played back: is the building it says it was to one whose tape the office has? */
+export const isReplay = (record, run) => !!run && run.seed !== '' && (record?.tapes || []).some((t) => t.seed === run.seed);
 
 /**
  * What a visit scored, line by line. run: what cleanRun gives.
@@ -86,7 +102,10 @@ export function scoreRun(run) {
   return { total: lines.reduce((n, l) => n + l.points, 0), lines };
 }
 
-/** A record with nothing in it yet. */
+/**
+ * A record with nothing in it yet. A tape in one: { seed, at, by, score, seconds } of the visit that kept it, and
+ * plays (times played back since), edition, mascot (what the building was: see cleanRun) where they are known.
+ */
 export const emptyRecord = () => ({ runs: 0, out: 0, best: 0, rooms: {}, cast: {}, tapes: [] });
 
 /** A record as it was stored, made safe to use: one that is damaged or from somewhere else becomes an empty one. */
@@ -96,7 +115,9 @@ export function cleanRecord(record) {
   return {
     runs: whole(r.runs, 0, 1e9), out: whole(r.out, 0, 1e9), best: whole(r.best, 0, 1e9), rooms: seen(r.rooms), cast: seen(r.cast),
     tapes: (Array.isArray(r.tapes) ? r.tapes : []).filter((t) => t && typeof t.seed === 'string' && t.seed).slice(0, TAPES_KEPT)
-      .map((t) => ({ seed: t.seed.slice(0, 80), at: Number(t.at) || 0, by: String(t.by || '').slice(0, 60), score: whole(t.score, 0, 1e9), seconds: whole(t.seconds, 0, 86400) })),
+      .map((t) => ({ seed: t.seed.slice(0, 80), at: Number(t.at) || 0, by: String(t.by || '').slice(0, 60), score: whole(t.score, 0, 1e9), seconds: whole(t.seconds, 0, 86400),
+        ...(whole(t.plays, 0, 999) ? { plays: whole(t.plays, 0, 999) } : {}), ...(edition(t.edition) ? { edition: edition(t.edition) } : {}),
+        ...(typeof t.mascot === 'boolean' ? { mascot: t.mascot } : {}) })),
   };
 }
 
@@ -107,24 +128,41 @@ export function cleanRecord(record) {
  * @param {{at:number, by?:string}} when
  * @returns {{record, card}}  the record as it is now · what the card says:
  *   card: { reason, score, lines, seconds, best: { score, was, beaten }, fresh: { rooms: [ids], cast: [ids] },
- *           seen: { rooms, cast } (how many kinds this office has ever met), tape: { kept, seed? }, runs: { n, out } }
+ *           seen: { rooms, cast } (how many kinds this office has ever met), tape: { kept, seed? }, runs: { n, out },
+ *           replay?: true (a kept tape played back: `tape` is the one on the shelf, with `plays`, and nothing else of
+ *           the record but what was met for the first time has changed) }
  */
 export function settleRun(record, run, { at, by = '' } = {}) {
   const { total, lines } = scoreRun(run), out = run.reason === 'exit';
   const fresh = { rooms: run.rooms.kinds.filter((id) => !record.rooms[id]), cast: run.cast.met.filter((id) => !record.cast[id]) };
   const mark = (seen, list) => ({ ...seen, ...Object.fromEntries(list.map((id) => [id, at])) });
+  const seen = { rooms: mark(record.rooms, fresh.rooms), cast: mark(record.cast, fresh.cast) };
+  const count = (r) => ({ rooms: Object.keys(r.rooms).length, cast: Object.keys(r.cast).length });
+  if (isReplay(record, run)) {
+    // a tape played back: counted on the tape, and nowhere else
+    const tapes = record.tapes.map((t) => (t.seed === run.seed ? { ...t, plays: Math.min(999, (t.plays || 0) + 1) } : t));
+    const next = { ...record, ...seen, tapes }, tape = tapes.find((t) => t.seed === run.seed);
+    return {
+      record: next,
+      card: {
+        reason: run.reason, score: total, lines, seconds: run.seconds, replay: true,
+        best: { score: record.best, was: record.best, beaten: false },
+        fresh, seen: count(next), tape: { kept: true, seed: run.seed, plays: tape.plays, first: { at: tape.at, by: tape.by, score: tape.score } },
+        runs: { n: record.runs, out: record.out },
+      },
+    };
+  }
   const keep = out && run.seed !== '';
   const next = {
-    runs: record.runs + 1, out: record.out + (out ? 1 : 0), best: Math.max(record.best, total),
-    rooms: mark(record.rooms, fresh.rooms), cast: mark(record.cast, fresh.cast),
-    tapes: keep ? [{ seed: run.seed, at, by: String(by).slice(0, 60), score: total, seconds: run.seconds }, ...record.tapes.filter((t) => t.seed !== run.seed)].slice(0, TAPES_KEPT) : record.tapes,
+    runs: record.runs + 1, out: record.out + (out ? 1 : 0), best: Math.max(record.best, total), ...seen,
+    tapes: keep ? [{ seed: run.seed, at, by: String(by).slice(0, 60), score: total, seconds: run.seconds, ...(run.edition ? { edition: run.edition } : {}), ...(typeof run.mascot === 'boolean' ? { mascot: run.mascot } : {}) }, ...record.tapes].slice(0, TAPES_KEPT) : record.tapes,
   };
   return {
     record: next,
     card: {
       reason: run.reason, score: total, lines, seconds: run.seconds,
       best: { score: next.best, was: record.best, beaten: total > record.best },
-      fresh, seen: { rooms: Object.keys(next.rooms).length, cast: Object.keys(next.cast).length },
+      fresh, seen: count(next),
       tape: keep ? { kept: true, seed: run.seed } : { kept: false },
       runs: { n: next.runs, out: next.out },
     },
