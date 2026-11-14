@@ -304,7 +304,7 @@ async function visit(office, opt) {
     player.update(dt, time);
     me.slow = 1; me.sinkTo = 0;                              // rooms that slow you or make you stoop say so every frame
     world.update(dt, time, me);
-    env.pursuer?.update(dt, time);
+    if (state !== 'held' && state !== 'drop') env.pursuer?.update(dt, time);          // (nothing gets you while the building has you)
     // the part below: begun once you have found your feet in this one, and only drawn from where it could be seen
     if (state === 'play' && !ahead && since > 4 && goesDown(cur.level.exit.way)) prepare();
     if (ahead?.f) { const at = world.current(); ahead.f.world.scene.visible = !!at && (at.def.toExit ?? 9) <= 1; }

@@ -757,12 +757,21 @@ function shapesFor(R, room) {
   return out;
 }
 
+/** The wallpaper family and what it is printed with, for a kind of place and a seed: what a whole part is hung with. */
+function paperOf(theme, seed) {
+  const t = themeOf(theme), R = makeRng(`paper:${seed}`);
+  return [R.weighted(FAMILIES, (f) => (t.families ? t.families[f.id] || 0 : f.weight)), R.pick(t.patterns || PATTERNS)];
+}
+
 function dress(R, level, o, opt, keeper = false) {
   const { rooms, links, start, exit } = level, theme = themeOf(opt.theme), lit = theme.light || {};
   // which wallpapers this floor is hung with, what they are printed with, and how its ceilings behave (themes.js)
   const weightOf = (f) => (theme.families ? theme.families[f.id] || 0 : f.weight), patterns = theme.patterns || PATTERNS, tubes = theme.tubes || TUBES;
   const dead = lit.dead || [0.06, 0.3], modes = lit.modes || [['normal', 1]], things = theme.dressing || DRESSING;
-  const family = R.weighted(FAMILIES, weightOf), pattern = R.pick(patterns);
+  // (a part of a visit is told which paper it is hung with — `paper`, a seed of its own — so that the parts either side
+  // of it can be told too, and have a little of it: see the seams, below. Rolled as ever first, so nothing else moves.)
+  const asRolled = [R.weighted(FAMILIES, weightOf), R.pick(patterns)];
+  const [family, pattern] = opt.paper ? paperOf(theme, opt.paper) : asRolled;
   const toExit = level.distances(exit);
   // something that follows you — in some visits. It stands in a plain room a little way in.
   let pursuer = null;
@@ -977,9 +986,9 @@ function dress(R, level, o, opt, keeper = false) {
   // ones round it still have the ceiling and some of the paper of the part above. Rolled from a source of its own,
   // and nothing but looks: asking for it moves no wall.
   const bleed = opt.bleed || {}, RB = R.fork('bleed');
-  const lookOf = (id, rr) => { const t = themeOf(id), w = (f) => (t.families ? t.families[f.id] || 0 : f.weight); return rollLook(rr, rr.weighted(FAMILIES, w), rr.pick(t.patterns || PATTERNS), t.tubes || TUBES); };
+  const lookOf = (b, rr) => { const t = themeOf(b.theme), [fam, pat] = paperOf(t, b.paper ?? `${b.theme}`); return rollLook(rr, fam, pat, t.tubes || TUBES); };
   let shaft = null;
-  if (bleed.next && THEMES[bleed.next]) {
+  if (bleed.next && THEMES[bleed.next.theme]) {
     const into = lookOf(bleed.next, RB.fork('next'));
     shaft = into;
     for (const room of rooms) {
@@ -989,7 +998,7 @@ function dress(R, level, o, opt, keeper = false) {
       room.bleed = 'next';
     }
   }
-  if (bleed.prev && THEMES[bleed.prev]) {
+  if (bleed.prev && THEMES[bleed.prev.theme]) {
     const from = lookOf(bleed.prev, RB.fork('prev'));
     for (const room of rooms) {
       if ((room.kind !== 'plain' && room.kind !== 'start') || room.depth > 1 || room.bleed) continue;

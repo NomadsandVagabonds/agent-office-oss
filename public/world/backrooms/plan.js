@@ -97,7 +97,8 @@ export function floorOf(visit, i) {
     const level = generate(f.seed, {
       name: opt.name, projects: opt.projects, agents: opt.agents, tasks: opt.tasks, count: opt.count,
       only: (opt.onlyDepth || 0) === k ? opt.only : undefined,
-      theme: f.theme, way: f.way, bleed: { prev: f.prev, next: f.next }, must: f.must, avoid: memo.levels.flatMap((l) => l.picked),
+      theme: f.theme, way: f.way, paper: `${visit.seed}/${k}`, must: f.must,
+      bleed: { prev: f.prev && { theme: f.prev, paper: `${visit.seed}/${k - 1}` }, next: f.next && { theme: f.next, paper: `${visit.seed}/${k + 1}` } }, avoid: memo.levels.flatMap((l) => l.picked),
       // what the floors above have had the chance to teach: a room that takes more than that for granted is not dealt here
       known: [...KNOWN_AT_START, ...memo.levels.flatMap((l) => lessonsOf(l))],
       pursuer: f.mascot, loot,

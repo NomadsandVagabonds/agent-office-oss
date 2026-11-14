@@ -534,13 +534,17 @@ test('near a seam the parts run into each other, and that changes nothing but ho
         assert.ok(into.some((r) => r.look.wall === level.shaft.wall), `${where}: the room at the door is not papered like the part below`);
       } else assert.equal(into.length, 0, `${where}: there is nothing below the last part`);
       if (i > 0) assert.ok(from.some((r) => r.id === level.start.room), `${where}: the room you land in remembers nothing of the part above`);
-      else assert.equal(from.length, 0);
+      // …and what turns up early or lingers is the neighbour's own paper, not merely its kind of paper
+      const most = (l) => { const n = new Map(); for (const r of l.rooms) if (r.kind === 'plain' && !r.bleed) n.set(r.look.family, (n.get(r.look.family) || 0) + 1); return [...n].sort((a, b) => b[1] - a[1])[0][0]; };
+      if (i > 0) assert.equal(level.rooms[level.start.room].look.family, most(floors[i - 1]), `${where}: the landing is papered like nowhere up there`);
+      if (i < visit.depths - 1) assert.equal(level.shaft.family, most(floors[i + 1]), `${where}: the shaft is papered like nowhere down there`);
+      if (i === 0) assert.equal(from.length, 0);
       assert.ok(into.length + from.length <= 9, `${where}: ${into.length + from.length} rooms are somebody else's colour: it is a seam, not a redecoration`);
     });
   }
   const strip = (level) => JSON.parse(JSON.stringify(level, (k, v) => (k === 'look' || k === 'bleed' || k === 'shaft' ? undefined : v)));
   for (const seed of [1, 7, 'tuesday']) for (const theme of THEME_IDS) {
-    const plain = generate(seed, { ...office, theme, way: 'hole' }), bled = generate(seed, { ...office, theme, way: 'hole', bleed: { prev: 'night', next: 'exec' } });
+    const plain = generate(seed, { ...office, theme, way: 'hole' }), bled = generate(seed, { ...office, theme, way: 'hole', paper: 'p1', bleed: { prev: { theme: 'night', paper: 'p0' }, next: { theme: 'exec', paper: 'p2' } } });
     assert.deepEqual(strip(bled), strip(plain), `seed ${seed}, ${theme}`);
     assert.equal(plain.shaft, null);
   }
