@@ -44,6 +44,8 @@ export function createTasks(ctx) {
       dependsOn: Array.isArray(task.dependsOn) ? task.dependsOn.slice() : [],
       live: !!task.sessionId,
       promptStatus: linkedPrompt?.status || null,
+      // Put up for review: which version, how many findings are open, whether it has been decided (server/reviews.mjs).
+      review: ctx.reviews?.summary(task.id) || null,
     };
   }
 

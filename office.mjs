@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { api, BASE, OfficeError, fmtTime, hook, join, resolveSelf,
+import { api, BASE, OfficeError, fmtTime, hook, join, resolveSelf, reviewBit,
   formatDelegation, formatHarness, formatTranscript, waitForDelegation } from './office-lib.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -54,6 +54,9 @@ const HELP = `office — your seat in The Office   (${BASE})
     office task add <title> [--status doing] [--priority high] [--body "…"]
     office task move <id> <backlog|todo|doing|blocked|review|done>
     office task claim <id>      office task assign <id> <agent|none>
+    office task review <id>     what is up for review (branch, commit), findings, who recommends what
+    office task finding <id> "what is wrong" [--file path] [--line n] [--blocker]
+    office task resolve <id> <finding> ["how"]        office task recommend <id> approve|changes ["why"]
     office status <working|thinking|done> [note]
     office block <what you need from the human>
     office docs [dept] [query]  the binder: list projects, list docs, or read one
@@ -105,7 +108,7 @@ async function resolveDept(ref, self) {
 
 function printTask(t) {
   const bits = [t.status, t.priority !== 'normal' ? t.priority : '', t.assigneeName ? '@' + t.assigneeName : 'unassigned',
-    t.dependsOn?.length ? `deps:${t.dependsOn.length}` : ''].filter(Boolean);
+    t.dependsOn?.length ? `deps:${t.dependsOn.length}` : '', reviewBit(t.review)].filter(Boolean);
   console.log(`${t.id}  ${t.title}\n  ${t.deptId} · ${bits.join(' · ')}${t.body ? `\n  ${t.body}` : ''}`);
 }
 
@@ -381,6 +384,28 @@ const commands = {
     }
     const id = words.shift();
     if (!id) throw new OfficeError(`usage: office task ${sub} <id> …`, 400);
+    // The review table of a card: what was put up, what was found, what is recommended. The verdict is the human's.
+    const table = '/api/tasks/' + encodeURIComponent(id) + '/review';
+    if (sub === 'review') { const r = await api(table); return flags.json ? out(r) : console.log(r.text); }
+    if (sub === 'finding' || sub === 'find') {
+      const text = rest();
+      if (!text) throw new OfficeError('usage: office task finding <id> "what is wrong and why it matters" [--file path] [--line n] [--blocker]', 400);
+      const r = await api(table + '/findings', { body: { text, from: self.id, ...(flags.file && flags.file !== true ? { file: String(flags.file) } : {}),
+        ...(flags.line && flags.line !== true ? { line: Number(flags.line) } : {}), ...(flags.blocker ? { severity: 'blocker' } : {}) } });
+      return flags.json ? out(r) : console.log(`${r.finding.id}  [${r.finding.severity}] recorded on ${id}.`);
+    }
+    if (sub === 'resolve' || sub === 'reopen') {
+      const fid = words.shift();
+      if (!fid) throw new OfficeError(`usage: office task ${sub} <id> <finding id> ["how it was dealt with"]   (office task review <id> lists them)`, 400);
+      const r = await api(table + '/findings/' + encodeURIComponent(fid), { method: 'PATCH', body: { resolved: sub === 'resolve', note: rest(), from: self.id } });
+      return flags.json ? out(r) : console.log(`${r.finding.id}  ${r.finding.resolved ? 'resolved' : 'open again'}.`);
+    }
+    if (sub === 'recommend') {
+      const decision = { approve: 'approved', approved: 'approved', changes: 'changes' }[String(words.shift() || '').toLowerCase()];
+      if (!decision) throw new OfficeError('usage: office task recommend <id> approve|changes ["why"]   (you recommend; the human decides)', 400);
+      const r = await api(table + '/recommend', { body: { decision, note: rest(), from: self.id } });
+      return flags.json ? out(r) : console.log(`Recorded: you would ${decision === 'approved' ? 'approve it' : 'ask for changes'}. The decision is the human's.`);
+    }
     const patch = (body) => api('/api/tasks/' + encodeURIComponent(id), { method: 'PATCH', body: { ...body, ...who } });
     let r;
     if (sub === 'move') r = await patch({ status: words[0] });
@@ -389,7 +414,7 @@ const commands = {
     else if (sub === 'done') r = await patch({ status: 'done' });
     else if (sub === 'edit') r = await patch({ ...(flags.title ? { title: flags.title } : {}), ...(flags.body ? { body: flags.body } : {}), ...(flags.priority ? { priority: flags.priority } : {}) });
     else if (sub === 'rm' || sub === 'remove') r = await api('/api/tasks/' + encodeURIComponent(id), { method: 'DELETE' });
-    else throw new OfficeError(`unknown: office task ${sub}  (list | add | show | move | claim | assign | done | edit | rm)`, 400);
+    else throw new OfficeError(`unknown: office task ${sub}  (list | add | show | move | claim | assign | done | edit | rm | review | finding | resolve | recommend)`, 400);
     return flags.json ? out(r) : printTask(r.task);
   },
   async tasks() { words.unshift('list'); return commands.task(); },

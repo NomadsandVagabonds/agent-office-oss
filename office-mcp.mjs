@@ -11,7 +11,7 @@
 // forwards to the daemon's HTTP API. The agent that launched it is walked in
 // through the front door on its first tool call.
 import readline from 'node:readline';
-import { api, BASE, OfficeError, fmtTime, hook, resolveSelf,
+import { api, BASE, OfficeError, fmtTime, hook, resolveSelf, reviewBit,
   formatDelegation, formatHarness, formatTranscript, waitForDelegation } from './office-lib.mjs';
 
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
@@ -43,6 +43,11 @@ const TOOLS = [
   { name: 'office_task_update', description: 'Move, assign, claim or edit a card. Move to "review" when it needs a second eye; do not close your own review.',
     inputSchema: obj({ id: str('Task id (t_…).'), status: str('New column.'), assignee: str('Agent name/id, "me", or "none".'),
       title: str('New title.'), body: str('New body.'), priority: str('low|normal|high') }, ['id']) },
+  { name: 'office_review', description: 'The review table of a card that is in review: which branch and commit were put up, the findings, what reviewers recommend. As a reviewer: record each problem as a finding (file and line where you can), then recommend. As the author: read the findings, fix, resolve them, and move the card back to review. You never approve; the human decides.',
+    inputSchema: obj({ taskId: str('Task id (t_…).'), action: { type: 'string', enum: ['show', 'finding', 'resolve', 'reopen', 'recommend'], description: 'Default: show.' },
+      text: str('finding: what is wrong and why it matters. resolve: how it was dealt with. recommend: why.'), file: str('finding: the file it is in.'), line: { type: 'number', description: 'finding: the line.' },
+      blocker: { type: 'boolean', description: 'finding: must be fixed before this is accepted.' }, findingId: str('resolve/reopen: the finding (f_…).'),
+      decision: { type: 'string', enum: ['approve', 'changes'], description: 'recommend: what you would do. Not for your own work.' } }, ['taskId']) },
   { name: 'office_repo', description: 'Sharing a repository with other agents: your branch, who is in the same checkout, which files you and someone else are both changing, and who has claimed what. Check it before a broad change.', inputSchema: obj() },
   { name: 'office_claim', description: 'Say which files or folders you are working on (advisory, expires). Others are told if they edit there, and you are told. Refused if somebody else already holds it: talk to them.',
     inputSchema: obj({ paths: { type: 'array', items: { type: 'string' }, description: 'Absolute paths, or paths relative to your folder; patterns such as src/** work.' }, note: str('What for, in a few words.'), minutes: { type: 'number', description: 'How long (default 120).' },
@@ -108,7 +113,8 @@ const E = encodeURIComponent;
 const text = (r) => (r && typeof r.text === 'string' ? r.text : JSON.stringify(r, null, 2));
 
 function taskLine(t) {
-  return `${t.id}  ${t.title}\n  ${t.deptId} · ${t.status}${t.priority !== 'normal' ? ' · ' + t.priority : ''} · ${t.assigneeName ? '@' + t.assigneeName : 'unassigned'}${t.body ? `\n  ${t.body}` : ''}`;
+  const review = reviewBit(t.review);
+  return `${t.id}  ${t.title}\n  ${t.deptId} · ${t.status}${t.priority !== 'normal' ? ' · ' + t.priority : ''} · ${t.assigneeName ? '@' + t.assigneeName : 'unassigned'}${review ? ' · ' + review : ''}${t.body ? `\n  ${t.body}` : ''}`;
 }
 
 const HANDLERS = {
@@ -178,6 +184,23 @@ const HANDLERS = {
     if (a.priority) body.priority = a.priority;
     const res = await api('/api/tasks/' + E(a.id), { method: 'PATCH', body });
     return taskLine(res.task);
+  },
+  async office_review(a) {
+    const s = await me();
+    const at = `/api/tasks/${E(a.taskId)}/review`, action = a.action || 'show';
+    if (action === 'finding') {
+      const r = await api(at + '/findings', { body: { text: a.text, file: a.file, line: a.line, ...(a.blocker ? { severity: 'blocker' } : {}), from: s.id } });
+      return `${r.finding.id} [${r.finding.severity}] recorded.`;
+    }
+    if (action === 'resolve' || action === 'reopen') {
+      const r = await api(`${at}/findings/${E(a.findingId || '')}`, { method: 'PATCH', body: { resolved: action === 'resolve', note: a.text, from: s.id } });
+      return `${r.finding.id} ${r.finding.resolved ? 'resolved' : 'open again'}.`;
+    }
+    if (action === 'recommend') {
+      await api(at + '/recommend', { body: { decision: a.decision === 'approve' ? 'approved' : a.decision, note: a.text, from: s.id } });
+      return `Recorded: you would ${a.decision === 'approve' ? 'approve it' : 'ask for changes'}. The decision is the human's.`;
+    }
+    return text(await api(at));
   },
   async office_repo() { const s = await me(); return text(await api(`/api/workspace/agent/${E(s.id)}`)); },
   async office_claim(a) {

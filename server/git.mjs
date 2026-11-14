@@ -145,6 +145,34 @@ export async function changedSinceFork(root, other, head) {
   return r.out.split('\0').filter(Boolean);
 }
 
+/**
+ * The branch this repository treats as its trunk: what origin's HEAD points at
+ * if there is one, else a local `main` or `master`. → "origin/main" | "main" | null
+ */
+export async function trunk(root) {
+  const r = await git(root, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD']);
+  if (r.ok && r.out.trim()) return r.out.trim();
+  for (const name of ['main', 'master']) {
+    const v = await git(root, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`]);
+    if (v.ok) return name;
+  }
+  return null;
+}
+
+/** How many commits `head` has that `base` does not. → number | null */
+export async function commitsAhead(root, base, head = 'HEAD') {
+  if (!base) return null;
+  const r = await git(root, ['rev-list', '--count', `${base}..${head}`]);
+  const n = r.ok ? Number(r.out.trim()) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+/** The commit a name points at, in full. → string | null */
+export async function resolveCommit(root, name = 'HEAD') {
+  const r = await git(root, ['rev-parse', '--verify', '--quiet', `${name}^{commit}`]);
+  return r.ok && r.out.trim() ? r.out.trim() : null;
+}
+
 /** Every checkout of the repository that `root` belongs to. */
 export async function worktrees(root) {
   const r = await git(root, ['worktree', 'list', '--porcelain']);

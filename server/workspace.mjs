@@ -25,6 +25,7 @@ import { EV } from '../core/contract.mjs';
 import { HttpError } from './http.mjs';
 import { JsonFile } from './persist.mjs';
 import * as G from './git.mjs';
+import { leaveNotice } from './notices.mjs';
 
 const MIN = 60 * 1000, HOUR = 60 * MIN;
 const WINDOW_MS = 30 * MIN;              // an edit this recent counts as "is working on it"
@@ -440,16 +441,8 @@ export function createWorkspace(ctx, file) {
     const times = (noteTimes.get(agent.id) || []).filter((t) => now - t < HOUR);
     if (times.length >= NOTES_PER_HOUR) return false;
     times.push(now); noteTimes.set(agent.id, times);
-    try {
-      const { bbs } = ctx, key = `office:${agent.id}`;
-      const thread = bbs.getThreads('collab').find((t) => t.meta?.kind === 'office-notice' && t.meta?.participantKey === key) || null;
-      const meta = { toAgentId: agent.id, toAgentName: agent.name, fromAgentName: 'Office', officeNote: true };
-      if (thread) bbs.reply({ threadId: thread.id, author: 'Office', authorType: 'system', content: text, meta });
-      else bbs.createThread({ board: 'collab', subject: `Office notices for ${agent.name}`, author: 'Office', authorType: 'system', content: text,
-        meta: { kind: 'office-notice', participantKey: key, participants: ['office', agent.id], ...meta }, postMeta: meta });
-      ctx.comms.broadcastCollabRecent();
-      return true;
-    } catch (err) { log.warn('[workspace] could not leave a note: ' + (err?.message || err)); return false; }
+    try { return leaveNotice(ctx, agent, text); }
+    catch (err) { log.warn('[workspace] could not leave a note: ' + (err?.message || err)); return false; }
   }
 
   /* ---- reading it back ------------------------------------------------------------------ */
