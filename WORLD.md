@@ -187,9 +187,10 @@ rubber duck is sitting.
 ## 8. Levels — where the lift goes
 
 The lift on the landing is usable. Click its doors (or walk up and press `E`)
-and a floor panel comes up; pick a floor and you get the doors, "Doors
-closing.", a few seconds in the car with the display counting floors, a ding,
-and you are somewhere else. `Esc` always brings you home: back through the lift
+and the car's panel comes up: a plate of buttons, two to a row, with nothing
+written on it but what is engraved in them. Press one and you get the doors,
+"Doors closing.", a few seconds in the car with the display counting floors, a
+ding, and you are somewhere else. `Esc` always brings you home: back through the lift
 to the landing, in walk mode. `/?level=roof` goes straight to a floor, and
 `&cam=x,z,dist,yaw,pitch` stands you somewhere on it with the camera already
 pointed (the office's own `?cam`, one floor along) — which is how to take a
@@ -200,35 +201,53 @@ sit, a game, a work surface.
 
 | | floor | kind | what it is there to show |
 |---|---|---|---|
-| **N** | Night Shift | game | a level with a camera and a look of its own: side on, black and white, light you must stay out of (`docs/NIGHTSHIFT.md`) |
-| **S** | Scranton Paper Co. | game | a level as a caper: a room full of small things to pick up, carry and use on each other (`docs/SCRANTON.md`) |
 | **R** | Rooftop Garden | place | a level can simply be somewhere: the office's clock and weather in the sky, steam from the flue when someone downstairs makes coffee, every agent-to-agent note crossing overhead as a paper plane |
-| **M** | Mission Control | **work** | a level as a work module: wall screens drawn straight from `office.net.state` — who is waiting on you, who is on what, every board — and a console per project that takes you to its room |
-| **L** | Lobby | office | the office itself |
+| **13** | | | only there on a Friday the 13th, or once someone has found the `noclip` secret; until then a blanking plate. It hands over to the hidden level under the office |
+| **11** | Scranton Paper Co. | game | a level as a caper: a room full of small things to pick up, carry and use on each other (`docs/SCRANTON.md`) |
+| **9** | Night Shift | game | a level with a camera and a look of its own: side on, black and white, light you must stay out of (`docs/NIGHTSHIFT.md`) |
+| **7** | After Hours | game | a level as a game: first person, a wave to clear, a score on the arcade board |
+| **3** | Mission Control | **work** | a level as a work module: wall screens drawn straight from `office.net.state` — who is waiting on you, who is on what, every board — and a console per project that takes you to its room |
+| **2** | The Office | office | the office itself |
 | **P** | The Pasture | place | a level with terrain, a herd with a little behaviour, and agents: they can ride here too |
-| **A** | After Hours | game | a level as a game: first person, a wave to clear, a score on the arcade board |
-| **13** | | | only there on a Friday the 13th, or once someone has found the `noclip` secret. It hands over to the hidden level under the office |
 
-N, S, P and A are the office's **game floors**: their buttons are dark, and not
-even on the panel, until a keycard has lit them (see *The long game* below).
-R, M and L are always there.
+**The building.** Floors 2 to 5 are ours: the office is on 2, Mission Control on
+3, and 4 and 5 are kept for work modules still to come (a blanking plate on the
+panel until one moves in). Above that the floors are other people's — most of
+them, anyway — then no 13, then the roof; at the bottom is the car park that
+is not one. `PLATE` in `core/levels.mjs` is the panel's layout, row by row.
+
+7, 9, 11 and P are the office's **game floors**: their buttons are red, and
+only buzz, until a keycard has lit them (see *The long game* below). So are 6,
+8, 10 and 12 — but nobody of ours is behind those, and no keycard there is yet
+opens them: they are where the next floors go. R, 2 and 3 are always open.
+
+**What a button looks like** is all the panel says. Plain: press it. Lit green:
+the car is here. Red: it wants a keycard. Brass, with a winking ring: lit since
+you last rode anywhere. The display at the top shows the number of whichever
+button you are on — and, for a floor you could know, its name, with a row of
+pips for a game floor (one shaped like a card, one for each coin hidden there)
+that fill in as those are found. A floor nobody has ridden to yet shows only
+its number. Under the plate is the reader: a lamp for every keycard there is,
+lit for the ones somebody has found. Arrows and Enter work, and so does typing
+what is engraved (`11` is two keys); `Esc` steps back.
 
 ### The registry
 
 `core/levels.mjs` is pure data, shared by the daemon and the browser:
 
 ```js
-{ id: 'roof', floor: 'R', storey: 2, kind: 'place', name: 'Rooftop Garden', blurb: '…',
+{ id: 'roof', floor: 'R', storey: 14, kind: 'place', name: 'Rooftop Garden', blurb: '…',   // blurb: for agents; the panel says nothing
   hidden: ({ quirks, found }) => …,   // optional: a pure rule that hides the button
   card: true, coins: 3,               // optional: a game floor — it needs a keycard, and hides one, and this many coins
   car: [x, z] }                       // optional: agents may ride here (see below)
 ```
 
-`visibleLevels({ quirks, found })` is every button that exists today, and is
-what the daemon reads out to agents; `panelLevels({ quirks, found, open })` is
-the panel as a person sees it — the same, less the game floors no keycard has
-lit yet, and how many of those there are. Keycards are the humans' game: they
-hold back nobody but the person standing at the panel.
+`visibleLevels({ quirks, found })` is every floor of ours that exists today, and
+is what the daemon reads out to agents, names and all; `panelPlate({ quirks,
+found, open }, here)` is the plate as a person sees it — every place on it
+`'here'`, `'open'`, `'locked'` or `'blank'` — and `panelLevels(…)` the floors
+that can be ridden to and how many of ours still want a keycard. Keycards are
+the humans' game: they hold back nobody but the person standing at the panel.
 
 ### The contract
 
@@ -305,16 +324,19 @@ The floors are tied together by three things, and none of them is explained to
 the person playing (`core/game.mjs` is the whole of the rules; it is pure):
 
 - **Keycards.** Every game floor hides one, and so does the place under the
-  office. The lift's panel shows the floors that are lit, and below them a card
-  reader with one unlit lamp for each floor that is not. *The number of game
-  floors lit is one more than the number of keycards found*: one is lit from
-  the start, drawn by lot for each office, and every card lights the next in
-  that office's own order — so no two offices open up the same way, a card
-  always opens something, and a floor once lit stays lit. A floor lit since you
-  last rode anywhere glows until somebody goes there. Beside each lit game
-  floor's name is a row of pips, one for its keycard and one for each coin,
-  filled in as they are found; the passport (§6) has an outline for every
-  keycard there is, and the jar.
+  office. On the lift's panel a floor that wants a keycard is a red button, and
+  under the plate is a card reader with a lamp for every keycard there is.
+  *The number of game floors lit is one more than the number of keycards
+  found*: one is lit from the start, drawn by lot for each office, and every
+  card lights the next in that office's own order — so no two offices open up
+  the same way, a card opens something for as long as a floor of ours is still
+  red, and a floor once lit stays lit. (A card found after that is kept: it
+  lights the next floor anybody builds, on one of the red numbers nobody is
+  behind yet.) A floor lit since you last rode anywhere is brass and winks
+  until somebody goes there. The car's display shows a row of pips for a game
+  floor you have been to, one for its keycard and one for each coin, filled in
+  as they are found; the passport (§6) has an outline for every keycard there
+  is, and the jar.
 - **Coins.** Each of those places hides a few (15 in all). A coin taken is gone
   for good — the office remembers which — and goes into **one jar for the whole
   office**. Every stamp in anybody's passport (§6) pays a coin into the same
@@ -424,10 +446,10 @@ The obvious use of a lift is more *office* — a second storey of project rooms
 when the first is full (today the building grows sideways, a bay at a time,
 and stops at 24 rooms). None of this exists; it is the shape it would take:
 
-- **The plan grows a dimension.** `plan.rooms[i]` gains `floor` (0 = lobby);
+- **The plan grows a dimension.** `plan.rooms[i]` gains `floor` (the office is on 2; 4 and 5 are kept for this);
   `buildLayout(plan, floor)` returns one storey. Every storey keeps the same
   core — landing, lift, a corridor each side — so the car and its doors line
-  up, and only the lobby has the plaza, kitchen and library.
+  up, and only the office's own floor has the plaza, kitchen and library.
 - **Placements carry a floor.** `Placement.floor`, and `world_agent` events
   with it. A walk between storeys is two walks with a ride in the middle:
   to the landing, a few seconds in the car (the `car` tile above is the

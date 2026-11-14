@@ -23,6 +23,7 @@ import { Vox, M, glow, tone, VOXEL } from '../vox/vox.js';
 import { meshVox } from '../vox/mesher.js';
 import { voxelMaterial } from '../vox/material.js';
 import { keycard } from '../props/loot.js';
+import { levelById } from '/core/levels.mjs';
 
 const ROOM = { x0: -9, z0: -6.5, x1: 9, z1: 6.5, h: 2.7 };
 const WAVE = 16, LIVES = 5, REACH = 1.55, ARC = 0.75, DIM = 0.8;
@@ -241,7 +242,7 @@ export async function enter(office) {
     game.score += (LIVES - game.lost) * 150;
     for (const d of desks) { d.bad = false; d.picture.material = office.screens.material('done'); }
     w.light(MORNING); beacon.intensity = 0;                                                      // the lights come back
-    w.sfx('lift-ding'); w.liftDoor?.setFloor('A', 0, '#5fe08a');
+    w.sfx('lift-ding'); w.liftDoor?.setFloor(levelById('afterhours').floor, 0, '#5fe08a');
     status.redraw();
     const name = office.walk?.me?.name || 'Lead';
     try {

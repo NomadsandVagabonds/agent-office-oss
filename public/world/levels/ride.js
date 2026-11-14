@@ -10,16 +10,16 @@ import { buildProp } from '../props/index.js';
 import { FLOORS, WALLS, canvasTexture } from '../scene/textures.js';
 import { h } from '../ui/dom.js';
 import { resolveLook } from '/core/look.mjs';
-import { LEVELS } from '/core/levels.mjs';
+import { HOME, LEVELS, panelPlate } from '/core/levels.mjs';
 import { CAR, ledDisplay, quad } from './car.js';
 import { curtain } from './curtain.js';
 
 const STOREY = 3.4;                              // metres between floors, in the shaft
 const T = { wait: 0.2, close: 0.75, travel: 2.7, open: 0.7, out: 0.45 };    // seconds; about 4.8 in all
 // What the announcer has a recording of (tools/make-audio.mjs). Floors without one arrive on the ding alone.
-const VOICE = { lobby: 'lift-lobby', roof: 'lift-roof', thirteen: 'lift-13' };
+const VOICE = { [HOME]: 'lift-office', roof: 'lift-roof', thirteen: 'lift-13' };
 // The light that comes through the doors when they open on each floor.
-const GLOW = { lobby: '#ffdcae', mission: '#5f8fe0', pasture: '#d8f0c0', afterhours: '#e0503a', thirteen: '#d8c45a' };
+const GLOW = { [HOME]: '#ffdcae', mission: '#5f8fe0', pasture: '#d8f0c0', afterhours: '#e0503a', thirteen: '#d8c45a' };
 
 const smooth = (x) => { const t = Math.max(0, Math.min(1, x)); return t * t * (3 - 2 * t); };
 const smoother = (x) => { const t = Math.max(0, Math.min(1, x)); return t * t * t * (t * (t * 6 - 15) + 10); };
@@ -66,8 +66,8 @@ function stencil(text) {
  * Play one ride and resolve when the screen has gone dark at the other end.
  *
  * @param {object} office
- * @param {{from:object, to:object, floors?:object[], until?:Promise, pace?:number, glitch?:boolean}} trip
- *        from/to: levels (core/levels.mjs) · floors: the buttons to show in the car
+ * @param {{from:object, to:object, plate?:object[][], until?:Promise, pace?:number, glitch?:boolean}} trip
+ *        from/to: levels (core/levels.mjs) · plate: the buttons in the car as they stand (panelPlate)
  *        until: do not open the doors before this settles (the next floor is still loading)
  *        pace: 1 is normal; larger is slower (for looking at it) · glitch: this is not a normal floor
  */
@@ -76,6 +76,7 @@ export function playRide(office, trip) {
   const pace = trip.pace || 1, glitch = !!trip.glitch;
   const stage = office.stage;
   const dir = Math.sign(to.storey - from.storey) || 1;
+  const TRAVEL = T.travel * (1 + 0.035 * Math.max(0, Math.abs(to.storey - from.storey) - 2));       // a long way takes a little longer
   const trash = [];
   const own = (x) => { trash.push(x); return x; };
   const sfx = (name) => { try { return office.sound?.play?.(name) ?? null; } catch { return null; } };
@@ -141,21 +142,24 @@ export function playRide(office, trip) {
   const led = new THREE.Mesh(own(new THREE.PlaneGeometry(0.38, 0.2)), display.material);
   led.position.set(0, (CAR.doorH + H) / 2 + 0.02, Z0 + 0.012);
   car.add(led);
-  const floors = (trip.floors && trip.floors.length ? trip.floors : LEVELS.filter((l) => !l.hidden || l.id === to.id));
-  const buttons = own(canvasTexture(48, 168, (g, w, hh) => {
+  // the plate of buttons beside the door, as it stands: red ones, blanking plates and all — and the one just pressed, lit
+  const plate = trip.plate && trip.plate.length ? trip.plate : panelPlate({}, from.id);
+  const buttons = own(canvasTexture(56, 196, (g, w, hh) => {
     g.fillStyle = '#2a2d36'; g.fillRect(0, 0, w, hh);
     g.fillStyle = '#3a3e4a'; g.fillRect(2, 2, w - 4, hh - 4);
-    const step = Math.min(30, (hh - 16) / floors.length);
-    floors.forEach((l, i) => {
-      const y = 12 + step * (i + 0.5), lit = l.id === to.id;
-      g.fillStyle = lit ? '#ffb44a' : '#171920'; g.beginPath(); g.arc(w / 2, y, Math.min(11, step / 2 - 2), 0, 7); g.fill();
-      g.fillStyle = lit ? '#2a1c06' : '#c9d0da'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.font = `700 ${l.floor.length > 1 ? 9 : 12}px ui-monospace, Menlo, Consolas, monospace`;
-      if (!l.unmarked) g.fillText(l.floor, w / 2, y + 1);
-    });
+    const step = Math.min(24, (hh - 16) / plate.length), r = Math.min(9, step / 2 - 1.5);
+    plate.forEach((row, i) => row.forEach((cell, c) => {
+      if (!cell) return;
+      const x = w / 2 + (c ? 13 : -13), y = 9 + step * (i + 0.5), lit = cell.level && cell.level.id === to.id;
+      if (cell.state === 'blank') { g.fillStyle = '#30343e'; g.fillRect(x - 4, y - 4, 8, 8); return; }
+      g.fillStyle = lit ? '#ffb44a' : cell.state === 'locked' ? '#4a1410' : '#171920'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+      g.fillStyle = lit ? '#2a1c06' : cell.state === 'locked' ? '#ff6a55' : '#c9d0da'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = `700 ${cell.label.length > 1 ? 8 : 11}px ui-monospace, Menlo, Consolas, monospace`;
+      if (!cell.level?.unmarked) g.fillText(cell.label, x, y + 1);
+    }));
   }, { clamp: true }));
   const buttonMat = own(new THREE.MeshBasicMaterial({ map: buttons, toneMapped: false }));
-  const column = new THREE.Mesh(own(new THREE.PlaneGeometry(0.2, 0.7)), buttonMat);
+  const column = new THREE.Mesh(own(new THREE.PlaneGeometry(0.22, 0.77)), buttonMat);
   column.position.set(half + 0.3, 1.12, Z0 + 0.012);
   car.add(column);
 
@@ -220,7 +224,7 @@ export function playRide(office, trip) {
   /* ---- time ----------------------------------------------------------------------------------- */
   let phase = 'closing', at = 0, arrived = 0, storey = from.storey, waiting = !!trip.until, finished = false, shown = null, music = null;
   if (trip.until) Promise.resolve(trip.until).catch(() => null).then(() => { waiting = false; });
-  const skip = () => { if (phase === 'closing' || phase === 'travel') { at = T.wait + T.close + T.travel; } };
+  const skip = () => { if (phase === 'closing' || phase === 'travel') { at = T.wait + T.close + TRAVEL; } };
   const key = (e) => {
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName || '')) return;
     e.stopPropagation();
@@ -252,7 +256,7 @@ export function playRide(office, trip) {
         if (at >= T.wait + T.close) { phase = 'travel'; sfx(dir > 0 ? 'lift-up' : 'lift-down'); }
       }
       if (phase === 'travel') {
-        const k = (at - T.wait - T.close) / T.travel;
+        const k = (at - T.wait - T.close) / TRAVEL;
         storey = from.storey + (to.storey - from.storey) * smoother(k);
         if (k >= 1 && !waiting) { phase = 'arrive'; arrived = at; sfx('lift-ding'); try { music?.stop?.(0.6); } catch { /* fine */ } setTimeout(() => sfx(VOICE[to.id]), 280); }
       }
@@ -277,12 +281,12 @@ export function playRide(office, trip) {
       let text = labelAt(phase === 'travel' || phase === 'closing' ? here : to.storey);
       let color = '#ffb44a';
       if (glitch && here > 2) { color = '#ff5a4a'; if (Math.sin(at * 53) > 0.2 && phase === 'travel') text = '#%?!8E3'[Math.floor((at * 31) % 7)] + (here % 10); }
-      if (waiting && phase === 'travel' && at > T.wait + T.close + T.travel && Math.sin(at * 9) < 0) text = '';
+      if (waiting && phase === 'travel' && at > T.wait + T.close + TRAVEL && Math.sin(at * 9) < 0) text = '';
       const sig = `${text}|${arrow}|${color}`;
       if (sig !== shown) { shown = sig; display.set(text, arrow, color); }
       // light, and the little shake of a car that is moving
       lampLight.intensity = 7 * flick; lampMat.color.set('#fff1d6').multiplyScalar(1.45 * flick);
-      const moving = phase === 'travel' ? Math.sin(Math.min(1, (at - T.wait - T.close) / T.travel) * Math.PI) : 0;
+      const moving = phase === 'travel' ? Math.sin(Math.min(1, (at - T.wait - T.close) / TRAVEL) * Math.PI) : 0;
       const shake = (0.004 + (glitch ? 0.012 : 0)) * moving;
       camera.position.set(camAt.x + Math.sin(at * 47) * shake, camAt.y + Math.sin(at * 31) * shake, camAt.z);
       camera.lookAt(camLook);

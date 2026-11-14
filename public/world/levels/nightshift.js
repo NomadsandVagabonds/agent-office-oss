@@ -1,4 +1,4 @@
-// N · Night Shift. A monochrome, side-on office stealth detour.
+// 9 · Night Shift. A monochrome, side-on office stealth detour.
 // The furniture and employee are actual Vox meshes; the rules run in a pure 2D world.
 //
 // Nothing here is addressed to whoever is playing. The words are the office's
@@ -15,6 +15,7 @@ import { createWorld } from './kit.js';
 import { makePickup } from './loot.js';
 import { Vox, M } from '../vox/vox.js';
 import { LEVEL, createGame, restart, step, lightBeams, beamPolygon, interactable, objective } from '/core/nightshift-game.mjs';
+import { levelById } from '/core/levels.mjs';
 import { silhouetteDesk, filingBank, securityLamp, officeDoor, staffCard } from './nightshift-props.js';
 import { createWorker } from './nightshift-worker.js';
 
@@ -104,7 +105,7 @@ export async function enter(office) {
   }
   w.vox(() => officeDoor({ open: true }), 1.3, -1.1, 'S');
   w.vox(() => officeDoor({ open: true }), LEVEL.exitX, -1.1, 'S');
-  lettering('N · NIGHT SHIFT', 1.3, 2.9, { size: 0.2 });
+  lettering(`${levelById('nightshift').floor} · NIGHT SHIFT`, 1.3, 2.9, { size: 0.2 });
   lettering('EXIT', LEVEL.exitX, 2.9, { size: 0.27 });
 
   // What is written up is what this office would have up anyway: a slip on the board by the door (the errand,

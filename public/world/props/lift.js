@@ -38,10 +38,10 @@ export function callplate() {
   v.paint(-5, 23, 0, 5, 24, 2, lite);                          // light catches the top edge
   v.paint(-5, 0, 0, 5, 1, 2, dark);
   for (const [x, y] of [[-4, 1], [3, 1], [-4, 22], [3, 22]]) v.set(x, y, 1, dark);     // screws
-  // where the car is: a dark window, an amber L
+  // where the car is: a dark window, an amber 2 (the office's floor: core/levels.mjs)
   v.carve(-3, 15, 1, 3, 22, 2);
   v.paint(-3, 15, 0, 3, 22, 1, k);
-  v.paint(-1, 16, 0, 0, 21, 1, glow(AMBER)); v.paint(0, 16, 0, 2, 17, 1, glow(AMBER));
+  for (const [x0, y0, x1, y1] of [[-1, 20, 2, 21], [1, 19, 2, 20], [-1, 18, 2, 19], [-1, 17, 0, 18], [-1, 16, 2, 17]]) v.paint(x0, y0, 0, x1, y1, 1, glow(AMBER));
   // up (lit: the car is here) and down
   v.cyl('z', 0, 10, 2, 3, 2.9, glow(AMBER)); v.cyl('z', 0, 10, 2, 3, 2, lite);
   v.cyl('z', 0, 4, 2, 3, 2.9, dark); v.cyl('z', 0, 4, 2, 3, 2, lite);

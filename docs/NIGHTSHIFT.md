@@ -1,6 +1,6 @@
 # Night Shift
 
-Floor **N** is a short, side-on office stealth game. Its monochrome atmosphere
+Floor **9** is a short, side-on office stealth game. Its monochrome atmosphere
 is a homage to Limbo, with an original office setting, employee, furniture and
 workplace jokes. The scene uses real Vox meshes through the existing level kit;
 it contains no borrowed game assets. The orthographic camera presents the voxel
@@ -17,7 +17,7 @@ What is written on the floor is what this office would have up anyway:
 
 | Words | Where |
 | --- | --- |
-| `N · NIGHT SHIFT`, `EXIT`, `RECORDS` | Door and department plaques. |
+| `9 · NIGHT SHIFT`, `EXIT`, `RECORDS` | Door and department plaques. |
 | `LOST PROPERTY · ONE STAFF BADGE · HANDED IN TO RECORDS` | A slip pinned by the door: the errand, as the office would put it. |
 | `NO OVERTIME HAS BEEN APPROVED`, `THE LAST ONE OUT GETS THE LIGHTS` | Two notices nobody took down. |
 | `PERSONNEL`, `ARCHIVE`, `SECURITY POWER`, `TIME CLOCK` | Labels on desks, boxes, the breaker and the clock. |
@@ -60,7 +60,7 @@ cover.
 | **E** | Take the badge, use the breaker, clock out; after that, the lift home. |
 | **P** | Pause or resume (the lamp readouts say `STANDBY`). |
 | **R** | Start the shift again. |
-| **Escape** | Return to the lobby. |
+| **Escape** | Return to the office. |
 
 Getting caught returns you to the latest dark checkpoint after a short pause.
 Retries are unlimited, and an acquired badge or disabled breaker remains earned

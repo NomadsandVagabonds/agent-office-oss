@@ -8,7 +8,7 @@
 //
 // As far as the floor plan knows, an agent who has taken the lift is standing
 // in the car (the one room nobody can see into) — which is exactly where a
-// human watching the lobby saw them go. They come back the way everybody comes
+// human watching the office saw them go. They come back the way everybody comes
 // back from anywhere: when they ask to, or when work calls.
 //
 // To give a floor a text side, add an entry to TEXT below. Floors without one
@@ -228,7 +228,7 @@ export function createFloors(ctx, world) {
   }
 
   function examine(agent, target) {
-    if (target.thing === 'lift') return { ok: true, text: `The lift, set into the wall behind you. Its display reads ${target.level.floor}. (office go home takes you back up)` };
+    if (target.thing === 'lift') return { ok: true, text: `The lift, set into the wall behind you. Its display reads ${target.level.floor}. (office go home takes you back to the office)` };
     if (target.thing) return { ok: true, text: TEXT[target.level.id].examine(agent, target.thing, api), level: target.level.id };
     if (target.level) {
       const l = target.level;
@@ -247,7 +247,7 @@ export function createFloors(ctx, world) {
     if (level.id === HOME) {
       if (!floorOf(agent)) return { ok: true, text: 'That is this floor. The lift waits, politely.' };
       world.sendHome(agent);
-      return { ok: true, text: 'You ride back up. Lobby. You head for your desk.' };
+      return { ok: true, text: `You ride back to ${level.floor}. ${level.name}. You head for your desk.` };
     }
     if (!rides(level)) {
       const open = floors().filter(rides).map((l) => `${l.floor} (office use lift ${l.id})`);

@@ -14,7 +14,7 @@
 // To add one: give it a line in core/levels.mjs (id, the letter on its
 // button, a name, a blurb) and a line in MODULES below. That is all the lift
 // needs to know.
-import { HOME, findLevel, isOpen, isVisible, levelById, levelContext, visibleLevels } from '/core/levels.mjs';
+import { HOME, findLevel, isOpen, isVisible, levelById, levelContext, panelPlate } from '/core/levels.mjs';
 import { curtain } from './curtain.js';
 import { playRide } from './ride.js';
 
@@ -27,7 +27,7 @@ const MODULES = {
   pasture: () => import('./pasture.js'),
   afterhours: () => import('./afterhours.js'),
 };
-// Two floors are not modules of ours: 'lobby' is the office you are already in,
+// Two floors are not modules of ours: 'office' is the office you are already in,
 // and 'thirteen' hands over to whatever office.onNoclip() opens (see eggs.js).
 
 const state = { floor: HOME, riding: false };
@@ -83,7 +83,7 @@ export async function ride(office, ref, opt = {}) {
       if (next.id === 'thirteen') return await thirteen(office, from, opt);
       const loading = (MODULES[next.id] ? MODULES[next.id]() : Promise.resolve(null)).catch((err) => { console.error(`[lift] ${next.id} would not load`, err); return null; });
       if (instant) await curtain.close(120);
-      else await playRide(office, { from, to: next, floors: visibleLevels(context(office)), until: loading, pace: opt.pace });
+      else await playRide(office, { from, to: next, plate: panelPlate(context(office), from.id), until: loading, pace: opt.pace });
       const mod = await loading;
       state.floor = next.id;
       // somebody has now been to a floor that was only just lit: its button need not glow any more
@@ -93,7 +93,7 @@ export async function ride(office, ref, opt = {}) {
       const onward = last.reason === 'lift' ? findLevel(last.to) : null;
       next = onward && isVisible(onward, context(office)) && isOpen(onward, context(office)) ? onward : levelById(HOME);
     }
-    if (last.reason !== 'missing') await playRide(office, { from, to: levelById(HOME), floors: visibleLevels(context(office)), pace: (opt.pace || 1) * (last.reason === 'lift' ? 1 : 0.6) });
+    if (last.reason !== 'missing') await playRide(office, { from, to: levelById(HOME), plate: panelPlate(context(office), from.id), pace: (opt.pace || 1) * (last.reason === 'lift' ? 1 : 0.6) });
   } catch (err) {
     console.error('[lift]', err);
     last = { reason: 'error', error: err };
@@ -154,7 +154,7 @@ async function thirteen(office, from, opt) {
   if (world?.today?.quirks?.includes('friday-13')) {
     office.net.api('/api/world/discover', { method: 'POST', body: { secret: 'thirteenth', name: office.walk?.me?.name || 'Lead' } }).catch(() => null);
   }
-  await playRide(office, { from, to: level, floors: visibleLevels(context(office)), glitch: true, pace: opt.pace });
+  await playRide(office, { from, to: level, plate: panelPlate(context(office), from.id), glitch: true, pace: opt.pace });
   office.stage.setView(null);
   document.body.classList.remove('level');
   state.floor = HOME; state.riding = false;

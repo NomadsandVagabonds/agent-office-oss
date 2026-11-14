@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { LEVELS, LEVEL_KINDS, HOME, levelById, findLevel, isVisible, visibleLevels, levelContext, floorOfPlacement } from '../core/levels.mjs';
+import { LEVELS, LEVEL_KINDS, HOME, PLATE, RESERVED, levelById, findLevel, isVisible, visibleLevels, levelContext, floorOfPlacement, panelPlate } from '../core/levels.mjs';
 import { buildLayout } from '../core/layout.mjs';
 import { createNav } from '../core/nav.mjs';
 import { SECRETS } from '../core/secrets.mjs';
@@ -28,10 +28,50 @@ test('levels: the registry is well formed', () => {
     assert.ok(Object.isFrozen(l), 'pure data: nobody edits a floor at runtime');
   }
   const home = levelById(HOME);
-  assert.ok(home && home.kind === 'office' && home.storey === 0 && !home.hidden, 'the lobby is the office, and is always there');
+  assert.ok(home && home.kind === 'office' && !home.hidden && !home.card, 'the office is a floor like any other, and is always there');
   assert.equal(LEVELS.filter((l) => l.kind === 'office').length, 1);
-  assert.deepEqual(['L', 'R', 'M', 'P', 'A', '13'].filter((f) => !LEVELS.some((l) => l.floor === f)), [], 'the floors the lift was built for');
+  // the building: our own floors are 2 to 5 (the office on 2), the roof is on top, and a numbered floor is on the storey its button says
+  assert.equal(home.floor, '2');
+  for (const l of LEVELS) if (/^\d+$/.test(l.floor)) assert.equal(l.storey, Number(l.floor), `${l.id}: button ${l.floor} stops at storey ${l.storey}`);
+  for (const l of LEVELS.filter((x) => x.kind === 'office' || x.kind === 'work')) assert.ok(l.storey >= 2 && l.storey <= 5, `${l.id} is one of our working floors`);
+  for (const l of LEVELS.filter((x) => x.card && /^\d+$/.test(x.floor))) assert.ok(l.storey > 5, `${l.id}: a floor that wants a keycard is above our own`);
+  assert.equal(Math.max(...LEVELS.map((l) => l.storey)), levelById('roof').storey, 'nothing is above the roof');
+  assert.deepEqual(LEVELS.map((l) => l.storey), [...LEVELS.map((l) => l.storey)].sort((a, b) => b - a), 'listed from the top of the building down');
   for (const kind of ['place', 'work', 'game']) assert.ok(LEVELS.some((l) => l.kind === kind), `there is a sample ${kind}`);
+});
+
+test('levels: the plate in the car has a button for every floor, and says nothing it should not', () => {
+  const places = PLATE.flat().filter((label) => label !== null);
+  assert.equal(new Set(places).size, places.length, 'nothing is engraved twice');
+  for (const row of PLATE) assert.equal(row.length, 2, 'two to a row');
+  for (const l of LEVELS) assert.ok(places.includes(l.floor), `${l.id} (${l.floor}) has a place on the plate`);
+  for (const label of RESERVED) assert.ok(places.includes(label) && !LEVELS.some((l) => l.floor === label), `${label} is kept, and nothing is there yet`);
+  // numbers run up the plate: the higher row is the higher floor
+  const numbered = PLATE.map((row) => row.filter((x) => /^\d+$/.test(x || '')).map(Number)).filter((row) => row.length);
+  for (let i = 1; i < numbered.length; i++) assert.ok(Math.min(...numbered[i - 1]) > Math.max(...numbered[i]), 'rows count down from the top');
+
+  // an office where one game floor is lit and nobody has ridden to it yet
+  const games = LEVELS.filter((l) => l.card), lit = games[1];
+  const ctx = levelContext({ game: { open: [lit.id], fresh: [lit.id] } });
+  const cells = panelPlate(ctx).flat().filter(Boolean), by = (label) => cells.find((c) => c.label === label);
+  assert.deepEqual(panelPlate(ctx).map((row) => row.map((c) => (c ? c.label : null))), PLATE.map((row) => [...row]), 'the plate as it stands is the plate');
+  assert.equal(by(levelById(HOME).floor).state, 'here');
+  assert.equal(by('R').state, 'open');
+  assert.equal(by(lit.floor).state, 'open');
+  for (const g of games) if (g !== lit) assert.equal(by(g.floor).state, 'locked', `${g.id} wants a keycard`);
+  for (const label of RESERVED) assert.deepEqual([by(label).state, by(label).level], ['blank', null]);
+  // a number nobody of ours answers to is somebody else's floor: red, and it stays red
+  const theirs = cells.filter((c) => !c.level && c.state !== 'blank');
+  assert.ok(theirs.length >= 2 && theirs.every((c) => c.state === 'locked' && /^\d+$/.test(c.label)));
+  // 13 is a blanking plate until its rule lets it out; then it is a button like the others
+  assert.equal(by('13').state, isVisible(levelById('thirteen'), ctx) ? 'open' : 'blank');
+  assert.equal(panelPlate({ quirks: ['friday-13'] }).flat().find((c) => c && c.label === '13').level.id, 'thirteen');
+  assert.equal(panelPlate({ quirks: [] }).flat().find((c) => c && c.label === '13').state, 'blank');
+  // on another floor, that floor is the one that is lit
+  assert.equal(panelPlate(ctx, 'roof').flat().find((c) => c && c.label === 'R').state, 'here');
+  assert.equal(panelPlate(ctx, 'roof').flat().find((c) => c && c.label === levelById(HOME).floor).state, 'open');
+  // an office that keeps no score holds nothing of ours back
+  for (const g of games) assert.equal(panelPlate({}).flat().find((c) => c && c.label === g.floor).state, 'open');
 });
 
 test('levels: where an agent stands in the car says which floor it rode to', () => {
@@ -54,7 +94,9 @@ test('levels: where an agent stands in the car says which floor it rode to', () 
 test('levels: floors are found by id or by what is on the button', () => {
   assert.equal(findLevel('roof').floor, 'R');
   assert.equal(findLevel('R').id, 'roof');
-  assert.equal(findLevel(' m ').id, 'mission');
+  assert.equal(findLevel(' 3 ').id, 'mission');
+  assert.equal(findLevel('2').id, HOME);
+  assert.equal(findLevel('lobby').id, HOME, 'what the office used to be called still finds it');
   assert.equal(findLevel('13').id, 'thirteen');
   assert.equal(findLevel(''), null);
   assert.equal(findLevel('penthouse'), null);

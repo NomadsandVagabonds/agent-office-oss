@@ -13,7 +13,7 @@ test('game: the rules — what is hidden where, how floors open, what a jar hold
   for (const h of HIDEOUTS) assert.ok(h.coins >= 2 && h.coins <= 4, `${h.id} hides ${h.coins} coins: two to four`);
   assert.deepEqual(HIDEOUTS.filter((h) => h.lift).map((h) => h.id), LEVELS.filter((l) => l.card).map((l) => l.id));
   assert.ok(HIDEOUTS.some((h) => !h.lift), 'and one place the lift does not go');
-  for (const id of ['roof', 'mission', 'lobby']) assert.ok(!levelById(id).card, `${id} is never locked`);
+  for (const id of ['roof', 'mission', 'office']) assert.ok(!levelById(id).card, `${id} is never locked`);
 
   // an order is every card floor once; an office keeps the order it was dealt, and a new floor joins the end
   const seq = [0.9, 0.1, 0.5, 0.3, 0.7, 0.2]; let i = 0; const rand = () => seq[i++ % seq.length];
@@ -46,7 +46,7 @@ test('game: the rules — what is hidden where, how floors open, what a jar hold
   const panel = panelLevels(ctx);
   assert.equal(panel.dark, floors.length - 1);
   assert.ok(panel.levels.some((l) => l.id === order[0]) && !panel.levels.some((l) => l.id === order[1]));
-  assert.ok(panel.levels.some((l) => l.id === 'roof') && panel.levels.some((l) => l.id === 'lobby'));
+  assert.ok(panel.levels.some((l) => l.id === 'roof') && panel.levels.some((l) => l.id === 'office'));
   assert.ok(isOpen(levelById(order[1]), {}), 'an office that says nothing about the game holds nothing back');
   assert.equal(panelLevels(levelContext({})).dark, 0);
 });

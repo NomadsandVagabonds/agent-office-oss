@@ -8,6 +8,7 @@ import { buildProp } from '../props/index.js';
 import { LIFT, LIFT_DISPLAY } from '../props/lift.js';
 import { VOXEL } from '../vox/vox.js';
 import { FLOORS, WALLS, canvasTexture } from '../scene/textures.js';
+import { HOME, levelById } from '/core/levels.mjs';
 
 /** Sizes in metres. The doorway is LIFT.open × LIFT.height voxels; the car is wider than its door, so the leaves have somewhere to go. */
 export const CAR = Object.freeze({
@@ -87,19 +88,19 @@ export function createLiftDoor(opt = {}) {
   const plate = buildProp('callplate', { id: 'callplate' });
   plate.position.set(half + 0.36, 0.7, 0);
   group.add(plate);
-  // the plate is sculpted showing L (it hangs in the lobby too); here its little window shows this floor
+  // the plate is sculpted showing the office's own floor (it hangs there too); here its little window shows this floor
   const here = ledDisplay(28, 32);
   const window_ = new THREE.Mesh(own(new THREE.PlaneGeometry(6 * VOXEL, 7 * VOXEL)), here.material);
   window_.position.set(half + 0.36, 0.7 + 18.5 * VOXEL, 1.06 * VOXEL);
   group.add(window_);
-  here.set(opt.floor || 'L');
+  here.set(opt.floor || levelById(HOME).floor);
   own(here);
 
   const display = ledDisplay();
   const screen = new THREE.Mesh(own(new THREE.PlaneGeometry(LIFT_DISPLAY.w * VOXEL, LIFT_DISPLAY.h * VOXEL)), display.material);
   screen.position.set(LIFT_DISPLAY.x * VOXEL, LIFT_DISPLAY.y * VOXEL, LIFT_DISPLAY.z * VOXEL);
   group.add(screen);
-  display.set(opt.floor || 'L');
+  display.set(opt.floor || levelById(HOME).floor);
 
   // the car you can see into while the doors are open
   const steel = WALLS.steel(), tile = FLOORS.tile('#8a8f98', '#7d828b');

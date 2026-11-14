@@ -56,6 +56,7 @@ export const MANIFEST = [
   sfx('needs-you', 'A gentle two-note ascending notification chime played on a soft marimba, warm and friendly, clean, no background', 1.4, { influence: 0.6 }),
   sfx('lift-ding', 'A single mellow elevator arrival chime: one warm, mid-pitched bell tone with a soft ringing tail, clean, no background noise', 1.5, { influence: 0.7, fx: 'lowpass=f=2600' }),
   sfx('lift-doors', 'Elevator doors sliding open, smooth mechanical hum and a soft thunk, indoors, clean', 2.2),
+  sfx('lift-denied', 'An electronic card reader refusing a card: two short, flat, low buzzer beeps, close and dry, no background noise', 0.8, { influence: 0.7 }),
   sfx('bell', 'One tap on a small brass reception desk bell, bright ringing ding, close and clean', 1.8, { influence: 0.7 }),
   sfx('coffee', 'Drip coffee machine gurgling and pouring coffee into a mug with a little hiss of steam, close', 3.5, { tail: 0.3 }),
   sfx('vend', 'Vending machine motor whirring, then a snack bar drops into the tray with a clunk', 2.6),
@@ -87,7 +88,7 @@ export const MANIFEST = [
   music('arcade-chiptune', 'A bouncy, friendly 8-bit chiptune loop for a small arcade game: a clear hummable square-wave lead, a simple triangle-wave bass line, light noise-channel drums. Major key, playful rather than frantic, like a 1980s home console title screen', 32, { bpm: 120, mono: true }),
   music('rooftop-lofi', 'Calm lo-fi hip hop instrumental at 80 BPM, warm electric piano chords, soft dusty drums and vinyl crackle, a relaxed evening on a city rooftop', 36, { bpm: 80 }),
   // ---- voices
-  voice('lift-lobby', 'lift', 'Lobby.'),
+  voice('lift-office', 'lift', 'Second floor.'),
   voice('lift-roof', 'lift', 'Rooftop garden.'),
   voice('lift-up', 'lift', 'Going up.'),
   voice('lift-down', 'lift', 'Going down.'),

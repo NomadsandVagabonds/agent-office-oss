@@ -260,7 +260,7 @@ body.level #ui > *:not(.level):not(.story):not(.liftveil):not(.liftpanel):not(.p
 #ui .level.ride { cursor: default; }
 #ui .level-chip { position: absolute; top: 10px; left: 10px; display: flex; align-items: center; gap: 10px; height: 42px; padding: 3px 8px 0 8px; cursor: default; }
 #ui .level-chip .floor { display: grid; place-items: center; min-width: 26px; height: 26px; padding: 0 4px 2px; background: var(--brass); color: var(--accent-ink);
-  font: 600 17px/1 var(--display); box-shadow: inset 0 -3px 0 var(--brass-lo), inset 0 1px 0 var(--brass-hi); }
+  font: 700 15px/1 var(--mono); letter-spacing: -.03em; box-shadow: inset 0 -3px 0 var(--brass-lo), inset 0 1px 0 var(--brass-hi); }   /* a floor is a number now: set in the face whose 2 and 7 cannot be mistaken */
 #ui .level-chip .floor:empty { background: var(--tape); box-shadow: inset 0 0 0 2px var(--danger); }
 #ui .level-chip .name { font: 400 16px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; padding: 0 4px 1px 0; }
 #ui .level-chip .name:empty { display: none; }
@@ -334,46 +334,65 @@ body.level #ui > *:not(.level):not(.story):not(.liftveil):not(.liftpanel):not(.p
 #ui .vslip span { display: block; font: 12.5px/1.35 var(--sans); color: var(--paper-dim); }
 @media (max-width: 460px) { #ui .vbody { grid-template-columns: minmax(0, 1fr) 104px; } #ui .vslot { height: 96px; } #ui .vbrand { font-size: 26px; height: 40px; } }
 #ui .liftveil { position: absolute; inset: 0; background: rgba(8, 13, 11, .55); pointer-events: auto; cursor: default; }
-#ui .liftpanel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(430px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow-y: auto;
-  padding: 18px 16px 14px; cursor: default; color: var(--ink); animation: liftin .16s steps(3); }
+/* The lift's panel: a steel plate of buttons under the car's display, screwed to the wall. Nothing is written on it
+   but what is engraved in the buttons; the display is the only thing that says a word, and only about a floor you know. */
+#ui .liftpanel { --b: 60px; --g: 11px; --steel: #4b544f; --steel-hi: #6d7871; --steel-lo: #2b322e; --eight: polygon(29% 0, 71% 0, 100% 29%, 100% 71%, 71% 100%, 29% 100%, 0 71%, 0 29%);
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(292px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow-y: auto;
+  padding: 24px 22px 22px; cursor: default; color: var(--ink); pointer-events: auto; animation: liftin .16s steps(3);
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .035) 0 1px, transparent 1px 3px), var(--steel); border: 2px solid var(--edge);
+  box-shadow: inset 0 2px 0 var(--steel-hi), inset 0 -3px 0 var(--steel-lo), var(--shadow); }
 @keyframes liftin { from { opacity: 0; transform: translate(-50%, -47%); } to { opacity: 1; transform: translate(-50%, -50%); } }
-#ui .liftpanel .led { display: flex; align-items: center; gap: 14px; padding: 8px 14px 9px; background: #0a0c0a; border: 2px solid var(--edge); box-shadow: inset 0 3px 0 rgba(0, 0, 0, .6); }
-#ui .liftpanel .led b { min-width: 1.2em; text-align: center; font: 600 38px/1 var(--display); color: var(--blocked); }
-#ui .liftpanel .led span { font: 400 11px/1.5 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--brass-lo); }
-#ui .liftpanel .led strong { font: 400 16px/1.2 var(--display); letter-spacing: .08em; color: var(--brass); }
-#ui .liftpanel .floors { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
-#ui .liftpanel .floorrow { display: flex; align-items: center; gap: 14px; padding: 7px 8px; cursor: pointer; border: 2px solid transparent; }
-#ui .liftpanel .floorrow.on { background: var(--board-2); border-color: var(--edge); }
-#ui .liftpanel .cap { flex: none; width: 44px; height: 44px; padding-bottom: 3px; display: grid; place-items: center; font: 600 21px/1 var(--display); color: var(--ink);
-  background: var(--board-3); border: 2px solid var(--edge); border-radius: 2px; box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .34), inset 0 1px 0 rgba(255, 255, 255, .09); }
-#ui .liftpanel .floorrow.on .cap { color: var(--accent); box-shadow: inset 0 -4px 0 var(--brass-lo), inset 0 1px 0 rgba(255, 255, 255, .09); }
-#ui .liftpanel .floorrow.here .cap { color: var(--working); box-shadow: inset 0 -4px 0 var(--ok), inset 0 1px 0 rgba(255, 255, 255, .09); }
-#ui .liftpanel .floorrow.lit .cap { padding-bottom: 0; color: var(--accent-ink); background: var(--brass); box-shadow: inset 0 2px 0 var(--brass-lo); }
-#ui .liftpanel .floorrow.nudge { animation: liftnudge .24s steps(4); }
+#ui .liftpanel .screw { position: absolute; width: 8px; height: 8px; background: linear-gradient(135deg, transparent 0 42%, var(--steel-lo) 42% 58%, transparent 58%), var(--steel-hi); box-shadow: 0 0 0 2px var(--steel-lo); }
+#ui .liftpanel .screw:nth-of-type(1) { left: 8px; top: 9px; } #ui .liftpanel .screw:nth-of-type(2) { right: 8px; top: 9px; }
+#ui .liftpanel .screw:nth-of-type(3) { left: 8px; bottom: 9px; } #ui .liftpanel .screw:nth-of-type(4) { right: 8px; bottom: 9px; }
+#ui .liftpanel .led { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12px; height: 74px; padding: 6px 12px 7px; overflow: hidden;
+  background: #0a0c0a; border: 2px solid var(--edge); box-shadow: inset 0 3px 0 rgba(0, 0, 0, .6), 0 1px 0 var(--steel-hi); }
+#ui .liftpanel .led b { grid-row: 1 / span 2; min-width: 1.3em; text-align: center; font: 700 36px/1 var(--mono); letter-spacing: -.02em; color: var(--blocked); }
+#ui .liftpanel .led b.no { color: var(--danger); } #ui .liftpanel .led b.here { color: var(--working); }
+#ui .liftpanel .led span { align-self: end; font: 400 15px/1.1 var(--display); letter-spacing: .07em; text-transform: uppercase; color: var(--brass); overflow-wrap: anywhere; }
+#ui .liftpanel .led span:empty { display: none; }
+#ui .liftpanel .led em { align-self: start; display: flex; align-items: flex-end; gap: 4px; min-height: 11px; margin-top: 5px; font-style: normal; }
+#ui .liftpanel .led em i { width: 8px; height: 8px; border: 2px solid #4d5a52; }
+#ui .liftpanel .led em i.got { background: #f2c64a; border-color: #b98a1e; }
+#ui .liftpanel .led em i.card { width: 8px; height: 11px; margin-right: 3px; }
+#ui .liftpanel .led em i.card.got { background: #f3eedd; border-color: #17130c; box-shadow: inset 0 3px 0 #3f8fd0; }
+#ui .liftpanel .plate { display: grid; gap: var(--g); justify-content: center; margin-top: 20px; }
+#ui .liftpanel .prow { display: grid; grid-template-columns: var(--b) var(--b); gap: 40px; }
+#ui .liftpanel :is(.lbtn, .blank, .bare) { position: relative; width: var(--b); height: var(--b); }
+/* a button is three eight-sided pieces, one inside the other: the collar set into the plate, the ring that lights, the cap you press */
+#ui .liftpanel .lbtn { --ring: #262d29; --cap: #cdd3cb; --side: #7f8a83; --cut: #1b221e; padding: 0; border: 0; background: none; cursor: pointer; }
+#ui .liftpanel .lbtn::before, #ui .liftpanel .lbtn::after, #ui .liftpanel .lbtn i, #ui .liftpanel .lbtn b, #ui .liftpanel .blank::before { content: ''; position: absolute; clip-path: var(--eight); }
+#ui .liftpanel .lbtn::before { inset: 0; background: #131815; }
+#ui .liftpanel .lbtn i { inset: 3px; background: var(--ring); }
+#ui .liftpanel .lbtn::after { inset: 10px 9px 8px; background: var(--side); }
+#ui .liftpanel .lbtn b { z-index: 1; inset: 8px 9px 11px; display: grid; place-items: center; background: var(--cap); color: var(--cut); font: 700 calc(var(--b) * .35)/1 var(--mono); letter-spacing: -.04em; }
+#ui .liftpanel .lbtn.on { --ring: var(--brass-hi); }
+#ui .liftpanel .lbtn:focus-visible { outline: none; --ring: var(--brass-hi); }
+#ui .liftpanel .lbtn.here { --ring: var(--working); }
+#ui .liftpanel .lbtn.locked { --ring: #8f271c; --cap: #33130f; --side: #1b0a08; --cut: #ff7b66; }
+#ui .liftpanel .lbtn.locked.on { --ring: var(--danger); }
+#ui .liftpanel .lbtn:active b, #ui .liftpanel .lbtn.lit b { inset: 10px 9px 9px; }
+#ui .liftpanel .lbtn.lit { --ring: var(--brass-hi); --cap: var(--brass-hi); --side: var(--brass-lo); --cut: var(--accent-ink); }
+/* lit since you last rode anywhere: the whole cap is brass, and its ring winks until somebody goes */
+#ui .liftpanel .lbtn.fresh { --cap: var(--brass); --side: var(--brass-lo); --cut: var(--accent-ink); }
+#ui .liftpanel .lbtn.fresh i { animation: liftfresh 1s steps(1) infinite; }
+@keyframes liftfresh { 0%, 100% { background: var(--brass-hi); } 50% { background: #262d29; } }
+#ui .liftpanel .lbtn.nudge, #ui .liftpanel .cardreader.nudge { animation: liftnudge .24s steps(4); }
 @keyframes liftnudge { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
-#ui .liftpanel .plate { min-width: 0; }
-#ui .liftpanel .plate b { display: inline-flex; align-items: center; gap: 8px; padding: 2px 8px 3px; background: var(--tape); color: #f4f0e6; font: 400 15px/1.2 var(--display); letter-spacing: .06em; text-transform: uppercase; }
-#ui .liftpanel .plate .here { font: 400 12px/1 var(--display); letter-spacing: .02em; text-transform: none; font-style: normal; color: var(--working); }
-#ui .liftpanel .plate small { display: block; margin-top: 4px; font: 12px/1.35 var(--sans); color: var(--dim); }
-#ui .liftpanel .plate .kind { display: inline-block; margin-top: 3px; font: 400 10px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
-/* the one that should not be there: no engraving, a blank strip of tape put on crooked, a light with a loose wire */
-#ui .liftpanel .floorrow.fresh .cap { color: var(--accent-ink); background: var(--brass); box-shadow: inset 0 -4px 0 var(--brass-lo), 0 0 0 0 rgba(236, 208, 138, .7); animation: liftfresh 1.5s ease-out infinite; }
-@keyframes liftfresh { to { box-shadow: inset 0 -4px 0 var(--brass-lo), 0 0 0 12px rgba(236, 208, 138, 0); } }
-#ui .liftpanel .pips { display: inline-flex; align-items: flex-end; gap: 4px; margin-left: 12px; vertical-align: -2px; }
-#ui .liftpanel .pips i { width: 8px; height: 8px; border: 2px solid #4d5a52; }
-#ui .liftpanel .pips i.got { background: #f2c64a; border-color: #b98a1e; }
-#ui .liftpanel .pips i.card { width: 8px; height: 11px; margin-right: 3px; }
-#ui .liftpanel .pips i.card.got { background: #f3eedd; border-color: #17130c; box-shadow: inset 0 3px 0 #3f8fd0; }
-#ui .liftpanel .cardreader { display: flex; align-items: center; gap: 14px; margin-top: 12px; padding: 9px 8px 9px 11px; background: #0a0c0a; border: 2px solid var(--edge); box-shadow: inset 0 3px 0 rgba(0, 0, 0, .6); cursor: pointer; }
-#ui .liftpanel .cardreader .slot { flex: none; width: 38px; height: 6px; background: #000; border: 2px solid var(--brass-lo); box-shadow: 0 0 0 2px #17130c; }
+/* the one that should not be there: no engraving, and a light with a loose wire */
+#ui .liftpanel .lbtn.odd { transform: rotate(-3deg); }
+#ui .liftpanel .lbtn.odd i { animation: liftflicker 3.1s steps(1) infinite; }
+@keyframes liftflicker { 0%, 100% { background: #262d29; } 7%, 9%, 12%, 46%, 48%, 81% { background: var(--danger); } 8%, 10%, 47%, 49%, 84% { background: #262d29; } }
+/* where a button will be one day: a cover, and the screw that holds it */
+#ui .liftpanel .blank::before { inset: 4px; background: var(--steel-lo); }
+#ui .liftpanel .blank i { position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; background: linear-gradient(45deg, transparent 0 42%, var(--steel-lo) 42% 58%, transparent 58%), var(--steel-hi); }
+/* the reader: a slot, and a lamp for every keycard there is */
+#ui .liftpanel .cardreader { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 20px; padding: 10px 10px; background: #0a0c0a; border: 2px solid var(--edge); box-shadow: inset 0 3px 0 rgba(0, 0, 0, .6), 0 1px 0 var(--steel-hi); }
+#ui .liftpanel .cardreader .slot { flex: none; width: 44px; height: 6px; background: #000; border: 2px solid var(--brass-lo); box-shadow: 0 0 0 2px #17130c; }
 #ui .liftpanel .cardreader .lamps { display: flex; gap: 7px; }
 #ui .liftpanel .cardreader .lamps i { width: 9px; height: 9px; background: #3a1512; border: 2px solid #17130c; }
-#ui .liftpanel .cardreader.nudge { animation: liftnudge .24s steps(4); } #ui .liftpanel .cardreader.nudge .lamps i { background: var(--danger); }
-#ui .liftpanel .floorrow.odd { transform: rotate(-1.6deg) translateX(5px); margin-top: 8px; }
-#ui .liftpanel .floorrow.odd .cap { animation: liftflicker 3.1s steps(1) infinite; }
-#ui .liftpanel .plate.blank { width: 132px; height: 22px; background: var(--tape); transform: rotate(2.4deg); }
-@keyframes liftflicker {
-  0%, 100% { border-color: var(--edge); background: var(--board-3); }
-  7%, 9%, 12%, 46%, 48%, 81% { border-color: var(--danger); background: #5a1c14; }
-  8%, 10%, 47%, 49%, 84% { border-color: var(--edge); background: var(--board-3); }
-}
+#ui .liftpanel .cardreader .lamps i.got { background: var(--working); }
+#ui .liftpanel .cardreader.nudge .lamps i:not(.got) { background: var(--danger); }
+@media (max-height: 800px) { #ui .liftpanel { --b: 52px; --g: 8px; } }
+@media (max-height: 700px) { #ui .liftpanel { --b: 44px; --g: 6px; padding-block: 20px 18px; } #ui .liftpanel .plate, #ui .liftpanel .cardreader { margin-top: 12px; } #ui .liftpanel .led { height: 62px; } #ui .liftpanel .led b { font-size: 30px; } }
+@media (max-height: 590px) { #ui .liftpanel { --b: 38px; --g: 4px; } #ui .liftpanel .lbtn b { inset: 6px 7px 8px; } #ui .liftpanel .lbtn::after { inset: 8px 7px 6px; } }

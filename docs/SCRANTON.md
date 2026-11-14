@@ -1,6 +1,6 @@
 # Scranton Paper Co.
 
-Floor **S** is a paper-company sitcom detour built with the existing level kit,
+Floor **11** is a paper-company sitcom detour built with the existing level kit,
 voxel furniture and avatar rigs. Select **Scranton Paper Co.** in the lift, or
 open the direct preview below. Its staff are fictional actors; the prank does
 not change project tasks or send messages to agents.
@@ -39,7 +39,7 @@ untimed attempt. Its four lines are the prank:
 Use **WASD** to walk, **Shift** to hurry, and drag to look around. Press **E**
 near an object or click it within reach. **Q** brings the reception memo into
 view from anywhere; **E**, **Q**, movement or **Escape** puts it down. Outside
-a closeup, **Escape** returns to the lobby.
+a closeup, **Escape** returns to the office.
 
 The green clock beside the memo reads `THE BOSS IS IN A MEETING` and stands at
 `02:00`. **E** at it sets it running: an optional **120-second challenge**
