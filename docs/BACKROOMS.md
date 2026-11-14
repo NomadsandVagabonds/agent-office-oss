@@ -79,6 +79,7 @@ plain room can be used.
 | plain | the connective rooms: a wallpaper, a carpet, tubes, and a layout from the floor's small vocabulary | three quarters of every floor |
 | oddity | a room from the deck: one idea, a few metres across | five to eight a floor, none twice in a visit while the deck lasts |
 | set piece | an oddity that says `big: true`, or has a view (`halo`) | one a floor at most |
+| placed by the plan | a room that says `planned: true` and is put where the visit's plan decides. So far one: the hallway that is not sure where it leads (`rooms/unsure-hall.js`), below wherever the cardboard people were | one in most visits, two in a long one now and then, never where you land |
 | from the news | a room the place has half-remembered from the headlines and staged wrongly (`headline: true`). Wordless and unnamed. **Only the owner decides which stories become rooms** | one a visit at most, in about a third of visits, never on the floor you land on |
 
 ## Adding a room

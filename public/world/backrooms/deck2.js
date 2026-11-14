@@ -16,7 +16,17 @@
 //   headline true: the place has half-remembered something from the news and staged it wrongly. Which stories become
 //            rooms is the owner's choice, nobody else's; the plan puts at most one in a visit, never on its first floor.
 
-export const MORE_DECK = [];
+const HALL_FACES = ['break', 'waiting', 'store', 'lounge'];        // (as rooms/unsure-hall.js builds them)
+
+export const MORE_DECK = [
+  // The hallway that is not sure where it leads: turn your back on the room at the end of it and it is another room.
+  // Never dealt by chance: the visit's plan puts one or two in, below wherever the cardboard people were (plan.js).
+  { id: 'unsure-hall', name: 'The Hall That Is Not Sure', landmark: 'the long hallway, whichever room it ends in',
+    w: [7, 8], d: [13, 15], ports: ['back'], weight: 1, lights: 'normal', planned: true, needs: ['unwatched'],
+    module: './rooms/unsure-hall.js',
+    stash: (r) => { const zM = -r.D / 2 + Math.min(7.5, r.D * 0.48); return [-0.5, zM - 2.4, 0.5, zM - 1.4]; },
+    roll: (R) => ({ faces: R.shuffle(HALL_FACES.slice()).slice(0, R.int(1, 3)) }) },
+];
 
 // Where a tape goes in an entry that does not say so itself: (room, ±1) → [x0, z0, x1, z1] in the room's own frame.
 export const MORE_STASH = {};
