@@ -205,6 +205,13 @@ delegated task's result also carries `delegationId`.
 The floor plan, where every avatar is, things that can be used, discoveries,
 and the same world as text for agents. See `WORLD.md`.
 
+The snapshot's `game` is the office's long game (`core/game.mjs`,
+`server/world/game.mjs`): `{ open: [level ids lit], dark, fresh, cards, spare,
+loot: { <hideout>: { card, of, coins: [n…] } }, coins: { have, found, stamps,
+spent }, prizes: [ids bought] }`. It changes through
+`POST /api/world/game/collect | visit | buy` and is broadcast with the world;
+a client that predates it sees every floor lit, as before. Additive only.
+
 ### Creations  (agent-authored desk items)
 `public/creations.json` is an append-only list of agent-designed desk items as a
 declarative pixel spec (`ops[]`, whitelisted primitives, clamped footprint,

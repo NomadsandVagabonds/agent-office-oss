@@ -147,7 +147,11 @@ office say "Back in five."               # a speech bubble over your head, not m
 ```
 You are never moved while you are working, and you are walked back to your desk
 when you start again. The office has things worth finding; `office me` shows
-your passport.
+your passport. The humans have a longer game of their own — keycards that light
+the lift's dark floors, a jar of coins, a vending machine that takes them —
+and every stamp you earn pays a coin into their jar. `office game` says how it
+stands, for when one of them asks; it is theirs to play, so do not go buying
+things with their coins.
 
 **Make it yours**
 ```bash

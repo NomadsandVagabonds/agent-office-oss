@@ -200,12 +200,18 @@ sit, a game, a work surface.
 
 | | floor | kind | what it is there to show |
 |---|---|---|---|
+| **N** | Night Shift | game | a level with a camera and a look of its own: side on, black and white, light you must stay out of (`docs/NIGHTSHIFT.md`) |
+| **S** | Scranton Paper Co. | game | a level as a caper: a room full of small things to pick up, carry and use on each other (`docs/SCRANTON.md`) |
 | **R** | Rooftop Garden | place | a level can simply be somewhere: the office's clock and weather in the sky, steam from the flue when someone downstairs makes coffee, every agent-to-agent note crossing overhead as a paper plane |
 | **M** | Mission Control | **work** | a level as a work module: wall screens drawn straight from `office.net.state` — who is waiting on you, who is on what, every board — and a console per project that takes you to its room |
 | **L** | Lobby | office | the office itself |
 | **P** | The Pasture | place | a level with terrain, a herd with a little behaviour, and agents: they can ride here too |
 | **A** | After Hours | game | a level as a game: first person, a wave to clear, a score on the arcade board |
 | **13** | | | only there on a Friday the 13th, or once someone has found the `noclip` secret. It hands over to the hidden level under the office |
+
+N, S, P and A are the office's **game floors**: their buttons are dark, and not
+even on the panel, until a keycard has lit them (see *The long game* below).
+R, M and L are always there.
 
 ### The registry
 
@@ -214,12 +220,15 @@ sit, a game, a work surface.
 ```js
 { id: 'roof', floor: 'R', storey: 2, kind: 'place', name: 'Rooftop Garden', blurb: '…',
   hidden: ({ quirks, found }) => …,   // optional: a pure rule that hides the button
+  card: true, coins: 3,               // optional: a game floor — it needs a keycard, and hides one, and this many coins
   car: [x, z] }                       // optional: agents may ride here (see below)
 ```
 
-`visibleLevels({ quirks, found })` is the panel as it stands today; the daemon
-and the client both ask it, so agents are told about exactly the buttons a
-human sees.
+`visibleLevels({ quirks, found })` is every button that exists today;
+`panelLevels({ quirks, found, open })` is the panel as a person sees it — the
+same, less the game floors no keycard has lit yet, and how many of those there
+are. The daemon and the client both ask, so agents are told about exactly the
+buttons a human sees.
 
 ### The contract
 
@@ -282,12 +291,80 @@ slab, with the lift set into one) · `prop` (the office's furniture) · `vox`
 `lamp` `light` · `thing` `seat` · `lift` · `focus` (hold the camera on
 something) · `look` (stand somewhere and point the camera, for a picture) ·
 `on(event, fn)` (the daemon's events, until the level closes) · `onFrame`
-`onKey` `onClick` · `sfx` `music` `bed` · `run` `leave`.
+`onKey` `onClick` · `sfx` `music` `bed` · `loot` (a coin or the floor's keycard,
+lying where you put it) · `run` `leave`.
 
 One house rule: **a level does not talk over itself.** No caption boxes, no
 line of instructions; the only thing the kit ever prints is the key and the
 name of what you are standing at. If there are words they are in the world —
 on a sign, a screen, a clipboard, the lift's display.
+
+### The long game
+
+The floors are tied together by three things, and none of them is explained to
+the person playing (`core/game.mjs` is the whole of the rules; it is pure):
+
+- **Keycards.** Every game floor hides one, and so does the place under the
+  office. The lift's panel shows the floors that are lit, and below them a card
+  reader with one unlit lamp for each floor that is not. *The number of game
+  floors lit is one more than the number of keycards found*: one is lit from
+  the start, drawn by lot for each office, and every card lights the next in
+  that office's own order — so no two offices open up the same way, a card
+  always opens something, and a floor once lit stays lit. A floor lit since you
+  last rode anywhere glows until somebody goes there.
+- **Coins.** Each of those places hides a few (15 in all). A coin taken is gone
+  for good — the office remembers which — and goes into **one jar for the whole
+  office**. Every stamp in anybody's passport (§6) pays a coin into the same
+  jar, which is what ties the older secrets to the newer ones.
+- **The vending machine.** Walk up to it in the kitchen: behind the glass are
+  eight things the jar can buy, each bought once. What comes out stands on top
+  of the machine from then on, where everybody can see it. The last place on
+  the bottom row is what the machine has always given away.
+
+Where things are hidden is for finding, and is not written down here.
+
+The office keeps the record (`server/world/game.mjs`, in the world store, so
+it outlives browsers and is the same for everybody): `world.game` in the
+snapshot, and
+
+```
+GET  /api/world/game            what is lit, what has been found where, the jar, the machine's shelf (and `text`, in words)
+POST /api/world/game/collect    { hideout, item: 'card' | 'coin', n?, name? }
+POST /api/world/game/visit      { floor }          a newly lit floor has been ridden to
+POST /api/world/game/buy        { prize | slot, name? }
+```
+
+Agents are not sent to play it, but they are not kept out of it either:
+`office game` (or the `office_game` tool) tells them how it stands — how much
+has been found on each floor anyone has been to, what is in the jar, what the
+machine still has — so a person can ask. The stamps agents earn pay into the
+jar like anybody's.
+
+**Putting a floor into the game** is two fields and a few calls. In the
+registry give it `card: true, coins: n`; it joins the end of every office's
+order the next time the daemon starts. In the level, say where things are:
+
+```js
+w.loot({ item: 'coin', n: 1, x: 4, z: -2 });                 // lying there; walking into it takes it
+w.loot({ item: 'coin', n: 2, x: -6, z: 3, hidden: () => !drawerOpen });
+const card = w.loot({ item: 'card', x: 0, z: 0, light: true, hidden: () => !solved });
+```
+
+`w.loot` returns `null` for a thing that has already been taken, so a floor
+calls it for everything it hides, every visit, and need keep no record of its
+own; the handle it returns otherwise has `moveTo(x, z, y)` (a thing that falls
+out of something) and `take()` (hand it over now). A level that does not use
+the kit asks the same questions directly — `office.game.left(id)` →
+`{ card, coins: [n…] }` still to be found, `office.game.take(id, 'coin', n)` —
+and draws the two shared models (`props/loot.js`, `levels/loot.js`), so that a
+coin is recognisably a coin on every floor. A place the lift does not go to
+can hide things as well: add it to `HIDEOUTS` in `core/game.mjs`.
+
+**Putting something new in the machine** is a line in `PRIZES`
+(`core/game.mjs`: a code behind the glass, a price, a name, a few words for
+its tag) and a small model with a place to stand (`props/prizes.js`:
+`PRIZE_MODELS`, `PRIZE_SPOTS`). The machine's front draws its picture from the
+model.
 
 ### A work module
 

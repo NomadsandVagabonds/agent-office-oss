@@ -122,5 +122,26 @@ export function createGame(ctx, state, hooks) {
     return { coins: jar, prizes: PRIZES.map((p) => ({ id: p.id, slot: p.slot, name: p.name, blurb: p.blurb, price: p.price, sold: !!g.prizes[p.id], by: g.prizes[p.id]?.by || null })) };
   }
 
-  return { view, collect, visit, buy, shelf, purse };
+  /**
+   * The same in words, for an agent that has been asked how the game is going. It says how much has been found
+   * where — never where a thing is hidden, and nothing about a place nobody has been.
+   */
+  function describe() {
+    const v = view(), jar = v.coins, n = (k, word) => `${k} ${word}${k === 1 ? '' : 's'}`;
+    const lit = v.open.map((id) => levelById(id)?.name || id);
+    const lines = ['The long game: keycards light the lift\'s dark buttons, coins go in the office\'s jar, the jar buys things from the vending machine. It is the humans\' game to play; what agents find counts too.'];
+    lines.push(`The lift: ${lit.length} of ${n(g.order.length, 'game floor')} lit${lit.length ? ` (${lit.join(', ')})` : ''}${v.dark ? `; ${v.dark} stay dark until a keycard turns up` : ''}.`);
+    const been = HIDEOUTS.filter((h) => v.open.includes(h.id) || v.loot[h.id].card || v.loot[h.id].coins.length);
+    for (const h of been) {
+      const l = v.loot[h.id];
+      lines.push(`  ${h.name}: keycard ${l.card ? `found by ${g.cards[h.id].by}` : 'still hidden'} · ${l.coins.length} of ${n(h.coins, 'coin')} found`);
+    }
+    if (been.length < HIDEOUTS.length) lines.push(`  …and ${n(HIDEOUTS.length - been.length, 'place')} nobody has found anything in yet.`);
+    lines.push(`The jar: ${n(jar.have, 'coin')} (${jar.found} picked up, ${jar.stamps} from passport stamps — every stamp anyone earns pays ${STAMP_COINS} — ${jar.spent} spent).`);
+    lines.push('The vending machine in the kitchen:');
+    for (const p of shelf().prizes) lines.push(`  ${p.slot}  ${p.name} — ${p.sold ? `bought by ${p.by}; it is on top of the machine` : n(p.price, 'coin')}`);
+    return lines.join('\n');
+  }
+
+  return { view, collect, visit, buy, shelf, purse, describe };
 }

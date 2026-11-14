@@ -26,6 +26,7 @@ const TOOLS = [
     inputSchema: obj({ at: str('Optional: a thing ("coffee", "board"), a room ("kitchen") or an agent name to examine.') }) },
   { name: 'office_who', description: 'Everyone in the office right now: provider, project, what they are doing and where.', inputSchema: obj() },
   { name: 'office_map', description: 'The floor plan as text: rooms, what is in each, where teams sit.', inputSchema: obj() },
+  { name: 'office_game', description: 'How the office\'s long game stands: which lift floors keycards have lit, how many coins have been found where, what is in the coin jar, what the vending machine sells and what has been bought. For when somebody asks how it is going; it never says where a thing is hidden.', inputSchema: obj() },
   { name: 'office_usage', description: 'How much each provider (Claude, Codex, OpenRouter, …) has left right now: each window, when it resets, how old the reading is, and which provider to prefer for new work. Check it before delegating or starting something large.', inputSchema: obj() },
   { name: 'office_inbox', description: 'Read your unread office mail (channel posts, direct notes, replies from the human). Marks it read unless peek is true.',
     inputSchema: obj({ peek: { type: 'boolean', description: 'Leave the mail unread.' } }) },
@@ -121,6 +122,7 @@ const HANDLERS = {
   async office_look(a) { const s = await me(); return text(await api(`/api/world/look?agent=${E(s.id)}${a.at ? '&at=' + E(a.at) : ''}`)); },
   async office_who() { return text(await api('/api/world/who')); },
   async office_usage() { return text(await api('/api/usage')); },
+  async office_game() { return text(await api('/api/world/game')); },
   async office_map() { const s = await me(); return text(await api(`/api/world/map?agent=${E(s.id)}`)); },
   async office_inbox(a) {
     const s = await me();

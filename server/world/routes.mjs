@@ -60,7 +60,7 @@ export function registerWorldRoutes(router, ctx) {
   }, { about: 'Put a creation on your team shelf: {agent, creationId, slot?} (creationId:null clears a slot).' });
 
   /* ---- the long game: keycards, the coin jar, the machine (core/game.mjs) ---- */
-  router.get('/api/world/game', () => ({ ...world.game.view(), shelf: world.game.shelf().prizes }),
+  router.get('/api/world/game', () => ({ ...world.game.view(), shelf: world.game.shelf().prizes, text: world.game.describe() }),
     { about: 'The long game: which lift buttons are lit, keycards and coins found, what is in the jar, what the vending machine sells.' });
   router.post('/api/world/game/collect', async (c) => {
     const body = await c.json();

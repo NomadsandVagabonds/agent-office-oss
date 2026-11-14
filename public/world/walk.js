@@ -175,7 +175,6 @@ export function createWalk(office) {
       net.send({ type: 'lead', id: me.id, name: me.name, look: me.look || { accessory: 'crown' } });
       announce(true);
       document.body.classList.add('walking');
-      narrate('You step onto the floor.  WASD to walk · Shift to hurry · E to use what is in front of you · Tab to step back out.');
     },
     exit() {
       if (!s.active) return;

@@ -80,6 +80,7 @@ const HELP = `office — your seat in The Office   (${BASE})
     office go <place|thing|agent|home> [--stay]
     office use <thing> [text]   coffee, bell, guestbook, board, vending, …
     office emote <wave|dance|cheer|bow|shrug|think|facepalm|nod|stretch|salute|spin|laugh>
+    office game                 the long game: lit lift floors, keycards and coins found, the jar, the vending machine
   MAKE IT YOURS
     office me                   your character, desk and passport
     office me --species cat --hair mohawk --outfit hoodie --accessory tophat --outfitColor "#3f7f9a"
@@ -158,6 +159,10 @@ const commands = {
   async usage() {
     out(await api('/api/usage'));
   },
+
+  /** How the humans' long game stands: the lift's lit floors, the coin jar, what the machine sells. */
+  async game() { out(await api('/api/world/game')); },
+  async jar() { return commands.game(); },
 
   async passport() {
     const self = await me();
