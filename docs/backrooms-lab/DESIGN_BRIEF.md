@@ -45,7 +45,7 @@ doors. Allow quiet stretches, similar branches and returns to familiar-looking
 spaces. Disorientation should come from repeated architecture and limited
 sightlines, while every required route remains physically traversable.
 
-**Next workshop priority:** ordinary maze variations using the existing material
+**Quiet-maze foundation:** ordinary maze variations using the existing material
 family and proportions: an offset doorway, an interrupted pillar aisle, and a
 dogleg with a nearly identical side bay. Repeat these motifs across multiple
 spaces, with restrained differences. These are structural candidates, not new
@@ -55,6 +55,13 @@ The first [quiet maze study](QUIET_MAZE.md) now provides nine connected rooms
 using three repeated partition layouts, available only in the dev preview.
 Some copies include repeated static wall cuts or submerged workstations.
 It is a geometry and atmosphere candidate, not a change to default pacing.
+
+**Current feature work:** the user selected the horror-focused brainstorm's
+Underfloor Walker, Flood-Mark Hall and Window Court for development. Their
+[independent previews](FEATURE_ROOMS.md) explore traversal, readable danger and
+a neutral encounter. The ordinary-space pacing direction still applies; these
+candidates do not enter the production deck automatically. Office humor is
+not a design requirement for this set.
 
 Gemini's room/creature/item slate is a useful catalogue of optional contributions.
 Keep its modular organization, but distinguish authored and tested candidates
