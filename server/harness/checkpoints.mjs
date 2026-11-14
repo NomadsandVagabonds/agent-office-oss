@@ -283,7 +283,8 @@ const NO_RECORD = 'the office has no snapshots of this session';
  *   own       folders that hold the office's own files (its data directory): never part of any snapshot
  *   changed   called when it becomes known whether a session is being recorded
  */
-export function createCheckpoints({ settings, dir, file, own = [path.dirname(file), dir], log = console, changed = () => {}, graceSeconds = GRACE_SECONDS }) {
+export function createCheckpoints({ settings, dir, file, own: officeFolders = [path.dirname(file), dir], log = console, changed = () => {},
+  graceSeconds = GRACE_SECONDS }) {
   const store = new JsonFile(file, {
     defaults: () => ({ v: 1, sessions: {} }), debounceMs: 200,
     validate: (d) => d && typeof d.sessions === 'object' && d.sessions !== null && !Array.isArray(d.sessions),
@@ -334,7 +335,7 @@ export function createCheckpoints({ settings, dir, file, own = [path.dirname(fil
     // stored in would store its own objects again, every time. Where the office keeps its files inside this
     // checkout, they are left out by name; a checkout that *is* where the office keeps them is not recorded.
     const keepOut = [], here = real(st.cwd);
-    for (const folder of own.map(real)) {
+    for (const folder of officeFolders.map(real)) {
       const at = path.relative(where.root, folder);
       const within = at !== '' && at !== '..' && !at.startsWith(`..${path.sep}`) && !path.isAbsolute(at);
       // Left out, the folder this session works in would have every turn seem to change nothing.
@@ -638,9 +639,9 @@ export function createCheckpoints({ settings, dir, file, own = [path.dirname(fil
       const listing = known.out.split('\n').map((row) => /^([0-9a-f]+) tree \d+$/.exec(row)?.[1]).filter(Boolean)
         .map((tree, i) => `040000 tree ${tree}\tt${i}\n`).join('');
       if (listing) {
-        const made = await own(['mktree'], { input: listing });
-        if (!oidOf(made)) { failed('list the trees to keep', made); return; }
-        const held = await own(['update-ref', '--no-deref', KEEP, oidOf(made)]);
+        const listed = await own(['mktree'], { input: listing });
+        if (!oidOf(listed)) { failed('list the trees to keep', listed); return; }
+        const held = await own(['update-ref', '--no-deref', KEEP, oidOf(listed)]);
         if (!held.ok) { failed('hold on to the trees to keep', held); return; }
       }
     }

@@ -1133,7 +1133,10 @@ The copy may be taken away. Removing `<data>/harness/checkpoints/<key>/` (or
 all of `checkpoints/`) while the office runs loses the snapshots taken so far
 — their turns then answer "can no longer be read" — and nothing else: the
 next snapshot of each session in that repository finds the directory gone,
-makes it again and starts over, as a first snapshot does.
+makes it again and starts over, as a first snapshot does. Starting the office
+with `OFFICE_CHECKPOINTS=0` takes no new snapshots and removes none: what was
+kept stays readable, and stays on the disk, until its sessions are pruned or
+the directory is removed.
 
 **What it costs.** Measured on the machine this was built on (4 cores, ext4,
 git 2.43), with `data/` on the same disk and nothing else running; with other

@@ -1183,7 +1183,9 @@ test('checkpoints: how much is kept, for how long, and what a restart leaves', {
       assert.deepEqual([kept.keeps, kept.turns.map((turn) => turn.turn)], [2, [2, 3]]);
       assert.equal((await h.get(`${at}/changes?turn=1`)).status, 404);
       assert.match((await h.get(`${at}/diff?from=1&to=3`)).data.error, /no record of turn 1 \(the last 2 turns of a session are kept\)/);
-      assert.equal(JSON.parse(fs.readFileSync(path.join(h.dir, 'checkpoints.json'), 'utf8')).sessions[s.id].turns.length, 2, 'nor is it kept on disk');
+      // Nor is it kept on disk (which the office writes a moment after the fact).
+      await waitFor(() => { try { return JSON.parse(fs.readFileSync(path.join(h.dir, 'checkpoints.json'), 'utf8')).sessions[s.id].turns.map((turn) => turn.n).join() === '2,3'; } catch { return false; } },
+        { what: 'the record on disk to list turns 2 and 3 only' });
 
       // A diff longer than one answer carries is cut at a line, and says it was cut.
       await turnThat(h, s.id, () => write(work, 'long.txt', Array.from({ length: 300 }, (_, i) => `line number ${i}`).join('\n') + '\n'));
@@ -1230,6 +1232,16 @@ test('checkpoints: how much is kept, for how long, and what a restart leaves', {
       const entry = (await second.get(`${at}/transcript`)).data.entries.find((e) => e.kind === 'changes');
       assert.deepEqual([entry.id, entry.files.length], ['turn-1:changes', 1]);
     } finally { await second.stop(); }
+
+    // An office started with snapshots switched off takes none and removes none: what was kept can still be read.
+    const off = await startOffice({ dir, work });
+    try {
+      assert.equal(off.cfg.harness.checkpoints.enabled, false);
+      const still = await changes(off, s.id);
+      assert.deepEqual([still.recorded, still.turns.map((turn) => turn.count)], [true, [1, 0]]);
+      assert.ok(still.stored.bytes > 0 && objectsIn(store) === still.stored.objects);
+      assert.match((await diffOf(off, s.id, 'turn=1')).diff, /\+for later\n$/);
+    } finally { await off.stop(); }
 
     // Should the office's own files be lost, a turn says its snapshots cannot be read. It does not fail, and the rest is still told.
     const aside = `${store}.aside`;
