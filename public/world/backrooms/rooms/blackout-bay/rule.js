@@ -11,6 +11,8 @@ export const BLACKOUT = Object.freeze({
   catchRadius: 0.64,
   beamRange: 9.8,
   beamCosHalf: 0.76,
+  hurts: 2,                  // hearts the dark costs, where there are hearts
+  grace: 4,                  // seconds, back at the door, in which nothing in here stirs
 });
 
 /**
@@ -38,6 +40,9 @@ export const createBlackoutState = (count = 4) => ({
  * @param s  state from createBlackoutState()
  * @param o  { dt, inDark, hasFlashlight, px, pz, yaw, targets: [{ x, z, los }] }
  */
+/** The dark had somebody, who is still here (and back at the door, where the room put them): everything is as it was, and for a moment nothing stirs. */
+export function releaseBlackout(s) { return { ...createBlackoutState(s.frozen.length), grace: BLACKOUT.grace }; }
+
 export function stepBlackout(s, o) {
   const {
     dt,
@@ -50,6 +55,10 @@ export function stepBlackout(s, o) {
   } = o;
 
   let { red, caught } = s;
+  if (s.grace > 0) {
+    const grace = s.grace - dt, still = targets.map(() => false);
+    return { state: { red: 0, caught: false, frozen: still, ...(grace > 0 ? { grace } : {}) }, red: 0, caught: false, speeds: targets.map(() => 0), frozen: still };
+  }
 
   // Without a flashlight in the blackout zone, the screen floods red and kills you
   if (inDark && !hasFlashlight) {

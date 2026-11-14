@@ -7,7 +7,7 @@
 import { lin, WHITE } from '../kit.js';
 import { clamp, turnTo, card, framed } from '../bits.js';
 import { placePickup } from '../hand.js';
-import { createBlackoutState, stepBlackout } from './blackout-bay/rule.js';
+import { BLACKOUT, createBlackoutState, stepBlackout, releaseBlackout } from './blackout-bay/rule.js';
 import { buildStandIn } from './blackout-bay/rig.js';
 
 export function build(c) {
@@ -97,7 +97,7 @@ export function build(c) {
   }
 
   let rule = createBlackoutState(standIns.length);
-  let wasRed = false;
+  let wasRed = false, known = false;
 
   c.tick((dt, time, me) => {
     const nearOtherDoor = c.room.doors.some((dr) => {
@@ -124,6 +124,8 @@ export function build(c) {
       targets,
     });
     rule = res.state;
+    // (really seen: held still in the beam, near enough to make out)
+    if (!known && res.frozen.some((f, i) => f && Math.hypot(standIns[i].x - me.x, standIns[i].z - me.z) < 8)) { known = true; c.met('stand-ins'); }
 
     if (res.red > 0) {
       c.env.red(res.red);
@@ -173,7 +175,17 @@ export function build(c) {
       c.env.red(1);
       c.env.interfere(1);
       c.env.play('buzz', meW.x, meW.z, 8);
-      c.env.end('caught');
+      // the dark has you: two hearts where there are hearts — and if that was not the last of them, you are back at the door you came
+      // in by, they are back where they stood, and there is a moment to think about a light
+      if (!known) { known = true; c.met('stand-ins'); }
+      const hit = c.hurt(BLACKOUT.hurts);
+      if (!hit.ended) {
+        rule = releaseBlackout(rule);
+        const front = c.room.doors.find((dr) => dr.side === 'front') || c.room.doors[0], at = front ? c.doorPoint(front, 0.7) : { x: 0, z: D / 2 - 0.7 }, w = c.toWorld(at.x, at.z);
+        c.env.player?.warp(w.x, w.z);
+        for (const s of standIns) { s.x = s.hx; s.z = s.hz; s.group.position.set(s.x, 0, s.z); }
+        if (hit.landed) { c.env.hud.glitch(0.7); c.survived('stand-ins'); }
+      }
     }
   });
 }

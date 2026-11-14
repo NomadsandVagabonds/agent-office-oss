@@ -6,7 +6,7 @@ import { ITEM_IDS, kindOf, createHandOver, isPaper, isBalloon, isFlashlight } fr
 import { CABLE, createCableState, stepCable, releaseCable } from '../public/world/backrooms/rooms/cable-drop/rule.js';
 import { SHREDDER, createShredderState, stepShredder, releaseShredder } from '../public/world/backrooms/rooms/shredding-bay/rule.js';
 import { PARTY, createPartyState, stepParty, releaseParty } from '../public/world/backrooms/rooms/mandatory-fun/rule.js';
-import { BLACKOUT, createBlackoutState, stepBlackout, isInBeam } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
+import { BLACKOUT, createBlackoutState, stepBlackout, releaseBlackout, isInBeam } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
 import { WARDEN, createWardenState, stepWarden } from '../public/world/backrooms/rooms/safety-corridor/rule.js';
 import { PARTNER, createPartnerState, stepPartner } from '../public/world/backrooms/rooms/audit-pod/rule.js';
 
@@ -257,4 +257,14 @@ test('the Fun Committee lets go: after somebody has been made to join in, the ci
   for (let t = 0; t < 0.6; t += 0.1) { r = stepParty(s, { dt: 0.1, insideRoom: true, pastThreshold: true, holdingBalloon: false, minDist: 3 }); s = r.state; }
   assert.equal(s.mode, 'swarming', 'and then the music is off again');
   assert.ok(PARTY.hurts === 1 && PARTY.pause >= 5);
+});
+
+test('Blackout Bay lets go: after the dark has had somebody, nothing stirs and nothing reddens for a moment, and then it is the room it was', () => {
+  const targets = [{ x: 0, z: 0.2, los: true }, { x: 3, z: 3, los: true }];
+  let s = releaseBlackout({ red: 1, caught: true, frozen: [false, false] }), r = null;
+  assert.deepEqual(s.frozen, [false, false]); assert.equal(s.caught, false);
+  for (let t = 0; t < BLACKOUT.grace - 0.3; t += 0.1) { r = stepBlackout(s, { dt: 0.1, inDark: true, hasFlashlight: false, px: 0, pz: 0, yaw: 0, targets }); s = r.state; assert.ok(!r.caught && r.red === 0 && r.speeds.every((v) => v === 0)); }
+  for (let t = 0; t < BLACKOUT.redFillSeconds + 0.6; t += 0.1) { r = stepBlackout(s, { dt: 0.1, inDark: true, hasFlashlight: false, px: 0, pz: 0, yaw: 0, targets }); s = r.state; }
+  assert.ok(r.caught, 'stay in the dark without a light and it has you again');
+  assert.ok(BLACKOUT.hurts === 2 && BLACKOUT.grace >= 3);
 });
