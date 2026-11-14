@@ -6,15 +6,20 @@
 //   node tools/blockrooms/build.mjs <folder>
 //
 // What goes in:
-//   index.html   a whole page (page.html beside this file): its head, what a
-//                link to it looks like when it is passed on, the import map,
-//                and a list of the modules to fetch at once
-//   site.js      the page's own script (beside this file): one building after
-//                another, and tapes that can be handed on (?tape=<seed>)
+//   index.html   the front page (home.html beside this file, with home.css,
+//                home.js and art.js): the caretaker's own home page, as home
+//                pages were in 1998. It is small and has nothing of the level
+//                in it, so it is there at once
+//   play.html    the page the level is played on (page.html): its head, the
+//                import map, and a list of the modules to fetch at once
+//   site.js      that page's script: one building after another, tapes that
+//                can be handed on (?tape=<seed>), and what the book is told
 //   world/ core/ every module the level imports, found by reading the imports
-//                (tools/backrooms-sample/stage.mjs does this part)
+//                (tools/backrooms-sample/stage.mjs does this part), and the
+//                rules of the book (core/book.mjs), which both pages share
 //   vendor/      three.js and the add-ons the level uses, the fonts it asks
 //                for, and the licences they are under
+//   shots/       pictures from inside, for the front page
 //   og.jpg       the picture a link to the site is shown with, if there is one
 //                beside this file
 //   robots.txt
@@ -47,15 +52,16 @@ export function originOf(env = process.env) {
 export const IMPORT_MAP = JSON.stringify({ imports: { three: './vendor/three.module.min.js', '/vendor/three-addons/': './vendor/three-addons/', '/core/': './core/' } });
 
 /**
- * What the page lets itself do, as a browser will hold it to. Everything from this site and nowhere else; the one
- * script written into the page is the import map, and it is allowed by what it says (its hash), not by where it is.
- * Styles are written into the page by the level as it goes (the camcorder's lettering, the card), so those are allowed
- * as they come; pictures are drawn into data and blob addresses.
+ * What a page lets itself do, as a browser will hold it to. Everything from this site and nowhere else; the one
+ * script written into the page the level is played on is the import map, and it is allowed by what it says (its hash),
+ * not by where it is (a page with no import map — `null` — has no script written into it at all). Styles are written
+ * into the page by the level as it goes (the camcorder's lettering, the card), so those are allowed as they come;
+ * pictures are drawn into data and blob addresses.
  */
 export function policyFor(importMap = IMPORT_MAP) {
-  const hash = crypto.createHash('sha256').update(importMap).digest('base64');
+  const hash = importMap === null ? '' : ` 'sha256-${crypto.createHash('sha256').update(importMap).digest('base64')}'`;
   return [
-    "default-src 'self'", `script-src 'self' 'sha256-${hash}'`, "style-src 'self' 'unsafe-inline'", "img-src 'self' data: blob:",
+    "default-src 'self'", `script-src 'self'${hash}`, "style-src 'self' 'unsafe-inline'", "img-src 'self' data: blob:",
     "media-src 'self' data: blob:", "font-src 'self'", "connect-src 'self'", "worker-src 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'none'",
   ].join('; ');
 }
@@ -63,7 +69,7 @@ export function policyFor(importMap = IMPORT_MAP) {
 /**
  * Build the site into `out`.
  * @param {string} out
- * @param {{origin?: string}} [opt]  origin: where the site will be (default: originOf())
+ * @param {{origin?: string, now?: Date}} [opt]  origin: where the site will be (default: originOf()) · now: the day it is built
  * @returns {{files: string[], origin: string, preloaded: number}}
  */
 export function build(out, opt = {}) {
@@ -74,7 +80,15 @@ export function build(out, opt = {}) {
   const put = (name, text) => { fs.writeFileSync(path.join(out, name), text); extra.push(name); };
   const copy = (name) => { if (!fs.existsSync(path.join(HERE, name))) return false; fs.copyFileSync(path.join(HERE, name), path.join(out, name)); extra.push(name); return true; };
 
-  copy('site.js');
+  for (const name of ['site.js', 'home.js', 'home.css', 'art.js']) if (!copy(name)) throw new Error(`tools/blockrooms/${name} is not there`);
+  // (the rules of the book: both pages read them, and the level does not, so nothing has staged them)
+  if (!files.includes('core/book.mjs')) { fs.copyFileSync(path.join(HERE, '..', '..', 'core', 'book.mjs'), path.join(out, 'core', 'book.mjs')); extra.push('core/book.mjs'); }
+  // pictures from inside, for the front page (taken through the level's own camcorder: tools/blockrooms/shots/)
+  const shots = path.join(HERE, 'shots');
+  if (fs.existsSync(shots)) {
+    fs.mkdirSync(path.join(out, 'shots'), { recursive: true });
+    for (const name of fs.readdirSync(shots).filter((f) => /^[\w-]+\.jpg$/.test(f)).sort()) { fs.copyFileSync(path.join(shots, name), path.join(out, 'shots', name)); extra.push(`shots/${name}`); }
+  }
   const picture = copy('og.jpg');
   put('robots.txt', 'User-agent: *\nAllow: /\n');
 
@@ -82,20 +96,24 @@ export function build(out, opt = {}) {
   // own are fetched when a building has them, and are not in this list)
   const first = ['site.js', 'vendor/three.module.min.js', 'vendor/three.core.min.js', ...files.filter((f) => f.startsWith('vendor/three-addons/')), ...eager.filter((f) => !f.startsWith('world/dev/'))];
   const preload = first.map((f) => `<link rel="modulepreload" href="./${f}">`).join('\n');
-  const og = [
-    origin && `<meta property="og:url" content="${origin}/">`,
+  const og = (at) => [
+    origin && `<meta property="og:url" content="${origin}/${at}">`,
     picture && `<meta property="og:image" content="${origin || '.'}/og.jpg">`,
     picture && '<meta property="og:image:width" content="1200">', picture && '<meta property="og:image:height" content="630">',
     `<meta name="twitter:card" content="${picture ? 'summary_large_image' : 'summary'}">`,
-    origin && `<link rel="canonical" href="${origin}/">`,
+    origin && `<link rel="canonical" href="${origin}/${at}">`,
   ].filter(Boolean).join('\n');
-  const page = fs.readFileSync(path.join(HERE, 'page.html'), 'utf8')
-    .replace('<!--CSP-->', `<meta http-equiv="Content-Security-Policy" content="${policyFor()}">`)
-    .replace('<!--OG-->', og)
-    .replace('<!--PRELOAD-->', preload)
-    .replace('<!--IMPORTMAP-->', IMPORT_MAP);
-  if (/<!--[A-Z]+-->/.test(page)) throw new Error('page.html has a mark nothing filled in');
-  put('index.html', page);
+  const fill = (name, marks) => {
+    let page = fs.readFileSync(path.join(HERE, name), 'utf8');
+    for (const [mark, text] of Object.entries(marks)) page = page.replace(`<!--${mark}-->`, text);
+    if (/<!--[A-Z]+-->/.test(page)) throw new Error(`${name} has a mark nothing filled in`);
+    return page;
+  };
+  put('play.html', fill('page.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor()}">`, OG: og('play'), PRELOAD: preload, IMPORTMAP: IMPORT_MAP }));
+  // the front page says when it was last touched: the day it was built — of a year it has been for some time
+  const day = (opt.now || new Date()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+  put('index.html', fill('home.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor(null)}">`, OG: og('') })
+    .replace('<span id="updated">recently</span>', `<span id="updated">${day} 1998</span>`));
   return { files: [...extra, ...files].sort(), origin, preloaded: first.length };
 }
 

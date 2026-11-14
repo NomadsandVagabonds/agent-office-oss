@@ -7,9 +7,10 @@
 //
 //   const card = await showScorecard({ office, reason, kept, run, name });
 //
-// A page that is not the office may give the card its own heading (`brand`)
-// and say where a kept tape can be found again (`share`: the number on the
-// card is then a link to it, and choosing it is asking to walk it again).
+// A page that is not the office may give the card its own heading (`brand`),
+// say where a kept tape can be found again (`share`: the number on the card
+// is then a link to it, and choosing it is asking to walk it again), and add
+// a line of its own once it knows what to say (`also`: the site's book).
 //
 // reason, kept and run are what the visit resolves with (index.js). The rules
 // are not here: what a visit scored and what is kept of it is core/runs.mjs,
@@ -99,8 +100,8 @@ const CSS = `
 .brc-box .v .brc-ic { width: 1.25em; height: 1.25em; }
 .brc-box small { grid-column: 2 / -1; font-size: .84em; opacity: .7; margin-top: -.22em; }
 .brc-seed { font-weight: 500 !important; opacity: .85; overflow: hidden; text-overflow: ellipsis; max-width: 13em; }
-a.brc-seed { color: inherit; text-decoration: underline dotted; text-underline-offset: .22em; cursor: pointer; }
-a.brc-seed:focus-visible { outline: 2px solid currentColor; outline-offset: .15em; }
+a.brc-seed, a.brc-more { color: inherit; text-decoration: underline dotted; text-underline-offset: .22em; cursor: pointer; }
+a.brc-seed:focus-visible, a.brc-more:focus-visible { outline: 2px solid currentColor; outline-offset: .15em; }
 .brc-foot { margin-top: 1.1em; font-size: .68em; letter-spacing: .3em; font-weight: 700; opacity: .5; }
 .brc-go { position: absolute; right: .2em; bottom: -.1em; opacity: 0; color: #4a3a10; animation: brc-blink 1.1s 1.5s steps(1) infinite; }
 @keyframes brc-in { from { opacity: 0; } }
@@ -182,9 +183,10 @@ function local(report, who) {
 
 /**
  * Show the card for a visit that is over, and resolve when it has been put down (any key, a click, a tap).
- * @param {{office?:object, reason:string, kept?:object, run?:object, name?:string, brand?:{over?:string, title?:string, jar?:boolean}, share?:(seed:string)=>string}} o
+ * @param {{office?:object, reason:string, kept?:object, run?:object, name?:string, brand?:{over?:string, title?:string, jar?:boolean}, share?:(seed:string)=>string, also?:(card:object, report:object)=>Promise<{icon?:string,label:string,value?:string,href?:string}|null>}} o
  *        run: { seed, seconds, parts: { reached, of }, rooms: { explored, kinds }, cast: { met, survived }, hearts?, edition? } — what index.js counted
  *        brand: what is printed at the head of the card (default: the office's) · share: where a kept tape can be found again
+ *        also: one more line for the card, given the card and what was reported; it may take its time, and may be null
  * @returns {Promise<object>} the card as it was shown (core/runs.mjs: settleRun, with `coins`) — and `again`: the tape's
  *          seed, if it was put down by choosing the tape's number (only where there is a `share`)
  */
@@ -201,6 +203,14 @@ export async function showScorecard(o = {}) {
   const style = el('style', '', CSS), veil = draw(card, who, { brand: o.brand, share: o.share }), form = veil.querySelector('.brc-form');
   const number = veil.querySelector('a.brc-seed');
   document.head.append(style); root.append(veil);
+  // a line whoever is showing the card wants on it, which it may have to go and ask somebody about: printed when it is known
+  if (typeof o.also === 'function') {
+    Promise.resolve().then(() => o.also(card, report)).then((line) => {
+      if (!line || !veil.isConnected) return;
+      const value = line.href ? Object.assign(el('a', 'v brc-more', line.value || ''), { href: line.href }) : el('span', 'v', line.value || '');
+      veil.querySelector('.brc-box').append(icon(ICONS[line.icon] ? line.icon : 'fresh'), el('span', '', String(line.label || '')), value);
+    }).catch(() => { /* then the card is the card */ });
+  }
   try { form.focus({ preventScroll: true }); } catch { /* it will take a click, then */ }
   let again = false;
   await new Promise((done) => {

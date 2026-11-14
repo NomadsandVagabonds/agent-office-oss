@@ -10,6 +10,17 @@ copied out by a script, with a small page round them that stands in for the
 office: an invented team to borrow names and faces from, a keycard that is
 always down there to find, and one building after another.
 
+In front of that is a home page, and it is 1998: "The Unofficial Home Page
+of Paranormal Office Phenomena", with what a home page had then. A door
+marked ENTER, a visitor counter, high scores and a guestbook, a webring,
+spoof banner adverts that are links into the level, screenshots, and a
+bottom that keeps going.
+
+**The words on it are plain on purpose** (the owner's rule for this page):
+what somebody would really have typed on a home page in 1998, which is
+labels, a welcome and a changelog. No asides, no captions explaining a joke,
+no clever phrases. The trappings do the work.
+
 ## Build
 
 ```bash
@@ -21,17 +32,36 @@ plain files and can be served by anything.
 
 | In the folder | What it is |
 |---|---|
-| `index.html` | the page (`tools/blockrooms/page.html`), with its head, its import map, its content policy and the list of modules to fetch at once filled in |
-| `site.js` | the page's script (`tools/blockrooms/site.js`) |
-| `world/`, `core/` | every module the level imports, found by reading the imports (`tools/backrooms-sample/stage.mjs`) |
+| `index.html` | the home page (`home.html`, with `home.css`, `home.js` and `art.js`). Small, and with nothing of the level in it, so it is there at once |
+| `play.html` | the page the level is played on (`page.html`), with its head, its import map, its content policy and the list of modules to fetch at once filled in. Served as `/play` |
+| `site.js` | that page's script |
+| `world/`, `core/` | every module the level imports, found by reading the imports (`tools/backrooms-sample/stage.mjs`), and the rules of the book (`core/book.mjs`) |
 | `vendor/` | three.js and the add-ons the level uses, the fonts it asks for, and their licences |
-| `og.jpg` | the picture a link to the site is shown with, if `tools/blockrooms/og.jpg` exists |
+| `shots/` | pictures from inside, for the home page (`tools/blockrooms/shots/`: taken through the level's own camcorder) |
+| `og.jpg` | the picture a link to the site is shown with |
 | `robots.txt` | |
 
-The page asks for nothing from any other site, and says so in a
+Neither page asks for anything from any other site, and each says so in a
 Content-Security-Policy a browser enforces (`default-src 'self'`; the one
-script written into the page, the import map, is allowed by its hash).
+script written into the play page, the import map, is allowed by its hash;
+the home page has no script written into it at all).
 `test/blockrooms-site.test.mjs` builds the site and checks all of this.
+
+Every picture on the home page that moves is drawn by `art.js`, a character
+a pixel; none of it came from anybody else's page.
+
+To try the built site on one's own machine, book and all:
+
+```bash
+node tools/blockrooms/build.mjs dist
+```
+
+```bash
+node tools/blockrooms/serve.mjs dist
+```
+
+(`serve.mjs` answers `/api/book` out of a store that is only a Map: empty
+every time it starts, and nothing in it goes anywhere.)
 
 **The site's address is not written anywhere in this repository.** Where a
 link preview needs it whole (`og:url`, `og:image`, the canonical link), the
@@ -42,10 +72,13 @@ build takes it from `SITE_ORIGIN` (`https://…`), or, on Vercel, from
 
 | Address | What happens |
 |---|---|
-| `/` | a building nobody has had before, then another when that one ends |
-| `/?tape=<seed>` | that building first. A finished visit keeps its tape (its seed); while the card for it is on the wall the address bar shows this address, so copying it hands the building on |
+| `/` | the home page |
+| `/play` | a building nobody has had before, then another when that one ends |
+| `/play?tape=<seed>` | that building first. A finished visit keeps its tape (its seed); while the card for it is on the wall the address bar shows this address, so copying it hands the building on. (`/?tape=` from before there was a home page goes straight through.) |
 | the tape's number on the card | a link to the same address; choosing it walks the building again |
-| `/?debug` (with `depths=`, `depth=`, `mute`, `pursuer=0`) | for checking, not playing: exposes the level's handle as `window.__backrooms` and allows a shorter building |
+| `/play?room=<a room of the deck>` | a building with that room where you land: what the adverts and the pictures on the home page lead to. A room that does not exist is an ordinary door |
+| `/play?debug` (with `depths=`, `depth=`, `mute`, `pursuer=0`) | for checking, not playing: exposes the level's handle as `window.__backrooms` and allows a shorter building |
+| `/api/book` | the visitors' book (below) |
 
 A tape this browser has kept is **played back**: the picture says PLAY where
 a visit says REC, nothing is hidden in it, and it scores but cannot beat the
@@ -54,10 +87,64 @@ building like any other, walked for the first time.
 
 ## What is kept, and where
 
-Only in the visitor's own browser (`localStorage`): whether the keycard has
-been brought out, the record of visits (best score, kinds of room and
-residents met, up to twelve tapes), and the two camcorder settings. No
-cookies, no analytics, no accounts, and no request to anywhere but this site.
+In the visitor's own browser (`localStorage`): whether the keycard has been
+brought out, the record of visits (best score, kinds of room and residents
+met, up to twelve tapes), the two camcorder settings, and the name and note
+they sign with. No cookies, no analytics, no accounts, and no request to
+anywhere but this site.
+
+On the site, if it keeps a book: see the next section.
+
+## The visitors' book
+
+High scores, a guestbook and the traffic counter are one small thing: a
+function at `/api/book` (`api/book.mjs`, which is three lines;
+`tools/blockrooms/book-api.mjs` is what it does; `core/book.mjs` is the rules)
+over a Redis the host provides, spoken to over its REST interface with
+`fetch`. No client library: this repository still has no dependencies.
+
+**What the host has to be given** (environment variables on the project):
+
+| Variable | What for |
+|---|---|
+| `KV_REST_API_URL` + `KV_REST_API_TOKEN`, or `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | where the book is kept. Adding a Redis (Upstash) database to the project from Vercel's marketplace sets one of these pairs. **Without them there is no book**: `/api/book` answers 503, and the home page shows this browser's own scores and tapes instead |
+| `BOOK_ADMIN_KEY` | a secret of sixteen characters or more: what strikes a line out of the book. With none set, nothing can be struck |
+| `BOOK_BLOCKLIST` | words no name in the book may have in it, separated by commas. Matched inside a name however it is spelled round (`0` for `o`, dots between letters). The list is the keeper's and is not in this repository |
+| `BOOK_SALT` | optional: salt for the short-lived hashes that stop one visitor counting twice (default: derived from the store's token) |
+
+**What is written in it.** A visit that got out, as counted again by the
+site from what the browser reports (`checkRun`): a name, a short message if
+one was typed, the points, how long the tape ran, parts and rooms, spare
+batteries, hearts, and the building's seed (so that anybody can walk the same
+building: every line in the high scores is a link to one).
+
+- **The name is typed by whoever signs**: that is the fun of a table of high
+  scores. It is held to sixteen characters of letters, figures, spaces and
+  `. - _ '`, refused if it could be an address, refused if it has a blocked
+  word in it, and only ever put on a page as text. Somebody who types nothing
+  gets a made-up name ("Amber Vireo").
+- **The message is typed too, and optional**: sixty characters, the same
+  plain characters and a little more punctuation, no addresses, the same
+  blocked words, text only.
+- Both are typed on the home page (by the door) and kept in the browser; the
+  book is signed when a visit gets out, unless the box there is unticked.
+- **Scores are kept on trust.** The level runs in the visitor's browser, so a
+  determined person can be in the book with a score they did not make. The
+  site refuses what a building could not allow (rooms and seconds per part,
+  hearts, batteries) and counts the points itself, which stops carelessness
+  and casual tampering and nothing more.
+- **Nothing about who anybody is.** No address of theirs is stored; a salted
+  hash of it is kept for seconds or minutes, so that the same visitor is not
+  counted twice and cannot sign line after line.
+
+**Striking a line out** (the `id` is in what `/api/book` returns):
+
+```bash
+curl -X POST https://YOUR-SITE/api/book -H 'content-type: application/json' -d '{"do":"strike","id":"THE-LINE-ID","key":"YOUR-BOOK-ADMIN-KEY"}'
+```
+
+`test/blockrooms-book.test.mjs` covers the rules and the keeping of it
+against a store that is only a Map.
 
 ## Hosting (Vercel)
 
@@ -104,3 +191,9 @@ git push origin <commit>:blockrooms-live
   rendering, which shows that it works and nothing about how fast.
 - **On Vercel itself.** The build and the built site are tested locally; the
   first deploy is the first time Vercel has seen this configuration.
+- **The book against a real store.** Its tests run against a stand-in; the
+  REST calls follow Upstash's documentation and have not been run against a
+  live database from here.
+- **Signing from the level itself.** The home page, the book's function and
+  the card's extra line are each checked; a whole visit of three parts, out by
+  the wall and into the book, has not been played end to end by anybody yet.

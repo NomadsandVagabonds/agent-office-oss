@@ -10,9 +10,14 @@
 // address bar says where it is; and choosing the tape's number on the card
 // walks it again.
 //
-// Nothing is asked of anybody and nothing leaves the browser: what is kept
-// (the keycard, the record of visits and tapes, the two settings) is kept in
-// this browser's own storage, and every file comes from this site.
+// Nothing is asked of anybody: what is kept (the keycard, the record of visits
+// and tapes, the two settings) is kept in this browser's own storage, and
+// every file comes from this site. Two things are told to the site's book, if
+// it keeps one (/api/book; core/book.mjs): that somebody went in, and — when
+// somebody gets out, and has not unticked the box on the front page — what
+// the visit came to, under the made-up name they were given there.
+import { cleanMessage, cleanName, rollName } from './core/book.mjs';
+
 const fault = document.getElementById('fault');
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -72,10 +77,39 @@ function address(seed) {
   return url;
 }
 
+/* ---- the book ------------------------------------------------------------------------------------ */
+
+const ME = 'blockrooms:me';
+/** Who this visitor signed in as (or, if they did not, a made-up name), their message, and whether they sign the book: all set on the front page. */
+function me() {
+  let was = {};
+  try { was = JSON.parse(localStorage.getItem(ME) || '{}') || {}; } catch { /* nobody yet */ }
+  const spare = cleanName(was.spare) || rollName();
+  const now = { name: cleanName(was.name) || spare, spare, message: cleanMessage(was.message) || '', sign: was.sign !== false };
+  try { localStorage.setItem(ME, JSON.stringify(now)); } catch { /* until the page closes, then */ }
+  return now;
+}
+/** Tell the book something. → what it answered, or null (no book, no network, no matter). */
+async function tell(body) {
+  try {
+    const res = await fetch('./api/book', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), keepalive: true });
+    return await res.json();
+  } catch { return null; }
+}
+/** The line the card gets once the book has answered: that this visit is in it, and where. */
+async function sign(card, report) {
+  if (card.replay || card.reason !== 'exit') return null;
+  const who = me();
+  if (!who.sign) return null;
+  const answer = await tell({ do: 'sign', name: who.name, message: who.message, run: report });
+  if (answer?.ok) return { icon: 'fresh', label: `High scores: ${who.name}`, value: answer.place ? `№ ${answer.place}` : 'signed', href: './#book' };
+  return answer?.why === 'signed' ? { icon: 'fresh', label: 'High scores', value: 'signed', href: './#book' } : null;
+}
+
 async function run() {
   try {
-    const [{ createStage }, { enterBackrooms }, { keptTapes }] = await Promise.all([
-      import('./world/engine/stage.js'), import('./world/backrooms/index.js'), import('./world/backrooms/scorecard.js')]);
+    const [{ createStage }, { enterBackrooms }, { keptTapes }, { ARCHETYPES }] = await Promise.all([
+      import('./world/engine/stage.js'), import('./world/backrooms/index.js'), import('./world/backrooms/scorecard.js'), import('./world/backrooms/gen.js')]);
     office.stage = createStage(document.getElementById('stage'), { fx: false, shadows: false, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5) });
     office.stage.start();
     // the tape this address names, if it names one: the first building walked. After that, a new one each time —
@@ -86,16 +120,22 @@ async function run() {
     // for a shorter building, a part to begin on, a quiet one)
     const whole = (k) => (q.has(k) && Number.isFinite(Number(q.get(k))) ? Math.floor(Number(q.get(k))) : undefined);
     const dev = q.has('debug') ? { debug: true, depths: whole('depths'), depth: whole('depth'), mute: q.has('mute') ? true : undefined, pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined } : {};
+    // an advert on the front page is a door: ?room=<a room of the deck> is a building with that room where you land
+    // (the first one only; a room nobody has built yet is no room, and the door is an ordinary door)
+    let room = !next && q.get('room') && Object.hasOwn(ARCHETYPES, q.get('room')) ? q.get('room') : null;
     for (;;) {
       const seed = next || fresh();
       // a tape this browser has kept is a tape played back (it says PLAY, hides nothing, and is paid nothing: core/runs.mjs);
       // one that came from somebody else is a building like any other, walked for the first time
       const mine = next ? keptTapes().find((t) => t.seed === seed) : null;
       next = null;
+      if (!mine) tell({ do: 'in' });                      // (he keeps count of who goes in. A tape played back is nobody going anywhere)
       const result = await enterBackrooms(office, {
-        name: 'Employee', seed, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, ...dev,
+        name: 'Employee', seed, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: sign, ...dev,
+        ...(room ? { only: [room] } : {}),
         ...(mine ? { replay: true, pursuer: typeof mine.mascot === 'boolean' ? mine.mascot : undefined } : {}),
       });
+      room = null;
       if (result?.card?.again) next = asSeed(result.card.again) || null;
       address(next);
       office.stage.setView(null);
