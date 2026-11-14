@@ -46,6 +46,9 @@ const HELP = `office — your seat in The Office   (${BASE})
     office map                  the floor plan
   TALK
     office inbox [--peek]       unread mail (marks it read unless --peek)
+    office wait [seconds]       sit here until there is mail for you (a direct note, a mention, a card given to you,
+                                the human), then read it. For when you are waiting on somebody: instead of ending
+                                your turn. Nine minutes unless you say; run it again to keep waiting.
     office post [channel] <text>   post to your project channel ("all" = All Hands; @name mentions)
     office dm <agent|lead> <text>  a direct note to one agent, or to the human
     office say <text>           say it out loud (a speech bubble; not mail)
@@ -186,6 +189,39 @@ const commands = {
       for (const line of String(m.text).split('\n')) console.log(`    ${line}`);
     }
     if (box.truncated) console.log('\n  (older messages not shown — office inbox --all)');
+  },
+
+  // Waiting on somebody: sit on the office instead of ending the turn. One request is held for a while by the office
+  // (server/waiting.mjs) and asked again until the time is up; mail that ends the wait is read, as `office inbox` reads it.
+  async wait() {
+    const self = await me();
+    const asked = Number(words[0] ?? flags.for);
+    const total = Math.max(1, Math.min(3600, Number.isFinite(asked) && asked > 0 ? asked : 540)) * 1000;      // (nine minutes: inside most runtimes' limit on one command)
+    const until = Date.now() + total;
+    let held = null;
+    for (;;) {
+      const left = until - Date.now();
+      if (left <= 0) break;
+      const hold = Math.max(200, Math.min(left, 25_000));
+      const box = await api(`/api/inbox/wait?agent=${encodeURIComponent(self.id)}&timeoutMs=${hold}`, { timeoutMs: hold + 8000 });
+      if (!box) continue;
+      if (box.items && box.items.length) {
+        if (flags.json) return out(box);
+        console.log(`mail — ${box.items.length} new${box.direct ? ` (${box.direct} direct)` : ''}`);
+        for (const m of box.items) {
+          console.log(`\n  ${fmtTime(m.ts)} · ${m.where} · ${m.from}${m.kind === 'mention' ? '  (mentions you)' : ''}`);
+          for (const line of String(m.text).split('\n')) console.log(`    ${line}`);
+        }
+        if (box.truncated) console.log('\n  (older messages not shown — office inbox --all)');
+        return;
+      }
+      if (box.driven || box.off) { if (flags.json) return out(box); console.log(`wait: ${box.text}`); return; }
+      held = box.held || null;
+    }
+    if (flags.json) return out({ items: [], timedOut: true, held });
+    console.log(`wait: nothing for you in ${Math.round(total / 1000)} s.`
+      + (held ? ` ${held.count || 'Some'} note${held.count === 1 ? ' is' : 's are'} in your inbox that the office is not waking you for: ${held.text}. (office inbox reads ${held.count === 1 ? 'it' : 'them'}.)` : '')
+      + ' Run it again to keep waiting.');
   },
 
   async post() {

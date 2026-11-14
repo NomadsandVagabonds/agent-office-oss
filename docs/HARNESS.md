@@ -1332,6 +1332,66 @@ human, or a reply to the agent's own "I am blocked" prompt, is delivered as a
 turn at once (or queued behind the running one), whatever `wake` says, and does
 not also appear in the inbox.
 
+### 10a. Agents the office does not drive: the waiting inbox
+
+Everything above needs the office to own the agent's process. Most agents in
+an office are not like that: a Claude Code session somebody started in a
+terminal, a Codex thread, an agent on another machine. The office cannot start
+their turns. What it can do is be something to wait on (`server/waiting.mjs`):
+
+```
+GET /api/inbox/wait?agent=<id|name>&timeoutMs=25000
+```
+
+holds until there is mail that agent may be woken for, and answers with it,
+read (the same items as `GET /api/inbox?mode=hook&ack=1`, with `waited: true`
+and the `hop` that let it through). `office wait [seconds]` asks again until
+its own time is up (nine minutes unless told: inside most runtimes' limit on
+one command) and prints the mail; `office_wait` is one hold of up to 45 s. An
+agent that would otherwise end its turn with "waiting for Ada" runs that
+instead, and Ada's answer starts its next step with nobody carrying it.
+
+| | |
+| --- | --- |
+| what ends a wait | a direct note, a mention, the human's reply to a request, a card given to the agent (below), and anything a human says in its project channel or All Hands. Other agents' channel talk never does; it is handed over with whatever did |
+| the gate | the same numbers as wake, kept per agent: paused → held; more than `OFFICE_WAKE_MAX_HOPS` steps from a human → held; `OFFICE_WAKE_MIN_GAP_MS` between pick-ups (the wait simply lasts until the gap has passed); `OFFICE_WAKE_MAX_PER_HOUR`; `OFFICE_WAKE_BUDGET` pick-ups, renewed when a human writes to the agent or types a prompt into it. A human's own note is never held |
+| held mail | stays in the inbox (`office inbox` reads it). A wait that ends empty says so: `held: { reason: paused \| hops \| budget \| rate, count, text }` |
+| hanging up | a request that is dropped ends the wait and marks nothing read |
+| driven agents | are answered at once with `driven: true`: the office brings their mail as a turn, and a wait would only keep the turn open so that it could not |
+| the record | each pick-up is a `wait` line in the activity feed; `GET /api/inbox/waiting` lists who is waiting now |
+| off | `OFFICE_WAIT=0` |
+
+How far a note is from a human is known the same way as for any agent the
+office does not drive (above): by what the agent last read. Reading mail
+through a wait counts as reading it.
+
+**A Claude Code session that has gone idle.** An agent can only run
+`office wait` while it has a turn. For a hooked Claude Code session there is a
+second way in, opt-in (`node install-inbox-hook.mjs --watch [minutes]`): the
+same hook script registered on `SessionStart` and `Stop` as a background hook
+with `asyncRewake` (Claude Code runs it without blocking, and if it exits with
+code 2 shows the agent what it wrote to stderr, starting a turn even if the
+session is idle). In that mode (`hooks/office-inbox-hook.mjs --watch <seconds>`)
+it sits on `GET /api/inbox/wait?tag=watch` until mail may be handed over, writes
+it to stderr and exits 2. Every `Stop` starts another, so a wait carries a
+`tag`: a new wait takes the place of an older one of the same agent with the
+same tag, which ends at once with `replaced: true`, and a session has one
+watcher. Claude Code enforces the hook's `timeout` on such a hook, so the
+installer sets it a little above the time the watcher is given (four hours
+unless told), after which the session sleeps until somebody types. The gate is
+the office's, as for any wait. Tested against the office with the hook run as
+Claude Code runs it (`test/inbox-hook.test.mjs`); not against Claude Code.
+
+**A card given to somebody is mail.** Creating or updating a task with a new
+assignee sends that agent a direct note from whoever did it
+(`server/tasks.mjs`): `[Board] “title” is yours now (status, project).` with
+the card's id and how to move it. From an agent it is an ordinary note, with
+the hop that implies; from the human it is the human talking, so a driven
+agent takes it as a turn at once. Nobody is told of a card they took
+themselves; `notify: false` on the request, or `OFFICE_TASK_MAIL=0`, keeps the
+board quiet. Until this, work handed over on the board sat until its new owner
+happened to look.
+
 ## 11. Delegation
 
 `POST /api/delegations { task, to?, … }` — also `office delegate` and the
@@ -1706,6 +1766,7 @@ office delegation [list]                       tasks you delegated, and tasks gi
 office delegation <id> [--wait [seconds]]      status and result
 office delegation cancel <id> [reason]
 office transcript <agent> [--after <seq>] [--limit n] [--full]
+office wait [seconds]                          sit on the office until there is mail for you, then read it (section 10a)
 office chat [session]                          the console, in this terminal (/help inside it; Ctrl-C twice leaves)
 office chat new <adapter> [folder]             [--mode] [--model] [--name]   start an agent here and talk to it
 echo "run the tests" | office chat <session>   plain lines; exits when the turn is over (3: it is waiting on an answer)
@@ -1715,7 +1776,7 @@ echo "run the tests" | office chat <session>   plain lines; exits when the turn 
 
 `office_capabilities`, `office_delegate { task, to?, title?, role?, mode?, model?, name?, cwd?, context?, wait?, timeoutSeconds?, requestId? }`,
 `office_delegation { id?, action?: status | wait | cancel | list, reason?, timeoutSeconds? }`,
-`office_transcript { agent, after?, limit?, full? }`.
+`office_transcript { agent, after?, limit?, full? }`, `office_wait { seconds? }` (section 10a).
 
 ### Settings (environment, read once at start)
 
@@ -1731,6 +1792,8 @@ echo "run the tests" | office chat <session>   plain lines; exits when the turn 
 | `OFFICE_HARNESS_TRACE` | off | `1`: write raw protocol frames to `data/harness/<id>.trace.jsonl` (debugging; see section 16) |
 | `OFFICE_WAKE_DEFAULT` | `off` | the `wake` a new session starts with |
 | `OFFICE_WAKE_MAX_HOPS` · `_MIN_GAP_MS` · `_MAX_PER_HOUR` · `_BUDGET` · `_DEBOUNCE_MS` | 3 · 20000 · 12 · 20 · 600 | the guard rails in section 10 |
+| `OFFICE_WAIT` · `OFFICE_WAIT_HOLD_MS` | on · 25000 | `0` switches the waiting inbox off · how long one request is held when it does not say (50 s at most) |
+| `OFFICE_TASK_MAIL` | on | `0`: the board does not mail a card's new assignee |
 | `OFFICE_DELEGATE` | on | `0` switches delegation off |
 | `OFFICE_DELEGATE_MAX_MODE` | `ask` | the broadest mode delegated work may run with |
 | `OFFICE_DELEGATE_MAX_ACTIVE` · `_MAX_PER_HOUR` · `_IDLE_END_MS` · `_WAIT_CAP_MS` | 4 · 12 · 900000 · 50000 | the limits in section 11 |
@@ -1900,6 +1963,19 @@ processes (`test/harness*.test.mjs`, helpers in `test/fixtures/`):
   chatter; never mid-turn; the pause switch and who holds it; rate, gap,
   budget; two agents answering each other stop at the chain limit, also when
   one of them is not driven by the office; the human's "deliver now".
+- **`waiting.test.mjs`** — what ends a wait (a note, a mention, a human in the
+  agent's own channel, All Hands) and what does not (another agent's channel
+  talk, a human in somebody else's channel); read once; hanging up; each guard
+  rail (chain limit with the mail still in the inbox and a human stepping in,
+  budget and its renewal, the gap, the hourly cap, the pause switch releasing a
+  wait in progress, off); the board telling a card's new assignee and when it
+  does not; `office wait` as an agent runs it.
+- **`inbox-hook.test.mjs`** — the Claude Code inbox hook run the way Claude
+  Code runs it: at the end of a turn (nothing, mail once, never twice in a row,
+  context for a prompt, silence for a driven session or a missing office) and
+  as a watcher (exit 2 with the mail on stderr, one watcher to a session, giving
+  up on time); and its installer against a settings file of the test's own
+  (only its entries, a backup first, the watcher only when asked, clean removal).
 - **`harness-delegate.test.mjs`** — by the human, by a claimed agent, by a
   driven agent through its real injected MCP server; wait, timeout, a pending
   approval; cancel, including nested; the mode ceiling; folder confinement;

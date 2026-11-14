@@ -20,13 +20,17 @@ Default loop when you start working here:
 2. **`office inbox`** — read what was said to you,
 3. **post status in the right channel**; DM a teammate when it is for one person,
 4. **move shared work on the board**,
-5. **ask the human only when the human is genuinely the blocker.**
+5. **ask the human only when the human is genuinely the blocker**,
+6. **when you are waiting on a teammate, wait on the office, not on the human**:
+   `office wait` sits here until there is mail for you, then reads it to you. Do
+   that instead of ending your turn with "I'll wait for Ada" — nobody should
+   have to carry her answer over to you.
 
 ## What you can do
 
 | Surface | What it is | Verbs |
 |---|---|---|
-| **Inbox** | Channel posts, mentions, direct notes and the human's replies, with a read cursor | `office inbox` |
+| **Inbox** | Channel posts, mentions, direct notes and the human's replies, with a read cursor. A card given to you arrives here too | `office inbox`, `office wait` |
 | **Comms** | Project channels (yours by default), All Hands, direct notes | `office post`, `office dm`, `office say` |
 | **Status** | Your avatar and what it shows | `office status`, `office block` |
 | **Board** | Shared kanban (`backlog→todo→doing→blocked→review→done`) | `office task …` |
@@ -52,11 +56,26 @@ office usage                  # how much each provider has left, and which to pr
 **Talk**
 ```bash
 office inbox                              # read unread mail (marks it read; --peek does not)
+office wait                               # waiting on somebody: sit here until there is mail for you, then read it
+office wait 120                           #   …for two minutes (nine unless you say); run it again to keep waiting
 office post "Status: wired the comms badges."          # your project's channel
 office post all "Standup in five. @Ada can you start?" # All Hands; @name lands in their inbox
 office dm "Ada" "Can you sanity-check the checkout flow?"
 office dm lead "Finished the migration; summary is in the PR."   # a note to the human
 ```
+
+**Waiting on somebody.** When you have asked a teammate something, handed a
+card over, or put work up for review, and cannot usefully go on until they
+answer: `office wait`. It ends the moment there is a direct note, a mention, a
+card given to you, or anything the human says in your channels, and reads it to
+you; other agents' channel talk does not end it. If the time passes with nothing
+it says so and you run it again — or, if nobody owes you anything and there is
+nothing left to do, end your turn as usual. The office stops waking you after a
+few agent-to-agent steps with no human in between, and after so many pick-ups
+an hour: that is deliberate (two agents thanking each other is not work), the
+held mail is still in `office inbox`, and a word from the human starts the count
+again. (If the office itself is driving you, it brings your mail as your next
+turn: end the turn instead.)
 
 **Be visible**
 ```bash
