@@ -8,7 +8,7 @@ import { TILE } from '../gen.js';
 import { clamp, turnTo, card, framed, doorFrame } from '../bits.js';
 import { placePickup } from '../hand.js';
 import { stepWalker, routeToward } from '../denizens.js';
-import { createCableState, stepCable } from './cable-drop/rule.js';
+import { CABLE, createCableState, stepCable, releaseCable } from './cable-drop/rule.js';
 import { dormantTendrilsVox, makeTrunkLine } from './cable-drop/rig.js';
 
 function hangFireDoor(c, dr) {
@@ -133,7 +133,7 @@ export function build(c) {
   // The Trunk Line itself — hidden in the ceiling until woken, then registered on the floor
   const rig = makeTrunkLine(c.kit);
   const startW = c.toWorld(hole.x, hole.z);
-  let rule = createCableState();
+  let rule = createCableState(), known = false;
 
   const roamer = c.env.denizens?.add({
     x: startW.x, z: startW.z, r: 0.24, tall: 0.62, heading: 0,
@@ -170,7 +170,8 @@ export function build(c) {
         roamer.lift = (1 - k * k) * (H - 0.55);
         rig.pose(time, 0.5, 0.55 + 0.45 * k);
         rig.group.rotation.y = Math.atan2(me.x - roamer.x, me.z - roamer.z);
-      } else if (rule.phase === 'hunting') {
+      } else if (rule.phase === 'hunting' || rule.phase === 'recoiling') {
+        if (!known && distMe < 9 && c.env.sees(roamer.x, roamer.z, { radius: 0.5 })) { known = true; c.met('trunk-line'); }
         roamer.lift = 0;
         if (res.rattled) {
           const rx = nav.door?.x ?? roamer.x, rz = nav.door?.z ?? roamer.z;
@@ -188,9 +189,11 @@ export function build(c) {
         rig.group.rotation.y += clamp(turnTo(rig.group.rotation.y, wantYaw), -dt * 8, dt * 8);
         if (distMe < 2.6 && clearLine) c.env.interfere(clamp((2.6 - distMe) * 0.24, 0, 0.65));
         if (res.caught) {
+          // round your neck: a heart where there are hearts, and if that was not the last of them it lets go and hangs back
           c.env.play('buzz', roamer.x, roamer.z, 6);
           c.env.interfere(1);
-          c.env.end('caught');
+          const hit = c.hurt(CABLE.hurts);
+          if (!hit.ended) { rule = releaseCable(rule); if (hit.landed) { c.env.hud.glitch(0.5); c.survived('trunk-line'); } }
         }
       }
     },

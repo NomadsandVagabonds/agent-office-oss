@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { ITEM_IDS, kindOf, createHandOver, isPaper, isBalloon, isFlashlight } from '../public/world/backrooms/items.js';
-import { CABLE, createCableState, stepCable } from '../public/world/backrooms/rooms/cable-drop/rule.js';
+import { CABLE, createCableState, stepCable, releaseCable } from '../public/world/backrooms/rooms/cable-drop/rule.js';
 import { SHREDDER, createShredderState, stepShredder } from '../public/world/backrooms/rooms/shredding-bay/rule.js';
 import { PARTY, createPartyState, stepParty } from '../public/world/backrooms/rooms/mandatory-fun/rule.js';
 import { BLACKOUT, createBlackoutState, stepBlackout, isInBeam } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
@@ -221,4 +221,18 @@ test('The Efficiency Partners (audit-pod): auto-give Pink Slip to empty hand, wa
   const swapped = stepPartner(polite.state, { dt: 0.1, dist: 1.0, insideRoom: true, handEmpty: false, acceptedViaUse: true });
   assert.equal(swapped.gaveSlip, true);
   assert.equal(swapped.state.phase, 'departing');
+});
+
+/* ---- nothing down here is an instant death: after a catch that was lived through, each of them lets go ------------- */
+
+test('the Trunk Line lets go: after a strangle that was survived it hangs back for a while, harmless, and then comes on again', () => {
+  let s = { ...createCableState(), phase: 'hunting' };
+  let r = stepCable(s, { dt: 0.05, distToDrop: 5, distToCreature: CABLE.catchRadius - 0.1, insideRoom: true, clearLine: true });
+  assert.ok(r.caught);
+  s = releaseCable(r.state);
+  assert.equal(s.phase, 'recoiling'); assert.equal(s.caught, false);
+  for (let t = 0; t < CABLE.recoil - 0.2; t += 0.05) { r = stepCable(s, { dt: 0.05, distToDrop: 5, distToCreature: 0.1, insideRoom: true, clearLine: true }); s = r.state; assert.ok(!r.caught && r.speed === 0, 'standing right against it, and it does nothing'); }
+  for (let t = 0; t < 0.5; t += 0.05) { r = stepCable(s, { dt: 0.05, distToDrop: 5, distToCreature: 4, insideRoom: true, clearLine: true }); s = r.state; }
+  assert.equal(s.phase, 'hunting'); assert.ok(r.speed > 0);
+  assert.ok(CABLE.hurts === 1 && CABLE.recoil >= 4);
 });

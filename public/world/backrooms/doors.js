@@ -6,7 +6,7 @@
 // trapped; what it is, is in the way of whatever is behind you (cast/hunt.js),
 // and something tall to stand behind while it is open.
 // doorleaf.js builds them and works them.
-import { makeRng } from './gen.js';
+import { makeRng, ARCHETYPES } from './gen.js';
 
 export const DOORS = Object.freeze({
   share: 0.42,       // of the doorways that could have doors, how many do
@@ -24,6 +24,7 @@ export function doorRooms(level, link) {
   const w = link.to - link.from, a = level.rooms[link.a], b = level.rooms[link.b];
   if (w > DOORS.widest + 1e-6 || !(link.h >= DOORS.lowest)) return [];
   if ([a, b].some((r) => r.kind === 'start' || r.kind === 'exit' || r.crawl || r.H < 2.2)) return [];
+  if ([a, b].some((r) => r.arch && ARCHETYPES[r.arch] && ARCHETYPES[r.arch].doors === 'own')) return [];          // a room that hangs doors of its own on its doorways
   if ([a, b].some((r) => r.doors.some((d) => d.link === link.id && d.sill > 0.01))) return [];
   // the leaves stand open in a plain room (nobody's set piece is rearranged), and not the one the mascot's plinth is in
   return [a, b].filter((r) => {

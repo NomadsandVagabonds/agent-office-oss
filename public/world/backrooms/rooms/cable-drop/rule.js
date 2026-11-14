@@ -13,6 +13,8 @@ export const CABLE = Object.freeze({
   huntSpeed: 3.12,          // m/s lurching chase speed (player hurry is 3.7)
   catchRadius: 0.62,        // strangle reach when unimpeded by a closed door
   rattleEvery: 0.85,        // seconds between claw-scrapes on a shut door
+  hurts: 1,                 // hearts a strangle costs, where there are hearts
+  recoil: 6,                // seconds it hangs back, coiled, after one that was lived through
 });
 
 export const createCableState = () => ({
@@ -27,6 +29,9 @@ export const createCableState = () => ({
  * @param s  state from createCableState()
  * @param o  { dt, distToDrop, distToCreature, playerSpeed, insideRoom, doorBlocked, clearLine }
  */
+/** It had somebody, and they are still standing: it lets go and hangs back for a while before it comes on again. */
+export function releaseCable(s) { return { ...s, phase: 'recoiling', caught: false, rattleTimer: CABLE.recoil }; }
+
 export function stepCable(s, o) {
   const { dt, distToDrop, distToCreature, playerSpeed = 0, insideRoom = false, doorBlocked = false, clearLine = true } = o;
   let woke = false, rattled = false, caught = s.caught;
@@ -47,6 +52,12 @@ export function stepCable(s, o) {
     dropProgress = Math.min(1, dropProgress + dt / CABLE.dropTime);
     if (dropProgress >= 1) phase = 'hunting';
     return { state: { phase, dropProgress, rattleTimer, caught }, woke, rattled, caught, speed: 0 };
+  }
+
+  if (phase === 'recoiling') {
+    rattleTimer -= dt;
+    if (rattleTimer <= 0) { phase = 'hunting'; rattleTimer = 0; }
+    return { state: { phase, dropProgress: 1, rattleTimer, caught: false }, woke, rattled, caught: false, speed: 0 };
   }
 
   // phase === 'hunting'

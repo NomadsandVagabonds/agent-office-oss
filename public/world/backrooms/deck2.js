@@ -16,6 +16,7 @@
 //   resident the id of whoever lives in the room, if somebody does (one such room to a part of the building, at most)
 //   items    what that resident cares about that a visitor might be carrying (inventory item types)
 //   caught   how many hearts it costs to be got by them
+//   doors    'own': the room hangs doors of its own on its doorways, so the floor's fire doors (doors.js) keep off them
 //   headline true: the place has half-remembered something from the news and staged it wrongly. Which stories become
 //            rooms is the owner's choice, nobody else's; the plan puts at most one in a visit, never on its first floor.
 
@@ -44,7 +45,7 @@ export const MORE_DECK = [
   // (supplies.js leaves such things about on that part) · caught: the hearts it costs to be got by them.
   {
     id: 'cable-drop',
-    resident: 'trunk-line', items: [], teaches: 'overhead', caught: 1,
+    resident: 'trunk-line', items: [], teaches: 'overhead', caught: 1, doors: 'own',
     name: 'The Trunk Drop',
     landmark: 'the patch cables hanging from the ceiling',
     w: [8, 10], d: [8, 10],
