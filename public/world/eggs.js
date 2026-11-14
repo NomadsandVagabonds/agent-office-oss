@@ -252,8 +252,15 @@ export function createEggs(office) {
     office.rig.flyTo({ x: -4, z: -6.3, dist: 9, yaw: 0, pitch: 0.62 }, { instant: true });      // you come to by the bookshelf
     office.walk.enter();
     // Nothing is said about where you have been. The passport simply has a new stamp, now that you are back to look at it.
-    found('noclip');
-    if (result?.reason === 'exit') found('way-out');
+    const stamps = [found('noclip'), result?.reason === 'exit' ? found('way-out') : null];
+    // …except by the purse: what you carried out through the door is the office's now, and it shows it the way it does on every
+    // other floor — once the office has heard all of it, stamps included (each of those is a coin in the jar too).
+    const kept = result?.kept;
+    if (kept?.card || kept?.coins?.length) Promise.all([kept.told, ...stamps]).then(() => setTimeout(() => {
+      try { office.sound?.play?.(kept.card ? 'discovery' : 'coin'); } catch { /* only a sound */ }
+      if (kept.card) office.game?.flash('card');
+      if (kept.coins.length) setTimeout(() => office.game?.flash('coin', office.game.view()?.coins?.have ?? kept.coins.length), kept.card ? 1500 : 0);
+    }, 300));
   };
 
   net.on('world', () => { treeStage = -1; growTree(net.state.world?.stats?.tasksDone || 0); placeDuck(); softSpot(); });

@@ -54,7 +54,8 @@ let running = false;
 /**
  * @param office  the office object (stage, net, …)
  * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, dev?:object, onReady?:Function}} [opt]
- * @returns {Promise<{reason:'exit'|'caught'|'quit', kept:{card:boolean, coins:number[]}}>}  kept: what you brought out (nothing, unless you left by the door)
+ * @returns {Promise<{reason:'exit'|'caught'|'quit', kept:{card:boolean, coins:number[], told?:Promise<void>}}>}  kept: what you brought out (nothing,
+ *          unless you left by the door); kept.told settles once the office has been told of it
  */
 export async function enterBackrooms(office, opt = {}) {
   if (running) return { reason: 'quit', kept: { card: false, coins: [] } };
@@ -65,8 +66,11 @@ export async function enterBackrooms(office, opt = {}) {
 async function visit(office, opt) {
   const stage = office.stage, renderer = stage.renderer, canvas = renderer.domElement;
   const who = gather(office, opt);
-  const level = generate(opt.seed ?? Date.now(), { name: who.name, projects: who.projects, agents: who.agents.map((a) => a.name), tasks: who.tasks, only: opt.only, pursuer: opt.pursuer, count: opt.count,
-    loot: lootLeft(office) || undefined });               // what the office says is still to be found down here; no office keeping count, nothing hidden
+  const seed = opt.seed ?? Date.now(), ask = { name: who.name, projects: who.projects, agents: who.agents.map((a) => a.name), tasks: who.tasks, only: opt.only, pursuer: opt.pursuer, count: opt.count };
+  // what the office says is still to be found down here is hidden in this visit; no office keeping count, nothing hidden
+  let level = null;
+  try { level = generate(seed, { ...ask, loot: lootLeft(office) || undefined }); }
+  catch (err) { console.warn('[backrooms] nothing could be hidden this time', err); level = generate(seed, ask); }
   // everybody in the level's cast has a face: the real one, or one rolled from the name
   const byName = new Map(who.agents.map((a) => [a.name, a.look]));
   const cast = level.cast.map((name) => ({ name, look: byName.get(name) || resolveLook('backrooms:' + name) }));

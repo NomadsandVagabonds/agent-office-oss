@@ -279,12 +279,10 @@ export function createWorld(ctx, file) {
       const key = ctx.personas.keyOf(by.id);
       if (key) stamped = ctx.personas.stamp(key, secretId) || first;
     }
-    if (secretId === 'red-book' && !state.unlocked.backroom) {
-      state.unlocked.backroom = true;
-      save();
-      rebuild();
-      broadcastWorld();
-    }
+    const opens = secretId === 'red-book' && !state.unlocked.backroom;
+    if (opens) { state.unlocked.backroom = true; save(); rebuild(); }
+    // a first stamp is a coin in the office's jar (core/game.mjs): everybody's copy of the jar should say so at once
+    if (first || opens) broadcastWorld();
     if (first || stamped) {
       bus.broadcast({ type: EV.DISCOVERY, secret: { id: secret.id, name: secret.name, icon: secret.icon, blurb: secret.blurb },
         by: byName, byAgentId: by ? by.id : null, first });

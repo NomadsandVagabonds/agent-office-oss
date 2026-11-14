@@ -48,7 +48,7 @@ if (q.has('loot')) {
     left: (hideout) => (hideout === 'backrooms' ? { card: left.card, coins: left.coins.slice() } : { card: false, coins: [] }),
     async take(hideout, item, n) {
       const had = hideout === 'backrooms' && (item === 'card' ? left.card : left.coins.includes(n));
-      if (item === 'card') left.card = false; else left.coins = left.coins.filter((k) => k !== n);
+      if (had && item === 'card') left.card = false; else if (had) left.coins = left.coins.filter((k) => k !== n);
       console.log(`[loot] ${had ? 'kept' : 'not there to keep'}: ${item === 'card' ? 'the keycard' : `coin ${n}`} — still down there: ${JSON.stringify(left)}`);
       return { ok: true, taken: had, item, n };
     },

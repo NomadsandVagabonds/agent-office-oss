@@ -319,10 +319,10 @@ export function createStalkers(env) {
     const at = c.toWorld(k.x, k.z), p = mascot(at.x, at.z, yaw + (c.room.rot * Math.PI) / 2, true);
     p.group.position.y += c.room.y;
     c.world.scene.add(p.group);
-    // the keycard, if it still has it: in whichever hand is further from the walls
+    // the keycard, if it still has it: in the hand on the side its name plate is not, unless that would put the card in the wall
     if (level.loot?.card) {
       const room = (sx) => Math.min(c.W / 2 - Math.abs(k.x + sx * 0.85 * fz), c.D / 2 - Math.abs(k.z - sx * 0.85 * fx));
-      p.give(Math.abs(room(1) - room(-1)) < 0.05 ? level.pursuer.face % 2 : room(1) > room(-1) ? 1 : 0);
+      p.give(room(-1) >= 0.2 || room(-1) >= room(1) ? 0 : 1);
     }
   };
   (env.ready ||= []).push(() => {

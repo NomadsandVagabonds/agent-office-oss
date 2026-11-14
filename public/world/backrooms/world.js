@@ -203,7 +203,7 @@ export async function buildWorld(kit, level, env, tick) {
       rt.clip = null; rt.floorY = null; rt.headY = null; rt.fold = false;
       ctx = roomContext(world, rt); ctx.shell();
     }
-    env.stash?.(ctx);                          // what is hidden in this room, if anything (loot.js): last, when it can see what floor the furniture left
+    env.stash?.(ctx);                          // what is hidden in this room, if anything (loot.js): last, so the furniture is where it always was and the coin can see what floor is left
     const t1 = performance.now();
     ctx.finish();
     world.timing.push([`${rt.def.arch || rt.def.kind}#${rt.id}`, Math.round(t1 - t0), Math.round(performance.now() - t1)]);
@@ -310,7 +310,6 @@ function roomContext(world, rt) {
   const R = makeRng(`${level.seed}/build/${def.id}`);
   const mapped = new Map(), shining = new Map();
   const reserved = [];                                    // floor already spoken for: [x, z, radius]
-  for (const k of level.loot?.coins || []) if (k.room === def.id) reserved.push([k.x, k.z, 0.45]);      // a coin hangs here (gen.js): nothing is put down on it
   const mat = new THREE.Matrix4(), quat = new THREE.Quaternion(), eul = new THREE.Euler(), vec = new THREE.Vector3(), scl = new THREE.Vector3();
   const doorPoint = (dr, off = 0) => wallPoint(def, dr.side, dr.c, off);
   const stairs = stairZones(def, 0.7);

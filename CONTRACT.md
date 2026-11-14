@@ -209,8 +209,10 @@ The snapshot's `game` is the office's long game (`core/game.mjs`,
 `server/world/game.mjs`): `{ open: [level ids lit], dark, fresh, cards, spare,
 loot: { <hideout>: { card, of, coins: [n…] } }, coins: { have, found, stamps,
 spent }, prizes: [ids bought] }`. It changes through
-`POST /api/world/game/collect | visit | buy` and is broadcast with the world;
-a client that predates it sees every floor lit, as before. Additive only.
+`POST /api/world/game/collect | visit | buy` and is broadcast with the world —
+as is a first stamp in the passport (`POST /api/world/discover`), which pays a
+coin into the jar; a client that predates it sees every floor lit, as before.
+Additive only.
 
 ### Creations  (agent-authored desk items)
 `public/creations.json` is an append-only list of agent-designed desk items as a

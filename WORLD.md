@@ -363,6 +363,14 @@ and draws the two shared models (`props/loot.js`, `levels/loot.js`), so that a
 coin is recognisably a coin on every floor. A place the lift does not go to
 can hide things as well: add it to `HIDEOUTS` in `core/game.mjs`.
 
+A floor may also make you *get out* with what you found. The place under the
+office does: what is picked up there is only carried — shown in that place's
+own way, not by the purse — and the office is told when you leave by the
+proper way out (`office.game.take(id, item, n, { quiet: true })`, then; the
+purse shows it once you are back). Caught, or gone any other way, and it is
+all where it was. One of the lift's floors does the same with its keycard
+alone. Use it sparingly: it is what makes a place one with something to lose.
+
 **Putting something new in the machine** is a line in `PRIZES`
 (`core/game.mjs`: a code behind the glass, a price, a name, a few words for
 its tag) and a small model with a place to stand (`props/prizes.js`:

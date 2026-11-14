@@ -5,14 +5,16 @@
 // hangs the coins up, notices you walking into one, and keeps count of what
 // you are carrying — and carrying is all it is. Only when you leave by the
 // door is the office told. Get caught, or stop the tape, and every bit of it
-// is down here again next time.
+// is down here again next time. The coins change nothing else about the level:
+// every room is furnished exactly as it would be with nothing to find. (The
+// card does change one thing: a visit that would have had no mascot has one.)
 import * as THREE from 'three';
 import { Batch } from './kit.js';
+import { coinFits } from './gen.js';
 import { coin } from '../props/loot.js';
 
 const HIDEOUT = 'backrooms';
 const SIZE = 1.3, HOVER = 0.5, REACH = 0.6;        // a coin's scale (1 is the office's: 22 cm across) · how high it hangs · how near takes it
-const VOX = 0.025;
 
 /** What the office says is still down here → { card, coins: [numbers] }, or null: nothing left, or no office keeping count. */
 export function lootLeft(office) {
@@ -36,7 +38,12 @@ export function createLoot(env, office) {
   let kept = null;
   const show = () => hud.carry({ card: carried.card, coins: carried.coins.length });
 
-  /** Where a coin really goes: the spot the generator chose if you can walk to it, else the nearest floor that you can. */
+  /**
+   * Where a coin really goes. The generator chose a spot without knowing what the room would be furnished with; the
+   * furniture is where it would have been anyway, so now and then something stands on that spot or walls it in. Then
+   * the coin moves to the nearest floor that can be walked to — floor the generator would have accepted, if there is
+   * any, and not wedged in between two things, if there is a choice.
+   */
   function settle(c, k) {
     const walk = c.world.walkable(c.rt), seen = walk.flood(c.room.doors);
     const ok = (x, z) => Math.abs(x) < c.W / 2 && Math.abs(z) < c.D / 2 && seen[walk.key({ x, z })] === 1 && walk.free(x, z);
@@ -44,9 +51,10 @@ export function createLoot(env, office) {
     if (!ok(x, z)) for (let i = 0; i < seen.length; i++) {
       if (!seen[i]) continue;
       const p = walk.at(i);
-      if (!walk.free(p.x, p.z)) continue;
-      const roomy = [[1, 0], [-1, 0], [0, 1], [0, -1]].every(([di, dj]) => ok(p.x + di * walk.cell * 2, p.z + dj * walk.cell * 2));     // not wedged in between two things, if there is a choice
-      const d = Math.hypot(p.x - k.x, p.z - k.z) + (roomy ? 0 : 0.75);
+      let d = Math.hypot(p.x - k.x, p.z - k.z);
+      if (d >= best || !walk.free(p.x, p.z)) continue;
+      if (![[1, 0], [-1, 0], [0, 1], [0, -1]].every(([di, dj]) => ok(p.x + di * walk.cell * 2, p.z + dj * walk.cell * 2))) d += 0.75;
+      if (d < best && !coinFits(c.room, p.x, p.z)) d += 6;
       if (d < best) { best = d; x = p.x; z = p.z; moved = true; }
     }
     return { x, z, y: walk.floor(x, z), moved };
@@ -65,7 +73,7 @@ export function createLoot(env, office) {
   /** One coin, turning in the air: its own small mesh, lit by its room like everything else in it — and a little of its own light on the carpet. */
   let shine = null;
   function hang(c, k) {
-    const at = settle(c, k), y = at.y + HOVER, s = VOX * SIZE, b = new Batch(true);
+    const at = settle(c, k), y = at.y + HOVER, s = kit.VOXEL * SIZE, b = new Batch(true);
     b.addVox(kit.model('loot:coin', coin).solid, new THREE.Matrix4().compose(new THREE.Vector3(at.x, y, at.z), new THREE.Quaternion(), new THREE.Vector3(s, s, s)));
     const node = c.dynamic(b, { pivot: [at.x, y, at.z] }), w = c.toWorld(at.x, at.z);
     let pool = null;
@@ -116,17 +124,20 @@ export function createLoot(env, office) {
         }
       }
     },
-    /** You left by the door: what you carried is yours. The office is told, one thing after another; nobody waits for its answer. */
+    /**
+     * You left by the door: what you carried is yours. The office is told, one thing after another; the tape does not
+     * wait for its answer (kept.told settles when the office has heard it all, for whoever does want to wait).
+     */
     bank() {
       if (kept) return kept;
       kept = { card: carried.card, coins: carried.coins.slice() };
-      (async () => {
+      kept.told = (async () => {
         if (kept.card) await game.take(HIDEOUT, 'card', undefined, { quiet: true });
         for (const n of kept.coins) await game.take(HIDEOUT, 'coin', n, { quiet: true });
       })().catch((err) => console.warn('[backrooms] the office could not be told', err));
       return kept;
     },
     /** For the dev page: where everything is and what has become of it. */
-    report: () => ({ card: level.loot.card, coins: coins.map((k) => ({ n: k.n, room: k.rt.id, x: +k.x.toFixed(2), z: +k.z.toFixed(2), wx: +k.wx.toFixed(2), wz: +k.wz.toFixed(2), moved: k.moved, taken: k.gone > 0 })), carried: { card: carried.card, coins: carried.coins.slice() }, kept }),
+    report: () => ({ card: level.loot.card, coins: coins.map((k) => ({ n: k.n, room: k.rt.id, x: +k.x.toFixed(2), z: +k.z.toFixed(2), wx: +k.wx.toFixed(2), wz: +k.wz.toFixed(2), moved: k.moved, taken: k.gone > 0 })), carried: { card: carried.card, coins: carried.coins.slice() }, kept: kept && { card: kept.card, coins: kept.coins.slice() } }),
   };
 }

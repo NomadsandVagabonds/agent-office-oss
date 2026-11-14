@@ -1,6 +1,8 @@
 // The Backrooms — what the camcorder prints over the picture: a blinking REC,
-// a tape counter that runs, a date stamp from some other decade. That is all.
-// Nothing here tells you where you are or what to press; the one concession
+// a tape counter that runs, a date stamp from some other decade — and, under
+// the battery, a small picture of each thing of the office's you are carrying
+// (a card, a ring for a coin; nothing until you pick something up). That is
+// all. Nothing here tells you where you are or what to press; the one concession
 // is a small [E] that appears when there is something in front of you to use
 // (and, on a touch screen, a faint ✕, because there is no Esc). Everything
 // lives in one element with class `backrooms` inside #ui, which is the one
@@ -20,7 +22,7 @@ const CSS = `
 .backrooms .br-batt { display: inline-block; width: 1.5em; height: .7em; border: .1em solid currentColor; vertical-align: -.05em; margin-left: .6em; position: relative; }
 .backrooms .br-batt::after { content: ''; position: absolute; right: -.26em; top: .12em; width: .12em; height: .3em; background: currentColor; }
 .backrooms .br-batt i { position: absolute; left: .06em; top: .06em; bottom: .06em; width: 28%; background: currentColor; animation: br-blink 1.6s steps(1) infinite; }
-.backrooms .br-carry { right: 6%; top: calc(6.5% + 1.75em); line-height: 0; letter-spacing: 0; }
+.backrooms .br-carry { right: 6%; top: calc(6.5% + 1.75em); line-height: 0; letter-spacing: 0; filter: blur(.35px) drop-shadow(0 .08em .1em rgba(0, 0, 0, .8)); }
 .backrooms .br-carry i { display: inline-block; box-sizing: border-box; vertical-align: middle; margin-left: .34em; animation: br-blink .22s steps(1) 4; }
 .backrooms .br-coin { width: .74em; height: .74em; border: .23em solid currentColor; border-radius: 50%; }
 .backrooms .br-card { position: relative; width: .64em; height: .92em; border: .1em solid currentColor; border-radius: .1em; }
@@ -42,9 +44,9 @@ export function createHud(level) {
   const style = h('style', { id: 'backrooms-css' }, CSS);
   document.head.append(style);
   const mode = h('span', 'PLAY ▶'), dot = h('span.br-dot', { style: { display: 'none' } });
-  const counter = h('span', '0:00:00'), stamp = h('div.br-osd.bl'), flags = h('div.br-osd.brr'), carry = h('div.br-osd.br-carry');
+  const counter = h('span', '0:00:00'), stamp = h('div.br-osd.bl'), flags = h('div.br-osd.brr'), held = h('div.br-osd.br-carry');
   const use = h('div.br-use', 'E'), leave = h('div.br-leave', '✕');
-  const frame = h('div.br-frame', h('div.br-osd.tl', dot, mode), h('div.br-osd.tr', 'SP  ', counter, h('span.br-batt', h('i'))), carry, stamp, flags, use);
+  const frame = h('div.br-frame', h('div.br-osd.tl', dot, mode), h('div.br-osd.tr', 'SP  ', counter, h('span.br-batt', h('i'))), held, stamp, flags, use);
   const el = h('div.backrooms', frame, leave);
   root.append(el);
 
@@ -69,11 +71,11 @@ export function createHud(level) {
     flag(name, on) { if (on) flagSet.add(name); else flagSet.delete(name); flags.textContent = [...flagSet].join('  '); },
     /** What you are carrying, under the battery: a card, a ring for each coin. Pictures only; nothing is ever written. */
     carry({ card = false, coins = 0 } = {}) {
-      const want = (card ? 1 : 0) + coins, cardEl = carry.querySelector('.br-card');
-      if (!card && cardEl) cardEl.remove();
-      if (card && !cardEl) carry.prepend(h('i.br-card'));
-      for (let n = carry.querySelectorAll('.br-coin').length; n > coins; n--) carry.lastElementChild.remove();
-      while (carry.children.length < want) carry.append(h('i.br-coin'));
+      const has = held.querySelector('.br-card');
+      if (!card && has) has.remove();
+      if (card && !has) held.prepend(h('i.br-card'));
+      for (let n = held.querySelectorAll('.br-coin').length; n > coins; n--) held.lastElementChild.remove();
+      while (held.children.length < (card ? 1 : 0) + coins) held.append(h('i.br-coin'));
     },
     setClean(on) { el.classList.toggle('clean', !!on); },
     setTouch(on) { el.classList.toggle('touch', !!on); },

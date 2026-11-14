@@ -2,7 +2,7 @@
 // coin jar, and the vending machine that takes what is in it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { startOffice, tempDir } from './helpers.mjs';
+import { startOffice, tempDir, sleep } from './helpers.mjs';
 import { HIDEOUTS, PRIZES, COINS_HIDDEN, STAMP_COINS, cardFloors, dealOrder, findPrize, jarOf, openFloors } from '../core/game.mjs';
 import { LEVELS, levelContext, panelLevels, isOpen, levelById } from '../core/levels.mjs';
 import { SECRETS } from '../core/secrets.mjs';
@@ -121,12 +121,22 @@ test('game: coins do not come back, the passport pays into the same jar, and the
   // (arriving can itself earn a stamp — somebody at a desk in the small hours, say — so count from here)
   const stamped = async () => Object.keys((await office.get('/api/world')).data.discoveries).length;
   const had = await stamped();
+  // (a browser is listening: its copy of the jar is the one the vending machine reads)
+  const ws = new WebSocket(`ws://127.0.0.1:${office.port}`), heard = [];
+  t.after(() => ws.close());
+  ws.addEventListener('message', (m) => { try { const e = JSON.parse(m.data); if (e.type === 'world') heard.push(e.world.game.coins.have); } catch { /* not for us */ } });
+  await new Promise((resolve, reject) => { ws.addEventListener('open', resolve); ws.addEventListener('error', () => reject(new Error('websocket failed'))); });
   await office.post('/api/world/discover', { secret: 'ding', agent: ada });
   await office.post('/api/world/discover', { secret: 'guest', name: 'Lead' });
+  await sleep(120);
+  const told = heard.length;
   await office.post('/api/world/discover', { secret: 'ding', name: 'Lead' });          // already found: no second coin
+  await sleep(120);
   assert.equal(await stamped(), had + 2);
   const jar = (await game()).coins;
   assert.deepEqual(jar, { have: pasture.coins + (had + 2) * STAMP_COINS, found: pasture.coins, stamps: (had + 2) * STAMP_COINS, spent: 0 });
+  assert.equal(heard[told - 1], jar.have, 'each new stamp is heard by every browser as a fuller jar');
+  assert.ok(told >= 2 && heard.length === told, 'and a stamp somebody already had changes nothing, so nothing is sent');
 
   // the machine
   const cheap = PRIZES.find((p) => p.price <= jar.have), dear = PRIZES.find((p) => p.price > jar.have);

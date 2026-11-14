@@ -11,6 +11,10 @@
 // may be knee-high, a plain room may have a pit, a beam to duck under, a
 // ceiling that slopes, stairs to nowhere (see "heights" below).
 //
+// Told what is still to be found down here, it also says where the coins are
+// (see "what is hidden down here", near the end); told nothing, it hides
+// nothing and builds exactly the level it always did.
+//
 // Every room has a local frame: x across, z deep, centred on the room, and the
 // doorway you are meant to arrive through is in the +z wall (the "front").
 // `rot` quarter-turns that frame into the world, so the builders (rooms.js)
@@ -894,8 +898,8 @@ function dress(R, level, o, opt, keeper = false) {
    from a random source of its own: a visit with nothing left to find is the visit it always was.
    The keycard is not put anywhere: the mascot is holding it (pursuer.js), so asking for it makes sure there is
    a mascot. Coins go where exploring pays: rooms that are on no shortest way from the landing to the way out,
-   dead ends and oddities first, one to a room and not next door to each other. Never where you land, never the
-   way out, never anywhere you have to crawl.                                                                  */
+   dead ends and oddities for preference, one to a room and spread over the building. Never where you land,
+   never the way out, never anywhere you have to crawl.                                                        */
 
 export const COIN_R = 0.35;                          // the floor a coin keeps to itself, metres
 const cm = (v) => Math.round(v * 100) / 100;
@@ -903,8 +907,8 @@ const about = (x, z, hx, hz = hx) => [x - hx, z - hz, x + hx, z + hz];
 
 // Where a coin goes in each oddity: (room, ±1) → [x0, z0, x1, z1] in the room's own frame, or several to try in
 // turn. The generator cannot see furniture — rooms*.js puts that in — so these are the places each builder is known
-// to leave clear; world.js still checks, once the room stands, that the spot can be walked to (and moves it if not).
-const STASH = {
+// to leave clear; loot.js still checks, once the room stands, that the spot can be walked to (and moves the coin if not).
+export const STASH = {
   cutouts: (r, s) => about(s * (r.W / 2 - 1), r.D / 2 - 1.05, 0.3),                              // a corner beside the door you came in by: behind you, with all of them watching
   'ceiling-meeting': () => [-1.5, -0.5, -0.9, 0.2],                                             // on the carpet, under one end of the table
   coolers: (r) => [-0.3, r.D / 2 - 9, 0.3, r.D / 2 - 6.6],                                      // a little way into the dark, before the corridor starts again
@@ -930,24 +934,27 @@ const STASH = {
     return about(d[0] * 1.62 + d[1] * s * 1.2, r.params.z + d[1] * 1.62 + d[0] * s * 1.2, 0.05); },
 };
 
+const AROUND = [0, 0, 1, 0, -1, 0, 0, 1, 0, -1, 1, 1, 1, -1, -1, 1, -1, -1];     // a spot, and the eight points round it
+/** What a coin in this room keeps clear of besides walls and pillars: the floor just inside each doorway, and every flight of stairs with its landing. */
+const coinClear = (room) => ({ doors: room.doors.map((d) => wallPoint(room, d.side, d.c, 0.3)), stairs: stairZones(room, 0.9) });
 /**
  * Could a coin hang here, as far as the generator can tell? Level carpet all round it and room to stand up, clear
  * of walls, pillars and every flight of stairs, and a good pace in from any doorway. (Furniture is the builders' business.)
+ * `at` is coinClear(room), for whoever asks about many spots in one room.
  */
-export function coinFits(room, x, z, r = COIN_R) {
+export function coinFits(room, x, z, r = COIN_R, at = coinClear(room)) {
   if (Math.abs(x) > room.W / 2 - r - 0.2 || Math.abs(z) > room.D / 2 - r - 0.2 || !fitsAt(room, x, z, r + 0.1)) return false;
-  for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r], [r, r], [r, -r], [-r, r], [-r, -r]]) {
-    if (floorAt(room, x + dx, z + dz) !== 0 || headAt(room, x + dx, z + dz) < 1.5) return false;
-  }
-  if ((room.pillars || []).some((q) => Math.abs(x - q.x) < q.w / 2 + r + 0.1 && Math.abs(z - q.z) < q.d / 2 + r + 0.1)) return false;
-  if (stairZones(room, 0.9).some((s) => x > s.x0 - r && x < s.x1 + r && z > s.z0 - r && z < s.z1 + r)) return false;
-  return room.doors.every((d) => { const p = wallPoint(room, d.side, d.c, 0.3); return Math.hypot(x - p.x, z - p.z) >= 1.25; });
+  for (const p of at.doors) if (Math.hypot(x - p.x, z - p.z) < 1.25) return false;
+  for (const q of room.pillars || []) if (Math.abs(x - q.x) < q.w / 2 + r + 0.1 && Math.abs(z - q.z) < q.d / 2 + r + 0.1) return false;
+  for (const s of at.stairs) if (x > s.x0 - r && x < s.x1 + r && z > s.z0 - r && z < s.z1 + r) return false;
+  for (let k = 0; k < 18; k += 2) if (floorAt(room, x + AROUND[k] * r, z + AROUND[k + 1] * r) !== 0 || headAt(room, x + AROUND[k] * r, z + AROUND[k + 1] * r) < 1.5) return false;
+  return true;
 }
 
 /** Every place a coin could hang in a room (see coinFits), on the 12.5 cm grid the level is walked on. None: the room hides nothing. */
 export function coinSpots(room) {
-  const out = [], step = 0.125, nx = Math.floor((room.W - 1.1) / step), nz = Math.floor((room.D - 1.1) / step);
-  for (let i = 0; i <= nx; i++) for (let j = 0; j <= nz; j++) { const x = (i - nx / 2) * step, z = (j - nz / 2) * step; if (coinFits(room, x, z)) out.push({ x, z }); }
+  const out = [], step = 0.125, nx = Math.floor((room.W - 1.1) / step), nz = Math.floor((room.D - 1.1) / step), at = coinClear(room);
+  for (let i = 0; i <= nx; i++) for (let j = 0; j <= nz; j++) { const x = (i - nx / 2) * step, z = (j - nz / 2) * step; if (coinFits(room, x, z, COIN_R, at)) out.push({ x, z }); }
   return out;
 }
 

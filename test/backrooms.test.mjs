@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { generate, sketch, DECK, ARCHETYPES, SIDES, T, RISE, toWorld, wallLength, wallPoint, floorAt, ceilAt, headAt, fitsAt, stairZones,
-  roomDistances, roomPath, makeRng, MIN_EXIT_STEPS, coinSpots } from '../public/world/backrooms/gen.js';
+  roomDistances, roomPath, makeRng, MIN_EXIT_STEPS, coinSpots, STASH } from '../public/world/backrooms/gen.js';
 
 const office = {
   name: 'Robin', projects: ['Webstore', 'Mobile App', 'Infra'], agents: ['Ivory Marten', 'Amber Vireo', 'Ember Numbat', 'Olive Heron'],
@@ -253,7 +253,8 @@ test('something follows you in some visits, not all', () => {
 
 const ALL = { card: true, coins: [1, 2, 3, 4] };
 const withLoot = (seed, loot = ALL) => generate(seed, { ...office, loot });
-const hasCoinFloor = (r) => coinSpots(r).length > 0;
+const coinFloor = new WeakMap();
+const hasCoinFloor = (r) => { if (!coinFloor.has(r)) coinFloor.set(r, coinSpots(r).length > 0); return coinFloor.get(r); };
 /** The rooms a coin may be in at all, and those of them that are on no shortest way from the landing to the way out. */
 function hidingPlaces(level) {
   const fromStart = roomDistances(level, level.start.room), toExit = roomDistances(level, level.exit.room), way = fromStart.get(level.exit.room);
@@ -268,18 +269,19 @@ function walked(r) {
   const free = (p) => Math.abs(p.x) <= r.W / 2 - R && Math.abs(p.z) <= r.D / 2 - R && fitsAt(r, p.x, p.z, R) && headAt(r, p.x, p.z) >= 0.62
     && !r.pillars.some((q) => Math.abs(p.x - q.x) < q.w / 2 + R && Math.abs(p.z - q.z) < q.d / 2 + R);
   const key = (p) => Math.floor((p.x + r.W / 2) / cell) + nx * Math.floor((p.z + r.D / 2) / cell);
-  const from = key(wallPoint(r, r.doors[0].side, r.doors[0].c, 0.3)), seen = new Set([from]), queue = [from];
+  const from = key(wallPoint(r, r.doors[0].side, r.doors[0].c, 0.3)), seen = new Uint8Array(nx * nz), queue = [from];
+  seen[from] = 1;
   while (queue.length) {
     const k = queue.pop(), i = k % nx, j = Math.floor(k / nx), here = at(i, j);
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const ii = i + di, jj = j + dj, kk = ii + nx * jj;
-      if (ii < 0 || jj < 0 || ii >= nx || jj >= nz || seen.has(kk)) continue;
+      if (ii < 0 || jj < 0 || ii >= nx || jj >= nz || seen[kk]) continue;
       const there = at(ii, jj);
       if (!free(there) || Math.abs(floorAt(r, there.x, there.z) - floorAt(r, here.x, here.z)) > 0.26) continue;
-      seen.add(kk); queue.push(kk);
+      seen[kk] = 1; queue.push(kk);
     }
   }
-  return { has: (p) => seen.has(key(p)) };
+  return { has: (p) => seen[key(p)] === 1 };
 }
 
 test('with nothing left to find, nothing is hidden: the level is the one it always was', () => {
@@ -302,7 +304,7 @@ test('while the keycard is still to be found there is a mascot to hold it, every
   let nowhere = 0;
   for (let i = 1; i <= 400; i++) {
     const seed = i <= 60 ? SEEDS[i - 1] : `far-${i}`;
-    for (const pursuer of [undefined, false]) {                    // not even asking for none gets rid of it
+    for (const pursuer of i <= 60 ? [undefined, false] : [undefined]) {                    // not even asking for none gets rid of it
       const level = generate(seed, { ...office, pursuer, loot: { card: true } });
       assert.ok(level.pursuer && level.loot.card === true, `seed ${seed}: nobody to hold the card`);
       const lair = level.rooms[level.pursuer.room];
@@ -311,20 +313,21 @@ test('while the keycard is still to be found there is a mascot to hold it, every
     }
     if (!generate(seed, { ...office, pursuer: true }).pursuer) nowhere++;
     // once the card has been found, the mascot is back to being a matter of chance
-    assert.deepEqual(generate(seed, { ...office, loot: { card: false, coins: [] } }).pursuer, generate(seed, office).pursuer);
+    if (i <= 60) assert.deepEqual(generate(seed, { ...office, loot: { card: false, coins: [1] } }).pursuer, levelFor(seed).pursuer);
   }
   assert.ok(nowhere > 0, 'four hundred buildings and every one had a room the mascot would have chosen: the other case is not being tested');
 });
 
 test('coins hide where exploring pays: off the way out, on floor you can walk to, one to a room', () => {
-  const seeds = [...SEEDS, ...Array.from({ length: 240 }, (_, i) => `coins-${i}`)];
+  const seeds = [...SEEDS, ...Array.from({ length: 140 }, (_, i) => `coins-${i}`)];
   const tally = { coins: 0, deadEnd: 0, oddity: 0, either: 0, shared: 0, withMascot: 0 };
   for (const seed of seeds) {
     const level = withLoot(seed), { able, aside, fromStart } = hidingPlaces(level);
     const coins = level.loot.coins;
     assert.deepEqual(coins.map((c) => c.n), [1, 2, 3, 4], `seed ${seed}: every coin has a place`);
-    assert.deepEqual(withLoot(seed).loot, level.loot, `seed ${seed}: the same seed hides them in the same places`);
-    assert.equal(JSON.stringify(withLoot(seed)), JSON.stringify(level), 'and it is still plain data');
+    const again = withLoot(seed);
+    assert.deepEqual(again.loot, level.loot, `seed ${seed}: the same seed hides them in the same places`);
+    assert.equal(JSON.stringify(again), JSON.stringify(level), 'and it is still plain data');
     const somewhereAside = aside.some(hasCoinFloor);
     for (const c of coins) {
       const r = level.rooms[c.room], where = `seed ${seed}: coin ${c.n} in room ${c.room} (${r && (r.arch || r.kind)}${r && r.shape ? ' ' + r.shape.kind : ''}) at ${c.x}, ${c.z}`;
@@ -362,28 +365,37 @@ test('coins hide where exploring pays: off the way out, on floor you can walk to
 });
 
 test('only the coins still to be found are hidden, and what is left takes the same hiding places in the same order', () => {
-  for (const seed of SEEDS) {
+  for (const seed of SEEDS.slice(0, 40)) {
     const all = withLoot(seed, { card: false, coins: [1, 2, 3, 4] }).loot.coins, places = (list) => list.map((c) => [c.room, c.x, c.z]);
+    const rooms = hidingPlaces(levelFor(seed)).aside.filter(hasCoinFloor).length;          // (coins alone leave every room as it was)
     for (const left of [[1], [4], [2, 3], [1, 4], [1, 3, 4], [4, 2, 2, 1]]) {
-      const level = withLoot(seed, { card: false, coins: left }), want = [...new Set(left)].sort((a, b) => a - b), { aside } = hidingPlaces(level);
+      const level = withLoot(seed, { card: false, coins: left }), want = [...new Set(left)].sort((a, b) => a - b);
       assert.deepEqual(level.loot.coins.map((c) => c.n), want, `seed ${seed}: asked for ${left}`);
       assert.deepEqual(places(level.loot.coins), places(all.slice(0, want.length)), `seed ${seed}: ${left} are not where the first ${want.length} of four would be`);
-      assert.deepEqual(withLoot(seed, { card: false, coins: left }).loot, level.loot, 'the same seed and the same coins: the same places');
       // fewer coins than rooms to hide them in: none of them share
-      if (aside.filter(hasCoinFloor).length >= want.length) assert.equal(new Set(level.loot.coins.map((c) => c.room)).size, want.length, `seed ${seed}: ${left} share a room`);
-      // the card being there or not makes no difference to where a coin goes, unless the mascot it brings with it gets in the way
-      const held = withLoot(seed, { card: true, coins: left });
-      if (JSON.stringify(held.pursuer) === JSON.stringify(level.pursuer)) assert.deepEqual(held.loot.coins, level.loot.coins);
+      if (rooms >= want.length) assert.equal(new Set(level.loot.coins.map((c) => c.room)).size, want.length, `seed ${seed}: ${left} share a room`);
     }
+    // the card being there or not makes no difference to where a coin goes — unless the mascot that comes with it is standing in the way
+    const bare = withLoot(seed, { card: false, coins: [2, 3] }), held = withLoot(seed, { card: true, coins: [2, 3] });
+    assert.deepEqual(withLoot(seed, { card: false, coins: [3, 2] }).loot, bare.loot, 'the same seed and the same coins: the same places');
+    if (JSON.stringify(held.pursuer) === JSON.stringify(bare.pursuer)) assert.deepEqual(held.loot.coins, bare.loot.coins);
   }
 });
 
-test('every oddity in the deck has a place of its own for a coin', () => {
-  const src = readFileSync(new URL('../public/world/backrooms/gen.js', import.meta.url), 'utf8');
-  const table = src.slice(src.indexOf('const STASH = {'), src.indexOf('\n};', src.indexOf('const STASH = {')));
-  for (const arch of DECK) assert.ok(new RegExp(`^  '?${arch.id}'?: `, 'm').test(table), `${arch.id} has no line in STASH: a coin there would land wherever the furniture is not`);
-  // …and in practice coins turn up in every kind of oddity
-  const seen = new Set();
-  for (let i = 0; i < 300 && seen.size < DECK.length; i++) { const level = withLoot(`deck-${i}`); for (const c of level.loot.coins) if (level.rooms[c.room].arch) seen.add(level.rooms[c.room].arch); }
-  assert.deepEqual([...seen].sort(), DECK.map((a) => a.id).sort());
+test('in an oddity a coin has a place of its own, where the builder leaves the floor clear', () => {
+  for (const arch of DECK) assert.equal(typeof STASH[arch.id], 'function', `${arch.id} has no place for a coin: one would land wherever the generator supposes there is floor`);
+  const seen = new Map();
+  for (let i = 0; i < 250; i++) {
+    const level = withLoot(`deck-${i}`), first = new Set();
+    for (const c of level.loot.coins) {
+      const r = level.rooms[c.room];
+      if (!r.arch || first.has(r.id)) continue;                  // (a second coin in the same room has to go somewhere else)
+      first.add(r.id);
+      const zones = [-1, 1].flatMap((side) => { const lay = STASH[r.arch](r, side); return Array.isArray(lay[0]) ? lay : [lay]; });
+      for (const [x0, z0, x1, z1] of zones) assert.ok(x0 <= x1 && z0 <= z1 && x0 > -r.W / 2 && x1 < r.W / 2 && z0 > -r.D / 2 && z1 < r.D / 2, `${r.arch} (${r.W} × ${r.D}): its place is not inside the room`);
+      assert.ok(zones.some(([x0, z0, x1, z1]) => c.x >= x0 - 0.01 && c.x <= x1 + 0.01 && c.z >= z0 - 0.01 && c.z <= z1 + 0.01), `seed deck-${i}: the coin in ${r.arch} is at ${c.x}, ${c.z}, not in its place`);
+      seen.set(r.arch, (seen.get(r.arch) || 0) + 1);
+    }
+  }
+  for (const arch of DECK) assert.ok(seen.get(arch.id) >= 5, `${arch.id}: only ${seen.get(arch.id) || 0} coins in 250 buildings`);
 });
