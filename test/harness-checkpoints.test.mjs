@@ -945,6 +945,50 @@ test('checkpoints: sessions and the folders they are in', { skip: !usable }, asy
     await h.del(`/api/harness/sessions/${s.id}`);
   });
 
+  await t.test('the office\'s own files are no part of a snapshot, also when it keeps them inside the folder', async () => {
+    // An office whose data directory is in the repository its agents work in, and is not ignored there:
+    // its transcripts and journals change with every turn, and the snapshots themselves are stored in it.
+    const housed = repo('office-changes-inside-');
+    const before = everything(path.join(housed, '.git'));
+    const data = path.join(housed, 'office-data');
+    fs.mkdirSync(data);
+    const inside = await startHarnessOffice({ dir: data, work: housed });
+    try {
+      const s = await inside.start('fake', { name: 'Housed' });
+      const quiet = await quietTurn(inside, s.id);
+      const store = inside.ctx.harness.checkpoints.storeOf(s.id);
+      assert.equal(path.dirname(store), path.join(data, 'harness', 'checkpoints'));
+      const had = objectsIn(store);
+      const n = await turnThat(inside, s.id, () => write(housed, 'src/b.js', 'export const b = 1;\n'));
+      const again = await quietTurn(inside, s.id);
+      const got = await changes(inside, s.id);
+      assert.deepEqual(got.turns.map((turn) => [turn.turn, brief(turn.files)]), [[quiet, []], [n, [['added', 'src/b.js', 1, 0]]], [again, []]],
+        'a turn\'s changes are the agent\'s folder\'s, not the office\'s bookkeeping');
+      assert.ok(fs.statSync(path.join(data, 'harness', `${s.id}.index`)).size > 0, 'which was written there all the while: this session\'s index, for one');
+      // The copy does not feed on itself: three objects for the one new file (the file, its folder, the top), none for the office's own.
+      assert.equal(objectsIn(store), had + 3);
+      assert.doesNotMatch(inStore(store, 'ls-tree', '-r', '--name-only', got.turns[1].trees.end), /office-data/);
+      // (What git itself makes of that folder is its owner's business. Asked without `git status`, which rewrites the index.)
+      assert.match(git(housed, 'ls-files', '--others', '--exclude-standard', '--directory'), /^office-data\/$/m);
+    } finally { await inside.stop(); }
+    assert.deepEqual(everything(path.join(housed, '.git')), before);
+
+    // And a checkout that *is* the office's data directory is not recorded: every file in it is the office's own.
+    const kept = fs.realpathSync(tempDir('office-changes-own-'));
+    git(kept, 'init', '-q', '-b', 'main');
+    const own = await startHarnessOffice({ dir: kept, work: kept });
+    try {
+      const s = await own.start('fake', { name: 'At home' });
+      await own.ctx.harness.checkpoints.settled(s.id);
+      await quietTurn(own, s.id);
+      const got = await changes(own, s.id);
+      assert.deepEqual([got.recorded, got.reason], [false, 'it is where the office keeps its own files']);
+      const told = (await own.entries(s.id)).filter((e) => e.kind === 'notice' && /not being recorded/.test(e.text));
+      assert.deepEqual(told.map((e) => e.text), ['What turns change in this folder is not being recorded: it is where the office keeps its own files.']);
+      assert.equal(fs.existsSync(path.join(kept, 'harness', 'checkpoints')), false);
+    } finally { await own.stop(); }
+  });
+
   await t.test('a file that is committed and also ignored is still followed', async () => {
     const own = repo('office-changes-forced-');
     write(own, 'ignored/kept.txt', 'added with -f\n');

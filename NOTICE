@@ -33,7 +33,14 @@ apps/server/src/orchestration-v2/ContextHandoffService.ts), the coalescing of
 tool updates (server/harness/acp.mjs, after
 packages/provider-acp/src/server/runtimeModel.ts), the reading of Codex's
 rate-limit windows (server/usage-sources.mjs, after
-apps/server/src/provider/codexUsageLimits.ts), and, in the Claude Code adapter
+apps/server/src/provider/codexUsageLimits.ts), the snapshots of a working
+tree that tell what a turn changed (server/harness/checkpoints.mjs, after
+apps/server/src/checkpointing/ and apps/server/src/vcs/GitVcsDriver.ts: the
+private index, the settings that keep git from splitting it or running
+anything, the environment it clears, the turn that waits a bounded moment for
+its baseline, and a renamed file's two names in a diff — the snapshots
+themselves are kept in a directory of the office's own, where T3 Code keeps
+them in the user's repository), and, in the Claude Code adapter
 (server/harness/claude.mjs, after
 apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts and
 apps/server/src/provider/claudeUsageLimits.ts), how a session's mode becomes

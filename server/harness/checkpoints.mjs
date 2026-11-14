@@ -28,7 +28,10 @@
 //     converter. Files are snapshotted as they are on disk;
 //   - a repository inside the folder — a submodule, a clone, another worktree —
 //     is left out, whole. To record one as git would, git runs `git status`
-//     inside it, with that repository's own config and filters.
+//     inside it, with that repository's own config and filters;
+//   - the office's own data directory is left out as well, wherever it is: its
+//     files are no part of anybody's turn, and a snapshot that took in the
+//     directory it is stored in would store its own objects again, every time.
 //
 //   GIT_OBJECT_DIRECTORY=<ours> GIT_INDEX_FILE=<ours> git add -A --ignore-errors   our index := the working tree
 //   GIT_OBJECT_DIRECTORY=<ours> GIT_INDEX_FILE=<ours> git write-tree               → the id of a tree
@@ -119,7 +122,8 @@ function gitEnv({ index, store, patterns } = {}) {
   for (const name of INHERITED) delete env[name];
   Object.assign(env, { GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C', GIT_PAGER: 'cat' });
   // Literal pathspecs: a path we pass after "--" is that path, never a pattern and never "magic".
-  // (`check-ignore` refuses to run this way, and is the one call that asks for `patterns`.)
+  // (`patterns` is asked for by `check-ignore`, which refuses to run this way, and by a call that names
+  // folders to leave out — as `:(top,exclude,literal)<folder>`, which is magic that says "no pattern" itself.)
   if (!patterns) env.GIT_LITERAL_PATHSPECS = '1';
   if (index) env.GIT_INDEX_FILE = index;
   // Where objects are written and looked for — and, with no alternates, the only place.
@@ -256,6 +260,8 @@ function why(r) {
   return line(first.replace(/^(?:fatal|error): /, ''), 240);
 }
 const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+/** Is `inner` the folder `outer`, or somewhere inside it? */
+const contains = (outer, inner) => { const at = path.relative(outer, inner); return at === '' || (at !== '..' && !at.startsWith(`..${path.sep}`) && !path.isAbsolute(at)); };
 const wait = (ms) => new Promise((resolve) => { const t = setTimeout(resolve, ms); t.unref?.(); });
 /** What is kept of a snapshot: the tree it is, where HEAD was, when, and how long it took. */
 const kept = (snap) => ({ tree: snap.tree, ...(snap.head ? { head: snap.head } : {}), at: snap.at, ms: snap.ms,
@@ -268,14 +274,15 @@ const SWITCHED_OFF = 'this office is not recording what turns change (it was sta
 const NO_RECORD = 'the office has no snapshots of this session';
 
 /**
- * @param {{settings:object, dir:string, file:string, log?:{warn:Function}, changed?:()=>void, graceSeconds?:number}} init
+ * @param {{settings:object, dir:string, file:string, own?:string[], log?:{warn:Function}, changed?:()=>void, graceSeconds?:number}} init
  *   settings  cfg.harness.checkpoints
  *   dir       the harness's folder under the data directory: a session's index lives in it while the session
  *             does, and `checkpoints/<repository key>/` under it is the object directory for one repository
  *   file      which sessions have snapshots, of which folder, and the tree of each
+ *   own       folders that hold the office's own files (its data directory): never part of any snapshot
  *   changed   called when it becomes known whether a session is being recorded
  */
-export function createCheckpoints({ settings, dir, file, log = console, changed = () => {}, graceSeconds = GRACE_SECONDS }) {
+export function createCheckpoints({ settings, dir, file, own = [path.dirname(file), dir], log = console, changed = () => {}, graceSeconds = GRACE_SECONDS }) {
   const store = new JsonFile(file, {
     defaults: () => ({ v: 1, sessions: {} }), debounceMs: 200,
     validate: (d) => d && typeof d.sessions === 'object' && d.sessions !== null && !Array.isArray(d.sessions),
@@ -321,8 +328,19 @@ export function createCheckpoints({ settings, dir, file, log = console, changed 
       const ignored = await git(where.root, ['check-ignore', '-q', '--no-index', '--', `./${below.split(path.sep).join('/')}`], { timeout: 4000, patterns: true });
       if (ignored.code === 0) return refuse(st, 'this folder is ignored by the git repository it is in, so git does not look at it');
     }
+    // The office's own files are no part of anybody's turn, and a snapshot that took in the directory it is
+    // stored in would store its own objects again, every time. Where the office keeps its files inside this
+    // checkout, they are left out by name; a checkout that *is* where the office keeps them is not recorded.
+    const keepOut = [];
+    for (const folder of own.map(real)) {
+      const at = path.relative(where.root, folder);
+      const within = at !== '' && at !== '..' && !at.startsWith(`..${path.sep}`) && !path.isAbsolute(at);
+      if (within) keepOut.push(at.split(path.sep).join('/'));
+      else if (at === '' || contains(real(dir), where.root)) return refuse(st, 'it is where the office keeps its own files');
+    }
     const format = await git(where.root, ['rev-parse', '--show-object-format'], { timeout: 4000 });
     st.root = where.root;
+    st.keepOut = [...new Set(keepOut)];
     st.key = repoKey(where.commonDir);
     st.sha256 = format.ok && format.out.trim() === 'sha256';
     store.data.sessions[st.id] = { root: where.root, repo: where.commonDir, key: st.key, at: Date.now(), turns: [] };
@@ -432,14 +450,19 @@ export function createCheckpoints({ settings, dir, file, log = console, changed 
       const mine = (extra = {}) => ({ index: st.index, store: storeOf(st.key), filtersOff: drivers, timeout: left(), ...extra });
       if (first) fs.rmSync(st.index, { force: true });
 
+      // The office's own files, where they are kept inside this checkout, are named to git as left out.
+      const aside = st.keepOut.map((folder) => `:(top,exclude,literal)${folder}`);
+      const rest = aside.length ? ['--', '.', ...aside] : [];
+      const notOurs = (name) => !st.keepOut.some((folder) => name === folder || name.startsWith(`${folder}/`));
       // What a snapshot would take in: files our index has never seen and — once it has seen the tree —
       // files whose stat data no longer matches. Counted and weighed before anything is stored.
-      const [fresh, stale, extra] = await Promise.all([
-        git(st.root, ['ls-files', '-z', '--others', '--exclude-standard'], mine()),
-        first ? null : git(st.root, ['diff-files', '-z', '--name-only', '--ignore-submodules=all'], mine()),
+      const [fresh, stale, tracked] = await Promise.all([
+        git(st.root, ['ls-files', '-z', '--others', '--exclude-standard', ...rest], mine({ patterns: aside.length > 0 })),
+        first ? null : git(st.root, ['diff-files', '-z', '--name-only', '--ignore-submodules=all', ...rest], mine({ patterns: aside.length > 0 })),
         first && head ? ignoredButTracked(st, head, left()) : [],
       ]);
       for (const r of [fresh, stale]) if (r && !r.ok && !r.truncated) return failed('look at the folder', r);
+      const extra = tracked.filter(notOurs);
       const names = [...namesOf(fresh), ...namesOf(stale), ...extra];
       const uncounted = fresh.truncated || !!stale?.truncated;
       if (first) {
@@ -469,7 +492,7 @@ export function createCheckpoints({ settings, dir, file, log = console, changed 
       // inside it to list files). It is kept out of the snapshot by name, so that git never has reason to.
       const inner = names.filter((name) => name.endsWith('/')).map((name) => `:(top,exclude,literal)${name.slice(0, -1)}`);
       // --ignore-errors: one unreadable file costs that file and not the snapshot. Git then exits 1 and has said which.
-      const added = await git(st.root, ['add', '-A', '--ignore-errors', '--', '.', ...inner], mine({ patterns: inner.length > 0 }));
+      const added = await git(st.root, ['add', '-A', '--ignore-errors', '--', '.', ...inner, ...aside], mine({ patterns: inner.length + aside.length > 0 }));
       if (added.timedOut || (!added.ok && added.code !== 1)) return failed('read the working tree', added);
       if (extra.length) await git(st.root, ['update-index', '--add', '--remove', '-z', '--stdin'], mine({ input: extra.join('\0') + '\0' }));
       if (/adding embedded git repository/.test(added.err)) {
@@ -617,7 +640,7 @@ export function createCheckpoints({ settings, dir, file, log = console, changed 
    */
   function open({ id, cwd, note }) {
     if (!SESSION_ID.test(String(id)) || live.has(id)) return Promise.resolve(false);
-    const st = { id, cwd, note: typeof note === 'function' ? note : () => {}, root: '', key: '', sha256: false,
+    const st = { id, cwd, note: typeof note === 'function' ? note : () => {}, root: '', key: '', sha256: false, keepOut: [],
       index: path.join(dir, `${id}.index`), off: '', placed: false, warm: false, tree: '', flying: null, slow: 0,
       told: new Set(), holds: new Set(), closed: false, trimmed: false, chain: null };
     live.set(id, st);
