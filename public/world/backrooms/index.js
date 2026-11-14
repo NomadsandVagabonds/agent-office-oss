@@ -9,7 +9,9 @@
 // (world.js + rooms.js with kit.js), takes the screen through the stage's
 // setView, runs the player, the camcorder (vhs.js), its overlay (hud.js), the
 // sound and whatever follows you, and puts everything back when it is over.
-// It reads names and faces from the office and sends nothing anywhere.
+// It reads names and faces from the office, and what is still hidden down here
+// (office.game: a keycard, some coins — loot.js). The one thing it ever tells
+// the office is what you were carrying when you left by the door.
 import * as THREE from 'three';
 import { resolveLook } from '/core/look.mjs';
 import { generate, sketch, toWorld, toLocal, DECK } from './gen.js';
@@ -21,6 +23,7 @@ import { createVhs } from './vhs.js';
 import { createHud } from './hud.js';
 import { createSound } from './sound.js';
 import { createStalkers } from './pursuer.js';
+import { createLoot, lootLeft } from './loot.js';
 
 const FOV = 62;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -51,10 +54,10 @@ let running = false;
 /**
  * @param office  the office object (stage, net, …)
  * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, dev?:object, onReady?:Function}} [opt]
- * @returns {Promise<{reason:'exit'|'caught'|'quit'}>}
+ * @returns {Promise<{reason:'exit'|'caught'|'quit', kept:{card:boolean, coins:number[]}}>}  kept: what you brought out (nothing, unless you left by the door)
  */
 export async function enterBackrooms(office, opt = {}) {
-  if (running) return { reason: 'quit' };
+  if (running) return { reason: 'quit', kept: { card: false, coins: [] } };
   running = true;
   try { return await visit(office, opt); } finally { running = false; }
 }
@@ -62,7 +65,8 @@ export async function enterBackrooms(office, opt = {}) {
 async function visit(office, opt) {
   const stage = office.stage, renderer = stage.renderer, canvas = renderer.domElement;
   const who = gather(office, opt);
-  const level = generate(opt.seed ?? Date.now(), { name: who.name, projects: who.projects, agents: who.agents.map((a) => a.name), tasks: who.tasks, only: opt.only, pursuer: opt.pursuer, count: opt.count });
+  const level = generate(opt.seed ?? Date.now(), { name: who.name, projects: who.projects, agents: who.agents.map((a) => a.name), tasks: who.tasks, only: opt.only, pursuer: opt.pursuer, count: opt.count,
+    loot: lootLeft(office) || undefined });               // what the office says is still to be found down here; no office keeping count, nothing hidden
   // everybody in the level's cast has a face: the real one, or one rolled from the name
   const byName = new Map(who.agents.map((a) => [a.name, a.look]));
   const cast = level.cast.map((name) => ({ name, look: byName.get(name) || resolveLook('backrooms:' + name) }));
@@ -77,7 +81,7 @@ async function visit(office, opt) {
   document.activeElement?.blur?.();
 
   let state = 'loading', world = null, player = null, time = 0, ending = 0, reason = null, resolveVisit = null;
-  let pictureKey = '', currentUse = null, light = 0.3, torch = 0, interference = 0, pendingQuit = false;
+  let pictureKey = '', currentUse = null, light = 0.3, torch = 0, interference = 0, pendingQuit = false, kept = { card: false, coins: [] };
   const u = vhs.uniforms;
   u.uSnow.value = 1;
 
@@ -124,6 +128,7 @@ async function visit(office, opt) {
   };
 
   createStalkers(env);
+  env.loot = createLoot(env, office);
 
   /* ---- input: ours while we run, in the capture phase so the office never hears it -- */
   const keys = () => player?.input.keys;
@@ -211,6 +216,7 @@ async function visit(office, opt) {
     me.slow = 1; me.sinkTo = 0;                              // rooms that slow you or make you stoop say so every frame
     world.update(dt, time, me);
     env.pursuer?.update(dt, time);
+    env.loot?.update(dt, time, state === 'play');
     currentUse = state === 'play' ? world.usable(me) : null;
     hud.hint(!!currentUse);
 
@@ -255,12 +261,13 @@ async function visit(office, opt) {
     world?.dispose(); kit.dispose(); vhs.dispose();
     renderer.setRenderTarget(null);
     if (opt.debug) delete window.__backrooms;
-    resolveVisit({ reason: reason || 'quit' });
+    resolveVisit({ reason: reason || 'quit', kept });
   }
   finish = (why) => {
     if (state === 'done' || state === 'ending' || pendingQuit) return;
     reason = why; ending = 0;
     hud.hint(false);
+    if (why === 'exit' && env.loot) kept = env.loot.bank();        // carried is only kept by leaving through the door
     if (why === 'caught') sound.play('static', { dur: 1.3 });
     if (state === 'loading') pendingQuit = true; else state = 'ending';
   };
@@ -289,7 +296,7 @@ async function visit(office, opt) {
 
   // a way for the dev page (and the curious) to poke at it
   const handle = {
-    level, world, player, vhs, hud, env, sketch: () => sketch(level), deck: DECK.map((a) => a.id),
+    level, world, player, vhs, hud, env, loot: env.loot, sketch: () => sketch(level), deck: DECK.map((a) => a.id),
     /** Stand in a room: by archetype id or room number; x, z in the room's own frame (default: just inside its door). */
     goto(which, x, z, yaw, pitch = 0) {
       const def = level.rooms.find((r) => r.arch === which || r.kind === which || r.id === which);

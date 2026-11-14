@@ -724,7 +724,7 @@ function shapesFor(R, room) {
   return out;
 }
 
-function dress(R, level, o, opt) {
+function dress(R, level, o, opt, keeper = false) {
   const { rooms, links, start, exit } = level;
   const family = R.weighted(FAMILIES, (f) => f.weight), pattern = R.pick(PATTERNS);
   const toExit = level.distances(exit);
@@ -736,6 +736,12 @@ function dress(R, level, o, opt) {
   const rolled = R.chance(0.62) ? pickLair(R) : null;
   if (opt.pursuer === undefined) pursuer = rolled;
   else if (opt.pursuer) pursuer = rolled || pickLair(R.fork('pursuer'));
+  // …and while it is holding the keycard there has to be one, even in a building with no room it would have chosen
+  if (!pursuer && keeper) {
+    const plainer = rooms.filter((r) => r.kind === 'plain' && !r.crawl), roomy = plainer.filter((r) => r.depth >= 1 && r.W >= 2.8 && r.D >= 2.8 && r.H >= 2.2);
+    const r = R.fork('keeper'), anywhere = roomy.length ? roomy : plainer;
+    if (anywhere.length) pursuer = { room: r.pick(anywhere).id, corner: r.int(0, 3), face: r.int(0, 9) };
+  }
 
   for (const room of rooms) {
     const rr = R.fork('dress:' + room.id);
@@ -883,21 +889,159 @@ function dress(R, level, o, opt) {
   };
 }
 
+/* ---- what is hidden down here: a keycard and a few coins (core/game.mjs) --------------------------------
+   Only when asked — generate(seed, { loot: { card, coins: [the numbers not found yet] } }) — and decided last,
+   from a random source of its own: a visit with nothing left to find is the visit it always was.
+   The keycard is not put anywhere: the mascot is holding it (pursuer.js), so asking for it makes sure there is
+   a mascot. Coins go where exploring pays: rooms that are on no shortest way from the landing to the way out,
+   dead ends and oddities first, one to a room and not next door to each other. Never where you land, never the
+   way out, never anywhere you have to crawl.                                                                  */
+
+export const COIN_R = 0.35;                          // the floor a coin keeps to itself, metres
+const cm = (v) => Math.round(v * 100) / 100;
+const about = (x, z, hx, hz = hx) => [x - hx, z - hz, x + hx, z + hz];
+
+// Where a coin goes in each oddity: (room, ±1) → [x0, z0, x1, z1] in the room's own frame, or several to try in
+// turn. The generator cannot see furniture — rooms*.js puts that in — so these are the places each builder is known
+// to leave clear; world.js still checks, once the room stands, that the spot can be walked to (and moves it if not).
+const STASH = {
+  cutouts: (r, s) => about(s * (r.W / 2 - 1), r.D / 2 - 1.05, 0.3),                              // a corner beside the door you came in by: behind you, with all of them watching
+  'ceiling-meeting': () => [-1.5, -0.5, -0.9, 0.2],                                             // on the carpet, under one end of the table
+  coolers: (r) => [-0.3, r.D / 2 - 9, 0.3, r.D / 2 - 6.6],                                      // a little way into the dark, before the corridor starts again
+  'stress-pool': (r) => [-r.W / 2 + 2.6, -r.D / 2 + 2.4, r.W / 2 - 2.6, r.D / 2 - 2.9],         // out in the pool: wade in
+  'keyboard-floor': (r) => [-3, -r.D / 2 + 0.75, 3, -r.D / 2 + 1.15],                           // under the screen: you type your way there
+  'tiny-door': (r) => [-0.25, r.D * 0.08, 0.25, r.D * 0.24],                                    // where the corridor has begun to shrink, not yet to a crawl
+  'many-doors': () => [-1, -1.2, 1, 0.2],                                                       // nothing in here but doors
+  vending: (r) => [[-0.9, -r.D / 2 + 0.75, 0.9, -r.D / 2 + 1.3], [-0.9, -r.D / 2 + 2.4, 0.9, -r.D / 2 + 3]],   // the dark end, past the last machine
+  'ceiling-plants': (r) => [-r.W / 2 + 0.8, -r.D / 2 + 0.8, r.W / 2 - 0.8, -0.6],               // the far half: the floor is the one thing they left alone
+  phone: (r) => [-r.W / 2 + 0.8, -r.D / 2 + 0.8, r.W / 2 - 0.8, -r.D / 2 + 1.8],                // along the far wall, past the telephone
+  party: (r) => [-1.6, -r.D / 2 + 0.7, 1.6, -r.D / 2 + 1.35],                                   // behind the table, under the banner
+  chairs: (r, s) => (r.params.variant === 'corner' ? about(r.params.corner * (r.W / 2 - 1.1), -r.D / 2 + 1.1, 0.1)   // in the corner they are all facing
+    : r.params.variant === 'arch' ? [-0.3, -0.55, 0.3, -0.05]                                   // under the arch
+    : r.params.variant === 'audience' ? [0.6, -r.D / 2 + 0.8, r.W / 2 - 0.9, -r.D / 2 + 1.6]    // up at the front, by the slide
+    : about(s * (r.W / 2 - 0.95), -r.D / 2 + 0.95, 0.2)),                                       // (a ring) outside it, in a far corner
+  'wet-floor': (r) => about(r.params.puddle[0] * r.W, r.params.puddle[1] * r.D, 0.25),          // in the one wet patch
+  'hall-of-fame': (r) => (r.doors.some((d) => d.side === 'back') ? [-0.3, -r.D / 2 + 3.2, 0.3, -r.D / 2 + 4.4] : [-0.3, -r.D / 2 + 1.6, 0.3, -r.D / 2 + 2.6]),   // the far end, by the last frame
+  kanban: (r) => [-r.W / 2 + 1.2, -r.D / 2 + 0.7, -0.6, -r.D / 2 + 1.25],                       // under the board, with the cards that fell off it
+  lift: (r) => [-0.3, -r.D / 2 + 0.75, 0.3, -r.D / 2 + 1],                                      // on the mat, waiting for the lift
+  museum: (r, s) => (s > 0 ? [2.1, 2.35, r.W / 2 - 0.7, r.D / 2 - 0.7] : [-r.W / 2 + 0.7, 2.35, -2.1, r.D / 2 - 0.7]),   // a corner by the door: behind you while you look at the exhibits
+  photo: (r) => about(0, -r.D / 2 + 1.3, 0.08),                                                 // on the cross of tape: your place in the photograph
+  nested: (r, s) => { const d = [[0, 1], [1, 0], [0, -1], [-1, 0]][(r.params.turn + 2) % 4];     // in the room inside the room, round the side its own little room opens on
+    return about(d[0] * 1.62 + d[1] * s * 1.2, r.params.z + d[1] * 1.62 + d[0] * s * 1.2, 0.05); },
+};
+
+/**
+ * Could a coin hang here, as far as the generator can tell? Level carpet all round it and room to stand up, clear
+ * of walls, pillars and every flight of stairs, and a good pace in from any doorway. (Furniture is the builders' business.)
+ */
+export function coinFits(room, x, z, r = COIN_R) {
+  if (Math.abs(x) > room.W / 2 - r - 0.2 || Math.abs(z) > room.D / 2 - r - 0.2 || !fitsAt(room, x, z, r + 0.1)) return false;
+  for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r], [r, r], [r, -r], [-r, r], [-r, -r]]) {
+    if (floorAt(room, x + dx, z + dz) !== 0 || headAt(room, x + dx, z + dz) < 1.5) return false;
+  }
+  if ((room.pillars || []).some((q) => Math.abs(x - q.x) < q.w / 2 + r + 0.1 && Math.abs(z - q.z) < q.d / 2 + r + 0.1)) return false;
+  if (stairZones(room, 0.9).some((s) => x > s.x0 - r && x < s.x1 + r && z > s.z0 - r && z < s.z1 + r)) return false;
+  return room.doors.every((d) => { const p = wallPoint(room, d.side, d.c, 0.3); return Math.hypot(x - p.x, z - p.z) >= 1.25; });
+}
+
+/** Every place a coin could hang in a room (see coinFits), on the 12.5 cm grid the level is walked on. None: the room hides nothing. */
+export function coinSpots(room) {
+  const out = [], step = 0.125, nx = Math.floor((room.W - 1.1) / step), nz = Math.floor((room.D - 1.1) / step);
+  for (let i = 0; i <= nx; i++) for (let j = 0; j <= nz; j++) { const x = (i - nx / 2) * step, z = (j - nz / 2) * step; if (coinFits(room, x, z)) out.push({ x, z }); }
+  return out;
+}
+
+/** A place for a coin in this room, clear of any already in it — or null. */
+function coinSpot(room, R, others = []) {
+  const lay = room.arch && STASH[room.arch] ? STASH[room.arch](room, R.pick([-1, 1])) : null;
+  const zones = !lay ? [] : Array.isArray(lay[0]) ? lay : [lay];
+  const inner = room.doors.map((d) => wallPoint(room, d.side, d.c, 0.3));
+  const behind = (p, x, z) => {                          // is there a pillar between this doorway and the spot?
+    const n = Math.ceil(Math.hypot(x - p.x, z - p.z) / 0.12);
+    return room.pillars.some((q) => { for (let i = 1; i < n; i++) if (Math.abs(p.x + ((x - p.x) * i) / n - q.x) < q.w / 2 && Math.abs(p.z + ((z - p.z) * i) / n - q.z) < q.d / 2) return true; return false; });
+  };
+  let all = null;
+  for (const gap of [1.6, 0.9]) {
+    const apart = (x, z) => others.every((o) => Math.hypot(o.x - x, o.z - z) >= gap);
+    // an oddity has a place of its own for one
+    for (const [x0, z0, x1, z1] of zones) for (let tries = 0; tries < 12; tries++) {
+      const x = cm(R.range(x0, x1)), z = cm(R.range(z0, z1));
+      if (apart(x, z) && coinFits(room, x, z)) return { x, z };
+    }
+    // anywhere else: the further from every doorway the better, and better still where none of them can see it
+    all ||= coinSpots(room);
+    const hides = room.pillars.length > 0 && inner.length > 0;
+    const options = all.filter((k) => apart(k.x, k.z)).map((k) => ({ x: k.x, z: k.z,
+      w: Math.min(9, ...inner.map((p) => Math.hypot(k.x - p.x, k.z - p.z))) ** 2 * (hides && inner.every((p) => behind(p, k.x, k.z)) ? 4 : 1) }));
+    if (!options.length) continue;
+    const o = R.weighted(options, (k) => k.w);
+    return { x: o.x, z: o.z };
+  }
+  return null;
+}
+
+/** What generate() was asked to hide, tidied — or null for nothing. */
+function wanted(loot) {
+  if (!loot || typeof loot !== 'object') return null;
+  const coins = [...new Set((Array.isArray(loot.coins) ? loot.coins : []).map((n) => Math.floor(Number(n))).filter((n) => n >= 1))].sort((a, b) => a - b);
+  return loot.card || coins.length ? { card: !!loot.card, coins } : null;
+}
+
+/** Hide it. → { card, coins: [{ n, room, x, z }] }: each coin in a room, at a spot in that room's own frame. */
+function stash(level, want, R) {
+  const loot = { card: !!(want.card && level.pursuer), coins: [] };
+  if (!want.coins.length) return loot;
+  const fromStart = roomDistances(level, level.start.room), toExit = roomDistances(level, level.exit.room), way = fromStart.get(level.exit.room);
+  const detour = (r) => fromStart.get(r.id) + toExit.get(r.id) - way;        // 0 on a shortest way out, 2 for a room one doorway off it…
+  const able = level.rooms.filter((r) => r.kind !== 'start' && r.kind !== 'exit' && !r.crawl && fromStart.has(r.id));
+  // how likely a room is to be picked: a dead end, an oddity, a long way off the route — and hardly ever the mascot's own room
+  const entry = (r) => ({ room: r, R: R.fork('room:' + r.id), spots: [], dist: null, dud: false,
+    worth: (r.doors.length === 1 ? 3 : 1) * (r.kind === 'special' ? 2 : 1) * (0.5 + 0.5 * Math.max(1, Math.min(3, Math.ceil(detour(r) / 2)))) * (level.pursuer && level.pursuer.room === r.id ? 0.02 : 1) });
+  const slots = [], chosen = [];
+  // rooms off the way out; only a building with none of those (or no floor left in them) hides anything on it
+  for (const pool of [able.filter((r) => detour(r) > 0).map(entry), able.filter((r) => detour(r) <= 0).map(entry)]) {
+    // one coin to a room; a room beside one already chosen is much less likely, so they end up spread over the building
+    while (slots.length < want.coins.length) {
+      const open = pool.filter((k) => !k.spots.length && !k.dud);
+      if (!open.length) break;
+      const k = R.weighted(open, (q) => chosen.reduce((w, c) => { const d = c.dist.get(q.room.id); return w * (d === 1 ? 0.2 : d === 2 ? 0.6 : 1); }, q.worth));
+      const spot = coinSpot(k.room, k.R);
+      if (!spot) { k.dud = true; continue; }
+      k.spots.push(spot); k.dist = roomDistances(level, k.room.id); chosen.push(k);
+      slots.push({ room: k.room.id, ...spot });
+    }
+    // fewer such rooms than coins: the rest double up, as far apart as their room allows
+    const mine = chosen.filter((k) => pool.includes(k));
+    for (let i = 0, misses = 0; mine.length && slots.length < want.coins.length && misses < mine.length; i++) {
+      const k = mine[i % mine.length], spot = coinSpot(k.room, k.R, k.spots);
+      if (spot) { k.spots.push(spot); slots.push({ room: k.room.id, ...spot }); misses = 0; } else misses++;
+    }
+    if (slots.length >= want.coins.length) break;
+  }
+  // the coins still to be found take the hiding places in the order they were chosen
+  loot.coins = slots.map((s, i) => ({ n: want.coins[i], room: s.room, x: s.x, z: s.z }));
+  return loot;
+}
+
 /**
  * One visit.
  * @param {string|number} seed
- * @param {{name?:string, projects?:string[], agents?:string[], tasks?:string[], only?:string|string[], count?:number, pursuer?:boolean}} [opt]
- * @returns {{seed, rooms, links, windows, start, exit, pursuer, picked, hint, stamp, hum, cast, projects}}
+ * @param {{name?:string, projects?:string[], agents?:string[], tasks?:string[], only?:string|string[], count?:number, pursuer?:boolean,
+ *          loot?:{card?:boolean, coins?:number[]}}} [opt]  loot: what is still to be found down here (see above); leave it out and nothing is hidden
+ * @returns {{seed, rooms, links, windows, start, exit, pursuer, picked, hint, stamp, hum, cast, projects, loot?}}
  */
 export function generate(seed, opt = {}) {
-  const o = names(opt);
+  const o = names(opt), want = wanted(opt.loot);
+  const keeper = !!(want && want.card);                  // the keycard is in the mascot's hand: this visit has a mascot
   for (let attempt = 0; attempt < 40; attempt++) {
     const R = makeRng(`backrooms:${seed}:${attempt}`);
     const level = build(R, o, opt);
     if (!level) continue;
-    const extra = dress(R.fork('dress'), level, o, opt);
+    const extra = dress(R.fork('dress'), level, o, keeper ? { ...opt, pursuer: true } : opt, keeper);
     const rooms = level.rooms.map((r) => { const { links: _l, pts: _p, stairs: _s, ...rest } = r; return rest; });
-    return { seed: String(seed), name: o.name, cast: o.agents, projects: o.projects, rooms, links: level.links, picked: level.specials.map((r) => r.arch), ...extra };
+    const out = { seed: String(seed), name: o.name, cast: o.agents, projects: o.projects, rooms, links: level.links, picked: level.specials.map((r) => r.arch), ...extra };
+    if (want) out.loot = stash(out, want, R.fork('loot'));
+    return out;
   }
   throw new Error(`backrooms: no layout for seed ${seed}`);
 }

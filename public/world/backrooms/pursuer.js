@@ -5,9 +5,13 @@
 // turned your back it comes after you, but only ever while you are not
 // looking: watch it and it is a mannequin. Walk into it while you watch and it
 // was never there. Let it reach you from behind and the tape ends ('caught').
+// While the office's keycard for this place has not been found (loot.js), the
+// mascot is holding it: on a loop of ribbon, from one hand, held out. Walk up
+// and take it — which it notices, the way it notices being looked at.
 // Also here: the cardboard colleague who sometimes decides to come along.
 import * as THREE from 'three';
 import { Vox, M } from '../vox/vox.js';
+import { keycard } from '../props/loot.js';
 import { Batch, lamp, lin, drawText } from './kit.js';
 import { makeRng, RISE, RUN } from './gen.js';
 import { P, clamp, turnTo } from './bits.js';
@@ -16,6 +20,8 @@ const SC = 1.25, S = 0.025 * SC;                 // sculpted chunkier than the f
 const TALL = 1.62, PLINTH = 0.16;
 const SKIN = '#7ea04a', SKIN_D = '#56733a', BEARD = '#1e1a1c', FELT = '#4d311d', BRAID = '#b39245', COAT = '#b9923a', SHIRT = '#2c8a79';
 const BELT = '#221a16', GOLD = '#e2ba48', SASH = '#7f7392', BOOT = '#2b1d15', CLOTH = '#393843';
+const CARD = 0.02;                               // metres to a voxel of the keycard in its hand: a size down from the office's, or it would be a placard
+const HELD = 1.3;                                // …and the arm that holds it is never lower than this (radians out from its side): the card hangs clear of its coat
 
 /* ---- the figure ------------------------------------------------------------------------ */
 
@@ -50,6 +56,15 @@ function armVox() {
   v.box(-3, -15, -3, 3, -13, 3, M('#d7dac6', 1));
   v.rbox(-2, -19, -2, 2, -15, 2, 1, M(SKIN, 1));
   for (const fx of [-2, 0, 1]) v.box(fx, -21, -1, fx + 1, -19, 1, M(SKIN_D, 1));
+  return v;
+}
+
+/** The loop of ribbon the keycard hangs by: over the wrist and down to the clip. In the card's own voxels, the wrist at the origin. */
+function strapVox() {
+  const v = new Vox(), red = M('#a8322b', 3);
+  v.box(-1, 4, -5, 1, 5, 5, red);
+  for (const z of [-5, 4]) v.box(-1, -2, z, 1, 4, z + 1, red);
+  v.tube(0, -2, -4, 0, -6, 0, 0.75, red); v.tube(0, -2, 4, 0, -6, 0, 0.75, red);
   return v;
 }
 
@@ -148,13 +163,26 @@ function makePirate(kit, R, first = 0) {
   const shadow = new THREE.Mesh(kit.own(new THREE.PlaneGeometry(1.05, 1.05)), kit.own(new THREE.MeshBasicMaterial({ map: kit.tex.blob(), color: 0x000000, transparent: true, opacity: 0.42, depthWrite: false })));
   shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.012; shadow.renderOrder = 1; group.add(shadow);
   const p = {
-    group, head, arms, faces, mat, face: first % faces.length, pose: 0, slip: false,
+    group, head, arms, faces, mat, face: first % faces.length, pose: 0, slip: false, card: null,
     show() { faces.forEach((f, k) => { f.whole.visible = k === p.face && !p.slip; f.slipped.visible = k === p.face && p.slip; }); },
     hold(k, look = 0) {
-      const q = POSES[k]; p.pose = k;
-      arms[0].rotation.set(-(q.fl || 0), 0, -q.l); arms[1].rotation.set(-(q.fr || 0), 0, q.r);
+      const q = POSES[k], out = [q.l, q.r]; p.pose = k;
+      if (p.card && p.card.held && !q.fl && !q.fr) out[p.card.side] = Math.max(out[p.card.side], HELD);       // whatever else it is doing, it holds the card out
+      arms[0].rotation.set(-(q.fl || 0), 0, -out[0]); arms[1].rotation.set(-(q.fr || 0), 0, out[1]);
       head.rotation.set(0, look, q.tilt || 0);
+      p.plumb();
     },
+    /** Hang the office's keycard from one wrist (0 or 1). It is a thing on a ribbon: however the arm is held, it hangs straight down. */
+    give(side) {
+      const b = new Batch(true), m = new THREE.Matrix4(), hang = new THREE.Group();
+      b.addVox(kit.model('pirate:strap', strapVox).solid, m.makeScale(CARD, CARD, CARD));
+      b.addVox(kit.model('loot:card', keycard).solid, m.makeScale(CARD, CARD, CARD).setPosition(0, -21 * CARD, 0));
+      hang.add(new THREE.Mesh(kit.geometry(b, lights, amb), mat));
+      hang.position.set(0, -17 * S, 0); arms[side].add(hang);
+      p.card = { side, hang, held: true };
+      p.hold(p.pose, head.rotation.y);
+    },
+    plumb() { if (p.card) p.card.hang.quaternion.copy(arms[p.card.side].quaternion).invert(); },
     light(rgb) { mat.uniforms.uTint.value.set(rgb[0], rgb[1], rgb[2]); },
   };
   p.show(); p.hold(0);
@@ -291,12 +319,42 @@ export function createStalkers(env) {
     const at = c.toWorld(k.x, k.z), p = mascot(at.x, at.z, yaw + (c.room.rot * Math.PI) / 2, true);
     p.group.position.y += c.room.y;
     c.world.scene.add(p.group);
+    // the keycard, if it still has it: in whichever hand is further from the walls
+    if (level.loot?.card) {
+      const room = (sx) => Math.min(c.W / 2 - Math.abs(k.x + sx * 0.85 * fz), c.D / 2 - Math.abs(k.z - sx * 0.85 * fx));
+      p.give(Math.abs(room(1) - room(-1)) < 0.05 ? level.pursuer.face % 2 : room(1) > room(-1) ? 1 : 0);
+    }
   };
   (env.ready ||= []).push(() => {
-    if (!level.pursuer || pirate) return;                             // the room it was meant for was never built: it stands in the middle of it
-    const def = level.rooms[level.pursuer.room], p = mascot(def.cx, def.cz, 0, false);
-    p.group.position.y = def.y; W().scene.add(p.group);
+    if (level.pursuer && !pirate) {                                   // the room it was meant for was never built: it stands in the middle of it
+      const def = level.rooms[level.pursuer.room], p = mascot(def.cx, def.cz, 0, false);
+      p.group.position.y = def.y; W().scene.add(p.group);
+      if (level.loot?.card) p.give(level.pursuer.face % 2);
+    }
+    if (pirate?.card) offer(pirate);
   });
+
+  /* ---- the card in its hand ---------------------------------------------------------------- */
+
+  const hand = new THREE.Vector3();
+  /** Something to press E at: the card, wherever the hand holding it has got to. Taking it is noticed. */
+  function offer(p) {
+    p.card.use = { r: 1.2, wx: p.x, wz: p.z, room: null, when: () => p.card.held && p.state !== 'caught' && p.group.visible,
+      use: () => {
+        p.card.held = false; p.card.hang.visible = false;             // (the arm stays where it was: it is being watched)
+        env.loot?.pocket('card');
+        env.interfere(0.55); env.hud.glitch(0.35);
+        wake();
+      } };
+    reach(p);
+  }
+  /** Keep the [E] where the card is. */
+  function reach(p) {
+    const use = p.card.use, rt = W().roomAt(p.x, p.z);
+    if (rt && rt !== use.room) { const i = use.room ? use.room.uses.indexOf(use) : -1; if (i >= 0) use.room.uses.splice(i, 1); rt.uses.push(use); use.room = rt; }
+    p.card.hang.getWorldPosition(hand);
+    use.wx = hand.x; use.wz = hand.z;
+  }
 
   function wake(force) {
     const p = pirate; if (!p || p.state === 'caught') return false;
@@ -386,7 +444,12 @@ export function createStalkers(env) {
           const k = 0.62 / Math.max(now, 0.05);
           const nx = me.x - (me.x - p.x) * k, nz = me.z - (me.z - p.z) * k;
           if (w.free(nx, nz, 0.1)) { p.x = nx; p.z = nz; }
-          p.yaw = Math.atan2(me.x - p.x, me.z - p.z); p.hold(7); p.state = 'caught'; p.catchT = 0;
+          p.yaw = Math.atan2(me.x - p.x, me.z - p.z); p.state = 'caught'; p.catchT = 0;
+          p.hold(7);
+          if (p.card && !p.card.held && env.loot?.carried.card) {       // …and it has its card back: held up beside its face, where the tape cannot miss it
+            p.card.held = true; p.card.hang.visible = true; env.loot.forfeit();
+            p.arms[p.card.side].rotation.set(0.2, 0, p.card.side ? 2.95 : -2.95); p.plumb();
+          }
           env.sound.play('thunk');
           env.end('caught');
         } else if (p.chase > p.stamina && now > 8) { p.state = 'rest'; p.rest = 28 + Math.random() * 25; p.stamina = 45 + Math.random() * 40; }
@@ -397,6 +460,7 @@ export function createStalkers(env) {
     if (slip !== p.slip || !seen) { p.slip = slip; p.show(); }
     p.group.position.set(p.x, w.floorY(p.x, p.z) + (p.plinth ? PLINTH : 0), p.z);
     p.group.rotation.y = p.yaw;
+    if (p.card?.use && p.card.held) reach(p);
     p.lit -= dt;
     if (p.lit < 0 && p.group.visible) { p.lit = 0.2; p.light(w.lightAt(p.x, p.z, 1.0)); }
   }
@@ -436,7 +500,7 @@ export function createStalkers(env) {
     },
     wake,
     /** Where it is and what it is doing (for the dev page). */
-    at() { return pirate ? { x: pirate.x, z: pirate.z, state: pirate.state, room: W()?.roomAt(pirate.x, pirate.z)?.id ?? null, face: pirate.face, pose: pirate.pose } : null; },
+    at() { return pirate ? { x: pirate.x, z: pirate.z, state: pirate.state, room: W()?.roomAt(pirate.x, pirate.z)?.id ?? null, face: pirate.face, pose: pirate.pose, card: pirate.card ? pirate.card.held : null } : null; },
     get follower() { return follower ? { x: follower.x, z: follower.z } : null; },
     get figure() { return pirate; },
     dispose() { pirate?.group.removeFromParent(); follower?.g.removeFromParent(); pirate = null; follower = null; },

@@ -8,7 +8,11 @@
 //   &pursuer=1|0       force the thing that follows you in or out; &wake=1 has it already awake, in the room with you
 //   &name=Robin        who you are                               &live=1     borrow names from the running office (GET only)
 //   &list=1            print the deck with links                 &map=1      show the floor plan
-// window.__backrooms is the live handle: goto(room, x, z, yaw, pitch), where(), level, world, player, env (env.pursuer.at()).
+//   &loot=1            something to find: the keycard (in the mascot's hand) and coins 1–4; &loot=card,1,3 for some of it. There is no
+//                      office here to keep count, so a stand-in does, in this page's memory, and says so on the console: what you leave
+//                      by the door with is gone the next visit (any key), everything else is down there again. Without it: no loot.
+// window.__backrooms is the live handle: goto(room, x, z, yaw, pitch), where(), level, world, player, env (env.pursuer.at()),
+// loot (loot.report(): where the coins are, what is carried). window.__loot is what the stand-in still has down there.
 // Nothing on screen says how to play, on purpose: WASD/arrows, mouse, Shift (hurry), Space (hop), C (crouch, held), E, V (picture), M (sound), Esc.
 import { createStage } from '../engine/stage.js';
 import { enterBackrooms } from '../backrooms/index.js';
@@ -36,6 +40,22 @@ const office = {
     tasks: new Map([['webstore', [{ title: 'Cache the product catalogue' }, { title: 'Trim the Docker image' }, { title: 'Fix the flaky checkout test' }]]]),
   } },
 };
+if (q.has('loot')) {
+  // a stand-in for office.game (public/world/game.js): the same two questions, answered from memory
+  const all = /^(|1|all|true)$/.test(q.get('loot')), asked = q.get('loot').split(',');
+  const left = { card: all || asked.includes('card'), coins: all ? [1, 2, 3, 4] : [1, 2, 3, 4].filter((n) => asked.includes(String(n))) };
+  office.game = {
+    left: (hideout) => (hideout === 'backrooms' ? { card: left.card, coins: left.coins.slice() } : { card: false, coins: [] }),
+    async take(hideout, item, n) {
+      const had = hideout === 'backrooms' && (item === 'card' ? left.card : left.coins.includes(n));
+      if (item === 'card') left.card = false; else left.coins = left.coins.filter((k) => k !== n);
+      console.log(`[loot] ${had ? 'kept' : 'not there to keep'}: ${item === 'card' ? 'the keycard' : `coin ${n}`} — still down there: ${JSON.stringify(left)}`);
+      return { ok: true, taken: had, item, n };
+    },
+  };
+  window.__loot = left;
+  console.log(`[loot] down there: ${JSON.stringify(left)}`);
+}
 if (q.get('live')) {
   try {
     const [world, list] = await Promise.all([fetch('/api/world').then((r) => r.json()), fetch('/api/agents').then((r) => r.json())]);

@@ -159,6 +159,36 @@ export async function buildWorld(kit, level, env, tick) {
     while (queue.length) { const cur = queue.shift(); for (const n of sight[cur]) if (!dist.has(n)) { dist.set(n, dist.get(cur) + 1); queue.push(n); } }
     return dist;
   };
+  /**
+   * One room's floor the way the player walks it, on a 12.5 cm grid in the room's own frame: where a body fits (free),
+   * how high the floor is there, and everything that can be reached on foot from just inside a set of its doorways
+   * (flood → one byte per cell; key(point) is a point's cell, at(k) the middle of cell k).
+   */
+  world.walkable = (rt) => {
+    const { def } = rt, cell = 0.125, r = 0.225, nx = Math.ceil(def.W / cell), nz = Math.ceil(def.D / cell);
+    const key = (p) => Math.floor((p.x + def.W / 2) / cell) + nx * Math.floor((p.z + def.D / 2) / cell);
+    const at = (k) => { const i = k % nx; return { x: -def.W / 2 + (i + 0.5) * cell, z: -def.D / 2 + ((k - i) / nx + 0.5) * cell }; };
+    const floor = (x, z) => (rt.flat ? 0 : rt.floorY ? rt.floorY(x, z) : floorAt(def, x, z)), head = (x, z) => (rt.flat ? 9 : rt.headY ? rt.headY(x, z) : headAt(def, x, z));
+    const local = rt.colliders.map((c) => { const a = toLocal(def, c.x0, c.z0), b = toLocal(def, c.x1, c.z1); return { c, x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z) }; });
+    const free = (x, z) => Math.abs(x) <= def.W / 2 - r && Math.abs(z) <= def.D / 2 - r && (rt.clip ? rt.clip(x, z, r) : fitsAt(def, x, z, r)) && head(x, z) >= HEAD
+      && !local.some((q) => { if (q.c.on === false) return false; const dx = x - clamp(x, q.x0, q.x1), dz = z - clamp(z, q.z0, q.z1); return dx * dx + dz * dz < r * r; });
+    const flood = (doors) => {
+      const seen = new Uint8Array(nx * nz), queue = [];
+      for (const dr of doors) { const k = key(wallPoint(def, dr.side, dr.c, 0.5)); if (!seen[k]) { seen[k] = 1; queue.push(k); } }          // half a metre in: clear of a door that is still shut
+      while (queue.length) {
+        const k = queue.pop(), i = k % nx, j = (k - i) / nx, hx = -def.W / 2 + (i + 0.5) * cell, hz = -def.D / 2 + (j + 0.5) * cell, hy = floor(hx, hz);
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const ii = i + di, jj = j + dj, kk = ii + nx * jj;
+          if (ii < 0 || jj < 0 || ii >= nx || jj >= nz || seen[kk]) continue;
+          const tx = hx + di * cell, tz = hz + dj * cell;
+          if (!free(tx, tz) || (!rt.fold && Math.abs(floor(tx, tz) - hy) > STEP)) continue;
+          seen[kk] = 1; queue.push(kk);
+        }
+      }
+      return seen;
+    };
+    return { cell, nx, nz, key, at, free, floor, head, flood };
+  };
 
   /* ---- build ---------------------------------------------------------------------- */
   world.timing = [];                           // [what, milliseconds] — where the loading time went
@@ -173,6 +203,7 @@ export async function buildWorld(kit, level, env, tick) {
       rt.clip = null; rt.floorY = null; rt.headY = null; rt.fold = false;
       ctx = roomContext(world, rt); ctx.shell();
     }
+    env.stash?.(ctx);                          // what is hidden in this room, if anything (loot.js): last, when it can see what floor the furniture left
     const t1 = performance.now();
     ctx.finish();
     world.timing.push([`${rt.def.arch || rt.def.kind}#${rt.id}`, Math.round(t1 - t0), Math.round(performance.now() - t1)]);
@@ -185,27 +216,8 @@ export async function buildWorld(kit, level, env, tick) {
   for (const rt of rooms) {
     const { def } = rt;
     if (def.doors.length < 2 || (!rt.colliders.length && !def.shape && !rt.clip && !rt.floorY && def.doors.every((d) => !(d.sill > 0.01)))) continue;
-    const cell = 0.125, r = 0.225, nx = Math.ceil(def.W / cell), nz = Math.ceil(def.D / cell);
-    const key = (p) => Math.floor((p.x + def.W / 2) / cell) + nx * Math.floor((p.z + def.D / 2) / cell);
-    const floor = (x, z) => (rt.flat ? 0 : rt.floorY ? rt.floorY(x, z) : floorAt(def, x, z)), head = (x, z) => (rt.flat ? 9 : rt.headY ? rt.headY(x, z) : headAt(def, x, z));
-    const local = rt.colliders.map((c) => { const a = toLocal(def, c.x0, c.z0), b = toLocal(def, c.x1, c.z1); return { c, x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z) }; });
-    const free = (x, z) => Math.abs(x) <= def.W / 2 - r && Math.abs(z) <= def.D / 2 - r && (rt.clip ? rt.clip(x, z, r) : fitsAt(def, x, z, r)) && head(x, z) >= HEAD
-      && !local.some((q) => { if (q.c.on === false) return false; const dx = x - clamp(x, q.x0, q.x1), dz = z - clamp(z, q.z0, q.z1); return dx * dx + dz * dz < r * r; });
-    const reaches = () => {
-      const from = wallPoint(def, def.doors[0].side, def.doors[0].c, 0.5), seen = new Uint8Array(nx * nz), queue = [key(from)];
-      seen[queue[0]] = 1;
-      while (queue.length) {
-        const k = queue.pop(), i = k % nx, j = (k - i) / nx, hx = -def.W / 2 + (i + 0.5) * cell, hz = -def.D / 2 + (j + 0.5) * cell, hy = floor(hx, hz);
-        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const ii = i + di, jj = j + dj, kk = ii + nx * jj;
-          if (ii < 0 || jj < 0 || ii >= nx || jj >= nz || seen[kk]) continue;
-          const tx = hx + di * cell, tz = hz + dj * cell;
-          if (!free(tx, tz) || (!rt.fold && Math.abs(floor(tx, tz) - hy) > STEP)) continue;
-          seen[kk] = 1; queue.push(kk);
-        }
-      }
-      return def.doors.every((dr) => seen[key(wallPoint(def, dr.side, dr.c, 0.5))]);          // half a metre in: clear of a door that is still shut
-    };
+    const walk = world.walkable(rt);
+    const reaches = () => { const seen = walk.flood([def.doors[0]]); return def.doors.every((dr) => seen[walk.key(wallPoint(def, dr.side, dr.c, 0.5))]); };
     if (reaches()) continue;
     console.warn(`[backrooms] a doorway of ${def.arch || def.kind} #${def.id} could not be reached — its furniture is no longer solid`);
     for (const c of rt.colliders) if (!c.keep) c.on = false;
@@ -298,6 +310,7 @@ function roomContext(world, rt) {
   const R = makeRng(`${level.seed}/build/${def.id}`);
   const mapped = new Map(), shining = new Map();
   const reserved = [];                                    // floor already spoken for: [x, z, radius]
+  for (const k of level.loot?.coins || []) if (k.room === def.id) reserved.push([k.x, k.z, 0.45]);      // a coin hangs here (gen.js): nothing is put down on it
   const mat = new THREE.Matrix4(), quat = new THREE.Quaternion(), eul = new THREE.Euler(), vec = new THREE.Vector3(), scl = new THREE.Vector3();
   const doorPoint = (dr, off = 0) => wallPoint(def, dr.side, dr.c, off);
   const stairs = stairZones(def, 0.7);
