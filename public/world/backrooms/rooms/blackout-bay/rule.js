@@ -7,7 +7,7 @@
 export const BLACKOUT = Object.freeze({
   redFillSeconds: 0.92,
   redFadePerSec: 2.4,
-  stalkSpeed: 1.65,
+  stalkSpeed: 1.0,
   catchRadius: 0.64,
   beamRange: 9.8,
   beamCosHalf: 0.76,

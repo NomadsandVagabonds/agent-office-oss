@@ -41,7 +41,7 @@ export const WARNINGS = Object.freeze({
     ['NO BALLOON = THEY ALL', 'TURN ROUND. I RAN.', 'THE HATS ARE'],
   ],
   'stand-ins': [
-    ['KEEP THE TORCH ON', 'THEM. THE ONES YOU', 'ARE NOT LIGHTING'],
+    ['KEEP THE TORCH ON', 'IT. IT ONLY MOVES', 'WHEN THE LIGHT IS'],
     ['NOT WITHOUT A LIGHT.', 'IT GOES RED AND THEN', 'YOU ARE BACK AT'],
   ],
   'floor-warden': [
