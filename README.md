@@ -249,7 +249,8 @@ One thing `data/` does hold once you drive agents: to tell you what each turn
 changed, the office keeps its own compressed copy of the working files (not
 the ignored ones) of every repository a driven session works in, under
 `data/harness/checkpoints/`. Nothing is written into those repositories, and
-the copy never leaves your machine; a session says so when it grows large.
+the copy never leaves your machine; a session says so when it grows large,
+and it stops growing at 2 GB per repository (`OFFICE_CHECKPOINTS_MAX_STORE_BYTES`).
 `OFFICE_CHECKPOINTS=0` switches it off. See [`docs/HARNESS.md`](docs/HARNESS.md) §9a.
 
 ## License
