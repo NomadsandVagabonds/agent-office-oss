@@ -311,7 +311,10 @@ the person playing (`core/game.mjs` is the whole of the rules; it is pure):
   the start, drawn by lot for each office, and every card lights the next in
   that office's own order — so no two offices open up the same way, a card
   always opens something, and a floor once lit stays lit. A floor lit since you
-  last rode anywhere glows until somebody goes there.
+  last rode anywhere glows until somebody goes there. Beside each lit game
+  floor's name is a row of pips, one for its keycard and one for each coin,
+  filled in as they are found; the passport (§6) has an outline for every
+  keycard there is, and the jar.
 - **Coins.** Each of those places hides a few (15 in all). A coin taken is gone
   for good — the office remembers which — and goes into **one jar for the whole
   office**. Every stamp in anybody's passport (§6) pays a coin into the same
