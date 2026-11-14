@@ -50,8 +50,7 @@ const angleOf = (face) => (typeof face === 'number' ? face : faceAngle(face));
  *                 ceiling: y — never rise above this · inside: { x0, z0, x1, z1 } — never leave this rectangle
  *                 first: true — see through your own eyes instead (drag to look; `height` is then eye height) }
  *   background  scene colour · fog { color, near, far }
- *   look        { tilt: 0..1 soft focus, bloom, glow } — how the office's post-processing treats this place
- *   hint        a line of help shown for a few seconds on arrival
+ *   grade       { tilt: 0..1 soft focus, bloom, glow } — how the office's post-processing treats this place
  */
 export function createWorld(office, spec = {}) {
   const level = levelById(spec.id) || { id: spec.id || 'somewhere', floor: spec.floor || '?', name: spec.name || 'Somewhere' };
@@ -61,7 +60,7 @@ export function createWorld(office, spec = {}) {
   if (spec.fog) scene.fog = new THREE.Fog(spec.fog.color || spec.background || '#15121c', spec.fog.near ?? 30, spec.fog.far ?? 120);
   const cam = { yaw: 0, pitch: 0.42, dist: 8.5, minDist: 3, maxDist: 16, minPitch: 0.08, maxPitch: 1.35, fov: 36, height: 0.9, ...(spec.camera || {}) };
   const camera = new THREE.PerspectiveCamera(cam.fov, stage.size.w / stage.size.h, 0.2, spec.far || 900);
-  const look = { tilt: 0.25, bloom: null, glow: null, ...(spec.look || {}) };
+  const grade = { tilt: 0.25, bloom: null, glow: null, ...(spec.grade || {}) };
   const floorY = typeof spec.floorY === 'function' ? spec.floorY : () => 0;
 
   /* ---- light: a sky, a sun with shadows that follows you ----------------------------------- */
@@ -357,11 +356,10 @@ export function createWorld(office, spec = {}) {
   const ui = document.getElementById('ui') || document.body;
   const needs = h('div.level-needs.glass.hidden', { title: 'Back to the office, to whoever is waiting (N)', onclick: () => leave('needs') });
   const hint = h('div.usehint.glass.hidden');
-  const help = h('div.level-help', spec.hint || 'WASD to walk · Shift to hurry · drag to look round · E to use things');
   const chip = h('div.level-chip.glass',
     h('b.floor', level.unmarked ? '' : level.floor), h('span.name', level.unmarked ? '' : level.name),
-    h('button.btn.ghost.small', { title: 'Back to the office (Esc)', onclick: () => leave('esc') }, 'Esc · back to the office'));
-  const root = h('div.level', chip, needs, help, hint);
+    h('button.btn.small', { title: 'Back to the office', onclick: () => leave('esc') }, 'Esc'));
+  const root = h('div.level', chip, needs, hint);
   function showNeeds() {
     const n = (net.state.prompts || []).filter((p) => p.status === 'pending' && p.kind !== 'idle').length;
     needs.classList.toggle('hidden', !n);
@@ -449,6 +447,26 @@ export function createWorld(office, spec = {}) {
   }
   function unfocus() { const s = shot; shot = null; s?.onLeave?.(); }
   function stand() { me.seat = null; }
+  /**
+   * Stand somewhere and point the camera, at once — for taking a picture.
+   * Any of { x, z, yaw, pitch, dist, fov, heading }: where you are, then the camera
+   * round you (yaw 0 looks north, pitch is how far it looks down, in radians).
+   * The same thing from the address bar: /?level=<id>&cam=x,z,dist,yaw,pitch
+   */
+  function look(o = {}) {
+    if (me.script) { const s = me.script; me.script = null; s.resolve(); }
+    me.seat = null; shot = null; shotMix = 0; me.moving = false;
+    if (liftHere) { liftHere.want = 0; liftHere.open = 0; liftHere.holdUntil = 0; }
+    if (Number.isFinite(o.x)) me.x = o.x;
+    if (Number.isFinite(o.z)) me.z = o.z;
+    if (Number.isFinite(o.heading)) me.heading = o.heading;
+    for (const k of ['yaw', 'pitch', 'dist']) if (Number.isFinite(o[k])) { goal[k] = o[k]; cam[k] = o[k]; }
+    if (Number.isFinite(o.fov)) cam.fov = o.fov;
+    eye.set(me.x, cam.height + floorY(me.x, me.z), me.z);
+    if (cam.anchor) { eye.x += (cam.anchor.x - eye.x) * (cam.anchor.pull ?? 0.6); eye.z += (cam.anchor.z - eye.z) * (cam.anchor.pull ?? 0.6); }
+    placeCamera(0, true);
+    return api;
+  }
 
   function placeCamera(dt, instant) {
     const k = instant ? 1 : ease(cam.first ? 18 : 7, dt);
@@ -563,9 +581,9 @@ export function createWorld(office, spec = {}) {
     sun.target.position.set(eye.x, eye.y - cam.height, eye.z);
     sun.position.set(eye.x + sunDir.x * 60, eye.y + sunDir.y * 60, eye.z + sunDir.z * 60);
     // this place's share of the office's post-processing (the office sets its own again when you leave)
-    stage.setTilt(look.tilt, 0.5, 0.3);
-    if (stage.bloom && look.bloom !== null) stage.bloom.strength = look.bloom;
-    if (look.glow !== null) voxelUniforms.uGlow.value = look.glow;
+    stage.setTilt(grade.tilt, 0.5, 0.3);
+    if (stage.bloom && grade.bloom !== null) stage.bloom.strength = grade.bloom;
+    if (grade.glow !== null) voxelUniforms.uGlow.value = grade.glow;
     stage.renderer.shadowMap.needsUpdate = true;
   }
 
@@ -589,7 +607,6 @@ export function createWorld(office, spec = {}) {
       root.addEventListener('contextmenu', (e) => e.preventDefault());
       subs.push(net.on('prompts', showNeeds));
       showNeeds();
-      setTimeout(() => help.classList.add('gone'), 9000);
       if (liftHere && spec.arrive !== false) {               // step out of the car; the doors close behind you
         const L = liftHere, tx = me.x, tz = me.z;
         me.x = L.x - L.fx * 0.7; me.z = L.z - L.fz * 0.7;
@@ -605,6 +622,13 @@ export function createWorld(office, spec = {}) {
       offFrame = stage.onFrame(frame);
       stage.setView({ scene, camera });
       office.level = api;                                    // for the console, and for the curious
+      // /?level=<this one>&cam=x,z,dist,yaw,pitch — arrive already standing there, looking that way (the office's own ?cam, one floor along)
+      const recipe = office.q?.get('cam'), asked = office.q?.get('level');
+      if (recipe && asked && !office.camUsed && (asked === level.id || asked.toLowerCase() === String(level.floor).toLowerCase())) {
+        office.camUsed = true;
+        const [x, z, dist, yaw, pitch] = recipe.split(',').map(Number);
+        look({ x, z, dist, yaw, pitch });
+      }
     });
   }
   /**
@@ -646,7 +670,7 @@ export function createWorld(office, spec = {}) {
   }
 
   const api = {
-    office, level, scene, camera, root, me, cam: goal, look, avatar, hemi, sun, floorY,
+    office, level, scene, camera, root, me, cam: goal, grade, look, avatar, hemi, sun, floorY,
     get time() { return t; },
     /** This floor's lift doorway (see car.js), once lift() or room({ lift }) has stood it somewhere. */
     get liftDoor() { return liftHere?.door || null; },

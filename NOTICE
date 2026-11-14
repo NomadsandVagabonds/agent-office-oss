@@ -17,3 +17,41 @@ licence texts are beside the files.
 
 three.js under public/vendor/ is Copyright 2010-2025 Three.js Authors, MIT
 licence (public/vendor/LICENSE-three.txt).
+
+The harness under server/harness/ (and its fake agents under test/fixtures/)
+was written for this project, with T3 Code (https://github.com/pingdotgg/t3code,
+read at commit 08b8689a) as reference: its Agent Client Protocol and Codex
+app-server clients are where the message shapes we speak were learned, and its
+orchestrator design is where the delegation and handoff rules come from. A few
+small pieces follow its logic closely and say so where they are: the redaction
+of an agent's stderr (server/harness/child.mjs, after
+packages/provider-acp/src/server/stderr.ts), the rules of a portable context
+handoff (server/harness/handoff.mjs, after
+apps/server/src/orchestration-v2/ContextHandoffService.ts), the coalescing of
+tool updates (server/harness/acp.mjs, after
+packages/provider-acp/src/server/runtimeModel.ts), and the reading of Codex's
+rate-limit windows (server/usage-sources.mjs, after
+apps/server/src/provider/codexUsageLimits.ts). docs/HARNESS.md lists every
+file consulted. T3 Code is distributed under the MIT licence:
+
+  MIT License
+
+  Copyright (c) 2026 T3 Tools Inc.
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.

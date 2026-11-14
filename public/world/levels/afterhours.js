@@ -31,7 +31,7 @@ const BUG = [['.#.#.#.', '#######', '.#####.', '#######', '.#.#.#.'], ['#.#.#.#'
 function bug(frame, gold) {
   const v = new Vox(), body = M(gold ? '#ffd75a' : '#6fe08a', 0), dark = tone(body, -0.38), lite = tone(body, 0.3);
   BUG[frame].forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === '#') v.set(i - 3, 0, j - 2, j === 0 || j === 4 || i === 0 || i === 6 ? dark : body); });
-  v.box(-2, 1, -1, 3, 2, 2, body); v.box(-1, 2, -1, 2, 3, 1, lite);                      // the shell
+  v.box(-2, 1, -1, 3, 2, 2, body); v.box(-1, 2, -1, 2, 3, 1, glow(lite));                // the shell, lit like the screen it came off
   v.box(-2, 1, 1, 3, 2, 2, dark);
   v.set(-1, 1, 2, glow('#f4fff0')); v.set(1, 1, 2, glow('#f4fff0'));                      // eyes
   return v;
@@ -56,8 +56,7 @@ export async function enter(office) {
   const w = createWorld(office, {
     id: 'afterhours', background: '#07070b', shadows: 11,
     camera: { first: true, fov: 62, yaw: 0, pitch: 0.06, minPitch: -0.7, maxPitch: 0.8, height: 1.08 },
-    look: { tilt: 0, bloom: 0.5, glow: 2.1 },
-    hint: 'WASD to walk · drag (or ← →) to look · click, Space or E to swing · Esc back to the office',
+    grade: { tilt: 0, bloom: 0.5, glow: 2.1 },
   });
   const { scene, camera } = w;
   const R = Math.random;
@@ -92,7 +91,7 @@ export async function enter(office) {
   const attract = new THREE.Mesh(w.own(new THREE.PlaneGeometry(ARCADE_SCREEN.w, ARCADE_SCREEN.h)), office.screens.material('arcade'));
   attract.position.set(ARCADE_SCREEN.x, ARCADE_SCREEN.y, ARCADE_SCREEN.z);
   cabinet.children[0].add(attract);
-  w.thing({ x: 6.9, z: 5.0, label: 'BUG SQUASH — the flat version', object: cabinet, reach: 1.2,
+  w.thing({ x: 6.9, z: 5.0, label: 'BUG SQUASH', object: cabinet, reach: 1.2,
     use() { import('../ui/arcade.js').then((m) => m.playBugSquash({ office, ui: { ...(office.ui || {}), root: w.root } })).catch(() => null); } });
   // vents in the floor: where they come up
   const VENTS = [[-7.6, 5.2], [7.4, 1.0], [-7.8, -0.6], [6.6, 4.4]];
@@ -127,10 +126,10 @@ export async function enter(office) {
       g.fillStyle = game.rank === i + 1 ? '#5fe08a' : '#aab4c6'; g.font = `${Math.round(ch * 0.095)}px ${MONO}`;
       g.fillText(`${String(e.name).slice(0, 14)}  ${String(e.score).padStart(5, ' ')}`, cw * 0.97, ch * (0.29 + i * 0.13));
     });
-    if (green || red) { g.textAlign = 'left'; g.fillStyle = '#7f8aa0'; g.font = `${Math.round(ch * 0.09)}px ${MONO}`; g.fillText(green ? `score ${game.score}${game.rank ? ` · rank #${game.rank}` : ''} · E here to run it again` : 'E here to redeploy', cw * 0.04, ch * 0.93); }
+    if (green || red) { g.textAlign = 'left'; g.fillStyle = '#7f8aa0'; g.font = `${Math.round(ch * 0.09)}px ${MONO}`; g.fillText(green ? `score ${game.score}${game.rank ? ` · rank #${game.rank}` : ''}` : 'production was restored from backup', cw * 0.04, ch * 0.93); }
   }, { ppm: 220, gain: 1.15 });
   w.add(status.mesh, RACK.x, ROOM.z0 + 0.03, 'S', 1.78);
-  w.thing({ x: RACK.x, z: RACK.z + 0.3, label: 'deploy again', reach: 1.4, hidden: () => game.state === 'playing' || game.state === 'ready', use: () => start() });
+  w.thing({ x: RACK.x, z: RACK.z + 0.3, label: 'the build', reach: 1.4, hidden: () => game.state === 'playing' || game.state === 'ready', use: () => start() });
 
   /* ---- the mallet, in your hand ------------------------------------------------------------------------ */
   const flesh = voxelMaterial();

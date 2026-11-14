@@ -20,6 +20,7 @@ import { createPlayer } from './player.js';
 import { createVhs } from './vhs.js';
 import { createHud } from './hud.js';
 import { createSound } from './sound.js';
+import { createStalkers } from './pursuer.js';
 
 const FOV = 62;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -121,6 +122,8 @@ async function visit(office, opt) {
     /** More static on the tape (0..1), for a moment; things that interfere call this every frame. */
     interfere(k) { interference = Math.max(interference, k); },
   };
+
+  createStalkers(env);
 
   /* ---- input: ours while we run, in the capture phase so the office never hears it -- */
   const keys = () => player?.input.keys;

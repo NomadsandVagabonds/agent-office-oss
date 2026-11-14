@@ -97,11 +97,16 @@ test('delegation', async (t) => {
     const box = await h.inbox('bob-1');
     const mail = box.items.find((m) => m.delegationId === d.id);
     assert.ok(mail, 'the result is mail');
+    // …unless the delegator is waiting on the task at that moment: then the wait's answer is the delivery.
+    const waited = (await h.post('/api/delegations', { from: 'bob-1', to: 'fake', task: 'say:straight back', wait: true })).data.delegation;
+    assert.equal(waited.result, 'straight back');
+    assert.match(waited.delivered.how, /returned to the delegator/);
+    assert.ok(!(await h.inbox('bob-1')).items.some((m) => m.delegationId === waited.id));
     assert.equal(mail.from, d.to.name);
     assert.ok(mail.text.startsWith(`[Delegated task ${d.id} · completed]`));
     assert.ok(mail.text.includes(`Full timeline: office transcript ${d.to.agentId}`));
     assert.equal(mail.hop, 1, 'a result going home is the same exchange, not a step further');
-    assert.deepEqual((await h.get('/api/delegations?from=bob-1')).data.delegations.map((x) => x.id), [d.id]);
+    assert.deepEqual((await h.get('/api/delegations?from=bob-1')).data.delegations.map((x) => x.id), [waited.id, d.id]);
   });
 
   await t.test('a driven agent delegates with its own office tools and is woken with the result', async () => {
@@ -136,6 +141,7 @@ test('delegation', async (t) => {
 
   await t.test('the office tools a launched agent is given really work, and say who it is', async () => {
     const boss = await h.start('fake', { name: 'Toolsmith' });
+    await h.patch(`/api/harness/sessions/${boss.id}`, { wake: 'results' });
     const caps = (await h.turn(boss.id, 'mcp:office_capabilities')).said;
     assert.match(caps, /Agents the office can start here/);
     assert.match(caps, /fake\s+Fake Agent · acp/);
@@ -147,6 +153,11 @@ test('delegation', async (t) => {
     const d = (await h.get(`/api/delegations/${id}`)).data.delegation;
     assert.equal(d.from.agentId, boss.id);
     assert.equal(d.from.verified, true, 'the injected MCP server carries the session token');
+    // It waited for the result and got it as the tool's answer: the office does not also mail it, or spend a turn on it.
+    assert.match(d.delivered.how, /returned to the delegator, which was waiting for it/);
+    await sleep(150);
+    assert.equal((await h.session(boss.id)).turns, 2);
+    assert.ok(!(await h.inbox(boss.id)).items.some((m) => m.delegationId === id));
     assert.match((await h.turn(boss.id, 'mcp:office_delegation {}')).said, new RegExp(`^${id}  completed`));
     assert.match((await h.turn(boss.id, `mcp:office_transcript {"agent":"${d.to.agentId}"}`)).said, /── turn 1 · delegation from Toolsmith[\s\S]*made through mcp/);
     assert.match((await h.turn(boss.id, 'mcp:office_who')).said, /Toolsmith/);
@@ -311,7 +322,8 @@ test('delegation', async (t) => {
   });
 
   await t.test('a delegate that dies fails the task, and says why', async () => {
-    const d = (await h.post('/api/delegations', { from: 'bob-1', to: 'fake', task: 'say:half way; crash:3', wait: true })).data.delegation;
+    const started = (await h.post('/api/delegations', { from: 'bob-1', to: 'fake', task: 'say:half way; crash:3' })).data.delegation;
+    const d = await waitDone(h, started.id);
     assert.equal(d.status, 'failed');
     assert.match(d.error, /exited with code 3/);
     assert.equal(d.result, 'half way', 'what it got done is kept');

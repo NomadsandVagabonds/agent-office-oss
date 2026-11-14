@@ -162,8 +162,7 @@ export async function enter(office) {
     id: 'roof', bounds: DECK, far: 1200, shadows: 17,
     camera: { fov: 42, pitch: 0.13, dist: 9, yaw: -0.4, minPitch: 0.03, maxPitch: 1.2, maxDist: 16, height: 1.0 },
     fog: { color: '#d5e9f5', near: 45, far: 300 },
-    look: { tilt: 0.18 },
-    hint: 'WASD to walk · drag to look round · E to sit, to look, to use · Esc back to the office',
+    grade: { tilt: 0.18 },
   });
   const { scene } = w;
   const R = rng(20261113);
@@ -480,7 +479,7 @@ export async function enter(office) {
     // the same light the office has at this hour, from where this sky's sun is
     const el = Math.max(0.16, sky.dir.y);
     w.light({ sky: L.sky, ground: L.ground, hemi: L.hemi * (1 - overcast * 0.2), sun: L.sun, power: L.power * (1 - overcast * 0.55), dir: [sky.dir.x, el, sky.dir.z] });
-    w.look.glow = L.glow; w.look.bloom = L.bloom + sky.lit * 0.12;
+    w.grade.glow = L.glow; w.grade.bloom = L.bloom + sky.lit * 0.12;
     for (const m of sides) m.emissiveIntensity = sky.lit * 1.5;
     const on = Math.max(L.lamp, overcast > 0.6 ? 0.5 : 0);
     bulbMat.color.setScalar(on > 0.05 ? 1.0 + on * 0.5 : 0.4);

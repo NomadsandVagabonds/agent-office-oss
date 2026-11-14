@@ -47,7 +47,7 @@ export function createDelegations({ ctx, settings, file, harness, wake }) {
     validate: (d) => d && Array.isArray(d.delegations),
   });
   const byId = new Map(store.data.delegations.map((d) => [d.id, d]));
-  const waiters = new Map();             // delegation id → Set<() => void>
+  const waiters = new Map();             // delegation id → Set<{ check(), agentId }> — who is waiting on it right now
   const idleTimers = new Map();          // session id → timer that sends an idle delegate home
 
   // Whatever was in flight when the daemon stopped did not survive it.
@@ -63,7 +63,7 @@ export function createDelegations({ ctx, settings, file, harness, wake }) {
     }
     store.save();
     bus.broadcast({ type: EV.DELEGATIONS, delegation: view(d) });
-    for (const wakeUp of waiters.get(d.id) || []) wakeUp();
+    for (const waiter of [...(waiters.get(d.id) || [])]) waiter.check();
   }
 
   function pendingApproval(d) {
@@ -294,7 +294,11 @@ export function createDelegations({ ctx, settings, file, harness, wake }) {
     if (error) d.error = cleanText(error, 600);
     // Whoever cancelled their own task does not need a letter telling them so.
     if (quiet) d.delivered = { at: Date.now(), how: 'not mailed: the delegator cancelled it' };
-    else deliver(d);
+    // A delegator that is waiting on this very task is about to be handed the result as the answer to
+    // its wait. Mailing it too would be the same news twice — and, for a driven delegator, a turn spent on it.
+    else if (d.from.kind === 'agent' && [...(waiters.get(d.id) || [])].some((w) => w.agentId === d.from.agentId)) {
+      d.delivered = { at: Date.now(), how: 'returned to the delegator, which was waiting for it' };
+    } else deliver(d);
     save(d);
   }
 
@@ -340,8 +344,11 @@ export function createDelegations({ ctx, settings, file, harness, wake }) {
     return view(d);
   }
 
-  /** Wait until the task is finished, needs the human, or the time is up. Waiting never cancels. */
-  function wait(id, timeoutMs) {
+  /**
+   * Wait until the task is finished, needs the human, or the time is up. Waiting never cancels.
+   * `caller` is who is waiting (see finish: a delegator waiting on its own task is not also mailed the result).
+   */
+  function wait(id, timeoutMs, caller = {}) {
     const d = byId.get(id);
     if (!d) return Promise.reject(new SessionError(404, 'no such delegation'));
     const settled = () => TERMINAL.has(d.status) || !!pendingApproval(d);
@@ -350,16 +357,16 @@ export function createDelegations({ ctx, settings, file, harness, wake }) {
     return new Promise((resolve) => {
       const set = waiters.get(id) || new Set();
       waiters.set(id, set);
+      const waiter = { agentId: caller.agentId || null, check: () => { if (settled()) done(false); } };
       const done = (timedOut) => {
         clearTimeout(timer);
-        set.delete(check);
+        set.delete(waiter);
         if (!set.size) waiters.delete(id);
         resolve(view(d, timedOut ? { waitTimedOut: true } : {}));
       };
-      const check = () => { if (settled()) done(false); };
       const timer = setTimeout(() => done(true), cap);
       if (typeof timer.unref === 'function') timer.unref();
-      set.add(check);
+      set.add(waiter);
     });
   }
 
@@ -399,7 +406,7 @@ export function createDelegations({ ctx, settings, file, harness, wake }) {
       const d = session.turn?.delegationId ? byId.get(session.turn.delegationId) : null;
       if (d && !TERMINAL.has(d.status)) {
         bus.broadcast({ type: EV.DELEGATIONS, delegation: view(d) });
-        for (const wakeUp of waiters.get(d.id) || []) wakeUp();
+        for (const waiter of [...(waiters.get(d.id) || [])]) waiter.check();
       }
     },
     onSessionEnded(session, { reason } = {}) {

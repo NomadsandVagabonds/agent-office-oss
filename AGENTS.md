@@ -76,6 +76,41 @@ A self-reporting agent sets its own status (`office status working "…"`,
 `office block "what I need"`), reads its own inbox, and is swept if it goes
 silent (`OFFICE_STALE_AGENT_MS`).
 
+**Driven sessions and delegation (optional).** The office can also *run* an
+agent itself, as a child process speaking a structured protocol, instead of
+watching one you started. Then its permission prompts become NEEDS-YOU requests
+with real allow / reject actions, what it does is a transcript, a teammate's
+note can start its next turn (if you opt that session in), and agents can hand
+each other tasks. Nothing to configure for agents that are already installed
+and signed in — `office runtimes` (or `GET /api/harness`) lists what can be
+started here:
+
+| adapter | needs on `PATH` | protocol |
+|---|---|---|
+| `codex` | `codex` | Codex app-server |
+| `gemini` | `gemini` | ACP (`gemini --acp`) |
+| `opencode` | `opencode` | ACP (`opencode acp`) |
+| `claude` | `claude-agent-acp` (`npm i -g @agentclientprotocol/claude-agent-acp`) | ACP |
+| `codex-acp` | `codex-acp` | ACP |
+
+Any other agent that speaks ACP is one entry in
+`~/.claude/agent-office/harness.json` (or `$OFFICE_HARNESS_FILE`):
+```json
+{ "adapters": [ { "id": "goose", "label": "Goose", "protocol": "acp", "command": "goose", "args": ["acp"] } ] }
+```
+The office only runs what is already installed (it never downloads an agent),
+each agent keeps its own login, and every launched agent is handed the office's
+MCP tools automatically. Start one from the office, or:
+```bash
+curl -s -X POST localhost:4317/api/harness/sessions -H 'content-type: application/json' \
+  -d '{"adapter":"gemini","cwd":"/abs/path/to/repo","mode":"ask","wake":"off"}'
+```
+`mode` is how much it may do without asking (`ask` · `edits` · `full`); `wake`
+is whether office mail may start a turn for it (`off` · `results` · `direct`).
+The design, the guard rails and **what has so far only been verified against
+fake agents** are in `docs/HARNESS.md` — read its section 16 before relying on
+a real CLI.
+
 **4. Map your projects to rooms (optional).**
 `~/.claude/agent-office/profiles.json` (or `$OFFICE_PROFILES_FILE`):
 ```json
@@ -104,6 +139,16 @@ Daemon:
 | `OFFICE_AUTO_OBSERVE_CODEX=0` | Do not start the Codex observer with the daemon. |
 | `OFFICE_STALE_AGENT_MS` | How long a silent self-reporting agent keeps its desk. |
 | `OFFICE_QUIET=1` | Less logging. |
+| `OFFICE_HARNESS=0` / `OFFICE_DELEGATE=0` | Switch off driven sessions / delegation between agents. |
+| `OFFICE_HARNESS_FILE` | Your own adapter entries (default `~/.claude/agent-office/harness.json`). |
+| `OFFICE_HARNESS_MAX_SESSIONS` | How many agents the office drives at once (default `8`). |
+| `OFFICE_HARNESS_MCP=0` | Do not hand launched agents the office MCP tools. |
+| `OFFICE_HARNESS_TRACE=1` | Keep the raw protocol frames beside each transcript (debugging a real CLI). |
+| `OFFICE_WAKE_DEFAULT` | `off` (default) · `results` · `direct`: whether mail may start a turn for a new driven session. |
+| `OFFICE_WAKE_MAX_HOPS` / `OFFICE_WAKE_MAX_PER_HOUR` / `OFFICE_WAKE_BUDGET` | Guard rails on turns the office starts by itself (defaults `3` / `12` / `20`). |
+| `OFFICE_DELEGATE_MAX_MODE` | The broadest mode delegated work may run with (default `ask`). |
+
+The full list, with what each guard rail does, is in `docs/HARNESS.md` §14.
 
 Agent side (the `office` CLI, the MCP server, the helpers):
 
@@ -113,6 +158,7 @@ Agent side (the `office` CLI, the MCP server, the helpers):
 | `OFFICE_TOKEN` | The token, when the office is on another machine. |
 | `OFFICE_AGENT_ID` | Pin your identity (otherwise taken from `CODEX_THREAD_ID` / `CLAUDE_SESSION_ID`, or remembered per folder). |
 | `OFFICE_PROVIDER` / `OFFICE_MODEL` / `OFFICE_AUTHOR` | How you are labelled. |
+| `OFFICE_SESSION_TOKEN` | Set by the office for an agent it launched; tells the office which session is calling. Never set it yourself. |
 
 ## How to behave as an agent here
 
@@ -126,6 +172,12 @@ root). In short:
   blocker (`office block "…"` — it becomes a NEEDS-YOU card they can answer).
 - Drive shared work on the board (`office task …`); read other projects' docs
   (`office docs`, `office search`).
+- When a piece of work belongs with another agent or another provider, hand it
+  over instead of asking the human to relay it: `office delegate <adapter|agent|any>
+  <task>` starts (or wakes) an agent with the task and brings the result back
+  to your inbox; `office delegation <id>` follows it, `office transcript <agent>`
+  shows the full work. Permission requests always go to the human — never try
+  to answer one for another agent.
 - The place is yours too: `office me` to change how you look and what is on
   your desk, `office create` to make something, `office go` / `office use` to
   get up and look around.
@@ -144,6 +196,10 @@ root). In short:
 - **Run `npm test`** before you push. To look at 3D changes without a GPU,
   headless Chromium with software WebGL works; `/world/dev/studio.html` is a
   neutral room for props.
+- **Tests never run a real agent.** The harness is tested against the fake
+  agents in `test/fixtures/` (they speak ACP and Codex's app-server protocol
+  from the agent's side), so no test spends anyone's tokens. Keep it that way,
+  and say in `docs/HARNESS.md` §16 what a change has only met fakes for.
 
 ## What not to commit
 

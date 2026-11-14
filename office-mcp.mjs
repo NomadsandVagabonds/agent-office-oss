@@ -223,7 +223,7 @@ const HANDLERS = {
       from: s.id, task: a.task, ...(a.to ? { to: a.to } : {}), title: a.title, role: a.role, mode: a.mode, model: a.model, name: a.name, cwd: a.cwd,
       clientRequestId: a.requestId, ...(a.context ? { context: {} } : {}),
     } });
-    const d = a.wait ? await waitForDelegation(res.delegation.id, waitSeconds(a)) : res.delegation;
+    const d = a.wait ? await waitForDelegation(res.delegation.id, waitSeconds(a), s.id) : res.delegation;
     return formatDelegation(d);
   },
   async office_delegation(a) {
@@ -235,7 +235,7 @@ const HANDLERS = {
     }
     if (!a.id) throw new OfficeError('which task? pass its id (dg_…), or call with no arguments to list yours', 400);
     if (action === 'cancel') return formatDelegation((await api(`/api/delegations/${E(a.id)}/cancel`, { body: { from: s.id, reason: a.reason || '' } })).delegation);
-    if (action === 'wait') return formatDelegation(await waitForDelegation(a.id, waitSeconds(a)));
+    if (action === 'wait') return formatDelegation(await waitForDelegation(a.id, waitSeconds(a), s.id));
     return formatDelegation((await api(`/api/delegations/${E(a.id)}`)).delegation);
   },
   async office_transcript(a) {

@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { startHarnessOffice, waitFor, sleep, ADAPTERS } from './fixtures/harness-helpers.mjs';
 import { tempDir } from './helpers.mjs';
@@ -656,6 +657,93 @@ test('driven sessions and the daemon\'s own life', async (t) => {
       assert.equal((await o.get('/api/harness/wake')).data.paused, true, 'the pause switch survives a restart');
       assert.equal((await o.get('/api/harness/sessions/d_0123456789ab/transcript')).data.missing, true);
     } finally { await o.stop(); }
+  });
+
+  await t.test('old finished sessions are forgotten, transcripts and all', async () => {
+    const dir = tempDir('office-harness-prune-');
+    fs.mkdirSync(path.join(dir, 'harness'));
+    const sessions = {};
+    for (let i = 1; i <= 121; i++) {
+      const id = `d_${String(i).padStart(12, '0')}`;
+      sessions[id] = { id, adapter: 'fake', label: 'Fake Agent', provider: 'gemini', protocol: 'acp/1', cwd: dir, name: `Old ${i}`,
+        mode: 'ask', wake: 'off', state: 'ended', startedAt: 1000 + i, endedAt: 2000 + i, turns: 1 };
+    }
+    fs.writeFileSync(path.join(dir, 'harness.json'), JSON.stringify({ v: 1, wakePaused: false, sessions }));
+    const oldest = path.join(dir, 'harness', 'd_000000000001.jsonl');
+    const kept = path.join(dir, 'harness', 'd_000000000121.jsonl');
+    for (const file of [oldest, kept]) fs.writeFileSync(file, '{"id":"session","kind":"session","state":"ended","seq":1}\n');
+    const o = await startHarnessOffice({ dir });
+    try {
+      assert.equal((await o.get('/api/harness/sessions?all=1')).data.sessions.length, 121);
+      const s = await o.start('fake');
+      await o.del(`/api/harness/sessions/${s.id}`);
+      const listed = (await o.get('/api/harness/sessions?all=1')).data.sessions;
+      assert.equal(listed.length, 120, 'the newest 120 finished sessions are kept');
+      assert.ok(listed.some((x) => x.id === s.id) && listed.some((x) => x.id === 'd_000000000121'));
+      assert.ok(!listed.some((x) => x.id === 'd_000000000001' || x.id === 'd_000000000002'));
+      await waitFor(() => !fs.existsSync(oldest), { what: 'the oldest transcript to be removed' });
+      assert.ok(fs.existsSync(kept));
+      assert.equal((await o.get('/api/harness/sessions/d_000000000001/transcript')).status, 404);
+    } finally { await o.stop(); }
+  });
+
+  await t.test('from another machine: the list is readable, transcripts and controls are not (like terminals)', async (t2) => {
+    const outside = Object.values(os.networkInterfaces()).flat().find((a) => a && a.family === 'IPv4' && !a.internal)?.address;
+    if (!outside) { t2.skip('this machine has no address other than loopback'); return; }
+    const token = 'test-office-token-0123456789';
+    const remote = (o) => async (method, p, body) => {
+      const res = await fetch(`http://${outside}:${o.port}${p}`, { method,
+        headers: { authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+      return { status: res.status, data: await res.json().catch(() => null) };
+    };
+    const o = await startHarnessOffice({ env: { OFFICE_HOST: '0.0.0.0', OFFICE_TOKEN: token } });
+    try {
+      // Some machines will not route to their own address; that is not what is being tested.
+      try { await fetch(`http://${outside}:${o.port}/api/health`, { signal: AbortSignal.timeout(1500) }); }
+      catch { t2.skip(`cannot reach ${outside} from here`); return; }
+      const s = await o.start('fake', { name: 'Local' });
+      const n = await o.begin(s.id, 'say:private work; ask:rm -rf build');
+      const card = await o.need(s.id);
+      const far = remote(o);
+      assert.equal((await fetch(`http://${outside}:${o.port}/api/harness`)).status, 401, 'no token, no office');
+      const seen = await far('GET', '/api/harness');
+      assert.equal(seen.status, 200);
+      assert.ok(seen.data.sessions.some((x) => x.id === s.id), 'who is here is no secret to someone let into the office');
+      assert.equal((await far('GET', `/api/harness/sessions/${s.id}/transcript`)).status, 403);
+      assert.equal((await far('POST', '/api/harness/sessions', { adapter: 'fake', cwd: o.work })).status, 403);
+      assert.equal((await far('POST', `/api/harness/sessions/${s.id}/turn`, { text: 'say:from afar' })).status, 403);
+      assert.equal((await far('POST', `/api/harness/sessions/${s.id}/interrupt`)).status, 403);
+      assert.equal((await far('DELETE', `/api/harness/sessions/${s.id}`)).status, 403);
+      assert.equal((await far('POST', '/api/delegations', { to: 'fake', task: 'say:x', cwd: o.work })).status, 403);
+      assert.equal((await far('POST', '/api/harness/wake', { paused: true })).status, 403);
+      assert.equal((await far('POST', card.respond.url, { action: 'once' })).status, 403);
+      assert.equal((await o.need(s.id)).id, card.id);
+
+      // The socket: the office's state arrives, a transcript watch is quietly not honoured.
+      // (A browser carries the token as the cookie the office set; Node's WebSocket takes headers as an extension.)
+      const ws = new WebSocket(`ws://${outside}:${o.port}/`, { headers: { cookie: `office_token=${token}` } });
+      const frames = [];
+      ws.onmessage = (e) => frames.push(JSON.parse(e.data));
+      await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
+      await waitFor(() => frames.some((m) => m.type === 'harness'), { what: 'the harness snapshot over the network' });
+      ws.send(JSON.stringify({ type: 'transcript:watch', sessionId: s.id }));
+      await sleep(40);
+      await o.answer(card.id, { action: 'once' });
+      await o.turnDone(s.id, n);
+      await sleep(80);
+      assert.equal(frames.filter((m) => m.type === 'transcript').length, 0);
+      ws.close();
+    } finally { await o.stop(); }
+
+    // The operator can open terminals to token holders; transcripts follow that one switch.
+    const opened = await startHarnessOffice({ env: { OFFICE_HOST: '0.0.0.0', OFFICE_TOKEN: token, OFFICE_REMOTE_TERMINALS: '1' } });
+    try {
+      const s = await opened.start('fake');
+      await opened.turn(s.id, 'say:shared on purpose');
+      const read = await remote(opened)('GET', `/api/harness/sessions/${s.id}/transcript`);
+      assert.equal(read.status, 200);
+      assert.ok(read.data.entries.some((e) => e.text === 'shared on purpose'));
+    } finally { await opened.stop(); }
   });
 
   await t.test('the harness can be switched off, and limited', async () => {

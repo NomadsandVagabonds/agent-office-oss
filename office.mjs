@@ -276,7 +276,7 @@ const commands = {
       ...(flags.context ? { context: { turns: Number(flags.context) || 0 } } : {}),
     } });
     let d = res.delegation;
-    if (flags.wait) d = await waitForDelegation(d.id, flags.wait === true ? 45 : Number(flags.wait));
+    if (flags.wait) d = await waitForDelegation(d.id, flags.wait === true ? 45 : Number(flags.wait), self.id);
     if (flags.json) return out({ delegation: d });
     console.log(formatDelegation(d));
   },
@@ -302,7 +302,7 @@ const commands = {
       return flags.json ? out(res) : console.log(formatDelegation(res.delegation));
     }
     const id = words[0];
-    const d = flags.wait ? await waitForDelegation(id, flags.wait === true ? 45 : Number(flags.wait))
+    const d = flags.wait ? await waitForDelegation(id, flags.wait === true ? 45 : Number(flags.wait), self.id)
       : (await api(`/api/delegations/${encodeURIComponent(id)}`)).delegation;
     if (flags.json) return out({ delegation: d });
     console.log(formatDelegation(d));

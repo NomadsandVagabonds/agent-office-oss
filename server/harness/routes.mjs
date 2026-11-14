@@ -1,9 +1,11 @@
 // The Office — harness: the HTTP surface.
 //
-// Reading is open to whoever may read the office. Everything that starts a
+// Which agents exist and what state they are in is open to whoever may read
+// the office. A transcript is not: it is what a terminal would show, so it is
+// read on this machine only, like a terminal snapshot. Everything that starts a
 // process, gives an agent a turn, stops one or answers a permission request is
-// loopback-only, exactly like the terminal endpoints (lifted only by the
-// operator's OFFICE_REMOTE_TERMINALS=1). On top of that, the things only the
+// loopback-only too, exactly like the terminal endpoints (all lifted only by
+// the operator's OFFICE_REMOTE_TERMINALS=1). On top of that, the things only the
 // human may do are refused to any caller that presents an agent's session
 // token: an agent can delegate, read transcripts and send mail — it cannot
 // drive another agent directly, approve anything, or lift the pause.
@@ -124,7 +126,8 @@ export function registerHarnessRoutes(router, ctx) {
     const caller = harness.callerOf(c.req);
     if (caller.agentId) ctx.agents.seen(caller.agentId);
     return result;
-  }, { about: 'What a driven session did, as a timeline (?after=<seq> for what changed since, &limit=).' });
+    // Loopback-only, like a terminal snapshot: it is the same material — commands, paths, output.
+  }, { ...local, about: 'What a driven session did, as a timeline (?after=<seq> for what changed since, &limit=). This machine only.' });
 
   router.post('/api/harness/sessions/:ref/requests/:rid', async (c) => guard(async () => {
     const who = humanOnly(c, 'answer a permission request');
@@ -178,17 +181,23 @@ export function registerHarnessRoutes(router, ctx) {
 
   router.post('/api/delegations', async (c) => guard(async () => {
     const body = await c.json();
-    const result = delegations.request(body, delegator(c, body));
-    if (body.wait) return { ok: true, delegation: await delegations.wait(result.id, body.timeoutMs) };
+    const who = delegator(c, body);
+    const result = delegations.request(body, who);
+    if (body.wait) return { ok: true, delegation: await delegations.wait(result.id, body.timeoutMs, who) };
     return { ok: true, delegation: result };
   }), { ...local, about: 'Give another agent a task: {task, to?:<adapter|agent> (left out: the office picks, by remaining allowance when known), from?, title?, role?, model?, mode?, cwd?, context?:{session?,turns?}, wait?, timeoutMs?}.' });
 
   router.get('/api/delegations/:id', (c) => guard(async () => {
     const d = delegations.get(c.params.id);
     if (!d) throw new HttpError(404, 'no such delegation');
-    if (c.query.get('wait') === '1') return { delegation: await delegations.wait(d.id, Number(c.query.get('timeoutMs')) || undefined) };
+    // `from` (or a session token) says who is waiting: a delegator waiting on its own task gets the result here, not again by mail.
+    if (c.query.get('wait') === '1') {
+      let who = {};
+      try { who = delegator(c, null); } catch { who = {}; }          // reading needs no identity; a stale one is simply nobody
+      return { delegation: await delegations.wait(d.id, Number(c.query.get('timeoutMs')) || undefined, who) };
+    }
     return { delegation: delegations.view(d) };
-  }), { about: 'One delegated task: status and result (?wait=1&timeoutMs= holds until it finishes, needs the human, or times out).' });
+  }), { about: 'One delegated task: status and result (?wait=1&timeoutMs=&from=<you> holds until it finishes, needs the human, or times out).' });
 
   router.post('/api/delegations/:id/cancel', async (c) => guard(async () => {
     const body = await c.json();

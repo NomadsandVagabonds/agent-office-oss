@@ -190,7 +190,10 @@ The lift on the landing is usable. Click its doors (or walk up and press `E`)
 and a floor panel comes up; pick a floor and you get the doors, "Doors
 closing.", a few seconds in the car with the display counting floors, a ding,
 and you are somewhere else. `Esc` always brings you home: back through the lift
-to the landing, in walk mode. `/?level=roof` goes straight to a floor.
+to the landing, in walk mode. `/?level=roof` goes straight to a floor, and
+`&cam=x,z,dist,yaw,pitch` stands you somewhere on it with the camera already
+pointed (the office's own `?cam`, one floor along) — which is how to take a
+picture of one. In the console the same thing is `office.level.look({ x, z, yaw, pitch, dist })`.
 
 A **level** is anywhere the lift can open its doors: more office, a place to
 sit, a game, a work surface.
@@ -262,9 +265,10 @@ export async function enter(office) {
   w.light({ sky: '#e3ecff', ground: '#8a7560', hemi: 1.5, power: 2.4 });
   w.prop('tree', 3, -2, 'S', { o: { stage: 3 } });           // anything in props/index.js
   w.seat(w.prop('bench', 0, 3.5, 'N'), 'a bench');             // E sits you down
-  w.add(w.sign('NO FISHING'), -2, -4.99, 'S', 1.2);            // words live in the world
-  w.thing({ x: -2, z: 0, label: 'the pond', use: () => w.sfx('water') });
-  w.lift(0, -5, 'S');                                          // where you arrive, and the way back
+  w.box(-3.5, 0, -1, -0.5, 0.04, 1.5, '#3f7f9a', { cast: false });
+  w.thing({ x: -2, z: 0.2, label: 'the pond', use: () => w.sfx('water') });
+  const door = w.lift(0, -3, 'S');                             // where you arrive, and the way back
+  door.group.add(w.sign('NO FISHING').translateX(-0.9).translateY(1.5).translateZ(0.012));   // words live in the world
   return w.run();                                              // resolves when they leave
 }
 ```
@@ -276,12 +280,14 @@ What the kit gives a level (`w`): `floor` `wall` `box` `room` (four walls on a
 slab, with the lift set into one) · `prop` (the office's furniture) · `vox`
 (something you sculpt) · `sign` · `screen` (a live canvas on a glowing panel) ·
 `lamp` `light` · `thing` `seat` · `lift` · `focus` (hold the camera on
-something) · `on(event, fn)` (the daemon's events, until the level closes) ·
-`onFrame` `onKey` `onClick` · `sfx` `music` · `run` `leave`.
+something) · `look` (stand somewhere and point the camera, for a picture) ·
+`on(event, fn)` (the daemon's events, until the level closes) · `onFrame`
+`onKey` `onClick` · `sfx` `music` · `run` `leave`.
 
-One house rule: **a level does not talk over itself.** There are no caption
-boxes; if there are words they are in the world — on a sign, a screen, a
-clipboard, the lift's display.
+One house rule: **a level does not talk over itself.** No caption boxes, no
+line of instructions; the only thing the kit ever prints is the key and the
+name of what you are standing at. If there are words they are in the world —
+on a sign, a screen, a clipboard, the lift's display.
 
 ### A work module
 

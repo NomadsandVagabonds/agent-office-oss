@@ -186,9 +186,8 @@ export async function enter(office) {
   const net = office.net;
   const w = createWorld(office, {
     id: 'mission', background: '#06080e', shadows: 12,
-    camera: { fov: 46, yaw: 0, pitch: 0.1, dist: 7.8, minDist: 3.5, maxDist: 14, minPitch: 0.03, maxPitch: 1.2, height: 1.85, anchor: { x: 0, z: -0.6, pull: 0.9 } },
-    look: { tilt: 0, bloom: 0.34, glow: 1.9 },
-    hint: 'WASD to walk · drag to look round · E in front of a screen to read it · E at a console to go to that project',
+    camera: { fov: 46, yaw: 0, pitch: 0.16, dist: 7.4, minDist: 3, maxDist: 14, minPitch: 0.02, maxPitch: 1.2, height: 1.3, anchor: { x: 0, z: -0.6, pull: 0.9 } },
+    grade: { tilt: 0, bloom: 0.34, glow: 1.9 },
   });
   const { scene } = w;
   w.light({ sky: '#8fa3d8', ground: '#262838', hemi: 0.85, sun: '#c8d4ff', power: 0.7, dir: [0.2, 1, 0.6] });
@@ -238,7 +237,7 @@ export async function enter(office) {
         if (p) {
           c.plate = w.add(w.sign(p.name.toUpperCase().slice(0, 18), { height: 0.2, bg: '#1a2236', fg: '#dfe6f0', accent: p.color || ['#3f7d74', '#5a6fa8', '#8a5a8f', '#6f8a4a', '#b5683f', '#c9893f', '#3f7f9a', '#8a5a62'][hashId(String(p.id)) % 8] }), c.x - 0.74, c.z + 0.03, 'S', 1.3);
           c.plate.position.x += c.plate.geometry.parameters.width / 2 + 0.03;
-          c.thing.label = `${p.name} — go to its room`;
+          c.thing.label = p.name;
         }
       }
       c.project = p;
@@ -252,8 +251,8 @@ export async function enter(office) {
   /* ---- stand in front of a screen to read it properly ----------------------------------------------- */
   w.prop('lectern', 0, -3.1, 'S');
   let reading = null;
-  for (const [key, x, wide, label] of [['who', -5.1, 4.6, 'who is on what'], ['waiting', 0, 5.3, 'who is waiting on you'], ['boards', 5.1, 4.6, 'the boards']]) {
-    w.thing({ x, z: key === 'waiting' ? -2.55 : -3.3, label: `read: ${label}`, reach: key === 'waiting' ? 1.2 : 1.5,
+  for (const [key, x, wide, label] of [['who', -5.1, 4.6, 'the roster'], ['waiting', 0, 5.3, 'the waiting list'], ['boards', 5.1, 4.6, 'the boards']]) {
+    w.thing({ x, z: key === 'waiting' ? -2.55 : -3.3, label, reach: key === 'waiting' ? 1.2 : 1.5,
       use() {
         reading = key;
         w.focus([x, 1.92, WALL_Z + wide * 1.34], [x, 1.92, WALL_Z], { fov: 30, alone: true, onLeave: () => { reading = null; } });

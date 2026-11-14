@@ -38,6 +38,7 @@ from small modules that share one context object:
 | `prompts.mjs` · `inbox.mjs` · `comms.mjs` | NEEDS-YOU · per-agent mail with read cursors · channels and direct notes |
 | `tasks.mjs` · `knowledge.mjs` · `creations-store.mjs` | kanban · binder over HTTP · the creation legacy |
 | `activity.mjs` | one human-readable line per thing that happened |
+| `harness/` | sessions the office drives itself over a structured protocol (ACP, Codex app-server): turns, transcripts, real approvals, wake-on-mail, delegation — see `docs/HARNESS.md` |
 | `world/` | the floor plan, where everyone is, momentary effects, the world as text |
 | `routes.mjs` · `world/routes.mjs` | every endpoint, self-described at `GET /api` |
 
@@ -65,6 +66,12 @@ Two facets that must stay joined:
 - **Runtime facet** — `RuntimeManager.getSession(id)` / `listSessions()` in
   `runtime-manager.mjs`: a tmux-backed managed terminal
   (spawn/capture/sendInput/kill), with a `provider` (`claude|codex|shell`).
+  Or a **driven session** (`server/harness`): the office runs the agent as a
+  child process speaking ACP or Codex's app-server protocol. Then the agent
+  facet carries `driven: true`, is derived from the agent's own event stream
+  (no hooks), and its `runtime` summary has `kind: "driven"`, `mode`, `wake`,
+  `state` and `links` to the session's transcript and controls. The session id
+  is the agent id; the provider's own id is only a reference.
 
 The join key is an explicit `sessionId` carried on the agent (the hook bridge
 passes it; the office renders by it), with `cwd` as a fallback — correlating by
@@ -97,6 +104,9 @@ WS message envelope `{ type, ... }`:
 | `creations` | `{ count, latest }` | a creation was signed |
 | `activity` | `{ item }` | one line for the "what happened" feed |
 | `usage` | `{ usage:UsageSnapshot }` | client connects; a provider's remaining allowance changed |
+| `harness` | `{ sessions:[DrivenSession], wake:{paused,limits}, delegations:{active} }` | client connects; a driven session, the pause switch or a guard rail changed |
+| `transcript` | `{ sessionId, agentId, entry }` | a driven session's timeline gained or revised an entry — sent only to clients that asked with `{type:"transcript:watch", sessionId}` |
+| `delegations` | `{ delegation }` | a task one agent gave another changed state |
 
 The `world*` events are specified in `WORLD.md`. The classic client ignores them.
 
@@ -120,6 +130,22 @@ daemon controls nothing. So `PermissionRequest.actions = promptActions(provider)
 only` · else `[]`. The UI renders only what the runtime can honor — no fake
 "always allow", and no actions at all on an observed session it doesn't own.
 
+**Request-backed prompts.** A driven session's permission request (or
+question) is a prompt that carries the live `request` it stands for. Its
+actions are that request's own — `once`, `always` (remembered by the office for
+the session, per category, and never past the session's folder for files),
+`reject` — and answering resolves the agent's request over its protocol.
+Answering is loopback-only and refused to any caller presenting an agent's
+session token; words alone are never taken for a decision. Such a prompt is
+not restored after a restart: the process that asked is gone.
+
+Every prompt, whatever stands behind it, also carries `ask` (what is being
+asked, as plain fields: `summary, tool, toolKind, command, files, detail,
+category, questions`) and `respond` (`method, url, textField, reaches` and
+`actions: [{ id, kind, label, text: none|optional|required, body }]`), so a
+client can render and answer it without knowing the runtime. Shapes and
+examples: `docs/HARNESS.md` §14.
+
 ## 5. RuntimeAdapter  (capability-typed, per provider)
 
 `RuntimeManager` registry (`runtime-manager.mjs` `RUNTIMES[]`) maps a runtime
@@ -139,6 +165,12 @@ listSessions · runtimeStatus`. Every adapter declares explicit capabilities
 | `custom` | ✅ self-report | 📥 inbox | ✗ | ✗ | joined over HTTP / MCP; reads its own mail |
 | `openrouter` *(exp.)* | ✗ | ✗ | ✗ | ✗ | scaffold; claims nothing until built |
 | `unknown` (observed) | ✅ tmux | ⚠️ relay | ✗ | ✗ | not ours; watch only, never grant/stop |
+| *any provider, driven* | ✅ its event stream | ✅ a turn | ✅ | ✅ | `capabilityFor(session)`: true while the office holds the process, nothing once it has ended |
+
+Capability follows **how a session is run**, not which provider it is:
+`capabilityFor(session)` gives a driven session `control: true` (the office can
+grant, deny and stop it over its protocol), while the same provider in a
+terminal stays a relay. The provider table above is unchanged.
 
 `capabilityOf()` falls back to **`unknown`** (observe/relay, no control/spawn),
 **never `shell`** — so an unrecognized provider can never render a fake
@@ -250,6 +282,46 @@ balance — spending money is a person's decision.
 Agents read it with `office usage` (MCP: `office_usage`); in the office it is the
 fuel chip in the top bar, the **What is left** panel (`U`), and four glass tanks
 beside the big board (`office use gauges`).
+
+### Harness  (sessions the office drives, and work handed between agents)
+`server/harness/` starts an agent as a child process and speaks its structured
+protocol — ACP for anything that implements it (Gemini CLI, opencode, Claude
+Code and Codex through their ACP wrappers, others by one entry in the
+operator's `harness.json`), Codex's own app-server protocol for Codex. Which
+agents can be started here is `GET /api/harness`; a request names an adapter
+id and can never supply a command.
+
+```
+DrivenSession { id (= agentId), adapter, provider, protocol, cwd, name, model,
+                mode:'ask'|'edits'|'full', wake:'off'|'results'|'direct',
+                state:'starting'|'idle'|'running'|'waiting'|'ended'|'failed', live,
+                turns, queued, turn?, pending:[{id,promptId,kind,category,title}],
+                grants, features, nativeRef, origin, usage?, limits?, caps, controls }
+Delegation    { id:dg_*, title, role, task, status:'queued'|'running'|'waiting'|'completed'|'failed'|'cancelled'|'interrupted',
+                from:{kind:'human'|'agent',agentId,name,verified?}, to:{agentId,sessionId,adapter,provider,name,started,chosenBecause?},
+                hop, mode, parentId?, result?, error?, pendingApproval?, handoff?, delivered?, next? }
+```
+
+- **Transcript** — an append-only timeline per session
+  (`GET /api/harness/sessions/:ref/transcript?after=<seq>`; entries of kind
+  `session · turn · user · message · thought · tool · plan · usage · permission ·
+  question · notice · handoff`), pushed as `transcript` events to clients
+  watching that session.
+- **Mail that wakes** — an idle driven session can be given a turn by a direct
+  note, opt-in per session, behind a pause switch, rates, a budget and a limit
+  on chains of agents waking agents; every automatic turn is recorded.
+- **Delegation** — `POST /api/delegations {task, to?}` starts (or wakes) an
+  agent with a task; the delegator can wait, poll and cancel; the result is
+  kept, is in the delegate's transcript, and is mailed back. A delegate never
+  runs with more freedom than its delegator, and a child finishing never
+  finishes its parent.
+
+Agents use `office delegate | delegation | transcript | runtimes` (MCP:
+`office_delegate`, `office_delegation`, `office_transcript`,
+`office_capabilities`). Everything that starts a process, gives a turn, stops
+one or answers a request is loopback-only; the things only the human may do
+refuse a caller presenting an agent's session token. Design, protocols, guard
+rails and what is so far verified only against fake agents: `docs/HARNESS.md`.
 
 ### Session Observatory  (real sessions get desks)
 `observe.mjs` (sibling of `simulate.mjs`; POSTs the daemon's standard hook

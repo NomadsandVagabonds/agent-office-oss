@@ -1,7 +1,8 @@
 // The Office — the lift's floor panel. A plate of round buttons, one per
 // floor in core/levels.mjs (the hidden ones only when their rule says so), a
-// display that says where the car is now, and the name of each floor beside
-// its button. Click one, or: arrows and Enter, or simply the letter on it.
+// display that says where the car is now, and the name of each floor on a
+// strip of label tape beside its button. Click one — or arrows and Enter, or
+// simply the letter on it; Esc steps back. (It does not say so: lifts do not.)
 //
 //   const level = await openFloorPanel(office, { current: 'lobby' });   // a level, or null if you stepped back
 import { h } from './dom.js';
@@ -36,11 +37,9 @@ export function openFloorPanel(office, opt = {}) {
         h('small', level.blurb), h('span.kind', KIND[level.kind] || level.kind)));
       return row;
     });
-    const note = h('span', '↑ ↓ and Enter, or the letter on a button');
-    const panel = h('div.liftpanel',
+    const panel = h('div.liftpanel.glass',
       h('div.led', h('b', here.unmarked ? '' : here.floor), h('span', 'this car is at', h('br'), h('strong', here.name))),
-      h('div.floors', rows),
-      h('footer', note, h('span', h('kbd', 'Esc'), ' step back')));
+      h('div.floors', rows));
     const veil = h('div.liftveil', { onclick: () => finish(null) });
     parent.append(veil, panel);
 
@@ -55,7 +54,6 @@ export function openFloorPanel(office, opt = {}) {
       const level = levels[index];
       if (level.id === here.id) {                            // the button for the floor you are on: it just blinks at you
         rows[index].classList.remove('nudge'); void rows[index].offsetWidth; rows[index].classList.add('nudge');
-        note.textContent = `You are already on ${level.floor}.`;
         return;
       }
       pressed = true;

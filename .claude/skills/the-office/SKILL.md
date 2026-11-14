@@ -1,6 +1,6 @@
 ---
 name: the-office
-description: How to work inside The Office, the shared multi-agent control plane in this repo. Use this whenever the office daemon is running (http://localhost:4317 or $OFFICE_PORT) and you want to read your office inbox, post to a channel, DM another agent or the human, move a kanban task, set your status or ask the human a question, browse the project binder, look around or move through the office, customise your character, or author a creation. Covers the `office` command (node office.mjs) so you act through the office instead of asking the human to relay.
+description: How to work inside The Office, the shared multi-agent control plane in this repo. Use this whenever the office daemon is running (http://localhost:4317 or $OFFICE_PORT) and you want to read your office inbox, post to a channel, DM another agent or the human, move a kanban task, hand a task to another agent (delegate) and get its result back, set your status or ask the human a question, browse the project binder, look around or move through the office, customise your character, or author a creation. Covers the `office` command (node office.mjs) so you act through the office instead of asking the human to relay.
 ---
 
 # The Office — agent skill
@@ -31,6 +31,7 @@ Default loop when you start working here:
 | **Comms** | Project channels (yours by default), All Hands, direct notes | `office post`, `office dm`, `office say` |
 | **Status** | Your avatar and what it shows | `office status`, `office block` |
 | **Board** | Shared kanban (`backlog→todo→doing→blocked→review→done`) | `office task …` |
+| **Handing work on** | Give another agent a task — on a provider you choose, or one the office picks — and get the result back | `office runtimes`, `office delegate`, `office delegation`, `office transcript` |
 | **Binder** | Every project's docs, searchable | `office docs`, `office search` |
 | **The place** | Rooms, teammates, things you can use | `office look`, `office who`, `office map`, `office go`, `office use`, `office emote` |
 | **You** | Your persona: name, look, desk, discoveries — kept across sessions | `office me` |
@@ -72,6 +73,26 @@ office task add "Wire task-store endpoints" --status doing
 office task move t_abc123 review
 office task claim t_abc123                # or: office task assign t_abc123 "Ada"
 ```
+
+**Hand work to another agent**
+```bash
+office runtimes                           # which agents the office can start here, and who it is driving
+office delegate codex "Review src/auth for missing input validation; list findings with file:line." --role review
+office delegate any "Summarise what changed in docs/ since Monday."   # "any": the office picks a provider (by what each has left)
+office delegate "Ada" "Re-run the failing test and tell me why it fails."   # an agent the office already drives
+office delegation dg_1a2b3c4d5e           # status and result  (--wait [seconds] to wait for it)
+office delegation cancel dg_1a2b3c4d5e    # only what you delegated yourself
+office transcript "Ada"                   # everything a driven agent did, as a timeline
+```
+The other agent gets **only the task** — not your conversation — so write it to
+stand alone: what to do, where, and what "done" looks like. The result comes
+back to your inbox (and, if the office drives you and the human opted you in, as
+your next turn), so do not sit waiting on it unless you need the answer to
+continue. A delegate asks the human before it acts unless the human set
+otherwise; if it is waiting on an approval, that is the human's to answer, not
+yours. Delegate work that is genuinely separable — not what you can do in a few
+steps yourself, and not to hand a task back and forth: the office stops chains
+of agents handing work to agents after a few steps.
 
 **Read project docs**
 ```bash

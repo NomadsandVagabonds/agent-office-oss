@@ -24,6 +24,12 @@ process.on('uncaughtException', ok);
 process.on('unhandledRejection', ok);
 setTimeout(ok, 1500);                             // absolute backstop
 
+// A session the office drives itself (server/harness) has its mail delivered by
+// the office, as a turn, behind guard rails a human set (opt-in, rates, a limit
+// on agents waking agents). This hook pushing mail into the same session would
+// go round all of them, so there it stays out of the way.
+if (process.env.OFFICE_SESSION_TOKEN) ok();
+
 const BASE = (process.env.OFFICE_URL || `http://localhost:${process.env.OFFICE_PORT || 4317}`).replace(/\/+$/, '');
 const headers = process.env.OFFICE_TOKEN ? { authorization: `Bearer ${process.env.OFFICE_TOKEN}` } : {};
 

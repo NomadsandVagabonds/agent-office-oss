@@ -206,8 +206,7 @@ export async function enter(office) {
     fog: { color: '#e4e6de', near: 26, far: 105 },
     camera: { fov: 50, yaw: 1.0, pitch: 0.09, dist: 7.5, minPitch: -0.04, maxPitch: 0.5, minDist: 3, maxDist: 12, height: 1.05,
       ceiling: ROOM.h - 0.35, inside: { x0: ROOM.x0 + 0.5, z0: ROOM.z0 + 0.5, x1: ROOM.x1 - 0.5, z1: ROOM.z1 - 0.5 } },
-    look: { tilt: 0.1, bloom: 0.3, glow: 1.5 },
-    hint: 'WASD to walk · Shift to hurry (they do not like it) · drag to look round · E to use what is in front of you',
+    grade: { tilt: 0.1, bloom: 0.3, glow: 1.5 },
   });
   const { scene } = w;
   const R = rng(1113);

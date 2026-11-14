@@ -15,7 +15,7 @@
 // And the office only ever runs what is already installed: it does not
 // download agents (no `npx`), so what runs is what the operator put on PATH.
 import fs from 'node:fs';
-import { whichSync } from './child.mjs';
+import { whichSync, redact } from './child.mjs';
 import { normalizeProvider } from '../../core/contract.mjs';
 
 export const PROTOCOLS = Object.freeze(['acp', 'codex-app-server']);
@@ -127,7 +127,7 @@ export function createCatalog(cfg, log) {
     return {
       id: adapter.id, label: adapter.label, provider: adapter.provider, protocol: adapter.protocol,
       available: !!resolved, note: adapter.note || '', custom: !!adapter.custom,
-      command: adapter.command,
+      command: redact(adapter.command, 200),            // shown to whoever may read the office: no home path
       modes: MODES.slice(),
       // What a session on this adapter can honour — declared here, never guessed from the provider's name.
       caps: {

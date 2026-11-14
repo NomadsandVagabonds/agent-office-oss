@@ -706,8 +706,11 @@ function dress(R, level, o, opt) {
   // something that follows you — in some visits. It stands in a plain room a little way in.
   let pursuer = null;
   const lairs = rooms.filter((r) => r.kind === 'plain' && !r.crawl && r.depth >= 2 && r.W >= 3.5 && r.D >= 3.5 && r.H >= 2.5 && r.H <= 3.4);
-  const wants = opt.pursuer === undefined ? R.chance(0.62) : !!opt.pursuer;
-  if (wants && lairs.length) { const lair = R.pick(lairs); pursuer = { room: lair.id, corner: R.int(0, 3), face: R.int(0, 9) }; }
+  // (always rolled the same way, so that asking for it — or for none — changes nothing else about the level)
+  const pickLair = (r) => (lairs.length ? { room: r.pick(lairs).id, corner: r.int(0, 3), face: r.int(0, 9) } : null);
+  const rolled = R.chance(0.62) ? pickLair(R) : null;
+  if (opt.pursuer === undefined) pursuer = rolled;
+  else if (opt.pursuer) pursuer = rolled || pickLair(R.fork('pursuer'));
 
   for (const room of rooms) {
     const rr = R.fork('dress:' + room.id);

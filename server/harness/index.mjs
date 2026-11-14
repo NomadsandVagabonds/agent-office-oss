@@ -23,6 +23,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { JsonFile } from '../persist.mjs';
+import { isLoopbackAddress } from '../config.mjs';
 import { EV } from '../../core/contract.mjs';
 import { createCatalog, MODES, MODE_LABEL } from './catalog.mjs';
 import { createCredentials, SESSION_HEADER } from './credentials.mjs';
@@ -108,6 +109,9 @@ export function createHarness(ctx, file) {
 
   function onClientMessage(client, message) {
     if (!message || message.type !== 'transcript:watch') return;
+    // A transcript is what a terminal would show — commands, paths, output — so it is watched
+    // from this machine only, exactly like a terminal snapshot (unless the operator opened those).
+    if (!cfg.remoteTerminals && !isLoopbackAddress(client.remote)) return;
     for (const set of watchers.values()) set.delete(client);
     const id = typeof message.sessionId === 'string' ? message.sessionId : '';
     if (!id || (id !== '*' && !SESSION_ID.test(id))) return;
@@ -136,7 +140,12 @@ export function createHarness(ctx, file) {
     store.data.sessions[session.id] = session.record;
     const ended = Object.values(store.data.sessions).filter((r) => r.state === 'ended' || r.state === 'failed')
       .sort((a, b) => (b.endedAt || 0) - (a.endedAt || 0));
-    for (const old of ended.slice(KEEP_ENDED)) delete store.data.sessions[old.id];
+    // The oldest finished sessions are forgotten, and their transcripts with them: the record does not grow for ever.
+    for (const old of ended.slice(KEEP_ENDED)) {
+      delete store.data.sessions[old.id];
+      if (!SESSION_ID.test(old.id)) continue;                       // only ever a file name we made ourselves
+      for (const suffix of ['.jsonl', '.jsonl.1', '.jsonl.2', '.trace.jsonl']) fs.rm(path.join(dir, old.id + suffix), { force: true }, () => {});
+    }
     store.save();
   }
 

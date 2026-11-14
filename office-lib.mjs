@@ -174,11 +174,13 @@ const DELEGATION_DONE = new Set(['completed', 'failed', 'cancelled', 'interrupte
  * have passed. The daemon holds one request for under a minute, so a longer
  * wait is several of them. Waiting never cancels the task.
  */
-export async function waitForDelegation(id, seconds) {
+export async function waitForDelegation(id, seconds, selfId = '') {
   const until = Date.now() + Math.max(1, Number(seconds) || 30) * 1000;
+  // Saying who is waiting lets the office hand the result over here instead of also mailing it.
+  const who = selfId ? `&from=${encodeURIComponent(selfId)}` : '';
   for (;;) {
     const left = Math.max(500, Math.min(40_000, until - Date.now()));
-    const { delegation } = await api(`/api/delegations/${encodeURIComponent(id)}?wait=1&timeoutMs=${left}`, { timeoutMs: left + 8000 });
+    const { delegation } = await api(`/api/delegations/${encodeURIComponent(id)}?wait=1&timeoutMs=${left}${who}`, { timeoutMs: left + 8000 });
     if (DELEGATION_DONE.has(delegation.status) || delegation.pendingApproval || Date.now() >= until - 250) return delegation;
   }
 }

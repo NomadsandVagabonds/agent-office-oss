@@ -170,7 +170,16 @@ export function normalizeProvider(value) {
  * @property {'pending'|'resolved'} status
  * @property {string|null} threadId            BBS thread for the exchange
  * @property {string|null} terminalSessionId   tmux session reply is relayed to
- * @property {string[]} actions   from promptActions(provider)
+ * @property {string[]} actions   from promptActions(provider) — or, with a `request`, from requestActions(request)
+ * @property {object|null} [request]  the live request of a driven session this prompt stands for:
+ *           { id, sessionId, kind:'permission'|'question', pending, category, tool, toolKind, title, command, paths,
+ *             detail, choices:[{action,label,scope?}], options:[{id,name,kind}], questions? }
+ * @property {{summary:string, tool:string, toolKind:string, command:string, files:string[], detail:string,
+ *             category:string, questions:object[]}} [ask]      what is being asked, as plain fields (every prompt)
+ * @property {{method:string, url:string, textField:string, reaches:('agent'|'turn'|'terminal'|'inbox'|null),
+ *             humanOnly?:boolean, thisMachineOnly?:boolean,
+ *             actions:Array<{id:string, kind:string, label:string, text:('none'|'optional'|'required'), body:object,
+ *                            scope?:string, covers?:string}>}} [respond]   every way to answer it, with the call to make
  * @property {number} createdAt
  * @property {number|null} resolvedAt
  */

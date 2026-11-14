@@ -315,7 +315,7 @@ without asking, whatever the provider:
 | mode | the office answers without asking | Codex additionally runs with |
 | --- | --- | --- |
 | `ask` (default) | nothing | `approvalPolicy: untrusted`, `sandbox: read-only` |
-| `edits` | file changes | `on-request`, `workspace-write` |
+| `edits` | file changes inside the session's folder | `on-request`, `workspace-write` |
 | `full` | everything | `never`, `danger-full-access` |
 
 For an ACP agent the mode is enforced at our end of the wire only: it decides
@@ -351,7 +351,10 @@ proxies no model call), minus `OFFICE_TOKEN`, plus `OFFICE_PORT`, `OFFICE_URL`,
 (`hooks/office-hook.sh`) send an `x-office-runtime-session` header, and the
 daemon drops hook events from a session it is driving — otherwise Claude Code
 run through its ACP wrapper, with the office hooks installed, would seat a
-second avatar.
+second avatar. The inbox hook (`hooks/office-inbox-hook.mjs`) also stays out of
+a driven session (it sees `OFFICE_SESSION_TOKEN`): there, mail is delivered by
+the office as a turn, behind the guard rails in section 10, and a hook pushing
+it in would go round all of them.
 
 ## 7. The wire protocols
 
@@ -518,6 +521,10 @@ or `$OFFICE_HARNESS_FILE`):
 ] }
 ```
 
+Other entries from the registry that should work the same way — none tried:
+GitHub Copilot (`copilot --acp`), Cursor (`cursor-agent acp`), goose
+(`goose acp`), Qwen Code (`qwen --acp`), Kiro (`kiro-cli acp`).
+
 Fields: `id`, `label`, `protocol` (`acp` | `codex-app-server`), `command`,
 `args`, `env`, `provider` (which office provider it counts as), `note`,
 `modeId` (an agent mode to select at start), `acpVersion: 2`, `mcp: false` (do
@@ -547,6 +554,17 @@ offers three actions, and is careful about what each promises
 
 The agent's own options stay reachable by id (`{ "optionId": "…" }`) for anyone
 who wants exactly what the agent offered.
+
+**Standing permission for files stops at the edge of the session's folder.**
+Whether it comes from `edits` mode or from a session grant, a request is only
+answered without asking when every file it names is inside the session's
+working folder — with symlinks followed, and "no file named" counted as
+outside. A request about a file anywhere else is always put to the human, and
+is offered as "once" or "reject" only: it is never the start of a session-wide
+grant. (T3 draws the same line in `clientPolicy.ts`.) This matters most for
+Codex in `edits` mode, where its own sandbox already lets it write in its
+folder: what it asks about is exactly what the sandbox refused. `full` mode is
+the operator's explicit choice and has no such edge.
 
 A decision has to be said. Words alone — "yes", "ok then" — are refused with a
 message naming the actions, never guessed at. Words sent *with* a decision
@@ -636,8 +654,9 @@ automatic turn — and every delegation an agent starts — passes one gate:
 Also: mail never interrupts a running turn (it is delivered when the session is
 next idle, several notes as one turn, oldest first, at most 20 notes of 4,000
 characters each per delivery); the read cursor moves only after the turn really
-started; the sender's receipt says `queued` only when a turn will in fact
-follow.
+started; the sender's receipt says `queued` only for a recipient that is opted
+in (`direct`) while automatic turns are not paused — otherwise it says
+`stored`, which is the truth.
 
 Mail a guard rail held back is not lost. It stays in the agent's inbox — where
 the agent finds it the next time it reads its mail — and the human can have it
@@ -691,7 +710,10 @@ not also appear in the inbox.
   needs the human, or the time is up (`waitTimedOut: true`; one request holds
   for at most 50 s). **Waiting never cancels.** A pending approval ends a wait
   and is reported (`pendingApproval`), and that is all: the delegator cannot
-  answer it. Approvals go to the human.
+  answer it. Approvals go to the human. A delegator that is waiting on its own
+  task at the moment it finishes gets the result as the answer to that wait and
+  is not also mailed it (`delivered.how` says which happened) — the same news
+  twice would cost a driven delegator a turn.
 - Cancel: the delegator or the human. Tasks the cancelled task delegated in
   turn are cancelled first. Cancelling stops the turn, not the agent.
 
@@ -762,11 +784,14 @@ The office does not ask any provider's API itself: it holds no credentials.
 
 ### HTTP
 
-Reading is open to whoever may read the office. Everything that starts a
-process, gives an agent a turn, stops one or answers a request is
-**loopback-only** (lifted only by the operator's `OFFICE_REMOTE_TERMINALS=1`,
-like the terminal endpoints). Routes marked *human* additionally refuse any
-caller that presents an agent's session token.
+Which agents exist, what state they are in and what was delegated to whom is
+open to whoever may read the office. A transcript is not — it is what a
+terminal would show — so it is read on this machine only, like a terminal
+snapshot. Everything that starts a process, gives an agent a turn, stops one or
+answers a request is **loopback-only** too (all of this lifted only by the
+operator's `OFFICE_REMOTE_TERMINALS=1`, like the terminal endpoints). Routes
+marked *human* additionally refuse any caller that presents an agent's session
+token.
 
 | method and path | body → answer |
 | --- | --- |
@@ -778,14 +803,14 @@ caller that presents an agent's session token.
 | `POST /api/harness/sessions/:ref/turn` *human* | `{ text }` → `{ ok, queued, turn \| position, session }` |
 | `POST /api/harness/sessions/:ref/interrupt` *human* | → `{ ok, interrupted, dropped, session }` |
 | `DELETE /api/harness/sessions/:ref` *human* | → `{ ok, session }` — ends the whole process group |
-| `GET /api/harness/sessions/:ref/transcript[?after=<seq>&limit=]` | → `{ sessionId, entries, truncated, seq, live }` |
+| `GET /api/harness/sessions/:ref/transcript[?after=<seq>&limit=]` *loopback* | → `{ sessionId, entries, truncated, seq, live }` |
 | `POST /api/harness/sessions/:ref/requests/:rid` *human* | `{ action \| optionId, text? }` → `{ ok, state, sessionGrant, followUp, session }` |
 | `POST /api/harness/sessions/:ref/mail` *human* | → `{ ok, delivered, waiting, … }` — deliver waiting mail now |
 | `GET /api/harness/wake` | → `{ paused, limits, sessions: [{ id, name, mode, budget, usedThisHour, held }] }` |
 | `POST /api/harness/wake` *human* | `{ paused: true \| false }` |
 | `GET /api/delegations[?from=&to=&status=&limit=]` | → `{ delegations }` |
 | `POST /api/delegations` | `{ task, to?, from?, title?, role?, mode?, model?, name?, cwd?, context?, clientRequestId?, wait?, timeoutMs? }` → `{ ok, delegation }` |
-| `GET /api/delegations/:id[?wait=1&timeoutMs=]` | → `{ delegation }` |
+| `GET /api/delegations/:id[?wait=1&timeoutMs=&from=]` | → `{ delegation }` |
 | `POST /api/delegations/:id/cancel` | `{ from?, reason? }` → `{ ok, delegation }` |
 | `POST /api/prompts/:id/reply` | existing endpoint; for a prompt with a `request`: `{ action: once \| always \| reject, text? }` or `{ optionId }` (loopback, *human*) |
 
@@ -865,7 +890,7 @@ The rest of a session's public view: `id` (= `agentId`), `adapter`, `label`,
 | event | payload | who gets it |
 | --- | --- | --- |
 | `harness` | `{ sessions, wake: { paused, limits }, delegations: { active } }` | every client: on connect, then on change (debounced) |
-| `transcript` | `{ sessionId, agentId, entry }` | only clients that sent `{ "type": "transcript:watch", "sessionId": "<id>" \| "*" }` (one watch per client; send another to change it) — and in-process listeners |
+| `transcript` | `{ sessionId, agentId, entry }` | only clients on this machine that sent `{ "type": "transcript:watch", "sessionId": "<id>" \| "*" }` (one watch per client; send another to change it) — and in-process listeners |
 | `delegations` | `{ delegation }` | every client, on each change of a delegation |
 | `prompts` | existing event; entries gain `request`, `ask`, `respond` | every client |
 
@@ -975,10 +1000,14 @@ different OS user.
    delegation rules checked against the scope rather than against what the
    caller says about itself.
 4. Transport security, and the token no longer passed in a child's environment
-   where the agent's own tools can read it — T3 puts it in the MCP server's
-   configuration instead.
-5. Transcripts treated as sensitive: today anyone who can read the office can
-   read every driven session's transcript, as they can read every terminal.
+   where the agent's own tools can read it — T3 puts it in the MCP server entry
+   it hands the provider (an `Authorization` header on an HTTP MCP server; see
+   `CodexAdapterV2.ts`), which the model's shell does not see.
+5. A decision about who may read what. Today transcripts are loopback-only,
+   like terminal snapshots, and any agent on this machine can read any driven
+   session's transcript; session lists, delegation records (the task and its
+   result) and permission prompts (the command or file asked about) go to
+   everyone who may read the office.
 6. Rate limits per credential rather than per agent name.
 
 ## 16. What is tested, and what has only met fakes
@@ -992,14 +1021,18 @@ processes (`test/harness*.test.mjs`, helpers in `test/fixtures/`):
   transcript (replies, reasoning, tools, plan, usage, revisions, paging);
   first-turn framing and tool injection; each permission answer (once, reject
   with words, the agent's own option, for-the-session with later auto-allow,
-  per-category); who may answer (not an agent, not another origin, not a prompt
-  without a live request); modes; interrupt, interrupt during a request, and an
+  per-category, and never past the edge of the session's folder — by absolute
+  path, by `..`, or through a symlink); who may answer (not an agent, not
+  another origin, not a prompt without a live request); that words alone are
+  not a decision; modes; interrupt, interrupt during a request, and an
   agent that ignores the stop (its process is ended); a crash mid-turn and
   mid-request (reported with the stderr line, cleaned up, in the activity
   feed); noise and a malformed frame on stdout; queueing; a failed turn and one
   cut by a limit; ending; ACP v2; an agent that wants a login; the bus
   (snapshot, watched transcript entries); the human's note as a turn; hook
-  events from a driven agent's CLI; restart; the trace file; the token masked.
+  events from a driven agent's CLI; restart; pruning; the trace file; the token
+  masked; and the whole surface from a non-loopback address with the office
+  token (the list is readable; transcripts, controls and answers are refused).
 - **`harness-codex.test.mjs`** — thread start with each mode's native policy;
   the stream; approvals as Codex decisions; a question; interrupt and a
   withdrawn request; failure and crash; the allowance (asked once, partial
@@ -1101,6 +1134,11 @@ In rough order of value:
   worktree per delegate (the workspace layer) would let several write at once.
 - **Images and files in a turn**; ACP **elicitation** (forms); **steering** a
   running turn instead of queueing behind it.
+- **Sub-agents inside a driven session.** Claude's Agent/Task tool and Codex's
+  collaboration threads show up here as ordinary tool calls, and updates for a
+  child session id are ignored. T3 tracks them as child executions
+  (`packages/provider-acp-registry/src/server/claudeAcp.ts`); the office could
+  show them as the helpers it already draws for hook-driven Claude sessions.
 - **Checkpoints and rollback** of a session's file changes.
 - **Codex instructions** through its own developer-message channel rather than
   the first-turn framing.

@@ -215,8 +215,7 @@ export function playRide(office, trip) {
   /* ---- what is on screen besides ---------------------------------------------------------------- */
   const ui = document.getElementById('ui') || document.body;
   const root = h('div.level.ride',
-    h('div.level-chip.glass', h('b.floor', to.unmarked ? '' : to.floor), h('span.name', to.unmarked ? '' : `${dir > 0 ? 'going up' : 'going down'} · ${to.name}`)),
-    h('div.level-help', 'Space to skip the ride'));
+    h('div.level-chip.glass', h('b.floor', to.unmarked ? '' : to.floor), h('span.name', to.unmarked ? '' : `${dir > 0 ? 'going up' : 'going down'} · ${to.name}`)));
 
   /* ---- time ----------------------------------------------------------------------------------- */
   let phase = 'closing', at = 0, arrived = 0, storey = from.storey, waiting = !!trip.until, finished = false, shown = null, music = null;
