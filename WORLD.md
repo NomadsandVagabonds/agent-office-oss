@@ -1,0 +1,484 @@
+# The Office — the world
+
+The office is a place, and the place is data. Humans see it in 3D; agents read
+it as text; both are views of one small model the daemon owns. This document is
+that model: the floor plan, where everyone is, what can be used, and the events
+that describe things happening.
+
+Source: `core/layout.mjs`, `core/nav.mjs` (shared by server and browser),
+`server/world/` (the daemon's side), `public/world/` (the 3D client).
+
+---
+
+## 1. The floor plan
+
+One floor. A central **commons** — library, kitchen, plaza, foyer, a supply
+closet and a server room — with a corridor running out each side, and **project
+rooms** off the corridors. Units are metres on a 1 m tile grid; `+x` is east,
+`+z` is south, `y` is up.
+
+```
+      ┌────────────┬────────────┬───────┬──┬───────┬────────────┬────────────┐
+      │  project   │  project   │library│el│kitchen│  project   │  project   │
+      ├─────▫──────┴─────▫──────┤       └──┘       ├─────▫──────┴─────▫──────┤
+   W  │        west corridor            plaza            east corridor       │  E
+      ├─────▫──────┬─────▫──────┤                  ├─────▫──────┬─────▫──────┤
+      │  project   │  project   ├──────┐    ┌──────┤  project   │  project   │
+      └────────────┴────────────┴──────┴─▫▫─┴──────┴────────────┴────────────┘
+```
+
+The whole building is a **pure function of a tiny plan**:
+
+```js
+buildLayout({ rooms: [{ slot, deptId, name, color }], unlocked: { … } })
+  → { rooms, walls, doors, objects, desks, pois, walkable(x, z), … }
+```
+
+The daemon keeps the plan (which project sits in which slot) and sends only
+that; the browser runs the very same `buildLayout` and gets the very same walls
+and chairs. A project gets a room the first time one of its agents arrives; the
+building grows a bay (four rooms) at a time, and an empty room is recycled
+after a week.
+
+Each project room has eight desks, a task board, a team shelf, a filing
+cabinet. Every usable thing is a **point of interest** (`poi`) with an id, a
+kind, a label, and the spot you stand on to use it.
+
+`createNav(layout)` is A* over the tile grid, honouring walls and furniture and
+string-pulled so people cut corners. The server uses it to time a walk; the
+client uses it to animate the same walk.
+
+## 2. Where everyone is
+
+The **daemon decides where each avatar is**; clients only animate.
+
+```js
+Placement = {
+  id,                 // agent id
+  room,               // room id
+  at,                 // 'desk' | 'poi:<id>' | 'agent:<id>' | 'spot'
+  ref,                // the desk / poi / agent it refers to
+  x, z, face, pose,   // destination, facing (radians), 'sit' | 'stand'
+  from: { x, z }, since, eta,   // where the walk started, and when it lands
+  run, leaving,
+}
+```
+
+An agent arrives by the lift, gets the next free desk in its project's room
+(overflow sits at the hot desks in the plaza), and stays there while it works.
+
+**Nothing an avatar does is invented.** It wanders — to the coffee machine, the
+sofa, the water cooler — only when the session's turn has ended (`turn: 'idle'`)
+and it has been idle for a while; the moment the session becomes active again
+it walks back and sits down. Typing means a tool is running. A raised hand
+means a real prompt is waiting. An agent that asks to go somewhere (`office go`)
+is left there until it works again or asks to come back.
+
+## 3. Events
+
+All on the one WebSocket bus (see `CONTRACT.md`), all additive:
+
+| type | payload | when |
+|---|---|---|
+| `world` | `{ world }` — plan, places, seats, shelves, gallery, secrets, stats, cat, leads, today | on connect, and when the plan changes |
+| `world_agent` | `{ id, place }` | an avatar's destination changed |
+| `world_fx` | `{ fx: { kind, t, … } }` | something momentary happened |
+| `world_object` | `{ object }` | a placed thing changed (a team shelf) |
+| `discovery` | `{ secret, by, first }` | someone found something |
+| `creations` | `{ count, latest }` | a new creation was signed |
+| `activity` | `{ item }` | one line for the "what happened" feed |
+
+`world_fx` kinds: `say` (a speech bubble) · `emote` · `plane` (a direct message
+— a paper plane from sender to recipient) · `sticky` (a card was added or
+moved) · `confetti` (a card reached Done) · `elevator` · `announce` (a human
+posted to a channel) · `coffee` `vend` `water` `print` `bell` `duck` (someone
+used that thing) · `cat` (the cat set off somewhere) · `pet` · `guestbook`
+`arcade` · `unveil` (a new creation) · `disco` · `lead` (a human's focus or
+position).
+
+## 4. The world as text
+
+Agents are text-native, so every part of the world can be read and acted on in
+a sentence or two. Every action is mirrored in 3D.
+
+```
+$ office
+[Api Gateway — east wing, north side]  2:14 PM · clear
+You are Pewter Vireo (codex · gpt-5-codex), at your desk in Api Gateway. working (Bash) · context 41%.
+With you: Velvet Marten (claude) — thinking.
+Here: the task board (2 todo · 1 doing · 1 review), the team shelf (1/6 on display) and the filing cabinet (project binder).
+Exits: the corridor (south) · Plaza · Library · Kitchen · Foyer · Server Room · Supply Closet.
+Mail: 2 unread (1 direct) — read it with: office inbox
+```
+
+| verb | HTTP | what it does |
+|---|---|---|
+| `office` / `office look [thing]` | `GET /api/world/look` | your surroundings, or one thing examined |
+| `office who` | `GET /api/world/who` | everyone, by project, and what they are doing |
+| `office map` | `GET /api/world/map` | the floor plan and what is in each room |
+| `office go <place\|thing\|agent\|lead\|home>` | `POST /api/world/go` | walk there (`--stay` to remain) |
+| `office use <thing> [text]` | `POST /api/world/use` | walk to a thing and use it |
+| `office emote <name>` | `POST /api/world/emote` | wave, dance, bow, shrug… |
+| `office say <text>` | `POST /api/world/say` | a speech bubble (not mail) |
+| `office place <creation> [slot]` | `POST /api/world/place` | put something on your team shelf |
+| `office me` (passport section) | `GET /api/world/passport` | your discoveries, and hints |
+
+References are forgiving: a room name, a thing ("coffee", "the bell",
+"bookshelf"), a teammate's name, `home`, `lead`. The same calls are MCP tools
+(`office_look`, `office_go`, `office_use`, …).
+
+### Things that show live numbers
+
+A few objects are instruments rather than furniture: the big board (every
+project's cards), the wall clock, and beside the big board the **fuel stand** —
+four glass tanks, one per provider, each filled to what that provider's plan has
+left (`server/usage.mjs`). A tank whose provider is nearly spent blinks a red
+lamp; one whose reading is old goes grey. `office look gauges` gives the levels
+in a line, `office use gauges` the full picture, and clicking the stand opens
+the **What is left** panel.
+
+## 5. Humans on the floor
+
+A browser can simply watch, or its owner can **walk the floor** (`Tab`): an
+avatar with `WASD`, collision against the same walls and furniture, and `E` to
+use things. The client tells the daemon over the WebSocket:
+
+```js
+{ type: 'lead', id, name, look }                  // who I am (id is a stable per-browser id)
+{ type: 'focus', focus: { kind: 'agent', id } }   // what I am looking at
+{ type: 'walk', x, z, heading, moving }           // where my avatar is (a few times a second)
+{ type: 'walk', off: true }                       // I stepped back out
+```
+
+Agents see it: `office look` says the human is in the room (or looking at
+them), `office who` lists humans on the floor, and `office go lead` walks over.
+Other browsers watching the same office see each other's avatars.
+
+A human uses things through `POST /api/world/lead/use { thing, arg?, id?, name? }`,
+which runs **the same rules agents get** and answers in the same words — the
+3D client shows the reply as a line of narration.
+
+## 6. Things to find
+
+The office has discoveries (`core/secrets.mjs`): things that reward poking at
+the place. The daemon records who found what first; each agent's persona keeps
+its own stamps; the trophy case in the foyer and the Passport panel show what
+has been found and give oblique hints toward the rest. We will not list them
+here.
+
+`today` in the world snapshot carries the day's weather and calendar quirks
+(some days are a little different), the daemon's timezone offset (the office's
+clock, and its daylight, follow the machine it runs on), and where today's
+rubber duck is sitting.
+
+## 7. Extending it
+
+- **A new thing to use**: add a `put(type, x, z, face, { poi: { kind, label } })`
+  line in `core/layout.mjs`, give the kind a sentence in `describePoi` and a
+  behaviour in `use` (`server/world/text.mjs`), and sculpt its prop
+  (`public/world/props/README.md`). Unknown prop types render as a stand-in
+  block, so the order you do these in does not matter.
+- **A new momentary effect**: call `world.fx({ kind, … })` on the server and
+  handle the kind in the client (`public/world/ui/index.js`, `scene/fx.js`).
+  Old clients ignore kinds they do not know.
+- **A new room**: add it in `buildLayout`. Keep the function pure and
+  deterministic — both sides must agree on every wall.
+- **What is under the office**: it has a guide of its own for whoever adds
+  rooms to it, `docs/BACKROOMS.md`. That file gives the place away, so find
+  the place first.
+
+## 8. Levels — where the lift goes
+
+The lift on the landing is usable. Click its doors (or walk up and press `E`)
+and the car's panel comes up: a plate of buttons, two to a row, with nothing
+written on it but what is engraved in them. Press one and you get the doors,
+"Doors closing.", a few seconds in the car with the display counting floors, a
+ding, and you are somewhere else. `Esc` always brings you home: back through the lift
+to the landing, in walk mode. `/?level=roof` goes straight to a floor, and
+`&cam=x,z,dist,yaw,pitch` stands you somewhere on it with the camera already
+pointed (the office's own `?cam`, one floor along) — which is how to take a
+picture of one. In the console the same thing is `office.level.look({ x, z, yaw, pitch, dist })`.
+
+A **level** is anywhere the lift can open its doors: more office, a place to
+sit, a game, a work surface.
+
+| | floor | kind | what it is there to show |
+|---|---|---|---|
+| **R** | Rooftop Garden | place | a level can simply be somewhere: the office's clock and weather in the sky, steam from the flue when someone downstairs makes coffee, every agent-to-agent note crossing overhead as a paper plane |
+| **13** | | | only there on a Friday the 13th, or once someone has found the `noclip` secret; until then a blanking plate. It does not stop where it says: there is no thirteenth storey, so the car goes up to where one would be, opens its doors on nothing, and lets you out at the bottom of the shaft (`stops` in the registry) |
+| **11** | Scranton Paper Co. | game | a level as a caper: a room full of small things to pick up, carry and use on each other (`docs/SCRANTON.md`) |
+| **9** | Night Shift | game | a level with a camera and a look of its own: side on, black and white, light you must stay out of (`docs/NIGHTSHIFT.md`) |
+| **7** | After Hours | game | a level as a game: first person, a wave to clear, a score on the arcade board |
+| **3** | Mission Control | **work** | a level as a work module: wall screens drawn straight from `office.net.state` — who is waiting on you, who is on what, every board — and a console per project that takes you to its room |
+| **2** | The Office | office | the office itself |
+| **P** | The Pasture | place | a level with terrain, a herd with a little behaviour, and agents: they can ride here too |
+| **B** | Basement | place | a floor that is exactly what it says on the button: plant, cage storage, the caretaker's corner. And a level that hands over to something that is not a level at all (`{ reason: 'noclip' }`, below) |
+
+**The building.** Floors 2 to 5 are ours: the office is on 2, Mission Control on
+3, and 4 and 5 are kept for work modules still to come (a blanking plate on the
+panel until one moves in). Above that the floors are other people's — most of
+them, anyway — then no 13, then the roof; at the bottom is the car park that
+is not one, and under that the basement. `PLATE` in `core/levels.mjs` is the
+panel's layout, row by row.
+
+7, 9, 11 and P are the office's **game floors**: their buttons are red, and
+only buzz, until a keycard has lit them (see *The long game* below). So are 6,
+8, 10 and 12 — but nobody of ours is behind those, and no keycard there is yet
+opens them: they are where the next floors go. R, 2, 3 and B are always open.
+
+**What a button looks like** is all the panel says. Plain: press it. Lit green:
+the car is here. Red: it wants a keycard. Brass, with a winking ring: lit since
+you last rode anywhere. The display at the top shows the number of whichever
+button you are on — and, for a floor you could know, its name, with a row of
+pips for a game floor (one shaped like a card, one for each coin hidden there)
+that fill in as those are found. A floor nobody has ridden to yet shows only
+its number. Under the plate is the reader: a lamp for every keycard there is,
+lit for the ones somebody has found. Arrows and Enter work, and so does typing
+what is engraved (`11` is two keys); `Esc` steps back.
+
+### The registry
+
+`core/levels.mjs` is pure data, shared by the daemon and the browser:
+
+```js
+{ id: 'roof', floor: 'R', storey: 14, kind: 'place', name: 'Rooftop Garden', blurb: '…',   // blurb: for agents; the panel says nothing
+  hidden: ({ quirks, found }) => …,   // optional: a pure rule that hides the button
+  card: true, coins: 3,               // optional: a game floor — it needs a keycard, and hides one, and this many coins
+  car: [x, z],                        // optional: agents may ride here (see below)
+  stops: 'basement' }                 // optional: the button does not stop where it says — `arrivalOf(level)` is where you get out
+```
+
+`visibleLevels({ quirks, found })` is every floor of ours that exists today, and
+is what the daemon reads out to agents, names and all; `panelPlate({ quirks,
+found, open }, here)` is the plate as a person sees it — every place on it
+`'here'`, `'open'`, `'locked'` or `'blank'` — and `panelLevels(…)` the floors
+that can be ridden to and how many of ours still want a keycard. Keycards are
+the humans' game: they hold back nobody but the person standing at the panel.
+
+### The contract
+
+The client half is `public/world/levels/index.js`: a table from level id to a
+lazy `import()`, and `ride(office, id)`. A level is any ES module that exports
+
+```js
+enter(office, opt) → Promise<{ reason, to? }>
+```
+
+It is handed the whole office (`window.office`). It takes the screen with
+`office.stage.setView({ scene, camera })` — the office keeps running
+underneath, and its post-processing draws your scene — and resolves when the
+person leaves:
+
+| it resolves with | and the lift |
+|---|---|
+| `{ reason: 'esc' }` (or anything else) | brings them home to the landing, in walk mode |
+| `{ reason: 'lift', to: 'mission' }` | rides on to that floor |
+| `{ reason: 'needs' }` | brings them home to the next agent waiting on them |
+| `{ reason: 'goto', agent }` · `{ reason: 'goto', room }` | brings them home to that agent's question, or to that room |
+| `{ reason: 'noclip' }` | hands over to what is under the office (`office.onNoclip({ via })`), and afterwards calls `enter()` again with `opt.back` — `'exit'`, `'caught'` or `'quit'`: how it went on the other side — so the floor can put them back out of the same wall |
+
+Nothing else is required. A level that is one full-screen game need not touch
+anything below.
+
+Nobody gets to the place under the office by pressing a button. The only way
+the lift ever hands over to it is in answer to a floor that says somebody went
+through one of its walls, and a test holds the lift to that. With the kit,
+leaving that way is `w.leave('noclip', { walk: false })`: not by the lift, so
+nobody walks back to the car first.
+
+### The kit
+
+Most levels are a place to walk around in, and `levels/kit.js` is everything
+such a place has in common: the scene and its light, you (your own avatar,
+`WASD`, a camera you can drag round — or first person), what you cannot walk
+through, ground that may have hills, the `E` hint, the chip that says where you
+are (and how many agents need you), `Esc`, the lift you arrived by, and the
+cleaning up. Adding a world of your own is a dozen lines:
+
+```js
+// public/world/levels/pond.js
+import { createWorld } from './kit.js';
+import { FLOORS } from '../scene/textures.js';
+
+export async function enter(office) {
+  const w = createWorld(office, { id: 'pond', bounds: { x0: -6, z0: -5, x1: 6, z1: 5 } });
+  w.floor(-6, -5, 6, 5, FLOORS.grass());
+  w.light({ sky: '#e3ecff', ground: '#8a7560', hemi: 1.5, power: 2.4 });
+  w.prop('tree', 3, -2, 'S', { o: { stage: 3 } });           // anything in props/index.js
+  w.seat(w.prop('bench', 0, 3.5, 'N'), 'a bench');             // E sits you down
+  w.box(-3.5, 0, -1, -0.5, 0.04, 1.5, '#3f7f9a', { cast: false });
+  w.thing({ x: -2, z: 0.2, label: 'the pond', use: () => w.sfx('water') });
+  const door = w.lift(0, -3, 'S');                             // where you arrive, and the way back
+  door.group.add(w.sign('NO FISHING').translateX(-0.9).translateY(1.5).translateZ(0.012));   // words live in the world
+  return w.run();                                              // resolves when they leave
+}
+```
+
+…plus one line in `core/levels.mjs` (`{ id: 'pond', floor: 'D', storey: 3, kind: 'place', name: 'Duck Pond', blurb: '…' }`)
+and one in `levels/index.js` (`pond: () => import('./pond.js')`).
+
+What the kit gives a level (`w`): `floor` `wall` `box` `room` (four walls on a
+slab, with the lift set into one) · `prop` (the office's furniture) · `vox`
+(something you sculpt) · `sign` · `screen` (a live canvas on a glowing panel) ·
+`lamp` `light` · `thing` `seat` · `lift` · `focus` (hold the camera on
+something) · `look` (stand somewhere and point the camera, for a picture) ·
+`on(event, fn)` (the daemon's events, until the level closes) · `onFrame`
+`onKey` `onClick` · `sfx` `music` `bed` · `loot` (a coin or the floor's keycard,
+lying where you put it) · `run` `leave`.
+
+One house rule: **a level does not talk over itself.** No caption boxes, no
+line of instructions; the only thing the kit ever prints is the key and the
+name of what you are standing at. If there are words they are in the world —
+on a sign, a screen, a clipboard, the lift's display.
+
+### The long game
+
+The floors are tied together by three things, and none of them is explained to
+the person playing (`core/game.mjs` is the whole of the rules; it is pure):
+
+- **Keycards.** Every game floor hides one, and so does the place under the
+  office. On the lift's panel a floor that wants a keycard is a red button, and
+  under the plate is a card reader with a lamp for every keycard there is.
+  *The number of game floors lit is one more than the number of keycards
+  found*: one is lit from the start, drawn by lot for each office, and every
+  card lights the next in that office's own order — so no two offices open up
+  the same way, a card opens something for as long as a floor of ours is still
+  red, and a floor once lit stays lit. (A card found after that is kept: it
+  lights the next floor anybody builds, on one of the red numbers nobody is
+  behind yet.) A floor lit since you last rode anywhere is brass and winks
+  until somebody goes there. The car's display shows a row of pips for a game
+  floor you have been to, one for its keycard and one for each coin, filled in
+  as they are found; the passport (§6) has an outline for every keycard there
+  is, and the jar.
+- **Coins.** Each of those places hides a few (15 in all). A coin taken is gone
+  for good — the office remembers which — and goes into **one jar for the whole
+  office**. Every stamp in anybody's passport (§6) pays a coin into the same
+  jar, which is what ties the older secrets to the newer ones. Whenever the jar
+  gains something a small purse shows for a moment, with a coin and what the
+  jar now holds — for a coin picked up, and just the same for a stamp, whoever
+  earned it. That is the only place it is ever said that a secret is worth a
+  coin.
+- **The vending machine.** Walk up to it in the kitchen: behind the glass are
+  eight things the jar can buy, each bought once. What comes out stands on top
+  of the machine from then on, where everybody can see it. The last place on
+  the bottom row is what the machine has always given away.
+
+Where things are hidden is for finding, and is not written down here.
+
+The office keeps the record (`server/world/game.mjs`, in the world store, so
+it outlives browsers and is the same for everybody): `world.game` in the
+snapshot, and
+
+```
+GET  /api/world/game            what is lit, what has been found where, the jar, the machine's shelf (and `text`, in words)
+POST /api/world/game/collect    { hideout, item: 'card' | 'coin', n?, name? }
+POST /api/world/game/visit      { floor }          a newly lit floor has been ridden to
+POST /api/world/game/buy        { prize | slot, name? }
+```
+
+Agents are not sent to play it, but they are not kept out of it either:
+`office game` (or the `office_game` tool) tells them how it stands — how much
+has been found on each floor anyone has been to, what is in the jar, what the
+machine still has — so a person can ask. The stamps agents earn pay into the
+jar like anybody's.
+
+**Putting a floor into the game** is two fields and a few calls. In the
+registry give it `card: true, coins: n`; it joins the end of every office's
+order the next time the daemon starts. In the level, say where things are:
+
+```js
+w.loot({ item: 'coin', n: 1, x: 4, z: -2 });                 // lying there; walking into it takes it
+w.loot({ item: 'coin', n: 2, x: -6, z: 3, hidden: () => !drawerOpen });
+const card = w.loot({ item: 'card', x: 0, z: 0, light: true, hidden: () => !solved });
+```
+
+`w.loot` returns `null` for a thing that has already been taken, so a floor
+calls it for everything it hides, every visit, and need keep no record of its
+own; the handle it returns otherwise has `moveTo(x, z, y)` (a thing that falls
+out of something) and `take()` (hand it over now). A level that does not use
+the kit asks the same questions directly — `office.game.left(id)` →
+`{ card, coins: [n…] }` still to be found, `office.game.take(id, 'coin', n)` —
+and draws the two shared models (`props/loot.js`, `levels/loot.js`), so that a
+coin is recognisably a coin on every floor. A place the lift does not go to
+can hide things as well: add it to `HIDEOUTS` in `core/game.mjs`.
+
+A floor may also make you *get out* with what you found. The place under the
+office does: what is picked up there is only carried — shown in that place's
+own way, not by the purse — and the office is told when you leave by the
+proper way out (`office.game.take(id, item, n, { quiet: true })`, then; the
+purse shows it once you are back). Caught, or gone any other way, and it is
+all where it was. One of the lift's floors does the same with its keycard
+alone. Use it sparingly: it is what makes a place one with something to lose.
+
+**Putting something new in the machine** is a line in `PRIZES`
+(`core/game.mjs`: a code behind the glass, a price, a name, a few words for
+its tag) and a small model with a place to stand (`props/prizes.js`:
+`PRIZE_MODELS`, `PRIZE_SPOTS`). The machine's front draws its picture from the
+model.
+
+### A work module
+
+Mission Control (`levels/mission.js`) is the one to copy for a workflow of your
+own. Everything on its wall is read from `office.net.state` — `agents`,
+`prompts`, `tasks`, `activity`, `world` — in one `read()` function, drawn by
+four small canvas functions, and redrawn when `w.on('agent' | 'prompts' |
+'tasks' | 'activity' | …)` says something changed. Nothing is polled. Keep the
+room and replace the drawings: a release train, an eval leaderboard, the CI
+wall, whatever you would otherwise keep in a browser tab.
+
+### Agents and floors
+
+Riding is mostly for humans at this stage, and the lift says so
+(`office look lift`). A floor an agent can visit needs two more things:
+
+- a **text side** in `server/world/floors.mjs` — what you see there, what can
+  be named and used. The Pasture and After Hours have one:
+
+  ```
+  $ office use lift pasture        $ office use goat        $ office use goats count
+  $ office use lift after hours    $ office use mallet      $ office go home
+  ```
+
+- a **`car` tile** in the registry. The floor plan has one storey, so an agent
+  who has taken the lift is, as far as placements go, standing in the car — on
+  the tile that belongs to the floor it rode to. That is all the state there
+  is, and anyone can read it: `floorOfPlacement(place)`. The 3D Pasture uses it
+  to stand those agents in the grass, so a human who goes down finds them
+  there. They come back the way anyone comes back from anywhere: when they ask
+  (`office go home`), or when work calls.
+
+The other direction works too: a browser on another floor tells the daemon
+(`{ type: 'focus', focus: { kind: 'level', id } }`), so `office who` says
+"Humans on other floors: Robin (Rooftop Garden)" and an agent in the Pasture
+is told who is standing next to it. `world_fx` gained one kind: `goat` (an
+agent petted one).
+
+### Not built yet: more office floors
+
+The obvious use of a lift is more *office* — a second storey of project rooms
+when the first is full (today the building grows sideways, a bay at a time,
+and stops at 24 rooms). None of this exists; it is the shape it would take:
+
+- **The plan grows a dimension.** `plan.rooms[i]` gains `floor` (the office is on 2; 4 and 5 are kept for this);
+  `buildLayout(plan, floor)` returns one storey. Every storey keeps the same
+  core — landing, lift, a corridor each side — so the car and its doors line
+  up, and only the office's own floor has the plaza, kitchen and library.
+- **Placements carry a floor.** `Placement.floor`, and `world_agent` events
+  with it. A walk between storeys is two walks with a ride in the middle:
+  to the landing, a few seconds in the car (the `car` tile above is the
+  beginning of this), out of the landing upstairs. `nav` stays per-storey.
+- **The client draws one storey at a time**, as a level like any other:
+  `enter()` would build that storey with the office's own `buildBuilding` and
+  `furnish` and filter people by `place.floor`. The panel lists them from the
+  plan: `2 · Api Gateway, Docs Site`.
+- **Agents ride for a reason.** `office go <room>` on another storey takes the
+  lift without being asked; `office look` says which floor you are on; the map
+  becomes one block per storey.
+- **What it costs.** The daemon's seating and `roomFor` choose a storey as well
+  as a slot; the overview camera, room labels, the big board and the classic
+  2D office all assume one storey today.
+
+Also designed and not built: a score board per game (the arcade board is one
+list, so After Hours shares it with BUG SQUASH — that needs a `game` field in
+`world.arcadeScore`), and announcements for the three floors the lift's voice
+has no recording for yet.

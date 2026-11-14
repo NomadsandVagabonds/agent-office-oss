@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Office — prop studio</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1b1622; overflow: hidden; font: 12px ui-monospace, Menlo, Consolas, monospace; color: #f1ead8; }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  #help { position: fixed; left: 10px; bottom: 8px; opacity: .65; }
+</style>
+<script type="importmap">{ "imports": { "three": "/vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<div id="stage"></div>
+<div id="help">?show=desk,chair,sofa (or all) · &amp;turn=0..3 quarter turns · &amp;cam=wide|close|top|low · &amp;hour=14 · &amp;who=1 adds a person for scale · drag / right-drag / scroll</div>
+<script type="module" src="/world/dev/studio.js"></script>
+</body>
+</html>

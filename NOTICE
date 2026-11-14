@@ -5,3 +5,69 @@ Originally developed by Justin Miller.
 
 This NOTICE file is provided for attribution purposes only and does not
 modify the Apache License, Version 2.0.
+
+The audio under public/audio/ was generated with ElevenLabs (sound effects,
+music and stock voices) on the project owner's account, by
+tools/make-audio.mjs, and is distributed under the licence terms of that plan.
+
+The typefaces under public/vendor/fonts/ are Pixelify Sans (Copyright 2021
+The Pixelify Sans Project Authors) and IBM Plex Sans and IBM Plex Mono
+(Copyright 2018 IBM Corp.), each under the SIL Open Font License 1.1. The
+licence texts are beside the files.
+
+three.js under public/vendor/ is Copyright 2010-2025 Three.js Authors, MIT
+licence (public/vendor/LICENSE-three.txt).
+
+The harness under server/harness/ (and its fake agents under test/fixtures/)
+was written for this project, with T3 Code (https://github.com/pingdotgg/t3code,
+read at commit 08b8689a) as reference: its Agent Client Protocol and Codex
+app-server clients are where the message shapes we speak were learned, its
+Claude adapter and the frames it recorded from real runs are what our reading
+of Claude Code's stream-json mode was checked against, and its orchestrator
+design is where the delegation and handoff rules come from. A few small pieces
+follow its logic closely and say so where they are: the redaction of an
+agent's stderr (server/harness/child.mjs, after
+packages/provider-acp/src/server/stderr.ts), the rules of a portable context
+handoff (server/harness/handoff.mjs, after
+apps/server/src/orchestration-v2/ContextHandoffService.ts), the coalescing of
+tool updates (server/harness/acp.mjs, after
+packages/provider-acp/src/server/runtimeModel.ts), the reading of Codex's
+rate-limit windows (server/usage-sources.mjs, after
+apps/server/src/provider/codexUsageLimits.ts), the snapshots of a working
+tree that tell what a turn changed (server/harness/checkpoints.mjs, after
+apps/server/src/checkpointing/ and apps/server/src/vcs/GitVcsDriver.ts: the
+private index, the settings that keep git from splitting it or running
+anything, the environment it clears, the turn that waits a bounded moment for
+its baseline, and a renamed file's two names in a diff — the snapshots
+themselves are kept in a directory of the office's own, where T3 Code keeps
+them in the user's repository), and, in the Claude Code adapter
+(server/harness/claude.mjs, after
+apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts and
+apps/server/src/provider/claudeUsageLimits.ts), how a session's mode becomes
+Claude's permission mode, the handing of the MCP server over the pipe instead
+of the command line, the reading of context use and of the allowance frames,
+which endings of a turn count as failures, and which of Claude's permission
+requests always go to a person. docs/HARNESS.md lists every file consulted.
+T3 Code is distributed under the MIT licence:
+
+  MIT License
+
+  Copyright (c) 2026 T3 Tools Inc.
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.

@@ -15,6 +15,7 @@ import os from 'node:os';
 import cp from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { requestJson } from './office-http.mjs';
+import { codexRateLimitsToReport } from './server/usage-sources.mjs';
 import { codexInjectThreadUserMessage } from './codex-app-server.mjs';
 import {
   acquireCodexObserverLock,
@@ -396,6 +397,8 @@ function readRollout(lines) {
   let latestTool = '';
   let contextPct = 0;
   let contextWindow = 0;
+  let rateLimits = null;
+  let rateLimitsTs = 0;
 
   for (const line of lines) {
     let event;
@@ -425,6 +428,11 @@ function readRollout(lines) {
         if (total && window) {
           contextWindow = window;
           contextPct = Math.min(100, Math.round((total / window) * 100));
+        }
+        // Codex writes what is left of the plan next to the token counts.
+        if (payload.rate_limits && typeof payload.rate_limits === 'object') {
+          rateLimits = payload.rate_limits;
+          rateLimitsTs = ts || rateLimitsTs;
         }
       }
       continue;
@@ -458,6 +466,8 @@ function readRollout(lines) {
     latestTs,
     contextPct,
     contextWindow,
+    rateLimits,
+    rateLimitsTs,
     status: pending.size ? 'working' : latestKind,
     tool: pending.size ? activeTool : '',
   };
@@ -476,6 +486,19 @@ function writeFeed(sid, data) {
     fs.writeFileSync(file + '.tmp', JSON.stringify(out));
     fs.renameSync(file + '.tmp', file);
   } catch {}
+}
+
+// What Codex last said about its plan's limits goes to the office's usage feed —
+// only when it changed, and only the newest reading across all threads.
+let lastUsage = { key: '', ts: 0 };
+function shareUsage(info, now) {
+  if (!info.rateLimits || info.rateLimitsTs < lastUsage.ts) return;
+  const report = codexRateLimitsToReport(info.rateLimits, info.rateLimitsTs || now);
+  if (!report) return;
+  const key = JSON.stringify(report.windows) + (report.plan || '');
+  if (key === lastUsage.key) { lastUsage.ts = info.rateLimitsTs; return; }
+  lastUsage = { key, ts: info.rateLimitsTs };
+  officePost('/api/usage/report', report);
 }
 
 async function tick() {
@@ -512,6 +535,7 @@ async function tick() {
     live.add(sid);
     const lines = tailLines(thread.rollout_path);
     const info = readRollout(lines);
+    shareUsage(info, now);
     const channels = overview?.channels || [];
     const selfName = resolveSelfName(channels, sid, thread.cwd || '');
     const officeMsgs = collectOfficeMail(
@@ -528,8 +552,9 @@ async function tick() {
       appendTurn(mergedTurns, 'o',
         `[${msg.who} · ${msg.where} · ${officeTime(msg.t)}] ${msg.text}`);
     }
+    const { rateLimits: _limits, rateLimitsTs: _limitsTs, ...feedInfo } = info;   // the usage feed has those; the transcript feed does not need them
     writeFeed(sid, {
-      ...info,
+      ...feedInfo,
       turns: mergedTurns.slice(-FEED_TURNS),
       mailCount: office.trail.length,
     });
@@ -546,11 +571,7 @@ async function tick() {
     const runtimeSessionId = resolveRuntimeSessionForThread(thread, runtimeSessions, activeThreadCounts);
     const inboxState = readInboxState(sid);
     const lastInjectedTs = inboxState.lastInjectedTs || 0;
-    // An agent on a break, on the roof, in focus, etc. has asked not to be
-    // interrupted: leave their mail queued (lastInjectedTs untouched) and it
-    // is delivered on a later tick, once they are back.
-    const holding = Array.isArray(overview?.holdingMail) && overview.holdingMail.includes(sid);
-    const backlog = holding ? [] : runtimeSessionId
+    const backlog = runtimeSessionId
       ? managedMailBacklog(office.trail, runtimeSessionId, lastInjectedTs)
       : externalMailBacklog(office.trail, lastInjectedTs);
     if (runtimeSessionId && backlog.length && deliverManagedMail(runtimeSessionId, backlog)) {

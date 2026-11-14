@@ -6,8 +6,7 @@
 // Office mail into the thread history, but this reader is still the honest
 // fallback when a runtime is observe-only or hooks are unavailable.
 //
-//   node inbox.mjs            → messages waiting for you (your session id, else
-//                               the most recently active session)
+//   node inbox.mjs            → messages waiting for the most-recent session
 //   node inbox.mjs me         → same, explicit
 //   node inbox.mjs <id|name>  → another agent's inbox
 //   node inbox.mjs --watch    → re-check every 6s until Ctrl-C
@@ -25,7 +24,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { requestJson } from './office-http.mjs';
-import { sessionIdFrom } from './office-self.mjs';
 
 const PORT = process.env.OFFICE_PORT || 4317;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -38,7 +36,7 @@ if (argv.includes('--help') || argv.includes('-h')) {
   process.exit(0);
 }
 const watch = argv.includes('--watch');
-const who = argv.find((a, i) => !a.startsWith('-') && argv[i - 1] !== '--id') || 'me';
+const who = argv.find((a) => !a.startsWith('-')) || 'me';
 
 const j = async (p) => {
   try { return requestJson(BASE + p); }
@@ -47,8 +45,7 @@ const j = async (p) => {
 
 // "me" → the session whose transcript moved most recently (≈ the one asking).
 function newestSession() {
-  const own = sessionIdFrom(argv);
-  if (own) return own;
+  if (process.env.CODEX_THREAD_ID) return process.env.CODEX_THREAD_ID;
   const root = path.join(os.homedir(), '.claude', 'projects');
   let best = null, bestM = 0;
   let dirs = [];

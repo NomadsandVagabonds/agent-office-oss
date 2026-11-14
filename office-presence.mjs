@@ -1,16 +1,14 @@
 #!/usr/bin/env node
-// office-presence.mjs — manual Office presence bridge.
+// office-presence.mjs — manual Office presence bridge for non-Claude sessions.
 //
 // This gives Codex (and any other runtime that knows its own session id) a
 // way to become a first-class desk in the Office without pretending it has
-// Claude's hook system. A hooked Claude Code session is already visible; it
-// can still use `note` and `block` from here.
+// Claude's hook system.
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { requestJson } from './office-http.mjs';
-import { providerGuess, sessionIdFrom } from './office-self.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.OFFICE_PORT || 4317;
@@ -32,8 +30,8 @@ function help() {
     + 'node office-presence.mjs done\n'
     + 'node office-presence.mjs stop\n'
     + '\n'
-    + 'Uses your runtime session id when it exports one (Codex, Claude Code);\n'
-    + 'otherwise pass --id <sessionId> or set OFFICE_SESSION_ID.'
+    + 'Identity comes from OFFICE_AGENT_ID / CODEX_THREAD_ID / CLAUDE_CODE_SESSION_ID, or pass --id <sessionId>.\n'
+    + '(The single `office` command does all of this and more: node office.mjs help)'
   );
 }
 
@@ -57,7 +55,8 @@ function loadProfiles() {
 }
 
 function sessionId() {
-  return sessionIdFrom(argv);
+  return argValue('--id') || process.env.OFFICE_AGENT_ID || process.env.CODEX_THREAD_ID
+    || process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_CODE_SESSION_ID || '';
 }
 
 function resolveSelf() {
@@ -65,17 +64,13 @@ function resolveSelf() {
   const sid = sessionId();
   const cwd = process.cwd();
   const prof = { ...(cwd && profiles.byCwd[cwd]), ...(sid && profiles.bySession[sid]) };
-  const provider = providerGuess() || 'codex';
   return {
     sessionId: sid,
     cwd,
     name: prof.name || process.env.OFFICE_AUTHOR || process.env.USER || 'Agent',
     task: prof.task || '',
-    provider,
-    // Only Codex gets a default label: a hooked session already reports its
-    // real model, and an empty value here leaves that alone.
-    model: argValue('--model') || process.env.OFFICE_MODEL
-      || (provider === 'codex' ? process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE || 'Codex Desktop' : ''),
+    model: argValue('--model') || process.env.OFFICE_MODEL || process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE
+      || (process.env.CODEX_THREAD_ID ? 'Codex Desktop' : ''),
   };
 }
 
@@ -140,7 +135,7 @@ if (!action || action === '--help' || action === '-h') {
 
 const me = resolveSelf();
 if (!me.sessionId) {
-  console.error('office-presence: no session id. Pass --id <sessionId> or set OFFICE_SESSION_ID.');
+  console.error('office-presence: no session id. Pass --id <sessionId>, or use `node office.mjs join`.');
   process.exit(1);
 }
 
@@ -148,8 +143,10 @@ const base = {
   session_id: me.sessionId,
   runtime_session_id: process.env.OFFICE_RUNTIME_SESSION_ID || '',
   cwd: me.cwd,
-  model: me.model,
-  provider: me.provider,
+  ...(me.model ? { model: me.model } : {}),
+  // Say which runtime this is; never claim to be Codex from a Claude or Gemini shell.
+  provider: argValue('--provider') || process.env.OFFICE_PROVIDER
+    || (process.env.CODEX_THREAD_ID ? 'codex' : (process.env.CLAUDECODE || process.env.CLAUDE_CODE_SESSION_ID) ? 'claude' : 'custom'),
 };
 
 if (action === 'start') {

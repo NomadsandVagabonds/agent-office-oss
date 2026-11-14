@@ -1,11 +1,10 @@
 import cp from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-// Where the office repo lives, exported to managed sessions so an agent
-// working in another directory can find the office-*.mjs helpers.
-const OFFICE_HOME = path.dirname(fileURLToPath(import.meta.url));
+// Keys a client may press in a pane by name (tmux send-keys names).
+export const SAFE_KEYS = new Set(['Enter', 'Escape', 'Tab', 'BTab', 'BSpace', 'Space', 'Up', 'Down', 'Left', 'Right',
+  'Home', 'End', 'PPage', 'NPage', 'C-c', 'C-d', 'C-l', 'C-r', 'C-u', 'C-a', 'C-e', 'C-z', 'C-o']);
 
 function safeExec(args, opt = {}) {
   return cp.execFileSync(args[0], args.slice(1), {
@@ -14,6 +13,24 @@ function safeExec(args, opt = {}) {
     ...opt,
   });
 }
+
+// CLI probes fork a process each; the daemon asks on nearly every event, so
+// answers are cached. `tmux list-sessions` is cached briefly and invalidated
+// whenever we spawn or kill.
+const PROBE_TTL_MS = 60_000;
+const LIST_TTL_MS = 1_000;
+const probeCache = new Map();
+function probe(bin, args) {
+  const hit = probeCache.get(bin);
+  const now = Date.now();
+  if (hit && now - hit.at < PROBE_TTL_MS) return hit.ok;
+  let ok = false;
+  try { safeExec([bin, ...args], { timeout: 4000 }); ok = true; } catch { ok = false; }
+  probeCache.set(bin, { ok, at: now });
+  return ok;
+}
+let listCache = { at: 0, sessions: [] };
+function invalidateList() { listCache = { at: 0, sessions: [] }; }
 
 function sessionSlug(name) {
   return `office-${(''+name).toLowerCase().replace(/[^a-z0-9]+/g,'-')
@@ -82,18 +99,20 @@ export class TmuxManager {
   }
 
   static isAvailable() {
-    try { safeExec(['tmux', '-V']); return true; }
-    catch { return false; }
+    return probe('tmux', ['-V']);
   }
 
   static isClaudeAvailable() {
-    try { safeExec(['claude', '--version']); return true; }
-    catch { return false; }
+    return probe('claude', ['--version']);
   }
 
   static isCodexAvailable() {
-    try { safeExec(['codex', '--version']); return true; }
-    catch { return false; }
+    return probe('codex', ['--version']);
+  }
+
+  /** Is an arbitrary agent CLI on PATH? (cached like the others) */
+  static isBinAvailable(bin, args = ['--version']) {
+    return probe(bin, args);
   }
 
   static runtimeStatus() {
@@ -107,10 +126,15 @@ export class TmuxManager {
 
   listSessions() {
     if (!TmuxManager.isAvailable()) return [];
+    const now = Date.now();
+    if (now - listCache.at < LIST_TTL_MS) return listCache.sessions.slice();
+    let sessions = [];
     try {
-      const out = safeExec(['tmux', 'list-sessions', '-F', '#{session_name}']);
-      return out.trim().split('\n').filter(Boolean);
-    } catch { return []; }
+      const out = safeExec(['tmux', 'list-sessions', '-F', '#{session_name}'], { timeout: 4000 });
+      sessions = out.trim().split('\n').filter(Boolean);
+    } catch { sessions = []; }
+    listCache = { at: now, sessions };
+    return sessions.slice();
   }
 
   listManaged() {
@@ -156,6 +180,7 @@ export class TmuxManager {
     const cmd = this.buildCommand({
       runtimeSessionId: id,
       provider,
+      bin: opts.bin || '',
       task: opts.task || '',
       systemPrompt: opts.systemPrompt || '',
       command: opts.command || '',
@@ -166,6 +191,7 @@ export class TmuxManager {
     });
     try { safeExec(['tmux', 'kill-session', '-t', id]); } catch {}
     safeExec(['tmux', 'new-session', '-d', '-s', id, '-c', cwd, ...cmd]);
+    invalidateList();
     const meta = {
       id,
       name,
@@ -184,14 +210,28 @@ export class TmuxManager {
 
   kill(id) {
     try { safeExec(['tmux', 'kill-session', '-t', id]); } catch {}
+    invalidateList();
     this.managed.delete(id);
     this.saveManaged();
   }
 
-  capture(id, lines = 220) {
+  /** The pane as text. `ansi` keeps colour escapes (SGR) so a client can paint them. */
+  capture(id, lines = 220, opt = {}) {
     if (!TmuxManager.isAvailable()) throw new Error('tmux is not available');
     const start = String(-Math.max(20, Math.min(4000, Number(lines) || 220)));
-    return safeExec(['tmux', 'capture-pane', '-pt', id, '-S', start]).replace(/\s+$/,'');
+    const args = ['tmux', 'capture-pane', '-p', ...(opt.ansi ? ['-e'] : []), '-t', id, '-S', start];
+    return safeExec(args).replace(/\s+$/,'');
+  }
+
+  /**
+   * Press named keys (Escape, Up, C-c…): the things you cannot type as text —
+   * answering a menu, interrupting a run. Only a fixed set of keys is allowed.
+   */
+  sendKeys(id, keys) {
+    if (!TmuxManager.isAvailable()) throw new Error('tmux is not available');
+    const list = (Array.isArray(keys) ? keys : [keys]).map(String).filter((k) => SAFE_KEYS.has(k)).slice(0, 32);
+    for (const key of list) safeExec(['tmux', 'send-keys', '-t', id, key]);
+    return list.length;
   }
 
   sendInput(id, text, opt = {}) {
@@ -213,9 +253,9 @@ export class TmuxManager {
   buildCommand(opts) {
     const envPairs = {
       OFFICE_PORT: String(this.port),
-      OFFICE_HOME,
       OFFICE_RUNTIME_SESSION_ID: opts.runtimeSessionId || '',
       OFFICE_RUNTIME_PROVIDER: opts.provider || '',
+      OFFICE_PROVIDER: opts.provider && opts.provider !== 'shell' ? opts.provider : '',
       ...(opts.env || {}),
     };
     const envCmd = ['env', ...Object.entries(envPairs).map(([k, v]) => `${k}=${v}`)];
@@ -235,6 +275,12 @@ export class TmuxManager {
       if (opts.systemPrompt) cmd.push('--system-prompt', opts.systemPrompt);
       if (opts.task) cmd.push(opts.task);
       return cmd;
+    }
+    // Any other agent CLI the registry names (gemini, opencode, …): launch it
+    // bare. The human or the agent itself gives it its first instruction.
+    if (opts.bin) {
+      if (!TmuxManager.isBinAvailable(opts.bin)) throw new Error(`${opts.bin} CLI is not available`);
+      return [...envCmd, opts.bin, ...(opts.args || [])];
     }
     throw new Error(`Unsupported provider: ${opts.provider}`);
   }

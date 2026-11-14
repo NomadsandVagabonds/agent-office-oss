@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Office — the Backrooms (dev)</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font: 12px ui-monospace, Menlo, Consolas, monospace; color: #f1ead8; }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  #ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+  #dev { position: fixed; left: 8px; bottom: 6px; z-index: 20; opacity: .6; white-space: pre; pointer-events: none; max-width: 46vw; overflow: hidden; }
+  #dev a { color: #f0b860; pointer-events: auto; }
+  #over { position: fixed; inset: 0; z-index: 30; display: none; place-items: center; text-align: center; background: rgba(0, 0, 0, .8); font-size: 15px; line-height: 1.8; }
+</style>
+<script type="importmap">{ "imports": { "three": "/vendor/three.module.min.js" } }</script>
+</head>
+<body class="noclip">
+<div id="stage"></div>
+<div id="ui"></div>
+<div id="dev"></div>
+<div id="over"></div>
+<script type="module" src="/world/dev/backrooms.js"></script>
+</body>
+</html>

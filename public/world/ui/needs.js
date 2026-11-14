@@ -1,0 +1,176 @@
+// The Office — NEEDS YOU, as an in-tray.
+//
+// However many agents are waiting, you are handed one slip: who is asking,
+// what exactly, and what your answer is holding up. A counter and two arrows
+// reach the rest. Nothing piles up on the screen, nothing steals the slip you
+// are reading, and the tray can be put away — a new arrival only nudges it.
+//
+// What you can do with a slip is exactly what the agent's runtime can honour
+// (answers.js): stamps appear only when a live request is waiting on them, a
+// question brings its own choices, and otherwise there is a line to write on.
+import { h, ago, replace } from './dom.js';
+import { mugshot } from './portrait.js';
+import { answersOf, describe, answerControls } from './answers.js';
+
+const HELD = ['doing', 'blocked', 'review'];
+// what blocks a running turn comes first, then other permissions, then questions; oldest first within each
+const rank = (p) => (p.request?.pending ? 0 : p.kind === 'permission' ? 1 : 2);
+
+export function createNeeds(office, ui) {
+  const net = office.net;
+  const tray = h('div.intray');
+  ui.root.append(tray);
+  let list = [];                 // what is waiting, in the order you would want it
+  let top = null;                // id of the slip on top
+  let folded = false;            // the tray has been put away
+  let covered = false;           // a panel is open: the tray waits as a tab until it closes
+  let shown = '';                // what is drawn, so a tick does not rebuild it
+  let slip = null;               // { el, input, receipt, age, prompt }
+  const later = new Set();       // slips sent to the back
+
+  const current = () => list.find((p) => p.id === top) || list[0] || null;
+
+  /** The cards this agent is carrying: what an answer lets move again. */
+  function held(p) {
+    const mine = [];
+    for (const tasks of net.state.tasks.values()) {
+      for (const t of tasks) {
+        if (HELD.includes(t.status) && (t.assignee === p.agentId || t.assigneeId === p.agentId || (t.assigneeName && t.assigneeName === p.agentName))) mine.push(t);
+      }
+    }
+    return mine;
+  }
+  function whereabouts(p) {
+    const place = net.state.places.get(p.agentId);
+    const room = place && office.world?.layout.roomById.get(place.room);
+    return room?.name || '';
+  }
+
+  async function answer(body, mark, cls) {
+    const p = slip?.prompt;
+    if (!p || slip.busy) return;
+    slip.busy = true;
+    slip.el.append(h(`div.mark.${cls}`, mark));
+    try {
+      const res = await net.api(`/api/prompts/${encodeURIComponent(p.id)}/reply`, { method: 'POST', body });
+      const said = body.text || body[p.respond?.textField || 'text'];
+      const how = !said ? null : res.turnDelivered ? `${p.agentName} has it.` : res.terminalDelivered ? `Typed into ${p.agentName}'s terminal.`
+        : res.boardPosted ? `Left for ${p.agentName}: they read it on their next turn.` : null;
+      if (how) ui.toast(how);
+      slip.el.classList.add('gone');                                  // the bus takes it off the list; this is just the paper leaving
+    } catch (err) {
+      slip.busy = false;
+      slip.el.querySelector('.mark')?.remove();
+      slip.receipt.textContent = `That did not go through: ${err.message}`;
+    }
+  }
+
+  function step(dir) {
+    if (list.length < 2) return;
+    const i = Math.max(0, list.findIndex((p) => p.id === top));
+    top = list[(i + dir + list.length) % list.length].id;
+    draw(true);
+  }
+
+  function build(p, index) {
+    const agent = net.state.agents.get(p.agentId);
+    const photo = mugshot(agent?.profile?.character, 'photo');
+    const show = () => ui.select(p.agentId);
+    photo.onclick = show; photo.title = 'Show me';
+    const age = h('small');
+    const pager = list.length > 1 ? h('div.pager',
+      h('button', { type: 'button', title: 'The one before', onclick: () => step(-1) }, '‹'), `${index + 1}/${list.length}`,
+      h('button', { type: 'button', title: 'The next one (N)', onclick: () => step(1) }, '›')) : null;
+    const { verb, words, detail, questions } = describe(p);
+    const cards = held(p);
+    const controls = answerControls(p, answer);
+    const { input, wave } = controls;
+    // one question is simply the message; several each sit above their own line (answers.js draws those)
+    const asked = questions.length === 1 ? h('p.msg', questions[0].header ? h('b', questions[0].header + ' ') : null, questions[0].text) : null;
+    const session = p.request?.sessionId || null;
+    const receipt = h('div.receipt');
+    const el = h(`article.slip.${p.kind === 'question' ? 'question' : 'permission'}${list.length > 1 ? '.more' : ''}${list.length > 2 ? '.many' : ''}`,
+      h('header', photo, h('div.who', { onclick: show, title: 'Show me' }, h('b', p.agentName || 'Someone'), age), pager),
+      h('div.ask', verb),
+      words ? h('p.msg', words) : null, asked,
+      detail ? h('pre.cmd', detail) : null,
+      cards.length ? h('p.holds', 'Holding up ', h('b', cards.length === 1 ? '1 card' : `${cards.length} cards`), ': ', cards.slice(0, 2).map((t) => `“${t.title}”`).join(', '), cards.length > 2 ? ` and ${cards.length - 2} more` : '') : null,
+      controls.nodes,
+      receipt,
+      h('footer',
+        p.terminalSessionId ? h('a', { onclick: () => ui.openSheet('work', { sessionId: p.terminalSessionId }) }, 'open its terminal') : null,
+        session ? h('a', { title: 'Read what it has done so far', onclick: () => ui.openSheet('work', { driven: session }) }, 'its record') : null,
+        list.length > 1 ? h('a', { title: 'Put this one at the back', onclick: () => { later.add(p.id); sort(); top = list[0]?.id || null; draw(true); } }, 'later') : null,
+        wave ? h('a', { title: wave.kind === 'decline' ? 'Tell the agent you will not answer this' : 'Take it off the pile without answering', onclick: () => answer(wave.body, 'FILED', 'sent') }, wave.kind === 'decline' ? 'decline' : 'dismiss') : null,
+        h('span.grow'),
+        h('a', { title: 'Put the tray away', onclick: () => { folded = true; draw(true); } }, 'put away')));
+    return { el, input, receipt, age, prompt: p, busy: false };
+  }
+
+  function draw(force) {
+    const p = current();
+    top = p ? p.id : null;
+    const key = p ? `${folded || covered}|${p.id}|${p.updatedAt}|${list.length}|${list.indexOf(p)}|${answersOf(p).map((a) => a.id).join()}|${held(p).length}` : `${folded || covered}|`;
+    if (!force && key === shown) return;
+    shown = key;
+    if (!p) { slip = null; replace(tray); return; }
+    if (folded || covered) {
+      slip = null;
+      replace(tray, h('button.tab', { type: 'button', title: 'Show who is waiting (N)', onclick: () => { folded = false; if (covered) ui.closeSheet(); covered = false; draw(true); } }, `${list.length} waiting on you`));
+      return;
+    }
+    slip = build(p, list.indexOf(p));
+    replace(tray, slip.el);
+    tick();
+  }
+
+  function sort() {
+    list.sort((a, b) => (later.has(a.id) - later.has(b.id)) || (rank(a) - rank(b)) || (a.createdAt - b.createdAt));
+  }
+
+  function render(prompts) {
+    const before = new Set(list.map((p) => p.id));
+    list = (prompts || []).filter((p) => p.status === 'pending' && p.kind !== 'idle');
+    for (const id of later) if (!list.some((p) => p.id === id)) later.delete(id);
+    sort();
+    const fresh = list.some((p) => !before.has(p.id));
+    // the slip you are reading stays where it is; whatever arrives joins the pile behind it
+    if (!list.some((p) => p.id === top)) top = list[0]?.id || null;
+    draw();
+    if (fresh && before.size) { tray.classList.remove('nudge'); void tray.offsetWidth; tray.classList.add('nudge'); }
+    ui.setNeedCount(list.length);
+  }
+
+  function tick() {
+    if (!slip) return;
+    const p = slip.prompt;
+    slip.age.textContent = [whereabouts(p), `waiting ${ago(p.createdAt, net.now())}`].filter(Boolean).join(' · ');
+  }
+  setInterval(tick, 20000);
+
+  net.on('prompts', render);
+  net.on('tasks', () => draw());
+  render(net.state.prompts);
+
+  return {
+    count: () => list.length,
+    /** A panel opened or closed: tuck the slip away, or bring it back. */
+    cover(on) { covered = !!on; draw(true); },
+    /** Put one agent's slip on top and get ready to answer it. */
+    focus(agentId) {
+      const p = list.find((x) => x.agentId === agentId);
+      if (!p) return false;
+      top = p.id; folded = false;
+      if (covered) { ui.closeSheet(); covered = false; }
+      draw(true);
+      (slip?.el.querySelector('.inkstamp') || slip?.input)?.focus({ preventScroll: true });
+      return true;
+    },
+    /** Whose slip comes after `afterId`'s (wraps round). */
+    next(afterId) {
+      if (!list.length) return null;
+      const i = list.findIndex((p) => p.agentId === afterId);
+      return list[(i + 1) % list.length].agentId;
+    },
+  };
+}

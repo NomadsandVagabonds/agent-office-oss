@@ -1,0 +1,398 @@
+/* The Office — the human's interface.
+   Made of what the office is made of: enamel boards with a brass edge for the
+   furniture of the screen, paper for anything an agent hands you, label tape
+   for names, keycaps for buttons. Square corners, hard shadows, pixel type —
+   and no blur or glass: nothing here costs the 3D scene a frame.
+   The rule of the layout: the room is the main thing. Everything else stays
+   at the edges and says one thing at a time. */
+@font-face { font-family: "Pixelify Sans"; src: url("/vendor/fonts/pixelify-sans-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Pixelify Sans"; src: url("/vendor/fonts/pixelify-sans-600.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "IBM Plex Sans"; src: url("/vendor/fonts/ibm-plex-sans-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "IBM Plex Sans"; src: url("/vendor/fonts/ibm-plex-sans-600.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("/vendor/fonts/ibm-plex-mono-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("/vendor/fonts/ibm-plex-mono-600.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+:root {
+  /* enamel board: panels, the dock, the inside of a sheet */
+  --board: #14201c; --board-2: #1c2c26; --board-3: #273b33; --edge: #080d0b;
+  --bg: var(--board); --panel: var(--board); --panel-solid: var(--board);
+  --line: rgba(216, 236, 222, .1); --line-2: rgba(216, 236, 222, .2);
+  --ink: #efe9d6; --dim: #a8b4a6; --faint: #74817a;
+  /* brass: the edge of every board, the nameplate, the thing you press */
+  --brass: #cfa84e; --brass-hi: #ecd08a; --brass-lo: #8a6c28;
+  --accent: #e2b85c; --accent-ink: #231905;
+  /* paper: whatever an agent hands you */
+  --paper: #f4ecd6; --paper-2: #e6dabd; --paper-3: #d6c9a8; --paper-ink: #2a2420; --paper-dim: #5a5045; --paper-line: #c8b995;
+  --tape: #14110f;                      /* label-maker tape */
+  --working: #62d98b; --thinking: #7db8f5; --blocked: #ffb347; --done: #7ccfc0; --idle: #8b948e; --danger: #ef6a57;
+  --ok: #2c8452; --no: #c63d2c; --pen: #2f55a4;
+  --radius: 2px; --shadow: 4px 4px 0 rgba(0, 0, 0, .42);
+  --display: "Pixelify Sans", "IBM Plex Mono", ui-monospace, monospace;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+#ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; font: 13px/1.45 var(--sans); color: var(--ink); }
+#ui * { box-sizing: border-box; }
+#ui button, #ui input, #ui textarea, #ui select { font: inherit; color: inherit; }
+/* a board: enamel, a dark outline, a strip of brass along the top */
+#ui .glass { background: var(--board); border: 2px solid var(--edge); border-radius: 0; pointer-events: auto;
+  box-shadow: inset 0 3px 0 var(--brass), inset 0 4px 0 var(--brass-lo), var(--shadow); }
+#ui .mono { font-family: var(--mono); }
+#ui .dim { color: var(--dim); } #ui .faint { color: var(--faint); }
+#ui .row { display: flex; align-items: center; gap: 8px; } #ui .grow { flex: 1 1 auto; min-width: 0; }
+#ui .clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ui .hidden { display: none !important; }
+
+/* keycaps */
+#ui .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 2px; border: 2px solid var(--edge); border-radius: 2px; background: var(--board-2);
+  font: 400 15px/1 var(--display); letter-spacing: .02em; cursor: pointer; white-space: nowrap; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .07); }
+#ui .btn:hover { background: var(--board-3); }
+#ui .btn:active { padding-bottom: 0; box-shadow: inset 0 2px 0 rgba(0, 0, 0, .4); }
+#ui .btn.primary { background: var(--brass); color: var(--accent-ink); box-shadow: inset 0 -3px 0 var(--brass-lo), inset 0 1px 0 var(--brass-hi); }
+#ui .btn.primary:hover { background: var(--brass-hi); }
+#ui .btn.primary:active { box-shadow: inset 0 2px 0 var(--brass-lo); }
+#ui .btn.ghost { border-color: transparent; background: transparent; box-shadow: none; }
+#ui .btn.ghost:hover { background: rgba(216, 236, 222, .1); }
+#ui .btn.on, #ui .btn.ghost.on { color: var(--accent); background: rgba(226, 184, 92, .12); border-color: var(--brass-lo); box-shadow: inset 0 -3px 0 var(--brass); }
+#ui .btn.small { height: 24px; padding: 0 7px 2px; font-size: 13px; }
+#ui .btn[disabled] { opacity: .45; cursor: default; }
+#ui :is(.btn, .key, .inkstamp, .field, .tab, .pager button):focus-visible { outline: 2px solid var(--brass-hi); outline-offset: 2px; }
+#ui .btn .badge, #ui .badge { min-width: 18px; height: 18px; padding: 0 4px; border-radius: 0; background: var(--blocked); color: #2a1c06; font: 600 13px/18px var(--display); text-align: center; }
+#ui .icon { width: 16px; height: 16px; flex: none; image-rendering: pixelated; }
+#ui input.field, #ui textarea.field, #ui select.field { width: 100%; background: #0b1411; border: 2px solid var(--edge); border-radius: 2px; padding: 6px 8px; outline: none; box-shadow: inset 0 2px 0 rgba(0, 0, 0, .45); }
+#ui textarea.field { resize: vertical; min-height: 34px; line-height: 1.4; }
+#ui .field:focus { border-color: var(--brass); }
+/* status is a square pixel, not a soft dot */
+#ui .dot { width: 8px; height: 8px; flex: none; background: var(--idle); }
+#ui .dot.working { background: var(--working); } #ui .dot.thinking { background: var(--thinking); }
+#ui .dot.blocked { background: var(--blocked); animation: beat 2s ease-in-out infinite; }
+#ui .dot.done { background: var(--done); } #ui .dot.arriving, #ui .dot.leaving { background: var(--idle); }
+@keyframes beat { 50% { opacity: .35; } }
+#ui .chip { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 0; background: rgba(216, 236, 222, .09); font: 11px/1 var(--mono); color: var(--dim); white-space: nowrap; }
+#ui kbd { font: 11px/1 var(--mono); padding: 2px 5px 3px; border-radius: 2px; border: 1px solid var(--line-2); border-bottom-width: 2px; background: rgba(0, 0, 0, .3); color: var(--dim); }
+
+/* top left: the nameplate, and who is in */
+#ui .hud-tl { position: absolute; top: 10px; left: 10px; display: flex; pointer-events: auto; filter: drop-shadow(4px 4px 0 rgba(0, 0, 0, .42)); }
+#ui .nameplate { position: relative; display: flex; align-items: center; height: 38px; padding: 0 20px; border: 2px solid var(--edge); background: linear-gradient(#dfbd66, #c39a3e);
+  color: #3a2a08; font: 600 18px/1 var(--display); letter-spacing: .18em; text-shadow: 0 1px 0 rgba(255, 255, 255, .35); cursor: pointer; white-space: nowrap; }
+#ui .nameplate::before, #ui .nameplate::after { content: ''; position: absolute; top: 50%; width: 4px; height: 4px; margin-top: -2px; background: #7a5d1e; box-shadow: inset 1px 1px 0 rgba(0, 0, 0, .35); }
+#ui .nameplate::before { left: 6px; } #ui .nameplate::after { right: 6px; }
+#ui .census { display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 12px; border: 2px solid var(--edge); border-left: 0; background: var(--board); font: 12px/1 var(--mono); color: var(--dim); white-space: nowrap; }
+#ui .census .n { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+#ui .census .n b { font: 600 14px/1 var(--mono); color: var(--ink); }
+#ui .census .n:hover { color: var(--ink); }
+#ui .census .n.hot, #ui .census .n.hot b { color: var(--blocked); }
+
+/* top right: instruments */
+#ui .hud-tr { position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 8px; pointer-events: auto; }
+#ui .lcd { display: flex; align-items: center; gap: 9px; height: 38px; padding: 0 12px; background: #090f0d; border: 2px solid var(--edge); box-shadow: inset 0 3px 0 rgba(0, 0, 0, .6), var(--shadow);
+  font: 400 19px/1 var(--display); letter-spacing: .06em; color: #ffc66b; text-shadow: 0 0 8px rgba(255, 180, 74, .45); white-space: nowrap; }
+#ui .lcd small { font: 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: #9a7436; text-shadow: none; }
+
+/* bottom centre: the dock. Seven keys; what each does is on the key when you hover */
+#ui .dock { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 4px; padding: 9px 8px 6px; }
+#ui .dock .key { position: relative; width: 46px; height: 42px; display: grid; place-items: center; padding: 0 0 4px; border: 2px solid var(--edge); border-radius: 2px; background: var(--board-2); cursor: pointer;
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .32), inset 0 1px 0 rgba(255, 255, 255, .08); transition: transform .06s; }
+#ui .dock .key .icon { width: 24px; height: 24px; }
+#ui .dock .key:hover { background: var(--board-3); transform: translateY(-2px); }
+#ui .dock .key:active { transform: translateY(1px); padding-bottom: 0; box-shadow: inset 0 2px 0 rgba(0, 0, 0, .45); }
+#ui .dock .key.on { background: var(--brass); color: var(--accent-ink); box-shadow: inset 0 -4px 0 var(--brass-lo), inset 0 1px 0 var(--brass-hi); }
+#ui .dock .key kbd { position: absolute; right: 3px; bottom: 5px; padding: 0; border: 0; background: none; font: 9px/1 var(--mono); color: var(--faint); }
+#ui .dock .key.on kbd { color: #5d4410; }
+#ui .dock .key .tip { position: absolute; left: 50%; bottom: calc(100% + 12px); transform: translateX(-50%); padding: 4px 8px 5px; background: var(--tape); color: #f4f0e6; font: 400 14px/1 var(--display); white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity .08s; box-shadow: 2px 2px 0 rgba(0, 0, 0, .35); }
+#ui .dock .key:hover .tip, #ui .dock .key:focus-visible .tip { opacity: 1; }
+#ui .dock .sep { width: 2px; margin: 4px 3px 8px; background: var(--line-2); }
+
+/* bottom left: one line of what just happened, on label tape. It replaces itself; it never stacks */
+#ui .ticker { position: absolute; left: 10px; bottom: 14px; max-width: min(430px, 32vw); padding: 6px 10px 7px; background: var(--tape); color: #f4f0e6; font: 400 14px/1.25 var(--display); letter-spacing: .02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: var(--shadow); opacity: 0; transition: opacity .5s; pointer-events: none; }
+#ui .ticker.on { opacity: 1; pointer-events: auto; }
+#ui .ticker.gold { background: var(--brass); color: var(--accent-ink); }
+#ui .ticker b { font-weight: 600; }
+
+/* labels floating over the world: label tape for names, paper for what people say, brass for doors */
+#ui .labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+#ui .tag { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; will-change: transform; white-space: nowrap; }
+#ui .tag .name { display: flex; align-items: center; gap: 6px; height: 20px; padding: 0 7px 1px 6px; background: var(--tape); color: #f4f0e6; font: 400 14px/1 var(--display);
+  pointer-events: auto; cursor: pointer; box-shadow: 2px 2px 0 rgba(0, 0, 0, .35); }
+#ui .tag .name:hover, #ui .tag.selected .name { background: var(--brass); color: var(--accent-ink); }
+/* further out a name is noise: a pip says how they are doing, and that is all */
+#ui .yarn { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+#ui .yarn path { fill: none; stroke: #d2432f; stroke-width: 2.5; stroke-linecap: round; }
+#ui .yarn path.shade { stroke: rgba(0, 0, 0, .4); stroke-width: 2.5; transform: translate(2px, 3px); }
+#ui .yarntag { position: absolute; left: 0; top: 0; padding: 1px 6px 2px; background: var(--paper); color: var(--paper-ink); border: 2px solid var(--edge); border-left: 5px solid var(--no); font: 11px/1.3 var(--mono); white-space: nowrap; cursor: pointer; pointer-events: auto; }
+#ui .yarntag:hover { background: #fffaf0; }
+#ui .tag.pip .name { height: auto; padding: 0; background: none; box-shadow: none; } #ui .tag.pip .name span { display: none; }
+#ui .tag.pip .dot { width: 9px; height: 9px; box-shadow: 0 0 0 2px var(--tape); }
+#ui .tag.pip.idle .dot { opacity: .5; }
+#ui .tag.bare .name { display: none; }
+#ui .tag.idle .name { opacity: .7; }
+#ui .tag .bubble { max-width: 230px; white-space: normal; padding: 5px 9px 6px; background: var(--paper); color: var(--paper-ink); border: 2px solid var(--edge); font: 13px/1.3 var(--sans);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, .35); position: relative; pointer-events: auto; cursor: pointer; }
+#ui .tag .bubble::after { content: ''; position: absolute; left: 50%; bottom: -7px; width: 8px; height: 8px; background: inherit; border: solid var(--edge); border-width: 0 2px 2px 0; transform: translateX(-50%) rotate(45deg); }
+#ui .tag .bubble.alert { background: var(--blocked); color: #2a1c06; font: 600 14px/1.2 var(--display); letter-spacing: .04em; }
+#ui .tag .bubble.emote { background: transparent; border: 0; box-shadow: none; font-size: 22px; padding: 0; } #ui .tag .bubble.emote::after { display: none; }
+/* a room's name is a strip of tape, quiet until it matters: it turns amber when someone inside needs you */
+#ui .roomtag { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); padding: 3px 8px 4px; background: rgba(20, 17, 15, .8); color: #ece6d6;
+  font: 400 13px/1.1 var(--display); letter-spacing: .08em; text-transform: uppercase; text-align: center; pointer-events: auto; cursor: pointer; box-shadow: 2px 2px 0 rgba(0, 0, 0, .3); }
+#ui .roomtag:hover { background: var(--brass); color: var(--accent-ink); }
+#ui .roomtag small { display: block; margin-top: 2px; font: 600 10px/1.1 var(--mono); letter-spacing: 0; text-transform: none; }
+#ui .roomtag.hot { background: var(--blocked); color: #2a1c06; }
+#ui .floater { position: absolute; left: 0; top: 0; font: 600 20px/1 var(--display); color: #fff; text-shadow: 2px 2px 0 rgba(0, 0, 0, .6); pointer-events: none; white-space: nowrap; will-change: transform, opacity; }
+
+/* bottom right: the in-tray. However many are waiting, you are handed one slip */
+#ui .intray { position: absolute; right: 14px; bottom: 14px; width: 344px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; isolation: isolate; }
+#ui .intray .tab { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px 2px; border: 2px solid var(--edge); background: var(--blocked); color: #2a1c06; font: 600 15px/1 var(--display); letter-spacing: .04em;
+  cursor: pointer; pointer-events: auto; box-shadow: var(--shadow); }
+#ui .intray .tab:hover { background: #ffc46b; }
+#ui .intray.nudge .tab, #ui .intray.nudge .slip { animation: nudge .4s; }
+@keyframes nudge { 30% { transform: translateY(-5px) rotate(-1deg); } 60% { transform: translateY(2px); } }
+#ui .slip { position: relative; width: 100%; padding: 12px 14px 11px; background: var(--paper); color: var(--paper-ink); border: 2px solid var(--edge); box-shadow: var(--shadow); pointer-events: auto;
+  animation: handed .22s ease-out; }
+#ui .slip.more::before, #ui .slip.many::after { content: ''; position: absolute; z-index: -1; height: 100%; border: 2px solid var(--edge); }
+#ui .slip.more::before { left: 5px; right: -7px; top: -7px; background: var(--paper-2); }
+#ui .slip.many::after { left: 12px; right: -14px; top: -14px; background: var(--paper-3); z-index: -2; }
+@keyframes handed { from { opacity: 0; transform: translateY(14px) rotate(1.5deg); } }
+#ui .slip.gone { animation: filed .3s ease-in forwards; }
+@keyframes filed { to { opacity: 0; transform: translateX(60%) rotate(5deg); } }
+#ui .slip header { display: flex; align-items: center; gap: 10px; }
+#ui .slip .photo { width: 44px; height: 44px; flex: none; background: #cfe0d6; border: 2px solid var(--edge); outline: 3px solid #fffaf0; outline-offset: -5px; image-rendering: pixelated; transform: rotate(-2deg); cursor: pointer; }
+#ui .slip .who { min-width: 0; flex: 1 1 auto; cursor: pointer; }
+#ui .slip .who b { display: block; font: 600 18px/1.1 var(--display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ui .slip .who small { display: block; font: 11px/1.3 var(--mono); color: var(--paper-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ui .slip .pager { display: flex; align-items: center; gap: 6px; flex: none; font: 600 12px/1 var(--mono); color: var(--paper-dim); }
+#ui .slip .pager button { width: 24px; height: 24px; display: grid; place-items: center; padding: 0 0 2px; border: 2px solid var(--paper-ink); background: transparent; color: var(--paper-ink); font: 600 14px/1 var(--display); cursor: pointer; }
+#ui .slip .pager button:hover { background: var(--paper-ink); color: var(--paper); }
+#ui .slip .ask { margin: 10px 0 4px; font: 600 13px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--no); }
+#ui .slip.question .ask { color: var(--pen); }
+#ui .slip .msg { margin: 0; font: 13px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 7.4em; overflow-y: auto; }
+#ui .slip .cmd { margin: 8px 0 0; padding: 6px 8px; background: #fffaf0; border: 2px dashed var(--paper-line); font: 12px/1.4 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 6.2em; overflow-y: auto; }
+#ui .slip .holds { margin: 8px 0 0; font: 12px/1.4 var(--sans); color: var(--paper-dim); }
+#ui .slip .holds b { color: var(--paper-ink); font-weight: 600; }
+#ui .slip .stamps { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+#ui .slip .scope { margin: 7px 0 0; font: 11.5px/1.35 var(--mono); color: var(--paper-dim); } #ui .slip .scope b { color: var(--ok); font-weight: 600; }
+#ui .slip .msg b { font-weight: 600; }
+#ui .slip .q { margin-top: 12px; } #ui .slip .q p { margin: 0; font: 13px/1.45 var(--mono); } #ui .slip .q p b { font-weight: 600; }
+#ui .slip .q .stamps { margin-top: 6px; } #ui .slip .q .write { margin-top: 6px; }
+#ui .slip .write .grow { flex: 1 1 auto; } #ui .slip .write button[disabled] { opacity: .4; cursor: default; }
+#ui .inkstamp { height: 34px; padding: 0 12px 2px; border: 3px solid currentColor; background: transparent; font: 600 16px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; cursor: pointer; transform: rotate(-1.5deg); }
+#ui .inkstamp.ok { color: var(--ok); } #ui .inkstamp.no { color: var(--no); transform: rotate(1.2deg); } #ui .inkstamp.plain { color: var(--paper-ink); transform: none; }
+#ui .inkstamp:hover { box-shadow: inset 0 0 0 99px currentColor; } #ui .inkstamp:hover span { color: var(--paper); position: relative; }
+#ui .inkstamp:active { transform: scale(.94); }
+#ui .slip .write { display: flex; gap: 8px; align-items: flex-end; margin-top: 12px; }
+#ui .slip .write input { flex: 1 1 auto; min-width: 0; padding: 4px 2px; background: transparent; border: 0; border-bottom: 2px solid var(--paper-ink); outline: none; font: 13px/1.3 var(--mono); color: var(--paper-ink); }
+#ui .slip .write input::placeholder { color: var(--paper-dim); }
+#ui .slip .write button { height: 28px; padding: 0 10px 2px; border: 2px solid var(--paper-ink); background: var(--paper-ink); color: var(--paper); font: 400 14px/1 var(--display); cursor: pointer; }
+#ui .slip .write button:hover { background: #000; }
+#ui .slip footer { display: flex; gap: 14px; margin-top: 12px; font: 12px/1 var(--mono); color: #3f372f; }
+#ui .slip footer a { color: inherit; cursor: pointer; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+#ui .slip footer a:hover { color: #000; text-decoration-thickness: 2px; }
+#ui .slip .receipt { margin-top: 8px; font: 12px/1.3 var(--mono); color: var(--no); }
+#ui .slip .mark { position: absolute; right: 22px; top: 34%; padding: 4px 12px 6px; border: 4px solid currentColor; font: 600 30px/1 var(--display); letter-spacing: .08em; transform: rotate(-11deg); opacity: .88; pointer-events: none;
+  animation: thunk .26s cubic-bezier(.2, 1.7, .4, 1); }
+#ui .slip .mark.ok { color: var(--ok); } #ui .slip .mark.no { color: var(--no); } #ui .slip .mark.sent { color: var(--pen); }
+@keyframes thunk { from { opacity: 0; transform: rotate(-11deg) scale(2.3); } }
+
+/* who is this: a card on the left, with their photo clipped to it */
+#ui .side { position: absolute; top: 60px; left: 10px; width: 312px; max-height: calc(100% - 140px); display: flex; flex-direction: column; overflow: hidden; }
+#ui .side header { display: flex; align-items: center; gap: 12px; padding: 14px 12px 10px; border-bottom: 2px solid var(--edge); }
+#ui .side header .mug { width: 52px; height: 52px; flex: none; background: #cfe0d6; border: 2px solid var(--edge); outline: 3px solid #fffaf0; outline-offset: -5px; image-rendering: pixelated; transform: rotate(-2deg); }
+#ui .side header h2 { margin: 0; font: 600 19px/1.15 var(--display); }
+#ui .side .body { padding: 10px 12px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+#ui .kv { display: grid; grid-template-columns: 78px 1fr; gap: 4px 10px; font-size: 12px; margin: 0; }
+#ui .kv dt { color: var(--faint); font-family: var(--mono); font-size: 11px; padding-top: 1px; } #ui .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+#ui .kv dd a.link { color: inherit; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
+#ui .kv dd a.link:hover { text-decoration-color: var(--accent); } #ui .kv dd a.link.warn { color: var(--blocked); text-decoration-color: currentColor; }
+#ui .meter { height: 8px; background: #0b1411; border: 2px solid var(--edge); overflow: hidden; }
+#ui .meter i { display: block; height: 100%; background: var(--working); }
+#ui .meter.warn i { background: var(--blocked); } #ui .meter.full i { background: var(--danger); }
+#ui .statusline { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: #0b1411; border: 2px solid var(--edge); }
+#ui .statusline.blocked { background: rgba(255, 179, 71, .16); color: var(--blocked); border-color: #6b4a14; }
+
+/* big sheets (comms, board, binder, terminals…): one board in the middle of the room */
+#ui .sheet { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); width: min(1080px, calc(100% - 20px)); height: min(720px, calc(100% - 132px));
+  display: flex; flex-direction: column; overflow: hidden; animation: rise .16s ease-out; }
+#ui .sheet > header { display: flex; align-items: center; gap: 10px; padding: 12px 10px 9px 16px; border-bottom: 2px solid var(--edge); flex: none; }
+#ui .sheet > header h2 { margin: 0; font: 600 18px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; }
+#ui .sheet > .content { flex: 1 1 auto; min-height: 0; display: flex; }
+@keyframes rise { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%); } }
+#ui .scroll { overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(216, 236, 222, .22) transparent; }
+#ui .scroll::-webkit-scrollbar { width: 9px; } #ui .scroll::-webkit-scrollbar-thumb { background: rgba(216, 236, 222, .2); border: 2px solid transparent; background-clip: content-box; }
+#ui .list { display: flex; flex-direction: column; }
+#ui .list .item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; border-left: 3px solid transparent; }
+#ui .list .item:hover { background: rgba(216, 236, 222, .06); }
+#ui .list .item.on { background: rgba(226, 184, 92, .12); border-left-color: var(--brass); }
+#ui .list h3 { margin: 12px 12px 4px; font: 400 13px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+#ui .empty { padding: 28px 18px; text-align: center; color: var(--faint); }
+
+@media (max-width: 900px) { #ui .census .word, #ui .lcd small { display: none; } }
+@media (max-width: 760px) {
+  #ui .census { display: none; } #ui .nameplate { padding: 0 14px; font-size: 16px; letter-spacing: .12em; }
+  #ui .dock { gap: 2px; padding: 8px 5px 5px; bottom: 6px; } #ui .dock .key { width: 40px; } #ui .dock .key kbd, #ui .dock .sep { display: none; }
+  #ui .intray { right: 8px; bottom: 66px; width: calc(100% - 16px); }
+  #ui .ticker { bottom: 66px; max-width: calc(100% - 20px); }
+  #ui .side { width: calc(100% - 20px); max-height: 44%; }
+  #ui .sheet { top: 56px; height: calc(100% - 124px); }
+}
+@media (prefers-reduced-motion: reduce) { #ui * { animation: none !important; transition: none !important; } }
+
+/* walking the floor: what you can use, and what the world says back */
+#ui .usehint { position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%); padding: 7px 12px; font-size: 13px; white-space: nowrap; }
+#ui .story { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); width: min(600px, calc(100% - 660px)); min-width: 300px; padding: 12px 16px; font: 13.5px/1.55 var(--mono);
+  white-space: pre-wrap; border-color: rgba(240, 184, 96, .35); animation: toastin .2s ease-out; }
+#ui .story .field { margin-top: 8px; font-family: var(--mono); }
+
+/* fallen out of the office: the level has the screen, the office's interface steps aside */
+body.noclip #ui > *:not(.backrooms):not(.story) { display: none !important; }
+
+/* while you were away */
+#ui .away { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); width: min(520px, calc(100% - 24px)); padding: 12px 14px; animation: rise .2s ease-out; }
+#ui .away header { display: flex; align-items: center; }
+#ui .away .line { display: flex; gap: 10px; padding: 3px 0; font-size: 12.5px; cursor: default; }
+#ui .away .line[onclick], #ui .away .line:hover { color: var(--ink); }
+#ui .away .line span:first-child { width: 34px; flex: none; text-align: right; }
+
+/* the lift. On another floor the level has the screen and the office's interface steps aside (as for noclip, above).
+   What is left is one board: a brass plate with the floor's letter, its name, and a key to leave by. */
+body.level #ui > *:not(.level):not(.story):not(.liftveil):not(.liftpanel):not(.purse) { display: none !important; }
+#ui .level { position: absolute; inset: 0; pointer-events: auto; touch-action: none; cursor: grab; }
+#ui .level:active { cursor: grabbing; }
+#ui .level.ride { cursor: default; }
+#ui .level-chip { position: absolute; top: 10px; left: 10px; display: flex; align-items: center; gap: 10px; height: 42px; padding: 3px 8px 0 8px; cursor: default; }
+#ui .level-chip .floor { display: grid; place-items: center; min-width: 26px; height: 26px; padding: 0 4px 2px; background: var(--brass); color: var(--accent-ink);
+  font: 700 15px/1 var(--mono); letter-spacing: -.03em; box-shadow: inset 0 -3px 0 var(--brass-lo), inset 0 1px 0 var(--brass-hi); }   /* a floor is a number now: set in the face whose 2 and 7 cannot be mistaken */
+#ui .level-chip .floor:empty { background: var(--tape); box-shadow: inset 0 0 0 2px var(--danger); }
+#ui .level-chip .name { font: 400 16px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; padding: 0 4px 1px 0; }
+#ui .level-chip .name:empty { display: none; }
+#ui .level-needs { position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 8px; height: 42px; padding: 3px 10px 0; cursor: pointer;
+  color: var(--blocked); font: 400 15px/1 var(--display); letter-spacing: .02em; }
+
+/* its floor panel: a board with a display at the top, a keycap for every floor, and each floor's name on label tape */
+/* the purse: what you just picked up, for a moment — a coin and how many the jar holds now, or a keycard */
+#ui .purse { position: absolute; z-index: 6; left: 50%; top: 64px; transform: translate(-50%, -14px); display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 14px 2px 11px; opacity: 0; pointer-events: none;
+  background: var(--tape); border: 2px solid var(--edge); box-shadow: var(--shadow); font: 600 22px/1 var(--mono); color: #f4f0e6; transition: opacity .5s ease-in, transform .5s ease-in; }
+#ui .purse.show { opacity: 1; transform: translate(-50%, 0); transition: opacity .12s ease-out, transform .18s cubic-bezier(.2, 1.6, .4, 1); }
+#ui .purse .coin { width: 20px; height: 20px; background: #f2c64a; border: 3px solid #b98a1e; box-shadow: inset 0 0 0 4px #f2c64a, inset 0 0 0 7px #7a5a12; }
+#ui .purse .card { width: 18px; height: 26px; background: #f3eedd; border: 2px solid #17130c; box-shadow: inset 0 6px 0 #3f8fd0, inset 0 8px 0 #f3eedd; }
+/* the vending machine, from the front: a lit window of three shelves, the jar on a display, a keypad, a tray */
+#ui .vend { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(540px, calc(100% - 20px)); max-height: calc(100% - 20px); overflow-y: auto; padding: 10px 12px 12px; pointer-events: auto;
+  background: #33363d; border: 2px solid var(--edge); box-shadow: inset 0 0 0 2px #454953, inset 0 -10px 0 #22242a, 8px 8px 0 rgba(0, 0, 0, .45); }
+#ui .vend .coin { display: inline-block; width: 12px; height: 12px; flex: none; background: #f2c64a; border: 2px solid #b98a1e; box-shadow: inset 0 0 0 2px #f2c64a, inset 0 0 0 4px #7a5a12; }
+#ui .vbrand { height: 46px; display: grid; place-items: center; padding: 0 0 3px .34em; background: #f5d08a; border: 2px solid var(--edge); color: #5a1a12; font: 600 32px/1 var(--display); letter-spacing: .34em;
+  box-shadow: inset 0 -4px 0 #d9ae5c, 0 0 22px rgba(245, 208, 138, .28); }
+#ui .vbody { display: grid; grid-template-columns: minmax(0, 1fr) 128px; gap: 10px; margin-top: 10px; }
+#ui .vwindow { display: grid; align-content: start; padding: 4px 6px 0; background: linear-gradient(#d6cdb4, #b8ab8c); border: 2px solid var(--edge); box-shadow: inset 0 0 0 5px #d9d4c8, inset 0 0 0 7px rgba(0, 0, 0, .18); }
+#ui .vrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 5px; border-bottom: 5px solid #c9ced6; box-shadow: 0 2px 0 #8d939c; }
+#ui .vrow:last-child { margin-bottom: 9px; }
+#ui .vslot { position: relative; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; height: 108px; padding: 8px 4px 0; border: 0; background: transparent; cursor: pointer; }
+#ui .vslot::before { content: ''; position: absolute; inset: 5px 3px 22px; border: 3px solid transparent; }
+#ui .vslot:hover::before { border-color: rgba(23, 19, 12, .18); }
+#ui .vslot.on::before { border-color: #17130c; box-shadow: inset 0 0 0 2px #f5d08a; }
+#ui .vitem { position: relative; z-index: 2; flex: 1 1 auto; display: grid; place-items: end center; padding-bottom: 2px; pointer-events: none; }
+#ui .vitem canvas, #ui .vtray canvas { display: block; image-rendering: pixelated; filter: drop-shadow(3px 3px 0 rgba(0, 0, 0, .22)); }
+/* the coil that holds a thing on its shelf: all you see of a place that has been emptied */
+#ui .vcoil { position: absolute; left: 50%; bottom: 24px; width: 46px; height: 12px; transform: translateX(-50%); opacity: 0;
+  background: repeating-linear-gradient(90deg, #6f757e 0 3px, transparent 3px 8px), linear-gradient(transparent 5px, #8d939c 5px 7px, transparent 7px); }
+#ui .vslot.sold .vcoil { opacity: 1; height: 26px; background: repeating-linear-gradient(90deg, #6f757e 0 3px, transparent 3px 8px), linear-gradient(transparent 12px, #8d939c 12px 14px, transparent 14px); }
+#ui .vslot.turning .vcoil { opacity: 1; animation: vcoil .26s steps(4) infinite; }
+@keyframes vcoil { to { background-position: 8px 0, 0 0; } }
+#ui .vslot.sold { cursor: default; }
+#ui .vtag { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: center; gap: 4px; height: 20px; margin: 0 2px 2px; padding: 0 6px 1px; background: var(--tape); color: #f4f0e6; font: 400 14px/1 var(--display); letter-spacing: .04em; }
+#ui .vtag span { display: flex; align-items: center; gap: 4px; }
+#ui .vtag .coin { width: 10px; height: 10px; box-shadow: inset 0 0 0 2px #f2c64a, inset 0 0 0 3px #7a5a12; }
+#ui .vslot.sold .vtag { color: #8b867a; } #ui .vslot.sold .vtag .coin { filter: grayscale(1) brightness(.7); }
+#ui .vside { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+#ui .vdisplay { display: grid; align-content: center; gap: 6px; height: 70px; padding: 0 10px 2px; background: #090f0d; border: 2px solid var(--edge); box-shadow: inset 0 3px 0 rgba(0, 0, 0, .6);
+  font: 400 22px/1 var(--display); letter-spacing: .06em; color: #ffc66b; text-shadow: 0 0 8px rgba(255, 180, 74, .45); white-space: nowrap; }
+#ui .vdisplay .jar, #ui .vdisplay > span, #ui .vdisplay .cost { display: flex; align-items: center; gap: 7px; }
+#ui .vdisplay > span { min-height: 20px; font-size: 18px; color: #e9a94a; } #ui .vdisplay > span b { font-weight: 400; margin-right: 4px; }
+#ui .vdisplay em { font-style: normal; color: #7a6a4a; text-shadow: none; }
+#ui .vdisplay .short { color: #ff6a5a; text-shadow: 0 0 8px rgba(255, 90, 70, .5); }
+#ui .vdisplay.nudge { animation: vnudge .32s steps(2) 1; }
+@keyframes vnudge { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+#ui .vkeys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 7px; background: #17181c; border: 2px solid var(--edge); }
+#ui .vkey { height: 32px; display: grid; place-items: center; padding: 0 0 4px; border: 2px solid var(--edge); border-radius: 2px; background: #c9ced6; color: #17181c; font: 600 17px/1 var(--display); cursor: pointer;
+  box-shadow: inset 0 -4px 0 #8d939c, inset 0 1px 0 #f2f4f7; }
+#ui .vkey:hover { background: #e3e7ec; } #ui .vkey:active { box-shadow: inset 0 2px 0 #8d939c; padding-bottom: 0; }
+#ui .vkey.go { grid-column: 1 / -1; background: #6f757e; box-shadow: inset 0 -4px 0 #4a4f57, inset 0 1px 0 #9aa0aa; }
+#ui .vkey.go i { width: 0; height: 0; border: solid transparent; border-width: 10px 9px 0; border-top-color: #17181c; transform: translateY(1px); opacity: .5; }
+#ui .vkey.go.armed { background: var(--brass); box-shadow: inset 0 -4px 0 var(--brass-lo), inset 0 1px 0 var(--brass-hi), 0 0 14px rgba(236, 208, 138, .5); animation: vgo 1s steps(2) infinite; }
+#ui .vkey.go.armed i { opacity: 1; }
+@keyframes vgo { 50% { background: var(--brass-hi); } }
+#ui .vcoin { flex: 1 1 auto; min-height: 34px; display: grid; place-items: center; background: #8a8f96; border: 2px solid var(--edge); box-shadow: inset 0 -4px 0 #5d6269, inset 0 1px 0 #c3c9d1; }
+#ui .vcoin i { width: 6px; height: 22px; background: #0b0c0e; box-shadow: 0 0 0 2px #5d6269; }
+#ui .vstripe { height: 8px; margin: 10px -10px 0; background: #c0463a; box-shadow: inset 0 -2px 0 #8a2f27; }
+#ui .vtray { position: relative; min-height: 74px; margin-top: 10px; padding: 9px 12px 8px; background: #0e0f12; border: 2px solid var(--edge); box-shadow: inset 0 6px 0 rgba(0, 0, 0, .6); }
+#ui .vtray .flap { position: absolute; left: 0; right: 0; top: 0; height: 100%; background: linear-gradient(#2b2d33, #1b1c20); border-bottom: 4px solid #0b0c0e; transform-origin: top; transition: transform .25s steps(3); }
+#ui .vtray .flap::after { content: ''; position: absolute; left: 50%; top: 50%; width: 96px; height: 8px; transform: translate(-50%, -50%); background: #0b0c0e; box-shadow: 0 2px 0 #3d4048; }
+#ui .vtray .flap.open { transform: scaleY(.08); }
+#ui .vtray .flap.open::after { display: none; }
+#ui .vtray .got { position: relative; display: flex; align-items: center; gap: 14px; min-height: 54px; animation: vgot .22s steps(3) 1; }
+@keyframes vgot { from { transform: translateY(-22px); } }
+#ui .vslip { flex: 1 1 auto; min-width: 0; padding: 6px 10px 7px; background: var(--paper); color: var(--paper-ink); border: 2px solid var(--edge); transform: rotate(-1deg); box-shadow: 3px 3px 0 rgba(0, 0, 0, .4); }
+#ui .vslip b { display: block; font: 600 17px/1.15 var(--display); letter-spacing: .02em; }
+#ui .vslip span { display: block; font: 12.5px/1.35 var(--sans); color: var(--paper-dim); }
+@media (max-width: 460px) { #ui .vbody { grid-template-columns: minmax(0, 1fr) 104px; } #ui .vslot { height: 96px; } #ui .vbrand { font-size: 26px; height: 40px; } }
+#ui .liftveil { position: absolute; inset: 0; background: rgba(8, 13, 11, .55); pointer-events: auto; cursor: default; }
+/* The lift's panel: a steel plate of buttons under the car's display, screwed to the wall. Nothing is written on it
+   but what is engraved in the buttons; the display is the only thing that says a word, and only about a floor you know. */
+#ui .liftpanel { --b: 60px; --g: 11px; --steel: #4b544f; --steel-hi: #6d7871; --steel-lo: #2b322e; --eight: polygon(29% 0, 71% 0, 100% 29%, 100% 71%, 71% 100%, 29% 100%, 0 71%, 0 29%);
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(292px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow-y: auto;
+  padding: 24px 22px 22px; cursor: default; color: var(--ink); pointer-events: auto; animation: liftin .16s steps(3);
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .035) 0 1px, transparent 1px 3px), var(--steel); border: 2px solid var(--edge);
+  box-shadow: inset 0 2px 0 var(--steel-hi), inset 0 -3px 0 var(--steel-lo), var(--shadow); }
+@keyframes liftin { from { opacity: 0; transform: translate(-50%, -47%); } to { opacity: 1; transform: translate(-50%, -50%); } }
+#ui .liftpanel .screw { position: absolute; width: 8px; height: 8px; background: linear-gradient(135deg, transparent 0 42%, var(--steel-lo) 42% 58%, transparent 58%), var(--steel-hi); box-shadow: 0 0 0 2px var(--steel-lo); }
+#ui .liftpanel .screw:nth-of-type(1) { left: 8px; top: 9px; } #ui .liftpanel .screw:nth-of-type(2) { right: 8px; top: 9px; }
+#ui .liftpanel .screw:nth-of-type(3) { left: 8px; bottom: 9px; } #ui .liftpanel .screw:nth-of-type(4) { right: 8px; bottom: 9px; }
+#ui .liftpanel .led { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12px; height: 74px; padding: 6px 12px 7px; overflow: hidden;
+  background: #0a0c0a; border: 2px solid var(--edge); box-shadow: inset 0 3px 0 rgba(0, 0, 0, .6), 0 1px 0 var(--steel-hi); }
+#ui .liftpanel .led b { grid-row: 1 / span 2; min-width: 1.3em; text-align: center; font: 700 36px/1 var(--mono); letter-spacing: -.02em; color: var(--blocked); }
+#ui .liftpanel .led b.no { color: var(--danger); } #ui .liftpanel .led b.here { color: var(--working); }
+#ui .liftpanel .led span { align-self: end; font: 400 15px/1.1 var(--display); letter-spacing: .07em; text-transform: uppercase; color: var(--brass); overflow-wrap: anywhere; }
+#ui .liftpanel .led span:empty { display: none; }
+#ui .liftpanel .led em { align-self: start; display: flex; align-items: flex-end; gap: 4px; min-height: 11px; margin-top: 5px; font-style: normal; }
+#ui .liftpanel .led em i { width: 8px; height: 8px; border: 2px solid #4d5a52; }
+#ui .liftpanel .led em i.got { background: #f2c64a; border-color: #b98a1e; }
+#ui .liftpanel .led em i.card { width: 8px; height: 11px; margin-right: 3px; }
+#ui .liftpanel .led em i.card.got { background: #f3eedd; border-color: #17130c; box-shadow: inset 0 3px 0 #3f8fd0; }
+#ui .liftpanel .plate { display: grid; gap: var(--g); justify-content: center; margin-top: 20px; }
+#ui .liftpanel .prow { display: grid; grid-template-columns: var(--b) var(--b); gap: 40px; }
+#ui .liftpanel :is(.lbtn, .blank, .bare) { position: relative; width: var(--b); height: var(--b); }
+/* a button is three eight-sided pieces, one inside the other: the collar set into the plate, the ring that lights, the cap you press */
+#ui .liftpanel .lbtn { --ring: #262d29; --cap: #cdd3cb; --side: #7f8a83; --cut: #1b221e; padding: 0; border: 0; background: none; cursor: pointer; }
+#ui .liftpanel .lbtn::before, #ui .liftpanel .lbtn::after, #ui .liftpanel .lbtn i, #ui .liftpanel .lbtn b, #ui .liftpanel .blank::before { content: ''; position: absolute; clip-path: var(--eight); }
+#ui .liftpanel .lbtn::before { inset: 0; background: #131815; }
+#ui .liftpanel .lbtn i { inset: 3px; background: var(--ring); }
+#ui .liftpanel .lbtn::after { inset: 10px 9px 8px; background: var(--side); }
+#ui .liftpanel .lbtn b { z-index: 1; inset: 8px 9px 11px; display: grid; place-items: center; background: var(--cap); color: var(--cut); font: 700 calc(var(--b) * .35)/1 var(--mono); letter-spacing: -.04em; }
+#ui .liftpanel .lbtn.on { --ring: var(--brass-hi); }
+#ui .liftpanel .lbtn:focus-visible { outline: none; --ring: var(--brass-hi); }
+#ui .liftpanel .lbtn.here { --ring: var(--working); }
+#ui .liftpanel .lbtn.locked { --ring: #8f271c; --cap: #33130f; --side: #1b0a08; --cut: #ff7b66; }
+#ui .liftpanel .lbtn.locked.on { --ring: var(--danger); }
+#ui .liftpanel .lbtn:active b, #ui .liftpanel .lbtn.lit b { inset: 10px 9px 9px; }
+#ui .liftpanel .lbtn.lit { --ring: var(--brass-hi); --cap: var(--brass-hi); --side: var(--brass-lo); --cut: var(--accent-ink); }
+/* lit since you last rode anywhere: the whole cap is brass, and its ring winks until somebody goes */
+#ui .liftpanel .lbtn.fresh { --cap: var(--brass); --side: var(--brass-lo); --cut: var(--accent-ink); }
+#ui .liftpanel .lbtn.fresh i { animation: liftfresh 1s steps(1) infinite; }
+@keyframes liftfresh { 0%, 100% { background: var(--brass-hi); } 50% { background: #262d29; } }
+#ui .liftpanel .lbtn.nudge, #ui .liftpanel .cardreader.nudge { animation: liftnudge .24s steps(4); }
+@keyframes liftnudge { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+/* the one that should not be there: no engraving, and a light with a loose wire */
+#ui .liftpanel .lbtn.odd { transform: rotate(-3deg); }
+#ui .liftpanel .lbtn.odd i { animation: liftflicker 3.1s steps(1) infinite; }
+@keyframes liftflicker { 0%, 100% { background: #262d29; } 7%, 9%, 12%, 46%, 48%, 81% { background: var(--danger); } 8%, 10%, 47%, 49%, 84% { background: #262d29; } }
+/* where a button will be one day: a cover, and the screw that holds it */
+#ui .liftpanel .blank::before { inset: 4px; background: var(--steel-lo); }
+#ui .liftpanel .blank i { position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; background: linear-gradient(45deg, transparent 0 42%, var(--steel-lo) 42% 58%, transparent 58%), var(--steel-hi); }
+/* the reader: a slot, and a lamp for every keycard there is */
+#ui .liftpanel .cardreader { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 20px; padding: 10px 10px; background: #0a0c0a; border: 2px solid var(--edge); box-shadow: inset 0 3px 0 rgba(0, 0, 0, .6), 0 1px 0 var(--steel-hi); }
+#ui .liftpanel .cardreader .slot { flex: none; width: 44px; height: 6px; background: #000; border: 2px solid var(--brass-lo); box-shadow: 0 0 0 2px #17130c; }
+#ui .liftpanel .cardreader .lamps { display: flex; gap: 7px; }
+#ui .liftpanel .cardreader .lamps i { width: 9px; height: 9px; background: #3a1512; border: 2px solid #17130c; }
+#ui .liftpanel .cardreader .lamps i.got { background: var(--working); }
+#ui .liftpanel .cardreader.nudge .lamps i:not(.got) { background: var(--danger); }
+@media (max-height: 800px) { #ui .liftpanel { --b: 52px; --g: 8px; } }
+@media (max-height: 700px) { #ui .liftpanel { --b: 44px; --g: 6px; padding-block: 20px 18px; } #ui .liftpanel .plate, #ui .liftpanel .cardreader { margin-top: 12px; } #ui .liftpanel .led { height: 62px; } #ui .liftpanel .led b { font-size: 30px; } }
+@media (max-height: 590px) { #ui .liftpanel { --b: 38px; --g: 4px; } #ui .liftpanel .lbtn b { inset: 6px 7px 8px; } #ui .liftpanel .lbtn::after { inset: 8px 7px 6px; } }

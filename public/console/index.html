@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Office · console</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%231a1917'/><path d='M4 5l3 3-3 3M8.5 11H12' stroke='%23e2b85c' stroke-width='1.6' fill='none'/></svg>">
+<link rel="stylesheet" href="./console.css">
+</head>
+<body>
+<!-- The office without the office: the same agents, projects and requests as text.
+     Left: every project, with whoever is working in it underneath. Right: the one you picked —
+     an agent's conversation, or a project's board. No 3D is loaded here; / is the office itself. -->
+<div id="app">
+  <aside id="rail" aria-label="Projects and agents"></aside>
+  <main id="main">
+    <header id="head"></header>
+    <div id="feed" tabindex="-1"></div>
+    <footer id="foot">
+      <div id="live"></div>
+      <div id="entry">
+        <div class="line"><span class="mark">&gt;</span><textarea id="input" rows="1" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Say something to the agent, or type a command"></textarea></div>
+        <!-- who this is said to, on which model, how hard it thinks, in which of its own modes, how freely it may act -->
+        <div id="bar"></div>
+      </div>
+      <div id="status"><span class="l"></span><span class="r"></span></div>
+    </footer>
+  </main>
+</div>
+<noscript><p style="padding:24px;font-family:monospace">The console needs JavaScript. <code>node office.mjs chat</code> is the same thing in a terminal.</p></noscript>
+<script type="module" src="./console.js"></script>
+</body>
+</html>
