@@ -1,14 +1,16 @@
 #!/usr/bin/env node
-// office-presence.mjs — manual Office presence bridge for non-Claude sessions.
+// office-presence.mjs — manual Office presence bridge.
 //
 // This gives Codex (and any other runtime that knows its own session id) a
 // way to become a first-class desk in the Office without pretending it has
-// Claude's hook system.
+// Claude's hook system. A hooked Claude Code session is already visible; it
+// can still use `note` and `block` from here.
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { requestJson } from './office-http.mjs';
+import { providerGuess, sessionIdFrom } from './office-self.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.OFFICE_PORT || 4317;
@@ -30,7 +32,8 @@ function help() {
     + 'node office-presence.mjs done\n'
     + 'node office-presence.mjs stop\n'
     + '\n'
-    + 'Uses CODEX_THREAD_ID when available; otherwise pass --id <sessionId>.'
+    + 'Uses your runtime session id when it exports one (Codex, Claude Code);\n'
+    + 'otherwise pass --id <sessionId> or set OFFICE_SESSION_ID.'
   );
 }
 
@@ -54,7 +57,7 @@ function loadProfiles() {
 }
 
 function sessionId() {
-  return argValue('--id') || process.env.CODEX_THREAD_ID || process.env.CLAUDE_SESSION_ID || '';
+  return sessionIdFrom(argv);
 }
 
 function resolveSelf() {
@@ -62,12 +65,17 @@ function resolveSelf() {
   const sid = sessionId();
   const cwd = process.cwd();
   const prof = { ...(cwd && profiles.byCwd[cwd]), ...(sid && profiles.bySession[sid]) };
+  const provider = providerGuess() || 'codex';
   return {
     sessionId: sid,
     cwd,
     name: prof.name || process.env.OFFICE_AUTHOR || process.env.USER || 'Agent',
     task: prof.task || '',
-    model: argValue('--model') || process.env.OFFICE_MODEL || process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE || 'Codex Desktop',
+    provider,
+    // Only Codex gets a default label: a hooked session already reports its
+    // real model, and an empty value here leaves that alone.
+    model: argValue('--model') || process.env.OFFICE_MODEL
+      || (provider === 'codex' ? process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE || 'Codex Desktop' : ''),
   };
 }
 
@@ -132,7 +140,7 @@ if (!action || action === '--help' || action === '-h') {
 
 const me = resolveSelf();
 if (!me.sessionId) {
-  console.error('office-presence: no session id. Set CODEX_THREAD_ID or pass --id <sessionId>.');
+  console.error('office-presence: no session id. Pass --id <sessionId> or set OFFICE_SESSION_ID.');
   process.exit(1);
 }
 
@@ -141,7 +149,7 @@ const base = {
   runtime_session_id: process.env.OFFICE_RUNTIME_SESSION_ID || '',
   cwd: me.cwd,
   model: me.model,
-  provider: 'codex',
+  provider: me.provider,
 };
 
 if (action === 'start') {

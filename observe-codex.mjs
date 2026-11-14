@@ -546,7 +546,11 @@ async function tick() {
     const runtimeSessionId = resolveRuntimeSessionForThread(thread, runtimeSessions, activeThreadCounts);
     const inboxState = readInboxState(sid);
     const lastInjectedTs = inboxState.lastInjectedTs || 0;
-    const backlog = runtimeSessionId
+    // An agent on a break, on the roof, in focus, etc. has asked not to be
+    // interrupted: leave their mail queued (lastInjectedTs untouched) and it
+    // is delivered on a later tick, once they are back.
+    const holding = Array.isArray(overview?.holdingMail) && overview.holdingMail.includes(sid);
+    const backlog = holding ? [] : runtimeSessionId
       ? managedMailBacklog(office.trail, runtimeSessionId, lastInjectedTs)
       : externalMailBacklog(office.trail, lastInjectedTs);
     if (runtimeSessionId && backlog.length && deliverManagedMail(runtimeSessionId, backlog)) {

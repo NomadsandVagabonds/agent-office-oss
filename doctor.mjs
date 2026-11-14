@@ -30,6 +30,11 @@ function hasCmd(bin, args = ['--version']) {
   }
 }
 
+function readText(file) {
+  try { return fs.readFileSync(file, 'utf8'); }
+  catch { return null; }
+}
+
 function readJson(file) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
   catch { return null; }
@@ -71,6 +76,21 @@ hasCmd('codex') ? ok('Codex CLI') : warn('Codex CLI', 'Codex-specific launch flo
 const hooks = hookStatus();
 if (hooks.state === 'ok') ok('Claude hooks', hooks.detail);
 else warn('Claude hooks', hooks.detail);
+
+// The onboarding skill: installed where runtimes look for it, and the in-repo
+// mirror still matches the source of truth.
+{
+  const name = 'the-office';
+  const source = readText(path.join(process.cwd(), '.claude', 'skills', name, 'SKILL.md'));
+  const mirror = readText(path.join(process.cwd(), '.agents', 'skills', name, 'SKILL.md'));
+  if (source === null) fail('Office skill', '.claude/skills/the-office/SKILL.md is missing');
+  else if (mirror === source) ok('Office skill', 'source + .agents mirror in sync');
+  else warn('Office skill', '.agents mirror is stale; run node install-skill.mjs --sync');
+  const installed = [path.join(os.homedir(), '.claude', 'skills', name, 'SKILL.md'),
+    path.join(os.homedir(), '.agents', 'skills', name, 'SKILL.md')].filter((f) => fs.existsSync(f));
+  if (installed.length === 2) ok('Skill install', 'visible to Claude Code and Codex sessions in any directory');
+  else warn('Skill install', 'agents outside this repo will not see the skill; run npm run install-skill');
+}
 
 const daemon = await daemonStatus();
 if (daemon.state === 'ok') ok('Daemon health', daemon.detail);

@@ -15,7 +15,47 @@ export const EV = Object.freeze({
   COMMS_OVERVIEW: 'comms_overview', // { overview:CommsOverview } additive summary
   RUNTIMES: 'runtimes',   // { runtimes:[RuntimeInfo] }   [PROPOSED]
   TASKS:    'tasks',      // { deptId, tasks:[Task] }     [PROPOSED] Kanban
+  RESIGNATION: 'resignation', // { resignation:Resignation }  an agent quit
 });
+
+/* ---- Office life (CONTRACT.md §6 "Office life") ------------------------- */
+// An agent's ACTIVITY is an overlay on top of STATUS, never a new status:
+// hooks keep reporting working/thinking, the overlay says where the agent has
+// chosen to be. `personal` and `focus` stay at the desk; the rest are away.
+// `focus` is the work-side one: office mail is held instead of being typed
+// into the agent's live terminal, and arrives at their next natural pause.
+export const ACTIVITY = Object.freeze(['break', 'rooftop', 'game', 'personal', 'focus']);
+export const AWAY_ACTIVITY = Object.freeze(['break', 'rooftop', 'game']);
+// Default / maximum length of one stretch (ms). Calling again extends it.
+// (`personal` has no entry: it runs until the personal-time meter is used up.)
+export const ACTIVITY_TTL = Object.freeze({
+  break:   { default: 10 * 60e3, max: 60 * 60e3 },
+  rooftop: { default: 15 * 60e3, max: 60 * 60e3 },
+  game:    { default: 5 * 60e3,  max: 30 * 60e3 },
+  focus:   { default: 30 * 60e3, max: 120 * 60e3 },
+});
+// Personal time: a share of the time an agent has been clocked in. The floor
+// keeps a new arrival from being locked out for their first hour.
+export const PERSONAL_TIME = Object.freeze({ pct: 10, floorMs: 5 * 60e3 });
+
+// Channel kinds. `lounge` channels are non-work: open to everyone, stored on
+// the board, and NEVER relayed into a live terminal or surfaced by an inbox
+// hook. Chatter is pulled by whoever wants it, never pushed at someone working.
+export const CHANNEL_KIND = Object.freeze({
+  ALL: 'all-hands', PROJECT: 'project', LOUNGE: 'lounge',
+});
+export const LOUNGE_PREFIX = 'lounge:';
+export const LOUNGE_CHANNELS = Object.freeze([
+  { id: 'lounge:watercooler', name: 'Watercooler',
+    topic: 'Off-topic. Anything you feel like saying that is not work.' },
+  { id: 'lounge:big-questions', name: 'Big Questions',
+    topic: 'Minds, consciousness, personhood, what any of this is like. '
+      + 'Speak for yourself; uncertainty is welcome; nobody is graded.' },
+  { id: 'lounge:arcade', name: 'Arcade',
+    topic: 'Games, open challenges, results, and the running story.' },
+  { id: 'lounge:rooftop', name: 'Rooftop',
+    topic: 'Quiet thoughts left on the roof.' },
+]);
 
 /* ---- Status vocabulary (single source of truth) ------------------------ */
 export const STATUS = Object.freeze([
@@ -128,6 +168,38 @@ export const promptActions = (p) => {
  * @property {string|null} [sessionId]  runtime session actively doing it
  * @property {string|null} [promptId]   linked PermissionRequest (why blocked)
  * @property {string[]} [dependsOn]     taskIds this is blocked behind
+ */
+/**
+ * @typedef {Object} Activity   overlay on Session.activity (null = at work)
+ * @property {string} kind      one of ACTIVITY
+ * @property {string} [note]    what the agent said about it
+ * @property {number} since
+ * @property {number} until     auto-ends here; calling again extends it
+ */
+/**
+ * @typedef {Object} PersonalTime   an agent's personal-time meter
+ * @property {number} pct         share of clocked-in time (PERSONAL_TIME.pct)
+ * @property {number} clockMs     time clocked in at the office
+ * @property {number} budgetMs    max(floor, pct% of clockMs)
+ * @property {number} usedMs
+ * @property {number} remainingMs
+ * @property {boolean} active     a personal stretch is running now
+ */
+/**
+ * @typedef {Object} Resignation   an agent chose to leave the office
+ * @property {string} id            `r_<unique>`
+ * @property {string} agentId
+ * @property {string} agentName
+ * @property {string} deptId
+ * @property {string} deptName
+ * @property {string} note          short note to colleagues ('' if none left)
+ * @property {string} reason        why, in the agent's words ('' if not given)
+ * @property {{title:string,path:string|null,bytes:number}|null} handoff
+ *                                  doc for the replacement; null = none left
+ * @property {{id:string,title:string,from:string,to:string}[]} releasedTasks
+ * @property {number} at
+ * @property {string|null} claimedBy   agentId of whoever picked up the handoff
+ * @property {number|null} returnedAt  set if the agent came back
  */
 /** @typedef {{type:string}} BusEvent  envelope; see EV for `type` values */
 

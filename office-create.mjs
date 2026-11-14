@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { sessionIdFrom } from './office-self.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Default = the real shared legacy. OFFICE_CREATIONS_FILE points it at a
@@ -71,7 +72,7 @@ function loadProfiles() {
 }
 
 function sessionId() {
-  return process.env.CODEX_THREAD_ID || process.env.CLAUDE_SESSION_ID || '';
+  return sessionIdFrom(process.argv.slice(2));
 }
 
 function resolveSelf() {

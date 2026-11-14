@@ -1,6 +1,11 @@
 import cp from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Where the office repo lives, exported to managed sessions so an agent
+// working in another directory can find the office-*.mjs helpers.
+const OFFICE_HOME = path.dirname(fileURLToPath(import.meta.url));
 
 function safeExec(args, opt = {}) {
   return cp.execFileSync(args[0], args.slice(1), {
@@ -208,6 +213,7 @@ export class TmuxManager {
   buildCommand(opts) {
     const envPairs = {
       OFFICE_PORT: String(this.port),
+      OFFICE_HOME,
       OFFICE_RUNTIME_SESSION_ID: opts.runtimeSessionId || '',
       OFFICE_RUNTIME_PROVIDER: opts.provider || '',
       ...(opts.env || {}),

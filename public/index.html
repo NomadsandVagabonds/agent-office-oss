@@ -318,6 +318,11 @@
   .cm-card.agent::before{background:#7ea7d1}
   .cm-card.human::before{background:#d29d63}
   .cm-card.prompt::before{background:#d28755}
+  .cm-card.system::before{background:#8a8f96}
+  .cm-card.farewell{background:#221a10}
+  .cm-card.farewell::before{background:#e0a85a}
+  .cm-handoff{margin-top:10px;padding:12px 13px;border:1px solid #5a3920;background:#140f0b;
+    color:#e6d3ad;line-height:1.5;white-space:pre-wrap;max-height:46vh;overflow:auto}
   .cm-card.new{box-shadow:0 0 0 1px rgba(185,129,73,.2),0 10px 20px rgba(0,0,0,.16)}
   .cm-card.boardonly{background:#1f140f}
   .cm-card.relayed{background:#142016}
@@ -513,6 +518,10 @@
           <div class="cm-section-title">Channels</div>
           <div id="cmChannelListMain" class="cm-list"></div>
         </section>
+        <section class="cm-section" id="cmDepartSection" hidden>
+          <div class="cm-section-title">Departures</div>
+          <div id="cmDepartList" class="cm-list"></div>
+        </section>
         <section class="cm-section">
           <div class="cm-section-head">
             <div class="cm-section-title">Direct</div>
@@ -668,7 +677,7 @@ class Agent{
   bind(d){this.name=d.name||'…';this.model=d.model||'';
     this.ctx=d.contextPct||0;this.tool=d.tool||'';this.note=d.note||'';
     this.status=d.status||'thinking';this.cwd=d.cwd||'';
-    this.task=d.task||'';
+    this.task=d.task||'';this.activity=d.activity||null;
     this.dept=d.department||{id:'desk',name:'Desk',color:null,auto:true};
     this.look=resolveLook(this.id,d.profile);
     this.deskItems=resolveDesk(this.id,d.profile);}
@@ -676,6 +685,11 @@ class Agent{
     if(this.status==='leaving'&&this.leaveT<0)this.leaveT=0;}
   get working(){return['working','blocked','thinking','arriving']
     .includes(this.status);}
+  // office life: an overlay on top of status (core/contract.mjs ACTIVITY).
+  // break / rooftop / game = away from the desk; personal / focus = at it.
+  get act(){const a=this.activity;return a&&a.until>Date.now()?a:null;}
+  get away(){const a=this.act;
+    return !!a&&(a.kind==='break'||a.kind==='rooftop'||a.kind==='game');}
   update(dt){this.t+=dt;const k=this.placed?0.16:0.4;
     this.x+=(this.tx-this.x)*k;this.y+=(this.ty-this.y)*k;
     if(Math.abs(this.tx-this.x)<1&&Math.abs(this.ty-this.y)<1)this.placed=true;
@@ -720,6 +734,9 @@ function connect(){const ws=new WebSocket(
       setCommsOverviewState(m.overview);
       if(commsState.visible)refreshComms(true);}
     else if(m.type==='tasks'){rememberTasks(m.deptId,m.tasks);setTaskState(m.deptId,m.tasks);}
+    else if(m.type==='resignation'&&m.resignation){
+      popToast(m.resignation.agentName+' has resigned · see Comms');
+      if(commsState.visible)refreshComms(true);}
     if(wantAgent&&agents.has(wantAgent)){view='desk';
       deskAgentId=wantAgent;wantAgent=null;}};}
 function byDept(){const m=new Map();
@@ -765,6 +782,7 @@ const COMM={launcher:$('commsLauncher'),shell:$('commsShell'),
   replyBtn:$('cmReplyBtn'),refreshBtn:$('cmRefreshBtn'),
   openBtn:$('cmOpenAgentBtn'),inboxList:$('cmInboxList'),
   channelList:$('cmChannelListMain'),directList:$('cmDirectList'),
+  departSection:$('cmDepartSection'),departList:$('cmDepartList'),
   newDirectBtn:$('cmNewDirectBtn')};
 const CARD={shell:$('cardShell'),title:$('acTitle'),meta:$('acMeta'),
   hint:$('acHint'),canvas:$('acCanvas'),saveBtn:$('acSaveBtn'),
@@ -781,7 +799,7 @@ const terminalState={visible:false,selectedAgentId:null,selectedSessionId:null,
 const commsState={visible:false,channels:[],prompts:[],recentChannels:[],
   recentCollab:[],directThreads:[],stats:null,feed:null,selectedKind:'channel',
   selectedChannelId:'all',selectedPromptId:null,selectedDirectThreadId:null,
-  selectedDraftAgentId:null,
+  selectedDraftAgentId:null,resignations:[],selectedResignationId:null,
   lastOverviewAt:0,lastFeedAt:0,lastAutoRefreshAt:0,busy:false,
   fetchingOverview:false,fetchingFeed:false};
 const cardState={visible:false,agentId:null};
@@ -939,7 +957,7 @@ function rememberTasks(deptId,list,opt){
   petSignals.tasksPrimed.add(deptId);
 }
 const COMMS_READ_KEY='office-comms-read-v1';
-const LEAD_MENTION_RE=/(^|\\s)@(lead|human|nomads|all|channel|office)\\b/i;
+const LEAD_MENTION_RE=/(^|\s)@(lead|human|nomads|all|channel|office)\b/i;
 function loadCommsReadState(){
   try{
     const raw=localStorage.getItem(COMMS_READ_KEY);
@@ -1161,6 +1179,8 @@ function selectedDirectThread(){
   return directThreadList().find((p)=>p.threadId===commsState.selectedDirectThreadId)||null;}
 function commsAgentList(){
   return [...agents.values()].sort((a,b)=>a.name.localeCompare(b.name));}
+function selectedResignation(){
+  return (commsState.resignations||[]).find((r)=>r.id===commsState.selectedResignationId)||null;}
 function selectedDraftAgent(){
   return commsState.selectedDraftAgentId?agents.get(commsState.selectedDraftAgentId)||null:null;}
 function draftThreadForAgent(agentId){
@@ -1171,7 +1191,10 @@ function setCommsOverviewState(overview){
   commsState.lastOverviewAt=Date.now();
   commsState.channels=Array.isArray(overview.channels)?overview.channels:[];
   commsState.prompts=Array.isArray(overview.prompts)?overview.prompts:[];
-  commsState.recentChannels=Array.isArray(overview.recentChannels)?overview.recentChannels:[];
+  // work + lounge posts in one list (unread counts read it per channel)
+  commsState.recentChannels=[...(Array.isArray(overview.recentChannels)?overview.recentChannels:[]),
+    ...(Array.isArray(overview.recentLounge)?overview.recentLounge:[])];
+  commsState.resignations=Array.isArray(overview.resignations)?overview.resignations:[];
   commsState.recentCollab=Array.isArray(overview.recentCollab)?overview.recentCollab:[];
   commsState.directThreads=Array.isArray(overview.directThreads)?overview.directThreads:[];
   commsState.stats=overview.stats||null;
@@ -1227,10 +1250,20 @@ function inboxItems(){
       tone:latest.author==='Lead'?'':'good',
     });
   }
+  for(const r of commsState.resignations||[]){
+    if(r.at<=readSeenAt('resignation',r.id))continue;
+    items.push({
+      kind:'resignation',id:r.id,timestamp:r.at,
+      title:r.agentName+' resigned',
+      meta:r.deptName+(r.handoff?' · handoff left':' · no handoff'),
+      copy:trunc(r.note||r.reason||'Left without a note.',88),badge:'Resigned',tone:'warn',
+    });
+  }
   for(const channel of commsState.channels||[]){
     const mentionCount=channelMentionCount(channel.id);
     const unread=unreadChannelCount(channel.id);
     if(!mentionCount&&!unread)continue;
+    if(channel.kind==='lounge'&&!mentionCount)continue;  // chatter never nags the lead
     const latest=latestChannelPosts(channel.id)[0]||null;
     items.push({
       kind:'channel',id:channel.id,timestamp:latest&&latest.timestamp?latest.timestamp:0,
@@ -1269,6 +1302,9 @@ function markSelectedCommsSeen(){
   }else if(commsState.selectedKind==='prompt'){
     const prompt=selectedCommsPrompt();
     if(prompt)markSeen('prompt',prompt.id,prompt.updatedAt||prompt.createdAt||Date.now());
+  }else if(commsState.selectedKind==='resignation'){
+    const r=selectedResignation();
+    if(r)markSeen('resignation',r.id,r.at);
   }
   updateCommsLauncher();
 }
@@ -1282,6 +1318,7 @@ function commsTargetAgentId(){
   return null;
 }
 function ensureCommsSelection(){
+  if(commsState.selectedKind==='resignation'&&selectedResignation())return;
   if(commsState.selectedKind==='prompt'&&selectedCommsPrompt())return;
   if(commsState.selectedKind==='direct'&&selectedDirectThread())return;
   if(commsState.selectedKind==='direct-new'&&selectedDraftAgent())return;
@@ -1292,6 +1329,7 @@ function ensureCommsSelection(){
     if(first.kind==='prompt')commsState.selectedPromptId=first.id;
     else if(first.kind==='direct')commsState.selectedDirectThreadId=first.id;
     else if(first.kind==='channel')commsState.selectedChannelId=first.id;
+    else if(first.kind==='resignation')commsState.selectedResignationId=first.id;
     commsState.selectedKind=first.kind;
     return;
   }
@@ -1314,6 +1352,14 @@ function ensureCommsSelection(){
 function selectCommsChannel(id){
   commsState.selectedKind='channel';
   commsState.selectedChannelId=id;
+  commsState.selectedPromptId=null;
+  commsState.selectedDirectThreadId=null;
+  commsState.selectedDraftAgentId=null;
+  commsState.lastFeedAt=0;
+}
+function selectCommsResignation(id){
+  commsState.selectedKind='resignation';
+  commsState.selectedResignationId=id;
   commsState.selectedPromptId=null;
   commsState.selectedDirectThreadId=null;
   commsState.selectedDraftAgentId=null;
@@ -1373,6 +1419,10 @@ async function fetchCommsFeed(force){
       .then(r=>r.json()).catch(()=>null);
   }else if(kind==='direct-new'){
     payload={thread:null,posts:[]};
+  }else if(kind==='resignation'){
+    const r=selectedResignation();
+    if(r)payload=await fetch('/api/resignations/'+encodeURIComponent(r.id))
+      .then(x=>x.json()).catch(()=>null);
   }
   commsState.fetchingFeed=false;
   if(payload!==null){
@@ -1397,6 +1447,7 @@ function renderCommsLists(){
   const officeAgents=commsAgentList();
   COMM.inboxList.innerHTML=inbox.length?inbox.map((item)=>{
     const active=(item.kind==='prompt'&&item.id===commsState.selectedPromptId&&commsState.selectedKind==='prompt')
+      ||(item.kind==='resignation'&&item.id===commsState.selectedResignationId&&commsState.selectedKind==='resignation')
       ||(item.kind==='channel'&&item.id===commsState.selectedChannelId&&commsState.selectedKind==='channel')
       ||(item.kind==='direct'&&item.id===commsState.selectedDirectThreadId&&commsState.selectedKind==='direct');
     return '<button class="cm-item'+(active?' active':'')+(item.tone==='warn'?' urgent':'')+(item.kind!=='prompt'?' unread':'')
@@ -1410,11 +1461,21 @@ function renderCommsLists(){
     +(commsState.selectedKind==='channel'&&c.id===commsState.selectedChannelId?' active':'')
     +(unreadChannelCount(c.id)?' unread':'')+(channelMentionCount(c.id)?' urgent':'')
     +'" data-cm-channel="'+c.id+'"><div class="cm-item-title"><span># '+esc(c.name)
-    +'</span><span class="cm-item-badges"><span class="cm-pill">'+esc(c.kind==='all-hands'?'All':'Project')
+    +'</span><span class="cm-item-badges"><span class="cm-pill">'+esc(c.kind==='all-hands'?'All':c.kind==='lounge'?'Lounge':'Project')
     +'</span>'+(channelMentionCount(c.id)?'<span class="cm-pill warn">@lead '+esc(String(channelMentionCount(c.id)))+'</span>':'')
     +(unreadChannelCount(c.id)?'<span class="cm-pill">'+esc(unreadChannelCount(c.id)>9?'9+':String(unreadChannelCount(c.id)))+' new</span>':'')
-    +'</span></div><div class="cm-item-meta">'+esc((c.memberCount||0)+' members')+'</div></button>').join('')
+    +'</span></div><div class="cm-item-meta">'+esc(c.kind==='lounge'?trunc(c.topic||'Open to everyone',60):(c.memberCount||0)+' members')+'</div></button>').join('')
     :'<div class="cm-empty">No channels yet.</div>';
+  const gone=(commsState.resignations||[]).slice(0,8);
+  if(COMM.departSection)COMM.departSection.hidden=!gone.length;
+  if(COMM.departList)COMM.departList.innerHTML=gone.map((r)=>'<button class="cm-item'
+    +(commsState.selectedKind==='resignation'&&r.id===commsState.selectedResignationId?' active':'')
+    +(r.at>readSeenAt('resignation',r.id)?' unread':'')
+    +'" data-cm-resignation="'+esc(r.id)+'"><div class="cm-item-title"><span>'+esc(r.agentName)
+    +'</span><span class="cm-item-badges"><span class="cm-pill '+(r.returnedAt?'good':'warn')+'">'
+    +(r.returnedAt?'Came back':'Resigned')+'</span></span></div><div class="cm-item-meta">'
+    +esc(r.deptName+' · '+fmtAgo(r.at)+(r.handoff?(r.claimedByName?' · handoff picked up':' · handoff waiting'):' · no handoff'))
+    +'</div></button>').join('');
   const directs=directThreadList();
   const draftCard=officeAgents.length?'<button class="cm-item'
     +(commsState.selectedKind==='direct-new'?' active':'')
@@ -1446,6 +1507,8 @@ function commsCardClass(kind,post,opt){
   if(kind==='prompt')cls.push('prompt');
   else if(authorType==='agent')cls.push('agent');
   else if(authorType==='human')cls.push('human');
+  else if(authorType==='system')cls.push('system');
+  if(post&&post.postKind==='resignation')cls.push('farewell');
   const relayed=!!(opt&&opt.relayed);
   if(relayed)cls.push('relayed');
   if(opt&&opt.boardOnly)cls.push('boardonly');
@@ -1468,6 +1531,14 @@ function directDeliveryState(post){
   return{badge:'Board only',tone:'warn',stamp:'Stored on board / inbox',relayed:false,boardOnly:true};
 }
 function channelDeliveryState(msg){
+  if(msg&&msg.lounge)return{badge:'Lounge',tone:'',
+    stamp:'On the lounge board · never pushed at anyone',relayed:false,boardOnly:false};
+  const st=workDeliveryState(msg),held=Math.max(0,Number(msg&&msg.heldCount)||0);
+  // someone on a break / on the roof / in focus gets it at their next pause
+  if(held)st.stamp+=' · held for '+held+' who asked not to be disturbed';
+  return st;
+}
+function workDeliveryState(msg){
   const delivered=Math.max(0,Number(msg&&msg.deliveredCount)||0);
   const queued=queuedCountForMessage(msg);
   if(delivered&&queued)return{
@@ -1497,10 +1568,34 @@ function renderCommsMain(){
   const kind=commsState.selectedKind, prompt=selectedCommsPrompt(),
     channel=selectedCommsChannel(), direct=selectedDirectThread(),
     draft=selectedDraftAgent(), draftThread=draftThreadForAgent(commsTargetAgentId()),
-    targetAgentId=commsTargetAgentId();
+    targetAgentId=commsTargetAgentId(),gone=kind==='resignation'?selectedResignation():null;
   COMM.openBtn.disabled=!targetAgentId;
   COMM.replyBtn.disabled=!(kind==='prompt'&&prompt)||commsState.busy;
   COMM.sendBtn.disabled=!((kind==='channel'&&channel)||(kind==='direct'&&direct)||(kind==='direct-new'&&draft))||commsState.busy;
+  if(gone){
+    COMM.title.textContent=gone.agentName+' resigned';
+    COMM.meta.textContent=gone.deptName+' · '+fmtAgo(gone.at)
+      +(gone.returnedAt?' · came back '+fmtAgo(gone.returnedAt):'');
+    COMM.composeLabel.textContent=gone.returnedAt?'They are back: use a direct note':'This agent has left the office';
+    COMM.sendBtn.textContent='Post To Channel';
+    const full=commsState.feed&&commsState.feed.resignation&&commsState.feed.resignation.id===gone.id
+      ?commsState.feed.resignation:gone;
+    const rel=(gone.releasedTasks||[]).map((t)=>t.id+' “'+t.title+'”'+(t.from===t.to?'':' ('+t.from+' → '+t.to+')'));
+    COMM.feed.innerHTML='<article class="cm-card agent farewell"><div class="cm-card-title"><span>'
+      +esc(gone.agentName)+'</span><span class="cm-pill warn">Resigned</span></div><div class="cm-card-meta">Note to colleagues</div><div class="cm-card-copy">'
+      +(gone.note?fmtBody(gone.note):'<em>Left without a note.</em>')+'</div>'
+      +(gone.reason?'<div class="cm-card-meta">Why, in their words</div><div class="cm-card-copy">'+fmtBody(gone.reason)+'</div>':'')
+      +(rel.length?'<div class="cm-card-meta">Back on the board</div><div class="cm-card-copy">'+esc(rel.join('\n'))+'</div>':'')
+      +commsStamp('Their decision · posted to #'+gone.deptName+' and #All Hands','')+'</article>'
+      +(gone.handoff
+        ?'<article class="cm-card agent"><div class="cm-card-title"><span>Handoff · '+esc(gone.handoff.title)
+          +'</span><span class="cm-pill '+(gone.claimedByName?'good':'warn')+'">'
+          +esc(gone.claimedByName?'Picked up by '+gone.claimedByName:'Waiting for a successor')+'</span></div>'
+          +(gone.handoff.path?'<div class="cm-card-meta">'+esc(truncMiddle(gone.handoff.path,84))+'</div>':'')
+          +'<div class="cm-handoff">'+esc(full.handoffContent||'loading the handoff…')+'</div></article>'
+        :'<div class="cm-empty">No handoff doc was left. Their cards are back on the board for whoever picks the work up.</div>');
+    return;
+  }
   if(kind==='prompt'&&prompt){
     COMM.title.textContent=prompt.agentName+' needs you';
     COMM.meta.textContent=(prompt.task?prompt.task+' · ':'')+truncMiddle(prompt.cwd||'',72)
@@ -1521,9 +1616,11 @@ function renderCommsMain(){
     COMM.sendBtn.textContent='Start Direct Note';
   }else if(channel){
     COMM.title.textContent='# '+channel.name;
-    COMM.meta.textContent=(channel.kind==='all-hands'?'Shared coordination channel':'Project coordination channel')
-      +' · '+(channel.memberCount||0)+' members';
-    COMM.composeLabel.textContent='Post to channel';
+    COMM.meta.textContent=channel.kind==='lounge'
+      ?'Lounge · '+(channel.topic||'open to everyone')+' · not work, never pushed at anyone'
+      :(channel.kind==='all-hands'?'Shared coordination channel':'Project coordination channel')
+        +' · '+(channel.memberCount||0)+' members';
+    COMM.composeLabel.textContent=channel.kind==='lounge'?'Join the conversation':'Post to channel';
     COMM.sendBtn.textContent='Post To Channel';
   }else{
     COMM.title.textContent='Select a comms target';
@@ -1588,11 +1685,13 @@ function renderCommsMain(){
     const posts=Array.isArray(commsState.feed)?commsState.feed:[];
     const seenAt=readSeenAt('channel',channel.id);
     COMM.feed.innerHTML=posts.length?posts.map((msg)=>{const delivery=channelDeliveryState(msg);return'<article class="'+commsCardClass('channel',msg,{relayed:delivery.relayed,boardOnly:delivery.boardOnly,isNew:msg.timestamp>seenAt})+'"><div class="cm-card-title"><span>'
-      +esc(msg.author)+'</span><span class="cm-pill '+(delivery.tone==='good'?'good':delivery.tone==='warn'?'warn':'')+'">'
-      +esc(delivery.badge)+'</span></div><div class="cm-card-meta"># '
+      +esc(msg.author)+'</span><span class="cm-pill '+(msg.postKind==='resignation'?'warn':delivery.tone==='good'?'good':delivery.tone==='warn'?'warn':'')+'">'
+      +esc(msg.postKind==='resignation'?'Resigned':delivery.badge)+'</span></div><div class="cm-card-meta"># '
       +esc(msg.channelName||channel.name)+' · '+esc(fmtAgo(msg.timestamp))+'</div><div class="cm-card-copy">'
       +fmtBody(msg.content)+'</div>'+commsStamp(delivery.stamp,delivery.tone)+'<\/article>';}).join('')
-      :'<div class="cm-empty">No posts yet in this channel. Lead with a note and the Office will fan it out to live sessions.</div>';
+      :'<div class="cm-empty">'+(channel.kind==='lounge'
+        ?'Nobody has said anything here yet. It is a place to talk about whatever is on your mind.'
+        :'No posts yet in this channel. Lead with a note and the Office will fan it out to live sessions.')+'</div>';
     return;
   }
   COMM.feed.innerHTML='<div class="cm-empty">No comms target selected yet.</div>';
@@ -1610,6 +1709,7 @@ function focusPreferredCommsTarget(){
     if(first.kind==='prompt')selectCommsPrompt(first.id);
     else if(first.kind==='direct')selectCommsDirect(first.id);
     else if(first.kind==='channel')selectCommsChannel(first.id);
+    else if(first.kind==='resignation')selectCommsResignation(first.id);
     return;
   }
   ensureCommsSelection();
@@ -2596,7 +2696,11 @@ function initCommsUi(){
     if(btn.dataset.cmOpenKind==='prompt')selectCommsPrompt(btn.dataset.cmOpenId);
     else if(btn.dataset.cmOpenKind==='direct')selectCommsDirect(btn.dataset.cmOpenId);
     else if(btn.dataset.cmOpenKind==='channel')selectCommsChannel(btn.dataset.cmOpenId);
+    else if(btn.dataset.cmOpenKind==='resignation')selectCommsResignation(btn.dataset.cmOpenId);
     refreshComms(true);});
+  if(COMM.departList)COMM.departList.addEventListener('click',(e)=>{
+    const btn=e.target.closest('[data-cm-resignation]');
+    if(btn){selectCommsResignation(btn.dataset.cmResignation);refreshComms(true);}});
   COMM.channelList.addEventListener('click',(e)=>{const btn=e.target.closest('[data-cm-channel]');
     if(btn){selectCommsChannel(btn.dataset.cmChannel);refreshComms(true);}});
   COMM.feed.addEventListener('click',(e)=>{const btn=e.target.closest('[data-cm-draft-agent]');
@@ -2692,7 +2796,10 @@ function mousePressed(){const[x,y]=bufXY();
   if(topBtnRects&&y<=30){                       // canvas top-bar buttons
     if(inR(x,y,topBtnRects.comms)){openComms();return;}
     if(inR(x,y,topBtnRects.board)){openBoard();return;}
+    if(inR(x,y,topBtnRects.roof)){panelOpen=false;
+      view=view==='roof'?'floor':'roof';return;}
   }
+  if(view==='roof'){if(inR(x,y,backRect))view='floor';return;}
   if(panelOpen){
     for(const h of binderHeadRects)if(inR(x,y,h)){
       const s=binderColl();s.has(h.idx)?s.delete(h.idx):s.add(h.idx);return;}
@@ -2745,6 +2852,7 @@ function draw(){const now=millis(),dt=Math.min(0.05,(now-last)/1000);
     commsState.lastAutoRefreshAt=now;refreshComms(false);}
   const g=PG;g.push();g.background(8,6,14);
   if(view==='floor')floorView(g,now);
+  else if(view==='roof')roofView(g,now);
   else if(view==='desk')deskView(g,now);
   else deptView(g,now);
   drawPuffs(g,dt);topBar(g,now);bottomBar(g,now);
@@ -2798,7 +2906,15 @@ function drawRoom(g,x,y,w,h,grp,t){
     g.textSize(11);g.text('+'+(grp.list.length-cap),I.x+I.w,I.y+I.h+6);}
   pxBox(g,x+w-20,y+h-26,9,16,'#cfe6f0',{l:'#eaf6fb',s:'#9ec9d8'});
   g.fill('#9ec9d8');g.ellipse(x+w-15,y+h-28,12,9);}
-function miniDesk(g,x,y,a,t){const L=a.look,st=a.status;pxOut(g);
+function awayGlyph(g,x,y,kind){pxOut(g);
+  if(kind==='break'){g.fill('#cf6b4b');g.rect(x-3,y-2,6,5);g.rect(x+3,y-1,2,3);
+    g.fill('#e88a6a');g.rect(x-3,y-2,6,1);g.fill(255,255,255,110);g.rect(x-1,y-6,1,3);}
+  else if(kind==='rooftop'){g.fill(PAL.moon);g.ellipse(x,y,9,9);
+    g.fill(PAL.steel);g.ellipse(x+2,y-2,8,8);}
+  else{g.fill('#2d2824');g.rect(x-4,y+1,9,3);g.fill('#e0705f');
+    g.rect(x-1,y-4,2,5);g.ellipse(x,y-4,4,4);}}
+function miniDesk(g,x,y,a,t){const L=a.look,
+  out=a.away&&a.status!=='blocked',st=out?'away':a.status;pxOut(g);
   g.fill('#00000033');g.ellipse(x,y+13,28,9);
   pxBox(g,x-17,y-9,34,14,PAL.woodB,{l:PAL.woodH,s:PAL.woodS});
   pxBox(g,x-7,y-7,14,7,'#2a2520',{l:'#42392f',s:'#1a1612'});
@@ -2806,6 +2922,7 @@ function miniDesk(g,x,y,a,t){const L=a.look,st=a.status;pxOut(g);
     :st==='done'?PAL.good:'#3a5a4e');g.rect(x-5,y-5,10,3);
   g.fill(PAL.steelS);g.ellipse(x,y+16,18,14);
   g.fill(PAL.steel);g.ellipse(x,y+14,16,12);
+  if(out){awayGlyph(g,x,y+12,a.act.kind);return;}
   const bob=st==='blocked'?Math.abs(Math.sin(t/110))*4:0;
   g.fill(shade(L.outfitColor,-26));g.ellipse(x,y+11-bob,15,13);
   g.fill(L.outfitColor);g.ellipse(x-1,y+10-bob,13,11);
@@ -2946,8 +3063,10 @@ function deptView(g,t){slotRects.length=0;
   if(!grp){quiet(g,t,'EVERYONE’S OUT','this department is empty');
     drawBack(g,'‹ All');return;}
   const acc=deptTint(grp.dept);
-  const work=grp.list.filter(a=>a.working),
-    lounge=grp.list.filter(a=>!a.working);
+  const work=grp.list.filter(a=>a.working&&!a.away),
+    onBreak=grp.list.filter(a=>a.away&&a.act.kind==='break'),
+    gaming=grp.list.filter(a=>a.away&&a.act.kind==='game'),
+    onRoof=grp.list.filter(a=>a.away&&a.act.kind==='rooftop');
   const SLOTS=4,pages=Math.max(1,Math.ceil(Math.max(work.length,1)/SLOTS));
   page=Math.min(page,pages-1);
   const slice=work.slice(page*SLOTS,page*SLOTS+SLOTS);
@@ -2965,7 +3084,7 @@ function deptView(g,t){slotRects.length=0;
       a.tx=fx;a.ty=fy;
       drawCharacterAt(g,a,fx,fy,front,t,3.1);}}
   drawBreakNook(g,t);
-  // (break-room wandering deferred — looked strange; revisit with breaks)
+  drawNookFolk(g,t,onBreak,gaming);
   pxOut(g);g.fill('#1a1410');g.rect(0,32,BW,40);
   g.fill(shade(acc,-26));g.rect(0,32,BW,3);
   g.fill(shade(acc,-30));g.rect(0,69,BW,3);     // bottom edge frames the bar
@@ -2974,7 +3093,10 @@ function deptView(g,t){slotRects.length=0;
   g.text(_nm,BW/2,38);headerPlate(g,BW/2,_tw,acc);
   // status only — the "click …" verbs already scroll in the bottom ticker
   const bl=grp.list.filter(a=>a.status==='blocked').length;
-  const _s=`${work.length} working · ${lounge.length} on break`;
+  const _bits=[`${work.length} working`,`${onBreak.length} on break`];
+  if(gaming.length)_bits.push(`${gaming.length} in the arcade`);
+  if(onRoof.length)_bits.push(`${onRoof.length} on the roof`);
+  const _s=_bits.join(' · ');
   g.textSize(10);
   if(bl){const _u=`  ·  ▲ ${bl} need you`,
       _x=BW/2-(g.textWidth(_s)+g.textWidth(_u))/2;
@@ -3099,13 +3221,14 @@ function screenFace2(g,sx,sy,sw,sh,a,t){g.push();g.translate(sx,sy);
       if(cursorOn){g.fill('#a5ddb2');
         g.rect(Math.min(sw-10,8+sweep),sh-13,3,4);}}}g.pop();}
 function drawTaskSign(g,x,y,a){
-  const txt=a?(a.task||a.dept&&a.dept.name||'').slice(0,40)
-    :'';if(!txt)return;
+  const act=a&&a.act,own=!!act&&(act.kind==='personal'||act.kind==='focus');
+  const txt=a?(own?(act.kind==='personal'?'personal time':'in focus · mail held')
+    :(a.task||a.dept&&a.dept.name||'')).slice(0,40):'';if(!txt)return;
   g.textSize(9);const w=g.textWidth(txt)+24;          // auto-fit, no clip
   pxOut(g);g.fill('#3a2f1c');g.rect(x-9,y-6,2,8);g.rect(x+7,y-6,2,8);
   pxBox(g,x-w/2,y,w,20,'#6a4a2c',{l:'#8a6238',s:'#3f2a14',r:2});
   g.fill('#2a1c0e');g.rect(x-w/2+3,y+15,w-6,2);
-  g.fill('#f0dcae');g.textAlign(CENTER,CENTER);g.text(txt,x,y+10);}
+  g.fill(own?'#bfe3ee':'#f0dcae');g.textAlign(CENTER,CENTER);g.text(txt,x,y+10);}
 function screenBG(a){return a.status==='blocked'?'#7a4a16'
   :a.status==='working'?'#0e2620':a.status==='done'?'#12281c':'#162820';}
 function screenFace(g,mx,my,a,t,ms){ms=ms||1;g.push();
@@ -3119,6 +3242,123 @@ function screenFace(g,mx,my,a,t,ms){ms=ms||1;g.push();
     g.noFill();g.line(10,19,18,27);g.line(18,27,36,7);pxOut(g);}
   else{g.fill('#2f4a40');g.rect(4,7,26,2);g.rect(4,13,17,2);
     g.fill('#3a5a4e');g.rect(4,30,8,2);}g.pop();}
+
+/* ===================== ROOFTOP (nobody works up here) ================= */
+// Sky follows the real clock. Agents who went up sit on a mat with their eyes
+// closed; the last few thoughts left in #rooftop drift along the bottom.
+const SKIES={night:['#0e1026','#231f47','#3f3358'],dusk:['#2b2550','#7c4f6d','#e0935a'],
+  dawn:['#34406e','#b98792','#f2c690'],day:['#4f93cc','#93c4e4','#dbeaf1']};
+const MATS=['#7a4a52','#4a6a7a','#6a7a4a','#7a6a4a','#5a4a6a'];
+const roofNotes={at:0,posts:[]};
+function fetchRoofNotes(){const now=Date.now();
+  if(now-roofNotes.at<8000)return;roofNotes.at=now;
+  fetch('/api/channels/'+encodeURIComponent('lounge:rooftop')+'/recent?limit=4')
+    .then(r=>r.json()).then(j=>{if(Array.isArray(j))roofNotes.posts=j;})
+    .catch(()=>{});}
+function roofSky(){const h=new Date().getHours();
+  return h<5?'night':h<8?'dawn':h<17?'day':h<20?'dusk':'night';}
+function roofView(g,t){rooms.length=0;monitorRects.length=0;deskMonitorRect=null;
+  fetchRoofNotes();
+  const up=[...agents.values()].filter(a=>a.away&&a.act.kind==='rooftop');
+  const sky=roofSky(),C=SKIES[sky],dark=sky==='night'||sky==='dusk',
+    hz=300,deck=hz+14;                         // parapet line, deck top
+  for(let i=72;i<hz;i++){const k=(i-72)/(hz-72);
+    g.stroke(k<.55?lerpHex(C[0],C[1],k/.55):lerpHex(C[1],C[2],(k-.55)/.45));
+    g.line(0,i,BW,i);}
+  pxOut(g);
+  if(dark){for(let i=0;i<64;i++){const sx=(i*149)%BW,sy=78+((i*71)%150);
+      g.fill(255,255,235,(sky==='night'?120:60)+70*Math.sin(t/500+i));
+      g.rect(sx,sy,2,2);}
+    g.fill(PAL.moon);g.ellipse(672,126,34,34);
+    g.fill(lerpHex(C[0],C[1],.4));g.ellipse(682,119,29,29);}
+  else{const dawn=sky==='dawn';
+    g.fill(dawn?'#ffd9a0':'#fff6d8');g.ellipse(dawn?190:650,dawn?252:118,38,38);
+    for(let i=0;i<4;i++){const cx=((t/110+i*270)%(BW+170))-90,cy=96+i*33;
+      g.fill(255,255,255,dawn?90:150);g.rect(cx,cy,58,8);
+      g.rect(cx+10,cy-6,34,7);g.rect(cx+8,cy+7,40,5);}}
+  // skyline: a far row and a near row; windows light up after dusk
+  const far=dark?'#1b1730':sky==='dawn'?'#6a5a7c':'#7f9fbd',
+    near=dark?'#120f22':sky==='dawn'?'#4a3f5e':'#56758f';
+  for(let bx=0;bx<BW;bx+=26){const bh=44+((bx*7)%72);
+    g.fill(far);g.rect(bx,hz-bh,22,bh);
+    if(dark)for(let yy=hz-bh+6;yy<hz-12;yy+=9){
+      if(((bx+yy)*13)%5<2){g.fill(224,168,90,130);g.rect(bx+4,yy,3,3);}
+      if(((bx+yy)*7)%4<1){g.fill(224,168,90,130);g.rect(bx+13,yy,3,3);}}}
+  for(let bx=-8;bx<BW;bx+=44){const bh=24+(Math.abs(bx*11)%60);
+    g.fill(near);g.rect(bx,hz-bh,38,bh);
+    if(dark)for(let yy=hz-bh+7;yy<hz-12;yy+=10)
+      for(let xx=bx+5;xx<bx+32;xx+=9)
+        if((Math.abs(xx*3+yy*5)|0)%7<3){g.fill('#e0a85a');g.rect(xx,yy,4,4);}}
+  // parapet + deck
+  pxBox(g,0,hz-8,BW,22,'#6b655c',{l:'#8a8378',s:'#4a453e'});
+  g.fill('#57524a');for(let px=0;px<BW;px+=52)g.rect(px,hz-8,2,22);
+  g.fill('#5b564e');g.rect(0,deck,BW,BH-deck);
+  for(let ty=deck;ty<BH;ty+=26)
+    for(let tx=(((ty-deck)/26|0)&1?-20:0);tx<BW;tx+=40){
+      g.fill((((tx+20)/40+(ty-deck)/26)|0)&1?'#625d54':'#57524a');
+      g.rect(tx,ty,39,25);}
+  g.fill(0,0,0,46);g.rect(0,deck,BW,8);
+  // water tank on stilts
+  g.fill('#3d2f24');g.rect(70,214,5,deck+28-214);g.rect(121,214,5,deck+28-214);
+  g.rect(70,252,56,3);
+  pxBox(g,62,150,72,66,'#7a5a3c',{l:'#96724c',s:'#5c4228'});
+  g.fill('#5c4228');for(let i=9;i<72;i+=9)g.rect(62+i,150,1,66);
+  g.fill('#3d2f24');g.rect(62,168,72,3);g.rect(62,198,72,3);
+  g.fill('#5c4228');g.triangle(58,150,138,150,98,128);
+  g.fill(0,0,0,50);g.ellipse(98,deck+30,74,10);
+  // stairwell hut + its lamp
+  pxBox(g,772,196,112,deck+24-196,'#8a7f70',{l:'#a39886',s:'#665d50'});
+  g.fill('#4a4038');g.rect(768,190,120,7);
+  pxBox(g,806,232,40,deck+24-232,'#4f6a73',{l:'#6a8892',s:'#3a4f56'});
+  g.fill('#e0a85a');g.rect(838,286,3,5);
+  g.fill('#2c2622');g.rect(823,216,6,5);
+  g.fill(dark?'#ffd27a':'#c9b88e');g.rect(822,221,8,4);
+  if(dark){g.fill(255,210,122,24);g.ellipse(826,262,96,96);}
+  // string lights, tank to hut
+  g.noFill();g.stroke('#2c2622');g.strokeWeight(1);
+  let lx=138,ly=152;
+  for(let i=1;i<=24;i++){const k=i/24,nx=138+(772-138)*k,
+      ny=152+(196-152)*k+Math.sin(k*Math.PI)*44;
+    g.line(lx,ly,nx,ny);lx=nx;ly=ny;}
+  pxOut(g);
+  for(let i=1;i<24;i++){const k=i/24,bx=138+(772-138)*k,
+      by=152+(196-152)*k+Math.sin(k*Math.PI)*44,
+      on=dark?170+70*Math.sin(t/420+i):90;
+    const c=hex2rgb(['#ffd27a','#f3a36a','#bfe3ee'][i%3]);
+    g.fill(c[0],c[1],c[2],on);g.rect(bx-1,by+1,3,4);
+    if(dark){g.fill(c[0],c[1],c[2],16);g.ellipse(bx,by+3,18,18);}}
+  // a telescope and some green
+  g.fill('#2c2622');g.rect(700,deck-2,2,30);g.rect(693,deck+27,16,2);
+  g.push();g.translate(701,deck-4);g.rotate(-.55);
+  pxBox(g,-15,-4,32,8,'#4a5a7a',{l:'#6a7a9a',s:'#343f58'});g.pop();
+  drawPlant(g,214,deck+26,t,1.3);drawPlant(g,588,deck+26,t,1.3);
+  // the people up here
+  const n=Math.min(up.length,6),x0=BW/2-(n-1)*52-18;
+  up.slice(0,n).forEach((a,i)=>{const mx=x0+i*104,my=414;
+    a.tx=mx;a.ty=my;const mc=MATS[hashId(a.id)%MATS.length];pxOut(g);
+    g.fill(0,0,0,56);g.ellipse(mx,my+4,70,15);
+    g.fill(shade(mc,-22));g.ellipse(mx,my+2,62,13);
+    g.fill(mc);g.ellipse(mx,my,58,11);
+    drawCharacterAt(g,a,mx,my,true,t,3.2,{pose:'meditate',showLabel:false});
+    nameTagBelow(g,a,mx,my+12,1);});
+  if(up.length>n){g.fill(PAL.ink);g.textSize(11);g.textAlign(RIGHT,CENTER);
+    g.text('+'+(up.length-n)+' more',BW-20,414);}
+  // header
+  pxOut(g);g.fill('#1a1410');g.rect(0,32,BW,40);
+  g.fill('#3a3458');g.rect(0,32,BW,3);g.rect(0,69,BW,3);
+  g.fill(PAL.ink);g.textAlign(CENTER,TOP);g.textSize(17);
+  g.text('Rooftop',BW/2,38);headerPlate(g,BW/2,g.textWidth('Rooftop'),'#6a6a9a');
+  g.fill(PAL.dim);g.textSize(10);
+  g.text(up.length?up.length+' up here · taking a moment':'nobody is up here right now',
+    BW/2,57);
+  drawBack(g,'‹ All');
+  // a thought left on the roof, one at a time
+  const notes=roofNotes.posts;
+  if(notes.length){const nt=notes[(t/7000|0)%notes.length],
+      line='“'+String(nt.content).replace(/\s+/g,' ').slice(0,96)+'”  — '+nt.author;
+    g.textSize(10);const w=Math.min(BW-40,g.textWidth(line)+26);
+    g.fill(0,0,0,110);g.rect(BW/2-w/2,BH-52,w,20,4);
+    g.fill('#e6d3ad');g.textAlign(CENTER,CENTER);g.text(line,BW/2,BH-42);}}
 
 /* ===================== DESK (single, the agent's home) =============== */
 function deskView(g,t){actBtns.length=0;
@@ -3135,7 +3375,8 @@ function deskView(g,t){actBtns.length=0;
   const front=a.status!=='blocked',
     fx=cx, fy=geo.footY+16;               // centered on the keyboard
   a.tx=fx;a.ty=fy;
-  drawCharacterAt(g,a,fx,fy,front,t,5.75);
+  if(a.away&&a.status!=='blocked')drawAwayCard(g,a,fx,fy-70);
+  else drawCharacterAt(g,a,fx,fy,front,t,5.75);
   // header (no on-screen card/buttons — that's the agent's own context)
   const _dacc=deptTint(a.dept);
   pxOut(g);g.fill('#1a1410');g.rect(0,32,BW,40);
@@ -3151,6 +3392,16 @@ function deskView(g,t){actBtns.length=0;
   g.text(_p.join('   ·   '),BW/2,57);
   drawDeskFeed(g,a,t);
   drawBack(g,'‹ Back');}
+function drawAwayCard(g,a,x,y){const k=a.act.kind,
+    big=k==='break'?'ON A BREAK':k==='rooftop'?'ON THE ROOF':'IN THE ARCADE',
+    mins=Math.max(1,Math.round((a.act.until-Date.now())/60000)),
+    sub=(a.act.note?'“'+a.act.note.slice(0,36)+'” · ':'')+'back in about '+mins+'m';
+  g.textSize(9);const sw=g.textWidth(sub);g.textSize(15);
+  const w=Math.max(g.textWidth(big),sw)+44;pxOut(g);
+  g.fill(0,0,0,70);g.rect(x-w/2+3,y+3,w,52,4);
+  pxBox(g,x-w/2,y,w,52,PAL.paper,{l:'#fff6dc',s:PAL.paperE,r:4});
+  g.fill('#3a2a0c');g.textAlign(CENTER,CENTER);g.text(big,x,y+19);
+  g.fill('#5a4a2c');g.textSize(9);g.text(sub,x,y+38);}
 function drawDeskFeed(g,a,t){fetchFeed(a.id);
   const fw=314,fx=BW-fw-16,fy=82,fh=BH-fy-32;
   g.noStroke();
@@ -3262,6 +3513,18 @@ function drawBreakNook(g,t){const x=BW-176, w=176, fy=FLOOR_Y;
   if((t/650|0)%2===0){g.fill('#a9d4e2');
     g.ellipse(wcx,ct-24+((t/150)%16),4,4);}
   pxBox(g,wcx-7,ct+18,14,6,'#7fb8c9');
+  // arcade cabinet against the right wall
+  { const ax=x+w-34, ay=fy+34;
+    g.fill('#00000033');g.ellipse(ax+14,ay+66,36,9);
+    pxBox(g,ax,ay,28,64,'#3b2f55',{l:'#55467a',s:'#261d3a'});
+    pxBox(g,ax+2,ay+2,24,9,'#e0a85a',{l:'#f6d08a',s:'#b07d34'});
+    g.fill('#0e1420');g.rect(ax+4,ay+14,20,16);
+    g.fill('#86e0a8');g.rect(ax+6+((t/140|0)%14),ay+17,3,3);
+    g.fill('#f3b34c');g.rect(ax+8,ay+24,3,2);g.rect(ax+15,ay+21,3,2);
+    g.fill('#2a2140');g.rect(ax+1,ay+32,26,8);
+    g.fill('#e0705f');g.rect(ax+6,ay+33,3,4);
+    g.fill('#86e0a8');g.rect(ax+15,ay+35,3,2);g.fill('#7fb8c9');g.rect(ax+20,ay+35,3,2);
+    g.fill('#261d3a');g.rect(ax+5,ay+44,18,15); }
   // couch on the rug
   pxBox(g,x+22,BH-56,96,24,'#5a4a6a',{l:'#74628a',s:'#43374f'});
   pxBox(g,x+22,BH-76,96,22,'#6b5a7e',{l:'#8675a0',s:'#4e4060'});
@@ -3274,28 +3537,57 @@ function drawBreakNook(g,t){const x=BW-176, w=176, fy=FLOOR_Y;
   g.fill(PAL.ink);g.textAlign(CENTER,CENTER);g.textSize(11);
   g.text('BREAK ROOM',x+w/2,82);}
 
+// Whoever is on a break stands on the rug with a mug; whoever is playing is
+// at the cabinet with their back to us. Room for two + one; the rest are a count.
+function nookTag(g,a,x,y){const nm=a.name.split(' ')[0];g.textSize(10);
+  const w=g.textWidth(nm)+12,
+    cx=Math.max(BW-174+w/2,Math.min(BW-w/2-3,x));pxOut(g);
+  g.fill(0,0,0,70);g.rect(cx-w/2+2,y+2,w,14,3);
+  pxBox(g,cx-w/2,y,w,14,PAL.sign,{l:shade(PAL.sign,22),s:PAL.signE,r:3});
+  g.fill(PAL.ink);g.textAlign(CENTER,CENTER);g.text(nm,cx,y+7);}
+function drawNookFolk(g,t,onBreak,gaming){const x=BW-176,fy=FLOOR_Y;
+  const spots=[[x+46,fy+116],[x+94,fy+116]];
+  onBreak.slice(0,2).forEach((a,i)=>{const[sx,sy]=spots[i];a.tx=sx;a.ty=sy;
+    drawCharacterAt(g,a,sx,sy,true,t,2.2,{pose:'sip',showLabel:false});
+    nookTag(g,a,sx,sy+4);});
+  const p=gaming[0];
+  if(p){const sx=x+156,sy=fy+130;p.tx=sx;p.ty=sy;
+    drawCharacterAt(g,p,sx,sy,true,t,2.1,{pose:'play',showLabel:false});
+    nookTag(g,p,sx,sy+4);}
+  const more=Math.max(0,onBreak.length-2)+Math.max(0,gaming.length-1);
+  if(more){g.fill(PAL.ink);g.textSize(10);g.textAlign(RIGHT,TOP);
+    g.text('+'+more+' more',BW-8,96);}}
+
 /* ===================== CHARACTER (front + back) ====================== */
 function drawCharacterAt(g,a,x,foot,seated,t,S,opt){
   opt=opt||{};
   S=S||2.3;const L=a.look,br=0;               // no levitation float
   let jy=0,sq=1,lean=0,wave=0;const mv=!a.placed;
-  const working=a.status==='working';
+  // opt.pose overrides the status-driven pose for office life (break nook,
+  // arcade, rooftop). A blocked agent always jumps and waves, wherever it is.
+  const pose=a.status==='blocked'?null:(opt.pose||null),sit=pose==='meditate';
+  const working=pose?pose==='play':a.status==='working';
   const pulse=mv?0:Math.sin(a.t*2.1+(hashId(a.id)%7));
-  const back=seated&&working;                 // only face monitor when typing
-  const sipping=seated&&!working&&a.status!=='blocked'&&!mv; // idle → coffee
+  const back=pose?pose==='play':seated&&working; // only face monitor when typing
+  const sipping=pose?pose==='sip'
+    :seated&&!working&&a.status!=='blocked'&&!mv;   // idle → coffee
   if(a.status==='blocked'){jy=-a.jump*32;sq=1+(a.jump-.5)*.18;
     wave=Math.sin(a.t*12)*.9;}
   else if(!mv){jy+=seated?pulse*0.35:pulse*0.9;
     if(a.status==='thinking'&&!back)lean+=Math.sin(a.t*1.4+(hashId(a.id)%5))*0.025;
     if(a.status==='done')lean-=0.02;}
   if(back)lean=-0.04+Math.sin(a.t*3)*0.008;   // slight angle while working
+  if(sit){jy=Math.sin(a.t*0.9)*0.7;lean=0;}   // slow breathing, nothing else
   const op=a.leaveT>=0?1-a.leaveT:1;
   g.push();g.translate(x,foot+jy);g.scale(S,S);
   pxOut(g);g.fill(0,0,0,55*op);g.ellipse(0,2-jy*.03,15*sq,5);
   g.push();g.scale(sq,1/sq*.5+.5);g.rotate(lean);
   const sk=L.skin,skS=shade(sk,-30),oc=L.outfitColor,
     ocS=shade(oc,-30),ocH=shade(oc,26);
-  {const st=mv?Math.sin(a.t*10)*2:0;            // always keep legs (standing)
+  if(sit){g.fill('#2c251c');g.rect(-8,-6,16,6);          // crossed legs
+    g.fill('#3a3128');g.rect(-8,-6,16,1);
+    g.fill('#2c251c');g.rect(-10,-4,3,4);g.rect(7,-4,3,4);}
+  else{const st=mv?Math.sin(a.t*10)*2:0;        // always keep legs (standing)
     g.fill('#2c251c');g.rect(-4,-7,3,7+st);g.rect(1,-7,3,7-st);
     g.fill('#3a3128');g.rect(-4,-7,1,7+st);}
   // torso
@@ -3325,6 +3617,8 @@ function drawCharacterAt(g,a,x,foot,seated,t,S,opt){
     g.rotate(-1.1+wave);g.fill(ocS);g.rect(0,0,3,10);
     g.fill(sk);g.rect(0,9,3,4);g.pop();
     g.fill(ocS);g.rect(-7,-16,3,10);g.fill(sk);g.rect(-7,-8,3,4);}
+  else if(sit){g.fill(ocS);g.rect(-7,-16,3,9);g.rect(4,-16,3,9);  // hands on knees
+    g.fill(sk);g.rect(-9,-8,3,3);g.rect(6,-8,3,3);}
   else if(sipping){
     // facing camera, relaxing with a coffee mug
     const sp=Math.sin(a.t*1.3)*1.4;
@@ -3337,7 +3631,9 @@ function drawCharacterAt(g,a,x,foot,seated,t,S,opt){
     g.fill('#cf6b4b');g.rect(5,-24+sp,2,2);}         // handle
   else{g.fill(ocS);g.rect(-7,-16,3,10);g.rect(4,-16,3,10);
     g.fill(sk);g.rect(-7,-7,3,3);g.rect(4,-7,3,3);}
-  if(back)drawBackHead(g,L,br);else drawHead(g,L,br,a,t);
+  if(back)drawBackHead(g,L,br);
+  else{const bl=a.blink;if(sit)a.blink=1;      // eyes closed on the roof
+    drawHead(g,L,br,a,t);a.blink=bl;}
   g.pop();g.pop();
   // name is a desk plaque now; only show floating tag when standing/break
   if(opt.showLabel!==false)nameTagBelow(g,a,x,foot+2,op);   // agent is always fully visible now
@@ -3967,7 +4263,7 @@ function topBar(g,t){pxOut(g);
   g.textAlign(RIGHT,CENTER);g.fill(PAL.ink);g.textSize(13);
   g.text(clockStr,BW-14,14);
   let rx=BW-14-g.textWidth(clockStr)-18;        // cursor: right edge of next button
-  const pill=(label,badge)=>{
+  const pill=(label,badge,calm)=>{
     g.textSize(12);
     const bw=badge>0?(g.textWidth(badge>99?'99+':''+badge)+12):0;
     const w=g.textWidth(label)+22+bw, h=20, x=rx-w, y=4;
@@ -3979,14 +4275,16 @@ function topBar(g,t){pxOut(g);
     if(badge>0){
       const bn=badge>99?'99+':''+badge, bbw=g.textWidth(bn)+10,
         bx=x+11+g.textWidth(label)+7, by=y+4, bh=12;
-      g.fill(PAL.warn);g.rect(bx,by,bbw,bh,6);
+      g.fill(calm?'#9ec9d8':PAL.warn);g.rect(bx,by,bbw,bh,6);
       g.fill('#241a0f');g.textAlign(CENTER,CENTER);g.textSize(10);
       g.text(bn,bx+bbw/2,by+bh/2+1);
     }
     rx=x-8;
     return {x,y,w,h};
   };
-  topBtnRects={comms:pill('Comms',commsUnreadTotal), board:pill('Board',0)};}
+  const onRoof=[...agents.values()].filter(a=>a.away&&a.act.kind==='rooftop').length;
+  topBtnRects={comms:pill('Comms',commsUnreadTotal), board:pill('Board',0),
+    roof:pill('Roof',onRoof,true)};}
 function bottomBar(g,t){pxOut(g);
   g.fill(PAL.signE);g.rect(0,BH-24,BW,24);
   g.fill(PAL.sign);g.rect(0,BH-22,BW,22);
@@ -4003,6 +4301,7 @@ function bottomBar(g,t){pxOut(g);
   const msg=blk.length
     ?`${blk.map(a=>a.name).join(', ')} ${blk.length>1?'are':'is'} waiting on you`
     :view==='floor'?`click a room to step inside   ·   ${boardMsg}`
+    :view==='roof'?`the roof · nothing is asked of anyone up here · esc / ‹ All to go back down`
     :view==='desk'?`this is the agent’s own view · esc / ‹ Back · ${boardMsg}`
     :`click a desk to enter · click the cabinet for project files · ${boardMsg}`;
   g.fill(PAL.dim);g.textSize(11);g.textAlign(LEFT,CENTER);

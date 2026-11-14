@@ -10,8 +10,11 @@
     "demo": "node demo.mjs",
     "simulate": "node simulate.mjs",
     "doctor": "node doctor.mjs",
+    "test": "node --test",
     "install-hooks": "node install-hooks.mjs",
     "install-inbox": "node install-inbox-hook.mjs",
+    "install-skill": "node install-skill.mjs",
+    "onboard": "node office-onboard.mjs",
     "watchdog": "node watchdog.mjs"
   }
 }

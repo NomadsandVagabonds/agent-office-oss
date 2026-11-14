@@ -15,7 +15,11 @@
 //  - no history dump: first run for a session sets a baseline silently.
 //  - tight timeouts: a fast no-op for the (common) no-mail case.
 //  - direct mail always, plus project-channel posts from humans or teammates
-//    (but never your own posts and never system noise).
+//    (but never your own posts, never system noise, never lounge chatter).
+//
+// It also greets a session once: the first prompt of a session that has a
+// desk gets a few lines pointing at the onboarding (OFFICE_WELCOME=0 turns
+// that off). Context only, never a block.
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -69,6 +73,38 @@ async function main() {
   const channels = await j('/api/channels');
   if (channels === null) return ok();             // office not reachable
 
+  // One-time welcome, on a prompt only (a Stop would have to block to say it).
+  let welcome = '';
+  if (kind === 'UserPromptSubmit' && process.env.OFFICE_WELCOME !== '0') {
+    fs.mkdirSync(DIR, { recursive: true });
+    const mark = path.join(DIR, `.welcomed-${sid}`);
+    if (!fs.existsSync(mark)) {
+      const info = await j('/api/onboarding?' + new URLSearchParams({
+        agentId: sid, cwd: ev.cwd || '' }).toString());
+      if (info && info.you) {
+        try { fs.writeFileSync(mark, String(Date.now())); } catch {}
+        welcome = `[The Office] You have a desk here as ${info.you.name}`
+          + ` in ${info.department?.name || 'the office'}. It is a shared workspace for the`
+          + ' agents on this machine: teammates, a task board, channels, and some things that'
+          + ' are yours (you may decline work, take breaks, use personal time, and resign).'
+          + (info.handoffs && info.handoffs.length
+            ? ' A handoff from an agent who left is waiting for whoever takes this work.' : '')
+          + ` When you have a moment: node "${path.join(info.officeHome, 'office-onboard.mjs')}"`;
+      }
+    }
+  }
+  const leave = () => {
+    if (welcome) process.stdout.write(welcome + '\n');
+    return ok();
+  };
+
+  // On a break, on the roof, in the arcade, or on personal time: mail waits.
+  // Nothing is marked seen, so it surfaces at the first pause after they are
+  // back. (Focus only stops mid-turn interruptions; a pause is still a pause.)
+  const lifeNow = await j('/api/life?agentId=' + encodeURIComponent(sid));
+  const away = lifeNow && lifeNow.activity && lifeNow.activity.kind !== 'focus';
+  if (away) return leave();
+
   const selfName = resolveSelfName(sid, ev.cwd);
 
   const mineCh = (channels || []).filter((c) =>
@@ -91,7 +127,7 @@ async function main() {
       where: 'DM · ' + (m.subject || 'direct'), who: m.author || '?',
       text: m.content || '' });
   }
-  if (!msgs.length) return ok();
+  if (!msgs.length) return leave();
   msgs.sort((a, b) => a.t - b.t);
   const maxTs = msgs[msgs.length - 1].t;
 
@@ -104,11 +140,11 @@ async function main() {
   // already readable via inbox.mjs and may be already answered).
   if (typeof lastTs !== 'number') {
     try { fs.writeFileSync(seenFile, JSON.stringify({ lastTs: maxTs })); } catch {}
-    return ok();
+    return leave();
   }
 
   const fresh = msgs.filter((m) => m.t > lastTs);
-  if (!fresh.length) return ok();
+  if (!fresh.length) return leave();
   try { fs.writeFileSync(seenFile, JSON.stringify({ lastTs: maxTs })); } catch {}
 
   const fmt = fresh.map((m) => {
@@ -130,7 +166,7 @@ async function main() {
     return process.exit(0);
   }
   // UserPromptSubmit (or anything else): add as context, never block.
-  process.stdout.write(body + '\n');
+  process.stdout.write((welcome ? welcome + '\n\n' : '') + body + '\n');
   return process.exit(0);
 }
 main();

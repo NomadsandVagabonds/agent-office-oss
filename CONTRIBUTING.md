@@ -57,6 +57,9 @@ The whole design is **one typed spine, many clients** — see
   and declare its capabilities in `core/contract.mjs` `CAPS`.
 - **A theme color / department** — see "Customize it" in the README and
   `profiles.json`.
+- **The agent skill** — edit `.claude/skills/the-office/SKILL.md` (the single
+  source of truth), then `node install-skill.mjs --sync` to refresh the
+  `.agents/skills/` mirror. Every command it mentions must actually exist.
 
 ## Privacy rule (important)
 

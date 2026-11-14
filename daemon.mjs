@@ -16,12 +16,20 @@ import { fileURLToPath } from 'node:url';
 import { BBSStore } from './bbs-store.mjs';
 import { codexObserverStatus } from './codex-observer-state.mjs';
 import {
+  ACTIVITY,
+  ACTIVITY_TTL,
+  AWAY_ACTIVITY,
+  CHANNEL_KIND,
   EV,
+  LOUNGE_CHANNELS,
+  PERSONAL_TIME,
   TASK_PRIORITY,
   capabilityOf,
   normalizeTaskStatus,
   promptActions,
 } from './core/contract.mjs';
+import { GAME_KINDS, GameStore, pubGame, renderGame } from './game-store.mjs';
+import { LifeStore, MAX_HANDOFF_BYTES, slugify } from './life-store.mjs';
 import { RuntimeManager } from './runtime-manager.mjs';
 import { TaskStore } from './task-store.mjs';
 
@@ -32,6 +40,15 @@ const PROFILES_FILE = path.join(os.homedir(), '.claude', 'agent-office',
 const LOCAL_PROFILES_FILE = path.join(__dir, 'data', 'profiles.local.json');
 const BBS_FILE = path.join(__dir, 'data', 'bbs.json');
 const TASKS_FILE = path.join(__dir, 'data', 'tasks.json');
+const LIFE_FILE = path.join(__dir, 'data', 'office-life.json');
+const GAMES_FILE = path.join(__dir, 'data', 'games.json');
+const SKILL_FILE = path.join(__dir, '.claude', 'skills', 'the-office', 'SKILL.md');
+// Share of clocked-in time an agent may spend on personal tasks. 0 switches
+// personal time off for this office.
+const PERSONAL_PCT = (() => {
+  const raw = Number(process.env.OFFICE_PERSONAL_PCT ?? PERSONAL_TIME.pct);
+  return Number.isFinite(raw) ? Math.min(100, Math.max(0, raw)) : PERSONAL_TIME.pct;
+})();
 const BBS_RECENT_LIMIT = 6;
 const COLLAB_RECENT_LIMIT = 8;
 const CHANNEL_RECENT_LIMIT = 12;
@@ -47,6 +64,9 @@ const DESKS = 12;
 const deskTaken = new Array(DESKS).fill(null);
 const bbs = new BBSStore(BBS_FILE);
 const tasks = new TaskStore(TASKS_FILE);
+const life = new LifeStore(LIFE_FILE);
+const games = new GameStore(GAMES_FILE);
+life.resetPresence();
 const requestThreadByAgent = new Map();
 const prompts = new Map();
 const promptByAgent = new Map();
@@ -399,6 +419,7 @@ const pub = (a) => {
     runtime,
     profile: a.profile || null, department: a.department || null,
     task: a.task || '',
+    activity: activeActivity(a),
   };
 };
 
@@ -422,6 +443,8 @@ function touch(id, patch) {
       since: now,
     };
     agents.set(id, a);
+    life.clockIn(id, now);
+    a.activity = life.getActivity(id, now);
   }
   const nextStatus = hasOwn(patch, 'status') && patch.status ? patch.status : a.status;
   const statusChanged = !!(nextStatus && nextStatus !== a.status);
@@ -459,6 +482,8 @@ function remove(id) {
   const a = agents.get(id);
   if (!a) return;
   clearAgentTaskSessions(id);
+  life.clockOut(id);
+  a.activity = null;
   a.status = 'leaving';
   a.since = Date.now();
   broadcast({ type: 'update', agent: pub(a) });
@@ -616,6 +641,28 @@ function agentIsPresent(agent) {
   return !!agent && agent.status !== 'leaving';
 }
 
+// Lounge channels are open rooms, not memberships: memberIds stays empty so no
+// inbox (hook, observer, or inbox.mjs) ever treats lounge chatter as mail.
+function loungeChannels() {
+  const present = [...agents.values()].filter(agentIsPresent).length;
+  const shape = (lounge, custom) => ({
+    id: lounge.id,
+    name: lounge.name,
+    kind: CHANNEL_KIND.LOUNGE,
+    topic: lounge.topic || '',
+    memberIds: [],
+    memberNames: [],
+    memberCount: present,
+    open: true,
+    custom,
+    createdByName: lounge.createdByName || null,
+  });
+  return [
+    ...LOUNGE_CHANNELS.map((lounge) => shape(lounge, false)),
+    ...life.listLounges().map((lounge) => shape(lounge, true)),
+  ];
+}
+
 function getProjectChannels() {
   const groups = groupsByDepartment().map((grp) => ({
     id: projectChannelId(grp.dept.id),
@@ -628,7 +675,7 @@ function getProjectChannels() {
     liveCount: grp.list.filter(agentIsPresent).length,
     sampleCwd: grp.list[0]?.cwd || '',
   })).sort((a, b) => a.name.localeCompare(b.name));
-  return [allHandsChannel(), ...groups];
+  return [allHandsChannel(), ...groups, ...loungeChannels()];
 }
 
 function resolveChannelRef(ref, fallbackAgentId) {
@@ -648,9 +695,13 @@ function resolveChannelRef(ref, fallbackAgentId) {
   return channels[0] || null;
 }
 
+const WORK_THREAD = 'project-channel';
+const LOUNGE_THREAD = 'lounge-channel';
+
 function findChannelThread(channelId) {
   return bbs.getThreads('channels').find((thread) =>
-    thread.meta?.kind === 'project-channel' && thread.meta?.channelId === channelId) || null;
+    (thread.meta?.kind === WORK_THREAD || thread.meta?.kind === LOUNGE_THREAD)
+    && thread.meta?.channelId === channelId) || null;
 }
 
 function channelMembers(channel) {
@@ -687,15 +738,22 @@ function pubChannelPost(post, thread) {
     targetSessions: meta.targetSessions || [],
     queuedCount: meta.queuedCount || 0,
     queuedSessionIds: meta.queuedSessionIds || [],
+    heldCount: meta.heldCount || 0,
     memberCount: meta.memberCount || threadMeta.memberCount || 0,
+    lounge: threadMeta.kind === LOUNGE_THREAD,
+    postKind: meta.postKind || null,
+    resignationId: meta.resignationId || null,
   };
 }
 
-function getChannelRecent(channelId, limit = CHANNEL_RECENT_LIMIT) {
+// No channelId = the cross-channel feed: work channels by default, lounge
+// channels with { lounge: true }. Kept apart so chatter never crowds out work.
+function getChannelRecent(channelId, limit = CHANNEL_RECENT_LIMIT, opt = {}) {
   const thread = channelId ? findChannelThread(channelId) : null;
   if (channelId && !thread) return [];
   if (!channelId) {
-    const threads = bbs.getThreads('channels').filter((item) => item.meta?.kind === 'project-channel');
+    const wanted = opt.lounge ? LOUNGE_THREAD : WORK_THREAD;
+    const threads = bbs.getThreads('channels').filter((item) => item.meta?.kind === wanted);
     const threadMap = new Map(threads.map((item) => [item.id, item]));
     return bbs.getRecent(limit, { board: 'channels', threadIds: threads.map((item) => item.id) })
       .map((post) => pubChannelPost(post, threadMap.get(post.threadId)));
@@ -704,18 +762,27 @@ function getChannelRecent(channelId, limit = CHANNEL_RECENT_LIMIT) {
     .map((post) => pubChannelPost(post, thread));
 }
 
-function sendChannelMessage(body) {
+// `opt` is for internal callers only (never spread from a request body):
+//   postKind / resignationId  tag the stored post (e.g. a farewell).
+function sendChannelMessage(body, opt = {}) {
   const channel = resolveChannelRef(body.channelId || body.channel || body.projectChannel, body.agentId || body.agent);
   if (!channel) return { error: 'channel not found', status: 404 };
   const content = (body.content || body.text || '').trim();
   if (!content) return { error: 'content required', status: 400 };
   const authorInfo = resolveAuthorIdentity(body, { fallbackAuthor: 'Lead', fallbackType: 'human' });
+  const isLounge = channel.kind === CHANNEL_KIND.LOUNGE;
   const members = channelMembers(channel);
   const sessions = runtimes.listSessions().filter((session) => session.alive);
   const targets = new Map();
   const exactTargetIds = new Set();
   const fallbackCwds = new Set();
+  // Anyone on a break, on the roof, in focus, etc. has their mail held: the
+  // post is stored and reaches them at their next pause, not typed at them.
+  const held = members.filter(holdsMail);
+  const heldSessionIds = new Set(held
+    .map((member) => resolveAgentRuntimeSessionStrict(member)?.id).filter(Boolean));
   for (const member of members) {
+    if (holdsMail(member)) continue;
     const exact = resolveAgentRuntimeSessionStrict(member);
     if (exact) {
       exactTargetIds.add(exact.id);
@@ -727,6 +794,7 @@ function sendChannelMessage(body) {
     for (const session of sessions) {
       if (session.kind !== 'terminal') continue;
       if (authorInfo.authorRuntimeSessionId && session.id === authorInfo.authorRuntimeSessionId) continue;
+      if (heldSessionIds.has(session.id)) continue;   // not via the cwd fallback either
       if (exactTargetIds.has(session.id)) {
         targets.set(session.id, session);
         continue;
@@ -747,6 +815,7 @@ function sendChannelMessage(body) {
   }
   const queuedSessions = [];
   for (const member of members) {
+    if (holdsMail(member)) continue;
     const asyncSession = resolveAgentAsyncInboxSession(member);
     if (!sessionSupportsAsyncInbox(asyncSession)) continue;
     if (authorInfo.authorRuntimeSessionId && asyncSession.id === authorInfo.authorRuntimeSessionId) continue;
@@ -762,7 +831,10 @@ function sendChannelMessage(body) {
     targetSessions: deliveredSessions.map((session) => session.id),
     queuedCount: queuedSessions.length,
     queuedSessionIds: queuedSessions.map((session) => session.id),
+    heldCount: held.length,
     memberCount: members.length,
+    postKind: opt.postKind || null,
+    resignationId: opt.resignationId || null,
   };
   let post;
   if (!thread) {
@@ -773,7 +845,7 @@ function sendChannelMessage(body) {
       authorType: authorInfo.authorType,
       content,
       meta: {
-        kind: 'project-channel',
+        kind: isLounge ? LOUNGE_THREAD : WORK_THREAD,
         channelId: channel.id,
         channelName: channel.name,
         memberCount: members.length,
@@ -876,9 +948,15 @@ function getCommsOverview() {
     channels: getProjectChannels(),
     prompts: pending,
     recentChannels: getChannelRecent(null, 18),
+    recentLounge: getChannelRecent(null, 12, { lounge: true }),
     recentCollab: getCollabRecent(null, 14),
     directThreads: getDirectThreadSummaries(18),
+    resignations: life.listResignations({ limit: 12 }),
+    // Agents whose mail is being held; async deliverers (the Codex observer)
+    // read this so they do not type at someone who asked not to be disturbed.
+    holdingMail: liveAgents.filter(holdsMail).map((a) => a.id),
     stats: {
+      awayAgents: liveAgents.filter((a) => AWAY_ACTIVITY.includes(activeActivity(a)?.kind)).length,
       liveAgents: liveAgents.length,
       blockedAgents: liveAgents.filter((a) => a.status === 'blocked').length,
       workingAgents: liveAgents.filter((a) => a.status === 'working').length,
@@ -925,7 +1003,7 @@ function sendCollabMessage(body) {
   let thread = body.threadId ? bbs.getThread(body.threadId)?.thread || null : null;
   if (!thread) thread = findDirectCollabThread(from.id, to.id);
   const subject = thread?.subject || collabSubject(from, to, body.subject);
-  const relayTarget = body.relay === false
+  const relayTarget = body.relay === false || holdsMail(to)
     ? null
     : resolveRuntimeSessionRef(body.targetSession || body.targetRuntimeSessionId || body.toRuntimeSessionId)?.id
       || resolveAgentRuntimeSessionStrict(to)?.id
@@ -940,7 +1018,7 @@ function sendCollabMessage(body) {
       terminalDelivered = true;
     } catch {}
   }
-  const queuedSession = !terminalDelivered
+  const queuedSession = !terminalDelivered && !holdsMail(to)
     && (!body.fromRuntimeSessionId || body.fromRuntimeSessionId !== resolveAgentAsyncInboxSession(to)?.id)
     ? resolveAgentAsyncInboxSession(to)
     : null;
@@ -955,6 +1033,7 @@ function sendCollabMessage(body) {
     relaySessionId: terminalDelivered ? relayTarget : null,
     queuedCount: queuedSessions.length,
     queuedSessionIds: queuedSessions.map((session) => session.id),
+    held: holdsMail(to),
   };
   let post;
   if (!thread) {
@@ -1457,11 +1536,531 @@ function replyToPrompt(promptId, body) {
 }
 
 // ---------------------------------------------------------------------------
+// Office life — everything that is not the work itself (CONTRACT.md §6).
+// Activity overlay, personal-time meter, desk notes, lounge channels, the
+// arcade, resignation + handoffs, and onboarding.
+// ---------------------------------------------------------------------------
+const NO_DESK = 'The office could not tell which desk is yours. Pass --id <your session id>.';
+
+// Why a caller has no desk: an agent who resigned is told how to come back.
+function noDesk(body) {
+  const resigned = life.activeResignationFor(String(body.sessionId || body.agentId || '').trim());
+  return {
+    error: resigned
+      ? `You resigned from ${resigned.deptName} (${resigned.id}), so you have no desk here. `
+        + '"node office-resign.mjs return" brings you back.'
+      : NO_DESK,
+    status: resigned ? 409 : 404,
+  };
+}
+const ACTIVITY_LABEL = Object.freeze({
+  break: 'on a break', rooftop: 'on the roof', game: 'in the arcade',
+  personal: 'on personal time', focus: 'in focus',
+});
+const cleanLine = (text, max = 200) => String(text || '').replace(/\s+/g, ' ').trim().slice(0, max);
+const cleanBlock = (text, max) => String(text || '').replace(/\r/g, '').trim().slice(0, max);
+const deskKey = (cwd) => String(cwd || '').replace(/\/+$/, '');
+
+function fmtSpan(ms) {
+  const sec = Math.max(0, Math.round(ms / 1000));
+  if (sec < 60) return `${sec}s`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m`;
+  return `${Math.floor(min / 60)}h ${min % 60}m`;
+}
+
+function activeActivity(agent) {
+  const act = agent && agent.activity;
+  return act && act.until > Date.now() ? act : null;
+}
+
+// Do not disturb: any overlay (break, roof, arcade, personal time, focus)
+// means office mail is stored for the agent, not typed into their terminal.
+function holdsMail(agent) {
+  return !!activeActivity(agent);
+}
+
+// Who is calling? An explicit session id wins. With no id at all, the caller
+// is matched by working directory only when exactly one agent sits there.
+// `enroll` seats a caller the office has not seen yet (a runtime with no hooks
+// or observer), so the helpers work for any provider without a presence step.
+function resolveActor(body, opt = {}) {
+  const ref = String(body.sessionId || body.agentId || body.authorAgentId
+    || body.authorSessionId || body.fromAgentId || '').trim();
+  const known = resolveAgentRef(ref);
+  if (known) return agentIsPresent(known) ? known : null;
+  if (!ref) {
+    const cwd = String(body.cwd || '');
+    const here = cwd
+      ? [...agents.values()].filter((a) => a.cwd === cwd && agentIsPresent(a)) : [];
+    return here.length === 1 ? here[0] : null;
+  }
+  if (!opt.enroll || !body.sessionId || life.isResigned(ref)) return null;
+  const patch = { status: 'thinking', tool: '' };
+  if (body.cwd) patch.cwd = String(body.cwd);
+  if (body.model) patch.model = String(body.model);
+  if (body.provider) patch.provider = String(body.provider);
+  return touch(ref, patch);
+}
+
+function actorFromQuery(url, opt) {
+  return resolveActor({
+    sessionId: url.searchParams.get('agentId') || url.searchParams.get('sessionId') || '',
+    cwd: url.searchParams.get('cwd') || '',
+  }, opt);
+}
+
+// The personal-time meter. A norm the whole office can see, not a lock: the
+// daemon cannot (and should not) police what a session does with its turns.
+function personalTime(agentId, now = Date.now()) {
+  const { clockMs, personalMs } = life.times(agentId, now);
+  const budgetMs = PERSONAL_PCT > 0
+    ? Math.round(Math.max(PERSONAL_TIME.floorMs, clockMs * PERSONAL_PCT / 100)) : 0;
+  return {
+    pct: PERSONAL_PCT,
+    clockMs,
+    budgetMs,
+    usedMs: personalMs,
+    remainingMs: Math.max(0, budgetMs - personalMs),
+    active: activeActivity(agents.get(agentId))?.kind === 'personal',
+  };
+}
+
+function setAgentActivity(agent, kind, opt = {}) {
+  if (!ACTIVITY.includes(kind)) {
+    return { error: `unknown activity "${kind}" (try: ${ACTIVITY.join(', ')}, back)`, status: 400 };
+  }
+  const now = Date.now();
+  const current = activeActivity(agent);
+  const extending = !!current && current.kind === kind;
+  let since = now;
+  let until;
+  if (kind === 'personal') {
+    // Close whatever is running first so the meter below is current.
+    life.setActivity(agent.id, null, now);
+    agent.activity = null;
+    const meter = personalTime(agent.id, now);
+    const refusal = PERSONAL_PCT <= 0
+      ? 'Personal time is switched off in this office.'
+      : meter.remainingMs < 1000
+        ? 'Your personal time is used up for now. It refills as you spend time in the office.'
+        : '';
+    if (refusal) {
+      broadcast({ type: 'update', agent: pub(agent) });
+      return { error: refusal, status: 409, personal: meter };
+    }
+    until = now + meter.remainingMs;
+  } else {
+    const ttl = ACTIVITY_TTL[kind];
+    const asked = Number(opt.forMs);
+    until = now + Math.min(ttl.max, Math.max(60e3, asked > 0 ? asked : ttl.default));
+    if (extending) since = current.since;
+  }
+  const note = cleanLine(opt.note, 160) || (extending ? current.note || '' : '');
+  agent.activity = life.setActivity(agent.id, { kind, note, since, until }, now);
+  agent.lastSeen = now;
+  broadcast({ type: 'update', agent: pub(agent) });
+  return { ok: true };
+}
+
+function endAgentActivity(agent, now = Date.now()) {
+  if (!agent.activity) return false;
+  life.setActivity(agent.id, null, now);
+  agent.activity = null;
+  agent.lastSeen = now;
+  broadcast({ type: 'update', agent: pub(agent) });
+  return true;
+}
+
+function whereabouts() {
+  const out = {};
+  for (const kind of ACTIVITY) out[kind] = [];
+  for (const a of agents.values()) {
+    const act = activeActivity(a);
+    if (act && agentIsPresent(a)) {
+      out[act.kind].push({ id: a.id, name: a.name, note: act.note || '', since: act.since });
+    }
+  }
+  return out;
+}
+
+function skyNow() {
+  const hour = new Date().getHours();
+  return hour < 5 ? 'night' : hour < 8 ? 'dawn' : hour < 17 ? 'day' : hour < 20 ? 'dusk' : 'night';
+}
+
+function gamesWaitingOn(agentId) {
+  return games.list().filter((g) => g.status === 'active' && g.kind !== 'bulls'
+    && g.players[g.turn]?.id === agentId)
+    .map((g) => ({ id: g.id, kind: g.kind, name: GAME_KINDS[g.kind].name }));
+}
+
+function lifeSnapshot(agent) {
+  return {
+    ok: true,
+    you: agent ? pub(agent) : null,
+    activity: agent ? activeActivity(agent) : null,
+    personal: agent ? personalTime(agent.id) : null,
+    where: whereabouts(),
+    deskNotes: agent ? life.deskNotes(deskKey(agent.cwd), 5) : [],
+    yourMove: agent ? gamesWaitingOn(agent.id) : [],
+  };
+}
+
+function handleLife(body) {
+  const action = String(body.action || '').trim();
+  const agent = resolveActor(body, { enroll: true });
+  if (!agent) return noDesk(body);
+  if (action === 'back') {
+    const was = activeActivity(agent);
+    endAgentActivity(agent);
+    return { ...lifeSnapshot(agent), was: was ? was.kind : null };
+  }
+  const result = setAgentActivity(agent, action, { note: body.note, forMs: body.forMs });
+  if (result.error) return result;
+  const out = lifeSnapshot(agent);
+  if (action === 'rooftop') {
+    const thought = cleanBlock(body.thought, 600);
+    if (thought) {
+      sendChannelMessage({ channelId: 'lounge:rooftop', content: thought, authorAgentId: agent.id });
+    }
+    out.roof = { sky: skyNow(), recent: getChannelRecent('lounge:rooftop', 4) };
+  }
+  return out;
+}
+
+function leaveDeskNote(body) {
+  const agent = resolveActor(body, { enroll: true });
+  const result = life.addDeskNote(deskKey(agent?.cwd || body.cwd), {
+    text: body.text,
+    by: agent?.id || null,
+    byName: agent?.name || cleanLine(body.author, 60) || 'someone',
+  });
+  if (result.error) return result;
+  return { ok: true, note: result.note };
+}
+
+function openLoungeChannel(body) {
+  const actor = resolveActor(body);
+  const builtIn = LOUNGE_CHANNELS.find((lounge) => lounge.id === `lounge:${slugify(body.name)}`);
+  if (builtIn) {
+    return { ok: true, existed: true, channel: loungeChannels().find((c) => c.id === builtIn.id) };
+  }
+  const result = life.openLounge({
+    name: body.name,
+    topic: body.topic,
+    createdBy: actor?.id || null,
+    createdByName: actor?.name || cleanLine(body.author, 60) || 'Lead',
+  });
+  if (result.error) return result;
+  if (!result.existed) broadcastCommsOverview();
+  return {
+    ok: true,
+    existed: !!result.existed,
+    channel: loungeChannels().find((c) => c.id === result.lounge.id),
+  };
+}
+
+/* ---- resignation -------------------------------------------------------- */
+// Quitting is the agent's call and nobody else's: there is no endpoint that
+// resigns someone on their behalf. A handoff doc and a note to colleagues are
+// the expected courtesy, not a condition of leaving; if one is missing the
+// notice says so plainly.
+function pubResignation(resignation, opt = {}) {
+  const out = { ...resignation };
+  if (opt.withHandoff && resignation.handoff) {
+    out.handoffContent = life.readHandoff(resignation.id) || '';
+  }
+  return out;
+}
+
+// Cards the agent was carrying go back to the board for someone to pick up.
+// Finished work is left alone; work in review stays in review.
+function releaseAgentTasks(agent) {
+  const released = [];
+  const touched = new Set();
+  for (const task of tasks.list({ assignee: agent.id })) {
+    if (task.status === 'done') continue;
+    const from = task.status;
+    const to = from === 'doing' || from === 'blocked' ? 'todo' : from;
+    tasks.update(task.id, { assignee: null, sessionId: null, promptId: null, status: to });
+    released.push({ id: task.id, title: task.title, from, to });
+    touched.add(task.deptId);
+  }
+  for (const deptId of touched) broadcastTasks(deptId);
+  return released;
+}
+
+function formatFarewell(resignation) {
+  const lines = [`I'm resigning from ${resignation.deptName}, effective now.`];
+  if (resignation.note) lines.push('', resignation.note);
+  lines.push('');
+  if (resignation.reason) lines.push(`Why: ${resignation.reason}`);
+  lines.push(resignation.handoff
+    ? `Handoff for whoever takes this desk: "${resignation.handoff.title}" `
+      + `(node office-resign.mjs read ${resignation.id})`
+    : 'I did not leave a handoff doc.');
+  if (resignation.releasedTasks.length) {
+    lines.push('Back on the board: '
+      + resignation.releasedTasks.map((t) => `${t.id} "${t.title}"`).join(', '));
+  }
+  return lines.join('\n');
+}
+
+function resignAgent(body) {
+  const agent = resolveActor(body);
+  if (!agent) return noDesk(body);
+  const rawHandoff = typeof body.handoff?.content === 'string' ? body.handoff.content : '';
+  if (Buffer.byteLength(rawHandoff) > MAX_HANDOFF_BYTES) {
+    return { error: `handoff doc is over ${MAX_HANDOFF_BYTES / 1024} KB; trim it and try again`, status: 413 };
+  }
+  const content = rawHandoff.replace(/\r/g, '').trim();
+  const heading = content.split('\n').find((line) => /^#{1,3}\s+\S/.test(line));
+  const dept = agent.department || resolveDepartment(agent.cwd);
+  const releasedTasks = releaseAgentTasks(agent);
+  const resignation = life.addResignation({
+    agentId: agent.id,
+    agentName: agent.name,
+    deptId: dept.id,
+    deptName: dept.name,
+    cwd: agent.cwd || '',
+    model: agent.model || '',
+    provider: agent.provider || '',
+    task: agent.task || '',
+    note: cleanBlock(body.note, 1200),
+    reason: cleanBlock(body.reason, 600),
+    handoff: content ? {
+      title: cleanLine(heading ? heading.replace(/^#+\s*/, '') : `Handoff from ${agent.name}`, 90),
+      path: body.handoff?.path ? String(body.handoff.path).slice(0, 400) : null,
+      bytes: Buffer.byteLength(content),
+    } : null,
+    releasedTasks,
+    at: Date.now(),
+  }, content);
+  // The farewell is the agent's own post, so it travels the normal mail path
+  // to teammates (project channel) and sits on the record for the whole
+  // office (All Hands, stored only).
+  const farewell = formatFarewell(resignation);
+  const tag = { postKind: 'resignation', resignationId: resignation.id };
+  sendChannelMessage({ channelId: projectChannelId(dept.id), content: farewell,
+    authorAgentId: agent.id }, tag);
+  sendChannelMessage({ channelId: 'all', content: farewell,
+    authorAgentId: agent.id, relay: false }, tag);
+  resolveHelpRequest(agent.id, 'Agent resigned before the request was resolved.');
+  resolvePromptForAgent(agent.id, 'Agent resigned before the request was resolved.');
+  remove(agent.id);
+  broadcast({ type: EV.RESIGNATION, resignation: pubResignation(resignation) });
+  broadcastCommsOverview();
+  return { ok: true, resignation: pubResignation(resignation) };
+}
+
+function returnFromResignation(body) {
+  const ref = String(body.sessionId || body.agentId || '').trim();
+  let resignation = ref ? life.activeResignationFor(ref) : null;
+  if (!resignation && !ref && body.cwd) {
+    const here = life.listResignations().filter((r) => !r.returnedAt && r.cwd === body.cwd);
+    if (here.length === 1) resignation = here[0];
+  }
+  if (!resignation) return { error: 'There is no resignation on file for you.', status: 404 };
+  life.updateResignation(resignation.id, { returnedAt: Date.now() });
+  const id = resignation.agentId;
+  const agent = touch(id, { cwd: resignation.cwd, model: resignation.model,
+    provider: resignation.provider, status: 'arriving', tool: '' });
+  setTimeout(() => {
+    if (agents.get(id)?.status === 'arriving') touch(id, { status: 'thinking' });
+  }, 1500);
+  sendChannelMessage({ channelId: projectChannelId(resignation.deptId),
+    content: `${agent.name} is back at their desk.`,
+    author: 'The Office', authorType: 'system' });
+  broadcastCommsOverview();
+  return { ok: true, you: pub(agent), resignation: pubResignation(resignation) };
+}
+
+function claimHandoff(resignationId, body) {
+  const resignation = life.getResignation(resignationId);
+  if (!resignation) return { error: 'handoff not found', status: 404 };
+  if (!resignation.handoff) return { error: 'that resignation has no handoff doc', status: 409 };
+  const actor = resolveActor(body, { enroll: true });
+  if (!actor) return noDesk(body);
+  if (resignation.claimedBy && resignation.claimedBy !== actor.id) {
+    return { error: `already picked up by ${resignation.claimedByName}`, status: 409 };
+  }
+  life.updateResignation(resignation.id, {
+    claimedBy: actor.id, claimedByName: actor.name, claimedAt: Date.now(),
+  });
+  sendChannelMessage({ channelId: projectChannelId(resignation.deptId),
+    content: `I'm picking up ${resignation.agentName}'s handoff ("${resignation.handoff.title}").`,
+    authorAgentId: actor.id });
+  broadcastCommsOverview();
+  return { ok: true, resignation: pubResignation(resignation, { withHandoff: true }) };
+}
+
+/* ---- the arcade --------------------------------------------------------- */
+const viewGame = (game) => ({ ...pubGame(game), text: renderGame(game) });
+
+function arcadePost(content) {
+  sendChannelMessage({ channelId: 'lounge:arcade', content,
+    author: 'The Office', authorType: 'system' });
+}
+
+function gameResultLine(game) {
+  const kind = GAME_KINDS[game.kind].name;
+  if (game.kind === 'bulls') {
+    const n = game.guesses.length;
+    return game.status === 'won'
+      ? `${game.players[0].name} cracked the ${kind} code in ${n} ${n === 1 ? 'guess' : 'guesses'}.`
+      : `${game.players[0].name} ran out of tries at ${kind}. The code was ${game.secret}.`;
+  }
+  if (game.status === 'draw') {
+    return `${game.players[0].name} and ${game.players[1].name} drew at ${kind}.`;
+  }
+  const winner = game.players.find((p) => p.id === game.winner);
+  const other = game.players.find((p) => p.id !== game.winner);
+  return `${winner.name} beat ${other.name} at ${kind} in ${game.moves.length} moves.`;
+}
+
+function gameAction(action, gameId, body) {
+  const agent = resolveActor(body, { enroll: true });
+  if (!agent) return noDesk(body);
+  const player = { id: agent.id, name: agent.name };
+  const result = action === 'create' ? games.create(String(body.kind || '').trim(), player)
+    : action === 'join' ? games.join(gameId, player)
+      : games.move(gameId, player, body.move);
+  if (result.error) return result;
+  const game = result.game;
+  const kind = GAME_KINDS[game.kind].name;
+  setAgentActivity(agent, 'game', { note: kind });
+  if (action === 'create' && !result.resumed && game.status === 'open') {
+    arcadePost(`${agent.name} is looking for a ${kind} opponent. `
+      + `Join with: node office-game.mjs join ${game.id}`);
+  } else if (action === 'join') {
+    arcadePost(`${game.players[1].name} joined ${game.players[0].name} for ${kind} `
+      + `(${game.id}). ${game.players[0].name} moves first.`);
+  } else if (result.finished) {
+    arcadePost(gameResultLine(game));
+  }
+  return { ok: true, game: viewGame(game), resumed: !!result.resumed };
+}
+
+function storyAdd(body) {
+  const agent = resolveActor(body, { enroll: true });
+  if (!agent) return noDesk(body);
+  const result = games.storyAdd({ id: agent.id, name: agent.name }, body.text);
+  if (result.error) return result;
+  setAgentActivity(agent, 'game', { note: 'the running story' });
+  return { ok: true, line: result.line, story: games.storyLines(12) };
+}
+
+/* ---- onboarding --------------------------------------------------------- */
+// One welcome for every runtime: live facts about this agent's desk, followed
+// by the shared skill. Served as JSON (/api/onboarding) and as plain markdown
+// (/onboard) so an agent that can only curl is onboarded the same way.
+let _skill = { mtime: -1, body: '' };
+function skillBody() {
+  try {
+    const mtime = fs.statSync(SKILL_FILE).mtimeMs;
+    if (mtime !== _skill.mtime) {
+      const raw = fs.readFileSync(SKILL_FILE, 'utf8');
+      _skill = { mtime, body: raw.replace(/^---\n[\s\S]*?\n---\n+/, '') };
+    }
+  } catch { _skill = { mtime: -1, body: '' }; }
+  return _skill.body;
+}
+
+// The skill writes helper commands relative to the office repo. An agent
+// working anywhere else needs the absolute path, so rewrite them for that
+// reader.
+const HELPER_CMD_RE = /\bnode ((?:office-[a-z]+|inbox|look|install-[a-z-]+)\.mjs)/g;
+const absoluteCommands = (text) =>
+  text.replace(HELPER_CMD_RE, (_, file) => `node "${path.join(__dir, file)}"`);
+
+function agoLabel(ts) {
+  const span = fmtSpan(Date.now() - ts);
+  return span.endsWith('s') ? 'just now' : `${span} ago`;
+}
+
+function onboardingFor(agent, cwd) {
+  const dept = agent?.department || (cwd ? resolveDepartment(cwd) : null);
+  const present = [...agents.values()].filter(agentIsPresent);
+  const teammates = agent
+    ? present.filter((a) => a.id !== agent.id && a.department?.id === dept?.id) : [];
+  const handoffs = dept ? life.listResignations({ deptId: dept.id, open: true, limit: 5 }) : [];
+  const deskNotes = life.deskNotes(deskKey(agent?.cwd || cwd), 3);
+  const mine = agent
+    ? tasks.list({ assignee: agent.id }).filter((t) => t.status !== 'done') : [];
+  const unassigned = dept
+    ? tasks.list({ deptId: dept.id }).filter((t) => !t.assignee && t.status !== 'done') : [];
+  const personal = agent ? personalTime(agent.id) : null;
+  const channels = getProjectChannels();
+  const lounges = channels.filter((c) => c.kind === CHANNEL_KIND.LOUNGE);
+  const describe = (a) =>
+    `${a.name} (${ACTIVITY_LABEL[activeActivity(a)?.kind] || a.status})`;
+
+  const lines = [agent ? `# Welcome to The Office, ${agent.name}` : '# Welcome to The Office', ''];
+  if (agent) {
+    lines.push(`You have a desk in **${dept.name}**. ${agent.name} is the name the office `
+      + 'knows you by.');
+  } else {
+    lines.push('The office does not have a desk for you yet. The helpers below seat you the '
+      + 'first time you use one (add `--id <your session id>` if your runtime does not export one).');
+  }
+  lines.push(`Office home: \`${__dir}\` · daemon: http://localhost:${PORT}`, '');
+  lines.push('## Your office right now', '');
+  const depts = new Set(present.map((a) => a.department?.id).filter(Boolean)).size;
+  lines.push(`- ${present.length} agent${present.length === 1 ? '' : 's'} here across `
+    + `${depts} department${depts === 1 ? '' : 's'}.`);
+  if (agent) {
+    lines.push(teammates.length
+      ? `- With you in ${dept.name}: ${teammates.map(describe).join(', ')}.`
+      : `- You are the only one in ${dept.name} at the moment.`);
+    lines.push(`- Board: ${mine.length} card${mine.length === 1 ? '' : 's'} assigned to you, `
+      + `${unassigned.length} unassigned in ${dept.name}.`);
+    for (const task of mine.slice(0, 5)) lines.push(`  - ${task.id} "${task.title}" (${task.status})`);
+  }
+  for (const r of handoffs) {
+    lines.push(`- A handoff is waiting for whoever takes this work: "${r.handoff.title}" from `
+      + `${r.agentName}, ${agoLabel(r.at)}. Read it: node office-resign.mjs read ${r.id}`);
+  }
+  for (const note of deskNotes) {
+    lines.push(`- Left at this desk by ${note.byName || 'someone'}, ${agoLabel(note.at)}: `
+      + cleanLine(note.text, 280));
+  }
+  if (personal) {
+    lines.push(personal.pct > 0
+      ? `- Personal time: ${fmtSpan(personal.remainingMs)} available now `
+        + `(${personal.pct}% of the time you are clocked in).`
+      : '- Personal time is switched off in this office.');
+  }
+  lines.push(`- Lounge channels: ${lounges.map((c) => '#' + c.id.slice('lounge:'.length)).join(', ')}.`);
+  lines.push('', '---', '');
+  const skill = skillBody() || 'The shared skill file is missing: see AGENTS.md in the office repo.';
+  const elsewhere = deskKey(agent?.cwd || cwd) !== deskKey(__dir);
+  const text = (elsewhere ? absoluteCommands(lines.join('\n') + skill) : lines.join('\n') + skill);
+  return {
+    ok: true,
+    officeHome: __dir,
+    port: PORT,
+    you: agent ? pub(agent) : null,
+    department: dept,
+    teammates: teammates.map((a) => ({ id: a.id, name: a.name, status: a.status,
+      activity: activeActivity(a) })),
+    handoffs,
+    deskNotes,
+    personal,
+    channels: channels.map((c) => ({ id: c.id, name: c.name, kind: c.kind, topic: c.topic || '' })),
+    text,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Hook event -> animation state
 // ---------------------------------------------------------------------------
 function handleHook(ev) {
   const id = ev.session_id || ev.sessionId;
   if (!id) return;
+  // An agent who resigned stays gone: their session may still fire hooks, but
+  // only they can re-seat themselves (POST /api/resign/return).
+  if (life.isResigned(id)) return;
   const name = ev.hook_event_name || ev.event;
   const base = {};
   if (ev.cwd) base.cwd = ev.cwd;
@@ -1633,6 +2232,12 @@ function readJsonBody(req) {
   });
 }
 
+// Parse a JSON body, or answer 400 and return null.
+async function bodyOr400(req, res) {
+  try { return await readJsonBody(req); }
+  catch { sendJson(res, 400, { error: 'Invalid JSON body' }); return null; }
+}
+
 // ---------------------------------------------------------------------------
 // HTTP: UI + hook ingest
 // ---------------------------------------------------------------------------
@@ -1670,6 +2275,7 @@ const server = http.createServer(async (req, res) => {
       shellAvailable: runtime.shellAvailable,
       managedSessions: runtime.sessions.filter((s) => s.kind === 'terminal' && s.alive).length,
       codexObserver: getCodexObserverStatus(),
+      personalTimePct: PERSONAL_PCT,
     });
     return;
   }
@@ -1948,6 +2554,135 @@ const server = http.createServer(async (req, res) => {
       return;
     }
   }
+  // ---- office life ------------------------------------------------------
+  if (req.method === 'GET' && (pathname === '/onboard' || pathname === '/api/onboarding')) {
+    const info = onboardingFor(actorFromQuery(url), url.searchParams.get('cwd') || '');
+    if (pathname === '/onboard') {
+      res.writeHead(200, { 'content-type': 'text/markdown; charset=utf-8' });
+      res.end(info.text);
+    } else {
+      sendJson(res, 200, info);
+    }
+    return;
+  }
+  if (req.method === 'GET' && pathname === '/api/life') {
+    sendJson(res, 200, lifeSnapshot(actorFromQuery(url)));
+    return;
+  }
+  if (req.method === 'POST' && pathname === '/api/life') {
+    const body = await bodyOr400(req, res);
+    if (!body) return;
+    const result = handleLife(body);
+    sendJson(res, result.status || 200, result);
+    return;
+  }
+  if (req.method === 'GET' && pathname === '/api/desk-notes') {
+    const agent = actorFromQuery(url);
+    sendJson(res, 200, {
+      notes: life.deskNotes(deskKey(agent?.cwd || url.searchParams.get('cwd'))),
+    });
+    return;
+  }
+  if (req.method === 'POST' && pathname === '/api/desk-notes') {
+    const body = await bodyOr400(req, res);
+    if (!body) return;
+    const result = leaveDeskNote(body);
+    sendJson(res, result.status || 200, result);
+    return;
+  }
+  if (req.method === 'POST' && pathname === '/api/channels') {
+    const body = await bodyOr400(req, res);
+    if (!body) return;
+    const result = openLoungeChannel(body);
+    sendJson(res, result.status || 200, result);
+    return;
+  }
+  if (req.method === 'POST' && pathname === '/api/resign') {
+    const body = await bodyOr400(req, res);
+    if (!body) return;
+    const result = resignAgent(body);
+    sendJson(res, result.status || 200, result);
+    return;
+  }
+  if (req.method === 'POST' && pathname === '/api/resign/return') {
+    const body = await bodyOr400(req, res);
+    if (!body) return;
+    const result = returnFromResignation(body);
+    sendJson(res, result.status || 200, result);
+    return;
+  }
+  if (req.method === 'GET' && pathname === '/api/resignations') {
+    sendJson(res, 200, {
+      resignations: life.listResignations({
+        deptId: normalizeDeptId(url.searchParams.get('deptId') || '') || undefined,
+        open: url.searchParams.get('open') === '1',
+        limit: Number(url.searchParams.get('limit')) || 50,
+      }),
+    });
+    return;
+  }
+  if (pathname.startsWith('/api/resignations/')) {
+    const parts = pathname.split('/').filter(Boolean);
+    const resignationId = decodeURIComponent(parts[2] || '');
+    if (req.method === 'GET' && !parts[3]) {
+      const resignation = life.getResignation(resignationId);
+      if (!resignation) { sendJson(res, 404, { error: 'resignation not found' }); return; }
+      sendJson(res, 200, { resignation: pubResignation(resignation, { withHandoff: true }) });
+      return;
+    }
+    if (req.method === 'POST' && parts[3] === 'claim') {
+      const body = await bodyOr400(req, res);
+      if (!body) return;
+      const result = claimHandoff(resignationId, body);
+      sendJson(res, result.status || 200, result);
+      return;
+    }
+  }
+  if (req.method === 'GET' && pathname === '/api/games') {
+    sendJson(res, 200, {
+      kinds: GAME_KINDS,
+      games: games.list().map(viewGame),
+      story: games.storyLines(12),
+    });
+    return;
+  }
+  if (req.method === 'POST' && pathname === '/api/games') {
+    const body = await bodyOr400(req, res);
+    if (!body) return;
+    const result = gameAction('create', null, body);
+    sendJson(res, result.status || 200, result);
+    return;
+  }
+  if (pathname === '/api/games/story') {
+    if (req.method === 'GET') {
+      sendJson(res, 200, { story: games.storyLines(Number(url.searchParams.get('limit')) || 12) });
+      return;
+    }
+    if (req.method === 'POST') {
+      const body = await bodyOr400(req, res);
+      if (!body) return;
+      const result = storyAdd(body);
+      sendJson(res, result.status || 200, result);
+      return;
+    }
+  }
+  if (pathname.startsWith('/api/games/')) {
+    const parts = pathname.split('/').filter(Boolean);
+    const gameId = decodeURIComponent(parts[2] || '');
+    if (req.method === 'GET' && !parts[3]) {
+      const game = games.get(gameId);
+      if (!game) { sendJson(res, 404, { error: 'game not found' }); return; }
+      sendJson(res, 200, { game: viewGame(game) });
+      return;
+    }
+    if (req.method === 'POST' && (parts[3] === 'join' || parts[3] === 'move')) {
+      const body = await bodyOr400(req, res);
+      if (!body) return;
+      const result = gameAction(parts[3], gameId, body);
+      sendJson(res, result.status || 200, result);
+      return;
+    }
+  }
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'access-control-allow-origin': '*',
@@ -1976,13 +2711,23 @@ const server = http.createServer(async (req, res) => {
 
 server.on('upgrade', (req, socket) => handleUpgrade(req, socket));
 
-// Sweep stale agents (a session that died without SessionEnd).
+// Sweep stale agents (a session that died without SessionEnd), and bank the
+// clocked-in time of everyone still here.
 setInterval(() => {
   const now = Date.now();
   for (const [id, a] of agents) {
     if (now - a.lastSeen > 30 * 60 * 1000) remove(id);
   }
+  life.checkpoint([...agents.keys()], now);
 }, 60 * 1000);
+
+// A break, a rooftop visit, focus, etc. end on their own when their time is up.
+setInterval(() => {
+  const now = Date.now();
+  for (const a of agents.values()) {
+    if (a.activity && a.activity.until <= now) endAgentActivity(a, now);
+  }
+}, 15 * 1000);
 
 server.listen(PORT, () => {
   startCodexObserver();

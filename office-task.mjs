@@ -7,6 +7,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { requestJson } from './office-http.mjs';
+import { sessionIdFrom } from './office-self.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.OFFICE_PORT || 4317;
@@ -24,6 +25,7 @@ function help() {
     + 'node office-task.mjs move <taskId> <status>\n'
     + 'node office-task.mjs assign <taskId> <agent|none>\n'
     + 'node office-task.mjs claim <taskId> [doing|blocked|review]\n'
+    + 'node office-task.mjs decline <taskId> [reason...]   pass on a card; it goes back to the board\n'
   );
 }
 
@@ -42,7 +44,7 @@ function loadProfiles() {
 }
 
 function sessionId() {
-  return process.env.CODEX_THREAD_ID || process.env.CLAUDE_SESSION_ID || '';
+  return sessionIdFrom(argv);
 }
 
 function resolveSelf() {
@@ -154,7 +156,7 @@ if (cmd === 'create') {
     && argv[index - 1] !== '--dept' && argv[index - 1] !== '--status'
     && argv[index - 1] !== '--priority' && argv[index - 1] !== '--assignee'
     && argv[index - 1] !== '--body' && argv[index - 1] !== '--depends'
-    && argv[index - 1] !== '--prompt').join(' ').trim();
+    && argv[index - 1] !== '--prompt' && argv[index - 1] !== '--id').join(' ').trim();
   if (!title) {
     console.error('office-task: title required.');
     process.exit(1);
@@ -253,6 +255,51 @@ if (cmd === 'claim') {
     },
   });
   renderTask(res.task);
+  process.exit(0);
+}
+
+// Saying no is a normal move. The card goes back to the board unassigned and
+// the project channel hears about it, so nothing is dropped silently.
+if (cmd === 'decline') {
+  const taskId = argv[1];
+  if (!taskId) {
+    console.error('office-task: decline requires <taskId>.');
+    process.exit(1);
+  }
+  const reason = argv.slice(2).filter((part, index, all) =>
+    part !== '--id' && all[index - 1] !== '--id').join(' ').trim();
+  const { task } = await j('/api/tasks/' + encodeURIComponent(taskId));
+  if (task.assignee && me.sessionId && task.assignee !== me.sessionId) {
+    console.error(`office-task: ${task.id} is ${task.assigneeName || task.assignee}'s card, not yours to decline.`);
+    process.exit(1);
+  }
+  const identity = {
+    author: me.name,
+    authorType: 'agent',
+    authorAgentId: me.sessionId,
+    authorSessionId: me.sessionId,
+  };
+  const res = await j('/api/tasks/' + encodeURIComponent(taskId), {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: {
+      assignee: null,
+      sessionId: null,
+      status: task.status === 'doing' || task.status === 'blocked' ? 'todo' : task.status,
+      ...identity,
+    },
+  });
+  await j(`/api/channels/${encodeURIComponent('project:' + task.deptId)}/message`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: {
+      content: `I'm passing on ${task.id} "${task.title}"${reason ? ': ' + reason : '.'}`
+        + (reason && !/[.!?]$/.test(reason) ? '.' : '') + ' It is back on the board, unassigned.',
+      ...identity,
+    },
+  });
+  renderTask(res.task);
+  console.log('  declined; the project channel has been told.');
   process.exit(0);
 }
 
