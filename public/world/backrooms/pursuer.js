@@ -56,6 +56,8 @@ export function createStalkers(env) {
       if (member.disposition === 'hunts') { env.end('caught'); return { landed: true, dead: true, ended: true }; }
       return { landed: false, dead: false, ended: false };
     },
+    /** Something E does, at a spot of the world: { x, z, r, when?(), use() }. It has to look as though it can be used: nothing says so. */
+    use(spec) { const rt = W().roomAt(spec.x, spec.z); const u = { r: 1.2, ...spec, wx: spec.x, wz: spec.z, room: rt }; rt?.uses.push(u); return u; },
     /** For the count kept of a visit: the visitor has really seen it, for the first time (say so once) · it had them, and they got away (each time). */
     met: () => env.run?.met?.(member.id),
     survived: () => env.run?.survived?.(member.id),

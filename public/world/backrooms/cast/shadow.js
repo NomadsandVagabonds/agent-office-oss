@@ -94,8 +94,6 @@ export function create(c) {
         hiss -= dt;
         if (hiss <= 0 && d < 12) { hiss = 0.55 + Math.random() * 0.3; c.play('static', at.x, at.z, 3.2 + 4 * h); }
         if (!c.hidden(at.x, at.z, 0.4)) { seenT += dt; if (!known && seenT > 0.5 && d < 12) { known = true; c.met(); } }
-        // looked at long enough to be warned, and looked away in time: that counts as getting away from it
-        if (h > 0.4) close = true; else if (h === 0 && close) { close = false; c.survived(); }
       } else if (mesh) mesh.visible = false;
       // the tubes, after it has gone off: a flash, a stutter, and then a long while of nothing
       for (const k of dark) {

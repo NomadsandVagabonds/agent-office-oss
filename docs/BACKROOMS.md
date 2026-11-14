@@ -307,7 +307,8 @@ on for showing) can find the file.
 `cast/<id>.js` exports one function. Its rule is pure and lives in a module
 beside it that imports nothing a test cannot (`cast/<id>.rule.js`; no
 three.js, no DOM), with tests against a made-up clock. `cast/shadow.js` and
-`cast/shadow.rule.js` are the short example; `cast/pirate.js` with
+`cast/shadow.rule.js` are the short example (`cast/moth.js` is one that helps,
+`cast/porter.js` one that lives in a room); `cast/pirate.js` with
 `cast/hunt.js` and `reach.js` the long one.
 
 ```js
@@ -349,6 +350,7 @@ through `c`. It never calls `env.end`: being caught is `c.hurt`.
 | seeing | `c.hidden(x, z, r)` that spot is off their screen or behind a wall · `c.los(ax, az, bx, bz)` a line of sight between two spots, whichever way anybody is facing · `c.drawn(thing)` its room is being drawn at all |
 | getting about | `c.walk.go(walker, { x, z }, metres, keep)` → `{ went, door, cannot, there }` · `c.walk.exits(walker)` · `c.walk.spotIn(walker, room)` · `c.walk.steps(walker, { x, z })` · `c.walk.stand(walker, x, z)` |
 | being there | `c.add(object)` into the scene, in world coordinates · `c.body({ x, z, r })` a body nobody walks through · `c.light(x, z)` the light falling there · `c.play(name, x, z, reach)` |
+| things to use | `c.use({ x, z, r, when, use })` something `E` does at a spot of the world. Nothing says so on screen: it has to look as though it can be used |
 | keeping count | `c.met()` once, the first time in a visit that the visitor has really seen it (in view, and near enough to know what it is) · `c.survived()` each time it had them and they got away: a grab they lived through, a chase it lost them in |
 | catching them | `c.hurt(n)` → `{ landed, dead, ended }` · `c.drain(share)` takes that share of the camcorder's charge, where it has a battery |
 | the rest | `c.env`: `env.doors`, `env.interfere(0…1)`, `env.hud.glitch(seconds)`, `env.kit` for models and textures |

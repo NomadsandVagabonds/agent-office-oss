@@ -3,5 +3,7 @@
 // level is staged on for showing finds every one of them by following imports.)
 import { create as pirate } from './pirate.js';
 import { create as shadow } from './shadow.js';
+import { create as moth } from './moth.js';
+import { create as porter } from './porter.js';
 
-export const MAKERS = { pirate, shadow };
+export const MAKERS = { pirate, shadow, moth, porter };
