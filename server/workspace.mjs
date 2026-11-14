@@ -499,7 +499,9 @@ export function createWorkspace(ctx, file) {
     const abs = canon(p, opt.cwd || agent?.cwd);
     if (!abs) return { ok: false, path: p, items: [], warnings: [], text: 'That is not a path the office can place.' };
     const now = Date.now(), mine = agent ? whereOf(agent) : null;
-    const rel = (mine && relTo(mine.root, abs)) || abs;
+    // Until git has been read for this folder (the first seconds of a session), name the file as the agent itself would: from where it stands.
+    const here = opt.cwd || agent?.cwd;
+    const rel = (mine && relTo(mine.root, abs)) || (here && path.isAbsolute(here) && relTo(here, abs)) || abs;
     const items = [], warnings = [];
     for (const a of present()) {
       if (agent && a.id === agent.id) continue;

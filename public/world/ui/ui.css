@@ -117,6 +117,11 @@
   pointer-events: auto; cursor: pointer; box-shadow: 2px 2px 0 rgba(0, 0, 0, .35); }
 #ui .tag .name:hover, #ui .tag.selected .name { background: var(--brass); color: var(--accent-ink); }
 /* further out a name is noise: a pip says how they are doing, and that is all */
+#ui .yarn { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+#ui .yarn path { fill: none; stroke: #d2432f; stroke-width: 2.5; stroke-linecap: round; }
+#ui .yarn path.shade { stroke: rgba(0, 0, 0, .4); stroke-width: 2.5; transform: translate(2px, 3px); }
+#ui .yarntag { position: absolute; left: 0; top: 0; padding: 1px 6px 2px; background: var(--paper); color: var(--paper-ink); border: 2px solid var(--edge); border-left: 5px solid var(--no); font: 11px/1.3 var(--mono); white-space: nowrap; cursor: pointer; pointer-events: auto; }
+#ui .yarntag:hover { background: #fffaf0; }
 #ui .tag.pip .name { height: auto; padding: 0; background: none; box-shadow: none; } #ui .tag.pip .name span { display: none; }
 #ui .tag.pip .dot { width: 9px; height: 9px; box-shadow: 0 0 0 2px var(--tape); }
 #ui .tag.pip.idle .dot { opacity: .5; }
@@ -196,6 +201,8 @@
 #ui .side .body { padding: 10px 12px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 #ui .kv { display: grid; grid-template-columns: 78px 1fr; gap: 4px 10px; font-size: 12px; margin: 0; }
 #ui .kv dt { color: var(--faint); font-family: var(--mono); font-size: 11px; padding-top: 1px; } #ui .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+#ui .kv dd a.link { color: inherit; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
+#ui .kv dd a.link:hover { text-decoration-color: var(--accent); } #ui .kv dd a.link.warn { color: var(--blocked); text-decoration-color: currentColor; }
 #ui .meter { height: 8px; background: #0b1411; border: 2px solid var(--edge); overflow: hidden; }
 #ui .meter i { display: block; height: 100%; background: var(--working); }
 #ui .meter.warn i { background: var(--blocked); } #ui .meter.full i { background: var(--danger); }

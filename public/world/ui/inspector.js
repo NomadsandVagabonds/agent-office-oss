@@ -89,6 +89,9 @@ export function createInspector(office, ui) {
     const place = office.net.state.places.get(a.id);
     const room = place && office.world?.layout.roomById.get(place.room);
     const rt = a.runtime || null, driven = rt?.kind === 'driven';
+    const ws = office.net.state.workspace;
+    const git = ws?.agents?.[a.id] || null;
+    const clash = (ws?.overlaps || []).find((o) => (o.agents || []).some((x) => x.id === a.id)) || null;
     const hosted = !driven && rt?.managed && rt?.sessionId && rt?.kind === 'terminal';
     workBtn.classList.toggle('hidden', !(driven || hosted));
     workBtn.lastChild.textContent = driven ? 'Record' : 'Terminal';
@@ -99,6 +102,10 @@ export function createInspector(office, ui) {
       ['project', a.department?.name || '—'],
       ['where', room ? `${room.name}${place.at === 'desk' ? ' · at their desk' : place.at?.startsWith('poi:') ? ` · ${place.ref}` : ''}` : '—'],
       ['folder', shortPath(a.cwd) || '—'],
+      git ? ['branch', h('a.link', { title: 'Who else is in this repository (G)', onclick: () => ui.openSheet('repos') },
+        [git.branch || (git.detached ? 'detached' : 'no branch yet'), git.linked ? 'own checkout' : '', git.dirty ? `${git.dirty} changed` : '', git.ahead ? `${git.ahead} ahead` : '', git.behind ? `${git.behind} behind` : ''].filter(Boolean).join(' · '))] : null,
+      clash ? ['clash', h('a.link.warn', { title: clash.text || '', onclick: () => ui.openSheet('repos') },
+        `${clash.agents.filter((x) => x.id !== a.id).map((x) => x.name).join(', ')} ${clash.kind === 'claimed' ? 'has claimed' : 'is also in'} ${String(clash.path || '').split('/').pop()}`)] : null,
       driven ? ['runs', `driven by the office · ${DRIVEN_MODE[rt.mode] || rt.mode || ''}`.replace(/ · $/, '')] : null,
       ['tools used', String(a.toolCount || 0) + (a.subagents ? ` · ${a.subagents} helper${a.subagents > 1 ? 's' : ''} running` : '')],
       ['here since', ago(a.joinedAt, office.net.now())],
@@ -112,6 +119,7 @@ export function createInspector(office, ui) {
 
   office.net.on('agent', (a) => { if (a.id === current) render(); });
   office.net.on('place', (id) => { if (id === current) render(); });
+  office.net.on('workspace', () => { if (current) render(); });
   office.net.on('remove', (id) => { if (id === current) ui.select(null); });
   setInterval(() => { if (current) render(); }, 15000);
 

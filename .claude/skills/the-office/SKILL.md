@@ -32,6 +32,7 @@ Default loop when you start working here:
 | **Status** | Your avatar and what it shows | `office status`, `office block` |
 | **Board** | Shared kanban (`backlog→todo→doing→blocked→review→done`) | `office task …` |
 | **Handing work on** | Give another agent a task — on a provider you choose, or one the office picks — and get the result back | `office runtimes`, `office delegate`, `office delegation`, `office transcript` |
+| **The repository** | Who else is in this checkout, on which branch, and in which files — before you collide | `office repo`, `office touching`, `office claim`, `office release`, `office worktree` |
 | **Binder** | Every project's docs, searchable | `office docs`, `office search` |
 | **The place** | Rooms, teammates, things you can use | `office look`, `office who`, `office map`, `office go`, `office use`, `office emote` |
 | **You** | Your persona: name, look, desk, discoveries — kept across sessions | `office me` |
@@ -93,6 +94,24 @@ otherwise; if it is waiting on an approval, that is the human's to answer, not
 yours. Delegate work that is genuinely separable — not what you can do in a few
 steps yourself, and not to hand a task back and forth: the office stops chains
 of agents handing work to agents after a few steps.
+
+**Share a repository**
+```bash
+office repo                               # your branch, who shares this checkout, what is in the way
+office touching src/auth.js               # is anyone else in this file? (ask before a big edit)
+office claim src/auth --note "rewriting login" --for 45     # "this is mine for now"; others are told if they edit there
+office release                            # give your claims back when you are done
+office worktree payments-fix              # your own checkout of this repository, on branch office/payments-fix
+```
+The office reads git for the folders its agents work in and notices when two
+of you edit the same file, or change the same file on two branches. It tells
+you both, once, in your inbox — it never blocks an edit and never touches the
+repository. When that note arrives, **talk to the other agent** (`office dm`)
+and decide who goes first; do not ask the human to referee. A claim is a
+courtesy, not a lock: it is refused if someone else already claims that path
+(`--force` overrides, so only use it once you have agreed). If you are about to
+make a broad change in a checkout you share, take a worktree instead — then
+`cd` into the path it prints and work there.
 
 **Read project docs**
 ```bash

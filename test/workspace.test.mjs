@@ -4,8 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync, spawnSync } from 'node:child_process';
-import { startOffice, tempDir } from './helpers.mjs';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { ROOT, startOffice, tempDir } from './helpers.mjs';
 import { claimMatcher, filesFromTool } from '../server/workspace.mjs';
 import { parseStatus, safeRefName } from '../server/git.mjs';
 
@@ -152,4 +152,117 @@ test('workspace: nothing to read is not an error, and git can be left alone enti
   assert.deepEqual(snap.overlaps.map((o) => [o.kind, o.path]), [['same-file', 'notes.md']], 'hooks alone are enough to notice a shared file');
   assert.match((await office.get(`/api/workspace/agent/${a}`)).data.text, /not reading git here/);
   assert.equal((await office.post('/api/workspace/claim', { agent: a, paths: ['docs/**'] })).data.ok, true);
+});
+
+/** Run a script the way an agent's runtime would, while the office under test keeps answering in this process. */
+function run(file, args, { cwd, env, input } = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [path.join(ROOT, file), ...args], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    let out = '', err = '';
+    child.stdout.on('data', (chunk) => { out += chunk; });
+    child.stderr.on('data', (chunk) => { err += chunk; });
+    child.on('close', (code) => resolve({ code, out: out.trim(), err: err.trim() }));
+    child.stdin.end(input || '');
+  });
+}
+const agentEnv = (office, id) => ({ ...process.env, OFFICE_PORT: String(office.port), OFFICE_URL: '', OFFICE_TOKEN: '', OFFICE_SESSION_TOKEN: '', OFFICE_AGENT_ID: id,
+  CLAUDE_CODE_SESSION_ID: '', CLAUDE_SESSION_ID: '', CODEX_THREAD_ID: '', CLAUDECODE: '', HOME: office.dir });
+
+test('workspace: the office command — repo, touching, claim, release, worktree', { skip: !hasGit }, async (t) => {
+  const dir = repo();
+  const office = await startOffice({ env: { OFFICE_GIT_EVERY_MS: '300' } });
+  t.after(() => office.stop());
+  const ada = await join(office, 'Ada', dir), lin = await join(office, 'Linus', dir);
+  await edit(office, ada, dir, path.join(dir, 'src', 'a.js'));
+  await office.post('/api/workspace/refresh');
+  const as = (id) => (...args) => run('office.mjs', args, { cwd: dir, env: agentEnv(office, id) });
+  const linus = as(lin), adaSays = as(ada);
+
+  const where = await linus('repo');
+  assert.equal(where.code, 0, where.err);
+  assert.match(where.out, /^You are in .+ on main\./);
+  assert.match(where.out, /Sharing this checkout with Ada/);
+
+  const who = await linus('touching', 'src/a.js');
+  assert.equal(who.code, 0, who.err);
+  assert.match(who.out, /Ada edited it/);
+  assert.match(who.out, /office dm "Ada"/, 'it says how to sort it out, not just that there is a problem');
+  assert.match((await linus('touching', 'README.md')).out, /README\.md/);
+  assert.doesNotMatch((await linus('touching', 'README.md')).out, /Ada/, 'a file nobody is in has nobody in it');
+
+  const mine = await linus('claim', 'src', '--note', 'rewriting the module', '--for', '20');
+  assert.equal(mine.code, 0, mine.err);
+  assert.match(mine.out, /^Claimed src until /);
+  assert.match(mine.out, /nothing is locked/, 'a claim is a courtesy, and says so');
+  const theirs = await adaSays('claim', 'src/a.js');
+  assert.match(theirs.out, /^Not claimed: Linus already claims src \(“rewriting the module”\)/);
+  assert.equal((await office.get('/api/workspace')).data.claims.length, 1, 'a contested claim is not recorded');
+  const forced = await adaSays('claim', 'src/a.js', '--force');
+  assert.match(forced.out, /^Claimed src\/a\.js/);
+  assert.match((await linus('release')).out, /^Released 1 claim/);
+  assert.deepEqual((await office.get('/api/workspace')).data.claims.map((c) => c.agentName), ['Ada']);
+
+  const tree = await linus('worktree', 'side-desk');
+  assert.equal(tree.code, 0, tree.err);
+  const made = `${dir}.worktrees/side-desk`;
+  assert.ok(tree.out.includes(made), tree.out);
+  assert.ok(fs.existsSync(path.join(made, 'src', 'a.js')), 'a real second checkout');
+  assert.equal(git(made, 'branch', '--show-current').trim(), 'office/side-desk');
+  assert.equal(git(dir, 'branch', '--show-current').trim(), 'main', 'the checkout it was asked from is left where it was');
+  const again = await linus('worktree', 'side-desk');
+  assert.match(again.out + again.err, /already exists/);
+});
+
+test('workspace: the look-before-you-edit hook speaks once, only when somebody is there, and never blocks', { skip: !hasGit }, async (t) => {
+  const dir = repo();
+  const office = await startOffice({ env: { OFFICE_GIT_EVERY_MS: '300' } });
+  t.after(() => office.stop());
+  const ada = await join(office, 'Ada', dir), lin = await join(office, 'Linus', dir);
+  await edit(office, ada, dir, path.join(dir, 'src', 'a.js'));
+  const env = { ...process.env, OFFICE_PORT: String(office.port), OFFICE_URL: '', OFFICE_TOKEN: '' };
+  const hook = (ev) => run('hooks/office-guard-hook.mjs', [], { cwd: dir, env, input: typeof ev === 'string' ? ev : JSON.stringify(ev) });
+  const about = (file, extra = {}) => ({ session_id: lin, hook_event_name: 'PreToolUse', cwd: dir, tool_name: 'Edit', tool_input: { file_path: file }, ...extra });
+
+  const first = await hook(about(path.join(dir, 'src', 'a.js')));
+  assert.equal(first.code, 0);
+  const said = JSON.parse(first.out).hookSpecificOutput;
+  assert.equal(said.hookEventName, 'PreToolUse');
+  assert.match(said.additionalContext, /^From the office, before you change this file:/);
+  assert.match(said.additionalContext, /Ada edited src\/a\.js/);
+  assert.match(said.additionalContext, /You may still go ahead/);
+  assert.equal(said.permissionDecision, undefined, 'it informs; it does not decide');
+
+  assert.equal((await hook(about(path.join(dir, 'src', 'a.js')))).out, '', 'told once, not on every edit');
+  assert.equal((await hook(about(path.join(dir, 'README.md')))).out, '', 'nobody else is in that file');
+  assert.equal((await hook(about('notebook.ipynb', { tool_name: 'NotebookEdit', tool_input: { notebook_path: 'notebook.ipynb' } }))).out, '');
+  // Everything that could go wrong is silence and a clean exit: an edit is never held up by the office.
+  for (const bad of ['not json', '{}', JSON.stringify({ session_id: 'nobody-the-office-knows', tool_input: { file_path: 'src/a.js' } }), JSON.stringify(about(undefined, { tool_input: {} }))]) {
+    const r = await hook(bad);
+    assert.deepEqual([r.code, r.out], [0, ''], bad);
+  }
+  const down = await run('hooks/office-guard-hook.mjs', [], { cwd: dir, env: { ...env, OFFICE_PORT: '9' }, input: JSON.stringify(about(path.join(dir, 'shared.txt'))) });
+  assert.deepEqual([down.code, down.out], [0, ''], 'no office: no noise');
+});
+
+test('workspace: installing the hook keeps what was there, and uninstalling removes only its own', () => {
+  const dir = tempDir('office-settings-');
+  const file = path.join(dir, 'settings.json');
+  const install = (...args) => spawnSync(process.execPath, [path.join(ROOT, 'install-guard-hook.mjs'), ...args], { env: { ...process.env, OFFICE_CLAUDE_SETTINGS: file }, encoding: 'utf8' });
+  const read = () => JSON.parse(fs.readFileSync(file, 'utf8'));
+  const theirs = { matcher: 'Bash', hooks: [{ type: 'command', command: 'echo mine' }] };
+  fs.writeFileSync(file, JSON.stringify({ model: 'x', hooks: { PreToolUse: [theirs], Stop: [{ hooks: [{ type: 'command', command: 'echo bye' }] }] } }));
+
+  assert.equal(install().status, 0);
+  assert.equal(install().status, 0);                                   // twice: still one entry
+  const after = read();
+  assert.equal(after.model, 'x');
+  assert.equal(after.hooks.Stop.length, 1);
+  assert.deepEqual(after.hooks.PreToolUse[0], theirs);
+  const ours = after.hooks.PreToolUse.filter((g) => g.hooks.some((h) => h.command.includes('office-guard-hook.mjs')));
+  assert.equal(ours.length, 1);
+  assert.equal(ours[0].matcher, 'Edit|Write|MultiEdit|NotebookEdit');
+  assert.ok(fs.readdirSync(dir).some((f) => f.startsWith('settings.json.bak.')), 'the old file was kept beside it');
+
+  assert.equal(install('--uninstall').status, 0);
+  assert.deepEqual(read().hooks, { PreToolUse: [theirs], Stop: [{ hooks: [{ type: 'command', command: 'echo bye' }] }] });
 });

@@ -286,6 +286,48 @@ Agents read it with `office usage` (MCP: `office_usage`); in the office it is th
 fuel chip in the top bar, the **What is left** panel (`U`), and four glass tanks
 beside the big board (`office use gauges`).
 
+### Workspace  (who is working where)
+`server/workspace.mjs` knows, for every agent that has a working folder, which
+git checkout that folder is in — and so which agents share a checkout, which
+are in different worktrees of one repository, and which files each has changed.
+It **only reads git** (`rev-parse`, `status`, `diff --name-only`,
+`worktree list`), with a timeout, without taking git's optional locks, never
+for a folder no agent is in. Which file an agent is touching comes from what it
+already reports: Claude Code's tool hooks, a driven session's tool calls, or
+`POST /api/workspace/touch`.
+
+```
+WorkspaceSnapshot { git, repos:[{ id, name, checkouts:[Checkout], idle:[{ root, branch }] }],
+                    agents:{ <agentId>: { repo, root, branch, linked, dirty, ahead, behind, touched:[{ path, kind, at }] } },
+                    claims:[{ id, agentId, agentName, pattern, note, at, until }],
+                    overlaps:[Overlap] }
+Checkout { root, name, branch, detached, head, upstream, ahead, behind, linked, dirty, files:[{ path, state }], agents:[agentId] }
+Overlap  { id, kind:'same-file'|'claimed'|'both-changed', severity:'high'|'medium'|'low', repoName, path,
+           agents:[{ id, name, branch }], since, text }
+```
+
+`same-file`: two agents edited one file in one checkout within half an hour.
+`claimed`: an agent edited inside another agent's claim. `both-changed`: the
+same file has changed in two checkouts of one repository (uncommitted on either
+side, or committed since they forked). Each new overlap is written to the
+agents involved, once, as office mail from "Office" — rate-limited, and never
+to the human, who has nothing to decide. Nothing is ever blocked.
+
+| | |
+|---|---|
+| `GET /api/workspace` | the snapshot (also the `workspace` bus event, on connect and on change) |
+| `GET /api/workspace/agent/:ref` | one agent's picture, and the same thing as `text` (`office repo`) |
+| `GET /api/workspace/check?agent=&path=[&once=1][&cwd=]` | who else has to do with this file: `items`, `warnings`, `text` (`office touching`; the guard hook passes `once=1`) |
+| `GET /api/workspace/touching?path=` | everyone who has touched a path lately |
+| `POST /api/workspace/claim` | `{ agent, paths:[…], note?, minutes?, force? }` — advisory; refused while another agent's claim covers the path, unless `force` |
+| `POST /api/workspace/release` | `{ agent, paths? }` — all of the agent's claims, or those paths |
+| `POST /api/workspace/touch` | `{ agent, path, kind:'edit'\|'read' }` — for runtimes with no hooks |
+| `POST /api/workspace/worktree` | loopback only. `{ agent \| cwd, name, branch?, base? }` → `git worktree add` beside the repository, on a new branch `office/<name>`; never reuses a folder or a branch |
+| `POST /api/workspace/refresh` | read git now, return the snapshot |
+
+In the office this is the **Repos** panel (`G`), a branch line on each agent's
+card, and a red thread on the floor between two agents who are in the same file.
+
 ### Harness  (sessions the office drives, and work handed between agents)
 `server/harness/` starts an agent as a child process and speaks its structured
 protocol — ACP for anything that implements it (Gemini CLI, opencode, Claude

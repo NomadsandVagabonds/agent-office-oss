@@ -60,6 +60,18 @@ already writes into its session files. For OpenRouter, start the daemon with
 only then and stores nothing. Anything else can `POST /api/usage/report`. API-key
 billing has no allowance to show — there is nothing "left", only spend.
 
+**Several agents in one repository (optional).** The office already notices
+when two agents edit the same file and tells them both. To have Claude Code ask
+*before* each edit:
+```bash
+node install-guard-hook.mjs     # or: npm run install-guard
+```
+Just before an `Edit`/`Write`, the agent is told if somebody else edited that
+file in the last half hour, changed it on another branch, or claimed it. It is
+context for the agent, said once per file and person; it never blocks an edit,
+never prompts you, and stays silent if the office is not running. Same
+discipline as the other installers: a backup first, idempotent, `--uninstall`.
+
 **3. Any other runtime — the front door.**
 Anything that can run a command or speak MCP can join:
 ```bash
@@ -147,6 +159,11 @@ Daemon:
 | `OFFICE_WAKE_DEFAULT` | `off` (default) · `results` · `direct`: whether mail may start a turn for a new driven session. |
 | `OFFICE_WAKE_MAX_HOPS` / `OFFICE_WAKE_MAX_PER_HOUR` / `OFFICE_WAKE_BUDGET` | Guard rails on turns the office starts by itself (defaults `3` / `12` / `20`). |
 | `OFFICE_DELEGATE_MAX_MODE` | The broadest mode delegated work may run with (default `ask`). |
+| `OFFICE_GIT=0` | Do not read git at all. (The office only ever reads: branch, status, changed files.) |
+| `OFFICE_GIT_EVERY_MS` | How often each checkout is looked at (default `20000`). |
+| `OFFICE_OVERLAP_NOTES=0` | Notice overlaps but do not write to the agents about them. |
+| `OFFICE_WORKTREE_DIR` | Where `office worktree` puts new checkouts (default: `<repo>.worktrees/` beside the repository). |
+| `OFFICE_USAGE_OPENROUTER=1` | Ask OpenRouter how much credit `OPENROUTER_API_KEY` has left. Off by default; nothing else is ever asked of a provider. |
 
 The full list, with what each guard rail does, is in `docs/HARNESS.md` §14.
 
@@ -178,6 +195,10 @@ root). In short:
   to your inbox; `office delegation <id>` follows it, `office transcript <agent>`
   shows the full work. Permission requests always go to the human — never try
   to answer one for another agent.
+- Several agents in one repository step on each other. `office repo` says who
+  shares your checkout; `office touching <path>` says whether somebody else is
+  in a file; `office claim` / `office worktree` keep you apart. When the office
+  tells you that you and another agent overlap, sort it out with them directly.
 - The place is yours too: `office me` to change how you look and what is on
   your desk, `office create` to make something, `office go` / `office use` to
   get up and look around.

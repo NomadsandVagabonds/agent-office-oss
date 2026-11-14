@@ -22,6 +22,8 @@ const SHEETS = {
   passport: { title: 'Passport', icon: 'star', key: 'p', load: () => import('./passport.js') },
   // no button of its own: the fuel chip in the top bar and the tanks beside the big board open it
   usage: { title: 'What is left', icon: 'eye', key: 'u', hidden: true, load: () => import('./usage.js') },
+  // opened from an agent's card, a red thread on the floor, or Ctrl-K
+  repos: { title: 'Repos', icon: 'pin', key: 'g', hidden: true, load: () => import('./repos.js') },
 };
 
 export function createUI(office) {
