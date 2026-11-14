@@ -132,6 +132,7 @@ export function createDenizens(env) {
   });
 
   const denizens = {
+    all: () => list,
     add(d) {
       list.push(d);
       if (env.world && d.group && !d.group.parent) env.world.scene.add(d.group);

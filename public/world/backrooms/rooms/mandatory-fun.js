@@ -103,6 +103,7 @@ export function build(c) {
     const m = buildCommitteeMember(c.kit, variant, idx);
     m.group.position.set(hx, 0, hz);
     m.group.rotation.y = hRot;
+    m.aimHead(turnTo(hRot, Math.atan2(-hx, D / 2 - hz)), 0, 'idle');
     c.add(m.group);
     const entry = { ...m, variant, idx, hx, hz, x: hx, z: hz, rot: hRot, baseAngle };
     c.after.push(() => entry.light(c.sample(entry.x, 1.0, entry.z)));
@@ -165,6 +166,7 @@ export function build(c) {
           m.group.rotation.y = m.rot;
           m.group.rotation.z = Math.sin(rule.dancePhase * 1.4) * 0.13;
         }
+        m.aimHead(turnTo(m.rot, Math.atan2(me.x - m.x, me.z - m.z)), time, rule.mode);
         m.light(c.sample(m.x, 1.0, m.z));
       }
     } else if (rule.mode === 'swarming') {
@@ -183,6 +185,7 @@ export function build(c) {
         m.group.position.set(m.x, Math.abs(Math.sin(rule.dancePhase + m.idx * 1.3)) * 0.075, m.z);
         m.group.rotation.y = m.rot;
         m.group.rotation.z = Math.sin(rule.dancePhase * 1.5 + m.idx) * 0.09;
+        m.aimHead(turnTo(m.rot, want), time, rule.mode);
         m.light(c.sample(m.x, 1.0, m.z));
       }
       if (minDist < 2.6) c.env.interfere(clamp((2.6 - minDist) * 0.28, 0, 0.72));
@@ -192,7 +195,7 @@ export function build(c) {
         c.env.end('caught');
       }
     } else {
-      // Idle or resetting: drift quietly back to formation and stare toward the threshold
+      // Idle or resetting: bodies hold the circle while every neck twists toward the threshold/visitor
       for (const m of members) {
         const tx = m.variant === 'circle' ? ringX + Math.sin(m.baseAngle) * ringR : m.hx;
         const tz = m.variant === 'circle' ? ringZ + Math.cos(m.baseAngle) * ringR : m.hz;
@@ -209,6 +212,8 @@ export function build(c) {
         m.group.position.set(m.x, 0, m.z);
         m.group.rotation.y = m.rot;
         m.group.rotation.z = 0;
+        const gaze = Math.atan2((me.inside ? me.x : 0) - m.x, (me.inside ? me.z : D / 2) - m.z);
+        m.aimHead(turnTo(m.rot, gaze), time, rule.mode);
         m.light(c.sample(m.x, 1.0, m.z));
       }
     }
