@@ -99,6 +99,7 @@ body.norail #rail { display: none; }
 .s-key { color: var(--accent); font-weight: 600; }
 
 /* ---- the bottom: what is still happening, the line you are typing, and one line of state ---------------- */
+.blk.changes { cursor: pointer; border-radius: 5px; } .blk.changes:hover { background: #1f1e1b; }
 #foot { flex: none; padding: 0 22px 10px; position: relative; }
 #live { color: var(--dim); min-height: 0; white-space: pre-wrap; }
 #live .spin { color: var(--say); }

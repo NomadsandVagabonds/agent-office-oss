@@ -218,9 +218,14 @@ export function renderEntry(e, opt = {}) {
     case 'changes': {
       const files = e.files || [];
       if (!files.length) return [];
-      const adds = files.reduce((n, f) => n + (f.additions || 0), 0), dels = files.reduce((n, f) => n + (f.deletions || 0), 0);
+      // the turn's own totals where it gives them: the files listed may be only the first few
+      const adds = Number.isFinite(e.additions) ? e.additions : files.reduce((n, f) => n + (f.additions || 0), 0);
+      const dels = Number.isFinite(e.deletions) ? e.deletions : files.reduce((n, f) => n + (f.deletions || 0), 0);
       const out = [line(span('  ± ', 'tool'), span(`${plural(files.length + (e.more || 0), 'file')} changed`, ''), span(`  +${adds}`, 'add'), span(` −${dels}`, 'del'))];
-      for (const f of files.slice(0, full ? files.length : 8)) out.push(line(span(`     ${CHANGE_MARK[f.status] || 'M'} `, 'dim'), span(f.path || '', ''), span(`  +${f.additions || 0}`, 'add'), span(` −${f.deletions || 0}`, 'del')));
+      for (const f of files.slice(0, full ? files.length : 8)) {
+        out.push(line(span(`     ${CHANGE_MARK[f.status] || 'M'} `, 'dim'), span(f.from ? `${f.from} → ${f.path || ''}` : (f.path || ''), ''),
+          ...(f.binary ? [span('  binary', 'dim')] : [span(`  +${f.additions || 0}`, 'add'), span(` −${f.deletions || 0}`, 'del')])));
+      }
       const hidden = (full ? 0 : Math.max(0, files.length - 8)) + (e.more || 0);
       if (hidden) out.push(line(span(`     … ${plural(hidden, 'more file')}`, 'dim')));
       return out;
@@ -273,7 +278,7 @@ export const COMMANDS = Object.freeze([
   { name: 'no', alias: ['n'], args: '[why]', about: 'refuse it, with a reason if you like' },
   { name: 'delegate', args: '<agent|any> <task…>', about: 'hand a task to another agent' },
   { name: 'mail', about: 'deliver mail that is being held for this session' },
-  { name: 'diff', args: '[turn]', about: 'what a turn changed (the last one, by default)' },
+  { name: 'diff', args: '[turn | from..to] [file]', about: 'what a turn changed, as a diff (the last turn that changed anything, by default)' },
   { name: 'full', about: 'show whole tool output and reasoning, or go back to the short form' },
   { name: 'usage', about: 'what is left with each provider' },
   { name: 'who', about: 'everyone in the office' },
@@ -599,20 +604,28 @@ export function createConsole(io) {
       } catch (err) { fail(err); }
     },
     async mail() { const c = control('deliverMail'); if (!c) { say('No mail is being held for this session.'); return; } try { const r = await call(c); say(r?.delivered ? `delivered ${plural(r.delivered, 'note')}` : 'nothing was waiting'); } catch (err) { fail(err); } },
-    async diff({ words }) {
+    async diff({ words, rest }) {
       const s = session(), c = s?.controls?.diff, list = s?.controls?.changes;
       if (!s) { say('No session.'); return; }
       if (!c) { say('This office keeps no record of what a turn changed for this session.'); return; }
       try {
-        let n = Number(words[0]);
-        if (!Number.isInteger(n) || n < 1) {
+        // "3", "2..5" (from the start of turn 2 to the end of turn 5), then optionally one file
+        const range = /^(\d+)(?:\.\.(\d+))?$/.exec(words[0] || '');
+        const file = (range ? rest.replace(/^\S+\s*/, '') : rest).trim();
+        let from = range ? Number(range[1]) : 0, to = range ? Number(range[2] || range[1]) : 0;
+        if (!range || c.available === false) {
           const all = list ? await io.api(list.url) : null;
-          n = (all?.turns || []).filter((t) => (t.files || []).length).map((t) => t.turn).pop();
-          if (!n) { say('No turn of this session has changed a file.'); return; }
+          // why there is nothing to read is the office's to say: the folder is not in a repository, it is too big, it is switched off
+          if (all && all.recorded === false) { say(`No record of what this session's turns change: ${all.reason || 'the office has no snapshots of it'}.`); return; }
+          if (!range) {
+            from = to = (all?.turns || []).filter((t) => t.count || (t.files || []).length).map((t) => t.turn).pop() || 0;
+            if (!from) { say('No turn of this session has changed a file.'); return; }
+          }
         }
-        const res = await io.api(`${c.url}?turn=${n}`);
-        if (!res?.diff) { say(`Turn ${n} changed nothing.`); return; }
-        say([[`turn ${n}`, 'bold']], ...renderDiff(res.diff), ...(res.truncated ? ['… the rest of the diff is not shown.'] : []));
+        const res = await io.api(`${c.url}?${from === to ? `turn=${from}` : `from=${from}&to=${to}`}${file ? `&path=${encodeURIComponent(file)}` : ''}`);
+        const what = `${from === to ? `turn ${from}` : `turns ${from} to ${to}`}${file ? ` · ${file}` : ''}`;
+        if (!res?.diff) { say(`${what[0].toUpperCase()}${what.slice(1)}: nothing changed.`); return; }
+        say([[what, 'bold']], ...renderDiff(res.diff), ...(res.truncated ? ['… the rest of the diff is not shown.'] : []));
       } catch (err) { fail(err); }
     },
     async full() { state.full = !state.full; redraw(true); say(state.full ? 'Showing whole tool output and reasoning.' : 'Showing the short form.'); },

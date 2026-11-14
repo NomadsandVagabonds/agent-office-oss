@@ -89,6 +89,9 @@ test('console: every kind of transcript entry has its lines, and an unknown one 
   assert.equal(shown({ kind: 'handoff', direction: 'in', fromName: 'Bo', items: 3, omitted: 2 }), '  ⇠ context handed over from Bo: 3 items, 2 older left out');
   assert.equal(shown({ kind: 'changes', files: [{ path: 'a.js', status: 'modified', additions: 3, deletions: 1 }, { path: 'b.js', status: 'added', additions: 9, deletions: 0 }] }),
     '  ± 2 files changed  +12 −1\n     M a.js  +3 −1\n     A b.js  +9 −0');
+  // a turn that changed more files than it lists gives its own totals; a rename shows both names, a binary file no line counts
+  assert.equal(shown({ kind: 'changes', turn: 4, more: 30, additions: 410, deletions: 7, files: [{ path: 'lib/new.js', from: 'lib/old.js', status: 'renamed', additions: 1, deletions: 1 }, { path: 'logo.png', status: 'modified', additions: 0, deletions: 0, binary: true }] }),
+    '  ± 32 files changed  +410 −7\n     R lib/old.js → lib/new.js  +1 −1\n     M logo.png  binary\n     … 30 more files');
   assert.deepEqual(renderEntry({ kind: 'usage', used: 1, size: 2 }), []);
   assert.deepEqual(renderEntry({ kind: 'something-from-a-newer-office', text: 'hello' }), []);
   assert.deepEqual(renderEntry(null), []);
@@ -302,6 +305,42 @@ test('console: a model, an effort and the agent\'s own mode are picked from what
   h.calls.length = 0;
   await h.con.submit('/new fake --context --model fake-small --effort low');
   assert.deepEqual(h.calls[0], ['POST', '/api/harness/sessions', { adapter: 'fake', cwd: '/work/app', model: 'fake-small', effort: 'low', context: { session: 'd_1' } }]);
+});
+
+test('console: /diff asks the office what a turn changed, and says why when there is nothing to read', async () => {
+  const at = '/api/harness/sessions/d_1';
+  const answers = { 'GET /api/harness/sessions/d_1/transcript': { entries: [], seq: 0 },
+    [`GET ${at}/changes`]: { recorded: true, turns: [{ turn: 1, count: 2, files: [{ path: 'a.js' }] }, { turn: 2, count: 0, files: [] }, { turn: 3, count: 1, files: [{ path: 'b.js' }] }, { turn: 4, count: 0, files: [], skipped: 'x' }] },
+    [`GET ${at}/diff`]: { diff: 'diff --git a/b.js b/b.js\n@@ -1 +1 @@\n-old\n+new\n', truncated: true } };
+  const h = harnessed(answers);
+  const withRecord = (available) => h.session({ controls: { ...h.session().controls, changes: { method: 'GET', url: `${at}/changes`, available }, diff: { method: 'GET', url: `${at}/diff`, available } } });
+  h.con.harness({ sessions: [withRecord(true)] });
+  await h.con.open('ada');
+  h.calls.length = 0;
+  await h.con.submit('/diff');                               // the last turn that changed anything
+  assert.equal(h.said.pop(), 'turn 3\ndiff --git a/b.js b/b.js\n@@ -1 +1 @@\n-old\n+new\n… the rest of the diff is not shown.');
+  await h.con.submit('/diff 1');
+  await h.con.submit('/diff 1..3 src/my file.js');           // a run of turns, one file — a name with a space in it is still one name
+  assert.equal(h.said.pop().split('\n')[0], 'turns 1 to 3 · src/my file.js');
+  assert.deepEqual(h.calls.map((c) => c[1]), [`${at}/changes`, `${at}/diff?turn=3`, `${at}/diff?turn=1`, `${at}/diff?from=1&to=3&path=src%2Fmy%20file.js`]);
+
+  // nothing recorded: the office's own reason is passed on, and no diff is asked for
+  answers[`GET ${at}/changes`] = { recorded: false, reason: '/work/app is not inside a git repository', turns: [] };
+  h.con.harness({ sessions: [withRecord(false)] });
+  h.calls.length = 0;
+  await h.con.submit('/diff 2');
+  assert.equal(h.said.pop(), 'No record of what this session\'s turns change: /work/app is not inside a git repository.');
+  assert.deepEqual(h.calls.map((c) => c[1]), [`${at}/changes`]);
+  // an office that has no such thing at all
+  h.con.harness({ sessions: [h.session()] });
+  await h.con.submit('/diff');
+  assert.equal(h.said.pop(), 'This office keeps no record of what a turn changed for this session.');
+  // a refusal (a turn with no snapshot) comes back in the office's words
+  answers[`GET ${at}/changes`] = { recorded: true, turns: [{ turn: 4, count: 1, files: [{ path: 'a' }] }] };
+  answers[`GET ${at}/diff`] = new Error('turn 4 has no snapshot of its start: the office stopped before this turn ended');
+  h.con.harness({ sessions: [withRecord(true)] });
+  await h.con.submit('/diff 4');
+  assert.equal(h.said.pop(), '✗ turn 4 has no snapshot of its start: the office stopped before this turn ended');
 });
 
 test('console: the pretend terminal behaves like one', () => {

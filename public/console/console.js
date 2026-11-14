@@ -65,6 +65,11 @@ function blockNode(b) {
     const choices = choicesOf(b.prompt);
     if (choices.length) el.append(h('div.keys', choices.map((c) => h('button', { type: 'button', onclick: () => con.key(c.key) }, h('kbd', c.key), c.label))));
   }
+  // what a turn changed opens as its diff (the same as typing /diff n), unless the click was the end of selecting text
+  if (kind === 'changes' && Number.isInteger(b.entry.turn)) {
+    el.title = `/diff ${b.entry.turn}`;
+    el.addEventListener('click', () => { if (!String(getSelection())) con.submit(`/diff ${b.entry.turn}`); });
+  }
   return el;
 }
 
