@@ -219,6 +219,11 @@ const list = (v) => (v === undefined || v === null ? [] : [].concat(v));
 export const LESSONS = Object.freeze({
   lean: 'a stretch of wall that somebody has marked may give, if it is leaned on for as long as it takes (known from the start: it is how you got in)',
   unwatched: 'some things only move while nobody is looking at them',
+  overhead: 'what hangs from the ceiling comes down on whoever walks under it',
+  offering: 'somebody who is coming for you may take what you are carrying instead',
+  belonging: 'carry what they are carrying and you are one of them',
+  beam: 'some things stop where a light is pointed at them',
+  pace: 'some things only mind how fast you are going',
 });
 /** Is this archetype a set piece — a room with a view (`halo`), or one that says so (`big`)? A floor has one at most. */
 export const isBig = (arch) => !!(arch && (arch.big || arch.halo));
@@ -1054,10 +1059,12 @@ function dress(R, level, o, opt, keeper = false) {
   if (bleed.next && THEMES[bleed.next.theme]) {
     const into = lookOf(bleed.next, RB.fork('next'));
     shaft = into;
+    // (the room at the door: the nearest plain one, which is a step further off where an oddity stands at the way down)
+    const door = Math.max(1, Math.min(...rooms.filter((r) => r.kind === 'plain' && r.toExit <= 2).map((r) => r.toExit)));
     for (const room of rooms) {
       if (room.kind !== 'plain' || !(room.toExit <= 2)) continue;
-      room.look = { ...room.look, carpet: into.carpet, floor: into.floor, trim: room.toExit <= 1 ? into.trim : room.look.trim,
-        ...(room.toExit <= 1 ? { family: into.family, pattern: into.pattern, wall: into.wall, ink: into.ink, pale: into.pale } : {}) };
+      room.look = { ...room.look, carpet: into.carpet, floor: into.floor, trim: room.toExit <= door ? into.trim : room.look.trim,
+        ...(room.toExit <= door ? { family: into.family, pattern: into.pattern, wall: into.wall, ink: into.ink, pale: into.pale } : {}) };
       room.bleed = 'next';
     }
   }

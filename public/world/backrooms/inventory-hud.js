@@ -157,6 +157,10 @@ function itemIcon(type) {
     poly('22,17 24,17 24,19 26,19 26,21 28,21 28,24 22,24', '#d8d1b9');
     poly('22,17 24,17 24,19 26,19 26,21 28,21 22,23', '#f6efd9');
     rect(9,7,1,12,'#e4ddc5');
+  } else if (type === 'pink-slip') {
+    rect(6,5,21,24,'#8c5266'); rect(5,4,21,24,'#e7a3b4'); rect(5,4,2,24,'#f3bccb');
+    rect(8,7,15,3,'#4a2f3a'); for (const y of [13, 16, 19]) rect(8,y,13,1,'#b8697f');
+    rect(16,22,8,4,'#b8697f'); rect(17,23,6,2,'#e7a3b4');
   } else if (type === 'scissors') {
     poly('6,2 9,3 18,14 16,18 13,14', '#535e58');
     poly('6,2 8,3 17,14 15,15 12,11', '#c9cfbb');
@@ -335,7 +339,7 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCombine, o
     const label = selected?.type === 'torch' ? snapshot.activeTorch === selected.id ? 'Switch off' : 'Switch on'
       : selected?.type === 'battery' ? 'Fit battery' : selected?.type === 'chalk' ? 'Mark floor' : selected?.type === 'snack' ? 'Eat' : 'Use';
     text(useLabel, combineFrom !== null ? 'Cancel' : label);
-    use.disabled = blocked() || (combineFrom === null && (!selected || ['paper', 'scissors', 'balloon'].includes(selected.type) || (selected.type === 'snack' && !canEat()) || (selected.type === 'torch' && selected.charge <= 0)));
+    use.disabled = blocked() || (combineFrom === null && (!selected || ['paper', 'pink-slip', 'scissors', 'balloon'].includes(selected.type) || (selected.type === 'snack' && !canEat()) || (selected.type === 'torch' && selected.charge <= 0)));
     drop.disabled = blocked() || !selected || combineFrom !== null; drop.hidden = combineFrom !== null;
     recharge.hidden = combineFrom === null; recharge.disabled = !canRecharge();
     text(cameraTime, snapshot.camera ? `${remainingTime(snapshot.camera.remaining)} left` : 'Unavailable');

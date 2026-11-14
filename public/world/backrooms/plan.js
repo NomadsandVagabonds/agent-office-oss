@@ -61,7 +61,8 @@ function dealHand(R, themes, story) {
   const total = () => hands.reduce((n, h) => n + h.length, 0);
   const taught = (n, i) => KNOWN_AT_START.includes(n) || [...at].some(([id, p]) => p < i && lessons(ARCHETYPES[id]).teaches.includes(n));
   const fits = (a, i, strict = true) => (!strict || hands[i].length < cap[i]) && ((a.themes && a.themes[themes[i]]) ?? 1) > 0
-    && !(isBig(a) && hands[i].some((id) => isBig(ARCHETYPES[id]))) && lessons(a).needs.every((n) => taught(n, i));
+    && !(isBig(a) && hands[i].some((id) => isBig(ARCHETYPES[id]))) && lessons(a).needs.every((n) => taught(n, i))
+    && !(a.resident && hands[i].some((id) => ARCHETYPES[id].resident));          // (one room with somebody living in it to a part, as with set pieces)
   const put = (a, i) => { hands[i].push(a.id); at.set(a.id, i); };
   if (story && ARCHETYPES[story.arch]) put(ARCHETYPES[story.arch], story.floor);
   // the hallway, and the room that has to come before it

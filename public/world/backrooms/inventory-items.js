@@ -100,4 +100,14 @@ function balloon() {
   v.paint(-7, 46, 5, -6, 49, 8, M('#dfa086', 0));
   return v;
 }
-export const INVENTORY_MODELS = Object.freeze({ torch, battery, chalk, paper, scissors, snack, balloon });
+/** FORM HR-404: one pink sheet, a heading bar, three ruled lines, a box for the signature nobody gave. */
+function pinkSlip() {
+  const v = new Vox(), pink = M('#e7a3b4', 1), dark = M('#b8697f', 1), ink = M('#4a2f3a', 0);
+  v.box(-6, 0, -8, 6, 1, 8, pink); v.box(-6, 0, -8, -5, 1, 8, dark);
+  v.box(-4, 1, -7, 5, 2, -5, ink);
+  for (const z of [-3, -1, 1]) v.box(-4, 1, z, 4, 2, z + 1, dark);
+  v.box(1, 1, 4, 5, 2, 7, dark); v.carve(2, 1, 5, 4, 2, 6);
+  v.box(5, 1, 6, 6, 2, 8, pink);                                        // a corner that will not lie flat
+  return v;
+}
+export const INVENTORY_MODELS = Object.freeze({ torch, battery, chalk, paper, scissors, snack, balloon, 'pink-slip': pinkSlip });

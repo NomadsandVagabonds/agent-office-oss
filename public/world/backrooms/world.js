@@ -546,6 +546,18 @@ function roomContext(world, rt) {
       rt.uses.push(u);
       return u;
     },
+    /**
+     * Leave something for the visitor to pick up (an inventory item type: paper, balloon, torch…) at a spot of the room, `opt.y` metres up.
+     * It is put down when the part's pockets are hung (inventory.js), so a visit without pockets leaves nothing: the room must cope.
+     */
+    leave(type, x, z, opt = {}) { (rt.left ||= []).push({ type, x, z, y: opt.y || 0, quantity: opt.quantity, charge: opt.charge, taken: opt.taken }); },
+    /**
+     * The room's resident has got the visitor: n hearts where there is health, and the end of the tape only where there is none or that
+     * was the last of them (as a creature's c.hurt: pursuer.js). → { landed, dead, ended }. After one that was survived: let go.
+     */
+    hurt(n = 1) { const hit = env.health?.damage(n); if (hit) return { landed: !!hit.ok, dead: !!hit.dead, ended: !!hit.dead }; env.end('caught'); return { landed: true, dead: true, ended: true }; },
+    /** For the count kept of a visit: the resident (its own id) has really been seen, once · it had the visitor and they got away, each time. */
+    met: (id) => env.run?.met?.(id), survived: (id) => env.run?.survived?.(id),
     /** A patch of floor that notices you: { x0, z0, x1, z1, enter?, leave?, stay? }. */
     zone(spec) { rt.zones.push({ in: false, ...spec }); return spec; },
     /** Runs every frame while you are in this room or next door: fn(dt, t, me) with me in room coordinates. */
