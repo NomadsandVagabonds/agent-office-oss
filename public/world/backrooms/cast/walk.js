@@ -159,6 +159,12 @@ export function createWalk(env) {
     const c = cost(a);
     return here.def.doors.filter((d) => c(d, here.id, d.to) < Infinity).map((d) => ({ room: d.to, shut: !!doorOf(d.link)?.news }));
   }
+  /** A spot `k` metres into room `to` through the doorway it shares with room `from` — or null if they share none. */
+  function spotBeyond(from, to, k = 1) {
+    const a = W().rooms[from], b = W().rooms[to]; if (!a.def.doors.some((d) => d.to === to)) return null;
+    const t = through(a, b), dx = t.B.x - t.A.x, dz = t.B.z - t.A.z, len = Math.hypot(dx, dz) || 1;
+    return { x: t.B.x + (dx / len) * (k - 0.45), z: t.B.z + (dz / len) * (k - 0.45) };
+  }
   /** Somewhere to stand in a room: as near its middle as this walker fits. */
   function spotIn(a, id) {
     const rt = W().rooms[id], g = grid(a, rt), k = nearCell(rt, g, rt.def.cx, rt.def.cz);
@@ -171,5 +177,5 @@ export function createWalk(env) {
     const c = roomCosts(level, here.id, cost(a), there.id).cost.get(there.id);
     return c === undefined ? Infinity : c;
   }
-  return { stand, shy, cost, stride, clear, go, exits, spotIn, steps, forget(a) { a.way = null; a.thru = null; } };
+  return { stand, shy, cost, stride, clear, go, exits, spotIn, spotBeyond, steps, forget(a) { a.way = null; a.thru = null; } };
 }

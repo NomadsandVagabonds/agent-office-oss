@@ -8,6 +8,7 @@ import { CAST, ALL_CAST, SUPPORTING, DISPOSITIONS, ITEMS, ROOM_LESSONS, CAST_LES
 import { THEME_IDS } from '../public/world/backrooms/themes.js';
 import { HUNT, knows, lost, shown, spent, noticeTime, wayOn, handle, atHandle, getsDown, lying, willPeek } from '../public/world/backrooms/cast/hunt.js';
 import { roomRoute, roomCosts, gridPath, straighten } from '../public/world/backrooms/cast/paths.js';
+import { SHADOW, away, watched, drained } from '../public/world/backrooms/cast/shadow.rule.js';
 import { DOORS, doorPlan, doorRooms, inTheWay } from '../public/world/backrooms/doors.js';
 
 const office = { name: 'Robin', projects: ['Atlas', 'Harbor'], agents: ['Ivory Marten', 'Amber Vireo', 'Ember Numbat'], tasks: ['Ship the thing', 'Fix the other thing'] };
@@ -31,7 +32,7 @@ test('the cast: the mascot is in every visit; the same seed is the same company'
     assert.equal(floors.filter((l) => l.pursuer).length, 1, 'on one floor of it');
   }
   // with others to choose from, they rotate and he stays
-  const more = [...CAST, { id: 'a', weight: 1 }, { id: 'b', weight: 1 }, { id: 'c', weight: 1 }, { id: 'never', weight: 0 }];
+  const more = [...CAST.filter((m) => m.always), { id: 'a', weight: 1 }, { id: 'b', weight: 1 }, { id: 'c', weight: 1 }, { id: 'never', weight: 0 }];
   const turns = new Map();
   for (let seed = 1; seed <= 300; seed++) { const who = whoIsDown(seed, more); assert.equal(who[0], 'pirate'); assert.equal(who.length, 1 + SUPPORTING); for (const id of who.slice(1)) turns.set(id, (turns.get(id) || 0) + 1); }
   assert.deepEqual([...turns.keys()].sort(), ['a', 'b', 'c']);
@@ -273,13 +274,14 @@ test('a creature\'s file: named for it, listed, exports create(c), keeps its rul
       assert.ok(!/^\.\.\/(index|world|player|input|hud|vhs|sound|loot|pursuer)\.js$/.test(spec), `cast/${m.id}.js imports ${spec}: what it needs of the level comes through c`);
     }
     // its rule is pure and somewhere a test can run it: its own exports, or a module of rules beside it
-    const pure = [...src.matchAll(/from\s+'(\.\/[a-z-]+\.js|\.\.\/reach\.js)'/g)].map((k) => k[1]);
-    assert.ok(/export\s+(function|const)\s+(?!create\b)\w+/.test(src) || pure.length > 0, `cast/${m.id}.js: no rule a test could run`);
+    const pure = [...src.matchAll(/from\s+'(\.\/[a-z.-]+\.js|\.\.\/reach\.js)'/g)].map((k) => k[1]).filter((k) => k !== './index.js');
+    assert.ok(pure.length > 0, `cast/${m.id}.js: no rule a test could run`);
+    for (const k of pure.filter((x) => x.startsWith('./'))) assert.ok(!/from\s+'three'|document\.|window\./.test(fs.readFileSync(new URL('cast/' + k.slice(2), DIR), 'utf8')), `cast/${k.slice(2)} is not pure`);
   }
 });
 
 test('who is on which floor, and in which room: one floor each, the same for the same seed, nothing that needs a lesson where you land', () => {
-  const more = [...CAST,
+  const more = [...CAST.filter((m) => m.always),
     { id: 'roamer', disposition: 'hunts', home: 'roams', weight: 1, needs: ['sight'], items: [] },
     { id: 'homebody', disposition: 'helps', home: 'room', weight: 1, needs: [], items: [], room: { w: 4, d: 4 }, themes: { yellow: 0 } },
     { id: 'big', disposition: 'keeps to itself', home: 'room', weight: 1, needs: [], items: [], room: { w: 11, d: 11 } }];
@@ -318,4 +320,33 @@ test('with health to take, being grabbed costs two of four and it keeps away a w
   assert.equal(s.mode, 'wander', 'in plain sight, a pace away, and it does not care');
   s = run(s, 1.5, { los: true, d: 2, exits: [{ room: 3 }] });
   assert.equal(s.mode, 'chase', 'and then it does');
+});
+
+test('the shadow: out of the corner of your eye for as long as you like; in the middle of the picture for a second and it goes off, once, and is gone a good while', () => {
+  const lurk = () => { let s = away(() => 0.5, true); for (let t = 0; t < 30 && s.mode !== 'lurk'; t += dt) s = watched(s, dt, { placed: true, looked: false, d: 6 }, () => 0.5); assert.equal(s.mode, 'lurk'); return s; };
+  // it is not there at first, and it does not arrive until there is somewhere out of sight for it to stand
+  let s = away(() => 0.5, true), asked = 0;
+  for (let t = 0; t < 60; t += dt) { s = watched(s, dt, { placed: false, looked: false, d: Infinity }); if (s.shift) asked++; assert.equal(s.mode, 'away'); }
+  assert.ok(asked > 100, 'it keeps asking for a place');
+  // never looked at: nothing, for ever — though it moves about, while it is off the picture
+  s = lurk(); let moves = 0;
+  for (let t = 0; t < 300; t += dt) { s = watched(s, dt, { placed: true, looked: false, d: 4 }, () => 0.5); assert.ok(!s.burst && s.heat === 0); if (s.shift) moves++; }
+  assert.equal(s.mode, 'lurk'); assert.ok(moves > 5);
+  // a glance costs nothing, and is forgotten
+  s = lurk();
+  for (let t = 0; t < SHADOW.fuse * 0.6; t += dt) { s = watched(s, dt, { placed: true, looked: true, d: 6 }); assert.ok(!s.burst); }
+  assert.ok(s.heat > 0.4 && s.heat < 1, 'it whitens: that is the warning');
+  for (let t = 0; t < 3; t += dt) s = watched(s, dt, { placed: true, looked: false, d: 6 });
+  assert.equal(s.heat, 0);
+  // looked at: it goes off after the fuse, once
+  s = lurk(); let bursts = 0, when = null;
+  for (let t = dt; t < 20; t += dt) { s = watched(s, dt, { placed: s.mode === 'lurk', looked: true, d: 6 }, () => 0.5); if (s.burst) { bursts++; when ??= t; } }
+  assert.equal(bursts, 1); assert.ok(Math.abs(when - SHADOW.fuse) < 3 * dt, `after ${when} s`);
+  assert.ok(SHADOW.fuse >= 1 && SHADOW.fuse <= 2, 'a second or two: long enough to look away from');
+  assert.ok(s.mode === 'away' && s.t > SHADOW.gone[0] - 20);
+  // too far off to count; and walking into it is the same as staring
+  s = lurk(); for (let t = 0; t < 10; t += dt) { s = watched(s, dt, { placed: true, looked: true, d: SHADOW.far + 1 }); assert.ok(!s.burst); }
+  s = watched(lurk(), dt, { placed: true, looked: false, d: SHADOW.touch - 0.1 }); assert.ok(s.burst);
+  // what it takes
+  assert.equal(drained(300), 150); assert.equal(SHADOW.drain, 0.5);
 });

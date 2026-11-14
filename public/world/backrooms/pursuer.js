@@ -56,6 +56,8 @@ export function createStalkers(env) {
       if (member.disposition === 'hunts') { env.end('caught'); return { landed: true, dead: true, ended: true }; }
       return { landed: false, dead: false, ended: false };
     },
+    /** Take a share (0…1) of whatever charge the camcorder's battery has left, where it has one. → { ok } */
+    drain: (share) => env.camera?.drain?.(share) ?? { ok: false },
     /** What the visitor is holding (inventory, when there is one): { type, … } or null · take n of it: → whether that was done. */
     held: () => env.inventory?.held?.() ?? null,
     take: (type, n = 1) => !!env.inventory?.consumeHeld?.(type, n)?.ok,

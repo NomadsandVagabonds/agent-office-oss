@@ -22,6 +22,7 @@ export const ROOM_LESSONS = Object.freeze(['lean', 'unwatched']);
 export const CAST_LESSONS = Object.freeze({
   sight: 'What follows you only knows where you are while it can see you.',
   doors: 'Some doors can be shut, and what is behind you has to stop and open them.',
+  averted: 'Some things are better not looked at.',
 });
 
 /**
@@ -45,6 +46,9 @@ export const CAST_LESSONS = Object.freeze({
 export const ALL_CAST = Object.freeze([
   Object.freeze({ id: 'pirate', name: 'The mascot', rule: 'It only moves while nobody is looking at it — and it only knows where you are while it can see you.',
     disposition: 'hunts', home: 'roams', always: true, weight: 1, teaches: 'sight', needs: [], items: [], caught: { hurt: 2 } }),
+  Object.freeze({ id: 'shadow', name: 'The shadow', rule: 'Look straight at it and it goes off like a flashbulb, and half your battery goes with it.',
+    disposition: 'hunts', home: 'roams', weight: 1, teaches: 'averted', needs: [], items: ['battery', 'torch'],
+    caught: { setback: 'the room goes dark for a while, and half the camcorder\'s charge is gone' } }),
 ]);
 export const CAST = Object.freeze(ALL_CAST.filter((m) => m.on !== false));
 /** How many of the others turn up in one visit, at most. */

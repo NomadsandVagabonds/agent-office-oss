@@ -298,15 +298,20 @@ on for showing) can find the file.
 
 ### 2. The file
 
-`cast/<id>.js` exports one function, and keeps its rule pure: either exported
-from the same file, or in a module of rules beside it, with tests against a
-made-up clock (`reach.js` and `cast/hunt.js` are how).
+`cast/<id>.js` exports one function. Its rule is pure and lives in a module
+beside it that imports nothing a test cannot (`cast/<id>.rule.js`; no
+three.js, no DOM), with tests against a made-up clock. `cast/shadow.js` and
+`cast/shadow.rule.js` are the short example; `cast/pirate.js` with
+`cast/hunt.js` and `reach.js` the long one.
 
 ```js
+// cast/<id>.rule.js
 export const RULE = Object.freeze({ near: 2.5 });
 /** One moment of it. Pure: state in, state out. */
 export function minds(s, dt, sense, rnd = Math.random) { … }
 
+// cast/<id>.js
+import { RULE, minds } from './<id>.rule.js';
 export function create(c) {
   let me = null;
   return {
@@ -338,7 +343,7 @@ through `c`. It never calls `env.end`: being caught is `c.hurt`.
 | seeing | `c.hidden(x, z, r)` that spot is off their screen or behind a wall · `c.los(ax, az, bx, bz)` a line of sight between two spots, whichever way anybody is facing · `c.drawn(thing)` its room is being drawn at all |
 | getting about | `c.walk.go(walker, { x, z }, metres, keep)` → `{ went, door, cannot, there }` · `c.walk.exits(walker)` · `c.walk.spotIn(walker, room)` · `c.walk.steps(walker, { x, z })` · `c.walk.stand(walker, x, z)` |
 | being there | `c.add(object)` into the scene, in world coordinates · `c.body({ x, z, r })` a body nobody walks through · `c.light(x, z)` the light falling there · `c.play(name, x, z, reach)` |
-| catching them | `c.hurt(n)` → `{ landed, dead, ended }` |
+| catching them | `c.hurt(n)` → `{ landed, dead, ended }` · `c.drain(share)` takes that share of the camcorder's charge, where it has a battery |
 | the rest | `c.env`: `env.doors`, `env.interfere(0…1)`, `env.hud.glitch(seconds)`, `env.kit` for models and textures |
 
 A **walker** is any object `{ x, z, r, tall, opens }`: where it is, its
