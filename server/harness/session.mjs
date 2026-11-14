@@ -557,6 +557,8 @@ export class DrivenSession extends EventEmitter {
     r.state = state;
     r.endedAt = Date.now();
     r.reason = reason;
+    // The office gave it a name when it joined; a finished session is still listed, and should still be called that.
+    r.name = this.ctx.agents.get(this.id)?.name || r.name || '';
     for (const [requestId, pending] of this.requests) {
       this.transcript.write({ id: `perm:${requestId}`, state: 'withdrawn', reason: 'the session ended' });
       if (pending.promptId) this.ctx.prompts.resolveRequest(pending.promptId, 'The session ended before this was answered.');

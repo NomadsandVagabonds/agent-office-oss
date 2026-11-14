@@ -18,7 +18,7 @@ const SHEETS = {
   comms: { title: 'Comms', icon: 'chat', key: 'c', load: () => import('./comms.js') },
   board: { title: 'Board', icon: 'board', key: 'b', load: () => import('./board.js') },
   binder: { title: 'Binder', icon: 'book', key: 'k', load: () => import('./binder.js') },
-  work: { title: 'Terminals', icon: 'term', key: 't', load: () => import('./terminal.js') },
+  work: { title: 'Sessions', icon: 'term', key: 't', load: () => import('./terminal.js') },
   passport: { title: 'Passport', icon: 'star', key: 'p', load: () => import('./passport.js') },
   // no button of its own: the fuel chip in the top bar and the tanks beside the big board open it
   usage: { title: 'What is left', icon: 'eye', key: 'u', hidden: true, load: () => import('./usage.js') },

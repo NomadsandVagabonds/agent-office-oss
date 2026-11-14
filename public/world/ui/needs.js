@@ -5,15 +5,13 @@
 // reach the rest. Nothing piles up on the screen, nothing steals the slip you
 // are reading, and the tray can be put away — a new arrival only nudges it.
 //
-// What you can do with a slip is exactly what the agent's runtime can honour:
-// stamps (allow / deny) appear only when a live request is waiting on them;
-// otherwise there is a line to write back on.
+// What you can do with a slip is exactly what the agent's runtime can honour
+// (answers.js): stamps appear only when a live request is waiting on them, a
+// question brings its own choices, and otherwise there is a line to write on.
 import { h, ago, replace } from './dom.js';
 import { mugshot } from './portrait.js';
+import { answersOf, describe, answerControls } from './answers.js';
 
-const ASK = { permission: 'wants permission', question: 'has a question' };
-const STAMP = { once: ['Allow', 'ok', 'Allow this once', 'ALLOWED'], always: ['Always', 'ok', 'Allow this for the rest of the session', 'ALLOWED'],
-  reject: ['Deny', 'no', 'Refuse it', 'DENIED'] };
 const HELD = ['doing', 'blocked', 'review'];
 // what blocks a running turn comes first, then other permissions, then questions; oldest first within each
 const rank = (p) => (p.request?.pending ? 0 : p.kind === 'permission' ? 1 : 2);
@@ -55,7 +53,8 @@ export function createNeeds(office, ui) {
     slip.el.append(h(`div.mark.${cls}`, mark));
     try {
       const res = await net.api(`/api/prompts/${encodeURIComponent(p.id)}/reply`, { method: 'POST', body });
-      const how = body.action ? null : !body.text ? null : res.turnDelivered ? `${p.agentName} has it.` : res.terminalDelivered ? `Typed into ${p.agentName}'s terminal.`
+      const said = body.text || body[p.respond?.textField || 'text'];
+      const how = !said ? null : res.turnDelivered ? `${p.agentName} has it.` : res.terminalDelivered ? `Typed into ${p.agentName}'s terminal.`
         : res.boardPosted ? `Left for ${p.agentName}: they read it on their next turn.` : null;
       if (how) ui.toast(how);
       slip.el.classList.add('gone');                                  // the bus takes it off the list; this is just the paper leaving
@@ -82,31 +81,27 @@ export function createNeeds(office, ui) {
     const pager = list.length > 1 ? h('div.pager',
       h('button', { type: 'button', title: 'The one before', onclick: () => step(-1) }, '‹'), `${index + 1}/${list.length}`,
       h('button', { type: 'button', title: 'The next one (N)', onclick: () => step(1) }, '›')) : null;
-    const req = p.request?.pending ? p.request : null;
-    const detail = req ? [req.command, ...(req.paths || []), req.detail].filter(Boolean).join('\n') : '';
+    const { verb, words, detail, questions } = describe(p);
     const cards = held(p);
-    const stamps = (p.actions || []).filter((a) => STAMP[a]).map((a) => {
-      const [label, cls, title, mark] = STAMP[a];
-      return h(`button.inkstamp.${cls}`, { type: 'button', title, onclick: () => answer({ action: a }, mark, cls) }, h('span', label));
-    });
-    const canWrite = (p.actions || []).includes('reply');
-    const input = canWrite ? h('input', { type: 'text', placeholder: stamps.length ? 'or write back…' : 'write back…', 'aria-label': `Reply to ${p.agentName}` }) : null;
-    const send = () => { const text = input.value.trim(); if (text) answer({ text, close: true }, 'SENT', 'sent'); };
-    if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } e.stopPropagation(); });
+    const controls = answerControls(p, answer);
+    const { input, wave } = controls;
+    // one question is simply the message; several each sit above their own line (answers.js draws those)
+    const asked = questions.length === 1 ? h('p.msg', questions[0].header ? h('b', questions[0].header + ' ') : null, questions[0].text) : null;
+    const session = p.request?.sessionId || null;
     const receipt = h('div.receipt');
     const el = h(`article.slip.${p.kind === 'question' ? 'question' : 'permission'}${list.length > 1 ? '.more' : ''}${list.length > 2 ? '.many' : ''}`,
       h('header', photo, h('div.who', { onclick: show, title: 'Show me' }, h('b', p.agentName || 'Someone'), age), pager),
-      h('div.ask', ASK[p.kind] || 'needs you'),
-      h('p.msg', (req?.title && req.title !== p.message ? req.title + '\n' : '') + (p.message || '')),
+      h('div.ask', verb),
+      words ? h('p.msg', words) : null, asked,
       detail ? h('pre.cmd', detail) : null,
       cards.length ? h('p.holds', 'Holding up ', h('b', cards.length === 1 ? '1 card' : `${cards.length} cards`), ': ', cards.slice(0, 2).map((t) => `“${t.title}”`).join(', '), cards.length > 2 ? ` and ${cards.length - 2} more` : '') : null,
-      stamps.length ? h('div.stamps', stamps) : null,
-      input ? h('div.write', input, h('button', { type: 'button', onclick: send }, 'Send')) : null,
+      controls.nodes,
       receipt,
       h('footer',
         p.terminalSessionId ? h('a', { onclick: () => ui.openSheet('work', { sessionId: p.terminalSessionId }) }, 'open its terminal') : null,
+        session ? h('a', { title: 'Read what it has done so far', onclick: () => ui.openSheet('work', { driven: session }) }, 'its record') : null,
         list.length > 1 ? h('a', { title: 'Put this one at the back', onclick: () => { later.add(p.id); sort(); top = list[0]?.id || null; draw(true); } }, 'later') : null,
-        h('a', { title: 'Take it off the pile without answering', onclick: () => answer({ text: '', close: true }, 'FILED', 'sent') }, 'dismiss'),
+        wave ? h('a', { title: wave.kind === 'decline' ? 'Tell the agent you will not answer this' : 'Take it off the pile without answering', onclick: () => answer(wave.body, 'FILED', 'sent') }, wave.kind === 'decline' ? 'decline' : 'dismiss') : null,
         h('span.grow'),
         h('a', { title: 'Put the tray away', onclick: () => { folded = true; draw(true); } }, 'put away')));
     return { el, input, receipt, age, prompt: p, busy: false };
@@ -115,7 +110,7 @@ export function createNeeds(office, ui) {
   function draw(force) {
     const p = current();
     top = p ? p.id : null;
-    const key = p ? `${folded || covered}|${p.id}|${p.updatedAt}|${list.length}|${list.indexOf(p)}|${(p.actions || []).join()}|${held(p).length}` : `${folded || covered}|`;
+    const key = p ? `${folded || covered}|${p.id}|${p.updatedAt}|${list.length}|${list.indexOf(p)}|${answersOf(p).map((a) => a.id).join()}|${held(p).length}` : `${folded || covered}|`;
     if (!force && key === shown) return;
     shown = key;
     if (!p) { slip = null; replace(tray); return; }
@@ -168,7 +163,7 @@ export function createNeeds(office, ui) {
       top = p.id; folded = false;
       if (covered) { ui.closeSheet(); covered = false; }
       draw(true);
-      (slip?.input || slip?.el.querySelector('.inkstamp'))?.focus({ preventScroll: true });
+      (slip?.el.querySelector('.inkstamp') || slip?.input)?.focus({ preventScroll: true });
       return true;
     },
     /** Whose slip comes after `afterId`'s (wraps round). */
