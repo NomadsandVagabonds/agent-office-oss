@@ -143,7 +143,7 @@ export async function buildWorld(kit, level, env, tick) {
   };
   /** Can one point see another? Walls and tall furniture block; chairs, doorways and windows do not. */
   world.los = (ax, az, bx, bz) => {
-    const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(len / 0.25));
+    const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(len / 0.2));                      // (a wall is 0.2 m: a longer step can miss one)
     for (let i = 1; i < n; i++) { const t = i / n; if (!world.free(ax + (bx - ax) * t, az + (bz - az) * t, 0.02, { tall: true })) return false; }
     return true;
   };

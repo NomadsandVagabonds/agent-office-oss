@@ -21,15 +21,19 @@ import * as THREE from 'three';
 import { Vox, M } from '../vox/vox.js';
 import { keycard } from '../props/loot.js';
 import { Batch, lamp, lin, drawText } from './kit.js';
-import { makeRng, RISE, RUN } from './gen.js';
+import { makeRng, toWorld, roomDistances } from './gen.js';
 import { P, clamp, turnTo } from './bits.js';
 import { REACH, calm, beside } from './reach.js';
+import { HUNT, knows, lost, shown, handle, atHandle, willPeek, getsDown, lying } from './cast/hunt.js';
+import { createWalk } from './cast/walk.js';
+import { hangDoors } from './doorleaf.js';
 
 const SC = 1.25, S = 0.025 * SC;                 // sculpted chunkier than the furniture: one voxel is 3.1 cm
 const TALL = 1.62, PLINTH = 0.16, BODY = 0.3;        // BODY: how much floor it takes up, as a radius (with yours, that is REACH.touch)
 const SKIN = '#7ea04a', SKIN_D = '#56733a', BEARD = '#1e1a1c', FELT = '#4d311d', BRAID = '#b39245', COAT = '#b9923a', SHIRT = '#2c8a79';
 const BELT = '#221a16', GOLD = '#e2ba48', SASH = '#7f7392', BOOT = '#2b1d15', CLOTH = '#393843';
 const CARD = 0.02;                               // metres to a voxel of the keycard in its hand: a size down from the office's, or it would be a placard
+const FACE = 1.4;                                // how much bigger its face is when it is pressed to a hole (it is never the same face twice)
 const HELD = 1.3;                                // …and the arm that holds it is never lower than this (radians out from its side): the card hangs clear of its coat
 
 /* ---- the figure ------------------------------------------------------------------------ */
@@ -157,7 +161,8 @@ function makePirate(kit, R, first = 0) {
   const mat = kit.surface({ vox: true }), m4 = new THREE.Matrix4().makeScale(S, S, S);
   const lights = [lamp(0.25, 2.6, 0.9, [1.3, 1.3, 1.3], { k: 9, wrap: 0.45, far: 30 })], amb = [0.6, 0.6, 0.6];
   const part = (key, make) => { const b = new Batch(true); b.addVox(kit.model('pirate:' + key, make).solid, m4); return new THREE.Mesh(kit.geometry(b, lights, amb), mat); };
-  const group = new THREE.Group(), head = new THREE.Group();
+  const group = new THREE.Group(), head = new THREE.Group(), flat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+  group.rotation.order = 'YXZ';
   group.add(part('body', bodyVox));
   const arms = [-1, 1].map((sx) => { const g = new THREE.Group(); g.position.set(sx * 9.5 * S, 28 * S, 0); g.add(part('arm', armVox)); group.add(g); return g; });
   head.position.set(0, 31 * S, 0); group.add(head);
@@ -172,7 +177,7 @@ function makePirate(kit, R, first = 0) {
   const shadow = new THREE.Mesh(kit.own(new THREE.PlaneGeometry(1.05, 1.05)), kit.own(new THREE.MeshBasicMaterial({ map: kit.tex.blob(), color: 0x000000, transparent: true, opacity: 0.42, depthWrite: false })));
   shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.012; shadow.renderOrder = 1; group.add(shadow);
   const p = {
-    group, head, arms, faces, mat, face: first % faces.length, pose: 0, slip: false, card: null,
+    group, head, arms, faces, mat, shadow, face: first % faces.length, pose: 0, slip: false, card: null,
     show() { faces.forEach((f, k) => { f.whole.visible = k === p.face && !p.slip; f.slipped.visible = k === p.face && p.slip; }); },
     hold(k, look = 0) {
       const q = POSES[k], out = [q.l, q.r]; p.pose = k;
@@ -191,7 +196,7 @@ function makePirate(kit, R, first = 0) {
       p.card = { side, hang, held: true };
       p.hold(p.pose, head.rotation.y);
     },
-    plumb() { if (p.card) p.card.hang.quaternion.copy(arms[p.card.side].quaternion).invert(); },
+    plumb() { if (!p.card) return; const q = p.card.hang.quaternion.copy(arms[p.card.side].quaternion).invert(); if (Math.abs(group.rotation.x) > 0.1) q.multiply(flat); },
     light(rgb) { mat.uniforms.uTint.value.set(rgb[0], rgb[1], rgb[2]); },
   };
   p.show(); p.hold(0);
@@ -200,99 +205,39 @@ function makePirate(kit, R, first = 0) {
 
 /* ---- getting about when nobody is looking ---------------------------------------------- */
 
+/** The openings of a floor that it could not stand up in: crawl-height doorways, and the low holes in the partitions of plain rooms. */
+function lowWays(world) {
+  const out = [];
+  for (const th of world.throats) {
+    const l = th.link; if (!(l.h < TALL)) continue;
+    const mid = (l.from + l.to) / 2, x = l.axis === 'x';
+    out.push({ x: x ? l.at : mid, z: x ? mid : l.at, nx: x ? 1 : 0, nz: x ? 0 : 1, w: l.to - l.from, th, last: 0 });
+  }
+  for (const rt of world.rooms) for (const lo of rt.def.lows || []) {
+    if (!(lo.h < TALL)) continue;
+    const thinX = lo.x1 - lo.x0 < lo.z1 - lo.z0, c = toWorld(rt.def, (lo.x0 + lo.x1) / 2, (lo.z0 + lo.z1) / 2), n = toWorld(rt.def, (lo.x0 + lo.x1) / 2 + (thinX ? 1 : 0), (lo.z0 + lo.z1) / 2 + (thinX ? 0 : 1));
+    out.push({ x: c.x, z: c.z, nx: n.x - c.x, nz: n.z - c.z, w: thinX ? lo.z1 - lo.z0 : lo.x1 - lo.x0, th: null, last: 0 });
+  }
+  return out;
+}
+
 export function createStalkers(env) {
   const level = env.level, R = makeRng(`${level.seed}/pursuer`);
   const W = () => env.world;
+  const walk = createWalk(env), stand = walk.stand;
   const hiddenAt = (x, z, r = 0.6) => !env.sees(x, z, { radius: r, margin: 0.2, far: 40 });
-  const stand = (a, x, z) => W().free(x, z, a.r, { ghost: true }) && W().headroom(x, z) >= a.tall;
-  const shy = (rt) => !rt || rt.fold || !!rt.clip || rt.def.crawl || rt.def.H < 1.7;      // rooms it will not stop in
-  const run = (d) => (d && d.sill > 0.01 ? (Math.round(d.sill / RISE) - 1) * RUN : 0);
-  let pirate = null, follower = null;
-
-  /** Some strides toward a point, sliding round what is in the way. → how far it got. */
-  function stride(a, tx, tz, dist) {
-    let went = 0;
-    while (dist > 1e-3) {
-      const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz);
-      if (d < 0.02) break;
-      const s = Math.min(dist, d, 0.09);
-      let moved = false;
-      for (const turn of [0, 0.6, -0.6, 1.2, -1.2]) {
-        const cs = Math.cos(turn), sn = Math.sin(turn), nx = a.x + ((dx * cs - dz * sn) / d) * s, nz = a.z + ((dx * sn + dz * cs) / d) * s;
-        if (stand(a, nx, nz) && W().passable(a.x, a.z, nx, nz)) { a.x = nx; a.z = nz; moved = true; break; }
-      }
-      if (!moved) break;
-      went += s; dist -= s;
-    }
-    return went;
-  }
-  /** The way from where it stands to the player: the same room, or a doorway to line up with (A), its far side (B), or a place to be next (hop). */
-  function route(a, me) {
-    const w = W(), here = w.roomAt(a.x, a.z), there = w.roomAt(me.x, me.z);
-    if (!here || !there) return null;
-    if (here === there) return { same: true };
-    const path = w.path(here.id, there.id);
-    if (!path || path.length < 2) return null;
-    const inside = (from, to, off) => {                              // a spot in room `to`, just past the door it shares with `from`
-      const d = w.doorway(from.id, to.id), mine = to.def.doors.find((x) => x.to === from.id);
-      if (!d || !d.open) return null;
-      const s = Math.sign((to.def.cx - d.x) * d.nx + (to.def.cz - d.z) * d.nz) || 1, k = off + run(mine);
-      return { x: d.x + d.nx * s * k, z: d.z + d.nz * s * k, h: mine ? mine.h : 2 };
-    };
-    const next = w.rooms[path[1]], A = inside(next, here, 0.55), B = inside(here, next, 0.55);
-    if (!A || !B) return null;
-    const r = { key: here.id + '>' + next.id, A, B, hop: null, wait: false };
-    // doors too low to walk through and rooms it cannot stand in are crossed in one go, when nobody is looking — or not at all
-    if (A.h < a.tall || shy(next)) {
-      r.wait = true;
-      for (let i = 1; i < path.length; i++) {
-        const spot = inside(w.rooms[path[i - 1]], w.rooms[path[i]], 0.6);
-        if (!spot) return null;
-        if (!shy(w.rooms[path[i]])) { r.hop = spot; r.wait = false; break; }
-      }
-    }
-    return r;
-  }
-  /** Carry on along a route for `dist` metres. → how far it got. */
-  function travel(a, r, dist) {
-    if (a.to) { const went = stride(a, a.to.x, a.to.z, dist); if (Math.hypot(a.to.x - a.x, a.to.z - a.z) < 0.1) a.to = null; return went; }
-    if (a.leg !== r.key) { if (Math.hypot(r.A.x - a.x, r.A.z - a.z) > 0.12) return stride(a, r.A.x, r.A.z, dist); a.leg = r.key; }
-    if (r.wait) return dist;
-    if (r.hop) {
-      if (!hiddenAt(r.hop.x, r.hop.z) || !stand(a, r.hop.x, r.hop.z)) return dist;
-      a.x = r.hop.x; a.z = r.hop.z; a.leg = null;
-      return dist;
-    }
-    a.to = r.B; a.leg = null;
-    return stride(a, r.B.x, r.B.z, dist);
-  }
-  /** Move a walker toward the player for `step` seconds, stopping `keep` short. Never where it could be seen arriving. → how far it went. */
-  function approach(a, step, keep) {
-    const me = env.player.me, bx = a.x, bz = a.z, r = route(a, me), want = a.speed * step;
-    if (!r) return 0;
-    let went = 0;
-    if (r.same && !a.to) { const d = Math.hypot(me.x - a.x, me.z - a.z); went = d > keep + 0.05 ? stride(a, me.x, me.z, Math.min(want, d - keep)) : want; }
-    else went = travel(a, r.same ? { key: '' } : r, want);
-    // stuck behind something: nobody is looking, so it is simply further on
-    a.idle = went < want * 0.25 ? (a.idle || 0) + step : 0;
-    if (a.idle > 1.2) {
-      let t = a.to || (r.same ? null : a.leg === r.key ? r.B : r.A);
-      if (!t) { const d = Math.hypot(me.x - a.x, me.z - a.z), k = Math.min(1.4, d - keep - 0.6) / d; if (k > 0) t = { x: a.x + (me.x - a.x) * k, z: a.z + (me.z - a.z) * k }; }
-      a.idle = 0;
-      if (t && stand(a, t.x, t.z) && hiddenAt(t.x, t.z)) { a.x = t.x; a.z = t.z; a.to = null; went = want; }
-    }
-    if (!hiddenAt(a.x, a.z, a.r + 0.3)) { a.x = bx; a.z = bz; return 0; }          // it would have walked into view: it waits instead
-    return Math.hypot(a.x - bx, a.z - bz);
-  }
+  let pirate = null, follower = null, ways = [];
   const drawn = (a) => { const rt = W().roomAt(a.x, a.z); return !!rt && rt.group.visible; };
+  // the floor's doors are hung once it is up (doorleaf.js), and its low places noted
+  (env.ready ||= []).push(() => { env.doors = hangDoors(env); ways = lowWays(W()); });
 
   /* ---- the mascot ------------------------------------------------------------------------ */
 
   function mascot(x, z, yaw, onPlinth) {
     pirate = Object.assign(makePirate(env.kit, R, level.pursuer?.face || 0), {
-      x, z, yaw, r: 0.26, tall: TALL, speed: 1.9, state: 'still', plinth: onPlinth, home: { x, z, yaw },
-      met: 0, unseen: 0, rolled: false, chase: 0, rest: 0, noise: 0.5, tearIn: 2 + R() * 3, tearFor: 0, lit: 0,
-      patience: R.range(2.2, 4.5), wakeAt: R.range(150, 260), stamina: R.range(60, 95), catchT: 0,
+      x, z, yaw, r: 0.26, tall: TALL, opens: true, speed: 1.9, state: 'still', know: lost(), got: null, handle: null, cross: null, down: null, spot: null, plinth: onPlinth, home: { x, z, yaw },
+      met: 0, unseen: 0, rolled: false, noise: 0.5, tearIn: 2 + R() * 3, tearFor: 0, lit: 0,
+      patience: R.range(2.2, 4.5), wakeAt: R.range(150, 260), catchT: 0,
       near: calm(), body: { x, z, r: BODY },
     });
     pirate.group.position.set(x, onPlinth ? PLINTH : 0, z); pirate.group.rotation.y = yaw;
@@ -341,9 +286,18 @@ export function createStalkers(env) {
       p.group.position.y = def.y; W().scene.add(p.group);
       if (level.loot?.card) p.give(level.pursuer.face % 2);
     }
+    if (!level.pursuer && !pirate && env.visit?.floors?.[level.depth]?.mascot) {
+      // the floor had no corner for a plinth (a few in a hundred have not): he is in every visit all the same, standing in a plain room
+      // a good way in, with nothing to stand on and no name plate
+      const far = roomDistances(level, level.start.room), able = level.rooms.filter((r) => r.kind === 'plain' && !r.crawl && r.H >= 2.2 && !r.shape && (far.get(r.id) || 0) >= 3);
+      if (able.length) {
+        const def = R.pick(able), at = walk.spotIn({ r: 0.26, tall: TALL }, def.id), p = mascot(at.x, at.z, R.range(-3, 3), false);
+        p.group.position.y = def.y; W().scene.add(p.group);
+      }
+    }
     if (pirate?.card) offer(pirate);
     // it was after you on the floor above: give it time to find the hole
-    if (!pirate && env.carry?.awake) arriving = { wait: env.carry.wait ?? R.range(16, 28), face: env.carry.face || 0, card: !!env.carry.card };
+    if (!pirate && env.carry?.awake) arriving = { wait: env.carry.wait ?? (env.carry.lost ? R.range(45, 80) : R.range(16, 28)), face: env.carry.face || 0, card: !!env.carry.card, lost: !!env.carry.lost };
   });
 
   /** It comes down the way you did: under the hole you fell through, as soon as you are not there to see it land. */
@@ -356,7 +310,9 @@ export function createStalkers(env) {
     const p = mascot(at.x, at.z, Math.atan2(me.x - at.x, me.z - at.z), false);
     if (!stand(p, at.x, at.z)) { for (let a = 0; a < 12; a++) { const x = at.x + Math.cos(a * 0.52) * 0.9, z = at.z + Math.sin(a * 0.52) * 0.9; if (stand(p, x, z)) { p.x = x; p.z = z; break; } } }
     p.face = arriving.face % p.faces.length; p.show();
-    p.state = 'awake'; p.met = 1; p.chase = 0;
+    p.state = 'awake'; p.met = 1;
+    // if it was after you up there, it saw which way you went from the hole; if it had lost you, it has no idea
+    p.know = arriving.lost ? lost() : { ...shown(here()), mode: 'search' };
     W().scene.add(p.group);
     if (arriving.card) { p.give(p.face % 2); offer(p); }
     env.play('thunk', at.x, at.z, 14);
@@ -385,6 +341,9 @@ export function createStalkers(env) {
     use.wx = hand.x; use.wz = hand.z;
   }
 
+  const here = () => { const me = env.player.me; return { x: me.x, z: me.z, room: W().roomAt(me.x, me.z)?.id ?? null }; };
+  /** It stops being a shop dummy. shownYou: it knows where you are (you touched it, or turned your back within its reach); otherwise it has to see you first. */
+  function awaken(p, shownYou) { p.state = 'awake'; p.met = Math.max(p.met, 1); p.know = shownYou ? shown(here()) : lost(); p.got = null; }
   function wake(force) {
     const p = pirate; if (!p || p.state === 'caught') return false;
     if (force && env.player) {
@@ -396,9 +355,9 @@ export function createStalkers(env) {
         const score = (hiddenAt(x, z) ? 10 : 0) - Math.abs(d - 3.2);
         if (!best || score > best.score) best = { x, z, score };
       }
-      if (best) { p.x = best.x; p.z = best.z; p.plinth = false; p.to = null; p.leg = null; }
+      if (best) { p.x = best.x; p.z = best.z; p.plinth = false; walk.forget(p); }
     }
-    p.state = 'awake'; p.chase = 0; p.met = 1;
+    awaken(p, true);
     return true;
   }
   /** It has you: face to face, its card back in its hand if you had taken it, and the tape ends. */
@@ -406,9 +365,11 @@ export function createStalkers(env) {
     const w = W(), me = env.player.me, now = Math.hypot(me.x - p.x, me.z - p.z);
     const k = REACH.touch / Math.max(now, 0.05);
     const nx = me.x - (me.x - p.x) * k, nz = me.z - (me.z - p.z) * k;
-    if (w.free(nx, nz, 0.1, { ghost: true })) { p.x = nx; p.z = nz; }
+    p.state = 'caught'; p.catchT = 0;
+    if (p.down) { env.sound.play('thunk'); env.end('caught'); return; }          // from the hole: it does not get up for this
+    if (w.free(nx, nz, 0.1, { ghost: true }) && w.los(p.x, p.z, nx, nz)) { p.x = nx; p.z = nz; }
     p.plinth = false;
-    p.yaw = Math.atan2(me.x - p.x, me.z - p.z); p.state = 'caught'; p.catchT = 0;
+    p.yaw = Math.atan2(me.x - p.x, me.z - p.z);
     p.hold(7);
     if (p.card && !p.card.held && env.loot?.carried.card) {       // …and it has its card back: held up between you, where the tape cannot miss it
       p.card.held = p.card.back = true; p.card.hang.visible = true; env.loot.forfeit();
@@ -419,20 +380,95 @@ export function createStalkers(env) {
     env.end('caught');
   }
 
+  /* ---- what it knows, and where that takes it ---------------------------------------------- */
+
+  /** You have gone through a hole it cannot: if it was after you, and near, it may come and look. */
+  function crossings(p) {
+    const me = env.player.me;
+    for (const way of ways) {
+      if (way.th && !way.th.open) { way.last = 0; continue; }
+      const s = (me.x - way.x) * way.nx + (me.z - way.z) * way.nz, across = (me.x - way.x) * way.nz - (me.z - way.z) * way.nx;
+      if (Math.abs(across) > way.w / 2 + 0.15 || Math.abs(s) > 0.9) { way.last = 0; continue; }
+      const side = s > 0 ? 1 : -1, was = way.last; way.last = side;
+      if (!was || was === side) continue;
+      if (p.cross && p.cross.way === way) { p.cross = null; continue; }                            // …and come back
+      const its = (p.x - way.x) * way.nx + (p.z - way.z) * way.nz, k = p.know.mode;
+      if (p.state !== 'awake' || p.down || (k !== 'chase' && k !== 'search') || its * side > 0 || Math.hypot(p.x - way.x, p.z - way.z) > 10) continue;
+      const mx = -side * way.nx, mz = -side * way.nz, at = (k2) => ({ x: way.x + mx * k2, z: way.z + mz * k2 });
+      const feet = at(1.26), mid = at(0.8);
+      p.cross = { way, side, t: 0, turned: 0, will: willPeek(), near: mid, feet, head: at(0.38), yaw: Math.atan2(-mx, -mz),
+        room: W().free(feet.x, feet.z, 0.2, { ghost: true }) && W().free(mid.x, mid.z, 0.2, { ghost: true }) };
+    }
+  }
+
+  function think(p, dt, los, d) {
+    const w = W(), me = env.player.me, k0 = p.know, got = p.got || {};
+    const choosing = k0.mode === 'wander' && (k0.room === null || got.cannot);
+    const k = p.know = knows(k0, dt, { los, d, me: { x: me.x, z: me.z, room: w.roomAt(me.x, me.z)?.id ?? null }, room: w.roomAt(p.x, p.z)?.id ?? null,
+      at: !!got.there, cannot: !!got.cannot, exits: choosing ? walk.exits(p) : null });
+    if (k.mode !== k0.mode || k.room !== k0.room) { p.got = null; p.handle = null; }
+    if (k.found) { env.interfere(0.6); env.hud.glitch(0.25); env.play('seek', p.x, p.z, 10); }      // it has seen you: the tape knows before you do
+    if (p.cross) {
+      const c = p.cross;
+      c.t += dt; c.turned = env.sees(c.way.x, c.way.z, { radius: 0.5, margin: 0.1, far: 20 }) ? 0 : c.turned + dt;
+      if (c.t > HUNT.peekWithin + 4 || !c.will || !c.room) p.cross = null;
+    }
+  }
+
+  /** Where it is making for this moment, and how near that it stops: { x, z, keep } — or null: it stands where it is. */
+  function goal(p) {
+    const k = p.know, me = env.player.me;
+    if (p.cross) return { x: p.cross.near.x, z: p.cross.near.z, keep: 0 };
+    if (k.mode === 'chase') return { x: me.x, z: me.z, keep: 0.5 };
+    if (k.mode === 'search' && k.last) return { x: k.last.x, z: k.last.z, keep: 0 };
+    if (k.mode === 'wander' && k.room !== null) {
+      if (!p.spot || p.spot.room !== k.room) p.spot = { room: k.room, ...walk.spotIn(p, k.room) };
+      return { x: p.spot.x, z: p.spot.z, keep: 0.3 };
+    }
+    return null;
+  }
+
+  /** Some of the way to wherever it is going, in `step` seconds. Never where it could be seen arriving. → how far it went. */
+  function advance(p, step) {
+    const to = goal(p), bx = p.x, bz = p.z;
+    if (!to) return 0;
+    const got = p.got = walk.go(p, to, p.speed * step, to.keep);
+    if (!hiddenAt(p.x, p.z, p.r + 0.3)) { p.x = bx; p.z = bz; return 0; }          // it would have walked into view: it waits instead
+    if (got.door) {
+      // a shut door: it works the handle, and you can hear it — unless you are watching the door (cast/hunt.js)
+      const h = p.handle = handle(p.handle || atHandle(), step, env.doors.watched(got.door));
+      if (h.rattle) env.play('rattle', got.door.x, got.door.z, 9);
+      if (h.open) { env.doors.open(got.door, 'it'); p.handle = null; }
+    } else p.handle = null;
+    return Math.hypot(p.x - bx, p.z - bz);
+  }
+
   function haunt(p, dt) {
-    const w = W(), me = env.player.me, dx = me.x - p.x, dz = me.z - p.z, d = Math.hypot(dx, dz);
+    const w = W(), me = env.player.me;
+    // its eyes are where its head is: at the hole, when it has got down to look through one
+    const ex = p.down ? p.down.head.x : p.x, ez = p.down ? p.down.head.z : p.z;
+    const dx = me.x - ex, dz = me.z - ez, d = Math.hypot(dx, dz);
     p.group.visible = drawn(p);
     if (!w.bodies.includes(p.body)) w.bodies.push(p.body);            // it has a body: nobody walks through it
     if (p.state === 'caught') {                                       // the last thing on the tape
       p.catchT += dt;
       me.yaw += turnTo(me.yaw, Math.atan2(dx, dz)) * (1 - Math.exp(-16 * dt));
-      me.pitch += ((p.card?.back ? 0.08 : 0.27) - me.pitch) * (1 - Math.exp(-12 * dt));
+      me.pitch += ((p.down ? -Math.atan2(0.75, Math.max(0.3, d)) : p.card?.back ? 0.08 : 0.27) - me.pitch) * (1 - Math.exp(-12 * dt));
       p.slip = Math.random() < 0.3; p.show();
       env.interfere(1);
       return;
     }
-    const seen = p.group.visible && env.sees(p.x, p.z, { radius: 0.6, margin: 0.18, far: 40 });
+    const seen = p.group.visible && env.sees(ex, ez, { radius: 0.6, margin: 0.18, far: 40 });
     const toMe = Math.atan2(dx, dz);
+    if (p.state === 'awake') {
+      crossings(p);
+      think(p, dt, d < HUNT.far && Math.abs(w.floorY(p.x, p.z) - w.floorY(me.x, me.z)) < 1.6 && w.los(ex, ez, me.x, me.z), d);
+    }
+    if (p.down) {                                                     // lying at the hole (cast/hunt.js): it gets up only when you are not looking
+      const l = p.down.l = lying(p.down.l, dt, seen);
+      if (l.shock) { env.interfere(0.8); env.hud.glitch(0.4); env.sound.play('thunk', { vol: 0.5 }); }
+      if (l.up) { p.down = null; p.cross = null; p.hold(0); }
+    }
     if (seen) {
       p.unseen = 0; p.rolled = false;
       if (d < 12) p.met += dt;
@@ -443,67 +479,84 @@ export function createStalkers(env) {
       const n = p.near = beside(p.near, dt, d);
       if (d < REACH.arm + 1.4) env.interfere(Math.max(n.noise * 0.75, 0.3 * (1 - (d - REACH.arm) / 1.4)));
       if (n.tear) {
-        env.interfere(1); env.hud.glitch(0.5); env.sound.play('static', { dur: 0.22, vol: 0.8 }); env.play('creak', p.x, p.z, 4);
+        env.interfere(1); env.hud.glitch(0.5); env.sound.play('static', { dur: 0.22, vol: 0.8 }); env.play('creak', ex, ez, 4);
         p.tearFor = 0.16; p.tearIn = 1.5;
         p.face = (p.face + 1 + Math.floor(Math.random() * (p.faces.length - 1))) % p.faces.length;
-        if (p.state !== 'awake') { p.state = 'awake'; p.chase = 0; p.met = 1; }          // it has noticed
-        // a little nearer, an arm a little higher
-        if (p.plinth && n.tears >= 2) {
-          const x = p.home.x + (dx / d) * 0.8, z = p.home.z + (dz / d) * 0.8;
-          if (stand(p, x, z) && Math.hypot(me.x - x, me.z - z) > REACH.touch) { p.x = x; p.z = z; p.plinth = false; }
-        } else if (!p.plinth && d > REACH.touch + 0.04) stride(p, me.x, me.z, Math.min(0.3, d - REACH.touch - 0.02));
-        if (!p.plinth) p.yaw = Math.atan2(me.x - p.x, me.z - p.z);
-        p.hold(n.tears <= 1 ? 3 + Math.floor(Math.random() * 2) : n.tears === 2 ? 5 : 7 + Math.floor(Math.random() * 2), p.plinth ? clamp(turnTo(p.yaw, toMe), -1.3, 1.3) : 0);
+        if (p.state !== 'awake') awaken(p, true);                                           // it has noticed
+        if (!p.down) {
+          // a little nearer, an arm a little higher
+          if (p.plinth && n.tears >= 2) {
+            const x = p.home.x + (dx / d) * 0.8, z = p.home.z + (dz / d) * 0.8;
+            if (stand(p, x, z) && Math.hypot(me.x - x, me.z - z) > REACH.touch) { p.x = x; p.z = z; p.plinth = false; }
+          } else if (!p.plinth && d > REACH.touch + 0.04) walk.stride(p, me.x, me.z, Math.min(0.3, d - REACH.touch - 0.02));
+          if (!p.plinth) p.yaw = Math.atan2(me.x - p.x, me.z - p.z);
+          p.hold(n.tears <= 1 ? 3 + Math.floor(Math.random() * 2) : n.tears === 2 ? 5 : 7 + Math.floor(Math.random() * 2), p.plinth ? clamp(turnTo(p.yaw, toMe), -1.3, 1.3) : 0);
+        }
         if (n.grab) seize(p);
       }
     } else {
       p.near = beside(p.near, dt, Infinity);                            // (unwatched it needs no torn frames to move in)
-      if (d < REACH.arm && p.state !== 'awake' && p.group.visible) { p.state = 'awake'; p.chase = 0; p.met = 1; }       // …and a back turned this close is all the invitation it needs
+      if (d < REACH.arm && p.state !== 'awake' && p.group.visible) awaken(p, true);         // …and a back turned this close is all the invitation it needs
       p.unseen += dt;
-      const step = dt;
       if (p.unseen > 0.3 && !p.rolled) {                              // every time you look back: another face, another way of standing
         p.rolled = true;
         p.face = (p.face + 1 + Math.floor(Math.random() * (p.faces.length - 1))) % p.faces.length;
-        const near = p.state === 'awake' && d < 2.6;
-        p.hold(near ? 7 + Math.floor(Math.random() * 2) : Math.floor(Math.random() * 7), p.plinth ? clamp(turnTo(p.yaw, toMe), -1.3, 1.3) : 0);
+        const near = p.state === 'awake' && p.know.mode === 'chase' && d < 2.6;
+        if (!p.down) p.hold(near ? 7 + Math.floor(Math.random() * 2) : Math.floor(Math.random() * 7), p.plinth ? clamp(turnTo(p.yaw, toMe), -1.3, 1.3) : 0);
       }
-      if (p.state === 'still' || p.state === 'rest') {
+      if (p.state === 'still') {
         if (!p.plinth) p.yaw = toMe; else p.head.rotation.y = clamp(turnTo(p.yaw, toMe), -1.3, 1.3);
-        p.rest -= dt;
         const far = d > 2.4 || w.roomAt(me.x, me.z) !== w.roomAt(p.x, p.z);
-        if (p.state === 'still' ? (p.met > 0.6 && p.unseen > p.patience && far) || env.clock > p.wakeAt : p.rest < 0) { p.state = 'awake'; p.chase = 0; }
+        if ((p.met > 0.6 && p.unseen > p.patience && far) || env.clock > p.wakeAt) awaken(p, false);
+      } else if (p.state === 'awake' && p.down) {
+        if (d < 0.9) seize(p);                                          // crawl back to it and it has you
       } else if (p.state === 'awake') {
-        p.chase += dt;
-        p.speed = d > 5.5 ? 1.85 : 1.05;                                // it hurries only while it is far behind
+        const k = p.know.mode;
+        p.speed = k === 'chase' ? (d > 5.5 ? 1.85 : 1.05) : k === 'search' ? 1.6 : 1.15;        // it hurries only while it is far behind
         if (p.plinth && p.unseen > 0.45) {                              // down off its plinth, on whichever side is free
           for (const turn of [0, 0.7, -0.7, 1.4, -1.4, 2.2, -2.2, Math.PI]) {
             const x = p.home.x + Math.sin(p.home.yaw + turn) * 0.95, z = p.home.z + Math.cos(p.home.yaw + turn) * 0.95;
             if (stand(p, x, z) && hiddenAt(x, z)) { p.x = x; p.z = z; p.plinth = false; break; }
           }
         }
-        const went = p.unseen > 0.45 && !p.plinth ? approach(p, step, 0.5) : 0;
+        const bx = p.x, bz = p.z, went = p.unseen > 0.45 && !p.plinth ? advance(p, dt) : 0;
         if (went > 0) {
-          p.yaw = Math.atan2(me.x - p.x, me.z - p.z);
+          p.yaw = k === 'chase' ? Math.atan2(me.x - p.x, me.z - p.z) : Math.atan2(p.x - bx, p.z - bz);
           p.noise -= went;
           if (p.noise < 0) { p.noise = 1.0 + Math.random() * 1.4; env.play('creak', p.x, p.z, 5); }
-          if (Math.hypot(me.x - p.x, me.z - p.z) < 2.6 && p.pose < 7) p.hold(7 + Math.floor(Math.random() * 2));
-        }
+          if (k === 'chase' && Math.hypot(me.x - p.x, me.z - p.z) < 2.6 && p.pose < 7) p.hold(7 + Math.floor(Math.random() * 2));
+        } else if (k === 'look' && p.unseen > 0.45 && Math.random() < dt * 1.2) p.yaw += (Math.random() - 0.5) * 2.4;          // it looks about
         const now = Math.hypot(me.x - p.x, me.z - p.z);
-        if (now < 6.5) env.interfere(0.42 * (1 - now / 6.5));
-        if (now < 0.9 && Math.abs(w.floorY(p.x, p.z) - w.floorY(me.x, me.z)) < 0.6) {          // got you
-          seize(p);
-        } else if (p.chase > p.stamina && now > 8) { p.state = 'rest'; p.rest = 28 + Math.random() * 25; p.stamina = 45 + Math.random() * 40; }
+        // the tape feels it: plainly while it knows where you are, hardly at all while it does not
+        if (k === 'chase' ? now < 6.5 : now < 3) env.interfere(k === 'chase' ? 0.42 * (1 - now / 6.5) : 0.16 * (1 - now / 3));
+        // at the hole you crawled through, with your back turned: down on the carpet, its face in the hole
+        const c = p.cross;
+        if (c && p.unseen > 0.45 && getsDown({ since: c.t, d: Math.hypot(me.x - c.way.x, me.z - c.way.z), turned: c.turned, room: c.room,
+          there: Math.hypot(p.x - c.near.x, p.z - c.near.z) < 0.5 || !!p.got?.there }) && hiddenAt(c.head.x, c.head.z, 0.7)) {
+          p.down = { l: { t: 0, seen: 0, away: 0 }, head: c.head, feet: c.feet, yaw: c.yaw };
+          p.arms[0].rotation.set(0, 0, -1.5); p.arms[1].rotation.set(0, 0, 1.5); p.plumb();
+          env.play('shuffle', c.head.x, c.head.z, 6);
+        } else if (now < 0.9 && Math.abs(w.floorY(p.x, p.z) - w.floorY(me.x, me.z)) < 0.6 && w.los(p.x, p.z, me.x, me.z)) seize(p);          // got you
       }
     }
     if (p.tearFor > 0) p.tearFor -= dt;
     const slip = p.tearFor > 0;
     if (slip !== p.slip || !seen) { p.slip = slip; p.show(); }
-    p.group.position.set(p.x, w.floorY(p.x, p.z) + (p.plinth ? PLINTH : 0), p.z);
-    p.group.rotation.y = p.yaw;
+    if (p.down) {
+      // stiff as ever: flat on its front, its head tipped back to look along the carpet
+      p.group.position.set(p.down.feet.x, w.floorY(p.down.feet.x, p.down.feet.z) + 0.17, p.down.feet.z);
+      p.group.rotation.set(Math.PI / 2, p.down.yaw, 0);
+      p.head.rotation.set(-Math.PI / 2 - 0.25, 0, 0); p.head.scale.setScalar(FACE);
+      p.shadow.visible = false;
+    } else {
+      p.group.position.set(p.x, w.floorY(p.x, p.z) + (p.plinth ? PLINTH : 0), p.z);
+      p.group.rotation.set(0, p.yaw, 0);
+      if (p.head.scale.x !== 1) { p.head.scale.setScalar(1); p.shadow.visible = true; }
+    }
     p.body.x = p.x; p.body.z = p.z;
-    if (p.card?.use && p.card.held) reach(p);
+    if (p.card?.use && p.card.held) { p.plumb(); reach(p); }
     p.lit -= dt;
-    if (p.lit < 0 && p.group.visible) { p.lit = 0.2; p.light(w.lightAt(p.x, p.z, 1.0)); }
+    if (p.lit < 0 && p.group.visible) { p.lit = 0.2; p.light(w.lightAt(ex, ez, 1.0)); }
   }
 
   /* ---- the colleague who comes along --------------------------------------------------- */
@@ -513,7 +566,7 @@ export function createStalkers(env) {
     if (follower || !env.player) return false;
     const at = c.toWorld(k.x, k.z);
     c.rt.group.remove(k.g); c.world.scene.add(k.g);
-    follower = { g: k.g, x: at.x, z: at.z, r: 0.2, tall: 1.3, speed: 2.7, wait: 0, unseen: 0 };
+    follower = { g: k.g, x: at.x, z: at.z, r: 0.2, tall: 1.3, opens: false, speed: 2.7, wait: 0, unseen: 0 };
     k.g.position.set(at.x, c.room.y, at.z);
     return true;
   };
@@ -524,7 +577,10 @@ export function createStalkers(env) {
     const step = f.wait; f.wait = 0;
     if (!hiddenAt(f.x, f.z, 0.55)) { f.unseen = 0; return; }
     f.unseen += step; if (f.unseen < 0.7) return;
-    const went = approach(f, step, 1.7);
+    const bx = f.x, bz = f.z;
+    walk.go(f, me, f.speed * step, 1.7);                                 // cardboard cannot work a door handle, or get down and crawl: shut a door on it and it waits
+    if (!hiddenAt(f.x, f.z, f.r + 0.3)) { f.x = bx; f.z = bz; }
+    const went = Math.hypot(f.x - bx, f.z - bz);
     f.g.position.set(f.x, w.floorY(f.x, f.z), f.z);
     f.g.rotation.y = Math.atan2(me.x - f.x, me.z - f.z);
     f.g.userData.light?.(w.lightAt(f.x, f.z, 1.0));
@@ -536,19 +592,21 @@ export function createStalkers(env) {
     update(dt) {
       if (!env.player || !env.world) return;
       env.clock += dt;
+      env.doors?.update(dt);
       if (follower) tag(follower, dt);
       if (arriving) arrive(dt);
       if (pirate) haunt(pirate, dt);
     },
     /** What it takes down the stairs after you, if it is after you at all: { awake, face, card } — or null. */
     carry() {
-      if (arriving) return { awake: true, face: arriving.face, card: arriving.card, wait: Math.max(6, arriving.wait) };
-      if (!pirate || (pirate.state !== 'awake' && pirate.state !== 'rest')) return null;
-      return { awake: true, face: pirate.face, card: !!(pirate.card && pirate.card.held) };
+      if (arriving) return { awake: true, face: arriving.face, card: arriving.card, lost: arriving.lost, wait: Math.max(6, arriving.wait) };
+      if (!pirate || pirate.state !== 'awake') return null;
+      // it comes down after you either way; but if it had lost you, it is a long while about it, and lands knowing nothing
+      return { awake: true, face: pirate.face, card: !!(pirate.card && pirate.card.held), lost: pirate.know.mode === 'wander' || pirate.know.mode === 'look' };
     },
     wake,
     /** Where it is and what it is doing (for the dev page). */
-    at() { return pirate ? { x: pirate.x, z: pirate.z, state: pirate.state, room: W()?.roomAt(pirate.x, pirate.z)?.id ?? null, face: pirate.face, pose: pirate.pose, card: pirate.card ? pirate.card.held : null } : null; },
+    at() { return pirate ? { x: pirate.x, z: pirate.z, state: pirate.state, know: pirate.know.mode, making: pirate.know.room, down: !!pirate.down, handle: pirate.handle ? pirate.handle.t : null, room: W()?.roomAt(pirate.x, pirate.z)?.id ?? null, face: pirate.face, pose: pirate.pose, card: pirate.card ? pirate.card.held : null } : null; },
     get follower() { return follower ? { x: follower.x, z: follower.z } : null; },
     get figure() { return pirate; },
     dispose() { if (pirate) { const i = W()?.bodies.indexOf(pirate.body); if (i >= 0) W().bodies.splice(i, 1); } pirate?.group.removeFromParent(); follower?.g.removeFromParent(); pirate = null; follower = null; },
