@@ -30,6 +30,10 @@ export const HOME = 'lobby';
 
 // In the order they appear on the panel: top of the building first.
 export const LEVELS = Object.freeze([
+  { id: 'nightshift', floor: 'N', storey: 4, kind: 'game', name: 'Night Shift',
+    blurb: 'The office in black and white. Stay out of the security lights. Clock out.' },
+  { id: 'scranton', floor: 'S', storey: 3, kind: 'game', name: 'Scranton Paper Co.',
+    blurb: 'A very ordinary paper company. Reception has a memo about a very ordinary stapler.' },
   { id: 'roof', floor: 'R', storey: 2, kind: 'place', name: 'Rooftop Garden',
     blurb: 'Open air above the office: planters, benches, a telescope, and the skyline all round.' },
   { id: 'mission', floor: 'M', storey: 1, kind: 'work', name: 'Mission Control',
