@@ -11,6 +11,9 @@ import { roomRoute, roomCosts, gridPath, straighten } from '../public/world/back
 import { SHADOW, away, watched, drained } from '../public/world/backrooms/cast/shadow.rule.js';
 import { MOTH, resting, flits } from '../public/world/backrooms/cast/moth.rule.js';
 import { PORTER, mopping, minds, facesYou } from '../public/world/backrooms/cast/porter.rule.js';
+import { FIRE_WAYS, FIRE_FEAR, calm, afraid, tooNear } from '../public/world/backrooms/cast/fire.rule.js';
+import { BLACKOUT, createBlackoutState, stepBlackout } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
+import { ARCHETYPES } from '../public/world/backrooms/gen.js';
 import { DOORS, doorPlan, doorRooms, inTheWay } from '../public/world/backrooms/doors.js';
 
 const office = { name: 'Robin', projects: ['Atlas', 'Harbor'], agents: ['Ivory Marten', 'Amber Vireo', 'Ember Numbat'], tasks: ['Ship the thing', 'Fix the other thing'] };
@@ -393,4 +396,64 @@ test('the night porter: nothing, unless you knock his bucket over; then the room
   // his back while he mops; what he has for a face for as long as the bucket is on its side, turned to you slowly
   assert.equal(facesYou(mopping()), false); assert.equal(facesYou({ ...mopping(), mode: 'upset' }), true); assert.equal(facesYou({ ...mopping(), mode: 'shut' }), true);
   assert.ok(PORTER.round < 2 && PORTER.turn > 6.7, 'he turns to you slowly, and away faster than anybody can run round him');
+});
+
+test('fire: every creature says what one is to it; one that fears it backs off from a fire beside it and will not stand near one', () => {
+  for (const m of ALL_CAST) assert.ok(FIRE_WAYS.includes(m.fire), `${m.id}: fire is one of ${FIRE_WAYS.join(', ')}`);
+  assert.equal(CAST.find((m) => m.id === 'pirate').fire, 'fears', 'a fire is the one way to hold the mascot off');
+  for (const a of Object.values(ARCHETYPES)) if (a.fire !== undefined) assert.ok(a.resident && FIRE_WAYS.includes(a.fire), `${a.id}: fire is what it is to whoever lives there`);
+  const fire = { x: 0, z: 0 };
+  // out of its reach: nothing; standing where it would be too near: no
+  assert.equal(afraid(calm(), dt, { x: FIRE_FEAR.keep + 0.5, z: 0 }, fire).flee, false);
+  assert.equal(afraid(calm(), dt, { x: 1, z: 0 }, null).flee, false);
+  assert.ok(tooNear({ x: 1, z: 1 }, fire) && !tooNear({ x: FIRE_FEAR.keep + 0.01, z: 0 }, fire) && !tooNear({ x: 0, z: 0 }, null));
+  // lit beside it: straight away from it, this moment and every moment until it is clear and has kept going a while
+  let at = { x: 1, z: 0, yaw: 0 }, s = calm(), secs = 0;
+  for (; secs < 20; secs += dt) {
+    s = afraid(s, dt, at, fire);
+    if (!s.flee) break;
+    assert.ok(Math.abs(s.away - Math.PI / 2) < 1e-9 && s.step > 0 && s.step <= FIRE_FEAR.speed * dt + 1e-9);
+    at = { ...at, x: at.x + Math.sin(s.away) * s.step, z: at.z + Math.cos(s.away) * s.step };
+  }
+  assert.ok(at.x > FIRE_FEAR.keep + FIRE_FEAR.speed * FIRE_FEAR.memory * 0.9, `it stopped ${at.x.toFixed(2)} m off`);
+  assert.ok(secs < 4, 'and it is over quickly');
+  assert.ok(FIRE_FEAR.speed > 1.85, 'it goes faster than it ever comes');
+  // the fire goes out under it: it still finishes backing off, and then it is not afraid of anything
+  s = afraid(calm(), dt, { x: 1, z: 0 }, fire); let more = 0;
+  for (let t = 0; t < 5; t += dt) { s = afraid(s, dt, { x: 1, z: 0 }, null); if (s.flee) more += dt; }
+  assert.ok(Math.abs(more - FIRE_FEAR.memory) < 0.1 && s.from === null);
+  // lit exactly underfoot: the way it was not facing; and a moment that is no time at all moves nothing
+  assert.ok(Math.abs(afraid(calm(), dt, { x: 0, z: 0, yaw: 1 }, fire).away - (1 + Math.PI)) < 1e-9);
+  assert.equal(afraid(calm(), 0, { x: 1, z: 0 }, fire).flee, false);
+  // a doorway is narrower than the room a fire keeps round itself: one lit in a doorway shuts it, to anything that fears it
+  assert.ok(FIRE_FEAR.keep > DOORS.widest / 2 + 0.5 && FIRE_FEAR.keep < 6, 'wider than half a doorway, and no further than a fire is seen from');
+  // and to what hunts, a way it will not go is a way it cannot: it stands off for as long as it would look, and gives you up
+  const stood = run(shown(me), HUNT.look + 0.5, { los: true, cannot: true });
+  assert.ok(stood.events.includes('gaveUp') && stood.mode === 'wander');
+});
+
+test('fire: the moth goes to one it can see, and into it; the stand-ins are held by one, and paper burning is light enough to stand in', () => {
+  const near = { d: 3, seen: true, torch: false, next: true, there: false };
+  // a fire it can see: that, before a torch and before the next tube
+  let s = flits(resting(), dt, { ...near, torch: true, fire: true, atFire: false });
+  assert.equal(s.mode, 'flame');
+  for (let t = 0; t < 30; t += dt) { s = flits(s, dt, { ...near, fire: true, atFire: false }); assert.ok(s.mode === 'flame' && !s.burnt, 'on its way, however long that takes'); }
+  // at it: round it for a little, and then once, and for good
+  let burnt = 0, secs = 0;
+  for (; secs < 20 && s.mode !== 'gone'; secs += dt) { s = flits(s, dt, { ...near, fire: true, atFire: true }); if (s.burnt) burnt++; }
+  assert.equal(s.mode, 'gone'); assert.equal(burnt, 1); assert.ok(Math.abs(secs - MOTH.burn) < 0.1);
+  for (let t = 0; t < 5; t += dt) { s = flits(s, dt, near); assert.ok(s.mode === 'gone' && !s.burnt && !s.moved, 'nothing brings it back'); }
+  // the paper burns out before it gets there: it goes round wherever it has got to, and can be followed again
+  s = flits(flits(resting(), dt, { ...near, fire: true }), dt, near);
+  assert.equal(s.mode, 'round'); assert.equal(s.seen, 0);
+  // the stand-ins (rooms/blackout-bay): one that can see a fire does not move, torch or no torch
+  const targets = [{ x: 0, z: -6, los: true, fire: true }, { x: 3, z: -6, los: true, fire: false }];
+  let r = stepBlackout(createBlackoutState(2), { dt, inDark: true, hasFlashlight: false, px: 0, pz: 0, yaw: 0, targets });
+  assert.deepEqual(r.speeds.map((v) => v > 0), [false, true]); assert.deepEqual(r.frozen, [true, false]);
+  assert.ok(r.red > 0, 'in the dark with no light of your own the red still comes');
+  // …and standing within sight of the fire is standing in light: no red, for as long as it burns
+  let st = createBlackoutState(2);
+  for (let t = 0; t < BLACKOUT.redFillSeconds * 2; t += dt) { r = stepBlackout(st, { dt, inDark: true, hasFlashlight: false, byFire: true, px: 0, pz: 0, yaw: 0, targets }); st = r.state; }
+  assert.equal(r.red, 0); assert.equal(r.speeds[0], 0);
+  assert.equal(ARCHETYPES['blackout-bay'].fire, 'fears');
 });

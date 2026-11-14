@@ -67,6 +67,11 @@ export function createStalkers(env) {
     held: () => env.inventory?.held?.() ?? null,
     take: (type, n = 1) => !!env.inventory?.consumeHeld?.(type, n)?.ok,
     give: (item) => env.inventory?.give?.(item) ?? { ok: false },
+    /**
+     * The fire a spot is within sight and reach of (paper the visitor has lit: inventory-fire.js): { x, z, remaining: seconds it will
+     * burn } — or null: none, or a visit without pockets. What a creature does about one is its own rule (cast/fire.rule.js).
+     */
+    fire(x, z) { const f = env.inventory?.fire?.threatAt?.(x, z, W().floorY(x, z)); return f ? { x: f.x, z: f.z, remaining: f.remaining } : null; },
   });
   const live = [];
   for (const cast of castFor(env.visit, level.depth)) {

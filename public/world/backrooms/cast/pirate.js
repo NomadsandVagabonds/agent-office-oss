@@ -39,6 +39,7 @@ import { makeRng, toWorld, roomDistances } from '../gen.js';
 import { P, clamp, turnTo } from '../bits.js';
 import { REACH, calm, beside } from '../reach.js';
 import { HUNT, knows, lost, shown, spent, handle, atHandle, willPeek, getsDown, lying } from './hunt.js';
+import { FIRE_FEAR, calm as unafraid, afraid, tooNear } from './fire.rule.js';
 
 const SC = 1.25, S = 0.025 * SC;                 // sculpted chunkier than the furniture: one voxel is 3.1 cm
 const TALL = 1.62, PLINTH = 0.16, BODY = 0.3;        // BODY: how much floor it takes up, as a radius (with yours, that is REACH.touch)
@@ -465,6 +466,8 @@ export function create(c) {
     if (!to) return 0;
     const got = p.got = walk.go(p, to, p.speed * step, to.keep);
     if (!hiddenAt(p.x, p.z, p.r + 0.3)) { p.x = bx; p.z = bz; return 0; }          // it would have walked into view: it waits instead
+    // a fire it can see is as far as it goes that way (cast/fire.rule.js): it stands off, and to hunt.js that is a way it cannot get by
+    if (tooNear(p, c.fire(p.x, p.z))) { p.x = bx; p.z = bz; p.got = { went: 0, there: false, cannot: true, door: null }; p.handle = null; return 0; }
     if (got.door) {
       // a shut door: it works the handle, and you can hear it — unless you are watching the door (cast/hunt.js)
       const h = p.handle = handle(p.handle || atHandle(), step, env.doors.watched(got.door));
@@ -472,6 +475,30 @@ export function create(c) {
       if (h.open) { env.doors.open(got.door, 'it'); p.handle = null; }
     } else p.handle = null;
     return Math.hypot(p.x - bx, p.z - bz);
+  }
+
+  /** Away from a fire: off its plinth if it is on one, and as far as this moment allows, whoever is looking. */
+  function flee(p, fear, seen, d, dt) {
+    if (p.state !== 'awake') awaken(p, false);
+    if (seen && d < 12) { p.met += dt; if (!p.known && p.met > 0.4) { p.known = true; c.met(); } }
+    p.down = null; p.cross = null; p.got = null; p.handle = null; p.unseen = 0; p.rolled = false;
+    const far = (x, z) => stand(p, x, z) && Math.abs(W().floorY(x, z) - W().floorY(p.x, p.z)) < 0.6;
+    if (p.plinth) for (const turn of FIRE_FEAR.turns) {
+      const x = p.home.x + Math.sin(fear.away + turn) * 0.95, z = p.home.z + Math.cos(fear.away + turn) * 0.95;
+      if (far(x, z)) { p.x = x; p.z = z; p.plinth = false; break; }
+    }
+    const bx = p.x, bz = p.z;
+    if (!p.plinth) for (const turn of FIRE_FEAR.turns) {
+      const x = p.x + Math.sin(fear.away + turn) * fear.step, z = p.z + Math.cos(fear.away + turn) * fear.step;
+      if (!far(x, z) || !W().passable(p.x, p.z, x, z)) continue;
+      p.x = x; p.z = z; break;
+    }
+    const went = Math.hypot(p.x - bx, p.z - bz);
+    // it goes backwards: it does not take its eyes off the fire
+    p.yaw = Math.atan2(fear.from.x - p.x, fear.from.z - p.z);
+    if (p.pose !== 5) p.hold(5);                                        // both arms up
+    if (went > 0) { p.noise -= went; if (p.noise <= 0) { p.noise = 0.65; env.play('creak', p.x, p.z, 7); } }
+    if (seen) env.interfere(0.25);
   }
 
   function haunt(p, dt) {
@@ -500,7 +527,10 @@ export function create(c) {
       if (l.shock) { env.interfere(0.8); env.hud.glitch(0.4); env.sound.play('thunk', { vol: 0.5 }); }
       if (l.up) { p.down = null; p.cross = null; p.hold(0); }
     }
-    if (seen) {
+    // a fire beside it: it backs off, watched or not, and this moment is for nothing else (cast/fire.rule.js)
+    const fear = p.fear = afraid(p.fear || unafraid(), dt, p, me.frozen ? null : c.fire(p.x, p.z));
+    if (fear.flee) flee(p, fear, seen, d, dt);
+    else if (seen) {
       p.unseen = 0; p.rolled = false;
       if (d < 12) { p.met += dt; if (!p.known && p.met > 0.4) { p.known = true; c.met(); } }
       // a bad frame now and then: for an instant the head is not where it was
@@ -519,7 +549,11 @@ export function create(c) {
           if (p.plinth && n.tears >= 2) {
             const x = p.home.x + (dx / d) * 0.8, z = p.home.z + (dz / d) * 0.8;
             if (stand(p, x, z) && Math.hypot(me.x - x, me.z - z) > REACH.touch) { p.x = x; p.z = z; p.plinth = false; }
-          } else if (!p.plinth && d > REACH.touch + 0.04) walk.stride(p, me.x, me.z, Math.min(0.3, d - REACH.touch - 0.02));
+          } else if (!p.plinth && d > REACH.touch + 0.04) {
+            const sx = p.x, sz = p.z;
+            walk.stride(p, me.x, me.z, Math.min(0.3, d - REACH.touch - 0.02));
+            if (tooNear(p, c.fire(p.x, p.z))) { p.x = sx; p.z = sz; }      // (not toward a fire, even in the torn frames)
+          }
           if (!p.plinth) p.yaw = Math.atan2(me.x - p.x, me.z - p.z);
           p.hold(n.tears <= 1 ? 3 + Math.floor(Math.random() * 2) : n.tears === 2 ? 5 : 7 + Math.floor(Math.random() * 2), p.plinth ? clamp(turnTo(p.yaw, toMe), -1.3, 1.3) : 0);
         }

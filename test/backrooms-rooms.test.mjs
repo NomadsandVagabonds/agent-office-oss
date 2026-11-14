@@ -129,7 +129,6 @@ test('somebody lives in a room: it says who, what a catch costs and what they ca
     assert.match(a.resident, /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, `${a.id}: resident is the id of whoever lives there`);
     assert.ok(Number.isInteger(a.caught) && a.caught >= 0 && a.caught <= 2, `${a.id}: caught is the hearts a catch costs, 0 to 2: nothing down here takes all four at once`);
     assert.ok(Array.isArray(a.items) && a.items.every((t) => ITEM_TYPES.includes(t)), `${a.id}: items are things a visitor can carry`);
-    assert.ok(!a.headline, `${a.id}: a room from the news has nobody anybody could be asked about`);
   }
   let parts = 0, withOne = 0;
   for (let seed = 1; seed <= 60; seed++) {

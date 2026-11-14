@@ -45,7 +45,10 @@ function toGeometry(buf) {
 
 /**
  * @param {import('./vox.js').Vox} vox
- * @param {{origin?:[number,number,number]}} [opt]  the voxel coordinate that becomes (0,0,0)
+ * @param {{origin?:[number,number,number], ao?:boolean}} [opt]
+ *   origin becomes (0,0,0); ao:false retains the exact voxel surface but lets
+ *   coplanar faces merge without per-corner ambient occlusion. Useful for
+ *   densely populated rooms whose lighting already supplies their shading.
  * @returns {{solid:THREE.BufferGeometry|null, glass:THREE.BufferGeometry|null, bounds:object, quads:number}}
  */
 export function meshVox(vox, opt = {}) {
@@ -112,8 +115,8 @@ export function meshVox(vox, opt = {}) {
             const nv = grid[at(n[0], n[1], n[2])];
             // a face shows if it meets air, or if it is solid and meets glass
             if (nv !== 0 && !(isGlass(nv) && !isGlass(v))) continue;
-            let ao = 0;
-            for (let c = 0; c < 4; c++) {
+            let ao = opt.ao === false ? OPEN : 0;
+            if (opt.ao !== false) for (let c = 0; c < 4; c++) {
               const su = c === 0 || c === 3 ? -1 : 1, sw = c < 2 ? -1 : 1;
               s[0] = n[0]; s[1] = n[1]; s[2] = n[2]; s[u] += su;
               const s1 = opaque(grid[at(s[0], s[1], s[2])]) ? 1 : 0;

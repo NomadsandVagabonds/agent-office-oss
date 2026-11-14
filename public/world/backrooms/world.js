@@ -558,6 +558,11 @@ function roomContext(world, rt) {
     hurt(n = 1) { const hit = env.health?.damage(n); if (hit) return { landed: !!hit.ok, dead: !!hit.dead, ended: !!hit.dead }; env.end('caught'); return { landed: true, dead: true, ended: true }; },
     /** For the count kept of a visit: the resident (its own id) has really been seen, once · it had the visitor and they got away, each time. */
     met: (id) => env.run?.met?.(id), survived: (id) => env.run?.survived?.(id),
+    /**
+     * The fire a spot of this room is within sight and reach of (paper the visitor has lit): { x, z, remaining } in the room's own
+     * frame — or null: none, or a visit without pockets. (As a creature's c.fire: pursuer.js.)
+     */
+    fire(x, z) { const p = toWorld(def, x, z), f = env.inventory?.fire?.threatAt?.(p.x, p.z, world.floorY(p.x, p.z)); if (!f) return null; const q = toLocal(def, f.x, f.z); return { x: q.x, z: q.z, remaining: f.remaining }; },
     /** A patch of floor that notices you: { x0, z0, x1, z1, enter?, leave?, stay? }. */
     zone(spec) { rt.zones.push({ in: false, ...spec }); return spec; },
     /** Runs every frame while you are in this room or next door: fn(dt, t, me) with me in room coordinates. */

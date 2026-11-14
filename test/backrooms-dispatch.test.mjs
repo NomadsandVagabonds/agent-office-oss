@@ -116,7 +116,7 @@ test('Dispatch is on the room contract: from the news, a set piece, a dead end, 
   assert.ok(a && a.headline === true && a.big === true && isBig(a) && a.module === './rooms/dispatch.js');
   assert.deepEqual(a.ports, [], 'its only doorway is the one you came in by: the crate is the other way out, and it is not on the plan');
   assert.ok(a.w[1] <= 20 && a.d[1] <= 20 && a.h[1] <= 9 && !a.teaches && !a.needs);
-  assert.equal(DECK.filter((d) => d.headline).length, 1, 'which stories become rooms is the owner\'s call: so far, this one');
+  assert.deepEqual(DECK.filter((d) => d.headline).map((d) => d.id), ['dispatch', 'mecha'], 'which stories become rooms is the owner\'s call: so far, these two');
   // the floor plan was drawn for a bigger room: it has to hold at every size the deck can deal
   for (let seed = 0; seed < 12; seed++) {
     const level = generate(`dispatch-${seed}`, { only: ['dispatch'] }), r = level.rooms.find((k) => k.arch === 'dispatch');
@@ -149,7 +149,7 @@ test('the heap is thinned to fit a set piece, and is still a heap', () => {
   assert.ok(cards * 428 < 45000, 'the cards are well under half of what a set piece may cost (120,000 triangles): the two figures and the crates need the rest');
 });
 
-test('the plan puts Dispatch in a third of visits or so, once, and never where you land', () => {
+test('the plan puts Dispatch in its share of the third of visits that have a room from the news, once, and never where you land', () => {
   let visits = 0, withIt = 0;
   for (let i = 0; i < 90; i++) {
     const { visit, floors } = generateVisit(`news-${i}`, { name: 'Robin' });
@@ -159,5 +159,6 @@ test('the plan puts Dispatch in a third of visits or so, once, and never where y
     for (const k of at) assert.equal(floors[k].rooms.filter((r) => r.big || (r.arch && isBig(ARCHETYPES[r.arch]))).length <= 1, true, `visit ${i}: two set pieces on one part`);
     visits++; if (at.length) withIt++;
   }
-  assert.ok(withIt / visits > 0.2 && withIt / visits < 0.5, `Dispatch is in ${withIt} of ${visits} visits`);
+  // (a third of visits have a room from the news, and there are two such rooms now: each has half of them)
+  assert.ok(withIt / visits > 0.08 && withIt / visits < 0.3, `Dispatch is in ${withIt} of ${visits} visits`);
 });
