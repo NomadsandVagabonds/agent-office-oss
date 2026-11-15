@@ -64,7 +64,7 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
         if (!supported(rt, p, radius, height) || Math.abs(floorAt(p) - floor) > .24 || !clearRay(me.x, me.z, wx, wz, radius, true, height)) continue;
         if (fires.occupied(p.wx, p.wz, radius, floorAt(p))) continue;
         if (!mark && [...entries.values()].some(e => e.active && e.rt === rt && Math.hypot(e.x - p.x, e.z - p.z) < radius + ITEM_RADIUS[e.item.type])) continue;
-        if (mark && marks.some(m => m.rt === rt && Math.hypot(m.x - p.x, m.z - p.z) < .48)) continue;
+        if (mark && marks.some(m => !m.away && m.rt === rt && Math.hypot(m.x - p.x, m.z - p.z) < .48)) continue;
         return { ...p, rt, yaw: me.yaw - (rt.def.rot * Math.PI) / 2 };
       }
     }
@@ -117,7 +117,7 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
       if (e.rt) e.rt.uses = e.rt.uses.filter(u => u !== e.use);
       p.rt.uses.push(e.use); p.rt.group.add(e.mesh);
     }
-    Object.assign(e, { item: copy(item), rt: p.rt, x: p.x, z: p.z, y: p.y, wx: p.wx, wz: p.wz, active: true });
+    Object.assign(e, { item: copy(item), rt: p.rt, x: p.x, z: p.z, y: p.y, wx: p.wx, wz: p.wz, active: true, away: null });
     Object.assign(e.use, { wx: p.wx, wz: p.wz, x: p.x, z: p.z, room: p.rt, label: label(item) });
     e.mesh.position.set(p.x, p.y + .009, p.z); e.mesh.rotation.y = rotation; e.mesh.visible = true;
     tint(e.mesh, p.rt, p.x, p.y, p.z);
@@ -172,8 +172,8 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
     if (marks.length < MAX_MARKS) {
       m = { mesh: new THREE.Mesh(arrowGeometry, kit.surface({ room: p.rt.u })) }; marks.push(m);
     } else { m = marks.shift(); marks.push(m); }
-    Object.assign(m, { rt: p.rt, x: p.x, z: p.z, y: p.y, number: ++markCount });
-    p.rt.group.add(m.mesh); m.mesh.position.set(p.x, p.y + .013, p.z); m.mesh.rotation.y = p.yaw;
+    Object.assign(m, { rt: p.rt, x: p.x, z: p.z, y: p.y, number: ++markCount, away: null });
+    p.rt.group.add(m.mesh); m.mesh.position.set(p.x, p.y + .013, p.z); m.mesh.rotation.y = p.yaw; m.mesh.visible = true;
     tint(m.mesh, p.rt, p.x, p.y, p.z);
     env.sound.play('rustle', { vol: .6 });
     return { ok: true, number: markCount, room: p.rt.id, x: p.x, z: p.z };
@@ -194,10 +194,30 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
       if (disposed) return;
       fires.update(dt);
       for (const e of entries.values()) if (e.active && e.rt.near) tint(e.mesh, e.rt, e.x, e.y, e.z);
-      for (const m of marks) if (m.rt.near) tint(m.mesh, m.rt, m.x, m.y, m.z);
+      for (const m of marks) if (m.rt.near && !m.away) tint(m.mesh, m.rt, m.x, m.y, m.z);
     },
-    report: () => ({ items: [...entries.values()].map(e => ({ ...copy(e.item), room: e.rt.id, x: e.x, y: e.y, z: e.z, wx: e.wx, wz: e.wz, active: e.active })),
-      marks: marks.map(m => ({ number: m.number, room: m.rt.id, x: m.x, y: m.y, z: m.z })), marksMade: markCount, fires: fires.report() }),
+    /**
+     * A room has gone, and taken what was lying in it (there are rooms that change the building: the hallway that is not
+     * sure where it leads). Everything on that floor — things put down, chalk marks, a fire — goes with the room and is
+     * there again, as it was, when the room is: bringBack(key). `inside(x, z)` says where the room was, in the world.
+     * (So a chalk mark made to find out whether it is the same room says what is true: it is not.) → how many things went.
+     */
+    takeAway(inside, key) {
+      if (disposed) return 0;
+      let n = fires.takeAway?.(inside, key) || 0;
+      for (const e of entries.values()) if (e.active && inside(e.wx, e.wz)) { e.active = false; e.away = key; e.mesh.visible = false; n++; }
+      for (const m of marks) { if (m.away) continue; const at = toWorld(m.rt.def, m.x, m.z); if (inside(at.x, at.z)) { m.away = key; m.mesh.visible = false; n++; } }
+      return n;
+    },
+    bringBack(key) {
+      if (disposed) return 0;
+      let n = fires.bringBack?.(key) || 0;
+      for (const e of entries.values()) if (e.away === key) { e.away = null; e.active = true; e.mesh.visible = true; n++; }
+      for (const m of marks) if (m.away === key) { m.away = null; m.mesh.visible = true; n++; }
+      return n;
+    },
+    report: () => ({ items: [...entries.values()].map(e => ({ ...copy(e.item), room: e.rt.id, x: e.x, y: e.y, z: e.z, wx: e.wx, wz: e.wz, active: e.active, ...(e.away ? { away: e.away } : {}) })),
+      marks: marks.map(m => ({ number: m.number, room: m.rt.id, x: m.x, y: m.y, z: m.z, ...(m.away ? { away: m.away } : {}) })), marksMade: markCount, fires: fires.report() }),
     dispose() {
       if (disposed) return;
       disposed = true;

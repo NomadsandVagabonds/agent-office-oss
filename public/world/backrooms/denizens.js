@@ -83,7 +83,7 @@ export function createDenizens(env) {
   function present(d, distMap) {
     if (!d.group) return;
     const world = env.world;
-    if (!world || d.gone) { d.group.visible = false; return; }
+    if (!world || d.gone || d.away) { d.group.visible = false; return; }
     const rt = world.roomAt(d.x, d.z);
     const nearEnough = !rt || (distMap ? (distMap.get(rt.id) ?? 99) <= 3 : rt.group.visible);
     d.group.position.set(d.x, (d.y ?? world.floorY(d.x, d.z)) + (d.lift || 0), d.z);
@@ -118,11 +118,14 @@ export function createDenizens(env) {
       const curRoom = world.current();
       const distMap = curRoom ? world.distances(curRoom.id) : null;
       for (const d of list) {
-        if (d.gone) { if (d.group) d.group.visible = false; continue; }
+        if (d.gone || d.away) { if (d.group) d.group.visible = false; continue; }          // (away: the room it was standing in has gone, and it with it)
         d.update?.(dt, time, me);
         present(d, distMap);
       }
     },
+    /** A room has gone and taken whoever was in it (pursuer.js, takeAway: the same, for the residents that walk) · and is back. */
+    takeAway(inside, key) { const gone = list.filter((d) => !d.gone && !d.away && Number.isFinite(d.x) && Number.isFinite(d.z) && inside(d.x, d.z)); for (const d of gone) { d.away = key; if (d.group) d.group.visible = false; } return gone.length; },
+    bringBack(key) { const back = list.filter((d) => d.away === key); for (const d of back) { d.away = null; present(d); } return back.length; },
     dispose() {
       for (const d of list) { d.dispose?.(); d.group?.removeFromParent(); }
       list.length = 0;

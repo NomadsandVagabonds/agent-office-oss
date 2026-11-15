@@ -24,8 +24,8 @@ export function createStalkers(env) {
 
   /* ---- who is on this floor ---------------------------------------------------------------- */
 
-  /** What a creature is handed (the contract). Everything it may need of the level is here or on c.env. */
-  const toolbox = (member, home) => ({
+  /** What a creature is handed (the contract). Everything it may need of the level is here or on c.env. (k: the conductor's own note of it.) */
+  const toolbox = (k, home, member = k.member) => ({
     env, level, member, walk, home,
     /** Seeded: for what the creature is (which room, which face). What happens while somebody is playing may use Math.random. */
     R: makeRng(`${level.seed}/cast/${member.id}`),
@@ -43,8 +43,8 @@ export function createStalkers(env) {
     /** A sound from a spot (sound.js voices), heard as far as `reach` metres. */
     play: (name, x, z, reach) => env.play(name, x, z, reach),
     /** Put something in the level (a THREE object, in world coordinates) · and give it a body nobody walks through: { x, z, r }, kept up to date by you. */
-    add: (object) => { W().scene.add(object); return object; },
-    body: (b) => { if (!W().bodies.includes(b)) W().bodies.push(b); return b; },
+    add: (object) => { W().scene.add(object); k.things.push(object); return object; },
+    body: (b) => { if (!W().bodies.includes(b)) W().bodies.push(b); if (!k.bodies.includes(b)) k.bodies.push(b); return b; },
     /**
      * It has got the visitor. With a health system (env.health, when there is one) this costs `n` points and says what happened:
      * { landed: the hit counted (false: they were hit a moment ago), dead: it was the last of them — the visit is ending, do nothing more }.
@@ -57,7 +57,8 @@ export function createStalkers(env) {
       return { landed: false, dead: false, ended: false };
     },
     /** Something E does, at a spot of the world: { x, z, r, when?(), use() }. It has to look as though it can be used: nothing says so. */
-    use(spec) { const rt = W().roomAt(spec.x, spec.z); const u = { r: 1.2, ...spec, wx: spec.x, wz: spec.z, room: rt }; rt?.uses.push(u); return u; },
+    // (…and nothing of somebody who is not there can be used: see takeAway)
+    use(spec) { const rt = W().roomAt(spec.x, spec.z); const u = { r: 1.2, ...spec, wx: spec.x, wz: spec.z, room: rt, when: () => !k.away && (spec.when ? spec.when() : true) }; rt?.uses.push(u); return u; },
     /** For the count kept of a visit: the visitor has really seen it, for the first time (say so once) · it had them, and they got away (each time). */
     // (a member of the cast with music of its own — `music` on its line of cast.js — has it begin here: each part's is
     // met once, so it is once a part, and a piece already playing is not begun again)
@@ -79,7 +80,9 @@ export function createStalkers(env) {
   for (const cast of castFor(env.visit, level.depth)) {
     const member = CAST.find((m) => m.id === cast.id), make = MAKERS[cast.id];
     if (!member || !make) continue;
-    try { live.push({ id: member.id, member, it: make(toolbox(member, homeFor(level, member))) }); }
+    // (things: what it has put in the level · bodies: what of it nobody walks through · away: the room it is standing in has gone, and it with it)
+    const k = { id: member.id, member, it: null, things: [], bodies: [], away: null, shown: null };
+    try { k.it = make(toolbox(k, homeFor(level, member))); live.push(k); }
     catch (err) { console.warn(`[backrooms] ${member.id} would not be made — the floor does without`, err); }
   }
   const pirate = live.find((k) => k.id === 'pirate')?.it || null;
@@ -124,9 +127,9 @@ export function createStalkers(env) {
       if (!env.player || !env.world) return;
       env.clock += dt;
       env.doors?.update(dt);
-      if (follower) tag(follower, dt);
+      if (follower && !follower.away) tag(follower, dt);
       for (const k of live) {
-        if (k.dead) continue;
+        if (k.dead || k.away) continue;                                    // (somebody who is not here does nothing here)
         try { k.it.update?.(dt, env.clock); } catch (err) { console.warn(`[backrooms] ${k.id} has stopped`, err); k.dead = true; if (k.member.music === 'mascot') env.sound?.stopMascot?.(); }
       }
     },
@@ -137,6 +140,44 @@ export function createStalkers(env) {
       return mine || Object.keys(others).length ? { ...(mine || {}), others } : null;
     },
     wake: (force) => pirate?.wake(force),
+    /**
+     * A room has gone, and taken whoever was standing in it. (There are rooms that change the building: the hallway
+     * that is not sure where it leads. The place does not wait for anybody to step out first.) `inside(x, z)` says
+     * where the room was, in the world; `key` is the room's own name for itself. Whoever was there is not seen, not
+     * walked into, not heard from and does nothing until bringBack(key): they are standing in a room that is
+     * somewhere else, exactly as they were. → who went.
+     */
+    takeAway(inside, key) {
+      const w = W(), gone = [];
+      for (const k of live) {
+        if (k.dead || k.away) continue;
+        const at = k.it.at?.();
+        if (!at || !Number.isFinite(at.x) || !Number.isFinite(at.z) || !inside(at.x, at.z)) continue;
+        // what there is of it to put away: whatever it added to the level, and (the mascot, which builds itself) its figure
+        const figure = k.it.figure, things = [...k.things, figure?.group].filter(Boolean), bodies = [...k.bodies, figure?.body].filter(Boolean);
+        k.away = key; k.shown = things.map((o) => [o, o.visible]); k.out = bodies.filter((b) => w.bodies.includes(b));
+        for (const o of things) o.visible = false;
+        for (const b of k.out) w.bodies.splice(w.bodies.indexOf(b), 1);
+        gone.push(k.id);
+      }
+      if (follower && !follower.away && inside(follower.x, follower.z)) { follower.away = key; follower.g.visible = false; gone.push('follower'); }
+      return gone;
+    },
+    /** That room is back, and so is whoever was in it: where they stood, as they were. → who came back. */
+    bringBack(key) {
+      const w = W(), back = [];
+      for (const k of live) {
+        if (k.away !== key) continue;
+        k.away = null;
+        for (const [o, visible] of k.shown || []) o.visible = visible;
+        for (const b of k.out || []) if (!w.bodies.includes(b)) w.bodies.push(b);
+        k.shown = k.out = null; back.push(k.id);
+      }
+      if (follower && follower.away === key) { follower.away = null; follower.g.visible = drawn(follower); back.push('follower'); }
+      return back;
+    },
+    /** Who is away with a room, and which (for the dev page and the tests): { id: key }. */
+    get away() { return Object.fromEntries([...live.filter((k) => k.away).map((k) => [k.id, k.away]), ...(follower?.away ? [['follower', follower.away]] : [])]); },
     /** Where the mascot is and what it is doing (for the dev page) · everybody on this floor: { id: at() }. */
     at: () => pirate?.at() ?? null,
     cast: () => Object.fromEntries(live.map((k) => [k.id, k.dead ? null : k.it.at?.() ?? {}])),

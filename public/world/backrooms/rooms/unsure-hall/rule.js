@@ -20,6 +20,14 @@
 // This is not paint. The two doorways are real doorways to real rooms, and
 // they are opened and shut with the room (world.throats), for the visitor and
 // for everything else that walks.
+//
+// And it does not wait for anything. Whatever is standing in the room when it
+// goes, goes with it, and whatever was put down in it: they are in that room,
+// wherever it now is, and are there when it comes round again (the owner:
+// "If an enemy is in a room it gets warped away with the room. The backrooms
+// lore is not nice and considerate and waiting to make its changes."). The
+// one thing it does not take is the visitor, who has to be somewhere else for
+// it to turn at all.
 
 /** How long nobody has to have been looking, seconds: a glance at your feet is not long enough, turning round is. */
 export const AWAY = 0.4;
@@ -61,19 +69,19 @@ export const settled = () => ({ face: 0, away: 0, seen: false });
  * One moment of it.
  * @param s    what settled() or the last call gave
  * @param dt   seconds since
- * @param now  { watched, inside, busy, near }
+ * @param now  { watched, inside, near }
  *        watched  is any of the room at the front on the visitor's screen, and not behind a wall?
  *        inside   is the visitor in it, or in one of its doorways?
- *        busy     is anything else that walks in it, or in one of its doorways?
  *        near     is the visitor in the hallway or the room at the back (the only places it turns for)?
+ *        (Nothing else is asked. What else is in the room is not a reason to wait: it goes with the room.)
  * @param n    how many rooms it is (ROOMS)
  * @returns {{face:number, away:number, seen:boolean, turned:boolean}}  face: which of ROOMS · turned: it changed this moment
  */
 export function unsure(s, dt, now, n = ROOMS.length) {
   // looked at, or walked into: it is known, and it stays as it is for as long as that lasts
   if (now.watched || now.inside) return { face: s.face, away: 0, seen: true, turned: false };
-  // something is standing in it, or the visitor is somewhere else altogether: nothing happens, and nothing is forgotten
-  if (now.busy || !now.near) return { face: s.face, away: 0, seen: s.seen, turned: false };
+  // the visitor is somewhere else altogether: nothing happens, and nothing is forgotten
+  if (!now.near) return { face: s.face, away: 0, seen: s.seen, turned: false };
   const away = s.away + dt;
   if (s.seen && away >= AWAY && n > 1) return { face: (s.face + 1) % n, away: 0, seen: false, turned: true };
   return { face: s.face, away, seen: s.seen, turned: false };

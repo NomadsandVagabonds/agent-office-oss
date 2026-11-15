@@ -131,7 +131,7 @@ export function createInventoryFire(env, { canAct = () => true, clearRay, isDry 
   return {
     request, ignite,
     occupied(x, z, radius, y) {
-      return !disposed && pool.some(f => f.remaining > 0 && Math.abs(f.wy - y) < .8 && Math.hypot(f.wx - x, f.wz - z) < FIRE.footprint + radius);
+      return !disposed && pool.some(f => f.remaining > 0 && !f.away && Math.abs(f.wy - y) < .8 && Math.hypot(f.wx - x, f.wz - z) < FIRE.footprint + radius);
     },
     threatAt(x, z, y) {
       if (disposed || !canAct() || !Number.isFinite(x) || !Number.isFinite(z) || !world.roomAt(x, z)) return null;
@@ -139,7 +139,7 @@ export function createInventoryFire(env, { canAct = () => true, clearRay, isDry 
       if (!Number.isFinite(height)) return null;
       let nearest = null, distance = FIRE.radius + 1e-8;
       for (const f of pool) {
-        if (f.remaining <= 0 || Math.abs(f.wy - floor) >= .8 || Math.abs(f.wy - height) >= .8) continue;
+        if (f.remaining <= 0 || f.away || Math.abs(f.wy - floor) >= .8 || Math.abs(f.wy - height) >= .8) continue;
         const d = Math.hypot(f.wx - x, f.wz - z);
         if (d > distance || !lineOfSight(x, z, f.wx, f.wz)) continue;
         nearest = f; distance = d;
@@ -148,12 +148,16 @@ export function createInventoryFire(env, { canAct = () => true, clearRay, isDry 
     },
     update(dt) {
       if (disposed || !Number.isFinite(dt) || dt <= 0) return;
-      for (const f of pool) if (f.remaining > 0) {
+      for (const f of pool) if (f.remaining > 0 && !f.away) {
         f.remaining = isDry(f) ? Math.max(0, f.remaining - dt) : 0;
         draw(f);
       }
     },
-    report: () => pool.filter(f => f.remaining > 0).map(snapshot),
+    // A fire burning in a room that has gone is burning there, not here: it is no light, no heat and no threat to
+    // anything until the room is back, and then it has as long left as it had (inventory-world.js, takeAway).
+    takeAway(inside, key) { const gone = pool.filter(f => f.remaining > 0 && !f.away && inside(f.wx, f.wz)); for (const f of gone) { f.away = key; f.group.visible = false; } return gone.length; },
+    bringBack(key) { const back = pool.filter(f => f.away === key); for (const f of back) { f.away = null; f.group.visible = true; draw(f); } return back.length; },
+    report: () => pool.filter(f => f.remaining > 0 && !f.away).map(snapshot),
     dispose() {
       if (disposed) return;
       disposed = true;

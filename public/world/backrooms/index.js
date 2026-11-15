@@ -272,6 +272,15 @@ async function visit(office, opt) {
       descend: (at) => cur === f && descend(false, at || {}),
       /** A room is carrying somebody (a chute): their hands are off the controls until it lets go. */
       hold: (on) => { if (cur === f) hold = !!on; },
+      /**
+       * A room has gone, and taken what was in it (there are rooms that change the building: rooms/unsure-hall.js).
+       * Whoever was standing there and whatever was lying there go with it, and are there again when it is back:
+       * the cast and the colleague who came along (pursuer.js), the residents that walk (denizens.js), and what is
+       * on the floor (inventory-world.js). `inside(x, z)`: where the room was, in this part's world. `key`: the
+       * room's own name for itself. The place does not wait for anybody to step out of the way.
+       */
+      takeAway(inside, key) { return { cast: env.pursuer?.takeAway?.(inside, key) || [], residents: env.denizens?.takeAway?.(inside, key) || 0, things: env.inventory?.physical?.takeAway?.(inside, key) || 0 }; },
+      bringBack(key) { return { cast: env.pursuer?.bringBack?.(key) || [], residents: env.denizens?.bringBack?.(key) || 0, things: env.inventory?.physical?.bringBack?.(key) || 0 }; },
       /** Is this spot on screen and not behind a wall? */
       sees(x, z, o = {}) {
         const me = f.player?.me; if (!me) return false;

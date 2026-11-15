@@ -589,7 +589,7 @@ test('near a seam the parts run into each other, and that changes nothing but ho
 });
 
 test('the hallway that is not sure where it leads: the room you came through, a dead end, the way on; behind your back, from the hallway or beyond, and round again', () => {
-  const dt = 1 / 30, beyond = { watched: false, inside: false, busy: false, near: true };
+  const dt = 1 / 30, beyond = { watched: false, inside: false, near: true };
   const run = (s, secs, now) => { let turns = 0; for (let t = 0; t < secs; t += dt) { s = unsure(s, dt, now); if (s.turned) turns++; } return [s, turns]; };
   assert.deepEqual([...ROOMS], ['through', 'dead', 'on']);
   assert.deepEqual(JSON.parse(JSON.stringify(DOORWAYS)), { through: { in: true, on: false }, dead: { in: false, on: false }, on: { in: false, on: true } });
@@ -606,10 +606,11 @@ test('the hallway that is not sure where it leads: the room you came through, a 
   // from the room outside and walked off would otherwise come back to a wall.)
   [s] = run(settled(), 1, { ...beyond, watched: true, near: false });
   [s, turns] = run(s, 60, { ...beyond, near: false }); assert.equal(turns, 0, 'it only turns for somebody who is in the hallway or beyond it');
-  // something else is standing in it: not then either. And that it was looked at is not forgotten
+  // Something else standing in it is no reason to wait (the owner: "If an enemy is in a room it gets warped away with
+  // the room. The backrooms lore is not nice and considerate and waiting to make its changes."). The rule is not even
+  // told: whatever is in the room goes with it, and that is the room's business (env.takeAway)
   [s] = run(settled(), 1, { ...beyond, watched: true });
-  [s, turns] = run(s, 30, { ...beyond, busy: true }); assert.equal(turns, 0, 'never on top of anything that walks');
-  [s, turns] = run(s, 1, beyond); assert.equal(turns, 1);
+  [s, turns] = run(s, 1, { ...beyond, busy: true }); assert.equal(turns, 1, 'it does not wait for anything that is standing in it');
   // The walk itself: in by the doorway (inside), on into the hallway with your back to it (out of sight) — a dead end.
   // Look back, look away: the way on. Look back, look away: the room you came through. One room each time.
   s = settled();

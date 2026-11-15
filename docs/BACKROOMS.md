@@ -503,11 +503,25 @@ What makes it real and not paint:
   and the fire exit off the gate and off nothing else. No doorway is ever
   added afterwards. A test takes the room out of each such part and checks
   that the exit can no longer be walked to.
-- **Nobody is shut in for good.** The rooms come round; the first has the way
-  back in it and the third the way on. It never turns while the visitor, or
-  anything with a body, is in it or in one of its doorways. And it never turns
-  at all unless the visitor is in the hallway or the room beyond, so nobody
-  who looked in from outside and walked off comes back to a wall.
+- **The visitor is not shut in for good.** The rooms come round; the first
+  has the way back in it and the third the way on. It never turns while the
+  visitor is in it or in one of its doorways. And it never turns at all
+  unless the visitor is in the hallway or the room beyond, so nobody who
+  looked in from outside and walked off comes back to a wall.
+- **It waits for nothing else.** The owner: "You don't want the swap to be
+  blocked if an enemy is in a room. If an enemy is in a room it gets warped
+  away with the room. The backrooms lore is not nice and considerate and
+  waiting to make its changes." Whatever is in the room when it goes, goes
+  with it, and is in it, as it was, when that room comes round again:
+  the mascot and the rest of the cast, the colleague who came along, a
+  resident that has walked in, anything put down on its floor, a chalk mark,
+  a fire. While they are away they are not seen, not walked into, cannot be
+  used and do nothing. (So a chalk mark made to find out whether it is the
+  same room says what is true: it is not.) Each of the three rooms keeps its
+  own. This is `env.takeAway(inside, key)` and `env.bringBack(key)`
+  (`index.js`), which any room that changes the building may call; the cast
+  (`pursuer.js`), the residents (`denizens.js`) and the floor
+  (`inventory-world.js`, `inventory-fire.js`) each do their share.
 
 The room at the back is a dead end with a column in the middle of it on
 purpose (the owner's easier version): a walk round the column is a walk out of
@@ -519,7 +533,13 @@ field away (`ports`) and is not built.
 
 Adding another: give its deck line `gate: (room) => …` and `planned: true`,
 have the plan `must` it, read `room.gate = { in, on }` (link ids) in its
-builder, and keep the three promises above. One to a part.
+builder, and keep the promises above. One to a part.
+
+A creature needs to do nothing to be taken: the conductor puts away whatever
+it added with `c.add` and whatever body it gave with `c.body` (or, for one
+that builds itself as the mascot does, its `figure`: `{ group, body }`),
+stops running it, and makes what it offered with `c.use` unusable. It is
+found by where `at()` says it is. One that says it is nowhere is in no room.
 
 ## On a phone
 

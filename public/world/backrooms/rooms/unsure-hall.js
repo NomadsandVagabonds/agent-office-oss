@@ -14,10 +14,15 @@
 //
 // It takes the cardboard people for granted (`needs: unwatched`): they are
 // where anybody learns that some things only move while nobody is looking.
-// Nobody can be shut in for good: the three rooms come round again, the first
-// has the way back in it and the third the way on, it never turns while
-// anybody or anything is standing in it or in one of its doorways, and it
-// never turns at all unless the visitor is in the hallway or the room beyond.
+// The visitor cannot be shut in for good: the three rooms come round again,
+// the first has the way back in it and the third the way on, it never turns
+// while the visitor is in it or in one of its doorways, and it never turns at
+// all unless the visitor is in the hallway or the room beyond.
+//
+// Nothing else is waited for. Whatever is standing in the room when it goes,
+// goes with it — the mascot, anything that walks, anything put down there, a
+// chalk mark, a fire — and is in it, as it was, when that room comes round
+// again (env.takeAway / env.bringBack).
 import { Batch, lin, WHITE } from '../kit.js';
 import { toLocal } from '../gen.js';
 import { T } from '../frame.js';
@@ -34,7 +39,7 @@ const FACES = {
 export const FACE_IDS = Object.keys(FACES);
 
 export function build(c) {
-  const { W, D, H, kit, room, params: p } = c;
+  const { W, D, H, kit, room, params: p, env } = c;
   const { zEnd, zView, on, column } = partsOf(room);
   c.shell();
 
@@ -137,16 +142,22 @@ export function build(c) {
   };
   c.after.push(() => show(0));
 
-  // while nobody is looking, nobody is in it, and the visitor is in the hallway or the room beyond
+  // while nobody is looking, the visitor is not in it, and the visitor is in the hallway or the room beyond
   const inEnd = (x, z) => x > -W / 2 - 0.7 && x < W / 2 + 0.7 && z > zEnd - 0.15 && z < D / 2 + 0.7;       // (the room, and half a pace into each of its doorways)
+  // …and what is in it goes with it: each of the three rooms keeps whoever and whatever was in it when it went
+  const inWorld = (x, z) => { const l = toLocal(room, x, z); return inEnd(l.x, l.z); };
+  const nameOf = (i) => `unsure-hall:${room.id}:${ROOMS[i]}`;
   const spots = [[xh, zEnd + 0.5], [xh, D / 2 - 0.5], [0, on], [-W / 4, on], [W / 4, on], [-W / 2 + 0.6, zEnd + 0.6], [W / 2 - 0.6, zEnd + 0.6], [-W / 2 + 0.6, D / 2 - 0.6], [W / 2 - 0.6, D / 2 - 0.6]];
   let s = settled();
   c.tick((dt, t, me) => {
-    const inside = inEnd(me.x, me.z), near = !!me.inside && !inside;
-    const busy = c.world.bodies.some((b) => { const l = toLocal(room, b.x, b.z); return inEnd(l.x, l.z); });
+    const inside = inEnd(me.x, me.z), near = !!me.inside && !inside, was = s.face;
     const watched = spots.some(([x, z]) => c.seen(x, z, { margin: 0.25, radius: 0.8 }));
-    s = unsure(s, dt, { watched, inside, busy, near });
-    if (s.turned) show(s.face);
+    s = unsure(s, dt, { watched, inside, near });
+    if (!s.turned) return;
+    // the room that was here goes, with everything in it; the next is here, with everything that was in it when it went
+    env.takeAway?.(inWorld, nameOf(was));
+    show(s.face);
+    env.bringBack?.(nameOf(s.face));
   });
   c.rt.unsure = { get face() { return ROOMS[s.face]; }, count: ROOMS.length, parts: { zEnd, zView, xh, column: { x: xh + column.x, z: column.z, s: column.s } } };          // (for the dev page, and for whoever is checking it)
 }
