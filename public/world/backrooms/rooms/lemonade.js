@@ -135,13 +135,10 @@ export function build(c) {
   c.add(fig); c.reserve(home.x, home.z, 0.5);
   const s = { mode: 'home', waited: 0, sulk: 0, glasses: STAND.glasses, happy: false };
   // her giggle (the owner's ask; made for her, and the one sound down here that is a recording and not the owner's music): only
-  // when she is right beside you, a little too high, and never while the sound is off or the menu is up
+  // when she is right beside you, louder the longer she has waited, and never while the sound is off or the menu is up
   const GIGGLE = new URL('./lemonade/giggle.mp3', import.meta.url).href;
-  let voice = null, nextGiggle = 2;
-  const giggle = (loud = 0.7, rate = 1.18) => {
-    if (!c.env.sound?.on || typeof Audio === 'undefined') return;
-    try { voice ||= new Audio(GIGGLE); voice.preservesPitch = false; voice.playbackRate = rate; voice.volume = loud; voice.currentTime = 0; voice.play()?.catch?.(() => {}); } catch { /* a sound is never worth an error */ }
-  };
+  let nextGiggle = 2;
+  const giggle = (loud = 0.7) => c.env.sound?.file?.(GIGGLE, { vol: loud });          // through the effects bus: the slider, M and the menu reach it
   let took = false, clock = 0;
   c.rt.vendor = s;                                        // (for the dev page and for scripts: what she is doing)
   const put = (bob = 0, shake = 0) => { fig.position.set(me0.x + shake * (Math.random() - 0.5), bob, me0.z + shake * (Math.random() - 0.5)); fig.rotation.y = me0.rot; };
@@ -159,9 +156,9 @@ export function build(c) {
     clock += dt; c.rt.vendorMe = { x: me.x, z: me.z };
     const d = Math.hypot(me.x - me0.x, me.z - me0.z), atHome = Math.hypot(home.x - me0.x, home.z - me0.z) < 0.1;
     const did = minds(s, dt, { inside: me.inside, d, took, home: atHome }); took = false;
-    if (did === 'gave') { giggle(0.8, 1.3); c.env.health?.heal?.(1); const w = c.toWorld(me0.x, me0.z); c.env.play?.('click', w.x, w.z, 5); }
+    if (did === 'gave') { giggle(0.85); c.env.health?.heal?.(1); const w = c.toWorld(me0.x, me0.z); c.env.play?.('click', w.x, w.z, 5); }
     if (did === 'hit') { c.hurt(1); c.env.interfere?.(1); c.env.hud?.glitch?.(0.5); }
-    nextGiggle -= dt; if (s.mode === 'offer' && me.inside && d < 1.7 && nextGiggle <= 0) { giggle(0.45 + 0.3 * (s.waited / STAND.patience), 1.12 + 0.2 * (s.waited / STAND.patience)); nextGiggle = 4 + Math.random() * 3; }
+    nextGiggle -= dt; if (s.mode === 'offer' && me.inside && d < 1.7 && nextGiggle <= 0) { giggle(0.45 + 0.4 * (s.waited / STAND.patience)); nextGiggle = 4 + Math.random() * 3; }
     let bob = 0, shake = 0;
     if (s.mode === 'offer') { go(me.x, me.z, STAND.walk, dt, STAND.reach); if (s.waited > STAND.patience * STAND.shakes) shake = 0.03 * (s.waited / STAND.patience); }
     else if (s.mode === 'angry') { go(me.x, me.z, STAND.run, dt, 0.3); shake = 0.05; }
