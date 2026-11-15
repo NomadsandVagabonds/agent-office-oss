@@ -8,21 +8,25 @@
 // frame, tinted by the light where it stands.
 import * as THREE from 'three';
 import { roomDistances } from '../gen.js';
+import { Batch, lamp } from '../kit.js';
+import { S, SW, RING, LIMB, ringVox, mouthVox, limbVox, endVox, footVox, wormVox } from './greeter.model.js';
 import { GREETER, WORM, swaying, sways, finds, trodden } from './greeter.rule.js';
 
-const SEGS = 10, SEG_H = GREETER.height / SEGS;
-const FLESH = [[0.8, 0.42, 0.4], [0.62, 0.27, 0.3], [0.86, 0.5, 0.45]], GUM = [0.4, 0.08, 0.12], THROAT = [0.07, 0.01, 0.02], TOOTH = [0.95, 0.9, 0.78], PINK = [[1, 0.36, 0.56], [0.84, 0.2, 0.44]];
+const SEGS = 14, SEG_H = GREETER.height / SEGS, RING_H = RING * S, LIMB_H = LIMB * S;
 
 export function create(c) {
   const env = c.env, level = c.level, G = GREETER;
-  const own = (x) => (env.kit.own ? env.kit.own(x) : x);
   const walker = { x: 0, z: 0, r: G.r, tall: G.tall, opens: false };
   const worms = [];
-  let s = swaying(), group = null, segs = [], arms = [], feet = [], lips = [], mats = [], wormMats = [], cube = null;
+  let s = swaying(), group = null, segs = [], arms = [], feet = [], lips = [], mat = null, wormMat = null, wormGeo = [], peeping = [];
   let clock = 0, yaw = 0, lean = 0, walked = 0, known = false, over = false, use = null, tookOne = false, hadBrood = false;
 
-  const mat = (rgb, list) => { const m = own(new THREE.MeshBasicMaterial()); m.userData.rgb = rgb; list.push(m); return m; };
-  const box = (parent, m, w, h, d) => { const k = new THREE.Mesh(cube, m); k.scale.set(w, h, d); parent.add(k); return k; };
+  // (voxels, lit once from above and in front as the lines are, and tinted every frame by the light where it stands)
+  const LIGHTS = [lamp(0.6, 3.2, 1.4, [1.1, 1.05, 1.0], { k: 9, wrap: 0.45, far: 40 })];
+  const geo = (key, make, scale = S) => { const b = new Batch(true); b.addVox(env.kit.model(key, make).solid, new THREE.Matrix4().makeScale(scale, scale, scale)); return env.kit.geometry(b, LIGHTS, [0.42, 0.4, 0.4]); };
+  const part = (parent, g, m = mat) => { const k = new THREE.Mesh(g, m); parent.add(k); return k; };
+  /** One of the small ones, as a thing to look at: four lengths of it, its head first. */
+  const smallOne = (parent) => { const g = new THREE.Group(), parts = wormGeo.map((w, k) => { const p = part(g, w, wormMat); p.scale.setScalar(1 - k * 0.1); return p; }); parent.add(g); return { g, parts }; };
 
   function startRoom() {
     const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 2.5 && r.kind !== 'start' && r.kind !== 'exit';
@@ -37,37 +41,40 @@ export function create(c) {
   function ready() {
     const spot = c.walk.spotIn(walker, startRoom());
     walker.x = spot.x; walker.z = spot.z; yaw = c.R.range(0, Math.PI * 2);
-    cube = own(new THREE.BoxGeometry(1, 1, 1));
     group = new THREE.Group();
-    const flesh = FLESH.map((rgb) => mat(rgb, mats)), gum = mat(GUM, mats), tooth = mat(TOOTH, mats), throat = mat(THROAT, mats);
-    // the tube: rings of it, a little narrower toward the top, every other one a paler band
+    mat = env.kit.surface({ vox: true }); wormMat = env.kit.surface({ vox: true });
+    wormGeo = [0, 1, 2, 3].map((k) => geo('greeter:small:' + k, () => wormVox(k), SW));
+    // the trunk: rings of it, no two alike, narrower toward the top and never quite round
+    const rings = [0, 1, 2, 3].map((k) => geo('greeter:ring:' + k, () => ringVox(k)));
     for (let i = 0; i < SEGS; i++) {
-      const w = 0.62 - 0.2 * (i / (SEGS - 1)) + (i % 2 ? 0.03 : 0);
-      segs.push({ m: box(group, flesh[i % 2 ? 1 : i % 3 === 0 ? 2 : 0], w, SEG_H * 1.04, w), w });
+      const w = 1.02 - 0.36 * (i / (SEGS - 1)) + Math.sin(i * 2.3) * 0.05;
+      segs.push({ m: part(group, rings[(i * 3 + (i >> 2)) % 4]), w, wx: 1 + Math.sin(i * 1.7) * 0.07, wz: 1 + Math.cos(i * 2.9) * 0.07, turn: i * 1.1 });
     }
-    // the mouth at the top of it: a dark ring, and what it has for teeth
+    // the mouth on top of it: a pit of spines, with some of what is in it looking out, and what grows round the lip of it
     const top = new THREE.Group(); group.add(top); lips.push(top);
-    box(top, gum, 0.46, 0.1, 0.46).position.y = 0.03;
-    box(top, throat, 0.3, 0.04, 0.3).position.y = 0.085;
-    for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2, t = box(top, tooth, 0.05, 0.13, 0.05); t.position.set(Math.cos(a) * 0.18, 0.12, Math.sin(a) * 0.18); t.rotation.y = -a; }
-    // two arms that do nothing but wave
-    for (const side of [-1, 1]) {
-      const joints = []; for (let j = 0; j < 4; j++) joints.push(box(group, flesh[j % 2], 0.15 - j * 0.02, 0.3, 0.15 - j * 0.02));
-      arms.push({ side, joints });
+    part(top, geo('greeter:mouth', mouthVox)).scale.setScalar(0.74);
+    for (let k = 0; k < 3; k++) { const w = smallOne(top); w.a = k * 2.2 + 0.4; w.g.scale.setScalar(0.85); peeping.push(w); }
+    const limb = geo('greeter:limb', limbVox), end = geo('greeter:end', endVox);
+    const feelers = []; for (let k = 0; k < 5; k++) { const joints = [0, 1, 2].map((n) => { const j = part(top, n === 2 ? end : limb); j.scale.set(0.55, 0.7, 0.55); return j; }); feelers.push({ a: k * 1.26 + 0.3, joints }); }
+    lips.push(feelers);
+    // what it waves: two long, two short, joined on wherever
+    for (const [side, at, n, thick] of [[-1, 0.66, 5, 1], [1, 0.6, 5, 1], [-1, 0.42, 3, 0.75], [1, 0.8, 3, 0.7]]) {
+      const joints = []; for (let j = 0; j < n; j++) { const m = part(group, j === n - 1 ? end : limb); m.scale.set(thick * (1 - j * 0.1), 1, thick * (1 - j * 0.1)); joints.push(m); }
+      arms.push({ side, at, joints });
     }
     // and the feet: short, thick, and more of them than it needs
-    for (let k = 0; k < 6; k++) feet.push({ a: (k / 6) * Math.PI * 2, m: box(group, flesh[1], 0.24, 0.2, 0.34) });
+    const foot = geo('greeter:foot', footVox);
+    for (let k = 0; k < 7; k++) { const m = part(group, foot); m.scale.setScalar(0.95 + (k % 3) * 0.12); feet.push({ a: (k / 7) * Math.PI * 2 + (k % 2) * 0.2, m }); }
     c.add(group);
     c.body({ get x() { return walker.x; }, get z() { return walker.z; }, r: G.r });
-    PINK.forEach((rgb) => mat(rgb, wormMats));
     // E treads on one: the one spot there is to use, kept under whichever of them a foot would come down on
     use = c.use({ x: walker.x, z: walker.z, r: WORM.tread, cone: -1, when: () => !over && trodden(c.me(), worms) >= 0, use: tread });
     pose(0);
   }
 
-  function tint(list, x, z, lift = 0.1) {
-    const L = c.light(x, z, 1.2);
-    for (const m of list) { const k = m.userData.rgb; const f = (v) => Math.min(1.15, v * 1.05 + lift); m.color.setRGB(k[0] * f(L[0]), k[1] * f(L[1]), k[2] * f(L[2])); }
+  function tint(m, x, z, lift = 0.06) {
+    const L = c.light(x, z, 1.4);
+    m.uniforms.uTint.value.set(L[0] * 1.5 + lift, L[1] * 1.5 + lift, L[2] * 1.5 + lift);
   }
 
   /** Lean every ring of it where the sway has it this moment. */
@@ -77,46 +84,61 @@ export function create(c) {
     const amp = 0.5 + 0.35 * glad - 0.25 * heave, rate = 1.5 + 0.5 * glad;
     lean += ((heave ? -0.75 * heave : 0) - lean) * Math.min(1, dt * 5);
     const fx = Math.sin(yaw), fz = Math.cos(yaw), sx = Math.cos(yaw), sz = -Math.sin(yaw);
-    let px = 0, pz = 0, py = 0.14, bend = 0, pitch = 0;
+    let px = 0, pz = 0, py = 0.1, bend = 0, pitch = 0;
     for (let i = 0; i < SEGS; i++) {
       const k = i / (SEGS - 1), sway = Math.sin(clock * rate - i * 0.42) * amp * k * 0.34 + (heave ? (Math.random() - 0.5) * 0.05 * heave : 0);
       const nod = Math.sin(clock * rate * 0.5 - i * 0.3) * 0.12 * k * (1 + glad) + lean * k * 0.5;   // (the top of it curls over, to look at you with what it has)
-      bend += sway * 0.32; pitch += nod * 0.3 + (k > 0.55 ? 0.3 * (1 - heave) : 0);
+      bend += sway * 0.23; pitch += nod * 0.22 + (k > 0.55 ? 0.21 * (1 - heave) : 0);
       const seg = segs[i].m, h = SEG_H * (1 + (heave ? Math.sin(clock * 22 + i) * 0.05 * heave : 0));
+      seg.position.set(walker.x + sx * px + fx * pz, floor + py, walker.z + sz * px + fz * pz);
+      seg.rotation.set(0, yaw, 0); seg.rotateZ(-bend); seg.rotateX(pitch); seg.rotateY(segs[i].turn);
       px += Math.sin(bend) * h; pz += Math.sin(pitch) * h; py += Math.cos(bend) * Math.cos(pitch) * h;
-      seg.position.set(walker.x + sx * px + fx * pz, floor + py - h / 2, walker.z + sz * px + fz * pz);
-      seg.rotation.set(0, yaw, 0); seg.rotateZ(-bend); seg.rotateX(pitch);
       // a swallow goes up it while it heaves
       const gulp = heave ? Math.max(0, 1 - Math.abs(k - heave) * 5) * 0.35 : 0;
-      seg.scale.set(segs[i].w * (1 + gulp), SEG_H * 1.04, segs[i].w * (1 + gulp));
+      const breath = 1 + Math.sin(clock * 1.1 - i * 0.5) * 0.025;
+      seg.scale.set(segs[i].w * segs[i].wx * (1 + gulp) * breath, (h / RING_H) * 1.25, segs[i].w * segs[i].wz * (1 + gulp) * breath);
     }
     const head = segs[SEGS - 1].m;
-    lips[0].position.copy(head.position); lips[0].position.y += SEG_H / 2; lips[0].rotation.copy(head.rotation);
-    lips[0].scale.setScalar(1 + 0.6 * heave);
-    // the arms, from two thirds of the way up
-    const sh = segs[Math.floor(SEGS * 0.65)].m;
+    lips[0].position.set(walker.x + sx * px + fx * pz, floor + py, walker.z + sz * px + fz * pz); lips[0].rotation.set(0, yaw, 0); lips[0].rotateZ(-bend); lips[0].rotateX(pitch);
+    lips[0].scale.setScalar(1 + 0.45 * heave);
+    // what is in it looks out, and goes back in; more of them, further, as it heaves
+    peeping.forEach((w, n) => {
+      const out = Math.max(0, Math.sin(clock * (0.9 + n * 0.23) + n * 2.1)) * (0.5 + 0.5 * heave) + heave * 0.4, r = 0.07 + 0.03 * n;
+      w.g.position.set(Math.cos(w.a + clock * 0.2) * r, 0.02 + out * 0.2, Math.sin(w.a + clock * 0.2) * r);
+      w.g.rotation.set(-Math.PI / 2 + Math.sin(clock * 3 + n) * 0.5, w.a, 0);
+      w.parts.forEach((p, q) => p.position.set(Math.sin(clock * 9 + n * 2 - q * 1.4) * 0.012, 0, -q * 0.05));
+    });
+    // and what grows round the lip of it feels about
+    for (const f of lips[1]) {
+      let x = Math.cos(f.a) * 0.2, y = 0.2, z = Math.sin(f.a) * 0.2, tilt = 0.5 + Math.sin(clock * 1.7 + f.a * 3) * 0.5 - heave * 0.6;
+      f.joints.forEach((jt, n) => {
+        tilt += Math.sin(clock * (2.4 + n * 0.6) + f.a * 5 + n) * 0.45;
+        jt.position.set(x, y, z); jt.rotation.set(0, -f.a, 0); jt.rotateZ(-tilt);
+        const len = LIMB_H * 0.7; x += Math.cos(f.a) * Math.sin(tilt) * len; z += Math.sin(f.a) * Math.sin(tilt) * len; y += Math.cos(tilt) * len;
+      });
+    }
+    // what it waves, joined on to the trunk
     for (const arm of arms) {
-      let ax = sh.position.x + sx * arm.side * 0.26, ay = sh.position.y, az = sh.position.z + sz * arm.side * 0.26, ang = arm.side * (1.1 + 0.5 * glad);
-      arm.joints.forEach((j, n) => {
-        ang += Math.sin(clock * (4.2 + glad * 2) + n * 0.9 + arm.side) * (0.55 + 0.25 * glad) - arm.side * heave * 0.35;
-        const dx = Math.sin(ang) * 0.27, dy = Math.cos(ang) * 0.27;
-        j.position.set(ax + sx * dx / 2, ay + dy / 2, az + sz * dx / 2); j.rotation.set(0, yaw, 0); j.rotateZ(-ang);
+      const sh = segs[Math.floor((SEGS - 1) * arm.at)].m, out = 0.24 * segs[Math.floor((SEGS - 1) * arm.at)].w;
+      let ax = sh.position.x + sx * arm.side * out, ay = sh.position.y + 0.06, az = sh.position.z + sz * arm.side * out, ang = arm.side * (1.25 + 0.4 * glad);
+      arm.joints.forEach((jt, n) => {
+        ang += Math.sin(clock * (3.6 + glad * 2) + n * 0.9 + arm.side + arm.at * 7) * (0.5 + 0.25 * glad) - arm.side * heave * 0.3;
+        jt.position.set(ax, ay, az); jt.rotation.set(0, yaw, 0); jt.rotateZ(-ang);
+        const dx = Math.sin(ang) * LIMB_H * 0.94, dy = Math.cos(ang) * LIMB_H * 0.94;
         ax += sx * dx; ay += dy; az += sz * dx;
       });
     }
     // the feet shuffle when it goes anywhere, and tread on the spot when it does not
     for (const f of feet) {
       const step = Math.max(0, Math.sin(walked * 9 + f.a * 2 + clock * (glad ? 3 : 0.8))) * (0.05 + 0.04 * glad);
-      f.m.position.set(walker.x + Math.cos(f.a + yaw) * 0.36, floor + 0.1 + step, walker.z + Math.sin(f.a + yaw) * 0.36); f.m.rotation.y = -f.a - yaw + Math.PI / 2;
+      f.m.position.set(walker.x + Math.cos(f.a + yaw) * 0.3, floor + step, walker.z + Math.sin(f.a + yaw) * 0.3); f.m.rotation.y = -f.a - yaw + Math.PI / 2;
     }
-    return { x: lips[0].position.x, y: lips[0].position.y, z: lips[0].position.z };
+    return { x: lips[0].position.x, y: lips[0].position.y + 0.2, z: lips[0].position.z };
   }
 
   /** One of the small ones, out of its mouth: thrown up and over toward the visitor, and off it goes. */
   function bring(from, n, i) {
-    const g = new THREE.Group(), parts = [];
-    for (let k = 0; k < 4; k++) { const p = box(g, wormMats[k % 2], 0.085 - k * 0.012, 0.075 - k * 0.01, 0.1); parts.push(p); }
-    c.add(g);
+    const { g, parts } = smallOne(group); group.remove(g); c.add(g);
     const m = c.me(), a = Math.atan2(m.x - walker.x, m.z - walker.z) + (i - (n - 1) / 2) * 0.5 + (Math.random() - 0.5) * 0.3, far = 0.9 + Math.random() * 0.8;
     let tx = walker.x + Math.sin(a) * far, tz = walker.z + Math.cos(a) * far;
     const probe = { x: tx, z: tz, r: WORM.r, tall: WORM.tall, opens: false, crawls: true };
@@ -191,7 +213,7 @@ export function create(c) {
       // a writhing line of four
       const lying = w.dazed > 0 && !w.air;
       w.g.position.set(w.x, w.y, w.z); w.g.rotation.set(lying ? Math.PI : 0, w.air ? Math.atan2(w.air.tx - w.air.fx, w.air.tz - w.air.fz) : w.heading, 0); w.g.scale.set(1, 1, 1);
-      w.parts.forEach((p, k) => p.position.set(Math.sin(w.phase - k * 1.4) * (lying ? 0.05 : 0.028), w.air ? Math.sin(w.phase * 0.6 + k) * 0.03 : 0, -k * 0.085));
+      w.parts.forEach((p, k) => p.position.set(Math.sin(w.phase - k * 1.4) * (lying ? 0.05 : 0.028), w.air ? Math.sin(w.phase * 0.6 + k) * 0.03 : 0, -k * 0.07));
       w.g.visible = c.drawn(w);
     }
     // the one spot to use is under whichever of them a foot would find
@@ -224,9 +246,10 @@ export function create(c) {
       }
       group.visible = c.drawn(walker);
       const mouth = pose(dt);
-      tint(mats, walker.x, walker.z);
+      tint(mat, walker.x, walker.z);
       if (s.up) { hadBrood = true; tookOne = false; for (let i = 0; i < s.up; i++) bring(mouth, s.up, i); c.play('dissolve', walker.x, walker.z, 12); env.interfere?.(0.35); }
-      if (worms.length) { small(dt); if (worms[0]) tint(wormMats, worms[0].x, worms[0].z, 0.25); }
+      if (worms.length) small(dt);
+      tint(wormMat, worms[0] ? worms[0].x : walker.x, worms[0] ? worms[0].z : walker.z, 0.14);
       if (hadBrood && !over && !worms.some((w) => !w.dead)) { hadBrood = false; if (!tookOne) c.survived(); }
     },
     /** The building's camera: every one of them that is left goes for the visitor's character, which goes down under them. */
@@ -244,7 +267,7 @@ export function create(c) {
           w.g.visible = true; w.g.scale.set(1, 1, 1);
           w.g.position.set(w.from.x + (hx - w.from.x) * k, w.from.y + (hy - w.from.y) * k + Math.sin(k * Math.PI) * 0.4, w.from.z + (hz - w.from.z) * k);
           w.g.rotation.set(Math.sin(w.phase * 0.3), w.on.a + t * 2, 0);
-          w.parts.forEach((p, n) => p.position.set(Math.sin(w.phase - n * 1.4) * 0.04, 0, -n * 0.085));
+          w.parts.forEach((p, n) => p.position.set(Math.sin(w.phase - n * 1.4) * 0.04, 0, -n * 0.07));
         }
       };
     },
