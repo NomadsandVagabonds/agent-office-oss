@@ -1,6 +1,8 @@
 // Route IDs are shared by the relay and both browsers. Invite codes remain
 // random/private even when the building itself uses a repeatable seed.
 export const SHOWCASE_ROUTE = 'showcase';
+// The revised five-floor tour waits for Gemini's finished waterpark and co-op checks.
+export const SHOWCASE_PENDING = 'The waterpark is still being finished. Choose Somewhere new for now.';
 export const SHOWCASE_SEED = 'blockrooms-the-long-way-round-v1';
 export const COOP_ROUTES = Object.freeze([
   Object.freeze({id:'random',label:'Somewhere new',description:'A different building each time.'}),

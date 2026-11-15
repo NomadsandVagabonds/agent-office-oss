@@ -7,12 +7,13 @@ Private alpha: hosted on Railway; use the owner's private host bookmark.
 Railway runs game build `bb4551a`, separately from the public BlockRooms site.
 Deployment: `ed437082-8346-4085-9846-c8b3cba30be7`, verified 15 November 2026.
 
-## Curated tour (prepared, not live)
+## Curated tour (awaiting waterpark integration)
 
-**The long way round** adds a host-selectable five-floor tour, including Dispatch,
-Return Plenum, Suburbia, MECHA and Last Light. It schedules 27 feature rooms and
-all six cast types with 72–79% ordinary maze per floor. Full content and test
-limits are in [the showcase notes](BACKROOMS-COOP-SHOWCASE.md).
+The owner reserved floor 4 for Gemini's waterpark. The former floors 4–5 are
+combined into a six-feature night finale at floor 5, with MECHA and Last Light
+separated by maze rooms. Floor 1 keeps the pirate, cake room and moving cutouts.
+The new tour is unavailable until the waterpark is integrated and tested; normal
+random visits still work. See [the showcase notes](BACKROOMS-COOP-SHOWCASE.md).
 
 ## Custom characters and open mic (live)
 

@@ -1,4 +1,4 @@
-import {COOP_ROUTES} from '/core/coop-routes.mjs';
+import {COOP_ROUTES,SHOWCASE_PENDING} from '/core/coop-routes.mjs';
 import {GUEST_PRESETS,guestPreset} from '/core/guest-presets.mjs';
 import {createCharacterPicker} from './characters-ui.js';
 import {createInventoryHud} from '../backrooms/inventory-hud.js';
@@ -129,14 +129,15 @@ try {
  if(key){sessionStorage.setItem('coop-host',key);history.replaceState(null,'',location.pathname+location.search);}
  $('alphaKey').value=sessionStorage.getItem('coop-host')||'';if($('alphaKey').value)$('hostAccess').hidden=true;
 }catch{}
-$('route').value=new URLSearchParams(location.search).get('route')==='showcase'?'showcase':'random';
+if(SHOWCASE_PENDING){$('route').querySelector('[value=showcase]').disabled=true;$('route').querySelector('[value=showcase]').textContent='The long way round · waterpark coming soon';}
+$('route').value=!SHOWCASE_PENDING&&new URLSearchParams(location.search).get('route')==='showcase'?'showcase':'random';
 $('route').onchange=()=>{$('routeHelp').textContent=COOP_ROUTES.find(r=>r.id===$('route').value).description;};$('route').onchange();
 $('create').onclick=async()=>{
  $('create').disabled=true;$('create').textContent='Starting…';$('status').textContent='Starting your game…';
  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
  try{
   const r=await fetch(realMode?'/new?mode=rooms&route='+encodeURIComponent($('route').value)+(new URLSearchParams(location.search).get('slice')==='1'?'&slice=1':''):'/new',{method:'POST',headers:{'x-alpha-key':$('alphaKey').value},signal:controller.signal});
-  if(!r.ok){if(r.status===403){$('hostAccess').hidden=false;$('hostAccess').open=true;throw Error('Open your private host link, or enter the host passcode.');}throw Error('The server could not start a game. Please try again.');}
+  if(!r.ok){if(r.status===409)throw Error(await r.text());if(r.status===403){$('hostAccess').hidden=false;$('hostAccess').open=true;throw Error('Open your private host link, or enter the host passcode.');}throw Error('The server could not start a game. Please try again.');}
   $('alphaKey').value='';await connect((await r.json()).code);
  }catch(e){$('status').textContent=e.name==='AbortError'?'The server took too long to answer. Please try again.':e instanceof TypeError?'Could not reach the server. Check your connection and try again.':e.message;}
  finally{clearTimeout(timeout);$('create').disabled=false;$('create').textContent='Start a game';}

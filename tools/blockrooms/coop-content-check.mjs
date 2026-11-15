@@ -21,13 +21,13 @@ try{
  const THREE=await import('three'),{createRealRooms}=await import('/world/coop/real-rooms.js');
  const canvas=document.createElement('canvas');canvas.style='position:fixed;inset:0;z-index:10000';document.body.append(canvas);
  const renderer=new THREE.WebGLRenderer({canvas});renderer.setSize(960,600);const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(70,1.6,.05,100);
- window.review={scene,camera,renderer,r:null};window.makeReview=async(seed,options)=>{review.r?.dispose();review.r=await createRealRooms(seed,${isHost},scene,{slice:true,planOptions:options});};
+ window.review={scene,camera,renderer,r:null};window.makeReview=async(seed,options)=>{review.r?.dispose();const visit=options.finale?(await import("/world/coop/showcase-preview.js")).previewFloor(4):null;review.r=await createRealRooms(seed,${isHost},scene,{slice:true,planOptions:options,visit});};
  window.drawReview=()=>{const r=review.r,rt=r.world.rooms.find(rt=>rt.def.arch);const def=rt?.def||r.level.rooms[0];camera.position.set(def.cx,def.y+1.25,def.cz+Math.min(2,def.D/3));camera.lookAt(def.cx,def.y+1,def.cz-4);renderer.render(scene,camera);};
  })()`);
  const {DECK}=await import('../../public/world/backrooms/gen.js');
  const selected=process.env.COOP_CHECK_ROOMS?.split(',');
- const cases=DECK.filter(a=>!selected||selected.includes(a.id)).map(a=>({id:a.id,options:{only:a.id,themes:[a.themes?.suburb?'suburb':'yellow'],members:[]}}));
- if(!selected)for(const member of ['pirate','moth','shadow','porter','toner','other-door'])cases.push({id:'cast-'+member,options:{only:'ceiling-meeting',members:[member]}});
+ const cases=process.argv.includes('--finale')?[{id:'showcase-finale',options:{only:'mecha',finale:true}}]:DECK.filter(a=>!selected||selected.includes(a.id)).map(a=>({id:a.id,options:{only:a.id,themes:[a.themes?.suburb?'suburb':'yellow'],members:[]}}));
+ if(!selected&&!process.argv.includes('--finale'))for(const member of ['pirate','moth','shadow','porter','toner','other-door'])cases.push({id:'cast-'+member,options:{only:'ceiling-meeting',members:[member]}});
  if(process.env.COOP_CAST)for(const member of process.env.COOP_CAST.split(','))cases.push({id:'cast-'+member,options:{only:'ceiling-meeting',members:[member]}});
  const {exercise}=await import('./coop-encounters.mjs');
  const {createSceneSender}=await import('../../public/world/coop/scene-wire.js');

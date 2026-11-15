@@ -9,7 +9,7 @@ import {VERSION,createSession,join,act,tick,snapshot} from '../../core/coop.js';
 import {validVoicePacket} from '../../core/coop-voice.js';
 import {beginTransition,floorReady} from '../../public/world/coop/transition.js';
 import {validRealSnapshot} from '../../core/coop-real.js';
-import {SHOWCASE_ROUTE,SHOWCASE_SEED,sessionLifetime} from '../../core/coop-routes.mjs';
+import {SHOWCASE_ROUTE,SHOWCASE_SEED,SHOWCASE_PENDING,sessionLifetime} from '../../core/coop-routes.mjs';
 import {GUEST_PRESETS,guestPreset} from '../../core/guest-presets.mjs';
 const root=fileURLToPath(new URL('../../',import.meta.url));
 export function createCoopServer({alphaKey=process.env.COOP_ALPHA_KEY||'',defaultRooms=process.env.COOP_DEFAULT_MODE==='rooms'}={}) {
@@ -24,6 +24,7 @@ export function createCoopServer({alphaKey=process.env.COOP_ALPHA_KEY||'',defaul
     if(alphaKey&&!timingSafeEqual(hash(req.headers['x-alpha-key']||''),hash(alphaKey))){res.writeHead(403).end('Private alpha: host passcode required');return;}
     if(rooms.size>=64){res.writeHead(503).end('Review server full');return;}
     const route=u.searchParams.get('mode')==='rooms'&&u.searchParams.get('route')===SHOWCASE_ROUTE?SHOWCASE_ROUTE:'random';
+    if(route===SHOWCASE_ROUTE&&SHOWCASE_PENDING){res.writeHead(409,{'content-type':'text/plain'}).end(SHOWCASE_PENDING);return;}
     const code=randomBytes(16).toString('hex');rooms.set(code,{state:createSession(),mode:u.searchParams.get('mode')==='rooms'?'rooms':'maze',seed:route===SHOWCASE_ROUTE?SHOWCASE_SEED:code,route,depth:0,characters:GUEST_PRESETS.map(p=>p.id),slice:route==='random'&&u.searchParams.get('slice')==='1',host:null,clients:new Map(),born:Date.now()});
     res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'}).end(JSON.stringify({code}));return;
    }
