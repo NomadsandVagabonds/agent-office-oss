@@ -20,11 +20,9 @@
 // hundred times) a salted hash of it that cannot be turned back into one.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { blocked, checkRun, cleanEntry, cleanMessage, cleanName, entryOf } from '../../core/book.mjs';
+import { KEEP, AGAIN } from './book-policy.mjs';
 
-/** How many of the best are kept, and of the latest; how many of each a reader is shown. */
-export const KEEP = Object.freeze({ top: 100, latest: 100, showTop: 25, showLatest: 30 });
-/** Seconds before the same visitor counts again: as a hit on the page, as somebody going in, as somebody signing. */
-export const AGAIN = Object.freeze({ hit: 1800, in: 15, sign: 20, same: 90 * 86400 });
+export { KEEP, AGAIN };
 const MAX_BODY = 4096;
 
 const json = (status, body, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers } });
@@ -40,7 +38,7 @@ function who(request, salt) {
 /**
  * Answer a request for the book.
  * @param {Request} request
- * @param {{store: {pipeline: Function}|null, now?: () => number, salt?: string, blocklist?: string[], adminKey?: string}} ctx
+ * @param {{store: object|null, now?: () => number, salt?: string, blocklist?: string[], adminKey?: string}} ctx
  *        store: null if nothing keeps the book · blocklist: words no name may have in it · adminKey: what strikes a line out
  * @returns {Promise<Response>}
  */
@@ -49,6 +47,11 @@ export async function handle(request, ctx) {
   if (!store) return json(503, { ok: false, why: 'no-store' });
   try {
     if (request.method === 'GET' || request.method === 'HEAD') {
+      if (store.read) {
+        const { counter, top, latest } = await store.read();
+        return json(200, { ok: true, counter, top: top.map(cleanEntry).filter(Boolean), latest: latest.map(cleanEntry).filter(Boolean) },
+          { 'cache-control': 'public, max-age=0, s-maxage=10, stale-while-revalidate=120' });
+      }
       const [n, top, latest] = await store.pipeline([COUNTERS, ['ZREVRANGE', 'br:top', 0, KEEP.showTop - 1], ['LRANGE', 'br:latest', 0, KEEP.showLatest - 1]]);
       // (a reader is shown what was there a moment ago: the edge keeps it for a few seconds, so that a busy day is one read and not thousands)
       return json(200, { ok: true, counter: counterOf(n), top: (top || []).map(cleanEntry).filter(Boolean), latest: (latest || []).map(cleanEntry).filter(Boolean) },
@@ -66,6 +69,7 @@ export async function handle(request, ctx) {
     const me = who(request, salt);
 
     if (body.do === 'hit' || body.do === 'in') {
+      if (store.count) return json(200, { ok: true, ...await store.count(body.do, me) });
       const kind = body.do === 'hit' ? 'hits' : 'in';
       const [fresh] = await store.pipeline([['SET', `br:rl:${body.do}:${me}`, 1, 'NX', 'EX', AGAIN[body.do]]]);
       const [, n] = await store.pipeline([fresh ? ['INCR', `br:n:${kind}`] : ['GET', `br:n:${kind}`], COUNTERS]);
@@ -81,6 +85,17 @@ export async function handle(request, ctx) {
       if (blocked(message, ctx.blocklist || [])) return json(400, { ok: false, why: 'message', text: 'Message not allowed.' });
       const checked = checkRun(body.run);
       if (!checked.ok) return json(422, { ok: false, why: 'visit', text: checked.why });
+      if (store.sign) {
+        const duplicate = createHash('sha256').update(`${checked.run.seed}|${name}`).digest('base64url').slice(0, 22);
+        const entry = entryOf({ id: randomBytes(9).toString('hex'), at: now(), name, message, run: checked.run, score: checked.score });
+        const result = await store.sign(entry, me, duplicate);
+        if (!result.ok) {
+          if (result.why === 'slow') return json(429, { ok: false, why: 'slow' }, { 'retry-after': String(AGAIN.sign) });
+          if (result.why === 'signed') return json(409, { ok: false, why: 'signed' });
+          throw new Error('the store did not accept the entry');
+        }
+        return json(200, { ok: true, entry, place: result.place });
+      }
       // not line after line from the same hand…
       const [mine] = await store.pipeline([['SET', `br:rl:sign:${me}`, 1, 'NX', 'EX', AGAIN.sign]]);
       if (!mine) return json(429, { ok: false, why: 'slow' }, { 'retry-after': String(AGAIN.sign) });
@@ -107,6 +122,11 @@ export async function handle(request, ctx) {
       const key = Buffer.from(String(body.key || '')), right = Buffer.from(String(ctx.adminKey || ''));
       if (right.length < 16 || key.length !== right.length || !timingSafeEqual(key, right)) return json(403, { ok: false, why: 'key' });
       const id = String(body.id || '');
+      if (store.strike) {
+        if (!/^[a-z0-9]{6,40}$/.test(id)) return json(404, { ok: false, why: 'line' });
+        const struck = await store.strike(id);
+        return struck ? json(200, { ok: true, struck }) : json(404, { ok: false, why: 'line' });
+      }
       const [top, latest] = await store.pipeline([['ZREVRANGE', 'br:top', 0, KEEP.top - 1], ['LRANGE', 'br:latest', 0, KEEP.latest - 1]]);
       const lines = [...new Set([...(top || []), ...(latest || [])])].filter((line) => cleanEntry(line)?.id === id || (() => { try { return JSON.parse(line).id === id; } catch { return false; } })());
       if (!lines.length) return json(404, { ok: false, why: 'line' });

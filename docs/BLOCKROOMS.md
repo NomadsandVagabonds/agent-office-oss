@@ -123,17 +123,19 @@ On the site, if it keeps a book: see the next section.
 High scores, a guestbook and the traffic counter are one small thing: a
 function at `/api/book` (`api/book.mjs`, which is three lines;
 `tools/blockrooms/book-api.mjs` is what it does; `core/book.mjs` is the rules)
-over a Redis the host provides, spoken to over its REST interface with
-`fetch`. No client library: this repository still has no dependencies.
+over a small persistent store, spoken to with `fetch`. The Cloudflare D1
+adapter uses an existing Cloudflare account; the original Redis adapter is
+also supported. No client library: this repository still has no dependencies.
 
 **What the host has to be given** (environment variables on the project):
 
 | Variable | What for |
 |---|---|
-| `KV_REST_API_URL` + `KV_REST_API_TOKEN`, or `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | where the book is kept. Adding a Redis (Upstash) database to the project from Vercel's marketplace sets one of these pairs. **Without them there is no book**: `/api/book` answers 503, and the home page shows this browser's own scores and tapes instead |
+| `BOOK_STORE_URL` + `BOOK_STORE_KEY` | private Cloudflare Worker `/book` URL and a shared secret of at least 32 characters. The Worker stores the book in D1. See [the setup guide](BLOCKROOMS-STORE.md). This pair takes priority if configured |
+| `KV_REST_API_URL` + `KV_REST_API_TOKEN`, or `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | optional existing Redis REST store. There is no need to purchase one when using D1. With neither store configured, `/api/book` answers 503 and the home page shows this browser's own scores and tapes instead |
 | `BOOK_ADMIN_KEY` | a secret of sixteen characters or more: what strikes a line out of the book. With none set, nothing can be struck |
 | `BOOK_BLOCKLIST` | words no name in the book may have in it, separated by commas. Matched inside a name however it is spelled round (`0` for `o`, dots between letters). The list is the keeper's and is not in this repository |
-| `BOOK_SALT` | optional: salt for the short-lived hashes that stop one visitor counting twice (default: derived from the store's token) |
+| `BOOK_SALT` | salt for the short-lived hashes that stop one visitor counting twice (defaults to the configured store's secret; a separate random value is recommended) |
 
 **What is written in it.** A visit that got out, as counted again by the
 site from what the browser reports (`checkRun`): a name, a short message if
