@@ -83,7 +83,8 @@ export function create(c) {
       const px = Math.cos(rot), pz = -Math.sin(rot), hemmed = !c.los(walker.x, walker.z, walker.x + px * 1.5, walker.z + pz * 1.5) || !c.los(walker.x, walker.z, walker.x - px * 1.5, walker.z - pz * 1.5);
       const want = s.mode === 'asleep' ? 0 : folded(w.headroom(walker.x, walker.z), hemmed); q += (want - q) * Math.min(1, dt * (want > q ? 5 : 1.6));
       const bridge = !!w.terrainY && fy - w.terrainY(walker.x, walker.z) > 0.02;
-      s = minds(s, dt, { d, sees, here: c.room(m.x, m.z) === c.room(walker.x, walker.z), floor, fold: q, bridge });
+      // (where it sleeps may be next door to the landing, in plain sight of it: it is not woken from there in the first moments of a part)
+      s = minds(s, dt, { d, sees: sees && (s.mode !== 'asleep' || clock >= L.grace), here: c.room(m.x, m.z) === c.room(walker.x, walker.z), floor, fold: q, bridge });
       if (s.woke) { c.play('rattle', walker.x, walker.z, 18); env.interfere(0.35); }
       if (s.fell) { c.play('rattle', walker.x, walker.z, 20); env.interfere(0.6); }
       if (s.mode === 'falling') { drop = 0.5 * 9.8 * s.t * s.t; rot += dt * 0.9; pose(dt, false); return; }

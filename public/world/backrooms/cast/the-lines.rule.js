@@ -9,11 +9,12 @@
 /**
  * wake: how near wakes it, seen · rise: seconds of getting up · speed: in the open · tight: folded · onBridge: on something laid
  * reach, again: how near it gets you, and how long before it can again · stun: how long it stands after · falls: seconds of going down
+ * grace: seconds of a part before the sight of somebody far off can wake it (somebody in its room always does) ·
  * before: how many doorways before the gap it sleeps, fewest and most · pole: a leg, metres · spread, high: how it stands in the open
  * low, trail: how it goes folded: its body this far off the floor, its feet this far behind
  */
 export const LINES = Object.freeze({ wake: 8, rise: 1.5, speed: 2.45, tight: 1.55, onBridge: 1.25, reach: 1.55, again: 1.7, stun: 1.0, falls: 3,
-  before: [2, 4], pole: 3.3, spread: 2.2, high: 1.75, low: 0.62, trail: 1.9, stride: 1.15, step: 0.24, legs: 6, room: 3.6 });
+  before: [2, 4], grace: 12, pole: 3.3, spread: 2.2, high: 1.75, low: 0.62, trail: 1.9, stride: 1.15, step: 0.24, legs: 6, room: 3.6 });
 
 export const asleep = () => ({ mode: 'asleep', t: 0, again: 0, up: 0 });
 
