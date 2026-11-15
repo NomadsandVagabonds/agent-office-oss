@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { generate, sketch, DECK, ARCHETYPES, SIDES, T, RISE, toWorld, wallLength, wallPoint, floorAt, ceilAt, headAt, fitsAt, stairZones,
   roomDistances, roomPath, makeRng, MIN_EXIT_STEPS, MIN_ODD, MAX_ODD, MAX_ROOMS, coinSpots, STASH, THING_CHANCE, TRACES } from '../public/world/backrooms/gen.js';
-import { layoutOf, standable, TELLS, HALLS, NARROW, LOW, HIGH } from '../public/world/backrooms/quiet.js';
+import { layoutOf, standable, motif, fits, TELLS, HALLS, NARROW, LOW, HIGH } from '../public/world/backrooms/quiet.js';
 import { THEME_IDS } from '../public/world/backrooms/themes.js';
 
 const office = {
@@ -163,6 +163,29 @@ test('stairs, crawl doors and windows: the geometry between rooms adds up', () =
   for (const [what, n] of Object.entries(seen)) assert.ok(n > 0, `sixty visits and not one of: ${what}`);
 });
 
+test('a doorway keeps its metre of clear floor: no partition ends in one, however thin', () => {
+  // (a room that turned up once: 5.8 by 6.8, a doorway 1.8 wide on the right wall, and a dogleg whose second partition
+  // ran to that wall and stopped in the middle of the doorway. The rule tried five points across it; the end of a
+  // partition is twenty centimetres across and stood between two of them.)
+  const room = (c) => ({ id: 1, kind: 'plain', W: 5.8, D: 6.8, H: 2.6, rot: 0, x: 0, z: 0, cx: 0, cz: 0, y: 0,
+    doors: [{ side: 'right', c, w: 1.8 }, { side: 'left', c: -2.4, w: 1.2 }], pillars: [], lows: [], blocks: [] });
+  const dogleg = (r) => motif(r, { kind: 'dogleg', band: 0.17, gap: 1.1 }, 0);
+  const plan = dogleg(room(1));
+  assert.deepEqual(plan.pillars.map((p) => [p.x, p.z, p.w, p.d].map((v) => +v.toFixed(3))), [[-0.55, -1.156, 4.7, 0.2], [0.55, 1.156, 4.7, 0.2]]);
+  assert.equal(fits(room(1), plan), false, 'the partition that ends in the doorway');
+  assert.equal(fits(room(-1.4), dogleg(room(-1.4))), true, 'the same partitions, the doorway clear of both');
+  // and in what is built: nothing a quiet room was given stands in that metre, in any of the visits these tests walk
+  for (const seed of SEEDS) for (const r of levelFor(seed).rooms) {
+    if (r.kind !== 'plain' || !r.quiet) continue;
+    for (const d of r.doors) {
+      const a = wallPoint(r, d.side, d.c - d.w / 2, 0.2), b = wallPoint(r, d.side, d.c + d.w / 2, 0.9);
+      const zone = { x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z) };
+      const inIt = r.pillars.filter((q) => !q.wrong && q.x + q.w / 2 > zone.x0 && q.x - q.w / 2 < zone.x1 && q.z + q.d / 2 > zone.z0 && q.z - q.d / 2 < zone.z1);
+      assert.deepEqual(inIt, [], `seed ${seed}, room ${r.id} (${r.quiet.kind}): something stands in the doorway on its ${d.side} wall`);
+    }
+  }
+});
+
 test('no room can trap you: every doorway of every plain room can be walked to from every other', () => {
   const kinds = new Set();
   const SHAPES = ['ell', 'pinch', 'forest', 'stepceil', 'slopeceil', 'pit', 'dais', 'soffit', 'stairs'];
@@ -181,7 +204,10 @@ test('no room can trap you: every doorway of every plain room can be walked to f
         && !r.pillars.some((q) => Math.abs(p.x - q.x) < q.w / 2 + R && Math.abs(p.z - q.z) < q.d / 2 + R);
       const key = (p) => Math.floor((p.x + r.W / 2) / cell) + nx * Math.floor((p.z + r.D / 2) / cell);
       const inner = (d) => wallPoint(r, d.side, d.c, 0.3);
-      const seen = new Set([key(inner(r.doors[0]))]), queue = [key(inner(r.doors[0]))];
+      // (from wherever one can stand across the first doorway: its middle may be the one place something is in the way)
+      const first = doorCells(r, r.doors[0], free).map(key);
+      assert.ok(first.length, `seed ${seed}, room ${r.id}: nowhere to stand in its first doorway`);
+      const seen = new Set(first), queue = [...first];
       while (queue.length) {
         const k = queue.pop(), i = k % nx, j = Math.floor(k / nx), here = at(i, j);
         for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -276,6 +302,12 @@ function hidingPlaces(level) {
   const aside = able.filter((r) => fromStart.get(r.id) + toExit.get(r.id) > way);
   return { able, aside, fromStart };
 }
+/** Where one can stand just inside a doorway: every free place across its width, 30 cm in. (Not its middle only: that is one point.) */
+function doorCells(r, d, free) {
+  const out = [];
+  for (let at = d.c - d.w / 2 + 0.25; at <= d.c + d.w / 2 - 0.25 + 1e-9; at += 0.125) { const p = wallPoint(r, d.side, at, 0.3); if (free(p)) out.push(p); }
+  return out;
+}
 /** Everywhere in a room that can be walked to from its first doorway, by the rules the player walks by (as in the test further up). */
 function walked(r) {
   const cell = 0.125, R = 0.22, nx = Math.ceil(r.W / cell), nz = Math.ceil(r.D / cell);
@@ -283,8 +315,8 @@ function walked(r) {
   const free = (p) => Math.abs(p.x) <= r.W / 2 - R && Math.abs(p.z) <= r.D / 2 - R && fitsAt(r, p.x, p.z, R) && headAt(r, p.x, p.z) >= 0.62
     && !r.pillars.some((q) => Math.abs(p.x - q.x) < q.w / 2 + R && Math.abs(p.z - q.z) < q.d / 2 + R);
   const key = (p) => Math.floor((p.x + r.W / 2) / cell) + nx * Math.floor((p.z + r.D / 2) / cell);
-  const from = key(wallPoint(r, r.doors[0].side, r.doors[0].c, 0.3)), seen = new Uint8Array(nx * nz), queue = [from];
-  seen[from] = 1;
+  const seen = new Uint8Array(nx * nz), queue = doorCells(r, r.doors[0], free).map(key);
+  for (const k of queue) seen[k] = 1;
   while (queue.length) {
     const k = queue.pop(), i = k % nx, j = Math.floor(k / nx), here = at(i, j);
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
