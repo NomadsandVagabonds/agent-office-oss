@@ -17,7 +17,8 @@
     "install-statusline": "node install-statusline.mjs",
     "install-guard": "node install-guard-hook.mjs",
     "watchdog": "node watchdog.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "coop": "node tools/blockrooms/coop-server.mjs"
   },
   "engines": {
     "node": ">=20"

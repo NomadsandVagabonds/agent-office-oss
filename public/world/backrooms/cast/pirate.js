@@ -173,7 +173,7 @@ const POSES = [
   { l: 0.25, r: 0.25, fl: 1.35, fr: 1.35 }, { l: 0.3, r: 0.3, fl: 1.5, fr: 0.25, tilt: 0.35 },          // the last two reach for you
 ];
 
-function makePirate(kit, R, first = 0) {
+export function makePirate(kit, R, first = 0) {
   const mat = kit.surface({ vox: true }), m4 = new THREE.Matrix4().makeScale(S, S, S);
   const lights = [lamp(0.25, 2.6, 0.9, [1.3, 1.3, 1.3], { k: 9, wrap: 0.45, far: 30 })], amb = [0.6, 0.6, 0.6];
   const part = (key, make) => { const b = new Batch(true); b.addVox(kit.model('pirate:' + key, make).solid, m4); return new THREE.Mesh(kit.geometry(b, lights, amb), mat); };
