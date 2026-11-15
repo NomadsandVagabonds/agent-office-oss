@@ -405,10 +405,11 @@ export const MORE_DECK = [
   { id: 'walk-in', name: 'The Walk-in', landmark: 'the bedroom with the closet you can get lost in', w: [11, 13], d: [12, 14], h: [2.4, 2.6],
     ports: ['back'], weight: 1.3, lights: 'dim', themes: { suburb: 1, '*': 0 }, haunt: 2,
     module: './rooms/walk-in.js', stash: (r) => [r.W / 2 - 1.3, r.D / 2 - 1.3, r.W / 2 - 0.6, r.D / 2 - 0.6], roll: () => ({}) },
-  // A storm drain across a lawn, and three hoardings on the edge of it: one of them is a bridge.
-  { id: 'the-culvert', name: 'The Culvert', landmark: 'the ditch with the hoardings beside it', w: [10, 12], d: [11, 13], h: [2.9, 3.6],
+  // A storm drain across a lawn with no bottom to it, and nothing to stop anybody walking in; loose hoardings near the edge: a tall one let down is a bridge.
+  // (h: a hoarding 3.1 m tall has to stand under the ceiling before it can be let down)
+  { id: 'the-culvert', name: 'The Culvert', landmark: 'the ditch with the hoardings beside it', w: [10, 12], d: [11, 13], h: [3.3, 3.8],
     ports: ['left', 'right'], weight: 1.2, lights: 'normal', themes: { suburb: 1, '*': 0 },
-    module: './rooms/the-culvert.js', stash: (r, side) => [side * (r.W / 2 - 1.3) - 0.35, -r.D / 2 + 1.9, side * (r.W / 2 - 1.3) + 0.35, -r.D / 2 + 2.6],
+    module: './rooms/the-culvert.js', stash: (r, side) => [side * (r.W / 2 - 1.3) - 0.35, -r.D / 2 + 0.5, side * (r.W / 2 - 1.3) + 0.35, -r.D / 2 + 1.1],
     roll: (R) => ({ side: R.pick([-1, 1]) }) },
   // A playground on fake grass. Most of it is going down into the floor, slowly, and has been for some time.
   { id: 'recess', name: 'Recess', landmark: 'the playground that is going under', w: [12, 14], d: [10, 12], h: [3.3, 4.2],
