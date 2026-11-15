@@ -27,9 +27,9 @@ export const TONER = Object.freeze({
   weaveAmp: 1.08,                  // metres of lateral zig-zag either side of its line
   weaveFreq: 5.8,                  // rad/s base lateral weave frequency
   glitchEvery: Object.freeze([0.28, 0.68]),   // seconds between sporadic phase-jumps during a chase
-  pingEvery: Object.freeze([1.85, 2.65]),     // seconds between calm ceiling sonar clicks
-  warnEvery: 0.22,                 // seconds between frantic warning clicks while locking on
-  chasePingEvery: 0.34,            // seconds between sonar clicks during active pursuit
+  pingEvery: Object.freeze([1.85 / 0.7, 2.65 / 0.7]),     // seconds between calm ceiling sonar clicks
+  warnEvery: 0.22 / 0.7,                 // seconds between frantic warning clicks while locking on
+  chasePingEvery: 0.34 / 0.7,            // seconds between sonar clicks during active pursuit
   listenFar: 11,                   // metres within which upright movement is heard
   dropFar: 7.5,                    // metres within which full lock-on drops it off the ceiling
   crouchSink: 0.26,                // me.sink (from holding C or ducking in a crawlway) that keeps you below its sonar

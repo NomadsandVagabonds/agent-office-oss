@@ -29,16 +29,34 @@ Easy for a real health test. This developer helper is not imported by the public
 entry point. Run the source via the local standalone build with public/world/dev
 copied into its world/dev directory.
 
-Validation: 79 focused tests pass (cast lifecycle, quiet/perks, difficulty,
-co-op conductor, audio graph, and new counterplay tests). Browser smoke test observed chase,
-windup, lunge, recoil, prowl and perch with no console warnings/errors. The
-25% figure is covered by stratified aim samples, not measured player hit rate.
-Actual balance and camera readability still need playtesting.
+Quiet counterplay: standing still or crouching prevents attack wind-up, cancels
+an existing wind-up, and prevents damage from an already airborne leap. Flight
+keeps its committed trajectory. Silence resets the stalking timer and loses
+the sound trail even with line of sight. The study uses the same attack gates.
 
-Full suite: 930/933 pass. Failures are the console chat path assertion and its
-parent, plus the usage/status-line missing-source test, matching the previously
-observed unrelated failures. Standalone build and git diff --check pass.
+Audio: six ElevenLabs OGG clips from `b7170fe` play through the effects bus with
+positional pan and distance gain. Variants avoid immediate repeats; approximate
+RMS compensation balances their levels. Playback is 0.7x (30% slower, with lower
+pitch), and search/stalking/warning repeat intervals are divided by 0.7 to
+preserve gaps. Attack and movement timing are independent of this audio change.
+The mix is 82% dry with 18% soft saturation (2x oversampling). Two randomized
+15ms interruptions affect only the gritty layer. Original asset bytes are unchanged.
 
-Quiet counterplay pass: standing still or crouching prevents attack wind-up, cancels an existing wind-up, and prevents damage from an already airborne leap. Flight itself stays on its committed trajectory. Silence resets the stalking timer and loses the sound trail even with line of sight. The study starts stalking but uses these same attack gates. Jump accuracy, tell duration and recovery remain unchanged.
+Clips load after the audio gesture and are decoded once per sound context.
+Procedural rattles remain the loading/error fallback. The standalone build
+ships only the six OGGs; WAV masters and long takes remain on blockrooms-live.
+The study's Hear sonar clicks / Hear attack rattle buttons start and unmute
+actual game audio for review. The earlier muted preview hid these cues.
 
-Audio review: sonar click pairs already play during ceiling searches and wall stalking, with an accelerating rattle during lock-on and wind-up. The study now has Hear sonar clicks and Hear attack rattle buttons that explicitly unmute and start audio on a user gesture. These use the actual production sound functions. The earlier mute=1 preview hid all audio. Current sounds remain procedural; realism still needs a listening review before replacing them with generated samples.
+Validation: audio and counterplay tests pass, including variant selection,
+0.7x playback, distortion routing, finite glitch timing, mute and teardown.
+Browser checks observed stalking, wind-up, flight, recovery and return to perch;
+the stationary-player check observed no attack and no hits. The 25% aim figure
+is covered by stratified samples, not a measured player hit rate. Standalone
+build includes all six OGGs; git diff --check passes. Balance remains subject
+to playtesting.
+
+Final verification: 80/80 focused tests pass. Full npm test: 932/937 pass;
+failures are console chat path normalization (subtest + parent), harness mail
+ordering (subtest + parent, also reproduces in isolation), and usage status-line
+source reporting. These failures are outside the changed game/audio modules.
