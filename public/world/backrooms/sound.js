@@ -303,6 +303,23 @@ export function createSound(level, opt = {}) {
     },
     /** Play one of the small sounds by name. */
     play(name, o) { if (ctx && !muted && !paused && voice[name]) { try { voice[name](o); } catch { /* a sound is never worth an error */ } } },
+    /**
+     * A recording of a room's own, played once through the effects (so the effects slider, M and the menu reach it):
+     * `href` as the room has it from new URL('./x.mp3', import.meta.url), which is also how the site's build finds the
+     * file. o: { vol: 0…1, pan: -1…1 } as for play(). Recordings are the owner's to ask for; voices are the rule.
+     */
+    file(href, o = {}) {
+      if (!ctx || muted || paused || typeof Audio === 'undefined') return false;
+      try {
+        const el = new Audio(href), g = ctx.createGain(); g.gain.value = Math.max(0, Math.min(1, o.vol ?? 1));
+        const src = ctx.createMediaElementSource(el);
+        if (Number.isFinite(o.pan) && ctx.createStereoPanner) { const pn = ctx.createStereoPanner(); pn.pan.value = Math.max(-1, Math.min(1, o.pan)); src.connect(pn); pn.connect(g); } else src.connect(g);
+        g.connect(effects || master);
+        el.addEventListener?.('ended', () => { try { g.disconnect(); } catch { /* gone */ } });
+        el.play().catch(() => {});
+        return true;
+      } catch { return false; }
+    },
     /** The hum follows the light: louder under a full ceiling, nearly gone in the dark. */
     setHum(k) { humTarget = k; if (humGain) humGain.gain.setTargetAtTime(0.012 + 0.05 * Math.max(0, Math.min(1.4, k)), now(), 0.6); },
     /** Air coming through somewhere it should not (0…1): a thin whistle, nearer the louder. */
