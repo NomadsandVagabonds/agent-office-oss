@@ -13,7 +13,7 @@ function wire(port,room,origin=`http://127.0.0.1:${port}`,version=VERSION){
    const parser=new FrameParser({requireMask:false}),messages=[];let closed=false;
    const read=chunk=>parser.push(chunk,f=>{if(f.opcode===1)messages.push(JSON.parse(f.payload));if(f.opcode===8){closed=true;socket.destroy();}});
    socket.on('data',read);socket.on('error',()=>{});if(head.length)read(head);
-   resolve({socket,messages,get closed(){return closed;},send(m){const body=Buffer.from(JSON.stringify(m)),mask=randomBytes(4);const header=body.length<126?Buffer.from([0x81,0x80|body.length]):Buffer.from([0x81,0xfe,body.length>>8,body.length&255]);socket.write(Buffer.concat([header,mask,Buffer.from(body.map((b,i)=>b^mask[i%4]))]));}});
+   resolve({socket,messages,get closed(){return closed;},send(m){const body=Buffer.from(JSON.stringify(m)),mask=randomBytes(4);const header=body.length<126?Buffer.from([0x81,0x80|body.length]):body.length<=65535?Buffer.from([0x81,0xfe,body.length>>8,body.length&255]):Buffer.alloc(10);if(body.length>65535){header[0]=0x81;header[1]=0xff;header.writeBigUInt64BE(BigInt(body.length),2);}socket.write(Buffer.concat([header,mask,Buffer.from(body.map((b,i)=>b^mask[i%4]))]));}});
   });req.end();
  });
 }
@@ -80,8 +80,34 @@ test('hosted entry opens the full-run lobby and keeps room creation passcode-pro
  const page=await fetch(root,{redirect:'manual'});assert.equal(page.status,302);assert.equal(page.headers.get('location'),'/rooms');
  assert.equal((await fetch(root+'/new?mode=rooms',{method:'POST'})).status,403);
  assert.equal(await(await fetch(root+'/health')).text(),'ok');
+ const presets=await fetch(root+'/core/guest-presets.mjs');assert.equal(presets.status,200);assert.match(await presets.text(),/pink-cowgirl/);
  for(const [asset,type] of [['lobby.css','text/css'],['art/logo.svg','image/svg+xml']]){
   const res=await fetch(root+'/world/coop/'+asset);assert.equal(res.status,200);
   assert.equal(res.headers.get('content-type'),type);assert.equal(res.headers.get('x-content-type-options'),'nosniff');
  }
+});
+
+test('custom characters: host assigns either slot, guest chooses only their own, and selection locks at Ready',async t=>{
+ const app=createCoopServer();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));t.after(()=>app.close());const port=app.server.address().port;
+ const {code}=await(await fetch(`http://127.0.0.1:${port}/new?mode=rooms`,{method:'POST'})).json();
+ const a=await wire(port,code);t.after(()=>a.socket.destroy());await until(()=>a.messages.some(m=>m.type==='welcome'));
+ a.send({type:'character',slot:1,character:'yellow-alien'});await until(()=>app.rooms.get(code).characters[1]==='yellow-alien');
+ const b=await wire(port,code);t.after(()=>b.socket.destroy());await until(()=>b.messages.some(m=>m.type==='welcome'));
+ const s=app.rooms.get(code).state;assert.equal(s.players[1].character,'yellow-alien','host can prepare friend before arrival');
+ b.send({type:'character',slot:0,character:'pink-cowgirl'});b.send({type:'character',slot:1,character:'untrusted-model'});
+ await new Promise(r=>setTimeout(r,80));assert.deepEqual(s.players.map(p=>p.character),['yellow-alien','yellow-alien']);
+ a.send({type:'ready'});await until(()=>s.players[0].ready);
+ b.send({type:'character',slot:1,character:'pink-cowgirl'});await until(()=>s.players[1].character==='pink-cowgirl');assert.equal(s.players[0].ready,false,'a changed choice resets readiness');
+ a.send({type:'ready'});b.send({type:'ready'});await until(()=>s.phase==='play');
+ a.send({type:'character',slot:1,character:'yellow-alien'});await new Promise(r=>setTimeout(r,80));assert.equal(s.players[1].character,'pink-cowgirl');
+});
+
+test('real scene baseline larger than 512 KiB reaches the partner without closing the relay',async t=>{
+ const app=createCoopServer();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));t.after(()=>app.close());const port=app.server.address().port;
+ const {code}=await(await fetch(`http://127.0.0.1:${port}/new?mode=rooms`,{method:'POST'})).json();
+ const a=await wire(port,code),b=await wire(port,code);t.after(()=>{a.socket.destroy();b.socket.destroy();});
+ await until(()=>b.messages.some(m=>m.type==='welcome'));a.send({type:'ready'});b.send({type:'ready'});await until(()=>app.rooms.get(code).state.phase==='play');
+ const s=structuredClone(app.rooms.get(code).state);s.real=true;s.nodeCount=20000;s.nodes=Array.from({length:s.nodeCount},(_,i)=>[i,0,0,0,0,0,0,1,1,1,1,1]);
+ assert.ok(Buffer.byteLength(JSON.stringify(s))>524288);a.send({type:'real-state',state:s});
+ await until(()=>b.messages.some(m=>m.state?.real));assert.equal(b.messages.find(m=>m.state?.real).state.nodes.length,20000);assert.equal(a.closed,false);
 });

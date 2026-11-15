@@ -1,3 +1,4 @@
+import {GUEST_PRESETS} from './core/guest-presets.mjs';
 // BlockRooms — the home page's script.
 //
 //   pictures   art.js draws them; this only says where
@@ -91,8 +92,7 @@ const LABELS = {
 };
 
 const PRESETS = [
-  { label: 'Yellow Alien', look: { species: 'alien', skin: '#e0a638', hair: 'bald', hairColor: '#241608', facial: 'none', outfit: 'consul', outfitColor: '#dfa22e', accessory: 'goggles' } },
-  { label: 'Pink Cowgirl', look: { species: 'human', skin: '#e3aa84', hair: 'braids', hairColor: '#db7093', facial: 'lashes', outfit: 'tunic', outfitColor: '#e88fb0', accessory: 'cowboy' } },
+  ...GUEST_PRESETS,
   { label: '98 Intern', look: { species: 'human', skin: '#f3cda8', hair: 'side', hairColor: '#4a2f1a', facial: 'none', outfit: 'vest', outfitColor: '#3f7f9a', accessory: 'glasses' } },
   { label: 'Exec Suit', look: { species: 'human', skin: '#cd8d5e', hair: 'short', hairColor: '#9aa0ac', facial: 'mustache', outfit: 'suit', outfitColor: '#5a5a66', accessory: 'monocle' } },
   { label: 'Goblin Clerk', look: { species: 'goblin', skin: '#6b9460', hair: 'short', hairColor: '#241608', facial: 'mustache', outfit: 'cardigan', outfitColor: '#8a5a8f', accessory: 'glasses' } },

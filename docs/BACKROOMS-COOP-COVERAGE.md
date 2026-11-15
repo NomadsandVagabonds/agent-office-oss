@@ -1,7 +1,8 @@
 # Full-content co-op review
 
 Branch: `codex/backrooms-coop-full-game`. Base: merge `1393d01`, incorporating
-Fable development `2ce180f`. This branch has not been pushed or deployed yet.
+Fable development `2ce180f`. Full-content commit `de00cec` is pushed.
+The custom-character/open-mic follow-up is awaiting publication.
 Railway still serves the restricted `69d7c55` build.
 
 ## Scope
@@ -25,7 +26,8 @@ is reviewed; it is not a selectable mode here.
 | Physics | Production furniture registration and movement for chairs, desks and trolleys. Either visitor can drag with E. The other visitor, creatures and walls block movement. Creature barricade contracts remain active. |
 | Flashlights | Loose and mounted beams, matching optical pose, remote beam, both visitors' light available to relevant room encounters. |
 | Inventory | Production six-pocket inventory, crafting, stacks, supplies requested by rooms/creatures, scissors, shared pickups, fires and chalk. Battery/snack density scaled for two players. |
-| Team interactions | Existing snack revives, flat-camera battery rescue, consent-based trades, emotes and push-to-talk retained. |
+| Team interactions | Existing snack revives, flat-camera battery rescue, consent-based trades, emotes, push-to-talk and opt-in open mic. |
+| Characters | Gemini’s Yellow Alien and Pink Cowgirl, using the exact studio presets. Each visitor chooses their own; the host can assign both slots before Ready. Choices carry across floors. |
 | Run | Production 3–5-part visit, shared descent and final taped-wall extraction, carried health/batteries/inventory and creature carry state. |
 | Picture/sound | Production VHS rendering and per-visitor interference/white/red effects; soundtrack, creature cue, positional events and lemonade recordings. |
 
@@ -46,7 +48,7 @@ canvas revisions are sent once per floor over ordered WebSockets. Mutable
 terrain state, collider bounds, furniture positions and lighting cues travel
 with the snapshot. Local held-item models stay outside the replicated graph.
 
-Protocol is `blockrooms-coop-6`: server and both clients must update together.
+Protocol is `blockrooms-coop-7`: server and both clients must update together.
 There are no new packages, accounts or hosting services.
 
 ## Verification
@@ -80,8 +82,10 @@ human has completed every puzzle naturally.
 - `coop-preflight-check.mjs`: real fake-microphone capture/resampling/relay and
   audible generated audio in both directions, with 100 ms outbound delay per
   peer. Joining, readiness, duplicate Start handling, mouse capture, reload
-  warning and disconnect feedback pass. No real microphone was accessed.
-- `npm test`: 870/873 pass. Existing failures: Office console child test and its
+  warning and disconnect feedback pass. Custom character assignment, guest choice,
+  both 3D looks, open mic without a held key, V mute, button unmute, blur/focus
+  and switching back to push-to-talk also pass. No real microphone was accessed.
+- `npm test`: 872/875 pass. Existing failures: Office console child test and its
   parent (`/var` versus `/private/var` on macOS), and the Office usage/status-line
   bridge. The previously observed wake-order timing failure passed this run.
 
@@ -90,7 +94,7 @@ human has completed every puzzle naturally.
 These are explicit limits, not hidden exclusions from the room catalogue:
 
 - The solo Escape settings panel, scorecard, public leaderboard/guestbook,
-  character/perk selection, saved tapes and Office rewards are not integrated.
+  full character editor/perks, saved tapes and Office rewards are not integrated.
   Co-op retains its own controls/voice overlay and simple end-of-run summary.
 - Solo death cinematics and the final low-battery shutdown film are not ported.
   A downed visitor spectates their partner and can be revived instead.
@@ -106,9 +110,9 @@ These are explicit limits, not hidden exclusions from the room catalogue:
   screens increase rendering and network cost. All room groups remain rendered;
   distance/portal culling and performance tuning remain follow-up work. Resource
   deduplication reduces repeated payload, but this is not a WAN performance
-  guarantee. The largest measured full baseline snapshot was roughly 526 KB after the warden drops scissors.
+  guarantee. The largest measured full baseline snapshot was roughly 526 KB after the warden drops scissors. The relay now accepts packets up to 1 MiB,
+  matching its outbound buffer bound and covering that baseline.
 - The second flashlight cone has no shadow-map pass, matching the prototype's
   lightweight lighting approach.
 
-Do not describe the currently hosted link as this build until a separate push,
-Railway deployment and hosted verification have been completed.
+Do not describe the currently hosted link as this build until Railway deployment and hosted verification have been completed.

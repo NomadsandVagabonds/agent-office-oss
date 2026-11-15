@@ -1,3 +1,4 @@
+import {guestPreset} from './guest-presets.mjs';
 import {ITEM_DEFS,makeItem,createInventory} from '../public/world/backrooms/inventory-state.js';
 // Transport guard for the trusted-browser real-room authority. It is not an
 // anti-cheat server: the private host owns the simulation, including health.
@@ -6,6 +7,7 @@ export function validRealSnapshot(s, ids) {
  if (!s || s.real !== true || !['play', 'dead', 'escaped','descending'].includes(s.phase) || !finite(s.time)) return false;
  if (!Array.isArray(s.players) || s.players.length !== ids.length
   || !s.players.every(p => p && ids.includes(p.id)
+   && (p.character===undefined||!!guestPreset(p.character))
    && [p.x,p.z,p.yaw,p.pitch,p.health,p.battery].every(finite)
    && (p.y === undefined || finite(p.y)) && p.health >= 0 && p.health <= 4 && p.battery >= 0 && p.battery <= 400
    && Array.isArray(p.bag) && p.bag.length <= 6 && p.bag.every(id => typeof id === 'string'))

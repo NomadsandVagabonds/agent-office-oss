@@ -83,7 +83,7 @@ export function build(out, opt = {}) {
 
   for (const name of ['site.js', 'home.js', 'home.css', 'art.js']) if (!copy(name)) throw new Error(`tools/blockrooms/${name} is not there`);
   // (the rules of the book, looks and perks: shared by both pages)
-  for (const coreName of ['core/book.mjs', 'core/look.mjs', 'core/perks.mjs']) {
+  for (const coreName of ['core/book.mjs', 'core/look.mjs', 'core/perks.mjs', 'core/guest-presets.mjs']) {
     if (!files.includes(coreName)) {
       fs.mkdirSync(path.join(out, 'core'), { recursive: true });
       fs.copyFileSync(path.join(HERE, '..', '..', coreName), path.join(out, coreName));

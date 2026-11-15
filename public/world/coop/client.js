@@ -1,3 +1,5 @@
+import {GUEST_PRESETS,guestPreset} from '/core/guest-presets.mjs';
+import {createCharacterPicker} from './characters-ui.js';
 import {createInventoryHud} from '../backrooms/inventory-hud.js';
 import {inventoryView,heldItem} from './inventory.js';
 import {createCoopAudio} from './audio.js';
@@ -38,7 +40,9 @@ if(!realMode)box(EXIT.x,1.1,EXIT.z+.8,1.3,2.2,.08,new THREE.MeshBasicMaterial({c
 const pirate=makePirate(kit,makeRng('coop-pirate'));pirate.show();pirate.hold(0);if(!realMode)scene.add(pirate.group);
 const itemMeshes=new Map(),avatars=new Map(),keys=new Set();let state=null,id=null,socket=null,yaw=Math.PI,pitch=0,selected=0,lastHealth=4,ended=false;
 function send(m){if(realMode&&!['ready','floor-ready','voice','host-paused','real-state'].includes(m.type))m.depth=real?.depth;if(real?.host&&state?.phase==='play'&&['input','select','toggle-light','craft','take','drop','use','exit','revive','emote','trade-request','trade-answer','trade-offer','trade-confirm','trade-cancel'].includes(m.type)){real.command(id,m);return;}if(socket?.readyState===1)socket.send(JSON.stringify(m.type==='real-state'?{...m,state:sceneSender(m.state)}:m));}
-const voice=createVoice({send,enabled:()=>socket?.readyState===1&&!!state&&!ended,button:$('voice'),status:$('voiceStatus'),volume:$('voiceVolume'),indicator:$('voiceIndicator')});
+let characterChoices=GUEST_PRESETS.map(p=>p.id);
+const characterPicker=createCharacterPicker({root:$('characterSlots'),help:$('characterHelp'),send});characterPicker.update(null,null,false,characterChoices);
+const voice=createVoice({send,enabled:()=>socket?.readyState===1&&!!state&&!ended,button:$('voice'),status:$('voiceStatus'),volume:$('voiceVolume'),indicator:$('voiceIndicator'),mode:$('voiceMode'),mute:$('voiceMute')});
 let inventoryHud=null;let resultSerial=0;
 const socialUI=createSocialUI({read:()=>({state,me:state?.players.find(p=>p.id===id),real:realMode}),send,resume:()=>lock(),stop:()=>{inventoryHud?.setOpen(false);keys.clear();send({type:'input',f:0,s:0,yaw,pitch});}});
 const myself=()=>state?.players.find(p=>p.id===id);
@@ -67,7 +71,7 @@ function fail(error){fatal='The game stopped: '+error.message;ended=true;keys.cl
 function active(){return !building&&!inventoryHud?.isOpen&&!socialUI.visible&&!ended&&!hostPaused&&document.pointerLockElement===canvas&&state?.phase==='play'&&state.players.find(p=>p.id===id)?.health>0;}
 const slots=Array.from({length:6},(_,i)=>{const b=document.createElement('button');b.onclick=()=>selected=i;$('bar').append(b);return b;});
 function itemMesh(type){const b=new Batch(true);b.addVox(kit.model('coop:'+type,INVENTORY_MODELS[type]).solid,new THREE.Matrix4().makeScale(.04,.04,.04));return new THREE.Mesh(kit.geometry(b,[lamp(0,3,0,[1,1,1],{k:8})],[.8,.8,.8]),kit.surface({vox:true}));}
-function update(s){state=s;if(s.phase==='play')$('panel').classList.add('has-played');if(realMode)gameAudio.update(s,id);if(real&&!real.host&&!building)real.apply(s);for(const p of s.players){if(p.id!==id&&!avatars.has(p.id)){const a=new Avatar(resolveLook(p.id,{species:'human',outfit:'hoodie',outfitColor:'#498776',accessory:'none'}),{seed:p.id});scene.add(a.root);a.root.position.set(p.x,0,p.z);a.signal=signalSprite();scene.add(a.signal);avatars.set(p.id,a);}}
+function update(s){state=s;characterPicker.update(s,id,realHost,characterChoices);if(s.phase==='play')$('panel').classList.add('has-played');if(realMode)gameAudio.update(s,id);if(real&&!real.host&&!building)real.apply(s);for(const p of s.players){if(p.id!==id&&(!avatars.has(p.id)||avatars.get(p.id).character!==p.character)){const old=avatars.get(p.id);if(old){scene.remove(old.root,old.signal);old.dispose();old.signal.material.map.dispose();old.signal.material.dispose();}const preset=guestPreset(p.character)||GUEST_PRESETS[0];const a=new Avatar(resolveLook(preset.id,preset.look),{seed:preset.id});a.character=p.character;scene.add(a.root);a.root.position.set(p.x,0,p.z);a.signal=signalSprite();scene.add(a.signal);avatars.set(p.id,a);}}
  for(const item of s.items){if(!itemMeshes.has(item.id)){const m=itemMesh(item.type);scene.add(m);itemMeshes.set(item.id,m);}const m=itemMeshes.get(item.id);m.visible=item.owner===null&&!item.away;m.position.set(item.x,(item.y||0)+.03,item.z);}
  const me=s.players.find(p=>p.id===id);if(!me)return;
  $('clock').textContent=`SP ${Math.floor(s.time/60).toString().padStart(2,'0')}:${Math.floor(s.time%60).toString().padStart(2,'0')}`;
@@ -113,7 +117,7 @@ async function connect(code){$('ready').disabled=true;$('ready').textContent='Co
   update(m.state);gameAudio.pause(false);
   $('panel').hidden=document.pointerLockElement===canvas;$('status').textContent='Floor loaded. Click Enter / resume to continue.';return;
  }
- if(m.type==='control'){real?.command(m.id,m.action);return;}if(m.type==='host-paused'){hostPaused=m.paused;gameAudio.pause(hostPaused);$('notice').textContent=hostPaused?'Host tab paused · waiting for return':'';return;}if(m.type==='voice')voice.receive(m);if(m.type==='welcome'){id=m.id;realHost=m.host;if((m.mode==='rooms')!==realMode){socket.close();return;}if(realMode){roomSeed=m.seed;roomSlice=!!m.slice;await buildFloor(0);building=false;gameAudio.pause(false);$('ready').disabled=!real;$('ready').textContent="I'm ready";}}if(m.type==='state'){if(m.state.phase==='disconnected')hostPaused=true;update(m.state);}}catch(error){fail(error);}};
+ if(m.type==='characters'){characterChoices=m.characters;characterPicker.update(state,id,realHost,characterChoices);return;}if(m.type==='control'){real?.command(m.id,m.action);return;}if(m.type==='host-paused'){hostPaused=m.paused;gameAudio.pause(hostPaused);$('notice').textContent=hostPaused?'Host tab paused · waiting for return':'';return;}if(m.type==='voice')voice.receive(m);if(m.type==='welcome'){id=m.id;realHost=m.host;characterChoices=m.characters||characterChoices;if((m.mode==='rooms')!==realMode){socket.close();return;}if(realMode){roomSeed=m.seed;roomSlice=!!m.slice;await buildFloor(0);building=false;gameAudio.pause(false);$('ready').disabled=!real;$('ready').textContent="I'm ready";}}if(m.type==='state'){if(m.state.phase==='disconnected')hostPaused=true;update(m.state);}}catch(error){fail(error);}};
  socket.onclose=()=>{ended=true;hostPaused=true;gameAudio.stop();voice.off();keys.clear();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=fatal||'Connection closed. The room may be full, started, or expired. Start a new game.';};
  socket.onerror=()=>{$('status').textContent='Could not connect to the co-op server.';};
 }
@@ -173,6 +177,6 @@ const room=new URLSearchParams(location.search).get('room');if(room)connect(room
 
 document.addEventListener('visibilitychange',()=>{if(realHost)send({type:'host-paused',paused:document.hidden});});
 
-if(realMode){$('newSession').href='/rooms';$('controlsText').innerHTML='V hold to talk · M mute game audio<br>WASD move · mouse look · Shift run · C crouch · Space jump<br>E pick up / open doors · lean into the taped exit wall together<br>1–6 hold / stow · Q or R use · G drop · F flashlight<br>I or Tab inventory / crafting · B emotes<br>E near partner: trade / revive with selected snack<br>Esc release mouse · Host: keep this tab visible. The game keeps running with this menu open.';$('status').textContent='Start a game, then send your friend the invite link.';}else{const link=document.createElement('a');link.href='/rooms';link.textContent='Try real rooms →';$('panel').append(document.createElement('br'),link);}
+if(realMode){$('newSession').href='/rooms';$('controlsText').innerHTML='V hold to talk / toggle open mic · M mute game audio<br>WASD move · mouse look · Shift run · C crouch · Space jump<br>E pick up / open doors · lean into the taped exit wall together<br>1–6 hold / stow · Q or R use · G drop · F flashlight<br>I or Tab inventory / crafting · B emotes<br>E near partner: trade / revive with selected snack<br>Esc release mouse · Host: keep this tab visible. The game keeps running with this menu open.';$('status').textContent='Start a game, then send your friend the invite link.';}else{const link=document.createElement('a');link.href='/rooms';link.textContent='Try real rooms →';$('panel').append(document.createElement('br'),link);}
 
-if(new URLSearchParams(location.search).has('debug'))window.__coop={get inventoryHud(){return inventoryHud;},get runtime(){return real;},get state(){return state;}};
+if(new URLSearchParams(location.search).has('debug'))window.__coop={get avatarLooks(){return [...avatars].map(([id,a])=>({id,character:a.character,look:a.look}));},get inventoryHud(){return inventoryHud;},get runtime(){return real;},get state(){return state;}};

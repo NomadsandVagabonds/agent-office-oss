@@ -32,6 +32,16 @@ try{
  assert.match(await a.ev('document.getElementById("copy").textContent'),/Link selected/);
  const invite=await a.ev('document.getElementById("invite").value'),b=await tab(invite);
  for(const t of [a,b])await until(()=>t.ev('testState?.players?.length===2&&!document.getElementById("ready").disabled').catch(()=>false),'floor loading');
+ // Exact studio presets, with host assignment and guest override before Ready.
+ const choose=async(t,slot,value)=>t.ev(`(()=>{const s=document.getElementById('character-${slot}');s.value=${JSON.stringify(value)};s.dispatchEvent(new Event('change'));})()`);
+ assert.equal(await b.ev('document.getElementById("character-0").disabled'),true);
+ await choose(a,1,'yellow-alien');await until(()=>b.ev('testState.players[1].character==="yellow-alien"'),'host assigns friend');
+ await choose(b,1,'pink-cowgirl');await until(()=>a.ev('testState.players[1].character==="pink-cowgirl"'),'friend chooses cowgirl');
+ assert.equal(await a.ev('__coop.avatarLooks.find(a=>a.character==="pink-cowgirl")?.look.accessory'),'cowboy');
+ assert.equal(await b.ev('__coop.avatarLooks.find(a=>a.character==="yellow-alien")?.look.accessory'),'goggles');
+ await a.ev('document.getElementById("characterSlots").scrollIntoView({block:"center"})');
+ const lobbyShot=await a.cmd('Page.captureScreenshot',{format:'png'});fs.writeFileSync(os.tmpdir()+'/coop-custom-characters.png',Buffer.from(lobbyShot.data,'base64'));
+ console.log('Host assignment, guest choice and both custom 3D avatar looks verified.');
  // Real getUserMedia -> AudioWorklet -> 16k PCM -> WebSocket -> partner AudioBufferSource.
  for(const t of [a,b]){await t.cmd('Page.bringToFront');await click(t,'voice');await until(()=>t.ev('document.getElementById("voiceStatus").textContent.includes("Voice ready")'),'microphone enabled');}
  for(const [sender,receiver] of [[a,b],[b,a]]){
@@ -41,6 +51,17 @@ try{
   await key(sender,'keyUp');await sleep(500);assert.equal(await sender.ev('document.getElementById("voiceIndicator").hidden'),true);
  }
  console.log('Microphone capture, resampling, two-way audible playback and key-up verified with 100ms send delay per peer.');
+ // Open microphone transmits without holding V; mute and blur stop outbound packets.
+ await a.cmd('Page.bringToFront');
+ const setMode=async value=>a.ev(`(()=>{const s=document.getElementById('voiceMode');s.value=${JSON.stringify(value)};s.dispatchEvent(new Event('change'));})()`);
+ let received=await b.ev('voicePlayback.count');await setMode('open');await until(()=>b.ev(`voicePlayback.count>${received+8}`),'open mic audio without a key');
+ assert.match(await a.ev('document.getElementById("voiceIndicator").textContent'),/MIC ON/);
+ await key(a,'keyDown');await key(a,'keyUp');await sleep(600);received=await b.ev('voicePlayback.count');await sleep(600);assert.equal(await b.ev('voicePlayback.count'),received,'V mute stops sending');
+ await click(a,'voiceMute');await until(()=>b.ev(`voicePlayback.count>${received+8}`),'button unmutes open mic');
+ await a.ev('window.dispatchEvent(new Event("blur"))');await sleep(600);received=await b.ev('voicePlayback.count');await sleep(600);assert.equal(await b.ev('voicePlayback.count'),received,'blur stops open mic');
+ await a.ev('window.dispatchEvent(new Event("focus"))');await until(()=>b.ev(`voicePlayback.count>${received+8}`),'focus restores chosen open mic');
+ await setMode('ptt');await sleep(600);received=await b.ev('voicePlayback.count');await sleep(600);assert.equal(await b.ev('voicePlayback.count'),received,'switching to push-to-talk closes open mic');
+ console.log('Open mic, V mute, button unmute, blur/focus and return to push-to-talk verified.');
  await a.cmd('Page.bringToFront');await click(a,'ready');await sleep(500);
  assert.equal(await a.ev('testState.phase'),'waiting');assert.equal(await a.ev('document.getElementById("panel").hidden'),false,'first Ready stays in lobby');assert.equal(await a.ev('document.getElementById("ready").disabled'),true);
  await click(b,'ready');await until(()=>a.ev('testState.phase==="play"'),'both ready');await until(()=>b.ev('testState.phase==="play"'),'guest play');

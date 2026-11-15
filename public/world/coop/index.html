@@ -45,14 +45,20 @@
         <aside class="web-window sound-window" aria-labelledby="soundHeading">
           <h2 class="window-title" id="soundHeading">Can you hear me?</h2>
           <div class="window-body">
-            <p>Both players: enable voice, allow your microphone, then hold <kbd>V</kbd> to talk.</p>
+            <p>Enable your microphone, then choose how to talk.</p>
             <button id="voice" disabled>Enable voice</button>
+            <label for="voiceMode">Voice mode</label><select id="voiceMode"><option value="ptt">Push to talk · hold V</option><option value="open">Open mic · always on</option></select>
+            <button id="voiceMute" disabled>Mute microphone</button>
             <label for="voiceVolume">Friend's volume</label><input id="voiceVolume" type="range" min="0" max="1" step="0.05" value="0.8">
             <p id="voiceStatus" aria-live="polite">Microphone off</p>
-            <small>Voice isn't recorded.</small>
+            <small>Voice isn't recorded. Open mic pauses when you leave this tab. V mutes or unmutes it.</small>
           </div>
         </aside>
       </div>
+      <section class="web-window only-lobby character-window" aria-labelledby="characterHeading">
+        <h2 class="window-title" id="characterHeading">Who's coming?</h2>
+        <div class="window-body"><p id="characterHelp">Start or join a game to choose. The host can choose for both players.</p><div id="characterSlots"></div></div>
+      </section>
       <div class="field-notes only-lobby"><img src="/world/coop/art/battery.svg" alt="" width="36" height="48"><p><strong>A note for the host:</strong> keep this tab visible while you play. Switching tabs pauses your friend's game. Refreshing or leaving ends the run.</p></div>
       <details class="lobby-controls"><summary>Keyboard controls</summary><p><small id="controlsText">V hold to talk · WASD move · mouse look · Shift run<br>E pick up / leave together at the green doorway<br>1–6 select · R use · G drop · Esc release mouse<br>The game keeps running while this menu is open.</small></p></details>
       <footer class="lobby-footer">

@@ -2,9 +2,30 @@
 
 Working branch: `codex/backrooms-coop-full-game`, with Fable development through `2ce180f`.
 Full-content coverage and remaining differences: [BACKROOMS-COOP-COVERAGE.md](BACKROOMS-COOP-COVERAGE.md).
-The full-content changes are local and are **not** in the Railway build below.
+Full-content commit `de00cec` is pushed, but is **not** in the Railway build below.
 Private alpha: hosted on Railway; use the owner's private host bookmark.
 Railway runs game build `69d7c55`, separately from the public BlockRooms site.
+
+## Custom characters and open mic (pending publication)
+
+The lobby has a “Who’s coming?” picker with Gemini’s existing Yellow Alien and
+Pink Cowgirl. The host defaults to Yellow Alien; the friend defaults to Pink
+Cowgirl. Either visitor can change their own character, and the host can assign
+either slot before the friend joins. Changing a choice clears Ready for both
+players. Characters lock for the visit and carry through floor changes. These
+are cosmetic choices; the full studio editor and character perks are not ported.
+
+Click **Enable voice**, then choose **Open mic · always on** to talk without
+holding a key. **V** toggles mute in that mode; the menu also has a mute button.
+The camcorder indicator stays visible while open mic is enabled and shows mute
+or pause status. Leaving the tab pauses transmission; returning resumes it
+unless muted. Push-to-talk remains the default. No microphone starts without
+clicking Enable voice, and neither mode records voice.
+
+Protocol `blockrooms-coop-7` requires both clients and the relay to update.
+The browser preflight verifies the exact character looks and actual audio
+capture/playback with a generated fake microphone, including mute and focus
+handling. A London–Argentina session is still untested.
 
 ## Lobby refresh (live)
 
