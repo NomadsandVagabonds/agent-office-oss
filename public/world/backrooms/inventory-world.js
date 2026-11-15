@@ -11,11 +11,25 @@ const REACH = 1.35, MARK_R = .33, MAX_MARKS = 24;
 const ITEM_RADIUS = Object.freeze({ torch: .30, battery: .19, chalk: .16, paper: .31, 'pink-slip': .28, scissors: .29, snack: .23, balloon: .26, lighter: .20, tape: .26, opener: .2 });
 const ITEM_HEIGHT = Object.freeze({ balloon: 1.4 });
 const copy = item => ({ ...item });
+/**
+ * Something lying on the floor gives a small start now and then, so that it is seen: two quick rocks and a hop of a few
+ * centimetres, every few seconds, each thing in its own time. No glow, no marker: it is the thing itself that moves.
+ * every, lasts: seconds · tilt: radians at the most · hop: metres at the most
+ */
+export const JIGGLE = Object.freeze({ every: 5.5, lasts: 0.5, tilt: 0.17, hop: 0.03 });
+/** Where in its start a thing is, `clock` seconds in, for one that began `phase` seconds out of step: { tilt, hop }, both 0 between starts. */
+export function jiggleAt(clock, phase = 0) {
+  const t = (((clock + phase) % JIGGLE.every) + JIGGLE.every) % JIGGLE.every;
+  if (t >= JIGGLE.lasts) return { tilt: 0, hop: 0 };
+  const k = t / JIGGLE.lasts, w = Math.sin(k * Math.PI * 4) * (1 - k);
+  return { tilt: w * JIGGLE.tilt, hop: Math.abs(w) * JIGGLE.hop };
+}
+const phaseOf = id => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return (h % 1000) / 1000 * JIGGLE.every; };
 const label = item => item.type === 'paper' ? `Paper × ${item.quantity}` : item.type === 'battery' ? 'Batteries' : ITEM_DEFS[item.type].name;
 
 export function createInventoryWorld(env, model, { canAct = () => true, onNotice = () => {}, onPickup = () => {} } = {}) {
   const { world, kit } = env, entries = new Map(), geometries = new Map(), marks = [];
-  let disposed = false, markCount = 0, arrowGeometry = null;
+  let disposed = false, markCount = 0, arrowGeometry = null, clock = 0;
   const point = (rt, x, z) => { const p = toWorld(rt.def, x, z); return { x, z, wx: p.x, wz: p.z, y: world.floorY(p.x, p.z) - rt.def.y }; };
   const roomFor = room => typeof room === 'object' ? world.rooms.find(r => r === room) : world.rooms.find(r => r.id === room);
   const available = () => !disposed && canAct() && !!env.player?.me;
@@ -205,7 +219,12 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
     update(dt = 0) {
       if (disposed) return;
       fires.update(dt);
-      for (const e of entries.values()) if (e.active && e.rt.near) tint(e.mesh, e.rt, e.x, e.y, e.z);
+      clock += dt;
+      for (const e of entries.values()) if (e.active && e.rt.near) {
+        tint(e.mesh, e.rt, e.x, e.y, e.z);
+        const j = jiggleAt(clock, e.phase ??= phaseOf(e.item.id));
+        e.mesh.rotation.z = j.tilt; e.mesh.position.y = e.y + .009 + j.hop;
+      }
       for (const m of marks) if (m.rt.near && !m.away) tint(m.mesh, m.rt, m.x, m.y, m.z);
     },
     /**
