@@ -601,9 +601,10 @@ function renderStage(ms = 0, dtOverride = null) {
   d3.voxelUniforms.uTime.value = ms / 1000;
   d3.turntable.rotation.y = studio.yaw;
 
-  const goalCamY = studio.zoom ? 1.18 : 0.90;
-  const goalCamZ = studio.zoom ? 1.28 : 2.72;
-  const goalLookY = studio.zoom ? 1.12 : 0.76;
+  const isAlien = activeLook().species === 'alien';
+  const goalCamY = studio.zoom ? (isAlien ? 1.28 : 1.18) : (isAlien ? 0.96 : 0.90);
+  const goalCamZ = studio.zoom ? (isAlien ? 1.44 : 1.28) : (isAlien ? 2.90 : 2.72);
+  const goalLookY = studio.zoom ? (isAlien ? 1.22 : 1.12) : (isAlien ? 0.82 : 0.76);
   const k = dt > 0 ? 1 - Math.exp(-12 * dt) : 1;
   d3.camY += (goalCamY - d3.camY) * k;
   d3.camZ += (goalCamZ - d3.camZ) * k;
@@ -638,14 +639,17 @@ function refreshThumbnails() {
       }
       if (trait === 'species' && item.val !== base.species) {
         sample.skin = SPECIES_DEFAULT_SKIN[item.val] || base.skin;
-        if (item.val === 'human') {
+        if (item.val === 'alien') {
+          sample.hair = 'bald';
+          sample.facial = 'none';
+        } else if (item.val === 'human') {
           const defs = humanGenderDefaults(base.gender);
           if (sample.hair === 'bald') sample.hair = defs.hair;
           if (sample.outfit === 'consul') sample.outfit = defs.outfit;
         }
       }
-      if (trait === 'hair' && (sample.species === 'robot' || sample.species === 'alien')) { sample.species = 'human'; sample.skin = SPECIES_DEFAULT_SKIN.human; }
-      if (trait === 'facial' && (sample.species === 'robot' || sample.species === 'alien')) { sample.species = 'human'; sample.skin = SPECIES_DEFAULT_SKIN.human; }
+      if (trait === 'hair' && sample.species === 'robot') { sample.species = 'human'; sample.skin = SPECIES_DEFAULT_SKIN.human; }
+      if (trait === 'facial' && sample.species === 'robot') { sample.species = 'human'; sample.skin = SPECIES_DEFAULT_SKIN.human; }
       const ctx = item.canvas.getContext('2d');
       ctx.imageSmoothingEnabled = false;
       ctx.fillStyle = '#e6dec2';
@@ -653,7 +657,7 @@ function refreshThumbnails() {
       ctx.fillStyle = '#c9be99';
       ctx.fillRect(0, 46, 56, 10);
       const pix = paintFlatCharacter(sample, { pose: 'idle' });
-      const sy = trait === 'outfit' ? 34 : 20;
+      const sy = trait === 'outfit' ? 34 : (sample.species === 'alien' ? 16 : 20);
       blitPixCrop(ctx, pix, { sx: 2, sy, sw: 28, sh: 28, dx: 0, dy: 0, scale: 2 });
     }
   }

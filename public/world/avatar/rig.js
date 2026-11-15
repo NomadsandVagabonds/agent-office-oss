@@ -155,13 +155,14 @@ export class Avatar {
     this.head = node(JOINT.head, JOINT.hips, this.torso);
     this.head.add(partMesh(P.head, JOINT.head));
     if (P.accessory) this.head.add(partMesh(P.accessory, JOINT.head));
+    const topY = hatTop(look);
     if (P.spin) {
       this.spinner = partMesh(P.spin, [0, 0, 0]);
-      this.spinner.position.set(0, JOINT.hat[1] + 6 - JOINT.head[1], 0);
+      this.spinner.position.set(0, topY + 6 - JOINT.head[1], 0);
       this.head.add(this.spinner);
     }
     this.hat = new THREE.Group();                        // custom creation hats attach here
-    this.hat.position.set(0, JOINT.hat[1] - JOINT.head[1], 0);
+    this.hat.position.set(0, topY - JOINT.head[1], 0);
     this.head.add(this.hat);
 
     this.faces = {};
