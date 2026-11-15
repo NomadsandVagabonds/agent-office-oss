@@ -34,6 +34,7 @@ import { enterBackrooms } from '../backrooms/index.js';
 import { LIGHTING_MODES } from '../backrooms/lighting.js';
 import { lightingStudy } from './lighting-study.js';
 import { lastLightStudy } from './last-light-study.js';
+import { bridgeStudy } from './bridge-study.js';
 
 // &check=1: listen from the start, so that nothing said while the floor was being built is missed
 const said = [];
@@ -121,6 +122,7 @@ async function go() {
     debug: true, scorecard: q.get('card') !== '0', home: { label: 'Return to homepage' }, where: q.get('where') || undefined,
     inventory: q.get('inventory') !== '0', barricades: q.get('barricades') !== '0',
     dev: { supplies: q.get('supplies') === '1', barricadeStudy: q.get('barricades') === '1' && q.get('study') === '1',
+      bridgeStudy: q.get('bridgestudy') === '1',
       lighting: ['1', ...LIGHTING_MODES].includes(q.get('lighting')) ? q.get('lighting') : false,
       owns: target => !!target?.closest?.('[data-lighting-study]') },
     onReady(handle) {
@@ -130,7 +132,8 @@ async function go() {
       if (q.get('map')) dev.textContent = handle.sketch();
       console.log(handle.sketch());
       if (q.get('check')) console.log('[check] ' + JSON.stringify(check(handle)));
-      if (q.get('hallstudy') === '1') closeStudy = lastLightStudy(handle);
+      if (q.get('bridgestudy') === '1') closeStudy = bridgeStudy(handle);
+      else if (q.get('hallstudy') === '1') closeStudy = lastLightStudy(handle);
       else if (q.get('lightstudy') === '1' && handle.world.hasLighting) closeStudy = lightingStudy(handle);
       document.title = 'ready';
     },

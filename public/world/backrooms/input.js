@@ -100,6 +100,7 @@ export function createInput(o) {
     if (e.pointerType === 'touch') {
       if (e.target === hud.leave) { o.menu(); return; }
       if (e.target === hud.use) { o.use(); return; }
+      if (e.target === hud.tip) { o.key('r'); return; }
       const t = thumbs(), name = t?.act(e.target);
       if (name) { pressButton(name, e.pointerId); return; }
       const zone = t?.zone || { x0: 0, y0: stage.size.h * 0.45, x1: stage.size.w * 0.4, y1: stage.size.h };
@@ -110,6 +111,7 @@ export function createInput(o) {
       return;
     }
     if (e.target === hud.use) { o.use(); return; }
+    if (e.target === hud.tip) { o.key('r'); return; }
     // the first click only takes hold of the mouse; after that a click is a click. (Where the mouse cannot be held —
     // it is dragged to look instead — a click is a press that went nowhere: see onPointerUp.)
     if (document.pointerLockElement === canvas) { if (e.button === 0) o.click(); press = null; }

@@ -2,12 +2,15 @@
 // owns the meshes, collisions and room revisions; this only approves moves.
 
 import { furnitureEntryTime } from './furniture-rules.js';
+import { bridgeSupport, canTip, bodyOver } from './bridge-rules.js';
 
 /** Relative weight; player and creature movement rates in metres/second. */
 export const FURNITURE = Object.freeze({
   chair: Object.freeze({ weight: 1, playerSpeed: 1.1, pushSpeed: 0.85 }),
   desk: Object.freeze({ weight: 3, playerSpeed: 0.45, pushSpeed: 0.4 }),
   trolley: Object.freeze({ weight: 1.5, playerSpeed: 0.85, pushSpeed: 0.65 }),
+  prop: Object.freeze({ weight: 1.5, playerSpeed: .75, pushSpeed: .6 }),
+  cutout: Object.freeze({ weight: 1, playerSpeed: .9, pushSpeed: .7 }),
 });
 const STEP = 0.04, MAX_MOVE = 0.5, SAMPLE = 0.1, FLOOR_EPS = 0.012, EPS = 1e-6;
 const none = () => ({ dx: 0, dz: 0, moved: false });
@@ -32,12 +35,18 @@ export function createFurnitureMotion(world) {
       && item.x1 > item.x0 && item.z1 > item.z0 && item.x1 - item.x0 <= 4 && item.z1 - item.z0 <= 4 && item.top > item.y;
   }
   function fits(item, dx, dz, ignoreBody) {
+    if (item.transition || item.deployed && item.support?.spansGap) return false;
     const bounds = shifted(item, dx, dz), x = item.x + dx, z = item.z + dz;
     if (!world.free(x, z, 0, { bounds, bottom: item.y, top: item.top, ignoreCollider: item.collider, ignoreBody })) return false;
     // The player is not in world.bodies; creatures are. Both stop a desk.
     const player = world.env?.player, me = player?.me;
     const radius = Number.isFinite(player?.RADIUS) && player.RADIUS > 0 ? player.RADIUS : 0.22;
     if (point(me) && !ignores(ignoreBody, me) && distance2(me, bounds) < radius * radius - EPS) return false;
+    if (item.deployed) {
+      // A bridge on solid ground may slide, but not while it carries somebody.
+      if (me && bodyOver(item, { ...me, r: radius }) || (world.bodies || []).some(b => b.on !== false && !b.airborne && bodyOver(item, b))) return false;
+      return bridgeSupport(world, { ...item, ...bounds }, item.bridge.axis, item.bridge.bearing).ok;
+    }
     // Check the interior as well as the corners: four good legs do not make
     // a desk safe to slide over a hole. Furniture does not climb or fall.
     const nx = Math.ceil((bounds.x1 - bounds.x0) / SAMPLE), nz = Math.ceil((bounds.z1 - bounds.z0) / SAMPLE);
@@ -65,6 +74,7 @@ export function createFurnitureMotion(world) {
       ax = tx; az = tz;
     }
     if (Math.hypot(ax, az) < EPS || item.translate(ax, az) === false) return none();
+    if (item.deployed) item.support = bridgeSupport(world, item, item.bridge.axis, item.bridge.bearing);
     return { dx: ax, dz: az, moved: true };
   }
   /** The first solid movable thing a circular walker would meet on a straight segment, or null. */
@@ -72,7 +82,7 @@ export function createFurnitureMotion(world) {
     if (!point(a) || !point(b) || !Number.isFinite(r) || r < 0 || r > 4) return null;
     let closest = null, at = Infinity;
     for (const item of world.furniture || []) {
-      if (!usable(item) || item.collider.on === false) continue;
+      if (!usable(item) || item.collider.on === false || item.collider.floor) continue;
       const t = furnitureEntryTime(a, b, r, item);
       if (t < at) { at = t; closest = item; }
     }
@@ -130,5 +140,11 @@ export function createFurnitureMotion(world) {
     world.refreshFurniture?.();
     return back;
   }
-  return { move, blocking, shove, takeAway, bringBack, version: room => world.furnitureRevision?.get(room) || 0 };
+  function tip(item, actor) {
+    if (!usable(item)) return { ok: false, reason: 'fixed' };
+    const checked = canTip(world, item, { actor });
+    if (checked.ok && !item.tip?.(checked)) return { ok: false, reason: 'busy' };
+    return checked;
+  }
+  return { move, blocking, shove, tip, takeAway, bringBack, version: room => world.furnitureRevision?.get(room) || 0 };
 }

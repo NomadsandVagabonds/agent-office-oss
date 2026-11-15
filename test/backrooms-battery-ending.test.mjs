@@ -43,7 +43,7 @@ async function visit(t) {
   const hud = {
     el: {}, warnings, icons, ending: false, removed: false,
     setClean: noop, layout: noop, hint: noop, flag: noop, recording: noop, setStamp: noop, setPaused: noop, update: noop, glitch: noop,
-    battery: noop,
+    battery: noop, tipHint: noop,
     batteryWarning(value) { if (!this.ending) warnings.push(value); },
     batteryEnding({ opacity }) { this.ending = true; icons.push(opacity); },
     remove() { this.removed = true; },
