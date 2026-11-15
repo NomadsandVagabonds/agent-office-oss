@@ -11,9 +11,22 @@ import { toWorld, wallPoint, wallSpans, floorAt, ceilAt } from './gen.js';
 import { clamp, turnTo } from './bits.js';
 import {
   ABSORBED, ABSORBED_MOUNTS, rollAbsorbedRoster, absorbedCount,
-  createAbsorbedState, stepAbsorbed,
+  createAbsorbedState, stepAbsorbed, tugsTheCamera, HUNTER_NEAR,
 } from './absorbed/rule.js';
+import { CAST } from './cast.js';
 import { makeAbsorbedWorker } from './absorbed/rig.js';
+
+/** Whoever of the cast hunts (cast.js): the ones a visitor must be left free to watch, or not to look at. */
+const HUNTERS = CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id);
+/** Is one of them near the visitor, with nothing between the two? */
+function hunted(env, me) {
+  for (const id of HUNTERS) {
+    const at = env.pursuer?.of?.(id)?.at?.();
+    if (!at || !Number.isFinite(at.x) || !Number.isFinite(at.z)) continue;
+    if (Math.hypot(at.x - me.x, at.z - me.z) <= HUNTER_NEAR && env.world.los(me.x, me.z, at.x, at.z)) return true;
+  }
+  return false;
+}
 
 function doorClear(def, lx, lz, minDist) {
   for (const dr of def.doors) {
@@ -259,7 +272,8 @@ export function spawnAbsorbed(env, { rt, placement, spec }) {
         }
 
         // Subtle physical camera tug toward the clutching coworker's face on initial snare
-        if (rule.holdLeft > ABSORBED.holdDuration - 0.55) {
+        // (not while something that hunts is near and in sight: the visitor's look is theirs to keep — absorbed/rule.js)
+        if (tugsTheCamera(rule.holdLeft, hunted(env, me))) {
           const faceYaw = Math.atan2(-(reachX - me.x), -(reachZ - me.z));
           me.yaw += turnTo(me.yaw, faceYaw) * (1 - Math.exp(-4.8 * dt));
           const wantPitch = mount === 'ceiling' ? 0.42 : mount === 'floor' ? -0.34 : 0.02;

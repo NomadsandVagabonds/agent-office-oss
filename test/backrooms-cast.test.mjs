@@ -15,6 +15,7 @@ import { createWalk, clearOfAbsorbed, ABSORBED_GAP } from '../public/world/backr
 import { FIRE_WAYS, FIRE_FEAR, calm, afraid, tooNear } from '../public/world/backrooms/cast/fire.rule.js';
 import { BLACKOUT, createBlackoutState, stepBlackout } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
 import { ARCHETYPES } from '../public/world/backrooms/gen.js';
+import * as SUNK from '../public/world/backrooms/absorbed/rule.js';
 import { DOORS, doorPlan, doorRooms, inTheWay } from '../public/world/backrooms/doors.js';
 
 const office = { name: 'Robin', projects: ['Atlas', 'Harbor'], agents: ['Ivory Marten', 'Amber Vireo', 'Ember Numbat'], tasks: ['Ship the thing', 'Fix the other thing'] };
@@ -474,4 +475,20 @@ test('the absorbed staff: nothing of the cast walks through one or stops on one'
   assert.equal(walk.stand(it, -2, 9.3), false);
   env.absorbed = [];
   assert.equal(walk.stand(it, 4.2, 4.1), true, 'and where there are none, as before');
+});
+
+test('the absorbed staff: a hold never turns the visitor\'s head while something that hunts is near and in sight', () => {
+  const { ABSORBED: A, tugsTheCamera, HUNTER_NEAR, TUG_SECONDS } = SUNK;
+  // nobody about: the first half second of a hold pulls the look round to the face, and then lets it go
+  assert.equal(tugsTheCamera(A.holdDuration, false), true);
+  assert.equal(tugsTheCamera(A.holdDuration - TUG_SECONDS + 0.01, false), true);
+  assert.equal(tugsTheCamera(A.holdDuration - TUG_SECONDS - 0.01, false), false);
+  // the mascot in the room (or the shadow): not for a moment of it
+  for (let left = A.holdDuration; left > 0; left -= dt) assert.equal(tugsTheCamera(left, true), false);
+  assert.ok(HUNTER_NEAR >= 5 && HUNTER_NEAR <= HUNT.far, 'near enough to matter, and no further than it could see you from');
+  assert.ok(TUG_SECONDS < A.holdDuration);
+  // the two this is for are the ones that hunt; the rest of the hold is as it was
+  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow']);
+  const held = SUNK.stepAbsorbed(SUNK.createAbsorbedState('wall'), { dt, dist: 0.5 });
+  assert.ok(held.startedGrab && held.slow === A.slowFactor);
 });

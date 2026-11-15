@@ -212,3 +212,16 @@ export function stepAbsorbed(prev, {
     interfere,
   };
 }
+
+/**
+ * Does the hold turn the visitor's head to the one holding them, this moment? Only in its first half second — and
+ * never while something that hunts is within HUNTER_NEAR metres of them with a line of sight between the two
+ * (`hunted`). Watching is what holds the mascot where it is, and looking is what sets the shadow off: nothing of the
+ * building's takes that look out of the visitor's hands. Being slowed and held with one of them close is the cost of
+ * walking into reach; the creak and the arms were the warning.
+ */
+export const HUNTER_NEAR = 6;
+export const TUG_SECONDS = 0.55;
+export function tugsTheCamera(holdLeft, hunted) {
+  return !hunted && holdLeft > ABSORBED.holdDuration - TUG_SECONDS;
+}
