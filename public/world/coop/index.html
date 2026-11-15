@@ -13,7 +13,7 @@
 .real-inventory .br-inventory{position:fixed;inset:0;z-index:4}.real-inventory #panel{z-index:6}.real-inventory #socialPanel{z-index:7}.real-inventory #emoteButton{z-index:5}.real-inventory .br-inventory button{margin:0;width:auto}
 </style>
 <link rel="stylesheet" href="/world/coop/lobby.css">
-<canvas id="view"></canvas><div id="overlay"></div><header id="cameraHeader"><span>● REC · TWO TAPES</span><span id="clock">SP 00:00</span></header><div id="aim">·</div>
+<canvas id="view"></canvas><div id="overlay"></div><header id="cameraHeader"><span>● REC · TWO TAPES</span><span id="clock">SP 00:00</span></header><div id="aim">·</div><div id="voiceIndicator" aria-live="polite" hidden></div>
 <main id="panel" aria-label="Co-op lobby">
   <div class="lobby-brand">
     <div class="web-address">THE BLOCKROOMS WORLD WIDE WEB SITE</div>
@@ -38,14 +38,14 @@
             <input id="invite" readonly aria-label="Invite link" hidden>
             <button id="copy" hidden>Copy invite link</button>
             <button id="ready" class="primary-action" hidden>Ready / resume</button>
-            <p id="readyHelp" hidden>Send the link to your friend. When you're both here, click Ready.</p>
+            <p id="readyHelp" hidden>Send the link to your friend. Click Ready when you have finished setting up voice.</p>
             <a id="newSession" href="/">Start over</a>
           </div>
         </section>
         <aside class="web-window sound-window" aria-labelledby="soundHeading">
           <h2 class="window-title" id="soundHeading">Can you hear me?</h2>
           <div class="window-body">
-            <p>Enable voice, allow your microphone, then hold <kbd>V</kbd> to talk.</p>
+            <p>Both players: enable voice, allow your microphone, then hold <kbd>V</kbd> to talk.</p>
             <button id="voice" disabled>Enable voice</button>
             <label for="voiceVolume">Friend's volume</label><input id="voiceVolume" type="range" min="0" max="1" step="0.05" value="0.8">
             <p id="voiceStatus" aria-live="polite">Microphone off</p>

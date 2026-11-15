@@ -35,7 +35,7 @@ if(!realMode)box(EXIT.x,1.1,EXIT.z+.8,1.3,2.2,.08,new THREE.MeshBasicMaterial({c
 const pirate=makePirate(kit,makeRng('coop-pirate'));pirate.show();pirate.hold(0);if(!realMode)scene.add(pirate.group);
 const itemMeshes=new Map(),avatars=new Map(),keys=new Set();let state=null,id=null,socket=null,yaw=Math.PI,pitch=0,selected=0,lastHealth=4,ended=false;
 function send(m){if(realMode&&!['ready','floor-ready','voice','host-paused','real-state'].includes(m.type))m.depth=real?.depth;if(real?.host&&state?.phase==='play'&&['input','select','toggle-light','craft','take','drop','use','exit','revive','emote','trade-request','trade-answer','trade-offer','trade-confirm','trade-cancel'].includes(m.type)){real.command(id,m);return;}if(socket?.readyState===1)socket.send(JSON.stringify(m));}
-const voice=createVoice({send,enabled:()=>socket?.readyState===1&&!!state&&!ended,button:$('voice'),status:$('voiceStatus'),volume:$('voiceVolume')});
+const voice=createVoice({send,enabled:()=>socket?.readyState===1&&!!state&&!ended,button:$('voice'),status:$('voiceStatus'),volume:$('voiceVolume'),indicator:$('voiceIndicator')});
 let inventoryHud=null;let resultSerial=0;
 const socialUI=createSocialUI({read:()=>({state,me:state?.players.find(p=>p.id===id),real:realMode}),send,resume:()=>lock(),stop:()=>{inventoryHud?.setOpen(false);keys.clear();send({type:'input',f:0,s:0,yaw,pitch});}});
 const myself=()=>state?.players.find(p=>p.id===id);
@@ -78,11 +78,16 @@ function update(s){state=s;if(s.phase==='play')$('panel').classList.add('has-pla
   if(me.health<=0||s.phase!=='play')inventoryHud.setOpen(false);
  }
  socialUI.update();
- if(s.phase==='waiting'&&!building)$('status').textContent=`${s.players.length} of 2 players here · ${s.players.filter(p=>p.ready).length} ready`;
+ if(s.phase==='waiting'&&!building){
+  $('ready').disabled=!!me.ready;$('ready').textContent=me.ready?'Waiting for your friend…':"I'm ready";
+  $('status').textContent=me.ready?(s.players.length<2?'You are ready. Send your friend the invite link.':'You are ready. Waiting for your friend to click Ready.'):`${s.players.length} of 2 players here · ${s.players.filter(p=>p.ready).length} ready`;
+ }
+ if(s.phase==='play'&&!building&&!ended){$('ready').disabled=false;$('ready').textContent='Enter / resume';$('status').textContent='Both players are ready. Click Enter / resume to play.';}
+
  if(!['waiting','play','descending','loading'].includes(s.phase)&&!ended){ended=true;gameAudio.pause(true);voice.off();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=({escaped:'The surviving visitors escaped.',dead:'Neither tape was recovered.',disconnected:'Your friend disconnected. Start a new game to try again.'})[s.phase]+(s.depths?` · ${s.visited?.length||0} rooms · ${s.depth+1}/${s.depths} floors · ${Math.floor(s.time/60)}m ${Math.floor(s.time%60)}s`:'');}
 }
 async function buildFloor(depth){
- building=true;inventoryHud?.setOpen(false);gameAudio.pause(true);keys.clear();hostPaused=false;$('panel').hidden=false;$('ready').disabled=true;$('status').textContent=depth?'Loading the next floor…':'Loading the first floor…';
+ building=true;inventoryHud?.setOpen(false);gameAudio.pause(true);keys.clear();hostPaused=false;$('panel').hidden=false;$('ready').disabled=true;$('ready').textContent='Loading…';$('status').textContent=depth?'Loading the next floor… Keep this tab visible.':'Loading the first floor… Keep this tab visible.';
  for(const mesh of itemMeshes.values()){scene.remove(mesh);mesh.geometry.dispose();}itemMeshes.clear();
  for(const a of avatars.values()){a.root.visible=false;a.signal.visible=false;}
  const old=real;real=null;old?.dispose();
@@ -91,7 +96,7 @@ async function buildFloor(depth){
  real=next;gameAudio.floor(real.level,depth);initialized=false;yaw=real.start.yaw;pitch=0;
  $('status').textContent='Floor loaded. Waiting for your friend…';
 }
-async function connect(code){$('create').hidden=true;$('alphaKey').hidden=true;$('hostAccess').hidden=true;$('inviteLabel').hidden=$('readyHelp').hidden=false;$('voice').disabled=false;$('roomHeading').textContent='Your game';$('joinHelp').textContent='Waiting for your friend? Copy the link below.';$('invite').hidden=$('copy').hidden=$('ready').hidden=false;
+async function connect(code){$('ready').disabled=true;$('ready').textContent='Connecting…';$('status').textContent='Connecting to your game…';$('create').hidden=true;$('alphaKey').hidden=true;$('hostAccess').hidden=true;$('inviteLabel').hidden=$('readyHelp').hidden=false;$('voice').disabled=false;$('roomHeading').textContent='Your game';$('joinHelp').textContent='Waiting for your friend? Copy the link below.';$('invite').hidden=$('copy').hidden=$('ready').hidden=false;
  const url=new URL(location.href);url.searchParams.set('room',code);history.replaceState(null,'',url);$('invite').value=url.href;
  socket=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/socket?room=${encodeURIComponent(code)}&v=${VERSION}`);
  socket.onmessage=async e=>{try{const m=JSON.parse(e.data);
@@ -103,9 +108,9 @@ async function connect(code){$('create').hidden=true;$('alphaKey').hidden=true;$
   if(ended||!real||real.depth!==m.depth)return;building=false;$('ready').disabled=false;hostPaused=false;
   for(const p of m.state.players)Object.assign(p,{x:real.start.x,z:real.start.z,y:real.world.floorY(real.start.x,real.start.z)+1.1,yaw:real.start.yaw,pitch:0});
   update(m.state);gameAudio.pause(false);
-  $('panel').hidden=document.pointerLockElement===canvas;$('status').textContent="You’re both here. Ready to go?";return;
+  $('panel').hidden=document.pointerLockElement===canvas;$('status').textContent='Floor loaded. Click Enter / resume to continue.';return;
  }
- if(m.type==='control'){real?.command(m.id,m.action);return;}if(m.type==='host-paused'){hostPaused=m.paused;gameAudio.pause(hostPaused);$('notice').textContent=hostPaused?'Host tab paused · waiting for return':'';return;}if(m.type==='voice')voice.receive(m);if(m.type==='welcome'){id=m.id;realHost=m.host;if((m.mode==='rooms')!==realMode){socket.close();return;}if(realMode){roomSeed=m.seed;roomSlice=!!m.slice;await buildFloor(0);building=false;gameAudio.pause(false);$('ready').disabled=!real;}}if(m.type==='state'){if(m.state.phase==='disconnected')hostPaused=true;update(m.state);}}catch(error){fail(error);}};
+ if(m.type==='control'){real?.command(m.id,m.action);return;}if(m.type==='host-paused'){hostPaused=m.paused;gameAudio.pause(hostPaused);$('notice').textContent=hostPaused?'Host tab paused · waiting for return':'';return;}if(m.type==='voice')voice.receive(m);if(m.type==='welcome'){id=m.id;realHost=m.host;if((m.mode==='rooms')!==realMode){socket.close();return;}if(realMode){roomSeed=m.seed;roomSlice=!!m.slice;await buildFloor(0);building=false;gameAudio.pause(false);$('ready').disabled=!real;$('ready').textContent="I'm ready";}}if(m.type==='state'){if(m.state.phase==='disconnected')hostPaused=true;update(m.state);}}catch(error){fail(error);}};
  socket.onclose=()=>{ended=true;hostPaused=true;gameAudio.stop();voice.off();keys.clear();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=fatal||'Connection closed. The room may be full, started, or expired. Start a new game.';};
  socket.onerror=()=>{$('status').textContent='Could not connect to the co-op server.';};
 }
@@ -116,11 +121,25 @@ try {
  if(key){sessionStorage.setItem('coop-host',key);history.replaceState(null,'',location.pathname+location.search);}
  $('alphaKey').value=sessionStorage.getItem('coop-host')||'';if($('alphaKey').value)$('hostAccess').hidden=true;
 }catch{}
-$('create').onclick=async()=>{try{const r=await fetch(realMode?'/new?mode=rooms'+(new URLSearchParams(location.search).get('slice')==='1'?'&slice=1':''):'/new',{method:'POST',headers:{'x-alpha-key':$('alphaKey').value}});if(!r.ok)throw Error(r.status===403?'Open your private host link, or enter the host passcode.':'Could not start a game. Please try again.');$('alphaKey').value='';await connect((await r.json()).code);}catch(e){$('status').textContent=e.message;$('hostAccess').hidden=false;$('hostAccess').open=true;}};
-$('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('invite').value);$('copy').textContent='Copied';}catch{$('invite').select();}};
-function lock(){gameAudio.start();const request=canvas.requestPointerLock();request?.catch(()=>{$('panel').hidden=false;$('status').textContent='Click Ready / resume to give this tab mouse control.';});}
-$('ready').onclick=()=>{send({type:'ready'});lock();};
-canvas.onclick=()=>{if(state&&!ended)lock();};
+$('create').onclick=async()=>{
+ $('create').disabled=true;$('create').textContent='Starting…';$('status').textContent='Starting your game…';
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
+ try{
+  const r=await fetch(realMode?'/new?mode=rooms'+(new URLSearchParams(location.search).get('slice')==='1'?'&slice=1':''):'/new',{method:'POST',headers:{'x-alpha-key':$('alphaKey').value},signal:controller.signal});
+  if(!r.ok){if(r.status===403){$('hostAccess').hidden=false;$('hostAccess').open=true;throw Error('Open your private host link, or enter the host passcode.');}throw Error('The server could not start a game. Please try again.');}
+  $('alphaKey').value='';await connect((await r.json()).code);
+ }catch(e){$('status').textContent=e.name==='AbortError'?'The server took too long to answer. Please try again.':e instanceof TypeError?'Could not reach the server. Check your connection and try again.':e.message;}
+ finally{clearTimeout(timeout);$('create').disabled=false;$('create').textContent='Start a game';}
+};
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('invite').value);$('copy').textContent='Copied';}catch{$('invite').focus();$('invite').select();$('copy').textContent='Link selected — press Ctrl+C / ⌘C';}};
+function lock(){gameAudio.start();const request=canvas.requestPointerLock();request?.catch(()=>{$('panel').hidden=false;$('status').textContent='Click Enter / resume to give this tab mouse control.';});}
+$('ready').onclick=()=>{
+ gameAudio.start();
+ if(state?.phase==='waiting'){send({type:'ready'});$('ready').disabled=true;$('ready').textContent='Waiting for your friend…';return;}
+ if(state?.phase==='play'&&!building&&!ended)lock();
+};
+window.addEventListener('beforeunload',e=>{if(!ended&&state&&['play','loading','descending'].includes(state.phase)){e.preventDefault();e.returnValue='';}});
+canvas.onclick=()=>{if(state?.phase==='play'&&!building&&!ended)lock();};
 document.addEventListener('pointerlockchange',()=>{keys.clear();$('panel').hidden=inventoryHud?.isOpen||socialUI.visible||document.pointerLockElement===canvas;if(!active())send({type:'input',f:0,s:0,yaw,pitch});});
 window.addEventListener('blur',()=>{keys.clear();send({type:'input',f:0,s:0,yaw,pitch});});
 document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas){yaw-=e.movementX*.0023;pitch=Math.max(-1.2,Math.min(1.2,pitch-e.movementY*.0023));}});

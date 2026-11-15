@@ -44,3 +44,7 @@ body:has(#panel:not([hidden]):not(.has-played)) > :is(#hud,#cameraHeader,#aim,#e
 #panel.has-played button:hover{background:#efefd822}#panel.has-played a,.has-played .lobby-controls summary{color:#efefd8}#panel.has-played #status{font:14px/1.5 "Courier New",monospace}#panel.has-played kbd{background:transparent;color:inherit}.has-played #joinHelp,.has-played #readyHelp{display:none}
 #panel.has-played :focus-visible{outline-color:#efefd8}
 @media(max-width:600px){.lobby-content{padding:20px 14px}.lobby-columns{grid-template-columns:1fr;gap:14px}.lobby-brand{padding-top:12px}.web-address{font-size:9px;letter-spacing:1px}.camera-art{left:4%;width:40px}.moth-art{right:4%;width:40px}.lobby-logo{width:245px}.ticker{font-size:10px}.welcome h2{font-size:23px}.construction span{margin:0 0 6px}.construction{display:flex;align-items:center;flex-direction:column}.has-played .lobby-columns{grid-template-columns:1fr}}
+
+#voiceIndicator{position:fixed;z-index:8;right:4%;top:12%;font:13px "Courier New",monospace;color:#efefd8;text-shadow:1px 1px #10180e;background:#10180e88;padding:5px 8px;pointer-events:none}
+#voiceIndicator[hidden]{display:none}
+body:has(#panel:not([hidden])) #voiceIndicator{top:auto;bottom:10px}

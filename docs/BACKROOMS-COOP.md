@@ -21,6 +21,41 @@ known unrelated console/status-line failures. Deployed as `b756746`; the live
 HTTPS page, CSS/SVG assets, private host-key stripping, guest invite and both
 players entering a run passed in two Chromium clients.
 
+## First-play preflight (prepared, not deployed)
+
+Small first-session fixes: starting a game disables the button until the request
+finishes, times out after 15 seconds, and offers a useful retry after failure.
+Ready stays in the lobby while waiting for the other visitor. Once both are
+ready, Enter / resume captures the mouse. A native browser warning catches
+refreshing or leaving during a run. A brief camcorder indicator shows when you
+or your friend is transmitting voice. Clipboard failure selects the invite and
+explains how to copy it manually.
+
+`node tools/blockrooms/coop-preflight-check.mjs` uses Chrome's fake microphone
+with a generated tone; it never accesses the real microphone. It verifies the
+actual AudioWorklet capture, resampling, WebSocket relay and non-silent audio
+playback in both directions, with 100ms outbound delay per peer. It also checks
+failed creation/retry, repeated Start clicks, clipboard denial, readiness,
+mouse capture, the refresh warning and disconnect feedback.
+
+Three-floor (`first-play-preflight`) and five-floor (`first-play-1`) browser
+runs escaped with health, batteries and possessions carried across every seam.
+Inventory/crafting, mounted lights, fire, trades, revives, doors, shared pirate
+attacks and host visibility feedback passed. The first unseeded long check
+hit a later-floor loading timeout; reproducible checks passed after disabling
+background timer throttling in the test browser, to represent two visible
+browsers on separate computers. A separate probe measured sixteen build-style
+yields at 9,689ms in a hidden tab versus 46ms visible. Loading messages now
+remind both players to keep their tab visible. The original timeout seed was
+not retained, so its exact cause is not proven. The harness prints the seed
+and transition diagnostics for repeatable investigation.
+
+Co-op tests: 42/42. Full suite: 821/824, same existing console/status-line failures.
+Physical microphones and the London–Argentina connections still need the real
+playthrough. Use the private host bookmark to create, send only the resulting
+invite, enable voice in both browsers, and keep the host tab visible. A selected
+battery + Q (or R) refills the camera; I opens the full inventory/crafting view.
+
 ## Try the real rooms
 
 Run `npm run coop`, then open http://127.0.0.1:4488/rooms.
