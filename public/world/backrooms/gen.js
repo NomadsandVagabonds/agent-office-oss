@@ -424,6 +424,12 @@ function build(R, o, opt) {
   // …and may insist on a room of its own, somewhere among the ones it would have had anyway
   const must = [].concat(opt.must || []).map((id) => ARCHETYPES[id]).filter(Boolean);
   if (must.length) { deck = deck.filter((a) => !must.includes(a)); for (const a of must) deck.splice(R.int(0, Math.min(want - 1, deck.length)), 0, a); }
+  // A room the way out is through (`gate`: deck2.js) is not dealt with the others. It goes in last of all, with the
+  // lobby and the fire exit hung off it and off nothing else, so that there is no way to them but through it.
+  const gate = deck.find((a) => a.gate) || null;
+  if (gate) deck = deck.filter((a) => a !== gate);
+  /** Is this the room a building was asked for by name (`only`), which is put where you land? */
+  const byStart = (arch) => !!opt.only && [].concat(opt.only).includes(arch.id);
 
   const sides = () => R.shuffle([0, 1, 2, 3]);
   function connector(from) {                 // a plain room off a hub or a port
@@ -463,7 +469,7 @@ function build(R, o, opt) {
       // where to grow from: usually the newest part of the maze, sometimes an older room (a branch)
       let hub = null, fresh = [], port = null;
       const openPorts = ports.filter((p) => !p.used);
-      if (first && opt.only) hub = start;
+      if (first && byStart(arch)) hub = start;
       else if (openPorts.length && R.chance(0.5)) {
         port = R.chance(0.7) ? openPorts[openPorts.length - 1] : R.pick(openPorts);
         fresh = run(port, 1);
@@ -480,7 +486,7 @@ function build(R, o, opt) {
         const room = attach(hub, side, spec);
         if (!room) continue;
         room.name = arch.name;
-        if (!(first && opt.only) && R.chance(0.18)) step(hub, room, R.pick([2, 4, 4]));
+        if (!(first && byStart(arch)) && R.chance(0.18)) step(hub, room, R.pick([2, 4, 4]));
         hubs.push(...fresh);
         if (port) port.used = true;
         for (const local of arch.ports) if (wallLength(room, local) >= 3.2) ports.push({ room, local });
@@ -491,7 +497,7 @@ function build(R, o, opt) {
     return null;
   }
   for (const arch of deck) {
-    if (specials.length >= want) break;
+    if (specials.length >= want - (gate ? 1 : 0)) break;
     if (isBig(arch) && specials.some((r) => isBig(ARCHETYPES[r.arch]))) continue;      // one set piece to a floor — a room with a view, or one that says it is `big`: it is the landmark
     const room = placeSpecial(arch, specials.length === 0);
     if (room) specials.push(room);
@@ -618,7 +624,7 @@ function build(R, o, opt) {
     .filter((p) => depth.get(p.room.id) + 1 >= Math.max(deepest, MIN_EXIT_STEPS))
     .sort((p, q) => depth.get(q.room.id) - depth.get(p.room.id) || far(q.room) - far(p.room));
   const tryExit = (a) => {
-    if (a.local) { const dw = Math.min(1.2, wallLength(a.room, a.local) - 1.2); return attach(a.room, worldSide(a.room, a.local), { ...exitSpec, dw, fixed: portSpan(a.room, a.local, 0, dw) }); }
+    if (a.local) { const dw = Math.min(1.2, wallLength(a.room, a.local) - 1.2); return attach(a.room, worldSide(a.room, a.local), { ...exitSpec, dw, fixed: portSpan(a.room, a.local, a.c || 0, dw) }); }
     for (const side of sides()) { const made = attach(a.room, side, exitSpec); if (made) { if (R.chance(0.45)) step(a.room, made, R.pick([2, 4, 6])); return made; } }
     return null;
   };
@@ -628,7 +634,7 @@ function build(R, o, opt) {
     for (let k = 0; k < 4; k++) {
       const [lw, ld] = sizes[k % 2 ? 'hall' : 'room'][R.chance(0.7) ? 0 : 1], spec = { kind: 'plain', lw, ld, dw: widths[0], H: heights[0] >= 2.3 ? heights[0] : WALL_H };
       let lobby = null;
-      if (a.local) { const dw = Math.min(1.8, wallLength(a.room, a.local) - 1.2); lobby = attach(a.room, worldSide(a.room, a.local), { ...spec, dw, fixed: portSpan(a.room, a.local, 0, dw) }); }
+      if (a.local) { const dw = Math.min(1.8, wallLength(a.room, a.local) - 1.2); lobby = attach(a.room, worldSide(a.room, a.local), { ...spec, dw, fixed: portSpan(a.room, a.local, a.c || 0, dw) }); }
       else for (const side of sides()) { lobby = attach(a.room, side, spec); if (lobby) break; }
       if (!lobby) continue;
       for (const side of sides()) { const made = attach(lobby, side, exitSpec); if (made) { if (R.chance(0.45)) step(lobby, made, R.pick([2, 4, 6])); return made; } }
@@ -636,8 +642,37 @@ function build(R, o, opt) {
     }
     return null;
   };
+  /**
+   * The way out, through a gate: a run of plain rooms off the anchor (it is an oddity like any other, and keeps its
+   * distance from the rest), the gate off the last of them, and the lobby and the fire exit off the side of the gate's
+   * far room (`gate.gate(room)`: where along that wall). The doorway it is entered by and the one the way out is
+   * beyond are written on it (`room.gate`: link ids) for the room that builds it. → the exit, or null: nothing went.
+   */
+  const throughGate = (a) => {
+    const near = byStart(gate), fresh = near ? [] : run(a.local ? a : a.room, runLength());
+    const hub = fresh.length ? fresh[fresh.length - 1] : near ? a.room : null;
+    if (hub) for (const side of sides()) {
+      const lw = R.int(gate.w[0], gate.w[1]), ld = R.int(gate.d[0], gate.d[1]);
+      const room = attach(hub, side, { kind: 'special', arch: gate.id, lw, ld, dw: gate.door || 1.8, centred: true, H: gate.h ? Math.round(R.range(gate.h[0], gate.h[1]) * 10) / 10 : WALL_H });
+      if (!room) continue;
+      const enter = links[links.length - 1].id;
+      for (const local of R.shuffle(['left', 'right'])) {
+        const on = { room, local, c: gate.gate(room) }, made = viaLobby(on) || tryExit(on);
+        if (!made) continue;
+        const beyond = links.filter((l) => l.a === room.id || l.b === room.id).pop();          // (its newest doorway: the one just made)
+        room.name = gate.name; room.gate = { in: enter, on: beyond.id };
+        room.params = gate.roll(R.fork('roll:' + room.id), o);
+        hubs.push(...fresh); specials.push(room);
+        return made;
+      }
+      undo(room);
+    }
+    for (const r of fresh.reverse()) undo(r);
+    return null;
+  };
   let exit = null;
-  for (const a of anchors) { exit = viaLobby(a) || tryExit(a); if (exit) { if (a.local) a.used = true; break; } }
+  if (gate) { for (const a of (byStart(gate) ? [{ room: start }] : anchors)) { exit = throughGate(a); if (exit) { if (a.local) a.used = true; break; } } }
+  else for (const a of anchors) { exit = viaLobby(a) || tryExit(a); if (exit) { if (a.local) a.used = true; break; } }
   if (!exit) return null;
   exit.way = goesDown(opt.way) ? opt.way : 'wall';
   exit.name = 'Fire exit';
@@ -1214,7 +1249,9 @@ function stash(level, want, R) {
   const loot = { card: !!(want.card && level.pursuer), coins: [] };
   if (!want.coins.length) return loot;
   const fromStart = roomDistances(level, level.start.room), toExit = roomDistances(level, level.exit.room), way = fromStart.get(level.exit.room);
-  const detour = (r) => fromStart.get(r.id) + toExit.get(r.id) - way;        // 0 on a shortest way out, 2 for a room one doorway off it…
+  // (a room the way out is through has a dead end of its own inside it — the room at the back of its hallway, where its
+  // hiding place is — and that is off the way out, whatever the plan of doorways says)
+  const detour = (r) => (r.arch && ARCHETYPES[r.arch] && ARCHETYPES[r.arch].gate ? 2 : fromStart.get(r.id) + toExit.get(r.id) - way);        // 0 on a shortest way out, 2 for a room one doorway off it…
   const able = level.rooms.filter((r) => r.kind !== 'start' && r.kind !== 'exit' && !r.crawl && fromStart.has(r.id));
   // how likely a room is to be picked: a dead end, an oddity, a long way off the route — and hardly ever the mascot's own room
   const entry = (r) => ({ room: r, R: R.fork('room:' + r.id), spots: [], dist: null, dud: false,

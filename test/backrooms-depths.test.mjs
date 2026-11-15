@@ -10,7 +10,7 @@ import { REACH, calm, beside, closeness, grabChance } from '../public/world/back
 import { planVisit, floorOf, generateVisit, MIN_FLOORS, MAX_FLOORS, MIN_VISIT_STEPS, KNOWN_AT_START } from '../public/world/backrooms/plan.js';
 import { THEMES, THEME_IDS } from '../public/world/backrooms/themes.js';
 import { WAYS, DEALT, GAP, goesDown, dropOf, hangBelow, flight, holeIn, ledgeAt, ductIn, pushes } from '../public/world/backrooms/seam.js';
-import { AWAY, settled, unsure } from '../public/world/backrooms/rooms/unsure-hall/rule.js';
+import { AWAY, ROOMS, DOORWAYS, PLAN, partsOf, settled, unsure } from '../public/world/backrooms/rooms/unsure-hall/rule.js';
 import { HALL, HAND, PART_ROOMS } from '../public/world/backrooms/plan.js';
 import { WARNINGS, warningFor } from '../public/world/backrooms/drawings.js';
 import { CAST, castFor } from '../public/world/backrooms/cast.js';
@@ -588,38 +588,64 @@ test('near a seam the parts run into each other, and that changes nothing but ho
   }
 });
 
-test('the hallway that is not sure where it leads: only while nobody looks and nobody is in it, once per look away, and round to the first room again', () => {
-  const dt = 1 / 30;
-  const run = (s, secs, watched, occupied, n) => { let turns = 0; for (let t = 0; t < secs; t += dt) { s = unsure(s, dt, watched, occupied, n); if (s.turned) turns++; } return [s, turns]; };
-  for (const n of [2, 3, 4]) {
-    // nobody has ever seen it: it has nothing to be different from, and stays as it is
-    let [s, turns] = run(settled(), 30, false, false, n);
-    assert.deepEqual([s.face, turns], [0, 0], 'a room nobody has looked at does not change behind their backs');
-    // watched, or stood in, for as long as you like: never
-    [s, turns] = run(s, 30, true, false, n); assert.equal(turns, 0, 'it never changes while somebody is looking');
-    [s, turns] = run(s, 30, false, true, n); assert.equal(turns, 0, 'nor while somebody is in it, looking or not');
-    // look away, look back; look away, look back: one room on each time, and after n of them the room you started with
-    const seen = [];
-    s = settled();
-    for (let i = 0; i < n * 2; i++) {
-      [s] = run(s, 1, true, false, n); seen.push(s.face);
-      [s, turns] = run(s, 5, false, false, n);
-      assert.equal(turns, 1, 'however long you look away, it is one room on: you have to look back before it will change again');
-    }
-    assert.deepEqual(seen, Array.from({ length: n * 2 }, (_, i) => i % n), `${n} rooms, in order, and round again`);
-    // a glance at your feet is not long enough
-    [s] = run(settled(), 1, true, false, n);
-    [s, turns] = run(s, AWAY - 2 * dt, false, false, n);
-    assert.equal(turns, 0);
-    [s, turns] = run(s, 1, true, false, n); assert.equal(turns, 0);
+test('the hallway that is not sure where it leads: the room you came through, a dead end, the way on; behind your back, from the hallway or beyond, and round again', () => {
+  const dt = 1 / 30, beyond = { watched: false, inside: false, busy: false, near: true };
+  const run = (s, secs, now) => { let turns = 0; for (let t = 0; t < secs; t += dt) { s = unsure(s, dt, now); if (s.turned) turns++; } return [s, turns]; };
+  assert.deepEqual([...ROOMS], ['through', 'dead', 'on']);
+  assert.deepEqual(JSON.parse(JSON.stringify(DOORWAYS)), { through: { in: true, on: false }, dead: { in: false, on: false }, on: { in: false, on: true } });
+  // nobody is ever shut in for good: the rooms come round, one of them has the way back in it and one the way on
+  assert.ok(ROOMS.some((r) => DOORWAYS[r].in) && ROOMS.some((r) => DOORWAYS[r].on));
+  assert.equal(ROOMS[settled().face], 'through', 'it begins as the room you will walk through');
+  // nobody has been in it or looked at it: it has nothing to be different from, and stays as it is
+  let [s, turns] = run(settled(), 30, beyond);
+  assert.deepEqual([s.face, turns], [0, 0], 'a room nobody has seen does not change behind their backs');
+  // looked at, or stood in, for as long as you like: never
+  [s, turns] = run(settled(), 30, { ...beyond, watched: true }); assert.equal(turns, 0, 'it never changes while somebody is looking');
+  [s, turns] = run(settled(), 30, { ...beyond, inside: true, near: false }); assert.equal(turns, 0, 'nor while the visitor is in it');
+  // from anywhere but the hallway and the room beyond: never, however long it is out of sight. (Somebody who looked in
+  // from the room outside and walked off would otherwise come back to a wall.)
+  [s] = run(settled(), 1, { ...beyond, watched: true, near: false });
+  [s, turns] = run(s, 60, { ...beyond, near: false }); assert.equal(turns, 0, 'it only turns for somebody who is in the hallway or beyond it');
+  // something else is standing in it: not then either. And that it was looked at is not forgotten
+  [s] = run(settled(), 1, { ...beyond, watched: true });
+  [s, turns] = run(s, 30, { ...beyond, busy: true }); assert.equal(turns, 0, 'never on top of anything that walks');
+  [s, turns] = run(s, 1, beyond); assert.equal(turns, 1);
+  // The walk itself: in by the doorway (inside), on into the hallway with your back to it (out of sight) — a dead end.
+  // Look back, look away: the way on. Look back, look away: the room you came through. One room each time.
+  s = settled();
+  [s] = run(s, 2, { ...beyond, inside: true, near: false });
+  [s, turns] = run(s, 5, beyond);
+  assert.deepEqual([ROOMS[s.face], turns], ['dead', 1], 'walking through it is having seen it');
+  const seen = [];
+  for (let i = 0; i < 6; i++) {
+    [s] = run(s, 1, { ...beyond, watched: true }); seen.push(ROOMS[s.face]);
+    [s, turns] = run(s, 5, beyond);
+    assert.equal(turns, 1, 'however long you look away, it is one room on: you have to look back before it will change again');
   }
-  assert.equal(unsure({ face: 0, away: 9, seen: true }, 1, false, false, 1).turned, false, 'a hallway with only one end is only a hallway');
+  assert.deepEqual(seen, ['dead', 'on', 'through', 'dead', 'on', 'through']);
+  // a glance at your feet is not long enough
+  [s] = run(settled(), 1, { ...beyond, watched: true });
+  [s, turns] = run(s, AWAY - 2 * dt, beyond); assert.equal(turns, 0);
+  [s, turns] = run(s, 1, { ...beyond, watched: true }); assert.equal(turns, 0);
+  assert.equal(unsure({ face: 0, away: 9, seen: true }, 1, beyond, 1).turned, false, 'a hallway with only one end is only a hallway');
   assert.ok(AWAY >= 0.25 && AWAY <= 0.8);
 });
 
-test('the hallway is rare, is never where you land, and only ever comes after the cardboard people', () => {
+/** Can `to` be walked to from `from` if `without` (a room, or a doorway by its link) is not there? */
+function reaches(level, from, to, without = {}) {
+  const seen = new Set([from]), queue = [from];
+  while (queue.length) {
+    const r = level.rooms[queue.shift()];
+    for (const d of r.doors) { if (d.link === without.link || d.to === without.room || seen.has(d.to)) continue; seen.add(d.to); queue.push(d.to); }
+  }
+  return seen.has(to);
+}
+
+test('the hallway is the way out of its part: the fire exit is beyond it and nowhere else, it has the two doorways it turns, and it is where the plan puts it', () => {
   const hall = ARCHETYPES[HALL];
-  assert.ok(hall && hall.planned && lessons(hall).needs.includes('unwatched'), 'it takes the cardboard people for granted, and is never dealt by chance');
+  assert.ok(hall && hall.planned && typeof hall.gate === 'function' && lessons(hall).needs.includes('unwatched'), 'it takes the cardboard people for granted, is never dealt by chance, and is a way out');
+  assert.equal(hall.doors, 'own', 'the floor hangs no fire doors of its own in doorways that are sometimes wall');
+  assert.deepEqual(hall.ports, [], 'and nothing else is ever hung off it');
   const counts = [0, 0, 0];
   for (const seed of SEEDS) {
     const { visit, floors } = visitFor(seed);
@@ -627,18 +653,52 @@ test('the hallway is rare, is never where you land, and only ever comes after th
     assert.ok(at.length <= 1, `seed ${seed}: ${at.length} of them in one visit (no room is in a visit twice)`);
     counts[at.length]++;
     for (const i of at) {
+      const level = floors[i], where = `seed ${seed}, part ${i}`;
       assert.ok(i > 0, `seed ${seed}: in the part you land in`);
-      assert.ok(floors.slice(0, i).some((l) => l.picked.includes('cutouts')), `seed ${seed}, part ${i}: before anybody has met the cardboard people`);
-      assert.equal(floors[i].picked.filter((id) => id === HALL).length, 1);
-      const room = floors[i].rooms.find((r) => r.arch === HALL);
-      // where a tape may hide in it: inside the room, in the far end, on the way through that every room it can be keeps clear
-      const [x0, z0, x1, z1] = hall.stash(room, 1);
-      assert.ok(x0 < x1 && z0 < z1 && x0 > -room.W / 2 && x1 < room.W / 2 && z0 > -room.D / 2 + 1 && z1 < 0, `seed ${seed}: its hiding place is at ${[x0, z0, x1, z1]}`);
-      assert.ok(room.params.faces.length >= 1 && room.params.faces.length <= 3 && new Set(room.params.faces).size === room.params.faces.length, 'two to four rooms at the end of it, the first being more of the hallway');
+      assert.ok(floors.slice(0, i).some((l) => l.picked.includes('cutouts')), `${where}: before anybody has met the cardboard people`);
+      assert.equal(level.picked.filter((id) => id === HALL).length, 1);
+      const room = level.rooms.find((r) => r.arch === HALL), parts = partsOf(room), exit = level.exit.room;
+      // its two doorways, and no others: the one it is entered by, in the middle of its front wall; the one the way out is beyond, in a side wall of the room at the front
+      assert.equal(room.doors.length, 2, `${where}: ${room.doors.map((d) => d.side)}`);
+      const dIn = room.doors.find((d) => d.link === room.gate.in), dOn = room.doors.find((d) => d.link === room.gate.on);
+      assert.ok(dIn && dOn && dIn !== dOn, `${where}: its doorways are not written on it`);
+      assert.equal(dIn.side, 'front'); assert.ok(Math.abs(dIn.c) < 1e-6, 'the hallway is straight on from the doorway');
+      assert.ok(dOn.side === 'left' || dOn.side === 'right');
+      assert.ok(Math.abs(dOn.c - parts.on) < 1e-6 && dOn.c - dOn.w / 2 > parts.zEnd + 0.5 && dOn.c + dOn.w / 2 < room.D / 2 - 0.5, `${where}: the way on is at ${dOn.c}, in a room from ${parts.zEnd} to ${room.D / 2}`);
+      assert.ok(!level.links[dIn.link].door && level.rooms[dIn.to].kind !== 'special', `${where}: it is hard against another oddity`);
+      // beyond the way on: the lobby and then the fire exit, or the fire exit itself. And there is no other way to them
+      const beyond = level.rooms[dOn.to];
+      assert.ok(beyond.id === exit || (beyond.kind === 'plain' && beyond.doors.some((d) => d.to === exit)), `${where}: the way on leads to a ${beyond.kind}`);
+      assert.ok(reaches(level, level.start.room, exit), where);
+      assert.ok(!reaches(level, level.start.room, exit, { room: room.id }), `${where}: the fire exit can be walked to without going through the hallway`);
+      assert.ok(!reaches(level, level.start.room, exit, { link: dOn.link }), `${where}: there is a way out that is not the way on`);
+      assert.ok(!reaches(level, level.start.room, room.id, { link: dIn.link }), `${where}: there is another way into it`);
+      if (beyond.id !== exit) assert.deepEqual(beyond.doors.map((d) => d.to).sort(), [room.id, exit].sort(), `${where}: the lobby has a doorway of its own to somewhere else`);
+      // it is still the last thing in the part, and a long walk from where you land
+      const steps = roomDistances(level, level.start.room);
+      assert.ok(steps.get(exit) >= MIN_EXIT_STEPS && steps.get(exit) === Math.max(...steps.values()), `${where}: the exit is ${steps.get(exit)} doorways in`);
+      // the plan of it: a room at the front, a hallway of some length, a room at the back with a column to walk round
+      assert.ok(parts.hall >= 4 && parts.hall <= 7, `${where}: a hallway ${parts.hall} m long`);
+      assert.ok(room.W / 2 - PLAN.half >= 2, 'with wall either side of it');
+      // where something may be hidden: behind the column, in the room at the back, clear of it and of the walls
+      const [x0, z0, x1, z1] = hall.stash(room, 1), col = parts.column;
+      assert.ok(x0 < x1 && z0 < z1 && x0 > -room.W / 2 && x1 < room.W / 2 && z0 > -room.D / 2 + 0.5 && z1 < col.z - col.s / 2 - 0.2, `${where}: its hiding place is at ${[x0, z0, x1, z1]}`);
+      // the other two rooms it can be: two different ones
+      assert.ok(room.params.faces.length === 2 && new Set(room.params.faces).size === 2, `${where}: ${room.params.faces}`);
     }
     assert.equal(visit.depths, floors.length);
   }
   assert.ok(counts[2] === 0 && counts[1] > SEEDS.length * 0.5 && counts[0] > SEEDS.length * 0.1, `visits with none, one, two: ${counts}`);
+  // asked for by name (the page that shows one room), it is where you land, and the way out is still through it
+  for (let i = 0; i < 12; i++) {
+    const level = generate(`only-hall-${i}`, { ...office, only: HALL }), room = level.rooms.find((r) => r.arch === HALL);
+    assert.ok(room && room.doors.some((d) => d.to === level.start.room), 'a building asked for by this room has it next to where you land');
+    assert.ok(!reaches(level, level.start.room, level.exit.room, { room: room.id }));
+  }
+  // and a part with no such room in it is exactly the part it always was
+  const plain = (seed) => { const l = generate(seed, { ...office }); return [l.rooms.length, l.exit.room, l.picked.join()]; };
+  assert.deepEqual(plain('no-hall-1'), plain('no-hall-1'));
+  assert.ok(!generate('no-hall-1', { ...office }).picked.includes(HALL), 'it is never dealt by chance');
 });
 
 test('the visit\'s hand: a visit shows 40–70% of the deck, in an order of its own, and never a room twice', () => {

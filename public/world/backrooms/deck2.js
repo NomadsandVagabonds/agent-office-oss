@@ -20,12 +20,17 @@
 //   doors    'own': the room hangs doors of its own on its doorways, so the floor's fire doors (doors.js) keep off them
 //   headline true: the place has half-remembered something from the news and staged it wrongly. Which stories become
 //            rooms is the owner's choice, nobody else's; the plan puts at most one in a visit, never on its first floor.
+//   gate     (room) → where along a side wall the way on goes, in the room's own frame. The way out of the part is
+//            through this room and nowhere else: it is not dealt with the others but put down last, off the deepest
+//            room there is, and the lobby and the fire exit are hung off it (gen.js, throughGate). The two doorways are
+//            written on the room for its builder: `room.gate = { in, on }`, link ids. One to a part, at most.
 
 import { freightStash } from './rooms/dispatch/layout.js';
 import { reorgStash } from './rooms/re-org/layout.js';
 import { allHandsStash } from './rooms/all-hands/rule.js';
 import { compactorStash } from './rooms/compactor-canyon/rule.js';
 import { serverChasmStash } from './rooms/server-chasm/rule.js';
+import { PLAN as HALL_PLAN, partsOf as hallParts } from './rooms/unsure-hall/rule.js';
 import { fill } from './words.js';
 
 const cornerStash = (r, side) => (side < 0
@@ -70,13 +75,18 @@ const MAIL_SLOTS = ['INBOX', 'OUTBOX', 'ESCALATIONS', '{PROJECT}', 'UNASSIGNED',
 const HALL_FACES = ['break', 'waiting', 'store', 'lounge'];        // (as rooms/unsure-hall.js builds them)
 
 export const MORE_DECK = [
-  // The hallway that is not sure where it leads: turn your back on the room at the end of it and it is another room.
-  // Never dealt by chance: the visit's plan puts one or two in, below wherever the cardboard people were (plan.js).
-  { id: 'unsure-hall', name: 'The Hall That Is Not Sure', landmark: 'the long hallway, whichever room it ends in',
-    w: [7, 8], d: [13, 15], ports: ['back'], weight: 1, lights: 'normal', planned: true, needs: ['unwatched'],
+  // The hallway that is not sure where it leads. The room you come into, a hallway, a room at the far end of it that
+  // goes nowhere; and behind your back the first room becomes a dead end, and then the room with the way out in it
+  // (rooms/unsure-hall/rule.js). The way out of the part is through it (`gate`), so it is where the fire exit is: put
+  // down last, by the plan and never by chance, in a part below wherever the cardboard people were.
+  { id: 'unsure-hall', name: 'The Hall That Is Not Sure', landmark: 'the long hallway',
+    w: [7, 8], d: [16, 18], ports: [], weight: 1, lights: 'normal', planned: true, needs: ['unwatched'], doors: 'own',
     module: './rooms/unsure-hall.js',
-    stash: (r) => { const zM = -r.D / 2 + Math.min(7.5, r.D * 0.48); return [-0.5, zM - 2.4, 0.5, zM - 1.4]; },
-    roll: (R) => ({ faces: R.shuffle(HALL_FACES.slice()).slice(0, R.int(1, 3)) }) },
+    gate: (r) => hallParts(r).on,
+    // behind the column in the room at the back: what a walk round it finds, and the walk is what turns the room
+    stash: (r) => { const col = hallParts(r).column; return [-0.5, -r.D / 2 + 0.7, 0.5, col.z - HALL_PLAN.column / 2 - 0.35]; },
+    // (what the dead end and the room with the way on are papered and furnished as: two different ones, never the part's own)
+    roll: (R) => ({ faces: R.shuffle(HALL_FACES.slice()).slice(0, 2) }) },
   // Four rooms after Gemini's Wave 2, each in a file of its own.
   { id: 'vestibule', module: './rooms/vestibule.js', stash: (r, s) => about(s * (r.W / 2 - 1.15), -r.D / 2 + 1.15, 0.2), name: 'The Vestibule', landmark: 'the revolving doors', w: [9, 10], d: [9, 10], h: [3.0, 3.3],
     ports: ['back'], weight: 1.6, lights: 'normal', themes: { exec: 1.6, night: 1.3 },
