@@ -413,10 +413,10 @@ export const MORE_DECK = [
     module: './rooms/the-culvert.js', stash: (r, side) => [side * (r.W / 2 - 1.3) - 0.35, -r.D / 2 + 0.5, side * (r.W / 2 - 1.3) + 0.35, -r.D / 2 + 1.1],
     roll: (R) => ({ side: R.pick([-1, 1]) }) },
   // The shopping centre (themes.js `mall`: still being built, `dealt: false`). Rooms made for it, and dealt nowhere else.
-  // Nine shop units made of office partition, three by three, and shutters down across some of the ways between them.
-  { id: 'the-concourse', name: 'The Concourse', landmark: 'the units, one to nine', w: [11, 13], d: [11, 13], h: [2.6, 2.9],
-    ports: ['left', 'right', 'back'], weight: 1.3, lights: 'dim', themes: { mall: 1, '*': 0 },
-    module: './rooms/the-concourse.js', stash: (r) => [-r.W / 2 + 0.3, r.D / 2 - 1.0, -r.W / 2 + 0.95, r.D / 2 - 0.35], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A warehouse bay with a shopping centre stood up in it: a gallery of shops a storey up, a flight to it, another going down into nothing, and only neon to see by.
+  { id: 'the-atrium', name: 'The Atrium', landmark: 'the two floors of shops, and the way down to more', w: [16, 18], d: [14, 16], h: [7.6, 8.6],
+    ports: ['left', 'right'], weight: 1.4, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/the-atrium.js', stash: (r) => [-r.W / 2 + 0.4, r.D / 2 - 1.1, -r.W / 2 + 1.0, r.D / 2 - 0.5], roll: (R) => ({ seed: R.int(1, 9999) }) },
   // A tea point scaled up: bolted tables, counters with lit boards, and the middle of the floor left out behind a rail with a length missing.
   { id: 'food-court', name: 'The Food Court', landmark: 'the tables round the hole', w: [13, 15], d: [12, 14], h: [3.3, 3.8],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
