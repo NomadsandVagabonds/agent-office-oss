@@ -9,7 +9,7 @@
 // Also here: the cardboard colleague who sometimes decides to come along, and
 // who cannot open a door.
 import { creatureTuning, difficultyOf } from '../../../core/difficulty.mjs';
-import { makeRng } from './gen.js';
+import { makeRng, roomDistances } from './gen.js';
 import * as castList from './cast.js';              // (the whole of it, so that hauntsFor is asked for only where it is used: a stand-in cast list need not have it)
 const { CAST, castFor, homeFor } = castList;
 import { MAKERS } from './cast/index.js';
@@ -21,6 +21,7 @@ import { hangDoors } from './doorleaf.js';
 export function createStalkers(env, options = {}) {
   const level = env.level;
   const W = () => env.world;
+  const fromStart = roomDistances(level, level.start?.room);
   const walk = createWalk(env);
   const hiddenAt = (x, z, r = 0.6) => !env.sees(x, z, { radius: r, margin: 0.2, far: 40 });
   const drawn = (a) => { const rt = W().roomAt(a.x, a.z); return !!rt && rt.group.visible; };
@@ -31,6 +32,8 @@ export function createStalkers(env, options = {}) {
   /** What a creature is handed (the contract). Everything it may need of the level is here or on c.env. (k: the conductor's own note of it.) */
   const toolbox = (k, home, haunt = null, lair = null, member = k.member) => ({
     env, level, member, walk, home,
+    /** Hostile placements must leave the landing and its adjacent rooms empty. */
+    spawnAllowed: id => fromStart.has(id) && fromStart.get(id) >= 2,
     get speedScale() { return creatureTuning(env.difficulty?.() ?? 'training-wheels', member.id).speed ?? 1; },
     get population() { return Math.max(1, level.difficulty ? difficultyOf(level.difficulty).toner : 1); },
     /** A room that asked for company and got this one (cast.js hauntsFor): its id, or null. What it does about it is its own. */
@@ -104,13 +107,13 @@ export function createStalkers(env, options = {}) {
     // (things: what it has put in the level · bodies: what of it nobody walks through · away: the room it is standing in has gone, and it with it)
     const k = { id: member.id, member, it: null, things: [], bodies: [], away: null, shown: null };
     try { k.it = make(toolbox(k, homeFor(level, member), haunts.get(member.id) ?? null, castList.lairFor?.(level, member) ?? null)); live.push(k); }
-    catch (err) { console.warn(`[backrooms] ${member.id} would not be made — the floor does without`, err); }
+    catch (err) { if(env.coopStrict)throw err;console.warn(`[backrooms] ${member.id} would not be made — the floor does without`, err); }
   }
   const pirate = live.find((k) => k.id === 'pirate')?.it || null;
   // once the floor is up and somebody is standing on it: its doors are hung, and everybody takes their places
   (env.ready ||= []).push(() => {
     env.doors = hangDoors(env);
-    for (const k of live) { try { k.it.ready?.(); } catch (err) { console.warn(`[backrooms] ${k.id} would not take its place`, err); k.dead = true; } }
+    for (const k of live) { try { k.it.ready?.(); } catch (err) { if(env.coopStrict)throw err;console.warn(`[backrooms] ${k.id} would not take its place`, err); k.dead = true; } }
   });
 
   /* ---- the colleague who comes along --------------------------------------------------- */
@@ -150,14 +153,14 @@ export function createStalkers(env, options = {}) {
       if (!env.player || !env.world) return;
       env.clock += dt;
       env.doors?.update(dt);
-      if (follower && !follower.away) tag(follower, dt);
+      if (follower && !follower.away) {if(options.withVisitor)options.withVisitor('follower',follower,()=>tag(follower,dt));else tag(follower, dt);}
       for (const k of live) {
         if (k.dead || k.away) continue;                                    // (somebody who is not here does nothing here)
         try {
           const tick = () => k.it.update?.(dt, env.clock);
           if (options.withVisitor) options.withVisitor(k.id, k.it.at?.(), tick);
           else tick();
-        } catch (err) { console.warn(`[backrooms] ${k.id} has stopped`, err); k.dead = true; if (k.member.music === 'mascot') env.sound?.stopMascot?.(); }
+        } catch (err) { if(env.coopStrict)throw err;console.warn(`[backrooms] ${k.id} has stopped`, err); k.dead = true; if (k.member.music === 'mascot') env.sound?.stopMascot?.(); }
       }
     },
     /** What goes down the stairs with you: the mascot's (as ever: { awake, face, card, lost }), and under `others` whatever anybody else wants kept. */

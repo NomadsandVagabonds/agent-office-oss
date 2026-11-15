@@ -8,7 +8,8 @@ lean on things.
 
 It is a level called the Backrooms: yellow rooms that hum, seen through a
 camcorder, generated from a seed and never the same twice. It is one building.
-A visit goes down through three to five parts of it, each a different kind of
+A visit goes down through four parts of it (always four: the number used to be the seed's, three to five, and was worth
+hundreds of points either way; one of the middle two is the one kind that is not an office, `featured` in `themes.js`), each a different kind of
 place (the code and this guide still call a part a *floor*; nothing down there
 does, and nothing is numbered). Behind the fire door at the far end of each is
 a way down that cannot be undone: a hole in the floor, a corridor that stops,

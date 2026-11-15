@@ -1,10 +1,88 @@
 # Two tapes: private two-player prototype
 
-Branch: `codex/backrooms-coop`, based on development `a155afc`.
-Private alpha: hosted on Railway; the address is the owner's to give out, and is not written here
-Railway runs game build `69d7c55`, separately from the public BlockRooms site.
+Working branch: `codex/backrooms-coop-full-game`, merging `blockrooms-live`
+through `eadfb5d`. Full-content coverage and remaining differences:
+[BACKROOMS-COOP-COVERAGE.md](BACKROOMS-COOP-COVERAGE.md).
+Private alpha: hosted separately on Railway; use the owner's private host
+bookmark. Deployment addresses and host credentials stay in local records.
+This merge is for review; publishing the branch does not redeploy Railway.
 
-## Lobby refresh (live)
+## Live merge review
+
+The normal dealer is Fable's four-floor visit, with Suburbia second or third.
+The optional showcase has its own explicit route and cast, without changing
+single-player visits. Live headline placement, toner counterplay, party crawl,
+Mother's recorded sounds, The Lines' wake grace, both-end bridge grips, Gemini's
+item models and pickup jiggle are retained. The mall stays hidden from normal
+visits, as on live. Ordinary furniture now uses live's carry/set-down behavior;
+placement checks both visitors and the 0.4 m floor-height limit.
+
+## Guest movement and safe landings
+
+The input fix preserves a held movement key when Chrome delivers its delayed
+pointer-lock event. Enter / resume focuses the canvas; losing capture or focus
+still clears movement. The preflight now uses two separate Chrome processes
+and real keyboard events, with 100 ms outbound delay per peer, rather than
+only sending movement commands directly to the socket.
+
+Removed the old eight-second demo shortcut that teleported an awake pirate
+into the player's room. Hostile initial placements, haunt overrides and lair
+fallbacks leave the landing and directly adjacent rooms empty (at least two
+doorway connections away). A carried pirate also returns in a distant unseen
+room. Resident-room shortcut doors cannot connect directly to the landing in
+normal generated visits. Explicit single-room development previews may still
+put their featured room beside the entrance.
+
+Co-op hunters do not select a visitor who has not yet explored beyond that
+buffer on the current floor. After exploration they can keep following that
+visitor back; this is a safe introduction, not a permanent invulnerable room.
+The shared placement corrections also apply to solo play; the showcase route
+still does not change single-player floor selection.
+
+Local checks: actual guest W press/release with voice and simulated latency;
+one minute at each of the four showcase landings with both players unharmed;
+128 generated floors checked for hostile/resident placement; shadow fuse,
+toner hatch, Mother brood, The Lines pursuit and removable bridge encounters.
+The complete showcase also passes all three descents and shared escape, with
+health, battery and inventory retained. Full suite: 958/959 passing; the sole
+failure is the existing Office status-line bridge test (`usage.test.mjs`),
+unchanged by this patch. These are automated local browsers, not a
+London–Argentina connection test.
+
+## Curated tour
+
+**The long way round** is a fixed four-floor tour: yellow offices, unfinished
+offices, Suburbia, and the combined night finale. Floor 1 keeps pirate, cake and
+moving cutouts; Mother is on floor 2 and The Lines on floor 3. The waterpark
+will come later. The Gap includes removable hoarding bridges: hold with E,
+lower/raise with R, and pull one out from under The Lines. Both players share
+the floor and a teammate standing on a bridge prevents removal. See [the showcase notes](BACKROOMS-COOP-SHOWCASE.md) for the seed, tested
+route, creature changes and limits.
+
+## Custom characters and open mic (live)
+
+The lobby has a “Who’s coming?” picker with Gemini’s existing Yellow Alien and
+Pink Cowgirl. The host defaults to Yellow Alien; the friend defaults to Pink
+Cowgirl. Either visitor can change their own character, and the host can assign
+either slot before the friend joins. Changing a choice clears Ready for both
+players. Characters lock for the visit and carry through floor changes. These
+are cosmetic choices; the full studio editor and character perks are not ported.
+
+First start or join a game; the voice button is disabled until connected.
+Click **Enable voice**, allow the browser microphone prompt, then choose **Open mic · always on** to talk without
+holding a key. **V** toggles mute in that mode; the menu also has a mute button.
+The camcorder indicator stays visible while open mic is enabled and shows mute
+or pause status. Leaving the tab pauses transmission; returning resumes it
+unless muted. Push-to-talk remains the default. No microphone starts without
+clicking Enable voice, and neither mode records voice.
+
+Protocol `blockrooms-coop-8` requires both clients and the relay to update.
+The browser preflight verifies the exact character looks and actual audio
+capture/playback with a generated fake microphone, including mute and focus
+handling. The same preflight passes on the hosted Railway build, including
+joining and entering the game. A London–Argentina session is still untested.
+
+## Earlier lobby refresh
 
 The co-op entry page now uses the homepage’s yellow wallpaper, original voxel
 logo and sprites, navy window bars and beveled buttons. Instructions use plain
@@ -21,7 +99,7 @@ known unrelated console/status-line failures. Deployed as `b756746`; the live
 HTTPS page, CSS/SVG assets, private host-key stripping, guest invite and both
 players entering a run passed in two Chromium clients.
 
-## First-play preflight (live)
+## Earlier first-play preflight
 
 Small first-session fixes: starting a game disables the button until the request
 finishes, times out after 15 seconds, and offers a useful retry after failure.
@@ -70,7 +148,7 @@ gets an explicit pause message and resumes when the host returns.
 
 WASD moves, mouse looks, Shift runs, C crouches and Space jumps. E picks up, operates a door, or interacts with a nearby teammate; 1–6 holds/stows, Q (or R) uses, G drops, F toggles the flashlight. I or Tab opens the production camcorder inventory and its two-ingredient crafting panel. Escape releases the mouse without
 pausing a visible host. Enable voice in the menu, then hold V to talk.
-Visits now span 3–5 seeded floors. Find each floor’s way down and gather
+Normal visits span four seeded floors, with Suburbia second or third. Find each floor’s way down and gather
 within three metres to descend together. Both browsers must finish loading
 before simulation resumes. On the final floor, lean into the taped wall at the
 bottom of the fire stairs; extraction waits for all living visitors.
@@ -89,7 +167,7 @@ Trade screens do not pause hazards or batteries.
 runs on Node; `/rooms` uses the real game modules and a trusted host browser.
 These are deliberately separate review modes, not a hidden public-game flag.
 
-## Real-room integration now implemented
+## Earlier deployed slice (69d7c55)
 
 - The production generator, room builders, prop catalogue, collision and player
   controller. The production visit planner selects 3–5 themed floors, each
@@ -144,7 +222,7 @@ These are deliberately separate review modes, not a hidden public-game flag.
   world sounds for its listener. M mutes game audio. Loading and host pauses
   pause the sound; a new floor stops the old pirate cue.
 
-## Authority and implementation seams
+## Earlier slice: authority and implementation seams
 
 `real-rooms.js` owns the generated world on the host. The guest sends controls
 through the WebSocket relay; the host validates interactions against its real
@@ -180,7 +258,7 @@ Random 128-bit invites, matching origin/version, two-client capacity, packet and
 buffer bounds, a 64-room cap and one-hour expiry apply to both modes. Restarting
 the server loses all sessions. An invite is access to that private room.
 
-## Not integrated yet
+## Earlier slice: what was not integrated
 
 No full room deck, remaining creatures, movable furniture, full VHS effects, production scorecard/leaderboard, late
 joining, reconnection, saved runs or client movement prediction. Descent uses

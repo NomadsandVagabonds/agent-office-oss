@@ -42,12 +42,13 @@ export function createFurnitureMotion(world) {
     const bounds = shifted(item, dx, dz), x = item.x + dx, z = item.z + dz;
     if (!world.free(x, z, 0, { bounds, bottom: item.y, top: item.top, ignoreCollider: item.collider, ignoreBody })) return false;
     // The player is not in world.bodies; creatures are. Both stop a desk.
-    const player = world.env?.player, me = player?.me;
-    const radius = Number.isFinite(player?.RADIUS) && player.RADIUS > 0 ? player.RADIUS : 0.22;
-    if (point(me) && !ignores(ignoreBody, me) && distance2(me, bounds) < radius * radius - EPS) return false;
+    const players = world.env?.players?.() || [world.env?.player];
+    for (const player of players) {
+      const me = player?.me, radius = player?.RADIUS || .22;
+      if (point(me) && !ignores(ignoreBody, me) && distance2(me, bounds) < radius * radius - EPS) return false;
+    }
     if (item.deployed) {
-      // A bridge on solid ground may slide, but not while it carries somebody.
-      if (me && bodyOver(item, { ...me, r: radius }) || (world.bodies || []).some(b => b.on !== false && !b.airborne && bodyOver(item, b))) return false;
+      if (players.some(p=>p?.me && bodyOver(item, {...p.me,r:p.RADIUS||.22})) || (world.bodies || []).some(b=>b.on!==false && !b.airborne && bodyOver(item,b))) return false;
       return bridgeSupport(world, { ...item, ...bounds }, item.bridge.axis, item.bridge.bearing).ok;
     }
     // Check the interior as well as the corners: four good legs do not make
@@ -86,7 +87,7 @@ export function createFurnitureMotion(world) {
   function place(item, x, z, { from } = {}) {
     if (!usable(item) || ![x, z].every(Number.isFinite)) return false;
     const floor = world.floorY(x, z), dy = floor - item.y;
-    if (!Number.isFinite(floor)) return false;
+    if (!Number.isFinite(floor) || item.authored && Math.abs(dy) > FLOOR_EPS) return false;
     // `from`: the floor its carrier stands on. Nothing is set down more than a step above or below that: not into a pit
     // (where it would be lost, or stand in the air over one), and not up onto a ledge out of reach.
     if (Number.isFinite(from) && Math.abs(floor - from) > SET_DOWN_STEP) return false;

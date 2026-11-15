@@ -185,7 +185,7 @@ export function create(c) {
         c.play('thunk', d.x, d.z, 10);
         const hit = c.hurt(OTHER_DOOR.hurts);
         // (the last heart is the last thing it does to anybody: what is seen of it after that is the building's camera's — takes())
-        if (hit.dead || hit.ended) { s = took(s); over = true; draw(me, dt); return; }
+        if (hit.ended || (hit.dead && hit.ended !== false)) { s = took(s); over = true; draw(me, dt); return; }
         s = let_(s); if (hit.landed) { env.hud?.glitch?.(0.6); c.survived(); }
       }
       draw(me, dt);

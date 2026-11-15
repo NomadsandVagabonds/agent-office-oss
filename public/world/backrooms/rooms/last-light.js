@@ -42,6 +42,7 @@ export function build(c) {
   const actor={...figure,...layout.home,gone:false,step:0};
   actor.group.scale.set(.88,1.32,.88); actor.group.position.set(actor.x,0,actor.z);
   c.add(actor.group); roomBody(c,actor,{r:.27,tall:2.15});
+  rt.coopFocus=()=>[actor];
   let state=waiting(), known=false, clicks=0;
   const lightActor=()=>{const w=c.toWorld(actor.x,actor.z);actor.light(c.world.lightAt?.(w.x,w.z,1.3)||c.sample(actor.x,1.3,actor.z));};
   c.after.push(lightActor);
@@ -49,7 +50,7 @@ export function build(c) {
   c.tick((dt,time,me)=>{
     const w=c.toWorld(actor.x,actor.z), pw=c.toWorld(me.x,me.z);
     const localEye=(me.world?.y ?? ((room.y||0)+1.1))-(room.y||0);
-    const beam=heldInBeam({x:me.x,y:localEye,z:me.z,yaw:me.yaw,pitch:me.world?.pitch||0,mounted:!!env.inventory?.torchMounted?.()},actor,env.inventory?.torchPower?.()||0,c.world.los(pw.x,pw.z,w.x,w.z));
+    const beam=env.coopBeam?.({...w,y:room.y},{bottom:.8,top:1.9})||heldInBeam({x:me.x,y:localEye,z:me.z,yaw:me.yaw,pitch:me.world?.pitch||0,mounted:!!env.inventory?.torchMounted?.()},actor,env.inventory?.torchPower?.()||0,c.world.los(pw.x,pw.z,w.x,w.z));
     const distance=Math.hypot(me.x-actor.x,me.z-actor.z), previous=state.phase;
     state=stepHall(state,dt,{inside:me.inside,equipped:!!env.inventory,trigger:me.z<layout.trigger,clear:me.z<layout.clear,beam,distance,contact:roomContact(c,actor,me)});
     if(state.start){rt.lighting.preview=null;c.world.startLightingCue(rt,{from:'low',hold:true});}

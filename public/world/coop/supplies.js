@@ -1,8 +1,11 @@
-import {planSupplies,supplyRooms} from '../backrooms/supplies.js';
+import {ARCHETYPES} from '../backrooms/gen.js';
+import {CAST,castFor} from '../backrooms/cast.js';
+import {planSupplies,supplyRooms,wantedByRooms} from '../backrooms/supplies.js';
 // Production seeded placement, with consumables scaled to two tapes. The first
 // floor supplies two torches and one shared crafting kit for this private alpha.
-export function coopSupplies(level,players=2){
- const base=planSupplies(level),out=[];
+export function coopSupplies(level,players=2,visit=null){
+ const wanted=[...wantedByRooms(level,ARCHETYPES),...(visit?castFor(visit,level.depth).flatMap(m=>CAST.find(c=>c.id===m.id)?.items||[]):[])];
+ const base=planSupplies(level,wanted),out=[];
  for(const spec of base){
   out.push(spec);
   if(['battery','snack'].includes(spec.type))for(let n=1;n<players;n++)out.push({...spec,id:`${spec.id}-p${n}`,rooms:[...spec.rooms].reverse()});

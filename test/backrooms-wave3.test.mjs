@@ -65,6 +65,8 @@ test('the hand, as a resident asks after it: the selected pocket in the words a 
   // a torch is only a flashlight while it is on
   assert.equal(createHandOver(() => pockets({ id: 'c', type: 'torch', charge: 60 }, false)).hasFlashlight(), false);
   assert.equal(createHandOver(() => pockets({ id: 'c', type: 'torch', charge: 60 }, true)).hasFlashlight(), true);
+  assert.equal(createHandOver(() => pockets(null, true)).hasFlashlight(), true, 'a mounted torch lights the room with empty hands');
+  assert.equal(createHandOver(() => pockets({type:'paper'}, true)).hasFlashlight(), true, 'mount stays useful while offering paper');
   // being handed something: into a pocket, with an id of its own each time; a full bag hands it back
   p = pockets(null); hand = createHandOver(() => p, 'part-2');
   assert.equal(hand.give('pink-slip'), null); assert.equal(hand.swap('balloon'), null);

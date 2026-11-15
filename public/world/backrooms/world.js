@@ -301,6 +301,7 @@ export async function buildWorld(kit, level, env, tick) {
     let ctx = roomContext(world, rt);
     try { builder(ctx); }
     catch (err) {
+      if (env.coopStrict) throw err;
       console.warn(`[backrooms] ${rt.def.arch || rt.def.kind} would not build — leaving it plain`, err);
       for (const f of [...world.furniture]) if (f.authored && f.room === rt.id) f.remove();
       rt.bridgePlans = [];
@@ -376,12 +377,7 @@ export async function buildWorld(kit, level, env, tick) {
       f.lightTint.fromArray(world.lightAt(f.x, f.z, (f.y + f.top) / 2 - (rt?.def.y || 0)));
     }
   };
-  world.update = (dt, t, me) => {
-    if (!me.frozen) for (const f of world.furniture) f.tick?.(dt);
-    world.updateLighting(t);
-    const here = world.roomAt(me.x, me.z);
-    if (here) world.enter(here);
-    for (const rt of rooms) {
+  world.updateFlicker = (dt) => {for(const rt of rooms){
       // tubes that cannot make their minds up
       if (rt.flickers.length && rt.group.visible) {
         rt.phase = (rt.phase ?? rt.id * 7.3) + dt;
@@ -395,6 +391,13 @@ export async function buildWorld(kit, level, env, tick) {
         rt.u.flick.value += (k - rt.u.flick.value) * 0.6;
         for (const f of rt.flickers) f.material.color.copy(f.userData.on).multiplyScalar((0.12 + 0.88 * rt.u.flick.value) * (rt.lightsK ?? 1));
       }
+  }};
+  world.update = (dt, t, me) => {
+    if (!me.frozen) for (const f of world.furniture) f.tick?.(dt);
+    world.updateLighting(t);world.updateFlicker(dt);
+    const here = world.roomAt(me.x, me.z);
+    if (here) world.enter(here);
+    for (const rt of rooms) {
       if (!rt.near) continue;
       const p = toLocal(rt.def, me.x, me.z);
       const local = { x: p.x, z: p.z, inside: rt === current, yaw: me.yaw - (rt.def.rot * Math.PI) / 2, moving: me.moving, speed: me.speed, world: me };
@@ -871,7 +874,7 @@ function roomContext(world, rt) {
       // as a creature's takes(shot). Noted before the hit, because the hit is what ends the visit.)
       const before = env.tookBy; env.tookBy = { id: def.arch || null, it: rt };
       const hit = env.health?.damage(n);
-      if (hit) { if (!hit.dead) env.tookBy = before; return { landed: !!hit.ok, dead: !!hit.dead, ended: !!hit.dead }; }
+      if (hit) { const ended=!!hit.dead&&!env.hasSurvivor?.();if (!ended) env.tookBy = before; return { landed: !!hit.ok, dead: !!hit.dead, ended }; }
       env.end('caught'); return { landed: true, dead: true, ended: true };
     },
     /** For the count kept of a visit: the resident (its own id) has really been seen, once · it had the visitor and they got away, each time. */

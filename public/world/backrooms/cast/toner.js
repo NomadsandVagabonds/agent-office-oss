@@ -315,9 +315,9 @@ export function create(c) {
     const dist = roomDistances(level, level.start.room);
     const plain = level.rooms.filter((r) => r.kind === 'plain' && !r.crawl && r.H >= 2.2 && r.H <= 3.6 && (dist.get(r.id) ?? 0) >= 2);
     const far = level.rooms.filter((r) => r.kind !== 'start' && r.kind !== 'exit' && !r.crawl && r.H >= 2.2 && (dist.get(r.id) ?? 0) >= 2);
-    const fallback = level.rooms.filter((r) => r.kind !== 'start' && r.H >= 1.8 && (dist.get(r.id) ?? 1) >= 1);
-    const pool = plain.length ? plain : far.length ? far : fallback.length ? fallback : level.rooms;
-    return R.pick(pool);
+    const fallback = level.rooms.filter((r) => r.kind !== 'start' && r.H >= 1.8 && (dist.get(r.id) ?? 0) >= 2);
+    const pool = plain.length ? plain : far.length ? far : fallback;
+    return pool.length ? R.pick(pool) : null;
   }
 
   function pickSpotInRoom(walker, roomId, preferAngle = null, awayFrom = null) {
@@ -495,7 +495,8 @@ export function create(c) {
       if (chosen.length) { placed = true; return; }
     }
     let startRoom = pickStartRoom(), spot = null;
-    if (c.haunt != null && env.world.rooms[c.haunt]) { const s = c.walk.spotIn(probe, c.haunt); if (c.walk.stand(probe, s.x, s.z)) { startRoom = level.rooms[c.haunt]; spot = s; } }
+    if (c.haunt != null && env.world.rooms[c.haunt] && c.spawnAllowed?.(c.haunt) !== false) { const s = c.walk.spotIn(probe, c.haunt); if (c.walk.stand(probe, s.x, s.z)) { startRoom = level.rooms[c.haunt]; spot = s; } }
+    if (!startRoom) return;
     spot ||= c.walk.spotIn(probe, startRoom.id);
     spawnUnit(spot.x, spot.z, perched(() => R(), expanded ? null : c.carried), 1, null, R.range(0, Math.PI * 2));
     placed = true;
@@ -742,7 +743,7 @@ export function create(c) {
       const hit = c.hurt(TONER.hitDamage);
       // that was the last of them (or there is no health down here, and being got is the end): the tape is ending, and
       // none of them does anything more — it was biting again every frame until the picture went, and saying so
-      if (hit.dead || hit.ended) { over = true; return; }
+      if (hit.ended || (hit.dead && hit.ended !== false)) { over = true; return; }
       if (hit.landed) packGrace = TONER.packGrace;
       unit.s = strikeToner(unit.s, hit);
       unit.prowlGoal = null;
@@ -851,7 +852,7 @@ export function create(c) {
       wadeT = Math.max(0, wadeT - dt);
       const w = env.world, m = me();
       const snapshot = units.slice();
-      for (const unit of snapshot) if (!unit.away) stepUnit(unit, dt, t, w, m);          // (one that is not here does nothing here)
+      for (const unit of snapshot) if (!unit.away) {if(env.withVisitor)env.withVisitor('toner',unit.walker,()=>stepUnit(unit,dt,t,w,me()));else stepUnit(unit, dt, t, w, m);}          // (one that is not here does nothing here)
     },
 
     /**

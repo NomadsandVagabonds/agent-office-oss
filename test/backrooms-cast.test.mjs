@@ -518,12 +518,14 @@ test('the waste toner: the bite that takes the last heart is the last thing any 
   // (the rule cannot know: being got is the conductor's c.hurt. What the creature's file does with the answer is read here,
   // and was seen in a browser: before this it stayed on the visitor biting, and buzzing, every frame until the picture went)
   const src = fs.readFileSync(new URL('../public/world/backrooms/cast/toner.js', import.meta.url), 'utf8');
-  assert.match(src, /const hit = c\.hurt\(TONER\.hitDamage\);\s+(\/\/[^\n]*\n\s+)*if \(hit\.dead \|\| hit\.ended\) \{ over = true; return; \}/, 'nothing more once the visit is ending');
+  assert.match(src, /const hit = c\.hurt\(TONER\.hitDamage\);\s+(\/\/[^\n]*\n\s+)*if \(hit\.ended \|\| \(hit\.dead && hit\.ended !== false\)\) \{ over = true; return; \}/, 'nothing more once the visit is ending');
   assert.match(src, /if \(!placed \|\| !units\.length \|\| over\) return;/, 'and none of the others either');
   assert.ok(!/env\.end\(/.test(src), 'it never ends a visit itself: being caught is c.hurt');
   // the rule's own answer to a hit that did not count (they were hit a moment ago) is to go back up, not to try again at once
   const s = strikeToner({ ...perched(() => 0.5), mode: 'chase' }, { landed: false, dead: false, ended: false }, () => 0.5);
   assert.equal(s.mode, 'recoil'); assert.equal(s.hits, 0); assert.ok(s.t > 2 && s.t < TONER.recoilTime[1]);
+  const teamHit=strikeToner({...perched(()=>.5),mode:'chase'},{landed:true,dead:true,ended:false},()=>.5);
+  assert.equal(teamHit.hits,1,'a teammate death still feeds the creature while the visit continues');assert.equal(teamHit.mode,'recoil');
 });
 
 test('the absorbed staff: a hold never turns the visitor\'s head while something that hunts is near and in sight', () => {
@@ -886,7 +888,9 @@ test('close-quarters scissors (melee.js & snipToner): reach, forward cone, ceili
 });
 
 test('a room may ask for company, and gets only who roams and is on the part anyway', () => {
-  const level = { seed: 'h1', rooms: [{ id: 0, kind: 'start', arch: null }, { id: 1, kind: 'odd', arch: 'maze' }, { id: 2, kind: 'odd', arch: 'quiet' }, { id: 3, kind: 'odd', arch: 'crowd' }] };
+  const level = { seed: 'h1', start: {room: 0}, rooms: [{ id: 0, kind: 'start', arch: null }, { id: 1, kind: 'odd', arch: 'maze' }, { id: 2, kind: 'odd', arch: 'quiet' }, { id: 3, kind: 'odd', arch: 'crowd' }] };
+  level.rooms.push({id: 4, kind: 'plain'});
+  for (const [a,b] of [[0,4],[4,1],[1,2],[2,3]]) { (level.rooms[a].doors ||= []).push({to:b}); (level.rooms[b].doors ||= []).push({to:a}); }
   const deck = { maze: { haunt: 1 }, quiet: {}, crowd: { haunt: 5 } };
   assert.equal(hauntsFor(level, [], deck).size, 0, 'nobody dealt: nobody comes');
   assert.equal(hauntsFor(level, ['pirate', 'porter', 'other-door'], deck).size, 0, 'not the mascot, and nobody with a room of their own');
@@ -971,8 +975,8 @@ test('one that comes with a room is on a part only if the room is, is never deal
   }
   assert.ok(seen.size > 1, 'not always the same distance');
   assert.equal(lairFor(floor(8, 6), plain), null, 'null for everybody else');
-  assert.equal(lairFor(floor(8, 3), lines), 1, 'never the landing: three doorways in, it is two before');
-  assert.equal(lairFor(floor(8, 2), lines), 1, 'too near for two: the nearest that is allowed');
+  assert.equal(lairFor(floor(8, 3), lines), 2, 'keep the first adjacent room free, even when the gap is nearby');
+  assert.equal(lairFor(floor(8, 2), lines), null, 'no allowed lair before a gap only two rooms away');
   assert.equal(lairFor(floor(8, 1), lines), null, 'next to the landing: nowhere');
   assert.equal(lairFor({ seed: 's', rooms: chain(5), start: { room: 0 }, exit: { room: 4 } }, lines), null, 'no such room');
 });

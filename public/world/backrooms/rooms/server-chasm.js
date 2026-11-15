@@ -209,6 +209,7 @@ export function build(c) {
   c.shell({ walls: ['front'], floor: false, ceiling: false, panels: false, sockets: false });
 
   let state = createChasmState();
+  c.rt.coopRead=()=>structuredClone(state);c.rt.coopApply=value=>{state=structuredClone(value);};
   c.rt.clip = (x, z, r) => chasmWalkable(x, z, r, W, D, state);
   c.rt.headY = () => H + 2.0;
 

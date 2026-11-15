@@ -150,7 +150,7 @@ export function build(c) {
   const spots = [[xh, zEnd + 0.5], [xh, D / 2 - 0.5], [0, on], [-W / 4, on], [W / 4, on], [-W / 2 + 0.6, zEnd + 0.6], [W / 2 - 0.6, zEnd + 0.6], [-W / 2 + 0.6, D / 2 - 0.6], [W / 2 - 0.6, D / 2 - 0.6]];
   let s = settled();
   c.tick((dt, t, me) => {
-    const inside = inEnd(me.x, me.z), near = !!me.inside && !inside, was = s.face;
+    const inside = inEnd(me.x, me.z) || !!env.players?.().some(p=>inWorld(p.me.x,p.me.z)), near = !!me.inside && !inside, was = s.face;
     const watched = spots.some(([x, z]) => c.seen(x, z, { margin: 0.25, radius: 0.8 }));
     s = unsure(s, dt, { watched, inside, near });
     if (!s.turned) return;

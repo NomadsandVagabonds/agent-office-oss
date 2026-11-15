@@ -37,8 +37,8 @@ export function createHandOver(inventory, prefix = 'hand') {
     get, has: (kind) => get() === kind,
     hasPaper: () => isPaper(get()),
     hasBalloon: () => isBalloon(get()),
-    /** A torch in the hand that is switched on: possession alone is not light. (With no pockets there is no switch: it is on.) */
-    hasFlashlight: () => isFlashlight(get()) && (inventory() ? (inventory().torchPower?.() ?? 0) > 0 : true),
+    /** A lit loose or camera-mounted torch: possession alone is not light. (With no pockets there is no switch: it is on.) */
+    hasFlashlight: () => inventory() ? (inventory().torchPower?.() ?? 0) > 0 : isFlashlight(get()),
     /** Put one of something into the visitor's pockets. → null if it went in, or the kind back if there was no room for it. */
     give(kind) {
       if (!KINDS[kind]) return kind;

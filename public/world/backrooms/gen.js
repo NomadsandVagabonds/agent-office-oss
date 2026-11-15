@@ -503,9 +503,12 @@ function build(R, o, opt) {
     }
     return null;
   }
+  // Only an authored co-op finale asks for two landmarks. Normal generation
+  // retains the one-set-piece limit; this cannot grow beyond two.
+  const setPieceLimit = opt.setPieces === 2 ? 2 : 1;
   for (const arch of deck) {
     if (specials.length >= want - (gate ? 1 : 0)) break;
-    if (isBig(arch) && specials.some((r) => isBig(ARCHETYPES[r.arch]))) continue;      // one set piece to a floor — a room with a view, or one that says it is `big`: it is the landmark
+    if (isBig(arch) && specials.filter((r) => isBig(ARCHETYPES[r.arch])).length >= setPieceLimit) continue;
     const room = placeSpecial(arch, specials.length === 0);
     if (room) specials.push(room);
   }
@@ -613,6 +616,7 @@ function build(R, o, opt) {
     for (let v = Math.floor(span.from); v < Math.ceil(span.to); v++) ids.add(taken.get(side % 2 === 0 ? cellKey(v, beyond) : cellKey(beyond, v)));
     const other = ids.size === 1 ? rooms[[...ids][0]] : null;
     if (!other || !plain(other) || other.crawl || other.y > r.y + 1e-6 || r.links.some((id) => links[id].a === other.id || links[id].b === other.id)) continue;
+    if (other === start && ARCHETYPES[r.arch]?.resident && !byStart(ARCHETYPES[r.arch])) continue;
     const lo = side % 2 === 0 ? other.x : other.z, hi = lo + (side % 2 === 0 ? other.w : other.d);
     if (span.from < lo + 0.3 || span.to > hi - 0.3) continue;
     const link = addLink(r, other, side % 2 === 0 ? 'z' : 'x', wall, span.from, span.to);
@@ -854,7 +858,7 @@ function dress(R, level, o, opt, keeper = false) {
   // …and while it is holding the keycard there has to be one, even in a building with no room it would have chosen
   // (likewise when the visit's plan has said it stands on this part — `mascot`: a part with no room of the height it likes still has it)
   if (!pursuer && (keeper || opt.mascot === true)) {
-    const plainer = rooms.filter((r) => r.kind === 'plain' && !r.crawl), roomy = plainer.filter((r) => r.depth >= 1 && r.W >= 2.8 && r.D >= 2.8 && r.H >= 2.2);
+    const plainer = rooms.filter((r) => r.kind === 'plain' && !r.crawl && r.depth >= 2), roomy = plainer.filter((r) => r.depth >= 2 && r.W >= 2.8 && r.D >= 2.8 && r.H >= 2.2);
     const r = R.fork('keeper'), anywhere = roomy.length ? roomy : plainer;
     if (anywhere.length) pursuer = { room: r.pick(anywhere).id, corner: r.int(0, 3), face: r.int(0, 9) };
   }

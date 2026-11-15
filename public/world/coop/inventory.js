@@ -51,7 +51,7 @@ export function inventoryAct(s,p,m,ctx){
   else if(item.type==='chalk'){
    // Commit the world mark first; only spend a use when placement succeeds.
    const placed=item.uses>0?ctx.mark():{ok:false,reason:'empty-chalk'};out=placed.ok?model.useSelected({canMark:true}):placed;
-  }else out=model.useSelected({heal:ctx.heal});
+  }else out=model.useSelected({heal:ctx.heal,snip:ctx.snip});
  }
  if(out?.ok){
   save(s,p,model);
@@ -61,3 +61,5 @@ export function inventoryAct(s,p,m,ctx){
  return true;
 }
 export {makeItem};
+
+export function mutateInventory(s,p,fn){const model=reconcileInventory(s,p),out=fn(model);if(out?.ok){save(s,p,model);s.trade=null;}return out;}

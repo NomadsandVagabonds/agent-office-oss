@@ -108,6 +108,9 @@ export function whoIsDown(seed, cast = CAST) {
  */
 export function castFor(visit, floor, cast = CAST) {
   if (!visit) return cast.filter((m) => m.always).map((m) => ({ id: m.id, floor: null }));
+  // Private curated visits may schedule the production cast explicitly. Ordinary
+  // visits keep exactly the seeded dealer below. Entries are authored, not input.
+  if (Array.isArray(visit.company)) return visit.company.filter(m => cast.some(c => c.id === m.id) && Number.isInteger(m.floor) && m.floor >= 0 && m.floor < visit.depths && (floor === undefined || m.floor === floor));
   const out = [];
   for (const id of whoIsDown(visit.seed, cast)) {
     const m = cast.find((k) => k.id === id);
@@ -163,9 +166,12 @@ export function hauntsFor(level, ids, deck = ARCHETYPES, cast = CAST) {
   const out = new Map();
   const rooms = (level?.rooms || []).filter((r) => r.arch && Number.isInteger(deck[r.arch]?.haunt) && deck[r.arch].haunt > 0 && r.kind !== 'start' && r.kind !== 'exit');
   if (!rooms.length) return out;
-  const R = makeRng(`${level.seed}/haunt`);
+  const R = makeRng(`${level.seed}/haunt`), fromStart = level.start ? roomDistances(level, level.start.room) : new Map();
   const free = R.shuffle(ids.filter((id, i) => ids.indexOf(id) === i).map((id) => cast.find((m) => m.id === id)).filter((m) => m && m.home === 'roams' && !m.always && !m.withRoom).map((m) => m.id));
-  for (const r of rooms) for (let n = Math.min(HAUNT_MOST, deck[r.arch].haunt); n > 0 && free.length; n--) out.set(free.shift(), r.id);
+  for (const r of rooms) for (let n = Math.min(HAUNT_MOST, deck[r.arch].haunt); n > 0 && free.length; n--) {
+    const i = free.findIndex(id => cast.find(m => m.id === id)?.disposition !== 'hunts' || (fromStart.get(r.id) ?? 0) >= 2);
+    if (i < 0) break; out.set(free.splice(i, 1)[0], r.id);
+  }
   return out;
 }
 
@@ -194,7 +200,8 @@ export function lairFor(level, member) {
   const room = level.rooms.find((r) => r.arch === member.withRoom);
   const path = room && roomPath(level, level.start.room, room.id);
   if (!path) return null;
-  const last = path.length - 1, ok = (i) => i > 0 && i < last && path[i] !== level.exit?.room && path[i] !== level.start.room;
+  const fromStart = roomDistances(level, level.start.room);
+  const last = path.length - 1, ok = (i) => (fromStart.get(path[i]) ?? 0) >= 2 && i > 0 && i < last && path[i] !== level.exit?.room && path[i] !== level.start.room;
   const able = []; for (let back = LAIR[0]; back <= LAIR[1]; back++) if (ok(last - back)) able.push(path[last - back]);
   if (able.length) return makeRng(`${level.seed}/lair/${member.id}`).pick(able);
   for (let i = last - 1; i > 0; i--) if (ok(i)) return path[i];
