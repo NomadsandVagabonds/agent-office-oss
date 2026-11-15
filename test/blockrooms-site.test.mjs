@@ -166,6 +166,9 @@ test('the page\'s own script: a building nobody has had, a tape from the address
   assert.match(src, /if \(!mine\) tell\(\{ do: 'in' \}\);/);
   assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit'\) return null;\n  const who = me\(\);\n  if \(!who\.sign\) return null;/);
   assert.match(src, /tell\(\{ do: 'sign', name: who\.name, message: who\.message, run: report \}\)/);
+  // a building asked to be other than its seed has it (?debug, ?room=) is for looking at: walking out of one is not a score
+  assert.match(src, /const doctored = !!dev\.debug \|\| !!room;\n      const result = await enterBackrooms\(office, \{\n[^\n]*also: doctored \? undefined : sign,/, 'the book is not signed for a doctored building');
+  assert.ok(!/also: sign,/.test(src));
   assert.match(src, /let room = !next && q\.get\('room'\) && Object\.hasOwn\(ARCHETYPES, q\.get\('room'\)\) \? q\.get\('room'\) : null;/, 'a room asked for by name is a room of the deck, or it is an ordinary door');
 });
 

@@ -129,9 +129,10 @@ async function run() {
     const q = new URLSearchParams(location.search);
     let next = asSeed(q.get('tape')) || null;
     // (for whoever is checking the site and not playing it: ?debug hands a script the level's own handle, and lets it ask
-    // for a shorter building, a part to begin on, a quiet one)
+    // for a shorter building, a part to begin on, a quiet one, particular kinds of floor)
     const whole = (k) => (q.has(k) && Number.isFinite(Number(q.get(k))) ? Math.floor(Number(q.get(k))) : undefined);
-    const dev = q.has('debug') ? { debug: true, depths: whole('depths'), depth: whole('depth'), mute: q.has('mute') ? true : undefined, pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined } : {};
+    const dev = q.has('debug') ? { debug: true, depths: whole('depths'), depth: whole('depth'), mute: q.has('mute') ? true : undefined, pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined,
+      themes: q.get('themes') ? q.get('themes').split(',').filter(Boolean) : undefined } : {};
     // ?room=<a room of the deck> is a building with that room where you land (for looking at one room; nothing on
     // the front page leads here. A room nobody has built yet is no room, and the door is an ordinary door)
     let room = !next && q.get('room') && Object.hasOwn(ARCHETYPES, q.get('room')) ? q.get('room') : null;
@@ -145,8 +146,11 @@ async function run() {
       const mine = next ? keptTapes().find((t) => t.seed === seed) : null;
       next = null;
       if (!mine) tell({ do: 'in' });                      // (he keeps count of who goes in. A tape played back is nobody going anywhere)
+      // a building that was asked to be other than its seed has it (?debug, ?room=) is for looking at, and getting out of
+      // one is not a score: the book is not signed for it (it was, by anybody checking the site who walked out)
+      const doctored = !!dev.debug || !!room;
       const result = await enterBackrooms(office, {
-        name: me().name, seed, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: sign,
+        name: me().name, seed, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: doctored ? undefined : sign,
         home: { label: 'Return to homepage' }, anew: { label: 'Go back in' }, where, ...dev,
         ...(room ? { only: [room] } : {}),
         ...(mine ? { replay: true, pursuer: typeof mine.mascot === 'boolean' ? mine.mascot : undefined } : {}),

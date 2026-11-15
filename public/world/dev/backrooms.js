@@ -5,6 +5,8 @@
 //   &room=party        start inside one archetype (any id from the deck; also: exit, start, plain, or a room number)
 //   &x=0&z=2&yaw=0.6&pitch=-0.1   where to stand in that room's own frame (z = depth/2 is the door you came in by; yaw 0 looks in)
 //   &only=a,b          deal these archetypes into the visit      &count=6    how many oddities
+//   &themes=night,exec what kind of floor each part is, top down (themes.js; the rest are as the seed has them). The only
+//                      way onto a kind that is still being built (`dealt: false`), which is in nobody's visit
 //   &vhs=0|1|2         clean · steady · full camcorder           &mute=1
 //   &pursuer=1|0       force the thing that follows you in or out; &wake=1 has it already awake, in the room with you
 //   &name=Robin        who you are                               &live=1     borrow names from the running office (GET only)
@@ -106,6 +108,7 @@ async function go() {
   const result = await enterBackrooms(office, {
     name: q.get('name') || 'Robin', seed, only: only.length ? only : undefined, count: q.has('count') ? num('count', 7) : undefined,
     depth: q.has('depth') ? num('depth', 0) : undefined, depths: q.has('depths') ? num('depths', 3) : undefined,
+    themes: q.get('themes') ? q.get('themes').split(',').filter(Boolean) : undefined,
     pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined, vhs: q.has('vhs') ? num('vhs', 2) : undefined, mute: q.has('mute') ? q.get('mute') !== '0' : undefined,
     debug: true, scorecard: q.get('card') !== '0', home: { label: 'Return to homepage' }, where: q.get('where') || undefined,
     inventory: q.get('inventory') !== '0', dev: q.get('supplies') === '1' ? { supplies: true } : undefined,

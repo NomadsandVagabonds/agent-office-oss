@@ -14,6 +14,9 @@
 //   heights    [[ceiling height, weight]…] for plain rooms
 //   dressing   what somebody left behind, most likely first (the generator's own list if null)
 //   hum        mains hum, Hz (null: rolled)
+//   dealt      false: still being built. It is a kind of floor like any other and every test of one holds for it, but it
+//              is in nobody's visit until this line goes: only ever a floor that was asked for by name (plan.js
+//              `themes`; the dev page's &themes=). That is how a new kind of floor is made in the open, a room at a time
 
 export const THEMES = {
   // the one everybody remembers: mono-yellow, humming, slightly damp
@@ -50,5 +53,7 @@ export const THEMES = {
 };
 
 export const THEME_IDS = Object.keys(THEMES);
+/** The kinds of floor a visit may be dealt: every one that is not still being built (`dealt: false`). */
+export const dealtThemes = (themes = THEMES) => Object.keys(themes).filter((id) => themes[id].dealt !== false);
 /** A theme by id, or the yellow one. */
 export const themeOf = (id) => (id && typeof id === 'object' ? id : THEMES[id] || THEMES.yellow);

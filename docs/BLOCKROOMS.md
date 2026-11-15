@@ -97,7 +97,7 @@ build takes it from `SITE_ORIGIN` (`https://…`), or, on Vercel, from
 | `/play?tape=<seed>` | that building first. A finished visit keeps its tape (its seed); while the card for it is on the wall the address bar shows this address, so copying it hands the building on. (`/?tape=` from before there was a home page goes straight through.) |
 | the tape's number on the card | a link to the same address; choosing it walks the building again |
 | `/play?room=<a room of the deck>` | a building with that room where you land, for looking at one room. Nothing on the home page leads here. A room that does not exist is an ordinary door |
-| `/play?debug` (with `depths=`, `depth=`, `mute`, `pursuer=0`) | for checking, not playing: exposes the level's handle as `window.__backrooms` and allows a shorter building |
+| `/play?debug` (with `depths=`, `depth=`, `mute`, `pursuer=0`, `themes=`) | for checking, not playing: exposes the level's handle as `window.__backrooms` and allows a shorter building, or particular kinds of floor (`themes=night,exec`, top down: the only way onto a kind that is still being built). A building asked for with `debug` or `room=` is not the one its seed gives, so walking out of it does not sign the book |
 | `/api/book` | the visitors' book (below) |
 | `/api/where` | the city a visitor's connection appears to come from, for one of the awards on the home page (below) |
 

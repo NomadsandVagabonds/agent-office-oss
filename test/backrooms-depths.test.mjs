@@ -8,7 +8,7 @@ import { generate, MAX_ODD, MAX_ROOMS, DECK, ARCHETYPES, LESSONS, lessons, ready
 import { MIN_OUT_STEPS, THIN_W, MARK_W, LEAN, REFUSE, MARK_STYLES, PRINT_CHANCE, PRINTED, lean, pressing, answer, TAPE_LABELS } from '../public/world/backrooms/marks.js';
 import { REACH, calm, beside, closeness, grabChance } from '../public/world/backrooms/reach.js';
 import { planVisit, floorOf, generateVisit, MIN_FLOORS, MAX_FLOORS, MIN_VISIT_STEPS, KNOWN_AT_START } from '../public/world/backrooms/plan.js';
-import { THEMES, THEME_IDS } from '../public/world/backrooms/themes.js';
+import { THEMES, THEME_IDS, dealtThemes } from '../public/world/backrooms/themes.js';
 import { WAYS, DEALT, GAP, goesDown, dropOf, hangBelow, flight, holeIn, ledgeAt, ductIn, pushes } from '../public/world/backrooms/seam.js';
 import { AWAY, ROOMS, DOORWAYS, PLAN, partsOf, settled, unsure } from '../public/world/backrooms/rooms/unsure-hall/rule.js';
 import { HALL, HAND, PART_ROOMS } from '../public/world/backrooms/plan.js';
@@ -55,7 +55,7 @@ test('a visit is planned from its seed: three to five floors, yellow on top, the
     for (const f of plan.floors.slice(1)) under.add(f.theme);
   }
   for (let n = MIN_FLOORS; n <= MAX_FLOORS; n++) assert.ok(sizes.get(n) > 5, `visits of ${n} floors: ${sizes.get(n) || 0} in ${SEEDS.length}`);
-  assert.deepEqual([...under].sort(), THEME_IDS.filter((id) => id !== 'yellow').sort(), 'every kind of floor turns up under the yellow one');
+  assert.deepEqual([...under].sort(), dealtThemes().filter((id) => id !== 'yellow').sort(), 'every kind of floor that is finished turns up under the yellow one');
   assert.deepEqual([...ways].sort(), [...DEALT].sort(), 'every way down a visit is dealt turns up somewhere');
   assert.deepEqual([...DEALT].sort(), ['chute', 'hole', 'ledge'], 'and those are falling, climbing down and sliding: never a flight of stairs');
   assert.ok(orders.size > 30, `only ${orders.size} different buildings in ${SEEDS.length} visits`);
@@ -758,6 +758,34 @@ test('what a visit came to: time in play, parts reached, rooms walked into, who 
   const far = createTally({ seed: 1, of: 3 }); for (let i = 0; i < 9; i++) far.way();
   assert.deepEqual(far.report().parts, { reached: 3, of: 3 });
   assert.equal(far.report().seed, '1');
+});
+
+test('a kind of floor that is still being built is in nobody\'s visit, and any kind can be asked for by name', () => {
+  // what may be dealt: everything that does not say it is unfinished
+  const made = { yellow: {}, night: {}, estate: { dealt: false }, attic: { dealt: true } };
+  assert.deepEqual(dealtThemes(made), ['yellow', 'night', 'attic']);
+  assert.deepEqual(dealtThemes().sort(), THEME_IDS.filter((id) => THEMES[id].dealt !== false).sort());
+  assert.ok(dealtThemes().includes('yellow'), 'the one everybody lands in is not something still being built');
+  const read = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
+  const src = read('../public/world/backrooms/plan.js');
+  assert.match(src, /const below = R\.shuffle\(dealtThemes\(\)\.filter\(\(id\) => id !== 'yellow'\)\);/, 'the planner deals from the finished ones');
+  // asked for, top down: those parts are that kind; what was not asked for is as the seed has it
+  for (const seed of [1, 7, 'tuesday']) {
+    const usual = planVisit(seed, office), kinds = usual.floors.map((f) => f.theme);
+    assert.equal(kinds[0], 'yellow');
+    const other = THEME_IDS.find((id) => id !== 'yellow' && id !== kinds[1]);
+    const asked = planVisit(seed, { ...office, themes: [other] });
+    assert.deepEqual(asked.floors.map((f) => f.theme), [other, ...kinds.slice(1)], `seed ${seed}: the part you land on is the kind asked for, the rest as they were`);
+    assert.equal(asked.depths, usual.depths);
+    assert.deepEqual(planVisit(seed, { ...office, themes: ['yellow', other] }).floors.slice(0, 2).map((f) => f.theme), ['yellow', other]);
+    assert.deepEqual(planVisit(seed, { ...office, themes: ['no-such-floor', '', null] }).floors.map((f) => f.theme), kinds, 'a kind nobody has made is not a kind: the visit is what it was');
+    assert.deepEqual(planVisit(seed, { ...office, themes: other }).floors[0].theme, other, 'one name will do');
+    // …and that floor can be made
+    const level = floorOf(asked, 0);
+    assert.equal(level.theme, other); assert.ok(level.rooms.length > 5 && level.exit);
+  }
+  // nobody's visit is made this way: the office's lift and the site's door ask for nothing (the dev page and ?debug do)
+  assert.match(read('../public/world/backrooms/index.js'), /depths: opt\.depths, themes: opt\.themes \};/);
 });
 
 test('drawings on the walls: only ever of something that is in this visit, on its part or the one above, in a frightened person\'s own unfinished words', () => {

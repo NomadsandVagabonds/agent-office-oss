@@ -568,6 +568,51 @@ that builds itself as the mascot does, its `figure`: `{ group, body }`),
 stops running it, and makes what it offered with `c.use` unusable. It is
 found by where `at()` says it is. One that says it is nowhere is in no room.
 
+## A new kind of floor
+
+A visit goes down through several parts, and no two are the same kind of
+place: the yellow one everybody remembers is only where you land. A kind of
+floor is a **theme** (`themes.js`), and it is pure data. It changes what the
+generator rolls and never how it works: the wallpaper, carpet and skirting
+(`families`, from `FAMILIES` in `gen.js`, which also says what the floor
+is made of), what the paper is printed with (`patterns`; `kit.js` draws
+them), the colour of the tubes and how the ceilings behave, how the plain
+rooms are proportioned and how high they are, what somebody left lying about
+(`dressing`; `rooms.js` builds each thing), and the hum.
+
+A new one needs more than its line:
+
+- **Plain rooms of its own.** Most of a part is plain rooms (rule 6), and
+  each kind of floor repeats in its own way: `quiet.js` gives a floor two or
+  three ways of laying out a plain room and uses them again and again. A new
+  kind of floor is told from the others by its own (`TELLS` in
+  `test/backrooms.test.mjs`: add a line). If its plain rooms are the yellow
+  floor's with different paper, it is not a new kind of floor.
+- **Rooms that belong to it.** A line of the deck says `themes: { <id>: n }`
+  to be dealt more often there, and `0` for the kinds of floor it must
+  never be on. A room built for one kind of floor says `0` for all the
+  others.
+- **Nothing of its own that the building already has.** Doorways, fire
+  doors, the ways down (`seam.js`), the cast, pockets, the card: one
+  building, whatever the part is dressed as.
+
+**While it is being built it says `dealt: false`.** It is then a kind of
+floor like any other, and every test of one holds for it from its first
+line, but it is in nobody's visit: the plan deals from the finished ones
+(`dealtThemes()`). It is looked at by asking for it by name:
+
+```
+/world/dev/backrooms.html?seed=7&themes=<id>&vhs=0&mute=1&pursuer=0&check=1
+```
+
+`themes=` is the kind of floor of each part, top down (`themes=yellow,<id>`
+puts it second, where it will really be met); a part that is not named is
+what the seed made it. On the site the same thing is `/play?debug&themes=`.
+So a new kind of floor can be merged and released a room at a time, and
+shown to whoever should see it, without being in anybody's game. Taking the
+line out is what makes it live: it then turns up under the yellow floor like
+the others, and the make of the building (`edition()`) changes with it.
+
 ## On a phone
 
 A phone has no keys and no mouse, so while a finger is what is being used the

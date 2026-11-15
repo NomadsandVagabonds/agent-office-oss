@@ -113,7 +113,7 @@ async function visit(office, opt) {
   const stage = office.stage, renderer = stage.renderer, canvas = renderer.domElement;
   const who = gather(office, opt);
   const seed = opt.seed ?? Date.now();
-  const ask = { name: who.name, projects: who.projects, agents: who.agents.map((a) => a.name), tasks: who.tasks, only: opt.only, onlyDepth: opt.depth | 0, pursuer: opt.pursuer, count: opt.count, depths: opt.depths };
+  const ask = { name: who.name, projects: who.projects, agents: who.agents.map((a) => a.name), tasks: who.tasks, only: opt.only, onlyDepth: opt.depth | 0, pursuer: opt.pursuer, count: opt.count, depths: opt.depths, themes: opt.themes };
   // what the office says is still to be found down here is hidden in this visit; no office keeping count, nothing hidden
   // (and nothing in a tape that is being played back: what was to be found in that building was found, or was not)
   const left = opt.replay ? null : lootLeft(office);
