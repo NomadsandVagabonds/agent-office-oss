@@ -178,6 +178,16 @@ for (const slot of document.querySelectorAll('.plug[data-plug]')) {
 counter(null);
 book();
 
+// the welcome: where the visitor's connection appears to come from, as the site's host tells the site with every request
+// (api/where). Said to them and to nobody else, and not kept. No answer, no city: the welcome is still a welcome.
+(async () => {
+  try {
+    const res = await fetch('./api/where', { headers: { accept: 'application/json' }, cache: 'no-store' });
+    const data = res.ok ? await res.json() : null, city = data && typeof data.city === 'string' ? data.city.trim().slice(0, 40) : '';
+    if (city) for (const node of document.querySelectorAll('[data-welcome]')) node.textContent = `WELCOME VISITOR FROM ${city.toUpperCase()}`;
+  } catch { /* nobody said */ }
+})();
+
 // the store: a window
 let before = null;
 function shop(open) {

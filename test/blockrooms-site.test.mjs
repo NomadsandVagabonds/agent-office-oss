@@ -95,6 +95,8 @@ test('the front page is the caretaker\'s: every picture it shows is there, every
   // its music, when it is switched on, is the lift's from the office upstairs: a file beside the page, asked of nobody else
   assert.ok(script.includes("new Audio('./muzak.mp3')") && fs.statSync(path.join(out, 'muzak.mp3')).size > 100000, 'the front page\'s music is not there');
   assert.deepEqual(fs.readFileSync(path.join(out, 'muzak.mp3')), fs.readFileSync(path.join(ROOT, 'public/audio/elevator-muzak.mp3')));
+  // the front page talks to its own site and nobody else: the book, and where the visitor appears to be (for the welcome)
+  assert.deepEqual([...new Set([...script.matchAll(/fetch\(([^,)]+)/g)].map((m) => m[1].trim()))].sort(), ["'./api/book'", "'./api/where'"]);
   // what a stranger typed is put on the page as text, never as markup
   assert.ok(!/innerHTML|insertAdjacentHTML|outerHTML|document\.write/.test(script), 'home.js writes markup');
 });
@@ -127,7 +129,7 @@ test('where the site is, is given when it is built and written down nowhere', (t
   assert.ok(home.includes('<meta property="og:url" content="https://example.app/">') && home.includes('<link rel="canonical" href="https://example.app/">'));
   assert.ok(page.includes('<meta property="og:url" content="https://example.app/play">') && page.includes('<link rel="canonical" href="https://example.app/play">'));
   // (the repository itself names no site: not in the pages, the scripts, the build, or what the host is told)
-  for (const f of ['tools/blockrooms/page.html', 'tools/blockrooms/home.html', 'tools/blockrooms/site.js', 'tools/blockrooms/home.js', 'tools/blockrooms/build.mjs', 'vercel.json', 'api/book.mjs']) {
+  for (const f of ['tools/blockrooms/page.html', 'tools/blockrooms/home.html', 'tools/blockrooms/site.js', 'tools/blockrooms/home.js', 'tools/blockrooms/build.mjs', 'vercel.json', 'api/book.mjs', 'api/where.mjs', 'tools/blockrooms/where-api.mjs']) {
     const named = [...fs.readFileSync(path.join(ROOT, f), 'utf8').matchAll(/\b[a-z0-9-]+\.app\b/g)].map((m) => m[0]).filter((d) => d !== 'example.app');
     assert.deepEqual(named, [], `${f} names a site`);
   }

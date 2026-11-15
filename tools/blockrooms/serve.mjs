@@ -9,6 +9,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { handle } from './book-api.mjs';
+import { handle as where } from './where-api.mjs';
 import { memoryStore } from './book-store.mjs';
 
 const root = path.resolve(process.argv[2] || 'dist'), port = Number(process.argv[3]) || 4478;
@@ -20,6 +21,12 @@ http.createServer(async (req, res) => {
   if (url.pathname === '/api/book') {
     const chunks = []; for await (const c of req) chunks.push(c);
     const answer = await handle(new Request(url, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) }), ctx);
+    res.writeHead(answer.status, Object.fromEntries(answer.headers)); res.end(await answer.text());
+    return;
+  }
+  if (url.pathname === '/api/where') {
+    // (there is no host here to say where anybody is: CITY=Springfield says it, for looking at the welcome)
+    const answer = where(new Request(url, { method: req.method, headers: process.env.CITY ? { 'x-vercel-ip-city': encodeURIComponent(process.env.CITY) } : {} }));
     res.writeHead(answer.status, Object.fromEntries(answer.headers)); res.end(await answer.text());
     return;
   }

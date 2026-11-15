@@ -89,6 +89,7 @@ build takes it from `SITE_ORIGIN` (`https://…`), or, on Vercel, from
 | `/play?room=<a room of the deck>` | a building with that room where you land, for looking at one room. Nothing on the home page leads here. A room that does not exist is an ordinary door |
 | `/play?debug` (with `depths=`, `depth=`, `mute`, `pursuer=0`) | for checking, not playing: exposes the level's handle as `window.__backrooms` and allows a shorter building |
 | `/api/book` | the visitors' book (below) |
+| `/api/where` | the city a visitor's connection appears to come from, for the welcome on the home page (below) |
 
 A tape this browser has kept is **played back**: the picture says PLAY where
 a visit says REC, nothing is hidden in it, and it scores but cannot beat the
@@ -117,6 +118,17 @@ they sign with. No cookies, no analytics, no accounts, and no request to
 anywhere but this site.
 
 On the site, if it keeps a book: see the next section.
+
+**The welcome names the visitor's city** ("WELCOME VISITOR FROM PORTLAND":
+the owner's idea, and meant to be a little creepy). The site looks nothing
+up. Its host works a city out of the address every request arrives from and
+hands it to the function with the request (Vercel's `x-vercel-ip-city`
+header); `/api/where` (`api/where.mjs`, `tools/blockrooms/where-api.mjs`)
+passes that one word back to the page that asked, marked private and never
+to be stored, and keeps nothing: not the city, not the address, no count.
+Anything in the header that is not a place name is not passed on. With no
+host to say (any other host, or `serve.mjs` without `CITY=Springfield`) the
+welcome is the plain one. The page's small print says so in a sentence.
 
 ## The visitors' book
 
