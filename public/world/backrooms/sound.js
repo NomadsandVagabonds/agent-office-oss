@@ -164,6 +164,8 @@ export function createSound(level, opt = {}) {
     click: (o = {}) => burst({ vol: 0.14 * (o.vol ?? 1), pan: o.pan, dur: 0.03, freq: 1500, q: 2, type: 'bandpass', attack: 0.001 }),
     door: (o = {}) => { tone({ vol: 0.05 * (o.vol ?? 1), dur: 0.7, freq: 240, to: 330, type: 'sawtooth', attack: 0.1 }); burst({ vol: 0.12, dur: 0.1, freq: 400, when: 0.02 }); },
     slide: (o = {}) => burst({ vol: 0.1 * (o.vol ?? 1), pan: o.pan, dur: 1.0, freq: 240, q: 2, type: 'bandpass', attack: 0.25 }),
+    furnitureScrape: (o = {}) => { burst({ vol: .13 * (o.vol ?? 1), pan: o.pan, dur: .36, freq: 320, q: 1.1, type: 'bandpass', attack: .04 }); tone({ vol: .018 * (o.vol ?? 1), pan: o.pan, dur: .3, freq: 95, to: 81, type: 'sawtooth', attack: .05 }); },
+    furnitureRoll: (o = {}) => burst({ vol: .075 * (o.vol ?? 1), pan: o.pan, dur: .34, freq: 650, q: 1.5, type: 'bandpass', attack: .04 }),
     whir: (o = {}) => { tone({ vol: 0.035 * (o.vol ?? 1), pan: o.pan, dur: 0.5, freq: 520, to: 610, type: 'sawtooth', attack: 0.08 }); burst({ vol: 0.04 * (o.vol ?? 1), pan: o.pan, dur: 0.5, freq: 2600, q: 1, type: 'bandpass', attack: 0.1 }); },
     // an old telephone: two tones beaten together, twice
     ring: (o = {}) => { for (const w of [0, 0.5]) for (const f of [440, 480]) { tone({ vol: 0.07 * (o.vol ?? 1), pan: o.pan, dur: 0.4, freq: f, type: 'triangle', when: w }); tone({ vol: 0.02 * (o.vol ?? 1), pan: o.pan, dur: 0.4, freq: f * 4.02, when: w }); } },

@@ -15,7 +15,7 @@ const CONTROLS = [
  * Native controls over the frozen picture. onChange(key, value) is immediate;
  * the caller applies and saves it. setOpen never invokes pause/resume callbacks.
  */
-export function createMenu({ host, settings = {}, onRequestOpen, onResume, onGiveUp, onChange } = {}) {
+export function createMenu({ host, settings = {}, furniture = false, onRequestOpen, onResume, onGiveUp, onChange } = {}) {
   const id = ++instance, prefix = `br-menu-${id}`;
   let opened = false, disposed = false, page = 'main', previousFocus = null;
   let values = { ...DEFAULTS, ...settings };
@@ -28,6 +28,7 @@ export function createMenu({ host, settings = {}, onRequestOpen, onResume, onGiv
   const main = h('div.br-menu-main');
   const controls = h('div.br-menu-controls-page', { hidden: true },
     h('dl.br-menu-controls', CONTROLS.map(([action, keys]) => h('div.br-menu-control', h('dt', action), h('dd', keys)))),
+    furniture ? h('p.br-menu-note', h('strong', 'Move furniture'), ' — look at an ordinary chair, desk or trolley and press E (or tap the hand) to grab it. Walk to push or pull; press again to release. For a desk with a working computer, aim below the tabletop to move the desk. Heavy furniture moves slowly. Bolted, buried and suspended furniture stays fixed.') : null,
     h('p.br-menu-note', h('strong', 'On a phone'), ' — the ring walks; push past it to run. Drag anywhere else to look. The arrows jump and crouch, the hand interacts, the torch switches your light; tap a pocket to inspect it.'),
     h('p.br-menu-note', h('strong', 'Recharge the camcorder'), ' — select a battery and press Q. On a phone, tap its pocket, then Recharge camera. Use Combine to fit a battery to a flashlight instead.'));
   const settingsPage = h('div.br-menu-settings', { hidden: true });

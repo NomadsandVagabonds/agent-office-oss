@@ -9,11 +9,15 @@
 // A walker is any object with { x, z, r, tall, opens? }: where it is, its
 // radius, how much headroom it needs, and whether it can open a door.
 import { toWorld, toLocal, T } from '../gen.js';
+import { overlaps } from '../furniture-policy.js';
 import { roomRoute, roomCosts, gridPath, straighten } from './paths.js';
 
 const CELL = 0.125, STEP = 0.26;
 /** What a shut door costs a walker that can open one, in rooms: it would go some way round sooner than stop and work a handle. */
 export const DOOR_COST = 3;
+/** A furnished doorway is usable, but going around is usually quicker than clearing it. */
+export const BARRICADE_COST = 3;
+const RETRY_BARRICADE = 3;
 
 /** How near one of the absorbed staff a creature will set foot, metres (their arms are longer; their bodies are not). */
 export const ABSORBED_GAP = 0.5;
@@ -27,30 +31,40 @@ export function createWalk(env) {
   const W = () => env.world, level = env.level;
   const grids = new Map();                         // room id + who → { nx, nz, ok, floor, version }
   const doorOf = (id) => env.doors?.at(id) || null;
+  const furnitureVersion = (id) => env.barricades?.version(id) || 0;
+  const linkVersion = (from, to) => `${furnitureVersion(Math.min(from, to))}:${furnitureVersion(Math.max(from, to))}:${env.doors?.version || 0}`;
 
   // (ghost: creatures do not block on one another's bodies. But a colleague the building is keeping — absorbed.js — is
   // not somebody to walk through or stop on: nothing of the cast stands within ABSORBED_GAP of one.)
-  const stand = (a, x, z) => W().free(x, z, a.r, { ghost: true }) && W().headroom(x, z) >= a.tall && clearOfAbsorbed(env.absorbed, x, z);
+  const stand = (a, x, z, furnitureColliders) => W().free(x, z, a.r, { ghost: true, furnitureColliders }) && W().headroom(x, z) >= a.tall && clearOfAbsorbed(env.absorbed, x, z);
   /** Rooms it will not go into: ones that fold space, and ones it could not stand up in. */
   const shy = (a, rt) => !rt || rt.fold || rt.def.crawl || rt.def.H < a.tall + 0.05;
   /** What a doorway costs this walker (cast/paths.js): Infinity where it cannot go. */
   const cost = (a) => (d, from, to) => {
     const th = W().throats[d.link], door = doorOf(d.link);
     if (!th || d.h < a.tall || shy(a, W().rooms[to])) return Infinity;
-    if (door && door.isShut) return a.opens ? 1 + DOOR_COST : Infinity;
-    return th.open ? 1 : Infinity;
+    const blockedLink = a.blockedLinks?.get(d.link);
+    if (blockedLink?.version === linkVersion(from, to) && blockedLink.until > (a.walkTime || 0)) return Infinity;
+    if (door?.isShut ? !a.opens : !th.open) return Infinity;
+    const t = env.barricades ? through(W().rooms[from], W().rooms[to]) : null;
+    const blocked = t && env.barricades.blocking(t.A, t.B, a.r);
+    return 1 + (door?.isShut ? DOOR_COST : 0) + (blocked ? BARRICADE_COST : 0);
   };
 
   function grid(a, rt) {
-    const key = rt.id + ':' + a.r + ':' + a.tall, version = (env.doors?.version || 0) + ':' + (env.absorbed?.length || 0);          // (the absorbed are placed after the creatures: a grid made before they were is made again)
+    const key = rt.id + ':' + a.r + ':' + a.tall, version = (env.doors?.version || 0) + ':' + (env.absorbed?.length || 0) + ':' + furnitureVersion(rt.id);          // only a room whose furniture moved needs a new grid
     let g = grids.get(key);
     if (g && g.version === version) return g;
     const def = rt.def, nx = Math.max(1, Math.ceil(def.W / CELL)), nz = Math.max(1, Math.ceil(def.D / CELL));
     g = { nx, nz, ok: new Uint8Array(nx * nz), floor: new Float32Array(nx * nz), version };
+    // A synchronous grid build cannot see furniture move between its cells. Snapshot only
+    // nearby footprints, including those across the doorway within this body's radius.
+    // rect stops at the inner wall; open-throat cells also occupy its half-wall strip.
+    const nearbyFurniture = rt.rect && W().furnitureColliders?.filter(c => overlaps(c, rt.rect, -a.r - T / 2));
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
       const p = toWorld(def, -def.W / 2 + (i + 0.5) * CELL, -def.D / 2 + (j + 0.5) * CELL), k = i + nx * j;
       if (W().roomAt(p.x, p.z) !== rt) continue;
-      g.ok[k] = stand(a, p.x, p.z) ? 1 : 0; g.floor[k] = W().floorY(p.x, p.z);
+      g.ok[k] = stand(a, p.x, p.z, nearbyFurniture) ? 1 : 0; g.floor[k] = W().floorY(p.x, p.z);
     }
     grids.set(key, g);
     return g;
@@ -123,25 +137,41 @@ export function createWalk(env) {
     return went;
   }
 
+  /** A path ends at furniture: name the thing within reach, instead of pretending we reached the goal. */
+  function stopped(a, target, out) {
+    if (!env.barricades || out.went > 1e-3) return;
+    const item = env.barricades.blocking(a, target, a.r);
+    if (item) {
+      const x = Math.max(item.x0, Math.min(a.x, item.x1)), z = Math.max(item.z0, Math.min(a.z, item.z1));
+      if (Math.hypot(a.x - x, a.z - z) <= a.r + 0.4) { out.obstacle = item; out.there = false; out.cannot = !a.pushes; return; }
+    }
+    if (a.way && !a.way.reached && !a.way.pts.length) { out.cannot = true; out.there = false; }
+  }
+
   /**
    * Walk toward a spot for `dist` metres, by whatever rooms lie between.
    * @param a       the walker
    * @param target  { x, z }
    * @param dist    metres it may go this time
    * @param keep    stop this far short of the spot
-   * @returns {{went:number, door:object|null, cannot:boolean, there:boolean}}  how far it got · the shut door it is standing at, if one is in
+   * @returns {{went:number, door:object|null, obstacle:object|null, link:number|null, cannot:boolean, there:boolean}}  how far it got · the shut door or furniture it is standing at, if one is in
    *          its way · there is no way there at all · it is as near as it is going to get
    */
   function go(a, target, dist, keep = 0) {
-    const w = W(), here = w.roomAt(a.x, a.z), there = w.roomAt(target.x, target.z), out = { went: 0, door: null, cannot: false, there: false };
+    const w = W(), here = w.roomAt(a.x, a.z), there = w.roomAt(target.x, target.z), out = { went: 0, door: null, obstacle: null, link: null, cannot: false, there: false };
+    if (env.barricades) a.walkTime = (a.walkTime || 0) + dist / Math.max(0.2, a.speed || 1);
     if (a.way) a.way.age += dist / Math.max(0.2, a.speed || 1);
     if (!here) { out.cannot = true; return out; }
     // somewhere its body does not fit (something was shut on it, or put down round it): the nearest floor that it does
     if (!stand(a, a.x, a.z)) { const g = grid(a, here), k = nearCell(here, g, a.x, a.z); if (g.ok[k]) { const m = middle(here, g, k); a.x = m.x; a.z = m.z; a.way = null; a.thru = null; } }
     // half way through a doorway: finish going through it
     if (a.thru) {
+      out.link = a.thru.link ?? null;
       out.went = stride(a, a.thru.x, a.thru.z, dist);
-      if (Math.hypot(a.thru.x - a.x, a.thru.z - a.z) < 0.1 || out.went < 1e-3) a.thru = null;
+      stopped(a, a.thru, out);
+      // A movable obstruction in the throat is still the same crossing. Re-approaching A here
+      // would make it walk back and forth between the doorway and the desk it just shifted.
+      if (Math.hypot(a.thru.x - a.x, a.thru.z - a.z) < 0.1 || out.went < 1e-3 && !out.obstacle) a.thru = null;
       return out;
     }
     if (!there) { out.cannot = true; return out; }
@@ -150,16 +180,19 @@ export function createWalk(env) {
       if (d <= keep + 0.05) { out.there = true; return out; }
       out.went = cross(a, here, target.x, target.z, Math.min(dist, d - keep));
       if (out.went < 1e-3 && a.way && !a.way.pts.length) out.there = true;                       // as near as its body will go
+      stopped(a, target, out);
       return out;
     }
     const path = roomRoute(level, here.id, there.id, cost(a));
     if (!path || path.length < 2) { out.cannot = true; return out; }
     const t = through(here, w.rooms[path[1]]), dA = Math.hypot(t.A.x - a.x, t.A.z - a.z);
-    if (dA > 0.12) { out.went = cross(a, here, t.A.x, t.A.z, dist); if (out.went > 1e-3 || Math.hypot(t.A.x - a.x, t.A.z - a.z) > 0.3) return out; }
+    out.link = t.link;
+    if (dA > 0.12) { out.went = cross(a, here, t.A.x, t.A.z, dist); if (out.went > 1e-3 || Math.hypot(t.A.x - a.x, t.A.z - a.z) > 0.3) { stopped(a, t.B, out); return out; } }
     const door = doorOf(t.link);
     if (door && (door.isShut || door.moving)) { out.door = door; return out; }
-    a.thru = t.B; a.way = null;
+    a.thru = { ...t.B, link: t.link }; a.way = null;
     out.went += stride(a, t.B.x, t.B.z, dist - out.went);
+    stopped(a, t.B, out);
     return out;
   }
 
@@ -187,5 +220,13 @@ export function createWalk(env) {
     const c = roomCosts(level, here.id, cost(a), there.id).cost.get(there.id);
     return c === undefined ? Infinity : c;
   }
-  return { stand, shy, cost, stride, clear, go, exits, spotIn, spotBeyond, steps, forget(a) { a.way = null; a.thru = null; } };
+  return { stand, shy, cost, stride, clear, go, exits, spotIn, spotBeyond, steps,
+    /** Try another doorway after a failed shove; retry later in case a body was temporarily in the way. */
+    avoid(a, link) {
+      const th = W().throats[link]; if (!th) return;
+      (a.blockedLinks ||= new Map()).set(link, { version: linkVersion(th.a, th.b), until: (a.walkTime || 0) + RETRY_BARRICADE });
+      a.way = null; a.thru = null;
+    },
+    forget(a) { a.way = null; a.thru = null; },
+  };
 }

@@ -9,6 +9,8 @@
 import * as THREE from 'three';
 import { T, TILE, RISE, RUN, toWorld, toLocal, wallLength, wallPoint, wallSpans, floorAt, ceilAt, headAt, fitsAt, stairZones, makeRng, roomPath } from './gen.js';
 import { Batch, lamp, lightAt, lin, ticks, smooth, WHITE } from './kit.js';
+import { FURNITURE, furnitureType, fixedFurnitureReason, onFurniture, overlaps, worldFootprint, boxHits } from './furniture-policy.js';
+import { fixedFurnitureFoot } from '../props/trolley.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
 // and how far along it a local coordinate c is (c is x on the front/back walls, z on the side walls)
@@ -23,6 +25,32 @@ const P = (g, col, x, y, w, h) => { g.fillStyle = col; g.fillRect(x, y, w, h); }
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 /** Vertex positions from a to b with one at every ceiling-tile seam (seams are at multiples of TILE). */
 const tiles = (a, b) => { const out = [0]; for (let p = Math.ceil((a + 0.05) / TILE) * TILE; p < b - 0.05; p += TILE) out.push(p - a); out.push(b - a); return out; };
+
+// Retain whole authored primitives when separating a desktop from the room
+// bake. Splitting individual triangles can leave half a monitor on the wall.
+function chunkBounds(batch, start, end) {
+  const foot = { x0: Infinity, z0: Infinity, x1: -Infinity, z1: -Infinity, bottom: Infinity, top: -Infinity };
+  for (let i = start; i < end; i++) {
+    const x = batch.pos[i * 3], y = batch.pos[i * 3 + 1], z = batch.pos[i * 3 + 2];
+    foot.x0 = Math.min(foot.x0, x); foot.x1 = Math.max(foot.x1, x);
+    foot.z0 = Math.min(foot.z0, z); foot.z1 = Math.max(foot.z1, z);
+    foot.bottom = Math.min(foot.bottom, y); foot.top = Math.max(foot.top, y);
+  }
+  return foot;
+}
+function copyChunks(batch, chunks, decals = false) {
+  const result = decals ? { pos: [], uv: [], col: [], idx: [] } : new Batch(batch.vox);
+  const fields = decals ? { pos: 3, uv: 2, col: 4 } : { pos: 3, nor: 3, uv: 2, alb: 3, ao: 1, vx: 3, sf: 2 };
+  for (const q of chunks) {
+    const offset = result.pos.length / 3 - q.start;
+    for (const [key, stride] of Object.entries(fields)) {
+      if (!batch[key]?.length) continue;
+      for (let i = q.start * stride; i < q.end * stride; i++) result[key].push(batch[key][i]);
+    }
+    for (let i = q.first; i < q.last; i++) result.idx.push(batch.idx[i] + offset);
+  }
+  return result;
+}
 
 /**
  * The office's furniture catalogue, if it will load (other people are still writing it).
@@ -65,7 +93,22 @@ export async function buildWorld(kit, level, env, tick) {
     rect: { x0: def.x + T / 2, z0: def.z + T / 2, x1: def.x + def.w - T / 2, z1: def.z + def.d - T / 2 },
   }));
   const throats = level.links.map((link) => ({ link, open: !link.door, a: link.a, b: link.b }));
-  const world = { scene, level, rooms, throats, kit, env };
+  const world = { scene, level, rooms, throats, kit, env, furniture: [], furnitureColliders: [],
+    furnitureRevision: new Map(rooms.map(rt => [rt.id, 0])) };
+  for (const rt of rooms) rt.furnitureRevision = 0;
+  /** Invalidate navigation after an explicit collider-state change (e.g. a
+   * rejected player step restoring a construction-rescue exception). */
+  world.touchFurniture = item => {
+    if (!world.furniture.includes(item)) return;
+    for (const rt of rooms) if (overlaps(item, rt.rect)) {
+      const revision = (world.furnitureRevision.get(rt.id) || 0) + 1;
+      world.furnitureRevision.set(rt.id, revision); rt.furnitureRevision = revision;
+    }
+  };
+  const furnitureVisible = () => {
+    for (const f of world.furniture) f.group.visible = !f.away && rooms.some(rt => rt.group.visible && overlaps(f, rt.rect));
+  };
+  world.refreshFurniture = furnitureVisible;
 
   /* ---- how bright each room is, before anything is built ------------------------- */
   for (const rt of rooms) {
@@ -94,8 +137,8 @@ export async function buildWorld(kit, level, env, tick) {
     return false;
   };
   const inWindow = (x, z) => level.windows.some((w) => (w.axis === 'x' ? Math.abs(x - w.at) <= T / 2 + 0.03 && z >= w.from && z <= w.to : Math.abs(z - w.at) <= T / 2 + 0.03 && x >= w.from && x <= w.to));
-  /** Is there floor for a circle of radius r here, clear of walls and furniture? opt.tall: only what blocks the view counts. */
-  world.free = (x, z, r = 0.22, opt = {}) => {
+  const ignored = (value, object) => value === object || value?.has?.(object);
+  const insideAt = (x, z, r, opt) => {
     let inside = false;
     for (const rt of rooms) {
       const b = rt.rect;
@@ -104,14 +147,30 @@ export async function buildWorld(kit, level, env, tick) {
       if (rt.clip ? !rt.clip(p.x, p.z, r) : !fitsAt(rt.def, p.x, p.z, r)) continue;
       inside = true; break;
     }
-    if (!inside && !world.inThroat(x, z, r) && !(opt.tall && inWindow(x, z))) return false;
+    return inside || world.inThroat(x, z, r) || (opt.tall && inWindow(x, z));
+  };
+  /** Clear of walls, furniture and bodies. bounds supplies an exact AABB footprint;
+   * ignoreCollider/ignoreBody are identity-based exceptions for the body being moved. */
+  world.free = (x, z, r = 0.22, opt = {}) => {
+    const box = opt.bounds;
+    if (box) {
+      if (![box.x0, box.z0, box.x1, box.z1].every(Number.isFinite) || box.x1 <= box.x0 || box.z1 <= box.z0) return false;
+      const nx = Math.max(1, Math.ceil((box.x1 - box.x0) / .15)), nz = Math.max(1, Math.ceil((box.z1 - box.z0) / .15));
+      for (let ix = 0; ix <= nx; ix++) for (let iz = 0; iz <= nz; iz++) {
+        if (!insideAt(box.x0 + (box.x1 - box.x0) * ix / nx, box.z0 + (box.z1 - box.z0) * iz / nz, .001, opt)) return false;
+      }
+    } else if (!insideAt(x, z, r, opt)) return false;
+    const blocked = c => !ignored(opt.ignoreCollider, c) && (!opt.tall || c.tall) && (box ? boxHits(box, c) : hits(c, x, z, r));
+    // Grid construction may supply a room-local snapshot for this synchronous query.
+    // Actual body movement omits the hint and always tests the current complete set.
+    for (const c of opt.furnitureColliders || world.furnitureColliders) if (blocked(c)) return false;
     for (const rt of rooms) {
       const b = rt.rect;
-      if (x < b.x0 - 1 || x > b.x1 + 1 || z < b.z0 - 1 || z > b.z1 + 1) continue;
-      for (const c of rt.colliders) if ((!opt.tall || c.tall) && hits(c, x, z, r)) return false;
+      if (box ? !overlaps(box, { x0: b.x0 - 1, z0: b.z0 - 1, x1: b.x1 + 1, z1: b.z1 + 1 }) : x < b.x0 - 1 || x > b.x1 + 1 || z < b.z0 - 1 || z > b.z1 + 1) continue;
+      for (const c of rt.colliders) if (!c.furniture && blocked(c)) return false;
     }
     // …and whatever is standing about that has a body (pursuer.js). They only ever move while nobody is looking.
-    if (!opt.tall && !opt.ghost) for (const b of world.bodies) if ((x - b.x) * (x - b.x) + (z - b.z) * (z - b.z) < (r + b.r) * (r + b.r)) return false;
+    if (!opt.tall && !opt.ghost) for (const b of world.bodies) if (!ignored(opt.ignoreBody, b) && (box ? boxHits(box, b) : (x - b.x) * (x - b.x) + (z - b.z) * (z - b.z) < (r + b.r) * (r + b.r))) return false;
     return true;
   };
   /** Things with a body that are not part of any room: [{ x, z, r }], kept up to date by whoever owns them. */
@@ -173,7 +232,10 @@ export async function buildWorld(kit, level, env, tick) {
     const key = (p) => Math.floor((p.x + def.W / 2) / cell) + nx * Math.floor((p.z + def.D / 2) / cell);
     const at = (k) => { const i = k % nx; return { x: -def.W / 2 + (i + 0.5) * cell, z: -def.D / 2 + ((k - i) / nx + 0.5) * cell }; };
     const floor = (x, z) => (rt.flat ? 0 : rt.floorY ? rt.floorY(x, z) : floorAt(def, x, z)), head = (x, z) => (rt.flat ? 9 : rt.headY ? rt.headY(x, z) : headAt(def, x, z));
-    const local = rt.colliders.map((c) => { const a = toLocal(def, c.x0, c.z0), b = toLocal(def, c.x1, c.z1); return { c, x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z) }; });
+    // Include a neighbouring room's desk when it straddles this doorway, without
+    // testing every distant movable object at every cell in this room's flood.
+    const nearbyFurniture = world.furnitureColliders.filter(c => overlaps(c, rt.rect, -r));
+    const local = [...new Set([...rt.colliders, ...nearbyFurniture])].map((c) => { const a = toLocal(def, c.x0, c.z0), b = toLocal(def, c.x1, c.z1); return { c, x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z) }; });
     const free = (x, z) => Math.abs(x) <= def.W / 2 - r && Math.abs(z) <= def.D / 2 - r && (rt.clip ? rt.clip(x, z, r) : fitsAt(def, x, z, r)) && head(x, z) >= HEAD
       && !local.some((q) => { if (q.c.on === false) return false; const dx = x - clamp(x, q.x0, q.x1), dz = z - clamp(z, q.z0, q.z1); return dx * dx + dz * dz < r * r; });
     const flood = (doors) => {
@@ -241,6 +303,7 @@ export async function buildWorld(kit, level, env, tick) {
     current = rt;
     const dist = world.distances(rt.id);
     for (const r of rooms) { const d = dist.get(r.id); r.group.visible = d <= 3; r.near = d <= 1; }
+    furnitureVisible();
     before?.onLeave?.();
     rt.visits = (rt.visits || 0) + 1;
     rt.onEnter?.(rt.visits);
@@ -249,6 +312,7 @@ export async function buildWorld(kit, level, env, tick) {
   world.glimpse = (x, z, reach) => {
     const at = world.roomAt(x, z), dist = at ? world.distances(at.id) : new Map();
     for (const r of rooms) r.group.visible = (dist.get(r.id) ?? 99) <= 3 || Math.hypot(r.def.cx - x, r.def.cz - z) <= reach;
+    furnitureVisible();
   };
   world.update = (dt, t, me) => {
     const here = world.roomAt(me.x, me.z);
@@ -285,6 +349,7 @@ export async function buildWorld(kit, level, env, tick) {
     for (const rt of rooms) {
       if (!rt.near) continue;
       for (const use of rt.uses) {
+        if (use.furniture?.away) continue;
         if (use.when && !use.when()) continue;
         const dx = use.wx - me.x, dz = use.wz - me.z, d = Math.hypot(dx, dz);
         if (d > use.r) continue;
@@ -322,20 +387,140 @@ function roomContext(world, rt) {
   const mat = new THREE.Matrix4(), quat = new THREE.Quaternion(), eul = new THREE.Euler(), vec = new THREE.Vector3(), scl = new THREE.Vector3();
   const doorPoint = (dr, off = 0) => wallPoint(def, dr.side, dr.c, off);
   const stairs = stairZones(def, 0.7);
+  const moving = env.barricadesEnabled === true, placements = [], batches = new Map(), decalChunks = [], added = [];
+  let placing = null;
+  const track = (batch, structural = false) => {
+    if (!moving || batches.has(batch)) return batch;
+    const entry = { batch, chunks: [], structural }; batches.set(batch, entry);
+    let depth = 0;
+    for (const name of ['grid', 'quad', 'tri', 'ball', 'box', 'addVox']) {
+      const original = batch[name];
+      batch[name] = function (...args) {
+        const start = this.verts, first = this.idx.length, outer = depth++ === 0;
+        try { return original.apply(this, args); }
+        finally {
+          depth--;
+          if (outer && this.verts > start) entry.chunks.push({ start, end: this.verts, first, last: this.idx.length, placement: placing });
+        }
+      };
+    }
+    return batch;
+  };
+  const furnitureGroups = [];
+  function separateFurniture() {
+    const candidates = placements.filter(p => furnitureType(p.type));
+    for (const p of candidates) {
+      const f = p.foot, floor = rt.floorY ? rt.floorY(f.x, f.z) : floorAt(def, f.x, f.z);
+      p.floor = floor;
+      const stacked = candidates.some(q => q !== p && overlaps(f, q.foot, .08) && q.foot.bottom > f.bottom + .2 && q.foot.bottom < f.top + 1.1);
+      p.fixed = fixedFurnitureReason(p.type, f, p.opt, floor, stacked);
+      if (p.fixed) {
+        // Sunk, hanging and toppled pieces already show their predicament.
+        // An otherwise ordinary-looking base in a stack gets steel feet.
+        if (p.fixed === 'stacked' || p.fixed === 'anchored') for (const x of [f.x0, f.x1]) for (const z of [f.z0, f.z1]) {
+          c.flat.box(x - .10, floor + .008, z - .09, x + .10, floor + .035, z + .09, [.13, .15, .14]);
+          c.flat.box(x - .025, floor + .035, z - .025, x + .025, floor + .06, z + .025, [.32, .29, .23]);
+        }
+        continue;
+      }
+      const group = new THREE.Group();
+      group.position.copy(rt.group.position); group.rotation.copy(rt.group.rotation);
+      group.name = `furniture:${def.id}:${p.type}:${furnitureGroups.length}`;
+      world.scene.add(group);
+      const record = { id: group.name, type: p.type, label: FURNITURE[p.type], room: rt.id, ...worldFootprint(f, def, toWorld), surfaceY: (def.y || 0) + f.top, group, collider: null };
+      p.owner = record; record.placement = p; record.attachments = [];
+      furnitureGroups.push(record); world.furniture.push(record);
+    }
+    const parentFor = foot => furnitureGroups.find(f => f.type !== 'chair' && onFurniture(f.placement.foot, foot));
+    for (const p of placements) if (!p.owner && !furnitureType(p.type)) p.owner = parentFor(p.foot);
+    // Every child collider is replaced by the single carried footprint. It
+    // can be ignored as one object by the swept movement solver.
+    for (const f of furnitureGroups) {
+      const owned = placements.filter(p => p.owner === f), bounds = { ...f.placement.foot };
+      for (const p of owned) {
+        if (p.collider) rt.colliders.splice(rt.colliders.indexOf(p.collider), 1);
+        bounds.x0 = Math.min(bounds.x0, p.foot.x0); bounds.z0 = Math.min(bounds.z0, p.foot.z0);
+        bounds.x1 = Math.max(bounds.x1, p.foot.x1); bounds.z1 = Math.max(bounds.z1, p.foot.z1); bounds.top = Math.max(bounds.top, p.foot.top);
+      }
+      Object.assign(f, worldFootprint(bounds, def, toWorld));
+      f.y = (def.y || 0) + f.placement.floor;
+      const collider = f.collider = { x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, tall: false, on: true, furniture: f.id };
+      rt.colliders.push(collider); world.furnitureColliders.push(collider);
+      const touching = () => world.rooms.filter(room => overlaps(f, room.rect)).map(room => room.id);
+      let lastX = f.x, lastZ = f.z, lastRooms = touching();
+      f.translate = (dx, dz) => {
+        if (f.away || !Number.isFinite(dx) || !Number.isFinite(dz) || Math.hypot(dx, dz) < 1e-6) return false;
+        const wasSolid = collider.on !== false, oldRooms = touching(), oldRoom = world.rooms.find(room => room.id === f.room);
+        for (const k of ['x', 'x0', 'x1']) f[k] += dx;
+        for (const k of ['z', 'z0', 'z1']) f[k] += dz;
+        Object.assign(collider, { x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, on: true });
+        f.group.position.x += dx; f.group.position.z += dz;
+        const now = world.roomAt(f.x, f.z) || oldRoom;
+        if (now && now !== oldRoom) {
+          const i = oldRoom?.colliders.indexOf(collider); if (i >= 0) oldRoom.colliders.splice(i, 1);
+          now.colliders.push(collider); f.room = now.id;
+          f.group.traverse(object => { const u = object.material?.uniforms; if (u?.uDim) u.uDim = now.u.dim; if (u?.uFlick) u.uFlick = now.u.flick; });
+        }
+        for (const use of f.attachments) {
+          use.wx += dx; use.wz += dz;
+          const nextRoom = world.roomAt(use.wx, use.wz) || now, local = toLocal(nextRoom.def, use.wx, use.wz);
+          Object.assign(use, { x: local.x, z: local.z });
+          if (use.room !== nextRoom) {
+            const i = use.room.uses.indexOf(use); if (i >= 0) use.room.uses.splice(i, 1);
+            nextRoom.uses.push(use); use.room = nextRoom;
+          }
+        }
+        const nextRooms = touching(), changedRooms = nextRooms.join(',') !== lastRooms.join(',');
+        if (!wasSolid || changedRooms || Math.hypot(f.x - lastX, f.z - lastZ) >= .05) {
+          for (const id of new Set([...lastRooms, ...oldRooms, ...nextRooms])) {
+            const rev = (world.furnitureRevision.get(id) || 0) + 1;
+            world.furnitureRevision.set(id, rev); world.rooms.find(room => room.id === id).furnitureRevision = rev;
+          }
+          lastRooms = nextRooms; lastX = f.x; lastZ = f.z;
+        }
+        f.group.visible = !f.away && nextRooms.some(id => world.rooms.find(room => room.id === id).group.visible);
+        return true;
+      };
+    }
+    for (const entry of batches.values()) {
+      const groups = new Map();
+      for (const q of entry.chunks) {
+        q.owner = q.placement ? q.placement.owner : entry.structural ? null : parentFor(chunkBounds(entry.batch, q.start, q.end));
+        if (!q.owner) continue;
+        if (!q.placement) q.owner.top = Math.max(q.owner.top, (def.y || 0) + chunkBounds(entry.batch, q.start, q.end).top);
+        if (!groups.has(q.owner)) groups.set(q.owner, []);
+        groups.get(q.owner).push(q);
+      }
+      entry.moving = [...groups].map(([owner, chunks]) => ({ owner, batch: copyChunks(entry.batch, chunks) }));
+      if (groups.size) {
+        const still = copyChunks(entry.batch, entry.chunks.filter(q => !q.owner));
+        for (const key of ['pos', 'nor', 'uv', 'alb', 'ao', 'idx', 'vx', 'sf']) entry.batch[key] = still[key];
+      }
+    }
+    for (const q of decalChunks) q.owner = q.placement?.owner;
+    const decals = c.decals;
+    for (const f of furnitureGroups) f.decals = copyChunks(decals, decalChunks.filter(q => q.owner === f), true);
+    c.decals = copyChunks(decals, decalChunks.filter(q => !q.owner), true);
+    // Uses belong to the carried physical thing as well as its picture.
+    for (const use of rt.uses) {
+      const f = furnitureGroups.find(f => f.type !== 'chair' && use.wx >= f.x0 && use.wx <= f.x1 && use.wz >= f.z0 && use.wz <= f.z1);
+      if (f) { f.attachments.push(use); use.furniture = f; }
+    }
+  }
 
   const c = {
     world, kit, env, level, room: def, rt, R, W, D, H, look, params: def.params || {},
-    vox: new Batch(true), glass: new Batch(true),
+    vox: track(new Batch(true)), glass: track(new Batch(true)),
     decals: { pos: [], uv: [], col: [], idx: [] },
 
     /** A batch drawn with `texture` and lit by the bake. One mesh per key. */
     mapped(key, texture, opt = {}) {
-      if (!mapped.has(key)) mapped.set(key, { batch: new Batch(), texture, ...opt });
+      if (!mapped.has(key)) mapped.set(key, { batch: track(new Batch(), ['wall', 'floor', 'ceil'].includes(key)), texture, ...opt });
       return mapped.get(key).batch;
     },
     /** A batch that shines by itself (unlit): lit panels, screens, signs. */
     shining(key, texture, power = 1, rgb = WHITE, opt = {}) {
-      if (!shining.has(key)) shining.set(key, { batch: new Batch(), texture, power, rgb, opt });
+      if (!shining.has(key)) shining.set(key, { batch: track(new Batch(), key === 'panel'), texture, power, rgb, opt });
       return shining.get(key).batch;
     },
     get flat() { return c.mapped('flat', kit.tex.white()); },
@@ -433,11 +618,13 @@ function roomContext(world, rt) {
     /** A soft-edged stain: on the floor, or (down: true) on the underside of the ceiling. */
     blot(x, z, w, d, o = {}) {
       const q = c.decals, base = q.pos.length / 3, hw = w / 2, hd = d / 2, y = o.y ?? 0.006, rgb = o.rgb || [0, 0, 0];
+      const first = q.idx.length;
       if (o.down) q.pos.push(x - hw, y, z - hd, x + hw, y, z - hd, x + hw, y, z + hd, x - hw, y, z + hd);
       else q.pos.push(x - hw, y, z + hd, x + hw, y, z + hd, x + hw, y, z - hd, x - hw, y, z - hd);
       q.uv.push(0, 0, 1, 0, 1, 1, 0, 1);
       for (let i = 0; i < 4; i++) q.col.push(rgb[0], rgb[1], rgb[2], o.a ?? 0.5);
       q.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      if (moving) decalChunks.push({ start: base, end: base + 4, first, last: q.idx.length, placement: placing });
     },
     /**
      * Put a meshed voxel model down. opt: rot (about y), y, flip (hang it from height y, upside down),
@@ -451,8 +638,6 @@ function roomContext(world, rt) {
       else { eul.set(opt.tilt ? opt.tilt[0] : 0, opt.rot || 0, (opt.flip ? Math.PI : 0) + (opt.tilt ? opt.tilt[1] : 0), 'YXZ'); quat.setFromEuler(eul); }
       scl.set(VOX * s[0] * (opt.mirror ? -1 : 1), VOX * s[1], VOX * s[2]);
       mat.compose(vec.set(x, opt.y || 0, z), quat, scl);
-      (opt.batch || c.vox).addVox(geo.solid, mat, opt);
-      if (geo.glass) c.glass.addVox(geo.glass, mat, opt);
       const b = geo.bounds;
       let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity, y0 = Infinity, y1 = -Infinity;
       for (const bx of [b.x0, b.x1]) for (const by of [b.y0, b.y1]) for (const bz of [b.z0, b.z1]) {
@@ -460,14 +645,34 @@ function roomContext(world, rt) {
         x0 = Math.min(x0, vec.x); x1 = Math.max(x1, vec.x); z0 = Math.min(z0, vec.z); z1 = Math.max(z1, vec.z); y0 = Math.min(y0, vec.y); y1 = Math.max(y1, vec.y);
       }
       const foot = { x0, z0, x1, z1, top: y1, bottom: y0, w: x1 - x0, d: z1 - z0, h: y1 - y0, x, z };
-      if (opt.solid !== false && y0 < 1.0 && y1 > 0.25) c.solid(x0 + 0.03, z0 + 0.03, x1 - 0.03, z1 - 0.03, { tall: opt.tall ?? y1 > 1.25 });
+      const before = placing;
+      if (moving && !opt.batch) { placing = { type: opt.furnitureType, foot, opt }; placements.push(placing); }
+      (opt.batch || c.vox).addVox(geo.solid, mat, opt);
+      if (geo.glass) c.glass.addVox(geo.glass, mat, opt);
+      if (opt.solid !== false && y0 < 1.0 && y1 > 0.25) {
+        const col = c.solid(x0 + 0.03, z0 + 0.03, x1 - 0.03, z1 - 0.03, { tall: opt.tall ?? y1 > 1.25 });
+        if (placing !== before) placing.collider = col;
+      }
       if (opt.shadow !== false && y0 < 0.3) c.shadow((x0 + x1) / 2, (z0 + z1) / 2, foot.w, foot.d, opt.shadow || 0.45);
+      placing = before;
       return foot;
     },
     /** Something from the office's catalogue (desk, chair, cooler…), or a plain crate if it is not there. */
     prop(type, x, z, opt = {}) {
       const geo = env.catalogue.geo(type, opt.o);
-      if (geo) return c.place(geo, x, z, opt);
+      if (geo) {
+        const foot = c.place(geo, x, z, { ...opt, furnitureType: type });
+        if (moving && opt.batch && furnitureType(type)) {
+          // A transforming room owns this entire batch. Its furniture is
+          // bolted to that scenery, with the bolts in the same moving mesh.
+          const anchor = kit.model('furniture:fixed-foot:v1', fixedFurnitureFoot);
+          for (const px of [foot.x0 + .04, foot.x1 - .04]) for (const pz of [foot.z0 + .04, foot.z1 - .04]) {
+            c.place(anchor, px, pz, { batch: opt.batch, y: foot.bottom, solid: false, shadow: false });
+          }
+          foot.fixed = 'anchored';
+        }
+        return foot;
+      }
       const [w, h, d] = opt.fallback || [0.6, 0.8, 0.6];
       return c.crate(x, z, w, h, d, opt.rot || 0, [0.6, 0.55, 0.45], opt);
     },
@@ -520,6 +725,7 @@ function roomContext(world, rt) {
       const holder = new THREE.Group(), pv = opt.pivot || [0, 0, 0];
       holder.position.set(pv[0], pv[1], pv[2]);
       rt.group.add(holder);
+      if (moving) added.push(holder);
       c.after.push(() => {
         const geo = kit.geometry(batch, opt.unlit ? [] : rt.lights, opt.unlit ? [1.25, 1.25, 1.25] : rt.amb);
         if (!geo) return;
@@ -538,7 +744,7 @@ function roomContext(world, rt) {
     },
 
     /* ---- things that happen -------------------------------------------------------- */
-    add(object) { rt.group.add(object); return object; },
+    add(object) { rt.group.add(object); if (moving) added.push(object); return object; },
     /** Something E can be pressed at. { x, z, r?, label, use(), when?() } in room coordinates. */
     use(spec) {
       const p = toWorld(def, spec.x, spec.z);
@@ -794,30 +1000,53 @@ function roomContext(world, rt) {
 
     /* ---- done: bake and hand the meshes over ----------------------------------------- */
     finish() {
-      const add = (mesh, order = 0) => { mesh.renderOrder = order; mesh.matrixAutoUpdate = false; rt.group.add(mesh); return mesh; };
+      if (moving) separateFurniture();
+      const add = (mesh, order = 0, parent = rt.group) => { mesh.renderOrder = order; mesh.matrixAutoUpdate = false; parent.add(mesh); return mesh; };
+      const bake = (batch, make, order = 0, unlit = false) => {
+        let last = null;
+        for (const { batch: part, owner } of [{ batch }, ...(batches.get(batch)?.moving || [])]) {
+          const geo = unlit ? kit.plain(part) : kit.geometry(part, rt.lights, rt.amb);
+          if (geo) last = add(new THREE.Mesh(geo, make(geo)), order, owner?.group || rt.group);
+        }
+        return last;
+      };
       for (const [, m] of mapped) {
-        const geo = kit.geometry(m.batch, rt.lights, rt.amb);
-        if (geo) add(new THREE.Mesh(geo, kit.surface({ map: m.texture, room: rt.u, flick: geo.userData.flick, cutout: m.cutout, side: m.side })));
+        bake(m.batch, geo => kit.surface({ map: m.texture, room: rt.u, flick: geo.userData.flick, cutout: m.cutout, side: m.side }));
       }
-      const vg = kit.geometry(c.vox, rt.lights, rt.amb);
-      if (vg) add(new THREE.Mesh(vg, kit.surface({ vox: true, room: rt.u, flick: vg.userData.flick })));
-      const gg = kit.geometry(c.glass, rt.lights, rt.amb);
-      if (gg) add(new THREE.Mesh(gg, kit.surface({ vox: true, room: rt.u, flick: gg.userData.flick, alpha: 0.42 })), 3);
+      bake(c.vox, geo => kit.surface({ vox: true, room: rt.u, flick: geo.userData.flick }));
+      bake(c.glass, geo => kit.surface({ vox: true, room: rt.u, flick: geo.userData.flick, alpha: 0.42 }), 3);
       for (const [key, m] of shining) {
-        const geo = kit.plain(m.batch); if (!geo) continue;
-        const mesh = add(new THREE.Mesh(geo, kit.glowing(m.texture, m.power, m.rgb, m.opt)));
-        if (key === 'panel') { rt.panelMesh = mesh; rt.panelOn = mesh.material.color.clone(); }
+        const mesh = bake(m.batch, () => kit.glowing(m.texture, m.power, m.rgb, m.opt), 0, true);
+        if (key === 'panel' && mesh) { rt.panelMesh = mesh; rt.panelOn = mesh.material.color.clone(); }
       }
-      if (c.decals.idx.length) {
-        const q = c.decals, geo = kit.own(new THREE.BufferGeometry());
+      for (const { q, parent } of [{ q: c.decals, parent: rt.group }, ...furnitureGroups.map(f => ({ q: f.decals, parent: f.group }))]) {
+        if (!q.idx.length) continue;
+        const geo = kit.own(new THREE.BufferGeometry());
         geo.setAttribute('position', new THREE.Float32BufferAttribute(q.pos, 3));
         geo.setAttribute('uv', new THREE.Float32BufferAttribute(q.uv, 2));
         geo.setAttribute('color', new THREE.Float32BufferAttribute(q.col, 4));
         geo.setIndex(q.idx);
-        add(new THREE.Mesh(geo, kit.own(new THREE.MeshBasicMaterial({ map: kit.tex.blob(), vertexColors: true, transparent: true, depthWrite: false }))), 1);
+        add(new THREE.Mesh(geo, kit.own(new THREE.MeshBasicMaterial({ map: kit.tex.blob(), vertexColors: true, transparent: true, depthWrite: false }))), 1, parent);
       }
       rt.group.updateMatrixWorld(true);
       for (const fn of c.after) fn();
+      if (moving) for (const object of added) {
+        object.updateMatrixWorld(true);
+        // Added objects and c.dynamic holders are authored in room space.
+        // Measure there, so a quarter-turned room does not change ownership.
+        const box = new THREE.Box3();
+        object.traverse(child => {
+          if (!child.geometry?.attributes?.position) return;
+          child.geometry.computeBoundingBox();
+          const local = new THREE.Matrix4().copy(rt.group.matrixWorld).invert().multiply(child.matrixWorld);
+          box.union(child.geometry.boundingBox.clone().applyMatrix4(local));
+        });
+        if (box.isEmpty()) continue;
+        const foot = { x0: box.min.x, z0: box.min.z, x1: box.max.x, z1: box.max.z, bottom: box.min.y, top: box.max.y };
+        const f = furnitureGroups.find(f => f.type !== 'chair' && onFurniture(f.placement.foot, foot));
+        if (f) { f.group.add(object); f.top = Math.max(f.top, (def.y || 0) + foot.top); }
+      }
+      for (const f of furnitureGroups) f.group.updateMatrixWorld(true);
     },
     /** Hooks run once the light is baked (so moving things can ask how bright their spot is). */
     after: [],

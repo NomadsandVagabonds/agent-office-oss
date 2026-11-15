@@ -55,6 +55,15 @@ const CSS = `
   font: 700 calc(var(--ph, 600px) * 0.03)/1.3 ui-monospace, Menlo, Consolas, monospace; color: #15140f; background: #fff7cf; border-radius: .22em; box-shadow: 0 0 0 1px rgba(0, 0, 0, .5), 0 .1em .5em rgba(0, 0, 0, .5);
   opacity: 0; visibility: hidden; transition: opacity .15s ease; }
 .backrooms .br-use.on { opacity: .9; visibility: visible; }
+.backrooms .br-use.furniture { color: #f4f1e6; background: transparent; border-radius: 0; box-shadow: none;
+  text-shadow: 1px 1px 2px #111, -1px -1px 2px #111; font-size: clamp(12px, calc(var(--ph, 600px) * .025), 20px); }
+.backrooms .br-focus { position: absolute; left: 50%; top: 50%; width: 38px; height: 28px; transform: translate(-50%, -50%);
+  background: linear-gradient(currentColor,currentColor) left top / 9px 2px, linear-gradient(currentColor,currentColor) left top / 2px 9px,
+  linear-gradient(currentColor,currentColor) right top / 9px 2px, linear-gradient(currentColor,currentColor) right top / 2px 9px,
+  linear-gradient(currentColor,currentColor) left bottom / 9px 2px, linear-gradient(currentColor,currentColor) left bottom / 2px 9px,
+  linear-gradient(currentColor,currentColor) right bottom / 9px 2px, linear-gradient(currentColor,currentColor) right bottom / 2px 9px;
+  background-repeat: no-repeat; filter: drop-shadow(0 1px 1px #000); opacity: .8; }
+.backrooms .br-focus[hidden] { display: none; }
 .backrooms .br-leave { position: absolute; right: 10px; top: 8px; width: 34px; height: 34px; display: none; place-items: center; pointer-events: auto; font: 400 18px/1 ui-monospace, Menlo, Consolas, monospace; color: #fff; opacity: .28; }
 .backrooms.touch .br-leave { display: grid; }
 .backrooms.clean .br-osd { display: none; }
@@ -83,10 +92,11 @@ export function createHud(level) {
   const mode = h('span', 'PLAY ▶'), dot = h('span.br-dot', { style: { display: 'none' } });
   const counter = h('span', '0:00:00'), stamp = h('div.br-osd.bl'), flags = h('div.br-osd.brr'), held = h('div.br-osd.br-carry');
   const use = h('div.br-use', 'E'), leave = h('div.br-leave', '✕');
+  const focus = h('div.br-focus', { hidden: true, 'aria-hidden': 'true' });
   const batteryFill = h('i'), battery = h('span.br-batt', batteryFill);
   const warningGlyph = warningBattery(), warningCount = h('span.br-battery-count', { 'aria-hidden': 'true' });
   const warning = h('div.br-battery-warning', { hidden: true, role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' }, warningGlyph.svg, warningCount);
-  const frame = h('div.br-frame', h('div.br-osd.tl', dot, mode), h('div.br-osd.tr', 'SP  ', counter, battery), held, stamp, flags, use, warning);
+  const frame = h('div.br-frame', h('div.br-osd.tl', dot, mode), h('div.br-osd.tr', 'SP  ', counter, battery), held, stamp, flags, use, focus, warning);
   const el = h('div.backrooms', frame, leave);
   root.append(el);
 
@@ -131,7 +141,11 @@ export function createHud(level) {
       if (thumbs && screen) thumbs.layout({ ...screen, picture });
     },
     /** Show (or hide) the [E]: there is something here to use. */
-    hint(on, label = 'E') { if (!!on !== usable) { usable = !!on; use.classList.toggle('on', usable); thumbs?.set({ usable }); } if (on && use.textContent !== label) use.textContent = label; },
+    hint(on, label = 'E', furniture = false) {
+      if (!!on !== usable) { usable = !!on; use.classList.toggle('on', usable); thumbs?.set({ usable }); }
+      if (on && use.textContent !== label) use.textContent = label;
+      use.classList.toggle('furniture', on && furniture); focus.hidden = !(on && furniture);
+    },
     /** A word in the corner, the way a camcorder notes that its lamp is on. */
     flag(name, on) { if (on) flagSet.add(name); else flagSet.delete(name); flags.textContent = [...flagSet].join('  '); },
     /** The existing camcorder glyph is also the run's remaining battery. */

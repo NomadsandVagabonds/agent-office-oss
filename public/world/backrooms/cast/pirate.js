@@ -39,7 +39,7 @@ import { Batch, lamp, lin, drawText } from '../kit.js';
 import { makeRng, toWorld, roomDistances } from '../gen.js';
 import { P, clamp, turnTo } from '../bits.js';
 import { REACH, calm, beside } from '../reach.js';
-import { HUNT, knows, lost, shown, spent, handle, atHandle, willPeek, getsDown, lying } from './hunt.js';
+import { HUNT, BARRICADE, heave, knows, lost, shown, spent, handle, atHandle, willPeek, getsDown, lying } from './hunt.js';
 import { FIRE_FEAR, calm as unafraid, afraid, tooNear } from './fire.rule.js';
 import { ROAMING, roamsThisFloor, roamingRooms, roamingSpots } from './roaming.rule.js';
 
@@ -249,7 +249,7 @@ export function create(c) {
 
   function mascot(x, z, yaw, onPlinth) {
     pirate = Object.assign(makePirate(env.kit, R, level.pursuer?.face || 0), {
-      x, z, yaw, r: 0.26, tall: TALL, opens: true, speed: 1.9, state: 'still', know: lost(), got: null, handle: null, cross: null, down: null, spot: null, plinth: onPlinth, home: { x, z, yaw },
+      x, z, yaw, r: 0.26, tall: TALL, opens: true, pushes: true, speed: 1.9, state: 'still', know: lost(), got: null, handle: null, shove: null, cross: null, down: null, spot: null, plinth: onPlinth, home: { x, z, yaw },
       met: 0, unseen: 0, rolled: false, noise: 0.5, tearIn: 2 + R() * 3, tearFor: 0, lit: 0,
       patience: R.range(2.2, 4.5), wakeAt: R.range(150, 260), catchT: 0,
       near: calm(), body: { x, z, r: BODY },
@@ -425,7 +425,7 @@ export function create(c) {
   /** It has had you and you are still standing: a torn frame, and it is not there. Somewhere out of sight, not interested, for a while. */
   function breakOff(p) {
     env.interfere(1); env.hud.glitch(0.7); env.sound.play('static', { dur: 0.5 }); env.sound.play('thunk');
-    p.down = null; p.cross = null; p.near = calm(); p.handle = null; p.got = null; p.plinth = false; walk.forget(p);
+    p.down = null; p.cross = null; p.near = calm(); p.handle = null; p.shove = null; p.got = null; p.plinth = false; walk.forget(p);
     p.know = spent(); p.hunted = false; c.survived();
     for (const e of walk.exits(p).sort(() => Math.random() - 0.5)) {
       const at = walk.spotIn(p, e.room);
@@ -460,7 +460,7 @@ export function create(c) {
     const choosing = k0.mode === 'wander' && (k0.room === null || got.cannot);
     const k = p.know = knows(k0, dt, { los, d, me: { x: me.x, z: me.z, room: w.roomAt(me.x, me.z)?.id ?? null }, room: w.roomAt(p.x, p.z)?.id ?? null,
       at: !!got.there, cannot: !!got.cannot, exits: choosing ? walk.exits(p) : null });
-    if (k.mode !== k0.mode || k.room !== k0.room) { p.got = null; p.handle = null; }
+    if (k.mode !== k0.mode || k.room !== k0.room) { p.got = null; p.handle = null; p.shove = null; }
     if (k.mode === 'chase') p.hunted = true;
     if (k.gaveUp && p.hunted) { p.hunted = false; c.survived(); }                                  // it was after you, and it has lost you
     if (k.found) { env.interfere(0.6); env.hud.glitch(0.25); env.play('seek', p.x, p.z, 10); }      // it has seen you: the tape knows before you do
@@ -487,17 +487,38 @@ export function create(c) {
   /** Some of the way to wherever it is going, in `step` seconds. Never where it could be seen arriving. → how far it went. */
   function advance(p, step) {
     const to = goal(p), bx = p.x, bz = p.z;
-    if (!to) return 0;
+    if (!to) { p.shove = null; return 0; }
     const got = p.got = walk.go(p, to, p.speed * step, to.keep);
     if (!hiddenAt(p.x, p.z, p.r + 0.3)) { p.x = bx; p.z = bz; return 0; }          // it would have walked into view: it waits instead
     // a fire it can see is as far as it goes that way (cast/fire.rule.js): it stands off, and to hunt.js that is a way it cannot get by
-    if (tooNear(p, c.fire(p.x, p.z))) { p.x = bx; p.z = bz; p.got = { went: 0, there: false, cannot: true, door: null }; p.handle = null; return 0; }
+    if (tooNear(p, c.fire(p.x, p.z))) { p.x = bx; p.z = bz; p.got = { went: 0, there: false, cannot: true, door: null }; p.handle = null; p.shove = null; return 0; }
     if (got.door) {
       // a shut door: it works the handle, and you can hear it — unless you are watching the door (cast/hunt.js)
       const h = p.handle = handle(p.handle || atHandle(), step, env.doors.watched(got.door));
       if (h.rattle) env.play('rattle', got.door.x, got.door.z, 9);
       if (h.open) { env.doors.open(got.door, 'it'); p.handle = null; }
     } else p.handle = null;
+    // A desk across its path is time bought, not a stopped brain. The walker tries a detour first; at a real
+    // blockage it braces, rattles it, then slides it in small collision-checked steps. Looking at the mascot
+    // never enters advance(), and a frozen visitor, a spent hunter or fire cannot advance this clock either.
+    const item = got.obstacle;
+    p.shove = heave(p.shove, step, item, !env.player.me.frozen && !(p.know.spent > 0) && !p.fear?.flee);
+    if (item && p.shove && env.barricades) {
+      if (p.shove.knock) { env.play('creak', item.x, item.z, 9); p.hold(5); }
+      if (p.shove.shove > 0) {
+        const moved = env.barricades.shove(item, p, p.shove.shove)?.moved;
+        p.shove.stuck = moved ? 0 : p.shove.stuck + step;
+        if (moved && p.shove.t >= (p.shove.scrape || 0)) {
+          env.play(item.type === 'trolley' || item.type === 'chair' ? 'furnitureRoll' : 'furnitureScrape', item.x, item.z, 7);
+          p.shove.scrape = p.shove.t + 0.3;
+        }
+        p.yaw = Math.atan2(item.x - p.x, item.z - p.z);
+        if (p.shove.stuck >= BARRICADE.stuck) {
+          got.cannot = true;
+          if (got.link !== null) walk.avoid(p, got.link);             // a wall/player behind it: another route, never a shove through them
+        }
+      }
+    }
     return Math.hypot(p.x - bx, p.z - bz);
   }
 
@@ -505,7 +526,7 @@ export function create(c) {
   function flee(p, fear, seen, d, dt) {
     if (p.state !== 'awake') awaken(p, false);
     if (seen && d < 12) { p.met += dt; if (!p.known && p.met > 0.4) { p.known = true; c.met(); } }
-    p.down = null; p.cross = null; p.got = null; p.handle = null; p.unseen = 0; p.rolled = false;
+    p.down = null; p.cross = null; p.got = null; p.handle = null; p.shove = null; p.unseen = 0; p.rolled = false;
     const far = (x, z) => stand(p, x, z) && Math.abs(W().floorY(x, z) - W().floorY(p.x, p.z)) < 0.6;
     if (p.plinth) for (const turn of FIRE_FEAR.turns) {
       const x = p.home.x + Math.sin(fear.away + turn) * 0.95, z = p.home.z + Math.cos(fear.away + turn) * 0.95;
@@ -663,7 +684,7 @@ export function create(c) {
     },
     wake,
     /** Where it is and what it is doing (for the dev page). */
-    at() { return pirate ? { x: pirate.x, z: pirate.z, state: pirate.state, know: pirate.know.mode, making: pirate.know.room, down: !!pirate.down, handle: pirate.handle ? pirate.handle.t : null, room: W()?.roomAt(pirate.x, pirate.z)?.id ?? null, face: pirate.face, pose: pirate.pose, card: pirate.card ? pirate.card.held : null } : null; },
+    at() { return pirate ? { x: pirate.x, z: pirate.z, state: pirate.state, know: pirate.know.mode, making: pirate.know.room, down: !!pirate.down, handle: pirate.handle ? pirate.handle.t : null, barricade: pirate.shove ? { id: pirate.shove.id, time: pirate.shove.t } : null, room: W()?.roomAt(pirate.x, pirate.z)?.id ?? null, face: pirate.face, pose: pirate.pose, card: pirate.card ? pirate.card.held : null } : null; },
     get figure() { return pirate; },
     dispose() { if (pirate) { const i = W()?.bodies.indexOf(pirate.body); if (i >= 0) W().bodies.splice(i, 1); } pirate?.group.removeFromParent(); pirate = null; },
   };

@@ -6,6 +6,7 @@
 //   &x=0&z=2&yaw=0.6&pitch=-0.1   where to stand in that room's own frame (z = depth/2 is the door you came in by; yaw 0 looks in)
 //   &only=a,b          deal these archetypes into the visit      &count=6    how many oddities
 //   &vhs=0|1|2         clean · steady · full camcorder           &mute=1
+//   &barricades=1      ordinary chairs/desks/trolleys can be dragged; &study=1 puts a review set by the landing (seed=7)
 //   &pursuer=1|0       force the thing that follows you in or out; &wake=1 has it already awake, in the room with you
 //   &name=Robin        who you are                               &live=1     borrow names from the running office (GET only)
 //   &where=Portland    the place on the banner near the landing (banner.js); without it, what such banners say
@@ -108,7 +109,8 @@ async function go() {
     depth: q.has('depth') ? num('depth', 0) : undefined, depths: q.has('depths') ? num('depths', 3) : undefined,
     pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined, vhs: q.has('vhs') ? num('vhs', 2) : undefined, mute: q.has('mute') ? q.get('mute') !== '0' : undefined,
     debug: true, scorecard: q.get('card') !== '0', home: { label: 'Return to homepage' }, where: q.get('where') || undefined,
-    inventory: q.get('inventory') !== '0', dev: q.get('supplies') === '1' ? { supplies: true } : undefined,
+    inventory: q.get('inventory') !== '0', barricades: q.get('barricades') === '1',
+    dev: { supplies: q.get('supplies') === '1', barricadeStudy: q.get('barricades') === '1' && q.get('study') === '1' },
     onReady(handle) {
       if (room) handle.goto(/^\d+$/.test(room) ? Number(room) : room, q.has('x') ? num('x', 0) : undefined, q.has('z') ? num('z', 0) : undefined, num('yaw', 0), num('pitch', 0));
       else if (q.has('yaw')) { handle.player.me.yaw = num('yaw', 0); handle.player.me.pitch = num('pitch', 0); }
