@@ -83,7 +83,8 @@ export function build(c) {
     tex.needsUpdate = true;
   };
 
-  // ---- the cut-out of you that comes out of it
+  // ---- the cut-out of you that comes out of it. This is a spectral recording,
+  // not another physical resident: furniture cannot alter the recorded route.
   const who = c.env.who || {}, fig = c.add(makeCutout(kit, 'tape:' + (c.level.name || 'you'), who.look || {}, { creations: who.creations, name: c.level.name }));
   fig.visible = false;
 

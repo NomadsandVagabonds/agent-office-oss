@@ -8,6 +8,7 @@ import { lin } from '../kit.js';
 import { clamp, turnTo, card, framed, wetSign } from '../bits.js';
 import { buildItemProp } from '../hand.js';
 import { stepWalker, routeToward } from '../denizens.js';
+import { furnitureClear } from '../furniture-rules.js';
 import { WARDEN, createWardenState, stepWarden, releaseWarden } from './safety-corridor/rule.js';
 import { makeFloorWarden } from './safety-corridor/rig.js';
 
@@ -77,6 +78,7 @@ export function build(c) {
       const inRoom = c.world.current() === c.rt;
       const dist = Math.hypot(me.x - roamer.x, me.z - roamer.z);
       const clearLine = c.world.los(roamer.x, roamer.z, me.x, me.z);
+      const contactClear = furnitureClear(c.world, roamer.x, roamer.z, me.x, me.z, .035);
       if (!known && dist < 9 && c.env.sees(roamer.x, roamer.z, { radius: 0.5 })) { known = true; c.met('floor-warden'); }
 
       const res = stepWarden(rule, {
@@ -85,6 +87,7 @@ export function build(c) {
         playerSpeed: me.speed,
         insideRoom: inRoom,
         clearLine,
+        contactClear,
       });
       rule = res.state;
 

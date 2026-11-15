@@ -7,7 +7,7 @@
 // on. A visit is one roll: the same seed is the same company, on the same
 // floors, in the same rooms — and a seed is only ever given once (index.js:
 // the seed is the clock).
-import { makeRng, roomDistances } from './gen.js';
+import { makeRng, roomDistances, wallSpans } from './gen.js';
 
 /** What a creature is to the visitor. Only one that hunts may end a visit. */
 export const DISPOSITIONS = Object.freeze(['hunts', 'keeps to itself', 'helps']);
@@ -45,7 +45,8 @@ export const CAST_LESSONS = Object.freeze({
  *                lit beside it) | 'ignores' | 'drawn' (goes to it). Its own rule does it, with c.fire(x, z)
  *   caught       what it costs to be got by it: { hurt: points of health } (and with no health system, a creature that hunts ends the visit) ·
  *                { ends: true } only for one that hunts · { setback: 'in a sentence' } for the rest
- *   room         for home 'room': { w, d } the least floor it needs, metres; far: the fewest doorways from where you land (default 3)
+ *   room         for home 'room': { w, d } the least floor it needs, metres; far: the fewest doorways from where you land (default 3);
+ *                wall, clear: for one that hangs on a wall, the metres of it it needs, and how far that must be from any doorway
  *   music        'mascot': it has a piece of music of its own (sound.js), which is played once through from the moment a part's
  *                has first really been seen, and stopped early only if it is no more
  *   on           false: retired. It is out of the cast and nothing else has to change
@@ -65,6 +66,9 @@ export const ALL_CAST = Object.freeze([
   Object.freeze({ id: 'toner', name: 'The waste toner',
     rule: 'It clings to the ceiling and listens with clicks — crouch or stand still and it creeps past; walk upright and it drops, zigzags through crawlways, cannot work a door handle, and after hurting you twice melts into black sludge that soon hatches more of its kind.',
     disposition: 'hunts', home: 'roams', weight: 1, teaches: 'hush', needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 1 } }),
+  Object.freeze({ id: 'other-door', name: 'The other door',
+    rule: 'One pair of doors is not doors: it shivers, now and then, and that is all that gives it away. Try it, walk into it or stand in front of it too long, and it opens on nothing and takes hold of you.',
+    disposition: 'hunts', home: 'room', weight: 1, needs: ['doors'], items: ['paper', 'lighter'], fire: 'fears', room: { w: 4, d: 4, wall: 2.3, clear: 1.8 }, caught: { hurt: 2 } }),
 ]);
 export const CAST = Object.freeze(ALL_CAST.filter((m) => m.on !== false));
 /** How many of the others turn up in one visit, at most. */
@@ -111,13 +115,19 @@ export function castFor(visit, floor, cast = CAST) {
 
 /**
  * The room a creature that lives in one room lives in, on a floor: a plain room of the size it asked for, a little way in, that is not
- * where you land, not on the way out, not somewhere to crawl, and not the mascot's. Seeded by the floor. → room id, or null (none will do:
+ * where you land, not on the way out, not somewhere to crawl, not the mascot's, and not already somebody else's. Seeded by the floor. → room id, or null (none will do:
  * it is not on this floor after all), and null for anything that roams.
  */
 export function homeFor(level, member) {
   if (!member || member.home !== 'room') return null;
   const want = member.room || {}, far = roomDistances(level, level.start.room);
   const able = level.rooms.filter((r) => r.kind === 'plain' && !r.crawl && r.H >= 2.2 && !r.shape && !r.lows && !(level.pursuer && level.pursuer.room === r.id)
-    && (far.get(r.id) ?? 0) >= (want.far ?? 3) && Math.max(r.W, r.D) >= Math.max(want.w || 0, want.d || 0) && Math.min(r.W, r.D) >= Math.min(want.w || 0, want.d || 0));
-  return able.length ? makeRng(`${level.seed}/home/${member.id}`).pick(able).id : null;
+    && (far.get(r.id) ?? 0) >= (want.far ?? 3) && Math.max(r.W, r.D) >= Math.max(want.w || 0, want.d || 0) && Math.min(r.W, r.D) >= Math.min(want.w || 0, want.d || 0)
+    // (and, for one that hangs on a wall: a stretch of it that long, that far from any doorway)
+    && (!want.wall || ['back', 'front', 'left', 'right'].some((side) => wallSpans(r, side, want.clear ?? 0.3, 0).some(([a, b]) => b - a >= want.wall))));
+  if (!able.length) return null;
+  // no two of them have the same room: whoever is earlier on the list has the first pick of the floor
+  const mine = CAST.indexOf(member), theirs = new Set(mine > 0 ? CAST.slice(0, mine).filter((m) => m.home === 'room').map((m) => homeFor(level, m)) : []);
+  const free = able.filter((r) => !theirs.has(r.id));
+  return free.length ? makeRng(`${level.seed}/home/${member.id}`).pick(free).id : null;
 }

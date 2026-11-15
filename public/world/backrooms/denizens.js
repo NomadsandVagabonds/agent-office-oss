@@ -9,6 +9,7 @@
 // shut against it.
 import { makeRng } from './gen.js';
 import { populateAbsorbed } from './absorbed.js';
+import { furnitureClear } from './furniture-rules.js';
 
 /**
  * Step a walker `(a.x, a.z)` toward `(tx, tz)` by up to `dist` metres, sliding
@@ -20,6 +21,7 @@ export function stepWalker(world, a, tx, tz, dist, { closedDoor = null } = {}) {
     if (!world.free(x, z, a.r ?? 0.24, { ghost: true })) return false;
     if (world.headroom(x, z) < (a.tall ?? 1.45)) return false;
     if (!world.passable(a.x, a.z, x, z)) return false;
+    if (!furnitureClear(world, a.x, a.z, x, z, a.r ?? 0.24)) return false;
     if (closedDoor && Math.hypot(x - closedDoor.x, z - closedDoor.z) < 0.58) return false;
     return true;
   };
@@ -75,7 +77,20 @@ export function routeToward(world, ax, az, gx, gz, { needsOpenDoor = false } = {
 }
 
 export function createDenizens(env) {
-  const list = [];
+  const list = [], bodies = new Map();
+
+  function bodyFor(d) {
+    const world = env.world;
+    if (!env.barricadesEnabled || !world?.bodies || bodies.has(d)) return;
+    // Coordinate getters stay live even when a room's update runs after the
+    // player's drag. A vanished, airborne or spectral resident has no body.
+    const body = {
+      get x() { return d.x; }, get z() { return d.z; },
+      get r() { return d.r ?? 0.24; },
+      get on() { return !d.gone && !d.away && d.physical !== false && d.visible !== false; },
+    };
+    world.bodies.push(body); bodies.set(d, { world, body }); d.body = body;
+  }
 
   // Placement is not a behaviour tick. A newly built part is visible during
   // the fall, while its residents are frozen: put each in its room before
@@ -91,6 +106,7 @@ export function createDenizens(env) {
     d.light?.(d.sampleLight ? d.sampleLight(world) : world.lightAt(d.x, d.z, 1.0));
   }
   function attach(d) {
+    bodyFor(d);
     present(d);
     if (env.world && d.group && !d.group.parent) env.world.scene.add(d.group);
   }
@@ -128,7 +144,11 @@ export function createDenizens(env) {
     bringBack(key) { const back = list.filter((d) => d.away === key); for (const d of back) { d.away = null; present(d); } return back.length; },
     dispose() {
       for (const d of list) { d.dispose?.(); d.group?.removeFromParent(); }
-      list.length = 0;
+      for (const [resident, { world, body }] of bodies) {
+        const i = world.bodies.indexOf(body); if (i >= 0) world.bodies.splice(i, 1);
+        if (resident.body === body) delete resident.body;
+      }
+      bodies.clear(); list.length = 0;
     },
   };
   env.denizens = denizens;

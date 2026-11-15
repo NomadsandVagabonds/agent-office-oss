@@ -27,13 +27,13 @@ export const createCableState = () => ({
 /**
  * Advance the Trunk Line by `dt` seconds.
  * @param s  state from createCableState()
- * @param o  { dt, distToDrop, distToCreature, playerSpeed, insideRoom, doorBlocked, clearLine }
+ * @param o  { dt, distToDrop, distToCreature, playerSpeed, insideRoom, doorBlocked, clearLine, contactClear }
  */
 /** It had somebody, and they are still standing: it lets go and hangs back for a while before it comes on again. */
 export function releaseCable(s) { return { ...s, phase: 'recoiling', caught: false, rattleTimer: CABLE.recoil }; }
 
 export function stepCable(s, o) {
-  const { dt, distToDrop, distToCreature, playerSpeed = 0, insideRoom = false, doorBlocked = false, clearLine = true } = o;
+  const { dt, distToDrop, distToCreature, playerSpeed = 0, insideRoom = false, doorBlocked = false, clearLine = true, contactClear = true } = o;
   let woke = false, rattled = false, caught = s.caught;
   let { phase, dropProgress, rattleTimer } = s;
 
@@ -68,6 +68,6 @@ export function stepCable(s, o) {
   }
 
   rattleTimer = Math.max(0, rattleTimer - dt);
-  if (!caught && clearLine && distToCreature < CABLE.catchRadius) caught = true;
+  if (!caught && clearLine && contactClear && distToCreature < CABLE.catchRadius) caught = true;
   return { state: { phase, dropProgress: 1, rattleTimer, caught }, woke, rattled, caught, speed: caught ? 0 : CABLE.huntSpeed };
 }

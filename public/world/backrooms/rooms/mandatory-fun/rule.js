@@ -34,6 +34,7 @@ export function stepParty(s, o) {
     pastThreshold = false,
     holdingBalloon = false,
     minDist = Infinity,
+    contactDist = minDist,
   } = o;
 
   let { mode, hornTimer, dancePhase, caught } = s;
@@ -83,7 +84,7 @@ export function stepParty(s, o) {
       triggeredSwarm = true;
     }
     dancePhase += dt * 9.5;
-    if (!caught && minDist < PARTY.catchRadius) caught = true;
+    if (!caught && contactDist < PARTY.catchRadius) caught = true;
     return {
       state: { mode, hornTimer, dancePhase, caught },
       horn,

@@ -9,6 +9,7 @@ import { drawText } from '../kit.js';
 import { P, clamp, turnTo, framed, scatter } from '../bits.js';
 import { placePickup, buildItemProp, isPaper } from '../hand.js';
 import { stepWalker, routeToward } from '../denizens.js';
+import { furnitureClear } from '../furniture-rules.js';
 import { createPartnerState, stepPartner } from './audit-pod/rule.js';
 import { makeEfficiencyPartner } from './audit-pod/rig.js';
 
@@ -143,6 +144,8 @@ export function build(c) {
         const inRoom = c.world.current() === c.rt;
         const dist = Math.hypot(me.x - roamer.x, me.z - roamer.z);
         const handEmpty = !c.env.hand?.get();
+        const clearLine = c.world.los(roamer.x, roamer.z, me.x, me.z);
+        const contactClear = furnitureClear(c.world, roamer.x, roamer.z, me.x, me.z, .035);
 
         const res = stepPartner(rule, {
           dt,
@@ -150,6 +153,8 @@ export function build(c) {
           insideRoom: inRoom,
           handEmpty,
           acceptedViaUse,
+          clearLine,
+          contactClear,
         });
         const usedSwap = acceptedViaUse;
         acceptedViaUse = false;

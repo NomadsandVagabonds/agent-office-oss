@@ -20,7 +20,7 @@ export function createStalkers(env) {
   const walk = createWalk(env);
   const hiddenAt = (x, z, r = 0.6) => !env.sees(x, z, { radius: r, margin: 0.2, far: 40 });
   const drawn = (a) => { const rt = W().roomAt(a.x, a.z); return !!rt && rt.group.visible; };
-  let follower = null;
+  let follower = null, taker = null;                    // (taker: whoever's hit was the last heart — index.js asks, for the last shot)
 
   /* ---- who is on this floor ---------------------------------------------------------------- */
 
@@ -51,9 +51,12 @@ export function createStalkers(env) {
      * Without one, a creature that hunts ends the visit ('caught') and anything else does nothing: { landed: false, ended }.
      */
     hurt(n = 1) {
+      // (who it was is noted before the hit is made: the visit begins to end inside it, and asks)
+      const before = taker; taker = k;
       const hit = env.health?.damage(n);
-      if (hit) return { landed: !!hit.ok, dead: !!hit.dead, ended: !!hit.dead };
+      if (hit) { if (!hit.dead) taker = before; return { landed: !!hit.ok, dead: !!hit.dead, ended: !!hit.dead }; }
       if (member.disposition === 'hunts') { env.end('caught'); return { landed: true, dead: true, ended: true }; }
+      taker = before;
       return { landed: false, dead: false, ended: false };
     },
     /** Something E does, at a spot of the world: { x, z, r, when?(), use() }. It has to look as though it can be used: nothing says so. */
@@ -99,7 +102,8 @@ export function createStalkers(env) {
     if (follower || !env.player) return false;
     const at = c.toWorld(k.x, k.z);
     c.rt.group.remove(k.g); c.world.scene.add(k.g);
-    follower = { g: k.g, x: at.x, z: at.z, r: 0.2, tall: 1.3, opens: false, speed: 2.7, wait: 0, unseen: 0 };
+    follower = { g: k.g, x: at.x, z: at.z, r: 0.2, tall: 1.3, opens: false, speed: 2.7, wait: 0, unseen: 0, body: { x: at.x, z: at.z, r: 0.2 } };
+    W().bodies.push(follower.body);
     k.g.position.set(at.x, c.room.y, at.z);
     return true;
   };
@@ -113,6 +117,7 @@ export function createStalkers(env) {
     const bx = f.x, bz = f.z;
     walk.go(f, me, f.speed * step, 1.7);                                 // cardboard cannot work a door handle, or get down and crawl: shut a door on it and it waits
     if (!hiddenAt(f.x, f.z, f.r + 0.3)) { f.x = bx; f.z = bz; }
+    f.body.x = f.x; f.body.z = f.z;
     const went = Math.hypot(f.x - bx, f.z - bz);
     f.g.position.set(f.x, w.floorY(f.x, f.z), f.z);
     f.g.rotation.y = Math.atan2(me.x - f.x, me.z - f.z);
@@ -140,6 +145,8 @@ export function createStalkers(env) {
       return mine || Object.keys(others).length ? { ...(mine || {}), others } : null;
     },
     wake: (force) => pirate?.wake(force),
+    /** Whoever took the last heart, if it was one of the cast: { id, it } (it.takes(shot), where it has one, is what the building's camera shows). */
+    get taker() { return taker && !taker.dead ? { id: taker.id, it: taker.it } : null; },
     /**
      * A room has gone, and taken whoever was standing in it. (There are rooms that change the building: the hallway
      * that is not sure where it leads. The place does not wait for anybody to step out first.) `inside(x, z)` says
@@ -163,7 +170,11 @@ export function createStalkers(env) {
         for (const b of k.out) w.bodies.splice(w.bodies.indexOf(b), 1);
         gone.push(k.id);
       }
-      if (follower && !follower.away && inside(follower.x, follower.z)) { follower.away = key; follower.g.visible = false; gone.push('follower'); }
+      if (follower && !follower.away && inside(follower.x, follower.z)) {
+        follower.away = key; follower.g.visible = false;
+        const i = w.bodies.indexOf(follower.body); if (i >= 0) w.bodies.splice(i, 1);
+        gone.push('follower');
+      }
       return gone;
     },
     /** That room is back, and so is whoever was in it: where they stood, as they were. → who came back. */
@@ -177,7 +188,11 @@ export function createStalkers(env) {
         for (const b of k.out || []) if (!w.bodies.includes(b)) w.bodies.push(b);
         k.shown = k.out = null; back.push(k.id);
       }
-      if (follower && follower.away === key) { follower.away = null; follower.g.visible = drawn(follower); back.push('follower'); }
+      if (follower && follower.away === key) {
+        follower.away = null; follower.g.visible = drawn(follower);
+        if (!w.bodies.includes(follower.body)) w.bodies.push(follower.body);
+        back.push('follower');
+      }
       return back;
     },
     /** Who is away with a room, and which (for the dev page and the tests): { id: key }. */
@@ -188,6 +203,10 @@ export function createStalkers(env) {
     get follower() { return follower ? { x: follower.x, z: follower.z } : null; },
     get figure() { return pirate?.figure ?? null; },
     of: (id) => live.find((k) => k.id === id)?.it ?? null,
-    dispose() { for (const k of live) { try { k.it.dispose?.(); } catch { /* it is going anyway */ } } follower?.g.removeFromParent(); follower = null; },
+    dispose() {
+      for (const k of live) { try { k.it.dispose?.(); } catch { /* it is going anyway */ } }
+      if (follower) { const i = W().bodies.indexOf(follower.body); if (i >= 0) W().bodies.splice(i, 1); follower.g.removeFromParent(); }
+      follower = null;
+    },
   };
 }

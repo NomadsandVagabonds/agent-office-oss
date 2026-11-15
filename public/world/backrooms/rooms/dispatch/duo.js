@@ -1,5 +1,6 @@
 import { makeFreightFigure } from './figures.js';
 import { createFreightBehavior, makeFreightNavigator } from './behavior.js';
+import { furnitureClear } from '../../furniture-rules.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const angle = a => Math.atan2(Math.sin(a), Math.cos(a));
@@ -15,21 +16,39 @@ export function installFreightDuo(c, { home, loading, pickup, bounds }) {
     c.add(rig.group);
     return { rig, side, path: [], repath: 0, gait: i * 0.5, moving: false, arrived: true, gpuY: rig.heldGPU.position.y, gpuZ: rig.heldGPU.position.z };
   });
-  let nav = null;
+  let nav = null, navRevision = -1, disposed = false;
+  const bodies = c.env.barricadesEnabled ? (c.world.bodies ||= []) : null;
+  for (const f of figures) f.body = { ...c.toWorld(f.rig.group.position.x, f.rig.group.position.z), r: .25 };
+  const syncBody = f => Object.assign(f.body, c.toWorld(f.rig.group.position.x, f.rig.group.position.z));
   const free = (x, z) => {
     if (Math.abs(x) > c.W / 2 - 0.4 || Math.abs(z) > c.D / 2 - 0.4) return false;
     const w = c.toWorld(x, z);
-    return c.world.free(w.x, w.z, 0.25) && c.world.headroom(w.x, w.z) >= 1.85 && Math.abs(c.floorAt(x, z)) < 0.02;
+    return c.world.free(w.x, w.z, 0.25, { ghost: true }) && c.world.headroom(w.x, w.z) >= 1.85 && Math.abs(c.floorAt(x, z)) < 0.02;
   };
-  (c.env.ready ||= []).push(() => {
+  function refreshNavigation() {
+    const revision = c.world.furnitureRevision?.get(c.room.id) || 0;
+    if (nav && revision === navRevision) return;
+    navRevision = revision;
     nav = makeFreightNavigator({ W: c.W, D: c.D, free });
+    for (const f of figures) { f.path = []; f.repath = 0; }
+  }
+  (c.env.ready ||= []).push(() => {
+    if (disposed) return;
+    refreshNavigation();
     for (const f of figures) if (!free(f.rig.group.position.x, f.rig.group.position.z)) {
       const p = nav.nearest(f.rig.group.position); if (p) { f.rig.group.position.x = p.x; f.rig.group.position.z = p.z; }
     }
+    for (const f of figures) { syncBody(f); if (bodies && !bodies.includes(f.body)) bodies.push(f.body); }
   });
   const oldEnter = c.rt.onEnter, oldLeave = c.rt.onLeave;
   c.rt.onEnter = visits => { oldEnter?.(visits); behavior.notice(); figures.forEach(f => { f.path = []; f.repath = 0; }); };
   c.rt.onLeave = () => { oldLeave?.(); behavior.leave(); figures.forEach(f => { f.path = []; f.repath = 0; }); };
+  const beforeDispose = c.rt.group.userData.dispose;
+  c.rt.group.userData.dispose = () => {
+    if (disposed) return; disposed = true;
+    for (const f of figures) { f.body.on = false; const at = bodies?.indexOf(f.body) ?? -1; if (at >= 0) bodies.splice(at, 1); }
+    beforeDispose?.();
+  };
 
   function move(f, target, speed, dt) {
     const p = f.rig.group.position;
@@ -40,7 +59,8 @@ export function installFreightDuo(c, { home, loading, pickup, bounds }) {
     if (!goal) { f.moving = false; return; }
     const dx = goal.x - p.x, dz = goal.z - p.z, d = Math.hypot(dx, dz), step = Math.min(d, speed * dt);
     const x = p.x + dx / (d || 1) * step, z = p.z + dz / (d || 1) * step;
-    if (!free(x, z)) { f.path = []; f.repath = 0; f.moving = false; return; }
+    const from = c.toWorld(p.x, p.z), to = c.toWorld(x, z);
+    if (!free(x, z) || !furnitureClear(c.world, from.x, from.z, to.x, to.z, .25)) { f.path = []; f.repath = 0; f.moving = false; return; }
     p.x = x; p.z = z; f.moving = step > 0.0001;
     f.rig.group.rotation.y = turn(f.rig.group.rotation.y, Math.atan2(dx, dz), dt * 2.4);
     if (d <= step + 0.02) f.path.shift();
@@ -50,7 +70,8 @@ export function installFreightDuo(c, { home, loading, pickup, bounds }) {
     actors: figures.map(f => ({ x: f.rig.group.position.x, z: f.rig.group.position.z, yaw: f.rig.group.rotation.y, carrying: f.rig.heldGPU.visible, moving: f.moving })) }) };
   c.rt.dispatchDuo = debug;
   c.tick((dt, t, me) => {
-    if (me.world.frozen) return;
+    if (disposed || me.world.frozen) return;
+    refreshNavigation();
     const state = behavior.advance(dt, { arrived: figures.every(f => f.arrived) });
     for (const f of figures) {
       const { rig, side } = f, p = rig.group.position;
@@ -98,6 +119,7 @@ export function installFreightDuo(c, { home, loading, pickup, bounds }) {
       rig.head.rotation.x = (hugging ? 0.12 : 0) + loadingBend * 0.15;
       p.y = (f.moving ? Math.abs(Math.sin(f.gait)) * 0.012 : Math.sin(t * 0.7 + side) * 0.003);
       rig.updateLight?.(p.x, p.z);
+      syncBody(f);
     }
   });
   return debug;

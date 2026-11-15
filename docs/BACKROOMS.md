@@ -457,6 +457,20 @@ Things to know before they bite:
 - **Never where it can be seen arriving,** if its rule involves not being
   watched: move, then check `c.hidden` at where it got to, and put it back if
   it would have walked into view. The mascot does this every frame.
+- **The last three seconds are the building's.** When a hit through
+  `c.hurt` takes the last heart, the tape does not go straight to static.
+  The picture cuts to a fixed camera high in a corner of that room
+  (`lastshot.js`), with the visitor's own office character standing where
+  they stood, for three seconds; then static, then the card. Nobody of the
+  cast is run during it but the one who took them, and only through
+  `takes(shot)`, if what its `create` returns has one. `shot` is
+  `{ x, y, z, yaw, room, figure, seconds }`: the spot (`y` is the floor),
+  the room's id, the visitor's character (a THREE.Group, yours to move, turn,
+  shrink or hide) and how long there is. Return a function `(t, dt)` and it
+  is called ten times a second until `seconds`; return nothing and the
+  character goes down where it stands. No `c.hurt` and no `c.met` from
+  inside it. A flat battery, giving up and the way out end as they always
+  did, and a hit that is survived stays in first person.
 - **More than one body.** There are rooms that change the building and take
   whatever is in them (*A room the way out is through*). The conductor does
   this for you: it asks `at()` where you are, and if that is in the room it

@@ -151,6 +151,7 @@ export function stepAbsorbed(prev, {
   playerDrop = 0,
   struggling = false,
   clearLine = true,
+  contactClear = true,
   fire = false,
 }) {
   const s = { ...prev };
@@ -174,7 +175,7 @@ export function stepAbsorbed(prev, {
     const burn = struggling ? ABSORBED.struggleRate : 1.0;
     s.holdLeft -= dt * burn;
     // Also release if external warp moved player far away
-    if (s.holdLeft <= 0 || dist > (ABSORBED.reachRadius[s.mount] ?? 1.0) + 0.85) {
+    if (!contactClear || s.holdLeft <= 0 || dist > (ABSORBED.reachRadius[s.mount] ?? 1.0) + 0.85) {
       s.holdLeft = 0;
       s.phase = 'cooldown';
       s.cooldownLeft = ABSORBED.cooldownDuration;
@@ -182,7 +183,7 @@ export function stepAbsorbed(prev, {
     }
   } else {
     // 'idle' or 'reaching'
-    if (canGrabPlayer(s.mount, { dist, playerSink, playerDrop, clearLine })) {
+    if (contactClear && canGrabPlayer(s.mount, { dist, playerSink, playerDrop, clearLine })) {
       s.phase = 'grabbing';
       s.holdLeft = ABSORBED.holdDuration;
       s.grabCount += 1;

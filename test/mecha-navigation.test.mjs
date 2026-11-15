@@ -14,6 +14,7 @@ function lab(blocks = [], turns = 0) {
   const toWorld = (x, z) => ({ x: 31 + x * cos + z * sin, z: -17 - x * sin + z * cos });
   const toLocal = (x, z) => ({ x: (x - 31) * cos - (z + 17) * sin, z: (x - 31) * sin + (z + 17) * cos });
   const world = {
+    furnitureRevision: new Map([[0, 0]]),
     free(x, z, radius, opt) {
       calls.push({ radius, ghost: opt?.ghost });
       const p = toLocal(x, z);
@@ -22,7 +23,7 @@ function lab(blocks = [], turns = 0) {
     },
     passable: () => true,
   };
-  return { nav: createLabNavigation({ W, D, world, toWorld }), calls, W, D };
+  return { nav: createLabNavigation({ W, D, world, toWorld, room: { id: 0 } }), calls, world, W, D };
 }
 
 // Independent continuous geometry check: even a shortcut between safe grid
@@ -106,4 +107,21 @@ test('MECHA navigation: a passage narrower than the guard cannot be entered', ()
   ]);
   assert.equal(nav.free(0, 0), false, 'a .65m gap is narrower than the .72m guard');
   assert.deepEqual(nav.route({ x: 0, z: -3 }, { x: 0, z: 3 }), []);
+});
+
+test('MECHA navigation: moving a barricade invalidates only this room and opens a new route', () => {
+  const divider = { x0: -.15, z0: -5, x1: .15, z1: 5 }, cage = { x0: -1, z0: -1, x1: 1, z1: 1 };
+  const { nav, world, calls } = lab([divider, cage]);
+  const from = { x: -3, z: 0 }, to = { x: 3, z: 0 };
+  assert.deepEqual(nav.route(from, to), []);
+  divider.z0 = 2;
+  world.furnitureRevision.set(7, 1);
+  assert.deepEqual(nav.route(from, to), [], 'a different room does not rebuild this cached component');
+  world.furnitureRevision.set(0, 1);
+  const before = calls.length, route = nav.route(from, to);
+  assertSafeRoute(from, route, [divider, cage]);
+  assert.deepEqual(route.at(-1), to);
+  const rebuildCalls = calls.length - before, cachedBefore = calls.length;
+  nav.route(from, to);
+  assert.ok(calls.length - cachedBefore < rebuildCalls / 2, 'unchanged furniture retains the graph cache');
 });

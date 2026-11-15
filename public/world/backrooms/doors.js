@@ -34,6 +34,9 @@ export function doorRooms(level, link) {
   }).map((r) => r.id);
 }
 
+/** Which of the door colours a floor's doors are (0…3): the same for every pair on it, and for anything made to look like one. */
+export function doorTint(level) { return makeRng(`${level.seed}/doors`).int(0, 3); }
+
 /**
  * The doors of one floor.
  * @param level  from generate()
@@ -41,7 +44,7 @@ export function doorRooms(level, link) {
  *          stand open in · other: the room beyond · tint: which of the floor's door colours (0…)
  */
 export function doorPlan(level) {
-  const R = makeRng(`${level.seed}/doors`), tint = R.int(0, 3);
+  const R = makeRng(`${level.seed}/doors`), tint = R.int(0, 3);          // (the first roll: doorTint() below gives the same)
   const able = level.links.map((link) => ({ link, rooms: doorRooms(level, link) })).filter((k) => k.rooms.length);
   const n = Math.min(able.length, Math.max(DOORS.least, Math.round(able.length * DOORS.share)));
   return R.shuffle(able).slice(0, n).sort((p, q) => p.link.id - q.link.id).map(({ link, rooms }) => {
