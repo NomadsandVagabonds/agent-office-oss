@@ -5,22 +5,37 @@
 // this file): mostly air, played low and round and round under everything
 // else, and done without if it will not load. All of it is quiet on purpose,
 // starts only after you have touched something, and M turns it off.
+//
+// There is one more piece of the owner's (music/mascot.mp3): the mascot's.
+// It is played once through, in place of the other, from the moment a part's
+// mascot has first really been seen, and the other comes back up when it is
+// over. It is not fetched until that moment: most visits never hear it.
 
 /** How loud the music is, against a small sound's 0.1 to 0.2: under them, never over. */
 export const MUSIC_GAIN = 0.4;
+/** How loud the mascot's music is: it is what is happening, so it is over the place and not under it (and the file is the louder of the two). */
+export const MASCOT_GAIN = 0.45;
 const MUSIC = new URL('./music/room4.mp3', import.meta.url);
+const MASCOT = new URL('./music/mascot.mp3', import.meta.url);
 const volume = (value, fallback = 1) => Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback;
 export function createSound(level, opt = {}) {
   let ctx = null, master = null, effects = null, musicBus = null, humGain = null, draught = null, noiseBuf = null, muted = !!opt.mute, paused = false, humTarget = 1, hum = level.hum || 50;
   let musicVolume = volume(opt.musicVolume), sfxVolume = volume(opt.sfxVolume);
-  let music = null;                          // the <audio> the music comes out of, once there is one
+  let music = null, musicGain = null;        // the <audio> the music comes out of, once there is one, and its own level
+  let theme = null, themeGain = null, themeOn = false;      // the mascot's music, once it has been asked for · is it what is playing?
   const running = [], mains = [];            // things to stop at the end · the hum's oscillators, to retune
   const loops = new Map();                   // name → { gain, stop }
   const now = () => ctx.currentTime;
 
   function start() {
     if (paused) return;
-    if (ctx) { if (ctx.state === 'suspended') ctx.resume().catch(() => {}); if (music?.paused) music.play().catch(() => {}); return; }
+    if (ctx) {
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      if (music?.paused) music.play().catch(() => {});
+      // (a phone will not start a piece of music that was not asked for by a touch: the mascot's waits for the next one, which is this)
+      if (themeOn && theme?.paused) theme.play().catch(() => {});
+      return;
+    }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     try { ctx = new AC(); } catch { ctx = null; return; }
@@ -62,9 +77,49 @@ export function createSound(level, opt = {}) {
       const g = ctx.createGain(); g.gain.value = 0;
       ctx.createMediaElementSource(el).connect(g); g.connect(musicBus);
       g.gain.linearRampToValueAtTime(MUSIC_GAIN, now() + 6);                      // it comes up slowly, after the hum
-      music = el;
+      music = el; musicGain = g;
       el.play().catch(() => { /* no music, then: the place has its own noises */ });
-    } catch { music = null; }
+    } catch { music = null; musicGain = null; }
+  }
+
+  /**
+   * The mascot's music: once through, through the same dial as the other music (so its volume, M and the menu all
+   * apply), and the other gives way to it. → whether it began (false: it is already playing, or there is no sound).
+   */
+  function playMascot() {
+    if (!ctx || themeOn || opt.music === false || typeof Audio === 'undefined') return false;
+    try {
+      if (!theme) {
+        theme = new Audio(MASCOT.href); theme.loop = false; theme.preload = 'auto';
+        themeGain = ctx.createGain(); themeGain.gain.value = 0;
+        ctx.createMediaElementSource(theme).connect(themeGain); themeGain.connect(musicBus);
+        theme.addEventListener?.('ended', () => endMascot());
+        theme.addEventListener?.('error', () => endMascot(1));                    // (it would not load: the usual music, then)
+      }
+      try { theme.currentTime = 0; } catch { /* not loaded yet: it starts at the start anyway */ }
+      themeOn = true;
+      const t = now();
+      themeGain.gain.cancelScheduledValues(t); themeGain.gain.setValueAtTime(0, t); themeGain.gain.linearRampToValueAtTime(MASCOT_GAIN, t + 0.8);
+      if (musicGain) { musicGain.gain.cancelScheduledValues(t); musicGain.gain.setTargetAtTime(0, t, 0.5); }
+      if (!paused) theme.play().catch(() => { /* a phone wants a touch first: start() tries again at the next one */ });
+      return true;
+    } catch { themeOn = false; return false; }
+  }
+  /** The mascot's music is over (it ran out, or was stopped): the usual music comes back up over `rise` seconds. */
+  function endMascot(rise = 4) {
+    if (!themeOn) return;
+    themeOn = false;
+    if (!ctx || !musicGain) return;
+    const t = now();
+    musicGain.gain.cancelScheduledValues(t); musicGain.gain.setValueAtTime(0, t); musicGain.gain.linearRampToValueAtTime(MUSIC_GAIN, t + rise);
+  }
+  /** Stop the mascot's music before it has run out (there is no mascot any more): it fades, and the usual music comes back. */
+  function stopMascot() {
+    if (!themeOn || !theme || !ctx) return;
+    const el = theme, t = now();
+    themeGain.gain.cancelScheduledValues(t); themeGain.gain.setTargetAtTime(0, t, 0.4);
+    setTimeout(() => { if (!themeOn) { try { el.pause(); } catch { /* gone anyway */ } } }, 1800);
+    endMascot();
   }
 
   /** A burst of filtered noise. */
@@ -176,6 +231,9 @@ export function createSound(level, opt = {}) {
     get sfxVolume() { return sfxVolume; },
     /** Is the music going? (for the dev page and the tests) */
     get music() { return music ? { playing: !music.paused, at: music.currentTime } : null; },
+    /** The mascot's music: null until it has been asked for; then whether it is what is playing, and how far in. */
+    get mascotMusic() { return theme ? { playing: themeOn && !theme.paused, on: themeOn, at: theme.currentTime } : null; },
+    playMascot, stopMascot,
     setMute(m) { muted = !!m; if (master) master.gain.setTargetAtTime(muted ? 0 : 0.5, now(), 0.05); },
     setMusicVolume(value) { musicVolume = volume(value, musicVolume); if (musicBus) musicBus.gain.setTargetAtTime(musicVolume, now(), 0.05); },
     setSfxVolume(value) { sfxVolume = volume(value, sfxVolume); if (effects) effects.gain.setTargetAtTime(sfxVolume, now(), 0.05); },
@@ -185,8 +243,8 @@ export function createSound(level, opt = {}) {
       if (paused === next) return;
       paused = next;
       if (!ctx) return;
-      if (paused) { music?.pause(); ctx.suspend().catch(() => {}); }
-      else { ctx.resume().catch(() => {}); if (music?.paused) music.play().catch(() => {}); }
+      if (paused) { music?.pause(); theme?.pause(); ctx.suspend().catch(() => {}); }
+      else { ctx.resume().catch(() => {}); if (music?.paused) music.play().catch(() => {}); if (themeOn && theme?.paused) theme.play().catch(() => {}); }
     },
     /** Play one of the small sounds by name. */
     play(name, o) { if (ctx && !muted && !paused && voice[name]) { try { voice[name](o); } catch { /* a sound is never worth an error */ } } },
@@ -202,6 +260,8 @@ export function createSound(level, opt = {}) {
       for (const n of running) { try { n.stop(); } catch { /* already stopped */ } }
       running.length = 0; loops.clear();
       if (music) { try { music.pause(); music.removeAttribute('src'); music.load(); } catch { /* gone anyway */ } music = null; }
+      if (theme) { try { theme.pause(); theme.removeAttribute('src'); theme.load(); } catch { /* gone anyway */ } theme = null; }
+      themeOn = false; musicGain = themeGain = null;
       if (ctx) { const c = ctx; ctx = null; c.close().catch(() => {}); }
       master = effects = musicBus = humGain = draught = noiseBuf = null;
       mains.length = 0;

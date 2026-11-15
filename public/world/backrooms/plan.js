@@ -188,13 +188,15 @@ export function floorOf(visit, i) {
  * Which make of the building this is: a few letters and digits that are the same for as long as a seed gives the same
  * building, and change when it would not (a room added to the deck, a rule of the generator altered). A tape that is
  * kept says which make it was shot in (core/runs.mjs), so that whoever plays it back later can tell whether what they
- * are about to walk is what was walked. Worked out once, from a building nobody visits: its plan and its first two parts.
+ * are about to walk is what was walked. Worked out once, from a building nobody visits: its plan and every part of it.
+ * (Every part, and not the first two as it was: that building has the hallway in its last part, and when the hallway
+ * became the way out of its part the first two were as they had always been, and this said nothing had changed.)
  */
 let make = null;
 export function edition() {
   if (make) return make;
   const visit = planVisit('which make of the building is this', { name: 'Nobody' });
-  const parts = [0, 1].filter((i) => i < visit.depths).map((i) => {
+  const parts = visit.floors.map((_, i) => {
     const level = floorOf(visit, i);
     return [level.rooms.map((r) => [r.arch || r.kind, r.x, r.z, r.w, r.d, r.H]), level.links.length, level.start, level.exit];
   });
