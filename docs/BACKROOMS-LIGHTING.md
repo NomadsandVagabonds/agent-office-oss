@@ -1,85 +1,123 @@
-# Fluorescent banks — lighting prototype
+# Ambient lighting — review package
 
-Branch: `codex/backrooms-lighting`, based on the working branch at `e3a7cab`.
-Off by default. This is a first pass for judging atmosphere and flashlight
-usefulness before dealing it into public visits.
+Branch: `codex/backrooms-lighting-effects`, based on Fable's working branch at
+`a155afc`. Includes the first lighting pass (originally `04ad1c8`, carried onto
+this base as `f1db571`) and the follow-up effects. Merge this branch as a whole;
+it already includes the furniture work on that base. Lighting remains behind
+the dev flag, off in ordinary public visits.
 
 ## Try it
 
-On the normal development server:
+`/world/dev/backrooms.html?seed=9&lighting=travel&lightstudy=1&mute=1&vhs=1&pursuer=0`
 
-`/world/dev/backrooms.html?seed=7&lighting=failing&lightstudy=1&mute=1&vhs=1&pursuer=0`
+Choose room 13 for a narrow corridor on this review seed. The study panel lets
+you switch profiles, jump to an eligible room, replay a cycle, compare ceiling
+on/off, and give/select/toggle a real flashlight. **Hallway blackout** triggers
+the one-way sequence and leaves the banks dark; **Replay cue** clears it.
 
-The local study panel jumps between eligible rooms, switches between both banks
-working, one failed, and the seeded cycle, and gives/selects/toggles a real
-inventory flashlight. Its two percentages are the actual shader uniforms.
-The comparison panel is only on the dev page with `lightstudy=1`; it is not
-part of the game's HUD. The battery and normal gameplay clocks still run.
+For the backup fixtures, use seed 7, `lighting=emergency`, room 10. The
+**Steady ambient lights** checkbox also works in the actual Esc → Settings
+menu and saves with the other preferences. It holds the new effects steady
+and settles ordinary flickering tubes. It does not disable authored creature
+flashes or VHS effects and is not a comprehensive photosensitivity mode.
+The study controls are dev-only. Gameplay and camera battery still run.
 
-- `lighting=1`: normal distribution, about 70% of eligible rooms unchanged,
-  20% failing-bank rooms, 10% with a permanently dim side.
-- `lighting=failing` / `lighting=dim`: force that treatment in eligible rooms
-  so a reviewer can find examples easily.
-- Omit `lighting`: original lighting and camera response.
+| Flag | Treatment |
+| --- | --- |
+| `lighting=1` | Seeded mix: 70% of eligible rooms unchanged; 12% failing; 8% dim; 5% islands; 4% travel candidates; 1% emergency candidates. |
+| `lighting=failing` | One bank hesitates, goes out for about eight seconds, then slowly recovers. |
+| `lighting=dim` | One side remains at 78%, the other at 1.5%. |
+| `lighting=travel` | Three or four ceiling banks fail in sequence, 1.35 seconds apart, then recover. A passing cycle lasts 64–88 seconds. |
+| `lighting=islands` | One surviving tube, or two in a large ceiling; the others sit at 0.8%. No pulsing. |
+| `lighting=emergency` | Ceiling tubes at 1.8%, with real red wall fixtures. A broad 2.6-second pulse followed by a quiet interval; not a sharp strobe. |
+| omitted | Original lighting/camera response. |
 
-Only plain rooms with normal/dim lighting and at least two separable live
-fixtures qualify. Landings, exits, crawlspaces and authored special rooms keep
-their lighting. The lighting RNG is independent: switching the feature on
-does not reroll furniture, rooms, creatures or supplies.
+Natural travel candidates require a corridor at least 1.8 times as long as it
+is wide and at least three live panel rows. Other travel candidates become
+failing rooms. Emergency rooms are capped at one per part. Forced review
+profiles bypass that cap; forced travel also admits wide rooms, but still
+needs three rows. Actual effects are less frequent than the table across the
+whole building because protected/unsuitable rooms are excluded.
 
-## Behavior
+Only plain rooms with normal/dim light and at least two separable live panel
+rows qualify. Landings, exits, crawlspaces and authored special rooms keep
+their lighting. Original dead panels stay dead. Lighting has its own RNG;
+fixtures are added after furnishing without drawing from the room's RNG, so
+rooms, supplies, residents and furniture keep their seeded positions.
 
-Two spatial banks share a room's ceiling. One stays on; the other hesitates,
-recovers briefly, goes out for roughly eight seconds, then takes 2.5 seconds
-to restart. A cycle lasts 38–54 seconds, with a seeded phase, so the building
-is not constantly flashing. The dim treatment keeps one bank at 78% and the
-other at 1.5%. Original dead fixtures stay dead.
+## Shared behavior and integration
 
-Tube emission, baked direct/bounced light and moving-object light probes use
-the same bank strengths. Bank phases use visit time rather than frame count
-or visibility. Room/creature `setLights` effects temporarily override the
-banks; resetting to 1 restores the normal bank cycle. Existing flickering
-light probes now respect the actual flicker strength too.
-The parts visible below/above a way down update their banks without running
-their creatures, hazards or room-entry callbacks.
+Tube emission, baked light, probes, exposure and hum follow the bank state.
+Emergency fixtures have their own colored contribution and receive no generic
+ambient bounce. They use free wall spans; a small ceiling fixture is the
+fallback when all walls are occupied. They introduce no floor colliders.
 
-In the prototype, camera gain tops out at 1.65 rather than 2.3, and its weak
-automatic lamp is 8% rather than 30% of the flashlight. Exposure and hum follow
-the local bank. These are starting values for playtesting, not final balance.
+The visible parts above and below a way down update their lighting from the
+same visit clock without running their hazards, creatures or entry callbacks.
+`world.setLights(rt, k)` retains encounter priority: while k is not 1, ceiling
+banks are fully available to the encounter and red backup lamps go off.
+Restoring k=1 resumes the ambient state.
+
+Movable chairs, desks and trolleys use a shared light probe per carrier when
+the flag is on. The probe follows their current position, including across
+room boundaries. Carried voxel props, mapped surfaces and `c.dynamic` objects
+follow it too. Contact shadows and self-lit screens remain separate. This
+prevents a desk from carrying its old room's red bank with it.
+
+In the prototype the camera's automatic lamp is 8% of the flashlight (instead
+of 30%) and maximum gain is 1.65 (instead of 2.3). Darkness/supply balance and
+natural effect frequency still need longer playtesting.
+
+## Hook for the proposed hallway encounter
+
+An existing corridor built with a travel plan can be commanded with:
+
+```js
+world.startLightingCue(rt, { from: 'low', hold: true });
+// …when the encounter releases the corridor:
+world.clearLightingCue(rt);
+```
+
+`low` / `high` refers to the corridor's local lighting axis. The hook starts
+from the current visit time, runs once, and can hold the blackout indefinitely.
+It returns false on rooms without travel banks; it never changes baked bank
+assignments after construction. The steady-light preference still wins over
+ambient motion. The dev Hallway blackout button exercises this same hook.
+
+**Room to build next:** a long hall whose lights click out toward the player.
+A creature advances in darkness and stops only under the player's flashlight.
+Side alcoves offer escape decisions while the player manages the beam and its
+battery. Keep the approach readable and use a deliberate, held cue rather
+than the ambient repeating cycle. This package supplies the lighting hook;
+it does not add that creature, sound sequence or encounter room yet. An
+authored special room will need an explicit plan opt-in before its bake.
 
 ## Cost and limits
 
-This extends the existing bake. Two optional RGB vertex attributes hold each
-bank's contribution, with two runtime multipliers. There are no new per-frame
-lights, shadow maps or geometry rebuilds. Untouched rooms allocate neither
-bank attribute. Bounced light uses proximity to tubes, not a full transport
-simulation. Neighboring doorway spill remains baked; this does not add dynamic
-shadows or make furniture occlude the flashlight.
+The system extends the existing bake with two, three or four optional RGB
+vertex attributes and a few scalar multipliers. Untouched rooms allocate no
+bank attributes. Red fixtures add one emissive batch per emergency room plus
+small housing geometry. No new Three lights, shadow maps, per-frame geometry
+rebuilds or physics engine. Visible movable furniture adds one CPU light probe
+per carrier per frame; desktop/mobile frame time still needs measurement.
 
-A Node build of seed 7's 39 room shells, with the normal distribution, affected
-8 rooms: bank attributes occupied 280,896 bytes; total vertex attributes grew
-from 2,431,551 to 2,688,411 bytes, and mesh count from 223 to 230. This measures
-shell overhead only; it is not a full-game GPU/mobile benchmark. Real-world
-mobile frame time and longer flashlight/supply balance need playtesting.
+Bounced light uses proximity to ceiling tubes, not full light transport.
+Neighboring doorway spill remains baked, so an open doorway into a bright
+room will soften a corridor blackout. Furniture does not cast dynamic shadows
+or occlude the flashlight in this pass. Added custom meshes outside the normal
+catalogue/`c.dynamic` path retain their author's lighting behavior.
 
 ## Verification
 
-Seven lighting tests cover seeded distribution, unchanged layouts, encounter
-priority, continuous cycles at different sampling rates, bake reconstruction,
-spatial contrast, emissive independence, flicker probes, and actual world
-meshes/fixture uniforms. Lighting plus menu/battery-ending tests: 15/15.
-
-Full suite: 714/715. The status-line bridge usage test fails in this environment;
-it also fails in a clean archive of base `e3a7cab` (at a different assertion).
-The lighting change does not touch that code. The standalone build passes.
-
-Browser checks: working/failed bank comparison, real inventory flashlight
-on/off, and the cycling bank readout. No shader errors were reported.
-
-## Next decisions
-
-Judge how dark the failed side should be and how often it should appear before
-adding emergency lighting. The same bank system can later support a corridor
-outage or an authored breaker, while rare emergency fixtures would need a
-separate colored contribution and a reduced-flashing setting. Those effects
-are not part of this prototype.
+- Focused lighting, furniture integration, settings and menu tests: **28/28**.
+  Covers bank order/recovery, held cues, rarity/cap, seeded layout stability,
+  three/four-bank bake reconstruction, red probes, encounter priority,
+  multi-part lighting updates, and carried furniture crossing room boundaries.
+- Full suite: **793/794**. The status-line bridge test in `test/usage.test.mjs`
+  fails in this environment (line 197); the same test also fails on an untouched
+  archive of base `a155afc` (line 202). No usage/status-line code is changed.
+- Standalone build: **212 files**, successful.
+- Browser: corridor sequence, held blackout, flashlight on/off, emergency
+  fixtures, surviving light pool and the live steady-light control checked.
+  No shader errors reported. Browser-extension message-channel errors appeared
+  during page navigation; these are distinct from the game's shader logs.

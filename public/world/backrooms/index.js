@@ -281,6 +281,7 @@ async function visit(office, opt) {
       plan: office.net?.state?.world?.plan || {}, visit: plan, carry,
       barricadesEnabled: opt.barricades !== false,
       lighting: opt.dev?.lighting || false,
+      steadyLighting: () => settings.steadyLighting,
       where: cleanWhere(opt.where),             // a place name the page was told (the site's host says a city): the banner's second line, and nothing else's
       player: null, world: null, pursuer: null,
       hatches: new Map(),                       // room id → { drop() }: where a door in a floor lets you out
@@ -680,6 +681,7 @@ async function visit(office, opt) {
 
   // a way for the dev page (and the curious) to poke at it: always the floor you are on
   const handle = {
+    settings: () => settings, setSetting: changeSetting,
     vhs, hud, plan: () => plan, deck: DECK.map((a) => a.id),
     get level() { return cur?.level; }, get world() { return cur?.world; }, get player() { return cur?.player; }, get env() { return cur?.env; },
     get state() { return state; }, get paused() { return paused; }, menu, loot: purse, inventory, health: survival?.health, camera: survival?.camera, survival,
