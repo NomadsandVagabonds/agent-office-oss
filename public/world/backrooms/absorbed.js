@@ -341,6 +341,10 @@ export function populateAbsorbed(env, R) {
   // before anybody takes their place): none of them is put where a thing could not be picked up without being held.
   // (They move for the things, not the things for them: what the seed leaves, and where, is compared on a kept tape.)
   const things = (env.inventory?.physical?.report?.().items || []).filter((i) => i.active !== false && Number.isFinite(i.wx) && Number.isFinite(i.wz)).map((i) => ({ x: i.wx, z: i.wz }));
+  // …nor where one of the cast has just taken its place (they are placed first, and may be anywhere now that the mascot
+  // can start a part already walking): a creature will not set foot within half a metre of one of these (cast/walk.js),
+  // and one put down on top of it would leave it with nowhere to step.
+  const company = Object.values(env.pursuer?.cast?.() || {}).filter((at) => at && Number.isFinite(at.x) && Number.isFinite(at.z)).map((at) => ({ x: at.x, z: at.z }));
 
   const roster = rollAbsorbedRoster(R, targetCount + 3, cast || []);
   const shuffledRooms = R.shuffle(candidates);
@@ -357,7 +361,7 @@ export function populateAbsorbed(env, R) {
       if (!s) continue;
       if (Math.hypot(s.wx - start.x, s.wz - start.z) < 3.4) continue;
       if (placed.some((p) => Math.hypot(s.wx - p.x, s.wz - p.z) < 5.0)) continue;
-      if (!clearOfThings(s.wx, s.wz, things)) continue;
+      if (!clearOfThings(s.wx, s.wz, things) || !clearOfThings(s.wx, s.wz, company)) continue;
       spot = s;
       break;
     }
