@@ -182,9 +182,10 @@ export const INVENTORY_CSS = `
   height: 44px;
   max-width: 100%;
   object-fit: contain;
-  image-rendering: pixelated;
+  image-rendering: auto;
   filter: drop-shadow(1px 2px 1px #10170d88);
 }
+.br-inventory svg.br-inv-icon { image-rendering: pixelated; }
 .br-inventory .br-inv-count {
   position: absolute;
   bottom: 5px;

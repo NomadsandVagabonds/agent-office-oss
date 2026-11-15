@@ -92,9 +92,18 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
   }
   function itemGeometry(type) {
     if (!geometries.has(type)) {
-      const b = new Batch(true), s = kit.VOXEL;
-      b.addVox(kit.model(`inventory:${type}:v1`, INVENTORY_MODELS[type]).solid, new THREE.Matrix4().makeScale(s, s, s));
-      geometries.set(type, kit.geometry(b, [lamp(-1, 3, 1, [.4, .4, .4], { k: 8, far: 12, wrap: .5 })], [.8, .8, .8]));
+      const make = INVENTORY_MODELS[type], high = typeof make?.sculpt === 'function';
+      const b = new Batch(!high), s = kit.VOXEL;
+      if (high && Array.isArray(b.pos)) {
+        make.sculpt(b, s, { grounded: true });
+        geometries.set(type, kit.geometry(b, [
+          lamp(-1.4, 3.2, 1.6, [.48, .46, .42], { k: 10, far: 14, wrap: .45 }),
+          lamp(1.8, 1.9, -1.6, [.20, .22, .26], { k: 10, far: 14, wrap: .35 }),
+        ], [.78, .78, .80]));
+      } else {
+        b.addVox(kit.model(`inventory:${type}:v1`, make).solid, new THREE.Matrix4().makeScale(s, s, s));
+        geometries.set(type, kit.geometry(b, [lamp(-1, 3, 1, [.4, .4, .4], { k: 8, far: 12, wrap: .5 })], [.8, .8, .8]));
+      }
     }
     return geometries.get(type);
   }
@@ -120,7 +129,8 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
   function place(item, p, rotation = -.18) {
     let e = entries.get(item.id);
     if (!e) {
-      const mesh = new THREE.Mesh(itemGeometry(item.type), kit.surface({ vox: true, room: p.rt.u }));
+      const high = typeof INVENTORY_MODELS[item.type]?.sculpt === 'function';
+      const mesh = new THREE.Mesh(itemGeometry(item.type), kit.surface({ vox: !high, room: p.rt.u }));
       mesh.name = `inventory-${item.id}`;
       e = { item: copy(item), mesh, active: false };
       e.use = { r: REACH, label: label(item), inventoryItem: true,
