@@ -40,7 +40,8 @@ export function create(c) {
     group.userData.mat = mat;
     // a few rooms in from where you land, on the way you will want to go
     const path = roomPath(level, level.start.room, level.exit.room) || [level.start.room];
-    lamp = lampOf(path[Math.min(MOTH.far, path.length - 1)]); room = lamp.room;
+    // (or at a light of the room that asked for company: found there, it leads out of it and on the way down as it always does)
+    lamp = lampOf(c.haunt != null && level.rooms[c.haunt] ? c.haunt : path[Math.min(MOTH.far, path.length - 1)]); room = lamp.room;
     walker.x = lamp.x; walker.z = lamp.z; y = lamp.y;
     walker.flightY = env.world.floorY(walker.x, walker.z) + y - HALF;
     // Its first behaviour tick waits until the visitor lands. Even while
