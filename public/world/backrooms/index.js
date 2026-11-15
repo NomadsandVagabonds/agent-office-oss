@@ -418,6 +418,7 @@ async function visit(office, opt) {
     f.env.denizens?.sync();                              // (their picture is ready even while the fall holds their behaviour)
     vhs.setScene(root);
     if (f.level !== first) hud.setStamp(f.level.stamp);
+    sound.setDepth?.(f.level.depth);                          // (further down the music is another piece, and quieter: sound.js)
     sound.setMains(f.level.hum);
   }
   /**

@@ -323,7 +323,9 @@ back, and it is the only thing that walks into the crawl spaces.
 - **Cheap.** A few thousand triangles, lit by where it stands (`c.light`), a
   handful of meshes. No new audio files: `sound.js` voices only. (The two
   files the level does load are the owner's own music: `music/room4.mp3`,
-  played low under everything, and `music/mascot.mp3`, the mascot's. Those
+  played low under everything; `music/deep.mp3`, which takes its place from
+  the third part of a visit on, quieter still; and `music/mascot.mp3`, the
+  mascot's. Those
   were the owner's to add.)
 - **The mascot has music.** A line of the cast may say `music: 'mascot'`,
   and only the mascot's does. The piece begins the moment a part's mascot

@@ -343,6 +343,8 @@ export function createKit() {
       else if (look.pattern === 'blocks') { for (let y = 0; y < h; y += 8) { P(g, ink, 0, y, w, 1); P(g, pale, 0, y + 1, w, 1); for (let x = (y / 8) % 2 ? 8 : 0; x < w; x += 16) P(g, ink, x, y, 1, 8); } for (let i = 0; i < 30; i++) P(g, shade(wall, -0.07), (r() * w) | 0, (r() * h) | 0, 2, 1); }
       else if (look.pattern === 'board') { P(g, pale, 14, 0, 4, h); P(g, shade(wall, -0.05), 13, 0, 1, h); P(g, shade(wall, -0.05), 18, 0, 1, h); for (let y = 3; y < h; y += 8) { P(g, ink, 10, y, 1, 1); P(g, ink, 21, y, 1, 1); P(g, ink, 0, y + 4, 1, 1); } }
       else if (look.pattern === 'panel') { P(g, ink, 0, 0, w, 2); P(g, ink, 0, 0, 2, h); P(g, pale, 2, 2, w - 2, 1); P(g, pale, 2, 2, 1, h - 2); P(g, ink, 6, 6, w - 10, 1); P(g, ink, 6, 6, 1, h - 10); P(g, pale, 6, h - 5, w - 10, 1); P(g, pale, w - 5, 6, 1, h - 10); for (let x = 3; x < w; x += 3) P(g, shade(wall, (r() - 0.5) * 0.09), x, 2, 1, h - 2); }
+      // sky-blue emulsion (themes.js `suburb`): put on with a roller, in a hurry; the clouds are separate, and screwed on (suburb.js)
+      else if (look.pattern === 'sky') { for (let x = 0; x < w; x += 8) P(g, shade(wall, (r() - 0.5) * 0.04), x, 0, 8, h); for (let i = 0; i < 4; i++) P(g, shade(wall, 0.07), (r() * w) | 0, (r() * h) | 0, 2, 3 + ((r() * 4) | 0)); }
       else if (look.pattern === 'sprigs') { for (let y = 5; y < h; y += 16) for (let x = ((y - 5) / 16) % 2 ? 13 : 5; x < w; x += 16) { P(g, ink, x, y, 1, 4); P(g, ink, x - 1, y + 1, 3, 1); P(g, pale, x - 1, y - 1, 1, 1); P(g, pale, x + 1, y - 1, 1, 1); P(g, pale, x, y - 2, 1, 1); } }
       else { for (let y = 3; y < h; y += 8) for (let x = 0; x < w; x++) { const k = x % 8; P(g, ink, x, y + (k < 4 ? k : 7 - k), 1, 1); } }
     })),
@@ -354,7 +356,14 @@ export function createKit() {
       for (let y = 0; y < h; y += 2) for (let x = (y / 2) & 1 ? 1 : 0; x < w; x += 2) { const n = r(); if (n > 0.66) P(g, shade(color, 0.08), x, y, 1, 1); else if (n < 0.3) P(g, shade(color, -0.1), x, y, 1, 1); }
     })),
     /** What is underfoot on this floor of the building: carpet, mostly — but lino in Records, screed where they are still fitting out, and something deeper upstairs. */
-    floor: (look) => (look.floor === 'lino' ? T.lino(look.carpet) : look.floor === 'screed' ? T.screed(look.carpet) : look.floor === 'plush' ? T.plush(look.carpet, look.pale) : T.carpet(look.carpet)),
+    floor: (look) => (look.floor === 'turf' ? T.turf(look.carpet) : look.floor === 'lino' ? T.lino(look.carpet) : look.floor === 'screed' ? T.screed(look.carpet) : look.floor === 'plush' ? T.plush(look.carpet, look.pale) : T.carpet(look.carpet)),
+    /** Fake grass off a roll, 1.6 m wide: the stripes of a mown lawn are printed in, and the joins between rolls show. */
+    turf: (color) => tex('turf' + color, () => canvasTexture(64, 64, (g, w, h) => {
+      const r = lcg(parseInt(color.slice(1), 16) + 31);
+      P(g, color, 0, 0, w, h); P(g, shade(color, 0.05), 0, 0, w / 2, h);
+      for (let y = 0; y < h; y++) for (let x = (y & 1); x < w; x += 2) { const n = r(); if (n > 0.7) P(g, shade(color, 0.1), x, y, 1, 1); else if (n < 0.3) P(g, shade(color, -0.1), x, y, 1, 2); }
+      P(g, shade(color, -0.24), 0, 0, 1, h); P(g, shade(color, 0.1), 1, 0, 1, h);
+    })),
     /** Vinyl tiles, 0.4 m, two tones, laid chequerwise and scuffed where people turned. */
     lino: (color) => tex('lino' + color, () => canvasTexture(64, 64, (g, w, h) => {
       const r = lcg(parseInt(color.slice(1), 16) + 3);
