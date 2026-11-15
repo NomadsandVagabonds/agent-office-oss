@@ -1,4 +1,4 @@
-// Two carried objects, or one object and the built-in camera. Planning is
+// Two carried objects, or an object and camcorder equipment. Planning is
 // pure; the inventory performs the accepted effect before spending anything.
 import { CAMERA_TUNING } from './camera-state.js';
 
@@ -15,8 +15,8 @@ export const RECIPES = Object.freeze({
 
 const DESCRIPTIONS = Object.freeze({
   'missing-input': 'Choose two objects to combine.',
-  'invalid-input': 'Choose an object from a pocket or the camcorder.',
-  'stale-input': 'That object is no longer in this pocket. Choose it again.',
+  'invalid-input': 'Choose an object from a pocket or the camera equipment.',
+  'stale-input': 'That object is no longer here. Choose it again.',
   'duplicate-input': 'Choose two different objects.',
   incompatible: 'These objects do not combine.',
   'invalid-amount': 'Choose between one and ten sheets.',
@@ -36,6 +36,12 @@ const failure = (reason, plan = {}) => ({ ...plan, ok: false, reason, descriptio
 export function resolveCraftInput(snapshot, ref) {
   if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return failure('invalid-input');
   if (Object.hasOwn(ref, 'device')) {
+    if (ref.device === 'mounted-torch') {
+      if (Object.hasOwn(ref, 'slot') || typeof ref.id !== 'string' || !ref.id.trim()) return failure('invalid-input');
+      const torch = snapshot?.mountedTorch;
+      if (torch?.id !== ref.id || torch.type !== 'torch') return failure('stale-input');
+      return { ok: true, ref: { device: 'mounted-torch', id: torch.id }, type: 'torch', item: { ...torch } };
+    }
     if (ref.device !== 'camera' || Object.hasOwn(ref, 'slot') || Object.hasOwn(ref, 'id')) return failure('invalid-input');
     const camera = snapshot?.camera;
     if (!camera || !Number.isFinite(camera.remaining) || !Number.isFinite(camera.capacity)
@@ -85,7 +91,7 @@ export function previewCraft(snapshot, refs, { paperCount = 1 } = {}) {
     const out = plan('mount-torch'), torch = of('torch').item, camera = of('camera').camera;
     if (camera.depleted || camera.remaining === 0) return failure('depleted', out);
     if (!torch.prepared) return failure('not-prepared', out);
-    if (snapshot.mountedTorch === torch.id) return failure('already-mounted', out);
+    if (snapshot.mountedTorch?.id === torch.id) return failure('already-mounted', out);
     if (snapshot.mountedTorch) return failure('mount-occupied', out);
     return out;
   }

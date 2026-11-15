@@ -19,12 +19,12 @@ export const MENU_CSS = `
 .br-menu button:disabled, .br-menu select:disabled { cursor: default; opacity: .55; }
 .br-menu-picture { position: absolute; left: var(--px, 0px); top: var(--py, 0px); width: var(--pw, 100%); height: var(--ph, 100%); pointer-events: none; }
 .br-menu .br-menu-launcher {
-  position: absolute; top: 18%; right: 6%; min-width: 74px; min-height: 44px; padding: 8px;
-  display: flex; align-items: center; justify-content: center; gap: 8px; pointer-events: auto;
+  position: absolute; top: 18%; right: 6%; width: 44px; min-height: 44px; padding: 8px;
+  display: none; align-items: center; justify-content: center; pointer-events: auto;
   font: 400 12px/1.2 "IBM Plex Mono", monospace; opacity: .8;
 }
 .br-menu-launcher span { font: 400 19px/1 "Pixelify Sans", monospace; }
-.br-menu-launcher kbd { font: inherit; color: var(--menu-soft); }
+.backrooms.touch .br-menu-launcher { display: flex; }
 .br-menu.is-open .br-menu-picture { display: none; }
 .br-menu-overlay {
   position: absolute; inset: 0; display: grid; place-items: center; padding: clamp(14px, 5vmin, 52px);
@@ -98,7 +98,6 @@ export const MENU_CSS = `
   .br-menu-setting > label { font-size: 20px; }
   .br-menu-setting select { font-size: 16px; }
   .br-menu-picture .br-menu-launcher { min-width: 44px; right: 4%; }
-  .br-menu-launcher kbd { display: none; }
 }
 @container (max-height: 430px) {
   .br-menu-overlay { padding: 10px 22px; }

@@ -2,11 +2,11 @@
 // stands where you are about to look: in the next doorway, in the corner you
 // have not checked. It does nothing. You can hear it — a faint hiss of static,
 // from wherever it is — and you can see it perfectly well out of the corner of
-// your eye. What you cannot do is look straight at it: hold it in the middle
-// of the picture for a second or so and it whitens, and goes off like a
-// flashbulb. The tubes go, the room is dark for a while, and half of whatever
-// the camcorder had left in its battery is gone with it. Then it is somewhere
-// else, later. It is the mascot's rule inside out: him you must watch.
+// your eye. Hold it in the middle of the picture until it turns white: its
+// fuse is lit. Turn away before it goes off and it burns out for this floor.
+// Keep it in the picture and the flash takes half the camcorder's remaining
+// charge, blacks out the room, and leaves it free to return later. A glance
+// only warms it; looking back before the white fuse ends still costs you.
 //
 // The rule is watched(), in shadow.rule.js: pure, and tested against a made-up clock.
 import * as THREE from 'three';
@@ -69,25 +69,38 @@ export function create(c) {
     c.drain(SHADOW.drain);
     at = null; mesh.visible = false; close = false;
   }
+  function clear() {
+    // A small sound behind you is the confirmation. No screen flash, lost
+    // battery or blackout for getting the timing right, and no respawn.
+    if (at) c.play('static', at.x, at.z, 4);
+    at = null; mesh.visible = false; close = false;
+    c.survived();
+  }
 
   return {
     ready,
     update(dt) {
       if (!mesh) return;
       const m = me(), w = env.world;
-      let looked = false, d = Infinity;
+      let looked = false, exposed = false, d = Infinity;
       if (at) {
         const dx = at.x - m.x, dz = at.z - m.z; d = Math.hypot(dx, dz);
         mesh.visible = c.drawn(at);
         const cos = (-Math.sin(m.yaw) * dx - Math.cos(m.yaw) * dz) / Math.max(d, 0.01);
-        looked = mesh.visible && cos > Math.cos(SHADOW.cone + Math.atan2(0.25, d)) && Math.abs(m.pitch) < 0.7 && c.los(m.x, m.z, at.x, at.z);
+        const sight = mesh.visible && c.los(m.x, m.z, at.x, at.z);
+        looked = sight && cos > Math.cos(SHADOW.cone + Math.atan2(0.25, d)) && Math.abs(m.pitch) < 0.7;
+        exposed = sight && !c.hidden(at.x, at.z, 0.4);
       }
-      s = watched(s, dt, { placed: !!at, looked, d });
+      s = watched(s, dt, { placed: !!at, looked, exposed, d });
+      if (s.armed && at) c.play('click', at.x, at.z, 8);
       if (s.burst) burst();
+      else if (s.cleared) clear();
       else if (s.shift && (!at || c.hidden(at.x, at.z, 0.7))) { const was = at; if (!place() && s.mode === 'away') at = was; }
-      if (at && s.mode === 'lurk') {
-        // out of the corner of your eye it is a hole in the room; looked at, it whitens
-        const h = s.heat, L = c.light(at.x, at.z).map((v) => v * 0.012 * (1 - h) + h * h * h * 4);
+      if (at && (s.mode === 'lurk' || s.mode === 'armed')) {
+        // Grey while charging; a clear jump to white means the fuse is lit.
+        // It remains white even after the gaze leaves it, until it burns out.
+        const h = s.mode === 'armed' ? 1 : s.heat * 0.65;
+        const L = c.light(at.x, at.z).map((v) => v * 0.012 * (1 - h) + h * h * h * 4);
         mesh.material.uniforms.uTint.value.set(L[0], L[1], L[2]);
         if (h > 0) env.interfere(0.25 + 0.6 * h);
         // …and you can always hear where it is

@@ -5,9 +5,31 @@
 import * as THREE from 'three';
 import { Batch, lamp, drawText } from './kit.js';
 import { INVENTORY_MODELS } from './inventory-items.js';
+import { Vox, M } from '../vox/vox.js';
 import { KINDS, ITEM_IDS, isPaper, isBalloon, isFlashlight, createHandOver } from './items.js';
 
 export { ITEM_IDS, isPaper, isBalloon, isFlashlight };
+
+/** A right glove around the torch's rear grip; the sleeve continues off the picture. Held view only. */
+function torchGrip() {
+  const v = new Vox(), glove = M('#ac9c7d', 2), seam = M('#81765f', 2), knuckle = M('#c2b293', 2);
+  const sleeve = M('#465256', 3), cuff = M('#697371', 3), fold = M('#384446', 3);
+  v.rbox(3, -2, 1, 7, 5, 8, 1, glove);                     // palm on the right of the handle
+  for (const z of [1, 3, 5]) {                             // fingers curl underneath, up the far side
+    v.box(-4, -2, z, 5, 1, z + 2, glove);
+    v.box(-5, 0, z, -3, 4, z + 2, knuckle);
+    v.box(-4, -2, z, 4, -1, z + 1, seam);
+  }
+  v.box(2, 4, 3, 6, 7, 7, glove);                         // thumb rests behind the switch
+  v.box(0, 6, 3, 4, 8, 5, knuckle);
+  v.rbox(3, -5, 6, 9, 1, 12, 1, glove);
+  v.rbox(4, -8, 8, 11, -2, 15, 1, cuff);
+  v.rbox(6, -12, 11, 15, -5, 21, 1, sleeve);
+  v.rbox(10, -20, 17, 22, -9, 31, 1, sleeve);
+  v.box(7, -11, 13, 8, -6, 19, fold);
+  v.box(17, -17, 20, 19, -11, 28, fold);
+  return v;
+}
 
 /** Give a part of the building its hand (env.hand): the selected pocket, in the words its rooms use. */
 export function createHand(env) {
@@ -48,9 +70,22 @@ export function createHandView(env, camera) {
   function model(kind) {
     if (kind === 'pink-slip') return slip();
     const b = new Batch(true), s = (kit.VOXEL || 0.025) * (kind === 'balloon' ? 0.26 : 0.46);
-    b.addVox(kit.model(`inventory:${kind}:v1`, INVENTORY_MODELS[kind]).solid, new THREE.Matrix4().makeScale(s, s, s));
+    const item = kit.model(`inventory:${kind}:v1`, INVENTORY_MODELS[kind]).solid, scale = new THREE.Matrix4().makeScale(s, s, s);
+    b.addVox(item, scale);
+    if (kind === 'torch') b.addVox(kit.model('hand:torch-grip:v1', torchGrip).solid, scale);
     const mat = kit.surface({ vox: true }), mesh = new THREE.Mesh(kit.geometry(b, [lamp(-1, 3, 1, [0.4, 0.4, 0.4], { k: 8, far: 12, wrap: 0.5 })], [0.8, 0.8, 0.8]), mat);
-    mesh.rotation.set(0.25, kind === 'torch' ? 2.5 : -0.6, kind === 'paper' ? -0.2 : 0);
+    if (kind === 'torch') {
+      // The lens is local -Z, just like the camera. Look down its body, with the
+      // front aimed slightly inward/up and the wrist below the right edge.
+      mesh.rotation.set(0.12, 0.22, -0.08);
+      // A first-person grip is drawn over the room: pressing against a wall
+      // must not cut the torch or the visitor's own fingers out of the frame.
+      mat.transparent = true;
+      mesh.renderOrder = 10000;
+      item.computeBoundingBox();
+      return { mesh, mat, hold: [0.24, -0.22, -0.5], fitBounds: item.boundingBox.clone().applyMatrix4(scale) };
+    }
+    mesh.rotation.set(0.25, -0.6, kind === 'paper' ? -0.2 : 0);
     return { mesh, mat, hold: kind === 'balloon' ? [0.24, -0.2, -0.56] : [0.2, -0.12, -0.5] };
   }
   function fitPicture() {
@@ -65,11 +100,14 @@ export function createHandView(env, camera) {
     const bottom = p.h * (p.h <= 430 ? .96 : .97) - 54 - 10 - 17 - 12 - pad;
     if (!shown.bounds) {
       shown.mesh.geometry.computeBoundingBox();
+      // A sleeve must leave the frame, not be shrunk into another floating
+      // object. On phones fit the torch itself above the pockets, as before.
+      const bounds = shown.fitBounds || shown.mesh.geometry.boundingBox;
       shown.bounds = new THREE.Box3();
       const r = shown.mesh.rotation;
       for (const z of type === 'balloon' ? [-.09, 0, .21] : [r.z]) {
         const turn = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(r.x, r.y, z));
-        shown.bounds.union(shown.mesh.geometry.boundingBox.clone().applyMatrix4(turn));
+        shown.bounds.union(bounds.clone().applyMatrix4(turn));
       }
       shown.extent = shown.bounds.getSize(new THREE.Vector3());
     }
@@ -90,11 +128,31 @@ export function createHandView(env, camera) {
       if (want !== type) {
         if (shown) shown.mesh.visible = false;
         type = want; shown = null;
-        if (want) { if (!made.has(want)) { const m = model(want); m.mesh.onBeforeRender = () => { if (camera.userData.hand !== view) root.visible = false; }; made.set(want, m); root.add(m.mesh); } shown = made.get(want); shown.mesh.visible = true; }
+        if (want) {
+          if (!made.has(want)) {
+            const m = model(want);
+            m.mesh.onBeforeRender = renderer => {
+              if (camera.userData.hand !== view) root.visible = false;
+              // Keep the grip's own depth (fingers behind the handle), but discard
+              // the room's depth before drawing this final first-person mesh.
+              else if (want === 'torch') {
+                // The previous transparent room mesh may have disabled depth writes;
+                // WebGL also applies that mask to clear(), before our material is set.
+                renderer.state.buffers.depth.setMask(true);
+                renderer.clearDepth();
+              }
+            };
+            made.set(want, m); root.add(m.mesh);
+          }
+          shown = made.get(want); shown.mesh.visible = true;
+        }
       }
       root.visible = !!shown;
       if (!shown) return;
       if (!root.parent) env.world.scene.add(root);
+      // Two parts can be alive together. Hide the previous hand before Three
+      // builds its draw list, rather than relying on a late render callback.
+      if (camera.userData.hand !== view) camera.userData.hand?.hide();
       camera.userData.hand = view;
       fitPicture();
       const me = env.player.me, pace = Math.min(1, (me.speed || 0) / 2);
@@ -104,9 +162,10 @@ export function createHandView(env, camera) {
       shown.mesh.position.copy(at);
       if (type === 'balloon') shown.mesh.rotation.z = Math.sin(t * 0.5) * 0.09 + swing * 0.12;
       // lit by where you are standing — and a torch that is switched on is its own light
-      const L = env.world.lightAt(me.x, me.z, 1.2), on = type === 'torch' && item.lit, k = on ? 2.4 : 1.25, floor = on ? 0.5 : 0.16;
+      const L = env.world.lightAt(me.x, me.z, 1.2), on = type === 'torch' && item.lit, k = on ? 1.45 : 1.25, floor = on ? 0.22 : 0.16;
       shown.mat.uniforms.uTint.value.set(Math.max(floor, L[0] * k) * (on ? 1.1 : 1), Math.max(floor, L[1] * k), Math.max(floor, L[2] * k) * (on ? 0.85 : 1));
     },
+    hide() { root.visible = false; },
     dispose() { root.removeFromParent(); if (camera.userData.hand === view) camera.userData.hand = null; },
   };
   env.handView = view;

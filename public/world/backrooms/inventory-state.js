@@ -61,12 +61,13 @@ export function makeItem(type, id, overrides = {}) {
 export function createInventory({ size = 6 } = {}) {
   if (!Number.isInteger(size) || size < 1 || size > 6) throw new RangeError('Inventory has one to six slots.');
   const slots = Array(size).fill(null);
-  let selected = 0, activeTorch = null, mountedTorch = null, revision = 0, crafting = false;
+  let selected = 0, holstered = false, activeTorch = null, mountedTorch = null, revision = 0, crafting = false;
   const fail = reason => ({ ok: false, reason });
-  const read = () => ({ slots: slots.map(copy), selected, activeTorch, mountedTorch, revision });
+  const read = () => ({ slots: slots.map(copy), selected, holstered, activeTorch, mountedTorch: copy(mountedTorch), revision });
+  const activeLight = () => mountedTorch?.id === activeTorch ? mountedTorch : slots.find(item => item?.id === activeTorch);
   const torchPower = () => {
-    const torch = slots.find(item => item?.id === activeTorch);
-    return torch?.type === 'torch' && torch.charge > 0 && (activeTorch === mountedTorch || slots[selected]?.id === activeTorch) ? 1 : 0;
+    const torch = activeLight();
+    return torch?.type === 'torch' && torch.charge > 0 && (activeTorch === mountedTorch?.id || (!holstered && slots[selected]?.id === activeTorch)) ? 1 : 0;
   };
 
   function add(value) {
@@ -74,7 +75,7 @@ export function createInventory({ size = 6 } = {}) {
     let item;
     try { item = makeItem(value?.type, value?.id, value); }
     catch { return fail('invalid-item'); }
-    if (slots.some(other => other?.id === item.id)) return fail('duplicate');
+    if (mountedTorch?.id === item.id || slots.some(other => other?.id === item.id)) return fail('duplicate');
     const emptyIndex = slots.indexOf(null);
     if (item.type === 'paper') {
       // Transfer only what fits. The ground record keeps its identity if some
@@ -109,20 +110,22 @@ export function createInventory({ size = 6 } = {}) {
     if (index < 0) return null;
     const item = slots[index]; slots[index] = null;
     if (activeTorch === id) activeTorch = null;
-    if (mountedTorch === id) mountedTorch = null;
     revision++;
     return copy(item);
   }
-  function select(index) {
+  // Number keys can put an item away without changing its pocket. Clicking
+  // a pocket still equips it, even when that pocket was stowed.
+  function select(index, { toggle = false } = {}) {
     if (crafting) return false;
     if (!slotNumber(index, size)) return false;
-    if (selected !== index) { selected = index; revision++; }
+    const stow = toggle && selected === index && !!slots[index] && !holstered;
+    if (selected !== index || holstered !== stow) { selected = index; holstered = stow; revision++; }
     return true;
   }
   function useSelected({ canMark = true, heal } = {}) {
     if (crafting) return fail('busy');
     const item = slots[selected];
-    if (!item) return fail('empty');
+    if (holstered || !item) return fail('empty');
     if (['battery', 'paper', 'lighter', 'tape'].includes(item.type)) return { ok: true, action: 'combine', item: copy(item), index: selected };
     if (item.type === 'torch') {
       if (activeTorch === item.id) {
@@ -159,8 +162,9 @@ export function createInventory({ size = 6 } = {}) {
   /** F uses the mounted light first, otherwise the flashlight in hand. */
   function toggleLight() {
     if (crafting) return fail('busy');
-    const index = mountedTorch ? slots.findIndex(item => item?.id === mountedTorch) : selected;
-    const item = slots[index];
+    if (holstered && !mountedTorch) return fail('no-light');
+    const index = mountedTorch ? null : selected;
+    const item = mountedTorch || slots[index];
     if (item?.type !== 'torch') return fail('no-light');
     if (activeTorch === item.id) {
       activeTorch = null; revision++;
@@ -178,7 +182,7 @@ export function createInventory({ size = 6 } = {}) {
     if (type === null) return fail('invalid-item');
     if (!Number.isSafeInteger(amount) || amount <= 0) return fail('invalid-amount');
     const item = slots[selected];
-    if (!item) return fail('empty');
+    if (holstered || !item) return fail('empty');
     if (item.type !== type) return fail('wrong-item');
     const available = item.type === 'paper' ? item.quantity : 1;
     if (amount > available) return fail('insufficient');
@@ -187,7 +191,6 @@ export function createInventory({ size = 6 } = {}) {
     if (amount === available) {
       slots[selected] = null;
       if (activeTorch === item.id) activeTorch = null;
-      if (mountedTorch === item.id) mountedTorch = null;
     } else item.quantity -= amount;
     revision++;
     return { ok: true, action: 'consume', item: consumed, index: selected };
@@ -216,6 +219,13 @@ export function createInventory({ size = 6 } = {}) {
     if (!plan.ok) return plan;
     const of = type => plan.inputs.find(input => input.type === type);
     if (plan.recipe === 'torch-battery') {
+      if (of('torch').ref.device === 'mounted-torch') {
+        const source = of('battery');
+        mountedTorch.charge = ITEM_DEFS.torch.maxCharge;
+        slots[source.ref.slot] = null; revision++;
+        return { ok: true, recipe: plan.recipe, action: 'recharge', index: null, item: copy(mountedTorch),
+          consumed: [copy(source.item)], result: { item: copy(mountedTorch) } };
+      }
       const result = combine(of('battery').ref.slot, of('torch').ref.slot);
       return { ...result, recipe: plan.recipe, consumed: [copy(result.consumed)], result: { item: copy(result.item) } };
     }
@@ -228,10 +238,14 @@ export function createInventory({ size = 6 } = {}) {
         item: copy(slots[target.ref.slot]), result: { prepared: true } };
     }
     if (plan.recipe === 'mount-torch') {
-      mountedTorch = of('torch').item.id;
+      const source = of('torch');
+      // Equipment keeps its own charge and identity, but occupies no pocket.
+      // Leave selection in place: mounting the held torch leaves empty hands.
+      mountedTorch = slots[source.ref.slot];
+      slots[source.ref.slot] = null;
       revision++;
       return { ok: true, recipe: plan.recipe, action: 'mount-torch', consumed: [],
-        item: copy(of('torch').item), result: { mountedTorch } };
+        item: copy(mountedTorch), result: { mountedTorch: copy(mountedTorch) } };
     }
     const action = plan.recipe === 'camera-battery' ? 'recharge-camera' : 'ignite';
     const effect = plan.recipe === 'camera-battery'
@@ -260,7 +274,7 @@ export function createInventory({ size = 6 } = {}) {
   }
   function tick(dt) {
     if (crafting || !Number.isFinite(dt) || dt <= 0 || !torchPower()) return { changed: false, depleted: false };
-    const item = slots.find(item => item?.id === activeTorch);
+    const item = activeLight();
     if (!item) { activeTorch = null; revision++; return { changed: true, depleted: false }; }
     item.charge = Math.max(0, item.charge - dt);
     const depleted = item.charge === 0;
@@ -270,8 +284,8 @@ export function createInventory({ size = 6 } = {}) {
   }
   function clear() {
     if (crafting) return;
-    if (!slots.some(Boolean) && selected === 0 && activeTorch === null && mountedTorch === null) return;
-    slots.fill(null); selected = 0; activeTorch = null; mountedTorch = null; revision++;
+    if (!slots.some(Boolean) && selected === 0 && !holstered && activeTorch === null && mountedTorch === null) return;
+    slots.fill(null); selected = 0; holstered = false; activeTorch = null; mountedTorch = null; revision++;
   }
   return {
     add, remove, select, useSelected, consumeSelected, combine, craft, toggleLight, torchPower, tick, clear, read,

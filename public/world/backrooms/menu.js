@@ -7,7 +7,7 @@ import { BACKROOMS_DEFAULTS as DEFAULTS } from '/core/backrooms-settings.mjs';
 let instance = 0;
 const CONTROLS = [
   ['Walk', 'W A S D'], ['Look', 'Mouse / drag'], ['Run', 'Shift'], ['Crouch / jump', 'C / Space'],
-  ['Interact', 'E / Enter'], ['Select pocket', '1 – 6'], ['Inventory', 'I / Tab'], ['Use item', 'Q'],
+  ['Interact', 'E / Enter'], ['Select / stow pocket', '1 – 6'], ['Inventory', 'I / Tab'], ['Use item', 'Q'],
   ['Drop item', 'G'], ['Flashlight', 'F'], ['VHS picture', 'V'], ['Mute sound', 'M'], ['Pause menu', 'Esc'],
 ];
 
@@ -21,7 +21,7 @@ export function createMenu({ host, settings = {}, onRequestOpen, onResume, onGiv
   let values = { ...DEFAULTS, ...settings };
   const style = h('style', { id: `${prefix}-css` }, MENU_CSS);
   document.head.append(style);
-  const launcher = h('button.br-menu-launcher', { type: 'button', 'aria-label': 'Open pause menu', 'aria-expanded': 'false' }, h('span', 'Ⅱ'), 'Menu', h('kbd', 'Esc'));
+  const launcher = h('button.br-menu-launcher', { type: 'button', 'aria-label': 'Open pause menu', 'aria-expanded': 'false' }, h('span', { 'aria-hidden': 'true' }, 'Ⅱ'));
   const title = h('h2.br-menu-title', { id: `${prefix}-title` }, 'Paused');
   const close = h('button.br-menu-close', { type: 'button', 'aria-label': 'Resume recording', title: 'Resume' }, '×');
   const header = h('div.br-menu-header', h('div', h('span.br-menu-eyebrow', 'Ⅱ  RECORDING PAUSED'), title), close);

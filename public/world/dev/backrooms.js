@@ -10,8 +10,7 @@
 //   &name=Robin        who you are                               &live=1     borrow names from the running office (GET only)
 //   &where=Portland    the place on the banner near the landing (banner.js); without it, what such banners say
 //   &list=1            print the deck with links                 &map=1      show the floor plan
-//   &card=1            show the card at the end of the visit, as the office and the sample page do (here it is off unless asked for,
-//                      so that a script is never left waiting for somebody to put it down)
+//   &card=0            skip the end-of-visit scorecard for automated checks (normal play shows it, just like the public game)
 //   &inventory=0       without pockets, hearts or the camcorder's battery running down (they are on unless turned off)
 //   &supplies=1        one of everything that can be carried, on the floor where you land (for looking at them: a visit has only what its seed left lying about)
 //   &check=1           once the floor is up, one line on the console that a script can read — `[check] {…}`: for every oddity on it, how
@@ -108,7 +107,7 @@ async function go() {
     name: q.get('name') || 'Robin', seed, only: only.length ? only : undefined, count: q.has('count') ? num('count', 7) : undefined,
     depth: q.has('depth') ? num('depth', 0) : undefined, depths: q.has('depths') ? num('depths', 3) : undefined,
     pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined, vhs: q.has('vhs') ? num('vhs', 2) : undefined, mute: q.has('mute') ? q.get('mute') !== '0' : undefined,
-    debug: true, scorecard: q.get('card') === '1', where: q.get('where') || undefined,
+    debug: true, scorecard: q.get('card') !== '0', home: { label: 'Return to homepage' }, where: q.get('where') || undefined,
     inventory: q.get('inventory') !== '0', dev: q.get('supplies') === '1' ? { supplies: true } : undefined,
     onReady(handle) {
       if (room) handle.goto(/^\d+$/.test(room) ? Number(room) : room, q.has('x') ? num('x', 0) : undefined, q.has('z') ? num('z', 0) : undefined, num('yaw', 0), num('pitch', 0));
@@ -123,6 +122,7 @@ async function go() {
   window.__backroomsResult = result;
   stage.setView(null);
   document.title = `over: ${result.reason}`;
+  if (result.card) { location.assign('/'); return; }
   over.style.display = 'grid';
   over.innerHTML = `<div>the level is over: <b>${result.reason}</b><br>press any key for another visit</div>`;
   window.addEventListener('keydown', () => { if (!q.has('seed')) seed = Date.now(); else seed = `${seed}+`; go(); }, { once: true });
