@@ -47,10 +47,11 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     if (!result?.ok) { tell(result?.reason); return false; }
     env.sound.play(result.action === 'heal' ? 'rustle' : 'clack', { vol: .45 }); refresh(); return true;
   };
-  function select(index) { if (available() && model.select(index)) refresh(); }
+  function select(index, options) { if (available() && model.select(index, options)) refresh(); }
   function use() {
     if (!available()) return unavailable();
     const snapshot = model.read(), item = snapshot.slots[snapshot.selected];
+    if (snapshot.holstered) { tell('Hands empty'); return { ok: false, reason: 'empty' }; }
     // Put the mark into the world before spending chalk. A bad floor or failed
     // placement never consumes a use. This synchronous action cannot race UI.
     if (item?.type === 'chalk' && item.uses > 0) {
@@ -64,6 +65,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
   }
   function drop() {
     if (!available()) return unavailable();
+    if (model.read().holstered) { tell('Hands empty'); return { ok: false, reason: 'empty' }; }
     if (accepted(active.physical.dropSelected())) { view.cancelCombine(); refresh(); }
   }
   function combine(from, to) {
@@ -105,6 +107,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
   function held() {
     if (disposed) return null;
     const state = model.read(), item = state.slots[state.selected];
+    if (state.holstered) return null;
     return item?.type === 'torch' ? { ...item, lit: state.activeTorch === item.id && item.charge > 0 } : item;
   }
   const torchPower = () => disposed ? 0 : model.torchPower();
@@ -115,7 +118,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
   }
   function give(item) {
     if (!available()) return unavailable();
-    const wasEmpty = !held(), result = model.add(item);
+    const state = model.read(), wasEmpty = !state.holstered && !state.slots[state.selected], result = model.add(item);
     if (result.ok) {
       if (wasEmpty) model.select(result.index);
       refresh(); env.sound.play('clack', { vol: .45 });
@@ -274,7 +277,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
       if (view.handleKey(e)) return true;
       if (view.isOpen) return false; // Native focused-button activation stays native.
       const k = e.key.toLowerCase();
-      if (/^[1-6]$/.test(k)) { if (!e.repeat) select(Number(k) - 1); return true; }
+      if (/^[1-6]$/.test(k)) { if (!e.repeat) select(Number(k) - 1, { toggle: true }); return true; }
       if (k === 'q' || k === 'g') { if (!e.repeat) (k === 'q' ? use : drop)(); return true; }
       return false;
     },

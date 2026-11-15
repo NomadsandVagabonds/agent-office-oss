@@ -128,7 +128,8 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
     if (disposed || !rt || !item?.id || !Number.isFinite(x) || !Number.isFinite(z)) return { ok: false, reason: 'invalid-item' };
     try { item = makeItem(item.type, item.id, item); } catch { return { ok: false, reason: 'invalid-item' }; }
     if (!INVENTORY_MODELS[item.type]) return { ok: false, reason: 'invalid-item' };
-    if (entries.has(item.id) || model.read().slots.some(s => s?.id === item.id)) return { ok: false, reason: 'duplicate' };
+    const bag = model.read();
+    if (entries.has(item.id) || bag.mountedTorch?.id === item.id || bag.slots.some(s => s?.id === item.id)) return { ok: false, reason: 'duplicate' };
     const p = { ...point(rt, x, z), rt }, radius = ITEM_RADIUS[item.type];
     if (fires.occupied(p.wx, p.wz, radius, floorAt(p))) return { ok: false, reason: 'no-space' };
     if (y !== undefined && !Number.isFinite(y)) return { ok: false, reason: 'no-space' };
@@ -141,7 +142,7 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
   function dropSelected() {
     if (!available()) return { ok: false, reason: 'unavailable' };
     const s = model.read(), item = s.slots[s.selected];
-    if (!item) return notice('empty');
+    if (s.holstered || !item) return notice('empty');
     const spot = groundSpot(ITEM_RADIUS[item.type], false, ITEM_HEIGHT[item.type]);
     if (disposed || !spot) return notice('no-space');
     // Build/position before removing anything from the bag. Allocation failure

@@ -272,6 +272,19 @@ that builds it and works it; and one rule, kept where a test can run it.
 the worked example. The mascot is in every visit; everybody else is dealt
 from the visit's seed, two at most, a different two each time.
 
+The first floor keeps that original, quieter deal. On each later floor the
+mascot is already roaming: a seeded clear spot at least three doors and nine
+metres from arrival, with twelve playable seconds before it can move or
+attack. Falling does not spend that grace. It starts without knowing where
+the visitor is, and keeps its carried face/keycard; there is only one body.
+Explicitly quiet development visits still suppress it. `cast/roaming.rule.js`
+chooses usable full-height rooms beyond low arrival openings.
+
+Residents' meshes are positioned, lit and culled before they join a new
+floor's scene. Their behaviour remains frozen during descent, so an office
+avatar never appears at the landing merely because its first AI tick has
+not happened yet.
+
 ### What a creature is
 
 - **One rule, never stated, and not somebody else's.** A creature is a rule
@@ -432,8 +445,9 @@ warned before it costs them anything.
 ## The camcorder menu
 
 Esc opens the transparent camcorder menu; with the mouse captured, the
-browser's release of the mouse opens the same menu. A Menu button gives
-touch screens the same controls. Esc closes a submenu first, then resumes;
+browser's release of the mouse opens the same menu. A small pause icon gives
+touch screens the same controls; desktop play has no persistent menu hint.
+Esc closes a submenu first, then resumes;
 in the inventory it still closes the current card before opening the menu.
 
 The menu pauses the whole visit: its tally, creatures and room hazards,
@@ -471,22 +485,39 @@ part of the building, and they are on unless a visit is started with
   (`caught: { hurt: 2 }` for the mascot), not the whole visit; a snack puts
   one back. After a hit there is a moment in which nothing else lands.
 - **Nobody is handed anything.** What is lying about is decided by the seed
-  (`supplies.js`, pure): a battery pack to every four rooms or so, a snack or
-  two to a part, a torch more often than not where you land, chalk in about
-  half the parts — and anything else (paper, scissors, a balloon) only on a
-  floor where somebody wants it, which is the `items` of the cast dealt to
-  that floor. Nothing is left where you land, at the way down, or in a room
-  an earlier visitor left something in.
+  (`supplies.js`, pure): an early battery pack among the first four eligible
+  rooms, then one per eight rooms. A part has zero or one snack and zero or
+  one stack of 3–5 sheets. A torch is still likely in the first part (70%),
+  rarer below (20%); chalk and a reusable lighter each have a 25% chance,
+  tape 20%. Scissors and balloons are only scattered where somebody wants
+  them. These rates roughly halve common scattered pickups; authored room
+  props and creature gifts stay separate. Nothing is scattered where you
+  land, at the way down, or in a room an earlier visitor left something in.
 - **Spare packs are the currency.** The packs still in your pockets when you
   leave by the way out are `kept.batteries`, which is what the office pays
   for (`core/game.mjs`).
+- **Empty hands.** Press the number of the held pocket again to stow its
+  item; press it once more to hold it again. The item stays in its slot,
+  with no use, drop, or creature handoff while stowed. `I` can still inspect
+  that pocket. Picking something up does not undo an intentional stow.
+  A stowed loose torch neither shines nor drains; a mounted torch still works.
 - **Light.** The camcorder's own lamp still comes on in the dark, but it is a
   weak one. A torch in the hand is the light, wherever it is switched on,
   for as long as its own charge lasts. Its held model glows only when that
   particular torch is on, even if another torch is mounted and lit.
+- **Attached light.** Tape and the torch, then combine the prepared torch
+  with the camcorder. Mounting frees its pocket and keeps its charge and
+  switch state. `F` works with any pocket selected, including empty hands.
+  The **ATTACHED** row inside the bag shows its charge; choose **Fit batteries**
+  and a spare pack to recharge it. It is equipment now, so it cannot be
+  dropped or handed to a creature, and a second torch cannot be mounted.
 - **The held model.** On narrow pictures, it fits above the pocket bar and
   its caption, with room to bob while walking. This uses the actual picture
   size in both VHS and clean modes. Opening inspection or crafting hides it.
+  The torch points into the room in a gloved right hand, with its sleeve
+  continuing offscreen. Only the held torch gets this grip; floor pickups
+  and pocket icons keep their ordinary model. The grip draws after the room
+  so standing against a wall cannot cut it away.
 - **Nothing is written on the picture but `E`.** What a thing is, it has to
   look like; its name is said once it is in a pocket.
 

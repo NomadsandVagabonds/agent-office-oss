@@ -5,6 +5,7 @@ import { createCameraBattery } from '../public/world/backrooms/camera-state.js';
 import { CAMERA_INPUT, FIRE_SECONDS_PER_SHEET, resolveCraftInput, previewCraft } from '../public/world/backrooms/crafting.js';
 
 const ref = (model, slot) => ({ slot, id: model.read().slots[slot].id });
+const mountedRef = model => ({ device: 'mounted-torch', id: model.read().mountedTorch.id });
 const bag = (...items) => { const model = createInventory(); for (const item of items) model.add(item); return model; };
 const item = (type, id = type, data) => makeItem(type, id, data);
 const unchanged = (model, operation, reason) => {
@@ -157,17 +158,72 @@ test('tape prepares the same flashlight once while preserving charge and armed s
   for (const prepared of [1, null, 'true']) assert.throws(() => item('torch', 'bad', { prepared }), TypeError);
 });
 
-test('one prepared flashlight mounts to the camera without creating another inventory slot', () => {
+test('only one prepared flashlight can leave its pocket and mount to the camera', () => {
   const model = bag(item('torch', 'plain'), item('torch', 'ready', { prepared: true }), item('torch', 'other', { prepared: true }));
   const camera = createCameraBattery();
   unchanged(model, () => model.craft([ref(model, 0), CAMERA_INPUT], { camera }), 'not-prepared');
-  const result = model.craft([CAMERA_INPUT, ref(model, 1)], { camera });
+  const pocket = ref(model, 1), result = model.craft([CAMERA_INPUT, pocket], { camera });
   assert.equal(result.action, 'mount-torch'); assert.deepEqual(result.consumed, []);
-  assert.equal(model.read().mountedTorch, 'ready'); assert.equal(model.read().activeTorch, null);
-  assert.equal(model.read().slots.filter(Boolean).length, 3);
-  unchanged(model, () => model.craft([ref(model, 1), CAMERA_INPUT], { camera }), 'already-mounted');
+  assert.deepEqual(model.read().mountedTorch, item('torch', 'ready', { prepared: true }));
+  assert.equal(model.read().activeTorch, null); assert.equal(model.read().slots[1], null);
+  assert.equal(model.read().slots.filter(Boolean).length, 2);
+  unchanged(model, () => model.craft([pocket, CAMERA_INPUT], { camera }), 'stale-input');
+  unchanged(model, () => model.craft([mountedRef(model), CAMERA_INPUT], { camera }), 'already-mounted');
   unchanged(model, () => model.craft([ref(model, 2), CAMERA_INPUT], { camera }), 'mount-occupied');
   assert.equal(camera.read().remaining, 300);
+});
+
+test('mounting frees a usable pocket in a full bag and preserves charge, on-state, selection and holstering', () => {
+  for (const on of [false, true]) for (const holstered of [false, true]) {
+    const torch = item('torch', 'light', { charge: 37, prepared: true });
+    const model = bag(item('chalk'), item('lighter'), torch, item('tape'), item('battery'), item('scissors'));
+    const camera = createCameraBattery(), cameraBefore = camera.read();
+    model.select(2);
+    if (on) { model.toggleLight(); model.tick(4); }
+    if (holstered) model.select(2, { toggle: true });
+    const before = model.read(), pocket = ref(model, 2);
+    unchanged(model, () => model.add(item('snack')), 'full');
+    const result = model.craft([pocket, CAMERA_INPUT], { camera });
+    assert.equal(result.ok, true);
+    assert.deepEqual(model.read().mountedTorch, before.slots[2]);
+    assert.equal(model.read().slots[2], null); assert.equal(model.read().selected, 2);
+    assert.equal(model.read().holstered, holstered); assert.equal(model.read().activeTorch, on ? 'light' : null);
+    assert.equal(model.torchPower(), on ? 1 : 0);
+    assert.equal(model.add(item('snack')).index, 2);
+    assert.equal(model.read().slots.filter(Boolean).length, 6);
+    assert.equal(model.read().selected, 2); assert.equal(model.read().holstered, holstered);
+    assert.deepEqual(camera.read(), cameraBefore);
+    result.item.charge = 0; result.item.prepared = false;
+    before.slots[2].charge = 0; torch.charge = 0;
+    assert.equal(model.read().mountedTorch.charge, on ? 33 : 37);
+    assert.equal(model.read().mountedTorch.prepared, true);
+  }
+});
+
+test('mounted crafting inputs resolve exact equipment identity and return detached snapshots', () => {
+  const model = bag(item('torch', 'light', { charge: 23, prepared: true }), item('battery'));
+  const pocket = ref(model, 0), camera = createCameraBattery();
+  assert.equal(model.craft([pocket, CAMERA_INPUT], { camera }).ok, true);
+  const input = mountedRef(model), snapshot = model.read(), resolved = resolveCraftInput(snapshot, input);
+  assert.equal(resolved.ok, true); assert.equal(resolved.type, 'torch');
+  assert.deepEqual(resolved.ref, input); assert.deepEqual(resolved.item, snapshot.mountedTorch);
+  resolved.item.charge = 0; resolved.ref.id = 'changed';
+  assert.equal(input.id, 'light'); assert.equal(snapshot.mountedTorch.charge, 23);
+  snapshot.mountedTorch.charge = 0; snapshot.mountedTorch.id = 'changed';
+  assert.equal(model.read().mountedTorch.charge, 23); assert.equal(model.read().mountedTorch.id, 'light');
+  assert.equal(resolveCraftInput(model.read(), pocket).reason, 'stale-input');
+  assert.equal(resolveCraftInput(model.read(), { ...input, id: 'old' }).reason, 'stale-input');
+  for (const invalid of [{ device: 'mounted-torch' }, { ...input, id: '' }, { ...input, id: 1 }, { ...input, slot: 0 }]) {
+    assert.equal(resolveCraftInput(model.read(), invalid).reason, 'invalid-input');
+  }
+  unchanged(model, () => model.craft([input, input]), 'duplicate-input');
+  unchanged(model, () => model.craft([ref(model, 1), { ...input, id: 'old' }]), 'stale-input');
+  model.clear();
+  assert.equal(resolveCraftInput(model.read(), input).reason, 'stale-input');
+  model.add(item('torch', 'replacement', { charge: 10, prepared: true })); model.add(item('battery', 'replacement-pack'));
+  model.craft([ref(model, 0), CAMERA_INPUT], { camera });
+  unchanged(model, () => model.craft([input, ref(model, 1)]), 'stale-input');
+  assert.equal(model.read().mountedTorch.id, 'replacement');
 });
 
 test('an armed loose flashlight emits and drains only while its pocket is selected', () => {
@@ -180,36 +236,102 @@ test('an armed loose flashlight emits and drains only while its pocket is select
   assert.equal(model.read().slots[0].charge, 15); assert.equal(model.toggleLight().action, 'torch-off');
 });
 
+test('stowing an armed loose flashlight stops its beam and drain until reselected', () => {
+  const model = bag(item('torch', 'light', { charge: 20 }));
+  model.toggleLight(); model.tick(2); model.select(0, { toggle: true });
+  assert.equal(model.read().activeTorch, 'light'); assert.equal(model.torchPower(), 0);
+  const stowed = model.read(); model.tick(10); assert.deepEqual(model.read(), stowed);
+  unchanged(model, () => model.toggleLight(), 'no-light');
+  unchanged(model, () => model.useSelected(), 'empty');
+  model.select(0, { toggle: true }); assert.equal(model.torchPower(), 1); model.tick(3);
+  assert.equal(model.read().slots[0].charge, 15);
+});
+
+test('a mounted flashlight keeps working with empty hands and F still toggles it', () => {
+  const model = bag(item('torch', 'mounted', { charge: 20, prepared: true }));
+  model.select(0, { toggle: true });
+  model.craft([ref(model, 0), CAMERA_INPUT], { camera: createCameraBattery() });
+  model.toggleLight();
+  assert.equal(model.read().holstered, true); assert.equal(model.torchPower(), 1);
+  assert.equal(model.read().slots[0], null);
+  model.tick(3); assert.equal(model.read().mountedTorch.charge, 17);
+  assert.equal(model.toggleLight().action, 'torch-off'); assert.equal(model.torchPower(), 0);
+  const off = model.read(); model.tick(10); assert.deepEqual(model.read(), off);
+  assert.equal(model.toggleLight().action, 'torch-on'); assert.equal(model.torchPower(), 1);
+  assert.equal(model.read().holstered, true);
+});
+
 test('F prioritizes a mounted lamp, which keeps emitting while another item is held', () => {
   const model = bag(item('torch', 'mounted', { charge: 10, prepared: true }), item('torch', 'loose'), item('paper'));
   model.craft([ref(model, 0), CAMERA_INPUT], { camera: createCameraBattery() });
   model.select(2); assert.equal(model.toggleLight().item.id, 'mounted'); assert.equal(model.torchPower(), 1);
-  model.tick(2); assert.equal(model.read().slots[0].charge, 8);
+  model.tick(2); assert.equal(model.read().mountedTorch.charge, 8);
   model.select(1); model.useSelected(); assert.equal(model.read().activeTorch, 'loose'); model.tick(1);
-  assert.equal(model.read().slots[0].charge, 8); assert.equal(model.read().slots[1].charge, 179);
+  assert.equal(model.read().mountedTorch.charge, 8); assert.equal(model.read().slots[1].charge, 179);
   assert.equal(model.toggleLight().item.id, 'mounted'); assert.equal(model.read().activeTorch, 'mounted');
   assert.equal(model.toggleLight().action, 'torch-off'); assert.equal(model.torchPower(), 0);
 });
 
-test('drop and re-pick preserve preparation but clear mount and active beam; consumption and disposal do too', () => {
+test('mounted equipment cannot be dropped, handed off, or added again as a pocket item', () => {
   const camera = createCameraBattery(), model = bag(item('torch', 'light', { charge: 20, prepared: true }));
   model.craft([ref(model, 0), CAMERA_INPUT], { camera }); model.toggleLight(); model.tick(2);
-  const dropped = model.remove('light');
-  assert.equal(dropped.prepared, true); assert.equal(dropped.charge, 18);
-  assert.equal(model.read().mountedTorch, null); assert.equal(model.read().activeTorch, null);
-  model.add(dropped); assert.equal(model.read().mountedTorch, null);
-  assert.equal(model.craft([ref(model, 0), CAMERA_INPUT], { camera }).ok, true);
-  model.consumeSelected('torch'); assert.equal(model.read().mountedTorch, null);
-  model.add(dropped); model.craft([ref(model, 0), CAMERA_INPUT], { camera }); model.clear();
-  assert.equal(model.read().mountedTorch, null); assert.equal(model.torchPower(), 0);
+  const equipped = model.read();
+  assert.equal(model.remove('light'), null); assert.deepEqual(model.read(), equipped);
+  unchanged(model, () => model.consumeSelected('torch'), 'empty');
+  unchanged(model, () => model.useSelected(), 'empty');
+  unchanged(model, () => model.add(equipped.mountedTorch), 'duplicate');
+  unchanged(model, () => model.add(item('chalk', 'light')), 'duplicate');
+  model.add(item('chalk'));
+  unchanged(model, () => model.consumeSelected('torch'), 'wrong-item');
+  assert.equal(model.consumeSelected('chalk').ok, true);
+  model.add(item('torch', 'loose', { prepared: true }));
+  assert.equal(model.remove('loose').prepared, true);
+  assert.deepEqual(model.read().mountedTorch, equipped.mountedTorch);
+  assert.equal(model.read().activeTorch, 'light'); assert.equal(model.torchPower(), 1);
+  model.clear();
+  assert.equal(model.read().mountedTorch, null); assert.equal(model.read().activeTorch, null); assert.equal(model.torchPower(), 0);
+  assert.equal(model.add(equipped.mountedTorch).ok, true);
+  assert.equal(model.read().mountedTorch, null);
+});
+
+test('camera and mounted-light battery recipes recharge only the explicitly chosen device', () => {
+  for (const reversed of [false, true]) {
+    const model = bag(item('torch', 'light', { charge: 37, prepared: true }), item('battery', 'camera-pack'),
+      item('battery', 'light-pack'), item('battery', 'spare'));
+    const camera = createCameraBattery(); camera.tick(50);
+    model.craft([ref(model, 0), CAMERA_INPUT], { camera }); model.toggleLight();
+    const light = mountedRef(model), pair = (a, b) => reversed ? [b, a] : [a, b];
+    const cameraResult = model.craft(pair(ref(model, 1), CAMERA_INPUT), { camera });
+    assert.equal(cameraResult.recipe, 'camera-battery'); assert.equal(cameraResult.result.added, 120);
+    assert.equal(camera.read().remaining, 370); assert.equal(model.read().mountedTorch.charge, 37);
+    assert.deepEqual(cameraResult.consumed, [item('battery', 'camera-pack')]);
+    const refs = pair(ref(model, 2), light), snapshot = { ...model.read(), camera: camera.read() }, before = structuredClone(snapshot);
+    assert.equal(previewCraft(snapshot, refs).recipe, 'torch-battery'); assert.deepEqual(snapshot, before);
+    const cameraBefore = camera.read(), lightResult = model.craft(refs);
+    assert.equal(lightResult.ok, true); assert.equal(lightResult.recipe, 'torch-battery'); assert.equal(lightResult.action, 'recharge');
+    assert.deepEqual(lightResult.consumed, [item('battery', 'light-pack')]);
+    assert.equal(model.read().mountedTorch.charge, 180); assert.equal(model.read().mountedTorch.prepared, true);
+    assert.equal(model.read().activeTorch, 'light'); assert.equal(model.torchPower(), 1);
+    assert.deepEqual(camera.read(), cameraBefore);
+    lightResult.item.charge = 0; assert.equal(model.read().mountedTorch.charge, 180);
+    unchanged(model, () => model.craft(refs), 'stale-input');
+    unchanged(model, () => model.craft(pair(ref(model, 3), light)), 'full-charge');
+    assert.equal(model.read().slots[3].id, 'spare');
+  }
 });
 
 test('depleting a mounted lamp preserves its mount and recharging it does not silently switch it on', () => {
   const model = bag(item('torch', 'light', { charge: 1, prepared: true }), item('battery')), camera = createCameraBattery();
-  model.craft([ref(model, 0), CAMERA_INPUT], { camera }); model.select(1); model.toggleLight(); model.tick(2);
-  assert.equal(model.read().mountedTorch, 'light'); assert.equal(model.read().activeTorch, null);
+  model.craft([ref(model, 0), CAMERA_INPUT], { camera }); model.select(1); model.toggleLight();
+  assert.deepEqual(model.tick(2), { changed: true, depleted: true });
+  assert.deepEqual(model.read().mountedTorch, item('torch', 'light', { charge: 0, prepared: true }));
+  assert.equal(model.read().activeTorch, null); assert.equal(model.torchPower(), 0);
   unchanged(model, () => model.toggleLight(), 'empty-charge');
-  model.craft([ref(model, 1), ref(model, 0)]);
-  assert.equal(model.read().mountedTorch, 'light'); assert.equal(model.read().activeTorch, null);
+  assert.deepEqual(model.tick(2), { changed: false, depleted: false });
+  camera.tick(300);
+  assert.equal(model.craft([ref(model, 1), mountedRef(model)], { camera }).ok, true);
+  assert.equal(model.read().mountedTorch.id, 'light'); assert.equal(model.read().mountedTorch.charge, 180);
+  assert.equal(model.read().activeTorch, null); assert.equal(camera.read().remaining, 0);
+  const off = model.read(); model.tick(10); assert.deepEqual(model.read(), off);
   assert.equal(model.toggleLight().action, 'torch-on'); assert.equal(model.torchPower(), 1);
 });

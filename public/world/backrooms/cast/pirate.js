@@ -2,8 +2,10 @@
 // plinth somewhere in the level (cast.js: he is the one who is always down
 // here): a goblin dressed as a pirate, stiff as a shop dummy, arms held out
 // from its sides, with a face that did not come out right and is not the same
-// face the next time you look. Once you have met it and turned your back it
-// comes after you, but only ever while you are not looking: watch it and it is
+// face the next time you look. On the first floor, once you have met it and
+// turned your back it comes after you. Below that floor it is already roaming
+// after a short arrival grace, whether or not you found its plinth. It moves
+// only ever while you are not looking: watch it and it is
 // a mannequin. Across a room. It has a body, and nobody walks through it; and
 // the camcorder cannot hold a picture inside arm's reach of it. There the tape
 // tears, and it moves in the torn frames (reach.js): run past and you lose a
@@ -25,10 +27,9 @@
 // mascot is holding it: on a loop of ribbon, from one hand, held out. Walk up
 // and take it — from inside its reach, so be quick — which it notices, the
 // way it notices being looked at.
-// Stairs are no way of losing it, though they are slower for it if it had
-// already lost you: some time after you land on the next floor there is a
-// second thump under the same hole in the ceiling (env.carry: what it was
-// doing, and whether the card was still in its hand).
+// Going down is no way of losing it. On the next floor it is somewhere in
+// the maze, keeping its face and whatever card was still in its hand
+// (env.carry). It starts without knowing where you landed.
 // With a health system (env.health) a grab costs two points of four and it
 // lets go, and keeps away a while; without one a grab is the end of the tape.
 import * as THREE from 'three';
@@ -40,9 +41,10 @@ import { P, clamp, turnTo } from '../bits.js';
 import { REACH, calm, beside } from '../reach.js';
 import { HUNT, knows, lost, shown, spent, handle, atHandle, willPeek, getsDown, lying } from './hunt.js';
 import { FIRE_FEAR, calm as unafraid, afraid, tooNear } from './fire.rule.js';
+import { ROAMING, roamsThisFloor, roamingRooms, roamingSpots } from './roaming.rule.js';
 
 const SC = 1.25, S = 0.025 * SC;                 // sculpted chunkier than the furniture: one voxel is 3.1 cm
-const TALL = 1.62, PLINTH = 0.16, BODY = 0.3;        // BODY: how much floor it takes up, as a radius (with yours, that is REACH.touch)
+const TALL = ROAMING.tall, PLINTH = 0.16, BODY = 0.3; // BODY: how much floor it takes up, as a radius (with yours, that is REACH.touch)
 const SKIN = '#7ea04a', SKIN_D = '#56733a', BEARD = '#1e1a1c', FELT = '#4d311d', BRAID = '#b39245', COAT = '#b9923a', SHIRT = '#2c8a79';
 const BELT = '#221a16', GOLD = '#e2ba48', SASH = '#7f7392', BOOT = '#2b1d15', CLOTH = '#393843';
 const CARD = 0.02;                               // metres to a voxel of the keycard in its hand: a size down from the office's, or it would be a placard
@@ -236,7 +238,7 @@ function lowWays(world) {
 
 /**
  * The mascot, for one floor (the creature contract: docs/BACKROOMS.md, "Adding a creature"). He is made for every floor of every visit:
- * on the one the plan puts him on he has a plinth; on a floor below one he was awake on, he comes down the hole after you.
+ * on the one the plan puts him on he has a plinth; below the first floor he takes a safe roaming start in the maze.
  */
 export function create(c) {
   const env = c.env, level = env.level, R = makeRng(`${level.seed}/pursuer`);
@@ -308,9 +310,31 @@ export function create(c) {
         p.group.position.y = def.y; W().scene.add(p.group);
       }
     }
+    // Below the first floor there is always a real roamer. It is already in
+    // the maze, beyond any low entrance, rather than waiting on an unseen
+    // plinth for several minutes or never being made until a later floor.
+    const roaming = roamsThisFloor(level, env.visit) && takeTheFloor();
     if (pirate?.card) offer(pirate);
     // it was after you on the floor above: give it time to find the hole
-    if (!pirate && env.carry?.awake) arriving = { wait: env.carry.wait ?? (env.carry.lost ? R.range(45, 80) : R.range(16, 28)), face: env.carry.face || 0, card: !!env.carry.card, lost: !!env.carry.lost };
+    if (!roaming && !pirate && env.carry?.awake) arriving = { wait: env.carry.wait ?? (env.carry.lost ? R.range(45, 80) : R.range(16, 28)), face: env.carry.face || 0, card: !!env.carry.card, lost: !!env.carry.lost };
+  }
+
+  /** Start well away from the landing, without knowing where the visitor is. No second body or second keycard. */
+  function takeTheFloor() {
+    const body = { r: 0.26, tall: TALL, opens: true }, start = level.start;
+    for (const id of roamingRooms(level, walk.cost(body))) {
+      const at = [walk.spotIn(body, id), ...roamingSpots(level, id)].find(p => stand(body, p.x, p.z) && Math.hypot(p.x - start.x, p.z - start.z) >= ROAMING.near);
+      if (!at) continue;
+      const p = pirate || mascot(at.x, at.z, R.range(-3, 3), false), carried = env.carry?.awake ? env.carry : null;
+      p.x = at.x; p.z = at.z; p.plinth = false; p.home = { x: at.x, z: at.z, yaw: p.yaw };
+      p.body.x = p.x; p.body.z = p.z;
+      p.state = 'awake'; p.know = lost(); p.entryGrace = ROAMING.grace;
+      if (carried) { p.face = (carried.face || 0) % p.faces.length; p.show(); if (carried.card && !p.card) p.give(p.face % 2); }
+      p.group.position.set(p.x, W().floorY(p.x, p.z), p.z); p.group.visible = drawn(p);
+      p.light(W().lightAt(p.x, p.z, 1.0)); W().scene.add(p.group);
+      return true;
+    }
+    return false;
   }
 
   /** It comes down the way you did: under the hole you fell through, as soon as you are not there to see it land. */
@@ -508,6 +532,9 @@ export function create(c) {
     const dx = me.x - ex, dz = me.z - ez, d = Math.hypot(dx, dz);
     p.group.visible = drawn(p);
     if (!w.bodies.includes(p.body)) w.bodies.push(p.body);            // it has a body: nobody walks through it
+    // Let somebody find their feet after each descent. The arrival/fall does
+    // not spend this grace, and there is no attack or pursuit during it.
+    if (p.entryGrace > 0) { if (!me.frozen) p.entryGrace = Math.max(0, p.entryGrace - dt); return; }
     if (p.state === 'caught') {                                       // the last thing on the tape
       p.catchT += dt;
       me.yaw += turnTo(me.yaw, Math.atan2(dx, dz)) * (1 - Math.exp(-16 * dt));

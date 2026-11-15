@@ -11,6 +11,8 @@ import { CAMERA_TUNING, createCameraBattery } from '../public/world/backrooms/ca
 
 const office = { name: 'Robin', projects: ['Webstore', 'Mobile App', 'Infra'], agents: ['Ivory Marten', 'Amber Vireo', 'Ember Numbat', 'Olive Heron'], tasks: ['Cache the product catalogue'] };
 const floors = (n) => { const out = []; for (let s = 1; s <= n; s++) { const v = planVisit(`supply-${s}`, office); for (let i = 0; i < v.depths; i++) out.push(floorOf(v, i)); } return out; };
+const part = (seed, depth, eligible = 22) => ({ seed: `often-${seed}`, depth, start: { room: 0 }, exit: { room: eligible + 1 },
+  rooms: Array.from({ length: eligible + 2 }, (_, id) => ({ id, kind: id === 0 ? 'start' : id === eligible + 1 ? 'exit' : 'plain', dress: [] })) });
 
 test('what is lying about is decided by the seed and by nothing else', () => {
   for (const level of floors(6)) {
@@ -35,10 +37,11 @@ test('nothing is left where you land, at the way down, or in a room an earlier v
   assert.ok(traced > 10, 'the floors tried had traces on them');
 });
 
-test('how much: a battery pack to every few rooms, a snack or two, at most one torch and one chalk, and every one can be made', () => {
+test('how much: an early battery then spaced refills, at most one snack and paper stack, and every find can be made', () => {
   for (const level of floors(40)) {
     const plan = planSupplies(level), of = (type) => plan.filter((s) => s.type === type);
-    assert.equal(of('battery').length, Math.ceil(supplyRooms(level).length / SUPPLY.batteryEvery));
+    const eligible = supplyRooms(level).length;
+    assert.equal(of('battery').length, eligible ? 1 + Math.ceil(Math.max(0, eligible - SUPPLY.batteryFirst) / SUPPLY.batteryEvery) : 0);
     assert.ok(of('snack').length >= SUPPLY.snacks[0] && of('snack').length <= SUPPLY.snacks[1]);
     assert.ok(of('torch').length <= 1 && of('chalk').length <= 1);
     for (const t of of('torch')) assert.ok(t.charge >= SUPPLY.torchCharge[0] && t.charge <= SUPPLY.torchCharge[1] && t.charge < ITEM_DEFS.torch.maxCharge, 'a found torch is never a full one');
@@ -49,10 +52,8 @@ test('how much: a battery pack to every few rooms, a snack or two, at most one t
   }
 });
 
-test('how often: a torch more often than not where you land, less so further down, chalk in about half the parts', () => {
+test('how often: preserve the first torch opportunity but make spare tools and crafting materials rarer', () => {
   // (the chances are the plan's own arithmetic, so it is asked about a thousand made-up parts: enough to hold it to its margins)
-  const part = (seed, depth) => ({ seed: `often-${seed}`, depth, start: { room: 0 }, exit: { room: 23 },
-    rooms: Array.from({ length: 24 }, (_, id) => ({ id, kind: id === 0 ? 'start' : id === 23 ? 'exit' : 'plain', dress: [] })) });
   const share = (depth, type) => { let n = 0; for (let s = 0; s < 1000; s++) n += planSupplies(part(s, depth)).filter((x) => x.type === type).length; return n / 1000; };
   const top = share(0, 'torch'), low = share(2, 'torch'), chalk = share(1, 'chalk'), lighter = share(1, 'lighter'), tape = share(1, 'tape');
   assert.ok(Math.abs(lighter - SUPPLY.lighter) < 0.06, `a lighter in ${Math.round(lighter * 100)} of 100`);
@@ -60,6 +61,34 @@ test('how often: a torch more often than not where you land, less so further dow
   assert.ok(Math.abs(top - SUPPLY.torch[0]) < 0.06, `a torch where you land in ${Math.round(top * 100)} of 100`);
   assert.ok(Math.abs(low - SUPPLY.torch[1]) < 0.06, `a torch further down in ${Math.round(low * 100)} of 100`);
   assert.ok(Math.abs(chalk - SUPPLY.chalk) < 0.06, `chalk in ${Math.round(chalk * 100)} of 100`);
+});
+
+test('sparser supplies retain an early battery opportunity and refill coverage even on a small floor', () => {
+  for (const eligible of [0, 1, 4, 5, 12, 20, 36]) {
+    const level = part(`coverage-${eligible}`, 1, eligible), batteries = planSupplies(level).filter(s => s.type === 'battery');
+    if (!eligible) { assert.deepEqual(planSupplies(level), []); continue; }
+    const first = batteries[0];
+    assert.ok(first.rooms.length > 0 && first.rooms.length <= 4);
+    assert.ok(first.rooms.every(id => id >= 1 && id <= Math.min(4, eligible)), 'first pack stays in the early group');
+    for (const pack of batteries.slice(1)) {
+      assert.ok(pack.rooms.length >= 1 && pack.rooms.length <= 8, 'later packs retain multiple placement opportunities');
+      assert.ok(pack.rooms.every(id => id > 4));
+    }
+    const coverage = batteries.flatMap(pack => pack.rooms).sort((a, b) => a - b);
+    assert.deepEqual(coverage, supplyRooms(level).map(room => room.id), 'disjoint groups cover the whole eligible floor');
+  }
+});
+
+test('a typical part has roughly six scattered finds rather than eleven, without reducing every pack to a lone placement', () => {
+  let finds = 0, snacks = 0, stacks = 0;
+  for (let seed = 0; seed < 1000; seed++) {
+    const plan = planSupplies(part(seed, 2));
+    finds += plan.length; snacks += plan.filter(s => s.type === 'snack').length; stacks += plan.filter(s => s.type === 'paper').length;
+    assert.equal(plan.filter(s => s.type === 'battery').length, 4, '24 rooms keep an early pack and three later packs');
+  }
+  assert.ok(finds / 1000 >= 5.5 && finds / 1000 <= 6.3, `${finds / 1000} finds per part`);
+  assert.ok(snacks / 1000 >= .4 && snacks / 1000 <= .6, `${snacks / 1000} snacks per part`);
+  assert.ok(stacks / 1000 >= .4 && stacks / 1000 <= .6, `${stacks / 1000} paper stacks per part`);
 });
 
 test('anything else is only there for somebody: what a creature or a resident on the part cares about, one of each', () => {

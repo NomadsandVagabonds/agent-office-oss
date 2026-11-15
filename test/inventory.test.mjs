@@ -57,6 +57,37 @@ test('selection follows numbered slots and a dropped torch preserves charge whil
   assert.equal(model.read().slots[1].charge, 67.5);
 });
 
+test('number selection stows and restores the same pocket without adding or moving slots', () => {
+  const model = createInventory();
+  model.add(item('battery', 'cell')); model.add(item('chalk', 'chalk'));
+  const contents = model.read().slots;
+  model.select(0, { toggle: true });
+  assert.equal(model.read().holstered, true); assert.equal(model.read().selected, 0);
+  assert.deepEqual(model.read().slots, contents);
+  assert.equal(model.select(6, { toggle: true }), false); assert.equal(model.read().holstered, true);
+  model.select(0, { toggle: true }); assert.equal(model.read().holstered, false);
+  model.select(0, { toggle: true }); model.select(1, { toggle: true });
+  assert.equal(model.read().holstered, false); assert.equal(model.read().selected, 1);
+  model.select(1, { toggle: true }); model.select(1); // Clicking an inspected pocket equips it.
+  assert.equal(model.read().holstered, false);
+  model.select(1, { toggle: true }); model.select(5, { toggle: true });
+  assert.equal(model.read().holstered, false); assert.equal(model.read().selected, 5);
+  assert.deepEqual(model.read().slots, contents);
+});
+
+test('stowed supplies cannot be used or given away, and new pickups preserve empty hands', () => {
+  const model = createInventory();
+  model.add(item('snack', 'snack')); model.select(0, { toggle: true });
+  unchanged(model, () => model.useSelected({ heal() { assert.fail('stowed snack must not heal'); } }), 'empty');
+  unchanged(model, () => model.consumeSelected('snack'), 'empty');
+  assert.equal(model.add(item('paper', 'paper', { quantity: 3 })).index, 1);
+  assert.equal(model.read().holstered, true); assert.equal(model.read().selected, 0);
+  model.select(1); model.select(1, { toggle: true });
+  unchanged(model, () => model.consumeSelected('paper', 2), 'empty');
+  model.clear(); assert.equal(model.read().holstered, false); assert.equal(model.read().selected, 0);
+  assert.equal(model.read().slots.length, 6);
+});
+
 test('only one carried torch drains, toggling pauses it, and depletion cannot produce negative charge', () => {
   const model = createInventory();
   model.add(item('torch', 'first', { charge: 4 })); model.add(item('torch', 'second', { charge: 8 }));

@@ -21,3 +21,4 @@ node_modules/
 .claude/worktrees/
 # The BlockRooms site, built (tools/blockrooms/build.mjs): made again whenever it is wanted
 /dist/
+.vercel

@@ -7,12 +7,12 @@
 //
 //   battery packs   the one thing there is always more of: the camcorder runs
 //                   on them, and spare ones are what the office pays for
-//   snacks          one or two to a part of the building
+//   snacks          at most one to a part of the building
 //   a torch         likely where you land, less so further down, never full
-//   chalk           in about half the parts
-//   paper           a stack or two to a part: it burns (crafting.js), and
+//   chalk           in about a quarter of the parts
+//   paper           at most one stack to a part: it burns (crafting.js), and
 //                   there is somebody down here who will take it instead of you
-//   a lighter, tape in about half the parts each: with paper, a fire; with a
+//   a lighter, tape in about a quarter of the parts each: with paper, a fire; with a
 //                   torch, a torch that will stay on the camcorder
 //   anything else   only where somebody on this floor wants it (cast.js: what
 //                   a creature cares about). Nothing is clutter.
@@ -20,15 +20,16 @@ import { makeRng } from './gen.js';
 
 /** How much there is. Starting points: this is what play-testing changes. */
 export const SUPPLY = Object.freeze({
-  batteryEvery: 4,                  // one pack to this many rooms
-  snacks: Object.freeze([1, 2]),    // to a part of the building: fewest, most
-  torch: Object.freeze([0.7, 0.4]), // the chance of a torch: in the part you land in · in any part below it
+  batteryFirst: 4,                  // keep the first pack among this many early eligible rooms
+  batteryEvery: 8,                  // after that, one pack to this many rooms
+  snacks: Object.freeze([0, 1]),    // to a part of the building: fewest, most
+  torch: Object.freeze([0.7, 0.2]), // keep the first torch likely; fewer redundant ones further down
   torchCharge: Object.freeze([45, 150]),   // seconds of light left in one (a full one is 180): fewest, most
-  chalk: 0.5,                       // the chance of a piece of chalk in a part
+  chalk: 0.25,                      // the chance of a piece of chalk in a part
   paper: Object.freeze([3, 5]),     // sheets in a stack of paper
-  stacks: Object.freeze([1, 2]),    // stacks of paper to a part
-  lighter: 0.5,                     // the chance of a lighter in a part (it is kept: one is enough for a visit)
-  tape: 0.4,                        // the chance of a roll of tape in a part
+  stacks: Object.freeze([0, 1]),    // stacks of paper to a part
+  lighter: 0.25,                    // the chance of a lighter in a part (it is kept: one is enough for a visit)
+  tape: 0.2,                        // the chance of a roll of tape in a part
   choices: 4,                       // rooms offered for each thing, in order: the first with clear floor gets it
 });
 /** What is about whether or not anybody wants it: the rest only turns up for somebody. */
@@ -62,9 +63,13 @@ export function supplyRooms(level) {
 export function planSupplies(level, wanted = []) {
   const R = makeRng(`${level.seed}/supplies/${level.depth ?? 0}`), rooms = supplyRooms(level), out = [];
   if (!rooms.length) return out;
-  // batteries: the rooms in the order they were made (which is roughly the order they are come to), in groups, one to a group
-  for (let i = 0, n = 0; i < rooms.length; i += SUPPLY.batteryEvery) {
-    out.push({ id: `battery-${n++}`, type: 'battery', rooms: R.shuffle(rooms.slice(i, i + SUPPLY.batteryEvery)).map((r) => r.id) });
+  // Keep an early refill opportunity, then space out surplus packs. The rooms
+  // are in build order (roughly encounter order); each group offers fallback
+  // locations, so one blocked floor patch does not discard its pack.
+  for (let i = 0, n = 0; i < rooms.length;) {
+    const span = n === 0 ? SUPPLY.batteryFirst : SUPPLY.batteryEvery;
+    out.push({ id: `battery-${n++}`, type: 'battery', rooms: R.shuffle(rooms.slice(i, i + span)).map((r) => r.id) });
+    i += span;
   }
   // everything else: a few rooms each, no two things offered the same first room while there are rooms to go round
   const order = R.shuffle(rooms);

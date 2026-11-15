@@ -77,20 +77,40 @@ export function routeToward(world, ax, az, gx, gz, { needsOpenDoor = false } = {
 export function createDenizens(env) {
   const list = [];
 
+  // Placement is not a behaviour tick. A newly built part is visible during
+  // the fall, while its residents are frozen: put each in its room before
+  // adding it to the scene, rather than leaving its mesh at the landing.
+  function present(d, distMap) {
+    if (!d.group) return;
+    const world = env.world;
+    if (!world || d.gone) { d.group.visible = false; return; }
+    const rt = world.roomAt(d.x, d.z);
+    const nearEnough = !rt || (distMap ? (distMap.get(rt.id) ?? 99) <= 3 : rt.group.visible);
+    d.group.position.set(d.x, (d.y ?? world.floorY(d.x, d.z)) + (d.lift || 0), d.z);
+    d.group.visible = nearEnough && d.visible !== false;
+    d.light?.(d.sampleLight ? d.sampleLight(world) : world.lightAt(d.x, d.z, 1.0));
+  }
+  function attach(d) {
+    present(d);
+    if (env.world && d.group && !d.group.parent) env.world.scene.add(d.group);
+  }
+
   (env.ready || (env.ready = [])).push(() => {
     // colleagues the building is keeping (absorbed.js, after Gemini's fifth pack): a few to a part, in its plain rooms,
     // by dice of their own, so that they move nothing else about a seed
     populateAbsorbed(env, makeRng(`${env.level.seed}/absorbed`));
-    for (const d of list) if (d.group && !d.group.parent) env.world.scene.add(d.group);
+    for (const d of list) attach(d);
   });
 
   const denizens = {
     all: () => list,
     add(d) {
       list.push(d);
-      if (env.world && d.group && !d.group.parent) env.world.scene.add(d.group);
+      attach(d);
       return d;
     },
+    /** Refresh room visibility after arrival, without waking or advancing anybody. */
+    sync() { for (const d of list) present(d); },
     update(dt, time) {
       const { world, player } = env;
       if (!world || !player) return;
@@ -100,13 +120,7 @@ export function createDenizens(env) {
       for (const d of list) {
         if (d.gone) { if (d.group) d.group.visible = false; continue; }
         d.update?.(dt, time, me);
-        if (d.group) {
-          const rt = world.roomAt(d.x, d.z);
-          const nearEnough = !distMap || !rt || (distMap.get(rt.id) ?? 99) <= 3;
-          d.group.visible = nearEnough && !d.gone && d.visible !== false;
-          d.group.position.set(d.x, (d.y ?? world.floorY(d.x, d.z)) + (d.lift || 0), d.z);
-          d.light?.(d.sampleLight ? d.sampleLight(world) : world.lightAt(d.x, d.z, 1.0));
-        }
+        present(d, distMap);
       }
     },
     dispose() {

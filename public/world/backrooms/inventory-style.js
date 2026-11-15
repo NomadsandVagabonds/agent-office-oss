@@ -213,16 +213,6 @@ export const INVENTORY_CSS = `
   background: #d87966;
   box-shadow: 1px 1px #151c12;
 }
-.br-inventory .br-inv-mount {
-  position: absolute;
-  right: 4px;
-  bottom: 8px;
-  font-size: 9px;
-  line-height: 1;
-  color: var(--vf-green);
-  font-family: "IBM Plex Mono", monospace;
-  text-shadow: var(--vf-shadow);
-}
 .br-inventory .br-inv-panel,
 .br-inventory.has-health .br-inv-panel {
   position: absolute;
@@ -366,6 +356,23 @@ export const INVENTORY_CSS = `
   font: 400 11px/1.2 "IBM Plex Mono", monospace;
 }
 .br-inventory .br-inv-camera-choice:hover:enabled { background: #d0e6b81a; }
+.br-inventory .br-inv-equipment {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: -5px 0 12px;
+}
+.br-inventory .br-inv-equipment-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  min-width: 0;
+}
+.br-inventory .br-inv-equipment-choice .br-inv-icon { width: 30px; height: 30px; }
+.br-inventory .br-inv-equipment-choice strong { display: block; font: inherit; }
+.br-inventory .br-inv-equipment-choice small { display: block; color: var(--vf-soft); font: 400 9px/1.5 "IBM Plex Mono", monospace; }
+.br-inventory .br-inv-equipment-choice.is-source { border-bottom-style: solid; }
 .br-inventory .br-inv-ingredients {
   display: grid;
   align-items: center;

@@ -143,6 +143,10 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
   const detail = h('div.br-inv-detail', specimen, h('div', title, description, condition));
   const inspectActions = h('div.br-inv-actions', use, combine, drop);
   const cameraChoice = h('button.br-inv-camera-choice', { type:'button', hidden:true, 'aria-label':'Add the built-in camcorder to the focused ingredient box' }, 'Camcorder +');
+  const mountedIcon = h('span'), mountedName = h('strong'), mountedCondition = h('small');
+  const mountedChoice = h('button.br-inv-camera-choice.br-inv-equipment-choice', { type:'button' },
+    mountedIcon, h('span', mountedName, mountedCondition));
+  const equipment = h('div.br-inv-equipment', { hidden:true }, h('span.br-inv-eyebrow', 'ATTACHED'), mountedChoice);
   const ingredients = Array.from({ length:2 }, (_, i) => {
     const icon = h('span'), name = h('strong'), sub = h('small'), clear = h('span.br-inv-ingredient-clear', { 'aria-hidden':'true' }, '×');
     const button = h('button.br-inv-ingredient', { type:'button' }, icon, h('span.br-inv-ingredient-label', name, sub), clear);
@@ -161,7 +165,7 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
     h('div.br-inv-ingredients', ingredients[0].button, h('span.br-inv-plus', { 'aria-hidden':'true' }, '+'), ingredients[1].button),
     result, h('div.br-inv-actions', cancel, craft));
   const panel = h('section.br-inv-panel', { hidden:true, 'aria-labelledby':titleId },
-    h('div.br-inv-panel-head', count, cameraChoice, close), detail, inspectActions, craftView);
+    h('div.br-inv-panel-head', count, cameraChoice, close), equipment, detail, inspectActions, craftView);
   const caption = h('div.br-inv-caption');
   const heart = heartIcon(id);
   const health = h('div.br-inv-health', { hidden:true, role:'img', 'aria-label':'Health 4 of 4' }, heart.svg);
@@ -177,9 +181,9 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
   const ownedEvents = ['keydown', 'keyup', 'keypress', 'pointerdown', 'pointerup', 'pointercancel', 'pointermove',
     'mousedown', 'mouseup', 'mousemove', 'wheel', 'click', 'dblclick', 'contextmenu', 'touchstart', 'touchmove', 'touchend', 'touchcancel'];
   for (const type of ownedEvents) el.addEventListener(type, stopBubble);
-  let snapshot = { slots:Array(6).fill(null), selected:0, activeTorch:null, revision:0 };
+  let snapshot = { slots:Array(6).fill(null), selected:0, holstered:false, activeTorch:null, revision:0 };
   let opened = false, combineFrom = null, craftRefs = [null, null], focusedIngredient = 1, paperCount = 1, craftError = '';
-  let noticeLeft = 0, previousFocus = null, disposed = false, detailType = null, signature = '';
+  let noticeLeft = 0, previousFocus = null, disposed = false, detailType = null, signature = '', mountedIconReady = false;
   const prompt = owner.querySelector('.br-use'), stamps = [...owner.querySelectorAll('.br-osd.bl,.br-osd.brr')];
   const offsets = ['--br-inv-hint-bottom', '--br-inv-notice-bottom', '--br-inv-osd-bottom'];
   const previousOffsets = offsets.map(name => [name, owner.style.getPropertyValue(name), owner.style.getPropertyPriority(name)]);
@@ -209,14 +213,13 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
 
   const slots = Array.from({ length:6 }, (_, i) => {
     const icon = h('span.br-inv-icon-wrap'), amount = h('span.br-inv-count'), fill = h('i');
-    const mount = h('span.br-inv-mount', { hidden:true, 'aria-hidden':'true' }, 'M');
     const power = h('span.br-inv-power', { hidden:true, 'aria-hidden':'true' }, fill);
     const button = h('button.br-inv-slot', { type:'button', 'aria-label':`Slot ${i + 1}: empty`, 'aria-pressed':i === 0 ? 'true':'false', dataset:{ slot:i } },
-      h('span.br-inv-number', { 'aria-hidden':'true' }, String(i + 1)), icon, amount, power, mount);
+      h('span.br-inv-number', { 'aria-hidden':'true' }, String(i + 1)), icon, amount, power);
     button.addEventListener('click', () => activateSlot(i)); bar.append(button);
-    return { button, icon, amount, power, fill, mount, type:null };
+    return { button, icon, amount, power, fill, type:null };
   });
-  function activateSlot(i) {
+  function activateSlot(i, options) {
     if (disposed) return;
     if (combineFrom !== null) {
       if (blocked()) return;
@@ -224,15 +227,16 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
       if (item) chooseIngredient({ slot:i, id:item.id });
       return;
     }
-    onSelect?.(i); setOpen(true);
+    onSelect?.(i, options); setOpen(true);
   }
   const blocked = () => !!snapshot.health?.dead || !!snapshot.camera?.depleted;
   const canEat = () => !blocked() && !!snapshot.health && snapshot.health.current > 0 && snapshot.health.current < snapshot.health.max;
   const craftIngredient = item => !!item && ['battery', 'torch', 'paper', 'lighter', 'tape'].includes(item.type);
-  const refEquals = (a, b) => !!a && !!b && (a.device ? a.device === b.device : a.slot === b.slot && a.id === b.id);
+  const refEquals = (a, b) => !!a && !!b && (a.device ? a.device === b.device && a.id === b.id : a.slot === b.slot && a.id === b.id);
   const iconKey = item => item ? `${item.type}:${!!item.prepared}` : null;
   const isLit = item => !!item && item.charge > 0 && item.id === snapshot.activeTorch
-    && (item.id === snapshot.mountedTorch || item.id === snapshot.slots[snapshot.selected]?.id);
+    && (item.id === snapshot.mountedTorch?.id || (!snapshot.holstered && item.id === snapshot.slots[snapshot.selected]?.id));
+  const mountedRef = () => snapshot.mountedTorch ? { device:'mounted-torch', id:snapshot.mountedTorch.id } : null;
   function chooseIngredient(ref) {
     if (blocked() || combineFrom === null) return;
     const other = 1 - focusedIngredient;
@@ -251,7 +255,7 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
     return previewCraft(snapshot, refs, { paperCount }).ok;
   }
   function conditionOf(item) {
-    if (item?.type === 'torch') return `${item.id === snapshot.mountedTorch ? 'Mounted · ' : item.prepared ? 'Tape fitted · ' : ''}${percent(item)}% charge · ${isLit(item) ? 'on' : 'off'}`;
+    if (item?.type === 'torch') return `${item.id === snapshot.mountedTorch?.id ? 'Mounted · ' : item.prepared ? 'Tape fitted · ' : ''}${percent(item)}% charge · ${isLit(item) ? 'on' : 'off'}`;
     if (item?.type === 'chalk') return `${item.uses} mark${item.uses === 1 ? '' : 's'} left`;
     if (item?.type === 'battery') return 'Fits flashlight or camera';
     if (item?.type === 'paper') return `${quantity(item)} / ${ITEM_DEFS.paper.maxStack} sheets`;
@@ -264,10 +268,10 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
     for (let i = 0; i < 2; i++) {
       const box = ingredients[i], resolved = craftRefs[i] && resolveCraftInput(snapshot, craftRefs[i]);
       const item = resolved?.ok ? resolved.type === 'camera' ? { type:'camera' } : resolved.item : null;
-      const name = item?.type === 'camera' ? 'Camcorder' : item ? nameOf(item) : `Ingredient ${i + 1}`;
+      const name = item?.type === 'camera' ? 'Camcorder' : resolved?.ref?.device === 'mounted-torch' ? 'Camera light' : item ? nameOf(item) : `Ingredient ${i + 1}`;
       const sub = item?.type === 'camera' ? `${remainingTime(snapshot.camera.remaining)} left`
         : item?.type === 'paper' ? `${quantity(item)} ${quantity(item) === 1 ? 'sheet' : 'sheets'}`
-        : item?.type === 'torch' ? `${percent(item)}%${item.id === snapshot.mountedTorch ? ' · mounted' : item.prepared ? ' · taped' : ''}`
+        : item?.type === 'torch' ? `${percent(item)}%${item.id === snapshot.mountedTorch?.id ? ' · mounted' : item.prepared ? ' · taped' : ''}`
         : item ? 'Click to replace' : 'Choose below';
       if (box.iconKey !== iconKey(item)) { box.icon.replaceChildren(...(item ? [itemIcon(item.type, item)] : [])); box.iconKey = iconKey(item); }
       text(box.name, name); text(box.sub, sub); box.clear.hidden = !item;
@@ -289,7 +293,7 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
         : plan.recipe === 'camera-battery' ? `+${remainingTime(plan.seconds)} camcorder power`
         : plan.recipe === 'torch-battery' ? 'Flashlight charge restored'
         : plan.recipe === 'tape-torch' ? 'Tape used · flashlight kept'
-        : plan.recipe === 'mount-torch' ? 'Camera light · frees your hand' : plan.description;
+        : plan.recipe === 'mount-torch' ? 'Camera light · frees your hand and pocket' : plan.description;
     }
     text(resultTitle, label); text(resultDescription, explanation); resultDescription.hidden = !explanation;
     result.classList.toggle('is-invalid', !plan.ok || !!error);
@@ -300,6 +304,16 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
   function redraw() {
     const selected = snapshot.slots[snapshot.selected];
     const crafting = combineFrom !== null;
+    const mounted = snapshot.mountedTorch;
+    equipment.hidden = !mounted;
+    if (mounted) {
+      if (!mountedIconReady) { mountedIcon.append(itemIcon('torch', mounted)); mountedIconReady = true; }
+      text(mountedName, crafting ? 'Camera light +' : 'Camera light');
+      text(mountedCondition, `${percent(mounted)}% charge · ${isLit(mounted) ? 'on' : 'off'}${crafting ? '' : ' · Fit batteries'}`);
+      mountedChoice.disabled = blocked();
+      mountedChoice.setAttribute('aria-label', `Camera light, ${percent(mounted)}% charge, ${isLit(mounted) ? 'on' : 'off'}. ${crafting ? 'Add to the focused ingredient box' : 'Combine with batteries to recharge'}`);
+      mountedChoice.classList.toggle('is-source', crafting && craftRefs.some(ref => refEquals(ref, mountedRef())));
+    }
     health.hidden = !snapshot.health; el.classList.toggle('has-health', !!snapshot.health);
     el.classList.toggle('is-combining', crafting);
     detail.hidden = inspectActions.hidden = crafting; craftView.hidden = cameraChoice.hidden = !crafting;
@@ -312,7 +326,7 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
       heart.layers.forEach((layer, i) => layer.setAttribute('visibility', i < current ? 'visible' : 'hidden'));
     }
     for (let i = 0; i < 6; i++) {
-      const item = snapshot.slots[i], slot = slots[i], chosen = i === snapshot.selected, conditionText = conditionOf(item);
+      const item = snapshot.slots[i], slot = slots[i], chosen = !snapshot.holstered && i === snapshot.selected, conditionText = conditionOf(item);
       slot.button.classList.toggle('is-selected', chosen);
       slot.button.classList.toggle('is-active', isLit(item));
       slot.button.classList.toggle('is-compatible', compatible(i));
@@ -326,25 +340,25 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
       if (slot.type !== iconKey(item)) { slot.icon.replaceChildren(...(item ? [itemIcon(item.type, item)] : [])); slot.type = iconKey(item); }
       text(slot.amount, item?.type === 'chalk' ? String(item.uses) : item?.type === 'paper' ? String(quantity(item)) : '');
       slot.power.hidden = item?.type !== 'torch';
-      slot.mount.hidden = !item || item.id !== snapshot.mountedTorch;
       if (item?.type === 'torch') slot.fill.style.transform = `scaleX(${percent(item) / 100})`;
     }
-    text(caption, selected ? `${nameOf(selected)}${selected.type === 'torch' ? ` · ${percent(selected)}%${selected.id === snapshot.mountedTorch ? ' · mounted' : ''}` : selected.type === 'chalk' ? ' · ' + selected.uses : selected.type === 'paper' ? ' · ' + quantity(selected) + (quantity(selected) === 1 ? ' sheet' : ' sheets') : ''}` : '');
+    text(caption, !snapshot.holstered && selected ? `${nameOf(selected)}${selected.type === 'torch' ? ` · ${percent(selected)}%` : selected.type === 'chalk' ? ' · ' + selected.uses : selected.type === 'paper' ? ' · ' + quantity(selected) + (quantity(selected) === 1 ? ' sheet' : ' sheets') : ''}` : '');
     text(count, crafting ? 'COMBINE' : `POCKETS  ${snapshot.slots.filter(Boolean).length} / 6`);
     text(title, nameOf(selected));
     text(description, selected ? ITEM_DEFS[selected.type]?.description || '' : 'Pick up an object to carry it here.');
-    text(condition, opened && noticeLeft > 0 ? noticeEl.textContent : conditionOf(selected));
+    text(condition, opened && noticeLeft > 0 ? noticeEl.textContent : snapshot.holstered && selected
+      ? `Stowed · ${snapshot.selected + 1} to hold${conditionOf(selected) ? ` · ${conditionOf(selected)}` : ''}` : conditionOf(selected));
     if (detailType !== iconKey(selected)) { specimen.replaceChildren(...(selected ? [itemIcon(selected.type, selected)] : [])); detailType = iconKey(selected); }
     const label = selected?.type === 'torch' ? snapshot.activeTorch === selected.id ? 'Switch off' : 'Switch on'
       : selected?.type === 'chalk' ? 'Mark floor' : selected?.type === 'snack' ? 'Eat' : 'Use';
     text(useLabel, label);
     // F prefers the mounted light; Q always acts on this inspected item.
-    text(useKey, selected?.type === 'torch' && (!snapshot.mountedTorch || snapshot.mountedTorch === selected.id) ? 'F' : 'Q');
+    text(useKey, selected?.type === 'torch' && !snapshot.mountedTorch ? 'F' : 'Q');
     use.hidden = ['battery', 'paper', 'lighter', 'tape'].includes(selected?.type);
-    use.disabled = blocked() || !selected || ['paper', 'pink-slip', 'scissors', 'balloon', 'lighter', 'tape', 'battery'].includes(selected.type)
+    use.disabled = blocked() || snapshot.holstered || !selected || ['paper', 'pink-slip', 'scissors', 'balloon', 'lighter', 'tape', 'battery'].includes(selected.type)
       || (selected.type === 'snack' && !canEat()) || (selected.type === 'torch' && selected.charge <= 0);
     combine.hidden = !craftIngredient(selected); combine.disabled = blocked(); combine.classList.toggle('primary', use.hidden);
-    drop.disabled = blocked() || !selected;
+    drop.disabled = blocked() || snapshot.holstered || !selected;
     if (crafting) redrawCraft();
     if (opened && document.activeElement?.disabled && el.contains(document.activeElement)) {
       const target = document.activeElement === more && !fewer.disabled ? fewer
@@ -363,7 +377,8 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
     }
     // Show whole charge percentages and camera seconds; cooldown ticks do not
     // touch the health label. Keep the same buttons so focus never jumps.
-    const key = JSON.stringify([snapshot.selected, snapshot.activeTorch, snapshot.mountedTorch, combineFrom, craftRefs, focusedIngredient, paperCount, craftError, opened,
+    const key = JSON.stringify([snapshot.selected, snapshot.holstered, snapshot.activeTorch,
+      snapshot.mountedTorch ? [snapshot.mountedTorch.id, percent(snapshot.mountedTorch)] : null, combineFrom, craftRefs, focusedIngredient, paperCount, craftError, opened,
       snapshot.health ? [snapshot.health.current, snapshot.health.max, snapshot.health.dead] : null,
       snapshot.camera ? [Math.ceil(snapshot.camera.remaining), snapshot.camera.capacity, snapshot.camera.depleted, snapshot.camera.remaining >= snapshot.camera.capacity] : null,
       snapshot.slots.map(item => item ? [item.id, item.type, item.prepared, item.type === 'torch' ? percent(item) : item.type === 'paper' ? quantity(item) : item.uses] : null)]);
@@ -396,7 +411,11 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
   function beginCombine(index = snapshot.selected) {
     const item = snapshot.slots[index];
     if (blocked() || !craftIngredient(item)) return false;
-    combineFrom = index; craftRefs = [{ slot:index, id:item.id }, null]; focusedIngredient = 1; paperCount = 1; craftError = '';
+    return beginCombineRef({ slot:index, id:item.id }, index);
+  }
+  function beginCombineRef(ref, origin) {
+    if (blocked() || !resolveCraftInput(snapshot, ref).ok) return false;
+    combineFrom = origin; craftRefs = [{ ...ref }, null]; focusedIngredient = 1; paperCount = 1; craftError = '';
     noticeLeft = 0; noticeEl.classList.remove('on'); text(noticeEl, '');
     setOpen(true); redraw();
     ingredients[1].button.focus(); return true;
@@ -412,6 +431,10 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
   combine.addEventListener('click', () => beginCombine());
   drop.addEventListener('click', () => onDrop?.());
   cameraChoice.addEventListener('click', () => chooseIngredient(CAMERA_INPUT));
+  mountedChoice.addEventListener('click', () => {
+    const ref = mountedRef();
+    if (ref) combineFrom !== null ? chooseIngredient(ref) : beginCombineRef(ref, 'mounted-torch');
+  });
   cancel.addEventListener('click', cancelCombine);
   fewer.addEventListener('click', () => { if (!fewer.disabled) { paperCount--; craftError = ''; redraw(); } });
   more.addEventListener('click', () => { if (!more.disabled) { paperCount++; craftError = ''; redraw(); } });
@@ -439,7 +462,7 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
       return true;
     }
     if (!opened) return false;
-    if (/^[1-6]$/.test(key)) { if (!e.repeat) activateSlot(Number(key) - 1); return true; }
+    if (/^[1-6]$/.test(key)) { if (!e.repeat) activateSlot(Number(key) - 1, { toggle: true }); return true; }
     if (key === 'q') {
       if (!e.repeat && combineFrom === null) {
         if (use.hidden && !combine.hidden) beginCombine(); else if (!use.disabled) use.click();

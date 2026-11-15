@@ -39,6 +39,10 @@ export function create(c) {
     const path = roomPath(level, level.start.room, level.exit.room) || [level.start.room];
     lamp = lampOf(path[Math.min(MOTH.far, path.length - 1)]); room = lamp.room;
     walker.x = lamp.x; walker.z = lamp.z; y = lamp.y;
+    // Its first behaviour tick waits until the visitor lands. Even while
+    // frozen, its mesh belongs by its tube, never at the world's origin.
+    group.position.set(lamp.x + MOTH.round, env.world.floorY(walker.x, walker.z) + y, lamp.z);
+    group.visible = c.drawn(walker);
     c.add(group);
   }
 

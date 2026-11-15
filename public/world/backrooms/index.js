@@ -351,6 +351,7 @@ async function visit(office, opt) {
     player.on('step', () => sound.play(f.world.current()?.footstep || 'step'));
     for (const fn of f.env.ready || []) fn();
     f.world.enter(f.world.roomAt(me.x, me.z) || f.world.rooms[f.level.start.room]);
+    f.env.denizens?.sync();                              // (their picture is ready even while the fall holds their behaviour)
     vhs.setScene(root);
     if (f.level !== first) hud.setStamp(f.level.stamp);
     sound.setMains(f.level.hum);
@@ -372,6 +373,7 @@ async function visit(office, opt) {
   }
   function handover(at) {
     const old = cur, f = ahead.f, me = old.player.me, o = f.world.scene.position.clone();
+    old.env.handView?.hide();                            // (the old hand must not hang in the shaft while the new one is lowered)
     ahead = null;
     f.env.carry = old.env.pursuer?.carry?.() || null;
     // the same body, in the coordinates of the part below — and never more than a stride from the middle of the hole it comes down through
