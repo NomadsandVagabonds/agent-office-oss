@@ -735,6 +735,26 @@ export function create(c) {
         fig.rotation.x = -1.45 * e;
       };
     },
+    snipTargets() {
+      if (!pirate || pirate.state === 'caught' || pirate.know?.spent > 0) return [];
+      const ex = pirate.down ? pirate.down.head.x : pirate.x, ez = pirate.down ? pirate.down.head.z : pirate.z;
+      const floorY = W()?.floorY(ex, ez) ?? 0;
+      return [{
+        id: 'pirate',
+        x: ex,
+        z: ez,
+        y: floorY + (pirate.down ? 0.32 : 1.0),
+        r: 0.32,
+        priority: 2,
+        snip: () => {
+          if (!pirate || pirate.state === 'caught' || pirate.know?.spent > 0) return false;
+          if (!pirate.known) { pirate.known = true; c.met(); }
+          if (pirate.state !== 'awake') awaken(pirate, false);
+          breakOff(pirate);
+          return { ok: true, target: 'pirate' };
+        },
+      }];
+    },
     /** Where it is and what it is doing (for the dev page). */
     at() { return pirate ? { x: pirate.x, z: pirate.z, state: pirate.state, know: pirate.know.mode, making: pirate.know.room, down: !!pirate.down, handle: pirate.handle ? pirate.handle.t : null, barricade: pirate.shove ? { id: pirate.shove.id, time: pirate.shove.t } : null, room: W()?.roomAt(pirate.x, pirate.z)?.id ?? null, face: pirate.face, pose: pirate.pose, card: pirate.card ? pirate.card.held : null } : null; },
     get figure() { return pirate; },

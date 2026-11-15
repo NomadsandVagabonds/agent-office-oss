@@ -46,6 +46,7 @@ import { leaving } from './leaving.js';
 import { middle, THIN_BEHIND } from './marks.js';
 import { hangBelow, goesDown } from './seam.js';
 import { createInventory } from './inventory.js';
+import { strikeSnip } from './melee.js';
 import { createSurvival } from './survival.js';
 import { batteryEnding, batteryWarning } from './battery-ending.js';
 import { createTally } from './tally.js';
@@ -203,11 +204,12 @@ async function visit(office, opt) {
     }
     inventory.toggleLight(); lightSeen = 0;
   }
+  const clickIt = () => { if (canAct() && !inventory?.isOpen && inventory?.held()?.type === 'scissors') inventory.snip({ quietMiss: true }); };
   const input = createInput({ canvas, stage, hud, sound,
     owns: target => !!menu?.owns(target) || (!paused && !!inventory?.owns(target)) || (opt.debug && !!opt.dev?.owns?.(target)),
     interceptKey: event => paused ? !!menu?.handleKey(event) : !!inventory?.handleKey(event),
     blocked: () => paused || !!inventory?.isOpen,
-    menu: () => setPaused(true), use: useIt, light: thumbLight, click: () => {}, wheel: () => {},
+    menu: () => setPaused(true), use: useIt, light: thumbLight, click: clickIt, wheel: () => {},
     key(k) {
       if (k === 'v') setPicture((vhs.level + 2) % 3);
       else if (k === 'm') changeSetting('mute', !sound.muted);
@@ -324,6 +326,16 @@ async function visit(office, opt) {
       play(name, x, z, reach) { const at = x === undefined ? {} : env.hear(x, z, reach); if (at.vol === undefined || at.vol > 0.02) sound.play(name, at); },
       /** More static on the tape (0..1), for a moment; things that interfere call this every frame. */
       interfere(k) { interference = Math.max(interference, k); },
+      /** Close-quarters scissor jab against whatever hostile entity or hazard is right in front of the lens. */
+      snip() {
+        const me = f.player?.me;
+        if (!me || !f.world) return { ok: false, reason: 'unavailable' };
+        const targets = [
+          ...(env.pursuer?.snipTargets?.() || []),
+          ...(env.denizens?.snipTargets?.() || []),
+        ];
+        return strikeSnip(me, targets, (ax, az, bx, bz) => f.world.los(ax, az, bx, bz));
+      },
     };
     if (survival) {
       // Two parts can be alive at a seam. Old or prebuilt room callbacks

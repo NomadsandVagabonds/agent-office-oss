@@ -7,7 +7,7 @@ import { CABLE, createCableState, stepCable, releaseCable } from '../public/worl
 import { SHREDDER, createShredderState, stepShredder, releaseShredder } from '../public/world/backrooms/rooms/shredding-bay/rule.js';
 import { PARTY, createPartyState, stepParty, releaseParty } from '../public/world/backrooms/rooms/mandatory-fun/rule.js';
 import { BLACKOUT, createBlackoutState, stepBlackout, releaseBlackout, isInBeam } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
-import { WARDEN, createWardenState, stepWarden, releaseWarden } from '../public/world/backrooms/rooms/safety-corridor/rule.js';
+import { WARDEN, createWardenState, stepWarden, releaseWarden, parryWarden } from '../public/world/backrooms/rooms/safety-corridor/rule.js';
 import { PARTNER, createPartnerState, stepPartner } from '../public/world/backrooms/rooms/audit-pod/rule.js';
 import {
   PLENUM,
@@ -186,7 +186,10 @@ test('The Stand-Ins (blackout-bay): unlit crossing floods crimson and kills; fla
   assert.equal(lit.caught, false);
 });
 
-test('The Floor Warden (safety-corridor): ignores walkers, chases runners with scissors, and trips onto them after 8s', () => {
+test('The Floor Warden (safety-corridor): ignores walkers, chases runners at outrunnable speed, trips onto his scissors on escape or shut door, and can be parried', () => {
+  assert.equal(WARDEN.dropsItem, 'scissors');
+  assert.ok(WARDEN.chaseSpeed > 2.55 && WARDEN.chaseSpeed < 3.5, 'faster than walking, slower than a visitor sprinting away');
+
   let s = createWardenState();
   // Walking right past at 2.05 m/s never triggers chase
   for (let i = 0; i < 20; i++) {
@@ -202,7 +205,7 @@ test('The Floor Warden (safety-corridor): ignores walkers, chases runners with s
   assert.equal(run.speed, WARDEN.chaseSpeed);
   s = run.state;
 
-  // Evading for 8 seconds makes him trip on his own scissors and despawn
+  // Evading for WARDEN.evadeDuration (6.5s) makes him trip on his own scissors and despawn
   let sawSnip = false, sawTrip = false, sawDespawn = false;
   for (let i = 0; i < 95; i++) {
     const r = stepWarden(s, { dt: 0.1, dist: 2.2, playerSpeed: 3.65, insideRoom: true, clearLine: true });
@@ -216,6 +219,19 @@ test('The Floor Warden (safety-corridor): ignores walkers, chases runners with s
   assert.equal(sawTrip, true);
   assert.equal(sawDespawn, true);
   assert.equal(s.phase, 'gone');
+
+  // Slamming a fire door in his face mid-sprint also pitches him onto his scissors early
+  let sDoor = stepWarden(createWardenState(), { dt: 0.1, dist: 4.0, playerSpeed: 3.6, insideRoom: true, clearLine: true }).state;
+  for (let i = 0; i < 6; i++) sDoor = stepWarden(sDoor, { dt: 0.1, dist: 3.2, playerSpeed: 3.6, insideRoom: true, clearLine: true }).state;
+  assert.equal(sDoor.phase, 'chasing');
+  const doorTrip = stepWarden(sDoor, { dt: 0.2, dist: 2.5, playerSpeed: 3.6, insideRoom: false, clearLine: false, doorBlocked: true });
+  assert.equal(doorTrip.trippedNow, true);
+  assert.equal(doorTrip.state.phase, 'tripping');
+
+  // Parrying him with held scissors forces him back onto peaceful patrol for WARDEN.calm seconds
+  const parried = parryWarden(sDoor);
+  assert.equal(parried.phase, 'patrol');
+  assert.equal(parried.calm, WARDEN.calm);
 });
 
 test('The Efficiency Partners (audit-pod): auto-give Pink Slip to empty hand, wait politely when holding another item', () => {

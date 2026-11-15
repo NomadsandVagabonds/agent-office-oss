@@ -16,7 +16,7 @@ const three = new URL('../public/vendor/three.module.min.js', import.meta.url).h
 const rig = url(`import { Group } from '${three}';
   const make = () => ({ group: new Group(), light() {}, aimHead() {}, animate() {}, pose() {}, setTint() {} });
   export const buildCommitteeMember = make, buildStandIn = make, makeKeynoteSpeaker = make,
-    makeRetentionClerk = make, makeFloorWarden = make, makeTrunkLine = make, makeEfficiencyPartner = make;
+    makeRetentionClerk = make, makeFloorWarden = make, makeFallenHardHat = make, makeTrunkLine = make, makeEfficiencyPartner = make;
   export const buildAudienceKit = () => ({ stamp() {} }), auditoriumSeatVox = () => {}, lecternVox = () => {}, qaMicVox = () => {}, dormantTendrilsVox = () => {};`);
 const kit = url('export class Batch { box() {} quad() {} addVox() {} } export const lin = () => [1,1,1], WHITE = [1,1,1], drawText = () => {};');
 const bits = url(`export const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), turnTo=(a,b)=>Math.atan2(Math.sin(b-a),Math.cos(b-a));

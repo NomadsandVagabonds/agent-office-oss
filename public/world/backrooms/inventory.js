@@ -5,6 +5,7 @@
 import { createInventory as createModel, makeItem, ITEM_DEFS } from './inventory-state.js';
 import { createInventoryHud } from './inventory-hud.js';
 import { createInventoryWorld } from './inventory-world.js';
+import { SNIP_TUNING } from './melee.js';
 import { toLocal, makeRng, ARCHETYPES, STASH } from './gen.js';
 import { planSupplies, wantedByRooms } from './supplies.js';
 import { CAST, castFor } from './cast.js';
@@ -12,6 +13,7 @@ import { CAST, castFor } from './cast.js';
 const MESSAGES = {
   empty: 'Empty slot', full: 'All six slots are full', duplicate: 'Already carrying that',
   'empty-charge': 'The flashlight needs batteries', 'empty-chalk': 'No chalk left',
+  'no-snip-target': 'Nothing within reach', 'broken-scissors': 'The scissors have snapped',
   incompatible: 'Those items do not fit together', 'full-charge': 'Already fully charged',
   'no-mark-space': 'No dry, clear floor here', 'no-drop-space': 'No clear place to set this down',
   'no-mark': 'No dry, clear floor here', 'no-space': 'No clear place to set this down',
@@ -37,7 +39,7 @@ const MESSAGES = {
  */
 export function createInventory(env, { canAct = () => true, onOpen = () => {}, review = false } = {}) {
   const model = createModel(), floors = new Map(), retired = new WeakSet();
-  let disposed = false, active = null, supplied = false;
+  let disposed = false, active = null, supplied = false, snipCooldown = 0;
   const available = (floor = active) => !disposed && !!floor && floor === active && !!floor.env.player?.me && canAct();
   const unavailable = () => ({ ok: false, reason: 'unavailable' });
   const tell = value => view.notice(MESSAGES[value] || value || 'Cannot use that here');
@@ -53,6 +55,29 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     const c = env.camera?.read?.();
     return !!c && !c.depleted && c.remaining < c.capacity;
   }
+  function snip({ quietMiss = false } = {}) {
+    if (!available()) return unavailable();
+    const state = model.read(), item = state.slots[state.selected];
+    if (item?.type !== 'scissors' || item.uses <= 0) return { ok: false, reason: 'wrong-item' };
+    if (snipCooldown > 0) return { ok: false, reason: 'cooldown' };
+    snipCooldown = SNIP_TUNING.cooldown;
+    active.env.handView?.jab?.();
+    const result = model.useSelected({
+      snip: () => active.env.snip ? active.env.snip() : { ok: false, reason: 'no-snip-target' },
+    });
+    if (!result.ok) {
+      env.sound.play('snip', { vol: .38 });
+      if (!quietMiss) tell(result.reason);
+      return result;
+    }
+    env.sound.play('snip', { vol: .78 });
+    if (result.snapped) env.sound.play('crack', { vol: .72 });
+    active.env.interfere?.(result.snapped ? 0.55 : 0.38);
+    env.hud?.glitch?.(result.snapped ? 0.42 : 0.26);
+    refresh();
+    tell(result.snapped ? 'The scissors snapped' : `${result.item.uses} snip${result.item.uses === 1 ? '' : 's'} left`);
+    return result;
+  }
   function use() {
     if (!available()) return unavailable();
     const snapshot = model.read(), item = snapshot.slots[snapshot.selected];
@@ -60,6 +85,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     // A battery pack in the hand goes straight into the camcorder, whose charge is the time left on the tape. With the
     // camcorder full there is only a torch to put it in, and that is a combination: the bag opens on it, as it did.
     if (item?.type === 'battery' && cameraTakes()) return rechargeCamera(snapshot.selected);
+    if (item?.type === 'scissors') return snip({ quietMiss: !view.isOpen });
     // Put the mark into the world before spending chalk. A bad floor or failed
     // placement never consumes a use. This synchronous action cannot race UI.
     if (item?.type === 'chalk' && item.uses > 0) {
@@ -276,7 +302,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     if (next.inventory === floor.facade) delete next.inventory;
   }
   return {
-    model, view, use, drop, combine, rechargeCamera, craft, toggleLight, select, held, give, consumeHeld, count, hang, attend, forget,
+    model, view, use, snip, drop, combine, rechargeCamera, craft, toggleLight, select, held, give, consumeHeld, count, hang, attend, forget,
     get physical() { return active?.physical || null; },
     get isOpen() { return view.isOpen; },
     owns: target => target instanceof Node && view.el.contains(target),
@@ -294,6 +320,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     update(dt, playing) {
       if (disposed) return;
       if (playing) {
+        if (snipCooldown > 0) snipCooldown = Math.max(0, snipCooldown - dt);
         const { depleted } = model.tick(dt);
         if (depleted) { tell('Flashlight battery empty'); env.sound.play('clack', { vol: .3 }); }
       }
