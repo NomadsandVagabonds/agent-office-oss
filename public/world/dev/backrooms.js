@@ -36,6 +36,7 @@ import { lightingStudy } from './lighting-study.js';
 import { lastLightStudy } from './last-light-study.js';
 import { bridgeStudy } from './bridge-study.js';
 import { partyStudy } from './party-study.js';
+import { waterparkStudy } from './waterpark-study.js';
 import { returnPoolStudy } from './return-pool-study.js';
 
 // &check=1: listen from the start, so that nothing said while the floor was being built is missed
@@ -134,7 +135,8 @@ async function go() {
       if (q.get('map')) dev.textContent = handle.sketch();
       console.log(handle.sketch());
       if (q.get('check')) console.log('[check] ' + JSON.stringify(check(handle)));
-      if (q.get('poolstudy') === '1') closeStudy = returnPoolStudy(handle);
+      if (q.get('waterstudy') === '1') closeStudy = waterparkStudy(handle);
+      else if (q.get('poolstudy') === '1') closeStudy = returnPoolStudy(handle);
       else if (q.get('partystudy') === '1') closeStudy = partyStudy(handle);
       else if (q.get('bridgestudy') === '1') closeStudy = bridgeStudy(handle);
       else if (q.get('hallstudy') === '1') closeStudy = lastLightStudy(handle);

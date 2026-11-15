@@ -70,6 +70,16 @@ export const THEMES = {
     rooms: [0.1, 0.38, 0.62, 0.9], heights: [[2.6, 40], [2.2, 24], [2.9, 16], [3.3, 10], [1.75, 6], [4.4, 4]],
     dressing: ['plant', 'plant', 'plant', 'wetsign', 'wetsign', 'bin', 'boxes', 'chair', 'clock', 'ladder'],
     hum: 50 },
+  // An indoor waterpark and Poolrooms annex, built inside the office by something that had only ever had swimming,
+  // recreation and hydration described to it: grouted ceramic tile stopping short of the damp carpet, chlorinated basins
+  // under a suspended acoustic ceiling. Still being built (waterpark.js)
+  waterpark: { id: 'waterpark', own: true, dealt: false, families: { pool: 12, seafoam: 6 }, patterns: ['tiles'], tubes: ['#e8fbff', '#eef6ff', '#f3ffe6'],
+    light: { dead: [0.04, 0.18], flicker: 0.22, modes: [['normal', 1]] },
+    rooms: [0.02, 0.12, 0.22, 0.56], heights: [[2.9, 24], [3.3, 34], [3.8, 22], [4.4, 14]],
+    dressing: ['floatring', 'floatring', 'noodle', 'noodle', 'lounger', 'wetsign', 'ladder'],
+    hum: 60 },
+
+
 };
 
 export const THEME_IDS = Object.keys(THEMES);

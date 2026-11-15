@@ -14,6 +14,7 @@ import { thinWall, refuses } from './thin.js';
 import { MORE } from './rooms2.js';
 import { stairwell } from './stairwell.js';
 import { lawn, standing, THINGS } from './suburb.js';
+import { poolroom, poolStanding, POOL_THINGS } from './waterpark.js';
 
 /* ---- the plain rooms, and what somebody left in them ------------------------------- */
 
@@ -101,6 +102,7 @@ function ceilDoor(c) {
 function dressing(c, item) {
   const R = c.R;
   if (item.type === 'trace') { trace(c, item); return; }                   // something an earlier visitor left (traces.js)
+  if (POOL_THINGS[item.type]) { POOL_THINGS[item.type](c, item); return; }
   if (THINGS[item.type]) { THINGS[item.type](c, item); return; }           // …or what is left on a lawn (suburb.js)
   if (item.type === 'boxes') {
     const s = c.spot(0.65, { head: 1.0 }); if (!s) return;
@@ -239,6 +241,7 @@ function nowhereStairs(c, s) {
  */
 function walls(c) {
   for (const p of c.room.pillars) {
+    if (p.prop === 'cabana') { poolStanding(c, p); continue; }
     if (p.prop) { standing(c, p); continue; }             // not wall at all: a run of fence, a scenic flat and its brace (suburb.js)
     if (p.y0 > 0.01) c.pillar(p.x, p.z, p.w, p.d, { y0: p.y0, solid: false, skirting: false });
     else c.pillar(p.x, p.z, p.w, p.d, p.h ? { h: p.h, cap: lin(c.look.trim) } : undefined);
@@ -270,6 +273,7 @@ function plain(c) {
   for (const item of room.dress) if (item.type === 'marks') refuses(c, item.side, item.at, marks(c, item));          // (likewise the other walls somebody tried: all of them only walls)
   for (const item of room.dress) if (item.type !== 'marks') dressing(c, item);
   if (c.level.pursuer?.room === room.id) c.env.lair?.(c);
+  if (c.level.theme === 'waterpark') poolroom(c);
   if (c.level.theme === 'suburb') lawn(c);                // the neighbourhood: carpet showing round the grass, clouds on the walls (last: whatever was hung first keeps its wall)
 }
 

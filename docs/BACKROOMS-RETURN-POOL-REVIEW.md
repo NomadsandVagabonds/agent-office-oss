@@ -1,6 +1,8 @@
 # The Return Pool — waterpark room study
 
-Branch: `codex/backrooms-return-pool`
+Original study branch: `codex/backrooms-return-pool`
+
+Integration update: the room is now included in the explicit, undealt `waterpark` theme on `codex/waterpark-integration`. See [the waterpark review](BACKROOMS-WATERPARK-REVIEW.md) for current preview links and validation. The standalone study notes below describe its original registration.
 
 Based on working branch `92f7d9d`. This is a separate contribution, not a replacement for Gemini's waterpark. No files were changed in Gemini's active worktree and none of its uncommitted waterpark infrastructure is required.
 
