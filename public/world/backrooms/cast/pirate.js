@@ -697,6 +697,43 @@ export function create(c) {
       return { awake: true, face: pirate.face, card: !!(pirate.card && pirate.card.held), lost: pirate.know.mode === 'wander' || pirate.know.mode === 'look' };
     },
     wake,
+    /**
+     * The building's camera, for the three seconds after it has taken the last of somebody (docs/BACKROOMS.md). The camera
+     * is no visitor: nobody is looking, so it moves — but a recording is frames, and it is only ever seen between them. Each
+     * half second it is nearer, another face, its arms further out; the visitor's character backs off a step and goes down,
+     * and the last frame is it standing over them.
+     */
+    takes(shot) {
+      const p = pirate; if (!p) return undefined;
+      const fig = shot.figure, W0 = W();
+      // from wherever it had them: a stride and a half off, on its own side of them
+      let dx = p.x - shot.x, dz = p.z - shot.z, d = Math.hypot(dx, dz);
+      if (d < 0.05) { dx = Math.sin(shot.yaw); dz = Math.cos(shot.yaw); d = 1; }
+      dx /= d; dz /= d;
+      const beats = [1.25, 1.0, 0.8, 0.62, 0.5, 0.42], poses = [3, 5, 7, 8, 7, 5];
+      let beat = -1;
+      p.down = null; p.plinth = false; p.group.visible = true; p.shadow.visible = true; p.head.scale.setScalar(1);
+      const stand = (k) => {
+        const off = beats[Math.min(k, beats.length - 1)];
+        p.x = shot.x + dx * off; p.z = shot.z + dz * off; p.yaw = Math.atan2(-dx, -dz);
+        p.face = (p.face + 1 + Math.floor(Math.random() * (p.faces.length - 1))) % p.faces.length;
+        p.hold(poses[Math.min(k, poses.length - 1)]); p.slip = false; p.show();
+        p.group.position.set(p.x, W0.floorY(p.x, p.z), p.z); p.group.rotation.set(0, p.yaw, 0);
+        p.light(W0.lightAt(p.x, p.z, 1.0));
+        if (k > 0) c.play('creak', p.x, p.z, 9);
+      };
+      stand(0);
+      return (t) => {
+        const k = Math.min(beats.length - 1, Math.floor(t / 0.5));
+        if (k !== beat) { beat = k; stand(k); }
+        if (!fig) return;
+        // the visitor: a step back from it, and then down on their back, away from it
+        const back = Math.min(1, t / 0.9) * 0.35, fall = Math.max(0, Math.min(1, (t - 0.9) / 0.7)), e = fall * fall * (3 - 2 * fall);
+        fig.position.x = shot.x - dx * back; fig.position.z = shot.z - dz * back;
+        fig.rotation.y = Math.atan2(dx, dz);                // facing it
+        fig.rotation.x = -1.45 * e;
+      };
+    },
     /** Where it is and what it is doing (for the dev page). */
     at() { return pirate ? { x: pirate.x, z: pirate.z, state: pirate.state, know: pirate.know.mode, making: pirate.know.room, down: !!pirate.down, handle: pirate.handle ? pirate.handle.t : null, barricade: pirate.shove ? { id: pirate.shove.id, time: pirate.shove.t } : null, room: W()?.roomAt(pirate.x, pirate.z)?.id ?? null, face: pirate.face, pose: pirate.pose, card: pirate.card ? pirate.card.held : null } : null; },
     get figure() { return pirate; },
