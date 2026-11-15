@@ -106,5 +106,7 @@ export function createPatrol(c,{visitor,rows,outerX,diversion=()=>null,onChange=
     if(security.phase==='captured')c.env.hold(false);
     beforeDispose?.();
   };
-  return {update,disable,state:()=>({...security}),read:()=>({security:{...security},guards:guards.map(g=>({id:g.id,x:g.x,z:g.z,yaw:g.yaw,mode:g.mode,moving:g.moving,eyesOn:g.model.read().eyesOn}))})};
+  /** Stand a warden somewhere, facing something (the building's camera, after the last heart: rooms/mecha.js). */
+  function post(i,x,z,yaw){const g=guards[i];if(!g)return;g.x=x;g.z=z;g.yaw=yaw;g.moving=false;g.model.update({x,z,yaw,time:clock,moving:false,disabled:false});}
+  return {update,disable,post,count:guards.length,where:(i)=>({x:guards[i].x,z:guards[i].z}),state:()=>({...security}),read:()=>({security:{...security},guards:guards.map(g=>({id:g.id,x:g.x,z:g.z,yaw:g.yaw,mode:g.mode,moving:g.moving,eyesOn:g.model.read().eyesOn}))})};
 }

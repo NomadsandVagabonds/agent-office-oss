@@ -480,7 +480,7 @@ async function visit(office, opt) {
       world.scene.add(figure.root, lamp);
       shotKept = { figure, lamp };
       // whoever took them says what happens (cast: takes(shot)); nobody else of the cast is run again
-      const taker = env.pursuer?.taker ?? null;
+      const taker = env.pursuer?.taker ?? env.tookBy ?? null;          // (one of the cast, or the room whose resident it was: world.js c.hurt)
       let run = null;
       try { run = taker?.it?.takes?.({ ...spot, room: rt?.id ?? null, figure: figure.root, seconds: SHOT.seconds }) ?? null; }
       catch (err) { console.warn(`[backrooms] ${taker?.id} had nothing to show for it`, err); }
