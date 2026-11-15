@@ -7,14 +7,14 @@
 import * as THREE from 'three';
 import { Vox, M } from '../../vox/vox.js';
 import { buildCharacter, JOINT } from '../../avatar/build.js';
-import { Batch, lin, drawText, WHITE } from '../kit.js';
+import { Batch, lin, drawText, smooth, WHITE } from '../kit.js';
 import { P, card, scatter } from '../bits.js';
 import {
   pallorLook, mottleHead, stretchHead, eraseNose, hollowSocket, slippedMouth, jointMat,
 } from '../uncanny.js';
 import {
-  TIER_H, SUMMIT_Y, REORG_DECKS, SUMMIT_BELL,
-  reorgFloorY, createBellCascade, stepBellCascade,
+  TIER_H, SUMMIT_Y, REORG_DECKS, GANGWAY_DECKS, GANGWAY_HINGE, SUMMIT_BELL,
+  reorgFloorY, chooseSealedDoors, createBellCascade, stepBellCascade,
 } from './re-org/layout.js';
 
 const TRIM_DARK = [0.16, 0.16, 0.15];
@@ -186,29 +186,45 @@ function addHollowCubicle(panelB, flatB, x0, z0, x1, z1, y0, y1, tint, {
   }
 }
 
-/** Drooping black power/data cable catenary strung between stacked cubicles or ceiling holes. */
-function addSaggingCable(flatB, ax, ay, az, bx, by, bz, sag = 0.45, segs = 5) {
+/** Drooping power/data/release cable catenary strung as a true oriented 3D tube between two points. */
+function addSaggingCable(flatB, ax, ay, az, bx, by, bz, sag = 0.45, segs = 6, col = CORD_BLACK, r = 0.016) {
+  const ring = (px, py, pz, ux, uy, uz, vx, vy, vz) => [
+    [px + ux, py + uy, pz + uz],
+    [px + vx, py + vy, pz + vz],
+    [px - ux, py - uy, pz - uz],
+    [px - vx, py - vy, pz - vz],
+  ];
   for (let i = 0; i < segs; i++) {
     const t0 = i / segs, t1 = (i + 1) / segs;
     const x0 = ax + (bx - ax) * t0, x1 = ax + (bx - ax) * t1;
     const z0 = az + (bz - az) * t0, z1 = az + (bz - az) * t1;
     const y0 = ay + (by - ay) * t0 - Math.sin(t0 * Math.PI) * sag;
     const y1 = ay + (by - ay) * t1 - Math.sin(t1 * Math.PI) * sag;
-    flatB.box(
-      Math.min(x0, x1) - 0.016, Math.min(y0, y1) - 0.016, Math.min(z0, z1) - 0.016,
-      Math.max(x0, x1) + 0.016, Math.max(y0, y1) + 0.016, Math.max(z0, z1) + 0.016,
-      CORD_BLACK, { step: 4 }
-    );
+    const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+    const len = Math.hypot(dx, dy, dz) || 1e-4;
+    const tx = dx / len, ty = dy / len, tz = dz / len;
+    const upX = Math.abs(ty) < 0.9 ? 0 : 1, upY = Math.abs(ty) < 0.9 ? 1 : 0;
+    const u0x = -tz * upY, u0y = tz * upX, u0z = tx * upY - ty * upX;
+    const uLen = Math.hypot(u0x, u0y, u0z) || 1;
+    const ux = (u0x / uLen) * r, uy = (u0y / uLen) * r, uz = (u0z / uLen) * r;
+    const vx = ty * uz - tz * uy, vy = tz * ux - tx * uz, vz = tx * uy - ty * ux;
+    const c0 = ring(x0, y0, z0, ux, uy, uz, vx, vy, vz);
+    const c1 = ring(x1, y1, z1, ux, uy, uz, vx, vy, vz);
+    for (let k = 0; k < 4; k++) {
+      const nk = (k + 1) & 3;
+      flatB.quad(c0[k], c0[nk], c1[nk], c1[k], col);
+    }
   }
 }
 
 export function build(c) {
   const { W, D, H, R, kit, params: p } = c;
+  let cascade = createBellCascade();
 
   // Open-backed atrium (`halo` void beyond -D/2); `lights: 'dark'` so we control the murky gloom
   c.shell({ walls: ['front', 'left', 'right'] });
-  c.rt.floorY = (x, z) => reorgFloorY(x, z);
-  c.rt.headY = (x, z) => Math.max(1.85, H - reorgFloorY(x, z));
+  c.rt.floorY = (x, z) => reorgFloorY(x, z, cascade);
+  c.rt.headY = (x, z) => Math.max(1.85, H - reorgFloorY(x, z, cascade));
 
   const fabTex = makeBeigeFabricTex(kit);
   const doorTex = makeFallenDoorTex(kit);
@@ -415,11 +431,103 @@ export function build(c) {
   c.prop('boxes', -3.75, -5.35, { y: TIER_H * 4, rot: 1.1, solid: false, shadow: false, o: { variant: 2 } });
   placeTumbledCrt(-2.15, TIER_H * 4, -5.42, 0.2, 'face-up', 2);
 
-  // Tier 5 Summit (`y = 4.80m`): real wooden chasm desk + glowing green CRT + brass Allocation Bell!
+  // Tier 5 Summit (`y = 4.80m`): real wooden chasm desk + interactive status CRT + brass Allocation Bell!
   c.prop('desk', 2.38, -6.48, { y: SUMMIT_Y, rot: 0, solid: false, shadow: false });
-  placeTumbledCrt(2.15, SUMMIT_Y + 0.74, -6.52, 0.14, 'upright', 0);
+  c.place(crtGeo, 2.15, -6.52, { y: SUMMIT_Y + 0.74, rot: 0.14, solid: false, shadow: false });
+  const sumLockTex = card(c, 'ct:sumcrt:lock', ['STATION 5A', 'SHUTTERS', 'SEALED'], {
+    w: 128, h: 96, bg: '#120a03', fg: '#f2b238', edge: '#5c3c0e', size: 13, pad: 8,
+  });
+  const sumOpenTex = card(c, 'ct:sumcrt:open', ['STATION 5A', 'SHUTTERS', 'OPEN'], {
+    w: 128, h: 96, bg: '#041208', fg: '#6ef292', edge: '#1b6632', size: 13, pad: 8,
+  });
+  const makeSummitScreenNode = (tex) => {
+    const b = new Batch();
+    const rot = 0.14, cs = Math.cos(rot), sn = Math.sin(rot), hw = 0.18;
+    const sx = 2.15 + sn * 0.183, sz = -6.52 + cs * 0.183, sy = SUMMIT_Y + 0.74;
+    b.quad(
+      [sx - cs * hw, sy + 0.16, sz + sn * hw],
+      [sx + cs * hw, sy + 0.16, sz - sn * hw],
+      [sx + cs * hw, sy + 0.44, sz - sn * hw],
+      [sx - cs * hw, sy + 0.44, sz + sn * hw],
+      WHITE, [[0, 0], [1, 0], [1, 1], [0, 1]]
+    );
+    return c.dynamic(b, { map: tex, unlit: true });
+  };
+  const summitScreenLocked = makeSummitScreenNode(sumLockTex);
+  const summitScreenOpen = makeSummitScreenNode(sumOpenTex);
+  summitScreenOpen.visible = false;
+
   c.model('ct:bell', serviceBellVox, SUMMIT_BELL.x + 0.34, SUMMIT_BELL.z - 0.18, { y: SUMMIT_Y + 0.74, solid: false, shadow: false });
-  c.light(2.25, SUMMIT_Y + 1.35, -6.0, '#7cc882', 0.65, { far: 6.5, k: 1.8 });
+  c.light(2.25, SUMMIT_Y + 1.35, -6.0, '#d8b46a', 0.75, { far: 6.5, k: 1.8 });
+
+  // ---------------------------------------------------------------------------
+  // 3b. Hinged Steel Maintenance Gangway (`GANGWAY_DECKS`: drops on bell ring!)
+  // ---------------------------------------------------------------------------
+  const STEEL_DECK = [0.24, 0.26, 0.28];
+  const STEEL_RAIL = [0.34, 0.36, 0.39];
+  const HAZARD_YEL = [0.84, 0.62, 0.10];
+  const [gTop, gRamp] = GANGWAY_DECKS;
+
+  // Fixed cantilever steel landing pad bolted to east edge of Tier 5 (`x = 4.4..5.65, z = -5.6..-4.2`)
+  c.flat.box(gTop.x0, SUMMIT_Y - 0.09, gTop.z0, gTop.x1, SUMMIT_Y, gTop.z1, STEEL_DECK, { step: 3 });
+  c.flat.box(gTop.x0 - 0.02, SUMMIT_Y - 0.01, gTop.z0 + 0.04, gTop.x0 + 0.11, SUMMIT_Y + 0.008, gTop.z1 - 0.04, HAZARD_YEL, { step: 3 });
+  // Under-deck diagonal steel brackets tying landing pad into Tier 5 stack
+  for (const bz of [-5.48, -4.34]) {
+    c.flat.box(4.2, SUMMIT_Y - 0.72, bz - 0.04, gTop.x1 - 0.05, SUMMIT_Y - 0.62, bz + 0.04, TRIM_DARK, { step: 3 });
+    c.flat.box(gTop.x1 - 0.13, SUMMIT_Y - 0.72, bz - 0.04, gTop.x1 - 0.05, SUMMIT_Y - 0.09, bz + 0.04, TRIM_DARK, { step: 3 });
+  }
+  // North & East guardrails on landing pad (west connects to Tier 5; south opens onto hinged gangplank)
+  c.flat.box(gTop.x0, SUMMIT_Y + 0.88, gTop.z0 - 0.03, gTop.x1, SUMMIT_Y + 0.94, gTop.z0 + 0.03, STEEL_RAIL, { step: 3 });
+  c.flat.box(gTop.x0, SUMMIT_Y + 0.44, gTop.z0 - 0.025, gTop.x1, SUMMIT_Y + 0.49, gTop.z0 + 0.025, STEEL_RAIL, { step: 3 });
+  c.flat.box(gTop.x1 - 0.03, SUMMIT_Y + 0.88, gTop.z0, gTop.x1 + 0.03, SUMMIT_Y + 0.94, gTop.z1, STEEL_RAIL, { step: 3 });
+  c.flat.box(gTop.x1 - 0.025, SUMMIT_Y + 0.44, gTop.z0, gTop.x1 + 0.025, SUMMIT_Y + 0.49, gTop.z1, STEEL_RAIL, { step: 3 });
+  for (const [px, pz] of [[gTop.x0 + 0.04, gTop.z0], [gTop.x1 - 0.03, gTop.z0], [gTop.x1 - 0.03, gTop.z1 - 0.04]]) {
+    c.flat.box(px - 0.03, SUMMIT_Y, pz - 0.03, px + 0.03, SUMMIT_Y + 0.95, pz + 0.03, TRIM_DARK, { step: 2 });
+  }
+  // Beacon post on landing pad corner: red while gangway raised, green once dropped
+  c.flat.box(gTop.x1 - 0.06, SUMMIT_Y + 0.95, gTop.z1 - 0.08, gTop.x1 + 0.02, SUMMIT_Y + 1.16, gTop.z1, TRIM_DARK, { step: 1 });
+  const gwRedB = new Batch(), gwGreenB = new Batch();
+  gwRedB.box(gTop.x1 - 0.08, SUMMIT_Y + 1.16, gTop.z1 - 0.10, gTop.x1 + 0.04, SUMMIT_Y + 1.28, gTop.z1 + 0.02, [0.95, 0.20, 0.16]);
+  gwGreenB.box(gTop.x1 - 0.08, SUMMIT_Y + 1.16, gTop.z1 - 0.10, gTop.x1 + 0.04, SUMMIT_Y + 1.28, gTop.z1 + 0.02, [0.22, 0.95, 0.42]);
+  const gangwayLampRed = c.dynamic(gwRedB, { unlit: true });
+  const gangwayLampGreen = c.dynamic(gwGreenB, { unlit: true });
+  gangwayLampGreen.visible = false;
+  c.light(4.95, SUMMIT_Y + 1.45, -4.6, '#d6b872', 0.65, { far: 7.0, k: 1.6 });
+
+  // Ceiling winch housing above gangway
+  c.flat.box(GANGWAY_HINGE.x - 0.30, H - 0.28, -2.45, GANGWAY_HINGE.x + 0.30, H, -1.95, TRIM_DARK, { step: 2 });
+  const hoistCableB = new Batch();
+  hoistCableB.box(GANGWAY_HINGE.x - 0.025, SUMMIT_Y + 2.15, -2.22, GANGWAY_HINGE.x + 0.025, H - 0.25, -2.17, CORD_BLACK, { step: 4 });
+  const hoistCableNode = c.dynamic(hoistCableB);
+
+  // Dynamic 7.0m sloped steel gangplank authored in lowered pose, pivoted at `GANGWAY_HINGE`
+  const gangwayB = new Batch();
+  const gx0 = gRamp.x0, gx1 = gRamp.x1, gz0 = gRamp.z0, gz1 = gRamp.z1;
+  const gy0 = gRamp.yAtZ0, gy1 = gRamp.yAtZ1, gThick = 0.09;
+  // Walkable top plate & underside
+  gangwayB.quad([gx0, gy1, gz1], [gx1, gy1, gz1], [gx1, gy0, gz0], [gx0, gy0, gz0], STEEL_DECK);
+  gangwayB.quad([gx0, gy0 - gThick, gz0], [gx1, gy0 - gThick, gz0], [gx1, gy1 - gThick, gz1], [gx0, gy1 - gThick, gz1], TRIM_DARK);
+  // Side stringers
+  gangwayB.quad([gx0, gy1 - gThick, gz1], [gx0, gy1, gz1], [gx0, gy0, gz0], [gx0, gy0 - gThick, gz0], HAZARD_YEL);
+  gangwayB.quad([gx1, gy0 - gThick, gz0], [gx1, gy0, gz0], [gx1, gy1, gz1], [gx1, gy1 - gThick, gz1], HAZARD_YEL);
+  // Anti-slip cleats & sloped side handrails
+  for (let i = 0; i <= 7; i++) {
+    const u = i / 7;
+    const cz = gz0 + (gz1 - gz0) * u, cy = gy0 + (gy1 - gy0) * u;
+    gangwayB.box(gx0 + 0.06, cy, cz - 0.03, gx1 - 0.06, cy + 0.022, cz + 0.03, HAZARD_YEL, { step: 2 });
+    if (i < 7) {
+      const u2 = (i + 1) / 7;
+      const nz = gz0 + (gz1 - gz0) * u2, ny = gy0 + (gy1 - gy0) * u2;
+      for (const rx of [gx0 + 0.03, gx1 - 0.03]) {
+        gangwayB.box(rx - 0.025, cy, cz - 0.025, rx + 0.025, cy + 0.86, cz + 0.025, TRIM_DARK, { step: 2 });
+        // Sloped top rail segment
+        gangwayB.quad([rx - 0.02, ny + 0.86, nz], [rx + 0.02, ny + 0.86, nz], [rx + 0.02, cy + 0.86, cz], [rx - 0.02, cy + 0.86, cz], STEEL_RAIL);
+        gangwayB.quad([rx - 0.02, cy + 0.82, cz], [rx + 0.02, cy + 0.82, cz], [rx + 0.02, ny + 0.82, nz], [rx - 0.02, ny + 0.82, nz], STEEL_RAIL);
+      }
+    }
+  }
+  const gangwayNode = c.dynamic(gangwayB, { pivot: [GANGWAY_HINGE.x, GANGWAY_HINGE.y, GANGWAY_HINGE.z], side: THREE.DoubleSide });
+  gangwayNode.rotation.x = GANGWAY_HINGE.raisedPitch;
 
   // ---------------------------------------------------------------------------
   // 4. Upside-Down Hollow Cubicles Hanging Out of Ripped-Open Dark Ceiling Holes!
@@ -450,7 +558,7 @@ export function build(c) {
   // Tangled black power cords drooping between ceiling holes and cubicle tiers
   addSaggingCable(c.flat, -1.6, H, 0.8, -2.6, TIER_H + 1.1, 1.2, 0.85);
   addSaggingCable(c.flat, 2.4, H, -2.2, 3.7, TIER_H * 2 + 1.1, -1.8, 0.95);
-  addSaggingCable(c.flat, 1.8, H, -5.6, 2.9, SUMMIT_Y + 0.9, -6.6, 0.65);
+  addSaggingCable(c.flat, 1.8, H, -5.6, 1.65, SUMMIT_Y + 1.16, -6.90, 0.55);
 
   // ---------------------------------------------------------------------------
   // 5. Pitch-Black Subterranean Cubicle Abyss (`halo` beyond z = -D/2) & Silent Watcher
@@ -526,7 +634,7 @@ export function build(c) {
   c.light(watcherX, watcherY + 1.6, watcherZ + 1.4, '#b8d8a0', 1.2, { far: 14, k: 1.5 });
   c.light(0, -3.5, -D / 2 - 7.5, '#6e7850', 1.4, { far: 22 });
 
-  // Taped paper notice slapped crookedly onto the ground cubicle partition (no theme-park stand!)
+  // Taped paper notice slapped crookedly onto the ground cubicle partition beside Ramp 1
   const noteTex = card(c, `ct:memo:${p.tierCode}`, [
     `RE-ORG: ${p.dept.toUpperCase()}`,
     `STATION MOVED -> ${p.tierCode}`,
@@ -537,29 +645,137 @@ export function build(c) {
     WHITE, [[0, 0], [1, 0], [1, 1], [0, 1]]
   );
 
-  for (const dr of c.room.doors) {
-    if (dr.side !== 'front') c.exitSign(dr, 'EXIT');
-  }
+  // ---------------------------------------------------------------------------
+  // 6. Ground-Floor Security Roll-Shutters & Yellow Release Conduit to Desk 5A
+  // ---------------------------------------------------------------------------
+  // (What is written is what would be written: the shutter says where its release is, once, and the yellow cable that
+  // runs from it up the pile to that desk says the rest. Nothing says "climb" or "ring": that is for whoever looks up.)
+  const shutterWarnTex = card(c, 'ct:shutter:warn', ['SHUTTER RELEASE', 'DESK 5A'], {
+    w: 148, h: 52, bg: '#d9ad26', fg: '#151412', edge: '#151412', size: 11, pad: 6,
+  });
+  const lockedSignTex = card(c, 'ct:shutter:red', ['SEALED'], {
+    w: 148, h: 34, bg: '#3a0a0a', fg: '#ff5c52', edge: '#961e18', size: 11, pad: 5,
+  });
+  const openSignTex = card(c, 'ct:shutter:grn', ['OPEN'], {
+    w: 148, h: 34, bg: '#0b381e', fg: '#6ef296', edge: '#249c54', size: 13, pad: 5,
+  });
 
-  let cascade = createBellCascade();
+  let entrySide = c.room.doors.some((d) => d.side === 'front') ? 'front' : (c.room.doors[0]?.side || 'front');
+  let enteredOnce = false;
+  let sealedSet = new Set(chooseSealedDoors(c.room.doors, entrySide));
+
+  const shutters = c.room.doors.map((dr) => {
+    const sw = dr.w + 0.14, yBot = dr.sill || 0, yTop = yBot + dr.h;
+    // Fixed overhead steel roll-drum housing & side guide channels
+    c.wbox(dr.side, dr.c, sw + 0.14, yTop, yTop + 0.25, 0.01, 0.19, [0.18, 0.20, 0.22]);
+    for (const s of [-1, 1]) {
+      c.wbox(dr.side, dr.c + s * (sw / 2 + 0.03), 0.06, yBot, yTop + 0.25, 0.01, 0.13, [0.22, 0.24, 0.26]);
+    }
+
+    // Dynamic ribbed steel shutter curtain + warning placard, pivoted at lintel `yTop`
+    const curtainB = new Batch();
+    const slats = Math.max(6, Math.round(dr.h / 0.18));
+    for (let i = 0; i < slats; i++) {
+      const sy0 = yBot + (i / slats) * dr.h, sy1 = yBot + ((i + 1) / slats) * dr.h;
+      const colSlat = i === 0 ? HAZARD_YEL : (i % 2 === 0 ? [0.30, 0.32, 0.35] : [0.21, 0.23, 0.25]);
+      c.wbox(dr.side, dr.c, sw, sy0 + 0.004, sy1, 0.04, 0.09, colSlat, { batch: curtainB });
+    }
+    const placB = new Batch();
+    c.hang(placB, dr.side, dr.c, yBot + Math.min(1.36, dr.h * 0.64), Math.min(0.84, sw * 0.68), 0.30, [[0, 0], [1, 0], [1, 1], [0, 1]], WHITE, 0.102);
+
+    const p0 = c.wallAt(dr.side, dr.c, 0.065), pivot = [p0.x, yTop, p0.z];
+    const curtainNode = c.dynamic(curtainB, { pivot });
+    const placardNode = c.dynamic(placB, { map: shutterWarnTex, pivot });
+
+    // Overhead illuminated status sign (`SEALED · RING 5A` red -> `EXIT OPEN` green)
+    const signY = Math.min(H - 0.22, yTop + 0.42), signW = Math.min(0.96, sw * 0.78);
+    const redB = new Batch(), grnB = new Batch();
+    c.hang(redB, dr.side, dr.c, signY, signW, 0.23, [[0, 0], [1, 0], [1, 1], [0, 1]], WHITE, 0.045);
+    c.hang(grnB, dr.side, dr.c, signY, signW, 0.23, [[0, 0], [1, 0], [1, 1], [0, 1]], WHITE, 0.045);
+    c.wbox(dr.side, dr.c, signW + 0.05, signY - 0.13, signY + 0.13, 0.005, 0.042, TRIM_DARK);
+    const redSign = c.dynamic(redB, { map: lockedSignTex, unlit: true });
+    const greenSign = c.dynamic(grnB, { map: openSignTex, unlit: true });
+
+    // Yellow-orange armored release conduit leading visibly from outgoing shutter housings up to Desk 5A!
+    if (dr.side !== 'front') {
+      const midX = dr.side === 'left' ? -3.6 : 3.85;
+      const midY = dr.side === 'left' ? TIER_H * 3 + 1.05 : TIER_H * 2 + 1.15;
+      const midZ = dr.side === 'left' ? -2.2 : -1.4;
+      addSaggingCable(c.flat, p0.x, yTop + 0.18, p0.z, midX, midY, midZ, 0.45, 7, HAZARD_YEL, 0.022);
+      addSaggingCable(c.flat, midX, midY, midZ, 3.35, SUMMIT_Y + 1.12, -5.85, 0.38, 7, HAZARD_YEL, 0.022);
+      addSaggingCable(c.flat, 3.35, SUMMIT_Y + 1.12, -5.85, SUMMIT_BELL.x + 0.34, SUMMIT_Y + 0.75, SUMMIT_BELL.z - 0.22, 0.12, 5, HAZARD_YEL, 0.016);
+    }
+
+    // Collider starts `on: false` at build time so `world.js` no-trap check passes, then arms on tick 1
+    const ca = c.wallAt(dr.side, dr.c - dr.w / 2 - 0.04, 0.01);
+    const cb = c.wallAt(dr.side, dr.c + dr.w / 2 + 0.04, 0.26);
+    const col = c.solid(Math.min(ca.x, cb.x), Math.min(ca.z, cb.z), Math.max(ca.x, cb.x), Math.max(ca.z, cb.z), { tall: true, on: false });
+
+    const usePt = c.wallAt(dr.side, dr.c, 0.42);
+    const doorPt = c.wallAt(dr.side, dr.c, 0.12);
+    const wUse = c.toWorld(usePt.x, usePt.z);
+    const wDoor = c.toWorld(doorPt.x, doorPt.z);
+    const sh = { dr, p0, curtainNode, placardNode, redSign, greenSign, col, doorPt, wUse, wDoor, rattle: 0, shut: false };
+
+    c.use({
+      x: usePt.x,
+      z: usePt.z,
+      r: 1.55,
+      label: 'sealed — ring bell at Desk 5A',
+      when: () => sealedSet.has(dr) && !cascade.unlocked,
+      use: () => {
+        sh.rattle = 0.45;
+        c.env.play('rattle', wUse.x, wUse.z, 7);
+      },
+    });
+    return sh;
+  });
+
+  const applyShutterVisuals = (t = 0) => {
+    const rollScale = Math.max(0.04, 1 - smooth(cascade.shutterOpen));
+    for (const sh of shutters) {
+      const isSealed = sealedSet.has(sh.dr);
+      const s = isSealed ? rollScale : 0.04;
+      sh.curtainNode.scale.y = s;
+      sh.placardNode.scale.y = s;
+      sh.placardNode.visible = isSealed && s > 0.12;
+      const shake = sh.rattle > 0 ? Math.sin(t * 58) * 0.018 * (sh.rattle / 0.45) : 0;
+      const yTop = (sh.dr.sill || 0) + sh.dr.h;
+      sh.curtainNode.position.set(sh.p0.x + sh.p0.U[0] * shake, yTop, sh.p0.z + sh.p0.U[2] * shake);
+      sh.placardNode.position.set(sh.p0.x + sh.p0.U[0] * shake, yTop, sh.p0.z + sh.p0.U[2] * shake);
+      sh.redSign.visible = isSealed && !cascade.unlocked;
+      sh.greenSign.visible = !isSealed || cascade.unlocked;
+    }
+  };
+  applyShutterVisuals(0);
+
   const bellWorld = c.toWorld(SUMMIT_BELL.x, SUMMIT_BELL.z);
-  c.use({
+  const gwWorld = c.toWorld(GANGWAY_HINGE.x, 0.5);
+  const bellUse = c.use({
     x: SUMMIT_BELL.x + 0.22,
     z: SUMMIT_BELL.z,
     r: 1.65,
-    label: 'ring service bell',
+    label: 'ring bell (unlock exit)',
     when: () => {
       const me = c.env.player?.me;
       if (!me) return false;
       const loc = c.toLocal(me.x, me.z);
-      return reorgFloorY(loc.x, loc.z) >= SUMMIT_Y - 0.3;
+      return reorgFloorY(loc.x, loc.z, cascade) >= SUMMIT_Y - 0.3;
     },
     use: () => {
       const res = stepBellCascade(cascade, { rang: true });
       cascade = res.state;
+      bellUse.label = 'ring service bell';
+      summitScreenLocked.visible = false;
+      summitScreenOpen.visible = true;
       c.env.interfere(0.32);
-      c.env.play('ding', bellWorld.x, bellWorld.z, 14);
+      c.env.play('ding', bellWorld.x, bellWorld.z, 16);
       c.env.play('buzz', bellWorld.x, bellWorld.z, 16);
+      if (res.justUnlocked) {
+        for (const sh of shutters) {
+          if (sealedSet.has(sh.dr)) c.env.play('door', sh.wUse.x, sh.wUse.z, 18);
+        }
+      }
     },
   });
 
@@ -568,7 +784,20 @@ export function build(c) {
     swayingPanel.rotation.set(rx, 0, rz);
     swayingTrim.rotation.set(rx, 0, rz);
 
-    if (cascade.active) {
+    // Loop-proof entrance detection: whichever doorway the visitor first enters from stays open!
+    if (me.inside) {
+      enteredOnce = true;
+    } else if (!enteredOnce && !cascade.unlocked && c.room.doors.length > 1) {
+      for (const sh of shutters) {
+        if (sealedSet.has(sh.dr) && Math.hypot(me.x - sh.doorPt.x, me.z - sh.doorPt.z) < 2.1) {
+          entrySide = sh.dr.side;
+          sealedSet = new Set(chooseSealedDoors(c.room.doors, entrySide));
+          break;
+        }
+      }
+    }
+
+    if (cascade.active || (cascade.unlocked && (cascade.shutterOpen < 1 || cascade.bridgeDrop < 1))) {
       const prev = cascade.litTier;
       const res = stepBellCascade(cascade, { dt });
       cascade = res.state;
@@ -577,7 +806,39 @@ export function build(c) {
         // The moment Tier 1 flickers out & back on, the distant chasm watcher vanishes!
         if (res.clackedTier >= 1) watcherNode.visible = false;
       }
+      if (res.bridgeLanded) {
+        gangwayLampRed.visible = false;
+        gangwayLampGreen.visible = true;
+        hoistCableNode.visible = false;
+        c.env.play('thunk', gwWorld.x, gwWorld.z, 18);
+        c.env.interfere(0.18);
+      }
     }
+
+    // Animate hinged express gangway drop
+    const gwEase = smooth(cascade.bridgeDrop);
+    gangwayNode.rotation.x = GANGWAY_HINGE.raisedPitch * (1 - gwEase);
+
+    // Update doorway shutter animations & colliders (never arm collider while standing inside doorway throat)
+    for (const sh of shutters) {
+      if (sh.rattle > 0) sh.rattle = Math.max(0, sh.rattle - dt);
+      const isSealed = sealedSet.has(sh.dr) && cascade.shutterOpen < 0.72;
+      // The shutter is a wall to walk into, and the doorway behind it is marked shut (world.throats): everything
+      // else that walks plans its way by which doorways are open, and would otherwise set off through steel. A
+      // doorway that was already shut for a reason of its own (a fire door nobody has pushed) is left as it was.
+      const throat = c.world.throats[sh.dr.link];
+      if (!isSealed) {
+        sh.col.on = false;
+        if (sh.shut) { if (throat) throat.open = true; sh.shut = false; }
+      } else if (!sh.col.on) {
+        // (never brought down on anybody: not on the visitor, not on anything with a body that is standing in it)
+        const inThroat = Math.hypot(me.x - sh.doorPt.x, me.z - sh.doorPt.z) < 0.62
+          || c.world.bodies.some((b) => Math.hypot(b.x - sh.wDoor.x, b.z - sh.wDoor.z) < 0.62 + (b.r || 0.2));
+        if (!inThroat) { sh.col.on = true; if (throat && throat.open) { throat.open = false; sh.shut = true; } }
+      }
+    }
+    applyShutterVisuals(t);
+
     cascadeStrips.forEach((grp, idx) => {
       const m = grp.userData.mesh;
       if (!m) return;
