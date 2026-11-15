@@ -365,6 +365,7 @@ In `ALL_CAST` in `cast.js`:
 | `items` | required | which things a visitor may be carrying change what it does (`ITEMS`: `torch`, `battery`, `chalk`, `paper`, `scissors`, `snack`, `balloon`). `[]` for none. This is how whoever writes an item finds out who is waiting for it |
 | `fire` | required | what paper the visitor has set light to is to it: `'fears'` (will not go within three metres of a fire it can see, and backs off from one lit beside it, watched or not) · `'ignores'` · `'drawn'` (goes to it). Its own rule does it, with `c.fire` and `cast/fire.rule.js` |
 | `caught` | required | what it costs to be got by it. `{ hurt: n }` points of health, of four · `{ ends: true }` the tape ends, whatever health there is (only for `hunts`) · `{ setback: 'in a sentence' }` for the rest |
+| `withRoom` | | the id of a kind of room (a deck line). Such a member is on a part if and only if that part has that room: it is never dealt by weight, takes nobody's place, and is handed `c.lair` (*Coming with a room*) |
 | `room` | for `home: 'room'` | `{ w, d }` the least floor it needs, metres (3 to 12), and `far`, the fewest doorways from where you land (default 3) |
 | `on` | | `false`: retired. Leave the line and the file |
 
@@ -414,7 +415,7 @@ through `c`. It never calls `env.end`: being caught is `c.hurt`.
 
 | for | use |
 |---|---|
-| who and where | `c.member` its line · `c.home` its room's id (or null) · `c.haunt` a room that asked for company and got you (id, or null: see below) · `c.R` the seeded source · `c.carried` what it left itself upstairs |
+| who and where | `c.member` its line · `c.home` its room's id (or null) · `c.haunt` a room that asked for company and got you (id, or null: see below) · `c.lair` for one that comes with a room, where it lies up (id, or null) · `c.R` the seeded source · `c.carried` what it left itself upstairs |
 | the visitor | `c.me()` → `{ x, z, yaw, pitch, speed, moving }` · `c.room(x, z)` which room that is · `c.held()` what they are holding (`{ type, … }` or null: there may be no inventory at all) · `c.take(type, n)` · `c.give(item)` |
 | seeing | `c.hidden(x, z, r)` that spot is off their screen or behind a wall · `c.los(ax, az, bx, bz)` a line of sight between two spots, whichever way anybody is facing · `c.drawn(thing)` its room is being drawn at all |
 | getting about | `c.walk.go(walker, { x, z }, metres, keep)` → `{ went, door, cannot, there }` · `c.walk.exits(walker)` · `c.walk.spotIn(walker, room)` · `c.walk.steps(walker, { x, z })` · `c.walk.stand(walker, x, z)` |
@@ -489,6 +490,19 @@ Things to know before they bite:
   place to hang, the moth waits at a light of it, the shadow shows itself
   within a second and a half of the visitor first walking in. Nothing new is
   made for it, and a creature may ignore it.
+- **Coming with a room.** A cast line with `withRoom: '<arch id>'` belongs to
+  one kind of room. It is on a part exactly when that part's floor has such a
+  room (`withRoomFor(level)` in `cast.js`, asked of the built floor by the
+  conductor, because the plan does not know which rooms a floor was dealt),
+  and it is extra: `whoIsDown` and `castFor` never deal it, and nobody is
+  left out to make room for it. Its `c.lair` is a room two to four doorways
+  before its own on the way there from the landing (`lairFor()`: seeded by
+  the floor; never the landing, the way out or the room itself; the nearest
+  allowed if its room is closer than that; null if there is nowhere), so that
+  it can be met and followed before the room is reached. What it does there
+  is its own. Because the plan does not know of it, nothing that is planned
+  from the cast (what is left lying about for them, what the walls warn of)
+  counts it.
 - **More than one body.** There are rooms that change the building and take
   whatever is in them (*A room the way out is through*). The conductor does
   this for you: it asks `at()` where you are, and if that is in the room it
