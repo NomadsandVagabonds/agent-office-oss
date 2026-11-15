@@ -27,8 +27,8 @@ function slideVox() {
   for (const sx of [-1, 1]) v.tube(sx * 10, 0, -42, sx * 10, top + 18, -17, 1.3, steel);
   for (let i = 1; i <= 6; i++) { const k = i / 7, y = top * k, z = -42 + 25 * k * (top / (top + 18)); v.tube(-10, y, z, 10, y, z, 1, steel); }
   // the chute: a trough, with a lip either side, and a flat where you are meant to stop
-  const N = 52;
-  for (let i = 0; i < N; i++) { const z = 17 + i * 2, y = top - 1 - (49 * i) / N; v.box(-11, y - 2, z, 11, y, z + 2, yellow); for (const sx of [-1, 1]) v.box(sx > 0 ? 10 : -12, y, z, sx > 0 ? 12 : -10, y + 5, z + 2, M('#d9a41e', 0)); }
+  const N = 26;                                       // (in steps of ten centimetres: finer than that and the room is over its budget)
+  for (let i = 0; i < N; i++) { const z = 17 + i * 4, y = Math.round(top - 1 - (49 * i) / N); v.box(-11, y - 2, z, 11, y, z + 4, yellow); for (const sx of [-1, 1]) v.box(sx > 0 ? 10 : -12, y, z, sx > 0 ? 12 : -10, y + 5, z + 4, M('#d9a41e', 0)); }
   v.box(-11, 8, 121, 11, 10, 142, yellow); for (const sx of [-1, 1]) { v.box(sx > 0 ? 10 : -12, 10, 121, sx > 0 ? 12 : -10, 14, 142, M('#d9a41e', 0)); v.tube(sx * 10, 0, 136, sx * 10, 9, 136, 1.2, steel); v.tube(sx * 10, 0, 80, sx * 10, 29, 80, 1.2, steel); }
   return v;
 }
@@ -36,7 +36,7 @@ function slideVox() {
 const swingVox = (links) => () => {
   const v = new Vox();
   v.rbox(-11, 0, -4, 11, 2.4, 4, 1, M('#17171a', 2)); for (const sx of [-1, 1]) { v.box(sx > 0 ? 9 : -11, 0.6, -4, sx > 0 ? 11 : -9, 1.8, 4, steel); v.tube(sx * 9, 2, 0, sx * 9, 6, 0, 0.6, steel); }
-  for (const sx of [-1, 1]) for (let y = 6; y < links; y += 3) v.ring(sx * 9, y + 1.5, 0, 1.3, 0.45, steel, (y / 3) % 2 ? 'x' : 'z');
+  for (const sx of [-1, 1]) for (let y = 6; y < links; y += 3) v.ring(sx * 9, y + 1.5, 0, 1.5, 0.75, steel, (y / 3) % 2 ? 'x' : 'z');
   return v;
 };
 /** What a seesaw turns on: two legs splayed either side, an axle between. */
@@ -76,7 +76,7 @@ export function build(c) {
 
   /* the slide, leaning and part of the way down; the small one, nearly gone */
   const going = (x, z, lean, tip, down, scale = 1) => {
-    c.model('recess:slide', slideVox, x, z, { y: -down, tilt: [tip, lean], scale, solid: false, shadow: false });
+    c.model('recess:slide:2', slideVox, x, z, { y: -down, tilt: [tip, lean], scale, solid: false, shadow: false });
     c.blot(x, z + 1.2, 2.6 * scale, 5.2 * scale, { a: 0.42 }); c.blot(x, z, 1.5 * scale, 1.5 * scale, { a: 0.4 });
   };
   const sx = -0.4, sz = -1.6;
@@ -89,7 +89,7 @@ export function build(c) {
   /* two swings, hung from the ceiling on chain: one where it should be, one that nobody could get on, and that one is moving */
   const wx = -W / 2 + 3.1, wz = -D / 2 + 2.9, VOX = kit.VOXEL;
   for (const k of [0, 1]) {
-    const x = wx + k * 1.15, high = k === p.high, y = high ? 2.05 : 0.5, links = Math.ceil((H - y) / VOX), geo = kit.model('recess:swing:' + links, swingVox(links));
+    const x = wx + k * 1.15, high = k === p.high, y = high ? 2.05 : 0.5, links = Math.ceil((H - y) / VOX), geo = kit.model('recess:swing:2:' + links, swingVox(links));
     c.hole(x - 0.25, wz - 0.25);
     if (!high) { c.place(geo, x, wz, { y, solid: false, shadow: false }); c.shadow(x, wz, 0.5, 0.2, 0.4); continue; }
     const b = new Batch(true); b.addVox(geo.solid, new THREE.Matrix4().compose(new THREE.Vector3(x, y, wz), new THREE.Quaternion(), new THREE.Vector3(VOX, VOX, VOX)));
