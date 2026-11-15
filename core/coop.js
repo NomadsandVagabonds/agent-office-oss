@@ -1,5 +1,5 @@
 // Deliberately bounded co-op simulation. Pure; the server owns all mutations.
-export const VERSION = 'blockrooms-coop-3';
+export const VERSION = 'blockrooms-coop-4';
 export const CELL = 2.4;
 export const MAP = [
 '#############',

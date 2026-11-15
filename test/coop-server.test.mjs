@@ -58,3 +58,19 @@ test('real-room controls go only to the host; guests cannot publish world state'
  b.send({type:'real-state',state:s});await until(()=>b.closed);assert.equal(app.rooms.get(code).state.phase,'disconnected');
  a.send({type:'real-state',state:{...s,phase:'play'}});await new Promise(r=>setTimeout(r,80));assert.equal(app.rooms.get(code).state.phase,'disconnected','in-flight host snapshot cannot revive a disconnected session');
 });
+test('real floor loading waits for both clients and ignores old-floor snapshots and commands',async t=>{
+ const app=createCoopServer();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));t.after(()=>app.close());const port=app.server.address().port;
+ const {code}=await(await fetch(`http://127.0.0.1:${port}/new?mode=rooms`,{method:'POST'})).json();
+ const a=await wire(port,code),b=await wire(port,code);t.after(()=>{a.socket.destroy();b.socket.destroy();});
+ await until(()=>b.messages.some(m=>m.type==='welcome'));a.send({type:'ready'});b.send({type:'ready'});await until(()=>a.messages.some(m=>m.state?.phase==='play'));
+ const r=app.rooms.get(code),s={...structuredClone(r.state),real:true,depth:0,depths:3,nodeCount:1,nodes:[],phase:'descending'};
+ a.send({type:'real-state',state:s});await until(()=>b.messages.some(m=>m.type==='floor-load'));assert.equal(r.state.phase,'loading');
+ a.send({type:'floor-ready',depth:1});a.send({type:'floor-ready',depth:1});b.send({type:'floor-ready',depth:0});
+ await new Promise(r=>setTimeout(r,80));assert.equal(r.state.phase,'loading');
+ b.send({type:'floor-ready',depth:1});await until(()=>b.messages.some(m=>m.type==='floor-start'));assert.equal(r.depth,1);
+ a.send({type:'real-state',state:{...s,phase:'play'}});b.send({type:'input',depth:0,f:1,s:0,yaw:0,pitch:0});
+ await new Promise(r=>setTimeout(r,80));assert.equal(r.state.depth,1);assert.equal(a.messages.some(m=>m.type==='control'),false);
+ b.send({type:'input',depth:1,f:1,s:0,yaw:0,pitch:0});await until(()=>a.messages.some(m=>m.type==='control'));
+ a.send({type:'real-state',state:{...s,depth:1}});await until(()=>r.state.phase==='loading');b.socket.destroy();await until(()=>r.state.phase==='disconnected');
+ a.send({type:'floor-ready',depth:2});await new Promise(r=>setTimeout(r,80));assert.equal(r.state.phase,'disconnected');
+});

@@ -2,7 +2,7 @@
 // anti-cheat server: the private host owns the simulation, including health.
 export function validRealSnapshot(s, ids) {
  const finite = n => Number.isFinite(n) && Math.abs(n) < 1e6;
- if (!s || s.real !== true || !['play', 'dead', 'escaped'].includes(s.phase) || !finite(s.time)) return false;
+ if (!s || s.real !== true || !['play', 'dead', 'escaped','descending'].includes(s.phase) || !finite(s.time)) return false;
  if (!Array.isArray(s.players) || s.players.length !== ids.length
   || !s.players.every(p => p && ids.includes(p.id)
    && [p.x,p.z,p.yaw,p.pitch,p.health,p.battery].every(finite)
@@ -13,6 +13,7 @@ export function validRealSnapshot(s, ids) {
   && ['battery','snack'].includes(i.type) && [i.x,i.z].every(finite)
   && (i.owner === null || i.owner === 'used' || ids.includes(i.owner)))) return false;
  if (!Number.isInteger(s.nodeCount) || s.nodeCount < 1 || s.nodeCount >= 50000) return false;
+ if(s.depth!==undefined&&(!Number.isInteger(s.depth)||!Number.isInteger(s.depths)||s.depth<0||s.depths<1||s.depths>8||s.depth>=s.depths))return false;
  const rows = (data, size) => Array.isArray(data) && data.length <= s.nodeCount
   && data.every(row => Array.isArray(row) && row.length === size && row.every(finite)
    && Number.isInteger(row[0]) && row[0] >= 0 && row[0] < s.nodeCount);

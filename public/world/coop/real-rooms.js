@@ -1,6 +1,6 @@
 // Real builders + collision + pirate controller; one trusted browser authority.
 import * as THREE from 'three';
-import {generate,toWorld} from '../backrooms/gen.js';
+import {toWorld} from '../backrooms/gen.js';
 import {createKit} from '../backrooms/kit.js';
 import {buildWorld,loadCatalogue} from '../backrooms/world.js';
 import {BUILDERS} from '../backrooms/rooms.js';
@@ -9,15 +9,18 @@ import {createPlayer} from '../backrooms/player.js';
 import {createHealth} from '../backrooms/health-state.js';
 import {resolveLook} from '/core/look.mjs';
 import {socialAct,socialTick,supplyPlan} from './social-rules.js';
+import {coopVisit,floorOf} from './visit.js';
 import {createPopulation} from './population.js';
 const nop=()=>{},dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
-export async function createRealRooms(seed,host,scene){
- const kit=createKit(),level=generate(seed,{only:['ceiling-meeting','coolers','hall-of-fame'],count:18,pursuer:true});level.depth=0;
+export async function createRealRooms(seed,host,scene,{depth=0,slice=false}={}){
+ const kit=createKit(),visit=coopVisit(seed,{slice}),level=floorOf(visit,depth);
  const cast=level.cast.map(name=>({name,look:resolveLook(name)}));
- let sim=null,visitors=[],active=null,acc=0,started=false;
- const sound={play:nop,playMascot:nop,stopMascot:nop};
- const env={level,kit,cast,who:{look:resolveLook('visitor'),creations:{}},builders:BUILDERS,catalogue:await loadCatalogue(kit),hatches:new Map(),sound,hud:{glitch:nop,flag:nop},clock:0,
-  play:nop,hear:()=>({vol:0,pan:0}),interfere:nop,hold:nop,descend:nop,run:{met:nop,survived:nop},
+ let sim=null,visitors=[],active=null,acc=0,started=false,floorTime=0;
+ let soundSeq=0;const sounds=[];
+ const emit=(name,extra={})=>{if(!sim)return;sounds.push({seq:++soundSeq,name,...extra});if(sounds.length>64)sounds.shift();};
+ const sound={play:(name,options)=>emit(name,{options,to:active?.id}),playMascot:()=>emit('mascot'),stopMascot:()=>emit('mascot-stop')};
+ const env={level,visit,kit,cast,who:{look:resolveLook('visitor'),creations:{}},builders:BUILDERS,catalogue:await loadCatalogue(kit),hatches:new Map(),sound,hud:{glitch:nop,flag:nop},clock:0,
+  play:(name,x,z,reach)=>emit(name,{x,z,reach}),hear:()=>({vol:1,pan:0}),interfere:nop,hold:nop,descend:at=>{if(sim&&active&&depth<visit.depths-1&&!sim.descent)sim.descent={x:at.x,z:at.z,by:active.id,ready:[]};},run:{met:nop,survived:nop},
   end:why=>{if(!sim||!active)return;if(why==='exit'){sim.exit={x:active.me.x,z:active.me.z};sim.exitOpen=true;return;}active.healthModel.damage(4);active.health=0;},
   sees(x,z,o={}){return visitors.some(v=>{if(v.health<=0)return false;const p=v.me,dx=x-p.x,dz=z-p.z,d=Math.hypot(dx,dz);return d<(o.far||40)&&Math.abs(p.pitch)<1.05&&(-Math.sin(p.yaw)*dx-Math.cos(p.yaw)*dz)/Math.max(.01,d)>.6&&env.world.los(p.x,p.z,x,z);});},
   health:{damage:n=>active?.healthModel.damage(n)},camera:{drain:share=>{if(active)active.record.battery*=1-Math.max(0,Math.min(1,share));return {ok:!!active};}},
@@ -45,21 +48,25 @@ export async function createRealRooms(seed,host,scene){
   v.health=1;v.me.frozen=false;v.me.vx=v.me.vz=0;v.input.keys.clear();v.age=1;
  }};
  function syncPlayers(s){
-  sim=JSON.parse(JSON.stringify(s));sim.real=true;
+  sim=JSON.parse(JSON.stringify(s));sim.real=true;sim.depth=depth;sim.depths=visit.depths;sim.theme=level.theme;sim.visited||=[];
   visitors=sim.players.map((record,i)=>{
    const input={keys:new Set(),dx:0,dy:0,stick:{x:0,y:0},hurry:false};
    const player=createPlayer(world,new THREE.PerspectiveCamera(),level.start,input);
+   player.on('step',m=>emit('step',{x:m.x,z:m.z,reach:7}));
    if(i&&world.free(player.me.x+.6,player.me.z,.23))player.me.x+=.6;
-   const v={id:record.id,record,player,me:player.me,input,health:4,healthModel:createHealth(),age:1};return v;
+   const healthModel=createHealth();
+   if(record.health<4||record.hitCooldown>0){healthModel.damage(Math.max(1,4-record.health));if(record.health===4)healthModel.heal(1);}
+   if(record.health>0)healthModel.tick(Math.max(0,1.25-(record.hitCooldown||0)));
+   const v={id:record.id,record,player,me:player.me,input,health:record.health,healthModel,age:1};return v;
   });
   const plain=world.rooms.filter(r=>r.def.kind==='plain'&&!r.def.crawl);
-  sim.items=[];
+  sim.items=sim.items.filter(i=>sim.players.some(p=>i.owner===p.id&&p.bag.includes(i.id)));
   const plan=supplyPlan(visitors.length);
   for(const [i,type]of plan.entries()){
    // Spread the two-person budget through the floor, with an early supply too.
    for(let n=0;n<plain.length;n++){
     const rt=plain[(Math.floor(i*plain.length/plan.length)+n)%plain.length],pos=findSpace(rt);
-    if(pos){sim.items.push({id:'real-'+i,type,...pos,y:world.floorY(pos.x,pos.z),owner:null});break;}
+    if(pos){sim.items.push({id:`floor-${depth}-supply-${i}`,type,...pos,y:world.floorY(pos.x,pos.z),owner:null});break;}
    }
   }
   active=visitors[0];env.player=active.player;started=true;
@@ -85,31 +92,36 @@ export async function createRealRooms(seed,host,scene){
  function step(dt,s){
   if(!host)return null;if(!started){if(s?.phase!=='play')return null;syncPlayers(s);}
   if(sim.phase!=='play')return sim;
-  dt=Math.min(.05,dt);sim.time+=dt;
-  for(const v of visitors){v.healthModel.tick(dt);v.age+=dt;if(v.age>.25)v.input.keys.clear();v.me.frozen=v.health<=0;
+  dt=Math.min(.05,dt);sim.time+=dt;floorTime+=dt;
+  for(const v of visitors){v.healthModel.tick(dt);v.age+=dt;if(v.age>.25)v.input.keys.clear();v.me.frozen=v.health<=0||!!sim.descent?.ready.includes(v.id);
    if(v.health>0){v.record.battery=Math.max(0,v.record.battery-dt);if(!v.record.battery)v.healthModel.damage(4);v.player.update(dt);}
    v.health=v.healthModel.read().current;
   }
   const live=visitors.filter(v=>v.health>0);if(!live.length)sim.phase='dead';
   population.update(dt,sim.time,visitors);
-  if(live.length){if(sim.time>8&&!env.coopAwake){env.pursuer.wake(true);env.coopAwake=true;}env.pursuer.update(dt,sim.time);}
-  for(const v of visitors){const m=v.me;Object.assign(v.record,{x:m.x,z:m.z,y:m.y,yaw:m.yaw,pitch:m.pitch,health:v.healthModel.read().current});v.health=v.record.health;}
+  for(const v of live){const rt=world.roomAt(v.me.x,v.me.z),key=`${depth}:${rt?.id}`;if(rt&&!sim.visited.includes(key))sim.visited.push(key);}
+  if(live.length){if(floorTime>8&&!env.coopAwake){env.pursuer.wake(true);env.coopAwake=true;}env.pursuer.update(dt,sim.time);}
+  for(const v of visitors){const m=v.me;Object.assign(v.record,{x:m.x,z:m.z,y:m.y,yaw:m.yaw,pitch:m.pitch,health:v.healthModel.read().current,hitCooldown:v.healthModel.read().cooldown});v.health=v.record.health;}
   // Opening the real taped wall creates a shared extraction point. It stays
   // open while the second visitor catches up; entering the stairwell is not a win.
   if(!sim.exit){const ex=level.rooms[level.exit.room];sim.exit={x:ex.cx,z:ex.cz};}
   if(!visitors.some(v=>v.health>0))sim.phase='dead';
   else if(sim.exitOpen&&visitors.filter(v=>v.health>0).every(v=>dist(v.me,sim.exit)<3))sim.phase='escaped';
+  if(sim.descent&&sim.phase==='play'){
+   for(const v of visitors.filter(v=>v.health>0))if(dist(v.me,sim.descent)<3&&!sim.descent.ready.includes(v.id))sim.descent.ready.push(v.id);
+   if(visitors.filter(v=>v.health>0).every(v=>sim.descent.ready.includes(v.id)))sim.phase='descending';
+  }
   socialTick(sim,socialContext);
   acc+=dt;if(acc<.1&&sim.phase==='play')return null;acc=0;
   sim.nodes=[];nodes.forEach((n,i)=>{const p=pack(n);if(JSON.stringify(p)!==initial[i])sim.nodes.push([i,...p]);});
   sim.links=world.throats.map(th=>th.open);sim.solids=world.rooms.map(rt=>rt.colliders.map(c=>c.on!==false));
-  sim.nodeCount=nodes.length;sim.pirate={...env.pursuer.at?.()};sim.creatures=env.pursuer.cast();
+  sim.sounds=sounds.slice();sim.nodeCount=nodes.length;sim.pirate={...env.pursuer.at?.()};sim.creatures=env.pursuer.cast();
   sim.opacity=nodes.flatMap((n,i)=>n.material?.transparent?[[i,n.material.opacity]]:[]);
   sim.lights=world.rooms.map(rt=>rt.u.dim.value);
   sim.tints=nodes.flatMap((n,i)=>n.material?.uniforms?.uTint?[[i,...n.material.uniforms.uTint.value.toArray()]]:[]);return sim;
  }
  function apply(s){
-  if(host||!s.real)return;
+  if(host||!s.real||s.nodeCount===undefined)return;
   if(s.nodeCount!==nodes.length)throw Error('Room build mismatch: restart both clients on the same version');
   for(let i=0;i<world.throats.length;i++)if(typeof s.links?.[i]==='boolean')world.throats[i].open=s.links[i];
   for(let r=0;r<world.rooms.length;r++)world.rooms[r].colliders.forEach((c,i)=>{
@@ -126,5 +138,5 @@ export async function createRealRooms(seed,host,scene){
   for(const [i,...p]of s.nodes||[])if(nodes[i])put(nodes[i],p);
  }
 
- return {world,level,step,command,apply,inspect:()=>({sim,visitors,nodes}),start:level.start,host,dispose(){env.pursuer.dispose();world.dispose();kit.dispose();}};
+ return {world,level,visit,depth,step,command,apply,inspect:()=>({sim,visitors,nodes}),start:level.start,host,dispose(){env.pursuer.dispose();scene.remove(world.scene);world.dispose();kit.dispose();}};
 }
