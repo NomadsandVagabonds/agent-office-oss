@@ -457,23 +457,30 @@ export function car(c, x, z, along = true, rgb = [0.6, 0.52, 0.38], lift = 0, in
 
 /**
  * A wooden telephone pole that is melting, toward (dx, dz): it stands for a metre or two, then goes over like a candle left
- * in the sun, its arms sagging, wood running off the ends of them in drips and standing in a pool at its foot. One wire still
- * goes up into the ceiling and is all that is holding the top; another has come down and lies on the grass.
+ * in the sun, wood running off its underside and standing in a pool at its foot. Only the pole: its two crossbars are as stiff
+ * and square as the day they went up. Two wires still go up into the ceiling and hold the top; two have come down.
  */
 export function meltingPole(c, x, z, dx, dz, hgt, R = c.R) {
   const wood = [0.36, 0.22, 0.12], dark = [0.24, 0.14, 0.07], wire = [0.04, 0.03, 0.02], N = 9, seg = hgt / N, pts = [[x, 0, z]], nx = -dz, nz = dx;
-  for (let i = 1; i <= N; i++) { const a = Math.pow(i / N, 2.2) * 2.5 + Math.sin(i * 1.7) * 0.06, q = pts[i - 1]; pts.push([q[0] + dx * Math.sin(a) * seg, Math.max(0.5, q[1] + Math.cos(a) * seg), q[2] + dz * Math.sin(a) * seg]); }
-  for (let i = 0; i < N; i++) beam(c.flat, pts[i], pts[i + 1], 0.17 - i * 0.011 + (i % 2) * 0.015, i % 3 ? wood : dark);
-  const drip = (p, len) => { beam(c.flat, p, [p[0], p[1] - len, p[2]], 0.035, wood); c.flat.ball(p[0], p[1] - len, p[2], 0.05, wood, 1.3, 6); };
-  for (const i of [N - 3, N - 2, N - 1]) {
-    const p = pts[i], hw = 0.62 - (N - 1 - i) * 0.05, sag = 0.18 + (i - N + 3) * 0.1;
-    for (const k of [-1, 1]) { const e = [p[0] + nx * hw * k, p[1] - sag * (k > 0 ? 1.5 : 1), p[2] + nz * hw * k]; beam(c.flat, p, e, 0.075, dark); drip(e, R.range(0.15, 0.7)); if (R.chance(0.5)) drip([(p[0] + e[0]) / 2, (p[1] + e[1]) / 2, (p[2] + e[2]) / 2], R.range(0.1, 0.4)); }
+  for (let i = 1; i <= N; i++) { const a = Math.pow(i / N, 2.4) * 1.75 + Math.sin(i * 1.7) * 0.07, q = pts[i - 1]; pts.push([q[0] + dx * Math.sin(a) * seg, Math.max(0.5, q[1] + Math.cos(a) * seg), q[2] + dz * Math.sin(a) * seg]); }
+  // the pole is what is melting: it thins and thickens as it goes over, and runs off its own underside
+  for (let i = 0; i < N; i++) beam(c.flat, pts[i], pts[i + 1], 0.18 - i * 0.008 + (i % 2) * 0.03, i % 3 ? wood : dark);
+  const drip = (p, len) => { beam(c.flat, p, [p[0], p[1] - len, p[2]], 0.04, wood); c.flat.ball(p[0], p[1] - len, p[2], 0.055, wood, 1.3, 6); };
+  for (const i of [N - 4, N - 2]) drip([pts[i][0], pts[i][1] - 0.06, pts[i][2]], R.range(0.25, 0.6));
+  // its two crossbars are not: square timber, dead straight, a row of insulators on each, exactly as they were put up
+  const ends = [];
+  for (const [i, hw] of [[N - 1, 0.75], [N - 2, 0.6]]) {
+    const p = pts[i]; beam(c.flat, [p[0] - nx * hw, p[1] + 0.09, p[2] - nz * hw], [p[0] + nx * hw, p[1] + 0.09, p[2] + nz * hw], 0.09, dark);
+    for (const k of [-0.9, -0.45, 0.45, 0.9]) { const q = [p[0] + nx * hw * k, p[1] + 0.135, p[2] + nz * hw * k]; c.flat.box(q[0] - 0.03, q[1], q[2] - 0.03, q[0] + 0.03, q[1] + 0.09, q[2] + 0.03, [0.55, 0.62, 0.6]); if (Math.abs(k) > 0.5) ends.push([q[0], q[1] + 0.09, q[2], k]); }
   }
-  const top = pts[N - 2], up = c.ceilAt(top[0], top[2]); beam(c.flat, top, [top[0] - dx * 0.25, up, top[2] - dz * 0.25], 0.014, wire); c.hole(top[0] - dx * 0.25 - 0.3, top[2] - dz * 0.25 - 0.3);
-  const end = pts[N]; beam(c.flat, end, [end[0] + dx * 0.5, 0.02, end[2] + dz * 0.5], 0.014, wire); beam(c.flat, [end[0] + dx * 0.5, 0.02, end[2] + dz * 0.5], [end[0] + dx * 1.6 + nx * 0.5, 0.02, end[2] + dz * 1.6 + nz * 0.5], 0.014, wire);
+  // the wires: two still go up into the ceiling, and are what is holding the top; two have come down
+  for (const [ex, ey, ez, k] of ends) {
+    if (k > 0) { const up = c.ceilAt(ex, ez); beam(c.flat, [ex, ey, ez], [ex - dx * 0.4, up, ez - dz * 0.4], 0.014, wire); c.hole(ex - dx * 0.4 - 0.3, ez - dz * 0.4 - 0.3); }
+    else { const g = [ex + dx * 0.7 + nx * k * 0.4, 0.02, ez + dz * 0.7 + nz * k * 0.4]; beam(c.flat, [ex, ey, ez], g, 0.014, wire); beam(c.flat, g, [g[0] + dx * 1.1, 0.02, g[2] + dz * 1.1 + nz * 0.3], 0.014, wire); }
+  }
   // the pool, and what has dripped into it since
   c.flat.ball(x, 0.01, z, 0.62, wood, 0.09, 10); c.flat.ball(x + dx * 0.5, 0.01, z + dz * 0.5, 0.4, dark, 0.08, 8); c.blot(x, z, 1.9, 1.9, { a: 0.4 });
-  for (const i of [N - 3, N - 1]) { const p = pts[i]; c.flat.ball(p[0] + nx * 0.5, 0.01, p[2] + nz * 0.5, 0.16, wood, 0.12, 6); }
+  for (const i of [N - 4, N - 2]) { const p = pts[i]; c.flat.ball(p[0], 0.01, p[2], 0.2, wood, 0.1, 6); }
   c.solid(x - 0.12, z - 0.12, x + 0.12, z + 0.12); c.reserve(x, z, 0.8);
 }
 
