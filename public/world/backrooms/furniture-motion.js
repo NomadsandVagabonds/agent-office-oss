@@ -26,6 +26,9 @@ const distance2 = (p, b) => (p.x - clamp(p.x, b.x0, b.x1)) ** 2 + (p.z - clamp(p
  * world.free accepts opt.bounds (an exact footprint), ignoreCollider and
  * ignoreBody identities. No collider is temporarily disabled during a query.
  */
+/** How far above or below its carrier's floor a carried thing may be set down (a stair and a bit). */
+export const SET_DOWN_STEP = 0.4;
+
 export function createFurnitureMotion(world) {
   const away = new Map();
   function usable(item) {
@@ -80,10 +83,13 @@ export function createFurnitureMotion(world) {
   /** A carried prop is intangible in transit. Only setting it down needs a
    * full footprint/body/floor check; it does not sweep back through the path
    * the visitor has already walked. Supports a different landing height. */
-  function place(item, x, z) {
+  function place(item, x, z, { from } = {}) {
     if (!usable(item) || ![x, z].every(Number.isFinite)) return false;
     const floor = world.floorY(x, z), dy = floor - item.y;
     if (!Number.isFinite(floor)) return false;
+    // `from`: the floor its carrier stands on. Nothing is set down more than a step above or below that: not into a pit
+    // (where it would be lost, or stand in the air over one), and not up onto a ledge out of reach.
+    if (Number.isFinite(from) && Math.abs(floor - from) > SET_DOWN_STEP) return false;
     const dx = x - item.x, dz = z - item.z;
     if (!fits({ ...item, y: floor, top: item.top + dy }, dx, dz)) return false;
     if (Math.hypot(dx, dz, dy) >= EPS && item.translate(dx, dz, dy) === false) return false;

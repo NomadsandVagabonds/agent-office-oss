@@ -326,4 +326,9 @@ test('setting down carried furniture accepts a new floor height but not pits, wa
   world.rooms[0].floorY = (x, z) => x > 0 && Math.abs(z - 1) < .12 ? -2 : .18;
   chair.carried = true; chair.collider.on = false;
   assert.equal(motion.place(chair, 6, 5), false, 'cannot use an ordinary chair as a bridge over an interior hole');
+  // a hole wide enough to take the whole chair: its floor is flat down there, so only where the carrier stands says no
+  world.rooms[0].floorY = (x) => x > 0 ? -40 : .18;
+  const y = chair.y;
+  assert.equal(motion.place(chair, 6, 5, { from: .18 }), false, 'nothing is set down into a pit from the bank');
+  assert.equal(chair.y, y, 'and it has not moved');
 });

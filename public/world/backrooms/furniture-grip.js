@@ -85,7 +85,7 @@ export function createFurnitureGrip(world, motion, { sound } = {}) {
           if (!world.free(me.x + (x - me.x) * i / n, me.z + (z - me.z) * i / n, .015,
             { tall: true, ghost: true, ignoreCollider: held.collider })) { clear = false; break; }
         }
-        if (clear && motion.place(held, x, z)) { finish(true); sound?.play('clack', { vol: .3 }); return true; }
+        if (clear && motion.place(held, x, z, { from: world.floorY(me.x, me.z) })) { finish(true); sound?.play('clack', { vol: .3 }); return true; }
       }
       if (!force) { blocked = true; follow(); return false; }
       held.translate(saved.x - held.x, saved.z - held.z, saved.y - held.y);
