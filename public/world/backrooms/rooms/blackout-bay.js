@@ -118,10 +118,13 @@ export function build(c) {
       dt,
       inDark,
       hasFlashlight,
+      mounted: !!c.env.inventory?.torchMounted?.(),
       byFire: !!c.fire(me.x, me.z),          // paper burning within sight is light enough to stand in
       px: me.x,
+      py: (me.world?.y ?? ((c.room.y||0)+1.1))-(c.room.y||0),
       pz: me.z,
       yaw: me.yaw,
+      pitch: me.world?.pitch||0,
       targets,
     });
     rule = res.state;

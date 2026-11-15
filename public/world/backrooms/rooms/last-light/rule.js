@@ -1,8 +1,9 @@
 // The Last Light: pure layout and encounter rules. The room owns the clock,
 // body and beam test; a glance, the camcorder lamp or fire is not a flashlight.
+import { FLASHLIGHT, inFlashlight } from '../../flashlight.js';
 export const LAST_LIGHT = Object.freeze({
   warning: 1.2, speed: 1.55, reach: .63, damage: 1, grace: 6,
-  beamRange: 12, beamCos: .91, half: 1.25,
+  beamRange: FLASHLIGHT.holdRange, beamCos: FLASHLIGHT.holdCos, half: 1.25,
 });
 
 export function hallLayout({ W, D }) {
@@ -19,13 +20,8 @@ export function hallLayout({ W, D }) {
 
 /** A body-sized target in the actual 3D beam. Pitch matters, as do walls,
  * finite range, and power from the inventory (including a taped-on torch). */
-export function heldInBeam({ x, y=1.1, z, yaw, pitch=0 }, target, power, los=true) {
-  if (!(power > .05) || !los) return false;
-  const cp=Math.cos(pitch), fx=-Math.sin(yaw)*cp, fy=Math.sin(pitch), fz=-Math.cos(yaw)*cp;
-  return [.8,1.35,1.9].some(height=>{
-    const dx=target.x-x, dy=(target.y||0)+height-y, dz=target.z-z, d=Math.hypot(dx,dy,dz);
-    return d <= LAST_LIGHT.beamRange && d>.001 && (dx*fx+dy*fy+dz*fz)/d >= LAST_LIGHT.beamCos;
-  });
+export function heldInBeam(eye, target, power, los=true) {
+  return inFlashlight(eye,target,{power,los});
 }
 
 export const waiting = () => ({phase:'idle',age:0,frozen:false,scored:false});

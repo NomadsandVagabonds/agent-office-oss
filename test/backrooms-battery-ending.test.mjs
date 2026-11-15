@@ -62,7 +62,7 @@ async function visit(t) {
     resolveLook: () => ({}),
     sketch: noop, toWorld: (r, x, z) => ({ x, z }), toLocal: (r, x, z) => ({ x, z }), DECK: [], ARCHETYPES: {},
     planVisit: () => ({ depths: 2 }), floorOf: (plan, depth) => level(depth), edition: () => 'test',
-    createKit: () => ({ shared: { uTorch: { value: 0 } }, dispose: noop }), BUILDERS: {}, loadCatalogue: async () => ({}),
+    createKit: () => ({ shared: { uTorch: { value: 0 }, uTorchOrigin: { value: new THREE.Vector3() }, uTorchDirection: { value: new THREE.Vector3() } }, dispose: noop }), BUILDERS: {}, loadCatalogue: async () => ({}),
     async buildWorld(kit, level, env) {
       const room = { id: 0, def: level.rooms[0], group: { visible: true }, level: 0.3, u: { dim: { value: 1 } }, flickers: [], visits: 0 };
       let current = null;
@@ -85,7 +85,7 @@ async function visit(t) {
   const beforeDocument = globalThis.document;
   globalThis.document = { activeElement: null };
   t.after(() => { delete globalThis[key]; if (beforeDocument === undefined) delete globalThis.document; else globalThis.document = beforeDocument; });
-  const real = new Set(['./player.js', './survival.js', './tally.js', './seam.js', './battery-ending.js', './banner.rule.js']);
+  const real = new Set(['./player.js', './survival.js', './tally.js', './seam.js', './battery-ending.js', './banner.rule.js', './flashlight.js']);
   let source = readFileSync(new URL('index.js', directory), 'utf8').replace(/^import (.+) from '([^']+)';$/gm, (_, names, path) => {
     if (path === 'three') return `import ${names} from ${JSON.stringify(new URL('../public/vendor/three.module.min.js', import.meta.url).href)};`;
     if (path === '/core/backrooms-settings.mjs') return `import ${names} from ${JSON.stringify(new URL('../core/backrooms-settings.mjs', import.meta.url).href)};`;

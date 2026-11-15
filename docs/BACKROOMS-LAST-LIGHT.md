@@ -79,8 +79,34 @@ includes the room and its helper automatically. Encounter pacing still needs
 the owner's playtesting; speed, grace, warning, beam range and angle are in
 `rooms/last-light/rule.js`.
 
-Validation on this branch: 801/802 full-suite tests pass. The sole failure is
+## Flashlight and blackout follow-up
+
+The shared surface shader now uses an offset handheld emitter (or the smaller
+camcorder offset for a mounted torch), a 5-degree bright core, an 18-degree
+soft outer half-angle, distance falloff and surface incidence. Nearby patches
+are small in world space and bright; distant patches cover more wallpaper and
+fade; oblique surfaces stretch the footprint and receive less light. The
+source converges on the sight line four metres ahead. It adds three bytes of
+normal data per lit vertex, no draw calls or shadow maps. Geometry does not
+cast new flashlight shadows in this pass.
+
+Last Light and Blackout Bay share the same emitter geometry, including pitch
+and mounted position. Their freeze region sits within the visible beam and
+tests the continuous body silhouette so close passes do not produce gaps.
+The light uniforms update both visible parts around a way down.
+
+Complete outages now retain roughly 1.25% of normal ambient contribution,
+down from about 9.4%. Failed banks run at 0.25%; exposure gain is capped at
+1.25 and the automatic camcorder lamp at 2.5% of the torch. Working-bank
+brightness and the steady-light accessibility behavior are preserved. These
+changes apply to the lighting system's rooms, including this authored hall.
+
+The study also has near-wall, far-wall and grazing-wall views for comparing
+the beam against the wallpaper's fixed pattern. Hard-refresh after updating
+the local modules. Screenshots and playtest balance remain outside Git.
+
+Validation on this branch: 806/807 full-suite tests pass. The sole failure is
 the existing status-line bridge test (`test/usage.test.mjs`), which also fails
 on the unchanged `c429e13` base on this Mac. The standalone build succeeds
-(224 files); the browser's world check reports no room warnings. Preview
+(225 files); the earlier browser world check reports no room warnings. Preview
 screenshots are kept outside Git. Nothing from this branch has been deployed.
