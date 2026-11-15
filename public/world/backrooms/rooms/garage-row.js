@@ -5,7 +5,6 @@
 // same wall, or on a picture of a garage with nothing in it. A remote is on
 // the floor here, in case nobody has found one.
 import { P } from '../bits.js';
-import { placePickup } from '../hand.js';
 import { garble, lawn, roller, daylight } from '../suburb.js';
 
 export function build(c) {
@@ -22,6 +21,6 @@ export function build(c) {
     c.hang(numB, side, at, 2.34, 0.5, 0.25, [[k / 8, 0], [(k + 1) / 8, 0], [(k + 1) / 8, 1], [k / 8, 1]], undefined, 0.07);
     const f = c.wallAt(side, at, 1.4); c.blot(f.x, f.z, 1.2, 0.9, { rgb: [0.02, 0.02, 0.02], a: 0.5 });
   }
-  placePickup(c, 'opener', R.range(-0.5, 0.5), 0.4, 0, { label: 'take the remote' });
+  c.leave('opener', R.range(-0.5, 0.5), 0.4, { y: 0 });
   void H;
 }

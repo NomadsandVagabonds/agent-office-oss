@@ -2,17 +2,20 @@
 // in. Wallpaper, carpet and ceiling-tile textures; batches that gather a whole
 // room's surfaces and furniture into a handful of meshes; and the lighting.
 //
-// Nothing here is lit while you play. Every vertex is lit ONCE, when a room is
+// Light contributions are baked ONCE, when a room is
 // built, from that room's ceiling panels (and anything else that glows), and
 // the result is stored on the vertex. That is what lets a level of twenty
 // rooms, each with a dozen fluorescent panels, run on anything: the picture
 // has pools of light under the tubes and gloom under the dead ones, and the
 // GPU only ever multiplies two colours. A flickering tube keeps its share of
-// the light in a second attribute, so it can stutter by itself.
+// the light in a second attribute, so it can stutter by itself. The optional
+// lighting study adds two ceiling-bank contributions; changing their strength
+// costs a multiply, with no shadow maps or per-frame geometry rebuilds.
 import * as THREE from 'three';
 import { canvasTexture, shade } from '../scene/textures.js';
 import { meshVox } from '../vox/mesher.js';
 import { VOXEL } from '../vox/vox.js';
+import { bankWeights } from './lighting.js';
 
 const GLOW = 2.3;                              // how hard a self-lit voxel shines
 
@@ -166,15 +169,18 @@ export class Batch {
  */
 export function lamp(x, y, z, rgb, o = {}) {
   return { x, y, z, r: rgb[0], g: rgb[1], b: rgb[2], k: o.k ?? 3.2, wrap: o.wrap ?? 0.3, lobe: !!o.axis, ax: o.axis?.[0] || 0, ay: o.axis?.[1] || 0, az: o.axis?.[2] || 0,
-    floor: o.floor ?? 0.25, flick: !!o.flick, far2: (o.far ?? 14) ** 2 };
+    floor: o.floor ?? 0.25, flick: !!o.flick, bank: o.bank, far2: (o.far ?? 14) ** 2 };
 }
 
 /** Light every vertex of a batch. → { lit, flk } (flk only if a flickering light reaches it). */
-export function bake(batch, lights, amb) {
+export function bake(batch, lights, amb, lighting = null) {
   const n = batch.verts, pos = batch.pos, nor = batch.nor, alb = batch.alb, ao = batch.ao, sf = batch.sf;
   const lit = new Float32Array(n * 3);
   let flk = null;
-  const steady = lights.filter((l) => !l.flick), flicker = lights.filter((l) => l.flick);
+  const banked = (l) => lighting && (l.bank === 0 || l.bank === 1);
+  const steady = lights.filter((l) => !banked(l) && !l.flick), flicker = lights.filter((l) => !banked(l) && l.flick);
+  const bankLights = lighting ? [0, 1].map((k) => lights.filter((l) => l.bank === k)) : null;
+  const banks = lighting ? [new Float32Array(n * 3), new Float32Array(n * 3)] : null;
   const sum = [0, 0, 0];
   const gather = (list, px, py, pz, nx, ny, nz) => {
     let r = 0, g = 0, b = 0;
@@ -197,7 +203,15 @@ export function bake(batch, lights, amb) {
     const px = pos[j], py = pos[j + 1], pz = pos[j + 2], nx = nor[j], ny = nor[j + 1], nz = nor[j + 2];
     const hemi = 0.8 + 0.2 * ny, k = ao[i];
     gather(steady, px, py, pz, nx, ny, nz);
-    lit[j] = ar * k * (amb[0] * hemi + sum[0]); lit[j + 1] = ag * k * (amb[1] * hemi + sum[1]); lit[j + 2] = ab * k * (amb[2] * hemi + sum[2]);
+    const base = 1 - (lighting?.ambientShare || 0);
+    lit[j] = ar * k * (amb[0] * hemi * base + sum[0]); lit[j + 1] = ag * k * (amb[1] * hemi * base + sum[1]); lit[j + 2] = ab * k * (amb[2] * hemi * base + sum[2]);
+    if (banks) {
+      const weights = bankWeights(lights, px, pz);
+      for (let b = 0; b < 2; b++) {
+        gather(bankLights[b], px, py, pz, nx, ny, nz);
+        for (let c = 0; c < 3; c++) banks[b][j + c] = alb[j + c] * k * (sum[c] + amb[c] * hemi * lighting.ambientShare * weights[b]);
+      }
+    }
     if (flicker.length) {
       gather(flicker, px, py, pz, nx, ny, nz);
       if (sum[0] + sum[1] + sum[2] > 1e-4) {
@@ -206,14 +220,15 @@ export function bake(batch, lights, amb) {
       }
     }
   }
-  return { lit, flk };
+  return { lit, flk, banks };
 }
 
 /** The light arriving at a point facing (nx, ny, nz) — for things that move after the bake. */
-export function lightAt(lights, amb, x, y, z, nx = 0, ny = 1, nz = 0) {
+export function lightAt(lights, amb, x, y, z, nx = 0, ny = 1, nz = 0, runtime = {}) {
   const probe = { verts: 1, pos: [x, y, z], nor: [nx, ny, nz], alb: [1, 1, 1], ao: [1], sf: [0, 0], vox: false };
-  const { lit, flk } = bake(probe, lights, amb);
-  return [lit[0] + (flk ? flk[0] : 0), lit[1] + (flk ? flk[1] : 0), lit[2] + (flk ? flk[2] : 0)];
+  const { lit, flk, banks } = bake(probe, lights, amb, runtime.lighting);
+  return [0, 1, 2].map((c) => lit[c] + (flk ? flk[c] * (runtime.flick ?? 1) : 0)
+    + (banks ? banks[0][c] * (runtime.banks?.[0] ?? 1) + banks[1][c] * (runtime.banks?.[1] ?? 1) : 0));
 }
 
 /* ---- the kit ----------------------------------------------------------------- */
@@ -221,6 +236,11 @@ export function lightAt(lights, amb, x, y, z, nx = 0, ny = 1, nz = 0) {
 const VERT = `
 attribute vec3 aLit;
 attribute vec3 aAlb;
+#ifdef BANKS
+attribute vec3 aBank0;
+attribute vec3 aBank1;
+uniform vec2 uBanks;
+#endif
 #ifdef FLICK
 attribute vec3 aFlk;
 #endif
@@ -240,6 +260,9 @@ varying vec3 vView;
 void main() {
   vUv = uv;
   vec3 lit = aLit;
+  #ifdef BANKS
+  lit += aBank0 * uBanks.x + aBank1 * uBanks.y;
+  #endif
   #ifdef FLICK
   lit += aFlk * uFlick;
   #endif
@@ -397,17 +420,19 @@ export function createKit() {
   };
 
   /** The one material: baked light × texture, with the per-room dimmer and flicker. */
-  function surface({ map = null, room = null, vox = false, cutout = false, flick = false, alpha = 1, side = THREE.FrontSide } = {}) {
+  function surface({ map = null, room = null, vox = false, cutout = false, flick = false, banks = false, alpha = 1, side = THREE.FrontSide } = {}) {
     const defines = {};
     if (map) defines.MAPPED = 1;
     if (vox) defines.VOXEL = 1;
     if (cutout) defines.CUTOUT = 1;
     if (flick) defines.FLICK = 1;
+    if (banks) defines.BANKS = 1;
     return own(new THREE.ShaderMaterial({
       defines, vertexShader: VERT, fragmentShader: FRAG, side,
       transparent: alpha < 1, depthWrite: alpha >= 1,
       uniforms: {
         map: { value: map }, uFlick: room ? room.flick : { value: 1 }, uDim: room ? room.dim : { value: 1 },
+        uBanks: room?.banks || { value: [1, 1] },
         uTint: { value: new THREE.Vector3(1, 1, 1) }, uTorch: shared.uTorch, uAlpha: { value: alpha },
       },
     }));
@@ -420,14 +445,15 @@ export function createKit() {
   }
 
   /** Batch → geometry with its light baked in. */
-  function geometry(batch, lights, amb) {
+  function geometry(batch, lights, amb, lighting = null) {
     if (!batch.verts) return null;
-    const { lit, flk } = bake(batch, lights, amb);
+    const { lit, flk, banks } = bake(batch, lights, amb, lighting);
     const geo = own(new THREE.BufferGeometry());
     geo.setAttribute('position', new THREE.Float32BufferAttribute(batch.pos, 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(batch.vox ? new Float32Array(batch.verts * 2) : batch.uv, 2));
     geo.setAttribute('aLit', new THREE.BufferAttribute(lit, 3));
     if (flk) geo.setAttribute('aFlk', new THREE.BufferAttribute(flk, 3));
+    if (banks) for (let b = 0; b < 2; b++) geo.setAttribute(`aBank${b}`, new THREE.BufferAttribute(banks[b], 3));
     const alb = new Uint8Array(batch.alb.length);
     for (let i = 0; i < alb.length; i++) alb[i] = Math.max(0, Math.min(255, Math.round(batch.alb[i] * 255)));
     geo.setAttribute('aAlb', new THREE.BufferAttribute(alb, 3, true));
@@ -435,6 +461,7 @@ export function createKit() {
     geo.setIndex(batch.idx);
     geo.computeBoundingSphere();
     geo.userData.flick = !!flk;
+    geo.userData.banks = !!banks;
     return geo;
   }
   /** Batch → plain geometry (position + uv), for things that shine by themselves. */

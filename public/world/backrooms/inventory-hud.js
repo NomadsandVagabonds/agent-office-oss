@@ -70,6 +70,10 @@ function fallbackItemIcon(type, item) {
       rect(x,22,1,4,'#c06850'); rect(x + 2,26,5,1,'#b45845');
     }
     rect(14,14,4,4,'#535e58'); rect(15,14,2,2,'#c9cfbb');
+  } else if (type === 'opener') {
+    rect(10,4,12,24,'#5b605c'); rect(11,5,10,22,'#8b8f8a');
+    rect(13,8,6,6,'#7a3229'); rect(14,9,4,4,'#a8473b');
+    rect(13,18,6,1,'#b9bdb4'); rect(13,21,6,1,'#b9bdb4'); rect(11,25,10,2,'#6c716c');
   } else if (type === 'snack') {
     rect(7,2,18,4,'#875737'); rect(7,26,18,4,'#875737');
     for (const x of [7, 11, 15, 19, 23]) { rect(x,2,1,4,'#d1a06a'); rect(x,26,1,4,'#d1a06a'); }
