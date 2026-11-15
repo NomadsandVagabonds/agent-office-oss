@@ -7,7 +7,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { generate, sketch, DECK, ARCHETYPES, SIDES, T, RISE, toWorld, wallLength, wallPoint, floorAt, ceilAt, headAt, fitsAt, stairZones,
   roomDistances, roomPath, makeRng, MIN_EXIT_STEPS, MIN_ODD, MAX_ODD, MAX_ROOMS, coinSpots, STASH, THING_CHANCE, TRACES } from '../public/world/backrooms/gen.js';
 import { layoutOf, standable, motif, fits, TELLS, HALLS, NARROW, LOW, HIGH } from '../public/world/backrooms/quiet.js';
-import { dealtThemes } from '../public/world/backrooms/themes.js';
+import { dealtThemes, atHome } from '../public/world/backrooms/themes.js';
 // (Every kind of floor that is finished. One still being built — themes.js `dealt: false` — is in nobody's visit and is
 // not held to these until that line goes: taking it out is what holds a new kind of floor to all of them.)
 const FINISHED = dealtThemes();
@@ -447,7 +447,8 @@ test('in an oddity a coin has a place of its own, where the builder leaves the f
     }
   };
   for (let i = 0; i < 250; i++) check(withLoot(`deck-${i}`));
-  for (const arch of DECK) if (!arch.planned && !arch.headline) assert.ok(seen.get(arch.id) >= 5, `${arch.id}: only ${seen.get(arch.id) || 0} coins in 250 buildings`);
+  // (a room made for a kind of floor that is still being built — themes.js `dealt: false` — is in none of those buildings either)
+  for (const arch of DECK) if (!arch.planned && !arch.headline && FINISHED.some((t) => atHome(arch, t) > 0)) assert.ok(seen.get(arch.id) >= 5, `${arch.id}: only ${seen.get(arch.id) || 0} coins in 250 buildings`);
   // a room that is never dealt by chance (placed by the plan, or from the news) is not in those buildings at all: ask for
   // each by name, and hold where its coin goes to the same
   for (const arch of DECK) if (arch.planned || arch.headline) {

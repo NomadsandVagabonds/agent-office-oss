@@ -31,6 +31,7 @@ import { allHandsStash } from './rooms/all-hands/rule.js';
 import { compactorStash } from './rooms/compactor-canyon/rule.js';
 import { serverChasmStash } from './rooms/server-chasm/rule.js';
 import { PLAN as HALL_PLAN, partsOf as hallParts } from './rooms/unsure-hall/rule.js';
+import { homeStash } from './rooms/show-home/layout.js';
 import { fill } from './words.js';
 
 const cornerStash = (r, side) => (side < 0
@@ -73,6 +74,14 @@ const MAIL_SIGNS = [
 const MAIL_SLOTS = ['INBOX', 'OUTBOX', 'ESCALATIONS', '{PROJECT}', 'UNASSIGNED', 'UNDELIVERABLE'];
 
 const HALL_FACES = ['break', 'waiting', 'store', 'lounge'];        // (as rooms/unsure-hall.js builds them)
+
+// The neighbourhood's words (themes.js `suburb`). Every one is the office's: nothing here is anybody's brand.
+const HOME_NUMBERS = ['404', '127', '8080', '443', '3000', '1'];
+const HOME_BOARDS = [
+  ['FOR SALE', 'OPEN PLAN', '{PROJECT}'], ['TO LET', 'ENQUIRE WITHIN', 'ASK FOR {AGENT}'], ['SOLD', 'SUBJECT TO', 'CODE REVIEW'],
+  ['SHOW HOME', 'PHASE 2 OF', '{PROJECT}'], ['UNDER OFFER', 'VIEWINGS BY', 'CALENDAR INVITE'],
+];
+const RECESS_RULES = [['PLAY AREA', 'RECESS IS BLOCKED BY:'], ['PLAY AREA', 'NEXT BREAK AFTER:'], ['WELLBEING ZONE', 'OPENS WHEN THIS IS DONE:']];
 
 export const MORE_DECK = [
   // The hallway that is not sure where it leads. The room you come into, a hallway, a room at the far end of it that
@@ -337,6 +346,19 @@ export const MORE_DECK = [
     teaches: 'tape', module: './rooms/cover.js',
     stash: (r) => { const s = r.params.side, x = s * (r.W / 2 - 1.0); return [Math.min(x - 0.4, x + 0.4), r.D / 2 - 1.5, Math.max(x - 0.4, x + 0.4), r.D / 2 - 0.7]; },
     roll: (R) => ({ side: R.pick([-1, 1]), deskZ: +R.range(-0.4, 0.8).toFixed(2), seconds: R.int(9, 12) }) },
+  // The neighbourhood (themes.js `suburb`: still being built, `dealt: false`). Rooms made for it, and dealt nowhere else.
+  // A house, front garden and all, in a room with a suspended ceiling. From the gate it is a house. The door is a door;
+  // what is behind it is the back of a set, and a desk.
+  { id: 'show-home', name: 'The Show Home', landmark: 'the house with its lights on', w: [16, 18], d: [14, 16], h: [5.4, 6.2],
+    ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/show-home.js', stash: homeStash,
+    roll: (R, o) => ({ number: R.pick(HOME_NUMBERS), board: R.pick(HOME_BOARDS).map((t) => fill(t, o, R).toUpperCase()), name: String(o.name || 'occupier').toUpperCase(),
+      door: R.pick(['#8c2a22', '#8c2a22', '#2f5a3a', '#27406b']), tree: R.pick([-1, 1]) }) },
+  // A playground on fake grass. Most of it is going down into the floor, slowly, and has been for some time.
+  { id: 'recess', name: 'Recess', landmark: 'the playground that is going under', w: [12, 14], d: [10, 12], h: [3.3, 4.2],
+    ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/recess.js', stash: (r) => [r.W / 2 - 1.55, -r.D / 2 + 0.45, r.W / 2 - 0.9, -r.D / 2 + 1.05],
+    roll: (R, o) => ({ rules: [...R.pick(RECESS_RULES), String(o.tasks.length ? R.pick(o.tasks) : 'TODO').toUpperCase()], lean: R.pick([-1, 1]), hops: [1, 2, 3, 4, 4, 6, 7, 9], high: R.int(0, 1) }) },
 ];
 
 // Where a tape goes in an entry that does not say so itself: (room, ±1) → [x0, z0, x1, z1] in the room's own frame.
