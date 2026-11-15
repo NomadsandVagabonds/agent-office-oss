@@ -2,7 +2,7 @@
 
 Branch: `codex/backrooms-coop`, based on development `a155afc`.
 Private alpha: https://blockrooms-coop-production.up.railway.app/rooms
-Railway runs game build `b756746`, separately from the public BlockRooms site.
+Railway runs game build `69d7c55`, separately from the public BlockRooms site.
 
 ## Lobby refresh (live)
 
@@ -21,7 +21,7 @@ known unrelated console/status-line failures. Deployed as `b756746`; the live
 HTTPS page, CSS/SVG assets, private host-key stripping, guest invite and both
 players entering a run passed in two Chromium clients.
 
-## First-play preflight (prepared, not deployed)
+## First-play preflight (live)
 
 Small first-session fixes: starting a game disables the button until the request
 finishes, times out after 15 seconds, and offers a useful retry after failure.
@@ -51,6 +51,10 @@ not retained, so its exact cause is not proven. The harness prints the seed
 and transition diagnostics for repeatable investigation.
 
 Co-op tests: 42/42. Full suite: 821/824, same existing console/status-line failures.
+Release `69d7c55` is live on Railway. The hosted check passed private-key
+stripping, invite joining, two-way generated microphone audio over HTTPS/WSS,
+readiness, mouse capture, the reload warning and disconnect feedback. Live
+client/voice/page bytes match the commit and `/health` responds 200.
 Physical microphones and the London–Argentina connections still need the real
 playthrough. Use the private host bookmark to create, send only the resulting
 invite, enable voice in both browsers, and keep the host tab visible. A selected
@@ -301,7 +305,7 @@ browser stores that key for its tab session and strips the fragment before
 constructing invite links. Never send the host bookmark to a guest. The guest
 only opens `/rooms?room=<random-session-id>`, clicks Ready, and optionally enables
 voice. Both still need the host tab visible. Railway project/service: `blockrooms-coop`. Deployed from the explicit artifact
-using game commit `b756746`, with one replica and US East configured in the
+using game commit `69d7c55`, with one replica and US East configured in the
 artifact’s Railway config. The creator key lives only in Railway variables and
 the owner’s private local credential file; it is not committed. Hosted HTTPS/WSS
 checks passed two-client joining, production crafting, mounted lights, shared
