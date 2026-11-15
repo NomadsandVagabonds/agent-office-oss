@@ -26,6 +26,7 @@ import { reorgStash } from './rooms/re-org/layout.js';
 import { allHandsStash } from './rooms/all-hands/rule.js';
 import { compactorStash } from './rooms/compactor-canyon/rule.js';
 import { serverChasmStash } from './rooms/server-chasm/rule.js';
+import { plenumStash } from './rooms/drop-plenum/rule.js';
 import { fill } from './words.js';
 
 const cornerStash = (r, side) => (side < 0
@@ -318,6 +319,25 @@ export const MORE_DECK = [
       dept: o.projects.length ? R.pick(o.projects).slice(0, 16) : R.pick(['Operations', 'Platform', 'Back Office', 'Fulfilment']),
       reduction: R.pick([18, 24, 32, 45]),
       tableSide: R.pick([-1, 1]),
+    }),
+  },
+  {
+    id: 'drop-plenum',
+    resident: 'plenum-toner', items: ['torch'], caught: 1, fire: 'fears',
+    name: 'The Return Plenum',
+    landmark: 'the step-ladder up into the red drop ceiling',
+    w: [14, 16], d: [16, 18], h: [4.8, 5.1],
+    ports: ['back', 'left', 'right'],
+    big: true,
+    weight: 1.0,
+    lights: 'dark',
+    themes: { yellow: 1.5, night: 1.4, archive: 1.2, fitout: 1.1 },
+    module: './rooms/drop-plenum.js',
+    stash: plenumStash,
+    roll: (R, o) => ({
+      zone: R.pick(['4B-RET', '7A-NORTH', 'SUB-3', 'PLM-9']),
+      supervisor: (o.agents.length ? R.pick(o.agents) : 'FACILITIES').slice(0, 14).toUpperCase(),
+      ductTone: R.pick([0, 1]),
     }),
   },
 ];

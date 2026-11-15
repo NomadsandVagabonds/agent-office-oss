@@ -260,7 +260,7 @@ export function fits(room, plan) {
   const inside = (p, q) => p.x > q.x0 && p.x < q.x1 && p.z > q.z0 && p.z < q.z1;
   for (const d of room.doors) {
     // a doorway keeps a metre of clear floor in front of it, a little wider than itself
-    for (let off = 0.15; off <= 1.0; off += 0.17) for (let k = -0.5; k <= 0.5; k += 0.25) {
+    for (let off = 0.15; off <= 1.0; off += 0.17) for (let k = -0.5; k <= 0.501; k += 0.1) {
       const p = wallPoint(room, d.side, d.c + k * (d.w + 0.4), off);
       if ([...plan.pillars.map(box), ...(plan.blocks || [])].some((q) => inside(p, pad(q, 0.05)))) return false;
     }
