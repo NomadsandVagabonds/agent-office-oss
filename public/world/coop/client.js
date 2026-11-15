@@ -33,7 +33,7 @@ if(!realMode)for(let z=0;z<MAP.length;z++)for(let x=0;x<MAP[z].length;x++){
 }
 if(!realMode)box(EXIT.x,1.1,EXIT.z+.8,1.3,2.2,.08,new THREE.MeshBasicMaterial({color:0x577762}));
 const pirate=makePirate(kit,makeRng('coop-pirate'));pirate.show();pirate.hold(0);if(!realMode)scene.add(pirate.group);
-const itemMeshes=new Map(),avatars=new Map(),keys=new Set();let state=null,id=null,socket=null,yaw=Math.PI,pitch=0,selected=0,lastHealth=4,ended=false;
+const itemMeshes=new Map(),avatars=new Map(),keys=new Set();let state=null,id=null,socket=null,yaw=Math.PI,pitch=0,selected=0,lastHealth=null,hitFlash=null,ended=false;
 function send(m){if(realMode&&!['ready','floor-ready','voice','host-paused','real-state'].includes(m.type))m.depth=real?.depth;if(real?.host&&state?.phase==='play'&&['input','select','toggle-light','craft','take','drop','use','exit','revive','emote','trade-request','trade-answer','trade-offer','trade-confirm','trade-cancel'].includes(m.type)){real.command(id,m);return;}if(socket?.readyState===1)socket.send(JSON.stringify(m));}
 const voice=createVoice({send,enabled:()=>socket?.readyState===1&&!!state&&!ended,button:$('voice'),status:$('voiceStatus'),volume:$('voiceVolume'),indicator:$('voiceIndicator')});
 let inventoryHud=null;let resultSerial=0;
@@ -63,14 +63,16 @@ function signalSprite(){const c=document.createElement('canvas');c.width=128;c.h
 function fail(error){fatal='The game stopped: '+error.message;ended=true;keys.clear();voice.off();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=fatal;socket?.close(1011,'Room runtime failed');}
 function active(){return !building&&!inventoryHud?.isOpen&&!socialUI.visible&&!ended&&!hostPaused&&document.pointerLockElement===canvas&&state?.phase==='play'&&state.players.find(p=>p.id===id)?.health>0;}
 const slots=Array.from({length:6},(_,i)=>{const b=document.createElement('button');b.onclick=()=>selected=i;$('bar').append(b);return b;});
-function itemMesh(type){const b=new Batch(true);b.addVox(kit.model('coop:'+type,INVENTORY_MODELS[type]).solid,new THREE.Matrix4().makeScale(.04,.04,.04));return new THREE.Mesh(kit.geometry(b,[lamp(0,3,0,[1,1,1],{k:8})],[.8,.8,.8]),kit.surface({vox:true}));}
+function itemMesh(type){const b=new Batch(false);INVENTORY_MODELS[type].sculpt(b,.032,{grounded:true});return new THREE.Mesh(kit.geometry(b,[lamp(-1.4,3.2,1.6,[.55,.52,.48],{k:10}),lamp(1.8,2,-1.6,[.22,.24,.28],{k:10})],[.8,.8,.82]),kit.surface({vox:false}));}
 function update(s){state=s;if(s.phase==='play')$('panel').classList.add('has-played');if(realMode)gameAudio.update(s,id);if(real&&!real.host&&!building)real.apply(s);for(const p of s.players){if(p.id!==id&&!avatars.has(p.id)){const a=new Avatar(resolveLook(p.id,{species:'human',outfit:'hoodie',outfitColor:'#498776',accessory:'none'}),{seed:p.id});scene.add(a.root);a.root.position.set(p.x,0,p.z);a.signal=signalSprite();scene.add(a.signal);avatars.set(p.id,a);}}
- for(const item of s.items){if(!itemMeshes.has(item.id)){const m=itemMesh(item.type);scene.add(m);itemMeshes.set(item.id,m);}const m=itemMeshes.get(item.id);m.visible=item.owner===null;m.position.set(item.x,(item.y||0)+.03,item.z);}
+ for(const item of s.items){if(!itemMeshes.has(item.id)){const m=itemMesh(item.type);scene.add(m);itemMeshes.set(item.id,m);}const m=itemMeshes.get(item.id);m.visible=item.owner===null;m.position.set(item.x,(item.y||0)+.01,item.z);}
  const me=s.players.find(p=>p.id===id);if(!me)return;
  $('clock').textContent=`SP ${Math.floor(s.time/60).toString().padStart(2,'0')}:${Math.floor(s.time%60).toString().padStart(2,'0')}`;
  $('vitals').textContent=`♥ ${me.health}/4  ·  BAT ${Math.ceil(me.battery)}s  ·  PARTNER ${s.players.find(p=>p.id!==id)?.health??'—'}/4`;
  slots.forEach((b,i)=>{b.className=selected===i?'selected':'';b.textContent=`${i+1} ${s.items.find(t=>t.id===me.bag[i])?.type||'·'}`;});
- if(me.health<lastHealth){$('overlay').style.backgroundColor='#a0202044';setTimeout(()=>$('overlay').style.backgroundColor='',250);}lastHealth=me.health;
+ // Only this visitor's health loss flashes: no arrival, healing, partner hit,
+ // or camera expiry. A new hit replaces the fade instead of an old timeout clearing it.
+ if(lastHealth!==null&&me.health<lastHealth&&me.battery>0){hitFlash?.cancel();hitFlash=$('overlay').animate([{backgroundColor:'#c706067a'},{backgroundColor:'#c7060600'}],{duration:700,easing:'ease-out'});}lastHealth=me.health;
  if(inventoryHud){
   inventoryHud.update(inventoryView(s,me));
   const result=me.inventoryResult;

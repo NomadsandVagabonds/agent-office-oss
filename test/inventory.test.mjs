@@ -413,3 +413,44 @@ test('scissors carry three snips, never waste durability on empty air, and snap 
   assert.equal(model.read().slots[0], null);
   unchanged(model, () => model.useSelected({ snip: () => ({ ok: true }) }), 'empty');
 });
+
+test('all inventory items sculpt high-detail 3D polygon geometry with outward normals and grounded footprints', async () => {
+  const { INVENTORY_MODELS, ICON_MODELS, sculptTorchGrip } = await import('../public/world/backrooms/inventory-items.js');
+  for (const type of Object.keys(ITEM_DEFS)) {
+    assert.equal(typeof INVENTORY_MODELS[type]?.sculpt, 'function', `missing high-detail sculptor for ${type}`);
+  }
+  for (const [name, entry] of Object.entries(ICON_MODELS)) {
+    const grounded = { pos: [], nor: [], uv: [], alb: [], ao: [], idx: [] };
+    const held = { pos: [], nor: [], uv: [], alb: [], ao: [], idx: [] };
+    entry.sculpt(grounded, 1, { grounded: true });
+    entry.sculpt(held, 1, { grounded: false, held: true });
+    const tris = grounded.idx.length / 3, verts = grounded.pos.length / 3;
+    assert.ok(tris >= 500, `${name} should have high-detail triangle count (got ${tris})`);
+    assert.equal(tris, held.idx.length / 3, `${name} should not include a separate shadow disc`);
+    let minY = Infinity;
+    for (let i = 0; i < grounded.pos.length; i += 3) {
+      assert.ok(Number.isFinite(grounded.pos[i]) && Number.isFinite(grounded.pos[i + 1]) && Number.isFinite(grounded.pos[i + 2]));
+      minY = Math.min(minY, grounded.pos[i + 1]);
+      const nl = Math.hypot(grounded.nor[i], grounded.nor[i + 1], grounded.nor[i + 2]);
+      assert.ok(Math.abs(nl - 1) < 1e-3, `${name} normal length ${nl}`);
+    }
+    if (name !== 'camera') assert.ok(minY >= -0.01 && minY <= 0.08, `${name} grounded mesh should rest flush on floor (${minY})`);
+    for (let k = 0; k < grounded.idx.length; k += 3) {
+      const a = grounded.idx[k], b = grounded.idx[k + 1], c = grounded.idx[k + 2];
+      assert.ok(a >= 0 && a < verts && b >= 0 && b < verts && c >= 0 && c < verts);
+      const i0 = a * 3, i1 = b * 3, i2 = c * 3;
+      const ux = grounded.pos[i1] - grounded.pos[i0], uy = grounded.pos[i1 + 1] - grounded.pos[i0 + 1], uz = grounded.pos[i1 + 2] - grounded.pos[i0 + 2];
+      const vx = grounded.pos[i2] - grounded.pos[i0], vy = grounded.pos[i2 + 1] - grounded.pos[i0 + 1], vz = grounded.pos[i2 + 2] - grounded.pos[i0 + 2];
+      const fnx = uy * vz - uz * vy, fny = uz * vx - ux * vz, fnz = ux * vy - uy * vx;
+      if (Math.hypot(fnx, fny, fnz) > 1e-6) {
+        const dot = fnx * (grounded.nor[i0] + grounded.nor[i1] + grounded.nor[i2])
+          + fny * (grounded.nor[i0 + 1] + grounded.nor[i1 + 1] + grounded.nor[i2 + 1])
+          + fnz * (grounded.nor[i0 + 2] + grounded.nor[i1 + 2] + grounded.nor[i2 + 2]);
+        assert.ok(dot > 0, `${name} triangle ${k / 3} has inverted winding`);
+      }
+    }
+  }
+  const grip = { pos: [], nor: [], uv: [], alb: [], ao: [], idx: [] };
+  sculptTorchGrip(grip, 1);
+  assert.ok(grip.idx.length / 3 >= 400);
+});

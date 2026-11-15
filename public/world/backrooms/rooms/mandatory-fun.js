@@ -1,94 +1,41 @@
-// Mandatory Fun ("the balloon party"): an HR breakroom decked out in garish
-// blue panelling, bunting, and a unattended sheet cake. One Culture Crew
-// greeter balances on one leg near the threshold holding a red balloon while
-// five more stand hand-in-hand in a ring. Hold a red balloon and they dance
-// and honk party horns for you; step past the foyer tape empty-handed and all
-// six break ranks to swarm.
-import { Vox, M } from '../../vox/vox.js';
+// Mandatory Fun: the office party nobody ever cleared away. A selected red
+// balloon buys a dance; empty hands make all six committee members converge.
 import * as THREE from 'three';
 import { lin } from '../kit.js';
 import { toLocal } from '../gen.js';
-import { clamp, turnTo, card, framed } from '../bits.js';
+import { clamp, turnTo } from '../bits.js';
 import { placePickup } from '../hand.js';
-import { PARTY, createPartyState, stepParty, releaseParty } from './mandatory-fun/rule.js';
+import { PARTY, createPartyState, stepParty, releaseParty, partyTarget } from './mandatory-fun/rule.js';
 import { buildCommitteeMember } from './mandatory-fun/rig.js';
+import { dressParty } from './mandatory-fun/dressing.js';
 import { roomBody, moveRoomWalker, roomContact } from '../room-physics.js';
 
-function cakeVox() {
-  const v = new Vox();
-  const plate = M('#e6e2d6', 1), icing = M('#f7f2ea', 1), trim = M('#e36474', 1), candle = M('#6bb4de', 0);
-  v.rbox(-8, 0, -6, 8, 1, 6, 1, plate, 'xz');
-  v.rbox(-7, 1, -5, 7, 6, 5, 1, icing, 'xz');
-  for (let x = -7; x <= 6; x += 2) { v.set(x, 6, 5, trim); v.set(x, 6, -5, trim); }
-  for (let z = -5; z <= 4; z += 2) { v.set(-7, 6, z, trim); v.set(7, 6, z, trim); }
-  for (const [cx, cz] of [[-3, 0], [0, 0], [3, 0]]) {
-    v.box(cx, 6, cz, cx + 1, 9, cz + 1, candle);
-    v.set(cx, 9, cz, M('#f4b43a', 0));
-  }
-  return v;
-}
-
 export function build(c) {
-  const { W, D, H, R, params: p } = c;
+  const { W, D, H, params: p } = c;
   c.shell();
 
   // Keep back corners clear for stashed tapes
   c.reserve(-W / 2 + 1.0, -D / 2 + 1.0, 0.65);
   c.reserve(W / 2 - 1.0, -D / 2 + 1.0, 0.65);
 
-  // Garish corporate party-blue feature panels on free stretches of wall
-  const partyBlue = lin('#2e5584'), festRed = lin('#c93030'), festGold = lin('#dfb838');
-  for (const side of ['back', 'left', 'right']) {
-    for (const [a, b] of c.spans(side, 0.45, 2.1)) {
-      if (b - a < 1.5) continue;
-      const w = Math.min(b - a - 0.2, 3.6), mid = (a + b) / 2;
-      c.wbox(side, mid, w, 0.12, H - 0.18, 0, 0.016, partyBlue);
-      // Bunting triangles / colour blocks along top of panel
-      const nFlags = Math.floor(w / 0.36);
-      for (let i = 0; i < nFlags; i++) {
-        const fx = mid - w / 2 + (i + 0.5) * (w / nFlags);
-        c.wbox(side, fx, 0.2, H - 0.38, H - 0.22, 0.016, 0.026, i % 2 === 0 ? festRed : festGold);
-      }
-    }
-  }
-
-  // Safe foyer threshold stripe across the front entrance
+  // The old foyer stripe is just decoration: sight, not crossing it, starts the approach.
   const thresholdZ = D / 2 - 2.3;
-  c.lay(c.flat, 0, thresholdZ, W - 0.8, 0.07, 0, null, festRed, 0.009);
+  c.lay(c.flat, 0, thresholdZ, W - 0.8, 0.07, 0, null, lin('#a34e44'), 0.009);
 
   // Balloon pickup tied safely on the foyer side of the red line so visitors can take one first
   const pickupSide = -p.greeterSide;
-  let placedBalloon = false;
+  const balloons = c.env.partySize === 2 ? 2 : 1;
+  let placedBalloons = 0;
   for (const sx of [pickupSide, -pickupSide, 0]) {
     const bx = clamp(sx * 1.35, -W / 2 + 1.1, W / 2 - 1.1), bz = D / 2 - 1.15;
     if (!c.clear(bx, bz, 0.48)) continue;
     placePickup(c, 'balloon', bx, bz, 0, { label: 'take red balloon' });
     c.reserve(bx, bz, 0.55);
-    placedBalloon = true;
-    break;
+    if (++placedBalloons === balloons) break;
   }
-  if (!placedBalloon) placePickup(c, 'balloon', 0, D / 2 - 1.05, 0, { label: 'take red balloon' });
-
-  // Refreshment table with Q3 morale cake off to one side
-  const tableSide = pickupSide || 1;
-  const tx = tableSide * (W / 2 - 0.95), tz = clamp(0.9, -D / 2 + 2.0, thresholdZ - 0.9);
-  if (c.clear(tx, tz, 0.65)) {
-    const tbl = c.prop(c.hasProp('cafetable') ? 'cafetable' : 'desk', tx, tz, {
-      rot: tableSide > 0 ? -Math.PI / 2 : Math.PI / 2,
-      fallback: [0.7, 0.74, 1.15],
-    });
-    c.model('fun:cake', cakeVox, tx, tz, { y: tbl.top, solid: false, shadow: false });
-  }
-
-  // Banner explaining the rule in corporate HR language
-  const signSpot = c.wallSpot(1.7, ['back', 'left', 'right']);
-  if (signSpot) {
-    const tex = card(c, 'funbanner:' + p.occasion, [
-      'MANDATORY FUN',
-      p.occasion,
-      'HOLD YOUR RED BALLOON',
-    ], { w: 192, h: 72, bg: '#fff6e4', fg: '#1d222c', edge: '#cf1d1d', size: 11, pad: 10 });
-    framed(c, c.mapped('funbanner', tex), signSpot.side, signSpot.at, 1.58, 1.28, 0.48);
+  // Distinct pickups (and IDs) even in a tightly furnished foyer.
+  while (placedBalloons < balloons) {
+    placePickup(c, 'balloon', placedBalloons++ ? .45 : -.45, D / 2 - 1.05, 0, { label: 'take red balloon' });
   }
 
   // Warm overhead party tint in the middle of the room
@@ -101,6 +48,7 @@ export function build(c) {
   const gx = clamp(p.greeterSide * (W / 2 - 1.45), -W / 2 + 1.1, W / 2 - 1.1);
   const gz = clamp(thresholdZ - 0.35, -D / 2 + 1.6, D / 2 - 1.6);
   c.reserve(gx, gz, 0.55);
+  dressParty(c);
 
   const addMember = (variant, idx, hx, hz, hRot, baseAngle = 0) => {
     const m = buildCommitteeMember(c.kit, variant, idx);
@@ -123,7 +71,32 @@ export function build(c) {
     addMember('circle', i, mx, mz, a + Math.PI, a);
   }
 
-  let rule = createPartyState(), known = false;
+  let rule = createPartyState(), known = false, targetId = null;
+  const welcomed = new Set();
+  c.rt.partyState = () => ({ mode: rule.mode, target: targetId, welcomed: [...welcomed], members: members.map(m => ({ x: m.group.position.x, z: m.group.position.z })) });
+  const seesVisitor = me => me.inside && members.some(m => {
+    const a = c.toWorld(m.x, m.z), b = c.toWorld(me.x, me.z);
+    return c.world.los(a.x, a.z, b.x, b.z);
+  });
+  // The shared room still ticks once. Select the threatened visitor before its
+  // context is installed, so damage and held-item checks belong to that person.
+  c.rt.chooseVisitor = people => partyTarget(people.map(p => ({ ...p, visible: seesVisitor(p) })), targetId, welcomed)?.id;
+  let danceAt = null, danceAngles = [];
+  const gatherAround = me => {
+    danceAt = { x: me.x, z: me.z };
+    // Keep their order around the visitor instead of assigning the old home
+    // slots. Nobody has to cross the camera to reach the opposite side.
+    const order = members.map((m, i) => ({ i, angle: Math.atan2(m.x - me.x, m.z - me.z) })).sort((a, b) => a.angle - b.angle);
+    const step = Math.PI * 2 / members.length;
+    const offset = Math.atan2(order.reduce((s, m, i) => s + Math.sin(m.angle - i * step), 0),
+      order.reduce((s, m, i) => s + Math.cos(m.angle - i * step), 0));
+    for (const [i, m] of order.entries()) danceAngles[m.i] = offset + i * step;
+  };
+  const danceSpot = i => {
+    const a = danceAngles[i];
+    return { x: clamp(danceAt.x + Math.sin(a) * PARTY.danceRadius, -W / 2 + .4, W / 2 - .4),
+      z: clamp(danceAt.z + Math.cos(a) * PARTY.danceRadius, -D / 2 + .4, D / 2 - .4) };
+  };
 
   // The building's camera, if they take the last of somebody (docs/BACKROOMS.md, "The last three seconds"): the six of
   // them close into a ring round the visitor's character, hand in hand, and it is given a hat. It does not fall down. It
@@ -160,8 +133,11 @@ export function build(c) {
 
   c.tick((dt, time, me) => {
     if (over) return;
-    const holdingBalloon = !!c.env.hand?.hasBalloon();
-    const pastThreshold = me.inside && me.z < thresholdZ;
+    const holdingBalloon = c.env.inventory ? c.env.inventory.held?.()?.type === 'balloon' : !!c.env.hand?.hasBalloon();
+    const id = me.id ?? 'local';
+    if (id !== targetId) { targetId = id; rule = { ...createPartyState(), welcomed: welcomed.has(id) }; danceAt = null; }
+    const visible = seesVisitor(me);
+    if (holdingBalloon && !rule.welcomed && rule.mode !== 'gathering' && rule.mode !== 'partying') gatherAround(me);
     let minDist = Infinity, contactDist = Infinity;
     for (const m of members) {
       const d = Math.hypot(me.x - m.x, me.z - m.z);
@@ -173,12 +149,14 @@ export function build(c) {
     const res = stepParty(rule, {
       dt,
       insideRoom: me.inside,
-      pastThreshold,
+      visible,
+      gathered: !!danceAt && members.every((m, i) => { const p = danceSpot(i); return Math.hypot(m.x - p.x, m.z - p.z) < .4; }),
       holdingBalloon,
       minDist,
       contactDist,
     });
     rule = res.state;
+    if (rule.welcomed) welcomed.add(id); else if (visible && !holdingBalloon) welcomed.delete(id);
 
     const centerW = c.toWorld(ringX, ringZ);
     if (res.horn) c.env.play('partyhorn', centerW.x, centerW.z, 10);
@@ -188,35 +166,38 @@ export function build(c) {
       c.env.interfere(0.8);
     }
 
-    if (rule.mode === 'partying') {
-      // Joyful celebration: the circle revolves hand-in-hand while the greeter bobs and waves
-      for (const m of members) {
-        if (m.variant === 'circle') {
-          const a = m.baseAngle + rule.dancePhase * 0.52;
-          moveRoomWalker(c, m, ringX + Math.sin(a) * ringR, ringZ + Math.cos(a) * ringR, PARTY.swarmSpeed * dt);
-          m.rot = a + Math.PI;
-          m.group.position.set(m.x, Math.abs(Math.sin(rule.dancePhase * 1.8 + m.idx)) * 0.085, m.z);
-          m.group.rotation.y = m.rot;
-          m.group.rotation.z = Math.sin(rule.dancePhase + m.idx * 1.2) * 0.11;
-        } else {
-          moveRoomWalker(c, m, m.hx, m.hz, PARTY.returnSpeed * dt);
-          m.group.position.set(m.x, Math.abs(Math.sin(rule.dancePhase * 1.8)) * 0.09, m.z);
-          const want = Math.atan2(me.x - m.x, me.z - m.z);
-          m.rot += clamp(turnTo(m.rot, want), -dt * 4, dt * 4);
-          m.group.rotation.y = m.rot;
-          m.group.rotation.z = Math.sin(rule.dancePhase * 1.4) * 0.13;
+    if (rule.mode === 'gathering' || rule.mode === 'partying') {
+      // Close around the balloon holder, sway briefly, then stay in this new circle. The
+      // spaced ring leaves walking gaps; the visitor is never held in place.
+      for (const [i, m] of members.entries()) {
+        if (rule.mode === 'gathering') {
+          const dx = m.x - danceAt.x, dz = m.z - danceAt.z, distance = Math.hypot(dx, dz);
+          const from = Math.atan2(dx, dz), angle = from + clamp(turnTo(from, danceAngles[i]), -dt * 2.5, dt * 2.5);
+          const radius = distance + clamp(PARTY.danceRadius - distance, -res.speed * dt, res.speed * dt);
+          // Walk round the holder, not straight through them to a ring slot.
+          moveRoomWalker(c, m, clamp(danceAt.x + Math.sin(angle) * radius, -W / 2 + .4, W / 2 - .4),
+            clamp(danceAt.z + Math.cos(angle) * radius, -D / 2 + .4, D / 2 - .4), res.speed * dt);
         }
-        m.aimHead(turnTo(m.rot, Math.atan2(me.x - m.x, me.z - m.z)), time, rule.mode);
+        const dancing = rule.mode === 'partying', want = Math.atan2(danceAt.x - m.x, danceAt.z - m.z);
+        m.rot += clamp(turnTo(m.rot, want), -dt * 6, dt * 6);
+        m.group.position.set(m.x, dancing ? Math.abs(Math.sin(rule.dancePhase + i)) * .065 : 0, m.z);
+        m.group.rotation.y = m.rot;
+        m.group.rotation.z = dancing ? Math.sin(rule.dancePhase + i * .6) * .14 : 0;
+        m.aimHead(turnTo(m.rot, want), time, dancing ? 'partying' : 'swarming');
         m.light(c.sample(m.x, 1.0, m.z));
       }
     } else if (rule.mode === 'swarming') {
       // Circle breaks: all six rush the visitor
-      for (const m of members) {
+      for (const [i, m] of members.entries()) {
         const dx = me.x - m.x, dz = me.z - m.z, d = Math.hypot(dx, dz) || 0.001;
-        const step = Math.min(d, res.speed * dt);
-        const nx = clamp(m.x + (dx / d) * step, -W / 2 + 0.35, W / 2 - 0.35);
-        const nz = clamp(m.z + (dz / d) * step, -D / 2 + 0.35, D / 2 - 0.35);
-        moveRoomWalker(c, m, nx, nz, step);
+        // Close from separate angles at arm's reach. Taking a short arc near
+        // the visitor avoids walking through their camera to reach a far slot.
+        const approach = Math.atan2(-dx, -dz), slot = i / members.length * Math.PI * 2;
+        const angle = approach + (d < 1.7 ? clamp(turnTo(approach, slot), -dt * 2.5, dt * 2.5) : 0);
+        const radius = Math.max(.55, d - res.speed * dt);
+        const nx = clamp(me.x + Math.sin(angle) * radius, -W / 2 + .35, W / 2 - .35);
+        const nz = clamp(me.z + Math.cos(angle) * radius, -D / 2 + .35, D / 2 - .35);
+        moveRoomWalker(c, m, nx, nz, res.speed * dt);
         const want = Math.atan2(me.x - m.x, me.z - m.z);
         m.rot += clamp(turnTo(m.rot, want), -dt * 9, dt * 9);
         m.group.position.set(m.x, Math.abs(Math.sin(rule.dancePhase + m.idx * 1.3)) * 0.075, m.z);
@@ -229,22 +210,23 @@ export function build(c) {
       if (res.caught) {
         c.env.play('partyhorn', centerW.x, centerW.z, 8);
         c.env.interfere(1);
-        // made to join in: a heart where there are hearts — and if that was not the last, they form up again and leave you be a while
+        // A hit costs a heart; survivors are still chased until they escape or show a balloon.
         if (!known) { known = true; c.met('fun-committee'); }
         const hit = c.hurt(PARTY.hurts);
         if (hit.ended) { over = true; return; }
         if (!hit.ended) { rule = releaseParty(rule); if (hit.landed) { c.env.hud.glitch(0.5); c.survived('fun-committee'); } }
       }
     } else {
-      // Idle or resetting: bodies hold the circle while every neck twists toward the threshold/visitor
+      // Once welcomed, keep the new circle. Only walk home after the visitor
+      // leaves the room, using the same collision-aware movement as pursuit.
       for (const m of members) {
         const tx = m.variant === 'circle' ? ringX + Math.sin(m.baseAngle) * ringR : m.hx;
         const tz = m.variant === 'circle' ? ringZ + Math.cos(m.baseAngle) * ringR : m.hz;
         const dx = tx - m.x, dz = tz - m.z, d = Math.hypot(dx, dz);
-        if (d > 0.02 && res.speed > 0) {
+        if (rule.mode !== 'released' && d > 0.02 && res.speed > 0) {
           moveRoomWalker(c, m, tx, tz, Math.min(d, res.speed * dt));
         }
-        const want = me.inside && m.variant === 'greeter'
+        const want = rule.mode === 'released' && danceAt ? Math.atan2(danceAt.x - m.x, danceAt.z - m.z) : me.inside && m.variant === 'greeter'
           ? Math.atan2(me.x - m.x, me.z - m.z)
           : (m.variant === 'circle' ? m.baseAngle + Math.PI : m.rot);
         m.rot += clamp(turnTo(m.rot, want), -dt * 4, dt * 4);

@@ -4,30 +4,33 @@
 // items.js. This is the part of the two that needs three.js.
 import * as THREE from 'three';
 import { Batch, lamp, drawText } from './kit.js';
-import { INVENTORY_MODELS } from './inventory-items.js';
+import { INVENTORY_MODELS, sculptTorchGrip } from './inventory-items.js';
 import { Vox, M } from '../vox/vox.js';
 import { KINDS, ITEM_IDS, isPaper, isBalloon, isFlashlight, createHandOver } from './items.js';
 
 export { ITEM_IDS, isPaper, isBalloon, isFlashlight };
 
-/** A right glove around the torch's rear grip; the sleeve continues off the picture. Held view only. */
-function torchGrip() {
-  const v = new Vox(), glove = M('#ac9c7d', 2), seam = M('#81765f', 2), knuckle = M('#c2b293', 2);
-  const sleeve = M('#465256', 3), cuff = M('#697371', 3), fold = M('#384446', 3);
-  v.rbox(3, -2, 1, 7, 5, 8, 1, glove);                     // palm on the right of the handle
-  for (const z of [1, 3, 5]) {                             // fingers curl underneath, up the far side
-    v.box(-4, -2, z, 5, 1, z + 2, glove);
-    v.box(-5, 0, z, -3, 4, z + 2, knuckle);
-    v.box(-4, -2, z, 4, -1, z + 1, seam);
-  }
-  v.box(2, 4, 3, 6, 7, 7, glove);                         // thumb rests behind the switch
-  v.box(0, 6, 3, 4, 8, 5, knuckle);
-  v.rbox(3, -5, 6, 9, 1, 12, 1, glove);
-  v.rbox(4, -8, 8, 11, -2, 15, 1, cuff);
-  v.rbox(6, -12, 11, 15, -5, 21, 1, sleeve);
-  v.rbox(10, -20, 17, 22, -9, 31, 1, sleeve);
-  v.box(7, -11, 13, 8, -6, 19, fold);
-  v.box(17, -17, 20, 19, -11, 28, fold);
+const ITEM_LIGHTS = () => [
+  lamp(-1.4, 3.2, 1.6, [0.48, 0.46, 0.42], { k: 10, far: 14, wrap: 0.45 }),
+  lamp(1.8, 1.9, -1.6, [0.20, 0.22, 0.26], { k: 10, far: 14, wrap: 0.35 }),
+];
+const ITEM_AMB = [0.78, 0.78, 0.80];
+
+function boundsFromBatch(b) {
+  const box = new THREE.Box3(), v = new THREE.Vector3();
+  for (let i = 0; i < b.pos.length; i += 3) box.expandByPoint(v.set(b.pos[i], b.pos[i + 1], b.pos[i + 2]));
+  return box;
+}
+
+/** Pinch the bottom of the balloon string; the wrist runs out of the frame. */
+function balloonGrip() {
+  const v = new Vox(), glove = M('#ac9c7d', 2), knuckle = M('#c2b293', 2), cuff = M('#697371', 3), sleeve = M('#465256', 3);
+  v.rbox(-3, -6, -2, 5, 0, 5, 1, glove);
+  v.box(-2, -2, -2, 1, 2, 0, knuckle);
+  v.box(1, -3, 0, 4, 1, 3, knuckle);
+  v.rbox(0, -10, 2, 7, -4, 9, 1, cuff);
+  v.rbox(2, -22, 5, 13, -8, 20, 1, sleeve);
+  v.rbox(7, -36, 14, 20, -18, 33, 1, sleeve);
   return v;
 }
 
@@ -69,24 +72,28 @@ export function createHandView(env, camera) {
   }
   function model(kind) {
     if (kind === 'pink-slip') return slip();
-    const b = new Batch(true), s = (kit.VOXEL || 0.025) * (kind === 'balloon' ? 0.26 : 0.46);
-    const item = kit.model(`inventory:${kind}:v1`, INVENTORY_MODELS[kind]).solid, scale = new THREE.Matrix4().makeScale(s, s, s);
-    b.addVox(item, scale);
-    if (kind === 'torch') b.addVox(kit.model('hand:torch-grip:v1', torchGrip).solid, scale);
-    const mat = kit.surface({ vox: true }), mesh = new THREE.Mesh(kit.geometry(b, [lamp(-1, 3, 1, [0.4, 0.4, 0.4], { k: 8, far: 12, wrap: 0.5 })], [0.8, 0.8, 0.8]), mat);
-    if (kind === 'torch') {
-      // The lens is local -Z, just like the camera. Look down its body, with the
-      // front aimed slightly inward/up and the wrist below the right edge.
-      mesh.rotation.set(0.12, 0.22, -0.08);
+    const b = new Batch(false), s = (kit.VOXEL || 0.025) * (kind === 'balloon' ? 0.36 : 0.46);
+    INVENTORY_MODELS[kind].sculpt(b, s, { grounded: false, held: true });
+    const itemBounds = kind === 'torch' || kind === 'balloon' ? boundsFromBatch(b) : null;
+    if (kind === 'torch') sculptTorchGrip(b, s);
+    const mat = kit.surface({ vox: false }), mesh = new THREE.Mesh(kit.geometry(b, ITEM_LIGHTS(), ITEM_AMB), mat);
+    if (kind === 'balloon') {
+      // The glove and the string it holds are a voxel model (the party's own): a mesh of their own, on the same hand.
+      const g = new Batch(true); g.addVox(kit.model('hand:balloon-grip:v1', balloonGrip).solid, new THREE.Matrix4().makeScale(s, s, s));
+      const gm = kit.surface({ vox: true }), grip = new THREE.Mesh(kit.geometry(g, [lamp(-1, 3, 1, [0.4, 0.4, 0.4], { k: 8, far: 12, wrap: 0.5 })], [0.8, 0.8, 0.8]), gm);
+      gm.transparent = true; grip.renderOrder = 10000; mesh.add(grip);
+    }
+    if (kind === 'torch' || kind === 'balloon') {
+      // The torch points down camera -Z (its lens is local -Z, like the camera's); the balloon rises above its grip.
+      mesh.rotation.set(...(kind === 'balloon' ? [0, -.12, 0] : [0.12, 0.22, -0.08]));
       // A first-person grip is drawn over the room: pressing against a wall
-      // must not cut the torch or the visitor's own fingers out of the frame.
+      // must not cut the held item or the visitor's fingers out of the frame.
       mat.transparent = true;
       mesh.renderOrder = 10000;
-      item.computeBoundingBox();
-      return { mesh, mat, hold: [0.24, -0.22, -0.5], fitBounds: item.boundingBox.clone().applyMatrix4(scale) };
+      return { mesh, mat, hold: kind === 'balloon' ? [.22, -.25, -.6] : [0.24, -0.22, -0.5], fitBounds: itemBounds };
     }
     mesh.rotation.set(0.25, -0.6, kind === 'paper' ? -0.2 : 0);
-    return { mesh, mat, hold: kind === 'balloon' ? [0.24, -0.2, -0.56] : [0.2, -0.12, -0.5] };
+    return { mesh, mat, hold: [0.2, -0.12, -0.5] };
   }
   function fitPicture() {
     const p = env.vhs.picture, focal = p.h * camera.projectionMatrix.elements[5] / 2;
@@ -135,7 +142,7 @@ export function createHandView(env, camera) {
               if (camera.userData.hand !== view) root.visible = false;
               // Keep the grip's own depth (fingers behind the handle), but discard
               // the room's depth before drawing this final first-person mesh.
-              else if (want === 'torch') {
+              else if (want === 'torch' || want === 'balloon') {
                 // The previous transparent room mesh may have disabled depth writes;
                 // WebGL also applies that mask to clear(), before our material is set.
                 renderer.state.buffers.depth.setMask(true);
@@ -184,10 +191,10 @@ export function createHandView(env, camera) {
 
 /** One of a thing, as a model with nothing to do: for a room to stand about. `light(rgb)` tints it. */
 export function buildItemProp(kit, kind) {
-  const type = INVENTORY_MODELS[kind] ? kind : (KINDS[kind] || 'paper'), b = new Batch(true), s = kit.VOXEL || 0.025, group = new THREE.Group();
-  b.addVox(kit.model(`inventory:${type}:v1`, INVENTORY_MODELS[type]).solid, new THREE.Matrix4().makeScale(s, s, s));
-  const mat = kit.surface({ vox: true });
-  group.add(new THREE.Mesh(kit.geometry(b, [lamp(-1, 3, 1, [0.4, 0.4, 0.4], { k: 8, far: 12, wrap: 0.5 })], [0.8, 0.8, 0.8]), mat));
+  const type = INVENTORY_MODELS[kind] ? kind : (KINDS[kind] || 'paper'), b = new Batch(false), s = kit.VOXEL || 0.025, group = new THREE.Group();
+  INVENTORY_MODELS[type].sculpt(b, s, { grounded: true });
+  const mat = kit.surface({ vox: false });
+  group.add(new THREE.Mesh(kit.geometry(b, ITEM_LIGHTS(), ITEM_AMB), mat));
   group.userData.light = (rgb) => mat.uniforms.uTint.value.set(rgb[0], rgb[1], rgb[2]);
   return group;
 }

@@ -234,7 +234,7 @@ async function visit(office, opt) {
   // Six pockets, four hearts, and a camcorder battery that runs down (inventory.js, survival.js): the visit's, not any
   // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.
   if (opt.inventory !== false) {
-    survival = createSurvival({ hud, sound, interfere(k) { interference = Math.max(interference, k); } }, {
+    survival = createSurvival({ hud, sound, interfere(k) { interference = Math.max(interference, k); }, red(k) { redWash = Math.max(redWash, k); } }, {
       canAct, onEnd: why => finish(why), perk, difficulty: () => difficulty.current,
     });
     inventory = createInventory({ hud, sound, health: survival.health, camera: survival.camera }, {
