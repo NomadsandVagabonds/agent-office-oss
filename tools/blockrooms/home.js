@@ -13,7 +13,8 @@
 //              longer at the bottom, a wall that gives when it is held
 import { mount, drawLogo, voidTile } from './art.js';
 import { rollName, cleanName, cleanMessage, cleanEntry } from './core/book.mjs';
-import { cleanRecord, emptyRecord } from './core/runs.mjs';
+import { archive, onArchive, startAccounts } from './archive-client.js';
+startAccounts().catch(() => {});
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, ...kids) => { const e = document.createElement(tag); if (cls) e.className = cls; e.append(...kids.filter((k) => k !== null && k !== undefined && k !== false)); return e; };
@@ -48,6 +49,7 @@ function named(value) {
   nameSays.textContent = bad ? '16 characters at most. Letters and numbers.' : '';
   me = { ...me, name: typed || me.spare, typed: !!typed };
   keep();
+  archive.edit({ name: me.name });
 }
 function said(value) {
   const text = cleanMessage(value), bad = text === null;
@@ -63,16 +65,22 @@ messageBox.addEventListener('input', () => said(messageBox.value));
 $('reroll').addEventListener('click', () => { const spare = rollName(); me = { ...me, spare, name: spare, typed: false }; nameBox.value = ''; nameBox.placeholder = spare; named(''); });
 $('optin').checked = me.sign;
 $('optin').addEventListener('change', (e) => { me = { ...me, sign: e.target.checked }; keep(); });
-$('signin').addEventListener('submit', (e) => { e.preventDefault(); location.href = PLAY; });
+$('signin').addEventListener('submit', async (e) => { e.preventDefault(); await archive.edit({ name: me.name }); location.href = PLAY; });
 
 /* ---- what this browser remembers ------------------------------------------------------------------- */
-const mine = cleanRecord(store.get('office-backrooms:record')?.record || emptyRecord());
-if (mine.tapes.length) {
-  $('shelf').replaceChildren(...mine.tapes.map((t) => {
-    const link = el('a', '', 'play'); link.href = `${PLAY}?tape=${encodeURIComponent(t.seed)}`;
-    return el('li', '', el('span', 'label', `${t.at ? day(t.at) : ''}  ${num(t.score)} pts  ${clock(t.seconds)}`), el('span', '', `№ ${t.seed}`), link);
-  }));
-}
+let mine = archive.record();
+onArchive(() => {
+  mine = archive.record();
+  if (document.activeElement !== nameBox) { me.name = archive.profile().name; nameBox.value = me.name; keep(); }
+  $('shelf').replaceChildren(el('li', 'empty', 'None.'));
+  if (mine.tapes.length) {
+    $('shelf').replaceChildren(...mine.tapes.map((t) => {
+      const link = el('a', '', 'play'); link.href = `${PLAY}?tape=${encodeURIComponent(t.seed)}`;
+      return el('li', '', el('span', 'label', `${t.at ? day(t.at) : ''}  ${num(t.score)} pts  ${clock(t.seconds)}`), el('span', '', `№ ${t.seed}`), link);
+    }));
+  }
+
+});
 
 /* ---- the counter, and the book --------------------------------------------------------------------- */
 // (the count did not start at nothing)

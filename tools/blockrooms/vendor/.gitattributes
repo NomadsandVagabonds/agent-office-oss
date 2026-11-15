@@ -1,0 +1,2 @@
+# Keep the official SDK byte-for-byte, including whitespace in its strings.
+supabase-2.119.0.js -whitespace

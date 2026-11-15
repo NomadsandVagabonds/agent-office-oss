@@ -12,13 +12,15 @@
 // address bar says where it is; and choosing the tape's number on the card
 // walks it again.
 //
-// Nothing is asked of anybody: what is kept (the keycard, the record of visits
-// and tapes, the two settings) is kept in this browser's own storage, and
-// every file comes from this site. Two things are told to the site's book, if
+// Play needs no account. Visits and character changes save locally first;
+// people who sign in can also sync their private archive through Supabase.
+// Two things are told to the site's book, if
 // it keeps one (/api/book; core/book.mjs): that somebody went in, and — when
 // somebody gets out, and has not unticked the box on the front page — what
 // the visit came to, under the made-up name they were given there.
 import { cleanMessage, cleanName, rollName } from './core/book.mjs';
+import { archive, startAccounts } from './archive-client.js';
+startAccounts().catch(() => {});
 
 const fault = document.getElementById('fault');
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -107,7 +109,7 @@ async function tell(body) {
 /** The line the card gets once the book has answered: that this visit is in it, and where. */
 async function sign(card, report) {
   if (card.replay || card.reason !== 'exit') return null;
-  const who = me();
+  const who = { ...me(), name: office.walk?.me?.name || me().name };
   if (!who.sign) return null;
   const answer = await tell({ do: 'sign', name: who.name, message: who.message, run: report });
   if (answer?.ok) return { icon: 'fresh', label: `High scores: ${who.name}`, value: answer.place ? `№ ${answer.place}` : 'signed', href: './#book' };
@@ -118,8 +120,8 @@ async function run() {
   // (asked for while the level is being fetched, so that nobody waits for it)
   const asked = fetch('./api/where', { headers: { accept: 'application/json' }, cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && typeof d.city === 'string' ? d.city : '')).catch(() => '');
   try {
-    const [{ createStage }, { enterBackrooms }, { keptTapes }, { ARCHETYPES }] = await Promise.all([
-      import('./world/engine/stage.js'), import('./world/backrooms/index.js'), import('./world/backrooms/scorecard.js'), import('./world/backrooms/gen.js')]);
+    const [{ createStage }, { enterBackrooms }, { ARCHETYPES }] = await Promise.all([
+      import('./world/engine/stage.js'), import('./world/backrooms/index.js'), import('./world/backrooms/gen.js')]);
     office.stage = createStage(document.getElementById('stage'), { fx: false, shadows: false, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5) });
     office.stage.start();
     // the tape this address names, if it names one, is the building walked; with none, one nobody has had. When it
@@ -147,14 +149,19 @@ async function run() {
       const seed = next || fresh();
       // a tape this browser has kept is a tape played back (it says PLAY, hides nothing, and is paid nothing: core/runs.mjs);
       // one that came from somebody else is a building like any other, walked for the first time
-      const mine = next ? keptTapes().find((t) => t.seed === seed) : null;
+      const visitOwner = archive.owner(), visitId = crypto.randomUUID(), visitor = archive.profile(visitOwner);
+      const visitName = visitor.name;
+      office.walk = { me: { id: visitOwner, name: visitName, look: visitor.look } };
+      office.game.report = (_place, report) => archive.report(report, visitId, visitOwner, visitName);
+      const mine = next ? archive.record(visitOwner).tapes.find((t) => t.seed === seed) : null;
       next = null;
       if (!mine) tell({ do: 'in' });                      // (he keeps count of who goes in. A tape played back is nobody going anywhere)
       // a building that was asked to be other than its seed has it (?debug, ?room=) is for looking at, and getting out of
       // one is not a score: the book is not signed for it (it was, by anybody checking the site who walked out)
       const doctored = !!dev.debug || !!room;
       const result = await enterBackrooms(office, {
-        name: me().name, seed, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: doctored ? undefined : sign,
+        name: visitName, seed, onArchive: () => window.open(new URL('./archive', location.href), '_blank', 'noopener'),
+        archive: { href: './archive' }, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: doctored ? undefined : sign,
         home: { label: 'Return to homepage' }, anew: { label: 'Go back in' }, where, ...dev,
         ...(room ? { only: [room] } : {}),
         ...(mine ? { replay: true, pursuer: typeof mine.mascot === 'boolean' ? mine.mascot : undefined } : {}),
