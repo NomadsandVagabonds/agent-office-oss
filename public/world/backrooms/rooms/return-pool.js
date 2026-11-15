@@ -3,6 +3,8 @@
 import { Batch, lin, WHITE } from '../kit.js';
 import { poolPlan, poolFloor, poolState, stepPool, turnValve, RETURN_POOL } from './return-pool/rule.js';
 import { poolTextures, tiledPlane, waterMesh, officeDesk, valveVox, wakeRig } from './return-pool/art.js';
+import { dressPool } from './return-pool/dressing.js';
+import { roomReturn } from '../room-physics.js';
 
 export function build(c) {
   const { W, D, H, rt, env, kit } = c, p = poolPlan(c.room), s = poolState(), tex = poolTextures(kit);
@@ -151,7 +153,7 @@ export function build(c) {
       box(c.flat,side*2.5-.07,-.055,z-.1,side*2.5+.07,.025,z+.1,lin(i%4<2?'#c9ccae':'#6c9e89'));
     }
   }
-  const wake=wakeRig(c);let waterTime=0, wheelTurn=0, bubblesTime=0;
+  const carts=dressPool(c), wake=wakeRig(c);let waterTime=0, wheelTurn=0, bubblesTime=0;
   rt.footstep='wade';
   c.tick((dt,time,me)=>{
     stepPool(s,dt,me,p);
@@ -159,11 +161,14 @@ export function build(c) {
     if(wet&&me.world)me.world.slow=Math.min(me.world.slow??1,.67);
     rt.footstep=wet?'wade':'stone';
     if(s.warp&&env.player) {
-      const dest=c.toWorld(s.warp.x,s.warp.z);
+      const dest=roomReturn(c,s.warp.x,s.warp.z);
       // Preserve bearing, including rotated room placements. The tape skips;
       // it does not turn the visitor around or drop them from above.
-      env.player.warp(dest.x,dest.z,me.world?.yaw);
-      env.interfere?.(.12);env.play?.('wade',dest.x,dest.z,6);
+      // A visitor may park a cart in the return tunnel. Never fold into it.
+      if(dest) {
+        env.player.warp(dest.x,dest.z,me.world?.yaw);
+        env.interfere?.(.12);env.play?.('wade',dest.x,dest.z,6);
+      }
     }
     if(s.warning){const at=c.toWorld(s.wake.x,s.wake.z);env.play?.('wade',at.x,at.z,10);}
     if(s.hit){const hit=c.hurt(1);if(hit.landed){env.interfere?.(.2);if(me.world)me.world.shake=Math.max(me.world.shake||0,.22);}}
@@ -178,5 +183,5 @@ export function build(c) {
     wake.fins[0].visible=s.phase==='hunting';
     wake.fins[0].rotation.y=Math.atan2(me.x-s.wake.x,me.z-s.wake.z);
   });
-  rt.returnPool={plan:p,get state(){return {...s,wake:{...s.wake}};},valve};
+  rt.returnPool={plan:p,get state(){return {...s,wake:{...s.wake}};},valve,carts};
 }

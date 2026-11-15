@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
 import { poolPlan, poolFloor, poolState, stepPool, turnValve } from '../public/world/backrooms/rooms/return-pool/rule.js';
+import { createFurnitureMotion } from '../public/world/backrooms/furniture-motion.js';
+import { createFurnitureGrip } from '../public/world/backrooms/furniture-grip.js';
+import { furnitureClear } from '../public/world/backrooms/furniture-rules.js';
 const root=new URL('../',import.meta.url);
 register(`data:text/javascript,${encodeURIComponent(`export function resolve(s,c,next){if(s==='three')return {url:new URL('public/vendor/three.module.min.js',${JSON.stringify(root.href)}).href,shortCircuit:true};if(s.startsWith('/core/'))return {url:new URL(s.slice(1),${JSON.stringify(root.href)}).href,shortCircuit:true};return next(s,c);}`)}`,import.meta.url);
 const [{ createKit }, { buildWorld, loadCatalogue }, { generate }, { toWorld, wallPoint }, { createPlayer }, THREE, {build}]=await Promise.all([
@@ -42,7 +45,7 @@ for(const [W,D,H,rot] of [[14,23,5.8,0],[15,25,6.2,1],[14,24,6,2],[15,23,5.8,3]]
   const level={...generated,rooms:[def],links:[],windows:[],start:{room:0,x:0,z:0}};
   const catalogue=rot%2?await loadCatalogue(kit):{has:()=>false,geo:()=>null};
   if(rot%2)assert.ok(catalogue.has('desk'),'exercise the real office furniture too');
-  const hits=[],warps=[],env={catalogue,level,play(){},interfere(){},health:{damage:n=>{hits.push(n);return {ok:true,dead:false};}},player:{warp:(...v)=>warps.push(v)},builders:{plain:build}};
+  const hits=[],warps=[],env={catalogue,level,barricadesEnabled:true,play(){},interfere(){},health:{damage:n=>{hits.push(n);return {ok:true,dead:false};}},player:{warp:(...v)=>warps.push(v)},builders:{plain:build}};
   const world=await buildWorld(kit,level,env);t.after(()=>{world.dispose();kit.dispose();});
   const rt=world.rooms[0];assert.ok(rt.returnPool,'builder did not fall back');assert.ok(!rt.flat);assert.ok(rt.colliders.every(v=>v.on!==false),'no navigation repairs');
   const p=rt.returnPool.plan,walk=world.walkable(rt),reachable=walk.flood([def.doors[0]]);
@@ -60,4 +63,42 @@ for(const [W,D,H,rot] of [[14,23,5.8,0],[15,25,6.2,1],[14,24,6,2],[15,23,5.8,3]]
   assert.equal(warps.length,1);const dest=at(p.fold.x,p.fold.toZ-.05);assert.ok(Math.hypot(warps[0][0]-dest.x,warps[0][1]-dest.z)<1e-8);assert.equal(warps[0][2],me.world.yaw);
   me.x=.7;me.z=-.7;for(let i=0;i<800;i++)for(const fn of rt.ticks)fn(.02,.04+i*.02,me);
   assert.ok(hits.length>0,'actual room invokes health damage');
+  // Actual cart, controller and grip: only the carrier collides while held;
+  // after release the same object is a physical barricade in the tunnel.
+  assert.equal(rt.returnPool.carts.length,2);
+  const cart=rt.returnPool.carts[0], motion=createFurnitureMotion(world), grip=createFurnitureGrip(world,motion);
+  assert.equal(cart.type,'trolley');assert.ok(world.furniture.includes(cart));
+  const cartView=at(-W/2+1.45,7.85);player.warp(cartView.x,cartView.z,rot*Math.PI/2);
+  env.player=player;input.keys.clear();player.me.pitch=-.42;player.update(.02);
+  player.on('move',(dx,dz,step)=>grip.step(dx,dz,step));
+  grip.update(0,player.me);assert.equal(grip.target,cart,'cart uses normal gaze targeting');
+  assert.ok(grip.use());assert.equal(cart.collider.on,false);
+  const before={x:player.me.x,z:player.me.z};input.keys.add('w');
+  for(let i=0;i<60;i++){grip.update(1/60,player.me);player.update(1/60);}
+  const moved=Math.hypot(player.me.x-before.x,player.me.z-before.z);
+  assert.ok(moved>.7&&moved<1,'carrier walks at trolley pace');
+  assert.ok(Math.hypot(cart.x-player.me.x,cart.z-player.me.z)<1.8,'cart follows its carrier');
+  input.keys.clear();assert.ok(grip.use(),'release on clear floor works');assert.equal(cart.collider.on,true);
+  assert.ok(Math.abs(cart.group.position.y-def.y)<1e-8);
+  const landing=at(p.fold.x,p.fold.toZ-.05);
+  assert.ok(motion.place(cart,landing.x,landing.z,{from:def.y}),'cart can barricade the return tunnel');
+  assert.equal(world.free(landing.x,landing.z,.22),false);
+  const a=at(p.fold.x,p.fold.toZ-1),b=at(p.fold.x,p.fold.toZ+1);
+  assert.equal(furnitureClear(world,a.x,a.z,b.x,b.z,.22),false,'physical creatures cannot pass through the cart');
+  let displaced;
+  env.player={warp:(x,z)=>{displaced={x,z};}};
+  me.x=p.fold.x;me.z=p.fold.z+.05;for(const fn of rt.ticks)fn(.02,20,me);
+  me.z-=.1;for(const fn of rt.ticks)fn(.02,20.02,me);
+  assert.ok(displaced&&world.free(displaced.x,displaced.z,.22),'fold chooses a clear landing beside a parked cart');
+  assert.ok(Math.hypot(displaced.x-landing.x,displaced.z-landing.z)>.5);
+  // Setting down at a different elevation must move mesh AND collider. This
+  // used to be ignored by the room-authored prop registry's translate hook.
+  env.player=player;
+  const basin=at(0,-4.65), low=def.y-.6;
+  assert.equal(motion.place(cart,basin.x,basin.z,{from:def.y}),false,'cannot drop it into a pit from the coping');
+  assert.ok(motion.place(cart,basin.x,basin.z,{from:low}),'a visitor standing in the basin can set it down');
+  assert.ok(Math.abs(cart.y-low)<1e-8);assert.ok(Math.abs(cart.group.position.y-low)<1e-8);
+  assert.equal(cart.collider.top,cart.top);
+  assert.ok(motion.place(cart,landing.x,landing.z,{from:def.y}));
+  assert.ok(Math.abs(cart.y-def.y)<1e-8);assert.ok(Math.abs(cart.group.position.y-def.y)<1e-8);
 });

@@ -24,6 +24,9 @@ The room is `planned:true` with `themes: { '*': 0 }`. Thus it does not change li
 - The wheel in the flooded office takes three quarter turns, at least 1.8 seconds apart. Its three indicators rise/light as it turns. The third turn reverses water animation and stops the fold, leaving a normal route behind the far partition to the room's back door.
 - A wake surfaces at the far end after entering the deeper water. A 1.5-second ripple warning precedes pursuit at 1.7 m/s. A submerged, long-fingered silhouette is only partially visible during pursuit.
 - Contact calls the shared `health.damage` path via `c.hurt(1)`. A 2.5-second local recovery also prevents repeated hits. Dry coping and the stepped central plinth stop the encounter. Wading slows walking to 67%.
+- Two room-built laundry carts: weathered canvas bins, steel handles, casters, stained towel piles and a towel draped over each rim. Both register with the existing `trolley` motion profile, including normal gaze targeting, E grab/release, slower carrying, and solid barricade collisions after release. They start clear of the routes, wheel and doors. The underwater wake remains spectral; these are barriers for the existing physical creatures.
+- A large Hotel Meridian pool-rules placard, with damaged print, mineral runs, a peeling corner, and four original stick-figure pictograms. The rules include "Shower before re-entry. Even if you have not left" and "Do not feed the drain. Lost property is not returned."
+- An abandoned bucket and skimmer, a few discarded damp towels, and wet footprints that leave the pool and continue up the wall. These small dressing props do not obstruct navigation.
 
 No item is required to solve the room. All basin edges and the central plinth use 15 cm steps with matching rendered geometry and floor heights. The ordinary room navigation validator can reach the valve, refuge and both doorways without disabling colliders or flattening the room.
 
@@ -32,6 +35,8 @@ No item is required to solve the room. All basin edges and the central plinth us
 - `public/world/backrooms/rooms/return-pool.js`: geometry and engine hooks.
 - `public/world/backrooms/rooms/return-pool/rule.js`: layout, floor heights, fold, valve and wake state; no renderer dependency.
 - `public/world/backrooms/rooms/return-pool/art.js`: procedural tile/water textures, lit animated water, valve, furniture fallback and wake rig.
+- `public/world/backrooms/rooms/return-pool/dressing.js`: trolley assemblies, rules-board texture and maintenance dressing. Two additional study buttons frame the cart and placard for review.
+- `public/world/backrooms/movable-props.js`: room-authored props now honor the existing `translate(dx, dz, dy)` contract when carried to a different floor elevation; mesh, collider height and cutout pose share the vertical offset. No change to carry/release collision policy.
 - One appended deck entry; one dev-only study import and selector.
 - `test/backrooms-return-pool.test.mjs`: rules plus actual world/controller integration in four rotations and minimum/maximum room sizes, with both real catalogue furniture and fallbacks.
 
@@ -39,11 +44,12 @@ No new dependencies, downloaded textures, physics engine, reflection render targ
 
 ## Validation and limits
 
-- Six room tests pass: directional folding, reversal, warnings/recovery, actual health calls, room navigation and real player movement down/up steps.
+- Six room tests pass: directional folding, reversal, warnings/recovery, actual health calls, room navigation and real player movement down/up steps. In all four rotations the real cart can be targeted, carried, released, parked as a tunnel barricade and set down on the lower basin floor. A barricaded fold landing now finds a clear space using `roomReturn`.
+- Dressing plus furniture/grip/motion/world/bridge/barricade regression checks: **56/56 pass**.
 - Room plus visit-planning tests: **35/35 pass**. Review-only registration does not alter ordinary room-count planning.
 - Production static build passes.
 - Full suite: **931/934 pass**. The three reported failures are the existing console temporary-path mismatch (`/var` versus `/private/var`, including its parent test) and the usage/status-line bridge reading an undefined `source`. No Backrooms tests fail.
-- Browser playtest: walked through the fold (lap count incremented), turned the actual wheel three times, observed real damage and recovery, stood on the dry refuge, and crossed the return threshold after reversal without another fold. Inspected upper/lower water, furniture and the wake. The final tile-UV/hand silhouette polish was checked in code/tests after that visual pass.
+- Browser playtest: walked through the fold (lap count incremented), turned the actual wheel three times, observed real damage and recovery, stood on the dry refuge, and crossed the return threshold after reversal without another fold. The dressing follow-up visually checked the finished tile surfaces, carts, placard and overall room, then grabbed a cart with E, walked with it and released it using the ordinary controls. The hand silhouette polish was checked in code/tests after the initial encounter visual pass.
 - Sound was muted during the browser pass. It reuses positional `wade`, `rattle` and `thunk`; ambient water audio is still a useful next pass.
 - Single-player prototype. The wheel and wake are room-local state; shared two-player authority/snapshots need integration before dealing this in co-op. It is deliberately not registered as a new collectible cast entry yet.
 - No mobile hardware or GPU performance benchmark yet. No new full-screen effects or additional scene render passes.

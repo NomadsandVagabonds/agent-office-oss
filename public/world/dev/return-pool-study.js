@@ -10,6 +10,8 @@ export function returnPoolStudy(handle) {
   const go=(x,z,yaw=0,pitch=0)=>handle.goto(rt.id,x,z,yaw,pitch);
   button('Entrance view',()=>go(-1.7,rt.def.D/2-2.6,0,.12));
   button('Look up at the other pool',()=>go(3.7,3.7,.7,.65));
+  button('Inspect towel cart / E to grab',()=>go(-rt.def.W/2+1.45,7.85,0,-.42));
+  button('Read pool rules',()=>go(-rt.def.W/2+3.1,3.8,Math.PI/2,.19));
   button('Walk through return tunnel',()=>go(p.fold.x,p.fold.z+.85,0,0));
   button('Stand by circulation valve',()=>go(p.valve.x+.5,p.valve.z+.8,.55,-.15));
   button('Turn valve (same as E)',()=>{
