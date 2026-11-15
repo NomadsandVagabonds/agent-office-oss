@@ -12,6 +12,7 @@ export const ITEM_DEFS = Object.freeze({
   scissors: Object.freeze({ name: 'Scissors', description: 'Heavy steel scissors with chipped red handles. The hinge is still stiff.', useLabel: 'Use' }),
   snack: Object.freeze({ name: 'Wrapped snack', description: 'A sealed oat bar. The wrapper has no date.', useLabel: 'Eat', healAmount: 1 }),
   'pink-slip': Object.freeze({ name: 'Pink slip', description: 'FORM HR-404, Notice of Redundancy. The name on it is yours; the date is last week.', useLabel: 'Use' }),
+  opener: Object.freeze({ name: 'Remote', description: 'A grey remote with one button. Nothing on it says what it is for.', useLabel: 'Use' }),
   balloon: Object.freeze({ name: 'Red balloon', description: 'A red balloon on a curling string. It tugs upward without a breeze.', useLabel: 'Use' }),
 });
 const ITEM_ALIASES = Object.freeze({

@@ -133,8 +133,10 @@ async function run() {
     const whole = (k) => (q.has(k) && Number.isFinite(Number(q.get(k))) ? Math.floor(Number(q.get(k))) : undefined);
     const dev = q.has('debug') ? { debug: true, depths: whole('depths'), depth: whole('depth'), mute: q.has('mute') ? true : undefined, pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined,
       themes: q.get('themes') ? q.get('themes').split(',').filter(Boolean) : undefined,
-      // (Codex's furniture that can be dragged, and put in a creature's way: a prototype, off for everybody, on for whoever asks here)
-      barricades: q.get('barricades') === '1' ? true : undefined } : {};
+      // (Codex's furniture that can be dragged, and put in a creature's way, is on for everybody; whoever is checking can have a building without it)
+      barricades: q.get('barricades') === '0' ? false : undefined,
+      // (Codex's fluorescent banks that fail, and rooms with a dark side: a prototype, off for everybody, on for whoever asks here)
+      dev: ['1', 'dim', 'failing'].includes(q.get('lighting')) ? { lighting: q.get('lighting') } : undefined } : {};
     // ?room=<a room of the deck> is a building with that room where you land (for looking at one room; nothing on
     // the front page leads here. A room nobody has built yet is no room, and the door is an ordinary door)
     let room = !next && q.get('room') && Object.hasOwn(ARCHETYPES, q.get('room')) ? q.get('room') : null;

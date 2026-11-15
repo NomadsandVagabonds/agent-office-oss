@@ -52,6 +52,7 @@ import { createTally } from './tally.js';
 import { createMenu } from './menu.js';
 import { createFurnitureMotion } from './furniture-motion.js';
 import { createFurnitureGrip } from './furniture-grip.js';
+import { LIGHTING } from './lighting.js';
 
 const FOV = 62;
 const OWN_LAMP = 0.3;                                    // the camcorder's own lamp, beside a torch: how much of one it is
@@ -102,7 +103,7 @@ async function buildersFor(level) {
  *        brand, share, also, home, anew: handed to the card at the end (scorecard.js), for a page that is not the office
  *        where: a place name, if the page was told one (the site's host says a city): the second line of the banner near the landing (banner.js)
  *        inventory: false for a visit without pockets, hearts or a battery that runs down · dev.supplies: one of everything where you land
- *        barricades: opt-in movable furniture prototype · dev.barricadeStudy: a review set at the landing (docs/BACKROOMS-BARRICADES.md)
+ *        barricades: furniture that can be dragged and put in a creature's way (Codex's; on, by the owner's word, unless this is false) · dev.barricadeStudy: a review set at the landing (docs/BACKROOMS-BARRICADES.md)
  * @returns {Promise<{reason:'exit'|'caught'|'battery'|'quit', kept:{card:boolean, coins:number[], batteries:number, told?:Promise<void>}, run:object, card:object|null}>}
  *          run: what the visit came to (tally.js) · card: the scorecard, once put down (opt.scorecard === false: none) · kept: what you brought out (nothing,
  *          unless you left by the door); kept.told settles once the office has been told of it
@@ -203,7 +204,7 @@ async function visit(office, opt) {
     inventory.toggleLight(); lightSeen = 0;
   }
   const input = createInput({ canvas, stage, hud, sound,
-    owns: target => !!menu?.owns(target) || (!paused && !!inventory?.owns(target)),
+    owns: target => !!menu?.owns(target) || (!paused && !!inventory?.owns(target)) || (opt.debug && !!opt.dev?.owns?.(target)),
     interceptKey: event => paused ? !!menu?.handleKey(event) : !!inventory?.handleKey(event),
     blocked: () => paused || !!inventory?.isOpen,
     menu: () => setPaused(true), use: useIt, light: thumbLight, click: () => {}, wheel: () => {},
@@ -212,7 +213,7 @@ async function visit(office, opt) {
       else if (k === 'm') changeSetting('mute', !sound.muted);
     } });
   input.state.sensitivity = settings.sensitivity; input.state.invertY = settings.invertY;
-  menu = createMenu({ host: hud.el, settings, furniture: opt.barricades === true, onRequestOpen: () => setPaused(true), onResume: resume,
+  menu = createMenu({ host: hud.el, settings, furniture: opt.barricades !== false, onRequestOpen: () => setPaused(true), onResume: resume,
     onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting });
   // Six pockets, four hearts, and a camcorder battery that runs down (inventory.js, survival.js): the visit's, not any
   // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.
@@ -271,14 +272,15 @@ async function visit(office, opt) {
     const kit = createKit();
     const f = { level, kit, world: null, player: null, env: null };
     const builders = await buildersFor(level);
-    if (opt.barricades === true && opt.dev?.barricadeStudy && level === first) {
+    if (opt.barricades !== false && opt.dev?.barricadeStudy && level === first) {
       const { prepareFurnitureStudy } = await import('./furniture-study.js');
       prepareFurnitureStudy(level, builders);
     }
     const env = f.env = {
       level, cast, who, kit, sound, hud, vhs, renderer, builders, catalogue: await loadCatalogue(kit), Avatar, layout,
       plan: office.net?.state?.world?.plan || {}, visit: plan, carry,
-      barricadesEnabled: opt.barricades === true,
+      barricadesEnabled: opt.barricades !== false,
+      lighting: opt.dev?.lighting || false,
       where: cleanWhere(opt.where),             // a place name the page was told (the site's host says a city): the banner's second line, and nothing else's
       player: null, world: null, pursuer: null,
       hatches: new Map(),                       // room id → { drop() }: where a door in a floor lets you out
@@ -523,6 +525,7 @@ async function visit(office, opt) {
     // the part below: begun once you have found your feet in this one, and only drawn from where it could be seen
     if (state === 'play' && !ahead && since > 4 && goesDown(cur.level.exit.way)) prepare();
     if (ahead?.f) { const at = world.current(); ahead.f.world.scene.visible = !!at && (at.def.toExit ?? 9) <= 1; }
+    if (env.lighting) { ahead?.f?.world.updateLighting(time); above?.f?.world.updateLighting(time); }
     if (env.below) for (const m of env.below) m.visible = !ahead?.f;          // (the stand-in at the bottom of a drop, until the real rooms are there)
     if (landed >= 0) landed += dt;
     purse?.update(dt, time, state === 'play');
@@ -534,13 +537,14 @@ async function visit(office, opt) {
 
     // the camcorder copes with the dark: more gain (and more noise), then its little lamp
     const here = world.current();
-    const lvl = here ? here.level * here.u.dim.value : 0.3;
+    const lvl = env.lighting ? world.illuminationAt(me.x, me.z) : here ? here.level * here.u.dim.value : 0.3;
     light += (lvl - light) * (1 - Math.exp(-2.2 * dt));
-    u.uGain.value = clamp(Math.pow(0.3 / Math.max(light, 0.04), 0.55), 0.9, 2.3);
+    u.uGain.value = clamp(Math.pow(0.3 / Math.max(light, 0.04), 0.55), 0.9, env.lighting ? LIGHTING.gainMax : 2.3);
     // …which with pockets is a weak one, enough not to walk into the furniture: a torch in the hand is the light, and
     // it works wherever its owner switches it on
     const lamp = light < 0.11 && !here?.noTorch ? 1 : 0;
-    const wantTorch = inventory ? Math.max(inventory.torchPower(), lamp * OWN_LAMP) : Math.max(lamp, env.hand?.hasFlashlight?.() ? 1 : 0);          // (no pockets: a torch in the hand is simply on)
+    const ownLamp = env.lighting ? LIGHTING.ownLamp : OWN_LAMP;
+    const wantTorch = inventory ? Math.max(inventory.torchPower(), lamp * ownLamp) : Math.max(lamp * (env.lighting ? ownLamp : 1), env.hand?.hasFlashlight?.() ? 1 : 0);          // (no pockets: a torch in the hand is simply on)
     torch += (wantTorch - torch) * (1 - Math.exp(-3 * dt));
     cur.kit.shared.uTorch.value = torch * 1.5;
     hud.flag('LIGHT', torch > 0.5);
