@@ -20,6 +20,22 @@ import { RISE, RUN, toWorld } from './frame.js';
 /** The ways down, as plan.js deals them. ('wall' is the other thing a part can end in: the way out, on the last.) */
 export const WAYS = Object.freeze(['stairs', 'hole', 'ledge', 'chute']);
 export const goesDown = (way) => WAYS.includes(way);
+/**
+ * The ways down a visit is dealt (plan.js): every one but the stairs. The owner, twice: a level that is got to by a
+ * door, a button and a flight of stairs is a video game's. This is one building, and one goes further into it by
+ * falling through it, climbing down it or sliding. (The stairs are still a way the place can be built: the last
+ * part's fire exit is the short stairwell with the wall at the bottom, and a part can be asked for with a flight.)
+ */
+export const DEALT = Object.freeze(WAYS.filter((way) => way !== 'stairs'));
+
+/**
+ * Is somebody pushing the bar? Walking, on the room's side of the door, within arm's length of it, across its width and
+ * facing it. (`me`: the visitor in the stairwell's own frame, as a room's tick is given them; the door is in its +z wall
+ * at z = door.z, and yaw 0 looks along −z, at the door from outside.) Pure, for the tests.
+ */
+export function pushes(me, door) {
+  return !me.inside && !!me.moving && Math.abs(me.x - door.c) < door.w / 2 + 0.05 && me.z > door.z && me.z < door.z + 0.6 && Math.cos(me.yaw) > 0.35;
+}
 
 /** Metres from the floor you drop off to the floor you land on: a storey, the thickness of a slab, and whatever is kept in between. */
 export const GAP = 6.4;

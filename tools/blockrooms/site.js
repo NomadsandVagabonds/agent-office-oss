@@ -83,7 +83,11 @@ function address(seed) {
 /** The front page: where a visit begins, and where it ends. */
 const HOME = './';
 const ME = 'blockrooms:me';
-/** Who this visitor signed in as (or, if they did not, a made-up name), their message, and whether they sign the book: all set on the front page. */
+/**
+ * Who this visitor signed in as (or, if they did not, a made-up name), their message, and whether they sign the book: all
+ * set on the front page. It is who they are in the building too (the card, and the rooms that know a visitor's name):
+ * a building is the same whoever walks it, so a tape handed on is still the same tape.
+ */
 function me() {
   let was = {};
   try { was = JSON.parse(localStorage.getItem(ME) || '{}') || {}; } catch { /* nobody yet */ }
@@ -135,7 +139,7 @@ async function run() {
       next = null;
       if (!mine) tell({ do: 'in' });                      // (he keeps count of who goes in. A tape played back is nobody going anywhere)
       const result = await enterBackrooms(office, {
-        name: 'Employee', seed, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: sign,
+        name: me().name, seed, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: sign,
         home: { label: 'Return to homepage' }, ...dev,
         ...(room ? { only: [room] } : {}),
         ...(mine ? { replay: true, pursuer: typeof mine.mascot === 'boolean' ? mine.mascot : undefined } : {}),

@@ -21,7 +21,7 @@
 import { generate, makeRng, MIN_EXIT_STEPS, MAX_ODD, DECK, ARCHETYPES, lessons, lessonsOf, isBig } from './gen.js';
 import { MIN_OUT_STEPS } from './marks.js';
 import { THEME_IDS } from './themes.js';
-import { WAYS } from './seam.js';
+import { DEALT } from './seam.js';
 import { whoIsDown, castFor } from './cast.js';
 
 export const MIN_FLOORS = 3, MAX_FLOORS = 5;
@@ -118,7 +118,7 @@ export function planVisit(seed, opt = {}) {
   const themes = Array.from({ length: depths }, (_, i) => (i === 0 ? 'yellow' : below[(i - 1) % below.length]));
   // how each part but the last ends, behind its fire door: a different way down each time, while there are ways left
   // (rolled from a source of its own, so that which they are changes nothing else about a visit)
-  const RW = R.fork('ways'), order = RW.shuffle(WAYS.slice());
+  const RW = R.fork('ways'), order = RW.shuffle(DEALT.slice());
   const ways = themes.map((_, i) => (i === depths - 1 ? 'wall' : order[i % order.length]));
   // the mascot: in some visits, on one floor — less often the one you land on. While the office's keycard is still to be
   // found there always is one, because it is holding it.

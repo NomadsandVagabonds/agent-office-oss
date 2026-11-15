@@ -2,13 +2,14 @@
 // on the last of them, getting there is never a short walk, and all of it is
 // the same again given the same seed.
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { generate, MAX_ODD, MAX_ROOMS, DECK, ARCHETYPES, LESSONS, lessons, ready, lessonsOf, roomDistances, roomPath, MIN_EXIT_STEPS, EXIT_DEPTH, T, sketch, wallPoint, wallLength, toWorld, floorAt, ceilAt, headAt, fitsAt } from '../public/world/backrooms/gen.js';
 import { MIN_OUT_STEPS, THIN_W, MARK_W, LEAN, REFUSE, MARK_STYLES, PRINT_CHANCE, PRINTED, lean, pressing, answer, TAPE_LABELS } from '../public/world/backrooms/marks.js';
 import { REACH, calm, beside, closeness, grabChance } from '../public/world/backrooms/reach.js';
 import { planVisit, floorOf, generateVisit, MIN_FLOORS, MAX_FLOORS, MIN_VISIT_STEPS, KNOWN_AT_START } from '../public/world/backrooms/plan.js';
 import { THEMES, THEME_IDS } from '../public/world/backrooms/themes.js';
-import { WAYS, GAP, goesDown, dropOf, hangBelow, flight, holeIn, ledgeAt, ductIn } from '../public/world/backrooms/seam.js';
+import { WAYS, DEALT, GAP, goesDown, dropOf, hangBelow, flight, holeIn, ledgeAt, ductIn, pushes } from '../public/world/backrooms/seam.js';
 import { AWAY, settled, unsure } from '../public/world/backrooms/rooms/unsure-hall/rule.js';
 import { HALL, HAND, PART_ROOMS } from '../public/world/backrooms/plan.js';
 import { WARNINGS, warningFor } from '../public/world/backrooms/drawings.js';
@@ -39,7 +40,8 @@ test('a visit is planned from its seed: three to five floors, yellow on top, the
     // one building: nothing in the plan numbers or names a part of it, and every part but the last ends in a way down that is its own while there are ways left
     assert.ok(!JSON.stringify(plan).match(/"(label|below)"/), `seed ${seed}: the plan numbers its parts`);
     const downs = plan.floors.slice(0, -1).map((f) => f.way);
-    assert.equal(new Set(downs).size, Math.min(downs.length, WAYS.length), `seed ${seed}: the same way down twice (${downs})`);
+    assert.equal(new Set(downs).size, Math.min(downs.length, DEALT.length), `seed ${seed}: the same way down twice (${downs})`);
+    assert.ok(!downs.includes('stairs'), `seed ${seed}: a flight of stairs between two parts of the building (the owner: that is a video game's level)`);
     downs.forEach((w) => ways.add(w));
     plan.floors.forEach((f, i) => {
       assert.equal(f.depth, i);
@@ -54,7 +56,8 @@ test('a visit is planned from its seed: three to five floors, yellow on top, the
   }
   for (let n = MIN_FLOORS; n <= MAX_FLOORS; n++) assert.ok(sizes.get(n) > 5, `visits of ${n} floors: ${sizes.get(n) || 0} in ${SEEDS.length}`);
   assert.deepEqual([...under].sort(), THEME_IDS.filter((id) => id !== 'yellow').sort(), 'every kind of floor turns up under the yellow one');
-  assert.deepEqual([...ways].sort(), [...WAYS].sort(), 'every way down turns up somewhere');
+  assert.deepEqual([...ways].sort(), [...DEALT].sort(), 'every way down a visit is dealt turns up somewhere');
+  assert.deepEqual([...DEALT].sort(), ['chute', 'hole', 'ledge'], 'and those are falling, climbing down and sliding: never a flight of stairs');
   assert.ok(orders.size > 30, `only ${orders.size} different buildings in ${SEEDS.length} visits`);
   // nothing in a plan says how to play, and asking for a number of floors gets that number
   assert.equal(planVisit(3, { ...office, depths: 4 }).depths, 4);
@@ -108,6 +111,21 @@ test('the way out is earned: every floor ends at a fire exit in its furthest roo
   assert.ok(steps / SEEDS.length > 28, `the straight way out averages ${(steps / SEEDS.length).toFixed(1)} doorways`);
   assert.ok(longest >= shortest + 12, 'and how long it is varies from one visit to the next');
   assert.ok(rooms / n >= 15, 'a floor is still a floor');
+});
+
+test('the fire door at the end of a part is pushed by walking into it: no key is pressed to go further into the building', () => {
+  const door = { c: 0, w: 0.95, z: 3.1 };                      // in the stairwell's +z wall; the room one leaves is beyond it
+  const me = (o) => ({ x: 0, z: 3.4, yaw: 0, moving: true, inside: false, ...o });
+  assert.equal(pushes(me(), door), true, 'walking at it from the room side');
+  assert.equal(pushes(me({ moving: false }), door), false, 'standing in front of it is not pushing');
+  assert.equal(pushes(me({ z: 4.2 }), door), false, 'nor is walking about a metre off');
+  assert.equal(pushes(me({ x: 0.8 }), door), false, 'nor walking into the wall beside it');
+  assert.equal(pushes(me({ yaw: Math.PI }), door), false, 'nor backing into it');
+  assert.equal(pushes(me({ yaw: 1.0 }), door), true, 'at it and a little askew is still at it');
+  assert.equal(pushes(me({ z: 2.9, inside: true }), door), false, 'and nobody pushes it from the stairs');
+  // nothing about that door asks for a key any more
+  const src = readFileSync(new URL('../public/world/backrooms/stairwell.js', import.meta.url), 'utf8');
+  assert.ok(!/label: 'push the bar'/.test(src) && /pushes\(me, \{ c: dr\.c, w: dw, z: zF \+ T \}\)/.test(src));
 });
 
 test('asking for a floor to be the last, or not, changes nothing else about it', () => {

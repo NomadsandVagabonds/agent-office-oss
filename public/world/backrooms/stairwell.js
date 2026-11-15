@@ -19,7 +19,7 @@ import { Batch, lin, drawText, WHITE } from './kit.js';
 import { RISE, RUN, T, makeRng } from './gen.js';
 import { P, doorFrame, floorPlan, card, wetSign } from './bits.js';
 import { gives } from './thin.js';
-import { GAP, flight, holeIn, ledgeAt, ductIn } from './seam.js';
+import { GAP, flight, holeIn, ledgeAt, ductIn, pushes } from './seam.js';
 import { camp, rationList, tallyMark, tapeMark } from './traces.js';
 
 const UP = [0, 1, 0], SLOPE = RISE / RUN;
@@ -197,11 +197,14 @@ function fireDoor(c) {
   }
   let open = 0;
   const here = c.toWorld(0, zF + T + 0.35);
-  c.use({ x: 0, z: zF + T + 0.35, r: 1.6, label: 'push the bar', when: () => !open, use: () => {
+  // A bar is pushed by walking into it. Nobody presses a key to leave a part of the building (the owner: a level that
+  // happens at the press of a button is a video game's): the door gives to whoever comes at it from the room side.
+  const push = () => {
     open = 0.0001; c.world.openLink(dr.link);
     c.env.play('thunk', here.x, here.z, 6); c.env.play('door', here.x, here.z, 6); c.env.noise?.(here.x, here.z, 1);
-  } });
-  c.tick((dt) => {
+  };
+  c.tick((dt, t, me) => {
+    if (!open && me && pushes(me, { c: dr.c, w: dw, z: zF + T })) push();
     if (!open || open >= 1) return;
     open = Math.min(1, open + dt / 1.1);
     door.rotation.y = sticker.rotation.y = 1.75 * open * open * (3 - 2 * open);

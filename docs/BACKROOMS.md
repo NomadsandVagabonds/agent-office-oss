@@ -11,8 +11,10 @@ camcorder, generated from a seed and never the same twice. It is one building.
 A visit goes down through three to five parts of it, each a different kind of
 place (the code and this guide still call a part a *floor*; nothing down there
 does, and nothing is numbered). Behind the fire door at the far end of each is
-a way down that cannot be undone: stairs that run out, a hole in the floor, a
-corridor that stops, a post chute. There is no cut and no loading: the part
+a way down that cannot be undone: a hole in the floor, a corridor that stops,
+a post chute. Never a flight of stairs, and no key is pressed: the door's bar
+is pushed by walking into it (the owner, twice: a level got to by a button and
+some stairs is a video game's). There is no cut and no loading: the part
 below is built while you walk and is really there under the edge, and near a
 seam the carpet and paper of the next part turn up early. On the last part
 there is no door. The fire stairs
@@ -548,7 +550,7 @@ the office is: the seed is the clock, and no building is ever given twice.
 | file | what is in it |
 |---|---|
 | `index.js` | the conductor: plans the visit, builds each part (the one below, ahead of time, hung under the way down), hands you from one to the next mid-fall, runs the frame, ends it |
-| `seam.js` | the ways down and where the next part hangs (pure): `WAYS`, `GAP`, `dropOf`, `hangBelow` |
+| `seam.js` | the ways down and where the next part hangs (pure): `WAYS`, `DEALT` (the ones a visit is dealt: not the stairs), `GAP`, `dropOf`, `hangBelow`, and `pushes` (the fire door's bar) |
 | `plan.js` | a visit from its seed: how many floors, which kind each is and how it ends, what is hidden where, what each floor may take for granted |
 | `gen.js` | the generator and the first deck. Pure: no three.js, no DOM. `frame.js` is its geometry |
 | `deck2.js` | the deck, continued: where new rooms' lines go |
