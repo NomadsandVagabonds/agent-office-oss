@@ -31,7 +31,8 @@ export function build(c) {
     if (p.empty.includes(k)) continue;
     // a car's side, standing where a car would, held up from behind
     const fx = x + (r ? 0.5 : -0.5), face = r ? 1 : -1;
-    if (face > 0) fallingFlat(c, fx, z + 1.35, fx, z - 1.35, 'carSide', { h: 1.1, alb: tints[k % tints.length] }); else fallingFlat(c, fx, z - 1.35, fx, z + 1.35, 'carSide', { h: 1.1, alb: tints[k % tints.length] });
+    const what = ['carSide', 'vanSide', 'carSide', 'pickupSide'][(k * 3 + p.real) % 4], o = { h: 1.1, alb: tints[k % tints.length] };
+    if (face > 0) fallingFlat(c, fx, z + 1.3, fx, z - 1.3, what, o); else fallingFlat(c, fx, z - 1.3, fx, z + 1.3, what, o);
     brace(c, fx - face * 0.02, z, -face, 0, 0.6, 0.8);
   }
   if (spot) {

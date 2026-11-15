@@ -40,7 +40,7 @@ const CELLS = {
   flamingo: [448, 0, 24, 40], flamingoBack: [472, 0, 24, 40],
   hillA: [0, 40, 96, 36], hillB: [96, 40, 96, 36], hose: [208, 40, 32, 32],
   tree: [0, 96, 64, 112], treeBack: [64, 96, 64, 112], duck: [128, 96, 32, 28], duckBack: [160, 96, 32, 28], bush: [192, 96, 48, 32],
-  corn: [256, 96, 48, 80], mallA: [304, 96, 96, 48], mallB: [400, 96, 96, 48], carSide: [304, 148, 108, 44],
+  corn: [256, 96, 48, 80], mallA: [304, 96, 96, 48], mallB: [400, 96, 96, 48], carSide: [304, 148, 108, 44], vanSide: [412, 148, 100, 44], pickupSide: [412, 196, 100, 44],
 };
 const SW = 512, SH = 256;
 
@@ -134,7 +134,12 @@ const DRAW = {
   // a car, from the side, in no colour: whoever cuts one out paints it afterwards
   carSide: (g, w, h) => { g.fillStyle = '#e9e7e0'; g.beginPath(); g.moveTo(2, 34); g.lineTo(2, 22); g.lineTo(22, 19); g.lineTo(34, 6); g.lineTo(72, 6); g.lineTo(86, 19); g.lineTo(106, 22); g.lineTo(106, 34); g.fill();
     g.fillStyle = '#39414a'; g.beginPath(); g.moveTo(27, 19); g.lineTo(36, 9); g.lineTo(52, 9); g.lineTo(52, 19); g.fill(); g.beginPath(); g.moveTo(55, 19); g.lineTo(55, 9); g.lineTo(70, 9); g.lineTo(81, 19); g.fill();
-    P(g, '#bdbab0', 2, 26, 104, 2); blob(g, '#1d1d1f', [[24, 35, 9, 9], [84, 35, 9, 9]]); blob(g, '#9a9a96', [[24, 35, 4, 4], [84, 35, 4, 4]]); P(g, '#f3e7a6', 103, 22, 3, 4); },
+    P(g, '#bdbab0', 2, 26, 104, 2); blob(g, '#1d1d1f', [[24, 35, 9, 9], [84, 35, 9, 9]]); blob(g, '#9a9a96', [[24, 35, 4, 4], [84, 35, 4, 4]]); P(g, '#f3e7a6', 103, 22, 3, 4); P(g, '#bdbab0', 53, 9, 1, 25); P(g, '#7a7a76', 44, 22, 4, 1); P(g, '#7a7a76', 62, 22, 4, 1); },
+  vanSide: (g) => { g.fillStyle = '#e9e7e0'; g.beginPath(); g.moveTo(2, 36); g.lineTo(2, 6); g.lineTo(74, 6); g.lineTo(88, 20); g.lineTo(98, 23); g.lineTo(98, 36); g.fill(); g.fillStyle = '#39414a'; g.beginPath(); g.moveTo(62, 20); g.lineTo(62, 9); g.lineTo(73, 9); g.lineTo(84, 20); g.fill();
+    P(g, '#bdbab0', 2, 27, 96, 2); P(g, '#bdbab0', 58, 6, 1, 30); P(g, '#bdbab0', 30, 6, 1, 30); blob(g, '#1d1d1f', [[22, 36, 8, 8], [78, 36, 8, 8]]); blob(g, '#9a9a96', [[22, 36, 3.5, 3.5], [78, 36, 3.5, 3.5]]); P(g, '#f3e7a6', 95, 23, 3, 4);
+    garble(g, 'DELIVRY', 6, 11, 22, 8, { color: '#7a7a76', size: 6, mess: 0.6 }, 5); garble(g, 'FOR YOU', 34, 11, 22, 8, { color: '#7a7a76', size: 6, mess: 0.6 }, 9); },
+  pickupSide: (g) => { g.fillStyle = '#e9e7e0'; g.beginPath(); g.moveTo(2, 36); g.lineTo(2, 20); g.lineTo(44, 20); g.lineTo(46, 7); g.lineTo(70, 7); g.lineTo(80, 20); g.lineTo(98, 23); g.lineTo(98, 36); g.fill(); g.fillStyle = '#39414a'; g.beginPath(); g.moveTo(49, 20); g.lineTo(50, 10); g.lineTo(68, 10); g.lineTo(76, 20); g.fill();
+    P(g, '#bdbab0', 2, 27, 96, 2); P(g, '#bdbab0', 44, 20, 1, 16); blob(g, '#1d1d1f', [[20, 36, 9, 9], [80, 36, 9, 9]]); blob(g, '#9a9a96', [[20, 36, 4, 4], [80, 36, 4, 4]]); P(g, '#f3e7a6', 95, 23, 3, 4); for (const [x, y] of [[8, 13], [18, 11], [30, 14]]) { P(g, '#c8a473', x, y, 9, 8); P(g, '#a9824f', x, y + 3, 9, 1); } },
   corn, mallA: (g, w, h) => mall(g, w, h, 0), mallB: (g, w, h) => mall(g, w, h, 1),
   bush: (g) => { blob(g, '#4f8f45', [[14, 20, 13, 12], [30, 18, 14, 14], [24, 24, 20, 8]]); blob(g, '#6fae58', [[12, 16, 5, 4], [32, 12, 6, 4]]); },
 };
@@ -200,6 +205,20 @@ export function sheet(batch, a, b, cc, d, nu = 1, nv = 1, uv = null, alb = WHITE
 /** An upright flat piece from (ax, az) to (bx, bz), y0 to y1: it faces whoever sees a on their left. */
 export const upright = (batch, ax, az, bx, bz, y0, y1, uv, alb, ao) => sheet(batch, [ax, y0, az], [bx, y0, bz], [bx, y1, bz], [ax, y1, az], Math.max(1, Math.round(Math.hypot(bx - ax, bz - az) / 0.6)), Math.max(1, Math.round((y1 - y0) / 0.8)), uv, alb, ao);
 /** A length of square timber from a to b, t thick. */
+/** A length of round timber from a to b, r0 thick at a and r1 at b: seven-sided, which at this size is round. */
+export function log(batch, a, b, r0, r1 = r0, alb = TIMBER) {
+  const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], L = Math.hypot(...d) || 1, e = d.map((v) => v / L), ref = Math.abs(e[1]) > 0.95 ? [1, 0, 0] : [0, 1, 0];
+  let p = [e[1] * ref[2] - e[2] * ref[1], e[2] * ref[0] - e[0] * ref[2], e[0] * ref[1] - e[1] * ref[0]]; const pl = Math.hypot(...p); p = p.map((v) => v / pl);
+  const q = [e[1] * p[2] - e[2] * p[1], e[2] * p[0] - e[0] * p[2], e[0] * p[1] - e[1] * p[0]], N = 7;
+  const at = (o, r, k) => { const cs = Math.cos(k * 6.2832 / N) * r, sn = Math.sin(k * 6.2832 / N) * r; return [o[0] + p[0] * cs + q[0] * sn, o[1] + p[1] * cs + q[1] * sn, o[2] + p[2] * cs + q[2] * sn]; };
+  for (let k = 0; k < N; k++) {
+    const a0 = at(a, r0, k), a1 = at(a, r0, k + 1), b0 = at(b, r1, k), b1 = at(b, r1, k + 1), mid = at([0, 0, 0], 1, k + 0.5);
+    const n = [(a1[1] - a0[1]) * (b0[2] - a0[2]) - (a1[2] - a0[2]) * (b0[1] - a0[1]), (a1[2] - a0[2]) * (b0[0] - a0[0]) - (a1[0] - a0[0]) * (b0[2] - a0[2]), (a1[0] - a0[0]) * (b0[1] - a0[1]) - (a1[1] - a0[1]) * (b0[0] - a0[0])];
+    const shade = alb.map((v) => v * (0.86 + 0.14 * ((k * 5) % 3) / 2));                                    // a little grain: no two faces quite the same
+    if (n[0] * mid[0] + n[1] * mid[1] + n[2] * mid[2] > 0) sheet(batch, a0, a1, b1, b0, 1, 1, null, shade); else sheet(batch, a1, a0, b0, b1, 1, 1, null, shade);
+  }
+  return batch;
+}
 export function beam(batch, a, b, t = 0.05, alb = TIMBER, ao = 1) {
   const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], L = Math.hypot(...d) || 1, e = d.map((v) => v / L);
   const ref = Math.abs(e[1]) > 0.95 ? [1, 0, 0] : [0, 1, 0];
@@ -358,7 +377,7 @@ export function lawn(c, opt = {}) {
   const chance = opt.wrong ?? (!room.quiet && !s && room.kind === 'plain' && Math.min(W, D) >= 3.4 ? 0.4 : 0);
   // (for looking at one: `window.__suburbWrong = 'melting'` before the floor is built puts that one on every lawn that can take it)
   const asked = typeof globalThis !== 'undefined' && WRONG[globalThis.__suburbWrong] ? globalThis.__suburbWrong : opt.which;
-  if (chance > 0 && (R.chance(chance) || asked)) { const name = asked || R.pick([...Object.keys(WRONG), 'melting', 'melting']); if (WRONG[name](c) !== false) c.rt.weird = name; }
+  if ((chance > 0 && R.chance(chance)) || (asked && room.kind === 'plain' && !s)) { const name = asked || R.pick([...Object.keys(WRONG), 'melting', 'melting']); if (WRONG[name](c) !== false) c.rt.weird = name; }
 }
 
 /* ---- the neighbour ------------------------------------------------------------------------------------------------ */
@@ -482,6 +501,37 @@ export function car(c, x, z, along = true, rgb = [0.6, 0.52, 0.38], lift = 0, in
   if (along) c.solid(x - 2.1, z - 0.85, x + 2.1, z + 0.85); else c.solid(x - 0.85, z - 2.1, x + 0.85, z + 2.1);
   c.blot(x, z, along ? 5.2 : 2.6, along ? 2.6 : 5.2, { a: lift < 0 ? 0.5 : 0.35 }); c.reserve(x, z, 2.3);
 }
+/* ---- the melt: timber that has gone soft (the owner's idea: wooden telephone poles, melting) ------------------------------- */
+
+/**
+ * A wooden telephone pole that is melting, toward (dx, dz): it stands for a metre or two, then goes over like a candle left
+ * in the sun, wood running off its underside and standing in a pool at its foot. Only the pole: its two crossbars are as stiff
+ * and square as the day they went up. Two wires still go up into the ceiling and hold the top; two have come down.
+ */
+export function meltingPole(c, x, z, dx, dz, hgt, R = c.R) {
+  const wood = [0.36, 0.22, 0.12], dark = [0.24, 0.14, 0.07], wire = [0.04, 0.03, 0.02], N = 9, seg = hgt / N, pts = [[x, 0, z]], nx = -dz, nz = dx;
+  for (let i = 1; i <= N; i++) { const a = Math.pow(i / N, 2.4) * 1.75 + Math.sin(i * 1.7) * 0.07, q = pts[i - 1]; pts.push([q[0] + dx * Math.sin(a) * seg, Math.max(0.5, q[1] + Math.cos(a) * seg), q[2] + dz * Math.sin(a) * seg]); }
+  // the pole is what is melting: it thins and thickens as it goes over, and runs off its own underside
+  for (let i = 0; i < N; i++) { const r = (k) => 0.1 - k * 0.004 + (k % 2) * 0.018; log(c.flat, pts[i], pts[i + 1], r(i), r(i + 1), i % 3 ? wood : dark); if (i) c.flat.ball(pts[i][0], pts[i][1], pts[i][2], r(i) * 1.02, wood, 1, 7); }
+  const drip = (p, len) => { log(c.flat, p, [p[0], p[1] - len, p[2]], 0.035, 0.018, wood); c.flat.ball(p[0], p[1] - len, p[2], 0.05, wood, 1.4, 7); };
+  for (const i of [N - 4, N - 2]) drip([pts[i][0], pts[i][1] - 0.06, pts[i][2]], R.range(0.25, 0.6));
+  // its two crossbars are not: square timber, dead straight, a row of insulators on each, exactly as they were put up
+  const ends = [];
+  for (const [i, hw] of [[N - 1, 0.75], [N - 2, 0.6]]) {
+    const p = pts[i]; beam(c.flat, [p[0] - nx * hw, p[1] + 0.09, p[2] - nz * hw], [p[0] + nx * hw, p[1] + 0.09, p[2] + nz * hw], 0.09, dark);
+    for (const k of [-0.9, -0.45, 0.45, 0.9]) { const q = [p[0] + nx * hw * k, p[1] + 0.135, p[2] + nz * hw * k]; c.flat.box(q[0] - 0.03, q[1], q[2] - 0.03, q[0] + 0.03, q[1] + 0.09, q[2] + 0.03, [0.55, 0.62, 0.6]); if (Math.abs(k) > 0.5) ends.push([q[0], q[1] + 0.09, q[2], k]); }
+  }
+  // the wires: two still go up into the ceiling, and are what is holding the top; two have come down
+  for (const [ex, ey, ez, k] of ends) {
+    if (k > 0) { const up = c.ceilAt(ex, ez); beam(c.flat, [ex, ey, ez], [ex - dx * 0.4, up, ez - dz * 0.4], 0.014, wire); c.hole(ex - dx * 0.4 - 0.3, ez - dz * 0.4 - 0.3); }
+    else { const g = [ex + dx * 0.7 + nx * k * 0.4, 0.02, ez + dz * 0.7 + nz * k * 0.4]; beam(c.flat, [ex, ey, ez], g, 0.014, wire); beam(c.flat, g, [g[0] + dx * 1.1, 0.02, g[2] + dz * 1.1 + nz * 0.3], 0.014, wire); }
+  }
+  // the pool, and what has dripped into it since
+  c.flat.ball(x, 0.01, z, 0.62, wood, 0.09, 10); c.flat.ball(x + dx * 0.5, 0.01, z + dz * 0.5, 0.4, dark, 0.08, 8); c.blot(x, z, 1.9, 1.9, { a: 0.4 });
+  for (const i of [N - 4, N - 2]) { const p = pts[i]; c.flat.ball(p[0], 0.01, p[2], 0.2, wood, 0.1, 6); }
+  c.solid(x - 0.12, z - 0.12, x + 0.12, z + 0.12); c.reserve(x, z, 0.8);
+}
+
 /** A fire that is not the visitor's: two crossed sheets of it, alight for as long as anybody is near, and what it does to the ceiling. */
 export function blaze(c, x, y, z, size = 1) {
   const tex = c.kit.tex.custom('suburb:flame', 32, 48, (g, w, h) => { for (const [col, k] of [['#d8421c', 1], ['#f08a1e', 0.72], ['#ffd65a', 0.42]]) { g.fillStyle = col; for (const [fx, fw, fh] of [[8, 7, 34], [16, 9, 46], [24, 7, 30], [12, 5, 22], [21, 5, 38]]) { g.beginPath(); g.moveTo(fx - fw * k, h); g.quadraticCurveTo(fx - fw * k, h - fh * k * 0.5, fx, h - fh * k); g.quadraticCurveTo(fx + fw * k, h - fh * k * 0.5, fx + fw * k, h); g.fill(); } } }, { clamp: true });
@@ -492,17 +542,37 @@ export function blaze(c, x, y, z, size = 1) {
   const top = c.ceilAt(x, z); c.blot(x, z, 3.2, 3.2, { rgb: [0.02, 0.02, 0.02], a: 0.75, y: top - 0.004, down: true }); c.blot(x, z, 1.6, 1.6, { rgb: [0, 0, 0], a: 0.8, y: top - 0.005, down: true });
   c.tick((dt, t) => { parts.forEach((m, i) => { const k = 1 + 0.16 * Math.sin(t * 11 + i * 2.1) + 0.08 * Math.sin(t * 23 + i); m.scale.set(1 + 0.08 * Math.sin(t * 7 + i), k, 1); m.position.y = y + 0.75 * size * k; }); });
 }
+/** A front door: six panels, a knob, a letter slot, a number. From its hinge edge (x from 0), 2.05 m high. */
+export const doorVox = (paint) => () => {
+  const v = new Vox(), body = M(paint, 1), deep = M(tone(paint, -0.28), 1), brass = M('#c9a43a', 0);
+  v.box(0, 1, -1, 36, 82, 1, body);
+  for (const [x0, x1] of [[4, 16], [20, 32]]) for (const [y0, y1] of [[6, 24], [30, 52], [58, 77]]) for (const z of [-1, 0.4]) { v.box(x0, y0, z, x1, y1, z + 0.6, deep); v.box(x0 + 1.4, y0 + 1.4, z < 0 ? -1.3 : 0.7, x1 - 1.4, y1 - 1.4, z < 0 ? -0.7 : 1.3, body); }
+  for (const z of [-2.2, 2.2]) { v.ellipsoid(31.5, 41, z, 1.6, 1.6, 1.3, brass); v.box(30.6, 37, z < 0 ? -1.4 : 1, 32.4, 45, z < 0 ? -1 : 1.4, brass); }
+  v.box(12, 26.4, 1, 24, 28.6, 1.5, brass); v.box(13, 27, 1.4, 23, 28, 1.7, M('#1d1c1a', 0)); for (const x of [15, 18, 21]) v.box(x, 54, 1, x + 1.6, 56.6, 1.5, brass);
+  return v;
+};
+/** The frame a door hangs in, about its middle: two jambs and a head, with an architrave. */
+export const doorFrameVox = () => { const v = new Vox(), w = M('#efe9d8', 1), d = M('#cfc8b4', 1); for (const sx of [-1, 1]) { v.box(sx > 0 ? 18 : -21, 0, -2.4, sx > 0 ? 21 : -18, 84, 2.4, w); v.box(sx > 0 ? 20 : -23, 0, 2, sx > 0 ? 23 : -20, 86, 3, d); } v.box(-21, 82, -2.4, 21, 85, 2.4, w); v.box(-23, 84, 2, 23, 87, 3, d); return v; };
+/** A garden gnome, with nothing to do. */
+export const gnomeVox = () => {
+  const v = new Vox(), coat = M('#3f5f8a', 1), beard = M('#efe9d8', 2), skin = M('#e2b494', 1);
+  for (const x of [-2.4, 2.4]) v.rbox(x - 2, 0, -2, x + 2, 3, 3.4, 1, M('#3a2a1c', 1));
+  v.rbox(-4.6, 2.6, -3.4, 4.6, 12, 3.4, 2.4, coat); v.cyl('y', 0, 0, 5.4, 6.6, 4.9, M('#1b1614', 0)); v.set(0, 6, 5, M('#c9a43a', 0));
+  for (const sx of [-1, 1]) { v.tube(sx * 4.4, 10.4, 0, sx * 5.4, 6.4, 1.4, 1.2, coat); v.ellipsoid(sx * 5.5, 5.6, 1.6, 1.2, 1.2, 1.2, skin); }
+  v.ellipsoid(0, 13.6, 0.2, 3.9, 3.6, 3.7, skin); v.ellipsoid(0, 11.4, 2.6, 3.6, 3.8, 2, beard); v.ellipsoid(0, 13.6, 3.9, 1.3, 1.1, 1.1, M('#d9977a', 1)); for (const sx of [-1.7, 1.7]) v.set(Math.round(sx), 15, 3, M('#17171a', 0));
+  v.cyl('y', 0, -0.4, 15.6, 25, 4.4, M('#b3261e', 1), 0.6); v.cyl('y', 0, -0.4, 15.2, 16.4, 4.7, M('#8f1d17', 1));
+  return v;
+};
 export const WRONG = {
   // one sprinkler head (the one thing here that is where it should be)
   sprinkler(c) { const at = c.spot(0.3, { pad: 1 }); if (!at) return false; sprinkler(c, at.x, at.z); },
   // every letter box the street had, delivered to one corner
   pile(c) {
     const k = c.corner(1.0); if (!k) return false;
-    const R = c.R;
-    for (const [n, r, y] of [[13, 0.85, 0], [8, 0.55, 0.19], [4, 0.28, 0.38], [1, 0, 0.57]]) for (let i = 0; i < n; i++) {
-      const a = (i / n) * 6.283 + R.range(-0.3, 0.3), x = k.x + Math.cos(a) * r * R.range(0.6, 1), z = k.z + Math.sin(a) * r * R.range(0.6, 1), t = R.chance(0.5), hw = t ? 0.22 : 0.1, hd = t ? 0.1 : 0.22, g = R.range(0.3, 0.46);
-      c.flat.box(x - hw, y, z - hd, x + hw, y + 0.19, z + hd, [g * 0.9, g, g * 1.15], y ? {} : { skip: '-y' });
-      c.flat.box(x - 0.015, y + 0.19, z - 0.015, x + 0.015, y + 0.19 + R.range(0.04, 0.2), z + 0.015, [0.75, 0.12, 0.1]);
+    const R = c.R, tints = ['#56606c', '#6c7680', '#3f4a56', '#7d2a22', '#48584a'];
+    for (const [n, r, y] of [[11, 0.8, 0.02], [7, 0.5, 0.2], [4, 0.26, 0.38], [1, 0, 0.56]]) for (let i = 0; i < n; i++) {
+      const a = (i / n) * 6.283 + R.range(-0.3, 0.3), tint = R.pick(tints);
+      c.model('suburb:letterbox:loose:' + tint, letterBoxVox(tint, false), k.x + Math.cos(a) * r * R.range(0.6, 1), k.z + Math.sin(a) * r * R.range(0.6, 1), { y: y + R.range(0, 0.04), rot: R.range(0, 6.28), tilt: [R.range(-0.5, 0.5), R.range(-0.9, 0.9)], solid: false, shadow: false });
     }
     c.solid(k.x - 0.8, k.z - 0.8, k.x + 0.8, k.z + 0.8); c.shadow(k.x, k.z, 2, 2, 0.4);
   },
@@ -520,7 +590,7 @@ export const WRONG = {
     c.flat.box(-0.03, y - 0.07, -0.03, 0.03, y, 0.03, [0.06, 0.06, 0.06]); c.flat.box(-0.02, y - 0.085, -0.02, 0.02, y - 0.07, 0.02, [0.7, 0.55, 0.2]);
   },
   // a car, alight, and it has been for some time: nothing is burnt but the ceiling
-  burning(c) { if (WRONG.car(c) === false) return false; blaze(c, 0.3, 0.75, 0, 1.3); blaze(c, -0.6, 0.7, 0.3, 0.9); },
+  burning(c) { if (WRONG.car(c) === false) return false; const [x, z] = c.rt.carAt; blaze(c, x + 0.3, 0.75, z, 1.3); blaze(c, x - 0.6, 0.7, z + 0.3, 0.9); },
   // a car, parked where there was room
   ceilcar(c) {
     const { W, D } = c, y = c.ceilAt(0, 0), along = W >= D;
@@ -553,15 +623,14 @@ export const WRONG = {
   // front doors. A house has one; so here are some
   doors(c) {
     const R = c.R; let n = 0;
+    if (Math.min(c.W, c.D) < 5.4) return false;                    // (room to walk round every one of them: a shut door in a lawn is a wall a metre wide)
     for (let i = 0; i < 5; i++) {
-      const s = c.spot(0.7, { head: 2.2 }); if (!s) continue;
-      const col = [[0.5, 0.12, 0.1], [0.15, 0.3, 0.2], [0.14, 0.2, 0.4], [0.75, 0.7, 0.2]][i % 4], ajar = R.chance(0.35) ? R.range(0.3, 1.2) : 0;
-      for (const k of [-1, 1]) c.flat.box(s.x + k * 0.5 - 0.04, 0, s.z - 0.05, s.x + k * 0.5 + 0.04, 2.1, s.z + 0.05, WHITEWASH, { skip: '-y' });
-      c.flat.box(s.x - 0.54, 2.06, s.z - 0.05, s.x + 0.54, 2.14, s.z + 0.05, WHITEWASH);
-      const hx = s.x - 0.46, ex = hx + Math.cos(ajar) * 0.92, ez = s.z - Math.sin(ajar) * 0.92;
-      upright(c.flat, hx, s.z, ex, ez, 0.02, 2.06, null, col); upright(c.flat, ex, ez, hx, s.z, 0.02, 2.06, null, col.map((v) => v * 0.8));
-      c.flat.ball(ex - Math.cos(ajar) * 0.1, 1.0, ez + Math.sin(ajar) * 0.1 + 0.04, 0.035, [0.75, 0.6, 0.25]);
-      if (!ajar) c.solid(s.x - 0.54, s.z - 0.05, s.x + 0.54, s.z + 0.05, { tall: true }); else { c.solid(s.x - 0.56, s.z - 0.05, s.x - 0.46, s.z + 0.05); c.solid(s.x + 0.46, s.z - 0.05, s.x + 0.56, s.z + 0.05); }
+      const s = c.spot(0.7, { head: 2.3, pad: 1.1 }); if (!s) continue;
+      const paint = ['#8c2a22', '#2f5a3a', '#27406b', '#b9a23a', '#3a3a3e'][i % 5], ajar = R.chance(0.4) ? R.range(0.35, 1.3) : 0;
+      c.model('suburb:doorframe', doorFrameVox, s.x, s.z, { solid: false, shadow: false });
+      c.model('suburb:door:' + paint, doorVox(paint), s.x - 0.45, s.z, { rot: ajar, solid: false, shadow: false });
+      if (!ajar) c.solid(s.x - 0.56, s.z - 0.06, s.x + 0.56, s.z + 0.06, { tall: true }); else { c.solid(s.x - 0.58, s.z - 0.06, s.x - 0.45, s.z + 0.06); c.solid(s.x + 0.45, s.z - 0.06, s.x + 0.58, s.z + 0.06); }
+      c.flat.box(s.x - 0.4, 0, s.z + 0.12, s.x + 0.4, 0.02, s.z + 0.6, [0.36, 0.26, 0.14], { skip: '-y' }); c.shadow(s.x, s.z, 1.2, 0.3, 0.35);
       n++;
     }
     return n > 1 ? undefined : false;
@@ -591,14 +660,19 @@ export const WRONG = {
   car(c) {
     const { W, D } = c, along = W >= D;
     if (Math.max(W, D) < 6.6 || Math.min(W, D) < 4.6) return false;
-    const x = along ? 0 : c.R.pick([-0.5, 0.5]), z = along ? c.R.pick([-0.5, 0.5]) : 0;
-    if (!c.clear(x, z, 0.9) || !c.clear(x + (along ? 1.5 : 0), z + (along ? 0 : 1.5), 0.9) || !c.clear(x - (along ? 1.5 : 0), z - (along ? 0 : 1.5), 0.9)) return false;
-    car(c, x, z, along, c.R.pick(['#9a8a66', '#7d2a22', '#3f5f8a', '#5f7f5a']), -0.5);
+    // (wherever in the room there is the length of it clear: other things are left in lawns now, and it will not park on them)
+    const ok = (x, z) => [-1.5, 0, 1.5].every((k) => c.clear(x + (along ? k : 0), z + (along ? 0 : k), 0.7));
+    for (const [u, v] of c.R.shuffle([[0, 0], [0, -1.2], [0, 1.2], [-1, 0], [1, 0], [-1, -1.2], [1, 1.2], [1, -1.2], [-1, 1.2]])) {
+      const x = along ? u : v, z = along ? v : u;
+      if (ok(x, z)) { car(c, x, z, along, c.R.pick(['#9a8a66', '#7d2a22', '#3f5f8a', '#5f7f5a']), -0.5); c.rt.carAt = [x, z]; return undefined; }
+    }
+    return false;
   },
 };
-export function sprinkler(c, x, z) {
-  c.flat.box(x - 0.03, 0, z - 0.03, x + 0.03, 0.07, z + 0.03, [0.06, 0.06, 0.06], { skip: '-y' });
-  c.flat.box(x - 0.02, 0.07, z - 0.02, x + 0.02, 0.085, z + 0.02, [0.7, 0.55, 0.2]);
+/** A sprinkler head: a riser out of the grass, a brass body, a nozzle on an arm. */
+const sprinklerVox = () => { const v = new Vox(); v.cyl('y', 0, 0, 0, 3, 1.6, M('#17171a', 1)); v.cyl('y', 0, 0, 3, 5, 1.2, M('#b58a2e', 0)); v.cyl('y', 0, 0, 5, 6, 1.7, M('#d9ac3f', 0)); v.tube(0, 5.5, 0, 3.4, 6.4, 0, 0.6, M('#b58a2e', 0)); v.set(3, 6, 0, M('#17171a', 0)); return v; };
+export function sprinkler(c, x, z, rot = 0) {
+  c.model('suburb:sprinkler', sprinklerVox, x, z, { rot, solid: false, shadow: false });
   c.blot(x, z, 0.5, 0.5, { a: 0.3 });
 }
 
@@ -641,12 +715,19 @@ export const THINGS = {
   },
 };
 /** A letter box on a post. opt.plate: a batch and uv for what is written on its side. */
+/** A letter box: a tunnel of pressed tin on a post, its door at one end, its flag up, a number that is nearly one. `post`: false for the box alone. */
+const letterBoxVox = (tint, post = true) => () => {
+  const v = new Vox(), tin = M(tint, 0), dark = M(tone(tint, -0.3), 0), y = post ? 40 : 0;
+  if (post) { v.cyl('y', 0, 0, 0, 40, 1.8, M('#7d5d36', 3)); v.box(-3, 37, -2.4, 3, 40, 2.4, M('#6b4f2c', 3)); v.tube(0, 28, 0, 5, 38, 0, 1, M('#6b4f2c', 3)); }
+  v.box(-10, y, -4.5, 10, y + 7, 4.5, tin); v.cyl('x', y + 7, 0, -10, 10, 4.5, tin);
+  for (const x of [-10, -3.4, 3.2, 9]) { v.box(x, y, -4.7, x + 1, y + 7, 4.7, dark); v.cyl('x', y + 7, 0, x, x + 1, 4.7, dark); }                    // the ribs it is pressed with
+  v.box(10, y + 1, -3.5, 10.6, y + 7, 3.5, M(tone(tint, 0.25), 0)); v.cyl('x', y + 7, 0, 10, 10.6, 3.5, M(tone(tint, 0.25), 0)); v.box(10.6, y + 8.4, -0.6, 11.4, y + 10, 0.6, dark);
+  v.box(1, y + 3, 4.5, 2, y + 6, 5.3, M('#b3261e', 0)); v.box(1, y + 6, 4.5, 2, y + 14, 5.3, M('#c9372b', 0)); v.box(1, y + 11, 4.5, 6, y + 14, 5.3, M('#c9372b', 0));
+  v.box(-7, y + 2, -5.1, -1, y + 5, -4.7, M('#1d1c1a', 0)); for (const x of [-6, -4, -2]) v.set(x, y + 3, -6, M('#e8d9a0', 0));
+  return v;
+};
 export function postbox(c, x, z, rot = 0, opt = {}) {
-  const along = Math.abs(Math.sin(rot)) > 0.7, hw = along ? 0.11 : 0.24, hd = along ? 0.24 : 0.11, body = opt.rgb || [0.32, 0.36, 0.42];
-  c.flat.box(x - 0.04, 0, z - 0.04, x + 0.04, 1.02, z + 0.04, TIMBER, { skip: '-y' });
-  c.flat.box(x - hw, 1.02, z - hd, x + hw, 1.2, z + hd, body); c.flat.box(x - hw * 0.86, 1.2, z - hd * 0.86, x + hw * 0.86, 1.25, z + hd * 0.86, body);
-  // the flag, up
-  if (along) c.flat.box(x + hw, 1.1, z - 0.02, x + hw + 0.012, 1.36, z + 0.02, [0.75, 0.12, 0.1]); else c.flat.box(x - 0.02, 1.1, z + hd, x + 0.02, 1.36, z + hd + 0.012, [0.75, 0.12, 0.1]);
-  c.solid(x - 0.12, z - 0.12, x + 0.12, z + 0.12); c.shadow(x, z, 0.3, 0.3, 0.4); c.reserve(x, z, 0.4);
-  return { top: 1.25, hw, hd, along };
+  c.model('suburb:letterbox:' + (opt.tint || '#56606c'), letterBoxVox(opt.tint || '#56606c'), x, z, { rot, solid: false, shadow: false });
+  c.solid(x - 0.12, z - 0.12, x + 0.12, z + 0.12); c.shadow(x, z, 0.5, 0.3, 0.4); c.reserve(x, z, 0.4);
+  return { top: 1.3, hw: 0.25, hd: 0.118, along: false };
 }

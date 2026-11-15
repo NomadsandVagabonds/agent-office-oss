@@ -9,7 +9,7 @@
 // you are off the grass: the room can always be crossed by its stones.
 import * as THREE from 'three';
 import { P } from '../bits.js';
-import { garble, lawn, daylight, WHITEWASH } from '../suburb.js';
+import { garble, lawn, sprinkler, daylight, WHITEWASH } from '../suburb.js';
 
 export const GREEN = Object.freeze({ hears: 2.7, pace: 1.5, runs: 4, reach: 2.4, arc: 0.45, share: 0.03, every: 0.5, stone: 0.42, edge: 0.5 });
 /** Is somebody at (x, z) going `speed` m/s heard by a head at (hx, hz)? Not on a stone (`onStone`), not on the carpet round the edge (`onEdge`), not going slowly. */
@@ -36,7 +36,7 @@ export function build(c) {
   for (let x = -W / 2 + 1.7; x <= W / 2 - 1.7; x += 2.3) for (let z = -D / 2 + 1.7; z <= D / 2 - 1.7; z += 2.3) {
     const hx = x + R.range(-0.3, 0.3), hz = z + R.range(-0.3, 0.3);
     if (stones.some(([sx, sz]) => Math.hypot(sx - hx, sz - hz) < 0.6)) continue;
-    c.flat.box(hx - 0.03, 0, hz - 0.03, hx + 0.03, 0.07, hz + 0.03, [0.06, 0.06, 0.06], { skip: '-y' }); c.flat.box(hx - 0.02, 0.07, hz - 0.02, hx + 0.02, 0.085, hz + 0.02, [0.7, 0.55, 0.2]);
+    sprinkler(c, hx, hz, R.range(0, 6.28));
     const spray = new THREE.Mesh(fan, mat); spray.position.set(hx, 0, hz); spray.visible = false; c.add(spray);
     heads.push({ x: hx, z: hz, spray, on: 0, a: R.range(0, 6.28) });
   }

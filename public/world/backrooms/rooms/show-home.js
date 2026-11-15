@@ -11,10 +11,13 @@
 // Where it all stands is rooms/show-home/layout.js, which the deck asks too.
 import { atlas, drawText, ticks, WHITE } from '../kit.js';
 import { P } from '../bits.js';
+import { Vox, M } from '../../vox/vox.js';
 import { sunk, SUNK } from '../quiet.js';
-import { lawn, fence, flat, sheet, upright, beam, brace, daylight, onWall, postbox, CARPET, TIMBER, WHITEWASH } from '../suburb.js';
+import { lawn, fence, flat, sheet, upright, beam, brace, daylight, onWall, postbox, doorVox, gnomeVox, CARPET, TIMBER, WHITEWASH } from '../suburb.js';
 import { HOME, homePlan } from './show-home/layout.js';
 
+/** A window box: a trough of earth, and what an office thinks flowers are: all of them the same one, in a row. */
+const flowerBox = () => { const v = new Vox(); v.box(-20, 0, -3, 20, 5, 3, M('#efe9d8', 1)); v.box(-19, 4, -2, 19, 6, 2, M('#3a2a1c', 3)); for (let x = -17; x <= 17; x += 4.25) { v.tube(x, 6, 0, x, 10, 0, 0.5, M('#3f7a3a', 1)); v.ellipsoid(x, 11.4, 0, 1.7, 1.5, 1.5, M('#d9433a', 1)); v.set(Math.round(x), 11, 1, M('#f3d44a', 0)); v.box(x - 2, 7.4, -0.5, x, 8.2, 0.5, M('#3f7a3a', 1)); } return v; };
 const hexRgb = (hex) => [1, 3, 5].map((i) => Math.pow(parseInt(hex.slice(i, i + 2), 16) / 255, 2.2));
 
 export function build(c) {
@@ -76,7 +79,8 @@ export function build(c) {
     upright(glass, wx - ww / 2, z, wx + ww / 2, z, y0, y1, [0, 0, 1, 1]);
     for (const [fx0, fy0, fx1, fy1] of [[wx - ww / 2 - 0.07, y0 - 0.07, wx + ww / 2 + 0.07, y0], [wx - ww / 2 - 0.07, y1, wx + ww / 2 + 0.07, y1 + 0.07], [wx - ww / 2 - 0.07, y0, wx - ww / 2, y1], [wx + ww / 2, y0, wx + ww / 2 + 0.07, y1]]) c.flat.box(fx0, fy0, front, fx1, fy1, front + 0.05, WHITEWASH);
     c.flat.box(wx - ww / 2 - 0.12, y0 - 0.11, front, wx + ww / 2 + 0.12, y0 - 0.07, front + 0.11, WHITEWASH);
-    for (const s of [-1, 1]) c.flat.box(wx + s * (ww / 2 + 0.09), y0 - 0.04, front, wx + s * (ww / 2 + 0.38), y1 + 0.04, front + 0.03, [0.1, 0.22, 0.16]);
+    for (const s of [-1, 1]) { const sx0 = wx + s * (ww / 2 + 0.09), sx1 = wx + s * (ww / 2 + 0.38), a = Math.min(sx0, sx1), b = Math.max(sx0, sx1); c.flat.box(a, y0 - 0.04, front, b, y1 + 0.04, front + 0.02, [0.07, 0.16, 0.11]); for (let y = y0; y < y1; y += 0.075) c.flat.box(a + 0.03, y, front + 0.02, b - 0.03, y + 0.045, front + 0.04, [0.11, 0.25, 0.18]); }
+    c.model('home:flowers', flowerBox, wx, front + 0.13, { y: y0 - 0.32, scale: [ww / 1.0, 1, 1], solid: false, shadow: false });
     c.light(wx, 1.5, front + 0.7, '#ffd98a', 0.3, { k: 1.1, far: 4.5 });
     c.flat.box(wx - ww / 2 - 0.05, y0 - 0.05, front - t - 0.13, wx + ww / 2 + 0.05, y1 + 0.05, front - t, [0.3, 0.3, 0.3], { ao: IN });
     c.flat.box(wx + ww / 2 - 0.1, 0.02, front - t - 0.03, wx + ww / 2 - 0.08, y0 - 0.05, front - t - 0.01, [0.04, 0.04, 0.04]);
@@ -85,8 +89,7 @@ export function build(c) {
 
   /* the door: open, inward. A step, a mat, a number */
   const red = hexRgb(p.door), hx = dx - dw, hz = front - t, ax = hx + Math.sin(0.3) * HOME.door.w, az = hz - Math.cos(0.3) * HOME.door.w;
-  upright(c.flat, hx, hz, ax, az, 0.02, dh - 0.02, null, red, 0.9); upright(c.flat, ax, az, hx, hz, 0.02, dh - 0.02, null, red, IN + 0.2);
-  c.flat.ball(ax - 0.11 - 0.03, 1.0, az + 0.08, 0.035, [0.75, 0.6, 0.25]);
+  c.model('suburb:door:' + p.door, doorVox(p.door), hx, hz, { rot: Math.PI / 2 - 0.3 + Math.PI, solid: false, shadow: false }); void red;
   c.solid(Math.min(hx, ax) - 0.03, az, Math.max(hx, ax) + 0.03, hz);
   for (const [fx0, fy0, fx1, fy1] of [[dx - dw - 0.09, 0, dx - dw, dh + 0.09], [dx + dw, 0, dx + dw + 0.09, dh + 0.09], [dx - dw, dh, dx + dw, dh + 0.09]]) c.flat.box(fx0, fy0, front, fx1, fy1, front + 0.04, WHITEWASH, { skip: '-y' });
   c.flat.box(dx - 0.85, 0, front, dx + 0.85, 0.05, front + 0.6, [0.55, 0.55, 0.52], { skip: '-y' });
@@ -100,6 +103,9 @@ export function build(c) {
   for (const q of sunk(desk.x, desk.z, 2).props) if (c.hasProp(q.type)) c.prop(q.type, q.x, q.z, { y: q.y - SUNK, rot: q.rot, solid: q.type === 'desk' || q.type === 'chair' });
   c.light(desk.x, 1.15, desk.z + 0.5, '#a9d0ff', 0.35, { k: 1, far: 3.5 });
   c.leave('opener', desk.x + 0.75, desk.z + 0.05, { y: 0.66 });               // on the desk: the thing that opens the garage doors
+
+  // gnomes, up the path, all looking at the door
+  for (let z = h.fenceZ - 0.7, k = 0; z > front + 1.1; z -= 0.85, k++) c.model('suburb:gnome', gnomeVox, dx + (k % 2 ? 0.62 : -0.62), z, { rot: Math.atan2(dx - (dx + (k % 2 ? 0.62 : -0.62)), front - z), solid: false, shadow: 0.3 });
 
   /* the garden: a fence with a gate left open, stones up to the step, a tree, a board, a letter box with your name on it */
   const fz = h.fenceZ, gx = dx;
