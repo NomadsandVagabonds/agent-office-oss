@@ -129,6 +129,7 @@ export const MORE_DECK = [
     landmark: 'the beige cubicles piled into the dark ceiling over the pit',
     w: [15, 17], d: [15, 17], h: [10, 12],
     ports: ['left', 'right'],
+    doors: 'own',
     halo: { back: 17, side: 8, lip: 12 },
     weight: 1.05,
     lights: 'dark',

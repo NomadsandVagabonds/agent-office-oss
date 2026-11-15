@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ARCHETYPES, isBig, generate } from '../public/world/backrooms/gen.js';
 import {
-  REORG_DECKS, SUMMIT_Y, SUMMIT_BELL,
-  reorgStash, reorgFloorY, createBellCascade, stepBellCascade,
+  REORG_DECKS, GANGWAY_DECKS, SUMMIT_Y, SUMMIT_BELL,
+  reorgStash, reorgFloorY, chooseSealedDoors, createBellCascade, stepBellCascade,
 } from '../public/world/backrooms/rooms/re-org/layout.js';
 import {
   QA_SLIDE, ADJOURNED_SLIDE, ALL_HANDS,
@@ -61,42 +61,78 @@ test('Wave 4 set pieces are registered in ARCHETYPES as set pieces (isBig) and g
   }
 });
 
-test('re-org: pairwise-disjoint heightfield climbs from ground doorways to +4.80m summit within 0.26m steps', () => {
-  // Check pairwise interior disjointness of REORG_DECKS
-  for (let i = 0; i < REORG_DECKS.length; i++) {
-    for (let j = i + 1; j < REORG_DECKS.length; j++) {
-      const a = REORG_DECKS[i], b = REORG_DECKS[j];
+test('re-org: pairwise-disjoint heightfield climbs to +4.80m summit, and ringing 5A bell unseals exits & drops express gangway', () => {
+  // Check pairwise interior disjointness of REORG_DECKS + GANGWAY_DECKS
+  const allDecks = [...REORG_DECKS, ...GANGWAY_DECKS];
+  for (let i = 0; i < allDecks.length; i++) {
+    for (let j = i + 1; j < allDecks.length; j++) {
+      const a = allDecks[i], b = allDecks[j];
       const ox = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0);
       const oz = Math.min(a.z1, b.z1) - Math.max(a.z0, b.z0);
       assert.ok(ox <= 1e-6 || oz <= 1e-6, `decks ${a.id} and ${b.id} do not overlap in interior`);
     }
   }
 
-  for (const W of [15, 17]) {
-    const D = W;
+  for (const [W, D] of [[13, 14], [15, 16]]) {
     const reached = floodHeightfield(W, D, reorgFloorY, { x: 0, z: D / 2 - 0.5 });
     // Reaches side doorways on y = 0
     assert.equal(reached(-W / 2 + 0.5, 0), true, 'reaches left doorway');
     assert.equal(reached(W / 2 - 0.5, 0), true, 'reaches right doorway');
-    // Reaches Summit (+4.80 m) & both summit stash zones
+    // Reaches Summit (+4.80 m), fixed gangway landing pad, & both summit stash zones
     assert.equal(reorgFloorY(SUMMIT_BELL.x, SUMMIT_BELL.z), SUMMIT_Y);
     assert.equal(reached(2.5, -5.0), true, 'reaches Tier 5 summit pod');
+    assert.equal(reached(5.0, -4.9), true, 'reaches fixed steel landing pad before ringing bell');
     assert.equal(reached(SUMMIT_BELL.x, -6.4), true, 'reaches cantilevered chasm nose');
+    // Before bell is rung, sloped gangplank (x=5.0, z=-2.0) is still raised (floor y=0 below)
+    assert.equal(reorgFloorY(5.0, -2.0), 0);
     for (const side of [-1, 1]) {
       const [x0, z0, x1, z1] = reorgStash({ W, D }, side);
       assert.equal(reached((x0 + x1) / 2, (z0 + z1) / 2), true, `reaches summit stash (${side})`);
     }
   }
 
-  // Bell cascade ripples down all 5 chasm tiers and resets
+  // Door sealing rules: 1-door room never seals; multi-door room keeps entry open & seals outgoing
+  const dFront = { side: 'front', link: 1 }, dLeft = { side: 'left', link: 2 }, dRight = { side: 'right', link: 3 };
+  assert.deepEqual(chooseSealedDoors([dFront], 'front'), []);
+  assert.deepEqual(chooseSealedDoors([dFront, dLeft, dRight], 'front'), [dLeft, dRight]);
+  assert.deepEqual(chooseSealedDoors([dFront, dLeft, dRight], 'left'), [dFront, dRight]);
+
+  // Bell cascade unseals exits, drops express gangway, and ripples down all 5 chasm tiers
   let bell = createBellCascade();
-  bell = stepBellCascade(bell, { rang: true }).state;
+  assert.equal(bell.unlocked, false);
+  assert.equal(bell.bridgeDown, false);
+  const firstRing = stepBellCascade(bell, { rang: true });
+  bell = firstRing.state;
+  assert.equal(firstRing.justUnlocked, true);
+  assert.equal(bell.unlocked, true);
   assert.equal(bell.active, true);
   assert.equal(bell.litTier, 0);
-  bell = stepBellCascade(bell, { dt: 1.8 }).state;
+
+  let landed = false;
+  for (let k = 0; k < 20; k++) {
+    const r = stepBellCascade(bell, { dt: 0.1 });
+    bell = r.state;
+    if (r.bridgeLanded) landed = true;
+  }
+  assert.equal(landed, true, 'express gangway lands within 2.0s');
+  assert.equal(bell.bridgeDown, true);
+  assert.equal(bell.shutterOpen, 1, 'lower exit shutters roll fully open');
   assert.equal(bell.litTier, 4);
+
+  // Once gangway is down, visitor on Tier 5 summit walks straight onto gangway & down to ground exits
+  for (const [W, D] of [[13, 14], [15, 16]]) {
+    const reachedFromTop = floodHeightfield(W, D, (x, z) => reorgFloorY(x, z, bell), { x: 2.5, z: -5.0 });
+    assert.equal(reorgFloorY(5.0, -4.9, bell), SUMMIT_Y, 'gangway landing pad active at +4.80m');
+    assert.ok(reorgFloorY(5.0, -2.0, bell) > 2.5, 'sloped gangplank active once dropped');
+    assert.equal(reachedFromTop(5.0, -4.9), true, 'steps from Tier 5 onto gangway landing');
+    assert.equal(reachedFromTop(5.0, 2.7), true, 'walks down express gangway to ground floor');
+    assert.equal(reachedFromTop(W / 2 - 0.5, 0), true, 'reaches unsealed right exit from gangway');
+    assert.equal(reachedFromTop(-W / 2 + 0.5, 0), true, 'reaches unsealed left exit from gangway');
+  }
+
   bell = stepBellCascade(bell, { dt: 3.0 }).state;
   assert.equal(bell.active, false);
+  assert.equal(bell.unlocked, true, 'stays unlocked permanently after cascade finishes');
 });
 
 test('all-hands: raked bowl reaches pit & stage via twin stairs, and Q&A shutter advances/adjourns speaker', () => {
