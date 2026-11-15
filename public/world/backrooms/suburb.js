@@ -36,6 +36,7 @@ const CELLS = {
   flamingo: [448, 0, 24, 40], flamingoBack: [472, 0, 24, 40],
   hillA: [0, 40, 96, 36], hillB: [96, 40, 96, 36], hose: [208, 40, 32, 32],
   tree: [0, 96, 64, 112], treeBack: [64, 96, 64, 112], duck: [128, 96, 32, 28], duckBack: [160, 96, 32, 28], bush: [192, 96, 48, 32],
+  corn: [256, 96, 48, 80], mallA: [304, 96, 96, 48], mallB: [400, 96, 96, 48],
 };
 const SW = 512, SH = 256;
 
@@ -91,6 +92,27 @@ function duck(g, w, h, back) {
   g.fillStyle = '#f2c230'; g.beginPath(); g.moveTo(2, 14); g.lineTo(0, 6); g.lineTo(8, 12); g.fill(); blob(g, '#dba51c', [[13, 18, 6, 4]]);
   if (back) { g.globalCompositeOperation = 'source-in'; P(g, '#c8a473', 0, 0, w, h); g.globalCompositeOperation = 'source-over'; }
 }
+// a field of corn by somebody who was told about one: the same stalk, the same ear, at the same height, for ever
+function corn(g, w, h) {
+  for (let x = 2; x < w; x += 8) {
+    P(g, '#5f8f3a', x + 3, 4, 2, h - 4); P(g, '#4b7630', x + 4, 4, 1, h - 4);
+    for (let y = 12; y < h; y += 14) { g.fillStyle = '#6fa544'; g.beginPath(); g.moveTo(x + 4, y + 6); g.quadraticCurveTo(x + 9, y, x + 10, y + 5); g.quadraticCurveTo(x + 8, y + 3, x + 4, y + 8); g.fill(); g.beginPath(); g.moveTo(x + 4, y + 12); g.quadraticCurveTo(x - 1, y + 6, x - 2, y + 11); g.quadraticCurveTo(x, y + 9, x + 4, y + 14); g.fill(); }
+    P(g, '#e6c648', x + 5, 30, 3, 8); P(g, '#c9a52f', x + 7, 30, 1, 8); P(g, '#d9cf9a', x + 3, 1, 4, 4);
+  }
+}
+// a row of shops, drawn straight on the paint with a marker by somebody who had them described: boxes, a sign each, somewhere to leave a car
+function mall(g, w, h, k) {
+  g.strokeStyle = '#2c3f5c'; g.fillStyle = '#2c3f5c'; g.lineWidth = 1;
+  const line = (x0, y0, x1, y1) => { g.beginPath(); g.moveTo(x0 + 0.5, y0 + 0.5); g.lineTo(x1 + 0.5, y1 + 0.5); g.stroke(); };
+  line(0, 34, w, 34); line(0, 10, w, 10);
+  const names = k ? ['STOR', 'SHOPE', 'OPEN OPEN'] : ['SHOP', 'STORE 2', 'SHOP'];
+  for (let i = 0; i < 3; i++) {
+    const x = i * 32; line(x, 10, x, 34); g.strokeRect(x + 4.5, 13.5, 23, 6); g.strokeRect(x + 4.5, 22.5, 10, 11); g.strokeRect(x + 17.5, 23.5, 10, 7);
+    g.font = '5px ui-monospace, Menlo, Consolas, monospace'; g.textAlign = 'center'; g.fillText(names[i], x + 16, 18.5);
+  }
+  for (let x = 6; x < w; x += 12) line(x, 38, x - 4, 47);
+  if (k) { line(80, 34, 80, 2); line(80, 2, 86, 2); g.strokeRect(84.5, 2.5, 4, 2); }
+}
 const DRAW = {
   cloudA: (g, w, h) => cloud(g, w, h, [[0.3, 0.6, 0.26, 0.32], [0.52, 0.42, 0.24, 0.38], [0.72, 0.62, 0.22, 0.28], [0.5, 0.7, 0.4, 0.22]]),
   cloudB: (g, w, h) => cloud(g, w, h, [[0.32, 0.58, 0.26, 0.32], [0.6, 0.48, 0.28, 0.4], [0.5, 0.72, 0.38, 0.2]]),
@@ -105,6 +127,7 @@ const DRAW = {
   hose: (g) => { g.strokeStyle = '#3f8a4a'; g.lineWidth = 2.4; for (const r of [6, 9.5, 13]) { g.beginPath(); g.arc(16, 16, r, 0, 7); g.stroke(); } g.strokeStyle = '#2f6b3a'; g.lineWidth = 1; for (const r of [7, 10.5, 14]) { g.beginPath(); g.arc(16, 16, r, 0.6, 3.4); g.stroke(); } P(g, '#c9a43a', 26, 3, 4, 3); },
   tree: (g, w, h) => tree(g, w, h, false), treeBack: (g, w, h) => tree(g, w, h, true),
   duck: (g, w, h) => duck(g, w, h, false), duckBack: (g, w, h) => duck(g, w, h, true),
+  corn, mallA: (g, w, h) => mall(g, w, h, 0), mallB: (g, w, h) => mall(g, w, h, 1),
   bush: (g) => { blob(g, '#4f8f45', [[14, 20, 13, 12], [30, 18, 14, 14], [24, 24, 20, 8]]); blob(g, '#6fae58', [[12, 16, 5, 4], [32, 12, 6, 4]]); },
 };
 /** The sheet of painted board, and where each thing is on it: art.uv(name, mirrored) → [u0, v0, u1, v1]; art.size(name) → [w, h] in metres. */
@@ -163,9 +186,12 @@ export function fence(c, ax, az, bx, bz, opt = {}) {
     const e = Math.min(len, s + mw), part = [uv[0], uv[1], uv[0] + (uv[2] - uv[0]) * ((e - s) / mw), uv[3]];
     for (const k of [1, -1]) {
       const o = 0.022 * k, x0 = ax + ux * s + nx * o, z0 = az + uz * s + nz * o, x1 = ax + ux * e + nx * o, z1 = az + uz * e + nz * o;
-      if (k > 0) upright(cut, x0, z0, x1, z1, 0.02, h, part); else upright(cut, x1, z1, x0, z0, 0.02, h, [part[2], part[1], part[0], part[3]]);
+      // (opt.hang: the same fence, the other way up, from that height down)
+      const y0 = opt.hang ? opt.hang - h : 0.02, y1 = opt.hang || h, pv = opt.hang ? [part[0], part[3], part[2], part[1]] : part;
+      if (k > 0) upright(cut, x0, z0, x1, z1, y0, y1, pv); else upright(cut, x1, z1, x0, z0, y0, y1, [pv[2], pv[1], pv[0], pv[3]]);
     }
   }
+  if (opt.hang) return;
   for (const [x, z] of opt.posts === false ? [] : [[ax, az], [bx, bz]]) { c.flat.box(x - 0.05, 0, z - 0.05, x + 0.05, h + 0.07, z + 0.05, WHITEWASH, { skip: '-y' }); c.flat.box(x - 0.065, h + 0.07, z - 0.065, x + 0.065, h + 0.1, z + 0.065, WHITEWASH); }
   if (opt.solid !== false && (Math.abs(ux) > 0.999 || Math.abs(uz) > 0.999)) c.solid(Math.min(ax, bx) - 0.05, Math.min(az, bz) - 0.05, Math.max(ax, bx) + 0.05, Math.max(az, bz) + 0.05, { keep: !!opt.keep });
   for (let s = 0; s <= len; s += 0.6) c.reserve(ax + ux * s, az + uz * s, 0.4);
@@ -222,7 +248,7 @@ export function onWall(c, name, side, at, y, opt = {}) {
 }
 /**
  * What every room of the neighbourhood has, plain or not: the grass stops short of the walls and the carpet shows (not across
- * a doorway: the grass goes on through), and there are clouds on the walls. opt: { clouds: false, border: false, sprinkler: 0…1 }
+ * a doorway: the grass goes on through), and there are clouds on the walls. opt: { clouds: false, border: false, paint: 'sky' | 'corn' | 'mall', wrong: 0…1 (how likely one thing got wrong is), which }
  */
 export function lawn(c, opt = {}) {
   const { W, D, R, room } = c, s = room.shape;
@@ -244,18 +270,92 @@ export function lawn(c, opt = {}) {
       }
     }
   }
+  // what is on the walls: clouds, mostly. In some rooms a field of corn, or a row of shops, as described to whoever drew them
+  const paint = opt.paint || R.pick(['sky', 'sky', 'sky', 'corn', 'corn', 'mall', 'mall']), art = setArt(c.kit), low = paint === 'corn' ? 2.75 : paint === 'mall' ? 1.95 : 1.55;
+  c.rt.paint = paint;
+  if (paint !== 'sky') for (const side of ['back', 'left', 'right', 'front']) for (const [a, b] of c.spans(side, 0.12, paint === 'corn' ? 2.2 : 1.5)) {
+    const [w, h] = art.size(paint === 'corn' ? 'corn' : 'mallA'), n = Math.floor((b - a) / w);
+    for (let i = 0; i < n; i++) onWall(c, paint === 'corn' ? 'corn' : (i + (side.length % 2)) % 2 ? 'mallB' : 'mallA', side, a + (b - a - n * w) / 2 + (i + 0.5) * w, 0.11 + h / 2, { off: 0.006 });
+  }
   if (opt.clouds !== false) for (const side of ['back', 'left', 'right', 'front']) for (const [a, b] of c.spans(side, 0.3, 2.2)) {
     const len = b - a; if (len < 2.7) continue;
     for (let i = 0, n = Math.max(1, Math.round(len / 5)); i < n; i++) {
-      const name = R.pick(['cloudA', 'cloudA', 'cloudB', 'cloudB', 'cloudC']), [w, h] = setArt(c.kit).size(name), at = a + (len / n) * (i + R.range(0.3, 0.7));
-      const p = c.wallAt(side, at, 0.3), top = c.ceilAt(p.x, p.z), y = R.range(1.55, Math.max(1.6, Math.min(top - h / 2 - 0.25, opt.cloudTop || 2.9)));
+      const name = R.pick(['cloudA', 'cloudA', 'cloudB', 'cloudB', 'cloudC']), [w, h] = art.size(name), at = a + (len / n) * (i + R.range(0.3, 0.7));
+      const p = c.wallAt(side, at, 0.3), top = c.ceilAt(p.x, p.z), hi = Math.min(top - h / 2 - 0.25, opt.cloudTop || 2.9);
+      if (hi < low) continue;
+      const y = R.range(low, Math.max(low, hi));
       if (at - w / 2 < a || at + w / 2 > b || y + h / 2 > top - 0.1) continue;
       onWall(c, name, side, at, y, { mirror: R.chance(0.5) });
     }
   }
-  // one sprinkler head, in some lawns that have nothing else
-  if ((opt.sprinkler ?? (!room.quiet && !s ? 0.3 : 0)) > 0 && R.chance(opt.sprinkler ?? 0.3)) { const at = c.spot(0.3, { pad: 1 }); if (at) sprinkler(c, at.x, at.z); }
+  // …and in some lawns that have nothing else, one thing that whoever built this got wrong (WRONG, below)
+  const chance = opt.wrong ?? (!room.quiet && !s && room.kind === 'plain' && Math.min(W, D) >= 3.4 ? 0.4 : 0);
+  if (chance > 0 && R.chance(chance)) { const name = opt.which || R.pick(Object.keys(WRONG)); if (WRONG[name](c) !== false) c.rt.weird = name; }
 }
+
+/* ---- got wrong: what a lawn has on it when whoever built it had only been told ------------------------------------- */
+
+function flamingoAt(c, x, z, turn) {
+  const art = setArt(c.kit), cut = cutBatch(c), dx = Math.cos(turn) * 0.3, dz = Math.sin(turn) * 0.3;
+  upright(cut, x - dx, z - dz, x + dx, z + dz, 0, 1.0, art.uv('flamingo')); upright(cut, x + dx, z + dz, x - dx, z - dz, 0, 1.0, art.uv('flamingoBack', true));
+  c.shadow(x, z, 0.3, 0.3, 0.3);
+}
+/** A car, as far down in the lawn as its door handles, its lamps still on. Along x, or along z. */
+export function car(c, x, z, along = true, rgb = [0.6, 0.52, 0.38]) {
+  const B = (u0, y0, v0, u1, y1, v1, col, o) => (along ? c.flat.box(x + u0, y0, z + v0, x + u1, y1, z + v1, col, o) : c.flat.box(x + v0, y0, z + u0, x + v1, y1, z + u1, col, o));
+  B(-2.1, 0, -0.85, 2.1, 0.42, 0.85, rgb, { skip: '-y' }); B(-2.1, 0.16, -0.86, 2.1, 0.3, 0.86, [0.36, 0.22, 0.12]);          // the body, and the strip of wood down its side
+  B(-1.25, 0.42, -0.74, 0.75, 0.86, 0.74, [0.07, 0.09, 0.11]); B(-1.3, 0.86, -0.78, 0.8, 0.93, 0.78, rgb);                    // glass all round, a roof
+  for (const u of [-1.28, -0.28, 0.72]) for (const v of [-0.76, 0.72]) B(u, 0.42, v, u + 0.07, 0.86, v + 0.04, rgb);
+  B(-0.9, 0.93, -0.6, 0.4, 0.97, -0.55, [0.6, 0.6, 0.6]); B(-0.9, 0.93, 0.55, 0.4, 0.97, 0.6, [0.6, 0.6, 0.6]);               // somewhere to put the luggage
+  const glow = c.shining('suburb:lamp', c.kit.tex.white(), 1.6, lin('#ffe9a8'));
+  for (const v of [-0.6, 0.6]) { const p = along ? [x + 2.105, z + v] : [x + v, z + 2.105], q = 0.11; if (along) sheet(glow, [p[0], 0.22, p[1] + q], [p[0], 0.22, p[1] - q], [p[0], 0.36, p[1] - q], [p[0], 0.36, p[1] + q]); else sheet(glow, [p[0] - q, 0.22, p[1]], [p[0] + q, 0.22, p[1]], [p[0] + q, 0.36, p[1]], [p[0] - q, 0.36, p[1]]); }
+  c.light(x + (along ? 2.5 : 0), 0.35, z + (along ? 0 : 2.5), '#ffe9a8', 0.5, { k: 1.1, far: 4 });
+  if (along) c.solid(x - 2.1, z - 0.85, x + 2.1, z + 0.85); else c.solid(x - 0.85, z - 2.1, x + 0.85, z + 2.1);
+  c.blot(x, z, along ? 5.2 : 2.6, along ? 2.6 : 5.2, { a: 0.45 }); c.reserve(x, z, 2.3);
+}
+export const WRONG = {
+  // one sprinkler head (the one thing here that is where it should be)
+  sprinkler(c) { const at = c.spot(0.3, { pad: 1 }); if (!at) return false; sprinkler(c, at.x, at.z); },
+  // every letter box the street had, delivered to one corner
+  pile(c) {
+    const k = c.corner(1.0); if (!k) return false;
+    const R = c.R;
+    for (const [n, r, y] of [[13, 0.85, 0], [8, 0.55, 0.19], [4, 0.28, 0.38], [1, 0, 0.57]]) for (let i = 0; i < n; i++) {
+      const a = (i / n) * 6.283 + R.range(-0.3, 0.3), x = k.x + Math.cos(a) * r * R.range(0.6, 1), z = k.z + Math.sin(a) * r * R.range(0.6, 1), t = R.chance(0.5), hw = t ? 0.22 : 0.1, hd = t ? 0.1 : 0.22, g = R.range(0.3, 0.46);
+      c.flat.box(x - hw, y, z - hd, x + hw, y + 0.19, z + hd, [g * 0.9, g, g * 1.15], y ? {} : { skip: '-y' });
+      c.flat.box(x - 0.015, y + 0.19, z - 0.015, x + 0.015, y + 0.19 + R.range(0.04, 0.2), z + 0.015, [0.75, 0.12, 0.1]);
+    }
+    c.solid(k.x - 0.8, k.z - 0.8, k.x + 0.8, k.z + 0.8); c.shadow(k.x, k.z, 2, 2, 0.4);
+  },
+  // the fence, where the description said it went: up
+  ceilfence(c) {
+    const { W, D } = c, x = c.ceilAt(0, 0);
+    if (x < 2.5) return false;
+    if (W >= D) fence(c, -W / 2 + 0.02, D * 0.12, W / 2 - 0.02, D * 0.12, { hang: x }); else fence(c, W * 0.12, -D / 2 + 0.02, W * 0.12, D / 2 - 0.02, { hang: x });
+  },
+  // a second lawn, overhead, with its own sprinkler
+  ceillawn(c) {
+    const { W, D } = c, y = c.ceilAt(0, 0) - 0.012, w = Math.min(3.6, W - 1.8), d = Math.min(2.4, D - 1.8);
+    if (c.ceilAt(w / 2, d / 2) !== c.ceilAt(-w / 2, -d / 2)) return false;
+    c.floor.grid([-w / 2, y, -d / 2], [1, 0, 0], [0, 0, 1], ticks(w, 0.6, 0), ticks(d, 0.6, 0), (u, v) => [u / 1.6, v / 1.6]);
+    c.flat.box(-0.03, y - 0.07, -0.03, 0.03, y, 0.03, [0.06, 0.06, 0.06]); c.flat.box(-0.02, y - 0.085, -0.02, 0.02, y - 0.07, 0.02, [0.7, 0.55, 0.2]);
+  },
+  // flamingos: one was mentioned. Nobody said how many
+  flock(c) {
+    const { W, D } = c, d = c.room.doors[0], p = d ? c.doorPoint(d, 0) : { x: 0, z: D / 2 };
+    let n = 0;
+    for (let x = -W / 2 + 1.2; x <= W / 2 - 1.2; x += 0.95) for (let z = -D / 2 + 1.2; z <= D / 2 - 1.2; z += 0.95) { if (!c.clear(x, z, 0.3, 1.2)) continue; flamingoAt(c, x, z, Math.atan2(x - p.x, p.z - z)); n++; }
+    return n > 3 ? undefined : false;
+  },
+  // a car, most of the way down
+  car(c) {
+    const { W, D } = c, along = W >= D;
+    if (Math.max(W, D) < 6.6 || Math.min(W, D) < 4.6) return false;
+    const x = along ? 0 : c.R.pick([-0.5, 0.5]), z = along ? c.R.pick([-0.5, 0.5]) : 0;
+    if (!c.clear(x, z, 0.9) || !c.clear(x + (along ? 1.5 : 0), z + (along ? 0 : 1.5), 0.9) || !c.clear(x - (along ? 1.5 : 0), z - (along ? 0 : 1.5), 0.9)) return false;
+    car(c, x, z, along);
+  },
+};
 export function sprinkler(c, x, z) {
   c.flat.box(x - 0.03, 0, z - 0.03, x + 0.03, 0.07, z + 0.03, [0.06, 0.06, 0.06], { skip: '-y' });
   c.flat.box(x - 0.02, 0.07, z - 0.02, x + 0.02, 0.085, z + 0.02, [0.7, 0.55, 0.2]);
@@ -290,9 +390,7 @@ export const THINGS = {
   // a flamingo, cut out of board, on a wire
   flamingo(c, item) {
     const s = c.spot(0.45, { head: 1.3 }); if (!s) return;
-    const art = setArt(c.kit), cut = cutBatch(c), dx = Math.cos(item.turn) * 0.3, dz = Math.sin(item.turn) * 0.3;
-    upright(cut, s.x - dx, s.z - dz, s.x + dx, s.z + dz, 0, 1.0, art.uv('flamingo')); upright(cut, s.x + dx, s.z + dz, s.x - dx, s.z - dz, 0, 1.0, art.uv('flamingoBack', true));
-    c.shadow(s.x, s.z, 0.3, 0.3, 0.3);
+    flamingoAt(c, s.x, s.z, item.turn);
   },
   // a garden hose, coiled, connected to nothing
   hose(c, item) {

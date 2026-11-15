@@ -22,7 +22,7 @@ export function build(c) {
   const { x0, x1, back, front, mid, ridge, slope } = h, t = HOME.t, wh = HOME.wall, dx = h.doorX, dw = HOME.door.w / 2, dh = HOME.door.h;
   c.shell({ panels: false });
   daylight(c, 4, 3, 1, 1.1);
-  lawn(c, { sprinkler: 0, width: 0.55, cloudTop: H - 1.3 });
+  lawn(c, { wrong: 0, paint: 'sky', width: 0.55, cloudTop: H - 1.3 });
   for (const side of ['back', 'left', 'right']) for (const [a, b] of c.spans(side, 0.2, 2)) for (let at = a + 1.2, k = 0; at + 1.2 <= b; at += 2.4, k++) onWall(c, k % 2 ? 'hillB' : 'hillA', side, at, 0.11 + 0.45, { off: 0.006 });
 
   /* what it is made of */

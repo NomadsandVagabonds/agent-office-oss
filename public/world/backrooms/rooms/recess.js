@@ -38,7 +38,7 @@ export function build(c) {
   const { W, D, H, params: p, kit } = c, art = setArt(kit), cut = cutBatch(c);
   c.shell({ panels: false });
   daylight(c, 4, 3, 1, 1);
-  lawn(c, { sprinkler: 0, width: 0.4, cloudTop: H - 0.9 });
+  lawn(c, { wrong: 0, paint: 'sky', width: 0.4, cloudTop: H - 0.9 });
 
   /* the square of bark, with a timber edge you step over */
   const m = { x0: -W / 2 + 2.3, x1: W / 2 - 4.6, z0: -D / 2 + 1.9, z1: D / 2 - 3.0 };
