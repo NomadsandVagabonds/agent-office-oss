@@ -115,9 +115,20 @@ export function build(c) {
   };
 
   const roamer = c.env.denizens?.add({
+    id: 'retention-clerk',
     x: homeW.x, z: homeW.z, r: 0.34, tall: 1.45, heading: 0,
     group: rig.group,
     light: (rgb) => rig.light(rgb),
+    snipTarget: () => ((rule.phase === 'following' || rule.phase === 'pulling') ? { id: 'retention-clerk', r: 0.36, priority: 2 } : false),
+    snip() {
+      if (rule.phase !== 'following' && rule.phase !== 'pulling') return false;
+      if (!known) { known = true; c.met('retention-clerk'); }
+      rule = releaseShredder(rule);
+      if (c.env.player?.me) c.env.player.me.pitch = 0;
+      c.env.play('clack', roamer.x, roamer.z, 8);
+      c.survived('retention-clerk');
+      return { ok: true, target: 'retention-clerk' };
+    },
     update(dt, time, me) {
       const inRoom = c.world.current() === c.rt;
       const dist = Math.hypot(me.x - roamer.x, me.z - roamer.z);

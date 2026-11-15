@@ -433,3 +433,43 @@ export function strikeToner(s, hit = {}, rnd = Math.random) {
     dissolving: false,
   };
 }
+
+/**
+ * Apply a desperate close-quarters scissor jab (`snipToner(s, rnd)`):
+ *   - Against an active hunter (`drop`, `chase`, or low `perch`/`prowl`): severs its lunge and drives it
+ *     straight back up into ceiling `'recoil'` WITHOUT hurting the visitor or advancing `hits` toward a puddle.
+ *   - Against a brooding `'puddle'`: ruptures the incubating slime sac early into inert `'spent'` crust
+ *     so it never hatches 2–3 broodlings.
+ */
+export function snipToner(s, rnd = Math.random) {
+  const base = clearFlags(s);
+  if (s.mode === 'drop' || s.mode === 'chase' || s.mode === 'perch' || s.mode === 'prowl') {
+    return {
+      ...base,
+      mode: 'recoil',
+      t: between(TONER.recoilTime, rnd),
+      ping: between(TONER.pingEvery, rnd),
+      alert: 0,
+      lostT: 0,
+      doorT: 0,
+      seekingSound: false,
+      glitch: true,
+      repelled: true,
+      ruptured: false,
+    };
+  }
+  if (s.mode === 'puddle') {
+    return {
+      ...base,
+      mode: 'spent',
+      broodLeft: 0,
+      gestation: 1,
+      hatched: false,
+      spawnCount: 0,
+      glitch: true,
+      repelled: false,
+      ruptured: true,
+    };
+  }
+  return { ...base, repelled: false, ruptured: false };
+}

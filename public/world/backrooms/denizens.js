@@ -81,6 +81,25 @@ export function createDenizens(env) {
 
   const denizens = {
     all: () => list,
+    snipTargets() {
+      const out = [];
+      for (const d of list) {
+        if (d.gone || d.visible === false || typeof d.snip !== 'function') continue;
+        const spec = typeof d.snipTarget === 'function' ? d.snipTarget() : null;
+        if (spec === false) continue;
+        out.push({
+          id: d.id || 'denizen',
+          x: d.x,
+          z: d.z,
+          y: (d.y ?? (env.world?.floorY(d.x, d.z) || 0)) + (d.lift || 0) + 0.75,
+          r: d.r ?? 0.3,
+          priority: 2,
+          ...(spec || {}),
+          snip: () => d.snip(),
+        });
+      }
+      return out;
+    },
     add(d) {
       list.push(d);
       if (env.world && d.group && !d.group.parent) env.world.scene.add(d.group);

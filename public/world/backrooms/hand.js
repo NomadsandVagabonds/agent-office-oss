@@ -23,7 +23,7 @@ export function createHand(env) {
  */
 export function createHandView(env, camera) {
   const kit = env.kit, root = new THREE.Group(), made = new Map(), at = new THREE.Vector3(), rest = new THREE.Vector3();
-  let shown = null, type = null, t = 0, swing = 0, layoutKey = '';
+  let shown = null, type = null, t = 0, swing = 0, jabT = 0, layoutKey = '';
   root.visible = false;
   /** FORM HR-404, as a sheet of paper held up: the one thing down here that is meant to be read. */
   function slip() {
@@ -99,14 +99,24 @@ export function createHandView(env, camera) {
       fitPicture();
       const me = env.player.me, pace = Math.min(1, (me.speed || 0) / 2);
       t += dt * (1 + pace * 5); swing += (pace - swing) * (1 - Math.exp(-6 * dt));
+      if (jabT > 0) jabT = Math.max(0, jabT - dt / 0.28);
       root.position.copy(camera.position).sub(env.world.scene.position); root.quaternion.copy(camera.quaternion);
       at.set(rest.x + Math.sin(t * 1.1) * 0.006 * swing, rest.y + Math.abs(Math.sin(t * 1.1)) * 0.014 * swing + Math.sin(t * 0.35) * 0.003, rest.z);
+      if (type === 'scissors') {
+        const u = jabT > 0 ? 1 - jabT : 0;
+        const thrust = u > 0 ? Math.sin(Math.pow(u, 0.55) * Math.PI) : 0;
+        at.x -= thrust * 0.088;
+        at.y += thrust * 0.045;
+        at.z -= thrust * 0.165;
+        shown.mesh.rotation.set(0.25 - thrust * 0.56, -0.6 + thrust * 0.36, thrust * 0.4);
+      }
       shown.mesh.position.copy(at);
       if (type === 'balloon') shown.mesh.rotation.z = Math.sin(t * 0.5) * 0.09 + swing * 0.12;
       // lit by where you are standing — and a torch that is switched on is its own light
       const L = env.world.lightAt(me.x, me.z, 1.2), on = type === 'torch' && item.lit, k = on ? 2.4 : 1.25, floor = on ? 0.5 : 0.16;
       shown.mat.uniforms.uTint.value.set(Math.max(floor, L[0] * k) * (on ? 1.1 : 1), Math.max(floor, L[1] * k), Math.max(floor, L[2] * k) * (on ? 0.85 : 1));
     },
+    jab() { jabT = 1; },
     dispose() { root.removeFromParent(); if (camera.userData.hand === view) camera.userData.hand = null; },
   };
   env.handView = view;
@@ -115,7 +125,7 @@ export function createHandView(env, camera) {
 
 /** One of a thing, as a model with nothing to do: for a room to stand about. `light(rgb)` tints it. */
 export function buildItemProp(kit, kind) {
-  const type = KINDS[kind] || 'paper', b = new Batch(true), s = kit.VOXEL || 0.025, group = new THREE.Group();
+  const type = INVENTORY_MODELS[kind] ? kind : (KINDS[kind] || 'paper'), b = new Batch(true), s = kit.VOXEL || 0.025, group = new THREE.Group();
   b.addVox(kit.model(`inventory:${type}:v1`, INVENTORY_MODELS[type]).solid, new THREE.Matrix4().makeScale(s, s, s));
   const mat = kit.surface({ vox: true });
   group.add(new THREE.Mesh(kit.geometry(b, [lamp(-1, 3, 1, [0.4, 0.4, 0.4], { k: 8, far: 12, wrap: 0.5 })], [0.8, 0.8, 0.8]), mat));

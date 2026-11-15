@@ -9,7 +9,7 @@ export const ITEM_DEFS = Object.freeze({
   paper: Object.freeze({ name: 'Paper', description: 'Blank office paper, warm from a printer you cannot hear.', useLabel: 'Combine', maxStack: CRAFTING_TUNING.maxPaper }),
   lighter: Object.freeze({ name: 'Lighter', description: 'A scratched metal lighter. The wheel catches on the second turn.', useLabel: 'Combine' }),
   tape: Object.freeze({ name: 'Adhesive tape', description: 'A half-used roll of grey tape. The torn end is folded back.', useLabel: 'Combine' }),
-  scissors: Object.freeze({ name: 'Scissors', description: 'Heavy steel scissors with chipped red handles. The hinge is still stiff.', useLabel: 'Use' }),
+  scissors: Object.freeze({ name: 'Scissors', description: 'Heavy steel scissors with chipped red handles. Good for three desperate jabs at close range before the stiff pivot snaps.', useLabel: 'Snip', maxUses: 3 }),
   snack: Object.freeze({ name: 'Wrapped snack', description: 'A sealed oat bar. The wrapper has no date.', useLabel: 'Eat', healAmount: 1 }),
   'pink-slip': Object.freeze({ name: 'Pink slip', description: 'FORM HR-404, Notice of Redundancy. The name on it is yours; the date is last week.', useLabel: 'Use' }),
   balloon: Object.freeze({ name: 'Red balloon', description: 'A red balloon on a curling string. It tugs upward without a breeze.', useLabel: 'Use' }),
@@ -45,6 +45,10 @@ export function makeItem(type, id, overrides = {}) {
   } else if (type === 'chalk') {
     const uses = overrides.uses ?? definition.maxUses;
     if (!Number.isInteger(uses) || uses < 0 || uses > definition.maxUses) throw new RangeError('Invalid chalk uses.');
+    item.uses = uses;
+  } else if (type === 'scissors') {
+    const uses = overrides.uses === undefined ? definition.maxUses : overrides.uses;
+    if (!Number.isInteger(uses) || uses < 0 || uses > definition.maxUses) throw new RangeError('Invalid scissors uses.');
     item.uses = uses;
   } else if (type === 'paper') {
     const quantity = overrides.quantity === undefined ? 1 : overrides.quantity;
@@ -119,7 +123,7 @@ export function createInventory({ size = 6 } = {}) {
     if (selected !== index) { selected = index; revision++; }
     return true;
   }
-  function useSelected({ canMark = true, heal } = {}) {
+  function useSelected({ canMark = true, heal, snip } = {}) {
     if (crafting) return fail('busy');
     const item = slots[selected];
     if (!item) return fail('empty');
@@ -141,6 +145,20 @@ export function createInventory({ size = 6 } = {}) {
       if (item.uses === 0) slots[selected] = null;
       revision++;
       return { ok: true, action: 'mark', item: used, index: selected };
+    }
+    if (item.type === 'scissors') {
+      if (item.uses <= 0) return fail('broken-scissors');
+      if (typeof snip !== 'function') return fail('no-snip-target');
+      const index = selected;
+      const result = snip(copy(item));
+      if (result?.ok !== true) return fail(result?.reason || 'no-snip-target');
+      if (slots[index]?.id !== item.id) return fail('stale-input');
+      item.uses--;
+      const used = copy(item);
+      const snapped = item.uses === 0;
+      if (snapped) slots[index] = null;
+      revision++;
+      return { ok: true, action: 'snip', snapped, target: result.target || null, item: used, index };
     }
     if (item.type === 'snack') {
       if (typeof heal !== 'function') return fail('health-unavailable');

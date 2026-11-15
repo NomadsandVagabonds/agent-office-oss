@@ -136,9 +136,20 @@ export function build(c) {
   let rule = createCableState(), known = false;
 
   const roamer = c.env.denizens?.add({
+    id: 'trunk-line',
     x: startW.x, z: startW.z, r: 0.24, tall: 0.62, heading: 0,
     group: rig.group, visible: false, lift: H - 0.2,
     light: (rgb) => rig.light(rgb),
+    snipTarget: () => ((rule.phase === 'dropping' || rule.phase === 'hunting') ? { id: 'trunk-line', r: 0.32, priority: 2 } : false),
+    snip() {
+      if (rule.phase !== 'dropping' && rule.phase !== 'hunting') return false;
+      if (!known) { known = true; c.met('trunk-line'); }
+      roamer.lift = 0;
+      rule = releaseCable(rule);
+      c.env.play('buzz', roamer.x, roamer.z, 7);
+      c.survived('trunk-line');
+      return { ok: true, target: 'trunk-line' };
+    },
     update(dt, time, me) {
       tendrils.rotation.z = Math.sin(time * 1.9) * 0.035;
       tendrils.rotation.x = Math.cos(time * 1.5) * 0.03;

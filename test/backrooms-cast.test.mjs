@@ -11,7 +11,8 @@ import { roomRoute, roomCosts, gridPath, straighten } from '../public/world/back
 import { SHADOW, away, watched, drained } from '../public/world/backrooms/cast/shadow.rule.js';
 import { MOTH, resting, flits } from '../public/world/backrooms/cast/moth.rule.js';
 import { PORTER, mopping, minds, facesYou } from '../public/world/backrooms/cast/porter.rule.js';
-import { TONER, perched, hatchedBrood, isQuiet, weaveOffset, stepToner, strikeToner } from '../public/world/backrooms/cast/toner.rule.js';
+import { TONER, perched, hatchedBrood, isQuiet, weaveOffset, stepToner, strikeToner, snipToner } from '../public/world/backrooms/cast/toner.rule.js';
+import { SNIP_TUNING, rankSnipTargets, strikeSnip } from '../public/world/backrooms/melee.js';
 import { FIRE_WAYS, FIRE_FEAR, calm, afraid, tooNear } from '../public/world/backrooms/cast/fire.rule.js';
 import { BLACKOUT, createBlackoutState, stepBlackout } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
 import { ARCHETYPES } from '../public/world/backrooms/gen.js';
@@ -595,4 +596,52 @@ test('the waste toner: hides on the ceiling clicking sonar, passes over crouch o
     brood = stepToner(brood, dt, { d: 15, los: false, audible: false, farFromHome: true }, () => 0.5);
     assert.equal(brood.mode, 'prowl', 'keeps creeping homeward rather than perching in distant rooms');
   }
+});
+
+test('close-quarters scissors (melee.js & snipToner): reach, forward cone, ceiling clearance, hunter priority, and repelling a lunging Waste Toner', () => {
+  assert.ok(SNIP_TUNING.reach > 1.3 && SNIP_TUNING.reach < 2.2);
+  const viewer = { x: 0, z: 0, y: 1.56, yaw: 0 }; // facing -z
+
+  // Out of reach, behind the camcorder, high on a 3.3 m ceiling, or behind a wall: no hit
+  const unreachable = [
+    { id: 'far', x: 0, z: -3.2, y: 1.2, r: 0.4, snip: () => true },
+    { id: 'behind', x: 0, z: 1.2, y: 1.2, r: 0.4, snip: () => true },
+    { id: 'ceiling', x: 0, z: -1.1, y: 3.3, r: 0.4, snip: () => true },
+    { id: 'walled', x: 0, z: -1.0, y: 1.2, r: 0.4, snip: () => true },
+  ];
+  assert.deepEqual(
+    strikeSnip(viewer, unreachable, (ax, az, bx, bz) => !(bx === 0 && bz === -1.0)),
+    { ok: false, reason: 'no-snip-target' }
+  );
+
+  // Active lunging hunter (priority 3) is jabbed ahead of a nearby brooding puddle (priority 1)
+  const struck = [];
+  const mix = [
+    { id: 'toner-puddle', x: 0, z: -0.9, y: 0.35, r: 0.85, priority: 1, snip: () => { struck.push('puddle'); return { ok: true, target: 'toner-puddle' }; } },
+    { id: 'toner', x: 0.15, z: -1.45, y: 1.15, r: 0.52, priority: 3, snip: () => { struck.push('toner'); return { ok: true, target: 'toner' }; } },
+  ];
+  assert.deepEqual(rankSnipTargets(viewer, mix).map((c) => c.id), ['toner', 'toner-puddle']);
+  assert.deepEqual(strikeSnip(viewer, mix), { ok: true, target: 'toner' });
+  assert.deepEqual(struck, ['toner'], 'stops after the first landed jab');
+
+  // Snipping a lunging ('drop') or chasing ('chase') Waste Toner drives it straight into ceiling recoil without incrementing hits
+  for (const mode of ['drop', 'chase']) {
+    const before = { ...perched(() => 0.5, { mode }), hits: 1, alert: 1 };
+    const after = snipToner(before, () => 0.5);
+    assert.equal(after.repelled, true);
+    assert.equal(after.mode, 'recoil');
+    assert.equal(after.hits, 1, 'jabbing a Toner does not feed it a bite toward its brood puddle');
+    assert.equal(after.alert, 0);
+  }
+
+  // Snipping a brooding puddle ruptures it into inert 'spent' stain with zero broodlings hatched
+  const puddle = { ...perched(() => 0.5, { mode: 'puddle' }), broodLeft: 14, gestation: 0.76 };
+  const burst = snipToner(puddle, () => 0.99);
+  assert.equal(burst.ruptured, true);
+  assert.equal(burst.mode, 'spent');
+  assert.equal(burst.hatched, false);
+  assert.equal(burst.spawnCount, 0);
+  const next = stepToner(burst, dt, { d: 0.3 }, () => 0.99);
+  assert.equal(next.mode, 'spent');
+  assert.equal(next.hatched, false);
 });
