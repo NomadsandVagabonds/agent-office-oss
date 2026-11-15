@@ -102,7 +102,10 @@ export function mimicSpots(spans, R) {
   const need = MIMIC.w + 0.5, out = [];
   for (const side of R.shuffle(Object.keys(spans).sort())) {
     for (const [a, b] of R.shuffle((spans[side] || []).filter(([p, q]) => q - p >= need))) {
-      out.push({ side, at: R.range(a + need / 2, b - need / 2) });
+      // every third of a metre along it, in the dice's order: furniture against a wall leaves some of it and not the rest
+      const here = [];
+      for (let at = a + need / 2; at <= b - need / 2 + 1e-6; at += 0.3) here.push(at);
+      for (const at of R.shuffle(here)) out.push({ side, at: Math.round(at * 1000) / 1000 });
     }
   }
   return out;

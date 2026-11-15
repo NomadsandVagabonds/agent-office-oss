@@ -91,7 +91,7 @@ export function create(c) {
     }
     arms.visible = false; c.add(arms);
 
-    door = { rt, holder, leaves, frame, hole, arms, links, x: cw.x, z: cw.z, nx, nz, ux, uz, y0,
+    door = { rt, holder, leaves, frame, hole, arms, links, x: cw.x, z: cw.z, nx, nz, ux, uz, y0, Ul: U, still: true,
       where: (x, z) => ({ across: (x - cw.x) * ux + (z - cw.z) * uz, out: (x - cw.x) * nx + (z - cw.z) * nz }),
       point: (across, out) => ({ x: cw.x + ux * across + nx * out, z: cw.z + uz * across + nz * out }) };
     // E, as on any pair: half a metre in front of it
@@ -114,12 +114,16 @@ export function create(c) {
     d.hole.visible = shown;
     // the tell: the pair out of register with itself, for a frame or two
     if (!shown && s.tremor > 0) {
-      const k = s.tremor * 0.016;
-      d.holder.position.set((Math.random() - 0.5) * k, (Math.random() - 0.5) * k * 0.6, (Math.random() - 0.5) * k);
-      d.leaves[0].position.y = (Math.random() - 0.5) * k * 1.5; d.leaves[1].position.y = (Math.random() - 0.5) * k * 1.5;
-      d.leaves[Math.random() < 0.5 ? 0 : 1].visible = Math.random() > 0.25 * s.tremor;
-    } else if (d.holder.position.lengthSq() > 0 || d.leaves[0].position.y !== 0 || d.leaves[1].position.y !== 0) {
-      d.holder.position.set(0, 0, 0); d.leaves[0].position.y = 0; d.leaves[1].position.y = 0;
+      // (a few centimetres: the whole pair jumps, and one leaf slides along the wall out of line with the other)
+      const k = s.tremor * 0.03, torn = d.leaves[Math.random() < 0.5 ? 0 : 1], slip = (Math.random() - 0.5) * k * 2.2;
+      d.holder.position.set((Math.random() - 0.5) * k * 0.5, (Math.random() - 0.5) * k, (Math.random() - 0.5) * k * 0.5);
+      for (const leaf of d.leaves) leaf.position.set(0, (Math.random() - 0.5) * k, 0);
+      torn.position.x = d.Ul[0] * slip; torn.position.z = d.Ul[1] * slip;
+      torn.visible = Math.random() > 0.3 * s.tremor;
+      d.still = false;
+    } else if (!d.still) {
+      d.holder.position.set(0, 0, 0); for (const leaf of d.leaves) leaf.position.set(0, 0, 0);
+      d.still = true;
     }
     // its arms: out to whoever it has, and back in when it lets go
     const want = s.mode === 'opening' ? Math.min(1, s.t / MIMIC.opens) : holds(s) ? 1 : s.mode === 'letting' ? 1 - Math.min(1, s.t / MIMIC.lets) : 0;

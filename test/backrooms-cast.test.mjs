@@ -824,7 +824,7 @@ test('the other door: it hangs on a clear stretch of wall wide enough for a pair
   const spans = { back: [[-3, 3]], front: [[-3, -1.2], [0.5, 3]], left: [[-1, 1]], right: [] };
   const a = mimicSpots(spans, makeRng('m1')), b = mimicSpots(spans, makeRng('m1'));
   assert.deepEqual(a, b);
-  assert.ok(a.length === 2 && a.every((p) => ['back', 'front'].includes(p.side)), 'only where there is room for it and its frame');
+  assert.ok(a.length > 4 && a.every((p) => ['back', 'front'].includes(p.side)) && new Set(a.map((p) => p.side)).size === 2, 'only where there is room for it and its frame, and more than one place to try on each');
   for (const p of a) { const [lo, hi] = spans[p.side].find(([x, y]) => p.at >= x && p.at <= y); assert.ok(p.at - MIMIC.w / 2 >= lo + 0.2 && p.at + MIMIC.w / 2 <= hi - 0.2); }
   assert.deepEqual(mimicSpots({ back: [[0, 1.5]], front: [], left: [], right: [] }, makeRng('m2')), []);
   // it is a pair like the floor's own: no wider than doors are hung, and it is never where you land (it takes the lesson of doors for granted)
