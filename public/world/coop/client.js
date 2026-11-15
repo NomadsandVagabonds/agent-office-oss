@@ -35,7 +35,7 @@ if(!realMode)box(EXIT.x,1.1,EXIT.z+.8,1.3,2.2,.08,new THREE.MeshBasicMaterial({c
 const pirate=makePirate(kit,makeRng('coop-pirate'));pirate.show();pirate.hold(0);if(!realMode)scene.add(pirate.group);
 const itemMeshes=new Map(),avatars=new Map(),keys=new Set();let state=null,id=null,socket=null,yaw=Math.PI,pitch=0,selected=0,lastHealth=4,ended=false;
 function send(m){if(realMode&&!['ready','floor-ready','voice','host-paused','real-state'].includes(m.type))m.depth=real?.depth;if(real?.host&&state?.phase==='play'&&['input','select','toggle-light','craft','take','drop','use','exit','revive','emote','trade-request','trade-answer','trade-offer','trade-confirm','trade-cancel'].includes(m.type)){real.command(id,m);return;}if(socket?.readyState===1)socket.send(JSON.stringify(m));}
-const voice=createVoice({send,enabled:()=>socket?.readyState===1&&!!state&&!ended,button:$('voice'),status:$('voiceStatus'),volume:$('voiceVolume')});
+const voice=createVoice({send,enabled:()=>socket?.readyState===1&&!!state&&!ended,button:$('voice'),status:$('voiceStatus'),volume:$('voiceVolume'),indicator:$('voiceIndicator')});
 let inventoryHud=null;let resultSerial=0;
 const socialUI=createSocialUI({read:()=>({state,me:state?.players.find(p=>p.id===id),real:realMode}),send,resume:()=>lock(),stop:()=>{inventoryHud?.setOpen(false);keys.clear();send({type:'input',f:0,s:0,yaw,pitch});}});
 const myself=()=>state?.players.find(p=>p.id===id);
@@ -60,11 +60,11 @@ const emoteCaption=document.createElement('div');emoteCaption.id='emoteCaption';
 function teammate(me){return realMode&&state.players.find(p=>p.id!==id&&Math.hypot(p.x-me.x,p.z-me.z)<=REACH&&Math.abs((p.y||0)-(me.y||0))<1&&real?.world.los(me.x,me.z,p.x,p.z));}
 function teamPrompt(me,other){if(!other)return '';if(other.health>0)return 'E · request trade';const snack=selectedItem(me)?.type==='snack';return snack?(other.battery<=0?'E · revive · snack + battery':'E · revive · one snack'):'Partner down · select a snack to revive';}
 function signalSprite(){const c=document.createElement('canvas');c.width=128;c.height=128;const g=c.getContext('2d');const tex=new THREE.CanvasTexture(c),mat=new THREE.SpriteMaterial({map:tex,depthTest:true,transparent:true});const sprite=new THREE.Sprite(mat);sprite.scale.set(.55,.55,.55);sprite.userData.paint=kind=>{g.clearRect(0,0,128,128);g.fillStyle='#efefd8';g.font='84px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText(EMOTES[kind]||'＋',64,65);tex.needsUpdate=true;};return sprite;}
-function fail(error){fatal='Real room session stopped: '+error.message;ended=true;keys.clear();voice.off();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=fatal;socket?.close(1011,'Room runtime failed');}
+function fail(error){fatal='The game stopped: '+error.message;ended=true;keys.clear();voice.off();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=fatal;socket?.close(1011,'Room runtime failed');}
 function active(){return !building&&!inventoryHud?.isOpen&&!socialUI.visible&&!ended&&!hostPaused&&document.pointerLockElement===canvas&&state?.phase==='play'&&state.players.find(p=>p.id===id)?.health>0;}
 const slots=Array.from({length:6},(_,i)=>{const b=document.createElement('button');b.onclick=()=>selected=i;$('bar').append(b);return b;});
 function itemMesh(type){const b=new Batch(true);b.addVox(kit.model('coop:'+type,INVENTORY_MODELS[type]).solid,new THREE.Matrix4().makeScale(.04,.04,.04));return new THREE.Mesh(kit.geometry(b,[lamp(0,3,0,[1,1,1],{k:8})],[.8,.8,.8]),kit.surface({vox:true}));}
-function update(s){state=s;if(realMode)gameAudio.update(s,id);if(real&&!real.host&&!building)real.apply(s);for(const p of s.players){if(p.id!==id&&!avatars.has(p.id)){const a=new Avatar(resolveLook(p.id,{species:'human',outfit:'hoodie',outfitColor:'#498776',accessory:'none'}),{seed:p.id});scene.add(a.root);a.root.position.set(p.x,0,p.z);a.signal=signalSprite();scene.add(a.signal);avatars.set(p.id,a);}}
+function update(s){state=s;if(s.phase==='play')$('panel').classList.add('has-played');if(realMode)gameAudio.update(s,id);if(real&&!real.host&&!building)real.apply(s);for(const p of s.players){if(p.id!==id&&!avatars.has(p.id)){const a=new Avatar(resolveLook(p.id,{species:'human',outfit:'hoodie',outfitColor:'#498776',accessory:'none'}),{seed:p.id});scene.add(a.root);a.root.position.set(p.x,0,p.z);a.signal=signalSprite();scene.add(a.signal);avatars.set(p.id,a);}}
  for(const item of s.items){if(!itemMeshes.has(item.id)){const m=itemMesh(item.type);scene.add(m);itemMeshes.set(item.id,m);}const m=itemMeshes.get(item.id);m.visible=item.owner===null;m.position.set(item.x,(item.y||0)+.03,item.z);}
  const me=s.players.find(p=>p.id===id);if(!me)return;
  $('clock').textContent=`SP ${Math.floor(s.time/60).toString().padStart(2,'0')}:${Math.floor(s.time%60).toString().padStart(2,'0')}`;
@@ -78,20 +78,25 @@ function update(s){state=s;if(realMode)gameAudio.update(s,id);if(real&&!real.hos
   if(me.health<=0||s.phase!=='play')inventoryHud.setOpen(false);
  }
  socialUI.update();
- if(s.phase==='waiting'&&!building)$('status').textContent=`${s.players.length}/2 connected · ${s.players.filter(p=>p.ready).length}/2 ready`;
- if(!['waiting','play','descending','loading'].includes(s.phase)&&!ended){ended=true;gameAudio.pause(true);voice.off();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=({escaped:'The surviving visitors escaped.',dead:'Neither tape was recovered.',disconnected:'Your partner disconnected. Start a new review session.'})[s.phase]+(s.depths?` · ${s.visited?.length||0} rooms · ${s.depth+1}/${s.depths} floors · ${Math.floor(s.time/60)}m ${Math.floor(s.time%60)}s`:'');}
+ if(s.phase==='waiting'&&!building){
+  $('ready').disabled=!!me.ready;$('ready').textContent=me.ready?'Waiting for your friend…':"I'm ready";
+  $('status').textContent=me.ready?(s.players.length<2?'You are ready. Send your friend the invite link.':'You are ready. Waiting for your friend to click Ready.'):`${s.players.length} of 2 players here · ${s.players.filter(p=>p.ready).length} ready`;
+ }
+ if(s.phase==='play'&&!building&&!ended){$('ready').disabled=false;$('ready').textContent='Enter / resume';$('status').textContent='Both players are ready. Click Enter / resume to play.';}
+
+ if(!['waiting','play','descending','loading'].includes(s.phase)&&!ended){ended=true;gameAudio.pause(true);voice.off();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=({escaped:'The surviving visitors escaped.',dead:'Neither tape was recovered.',disconnected:'Your friend disconnected. Start a new game to try again.'})[s.phase]+(s.depths?` · ${s.visited?.length||0} rooms · ${s.depth+1}/${s.depths} floors · ${Math.floor(s.time/60)}m ${Math.floor(s.time%60)}s`:'');}
 }
 async function buildFloor(depth){
- building=true;inventoryHud?.setOpen(false);gameAudio.pause(true);keys.clear();hostPaused=false;$('panel').hidden=false;$('ready').disabled=true;$('status').textContent=depth?'TRACKING… finding the next floor':'Building the real rooms…';
+ building=true;inventoryHud?.setOpen(false);gameAudio.pause(true);keys.clear();hostPaused=false;$('panel').hidden=false;$('ready').disabled=true;$('ready').textContent='Loading…';$('status').textContent=depth?'Loading the next floor… Keep this tab visible.':'Loading the first floor… Keep this tab visible.';
  for(const mesh of itemMeshes.values()){scene.remove(mesh);mesh.geometry.dispose();}itemMeshes.clear();
  for(const a of avatars.values()){a.root.visible=false;a.signal.visible=false;}
  const old=real;real=null;old?.dispose();
  const next=await createRealRooms(roomSeed,realHost,scene,{depth,slice:roomSlice});
  if(ended){next.dispose();return;}
  real=next;gameAudio.floor(real.level,depth);initialized=false;yaw=real.start.yaw;pitch=0;
- $('status').textContent='Floor built · waiting for both tapes';
+ $('status').textContent='Floor loaded. Waiting for your friend…';
 }
-async function connect(code){$('create').hidden=true;$('alphaKey').hidden=true;$('invite').hidden=$('copy').hidden=$('ready').hidden=false;
+async function connect(code){$('ready').disabled=true;$('ready').textContent='Connecting…';$('status').textContent='Connecting to your game…';$('create').hidden=true;$('alphaKey').hidden=true;$('hostAccess').hidden=true;$('inviteLabel').hidden=$('readyHelp').hidden=false;$('voice').disabled=false;$('roomHeading').textContent='Your game';$('joinHelp').textContent='Waiting for your friend? Copy the link below.';$('invite').hidden=$('copy').hidden=$('ready').hidden=false;
  const url=new URL(location.href);url.searchParams.set('room',code);history.replaceState(null,'',url);$('invite').value=url.href;
  socket=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/socket?room=${encodeURIComponent(code)}&v=${VERSION}`);
  socket.onmessage=async e=>{try{const m=JSON.parse(e.data);
@@ -103,10 +108,10 @@ async function connect(code){$('create').hidden=true;$('alphaKey').hidden=true;$
   if(ended||!real||real.depth!==m.depth)return;building=false;$('ready').disabled=false;hostPaused=false;
   for(const p of m.state.players)Object.assign(p,{x:real.start.x,z:real.start.z,y:real.world.floorY(real.start.x,real.start.z)+1.1,yaw:real.start.yaw,pitch:0});
   update(m.state);gameAudio.pause(false);
-  $('panel').hidden=document.pointerLockElement===canvas;$('status').textContent='Both tapes connected · resume';return;
+  $('panel').hidden=document.pointerLockElement===canvas;$('status').textContent='Floor loaded. Click Enter / resume to continue.';return;
  }
- if(m.type==='control'){real?.command(m.id,m.action);return;}if(m.type==='host-paused'){hostPaused=m.paused;gameAudio.pause(hostPaused);$('notice').textContent=hostPaused?'Host tab paused · waiting for return':'';return;}if(m.type==='voice')voice.receive(m);if(m.type==='welcome'){id=m.id;realHost=m.host;if((m.mode==='rooms')!==realMode){socket.close();return;}if(realMode){$('panel').querySelector('h1').textContent='TWO TAPES · REAL ROOMS';roomSeed=m.seed;roomSlice=!!m.slice;await buildFloor(0);building=false;gameAudio.pause(false);$('ready').disabled=!real;}}if(m.type==='state'){if(m.state.phase==='disconnected')hostPaused=true;update(m.state);}}catch(error){fail(error);}};
- socket.onclose=()=>{ended=true;hostPaused=true;gameAudio.stop();voice.off();keys.clear();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=fatal||'Connection closed. The room may be full, started, or expired. Start a new session.';};
+ if(m.type==='control'){real?.command(m.id,m.action);return;}if(m.type==='host-paused'){hostPaused=m.paused;gameAudio.pause(hostPaused);$('notice').textContent=hostPaused?'Host tab paused · waiting for return':'';return;}if(m.type==='voice')voice.receive(m);if(m.type==='welcome'){id=m.id;realHost=m.host;if((m.mode==='rooms')!==realMode){socket.close();return;}if(realMode){roomSeed=m.seed;roomSlice=!!m.slice;await buildFloor(0);building=false;gameAudio.pause(false);$('ready').disabled=!real;$('ready').textContent="I'm ready";}}if(m.type==='state'){if(m.state.phase==='disconnected')hostPaused=true;update(m.state);}}catch(error){fail(error);}};
+ socket.onclose=()=>{ended=true;hostPaused=true;gameAudio.stop();voice.off();keys.clear();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=fatal||'Connection closed. The room may be full, started, or expired. Start a new game.';};
  socket.onerror=()=>{$('status').textContent='Could not connect to the co-op server.';};
 }
 // A private host bookmark can supply the passcode in a fragment. Strip it
@@ -114,13 +119,27 @@ async function connect(code){$('create').hidden=true;$('alphaKey').hidden=true;$
 try {
  const fragment=new URLSearchParams(location.hash.slice(1)),key=fragment.get('host');
  if(key){sessionStorage.setItem('coop-host',key);history.replaceState(null,'',location.pathname+location.search);}
- $('alphaKey').value=sessionStorage.getItem('coop-host')||'';
+ $('alphaKey').value=sessionStorage.getItem('coop-host')||'';if($('alphaKey').value)$('hostAccess').hidden=true;
 }catch{}
-$('create').onclick=async()=>{try{const r=await fetch(realMode?'/new?mode=rooms'+(new URLSearchParams(location.search).get('slice')==='1'?'&slice=1':''):'/new',{method:'POST',headers:{'x-alpha-key':$('alphaKey').value}});if(!r.ok)throw Error(r.status===403?'Host passcode required or incorrect.':'Server full');$('alphaKey').value='';await connect((await r.json()).code);}catch(e){$('status').textContent=e.message;}};
-$('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('invite').value);$('copy').textContent='Copied';}catch{$('invite').select();}};
-function lock(){gameAudio.start();const request=canvas.requestPointerLock();request?.catch(()=>{$('panel').hidden=false;$('status').textContent='Click Ready / resume to give this tab mouse control.';});}
-$('ready').onclick=()=>{send({type:'ready'});lock();};
-canvas.onclick=()=>{if(state&&!ended)lock();};
+$('create').onclick=async()=>{
+ $('create').disabled=true;$('create').textContent='Starting…';$('status').textContent='Starting your game…';
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
+ try{
+  const r=await fetch(realMode?'/new?mode=rooms'+(new URLSearchParams(location.search).get('slice')==='1'?'&slice=1':''):'/new',{method:'POST',headers:{'x-alpha-key':$('alphaKey').value},signal:controller.signal});
+  if(!r.ok){if(r.status===403){$('hostAccess').hidden=false;$('hostAccess').open=true;throw Error('Open your private host link, or enter the host passcode.');}throw Error('The server could not start a game. Please try again.');}
+  $('alphaKey').value='';await connect((await r.json()).code);
+ }catch(e){$('status').textContent=e.name==='AbortError'?'The server took too long to answer. Please try again.':e instanceof TypeError?'Could not reach the server. Check your connection and try again.':e.message;}
+ finally{clearTimeout(timeout);$('create').disabled=false;$('create').textContent='Start a game';}
+};
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('invite').value);$('copy').textContent='Copied';}catch{$('invite').focus();$('invite').select();$('copy').textContent='Link selected — press Ctrl+C / ⌘C';}};
+function lock(){gameAudio.start();const request=canvas.requestPointerLock();request?.catch(()=>{$('panel').hidden=false;$('status').textContent='Click Enter / resume to give this tab mouse control.';});}
+$('ready').onclick=()=>{
+ gameAudio.start();
+ if(state?.phase==='waiting'){send({type:'ready'});$('ready').disabled=true;$('ready').textContent='Waiting for your friend…';return;}
+ if(state?.phase==='play'&&!building&&!ended)lock();
+};
+window.addEventListener('beforeunload',e=>{if(!ended&&state&&['play','loading','descending'].includes(state.phase)){e.preventDefault();e.returnValue='';}});
+canvas.onclick=()=>{if(state?.phase==='play'&&!building&&!ended)lock();};
 document.addEventListener('pointerlockchange',()=>{keys.clear();$('panel').hidden=inventoryHud?.isOpen||socialUI.visible||document.pointerLockElement===canvas;if(!active())send({type:'input',f:0,s:0,yaw,pitch});});
 window.addEventListener('blur',()=>{keys.clear();send({type:'input',f:0,s:0,yaw,pitch});});
 document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas){yaw-=e.movementX*.0023;pitch=Math.max(-1.2,Math.min(1.2,pitch-e.movementY*.0023));}});
@@ -151,6 +170,6 @@ const room=new URLSearchParams(location.search).get('room');if(room)connect(room
 
 document.addEventListener('visibilitychange',()=>{if(realHost)send({type:'host-paused',paused:document.hidden});});
 
-if(realMode){$('panel').querySelector('a').href='/rooms';$('panel').querySelector('small').innerHTML='V hold to talk · M mute game audio<br>WASD move · mouse look · Shift run · C crouch · Space jump<br>E pick up / open doors · lean into the taped exit wall together<br>1–6 hold / stow · Q or R use · G drop · F flashlight<br>I or Tab inventory / crafting · B emotes<br>E near partner: trade / revive with selected snack<br>Esc release mouse · Host must keep this tab visible. Menu stays live.';$('status').textContent='Real rooms alpha · host must keep this tab visible';}else{const link=document.createElement('a');link.href='/rooms';link.textContent='Try real rooms →';$('panel').append(document.createElement('br'),link);}
+if(realMode){$('newSession').href='/rooms';$('controlsText').innerHTML='V hold to talk · M mute game audio<br>WASD move · mouse look · Shift run · C crouch · Space jump<br>E pick up / open doors · lean into the taped exit wall together<br>1–6 hold / stow · Q or R use · G drop · F flashlight<br>I or Tab inventory / crafting · B emotes<br>E near partner: trade / revive with selected snack<br>Esc release mouse · Host: keep this tab visible. The game keeps running with this menu open.';$('status').textContent='Start a game, then send your friend the invite link.';}else{const link=document.createElement('a');link.href='/rooms';link.textContent='Try real rooms →';$('panel').append(document.createElement('br'),link);}
 
 if(new URLSearchParams(location.search).has('debug'))window.__coop={get inventoryHud(){return inventoryHud;},get runtime(){return real;},get state(){return state;}};

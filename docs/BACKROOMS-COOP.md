@@ -2,7 +2,63 @@
 
 Branch: `codex/backrooms-coop`, based on development `a155afc`.
 Private alpha: hosted on Railway; the address is the owner's to give out, and is not written here
-Railway runs game build `792b6d8`, separately from the public BlockRooms site.
+Railway runs game build `69d7c55`, separately from the public BlockRooms site.
+
+## Lobby refresh (live)
+
+The co-op entry page now uses the homepage’s yellow wallpaper, original voxel
+logo and sprites, navy window bars and beveled buttons. Instructions use plain
+player-facing language. The host bookmark still hides the passcode and strips
+it before generating an invite. Esc returns to the compact camcorder overlay
+after play begins. Desktop and 390px layouts, asset loading, two-browser
+joining/ready, and returning to the menu were checked in Chromium.
+
+Artwork is exported from the existing homepage source with
+`node tools/blockrooms/export-lobby-art.mjs`; no external images or dependencies.
+The server serves CSS and SVG with their correct MIME types under `nosniff`.
+Validation: 42/42 co-op tests pass; full suite 821/824, with the same three
+known unrelated console/status-line failures. Deployed as `b756746`; the live
+HTTPS page, CSS/SVG assets, private host-key stripping, guest invite and both
+players entering a run passed in two Chromium clients.
+
+## First-play preflight (live)
+
+Small first-session fixes: starting a game disables the button until the request
+finishes, times out after 15 seconds, and offers a useful retry after failure.
+Ready stays in the lobby while waiting for the other visitor. Once both are
+ready, Enter / resume captures the mouse. A native browser warning catches
+refreshing or leaving during a run. A brief camcorder indicator shows when you
+or your friend is transmitting voice. Clipboard failure selects the invite and
+explains how to copy it manually.
+
+`node tools/blockrooms/coop-preflight-check.mjs` uses Chrome's fake microphone
+with a generated tone; it never accesses the real microphone. It verifies the
+actual AudioWorklet capture, resampling, WebSocket relay and non-silent audio
+playback in both directions, with 100ms outbound delay per peer. It also checks
+failed creation/retry, repeated Start clicks, clipboard denial, readiness,
+mouse capture, the refresh warning and disconnect feedback.
+
+Three-floor (`first-play-preflight`) and five-floor (`first-play-1`) browser
+runs escaped with health, batteries and possessions carried across every seam.
+Inventory/crafting, mounted lights, fire, trades, revives, doors, shared pirate
+attacks and host visibility feedback passed. The first unseeded long check
+hit a later-floor loading timeout; reproducible checks passed after disabling
+background timer throttling in the test browser, to represent two visible
+browsers on separate computers. A separate probe measured sixteen build-style
+yields at 9,689ms in a hidden tab versus 46ms visible. Loading messages now
+remind both players to keep their tab visible. The original timeout seed was
+not retained, so its exact cause is not proven. The harness prints the seed
+and transition diagnostics for repeatable investigation.
+
+Co-op tests: 42/42. Full suite: 821/824, same existing console/status-line failures.
+Release `69d7c55` is live on Railway. The hosted check passed private-key
+stripping, invite joining, two-way generated microphone audio over HTTPS/WSS,
+readiness, mouse capture, the reload warning and disconnect feedback. Live
+client/voice/page bytes match the commit and `/health` responds 200.
+Physical microphones and the London–Argentina connections still need the real
+playthrough. Use the private host bookmark to create, send only the resulting
+invite, enable voice in both browsers, and keep the host tab visible. A selected
+battery + Q (or R) refills the camera; I opens the full inventory/crafting view.
 
 ## Try the real rooms
 
@@ -249,7 +305,7 @@ browser stores that key for its tab session and strips the fragment before
 constructing invite links. Never send the host bookmark to a guest. The guest
 only opens `/rooms?room=<random-session-id>`, clicks Ready, and optionally enables
 voice. Both still need the host tab visible. Railway project/service: `blockrooms-coop`. Deployed from the explicit artifact
-using game commit `792b6d8`, with one replica and US East configured in the
+using game commit `69d7c55`, with one replica and US East configured in the
 artifact’s Railway config. The creator key lives only in Railway variables and
 the owner’s private local credential file; it is not committed. Hosted HTTPS/WSS
 checks passed two-client joining, production crafting, mounted lights, shared

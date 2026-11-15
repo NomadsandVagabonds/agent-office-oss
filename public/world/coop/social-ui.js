@@ -13,7 +13,7 @@ export function createSocialUI({read,send,resume,stop}){
   const {state,me}=read();if(!mode||!state||!me)return;
   const t=state.trade,other=state.players.find(p=>p.id!==me.id);
   const key=JSON.stringify([mode,t,me.bag,other?.bag,me.notice?.text]);if(key===stamp)return;stamp=key;pane.replaceChildren();
-  const title=document.createElement('h2');title.textContent=mode==='emotes'?'SEND A SIGNAL':'POCKET EXCHANGE';pane.append(title);
+  const title=document.createElement('h2');title.textContent=mode==='emotes'?'EMOTES':'TRADE';pane.append(title);
   const line=text=>{const p=document.createElement('p');p.textContent=text;pane.append(p);};
   if(mode==='emotes'){
    const row=document.createElement('div');row.className='signals';
@@ -23,11 +23,11 @@ export function createSocialUI({read,send,resume,stop}){
   const command=(type,extra={})=>send({type,trade:t.id,revision:t.revision,...extra});
   if(t.status==='pending'){
    line(t.from===me.id?'Waiting for your partner to agree…':'Your partner wants to trade.');
-   line('Stay nearby. The building keeps moving.');
+   line('Stay close while trading.');
    if(t.from!==me.id)pane.append(button('Accept trade',()=>command('trade-answer',{accept:true})));
    pane.append(button(t.from===me.id?'Cancel request':'Decline',close));return;
   }
-  line('Select items from your pockets. Leave your offer empty to receive a gift.');
+  line('Choose what to give. You can trade without giving anything back.');
   const columns=document.createElement('div');columns.className='tradeColumns';
   for(const p of [me,other]){
    const col=document.createElement('div'),h=document.createElement('h3');h.textContent=p===me?'YOUR POCKETS':'THEIR OFFER';col.append(h);

@@ -1,7 +1,7 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"/><title>BlockRooms · two tapes</title>
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"/><title>BlockRooms — Play with a friend</title>
 <script type="importmap">{"imports":{"three":"/vendor/three.module.min.js"}}</script>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#090b08;color:#efefd8;font:16px 'Courier New',monospace}canvas{display:block;width:100vw;height:100vh}#overlay{position:fixed;inset:0;pointer-events:none;box-shadow:inset 0 0 100px #0008;background:repeating-linear-gradient(transparent 0 3px,#0001 3px 4px)}header{position:fixed;top:4%;left:4%;right:4%;display:flex;justify-content:space-between;text-shadow:2px 0 #a45,-2px 0 #4aa;pointer-events:none;font-weight:bold}#panel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(540px,92vw);padding:28px;border:1px solid #efefd899;background:#10180ed9;line-height:1.6}h1{font-size:24px;letter-spacing:4px;margin:0}button,input{font:inherit;color:inherit;background:transparent;border:1px solid #efefd899;padding:10px;margin:6px 0;width:100%}button{cursor:pointer}button:hover,button:focus{background:#efefd822}input{font-size:12px}#hud{position:fixed;bottom:4%;left:50%;transform:translateX(-50%);text-align:center;max-width:95vw;white-space:nowrap;text-shadow:1px 1px #000}#bar{display:flex;gap:8px;justify-content:center;margin-top:12px}#bar button{width:72px;height:54px;font-size:12px;background:#10180e55}#bar .selected{border:2px solid #fff}#aim{position:fixed;left:50%;top:50%;pointer-events:none}small{color:#b9c4ad}#status{min-height:25px}a{color:inherit}
+*{box-sizing:border-box}body{margin:0;background:#090b08;color:#efefd8;font:16px 'Courier New',monospace}#view{display:block;width:100vw;height:100vh}#overlay{position:fixed;inset:0;pointer-events:none;box-shadow:inset 0 0 100px #0008;background:repeating-linear-gradient(transparent 0 3px,#0001 3px 4px)}#cameraHeader{position:fixed;top:4%;left:4%;right:4%;display:flex;justify-content:space-between;text-shadow:2px 0 #a45,-2px 0 #4aa;pointer-events:none;font-weight:bold}#panel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(540px,92vw);padding:28px;border:1px solid #efefd899;background:#10180ed9;line-height:1.6}h1{font-size:24px;letter-spacing:4px;margin:0}button,input{font:inherit;color:inherit;background:transparent;border:1px solid #efefd899;padding:10px;margin:6px 0;width:100%}button{cursor:pointer}button:hover,button:focus{background:#efefd822}input{font-size:12px}#hud{position:fixed;bottom:4%;left:50%;transform:translateX(-50%);text-align:center;max-width:95vw;white-space:nowrap;text-shadow:1px 1px #000}#bar{display:flex;gap:8px;justify-content:center;margin-top:12px}#bar button{width:72px;height:54px;font-size:12px;background:#10180e55}#bar .selected{border:2px solid #fff}#aim{position:fixed;left:50%;top:50%;pointer-events:none}small{color:#b9c4ad}#status{min-height:25px}a{color:inherit}
 
 #socialPanel{position:fixed;z-index:5;left:50%;top:50%;transform:translate(-50%,-50%);width:min(600px,92vw);max-height:85vh;overflow:auto;padding:clamp(18px,4vw,32px);background:#10180ee8;border:1px solid #efefd899;outline:5px solid #10180e66;line-height:1.5}
 #socialPanel h2{font-size:20px;letter-spacing:3px;margin:0 0 20px}#socialPanel h3{font-size:12px;letter-spacing:2px;border-bottom:1px solid #efefd855;padding-bottom:10px}
@@ -12,6 +12,55 @@
 .real-inventory #bar{display:none}.bag-open #notice{visibility:hidden}.real-inventory #hud{bottom:23%;font-size:13px;pointer-events:none}.real-inventory #vitals{position:fixed;bottom:auto;top:calc(-73vh);left:50%;transform:translateX(-50%)}
 .real-inventory .br-inventory{position:fixed;inset:0;z-index:4}.real-inventory #panel{z-index:6}.real-inventory #socialPanel{z-index:7}.real-inventory #emoteButton{z-index:5}.real-inventory .br-inventory button{margin:0;width:auto}
 </style>
-<canvas id="view"></canvas><div id="overlay"></div><header><span>● REC · TWO TAPES</span><span id="clock">SP 00:00</span></header><div id="aim">·</div>
-<section id="panel"><h1>TWO TAPES</h1><p>One building. Two visitors. Something moves when neither of you watches.</p><div id="status">Private co-op review · desktop keyboard and mouse</div><input id="alphaKey" type="password" autocomplete="off" placeholder="Host passcode (private server only)" aria-label="Host passcode"><button id="create">Create a session</button><input id="invite" readonly aria-label="Invite link" hidden><button id="copy" hidden>Copy invite link</button><button id="ready" hidden>Ready / resume</button><button id="voice">Enable voice</button><label>Partner volume <input id="voiceVolume" type="range" min="0" max="1" step="0.05" value="0.8"></label><p id="voiceStatus" aria-live="polite">Microphone off</p><p><small>V hold to talk · voice is not recorded<br>WASD move · mouse look · Shift run<br>E pick up / leave together at the green doorway<br>1–6 select · R use · G drop · Esc release mouse<br>Your menu does not pause the building.</small></p><a href="/">New session</a></section>
+<link rel="stylesheet" href="/world/coop/lobby.css">
+<canvas id="view"></canvas><div id="overlay"></div><header id="cameraHeader"><span>● REC · TWO TAPES</span><span id="clock">SP 00:00</span></header><div id="aim">·</div><div id="voiceIndicator" aria-live="polite" hidden></div>
+<main id="panel" aria-label="Co-op lobby">
+  <div class="lobby-brand">
+    <div class="web-address">THE BLOCKROOMS WORLD WIDE WEB SITE</div>
+    <img class="float-art camera-art" src="/world/coop/art/camcorder.svg" alt="" width="72" height="60">
+    <h1><img class="lobby-logo" src="/world/coop/art/logo.svg" alt="BlockRooms" width="416" height="234"></h1>
+    <img class="float-art moth-art" src="/world/coop/art/moth.svg" alt="" width="72" height="72">
+    <p class="department">~ the two-player department ~</p>
+    <div class="ticker">WELCOME, VISITORS! &nbsp; ★ &nbsp; PLEASE STAY TOGETHER &nbsp; ★ &nbsp; MIND THE CARPET</div>
+  </div>
+  <div class="lobby-paper">
+    <div class="lobby-content">
+      <div class="welcome"><h2>Getting lost is better with company.</h2><p>Bring a friend into the endless offices of BlockRooms.</p></div>
+      <div class="lobby-columns">
+        <section class="web-window session-window" aria-labelledby="roomHeading">
+          <h2 class="window-title" id="roomHeading">Play with a friend</h2>
+          <div class="window-body">
+            <div id="status" role="status" aria-live="polite">Start a game, then send your friend the invite link.</div>
+            <p id="joinHelp">You both need a computer, a keyboard and a mouse.</p>
+            <details id="hostAccess"><summary>Host access</summary><label for="alphaKey">Host passcode</label><input id="alphaKey" type="password" autocomplete="off" placeholder="From your private host link"></details>
+            <button id="create" class="primary-action">Start a game</button>
+            <label id="inviteLabel" for="invite" hidden>Your friend's invite link</label>
+            <input id="invite" readonly aria-label="Invite link" hidden>
+            <button id="copy" hidden>Copy invite link</button>
+            <button id="ready" class="primary-action" hidden>Ready / resume</button>
+            <p id="readyHelp" hidden>Send the link to your friend. Click Ready when you have finished setting up voice.</p>
+            <a id="newSession" href="/">Start over</a>
+          </div>
+        </section>
+        <aside class="web-window sound-window" aria-labelledby="soundHeading">
+          <h2 class="window-title" id="soundHeading">Can you hear me?</h2>
+          <div class="window-body">
+            <p>Both players: enable voice, allow your microphone, then hold <kbd>V</kbd> to talk.</p>
+            <button id="voice" disabled>Enable voice</button>
+            <label for="voiceVolume">Friend's volume</label><input id="voiceVolume" type="range" min="0" max="1" step="0.05" value="0.8">
+            <p id="voiceStatus" aria-live="polite">Microphone off</p>
+            <small>Voice isn't recorded.</small>
+          </div>
+        </aside>
+      </div>
+      <div class="field-notes only-lobby"><img src="/world/coop/art/battery.svg" alt="" width="36" height="48"><p><strong>A note for the host:</strong> keep this tab visible while you play. Switching tabs pauses your friend's game. Refreshing or leaving ends the run.</p></div>
+      <details class="lobby-controls"><summary>Keyboard controls</summary><p><small id="controlsText">V hold to talk · WASD move · mouse look · Shift run<br>E pick up / leave together at the green doorway<br>1–6 select · R use · G drop · Esc release mouse<br>The game keeps running while this menu is open.</small></p></details>
+      <footer class="lobby-footer">
+        <div class="construction"><span>UNDER CONSTRUCTION</span> Co-op alpha — expect a few loose floor tiles.</div>
+        <div class="web-badges"><span class="badge two">2 PLAYER<br><b>CO-OP</b></span><span class="badge www">WORLD WIDE<br><b>WEB</b></span><span class="badge y2k">Y2K<br><b>READY*</b></span></div>
+        <p>*Probably. &nbsp; <a href="https://blockroooms.app/">Back to the BlockRooms homepage</a></p>
+      </footer>
+    </div>
+  </div>
+</main>
 <div id="hud"><div id="notice"></div><div id="vitals"></div><div id="bar"></div></div><script type="module" src="/world/coop/client.js"></script></html>

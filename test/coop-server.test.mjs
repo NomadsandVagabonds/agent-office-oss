@@ -80,4 +80,8 @@ test('hosted entry opens the full-run lobby and keeps room creation passcode-pro
  const page=await fetch(root,{redirect:'manual'});assert.equal(page.status,302);assert.equal(page.headers.get('location'),'/rooms');
  assert.equal((await fetch(root+'/new?mode=rooms',{method:'POST'})).status,403);
  assert.equal(await(await fetch(root+'/health')).text(),'ok');
+ for(const [asset,type] of [['lobby.css','text/css'],['art/logo.svg','image/svg+xml']]){
+  const res=await fetch(root+'/world/coop/'+asset);assert.equal(res.status,200);
+  assert.equal(res.headers.get('content-type'),type);assert.equal(res.headers.get('x-content-type-options'),'nosniff');
+ }
 });

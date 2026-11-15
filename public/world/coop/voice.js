@@ -1,10 +1,12 @@
 import {VOICE_RATE,VOICE_SAMPLES,validVoicePacket} from '/core/coop-voice.js';
-export function createVoice({send,enabled=()=>false,button,status,volume}) {
+export function createVoice({send,enabled=()=>false,button,status,volume,indicator=null}) {
  let context=null,stream=null,node=null,source=null,gain=null,talking=false,seq=0,next=0,lastSeq=-1,generation=0,starting=false;
- const scheduled=new Set();
+ const scheduled=new Set();let receiving=false,receiveTimer=null;
+ function activity(){if(!indicator)return;const hidden=!talking&&!receiving,text=talking?'● TALKING · V':'● FRIEND TALKING';if(indicator.hidden!==hidden)indicator.hidden=hidden;if(indicator.textContent!==text)indicator.textContent=text;}
+
  const say=text=>{status.textContent=text;};
- function stopTalking(){talking=false;node?.port.postMessage(false);if(stream)say('Voice ready · hold V to talk');}
- function off(){generation++;starting=false;stopTalking();stream?.getTracks().forEach(t=>t.stop());stream=null;node?.disconnect();source?.disconnect();node=source=null;
+ function stopTalking(){talking=false;node?.port.postMessage(false);if(stream)say('Voice ready · hold V to talk');activity();}
+ function off(){receiving=false;clearTimeout(receiveTimer);generation++;starting=false;stopTalking();stream?.getTracks().forEach(t=>t.stop());stream=null;node?.disconnect();source?.disconnect();node=source=null;
   for(const s of scheduled){try{s.stop();}catch{}}scheduled.clear();context?.close();context=null;gain=null;next=0;lastSeq=-1;button.textContent='Enable voice';say('Microphone off');}
  async function start(){if(stream){off();return;}if(starting)return;starting=true;const mine=++generation;
   try{if(!navigator.mediaDevices?.getUserMedia)throw Error('Voice needs HTTPS (or localhost).');
@@ -20,12 +22,13 @@ export function createVoice({send,enabled=()=>false,button,status,volume}) {
  }
  button.addEventListener('click',start);
  volume.addEventListener('input',()=>{if(gain)gain.gain.value=Number(volume.value);});
- const down=e=>{if(e.code!=='KeyV'||e.repeat||!stream||!node||!enabled()||/INPUT|TEXTAREA/.test(e.target.tagName))return;context.resume();talking=true;node.port.postMessage(true);say('● TRANSMITTING');};
+ const down=e=>{if(e.code!=='KeyV'||e.repeat||!stream||!node||!enabled()||/INPUT|TEXTAREA/.test(e.target.tagName))return;context.resume();talking=true;node.port.postMessage(true);say('● TRANSMITTING');activity();};
  const up=e=>{if(e.code==='KeyV')stopTalking();};
  window.addEventListener('keydown',down);window.addEventListener('keyup',up);window.addEventListener('blur',stopTalking);
  document.addEventListener('visibilitychange',()=>{if(document.hidden)stopTalking();});
  window.addEventListener('pagehide',off);
  return {off,receive(m){if(!context||context.state!=='running'||!validVoicePacket(m)||m.seq<=lastSeq)return;lastSeq=m.seq;
+   receiving=true;activity();clearTimeout(receiveTimer);receiveTimer=setTimeout(()=>{receiving=false;activity();},250);
    const raw=atob(m.pcm),buffer=context.createBuffer(1,VOICE_SAMPLES,VOICE_RATE),out=buffer.getChannelData(0);
    for(let i=0;i<VOICE_SAMPLES;i++){let n=raw.charCodeAt(i*2)|(raw.charCodeAt(i*2+1)<<8);if(n>32767)n-=65536;out[i]=n/32768;}
    // Bound playout delay: late audio is discarded instead of building a backlog.

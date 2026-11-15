@@ -1,0 +1,50 @@
+/* The same little 1998 website as the single-player homepage. Game overlays
+   keep their camcorder treatment; these rules belong to the lobby only. */
+body{overflow:hidden}
+#view{position:fixed;inset:0}
+body:has(#panel:not([hidden]):not(.has-played)) > :is(#hud,#cameraHeader,#aim,#emoteButton){visibility:hidden}
+#panel[hidden],#panel [hidden]{display:none}
+#panel{position:fixed;inset:0;transform:none;width:auto;padding:0;border:0;overflow-y:auto;background:#050507;color:#000;font:16px/1.4 "Times New Roman",Times,serif;z-index:6;overscroll-behavior:contain}
+#panel h1,#panel h2,#panel p{margin:0 0 .7em;letter-spacing:normal}
+#panel h1{line-height:0;margin:12px 0 8px}
+#panel a{color:#0000ee;text-decoration:underline}#panel a:visited{color:#551a8b}#panel a:hover{color:#c00000}
+#panel button{font:bold 15px Arial,sans-serif;color:#000;background:#c0c0c0;border:3px outset #e7e7e7;min-height:44px;margin:7px 0;padding:9px 12px;cursor:pointer}
+#panel button:hover{background:#d5d5d5}#panel button:active{border-style:inset}#panel button:disabled{color:#626262;cursor:default}
+#panel button:focus-visible,#panel input:focus-visible,#panel a:focus-visible,#panel summary:focus-visible{outline:2px solid #000080;outline-offset:3px}
+#panel input{font:14px "Courier New",monospace;border:2px inset #eee;color:#000;background:white;padding:9px;width:100%;margin:5px 0}
+#panel input[type=range]{padding:0;accent-color:#000080;background:transparent;min-height:24px;cursor:pointer}
+#panel label{display:block;font:bold 13px Arial,sans-serif;margin-top:10px}#panel small{color:inherit;font-size:13px}
+#panel kbd{font:bold 14px "Courier New",monospace;border:1px solid #777;background:#eee;padding:0 4px}
+.lobby-brand{position:relative;text-align:center;padding:16px 16px 0;color:#ffffcc;max-width:1000px;margin:auto}
+.web-address{font:11px "Courier New",monospace;letter-spacing:2px;color:#b9b1a1}
+.lobby-logo{width:290px;max-width:68vw;height:auto;image-rendering:pixelated}
+.float-art{position:absolute;image-rendering:pixelated;object-fit:contain}.camera-art{left:12%;top:90px;transform:rotate(-12deg)}.moth-art{right:12%;top:90px;transform:rotate(12deg)}
+#panel .department{color:#00ff00;font:bold 18px "Comic Sans MS","Chalkboard SE",cursive;margin:6px 0 18px}
+.ticker{border:2px inset #888;color:#ffff00;background:#000;font:bold 12px "Courier New",monospace;padding:6px 10px;max-width:780px;margin:auto}
+.lobby-paper{background:repeating-linear-gradient(90deg,#4a3a1029 0 1px,transparent 1px 264px),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44'%3E%3Cpath d='M22 15l4 7-4 7-4-7z' fill='none' stroke='%23b99f3c' stroke-opacity='.5' stroke-width='1.3'/%3E%3C/svg%3E"),repeating-linear-gradient(90deg,#b99f3c33 0 3px,transparent 3px 22px),#d6c56c;border-top:8px solid #5b4127;min-height:calc(100% - 260px)}
+.lobby-content{max-width:860px;margin:auto;padding:24px 24px 18px}.welcome{text-align:center}.welcome h2{font-size:26px}.welcome p{font-size:17px}
+.lobby-columns{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:18px;margin:22px 0 16px;align-items:start}
+.web-window{border:3px outset #ddd;background:#c0c0c0;padding:3px;min-width:0}
+#panel .window-title{background:#000080;color:white;font:bold 14px Arial,sans-serif;padding:6px 9px;margin:0}
+.window-body{padding:12px 14px}.window-body p{font-size:15px}
+#panel .primary-action{background:#ffffd4}#panel .primary-action:hover{background:#ffffa0}
+#status{min-height:0;font:bold 17px/1.4 "Times New Roman",Times,serif;margin:0 0 10px}#hostAccess{font-size:14px;margin:10px 0}#hostAccess summary{cursor:pointer}#hostAccess label{font-weight:normal}
+#newSession{display:inline-block;margin-top:7px;font-size:14px}#invite{font-size:12px!important}#readyHelp{margin-top:7px!important}#voiceStatus{font:13px "Courier New",monospace;margin:6px 0!important}
+.field-notes{display:flex;gap:14px;align-items:center;border-top:1px solid #8e773b;border-bottom:1px solid #8e773b;padding:12px 4px}.field-notes img{flex:none;image-rendering:pixelated;object-fit:contain}.field-notes p{margin:0!important;font-size:15px}
+.lobby-controls{padding:12px 4px}.lobby-controls summary{color:#000080;text-decoration:underline;cursor:pointer}.lobby-controls p{padding-top:10px;line-height:1.8}
+.lobby-footer{text-align:center;padding-top:5px}.construction{padding:8px;background:#fff6bf;border:2px ridge #b9a447;font-size:14px}.construction span{display:inline-block;background:#111;border-left:8px solid #fce347;border-right:8px solid #fce347;padding:5px 8px;margin-right:8px;font:bold 10px Arial,sans-serif;color:#fce347;letter-spacing:1px}
+.web-badges{display:flex;gap:7px;justify-content:center;margin:17px 0 9px}.badge{display:inline-block;width:88px;height:31px;border:2px outset #ccc;font:9px/11px Arial,sans-serif;padding:2px 0}.badge b{font-size:12px;letter-spacing:1px}.two{background:#000080;color:#fff}.www{background:#111;color:#7bfa76}.y2k{background:#ffffbd;color:#800000}#panel .lobby-footer p{font-size:12px}
+/* Once the game has started, Esc is a compact camcorder overlay again. */
+#panel.has-played{inset:50% auto auto 50%;transform:translate(-50%,-50%);width:min(650px,94vw);max-height:90vh;background:#10180eee;border:1px solid #efefd899;color:#efefd8;font-family:"Courier New",monospace}
+.has-played .lobby-brand,.has-played .welcome,.has-played .lobby-footer,.has-played .only-lobby{display:none}
+.has-played .lobby-paper{background:none;border:0;min-height:0}.has-played .lobby-content{padding:16px}.has-played .lobby-columns{margin:0;gap:16px}
+.has-played .web-window{background:none;border:0;padding:0}.has-played .window-body{padding:10px 0}
+#panel.has-played .window-title{background:none;padding:0 0 9px;border-bottom:1px solid #efefd866;font-family:inherit;letter-spacing:1px}
+#panel.has-played button,#panel.has-played input{background:transparent;color:#efefd8;border:1px solid #efefd899;font-family:inherit}
+#panel.has-played button:hover{background:#efefd822}#panel.has-played a,.has-played .lobby-controls summary{color:#efefd8}#panel.has-played #status{font:14px/1.5 "Courier New",monospace}#panel.has-played kbd{background:transparent;color:inherit}.has-played #joinHelp,.has-played #readyHelp{display:none}
+#panel.has-played :focus-visible{outline-color:#efefd8}
+@media(max-width:600px){.lobby-content{padding:20px 14px}.lobby-columns{grid-template-columns:1fr;gap:14px}.lobby-brand{padding-top:12px}.web-address{font-size:9px;letter-spacing:1px}.camera-art{left:4%;width:40px}.moth-art{right:4%;width:40px}.lobby-logo{width:245px}.ticker{font-size:10px}.welcome h2{font-size:23px}.construction span{margin:0 0 6px}.construction{display:flex;align-items:center;flex-direction:column}.has-played .lobby-columns{grid-template-columns:1fr}}
+
+#voiceIndicator{position:fixed;z-index:8;right:4%;top:12%;font:13px "Courier New",monospace;color:#efefd8;text-shadow:1px 1px #10180e;background:#10180e88;padding:5px 8px;pointer-events:none}
+#voiceIndicator[hidden]{display:none}
+body:has(#panel:not([hidden])) #voiceIndicator{top:auto;bottom:10px}
