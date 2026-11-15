@@ -11,7 +11,7 @@ both. **The host browser must stay visible.** Two computers work better than two
 tabs in one window; switching to the guest tab pauses a hidden host. The guest
 gets an explicit pause message and resumes when the host returns.
 
-WASD moves, mouse looks, Shift runs, C crouches and Space jumps. E picks up, operates a door, or interacts with a nearby teammate; 1–6 selects, R uses, G drops. Escape releases the mouse without
+WASD moves, mouse looks, Shift runs, C crouches and Space jumps. E picks up, operates a door, or interacts with a nearby teammate; 1–6 holds/stows, Q (or R) uses, G drops, F toggles the flashlight. I or Tab opens the production camcorder inventory and its two-ingredient crafting panel. Escape releases the mouse without
 pausing a visible host. Enable voice in the menu, then hold V to talk.
 Visits now span 3–5 seeded floors. Find each floor’s way down and gather
 within three metres to descend together. Both browsers must finish loading
@@ -51,11 +51,26 @@ These are deliberately separate review modes, not a hidden public-game flag.
   door links and collider flags. The guest applies authoritative state instead
   of running a second creature simulation. Doors refuse to close on either
   player, including when the pirate operates them.
-- Twelve shared supplies per floor for two visitors: six batteries and six snacks, twice
-  the six-item solo budget. They are spread across clear floor in ordinary rooms.
-  One ID, one owner: simultaneous claims cannot duplicate a pickup. Drop/use
-  and the six-slot bags use the prototype inventory rather than production
-  crafting. Each player has four health and 300 seconds of camera power,
+- Production six-pocket model, item definitions, stack limits, recipes, icons,
+  inspection/crafting panel and flashlight grip. Camera/battery, torch/battery,
+  tape/torch, prepared torch/camera and paper/lighter recipes are host-owned.
+  Paper stacks to ten; one sheet burns for eight seconds. Invalid or stale
+  ingredient identities spend nothing. Mounting removes the torch from pockets;
+  F still controls it, and its equipment tile accepts replacement batteries.
+- Loose flashlights shine and drain only when selected and equipped. Mounted
+  lights work with empty hands or another selected item. Both clients see the
+  same charge and on/off state. The local production beam and an additional
+  partner cone illuminate baked surfaces; the partner cone has no shadow maps.
+- Production supply planning with two-player consumables. Battery/snack plans
+  are doubled; at least two snacks per floor. The first floor guarantees two
+  torches, two tapes, a paper stack and a reusable lighter for alpha testing.
+  Room-authored pickups are included. Later tools follow production seed odds.
+  One ID has one owner. Partial paper pickup leaves the remainder on the floor.
+- Host-placed paper fires and chalk arrows are replicated separately from the
+  fixed room-node list. Both clients see the same fire lifetime; the existing
+  pirate fire-fear contract makes it back away. Placement must pass production
+  clear-floor/dryness checks before paper is spent. Fires/marks stay upstairs.
+  Each player starts with four health and 300 seconds of camera power,
   capped at 400; a pack adds 120 seconds and a snack restores one heart.
 - A pirate kill downs that visitor, not the whole team. A selected snack can
   revive them at close range with clear line of sight and a short hit cooldown. The
@@ -99,7 +114,7 @@ visitor may publish world state; guest input is sent only to that host. This
 is **trusted-friend authority**, not server anti-cheat. A hidden or stalled host
 pauses the guest; disconnect ends the session, with no host migration. A late
 snapshot cannot resurrect a disconnected run. Protocol version is
-`blockrooms-coop-4`; restart the server and reload both clients after updating.
+`blockrooms-coop-5`; restart the server and reload both clients after updating.
 
 The fixed maze retains `core/coop.js`'s Node-authoritative movement, pirate,
 survival and items at 20 Hz. The review HTTP/WebSocket server serves only public
@@ -110,19 +125,17 @@ the server loses all sessions. An invite is access to that private room.
 
 ## Not integrated yet
 
-No full room deck, remaining creatures, production inventory/crafting/fire,
-movable furniture, full VHS effects, production scorecard/leaderboard, late
+No full room deck, remaining creatures, movable furniture, full VHS effects, production scorecard/leaderboard, late
 joining, reconnection, saved runs or client movement prediction. Descent uses
 a coordinated loading cut, rather than single-player’s seamless two-floor
 rendering. This is a complete run structure with a limited content deck, not
 feature parity with the full single-player game.
 
 The next useful work is:
-1. Production inventory IDs, crafting/fire and supplies under host authority.
-2. Explicit per-visitor rules for each additional creature and room hazard.
-3. Reliable replicated spawn/remove/reparent events for changing rooms and
+1. Explicit per-visitor rules for each additional creature and room hazard.
+2. Reliable replicated spawn/remove/reparent events for changing rooms and
    creatures that create new meshes, instead of relying on a fixed node list.
-4. Movement prediction, visibility culling and two-network tests.
+3. Movement prediction, visibility culling and two-network tests.
 
 ## Voice and private hosting preparation
 
@@ -167,14 +180,14 @@ The temporary screenshot is `coop-real-rooms.png` in the system temp directory.
 These checks use no microphone or outside network.
 
 The standalone site build still passes and its asset graph excludes co-op.
-The full repository suite finished at 811/814 passing, with three counted
+The full repository suite finished at 819/822 passing, with three counted
 failures in the pre-existing console temporary-path and
 usage/status-line failures, reproduced previously on unchanged base a155afc.
 No real agent runtimes were launched by these checks.
 
 ### Revive, emote and trade checks
 
-All 33 co-op unit/socket/audio tests pass. `social-rules.js` owns consent, offer
+All 42 co-op unit/socket/audio/inventory tests pass. `social-rules.js` owns consent, offer
 revisions, final bag capacity and atomic transfers; the browser cannot directly
 assign another player's items. Revive consumes the snack (and, only for a flat
 camera, one battery) once. Emotes last three seconds and have a short cooldown.
@@ -184,8 +197,8 @@ Downed bodies remain visible with a rescue marker. These additions apply to
 `node tools/blockrooms/coop-browser-check.mjs --social` also exercises real
 keyboard E/B interaction and mouse controls: recipient acceptance, a changed
 offer resetting confirmation, completed exchange, shared wave, and reviving a
-flat-camera guest with one heart and restored charge. It verifies twelve
-spawned supplies. Its trade screenshot is `coop-trade.png` in the system temp
+flat-camera guest with one heart and restored charge. It verifies scaled
+refill supplies. Its trade screenshot is `coop-trade.png` in the system temp
 directory. No browser errors were observed. Supply density is an initial
 two-person balance and still needs a normal-length human playthrough.
 
@@ -208,3 +221,32 @@ Browser checks completed both a three-floor and a four-floor run (chute, hole
 and ledge entrances), with both clients reaching the final escape. Audio unit
 coverage also checks snapshot deduplication, listener-relative pan/attenuation,
 private sound targeting and rejecting old-floor sounds after a transition.
+
+### Production inventory checks
+
+`node tools/blockrooms/coop-browser-check.mjs --inventory` operates the guest's
+actual camcorder buttons and F key over two sockets. It checks loose-light
+selection/drain, tape preparation and mounting, camera/equipment recharging,
+a three-sheet 24-second fire, replicated disappearance, and the actual pirate
+entering its fire-fear state. `--social` still passes trades, revives and emotes.
+`--run` now carries a mounted flashlight alongside the existing survival/item
+checks. Unit tests also exercise stale recipes, partial stacks at full capacity,
+failed fire placement, gear trade metadata and invalid inventory snapshots.
+55 production inventory/crafting/controller tests pass unchanged.
+
+### Private Railway artifact (prepared, not deployed)
+
+`node tools/blockrooms/package-coop.mjs /absolute/new/output-folder` copies only
+tracked core/public files, the isolated server and its package metadata. It
+excludes knowledge/transcripts, Office data and untracked local files. The
+artifact has a root Dockerfile and Railway config: one replica, `/health` check,
+no database, no Office daemon. The Docker image defaults `/` to `/rooms`.
+Set a fresh `COOP_ALPHA_KEY` of at least 24 characters before starting it.
+
+A private host bookmark can be `https://<host>/rooms#host=<creator-key>`. The
+browser stores that key for its tab session and strips the fragment before
+constructing invite links. Never send the host bookmark to a guest. The guest
+only opens `/rooms?room=<random-session-id>`, clicks Ready, and optionally enables
+voice. Both still need the host tab visible. Railway access has been checked;
+no BlockRooms Railway service or upload has been created yet. International
+latency and real microphones still need a London–Argentina playtest.

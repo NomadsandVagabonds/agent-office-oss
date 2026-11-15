@@ -157,6 +157,9 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
     if (!available()) return { ok: false, reason: 'unavailable' };
     const p = groundSpot(MARK_R, true);
     if (disposed || !p) return { ok: false, reason: 'no-mark' };
+    return drawMark(p);
+  }
+  function drawMark(p, number = ++markCount) {
     if (!arrowGeometry) {
       const b = new Batch(), chalk = lin('#d9d1b2');
       // A broken, hand-drawn arrow. All pieces are disjoint and lie on one
@@ -172,11 +175,11 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
     if (marks.length < MAX_MARKS) {
       m = { mesh: new THREE.Mesh(arrowGeometry, kit.surface({ room: p.rt.u })) }; marks.push(m);
     } else { m = marks.shift(); marks.push(m); }
-    Object.assign(m, { rt: p.rt, x: p.x, z: p.z, y: p.y, number: ++markCount, away: null });
+    Object.assign(m, { rt: p.rt, x: p.x, z: p.z, y: p.y, number, yaw:p.yaw, away: null });
     p.rt.group.add(m.mesh); m.mesh.position.set(p.x, p.y + .013, p.z); m.mesh.rotation.y = p.yaw; m.mesh.visible = true;
     tint(m.mesh, p.rt, p.x, p.y, p.z);
-    env.sound.play('rustle', { vol: .6 });
-    return { ok: true, number: markCount, room: p.rt.id, x: p.x, z: p.z };
+    if (number === markCount) env.sound.play('rustle', { vol: .6 });
+    return { ok: true, number, room: p.rt.id, x: p.x, z: p.z };
   }
   function ignite(spec) {
     const checked = fires.request(spec);
@@ -188,8 +191,17 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
     return result;
   }
   return {
-    spawn, dropSelected, canMark: () => !disposed && !!groundSpot(MARK_R, true), mark, ignite,
+    spawn, dropSelected, dropSpot: item => groundSpot(ITEM_RADIUS[item.type], false, ITEM_HEIGHT[item.type]), canMark: () => !disposed && !!groundSpot(MARK_R, true), mark, ignite,
     fire: Object.freeze({ threatAt: fires.threatAt }),
+    // A co-op spectator renders only effects accepted by the authority.
+    applyEffects(report) {
+      fires.sync(report.fires || []);
+      const visible = new Set((report.marks || []).map(m => m.number));
+      for (const m of marks) m.mesh.visible = visible.has(m.number);
+      for (const m of report.marks || []) if (!marks.some(old => old.number === m.number)) {
+        const rt = roomFor(m.room); if (rt) drawMark({ ...m, rt }, m.number);
+      }
+    },
     update(dt = 0) {
       if (disposed) return;
       fires.update(dt);
@@ -217,7 +229,7 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
       return n;
     },
     report: () => ({ items: [...entries.values()].map(e => ({ ...copy(e.item), room: e.rt.id, x: e.x, y: e.y, z: e.z, wx: e.wx, wz: e.wz, active: e.active, ...(e.away ? { away: e.away } : {}) })),
-      marks: marks.map(m => ({ number: m.number, room: m.rt.id, x: m.x, y: m.y, z: m.z, ...(m.away ? { away: m.away } : {}) })), marksMade: markCount, fires: fires.report() }),
+      marks: marks.map(m => ({ number: m.number, room: m.rt.id, x: m.x, y: m.y, z: m.z, yaw:m.yaw, ...(m.away ? { away: m.away } : {}) })), marksMade: markCount, fires: fires.report() }),
     dispose() {
       if (disposed) return;
       disposed = true;

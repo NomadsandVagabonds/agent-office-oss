@@ -10,11 +10,12 @@ import {validVoicePacket} from '../../core/coop-voice.js';
 import {beginTransition,floorReady} from '../../public/world/coop/transition.js';
 import {validRealSnapshot} from '../../core/coop-real.js';
 const root=fileURLToPath(new URL('../../',import.meta.url));
-export function createCoopServer({alphaKey=process.env.COOP_ALPHA_KEY||''}={}) {
+export function createCoopServer({alphaKey=process.env.COOP_ALPHA_KEY||'',defaultRooms=process.env.COOP_DEFAULT_MODE==='rooms'}={}) {
  const rooms=new Map();
  const server=http.createServer(async(req,res)=>{
   try {
    const u=new URL(req.url,'http://local'),p=decodeURIComponent(u.pathname);
+   if(p==='/'&&defaultRooms){res.writeHead(302,{location:'/rooms'}).end();return;}
    if(p==='/health'){res.writeHead(200,{'content-type':'text/plain'}).end('ok');return;}
    if(p==='/new'&&req.method==='POST') {
     const hash=v=>createHash('sha256').update(String(v)).digest();

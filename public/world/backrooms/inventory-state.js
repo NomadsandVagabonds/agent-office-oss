@@ -58,10 +58,26 @@ export function makeItem(type, id, overrides = {}) {
  * Paper shares a slot up to ten sheets; other objects occupy one slot each.
  * Mutations never leak references. Drops retain charge, uses and quantities.
  */
-export function createInventory({ size = 6 } = {}) {
+export function createInventory({ size = 6, initial = null } = {}) {
   if (!Number.isInteger(size) || size < 1 || size > 6) throw new RangeError('Inventory has one to six slots.');
   const slots = Array(size).fill(null);
   let selected = 0, holstered = false, activeTorch = null, mountedTorch = null, revision = 0, crafting = false;
+  // Restore a detached authoritative bag, including empty pockets and mounted equipment.
+  if (initial) {
+    if (!Array.isArray(initial.slots) || initial.slots.length !== size) throw new TypeError('Invalid inventory slots.');
+    initial.slots.forEach((item, i) => { if (item) slots[i] = makeItem(item.type, item.id, item); });
+    if (initial.mountedTorch) {
+      mountedTorch = makeItem(initial.mountedTorch.type, initial.mountedTorch.id, initial.mountedTorch);
+      if (mountedTorch.type !== 'torch' || !mountedTorch.prepared) throw new TypeError('Invalid mounted flashlight.');
+    }
+    const ids = [...slots.filter(Boolean), mountedTorch].filter(Boolean).map(i => i.id);
+    if (new Set(ids).size !== ids.length) throw new TypeError('Duplicate inventory identity.');
+    if (!slotNumber(initial.selected, size)) throw new TypeError('Invalid selected pocket.');
+    selected = initial.selected; holstered = !!initial.holstered;
+    const light = [...slots, mountedTorch].find(i => i?.id === initial.activeTorch);
+    activeTorch = light?.type === 'torch' && light.charge > 0 ? light.id : null;
+    revision = Number.isSafeInteger(initial.revision) && initial.revision >= 0 ? initial.revision : 0;
+  }
   const fail = reason => ({ ok: false, reason });
   const read = () => ({ slots: slots.map(copy), selected, holstered, activeTorch, mountedTorch: copy(mountedTorch), revision });
   const activeLight = () => mountedTorch?.id === activeTorch ? mountedTorch : slots.find(item => item?.id === activeTorch);

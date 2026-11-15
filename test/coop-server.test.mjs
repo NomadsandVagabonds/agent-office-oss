@@ -74,3 +74,10 @@ test('real floor loading waits for both clients and ignores old-floor snapshots 
  a.send({type:'real-state',state:{...s,depth:1}});await until(()=>r.state.phase==='loading');b.socket.destroy();await until(()=>r.state.phase==='disconnected');
  a.send({type:'floor-ready',depth:2});await new Promise(r=>setTimeout(r,80));assert.equal(r.state.phase,'disconnected');
 });
+test('hosted entry opens the full-run lobby and keeps room creation passcode-protected',async t=>{
+ const app=createCoopServer({defaultRooms:true,alphaKey:'test-private-key'});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));t.after(()=>app.close());
+ const root=`http://127.0.0.1:${app.server.address().port}`;
+ const page=await fetch(root,{redirect:'manual'});assert.equal(page.status,302);assert.equal(page.headers.get('location'),'/rooms');
+ assert.equal((await fetch(root+'/new?mode=rooms',{method:'POST'})).status,403);
+ assert.equal(await(await fetch(root+'/health')).text(),'ok');
+});

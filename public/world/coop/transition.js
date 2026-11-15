@@ -3,7 +3,7 @@ export function carryFloor(s,next){
  const copy=structuredClone(s);copy.depth=next;copy.phase='play';copy.trade=null;
  copy.items=copy.items.filter(i=>copy.players.some(p=>i.owner===p.id&&p.bag.includes(i.id)));
  for(const p of copy.players){p.input={f:0,s:0};delete p.emote;delete p.notice;}
- for(const key of ['exit','exitOpen','descent','nodes','tints','opacity','lights','links','solids','nodeCount','creatures','pirate','sounds'])delete copy[key];
+ for(const key of ['exit','exitOpen','descent','nodes','tints','opacity','lights','links','solids','nodeCount','creatures','pirate','sounds','effects'])delete copy[key];
  return copy;
 }
 

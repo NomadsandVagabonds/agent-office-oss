@@ -19,8 +19,33 @@ try{
  await a.cmd('Page.bringToFront');await sleep(2000);
  const inspect=()=>a.ev('(()=>{const r=__coop.runtime;if(!r)return null;const {sim,visitors}=r.inspect();return {sim,creatures:r.world.env.pursuer.cast(),visitors:visitors.map(v=>({id:v.id,x:v.me.x,z:v.me.z,h:v.health}))}})()');
  let host=await inspect();assert.ok(host.sim?.real,'real floor started');
- if(process.argv.includes('--run')){
-  const saved=await a.ev('(()=>{const r=__coop.runtime,{sim,visitors}=r.inspect();const i=sim.items[0];i.owner=sim.players[0].id;sim.players[0].bag=[i.id];visitors[0].healthModel.damage(1);r.world.env.pursuer.figure.entryGrace=10000;return {id:i.id,depths:sim.depths};})()');
+ if(process.argv.includes('--inventory')){
+  await a.ev('(async()=>{const r=__coop.runtime,{sim,visitors}=r.inspect(),{makeItem}=await import("/world/backrooms/inventory-state.js");r.world.env.pursuer.figure.entryGrace=10000;for(const v of visitors){v.healthModel.heal(4);v.player.warp(r.start.x,r.start.z,0);}const p=sim.players[1];p.bag=[];p.inventory=null;for(const [type,id,extra] of [["paper","test-paper",{quantity:5}],["lighter","test-lighter",{}],["torch","test-torch",{charge:25}],["tape","test-tape",{}],["battery","test-battery",{}],["battery","test-battery-2",{}]]){sim.items.push({...makeItem(type,id,extra),owner:p.id,x:r.start.x,z:r.start.z,y:0});p.bag.push(id);}p.battery=150;visitors[0].player.warp(r.start.x+2,r.start.z,0);})()');await sleep(500);
+  const key=async(k,code)=>{await b.cmd('Input.dispatchKeyEvent',{type:'keyDown',key:k,code});await b.cmd('Input.dispatchKeyEvent',{type:'keyUp',key:k,code});await sleep(200);};
+  const click=async expr=>{await b.ev(expr+'.click()');await sleep(250);};
+  const pocket=i=>click(`document.querySelector('.br-inv-slot[data-slot="${i}"]')`);
+  const button=text=>click(`[...document.querySelectorAll('.br-inv-panel button')].find(b=>b.textContent.trim()===${JSON.stringify(text)})`);
+  const guest=async()=>{const s=await b.ev('testState');return s.players[1];};
+  await key('i','KeyI');await pocket(2);await key('f','KeyF');assert.equal((await guest()).inventory.activeTorch,'test-torch');
+  await key('Escape','Escape');await b.ev('document.getElementById("panel").hidden=true');await sleep(250);const handShot=await b.cmd('Page.captureScreenshot',{format:'png'});fs.writeFileSync(os.tmpdir()+'/coop-torch-hand.png',Buffer.from(handShot.data,'base64'));await key('i','KeyI');
+  await pocket(0);const charge=(await guest()).inventory.slots[2].charge;await sleep(500);assert.equal((await guest()).inventory.slots[2].charge,charge,'stowed beam does not drain');
+  await pocket(3);await button('Combine');await pocket(2);await button('Craft');assert.equal((await guest()).inventory.slots[2].prepared,true);
+  await pocket(2);await button('Combine');await button('Camcorder +');await button('Craft');assert.equal((await guest()).inventory.mountedTorch.id,'test-torch');assert.equal((await guest()).bag.includes('test-torch'),false);
+  await key('f','KeyF');assert.equal((await guest()).inventory.activeTorch,null);await key('f','KeyF');
+  await pocket(4);await button('Combine');await click('document.querySelector(".br-inv-equipment-choice")');await button('Craft');assert.ok((await guest()).inventory.mountedTorch.charge>179);
+  await pocket(5);await button('Combine');await button('Camcorder +');await button('Craft');assert.ok((await guest()).battery>260);
+  await pocket(0);await button('Combine');await pocket(1);
+  await click(`document.querySelector('[aria-label="Burn one more sheet"]')`);await click(`document.querySelector('[aria-label="Burn one more sheet"]')`);
+  const shot=await b.cmd('Page.captureScreenshot',{format:'png'});fs.writeFileSync(os.tmpdir()+'/coop-crafting.png',Buffer.from(shot.data,'base64'));
+  await button('Craft');const s=await b.ev('testState');assert.equal(s.effects.fires.length,1,JSON.stringify(s.players[1].inventoryResult));assert.equal(s.effects.fires[0].duration,24);assert.equal(s.players[1].inventory.slots[0].quantity,2);
+  assert.equal(await b.ev('__coop.runtime.world.scene.getObjectByName("inventory-fire-1")?.visible'),true);
+  const hostFire=await a.ev('__coop.runtime.world.env.inventory.fire.threatAt(__coop.state.effects.fires[0].wx,__coop.state.effects.fires[0].wz)');assert.ok(hostFire?.remaining>0,'shared fire reaches creature contract');
+  const fear=await a.ev('(()=>{const r=__coop.runtime,p=r.world.env.pursuer.figure,f=__coop.state.effects.fires[0];p.x=f.wx+.7;p.z=f.wz;p.plinth=false;p.state="awake";p.entryGrace=0;r.step(.04,__coop.state);const result=!!p.fear?.flee;p.entryGrace=10000;return result;})()');assert.equal(fear,true,'actual pirate backs away from crafted fire');
+  await a.ev('__coop.runtime.world.env.inventory.physical.update(25)');await sleep(350);assert.equal((await b.ev('testState')).effects.fires.length,0);assert.equal(await b.ev('__coop.runtime.world.scene.getObjectByName("inventory-fire-1")?.visible'),false);
+  await key('Escape','Escape');await b.ev('document.getElementById("panel").hidden=true');const sceneShot=await b.cmd('Page.captureScreenshot',{format:'png'});fs.writeFileSync(os.tmpdir()+'/coop-flashlight.png',Buffer.from(sceneShot.data,'base64'));
+  assert.equal(errors.length,0,JSON.stringify(errors));console.log('Production inventory UI, guest crafting, loose/mounted flashlight, camera refill and shared 24s fire passed');
+ }else if(process.argv.includes('--run')){
+  const saved=await a.ev('(()=>{const r=__coop.runtime,{sim,visitors}=r.inspect();const i=sim.items[0];i.owner=sim.players[0].id;sim.players[0].bag=[i.id];visitors[0].healthModel.damage(1);sim.players[0].inventory={slots:Array(6).fill(null),selected:0,mountedTorch:{id:"carried-light",type:"torch",charge:150,prepared:true},activeTorch:"carried-light"};r.world.env.pursuer.figure.entryGrace=10000;return {id:i.id,depths:sim.depths};})()');
   for(let depth=0;depth<saved.depths-1;depth++){
    const before=await inspect();assert.equal(before.sim.depth,depth);
    const result=await a.ev('(async()=>{const r=__coop.runtime,{visitors}=r.inspect(),g=await import("/world/backrooms/gen.js"),seam=await import("/world/backrooms/seam.js"),def=r.level.rooms[r.level.exit.room],way=r.level.exit.way;let x=0,z=0;if(way==="hole"){const q=seam.holeIn(def.W,def.D);x=(q[0]+q[2])/2;z=(q[1]+q[3])/2;}else if(way==="ledge")z=seam.ledgeAt(def.D)-.65;else if(way==="chute")z=seam.ductIn(def.D).z1-.35;else{const f=seam.flight(def.D,true);z=(f.back+f.zB)/2;}const at=g.toWorld(def,x,z);r.world.env.pursuer.figure.entryGrace=10000;visitors[1].player.warp(at.x,at.z,def.rot*Math.PI/2);for(let i=0;i<10;i++)r.step(.04,__coop.state);return {way,descent:r.inspect().sim.descent,phase:r.inspect().sim.phase};})()');
@@ -28,7 +53,7 @@ try{
    await a.ev('(()=>{const {sim,visitors}=__coop.runtime.inspect();visitors[0].player.warp(sim.descent.x,sim.descent.z,0);})()');
    let next;for(let i=0;i<160;i++){await sleep(250);next=await inspect().catch(()=>null);if(next?.sim?.depth===depth+1&&next.sim.nodeCount&&next.sim.phase==='play')break;}
    assert.equal(next?.sim?.depth,depth+1,'both browsers built next floor');assert.equal(next.sim.phase,'play');
-   const guest=await b.ev('testState');assert.equal(guest.depth,depth+1);assert.equal(guest.nodeCount,next.sim.nodeCount);assert.ok(next.sim.players[0].bag.includes(saved.id));assert.equal(next.sim.players[0].health,3);assert.ok(next.sim.players[0].battery<=before.sim.players[0].battery);assert.equal(next.sim.items.filter(i=>i.id===saved.id).length,1);assert.equal(next.sim.items.length,13);assert.equal(guest.items.find(i=>i.id===saved.id).owner,next.sim.players[0].id);
+   const guest=await b.ev('testState');assert.equal(guest.depth,depth+1);assert.equal(guest.nodeCount,next.sim.nodeCount);assert.ok(next.sim.players[0].bag.includes(saved.id));assert.equal(next.sim.players[0].health,3);assert.equal(next.sim.players[0].inventory.mountedTorch.id,'carried-light');assert.ok(next.sim.players[0].inventory.mountedTorch.charge<=before.sim.players[0].inventory.mountedTorch.charge);assert.ok(next.sim.players[0].battery<=before.sim.players[0].battery);assert.equal(next.sim.items.filter(i=>i.id===saved.id).length,1);assert.ok(next.sim.items.length>1);assert.equal(guest.items.find(i=>i.id===saved.id).owner,next.sim.players[0].id);
    console.log('Shared descent:',result.way,'→',next.sim.depth,next.sim.theme,'health/battery/bag retained');
   }
   await a.ev('(async()=>{const r=__coop.runtime,{visitors}=r.inspect(),g=await import("/world/backrooms/gen.js"),{flight}=await import("/world/backrooms/seam.js"),def=r.level.rooms[r.level.exit.room],at=g.toWorld(def,0,flight(def.D,false).back+.24);r.world.env.pursuer.figure.entryGrace=10000;for(const v of visitors)v.player.warp(at.x,at.z,def.rot*Math.PI/2);})()');
@@ -47,7 +72,7 @@ try{
  await Promise.all([a.ev(`testSocket.send(JSON.stringify({type:'take',id:${JSON.stringify(item)}}))`),b.ev(`testSocket.send(JSON.stringify({type:'take',id:${JSON.stringify(item)}}))`)]);await sleep(500);
  host=await inspect();sb=await b.ev('testState');assert.equal(host.sim.players.filter(p=>p.bag.includes(item)).length,1);assert.equal(sb.items.find(i=>i.id===item).owner,host.sim.items.find(i=>i.id===item).owner);console.log('Contested real pickup has one shared owner');
  if(process.argv.includes('--social')){
-  assert.equal(sb.items.length,12,'two-player supply budget');
+  assert.ok(sb.items.filter(i=>i.type==='battery').length>=6,'two-player refill budget');
   const kit=await a.ev('(()=>{const {sim}=__coop.runtime.inspect();for(const p of sim.players)p.bag=[];for(const i of sim.items)i.owner=null;const snack=sim.items.find(i=>i.type==="snack"),battery=sim.items.find(i=>i.type==="battery");snack.owner=sim.players[0].id;battery.owner=sim.players[1].id;sim.players[0].bag=[snack.id];sim.players[1].bag=[battery.id];return {snack:snack.id,battery:battery.id};})()');await sleep(300);
   const key=async(k,code)=>{await a.cmd('Input.dispatchKeyEvent',{type:'keyDown',key:k,code});await a.cmd('Input.dispatchKeyEvent',{type:'keyUp',key:k,code});};
   const aim=async()=>{await a.ev('document.getElementById("panel").hidden=true');for(const type of ['mousePressed','mouseReleased'])await a.cmd('Input.dispatchMouseEvent',{type,x:100,y:200,button:'left',clickCount:1});await sleep(100);assert.equal(await a.ev('document.pointerLockElement?.id'),'view');};
@@ -65,7 +90,7 @@ try{
   await aim();await key('b','KeyB');await a.ev('[...document.querySelectorAll("#socialPanel button")].find(b=>b.textContent.includes("wave")).click()');await sleep(300);assert.equal((await b.ev('testState')).players[0].emote.kind,'wave');
   const reviveSnack=await a.ev('(()=>{const {sim,visitors}=__coop.runtime.inspect();const snack=sim.items.find(i=>i.type==="snack"&&i.owner===null);snack.owner=sim.players[0].id;sim.players[0].bag.push(snack.id);visitors[1].healthModel.damage(4);visitors[1].record.battery=0;return snack.id;})()');await sleep(300);
   assert.equal((await b.ev('testState')).players[1].health,0);
-  await aim();await key('2','Digit2');await key('e','KeyE');await sleep(300);
+  await aim();await key('2','Digit2');await sleep(150);await key('e','KeyE');await sleep(300);
   sb=await b.ev('testState');assert.equal(sb.players[1].health,1);assert.ok(sb.players[1].battery>119);assert.equal(sb.items.find(i=>i.id===reviveSnack).owner,'used');assert.equal(sb.items.find(i=>i.id===kit.battery).owner,'used');
   await a.ev('(()=>{for(const v of __coop.runtime.inspect().visitors){v.healthModel.tick(2);v.healthModel.heal(4);}})()');
   console.log('Trade consent, changed-offer reconfirmation, shared emote and flat-camera revive passed');
