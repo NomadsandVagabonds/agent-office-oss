@@ -505,13 +505,14 @@ function roomContext(world, rt) {
       rt.colliders.push(collider); world.furnitureColliders.push(collider);
       const touching = () => world.rooms.filter(room => overlaps(f, room.rect)).map(room => room.id);
       let lastX = f.x, lastZ = f.z, lastRooms = touching();
-      f.translate = (dx, dz) => {
-        if (f.away || !Number.isFinite(dx) || !Number.isFinite(dz) || Math.hypot(dx, dz) < 1e-6) return false;
+      f.translate = (dx, dz, dy = 0) => {
+        if (f.away || ![dx, dz, dy].every(Number.isFinite) || Math.hypot(dx, dz, dy) < 1e-6) return false;
         const wasSolid = collider.on !== false, oldRooms = touching(), oldRoom = world.rooms.find(room => room.id === f.room);
         for (const k of ['x', 'x0', 'x1']) f[k] += dx;
         for (const k of ['z', 'z0', 'z1']) f[k] += dz;
-        Object.assign(collider, { x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, on: true });
-        f.group.position.x += dx; f.group.position.z += dz;
+        for (const k of ['y', 'top', 'surfaceY']) f[k] += dy;
+        Object.assign(collider, { x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, on: !f.carried });
+        f.group.position.x += dx; f.group.position.z += dz; f.group.position.y += dy;
         const now = world.roomAt(f.x, f.z) || oldRoom;
         if (now && now !== oldRoom) {
           const i = oldRoom?.colliders.indexOf(collider); if (i >= 0) oldRoom.colliders.splice(i, 1);
@@ -528,7 +529,7 @@ function roomContext(world, rt) {
           }
         }
         const nextRooms = touching(), changedRooms = nextRooms.join(',') !== lastRooms.join(',');
-        if (!wasSolid || changedRooms || Math.hypot(f.x - lastX, f.z - lastZ) >= .05) {
+        if (!f.carried && (!wasSolid || changedRooms || Math.hypot(f.x - lastX, f.z - lastZ) >= .05)) {
           for (const id of new Set([...lastRooms, ...oldRooms, ...nextRooms])) {
             const rev = (world.furnitureRevision.get(id) || 0) + 1;
             world.furnitureRevision.set(id, rev); world.rooms.find(room => room.id === id).furnitureRevision = rev;
