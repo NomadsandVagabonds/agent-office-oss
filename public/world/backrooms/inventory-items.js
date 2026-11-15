@@ -1,6 +1,6 @@
 // Detailed 3D polygon models for Backrooms pickups, held props, and HUD icons.
 // Authored in 2.5 cm unit coordinates (scale = kit.VOXEL = 0.025 m on the floor)
-// with real curves, bevels, negative space, propped angles, and contact shadows.
+// with real curves, bevels, negative space, and propped silhouettes.
 
 const DEG = Math.PI / 180, TAU = Math.PI * 2;
 const COLOR_CACHE = new Map();
@@ -130,22 +130,6 @@ class Sculpt {
     return this;
   }
 
-  contactShadow(rx, rz = rx, ox = 0, oz = 0, innerAo = 0.24) {
-    if (!this.grounded) return this;
-    const seg = 18, y = 0.012, inner = '#16150e', outer = '#333022';
-    const center = this.vert(ox, y, oz, 0, 1, 0, inner, innerAo, 0.5, 0.5);
-    const ring1 = [], ring2 = [];
-    for (let i = 0; i <= seg; i++) {
-      const th = (i / seg) * TAU, c = Math.cos(th), s = -Math.sin(th);
-      ring1.push(this.vert(ox + c * rx * 0.62, y, oz + s * rz * 0.62, 0, 1, 0, inner, innerAo + 0.14, 0.5, 0.5));
-      ring2.push(this.vert(ox + c * rx, y, oz + s * rz, 0, 1, 0, outer, 0.68, 0.5, 0.5));
-    }
-    for (let i = 0; i < seg; i++) {
-      this.triIdx(center, ring1[i], ring1[i + 1]);
-      this.quadIdx(ring1[i], ring2[i], ring2[i + 1], ring1[i + 1]);
-    }
-    return this;
-  }
 
   /**
    * Surface of revolution around +Y.
@@ -460,11 +444,10 @@ class Sculpt {
 /* ---- Individual High-Detail 3D Item Sculptors -------------------------------- */
 
 function sculptTorchBody(s, prepared = false) {
-  s.contactShadow(5.0, 10.6, 0, -0.8, 0.22);
   s.push();
   if (s.grounded && !s.held) {
     // Propped nose-up on its wide rubber bezel and tail cap so it catches room light
-    s.translate(0, 0.55, 0);
+    s.translate(0, 0.29, 0);
     s.rotateX(6.5 * DEG);
     s.rotateZ(13 * DEG);
   }
@@ -589,7 +572,6 @@ function sculptSingleBattery(s) {
 }
 
 function sculptBattery(s) {
-  s.contactShadow(6.2, 5.6, 0.1, 0.3, 0.22);
   // Torn yellow/white cardboard twin-pack tray corner on the floor
   s.push();
   s.translate(-0.4, 0.24, 0.2);
@@ -619,7 +601,6 @@ function sculptChalkStick(s, len = 6.8, r0 = 0.68, r1 = 0.62, col = '#faf8f0') {
 }
 
 function sculptChalk(s) {
-  s.contactShadow(5.4, 6.2, 0.2, 0.2, 0.24);
   // Open cobalt-blue & goldenrod classroom chalk box
   s.push();
   s.translate(-0.65, 0, 0.65);
@@ -665,7 +646,6 @@ function sculptChalk(s) {
 }
 
 function sculptPaper(s) {
-  s.contactShadow(8.8, 9.6, 0, 0.2, 0.24);
   // Warm amber-manila folder base with left index tab
   s.push();
   s.translate(-0.2, 0.22, 0.2);
@@ -716,7 +696,6 @@ function sculptPaper(s) {
 }
 
 function sculptPinkSlip(s) {
-  s.contactShadow(7.8, 9.0, 0, 0.1, 0.22);
   // Vivid rose-pink FORM HR-404 arched in a 3D S-wave with lifted corner so it never flattens into carpet
   s.push();
   s.rotateY(-7 * DEG);
@@ -724,7 +703,7 @@ function sculptPinkSlip(s) {
     const x = (u - 0.5) * 12.2, z = (v - 0.5) * 15.4;
     const wave = Math.sin(v * Math.PI * 1.15) * 1.35 + Math.sin(u * Math.PI) * 0.42;
     const lift = Math.pow(Math.max(0, (u - 0.35) * 0.85 + (v - 0.42) * 0.9), 2) * 2.1;
-    return [x - lift * 0.18, 0.28 + Math.max(0, wave) + lift, z - lift * 0.14];
+    return [x - lift * 0.18, 0.15 + Math.max(0, wave) + lift, z - lift * 0.14];
   }, 0.28, {
     bottomColor: '#d97896',
     edgeColor: '#e88aa7',
@@ -741,7 +720,6 @@ function sculptPinkSlip(s) {
 }
 
 function sculptScissors(s) {
-  s.contactShadow(7.2, 8.8, 0, -0.4, 0.22);
   s.push();
   if (s.grounded && !s.held) {
     // Propped up dynamically on one finger loop & lower blade so the open V-jaws catch light
@@ -819,7 +797,6 @@ function sculptScissors(s) {
 }
 
 function sculptSnack(s) {
-  s.contactShadow(6.6, 7.6, 0, 0.2, 0.24);
   s.push();
   if (s.grounded && !s.held) {
     // Jaunty 20° propped pillow angle so the bright foil bag rises clearly off the floor
@@ -872,7 +849,6 @@ function sculptSnack(s) {
 }
 
 function sculptLighter(s) {
-  s.contactShadow(3.6, 3.2, 0.15, 0.1, 0.25);
   s.push();
   // Stands upright (~6.4 units = 16 cm) with a slight 6° lean so its red + chrome silhouette is unmistakable
   if (s.grounded && !s.held) {
@@ -930,7 +906,6 @@ function sculptLighter(s) {
 }
 
 function sculptTape(s) {
-  s.contactShadow(7.8, 7.2, 0.6, 0.4, 0.24);
   // Curled peeling strip of satin-silver duct tape sweeping out along the floor & propping the roll
   s.sheet(9, 4, (u, v) => {
     const x = 1.2 + u * 6.6, z = 1.6 + (v - 0.5) * 3.1 + u * 1.4;
@@ -964,7 +939,6 @@ function sculptTape(s) {
 }
 
 function sculptOpener(s) {
-  s.contactShadow(4.8, 6.8, 0, 0.2, 0.24);
   s.push();
   if (s.grounded && !s.held) {
     // Propped nose-up on its rear metal visor clip so faceplate, red button & antenna silhouette stand tall
@@ -1023,7 +997,6 @@ function sculptOpener(s) {
 }
 
 function sculptBalloon(s) {
-  s.contactShadow(4.2, 4.2, 0, 0, 0.18);
   const yBase = s.icon ? 14 : 28.6;
   if (!s.icon) s.translate(0, 0.05, 0);
   // Smooth 3D S-curved twine string (with floor coil when not rendering compact HUD icon)

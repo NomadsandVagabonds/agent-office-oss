@@ -426,7 +426,7 @@ test('all inventory items sculpt high-detail 3D polygon geometry with outward no
     entry.sculpt(held, 1, { grounded: false, held: true });
     const tris = grounded.idx.length / 3, verts = grounded.pos.length / 3;
     assert.ok(tris >= 500, `${name} should have high-detail triangle count (got ${tris})`);
-    if (name !== 'camera') assert.ok(tris > held.idx.length / 3, `${name} grounded mode should add contact shadow`);
+    assert.equal(tris, held.idx.length / 3, `${name} should not include a separate shadow disc`);
     let minY = Infinity;
     for (let i = 0; i < grounded.pos.length; i += 3) {
       assert.ok(Number.isFinite(grounded.pos[i]) && Number.isFinite(grounded.pos[i + 1]) && Number.isFinite(grounded.pos[i + 2]));
@@ -434,7 +434,7 @@ test('all inventory items sculpt high-detail 3D polygon geometry with outward no
       const nl = Math.hypot(grounded.nor[i], grounded.nor[i + 1], grounded.nor[i + 2]);
       assert.ok(Math.abs(nl - 1) < 1e-3, `${name} normal length ${nl}`);
     }
-    assert.ok(minY >= -0.01, `${name} grounded mesh clipped below floor (${minY})`);
+    if (name !== 'camera') assert.ok(minY >= -0.01 && minY <= 0.08, `${name} grounded mesh should rest flush on floor (${minY})`);
     for (let k = 0; k < grounded.idx.length; k += 3) {
       const a = grounded.idx[k], b = grounded.idx[k + 1], c = grounded.idx[k + 2];
       assert.ok(a >= 0 && a < verts && b >= 0 && b < verts && c >= 0 && c < verts);
