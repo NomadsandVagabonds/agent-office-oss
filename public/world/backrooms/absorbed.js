@@ -11,7 +11,7 @@ import { toWorld, wallPoint, wallSpans, floorAt, ceilAt } from './gen.js';
 import { clamp, turnTo } from './bits.js';
 import {
   ABSORBED, ABSORBED_MOUNTS, rollAbsorbedRoster, absorbedCount,
-  createAbsorbedState, stepAbsorbed, tugsTheCamera, HUNTER_NEAR, absorbedKeepOut,
+  createAbsorbedState, stepAbsorbed, tugsTheCamera, HUNTER_NEAR, absorbedKeepOut, meetsAbsorbed,
 } from './absorbed/rule.js';
 import { CAST } from './cast.js';
 import { makeAbsorbedWorker } from './absorbed/rig.js';
@@ -235,6 +235,8 @@ export function spawnAbsorbed(env, { rt, placement, spec }) {
       if (res.noticedNow) {
         env.play('creak', reachX, reachZ, 4.5);
       }
+      // (for the card at the end: met, once a visit, when one is seen reaching. tally.js keeps it to once across the parts)
+      if (meetsAbsorbed(rule.phase, env.sees(placement.wx, placement.wz, { radius: 0.5, far: 12 }), env.metAbsorbed)) { env.metAbsorbed = true; env.run?.met?.('absorbed'); }
 
       if (res.startedGrab) {
         if (mount === 'wall') {

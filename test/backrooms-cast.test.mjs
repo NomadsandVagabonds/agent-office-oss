@@ -535,3 +535,16 @@ test('the absorbed staff and fire: paper burning beside one lets go of whoever i
   assert.deepEqual(stepAbsorbed(createAbsorbedState('wall'), { dt, dist: 2, fire: false }), stepAbsorbed(createAbsorbedState('wall'), { dt, dist: 2 }));
   assert.ok(A.fireRadius > A.reachRadius.floor && A.fireRadius <= 3, 'further than its arms, nearer than a fire is seen from');
 });
+
+test('the absorbed staff on the card: met once, when one is seen reaching; letting go is not getting away', () => {
+  const { meetsAbsorbed } = SUNK;
+  assert.equal(meetsAbsorbed('reaching', true, false), true);
+  assert.equal(meetsAbsorbed('grabbing', true, false), true);
+  assert.equal(meetsAbsorbed('reaching', false, false), false, 'behind you, it has not been met');
+  assert.equal(meetsAbsorbed('idle', true, false), false, 'hanging there doing nothing, it is part of the wall');
+  assert.equal(meetsAbsorbed('cooldown', true, false), false);
+  assert.equal(meetsAbsorbed('grabbing', true, true), false, 'once');
+  // and the room's own code never tells the count that somebody got away from one
+  const src = fs.readFileSync(new URL('../public/world/backrooms/absorbed.js', import.meta.url), 'utf8');
+  assert.ok(/run\?\.met\?\.\('absorbed'\)/.test(src) && !/survived/.test(src));
+});

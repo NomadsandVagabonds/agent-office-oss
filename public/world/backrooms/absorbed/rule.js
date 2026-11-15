@@ -253,3 +253,20 @@ export function absorbedKeepOut(level, visit) {
   }
   return out;
 }
+
+/**
+ * For the count kept of a visit (tally.js): is this the moment they have been met? Once a visit, the first time one
+ * of them is reaching (or has hold) while the visitor is looking at it. Getting out of their hands is not counted as
+ * getting away from anything: nothing was at stake, and they would let go again in three seconds.
+ */
+export function meetsAbsorbed(phase, looking, already) {
+  return !already && !!looking && (phase === 'reaching' || phase === 'grabbing');
+}
+
+/** How clear of anything lying about one of them is put, metres: so that nothing is in their hands that somebody might want to pick up. */
+export const THING_GAP = 1.5;
+/** Is a spot clear of everything lying about? (`things`: [{ x, z }] in the world's coordinates.) */
+export function clearOfThings(x, z, things, gap = THING_GAP) {
+  for (const t of things || []) if (Math.hypot(x - t.x, z - t.z) < gap) return false;
+  return true;
+}
