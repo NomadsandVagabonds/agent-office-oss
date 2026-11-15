@@ -624,7 +624,7 @@ test('the absorbed staff: none is put where a thing lying about could not be pic
 test('the waste toner: hides on the ceiling clicking sonar, passes over crouch or stillness, weaves fast through crawl holes, stops at shut doors, and melts into glitch slime on its second bite', () => {
   const deckEntry = CAST.find((m) => m.id === 'toner');
   assert.ok(deckEntry && deckEntry.caught.hurt === TONER.hitDamage && TONER.hitDamage === 1 && TONER.maxHits === 2);
-  assert.ok(TONER.tall <= 0.55 && TONER.opens === false && TONER.chaseSpeed > 4.2, 'low enough to crawl, fast, and unable to open doors');
+  assert.ok(TONER.tall <= 0.55 && TONER.opens === false && TONER.chaseSpeed < 2.5, 'low enough to crawl, slower stalking, and unable to open doors');
 
   // 1. Perched on the ceiling: standing still or crouching right underneath it never wakes it, while calm sonar clicks sound
   let s = perched(() => 0.5), pings = 0;
@@ -652,7 +652,7 @@ test('the waste toner: hides on the ceiling clicking sonar, passes over crouch o
 
   // Sprinting upright within drop range triggers ceiling peel -> floor chase
   let dropped = 0;
-  for (let t = 0; t < 1.2; t += dt) {
+  for (let t = 0; t < 1.6; t += dt) {
     s = stepToner(s, dt, { d: 5, los: true, audible: true, moving: true, speed: 3.4, sink: 0 }, () => 0.4);
     if (s.dropped) dropped++;
   }
@@ -676,7 +676,7 @@ test('the waste toner: hides on the ceiling clicking sonar, passes over crouch o
   assert.equal(s.mode, 'prowl', 'blocked by a shut door, it climbs back to the ceiling');
 
   // 5. Two landed 1-damage bites dissolve it into a persistent sticky pool of black glitch slime
-  s = { ...s, mode: 'chase', doorT: 0, lostT: 0 };
+  s = { ...s, mode: 'lunge', t: TONER.lungeTime, doorT: 0, lostT: 0 };
   s = stepToner(s, dt, { d: TONER.touch - 0.1, los: true, audible: true, moving: true, speed: 2, sink: 0 }, () => 0.5);
   assert.equal(s.bite, true);
   s = strikeToner(s, { landed: true, dead: false, ended: false }, () => 0.5);
@@ -686,8 +686,9 @@ test('the waste toner: hides on the ceiling clicking sonar, passes over crouch o
 
   // Fast-forward past ceiling recoil, drop again, and land the 2nd bite (2 total damage)
   for (let t = 0; t < TONER.recoilTime[1] + 0.5; t += dt) s = stepToner(s, dt, { d: 6, los: false, audible: false }, () => 0.5);
-  for (let t = 0; t < 1.2; t += dt) s = stepToner(s, dt, { d: 4, los: true, audible: true, moving: true, speed: 3.4, sink: 0 }, () => 0.5);
+  for (let t = 0; t < 1.6; t += dt) s = stepToner(s, dt, { d: 4, los: true, audible: true, moving: true, speed: 3.4, sink: 0 }, () => 0.5);
   assert.equal(s.mode, 'chase');
+  s = { ...s, mode: 'lunge', t: TONER.lungeTime };
   s = stepToner(s, dt, { d: TONER.touch - 0.1, los: true, audible: true, moving: true, speed: 2, sink: 0 }, () => 0.5);
   assert.equal(s.bite, true);
   s = strikeToner(s, { landed: true, dead: false, ended: false }, () => 0.5);
@@ -747,7 +748,7 @@ test('the waste toner: hides on the ceiling clicking sonar, passes over crouch o
   assert.equal(brood.territorial, true);
   assert.equal(brood.homeRoom, 4);
   // Hearing upright movement wakes a territorial broodling onto the hunt
-  for (let t = 0; t < 1.2; t += dt) brood = stepToner(brood, dt, { d: 5, los: true, audible: true, moving: true, speed: 3.4, sink: 0 }, () => 0.5);
+  for (let t = 0; t < 1.6; t += dt) brood = stepToner(brood, dt, { d: 5, los: true, audible: true, moving: true, speed: 3.4, sink: 0 }, () => 0.5);
   assert.equal(brood.mode, 'chase');
   assert.equal(brood.territorial, true);
   assert.equal(brood.homeRoom, 4, 'remembers its home room so it can return if it loses the trail');
