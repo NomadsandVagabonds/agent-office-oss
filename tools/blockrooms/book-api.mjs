@@ -55,7 +55,9 @@ export async function handle(request, ctx) {
       if (difficulty && difficulty !== 'original' && (!validDifficulty(difficulty) || difficulty === 'tourist')) return json(400, { ok: false, why: 'difficulty' });
       if (store.read) {
         const { counter, top, latest } = await store.read(difficulty);
-        return json(200, { ok: true, counter, top: top.map(cleanEntry).filter(Boolean), latest: latest.map(cleanEntry).filter(Boolean) },
+        // (a store that has not been brought up to date yet answers every mode with every score: keep to the mode asked for here as well)
+        const mode = (e) => !difficulty || (e.difficulty || 'original') === difficulty;
+        return json(200, { ok: true, counter, top: top.map(cleanEntry).filter(Boolean).filter(mode), latest: latest.map(cleanEntry).filter(Boolean) },
           { 'cache-control': 'public, max-age=0, s-maxage=10, stale-while-revalidate=120' });
       }
       const [n, top, latest] = await store.pipeline([COUNTERS, ['ZREVRANGE', difficulty ? `br:top:${difficulty}` : 'br:top', 0, KEEP.showTop - 1], ['LRANGE', 'br:latest', 0, KEEP.showLatest - 1]]);
