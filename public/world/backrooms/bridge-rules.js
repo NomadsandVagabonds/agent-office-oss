@@ -59,9 +59,12 @@ export function canTip(world, item, { actor, bodies = true } = {}) {
   const down = !item.deployed, target = item.pose(down ? Math.PI / 2 : 0);
   const support = bridgeSupport(world, item.pose(Math.PI / 2), item.bridge.axis, item.bridge.bearing);
   if (!support.ok) return { ok: false, reason: 'support' };
-  // Always retrieve it from its hinge bank. From the far bank, walk back first;
+  // Retrieve it from its hinge bank. From the far bank, walk back first;
   // lifting there would leave the only movable on the inaccessible bank.
-  if (actor && item.deployed) {
+  // (A room that has a way on from both banks may say `eitherEnd` of a cutout:
+  // then whoever has crossed may raise it behind them. It still stands up on
+  // its hinge bank, which is then the other side of the gap from them.)
+  if (actor && item.deployed && !item.bridge.eitherEnd) {
     const hinge = item.hinge, n = item.bridge.normal;
     if ((actor.x - hinge.x) * n.x + (actor.z - hinge.z) * n.z > -.12) return { ok: false, reason: 'hinge' };
   }

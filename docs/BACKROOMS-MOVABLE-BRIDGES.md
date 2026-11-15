@@ -18,6 +18,10 @@ It does not change the Culvert, suburb room layouts, or the dealt room mix.
 - A bridge spanning a gap stays put; neither visitors nor creatures can slide
   it out from under somebody. Retrieve it from the hinge bank, with the panel
   clear. Raising immediately reserves its sweep so nobody can walk onto it.
+- A room with a way on from both banks may pass `eitherEnd: true` to
+  `movableCutout`: that panel may then be raised from the far bank too, behind
+  whoever crossed. It still stands up on its hinge bank. (Added by the lead for
+  the culvert, where pulling the bridge up behind you is the point.)
 
 The visual distinction is construction: loose panels have exposed timber
 rails, while fixed scenery retains its braces, feet or attachment to the set.

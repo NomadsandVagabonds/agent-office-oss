@@ -5,8 +5,8 @@ import { Batch } from './kit.js';
 import { setArt, upright, beam, TIMBER } from './suburb.js';
 import { BRIDGE, cutoutBounds } from './bridge-rules.js';
 
-export function movableCutout(c, { x, z, y = 0, width = 1.3, height = 2.7, facing = 2, front = 'streetB', label = 'Scenery panel' }) {
-  const spec = { x, z, y, width, height, facing, thickness: BRIDGE.thickness };
+export function movableCutout(c, { x, z, y = 0, width = 1.3, height = 2.7, facing = 2, front = 'streetB', label = 'Scenery panel', eitherEnd = false }) {
+  const spec = { x, z, y, width, height, facing, thickness: BRIDGE.thickness, eitherEnd: eitherEnd === true };
   const art = setArt(c.kit), paint = new Batch(), frame = new Batch();
   const a = facing * Math.PI / 2, ux = Math.cos(a), uz = -Math.sin(a), nx = Math.sin(a), nz = Math.cos(a), half = width / 2;
   const p = (u, v, d) => [x + ux * u + nx * d, y + .04 + v, z + uz * u + nz * d];

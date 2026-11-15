@@ -142,6 +142,10 @@ test('swept lowering/raising cannot hit ceilings, walls, people or hide the loss
   delete f.world.env.player;
   assert.equal(f.env.barricades.move(item, .1, 0).moved, false, 'a deployed bridge is not shoved out from under its users');
   assert.equal(f.env.barricades.tip(item, f.at(-1.5, -2)).reason, 'hinge');
+  // (a room with a way on from both banks may let it be raised behind whoever crossed: `eitherEnd`)
+  item.bridge.eitherEnd = true;
+  assert.equal(canTip(f.world, item, { actor: f.at(-1.5, -2) }).ok, true, 'raised from the far bank where the room says so');
+  item.bridge.eitherEnd = false;
   const rev = f.env.barricades.version(0);
   assert.equal(f.env.barricades.tip(item, near).ok, true); item.tick(.5);
   assert.equal(item.deployed, false); close(f.world.floorY(over.x, over.z), -1.3);
