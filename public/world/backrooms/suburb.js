@@ -91,9 +91,11 @@ function flamingo(g, w, h, back) {
   P(g, '#3a3632', 10, 27, 1, 13);
   if (back) { g.globalCompositeOperation = 'source-in'; P(g, '#b08a5c', 0, 0, w, h); g.globalCompositeOperation = 'source-over'; }
 }
+// a duck for a spring rider, as described twice: a head at each end of it, each looking where it is going
 function duck(g, w, h, back) {
-  blob(g, '#f2c230', [[14, 17, 12, 8], [24, 8, 6.5, 6]]); P(g, '#e8862e', 28, 8, 4, 3); P(g, '#2a2420', 24, 6, 2, 2);
-  g.fillStyle = '#f2c230'; g.beginPath(); g.moveTo(2, 14); g.lineTo(0, 6); g.lineTo(8, 12); g.fill(); blob(g, '#dba51c', [[13, 18, 6, 4]]);
+  blob(g, '#f2c230', [[16, 18, 10, 7.5], [6.5, 8.5, 6, 5.6], [25.5, 8.5, 6, 5.6]]); blob(g, '#dba51c', [[16, 19, 5.5, 3.6]]);
+  P(g, '#f2c230', 6, 10, 5, 8); P(g, '#f2c230', 21, 10, 5, 8);
+  P(g, '#e8862e', 0, 8, 3, 3); P(g, '#e8862e', 29, 8, 3, 3); P(g, '#2a2420', 5, 6, 2, 2); P(g, '#2a2420', 25, 6, 2, 2);
   if (back) { g.globalCompositeOperation = 'source-in'; P(g, '#c8a473', 0, 0, w, h); g.globalCompositeOperation = 'source-over'; }
 }
 // a field of corn by somebody who was told about one: the same stalk, the same ear, at the same height, for ever
