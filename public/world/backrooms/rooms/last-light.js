@@ -49,7 +49,7 @@ export function build(c) {
   c.tick((dt,time,me)=>{
     const w=c.toWorld(actor.x,actor.z), pw=c.toWorld(me.x,me.z);
     const localEye=(me.world?.y ?? ((room.y||0)+1.1))-(room.y||0);
-    const beam=heldInBeam({x:me.x,y:localEye,z:me.z,yaw:me.yaw,pitch:me.world?.pitch||0},actor,env.inventory?.torchPower?.()||0,c.world.los(pw.x,pw.z,w.x,w.z));
+    const beam=heldInBeam({x:me.x,y:localEye,z:me.z,yaw:me.yaw,pitch:me.world?.pitch||0,mounted:!!env.inventory?.torchMounted?.()},actor,env.inventory?.torchPower?.()||0,c.world.los(pw.x,pw.z,w.x,w.z));
     const distance=Math.hypot(me.x-actor.x,me.z-actor.z), previous=state.phase;
     state=stepHall(state,dt,{inside:me.inside,equipped:!!env.inventory,trigger:me.z<layout.trigger,clear:me.z<layout.clear,beam,distance,contact:roomContact(c,actor,me)});
     if(state.start){rt.lighting.preview=null;c.world.startLightingCue(rt,{from:'low',hold:true});}

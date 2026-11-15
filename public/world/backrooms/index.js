@@ -29,6 +29,7 @@ import { sketch, toWorld, toLocal, DECK, ARCHETYPES } from './gen.js';
 import { planVisit, floorOf, edition } from './plan.js';
 import { SHOT, cameraFor, cameraFrom, slumps } from './lastshot.js';
 import { createKit } from './kit.js';
+import { FLASHLIGHT_POSES } from './flashlight.js';
 import { buildWorld, loadCatalogue } from './world.js';
 import { BUILDERS } from './rooms.js';
 import { createPlayer } from './player.js';
@@ -556,7 +557,14 @@ async function visit(office, opt) {
     const ownLamp = variedLight ? LIGHTING.ownLamp : OWN_LAMP;
     const wantTorch = inventory ? Math.max(inventory.torchPower(), lamp * ownLamp) : Math.max(lamp * (variedLight ? ownLamp : 1), env.hand?.hasFlashlight?.() ? 1 : 0);          // (no pockets: a torch in the hand is simply on)
     torch += (wantTorch - torch) * (1 - Math.exp(-3 * dt));
-    cur.kit.shared.uTorch.value = torch * 1.5;
+    const torchPose = inventory?.torchPower() > 0
+      ? (inventory.torchMounted() ? FLASHLIGHT_POSES.mounted : FLASHLIGHT_POSES.hand)
+      : FLASHLIGHT_POSES.camera;
+    for (const floor of [cur, ahead?.f, above?.f]) if (floor) {
+      floor.kit.shared.uTorch.value = torch * 1.5;
+      floor.kit.shared.uTorchOrigin.value.fromArray(torchPose.origin);
+      floor.kit.shared.uTorchDirection.value.fromArray(torchPose.direction);
+    }
     hud.flag('LIGHT', torch > 0.5);
     if (hud.thumbs && (lightSeen -= dt) <= 0) { lightSeen = 0.2; hud.thumbs.set({ light: lightNow() }); }
     sound.setHum(light / 0.3);

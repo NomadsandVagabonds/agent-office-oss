@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
 import { generate, toWorld } from '../public/world/backrooms/gen.js';
-import { planLighting, planFloorLighting, panelBank, bankLevels, bankWeights, localLightScale } from '../public/world/backrooms/lighting.js';
+import { LIGHTING, planLighting, planFloorLighting, panelBank, bankLevels, bankWeights, localLightScale } from '../public/world/backrooms/lighting.js';
 
 // Use the actual shader/bake/world code and the vendored Three, without WebGL.
 const three = new URL('../public/vendor/three.module.min.js', import.meta.url).href;
@@ -14,12 +14,23 @@ const { buildWorld } = await import('../public/world/backrooms/world.js');
 const fixture = { id: 1, kind: 'plain', W: 12, D: 6, light: { mode: 'normal' },
   panels: [-4, -2, 2, 4].map(x => ({ x, z: 0, state: 'on' })) };
 
+test('a complete outage retains only a faint silhouette while working banks keep their original bounce',()=>{
+  const plan=planLighting(fixture,7,'travel');
+  const lights=fixture.panels.map(p=>({...p,bank:panelBank(plan,p)}));
+  for(const x of [-4,0,4]) {
+    assert.ok(Math.abs(localLightScale(plan,lights,[1,1,1,1],x,0)-1)<1e-12);
+    const dark=localLightScale(plan,lights,[0,0,0,0].map(()=>LIGHTING.blackout),x,0);
+    assert.ok(dark>0 && dark<.014,'no more than 1.4% of ambient light survives all banks failing');
+  }
+  assert.ok(LIGHTING.gainMax<=1.3,'camera exposure cannot restore night vision');
+});
+
 test('passing outages advance in order, recover, and have a long quiet interval', () => {
   const p = {...planLighting(fixture,7,'travel'),offset:0};
   assert.equal(p.bankCount,4);
-  assert.deepEqual(bankLevels(p,1),[.015,1,1,1]);
-  assert.deepEqual(bankLevels(p,2.5),[.015,.015,1,1]);
-  assert.deepEqual(bankLevels(p,5),[.015,.015,.015,.015]);
+  assert.deepEqual(bankLevels(p,1),[LIGHTING.blackout,1,1,1]);
+  assert.deepEqual(bankLevels(p,2.5),[LIGHTING.blackout,LIGHTING.blackout,1,1]);
+  assert.deepEqual(bankLevels(p,5),[LIGHTING.blackout,LIGHTING.blackout,LIGHTING.blackout,LIGHTING.blackout]);
   assert.deepEqual(bankLevels(p,20),[1,1,1,1]);
   assert.ok(p.period>=64);
   near(bankLevels(p,7.5+p.period),bankLevels(p,7.5));
@@ -31,8 +42,8 @@ test('passing outages advance in order, recover, and have a long quiet interval'
   assert.equal(planLighting({...fixture,panels:fixture.panels.slice(0,2)},7,'travel'),null);
   const cue={...p,cue:{start:50,hold:true,reverse:true}};
   assert.deepEqual(bankLevels(cue,49),[1,1,1,1]);
-  assert.deepEqual(bankLevels(cue,51),[1,1,1,.015]);
-  assert.deepEqual(bankLevels(cue,500),[.015,.015,.015,.015]);
+  assert.deepEqual(bankLevels(cue,51),[1,1,1,LIGHTING.blackout]);
+  assert.deepEqual(bankLevels(cue,500),[LIGHTING.blackout,LIGHTING.blackout,LIGHTING.blackout,LIGHTING.blackout]);
 });
 
 test('emergency lighting is rare and capped; pools keep very few ceiling tubes alive', () => {
@@ -45,9 +56,9 @@ test('emergency lighting is rare and capped; pools keep very few ceiling tubes a
   assert.equal(fixture.panels.filter(panel=>panelBank(p,panel)===0).length,1);
   assert.deepEqual(bankLevels(p,0),bankLevels(p,800));
   const emergency={...planLighting(fixture,7,'emergency'),offset:0};
-  near(bankLevels(emergency,1.3),[.018,.018,1]);
-  near(bankLevels(emergency,3),[.018,.018,.08]);
-  assert.deepEqual(bankLevels(emergency,3,1,true),[.018,.018,.55]);
+  near(bankLevels(emergency,1.3),[LIGHTING.blackout,LIGHTING.blackout,1]);
+  near(bankLevels(emergency,3),[LIGHTING.blackout,LIGHTING.blackout,.08]);
+  assert.deepEqual(bankLevels(emergency,3,1,true),[LIGHTING.blackout,LIGHTING.blackout,.55]);
   assert.deepEqual(bankLevels(emergency,3,3),[1,1,0]);
 });
 
@@ -76,7 +87,7 @@ test('most eligible rooms retain their steady lighting; every ceiling bank has t
 
 test('a failing bank has a long dark dwell and slow recovery, independent of sampling rate', () => {
   const plan = {...planLighting(fixture,7,'failing'),offset:0,period:40};
-  assert.deepEqual(bankLevels(plan,5), [1,0.015]);
+  assert.deepEqual(bankLevels(plan,5), [1,LIGHTING.blackout]);
   assert.deepEqual(bankLevels(plan,20), [1,1]);
   assert.deepEqual(bankLevels(plan,45), bankLevels(plan,5));
   assert.ok(bankLevels(plan,11)[1] > 0.1 && bankLevels(plan,11)[1] < 0.7);
@@ -85,14 +96,14 @@ test('a failing bank has a long dark dwell and slow recovery, independent of sam
     for (let i=0; i<fps*40; i++) {
       const [steady,k] = bankLevels(plan,i/fps);
       assert.equal(steady,1);
-      assert.ok(k >= 0.0149 && k <= 1);
+      assert.ok(k >= LIGHTING.blackout-1e-8 && k <= 1);
       assert.ok(Math.abs(k-last) < 0.15);
       last=k;
     }
   }
   assert.deepEqual(bankLevels(plan,5,0.02), [1,1], 'encounter blackout owns the ceiling');
   assert.deepEqual(bankLevels(plan,5,3), [1,1], 'encounter flash owns the ceiling');
-  assert.deepEqual(bankLevels(plan,5,1), [1,0.015], 'normal service resumes its cycle');
+  assert.deepEqual(bankLevels(plan,5,1), [1,LIGHTING.blackout], 'normal service resumes its cycle');
 });
 
 const lights = [lamp(-4,2.6,0,[1,.8,.5],{bank:0}),lamp(4,2.6,0,[1,.8,.5],{bank:1})];
@@ -159,11 +170,11 @@ test('emergency world builds colored fixtures and honors live steady-light setti
     assert.equal(o.material.uniforms.uMoreBanks,rt.u.moreBanks);
     assert.ok(o.geometry.attributes.aBank2);
   }});
-  rt.lighting.offset=0; world.updateLighting(1.3); near(rt.lightLevels,[.018,.018,1]);
-  steady=true; world.updateLighting(1.3); near(rt.lightLevels,[.018,.018,.55]);
-  world.updateLighting(20); near(rt.lightLevels,[.018,.018,.55]);
+  rt.lighting.offset=0; world.updateLighting(1.3); near(rt.lightLevels,[LIGHTING.blackout,LIGHTING.blackout,1]);
+  steady=true; world.updateLighting(1.3); near(rt.lightLevels,[LIGHTING.blackout,LIGHTING.blackout,.55]);
+  world.updateLighting(20); near(rt.lightLevels,[LIGHTING.blackout,LIGHTING.blackout,.55]);
   world.setLights(rt,.02); assert.deepEqual(rt.lightLevels,[1,1,0]);
-  world.setLights(rt,1); near(rt.lightLevels,[.018,.018,.55]);
+  world.setLights(rt,1); near(rt.lightLevels,[LIGHTING.blackout,LIGHTING.blackout,.55]);
 });
 
 test('real world meshes, visible tubes, probes and encounter overrides share bank uniforms', async (t) => {
@@ -181,6 +192,13 @@ test('real world meshes, visible tubes, probes and encounter overrides share ban
   rt.group.traverse(o=>{if(o.geometry?.userData.banks){
     assert.equal(o.material.uniforms.uBanks,rt.u.banks);
     assert.ok(o.geometry.attributes.aBank0 && o.geometry.attributes.aBank1);
+    const normals=o.geometry.attributes.normal;
+    assert.equal(normals.count,o.geometry.attributes.position.count);
+    assert.equal(normals.normalized,true);
+    assert.ok(normals.array instanceof Int8Array);
+    for(let i=0;i<normals.count;i++)assert.ok(Math.abs(Math.hypot(normals.getX(i),normals.getY(i),normals.getZ(i))-1)<.015);
+    assert.equal(o.material.uniforms.uTorchOrigin,kit.shared.uTorchOrigin);
+    assert.equal(o.material.uniforms.uTorchDirection,kit.shared.uTorchDirection);
     before.push(o.geometry);
   }});
   assert.ok(before.length>0);
@@ -189,7 +207,7 @@ test('real world meshes, visible tubes, probes and encounter overrides share ban
   rt.lighting.kind='failing'; rt.lighting.offset=0; rt.lighting.period=40;
   rt.group.visible=false;
   world.updateLighting(5);
-  assert.deepEqual(rt.u.banks.value,[1,.015]);
+  assert.deepEqual(rt.u.banks.value,[1,LIGHTING.blackout]);
   world.updateLighting(20);
   assert.deepEqual(rt.u.banks.value,[1,1]);
   assert.equal(ticks,0,'lighting on the part below does not run its hazards');
@@ -202,7 +220,7 @@ test('real world meshes, visible tubes, probes and encounter overrides share ban
   assert.deepEqual(rt.u.banks.value,[1,1]);
   assert.ok(world.lightAt(pos.x,pos.z)[0] < lit[0]);
   world.setLights(rt,1);
-  assert.deepEqual(rt.u.banks.value,[.78,.015]);
+  assert.deepEqual(rt.u.banks.value,[.78,LIGHTING.blackout]);
   near(world.lightAt(pos.x,pos.z),lit);
   for (const mesh of rt.bankPanels) near(mesh.material.color.toArray(),mesh.userData.on.toArray().map(v=>v*rt.u.banks.value[mesh.userData.bank]));
   assert.ok(before.every(g=>g.attributes.aBank0.array.length>0));
@@ -211,7 +229,7 @@ test('real world meshes, visible tubes, probes and encounter overrides share ban
   world.updateLighting(50);
   assert.equal(world.startLightingCue(rt,{from:'high',hold:true}),true);
   world.updateLighting(100);
-  assert.deepEqual(rt.lightLevels,[.015,.015]);
+  assert.deepEqual(rt.lightLevels,[LIGHTING.blackout,LIGHTING.blackout]);
   world.clearLightingCue(rt);
   world.updateLighting(100);
   assert.deepEqual(rt.lightLevels,[1,1],'clearing the held cue restores the seeded cycle');

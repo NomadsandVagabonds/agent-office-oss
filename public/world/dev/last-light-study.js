@@ -23,6 +23,15 @@ export function lastLightStudy(handle){
     if(i<0){const added=bag.give(makeItem('torch','last-light-study'));if(!added.ok)return;i=added.index;}
     bag.select(i);bag.toggleLight();
   });
+  // Three views of the same wall, outside the encounter trigger. The wall's
+  // pattern provides a world-scale reference for the beam footprint.
+  const wall=(distance,yaw=Math.PI/2)=>{
+    handle.goto(rt.id,-rt.def.W/2+distance,layout.front-2.2,yaw,0);
+    rt.lighting.preview='outage';
+  };
+  button('Beam · near wall',()=>wall(.55));
+  button('Beam · far wall',()=>wall(rt.def.W-1));
+  button('Beam · grazing wall',()=>wall(.9,.35));
   const read=document.createElement('output');el.append(read);
   const note=document.createElement('span');note.textContent='The entrance has a real charged torch. These controls are only for review. Reload for a fresh encounter.';el.append(note);
   const timer=setInterval(()=>{

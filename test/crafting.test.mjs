@@ -263,12 +263,16 @@ test('a mounted flashlight keeps working with empty hands and F still toggles it
 
 test('F prioritizes a mounted lamp, which keeps emitting while another item is held', () => {
   const model = bag(item('torch', 'mounted', { charge: 10, prepared: true }), item('torch', 'loose'), item('paper'));
+  assert.equal(model.torchMounted(), false);
   model.craft([ref(model, 0), CAMERA_INPUT], { camera: createCameraBattery() });
   model.select(2); assert.equal(model.toggleLight().item.id, 'mounted'); assert.equal(model.torchPower(), 1);
+  assert.equal(model.torchMounted(), true);
   model.tick(2); assert.equal(model.read().mountedTorch.charge, 8);
   model.select(1); model.useSelected(); assert.equal(model.read().activeTorch, 'loose'); model.tick(1);
+  assert.equal(model.torchMounted(), false);
   assert.equal(model.read().mountedTorch.charge, 8); assert.equal(model.read().slots[1].charge, 179);
   assert.equal(model.toggleLight().item.id, 'mounted'); assert.equal(model.read().activeTorch, 'mounted');
+  assert.equal(model.torchMounted(), true);
   assert.equal(model.toggleLight().action, 'torch-off'); assert.equal(model.torchPower(), 0);
 });
 
