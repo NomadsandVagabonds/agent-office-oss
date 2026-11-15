@@ -20,12 +20,44 @@ const PAL = {
   b: '#2a52be', B: '#14245e', c: '#4fd6e8', v: '#8a5ad6', p: '#f4a8c0', P: '#c04a80',
   n: '#7a4a2a', N: '#4a2a14', t: '#d9b98a', T: '#a57d4c', s: '#f1c9a0',
   e: '#5fae4a', E: '#2a6b2a', m: '#c9c4a6',
+  h: '#b4756a', H: '#8f5148', f: '#c48a7d', F: '#5e3540',
   S: '#cfa07a', u: '#e6d896', U: '#8f7d34', d: '#526478', D: '#222730',
   M: '#3a3526', q: '#ffc8d8', z: '#6dff7a', Z: '#123d1c', V: '#56327a', x: '#b8aa8e',
 };
 
 /** name → { fps?, frames: [[rows…], …] }. '.' is nothing. */
 export const SPRITES = {
+  // Directory miniatures follow the in-game silhouettes: Mother's open-topped
+  // flesh tube, the Lines' six poles, ink-black toners, and the grinning clerks.
+  mother: { fps: 2, frames: [0, 1].map(f => [
+    '......HHHH......', '.....HllllH.....', '.....HlkklH.....', '.....HllllH.....',
+    f ? '..hh..HffH......' : '......HffH..hh..',
+    f ? '...hh.HhfH......' : '......HfhH.hh...',
+    '....hhHfhHhh....', '.....HHhhHH.....', '......HffH......',
+    '......HhhH......', '......HFhH......', '......HffH......',
+    '......HhhH......', '......HfhH......', '.....HHhhHH.....', '.....HH..HH.....',
+  ]) },
+  lines: { fps: 1.5, frames: [0, 1].map(f => [
+    '.n.....n.....n..', 'nnn...nnn...nnn.', '.n.....n.....n..', '.n.....n.....n..',
+    '.n..HHHHHH...n..', '.n.HhfhFhfH..n..', '.n.HfhHhfhH..n..', '.n..HHHHHH...n..',
+    '.n...n...n...n..', '.n..nnn.nnn..n..', '.n...n...n...n..',
+    f ? '..n..n...n..n...' : '.n...n...n...n..',
+    f ? '..n..n...n..n...' : '.n...n...n...n..',
+    '.n...n...n...n..', '.n...n...n...n..', 'nn..nn...nn..nn.',
+  ]) },
+  waste_toner: { fps: 3, frames: [0, 1].map(f => [
+    '..k.........k...', '..kk..k.k..kk...', '...k..kkk..k....', '...kkkkkkkkk....',
+    '..kkKKkkKKkkk...', '.kkkKkkkkKkkkk..', 'kk.kkkkkkkkk.kk.',
+    f ? '.k.kkkDkkkkk.k..' : '.k.kkkkkkkkk.k..',
+    '.k..kkkkkkk..k..', 'kk...k.k.k...kk.', 'k....k...k....k.',
+    '.....k...k......',
+  ]) },
+  pit_clerk: { fps: 1.5, frames: [0, 1].map(f => [
+    '.....nnnnnn.....', '....nnttttnn....', '....ntwttwtn....', '....ntkttktn....',
+    '....tttttttt....', '....tkkkkkkt....', '.....twwwt......', '......tttt......',
+    '..tt.dddddd.tt..', '..ttdddlldddtt..', '....dddllldd....', '....dddddddd....',
+    f ? '....dd....dd....' : '.....dd..dd.....', '.....dd..dd.....', '....kkk..kkk....',
+  ]) },
   battery: { frames: [[
     '...kkk...', '..kGGGk..', '.kkkkkkk.', '.kyyyyyk.', '.kyykyyk.', '.kykkkyk.', '.kyykyyk.', '.kyyyyyk.',
     '.kkkkkkk.', '.kKKKKKk.', '.kKKKKKk.', '.kKKKKKk.', '.kKKKKKk.', '.kKKKKKk.', '.kkkkkkk.',
