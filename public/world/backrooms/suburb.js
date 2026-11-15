@@ -439,7 +439,7 @@ export function roller(c, side, at, opt = {}) {
   if (opt.garage) sheet(c.flat, [q.x - U[0] * w / 2, 0.11, q.z - U[2] * w / 2], [q.x + U[0] * w / 2, 0.11, q.z + U[2] * w / 2], [q.x + U[0] * w / 2, h, q.z + U[2] * w / 2], [q.x - U[0] * w / 2, h, q.z - U[2] * w / 2], 2, 2, null, [0.03, 0.03, 0.035]);
   const leaf = new Batch(); upright(leaf, a[0], a[1], b[0], b[1], 0.02, h, (s, t) => [s * 6, t * 5.25]);
   const door = c.dynamic(leaf, { pivot: [p.x, 0, p.z], map: tex });
-  c.wbox(side, at, w + 0.16, h, h + 0.1, 0, 0.06, WHITEWASH); for (const k of [-1, 1]) c.wbox(side, at + k * (w / 2 + 0.04), 0.08, 0, h, 0, 0.06, WHITEWASH);
+  { const f0 = c.wallAt(side, at, 0.004); c.model('suburb:rollerframe', rollerFrameVox, f0.x, f0.z, { rot: f0.rot, solid: false, shadow: false }); }
   c.keepWall(side, at - w / 2 - 0.2, at + w / 2 + 0.2);
   let up = 0, going = false;
   c.tick((dt) => { if (!going || up >= 1) return; up = Math.min(1, up + dt * 0.7); door.position.y = up * (h - 0.25); door.scale.y = 1 - up * 0.86; });
@@ -544,6 +544,33 @@ export function blaze(c, x, y, z, size = 1) {
   const top = c.ceilAt(x, z); c.blot(x, z, 3.2, 3.2, { rgb: [0.02, 0.02, 0.02], a: 0.75, y: top - 0.004, down: true }); c.blot(x, z, 1.6, 1.6, { rgb: [0, 0, 0], a: 0.8, y: top - 0.005, down: true });
   c.tick((dt, t) => { parts.forEach((m, i) => { const k = 1 + 0.16 * Math.sin(t * 11 + i * 2.1) + 0.08 * Math.sin(t * 23 + i); m.scale.set(1 + 0.08 * Math.sin(t * 7 + i), k, 1); m.position.y = y + 0.75 * size * k; }); });
 }
+/** A paving stone, one of three: worn at the corners, a crack, moss in the crack. About its middle. */
+export const stoneVox = (k = 0) => () => {
+  const v = new Vox(), g = [M('#a3a198', 2), M('#96948b', 2), M('#b0aea4', 2)], w = 10 + (k % 2), d = 9 - (k % 2);
+  v.rbox(-w, 0, -d, w, 1.6, d, 1.4, g[k % 3], 'xz'); v.box(-w + 1, 1.6, -d + 1, w - 1, 2, d - 1, g[(k + 1) % 3]);
+  v.carve(w - 2, 0, d - 2 - k, w, 3, d); if (k !== 1) v.carve(-w, 0, -d, -w + 2, 3, -d + 1 + k);
+  for (let i = 0; i < w * 2 - 4; i++) { const x = -w + 2 + i, z = Math.round(Math.sin(i * 0.7 + k) * 2 + (k - 1) * 2); v.set(x, 1, z, M('#55534c', 2)); v.carve(x, 2, z, x + 1, 3, z + 1); if (i % 4 === k) v.set(x, 1, z, M('#4f7a3a', 3)); }
+  return v;
+};
+/** Put a paving stone down. */
+export function stone(c, x, z, k = 0, rot = 0) { c.model('suburb:stone:' + (k % 3), stoneVox(k % 3), x, z, { rot, solid: false, shadow: false }); }
+/** A board on a post, for a notice to go on: a turned post with a ball on it, an arm, the board hung from the arm on two hooks. The board's face is 1 m by 0.65, its middle 1.37 up. */
+export const noticeVox = () => { const v = new Vox(), w = M('#efe9d8', 1), d = M('#cfc8b4', 1); v.cyl('y', -24, 0, 0, 74, 1.7, w); v.ellipsoid(-24, 76, 0, 2.4, 2.4, 2.4, w); v.cyl('y', -24, 0, 0, 3, 3, d); v.box(-24, 69, -1, 22, 71, 1, w); v.tube(-24, 58, 0, -14, 69, 0, 0.8, d);
+  for (const x of [-16, 18]) { v.tube(x, 69, 0, x, 67.4, 0, 0.5, M('#5d646c', 0)); } v.rbox(-21, 41, -1, 21, 67.6, 1, 1, w, 'xy'); v.box(-21, 41, -1.2, 21, 42, 1.2, d); v.box(-21, 66.6, -1.2, 21, 67.6, 1.2, d); return v; };
+/** A machine to pay at: a post, a hooded body, a screen that is on, a slot, twelve buttons, a tray, a panel on top to keep it going. Its face is toward -z. */
+export const payVox = () => {
+  const v = new Vox(), body = M('#3a4048', 0), trim = M('#c9ccd0', 0);
+  v.cyl('y', 0, 0, 0, 22, 3, M('#2a2f36', 0)); v.cyl('y', 0, 0, 0, 2, 6, M('#2a2f36', 0)); v.rbox(-10, 22, -7, 10, 60, 7, 2, body); v.box(-11, 58, -9, 11, 60, 8, M('#2a2f36', 0));
+  v.box(-7, 46, -7.6, 7, 55, -7, glow('#8fe0a8')); for (let y = 47; y < 55; y += 2) v.box(-6, y, -7.8, 2 + (y % 3), y + 0.6, -7.6, M('#1f6b3a', 0));
+  for (let i = 0; i < 12; i++) v.box(-6 + (i % 3) * 3, 43 - Math.floor(i / 3) * 2.6, -7.6, -4 + (i % 3) * 3, 44.6 - Math.floor(i / 3) * 2.6, -7, i === 11 ? M('#b3261e', 0) : trim);
+  v.box(4, 36, -7.6, 8, 44, -7, trim); v.box(5.4, 37, -7.8, 6.6, 43, -7.6, M('#17171a', 0)); v.box(-7, 25, -8.6, 7, 30, -7, trim); v.carve(-6, 26, -8.6, 6, 30, -7.4);
+  v.tube(0, 60, 0, 0, 66, 2, 0.8, trim); for (let x = -9; x < 9; x += 3) v.box(x, 66 + (x + 9) * 0, -6, x + 2.6, 67, 8, M('#1f2a4a', 0)); v.box(-10, 65.4, -7, 10, 66, 9, trim);
+  return v;
+};
+/** What a roller door runs in: a channel either side, and over it the box the door rolls up into. 2.4 m of door, 2.1 high; its back to the wall (-z). */
+export const rollerFrameVox = () => { const v = new Vox(), k = M('#d9dbd6', 0), d = M('#a9aba6', 0); for (const sx of [-1, 1]) { v.box(sx > 0 ? 48 : -51, 0, 0, sx > 0 ? 51 : -48, 84, 3, k); v.box(sx > 0 ? 47 : -48, 0, 2, sx > 0 ? 48 : -47, 84, 3.6, d); }
+  v.rbox(-52, 84, 0, 52, 95, 7, 2, k, 'yz'); v.box(-52, 84, 6.4, 52, 85, 7.4, d); for (const x of [-40, 0, 38]) v.box(x, 88, 7, x + 2, 90, 7.6, d); v.box(52, 40, 0.4, 54, 47, 3, M('#3a4048', 0)); v.set(53, 44, 3, glow('#d9433a')); return v; };
+
 /** A front door: six panels, a knob, a letter slot, a number. From its hinge edge (x from 0), 2.05 m high. */
 export const doorVox = (paint) => () => {
   const v = new Vox(), body = M(paint, 1), deep = M(tone(paint, -0.28), 1), brass = M('#c9a43a', 0);

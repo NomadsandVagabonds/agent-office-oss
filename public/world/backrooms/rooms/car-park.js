@@ -11,7 +11,7 @@
 import { Batch, drawText, ticks, WHITE } from '../kit.js';
 import { goesDown } from '../seam.js';
 import { P } from '../bits.js';
-import { lawn, fallingFlat, brace, beam, car, daylight, WHITEWASH } from '../suburb.js';
+import { lawn, fallingFlat, brace, beam, car, payVox, daylight, WHITEWASH } from '../suburb.js';
 
 export function build(c) {
   const { W, D, H, R, params: p, kit } = c;
@@ -59,8 +59,8 @@ export function build(c) {
   for (const [x, z] of [[x0 + 0.4, 0], [x1 - 0.4, 0]]) { beam(c.flat, [x, 0, z], [x, H, z], 0.12); c.hole(x - 0.3, z - 0.3); c.solid(x - 0.08, z - 0.08, x + 0.08, z + 0.08); c.flat.box(x - 0.5, 2.45, z - 0.12, x + 0.5, 2.55, z + 0.12, [0.74, 0.6, 0.4]); }
   // somewhere to pay
   { const mx = x1 - 0.5, mz = z1 - 0.2, tex = kit.tex.custom('park:pay:' + p.pay.join('|'), 64, 64, (g, w, h) => { P(g, '#f2c230', 0, 0, w, h); P(g, '#1d1c1a', 4, 4, w - 8, 18); drawText(g, [p.pay[0]], 4, 4, w - 8, 18, { color: '#f2c230', size: 11 }); drawText(g, p.pay.slice(1), 2, 24, w - 4, h - 26, { color: '#1d1c1a', size: 8, pad: 6 }); }, { clamp: true });
-    c.flat.box(mx - 0.25, 0, mz - 0.18, mx + 0.25, 1.5, mz + 0.18, [0.25, 0.27, 0.3], { skip: '-y' });
-    c.mapped('park:pay', tex).quad([mx + 0.2, 0.85, mz - 0.185], [mx - 0.2, 0.85, mz - 0.185], [mx - 0.2, 1.4, mz - 0.185], [mx + 0.2, 1.4, mz - 0.185], WHITE);
+    c.model('suburb:pay', payVox, mx, mz, { solid: false, shadow: 0.4 });
+    c.mapped('park:pay', tex).quad([mx + 0.2, 1.62, mz - 0.2], [mx - 0.2, 1.62, mz - 0.2], [mx - 0.2, 2.06, mz - 0.2], [mx + 0.2, 2.06, mz - 0.2], WHITE); c.flat.box(mx - 0.22, 1.6, mz - 0.19, mx + 0.22, 2.08, mz - 0.17, [0.2, 0.2, 0.2]); c.flat.box(mx - 0.02, 1.5, mz - 0.19, mx + 0.02, 1.62, mz - 0.17, [0.2, 0.2, 0.2]);
     c.solid(mx - 0.25, mz - 0.18, mx + 0.25, mz + 0.18);
     c.leave('opener', mx - 0.6, mz - 0.1, { y: 0 }); }
   void R;

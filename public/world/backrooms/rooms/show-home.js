@@ -13,7 +13,7 @@ import { atlas, drawText, ticks, WHITE } from '../kit.js';
 import { P } from '../bits.js';
 import { Vox, M } from '../../vox/vox.js';
 import { sunk, SUNK } from '../quiet.js';
-import { lawn, fence, flat, sheet, upright, beam, brace, daylight, onWall, postbox, doorVox, gnomeVox, CARPET, TIMBER, WHITEWASH } from '../suburb.js';
+import { lawn, fence, flat, sheet, upright, beam, brace, daylight, onWall, postbox, doorVox, gnomeVox, noticeVox, stone, CARPET, TIMBER, WHITEWASH } from '../suburb.js';
 import { HOME, homePlan } from './show-home/layout.js';
 
 /** A window box: a trough of earth, and what an office thinks flowers are: all of them the same one, in a row. */
@@ -112,13 +112,12 @@ export function build(c) {
   fence(c, h.fx0, front - 0.7, h.fx0, fz); fence(c, h.fx1, front - 0.7, h.fx1, fz);
   fence(c, h.fx0, fz, gx - 0.65, fz); fence(c, gx + 0.65, fz, h.fx1, fz);
   fence(c, gx - 0.65, fz, gx - 0.65 - 0.42, fz + 1.2, { solid: false, posts: false });
-  for (let z = fz - 0.45, k = 0; z > front + 0.75; z -= 0.72, k++) c.flat.box(gx - 0.28 + (k % 2) * 0.1, 0, z - 0.22, gx + 0.24 + (k % 2) * 0.1, 0.022, z + 0.2, [0.62, 0.61, 0.57], { skip: '-y' });
+  for (let z = fz - 0.45, k = 0; z > front + 0.75; z -= 0.72, k++) stone(c, gx - 0.02 + (k % 2) * 0.1, z, k, ((k * 5) % 3 - 1) * 0.1);
   { const tx = p.tree * 3.3, tz = fz - 1.5; flat(c, tx - 0.8, tz, tx + 0.8, tz, 'tree', { h: 2.8, back: 'treeBack', brace: 0.9 }); }
   { const bx = -p.tree * 3.2, bz = fz - 0.9;
-    c.flat.box(bx - 0.035, 0, bz - 0.035, bx + 0.035, 1.75, bz + 0.035, WHITEWASH, { skip: '-y' });
-    c.flat.box(bx - 0.5, 1.05, bz + 0.035, bx + 0.5, 1.7, bz + 0.06, WHITEWASH);
-    upright(wordB, bx - 0.48, bz + 0.062, bx + 0.48, bz + 0.062, 1.07, 1.68, cell(0));
+    c.model('suburb:notice', noticeVox, bx, bz + 0.035, { solid: false, shadow: false });
+    upright(wordB, bx - 0.49, bz + 0.066, bx + 0.49, bz + 0.066, 1.05, 1.66, cell(0));
     c.solid(bx - 0.5, bz - 0.05, bx + 0.5, bz + 0.07); c.shadow(bx, bz, 0.9, 0.2, 0.35); }
-  { const mx = gx + 1.25, mz = fz + 0.45, m = postbox(c, mx, mz, 0);
-    upright(wordB, mx - m.hw + 0.02, mz + m.hd + 0.004, mx + m.hw - 0.02, mz + m.hd + 0.004, 1.045, 1.175, cell(2)); }
+  { const mx = gx + 1.25, mz = fz + 0.45, m = postbox(c, mx, mz, Math.PI);                 // (turned so that its flag is on the far side, and the side toward the gate is clear for the name)
+    upright(wordB, mx - m.hw + 0.03, mz + m.hd + 0.016, mx + m.hw - 0.03, mz + m.hd + 0.016, 1.03, 1.16, cell(2)); }
 }
