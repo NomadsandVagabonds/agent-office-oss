@@ -1,7 +1,8 @@
 # Two tapes: private two-player prototype
 
 Branch: `codex/backrooms-coop`, based on development `a155afc`.
-Nothing on this branch has been deployed or connected to the public game.
+Private alpha: https://blockrooms-coop-production.up.railway.app/rooms
+Railway runs game build `792b6d8`, separately from the public BlockRooms site.
 
 ## Try the real rooms
 
@@ -157,7 +158,7 @@ For private hosting, the prepared Dockerfile is
 It starts only this server as a non-root user. Set a random `COOP_ALPHA_KEY` of
 at least 24 characters and `COOP_HOST=0.0.0.0`; only the creating host needs the
 passcode, and the friend uses the invite. Railway can provide HTTPS and PORT.
-The health endpoint is `/health`. No infrastructure has been provisioned.
+The health endpoint is `/health`. A single private Railway service is now deployed; see the deployment notes below.
 
 ## Validation
 
@@ -234,7 +235,7 @@ checks. Unit tests also exercise stale recipes, partial stacks at full capacity,
 failed fire placement, gear trade metadata and invalid inventory snapshots.
 55 production inventory/crafting/controller tests pass unchanged.
 
-### Private Railway artifact (prepared, not deployed)
+### Private Railway deployment
 
 `node tools/blockrooms/package-coop.mjs /absolute/new/output-folder` copies only
 tracked core/public files, the isolated server and its package metadata. It
@@ -247,6 +248,11 @@ A private host bookmark can be `https://<host>/rooms#host=<creator-key>`. The
 browser stores that key for its tab session and strips the fragment before
 constructing invite links. Never send the host bookmark to a guest. The guest
 only opens `/rooms?room=<random-session-id>`, clicks Ready, and optionally enables
-voice. Both still need the host tab visible. Railway access has been checked;
-no BlockRooms Railway service or upload has been created yet. International
+voice. Both still need the host tab visible. Railway project/service: `blockrooms-coop`. Deployed from the explicit artifact
+using game commit `792b6d8`, with one replica and US East configured in the
+artifact’s Railway config. The creator key lives only in Railway variables and
+the owner’s private local credential file; it is not committed. Hosted HTTPS/WSS
+checks passed two-client joining, production crafting, mounted lights, shared
+fire and synthetic voice packets in both directions. The hosted test allows
+network round-trip time instead of the local test’s shorter fixed waits. International
 latency and real microphones still need a London–Argentina playtest.
