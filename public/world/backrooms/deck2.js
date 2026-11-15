@@ -474,6 +474,11 @@ export const MORE_DECK = [
       brokenSide: R.pick([-1, 1]),
     }),
   },
+  // Kept out of ordinary visits until the waterpark team's integration pass.
+  { id: 'return-pool', name: 'The Return Pool', landmark: 'the pool hanging above another pool',
+    module: './rooms/return-pool.js', w: [14,15], d: [23,25], h: [5.8,6.2], ports: ['back'],
+    big: true, planned: true, weight: 1, lights: 'dim', themes: { '*': 0 },
+    stash: r => [-r.W/2+.5, -r.D/2+.5, -r.W/2+1.2, -r.D/2+1.2], roll: () => ({}) },
 ];
 
 // Where a tape goes in an entry that does not say so itself: (room, ±1) → [x0, z0, x1, z1] in the room's own frame.
