@@ -888,7 +888,9 @@ test('close-quarters scissors (melee.js & snipToner): reach, forward cone, ceili
 });
 
 test('a room may ask for company, and gets only who roams and is on the part anyway', () => {
-  const level = { seed: 'h1', rooms: [{ id: 0, kind: 'start', arch: null }, { id: 1, kind: 'odd', arch: 'maze' }, { id: 2, kind: 'odd', arch: 'quiet' }, { id: 3, kind: 'odd', arch: 'crowd' }] };
+  const level = { seed: 'h1', start: {room: 0}, rooms: [{ id: 0, kind: 'start', arch: null }, { id: 1, kind: 'odd', arch: 'maze' }, { id: 2, kind: 'odd', arch: 'quiet' }, { id: 3, kind: 'odd', arch: 'crowd' }] };
+  level.rooms.push({id: 4, kind: 'plain'});
+  for (const [a,b] of [[0,4],[4,1],[1,2],[2,3]]) { (level.rooms[a].doors ||= []).push({to:b}); (level.rooms[b].doors ||= []).push({to:a}); }
   const deck = { maze: { haunt: 1 }, quiet: {}, crowd: { haunt: 5 } };
   assert.equal(hauntsFor(level, [], deck).size, 0, 'nobody dealt: nobody comes');
   assert.equal(hauntsFor(level, ['pirate', 'porter', 'other-door'], deck).size, 0, 'not the mascot, and nobody with a room of their own');
@@ -973,8 +975,8 @@ test('one that comes with a room is on a part only if the room is, is never deal
   }
   assert.ok(seen.size > 1, 'not always the same distance');
   assert.equal(lairFor(floor(8, 6), plain), null, 'null for everybody else');
-  assert.equal(lairFor(floor(8, 3), lines), 1, 'never the landing: three doorways in, it is two before');
-  assert.equal(lairFor(floor(8, 2), lines), 1, 'too near for two: the nearest that is allowed');
+  assert.equal(lairFor(floor(8, 3), lines), 2, 'keep the first adjacent room free, even when the gap is nearby');
+  assert.equal(lairFor(floor(8, 2), lines), null, 'no allowed lair before a gap only two rooms away');
   assert.equal(lairFor(floor(8, 1), lines), null, 'next to the landing: nowhere');
   assert.equal(lairFor({ seed: 's', rooms: chain(5), start: { room: 0 }, exit: { room: 4 } }, lines), null, 'no such room');
 });

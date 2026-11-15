@@ -17,6 +17,38 @@ item models and pickup jiggle are retained. The mall stays hidden from normal
 visits, as on live. Ordinary furniture now uses live's carry/set-down behavior;
 placement checks both visitors and the 0.4 m floor-height limit.
 
+## Guest movement and safe landings
+
+The input fix preserves a held movement key when Chrome delivers its delayed
+pointer-lock event. Enter / resume focuses the canvas; losing capture or focus
+still clears movement. The preflight now uses two separate Chrome processes
+and real keyboard events, with 100 ms outbound delay per peer, rather than
+only sending movement commands directly to the socket.
+
+Removed the old eight-second demo shortcut that teleported an awake pirate
+into the player's room. Hostile initial placements, haunt overrides and lair
+fallbacks leave the landing and directly adjacent rooms empty (at least two
+doorway connections away). A carried pirate also returns in a distant unseen
+room. Resident-room shortcut doors cannot connect directly to the landing in
+normal generated visits. Explicit single-room development previews may still
+put their featured room beside the entrance.
+
+Co-op hunters do not select a visitor who has not yet explored beyond that
+buffer on the current floor. After exploration they can keep following that
+visitor back; this is a safe introduction, not a permanent invulnerable room.
+The shared placement corrections also apply to solo play; the showcase route
+still does not change single-player floor selection.
+
+Local checks: actual guest W press/release with voice and simulated latency;
+one minute at each of the four showcase landings with both players unharmed;
+128 generated floors checked for hostile/resident placement; shadow fuse,
+toner hatch, Mother brood, The Lines pursuit and removable bridge encounters.
+The complete showcase also passes all three descents and shared escape, with
+health, battery and inventory retained. Full suite: 958/959 passing; the sole
+failure is the existing Office status-line bridge test (`usage.test.mjs`),
+unchanged by this patch. These are automated local browsers, not a
+London–Argentina connection test.
+
 ## Curated tour
 
 **The long way round** is a fixed four-floor tour: yellow offices, unfinished
