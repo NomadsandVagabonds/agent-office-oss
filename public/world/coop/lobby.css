@@ -48,3 +48,8 @@ body:has(#panel:not([hidden]):not(.has-played)) > :is(#hud,#cameraHeader,#aim,#e
 #voiceIndicator{position:fixed;z-index:8;right:4%;top:12%;font:13px "Courier New",monospace;color:#efefd8;text-shadow:1px 1px #10180e;background:#10180e88;padding:5px 8px;pointer-events:none}
 #voiceIndicator[hidden]{display:none}
 body:has(#panel:not([hidden])) #voiceIndicator{top:auto;bottom:10px}
+#panel select{font:14px Arial,sans-serif;color:#000;background:#fff;border:2px inset #eee;padding:8px;width:100%;min-height:38px}
+#panel select:focus-visible{outline:2px solid #000080;outline-offset:3px}
+.character-window{margin:18px 0}#characterSlots{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.character-card{text-align:center;background:#fff6bf;border:2px inset #d7c67d;padding:10px}.character-card canvas{display:block;image-rendering:pixelated;margin:auto;width:96px;height:138px}
+.character-card label{text-align:left}#voiceMute[aria-pressed=true]{border-style:inset}

@@ -518,12 +518,14 @@ test('the waste toner: the bite that takes the last heart is the last thing any 
   // (the rule cannot know: being got is the conductor's c.hurt. What the creature's file does with the answer is read here,
   // and was seen in a browser: before this it stayed on the visitor biting, and buzzing, every frame until the picture went)
   const src = fs.readFileSync(new URL('../public/world/backrooms/cast/toner.js', import.meta.url), 'utf8');
-  assert.match(src, /const hit = c\.hurt\(TONER\.hitDamage\);\s+(\/\/[^\n]*\n\s+)*if \(hit\.dead \|\| hit\.ended\) \{ over = true; return; \}/, 'nothing more once the visit is ending');
+  assert.match(src, /const hit = c\.hurt\(TONER\.hitDamage\);\s+(\/\/[^\n]*\n\s+)*if \(hit\.ended \|\| \(hit\.dead && hit\.ended !== false\)\) \{ over = true; return; \}/, 'nothing more once the visit is ending');
   assert.match(src, /if \(!placed \|\| !units\.length \|\| over\) return;/, 'and none of the others either');
   assert.ok(!/env\.end\(/.test(src), 'it never ends a visit itself: being caught is c.hurt');
   // the rule's own answer to a hit that did not count (they were hit a moment ago) is to go back up, not to try again at once
   const s = strikeToner({ ...perched(() => 0.5), mode: 'chase' }, { landed: false, dead: false, ended: false }, () => 0.5);
   assert.equal(s.mode, 'recoil'); assert.equal(s.hits, 0); assert.ok(s.t > 2 && s.t < TONER.recoilTime[1]);
+  const teamHit=strikeToner({...perched(()=>.5),mode:'chase'},{landed:true,dead:true,ended:false},()=>.5);
+  assert.equal(teamHit.hits,1,'a teammate death still feeds the creature while the visit continues');assert.equal(teamHit.mode,'recoil');
 });
 
 test('the absorbed staff: a hold never turns the visitor\'s head while something that hunts is near and in sight', () => {

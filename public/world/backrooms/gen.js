@@ -503,9 +503,12 @@ function build(R, o, opt) {
     }
     return null;
   }
+  // Only an authored co-op finale asks for two landmarks. Normal generation
+  // retains the one-set-piece limit; this cannot grow beyond two.
+  const setPieceLimit = opt.setPieces === 2 ? 2 : 1;
   for (const arch of deck) {
     if (specials.length >= want - (gate ? 1 : 0)) break;
-    if (isBig(arch) && specials.some((r) => isBig(ARCHETYPES[r.arch]))) continue;      // one set piece to a floor — a room with a view, or one that says it is `big`: it is the landmark
+    if (isBig(arch) && specials.filter((r) => isBig(ARCHETYPES[r.arch])).length >= setPieceLimit) continue;
     const room = placeSpecial(arch, specials.length === 0);
     if (room) specials.push(room);
   }

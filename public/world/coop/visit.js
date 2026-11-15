@@ -1,12 +1,12 @@
-// Reuse the production visit plan, with an explicitly audited co-op room deck.
+// Use the production dealer and complete room/cast catalogues. Suburbia is
+// and the live four-floor visit rules. The showcase is an explicit co-op option.
+import {SHOWCASE_ROUTE,SHOWCASE_SEED,SHOWCASE_PENDING} from '../../../core/coop-routes.mjs';
+import {SHOWCASE,curate} from './showcase.js';
 import {planVisit,floorOf} from '../backrooms/plan.js';
-export const COOP_ROOMS=Object.freeze(['ceiling-meeting','coolers','hall-of-fame','many-doors']);
-export function coopVisit(seed,{slice=false}={}){
- const visit=planVisit(seed,{...(slice?{depths:1}:{}),pursuer:true});
- for(const [i,f]of visit.floors.entries()){
-  f.hand=COOP_ROOMS.filter((_,k)=>k%2===i%2);f.must=[];f.mascot=true;
- }
- return visit;
+export function coopVisit(seed,{slice=false,route='random',...options}={}){
+ if(route===SHOWCASE_ROUTE&&SHOWCASE_PENDING)throw new Error(SHOWCASE_PENDING);
+ if(route===SHOWCASE_ROUTE)return curate(planVisit(SHOWCASE_SEED,{...options,depths:SHOWCASE.length,themes:SHOWCASE.map(f=>f.theme),pursuer:true}));
+ return planVisit(seed,{...options,...(slice?{depths:1}:{})});
 }
 export {floorOf};
 export {carryFloor} from './transition.js';

@@ -32,4 +32,3 @@ export function poleVox() {
 }
 /** What holds a leg on: a rope of the same flesh, a metre of it (it is stretched to fit). Along +y. */
 export function sinewVox() { const v = new Vox(), n = Math.round(1 / S); v.cyl('y', 0, 0, 0, n, 2.4, (x, y) => M(['#a5645b', '#8f5148', '#b4756a'][(y >> 2) % 3], 2), 3.2); v.tube(1.5, 0, 0, -1.5, n, 1, 0.8, M('#17171a', 0)); return v; }
-

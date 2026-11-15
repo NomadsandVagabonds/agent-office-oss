@@ -330,6 +330,7 @@ export function build(c) {
     if(me.inside&&beat!==lastBeat){lastBeat=beat;const n=beat%8;if(working(state,n))play(beat%3?'tick':'seek',cameras[n].x,cameras[n].z,11);}
   });
   // Read-only observation for inspection and controller-based browser checks.
+  c.rt.coopFocus=()=>Array.from({length:patrol.count},(_,i)=>patrol.where(i));
   c.rt.mecha={read:()=>JSON.parse(JSON.stringify(state)),summary:()=>summary(state),stations,actors,cameras,
     visitor,computer:{x:0,z:consoleZ},rows,centerX,cells,background,subjectCount:cells.length,patrol,gateSolid};
 }

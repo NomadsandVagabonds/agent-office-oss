@@ -92,7 +92,7 @@ export function createFurnitureGrip(world, motion, { sound } = {}) {
     }
     // Changing rooms stay absent. Returning an authored placement also
     // preserves its old construction-rescue exception.
-    const occupied = edgeDistance(held, me) < (world.env?.player?.RADIUS || .22)
+    const occupied = (world.env?.players?.() || [world.env?.player]).some(p => p?.me && edgeDistance(held, p.me) < (p.RADIUS || .22))
       || (world.bodies || []).some(b => b.on !== false && !b.airborne && edgeDistance(held, b) < b.r);
     const on = !held.away && saved.on !== false && !occupied;
     finish(on);

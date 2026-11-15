@@ -92,7 +92,7 @@ export function create(c) {
       if (!known && sees && d < 12 && s.mode !== 'asleep' && !c.hidden(walker.x, walker.z, 1)) { known = true; c.met(); }
       if (s.hit) {
         const got = c.hurt(1); env.interfere(1); env.hud?.glitch?.(0.6); c.play('thunk', walker.x, walker.z, 16);
-        if (got && (got.dead || got.ended)) { s = { ...s, mode: 'gone' }; return; }
+        if (got && (got.ended || (got.dead && !env.hasSurvivor?.()))) { s = { ...s, mode: 'gone' }; return; }
       }
       let moved = false;
       if (s.speed > 0 && d > L.reach * 0.7) {

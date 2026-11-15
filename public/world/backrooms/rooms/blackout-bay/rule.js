@@ -70,7 +70,7 @@ export function stepBlackout(s, o) {
   if (inDark && !hasFlashlight && !byFire) {
     red = Math.min(1, red + dt / BLACKOUT.redFillSeconds);
     if (!caught && red >= 1) caught = true;
-    const held = targets.map((t) => !!t.fire);
+    const held = targets.map((t) => (!!t.fire||!!t.lit));
     return {
       state: { red, caught, frozen: held },
       red,
@@ -87,7 +87,7 @@ export function stepBlackout(s, o) {
   for (let i = 0; i < targets.length; i++) {
     const t = targets[i];
     const d = Math.hypot(t.x - px, t.z - pz);
-    const litByTorch = !!t.fire || inFlashlight({x:px,y:py,z:pz,yaw,pitch,mounted},t,
+    const litByTorch = (!!t.fire||!!t.lit) || inFlashlight({x:px,y:py,z:pz,yaw,pitch,mounted},t,
       {power:hasFlashlight?1:0,los:t.los!==false,bottom:.5,top:1.5,range:BLACKOUT.beamRange});
     frozen.push(litByTorch);
     if (!inDark) {

@@ -81,7 +81,7 @@ export function canTip(world, item, { actor, bodies = true } = {}) {
       const ceiling = world.ceilingY ? world.ceilingY(x, z) : world.floorY(x, z) + world.headroom(x, z);
       if (floor > b.y + EPS || ceiling < b.top + .05) return { ok: false, reason: 'clearance' };
     }
-    for (const me of [actor, bodies && world.env?.player?.me]) {
+    for (const me of [actor, ...(bodies ? (world.env?.players?.() || [world.env?.player]).map(p => p?.me) : [])]) {
       if (me && bodyOver(volume, { ...me, r: world.env?.player?.RADIUS || .22 })) return { ok: false, reason: 'occupied' };
     }
   }

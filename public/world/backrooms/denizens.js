@@ -76,7 +76,7 @@ export function routeToward(world, ax, az, gx, gz, { needsOpenDoor = false } = {
   };
 }
 
-export function createDenizens(env) {
+export function createDenizens(env, options = {}) {
   const list = [], bodies = new Map();
 
   function bodyFor(d) {
@@ -154,8 +154,8 @@ export function createDenizens(env) {
       const distMap = curRoom ? world.distances(curRoom.id) : null;
       for (const d of list) {
         if (d.gone || d.away) { if (d.group) d.group.visible = false; continue; }          // (away: the room it was standing in has gone, and it with it)
-        d.update?.(dt, time, me);
-        present(d, distMap);
+        if(options.withVisitor)options.withVisitor(d.id,d,()=>d.update?.(dt,time,env.player.me));else d.update?.(dt, time, me);
+        present(d, options.withVisitor ? null : distMap);
       }
     },
     /** A room has gone and taken whoever was in it (pursuer.js, takeAway: the same, for the residents that walk) · and is back. */

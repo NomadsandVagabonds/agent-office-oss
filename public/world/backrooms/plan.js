@@ -195,7 +195,7 @@ export function floorOf(visit, i) {
       only: (opt.onlyDepth || 0) === k ? opt.only : undefined,
       theme: f.theme, way: f.way, paper: `${visit.seed}/${k}`, must: f.must,
       // the rooms of the visit's hand that are in this part, and how long the part is, whatever it holds
-      hand: f.hand, rooms: f.rooms,
+      hand: f.hand, rooms: f.rooms, setPieces: f.setPieces,
       // who an earlier visitor might have drawn on a wall here: whoever is on this part or the one below (the mascot from the
       // part above his own onward: he follows people down). Never anybody who is not in the visit
       // …nor a resident whose room is not in this part's hand or the next one's (deck2.js `resident`)

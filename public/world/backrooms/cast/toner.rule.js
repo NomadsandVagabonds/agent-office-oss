@@ -427,7 +427,7 @@ export function stepToner(s, dt, sense = {}, rnd = Math.random) {
  */
 export function strikeToner(s, hit = {}, rnd = Math.random) {
   const base = clearFlags(s);
-  if (hit.ended || hit.dead) return { ...base, survived: false, dissolving: false };
+  if (hit.ended || (hit.dead && hit.ended !== false)) return { ...base, survived: false, dissolving: false };
   if (!hit.landed) {
     return {
       ...base,
