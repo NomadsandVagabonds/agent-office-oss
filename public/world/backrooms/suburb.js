@@ -661,7 +661,9 @@ export const WRONG = {
     const { W, D } = c, along = W >= D;
     if (Math.max(W, D) < 6.6 || Math.min(W, D) < 4.6) return false;
     // (wherever in the room there is the length of it clear: other things are left in lawns now, and it will not park on them)
-    const ok = (x, z) => [-1.5, 0, 1.5].every((k) => c.clear(x + (along ? k : 0), z + (along ? 0 : k), 0.7));
+    // …and never where it would be a wall: a lane a body and more wide past either side of it and round either end, in a room with nothing else across it
+    if (c.room.quiet) return false;
+    const L = Math.max(W, D) / 2, X = Math.min(W, D) / 2, ok = (x, z) => { const u = along ? x : z, v = along ? z : x; return Math.abs(u) + 2.1 + 1.1 <= L && Math.abs(v) + 0.85 + 1.1 <= X && [-1.5, 0, 1.5].every((k) => c.clear(x + (along ? k : 0), z + (along ? 0 : k), 0.7)); };
     for (const [u, v] of c.R.shuffle([[0, 0], [0, -1.2], [0, 1.2], [-1, 0], [1, 0], [-1, -1.2], [1, 1.2], [1, -1.2], [-1, 1.2]])) {
       const x = along ? u : v, z = along ? v : u;
       if (ok(x, z)) { car(c, x, z, along, c.R.pick(['#9a8a66', '#7d2a22', '#3f5f8a', '#5f7f5a']), -0.5); c.rt.carAt = [x, z]; return undefined; }
