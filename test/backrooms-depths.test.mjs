@@ -846,7 +846,8 @@ test('drawings on the walls: only ever of something that is in this visit, on it
   // the walls: who is drawn where
   const drawnOf = new Map();
   let parts = 0, withOne = 0;
-  for (const seed of SEEDS) {
+  // A rare follow-up to the beam lesson: retain a real seed that draws its resident.
+  for (const seed of [...SEEDS, 'visit-198']) {
     const { visit, floors } = visitFor(seed), company = castFor(visit);
     floors.forEach((level, i) => {
       parts++;

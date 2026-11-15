@@ -387,6 +387,12 @@ export const MORE_DECK = [
     ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
     module: './rooms/recess.js', stash: (r) => [r.W / 2 - 1.55, -r.D / 2 + 0.45, r.W / 2 - 0.9, -r.D / 2 + 1.05],
     roll: (R, o) => ({ rules: [...R.pick(RECESS_RULES), String(o.tasks.length ? R.pick(o.tasks) : 'TODO').toUpperCase()], lean: R.pick([-1, 1]), hops: [1, 2, 3, 4, 4, 6, 7, 9], high: R.int(0, 1) }) },
+  { id: 'last-light', name: 'The Last Light', landmark: 'the long hall losing its lights',
+    module: './rooms/last-light.js', resident: 'lamplighter', items: ['torch'], caught: 1, fire: 'ignores',
+    w: [6, 7], d: [20, 22], h: [2.8, 3.0], ports: ['back'], big: true,
+    weight: .85, lights: 'normal', needs: ['beam'], themes: { night: 1.5, archive: 1.2 },
+    stash: r => [r.W/2-1.4, -r.D*.17-.65, r.W/2-.5, -r.D*.17+.65],
+    roll: R => ({face:R.int(0,7)}) },
 ];
 
 // Where a tape goes in an entry that does not say so itself: (room, ±1) → [x0, z0, x1, z1] in the room's own frame.
