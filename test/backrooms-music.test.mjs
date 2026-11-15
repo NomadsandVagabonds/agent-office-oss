@@ -245,7 +245,8 @@ test('toner recordings load, alternate variants, and stop with the sound context
   const { sound, contexts } = audio(t, { music: false, decodeAudioData: async () => ({ clip: ++id, duration: 0.3 }) });
   sound.start();
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(requested.length, 6);
+  assert.equal(requested.filter((u) => /toner-sonar/.test(String(u))).length, 6);
+  assert.equal(requested.filter((u) => /cast\/mother\/(squish|retch)\.ogg/.test(String(u))).length, 2, 'and the two recordings that stand in for a voice (Mother\'s)');
   assert.ok(requested.every(url => url.endsWith('.ogg')));
   const ctx = contexts[0];
   sound.play('sonar', { pan: -0.4 });

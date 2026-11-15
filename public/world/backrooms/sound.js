@@ -37,6 +37,14 @@ const TONER_CLIPS = {
     [new URL('./cast/toner-sonar/toner-lock-3.ogg', import.meta.url), 0.48],
   ],
 };
+/**
+ * Recordings that stand in for a voice of the same name, played as they are (the owner chose these two for Mother: a foot
+ * coming down on one of her small ones, and her heave). [file, how loud]. The made-up voice is what plays until one has loaded.
+ */
+const RECORDED = {
+  squish: [new URL('./cast/mother/squish.ogg', import.meta.url), 0.9],
+  retch: [new URL('./cast/mother/retch.ogg', import.meta.url), 0.85],
+};
 // A restrained parallel grit layer keeps the original recording intelligible.
 const TONER_GRIT = Float32Array.from({ length: 1024 }, (_, i) => {
   const x = i * 2 / 1023 - 1;
@@ -100,12 +108,24 @@ export function createSound(level, opt = {}) {
   function loadTonerClips() {
     const owner = ctx;
     if (typeof owner?.decodeAudioData !== 'function') return;
-    for (const variants of Object.values(TONER_CLIPS)) for (const [url] of variants) {
+    for (const variants of [...Object.values(TONER_CLIPS), ...Object.values(RECORDED).map((one) => [one])]) for (const [url] of variants) {
       fetch(url.href).then(r => { if (!r.ok) throw new Error('clip unavailable'); return r.arrayBuffer(); })
         .then(bytes => owner.decodeAudioData(bytes))
         .then(buffer => { if (ctx === owner) clipBuffers.set(url.href, buffer); })
         .catch(() => { /* Procedural voice stays available offline or on decode failure. */ });
     }
+  }
+  /** One of RECORDED, as it was recorded, from where it happens. False if it has not loaded (the caller's own voice plays then). */
+  function playRecorded(name, o = {}) {
+    const [url, level] = RECORDED[name] || [], buffer = url && clipBuffers.get(url.href);
+    if (!buffer) return false;
+    const src = ctx.createBufferSource(), gain = ctx.createGain();
+    src.buffer = buffer; gain.gain.value = level * volume(o.vol); src.connect(gain);
+    const panNode = out(gain, o.pan ?? 0);
+    clipSources.add(src);
+    src.onended = () => { clipSources.delete(src); src.disconnect(); gain.disconnect(); panNode?.disconnect(); };
+    src.start();
+    return true;
   }
   function playTonerClip(name, o = {}) {
     const ready = TONER_CLIPS[name]?.filter(([url]) => clipBuffers.has(url.href));
@@ -332,6 +352,7 @@ export function createSound(level, opt = {}) {
     static: (o = {}) => burst({ vol: 0.12 * (o.vol ?? 1), dur: o.dur || 0.9, freq: 4200, q: 0.4, type: 'highpass', attack: 0.05 }),
     // something soft and wet, trodden flat: the heel, the burst of it, and what comes out at the sides
     squish: (o = {}) => {
+      if (playRecorded('squish', o)) return;
       const v = o.vol ?? 1;
       tone({ vol: 0.24 * v, pan: o.pan, dur: 0.13, freq: 130, to: 44, type: 'triangle' });
       burst({ vol: 0.22 * v, pan: o.pan, dur: 0.09, freq: 700, q: 0.7 });
@@ -342,6 +363,7 @@ export function createSound(level, opt = {}) {
     },
     // something bringing up what is in it: three heaves from low down, each higher and wetter than the last, and then it comes
     retch: (o = {}) => {
+      if (playRecorded('retch', o)) return;
       const v = o.vol ?? 1;
       for (let i = 0; i < 3; i++) {
         const at = i * 0.36;
