@@ -278,7 +278,13 @@ export function build(c) {
   // visitor's character is in the cage with the gate shut. The three wardens come and stand in a row in front of it, and
   // it sits down in the chair and starts work.
   let over=false;
+  const films=(shot)=>{
+    for(const [dx,dz] of [[-4.6,.65],[-4.6,-.65],[-3.6,.65]]){const p=c.toWorld(visitor.x+dx,visitor.z+dz);
+      if(c.world.roomAt(p.x,p.z)===c.rt)return {x:p.x,y:shot.y+2.55,z:p.z};}
+    return null;
+  };
   c.rt.takes=(shot)=>{
+    shot.from=films(shot);
     over=true;gateSolid.on=true;gate.rotation.y=0;
     const fig=shot.figure,n=patrol.count,from=Array.from({length:n},(_,i)=>patrol.where(i));
     const row=(i)=>({x:visitor.x-visitor.w/2-1.05,z:visitor.z+(i-(n-1)/2)*1.3});   // along the cage's open side (its gate is hard by the wall)
@@ -298,12 +304,6 @@ export function build(c) {
     };
   };
   // …filmed from the floor beyond the wardens, over their shoulders
-  c.rt.films=(shot)=>{
-    const at=c.toWorld(visitor.x,visitor.z);
-    for(const [dx,dz] of [[-4.6,.65],[-4.6,-.65],[-3.6,.65]]){const p=c.toWorld(visitor.x+dx,visitor.z+dz);
-      if(c.world.roomAt(p.x,p.z)===c.rt)return {x:p.x,y:shot.y+2.55,z:p.z,at:{x:at.x,y:shot.y+.95,z:at.z}};}
-    return null;
-  };
   c.tick((dt,t,me)=>{
     if(over)return;
     patrol.update(dt,t,me);

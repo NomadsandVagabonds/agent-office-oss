@@ -10,7 +10,6 @@
 // at the car only has it answer.
 import { Batch, drawText, ticks, WHITE } from '../kit.js';
 import { goesDown } from '../seam.js';
-import { placePickup } from '../hand.js';
 import { P } from '../bits.js';
 import { lawn, fallingFlat, brace, beam, car, daylight, WHITEWASH } from '../suburb.js';
 
@@ -63,6 +62,6 @@ export function build(c) {
     c.flat.box(mx - 0.25, 0, mz - 0.18, mx + 0.25, 1.5, mz + 0.18, [0.25, 0.27, 0.3], { skip: '-y' });
     c.mapped('park:pay', tex).quad([mx + 0.2, 0.85, mz - 0.185], [mx - 0.2, 0.85, mz - 0.185], [mx - 0.2, 1.4, mz - 0.185], [mx + 0.2, 1.4, mz - 0.185], WHITE);
     c.solid(mx - 0.25, mz - 0.18, mx + 0.25, mz + 0.18);
-    placePickup(c, 'opener', mx - 0.6, mz - 0.1, 0, { label: 'take the remote' }); }
+    c.leave('opener', mx - 0.6, mz - 0.1, { y: 0 }); }
   void R;
 }
