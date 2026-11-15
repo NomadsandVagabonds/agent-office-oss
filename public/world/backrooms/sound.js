@@ -164,6 +164,30 @@ export function createSound(level, opt = {}) {
       tone({ vol: 0.11 * (o.vol ?? 1), pan: o.pan, dur: 0.45, freq: 120, to: 92, type: 'sawtooth', attack: 0.01 });
       burst({ vol: 0.12 * (o.vol ?? 1), pan: o.pan, dur: 0.22, freq: 2900, q: 1.8, type: 'bandpass', attack: 0.003 });
     },
+    // blind echolocation click-pair from up in the ceiling tiles
+    sonar: (o = {}) => {
+      const f0 = 2850 + Math.random() * 550;
+      for (const [w, k] of [[0, 1], [0.048, 0.52]]) {
+        burst({ vol: 0.15 * k * (o.vol ?? 1), pan: o.pan, dur: 0.016, freq: f0 * (w ? 1.18 : 1), q: 8.5, type: 'bandpass', attack: 0.0008, when: w });
+        tone({ vol: 0.065 * k * (o.vol ?? 1), pan: o.pan, dur: 0.03, freq: 1450, to: 460, type: 'triangle', attack: 0.001, when: w });
+      }
+    },
+    // frantic accelerating echolocation lock-on rattle
+    sonarrattle: (o = {}) => {
+      const times = [0, 0.046, 0.084, 0.116, 0.142];
+      times.forEach((w, i) => {
+        burst({ vol: (0.12 + i * 0.014) * (o.vol ?? 1), pan: o.pan, dur: 0.015, freq: 2700 + i * 380, q: 9.5, type: 'bandpass', attack: 0.0008, when: w });
+        tone({ vol: 0.055 * (o.vol ?? 1), pan: o.pan, dur: 0.024, freq: 1550 + i * 160, to: 520, type: 'triangle', attack: 0.001, when: w });
+      });
+    },
+    // feral waste toner collapsing into a bubbling pool of glitch slime
+    dissolve: (o = {}) => {
+      tone({ vol: 0.15 * (o.vol ?? 1), pan: o.pan, dur: 0.9, freq: 210, to: 46, type: 'sawtooth', attack: 0.01 });
+      burst({ vol: 0.14 * (o.vol ?? 1), pan: o.pan, dur: 0.85, freq: 1650, q: 1.3, type: 'bandpass', attack: 0.02 });
+      for (let i = 0; i < 5; i++) {
+        tone({ vol: 0.09 * (o.vol ?? 1), pan: o.pan, dur: 0.12, freq: 190 + i * 28, to: 380 + Math.random() * 90, when: 0.06 + i * 0.14 });
+      }
+    },
     static: (o = {}) => burst({ vol: 0.12 * (o.vol ?? 1), dur: o.dur || 0.9, freq: 4200, q: 0.4, type: 'highpass', attack: 0.05 }),
   };
 

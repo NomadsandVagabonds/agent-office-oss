@@ -21,8 +21,8 @@ export function createWalk(env) {
   const doorOf = (id) => env.doors?.at(id) || null;
 
   const stand = (a, x, z) => W().free(x, z, a.r, { ghost: true }) && W().headroom(x, z) >= a.tall;
-  /** Rooms it will not go into: ones that fold space, and ones it could not stand up in. */
-  const shy = (a, rt) => !rt || rt.fold || rt.def.crawl || rt.def.H < a.tall + 0.05;
+  /** Rooms it will not go into: ones that fold space, and ones it could not stand up (or crawl) in. */
+  const shy = (a, rt) => !rt || rt.fold || (rt.def.crawl && a.tall > 0.75) || rt.def.H < a.tall + 0.05;
   /** What a doorway costs this walker (cast/paths.js): Infinity where it cannot go. */
   const cost = (a) => (d, from, to) => {
     const th = W().throats[d.link], door = doorOf(d.link);
