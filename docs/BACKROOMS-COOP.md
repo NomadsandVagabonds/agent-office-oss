@@ -10,7 +10,7 @@ Deployment: `ed437082-8346-4085-9846-c8b3cba30be7`, verified 15 November 2026.
 ## Curated tour (prepared, not live)
 
 **The long way round** adds a host-selectable five-floor tour, including Dispatch,
-Return Plenum, Suburbia, MECHA and Last Light. It schedules 26 feature rooms and
+Return Plenum, Suburbia, MECHA and Last Light. It schedules 27 feature rooms and
 all six cast types with 72–79% ordinary maze per floor. Full content and test
 limits are in [the showcase notes](BACKROOMS-COOP-SHOWCASE.md).
 

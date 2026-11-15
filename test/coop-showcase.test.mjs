@@ -7,7 +7,7 @@ import {ARCHETYPES,lessons,isBig,roomDistances,lessonsOf} from '../public/world/
 import {castFor,CAST,homeFor} from '../public/world/backrooms/cast.js';
 import {coopSupplies} from '../public/world/coop/supplies.js';
 
-test('showcase guarantees its 26 discoveries, all six cast types and a quiet connected maze between them',()=>{
+test('showcase guarantees its 27 discoveries, all six cast types and a quiet connected maze between them',()=>{
  const v=coopVisit('private-invite-a',{route:'showcase'}),known=new Set(['lean']),seen=new Set();
  assert.equal(v.seed,SHOWCASE_SEED);assert.equal(v.depths,5);assert.equal(v.floors[2].theme,'suburb');
  for(let i=0;i<v.depths;i++){
@@ -27,10 +27,11 @@ test('showcase guarantees its 26 discoveries, all six cast types and a quiet con
   for(const m of castFor(v,i)){const def=CAST.find(c=>c.id===m.id);if(def.home==='room')assert.notEqual(homeFor(l,def),null,`${m.id} has an actual home`);}
   const supplies=coopSupplies(l,2,v);assert.ok(supplies.filter(s=>s.type==='battery').length>=4);assert.ok(supplies.filter(s=>s.type==='snack').length>=2);
   assert.equal(l.exit.way==='wall',i===v.depths-1);
-  assert.equal(!!l.pursuer,i===v.depths-1,'pirate is saved for the finale');
+  assert.equal(!!l.pursuer,SHOWCASE[i].members.includes('pirate'),'pirate spawn follows the authored schedule');
+  if(i===0){assert.ok(special.some(r=>r.arch==='party'));assert.ok(special.some(r=>r.arch==='cutouts'));assert.ok(castFor(v,0).some(m=>m.id==='pirate'));}
   lessonsOf(l).forEach(x=>known.add(x));
  }
- assert.equal(seen.size,26);assert.deepEqual(castFor(v).map(m=>m.id).sort(),CAST.map(m=>m.id).sort());
+ assert.equal(seen.size,27);assert.deepEqual([...new Set(castFor(v).map(m=>m.id))].sort(),CAST.map(m=>m.id).sort());
 });
 test('separate invites produce the same showcase including Suburbia; normal visits keep their random dealer',()=>{
  const a=coopVisit('invite-a',{route:'showcase',slice:true}),b=coopVisit('invite-b',{route:'showcase'});

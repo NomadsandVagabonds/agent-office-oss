@@ -11,18 +11,20 @@ Prepared locally after live build `bb4551a`; not deployed yet.
 
 | Part | Place | Discoveries | Roaming / room cast |
 | --- | --- | --- | --- |
-| 1 | Yellow offices | Cardboard colleagues, chairs, ceiling meeting, Blackout Bay, Dispatch and its GPU warehouse | Shadow, night porter |
+| 1 | Yellow offices | Moving cardboard colleagues, cake/party room, chairs, ceiling meeting, Blackout Bay, Dispatch and its GPU warehouse | Pirate, night porter |
 | 2 | Unfinished offices | Quiet Zone, Mailroom, Copiers, keyboard floor, Return Plenum | Waste Toner |
 | 3 | Suburbia | Show Home, The Close, Back Garden, lemonade stand, Model Village, Walk-in | Desk moth |
 | 4 | Executive offices | Team photo, phone, vending, Cover, MECHA | Other Door |
-| 5 | Night offices | Stress Pool, Many Doors, ceiling plants, Last Light, Unsure Hall | Pirate |
+| 5 | Night offices | Stress Pool, Many Doors, ceiling plants, Last Light, Unsure Hall | Pirate, shadow |
 
 The room residents are still present: stand-ins, plenum creature, MECHA warden,
 lamplighter, and the neighbourhood's inhabitants. The roster does not put all
-six roaming/room cast types on one floor. The pirate first appears in the
-final part; Suburbia is a breather with the guide moth.
+six roaming/room cast types on one floor. The pirate appears on floor 1 and
+returns in the finale. The shadow moves to the final part to keep the opening from stacking both threats. Suburbia is a
+breather with the guide moth. Floor 1 has six features and remains 73% ordinary
+maze; the existing cutout encounter advances while neither visitor is watching.
 
-There are **26 different feature rooms and 128 rooms total**. Ordinary maze
+There are **27 different feature rooms and 130 rooms total**. Ordinary maze
 accounts for 72–79% of each floor. No two feature rooms share a doorway, and
 there is at most one large set piece on each floor. Graph reachability, exit
 distance, and earlier lessons are checked. Blackout Bay comes before Last Light;

@@ -13,7 +13,7 @@ room types, ordinary maze connectors, six cast types, and room residents are
 eligible. Suburbia is explicitly included as the third part of a private visit.
 The existing seeded planner still chooses a subset of rooms and cast for each
 run. **Eligible does not mean every room and creature appears in one visit.**
-An optional curated tour is now prepared: **The long way round**, with 26
+An optional curated tour is now prepared: **The long way round**, with 27
 features and all six cast types across five floors. See
 [the showcase notes](BACKROOMS-COOP-SHOWCASE.md). This follow-up is not live yet;
 the current Railway release still has only the random visit selector.
