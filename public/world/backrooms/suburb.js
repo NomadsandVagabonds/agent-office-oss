@@ -21,6 +21,7 @@ import { Batch, lin, ticks, WHITE } from './kit.js';
 import { makeCutout } from './cutout.js';
 import { TILE } from './gen.js';
 import { FENCE, FLAT } from './quiet.js';
+import { LEAN, REFUSE, lean, pressing } from './marks.js';
 
 const P = (g, col, x, y, w, h) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
 const PPM = 40;                                    // painted pixels to the metre, as everywhere down here
@@ -109,7 +110,7 @@ function mall(g, w, h, k) {
   const names = k ? ['STOR', 'SHOPE', 'OPEN OPEN'] : ['SHOP', 'STORE 2', 'SHOP'];
   for (let i = 0; i < 3; i++) {
     const x = i * 32; line(x, 10, x, 34); g.strokeRect(x + 4.5, 13.5, 23, 6); g.strokeRect(x + 4.5, 22.5, 10, 11); g.strokeRect(x + 17.5, 23.5, 10, 7);
-    g.font = '5px ui-monospace, Menlo, Consolas, monospace'; g.textAlign = 'center'; g.fillText(names[i], x + 16, 18.5);
+    garble(g, names[i], x + 4, 14, 24, 6, { color: '#2c3f5c', size: 5, weight: 400, mess: 0.5 }, i + k * 3 + 1);
   }
   for (let x = 6; x < w; x += 12) line(x, 38, x - 4, 47);
   if (k) { line(80, 34, 80, 2); line(80, 2, 86, 2); g.strokeRect(84.5, 2.5, 4, 2); }
@@ -145,6 +146,33 @@ export function setArt(kit) {
 }
 /** The batch everything cut from that sheet is drawn into: one mesh a room. */
 export const cutBatch = (c) => c.mapped('suburb:set', setArt(c.kit).texture, { cutout: true });
+
+/**
+ * Lettering by something that has seen lettering. Every letter is nearly a letter: some are the wrong way round or the
+ * wrong way up, some have slid into the next, one is its neighbour, one is two. Drawn a glyph at a time into (x, y, w, h).
+ * The same text and seed is the same mess. opt: { color, size, weight, mess: 0…1 (how far gone) }
+ */
+export function garble(g, text, x, y, w, h, opt = {}, seed = 1) {
+  let k = (seed * 2654435761) >>> 0; const r = () => { k = (Math.imul(k, 1664525) + 1013904223) >>> 0; return k / 4294967296; };
+  const chars = String(text).split(''), mess = opt.mess ?? 0.5, twin = { E: 'F', O: 'Q', I: 'L', A: 'V', M: 'W', N: 'H', S: '5', R: 'P', T: 'I', P: 'R', C: 'G', U: 'V', D: 'O', L: 'I', B: '8' };
+  let size = opt.size || Math.floor(h * 0.7);
+  const font = (px) => `${opt.weight || 700} ${px}px ui-monospace, Menlo, Consolas, monospace`;
+  g.font = font(size); while (size > 5 && g.measureText('M').width * chars.length > w - 6) g.font = font(--size);
+  const cw = g.measureText('M').width, x0 = x + (w - cw * chars.length) / 2 + cw / 2;
+  g.fillStyle = opt.color || '#1c1812'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  chars.forEach((ch, i) => {
+    if (ch === ' ') { r(); r(); return; }
+    const roll = r(), gone = roll < mess, kind = Math.floor(r() * 7), cx = x0 + i * cw, cy = y + h / 2 + (gone ? (r() - 0.5) * size * 0.25 : 0);
+    g.save(); g.translate(cx, cy);
+    if (!gone) { g.fillText(ch, 0, 0.5); g.restore(); return; }
+    if (kind === 0) g.scale(-1, 1); else if (kind === 1) g.scale(1, -1); else if (kind === 2) g.rotate((r() - 0.5) * 0.7); else if (kind === 3) g.scale(0.55, 1.25);
+    const what = kind === 4 ? twin[ch] || ch : kind === 5 && chars[i + 1] && chars[i + 1] !== ' ' ? chars[i + 1] : ch;
+    g.fillText(what, 0, 0.5);
+    if (kind === 6) { g.globalAlpha = 0.8; g.fillText(ch, cw * 0.38, size * 0.12); g.globalAlpha = 1; }                    // two of it, run together
+    if (kind === 5) g.fillRect(-cw * 0.5, size * 0.18, cw * 1.3, Math.max(1, size * 0.09));                                  // a stroke that belongs to nothing
+    g.restore();
+  });
+}
 
 /* ---- pieces ------------------------------------------------------------------------------------------------- */
 
@@ -240,17 +268,17 @@ export function fallingFlat(c, ax, az, bx, bz, front, opt = {}) {
   c.reserve(mx, mz, len / 2 + 0.2);
   const tip = (a) => { if (Math.abs(ux) > 0.5) g.rotation.x = a * Math.sign(nz); else g.rotation.z = -a * Math.sign(nx); }, say = () => { const w = c.toWorld(mx, mz); c.env.play?.('shuffle', w.x, w.z, 7); };
   let held = 0, fall = 0, wob = 0;
-  const state = { down: false };
+  const state = { down: false }, w0 = c.toWorld(mx, mz), w1 = c.toWorld(mx + nx, mz + nz), nw = [w1.x - w0.x, w1.z - w0.z];
   c.tick((dt, t, me) => {
     if (fall >= 1) return;
     if (fall > 0) { fall = Math.min(1, fall + dt * 2.4); tip((Math.PI / 2) * fall * fall); if (fall >= 1) { state.down = true; say(); } return; }
     if (wob > 0) { wob -= dt; tip(wob > 0 ? Math.sin(wob * 44) * 0.05 * wob : 0); }
     if (!me.inside) return;
-    const rx = me.x - mx, rz = me.z - mz, off = rx * nx + rz * nz, toward = (Math.sin(me.yaw) * nx + Math.cos(me.yaw) * nz) * Math.sign(off);
-    held = Math.abs(rx * ux + rz * uz) < len / 2 && Math.abs(off) < 0.55 && toward > 0.6 ? held + dt : 0;
-    if (held < 0.8) return;
-    held = 0;
-    if (off < 0) { fall = 0.001; col.on = false; say(); } else if (wob <= 0) { wob = 0.4; say(); }
+    // the same lean as the wall that gives (marks.js): pressed against it, still pushing, getting nowhere
+    const rx = me.x - mx, rz = me.z - mz, off = rx * nx + rz * nz, wish = me.world ? me.world.wishX * nw[0] + me.world.wishZ * nw[1] : 0;
+    held = lean(held, dt, pressing(Math.abs(off), rx * ux + rz * uz, len, -wish * Math.sign(off), me.speed));
+    if (off >= 0) { if (held >= REFUSE && wob <= 0) { wob = 0.4; held = 0; say(); } return; }
+    if (held >= LEAN) { held = 0; fall = 0.001; col.on = false; say(); }
   });
   return state;
 }
@@ -392,7 +420,10 @@ export function roller(c, side, at, opt = {}) {
   c.tick((dt) => { if (!going || up >= 1) return; up = Math.min(1, up + dt * 0.7); door.position.y = up * (h - 0.25); door.scale.y = 1 - up * 0.86; });
   const f = c.wallAt(side, at, 0.6), it = { x: f.x, z: f.z, open() { going = true; const w2 = c.toWorld(f.x, f.z); c.env.play?.('shuffle', w2.x, w2.z, 9); } };
   (c.rt.rollers ||= []).push(it);
-  c.use({ x: f.x, z: f.z, r: 1.4, label: 'try the door', when: () => !going, use: () => { const w2 = c.toWorld(f.x, f.z); c.env.play?.('shuffle', w2.x, w2.z, 6); door.position.y = 0.03; setTimeout(() => { if (!going) door.position.y = 0; }, 120); } });
+  // with the remote in the hand, E from anywhere near opens the nearest one that is still shut (the item is the lead's: `opener`)
+  const has = () => c.env.inventory?.held?.()?.type === 'opener';
+  c.use({ x: f.x, z: f.z, r: 12, cone: -1, label: 'open the door', when: () => has() && !going, use: () => it.open() });
+  c.use({ x: f.x, z: f.z, r: 1.4, label: 'try the door', when: () => !going && !has(), use: () => { const w2 = c.toWorld(f.x, f.z); c.env.play?.('shuffle', w2.x, w2.z, 6); door.position.y = 0.03; setTimeout(() => { if (!going) door.position.y = 0; }, 120); } });
   return it;
 }
 
@@ -404,14 +435,15 @@ function flamingoAt(c, x, z, turn) {
   c.shadow(x, z, 0.3, 0.3, 0.3);
 }
 /** A car, as far down in the lawn as its door handles, its lamps still on. Along x, or along z. */
-export function car(c, x, z, along = true, rgb = [0.6, 0.52, 0.38], lift = 0) {
-  const B = (u0, y0, v0, u1, y1, v1, col, o) => (along ? c.flat.box(x + u0, y0 + lift, z + v0, x + u1, y1 + lift, z + v1, col, lift ? {} : o) : c.flat.box(x + v0, y0 + lift, z + u0, x + v1, y1 + lift, z + u1, col, lift ? {} : o));
+export function car(c, x, z, along = true, rgb = [0.6, 0.52, 0.38], lift = 0, into = null) {
+  const body = into || c.flat;
+  const B = (u0, y0, v0, u1, y1, v1, col, o) => (along ? body.box(x + u0, y0 + lift, z + v0, x + u1, y1 + lift, z + v1, col, lift ? {} : o) : body.box(x + v0, y0 + lift, z + u0, x + v1, y1 + lift, z + u1, col, lift ? {} : o));
   if (lift) for (const u of [-1.5, 1.1]) for (const v of [-0.88, 0.7]) B(u, -lift, v, u + 0.55, 0.12, v + 0.18, [0.05, 0.05, 0.06]);
   B(-2.1, 0, -0.85, 2.1, 0.42, 0.85, rgb, { skip: '-y' }); B(-2.1, 0.16, -0.86, 2.1, 0.3, 0.86, [0.36, 0.22, 0.12]);          // the body, and the strip of wood down its side
   B(-1.25, 0.42, -0.74, 0.75, 0.86, 0.74, [0.07, 0.09, 0.11]); B(-1.3, 0.86, -0.78, 0.8, 0.93, 0.78, rgb);                    // glass all round, a roof
   for (const u of [-1.28, -0.28, 0.72]) for (const v of [-0.76, 0.72]) B(u, 0.42, v, u + 0.07, 0.86, v + 0.04, rgb);
   B(-0.9, 0.93, -0.6, 0.4, 0.97, -0.55, [0.6, 0.6, 0.6]); B(-0.9, 0.93, 0.55, 0.4, 0.97, 0.6, [0.6, 0.6, 0.6]);               // somewhere to put the luggage
-  const glow = c.shining('suburb:lamp', c.kit.tex.white(), 1.6, lin('#ffe9a8'));
+  const glow = into || c.shining('suburb:lamp', c.kit.tex.white(), 1.6, lin('#ffe9a8'));
   for (const v of [-0.6, 0.6]) { const p = along ? [x + 2.105, z + v] : [x + v, z + 2.105], q = 0.11; const y = 0.22 + lift; if (along) sheet(glow, [p[0], y, p[1] + q], [p[0], y, p[1] - q], [p[0], y + 0.14, p[1] - q], [p[0], y + 0.14, p[1] + q]); else sheet(glow, [p[0] - q, y, p[1]], [p[0] + q, y, p[1]], [p[0] + q, y + 0.14, p[1]], [p[0] - q, y + 0.14, p[1]]); }
   c.light(x + (along ? 2.5 : 0), 0.35 + lift, z + (along ? 0 : 2.5), '#ffe9a8', 0.5, { k: 1.1, far: 4 });
   if (along) c.solid(x - 2.1, z - 0.85, x + 2.1, z + 0.85); else c.solid(x - 0.85, z - 2.1, x + 0.85, z + 2.1);

@@ -8,7 +8,9 @@
 // It is meant to be this floor's own way down (you get in; it goes down
 // through the tarmac with you in it), which is seam.js's to do. Until then E
 // at the car only has it answer.
-import { drawText, ticks, WHITE } from '../kit.js';
+import { Batch, drawText, ticks, WHITE } from '../kit.js';
+import { goesDown } from '../seam.js';
+import { placePickup } from '../hand.js';
 import { P } from '../bits.js';
 import { lawn, fallingFlat, brace, beam, car, daylight, WHITEWASH } from '../suburb.js';
 
@@ -34,11 +36,25 @@ export function build(c) {
     brace(c, fx - face * 0.02, z, -face, 0, 0.6, 0.8);
   }
   if (spot) {
-    car(c, spot.x, spot.z, false, [0.6, 0.52, 0.38], 0.32);
-    c.flat.box(spot.x - 0.86 - 0.9, 0.5, spot.z + 0.05, spot.x - 0.86, 1.2, spot.z + 0.1, [0.6, 0.52, 0.38]);                    // the driver's door, open
-    const w = () => c.toWorld(spot.x, spot.z);
-    c.use({ x: spot.x - 1.3, z: spot.z + 0.3, r: 1.5, label: 'get in', use: () => { const q = w(); c.env.play?.('shuffle', q.x, q.z, 8); c.env.interfere?.(0.5); } });
-    c.rt.wayDown = { x: spot.x, z: spot.z };                                                                                    // for seam.js, when the car is the way down
+    // (in a batch of its own, so that it can go)
+    const b = new Batch(); car(c, spot.x, spot.z, false, [0.6, 0.52, 0.38], 0.32, b);
+    b.box(spot.x - 0.86 - 0.9, 0.5, spot.z + 0.05, spot.x - 0.86, 1.2, spot.z + 0.1, [0.6, 0.52, 0.38]);                          // the driver's door, open
+    const body = c.dynamic(b, { pivot: [spot.x, 0, spot.z] }), w = c.toWorld(spot.x, spot.z), SINK = 2.6;
+    // Get in, and it goes down through the tarmac with you in it: a second way down from this part, where there is a part
+    // below (index.js `descend`). On the last part, and for anybody it will not take, it is a car: it answers and stays.
+    let going = 0;
+    c.use({ x: spot.x - 1.3, z: spot.z + 0.3, r: 1.6, label: 'get in', when: () => !going, use: () => {
+      c.env.play?.('shuffle', w.x, w.z, 8); c.env.interfere?.(0.5);
+      if (goesDown(c.level.exit.way) && c.env.hold && c.env.descend) { c.env.hold(true); going = 0.001; }
+    } });
+    c.tick((dt, t, me) => {
+      if (!going || going >= SINK + 1) return;
+      going += dt; const k = Math.min(1, going / SINK);
+      body.position.y = -1.7 * k * k; body.rotation.x = 0.06 * Math.sin(going * 9) * (1 - k);
+      if (me.world) me.world.sinkTo = 1.1 * k;
+      c.env.interfere?.(0.3 + 0.6 * k);
+      if (going >= SINK) { going = SINK + 1; if (!c.env.descend({ x: w.x, z: w.z })) { body.position.y = 0; going = 0; } c.env.hold(false); }
+    });
   }
   // lamp posts: timber, and they go on up
   for (const [x, z] of [[x0 + 0.4, 0], [x1 - 0.4, 0]]) { beam(c.flat, [x, 0, z], [x, H, z], 0.12); c.hole(x - 0.3, z - 0.3); c.solid(x - 0.08, z - 0.08, x + 0.08, z + 0.08); c.flat.box(x - 0.5, 2.45, z - 0.12, x + 0.5, 2.55, z + 0.12, [0.74, 0.6, 0.4]); }
@@ -46,6 +62,7 @@ export function build(c) {
   { const mx = x1 - 0.5, mz = z1 - 0.2, tex = kit.tex.custom('park:pay:' + p.pay.join('|'), 64, 64, (g, w, h) => { P(g, '#f2c230', 0, 0, w, h); P(g, '#1d1c1a', 4, 4, w - 8, 18); drawText(g, [p.pay[0]], 4, 4, w - 8, 18, { color: '#f2c230', size: 11 }); drawText(g, p.pay.slice(1), 2, 24, w - 4, h - 26, { color: '#1d1c1a', size: 8, pad: 6 }); }, { clamp: true });
     c.flat.box(mx - 0.25, 0, mz - 0.18, mx + 0.25, 1.5, mz + 0.18, [0.25, 0.27, 0.3], { skip: '-y' });
     c.mapped('park:pay', tex).quad([mx + 0.2, 0.85, mz - 0.185], [mx - 0.2, 0.85, mz - 0.185], [mx - 0.2, 1.4, mz - 0.185], [mx + 0.2, 1.4, mz - 0.185], WHITE);
-    c.solid(mx - 0.25, mz - 0.18, mx + 0.25, mz + 0.18); }
+    c.solid(mx - 0.25, mz - 0.18, mx + 0.25, mz + 0.18);
+    placePickup(c, 'opener', mx - 0.6, mz - 0.1, 0, { label: 'take the remote' }); }
   void R;
 }

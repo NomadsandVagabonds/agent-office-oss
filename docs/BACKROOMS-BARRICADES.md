@@ -2,8 +2,9 @@
 
 Branch: `codex/backrooms-barricades`, based on working branch `83e658f`.
 
-This is opt-in: `enterBackrooms(office, { barricades: true })`. The office and
-BlockRooms production entry points do not enable it. No new physics dependency.
+**On for everybody since 15 Nov, by the owner's word.** `enterBackrooms(office, { barricades: false })`
+turns it off (`&barricades=0` on the dev page, `?debug&barricades=0` on the site). What follows was
+written while it was opt-in. No new physics dependency.
 
 ## Review
 

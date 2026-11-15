@@ -11,6 +11,7 @@
 // Where it all stands is rooms/show-home/layout.js, which the deck asks too.
 import { atlas, drawText, ticks, WHITE } from '../kit.js';
 import { P } from '../bits.js';
+import { placePickup } from '../hand.js';
 import { sunk, SUNK } from '../quiet.js';
 import { lawn, fence, flat, sheet, upright, beam, brace, daylight, onWall, postbox, CARPET, TIMBER, WHITEWASH } from '../suburb.js';
 import { HOME, homePlan } from './show-home/layout.js';
@@ -99,6 +100,7 @@ export function build(c) {
   const desk = { x: 1.3, z: mid - 0.35 };
   for (const q of sunk(desk.x, desk.z, 2).props) if (c.hasProp(q.type)) c.prop(q.type, q.x, q.z, { y: q.y - SUNK, rot: q.rot, solid: q.type === 'desk' || q.type === 'chair' });
   c.light(desk.x, 1.15, desk.z + 0.5, '#a9d0ff', 0.35, { k: 1, far: 3.5 });
+  placePickup(c, 'opener', desk.x + 0.75, desk.z + 0.05, 0.66, { label: 'take the remote' });               // on the desk: the thing that opens the garage doors
 
   /* the garden: a fence with a gate left open, stones up to the step, a tree, a board, a letter box with your name on it */
   const fz = h.fenceZ, gx = dx;

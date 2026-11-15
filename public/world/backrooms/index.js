@@ -102,7 +102,7 @@ async function buildersFor(level) {
  *        brand, share, also, home, anew: handed to the card at the end (scorecard.js), for a page that is not the office
  *        where: a place name, if the page was told one (the site's host says a city): the second line of the banner near the landing (banner.js)
  *        inventory: false for a visit without pockets, hearts or a battery that runs down · dev.supplies: one of everything where you land
- *        barricades: opt-in movable furniture prototype · dev.barricadeStudy: a review set at the landing (docs/BACKROOMS-BARRICADES.md)
+ *        barricades: furniture that can be dragged and put in a creature's way (Codex's; on, by the owner's word, unless this is false) · dev.barricadeStudy: a review set at the landing (docs/BACKROOMS-BARRICADES.md)
  * @returns {Promise<{reason:'exit'|'caught'|'battery'|'quit', kept:{card:boolean, coins:number[], batteries:number, told?:Promise<void>}, run:object, card:object|null}>}
  *          run: what the visit came to (tally.js) · card: the scorecard, once put down (opt.scorecard === false: none) · kept: what you brought out (nothing,
  *          unless you left by the door); kept.told settles once the office has been told of it
@@ -212,7 +212,7 @@ async function visit(office, opt) {
       else if (k === 'm') changeSetting('mute', !sound.muted);
     } });
   input.state.sensitivity = settings.sensitivity; input.state.invertY = settings.invertY;
-  menu = createMenu({ host: hud.el, settings, furniture: opt.barricades === true, onRequestOpen: () => setPaused(true), onResume: resume,
+  menu = createMenu({ host: hud.el, settings, furniture: opt.barricades !== false, onRequestOpen: () => setPaused(true), onResume: resume,
     onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting });
   // Six pockets, four hearts, and a camcorder battery that runs down (inventory.js, survival.js): the visit's, not any
   // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.
@@ -271,14 +271,14 @@ async function visit(office, opt) {
     const kit = createKit();
     const f = { level, kit, world: null, player: null, env: null };
     const builders = await buildersFor(level);
-    if (opt.barricades === true && opt.dev?.barricadeStudy && level === first) {
+    if (opt.barricades !== false && opt.dev?.barricadeStudy && level === first) {
       const { prepareFurnitureStudy } = await import('./furniture-study.js');
       prepareFurnitureStudy(level, builders);
     }
     const env = f.env = {
       level, cast, who, kit, sound, hud, vhs, renderer, builders, catalogue: await loadCatalogue(kit), Avatar, layout,
       plan: office.net?.state?.world?.plan || {}, visit: plan, carry,
-      barricadesEnabled: opt.barricades === true,
+      barricadesEnabled: opt.barricades !== false,
       where: cleanWhere(opt.where),             // a place name the page was told (the site's host says a city): the banner's second line, and nothing else's
       player: null, world: null, pursuer: null,
       hatches: new Map(),                       // room id → { drop() }: where a door in a floor lets you out

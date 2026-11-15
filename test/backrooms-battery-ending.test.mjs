@@ -97,7 +97,8 @@ async function visit(t) {
   const prepared = new Promise(resolve => { ready = resolve; });
   const finished = enterBackrooms({ stage: { renderer: { domElement: {}, setRenderTarget: noop }, quality: {}, size: { w: 800, h: 600 },
     setView: noop, onFrame(fn) { onFrame = fn; return () => { onFrame = null; }; },
-  } }, { name: 'Test', seed: 'battery-regression', onReady: ready });
+  // (the floor here is a stand-in with no furniture in it: nothing to drag, so that is left out)
+  } }, { name: 'Test', seed: 'battery-regression', barricades: false, onReady: ready });
   const handle = await prepared;
   const tick = dt => onFrame?.(dt);
   tick(1.3);
