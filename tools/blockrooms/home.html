@@ -58,28 +58,50 @@
   <i class="float f18" data-sprite="plant" data-fx="sway" data-scale="4"></i>
   <i class="float f19" data-sprite="envelope" data-fx="spin" data-scale="3"></i>
   <i class="float f20" data-sprite="shoe" data-fx="bob" data-scale="3"></i>
+  <i class="float f21" data-sprite="pinkslip" data-fx="spin" data-scale="3"></i>
+  <i class="float f22" data-sprite="robot_oil" data-fx="bob" data-scale="3"></i>
   <h1><canvas id="logo" role="img" aria-label="BlockRooms"></canvas><span class="hide">BlockRooms</span></h1>
   <p class="tagline">The Unofficial Home Page of Paranormal Office Phenomena</p>
-  <div class="marquee" aria-hidden="true"><span>*** WELCOME *** NEW SCREENSHOTS *** SIGN THE GUESTBOOK ***&nbsp;</span></div>
+  <div class="marquee" aria-hidden="true"><span>*** WELCOME TO MY HOME PAGE *** NEW SCREENSHOTS *** PLEASE SIGN THE GUESTBOOK *** DO NOT RUN IN THE CORRIDORS ***&nbsp;</span></div>
 </header>
 
 <hr class="rainbow">
 <section class="zone paper" id="enter">
+  <div class="hanger" id="ceiling-carl" tabindex="0" role="button" aria-label="Figure in ceiling tile">
+    <i data-sprite="ceiling_carl" data-scale="4"></i>
+  </div>
+  <div class="wall-lurk" aria-hidden="true"><i data-sprite="wall_cat" data-scale="4"></i></div>
   <i class="side l1" data-sprite="plant" data-scale="6"></i>
   <i class="side l2" data-sprite="cooler" data-scale="6"></i>
   <i class="side r1" data-sprite="tube" data-scale="6"></i>
   <i class="side r2" data-sprite="door" data-scale="6"></i>
-  <p class="arrows" aria-hidden="true"><i data-sprite="arrow" data-fx="bob" data-scale="4"></i><i data-sprite="arrow" data-fx="bob" data-scale="4" data-phase=".3"></i><i data-sprite="arrow" data-fx="bob" data-scale="4" data-phase=".6"></i></p>
-  <a class="door" href="./play" id="door">
-    <span class="exitsign">EXIT</span>
-    <span class="doorway"><span class="leaf"></span></span>
-    <span class="enter">ENTER</span>
-  </a>
+
+  <div class="door-stage">
+    <table class="mini-box">
+      <tr><th class="navy">EMPLOYEE OF THE MONTH</th></tr>
+      <tr><td><i data-sprite="robot_oil" data-scale="3"></i><br><b>Coral Tapir</b><br><small>October 1994</small></td></tr>
+    </table>
+
+    <div class="door-col">
+      <p class="arrows" aria-hidden="true"><i data-sprite="arrow" data-fx="bob" data-scale="4"></i><i data-sprite="arrow" data-fx="bob" data-scale="4" data-phase=".3"></i><i data-sprite="arrow" data-fx="bob" data-scale="4" data-phase=".6"></i></p>
+      <a class="door" href="./play" id="door">
+        <span class="exitsign"><span class="ex">EX</span>IT</span>
+        <span class="doorway"><span class="leaf"></span></span>
+        <span class="enter">ENTER</span>
+      </a>
+    </div>
+
+    <table class="mini-box">
+      <tr><th class="maroon">FUN COMMITTEE</th></tr>
+      <tr><td><i data-sprite="fun_duo" data-scale="3"></i><br><b>Friday Cake</b><br><small>3:00 PM &middot; Break Room</small></td></tr>
+    </table>
+  </div>
+
   <form class="signin" id="signin">
     <label for="name">NAME:</label>
     <input id="name" type="text" maxlength="16" size="17" autocomplete="nickname" autocapitalize="words" spellcheck="false">
     <button type="button" id="reroll">Random</button>
-    <span class="says" id="name-says"></span>
+    <span class="says" id="name-says"></span><br>
     <label for="message">MESSAGE:</label>
     <input id="message" type="text" maxlength="60" size="34" autocomplete="off">
     <span class="says" id="message-says"></span>
@@ -105,6 +127,8 @@
   <div class="site">
     <span class="slot" data-slot="0"><i id="roamer" data-sprite="digger" data-scale="5"></i></span>
     <p class="sign s1">UNDER<br>CONSTRUCTION</p>
+    <i data-sprite="warden" data-scale="4"></i>
+    <p class="sign s2">NO<br>RUNNING</p>
     <i data-sprite="cone" data-scale="4"></i>
     <p class="sign s3">CAUTION<br>WET FLOOR</p>
     <i data-sprite="cone" data-fx="blink" data-scale="4"></i>
@@ -117,32 +141,120 @@
   <div class="cols">
     <div class="panel">
       <h2><i data-sprite="floppy" data-scale="2"></i> About</h2>
-      <p>This page documents paranormal office phenomena.</p>
-      <p>BlockRooms is a game. You go in with a camcorder. Find the way out before the battery runs out. The building is different every time.</p>
+      <p>Hi, my name is <b>Carl</b>. I work in Facilities &amp; Toner on Sub-Level B2. Management says the floors below B2 are not on the building lease, so I made this page on my lunch break to keep track of them.</p>
+      <p><i>Nov '98 update:</i> Everything below my cardigan is in the drywall outside Room 14 now, so I have plenty of time to look after the page and the Webring. Take a camcorder and spare batteries &mdash; the rooms are not in the same place twice.</p>
       <p class="center"><i data-sprite="standee" data-scale="4" id="standee"></i></p>
     </div>
     <div class="panel">
       <h2><span class="new">NEW!</span> What's new</h2>
+      <p class="center"><i data-sprite="tetris_cube" data-scale="3"></i></p>
       <ul class="news">
+        <li><span class="new">NEW!</span> Cubicles in 5A</li>
+        <li><span class="new">NEW!</span> Auditorium</li>
+        <li><span class="new">NEW!</span> People in the walls</li>
         <li><span class="new">NEW!</span> Torch can be taped to the camcorder</li>
-        <li><span class="new">NEW!</span> Paper burns</li>
-        <li><span class="new">NEW!</span> Training floor</li>
-        <li><span class="new">NEW!</span> Guestbook and high scores</li>
+        <li>Paper burns</li>
+        <li>Training floor</li>
+        <li>Guestbook and high scores</li>
       </ul>
       <span class="slot" data-slot="3"></span>
     </div>
+  </div>
+
+  <div class="panel roster-wrap">
+    <h2>Staff</h2>
+    <table class="roster">
+      <thead>
+        <tr><th>Picture</th><th>Name</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mug"><i data-sprite="mascot" data-scale="3"></i></td>
+          <td><b>The Mascot</b><br><small>Reception</small></td>
+          <td>Holds a spare keycard. Only moves when you are not looking.</td>
+        </tr>
+        <tr>
+          <td class="mug"><i data-sprite="porter" data-scale="3"></i></td>
+          <td><b>Night Porter</b><br><small>Housekeeping</small></td>
+          <td>Mops the halls. Leave his yellow bucket alone.</td>
+        </tr>
+        <tr>
+          <td class="mug"><i data-sprite="shadow" data-scale="3"></i></td>
+          <td><b>The Shadow</b><br><small>Corridors</small></td>
+          <td>Stands in doorways. Keep your eyes down when it is near.</td>
+        </tr>
+        <tr>
+          <td class="mug"><i data-sprite="moth" data-scale="3"></i></td>
+          <td><b>Desk Moth</b><br><small>Lighting</small></td>
+          <td>Waits on the ceiling lights near the stairs.</td>
+        </tr>
+        <tr>
+          <td class="mug"><i data-sprite="standee" data-scale="3"></i></td>
+          <td><b>Cardboard Colleagues</b><br><small>Upstairs</small></td>
+          <td>Cut-outs from the main office. Follow behind when unwatched.</td>
+        </tr>
+        <tr>
+          <td class="mug"><i data-sprite="jensen_slip" data-scale="3"></i></td>
+          <td><b>Consultants</b><br><small>Audit Pod</small></td>
+          <td>Hand out pink redundancy forms.</td>
+        </tr>
+        <tr>
+          <td class="mug"><i data-sprite="granny_shred" data-scale="3"></i></td>
+          <td><b>Gladys</b><br><small>Filing</small></td>
+          <td>Takes paper and pink forms for the shredder.</td>
+        </tr>
+        <tr>
+          <td class="mug"><i data-sprite="fun_duo" data-scale="2"></i></td>
+          <td><b>Fun Committee</b><br><small>Break Room</small></td>
+          <td>Bring a red balloon if you go in.</td>
+        </tr>
+        <tr>
+          <td class="mug"><i data-sprite="warden" data-scale="3"></i></td>
+          <td><b>Floor Warden</b><br><small>Safety Corridor</small></td>
+          <td>Walk in the corridor. No running.</td>
+        </tr>
+        <tr>
+          <td class="mug"><i data-sprite="trunk_line" data-scale="3"></i></td>
+          <td><b>Trunk Line</b><br><small>Telecoms</small></td>
+          <td>Hangs from open ceiling tiles. Cannot open fire doors.</td>
+        </tr>
+        <tr>
+          <td class="mug"><i data-sprite="stand_in" data-scale="3"></i></td>
+          <td><b>Stand-Ins</b><br><small>Blackout Bay</small></td>
+          <td>Wait in the dark. Keep your torch on them.</td>
+        </tr>
+        <tr>
+          <td class="mug"><i data-sprite="speaker" data-scale="3"></i></td>
+          <td><b>Keynote Speaker</b><br><small>Auditorium</small></td>
+          <td>Gives the quarterly talk. Leaves the stage when the slide goes dark.</td>
+        </tr>
+        <tr>
+          <td class="mug"><i data-sprite="mecha_guard" data-scale="3"></i></td>
+          <td><b>Training Wardens</b><br><small>MECHA</small></td>
+          <td>Robots in wigs. Mind the security cameras and the empty cage.</td>
+        </tr>
+        <tr>
+          <td class="mug"><i data-sprite="wall_cat" data-scale="2"></i></td>
+          <td><b>Wall &amp; Ceiling Staff</b><br><small>Facilities</small></td>
+          <td>Stuck in the plaster and ceiling tiles. Long reach.</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </section>
 
 <section class="zone pink" id="pictures">
   <h2 class="banner rose">SCREENSHOTS</h2>
   <ul class="gallery">
+    <li><figure><img src="./shots/tetris.jpg" width="640" height="480" loading="lazy" alt="Beige and slate office cubicles stacked five high with wooden planks and a sideways CRT monitor."></figure></li>
+    <li><figure><img src="./shots/shredder.jpg" width="640" height="480" loading="lazy" alt="A tall clerk wearing three crooked pairs of spectacles behind an industrial paper shredder."></figure></li>
+    <li><figure><img src="./shots/ceiling.jpg" width="640" height="480" loading="lazy" alt="An office worker in a blue hoodie hanging upside down out of a cracked acoustic ceiling tile."></figure></li>
+    <li><figure><img src="./shots/allhands.jpg" width="640" height="480" loading="lazy" alt="A large maroon auditorium with empty rows of chairs facing a quarterly headcount slide."></figure></li>
+    <li><figure><img src="./shots/absorbed.jpg" width="640" height="480" loading="lazy" alt="A ginger cat colleague in crooked spectacles emerging from yellow striped wallpaper with long arms."></figure></li>
     <li><figure><img src="./shots/coolers.jpg" width="640" height="480" loading="lazy" alt="A yellow corridor lined with water coolers, going off into the dark."></figure></li>
-    <li><figure><img src="./shots/colleagues.jpg" width="640" height="480" loading="lazy" alt="Cardboard cut-outs of office workers standing about a yellow room."></figure></li>
     <li><figure><img src="./shots/keyboard.jpg" width="640" height="480" loading="lazy" alt="A floor made of giant keyboard keys under a screen that says OFFICE BASIC, 64K CARPET FREE, READY."></figure></li>
     <li><figure><img src="./shots/doors.jpg" width="640" height="480" loading="lazy" alt="A room with a dozen identical doors and a sign: please use the correct door."></figure></li>
     <li><figure><img src="./shots/party.jpg" width="640" height="480" loading="lazy" alt="A leaving party with a cake and bunting and nobody at it."></figure></li>
-    <li><figure><img src="./shots/caution.jpg" width="640" height="480" loading="lazy" alt="A room full of yellow wet-floor signs."></figure></li>
   </ul>
 </section>
 
@@ -170,6 +282,7 @@
       <table class="finds">
         <tr><td><i data-sprite="battery" data-fx="spin" data-scale="3"></i></td><td><b>Battery</b> +2 minutes</td></tr>
         <tr><td><i data-sprite="torch" data-scale="3"></i></td><td><b>Torch</b></td></tr>
+        <tr><td><i data-sprite="pinkslip" data-scale="3"></i></td><td><b>Pink form</b></td></tr>
         <tr><td><i data-sprite="chalk" data-scale="3"></i></td><td><b>Chalk</b></td></tr>
         <tr><td><i data-sprite="snack" data-scale="3"></i></td><td><b>Snack</b> +1 heart</td></tr>
         <tr><td><i data-sprite="balloon" data-fx="bob" data-scale="2"></i></td><td><b>Balloon</b></td></tr>
@@ -185,10 +298,13 @@
   <h2 class="banner neon">SPONSORS</h2>
   <div class="plugwall">
     <div class="plug" data-plug="1"></div>
-    <div class="plug" data-plug="2"></div>
     <div class="plug" data-plug="3"></div>
     <div class="plug" data-plug="4"></div>
+    <div class="plug" data-plug="2"></div>
+    <div class="plug" data-plug="7"></div>
     <div class="plug" data-plug="5"></div>
+    <div class="plug" data-plug="6"></div>
+    <div class="plug" data-plug="8"></div>
   </div>
   <span class="slot" data-slot="4"></span>
 </section>
@@ -232,9 +348,11 @@
     </div>
     <div class="panel">
       <p class="badges">
+        <span class="b88 c2">NETSCAPE<br>NOW!</span>
         <span class="b88 c1">BEST VIEWED<br>AT 800 &times; 600</span>
-        <span class="b88 c3">MADE WITH<br>A TEXT EDITOR</span>
+        <span class="b88 c3">MADE WITH<br>NOTEPAD</span>
         <span class="b88 c6">NO FRAMES</span>
+        <span class="b88 c4">Y2K<br>READY</span>
       </p>
     </div>
   </div>
@@ -257,6 +375,21 @@
       <tr><td><i data-sprite="gpu" data-scale="3"></i><i data-sprite="gpu" data-scale="3"></i></td><td><b>Graphics card &times; 2</b></td><td>7 batteries/hr</td><td><button type="button" data-buy>RENT</button></td></tr>
     </table>
     <p class="center" id="store-says">&nbsp;</p>
+  </div>
+</div>
+
+<div class="window" id="hr-notice" hidden role="dialog" aria-modal="true" aria-labelledby="hr-title">
+  <div class="bar"><span id="hr-title">Consultants</span><button type="button" class="x" aria-label="Close">&times;</button></div>
+  <div class="body">
+    <div class="hr-dialog">
+      <i data-sprite="jensen_slip" data-scale="3"></i>
+      <p>The consultants have moved your desk to <b>5A</b>.</p>
+    </div>
+    <p class="hr-btns">
+      <button type="button" id="hr-ok">OK</button>
+      <button type="button" data-hr="Cannot cancel.">Cancel</button>
+    </p>
+    <p class="center small" id="hr-says">&nbsp;</p>
   </div>
 </div>
 

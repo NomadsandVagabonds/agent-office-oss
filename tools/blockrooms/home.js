@@ -84,10 +84,16 @@ function counter(c) {
   for (const node of document.querySelectorAll('[data-hits]')) node.textContent = num(hits);
 }
 // the first entries in the guestbook: they came with the page
-const FIRST_ENTRIES = [['Dave', 'cool page'], ['Karen', 'nice site'], ['Webmaster', 'test']];
+const FIRST_ENTRIES = [
+  ['Coral Tapir', '14 Apr 96', 'went down for copier paper, still looking for the lift'],
+  ['Olive Heron', '02 Nov 97', 'nice pictures! that is my cardigan in #5'],
+  ['Amber Vireo', '19 Jan 98', 'cool page'],
+  ['Ember Numbat', '29 Aug 98', 'Great site!! Found it on Yahoo.'],
+  ['Webmaster', '11 Nov 98', 'testing guestbook'],
+];
 function guests(latest) {
   const real = latest.map((e) => el('li', '', el('span', 'who', e.name), el('span', 'when', day(e.at)), e.message ? el('span', 'said', e.message) : null, el('span', 'sc', `${num(e.score)} pts`)));
-  const first = FIRST_ENTRIES.map(([who, text]) => el('li', '', el('span', 'who', who), el('span', 'said', text)));
+  const first = FIRST_ENTRIES.map(([who, when, text]) => el('li', '', el('span', 'who', who), el('span', 'when', when), el('span', 'said', text)));
   $('guests').replaceChildren(...real, ...first);
 }
 function scores(top, none = 'Nobody yet.') {
@@ -125,12 +131,15 @@ async function book() {
 // Nothing about them is called "ad" where a browser can see it (class, id, attribute): a blocker hides by name, and
 // one of these was being hidden. (MECHA's slogan is MECHA's own, as it is on the wall of its training floor.)
 const ADS = [
-  { cls: 'plug-free', sprite: ['battery', 'spin'], cta: 'CLICK HERE', frames: [['CONGRATULATIONS!!!', 'YOU ARE VISITOR NUMBER {hits}'], ['FREE BATTERY', 'CLICK HERE']] },
-  { cls: 'plug-mecha', sprite: ['cog', 'turn'], cta: 'APPLY', slogan: 'Profiting from the world’s misery so you don’t have to', frames: [['MECHA', 'now hiring']] },
-  { cls: 'plug-neo', store: true, sprite: ['pirate', ''], cta: 'STORE', frames: [['CAP’N’S NEOCLOUD', 'GRAPHICS CARDS BY THE HOUR']] },
-  { cls: 'plug-water', sprite: ['cooler', ''], cta: 'CLICK HERE', frames: [['Hydration Corridor™', 'WATER COOLERS']] },
+  { cls: 'plug-free', hr: true, sprite: ['battery', 'spin', 3], cta: 'CLICK HERE', frames: [['CONGRATULATIONS!!!', 'YOU ARE VISITOR NUMBER {hits}'], ['FREE DESK UPGRADE', 'Click here to claim 5A']] },
+  { cls: 'plug-mecha', sprite: ['cog', 'turn', 3], cta: 'APPLY', slogan: 'Profiting from the world’s misery so you don’t have to', frames: [['MECHA', 'now hiring']] },
+  { cls: 'plug-neo', store: true, sprite: ['pirate', '', 3], cta: 'STORE', frames: [['CAP’N’S NEOCLOUD', 'GRAPHICS CARDS BY THE HOUR']] },
+  { cls: 'plug-shred', sprite: ['granny_shred', '', 2], cta: 'CLICK HERE', frames: [['GLADYS DOCUMENT DISPOSAL', 'Pink forms taken daily'], ['SHREDDING WHILE U WAIT', '3rd Basement · Ext. 404']] },
+  { cls: 'plug-tetris', sprite: ['tetris_cube', '', 2], cta: 'FREE QUOTE', frames: [['APEX MODULAR CUBICLES', 'Stack up to 5 high'], ['SAVE FLOOR SPACE', 'Ladders sold separately']] },
+  { cls: 'plug-water', sprite: ['cooler', '', 3], cta: 'CLICK HERE', frames: [['Hydration Corridor™', 'WATER COOLERS']] },
   // (the owner's line)
-  { cls: 'plug-card', sprite: ['standee', ''], cta: 'ORDER NOW', frames: [['Cardboard Colleagues', 'Unlike your wife, we will never leave you']] },
+  { cls: 'plug-card', sprite: ['standee', '', 3], cta: 'ORDER NOW', frames: [['Cardboard Colleagues', 'Unlike your wife, we will never leave you']] },
+  { cls: 'plug-meld', sprite: ['ceiling_carl', '', 2], cta: 'LEARN MORE', frames: [['ACME ACOUSTIC TILES', 'Drop ceilings & partitions'], ['TRADE PRICES', 'Since 1974']] },
   { cls: 'plug-lean', lean: true, frames: [] },
 ];
 /** Hold something down for as long as the wall takes, and it gives. */
@@ -162,34 +171,50 @@ for (const slot of document.querySelectorAll('.plug[data-plug]')) {
   const ad = ADS[Number(slot.dataset.plug) % ADS.length];
   if (ad.lean) { slot.replaceWith(tapedWall('plug wall small', 'A wall with painter’s tape on it. Press and hold.')); continue; }
   const node = el('div', `plug ${ad.cls}`);
-  if (ad.store) { node.tabIndex = 0; node.setAttribute('role', 'button'); } else node.setAttribute('role', 'img');
+  if (ad.store || ad.hr) { node.tabIndex = 0; node.setAttribute('role', 'button'); } else node.setAttribute('role', 'img');
   node.setAttribute('aria-label', `Spoof advert: ${ad.frames.map((f) => f.filter(Boolean).join('. ')).join('. ')}${ad.slogan ? `. ${ad.slogan}` : ''}`);
   const frames = ad.frames.map(([big, small], i) => {
-    const pic = el('i'); pic.dataset.sprite = ad.sprite[0]; if (ad.sprite[1]) pic.dataset.fx = ad.sprite[1]; pic.dataset.scale = '3';
+    const pic = el('i'); pic.dataset.sprite = ad.sprite[0]; if (ad.sprite[1]) pic.dataset.fx = ad.sprite[1]; pic.dataset.scale = String(ad.sprite[2] || 3);
     const parts = small.split('{hits}'), line = el('span', '', parts[0]);
     if (parts.length > 1) { const n = el('span', '', '1'); n.dataset.hits = '1'; line.append(n, parts[1]); }
     return el('span', `f${i ? '' : ' on'}`, pic, el('span', '', el('b', '', big), ad.slogan ? el('em', 'slogan', ad.slogan) : el('br'), line));
   });
   node.append(el('span', 'tag', 'ADVERTISEMENT'), ...frames, el('span', 'cta', ad.cta));
   if (frames.length > 1 && !calm) { let at = 0; setInterval(() => { frames[at].classList.remove('on'); at = (at + 1) % frames.length; frames[at].classList.add('on'); }, 2400); }
-  if (ad.store) { const open = (e) => { if (e.type === 'keydown' && !['Enter', ' '].includes(e.key)) return; e.preventDefault(); shop(true); }; node.addEventListener('click', open); node.addEventListener('keydown', open); }
+  if (ad.store) { const open = (e) => { if (e.type === 'keydown' && !['Enter', ' '].includes(e.key)) return; e.preventDefault(); modal(storeWin, true); }; node.addEventListener('click', open); node.addEventListener('keydown', open); }
+  if (ad.hr) { const open = (e) => { if (e.type === 'keydown' && !['Enter', ' '].includes(e.key)) return; e.preventDefault(); $('hr-says').textContent = '\u00a0'; modal(hrWin, true); }; node.addEventListener('click', open); node.addEventListener('keydown', open); }
   slot.replaceWith(node);
 }
 counter(null);
 book();
 
-// the store: a window
+// windows on the front page: the store, and a relocation notice
+const storeWin = $('store'), hrWin = $('hr-notice');
 let before = null;
-function shop(open) {
-  const win = $('store');
-  if (open) { before = document.activeElement; win.hidden = false; mount(win); win.querySelector('.x').focus(); } else { win.hidden = true; before?.focus?.(); }
+function modal(win, open) {
+  if (open) { before = document.activeElement; win.hidden = false; mount(win); win.querySelector('.x').focus(); }
+  else { win.hidden = true; before?.focus?.(); }
 }
-$('store').querySelector('.x').addEventListener('click', () => shop(false));
-$('store').addEventListener('keydown', (e) => { if (e.key === 'Escape') shop(false); });
-for (const b of $('store').querySelectorAll('[data-buy]')) b.addEventListener('click', () => { $('store-says').textContent = 'OUT OF STOCK'; });
+for (const win of [storeWin, hrWin]) {
+  win.querySelector('.x').addEventListener('click', () => modal(win, false));
+  win.addEventListener('keydown', (e) => { if (e.key === 'Escape') modal(win, false); });
+}
+$('hr-ok').addEventListener('click', () => modal(hrWin, false));
+for (const b of storeWin.querySelectorAll('[data-buy]')) b.addEventListener('click', () => { $('store-says').textContent = 'OUT OF STOCK'; });
+for (const b of hrWin.querySelectorAll('[data-hr]')) b.addEventListener('click', () => { $('hr-says').textContent = b.dataset.hr; });
 
 /* ---- things that are not where they were ----------------------------------------------------------- */
 mount();
+
+// the colleague in the ceiling tile ducks back up when hovered, clicked, or when C is pressed
+const carl = $('ceiling-carl');
+if (carl) {
+  carl.addEventListener('click', () => carl.classList.toggle('ducked'));
+  document.addEventListener('keydown', (e) => {
+    if ((e.key === 'c' || e.key === 'C') && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) carl.classList.add('ducked');
+  });
+  document.addEventListener('keyup', (e) => { if (e.key === 'c' || e.key === 'C') carl.classList.remove('ducked'); });
+}
 
 // the man from the building site is wherever the visitor is not looking
 const slots = [...document.querySelectorAll('.slot[data-slot]')], roamer = $('roamer');
@@ -229,9 +254,21 @@ const watchFloor = typeof IntersectionObserver === 'function' ? new Intersection
 }, { rootMargin: '-45% 0px -45% 0px' }) : null;
 for (const a of lift.querySelectorAll('a')) { const zone = document.querySelector(a.getAttribute('href')); if (zone) watchFloor?.observe(zone); }
 
-/* ---- the bottom of the page ------------------------------------------------------------------------ */
+/* ---- the bottom of the page, and the lift's music -------------------------------------------------- */
 // Each time somebody reaches the bottom there is another floor under it, and under the last a stretch of wall.
-const DEEPER = [['B9', '#c9b8a0'], ['B10', '#b8c9a8'], ['B11', '#a8b8c9'], ['B12', '#c9a8b8'], ['B13', '#b0aa90']];
+let audio = null, subDepth = 0;
+const tuneAudio = () => {
+  if (!audio) return;
+  audio.preservesPitch = false; audio.mozPreservesPitch = false; audio.webkitPreservesPitch = false;
+  audio.playbackRate = Math.max(0.68, 1 - subDepth * 0.045);
+};
+const DEEPER = [
+  { name: 'B9', bg: '#c9b8a0' },
+  { name: 'B10', bg: '#b8c9a8', sprite: ['cooler', '', 4] },
+  { name: 'B11', bg: '#9eb49a' },
+  { name: 'B12', bg: '#a8b0c4', sprite: ['moth', 'bob', 3] },
+  { name: 'B13', bg: '#8f8968', sprite: ['ceiling_carl', '', 3] },
+];
 if (typeof IntersectionObserver === 'function') {
   let depth = 0, busy = false;
   const grow = () => {
@@ -241,11 +278,17 @@ if (typeof IntersectionObserver === 'function') {
       busy = false;
       const id = `b${9 + depth}`;
       let floor, name;
-      if (depth < DEEPER.length) { name = DEEPER[depth][0]; floor = el('div', 'floor', el('b', '', name)); floor.style.background = DEEPER[depth][1]; }
-      else { name = '?'; floor = tapedWall('wall', 'A wall with painter’s tape on it. Press and hold.'); }
-      floor.id = id; $('deeper').append(floor);
+      if (depth < DEEPER.length) {
+        const d = DEEPER[depth]; name = d.name;
+        const pic = d.sprite ? (() => { const i = el('i'); i.dataset.sprite = d.sprite[0]; if (d.sprite[1]) i.dataset.fx = d.sprite[1]; i.dataset.scale = String(d.sprite[2]); return el('p', 'center', i); })() : null;
+        floor = el('div', 'floor', el('b', '', name), pic);
+        floor.style.background = d.bg;
+      } else {
+        name = '?'; floor = tapedWall('wall', 'A wall with painter’s tape on it. Press and hold.');
+      }
+      floor.id = id; $('deeper').append(floor); mount(floor);
       const btn = el('a', '', name); btn.href = `#${id}`; lift.append(btn); watchFloor?.observe(floor);
-      depth++;
+      depth++; subDepth = depth; tuneAudio();
     }, calm ? 0 : 900);
   };
   new IntersectionObserver(([e]) => { if (e.isIntersecting) grow(); }, { rootMargin: '0px 0px 40px 0px' }).observe($('sentinel'));
@@ -253,16 +296,14 @@ if (typeof IntersectionObserver === 'function') {
   setInterval(() => { const r = $('sentinel').getBoundingClientRect(); if (r.top < innerHeight + 40 && depth <= DEEPER.length && document.visibilityState === 'visible') grow(); }, 1400);
 }
 
-/* ---- music --------------------------------------------------------------------------------------- */
 // The lift's music, from the office upstairs (public/audio/elevator-muzak.mp3; the build puts it beside the page as
 // muzak.mp3), round and round. Off until asked for, and off again when the page is put away.
-let audio = null;
 const says = (on) => { const btn = $('midi'); btn.setAttribute('aria-pressed', String(on)); btn.textContent = on ? 'MUSIC: ON' : 'MUSIC: OFF'; };
 function music(on) {
   if (audio) { audio.pause(); audio = null; }
   if (on) {
     const a = new Audio('./muzak.mp3');
-    a.loop = true; a.volume = 0.5; audio = a;
+    a.loop = true; a.volume = 0.5; audio = a; tuneAudio();
     a.play().catch(() => { if (audio === a) { audio = null; says(false); } });       // no sound to be had: the switch goes back
   }
   says(!!audio);
