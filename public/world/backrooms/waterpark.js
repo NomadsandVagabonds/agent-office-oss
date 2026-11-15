@@ -1055,6 +1055,7 @@ export function buildFlume(c, key, pts, opt = {}) {
  *   tile: 'seafoam'|'cobalt'|'emerald'|'white',
  *   waterTone: 'aqua'|'deep'|'emerald',
  *   deckBorder: true,         // draw dry mosaic deck + bullnose coping around basin
+ *   deckTex?, bedTex?, wallTex?, waterTex?, // authored materials; default pool tiles otherwise
  *   stepsSide: 'front'|'back'|'left'|'right'|'both'|'none',
  *   deepSwim: false,          // true: buoyancy treads water at surface; C dives to bottom
  *   floorAtInner?: (x, z) => y, // custom sloped floor (e.g. wave pool beach)
@@ -1067,11 +1068,11 @@ export function createBasin(c, spec) {
   const bx0 = spec.x0, bz0 = spec.z0, bx1 = spec.x1, bz1 = spec.z1;
   const depth = spec.depth ?? 0.78;
   const waterY = spec.waterY ?? -0.06;
-  const tileTex = poolTileTex(kit, spec.tile || 'seafoam');
+  const tileTex = spec.deckTex || poolTileTex(kit, spec.tile || 'seafoam');
   const subTileVariant = spec.subTile || (spec.tile === 'emerald' ? 'emerald' : 'cobalt');
-  const subTileTex = poolTileTex(kit, subTileVariant);
-  const wallTileTex = poolTileTex(kit, spec.wallTile || 'cobalt');
-  const waterTex = causticWaterTex(kit, spec.waterTone || (depth > 1.2 ? 'deep' : 'aqua'));
+  const subTileTex = spec.bedTex || poolTileTex(kit, subTileVariant);
+  const wallTileTex = spec.wallTex || poolTileTex(kit, spec.wallTile || 'cobalt');
+  const waterTex = spec.waterTex || causticWaterTex(kit, spec.waterTone || (depth > 1.2 ? 'deep' : 'aqua'));
   const tileBatch = c.mapped('wp:btile:' + (spec.tile || 'seafoam'), tileTex);
   const subBatch = c.mapped('wp:bsub:' + subTileVariant, subTileTex);
   const wallBatch = c.mapped('wp:bwall:' + (spec.wallTile || 'cobalt'), wallTileTex);

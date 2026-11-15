@@ -14,6 +14,8 @@ export function waterparkStudy(handle) {
       if(rt.flumeMaze){
         const b=rt.flumeMaze.bounds;
         button('Slide: boarding steps',()=>handle.goto(rt.id,-3,b.bz1+1.8,0,-.1));
+        button('Slide: inside tube',()=>handle.goto(rt.id,-3,1.25,-Math.PI/2,0));
+        button('Slide: far gallery',()=>handle.goto(rt.id,3,b.bz0-1.5,Math.PI,-.12));
         button('Slide: plunge platform',()=>handle.goto(rt.id,4.65,b.bz1+.4,0,-.22));
       }
     }

@@ -3,7 +3,7 @@ import { Vox, M } from '../../../vox/vox.js';
 
 // A laundry trolley, not a new exception to the office's grab rules. Every
 // copy uses the existing trolley profile and keeps its towels in its body.
-function towelCart(variant) {
+export function towelCart(variant) {
   const v = new Vox(), steel = M('#788d83', 0), worn = M('#b0b9a3', 0), rust = M('#79583b', 0);
   const rubber = M('#293e38', 0), canvas = M('#7f8c70', 0), seam = M('#526953', 0);
   const cloth = ['#d0ceb0', '#b6bc9c', '#9cae97', '#d9d3b5'].map(c => M(c, 0)), dirt = M('#7f8060', 0);

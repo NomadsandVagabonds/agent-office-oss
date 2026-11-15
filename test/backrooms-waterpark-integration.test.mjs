@@ -29,6 +29,12 @@ async function fixture(id,rot=0,generated=false){
 for(const id of ids)for(const rot of [0,1])test(`${id}: actual builder, runtime and doorways (${rot})`,async t=>{
  const f=await fixture(id,rot);t.after(()=>f.dispose());assert.deepEqual(f.warnings,[]);
  const rt=f.world.rooms[0];assert.ok(!rt.flat);
+ // A room can be navigable with broken render attributes (e.g. a CSS string
+ // passed where linear RGB is expected). Catch that independently of nav.
+ rt.group.traverse(node=>{
+  for(const [name,attr] of Object.entries(node.geometry?.attributes || {}))
+   assert.ok(attr.array.every(Number.isFinite),`${id}: finite ${name}`);
+ });
  const {ITEMS}=await import('../public/world/backrooms/cast.js');for(const item of rt.left || [])assert.ok(ITEMS.includes(item.type),`supported supply: ${item.type}`);assert.ok(rt.ticks.length>0);
  const nav=f.world.walkable(rt),seen=nav.flood([f.def.doors[0]]);
  for(const dr of f.def.doors)assert.ok(seen[nav.key(wallPoint(f.def,dr.side,dr.c,.5))],`${dr.side} reachable`);

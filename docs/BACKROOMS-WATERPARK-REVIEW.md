@@ -3,6 +3,8 @@
 Branch: `codex/waterpark-integration`.
 Base: Fable's `claude/determined-maxwell-ayvlut` at `6829692`.
 
+**Status: technical integration, not release-ready art.** The room-by-room quality audit and first Flume Knot art pass are in [BACKROOMS-WATERPARK-ART-AUDIT.md](BACKROOMS-WATERPARK-ART-AUDIT.md).
+
 This brings Gemini's unfinished waterpark onto the working branch, with Codex's Return Pool and its movable towel carts. Gemini's original checkout is untouched. Its uncommitted work was snapshotted to `/tmp/blockrooms-waterpark-handoff-20261115` before importing only the aquatics files. The unrelated forest work is not part of this branch.
 
 ## Review build
@@ -49,4 +51,4 @@ Full suite: **979/982 pass**. The three failures are the existing Office console
 
 This is a single-player review package. Do not enable `dealt:true` for public/co-op visits yet. Room switches, rides, creatures and the Return Pool fold need the shared-state contract; in particular deep swimming currently changes the basin's support height for the local swimmer. Creature journal metadata, fire responses, physical skimmer/furniture behavior, difficulty tuning and mobile GPU costs also need a pass. The lagoon's richer snip rules exist as tested draft logic but are not wired into its current room animation. Sound was muted for visual review.
 
-Keep Gemini's geometry and art direction; subsequent polish can bring the brighter areas down, replace literal key instructions on room signs with in-world clues, and tune creature density without crowding the quiet connectors.
+The original geometry and art are draft material. Retain useful mechanics, but expect room rebuilds, asset work and a shared connector architecture pass. Do not treat colour adjustment alone as sufficient for release.
