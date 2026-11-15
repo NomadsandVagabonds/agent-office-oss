@@ -131,7 +131,7 @@ New rooms go in `MORE_DECK` in `deck2.js`.
 | `stash(r, side)` | required | the room's hiding place, where whatever the seed leaves in this room is put (a battery pack, a snack; it used to be a cassette): `[x0, z0, x1, z1]` (or a list of them) in the room's own frame, strictly inside its walls. `r` is the room as generated (`r.W`, `r.D`, `r.params`), `side` is −1 or 1 for rooms that have a left and a right. Your builder leaves that patch of floor clear |
 | `teaches` | | the id of the one lesson this room is the first place to learn (`LESSONS` in `gen.js`) |
 | `needs` | | lesson ids it takes for granted. It is only dealt on a floor below rooms that taught them all, so a room that needs anything but `lean` is never on the floor you land on |
-| `themes` | | `{ yellow, archive, night, fitout, exec }` → a multiplier on `weight` for that kind of floor. 0 keeps it off one |
+| `themes` | | `{ yellow, archive, night, fitout, exec }` → a multiplier on `weight` for that kind of floor. 0 keeps it off one; `'*'` is every kind it does not name (*A new kind of floor*) |
 | `big` | | `true`: a set piece. One a floor at most |
 | `halo` | | `{ back, side, lip }`: metres of the plan kept empty behind and beside the room, for a room that is a balcony over a view drawn there. Makes it a set piece |
 | `planned` | | `true`: never dealt by chance, only where the visit's plan puts it |
@@ -588,18 +588,28 @@ A new one needs more than its line:
   kind of floor is told from the others by its own (`TELLS` in
   `test/backrooms.test.mjs`: add a line). If its plain rooms are the yellow
   floor's with different paper, it is not a new kind of floor.
-- **Rooms that belong to it.** A line of the deck says `themes: { <id>: n }`
-  to be dealt more often there, and `0` for the kinds of floor it must
-  never be on. A room built for one kind of floor says `0` for all the
-  others.
+- **Rooms that belong to it, and only those.** A theme that says
+  `own: true` keeps to its own: a line of the deck that does not name that
+  kind of floor is never dealt there, so the copier room does not turn up on
+  it because nobody thought to say otherwise. And a room made for one kind
+  of floor says `themes: { <id>: 1, '*': 0 }`, where `'*'` is every kind of
+  floor the line does not name. Such a room is not counted in, or drawn
+  for, a visit that has no such part, so adding rooms to a new kind of
+  floor changes nobody else's building. An ordinary room that suits it too
+  can be asked onto it: `themes: { <id>: 0.5 }`. (`atHome` in `themes.js`
+  is the one place this is decided; the plan and the generator both ask
+  it.)
 - **Nothing of its own that the building already has.** Doorways, fire
   doors, the ways down (`seam.js`), the cast, pockets, the card: one
   building, whatever the part is dressed as.
 
-**While it is being built it says `dealt: false`.** It is then a kind of
-floor like any other, and every test of one holds for it from its first
-line, but it is in nobody's visit: the plan deals from the finished ones
-(`dealtThemes()`). It is looked at by asking for it by name:
+**While it is being built it says `dealt: false`.** It is then in nobody's
+visit: the plan deals from the finished ones (`dealtThemes()`). All that is
+asked of it meanwhile is that it can be built as a part of a visit, however
+few rooms have been made for it (none will do). What a kind of floor's plain
+rooms must be like, and that a floor of it can be built by itself, are
+tests of the finished ones, so taking the line out is what holds it to all
+of them. It is looked at by asking for it by name:
 
 ```
 /world/dev/backrooms.html?seed=7&themes=<id>&vhs=0&mute=1&pursuer=0&check=1

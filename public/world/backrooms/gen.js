@@ -27,7 +27,7 @@ import { T, WALL_H, DOOR_H, TILE, RISE, RUN, SIDES, toWorld, toLocal, wallLength
 import { fill, wrap } from './words.js';
 import { warningFor } from './drawings.js';
 import { MORE_DECK, MORE_STASH } from './deck2.js';
-import { themeOf, THEMES } from './themes.js';
+import { themeOf, THEMES, atHome } from './themes.js';
 import { thinPlace, decoyMarks, TAPE_LABELS, PRINT_CHANCE } from './marks.js';
 import { goesDown } from './seam.js';
 import { vocabulary, motif, fits, pruned, sunk, NARROW, HALLS } from './quiet.js';
@@ -416,8 +416,11 @@ function build(R, o, opt) {
   // (a room that is only ever there because the visit's plan asked for it — `planned`, or one staged from the news — is
   // never dealt by chance; nor is one that takes for granted something the floors above have not taught)
   const known = opt.known ? new Set(opt.known) : null;
+  // (…nor one that is not at home on this kind of floor: themes.js atHome. `able`: how many are, which on a kind of floor
+  // that keeps to its own may be very few: a floor is not held to more oddities than there are for it)
+  let able = Infinity;
   if (hand) deck = hand.slice();
-  else { const pool = DECK.filter((a) => !a.planned && !a.headline && ready(a, known)); while (pool.length) { const pickd = R.weighted(pool, (a) => a.weight * ((a.themes && a.themes[theme.id]) ?? 1)); deck.push(pickd); pool.splice(pool.indexOf(pickd), 1); } }
+  else { const pool = DECK.filter((a) => !a.planned && !a.headline && ready(a, known) && atHome(a, theme.id) > 0); able = pool.length; while (pool.length) { const pickd = R.weighted(pool, (a) => a.weight * atHome(a, theme.id)); deck.push(pickd); pool.splice(pool.indexOf(pickd), 1); } }
   if (opt.only) { const forced = [].concat(opt.only).map((id) => ARCHETYPES[id]).filter(Boolean); deck = [...forced, ...deck.filter((a) => !forced.includes(a))]; }
   // a floor further down keeps clear of what the floors above it had, for as long as the deck lasts…
   if (opt.avoid && opt.avoid.length) { const had = new Set(opt.avoid); deck = [...deck.filter((a) => !had.has(a.id)), ...deck.filter((a) => had.has(a.id))]; }
@@ -545,7 +548,10 @@ function build(R, o, opt) {
   // Most of a floor is plain: between QUIET[0] and QUIET[1] of its rooms (the fire exit, which goes in last, among them).
   // What is still missing is made up with more of the same — side passages, dead ends that go on for a while, rooms that
   // close a loop and bring you back somewhere that looks like somewhere you have been.
-  const target = Math.min(MAX_ROOMS - 1, Math.max((opt.rooms | 0) - 1, Math.ceil(specials.length / (1 - R.range(QUIET[0] + 0.02, QUIET[1]))) - 1));
+  // (A floor asked for by itself, on a kind that keeps to its own and has fewer rooms made for it yet than a floor has
+  // oddities, is still a floor's length: eighteen rooms. Nobody else's is touched: every other kind has five and more.)
+  const sparse = !hand && able < MIN_ODD ? 17 : 0;
+  const target = Math.min(MAX_ROOMS - 1, Math.max((opt.rooms | 0) - 1, sparse, Math.ceil(specials.length / (1 - R.range(QUIET[0] + 0.02, QUIET[1]))) - 1));
   for (let guard = 0; rooms.length < target && guard < 200; guard++) {
     const open = ports.filter((p) => !p.used);
     // (a part with few oddities in it is mostly this: it grows on from its newest room as often as not, so that it is long as well as wide)
@@ -680,7 +686,7 @@ function build(R, o, opt) {
   depth = distances(start);
   for (const room of rooms) room.depth = depth.get(room.id) ?? -1;
   if (rooms.some((r) => r.depth < 0)) return null;
-  if (specials.length < (hand ? Math.max(hand.length ? 1 : 0, hand.length - 1) : Math.min(MIN_ODD, want)) || (opt.only && [].concat(opt.only).some((id) => ARCHETYPES[id] && !specials.some((r) => r.arch === id)))) return null;
+  if (specials.length < (hand ? Math.max(hand.length ? 1 : 0, hand.length - 1) : Math.min(MIN_ODD, want, able)) || (opt.only && [].concat(opt.only).some((id) => ARCHETYPES[id] && !specials.some((r) => r.arch === id)))) return null;
   if (must.some((a) => !specials.some((r) => r.arch === a.id))) return null;
   if (1 - specials.length / rooms.length < QUIET[0]) return null;              // (a floor that could not be made quiet enough is dealt again)
 

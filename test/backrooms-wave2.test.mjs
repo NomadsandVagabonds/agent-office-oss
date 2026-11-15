@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { generate, ARCHETYPES, STASH, coinSpots, wallPoint, fitsAt } from '../public/world/backrooms/gen.js';
-import { THEME_IDS } from '../public/world/backrooms/themes.js';
+import { dealtThemes } from '../public/world/backrooms/themes.js';
 
 const IDS = ['vestibule', 'copiers', 'quiet-zone', 'mailroom'];
 const office = {
@@ -31,7 +31,7 @@ test('wave two: each of the four is in the deck, in a file of its own, with a hi
 });
 
 test('wave two: the same seed rolls the same room on every kind of floor, with every blank filled in', () => {
-  for (const id of IDS) for (const theme of THEME_IDS) for (const seed of ['w2-a', 77]) {
+  for (const id of IDS) for (const theme of dealtThemes()) for (const seed of ['w2-a', 77]) {
     const a = generate(seed, { ...office, theme, only: id }), b = generate(seed, { ...office, theme, only: id });
     const room = a.rooms.find((r) => r.arch === id);
     assert.ok(room, `${id} is on a ${theme} floor asked for by itself (${seed})`);

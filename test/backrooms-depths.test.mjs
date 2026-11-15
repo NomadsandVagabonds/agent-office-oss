@@ -8,7 +8,7 @@ import { generate, MAX_ODD, MAX_ROOMS, DECK, ARCHETYPES, LESSONS, lessons, ready
 import { MIN_OUT_STEPS, THIN_W, MARK_W, LEAN, REFUSE, MARK_STYLES, PRINT_CHANCE, PRINTED, lean, pressing, answer, TAPE_LABELS } from '../public/world/backrooms/marks.js';
 import { REACH, calm, beside, closeness, grabChance } from '../public/world/backrooms/reach.js';
 import { planVisit, floorOf, generateVisit, MIN_FLOORS, MAX_FLOORS, MIN_VISIT_STEPS, KNOWN_AT_START } from '../public/world/backrooms/plan.js';
-import { THEMES, THEME_IDS, dealtThemes } from '../public/world/backrooms/themes.js';
+import { THEMES, THEME_IDS, dealtThemes, atHome } from '../public/world/backrooms/themes.js';
 import { WAYS, DEALT, GAP, goesDown, dropOf, hangBelow, flight, holeIn, ledgeAt, ductIn, pushes } from '../public/world/backrooms/seam.js';
 import { AWAY, ROOMS, DOORWAYS, PLAN, partsOf, settled, unsure } from '../public/world/backrooms/rooms/unsure-hall/rule.js';
 import { HALL, HAND, PART_ROOMS } from '../public/world/backrooms/plan.js';
@@ -130,7 +130,7 @@ test('the fire door at the end of a part is pushed by walking into it: no key is
 
 test('asking for a floor to be the last, or not, changes nothing else about it', () => {
   for (const seed of [1, 7, 'tuesday', 44]) {
-    for (const theme of THEME_IDS) {
+    for (const theme of dealtThemes()) {
       const door = generate(seed, { ...office, theme });
       assert.equal(door.exit.way, 'wall');
       const strip = (level) => JSON.parse(JSON.stringify(level, (k, v) => (k === 'way' || k === 'name' ? undefined : v)));
@@ -581,7 +581,7 @@ test('near a seam the parts run into each other, and that changes nothing but ho
     });
   }
   const strip = (level) => JSON.parse(JSON.stringify(level, (k, v) => (k === 'look' || k === 'bleed' || k === 'shaft' ? undefined : v)));
-  for (const seed of [1, 7, 'tuesday']) for (const theme of THEME_IDS) {
+  for (const seed of [1, 7, 'tuesday']) for (const theme of dealtThemes()) {
     const plain = generate(seed, { ...office, theme, way: 'hole' }), bled = generate(seed, { ...office, theme, way: 'hole', paper: 'p1', bleed: { prev: { theme: 'night', paper: 'p0' }, next: { theme: 'exec', paper: 'p2' } } });
     assert.deepEqual(strip(bled), strip(plain), `seed ${seed}, ${theme}`);
     assert.equal(plain.shaft, null);
@@ -784,6 +784,28 @@ test('a kind of floor that is still being built is in nobody\'s visit, and any k
     const level = floorOf(asked, 0);
     assert.equal(level.theme, other); assert.ok(level.rooms.length > 5 && level.exit);
   }
+  // every kind of floor there is, finished or not, can be built as the part of a visit it was asked for as: that is how one
+  // that is still being built is looked at (a floor asked for by itself, and what its plain rooms are like, are for the
+  // finished ones: test/backrooms.test.mjs)
+  for (const id of THEME_IDS) for (const seed of [3, 'thursday']) {
+    const v = planVisit(seed, { ...office, themes: ['yellow', id] }), level = floorOf(v, 1);
+    assert.equal(level.theme, id); assert.ok(level.rooms.length >= 12 && level.exit, `${id}, seed ${seed}`);
+    for (const r of level.rooms) if (r.kind === 'special') assert.ok(atHome(ARCHETYPES[r.arch], id) > 0 || ARCHETYPES[r.arch].planned, `${r.arch} is on a ${id} floor and is not at home there`);
+  }
+  // a kind of floor may keep to its own rooms, and a room may keep to its own kind of floor
+  const kinds = { yellow: {}, night: {}, estate: { own: true, dealt: false } };
+  const anywhere = { id: 'kanban' }, keen = { id: 'copiers', themes: { night: 1.4 } }, lawn = { id: 'lawn', themes: { estate: 1, '*': 0 } }, both = { id: 'hall', themes: { estate: 0.5 } }, never = { id: 'vault', themes: { night: 0 } };
+  assert.deepEqual(['yellow', 'night', 'estate'].map((t) => atHome(anywhere, t, kinds)), [1, 1, 0], 'an ordinary room is at home everywhere but on a floor that keeps to its own');
+  assert.deepEqual(['yellow', 'night', 'estate'].map((t) => atHome(keen, t, kinds)), [1, 1.4, 0]);
+  assert.deepEqual(['yellow', 'night', 'estate'].map((t) => atHome(lawn, t, kinds)), [0, 0, 1], 'a room made for one kind of floor is at home on it and nowhere else');
+  assert.deepEqual(['yellow', 'night', 'estate'].map((t) => atHome(both, t, kinds)), [1, 1, 0.5], 'an ordinary room can be asked onto a floor that keeps to its own');
+  assert.deepEqual(['yellow', 'night', 'estate'].map((t) => atHome(never, t, kinds)), [1, 0, 0]);
+  // today no kind of floor keeps to its own and no room keeps off any: everything is at home everywhere, as it always was
+  for (const a of DECK) for (const t of THEME_IDS) assert.ok(atHome(a, t) >= 1 || THEMES[t].own || (a.themes && (a.themes[t] === 0 || a.themes['*'] === 0)), `${a.id} on ${t}`);
+  // the plan and the generator both ask it, and a visit's hand is counted and drawn from the rooms at home in that visit
+  assert.match(src, /const deck = DECK\.filter\(\(a\) => themes\.some\(\(t\) => atHome\(a, t\) > 0\)\);\n  const depths = themes\.length, N = deck\.length;/);
+  assert.ok(!/a\.themes && a\.themes\[/.test(src) && !/a\.themes && a\.themes\[/.test(read('../public/world/backrooms/gen.js')), 'nobody reads a line\'s themes for themselves');
+  assert.match(read('../public/world/backrooms/gen.js'), /ready\(a, known\) && atHome\(a, theme\.id\) > 0\)/);
   // nobody's visit is made this way: the office's lift and the site's door ask for nothing (the dev page and ?debug do)
   assert.match(read('../public/world/backrooms/index.js'), /depths: opt\.depths, themes: opt\.themes \};/);
 });
