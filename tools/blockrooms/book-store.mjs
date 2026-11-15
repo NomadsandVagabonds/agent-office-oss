@@ -1,24 +1,28 @@
 // BlockRooms — where the visitors' book is kept. The site is plain files; the
 // book is the one thing that has to be somewhere everybody can reach, so it
-// is kept in a small Redis the host provides, spoken to over its REST
-// interface with nothing but fetch (no client library: this repository has no
+// is kept behind a private Cloudflare/D1 service, or an existing Redis REST
+// interface, with nothing but fetch (no client library: this repository has no
 // dependencies, and this is not the place to start).
 //
-// What it needs from the environment (either pair; the first is what Vercel's
-// marketplace integration sets, the second what Upstash itself calls them):
+// The existing-account service takes BOOK_STORE_URL + BOOK_STORE_KEY. A Redis
+// installation can instead use either pair below:
 //
 //   KV_REST_API_URL          KV_REST_API_TOKEN
 //   UPSTASH_REDIS_REST_URL   UPSTASH_REDIS_REST_TOKEN
 //
-// With neither, there is no store, and the site says so and carries on with
+// With none of these, there is no store, and the site says so and carries on with
 // what each browser keeps for itself.
+import { remoteStore } from './book-remote.mjs';
 
 /**
  * @param {object} [env]  where the address and the token are (default: process.env)
  * @param {Function} [fetchImpl]
- * @returns {{pipeline: (commands: any[][]) => Promise<any[]>} | null}  null: nothing has been set up to keep the book in
+ * @returns {object | null} A semantic store (read/count/sign/strike), legacy Redis pipeline, or no configured store.
  */
 export function createStore(env = process.env, fetchImpl = globalThis.fetch) {
+  // Prefer an explicitly configured existing-account store; never silently
+  // send its traffic to a different provider when its settings are incomplete.
+  if (env.BOOK_STORE_URL || env.BOOK_STORE_KEY) return remoteStore(env, fetchImpl);
   const url = String(env.KV_REST_API_URL || env.UPSTASH_REDIS_REST_URL || '').replace(/\/+$/, '');
   const token = String(env.KV_REST_API_TOKEN || env.UPSTASH_REDIS_REST_TOKEN || '');
   if (!/^https:\/\//.test(url) || !token) return null;

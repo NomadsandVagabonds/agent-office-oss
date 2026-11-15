@@ -7,7 +7,7 @@ import { createStore } from '../tools/blockrooms/book-store.mjs';
 
 const ctx = {
   store: createStore(),
-  salt: process.env.BOOK_SALT || process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || 'blockrooms',
+  salt: process.env.BOOK_SALT || process.env.BOOK_STORE_KEY || process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || 'blockrooms',
   // words no name in the book may have in it, and the key that strikes a line out: whoever hosts the site says what they are
   blocklist: String(process.env.BOOK_BLOCKLIST || '').split(',').map((w) => w.trim()).filter(Boolean),
   adminKey: process.env.BOOK_ADMIN_KEY || '',
