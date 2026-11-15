@@ -1,4 +1,4 @@
-// The Backrooms — the greeter's rule. Pure: no three.js, nothing of the page, and
+// The Backrooms — Mother's rule. Pure: no three.js, nothing of the page, and
 // chance comes in as a function so that a test can load the dice.
 //
 // A tall tube of flesh on stubby feet that sways and waves like the thing put
@@ -9,7 +9,7 @@
 // a long while and only sways; it does it again only to somebody who went
 // away and came back.
 
-export const GREETER = Object.freeze({
+export const MOTHER = Object.freeze({
   r: 0.36, tall: 1.9,      // what of it walks: it bends under a lintel
   height: 2.2,             // how tall it is, end to end: curled over at the top, it stands under any ceiling it walks beneath
   speed: 0.6,              // metres a second: it is in no hurry
@@ -50,13 +50,13 @@ export function sways(s, o, rnd = Math.random) {
   const { dt, d, sees, fire = false, brood = 0 } = o;
   let { mode, t, rest, been } = s;
   rest = Math.max(0, rest - dt);
-  if (d >= GREETER.away) been = true;                       // they went away: it may greet them again, when it has it in it
+  if (d >= MOTHER.away) been = true;                       // they went away: it may greet them again, when it has it in it
   if (mode === 'heave') {
     t += dt;
     if (fire) return { mode: 'sway', t: 0, rest, been };     // it swallows them again
-    if (t >= GREETER.heave) {
-      const [a, b] = GREETER.brood, n = a + Math.floor(rnd() * (b - a + 1));
-      return { mode: 'content', t: 0, rest: GREETER.rest, been: false, up: Math.min(b, n) };
+    if (t >= MOTHER.heave) {
+      const [a, b] = MOTHER.brood, n = a + Math.floor(rnd() * (b - a + 1));
+      return { mode: 'content', t: 0, rest: MOTHER.rest, been: false, up: Math.min(b, n) };
     }
     return { mode, t, rest, been };
   }
@@ -66,8 +66,8 @@ export function sways(s, o, rnd = Math.random) {
     return { mode, t: t + dt, rest, been };
   }
   // swaying, and ready
-  if (sees && !fire && d <= GREETER.near) return { mode: 'heave', t: 0, rest, been };
-  return { mode: 'sway', t: t + dt, rest, been, comes: sees && !fire && d <= GREETER.notices };
+  if (sees && !fire && d <= MOTHER.near) return { mode: 'heave', t: 0, rest, been };
+  return { mode: 'sway', t: t + dt, rest, been, comes: sees && !fire && d <= MOTHER.notices };
 }
 
 /** Does a jump find the face? Only one that came down near enough, and of those one in four. */

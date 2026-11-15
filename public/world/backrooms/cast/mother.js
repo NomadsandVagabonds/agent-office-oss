@@ -1,6 +1,6 @@
-// The Backrooms — the greeter. A tall tube of flesh on stubby feet that sways
+// The Backrooms — Mother. A tall tube of flesh on stubby feet that sways
 // and waves, the way the thing outside a grand opening does, and comes over
-// very slowly. It does no harm. What it brings up does (greeter.rule.js): four
+// very slowly. It does no harm. What it brings up does (mother.rule.js): four
 // or five small pink ones, fast and blind, that jump for the face. E treads on
 // one. Afterwards it is content, and only sways.
 //
@@ -9,13 +9,13 @@
 import * as THREE from 'three';
 import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
-import { S, SW, RING, LIMB, ringVox, mouthVox, limbVox, endVox, footVox, wormVox } from './greeter.model.js';
-import { GREETER, WORM, swaying, sways, finds, trodden } from './greeter.rule.js';
+import { S, SW, RING, LIMB, ringVox, mouthVox, limbVox, endVox, footVox, wormVox } from './mother.model.js';
+import { MOTHER, WORM, swaying, sways, finds, trodden } from './mother.rule.js';
 
-const SEGS = 14, SEG_H = GREETER.height / SEGS, RING_H = RING * S, LIMB_H = LIMB * S;
+const SEGS = 14, SEG_H = MOTHER.height / SEGS, RING_H = RING * S, LIMB_H = LIMB * S;
 
 export function create(c) {
-  const env = c.env, level = c.level, G = GREETER;
+  const env = c.env, level = c.level, G = MOTHER;
   const walker = { x: 0, z: 0, r: G.r, tall: G.tall, opens: false };
   const worms = [];
   let s = swaying(), group = null, segs = [], arms = [], feet = [], lips = [], mat = null, wormMat = null, wormGeo = [], peeping = [];
@@ -42,19 +42,19 @@ export function create(c) {
     const spot = c.walk.spotIn(walker, startRoom());
     walker.x = spot.x; walker.z = spot.z; yaw = c.R.range(0, Math.PI * 2);
     group = new THREE.Group();
-    mat = env.kit.surface({ vox: true }); wormMat = env.kit.surface({ vox: true });
-    wormGeo = [0, 1, 2, 3].map((k) => geo('greeter:small:' + k, () => wormVox(k), SW));
+    mat = env.kit.surface({ vox: true, wet: 0.55 }); wormMat = env.kit.surface({ vox: true, wet: 1 });   // (she is damp; what she brings up is wet)
+    wormGeo = [0, 1, 2, 3].map((k) => geo('mother:small:' + k, () => wormVox(k), SW));
     // the trunk: rings of it, no two alike, narrower toward the top and never quite round
-    const rings = [0, 1, 2, 3].map((k) => geo('greeter:ring:' + k, () => ringVox(k)));
+    const rings = [0, 1, 2, 3].map((k) => geo('mother:ring:' + k, () => ringVox(k)));
     for (let i = 0; i < SEGS; i++) {
       const w = 1.02 - 0.36 * (i / (SEGS - 1)) + Math.sin(i * 2.3) * 0.05;
       segs.push({ m: part(group, rings[(i * 3 + (i >> 2)) % 4]), w, wx: 1 + Math.sin(i * 1.7) * 0.07, wz: 1 + Math.cos(i * 2.9) * 0.07, turn: i * 1.1 });
     }
     // the mouth on top of it: a pit of spines, with some of what is in it looking out, and what grows round the lip of it
     const top = new THREE.Group(); group.add(top); lips.push(top);
-    part(top, geo('greeter:mouth', mouthVox)).scale.setScalar(0.74);
+    part(top, geo('mother:mouth', mouthVox)).scale.setScalar(0.74);
     for (let k = 0; k < 3; k++) { const w = smallOne(top); w.a = k * 2.2 + 0.4; w.g.scale.setScalar(0.85); peeping.push(w); }
-    const limb = geo('greeter:limb', limbVox), end = geo('greeter:end', endVox);
+    const limb = geo('mother:limb', limbVox), end = geo('mother:end', endVox);
     const feelers = []; for (let k = 0; k < 5; k++) { const joints = [0, 1, 2].map((n) => { const j = part(top, n === 2 ? end : limb); j.scale.set(0.55, 0.7, 0.55); return j; }); feelers.push({ a: k * 1.26 + 0.3, joints }); }
     lips.push(feelers);
     // what it waves: two long, two short, joined on wherever
@@ -63,7 +63,7 @@ export function create(c) {
       arms.push({ side, at, joints });
     }
     // and the feet: short, thick, and more of them than it needs
-    const foot = geo('greeter:foot', footVox);
+    const foot = geo('mother:foot', footVox);
     for (let k = 0; k < 7; k++) { const m = part(group, foot); m.scale.setScalar(0.95 + (k % 3) * 0.12); feet.push({ a: (k / 7) * Math.PI * 2 + (k % 2) * 0.2, m }); }
     c.add(group);
     c.body({ get x() { return walker.x; }, get z() { return walker.z; }, r: G.r });
@@ -151,7 +151,7 @@ export function create(c) {
   function tread() {
     const i = trodden(c.me(), worms); if (i < 0) return;
     const w = worms[i]; w.dead = true; w.flat = 0.001;
-    c.play('glug', w.x, w.z, 8); c.play('thunk', w.x, w.z, 8);
+    c.play('squish', w.x, w.z, 9);
   }
 
   function small(dt) {
@@ -236,7 +236,7 @@ export function create(c) {
       const alive = worms.filter((w) => !w.dead).length;
       const was = s.mode;
       s = sways(s, { dt, d, sees, fire: nearFire, brood: alive });
-      if (s.mode === 'heave' && was !== 'heave') c.play('glug', walker.x, walker.z, 12);
+      if (s.mode === 'heave' && was !== 'heave') c.play('retch', walker.x, walker.z, 14);          // (as long as the heave is: they come up on the last of it)
       // it turns to whoever it is greeting, slowly; and goes over to them, more slowly
       const want = sees ? Math.atan2(m.x - walker.x, m.z - walker.z) : yaw, turn = Math.atan2(Math.sin(want - yaw), Math.cos(want - yaw));
       yaw += Math.max(-dt * 1.2, Math.min(dt * 1.2, turn));
@@ -247,7 +247,7 @@ export function create(c) {
       group.visible = c.drawn(walker);
       const mouth = pose(dt);
       tint(mat, walker.x, walker.z);
-      if (s.up) { hadBrood = true; tookOne = false; for (let i = 0; i < s.up; i++) bring(mouth, s.up, i); c.play('dissolve', walker.x, walker.z, 12); env.interfere?.(0.35); }
+      if (s.up) { hadBrood = true; tookOne = false; for (let i = 0; i < s.up; i++) bring(mouth, s.up, i); env.interfere?.(0.35); }
       if (worms.length) small(dt);
       tint(wormMat, worms[0] ? worms[0].x : walker.x, worms[0] ? worms[0].z : walker.z, 0.14);
       if (hadBrood && !over && !worms.some((w) => !w.dead)) { hadBrood = false; if (!tookOne) c.survived(); }
