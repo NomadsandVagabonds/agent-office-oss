@@ -401,7 +401,7 @@ export const MORE_DECK = [
   { id: 'lemonade', name: 'The Stand', landmark: 'the lemonade stand that is going down', w: [9, 11], d: [8, 10], h: [2.9, 3.6],
     ports: ['left', 'right'], weight: 1.2, lights: 'normal', themes: { suburb: 1, '*': 0 },
     module: './rooms/lemonade.js', stash: (r) => [-0.3, -r.D / 2 + 0.6, 0.4, -r.D / 2 + 1.2], roll: (R) => ({ side: R.pick([-1, 1]) }) },
-  // A bedroom, and a closet that goes on: a maze a body wide, drawn on in marker, with two coats in it that are not being worn.
+  // A bedroom, and a closet that goes on: a maze a body wide, drawn on in marker. Whoever is down here this visit may be in it.
   { id: 'walk-in', name: 'The Walk-in', landmark: 'the bedroom with the closet you can get lost in', w: [11, 13], d: [12, 14], h: [2.4, 2.6],
     ports: ['back'], weight: 1.3, lights: 'dim', themes: { suburb: 1, '*': 0 },
     module: './rooms/walk-in.js', stash: (r) => [r.W / 2 - 1.3, r.D / 2 - 1.3, r.W / 2 - 0.6, r.D / 2 - 0.6], roll: () => ({}) },
