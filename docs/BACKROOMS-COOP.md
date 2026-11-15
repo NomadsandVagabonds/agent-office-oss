@@ -2,11 +2,12 @@
 
 Working branch: `codex/backrooms-coop-full-game`, with Fable development through `2ce180f`.
 Full-content coverage and remaining differences: [BACKROOMS-COOP-COVERAGE.md](BACKROOMS-COOP-COVERAGE.md).
-Full-content commit `de00cec` is pushed, but is **not** in the Railway build below.
+Full-content commit `de00cec` and character/open-mic follow-up `bb4551a` are pushed and live.
 Private alpha: hosted on Railway; use the owner's private host bookmark.
-Railway runs game build `69d7c55`, separately from the public BlockRooms site.
+Railway runs game build `bb4551a`, separately from the public BlockRooms site.
+Deployment: `ed437082-8346-4085-9846-c8b3cba30be7`, verified 15 November 2026.
 
-## Custom characters and open mic (pending publication)
+## Custom characters and open mic (live)
 
 The lobby has a “Who’s coming?” picker with Gemini’s existing Yellow Alien and
 Pink Cowgirl. The host defaults to Yellow Alien; the friend defaults to Pink
@@ -25,7 +26,8 @@ clicking Enable voice, and neither mode records voice.
 Protocol `blockrooms-coop-7` requires both clients and the relay to update.
 The browser preflight verifies the exact character looks and actual audio
 capture/playback with a generated fake microphone, including mute and focus
-handling. A London–Argentina session is still untested.
+handling. The same preflight passes on the hosted Railway build, including
+joining and entering the game. A London–Argentina session is still untested.
 
 ## Lobby refresh (live)
 

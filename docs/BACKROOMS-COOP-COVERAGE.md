@@ -2,8 +2,8 @@
 
 Branch: `codex/backrooms-coop-full-game`. Base: merge `1393d01`, incorporating
 Fable development `2ce180f`. Full-content commit `de00cec` is pushed.
-The custom-character/open-mic follow-up is awaiting publication.
-Railway still serves the restricted `69d7c55` build.
+Custom-character/open-mic follow-up `bb4551a` is pushed and live on Railway,
+deployment `ed437082-8346-4085-9846-c8b3cba30be7` (15 November 2026).
 
 ## Scope
 
@@ -115,4 +115,8 @@ These are explicit limits, not hidden exclusions from the room catalogue:
 - The second flashlight cone has no shadow-map pass, matching the prototype's
   lightweight lighting approach.
 
-Do not describe the currently hosted link as this build until Railway deployment and hosted verification have been completed.
+Hosted verification: key client/module files match the deployment artifact, health
+returns 200, and two Chromium clients pass invite/join, exact custom looks,
+readiness, game entry, real generated-microphone audio in both directions, open
+mic/mute/focus behavior, reload protection and disconnect feedback. These are
+remote Railway checks from one test machine, not a London–Argentina playthrough.
