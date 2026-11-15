@@ -1,4 +1,4 @@
-// The Backrooms — what the greeter is made of (cast/greeter.js): a ring of its
+// The Backrooms — what Mother is made of (cast/mother.js): a ring of its
 // trunk, the mouth on top of it, a length of what it waves, a foot, and the
 // small ones it brings up. Voxels and nothing else (no three.js here), in the
 // same flesh as the lines (cast/the-lines.model.js): raw, mottled, bruised.

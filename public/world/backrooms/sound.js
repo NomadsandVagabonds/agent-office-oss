@@ -330,6 +330,30 @@ export function createSound(level, opt = {}) {
       }
     },
     static: (o = {}) => burst({ vol: 0.12 * (o.vol ?? 1), dur: o.dur || 0.9, freq: 4200, q: 0.4, type: 'highpass', attack: 0.05 }),
+    // something soft and wet, trodden flat: the heel, the burst of it, and what comes out at the sides
+    squish: (o = {}) => {
+      const v = o.vol ?? 1;
+      tone({ vol: 0.24 * v, pan: o.pan, dur: 0.13, freq: 130, to: 44, type: 'triangle' });
+      burst({ vol: 0.22 * v, pan: o.pan, dur: 0.09, freq: 700, q: 0.7 });
+      burst({ vol: 0.2 * v, pan: o.pan, dur: 0.16, freq: 1900, q: 2.2, type: 'bandpass', attack: 0.012, when: 0.035 });
+      burst({ vol: 0.13 * v, pan: o.pan, dur: 0.22, freq: 3400, q: 3, type: 'bandpass', attack: 0.02, when: 0.07 });
+      tone({ vol: 0.13 * v, pan: o.pan, dur: 0.06, freq: 260 + Math.random() * 60, to: 760, when: 0.045 });
+      tone({ vol: 0.1 * v, pan: o.pan, dur: 0.07, freq: 420 + Math.random() * 80, to: 150, when: 0.11 });
+    },
+    // something bringing up what is in it: three heaves from low down, each higher and wetter than the last, and then it comes
+    retch: (o = {}) => {
+      const v = o.vol ?? 1;
+      for (let i = 0; i < 3; i++) {
+        const at = i * 0.36;
+        tone({ vol: (0.13 + i * 0.03) * v, pan: o.pan, dur: 0.3, freq: 62 + i * 9, to: 96 + i * 22, type: 'sawtooth', attack: 0.04, when: at });
+        burst({ vol: (0.08 + i * 0.03) * v, pan: o.pan, dur: 0.26, freq: 330 + i * 90, q: 3.2, type: 'bandpass', attack: 0.05, when: at + 0.02 });
+        tone({ vol: 0.09 * v, pan: o.pan, dur: 0.1, freq: 140 + i * 30, to: 330 + i * 60, when: at + 0.2 });
+      }
+      tone({ vol: 0.2 * v, pan: o.pan, dur: 0.42, freq: 300, to: 58, type: 'sawtooth', attack: 0.015, when: 1.1 });
+      burst({ vol: 0.24 * v, pan: o.pan, dur: 0.45, freq: 1100, q: 1.1, type: 'bandpass', attack: 0.02, when: 1.1 });
+      burst({ vol: 0.14 * v, pan: o.pan, dur: 0.6, freq: 2800, q: 2.4, type: 'bandpass', attack: 0.04, when: 1.16 });
+      for (let i = 0; i < 5; i++) tone({ vol: 0.1 * v, pan: o.pan, dur: 0.08, freq: 180 + Math.random() * 90, to: 420 + Math.random() * 160, when: 1.14 + i * 0.07 });
+    },
   };
 
   return {
