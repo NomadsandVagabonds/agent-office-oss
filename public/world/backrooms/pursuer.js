@@ -20,7 +20,7 @@ export function createStalkers(env) {
   const walk = createWalk(env);
   const hiddenAt = (x, z, r = 0.6) => !env.sees(x, z, { radius: r, margin: 0.2, far: 40 });
   const drawn = (a) => { const rt = W().roomAt(a.x, a.z); return !!rt && rt.group.visible; };
-  let follower = null;
+  let follower = null, taker = null;                    // (taker: whoever's hit was the last heart — index.js asks, for the last shot)
 
   /* ---- who is on this floor ---------------------------------------------------------------- */
 
@@ -51,9 +51,12 @@ export function createStalkers(env) {
      * Without one, a creature that hunts ends the visit ('caught') and anything else does nothing: { landed: false, ended }.
      */
     hurt(n = 1) {
+      // (who it was is noted before the hit is made: the visit begins to end inside it, and asks)
+      const before = taker; taker = k;
       const hit = env.health?.damage(n);
-      if (hit) return { landed: !!hit.ok, dead: !!hit.dead, ended: !!hit.dead };
+      if (hit) { if (!hit.dead) taker = before; return { landed: !!hit.ok, dead: !!hit.dead, ended: !!hit.dead }; }
       if (member.disposition === 'hunts') { env.end('caught'); return { landed: true, dead: true, ended: true }; }
+      taker = before;
       return { landed: false, dead: false, ended: false };
     },
     /** Something E does, at a spot of the world: { x, z, r, when?(), use() }. It has to look as though it can be used: nothing says so. */
@@ -140,6 +143,8 @@ export function createStalkers(env) {
       return mine || Object.keys(others).length ? { ...(mine || {}), others } : null;
     },
     wake: (force) => pirate?.wake(force),
+    /** Whoever took the last heart, if it was one of the cast: { id, it } (it.takes(shot), where it has one, is what the building's camera shows). */
+    get taker() { return taker && !taker.dead ? { id: taker.id, it: taker.it } : null; },
     /**
      * A room has gone, and taken whoever was standing in it. (There are rooms that change the building: the hallway
      * that is not sure where it leads. The place does not wait for anybody to step out first.) `inside(x, z)` says

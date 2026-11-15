@@ -20,7 +20,7 @@
 // a thing nobody has yet had the chance to learn.
 import { generate, makeRng, MIN_EXIT_STEPS, MAX_ODD, DECK, ARCHETYPES, lessons, lessonsOf, isBig } from './gen.js';
 import { MIN_OUT_STEPS } from './marks.js';
-import { THEME_IDS, dealtThemes } from './themes.js';
+import { THEME_IDS, dealtThemes, atHome } from './themes.js';
 import { DEALT } from './seam.js';
 import { CAST, whoIsDown, castFor } from './cast.js';
 
@@ -54,7 +54,11 @@ export const PART_ROOMS = Object.freeze([20, 28]);
  * below the cardboard people.
  */
 function dealHand(R, themes, story) {
-  const depths = themes.length, N = DECK.length;
+  // the deck this visit is dealt from: every room that is at home on one of its kinds of floor (themes.js atHome). A room
+  // made for a kind of floor this visit has none of is not counted and not drawn: it could go nowhere, and counting it
+  // would only make everybody else's hand bigger. (Today that is no room at all: each is at home everywhere.)
+  const deck = DECK.filter((a) => themes.some((t) => atHome(a, t) > 0));
+  const depths = themes.length, N = deck.length;
   // (never more than its parts can hold: a part has MAX_ODD oddities at most, however many rooms the deck has grown to)
   const most = Math.min(Math.floor(N * HAND[1]), depths * MAX_ODD), least = Math.min(Math.ceil(N * HAND[0]), most);
   const size = Math.max(depths, R.int(least, most));
@@ -64,7 +68,7 @@ function dealHand(R, themes, story) {
   for (const i of R.shuffle(themes.map((_, k) => k)).slice(0, size - cap[0] * depths)) cap[i]++;
   const total = () => hands.reduce((n, h) => n + h.length, 0);
   const taught = (n, i) => KNOWN_AT_START.includes(n) || [...at].some(([id, p]) => p < i && lessons(ARCHETYPES[id]).teaches.includes(n));
-  const fits = (a, i, strict = true) => (!strict || hands[i].length < cap[i]) && ((a.themes && a.themes[themes[i]]) ?? 1) > 0
+  const fits = (a, i, strict = true) => (!strict || hands[i].length < cap[i]) && atHome(a, themes[i]) > 0
     && !(isBig(a) && hands[i].some((id) => isBig(ARCHETYPES[id]))) && lessons(a).needs.every((n) => taught(n, i))
     && !(a.resident && hands[i].some((id) => ARCHETYPES[id].resident));          // (one room with somebody living in it to a part, as with set pieces)
   const put = (a, i) => { hands[i].push(a.id); at.set(a.id, i); };
@@ -72,7 +76,7 @@ function dealHand(R, themes, story) {
   // the hallway, and the room that has to come before it
   const hall = ARCHETYPES[HALL], RH = R.fork('hall');
   if (hall && depths > 1 && RH.chance(HALL_CHANCE)) {
-    const teachers = DECK.filter((a) => !a.planned && !a.headline && lessons(hall).needs.some((n) => lessons(a).teaches.includes(n)));
+    const teachers = deck.filter((a) => !a.planned && !a.headline && lessons(hall).needs.some((n) => lessons(a).teaches.includes(n)));
     const teacher = teachers.length ? RH.pick(teachers) : null, early = teacher ? themes.map((_, i) => i).filter((i) => i < depths - 1 && fits(teacher, i, false)) : [];
     if (early.length) {
       put(teacher, RH.pick(early));
@@ -81,14 +85,14 @@ function dealHand(R, themes, story) {
     }
   }
   // the rest of the hand, in the order the seed draws them — a room that cannot go anywhere yet waits for the next round
-  let pool = DECK.filter((a) => !a.planned && !a.headline && !at.has(a.id));
+  let pool = deck.filter((a) => !a.planned && !a.headline && !at.has(a.id));
   const order = [];
   while (pool.length) { const a = R.weighted(pool, (k) => k.weight); order.push(a); pool = pool.filter((k) => k !== a); }
   for (let round = 0; round < 2; round++) for (const a of order) {
     if (total() >= size) break;
     if (at.has(a.id)) continue;
     const parts = themes.map((_, i) => i).filter((i) => fits(a, i));
-    if (parts.length) put(a, R.weighted(parts, (i) => ((a.themes && a.themes[themes[i]]) ?? 1) * (cap[i] - hands[i].length)));
+    if (parts.length) put(a, R.weighted(parts, (i) => atHome(a, themes[i]) * (cap[i] - hands[i].length)));
   }
   return hands.map((h) => R.shuffle(h));
 }

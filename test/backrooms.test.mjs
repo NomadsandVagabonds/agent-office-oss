@@ -7,7 +7,10 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { generate, sketch, DECK, ARCHETYPES, SIDES, T, RISE, toWorld, wallLength, wallPoint, floorAt, ceilAt, headAt, fitsAt, stairZones,
   roomDistances, roomPath, makeRng, MIN_EXIT_STEPS, MIN_ODD, MAX_ODD, MAX_ROOMS, coinSpots, STASH, THING_CHANCE, TRACES } from '../public/world/backrooms/gen.js';
 import { layoutOf, standable, motif, fits, TELLS, HALLS, NARROW, LOW, HIGH } from '../public/world/backrooms/quiet.js';
-import { THEME_IDS } from '../public/world/backrooms/themes.js';
+import { dealtThemes } from '../public/world/backrooms/themes.js';
+// (Every kind of floor that is finished. One still being built — themes.js `dealt: false` — is in nobody's visit and is
+// not held to these until that line goes: taking it out is what holds a new kind of floor to all of them.)
+const FINISHED = dealtThemes();
 
 const office = {
   name: 'Robin', projects: ['Webstore', 'Mobile App', 'Infra'], agents: ['Ivory Marten', 'Amber Vireo', 'Ember Numbat', 'Olive Heron'],
@@ -466,7 +469,7 @@ const walkable = (level) => level.rooms.filter((r) => r.kind === 'plain' && !r.c
 const kindOf = (r) => (r.quiet ? r.quiet.kind : r.shape ? 'shape' : 'none');
 
 test('plain rooms repeat: on every floor the same few layouts come round again and again', () => {
-  for (const theme of THEME_IDS) {
+  for (const theme of FINISHED) {
     let top = 0, rooms = 0;
     for (const level of floorsOf(theme)) {
       const plain = walkable(level), lay = new Map();
@@ -482,21 +485,21 @@ test('plain rooms repeat: on every floor the same few layouts come round again a
 
 test('each kind of floor repeats in its own way', () => {
   const share = (theme, kinds) => { let n = 0, all = 0; for (const level of floorsOf(theme)) for (const r of walkable(level)) { all++; if (kinds.includes(kindOf(r)) || (kinds.includes('none') && r.quiet && r.quiet.kind === 'bare')) n++; } return n / all; };
-  assert.deepEqual(Object.keys(TELLS).sort(), THEME_IDS.slice().sort(), 'every kind of floor has something that gives it away');
-  for (const theme of THEME_IDS) {
+  assert.deepEqual(Object.keys(TELLS).sort(), FINISHED.slice().sort(), 'every kind of floor has something that gives it away');
+  for (const theme of FINISHED) {
     const own = share(theme, TELLS[theme]);
     assert.ok(own >= 0.08, `${theme}: only ${Math.round(own * 100)}% of its plain rooms are ${TELLS[theme].join(' or ')}`);
-    for (const other of THEME_IDS) if (other !== theme) assert.ok(own > share(other, TELLS[theme]), `${theme} is told by ${TELLS[theme].join(' and ')}, and ${other} has more of them`);
+    for (const other of FINISHED) if (other !== theme) assert.ok(own > share(other, TELLS[theme]), `${theme} is told by ${TELLS[theme].join(' and ')}, and ${other} has more of them`);
   }
   // …and corridors are part of it: somewhere, a floor's narrow rooms are lined, and somewhere they are not
-  const lined = new Set(THEME_IDS.flatMap((theme) => floorsOf(theme).flatMap((level) => walkable(level).filter((r) => r.quiet && HALLS.includes(r.quiet.kind)).map((r) => r.quiet.kind))));
+  const lined = new Set(FINISHED.flatMap((theme) => floorsOf(theme).flatMap((level) => walkable(level).filter((r) => r.quiet && HALLS.includes(r.quiet.kind)).map((r) => r.quiet.kind))));
   assert.deepEqual([...lined].sort(), HALLS.slice().sort());
-  for (const theme of THEME_IDS) for (const level of floorsOf(theme)) for (const r of walkable(level)) if (r.quiet && r.quiet.kind === 'nibs') assert.ok(Math.min(r.W, r.D) < NARROW, 'piers down both walls are for corridors');
+  for (const theme of FINISHED) for (const level of floorsOf(theme)) for (const r of walkable(level)) if (r.quiet && r.quiet.kind === 'nibs') assert.ok(Math.min(r.W, r.D) < NARROW, 'piers down both walls are for corridors');
 });
 
 test('the wrongnesses are never the mark of one room, and the wall with two holes does turn up', () => {
   let withHoles = 0, sunkFloors = 0, floors = 0;
-  for (const theme of THEME_IDS) for (const level of floorsOf(theme)) {
+  for (const theme of FINISHED) for (const level of floorsOf(theme)) {
     const holes = walkable(level).filter((r) => r.quiet && r.quiet.kind === 'apertures'), desks = walkable(level).filter((r) => r.blocks && r.blocks.length);
     assert.ok(holes.length !== 1 && desks.length !== 1, `${theme}, ${level.seed}: ${holes.length} holed walls and ${desks.length} sunk desks — one of anything is a landmark`);
     floors++; if (holes.length) withHoles++; if (desks.length) sunkFloors++;
@@ -517,7 +520,7 @@ test('the wrongnesses are never the mark of one room, and the wall with two hole
 });
 
 test('no layout can trap anybody: every doorway of every laid-out room is reached on foot — and the crawl hole is never the only way', () => {
-  for (const theme of THEME_IDS) for (const level of floorsOf(theme)) for (const r of walkable(level)) {
+  for (const theme of FINISHED) for (const level of floorsOf(theme)) for (const r of walkable(level)) {
     if (!r.quiet && !(r.blocks && r.blocks.length)) continue;
     const where = `${theme}, ${level.seed}, room ${r.id} (${layoutOf(r)})`;
     for (const sealed of [false, true]) {
@@ -545,7 +548,7 @@ test('no layout can trap anybody: every doorway of every laid-out room is reache
 
 test('an empty room is the point: hardly any plain room has something left in it, and the way to the way down is mostly plain rooms', () => {
   assert.ok(THING_CHANCE <= 0.08);
-  for (const theme of THEME_IDS) {
+  for (const theme of FINISHED) {
     let withThing = 0, rooms = 0;
     for (const level of floorsOf(theme)) {
       const plain = level.rooms.filter((r) => r.kind === 'plain' || r.kind === 'start');
@@ -566,7 +569,7 @@ test('an empty room is the point: hardly any plain room has something left in it
 
 test('what earlier visitors left: two or three to a floor at most, each a different thing, far apart, in rooms with nothing else in them and no oddity next door', () => {
   const seen = new Map(), perFloor = [0, 0, 0, 0];
-  for (const theme of THEME_IDS) for (const level of floorsOf(theme)) {
+  for (const theme of FINISHED) for (const level of floorsOf(theme)) {
     const rooms = level.rooms.filter((r) => r.dress.some((d) => d.type === 'trace')), where = `${theme}, ${level.seed}`;
     assert.ok(rooms.length <= 3, `${where}: ${rooms.length} traces on one floor`);
     perFloor[rooms.length]++;
