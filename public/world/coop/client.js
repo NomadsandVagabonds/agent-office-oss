@@ -1,3 +1,4 @@
+import {createVoice} from './voice.js';
 import * as THREE from 'three';
 import {VERSION,MAP,CELL,EXIT,los} from '/core/coop.js';
 import {createKit,Batch,lamp} from '../backrooms/kit.js';
@@ -26,6 +27,7 @@ box(EXIT.x,1.1,EXIT.z+.8,1.3,2.2,.08,new THREE.MeshBasicMaterial({color:0x577762
 const pirate=makePirate(kit,makeRng('coop-pirate'));pirate.show();pirate.hold(0);scene.add(pirate.group);
 const itemMeshes=new Map(),avatars=new Map(),keys=new Set();let state=null,id=null,socket=null,yaw=Math.PI,pitch=0,selected=0,lastHealth=4,ended=false;
 function send(m){if(socket?.readyState===1)socket.send(JSON.stringify(m));}
+const voice=createVoice({send,enabled:()=>socket?.readyState===1&&!!state&&!ended,button:$('voice'),status:$('voiceStatus'),volume:$('voiceVolume')});
 function active(){return document.pointerLockElement===canvas&&state?.phase==='play'&&state.players.find(p=>p.id===id)?.health>0;}
 const slots=Array.from({length:6},(_,i)=>{const b=document.createElement('button');b.onclick=()=>selected=i;$('bar').append(b);return b;});
 function itemMesh(type){const b=new Batch(true);b.addVox(kit.model('coop:'+type,INVENTORY_MODELS[type]).solid,new THREE.Matrix4().makeScale(.04,.04,.04));return new THREE.Mesh(kit.geometry(b,[lamp(0,3,0,[1,1,1],{k:8})],[.8,.8,.8]),kit.surface({vox:true}));}
@@ -37,16 +39,16 @@ function update(s){state=s;for(const p of s.players){if(p.id!==id&&!avatars.has(
  slots.forEach((b,i)=>{b.className=selected===i?'selected':'';b.textContent=`${i+1} ${s.items.find(t=>t.id===me.bag[i])?.type||'·'}`;});
  if(me.health<lastHealth){$('overlay').style.backgroundColor='#a0202044';setTimeout(()=>$('overlay').style.backgroundColor='',250);}lastHealth=me.health;
  if(s.phase==='waiting')$('status').textContent=`${s.players.length}/2 connected · ${s.players.filter(p=>p.ready).length}/2 ready`;
- if(!['waiting','play'].includes(s.phase)&&!ended){ended=true;document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=({escaped:'The surviving visitors escaped.',dead:'Neither tape was recovered.',disconnected:'Your partner disconnected. Start a new review session.'})[s.phase];}
+ if(!['waiting','play'].includes(s.phase)&&!ended){ended=true;voice.off();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=({escaped:'The surviving visitors escaped.',dead:'Neither tape was recovered.',disconnected:'Your partner disconnected. Start a new review session.'})[s.phase];}
 }
-async function connect(code){$('create').hidden=true;$('invite').hidden=$('copy').hidden=$('ready').hidden=false;
+async function connect(code){$('create').hidden=true;$('alphaKey').hidden=true;$('invite').hidden=$('copy').hidden=$('ready').hidden=false;
  const url=new URL(location.href);url.searchParams.set('room',code);history.replaceState(null,'',url);$('invite').value=url.href;
  socket=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/socket?room=${encodeURIComponent(code)}&v=${VERSION}`);
- socket.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='welcome')id=m.id;if(m.type==='state')update(m.state);};
- socket.onclose=()=>{keys.clear();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent='Connection closed. The room may be full, started, or expired. Start a new session.';};
+ socket.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='voice')voice.receive(m);if(m.type==='welcome')id=m.id;if(m.type==='state')update(m.state);};
+ socket.onclose=()=>{voice.off();keys.clear();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent='Connection closed. The room may be full, started, or expired. Start a new session.';};
  socket.onerror=()=>{$('status').textContent='Could not connect to the co-op server.';};
 }
-$('create').onclick=async()=>{try{const r=await fetch('/new',{method:'POST'});if(!r.ok)throw Error('Server full');await connect((await r.json()).code);}catch(e){$('status').textContent=e.message;}};
+$('create').onclick=async()=>{try{const r=await fetch('/new',{method:'POST',headers:{'x-alpha-key':$('alphaKey').value}});if(!r.ok)throw Error(r.status===403?'Host passcode required or incorrect.':'Server full');$('alphaKey').value='';await connect((await r.json()).code);}catch(e){$('status').textContent=e.message;}};
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('invite').value);$('copy').textContent='Copied';}catch{$('invite').select();}};
 function lock(){const request=canvas.requestPointerLock();request?.catch(()=>{$('panel').hidden=false;$('status').textContent='Click Ready / resume to give this tab mouse control.';});}
 $('ready').onclick=()=>{send({type:'ready'});lock();};

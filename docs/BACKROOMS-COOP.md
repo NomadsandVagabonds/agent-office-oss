@@ -10,7 +10,7 @@ the mouse; the simulation continues. At the green doorway, both living visitors
 must gather before E ends the run. A dead visitor watches the survivor.
 
 The default listener is loopback. For a trusted LAN review, run
-`COOP_HOST=0.0.0.0 npm run coop` and open the host's LAN address on both computers
+`COOP_HOST=0.0.0.0 COOP_ALPHA_KEY=<24-or-more-character-private-key> npm run coop` and open the host's LAN address on both computers
 before copying the invite. Mouse capture requires a browser that supports it;
 clipboard copying may be unavailable over LAN HTTP, so the link is selectable.
 No Railway/Vercel resources are provisioned. This is not a public deployment.
@@ -36,7 +36,7 @@ No Railway/Vercel resources are provisioned. This is not a public deployment.
   walls, but cannot move or attack through walls. No other creatures are enabled.
 - One death does not end the team run. Camera depletion also kills that visitor.
   Both dead ends the session; survivors can leave together. No solo leaderboard
-  writes. No doors, movable furniture, crafting, voice, floor changes, late joins,
+  writes. No doors, movable furniture, crafting, floor changes, late joins,
   reconnection, account system or saved runs in this slice.
 
 ## Integration boundaries
@@ -76,7 +76,58 @@ per-player damage, survival, exit and disconnect.
 Two headless Chrome tabs check asset loading, lobby, readiness, movement, a
 contested pickup with the same owner on both clients, and the rendered HUD;
 no browser errors were recorded. The pirate can physically reach every open
-tile in a continuous simulation test. All 11 co-op tests pass.
+tile in a continuous simulation test. All 13 co-op/voice tests pass.
 The regular standalone build still passes. The full repository suite has existing
 console temporary-path and usage/status-line failures; the same failing areas
 were reproduced on unchanged base a155afc. No real agent runtimes were launched.
+
+
+## Voice and private hosting preparation
+
+Enable voice explicitly in the lobby/menu, then hold V to transmit. Releasing V,
+blurring the tab, hiding the page, disabling voice, disconnecting, or ending the
+run stops transmission. Disable voice also stops the microphone track. Partner
+volume is independent of game audio. Both sides enable voice to initialize audio
+playback. Microphone access requires HTTPS or localhost.
+
+For this two-friend prototype, voice uses the authenticated game WebSocket rather
+than WebRTC: 40 ms mono PCM packets at 16 kHz, 16-bit, base64 encoded. Thus no TURN
+provider or peer-to-peer NAT traversal is required. This is deliberately less
+bandwidth-efficient than Opus: roughly 43 KB/s per transmitting visitor before
+protocol overhead. It needs WAN latency testing; it is not a production voice
+architecture. The server forwards bounded packets only to the other room member,
+rejects stale sequences and oversized/malformed packets, and limits packet rate.
+There is no audio recording or persistence. Browser playout backlog is bounded.
+
+Synthetic-microphone Chrome checks verified 25 received and scheduled audio
+packets during a one-second transmission, reverse-direction audio, key-release
+stop, blur stop, and disable. No browser errors occurred. This does not establish
+real-microphone quality or performance between two internet connections.
+
+The dedicated Dockerfile is `tools/blockrooms/coop/Dockerfile`, built from the
+repository root. It launches only the review server as a non-root user, without
+the Office daemon. Set `COOP_ALPHA_KEY` to a random private value (at least 24
+characters). A public listener refuses to start without that key. Only the host
+needs it to create a session; the invited friend uses the random room link.
+Railway can assign HTTPS and PORT. Health endpoint: `/health`. No deployment or
+account changes have been made. This container still serves the **test maze**.
+
+## Full-game migration: not implemented
+
+The full-game conductor is `backrooms/index.js`, not this prototype's client.
+Its floor generator can be reused, but sending a seed alone is insufficient.
+`world.js` currently has one current room, one zone occupancy bit, and simulation
+activity follows local visibility. `pursuer.js` targets `env.player`; damage,
+item consumption and camera drain implicitly use that same visitor. Many room
+scripts also read `env.player` directly. Connected-floor disposal and endings
+are whole-visit operations.
+
+The next integration needs, in order:
+1. Per-player world occupancy and explicit visitor IDs on interaction/damage.
+2. One authority for existing creature and mutable-room state, with snapshots.
+3. Existing item IDs claimed through authority, including drops/crafting/fire.
+4. Team readiness for floor transitions, per-player death, and team endings.
+5. Two-browser room-by-room validation under latency and disconnects.
+
+Do not advertise the full room catalogue as co-op until these are wired and
+verified. This branch's current multiplayer gameplay remains the fixed floor.
