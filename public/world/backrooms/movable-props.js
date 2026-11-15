@@ -56,7 +56,7 @@ export function registerMovable(world, rt, group, { foot, type = 'prop', label =
     const localN = { x: Math.sin(base.facing * Math.PI / 2), z: Math.cos(base.facing * Math.PI / 2) };
     const hinge = toWorld(def, base.x, base.z), tip = toWorld(def, base.x + localN.x, base.z + localN.z);
     f.hinge = { ...hinge };
-    f.bridge = { axis: Math.abs(tip.x - hinge.x) > .5 ? 'x' : 'z', normal: { x: tip.x - hinge.x, z: tip.z - hinge.z }, bearing: BRIDGE.bearing };
+    f.bridge = { axis: Math.abs(tip.x - hinge.x) > .5 ? 'x' : 'z', normal: { x: tip.x - hinge.x, z: tip.z - hinge.z }, bearing: BRIDGE.bearing, eitherEnd: cutout.eitherEnd === true };
     f.pose = (angle, dx = 0, dz = 0) => {
       const box = worldFootprint(cutoutBounds(base, angle), def, toWorld);
       for (const k of ['x', 'x0', 'x1']) box[k] += f.offsetX + dx;
