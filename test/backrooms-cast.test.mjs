@@ -327,7 +327,7 @@ test('with health to take, being grabbed costs two of four and it keeps away a w
   assert.equal(s.mode, 'chase', 'and then it does');
 });
 
-test('the shadow: out of the corner of your eye for as long as you like; in the middle of the picture for a second and it goes off, once, and is gone a good while', () => {
+test('the shadow: a glance cools; a sustained stare arms it, then its fuse runs whether watched or not', () => {
   const lurk = () => { let s = away(() => 0.5, true); for (let t = 0; t < 30 && s.mode !== 'lurk'; t += dt) s = watched(s, dt, { placed: true, looked: false, d: 6 }, () => 0.5); assert.equal(s.mode, 'lurk'); return s; };
   // it is not there at first, and it does not arrive until there is somewhere out of sight for it to stand
   let s = away(() => 0.5, true), asked = 0;
@@ -339,16 +339,23 @@ test('the shadow: out of the corner of your eye for as long as you like; in the 
   assert.equal(s.mode, 'lurk'); assert.ok(moves > 5);
   // a glance costs nothing, and is forgotten
   s = lurk();
-  for (let t = 0; t < SHADOW.fuse * 0.6; t += dt) { s = watched(s, dt, { placed: true, looked: true, d: 6 }); assert.ok(!s.burst); }
+  for (let t = 0; t < SHADOW.charge * 0.6; t += dt) { s = watched(s, dt, { placed: true, looked: true, d: 6 }); assert.ok(!s.burst && !s.cleared); }
   assert.ok(s.heat > 0.4 && s.heat < 1, 'it whitens: that is the warning');
   for (let t = 0; t < 3; t += dt) s = watched(s, dt, { placed: true, looked: false, d: 6 });
   assert.equal(s.heat, 0);
-  // looked at: it goes off after the fuse, once
+  // keep it on the picture: a charge, then a separate fuse, then one burst
   s = lurk(); let bursts = 0, when = null;
-  for (let t = dt; t < 20; t += dt) { s = watched(s, dt, { placed: s.mode === 'lurk', looked: true, d: 6 }, () => 0.5); if (s.burst) { bursts++; when ??= t; } }
-  assert.equal(bursts, 1); assert.ok(Math.abs(when - SHADOW.fuse) < 3 * dt, `after ${when} s`);
-  assert.ok(SHADOW.fuse >= 1 && SHADOW.fuse <= 2, 'a second or two: long enough to look away from');
+  for (let t = dt; t < 20; t += dt) { s = watched(s, dt, { placed: s.mode === 'lurk' || s.mode === 'armed', looked: true, exposed: true, d: 6 }, () => 0.5); if (s.burst) { bursts++; when ??= t; } }
+  assert.equal(bursts, 1); assert.ok(Math.abs(when - SHADOW.charge - SHADOW.fuse) < 3 * dt, `after ${when} s`);
+  assert.ok(SHADOW.charge >= 1 && SHADOW.fuse >= .7, 'a deliberate stare, and then a usable window to look away');
   assert.ok(s.mode === 'away' && s.t > SHADOW.gone[0] - 20);
+  // once it is white, get it off the picture before that fuse expires
+  s = watched(lurk(), SHADOW.charge, { placed: true, looked: true, exposed: true, d: 6 });
+  assert.equal(s.mode, 'armed'); assert.equal(s.heat, 1);
+  s = watched(s, SHADOW.fuse + .01, { placed: true, looked: false, exposed: false, d: 6 });
+  assert.ok(s.mode === 'gone' && s.cleared && !s.burst);
+  s = watched(s, 120, { placed: false, looked: false, d: Infinity });
+  assert.ok(s.mode === 'gone' && !s.cleared && !s.shift, 'gone for the rest of the floor, not another cooldown');
   // too far off to count; and walking into it is the same as staring
   s = lurk(); for (let t = 0; t < 10; t += dt) { s = watched(s, dt, { placed: true, looked: true, d: SHADOW.far + 1 }); assert.ok(!s.burst); }
   s = watched(lurk(), dt, { placed: true, looked: false, d: SHADOW.touch - 0.1 }); assert.ok(s.burst);

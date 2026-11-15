@@ -285,6 +285,15 @@ floor's scene. Their behaviour remains frozen during descent, so an office
 avatar never appears at the landing merely because its first AI tick has
 not happened yet.
 
+The shadow has two stages: a central stare charges it for 1.1 seconds, then
+it turns white and its 0.85-second fuse runs independently of your gaze.
+Get it entirely out of view (or behind cover) before the flash and it burns
+out for that floor, awarding one survived encounter without draining the
+camera or blacking out the room. A short glance cools away and clears nothing.
+Looking back before the fuse finishes still triggers the usual half-battery
+loss and blackout; touching it also triggers that penalty. Failed encounters
+keep the existing return delay. The white figure cannot relocate while armed.
+
 ### What a creature is
 
 - **One rule, never stated, and not somebody else's.** A creature is a rule

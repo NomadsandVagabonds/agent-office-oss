@@ -50,7 +50,7 @@ export const CAST_LESSONS = Object.freeze({
 export const ALL_CAST = Object.freeze([
   Object.freeze({ id: 'pirate', name: 'The mascot', rule: 'It only moves while nobody is looking at it — and it only knows where you are while it can see you.',
     disposition: 'hunts', home: 'roams', always: true, weight: 1, teaches: 'sight', needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 2 } }),
-  Object.freeze({ id: 'shadow', name: 'The shadow', rule: 'Look straight at it and it goes off like a flashbulb, and half your battery goes with it.',
+  Object.freeze({ id: 'shadow', name: 'The shadow', rule: 'Stare until it turns white, then look away before the flash to clear it; watch it go off and half your battery goes with it.',
     disposition: 'hunts', home: 'roams', weight: 1, teaches: 'averted', needs: [], items: ['battery', 'torch'], fire: 'ignores',
     caught: { setback: 'the room goes dark for a while, and half the camcorder\'s charge is gone' } }),
   Object.freeze({ id: 'moth', name: 'The desk moth', rule: 'It goes to the next light, and waits there for you — and the next light is always nearer the way down. (A fire is a light too, and it does not come back from one.)',
