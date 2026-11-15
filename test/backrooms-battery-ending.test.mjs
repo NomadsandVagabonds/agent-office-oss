@@ -35,15 +35,15 @@ test('battery ending blacks out the signal first and fades the last icon before 
 const directory = new URL('../public/world/backrooms/', import.meta.url);
 let serial = 0;
 const flush = () => new Promise(resolve => setImmediate(resolve));
-async function visit(t) {
+async function visit(t, options = {}) {
   const key = `__batteryEndingTest${++serial}`, noop = () => {};
   let onFrame, ready, menuActions, worldStep = noop;
-  const warnings = [], icons = [], cards = [], uniforms = Object.fromEntries(
+  const warnings = [], icons = [], cards = [], disposedFloors = [], uniforms = Object.fromEntries(
     ['uSnow', 'uBlack', 'uWhite', 'uRed', 'uTrack', 'uGain', 'uRoll', 'uStaticDark'].map(name => [name, { value: 0 }]));
   const hud = {
     el: {}, warnings, icons, ending: false, removed: false,
     setClean: noop, layout: noop, hint: noop, flag: noop, recording: noop, setStamp: noop, setPaused: noop, update: noop, glitch: noop,
-    battery: noop,
+    battery: noop, tipHint: noop,
     batteryWarning(value) { if (!this.ending) warnings.push(value); },
     batteryEnding({ opacity }) { this.ending = true; icons.push(opacity); },
     remove() { this.removed = true; },
@@ -57,18 +57,19 @@ async function visit(t) {
     close() { if (this.isOpen) { this.isOpen = false; bagActions.onOpen(false); } },
   };
   const def = { id: 0, kind: 'start', W: 8, D: 8, H: 3, cx: 0, cz: 0, rot: 0, y: 0, way: 'hole' };
-  const level = depth => ({ seed: 'battery-regression', cast: [], depth, rooms: [{ ...def }], start: { x: 0, z: 0, yaw: 0, room: 0 }, exit: { room: 0, way: 'wall' }, hum: 50, stamp: {} });
+  const level = depth => ({ seed: 'battery-regression', cast: [], depth, rooms: [{ ...def }], start: { x: 0, z: 0, yaw: 0, room: 0 }, exit: { room: 0, way: depth ? 'wall' : 'hole' }, hum: 50, stamp: {} });
   const fixtures = {
     resolveLook: () => ({}),
     sketch: noop, toWorld: (r, x, z) => ({ x, z }), toLocal: (r, x, z) => ({ x, z }), DECK: [], ARCHETYPES: {},
-    planVisit: () => ({ depths: 2 }), floorOf: (plan, depth) => level(depth), edition: () => 'test',
+    planVisit: (_seed, opt) => ({ depths: 2, difficulty: opt.difficulty }), floorOf: (plan, depth) => ({ ...level(depth), difficulty: plan.difficulty }), edition: () => 'test',
+    changeVisitDifficulty(plan, id) { plan.difficulty = id; },
     createKit: () => ({ shared: { uTorch: { value: 0 }, uTorchOrigin: { value: new THREE.Vector3() }, uTorchDirection: { value: new THREE.Vector3() } }, dispose: noop }), BUILDERS: {}, loadCatalogue: async () => ({}),
     async buildWorld(kit, level, env) {
       const room = { id: 0, def: level.rooms[0], group: { visible: true }, level: 0.3, u: { dim: { value: 1 } }, flickers: [], visits: 0 };
       let current = null;
       return { scene: new THREE.Scene(), rooms: [room], floorY: () => 0, headroom: () => 3, free: () => true, passable: () => true,
         current: () => current, roomAt: () => room, enter(rt) { current = rt; rt.visits++; }, update() { worldStep(env); },
-        glimpse: noop, lightAt: () => [0.3, 0.3, 0.3], usable: () => null, dispose: noop,
+        glimpse: noop, lightAt: () => [0.3, 0.3, 0.3], usable: () => null, dispose() { disposedFloors.push(level); },
       };
     },
     createVhs: () => vhs, createHud: () => hud, createSound: () => sound, createInput: () => input,
@@ -89,6 +90,7 @@ async function visit(t) {
   let source = readFileSync(new URL('index.js', directory), 'utf8').replace(/^import (.+) from '([^']+)';$/gm, (_, names, path) => {
     if (path === 'three') return `import ${names} from ${JSON.stringify(new URL('../public/vendor/three.module.min.js', import.meta.url).href)};`;
     if (path === '/core/backrooms-settings.mjs') return `import ${names} from ${JSON.stringify(new URL('../core/backrooms-settings.mjs', import.meta.url).href)};`;
+    if (path === '/core/difficulty.mjs') return `import ${names} from ${JSON.stringify(new URL('../core/difficulty.mjs', import.meta.url).href)};`;
     if (path === '/core/perks.mjs') return `import ${names} from ${JSON.stringify(new URL('../core/perks.mjs', import.meta.url).href)};`;
     if (real.has(path)) return `import ${names} from ${JSON.stringify(new URL(path, directory).href)};`;
     return `const ${names} = globalThis[${JSON.stringify(key)}];`;
@@ -99,12 +101,12 @@ async function visit(t) {
   const finished = enterBackrooms({ stage: { renderer: { domElement: {}, setRenderTarget: noop }, quality: {}, size: { w: 800, h: 600 },
     setView: noop, onFrame(fn) { onFrame = fn; return () => { onFrame = null; }; },
   // (the floor here is a stand-in with no furniture in it: nothing to drag, so that is left out)
-  } }, { name: 'Test', seed: 'battery-regression', barricades: false, onReady: ready });
+  } }, { name: 'Test', seed: 'battery-regression', barricades: false, ...options, onReady: ready });
   const handle = await prepared;
   const tick = dt => onFrame?.(dt);
   tick(1.3);
   assert.equal(handle.state, 'play');
-  return { handle, tick, finished, hud, uniforms, cards, bag,
+  return { handle, tick, finished, hud, uniforms, cards, bag, disposedFloors,
     pause: () => menuActions.onRequestOpen(), resume: () => menuActions.onResume(), hazard: fn => { worldStep = fn; },
   };
 }
@@ -182,4 +184,42 @@ test('battery lifecycle: exhaustion during a connected-floor drop still advances
   const result = await v.finished;
   assert.equal(result.reason, 'battery');
   assert.equal(v.cards.length, 1);
+});
+
+
+test('difficulty lifecycle: changing modes discards an in-flight next part and stays unscored after changing back', async t => {
+  const v = await visit(t, { difficulty: 'easy' }), { handle, tick } = v;
+  tick(4.1); // the next floor is building asynchronously
+  handle.setSetting('difficulty', 'hard');
+  await flush();
+  assert.equal(handle.ahead, null);
+  assert.ok(v.disposedFloors.some(f => f.depth === 1 && f.difficulty === 'easy'));
+  assert.equal(handle.level.difficulty, 'easy', 'the occupied floor is never regenerated');
+  assert.equal(handle.health.read().max, 1, 'survival changes immediately');
+  tick(.01); await flush();
+  assert.equal(handle.ahead.level.difficulty, 'hard');
+  handle.setSetting('difficulty', 'easy');
+  assert.equal(handle.ahead, null, 'a completed prebuild is discarded too');
+  assert.ok(v.disposedFloors.some(f => f.depth === 1 && f.difficulty === 'hard'));
+  assert.equal(handle.health.read().current, 1, 'changing back does not heal');
+  handle.finish('quit'); tick(10);
+  const result = await v.finished;
+  assert.equal(result.run.difficulty, 'easy');
+  assert.equal(result.run.difficultyChanged, true); assert.equal(result.run.ranked, false);
+});
+
+test('Tourist returns from an authored fatal pit without ending the visit or keeping fall momentum', async t => {
+  const v = await visit(t, { difficulty: 'tourist' }), { handle, tick } = v;
+  Object.assign(handle.player.me, { x: 5, z: 7, dropV: -8, vx: 2, pitch: .9 });
+  handle.env.end('caught');
+  assert.equal(handle.state, 'play');
+  assert.equal(handle.player.me.x, handle.level.start.x);
+  assert.equal(handle.player.me.z, handle.level.start.z);
+  assert.equal(handle.player.me.dropV, 0); assert.equal(handle.player.me.vx, 0);
+  tick(1000);
+  assert.equal(handle.health.read().current, 4); assert.equal(handle.camera.read().remaining, 300);
+  assert.equal(v.cards.length, 0);
+  handle.finish('quit'); tick(10);
+  const result = await v.finished;
+  assert.equal(result.run.ranked, false);
 });

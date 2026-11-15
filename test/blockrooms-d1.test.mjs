@@ -156,3 +156,18 @@ sqlTest('D1 book: indexed expiry cleanup is bounded and an expired guard yields 
   const plan = db.prepare('EXPLAIN QUERY PLAN SELECT kind, hash FROM br_guards WHERE expires <= ? ORDER BY expires LIMIT 256').all(f.now());
   assert.ok(plan.some(row => row.detail.includes('br_guards_expiry')), 'cleanup uses the expiry index instead of scanning the whole guard table');
 });
+
+
+sqlTest('D1 keeps separate difficulty tables even when Hard fills the combined table', async t => {
+  const { store } = fixture(t);
+  await store.sign({ ...entry(10000, 1), difficulty: 'easy', scoring: 1 }, 'easy', 'easy');
+  for (let i = 1; i <= KEEP.top + 5; i++) {
+    await store.sign({ ...entry(i, 1000 + i), difficulty: 'hard', scoring: 1 }, `v-${i}`, `d-${i}`);
+  }
+  assert.ok((await store.read()).top.every(e => e.difficulty === 'hard'));
+  const easy = await store.read('easy');
+  assert.equal(easy.top.length, 1); assert.equal(easy.top[0].difficulty, 'easy');
+  assert.equal((await store.read('normal')).top.length, 0);
+  await store.strike(easy.top[0].id);
+  assert.equal((await store.read('easy')).top.length, 0);
+});

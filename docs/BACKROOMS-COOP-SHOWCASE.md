@@ -1,8 +1,9 @@
 # The long way round — four-floor private tour
 
-Prepared locally for review and deployment. Railway remains at `bb4551a` until
-this release is approved and published. The waterpark is not included: Gemini
-is still finishing it. No uncommitted files were taken from its worktree.
+The tour shipped privately at `6c7e7a3`. The working branch now merges live
+`eadfb5d` for review; it does not change the deployed game until separately
+released. Waterpark remains deferred. No uncommitted files were taken from
+Gemini's worktree.
 
 Seed: `blockrooms-the-long-way-round-v1`. Choose **The long way round** in the
 host lobby, or open `/rooms?route=showcase` with the existing host bookmark's
@@ -25,8 +26,8 @@ calls retain the one-large-landmark limit.
 
 ## New creatures
 
-Mother and The Lines are imported from Fable's `34b5c98`, including Mother's
-wet appearance and procedural squish/retch sounds. Co-op changes:
+Mother and The Lines include Fable's live `eadfb5d` changes, including
+Mother's recorded squish/retch and The Lines' wake-up grace. Co-op changes:
 
 - Mother's small ones independently target the nearest living visitor. Each
   has its own moving E interaction, so either player can tread on one.
@@ -46,8 +47,8 @@ is raised beneath it. The shorter panel cannot span the gap.
 Both players share panel poses, floor surfaces, collision and navigation
 changes. Raising/lowering checks both visitors, so a partner standing on the
 bridge blocks the action. The Lines deliberately has no blocking body for this
-interaction. Ordinary chairs, desks and trolleys retain their drag behavior;
-loose hoardings can be carried. Hoardings are restored to a stranded bank when
+interaction. Ordinary chairs, desks and trolleys use the live carry behavior too;
+set-down needs clear space and a floor within 0.4 m of the carrier’s floor. Hoardings are restored to a stranded bank when
 needed, using the room's existing recovery rule.
 
 A fall affects only that visitor. In co-op the fallen player is downed and
@@ -57,8 +58,8 @@ them. It never lowers the entire room's floor beneath the other player.
 This imports the bridge support, movable-panel registry and reachability proof
 from Fable's development branch. A bridge must really connect both banks; the
 room is not silently flattened to make it pass the no-trap check. The Lines
-is explicitly scheduled in this tour; its upstream automatic room-linked
-dealer remains outside the ordinary random-visit integration.
+is explicitly scheduled in this tour; the upstream room-linked dealer is
+also retained for ordinary random visits.
 
 This is a curated selection, not every room in the catalogue. Side branches
 can be missed. Health, camera power, crafting, trading, revives, lighting,
@@ -96,9 +97,9 @@ solo settings/death presentation remain outside this prototype.
   real player/creature crossing, swept clearance, both-player protection,
   rotated/raised rooms and reachability from every entrance.
 
-`npm test`: 888/891 pass. The three existing failures are the Office console
-path-alias assertion, its parent suite, and the Office usage/status-line bridge.
-All Backrooms and co-op unit tests pass.
+Merged suite: 956/957 pass; the remaining failure is the unchanged Office
+usage/status-line test. All Backrooms and co-op unit tests pass. See the
+[coverage notes](BACKROOMS-COOP-COVERAGE.md) for merge checks and environment details.
 
 When the waterpark is ready, integrate its reviewed commit, verify water
 movement/hazards/shared state, place it at floor 4 and move this finale to 5.

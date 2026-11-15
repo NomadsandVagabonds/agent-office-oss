@@ -10,17 +10,6 @@
 // (cast.js `rule`): a test holds them apart. Each creature has a few
 // versions; every one of them stops before it has finished.
 export const WARNINGS = Object.freeze({
-  mother: [
-    ['THE TALL PINK ONE', 'ONLY WAVES. DONT GO', 'AND LOOK. IT SICKS UP'],
-    ['LITTLE ONES GO FOR', 'YOUR FACE. THEY CANT', 'SEE. STAMP ON THEM', 'BEFORE THEY'],
-    ['IT WAS STILL WAVING', 'WHEN I CAME BACK.', 'THEN IT DID IT AG'],
-  ],
-  'the-lines': [
-    ['THE POLES IN THE', 'CORNER ARE NOT POLES.', 'IT STOOD UP WHEN I', 'GOT NEAR AND THEN IT'],
-    ['NO FLOOR = IT STOPS.', 'BUT I PUT THE BOARD', 'ACROSS AND IT CAME', 'OVER THE BOARD AFTER'],
-    ['IN DOORWAYS IT FOLDS', 'UP AND DRAGS. SLOW', 'THEN. RUN THEN. IN', 'THE BIG ROOMS IT IS'],
-    ['LIFT THE BOARD WHILE', 'IT IS ON IT. IT WENT', 'DOWN AND I NEVER', 'HEARD IT LAND AND'],
-  ],
   pirate: [
     ['THE ONE IN THE HAT', 'ONLY MOVES WHEN YOU', 'ARE NOT LOOKING. SO'],
     ['HAT MAN: IF HE CANT', 'SEE YOU HE DOESNT', 'KNOW WHERE YOU'],
@@ -36,6 +25,11 @@ export const WARNINGS = Object.freeze({
     ['FOLLOW THE MOTH??', 'EVERY LIGHT IT PICKS', 'IS NEARER THE'],
     ['DONT LIGHT A FIRE', 'NEAR THE MOTH. IT', 'WENT STRAIGHT INTO'],
   ],
+  mother: [
+    ['THE TALL PINK ONE', 'ONLY WAVES. DONT GO', 'AND LOOK. IT SICKS UP'],
+    ['LITTLE ONES GO FOR', 'YOUR FACE. THEY CANT', 'SEE. STAMP ON THEM', 'BEFORE THEY'],
+    ['IT WAS STILL WAVING', 'WHEN I CAME BACK.', 'THEN IT DID IT AG'],
+  ],
   'other-door': [
     ['ONE OF THE DOORS IS', 'NOT A DOOR. IT SHAKES', 'A BIT. DONT TOUCH'],
     ['WATCH A DOOR BEFORE', 'YOU TRY IT. IF IT', 'TWITCHES GO ROUND AND'],
@@ -50,6 +44,12 @@ export const WARNINGS = Object.freeze({
     ['FOUR LEGS ON THE', 'CEILING. SHUT THE', 'FIRE DOORS ON IT.', 'IT CANNOT OPEN'],
     ['IT WEAVES SIDE TO', 'SIDE AND CRAWLS IN', 'THE HOLES. TWO BITES', 'AND IT MELTED INTO'],
     ['DONT GO BACK PAST', 'THE BLACK PUDDLE. I', 'CAME BACK LATER AND', 'THREE MORE WERE ON'],
+  ],
+  'the-lines': [
+    ['THE POLES IN THE', 'CORNER ARE NOT POLES.', 'IT STOOD UP WHEN I', 'GOT NEAR AND THEN IT'],
+    ['NO FLOOR = IT STOPS.', 'BUT I PUT THE BOARD', 'ACROSS AND IT CAME', 'OVER THE BOARD AFTER'],
+    ['IN DOORWAYS IT FOLDS', 'UP AND DRAGS. SLOW', 'THEN. RUN THEN. IN', 'THE BIG ROOMS IT IS'],
+    ['LIFT THE BOARD WHILE', 'IT IS ON IT. IT WENT', 'DOWN AND I NEVER', 'HEARD IT LAND AND'],
   ],
   // the residents of rooms (deck2.js `resident`)
   'trunk-line': [

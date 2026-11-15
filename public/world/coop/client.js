@@ -15,6 +15,7 @@ import {VERSION,MAP,CELL,EXIT,los} from '/core/coop.js';
 import {createKit,Batch,lamp} from '../backrooms/kit.js';
 import {makePirate} from '../backrooms/cast/pirate.js';
 import {makeRng} from '../backrooms/gen.js';
+import {JIGGLE,jiggleAt} from '../backrooms/inventory-world.js';
 import {INVENTORY_MODELS} from '../backrooms/inventory-items.js';
 import {Avatar} from '../avatar/rig.js';
 import {resolveLook} from '/core/look.mjs';
@@ -39,7 +40,7 @@ if(!realMode)for(let z=0;z<MAP.length;z++)for(let x=0;x<MAP[z].length;x++){
 }
 if(!realMode)box(EXIT.x,1.1,EXIT.z+.8,1.3,2.2,.08,new THREE.MeshBasicMaterial({color:0x577762}));
 const pirate=makePirate(kit,makeRng('coop-pirate'));pirate.show();pirate.hold(0);if(!realMode)scene.add(pirate.group);
-const itemMeshes=new Map(),avatars=new Map(),keys=new Set();let state=null,id=null,socket=null,yaw=Math.PI,pitch=0,selected=0,lastHealth=4,ended=false;
+const itemMeshes=new Map(),avatars=new Map(),keys=new Set();let state=null,id=null,socket=null,yaw=Math.PI,pitch=0,selected=0,lastHealth=null,hitFlash=null,ended=false;
 function send(m){if(realMode&&!['ready','floor-ready','voice','host-paused','real-state'].includes(m.type))m.depth=real?.depth;if(real?.host&&state?.phase==='play'&&['input','select','toggle-light','craft','take','drop','use','exit','tip','revive','emote','trade-request','trade-answer','trade-offer','trade-confirm','trade-cancel'].includes(m.type)){real.command(id,m);return;}if(socket?.readyState===1)socket.send(JSON.stringify(m.type==='real-state'?{...m,state:sceneSender(m.state)}:m));}
 let characterChoices=GUEST_PRESETS.map(p=>p.id);
 const characterPicker=createCharacterPicker({root:$('characterSlots'),help:$('characterHelp'),send});characterPicker.update(null,null,false,characterChoices);
@@ -71,14 +72,17 @@ function signalSprite(){const c=document.createElement('canvas');c.width=128;c.h
 function fail(error){fatal='The game stopped: '+error.message;ended=true;keys.clear();voice.off();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=fatal;socket?.close(4011,'Room runtime failed');}
 function active(){return !building&&!inventoryHud?.isOpen&&!socialUI.visible&&!ended&&!hostPaused&&document.pointerLockElement===canvas&&state?.phase==='play'&&state.players.find(p=>p.id===id)?.health>0;}
 const slots=Array.from({length:6},(_,i)=>{const b=document.createElement('button');b.onclick=()=>selected=i;$('bar').append(b);return b;});
-function itemMesh(type){const b=new Batch(true);b.addVox(kit.model('coop:'+type,INVENTORY_MODELS[type]).solid,new THREE.Matrix4().makeScale(.04,.04,.04));return new THREE.Mesh(kit.geometry(b,[lamp(0,3,0,[1,1,1],{k:8})],[.8,.8,.8]),kit.surface({vox:true}));}
-function update(s){state=s;characterPicker.update(s,id,realHost,characterChoices);if(s.phase==='play')$('panel').classList.add('has-played');if(realMode)gameAudio.update(s,id);if(real&&!real.host&&!building)real.apply(s);for(const p of s.players){if(p.id!==id&&(!avatars.has(p.id)||avatars.get(p.id).character!==p.character)){const old=avatars.get(p.id);if(old){scene.remove(old.root,old.signal);old.dispose();old.signal.material.map.dispose();old.signal.material.dispose();}const preset=guestPreset(p.character)||GUEST_PRESETS[0];const a=new Avatar(resolveLook(preset.id,preset.look),{seed:preset.id});a.character=p.character;scene.add(a.root);a.root.position.set(p.x,0,p.z);a.signal=signalSprite();scene.add(a.signal);avatars.set(p.id,a);}}
- for(const item of s.items){if(!itemMeshes.has(item.id)){const m=itemMesh(item.type);scene.add(m);itemMeshes.set(item.id,m);}const m=itemMeshes.get(item.id);m.visible=item.owner===null&&!item.away;m.position.set(item.x,(item.y||0)+.03,item.z);}
+function itemMesh(type){const b=new Batch(false);INVENTORY_MODELS[type].sculpt(b,.032,{grounded:true});return new THREE.Mesh(kit.geometry(b,[lamp(-1.4,3.2,1.6,[.55,.52,.48],{k:10}),lamp(1.8,2,-1.6,[.22,.24,.28],{k:10})],[.8,.8,.82]),kit.surface({vox:false}));}
+let snapshotAt=0;
+function update(s){state=s;snapshotAt=performance.now();characterPicker.update(s,id,realHost,characterChoices);if(s.phase==='play')$('panel').classList.add('has-played');if(realMode)gameAudio.update(s,id);if(real&&!real.host&&!building)real.apply(s);for(const p of s.players){if(p.id!==id&&(!avatars.has(p.id)||avatars.get(p.id).character!==p.character)){const old=avatars.get(p.id);if(old){scene.remove(old.root,old.signal);old.dispose();old.signal.material.map.dispose();old.signal.material.dispose();}const preset=guestPreset(p.character)||GUEST_PRESETS[0];const a=new Avatar(resolveLook(preset.id,preset.look),{seed:preset.id});a.character=p.character;scene.add(a.root);a.root.position.set(p.x,0,p.z);a.signal=signalSprite();scene.add(a.signal);avatars.set(p.id,a);}}
+ for(const item of s.items){if(!itemMeshes.has(item.id)){const m=itemMesh(item.type);m.userData.phase=makeRng('pickup:'+item.id).range(0,JIGGLE.every);scene.add(m);itemMeshes.set(item.id,m);}const m=itemMeshes.get(item.id);m.visible=item.owner===null&&!item.away;m.position.set(item.x,(item.y||0)+.01,item.z);}
  const me=s.players.find(p=>p.id===id);if(!me)return;
  $('clock').textContent=`SP ${Math.floor(s.time/60).toString().padStart(2,'0')}:${Math.floor(s.time%60).toString().padStart(2,'0')}`;
  $('vitals').textContent=`♥ ${me.health}/4  ·  BAT ${Math.ceil(me.battery)}s  ·  PARTNER ${s.players.find(p=>p.id!==id)?.health??'—'}/4`;
  slots.forEach((b,i)=>{b.className=selected===i?'selected':'';b.textContent=`${i+1} ${s.items.find(t=>t.id===me.bag[i])?.type||'·'}`;});
- if(me.health<lastHealth){$('overlay').style.backgroundColor='#a0202044';setTimeout(()=>$('overlay').style.backgroundColor='',250);}lastHealth=me.health;
+ // Only this visitor's health loss flashes: no arrival, healing, partner hit,
+ // or camera expiry. A new hit replaces the fade instead of an old timeout clearing it.
+ if(lastHealth!==null&&me.health<lastHealth&&me.battery>0){hitFlash?.cancel();hitFlash=$('overlay').animate([{backgroundColor:'#c706067a'},{backgroundColor:'#c7060600'}],{duration:700,easing:'ease-out'});}lastHealth=me.health;
  if(inventoryHud){
   inventoryHud.update(inventoryView(s,me));
   const result=me.inventoryResult;
@@ -172,6 +176,8 @@ function frame(now){requestAnimationFrame(frame);const dt=Math.min(.05,(now-last
  if(state&&!building){const me=state.players.find(p=>p.id===id),view=me?.health>0?me:state.players.find(p=>p.health>0)||me;
  if(view){const target=new THREE.Vector3(view.x,view.y??1.1,view.z);if(!initialized){camera.position.copy(target);initialized=true;}else camera.position.lerp(target,1-Math.exp(-22*dt));camera.rotation.set(view===me?pitch:view.pitch,view===me?yaw:view.yaw,0);}
  for(const p of state.players){const a=avatars.get(p.id);if(a){a.root.visible=p!==view&&(realMode||p.health>0);a.root.position.lerp(new THREE.Vector3(p.x,(p.y??1.1)-1.1+(p.health<=0?.25:0),p.z),1-Math.exp(-15*dt));const emote=p.emote?.until>state.time?p.emote.kind:null;a.root.rotation.y=p.yaw+Math.PI+(emote==='dance'?Math.sin(now*.006)*.3:0);a.root.rotation.z=p.health<=0?-Math.PI/2:emote==='dance'?Math.sin(now*.012)*.12:0;a.setPose(p.health<=0?'sleep':emote==='wave'?'wave':emote==='dance'?'cheer':emote==='heart'?'bow':emote==='help'?'ask':'stand');a.signal.visible=p!==view&&(p.health<=0||!!emote);a.signal.position.set(p.x,(p.y??1.1)+.9,p.z);const signal=p.health<=0?'revive':emote;if(a.signal.userData.kind!==signal){a.signal.userData.kind=signal;a.signal.userData.paint(signal);}a.walking=p.health>0&&Math.abs(p.input?.f||0)+Math.abs(p.input?.s||0)>.1?1:0;a.bounce=emote==='dance'?.5:0;a.update(dt);}}
+ const pickupTime=state.time+(state.phase==='play'&&!hostPaused?Math.min(.1,(now-snapshotAt)/1000):0);
+ for(const item of state.items){const m=itemMeshes.get(item.id);if(m?.visible){const j=jiggleAt(pickupTime,m.userData.phase);m.rotation.z=j.tilt;m.position.y=(item.y||0)+.01+j.hop;}}
  if(!realMode){pirate.group.position.lerp(new THREE.Vector3(state.pirate.x,0,state.pirate.z),1-Math.exp(-18*dt));pirate.group.rotation.y=state.pirate.yaw;}
  if(me){const item=nearby(me),other=teammate(me);emoteCaption.textContent=me.emote?.until>state.time?`${EMOTES[me.emote.kind]} ${me.emote.kind}`:'';$('notice').textContent=hostPaused?'Host tab paused · waiting for return':state.descent?'Way down found · gather together to descend':me.health<=0?(realMode?'DOWN · your partner can revive you with a snack':'TAPE LOST · watching your partner'):me.notice?.until>state.time?me.notice.text:me.gripping?me.interaction:other?teamPrompt(me,other):item?`E · ${item.type}`:me.interaction?me.interaction:me.usable?me.usable:Math.hypot(me.x-(state.exit||EXIT).x,me.z-(state.exit||EXIT).z)<2?(realMode?(state.depth<state.depths-1?'Find the way down · stay together':state.exitOpen?'Way open · gather here with your partner':'Find the taped wall · lean into it together'):'E · leave when both survivors are here'):'';}
  if(view&&real)real.renderView(camera,state,view,dt,!inventoryHud?.isOpen&&!socialUI.visible&&!ended);

@@ -17,6 +17,14 @@ import {
 import { CAST } from './cast.js';
 import { makeAbsorbedWorker } from './absorbed/rig.js';
 
+/**
+ * The sound one of them makes as somebody goes by: sad, and more in pain than out to frighten. Recordings, made for them
+ * (sound.js file()). One of them at a time, and each only once a pass: `near` to set it off, `far` before it will again.
+ */
+const MOANS = [new URL('./absorbed/moan1.mp3', import.meta.url).href, new URL('./absorbed/moan2.mp3', import.meta.url).href, new URL('./absorbed/moan3.mp3', import.meta.url).href];
+const MOAN = { near: 2.9, far: 4.8, gap: 4, reach: 3.4 };
+const hush = new WeakMap();          // env → the time before which nobody else makes a sound
+
 /** Whoever of the cast hunts (cast.js): the ones a visitor must be left free to watch, or not to look at. */
 const HUNTERS = CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id);
 /** Is one of them near the visitor, with nothing between the two? */
@@ -173,6 +181,7 @@ export function spawnAbsorbed(env, { rt, placement, spec }) {
   }
 
   let rule = createAbsorbedState(mount);
+  let moaned = false;          // has made its sound at this pass of the visitor (MOAN)
   let holdDirX = placement.nx || Math.sin(placement.yaw);
   let holdDirZ = placement.nz || Math.cos(placement.yaw);
 
@@ -217,6 +226,13 @@ export function spawnAbsorbed(env, { rt, placement, spec }) {
       const sameOrLos = inFrontOfWall && (playerRoom?.id === rt.id || (dist < 3.2 && world.los(reachX, reachZ, me.x, me.z)));
 
       const inputKeys = env.player?.input?.keys;
+      if (dist > MOAN.far) moaned = false;
+      else if (!moaned && dist < MOAN.near && sameOrLos && me.moving && time >= (hush.get(env) ?? 0)) {
+        moaned = true; hush.set(env, time + MOAN.gap + Math.random() * 2);
+        const at = env.hear?.(reachX, reachZ, MOAN.reach);
+        if (at && at.vol > 0.03) env.sound?.file?.(MOANS[Math.floor(Math.random() * MOANS.length)], { vol: Math.min(1, at.vol * 1.15), pan: at.pan });
+      }
+
       const struggling = Math.hypot(me.wishX || 0, me.wishZ || 0) > 0.25 || !!(inputKeys && (inputKeys.has(' ') || inputKeys.has('Shift')));
 
       // paper the visitor has set light to, near enough and in its sight (inventory-fire.js): it lets go, and keeps its arms down

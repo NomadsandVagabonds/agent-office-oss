@@ -8,7 +8,8 @@ lean on things.
 
 It is a level called the Backrooms: yellow rooms that hum, seen through a
 camcorder, generated from a seed and never the same twice. It is one building.
-A visit goes down through three to five parts of it, each a different kind of
+A visit goes down through four parts of it (always four: the number used to be the seed's, three to five, and was worth
+hundreds of points either way; one of the middle two is the one kind that is not an office, `featured` in `themes.js`), each a different kind of
 place (the code and this guide still call a part a *floor*; nothing down there
 does, and nothing is numbered). Behind the fire door at the far end of each is
 a way down that cannot be undone: a hole in the floor, a corridor that stops,
@@ -365,6 +366,7 @@ In `ALL_CAST` in `cast.js`:
 | `items` | required | which things a visitor may be carrying change what it does (`ITEMS`: `torch`, `battery`, `chalk`, `paper`, `scissors`, `snack`, `balloon`). `[]` for none. This is how whoever writes an item finds out who is waiting for it |
 | `fire` | required | what paper the visitor has set light to is to it: `'fears'` (will not go within three metres of a fire it can see, and backs off from one lit beside it, watched or not) · `'ignores'` · `'drawn'` (goes to it). Its own rule does it, with `c.fire` and `cast/fire.rule.js` |
 | `caught` | required | what it costs to be got by it. `{ hurt: n }` points of health, of four · `{ ends: true }` the tape ends, whatever health there is (only for `hunts`) · `{ setback: 'in a sentence' }` for the rest |
+| `withRoom` | | the id of a kind of room (a deck line). Such a member is on a part if and only if that part has that room: it is never dealt by weight, takes nobody's place, and is handed `c.lair` (*Coming with a room*) |
 | `room` | for `home: 'room'` | `{ w, d }` the least floor it needs, metres (3 to 12), and `far`, the fewest doorways from where you land (default 3) |
 | `on` | | `false`: retired. Leave the line and the file |
 
@@ -414,7 +416,7 @@ through `c`. It never calls `env.end`: being caught is `c.hurt`.
 
 | for | use |
 |---|---|
-| who and where | `c.member` its line · `c.home` its room's id (or null) · `c.R` the seeded source · `c.carried` what it left itself upstairs |
+| who and where | `c.member` its line · `c.home` its room's id (or null) · `c.haunt` a room that asked for company and got you (id, or null: see below) · `c.lair` for one that comes with a room, where it lies up (id, or null) · `c.R` the seeded source · `c.carried` what it left itself upstairs |
 | the visitor | `c.me()` → `{ x, z, yaw, pitch, speed, moving }` · `c.room(x, z)` which room that is · `c.held()` what they are holding (`{ type, … }` or null: there may be no inventory at all) · `c.take(type, n)` · `c.give(item)` |
 | seeing | `c.hidden(x, z, r)` that spot is off their screen or behind a wall · `c.los(ax, az, bx, bz)` a line of sight between two spots, whichever way anybody is facing · `c.drawn(thing)` its room is being drawn at all |
 | getting about | `c.walk.go(walker, { x, z }, metres, keep)` → `{ went, door, cannot, there }` · `c.walk.exits(walker)` · `c.walk.spotIn(walker, room)` · `c.walk.steps(walker, { x, z })` · `c.walk.stand(walker, x, z)` |
@@ -480,6 +482,28 @@ Things to know before they bite:
   chest); return nothing and the corner camera has it. A flat battery,
   giving up and the way out end as they always did, and a hit that is
   survived stays in first person.
+- **Company for a room.** A deck line may say `haunt: 1` or `haunt: 2`: the
+  room asks for that many of the cast, and gets them only from those who roam
+  and are dealt to that part anyway (`hauntsFor()` in `cast.js`: never the
+  mascot, never anybody with `home: 'room'`, nobody if nobody is dealt
+  there). Whoever is sent finds the room's id in `c.haunt`, and what it does
+  about it is its own: the toner hangs there from the start if there is a
+  place to hang, the moth waits at a light of it, the shadow shows itself
+  within a second and a half of the visitor first walking in. Nothing new is
+  made for it, and a creature may ignore it.
+- **Coming with a room.** A cast line with `withRoom: '<arch id>'` belongs to
+  one kind of room. It is on a part exactly when that part's floor has such a
+  room (`withRoomFor(level)` in `cast.js`, asked of the built floor by the
+  conductor, because the plan does not know which rooms a floor was dealt),
+  and it is extra: `whoIsDown` and `castFor` never deal it, and nobody is
+  left out to make room for it. Its `c.lair` is a room two to four doorways
+  before its own on the way there from the landing (`lairFor()`: seeded by
+  the floor; never the landing, the way out or the room itself; the nearest
+  allowed if its room is closer than that; null if there is nowhere), so that
+  it can be met and followed before the room is reached. What it does there
+  is its own. Because the plan does not know of it, nothing that is planned
+  from the cast (what is left lying about for them, what the walls warn of)
+  counts it.
 - **More than one body.** There are rooms that change the building and take
   whatever is in them (*A room the way out is through*). The conductor does
   this for you: it asks `at()` where you are, and if that is in the room it
@@ -856,7 +880,7 @@ the office is: the seed is the clock, and no building is ever given twice.
 | `denizens.js`, `absorbed.js`, `absorbed/` | residents that belong to one room and may walk out of it · colleagues the building is keeping (after Gemini's fifth pack): one to three a part, two thirds sunk into the wall, the carpet or the ceiling of a plain room, by dice of their own. They cannot move and never end a visit: within arm's reach they hold you for a second and a bit (less if you struggle), then leave you alone for three. A crouch goes under the ones in the ceiling and a hop over the hands of the ones in the floor. `absorbed/rule.js` is the rule (pure: how many, who, and the hold), `absorbed/rig.js` draws them |
 | `banner.js`, `banner.rule.js` | the vinyl banner near where a visit lands: "VOTED 6TH BEST OFFICE PARK", and under it of where (a place name the page may hand the level as `where`; otherwise "IN THE TRI-COUNTY AREA"). Where it hangs is by the seed (pure, `bannerSpot`); it is not in the level's data, so a kept tape is the same tape |
 | `doors.js`, `doorleaf.js` | which doorways have a pair of fire doors (pure) · the doors themselves |
-| `player.js`, `input.js`, `hud.js`, `vhs.js`, `sound.js` | walking, keys and touch, the camcorder, the tape, the hum (and, from `music/`, the owner's music under it) |
+| `player.js`, `input.js`, `hud.js`, `vhs.js`, `sound.js` | walking, keys and touch, the camcorder, the tape, the hum (and, from `music/`, the owner's music under it). Breath is `WIND` in `player.js`: about eight seconds of running from fresh, then out of breath for a few seconds (no running, a walk at half pace) with a recording of panting (`breath/pant.mp3`); nothing on the screen says how much is left |
 | `touch.js`, `touch.rule.js` | what a phone has instead of keys: a thumb stick and four buttons, drawn · where they go on a screen of any shape, which part of it is the stick, and what a push means (pure) |
 | `../levels/basement.js` | the floor above it all, and the wall |
 | `../dev/backrooms.js` | the level's own page |

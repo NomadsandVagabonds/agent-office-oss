@@ -12,3 +12,14 @@ test('capture stays scoped to its guest while another player moves, and danger f
  assert.deepEqual(events.filter(e=>e[0]==='tick'&&e[1]===0),[['tick',0,'b']]);events.length=0;
  rooms[0].coopHeld=null;rooms[0].coopFocus=()=>[{x:.5,z:0}];pop.update(.05,.05,[a,b]);assert.deepEqual(events.filter(e=>e[0]==='tick'&&e[1]===0),[['tick',0,'b']]);
 });
+
+test('room target hook keeps one clock and installs the selected visitor context',()=>{
+ const {rooms}=fixture(),a=visitor('a',0),b=visitor('b',.5);let active,observed;
+ for(const r of rooms)r.zones=[];
+ a.held={type:'balloon'};b.held={type:'paper'};
+ rooms[0].chooseVisitor=people=>{observed=people;return people.find(p=>!p.holdingBalloon)?.id;};
+ rooms[0].ticks=[()=>assert.equal(active.id,'b')];
+ const world={rooms,roomAt:()=>rooms[0],distances:()=>new Map([[0,0]])};
+ const pop=createPopulation(world,(v,fn)=>{const old=active;active=v;try{return fn();}finally{active=old;}},{held:()=>active.held});
+ pop.update(.05,0,[a,b]);assert.deepEqual(observed.map(p=>[p.id,p.holdingBalloon]),[['a',true],['b',false]]);
+});

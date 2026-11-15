@@ -88,11 +88,12 @@ function buildBodyBatch(kit, variant, idx) {
   stainHands(parts.armLowerL);
   stainHands(parts.armLowerR);
 
-  const b = new Batch(true);
+  const b = new Batch(true), balloons = new Batch(true), arms = { L: [], R: [] };
   const add = (sub, vox, mat4) => {
     if (!vox) return;
+    if (sub.startsWith('arm')) { arms[sub.at(-1)].push([sub, vox]); return; }
     const geo = kit.model(`${seedKey}:${sub}`, () => vox);
-    if (geo?.solid) b.addVox(geo.solid, mat4);
+    if (geo?.solid) (sub === 'balloon' ? balloons : b).addVox(geo.solid, mat4);
   };
 
   if (variant === 'greeter') {
@@ -151,20 +152,42 @@ function buildBodyBatch(kit, variant, idx) {
       add('balloon', balloonVox(25, 25, 8, 25, 56, 8), new THREE.Matrix4().makeScale(S[0], S[1], S[2]));
     }
   }
-  return b;
+  return { batch: b, balloons, arms, seedKey };
 }
 
 export function buildCommitteeMember(kit, variant = 'greeter', idx = 0) {
   const lights = [lamp(0.2, 2.4, 0.8, [1.28, 1.28, 1.28], { k: 8, wrap: 0.48, far: 26 })], amb = [0.62, 0.62, 0.62];
   const mat = kit.surface({ vox: true });
 
-  const bodyBatch = buildBodyBatch(kit, variant, idx);
-  const bodyMesh = new THREE.Mesh(kit.geometry(bodyBatch, lights, amb), mat);
+  const body = buildBodyBatch(kit, variant, idx);
+  const bodyMesh = new THREE.Mesh(kit.geometry(body.batch, lights, amb), mat);
+  const arms = ['L', 'R'].map(side => {
+    const shoulder = JOINT[`shoulder${side}`], batch = new Batch(true);
+    for (const [name, vox] of body.arms[side]) batch.addVox(kit.model(`${body.seedKey}:${name}`, () => vox).solid, localJointMat(S, shoulder));
+    const arm = new THREE.Group(); arm.position.set(shoulder[0]*S[0], shoulder[1]*S[1], shoulder[2]*S[2]);
+    arm.add(new THREE.Mesh(kit.geometry(batch, lights, amb), mat));
+    arm.scale.y = variant === 'greeter' ? 1.12 : 1.14;
+    return arm;
+  });
 
+  const balloon = body.balloons.verts ? new THREE.Mesh(kit.geometry(body.balloons, lights, amb), mat) : null;
+  // Keep the balloon upright but translate its tether with the reaching hand.
+  const restHand = new THREE.Vector3(0, -.47, 0).applyEuler(new THREE.Euler(-.22, 0, 2.08, 'YXZ'));
+  if (variant !== 'greeter') restHand.set(0,-.47,0).applyEuler(new THREE.Euler(-.42,-.18,1.06,'YXZ'));
+  const tether = new THREE.Vector3();
   const seedIdx = variant === 'greeter' ? 0 : idx + 1;
   const spec = STAFF[variant === 'greeter' ? 0 : (idx % (STAFF.length - 1)) + 1];
+  // Separate the lower face along the curved mouth, leaving a dark interior
+  // behind it. Animate the jaw joint, never rebuild the voxel mesh per frame.
+  const face = buildHeadVox(spec, seedIdx), skull = new Vox(), lower = new Vox(), cavity = M('#100608', 0);
+  face.each((x, y, z, color) => {
+    const cut = Math.min(41, Math.round(36 + 7.8 * ((x+.5)/7)**2));
+    if (Math.abs(x+.5) <= 7.5 && y <= cut && z >= 2) {
+      lower.set(x,y,z,color); skull.set(x,y,1,cavity);
+    } else skull.set(x,y,z,color);
+  });
   const headBatch = new Batch(true);
-  const headModel = kit.model(`fun:head:${variant}:${idx}`, () => buildHeadVox(spec, seedIdx));
+  const headModel = kit.model(`fun:head:${variant}:${idx}:jaw`, () => skull);
   headBatch.addVox(headModel.solid, localJointMat(S, JOINT.head, 0, 0, 0));
   const headMesh = new THREE.Mesh(kit.geometry(headBatch, lights, amb), mat);
 
@@ -173,15 +196,31 @@ export function buildCommitteeMember(kit, variant = 'greeter', idx = 0) {
   const baseTilt = (seedIdx % 2 === 0 ? 1 : -1) * (variant === 'greeter' ? 0.28 : 0.24);
   head.rotation.set(-0.08, 0, baseTilt);
   head.add(headMesh);
+  const hinge = [0, 38, -1], jawBatch = new Batch(true), jaw = new THREE.Group();
+  jawBatch.addVox(kit.model(`fun:jaw:${variant}:${idx}`, () => lower).solid, localJointMat(S, hinge));
+  jaw.add(new THREE.Mesh(kit.geometry(jawBatch, lights, amb), mat));
+  const jawY = (hinge[1]-JOINT.head[1])*S[1], jawZ = (hinge[2]-JOINT.head[2])*S[2];
+  jaw.position.set(0,jawY,jawZ); head.add(jaw);
 
   const group = new THREE.Group();
-  group.add(bodyMesh, head);
+  group.add(bodyMesh, head, ...arms);
+  if (balloon) group.add(balloon);
 
-  return {
+  const rig = {
     group,
-    head,
+    head, arms, jaw,
     mesh: bodyMesh,
     aimHead(relYaw = 0, time = 0, mode = 'idle') {
+      const chasing = mode === 'swarming';
+      arms.forEach((arm, i) => {
+        const sign = i ? 1 : -1;
+        if (chasing) arm.rotation.set(-1.48 + Math.sin(time*8 + seedIdx + i)*.09, sign*-.08, sign*.12, 'YXZ');
+        else if (variant === 'greeter') arm.rotation.set(-.22, 0, i ? 2.08 : -1.96, 'YXZ');
+        else arm.rotation.set(-.42, -sign*.18, sign*1.06, 'YXZ');
+      });
+      if (balloon) balloon.position.copy(tether.set(0,-.47,0).applyEuler(arms[1].rotation).sub(restHand));
+      const bite = chasing ? Math.pow((1 + Math.sin(time*13 + seedIdx*1.7))*.5, .65) : 0;
+      jaw.position.y = jawY - bite*.055; jaw.rotation.x = bite*.32;
       const clamped = Math.max(-2.35, Math.min(2.35, relYaw));
       const wobble = mode === 'partying'
         ? Math.sin(time * 3.4 + seedIdx) * 0.16
@@ -192,4 +231,6 @@ export function buildCommitteeMember(kit, variant = 'greeter', idx = 0) {
     },
     light(rgb) { mat.uniforms.uTint.value.set(rgb[0], rgb[1], rgb[2]); },
   };
+  rig.aimHead();
+  return rig;
 }

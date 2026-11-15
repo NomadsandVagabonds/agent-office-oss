@@ -92,6 +92,8 @@ const FAMILIES = [
   { id: 'panel', weight: 0, wall: [26, 0.44, 0.33], carpet: [152, 0.34, 0.20], trim: [24, 0.46, 0.17], floor: 'plush' },
   // …and one for the neighbourhood (themes.js `suburb`): sky-blue emulsion, and fake grass off a roll where the carpet should be
   { id: 'sky', weight: 0, wall: [203, 0.46, 0.72], carpet: [106, 0.34, 0.37], trim: [44, 0.12, 0.88], floor: 'turf' },
+  // …and one for the shopping centre (themes.js `mall`): oatmeal partition fabric, terrazzo with a brass strip, brown trim
+  { id: 'oatmeal', weight: 0, wall: [36, 0.2, 0.66], carpet: [28, 0.12, 0.62], trim: [22, 0.32, 0.28], floor: 'terrazzo' },
 ];
 const PATTERNS = ['dots', 'dots', 'dots', 'diamonds', 'stripes', 'trellis', 'sprigs', 'chevrons'];
 const TUBES = ['#fff6dc', '#fff6dc', '#fffbe9', '#f3ffe6', '#ffeec4', '#eef6ff'];

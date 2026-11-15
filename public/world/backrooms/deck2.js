@@ -350,7 +350,7 @@ export const MORE_DECK = [
     teaches: 'tape', module: './rooms/cover.js',
     stash: (r) => { const s = r.params.side, x = s * (r.W / 2 - 1.0); return [Math.min(x - 0.4, x + 0.4), r.D / 2 - 1.5, Math.max(x - 0.4, x + 0.4), r.D / 2 - 0.7]; },
     roll: (R) => ({ side: R.pick([-1, 1]), deskZ: +R.range(-0.4, 0.8).toFixed(2), seconds: R.int(9, 12) }) },
-  // The neighbourhood (themes.js `suburb`: still being built, `dealt: false`). Rooms made for it, and dealt nowhere else.
+  // The neighbourhood (themes.js `suburb`). Rooms made for it, and dealt nowhere else.
   // A house, front garden and all, in a room with a suspended ceiling. From the gate it is a house. The door is a door;
   // what is behind it is the back of a set, and a desk.
   { id: 'show-home', name: 'The Show Home', landmark: 'the house with its lights on', w: [16, 18], d: [14, 16], h: [5.4, 6.2],
@@ -403,7 +403,7 @@ export const MORE_DECK = [
     module: './rooms/lemonade.js', stash: (r) => [-0.3, -r.D / 2 + 0.6, 0.4, -r.D / 2 + 1.2], roll: (R) => ({ side: R.pick([-1, 1]) }) },
   // A bedroom, and a closet that goes on: a maze a body wide, drawn on in marker. Whoever is down here this visit may be in it.
   { id: 'walk-in', name: 'The Walk-in', landmark: 'the bedroom with the closet you can get lost in', w: [11, 13], d: [12, 14], h: [2.4, 2.6],
-    ports: ['back'], weight: 1.3, lights: 'dim', themes: { suburb: 1, '*': 0 },
+    ports: ['back'], weight: 1.3, lights: 'dim', themes: { suburb: 1, '*': 0 }, haunt: 2,
     module: './rooms/walk-in.js', stash: (r) => [r.W / 2 - 1.3, r.D / 2 - 1.3, r.W / 2 - 0.6, r.D / 2 - 0.6], roll: () => ({}) },
   // A lawn with a strip down the middle of it that was never drawn: jagged, no bottom, narrow in two places. Loose hoardings to bridge it,
   // and something on telephone poles that will come over a bridge after whoever laid it. (Its id is from when it was a storm drain.)
@@ -412,6 +412,19 @@ export const MORE_DECK = [
     ports: ['left', 'right'], weight: 1.2, lights: 'normal', themes: { suburb: 1, '*': 0 },
     module: './rooms/the-culvert.js', stash: (r, side) => [side * (r.W / 2 - 1.3) - 0.35, -r.D / 2 + 0.5, side * (r.W / 2 - 1.3) + 0.35, -r.D / 2 + 1.1],
     roll: (R) => ({ side: R.pick([-1, 1]) }) },
+  // The shopping centre (themes.js `mall`: still being built, `dealt: false`). Rooms made for it, and dealt nowhere else.
+  // Nine shop units made of office partition, three by three, and shutters down across some of the ways between them.
+  { id: 'the-concourse', name: 'The Concourse', landmark: 'the units, one to nine', w: [11, 13], d: [11, 13], h: [2.6, 2.9],
+    ports: ['left', 'right', 'back'], weight: 1.3, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/the-concourse.js', stash: (r) => [-r.W / 2 + 0.3, r.D / 2 - 1.0, -r.W / 2 + 0.95, r.D / 2 - 0.35], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A tea point scaled up: bolted tables, counters with lit boards, and the middle of the floor left out behind a rail with a length missing.
+  { id: 'food-court', name: 'The Food Court', landmark: 'the tables round the hole', w: [13, 15], d: [12, 14], h: [3.3, 3.8],
+    ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/food-court.js', stash: (r) => [r.W / 2 - 1.0, r.D / 2 - 1.0, r.W / 2 - 0.4, r.D / 2 - 0.4], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A car park in an office basement: low, every bay the same number, every car the one car, a barrier that works itself.
+  { id: 'level-p', name: 'Level P', landmark: 'the car park where every car is the one car', w: [13, 15], d: [14, 15], h: [2.3, 2.5],
+    ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/level-p.js', stash: (r) => [-r.W / 2 + 0.3, -0.35, -r.W / 2 + 0.95, 0.35], roll: (R) => ({ seed: R.int(1, 9999), bay: R.pick(['14', 'P14', '14B', '41']) }) },
   // A playground on fake grass. Most of it is going down into the floor, slowly, and has been for some time.
   { id: 'recess', name: 'Recess', landmark: 'the playground that is going under', w: [12, 14], d: [10, 12], h: [3.3, 4.2],
     ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },

@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {planVisit} from '../public/world/backrooms/plan.js';
+import {atHome} from '../public/world/backrooms/themes.js';
 import {coopVisit} from '../public/world/coop/visit.js';
 import {SHOWCASE} from '../public/world/coop/showcase.js';
 import {previewFloor,floorOf} from '../public/world/coop/showcase-preview.js';
@@ -40,4 +42,20 @@ test('ordinary floors still enforce one large set piece even when two are reques
  assert.throws(()=>generate('ordinary-landmark-rule',{only:['mecha','last-light'],known:['beam'],count:5}),/no layout/);
  const l=generate('ordinary-landmark-rule',{only:'mecha',count:5});
  assert.equal(l.rooms.filter(r=>r.arch&&isBig(ARCHETYPES[r.arch])).length,1);
+});
+
+// Curating one co-op visit must not mutate the live dealer or future solo visits.
+test('random co-op and solo retain the live four-floor dealer independently of the showcase',()=>{
+ for(let i=0;i<32;i++){
+  const seed=`live-isolation-${i}`,before=planVisit(seed);
+  coopVisit('private-tour',{route:'showcase'});
+  const after=planVisit(seed),random=coopVisit(seed);
+  assert.deepEqual(after,before);assert.deepEqual(random,before);
+  assert.equal(after.depths,4);assert.equal(after.floors[0].theme,'yellow');
+  assert.ok([1,2].includes(after.floors.findIndex(f=>f.theme==='suburb')));
+  assert.equal(after.floors.filter(f=>f.theme==='suburb').length,1);
+  assert.ok(after.floors.every(f=>f.theme!=='mall'&&!f.setPieces));
+  assert.equal(after.company,undefined);
+  if(after.headline)for(const f of after.floors)if(f.must.includes(after.headline))assert.ok(atHome(ARCHETYPES[after.headline],f.theme)>0);
+ }
 });

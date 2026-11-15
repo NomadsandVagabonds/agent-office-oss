@@ -3,6 +3,7 @@
 // option lists and the hash are the same ones the 2D pixel office has always
 // used, so an agent keeps its face when it steps into three dimensions.
 
+export const GENDER = Object.freeze(['male', 'female']);
 export const SPECIES = Object.freeze(['human', 'robot', 'goblin', 'dog', 'cat', 'alien']);
 export const SKIN = Object.freeze(['#f3cda8', '#e6b184', '#cd8d5e', '#9c6442', '#dcab8b']);
 export const HAIR_COLORS = Object.freeze(['#241608', '#4a2f1a', '#15151c', '#7d5836', '#caa05a', '#9aa0ac']);
@@ -26,6 +27,14 @@ const OUTFIT_POOL = ['tee', 'hoodie', 'suit', 'vest', 'cardigan'];
 const ACC_POOL = ['none', 'none', 'glasses', 'headphones', 'monocle', 'halo', 'partyhat',
   'crown', 'tophat', 'flower', 'eyepatch', 'shades', 'propeller'];
 const FACE_POOL = ['none', 'none', 'none', 'mustache', 'beard'];
+const HUMAN_FEMALE_HAIR_POOL = ['long', 'long', 'bun', 'braids', 'side', 'short', 'beanie'];
+const HUMAN_MALE_HAIR_POOL = ['short', 'short', 'side', 'cap', 'beanie', 'mohawk', 'bald'];
+const HUMAN_FEMALE_FACE_POOL = ['none', 'none', 'none', 'lashes'];
+const HUMAN_MALE_FACE_POOL = ['none', 'none', 'none', 'mustache', 'beard'];
+const HUMAN_FEMALE_OUTFIT_POOL = ['cardigan', 'hoodie', 'tunic', 'vest', 'tee', 'suit'];
+const HUMAN_MALE_OUTFIT_POOL = ['tee', 'hoodie', 'suit', 'vest', 'cardigan'];
+const HUMAN_FEMALE_OUTFIT_COLORS = ['#8a5a8f', '#b5483f', '#3f8a72', '#5a6fa8', '#c9893f', '#3f7f9a'];
+const HUMAN_FEMALE_ACC_POOL = ['none', 'none', 'glasses', 'headphones', 'flower', 'hoops', 'shades', 'halo', 'partyhat', 'crown', 'cowboy'];
 const SPECIES_POOL = ['human', 'human', 'human', 'human', 'human', 'human', 'human',
   'robot', 'robot', 'cat', 'dog', 'goblin'];
 const FUN_POOL = DESK_ITEMS.filter((id) => id !== 'mug');
@@ -53,21 +62,37 @@ export const isCreationId = (v) => typeof v === 'string' && /^c_[a-z0-9_]{1,48}$
  * A complete look for `seed`, with any provided `character` fields winning.
  * Deterministic: the same seed always rolls the same character.
  */
+/** Canonical starter defaults when toggling a Human between Male (Boy) and Female (Girl). */
+export function humanGenderDefaults(gender) {
+  return gender === 'female'
+    ? { gender: 'female', hair: 'long', facial: 'none', outfit: 'cardigan', outfitColor: '#8a5a8f', accessory: 'none' }
+    : { gender: 'male', hair: 'short', facial: 'none', outfit: 'tee', outfitColor: '#3f7f9a', accessory: 'none' };
+}
+
 export function resolveLook(seed, character) {
   const h = hashId(seed);
   const c = character && typeof character === 'object' ? character : {};
+  const gender = GENDER.includes(c.gender) ? c.gender : pick(GENDER, h >>> 24);
   const species = SPECIES.includes(c.species) ? c.species : pick(SPECIES_POOL, h >>> 21);
   const skinPool = SPECIES_SKIN[species] || SKIN;
+  const humanFemale = species === 'human' && gender === 'female';
+  const humanMale = species === 'human' && gender === 'male';
+  const hairPool = humanFemale ? HUMAN_FEMALE_HAIR_POOL : humanMale ? HUMAN_MALE_HAIR_POOL : HAIR_POOL;
+  const facePool = humanFemale ? HUMAN_FEMALE_FACE_POOL : humanMale ? HUMAN_MALE_FACE_POOL : FACE_POOL;
+  const outfitPool = humanFemale ? HUMAN_FEMALE_OUTFIT_POOL : humanMale ? HUMAN_MALE_OUTFIT_POOL : OUTFIT_POOL;
+  const outfitColorPool = humanFemale ? HUMAN_FEMALE_OUTFIT_COLORS : OUTFIT_COLORS;
+  const accPool = humanFemale ? HUMAN_FEMALE_ACC_POOL : ACC_POOL;
   return {
+    gender,
     species,
     skin: isHexColor(c.skin) ? c.skin : pick(skinPool, h),
-    hair: HAIR.includes(c.hair) ? c.hair : pick(HAIR_POOL, h >>> 3),
+    hair: HAIR.includes(c.hair) ? c.hair : pick(hairPool, h >>> 3),
     hairColor: isHexColor(c.hairColor) ? c.hairColor : pick(HAIR_COLORS, h >>> 6),
-    outfit: OUTFIT.includes(c.outfit) ? c.outfit : pick(OUTFIT_POOL, h >>> 9),
-    outfitColor: isHexColor(c.outfitColor) ? c.outfitColor : pick(OUTFIT_COLORS, h >>> 12),
+    outfit: OUTFIT.includes(c.outfit) ? c.outfit : pick(outfitPool, h >>> 9),
+    outfitColor: isHexColor(c.outfitColor) ? c.outfitColor : pick(outfitColorPool, h >>> 12),
     accessory: (ACCESSORY.includes(c.accessory) || isCreationId(c.accessory))
-      ? c.accessory : pick(ACC_POOL, h >>> 15),
-    facial: FACIAL.includes(c.facial) ? c.facial : pick(FACE_POOL, h >>> 18),
+      ? c.accessory : pick(accPool, h >>> 15),
+    facial: FACIAL.includes(c.facial) ? c.facial : pick(facePool, h >>> 18),
   };
 }
 
@@ -109,6 +134,7 @@ export function sanitizeLookPatch(patch) {
     if (isHexColor(patch[key])) look[key] = patch[key].toLowerCase();
     else errors.push(`${key} must be a #rrggbb color`);
   };
+  enumField('gender', GENDER);
   enumField('species', SPECIES);
   enumField('hair', HAIR);
   enumField('outfit', OUTFIT);
@@ -124,7 +150,7 @@ export function sanitizeLookPatch(patch) {
 }
 
 export const LOOK_OPTIONS = Object.freeze({
-  species: SPECIES, hair: HAIR, outfit: OUTFIT, accessory: ACCESSORY, facial: FACIAL,
+  gender: GENDER, species: SPECIES, hair: HAIR, outfit: OUTFIT, accessory: ACCESSORY, facial: FACIAL,
   skin: SKIN, hairColor: HAIR_COLORS, outfitColor: OUTFIT_COLORS,
   plants: PLANTS, deskItems: DESK_ITEMS,
 });

@@ -8,8 +8,10 @@
 // doors are what stand between the cast and you.
 // Also here: the cardboard colleague who sometimes decides to come along, and
 // who cannot open a door.
+import { creatureTuning, difficultyOf } from '../../../core/difficulty.mjs';
 import { makeRng } from './gen.js';
-import { CAST, castFor, homeFor } from './cast.js';
+import * as castList from './cast.js';              // (the whole of it, so that hauntsFor is asked for only where it is used: a stand-in cast list need not have it)
+const { CAST, castFor, homeFor } = castList;
 import { MAKERS } from './cast/index.js';
 import { createWalk } from './cast/walk.js';
 import { hangDoors } from './doorleaf.js';
@@ -27,8 +29,14 @@ export function createStalkers(env, options = {}) {
   /* ---- who is on this floor ---------------------------------------------------------------- */
 
   /** What a creature is handed (the contract). Everything it may need of the level is here or on c.env. (k: the conductor's own note of it.) */
-  const toolbox = (k, home, member = k.member) => ({
+  const toolbox = (k, home, haunt = null, lair = null, member = k.member) => ({
     env, level, member, walk, home,
+    get speedScale() { return creatureTuning(env.difficulty?.() ?? 'training-wheels', member.id).speed ?? 1; },
+    get population() { return Math.max(1, level.difficulty ? difficultyOf(level.difficulty).toner : 1); },
+    /** A room that asked for company and got this one (cast.js hauntsFor): its id, or null. What it does about it is its own. */
+    haunt,
+    /** For one that comes with a room (a cast line with `withRoom`, cast.js lairFor): the room it lies up in, a few doorways before its own — id, or null. */
+    lair,
     /** Seeded: for what the creature is (which room, which face). What happens while somebody is playing may use Math.random. */
     R: makeRng(`${level.seed}/cast/${member.id}`),
     /** What it left for itself on the floor above (its own carry()), or null. */
@@ -55,7 +63,7 @@ export function createStalkers(env, options = {}) {
     hurt(n = 1) {
       // (who it was is noted before the hit is made: the visit begins to end inside it, and asks)
       const before = taker; taker = k;
-      const hit = env.health?.damage(n);
+      const hit = env.health?.damage(creatureTuning(env.difficulty?.() ?? 'training-wheels', member.id).damage ?? n);
       if (hit) {
         const ended = !!hit.dead && !options.hasSurvivor?.();
         if (!ended) taker = before;
@@ -85,13 +93,17 @@ export function createStalkers(env, options = {}) {
      */
     fire(x, z) { const f = env.inventory?.fire?.threatAt?.(x, z, W().floorY(x, z)); return f ? { x: f.x, z: f.z, remaining: f.remaining } : null; },
   });
-  const live = [];
-  for (const cast of (options.members?.map(id => ({ id })) ?? castFor(env.visit, level.depth))) {
+  const live = [], dealt = options.members?.map(id => ({ id })) ?? castFor(env.visit, level.depth);
+  // …and whoever comes with a room this floor has (cast.js withRoomFor: extra, in nobody's place)
+  if (!options.members) { try { for (const id of castList.withRoomFor?.(level) ?? []) if (!dealt.some((k) => k.id === id)) dealt.push({ id }); } catch (err) { console.warn('[backrooms] nobody came with a room on this floor', err); } }
+  let haunts = new Map();
+  try { haunts = castList.hauntsFor?.(level, dealt.map((k) => k.id)) ?? haunts; } catch (err) { console.warn('[backrooms] nobody keeps a room company on this floor', err); }
+  for (const cast of dealt) {
     const member = CAST.find((m) => m.id === cast.id), make = MAKERS[cast.id];
     if (!member || !make) continue;
     // (things: what it has put in the level · bodies: what of it nobody walks through · away: the room it is standing in has gone, and it with it)
     const k = { id: member.id, member, it: null, things: [], bodies: [], away: null, shown: null };
-    try { k.it = make(toolbox(k, homeFor(level, member))); live.push(k); }
+    try { k.it = make(toolbox(k, homeFor(level, member), haunts.get(member.id) ?? null, castList.lairFor?.(level, member) ?? null)); live.push(k); }
     catch (err) { if(env.coopStrict)throw err;console.warn(`[backrooms] ${member.id} would not be made — the floor does without`, err); }
   }
   const pirate = live.find((k) => k.id === 'pirate')?.it || null;

@@ -57,8 +57,9 @@ export function build(c) {
   daylight(c, 3, 3, 1, 1);
   // Real terrain stays fixed for co-op. The solo fall retains its existing room-floor animation.
   const falls = new WeakMap(), safe = new WeakMap();
+  let soloFall = null;
   const inGap = (x, z) => { if (Math.abs(z) >= D / 2) return false; const [a, b] = gap.at(z); return x > a && x < b; };
-  c.rt.floorY = (x, z) => (!c.env.coopStrict && falls.get(c.env.player?.me)?.y !== undefined ? falls.get(c.env.player.me).y : inGap(x, z) ? -K.deep : 0);
+  c.rt.floorY = (x, z) => (!c.env.coopStrict && soloFall ? soloFall.y : inGap(x, z) ? -K.deep : 0);
   c.rt.headY = (x, z) => H - c.rt.floorY(x, z);
 
   /* the lawn, either side; the squares along the break, which never got their grass; under all of it, nothing */
@@ -147,5 +148,24 @@ export function build(c) {
     }
     if(env.world.terrainY(body.x,body.z)>=c.room.y-.2)safe.set(body,{x:body.x,z:body.z});redraw(dt,me);
   };
-  c.tick((dt)=>{if(env.forEachVisitor)env.forEachVisitor(body=>tickVisitor(dt,body));else if(env.player?.me)tickVisitor(dt,env.player.me);});
+  if (!env.coopStrict) c.tick((dt, t, me) => {
+    /* the visitor, going in */
+    if (soloFall) {
+      soloFall.t += dt; soloFall.y = Math.max(-80, -0.5 * 9.8 * soloFall.t * soloFall.t);
+      const q = c.toWorld(soloFall.x, soloFall.z); env.player?.warp?.(q.x, q.z);
+      const eye = env.player?.me; if (eye) eye.pitch = Math.min(0.95, eye.pitch + dt * 1.3);          // the strip of ceiling, getting narrower
+      env.red?.(Math.min(0.9, soloFall.t * 0.5)); env.interfere?.(0.3 + 0.5 * Math.min(1, soloFall.t / K.falls));
+      if (soloFall.t >= K.falls && !soloFall.over) { soloFall.over = true; env.hold?.(false); env.end?.('caught'); if (env.difficulty?.() === 'tourist') soloFall = null; }
+      return;
+    }
+    if (!me.inside || env.player?.me?.frozen) return;
+    // the lawn ends where it ends: within a step of the break with nothing let down there, and it is not there to stand on.
+    // (The floor as the building has it now is what counts: a hoarding that is down is floor, and has an edge either side.)
+    for (let a = 0; a < 8; a++) if (open(me.x + Math.sin(a * 0.7854) * K.brink, me.z + Math.cos(a * 0.7854) * K.brink)) {
+      const [ga, gb] = gap.at(me.z); soloFall = { x: Math.max(ga + 0.4, Math.min(gb - 0.4, me.x)), z: me.z, y: 0, t: 0 }; env.hold?.(true); env.run?.met?.('the-culvert');
+      const q = c.toWorld(me.x, me.z); env.play?.('rattle', q.x, q.z, 6); return;
+    }
+    redraw(dt, me);
+  });
+  else c.tick((dt)=>{if(env.forEachVisitor)env.forEachVisitor(body=>tickVisitor(dt,body));else if(env.player?.me)tickVisitor(dt,env.player.me);});
 }

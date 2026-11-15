@@ -42,10 +42,11 @@ export function createD1Store(db, { now = () => Date.now(), token = () => global
     WHERE br_guards.expires <= ? RETURNING token`, kind, who, at + AGAIN[kind] * 1000, mine, at);
 
   return {
-    async read() {
+    async read(difficulty = '') {
       const [counter, top, latest] = await batch([
         q(COUNTERS),
-        q('SELECT line FROM br_entries WHERE top = 1 ORDER BY score DESC, line DESC LIMIT ?', KEEP.showTop),
+        difficulty ? q("SELECT line FROM br_entries WHERE top = 1 AND COALESCE(json_extract(line, '$.difficulty'), 'original') = ? ORDER BY score DESC, line DESC LIMIT ?", difficulty, KEEP.showTop)
+          : q('SELECT line FROM br_entries WHERE top = 1 ORDER BY score DESC, line DESC LIMIT ?', KEEP.showTop),
         q('SELECT line FROM br_entries WHERE latest = 1 ORDER BY seq DESC LIMIT ?', KEEP.showLatest),
       ]);
       return { counter: counterOf(counter[0]), top: top.map(r => JSON.parse(r.line)), latest: latest.map(r => JSON.parse(r.line)) };
@@ -75,7 +76,7 @@ export function createD1Store(db, { now = () => Date.now(), token = () => global
         q(`INSERT INTO br_entries (id, line, score) SELECT ?, ?, ? WHERE ${OWN_BOTH}`, entry.id, line, entry.score, ...own),
         q(`UPDATE br_counters SET escaped = escaped + 1 WHERE id = 1 AND ${OWN_BOTH}`, ...own),
         q(`UPDATE br_entries SET top = 0 WHERE top = 1 AND seq NOT IN (
-          SELECT seq FROM br_entries WHERE top = 1 ORDER BY score DESC, line DESC LIMIT ?
+          SELECT seq FROM (SELECT seq, ROW_NUMBER() OVER (PARTITION BY COALESCE(json_extract(line, '$.difficulty'), 'original') ORDER BY score DESC, line DESC) AS place FROM br_entries WHERE top = 1) WHERE place <= ?
         )`, KEEP.top),
         q(`UPDATE br_entries SET latest = 0 WHERE latest = 1 AND seq NOT IN (
           SELECT seq FROM br_entries WHERE latest = 1 ORDER BY seq DESC LIMIT ?

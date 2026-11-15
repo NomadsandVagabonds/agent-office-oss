@@ -1,13 +1,23 @@
 # Two tapes: private two-player prototype
 
-Working branch: `codex/backrooms-coop-full-game`, with Fable development through `2ce180f`.
-Full-content coverage and remaining differences: [BACKROOMS-COOP-COVERAGE.md](BACKROOMS-COOP-COVERAGE.md).
-Full-content commit `de00cec` and character/open-mic follow-up `bb4551a` are pushed and live.
-Private alpha: hosted on Railway; use the owner's private host bookmark.
-Railway runs game build `bb4551a`, separately from the public BlockRooms site.
-Deployment: `ed437082-8346-4085-9846-c8b3cba30be7`, verified 15 November 2026.
+Working branch: `codex/backrooms-coop-full-game`, merging `blockrooms-live`
+through `eadfb5d`. Full-content coverage and remaining differences:
+[BACKROOMS-COOP-COVERAGE.md](BACKROOMS-COOP-COVERAGE.md).
+Private alpha: hosted separately on Railway; use the owner's private host
+bookmark. Deployment addresses and host credentials stay in local records.
+This merge is for review; publishing the branch does not redeploy Railway.
 
-## Curated tour (prepared for publication)
+## Live merge review
+
+The normal dealer is Fable's four-floor visit, with Suburbia second or third.
+The optional showcase has its own explicit route and cast, without changing
+single-player visits. Live headline placement, toner counterplay, party crawl,
+Mother's recorded sounds, The Lines' wake grace, both-end bridge grips, Gemini's
+item models and pickup jiggle are retained. The mall stays hidden from normal
+visits, as on live. Ordinary furniture now uses live's carry/set-down behavior;
+placement checks both visitors and the 0.4 m floor-height limit.
+
+## Curated tour
 
 **The long way round** is a fixed four-floor tour: yellow offices, unfinished
 offices, Suburbia, and the combined night finale. Floor 1 keeps pirate, cake and
@@ -15,7 +25,7 @@ moving cutouts; Mother is on floor 2 and The Lines on floor 3. The waterpark
 will come later. The Gap includes removable hoarding bridges: hold with E,
 lower/raise with R, and pull one out from under The Lines. Both players share
 the floor and a teammate standing on a bridge prevents removal. See [the showcase notes](BACKROOMS-COOP-SHOWCASE.md) for the seed, tested
-route, creature changes and limits. The hosted release above is still unchanged.
+route, creature changes and limits.
 
 ## Custom characters and open mic (live)
 
@@ -26,20 +36,21 @@ either slot before the friend joins. Changing a choice clears Ready for both
 players. Characters lock for the visit and carry through floor changes. These
 are cosmetic choices; the full studio editor and character perks are not ported.
 
-Click **Enable voice**, then choose **Open mic · always on** to talk without
+First start or join a game; the voice button is disabled until connected.
+Click **Enable voice**, allow the browser microphone prompt, then choose **Open mic · always on** to talk without
 holding a key. **V** toggles mute in that mode; the menu also has a mute button.
 The camcorder indicator stays visible while open mic is enabled and shows mute
 or pause status. Leaving the tab pauses transmission; returning resumes it
 unless muted. Push-to-talk remains the default. No microphone starts without
 clicking Enable voice, and neither mode records voice.
 
-Protocol `blockrooms-coop-7` requires both clients and the relay to update.
+Protocol `blockrooms-coop-8` requires both clients and the relay to update.
 The browser preflight verifies the exact character looks and actual audio
 capture/playback with a generated fake microphone, including mute and focus
 handling. The same preflight passes on the hosted Railway build, including
 joining and entering the game. A London–Argentina session is still untested.
 
-## Lobby refresh (live)
+## Earlier lobby refresh
 
 The co-op entry page now uses the homepage’s yellow wallpaper, original voxel
 logo and sprites, navy window bars and beveled buttons. Instructions use plain
@@ -56,7 +67,7 @@ known unrelated console/status-line failures. Deployed as `b756746`; the live
 HTTPS page, CSS/SVG assets, private host-key stripping, guest invite and both
 players entering a run passed in two Chromium clients.
 
-## First-play preflight (live)
+## Earlier first-play preflight
 
 Small first-session fixes: starting a game disables the button until the request
 finishes, times out after 15 seconds, and offers a useful retry after failure.
@@ -105,7 +116,7 @@ gets an explicit pause message and resumes when the host returns.
 
 WASD moves, mouse looks, Shift runs, C crouches and Space jumps. E picks up, operates a door, or interacts with a nearby teammate; 1–6 holds/stows, Q (or R) uses, G drops, F toggles the flashlight. I or Tab opens the production camcorder inventory and its two-ingredient crafting panel. Escape releases the mouse without
 pausing a visible host. Enable voice in the menu, then hold V to talk.
-Visits now span 3–5 seeded floors. Find each floor’s way down and gather
+Normal visits span four seeded floors, with Suburbia second or third. Find each floor’s way down and gather
 within three metres to descend together. Both browsers must finish loading
 before simulation resumes. On the final floor, lean into the taped wall at the
 bottom of the fire stairs; extraction waits for all living visitors.

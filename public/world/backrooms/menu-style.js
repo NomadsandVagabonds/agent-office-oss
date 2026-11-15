@@ -74,6 +74,15 @@ export const MENU_CSS = `
 .br-menu-setting input[type="range"] { grid-column: 1 / -1; display: block; width: 100%; height: 30px; margin: -2px 0; accent-color: var(--menu-ink); cursor: ew-resize; background: transparent; touch-action: pan-y; }
 .br-menu-setting select { min-height: 40px; max-width: 100%; padding: 4px 26px 4px 9px; border: 1px solid var(--menu-rule); background: #101b15c4; font-size: 18px; }
 .br-menu-setting option { color: var(--menu-ink); background: #182019; }
+.br-menu .retro-select { min-width: 0; width: min(270px, 100%); justify-self: end; }
+.br-menu-setting:has(.retro-select) { align-items: start; }
+.br-menu-setting:has(.retro-select) > label { padding-top: 5px; }
+.br-menu .retro-select-button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 40px; padding: 4px 9px; border: 1px solid var(--menu-rule); background: #101b15c4; text-align: left; }
+.br-menu .retro-select-arrow { flex: none; }
+/* Expand inside the scroll area so phone/short-window options cannot be clipped. */
+.br-menu .retro-select-list { border: 1px solid var(--menu-rule); border-top: 0; background: #101b15e8; }
+.br-menu .retro-select-option { padding: 7px 9px; cursor: pointer; }
+.br-menu .retro-select-option.is-active { background: var(--menu-ink); color: #101b15; text-shadow: none; outline: 1px dotted #101b15; outline-offset: -3px; }
 .br-menu-setting input[type="checkbox"] { width: 22px; height: 22px; margin: 4px; accent-color: var(--menu-ink); cursor: pointer; }
 .br-menu-setting small { grid-column: 1 / -1; color: var(--menu-soft); font: 400 10px/1.5 "IBM Plex Mono", monospace; }
 .br-menu-setting.is-future { padding-top: 18px; border-top: 1px solid var(--menu-rule); }
@@ -97,6 +106,8 @@ export const MENU_CSS = `
   .br-menu-settings { gap: 16px; }
   .br-menu-setting > label { font-size: 20px; }
   .br-menu-setting select { font-size: 16px; }
+  .br-menu-setting:has(.retro-select) { grid-template-columns: 1fr; }
+  .br-menu .retro-select { width: 100%; font-size: 16px; }
   .br-menu-picture .br-menu-launcher { min-width: 44px; right: 4%; }
 }
 @container (max-height: 430px) {

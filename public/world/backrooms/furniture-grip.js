@@ -1,5 +1,5 @@
-// A hand on ordinary furniture, not a gravity gun. The furniture and the
-// player's feet take the same short step; if either cannot fit, neither moves.
+// Ordinary furniture can be carried at walking pace. While held, only the
+// visitor collides; the prop follows the view and is checked when set down.
 import { FURNITURE } from './furniture-motion.js';
 
 const REACH = 1.65;
@@ -43,36 +43,61 @@ export function furnitureTarget(world, me) {
 }
 
 export function createFurnitureGrip(world, motion, { sound } = {}) {
-  let held = null, target = null, me = null, cooldown = 0, travelled = 0, blocked = false, saved = null, lift = 0;
-  const lies = item => !!item?.deployed || !!item?.transition;
+  let held = null, target = null, me = null, saved = null, lift = 0, blocked = false;
   const resetLift = () => { if (held?.group?.position) held.group.position.y -= lift; lift = 0; };
-  function followPanel() {
-    if (!held?.bridge || lies(held) || held.away || !me) return;
-    const reach = Math.min(1.8, Math.max(1.1, Math.hypot(held.x1-held.x0,held.z1-held.z0)/2+.65));
-    held.translate(me.x-Math.sin(me.yaw)*reach-held.x,me.z-Math.cos(me.yaw)*reach-held.z);
-    held.collider.on=false;resetLift();lift=world.floorY(me.x,me.z)-held.y+.16;
-    if(held.group?.position)held.group.position.y+=lift;
+  /** A panel laid as a bridge, or on its way down or up (movable-props.js), is held to be raised and never carried: it stays where it lies. */
+  const lies = (item) => !!item && (!!item.deployed || !!item.transition);
+  function follow() {
+    if (!held || held.away || !me || lies(held)) return;
+    const reach = Math.min(1.8, Math.max(1.1, Math.hypot(held.x1 - held.x0, held.z1 - held.z0) / 2 + .65));
+    const x = me.x - Math.sin(me.yaw) * reach, z = me.z - Math.cos(me.yaw) * reach;
+    // No collision query here. A chair protruding into a jamb must not pin
+    // its carrier; the actual player controller still tests walls and bodies.
+    held.translate(x - held.x, z - held.z);
+    held.collider.on = false;
+    resetLift();
+    const floor = world.floorY(me.x, me.z);
+    lift = (Number.isFinite(floor) ? floor - held.y : 0) + .16;
+    if (held.group?.position) held.group.position.y += lift;
   }
+  function finish(on) {
+    resetLift();
+    held.carried = false; held.collider.on = on;
+    world.touchFurniture?.(held);
+    delete me.gripSpeed;
+    held = target = saved = null; blocked = false;
+  }
+  /** Manual release needs room at the visitor's side of the wall. Forced
+   * release (menu/fall/teardown) can return it to its original resting place. */
   function release(force = true) {
-    if(held?.bridge && saved){
-      resetLift();
-      if(!held.away && !lies(held)){
-        const dx=held.x-me.x,dz=held.z-me.z;let placed=false;
-        for(const scale of [1,.85,.7]){
-          const x=me.x+dx*scale,z=me.z+dz*scale,n=Math.max(1,Math.ceil(Math.hypot(x-me.x,z-me.z)/.08));let clear=true;
-          for(let i=1;i<=n;i++)if(!world.free(me.x+(x-me.x)*i/n,me.z+(z-me.z)*i/n,.015,{tall:true,ghost:true,ignoreCollider:held.collider})){clear=false;break;}
-          if(clear&&motion.place(held,x,z,{from:world.floorY(me.x,me.z)})){placed=true;break;}
+    if (!held) { if (me) delete me.gripSpeed; target = null; return true; }
+    resetLift();
+    if (lies(held) && !held.away) { finish(held.deployed || held.transition ? true : saved.on !== false); return true; }          // let go where it lies: nothing to set down
+    if (!held.away) {
+      const dx = held.x - me.x, dz = held.z - me.z;
+      // Prefer where it is pictured, then a little nearer. Never drop a prop
+      // on the other side of a wall merely because its carried mesh clips it.
+      for (const scale of [1, .85, .7]) {
+        const x = me.x + dx * scale, z = me.z + dz * scale;
+        const n = Math.max(1, Math.ceil(Math.hypot(x - me.x, z - me.z) / .08));
+        let clear = true;
+        for (let i = 1; i <= n; i++) {
+          if (!world.free(me.x + (x - me.x) * i / n, me.z + (z - me.z) * i / n, .015,
+            { tall: true, ghost: true, ignoreCollider: held.collider })) { clear = false; break; }
         }
-        if(!placed&&!force){blocked=true;followPanel();return false;}
-        if(!placed)held.translate(saved.x-held.x,saved.z-held.z);
+        if (clear && motion.place(held, x, z, { from: world.floorY(me.x, me.z) })) { finish(true); sound?.play('clack', { vol: .3 }); return true; }
       }
-      const occupied = !lies(held) && ((world.env?.players?.() || [world.env?.player]).some(p=>p?.me&&edgeDistance(held,p.me)<(p.RADIUS||.22)) || (world.bodies||[]).some(b=>b.on!==false&&!b.airborne&&edgeDistance(held,b)<b.r));
-      held.carried=false;held.collider.on=!held.away&&!occupied;world.touchFurniture?.(held);
+      if (!force) { blocked = true; follow(); return false; }
+      held.translate(saved.x - held.x, saved.z - held.z, saved.y - held.y);
     }
-    if (me) delete me.gripSpeed;
-    held = null; target = null; saved=null; travelled = 0; blocked = false;return true;
+    // Changing rooms stay absent. Returning an authored placement also
+    // preserves its old construction-rescue exception.
+    const occupied = (world.env?.players?.() || [world.env?.player]).some(p => p?.me && edgeDistance(held, p.me) < (p.RADIUS || .22))
+      || (world.bodies || []).some(b => b.on !== false && !b.airborne && edgeDistance(held, b) < b.r);
+    const on = !held.away && saved.on !== false && !occupied;
+    finish(on);
+    return true;
   }
-
   return {
     get held() { return held; },
     get target() { return target; },
@@ -86,49 +111,34 @@ export function createFurnitureGrip(world, motion, { sound } = {}) {
     release,
     update(dt, player, enabled = true) {
       me = player;
-      if (!enabled || me.frozen || me.drop > .12 || (held && (held.away || held.transition || !held.bridge && edgeDistance(held, me) > REACH + .35))) { release(); return; }
-      followPanel();
+      if (!enabled || me.frozen || me.drop > .12 || held?.away || held?.transition) { release(); return; }
+      follow();
       target = held || furnitureTarget(world, me);
       if (held) me.gripSpeed = FURNITURE[held.type].playerSpeed;
       else delete me.gripSpeed;
-      cooldown -= dt;
-      if (held && travelled > .025 && cooldown <= 0) {
-        sound?.play(held.type === 'desk' ? 'furnitureScrape' : 'furnitureRoll', { vol: .7 });
-        cooldown = .32; travelled = 0;
-      }
     },
     use() {
       if (held) return release(false);
       if (!target || !me) return false;
       held = target; blocked = false; me.vx = me.vz = 0;
-      if(held.bridge){saved={x:held.x,z:held.z,on:held.collider.on};if(!lies(held)){held.carried=true;held.collider.on=false;world.touchFurniture?.(held);}followPanel();}
+      saved = { x: held.x, z: held.z, y: held.y, on: held.collider.on };
+      if (!lies(held)) { held.carried = true; held.collider.on = false; world.touchFurniture?.(held); }          // (a laid bridge is still a floor while it is held)
+      follow();
       me.gripSpeed = FURNITURE[held.type].playerSpeed;
       sound?.play('clack', { vol: .25 });
       return true;
     },
     tip() {
-      if(!held?.bridge||!me)return {ok:false,reason:'fixed'};
-      const result=motion.tip(held,me);
-      if(result.ok){sound?.play('furnitureScrape',{vol:.6});release();}
+      if (!held?.bridge || !me) return { ok: false, reason: 'fixed' };
+      const result = motion.tip(held, me);
+      if (result.ok) { sound?.play('furnitureScrape', { vol: .6 }); release(); }
       return result;
     },
-    /** Called by player.move for each <=6cm axis step. `step` tests the player's body after the furniture has moved. */
+    /** Player collision is the only movement constraint while carrying. */
     step(dx, dz, step) {
-      if (!held) return step(dx, dz);
-      if(held.bridge){const moved=step(dx,dz);if(moved){blocked=false;followPanel();}return moved;}
-      const wasOn = held.collider.on;
-      const moved = motion.move(held, dx, dz, { ignoreBody: me });
-      if (!moved.moved) { blocked = true; return false; }
-      if (!step(moved.dx, moved.dz)) {
-        // No other world update can run between these synchronous steps. This
-        // exact previous position is known safe, so rollback cannot strand it.
-        held.translate(-moved.dx, -moved.dz);
-        held.collider.on = wasOn;
-        if (wasOn === false) world.touchFurniture?.(held);
-        blocked = true; return false;
-      }
-      travelled += Math.hypot(moved.dx, moved.dz); blocked = false;
-      return true;
+      const moved = step(dx, dz);
+      if (held && moved) { blocked = false; follow(); }
+      return moved;
     },
   };
 }

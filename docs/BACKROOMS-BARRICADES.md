@@ -22,10 +22,25 @@ Remove `study=1` to try furniture throughout a normal seeded visit. Remove
 `barricades=1` to compare against the unchanged behavior.
 
 Look at furniture within reach. Camcorder focus brackets and **E · Move Chair**
-(or Desk/Trolley) appear. Tap E, walk to push or pull, then tap E to release.
+(or Desk/Trolley) appear. Tap E, carry it with WASD, then tap E to set it down.
 The touch hand does the same. A working computer keeps its own E interaction;
 aim below its tabletop to grab the desk. Pause, the bag, a fall or a changing
-room releases the grip. Selected-pocket models hide while dragging.
+room releases the grip. Selected-pocket models hide while carrying.
+
+**Carry correction (`codex/backrooms-chair-grab-fix`, 15 Nov):** only the visitor
+collides while holding furniture. The object follows the viewing direction,
+floating 16cm above the visitor's floor. It may clip scenery while carried;
+this is intentional, so dense chair layouts and narrow doors cannot pin the
+visitor. Held props do not block creatures or receive their shoves. Pickup and
+placement invalidate navigation; carrying does not rebuild paths every frame.
+
+E checks for a clear footprint on level floor, on this side of any wall, before
+restoring collision. If there is no room, the prompt says “Find space to set
+down”; the visitor remains free to walk and turn. Automatic release (menu,
+bag, fall or teardown) tries the same placement, then restores the original
+pickup location and collision state. If that spot is now occupied by a body,
+the prop retains the existing nonblocking rescue behavior until picked up and
+placed again. No prop becomes an invisible collider inside its carrier.
 
 ## Consistent physical rules
 
@@ -50,9 +65,12 @@ part of the fixed pile, rather than a free-standing desk.
 
 ## Movement and the pirate
 
-Furniture slides upright, at fixed orientation and floor height. It cannot be
-thrown, stacked, tipped, carried through a floor transition, or slid over holes,
-steps or changing floor heights. There is no separate furniture save format yet.
+Carried furniture stays upright and retains its orientation while following
+the visitor's view. It can pass steps and obstacles with the visitor and settle
+at a new floor height, but cannot be placed in a pit or carried through a floor
+transition. Creature shoves still slide grounded furniture along level floor.
+It cannot be thrown, stacked or tipped. There is no separate furniture save
+format yet.
 
 | Object | Player speed | Pirate brace | Pirate push |
 | --- | ---: | ---: | ---: |
@@ -60,10 +78,11 @@ steps or changing floor heights. There is no separate furniture save format yet.
 | Trolley | 0.85 m/s | 1.5 s | 0.65 m/s |
 | Desk | 0.45 m/s | 2.4 s | 0.40 m/s |
 
-Movement uses small swept steps over the full rectangular footprint. It checks
+Creature pushing uses small swept steps over the full rectangular footprint. It checks
 walls, closed doors, other furniture, creatures, the player, floor and ceiling.
-Player and furniture steps commit together; a blocked player step rolls back
-the furniture. An open, level doorway can transfer a piece into the next room.
+Player carrying instead follows the visitor's approved movement, without a
+prop sweep. Doorways transfer ownership and carried attachments into the next
+room; setting the prop down restores the floor's collision and path grids.
 
 Furniture blocks physical walkers and physical contact, independently of visual
 line of sight. Creatures can see over a desk and continue pursuing; they cannot

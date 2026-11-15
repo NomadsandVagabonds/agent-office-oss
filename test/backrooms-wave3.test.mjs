@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { ITEM_IDS, kindOf, createHandOver, isPaper, isBalloon, isFlashlight } from '../public/world/backrooms/items.js';
 import { CABLE, createCableState, stepCable, releaseCable } from '../public/world/backrooms/rooms/cable-drop/rule.js';
 import { SHREDDER, createShredderState, stepShredder, releaseShredder } from '../public/world/backrooms/rooms/shredding-bay/rule.js';
-import { PARTY, createPartyState, stepParty, releaseParty } from '../public/world/backrooms/rooms/mandatory-fun/rule.js';
+import { PARTY, createPartyState, stepParty, releaseParty, partyTarget } from '../public/world/backrooms/rooms/mandatory-fun/rule.js';
 import { BLACKOUT, createBlackoutState, stepBlackout, releaseBlackout, isInBeam } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
 import { WARDEN, createWardenState, stepWarden, releaseWarden, parryWarden } from '../public/world/backrooms/rooms/safety-corridor/rule.js';
 import { PARTNER, createPartnerState, stepPartner } from '../public/world/backrooms/rooms/audit-pod/rule.js';
@@ -145,31 +145,41 @@ test('The Retention Clerk (shredding-bay): paper appeases her into leaving; empt
   assert.equal(finalCatch, true);
 });
 
-test('The Fun Committee (mandatory-fun): holding a red balloon makes them dance; empty hands past threshold trigger swarm', () => {
-  let s = createPartyState();
-  // Entering past threshold WITH a balloon triggers harmless partying even right beside them
-  const party = stepParty(s, { dt: 0.2, insideRoom: true, pastThreshold: true, holdingBalloon: true, minDist: 0.2 });
-  assert.equal(party.state.mode, 'partying');
-  assert.equal(party.horn, true);
-  assert.equal(party.caught, false);
-  assert.equal(party.speed, 0);
+test('Fun Committee notices anywhere in the room, then pursues within 1–2 seconds', () => {
+  let s = createPartyState(), r;
+  for (let i = 0; i < 12; i++) { r = stepParty(s, { dt: .1, insideRoom: true, minDist: 3 }); s = r.state; assert.equal(r.speed, 0); }
+  r = stepParty(s, { dt: .1, insideRoom: true, minDist: 3 }); s = r.state;
+  assert.equal(s.mode, 'swarming'); assert.equal(r.triggeredSwarm, true); assert.equal(r.speed, PARTY.swarmSpeed);
+  r = stepParty(s, { dt: .1, insideRoom: true, visible: false, contactDist: Infinity });
+  assert.equal(r.speed, PARTY.swarmSpeed, 'keeps coming after briefly losing sight');
+  assert.equal(stepParty(s, { dt: .1, insideRoom: true, contactDist: .4 }).caught, true);
+  assert.equal(stepParty(s, { dt: .1, insideRoom: true, minDist: .4, contactDist: Infinity }).caught, false, 'furniture blocks contact');
+  r = stepParty(createPartyState(), { dt: 5, insideRoom: true, visible: false });
+  assert.equal(r.state.mode, 'idle', 'cannot first notice somebody through a wall');
+});
 
-  // Crossing threshold WITHOUT a balloon triggers swarming
-  let s2 = createPartyState();
-  const sw = stepParty(s2, { dt: 0.1, insideRoom: true, pastThreshold: true, holdingBalloon: false, minDist: 3.0 });
-  assert.equal(sw.triggeredSwarm, true);
-  assert.equal(sw.state.mode, 'swarming');
-  assert.equal(sw.speed, PARTY.swarmSpeed);
+test('balloon interrupts an attack: approach, dance for 2.4 seconds, leave the holder alone', () => {
+  let s = { ...createPartyState(), mode: 'swarming', caught: true };
+  const tick = (o = {}) => { const r = stepParty(s, { dt: .1, insideRoom: true, holdingBalloon: true, contactDist: .1, ...o }); s = r.state; assert.equal(r.caught, false); return r; };
+  assert.equal(tick().state.mode, 'gathering');
+  assert.ok(tick().speed > 0);
+  assert.equal(tick({ gathered: true }).state.mode, 'partying');
+  for (let i = 0; i < 20; i++) assert.equal(tick().state.mode, 'partying');
+  for (let i = 0; i < 5; i++) tick();
+  assert.equal(s.mode, 'released'); assert.equal(s.welcomed, true);
+  for (let i = 0; i < 100; i++) assert.equal(tick().state.mode, 'released');
+  tick({ insideRoom: false }); tick(); assert.equal(s.mode, 'released', 'no repeat dance on returning with balloon');
+  for (let i = 0; i < 14; i++) tick({ holdingBalloon: false, contactDist: 3 });
+  assert.equal(s.mode, 'swarming'); assert.equal(s.welcomed, false);
+});
 
-  // Grabbing the red balloon mid-swarm immediately pacifies them back into partying
-  const saved = stepParty(sw.state, { dt: 0.1, insideRoom: true, pastThreshold: false, holdingBalloon: true, minDist: 1.1 });
-  assert.equal(saved.state.mode, 'partying');
-  assert.equal(saved.speed, 0);
-  assert.equal(saved.caught, false);
-
-  // Staying empty-handed within catchRadius catches the visitor
-  const caught = stepParty(sw.state, { dt: 0.1, insideRoom: true, pastThreshold: true, holdingBalloon: false, minDist: 0.4 });
-  assert.equal(caught.caught, true);
+test('party in 2P targets the unprotected visitor rather than letting one balloon protect both', () => {
+  const welcomed = new Set(['a']), a = { id: 'a', visible: true, holdingBalloon: true }, b = { id: 'b', visible: true, holdingBalloon: false };
+  assert.equal(partyTarget([a, b], 'a', welcomed).id, 'b');
+  b.holdingBalloon = true; assert.equal(partyTarget([a, b], 'a', welcomed).id, 'b', 'second visitor gets a dance too');
+  welcomed.add('b'); a.holdingBalloon = false;
+  assert.equal(partyTarget([a, b], 'b', welcomed).id, 'a'); assert.equal(welcomed.has('a'), false);
+  a.visible = false; assert.equal(partyTarget([a, b], 'a', welcomed).id, 'b');
 });
 
 test('The Stand-Ins (blackout-bay): unlit crossing floods crimson and kills; flashlight beam freezes aimed targets only', () => {
@@ -298,12 +308,14 @@ test('the Retention Clerk lets go: after the rollers she is content for a while 
   assert.ok(SHREDDER.hurts === 2 && SHREDDER.respite >= 8);
 });
 
-test('the Fun Committee lets go: after somebody has been made to join in, the circle forms up and leaves them be for a while, wherever they stand', () => {
-  let s = releaseParty({ ...createPartyState(), mode: 'swarming', caught: true }), r = null;
-  for (let t = 0; t < PARTY.pause - 0.3; t += 0.1) { r = stepParty(s, { dt: 0.1, insideRoom: true, pastThreshold: true, holdingBalloon: false, minDist: 0.1 }); s = r.state; assert.ok(!r.caught && !r.triggeredSwarm && s.mode === 'idle'); assert.equal(r.speed, PARTY.returnSpeed); }
-  for (let t = 0; t < 0.6; t += 0.1) { r = stepParty(s, { dt: 0.1, insideRoom: true, pastThreshold: true, holdingBalloon: false, minDist: 3 }); s = r.state; }
-  assert.equal(s.mode, 'swarming', 'and then the music is off again');
-  assert.ok(PARTY.hurts === 1 && PARTY.pause >= 5);
+test('Fun Committee continues chasing after a hit, with a contact cooldown', () => {
+  let s = releaseParty({ ...createPartyState(), mode: 'swarming', caught: true }), r;
+  for (let i = 0; i < 12; i++) {
+    r = stepParty(s, { dt: .1, insideRoom: true, contactDist: .1 }); s = r.state;
+    assert.equal(r.caught, false); assert.equal(r.speed, PARTY.swarmSpeed);
+  }
+  for (let i = 0; i < 2; i++) { r = stepParty(s, { dt: .1, insideRoom: true, contactDist: .1 }); s = r.state; }
+  assert.equal(r.caught, true);
 });
 
 test('Blackout Bay lets go: after the dark has had somebody, nothing stirs and nothing reddens for a moment, and then it is the room it was', () => {

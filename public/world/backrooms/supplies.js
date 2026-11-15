@@ -16,13 +16,15 @@
 //                   torch, a torch that will stay on the camcorder
 //   anything else   only where somebody on this floor wants it (cast.js: what
 //                   a creature cares about). Nothing is clutter.
+import { difficultyOf } from '../../../core/difficulty.mjs';
 import { makeRng } from './gen.js';
 
 /** How much there is. Starting points: this is what play-testing changes. */
 export const SUPPLY = Object.freeze({
   batteryFirst: 4,                  // keep the first pack among this many early eligible rooms
-  batteryEvery: 8,                  // after that, one pack to this many rooms
+  batteryEvery: 28,                 // after that, one pack to this many rooms: two a part, about (it was 8, four a part: more than could ever be used)
   snacks: Object.freeze([0, 1]),    // to a part of the building: fewest, most
+  snack: 0.65,                      // the chance that a part has the most and not the fewest (it was even: one snack in a whole visit)
   torch: Object.freeze([0.7, 0.2]), // keep the first torch likely; fewer redundant ones further down
   torchCharge: Object.freeze([45, 150]),   // seconds of light left in one (a full one is 180): fewest, most
   chalk: 0.25,                      // the chance of a piece of chalk in a part
@@ -63,11 +65,12 @@ export function supplyRooms(level) {
 export function planSupplies(level, wanted = []) {
   const R = makeRng(`${level.seed}/supplies/${level.depth ?? 0}`), rooms = supplyRooms(level), out = [];
   if (!rooms.length) return out;
+  const d = level.difficulty ? difficultyOf(level.difficulty) : null;
   // Keep an early refill opportunity, then space out surplus packs. The rooms
   // are in build order (roughly encounter order); each group offers fallback
   // locations, so one blocked floor patch does not discard its pack.
   for (let i = 0, n = 0; i < rooms.length;) {
-    const span = n === 0 ? SUPPLY.batteryFirst : SUPPLY.batteryEvery;
+    const span = n === 0 ? SUPPLY.batteryFirst : (d?.batteryEvery ?? SUPPLY.batteryEvery);
     out.push({ id: `battery-${n++}`, type: 'battery', rooms: R.shuffle(rooms.slice(i, i + span)).map((r) => r.id) });
     i += span;
   }
@@ -76,7 +79,11 @@ export function planSupplies(level, wanted = []) {
   let at = 0;
   const some = () => { const pick = []; for (let k = 0; k < Math.min(SUPPLY.choices, order.length); k++) pick.push(order[(at + k) % order.length].id); at++; return pick; };
   const leave = (type, n, extra = {}) => out.push({ id: `${type}-${n}`, type, rooms: some(), ...extra });
-  for (let n = 0, most = R.int(SUPPLY.snacks[0], SUPPLY.snacks[1]); n < most; n++) leave('snack', n);
+  // Draw Easy's snack even when it will be removed, preserving all later rolls.
+  const snackChance = d?.snack === 0 ? difficultyOf('easy').snack : d?.snack ?? SUPPLY.snack;
+  const originalSupply = d && ['tourist', 'training-wheels'].includes(d.id);
+  const snacks = originalSupply ? R.int(...SUPPLY.snacks) : R.chance(snackChance) ? SUPPLY.snacks[1] : SUPPLY.snacks[0];
+  for (let n = 0; n < snacks; n++) leave('snack', n);
   if (R.chance(SUPPLY.torch[(level.depth ?? 0) > 0 ? 1 : 0])) leave('torch', 0, { charge: R.int(SUPPLY.torchCharge[0], SUPPLY.torchCharge[1]) });
   if (R.chance(SUPPLY.chalk)) leave('chalk', 0);
   // (what was added later draws from a source of its own, so that what was already lying about in a building stays where it was)
@@ -85,5 +92,12 @@ export function planSupplies(level, wanted = []) {
   if (RC.chance(SUPPLY.lighter)) leave('lighter', 0);
   if (RC.chance(SUPPLY.tape)) leave('tape', 0);
   for (const type of [...new Set(wanted)].filter((t) => KNOWN.has(t) && !ALWAYS.has(t)).sort()) leave(type, 0);
+  if (d && d.batteryShare < 1) {
+    // An independent draw preserves other loot positions. Keep the first pack;
+    // thin the rest to ~70% overall, not 70% of only the surplus.
+    const packs = out.filter(p => p.type === 'battery'), RR = makeRng(`${level.seed}/difficulty-packs`);
+    const keep = Math.max(0, (packs.length * d.batteryShare - 1) / Math.max(1, packs.length - 1));
+    return out.filter(p => (d.snack !== 0 || p.type !== 'snack') && (p.type !== 'battery' || p.id === 'battery-0' || RR.chance(keep)));
+  }
   return out;
 }

@@ -17,6 +17,7 @@
 //             again here (core/runs.mjs) and checked against what a building
 //             allows. That catches mistakes and casual tampering, not a
 //             determined cheat: the level runs in the visitor's own browser.
+import { validDifficulty, scoreEligible, cleanDifficulty } from './difficulty.mjs';
 import { cleanRun, scoreRun } from './runs.mjs';
 
 /* ---- names --------------------------------------------------------------------------------------- */
@@ -97,15 +98,19 @@ const SEED = /^[A-Za-z0-9_-]{4,40}$/;
 export function checkRun(report) {
   if (!report || typeof report !== 'object' || Array.isArray(report)) return { ok: false, why: 'not a visit' };
   const run = cleanRun(report), L = LIMITS, of = run.parts.of;
+  if (report.difficulty !== undefined && !validDifficulty(report.difficulty)) return { ok: false, why: 'unknown difficulty' };
+  if (report.scoring !== undefined && report.scoring !== 1) return { ok: false, why: 'unknown scoring edition' };
+  if (!scoreEligible(run)) return { ok: false, why: 'unscored recording' };
   if (run.reason !== 'exit') return { ok: false, why: 'did not get out' };
   if (!SEED.test(run.seed)) return { ok: false, why: 'no seed' };
   if (of < L.parts[0] || of > L.parts[1] || run.parts.reached !== of) return { ok: false, why: 'parts out of range' };
-  if (run.rooms.explored < L.roomsPerPart[0] * of || run.rooms.explored > L.roomsPerPart[1] * of) return { ok: false, why: 'rooms out of range' };
+  if (run.rooms.explored < L.roomsPerPart[0] * of || run.rooms.explored > (run.difficulty ? 44 : L.roomsPerPart[1]) * of) return { ok: false, why: 'rooms out of range' };
   if (run.rooms.kinds.length > L.kindsPerPart * of) return { ok: false, why: 'room kinds out of range' };
   if (run.seconds < L.secondsPerPart * of || run.seconds > L.seconds) return { ok: false, why: 'time out of range' };
   if (run.batteries > L.batteries) return { ok: false, why: 'batteries out of range' };
-  if (!run.hearts || run.hearts.of < L.hearts[0] || run.hearts.of > L.hearts[1] || run.hearts.left < 1 || run.hearts.left > run.hearts.of) return { ok: false, why: 'hearts out of range' };
-  if (run.cast.survived > L.survivedPerPart * of || run.cast.met.length > L.met) return { ok: false, why: 'encounters out of range' };
+  if (!run.hearts || run.hearts.of < (run.difficulty === 'hard' ? 1 : L.hearts[0]) || run.hearts.of > L.hearts[1] || run.hearts.left < 1 || run.hearts.left > run.hearts.of) return { ok: false, why: 'hearts out of range' };
+  if (run.difficulty === 'hard' && run.hearts.of !== 1) return { ok: false, why: 'hard needs one heart' };
+  if (run.cast.survived > (run.difficulty ? 12 : L.survivedPerPart) * of || run.cast.met.length > L.met) return { ok: false, why: 'encounters out of range' };
   return { ok: true, run, score: scoreRun(run).total };
 }
 
@@ -115,6 +120,7 @@ export function checkRun(report) {
  */
 export function entryOf({ id, at, name, message = '', run, score }) {
   return {
+    ...(run.difficulty ? { difficulty: run.difficulty, scoring: 1 } : {}),
     id: String(id), at: Math.floor(Number(at)) || 0, name, message, score, seconds: run.seconds, parts: run.parts.of, rooms: run.rooms.explored,
     batteries: run.batteries, hearts: run.hearts.left, card: run.card, seed: run.seed, ...(run.edition ? { edition: run.edition } : {}),
   };
@@ -126,9 +132,11 @@ export function cleanEntry(raw) {
   let e = raw;
   if (typeof e === 'string') { try { e = JSON.parse(e); } catch { return null; } }
   if (!e || typeof e !== 'object' || Array.isArray(e)) return null;
+  if (e.difficulty !== undefined && (!validDifficulty(e.difficulty) || e.difficulty === 'tourist')) return null;
   const name = cleanName(e.name);
   if (!name || typeof e.seed !== 'string' || !SEED.test(e.seed) || typeof e.id !== 'string' || !/^[a-z0-9]{6,24}$/.test(e.id)) return null;
   return {
+    ...(e.difficulty ? { difficulty: cleanDifficulty(e.difficulty, 'training-wheels'), scoring: 1 } : {}),
     id: e.id, at: whole(e.at, 0, 4e12), name, message: cleanMessage(e.message) || '', score: whole(e.score, 0, 1e6), seconds: whole(e.seconds, 0, 86400), parts: whole(e.parts, 1, 12), rooms: whole(e.rooms, 0, 2000),
     batteries: whole(e.batteries, 0, 200), hearts: whole(e.hearts, 0, 12), card: e.card === true, seed: e.seed,
     ...(typeof e.edition === 'string' && /^[a-z0-9]{1,16}$/.test(e.edition) ? { edition: e.edition } : {}),

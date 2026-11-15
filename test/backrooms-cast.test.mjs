@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateVisit } from '../public/world/backrooms/plan.js';
 import fs from 'node:fs';
-import { CAST, ALL_CAST, SUPPORTING, DISPOSITIONS, ITEMS, ROOM_LESSONS, CAST_LESSONS, whoIsDown, castFor, homeFor } from '../public/world/backrooms/cast.js';
+import { CAST, ALL_CAST, SUPPORTING, DISPOSITIONS, ITEMS, ROOM_LESSONS, CAST_LESSONS, whoIsDown, castFor, homeFor, hauntsFor, HAUNT_MOST, withRoomFor, lairFor, LAIR } from '../public/world/backrooms/cast.js';
 import { THEME_IDS } from '../public/world/backrooms/themes.js';
 import { HUNT, knows, lost, shown, spent, noticeTime, wayOn, handle, atHandle, getsDown, lying, willPeek } from '../public/world/backrooms/cast/hunt.js';
 import { roomRoute, roomCosts, gridPath, straighten } from '../public/world/backrooms/cast/paths.js';
@@ -257,6 +257,7 @@ test('a creature\'s line in the cast: every field the guide promises, and nothin
     for (const n of m.needs || []) assert.ok(CAST_LESSONS[n] || ROOM_LESSONS.includes(n), `${where}: needs ${n}`);
     assert.ok(!(m.needs || []).includes(m.teaches), `${where}: needs what it teaches`);
     for (const t of Object.keys(m.themes || {})) assert.ok(THEME_IDS.includes(t) && m.themes[t] >= 0, `${where}: themes.${t}`);
+    if (m.withRoom !== undefined) assert.ok(typeof m.withRoom === 'string' && m.withRoom.length > 0 && !m.always && m.home === 'roams', `${where}: withRoom names a kind of room, on a line that roams and is not always there`);
     assert.ok(Array.isArray(m.items) && m.items.every((i) => ITEMS.includes(i)), `${where}: items`);
     const c = m.caught || {};
     assert.equal(['hurt', 'ends', 'setback'].filter((k) => k in c).length, 1, `${where}: says one thing about what being caught by it costs`);
@@ -539,7 +540,7 @@ test('the absorbed staff: a hold never turns the visitor\'s head while something
   assert.ok(TUG_SECONDS < A.holdDuration);
   // the ones this is for are the ones that hunt (the waste toner since it came: something dropping off the ceiling at
   // you is not a moment to have your head turned for you); the rest of the hold is as it was
-  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['the-lines', 'mother', 'pirate', 'shadow', 'toner', 'other-door']);
+  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner', 'the-lines', 'mother', 'other-door']);
   const held = SUNK.stepAbsorbed(SUNK.createAbsorbedState('wall'), { dt, dist: 0.5 });
   assert.ok(held.startedGrab && held.slow === A.slowFactor);
 });
@@ -625,7 +626,7 @@ test('the absorbed staff: none is put where a thing lying about could not be pic
 test('the waste toner: hides on the ceiling clicking sonar, passes over crouch or stillness, weaves fast through crawl holes, stops at shut doors, and melts into glitch slime on its second bite', () => {
   const deckEntry = CAST.find((m) => m.id === 'toner');
   assert.ok(deckEntry && deckEntry.caught.hurt === TONER.hitDamage && TONER.hitDamage === 1 && TONER.maxHits === 2);
-  assert.ok(TONER.tall <= 0.55 && TONER.opens === false && TONER.chaseSpeed > 4.2, 'low enough to crawl, fast, and unable to open doors');
+  assert.ok(TONER.tall <= 0.55 && TONER.opens === false && TONER.chaseSpeed < 2.5, 'low enough to crawl, slower stalking, and unable to open doors');
 
   // 1. Perched on the ceiling: standing still or crouching right underneath it never wakes it, while calm sonar clicks sound
   let s = perched(() => 0.5), pings = 0;
@@ -653,7 +654,7 @@ test('the waste toner: hides on the ceiling clicking sonar, passes over crouch o
 
   // Sprinting upright within drop range triggers ceiling peel -> floor chase
   let dropped = 0;
-  for (let t = 0; t < 1.2; t += dt) {
+  for (let t = 0; t < 1.6; t += dt) {
     s = stepToner(s, dt, { d: 5, los: true, audible: true, moving: true, speed: 3.4, sink: 0 }, () => 0.4);
     if (s.dropped) dropped++;
   }
@@ -677,7 +678,7 @@ test('the waste toner: hides on the ceiling clicking sonar, passes over crouch o
   assert.equal(s.mode, 'prowl', 'blocked by a shut door, it climbs back to the ceiling');
 
   // 5. Two landed 1-damage bites dissolve it into a persistent sticky pool of black glitch slime
-  s = { ...s, mode: 'chase', doorT: 0, lostT: 0 };
+  s = { ...s, mode: 'lunge', t: TONER.lungeTime, doorT: 0, lostT: 0 };
   s = stepToner(s, dt, { d: TONER.touch - 0.1, los: true, audible: true, moving: true, speed: 2, sink: 0 }, () => 0.5);
   assert.equal(s.bite, true);
   s = strikeToner(s, { landed: true, dead: false, ended: false }, () => 0.5);
@@ -687,8 +688,9 @@ test('the waste toner: hides on the ceiling clicking sonar, passes over crouch o
 
   // Fast-forward past ceiling recoil, drop again, and land the 2nd bite (2 total damage)
   for (let t = 0; t < TONER.recoilTime[1] + 0.5; t += dt) s = stepToner(s, dt, { d: 6, los: false, audible: false }, () => 0.5);
-  for (let t = 0; t < 1.2; t += dt) s = stepToner(s, dt, { d: 4, los: true, audible: true, moving: true, speed: 3.4, sink: 0 }, () => 0.5);
+  for (let t = 0; t < 1.6; t += dt) s = stepToner(s, dt, { d: 4, los: true, audible: true, moving: true, speed: 3.4, sink: 0 }, () => 0.5);
   assert.equal(s.mode, 'chase');
+  s = { ...s, mode: 'lunge', t: TONER.lungeTime };
   s = stepToner(s, dt, { d: TONER.touch - 0.1, los: true, audible: true, moving: true, speed: 2, sink: 0 }, () => 0.5);
   assert.equal(s.bite, true);
   s = strikeToner(s, { landed: true, dead: false, ended: false }, () => 0.5);
@@ -748,7 +750,7 @@ test('the waste toner: hides on the ceiling clicking sonar, passes over crouch o
   assert.equal(brood.territorial, true);
   assert.equal(brood.homeRoom, 4);
   // Hearing upright movement wakes a territorial broodling onto the hunt
-  for (let t = 0; t < 1.2; t += dt) brood = stepToner(brood, dt, { d: 5, los: true, audible: true, moving: true, speed: 3.4, sink: 0 }, () => 0.5);
+  for (let t = 0; t < 1.6; t += dt) brood = stepToner(brood, dt, { d: 5, los: true, audible: true, moving: true, speed: 3.4, sink: 0 }, () => 0.5);
   assert.equal(brood.mode, 'chase');
   assert.equal(brood.territorial, true);
   assert.equal(brood.homeRoom, 4, 'remembers its home room so it can return if it loses the trail');
@@ -883,4 +885,127 @@ test('close-quarters scissors (melee.js & snipToner): reach, forward cone, ceili
   const next = stepToner(burst, dt, { d: 0.3 }, () => 0.99);
   assert.equal(next.mode, 'spent');
   assert.equal(next.hatched, false);
+});
+
+test('a room may ask for company, and gets only who roams and is on the part anyway', () => {
+  const level = { seed: 'h1', rooms: [{ id: 0, kind: 'start', arch: null }, { id: 1, kind: 'odd', arch: 'maze' }, { id: 2, kind: 'odd', arch: 'quiet' }, { id: 3, kind: 'odd', arch: 'crowd' }] };
+  const deck = { maze: { haunt: 1 }, quiet: {}, crowd: { haunt: 5 } };
+  assert.equal(hauntsFor(level, [], deck).size, 0, 'nobody dealt: nobody comes');
+  assert.equal(hauntsFor(level, ['pirate', 'porter', 'other-door'], deck).size, 0, 'not the mascot, and nobody with a room of their own');
+  assert.equal(hauntsFor({ ...level, rooms: level.rooms.slice(0, 1) }, ['toner', 'moth'], deck).size, 0, 'no room asks: nobody is sent');
+  const one = hauntsFor(level, ['pirate', 'toner'], deck);
+  assert.deepEqual([...one], [['toner', 1]], 'the first room that asks is served first');
+  const three = hauntsFor(level, ['toner', 'moth', 'shadow'], deck);
+  assert.equal(three.size, 3);
+  assert.equal([...three.values()].filter((r) => r === 1).length, 1, 'at most what it asked for');
+  assert.equal([...three.values()].filter((r) => r === 3).length, HAUNT_MOST, 'and never more than two, whatever it asked for');
+  assert.deepEqual([...hauntsFor(level, ['toner', 'moth', 'shadow'], deck)], [...three], 'the same floor, the same company');
+  assert.equal(hauntsFor(level, ['toner', 'toner'], deck).size, 1, 'nobody is sent twice');
+});
+
+/* ---- the lines (cast/the-lines.rule.js): what follows to the gap ------------------------------------------------- */
+
+test('the lines: asleep until somebody is near or in its room; then it gets up, and does not stop', async () => {
+  const { LINES, asleep, minds } = await import('../public/world/backrooms/cast/the-lines.rule.js');
+  const far = { d: 30, sees: false, here: false, floor: true, fold: 0, bridge: false };
+  let s = asleep();
+  for (let i = 0; i < 600; i++) s = minds(s, 0.1, far);
+  assert.equal(s.mode, 'asleep', 'a minute of nobody, and it has not stirred');
+  assert.equal(minds(s, 0.1, { ...far, d: LINES.wake + 1, sees: true }).mode, 'asleep', 'seen from further off than it wakes at');
+  const up = minds(s, 0.1, { ...far, d: LINES.wake - 1, sees: true });
+  assert.ok(up.woke && up.mode === 'rising');
+  assert.ok(minds(s, 0.1, { ...far, here: true }).woke, 'somebody in its room wakes it, seen or not');
+  s = up; let t = 0; while (s.mode === 'rising' && t < 10) { s = minds(s, 0.05, far); assert.equal(s.speed, 0, 'it does not walk while it is getting up'); t += 0.05; }
+  assert.equal(s.mode, 'hunt'); assert.ok(Math.abs(t - LINES.rise) < 0.11, `it took ${t} s to get up`);
+  for (let i = 0; i < 600; i++) { s = minds(s, 0.1, far); assert.equal(s.mode, 'hunt', 'out of sight and far off, it is still coming'); assert.ok(s.speed > 0); }
+});
+
+test('the lines: slower folded, slower still on something laid; one heart a time, and time to get away after', async () => {
+  const { LINES, asleep, minds, folded } = await import('../public/world/backrooms/cast/the-lines.rule.js');
+  const hunt = { ...asleep(), mode: 'hunt', up: 1 }, at = (o) => minds(hunt, 0.05, { d: 9, sees: true, here: true, floor: true, fold: 0, bridge: false, ...o });
+  assert.equal(at({}).speed, LINES.speed); assert.equal(at({ fold: 1 }).speed, LINES.tight); assert.equal(at({ bridge: true }).speed, LINES.onBridge);
+  assert.ok(LINES.tight < LINES.speed && LINES.onBridge < LINES.tight && at({ fold: 0.5 }).speed < LINES.speed && at({ fold: 0.5 }).speed > LINES.tight);
+  assert.ok(LINES.speed > 2.05 && LINES.speed < 3.7, 'faster than a walk in the open, slower than a hurry');
+  assert.equal(folded(4.4, false), 0); assert.equal(folded(2.2, false), 1); assert.equal(folded(4.4, true), 1); assert.ok(folded(3, false) > 0 && folded(3, false) < 1);
+  // within reach: one hit, then it stands, and cannot again for a while however near
+  let s = minds(hunt, 0.05, { d: LINES.reach - 0.1, sees: true, here: true, floor: true, fold: 0 });
+  assert.ok(s.hit && s.mode === 'stun' && s.speed === 0);
+  let hits = 0, t = 0; while (t < LINES.again - 0.06) { s = minds(s, 0.05, { d: 0.5, sees: true, here: true, floor: true, fold: 0 }); if (s.hit) hits++; t += 0.05; }
+  assert.equal(hits, 0, 'a second hit inside the wait');
+  for (let i = 0; i < 10 && !s.hit; i++) s = minds(s, 0.05, { d: 0.5, sees: true, here: true, floor: true, fold: 0 });
+  assert.ok(s.hit, 'and after the wait, another');
+  assert.ok(!minds(hunt, 0.05, { d: 0.5, sees: false, here: true, floor: true, fold: 0 }).hit, 'not through a wall');
+});
+
+test('the lines: with nothing under it, it falls, and is gone for good; and where it sleeps is short of the gap', async () => {
+  const { LINES, asleep, minds, sleepsIn } = await import('../public/world/backrooms/cast/the-lines.rule.js');
+  const none = { d: 4, sees: true, here: true, floor: false, fold: 0, bridge: false };
+  for (const mode of ['hunt', 'stun', 'rising']) { const s = minds({ ...asleep(), mode, up: 1, t: 0.5 }, 0.05, none); assert.ok(s.fell && s.mode === 'falling', `${mode}: the floor taken from under it`); }
+  assert.equal(minds(asleep(), 0.05, { ...none, here: false, sees: false }).mode, 'asleep', 'asleep, it is not asked');
+  let s = minds({ ...asleep(), mode: 'hunt', up: 1 }, 0.05, none), t = 0, over = 0;
+  while (s.mode !== 'gone' && t < 20) { s = minds(s, 0.05, { ...none, floor: true }); assert.ok(!s.hit && s.speed === 0, 'it does nothing on the way down'); if (s.over) over++; t += 0.05; }
+  assert.equal(s.mode, 'gone'); assert.equal(over, 1); assert.ok(Math.abs(t - LINES.falls) < 0.11);
+  assert.equal(minds(s, 1, { d: 0.2, sees: true, here: true, floor: true, fold: 0 }).mode, 'gone');
+  // where it sleeps: two to four doorways before the gap on a long way; on a short one, as far back as there is, but not the landing
+  const way = [10, 11, 12, 13, 14, 15, 16], seen = new Set();
+  for (let i = 0; i < 200; i++) seen.add(sleepsIn(way, () => i / 200));
+  assert.deepEqual([...seen].sort(), [12, 13, 14], 'two, three or four doorways before the last room');
+  assert.equal(sleepsIn([10, 11, 12], () => 0.99), 11); assert.equal(sleepsIn([10, 11], () => 0), 11); assert.equal(sleepsIn([10], () => 0), 10); assert.equal(sleepsIn([], () => 0), null);
+});
+
+test('one that comes with a room is on a part only if the room is, is never dealt, and lies up a few doorways before it', () => {
+  // a corridor of rooms 0…7 with the way out off its end, and a spur
+  const chain = (n) => Array.from({ length: n }, (_, id) => ({ id, kind: id === 0 ? 'start' : 'plain', arch: null, doors: [id > 0 && { to: id - 1 }, id < n - 1 && { to: id + 1 }].filter(Boolean) }));
+  const floor = (n, at, seed = 'L') => { const rooms = chain(n); rooms[at].arch = 'gap'; rooms[n - 1].kind = 'exit'; return { seed, rooms, start: { room: 0 }, exit: { room: n - 1 } }; };
+  const lines = { id: 'lines', home: 'roams', weight: 1, withRoom: 'gap' }, plain = { id: 'plain', home: 'roams', weight: 1 }, cast = [lines, plain];
+  assert.deepEqual(withRoomFor(floor(8, 6), cast), ['lines']);
+  assert.deepEqual(withRoomFor({ rooms: chain(5) }, cast), [], 'no such room: not on the part');
+  assert.deepEqual(withRoomFor(floor(8, 6), [plain]), [], 'nobody comes with a room unless their line says so');
+  for (const seed of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) assert.ok(!whoIsDown(seed, cast).includes('lines'), 'never dealt by weight');
+  assert.ok(!castFor({ seed: 'a', depths: 3, floors: [{ theme: 'x' }, { theme: 'x' }, { theme: 'x' }] }, undefined, cast).some((k) => k.id === 'lines'));
+  assert.equal(hauntsFor({ seed: 'h', rooms: [{ id: 1, kind: 'odd', arch: 'maze' }] }, ['lines'], { maze: { haunt: 2 } }, cast).size, 0, 'and is not sent to keep another room company');
+  const seen = new Set();
+  for (const seed of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l']) {
+    const level = floor(8, 6, seed), lair = lairFor(level, lines);
+    assert.ok(6 - lair >= LAIR[0] && 6 - lair <= LAIR[1], `two to four doorways before it (${lair})`);
+    assert.equal(lairFor(level, lines), lair, 'the same floor, the same room');
+    seen.add(lair);
+  }
+  assert.ok(seen.size > 1, 'not always the same distance');
+  assert.equal(lairFor(floor(8, 6), plain), null, 'null for everybody else');
+  assert.equal(lairFor(floor(8, 3), lines), 1, 'never the landing: three doorways in, it is two before');
+  assert.equal(lairFor(floor(8, 2), lines), 1, 'too near for two: the nearest that is allowed');
+  assert.equal(lairFor(floor(8, 1), lines), null, 'next to the landing: nowhere');
+  assert.equal(lairFor({ seed: 's', rooms: chain(5), start: { room: 0 }, exit: { room: 4 } }, lines), null, 'no such room');
+});
+
+/* ---- Mother (cast/mother.rule.js): it waves, and what it brings up jumps ---------------------------------- */
+
+test('Mother: comes over, heaves when near, brings up four or five, and is then content until they have been away', async () => {
+  const { MOTHER, WORM, swaying, sways, finds, trodden } = await import('../public/world/backrooms/cast/mother.rule.js');
+  let s = swaying();
+  assert.ok(!sways(s, { dt: 0.1, d: 20, sees: true }).comes, 'too far off to notice');
+  assert.ok(!sways(s, { dt: 0.1, d: 6, sees: false }).comes, 'unseen, it only sways');
+  assert.ok(sways(s, { dt: 0.1, d: 6, sees: true }).comes, 'seen and near enough, it comes over');
+  assert.equal(sways(s, { dt: 0.1, d: 2, sees: true, fire: true }).mode, 'sway', 'not beside a fire');
+  s = sways(s, { dt: 0.1, d: 2, sees: true }); assert.equal(s.mode, 'heave');
+  assert.equal(sways(s, { dt: 0.1, d: 2, sees: true, fire: true }).mode, 'sway', 'a fire lit beside it: it swallows them again');
+  let up = 0; for (let t = 0; t < MOTHER.heave + 0.2 && !up; t += 0.1) { s = sways(s, { dt: 0.1, d: 2, sees: true }, () => 0.99); up = s.up || 0; }
+  assert.equal(up, MOTHER.brood[1]); assert.equal(s.mode, 'content');
+  assert.equal(sways({ mode: 'heave', t: MOTHER.heave, rest: 0, been: true }, { dt: 0.1, d: 2, sees: true }, () => 0).up, MOTHER.brood[0]);
+  // content: not again while they stay, however long
+  for (let t = 0; t < MOTHER.rest + 20; t += 0.5) { s = sways(s, { dt: 0.5, d: 2, sees: true, brood: 0 }); assert.ok(!s.up && !s.comes); }
+  assert.equal(s.mode, 'content', 'they never left: it only sways');
+  s = sways(s, { dt: 0.5, d: MOTHER.away + 1, sees: false, brood: 0 }); assert.equal(s.mode, 'sway', 'they went away, and it has it in it again');
+  assert.equal(sways(s, { dt: 0.1, d: 2, sees: true }).mode, 'heave', 'and they came back');
+  // the small ones: blind
+  assert.ok(!finds(WORM.reach + 0.1, () => 0), 'the face has moved: a miss whatever the dice say');
+  assert.ok(finds(0.2, () => WORM.lands - 0.01) && !finds(0.2, () => WORM.lands + 0.01));
+  assert.ok(WORM.lands <= 0.3 && WORM.hurts === 1 && WORM.speed > 2.05 && WORM.speed < 3.7, 'one in four, one heart, faster than a walk and slower than a run');
+  // treading on them: the nearest on the floor, in front
+  const me = { x: 0, z: 0, yaw: 0 };                       // (yaw 0 looks toward -z)
+  assert.equal(trodden(me, [{ x: 0, z: -1 }, { x: 0, z: -0.6 }]), 1);
+  assert.equal(trodden(me, [{ x: 0, z: 1 }]), -1, 'not one behind');
+  assert.equal(trodden(me, [{ x: 0, z: 0.3 }]), 0, 'but one underfoot, whichever way');
+  assert.equal(trodden(me, [{ x: 0, z: -0.6, air: {} }, { x: 0, z: -0.6, dead: true }, { x: 0, z: -(WORM.tread + 0.2) }]), -1, 'not in the air, not twice, not out of reach');
 });

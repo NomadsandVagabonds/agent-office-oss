@@ -34,6 +34,7 @@ test('a deck entry says what the generator needs to know, and none of it is out 
     assert.equal(typeof a.roll, 'function', say('roll(R, o) decides its details from the seed'));
     if (a.themes !== undefined) for (const [id, k] of Object.entries(a.themes)) assert.ok((id === '*' || THEME_IDS.includes(id)) && Number.isFinite(k) && k >= 0, say(`themes: ${id} is not a kind of floor, or its weight is not a number`));
     for (const key of ['planned', 'headline', 'big', 'doored', 'on']) if (a[key] !== undefined) assert.equal(typeof a[key], 'boolean', say(`${key} is true or false`));
+    if (a.haunt !== undefined) assert.ok(a.haunt === 1 || a.haunt === 2, say('haunt (company it asks for, of the cast that roams) is 1 or 2'));
     if (a.headline) assert.ok(!a.teaches, say('a room staged from the news teaches nothing: nobody may depend on having seen it'));
   }
 });

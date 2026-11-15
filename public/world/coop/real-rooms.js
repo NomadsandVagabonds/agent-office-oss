@@ -33,7 +33,7 @@ export async function createRealRooms(seed,host,scene,{depth=0,slice=false,route
  let soundSeq=0;const sounds=[];
  const emit=(name,extra={})=>{if(!sim)return;sounds.push({seq:++soundSeq,name,...extra});if(sounds.length>64)sounds.shift();};
  const sound={play:(name,options)=>emit(name,{options,to:active?.id}),playMascot:()=>emit('mascot'),stopMascot:()=>emit('mascot-stop'),air:k=>emit('air',{k,to:active?.id}),file:(href,options)=>emit('file',{href:String(href),options,to:active?.id})};
- const env={level,visit,kit,cast,carry,who:{look:resolveLook('visitor'),creations:{}},builders,coopStrict:true,barricadesEnabled:true,lighting:true,catalogue:await loadCatalogue(kit),hatches:new Map(),sound,hud:{glitch:nop,flag:nop},clock:0,
+ const env={level,visit,kit,cast,carry,partySize:2,who:{look:resolveLook('visitor'),creations:{}},builders,coopStrict:true,barricadesEnabled:true,lighting:true,catalogue:await loadCatalogue(kit),hatches:new Map(),sound,hud:{glitch:nop,flag:nop},clock:0,
   play:(name,x,z,reach)=>emit(name,{x,z,reach}),hear:()=>({vol:1,pan:0}),interfere:k=>{if(active)active.record.interference=Math.max(active.record.interference||0,k);},
   red:k=>{if(active)active.record.red=Math.max(active.record.red||0,k);},
   hold:on=>{if(active){active.held=!!on;const rt=world.roomAt(active.me.x,active.me.z);if(rt)rt.coopHeld=on?active.id:null;}},
@@ -63,7 +63,7 @@ export async function createRealRooms(seed,host,scene,{depth=0,slice=false,route
  const initial=nodes.map(n=>JSON.stringify(pack(n)));let changed=[];
  const withVisitor=(v,fn)=>{const prev=active,player=env.player;active=v;env.player=v.player;try{return fn();}finally{active=prev;env.player=player;}};
  function scopeNearest(id,at,tick){const point=Number.isFinite(at?.x)&&Number.isFinite(at?.z)?at:level.start;const room=world.roomAt(point.x,point.z),recent=room?.coopInteraction;const actor=['pirate','moth','shadow','porter','toner','other-door','follower','mother','mother-brood','the-lines'].includes(id);const target=(!actor&&recent?.until>sim?.time&&visitors.find(v=>v.id===recent.id&&v.health>0))||chooseVisitor(visitors,point,id,world);if(!target)return;const before=activeCast,spot=castPoint;activeCast=id;castPoint=point;try{return withVisitor(target,tick);}finally{activeCast=before;castPoint=spot;}}
- const population=createPopulation(world,withVisitor);
+ const population=createPopulation(world,withVisitor,{held:()=>env.inventory?.held()});
  const physical=createInventoryWorld(env,{read:()=>active?.record.inventory||{slots:[]},add:item=>active?mutateInventory(sim,active.record,m=>m.add(item)):{ok:false}}, {canAct:()=>!host||sim?.phase==='play'});
  env.inventory={physical,fire:physical.fire,held:()=>active?heldItem(active.record):null,torchPower:()=>active?lightPower(active.record):0,torchMounted:()=>!!active?.record.inventory?.mountedTorch,
   give:item=>active?mutateInventory(sim,active.record,m=>m.add(makeItem(item.type,item.id,item))):{ok:false},
@@ -152,7 +152,7 @@ export async function createRealRooms(seed,host,scene,{depth=0,slice=false,route
   lights.refresh();sim.scene=sceneSync.read();sim.nodes=[];nodes.forEach((n,i)=>{const p=pack(n);if(JSON.stringify(p)!==initial[i])sim.nodes.push([i,...p]);});
   sim.links=world.throats.map(th=>th.open);sim.solids=world.rooms.map(rt=>rt.colliders.map(c=>c.on!==false));
   sim.roomState=world.rooms.flatMap(rt=>rt.coopRead?[[rt.id,rt.coopRead()]]:[]);
-  sim.furniture=world.furniture.map(f=>({x:f.x,z:f.z,away:f.away||null,on:f.collider.on!==false,...(f.bridge?{bridge:{bounds:Object.fromEntries(['x','z','x0','x1','z0','z1','y','top'].map(k=>[k,f[k]])),deployed:f.deployed,transition:!!f.transition,support:f.support,carried:!!f.carried,hinge:{...f.hinge},offsetX:f.offsetX,offsetZ:f.offsetZ,room:f.room}}:{})}));
+  sim.furniture=world.furniture.map(f=>({x:f.x,z:f.z,y:f.y,carried:!!f.carried,away:f.away||null,on:f.collider.on!==false,...(f.bridge?{bridge:{bounds:Object.fromEntries(['x','z','x0','x1','z0','z1','y','top'].map(k=>[k,f[k]])),deployed:f.deployed,transition:!!f.transition,support:f.support,carried:!!f.carried,hinge:{...f.hinge},offsetX:f.offsetX,offsetZ:f.offsetZ,room:f.room}}:{})}));
   sim.collision=world.rooms.map(rt=>rt.colliders.map(c=>Object.fromEntries(Object.entries(c).filter(([,v])=>typeof v==='number'||typeof v==='boolean'))));
   sim.effects=physical.report();sim.sounds=sounds.slice();sim.nodeCount=nodes.length;sim.castCarry=env.pursuer.carry();sim.pirate={...env.pursuer.at?.()};sim.creatures=env.pursuer.cast();
   sim.opacity=nodes.flatMap((n,i)=>n.material?.transparent?[[i,n.material.opacity]]:[]);
@@ -170,7 +170,7 @@ export async function createRealRooms(seed,host,scene,{depth=0,slice=false,route
     if(old!==next&&next){const k=old?.colliders.indexOf(item.collider);if(k>=0)old.colliders.splice(k,1);next.colliders.push(item.collider);}
     Object.assign(item,b.bounds,{room:b.room,hinge:{...b.hinge},offsetX:b.offsetX,offsetZ:b.offsetZ,deployed:b.deployed,transition:b.transition?{remote:true}:null,support:b.support,carried:b.carried});
     Object.assign(item.collider,{x0:item.x0,x1:item.x1,z0:item.z0,z1:item.z1,floor:item.deployed&&!item.transition&&!!item.support?.ok,tall:!item.deployed&&item.top-item.y>1.25});
-   }else if(Math.abs(f.x-item.x)+Math.abs(f.z-item.z)>1e-8)item.translate(f.x-item.x,f.z-item.z);
+   }else{const dy=Number.isFinite(f.y)?f.y-item.y:0;if(Math.abs(f.x-item.x)+Math.abs(f.z-item.z)+Math.abs(dy)>1e-8)item.translate(f.x-item.x,f.z-item.z,dy);item.carried=!!f.carried;}
    item.away=f.away;item.collider.on=f.on;
   }
   for(const [r,cs]of (s.collision||[]).entries()){const rt=world.rooms[r];if(rt)cs.forEach((c,i)=>{if(rt.colliders[i]){for(const [k,v]of Object.entries(c)){const d=Object.getOwnPropertyDescriptor(rt.colliders[i],k);if(!d?.get||d.set)rt.colliders[i][k]=v;}}else rt.colliders.push({...c});});}

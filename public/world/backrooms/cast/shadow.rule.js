@@ -10,6 +10,7 @@ export const SHADOW = Object.freeze({
   fuse: 0.85,          // seconds to turn away after arming; this countdown never cools
   cool: 1.8,           // seconds of unarmed charge lost per second of looking away
   touch: 0.8,          // walk into it and it goes off at once
+  haunt: 1.5,          // seconds at most before it first shows, to somebody who walks into a room that asked for its company
   drain: 0.5,          // the share of the battery's charge that goes with it
   dark: 16,            // seconds the room stays dark afterwards
   gone: [40, 75],      // seconds before it is standing somewhere again

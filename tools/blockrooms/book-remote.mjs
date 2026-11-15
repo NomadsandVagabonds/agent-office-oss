@@ -30,7 +30,7 @@ export function remoteStore(env = process.env, fetchImpl = globalThis.fetch) {
     return body.result;
   }
   return {
-    read: () => call('read'),
+    read: (difficulty = '') => call('read', difficulty ? { difficulty } : {}),
     count: (kind, visitor) => call('count', { kind, visitor }),
     sign: (entry, visitor, duplicate) => call('sign', { entry, visitor, duplicate }),
     strike: id => call('strike', { id }),

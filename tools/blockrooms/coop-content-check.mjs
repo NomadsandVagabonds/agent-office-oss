@@ -26,7 +26,7 @@ try{
  })()`);
  const {DECK}=await import('../../public/world/backrooms/gen.js');
  const selected=process.env.COOP_CHECK_ROOMS?.split(',');
- const cases=process.argv.includes('--bridge')?['bridge-gap','bridge-lines'].map(id=>({id,options:{only:'the-culvert',themes:['suburb'],members:id==='bridge-lines'?['the-lines']:[]}})):process.argv.includes('--finale')?[{id:'showcase-finale',options:{only:'mecha',finale:true}}]:DECK.filter(a=>!selected||selected.includes(a.id)).map(a=>({id:a.id,options:{only:a.id,themes:[a.themes?.suburb?'suburb':'yellow'],members:[]}}));
+ const cases=process.argv.includes('--bridge')?['bridge-gap','bridge-lines'].map(id=>({id,options:{only:'the-culvert',themes:['suburb'],members:id==='bridge-lines'?['the-lines']:[]}})):process.argv.includes('--finale')?[{id:'showcase-finale',options:{only:'mecha',finale:true}}]:DECK.filter(a=>!selected||selected.includes(a.id)).map(a=>({id:a.id,options:{only:a.id,themes:[a.themes?.mall?'mall':a.themes?.suburb?'suburb':'yellow'],members:[]}}));
  if(!selected&&!process.argv.includes('--finale')&&!process.argv.includes('--bridge'))for(const member of ['pirate','moth','shadow','porter','toner','other-door'])cases.push({id:'cast-'+member,options:{only:member==='the-lines'?'the-culvert':'ceiling-meeting',themes:[member==='the-lines'?'suburb':'yellow'],members:[member]}});
  if(process.env.COOP_CAST)for(const member of process.env.COOP_CAST.split(','))cases.push({id:'cast-'+member,options:{only:member==='the-lines'?'the-culvert':'ceiling-meeting',themes:[member==='the-lines'?'suburb':'yellow'],members:[member]}});
  const {exercise}=await import('./coop-encounters.mjs');
@@ -56,6 +56,8 @@ try{
   const detail=await a.ev(`(()=>{const r=review.r,s=r.inspect().sim;return {id:${JSON.stringify(c.id)},picked:r.level.picked,cast:Object.keys(r.world.env.pursuer.cast()),residents:r.world.env.denizens.all().length,nodes:s.nodeCount,bytes:JSON.stringify(s).length,furniture:r.world.furniture.length,lighting:r.world.rooms.filter(rt=>rt.lighting).length,added:s.scene.added.length}})()`);
   const signatures=await Promise.all([a,b].map(peer=>peer.ev(`(()=>{const {nodes}=review.r.inspect();let h=0;for(const n of nodes)for(const k of [...n.position.toArray(),...n.quaternion.toArray(),n.visible?1:0])h=(Math.imul(h,31)+Math.round(k*1000))|0;return h;})()`)));
   assert.equal(signatures[0],signatures[1],c.id+' scene agrees');
+  const furniture=await Promise.all([a,b].map(peer=>peer.ev(`review.r.world.furniture.map(f=>({position:[f.x,f.y,f.z,f.top].map(n=>Math.round(n*1e6)),carried:!!f.carried,on:f.collider.on!==false}))`)));
+  assert.deepEqual(furniture[0],furniture[1],c.id+' furniture height, carry and collision agree');
   assert.deepEqual(errors.slice(start),[],c.id+' browser errors');
   for(const peer of [a,b])await peer.ev('drawReview()');
   if(['cast-mother','cast-the-lines'].includes(c.id)){

@@ -5,6 +5,8 @@ import * as THREE from '../public/vendor/three.module.min.js';
 import * as officeProps from '../public/world/props/office.js';
 import { trolley } from '../public/world/props/trolley.js';
 import { fixedFurnitureReason, onFurniture, boxHits } from '../public/world/backrooms/furniture-policy.js';
+import { createFurnitureGrip } from '../public/world/backrooms/furniture-grip.js';
+import { createPlayer } from '../public/world/backrooms/player.js';
 import { createFurnitureMotion } from '../public/world/backrooms/furniture-motion.js';
 import { toLocal } from '../public/world/backrooms/gen.js';
 
@@ -252,4 +254,81 @@ test('furniture crosses a real flat doorway with collision, visibility, ownershi
   world.enter(world.rooms[1]); world.glimpse(desk.x, desk.z, 12);
   assert.equal(desk.group.visible, false, 'room culling never resurrects furniture taken out of a transforming face');
   assert.equal(desk.translate(.1, 0), false);
+});
+
+// The shipped chairs/circle builder spaces ordinary chairs along an arc at
+// ~78cm. Their rotated AABBs overlap even though the furniture itself does not.
+function chairRing(c) {
+  const r = 2.5, n = Math.floor(2 * Math.PI * r / .78);
+  for (let i = 0; i < n; i++) {
+    const a = i / n * Math.PI * 2;
+    c.prop('chair', Math.sin(a) * r, Math.cos(a) * r - .2, { rot: a });
+  }
+}
+
+test('grabbing a real diagonal chair permits slow walking, strafing and release, without moving its neighbours', async t => {
+  const world = await make(t, chairRing), chair = world.furniture[2];
+  const input = { keys: new Set(), dx: 0, dy: 0, stick: { x: 0, y: 0 } };
+  const camera = { position: { set() {} }, rotation: { set() {} } };
+  const a = 2 / 20 * Math.PI * 2;
+  const player = createPlayer(world, camera, { x: chair.x - Math.sin(a), z: chair.z - Math.cos(a), yaw: a + Math.PI }, input);
+  world.env.player = player;
+  Object.assign(player.me, { y: 1.1, pitch: -.4 });
+  assert.ok(world.free(player.me.x, player.me.z, player.RADIUS));
+  const grip = createFurnitureGrip(world, createFurnitureMotion(world));
+  player.on('move', (dx, dz, step) => grip.step(dx, dz, step));
+  const tick = n => { for (let i = 0; i < n; i++) { grip.update(.05, player.me); player.update(.05); } };
+  grip.update(0, player.me);
+  assert.equal(grip.target, chair);
+  assert.equal(grip.use(), true);
+  assert.equal(chair.collider.on, false);
+  const revision = world.furnitureRevision.get(0);
+  const before = { x: chair.x, z: chair.z }, others = world.furniture.filter(f => f !== chair).map(f => [f.x, f.z]);
+  const gap = { x: player.me.x - chair.x, z: player.me.z - chair.z };
+  input.keys.add('s'); tick(20);
+  const distance = Math.hypot(chair.x - before.x, chair.z - before.z);
+  assert.ok(distance > .8 && distance <= 1.1, `pulls at chair speed: ${distance}`);
+  input.keys.clear(); input.keys.add('a'); tick(8);
+  input.keys.clear(); input.keys.add('w'); tick(4);
+  assert.ok(Math.abs(player.me.x - chair.x - gap.x) < 1e-8 && Math.abs(player.me.z - chair.z - gap.z) < 1e-8);
+  assert.deepEqual(world.furniture.filter(f => f !== chair).map(f => [f.x, f.z]), others);
+  assert.equal(world.furnitureRevision.get(0), revision, 'carrying does not rebuild creature paths each frame');
+  assert.equal(grip.use(), true);
+  assert.equal(chair.collider.on, true);
+  assert.ok(world.furnitureRevision.get(0) > revision);
+  assert.ok(world.free(player.me.x, player.me.z, player.RADIUS));
+  const released = [chair.x, chair.z];
+  input.keys.clear(); input.keys.add('s'); tick(10);
+  assert.deepEqual([chair.x, chair.z], released);
+  assert.equal(player.me.gripSpeed, undefined);
+});
+
+
+test('setting down carried furniture accepts a new floor height but not pits, walls or bodies', async t => {
+  const world = await make(t, c => {
+    c.rt.floorY = x => x > 0 ? .18 : 0;
+    c.prop('chair', -2, 0);
+    c.solid(2.5, -3, 2.6, 3);
+  });
+  const chair = world.furniture[0], motion = createFurnitureMotion(world), height = chair.top - chair.y;
+  chair.carried = true; chair.collider.on = false;
+  const body = { x: 6, z: 4, r: .25 }; world.bodies.push(body);
+  assert.equal(motion.place(chair, 6, 4), false, 'cannot set down inside a creature');
+  body.on = false;
+  assert.equal(motion.place(chair, 6.5, 4), false, 'the whole chair still has to clear walls at release');
+  assert.equal(motion.place(chair, 4, 4), false, 'cannot set down straddling two floor heights');
+  assert.equal(motion.place(chair, 6, 4), true);
+  assert.equal(chair.y, .18); assert.equal(chair.group.position.y, .18);
+  assert.ok(Math.abs(chair.top - chair.y - height) < 1e-8);
+  assert.equal(chair.collider.top, chair.top);
+  chair.carried = false; chair.collider.on = true;
+  assert.equal(motion.move(chair, 0, .1).moved, true, 'creature pushing still works after a raised landing');
+  world.rooms[0].floorY = (x, z) => x > 0 && Math.abs(z - 1) < .12 ? -2 : .18;
+  chair.carried = true; chair.collider.on = false;
+  assert.equal(motion.place(chair, 6, 5), false, 'cannot use an ordinary chair as a bridge over an interior hole');
+  // a hole wide enough to take the whole chair: its floor is flat down there, so only where the carrier stands says no
+  world.rooms[0].floorY = (x) => x > 0 ? -40 : .18;
+  const y = chair.y;
+  assert.equal(motion.place(chair, 6, 5, { from: .18 }), false, 'nothing is set down into a pit from the bank');
+  assert.equal(chair.y, y, 'and it has not moved');
 });

@@ -18,13 +18,19 @@
 // floors above it had so that it deals different ones while the deck lasts —
 // and what those rooms taught, so that it deals nothing that takes for granted
 // a thing nobody has yet had the chance to learn.
+import { cleanDifficulty, difficultyOf } from '../../../core/difficulty.mjs';
 import { generate, makeRng, MIN_EXIT_STEPS, MAX_ODD, DECK, ARCHETYPES, lessons, lessonsOf, isBig } from './gen.js';
 import { MIN_OUT_STEPS } from './marks.js';
-import { THEME_IDS, dealtThemes, atHome } from './themes.js';
+import { THEME_IDS, dealtThemes, featuredThemes, atHome } from './themes.js';
 import { DEALT } from './seam.js';
 import { CAST, whoIsDown, castFor } from './cast.js';
 
-export const MIN_FLOORS = 3, MAX_FLOORS = 5;
+/**
+ * How many parts a visit has: four, every time. (It was three to five by the seed, which a visitor could not choose and which
+ * was worth some hundreds of points either way on the same play: the owner fixed it for the sake of the scores.)
+ */
+export const FLOORS = 4;
+export const MIN_FLOORS = FLOORS, MAX_FLOORS = FLOORS;
 /** What everybody knows before they have seen a single room down here: it is how they got in. */
 export const KNOWN_AT_START = Object.freeze(['lean']);
 /** How many visits in a hundred have a room in them that the place half-remembers from the news (if the deck has any). */
@@ -117,14 +123,20 @@ function wanted(loot) {
 export function planVisit(seed, opt = {}) {
   const R = makeRng(`visit:${seed}`), want = wanted(opt.loot);
   const rolled = R.weighted([[3, 5], [4, 4], [5, 2]], (k) => k[1])[0];
-  const depths = Math.max(1, Math.min(8, Math.floor(Number(opt.depths)) || rolled));
+  // (the roll is still made, and thrown away: what the seed rolls after it is what it always rolled)
+  const depths = Math.max(1, Math.min(8, Math.floor(Number(opt.depths)) || (rolled && FLOORS)));
   // you always land in the yellow; what is under it is a different selection, in a different order, every visit
   // (of the kinds that are finished: one still being built — themes.js `dealt: false` — is in nobody's visit)
   const below = R.shuffle(dealtThemes().filter((id) => id !== 'yellow'));
   // …unless particular kinds were asked for, top down: the way to look at one, and the only way onto one that is still
   // being built. A part nothing was asked for is what it would have been
   const asked = [].concat(opt.themes ?? []).map(String);
-  const themes = Array.from({ length: depths }, (_, i) => (THEME_IDS.includes(asked[i]) ? asked[i] : i === 0 ? 'yellow' : below[(i - 1) % below.length]));
+  // one part of every visit is not an office (themes.js `featured`): the second or the third, never where you land and never the last
+  const RF = R.fork('featured'), feats = featuredThemes().filter((id) => below.includes(id));
+  const feature = feats.length && depths >= 3 ? RF.pick(feats) : null, featureAt = feature ? RF.int(1, Math.min(2, depths - 2)) : -1;
+  const rest = below.filter((id) => id !== feature);
+  const under = (i) => (i === featureAt ? feature : rest[(i - 1 - (featureAt > 0 && i > featureAt ? 1 : 0)) % rest.length]);
+  const themes = Array.from({ length: depths }, (_, i) => (THEME_IDS.includes(asked[i]) ? asked[i] : i === 0 ? 'yellow' : under(i)));
   // how each part but the last ends, behind its fire door: a different way down each time, while there are ways left
   // (rolled from a source of its own, so that which they are changes nothing else about a visit)
   const RW = R.fork('ways'), order = RW.shuffle(DEALT.slice());
@@ -141,7 +153,11 @@ export function planVisit(seed, opt = {}) {
   // visits, one of them — and never on the floor you land on, which is for finding out where you are. (Rolled from a
   // source of its own: whether the deck has any such room changes nothing else about a visit.)
   const stories = DECK.filter((a) => a.headline), RS = R.fork('headline');
-  const story = stories.length && depths > 1 && RS.chance(HEADLINE_CHANCE) ? { arch: RS.pick(stories).id, floor: RS.int(1, depths - 1) } : null;
+  // (and only on a part where it is at home: a kind of floor that keeps to rooms of its own — themes.js `own` — does not get it.
+  // It used to be put on any part below the landing, and so turned up on the suburb's lawn.)
+  const told = stories.length && depths > 1 && RS.chance(HEADLINE_CHANCE) ? RS.pick(stories) : null, RS2 = RS.fork('floor');
+  const homes = told ? themes.map((_, i) => i).filter((i) => i >= 1 && atHome(told, themes[i]) > 0) : [];
+  const story = homes.length ? { arch: told.id, floor: RS2.pick(homes) } : null;
   // which rooms this visit has, and which part each is in (a source of its own: the hand moves nothing else)
   const hands = dealHand(R.fork('hand'), themes, story), RP = R.fork('rooms');
   const floors = themes.map((theme, i) => ({
@@ -151,6 +167,11 @@ export function planVisit(seed, opt = {}) {
     way: ways[i], hand: hands[i], rooms: RP.int(PART_ROOMS[0], PART_ROOMS[1]),
     must: hands[i].filter((id) => ARCHETYPES[id].planned || ARCHETYPES[id].headline), mascot: mascot === i, coins: coins[i],
   }));
+  for (const f of floors) {
+    f.baseRooms = f.rooms;
+    if (opt.difficulty) f.difficulty = cleanDifficulty(opt.difficulty);
+    f.rooms = Math.round(f.baseRooms * (opt.difficulty ? difficultyOf(opt.difficulty).rooms : 1));
+  }
   const visit = { seed: String(seed), depths, floors, mascot, card: !!(want && want.card), headline: story ? story.arch : null, hand: hands.flat() };
   made.set(visit, { opt, levels: [] });
   return visit;
@@ -186,6 +207,7 @@ export function floorOf(visit, i) {
       pursuer: f.mascot, mascot: f.mascot, loot,
     });
     level.depth = k; level.depths = visit.depths;
+    if (f.difficulty) level.difficulty = f.difficulty;
     // the tape is older the further down it was shot: every floor's date is some years before the one above
     if (first) level.stamp = { ...level.stamp, year: memo.levels[k - 1].stamp.year - 2 - (level.stamp.year % 4) };
     memo.levels.push(level);
@@ -223,4 +245,15 @@ export function edition() {
 export function generateVisit(seed, opt = {}) {
   const visit = planVisit(seed, opt);
   return { visit, floors: visit.floors.map((_, i) => floorOf(visit, i)) };
+}
+
+/** Replan only parts not yet entered. Caller disposes any prebuilt part before replacing it. */
+export function changeVisitDifficulty(visit, id, from) {
+  const memo = made.get(visit);
+  if (!memo || !Number.isInteger(from) || from < 0) return;
+  for (const f of visit.floors.slice(from)) {
+    f.difficulty = cleanDifficulty(id);
+    f.rooms = Math.round(f.baseRooms * difficultyOf(id).rooms);
+  }
+  memo.levels.length = Math.min(memo.levels.length, from);
 }

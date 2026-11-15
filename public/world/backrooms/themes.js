@@ -55,13 +55,21 @@ export const THEMES = {
     hum: 50 },
 
   // A neighbourhood, as an office remembered one and built it indoors: sky-blue emulsion, fake grass cut short of the walls
-  // so that the carpet shows, every tube working because it is always the middle of the day. Still being built (suburb.js)
-  suburb: { id: 'suburb', own: true, dealt: false, families: { sky: 12 }, patterns: ['sky'], tubes: ['#fffbe9', '#f3ffe6', '#eef6ff'],
+  // so that the carpet shows, every tube working because it is always the middle of the day (suburb.js)
+  suburb: { id: 'suburb', own: true, featured: true, families: { sky: 12 }, patterns: ['sky'], tubes: ['#fffbe9', '#f3ffe6', '#eef6ff'],
     light: { dead: [0.03, 0.16], flicker: 0.2, modes: [['normal', 1]] },
     // (mostly passages: a neighbourhood is got about by alleys, between fences and the backs of things. A lawn is where one comes out)
     rooms: [0.1, 0.36, 0.6, 0.9], heights: [[2.6, 34], [2.2, 22], [2.9, 16], [3.3, 10], [1.75, 10], [4.4, 6]],
     dressing: ['mailbox', 'mailbox', 'flamingo', 'flamingo', 'hose', 'hose', 'wetsign', 'ladder', 'boxes'],
     hum: 60 },
+
+  // A shopping centre at closing time, as a 1980s office park remembered one and built it out of itself: partition walls for
+  // shopfronts, terrazzo where the carpet tile ran out, half the tubes already off. Mostly passages. Still being built (mall.js)
+  mall: { id: 'mall', own: true, dealt: false, families: { oatmeal: 12 }, patterns: ['mall'], tubes: ['#ffe9c2', '#ffdcae', '#fff0d6'],
+    light: { dead: [0.3, 0.55], flicker: 0.3, modes: [['dim', 5], ['normal', 2], ['one', 1]] },
+    rooms: [0.1, 0.38, 0.62, 0.9], heights: [[2.6, 40], [2.2, 24], [2.9, 16], [3.3, 10], [1.75, 6], [4.4, 4]],
+    dressing: ['plant', 'plant', 'plant', 'wetsign', 'wetsign', 'bin', 'boxes', 'chair', 'clock', 'ladder'],
+    hum: 50 },
 };
 
 export const THEME_IDS = Object.keys(THEMES);
@@ -72,6 +80,11 @@ export const THEME_IDS = Object.keys(THEMES);
  */
 export const atHome = (line, id, themes = THEMES) => (line.themes && line.themes[id]) ?? (themes[id] && themes[id].own ? 0 : (line.themes && line.themes['*']) ?? 1);
 /** The kinds of floor a visit may be dealt: every one that is not still being built (`dealt: false`). */
+/**
+ * The kinds of floor that are not an office (`featured: true`): every visit has one of them, on a middle part (plan.js), so
+ * that no visit is offices all the way down. One for now; the day there are more, a visit is dealt one of them.
+ */
+export const featuredThemes = (themes = THEMES) => Object.keys(themes).filter((id) => themes[id].featured && themes[id].dealt !== false);
 export const dealtThemes = (themes = THEMES) => Object.keys(themes).filter((id) => themes[id].dealt !== false);
 /** A theme by id, or the yellow one. */
 export const themeOf = (id) => (id && typeof id === 'object' ? id : THEMES[id] || THEMES.yellow);

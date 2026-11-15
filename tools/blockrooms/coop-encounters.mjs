@@ -80,8 +80,16 @@ export async function exercise(r,id){
   }
   check(item,'guest acquires furniture through E');const before={x:item.x,z:item.z};
   for(let i=0;i<30;i++){r.command(g.id,{type:'input',f:-1,s:0,yaw:g.me.yaw,pitch:g.me.pitch});r.step(.05,sim);}
-  check(Math.hypot(item.x-before.x,item.z-before.z)>.05,'walking drags the furniture');
-  r.command(g.id,{type:'exit'});check(!g.grip.held,'second E releases');return {dragged:item.type};
+  check(Math.hypot(item.x-before.x,item.z-before.z)>.05,'walking carries the furniture');
+  check(item.carried&&item.collider.on===false,'carried prop does not block its carrier');
+  // E only sets a carried prop down where the full footprint fits. Search
+  // clear approaches to its original resting place, using the real controller.
+  const reach=Math.min(1.8,Math.max(1.1,Math.hypot(item.x1-item.x0,item.z1-item.z0)/2+.65));
+  for(let a=0;a<Math.PI*2&&g.grip.held;a+=Math.PI/8){
+   const x=before.x+Math.sin(a)*reach,z=before.z+Math.cos(a)*reach;if(!w.free(x,z,.23))continue;
+   g.player.warp(x,z,a);r.command(g.id,{type:'input',f:0,s:0,yaw:a,pitch:0});tick(2);r.command(g.id,{type:'exit'});
+  }
+  check(!g.grip.held,'E sets furniture down on a clear floor');check(!item.carried&&item.collider.on,'resting prop blocks movement again');return {carried:item.type};
  }
  if(id==='safety-corridor'){
   const d=env.denizens.all().find(d=>d.id==='floor-warden');check(d,'warden exists');g.player.warp(d.x,d.z+1.5,0);g.me.speed=4;
@@ -119,8 +127,18 @@ export async function exercise(r,id){
   target.me.pitch=1.2;tick(20);check(shadow.at().mode==='gone','turning away clears shadow');check(target.record.battery>power-2,'successful timing costs no flash drain');return {shadow:'armed then cleared'};
  }
  if(id==='cast-toner'){
-  const toner=env.pursuer.of('toner'),at=toner.at();g.player.warp(at.x,at.z+.35,0);h.player.warp(r.start.x,r.start.z,0);
-  for(let i=0;i<150&&toner.at().mode!=='puddle';i++){const p=toner.at();if(i%15===0&&toner.at().mode!=='dissolving'){g.healthModel.tick(3);g.healthModel.heal(4);g.player.warp(p.x,p.z+.35,0);toner.hurry({x:p.x,z:p.z,chase:true});}r.step(.05,sim);}
+  const toner=env.pursuer.of('toner'),at=toner.at();h.player.warp(1000,1000,0);
+  toner.hurry({x:at.x,z:at.z,chase:true});
+  // The live toner only bites during its committed leap, and stillness is
+  // counterplay. Keep the test visitor noisy and in reach; do not reset the
+  // wind-up every few frames as the former contact-damage fixture did.
+  for(let i=0;i<4000&&toner.at().mode!=='puddle';i++){
+   const p=toner.at();g.healthModel.heal(4);g.record.battery=390;
+   for(let a=0;a<Math.PI*2;a+=Math.PI/4){const x=p.x+Math.sin(a)*.35,z=p.z+Math.cos(a)*.35;
+    if(w.free(x,z,.22)&&w.los(x,z,p.x,p.z)){g.player.warp(x,z,a);r.command(g.id,{type:'input',f:1,s:0,yaw:a,pitch:0});break;}}
+   tick(1);
+  }
+  r.command(g.id,{type:'input',f:0,s:0,yaw:0,pitch:0});
   check(toner.at().mode==='puddle','two actual hits create brood pool '+JSON.stringify(toner.at()));const count=toner.at().count;g.player.warp(r.start.x,r.start.z,0);toner.hurry({hatch:true});tick(10);
   check(toner.at().count>count,'brood spawned new units');return {hatched:toner.at().count-count};
  }

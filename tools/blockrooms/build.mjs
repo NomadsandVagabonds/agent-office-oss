@@ -125,7 +125,7 @@ export function build(out, opt = {}) {
   put('play.html', fill('page.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor()}">`, OG: og('play'), PRELOAD: preload, IMPORTMAP: IMPORT_MAP }));
   // the front page says when it was last touched: the day it was built — of a year it has been for some time
   const day = (opt.now || new Date()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' });
-  put('index.html', fill('home.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor(null)}">`, OG: og('') })
+  put('index.html', fill('home.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor()}">`, OG: og(''), IMPORTMAP: IMPORT_MAP })
     .replace('<span id="updated">recently</span>', `<span id="updated">${day} 1998</span>`));
   return { files: [...extra, ...files].sort(), origin, preloaded: first.length };
 }

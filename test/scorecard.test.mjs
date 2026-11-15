@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 // its local files here, and a small DOM so the dismissal contract is tested.
 const source = readFileSync(new URL('../public/world/backrooms/scorecard.js', import.meta.url), 'utf8')
   .replaceAll("'/core/runs.mjs'", JSON.stringify(new URL('../core/runs.mjs', import.meta.url).href))
+  .replaceAll("'/core/difficulty.mjs'", JSON.stringify(new URL('../core/difficulty.mjs', import.meta.url).href))
   .replaceAll("'/core/game.mjs'", JSON.stringify(new URL('../core/game.mjs', import.meta.url).href));
 const { showScorecard } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 
@@ -43,14 +44,14 @@ class Element extends Surface {
   querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
 }
 
-async function setup(t, { standalone = true, tape = false, anew = false, reason, run = {} } = {}) {
+async function setup(t, { standalone = true, tape = false, anew = false, reason, run = {}, cardExtra = {} } = {}) {
   t.mock.timers.enable({ apis:['setTimeout'] });
   const previous = { document:globalThis.document, window:globalThis.window };
   const document = globalThis.document = {}, window = globalThis.window = new Surface();
   document.createElement = tag => new Element(tag, document);
   document.createElementNS = (_ns, tag) => new Element(tag, document);
   document.body = document.createElement('body'); document.head = document.createElement('head');
-  const card = { reason:reason || (tape ? 'exit' : 'quit'), score:123, lines:[], tape:{ kept:tape, seed:'held-tape' } };
+  const card = { reason:reason || (tape ? 'exit' : 'quit'), score:123, lines:[], tape:{ kept:tape, seed:'held-tape' }, ...cardExtra };
   const result = showScorecard({ office:{ game:{ report:async () => card } }, reason:card.reason, run,
     ...(standalone ? { home:{ label:'Return to homepage' } } : {}), ...(anew ? { anew:{ label:'Go back in' } } : {}), share:seed => `./play?tape=${seed}` });
   await Promise.resolve();
@@ -129,4 +130,16 @@ test('the wall does not say how it ended, or which pattern it is: only what was 
   assert.doesNotMatch(text(h.form), /battery flat|part 2 of 4|PATTERN/i);
   assert.match(h.form.attributes.get('aria-label'), /battery flat/, 'it is still read out');
   h.home.emit('click'); await h.result;
+});
+
+
+test('an unscored card keeps counts but prints no points or negative difficulty penalty', async t => {
+  const h = await setup(t, { cardExtra: { ranked:false, difficulty:'hard', difficultyChanged:true, score:0,
+    lines:[{id:'room', count:7, points:70}, {id:'difficulty', count:0, points:-70}] } });
+  const text = node => node.children.map(child => typeof child === 'string' ? child : text(child)).join(' ');
+  assert.match(text(h.form), /UNSCORED · DIFFICULTY CHANGED/);
+  assert.doesNotMatch(text(h.form), /Hard adjustment|-70/);
+  assert.match(text(h.form), /× 7/);
+  assert.match(h.form.attributes.get('aria-label'), /unscored recording/);
+  t.mock.timers.tick(900); h.home.emit('click'); await h.result;
 });

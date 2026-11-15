@@ -28,9 +28,9 @@ export function createCoopServer({alphaKey=process.env.COOP_ALPHA_KEY||'',defaul
     const code=randomBytes(16).toString('hex');rooms.set(code,{state:createSession(),mode:u.searchParams.get('mode')==='rooms'?'rooms':'maze',seed:route===SHOWCASE_ROUTE?SHOWCASE_SEED:code,route,depth:0,characters:GUEST_PRESETS.map(p=>p.id),slice:route==='random'&&u.searchParams.get('slice')==='1',host:null,clients:new Map(),born:Date.now()});
     res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'}).end(JSON.stringify({code}));return;
    }
-   const rel=(p==='/'||p==='/rooms')?'public/world/coop/index.html':['/core/coop.js','/core/look.mjs','/core/coop-voice.js','/core/guest-presets.mjs','/core/coop-routes.mjs'].includes(p)?p.slice(1):`public${p}`;
+   const rel=(p==='/'||p==='/rooms')?'public/world/coop/index.html':['/core/coop.js','/core/look.mjs','/core/coop-voice.js','/core/difficulty.mjs','/core/guest-presets.mjs','/core/coop-routes.mjs'].includes(p)?p.slice(1):`public${p}`;
    const file=path.resolve(root,rel);
-   if(!file.startsWith(path.join(root,'public')+path.sep)&&!['core/coop.js','core/look.mjs','core/coop-voice.js','core/guest-presets.mjs','core/coop-routes.mjs'].some(p=>file===path.join(root,p))){res.writeHead(404).end();return;}
+   if(!file.startsWith(path.join(root,'public')+path.sep)&&!['core/coop.js','core/look.mjs','core/coop-voice.js','core/difficulty.mjs','core/guest-presets.mjs','core/coop-routes.mjs'].some(p=>file===path.join(root,p))){res.writeHead(404).end();return;}
    const types={'.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.js':'text/javascript','.mjs':'text/javascript','.png':'image/png','.jpg':'image/jpeg'};
    const data=await readFile(file);res.writeHead(200,{'content-type':types[path.extname(file)]||'application/octet-stream','cache-control':'no-store','X-Content-Type-Options':'nosniff','Permissions-Policy':'microphone=(self), camera=()'}).end(data);
   }catch{res.writeHead(404).end('Not found');}
