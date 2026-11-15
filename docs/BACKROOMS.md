@@ -610,9 +610,7 @@ each time it had somebody and they got away.
 
 Before it resolves, the visit shows the card (`scorecard.js`): a wall of the
 yellow paper with the score printed into it in the paper's own ink and a
-picture beside every line. Beside its heading it says how the visit ended
-(back at your desk, caught, battery flat, left early) and, for a visit that
-did not get out, which part of how many it stopped in. (`opt.scorecard === false` for none; on the dev
+picture beside every line. (`opt.scorecard === false` for none; on the dev
 page, `&card=0` lets an automated check skip it.) What
 the lines are worth is `POINTS` in `core/runs.mjs`; the first four are earned
 however the visit ended, the rest only by getting out. The office keeps the

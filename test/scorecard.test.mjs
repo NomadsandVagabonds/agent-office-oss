@@ -58,7 +58,7 @@ async function setup(t, { standalone = true, tape = false, anew = false, reason,
   t.after(() => { for (const name of ['document', 'window']) if (previous[name] === undefined) delete globalThis[name]; else globalThis[name] = previous[name]; });
   const veil = document.body.querySelector('.brc-veil'), form = veil.querySelector('.brc-form');
   return { document, window, card, result, veil, form, home:veil.querySelector('button.brc-home'), anew:veil.querySelector('button.brc-anew'),
-    number:veil.querySelector('a.brc-seed'), ended:veil.querySelector('.brc-ended').children.join(''), get settled() { return settled; } };
+    number:veil.querySelector('a.brc-seed'), get settled() { return settled; } };
 }
 
 test('the standalone score waits for its explicit return action, not a carried-over key or background click', async t => {
@@ -100,22 +100,6 @@ test('the Office card retains its any-key return behavior', async t => {
   assert.equal(await h.result, h.card);
 });
 
-test('the card says how a visit ended, and how far down one that did not get out had got', async t => {
-  for (const [reason, run, said] of [
-    ['battery', { parts:{ reached:2, of:4 } }, 'battery flat · part 2 of 4'],
-    ['caught', { parts:{ reached:3, of:3 } }, 'caught · part 3 of 3'],
-    ['quit', { parts:{ reached:1, of:5 } }, 'left early · part 1 of 5'],
-    ['exit', { parts:{ reached:4, of:4 } }, 'back at your desk'],
-    ['caught', {}, 'caught'],                                             // (nothing said of the parts: none printed)
-  ]) {
-    const h = await setup(t, { reason, run }); t.mock.timers.tick(900);
-    assert.equal(h.ended, said, reason);
-    assert.match(h.form.attributes.get('aria-label'), new RegExp(said), 'the same words are read out');
-    h.home.emit('click'); await h.result;
-    t.mock.timers.reset();
-  }
-});
-
 test('Go back in asks for a building nobody has had, and only once the card has been seen', async t => {
   const h = await setup(t, { anew:true });
   assert.equal(h.anew.disabled, true); assert.match(h.home.className, /quiet/, 'the way home stands quietly beside it');
@@ -136,4 +120,13 @@ test('with Go back in offered, Return to homepage still goes home and a kept tap
   t.mock.timers.reset();
   const k = await setup(t, { anew:true, tape:true }); t.mock.timers.tick(900);
   k.number.emit('click'); assert.equal((await k.result).again, 'held-tape');
+});
+
+test('the wall does not say how it ended, or which pattern it is: only what was done, and whose it is', async t => {
+  const h = await setup(t, { reason:'battery', run:{ parts:{ reached:2, of:4 } } }); t.mock.timers.tick(900);
+  const text = (node) => node.children.map(child => typeof child === 'string' ? child : text(child)).join(' ');
+  assert.equal(h.veil.querySelector('.brc-ended'), null);
+  assert.doesNotMatch(text(h.form), /battery flat|part 2 of 4|PATTERN/i);
+  assert.match(h.form.attributes.get('aria-label'), /battery flat/, 'it is still read out');
+  h.home.emit('click'); await h.result;
 });

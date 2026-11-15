@@ -93,7 +93,7 @@ build takes it from `SITE_ORIGIN` (`https://…`), or, on Vercel, from
 | Address | What happens |
 |---|---|
 | `/` | the home page |
-| `/play` | a building nobody has had before. Esc opens the camcorder menu, mouse held or not. Give Up ends the recording and shows its score, as do the way out, being caught or a flat battery. The card says how the visit ended (and, if it did not get out, which part of how many it stopped in), and stays until **Go back in** (a building nobody has had, without going back to the home page) or **Return to homepage** is chosen, or a kept tape is played again |
+| `/play` | a building nobody has had before. Esc opens the camcorder menu, mouse held or not. Give Up ends the recording and shows its score, as do the way out, being caught or a flat battery. The card stays until **Go back in** (a building nobody has had, without going back to the home page) or **Return to homepage** is chosen, or a kept tape is played again |
 | `/play?tape=<seed>` | that building first. A finished visit keeps its tape (its seed); while the card for it is on the wall the address bar shows this address, so copying it hands the building on. (`/?tape=` from before there was a home page goes straight through.) |
 | the tape's number on the card | a link to the same address; choosing it walks the building again |
 | `/play?room=<a room of the deck>` | a building with that room where you land, for looking at one room. Nothing on the home page leads here. A room that does not exist is an ordinary door |

@@ -56,15 +56,8 @@ function icon(id, title) {
 
 /* ---- what the form says ---------------------------------------------------------------------- */
 
-// How it ended: printed beside the heading, so that a visit that did not get out says what stopped it, and how far down
-// it had got. (The same words are what is read out to whoever is having the wall read to them.)
-const ENDED = { exit: 'back at your desk', caught: 'caught', battery: 'battery flat', quit: 'left early' };
-/** The line beside the heading: how it ended and, for a visit that did not get out, which part of how many it was in. */
-function endedLine(reason, parts) {
-  const ended = ENDED[reason] || ENDED.quit;
-  const reached = Math.floor(Number(parts?.reached)), of = Math.floor(Number(parts?.of));
-  return reason !== 'exit' && of > 1 && reached >= 1 && reached <= of ? `${ended} · part ${reached} of ${of}` : ended;
-}
+// How it ended, for whoever is having the wall read to them. (The wall itself does not say: what is printed on it does.)
+const ENDED = { exit: 'back at your desk', caught: 'indefinitely', battery: 'battery flat', quit: 'left early' };
 const LINES = {
   room: 'Rooms walked into', kind: 'Rooms worth mentioning', part: 'Parts of the building', survived: 'Got away from',
   out: 'Left by the way out', pace: 'Time on the tape', card: 'Keycard brought back', battery: 'Spare batteries', heart: 'Still in one piece',
@@ -92,9 +85,7 @@ const CSS = `
 .brc-form { position: relative; box-sizing: border-box; padding: .4em .2em 0; outline: none; mix-blend-mode: multiply;
   text-shadow: .6px .4px 0 rgba(242,231,171,.55); animation: brc-in .9s ease-out both; }
 .brc-over { font-size: .78em; letter-spacing: .34em; font-weight: 700; opacity: .8; }
-.brc-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; column-gap: 1em; margin: .08em 0 .5em; }
-.brc-title { font-size: 2.9em; line-height: 1; font-weight: 700; letter-spacing: -.02em; }
-.brc-ended { font-size: .9em; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+.brc-title { font-size: 2.9em; line-height: 1; font-weight: 700; letter-spacing: -.02em; margin: .08em 0 .5em; }
 .brc-rows { display: grid; grid-template-columns: 1.7em 1fr auto auto; column-gap: .75em; row-gap: .3em; align-items: center; }
 .brc-rows .n { text-align: right; opacity: .8; min-width: 3.4em; }
 .brc-rows .p { text-align: right; min-width: 3.8em; font-weight: 700; }
@@ -125,11 +116,11 @@ a.brc-seed:focus-visible, a.brc-more:focus-visible { outline: 2px solid currentC
 .brc-go { position: absolute; right: .2em; bottom: -.1em; opacity: 0; color: #4a3a10; animation: brc-blink 1.1s 1.5s steps(1) infinite; }
 @keyframes brc-in { from { opacity: 0; } }
 @keyframes brc-blink { 0% { opacity: .8; } 50% { opacity: 0; } }
-@media (max-width: 30em) { .brc-veil { font-size: 12.5px; padding: 14px 14px 13vh; } .brc-title { font-size: 2.4em; } .brc-ended { margin-top: .3em; } }
+@media (max-width: 30em) { .brc-veil { font-size: 12.5px; padding: 14px 14px 13vh; } .brc-title { font-size: 2.4em; } }
 /* a phone held sideways is wide and very short: everything a little closer together, and the way home beside the last line, so that it is on the screen without a scroll */
 @media (max-height: 30em) and (min-aspect-ratio: 4/3) {
   .brc-veil { font-size: 12px; padding: 8px 16px 12vh; place-items: start center; }
-  .brc-head { margin: .04em 0 .3em; } .brc-title { font-size: 2em; }
+  .brc-title { font-size: 2em; margin: .04em 0 .3em; }
   .brc-rows { row-gap: .1em; } .brc-ic { width: 1.4em; height: 1.4em; }
   .brc-total { margin-top: .4em; padding-top: .3em; } .brc-total span:last-child { font-size: 2em; }
   .brc-box { margin-top: .5em; padding-top: .45em; row-gap: .18em; }
@@ -143,10 +134,10 @@ const el = (tag, cls, ...kids) => { const e = document.createElement(tag); if (c
 /** What is printed at the head of the card, unless whoever shows it says otherwise — and whether there is a jar to be paid into (jar: false where there is no office, and so nothing to spend a coin on). */
 const BRAND = Object.freeze({ over: 'AGENT OFFICE', title: 'Out of Office', jar: true });
 
-/** The card, printed on the wall. → the element (not yet shown). opt: { brand: { over, title, jar }, share: (seed) => href, home: { label }, anew: { label }, parts: { reached, of } } */
+/** The card, printed on the wall. → the element (not yet shown). opt: { brand: { over, title, jar }, share: (seed) => href, home: { label }, anew: { label } } */
 function draw(card, who, opt = {}) {
   const brand = { ...BRAND, ...(opt.brand || {}) };
-  const out = card.reason === 'exit', ended = endedLine(card.reason, opt.parts);
+  const out = card.reason === 'exit', ended = ENDED[card.reason] || ENDED.quit;
   const rows = el('div', 'brc-rows');
   for (const l of card.lines) {
     const zero = !l.points ? ' zero' : '';
@@ -180,10 +171,10 @@ function draw(card, who, opt = {}) {
   const best = replay ? `PLAYED BACK · FIRST TIME ${num(card.tape?.first?.score)}`
     : card.best?.beaten ? (card.best.was ? `THE BEST YET · WAS ${num(card.best.was)}` : 'THE BEST YET') : `BEST ${num(card.best?.score)}`;
 
-  const end = el('div', 'brc-end', el('div', 'brc-foot', `PATTERN 13/B · ${String(who || '').toUpperCase().slice(0, 24)}`));
+  const end = el('div', 'brc-end', el('div', 'brc-foot', String(who || '').toUpperCase().slice(0, 24)));
   const form = el('div', 'brc-form',
     el('div', 'brc-over', brand.over),
-    el('div', 'brc-head', el('div', 'brc-title', brand.title), el('div', `brc-ended ${card.reason === 'exit' ? 'out' : 'stopped'}`, ended)),
+    el('div', 'brc-title', brand.title),
     rows,
     el('div', 'brc-total', el('span', '', 'POINTS'), el('span', '', num(card.score))),
     el('div', `brc-best${card.best?.beaten ? ' new' : ''}`, best),
@@ -246,7 +237,7 @@ export async function showScorecard(o = {}) {
   // (on the page itself, not in the office's own interface: that steps aside for as long as somebody is out of the
   // building, and takes everything in it out of sight with it)
   const root = document.body;
-  const style = el('style', '', CSS), veil = draw(card, who, { brand: o.brand, share: o.share, home: o.home, anew: o.anew, parts: o.run?.parts }), form = veil.querySelector('.brc-form');
+  const style = el('style', '', CSS), veil = draw(card, who, { brand: o.brand, share: o.share, home: o.home, anew: o.anew }), form = veil.querySelector('.brc-form');
   const number = veil.querySelector('a.brc-seed'), home = veil.querySelector('button.brc-home'), anew = veil.querySelector('button.brc-anew');
   const held = !!(home || anew);                                            // (a card with buttons waits for one of them)
   document.head.append(style); root.append(veil);
