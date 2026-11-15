@@ -424,6 +424,12 @@ export const MORE_DECK = [
       ductTone: R.pick([0, 1]),
     }),
   },
+  { id: 'last-light', name: 'The Last Light', landmark: 'the long hall losing its lights',
+    module: './rooms/last-light.js', resident: 'lamplighter', items: ['torch'], caught: 1, fire: 'ignores',
+    w: [6, 7], d: [20, 22], h: [2.8, 3.0], ports: ['back'], big: true,
+    weight: .85, lights: 'normal', needs: ['beam'], themes: { night: 1.5, archive: 1.2 },
+    stash: r => [r.W/2-1.4, -r.D*.17-.65, r.W/2-.5, -r.D*.17+.65],
+    roll: R => ({face:R.int(0,7)}) },
 ];
 
 // Where a tape goes in an entry that does not say so itself: (room, ±1) → [x0, z0, x1, z1] in the room's own frame.

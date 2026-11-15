@@ -534,7 +534,7 @@ async function visit(office, opt) {
     // the part below: begun once you have found your feet in this one, and only drawn from where it could be seen
     if (state === 'play' && !ahead && since > 4 && goesDown(cur.level.exit.way)) prepare();
     if (ahead?.f) { const at = world.current(); ahead.f.world.scene.visible = !!at && (at.def.toExit ?? 9) <= 1; }
-    if (env.lighting) { ahead?.f?.world.updateLighting(time); above?.f?.world.updateLighting(time); }
+    if (env.lighting || ahead?.f?.world.hasLighting || above?.f?.world.hasLighting) { ahead?.f?.world.updateLighting(time); above?.f?.world.updateLighting(time); }
     if (env.below) for (const m of env.below) m.visible = !ahead?.f;          // (the stand-in at the bottom of a drop, until the real rooms are there)
     if (landed >= 0) landed += dt;
     purse?.update(dt, time, state === 'play');
@@ -546,14 +546,15 @@ async function visit(office, opt) {
 
     // the camcorder copes with the dark: more gain (and more noise), then its little lamp
     const here = world.current();
-    const lvl = env.lighting ? world.illuminationAt(me.x, me.z) : here ? here.level * here.u.dim.value : 0.3;
+    const variedLight = env.lighting || !!here?.lighting;
+    const lvl = variedLight ? world.illuminationAt(me.x, me.z) : here ? here.level * here.u.dim.value : 0.3;
     light += (lvl - light) * (1 - Math.exp(-2.2 * dt));
-    u.uGain.value = clamp(Math.pow(0.3 / Math.max(light, 0.04), 0.55), 0.9, env.lighting ? LIGHTING.gainMax : 2.3);
+    u.uGain.value = clamp(Math.pow(0.3 / Math.max(light, 0.04), 0.55), 0.9, variedLight ? LIGHTING.gainMax : 2.3);
     // …which with pockets is a weak one, enough not to walk into the furniture: a torch in the hand is the light, and
     // it works wherever its owner switches it on
     const lamp = light < 0.11 && !here?.noTorch ? 1 : 0;
-    const ownLamp = env.lighting ? LIGHTING.ownLamp : OWN_LAMP;
-    const wantTorch = inventory ? Math.max(inventory.torchPower(), lamp * ownLamp) : Math.max(lamp * (env.lighting ? ownLamp : 1), env.hand?.hasFlashlight?.() ? 1 : 0);          // (no pockets: a torch in the hand is simply on)
+    const ownLamp = variedLight ? LIGHTING.ownLamp : OWN_LAMP;
+    const wantTorch = inventory ? Math.max(inventory.torchPower(), lamp * ownLamp) : Math.max(lamp * (variedLight ? ownLamp : 1), env.hand?.hasFlashlight?.() ? 1 : 0);          // (no pockets: a torch in the hand is simply on)
     torch += (wantTorch - torch) * (1 - Math.exp(-3 * dt));
     cur.kit.shared.uTorch.value = torch * 1.5;
     hud.flag('LIGHT', torch > 0.5);

@@ -401,6 +401,14 @@ const SKETCH = {
     g.beginPath(); g.arc(70, 46, 6, 0, 6.3); g.stroke(); g.beginPath(); g.moveTo(70, 52); g.lineTo(70, 72); g.moveTo(62, 58); g.lineTo(78, 58); g.stroke();
     for (let i = 0; i < 14; i++) { g.beginPath(); g.moveTo(34 + (i * 5) % 12, 8 + (i * 7) % 30); g.lineTo(38 + (i * 3) % 12, 12 + (i * 11) % 30); g.stroke(); }
   },
+  lamplighter(g) {                                                    // dead ceiling strips, a crooked head and the only beam still working
+    for (const [x,y,w] of [[12,8,18],[38,16,14],[60,22,10]]) {
+      g.strokeRect(x,y,w,4);g.beginPath();g.moveTo(x-2,y-3);g.lineTo(x+w+2,y+7);g.stroke();
+    }
+    g.beginPath();g.moveTo(62,36);g.lineTo(76,42);g.lineTo(70,54);g.lineTo(57,48);g.closePath();g.stroke();
+    g.beginPath();g.moveTo(65,52);g.lineTo(62,73);g.lineTo(54,90);g.moveTo(62,73);g.lineTo(70,89);g.moveTo(64,58);g.lineTo(49,77);g.moveTo(64,58);g.lineTo(78,78);g.stroke();
+    g.strokeRect(8,65,15,7);g.beginPath();g.moveTo(23,65);g.lineTo(81,38);g.moveTo(23,72);g.lineTo(81,86);g.stroke();
+  },
   'floor-warden'(g) {                                                 // a hard hat, a stick man running, and scissors bigger than he is
     g.beginPath(); g.arc(30, 24, 8, 0, 6.3); g.stroke(); g.beginPath(); g.arc(30, 22, 10, 3.14, 6.28); g.stroke(); g.beginPath(); g.moveTo(18, 22); g.lineTo(42, 22); g.stroke();
     g.beginPath(); g.moveTo(30, 32); g.lineTo(34, 58); g.moveTo(34, 58); g.lineTo(22, 78); g.moveTo(34, 58); g.lineTo(48, 74); g.moveTo(31, 42); g.lineTo(50, 46); g.stroke();
