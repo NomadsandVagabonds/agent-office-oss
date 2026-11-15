@@ -475,6 +475,10 @@ export const MORE_DECK = [
     }),
   },
   // Kept out of ordinary visits until the waterpark team's integration pass.
+  { id: 'bellmouth-baths', name: 'Bellmouth Baths', landmark: 'the enormous ceramic drain with a gallery around its rim',
+    module: './rooms/bellmouth-baths.js', w: [26,28], d: [28,28], h: [9,10], ports: ['back'],
+    big: true, weight: 1, lights: 'normal', themes: { waterpark: 1, '*': 0 },
+    stash: r => [-.8, r.D/2-2, .8, r.D/2-1.2], roll: () => ({}) },
   { id: 'return-pool', name: 'The Return Pool', landmark: 'the pool hanging above another pool',
     module: './rooms/return-pool.js', w: [14,15], d: [23,25], h: [5.8,6.2], ports: ['back'],
     big: true, weight: 1, lights: 'dim', themes: { waterpark: 1, '*': 0 },

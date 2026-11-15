@@ -7,7 +7,7 @@ const [{createKit},{buildWorld,loadCatalogue},{generate},{DECK},{toWorld,wallPoi
  import('../public/world/backrooms/kit.js'),import('../public/world/backrooms/world.js'),import('../public/world/backrooms/gen.js'),import('../public/world/backrooms/gen.js'),import('../public/world/backrooms/frame.js'),import('../public/world/backrooms/player.js'),import('../public/vendor/three.module.min.js'),import('../public/world/backrooms/denizens.js')]);
 const draw=new Proxy({}, {get:(_,k)=>k==='measureText'?s=>({width:String(s).length*6}):/Gradient/.test(k)?()=>({addColorStop(){}}):()=>{},set:()=>true});
 const oldDocument=globalThis.document;globalThis.document={createElement:()=>({getContext:()=>draw})};test.after(()=>{globalThis.document=oldDocument;});
-const ids=['slide-maze','return-pool','wave-pool','lazy-river','deep-end','whirlpool-flume','kiddie-lagoon','locker-showers'];
+const ids=['bellmouth-baths','slide-maze','return-pool','wave-pool','lazy-river','deep-end','whirlpool-flume','kiddie-lagoon','locker-showers'];
 async function fixture(id,rot=0,generated=false){
  const {build}=await import(`../public/world/backrooms/rooms/${id}.js`),defn=DECK.find(a=>a.id===id), kit=createKit(),g=generate('waterpark-integration',{themes:['waterpark']});
  const W=defn.w[rot%2],D=defn.d[rot%2],H=defn.h[rot%2];
@@ -50,6 +50,22 @@ async function walkTo(f,x,z){
  f.input.keys.clear();f.player.me.vx=0;f.player.me.vz=0;
  assert.ok(Math.hypot(f.player.me.x-p.x,f.player.me.z-p.z)<.16,`reached ${x},${z}; at ${JSON.stringify(f.player.me)}`);
 }
+for(const rot of [0,1,2,3])test(`Bellmouth: both gallery directions, buttress and basin recovery (${rot})`,async t=>{
+ const f=await fixture('bellmouth-baths',rot);t.after(()=>f.dispose());assert.deepEqual(f.warnings,[]);
+ const rt=f.world.rooms[0],p=rt.bellmouth.plan;
+ await walkTo(f,0,p.rz*.9);
+ for(let i=1;i<=24;i++){const a=i*Math.PI/24;await walkTo(f,Math.sin(a)*p.rx*.9,Math.cos(a)*p.rz*.9);}
+ assert.ok(!rt.flat,'navigation never flattens the bowl');
+ await walkTo(f,0,-p.rz*.38);f.tick(30);
+ assert.ok(f.player.me.y-f.def.y<-.9,'the camera is physically down in the basin');
+ await walkTo(f,0,p.rz*.38);await walkTo(f,0,p.rz*.9);
+ assert.ok(f.player.me.y-f.def.y>1,'near stairs recover to entry elevation');
+ for(let i=1;i<=24;i++){const a=-i*Math.PI/24;await walkTo(f,Math.sin(a)*p.rx*.9,Math.cos(a)*p.rz*.9);}
+ await walkTo(f,0,-p.rz*.38);await walkTo(f,0,-p.rz*.9);
+ assert.ok(f.player.me.y-f.def.y>1,'far stairs also recover');
+ await walkTo(f,0,-f.def.D/2+.6);
+ assert.ok(f.world.free(f.player.me.x,f.player.me.z,.22));
+});
 for(const rot of [0,1,2,3])test(`Flume Knot: walk both mouths, ride down, walk the sump and escape (${rot})`,async t=>{
  const f=await fixture('slide-maze',rot);t.after(()=>f.dispose());assert.deepEqual(f.warnings,[]);
  for(const d of f.env.denizens.all())d.gone=true; // isolate route geometry; attacks have their own rules tests

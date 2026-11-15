@@ -56,6 +56,7 @@ const [
 
 const WATERPARK_ROOMS = [
   'return-pool',
+  'bellmouth-baths',
   'slide-maze',
   'wave-pool',
   'lazy-river',
@@ -355,7 +356,7 @@ test('stepSkimmer: ignores still waders and dry-deck walkers, surges on ripples,
   assert.equal(sk.mode, 'recoil');
 });
 
-test('waterpark theme isolation & generation: undealt by default, strictly isolated, deals all 8 aquatics rooms when requested', () => {
+test('waterpark theme isolation & generation: undealt by default, strictly isolated, deals all review rooms when requested', () => {
   assert.equal(THEMES.waterpark.own, true);
   assert.equal(THEMES.waterpark.dealt, false);
   assert.ok(!dealtThemes().includes('waterpark'), 'waterpark stays out of normal visits while dealt: false');
@@ -375,7 +376,7 @@ test('waterpark theme isolation & generation: undealt by default, strictly isola
     }
   }
 
-  // Generating waterpark levels deals all 8 rooms across seeds and rolls cabanas & pooltile looks cleanly
+  // Explicit waterpark levels deal the review rooms across seeds; ordinary visits cannot.
   const seenSpecials = new Set();
   const seenMotifs = new Set();
   for (let s = 1; s <= 24; s++) {
