@@ -257,13 +257,12 @@ const headOf = (room, x, z, plan) => {
 export function fits(room, plan) {
   const all = { pillars: [...(room.pillars || []), ...plan.pillars], lows: [...(room.lows || []), ...(plan.lows || [])], blocks: [...(room.blocks || []), ...(plan.blocks || [])] };
   const pad = (q, m) => ({ x0: q.x0 - m, z0: q.z0 - m, x1: q.x1 + m, z1: q.z1 + m });
-  const inside = (p, q) => p.x > q.x0 && p.x < q.x1 && p.z > q.z0 && p.z < q.z1;
   for (const d of room.doors) {
-    // a doorway keeps a metre of clear floor in front of it, a little wider than itself
-    for (let off = 0.15; off <= 1.0; off += 0.17) for (let k = -0.5; k <= 0.5; k += 0.25) {
-      const p = wallPoint(room, d.side, d.c + k * (d.w + 0.4), off);
-      if ([...plan.pillars.map(box), ...(plan.blocks || [])].some((q) => inside(p, pad(q, 0.05)))) return false;
-    }
+    // a doorway keeps a metre of clear floor in front of it, a little wider than itself: the whole of that floor, not
+    // points on it (the end of a partition is twenty centimetres across, and stood between any five points one tried)
+    const a = wallPoint(room, d.side, d.c - (d.w + 0.4) / 2, 0.15), b = wallPoint(room, d.side, d.c + (d.w + 0.4) / 2, 1.0);
+    const zone = { x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z) };
+    if ([...plan.pillars.map(box), ...(plan.blocks || [])].map((q) => pad(q, 0.05)).some((q) => q.x1 > zone.x0 && q.x0 < zone.x1 && q.z1 > zone.z0 && q.z0 < zone.z1)) return false;
   }
   for (const s of stairZones(room, 0.6)) if ([...plan.pillars.map(box), ...(plan.blocks || [])].some((q) => q.x1 > s.x0 && q.x0 < s.x1 && q.z1 > s.z0 && q.z0 < s.z1)) return false;
   if (!room.doors.length) return true;
