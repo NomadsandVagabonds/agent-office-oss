@@ -114,6 +114,8 @@ async function sign(card, report) {
 }
 
 async function run() {
+  // (asked for while the level is being fetched, so that nobody waits for it)
+  const asked = fetch('./api/where', { headers: { accept: 'application/json' }, cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && typeof d.city === 'string' ? d.city : '')).catch(() => '');
   try {
     const [{ createStage }, { enterBackrooms }, { keptTapes }, { ARCHETYPES }] = await Promise.all([
       import('./world/engine/stage.js'), import('./world/backrooms/index.js'), import('./world/backrooms/scorecard.js'), import('./world/backrooms/gen.js')]);
@@ -131,6 +133,9 @@ async function run() {
     // ?room=<a room of the deck> is a building with that room where you land (for looking at one room; nothing on
     // the front page leads here. A room nobody has built yet is no room, and the door is an ordinary door)
     let room = !next && q.get('room') && Object.hasOwn(ARCHETYPES, q.get('room')) ? q.get('room') : null;
+    // where the visitor appears to be, as the site's host tells the site (api/where): the second line of a banner in the
+    // building. Asked once, not waited for long, not kept; with no answer the banner says what such banners say
+    const where = await Promise.race([asked, pause(1500).then(() => '')]);
     for (;;) {
       const seed = next || fresh();
       // a tape this browser has kept is a tape played back (it says PLAY, hides nothing, and is paid nothing: core/runs.mjs);
@@ -140,7 +145,7 @@ async function run() {
       if (!mine) tell({ do: 'in' });                      // (he keeps count of who goes in. A tape played back is nobody going anywhere)
       const result = await enterBackrooms(office, {
         name: me().name, seed, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: sign,
-        home: { label: 'Return to homepage' }, ...dev,
+        home: { label: 'Return to homepage' }, where, ...dev,
         ...(room ? { only: [room] } : {}),
         ...(mine ? { replay: true, pursuer: typeof mine.mascot === 'boolean' ? mine.mascot : undefined } : {}),
       });

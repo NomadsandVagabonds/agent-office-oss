@@ -38,6 +38,8 @@ import { createInput } from './input.js';
 import { createStalkers } from './pursuer.js';
 import { createHand, createHandView } from './hand.js';
 import { createDenizens } from './denizens.js';
+import { hangBanner } from './banner.js';
+import { cleanWhere } from './banner.rule.js';
 import { createLoot, lootLeft } from './loot.js';
 import { leaving } from './leaving.js';
 import { middle, THIN_BEHIND } from './marks.js';
@@ -94,6 +96,7 @@ async function buildersFor(level) {
  *        depths: how many floors (default: by the seed) · depth: which floor to begin on (default: the top one)
  *        replay: this is a kept tape being played back (seed: the tape's; pursuer: whether the mascot was in it): nothing of the office's is hidden in it
  *        brand, share, also, home: handed to the card at the end (scorecard.js), for a page that is not the office
+ *        where: a place name, if the page was told one (the site's host says a city): the second line of the banner near the landing (banner.js)
  *        inventory: false for a visit without pockets, hearts or a battery that runs down · dev.supplies: one of everything where you land
  * @returns {Promise<{reason:'exit'|'caught'|'battery'|'quit', kept:{card:boolean, coins:number[], batteries:number, told?:Promise<void>}, run:object, card:object|null}>}
  *          run: what the visit came to (tally.js) · card: the scorecard, once put down (opt.scorecard === false: none) · kept: what you brought out (nothing,
@@ -239,6 +242,7 @@ async function visit(office, opt) {
     const env = f.env = {
       level, cast, who, kit, sound, hud, vhs, renderer, builders: await buildersFor(level), catalogue: await loadCatalogue(kit), Avatar, layout,
       plan: office.net?.state?.world?.plan || {}, visit: plan, carry,
+      where: cleanWhere(opt.where),             // a place name the page was told (the site's host says a city): the banner's second line, and nothing else's
       player: null, world: null, pursuer: null,
       hatches: new Map(),                       // room id → { drop() }: where a door in a floor lets you out
       /** The visit is over. how: { nx, nz } — the way out through the wall that gave (thin.js), for an 'exit'. */
@@ -290,6 +294,8 @@ async function visit(office, opt) {
     createStalkers(env);
     // the residents of rooms (denizens.js), and the visitor's hand as they ask after it; the picture washed red (0…1) by a room that does that
     createHand(env); createHandView(env, camera); createDenizens(env);
+    // the banner an office park puts up about itself, near where a visit lands (banner.js): once the part is built
+    if ((level.depth | 0) === 0) (env.ready || (env.ready = [])).push(() => { try { hangBanner(env); } catch (err) { console.warn('[backrooms] the banner would not hang', err); } });
     env.red = (k) => { redWash = Math.max(redWash, k); };
     env.loot = purse;
     purse?.hang(env);

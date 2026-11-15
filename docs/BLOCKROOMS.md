@@ -131,6 +131,15 @@ Anything in the header that is not a place name is not passed on. With no
 host to say (any other host, or `serve.mjs` without `CITY=Springfield`) that
 award is not there. The page's small print says so in a sentence.
 
+The same word is on a banner in the building. The page the level is played
+on asks `/api/where` once while the level loads and hands the answer to the
+level (`where`), which letters it on the second line of the vinyl banner
+that hangs near where a visit lands: "VOTED 6TH BEST OFFICE PARK / OF
+PORTLAND" (`public/world/backrooms/banner.js`). With no answer it says "IN
+THE TRI-COUNTY AREA", as it does in the office, where nobody is asked. Where
+the banner hangs is the seed's business and the same for everybody; only that
+line is the visitor's, and it is not kept.
+
 ## The visitors' book
 
 High scores, a guestbook and the traffic counter are one small thing: a

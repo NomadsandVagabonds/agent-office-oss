@@ -149,7 +149,11 @@ test('the page\'s own script: a building nobody has had, a tape from the address
   assert.ok(!/fresh\(\)/.test(src.slice(src.indexOf('room = null;'))), 'a building nobody asked for is begun after the card');
   // it talks to its own site's book and to nobody else, and says two things: that somebody went in, and (unless they
   // have said not to, and never for a tape played back) what a visit that got out came to
-  assert.deepEqual([...src.matchAll(/fetch\(([^,)]+)/g)].map((m) => m[1].trim()), ["'./api/book'"]);
+  assert.deepEqual([...src.matchAll(/fetch\(([^,)]+)/g)].map((m) => m[1].trim()).sort(), ["'./api/book'", "'./api/where'"]);
+  // (where the visitor appears to be, for the banner near the landing: asked while the level loads, never waited for long, handed to the level and to nothing else)
+  assert.match(src, /const where = await Promise\.race\(\[asked, pause\(1500\)\.then\(\(\) => ''\)\]\);/);
+  assert.match(src, /home: \{ label: 'Return to homepage' \}, where, \.\.\.dev,/);
+  assert.ok(!/localStorage[^;\n]*where|setItem\([^)]*where/.test(src), 'the page does not keep where anybody is');
   assert.ok(!/XMLHttpRequest|sendBeacon|WebSocket/.test(src));
   assert.match(src, /if \(!mine\) tell\(\{ do: 'in' \}\);/);
   assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit'\) return null;\n  const who = me\(\);\n  if \(!who\.sign\) return null;/);

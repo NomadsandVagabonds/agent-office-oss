@@ -8,6 +8,7 @@
 //   &vhs=0|1|2         clean · steady · full camcorder           &mute=1
 //   &pursuer=1|0       force the thing that follows you in or out; &wake=1 has it already awake, in the room with you
 //   &name=Robin        who you are                               &live=1     borrow names from the running office (GET only)
+//   &where=Portland    the place on the banner near the landing (banner.js); without it, what such banners say
 //   &list=1            print the deck with links                 &map=1      show the floor plan
 //   &card=1            show the card at the end of the visit, as the office and the sample page do (here it is off unless asked for,
 //                      so that a script is never left waiting for somebody to put it down)
@@ -107,7 +108,7 @@ async function go() {
     name: q.get('name') || 'Robin', seed, only: only.length ? only : undefined, count: q.has('count') ? num('count', 7) : undefined,
     depth: q.has('depth') ? num('depth', 0) : undefined, depths: q.has('depths') ? num('depths', 3) : undefined,
     pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined, vhs: q.has('vhs') ? num('vhs', 2) : undefined, mute: q.has('mute') ? q.get('mute') !== '0' : undefined,
-    debug: true, scorecard: q.get('card') === '1',
+    debug: true, scorecard: q.get('card') === '1', where: q.get('where') || undefined,
     inventory: q.get('inventory') !== '0', dev: q.get('supplies') === '1' ? { supplies: true } : undefined,
     onReady(handle) {
       if (room) handle.goto(/^\d+$/.test(room) ? Number(room) : room, q.has('x') ? num('x', 0) : undefined, q.has('z') ? num('z', 0) : undefined, num('yaw', 0), num('pitch', 0));
