@@ -212,3 +212,23 @@ test('the mascot\'s music belongs to the mascot: it begins when a part\'s is fir
   assert.ok(fs.statSync(new URL('music/mascot.mp3', dir)).size > 1000000);
   assert.match(sound, /theme = new Audio\(MASCOT\.href\)/); assert.ok(sound.indexOf('new Audio(MASCOT.href)') > sound.indexOf('function playMascot'), 'the file is not asked for until the piece is');
 });
+
+
+test('toner sonar and attack rattle create audible spatial effects and respect mute', t => {
+  const { sound, contexts } = audio(t, { music: false });
+  sound.start();
+  const ctx = contexts[0];
+  for (const name of ['sonar', 'sonarrattle']) {
+    const before = ctx.nodes.length;
+    sound.play(name, { vol: 0.8, pan: -0.6 });
+    const added = ctx.nodes.slice(before);
+    assert.ok(added.some(n => n.started), `${name} starts audio sources`);
+    assert.ok(added.some(n => n.gain.events.some(e => e[0] === 'ramp' && e[1] > 0.01)), `${name} has a nonzero envelope`);
+    assert.ok(added.some(n => n.pan.value === -0.6), `${name} follows the creature's direction`);
+    sound.setMute(true);
+    const mutedCount = ctx.nodes.length;
+    sound.play(name);
+    assert.equal(ctx.nodes.length, mutedCount, `${name} respects master mute`);
+    sound.setMute(false);
+  }
+});

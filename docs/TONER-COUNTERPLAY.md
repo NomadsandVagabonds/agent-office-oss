@@ -6,9 +6,9 @@ The old pursuit first spent a full 4.85 m/s movement budget toward the player,
 then added lateral movement. Its apparent weave did not reduce closing speed,
 and floor contact automatically bit. Sprint sonar locked on in 0.14 seconds.
 
-The new encounter uses wall-perimeter goals at 2.15 m/s (existing difficulty
+The new encounter uses wall-perimeter goals at 2.3 m/s (existing difficulty
 speed multipliers still apply), moving up/down the walls and crossing ceilings.
-After at least 5.5 seconds of stalking, a target within six metres and line of
+After at least 4.5 seconds of stalking, a target within six metres and line of
 sight can trigger a 0.95-second stationary audible wind-up. The 0.8-second jump
 commits to a fixed endpoint. 25% of aim rolls target the player's wind-up
 position; others aim 2.2 metres to either side. This is aim accuracy, not an
@@ -23,14 +23,14 @@ checks stop a leap rather than steering it around an obstruction. Existing
 puddle/brood lifecycle and character geometry are unchanged.
 
 Local review:
-`/world/dev/backrooms.html?room=copiers&seed=7&tonerstudy=1&mute=1&vhs=0`
+`/world/dev/backrooms.html?room=copiers&seed=7&tonerstudy=1&mute=0&vhs=0`
 Click Start stalking encounter. Damage defaults OFF; Toggle damage enables
 Easy for a real health test. This developer helper is not imported by the public
 entry point. Run the source via the local standalone build with public/world/dev
 copied into its world/dev directory.
 
-Validation: 68 focused tests pass (cast lifecycle, quiet/perks, difficulty,
-co-op conductor, and new counterplay tests). Browser smoke test observed chase,
+Validation: 79 focused tests pass (cast lifecycle, quiet/perks, difficulty,
+co-op conductor, audio graph, and new counterplay tests). Browser smoke test observed chase,
 windup, lunge, recoil, prowl and perch with no console warnings/errors. The
 25% figure is covered by stratified aim samples, not measured player hit rate.
 Actual balance and camera readability still need playtesting.
@@ -38,3 +38,7 @@ Actual balance and camera readability still need playtesting.
 Full suite: 930/933 pass. Failures are the console chat path assertion and its
 parent, plus the usage/status-line missing-source test, matching the previously
 observed unrelated failures. Standalone build and git diff --check pass.
+
+Quiet counterplay pass: standing still or crouching prevents attack wind-up, cancels an existing wind-up, and prevents damage from an already airborne leap. Flight itself stays on its committed trajectory. Silence resets the stalking timer and loses the sound trail even with line of sight. The study starts stalking but uses these same attack gates. Jump accuracy, tell duration and recovery remain unchanged.
+
+Audio review: sonar click pairs already play during ceiling searches and wall stalking, with an accelerating rattle during lock-on and wind-up. The study now has Hear sonar clicks and Hear attack rattle buttons that explicitly unmute and start audio on a user gesture. These use the actual production sound functions. The earlier mute=1 preview hid all audio. Current sounds remain procedural; realism still needs a listening review before replacing them with generated samples.

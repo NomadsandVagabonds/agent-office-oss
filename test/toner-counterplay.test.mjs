@@ -38,3 +38,18 @@ test('wall circuits visit all sides rather than following a target into the midd
  assert.equal(new Set(goals.map(g=>JSON.stringify(g))).size,4);
  for(const g of goals)assert.ok(Math.abs(g.x)>3.5&&Math.abs(g.z)>3.5);}
 });
+test('stillness and crouching prevent wind-up even with continuous line of sight',()=>{
+ for(const quiet of [{moving:false,speed:0},{sink:TONER.crouchSink+.1},{speed:0.1},{noiseScale:0}]){
+  let s={...perched(rnd),mode:'chase',attackT:0};
+  for(let t=0;t<20;t+=dt){s=stepToner(s,dt,{...sense,...quiet},rnd);assert.ok(!['windup','lunge'].includes(s.mode));assert.equal(s.bite,false);}
+ }
+});
+test('going quiet cancels wind-up, resets the stalking window and prevents airborne damage',()=>{
+ for(const quiet of [{moving:false,speed:0},{sink:TONER.crouchSink+.1}]){
+  const s=stepToner({...perched(rnd),mode:'windup',t:.01},dt,{...sense,...quiet},rnd);
+  assert.equal(s.mode,'chase');assert.equal(s.attackT,TONER.stalkTime);
+  assert.equal(stepToner(s,dt,sense,rnd).mode,'chase');
+  const airborne=stepToner({...perched(rnd),mode:'lunge',t:.3},dt,{...sense,d:.1,inReach:true,...quiet},rnd);
+  assert.equal(airborne.mode,'lunge');assert.equal(airborne.bite,false);
+ }
+});

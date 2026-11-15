@@ -16,8 +16,8 @@ export const TONER = Object.freeze({
   maxHits: 2,                      // full after dealing 2 total damage: dissolves into a brooding slime pool
   touch: 0.72,                     // bite reach while on the floor
   prowlSpeed: 1.5,                 // creeping upside down across the ceiling grid
-  chaseSpeed: 2.15,                // wall stalking; flying leaps use their own fixed duration
-  stalkTime: 5.5,                  // wall circuits before another jump can begin
+  chaseSpeed: 2.3,                // wall stalking; flying leaps use their own fixed duration
+  stalkTime: 4.5,                  // wall circuits before another jump can begin
   windupTime: 0.95,                // stationary audible tell; aim locks at its start
   lungeTime: 0.8,
   lungeRange: 6,
@@ -240,12 +240,15 @@ export function stepToner(s, dt, sense = {}, rnd = Math.random) {
 
   // A jump commits to its aim. Fire, a door, or pack recovery cancels it safely.
   if (s.mode === 'windup' || s.mode === 'lunge') {
+    const quiet = isQuiet(sense);
+    if (s.mode === 'windup' && quiet) return { ...base, mode: 'chase',
+      t: 0, attackT: TONER.stalkTime, alert: 0, lostT: 0, sonar: null };
     const blocked = sense.blockedByDoor || sense.cannot || sense.attackBlocked;
     const t = s.t - dt;
     if (blocked || (s.mode === 'lunge' && t <= 0)) return strikeToner(base, {}, rnd);
     if (s.mode === 'windup') return { ...base, mode: t <= 0 ? 'lunge' : 'windup',
       t: t <= 0 ? TONER.lungeTime : t, ping: (s.ping ?? 0) <= dt ? TONER.warnEvery : s.ping-dt, sonar: t <= 0 ? 'drop' : (s.ping ?? 0) <= dt ? 'warn' : null };
-    return { ...base, t, bite: d <= TONER.touch && !!sense.los && sense.inReach !== false };
+    return { ...base, t, bite: !quiet && d <= TONER.touch && !!sense.los && sense.inReach !== false };
   }
 
   // 4. Post-bite ceiling cooldown (or broodling emerging up onto the ceiling)
@@ -378,7 +381,7 @@ export function stepToner(s, dt, sense = {}, rnd = Math.random) {
   }
 
   const quiet = isQuiet(sense);
-  const tracked = !!sense.los || (!quiet && !!sense.audible && d <= listenFar);
+  const tracked = !quiet && !!sense.audible && d <= listenFar;
   const lostT = tracked ? 0 : (s.lostT || 0) + dt;
   if (lostT >= TONER.trailMemory) {
     return {
@@ -397,8 +400,8 @@ export function stepToner(s, dt, sense = {}, rnd = Math.random) {
     };
   }
 
-  const attackT = Math.max(0, (s.attackT ?? TONER.stalkTime) - dt);
-  if (!blocked && !sense.attackBlocked && sense.los && d <= TONER.lungeRange && attackT <= 0) {
+  const attackT = quiet ? TONER.stalkTime : Math.max(0, (s.attackT ?? TONER.stalkTime) - dt);
+  if (!quiet && tracked && !blocked && !sense.attackBlocked && sense.los && d <= TONER.lungeRange && attackT <= 0) {
     return { ...base, mode: 'windup', t: TONER.windupTime, attackT, sonar: 'warn' };
   }
   const bite = false; // Crawling past the visitor is not an automatic contact attack.
