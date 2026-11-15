@@ -11,7 +11,7 @@ import { toWorld, wallPoint, wallSpans, floorAt, ceilAt } from './gen.js';
 import { clamp, turnTo } from './bits.js';
 import {
   ABSORBED, ABSORBED_MOUNTS, rollAbsorbedRoster, absorbedCount,
-  createAbsorbedState, stepAbsorbed, tugsTheCamera, HUNTER_NEAR, absorbedKeepOut, meetsAbsorbed,
+  createAbsorbedState, stepAbsorbed, tugsTheCamera, HUNTER_NEAR, absorbedKeepOut, meetsAbsorbed, clearOfThings,
 } from './absorbed/rule.js';
 import { CAST } from './cast.js';
 import { makeAbsorbedWorker } from './absorbed/rig.js';
@@ -337,6 +337,11 @@ export function populateAbsorbed(env, R) {
     return [];
   }
 
+  // What is lying about in this part is already on the floor by now (inventory.js scatters when a part is landed in,
+  // before anybody takes their place): none of them is put where a thing could not be picked up without being held.
+  // (They move for the things, not the things for them: what the seed leaves, and where, is compared on a kept tape.)
+  const things = (env.inventory?.physical?.report?.().items || []).filter((i) => i.active !== false && Number.isFinite(i.wx) && Number.isFinite(i.wz)).map((i) => ({ x: i.wx, z: i.wz }));
+
   const roster = rollAbsorbedRoster(R, targetCount + 3, cast || []);
   const shuffledRooms = R.shuffle(candidates);
   const placed = [];
@@ -352,6 +357,7 @@ export function populateAbsorbed(env, R) {
       if (!s) continue;
       if (Math.hypot(s.wx - start.x, s.wz - start.z) < 3.4) continue;
       if (placed.some((p) => Math.hypot(s.wx - p.x, s.wz - p.z) < 5.0)) continue;
+      if (!clearOfThings(s.wx, s.wz, things)) continue;
       spot = s;
       break;
     }

@@ -548,3 +548,18 @@ test('the absorbed staff on the card: met once, when one is seen reaching; letti
   const src = fs.readFileSync(new URL('../public/world/backrooms/absorbed.js', import.meta.url), 'utf8');
   assert.ok(/run\?\.met\?\.\('absorbed'\)/.test(src) && !/survived/.test(src));
 });
+
+test('the absorbed staff: none is put where a thing lying about could not be picked up without being held', () => {
+  const { clearOfThings, THING_GAP, ABSORBED: A } = SUNK;
+  const things = [{ x: 2, z: 2 }, { x: 10, z: -3 }];
+  assert.equal(clearOfThings(2, 2 + THING_GAP - 0.01, things), false);
+  assert.equal(clearOfThings(2, 2 + THING_GAP + 0.01, things), true);
+  assert.equal(clearOfThings(10.5, -3.5, things), false);
+  assert.ok(clearOfThings(0, 0, []) && clearOfThings(0, 0, undefined), 'a visit without pockets has nothing lying about');
+  // the gap leaves somewhere to stand: within arm's length of the thing, and out of the longest of their reaches
+  const longest = Math.max(...Object.values(A.reachRadius));
+  assert.ok(THING_GAP - longest >= 0.4, `only ${(THING_GAP - longest).toFixed(2)} m between the thing and their hands`);
+  // …and it is they who move: the seed's supplies are not asked to (a kept tape is compared on them)
+  const src = fs.readFileSync(new URL('../public/world/backrooms/supplies.js', import.meta.url), 'utf8');
+  assert.ok(!/absorbed/i.test(src));
+});
