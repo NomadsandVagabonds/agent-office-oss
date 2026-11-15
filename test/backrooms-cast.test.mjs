@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateVisit } from '../public/world/backrooms/plan.js';
 import fs from 'node:fs';
-import { CAST, ALL_CAST, SUPPORTING, DISPOSITIONS, ITEMS, ROOM_LESSONS, CAST_LESSONS, whoIsDown, castFor, homeFor, hauntsFor, HAUNT_MOST } from '../public/world/backrooms/cast.js';
+import { CAST, ALL_CAST, SUPPORTING, DISPOSITIONS, ITEMS, ROOM_LESSONS, CAST_LESSONS, whoIsDown, castFor, homeFor, hauntsFor, HAUNT_MOST, withRoomFor, lairFor, LAIR } from '../public/world/backrooms/cast.js';
 import { THEME_IDS } from '../public/world/backrooms/themes.js';
 import { HUNT, knows, lost, shown, spent, noticeTime, wayOn, handle, atHandle, getsDown, lying, willPeek } from '../public/world/backrooms/cast/hunt.js';
 import { roomRoute, roomCosts, gridPath, straighten } from '../public/world/backrooms/cast/paths.js';
@@ -257,6 +257,7 @@ test('a creature\'s line in the cast: every field the guide promises, and nothin
     for (const n of m.needs || []) assert.ok(CAST_LESSONS[n] || ROOM_LESSONS.includes(n), `${where}: needs ${n}`);
     assert.ok(!(m.needs || []).includes(m.teaches), `${where}: needs what it teaches`);
     for (const t of Object.keys(m.themes || {})) assert.ok(THEME_IDS.includes(t) && m.themes[t] >= 0, `${where}: themes.${t}`);
+    if (m.withRoom !== undefined) assert.ok(typeof m.withRoom === 'string' && m.withRoom.length > 0 && !m.always && m.home === 'roams', `${where}: withRoom names a kind of room, on a line that roams and is not always there`);
     assert.ok(Array.isArray(m.items) && m.items.every((i) => ITEMS.includes(i)), `${where}: items`);
     const c = m.caught || {};
     assert.equal(['hurt', 'ends', 'setback'].filter((k) => k in c).length, 1, `${where}: says one thing about what being caught by it costs`);
@@ -949,3 +950,28 @@ test('the lines: with nothing under it, it falls, and is gone for good; and wher
   assert.equal(sleepsIn([10, 11, 12], () => 0.99), 11); assert.equal(sleepsIn([10, 11], () => 0), 11); assert.equal(sleepsIn([10], () => 0), 10); assert.equal(sleepsIn([], () => 0), null);
 });
 
+test('one that comes with a room is on a part only if the room is, is never dealt, and lies up a few doorways before it', () => {
+  // a corridor of rooms 0…7 with the way out off its end, and a spur
+  const chain = (n) => Array.from({ length: n }, (_, id) => ({ id, kind: id === 0 ? 'start' : 'plain', arch: null, doors: [id > 0 && { to: id - 1 }, id < n - 1 && { to: id + 1 }].filter(Boolean) }));
+  const floor = (n, at, seed = 'L') => { const rooms = chain(n); rooms[at].arch = 'gap'; rooms[n - 1].kind = 'exit'; return { seed, rooms, start: { room: 0 }, exit: { room: n - 1 } }; };
+  const lines = { id: 'lines', home: 'roams', weight: 1, withRoom: 'gap' }, plain = { id: 'plain', home: 'roams', weight: 1 }, cast = [lines, plain];
+  assert.deepEqual(withRoomFor(floor(8, 6), cast), ['lines']);
+  assert.deepEqual(withRoomFor({ rooms: chain(5) }, cast), [], 'no such room: not on the part');
+  assert.deepEqual(withRoomFor(floor(8, 6), [plain]), [], 'nobody comes with a room unless their line says so');
+  for (const seed of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) assert.ok(!whoIsDown(seed, cast).includes('lines'), 'never dealt by weight');
+  assert.ok(!castFor({ seed: 'a', depths: 3, floors: [{ theme: 'x' }, { theme: 'x' }, { theme: 'x' }] }, undefined, cast).some((k) => k.id === 'lines'));
+  assert.equal(hauntsFor({ seed: 'h', rooms: [{ id: 1, kind: 'odd', arch: 'maze' }] }, ['lines'], { maze: { haunt: 2 } }, cast).size, 0, 'and is not sent to keep another room company');
+  const seen = new Set();
+  for (const seed of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l']) {
+    const level = floor(8, 6, seed), lair = lairFor(level, lines);
+    assert.ok(6 - lair >= LAIR[0] && 6 - lair <= LAIR[1], `two to four doorways before it (${lair})`);
+    assert.equal(lairFor(level, lines), lair, 'the same floor, the same room');
+    seen.add(lair);
+  }
+  assert.ok(seen.size > 1, 'not always the same distance');
+  assert.equal(lairFor(floor(8, 6), plain), null, 'null for everybody else');
+  assert.equal(lairFor(floor(8, 3), lines), 1, 'never the landing: three doorways in, it is two before');
+  assert.equal(lairFor(floor(8, 2), lines), 1, 'too near for two: the nearest that is allowed');
+  assert.equal(lairFor(floor(8, 1), lines), null, 'next to the landing: nowhere');
+  assert.equal(lairFor({ seed: 's', rooms: chain(5), start: { room: 0 }, exit: { room: 4 } }, lines), null, 'no such room');
+});

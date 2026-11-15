@@ -7,7 +7,7 @@
 // on. A visit is one roll: the same seed is the same company, on the same
 // floors, in the same rooms — and a seed is only ever given once (index.js:
 // the seed is the clock).
-import { makeRng, roomDistances, wallSpans, ARCHETYPES } from './gen.js';
+import { makeRng, roomDistances, roomPath, wallSpans, ARCHETYPES } from './gen.js';
 
 /** What a creature is to the visitor. Only one that hunts may end a visit. */
 export const DISPOSITIONS = Object.freeze(['hunts', 'keeps to itself', 'helps']);
@@ -87,7 +87,7 @@ export const SUPPORTING = 2;
  */
 export function whoIsDown(seed, cast = CAST) {
   const R = makeRng(`cast:${seed}`), out = cast.filter((m) => m.always).map((m) => m.id);
-  const pool = cast.filter((m) => !m.always && m.weight > 0);
+  const pool = cast.filter((m) => !m.always && !m.withRoom && m.weight > 0);          // (one that comes with a room is not dealt: withRoomFor)
   for (let n = Math.min(SUPPORTING, pool.length); n > 0 && pool.length; n--) {
     const m = R.weighted(pool, (k) => k.weight);
     out.push(m.id); pool.splice(pool.indexOf(m), 1);
@@ -154,7 +154,39 @@ export function hauntsFor(level, ids, deck = ARCHETYPES, cast = CAST) {
   const rooms = (level?.rooms || []).filter((r) => r.arch && Number.isInteger(deck[r.arch]?.haunt) && deck[r.arch].haunt > 0 && r.kind !== 'start' && r.kind !== 'exit');
   if (!rooms.length) return out;
   const R = makeRng(`${level.seed}/haunt`);
-  const free = R.shuffle(ids.filter((id, i) => ids.indexOf(id) === i).map((id) => cast.find((m) => m.id === id)).filter((m) => m && m.home === 'roams' && !m.always).map((m) => m.id));
+  const free = R.shuffle(ids.filter((id, i) => ids.indexOf(id) === i).map((id) => cast.find((m) => m.id === id)).filter((m) => m && m.home === 'roams' && !m.always && !m.withRoom).map((m) => m.id));
   for (const r of rooms) for (let n = Math.min(HAUNT_MOST, deck[r.arch].haunt); n > 0 && free.length; n--) out.set(free.shift(), r.id);
   return out;
+}
+
+/** How many doorways before its room one that comes with a room lies up, on the way from the landing: from, to. */
+export const LAIR = Object.freeze([2, 4]);
+
+/**
+ * Who comes with a room (a cast line with `withRoom: '<arch id>'`): on a part if and only if that part has a room of that kind. Never
+ * dealt by weight (whoIsDown leaves them out) and never in anybody's place: they are extra company on that part. It is asked of the
+ * built floor and not of the plan (castFor), because only the floor knows which rooms it was dealt.
+ * @returns {string[]} ids, in the order of the cast list
+ */
+export function withRoomFor(level, cast = CAST) {
+  const here = new Set((level?.rooms || []).map((r) => r.arch).filter(Boolean));
+  return cast.filter((m) => m.withRoom && !m.always && here.has(m.withRoom)).map((m) => m.id);
+}
+
+/**
+ * Where one that comes with a room lies up: a room two to four doorways before its room on the way there from the landing, so that
+ * there is some way to be followed before the room is reached. Never the landing, never the way out, never the room itself. If its
+ * room is too near the landing for that, the allowed room nearest to two doorways before it. Seeded by the floor.
+ * @returns {number|null} room id — null for anybody without `withRoom`, or if there is no such room or nowhere allowed
+ */
+export function lairFor(level, member) {
+  if (!member?.withRoom || !level?.rooms) return null;
+  const room = level.rooms.find((r) => r.arch === member.withRoom);
+  const path = room && roomPath(level, level.start.room, room.id);
+  if (!path) return null;
+  const last = path.length - 1, ok = (i) => i > 0 && i < last && path[i] !== level.exit?.room && path[i] !== level.start.room;
+  const able = []; for (let back = LAIR[0]; back <= LAIR[1]; back++) if (ok(last - back)) able.push(path[last - back]);
+  if (able.length) return makeRng(`${level.seed}/lair/${member.id}`).pick(able);
+  for (let i = last - 1; i > 0; i--) if (ok(i)) return path[i];
+  return null;
 }
