@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
 import { DEFAULT_PERK, PERK_IDS, PERK_LIST, PERKS, cleanPerk, resolvePerk, starterLoadout } from '../core/perks.mjs';
-import { SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, resolveLook, sanitizeLookPatch } from '../core/look.mjs';
+import { GENDER, SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, humanGenderDefaults, resolveLook, sanitizeLookPatch } from '../core/look.mjs';
 import { createSurvival } from '../public/world/backrooms/survival.js';
 import { createInventory } from '../public/world/backrooms/inventory-state.js';
 import { previewCraft } from '../public/world/backrooms/crafting.js';
@@ -357,4 +357,47 @@ test('character creator looks: all species, hairstyles, outfits, facial hair & a
   const sculptedAlien = buildCharacter(alienLook, { seed: 'user-alien' });
   assert.ok(sculptedAlien.head.map.size > 1500 && sculptedAlien.torso.map.size > 500 && sculptedAlien.accessory.map.size > 150);
   assert.ok(facePixels(alienLook, 'neutral').length > 10);
+});
+
+test('male/female modifier: human defaults differ cleanly for boy vs girl while preserving full remix freedom', async () => {
+  assert.deepEqual(GENDER, ['male', 'female']);
+  assert.deepEqual(sanitizeLookPatch({ gender: 'female' }), { look: { gender: 'female' }, errors: [] });
+  assert.deepEqual(sanitizeLookPatch({ gender: 'male' }), { look: { gender: 'male' }, errors: [] });
+  assert.equal(sanitizeLookPatch({ gender: 'martian' }).errors.length, 1);
+
+  const boyDef = humanGenderDefaults('male');
+  const girlDef = humanGenderDefaults('female');
+  assert.notEqual(boyDef.hair, girlDef.hair);
+  assert.notEqual(boyDef.outfit, girlDef.outfit);
+
+  for (let i = 0; i < 200; i++) {
+    const seed = `human-seed-${i}`;
+    const boy = resolveLook(seed, { species: 'human', gender: 'male' });
+    const girl = resolveLook(seed, { species: 'human', gender: 'female' });
+    assert.equal(boy.gender, 'male');
+    assert.equal(girl.gender, 'female');
+    assert.ok(!['mustache', 'beard'].includes(girl.facial), `girl seed ${i} never defaults to beard/mustache (got ${girl.facial})`);
+    assert.notEqual(boy.facial, 'lashes', `boy seed ${i} never defaults to lashes`);
+    assert.ok(!['braids', 'bun', 'long'].includes(boy.hair), `boy seed ${i} uses masculine/neutral default hair (got ${boy.hair})`);
+    assert.ok(!['mohawk', 'bald', 'cap'].includes(girl.hair), `girl seed ${i} uses feminine/neutral default hair (got ${girl.hair})`);
+  }
+
+  // Manual overrides still win in both directions
+  assert.equal(resolveLook('remix-1', { species: 'human', gender: 'female', hair: 'mohawk', facial: 'mustache' }).hair, 'mohawk');
+  assert.equal(resolveLook('remix-2', { species: 'human', gender: 'male', hair: 'braids', facial: 'lashes' }).hair, 'braids');
+
+  // 2D & 3D renderers reflect subtle Boy vs Girl face & waist presentation even with identical tee + Clean facial
+  const { buildCharacter, facePixels } = await import('../public/world/avatar/build.js');
+  const baseTrait = { species: 'human', skin: '#e6b184', hair: 'side', hairColor: '#4a2f1a', facial: 'none', outfit: 'tee', outfitColor: '#3f7f9a', accessory: 'none' };
+  const maleLook = resolveLook('pair', { ...baseTrait, gender: 'male' });
+  const femaleLook = resolveLook('pair', { ...baseTrait, gender: 'female' });
+
+  const male2d = paintFlatCharacter(maleLook, { back: false, pose: 'idle' });
+  const female2d = paintFlatCharacter(femaleLook, { back: false, pose: 'idle' });
+  assert.ok(male2d.extent() && female2d.extent());
+
+  const male3d = buildCharacter(maleLook, { seed: 'pair' });
+  const female3d = buildCharacter(femaleLook, { seed: 'pair' });
+  assert.ok(female3d.torso.map.size < male3d.torso.map.size, 'female 3D torso has subtle 1-voxel waist taper');
+  assert.notDeepEqual(facePixels(maleLook, 'neutral'), facePixels(femaleLook, 'neutral'), 'female 3D neutral face has soft brow/lash/rose lip cues');
 });

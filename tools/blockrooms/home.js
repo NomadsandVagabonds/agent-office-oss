@@ -13,7 +13,7 @@
 //              longer at the bottom, a wall that gives when it is held
 import { mount, drawLogo, voidTile } from './art.js';
 import { rollName, cleanName, cleanMessage, cleanEntry } from './core/book.mjs';
-import { SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, SKIN, HAIR_COLORS, OUTFIT_COLORS, hashId, resolveLook, sanitizeLookPatch } from './core/look.mjs';
+import { GENDER, SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, SKIN, HAIR_COLORS, OUTFIT_COLORS, hashId, humanGenderDefaults, resolveLook, sanitizeLookPatch } from './core/look.mjs';
 import { DEFAULT_PERK, PERK_LIST, cleanPerk, resolvePerk } from './core/perks.mjs';
 import { cleanRecord, emptyRecord } from './core/runs.mjs';
 import { paintFlatCharacter } from './world/art/character.js';
@@ -80,6 +80,7 @@ const WILD_DYES = ['#db7093', '#ff5ad6', '#3bd6ff', '#62d94f', '#ff8a1f', '#ffd8
 const WILD_OUTFITS = ['#dfa22e', '#e88fb0', '#ff3a26', '#2a52be', '#ffd83a', '#1f9d55', '#9c3bc9', '#ff7a1f', '#1eb8c9', '#d9388a'];
 
 const LABELS = {
+  gender: { male: 'Male (Boy)', female: 'Female (Girl)' },
   species: { human: 'Human', alien: 'Alien', robot: 'Robot', goblin: 'Goblin', dog: 'Dog', cat: 'Cat' },
   hair: { short: 'Short', side: 'Side Part', long: 'Long', braids: 'Side Braid', bun: 'Top Bun', mohawk: 'Mohawk', bald: 'Bald', cap: 'Cap', beanie: 'Beanie' },
   facial: { none: 'Clean', lashes: 'Lashes & Hoops', mustache: 'Mustache', beard: 'Beard' },
@@ -91,16 +92,17 @@ const LABELS = {
 };
 
 const PRESETS = [
-  { label: 'Yellow Alien', look: { species: 'alien', skin: '#e0a638', hair: 'bald', hairColor: '#241608', facial: 'none', outfit: 'consul', outfitColor: '#dfa22e', accessory: 'goggles' } },
-  { label: 'Pink Cowgirl', look: { species: 'human', skin: '#e3aa84', hair: 'braids', hairColor: '#db7093', facial: 'lashes', outfit: 'tunic', outfitColor: '#e88fb0', accessory: 'cowboy' } },
-  { label: '98 Intern', look: { species: 'human', skin: '#f3cda8', hair: 'side', hairColor: '#4a2f1a', facial: 'none', outfit: 'vest', outfitColor: '#3f7f9a', accessory: 'glasses' } },
-  { label: 'Exec Suit', look: { species: 'human', skin: '#cd8d5e', hair: 'short', hairColor: '#9aa0ac', facial: 'mustache', outfit: 'suit', outfitColor: '#5a5a66', accessory: 'monocle' } },
-  { label: 'Goblin Clerk', look: { species: 'goblin', skin: '#6b9460', hair: 'short', hairColor: '#241608', facial: 'mustache', outfit: 'cardigan', outfitColor: '#8a5a8f', accessory: 'glasses' } },
-  { label: 'CRT Bot', look: { species: 'robot', skin: '#8a93a8', hair: 'short', hairColor: '#15151c', facial: 'none', outfit: 'hoodie', outfitColor: '#b5483f', accessory: 'headphones' } },
-  { label: 'Night Cat', look: { species: 'cat', skin: '#3a3a44', hair: 'beanie', hairColor: '#15151c', facial: 'none', outfit: 'hoodie', outfitColor: '#3f8a72', accessory: 'shades' } },
-  { label: 'Party Dog', look: { species: 'dog', skin: '#e3c79a', hair: 'short', hairColor: '#7d5836', facial: 'none', outfit: 'tee', outfitColor: '#c9893f', accessory: 'partyhat' } },
-  { label: 'Propeller IT', look: { species: 'human', skin: '#dcab8b', hair: 'bald', hairColor: '#4a2f1a', facial: 'beard', outfit: 'tee', outfitColor: '#5a6fa8', accessory: 'propeller' } },
-  { label: 'VIP Cat', look: { species: 'cat', skin: '#f1e6d2', hair: 'bun', hairColor: '#caa05a', facial: 'none', outfit: 'suit', outfitColor: '#8a5a8f', accessory: 'crown' } },
+  { label: 'Yellow Alien', look: { gender: 'male', species: 'alien', skin: '#e0a638', hair: 'bald', hairColor: '#241608', facial: 'none', outfit: 'consul', outfitColor: '#dfa22e', accessory: 'goggles' } },
+  { label: 'Pink Cowgirl', look: { gender: 'female', species: 'human', skin: '#e3aa84', hair: 'braids', hairColor: '#db7093', facial: 'lashes', outfit: 'tunic', outfitColor: '#e88fb0', accessory: 'cowboy' } },
+  { label: '98 Intern', look: { gender: 'male', species: 'human', skin: '#f3cda8', hair: 'side', hairColor: '#4a2f1a', facial: 'none', outfit: 'vest', outfitColor: '#3f7f9a', accessory: 'glasses' } },
+  { label: '98 Archivist', look: { gender: 'female', species: 'human', skin: '#f3cda8', hair: 'long', hairColor: '#7d5836', facial: 'none', outfit: 'cardigan', outfitColor: '#8a5a8f', accessory: 'glasses' } },
+  { label: 'Exec Suit', look: { gender: 'male', species: 'human', skin: '#cd8d5e', hair: 'short', hairColor: '#9aa0ac', facial: 'mustache', outfit: 'suit', outfitColor: '#5a5a66', accessory: 'monocle' } },
+  { label: 'Goblin Clerk', look: { gender: 'male', species: 'goblin', skin: '#6b9460', hair: 'short', hairColor: '#241608', facial: 'mustache', outfit: 'cardigan', outfitColor: '#8a5a8f', accessory: 'glasses' } },
+  { label: 'CRT Bot', look: { gender: 'male', species: 'robot', skin: '#8a93a8', hair: 'short', hairColor: '#15151c', facial: 'none', outfit: 'hoodie', outfitColor: '#b5483f', accessory: 'headphones' } },
+  { label: 'Night Cat', look: { gender: 'female', species: 'cat', skin: '#3a3a44', hair: 'beanie', hairColor: '#15151c', facial: 'none', outfit: 'hoodie', outfitColor: '#3f8a72', accessory: 'shades' } },
+  { label: 'Party Dog', look: { gender: 'male', species: 'dog', skin: '#e3c79a', hair: 'short', hairColor: '#7d5836', facial: 'none', outfit: 'tee', outfitColor: '#c9893f', accessory: 'partyhat' } },
+  { label: 'Propeller IT', look: { gender: 'male', species: 'human', skin: '#dcab8b', hair: 'bald', hairColor: '#4a2f1a', facial: 'beard', outfit: 'tee', outfitColor: '#5a6fa8', accessory: 'propeller' } },
+  { label: 'VIP Cat', look: { gender: 'female', species: 'cat', skin: '#f1e6d2', hair: 'bun', hairColor: '#caa05a', facial: 'none', outfit: 'suit', outfitColor: '#8a5a8f', accessory: 'crown' } },
 ];
 
 const POSES = [
@@ -286,6 +288,34 @@ function setCustomLook(patch) {
   syncStudioUI();
 }
 
+/** Compute unpinned human default adaptations when switching between Male (Boy) and Female (Girl). */
+function genderTransitionPatch(cur, nextGender, pins = studio.pins, forceDefaults = false) {
+  const patch = { gender: nextGender };
+  if (cur.species !== 'human') return patch;
+  const defs = humanGenderDefaults(nextGender);
+  if (forceDefaults) {
+    if (!pins.has('hair')) patch.hair = defs.hair;
+    if (!pins.has('facial')) patch.facial = defs.facial;
+    if (!pins.has('outfit')) patch.outfit = defs.outfit;
+    if (!pins.has('outfitColor')) patch.outfitColor = defs.outfitColor;
+    if (!pins.has('accessory')) patch.accessory = defs.accessory;
+    return patch;
+  }
+  if (nextGender === 'female') {
+    if (!pins.has('hair') && ['short', 'side', 'bald', 'mohawk', 'cap'].includes(cur.hair)) patch.hair = defs.hair;
+    if (!pins.has('facial') && ['mustache', 'beard'].includes(cur.facial)) patch.facial = 'none';
+    if (!pins.has('outfit') && ['tee', 'suit', 'consul', 'vest'].includes(cur.outfit)) patch.outfit = defs.outfit;
+    if (!pins.has('outfitColor') && String(cur.outfitColor || '').toLowerCase() === '#3f7f9a') patch.outfitColor = defs.outfitColor;
+  } else {
+    if (!pins.has('hair') && ['long', 'braids', 'bun'].includes(cur.hair)) patch.hair = defs.hair;
+    if (!pins.has('facial') && cur.facial === 'lashes') patch.facial = 'none';
+    if (!pins.has('outfit') && ['cardigan', 'tunic'].includes(cur.outfit)) patch.outfit = defs.outfit;
+    if (!pins.has('outfitColor') && String(cur.outfitColor || '').toLowerCase() === '#8a5a8f') patch.outfitColor = defs.outfitColor;
+    if (!pins.has('accessory') && cur.accessory === 'hoops') patch.accessory = 'none';
+  }
+  return patch;
+}
+
 function rollRandomLook() {
   studio.rollCount += 1;
   const seed = `${Date.now()}:${Math.random()}:${studio.rollCount}`;
@@ -293,17 +323,37 @@ function rollRandomLook() {
   const pickFrom = (arr, shift) => arr[(h >>> shift) % arr.length];
   const wild = $('wild-colors').checked;
   const cur = activeLook();
+  const nextGender = studio.pins.has('gender') ? cur.gender : pickFrom(GENDER, 24);
   const nextSpecies = studio.pins.has('species') ? cur.species : pickFrom(SPECIES, 0);
   const speciesSkin = SPECIES_DEFAULT_SKIN[nextSpecies] || SKIN[0];
+  const humanGirl = nextSpecies === 'human' && nextGender === 'female';
+  const humanBoy = nextSpecies === 'human' && nextGender === 'male';
+  const hairChoices = humanGirl
+    ? ['long', 'braids', 'bun', 'side', 'short', 'beanie']
+    : humanBoy
+      ? ['short', 'side', 'cap', 'beanie', 'mohawk', 'bald']
+      : (nextSpecies === 'alien' ? ['bald', 'bald', 'cap', 'beanie'] : HAIR);
+  const facialChoices = humanGirl
+    ? ['none', 'none', 'lashes']
+    : humanBoy
+      ? ['none', 'none', 'mustache', 'beard']
+      : FACIAL;
+  const outfitChoices = humanGirl
+    ? ['cardigan', 'hoodie', 'tunic', 'vest', 'tee', 'suit']
+    : humanBoy
+      ? ['tee', 'hoodie', 'suit', 'consul', 'vest', 'cardigan']
+      : OUTFIT;
+  const accChoices = humanBoy ? ACCESSORY.filter((a) => a !== 'hoops') : ACCESSORY;
   const next = {
+    gender: nextGender,
     species: nextSpecies,
     skin: studio.pins.has('skin') ? cur.skin : (wild ? pickFrom(WILD_SKINS, 3) : (nextSpecies === 'human' ? pickFrom(SKIN, 3) : speciesSkin)),
-    hair: studio.pins.has('hair') ? cur.hair : pickFrom(HAIR, 6),
+    hair: studio.pins.has('hair') ? cur.hair : pickFrom(hairChoices, 6),
     hairColor: studio.pins.has('hairColor') ? cur.hairColor : pickFrom(wild ? WILD_DYES : HAIR_COLORS, 9),
-    facial: studio.pins.has('facial') ? cur.facial : pickFrom(FACIAL, 12),
-    outfit: studio.pins.has('outfit') ? cur.outfit : pickFrom(OUTFIT, 15),
+    facial: studio.pins.has('facial') ? cur.facial : pickFrom(facialChoices, 12),
+    outfit: studio.pins.has('outfit') ? cur.outfit : pickFrom(outfitChoices, 15),
     outfitColor: studio.pins.has('outfitColor') ? cur.outfitColor : pickFrom(wild ? WILD_OUTFITS : OUTFIT_COLORS, 18),
-    accessory: studio.pins.has('accessory') ? cur.accessory : pickFrom(ACCESSORY, 21),
+    accessory: studio.pins.has('accessory') ? cur.accessory : pickFrom(accChoices, 21),
   };
   setCustomLook(next);
 }
@@ -353,9 +403,25 @@ function refreshThumbnails() {
   for (const [trait, list] of Object.entries(studio.thumbs)) {
     for (const item of list) {
       const sample = { ...base, [trait]: item.val };
-      if (trait === 'species' && item.val !== base.species) sample.skin = SPECIES_DEFAULT_SKIN[item.val] || base.skin;
-      if (trait === 'hair' && (sample.species === 'robot' || sample.species === 'alien')) sample.species = 'human';
-      if (trait === 'facial' && (sample.species === 'robot' || sample.species === 'alien')) sample.species = 'human';
+      if (trait === 'gender') {
+        if (base.species !== 'human' && base.species !== 'goblin') {
+          sample.species = 'human';
+          sample.skin = SPECIES_DEFAULT_SKIN.human;
+          Object.assign(sample, humanGenderDefaults(item.val));
+        } else {
+          Object.assign(sample, genderTransitionPatch({ ...base, species: sample.species }, item.val, studio.pins));
+        }
+      }
+      if (trait === 'species' && item.val !== base.species) {
+        sample.skin = SPECIES_DEFAULT_SKIN[item.val] || base.skin;
+        if (item.val === 'human') {
+          const defs = humanGenderDefaults(base.gender);
+          if (sample.hair === 'bald') sample.hair = defs.hair;
+          if (sample.outfit === 'consul') sample.outfit = defs.outfit;
+        }
+      }
+      if (trait === 'hair' && (sample.species === 'robot' || sample.species === 'alien')) { sample.species = 'human'; sample.skin = SPECIES_DEFAULT_SKIN.human; }
+      if (trait === 'facial' && (sample.species === 'robot' || sample.species === 'alien')) { sample.species = 'human'; sample.skin = SPECIES_DEFAULT_SKIN.human; }
       const ctx = item.canvas.getContext('2d');
       ctx.imageSmoothingEnabled = false;
       ctx.fillStyle = '#e6dec2';
@@ -435,9 +501,22 @@ function buildStudioOnce() {
       const btn = el('button', 'thumb-btn', canvas, el('span', '', LABELS[trait][val] || val));
       btn.type = 'button';
       btn.addEventListener('click', () => {
+        const cur = activeLook();
+        if (trait === 'gender') {
+          const sameGender = me.customLook && cur.gender === val;
+          setCustomLook(genderTransitionPatch(cur, val, studio.pins, sameGender));
+          return;
+        }
         const patch = { [trait]: val };
         if (trait === 'species' && !studio.pins.has('skin')) patch.skin = SPECIES_DEFAULT_SKIN[val] || SKIN[0];
         if (trait === 'species' && val === 'alien' && !studio.pins.has('hair')) patch.hair = 'bald';
+        if (trait === 'species' && val === 'human') {
+          const defs = humanGenderDefaults(cur.gender);
+          if (!studio.pins.has('hair') && cur.hair === 'bald') patch.hair = defs.hair;
+          if (!studio.pins.has('outfit') && cur.outfit === 'consul') patch.outfit = defs.outfit;
+          if (cur.gender === 'female' && !studio.pins.has('facial') && ['mustache', 'beard'].includes(cur.facial)) patch.facial = 'none';
+          if (cur.gender === 'male' && !studio.pins.has('facial') && cur.facial === 'lashes') patch.facial = 'none';
+        }
         setCustomLook(patch);
       });
       return { val, btn, canvas };
@@ -446,6 +525,7 @@ function buildStudioOnce() {
     $(hostId).replaceChildren(...items.map((it) => it.btn));
   };
 
+  makeThumbGroup('pick-gender', 'gender', GENDER);
   makeThumbGroup('pick-species', 'species', SPECIES);
   makeThumbGroup('pick-hair', 'hair', HAIR);
   makeThumbGroup('pick-facial', 'facial', FACIAL);
@@ -532,6 +612,9 @@ syncStudioUI = () => {
   pill.textContent = me.customLook ? 'Saved custom pass' : 'Random each visit';
   pill.classList.toggle('custom', me.customLook);
   $('use-random-look').disabled = !me.customLook;
+  $('gender-note').textContent = look.species === 'human'
+    ? '(Sets Boy / Girl defaults — all traits stay remixable)'
+    : '(Subtle silhouette & face cues; Human switches full Boy / Girl defaults)';
   $('hair-note').textContent = look.species === 'robot' ? '(Robot chassis uses steel dome + antenna)' : '';
 
   for (const [trait, list] of Object.entries(studio.thumbs)) {
