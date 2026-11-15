@@ -4,31 +4,21 @@
 // items.js. This is the part of the two that needs three.js.
 import * as THREE from 'three';
 import { Batch, lamp, drawText } from './kit.js';
-import { INVENTORY_MODELS } from './inventory-items.js';
-import { Vox, M } from '../vox/vox.js';
+import { INVENTORY_MODELS, sculptTorchGrip } from './inventory-items.js';
 import { KINDS, ITEM_IDS, isPaper, isBalloon, isFlashlight, createHandOver } from './items.js';
 
 export { ITEM_IDS, isPaper, isBalloon, isFlashlight };
 
-/** A right glove around the torch's rear grip; the sleeve continues off the picture. Held view only. */
-function torchGrip() {
-  const v = new Vox(), glove = M('#ac9c7d', 2), seam = M('#81765f', 2), knuckle = M('#c2b293', 2);
-  const sleeve = M('#465256', 3), cuff = M('#697371', 3), fold = M('#384446', 3);
-  v.rbox(3, -2, 1, 7, 5, 8, 1, glove);                     // palm on the right of the handle
-  for (const z of [1, 3, 5]) {                             // fingers curl underneath, up the far side
-    v.box(-4, -2, z, 5, 1, z + 2, glove);
-    v.box(-5, 0, z, -3, 4, z + 2, knuckle);
-    v.box(-4, -2, z, 4, -1, z + 1, seam);
-  }
-  v.box(2, 4, 3, 6, 7, 7, glove);                         // thumb rests behind the switch
-  v.box(0, 6, 3, 4, 8, 5, knuckle);
-  v.rbox(3, -5, 6, 9, 1, 12, 1, glove);
-  v.rbox(4, -8, 8, 11, -2, 15, 1, cuff);
-  v.rbox(6, -12, 11, 15, -5, 21, 1, sleeve);
-  v.rbox(10, -20, 17, 22, -9, 31, 1, sleeve);
-  v.box(7, -11, 13, 8, -6, 19, fold);
-  v.box(17, -17, 20, 19, -11, 28, fold);
-  return v;
+const ITEM_LIGHTS = () => [
+  lamp(-1.4, 3.2, 1.6, [0.48, 0.46, 0.42], { k: 10, far: 14, wrap: 0.45 }),
+  lamp(1.8, 1.9, -1.6, [0.20, 0.22, 0.26], { k: 10, far: 14, wrap: 0.35 }),
+];
+const ITEM_AMB = [0.78, 0.78, 0.80];
+
+function boundsFromBatch(b) {
+  const box = new THREE.Box3(), v = new THREE.Vector3();
+  for (let i = 0; i < b.pos.length; i += 3) box.expandByPoint(v.set(b.pos[i], b.pos[i + 1], b.pos[i + 2]));
+  return box;
 }
 
 /** Give a part of the building its hand (env.hand): the selected pocket, in the words its rooms use. */
@@ -69,11 +59,11 @@ export function createHandView(env, camera) {
   }
   function model(kind) {
     if (kind === 'pink-slip') return slip();
-    const b = new Batch(true), s = (kit.VOXEL || 0.025) * (kind === 'balloon' ? 0.26 : 0.46);
-    const item = kit.model(`inventory:${kind}:v1`, INVENTORY_MODELS[kind]).solid, scale = new THREE.Matrix4().makeScale(s, s, s);
-    b.addVox(item, scale);
-    if (kind === 'torch') b.addVox(kit.model('hand:torch-grip:v1', torchGrip).solid, scale);
-    const mat = kit.surface({ vox: true }), mesh = new THREE.Mesh(kit.geometry(b, [lamp(-1, 3, 1, [0.4, 0.4, 0.4], { k: 8, far: 12, wrap: 0.5 })], [0.8, 0.8, 0.8]), mat);
+    const b = new Batch(false), s = (kit.VOXEL || 0.025) * (kind === 'balloon' ? 0.26 : 0.46);
+    INVENTORY_MODELS[kind].sculpt(b, s, { grounded: false, held: true });
+    const itemBounds = kind === 'torch' ? boundsFromBatch(b) : null;
+    if (kind === 'torch') sculptTorchGrip(b, s);
+    const mat = kit.surface({ vox: false }), mesh = new THREE.Mesh(kit.geometry(b, ITEM_LIGHTS(), ITEM_AMB), mat);
     if (kind === 'torch') {
       // The lens is local -Z, just like the camera. Look down its body, with the
       // front aimed slightly inward/up and the wrist below the right edge.
@@ -82,8 +72,7 @@ export function createHandView(env, camera) {
       // must not cut the torch or the visitor's own fingers out of the frame.
       mat.transparent = true;
       mesh.renderOrder = 10000;
-      item.computeBoundingBox();
-      return { mesh, mat, hold: [0.24, -0.22, -0.5], fitBounds: item.boundingBox.clone().applyMatrix4(scale) };
+      return { mesh, mat, hold: [0.24, -0.22, -0.5], fitBounds: itemBounds };
     }
     mesh.rotation.set(0.25, -0.6, kind === 'paper' ? -0.2 : 0);
     return { mesh, mat, hold: kind === 'balloon' ? [0.24, -0.2, -0.56] : [0.2, -0.12, -0.5] };
@@ -184,10 +173,10 @@ export function createHandView(env, camera) {
 
 /** One of a thing, as a model with nothing to do: for a room to stand about. `light(rgb)` tints it. */
 export function buildItemProp(kit, kind) {
-  const type = INVENTORY_MODELS[kind] ? kind : (KINDS[kind] || 'paper'), b = new Batch(true), s = kit.VOXEL || 0.025, group = new THREE.Group();
-  b.addVox(kit.model(`inventory:${type}:v1`, INVENTORY_MODELS[type]).solid, new THREE.Matrix4().makeScale(s, s, s));
-  const mat = kit.surface({ vox: true });
-  group.add(new THREE.Mesh(kit.geometry(b, [lamp(-1, 3, 1, [0.4, 0.4, 0.4], { k: 8, far: 12, wrap: 0.5 })], [0.8, 0.8, 0.8]), mat));
+  const type = INVENTORY_MODELS[kind] ? kind : (KINDS[kind] || 'paper'), b = new Batch(false), s = kit.VOXEL || 0.025, group = new THREE.Group();
+  INVENTORY_MODELS[type].sculpt(b, s, { grounded: true });
+  const mat = kit.surface({ vox: false });
+  group.add(new THREE.Mesh(kit.geometry(b, ITEM_LIGHTS(), ITEM_AMB), mat));
   group.userData.light = (rgb) => mat.uniforms.uTint.value.set(rgb[0], rgb[1], rgb[2]);
   return group;
 }
