@@ -24,6 +24,24 @@ const MASCOT = new URL('./music/mascot.mp3', import.meta.url);
  */
 export const DEEP_FROM = 2, DEEP_GAIN = 0.13;
 const DEEP = new URL('./music/deep.mp3', import.meta.url);
+// Explicit URLs let the standalone build include just the six game clips.
+const TONER_CLIPS = {
+  sonar: [
+    [new URL('./cast/toner-sonar/toner-search-1.ogg', import.meta.url), 0.60],
+    [new URL('./cast/toner-sonar/toner-search-2.ogg', import.meta.url), 0.58],
+    [new URL('./cast/toner-sonar/toner-search-3.ogg', import.meta.url), 0.84],
+  ],
+  sonarrattle: [
+    [new URL('./cast/toner-sonar/toner-lock-1.ogg', import.meta.url), 0.37],
+    [new URL('./cast/toner-sonar/toner-lock-2.ogg', import.meta.url), 0.53],
+    [new URL('./cast/toner-sonar/toner-lock-3.ogg', import.meta.url), 0.48],
+  ],
+};
+// A restrained parallel grit layer keeps the original recording intelligible.
+const TONER_GRIT = Float32Array.from({ length: 1024 }, (_, i) => {
+  const x = i * 2 / 1023 - 1;
+  return Math.tanh(x * 3) / Math.tanh(3);
+});
 const volume = (value, fallback = 1) => Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback;
 export function createSound(level, opt = {}) {
   let ctx = null, master = null, effects = null, musicBus = null, humGain = null, draught = null, noiseBuf = null, muted = !!opt.mute, paused = false, humTarget = 1, hum = level.hum || 50;
@@ -33,6 +51,7 @@ export function createSound(level, opt = {}) {
   const ambient = () => (deep ? DEEP_GAIN : MUSIC_GAIN), piece = () => (deep ? DEEP : MUSIC).href;
   let theme = null, themeGain = null, themeOn = false;      // the mascot's music, once it has been asked for · is it what is playing?
   const running = [], mains = [];            // things to stop at the end · the hum's oscillators, to retune
+  const clipBuffers = new Map(), lastClip = new Map(), clipSources = new Set();
   const loops = new Map();                   // name → { gain, stop }
   const now = () => ctx.currentTime;
 
@@ -74,7 +93,50 @@ export function createSound(level, opt = {}) {
     draught = ctx.createGain(); draught.gain.value = 0;
     dr.buffer = noiseBuf; dr.loop = true; drF.type = 'bandpass'; drF.frequency.value = 1500; drF.Q.value = 2.2;
     dr.connect(drF); drF.connect(draught); draught.connect(effects); dr.start(0, 0.3); running.push(dr);
+    loadTonerClips();
     startMusic();
+  }
+
+  function loadTonerClips() {
+    const owner = ctx;
+    if (typeof owner?.decodeAudioData !== 'function') return;
+    for (const variants of Object.values(TONER_CLIPS)) for (const [url] of variants) {
+      fetch(url.href).then(r => { if (!r.ok) throw new Error('clip unavailable'); return r.arrayBuffer(); })
+        .then(bytes => owner.decodeAudioData(bytes))
+        .then(buffer => { if (ctx === owner) clipBuffers.set(url.href, buffer); })
+        .catch(() => { /* Procedural voice stays available offline or on decode failure. */ });
+    }
+  }
+  function playTonerClip(name, o = {}) {
+    const ready = TONER_CLIPS[name]?.filter(([url]) => clipBuffers.has(url.href));
+    if (!ready?.length) return false;
+    const choices = ready.filter(([url]) => url.href !== lastClip.get(name));
+    const pool = choices.length ? choices : ready;
+    const [url, level] = pool[Math.floor(Math.random() * pool.length)];
+    const src = ctx.createBufferSource(), gain = ctx.createGain();
+    src.buffer = clipBuffers.get(url.href);
+    src.playbackRate.value = 0.7; // 30% slower, with a deeper creature timbre.
+    gain.gain.value = level * volume(o.vol);
+    const dry = ctx.createGain(), wet = ctx.createGain(), grit = ctx.createWaveShaper();
+    dry.gain.value = 0.82; wet.gain.value = 0.18;
+    grit.curve = TONER_GRIT; grit.oversample = '2x';
+    src.connect(dry); dry.connect(gain);
+    src.connect(grit); grit.connect(wet); wet.connect(gain);
+    // Tiny interruptions in the dirty layer only: the dry creature stays audible.
+    const t = now(), duration = src.buffer.duration / 0.7;
+    wet.gain.setValueAtTime(0.18, t);
+    for (const fraction of [0.28 + Math.random() * 0.08, 0.63 + Math.random() * 0.08]) {
+      const at = t + duration * fraction;
+      wet.gain.setValueAtTime(0.18, at);
+      wet.gain.linearRampToValueAtTime(0.01, at + 0.002);
+      wet.gain.setValueAtTime(0.01, at + 0.012);
+      wet.gain.linearRampToValueAtTime(0.18, at + 0.015);
+    }
+    const panNode = out(gain, o.pan ?? 0);
+    clipSources.add(src);
+    src.onended = () => { clipSources.delete(src); src.disconnect(); dry.disconnect(); grit.disconnect(); wet.disconnect(); gain.disconnect(); panNode?.disconnect(); };
+    src.start(); lastClip.set(name, url.href);
+    return true;
   }
 
   /** The music: one file, streamed and looped, through its own dial and then the master (so M silences it too). */
@@ -152,7 +214,7 @@ export function createSound(level, opt = {}) {
     o.connect(g); out(g, pan); o.start(t); o.stop(t + dur + 0.05);
   }
   function out(node, pan) {
-    if (pan && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); node.connect(p); p.connect(effects); }
+    if (pan && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); node.connect(p); p.connect(effects); return p; }
     else node.connect(effects);
   }
 
@@ -230,21 +292,34 @@ export function createSound(level, opt = {}) {
       tone({ vol: 0.11 * (o.vol ?? 1), pan: o.pan, dur: 0.45, freq: 120, to: 92, type: 'sawtooth', attack: 0.01 });
       burst({ vol: 0.12 * (o.vol ?? 1), pan: o.pan, dur: 0.22, freq: 2900, q: 1.8, type: 'bandpass', attack: 0.003 });
     },
-    // blind echolocation click-pair from up in the ceiling tiles
+    // Dry rattling plates over a hollow throat rasp, with tiny broken-signal
+    // repeats. Keep the phrase under the 0.34-second stalking interval.
     sonar: (o = {}) => {
-      const f0 = 2850 + Math.random() * 550;
-      for (const [w, k] of [[0, 1], [0.048, 0.52]]) {
-        burst({ vol: 0.15 * k * (o.vol ?? 1), pan: o.pan, dur: 0.016, freq: f0 * (w ? 1.18 : 1), q: 8.5, type: 'bandpass', attack: 0.0008, when: w });
-        tone({ vol: 0.065 * k * (o.vol ?? 1), pan: o.pan, dur: 0.03, freq: 1450, to: 460, type: 'triangle', attack: 0.001, when: w });
-      }
-    },
-    // frantic accelerating echolocation lock-on rattle
-    sonarrattle: (o = {}) => {
-      const times = [0, 0.046, 0.084, 0.116, 0.142];
-      times.forEach((w, i) => {
-        burst({ vol: (0.12 + i * 0.014) * (o.vol ?? 1), pan: o.pan, dur: 0.015, freq: 2700 + i * 380, q: 9.5, type: 'bandpass', attack: 0.0008, when: w });
-        tone({ vol: 0.055 * (o.vol ?? 1), pan: o.pan, dur: 0.024, freq: 1550 + i * 160, to: 520, type: 'triangle', attack: 0.001, when: w });
+      const v = o.vol ?? 1, pan = o.pan, pitch = 0.88 + Math.random() * 0.24;
+      burst({ vol: 0.08 * v, pan, dur: 0.31, freq: 360 * pitch, q: 2.4, type: 'bandpass', attack: 0.018 });
+      burst({ vol: 0.035 * v, pan, dur: 0.29, freq: 920 * pitch, q: 3.5, type: 'bandpass', attack: 0.025 });
+      // Uneven gaps keep this organic; closely spaced dry ticks make a rattle.
+      [0, 0.024, 0.052, 0.077, 0.109, 0.151, 0.173, 0.199, 0.239, 0.273].forEach((w, i) => {
+        const k = (i < 5 ? 0.8 : 0.6) + Math.random() * 0.2;
+        burst({ vol: 0.105 * k * v, pan, dur: 0.019, freq: (3100 + Math.random() * 1500) * pitch, q: 1.7, type: 'bandpass', attack: 0.001, when: w });
+        if (i % 3 === 0) {
+          tone({ vol: 0.065 * v, pan, dur: 0.035, freq: 330 * pitch, to: 95 * pitch, type: 'triangle', attack: 0.002, when: w });
+          burst({ vol: 0.055 * v, pan, dur: 0.03, freq: 650 * pitch, q: 2, type: 'bandpass', attack: 0.002, when: w });
+        }
       });
+      // Subtle digital fractures, short enough to remain texture rather than beeps.
+      for (const w of [0.115, 0.128, 0.247]) tone({ vol: 0.018 * v, pan, dur: 0.008, freq: 790 * pitch, to: 230 * pitch, type: 'square', attack: 0.001, when: w });
+    },
+    // The same creature tightens into an accelerating warning buzz. Fits the
+    // 0.22-second warning interval, leaving the audible wind-up easy to identify.
+    sonarrattle: (o = {}) => {
+      const v = o.vol ?? 1, pan = o.pan, pitch = 0.92 + Math.random() * 0.16;
+      burst({ vol: 0.11 * v, pan, dur: 0.215, freq: 440 * pitch, q: 2.8, type: 'bandpass', attack: 0.012 });
+      [0, 0.033, 0.062, 0.088, 0.111, 0.132, 0.151, 0.168, 0.183, 0.196].forEach((w, i) => {
+        burst({ vol: (0.09 + i * 0.007) * v, pan, dur: 0.018, freq: (3200 + i * 130) * pitch, q: 2, type: 'bandpass', attack: 0.001, when: w });
+        if (i % 2 === 0) tone({ vol: 0.065 * v, pan, dur: 0.026, freq: (350 + i * 20) * pitch, to: 110 * pitch, type: 'triangle', attack: 0.001, when: w });
+      });
+      for (const w of [0.07, 0.082, 0.157, 0.169]) tone({ vol: 0.025 * v, pan, dur: 0.009, freq: 960 * pitch, to: 260 * pitch, type: 'square', attack: 0.001, when: w });
     },
     // feral waste toner collapsing into a bubbling pool of glitch slime
     dissolve: (o = {}) => {
@@ -326,7 +401,7 @@ export function createSound(level, opt = {}) {
       else { ctx.resume().catch(() => {}); if (music?.paused) music.play().catch(() => {}); if (themeOn && theme?.paused) theme.play().catch(() => {}); }
     },
     /** Play one of the small sounds by name. */
-    play(name, o) { if (ctx && !muted && !paused && voice[name]) { try { voice[name](o); } catch { /* a sound is never worth an error */ } } },
+    play(name, o) { if (ctx && !muted && !paused && voice[name]) { try { if (!playTonerClip(name, o)) voice[name](o); } catch { /* a sound is never worth an error */ } } },
     /**
      * A recording of a room's own, played once through the effects (so the effects slider, M and the menu reach it):
      * `href` as the room has it from a new URL of the file beside it against import.meta.url, which is also how the site's build finds the
@@ -354,6 +429,8 @@ export function createSound(level, opt = {}) {
     dip(k) { if (humGain && !muted && !paused) { humGain.gain.cancelScheduledValues(now()); humGain.gain.setTargetAtTime((0.012 + 0.05 * humTarget) * k, now(), 0.02); } },
     stop() {
       clearTimeout(swap);
+      for (const src of clipSources) { try { src.stop(); } catch { /* ended */ } }
+      clipSources.clear(); clipBuffers.clear(); lastClip.clear();
       for (const n of running) { try { n.stop(); } catch { /* already stopped */ } }
       running.length = 0; loops.clear();
       if (music) { try { music.pause(); music.removeAttribute('src'); music.load(); } catch { /* gone anyway */ } music = null; }
