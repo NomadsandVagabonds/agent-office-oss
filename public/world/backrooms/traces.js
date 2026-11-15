@@ -365,7 +365,7 @@ const SKETCH = {
     g.beginPath(); g.arc(20, 74, 5, 0, 6.3); g.stroke();
     g.beginPath(); g.moveTo(20, 79); g.lineTo(28, 83); g.lineTo(22, 90); g.moveTo(24, 81); g.lineTo(14, 86); g.stroke();
   },
-  mimic(g) {                                                         // a pair of doors with shake marks either side of it; the same pair scribbled black, and what comes out
+  'other-door'(g) {                                                         // a pair of doors with shake marks either side of it; the same pair scribbled black, and what comes out
     g.strokeRect(10, 22, 28, 62); g.beginPath(); g.moveTo(24, 22); g.lineTo(24, 84); g.stroke();
     for (const x of [5, 43]) { g.beginPath(); g.moveTo(x, 34); g.lineTo(x + (x < 20 ? -3 : 3), 40); g.lineTo(x, 46); g.moveTo(x, 58); g.lineTo(x + (x < 20 ? -3 : 3), 64); g.lineTo(x, 70); g.stroke(); }
     g.strokeRect(58, 22, 28, 62);
