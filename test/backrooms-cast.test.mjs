@@ -11,6 +11,7 @@ import { roomRoute, roomCosts, gridPath, straighten } from '../public/world/back
 import { SHADOW, away, watched, drained } from '../public/world/backrooms/cast/shadow.rule.js';
 import { MOTH, resting, flits } from '../public/world/backrooms/cast/moth.rule.js';
 import { PORTER, mopping, minds, facesYou } from '../public/world/backrooms/cast/porter.rule.js';
+import { createWalk, clearOfAbsorbed, ABSORBED_GAP } from '../public/world/backrooms/cast/walk.js';
 import { FIRE_WAYS, FIRE_FEAR, calm, afraid, tooNear } from '../public/world/backrooms/cast/fire.rule.js';
 import { BLACKOUT, createBlackoutState, stepBlackout } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
 import { ARCHETYPES } from '../public/world/backrooms/gen.js';
@@ -456,4 +457,21 @@ test('fire: the moth goes to one it can see, and into it; the stand-ins are held
   for (let t = 0; t < BLACKOUT.redFillSeconds * 2; t += dt) { r = stepBlackout(st, { dt, inDark: true, hasFlashlight: false, byFire: true, px: 0, pz: 0, yaw: 0, targets }); st = r.state; }
   assert.equal(r.red, 0); assert.equal(r.speeds[0], 0);
   assert.equal(ARCHETYPES['blackout-bay'].fire, 'fears');
+});
+
+test('the absorbed staff: nothing of the cast walks through one or stops on one', () => {
+  const sunk = [{ x: 4, z: 4 }, { x: -2, z: 9 }];
+  assert.ok(clearOfAbsorbed(null, 4, 4) && clearOfAbsorbed([], 4, 4), 'a part with none of them, or before they are placed');
+  assert.equal(clearOfAbsorbed(sunk, 4, 4), false);
+  assert.equal(clearOfAbsorbed(sunk, 4 + ABSORBED_GAP - 0.01, 4), false);
+  assert.equal(clearOfAbsorbed(sunk, 4 + ABSORBED_GAP + 0.01, 4), true);
+  assert.ok(ABSORBED_GAP >= 0.4 && ABSORBED_GAP <= 0.7, 'their body, not their reach: a corridor with one in the wall can still be walked');
+  // the walker's own footing test asks it: a floor that is otherwise free everywhere
+  const env = { level: { rooms: [] }, world: { free: () => true, headroom: () => 3 }, absorbed: sunk };
+  const walk = createWalk(env), it = { x: 0, z: 0, r: 0.3, tall: 1.6 };
+  assert.equal(walk.stand(it, 0, 0), true);
+  assert.equal(walk.stand(it, 4.2, 4.1), false);
+  assert.equal(walk.stand(it, -2, 9.3), false);
+  env.absorbed = [];
+  assert.equal(walk.stand(it, 4.2, 4.1), true, 'and where there are none, as before');
 });
