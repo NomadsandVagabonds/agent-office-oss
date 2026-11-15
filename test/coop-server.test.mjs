@@ -45,3 +45,16 @@ test('private deployment only lets the host create rooms',async t=>{
  assert.equal((await fetch(url,{method:'POST',headers:{'x-alpha-key':'wrong'}})).status,403);
  assert.equal((await fetch(url,{method:'POST',headers:{'x-alpha-key':alphaKey}})).status,200);
 });
+test('real-room controls go only to the host; guests cannot publish world state',async t=>{
+ const app=createCoopServer();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));t.after(()=>app.close());const port=app.server.address().port;
+ const {code}=await(await fetch(`http://127.0.0.1:${port}/new?mode=rooms`,{method:'POST'})).json();
+ const a=await wire(port,code),b=await wire(port,code);t.after(()=>{a.socket.destroy();b.socket.destroy();});
+ const aw=await until(()=>a.messages.find(m=>m.type==='welcome')),bw=await until(()=>b.messages.find(m=>m.type==='welcome'));assert.equal(aw.host,true);assert.equal(bw.host,false);assert.equal(aw.seed,bw.seed);
+ a.send({type:'ready'});b.send({type:'ready'});await until(()=>a.messages.some(m=>m.state?.phase==='play'));
+ b.send({type:'input',f:1,s:0,yaw:0,pitch:0});assert.equal((await until(()=>a.messages.find(m=>m.type==='control'))).id,bw.id);
+ assert.equal(b.messages.some(m=>m.type==='control'),false);
+ const s=app.rooms.get(code).state;s.real=true;s.nodeCount=1;s.nodes=[];
+ a.send({type:'real-state',state:s});await until(()=>b.messages.some(m=>m.state?.real));
+ b.send({type:'real-state',state:s});await until(()=>b.closed);assert.equal(app.rooms.get(code).state.phase,'disconnected');
+ a.send({type:'real-state',state:{...s,phase:'play'}});await new Promise(r=>setTimeout(r,80));assert.equal(app.rooms.get(code).state.phase,'disconnected','in-flight host snapshot cannot revive a disconnected session');
+});

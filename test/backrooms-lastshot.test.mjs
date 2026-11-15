@@ -41,5 +41,6 @@ test('left to itself the character goes down where it stood; and only being caug
   assert.match(src, /run = taker\?\.it\?\.takes\?\.\(\{ \.\.\.spot, room: rt\?\.id \?\? null, figure: figure\.root, seconds: SHOT\.seconds \}\)/);
   // who took them is noted before the hit is made (the visit begins to end inside it), and forgotten if they lived
   const cast = read('pursuer.js');
-  assert.match(cast, /const before = taker; taker = k;\n      const hit = env\.health\?\.damage\(n\);\n      if \(hit\) \{ if \(!hit\.dead\) taker = before;/);
+  assert.match(cast, /const before = taker; taker = k;\n      const hit = env\.health\?\.damage\(n\);/);
+  assert.match(cast, /const ended = !!hit\.dead && !options\.hasSurvivor\?\.\(\);\n        if \(!ended\) taker = before;/);
 });

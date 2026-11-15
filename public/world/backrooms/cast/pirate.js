@@ -413,7 +413,8 @@ export function create(c) {
     // where there is health to take, a grab takes some of it (cast/hunt.js) — and if that was not the last of it, it lets go
     const hit = env.health ? c.hurt(HUNT.grab) : null;
     if (hit && !hit.landed) return;
-    if (hit && !hit.dead) { breakOff(p); return; }
+    // In co-op, losing one visitor does not finish the surviving visitor's hunt.
+    if (hit && (!hit.dead || hit.ended === false)) { breakOff(p); return; }
     const end = () => { if (!hit) env.end('caught'); };            // (a last point taken ends the visit by itself)
     p.state = 'caught'; p.catchT = 0;
     if (p.down) { env.sound.play('thunk'); end(); return; }          // from the hole: it does not get up for this
