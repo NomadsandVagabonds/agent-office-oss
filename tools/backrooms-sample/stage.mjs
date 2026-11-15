@@ -74,9 +74,18 @@ export function stage(out, opt = {}) {
     const to = from.startsWith('public/world/') ? 'world/' + from.slice('public/world/'.length) : from.startsWith('core/') ? from : null;
     if (!to) throw new Error(`do not know where ${from} goes`);
     fs.mkdirSync(path.dirname(path.join(out, to)), { recursive: true });
-    const src = fs.readFileSync(file, 'utf8'), asked = [...src.matchAll(FONT)].map((m) => m[1]);
+    // Pure rules use repository-relative imports so Node can test them. Removing
+    // public/ changes their relative depth; give the staged copy its new path.
+    const src = fs.readFileSync(file, 'utf8').replace(IMPORTS, (whole, direct, lazy) => {
+      const spec = direct || lazy;
+      if (!spec.startsWith('.') || !from.startsWith('public/world/')) return whole;
+      const target = rel(path.resolve(path.dirname(file), spec));
+      if (!target.startsWith('core/')) return whole;
+      const next = path.posix.relative(path.posix.dirname(to), target);
+      return whole.replace(spec, next.startsWith('.') ? next : './' + next);
+    }), asked = [...src.matchAll(FONT)].map((m) => m[1]);
     if (asked.length) { for (const name of asked) fonts.add(name); fs.writeFileSync(path.join(out, to), src.replace(FONT, './vendor/fonts/$1')); }
-    else fs.copyFileSync(file, path.join(out, to));
+    else fs.writeFileSync(path.join(out, to), src);
     staged.push(to); placed.set(file, to);
     for (const m of src.matchAll(ASSET)) {
       const asset = path.resolve(path.dirname(file), m[1]), at = path.posix.join(path.posix.dirname(to), m[1]);

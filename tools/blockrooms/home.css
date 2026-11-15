@@ -138,6 +138,20 @@ canvas.sprite { image-rendering: pixelated; image-rendering: crisp-edges; displa
 .signin input.bad { background: #ffe0e0; color: #990000; }
 .signin button { font: 400 13px Arial, Helvetica, sans-serif; background: #c0c0c0; color: #000000; border: 2px outset #ffffff; padding: 3px 10px; cursor: pointer; margin-left: 4px; }
 .signin button:active { border-style: inset; }
+/* The list is drawn here, too: no rounded modern OS popup over the 1998 page. */
+#enter > .signin:has(.retro-select-button[aria-expanded="true"]) { z-index: 4; }
+.signin .retro-select { position: relative; display: inline-block; width: 234px; max-width: 100%; vertical-align: middle; text-align: left; font: 400 14px Tahoma, Arial, sans-serif; }
+.signin .retro-select [hidden] { display: none !important; }
+.signin .retro-select-button { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 32px; margin: 0; padding: 2px 2px 2px 7px; border: 2px inset #eee; border-radius: 0; background: #fff; font: inherit; text-align: left; }
+.signin .retro-select-arrow { display: grid; place-items: center; align-self: stretch; width: 24px; flex: none; border: 2px outset #fff; background: #c0c0c0; line-height: 1; }
+.signin .retro-select-button:focus-visible { outline: 1px dotted #000; outline-offset: 2px; }
+.signin .retro-select-list { position: absolute; z-index: 10; top: 100%; left: 0; right: 0; max-height: 240px; overflow-y: auto; border: 2px outset #eee; background: #fff; color: #000; box-shadow: 2px 2px 0 #000; }
+.signin .retro-select-option { padding: 7px; cursor: pointer; }
+.signin .retro-select-option.is-active { background: #000080; color: #fff; outline: 1px dotted #fff; outline-offset: -2px; }
+.signin #difficulty-note { margin: 8px 0 2px; font-weight: 400; }
+@media (pointer: coarse) {
+  .signin .retro-select-button, .signin .retro-select-option { min-height: 44px; }
+}
 .signin .says { display: block; font: 400 13px var(--serif); }
 .signin .says:empty { display: none; }
 .signin .says.bad { color: #990000; font-weight: 700; }
@@ -516,3 +530,7 @@ kbd { display: inline-block; min-width: 1.6em; text-align: center; font: 700 12p
   .marquee { white-space: normal; }
   .leaf, .hanger { transition: none; }
 }
+
+/* The extra difficulty column stays readable on narrow screens. */
+.score-panel { min-width: 0; }
+.score-scroll { max-width: 100%; overflow-x: auto; }

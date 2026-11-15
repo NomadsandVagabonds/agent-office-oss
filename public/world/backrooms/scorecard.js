@@ -20,6 +20,7 @@
 // level's own page — this keeps one of its own in the browser, by the same
 // rules, so the card is the same card.
 import { cleanRecord, cleanRun, emptyRecord, settleRun } from '/core/runs.mjs';
+import { difficultyOf, scoreEligible } from '/core/difficulty.mjs';
 import { payFor } from '/core/game.mjs';
 
 const HIDEOUT = 'backrooms', KEPT = 'office-backrooms:record';
@@ -59,7 +60,7 @@ function icon(id, title) {
 // How it ended, for whoever is having the wall read to them. (The wall itself does not say: what is printed on it does.)
 const ENDED = { exit: 'back at your desk', caught: 'indefinitely', battery: 'battery flat', quit: 'left early' };
 const LINES = {
-  room: 'Rooms walked into', kind: 'Rooms worth mentioning', part: 'Parts of the building', survived: 'Got away from',
+  difficulty: 'Difficulty adjustment', room: 'Rooms walked into', kind: 'Rooms worth mentioning', part: 'Parts of the building', survived: 'Got away from',
   out: 'Left by the way out', pace: 'Time on the tape', card: 'Keycard brought back', battery: 'Spare batteries', heart: 'Still in one piece',
 };
 const num = (n) => Number(n || 0).toLocaleString('en-US');
@@ -140,9 +141,10 @@ function draw(card, who, opt = {}) {
   const out = card.reason === 'exit', ended = ENDED[card.reason] || ENDED.quit;
   const rows = el('div', 'brc-rows');
   for (const l of card.lines) {
+    if (card.ranked === false && l.id === 'difficulty') continue;
     const zero = !l.points ? ' zero' : '';
-    rows.append(icon(l.id), el('span', zero.trim(), LINES[l.id] || l.id),
-      el('span', `n${zero}`, l.id === 'pace' ? clock(l.count) : l.id === 'out' ? '' : `× ${num(l.count)}`), el('span', `p${zero}`, num(l.points)));
+    rows.append(icon(l.id), el('span', zero.trim(), l.id === 'difficulty' ? `${difficultyOf(card.difficulty).label} adjustment` : LINES[l.id] || l.id),
+      el('span', `n${zero}`, l.id === 'pace' ? clock(l.count) : l.id === 'out' ? '' : `× ${num(l.count)}`), el('span', `p${zero}`, card.ranked === false ? '—' : num(l.points)));
   }
   const box = el('div', 'brc-box'), replay = !!card.replay;
   // a kept tape played back: it says so where the jar would have been, because nothing is paid for it
@@ -168,7 +170,7 @@ function draw(card, who, opt = {}) {
   box.append(icon('tape'), el('span', '', replay ? 'Tape back on the shelf' : card.tape?.kept ? 'Tape kept' : 'Tape not recovered'), number);
   if (!card.tape?.kept) box.append(el('small', '', 'That building is gone.'));
   // (a tape played back is measured against the first time it was walked, not against the office's best: it cannot beat that)
-  const best = replay ? `PLAYED BACK · FIRST TIME ${num(card.tape?.first?.score)}`
+  const best = card.ranked === false ? (card.difficultyChanged ? 'UNSCORED · DIFFICULTY CHANGED' : 'UNSCORED RECORDING') : replay ? `PLAYED BACK · FIRST TIME ${num(card.tape?.first?.score)}`
     : card.best?.beaten ? (card.best.was ? `THE BEST YET · WAS ${num(card.best.was)}` : 'THE BEST YET') : `BEST ${num(card.best?.score)}`;
 
   const end = el('div', 'brc-end', el('div', 'brc-foot', String(who || '').toUpperCase().slice(0, 24)));
@@ -176,11 +178,11 @@ function draw(card, who, opt = {}) {
     el('div', 'brc-over', brand.over),
     el('div', 'brc-title', brand.title),
     rows,
-    el('div', 'brc-total', el('span', '', 'POINTS'), el('span', '', num(card.score))),
+    el('div', 'brc-total', el('span', '', 'POINTS'), el('span', '', card.ranked === false ? '—' : num(card.score))),
     el('div', `brc-best${card.best?.beaten ? ' new' : ''}`, best),
     box,
     end);
-  form.setAttribute('role', 'dialog'); form.setAttribute('aria-modal', 'true'); form.setAttribute('aria-label', `${brand.title}, ${replay ? 'a tape played back, ' : ''}${ended}: ${num(card.score)} points`); form.tabIndex = -1;
+  form.setAttribute('role', 'dialog'); form.setAttribute('aria-modal', 'true'); form.setAttribute('aria-label', `${brand.title}, ${replay ? 'a tape played back, ' : ''}${ended}: ${card.ranked === false ? 'unscored recording' : num(card.score) + ' points'}`); form.tabIndex = -1;
   // the way back to the home page, and (where whoever shows the card offers one) a building nobody has had: that one is
   // the card's first choice, and the way home stands quietly beside it
   if (opt.home || opt.anew) {
@@ -210,7 +212,7 @@ function local(report, who) {
   const kept = remembered();
   const record = cleanRecord(kept?.record || emptyRecord()), earned = Math.max(0, Math.floor(Number(kept?.earned) || 0));
   const run = cleanRun(report), settled = settleRun(record, run, { at: Date.now(), by: who });
-  const worth = run.reason === 'exit' && !settled.card.replay ? payFor({ batteries: run.batteries }) : 0, paid = Math.max(0, worth - earned);
+  const worth = run.reason === 'exit' && scoreEligible(run) && !settled.card.replay ? payFor({ batteries: run.batteries }) : 0, paid = Math.max(0, worth - earned);
   try { localStorage.setItem(KEPT, JSON.stringify({ record: settled.record, earned: Math.max(earned, worth) })); } catch { /* until the page closes, then */ }
   return { ...settled.card, coins: { carried: run.batteries, worth, paid, best: Math.max(earned, worth) } };
 }

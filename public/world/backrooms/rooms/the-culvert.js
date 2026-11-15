@@ -208,7 +208,7 @@ export function build(c) {
       const q = c.toWorld(fall.x, fall.z); env.player?.warp?.(q.x, q.z);
       const eye = env.player?.me; if (eye) eye.pitch = Math.min(0.95, eye.pitch + dt * 1.3);          // the strip of ceiling, getting narrower
       env.red?.(Math.min(0.9, fall.t * 0.5)); env.interfere?.(0.3 + 0.5 * Math.min(1, fall.t / K.falls));
-      if (fall.t >= K.falls && !fall.over) { fall.over = true; env.hold?.(false); env.end?.('caught'); }
+      if (fall.t >= K.falls && !fall.over) { fall.over = true; env.hold?.(false); env.end?.('caught'); if (env.difficulty?.() === 'tourist') fall = null; }
       pose(dt, false); return;
     }
     const playing = me.inside && !env.player?.me?.frozen;

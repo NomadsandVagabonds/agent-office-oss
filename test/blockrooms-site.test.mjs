@@ -102,7 +102,7 @@ test('the front page is the caretaker\'s: every picture it shows is there, every
   assert.ok(script.includes("new Audio('./muzak.mp3')") && fs.statSync(path.join(out, 'muzak.mp3')).size > 100000, 'the front page\'s music is not there');
   assert.deepEqual(fs.readFileSync(path.join(out, 'muzak.mp3')), fs.readFileSync(path.join(ROOT, 'public/audio/elevator-muzak.mp3')));
   // the front page talks to its own site and nobody else: the book, and where the visitor appears to be (for the welcome)
-  assert.deepEqual([...new Set([...script.matchAll(/fetch\(([^,)]+)/g)].map((m) => m[1].trim()))].sort(), ["'./api/book'", "'./api/where'"]);
+  assert.deepEqual([...new Set([...script.matchAll(/fetch\(([^,)]+)/g)].map((m) => m[1].trim()))].sort(), ["'./api/book'", "'./api/where'", "bookUrl"]);
   // what a stranger typed is put on the page as text, never as markup
   assert.ok(!/innerHTML|insertAdjacentHTML|outerHTML|document\.write/.test(script), 'home.js writes markup');
 });
@@ -147,6 +147,7 @@ test('the page\'s own script: a building nobody has had, a tape from the address
   assert.match(src, /let next = asSeed\(q\.get\('tape'\)\) \|\| null;/);
   assert.match(src, /const mine = next \? keptTapes\(\)\.find\(\(t\) => t\.seed === seed\) : null;/);
   assert.match(src, /\.\.\.\(mine \? \{ replay: true, pursuer: typeof mine\.mascot === 'boolean' \? mine\.mascot : undefined \} : \{\}\)/, 'only a tape this browser has kept is played back; somebody else\'s is a building like any other');
+  assert.match(src, /difficulty: mine \? cleanDifficulty\(mine\.difficulty, 'training-wheels'\) : undefined/);
   assert.match(src, /home: \{ label: 'Return to homepage' \}/, 'the score has an explicit way back to the home page');
   // when a visit is over (the way out, caught, a flat battery, Give Up) the card comes up, and after the card the front page:
   // never straight into another building unless the visitor asks. A card put down by its tape's number asks for that
@@ -164,7 +165,7 @@ test('the page\'s own script: a building nobody has had, a tape from the address
   assert.ok(!/localStorage[^;\n]*where|setItem\([^)]*where/.test(src), 'the page does not keep where anybody is');
   assert.ok(!/XMLHttpRequest|sendBeacon|WebSocket/.test(src));
   assert.match(src, /if \(!mine\) tell\(\{ do: 'in' \}\);/);
-  assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit'\) return null;\n  const who = me\(\);\n  if \(!who\.sign\) return null;/);
+  assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit' \|\| !scoreEligible\(report\)\) return null;\n  const who = me\(\);\n  if \(!who\.sign\) return null;/);
   assert.match(src, /tell\(\{ do: 'sign', name: who\.name, message: who\.message, run: report \}\)/);
   // a building asked to be other than its seed has it (?debug, ?room=) is for looking at: walking out of one is not a score
   assert.match(src, /const doctored = !!dev\.debug \|\| !!room;\n      const result = await enterBackrooms\(office, \{\n[^\n]*also: doctored \? undefined : sign,/, 'the book is not signed for a doctored building');
