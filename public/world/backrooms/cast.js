@@ -99,6 +99,9 @@ export function whoIsDown(seed, cast = CAST) {
  */
 export function castFor(visit, floor, cast = CAST) {
   if (!visit) return cast.filter((m) => m.always).map((m) => ({ id: m.id, floor: null }));
+  // Private curated visits may schedule the production cast explicitly. Ordinary
+  // visits keep exactly the seeded dealer below. Entries are authored, not input.
+  if (Array.isArray(visit.company)) return visit.company.filter(m => cast.some(c => c.id === m.id) && Number.isInteger(m.floor) && m.floor >= 0 && m.floor < visit.depths && (floor === undefined || m.floor === floor));
   const out = [];
   for (const id of whoIsDown(visit.seed, cast)) {
     const m = cast.find((k) => k.id === id);

@@ -24,8 +24,8 @@ import {inFlashlight} from '../backrooms/flashlight.js';
 import {createSceneSync} from './scene-sync.js';
 import {createCoopLights} from './lights.js';
 const nop=()=>{},dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
-export async function createRealRooms(seed,host,scene,{depth=0,slice=false,planOptions={},carry=null}={}){
- const kit=createKit(),visit=coopVisit(seed,{slice,...planOptions}),level=floorOf(visit,depth);
+export async function createRealRooms(seed,host,scene,{depth=0,slice=false,route='random',planOptions={},carry=null}={}){
+ const kit=createKit(),visit=coopVisit(seed,{slice,route,...planOptions}),level=floorOf(visit,depth);
  const builders={...BUILDERS};
  for(const id of new Set(level.rooms.map(r=>r.arch))){const a=ARCHETYPES[id];if(a?.module){const mod=await import(new URL(a.module,new URL('../backrooms/index.js',import.meta.url)));if(typeof mod.build!=='function')throw Error('Missing room builder: '+id);builders[id]=mod.build;}}
  const cast=level.cast.map(name=>({name,look:resolveLook(name)}));

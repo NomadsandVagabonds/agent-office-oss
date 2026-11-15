@@ -13,8 +13,10 @@ room types, ordinary maze connectors, six cast types, and room residents are
 eligible. Suburbia is explicitly included as the third part of a private visit.
 The existing seeded planner still chooses a subset of rooms and cast for each
 run. **Eligible does not mean every room and creature appears in one visit.**
-The requested curated “super seed” is deliberately deferred until this coverage
-is reviewed; it is not a selectable mode here.
+An optional curated tour is now prepared: **The long way round**, with 26
+features and all six cast types across five floors. See
+[the showcase notes](BACKROOMS-COOP-SHOWCASE.md). This follow-up is not live yet;
+the current Railway release still has only the random visit selector.
 
 | System | This branch |
 | --- | --- |
@@ -48,7 +50,7 @@ canvas revisions are sent once per floor over ordered WebSockets. Mutable
 terrain state, collider bounds, furniture positions and lighting cues travel
 with the snapshot. Local held-item models stay outside the replicated graph.
 
-Protocol is `blockrooms-coop-7`: server and both clients must update together.
+The showcase follow-up uses `blockrooms-coop-8` (live release: `blockrooms-coop-7`): server and both clients must update together.
 There are no new packages, accounts or hosting services.
 
 ## Verification

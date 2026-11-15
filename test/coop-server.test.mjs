@@ -111,3 +111,15 @@ test('real scene baseline larger than 512 KiB reaches the partner without closin
  assert.ok(Buffer.byteLength(JSON.stringify(s))>524288);a.send({type:'real-state',state:s});
  await until(()=>b.messages.some(m=>m.state?.real));assert.equal(b.messages.find(m=>m.state?.real).state.nodes.length,20000);assert.equal(a.closed,false);
 });
+
+test('showcase uses unique private invites with the same authored seed and authoritative route for both peers',async t=>{
+ const app=createCoopServer();await new Promise(r=>app.server.listen(0,'127.0.0.1',r));t.after(()=>app.close());const port=app.server.address().port;
+ const create=async route=>(await(await fetch(`http://127.0.0.1:${port}/new?mode=rooms&route=${route}&slice=1`,{method:'POST'})).json()).code;
+ const first=await create('showcase'),second=await create('showcase');assert.notEqual(first,second);
+ assert.equal(app.rooms.get(first).seed,app.rooms.get(second).seed);assert.equal(app.rooms.get(first).slice,false);
+ const a=await wire(port,first),b=await wire(port,first);t.after(()=>{a.socket.destroy();b.socket.destroy();});
+ for(const peer of [a,b]){const welcome=await until(()=>peer.messages.find(m=>m.type==='welcome'));assert.equal(welcome.route,'showcase');assert.equal(welcome.slice,false);assert.equal(welcome.seed,app.rooms.get(first).seed);}
+ const random=await create('unknown-route');assert.equal(app.rooms.get(random).route,'random');assert.equal(app.rooms.get(random).seed,random);
+ app.rooms.get(first).born=Date.now()-65*60*1000;app.rooms.get(random).born=Date.now()-65*60*1000;await until(()=>!app.rooms.has(random));assert.ok(app.rooms.has(first),'long tour is not cut off at one hour');
+ app.rooms.get(first).born=Date.now()-181*60*1000;await until(()=>!app.rooms.has(first));
+});

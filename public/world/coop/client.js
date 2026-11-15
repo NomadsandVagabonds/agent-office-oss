@@ -1,3 +1,4 @@
+import {COOP_ROUTES} from '/core/coop-routes.mjs';
 import {GUEST_PRESETS,guestPreset} from '/core/guest-presets.mjs';
 import {createCharacterPicker} from './characters-ui.js';
 import {createInventoryHud} from '../backrooms/inventory-hud.js';
@@ -18,7 +19,7 @@ import {INVENTORY_MODELS} from '../backrooms/inventory-items.js';
 import {Avatar} from '../avatar/rig.js';
 import {resolveLook} from '/core/look.mjs';
 const gameAudio=createCoopAudio(),sceneSender=createSceneSender();
-const realMode=location.pathname==='/rooms';let real=null,realHost=false,building=false,hostPaused=false,fatal=null,roomSeed=null,roomSlice=false;
+const realMode=location.pathname==='/rooms';let real=null,realHost=false,building=false,hostPaused=false,fatal=null,roomSeed=null,roomSlice=false,roomRoute='random';
 const $=id=>document.getElementById(id),canvas=$('view'),renderer=new THREE.WebGLRenderer({canvas,antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
 const scene=new THREE.Scene();scene.background=new THREE.Color('#16190e');scene.fog=new THREE.Fog('#232419',10,35);
@@ -98,12 +99,12 @@ async function buildFloor(depth,carry=null){
  for(const mesh of itemMeshes.values()){scene.remove(mesh);mesh.geometry.dispose();}itemMeshes.clear();
  for(const a of avatars.values()){a.root.visible=false;a.signal.visible=false;}
  const old=real;real=null;old?.dispose();
- const next=await createRealRooms(roomSeed,realHost,scene,{depth,slice:roomSlice,carry:carry?.castCarry});
+ const next=await createRealRooms(roomSeed,realHost,scene,{depth,slice:roomSlice,route:roomRoute,carry:carry?.castCarry});
  if(ended){next.dispose();return;}
  real=next;gameAudio.floor(real.level,depth);initialized=false;yaw=real.start.yaw;pitch=0;
  $('status').textContent='Floor loaded. Waiting for your friend…';
 }
-async function connect(code){$('ready').disabled=true;$('ready').textContent='Connecting…';$('status').textContent='Connecting to your game…';$('create').hidden=true;$('alphaKey').hidden=true;$('hostAccess').hidden=true;$('inviteLabel').hidden=$('readyHelp').hidden=false;$('voice').disabled=false;$('roomHeading').textContent='Your game';$('joinHelp').textContent='Waiting for your friend? Copy the link below.';$('invite').hidden=$('copy').hidden=$('ready').hidden=false;
+async function connect(code){$('route').disabled=true;$('ready').disabled=true;$('ready').textContent='Connecting…';$('status').textContent='Connecting to your game…';$('create').hidden=true;$('alphaKey').hidden=true;$('hostAccess').hidden=true;$('inviteLabel').hidden=$('readyHelp').hidden=false;$('voice').disabled=false;$('roomHeading').textContent='Your game';$('joinHelp').textContent='Waiting for your friend? Copy the link below.';$('invite').hidden=$('copy').hidden=$('ready').hidden=false;
  const url=new URL(location.href);url.searchParams.set('room',code);history.replaceState(null,'',url);$('invite').value=url.href;
  socket=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/socket?room=${encodeURIComponent(code)}&v=${VERSION}`);
  socket.onmessage=async e=>{try{const m=JSON.parse(e.data);
@@ -117,7 +118,7 @@ async function connect(code){$('ready').disabled=true;$('ready').textContent='Co
   update(m.state);gameAudio.pause(false);
   $('panel').hidden=document.pointerLockElement===canvas;$('status').textContent='Floor loaded. Click Enter / resume to continue.';return;
  }
- if(m.type==='characters'){characterChoices=m.characters;characterPicker.update(state,id,realHost,characterChoices);return;}if(m.type==='control'){real?.command(m.id,m.action);return;}if(m.type==='host-paused'){hostPaused=m.paused;gameAudio.pause(hostPaused);$('notice').textContent=hostPaused?'Host tab paused · waiting for return':'';return;}if(m.type==='voice')voice.receive(m);if(m.type==='welcome'){id=m.id;realHost=m.host;characterChoices=m.characters||characterChoices;if((m.mode==='rooms')!==realMode){socket.close();return;}if(realMode){roomSeed=m.seed;roomSlice=!!m.slice;await buildFloor(0);building=false;gameAudio.pause(false);$('ready').disabled=!real;$('ready').textContent="I'm ready";}}if(m.type==='state'){if(m.state.phase==='disconnected')hostPaused=true;update(m.state);}}catch(error){fail(error);}};
+ if(m.type==='characters'){characterChoices=m.characters;characterPicker.update(state,id,realHost,characterChoices);return;}if(m.type==='control'){real?.command(m.id,m.action);return;}if(m.type==='host-paused'){hostPaused=m.paused;gameAudio.pause(hostPaused);$('notice').textContent=hostPaused?'Host tab paused · waiting for return':'';return;}if(m.type==='voice')voice.receive(m);if(m.type==='welcome'){id=m.id;realHost=m.host;characterChoices=m.characters||characterChoices;if((m.mode==='rooms')!==realMode){socket.close();return;}if(realMode){roomSeed=m.seed;roomSlice=!!m.slice;roomRoute=m.route||'random';$('route').value=roomRoute;$('routeHelp').textContent=COOP_ROUTES.find(r=>r.id===roomRoute)?.description||'';await buildFloor(0);building=false;gameAudio.pause(false);$('ready').disabled=!real;$('ready').textContent="I'm ready";}}if(m.type==='state'){if(m.state.phase==='disconnected')hostPaused=true;update(m.state);}}catch(error){fail(error);}};
  socket.onclose=()=>{ended=true;hostPaused=true;gameAudio.stop();voice.off();keys.clear();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=fatal||'Connection closed. The room may be full, started, or expired. Start a new game.';};
  socket.onerror=()=>{$('status').textContent='Could not connect to the co-op server.';};
 }
@@ -128,11 +129,13 @@ try {
  if(key){sessionStorage.setItem('coop-host',key);history.replaceState(null,'',location.pathname+location.search);}
  $('alphaKey').value=sessionStorage.getItem('coop-host')||'';if($('alphaKey').value)$('hostAccess').hidden=true;
 }catch{}
+$('route').value=new URLSearchParams(location.search).get('route')==='showcase'?'showcase':'random';
+$('route').onchange=()=>{$('routeHelp').textContent=COOP_ROUTES.find(r=>r.id===$('route').value).description;};$('route').onchange();
 $('create').onclick=async()=>{
  $('create').disabled=true;$('create').textContent='Starting…';$('status').textContent='Starting your game…';
  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
  try{
-  const r=await fetch(realMode?'/new?mode=rooms'+(new URLSearchParams(location.search).get('slice')==='1'?'&slice=1':''):'/new',{method:'POST',headers:{'x-alpha-key':$('alphaKey').value},signal:controller.signal});
+  const r=await fetch(realMode?'/new?mode=rooms&route='+encodeURIComponent($('route').value)+(new URLSearchParams(location.search).get('slice')==='1'?'&slice=1':''):'/new',{method:'POST',headers:{'x-alpha-key':$('alphaKey').value},signal:controller.signal});
   if(!r.ok){if(r.status===403){$('hostAccess').hidden=false;$('hostAccess').open=true;throw Error('Open your private host link, or enter the host passcode.');}throw Error('The server could not start a game. Please try again.');}
   $('alphaKey').value='';await connect((await r.json()).code);
  }catch(e){$('status').textContent=e.name==='AbortError'?'The server took too long to answer. Please try again.':e instanceof TypeError?'Could not reach the server. Check your connection and try again.':e.message;}

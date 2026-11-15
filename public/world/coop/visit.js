@@ -1,7 +1,10 @@
 // Use the production dealer and complete room/cast catalogues. Suburbia is
 // explicitly included in private co-op while it remains opt-in in solo play.
+import {SHOWCASE_ROUTE,SHOWCASE_SEED} from '../../../core/coop-routes.mjs';
+import {SHOWCASE,curate} from './showcase.js';
 import {planVisit,floorOf} from '../backrooms/plan.js';
-export function coopVisit(seed,{slice=false,...options}={}){
+export function coopVisit(seed,{slice=false,route='random',...options}={}){
+ if(route===SHOWCASE_ROUTE)return curate(planVisit(SHOWCASE_SEED,{...options,depths:SHOWCASE.length,themes:SHOWCASE.map(f=>f.theme),pursuer:true}));
  const base=planVisit(seed,{...options,...(slice?{depths:1}:{})});
  if(slice||options.themes)return base;
  const themes=base.floors.map(f=>f.theme);

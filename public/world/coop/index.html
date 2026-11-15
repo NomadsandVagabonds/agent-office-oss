@@ -33,6 +33,7 @@
             <div id="status" role="status" aria-live="polite">Start a game, then send your friend the invite link.</div>
             <p id="joinHelp">You both need a computer, a keyboard and a mouse.</p>
             <details id="hostAccess"><summary>Host access</summary><label for="alphaKey">Host passcode</label><input id="alphaKey" type="password" autocomplete="off" placeholder="From your private host link"></details>
+            <div id="routeChoice" class="only-lobby"><label for="route">Which way?</label><select id="route" aria-describedby="routeHelp"><option value="random">Somewhere new</option><option value="showcase">The long way round</option></select><p id="routeHelp">A different building each time.</p></div>
             <button id="create" class="primary-action">Start a game</button>
             <label id="inviteLabel" for="invite" hidden>Your friend's invite link</label>
             <input id="invite" readonly aria-label="Invite link" hidden>
