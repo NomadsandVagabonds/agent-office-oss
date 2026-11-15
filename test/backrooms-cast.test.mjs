@@ -11,9 +11,11 @@ import { roomRoute, roomCosts, gridPath, straighten } from '../public/world/back
 import { SHADOW, away, watched, drained } from '../public/world/backrooms/cast/shadow.rule.js';
 import { MOTH, resting, flits } from '../public/world/backrooms/cast/moth.rule.js';
 import { PORTER, mopping, minds, facesYou } from '../public/world/backrooms/cast/porter.rule.js';
+import { createWalk, clearOfAbsorbed, ABSORBED_GAP } from '../public/world/backrooms/cast/walk.js';
 import { FIRE_WAYS, FIRE_FEAR, calm, afraid, tooNear } from '../public/world/backrooms/cast/fire.rule.js';
 import { BLACKOUT, createBlackoutState, stepBlackout } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
 import { ARCHETYPES } from '../public/world/backrooms/gen.js';
+import * as SUNK from '../public/world/backrooms/absorbed/rule.js';
 import { DOORS, doorPlan, doorRooms, inTheWay } from '../public/world/backrooms/doors.js';
 
 const office = { name: 'Robin', projects: ['Atlas', 'Harbor'], agents: ['Ivory Marten', 'Amber Vireo', 'Ember Numbat'], tasks: ['Ship the thing', 'Fix the other thing'] };
@@ -456,4 +458,108 @@ test('fire: the moth goes to one it can see, and into it; the stand-ins are held
   for (let t = 0; t < BLACKOUT.redFillSeconds * 2; t += dt) { r = stepBlackout(st, { dt, inDark: true, hasFlashlight: false, byFire: true, px: 0, pz: 0, yaw: 0, targets }); st = r.state; }
   assert.equal(r.red, 0); assert.equal(r.speeds[0], 0);
   assert.equal(ARCHETYPES['blackout-bay'].fire, 'fears');
+});
+
+test('the absorbed staff: nothing of the cast walks through one or stops on one', () => {
+  const sunk = [{ x: 4, z: 4 }, { x: -2, z: 9 }];
+  assert.ok(clearOfAbsorbed(null, 4, 4) && clearOfAbsorbed([], 4, 4), 'a part with none of them, or before they are placed');
+  assert.equal(clearOfAbsorbed(sunk, 4, 4), false);
+  assert.equal(clearOfAbsorbed(sunk, 4 + ABSORBED_GAP - 0.01, 4), false);
+  assert.equal(clearOfAbsorbed(sunk, 4 + ABSORBED_GAP + 0.01, 4), true);
+  assert.ok(ABSORBED_GAP >= 0.4 && ABSORBED_GAP <= 0.7, 'their body, not their reach: a corridor with one in the wall can still be walked');
+  // the walker's own footing test asks it: a floor that is otherwise free everywhere
+  const env = { level: { rooms: [] }, world: { free: () => true, headroom: () => 3 }, absorbed: sunk };
+  const walk = createWalk(env), it = { x: 0, z: 0, r: 0.3, tall: 1.6 };
+  assert.equal(walk.stand(it, 0, 0), true);
+  assert.equal(walk.stand(it, 4.2, 4.1), false);
+  assert.equal(walk.stand(it, -2, 9.3), false);
+  env.absorbed = [];
+  assert.equal(walk.stand(it, 4.2, 4.1), true, 'and where there are none, as before');
+});
+
+test('the absorbed staff: a hold never turns the visitor\'s head while something that hunts is near and in sight', () => {
+  const { ABSORBED: A, tugsTheCamera, HUNTER_NEAR, TUG_SECONDS } = SUNK;
+  // nobody about: the first half second of a hold pulls the look round to the face, and then lets it go
+  assert.equal(tugsTheCamera(A.holdDuration, false), true);
+  assert.equal(tugsTheCamera(A.holdDuration - TUG_SECONDS + 0.01, false), true);
+  assert.equal(tugsTheCamera(A.holdDuration - TUG_SECONDS - 0.01, false), false);
+  // the mascot in the room (or the shadow): not for a moment of it
+  for (let left = A.holdDuration; left > 0; left -= dt) assert.equal(tugsTheCamera(left, true), false);
+  assert.ok(HUNTER_NEAR >= 5 && HUNTER_NEAR <= HUNT.far, 'near enough to matter, and no further than it could see you from');
+  assert.ok(TUG_SECONDS < A.holdDuration);
+  // the two this is for are the ones that hunt; the rest of the hold is as it was
+  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow']);
+  const held = SUNK.stepAbsorbed(SUNK.createAbsorbedState('wall'), { dt, dist: 0.5 });
+  assert.ok(held.startedGrab && held.slow === A.slowFactor);
+});
+
+test('the absorbed staff: never in the mascot\'s plinth room, nor in the home of anybody dealt to the part', () => {
+  let withMascot = 0, withPorter = 0, parts = 0;
+  for (const seed of SEEDS) {
+    const { visit, floors } = generateVisit(seed, office);
+    for (const level of floors) {
+      const out = SUNK.absorbedKeepOut(level, visit);
+      parts++;
+      if (level.pursuer) { withMascot++; assert.ok(out.has(level.pursuer.room), `${seed}, part ${level.depth}: the plinth room is his`); }
+      const porter = castFor(visit, level.depth).find((k) => k.id === 'porter');
+      const home = porter ? homeFor(level, CAST.find((m) => m.id === 'porter')) : null;
+      if (home !== null) { withPorter++; assert.ok(out.has(home), `${seed}, part ${level.depth}: the porter's room is his`); }
+      assert.ok(out.size <= 2 && [...out].every((id) => level.rooms[id]), 'and nothing else is kept from them');
+      if (!level.pursuer && home === null) assert.equal(out.size, 0);
+    }
+  }
+  assert.ok(withMascot > 20 && withPorter > 5 && parts > withMascot, `${withMascot} parts with the mascot, ${withPorter} with the porter, of ${parts}`);
+  // a floor made by itself, with no visit: only the plinth room
+  assert.deepEqual([...SUNK.absorbedKeepOut({ depth: 0, pursuer: { room: 3 }, rooms: [] }, null)], [3]);
+});
+
+test('the absorbed staff and fire: paper burning beside one lets go of whoever it has, and keeps its arms down while it burns', () => {
+  const { ABSORBED: A, createAbsorbedState, stepAbsorbed } = SUNK;
+  // holding somebody: the fire is lit, and that moment they are free
+  let r = stepAbsorbed(createAbsorbedState('floor'), { dt, dist: 0.6 });
+  assert.equal(r.state.phase, 'grabbing');
+  r = stepAbsorbed(r.state, { dt, dist: 0.6, fire: true });
+  assert.ok(r.releasedGrab && r.state.phase === 'cooldown' && r.slow === 1 && r.sinkTo === 0);
+  // for as long as it burns, standing in its arms is nothing: no reach, no grab, and the cooldown never runs down
+  let s = r.state;
+  for (let t = 0; t < 30; t += dt) { r = stepAbsorbed(s, { dt, dist: 0.4, fire: true }); s = r.state; assert.ok(s.phase === 'cooldown' && !r.startedGrab && !r.releasedGrab && s.cooldownLeft === A.cooldownDuration); }
+  assert.equal(s.grabCount, 1);
+  // the paper burns out: a whole cooldown more, and then it is what it was
+  let free = 0;
+  for (; free < 20 && s.phase === 'cooldown'; free += dt) s = stepAbsorbed(s, { dt, dist: 0.4 }).state;
+  assert.ok(Math.abs(free - A.cooldownDuration) < 0.1, `arms down for ${free.toFixed(2)} s after the fire`);
+  s = stepAbsorbed(s, { dt, dist: 0.4 }).state;
+  assert.equal(s.phase, 'grabbing');
+  // one that was only reaching, or doing nothing, is put off the same way; and no fire changes nothing
+  for (const mount of SUNK.ABSORBED_MOUNTS) assert.equal(stepAbsorbed(createAbsorbedState(mount), { dt, dist: 2, fire: true }).state.phase, 'cooldown');
+  assert.deepEqual(stepAbsorbed(createAbsorbedState('wall'), { dt, dist: 2, fire: false }), stepAbsorbed(createAbsorbedState('wall'), { dt, dist: 2 }));
+  assert.ok(A.fireRadius > A.reachRadius.floor && A.fireRadius <= 3, 'further than its arms, nearer than a fire is seen from');
+});
+
+test('the absorbed staff on the card: met once, when one is seen reaching; letting go is not getting away', () => {
+  const { meetsAbsorbed } = SUNK;
+  assert.equal(meetsAbsorbed('reaching', true, false), true);
+  assert.equal(meetsAbsorbed('grabbing', true, false), true);
+  assert.equal(meetsAbsorbed('reaching', false, false), false, 'behind you, it has not been met');
+  assert.equal(meetsAbsorbed('idle', true, false), false, 'hanging there doing nothing, it is part of the wall');
+  assert.equal(meetsAbsorbed('cooldown', true, false), false);
+  assert.equal(meetsAbsorbed('grabbing', true, true), false, 'once');
+  // and the room's own code never tells the count that somebody got away from one
+  const src = fs.readFileSync(new URL('../public/world/backrooms/absorbed.js', import.meta.url), 'utf8');
+  assert.ok(/run\?\.met\?\.\('absorbed'\)/.test(src) && !/survived/.test(src));
+});
+
+test('the absorbed staff: none is put where a thing lying about could not be picked up without being held', () => {
+  const { clearOfThings, THING_GAP, ABSORBED: A } = SUNK;
+  const things = [{ x: 2, z: 2 }, { x: 10, z: -3 }];
+  assert.equal(clearOfThings(2, 2 + THING_GAP - 0.01, things), false);
+  assert.equal(clearOfThings(2, 2 + THING_GAP + 0.01, things), true);
+  assert.equal(clearOfThings(10.5, -3.5, things), false);
+  assert.ok(clearOfThings(0, 0, []) && clearOfThings(0, 0, undefined), 'a visit without pockets has nothing lying about');
+  // the gap leaves somewhere to stand: within arm's length of the thing, and out of the longest of their reaches
+  const longest = Math.max(...Object.values(A.reachRadius));
+  assert.ok(THING_GAP - longest >= 0.4, `only ${(THING_GAP - longest).toFixed(2)} m between the thing and their hands`);
+  // …and it is they who move: the seed's supplies are not asked to (a kept tape is compared on them)
+  const src = fs.readFileSync(new URL('../public/world/backrooms/supplies.js', import.meta.url), 'utf8');
+  assert.ok(!/absorbed/i.test(src));
 });

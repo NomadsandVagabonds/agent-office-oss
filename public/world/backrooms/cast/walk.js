@@ -15,12 +15,22 @@ const CELL = 0.125, STEP = 0.26;
 /** What a shut door costs a walker that can open one, in rooms: it would go some way round sooner than stop and work a handle. */
 export const DOOR_COST = 3;
 
+/** How near one of the absorbed staff a creature will set foot, metres (their arms are longer; their bodies are not). */
+export const ABSORBED_GAP = 0.5;
+/** Is a spot clear of every colleague sunk into the building? (`list`: env.absorbed — [{ x, z }], or nothing yet.) */
+export function clearOfAbsorbed(list, x, z, gap = ABSORBED_GAP) {
+  if (list) for (const a of list) if ((x - a.x) * (x - a.x) + (z - a.z) * (z - a.z) < gap * gap) return false;
+  return true;
+}
+
 export function createWalk(env) {
   const W = () => env.world, level = env.level;
   const grids = new Map();                         // room id + who → { nx, nz, ok, floor, version }
   const doorOf = (id) => env.doors?.at(id) || null;
 
-  const stand = (a, x, z) => W().free(x, z, a.r, { ghost: true }) && W().headroom(x, z) >= a.tall;
+  // (ghost: creatures do not block on one another's bodies. But a colleague the building is keeping — absorbed.js — is
+  // not somebody to walk through or stop on: nothing of the cast stands within ABSORBED_GAP of one.)
+  const stand = (a, x, z) => W().free(x, z, a.r, { ghost: true }) && W().headroom(x, z) >= a.tall && clearOfAbsorbed(env.absorbed, x, z);
   /** Rooms it will not go into: ones that fold space, and ones it could not stand up in. */
   const shy = (a, rt) => !rt || rt.fold || rt.def.crawl || rt.def.H < a.tall + 0.05;
   /** What a doorway costs this walker (cast/paths.js): Infinity where it cannot go. */
@@ -32,7 +42,7 @@ export function createWalk(env) {
   };
 
   function grid(a, rt) {
-    const key = rt.id + ':' + a.r + ':' + a.tall, version = env.doors?.version || 0;
+    const key = rt.id + ':' + a.r + ':' + a.tall, version = (env.doors?.version || 0) + ':' + (env.absorbed?.length || 0);          // (the absorbed are placed after the creatures: a grid made before they were is made again)
     let g = grids.get(key);
     if (g && g.version === version) return g;
     const def = rt.def, nx = Math.max(1, Math.ceil(def.W / CELL)), nz = Math.max(1, Math.ceil(def.D / CELL));

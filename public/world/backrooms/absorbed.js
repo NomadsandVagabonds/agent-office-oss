@@ -11,9 +11,22 @@ import { toWorld, wallPoint, wallSpans, floorAt, ceilAt } from './gen.js';
 import { clamp, turnTo } from './bits.js';
 import {
   ABSORBED, ABSORBED_MOUNTS, rollAbsorbedRoster, absorbedCount,
-  createAbsorbedState, stepAbsorbed,
+  createAbsorbedState, stepAbsorbed, tugsTheCamera, HUNTER_NEAR, absorbedKeepOut, meetsAbsorbed, clearOfThings,
 } from './absorbed/rule.js';
+import { CAST } from './cast.js';
 import { makeAbsorbedWorker } from './absorbed/rig.js';
+
+/** Whoever of the cast hunts (cast.js): the ones a visitor must be left free to watch, or not to look at. */
+const HUNTERS = CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id);
+/** Is one of them near the visitor, with nothing between the two? */
+function hunted(env, me) {
+  for (const id of HUNTERS) {
+    const at = env.pursuer?.of?.(id)?.at?.();
+    if (!at || !Number.isFinite(at.x) || !Number.isFinite(at.z)) continue;
+    if (Math.hypot(at.x - me.x, at.z - me.z) <= HUNTER_NEAR && env.world.los(me.x, me.z, at.x, at.z)) return true;
+  }
+  return false;
+}
 
 function doorClear(def, lx, lz, minDist) {
   for (const dr of def.doors) {
@@ -204,8 +217,13 @@ export function spawnAbsorbed(env, { rt, placement, spec }) {
       const inputKeys = env.player?.input?.keys;
       const struggling = Math.hypot(me.wishX || 0, me.wishZ || 0) > 0.25 || !!(inputKeys && (inputKeys.has(' ') || inputKeys.has('Shift')));
 
+      // paper the visitor has set light to, near enough and in its sight (inventory-fire.js): it lets go, and keeps its arms down
+      const burning = env.inventory?.fire?.threatAt?.(reachX, reachZ, placement.wy);
+      const fire = !!burning && Math.hypot(burning.x - reachX, burning.z - reachZ) <= ABSORBED.fireRadius;
+
       const res = stepAbsorbed(rule, {
         dt,
+        fire,
         dist,
         playerSink: me.sink || 0,
         playerDrop: me.drop || 0,
@@ -217,6 +235,8 @@ export function spawnAbsorbed(env, { rt, placement, spec }) {
       if (res.noticedNow) {
         env.play('creak', reachX, reachZ, 4.5);
       }
+      // (for the card at the end: met, once a visit, when one is seen reaching. tally.js keeps it to once across the parts)
+      if (meetsAbsorbed(rule.phase, env.sees(placement.wx, placement.wz, { radius: 0.5, far: 12 }), env.metAbsorbed)) { env.metAbsorbed = true; env.run?.met?.('absorbed'); }
 
       if (res.startedGrab) {
         if (mount === 'wall') {
@@ -259,7 +279,8 @@ export function spawnAbsorbed(env, { rt, placement, spec }) {
         }
 
         // Subtle physical camera tug toward the clutching coworker's face on initial snare
-        if (rule.holdLeft > ABSORBED.holdDuration - 0.55) {
+        // (not while something that hunts is near and in sight: the visitor's look is theirs to keep — absorbed/rule.js)
+        if (tugsTheCamera(rule.holdLeft, hunted(env, me))) {
           const faceYaw = Math.atan2(-(reachX - me.x), -(reachZ - me.z));
           me.yaw += turnTo(me.yaw, faceYaw) * (1 - Math.exp(-4.8 * dt));
           const wantPitch = mount === 'ceiling' ? 0.42 : mount === 'floor' ? -0.34 : 0.02;
@@ -299,8 +320,11 @@ export function populateAbsorbed(env, R) {
   if (!world) return [];
   const start = level.start || { x: 0, z: 0 };
 
+  // (never in a room that is somebody's: the mascot's plinth room, the porter's — absorbed/rule.js)
+  const theirs = absorbedKeepOut(level, env.visit);
   const candidates = world.rooms.filter((rt) => (
     rt.def.kind === 'plain'
+    && !theirs.has(rt.id)
     && !rt.def.crawl
     && rt.def.W >= 2.8
     && rt.def.D >= 2.8
@@ -312,6 +336,11 @@ export function populateAbsorbed(env, R) {
     env.absorbed = [];
     return [];
   }
+
+  // What is lying about in this part is already on the floor by now (inventory.js scatters when a part is landed in,
+  // before anybody takes their place): none of them is put where a thing could not be picked up without being held.
+  // (They move for the things, not the things for them: what the seed leaves, and where, is compared on a kept tape.)
+  const things = (env.inventory?.physical?.report?.().items || []).filter((i) => i.active !== false && Number.isFinite(i.wx) && Number.isFinite(i.wz)).map((i) => ({ x: i.wx, z: i.wz }));
 
   const roster = rollAbsorbedRoster(R, targetCount + 3, cast || []);
   const shuffledRooms = R.shuffle(candidates);
@@ -328,6 +357,7 @@ export function populateAbsorbed(env, R) {
       if (!s) continue;
       if (Math.hypot(s.wx - start.x, s.wz - start.z) < 3.4) continue;
       if (placed.some((p) => Math.hypot(s.wx - p.x, s.wz - p.z) < 5.0)) continue;
+      if (!clearOfThings(s.wx, s.wz, things)) continue;
       spot = s;
       break;
     }

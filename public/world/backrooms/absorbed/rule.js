@@ -3,6 +3,8 @@
 // have sunk 2/3 into a Backrooms wall, carpet, or acoustic ceiling tile, with
 // 1.5x elongated droopy arms that snare passers-by without ending the tape.
 
+import { CAST, castFor, homeFor } from '../cast.js';
+
 export const ABSORBED = Object.freeze({
   armScale: 1.5,
   noticeRadius: 2.95,
@@ -21,6 +23,7 @@ export const ABSORBED = Object.freeze({
   hopClearDrop: 0.24,
   ceilingMinH: 2.30,
   ceilingMaxH: 3.45,
+  fireRadius: 2,         // metres: paper burning this near one, and in its sight, keeps its arms down
 });
 
 export const ABSORBED_MOUNTS = Object.freeze(['wall', 'floor', 'ceiling']);
@@ -148,13 +151,21 @@ export function stepAbsorbed(prev, {
   playerDrop = 0,
   struggling = false,
   clearLine = true,
+  fire = false,
 }) {
   const s = { ...prev };
   let startedGrab = false;
   let releasedGrab = false;
   let noticedNow = false;
 
-  if (s.phase === 'cooldown') {
+  if (fire) {
+    // Paper burning beside it (within ABSORBED.fireRadius, in its sight): whoever it has is let go, and the arms stay
+    // down for as long as it burns and a full cooldown after — the cooldown is begun again every moment of the fire.
+    releasedGrab = s.phase === 'grabbing';
+    s.phase = 'cooldown';
+    s.holdLeft = 0;
+    s.cooldownLeft = ABSORBED.cooldownDuration;
+  } else if (s.phase === 'cooldown') {
     s.cooldownLeft = Math.max(0, s.cooldownLeft - dt);
     if (s.cooldownLeft <= 0) {
       s.phase = (clearLine && dist <= ABSORBED.noticeRadius) ? 'reaching' : 'idle';
@@ -211,4 +222,51 @@ export function stepAbsorbed(prev, {
     sinkTo,
     interfere,
   };
+}
+
+/**
+ * Does the hold turn the visitor's head to the one holding them, this moment? Only in its first half second — and
+ * never while something that hunts is within HUNTER_NEAR metres of them with a line of sight between the two
+ * (`hunted`). Watching is what holds the mascot where it is, and looking is what sets the shadow off: nothing of the
+ * building's takes that look out of the visitor's hands. Being slowed and held with one of them close is the cost of
+ * walking into reach; the creak and the arms were the warning.
+ */
+export const HUNTER_NEAR = 6;
+export const TUG_SECONDS = 0.55;
+export function tugsTheCamera(holdLeft, hunted) {
+  return !hunted && holdLeft > ABSORBED.holdDuration - TUG_SECONDS;
+}
+
+/**
+ * The rooms of a part that are somebody else's, where none of the absorbed is put: the room the mascot's plinth is
+ * in, and the home of any of the cast that lives in one room and has been dealt to this part (the night porter's).
+ * @param level  what generate() gave (gen.js)
+ * @param visit  the planned visit (plan.js), or nothing for a floor made by itself
+ * @returns {Set<number>} room ids
+ */
+export function absorbedKeepOut(level, visit) {
+  const out = new Set();
+  if (level.pursuer && Number.isInteger(level.pursuer.room)) out.add(level.pursuer.room);
+  if (visit) for (const k of castFor(visit, level.depth ?? 0)) {
+    const home = homeFor(level, CAST.find((m) => m.id === k.id));
+    if (home !== null) out.add(home);
+  }
+  return out;
+}
+
+/**
+ * For the count kept of a visit (tally.js): is this the moment they have been met? Once a visit, the first time one
+ * of them is reaching (or has hold) while the visitor is looking at it. Getting out of their hands is not counted as
+ * getting away from anything: nothing was at stake, and they would let go again in three seconds.
+ */
+export function meetsAbsorbed(phase, looking, already) {
+  return !already && !!looking && (phase === 'reaching' || phase === 'grabbing');
+}
+
+/** How clear of anything lying about one of them is put, metres: so that nothing is in their hands that somebody might want to pick up. */
+export const THING_GAP = 1.5;
+/** Is a spot clear of everything lying about? (`things`: [{ x, z }] in the world's coordinates.) */
+export function clearOfThings(x, z, things, gap = THING_GAP) {
+  for (const t of things || []) if (Math.hypot(x - t.x, z - t.z) < gap) return false;
+  return true;
 }
