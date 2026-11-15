@@ -81,6 +81,8 @@ const HOME_BOARDS = [
   ['FOR SALE', 'OPEN PLAN', '{PROJECT}'], ['TO LET', 'ENQUIRE WITHIN', 'ASK FOR {AGENT}'], ['SOLD', 'SUBJECT TO', 'CODE REVIEW'],
   ['SHOW HOME', 'PHASE 2 OF', '{PROJECT}'], ['UNDER OFFER', 'VIEWINGS BY', 'CALENDAR INVITE'],
 ];
+const SHOP_ENDS = ['MART', '& SONS', 'DEPOT', 'OUTLET', 'EXPRESS', 'WORLD', 'DIRECT'];
+const SHOP_OFFERS = ['SALE 0% OFF', 'OPEN SOON', 'CLOSING UP', 'BUY 1 GET 1', 'NOW HIRING', 'BACK IN 5'];
 const RECESS_RULES = [['PLAY AREA', 'RECESS IS BLOCKED BY:'], ['PLAY AREA', 'NEXT BREAK AFTER:'], ['WELLBEING ZONE', 'OPENS WHEN THIS IS DONE:']];
 
 export const MORE_DECK = [
@@ -360,6 +362,26 @@ export const MORE_DECK = [
     module: './rooms/the-close.js', stash: (r) => [r.W / 2 - 1.4, r.D / 2 - 1.4, r.W / 2 - 0.7, r.D / 2 - 0.7],
     // names[0] is the visitor's; order[i] is whose name front i has to begin with
     roll: (R, o) => ({ names: [String(o.name || 'you'), ...Array.from({ length: 5 }, (_, i) => (o.agents.length ? o.agents[i % o.agents.length] : 'occupier'))].map((n) => n.toUpperCase()), order: R.shuffle([0, 1, 2, 3, 4, 5]) }) },
+  // A car park of cardboard cars and one car. (Meant to be this floor's own way down: seam.js's to wire.)
+  { id: 'car-park', name: 'The Car Park', landmark: 'the car park with one car in it', w: [16, 19], d: [13, 15], h: [3.3, 4.2],
+    ports: ['left', 'right'], weight: 1.2, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/car-park.js', stash: (r) => [-r.W / 2 + 0.6, -r.D / 2 + 0.6, -r.W / 2 + 1.3, -r.D / 2 + 1.3],
+    roll: (R, o) => ({ real: R.int(0, 99), empty: R.some([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 3), pay: ['PAY HERE', fill(R.pick(['STORY POINTS ONLY', 'NO CHANGE GIVEN OR MADE', 'BILLED TO {PROJECT}', 'ASK {AGENT} FOR A TOKEN']), o, R).toUpperCase()] }) },
+  // A back garden with a tall fence, and the neighbours looking over it.
+  { id: 'back-garden', name: 'The Back Garden', landmark: 'the garden everybody is looking into', w: [11, 13], d: [10, 12], h: [3.3, 4.2],
+    ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/back-garden.js', stash: (r) => [r.W / 2 - 1.2, -r.D / 2 + 0.5, r.W / 2 - 0.55, -r.D / 2 + 1.15],
+    roll: (R) => ({ who: R.shuffle([0, 1, 2, 3, 4, 5, 6, 7]) }) },
+  // Three shops. Inside the middle one, three shops.
+  { id: 'strip-mall', name: 'The Parade', landmark: 'the shops with the shops inside', w: [15, 18], d: [10, 12], h: [3.3, 4.2],
+    ports: ['left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/strip-mall.js', stash: (r) => [-2.6, -r.D / 2 + 1.75, -1.9, -r.D / 2 + 2.6],
+    roll: (R, o) => ({ shops: R.shuffle(SHOP_ENDS.slice()).slice(0, 3).map((end, i) => `${String(o.projects.length ? o.projects[(i + R.int(0, 9)) % o.projects.length] : 'shop').toUpperCase()} ${end}`), offers: R.shuffle(SHOP_OFFERS.slice()).slice(0, 3) }) },
+  // A bus stop, a queue, a timetable. No bus.
+  { id: 'bus-stop', name: 'The Stop', landmark: 'the bus stop with the queue', w: [9, 11], d: [6, 7],
+    ports: ['left', 'right'], weight: 1.3, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/bus-stop.js', stash: (r) => [-r.W / 2 + 0.5, -r.D / 2 + 0.5, -r.W / 2 + 1.15, -r.D / 2 + 1.15],
+    roll: (R, o) => ({ route: 'ROUTE ' + R.pick(HOME_NUMBERS), rows: (o.tasks.length ? R.shuffle(o.tasks.slice()) : ['TODO']).slice(0, 5).map((t) => String(t).toUpperCase().slice(0, 30)), queue: R.int(3, 6), who: R.shuffle([0, 1, 2, 3, 4, 5, 6, 7]) }) },
   // A playground on fake grass. Most of it is going down into the floor, slowly, and has been for some time.
   { id: 'recess', name: 'Recess', landmark: 'the playground that is going under', w: [12, 14], d: [10, 12], h: [3.3, 4.2],
     ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },

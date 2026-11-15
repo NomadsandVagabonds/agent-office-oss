@@ -17,7 +17,8 @@
 //   sheet, beam    a flat piece and a length of timber between any two points
 //   fence, flat    a run of pickets and a braced flat, anywhere, at any angle
 //   daylight(c)    the tubes of a room too big to be lit one lamp to a panel
-import { lin, ticks, WHITE } from './kit.js';
+import { Batch, lin, ticks, WHITE } from './kit.js';
+import { makeCutout } from './cutout.js';
 import { TILE } from './gen.js';
 import { FENCE, FLAT } from './quiet.js';
 
@@ -36,7 +37,7 @@ const CELLS = {
   flamingo: [448, 0, 24, 40], flamingoBack: [472, 0, 24, 40],
   hillA: [0, 40, 96, 36], hillB: [96, 40, 96, 36], hose: [208, 40, 32, 32],
   tree: [0, 96, 64, 112], treeBack: [64, 96, 64, 112], duck: [128, 96, 32, 28], duckBack: [160, 96, 32, 28], bush: [192, 96, 48, 32],
-  corn: [256, 96, 48, 80], mallA: [304, 96, 96, 48], mallB: [400, 96, 96, 48],
+  corn: [256, 96, 48, 80], mallA: [304, 96, 96, 48], mallB: [400, 96, 96, 48], carSide: [304, 148, 108, 44],
 };
 const SW = 512, SH = 256;
 
@@ -127,6 +128,10 @@ const DRAW = {
   hose: (g) => { g.strokeStyle = '#3f8a4a'; g.lineWidth = 2.4; for (const r of [6, 9.5, 13]) { g.beginPath(); g.arc(16, 16, r, 0, 7); g.stroke(); } g.strokeStyle = '#2f6b3a'; g.lineWidth = 1; for (const r of [7, 10.5, 14]) { g.beginPath(); g.arc(16, 16, r, 0.6, 3.4); g.stroke(); } P(g, '#c9a43a', 26, 3, 4, 3); },
   tree: (g, w, h) => tree(g, w, h, false), treeBack: (g, w, h) => tree(g, w, h, true),
   duck: (g, w, h) => duck(g, w, h, false), duckBack: (g, w, h) => duck(g, w, h, true),
+  // a car, from the side, in no colour: whoever cuts one out paints it afterwards
+  carSide: (g, w, h) => { g.fillStyle = '#e9e7e0'; g.beginPath(); g.moveTo(2, 34); g.lineTo(2, 22); g.lineTo(22, 19); g.lineTo(34, 6); g.lineTo(72, 6); g.lineTo(86, 19); g.lineTo(106, 22); g.lineTo(106, 34); g.fill();
+    g.fillStyle = '#39414a'; g.beginPath(); g.moveTo(27, 19); g.lineTo(36, 9); g.lineTo(52, 9); g.lineTo(52, 19); g.fill(); g.beginPath(); g.moveTo(55, 19); g.lineTo(55, 9); g.lineTo(70, 9); g.lineTo(81, 19); g.fill();
+    P(g, '#bdbab0', 2, 26, 104, 2); blob(g, '#1d1d1f', [[24, 35, 9, 9], [84, 35, 9, 9]]); blob(g, '#9a9a96', [[24, 35, 4, 4], [84, 35, 4, 4]]); P(g, '#f3e7a6', 103, 22, 3, 4); },
   corn, mallA: (g, w, h) => mall(g, w, h, 0), mallB: (g, w, h) => mall(g, w, h, 1),
   bush: (g) => { blob(g, '#4f8f45', [[14, 20, 13, 12], [30, 18, 14, 14], [24, 24, 20, 8]]); blob(g, '#6fae58', [[12, 16, 5, 4], [32, 12, 6, 4]]); },
 };
@@ -220,6 +225,36 @@ export function brace(c, x, z, dx, dz, reach = FLAT.brace, up = 1.7) {
   c.shadow(x + dx * reach * 0.6, z + dz * reach * 0.6, 0.3 + Math.abs(dx) * reach * 0.6, 0.3 + Math.abs(dz) * reach * 0.6, 0.35);
 }
 
+/**
+ * A flat that goes over. As flat(), square to the room, with no brace of its own. Stood against from behind, facing it, for the
+ * best part of a second, it falls on its face and stays there: what it was hiding is now a way through. From the front it only
+ * shudders (that is the side its braces hold). The floor's own rule: a prop is whatever falls over when it is leaned on.
+ */
+export function fallingFlat(c, ax, az, bx, bz, front, opt = {}) {
+  const art = setArt(c.kit), len = Math.hypot(bx - ax, bz - az), h = opt.h || FLAT.h, ux = (bx - ax) / len, uz = (bz - az) / len, nx = -uz, nz = ux, o = 0.012;
+  const crop = (uv) => [uv[0], uv[1], uv[2], uv[1] + (uv[3] - uv[1]) * Math.min(1, h / (opt.full || h))], b = new Batch();
+  upright(b, ax + nx * o, az + nz * o, bx + nx * o, bz + nz * o, 0, h, crop(art.uv(front)), opt.alb);
+  upright(b, bx - nx * o, bz - nz * o, ax - nx * o, az - nz * o, 0, h, crop(art.uv(opt.back || 'ply', !!opt.back)));
+  const mx = (ax + bx) / 2, mz = (az + bz) / 2, g = c.dynamic(b, { pivot: [mx + nx * o, 0.02, mz + nz * o], map: art.texture, cutout: true });
+  const col = c.solid(Math.min(ax, bx) - 0.03, Math.min(az, bz) - 0.03, Math.max(ax, bx) + 0.03, Math.max(az, bz) + 0.03, { tall: h > 1.25, keep: true });
+  c.reserve(mx, mz, len / 2 + 0.2);
+  const tip = (a) => { if (Math.abs(ux) > 0.5) g.rotation.x = a * Math.sign(nz); else g.rotation.z = -a * Math.sign(nx); }, say = () => { const w = c.toWorld(mx, mz); c.env.play?.('shuffle', w.x, w.z, 7); };
+  let held = 0, fall = 0, wob = 0;
+  const state = { down: false };
+  c.tick((dt, t, me) => {
+    if (fall >= 1) return;
+    if (fall > 0) { fall = Math.min(1, fall + dt * 2.4); tip((Math.PI / 2) * fall * fall); if (fall >= 1) { state.down = true; say(); } return; }
+    if (wob > 0) { wob -= dt; tip(wob > 0 ? Math.sin(wob * 44) * 0.05 * wob : 0); }
+    if (!me.inside) return;
+    const rx = me.x - mx, rz = me.z - mz, off = rx * nx + rz * nz, toward = (Math.sin(me.yaw) * nx + Math.cos(me.yaw) * nz) * Math.sign(off);
+    held = Math.abs(rx * ux + rz * uz) < len / 2 && Math.abs(off) < 0.55 && toward > 0.6 ? held + dt : 0;
+    if (held < 0.8) return;
+    held = 0;
+    if (off < 0) { fall = 0.001; col.on = false; say(); } else if (wob <= 0) { wob = 0.4; say(); }
+  });
+  return state;
+}
+
 /* ---- a plain room's layout, where it is not wall (quiet.js: `prop` on a pillar) ------------------------------------- */
 
 /** One piece of it. The room's frame; the pillar says where, how high, and which way round. */
@@ -230,8 +265,8 @@ export function standing(c, p) {
   } else if (p.prop === 'flat') {
     // the row stands off the middle of the room, and its back is to the nearer wall (quiet.js `flats`)
     const names = ['streetA', 'streetB', 'streetC'], front = names[(p.art || 0) % 3], o = { h: p.h, full: FLAT.h, keep: true };
-    if (along) { if (p.z < 0) flat(c, x0, p.z, x1, p.z, front, o); else flat(c, x1, p.z, x0, p.z, front, o); }
-    else if (p.x < 0) flat(c, p.x, z1, p.x, z0, front, o); else flat(c, p.x, z0, p.x, z1, front, o);
+    if (along) { if (p.z < 0) fallingFlat(c, x0, p.z, x1, p.z, front, o); else fallingFlat(c, x1, p.z, x0, p.z, front, o); }
+    else if (p.x < 0) fallingFlat(c, p.x, z1, p.x, z0, front, o); else fallingFlat(c, p.x, z0, p.x, z1, front, o);
   } else if (p.prop === 'brace') {
     // (a brace's pillar reaches out from the back of its flat: the end nearer the middle of the room is the flat's)
     if (along) { const s = p.x < 0 ? -1 : 1; brace(c, s < 0 ? x1 : x0, p.z, s, 0, p.w); } else { const s = p.z < 0 ? -1 : 1; brace(c, p.x, s < 0 ? z1 : z0, 0, s, p.d); }
@@ -288,9 +323,77 @@ export function lawn(c, opt = {}) {
       onWall(c, name, side, at, y, { mirror: R.chance(0.5) });
     }
   }
+  if (room.quiet && room.quiet.kind === 'fence' && room.kind === 'plain' && R.chance(opt.neighbour ?? 0.6)) neighbour(c);
   // …and in some lawns that have nothing else, one thing that whoever built this got wrong (WRONG, below)
   const chance = opt.wrong ?? (!room.quiet && !s && room.kind === 'plain' && Math.min(W, D) >= 3.4 ? 0.4 : 0);
   if (chance > 0 && R.chance(chance)) { const name = opt.which || R.pick(Object.keys(WRONG)); if (WRONG[name](c) !== false) c.rt.weird = name; }
+}
+
+/* ---- the neighbour ------------------------------------------------------------------------------------------------ */
+
+export const NEIGHBOUR = Object.freeze({ back: 0.75, unseen: 0.45, glance: 0.6, share: 0.2, sulk: 5 });
+/**
+ * The neighbour's rule, pure. They are always on the other side of the fence from you, level with you, and are never seen
+ * getting there. A fence between you is all it takes. The gate is where there is none: go through it without having
+ * looked at them (`glanced`: seconds since they were last on screen) and they are in the gateway behind you.
+ * → 'stay' | 'across' (go and stand opposite, unseen) | 'gate' (they have you)
+ */
+export function neighbourly(s, crossed, unseenFor, glanced) {
+  if (crossed && glanced > NEIGHBOUR.glance && s.sulk <= 0) return 'gate';
+  return unseenFor >= NEIGHBOUR.unseen && s.sulk <= 0 ? 'across' : 'stay';
+}
+/** A cardboard colleague over the fence of a lawn that has one (quiet.js `fence`). Costs a fifth of the camcorder's charge, never a heart. */
+function neighbour(c) {
+  const runs = c.room.pillars.filter((p) => p.prop === 'fence'), cast = c.env.cast || [];
+  if (runs.length !== 2 || !cast.length) return;
+  const alongX = runs[0].w >= runs[0].d, line = alongX ? runs[0].z : runs[0].x, ends = runs.map((p) => (alongX ? [p.x - p.w / 2, p.x + p.w / 2] : [p.z - p.d / 2, p.z + p.d / 2])).sort((a, b) => a[0] - b[0]);
+  const g0 = ends[0][1], g1 = ends[1][0], lo = ends[0][0] + 0.5, hi = ends[1][1] - 0.5, who = cast[c.R.int(0, cast.length - 1)];
+  const fig = makeCutout(c.kit, 'who:' + who.name, who.look, { creations: c.env.who?.creations, name: who.name });
+  c.add(fig); c.rt.neighbour = fig;
+  const P2 = (u, v) => (alongX ? [u, v] : [v, u]), gate = alongX ? c.solid(g0, line - 0.1, g1, line + 0.1, { on: false }) : c.solid(line - 0.1, g0, line + 0.1, g1, { on: false });
+  const s = { u: (lo + hi) / 2, side: 0, sulk: 0, unseen: 0, glanced: 9, mine: 0, inGate: false };
+  const put = (me) => { const [x, z] = P2(s.u, s.inGate ? line : line + s.side * NEIGHBOUR.back); fig.position.set(x, 0, z); fig.rotation.y = me ? Math.atan2(me.x - x, me.z - z) : 0; fig.userData.light(c.sample(x, 1, z)); return [x, z]; };
+  c.after.push(() => { const d = c.room.doors[0], q = d ? c.doorPoint(d, 0.5) : { x: 0, z: 0 }; s.mine = Math.sign((alongX ? q.z : q.x) - line) || 1; s.side = -s.mine; put({ x: q.x, z: q.z }); });
+  let wait = 0;
+  c.tick((dt, t, me) => {
+    wait += dt; if (wait < 0.15) return;
+    const step = wait; wait = 0;
+    if (!me.inside) return;
+    const [x, z] = P2(s.u, s.inGate ? line : line + s.side * NEIGHBOUR.back), seen = c.seen(x, z, { radius: 0.5 });
+    s.unseen = seen ? 0 : s.unseen + step; s.glanced = seen ? 0 : s.glanced + step; s.sulk = Math.max(0, s.sulk - step);
+    const mu = alongX ? me.x : me.z, mv = (alongX ? me.z : me.x) - line, now = Math.abs(mv) > 0.3 ? Math.sign(mv) : s.mine, crossed = now !== s.mine;
+    s.mine = now;
+    const does = neighbourly(s, crossed && !s.inGate, s.unseen, s.glanced);
+    if (does === 'gate') {
+      s.inGate = true; s.u = (g0 + g1) / 2; s.sulk = NEIGHBOUR.sulk; gate.on = true; put(me);
+      c.env.camera?.drain?.(NEIGHBOUR.share); c.env.interfere?.(1); c.env.hud?.glitch?.(0.6); const w = c.toWorld(...P2(s.u, line)); c.env.play?.('shuffle', w.x, w.z, 8);
+    } else if (does === 'across') {
+      const u = Math.max(lo, Math.min(hi, mu)), want = u > g0 - 0.5 && u < g1 + 0.5 ? (u < (g0 + g1) / 2 ? g0 - 0.5 : g1 + 0.5) : u;
+      if (s.inGate || -now !== s.side || Math.abs(want - s.u) > 0.25) { s.inGate = false; gate.on = false; s.side = -now; s.u = want; put(me); }
+    }
+  });
+}
+
+/* ---- a roller door, for whoever has the thing that opens them ----------------------------------------------------------- */
+
+/**
+ * A garage door on a wall. E at it only rattles it. `c.rt.rollers` lists every one in the room as { x, z, open() } (the room's
+ * frame): what the opener, when there is one, is to call. Behind it: the wall, mostly; or a garage, as a picture of one.
+ */
+export function roller(c, side, at, opt = {}) {
+  const w = 2.4, h = 2.1, p = c.wallAt(side, at, 0.03), U = p.U, a = [p.x - U[0] * w / 2, p.z - U[2] * w / 2], b = [p.x + U[0] * w / 2, p.z + U[2] * w / 2], q = c.wallAt(side, at, 0.012);
+  const tex = c.kit.tex.custom('suburb:roller', 16, 16, (g) => { P(g, '#b9bbb8', 0, 0, 16, 16); for (let y = 0; y < 16; y += 4) { P(g, '#8f918e', 0, y + 3, 16, 1); P(g, '#d2d4d0', 0, y, 16, 1); } });
+  if (opt.garage) sheet(c.flat, [q.x - U[0] * w / 2, 0.11, q.z - U[2] * w / 2], [q.x + U[0] * w / 2, 0.11, q.z + U[2] * w / 2], [q.x + U[0] * w / 2, h, q.z + U[2] * w / 2], [q.x - U[0] * w / 2, h, q.z - U[2] * w / 2], 2, 2, null, [0.03, 0.03, 0.035]);
+  const leaf = new Batch(); upright(leaf, a[0], a[1], b[0], b[1], 0.02, h, (s, t) => [s * 6, t * 5.25]);
+  const door = c.dynamic(leaf, { pivot: [p.x, 0, p.z], map: tex });
+  c.wbox(side, at, w + 0.16, h, h + 0.1, 0, 0.06, WHITEWASH); for (const k of [-1, 1]) c.wbox(side, at + k * (w / 2 + 0.04), 0.08, 0, h, 0, 0.06, WHITEWASH);
+  c.keepWall(side, at - w / 2 - 0.2, at + w / 2 + 0.2);
+  let up = 0, going = false;
+  c.tick((dt) => { if (!going || up >= 1) return; up = Math.min(1, up + dt * 0.7); door.position.y = up * (h - 0.25); door.scale.y = 1 - up * 0.86; });
+  const f = c.wallAt(side, at, 0.6), it = { x: f.x, z: f.z, open() { going = true; const w2 = c.toWorld(f.x, f.z); c.env.play?.('shuffle', w2.x, w2.z, 9); } };
+  (c.rt.rollers ||= []).push(it);
+  c.use({ x: f.x, z: f.z, r: 1.4, label: 'try the door', when: () => !going, use: () => { const w2 = c.toWorld(f.x, f.z); c.env.play?.('shuffle', w2.x, w2.z, 6); door.position.y = 0.03; setTimeout(() => { if (!going) door.position.y = 0; }, 120); } });
+  return it;
 }
 
 /* ---- got wrong: what a lawn has on it when whoever built it had only been told ------------------------------------- */
@@ -301,17 +404,18 @@ function flamingoAt(c, x, z, turn) {
   c.shadow(x, z, 0.3, 0.3, 0.3);
 }
 /** A car, as far down in the lawn as its door handles, its lamps still on. Along x, or along z. */
-export function car(c, x, z, along = true, rgb = [0.6, 0.52, 0.38]) {
-  const B = (u0, y0, v0, u1, y1, v1, col, o) => (along ? c.flat.box(x + u0, y0, z + v0, x + u1, y1, z + v1, col, o) : c.flat.box(x + v0, y0, z + u0, x + v1, y1, z + u1, col, o));
+export function car(c, x, z, along = true, rgb = [0.6, 0.52, 0.38], lift = 0) {
+  const B = (u0, y0, v0, u1, y1, v1, col, o) => (along ? c.flat.box(x + u0, y0 + lift, z + v0, x + u1, y1 + lift, z + v1, col, lift ? {} : o) : c.flat.box(x + v0, y0 + lift, z + u0, x + v1, y1 + lift, z + u1, col, lift ? {} : o));
+  if (lift) for (const u of [-1.5, 1.1]) for (const v of [-0.88, 0.7]) B(u, -lift, v, u + 0.55, 0.12, v + 0.18, [0.05, 0.05, 0.06]);
   B(-2.1, 0, -0.85, 2.1, 0.42, 0.85, rgb, { skip: '-y' }); B(-2.1, 0.16, -0.86, 2.1, 0.3, 0.86, [0.36, 0.22, 0.12]);          // the body, and the strip of wood down its side
   B(-1.25, 0.42, -0.74, 0.75, 0.86, 0.74, [0.07, 0.09, 0.11]); B(-1.3, 0.86, -0.78, 0.8, 0.93, 0.78, rgb);                    // glass all round, a roof
   for (const u of [-1.28, -0.28, 0.72]) for (const v of [-0.76, 0.72]) B(u, 0.42, v, u + 0.07, 0.86, v + 0.04, rgb);
   B(-0.9, 0.93, -0.6, 0.4, 0.97, -0.55, [0.6, 0.6, 0.6]); B(-0.9, 0.93, 0.55, 0.4, 0.97, 0.6, [0.6, 0.6, 0.6]);               // somewhere to put the luggage
   const glow = c.shining('suburb:lamp', c.kit.tex.white(), 1.6, lin('#ffe9a8'));
-  for (const v of [-0.6, 0.6]) { const p = along ? [x + 2.105, z + v] : [x + v, z + 2.105], q = 0.11; if (along) sheet(glow, [p[0], 0.22, p[1] + q], [p[0], 0.22, p[1] - q], [p[0], 0.36, p[1] - q], [p[0], 0.36, p[1] + q]); else sheet(glow, [p[0] - q, 0.22, p[1]], [p[0] + q, 0.22, p[1]], [p[0] + q, 0.36, p[1]], [p[0] - q, 0.36, p[1]]); }
-  c.light(x + (along ? 2.5 : 0), 0.35, z + (along ? 0 : 2.5), '#ffe9a8', 0.5, { k: 1.1, far: 4 });
+  for (const v of [-0.6, 0.6]) { const p = along ? [x + 2.105, z + v] : [x + v, z + 2.105], q = 0.11; const y = 0.22 + lift; if (along) sheet(glow, [p[0], y, p[1] + q], [p[0], y, p[1] - q], [p[0], y + 0.14, p[1] - q], [p[0], y + 0.14, p[1] + q]); else sheet(glow, [p[0] - q, y, p[1]], [p[0] + q, y, p[1]], [p[0] + q, y + 0.14, p[1]], [p[0] - q, y + 0.14, p[1]]); }
+  c.light(x + (along ? 2.5 : 0), 0.35 + lift, z + (along ? 0 : 2.5), '#ffe9a8', 0.5, { k: 1.1, far: 4 });
   if (along) c.solid(x - 2.1, z - 0.85, x + 2.1, z + 0.85); else c.solid(x - 0.85, z - 2.1, x + 0.85, z + 2.1);
-  c.blot(x, z, along ? 5.2 : 2.6, along ? 2.6 : 5.2, { a: 0.45 }); c.reserve(x, z, 2.3);
+  c.blot(x, z, along ? 5.2 : 2.6, along ? 2.6 : 5.2, { a: lift ? 0.3 : 0.45 }); c.reserve(x, z, 2.3);
 }
 export const WRONG = {
   // one sprinkler head (the one thing here that is where it should be)
@@ -347,6 +451,8 @@ export const WRONG = {
     for (let x = -W / 2 + 1.2; x <= W / 2 - 1.2; x += 0.95) for (let z = -D / 2 + 1.2; z <= D / 2 - 1.2; z += 0.95) { if (!c.clear(x, z, 0.3, 1.2)) continue; flamingoAt(c, x, z, Math.atan2(x - p.x, p.z - z)); n++; }
     return n > 3 ? undefined : false;
   },
+  // a garage door, on a wall with no garage behind it (suburb.js roller)
+  garage(c) { const spot = c.wallSpot(3.2, undefined, 0.5, 2.4); if (!spot) return false; roller(c, spot.side, spot.at, { garage: c.R.chance(0.5) }); },
   // a car, most of the way down
   car(c) {
     const { W, D } = c, along = W >= D;
