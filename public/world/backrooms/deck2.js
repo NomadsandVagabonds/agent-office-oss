@@ -449,10 +449,12 @@ export const MORE_DECK = [
       ductTone: R.pick([0, 1]),
     }),
   },
+  // (the owner's: one to be met often. It used to take the blackout bay for granted — `needs: ['beam']` — which had to be dealt to an
+  // earlier part, and so it was in one visit in a hundred; that is gone, and its weight is the most a room may have, three: about half of all visits. A part takes one big room, so the other big ones are a little rarer for it)
   { id: 'last-light', name: 'The Last Light', landmark: 'the long hall losing its lights',
     module: './rooms/last-light.js', resident: 'lamplighter', items: ['torch'], caught: 1, fire: 'ignores',
     w: [6, 7], d: [20, 22], h: [2.8, 3.0], ports: ['back'], big: true,
-    weight: .85, lights: 'normal', needs: ['beam'], themes: { night: 1.5, archive: 1.2 },
+    weight: 3, lights: 'normal', themes: { night: 1.5, archive: 1.2 },
     stash: r => [r.W/2-1.4, -r.D*.17-.65, r.W/2-.5, -r.D*.17+.65],
     roll: R => ({face:R.int(0,7)}) },
   {
