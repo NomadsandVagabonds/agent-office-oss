@@ -62,6 +62,14 @@ export const THEMES = {
     rooms: [0.1, 0.36, 0.6, 0.9], heights: [[2.6, 34], [2.2, 22], [2.9, 16], [3.3, 10], [1.75, 10], [4.4, 6]],
     dressing: ['mailbox', 'mailbox', 'flamingo', 'flamingo', 'hose', 'hose', 'wetsign', 'ladder', 'boxes'],
     hum: 60 },
+
+  // A shopping centre at closing time, as a 1980s office park remembered one and built it out of itself: partition walls for
+  // shopfronts, terrazzo where the carpet tile ran out, half the tubes already off. Mostly passages. Still being built (mall.js)
+  mall: { id: 'mall', own: true, dealt: false, families: { oatmeal: 12 }, patterns: ['mall'], tubes: ['#ffe9c2', '#ffdcae', '#fff0d6'],
+    light: { dead: [0.3, 0.55], flicker: 0.3, modes: [['dim', 5], ['normal', 2], ['one', 1]] },
+    rooms: [0.1, 0.38, 0.62, 0.9], heights: [[2.6, 40], [2.2, 24], [2.9, 16], [3.3, 10], [1.75, 6], [4.4, 4]],
+    dressing: ['plant', 'plant', 'plant', 'wetsign', 'wetsign', 'bin', 'boxes', 'chair', 'clock', 'ladder'],
+    hum: 50 },
 };
 
 export const THEME_IDS = Object.keys(THEMES);
