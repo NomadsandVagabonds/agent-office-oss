@@ -23,12 +23,14 @@
 // loot.js). The one thing it ever tells the office is what you were carrying
 // when you left by the way out.
 import * as THREE from 'three';
-import { resolveLook } from '/core/look.mjs';
+import { resolveLook, sanitizeLookPatch } from '/core/look.mjs';
+import { resolvePerk } from '/core/perks.mjs';
 import { BACKROOMS_DEFAULTS, cleanBackroomsSettings } from '/core/backrooms-settings.mjs';
 import { sketch, toWorld, toLocal, DECK, ARCHETYPES } from './gen.js';
 import { planVisit, floorOf, edition } from './plan.js';
-import { SHOT, cameraFor, slumps } from './lastshot.js';
+import { SHOT, cameraFor, cameraFrom, slumps } from './lastshot.js';
 import { createKit } from './kit.js';
+import { FLASHLIGHT_POSES } from './flashlight.js';
 import { buildWorld, loadCatalogue } from './world.js';
 import { BUILDERS } from './rooms.js';
 import { createPlayer } from './player.js';
@@ -46,12 +48,14 @@ import { leaving } from './leaving.js';
 import { middle, THIN_BEHIND } from './marks.js';
 import { hangBelow, goesDown } from './seam.js';
 import { createInventory } from './inventory.js';
+import { strikeSnip } from './melee.js';
 import { createSurvival } from './survival.js';
 import { batteryEnding, batteryWarning } from './battery-ending.js';
 import { createTally } from './tally.js';
 import { createMenu } from './menu.js';
 import { createFurnitureMotion } from './furniture-motion.js';
 import { createFurnitureGrip } from './furniture-grip.js';
+import { LIGHTING } from './lighting.js';
 
 const FOV = 62;
 const OWN_LAMP = 0.3;                                    // the camcorder's own lamp, beside a torch: how much of one it is
@@ -71,9 +75,11 @@ function gather(office, opt) {
   const tasks = [];
   for (const list of st.tasks?.values?.() || []) for (const t of list || []) if (t && t.title) tasks.push(String(t.title));
   const me = office.walk?.me;
+  const customLook = opt.look ? sanitizeLookPatch(opt.look) : null;
+  const lookPatch = customLook && Object.keys(customLook).length ? customLook : (me?.look || { accessory: 'crown' });
   return {
     name: String(opt.name || me?.name || 'Lead'), projects, agents, tasks,
-    look: resolveLook('lead:' + (me?.id || opt.name || 'lead'), me?.look || { accessory: 'crown' }),
+    look: resolveLook('lead:' + (me?.id || opt.name || 'lead'), lookPatch),
     creations: office.creations || {},
   };
 }
@@ -132,7 +138,9 @@ async function visit(office, opt) {
   const cast = first.cast.map((name) => ({ name, look: byName.get(name) || resolveLook('backrooms:' + name) }));
   const saved = prefs.load();
   let settings = cleanBackroomsSettings({ ...saved, vhs: opt.vhs ?? saved.vhs, mute: opt.mute ?? saved.mute });
-  const camera = new THREE.PerspectiveCamera(FOV, 4 / 3, 0.06, 170);
+  const perk = opt.inventory === false ? resolvePerk('none') : resolvePerk(opt.perk);
+  const fov = perk.fov || FOV;
+  const camera = new THREE.PerspectiveCamera(fov, 4 / 3, 0.06, 170);
   const vhs = createVhs(renderer, camera, { bloom: stage.quality?.fx !== false, level: settings.vhs });
   const sound = createSound(first, settings);
   const hud = createHud(first);
@@ -202,11 +210,12 @@ async function visit(office, opt) {
     }
     inventory.toggleLight(); lightSeen = 0;
   }
+  const clickIt = () => { if (canAct() && !inventory?.isOpen && inventory?.held()?.type === 'scissors') inventory.snip({ quietMiss: true }); };
   const input = createInput({ canvas, stage, hud, sound,
-    owns: target => !!menu?.owns(target) || (!paused && !!inventory?.owns(target)),
+    owns: target => !!menu?.owns(target) || (!paused && !!inventory?.owns(target)) || (opt.debug && !!opt.dev?.owns?.(target)),
     interceptKey: event => paused ? !!menu?.handleKey(event) : !!inventory?.handleKey(event),
     blocked: () => paused || !!inventory?.isOpen,
-    menu: () => setPaused(true), use: useIt, light: thumbLight, click: () => {}, wheel: () => {},
+    menu: () => setPaused(true), use: useIt, light: thumbLight, click: clickIt, wheel: () => {},
     key(k) {
       if (k === 'v') setPicture((vhs.level + 2) % 3);
       else if (k === 'm') changeSetting('mute', !sound.muted);
@@ -218,10 +227,10 @@ async function visit(office, opt) {
   // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.
   if (opt.inventory !== false) {
     survival = createSurvival({ hud, sound, interfere(k) { interference = Math.max(interference, k); } }, {
-      canAct, onEnd: why => finish(why),
+      canAct, onEnd: why => finish(why), perk,
     });
     inventory = createInventory({ hud, sound, health: survival.health, camera: survival.camera }, {
-      canAct, review: !!opt.dev?.supplies,
+      canAct, review: !!opt.dev?.supplies, perk, seed: String(seed),
       onOpen(open) {
         input.clear();
         if (open) cur?.env.grip?.release();
@@ -266,7 +275,7 @@ async function visit(office, opt) {
   }
 
   /* ---- a floor: everything that is built for it and thrown away with it ---------------- */
-  const halfFov = () => Math.atan(Math.tan((FOV * Math.PI) / 360) * camera.aspect);
+  const halfFov = () => Math.atan(Math.tan((fov * Math.PI) / 360) * camera.aspect);
   async function build(level, carry, pace) {
     const kit = createKit();
     const f = { level, kit, world: null, player: null, env: null };
@@ -276,9 +285,11 @@ async function visit(office, opt) {
       prepareFurnitureStudy(level, builders);
     }
     const env = f.env = {
-      level, cast, who, kit, sound, hud, vhs, renderer, builders, catalogue: await loadCatalogue(kit), Avatar, layout,
+      level, cast, who, perk, kit, sound, hud, vhs, renderer, builders, catalogue: await loadCatalogue(kit), Avatar, layout,
       plan: office.net?.state?.world?.plan || {}, visit: plan, carry,
       barricadesEnabled: opt.barricades !== false,
+      lighting: opt.dev?.lighting || false,
+      steadyLighting: () => settings.steadyLighting,
       where: cleanWhere(opt.where),             // a place name the page was told (the site's host says a city): the banner's second line, and nothing else's
       player: null, world: null, pursuer: null,
       hatches: new Map(),                       // room id → { drop() }: where a door in a floor lets you out
@@ -321,6 +332,16 @@ async function visit(office, opt) {
       play(name, x, z, reach) { const at = x === undefined ? {} : env.hear(x, z, reach); if (at.vol === undefined || at.vol > 0.02) sound.play(name, at); },
       /** More static on the tape (0..1), for a moment; things that interfere call this every frame. */
       interfere(k) { interference = Math.max(interference, k); },
+      /** Close-quarters scissor jab against whatever hostile entity or hazard is right in front of the lens. */
+      snip() {
+        const me = f.player?.me;
+        if (!me || !f.world) return { ok: false, reason: 'unavailable' };
+        const targets = [
+          ...(env.pursuer?.snipTargets?.() || []),
+          ...(env.denizens?.snipTargets?.() || []),
+        ];
+        return strikeSnip(me, targets, (ax, az, bx, bz) => f.world.los(ax, az, bx, bz));
+      },
     };
     if (survival) {
       // Two parts can be alive at a seam. Old or prebuilt room callbacks
@@ -330,7 +351,7 @@ async function visit(office, opt) {
       env.health = {
         read: survival.health.read,
         damage: amount => available() ? survival.health.damage(amount) : deniedHealth(),
-        heal: amount => available() ? survival.health.heal(amount) : deniedHealth(),
+        heal: (amount, hOpt) => available() ? survival.health.heal(amount, hOpt) : deniedHealth(),
       };
       env.camera = {
         read: survival.camera.read,
@@ -403,19 +424,23 @@ async function visit(office, opt) {
     tally.at(f.level.depth);                              // how far down somebody has got
     if (!f.world.scene.parent) root.add(f.world.scene);
     f.world.scene.position.set(0, 0, 0); f.world.scene.visible = true;
-    const player = f.player = f.env.player = createPlayer(f.world, camera, from || f.level.start, input.state);
+    const player = f.player = f.env.player = createPlayer(f.world, camera, from || f.level.start, input.state, perk);
     inventory?.attend(f.env);
     const me = player.me;
     me.shake = vhs.level === 2 ? 1 : vhs.level === 1 ? 0.5 : 0.25;
     if (from) { me.pitch = from.pitch; me.drop = Math.max(0.01, from.y - (f.world.floorY(me.x, me.z) + player.EYE)); me.dropV = Math.min(from.dropV, -0.4); }
     else me.drop = 1.3;
-    player.on('step', () => sound.play(f.world.current()?.footstep || 'step'));
+    player.on('step', () => {
+      const vol = me.noise ?? 1;
+      if (vol > 0.02) sound.play(f.world.current()?.footstep || 'step', { vol: Math.min(1.45, vol) });
+    });
     if (f.env.grip) player.on('move', (dx, dz, step) => f.env.grip.step(dx, dz, step));
     for (const fn of f.env.ready || []) fn();
     f.world.enter(f.world.roomAt(me.x, me.z) || f.world.rooms[f.level.start.room]);
     f.env.denizens?.sync();                              // (their picture is ready even while the fall holds their behaviour)
     vhs.setScene(root);
     if (f.level !== first) hud.setStamp(f.level.stamp);
+    sound.setDepth?.(f.level.depth);                          // (further down the music is another piece, and quieter: sound.js)
     sound.setMains(f.level.hum);
   }
   /**
@@ -478,13 +503,20 @@ async function visit(office, opt) {
       world.scene.add(figure.root, lamp);
       shotKept = { figure, lamp };
       // whoever took them says what happens (cast: takes(shot)); nobody else of the cast is run again
-      const taker = env.pursuer?.taker ?? null;
+      const taker = env.pursuer?.taker ?? env.tookBy ?? null;          // (one of the cast, or the room whose resident it was: world.js c.hurt)
       let run = null;
-      try { run = taker?.it?.takes?.({ ...spot, room: rt?.id ?? null, figure: figure.root, seconds: SHOT.seconds }) ?? null; }
+      // (it may also say where to film from — `shot.from = { x, y, z }`, world — for a room the corner is a bad seat in)
+      const told = { ...spot, room: rt?.id ?? null, figure: figure.root, seconds: SHOT.seconds, from: null };
+      try { run = taker?.it?.takes?.(told) ?? null; }
       catch (err) { console.warn(`[backrooms] ${taker?.id} had nothing to show for it`, err); }
+      // …and may say where it is filmed from, if the corner would not show it (films(shot) → { x, y, z, at? }, in the world)
+      let seen = cam;
+      try { seen = cameraFrom(taker?.it?.films?.({ ...spot, room: rt?.id ?? null, seconds: SHOT.seconds }), spot) ?? cam; }
+      catch (err) { console.warn(`[backrooms] ${taker?.id} could not say where to film it from`, err); }
+      seen = cameraFrom(told.from, spot) ?? seen;                // (or said so from inside its takes(): shot.from)
       hud.building?.(`CAM ${String(((rt?.id ?? 0) % 16) + 1).padStart(2, '0')}`);
       sound.play('tick');
-      return { t: 0, at: 0, acc: 0, cam, figure, run: typeof run === 'function' ? run : null, who: taker?.id ?? null };
+      return { t: 0, at: 0, acc: 0, cam: seen, figure, run: typeof run === 'function' ? run : null, who: taker?.id ?? null };
     } catch (err) { console.warn('[backrooms] the building\'s camera would not come on', err); return null; }
   }
   function lastShot(dt) {
@@ -523,6 +555,7 @@ async function visit(office, opt) {
     // the part below: begun once you have found your feet in this one, and only drawn from where it could be seen
     if (state === 'play' && !ahead && since > 4 && goesDown(cur.level.exit.way)) prepare();
     if (ahead?.f) { const at = world.current(); ahead.f.world.scene.visible = !!at && (at.def.toExit ?? 9) <= 1; }
+    if (env.lighting || ahead?.f?.world.hasLighting || above?.f?.world.hasLighting) { ahead?.f?.world.updateLighting(time); above?.f?.world.updateLighting(time); }
     if (env.below) for (const m of env.below) m.visible = !ahead?.f;          // (the stand-in at the bottom of a drop, until the real rooms are there)
     if (landed >= 0) landed += dt;
     purse?.update(dt, time, state === 'play');
@@ -534,15 +567,24 @@ async function visit(office, opt) {
 
     // the camcorder copes with the dark: more gain (and more noise), then its little lamp
     const here = world.current();
-    const lvl = here ? here.level * here.u.dim.value : 0.3;
+    const variedLight = env.lighting || !!here?.lighting;
+    const lvl = variedLight ? world.illuminationAt(me.x, me.z) : here ? here.level * here.u.dim.value : 0.3;
     light += (lvl - light) * (1 - Math.exp(-2.2 * dt));
-    u.uGain.value = clamp(Math.pow(0.3 / Math.max(light, 0.04), 0.55), 0.9, 2.3);
+    u.uGain.value = clamp(Math.pow(0.3 / Math.max(light, 0.04), 0.55), 0.9, variedLight ? LIGHTING.gainMax : 2.3);
     // …which with pockets is a weak one, enough not to walk into the furniture: a torch in the hand is the light, and
     // it works wherever its owner switches it on
     const lamp = light < 0.11 && !here?.noTorch ? 1 : 0;
-    const wantTorch = inventory ? Math.max(inventory.torchPower(), lamp * OWN_LAMP) : Math.max(lamp, env.hand?.hasFlashlight?.() ? 1 : 0);          // (no pockets: a torch in the hand is simply on)
+    const ownLamp = variedLight ? LIGHTING.ownLamp : OWN_LAMP;
+    const wantTorch = inventory ? Math.max(inventory.torchPower(), lamp * ownLamp) : Math.max(lamp * (variedLight ? ownLamp : 1), env.hand?.hasFlashlight?.() ? 1 : 0);          // (no pockets: a torch in the hand is simply on)
     torch += (wantTorch - torch) * (1 - Math.exp(-3 * dt));
-    cur.kit.shared.uTorch.value = torch * 1.5;
+    const torchPose = inventory?.torchPower() > 0
+      ? (inventory.torchMounted() ? FLASHLIGHT_POSES.mounted : FLASHLIGHT_POSES.hand)
+      : FLASHLIGHT_POSES.camera;
+    for (const floor of [cur, ahead?.f, above?.f]) if (floor) {
+      floor.kit.shared.uTorch.value = torch * 1.5;
+      floor.kit.shared.uTorchOrigin.value.fromArray(torchPose.origin);
+      floor.kit.shared.uTorchDirection.value.fromArray(torchPose.direction);
+    }
     hud.flag('LIGHT', torch > 0.5);
     if (hud.thumbs && (lightSeen -= dt) <= 0) { lightSeen = 0.2; hud.thumbs.set({ light: lightNow() }); }
     sound.setHum(light / 0.3);
@@ -676,7 +718,8 @@ async function visit(office, opt) {
 
   // a way for the dev page (and the curious) to poke at it: always the floor you are on
   const handle = {
-    vhs, hud, plan: () => plan, deck: DECK.map((a) => a.id),
+    settings: () => settings, setSetting: changeSetting,
+    vhs, hud, perk, plan: () => plan, deck: DECK.map((a) => a.id),
     get level() { return cur?.level; }, get world() { return cur?.world; }, get player() { return cur?.player; }, get env() { return cur?.env; },
     get state() { return state; }, get paused() { return paused; }, menu, loot: purse, inventory, health: survival?.health, camera: survival?.camera, survival,
     sketch: () => (cur ? sketch(cur.level) : ''),

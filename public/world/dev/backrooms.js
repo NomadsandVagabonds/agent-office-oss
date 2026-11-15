@@ -9,6 +9,9 @@
 //                      way onto a kind that is still being built (`dealt: false`), which is in nobody's visit
 //   &vhs=0|1|2         clean · steady · full camcorder           &mute=1
 //   &barricades=0      without furniture that can be dragged (it is on unless turned off); &study=1 puts a review set by the landing (seed=7)
+//   &lighting=1        fluorescent-bank prototype (off by default); &lighting=dim|failing|travel|emergency|islands forces that treatment in eligible plain rooms
+//   &hallstudy=1       rehearsal controls for the last-light room (use &only=last-light)
+//   &lightstudy=1      comparison controls and a flashlight for reviewing the prototype
 //   &pursuer=1|0       force the thing that follows you in or out; &wake=1 has it already awake, in the room with you
 //   &name=Robin        who you are                               &live=1     borrow names from the running office (GET only)
 //   &where=Portland    the place on the banner near the landing (banner.js); without it, what such banners say
@@ -28,6 +31,9 @@
 // Nothing on screen says how to play, on purpose: WASD/arrows, mouse, Shift (hurry), Space (hop), C (crouch, held), E, V (picture), M (sound), Esc.
 import { createStage } from '../engine/stage.js';
 import { enterBackrooms } from '../backrooms/index.js';
+import { LIGHTING_MODES } from '../backrooms/lighting.js';
+import { lightingStudy } from './lighting-study.js';
+import { lastLightStudy } from './last-light-study.js';
 
 // &check=1: listen from the start, so that nothing said while the floor was being built is missed
 const said = [];
@@ -104,6 +110,7 @@ const only = (q.get('only') || '').split(',').filter(Boolean);
 if (room && DECK.some((a) => a.id === room) && !only.includes(room)) only.unshift(room);
 
 async function go() {
+  let closeStudy;
   delete window.__backroomsResult;
   over.style.display = 'none';
   const result = await enterBackrooms(office, {
@@ -113,7 +120,9 @@ async function go() {
     pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined, vhs: q.has('vhs') ? num('vhs', 2) : undefined, mute: q.has('mute') ? q.get('mute') !== '0' : undefined,
     debug: true, scorecard: q.get('card') !== '0', home: { label: 'Return to homepage' }, where: q.get('where') || undefined,
     inventory: q.get('inventory') !== '0', barricades: q.get('barricades') !== '0',
-    dev: { supplies: q.get('supplies') === '1', barricadeStudy: q.get('barricades') === '1' && q.get('study') === '1' },
+    dev: { supplies: q.get('supplies') === '1', barricadeStudy: q.get('barricades') === '1' && q.get('study') === '1',
+      lighting: ['1', ...LIGHTING_MODES].includes(q.get('lighting')) ? q.get('lighting') : false,
+      owns: target => !!target?.closest?.('[data-lighting-study]') },
     onReady(handle) {
       if (room) handle.goto(/^\d+$/.test(room) ? Number(room) : room, q.has('x') ? num('x', 0) : undefined, q.has('z') ? num('z', 0) : undefined, num('yaw', 0), num('pitch', 0));
       else if (q.has('yaw')) { handle.player.me.yaw = num('yaw', 0); handle.player.me.pitch = num('pitch', 0); }
@@ -121,10 +130,13 @@ async function go() {
       if (q.get('map')) dev.textContent = handle.sketch();
       console.log(handle.sketch());
       if (q.get('check')) console.log('[check] ' + JSON.stringify(check(handle)));
+      if (q.get('hallstudy') === '1') closeStudy = lastLightStudy(handle);
+      else if (q.get('lightstudy') === '1' && handle.world.hasLighting) closeStudy = lightingStudy(handle);
       document.title = 'ready';
     },
   });
   window.__backroomsResult = result;
+  closeStudy?.();
   stage.setView(null);
   document.title = `over: ${result.reason}`;
   if (result.card) { location.assign('/'); return; }

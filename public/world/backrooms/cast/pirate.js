@@ -466,7 +466,12 @@ export function create(c) {
   function think(p, dt, los, d) {
     const w = W(), me = env.player.me, k0 = p.know, got = p.got || {};
     const choosing = k0.mode === 'wander' && (k0.room === null || got.cannot);
-    const k = p.know = knows(k0, dt, { los, d, me: { x: me.x, z: me.z, room: w.roomAt(me.x, me.z)?.id ?? null }, room: w.roomAt(p.x, p.z)?.id ?? null,
+    const perk = env.perk, crouched = !!me.crouching;
+    const far = HUNT.far * (crouched ? (perk?.crouchSightScale ?? 1) : 1);
+    const noticeScale = crouched ? (perk?.crouchNoticeScale ?? 1) : 1;
+    const alertFar = perk?.sprintAlertFar ?? 0;
+    const heard = alertFar > 0 && !!me.sprinting && !crouched && d <= alertFar && walk.steps(p, me) <= 2;
+    const k = p.know = knows(k0, dt, { los, d, far, noticeScale, heard, me: { x: me.x, z: me.z, room: w.roomAt(me.x, me.z)?.id ?? null }, room: w.roomAt(p.x, p.z)?.id ?? null,
       at: !!got.there, cannot: !!got.cannot, exits: choosing ? walk.exits(p) : null });
     if (k.mode !== k0.mode || k.room !== k0.room) { p.got = null; p.handle = null; p.shove = null; }
     if (k.mode === 'chase') p.hunted = true;
@@ -502,7 +507,8 @@ export function create(c) {
     if (tooNear(p, c.fire(p.x, p.z))) { p.x = bx; p.z = bz; p.got = { went: 0, there: false, cannot: true, door: null }; p.handle = null; p.shove = null; return 0; }
     if (got.door) {
       // a shut door: it works the handle, and you can hear it — unless you are watching the door (cast/hunt.js)
-      const h = p.handle = handle(p.handle || atHandle(), step, env.doors.watched(got.door));
+      const holdTime = HUNT.door * (got.door.by === 'you' ? (env.perk?.doorHoldScale ?? 1) : 1);
+      const h = p.handle = handle(p.handle || atHandle(), step, env.doors.watched(got.door), holdTime);
       if (h.rattle) env.play('rattle', got.door.x, got.door.z, 9);
       if (h.open) { env.doors.open(got.door, 'it'); p.handle = null; }
     } else p.handle = null;
@@ -734,6 +740,26 @@ export function create(c) {
         fig.rotation.y = Math.atan2(dx, dz);                // facing it
         fig.rotation.x = -1.45 * e;
       };
+    },
+    snipTargets() {
+      if (!pirate || pirate.state === 'caught' || pirate.know?.spent > 0) return [];
+      const ex = pirate.down ? pirate.down.head.x : pirate.x, ez = pirate.down ? pirate.down.head.z : pirate.z;
+      const floorY = W()?.floorY(ex, ez) ?? 0;
+      return [{
+        id: 'pirate',
+        x: ex,
+        z: ez,
+        y: floorY + (pirate.down ? 0.32 : 1.0),
+        r: 0.32,
+        priority: 2,
+        snip: () => {
+          if (!pirate || pirate.state === 'caught' || pirate.know?.spent > 0) return false;
+          if (!pirate.known) { pirate.known = true; c.met(); }
+          if (pirate.state !== 'awake') awaken(pirate, false);
+          breakOff(pirate);
+          return { ok: true, target: 'pirate' };
+        },
+      }];
     },
     /** Where it is and what it is doing (for the dev page). */
     at() { return pirate ? { x: pirate.x, z: pirate.z, state: pirate.state, know: pirate.know.mode, making: pirate.know.room, down: !!pirate.down, handle: pirate.handle ? pirate.handle.t : null, barricade: pirate.shove ? { id: pirate.shove.id, time: pirate.shove.t } : null, room: W()?.roomAt(pirate.x, pirate.z)?.id ?? null, face: pirate.face, pose: pirate.pose, card: pirate.card ? pirate.card.held : null } : null; },

@@ -90,6 +90,8 @@ const FAMILIES = [
   { id: 'records', weight: 0, wall: [70, 0.10, 0.74], carpet: [150, 0.10, 0.36], trim: [150, 0.14, 0.22], floor: 'lino' },
   { id: 'board', weight: 0, wall: [32, 0.10, 0.78], carpet: [40, 0.05, 0.46], trim: [30, 0.06, 0.52], floor: 'screed' },
   { id: 'panel', weight: 0, wall: [26, 0.44, 0.33], carpet: [152, 0.34, 0.20], trim: [24, 0.46, 0.17], floor: 'plush' },
+  // …and one for the neighbourhood (themes.js `suburb`): sky-blue emulsion, and fake grass off a roll where the carpet should be
+  { id: 'sky', weight: 0, wall: [203, 0.46, 0.72], carpet: [106, 0.34, 0.37], trim: [44, 0.12, 0.88], floor: 'turf' },
 ];
 const PATTERNS = ['dots', 'dots', 'dots', 'diamonds', 'stripes', 'trellis', 'sprigs', 'chevrons'];
 const TUBES = ['#fff6dc', '#fff6dc', '#fffbe9', '#f3ffe6', '#ffeec4', '#eef6ff'];
@@ -720,7 +722,8 @@ function build(R, o, opt) {
 
 const DRESSING = ['boxes', 'boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'highdoor', 'highdoor'];
 // what the plain-room builder (rooms.js) knows how to put down, of everything a theme may ask for; and how many plain rooms have anything
-const KNOWN_THINGS = new Set(['boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'cabinet', 'shelving', 'armchair', 'globe']);
+const KNOWN_THINGS = new Set(['boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'cabinet', 'shelving', 'armchair', 'globe',
+  'mailbox', 'flamingo', 'hose']);                                        // (the neighbourhood's: suburb.js builds them)
 export const THING_CHANCE = 0.06;
 /** What an earlier visitor may have left in a plain room (traces.js builds them): a floor has two or three, each a different one. */
 export const TRACES = Object.freeze(['camp', 'arrows', 'note', 'measure', 'map', 'queue', 'drawing']);
@@ -957,7 +960,9 @@ function dress(R, level, o, opt, keeper = false) {
       if (room.kind === 'plain' && rr.chance(0.16)) {                // …the wrong place for a pillar
         const dr = rr.pick(room.doors), deep = dr.side === 'front' || dr.side === 'back' ? room.D : room.W, span = wallLength(room, dr.side);
         const pw = Math.min(dr.w + 0.3, span - 1.9);
-        if (!(dr.sill > 0.01) && deep >= 3.2 && pw >= 0.6 && dr.kind !== 'crawl') {
+        // (…and not at all in a room that has steps in it: a pier before one doorway and another doorway's steps beside it
+        // left the far half of a room, and once the wall that gives, with no way to it. `fits` below did not see it.)
+        if (!room.doors.some((d2) => d2.sill > 0.01) && deep >= 3.2 && pw >= 0.6 && dr.kind !== 'crawl') {
           const p = wallPoint(room, dr.side, dr.c, 1.35), along = dr.side === 'front' || dr.side === 'back';
           // (in the way, but never in the way of everything: a pier that would wall a doorway off — it can, with another
           // doorway's steps beside it — is not built. Found on one seed in sixty once the deck had grown.)

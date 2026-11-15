@@ -4,8 +4,18 @@
 import { createHealth } from './health-state.js';
 import { createCameraBattery } from './camera-state.js';
 
-export function createSurvival(env, { canAct, onEnd }) {
-  const healthState = createHealth(), cameraState = createCameraBattery();
+export function createSurvival(env, { canAct, onEnd, perk }) {
+  const healthState = createHealth({
+    max: perk?.maxHealth,
+    regenSeconds: perk?.regenSeconds,
+    maxSnackHealth: perk?.maxSnackHealth,
+  });
+  const cameraState = createCameraBattery({
+    capacity: perk?.cameraCapacity,
+    start: perk?.cameraStart,
+    batterySeconds: perk?.batterySeconds,
+    drainRate: perk?.cameraDrainRate,
+  });
   let disposed = false, ended = false;
   const unavailable = () => disposed || ended || !canAct();
   const finish = reason => {
@@ -25,9 +35,9 @@ export function createSurvival(env, { canAct, onEnd }) {
       }
       return result;
     },
-    heal(amount = 1) {
+    heal(amount = 1, opt) {
       if (unavailable()) return healthFailure('unavailable');
-      return healthState.heal(amount);
+      return healthState.heal(amount, opt);
     },
   };
   const camera = {

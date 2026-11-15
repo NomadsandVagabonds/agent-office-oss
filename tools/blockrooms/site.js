@@ -19,6 +19,8 @@
 // somebody gets out, and has not unticked the box on the front page — what
 // the visit came to, under the made-up name they were given there.
 import { cleanMessage, cleanName, rollName } from './core/book.mjs';
+import { resolveLook, sanitizeLookPatch } from './core/look.mjs';
+import { cleanPerk } from './core/perks.mjs';
 
 const fault = document.getElementById('fault');
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -85,15 +87,25 @@ function address(seed) {
 const HOME = './';
 const ME = 'blockrooms:me';
 /**
- * Who this visitor signed in as (or, if they did not, a made-up name), their message, and whether they sign the book: all
- * set on the front page. It is who they are in the building too (the card, and the rooms that know a visitor's name):
- * a building is the same whoever walks it, so a tape handed on is still the same tape.
+ * Who this visitor signed in as (or, if they did not, a made-up name), their message, look, perk, and whether they sign
+ * the book: all set on the front page. It is who they are in the building too (the card, and the rooms that know a
+ * visitor's name): a building is the same whoever walks it, so a tape handed on is still the same tape.
  */
 function me() {
   let was = {};
   try { was = JSON.parse(localStorage.getItem(ME) || '{}') || {}; } catch { /* nobody yet */ }
   const spare = cleanName(was.spare) || rollName();
-  const now = { name: cleanName(was.name) || spare, spare, message: cleanMessage(was.message) || '', sign: was.sign !== false };
+  const patch = sanitizeLookPatch(was.look).look;
+  const customLook = !!was.customLook && Object.keys(patch).length > 0;
+  const now = {
+    name: cleanName(was.name) || spare,
+    spare,
+    message: cleanMessage(was.message) || '',
+    sign: was.sign !== false,
+    customLook,
+    look: customLook ? patch : {},
+    perk: cleanPerk(was.perk),
+  };
   try { localStorage.setItem(ME, JSON.stringify(now)); } catch { /* until the page closes, then */ }
   return now;
 }
@@ -134,7 +146,9 @@ async function run() {
     const dev = q.has('debug') ? { debug: true, depths: whole('depths'), depth: whole('depth'), mute: q.has('mute') ? true : undefined, pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined,
       themes: q.get('themes') ? q.get('themes').split(',').filter(Boolean) : undefined,
       // (Codex's furniture that can be dragged, and put in a creature's way, is on for everybody; whoever is checking can have a building without it)
-      barricades: q.get('barricades') === '0' ? false : undefined } : {};
+      barricades: q.get('barricades') === '0' ? false : undefined,
+      // (Codex's fluorescent banks that fail, and rooms with a dark side: a prototype, off for everybody, on for whoever asks here)
+      dev: ['1', 'dim', 'failing', 'travel', 'emergency', 'islands'].includes(q.get('lighting')) ? { lighting: q.get('lighting') } : undefined } : {};
     // ?room=<a room of the deck> is a building with that room where you land (for looking at one room; nothing on
     // the front page leads here. A room nobody has built yet is no room, and the door is an ordinary door)
     let room = !next && q.get('room') && Object.hasOwn(ARCHETYPES, q.get('room')) ? q.get('room') : null;
@@ -150,9 +164,12 @@ async function run() {
       if (!mine) tell({ do: 'in' });                      // (he keeps count of who goes in. A tape played back is nobody going anywhere)
       // a building that was asked to be other than its seed has it (?debug, ?room=) is for looking at, and getting out of
       // one is not a score: the book is not signed for it (it was, by anybody checking the site who walked out)
+      const who = me();
+      const playerLook = who.customLook ? resolveLook(`visitor:${seed}`, who.look) : resolveLook(`visitor:${seed}`);
       const doctored = !!dev.debug || !!room;
       const result = await enterBackrooms(office, {
-        name: me().name, seed, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: doctored ? undefined : sign,
+        name: who.name || 'Employee', seed, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: doctored ? undefined : sign,
+        look: playerLook, perk: who.perk,
         home: { label: 'Return to homepage' }, anew: { label: 'Go back in' }, where, ...dev,
         ...(room ? { only: [room] } : {}),
         ...(mine ? { replay: true, pursuer: typeof mine.mascot === 'boolean' ? mine.mascot : undefined } : {}),

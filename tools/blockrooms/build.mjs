@@ -82,8 +82,18 @@ export function build(out, opt = {}) {
   const copy = (name) => { if (!fs.existsSync(path.join(HERE, name))) return false; fs.copyFileSync(path.join(HERE, name), path.join(out, name)); extra.push(name); return true; };
 
   for (const name of ['site.js', 'home.js', 'home.css', 'art.js']) if (!copy(name)) throw new Error(`tools/blockrooms/${name} is not there`);
-  // (the rules of the book: both pages read them, and the level does not, so nothing has staged them)
-  if (!files.includes('core/book.mjs')) { fs.copyFileSync(path.join(HERE, '..', '..', 'core', 'book.mjs'), path.join(out, 'core', 'book.mjs')); extra.push('core/book.mjs'); }
+  // (the rules of the book, looks and perks: shared by both pages)
+  for (const coreName of ['core/book.mjs', 'core/look.mjs', 'core/perks.mjs']) {
+    if (!files.includes(coreName)) {
+      fs.mkdirSync(path.join(out, 'core'), { recursive: true });
+      fs.copyFileSync(path.join(HERE, '..', '..', coreName), path.join(out, coreName));
+      extra.push(coreName);
+    }
+  }
+  const stagedItems = path.join(out, 'world', 'art', 'items.js');
+  if (fs.existsSync(stagedItems)) {
+    fs.writeFileSync(stagedItems, fs.readFileSync(stagedItems, 'utf8').replaceAll("'/core/look.mjs'", "'../../core/look.mjs'"));
+  }
   // pictures from inside, for the front page (taken through the level's own camcorder: tools/blockrooms/shots/)
   const shots = path.join(HERE, 'shots');
   if (fs.existsSync(shots)) {

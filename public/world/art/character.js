@@ -30,9 +30,22 @@ function eyes(g, skS, open) {
   }
 }
 
+function paintHoops(g, color = '#e2989e', glint = '#f6d58e') {
+  g.z(-0.8, 1.4);
+  g.fill(color);
+  // Left open hoop ring beside cheek
+  g.rect(-7, -21, 1, 3); g.rect(-5, -21, 1, 3);
+  g.rect(-6, -22, 1, 1); g.rect(-6, -18, 1, 1);
+  // Right open hoop ring beside cheek
+  g.rect(4, -21, 1, 3); g.rect(6, -21, 1, 3);
+  g.rect(5, -22, 1, 1); g.rect(5, -18, 1, 1);
+  g.fill(glint);
+  g.rect(-7, -21, 1, 1); g.rect(6, -21, 1, 1);
+}
+
 function paintHeadFront(g, L, o) {
   const sk = L.skin, skS = shade(sk, -26), skH = shade(sk, 18);
-  const hc = L.hairColor, hcH = shade(hc, 30);
+  const hc = L.hairColor, hcH = shade(hc, 30), hcS = shade(hc, -28);
   const oc = L.outfitColor;
   const open = !o.blink;
   if (L.species === 'robot') {
@@ -47,6 +60,49 @@ function paintHeadFront(g, L, o) {
     g.fill(PAL.steelS); g.rect(-1, -30, 2, 3);
     g.fill(PAL.warn); g.rect(-1, -31, 2, 2);
     g.fill('#fff'); g.rect(-1, -31, 1, 1);
+  } else if (L.species === 'alien') {
+    // Dark corded neck + bulbous furrowed cranium tapering to chiseled jaw
+    g.z(-2.2, 2.2);
+    g.fill('#22242a'); g.rect(-2, -19, 4, 3);
+    g.fill(shade(sk, -42)); g.rect(-1, -19, 1, 3); g.rect(1, -19, 1, 2);
+    g.z(-HD, HD);
+    // Sleek tapered cranium + narrow chiseled lower jaw (no protruding ear flaps)
+    g.fill(skS); g.rect(-5, -29, 10, 5); g.rect(-4, -31, 8, 2); g.rect(-4, -24, 8, 4); g.rect(-3, -20, 6, 2);
+    g.fill(sk); g.rect(-5, -29, 8, 5); g.rect(-4, -31, 6, 2); g.rect(-4, -24, 7, 4); g.rect(-3, -20, 5, 2);
+    g.fill(skH); g.rect(-4, -31, 5, 1); g.rect(-5, -29, 3, 1); g.rect(-2, -20, 3, 1);
+    // Organic V-furrows on brow
+    g.fill(skS);
+    g.rect(-4, -30, 2, 1); g.rect(2, -30, 2, 1);
+    g.rect(-2, -28, 4, 1);
+    // Slit nostrils & stoic mouth crease
+    g.z(HD, HD + 0.6);
+    g.fill('#2b1c0a'); g.rect(-1, -22, 1, 2); g.rect(1, -22, 1, 2);
+    g.fill('#3b270d'); g.rect(-2, -20, 4, 1);
+    // Glossy obsidian alien eyes (shown whenever not covered by goggles)
+    g.z(-HD, HD);
+    if (open) {
+      g.fill('#111318'); g.rect(-4, -25, 3, 3); g.rect(1, -25, 3, 3);
+      g.fill('#dfe8f4'); g.rect(-4, -25, 1, 1); g.rect(1, -25, 1, 1);
+    } else {
+      g.fill(skS); g.rect(-4, -24, 3, 1); g.rect(1, -24, 3, 1);
+    }
+    // Optional wigs/hats if chosen over alien cranium
+    if (L.hair && L.hair !== 'bald') {
+      g.z(-HD - 0.6, HD + 0.6); g.fill(hc);
+      if (L.hair === 'cap') {
+        g.fill(oc); g.rect(-6, -32, 12, 4);
+        g.z(HD + 0.6, HD + 4.4); g.fill(shade(oc, -14)); g.rect(-5, -29, 10, 1);
+      } else if (L.hair === 'beanie') {
+        g.fill(oc); g.rect(-6, -34, 12, 6);
+        g.fill(shade(oc, -26)); g.rect(-6, -29, 12, 2);
+      } else if (L.hair === 'mohawk') {
+        g.rect(-1, -35, 3, 6);
+      } else if (L.hair === 'bun') {
+        g.zAuto(7); g.ellipse(0, -34, 7, 7);
+      } else {
+        g.rect(-6, -32, 12, 3);
+      }
+    }
   } else {
     g.z(-HD, HD);
     g.fill(skS); g.rect(-4, -27, 8, 9);
@@ -88,6 +144,17 @@ function paintHeadFront(g, L, o) {
     else if (L.hair === 'long') {
       g.rect(-6, -30, 12, 4); g.rect(-7, -29, 3, 14); g.rect(4, -29, 3, 14);
       g.fill(hcH); g.rect(-6, -29, 1, 12);
+    } else if (L.hair === 'braids') {
+      // parted crown + flowing right wave + banded left side-tail & square gold clip
+      g.rect(-6, -30, 12, 3);
+      g.rect(-8, -28, 4, 4); g.rect(4, -28, 4, 4);
+      g.rect(4, -25, 4, 6); g.rect(5, -20, 3, 6);
+      g.rect(-9, -25, 4, 8);
+      g.fill(hcH); g.rect(-8, -26, 1, 6); g.rect(5, -26, 1, 7);
+      g.fill('#e2bd5a'); g.rect(-9, -23, 2, 2);
+      g.fill(hcS); g.rect(-9, -17, 4, 2);
+      g.fill(hc); g.rect(-10, -15, 4, 4); g.rect(-11, -13, 3, 2);
+      g.fill(hcH); g.rect(-9, -15, 1, 3);
     } else if (L.hair === 'bun') {
       g.rect(-5, -29, 10, 3);
       g.zAuto(7); g.ellipse(0, -32, 7, 7); g.fill(hcH); g.ellipse(-1, -33, 3, 3);
@@ -107,6 +174,17 @@ function paintHeadFront(g, L, o) {
       g.fill(hc); g.rect(-4, -22, 8, 5);
       g.fill(hcH); g.rect(-4, -22, 8, 1);
       g.fill(sk); g.rect(-2, -22, 4, 2);
+    } else if (L.facial === 'lashes') {
+      paintHoops(g, '#e58ea6', '#ffdbe6');
+      g.z(HD, HD + 0.7);
+      if (open && L.species !== 'dog' && L.species !== 'cat') {
+        g.fill('#221816'); g.rect(-4, -23, 1, 1); g.rect(4, -23, 1, 1);
+        g.fill('#5a3836'); g.rect(-3, -25, 2, 1); g.rect(2, -25, 2, 1);
+      }
+      if (L.species !== 'dog' && L.species !== 'cat') {
+        g.fill('#c95266'); g.rect(-1, -19, 3, 1);
+        g.fill('#e88396'); g.rect(0, -19, 1, 1);
+      }
     }
   }
   paintAccessory(g, L, o);
@@ -172,6 +250,40 @@ function paintAccessory(g, L, o) {
     if (!o.noBlades) {
       g.z(-1, 1); g.fill('#e8c45a'); g.rect(-6, -36, 5, 2); g.rect(1, -36, 5, 2);
     }
+  } else if (acc === 'cowboy') {
+    // Tapered cattleman crown with center pinch + crimson ribbon band + wide curved brim
+    g.zAuto(10);
+    g.fill('#bfa77a'); g.rect(-6, -36, 12, 6);
+    g.rect(-5, -38, 4, 2); g.rect(1, -38, 4, 2);
+    g.fill('#9e865c'); g.rect(-1, -37, 2, 2);
+    g.fill('#d4be92'); g.rect(-5, -38, 3, 1); g.rect(1, -38, 2, 1); g.rect(-6, -36, 2, 4);
+    g.fill('#b53f38'); g.rect(-6, -32, 12, 2);
+    g.fill('#ddb65c'); g.rect(4, -32, 2, 2);
+    g.zAuto(14);
+    g.fill('#bfa77a'); g.rect(-10, -30, 20, 2);
+    g.rect(-11, -31, 3, 2); g.rect(8, -31, 3, 2);
+    g.fill('#d4be92'); g.rect(-12, -32, 2, 2); g.rect(10, -32, 2, 2); g.rect(-9, -30, 18, 1);
+    g.fill('#9a8258'); g.rect(-9, -28, 18, 1);
+  } else if (acc === 'hoops') {
+    paintHoops(g, '#e8c45a', '#fff3c0');
+  } else if (acc === 'goggles') {
+    const gy = L.species === 'alien' ? -27 : -25;
+    g.z(HD, HD + 1.4);
+    // Side silver straps + bridge
+    g.fill('#69717e'); g.rect(-7, gy + 2, 14, 2);
+    // Circular brushed-silver rims
+    g.fill('#949ca9');
+    g.rect(-6, gy + 1, 5, 4); g.rect(-5, gy, 3, 6);
+    g.rect(1, gy + 1, 5, 4); g.rect(2, gy, 3, 6);
+    g.fill('#cbd2de');
+    g.rect(-5, gy, 3, 1); g.rect(2, gy, 3, 1); g.rect(-1, gy + 2, 2, 1);
+    // Deep glossy black convex lenses + sky glint
+    g.fill('#111318');
+    g.rect(-5, gy + 1, 3, 4); g.rect(2, gy + 1, 3, 4);
+    g.fill('#dfe8f4');
+    g.rect(-5, gy + 1, 1, 1); g.rect(2, gy + 1, 1, 1);
+    g.fill('#5d6f86');
+    g.rect(-4, gy + 1, 1, 1); g.rect(3, gy + 1, 1, 1);
   } else if (o.creations && o.creations[acc] && o.creations[acc].kind === 'hat') {
     g.zAuto(8);
     drawCustom(g, o.creations[acc], 0, -30, 0);
@@ -187,6 +299,26 @@ function paintHeadBack(g, L) {
   if (L.species === 'robot') {
     g.fill(PAL.steel); g.rect(-4, -27, 7, 9);
     g.fill(PAL.steelS); g.rect(-2, -25, 4, 5);
+    g.z(-1, 1);
+    g.fill(PAL.steelS); g.rect(-1, -30, 2, 3);
+    g.fill(PAL.warn); g.rect(-1, -31, 2, 2);
+    g.back(false);
+    return;
+  }
+  if (L.species === 'alien') {
+    g.fill('#22242a'); g.rect(-2, -19, 4, 3);
+    g.fill(skS); g.rect(-5, -29, 10, 6); g.rect(-4, -31, 8, 2); g.rect(-4, -23, 8, 4);
+    g.fill(sk); g.rect(-5, -29, 8, 6); g.rect(-4, -31, 6, 2); g.rect(-4, -23, 7, 4);
+    g.fill(shade(sk, 16)); g.rect(-4, -31, 5, 1);
+    g.fill(skS); g.rect(-4, -28, 8, 1); g.rect(-4, -25, 8, 1);
+    if (L.accessory === 'goggles') {
+      g.fill('#69717e'); g.rect(-5, -25, 10, 1);
+    }
+    if (L.accessory === 'cowboy') {
+      g.z(-7, -3);
+      g.fill('#b53f38'); g.rect(-6, -32, 12, 2);
+      g.fill('#bfa77a'); g.rect(-10, -30, 20, 2);
+    }
     g.back(false);
     return;
   }
@@ -201,12 +333,24 @@ function paintHeadBack(g, L) {
   } else if (L.hair === 'beanie') {
     g.fill(oc); g.rect(-5, -32, 10, 9);
     g.fill(shade(oc, -26)); g.rect(-5, -24, 10, 2);
+  } else if (L.hair === 'braids') {
+    g.fill(hc); g.rect(-7, -29, 14, 12);
+    g.rect(-10, -19, 4, 6); g.rect(4, -19, 4, 4);
+    g.fill(hcH); g.rect(-5, -28, 9, 2);
+    g.fill(hcS); g.rect(-9, -17, 4, 2); g.rect(-6, -18, 12, 1);
+    g.fill(hc); g.rect(-11, -15, 4, 4);
   } else {
     g.fill(hc); g.rect(-5, -29, 10, 9);
     if (L.hair === 'long') g.rect(-6, -29, 12, 13);
     if (L.hair === 'mohawk') { g.fill(skS); g.rect(-5, -27, 10, 7); g.fill(hc); g.rect(-1, -32, 3, 9); }
     g.fill(hcH); g.rect(-4, -28, 7, 2);
     g.fill(hcS); g.rect(-4, -20, 8, 1);
+  }
+  if (L.accessory === 'cowboy') {
+    g.z(-7, -3);
+    g.fill('#b53f38'); g.rect(-6, -32, 12, 2);
+    g.fill('#bfa77a'); g.rect(-10, -30, 20, 2);
+    g.fill('#9a8258'); g.rect(-9, -28, 18, 1);
   }
   g.back(false);
 }
@@ -232,14 +376,45 @@ function paintTorso(g, L) {
   } else if (L.outfit === 'cardigan') {
     g.fill(ocS); g.rect(-5, -18, 2, 12); g.rect(3, -18, 2, 12);
     g.fill(ocH); g.rect(-1, -17, 2, 11);
+  } else if (L.outfit === 'tunic') {
+    // Wholesome tailored halter-neck bodice + collarbone straps + glossy choker
+    g.fill(sk); g.rect(-5, -18, 10, 2);
+    g.fill(oc); g.rect(-4, -18, 2, 3); g.rect(2, -18, 2, 3);
+    g.fill(ocH); g.rect(-4, -16, 8, 1);
+    g.fill(ocS); g.rect(-3, -15, 1, 7); g.rect(2, -15, 1, 7);
+    g.fill(shade(oc, -18)); g.rect(-3, -18, 6, 1);
+    g.fill('#fcebf2'); g.rect(-2, -18, 2, 1);
+  } else if (L.outfit === 'consul') {
+    // Striped slate-blue shirt V + patterned gold/slate silk tie + notched lapels + circular chest vent
+    g.fill('#688198'); g.rect(-2, -18, 4, 9);
+    g.fill('#9cb3c7'); g.rect(-3, -18, 2, 2); g.rect(1, -18, 2, 2); g.rect(-2, -15, 4, 1); g.rect(-2, -13, 4, 1);
+    if (L.species === 'alien') { g.fill('#22242a'); g.rect(-1, -18, 2, 1); }
+    g.fill(ocH); g.rect(-4, -18, 1, 7); g.rect(3, -18, 1, 7);
+    g.fill(ocS); g.rect(-3, -16, 1, 6); g.rect(2, -16, 1, 6);
+    g.fill('#d4a138'); g.rect(-1, -17, 2, 7);
+    g.fill('#3c4654'); g.rect(-1, -15, 2, 1); g.rect(0, -13, 1, 2);
+    // Welt pocket & circular silver-rimmed dark vent badge on lower-left chest
+    g.fill(ocS); g.rect(2, -13, 3, 1);
+    g.fill('#9aa2b0'); g.rect(2, -10, 3, 3);
+    g.fill('#1b1e24'); g.rect(3, -9, 1, 1);
   }
   g.fill(ocS); g.rect(-5, -8, 10, 2);
+  if (L.outfit === 'tunic') { g.fill(ocH); g.rect(-1, -8, 2, 1); }
   // the back: plain cloth, a seam down the spine, a collar
   g.back(true);
   g.fill(oc); g.rect(-5, -18, 8, 12);
   g.fill(ocH); g.rect(-5, -18, 8, 2);
   g.fill(ocS); g.rect(-1, -18, 1, 12);
   g.fill(shade(oc, -12)); g.rect(-5, -17, 10, 1);
+  if (L.outfit === 'tunic') {
+    g.fill(ocS); g.rect(-5, -18, 10, 12);
+    g.fill(oc); g.rect(-5, -18, 8, 12);
+    g.fill(sk); g.rect(-5, -18, 10, 2);
+    g.fill(oc); g.rect(-4, -18, 2, 2); g.rect(2, -18, 2, 2);
+    g.fill(ocH); g.rect(-4, -16, 8, 1);
+    g.fill(ocS); g.rect(-1, -15, 1, 7);
+    g.fill(shade(oc, -18)); g.rect(-3, -18, 6, 1);
+  }
   g.fill(ocS); g.rect(-5, -8, 10, 2);
   g.back(false);
 }
@@ -254,23 +429,36 @@ export function paintCharacter(look, opt = {}) {
   const L = look;
   const robot = L.species === 'robot';
   const sk = robot ? PAL.steel : L.skin;
-  const ocS = shade(L.outfitColor, -30);
+  const oc = L.outfitColor;
+  const ocS = shade(oc, -30), ocH = shade(oc, 24);
+  const tunic = L.outfit === 'tunic';
+  const consul = L.outfit === 'consul';
+  const sleeveC = tunic ? shade(sk, -10) : consul ? shade(oc, -14) : ocS;
+  const pantC = tunic ? '#37334a' : consul ? '#272b34' : '#2c251c';
+  const pantHi = tunic ? '#494462' : consul ? '#363c48' : '#3a3128';
   const mk = (b) => { const g = new Pix(b); g.voxel = !!opt.voxel; g.noStroke(); return g; };
 
   const legL = mk({ x0: -5, y0: -8, x1: 0, y1: 1 });
-  legL.z(-2, 2); legL.fill('#2c251c'); legL.rect(-4, -7, 3, 7); legL.fill('#3a3128'); legL.rect(-4, -7, 1, 7);
+  legL.z(-2, 2); legL.fill(pantC); legL.rect(-4, -7, 3, 7); legL.fill(pantHi); legL.rect(-4, -7, 1, 7);
+  if (tunic) { legL.fill('#a8895e'); legL.rect(-4, -2, 3, 2); }
   const legR = mk({ x0: 0, y0: -8, x1: 5, y1: 1 });
-  legR.z(-2, 2); legR.fill('#2c251c'); legR.rect(1, -7, 3, 7);
+  legR.z(-2, 2); legR.fill(pantC); legR.rect(1, -7, 3, 7);
+  if (tunic) { legR.fill('#a8895e'); legR.rect(1, -2, 3, 2); }
 
   const torso = mk({ x0: -6, y0: -19, x1: 6, y1: -5 });
   paintTorso(torso, L);
 
   const armL = mk({ x0: -8, y0: -17, x1: -3, y1: -3 });
-  armL.z(-1.6, 1.6); armL.fill(ocS); armL.rect(-7, -16, 3, 10); armL.fill(sk); armL.rect(-7, -7, 3, 3);
-  const armR = mk({ x0: 3, y0: -17, x1: 8, y1: -3 });
-  armR.z(-1.6, 1.6); armR.fill(ocS); armR.rect(4, -16, 3, 10); armR.fill(sk); armR.rect(4, -7, 3, 3);
+  armL.z(-1.6, 1.6); armL.fill(sleeveC); armL.rect(-7, -16, 3, 10);
+  if (tunic) { armL.fill(oc); armL.rect(-7, -10, 3, 3); armL.fill(ocH); armL.rect(-7, -10, 3, 1); }
+  armL.fill(sk); armL.rect(-7, -7, 3, 3);
 
-  const head = mk({ x0: -14, y0: -62, x1: 14, y1: -16 });
+  const armR = mk({ x0: 3, y0: -17, x1: 8, y1: -3 });
+  armR.z(-1.6, 1.6); armR.fill(sleeveC); armR.rect(4, -16, 3, 10);
+  if (tunic) { armR.fill(oc); armR.rect(4, -10, 3, 3); armR.fill(ocH); armR.rect(4, -10, 3, 1); }
+  armR.fill(sk); armR.rect(4, -7, 3, 3);
+
+  const head = mk({ x0: -14, y0: -62, x1: 14, y1: -9 });
   paintHeadFront(head, L, opt);
   paintHeadBack(head, L);
 
@@ -292,28 +480,44 @@ export function paintMug() {
 function paintArmsFlat(g, L, pose, t = 0) {
   const robot = L.species === 'robot';
   const sk = robot ? PAL.steel : L.skin;
-  const ocS = shade(L.outfitColor, -30);
+  const oc = L.outfitColor;
+  const ocS = shade(oc, -30), ocH = shade(oc, 24);
+  const tunic = L.outfit === 'tunic';
+  const sleeveC = tunic ? shade(sk, -10) : L.outfit === 'consul' ? shade(oc, -14) : ocS;
   g.noStroke();
   if (pose === 'typing') {
     const ty = Math.sin(t * 16) * 1.6;
-    g.fill(ocS); g.rect(-7, -23, 3, 10); g.rect(4, -23, 3, 10);
+    g.fill(sleeveC); g.rect(-7, -23, 3, 10); g.rect(4, -23, 3, 10);
+    if (tunic) { g.fill(oc); g.rect(-7, -21, 3, 3); g.rect(4, -21, 3, 3); }
     g.fill(sk); g.rect(-7, -24 + ty, 3, 3); g.rect(4, -24 - ty, 3, 3);
   } else if (pose === 'blocked') {
     const wave = Math.sin(t * 12) * 0.9;
     g.push(); g.translate(5, -16); g.rotate(-1.1 + wave);
-    g.fill(ocS); g.rect(0, 0, 3, 10); g.fill(sk); g.rect(0, 9, 3, 4); g.pop();
-    g.fill(ocS); g.rect(-7, -16, 3, 10); g.fill(sk); g.rect(-7, -8, 3, 4);
+    g.fill(sleeveC); g.rect(0, 0, 3, 10);
+    if (tunic) { g.fill(oc); g.rect(0, 6, 3, 3); }
+    g.fill(sk); g.rect(0, 9, 3, 4); g.pop();
+    g.fill(sleeveC); g.rect(-7, -16, 3, 10);
+    if (tunic) { g.fill(oc); g.rect(-7, -10, 3, 3); }
+    g.fill(sk); g.rect(-7, -8, 3, 4);
   } else if (pose === 'sip') {
     const sp = Math.sin(t * 1.3) * 1.4;
-    g.fill(ocS); g.rect(-7, -16, 3, 10); g.fill(sk); g.rect(-7, -7, 3, 3);
-    g.fill(ocS); g.rect(4, -17, 3, 6);
+    g.fill(sleeveC); g.rect(-7, -16, 3, 10);
+    if (tunic) { g.fill(oc); g.rect(-7, -10, 3, 3); g.fill(ocH); g.rect(-7, -10, 3, 1); }
+    g.fill(sk); g.rect(-7, -7, 3, 3);
+    g.fill(sleeveC); g.rect(4, -17, 3, 6);
     g.push(); g.translate(5, -16); g.rotate(-1.05);
-    g.fill(ocS); g.rect(0, 0, 3, 7); g.fill(sk); g.rect(0, 6, 3, 3); g.pop();
+    g.fill(sleeveC); g.rect(0, 0, 3, 7);
+    if (tunic) { g.fill(oc); g.rect(0, 4, 3, 2); }
+    g.fill(sk); g.rect(0, 6, 3, 3); g.pop();
     g.fill('#cf6b4b'); g.rect(1, -25 + sp, 5, 4);
     g.fill('#e88a6a'); g.rect(1, -25 + sp, 5, 1);
     g.fill('#cf6b4b'); g.rect(5, -24 + sp, 2, 2);
   } else {
-    g.fill(ocS); g.rect(-7, -16, 3, 10); g.rect(4, -16, 3, 10);
+    g.fill(sleeveC); g.rect(-7, -16, 3, 10); g.rect(4, -16, 3, 10);
+    if (tunic) {
+      g.fill(oc); g.rect(-7, -10, 3, 3); g.rect(4, -10, 3, 3);
+      g.fill(ocH); g.rect(-7, -10, 3, 1); g.rect(4, -10, 3, 1);
+    }
     g.fill(sk); g.rect(-7, -7, 3, 3); g.rect(4, -7, 3, 3);
   }
 }

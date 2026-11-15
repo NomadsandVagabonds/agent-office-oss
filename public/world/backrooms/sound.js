@@ -17,11 +17,20 @@ export const MUSIC_GAIN = 0.4;
 export const MASCOT_GAIN = 0.45;
 const MUSIC = new URL('./music/room4.mp3', import.meta.url);
 const MASCOT = new URL('./music/mascot.mp3', import.meta.url);
+/**
+ * Further down, the music is another piece of the owner's (music/deep.mp3: five minutes of glitches, "to change the
+ * pace"), from the third part of a visit on, and quieter than the usual one: the owner, "it is so random that it may
+ * get annoying so better at a lower volume than our main track".
+ */
+export const DEEP_FROM = 2, DEEP_GAIN = 0.22;
+const DEEP = new URL('./music/deep.mp3', import.meta.url);
 const volume = (value, fallback = 1) => Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback;
 export function createSound(level, opt = {}) {
   let ctx = null, master = null, effects = null, musicBus = null, humGain = null, draught = null, noiseBuf = null, muted = !!opt.mute, paused = false, humTarget = 1, hum = level.hum || 50;
   let musicVolume = volume(opt.musicVolume), sfxVolume = volume(opt.sfxVolume);
   let music = null, musicGain = null;        // the <audio> the music comes out of, once there is one, and its own level
+  let deep = (level?.depth ?? 0) >= DEEP_FROM, swap = null;      // which piece is the place's own just now · a change of piece on its way
+  const ambient = () => (deep ? DEEP_GAIN : MUSIC_GAIN), piece = () => (deep ? DEEP : MUSIC).href;
   let theme = null, themeGain = null, themeOn = false;      // the mascot's music, once it has been asked for · is it what is playing?
   const running = [], mains = [];            // things to stop at the end · the hum's oscillators, to retune
   const loops = new Map();                   // name → { gain, stop }
@@ -72,11 +81,11 @@ export function createSound(level, opt = {}) {
   function startMusic() {
     if (music || opt.music === false || typeof Audio === 'undefined') return;
     try {
-      const el = new Audio(MUSIC.href);
+      const el = new Audio(piece());
       el.loop = true; el.preload = 'auto';
       const g = ctx.createGain(); g.gain.value = 0;
       ctx.createMediaElementSource(el).connect(g); g.connect(musicBus);
-      g.gain.linearRampToValueAtTime(MUSIC_GAIN, now() + 6);                      // it comes up slowly, after the hum
+      g.gain.linearRampToValueAtTime(ambient(), now() + 6);                       // it comes up slowly, after the hum
       music = el; musicGain = g;
       el.play().catch(() => { /* no music, then: the place has its own noises */ });
     } catch { music = null; musicGain = null; }
@@ -111,7 +120,7 @@ export function createSound(level, opt = {}) {
     themeOn = false;
     if (!ctx || !musicGain) return;
     const t = now();
-    musicGain.gain.cancelScheduledValues(t); musicGain.gain.setValueAtTime(0, t); musicGain.gain.linearRampToValueAtTime(MUSIC_GAIN, t + rise);
+    musicGain.gain.cancelScheduledValues(t); musicGain.gain.setValueAtTime(0, t); musicGain.gain.linearRampToValueAtTime(ambient(), t + rise);
   }
   /** Stop the mascot's music before it has run out (there is no mascot any more): it fades, and the usual music comes back. */
   function stopMascot() {
@@ -255,6 +264,26 @@ export function createSound(level, opt = {}) {
     get paused() { return paused; },
     get musicVolume() { return musicVolume; },
     get sfxVolume() { return sfxVolume; },
+    /**
+     * Which part of the visit this is (0 is where you land): from DEEP_FROM on, the place's music is the other piece,
+     * quieter. The one fades out, the other comes up; the mascot's music, if it is playing, is left to finish.
+     */
+    setDepth(n) {
+      const want = (n | 0) >= DEEP_FROM;
+      if (want === deep) return;
+      deep = want;
+      if (!music || !musicGain || !ctx) return;                 // (not begun yet: it begins with the right piece)
+      const t = now(), el = music, g = musicGain;
+      g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(0, t, 0.4);
+      clearTimeout(swap);
+      swap = setTimeout(() => {
+        if (music !== el) return;
+        try { el.src = piece(); el.load(); el.play().catch(() => {}); } catch { /* the old piece goes on, silent */ }
+        if (!themeOn) { const u = now(); g.gain.cancelScheduledValues(u); g.gain.setValueAtTime(0, u); g.gain.linearRampToValueAtTime(ambient(), u + 5); }
+      }, 1600);
+    },
+    /** Which piece is the place's own just now (for the dev page and the tests). */
+    get piece() { return deep ? 'deep' : 'room4'; },
     /** Is the music going? (for the dev page and the tests) */
     get music() { return music ? { playing: !music.paused, at: music.currentTime } : null; },
     /** The mascot's music: null until it has been asked for; then whether it is what is playing, and how far in. */
@@ -274,6 +303,23 @@ export function createSound(level, opt = {}) {
     },
     /** Play one of the small sounds by name. */
     play(name, o) { if (ctx && !muted && !paused && voice[name]) { try { voice[name](o); } catch { /* a sound is never worth an error */ } } },
+    /**
+     * A recording of a room's own, played once through the effects (so the effects slider, M and the menu reach it):
+     * `href` as the room has it from a new URL of the file beside it against import.meta.url, which is also how the site's build finds the
+     * file. o: { vol: 0…1, pan: -1…1 } as for play(). Recordings are the owner's to ask for; voices are the rule.
+     */
+    file(href, o = {}) {
+      if (!ctx || muted || paused || typeof Audio === 'undefined') return false;
+      try {
+        const el = new Audio(href), g = ctx.createGain(); g.gain.value = Math.max(0, Math.min(1, o.vol ?? 1));
+        const src = ctx.createMediaElementSource(el);
+        if (Number.isFinite(o.pan) && ctx.createStereoPanner) { const pn = ctx.createStereoPanner(); pn.pan.value = Math.max(-1, Math.min(1, o.pan)); src.connect(pn); pn.connect(g); } else src.connect(g);
+        g.connect(effects || master);
+        el.addEventListener?.('ended', () => { try { g.disconnect(); } catch { /* gone */ } });
+        el.play().catch(() => {});
+        return true;
+      } catch { return false; }
+    },
     /** The hum follows the light: louder under a full ceiling, nearly gone in the dark. */
     setHum(k) { humTarget = k; if (humGain) humGain.gain.setTargetAtTime(0.012 + 0.05 * Math.max(0, Math.min(1.4, k)), now(), 0.6); },
     /** Air coming through somewhere it should not (0…1): a thin whistle, nearer the louder. */
@@ -283,6 +329,7 @@ export function createSound(level, opt = {}) {
     /** The lights stutter: so does the hum. */
     dip(k) { if (humGain && !muted && !paused) { humGain.gain.cancelScheduledValues(now()); humGain.gain.setTargetAtTime((0.012 + 0.05 * humTarget) * k, now(), 0.02); } },
     stop() {
+      clearTimeout(swap);
       for (const n of running) { try { n.stop(); } catch { /* already stopped */ } }
       running.length = 0; loops.clear();
       if (music) { try { music.pause(); music.removeAttribute('src'); music.load(); } catch { /* gone anyway */ } music = null; }

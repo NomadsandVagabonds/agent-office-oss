@@ -85,7 +85,7 @@ export function blocked(name, words = []) {
  * most anybody could carry out · hearts: what a visitor has · survivedPerPart: how often anybody is got and gets away
  * in one part · met: how many kinds of thing there are to meet.
  */
-export const LIMITS = Object.freeze({ parts: [3, 5], roomsPerPart: [2, 28], kindsPerPart: 8, secondsPerPart: 12, seconds: 3600, batteries: 30, hearts: 4, survivedPerPart: 4, met: 16 });
+export const LIMITS = Object.freeze({ parts: [3, 5], roomsPerPart: [2, 28], kindsPerPart: 8, secondsPerPart: 12, seconds: 3600, batteries: 30, hearts: [2, 4], survivedPerPart: 4, met: 16 });
 
 const SEED = /^[A-Za-z0-9_-]{4,40}$/;
 
@@ -104,7 +104,7 @@ export function checkRun(report) {
   if (run.rooms.kinds.length > L.kindsPerPart * of) return { ok: false, why: 'room kinds out of range' };
   if (run.seconds < L.secondsPerPart * of || run.seconds > L.seconds) return { ok: false, why: 'time out of range' };
   if (run.batteries > L.batteries) return { ok: false, why: 'batteries out of range' };
-  if (!run.hearts || run.hearts.of !== L.hearts || run.hearts.left < 1) return { ok: false, why: 'hearts out of range' };
+  if (!run.hearts || run.hearts.of < L.hearts[0] || run.hearts.of > L.hearts[1] || run.hearts.left < 1 || run.hearts.left > run.hearts.of) return { ok: false, why: 'hearts out of range' };
   if (run.cast.survived > L.survivedPerPart * of || run.cast.met.length > L.met) return { ok: false, why: 'encounters out of range' };
   return { ok: true, run, score: scoreRun(run).total };
 }

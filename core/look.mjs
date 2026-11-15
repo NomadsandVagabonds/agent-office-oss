@@ -3,16 +3,16 @@
 // option lists and the hash are the same ones the 2D pixel office has always
 // used, so an agent keeps its face when it steps into three dimensions.
 
-export const SPECIES = Object.freeze(['human', 'robot', 'goblin', 'dog', 'cat']);
+export const SPECIES = Object.freeze(['human', 'robot', 'goblin', 'dog', 'cat', 'alien']);
 export const SKIN = Object.freeze(['#f3cda8', '#e6b184', '#cd8d5e', '#9c6442', '#dcab8b']);
 export const HAIR_COLORS = Object.freeze(['#241608', '#4a2f1a', '#15151c', '#7d5836', '#caa05a', '#9aa0ac']);
 export const OUTFIT_COLORS = Object.freeze(['#b5483f', '#3f8a72', '#5a6fa8', '#8a5a8f', '#6f8a4a', '#c9893f',
   '#3f7f9a', '#5a5a66']);
-export const HAIR = Object.freeze(['short', 'side', 'long', 'bun', 'mohawk', 'bald', 'cap', 'beanie']);
-export const OUTFIT = Object.freeze(['tee', 'hoodie', 'suit', 'vest', 'cardigan']);
+export const HAIR = Object.freeze(['short', 'side', 'long', 'bun', 'mohawk', 'bald', 'cap', 'beanie', 'braids']);
+export const OUTFIT = Object.freeze(['tee', 'hoodie', 'suit', 'vest', 'cardigan', 'tunic', 'consul']);
 export const ACCESSORY = Object.freeze(['none', 'glasses', 'headphones', 'monocle', 'halo', 'partyhat',
-  'crown', 'tophat', 'flower', 'eyepatch', 'shades', 'propeller']);
-export const FACIAL = Object.freeze(['none', 'mustache', 'beard']);
+  'crown', 'tophat', 'flower', 'eyepatch', 'shades', 'propeller', 'cowboy', 'hoops', 'goggles']);
+export const FACIAL = Object.freeze(['none', 'mustache', 'beard', 'lashes']);
 export const PLANTS = Object.freeze(['monstera', 'succulent', 'cactus', 'bonsai', 'terrarium']);
 export const DESK_ITEMS = Object.freeze(['mug', 'figdragon', 'figrobot', 'duck', 'books', 'globe', 'stickies',
   'trophy', 'lavalamp', 'rubiks', 'gameboy', 'd20', 'fishbowl', 'newton', 'hourglass',
@@ -21,6 +21,8 @@ export const DESK_ITEMS = Object.freeze(['mug', 'figdragon', 'figrobot', 'duck',
   'zen', 'toycar', 'discoball', 'pizza', 'banana', 'medal']);
 
 // Weighted pools used only for the *default* roll (the classic 2D weights).
+const HAIR_POOL = ['short', 'side', 'long', 'bun', 'mohawk', 'bald', 'cap', 'beanie'];
+const OUTFIT_POOL = ['tee', 'hoodie', 'suit', 'vest', 'cardigan'];
 const ACC_POOL = ['none', 'none', 'glasses', 'headphones', 'monocle', 'halo', 'partyhat',
   'crown', 'tophat', 'flower', 'eyepatch', 'shades', 'propeller'];
 const FACE_POOL = ['none', 'none', 'none', 'mustache', 'beard'];
@@ -33,6 +35,7 @@ const SPECIES_SKIN = {
   goblin: ['#7fa35a', '#6b9460', '#8fae5e', '#5f8a6a'],
   dog: ['#c99a62', '#a8794a', '#e3c79a', '#8a6a4a', '#d9d2c4'],
   cat: ['#e0a060', '#9a9aa6', '#f1e6d2', '#3a3a44', '#d98a4a'],
+  alien: ['#e0a638', '#79c28a', '#7aa9d6', '#b68ad9'],
 };
 
 /** FNV-1a, 32-bit — identical to the 2D client's hashId(). */
@@ -58,9 +61,9 @@ export function resolveLook(seed, character) {
   return {
     species,
     skin: isHexColor(c.skin) ? c.skin : pick(skinPool, h),
-    hair: HAIR.includes(c.hair) ? c.hair : pick(HAIR, h >>> 3),
+    hair: HAIR.includes(c.hair) ? c.hair : pick(HAIR_POOL, h >>> 3),
     hairColor: isHexColor(c.hairColor) ? c.hairColor : pick(HAIR_COLORS, h >>> 6),
-    outfit: OUTFIT.includes(c.outfit) ? c.outfit : pick(OUTFIT, h >>> 9),
+    outfit: OUTFIT.includes(c.outfit) ? c.outfit : pick(OUTFIT_POOL, h >>> 9),
     outfitColor: isHexColor(c.outfitColor) ? c.outfitColor : pick(OUTFIT_COLORS, h >>> 12),
     accessory: (ACCESSORY.includes(c.accessory) || isCreationId(c.accessory))
       ? c.accessory : pick(ACC_POOL, h >>> 15),

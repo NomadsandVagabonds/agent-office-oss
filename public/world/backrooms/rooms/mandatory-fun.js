@@ -5,7 +5,9 @@
 // and honk party horns for you; step past the foyer tape empty-handed and all
 // six break ranks to swarm.
 import { Vox, M } from '../../vox/vox.js';
+import * as THREE from 'three';
 import { lin } from '../kit.js';
+import { toLocal } from '../gen.js';
 import { clamp, turnTo, card, framed } from '../bits.js';
 import { placePickup } from '../hand.js';
 import { PARTY, createPartyState, stepParty, releaseParty } from './mandatory-fun/rule.js';
@@ -123,7 +125,41 @@ export function build(c) {
 
   let rule = createPartyState(), known = false;
 
+  // The building's camera, if they take the last of somebody (docs/BACKROOMS.md, "The last three seconds"): the six of
+  // them close into a ring round the visitor's character, hand in hand, and it is given a hat. It does not fall down. It
+  // starts, a little late, to bob with the rest of them.
+  let over = false;
+  c.rt.takes = (shot) => {
+    over = true;
+    const fig = shot.figure, at = toLocal(c.room, shot.x, shot.z), from = members.map((m) => ({ x: m.x, z: m.z }));
+    let hat = null, clock = 0;
+    if (fig) {
+      const top = new THREE.Box3().setFromObject(fig).max.y - fig.position.y;
+      hat = new THREE.Mesh(c.kit.own(new THREE.ConeGeometry(0.11, 0.3, 4)), c.kit.own(new THREE.MeshBasicMaterial({ color: 0xc8322a })));
+      hat.position.y = top + 0.13; hat.visible = false; fig.add(hat);
+    }
+    c.env.play('partyhorn', shot.x, shot.z, 14);
+    return (t, dt) => {
+      clock += dt;
+      const k = Math.min(1, t / 1.3), e = k * k * (3 - 2 * k), turn = clock * 0.9 * e;
+      members.forEach((m, i) => {
+        const a = (i / members.length) * Math.PI * 2 + turn, tx = at.x + Math.sin(a) * 0.95, tz = at.z + Math.cos(a) * 0.95;
+        m.x = from[i].x + (tx - from[i].x) * e; m.z = from[i].z + (tz - from[i].z) * e;
+        m.group.position.set(m.x, Math.abs(Math.sin(clock * 5 + i)) * 0.09, m.z);
+        m.group.rotation.y = Math.atan2(at.x - m.x, at.z - m.z); m.group.rotation.z = Math.sin(clock * 4 + i * 1.2) * 0.12;
+        try { m.aimHead(0, 0, 'party'); } catch { /* as it was */ }
+      });
+      if (!fig) return;
+      if (t > 1.3 && hat && !hat.visible) { hat.visible = true; c.env.play('partyhorn', shot.x, shot.z, 14); }
+      const joins = Math.max(0, Math.min(1, (t - 1.6) / 0.8));
+      fig.position.y = shot.y + Math.abs(Math.sin(clock * 5)) * 0.08 * joins;
+      fig.rotation.z = Math.sin(clock * 4) * 0.12 * joins;
+      fig.rotation.y += dt * 0.9 * joins;
+    };
+  };
+
   c.tick((dt, time, me) => {
+    if (over) return;
     const holdingBalloon = !!c.env.hand?.hasBalloon();
     const pastThreshold = me.inside && me.z < thresholdZ;
     let minDist = Infinity, contactDist = Infinity;
@@ -196,6 +232,7 @@ export function build(c) {
         // made to join in: a heart where there are hearts — and if that was not the last, they form up again and leave you be a while
         if (!known) { known = true; c.met('fun-committee'); }
         const hit = c.hurt(PARTY.hurts);
+        if (hit.ended) { over = true; return; }
         if (!hit.ended) { rule = releaseParty(rule); if (hit.landed) { c.env.hud.glitch(0.5); c.survived('fun-committee'); } }
       }
     } else {

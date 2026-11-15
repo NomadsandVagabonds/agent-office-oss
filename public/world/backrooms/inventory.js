@@ -5,25 +5,30 @@
 import { createInventory as createModel, makeItem, ITEM_DEFS } from './inventory-state.js';
 import { createInventoryHud } from './inventory-hud.js';
 import { createInventoryWorld } from './inventory-world.js';
+import { SNIP_TUNING } from './melee.js';
 import { toLocal, makeRng, ARCHETYPES, STASH } from './gen.js';
 import { planSupplies, wantedByRooms } from './supplies.js';
 import { CAST, castFor } from './cast.js';
+import { starterLoadout } from '/core/perks.mjs';
 
 const MESSAGES = {
   empty: 'Empty slot', full: 'All six slots are full', duplicate: 'Already carrying that',
   'empty-charge': 'The flashlight needs batteries', 'empty-chalk': 'No chalk left',
+  'no-snip-target': 'Nothing within reach', 'broken-scissors': 'The scissors have snapped',
   incompatible: 'Those items do not fit together', 'full-charge': 'Already fully charged',
   'no-mark-space': 'No dry, clear floor here', 'no-drop-space': 'No clear place to set this down',
   'no-mark': 'No dry, clear floor here', 'no-space': 'No clear place to set this down',
   'no-use': 'Nothing to use this on here', 'health-unavailable': 'Keep this for when you need it',
-  'full-health': 'Health is full', dead: 'Too late', depleted: 'The camera has stopped',
+  'full-health': 'Health is full', 'snack-cap': 'Snacks cannot restore past half health',
+  dead: 'Too late', depleted: 'The camera has stopped',
   unavailable: 'Cannot do that right now',
   'missing-input': 'Choose two ingredients', 'stale-input': 'That item is no longer in the pocket',
   'duplicate-input': 'Choose two different ingredients', 'invalid-amount': 'Choose how many sheets to burn',
   insufficient: 'Not enough paper', 'no-fire-space': 'No clear, dry place for a fire',
   'fire-limit': 'Too many fires are still burning here', 'no-light': 'Select a flashlight or mount one on the camera',
   'already-prepared': 'This flashlight already has tape', 'already-mounted': 'The camera already has a flashlight',
-  'mount-occupied': 'The camera already has a flashlight', 'not-prepared': 'Wrap the flashlight with tape first',
+  'mount-occupied': 'The camera already has a flashlight', 'mount-disabled': 'This kit cannot mount a flashlight',
+  'not-prepared': 'Wrap the flashlight with tape first',
   'invalid-input': 'Choose an item from a pocket or the camcorder', 'invalid-item': 'Cannot use this item',
   'camera-unavailable': 'The camera is unavailable', 'invalid-fire': 'Choose one to ten sheets',
   'fire-unavailable': 'Cannot light a fire here', 'effect-failed': 'Could not combine those items',
@@ -32,16 +37,42 @@ const MESSAGES = {
 
 /**
  * @param env  { hud, sound, health, camera }
- * @param {{canAct?:Function, onOpen?:Function, review?:boolean}} [o]  review: one of everything on the floor where you land,
- *        for looking at them (the dev page's &supplies=1). A visit has only what its seed left lying about.
+ * @param {{canAct?:Function, onOpen?:Function, review?:boolean, perk?:object, seed?:string}} [o]  review: one of everything on the floor where you land,
+ *        for looking at them (the dev page's &supplies=1). A visit has only what its seed left lying about, plus any chosen department kit.
  */
-export function createInventory(env, { canAct = () => true, onOpen = () => {}, review = false } = {}) {
-  const model = createModel(), floors = new Map(), retired = new WeakSet();
-  let disposed = false, active = null, supplied = false;
+export function createInventory(env, { canAct = () => true, onOpen = () => {}, review = false, perk, seed } = {}) {
+  const size = perk?.pockets ?? 6;
+  const model = createModel({
+    size,
+    canMountTorch: perk?.canMountTorch,
+    fireSecondsPerSheet: perk?.fireSecondsPerSheet,
+    batterySeconds: perk?.batterySeconds,
+    torchDrainRate: perk?.torchDrainRate,
+  }), floors = new Map(), retired = new WeakSet();
+  if (!review && perk) {
+    for (const starter of starterLoadout(perk.id, seed)) {
+      const added = model.add(starter);
+      if (added.ok && starter.mounted) model.mount(added.item.id);
+    }
+  }
+  let disposed = false, active = null, supplied = false, snipCooldown = 0;
   const available = (floor = active) => !disposed && !!floor && floor === active && !!floor.env.player?.me && canAct();
   const unavailable = () => ({ ok: false, reason: 'unavailable' });
-  const tell = value => view.notice(MESSAGES[value] || value || 'Cannot use that here');
-  const snapshot = () => ({ ...model.read(), health: env.health?.read(), camera: env.camera?.read() });
+  const tell = value => {
+    const msg = value === 'full' && size !== 6 ? `All ${size} pockets are full` : MESSAGES[value];
+    view.notice(msg || value || 'Cannot use that here');
+  };
+  const snapshot = () => ({
+    ...model.read(),
+    health: env.health?.read(),
+    camera: env.camera?.read(),
+    ...(perk ? {
+      maxSnackHealth: perk.maxSnackHealth,
+      canMountTorch: perk.canMountTorch,
+      fireSecondsPerSheet: perk.fireSecondsPerSheet,
+      batterySeconds: perk.batterySeconds,
+    } : {}),
+  });
   const refresh = () => view.update(snapshot());
   const accepted = result => {
     if (!result?.ok) { tell(result?.reason); return false; }
@@ -53,6 +84,29 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     const c = env.camera?.read?.();
     return !!c && !c.depleted && c.remaining < c.capacity;
   }
+  function snip({ quietMiss = false } = {}) {
+    if (!available()) return unavailable();
+    const state = model.read(), item = state.slots[state.selected];
+    if (item?.type !== 'scissors' || item.uses <= 0) return { ok: false, reason: 'wrong-item' };
+    if (snipCooldown > 0) return { ok: false, reason: 'cooldown' };
+    snipCooldown = SNIP_TUNING.cooldown;
+    active.env.handView?.jab?.();
+    const result = model.useSelected({
+      snip: () => active.env.snip ? active.env.snip() : { ok: false, reason: 'no-snip-target' },
+    });
+    if (!result.ok) {
+      env.sound.play('snip', { vol: .38 });
+      if (!quietMiss) tell(result.reason);
+      return result;
+    }
+    env.sound.play('snip', { vol: .78 });
+    if (result.snapped) env.sound.play('crack', { vol: .72 });
+    active.env.interfere?.(result.snapped ? 0.55 : 0.38);
+    env.hud?.glitch?.(result.snapped ? 0.42 : 0.26);
+    refresh();
+    tell(result.snapped ? 'The scissors snapped' : `${result.item.uses} snip${result.item.uses === 1 ? '' : 's'} left`);
+    return result;
+  }
   function use() {
     if (!available()) return unavailable();
     const snapshot = model.read(), item = snapshot.slots[snapshot.selected];
@@ -60,13 +114,16 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     // A battery pack in the hand goes straight into the camcorder, whose charge is the time left on the tape. With the
     // camcorder full there is only a torch to put it in, and that is a combination: the bag opens on it, as it did.
     if (item?.type === 'battery' && cameraTakes()) return rechargeCamera(snapshot.selected);
+    if (item?.type === 'scissors') return snip({ quietMiss: !view.isOpen });
     // Put the mark into the world before spending chalk. A bad floor or failed
     // placement never consumes a use. This synchronous action cannot race UI.
     if (item?.type === 'chalk' && item.uses > 0) {
       const placed = active.physical.mark();
       if (!placed.ok) { tell(placed.reason || 'no-mark-space'); return; }
     }
-    const result = model.useSelected({ heal: env.health?.heal });
+    const result = model.useSelected({
+      heal: env.health ? amount => env.health.heal(amount, { snack: true }) : undefined,
+    });
     if (!accepted(result)) return;
     if (result.action === 'combine') view.beginCombine(snapshot.selected);
     if (result.action === 'heal') tell(`+${result.amount} health`);
@@ -121,6 +178,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     return item?.type === 'torch' ? { ...item, lit: state.activeTorch === item.id && item.charge > 0 } : item;
   }
   const torchPower = () => disposed ? 0 : model.torchPower();
+  const torchMounted = () => !disposed && model.torchMounted();
   /** How many of something are being carried, in any pocket: loose battery packs, sheets of paper, anything else by the piece. */
   function count(type) {
     if (disposed) return 0;
@@ -142,7 +200,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     if (result.ok) refresh();
     return result;
   }
-  const view = createInventoryHud({ host: env.hud.el, onSelect: select, onUse: use, onDrop: drop, onCraft: craft,
+  const view = createInventoryHud({ size, host: env.hud.el, onSelect: select, onUse: use, onDrop: drop, onCraft: craft,
     onOpen: open => {
       if (open && !available()) { view.setOpen(false); return; }
       onOpen(open);
@@ -246,6 +304,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
       fire: { threatAt: (...point) => !disposed && active === floor ? floor.physical.fire.threatAt(...point) : null },
       held: () => available(floor) ? held() : null,
       torchPower: () => !disposed && active === floor ? torchPower() : 0,
+      torchMounted: () => !disposed && active === floor && torchMounted(),
       give: item => available(floor) ? give(item) : unavailable(),
       consumeHeld: (type, amount = 1) => available(floor) ? consumeHeld(type, amount) : unavailable(),
       count: type => !disposed && active === floor ? count(type) : 0,
@@ -276,7 +335,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     if (next.inventory === floor.facade) delete next.inventory;
   }
   return {
-    model, view, use, drop, combine, rechargeCamera, craft, toggleLight, select, held, give, consumeHeld, count, hang, attend, forget,
+    model, view, use, snip, drop, combine, rechargeCamera, craft, toggleLight, select, held, give, consumeHeld, count, hang, attend, forget,
     get physical() { return active?.physical || null; },
     get isOpen() { return view.isOpen; },
     owns: target => target instanceof Node && view.el.contains(target),
@@ -287,13 +346,14 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
       if (view.handleKey(e)) return true;
       if (view.isOpen) return false; // Native focused-button activation stays native.
       const k = e.key.toLowerCase();
-      if (/^[1-6]$/.test(k)) { if (!e.repeat) select(Number(k) - 1, { toggle: true }); return true; }
+      if (/^[1-8]$/.test(k) && Number(k) <= size) { if (!e.repeat) select(Number(k) - 1, { toggle: true }); return true; }
       if (k === 'q' || k === 'g') { if (!e.repeat) (k === 'q' ? use : drop)(); return true; }
       return false;
     },
     update(dt, playing) {
       if (disposed) return;
       if (playing) {
+        if (snipCooldown > 0) snipCooldown = Math.max(0, snipCooldown - dt);
         const { depleted } = model.tick(dt);
         if (depleted) { tell('Flashlight battery empty'); env.sound.play('clack', { vol: .3 }); }
       }
@@ -302,7 +362,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
       for (const floor of floors.values()) floor.physical.update(playing ? dt : 0);
       view.el.inert = !available(); refresh(); view.tick(dt);
     },
-    torchPower,
+    torchPower, torchMounted,
     report: () => ({ ...snapshot(), open: view.isOpen, floor: active?.env.level.depth ?? null,
       world: active?.physical.report() || { items: [], marks: [], marksMade: 0 } }),
     dispose() {

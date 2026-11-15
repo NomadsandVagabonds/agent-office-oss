@@ -133,7 +133,7 @@ test('music: wherever the level is staged, both files go with it', () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'br-music-'));
   try {
     const { files } = stage(out, { page: null });
-    for (const name of ['room4.mp3', 'mascot.mp3']) {
+    for (const name of ['room4.mp3', 'mascot.mp3', 'deep.mp3']) {
       assert.ok(files.includes(`world/backrooms/music/${name}`), name);
       assert.ok(fs.existsSync(path.join(out, `world/backrooms/music/${name}`)), name);
     }

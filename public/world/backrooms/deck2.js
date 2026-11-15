@@ -31,6 +31,9 @@ import { allHandsStash } from './rooms/all-hands/rule.js';
 import { compactorStash } from './rooms/compactor-canyon/rule.js';
 import { serverChasmStash } from './rooms/server-chasm/rule.js';
 import { PLAN as HALL_PLAN, partsOf as hallParts } from './rooms/unsure-hall/rule.js';
+import { homeStash } from './rooms/show-home/layout.js';
+import { plenumStash } from './rooms/drop-plenum/rule.js';
+import { cubicleGridStash } from './rooms/cubicle-grid/rule.js';
 import { fill } from './words.js';
 
 const cornerStash = (r, side) => (side < 0
@@ -73,6 +76,16 @@ const MAIL_SIGNS = [
 const MAIL_SLOTS = ['INBOX', 'OUTBOX', 'ESCALATIONS', '{PROJECT}', 'UNASSIGNED', 'UNDELIVERABLE'];
 
 const HALL_FACES = ['break', 'waiting', 'store', 'lounge'];        // (as rooms/unsure-hall.js builds them)
+
+// The neighbourhood's words (themes.js `suburb`). Every one is the office's: nothing here is anybody's brand.
+const HOME_NUMBERS = ['404', '127', '8080', '443', '3000', '1'];
+const HOME_BOARDS = [
+  ['FOR SALE', 'OPEN PLAN', '{PROJECT}'], ['TO LET', 'ENQUIRE WITHIN', 'ASK FOR {AGENT}'], ['SOLD', 'SUBJECT TO', 'CODE REVIEW'],
+  ['SHOW HOME', 'PHASE 2 OF', '{PROJECT}'], ['UNDER OFFER', 'VIEWINGS BY', 'CALENDAR INVITE'],
+];
+const SHOP_ENDS = ['MART', '& SONS', 'DEPOT', 'OUTLET', 'EXPRESS', 'WORLD', 'DIRECT'];
+const SHOP_OFFERS = ['SALE 0% OFF', 'OPEN SOON', 'CLOSING UP', 'BUY 1 GET 1', 'NOW HIRING', 'BACK IN 5'];
+const RECESS_RULES = [['PLAY AREA', 'RECESS IS BLOCKED BY:'], ['PLAY AREA', 'NEXT BREAK AFTER:'], ['WELLBEING ZONE', 'OPENS WHEN THIS IS DONE:']];
 
 export const MORE_DECK = [
   // The hallway that is not sure where it leads. The room you come into, a hallway, a room at the far end of it that
@@ -337,6 +350,115 @@ export const MORE_DECK = [
     teaches: 'tape', module: './rooms/cover.js',
     stash: (r) => { const s = r.params.side, x = s * (r.W / 2 - 1.0); return [Math.min(x - 0.4, x + 0.4), r.D / 2 - 1.5, Math.max(x - 0.4, x + 0.4), r.D / 2 - 0.7]; },
     roll: (R) => ({ side: R.pick([-1, 1]), deskZ: +R.range(-0.4, 0.8).toFixed(2), seconds: R.int(9, 12) }) },
+  // The neighbourhood (themes.js `suburb`: still being built, `dealt: false`). Rooms made for it, and dealt nowhere else.
+  // A house, front garden and all, in a room with a suspended ceiling. From the gate it is a house. The door is a door;
+  // what is behind it is the back of a set, and a desk.
+  { id: 'show-home', name: 'The Show Home', landmark: 'the house with its lights on', w: [16, 18], d: [14, 16], h: [5.4, 6.2],
+    ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/show-home.js', stash: homeStash,
+    roll: (R, o) => ({ number: R.pick(HOME_NUMBERS), board: R.pick(HOME_BOARDS).map((t) => fill(t, o, R).toUpperCase()), name: String(o.name || 'occupier').toUpperCase(),
+      door: R.pick(['#8c2a22', '#8c2a22', '#2f5a3a', '#27406b']), tree: R.pick([-1, 1]) }) },
+  // Six house fronts round a dead end, a name over each door. Yours opens. The names change places when nobody is looking.
+  { id: 'the-close', name: 'The Close', landmark: 'the six houses that are the same house', w: [15, 17], d: [15, 17], h: [3.3, 4.2],
+    ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/the-close.js', stash: (r) => [r.W / 2 - 1.4, r.D / 2 - 1.4, r.W / 2 - 0.7, r.D / 2 - 0.7],
+    // names[0] is the visitor's; order[i] is whose name front i has to begin with
+    roll: (R, o) => ({ names: [String(o.name || 'you'), ...Array.from({ length: 5 }, (_, i) => (o.agents.length ? o.agents[i % o.agents.length] : 'occupier'))].map((n) => n.toUpperCase()), order: R.shuffle([0, 1, 2, 3, 4, 5]) }) },
+  // A car park of cardboard cars and one car. (Meant to be this floor's own way down: seam.js's to wire.)
+  { id: 'car-park', name: 'The Car Park', landmark: 'the car park with one car in it', w: [16, 19], d: [13, 15], h: [3.3, 4.2],
+    ports: ['left', 'right'], weight: 1.2, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/car-park.js', stash: (r) => [-r.W / 2 + 0.6, -r.D / 2 + 0.6, -r.W / 2 + 1.3, -r.D / 2 + 1.3],
+    roll: (R, o) => ({ real: R.int(0, 99), empty: R.some([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 3), pay: ['PAY HERE', fill(R.pick(['STORY POINTS ONLY', 'NO CHANGE GIVEN OR MADE', 'BILLED TO {PROJECT}', 'ASK {AGENT} FOR A TOKEN']), o, R).toUpperCase()] }) },
+  // A back garden with a tall fence, and the neighbours looking over it.
+  { id: 'back-garden', name: 'The Back Garden', landmark: 'the garden everybody is looking into', w: [11, 13], d: [10, 12], h: [3.3, 4.2],
+    ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/back-garden.js', stash: (r) => [r.W / 2 - 1.2, -r.D / 2 + 0.5, r.W / 2 - 0.55, -r.D / 2 + 1.15],
+    roll: (R) => ({ who: R.shuffle([0, 1, 2, 3, 4, 5, 6, 7]) }) },
+  // Three shops. Inside the middle one, three shops.
+  { id: 'strip-mall', name: 'The Parade', landmark: 'the shops with the shops inside', w: [15, 18], d: [10, 12], h: [3.3, 4.2],
+    ports: ['left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/strip-mall.js', stash: (r) => [-2.6, -r.D / 2 + 1.75, -1.9, -r.D / 2 + 2.6],
+    roll: (R, o) => ({ shops: R.shuffle(SHOP_ENDS.slice()).slice(0, 3).map((end, i) => `${String(o.projects.length ? o.projects[(i + R.int(0, 9)) % o.projects.length] : 'shop').toUpperCase()} ${end}`), offers: R.shuffle(SHOP_OFFERS.slice()).slice(0, 3) }) },
+  // A bus stop, a queue, a timetable. No bus.
+  { id: 'bus-stop', name: 'The Stop', landmark: 'the bus stop with the queue', w: [9, 11], d: [6, 7],
+    ports: ['left', 'right'], weight: 1.3, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/bus-stop.js', stash: (r) => [-r.W / 2 + 0.5, -r.D / 2 + 0.5, -r.W / 2 + 1.15, -r.D / 2 + 1.15],
+    roll: (R, o) => ({ route: 'ROUTE ' + R.pick(HOME_NUMBERS), rows: (o.tasks.length ? R.shuffle(o.tasks.slice()) : ['TODO']).slice(0, 5).map((t) => String(t).toUpperCase().slice(0, 30)), queue: R.int(3, 6), who: R.shuffle([0, 1, 2, 3, 4, 5, 6, 7]) }) },
+  // A lawn of sprinklers that hear, and a path of stones across it.
+  { id: 'the-green', name: 'The Green', landmark: 'the lawn you are not to walk on', w: [10, 12], d: [9, 11], h: [2.9, 3.6],
+    ports: ['back', 'left', 'right'], weight: 1.2, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/the-green.js', stash: (r) => [r.W / 2 - 1.5, -r.D / 2 + 0.8, r.W / 2 - 0.8, -r.D / 2 + 1.5], roll: () => ({}) },
+  // A neighbourhood to the knee, and on a table in it the same one again.
+  { id: 'model-village', name: 'The Model', landmark: 'the street that comes up to your knee', w: [11, 13], d: [8, 9], h: [2.9, 3.6],
+    ports: ['left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/model-village.js', stash: (r) => [-r.W / 2 + 0.5, -r.D / 2 + 0.5, -r.W / 2 + 1.15, -r.D / 2 + 1.15], roll: (R) => ({ lit: R.int(0, 8) }) },
+  // A room that is all garage doors.
+  { id: 'garage-row', name: 'The Lock-ups', landmark: 'the room that is all garage doors', w: [11, 13], d: [9, 11], h: [2.9, 3.3],
+    ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/garage-row.js', stash: (r) => [r.W / 2 - 1.3, r.D / 2 - 1.3, r.W / 2 - 0.65, r.D / 2 - 0.65],
+    roll: (R) => ({ nums: Array.from({ length: 8 }, () => R.pick([1, 2, 3, 4, 4, 7, 11, 12, 12, 40, 404])), empty: R.some([0, 1, 2, 3, 4, 5, 6, 7], 3) }) },
+  // A lemonade stand, going down, and the child who keeps it. She has a glass for you.
+  { id: 'lemonade', name: 'The Stand', landmark: 'the lemonade stand that is going down', w: [9, 11], d: [8, 10], h: [2.9, 3.6],
+    ports: ['left', 'right'], weight: 1.2, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/lemonade.js', stash: (r) => [-0.3, -r.D / 2 + 0.6, 0.4, -r.D / 2 + 1.2], roll: (R) => ({ side: R.pick([-1, 1]) }) },
+  // A bedroom, and a closet that goes on: a maze a body wide, drawn on in marker. Whoever is down here this visit may be in it.
+  { id: 'walk-in', name: 'The Walk-in', landmark: 'the bedroom with the closet you can get lost in', w: [11, 13], d: [12, 14], h: [2.4, 2.6],
+    ports: ['back'], weight: 1.3, lights: 'dim', themes: { suburb: 1, '*': 0 },
+    module: './rooms/walk-in.js', stash: (r) => [r.W / 2 - 1.3, r.D / 2 - 1.3, r.W / 2 - 0.6, r.D / 2 - 0.6], roll: () => ({}) },
+  // A storm drain across a lawn, and three hoardings on the edge of it: one of them is a bridge.
+  { id: 'the-culvert', name: 'The Culvert', landmark: 'the ditch with the hoardings beside it', w: [10, 12], d: [11, 13], h: [2.9, 3.6],
+    ports: ['left', 'right'], weight: 1.2, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/the-culvert.js', stash: (r, side) => [side * (r.W / 2 - 1.3) - 0.35, -r.D / 2 + 1.9, side * (r.W / 2 - 1.3) + 0.35, -r.D / 2 + 2.6],
+    roll: (R) => ({ side: R.pick([-1, 1]) }) },
+  // A playground on fake grass. Most of it is going down into the floor, slowly, and has been for some time.
+  { id: 'recess', name: 'Recess', landmark: 'the playground that is going under', w: [12, 14], d: [10, 12], h: [3.3, 4.2],
+    ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/recess.js', stash: (r) => [r.W / 2 - 1.55, -r.D / 2 + 0.45, r.W / 2 - 0.9, -r.D / 2 + 1.05],
+    roll: (R, o) => ({ rules: [...R.pick(RECESS_RULES), String(o.tasks.length ? R.pick(o.tasks) : 'TODO').toUpperCase()], lean: R.pick([-1, 1]), hops: [1, 2, 3, 4, 4, 6, 7, 9], high: R.int(0, 1) }) },
+  {
+    id: 'drop-plenum',
+    resident: 'plenum-toner', items: ['torch'], caught: 1, fire: 'fears',
+    name: 'The Return Plenum',
+    landmark: 'the step-ladder up into the red drop ceiling',
+    w: [14, 16], d: [16, 18], h: [4.8, 5.1],
+    ports: ['back', 'left', 'right'],
+    big: true,
+    weight: 1.0,
+    lights: 'dark',
+    themes: { yellow: 1.5, night: 1.4, archive: 1.2, fitout: 1.1, exec: 1.1 },
+    module: './rooms/drop-plenum.js',
+    stash: plenumStash,
+    roll: (R, o) => ({
+      zone: R.pick(['4B-RET', '7A-NORTH', 'SUB-3', 'PLM-9']),
+      supervisor: (o.agents.length ? R.pick(o.agents) : 'FACILITIES').slice(0, 14).toUpperCase(),
+      ductTone: R.pick([0, 1]),
+    }),
+  },
+  { id: 'last-light', name: 'The Last Light', landmark: 'the long hall losing its lights',
+    module: './rooms/last-light.js', resident: 'lamplighter', items: ['torch'], caught: 1, fire: 'ignores',
+    w: [6, 7], d: [20, 22], h: [2.8, 3.0], ports: ['back'], big: true,
+    weight: .85, lights: 'normal', needs: ['beam'], themes: { night: 1.5, archive: 1.2 },
+    stash: r => [r.W/2-1.4, -r.D*.17-.65, r.W/2-.5, -r.D*.17+.65],
+    roll: R => ({face:R.int(0,7)}) },
+  {
+    id: 'cubicle-grid',
+    resident: 'pit-clerks', items: ['paper'], caught: 2, fire: 'fears',
+    doors: 'own',
+    name: 'The Open-Plan Pit',
+    landmark: 'the sunken cubicle grid you walk across on top',
+    w: [14, 16], d: [16, 18], h: [3.2, 3.6],
+    ports: ['back'],
+    big: true,
+    weight: 1.0,
+    lights: 'normal',
+    themes: { yellow: 1.5, archive: 1.4, night: 1.3, fitout: 1.3, exec: 1.2 },
+    module: './rooms/cubicle-grid.js',
+    stash: cubicleGridStash,
+    roll: (R, o) => ({
+      dept: (o.projects.length ? R.pick(o.projects) : R.pick(['RETENTION', 'BILLING', 'COMPLIANCE', 'QA'])).slice(0, 12).toUpperCase(),
+      brokenSide: R.pick([-1, 1]),
+    }),
+  },
 ];
 
 // Where a tape goes in an entry that does not say so itself: (room, ±1) → [x0, z0, x1, z1] in the room's own frame.

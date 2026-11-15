@@ -239,3 +239,19 @@ export function makeFloorWarden(kit) {
     light(rgb) { mat.uniforms.uTint.value.set(rgb[0], rgb[1], rgb[2]); },
   };
 }
+
+/** Knocked-off white hard-hat left beside his scissors after he trips headlong onto his blades. */
+export function makeFallenHardHat(kit) {
+  const lights = [lamp(0.2, 2.5, 0.8, [1.3, 1.3, 1.3], { k: 8, wrap: 0.48, far: 26 })], amb = [0.62, 0.62, 0.62];
+  const mat = kit.surface({ vox: true });
+  const m4 = new THREE.Matrix4().makeScale(S[0], S[1], S[2]).multiply(new THREE.Matrix4().makeTranslation(0, -48, 0));
+  const b = new Batch(true);
+  b.addVox(kit.model('warden:fallenHat', hardHatVox).solid, m4);
+  const group = new THREE.Group();
+  const mesh = new THREE.Mesh(kit.geometry(b, lights, amb), mat);
+  mesh.rotation.set(-0.22, 0.65, 0.34);
+  mesh.position.y = 0.04;
+  group.add(mesh);
+  group.userData.light = (rgb) => mat.uniforms.uTint.value.set(rgb[0], rgb[1], rgb[2]);
+  return group;
+}

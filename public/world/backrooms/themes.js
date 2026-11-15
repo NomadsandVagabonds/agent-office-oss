@@ -53,6 +53,15 @@ export const THEMES = {
     rooms: [0.03, 0.16, 0.3, 0.62], heights: [[2.9, 30], [3.3, 30], [2.6, 20], [4.4, 8]],
     dressing: ['lamp', 'lamp', 'lamp', 'plant', 'plant', 'chair', 'clock', 'clock', 'frame', 'frame', 'frame', 'poster', 'coat', 'coat', 'globe', 'armchair', 'armchair', 'highdoor'],
     hum: 50 },
+
+  // A neighbourhood, as an office remembered one and built it indoors: sky-blue emulsion, fake grass cut short of the walls
+  // so that the carpet shows, every tube working because it is always the middle of the day. Still being built (suburb.js)
+  suburb: { id: 'suburb', own: true, dealt: false, families: { sky: 12 }, patterns: ['sky'], tubes: ['#fffbe9', '#f3ffe6', '#eef6ff'],
+    light: { dead: [0.03, 0.16], flicker: 0.2, modes: [['normal', 1]] },
+    // (mostly passages: a neighbourhood is got about by alleys, between fences and the backs of things. A lawn is where one comes out)
+    rooms: [0.1, 0.36, 0.6, 0.9], heights: [[2.6, 34], [2.2, 22], [2.9, 16], [3.3, 10], [1.75, 10], [4.4, 6]],
+    dressing: ['mailbox', 'mailbox', 'flamingo', 'flamingo', 'hose', 'hose', 'wetsign', 'ladder', 'boxes'],
+    hum: 60 },
 };
 
 export const THEME_IDS = Object.keys(THEMES);

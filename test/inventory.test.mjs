@@ -23,7 +23,7 @@ test('six slots reject duplicates, a seventh object and malformed records withou
   for (const id of ['missing', undefined, null, '', 0]) assert.equal(model.remove(id), null);
   assert.deepEqual(model.read(), beforeRemove);
   assert.equal(model.read().slots.filter(Boolean).length, 6);
-  for (const size of [0, 7, 1.5, NaN]) assert.throws(() => createInventory({ size }), RangeError);
+  for (const size of [0, 9, 1.5, NaN]) assert.throws(() => createInventory({ size }), RangeError);
 });
 
 test('construction and snapshots cannot mutate inventory contents or item definitions', () => {
@@ -230,9 +230,9 @@ test('invalid paper quantities do not create, inflate or mutate carried stacks',
   assert.equal(model.read().slots[0].quantity, 4);
 });
 
-test('paper opens combining, scissors have no use, and snacks need a health callback', () => {
+test('paper opens combining, scissors need a snip target, and snacks need a health callback', () => {
   const model = createInventory();
-  for (const type of ['paper', 'scissors', 'snack']) {
+  for (const type of ['paper', 'scissors', 'snack', 'pink-slip']) {
     const added = model.add(item(type, type));
     assert.equal(added.ok, true); assert.equal(added.accepted, 1); assert.equal(added.remainder, null);
     model.select(added.index);
@@ -242,12 +242,19 @@ test('paper opens combining, scissors have no use, and snacks need a health call
       assert.equal(model.useSelected({ canMark: false }).action, 'combine');
       assert.deepEqual(model.read(), before);
     } else {
-      unchanged(model, () => model.useSelected(), type === 'snack' ? 'health-unavailable' : 'no-use');
-      unchanged(model, () => model.useSelected({ canMark: false }), type === 'snack' ? 'health-unavailable' : 'no-use');
+      const expected = type === 'snack' ? 'health-unavailable' : type === 'scissors' ? 'no-snip-target' : 'no-use';
+      unchanged(model, () => model.useSelected(), expected);
+      unchanged(model, () => model.useSelected({ canMark: false }), expected);
     }
-    assert.equal(Object.hasOwn(model.read().slots[added.index], 'uses'), false);
+    if (type === 'scissors') {
+      assert.equal(model.read().slots[added.index].uses, 3);
+    } else {
+      assert.equal(Object.hasOwn(model.read().slots[added.index], 'uses'), false);
+    }
     assert.ok(ITEM_DEFS[type].name && ITEM_DEFS[type].description);
   }
+  assert.equal(ITEM_DEFS.scissors.maxUses, 3);
+  assert.equal(ITEM_DEFS.scissors.useLabel, 'Snip');
   assert.equal(ITEM_DEFS.snack.healAmount, 1);
   assert.equal(Object.hasOwn(model.read(), 'health'), false);
   unchanged(model, () => model.combine(1, 0), 'incompatible');
@@ -368,4 +375,41 @@ test('red balloons use one slot each and have no invented use action', () => {
   assert.equal(model.add(dropped).ok, true);
   assert.equal(model.consumeSelected('red-balloon').item.id, 'first-balloon');
   assert.equal(model.read().slots[1].id, 'second-balloon');
+});
+
+test('scissors carry three snips, never waste durability on empty air, and snap on the third landed hit', () => {
+  for (const uses of [-1, 4, 1.5, NaN, Infinity, '2', null]) {
+    assert.throws(() => makeItem('scissors', 'bad', { uses }), RangeError);
+  }
+  const model = createInventory();
+  model.add(item('scissors', 'warden-blades'));
+  assert.equal(model.read().slots[0].uses, 3);
+
+  // Swinging in thin air or without a target callback never costs a snip
+  unchanged(model, () => model.useSelected(), 'no-snip-target');
+  unchanged(model, () => model.useSelected({ snip: () => ({ ok: false }) }), 'no-snip-target');
+  unchanged(model, () => model.useSelected({ snip: () => ({ ok: false, reason: 'blocked-by-wall' }) }), 'blocked-by-wall');
+  unchanged(model, () => model.useSelected({ snip: () => ({ ok: 'yes' }) }), 'no-snip-target');
+
+  // Snip 1: 3 -> 2 uses
+  const first = model.useSelected({ snip: (held) => { assert.equal(held.uses, 3); held.uses = 0; return { ok: true, target: 'toner' }; } });
+  assert.deepEqual(first, { ok: true, action: 'snip', snapped: false, target: 'toner', item: { id: 'warden-blades', type: 'scissors', uses: 2 }, index: 0 });
+  assert.equal(model.read().slots[0].uses, 2);
+
+  // Drop and re-pick preserves remaining uses
+  const dropped = model.remove('warden-blades');
+  assert.deepEqual(dropped, { id: 'warden-blades', type: 'scissors', uses: 2 });
+  assert.equal(model.add(dropped).ok, true);
+
+  // Snip 2: 2 -> 1 use
+  const second = model.useSelected({ snip: () => ({ ok: true, target: 'toner-puddle' }) });
+  assert.equal(second.snapped, false);
+  assert.equal(second.item.uses, 1);
+  assert.equal(model.read().slots[0].uses, 1);
+
+  // Snip 3: 1 -> 0 uses -> blades snap and clear the slot
+  const third = model.useSelected({ snip: () => ({ ok: true, target: 'pirate' }) });
+  assert.deepEqual(third, { ok: true, action: 'snip', snapped: true, target: 'pirate', item: { id: 'warden-blades', type: 'scissors', uses: 0 }, index: 0 });
+  assert.equal(model.read().slots[0], null);
+  unchanged(model, () => model.useSelected({ snip: () => ({ ok: true }) }), 'empty');
 });

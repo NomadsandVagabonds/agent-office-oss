@@ -23,7 +23,7 @@ import { Batch, lamp } from '../kit.js';
 import { makeRng, roomDistances } from '../gen.js';
 import { clamp, turnTo } from '../bits.js';
 import { FIRE_FEAR, calm as unafraid, afraid, tooNear } from './fire.rule.js';
-import { TONER, perched, hatchedBrood, weaveOffset, stepToner, strikeToner } from './toner.rule.js';
+import { TONER, perched, hatchedBrood, weaveOffset, stepToner, strikeToner, snipToner } from './toner.rule.js';
 
 const S = 0.022;                               // 2.2 cm per voxel: sharp, spindly silhouette
 const VOID = '#050609', TAR = '#0d1018', OIL = '#171c29', SHEEN = '#262e42', STATIC = '#8fa4bd';
@@ -615,7 +615,8 @@ export function create(c) {
     const los = d < 18 && c.los(walker.x, walker.z, m.x, m.z);
     const curRoom = c.room(walker.x, walker.z);
     const sameRoom = curRoom === c.room(m.x, m.z);
-    const audible = los || sameRoom || (d <= TONER.listenFar && c.walk.steps(walker, m) <= 2);
+    const noiseScale = m.noise ?? env.perk?.noiseScale ?? 1;
+    const audible = los || sameRoom || (d <= TONER.listenFar * noiseScale && c.walk.steps(walker, m) <= 2);
     const farFromHome = unit.s.territorial && unit.s.homeRoom !== null && curRoom !== unit.s.homeRoom
       && !(w.rooms[unit.s.homeRoom]?.def.doors || []).some((dr) => dr.to === curRoom);
 
@@ -693,7 +694,7 @@ export function create(c) {
     }
 
     unit.s = stepToner(unit.s, dt, {
-      d, los, audible, moving: m.moving, speed: m.speed, sink: m.sink,
+      d, los, audible, moving: m.moving, speed: m.speed, sink: m.sink, noiseScale,
       blockedByDoor, cannot, there, farFromHome, fleeingFire: unit.fear.flee,
     });
     if (unit.s.gaveUp) unit.prowlGoal = null;
@@ -883,6 +884,54 @@ export function create(c) {
       const first = units[0];
       if (!first || first.s.hits <= 0) return null;
       return { hits: first.s.hits, mode: first.s.mode === 'puddle' ? 'puddle' : undefined };
+    },
+
+    snipTargets() {
+      if (!placed || !units.length) return [];
+      const out = [];
+      for (const u of units) {
+        if (u.s.mode === 'drop' || u.s.mode === 'chase' || u.s.mode === 'perch' || u.s.mode === 'prowl') {
+          out.push({
+            id: 'toner',
+            x: u.walker.x,
+            z: u.walker.z,
+            y: u.surfY + 0.18,
+            r: 0.34,
+            priority: u.s.mode === 'chase' || u.s.mode === 'drop' ? 3 : 2,
+            snip: () => {
+              const next = snipToner(u.s);
+              if (!next.repelled) return false;
+              u.s = next;
+              u.prowlGoal = null;
+              u.emerging = false;
+              u.rig.show((u.rig.variant + 1) % u.rig.cores.length, true);
+              c.play('sonarrattle', u.walker.x, u.walker.z, 10);
+              c.play('buzz', u.walker.x, u.walker.z, 8);
+              if (!known) { known = true; c.met(); }
+              c.survived();
+              return { ok: true, target: 'toner' };
+            },
+          });
+        } else if (u.s.mode === 'puddle') {
+          const floorY = env.world?.floorY(u.walker.x, u.walker.z) ?? 0;
+          out.push({
+            id: 'toner-puddle',
+            x: u.walker.x,
+            z: u.walker.z,
+            y: floorY + 0.12,
+            r: 0.65,
+            priority: 1,
+            snip: () => {
+              const next = snipToner(u.s);
+              if (!next.ruptured) return false;
+              u.s = next;
+              c.play('dissolve', u.walker.x, u.walker.z, 9);
+              return { ok: true, target: 'toner-puddle' };
+            },
+          });
+        }
+      }
+      return out;
     },
 
     /** Dev helper: place on ceiling/floor, trigger an immediate drop/chase, or fast-forward puddle hatching. */

@@ -71,6 +71,15 @@ function scissors() {
   v.box(-1, 2, -1, 1, 3, 1, dark); v.box(-1, 2, -1, 0, 3, 0, bright);
   return v;
 }
+/** A remote with one button (the suburb floor's: it opens a roller door that is near enough — the room's own c.use does that, while this is in the hand). */
+function opener() {
+  const v = new Vox(), grey = M('#8b8f8a', 1), dark = M('#5b605c', 1), pale = M('#b9bdb4', 0), red = M('#a8473b', 0);
+  v.rbox(-3, 0, -6, 3, 2, 6, 1, grey, 'xz');
+  v.box(-3, 0, 4, 3, 1, 6, dark);
+  v.box(-1, 2, -3, 1, 3, -1, red);
+  v.box(-2, 2, 2, 2, 3, 3, pale);
+  return v;
+}
 function snack() {
   const v = new Vox(), orange = M('#b77c49', 1), shadow = M('#875737', 1), fold = M('#d1a06a', 1), label = M('#dbd0a5', 1), ink = M('#63654a', 1);
   // A sealed, crumpled packet: pinched ends, a paper label and an uneven top seam.
@@ -136,4 +145,4 @@ function tape() {
   v.box(7, 2, 3, 8, 3, 5, silver);
   return v;
 }
-export const INVENTORY_MODELS = Object.freeze({ torch, battery, chalk, paper, scissors, snack, balloon, lighter, tape, 'pink-slip': pinkSlip });
+export const INVENTORY_MODELS = Object.freeze({ torch, battery, chalk, paper, scissors, snack, balloon, lighter, tape, opener, 'pink-slip': pinkSlip });

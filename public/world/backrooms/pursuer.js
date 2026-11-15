@@ -213,6 +213,15 @@ export function createStalkers(env, options = {}) {
     get follower() { return follower ? { x: follower.x, z: follower.z } : null; },
     get figure() { return pirate?.figure ?? null; },
     of: (id) => live.find((k) => k.id === id)?.it ?? null,
+    snipTargets() {
+      const out = [];
+      for (const k of live) {
+        if (k.dead || k.away) continue;                                    // (somebody who is away with a room cannot be reached either)
+        const list = k.it.snipTargets?.();
+        if (Array.isArray(list)) out.push(...list);
+      }
+      return out;
+    },
     dispose() {
       for (const k of live) { try { k.it.dispose?.(); } catch { /* it is going anyway */ } }
       if (follower) { const i = W().bodies.indexOf(follower.body); if (i >= 0) W().bodies.splice(i, 1); follower.g.removeFromParent(); }

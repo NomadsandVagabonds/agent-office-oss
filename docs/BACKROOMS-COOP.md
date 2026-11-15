@@ -1,7 +1,7 @@
 # Two tapes: private two-player prototype
 
 Branch: `codex/backrooms-coop`, based on development `a155afc`.
-Private alpha: https://blockrooms-coop-production.up.railway.app/rooms
+Private alpha: hosted on Railway; use the owner's private host bookmark.
 Railway runs game build `69d7c55`, separately from the public BlockRooms site.
 
 ## Lobby refresh (live)

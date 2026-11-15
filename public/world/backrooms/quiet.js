@@ -19,6 +19,10 @@
 //   return     a parallel wall with a short arm at one end: an L you walk round
 //   nibs       (corridors) shallow piers in pairs down both walls at even spacing: a corridor of frames
 //   baffle     (corridors) stubs from alternate walls, most of the way across: you walk it in a slalom
+//   fence      (the neighbourhood) a picket fence, waist high, from wall to wall across the room, with a gap where a gate
+//              would hang: you see the whole room over it and cross it in one place
+//   flats      (the neighbourhood) a row of scenic flats down the room, off the middle, one of them missing: a painted street
+//              from one side, bare board and braces from the other. Each brace's foot is in the way, a short step out behind
 //   apertures  (wrong) a parallel wall with two holes in it: one at carpet level, 0.85 m high, that you can crawl
 //              through, and one at head height, 1.7 to 2.3 m, that you cannot. The ordinary way round its ends stays.
 //   sunk       (wrong) a whole workstation — desk, chair, monitor, keyboard, mouse — full size and perfectly still,
@@ -42,6 +46,8 @@ export const SUNK = -0.4;                 // how far down in the carpet the work
 const VOXEL = 0.025;
 const r4 = (v) => Math.round(v * 10000) / 10000;
 
+/** A picket fence: how high, how thick. A scenic flat: a sheet of board on its end, and how far its brace reaches out behind. */
+export const FENCE = Object.freeze({ h: 0.96, t: 0.1 }), FLAT = Object.freeze({ w: 1.22, h: 2.44, t: 0.08, brace: 0.74 });
 export const MOTIFS = ['parallel', 'dogleg', 'bays', 'colonnade', 'return'];
 /** The motifs a corridor can take (a plain room less than NARROW across): a floor has one of them, or none. */
 export const HALLS = ['nibs', 'baffle'];
@@ -90,6 +96,10 @@ const THEME_QUIET = {
   // the top floor: screens with a return on them, alcoves, pilasters
   exec: { motifs: [['return', 4], ['bays', 2.5], ['dogleg', 1]], wrong: ['sunk', 'apertures'],
     mix: [[0.2, 0.3], [0.5, 0.6], [0.14, 0.2]], hall: [['nibs', 3], ['none', 2]], shapes: ['dais', 'soffit', 'ell', 'pinch', 'slopeceil'] },
+  // the neighbourhood: lawns with nothing on them, a fence across one, the backs of a row of flats; a lawn a few steps down, or up
+  // (it has no line in TELLS until it is finished — themes.js `dealt: false` — since TELLS is every finished kind and no other)
+  suburb: { motifs: [['fence', 4], ['flats', 3.2], ['dogleg', 0.8]], wrong: ['sunk', 'apertures'],
+    mix: [[0.26, 0.34], [0.4, 0.48], [0.22, 0.3]], hall: [['baffle', 3], ['nibs', 2], ['none', 1.5]], shapes: ['pinch', 'ell', 'stairs', 'soffit', 'stepceil', 'slopeceil', 'pit', 'dais'] },
 };
 /**
  * What gives a kind of floor away: the layouts there are more of on it than on any other kind ('none': a room with
@@ -112,6 +122,8 @@ export function vocabulary(R, themeId) {
     bays: () => ({ every: R.pick([1.7, 1.9, 2.1]), reach: R.pick([0.3, 0.36]), both: R.chance(0.5) }),
     colonnade: () => ({ every: R.pick([1.6, 1.8, 2.0]), size: R.pick([0.4, 0.5]), missing: R.int(0, 2), off: R.pick([0, 0.18]) }),
     return: () => ({ off: R.pick([0.16, 0.22]), gap: R.pick([1.1, 1.3]), arm: R.pick([1.0, 1.3]) }),
+    fence: () => ({ band: R.pick([-0.14, 0.1, 0.2]), gate: R.pick([-0.25, 0, 0.25]), gap: R.pick([1.1, 1.3]) }),
+    flats: () => ({ off: R.pick([0.1, 0.16]), gap: R.pick([1.1, 1.3]), missing: R.int(0, 2), face: R.pick([-1, 1]) }),
   };
   // (what a floor's corridors do is rolled from a source of its own, so that it moves nothing a floor always had)
   const RH = R.fork('hall'), hall = RH.weighted(q.hall, (k) => k[1])[0];
@@ -184,6 +196,26 @@ export function motif(room, m, t) {
     if (n < 3) return null;
     const missing = Math.min(n - 1, 1 + (m.missing ?? 0));
     for (let i = 0; i < n; i++) { if (i === missing) continue; const v = (i - (n - 1) / 2) * every; P(u - s / 2, v - s / 2, u + s / 2, v + s / 2); }
+  } else if (m.kind === 'fence') {
+    // (two runs of it, each `prop: 'fence'`: suburb.js draws the pickets, and nothing papers them)
+    if (A < 4 || B < 4.6) return null;
+    const v = B * (m.band ?? 0.1), gap = m.gap ?? 1.2, g = Math.max(-A / 2 + 0.9 + gap / 2, Math.min(A / 2 - 0.9 - gap / 2, A * (m.gate ?? 0)));
+    P(-A / 2, v - FENCE.t / 2, g - gap / 2, v + FENCE.t / 2, { h: FENCE.h, prop: 'fence' });
+    P(g + gap / 2, v - FENCE.t / 2, A / 2, v + FENCE.t / 2, { h: FENCE.h, prop: 'fence' });
+  } else if (m.kind === 'flats') {
+    // sheets of board FLAT.w wide, edge to edge, with a walk round either end and one sheet left out; behind every other one a brace
+    if (A < 5 || B < 4.8 || H < 2.2) return null;
+    const face = m.face ?? 1, u = face * A * (m.off ?? 0.12), gap = m.gap ?? 1.2, n = Math.floor((B - 2 * gap) / FLAT.w), h = Math.min(FLAT.h, r4(H - 0.08));
+    if (n < 3) return null;
+    // (a short row loses a sheet off its end, so that what is left still reads as a row)
+    const missing = n < 5 ? n - 1 : Math.min(n - 2, 1 + (m.missing ?? 0));
+    for (let i = 0; i < n; i++) {
+      if (i === missing) continue;
+      const v0 = (i - n / 2) * FLAT.w;
+      P(u - FLAT.t / 2, v0, u + FLAT.t / 2, v0 + FLAT.w, { h, prop: 'flat', face, art: i });
+      // (the painted side faces the bigger half of the room; the brace goes out behind, toward the nearer wall)
+      if (i % 2 === 0) P(u + face * FLAT.t / 2, v0 + FLAT.w / 2 - 0.06, u + face * (FLAT.t / 2 + FLAT.brace), v0 + FLAT.w / 2 + 0.06, { h: 0.34, prop: 'brace', face });
+    }
   } else if (m.kind === 'nibs') {
     // a corridor: piers in pairs, one each side, the same distance apart all the way down
     if (A < 1.7 || A >= NARROW || B < 4.4) return null;

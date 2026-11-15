@@ -45,6 +45,9 @@ test('book: a visit is counted again here, and held to what a building allows', 
   refused({ seconds: 5 }, /time/); refused({ seconds: 90000 }, /time/);
   refused({ batteries: 150 }, /batteries/);
   refused({ hearts: { left: 0, of: 4 } }, /hearts/); refused({ hearts: { left: 9, of: 9 } }, /hearts/); refused({ hearts: undefined }, /hearts/);
+  refused({ hearts: { left: 1, of: 1 } }, /hearts/); refused({ hearts: { left: 5, of: 5 } }, /hearts/); refused({ hearts: { left: 0, of: 2 } }, /hearts/);
+  assert.equal(checkRun(visit({ hearts: { left: 2, of: 2 } })).ok, true, 'Night Cleaner (2/2 max hearts) can sign the book');
+  assert.equal(checkRun(visit({ hearts: { left: 3, of: 3 } })).ok, true, 'Records Purge (3/3 max hearts) can sign the book');
   refused({ cast: { met: [], survived: 190 } }, /encounters/);
   for (const bad of [null, 'a visit', [visit()], 7]) assert.equal(checkRun(bad).ok, false);
   // the most a visit inside the limits can come to is a number, not anything anybody likes

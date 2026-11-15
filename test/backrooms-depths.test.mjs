@@ -723,15 +723,19 @@ test('the visit\'s hand: a visit shows 40–70% of the deck, in an order of its 
       for (const id of level.picked) shown.set(id, (shown.get(id) || 0) + 1);
     });
     // (40–70% of the deck — or, in a short visit of a deck grown big, what its parts can hold: MAX_ODD oddities a part comes first)
-    const share = visit.hand.length / DECK.length, holds = (visit.depths * MAX_ODD) / DECK.length;
-    assert.ok(share >= Math.min(HAND[0], holds) - 1e-9 && share <= Math.min(HAND[1], holds) + 1e-9, `seed ${seed}: the hand is ${visit.hand.length} of ${DECK.length} rooms, in ${visit.depths} parts`);
-    least = Math.min(least, all.length / DECK.length); most = Math.max(most, all.length / DECK.length);
+    // (the deck a visit is dealt from is every room at home on one of its kinds of floor, as plan.js counts it: a room made
+    // for a kind of floor the visit has no part of is not in it)
+    const N = DECK.filter((a) => visit.floors.some((f) => atHome(a, f.theme) > 0)).length;
+    const share = visit.hand.length / N, holds = (visit.depths * MAX_ODD) / N;
+    assert.ok(share >= Math.min(HAND[0], holds) - 1e-9 && share <= Math.min(HAND[1], holds) + 1e-9, `seed ${seed}: the hand is ${visit.hand.length} of ${N} rooms, in ${visit.depths} parts`);
+    least = Math.min(least, all.length / N); most = Math.max(most, all.length / N);
     orders.add(all.join('>'));
   }
-  assert.ok(least >= Math.min(HAND[0], (3 * MAX_ODD) / DECK.length) - 2 / DECK.length && most <= HAND[1] + 1e-9, `visits showed between ${Math.round(least * 100)}% and ${Math.round(most * 100)}% of the deck`);
+  const DEALT = DECK.filter((a) => dealtThemes().some((t) => atHome(a, t) > 0)).length;
+  assert.ok(least >= Math.min(HAND[0], (3 * MAX_ODD) / DEALT) - 2 / DEALT && most <= HAND[1] + 1e-9, `visits showed between ${Math.round(least * 100)}% and ${Math.round(most * 100)}% of the deck`);
   assert.equal(orders.size, SEEDS.length, 'no two visits have the same rooms in the same order');
   // every room in the deck gets its turn, and none is in every visit
-  for (const a of DECK) { const n = shown.get(a.id) || 0; assert.ok(n > 0, `${a.id} is never dealt`); assert.ok(n < SEEDS.length, `${a.id} is in every visit`); }
+  for (const a of DECK) { const n = shown.get(a.id) || 0; assert.ok(n > 0 || !dealtThemes().some((t) => atHome(a, t) > 0), `${a.id} is never dealt`); assert.ok(n < SEEDS.length, `${a.id} is in every visit`); }
 });
 
 test('what a visit came to: time in play, parts reached, rooms walked into, who was met — in the shape the card is filled in from', () => {
@@ -842,7 +846,8 @@ test('drawings on the walls: only ever of something that is in this visit, on it
   // the walls: who is drawn where
   const drawnOf = new Map();
   let parts = 0, withOne = 0;
-  for (const seed of SEEDS) {
+  // A rare follow-up to the beam lesson: retain a real seed that draws its resident.
+  for (const seed of [...SEEDS, 'visit-198']) {
     const { visit, floors } = visitFor(seed), company = castFor(visit);
     floors.forEach((level, i) => {
       parts++;
