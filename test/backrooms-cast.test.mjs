@@ -569,4 +569,9 @@ test('the absorbed staff: none is put where a thing lying about could not be pic
   // …and it is they who move: the seed's supplies are not asked to (a kept tape is compared on them)
   const src = fs.readFileSync(new URL('../public/world/backrooms/supplies.js', import.meta.url), 'utf8');
   assert.ok(!/absorbed/i.test(src));
+  // the same gap is kept from wherever the cast has taken its places: wider than the gap the cast keeps from them, so that
+  // nobody is ever walled in by a colleague put down beside them
+  assert.ok(THING_GAP > ABSORBED_GAP + 0.5);
+  const placing = fs.readFileSync(new URL('../public/world/backrooms/absorbed.js', import.meta.url), 'utf8');
+  assert.ok(/clearOfThings\(s\.wx, s\.wz, company\)/.test(placing) && /env\.pursuer\?\.cast\?\.\(\)/.test(placing));
 });
