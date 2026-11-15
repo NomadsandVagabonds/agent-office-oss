@@ -416,6 +416,22 @@ const SKETCH = {
     for (let x = 57; x < 88; x += 7) { g.beginPath(); g.moveTo(x, 40); g.lineTo(x, 86); g.stroke(); }
     for (let i = 0; i < 5; i++) { g.beginPath(); g.arc(69, 20, 5 + i * 1.6, i, i + 5.6); g.stroke(); }
   },
+  'plenum-toner'(g) {                                                 // a step-ladder through ceiling tiles, a duct, and four legs upside down above
+    g.beginPath(); g.moveTo(8, 48); g.lineTo(36, 48); g.moveTo(56, 48); g.lineTo(88, 48); g.stroke();
+    g.beginPath(); g.moveTo(34, 86); g.lineTo(44, 42); g.lineTo(54, 86); g.moveTo(37, 72); g.lineTo(51, 72); g.moveTo(40, 58); g.lineTo(48, 58); g.stroke();
+    g.strokeRect(56, 36, 28, 10);
+    g.beginPath(); g.moveTo(8, 12); g.lineTo(88, 12); g.stroke();
+    for (const [kx, fx] of [[58, 52], [66, 62], [74, 78], [82, 86]]) { g.beginPath(); g.moveTo(70, 22); g.lineTo(kx, 28); g.lineTo(fx, 12); g.stroke(); }
+  },
+  'pit-clerks'(g) {                                                   // a grid of deep square pits, a grinning head clawing over the top, and a door at the back
+    g.strokeRect(12, 42, 72, 44);
+    g.beginPath(); g.moveTo(36, 42); g.lineTo(36, 86); g.moveTo(60, 42); g.lineTo(60, 86); g.moveTo(12, 64); g.lineTo(84, 64); g.stroke();
+    g.beginPath(); g.arc(48, 32, 9, 0, 6.3); g.stroke();
+    g.fillRect(44, 29, 2, 2); g.fillRect(50, 29, 2, 2);
+    g.beginPath(); g.arc(48, 33, 6, 0.2, 2.94); g.stroke();
+    g.beginPath(); g.moveTo(39, 42); g.lineTo(35, 36); g.moveTo(57, 42); g.lineTo(61, 36); g.stroke();
+    g.strokeRect(42, 6, 12, 16);
+  },
   unknown(g) { g.beginPath(); g.arc(48, 46, 22, 0.4, 5.6); g.stroke(); g.font = '700 30px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.fillText('?', 48, 58); },
 };
 

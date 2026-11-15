@@ -65,6 +65,14 @@ export const WARNINGS = Object.freeze({
     ['THE TWO IN SUITS ARE', 'HARMLESS. THEY GAVE', 'ME A PINK'],
     ['TAKE THE PINK FORM.', 'THE SHREDDER LADY', 'WILL HAVE IT IF'],
   ],
+  'plenum-toner': [
+    ['UP IN THE RED DUCTS', 'HOLD C ON SHEET METAL', 'OR THEY DROP OFF THE'],
+    ['DONT TRUST STAINED', 'CEILING TILES UP TOP', 'THE EAST DUCT FOLDS'],
+  ],
+  'pit-clerks': [
+    ['KEEP ON THE WALL TOPS', 'FALL IN A CUBICLE AND', 'YOU NEVER COME BACK'],
+    ['SMILING ONES CLIMB UP', 'FROM THE DESKS BELOW', 'GET ACROSS AND SHUT'],
+  ],
 });
 /** Somebody we have no drawing lessons for yet: they saw it, and that is all they got down. */
 const UNKNOWN = [['SAW SOMETHING IN', 'HERE. DID NOT STAY', 'TO FIND OUT WHAT IT']];
