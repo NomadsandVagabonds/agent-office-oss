@@ -1,4 +1,4 @@
-// BlockRooms — the welcome that names a visitor's city: what the function passes back of what the host tells it, and
+// BlockRooms — the award that names a visitor's city: what the function passes back of what the host tells it, and
 // that it keeps nothing and lets nothing in between keep it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -41,9 +41,11 @@ test('it keeps nothing: no store, no log, no other site; and the page puts the n
   assert.ok(!/export const (POST|PUT|DELETE)/.test(fn));
   const home = fs.readFileSync(new URL('../tools/blockrooms/home.js', import.meta.url), 'utf8');
   assert.match(home, /fetch\('\.\/api\/where', \{ headers: \{ accept: 'application\/json' \}, cache: 'no-store' \}\)/);
-  assert.match(home, /node\.textContent = `WELCOME VISITOR FROM \$\{city\.toUpperCase\(\)\}`/, 'as text, never as markup');
+  assert.match(home, /if \(city\) \{ \$\('city'\)\.textContent = city; \$\('voted'\)\.hidden = false; \}/, 'as text, never as markup; and only when there is one');
   assert.ok(!/localStorage[^;]*city|city[^;]*localStorage/.test(home), 'the page does not keep it either');
   const page = fs.readFileSync(new URL('../tools/blockrooms/home.html', import.meta.url), 'utf8');
-  assert.ok(page.includes('<span data-welcome>WELCOME</span>'), 'with no answer the welcome is the plain one');
+  // the owner's line, the place on its second line; with no answer the award is not there at all
+  assert.ok(page.includes('<span class="award a4 wide" id="voted" hidden>VOTED 6TH BEST OFFICE PARK<br><small>of <span id="city"></span></small></span>'));
+  assert.ok(page.includes('*** WELCOME *** NEW SCREENSHOTS *** SIGN THE GUESTBOOK ***') && !/VISITOR FROM/.test(page + home), 'the city is said once, on the award');
   assert.ok(page.includes('Your city comes from your connection and is not kept.'), 'and the page says so, in as many words');
 });

@@ -84,6 +84,8 @@ canvas.sprite { image-rendering: pixelated; image-rendering: crisp-edges; displa
 .awards { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin: 14px 0 0; }
 .award { display: inline-block; width: 104px; padding: 12px 4px 10px; font: 700 15px/1.05 var(--fat); letter-spacing: .03em; text-align: center; border: 4px double #fff; color: #fff; transform: rotate(-4deg); box-shadow: 3px 3px 0 rgba(0, 0, 0, .35); }
 .award small { font: 400 11px var(--serif); display: block; margin-top: 3px; }
+.award.wide { width: auto; max-width: 86vw; padding: 12px 12px 10px; }
+.award[hidden] { display: none; }
 .a1 { background: #2a52be; } .a2 { background: #8a1410; transform: rotate(3deg); } .a3 { background: #2a6b2a; transform: rotate(-2deg); } .a4 { background: #5a2a8a; transform: rotate(5deg); }
 
 /* under construction, as it always has been */

@@ -178,13 +178,14 @@ for (const slot of document.querySelectorAll('.plug[data-plug]')) {
 counter(null);
 book();
 
-// the welcome: where the visitor's connection appears to come from, as the site's host tells the site with every request
-// (api/where). Said to them and to nobody else, and not kept. No answer, no city: the welcome is still a welcome.
+// One more award, for wherever the visitor appears to be: "VOTED 6TH BEST OFFICE PARK / of Portland" (the owner's line).
+// The site's host tells the site which city a connection comes from with every request (api/where); it is said to that
+// visitor and to nobody else, and not kept. No answer, no city: three awards, as there always were.
 (async () => {
   try {
     const res = await fetch('./api/where', { headers: { accept: 'application/json' }, cache: 'no-store' });
     const data = res.ok ? await res.json() : null, city = data && typeof data.city === 'string' ? data.city.trim().slice(0, 40) : '';
-    if (city) for (const node of document.querySelectorAll('[data-welcome]')) node.textContent = `WELCOME VISITOR FROM ${city.toUpperCase()}`;
+    if (city) { $('city').textContent = city; $('voted').hidden = false; }
   } catch { /* nobody said */ }
 })();
 

@@ -1,5 +1,5 @@
 // BlockRooms — where a visitor appears to be (GET /api/where): the city their
-// connection comes from, for the welcome on the front page, which says it to
+// connection comes from, for an award on the front page, which says it to
 // them and to nobody else.
 //
 // The site looks nothing up. Its host works a city out of the address every
