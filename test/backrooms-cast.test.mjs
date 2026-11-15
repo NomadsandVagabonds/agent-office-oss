@@ -538,7 +538,7 @@ test('the absorbed staff: a hold never turns the visitor\'s head while something
   assert.ok(TUG_SECONDS < A.holdDuration);
   // the ones this is for are the ones that hunt (the waste toner since it came: something dropping off the ceiling at
   // you is not a moment to have your head turned for you); the rest of the hold is as it was
-  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner', 'the-lines', 'other-door']);
+  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner', 'the-lines', 'greeter', 'other-door']);
   const held = SUNK.stepAbsorbed(SUNK.createAbsorbedState('wall'), { dt, dist: 0.5 });
   assert.ok(held.startedGrab && held.slow === A.slowFactor);
 });
@@ -974,4 +974,35 @@ test('one that comes with a room is on a part only if the room is, is never deal
   assert.equal(lairFor(floor(8, 2), lines), 1, 'too near for two: the nearest that is allowed');
   assert.equal(lairFor(floor(8, 1), lines), null, 'next to the landing: nowhere');
   assert.equal(lairFor({ seed: 's', rooms: chain(5), start: { room: 0 }, exit: { room: 4 } }, lines), null, 'no such room');
+});
+
+/* ---- the greeter (cast/greeter.rule.js): it waves, and what it brings up jumps ---------------------------------- */
+
+test('the greeter: comes over, heaves when near, brings up four or five, and is then content until they have been away', async () => {
+  const { GREETER, WORM, swaying, sways, finds, trodden } = await import('../public/world/backrooms/cast/greeter.rule.js');
+  let s = swaying();
+  assert.ok(!sways(s, { dt: 0.1, d: 20, sees: true }).comes, 'too far off to notice');
+  assert.ok(!sways(s, { dt: 0.1, d: 6, sees: false }).comes, 'unseen, it only sways');
+  assert.ok(sways(s, { dt: 0.1, d: 6, sees: true }).comes, 'seen and near enough, it comes over');
+  assert.equal(sways(s, { dt: 0.1, d: 2, sees: true, fire: true }).mode, 'sway', 'not beside a fire');
+  s = sways(s, { dt: 0.1, d: 2, sees: true }); assert.equal(s.mode, 'heave');
+  assert.equal(sways(s, { dt: 0.1, d: 2, sees: true, fire: true }).mode, 'sway', 'a fire lit beside it: it swallows them again');
+  let up = 0; for (let t = 0; t < GREETER.heave + 0.2 && !up; t += 0.1) { s = sways(s, { dt: 0.1, d: 2, sees: true }, () => 0.99); up = s.up || 0; }
+  assert.equal(up, GREETER.brood[1]); assert.equal(s.mode, 'content');
+  assert.equal(sways({ mode: 'heave', t: GREETER.heave, rest: 0, been: true }, { dt: 0.1, d: 2, sees: true }, () => 0).up, GREETER.brood[0]);
+  // content: not again while they stay, however long
+  for (let t = 0; t < GREETER.rest + 20; t += 0.5) { s = sways(s, { dt: 0.5, d: 2, sees: true, brood: 0 }); assert.ok(!s.up && !s.comes); }
+  assert.equal(s.mode, 'content', 'they never left: it only sways');
+  s = sways(s, { dt: 0.5, d: GREETER.away + 1, sees: false, brood: 0 }); assert.equal(s.mode, 'sway', 'they went away, and it has it in it again');
+  assert.equal(sways(s, { dt: 0.1, d: 2, sees: true }).mode, 'heave', 'and they came back');
+  // the small ones: blind
+  assert.ok(!finds(WORM.reach + 0.1, () => 0), 'the face has moved: a miss whatever the dice say');
+  assert.ok(finds(0.2, () => WORM.lands - 0.01) && !finds(0.2, () => WORM.lands + 0.01));
+  assert.ok(WORM.lands <= 0.3 && WORM.hurts === 1 && WORM.speed > 2.05 && WORM.speed < 3.7, 'one in four, one heart, faster than a walk and slower than a run');
+  // treading on them: the nearest on the floor, in front
+  const me = { x: 0, z: 0, yaw: 0 };                       // (yaw 0 looks toward -z)
+  assert.equal(trodden(me, [{ x: 0, z: -1 }, { x: 0, z: -0.6 }]), 1);
+  assert.equal(trodden(me, [{ x: 0, z: 1 }]), -1, 'not one behind');
+  assert.equal(trodden(me, [{ x: 0, z: 0.3 }]), 0, 'but one underfoot, whichever way');
+  assert.equal(trodden(me, [{ x: 0, z: -0.6, air: {} }, { x: 0, z: -0.6, dead: true }, { x: 0, z: -(WORM.tread + 0.2) }]), -1, 'not in the air, not twice, not out of reach');
 });
