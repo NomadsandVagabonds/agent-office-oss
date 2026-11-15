@@ -447,6 +447,8 @@ test('in an oddity a coin has a place of its own, where the builder leaves the f
     }
   };
   for (let i = 0; i < 250; i++) check(withLoot(`deck-${i}`));
+  // (a kind of floor with rooms of its own — themes.js `own` — has them nowhere else: look for those where they are)
+  for (const t of FINISHED) if (DECK.some((arch) => atHome(arch, t) > 0 && atHome(arch, 'yellow') === 0)) for (let i = 0; i < 250; i++) check(withLoot(`deck-${t}-${i}`, ALL, { theme: t }));
   // (a room made for a kind of floor that is still being built — themes.js `dealt: false` — is in none of those buildings either)
   for (const arch of DECK) if (!arch.planned && !arch.headline && FINISHED.some((t) => atHome(arch, t) > 0)) assert.ok(seen.get(arch.id) >= 5, `${arch.id}: only ${seen.get(arch.id) || 0} coins in 250 buildings`);
   // a room that is never dealt by chance (placed by the plan, or from the news) is not in those buildings at all: ask for

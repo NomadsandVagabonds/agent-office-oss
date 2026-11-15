@@ -350,7 +350,7 @@ export const MORE_DECK = [
     teaches: 'tape', module: './rooms/cover.js',
     stash: (r) => { const s = r.params.side, x = s * (r.W / 2 - 1.0); return [Math.min(x - 0.4, x + 0.4), r.D / 2 - 1.5, Math.max(x - 0.4, x + 0.4), r.D / 2 - 0.7]; },
     roll: (R) => ({ side: R.pick([-1, 1]), deskZ: +R.range(-0.4, 0.8).toFixed(2), seconds: R.int(9, 12) }) },
-  // The neighbourhood (themes.js `suburb`: still being built, `dealt: false`). Rooms made for it, and dealt nowhere else.
+  // The neighbourhood (themes.js `suburb`). Rooms made for it, and dealt nowhere else.
   // A house, front garden and all, in a room with a suspended ceiling. From the gate it is a house. The door is a door;
   // what is behind it is the back of a set, and a desk.
   { id: 'show-home', name: 'The Show Home', landmark: 'the house with its lights on', w: [16, 18], d: [14, 16], h: [5.4, 6.2],

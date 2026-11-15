@@ -391,8 +391,7 @@ export function lawn(c, opt = {}) {
   if (room.quiet && room.quiet.kind === 'fence' && room.kind === 'plain' && R.chance(opt.neighbour ?? 0.6)) neighbour(c);
   // …and in some lawns that have nothing else, one thing that whoever built this got wrong (WRONG, below)
   const chance = opt.wrong ?? (!room.quiet && !s && room.kind === 'plain' && Math.min(W, D) >= 3.4 ? 0.4 : 0);
-  // (for looking at one: `window.__suburbWrong = 'melting'` before the floor is built puts that one on every lawn that can take it)
-  const asked = typeof globalThis !== 'undefined' && WRONG[globalThis.__suburbWrong] ? globalThis.__suburbWrong : opt.which;
+  const asked = opt.which;
   if ((chance > 0 && R.chance(chance)) || (asked && room.kind === 'plain' && !s)) { const name = asked || R.pick([...Object.keys(WRONG), 'melting', 'melting']); if (WRONG[name](c) !== false) c.rt.weird = name; }
 }
 
