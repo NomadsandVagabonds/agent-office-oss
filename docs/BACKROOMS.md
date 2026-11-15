@@ -512,7 +512,8 @@ Difficulty is visibly unavailable at Normal until it has real game rules.
 
 Give Up confirms ending the recording and shows the scorecard, including
 for a visit shorter than two seconds. The standalone site gives that card
-a Return to homepage button; the Office keeps its return-to-work behavior.
+Go back in (a building nobody has had) and Return to homepage buttons; the
+Office keeps its return-to-work behavior.
 The end reason remains `quit`, so giving up cannot count as escaping.
 
 ## What a visitor carries
@@ -526,7 +527,10 @@ part of the building, and they are on unless a visit is started with
 - **The clock.** The camcorder lands three quarters charged: five minutes.
   When it is flat the visit is over (`'battery'`). A battery pack puts two
   minutes back, up to six minutes forty. The clock runs while you are in
-  play and while you fall; it does not stop for an open pocket.
+  play and while you fall; it does not stop for an open pocket. A pack in
+  the hand goes into the camcorder with Q (or the bag's Recharge camera)
+  while the camcorder is neither flat nor full; fitting one to a torch is a
+  combination, and with the camcorder full Q opens the bag on that.
   In the final ten seconds a centered camcorder battery blinks above a
   countdown; fitting a pack clears that warning. At zero, the picture fades
   through dark static to black in 2.2 seconds. The empty battery holds until
@@ -606,7 +610,9 @@ each time it had somebody and they got away.
 
 Before it resolves, the visit shows the card (`scorecard.js`): a wall of the
 yellow paper with the score printed into it in the paper's own ink and a
-picture beside every line. (`opt.scorecard === false` for none; on the dev
+picture beside every line. Beside its heading it says how the visit ended
+(back at your desk, caught, battery flat, left early) and, for a visit that
+did not get out, which part of how many it stopped in. (`opt.scorecard === false` for none; on the dev
 page, `&card=0` lets an automated check skip it.) What
 the lines are worth is `POINTS` in `core/runs.mjs`; the first four are earned
 however the visit ended, the rest only by getting out. The office keeps the

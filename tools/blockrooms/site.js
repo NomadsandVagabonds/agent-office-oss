@@ -3,7 +3,8 @@
 // for all of it with as little as the level needs — an invented team to borrow
 // names and faces from, a count of whether the keycard has been brought out,
 // and a building nobody has had before. One a visit: when it is over there is
-// the card, and after the card the front page.
+// the card, and after the card the front page, or (Go back in) another building
+// nobody has had.
 //
 // One thing a site can do that the office cannot: a building somebody got out
 // of can be handed on. Its tape is an address (…/?tape=<seed>). Whoever opens
@@ -123,7 +124,8 @@ async function run() {
     office.stage.start();
     // the tape this address names, if it names one, is the building walked; with none, one nobody has had. When it
     // is over the card comes up, and after the card the front page — unless the card for a kept tape is put down by
-    // its number, which is asking for that building again
+    // its number, which is asking for that building again, or the card is put down by Go back in, which is asking
+    // for one nobody has had
     const q = new URLSearchParams(location.search);
     let next = asSeed(q.get('tape')) || null;
     // (for whoever is checking the site and not playing it: ?debug hands a script the level's own handle, and lets it ask
@@ -145,16 +147,17 @@ async function run() {
       if (!mine) tell({ do: 'in' });                      // (he keeps count of who goes in. A tape played back is nobody going anywhere)
       const result = await enterBackrooms(office, {
         name: me().name, seed, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: sign,
-        home: { label: 'Return to homepage' }, where, ...dev,
+        home: { label: 'Return to homepage' }, anew: { label: 'Go back in' }, where, ...dev,
         ...(room ? { only: [room] } : {}),
         ...(mine ? { replay: true, pursuer: typeof mine.mascot === 'boolean' ? mine.mascot : undefined } : {}),
       });
       room = null;
-      // A card put down by its tape's number asks for that building again. Its return button takes the visitor to
-      // the front page, where the door and high scores are. Esc opens the menu; Give Up ends the recording, then
-      // the score stays until the visitor chooses what to do. Never straight into another building.
+      // A card put down by its tape's number asks for that building again; put down by Go back in, it asks for a
+      // building nobody has had. Its return button takes the visitor to the front page, where the door and high
+      // scores are. Esc opens the menu; Give Up ends the recording, then the score stays until the visitor chooses
+      // what to do. Never straight into another building without being asked.
       next = result?.card?.again ? asSeed(result.card.again) || null : null;
-      if (!next) { location.assign(HOME); return; }
+      if (!next && !result?.card?.anew) { location.assign(HOME); return; }
       address(next);
       office.stage.setView(null);
       await pause(1100);

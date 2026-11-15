@@ -96,7 +96,7 @@ async function buildersFor(level) {
  * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, depths?:number, depth?:number, inventory?:boolean, scorecard?:boolean, replay?:boolean, debug?:boolean, dev?:object, onReady?:Function}} [opt]
  *        depths: how many floors (default: by the seed) · depth: which floor to begin on (default: the top one)
  *        replay: this is a kept tape being played back (seed: the tape's; pursuer: whether the mascot was in it): nothing of the office's is hidden in it
- *        brand, share, also, home: handed to the card at the end (scorecard.js), for a page that is not the office
+ *        brand, share, also, home, anew: handed to the card at the end (scorecard.js), for a page that is not the office
  *        where: a place name, if the page was told one (the site's host says a city): the second line of the banner near the landing (banner.js)
  *        inventory: false for a visit without pockets, hearts or a battery that runs down · dev.supplies: one of everything where you land
  * @returns {Promise<{reason:'exit'|'caught'|'battery'|'quit', kept:{card:boolean, coins:number[], batteries:number, told?:Promise<void>}, run:object, card:object|null}>}
@@ -552,7 +552,7 @@ async function visit(office, opt) {
     if (why === 'exit') { run.mascot = plan.mascot !== null; try { run.edition = edition(); } catch { /* the tape does not say */ } }
     // (no card for a visit that was told not to show one, or that was stopped before it had really begun)
     if (opt.scorecard === false || (!gaveUp && why === 'quit' && run.seconds < 2)) { done(null); return; }
-    import('./scorecard.js').then((m) => m.showScorecard({ office, reason: why, kept, run, name: who.name, brand: opt.brand, share: opt.share, also: opt.also, home: opt.home }))
+    import('./scorecard.js').then((m) => m.showScorecard({ office, reason: why, kept, run, name: who.name, brand: opt.brand, share: opt.share, also: opt.also, home: opt.home, anew: opt.anew }))
       .then(done, (err) => { console.warn('[backrooms] the card would not come up', err); done(null); });
   }
   function finish(why, how) {

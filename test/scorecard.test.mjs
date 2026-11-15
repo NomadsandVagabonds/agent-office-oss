@@ -43,21 +43,22 @@ class Element extends Surface {
   querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
 }
 
-async function setup(t, { standalone = true, tape = false } = {}) {
+async function setup(t, { standalone = true, tape = false, anew = false, reason, run = {} } = {}) {
   t.mock.timers.enable({ apis:['setTimeout'] });
   const previous = { document:globalThis.document, window:globalThis.window };
   const document = globalThis.document = {}, window = globalThis.window = new Surface();
   document.createElement = tag => new Element(tag, document);
   document.createElementNS = (_ns, tag) => new Element(tag, document);
   document.body = document.createElement('body'); document.head = document.createElement('head');
-  const card = { reason:tape ? 'exit' : 'quit', score:123, lines:[], tape:{ kept:tape, seed:'held-tape' } };
-  const result = showScorecard({ office:{ game:{ report:async () => card } }, reason:card.reason, run:{},
-    ...(standalone ? { home:{ label:'Return to homepage' } } : {}), share:seed => `./play?tape=${seed}` });
+  const card = { reason:reason || (tape ? 'exit' : 'quit'), score:123, lines:[], tape:{ kept:tape, seed:'held-tape' } };
+  const result = showScorecard({ office:{ game:{ report:async () => card } }, reason:card.reason, run,
+    ...(standalone ? { home:{ label:'Return to homepage' } } : {}), ...(anew ? { anew:{ label:'Go back in' } } : {}), share:seed => `./play?tape=${seed}` });
   await Promise.resolve();
   let settled = false; result.then(() => { settled = true; });
   t.after(() => { for (const name of ['document', 'window']) if (previous[name] === undefined) delete globalThis[name]; else globalThis[name] = previous[name]; });
   const veil = document.body.querySelector('.brc-veil'), form = veil.querySelector('.brc-form');
-  return { document, window, card, result, veil, form, home:veil.querySelector('button.brc-home'), number:veil.querySelector('a.brc-seed'), get settled() { return settled; } };
+  return { document, window, card, result, veil, form, home:veil.querySelector('button.brc-home'), anew:veil.querySelector('button.brc-anew'),
+    number:veil.querySelector('a.brc-seed'), ended:veil.querySelector('.brc-ended').children.join(''), get settled() { return settled; } };
 }
 
 test('the standalone score waits for its explicit return action, not a carried-over key or background click', async t => {
@@ -97,4 +98,42 @@ test('the Office card retains its any-key return behavior', async t => {
   const h = await setup(t, { standalone:false }); assert.equal(h.home, null);
   t.mock.timers.tick(900); h.window.emit('keydown', { key:'Escape' });
   assert.equal(await h.result, h.card);
+});
+
+test('the card says how a visit ended, and how far down one that did not get out had got', async t => {
+  for (const [reason, run, said] of [
+    ['battery', { parts:{ reached:2, of:4 } }, 'battery flat · part 2 of 4'],
+    ['caught', { parts:{ reached:3, of:3 } }, 'caught · part 3 of 3'],
+    ['quit', { parts:{ reached:1, of:5 } }, 'left early · part 1 of 5'],
+    ['exit', { parts:{ reached:4, of:4 } }, 'back at your desk'],
+    ['caught', {}, 'caught'],                                             // (nothing said of the parts: none printed)
+  ]) {
+    const h = await setup(t, { reason, run }); t.mock.timers.tick(900);
+    assert.equal(h.ended, said, reason);
+    assert.match(h.form.attributes.get('aria-label'), new RegExp(said), 'the same words are read out');
+    h.home.emit('click'); await h.result;
+    t.mock.timers.reset();
+  }
+});
+
+test('Go back in asks for a building nobody has had, and only once the card has been seen', async t => {
+  const h = await setup(t, { anew:true });
+  assert.equal(h.anew.disabled, true); assert.match(h.home.className, /quiet/, 'the way home stands quietly beside it');
+  h.anew.emit('click'); await Promise.resolve(); assert.equal(h.settled, false);
+  t.mock.timers.tick(900); assert.equal(h.anew.disabled, false);
+  for (const key of ['Escape', 'Enter', ' ']) h.window.emit('keydown', { key, repeat:true, target:h.anew });
+  await Promise.resolve(); assert.equal(h.settled, false, 'a key carried over from play does not put it down');
+  h.anew.emit('click');
+  const card = await h.result;
+  assert.equal(card.anew, true); assert.equal(card.again, undefined);
+  assert.equal(h.document.body.children.length, 0);
+});
+
+test('with Go back in offered, Return to homepage still goes home and a kept tape is still a replay', async t => {
+  const h = await setup(t, { anew:true }); t.mock.timers.tick(900);
+  h.home.emit('click'); const card = await h.result;
+  assert.equal(card.anew, undefined); assert.equal(card.again, undefined);
+  t.mock.timers.reset();
+  const k = await setup(t, { anew:true, tape:true }); t.mock.timers.tick(900);
+  k.number.emit('click'); assert.equal((await k.result).again, 'held-tape');
 });
