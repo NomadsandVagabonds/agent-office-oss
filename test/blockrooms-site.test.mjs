@@ -70,8 +70,11 @@ test('the front page is the caretaker\'s: every picture it shows is there, every
   build(out, { origin: '', now: new Date('2026-11-14T12:00:00Z') });
   const home = fs.readFileSync(path.join(out, 'index.html'), 'utf8'), script = fs.readFileSync(path.join(out, 'home.js'), 'utf8');
   assert.ok(home.includes('<link rel="stylesheet" href="./home.css">') && fs.existsSync(path.join(out, 'home.css')) && fs.existsSync(path.join(out, 'art.js')));
-  assert.ok(!/<script\b(?![^>]*\bsrc=)/.test(home), 'no script is written into the front page: its policy would refuse one');
-  assert.equal(home.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/)[1], policyFor(null));
+  const homeInline = [...home.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !/\bsrc=/.test(m[1]));
+  assert.equal(homeInline.length, 1, 'only the import map for lazy 3D preview is written into the front page');
+  assert.deepEqual(JSON.parse(homeInline[0][2]), JSON.parse(IMPORT_MAP));
+  assert.ok(!/<link rel="modulepreload"[^>]*three/.test(home), 'the front page does not preload the 3D engine until the customizer opens');
+  assert.equal(home.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/)[1], policyFor());
   assert.ok(policyFor(null).split('; ').includes("script-src 'self'"));
   const shots = [...home.matchAll(/<img src="\.\/([^"]+)"[^>]*alt="([^"]*)"/g)];
   assert.ok(shots.length >= 4, 'pictures from inside');
