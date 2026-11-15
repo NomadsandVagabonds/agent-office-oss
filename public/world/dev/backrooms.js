@@ -9,7 +9,7 @@
 //                      way onto a kind that is still being built (`dealt: false`), which is in nobody's visit
 //   &vhs=0|1|2         clean · steady · full camcorder           &mute=1
 //   &barricades=0      without furniture that can be dragged (it is on unless turned off); &study=1 puts a review set by the landing (seed=7)
-//   &lighting=1        fluorescent-bank prototype (off by default); &lighting=dim|failing forces that treatment in eligible plain rooms
+//   &lighting=1        fluorescent-bank prototype (off by default); &lighting=dim|failing|travel|emergency|islands forces that treatment in eligible plain rooms
 //   &lightstudy=1      comparison controls and a flashlight for reviewing the prototype
 //   &pursuer=1|0       force the thing that follows you in or out; &wake=1 has it already awake, in the room with you
 //   &name=Robin        who you are                               &live=1     borrow names from the running office (GET only)
@@ -30,6 +30,7 @@
 // Nothing on screen says how to play, on purpose: WASD/arrows, mouse, Shift (hurry), Space (hop), C (crouch, held), E, V (picture), M (sound), Esc.
 import { createStage } from '../engine/stage.js';
 import { enterBackrooms } from '../backrooms/index.js';
+import { LIGHTING_MODES } from '../backrooms/lighting.js';
 import { lightingStudy } from './lighting-study.js';
 
 // &check=1: listen from the start, so that nothing said while the floor was being built is missed
@@ -118,7 +119,7 @@ async function go() {
     debug: true, scorecard: q.get('card') !== '0', home: { label: 'Return to homepage' }, where: q.get('where') || undefined,
     inventory: q.get('inventory') !== '0', barricades: q.get('barricades') !== '0',
     dev: { supplies: q.get('supplies') === '1', barricadeStudy: q.get('barricades') === '1' && q.get('study') === '1',
-      lighting: ['1', 'dim', 'failing'].includes(q.get('lighting')) ? q.get('lighting') : false,
+      lighting: ['1', ...LIGHTING_MODES].includes(q.get('lighting')) ? q.get('lighting') : false,
       owns: target => !!target?.closest?.('[data-lighting-study]') },
     onReady(handle) {
       if (room) handle.goto(/^\d+$/.test(room) ? Number(room) : room, q.has('x') ? num('x', 0) : undefined, q.has('z') ? num('z', 0) : undefined, num('yaw', 0), num('pitch', 0));

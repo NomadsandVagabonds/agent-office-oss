@@ -1,7 +1,7 @@
 // The camcorder's saved settings. Pure rules, shared with tests; storage stays
 // with the visit. Older saves only have vhs and mute, and still read as before.
 export const BACKROOMS_DEFAULTS = Object.freeze({
-  vhs: 2, mute: false, musicVolume: 1, sfxVolume: 1, sensitivity: 1, invertY: false,
+  vhs: 2, mute: false, musicVolume: 1, sfxVolume: 1, sensitivity: 1, invertY: false, steadyLighting: false,
 });
 
 export function cleanBackroomsSettings(value) {
@@ -12,6 +12,6 @@ export function cleanBackroomsSettings(value) {
     vhs: [0, 1, 2].includes(p.vhs) ? p.vhs : BACKROOMS_DEFAULTS.vhs,
     mute: p.mute === true,
     musicVolume: number('musicVolume', 0, 1), sfxVolume: number('sfxVolume', 0, 1),
-    sensitivity: number('sensitivity', .25, 2), invertY: p.invertY === true,
+    sensitivity: number('sensitivity', .25, 2), invertY: p.invertY === true, steadyLighting: p.steadyLighting === true,
   };
 }

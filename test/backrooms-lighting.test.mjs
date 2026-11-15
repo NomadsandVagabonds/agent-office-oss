@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
 import { generate, toWorld } from '../public/world/backrooms/gen.js';
-import { planLighting, panelBank, bankLevels, bankWeights, localLightScale } from '../public/world/backrooms/lighting.js';
+import { planLighting, planFloorLighting, panelBank, bankLevels, bankWeights, localLightScale } from '../public/world/backrooms/lighting.js';
 
 // Use the actual shader/bake/world code and the vendored Three, without WebGL.
 const three = new URL('../public/vendor/three.module.min.js', import.meta.url).href;
@@ -13,6 +13,43 @@ const { lamp, bake, lightAt, createKit } = await import('../public/world/backroo
 const { buildWorld } = await import('../public/world/backrooms/world.js');
 const fixture = { id: 1, kind: 'plain', W: 12, D: 6, light: { mode: 'normal' },
   panels: [-4, -2, 2, 4].map(x => ({ x, z: 0, state: 'on' })) };
+
+test('passing outages advance in order, recover, and have a long quiet interval', () => {
+  const p = {...planLighting(fixture,7,'travel'),offset:0};
+  assert.equal(p.bankCount,4);
+  assert.deepEqual(bankLevels(p,1),[.015,1,1,1]);
+  assert.deepEqual(bankLevels(p,2.5),[.015,.015,1,1]);
+  assert.deepEqual(bankLevels(p,5),[.015,.015,.015,.015]);
+  assert.deepEqual(bankLevels(p,20),[1,1,1,1]);
+  assert.ok(p.period>=64);
+  near(bankLevels(p,7.5+p.period),bankLevels(p,7.5));
+  assert.deepEqual(bankLevels(p,5,1,true),[.6,.6,.6,.6]);
+  assert.deepEqual(bankLevels(p,5,.02),[1,1,1,1]);
+  // Mirroring the assignment changes the travel direction, without changing
+  // the order of dimming in the baked bank uniforms.
+  for(const panel of fixture.panels) assert.equal(panelBank(p,panel)+panelBank({...p,reverse:!p.reverse},panel),3);
+  assert.equal(planLighting({...fixture,panels:fixture.panels.slice(0,2)},7,'travel'),null);
+  const cue={...p,cue:{start:50,hold:true,reverse:true}};
+  assert.deepEqual(bankLevels(cue,49),[1,1,1,1]);
+  assert.deepEqual(bankLevels(cue,51),[1,1,1,.015]);
+  assert.deepEqual(bankLevels(cue,500),[.015,.015,.015,.015]);
+});
+
+test('emergency lighting is rare and capped; pools keep very few ceiling tubes alive', () => {
+  const level={seed:'emergency-distribution',rooms:Array.from({length:2000},(_,id)=>({...fixture,id}))};
+  const individual=level.rooms.map(r=>planLighting(r,level.seed,true));
+  const red=individual.filter(p=>p?.kind==='emergency').length;
+  assert.ok(red>5 && red<40, `${red}/2000 emergency rooms`);
+  assert.equal(planFloorLighting(level,true).filter(p=>p?.kind==='emergency').length,1);
+  const p=planLighting(fixture,7,'islands');
+  assert.equal(fixture.panels.filter(panel=>panelBank(p,panel)===0).length,1);
+  assert.deepEqual(bankLevels(p,0),bankLevels(p,800));
+  const emergency={...planLighting(fixture,7,'emergency'),offset:0};
+  near(bankLevels(emergency,1.3),[.018,.018,1]);
+  near(bankLevels(emergency,3),[.018,.018,.08]);
+  assert.deepEqual(bankLevels(emergency,3,1,true),[.018,.018,.55]);
+  assert.deepEqual(bankLevels(emergency,3,3),[1,1,0]);
+});
 
 test('lighting is opt-in, deterministic and leaves the generated layout untouched', () => {
   const floor = generate('bank-study'), before = JSON.stringify(floor);
@@ -26,13 +63,13 @@ test('lighting is opt-in, deterministic and leaves the generated layout untouche
   }
 });
 
-test('most eligible rooms retain their steady lighting; both banks always have tubes', () => {
+test('most eligible rooms retain their steady lighting; every ceiling bank has tubes', () => {
   let affected = 0;
   for (let id = 0; id < 1000; id++) {
     const room = {...fixture,id}, plan = planLighting(room, 'distribution', true);
     if (!plan) continue;
     affected++;
-    assert.deepEqual([...new Set(room.panels.map(p => panelBank(plan,p)))].sort(), [0,1]);
+    assert.deepEqual([...new Set(room.panels.map(p => panelBank(plan,p)))].sort(), Array.from({length:plan.ceilingBanks},(_,i)=>i));
   }
   assert.ok(affected > 250 && affected < 350, `${affected}/1000 affected`);
 });
@@ -92,6 +129,43 @@ test('moving objects see actual flicker strength; emissive voxels stay independe
   assert.deepEqual([...glow.banks[0],...glow.banks[1]],[0,0,0,0,0,0]);
 });
 
+test('three/four bank bakes reconstruct light; red backup never owns ambient bounce', () => {
+  for(const count of [3,4]) {
+    const plan={ambientShare:.92,bankCount:count,ceilingBanks:count===3?2:4};
+    const sources=Array.from({length:count},(_,bank)=>lamp(-3+bank*2,2,0,bank===2?[2,.05,.02]:[1,1,1],{bank}));
+    const original=bake(probe(0),sources,amb), split=bake(probe(0),sources,amb,plan);
+    near([...original.lit],[...split.lit].map((v,c)=>v+split.banks.reduce((sum,b)=>sum+b[c],0)));
+    if(count===3) {
+      assert.equal(bankWeights(sources,1,0,3,2)[2],0);
+      const backup=lightAt(sources,amb,1,1,0,0,1,0,{lighting:plan,banks:[0,0,1]});
+      assert.ok(backup[0]>backup[1]*10,'near the backup lamp the light is red');
+    }
+  }
+});
+
+test('emergency world builds colored fixtures and honors live steady-light settings', async t => {
+  const previous=globalThis.document;
+  const ctx=new Proxy({}, {get:(_,k)=>k==='measureText'?()=>({width:20}):k.startsWith('create')?()=>({addColorStop(){}}):()=>{},set:()=>true});
+  globalThis.document={createElement:()=>({getContext:()=>ctx})}; t.after(()=>{globalThis.document=previous;});
+  let steady=false;
+  const kit=createKit(), floor=generate(7,{count:0});
+  const world=await buildWorld(kit,floor,{lighting:'emergency',steadyLighting:()=>steady,builders:{plain:c=>c.shell()}});
+  t.after(()=>{world.dispose();kit.dispose();});
+  const rt=world.rooms.find(r=>r.lighting);
+  assert.ok(rt.lights.some(l=>l.bank===2 && l.r>l.g*10));
+  assert.ok(rt.bankPanels.some(m=>m.userData.bank===2));
+  rt.group.traverse(o=>{if(o.geometry?.userData.banks){
+    assert.equal(o.material.defines.BANKS,3);
+    assert.equal(o.material.uniforms.uMoreBanks,rt.u.moreBanks);
+    assert.ok(o.geometry.attributes.aBank2);
+  }});
+  rt.lighting.offset=0; world.updateLighting(1.3); near(rt.lightLevels,[.018,.018,1]);
+  steady=true; world.updateLighting(1.3); near(rt.lightLevels,[.018,.018,.55]);
+  world.updateLighting(20); near(rt.lightLevels,[.018,.018,.55]);
+  world.setLights(rt,.02); assert.deepEqual(rt.lightLevels,[1,1,0]);
+  world.setLights(rt,1); near(rt.lightLevels,[.018,.018,.55]);
+});
+
 test('real world meshes, visible tubes, probes and encounter overrides share bank uniforms', async (t) => {
   const previous = globalThis.document;
   const ctx = new Proxy({}, {get:(_,k)=>k === 'measureText' ? () => ({width:20}) : k.startsWith('create') ? () => ({addColorStop(){}}) : () => {},set:()=>true});
@@ -132,4 +206,13 @@ test('real world meshes, visible tubes, probes and encounter overrides share ban
   near(world.lightAt(pos.x,pos.z),lit);
   for (const mesh of rt.bankPanels) near(mesh.material.color.toArray(),mesh.userData.on.toArray().map(v=>v*rt.u.banks.value[mesh.userData.bank]));
   assert.ok(before.every(g=>g.attributes.aBank0.array.length>0));
+  assert.equal(world.startLightingCue(rt),false,'ambient dim rooms are not secretly converted after baking');
+  rt.lighting.kind='travel';
+  world.updateLighting(50);
+  assert.equal(world.startLightingCue(rt,{from:'high',hold:true}),true);
+  world.updateLighting(100);
+  assert.deepEqual(rt.lightLevels,[.015,.015]);
+  world.clearLightingCue(rt);
+  world.updateLighting(100);
+  assert.deepEqual(rt.lightLevels,[1,1],'clearing the held cue restores the seeded cycle');
 });

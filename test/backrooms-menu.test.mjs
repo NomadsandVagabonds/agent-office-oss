@@ -88,6 +88,7 @@ test('settings emit typed values immediately, while restoring preferences emits 
   assert.equal(difficulty.disabled, true);
   h.menu.update({ musicVolume: .1, invertY: false });
   assert.equal(music.getAttribute('aria-valuetext'), '10%'); assert.equal(invert.checked, false); assert.equal(h.calls.changed.length, 3);
+  inputs[5].checked = true; inputs[5].emit('change'); assert.deepEqual(h.calls.changed.at(-1), ['steadyLighting', true]);
 });
 
 test('native slider keys work, Tab stays in the dialog, and Esc still works from a focused input', t => {

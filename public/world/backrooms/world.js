@@ -11,7 +11,8 @@ import { T, TILE, RISE, RUN, toWorld, toLocal, wallLength, wallPoint, wallSpans,
 import { Batch, lamp, lightAt, lin, ticks, smooth, WHITE } from './kit.js';
 import { FURNITURE, furnitureType, fixedFurnitureReason, onFurniture, overlaps, worldFootprint, boxHits } from './furniture-policy.js';
 import { fixedFurnitureFoot } from '../props/trolley.js';
-import { planLighting, panelBank, bankLevels, localLightScale } from './lighting.js';
+import { emergencyFixtures } from './lighting-fixtures.js';
+import { planFloorLighting, panelBank, bankLevels, localLightScale } from './lighting.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
 // and how far along it a local coordinate c is (c is x on the front/back walls, z on the side walls)
@@ -87,9 +88,10 @@ export async function loadCatalogue(kit) {
 export async function buildWorld(kit, level, env, tick) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
-  const rooms = level.rooms.map((def) => ({
-    def, id: def.id, group: new THREE.Group(), u: { flick: { value: 1 }, dim: { value: 1 }, banks: { value: [1, 1] } },
-    lighting: planLighting(def, level.seed, env.lighting), bankPanels: [],
+  const lightingPlans = planFloorLighting(level, env.lighting);
+  const rooms = level.rooms.map((def,i) => ({
+    def, id: def.id, group: new THREE.Group(), u: { flick: { value: 1 }, dim: { value: 1 }, banks: { value: [1, 1] }, moreBanks: { value: [0,0] } },
+    lighting: lightingPlans[i], bankPanels: [], lightLevels: [1,1],
     lights: [], amb: [0, 0, 0], level: 0, colliders: [], uses: [], zones: [], ticks: [], flickers: [],
     clip: null, floorY: null, headY: null, fold: false, flat: false, onEnter: null,
     rect: { x0: def.x + T / 2, z0: def.z + T / 2, x1: def.x + def.w - T / 2, z1: def.z + def.d - T / 2 },
@@ -114,9 +116,11 @@ export async function buildWorld(kit, level, env, tick) {
   let lightingTime = 0;
   const refreshBanks = (rt) => {
     if (!rt.lighting) return;
-    rt.u.banks.value = bankLevels(rt.lighting, lightingTime, rt.lightsK ?? 1);
+    rt.lightLevels = bankLevels(rt.lighting, lightingTime, rt.lightsK ?? 1, !!env.steadyLighting?.());
+    rt.u.banks.value = rt.lightLevels.slice(0,2);
+    rt.u.moreBanks.value = [rt.lightLevels[2] ?? 0, rt.lightLevels[3] ?? 0];
     for (const mesh of rt.bankPanels) mesh.material.color.copy(mesh.userData.on)
-      .multiplyScalar(Math.max(0.015, rt.u.banks.value[mesh.userData.bank]) * Math.max(0.02, rt.lightsK ?? 1));
+      .multiplyScalar(Math.max(0.001, rt.lightLevels[mesh.userData.bank]) * Math.max(0.02, rt.lightsK ?? 1));
   };
 
   /* ---- how bright each room is, before anything is built ------------------------- */
@@ -286,6 +290,7 @@ export async function buildWorld(kit, level, env, tick) {
       rt.clip = null; rt.floorY = null; rt.headY = null; rt.fold = false;
       ctx = roomContext(world, rt); ctx.shell();
     }
+    emergencyFixtures(ctx);
     env.stash?.(ctx);                          // what is hidden in this room, if anything (loot.js): last, so the furniture is where it always was and the coin can see what floor is left
     const t1 = performance.now();
     ctx.finish();
@@ -334,9 +339,23 @@ export async function buildWorld(kit, level, env, tick) {
   };
   // Also used for the visible part below/above a way down. Its lighting can
   // run without waking its creatures, hazards or room-entry callbacks.
+  /** Authored encounter hook: existing corridor banks go out from one end.
+   * Local low/high follows the plan's axis. Hold leaves them out until cleared. */
+  world.startLightingCue = (rt, {from = 'low', hold = true} = {}) => {
+    if (rt?.lighting?.kind !== 'travel' || !rooms.includes(rt)) return false;
+    rt.lighting.cue = {start:lightingTime, hold, reverse:from === 'low' ? rt.lighting.reverse : !rt.lighting.reverse};
+    return true;
+  };
+  world.clearLightingCue = rt => { if (rooms.includes(rt) && rt.lighting) delete rt.lighting.cue; };
   world.updateLighting = (t) => {
     lightingTime = t;
+    world.lightingTime = t;
     for (const rt of rooms) refreshBanks(rt);
+    if (env.lighting && world.lightAt) for (const f of world.furniture) {
+      if (!f.lightTint || !f.group.visible || f.away) continue;
+      const rt = world.roomAt(f.x, f.z);
+      f.lightTint.fromArray(world.lightAt(f.x, f.z, (f.y + f.top) / 2 - (rt?.def.y || 0)));
+    }
   };
   world.update = (dt, t, me) => {
     world.updateLighting(t);
@@ -349,7 +368,8 @@ export async function buildWorld(kit, level, env, tick) {
         const p = rt.phase;
         let k = 1;
         const slow = Math.sin(p * 1.7) + Math.sin(p * 2.9 + 1.3);
-        if (slow > 1.15) k = Math.random() < 0.5 ? 0.15 : 0.9;
+        if (env.steadyLighting?.()) k = 1;
+        else if (slow > 1.15) k = Math.random() < 0.5 ? 0.15 : 0.9;
         else if (Math.random() < 0.012) k = 0.3;
         rt.flickerNow = k;
         rt.u.flick.value += (k - rt.u.flick.value) * 0.6;
@@ -398,16 +418,17 @@ export async function buildWorld(kit, level, env, tick) {
     if (!rt) return [0.2, 0.2, 0.2];
     const p = toLocal(rt.def, x, z), k = rt.u.dim.value;
     return lightAt(rt.lights, rt.amb, p.x, y, p.z, 0, 1, 0,
-      { lighting: rt.lighting, banks: rt.u.banks.value, flick: rt.u.flick.value }).map((v) => v * k);
+      { lighting: rt.lighting, banks: rt.lightLevels, flick: rt.u.flick.value }).map((v) => v * k);
   };
   /** Exposure/hum follow the bank above the camera, rather than the whole room's average. */
   world.illuminationAt = (x, z) => {
     const rt = world.roomAt(x, z);
     if (!rt) return 0.3;
     const p = toLocal(rt.def, x, z);
-    return rt.level * rt.u.dim.value * (rt.lighting ? localLightScale(rt.lighting, rt.lights, rt.u.banks.value, p.x, p.z) : 1);
+    return rt.level * rt.u.dim.value * (rt.lighting ? localLightScale(rt.lighting, rt.lights, rt.lightLevels, p.x, p.z) : 1);
   };
   world.dispose = () => { scene.traverse((o) => { if (o.userData.dispose) o.userData.dispose(); }); scene.clear(); };
+  world.updateLighting(0);
   return world;
 }
 
@@ -463,6 +484,7 @@ function roomContext(world, rt) {
       world.scene.add(group);
       const record = { id: group.name, type: p.type, label: FURNITURE[p.type], room: rt.id, ...worldFootprint(f, def, toWorld), surfaceY: (def.y || 0) + f.top, group, collider: null };
       p.owner = record; record.placement = p; record.attachments = [];
+      if (env.lighting) record.lightTint = new THREE.Vector3(1, 1, 1);
       furnitureGroups.push(record); world.furniture.push(record);
     }
     const parentFor = foot => furnitureGroups.find(f => f.type !== 'chair' && onFurniture(f.placement.foot, foot));
@@ -493,7 +515,7 @@ function roomContext(world, rt) {
         if (now && now !== oldRoom) {
           const i = oldRoom?.colliders.indexOf(collider); if (i >= 0) oldRoom.colliders.splice(i, 1);
           now.colliders.push(collider); f.room = now.id;
-          f.group.traverse(object => { const u = object.material?.uniforms; if (u?.uDim) u.uDim = now.u.dim; if (u?.uFlick) u.uFlick = now.u.flick; });
+          f.group.traverse(object => { if (object.material?.userData.furnitureLight) return; const u = object.material?.uniforms; if (u?.uDim) u.uDim = now.u.dim; if (u?.uFlick) u.uFlick = now.u.flick; });
         }
         for (const use of f.attachments) {
           use.wx += dx; use.wz += dz;
@@ -766,6 +788,13 @@ function roomContext(world, rt) {
         const mesh = new THREE.Mesh(geo, kit.surface({ map: opt.map || (batch.vox ? null : kit.tex.white()), vox: batch.vox, room: rt.u, cutout: opt.cutout, flick: geo.userData.flick, banks: geo.userData.banks, side: opt.side }));
         mesh.position.set(-pv[0], -pv[1], -pv[2]);
         holder.add(mesh); holder.userData.mesh = mesh;
+        if (moving && env.lighting && !opt.unlit) mesh.userData.followFurnitureLight = f => {
+          mesh.geometry = kit.geometry(batch, [], WHITE);
+          delete mesh.material.defines.BANKS; delete mesh.material.defines.FLICK;
+          mesh.material.uniforms.uDim = {value:1}; mesh.material.uniforms.uFlick = {value:1};
+          mesh.material.uniforms.uTint.value = f.lightTint; mesh.material.userData.furnitureLight = true;
+          mesh.material.needsUpdate = true;
+        };
       });
       return holder;
     },
@@ -1048,8 +1077,16 @@ function roomContext(world, rt) {
       const bake = (batch, make, order = 0, unlit = false) => {
         let last = null;
         for (const { batch: part, owner } of [{ batch }, ...(batches.get(batch)?.moving || [])]) {
-          const geo = unlit ? kit.plain(part) : kit.geometry(part, rt.lights, rt.amb, rt.lighting);
-          if (geo) last = add(new THREE.Mesh(geo, make(geo)), order, owner?.group || rt.group);
+          const probeLit = !unlit && owner?.lightTint;
+          const geo = unlit ? kit.plain(part) : probeLit ? kit.geometry(part, [], WHITE) : kit.geometry(part, rt.lights, rt.amb, rt.lighting);
+          if (geo) {
+            const material = make(geo);
+            if (probeLit) {
+              material.uniforms.uDim = {value:1}; material.uniforms.uFlick = {value:1};
+              material.uniforms.uTint.value = owner.lightTint; material.userData.furnitureLight = true;
+            }
+            last = add(new THREE.Mesh(geo, material), order, owner?.group || rt.group);
+          }
         }
         return last;
       };
@@ -1088,7 +1125,7 @@ function roomContext(world, rt) {
         if (box.isEmpty()) continue;
         const foot = { x0: box.min.x, z0: box.min.z, x1: box.max.x, z1: box.max.z, bottom: box.min.y, top: box.max.y };
         const f = furnitureGroups.find(f => f.type !== 'chair' && onFurniture(f.placement.foot, foot));
-        if (f) { f.group.add(object); f.top = Math.max(f.top, (def.y || 0) + foot.top); }
+        if (f) { f.group.add(object); object.traverse(o => o.userData.followFurnitureLight?.(f)); f.top = Math.max(f.top, (def.y || 0) + foot.top); }
       }
       for (const f of furnitureGroups) f.group.updateMatrixWorld(true);
     },
