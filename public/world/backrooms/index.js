@@ -206,6 +206,7 @@ async function visit(office, opt) {
     inventory.toggleLight(); lightSeen = 0;
   }
   const clickIt = () => { if (canAct() && !inventory?.isOpen && inventory?.held()?.type === 'scissors') inventory.snip({ quietMiss: true }); };
+  let tipNote = '', tipUntil = 0;
   const input = createInput({ canvas, stage, hud, sound,
     owns: target => !!menu?.owns(target) || (!paused && !!inventory?.owns(target)) || (opt.debug && !!opt.dev?.owns?.(target)),
     interceptKey: event => paused ? !!menu?.handleKey(event) : !!inventory?.handleKey(event),
@@ -214,6 +215,11 @@ async function visit(office, opt) {
     key(k) {
       if (k === 'v') setPicture((vhs.level + 2) % 3);
       else if (k === 'm') changeSetting('mute', !sound.muted);
+      else if (k === 'r' && canAct() && !inventory?.isOpen && cur?.env.grip?.held?.bridge) {
+        const result = cur.env.grip.tip();
+        tipNote = result.ok ? '' : ({ support: 'Both ends need solid ground', hinge: 'Raise from the hinged end', occupied: 'Someone is in the way', clearance: 'Not enough clearance' }[result.reason] || 'Something is in the way');
+        tipUntil = performance.now() + 1800;
+      }
     } });
   input.state.sensitivity = settings.sensitivity; input.state.invertY = settings.invertY;
   menu = createMenu({ host: hud.el, settings, furniture: opt.barricades !== false, onRequestOpen: () => setPaused(true), onResume: resume,
@@ -278,6 +284,10 @@ async function visit(office, opt) {
     if (opt.barricades !== false && opt.dev?.barricadeStudy && level === first) {
       const { prepareFurnitureStudy } = await import('./furniture-study.js');
       prepareFurnitureStudy(level, builders);
+    }
+    if (opt.dev?.bridgeStudy && level === first) {
+      const { prepareBridgeStudy } = await import('./bridge-study.js');
+      prepareBridgeStudy(level, builders);
     }
     const env = f.env = {
       level, cast, who, kit, sound, hud, vhs, renderer, builders, catalogue: await loadCatalogue(kit), Avatar, layout,
@@ -556,6 +566,7 @@ async function visit(office, opt) {
     currentUse = canAct() && !inventory?.isOpen ? world.usable(me) : null;
     const grip = env.grip, furniture = grip?.action(currentUse);
     hud.hint(!!currentUse || !!furniture, furniture ? `E · ${grip.held ? 'Release' : 'Move'} ${furniture.label || furniture.type}` : 'E', !!furniture);
+    hud.tipHint(grip?.held?.bridge ? performance.now() < tipUntil && tipNote || `R · ${grip.held.deployed ? 'Raise' : 'Lower'} panel` : '');
 
     // the camcorder copes with the dark: more gain (and more noise), then its little lamp
     const here = world.current();

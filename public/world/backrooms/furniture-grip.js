@@ -28,7 +28,7 @@ export function furnitureTarget(world, me) {
   if (![me.x, me.y, me.z, me.yaw].every(Number.isFinite)) return null;
   let best = null, distance = Infinity;
   for (const item of world.furniture || []) {
-    if (!FURNITURE[item.type] || item.away || item.group?.visible === false || edgeDistance(item, me) > REACH) continue;
+    if (!FURNITURE[item.type] || item.away || item.transition || item.group?.visible === false || edgeDistance(item, me) > REACH) continue;
     const at = hit(item, me);
     if (!at || at.distance >= distance) continue;
     const n = Math.max(1, Math.ceil(at.distance / .08));
@@ -58,7 +58,7 @@ export function createFurnitureGrip(world, motion, { sound } = {}) {
     release,
     update(dt, player, enabled = true) {
       me = player;
-      if (!enabled || me.frozen || me.drop > .12 || (held && (held.away || edgeDistance(held, me) > REACH + .35))) { release(); return; }
+      if (!enabled || me.frozen || me.drop > .12 || (held && (held.away || held.transition || edgeDistance(held, me) > REACH + .35))) { release(); return; }
       target = held || furnitureTarget(world, me);
       if (held) me.gripSpeed = FURNITURE[held.type].playerSpeed;
       else delete me.gripSpeed;
@@ -75,6 +75,12 @@ export function createFurnitureGrip(world, motion, { sound } = {}) {
       me.gripSpeed = FURNITURE[held.type].playerSpeed;
       sound?.play('clack', { vol: .25 });
       return true;
+    },
+    tip() {
+      if (!held?.bridge || !me) return { ok: false, reason: 'fixed' };
+      const result = motion.tip(held, me);
+      if (result.ok) { sound?.play('furnitureScrape', { vol: .6 }); release(); }
+      return result;
     },
     /** Called by player.move for each <=6cm axis step. `step` tests the player's body after the furniture has moved. */
     step(dx, dz, step) {

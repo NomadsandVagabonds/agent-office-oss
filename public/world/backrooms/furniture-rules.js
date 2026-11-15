@@ -40,7 +40,7 @@ export function furnitureEntryTime(a, b, r, item) {
 export function furnitureClear(world, ax, az, bx, bz, r = 0, opt = {}) {
   if (![ax, az, bx, bz, r].every(Number.isFinite) || r < 0) return false;
   for (const c of world?.furnitureColliders || []) {
-    if (c.on === false || opt.furniture === 'phase'
+    if (c.on === false || c.floor || opt.furniture === 'phase'
       || Number.isFinite(opt.furnitureY) && Number.isFinite(c.top) && opt.furnitureY >= c.top) continue;
     if (furnitureEntryTime({ x: ax, z: az }, { x: bx, z: bz }, r, c) < Infinity) return false;
   }
