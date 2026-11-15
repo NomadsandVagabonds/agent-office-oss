@@ -42,8 +42,20 @@ test('left to itself the character goes down where it stood; and only being caug
   // whoever took them may say where to film from, and the camera then looks at the spot from there
   const seat = cameraFrom({ x: 3, y: 2, z: 5 }, { x: 3, y: 0, z: 1 });
   assert.ok(Math.abs(seat.yaw) < 1e-9 && seat.pitch < 0 && seat.z === 5, 'from +z, looking toward -z and down');
-  assert.match(src, /seat = f && \[f\.x, f\.y, f\.z\]\.every\(Number\.isFinite\) \? cameraFrom\(f, spot\) : cam/);
+  assert.match(src, /seen = cameraFrom\(told\.from, spot\) \?\? seen;/);
   // who took them is noted before the hit is made (the visit begins to end inside it), and forgotten if they lived
   const cast = read('pursuer.js');
   assert.match(cast, /const before = taker; taker = k;\n      const hit = env\.health\?\.damage\(n\);\n      if \(hit\) \{ if \(!hit\.dead\) taker = before;/);
+});
+
+test('a taker may say where it is filmed from, and what is looked at', () => {
+  const spot = { x: 2, y: 0, z: 2, yaw: 0 };
+  const cam = cameraFrom({ x: 2, y: 2, z: 6 }, spot);
+  assert.ok(Math.abs(cam.yaw) < 1e-9, 'it looks toward -z, at the visitor');
+  assert.ok(cam.pitch < 0, 'and down');
+  const aimed = cameraFrom({ x: 2, y: 1, z: 6, at: { x: 6, y: 1, z: 6 } }, spot);
+  assert.ok(Math.abs(aimed.yaw + Math.PI / 2) < 1e-9 && Math.abs(aimed.pitch) < 1e-9, 'at what it was told to look at');
+  assert.equal(cameraFrom(null, spot), null);
+  assert.equal(cameraFrom({ x: NaN, y: 1, z: 1 }, spot), null);
+  assert.equal(cameraFrom({ x: 2, y: 2.5, z: 2.1 }, spot), null, 'not from on top of it');
 });

@@ -488,10 +488,14 @@ async function visit(office, opt) {
       const told = { ...spot, room: rt?.id ?? null, figure: figure.root, seconds: SHOT.seconds, from: null };
       try { run = taker?.it?.takes?.(told) ?? null; }
       catch (err) { console.warn(`[backrooms] ${taker?.id} had nothing to show for it`, err); }
-      const f = told.from, seat = f && [f.x, f.y, f.z].every(Number.isFinite) ? cameraFrom(f, spot) : cam;
+      // …and may say where it is filmed from, if the corner would not show it (films(shot) → { x, y, z, at? }, in the world)
+      let seen = cam;
+      try { seen = cameraFrom(taker?.it?.films?.({ ...spot, room: rt?.id ?? null, seconds: SHOT.seconds }), spot) ?? cam; }
+      catch (err) { console.warn(`[backrooms] ${taker?.id} could not say where to film it from`, err); }
+      seen = cameraFrom(told.from, spot) ?? seen;                // (or said so from inside its takes(): shot.from)
       hud.building?.(`CAM ${String(((rt?.id ?? 0) % 16) + 1).padStart(2, '0')}`);
       sound.play('tick');
-      return { t: 0, at: 0, acc: 0, cam: seat, figure, run: typeof run === 'function' ? run : null, who: taker?.id ?? null };
+      return { t: 0, at: 0, acc: 0, cam: seen, figure, run: typeof run === 'function' ? run : null, who: taker?.id ?? null };
     } catch (err) { console.warn('[backrooms] the building\'s camera would not come on', err); return null; }
   }
   function lastShot(dt) {

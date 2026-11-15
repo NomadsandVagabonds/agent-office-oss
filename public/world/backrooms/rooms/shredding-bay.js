@@ -125,7 +125,6 @@ export function build(c) {
   let over = false;
   c.rt.takes = (shot) => {
     over = true;
-    shot.from = films(shot);
     const fig = shot.figure, yaw = rig.group.rotation.y, mouth = { x: roamer.x + Math.sin(yaw) * 0.62, z: roamer.z + Math.cos(yaw) * 0.62 };
     c.env.play('shred', roamer.x, roamer.z, 14); c.env.play('whistle', roamer.x, roamer.z, 12);
     let clock = 0, last = -1;
@@ -162,11 +161,11 @@ export function build(c) {
   };
 
   // …and where it is filmed from: side on and near, so that what goes in at one end and what comes out of the other are both in the picture
-  const films = (shot) => {
+  c.rt.films = (shot) => {
     const yaw = rig.group.rotation.y, fx = Math.sin(yaw), fz = Math.cos(yaw);
     for (const far of [3.2, 2.3]) for (const side of [1, -1]) {
       const x = roamer.x + fz * side * far + fx * 0.15, z = roamer.z - fx * side * far + fz * 0.15;
-      if (c.world.roomAt(x, z) === c.rt && c.world.los(x, z, roamer.x, roamer.z)) return { x, y: shot.y + 1.75, z };
+      if (c.world.roomAt(x, z) === c.rt && c.world.los(x, z, roamer.x, roamer.z)) return { x, y: shot.y + 1.75, z, at: { x: roamer.x + fx * 0.1, y: shot.y + 0.75, z: roamer.z + fz * 0.1 } };
     }
     return null;
   };
