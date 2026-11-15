@@ -284,7 +284,9 @@ export function build(c) {
     const row=(i)=>({x:visitor.x+(i-(n-1)/2)*.95,z:visitor.z+visitor.d/2+1.25});
     const seat=c.toWorld(visitor.x,visitor.z-.43),start={x:shot.x,z:shot.z};
     play('thunk',visitor.x,visitor.z,14);
+    let lit=false;
     return (t)=>{
+      if(!lit&&t>=.35){lit=true;c.world.setLights(c.rt,4);play('thunk',visitor.x,visitor.z,12);}   // the floods come on: this is meant to be seen
       const k=Math.min(1,t/1.6),e=k*k*(3-2*k);
       for(let i=0;i<n;i++){const to=row(i),x=from[i].x+(to.x-from[i].x)*e,z=from[i].z+(to.z-from[i].z)*e;
         patrol.post(i,x,z,e<1?Math.atan2(to.x-from[i].x,to.z-from[i].z):Math.PI);}
