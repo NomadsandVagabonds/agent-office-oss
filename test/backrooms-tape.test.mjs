@@ -164,3 +164,61 @@ test('Handover: taped looking the wrong way from B, the cardboard gets up and th
   assert.ok(!onMat(HAND.A.mat, v.s.card));
   assert.ok(!v.s.open);
 });
+
+// ---------------------------------------------------------------- Cover, as built (rooms/cover/rule.js)
+// Every size and roll the deck can deal: the answer gets in, the obvious tape does not, and neither does a sprint.
+import { COVER as CR, layout, fresh, press, step, open, inCupboard } from '../public/world/backrooms/rooms/cover/rule.js';
+import { ARCHETYPES } from '../public/world/backrooms/gen.js';
+
+function coverVisit(L, D) {
+  let s = fresh(L);
+  const me = { x: 0, z: D / 2 - 0.6, yaw: 0, inside: true };
+  const tick = () => { s = step(s, DT, me, L); };
+  const api = {
+    get s() { return s; }, me,
+    wait(sec, look) { for (let t = 0; t < sec; t += DT) { if (look) me.yaw = yawTo(me.x, me.z, look.x, look.z); tick(); } return api; },
+    go(to, look, speed = WALK) {
+      for (let n = 0; n < 4000; n++) {
+        const dx = to.x - me.x, dz = to.z - me.z, d = Math.hypot(dx, dz); if (d < 0.02) break;
+        // (a visitor cannot walk through a shutter that is down)
+        const st = Math.min(d, speed * DT), nx = me.x + (dx / d) * st, nz = me.z + (dz / d) * st;
+        if (inCupboard(L, nx, nz) && !inCupboard(L, me.x, me.z) && !open(s)) { tick(); if (n > 400) break; continue; }
+        me.x = nx; me.z = nz; me.yaw = look ? yawTo(me.x, me.z, look.x, look.z) : yawTo(0, 0, dx, dz); tick();
+      }
+      return api;
+    },
+    press() { const b = s; s = press(s, L, me); assert.notEqual(s, b, 'E did nothing: not at the deck'); return api; },
+    in: () => inCupboard(L, me.x, me.z),
+  };
+  return api;
+}
+
+test('Cover, every way it can be dealt: taped watching the screen you walk in; taped watching the shutter, or running for it, you do not', () => {
+  const a = ARCHETYPES.cover; assert.ok(a, 'Cover is in the deck');
+  for (let W = a.w[0]; W <= a.w[1]; W += 0.5) for (let D = a.d[0]; D <= a.d[1]; D += 0.5) for (const side of [-1, 1]) for (const deskZ of [-0.4, 0.2, 0.8]) for (const seconds of [9, 12]) {
+    const L = layout(W, D, { side, deskZ, seconds }), at = `W ${W} D ${D} side ${side} z ${deskZ} tape ${seconds}`;
+    const target = { x: L.reward.x, z: L.reward.z + 0.5 }, by = { x: L.mouth.x, z: L.mouth.z + 0.6 };
+    // the answer
+    let v = coverVisit(L, D).go(L.deck.stand).press().go(L.desk.mat).wait(seconds, L.desk.screen);
+    assert.equal(v.s.tape.state, 'play', at);
+    v.go(by).wait(seconds + 2).go(target);
+    assert.ok(v.in(), `the answer does not get in: ${at}`);
+    // the obvious tape: to the desk, then turn and watch the shutter
+    v = coverVisit(L, D).go(L.deck.stand).press().go(L.desk.mat).wait(seconds, L.mouth);
+    v.go(by).wait(seconds + 2).go(target);
+    assert.ok(!v.in(), `the wrong tape gets in: ${at}`);
+    // no tape: wake it yourself and run
+    v = coverVisit(L, D).go(L.desk.mat).wait(2, L.desk.screen);
+    assert.ok(open(v.s), `your own eyes do not open it: ${at}`);
+    v.go(by, null, HURRY).go(target, null, HURRY);
+    assert.ok(!v.in(), `a sprint gets in: ${at}`);
+  }
+});
+
+test('Cover: the shutter never comes down on somebody who is in the cupboard', () => {
+  const L = layout(10, 8, { side: 1, deskZ: 0, seconds: 9 });
+  let s = { ...fresh(L), lift: 1 };
+  const me = { x: L.reward.x, z: L.reward.z + 0.4, yaw: 0, inside: true };
+  for (let i = 0; i < 400; i++) s = step(s, DT, me, L);
+  assert.equal(s.lift, 1);
+});

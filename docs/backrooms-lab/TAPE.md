@@ -182,7 +182,18 @@ later.
 - Later, if wanted: the tape's eyes holding the mascot. That is the cast
   session's code.
 
+## Cover is built
+
+`rooms/cover.js` draws it and `rooms/cover/rule.js` is its rule; its deck line is in `deck2.js` (a dead end,
+`teaches: 'tape'`). To play it: `/world/dev/backrooms.html?seed=7&room=cover&pursuer=0`. The test plays the answer,
+the obvious wrong tape and a sprint in every size the room can be dealt; a script has played it in the real level on
+seed 7 (right tape, wrong tape, into the cupboard, reward picked up), and `&check=1` is clean on seeds 7, 11, 23 and
+40. Nobody has played it by hand yet.
+
+Adding any room to the deck shifts what every seed deals, and two of the older tests in `backrooms.test.mjs` sit on a
+knife-edge (a floor with 13 layouts in 15 plain rooms; one with something left in 9 of 22). Cover's weight is 0.9
+because 0.6, 0.7 and 1.0 each tip one of them over. That is worth knowing before the next room goes in.
+
 ## Next
 
-Build Cover as a playable room on `claude/backrooms-gameplay`, because the
-open questions above are about feel and nothing on paper will settle them.
+Handover, once somebody has played Cover and said whether the tape is worth a second room.
