@@ -1,10 +1,25 @@
-// One optical profile for the shared surface shader and beam-sensitive rooms.
-// Angles are half-angles: a small bright centre, then a soft circular falloff.
+// The handheld/mounted flashlight and the camcorder's small navigation lamp.
+// Only the real flashlight supplies the beam-sensitive creatures' power.
 const cos = degrees => Math.cos(degrees * Math.PI / 180);
 export const FLASHLIGHT = Object.freeze({
   coreCos: cos(5), edgeCos: cos(18), holdCos: cos(12),
   fadeFrom: 10, range: 14, holdRange: 12, attenuation: .2,
 });
+export const CAMCORDER_LAMP = Object.freeze({
+  coreCos: cos(2), edgeCos: cos(30), fadeFrom: .9, range: 2.2,
+  attenuation: .65, power: .09,
+  // Slightly below the sight line, so a level camera catches nearby carpet.
+  origin: Object.freeze([0, -.04, -.04]),
+  direction: Object.freeze([0, -Math.sin(Math.PI / 18), -cos(10)]),
+});
+
+/** The automatic lamp eases in as room light falls. Authored no-lamp rooms
+ * remain in charge; this is never inventory power or a free monster defense. */
+export function camcorderLampPower(light, blocked = false) {
+  if (blocked || !Number.isFinite(light)) return 0;
+  const t = Math.max(0, Math.min(1, (light - .035) / (.14 - .035)));
+  return CAMCORDER_LAMP.power * (1 - t * t * (3 - 2 * t));
+}
 
 // Camera-space emitters, aimed to meet the sight line four metres ahead.
 // Kept inside the player's collision radius, so pressing against a wall does
@@ -21,18 +36,29 @@ export const FLASHLIGHT_POSES = Object.freeze({
 });
 
 const gl = n => n.toFixed(8);
+const vec = a => `vec3(${a.map(gl).join(', ')})`;
 export const FLASHLIGHT_GLSL = `
 uniform vec3 uTorchOrigin;
 uniform vec3 uTorchDirection;
-float flashlightBeam(vec3 viewPosition, vec3 viewNormal) {
-  vec3 offset = viewPosition - uTorchOrigin;
+float surfaceBeam(vec3 viewPosition, vec3 viewNormal, vec3 origin, vec3 direction, vec2 coneCos, vec2 reach, float attenuation) {
+  vec3 offset = viewPosition - origin;
   float d = length(offset);
   vec3 ray = offset / max(d, 0.0001);
-  float aim = dot(ray, uTorchDirection);
-  float cone = smoothstep(${gl(FLASHLIGHT.edgeCos)}, ${gl(FLASHLIGHT.coreCos)}, aim);
-  float reach = 1.0 - smoothstep(${gl(FLASHLIGHT.fadeFrom)}, ${gl(FLASHLIGHT.range)}, d);
+  float aim = dot(ray, direction);
+  float cone = smoothstep(coneCos.x, coneCos.y, aim);
+  float fade = 1.0 - smoothstep(reach.x, reach.y, d);
   float incidence = max(dot(viewNormal, -ray), 0.0);
-  return cone * reach * incidence / (1.0 + d * d * ${gl(FLASHLIGHT.attenuation)});
+  return cone * fade * incidence / (1.0 + d * d * attenuation);
+}
+float flashlightBeam(vec3 viewPosition, vec3 viewNormal) {
+  return surfaceBeam(viewPosition, viewNormal, uTorchOrigin, uTorchDirection,
+    vec2(${gl(FLASHLIGHT.edgeCos)}, ${gl(FLASHLIGHT.coreCos)}),
+    vec2(${gl(FLASHLIGHT.fadeFrom)}, ${gl(FLASHLIGHT.range)}), ${gl(FLASHLIGHT.attenuation)});
+}
+float camcorderBeam(vec3 viewPosition, vec3 viewNormal) {
+  return surfaceBeam(viewPosition, viewNormal, ${vec(CAMCORDER_LAMP.origin)}, ${vec(CAMCORDER_LAMP.direction)},
+    vec2(${gl(CAMCORDER_LAMP.edgeCos)}, ${gl(CAMCORDER_LAMP.coreCos)}),
+    vec2(${gl(CAMCORDER_LAMP.fadeFrom)}, ${gl(CAMCORDER_LAMP.range)}), ${gl(CAMCORDER_LAMP.attenuation)});
 }`;
 
 /** The shader's emitter transformed into the room's coordinates. */

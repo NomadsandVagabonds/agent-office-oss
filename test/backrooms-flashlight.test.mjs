@@ -1,10 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FLASHLIGHT, FLASHLIGHT_POSES, flashlightRay, inFlashlight } from '../public/world/backrooms/flashlight.js';
+import { FLASHLIGHT, FLASHLIGHT_POSES, CAMCORDER_LAMP, camcorderLampPower, flashlightRay, inFlashlight } from '../public/world/backrooms/flashlight.js';
 import { createBlackoutState, stepBlackout } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
 
 const eye={x:0,y:1.1,z:0,yaw:0,pitch:0}, lit={power:1};
 const atAngle=degrees=>({x:6*Math.sin(degrees*Math.PI/180),z:-6*Math.cos(degrees*Math.PI/180)});
+
+test('the automatic camcorder lamp is broad, weak and limited to nearby surfaces',()=>{
+  assert.ok(CAMCORDER_LAMP.edgeCos<FLASHLIGHT.edgeCos);
+  assert.ok(CAMCORDER_LAMP.range<=2.5 && CAMCORDER_LAMP.fadeFrom<CAMCORDER_LAMP.range);
+  assert.ok(CAMCORDER_LAMP.power<.1);
+  assert.equal(camcorderLampPower(.3),0);
+  assert.equal(camcorderLampPower(0,true),0,'authored blackouts can suppress the camera lamp');
+  for(const invalid of [NaN,Infinity,undefined])assert.equal(camcorderLampPower(invalid),0);
+  let last=camcorderLampPower(0);
+  for(let i=1;i<=300;i++){
+    const now=camcorderLampPower(i/1000);
+    assert.ok(now<=last && now>=0);
+    assert.ok(last-now<.002,'no sudden threshold pop as the bank fades');
+    last=now;
+  }
+});
 
 test('hand and camcorder emitters converge on the sight line and rotate with the player',()=>{
   for (const mounted of [false,true]) for (const yaw of [0,.7,Math.PI/2]) for (const pitch of [-.4,0,.8]) {
