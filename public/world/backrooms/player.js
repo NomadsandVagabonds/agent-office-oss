@@ -13,8 +13,12 @@ const HOP = 2.75, GRAVITY = 9, CROUCH = 0.5;      // take-off speed (m/s: about 
 const TURN = 2.1, MOUSE = 0.0023, PITCH_MAX = 1.25;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-export function createPlayer(world, camera, start, input = { keys: new Set(), dx: 0, dy: 0, stick: { x: 0, y: 0 }, hurry: false }) {
-  const me = { x: start.x, z: start.z, yaw: start.yaw, pitch: 0, vx: 0, vz: 0, wishX: 0, wishZ: 0, moving: false, speed: 0, slow: 1, sink: 0, sinkTo: 0, duck: 0, y: 0, step: 0, shake: 1, drop: 0, dropV: 0, frozen: false };
+export function createPlayer(world, camera, start, input = { keys: new Set(), dx: 0, dy: 0, stick: { x: 0, y: 0 }, hurry: false }, perk = null) {
+  const walkSpeed = WALK * (perk?.walkScale ?? 1);
+  const hurrySpeed = HURRY * (perk?.sprintScale ?? 1);
+  const crouchFloor = perk?.crouchSpeedFloor ?? 0.42;
+  const baseNoise = perk?.noiseScale ?? 1;
+  const me = { x: start.x, z: start.z, yaw: start.yaw, pitch: 0, vx: 0, vz: 0, wishX: 0, wishZ: 0, moving: false, speed: 0, slow: 1, sink: 0, sinkTo: 0, duck: 0, y: 0, step: 0, shake: 1, drop: 0, dropV: 0, frozen: false, crouching: false, sprinting: false, noise: baseNoise };
   // `input`: keys held, mouse movement since last frame, and a thumb stick (x: right, y: forward, each −1…1; hurry: pushed
   // past its ring, which is what Shift is) — the visit's own (input.js), so that what is held on one floor is still held on the next
   let stride = 0, floor = world.floorY(start.x, start.z), sway = 0, duck = 0, hopHeld = false;
@@ -79,9 +83,12 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
       f += input.stick.y; s += input.stick.x;
     }
     const push = Math.hypot(f, s), len = Math.max(1, push);
-    const eyeNow = EYE - me.sink, crouch = clamp((eyeNow - 0.45) / (EYE - 0.45), 0, 1);
     // (a thumb walks unless it is pushed past the ring on purpose: there are rooms where running is noticed)
-    const top = Math.min(k.has('Shift') || input.hurry ? HURRY : WALK, me.gripSpeed ?? Infinity) * me.slow * (0.42 + 0.58 * crouch);
+    // (a thumb walks unless it is pushed past the ring on purpose, which is `hurry` — input.js: a full push is not a run.
+    // There are creatures that hear running, and on a phone a full push is simply how a thumb walks.)
+    const sprintingInput = k.has('Shift') || input.hurry;
+    const eyeNow = EYE - me.sink, crouch = clamp((eyeNow - 0.45) / (EYE - 0.45), 0, 1);
+    const top = Math.min(sprintingInput ? hurrySpeed : walkSpeed, me.gripSpeed ?? Infinity) * me.slow * (crouchFloor + (1 - crouchFloor) * crouch);
     const sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
     const wx = ((-sin * f + cos * s) / len) * top, wz = ((-cos * f - sin * s) / len) * top;
     me.wishX = push ? wx / top : 0; me.wishZ = push ? wz / top : 0;          // which way you are trying to go (a wall may have other ideas)
@@ -97,6 +104,11 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
     const went = Math.hypot(me.x - bx, me.z - bz);
     me.speed = went / Math.max(dt, 1e-4);
     me.moving = me.speed > 0.25;
+    const want = Math.min(EYE - 0.42, Math.max(me.sinkTo, duck, !me.frozen && k.has('c') ? CROUCH : 0));
+    me.sink += (want - me.sink) * (1 - Math.exp(-(want > me.sink ? 12 : 6) * dt));        // wading, stooping, crawling
+    me.crouching = me.sink >= 0.26;
+    me.sprinting = push > 0 && sprintingInput && me.sink < 0.2 && me.moving;
+    me.noise = me.crouching && perk?.id === 'night-cleaner' ? 0 : baseNoise;
     // the bob of somebody carrying a camcorder
     stride += went * 2.6;
     const beat = Math.floor(stride / Math.PI);
@@ -112,8 +124,6 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
       if (me.dropV > 0 && me.drop > room) { me.drop = Math.max(0, room); me.dropV = 0; }
       if (me.drop <= 0) { const hit = me.dropV; me.drop = 0; me.dropV = hit < -1.2 ? Math.min(1.15, -hit * 0.22) : 0; if (me.dropV > 0) me.drop = 0.001; if (hit < -2) listeners.step?.(me); }
     }
-    const want = Math.min(EYE - 0.42, Math.max(me.sinkTo, duck, !me.frozen && k.has('c') ? CROUCH : 0));
-    me.sink += (want - me.sink) * (1 - Math.exp(-(want > me.sink ? 12 : 6) * dt));        // wading, stooping, crawling
     const bob = Math.sin(stride * 2) * 0.016 * Math.min(1, me.speed / WALK) * me.shake;
     me.y = floor + EYE - me.sink + bob + me.drop;
     camera.position.set(me.x, me.y, me.z);

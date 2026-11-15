@@ -63,4 +63,4 @@ export function watched(s, dt, sense, rnd = Math.random) {
 }
 
 /** What is left in a battery after it has gone off. */
-export const drained = (charge) => charge * (1 - SHADOW.drain);
+export const drained = (charge, share = SHADOW.drain) => charge * (1 - share);

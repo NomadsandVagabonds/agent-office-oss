@@ -66,7 +66,7 @@ export function create(c) {
     env.interfere(1); env.hud.glitch(0.9); env.sound.play('crack'); env.sound.play('static', { dur: 0.7 });
     const rooms = new Set([w.roomAt(m.x, m.z), at && w.roomAt(at.x, at.z)].filter(Boolean));
     dark = [...rooms].map((rt) => ({ rt, t: 0 }));
-    c.drain(SHADOW.drain);
+    c.drain(env.perk?.shadowDrain ?? SHADOW.drain);
     at = null; mesh.visible = false; close = false;
   }
   function clear() {

@@ -61,6 +61,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /** True when the visitor is silent to ceiling sonar: standing still, holding crouch (C), or stooped in a crawlway. */
 export function isQuiet(sense = {}) {
+  if ((sense.noiseScale ?? 1) <= 0) return true;
   if (!sense.moving || !(sense.speed > TONER.quietSpeed)) return true;
   return (sense.sink ?? 0) >= TONER.crouchSink;
 }
@@ -143,6 +144,9 @@ export function stepToner(s, dt, sense = {}, rnd = Math.random) {
   const base = clearFlags(s);
   if (!(dt > 0) || !Number.isFinite(dt)) return base;
   const d = sense.d ?? Infinity;
+  const noiseScale = Math.max(0, sense.noiseScale ?? 1);
+  const listenFar = TONER.listenFar * noiseScale;
+  const dropFar = TONER.dropFar * noiseScale;
 
   // 1a. Ruptured puddle stain after hatching its brood: inert crust, never hatches again
   if (s.mode === 'spent') {
@@ -240,17 +244,17 @@ export function stepToner(s, dt, sense = {}, rnd = Math.random) {
   // 5. Ceiling ambush & prowling: blind echolocation clicks
   if (s.mode === 'perch' || s.mode === 'prowl') {
     const quiet = isQuiet(sense);
-    const heard = !quiet && !!sense.audible && d <= TONER.listenFar;
+    const heard = !quiet && !!sense.audible && d <= listenFar;
     let alert = s.alert;
     if (heard) {
-      const rate = (sense.speed ?? 0) >= TONER.sprintSpeed ? 1 / TONER.fuseSprint : 1 / TONER.fuseWalk;
-      const cap = d <= TONER.dropFar ? 1 : 0.86;
+      const rate = ((sense.speed ?? 0) >= TONER.sprintSpeed ? 1 / TONER.fuseSprint : 1 / TONER.fuseWalk) * noiseScale;
+      const cap = d <= dropFar ? 1 : 0.86;
       alert = Math.min(cap, alert + dt * rate);
     } else {
       alert = Math.max(0, alert - dt * 1.35);
     }
 
-    if (alert >= 1 && d <= TONER.dropFar) {
+    if (alert >= 1 && d <= dropFar) {
       return {
         ...base,
         mode: 'drop',
@@ -345,7 +349,7 @@ export function stepToner(s, dt, sense = {}, rnd = Math.random) {
   }
 
   const quiet = isQuiet(sense);
-  const tracked = !!sense.los || (!quiet && !!sense.audible && d <= TONER.listenFar);
+  const tracked = !!sense.los || (!quiet && !!sense.audible && d <= listenFar);
   const lostT = tracked ? 0 : (s.lostT || 0) + dt;
   if (lostT >= TONER.trailMemory) {
     return {

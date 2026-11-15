@@ -89,6 +89,7 @@ async function visit(t) {
   let source = readFileSync(new URL('index.js', directory), 'utf8').replace(/^import (.+) from '([^']+)';$/gm, (_, names, path) => {
     if (path === 'three') return `import ${names} from ${JSON.stringify(new URL('../public/vendor/three.module.min.js', import.meta.url).href)};`;
     if (path === '/core/backrooms-settings.mjs') return `import ${names} from ${JSON.stringify(new URL('../core/backrooms-settings.mjs', import.meta.url).href)};`;
+    if (path === '/core/perks.mjs') return `import ${names} from ${JSON.stringify(new URL('../core/perks.mjs', import.meta.url).href)};`;
     if (real.has(path)) return `import ${names} from ${JSON.stringify(new URL(path, directory).href)};`;
     return `const ${names} = globalThis[${JSON.stringify(key)}];`;
   });

@@ -160,7 +160,7 @@ test('the pieces are wired the way they are described: the stick\'s numbers come
   const read = (f) => fs.readFileSync(new URL(`../public/world/backrooms/${f}`, import.meta.url), 'utf8');
   const input = read('input.js'), player = read('player.js'), touch = read('touch.js'), hud = read('hud.js'), index = read('index.js');
   assert.match(input, /import \{ THUMBS, stickOf, inZone \} from '\.\/touch\.rule\.js';/);
-  assert.ok(!/stick\.x, input\.stick\.y\) > 0\.9/.test(player) && /k\.has\('Shift'\) \|\| input\.hurry \? HURRY : WALK/.test(player), 'the old stick ran whenever it was pushed all the way');
+  assert.ok(!/stick\.x, input\.stick\.y\) > 0\.9/.test(player) && /const sprintingInput = k\.has\('Shift'\) \|\| input\.hurry;/.test(player), 'the old stick ran whenever it was pushed all the way');
   assert.match(touch, /import \{ placeOf, zoneOf, pictureTop \} from '\.\/touch\.rule\.js';/);
   // no words on them, and nothing a phone would turn into a picture of its own
   assert.ok(!/[←-⇿☀-➿\u{1f300}-\u{1faff}]/u.test(touch.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')), 'a symbol a phone may draw its own way');

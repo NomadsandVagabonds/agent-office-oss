@@ -23,7 +23,7 @@ test('six slots reject duplicates, a seventh object and malformed records withou
   for (const id of ['missing', undefined, null, '', 0]) assert.equal(model.remove(id), null);
   assert.deepEqual(model.read(), beforeRemove);
   assert.equal(model.read().slots.filter(Boolean).length, 6);
-  for (const size of [0, 7, 1.5, NaN]) assert.throws(() => createInventory({ size }), RangeError);
+  for (const size of [0, 9, 1.5, NaN]) assert.throws(() => createInventory({ size }), RangeError);
 });
 
 test('construction and snapshots cannot mutate inventory contents or item definitions', () => {

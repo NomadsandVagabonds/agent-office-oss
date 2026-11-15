@@ -75,7 +75,78 @@ function buildHead(L, seed) {
     return v;
   }
 
-  const sk = M(L.skin, 1), skD = tone(sk, -0.16), skL = tone(sk, 0.12);
+  const sk = M(L.skin, 1), skD = tone(sk, -0.18), skL = tone(sk, 0.14);
+  if (L.species === 'alien') {
+    const neckDark = M('#1b1d24', 1), tendon = tone(sk, -0.26), earDeep = tone(sk, -0.34);
+    // Tall dark corded tendon neck rising into the tapered alien jaw
+    v.rbox(-3, 33, -3, 3, 39, 3, 1, neckDark, 'xz');
+    for (const tx of [-2, 0, 1]) for (let ty = 33; ty < 38; ty++) v.set(tx, ty, 2, tendon);
+    // Tapered chiseled jaw -> high cheekbones -> sleek domed furrowed cranium (no protruding side flaps)
+    const profile = [
+      [37, 3.5, 2.0, 7.7],
+      [38, 4.9, -1.8, 8.0],
+      [39, 5.9, -4.2, 8.1],
+      [40, 6.7, -5.6, 8.2],
+      [41, 7.4, -6.7, 8.3],
+      [42, 8.0, -7.4, 8.4],
+      [43, 8.5, -8.0, 8.5],
+      [44, 8.9, -8.5, 8.6],
+      [45, 9.2, -8.9, 8.6],
+      [46, 9.5, -9.2, 8.7],
+      [47, 9.6, -9.4, 8.7],
+      [48, 9.7, -9.5, 8.7],
+      [49, 9.7, -9.5, 8.6],
+      [50, 9.5, -9.3, 8.5],
+      [51, 9.2, -9.0, 8.3],
+      [52, 8.8, -8.6, 8.0],
+      [53, 8.2, -8.1, 7.6],
+      [54, 7.4, -7.4, 7.0],
+      [55, 6.3, -6.5, 6.1],
+      [56, 4.9, -5.3, 4.9],
+      [57, 3.2, -3.7, 3.4],
+    ];
+    for (const [y, rx, z0, z1] of profile) {
+      const zc = (z0 + z1) / 2, rz = (z1 - z0) / 2;
+      for (let x = -10; x <= 9; x++) {
+        for (let z = -10; z <= 9; z++) {
+          const nx = (x + 0.5) / rx, nz = (z + 0.5 - zc) / rz;
+          const r2 = nx * nx + nz * nz;
+          if (r2 > 1) continue;
+          let c = sk;
+          if (y >= 53 && z >= -2) c = skL;
+          else if (y <= 38 && z < 4) c = skD;
+          // Sweeping V-shaped cranial brow & crown furrows
+          if (y >= 48 && y <= 56 && z >= 3) {
+            const ax = Math.abs(x + 0.5);
+            const f1 = Math.abs(ax - (y - 47.4) * 1.02);
+            const f2 = Math.abs(ax - (y - 50.2) * 1.15);
+            if (f1 < 0.62 || f2 < 0.62) c = skD;
+            else if ((f1 < 1.25 || f2 < 1.2) && y >= 49) c = skL;
+          }
+          // Cheekbone & jaw plate seams
+          if (y >= 38 && y <= 43 && z >= 5) {
+            const ax = Math.abs(x + 0.5);
+            if (ax >= 3.4 && ax <= 4.3) c = skD;
+            else if (y <= 39 && ax < 2.5 && z >= 6) c = skL;
+          }
+          // Flush recessed ear indent painted onto existing side surface (never protruding)
+          if (y >= 43 && y <= 47 && z >= -3 && z <= 0 && r2 > 0.72) c = earDeep;
+          // Segmented temple / occipital creases
+          else if (y >= 46 && y <= 54 && r2 > 0.76 && z < 3 && ((y + Math.floor(Math.abs(z) * 0.5)) % 3 === 0)) c = skD;
+          v.set(x, y, z, c);
+        }
+      }
+    }
+    // Ridged triangular nose with two dark vertical nostril slits
+    v.box(-2, 41, 8, 2, 45, 9, sk);
+    v.box(-1, 44, 8, 1, 45, 9, skD);
+    v.box(-2, 41, 8, -1, 43, 9, M('#2b1c0a', 0));
+    v.box(1, 41, 8, 2, 43, 9, M('#2b1c0a', 0));
+    buildHair(v, L, seed);
+    buildFacialHair(v, L);
+    return v;
+  }
+
   skull(v, sk);
   v.paint(-HX, HY0, -HZ, HX, HY0 + 2, HZ, tone(sk, -0.06));           // a little weight under the chin
 
@@ -128,7 +199,7 @@ function buildHair(v, L, seed) {
   const style = L.hair;
   const animal = L.species === 'dog' || L.species === 'cat';
   if (style === 'bald') return;
-  if (animal && !['cap', 'beanie', 'mohawk', 'bun'].includes(style)) return;       // fur is the hairdo
+  if (animal && !['cap', 'beanie', 'mohawk', 'bun', 'braids'].includes(style)) return;       // fur is the hairdo
   const oc = L.outfitColor;
   const streak = (x, y, z) => {
     const base = M(L.hairColor, 2);
@@ -161,22 +232,37 @@ function buildHair(v, L, seed) {
   }
 
   // a cap of hair: top, back, sides; then a fringe that depends on the style
-  const backTo = style === 'long' ? 26 : 39;
+  const backTo = (style === 'long' || style === 'braids') ? 26 : 39;
   shell(v, streak, (x, y, z) => {
     if (y >= 48) return z <= 6 || y >= 50;                             // crown
     if (z <= -5) return y >= backTo;                                   // back of the head
-    if (Math.abs(x) >= 8 && z <= 2) return y >= (style === 'long' ? 26 : 43);      // sides
+    if (Math.abs(x) >= 8 && z <= 2) return y >= ((style === 'long' || style === 'braids') ? 27 : 43);      // sides
     return false;
-  }, { grow: style === 'long' ? 2 : 1 });
+  }, { grow: (style === 'long' || style === 'braids') ? 2 : 1 });
   if (style === 'long') {                                              // falls past the shoulders
     v.rbox(-HX - 2, 26, -HZ - 2, HX + 2, 40, -3, 3, streak, 'xz');
     for (const s of [-1, 1]) v.rbox(s < 0 ? -HX - 2 : HX, 28, -4, s < 0 ? -HX : HX + 2, 44, 3, 1, streak);
+  } else if (style === 'braids') {                                     // wavy cascade + banded side-tail & gold clip
+    const baseHair = M(L.hairColor, 2), bandC = tone(baseHair, -0.28), hiHair = tone(baseHair, 0.16);
+    v.rbox(-HX - 2, 26, -HZ - 2, HX + 2, 41, -3, 3, streak, 'xz');
+    // right-side flowing shoulder waves (leaves right ear & hoop clear)
+    v.rbox(HX, 29, -6, HX + 4, 47, 0, 2, streak);
+    v.tube(HX + 1, 35, -2, HX + 4, 27, 0, 2.2, streak);
+    // left-side outer wave + square gold hair clip + thick banded side-tail
+    v.rbox(-HX - 4, 39, -3, -HX, 49, 5, 2, streak);
+    v.rbox(-HX - 4, 33, -5, -HX - 1, 41, 0, 2, streak);
+    v.box(-HX - 5, 41, 2, -HX - 3, 44, 5, M('#e2bd5a', 0));            // square gold hair clasp on outer wave
+    v.tube(-11, 35, -1, -13, 28, 1.5, 2.9, streak);
+    v.cyl('y', -13, 1.5, 27, 29, 3.2, bandC);                          // hair wrap band
+    v.tube(-13, 27, 1.5, -15, 21, 2.5, 2.5, streak);
+    v.sphere(-15.2, 20.5, 2.7, 1.9, hiHair);
   }
   // fringe on the forehead (front face of the head)
   for (let x = -HX; x < HX; x++) {
     let drop;
     if (style === 'side') drop = 2 + Math.round((x + HX) / 4.5);       // swept across
     else if (style === 'long') drop = Math.abs(x) > 5 ? 6 : 2;         // curtains
+    else if (style === 'braids') drop = x < -5 ? 5 : x > 5 ? 4 : 1;    // parted waves, clear brow
     else if (style === 'bun') drop = 2;
     else drop = 2 + (noise3(x, 0, 0, seed) > 0.5 ? 1 : 0);             // short, a little uneven
     for (let y = HY1 - drop; y < HY1; y++) {
@@ -189,6 +275,20 @@ function buildHair(v, L, seed) {
   }
 }
 
+function buildHoopEarrings(v, color = '#e58ea6', glint = '#ffdbe6') {
+  const ring = M(color, 0), shine = M(glint, 0);
+  for (const s of [-1, 1]) {
+    const x = s < 0 ? -HX - 1 : HX;
+    for (let y = 33; y <= 40; y++) {
+      for (let z = 0; z <= 6; z++) {
+        const dy = (y - 36.5) / 3.3, dz = (z - 3.0) / 2.7;
+        const d2 = dy * dy + dz * dz;
+        if (d2 >= 0.44 && d2 <= 1.12) v.set(x, y, z, z >= 5 && y >= 36 ? shine : ring);
+      }
+    }
+  }
+}
+
 function buildFacialHair(v, L) {
   if (L.species === 'robot' || !L.facial || L.facial === 'none') return;
   const hc = M(L.hairColor, 2);
@@ -198,6 +298,8 @@ function buildFacialHair(v, L) {
   } else if (L.facial === 'beard') {
     shell(v, hc, (x, y, z) => y <= 41 && z >= -2 && (Math.abs(x) >= 5 || y <= 38), { grow: 1 });
     v.box(-4, 40, HZ, 4, 41, HZ + 1, hc);
+  } else if (L.facial === 'lashes') {
+    buildHoopEarrings(v);
   }
 }
 
@@ -211,10 +313,11 @@ const INK = '#2a211a';
 export function facePixels(L, expression = 'neutral') {
   const px = [];
   const robot = L.species === 'robot';
+  const alien = L.species === 'alien';
   const animal = L.species === 'dog' || L.species === 'cat';
-  const ey = animal ? 45 : 43;                       // eye line
+  const ey = animal ? 45 : alien ? 45 : 43;          // eye line
   const ex = animal ? 5 : 5;                         // eye centre offset
-  const eyeC = robot ? (expression === 'worried' ? '#f3b34c' : '#86e0a8') : INK;
+  const eyeC = robot ? (expression === 'worried' ? '#f3b34c' : '#86e0a8') : alien ? '#10131a' : INK;
   const put = (x, y, c, g) => px.push({ x, y, c, glow: !!g });
   const mirror = (fn) => { fn(-1); fn(1); };
 
@@ -229,7 +332,15 @@ export function facePixels(L, expression = 'neutral') {
       if (!robot && tall === 4 && (dy === 0 || dy === 3) && dx !== 0 && false) continue;
       cell(dx, dy - 1);
     }
-    if (!robot) put(cx - 1, ey + tall - 2, '#ffffff');                 // the sparkle that makes it alive
+    if (!robot) put(cx - 1, ey + tall - 2, alien ? '#dfe8f4' : '#ffffff'); // the sparkle that makes it alive
+    if (!robot && !animal && L.facial === 'lashes') {                  // smoky blue-grey iris + winged lashes + arched brows
+      put(cx, ey - 1, '#5e768f');
+      put(cx + s * 2, ey + 2, INK);
+      put(cx + s * 2, ey + 1, INK);
+      if (expression !== 'worried' && expression !== 'focus') {
+        put(cx - s, ey + 4, '#5a3836'); put(cx, ey + 5, '#5a3836'); put(cx + s, ey + 4, '#5a3836');
+      }
+    }
     if (!robot && expression === 'worried') {                          // brows tilted up in the middle
       put(cx - s, ey + 5, INK); put(cx, ey + 4, INK); put(cx + s, ey + 4, INK);
     } else if (!robot && expression === 'focus') {
@@ -237,14 +348,30 @@ export function facePixels(L, expression = 'neutral') {
     }
   });
 
-  if (!robot && !animal) {                                             // blush + mouth
+  if (alien) {
+    const seam = '#6b4918';
+    if (expression === 'happy') {
+      for (let x = -2; x < 2; x++) put(x, 39, seam);
+      put(-3, 40, seam); put(2, 40, seam);
+    } else if (expression === 'worried' || expression === 'talk') {
+      for (let x = -1; x < 1; x++) for (let y = 38; y < 40; y++) put(x, y, seam);
+    } else {
+      for (let x = -2; x < 2; x++) put(x, 39, seam);
+    }
+  } else if (!robot && !animal) {                                      // blush + mouth
+    const glam = L.facial === 'lashes';
     if (expression !== 'focus') mirror((s) => { put(s * 7 + (s < 0 ? -1 : 0), 40, '#e8a0a0'); put(s * 7 + (s < 0 ? 0 : -1), 40, '#e8a0a0'); });
     const my = 38;
-    if (expression === 'happy') { for (let x = -3; x < 3; x++) put(x, my, INK); put(-3, my + 1, INK); put(2, my + 1, INK); for (let x = -2; x < 2; x++) put(x, my - 1, '#c96a6a'); }
-    else if (expression === 'worried' || expression === 'talk') { for (let x = -1; x < 1; x++) for (let y = 0; y < 2; y++) put(x, my + y - 1, INK); }
-    else if (expression === 'focus') { for (let x = -2; x < 2; x++) put(x, my, INK); }
-    else if (expression === 'sleep') { put(-1, my, INK); put(0, my, INK); }
-    else { for (let x = -2; x < 2; x++) put(x, my, INK); put(-3, my + 1, INK); put(2, my + 1, INK); }     // a small smile
+    const lip = glam ? '#c95266' : INK;
+    if (expression === 'happy') { for (let x = -3; x < 3; x++) put(x, my, lip); put(-3, my + 1, lip); put(2, my + 1, lip); for (let x = -2; x < 2; x++) put(x, my - 1, glam ? '#e6788c' : '#c96a6a'); }
+    else if (expression === 'worried' || expression === 'talk') { for (let x = -1; x < 1; x++) for (let y = 0; y < 2; y++) put(x, my + y - 1, lip); }
+    else if (expression === 'focus') { for (let x = -2; x < 2; x++) put(x, my, lip); }
+    else if (expression === 'sleep') { put(-1, my, lip); put(0, my, lip); }
+    else {
+      for (let x = -2; x < 2; x++) put(x, my, lip);
+      put(-3, my + 1, lip); put(2, my + 1, lip);
+      if (glam) { put(-1, my - 1, '#e6788c'); put(0, my - 1, '#e6788c'); }
+    }
     if (expression === 'worried') { put(8, 47, '#8fd0f0'); put(8, 46, '#8fd0f0'); put(8, 45, '#bfe6fa'); }      // sweat drop
   } else if (animal) {
     if (expression === 'happy' || expression === 'talk') { put(-1, 37, INK); put(0, 37, INK); }
@@ -353,6 +480,86 @@ export function buildAccessory(L) {
       spin.box(-1, 0, -1, 1, 2, 1, M('#5a5a66', 0));
       break;
     }
+    case 'cowboy': {
+      const felt = M('#bfa77a', 2), feltHi = tone(felt, 0.14), feltSh = tone(felt, -0.18);
+      const band = M('#b53f38', 1), buckle = M('#ddb65c', 0);
+      // Wide Stetson brim with upturned side wings & subtle front dip
+      for (let x = -17; x <= 16; x++) {
+        for (let z = -15; z <= 15; z++) {
+          const nx = (x + 0.5) / 16.6, nz = (z + 0.5) / 14.8;
+          const r2 = nx * nx + nz * nz;
+          if (r2 > 1) continue;
+          const sideCurl = Math.round(Math.max(0, (Math.abs(x + 0.5) - 8.8) / 1.75));
+          const frontDip = z >= 9 && Math.abs(x + 0.5) < 6.5 ? -1 : 0;
+          const by = top - 2 + sideCurl + frontDip;
+          v.set(x, by, z, r2 > 0.78 ? feltHi : feltSh);
+          v.set(x, by + 1, z, sideCurl >= 2 ? feltHi : felt);
+        }
+      }
+      // Tapered cattleman crown with center pinch crease
+      for (let dy = 0; dy < 11; dy++) {
+        const t = dy / 10;
+        const rx = 8.6 - t * 2.2, rz = 9.2 - t * 1.7;
+        for (let x = -9; x <= 8; x++) {
+          for (let z = -9; z <= 8; z++) {
+            const nx = (x + 0.5) / rx, nz = (z + 0.5) / rz;
+            if (nx * nx + nz * nz > 1) continue;
+            if (dy >= 9 && Math.abs(x + 0.5) < 1.3 && Math.abs(z + 0.5) < 4.5) continue; // center crease
+            const isBand = dy >= 1 && dy <= 2;
+            const c = isBand ? band : dy >= 8 ? feltHi : felt;
+            v.set(x, top + dy, z, c);
+          }
+        }
+      }
+      // Small side ribbon clasp on the hatband
+      v.box(7, top + 1, 1, 9, top + 3, 3, buckle);
+      break;
+    }
+    case 'hoops': {
+      buildHoopEarrings(v, '#e8c45a', '#fff3c0');
+      break;
+    }
+    case 'goggles': {
+      // Round brushed-silver goggle housings with deep convex obsidian lenses & temple straps
+      const rim = M('#8f96a3', 0), rimHi = M('#c5ccd9', 0), rimSh = M('#59606c', 0);
+      const lens = M('#111318', 0), glint1 = M('#dfe8f4', 0), glint2 = M('#5d6f86', 0);
+      const cy = L.species === 'alien' ? 46.0 : 45.0;
+      const yMin = L.species === 'alien' ? 41 : 40, yMax = L.species === 'alien' ? 50 : 49;
+      for (const s of [-1, 1]) {
+        const cx = s * 4.6;
+        for (let x = -9; x <= 8; x++) {
+          for (let y = yMin; y <= yMax; y++) {
+            const dx = (x + 0.5) - cx, dy = (y + 0.5) - cy;
+            const r = Math.hypot(dx, dy);
+            if (r > 4.15) continue;
+            if (r >= 2.75) {
+              const rc = dy > 1.2 ? rimHi : dy < -1.4 ? rimSh : rim;
+              const zBack = Math.abs(x + 0.5) >= 6.8 ? 5 : 7;
+              for (let z = zBack; z <= 9; z++) v.set(x, y, z, rc);
+            } else {
+              v.set(x, y, 7, lens);
+              v.set(x, y, 8, lens);
+              if (r < 2.05) {
+                const isGlint1 = dx >= -1.7 && dx <= -0.4 && dy >= 0.4 && dy <= 1.7;
+                const isGlint2 = !isGlint1 && dx >= -2.0 && dx <= 0.2 && dy >= 0.0 && dy <= 2.0 && (dx + dy > -0.6);
+                v.set(x, y, 9, isGlint1 ? glint1 : isGlint2 ? glint2 : lens);
+              }
+            }
+          }
+        }
+        // Flush silver side strap hugging the temple
+        const sx = s < 0 ? -9 : 8, sy = Math.round(cy);
+        for (let z = 0; z <= 6; z++) {
+          v.set(sx, sy, z, rimHi);
+          v.set(sx, sy - 1, z, rimSh);
+        }
+      }
+      // Sculpted silver bridge between lenses
+      const by = Math.round(cy);
+      v.box(-2, by, 8, 2, by + 2, 10, rim);
+      v.box(-2, by + 1, 8, 2, by + 2, 10, rimHi);
+      break;
+    }
     default:
       return { model: null, spin: null };
   }
@@ -365,12 +572,19 @@ function buildTorso(L, opt) {
   const v = new Vox();
   const oc = M(L.outfitColor, 2), ocD = tone(oc, -0.2), ocL = tone(oc, 0.16);
   const robot = L.species === 'robot';
+  const alien = L.species === 'alien';
   const sk = robot ? M(STEEL, 0) : M(L.skin, 1);
   const shirt = M('#ece5d4', 2);
   const outfit = L.outfit;
   v.rbox(-7, 18, -4, 7, 35, 4, 2, outfit === 'vest' ? shirt : oc);
   v.paint(-7, 18, -4, 7, 20, 4, ocD);                                  // hem
-  v.box(-2, 34, -2, 2, 36, 2, sk);                                     // neck
+  if (alien) {
+    v.carve(-3, 33, -2, 3, 36, 4);
+    v.rbox(-3, 32, -2, 3, 36, 2, M('#22242a', 1), 'xz');                // dark corded alien neck
+    for (const tx of [-2, 0, 1]) for (let ty = 32; ty < 36; ty++) v.set(tx, ty, 1, tone(sk, -0.32));
+  } else {
+    v.box(-2, 34, -2, 2, 36, 2, sk);                                   // neck
+  }
 
   if (outfit === 'tee') {
     v.decal('+z', -3, 32, 3, 35, tone(oc, -0.12));                     // collar
@@ -397,11 +611,77 @@ function buildTorso(L, opt) {
     v.decal('+z', -2, 19, 2, 35, mix(oc, '#f4eee0', 0.72));            // the top underneath
     for (let y = 20; y < 31; y += 3) v.decal('+z', 2, y, 3, y + 1, ocL);
     v.decal('+z', -3, 19, -2, 34, ocD); v.decal('+z', 2, 19, 3, 34, ocD);
+  } else if (outfit === 'tunic') {
+    // Wholesome structured halter-neck tunic: full bodice coverage, vertical princess seams, waist sash & glossy choker
+    v.paint(-7, 31, -4, 7, 35, 4, sk);                                  // collarbone & upper shoulders
+    for (const s of [-1, 1]) {                                          // wide modest shoulder straps front-to-back
+      const sx0 = s < 0 ? -5 : 3, sx1 = s < 0 ? -3 : 5;
+      v.paint(sx0, 31, -4, sx1, 35, 4, oc);
+    }
+    v.decal('+z', -5, 30, 5, 31, ocL);                                  // crisp straight upper bodice trim
+    for (let y = 20; y < 30; y++) {                                     // tailored vertical panel seams
+      v.decal('+z', -3, y, -2, y + 1, ocD);
+      v.decal('+z', 2, y, 3, y + 1, ocD);
+    }
+    v.paint(-7, 18, -4, 7, 20, 4, ocD);                                 // structured waist band
+    v.decal('+z', -1, 19, 1, 20, ocL);
+    // Glossy metallic-rose choker collar standing proud under the chin
+    const choker = M(mix(oc, '#c96886', 0.45), 0), chokerHi = M('#f9dce8', 0);
+    v.rbox(-3, 33, -4, 3, 35, 5, 1, choker, 'xz');
+    v.box(-2, 34, 4, 1, 35, 5, chokerHi);
+    v.set(-1, 34, 4, M('#ffffff', 0));
+  } else if (outfit === 'consul') {
+    // Tailored Consul blazer: striped slate-blue shirt, patterned gold/slate silk tie, notched lapels & chest vent badge
+    const shA = M('#688198', 2), shB = M('#93acc2', 2), shCollar = M('#a7bfd4', 1);
+    const tieGold = M('#d4a138', 1), tieDark = M('#3c4654', 1), tieKnot = M('#b58424', 1);
+    for (let y = 23; y < 35; y++) {
+      const w = Math.max(1, Math.round((y - 22) / 2.2));
+      for (let x = -w; x < w; x++) {
+        if (alien && y >= 33 && x >= -1 && x < 1) continue;
+        v.decal('+z', x, y, x + 1, y + 1, (x + y) % 2 === 0 ? shB : shA);
+      }
+    }
+    // Pointed slate-blue spread shirt collar wings
+    v.decal('+z', -4, 32, -1, 35, shCollar);
+    v.decal('+z', 1, 32, 4, 35, shCollar);
+    // Patterned gold-and-slate silk tie with center medallion
+    for (let y = 23; y < 33; y++) {
+      for (let x = -1; x < 1; x++) {
+        const isKnot = y >= 31;
+        const isMedallion = y >= 27 && y <= 28;
+        const isStripe = (x + y) % 3 === 0;
+        const tc = isKnot ? tieKnot : isMedallion ? tieDark : isStripe ? tieDark : tieGold;
+        v.decal('+z', x, y, x + 1, y + 1, tc);
+      }
+    }
+    v.decal('+z', 0, 27, 1, 28, tieGold);
+    // Sharp notched lapels
+    for (let y = 23; y < 35; y++) {
+      const w = Math.max(1, Math.round((y - 22) / 2.2));
+      const lc = y === 31 ? ocD : ocL;
+      v.decal('+z', -w - 2, y, -w, y + 1, lc);
+      v.decal('+z', w, y, w + 2, y + 1, lc);
+      v.decal('+z', -w - 1, y, -w, y + 1, ocD);
+      v.decal('+z', w, y, w + 1, y + 1, ocD);
+    }
+    // Welt breast pocket on left chest (+x)
+    v.decal('+z', 2, 26, 6, 27, ocD);
+    v.decal('+z', 2, 25, 6, 26, ocL);
+    // Circular silver-rimmed dark louvered vent emblem below pocket
+    const vRim = M('#9aa2b0', 0), vGrille = M('#1b1e24', 0), vSlit = M('#454c59', 0);
+    for (let x = 2; x <= 5; x++) {
+      for (let y = 19; y <= 22; y++) {
+        const dx = x - 3.5, dy = y - 20.5;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > 3.2) continue;
+        v.set(x, y, 4, d2 >= 1.6 ? vRim : (y % 2 === 0 ? vGrille : vSlit));
+      }
+    }
   }
 
   // a lanyard and badge in the colour of the provider behind this agent
   const badge = PROVIDER_COLORS[opt.provider] || null;
-  if (badge && outfit !== 'suit') {
+  if (badge && outfit !== 'suit' && outfit !== 'consul' && outfit !== 'tunic') {
     const cord = M(badge, 0);
     for (let y = 27; y < 35; y++) { v.decal('+z', -4 + Math.round((34 - y) / 4), y, -3 + Math.round((34 - y) / 4), y + 1, cord); }
     v.box(-4, 22, 4, 0, 27, 5, M('#f4f0e6', 0));
@@ -421,19 +701,27 @@ function buildArm(L, side, part) {
   // side: -1 left, +1 right. part: 'upper' | 'lower'
   const v = new Vox();
   const robot = L.species === 'robot';
-  const oc = M(L.outfitColor, 2), ocD = tone(oc, -0.2);
+  const oc = M(L.outfitColor, 2), ocD = tone(oc, -0.2), ocL = tone(oc, 0.16);
   const sk = robot ? M(STEEL, 0) : M(L.skin, 1);
-  const sleeveLong = L.outfit !== 'tee';
+  const sleeveless = L.outfit === 'tunic';
+  const sleeveLong = L.outfit !== 'tee' && !sleeveless;
   const sleeve = L.outfit === 'vest' ? M('#ece5d4', 2) : oc;
   const x0 = side < 0 ? -11 : 7, x1 = x0 + 4;
   if (part === 'upper') {
-    v.rbox(x0, 25, -2, x1, 34, 2, 1, sleeve, 'xz');
-    v.rbox(x0, 31, -2, x1, 35, 2, 2, sleeve);                          // rounded shoulder
-    if (!sleeveLong) v.paint(x0, 25, -2, x1, 28, 2, sk);               // short sleeve ends above the elbow
-    if (!sleeveLong) v.paint(x0, 28, -2, x1, 29, 2, ocD);
+    v.rbox(x0, 25, -2, x1, 34, 2, 1, sleeveless ? sk : sleeve, 'xz');
+    v.rbox(x0, 31, -2, x1, 35, 2, 2, sleeveless ? sk : sleeve);         // rounded shoulder
+    if (!sleeveLong && !sleeveless) v.paint(x0, 25, -2, x1, 28, 2, sk); // short sleeve ends above the elbow
+    if (!sleeveLong && !sleeveless) v.paint(x0, 28, -2, x1, 29, 2, ocD);
   } else {
     v.rbox(x0, 18, -2, x1, 26, 2, 1, sleeveLong ? sleeve : sk, 'xz');
-    if (sleeveLong) v.paint(x0, 18, -2, x1, 20, 2, L.outfit === 'suit' ? M('#f4eee0', 0) : ocD);                 // cuff
+    if (sleeveLong) {
+      const cuffC = L.outfit === 'suit' ? M('#f4eee0', 0) : L.outfit === 'consul' ? M('#8ca5bb', 0) : ocD;
+      v.paint(x0, 18, -2, x1, 20, 2, cuffC);                           // cuff
+    }
+    if (sleeveless) {                                                   // wrist bracers / cuffs
+      v.paint(x0, 19, -2, x1, 23, 2, oc);
+      v.paint(x0, 22, -2, x1, 23, 2, ocL);
+    }
     v.rbox(x0, 14, -2, x1, 19, 3, 2, sk);                              // hand
     if (robot) v.paint(x0, 18, -2, x1, 19, 3, M(STEEL_D, 0));
   }
@@ -444,17 +732,18 @@ function buildLeg(L, side, part, seed) {
   const v = new Vox();
   const robot = L.species === 'robot';
   const h = hashId(String(seed));
-  const pants = robot ? M(STEEL_D, 0) : M(pick(PANTS, h >>> 5), 2);
-  const shoe = M(pick(SHOES, h >>> 9), 1);
+  const pants = robot ? M(STEEL_D, 0) : L.outfit === 'tunic' ? M('#37334a', 2) : L.outfit === 'consul' ? M('#272b34', 2) : M(pick(PANTS, h >>> 5), 2);
+  const shoe = L.outfit === 'tunic' ? M('#a8895e', 1) : L.outfit === 'consul' ? M('#1b1e24', 1) : M(pick(SHOES, h >>> 9), 1);
   const x0 = side < 0 ? -6 : 1, x1 = x0 + 5;
   if (part === 'upper') {
     v.rbox(x0, 9, -3, x1, 19, 3, 1, pants, 'xz');
   } else {
     v.rbox(x0, 2, -3, x1, 10, 3, 1, pants, 'xz');
     if (robot) v.paint(x0, 8, -3, x1, 9, 3, M(STEEL_L, 0));
+    const dressShoe = L.outfit === 'consul';
     v.rbox(x0, 0, -3, x1, 3, 6, 1, shoe, 'xz');                        // the shoe sticks out in front
-    v.paint(x0, 0, -3, x1, 1, 6, M('#f4f0e6', 0));                     // sole
-    v.decal('+y', x0 + 1, 2, x1 - 1, 5, M('#f4f0e6', 0));              // laces
+    v.paint(x0, 0, -3, x1, 1, 6, M(dressShoe ? '#2e333e' : '#f4f0e6', 0)); // sole
+    v.decal('+y', x0 + 1, 2, x1 - 1, 5, M(dressShoe ? '#3a404d' : '#f4f0e6', 0)); // laces
   }
   return v;
 }

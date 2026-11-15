@@ -615,7 +615,8 @@ export function create(c) {
     const los = d < 18 && c.los(walker.x, walker.z, m.x, m.z);
     const curRoom = c.room(walker.x, walker.z);
     const sameRoom = curRoom === c.room(m.x, m.z);
-    const audible = los || sameRoom || (d <= TONER.listenFar && c.walk.steps(walker, m) <= 2);
+    const noiseScale = m.noise ?? env.perk?.noiseScale ?? 1;
+    const audible = los || sameRoom || (d <= TONER.listenFar * noiseScale && c.walk.steps(walker, m) <= 2);
     const farFromHome = unit.s.territorial && unit.s.homeRoom !== null && curRoom !== unit.s.homeRoom
       && !(w.rooms[unit.s.homeRoom]?.def.doors || []).some((dr) => dr.to === curRoom);
 
@@ -693,7 +694,7 @@ export function create(c) {
     }
 
     unit.s = stepToner(unit.s, dt, {
-      d, los, audible, moving: m.moving, speed: m.speed, sink: m.sink,
+      d, los, audible, moving: m.moving, speed: m.speed, sink: m.sink, noiseScale,
       blockedByDoor, cannot, there, farFromHome, fleeingFire: unit.fear.flee,
     });
     if (unit.s.gaveUp) unit.prowlGoal = null;

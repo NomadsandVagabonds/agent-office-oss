@@ -42,9 +42,10 @@ export function createInventoryFire(env, { canAct = () => true, clearRay, isDry 
   });
   const request = (spec = {}) => {
     if (disposed || !canAct()) return fail('unavailable');
-    const paperCount = spec?.paperCount, duration = spec?.duration === undefined ? paperCount * FIRE_SECONDS_PER_SHEET : spec.duration;
+    const secondsPerSheet = env.perk?.fireSecondsPerSheet ?? FIRE_SECONDS_PER_SHEET;
+    const paperCount = spec?.paperCount, duration = spec?.duration === undefined ? paperCount * secondsPerSheet : spec.duration;
     if (!Number.isInteger(paperCount) || paperCount < 1 || paperCount > CRAFTING_TUNING.maxPaper
-      || !Number.isFinite(duration) || duration !== paperCount * FIRE_SECONDS_PER_SHEET) return fail('invalid-fire');
+      || !Number.isFinite(duration) || duration !== paperCount * secondsPerSheet) return fail('invalid-fire');
     if (pool.filter(f => f.remaining > 0).length >= FIRE.limit) return fail('fire-limit');
     return { ok: true, paperCount, duration };
   };

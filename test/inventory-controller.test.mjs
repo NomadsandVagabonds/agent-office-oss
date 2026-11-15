@@ -11,6 +11,7 @@ const moduleUrl = source => `data:text/javascript;base64,${Buffer.from(source).t
 const replacements = {
   './inventory-state.js': new URL('../public/world/backrooms/inventory-state.js', import.meta.url).href,
   './melee.js': new URL('../public/world/backrooms/melee.js', import.meta.url).href,
+  '/core/perks.mjs': new URL('../core/perks.mjs', import.meta.url).href,
   './inventory-hud.js': moduleUrl(`export function createInventoryHud(callbacks) {
     return { el: {}, snapshot: null, isOpen: false, callbacks,
       update(value) { this.snapshot = value; }, notice() {}, tick() {}, destroy() {}, cancelCombine() {}, beginCombine() {},

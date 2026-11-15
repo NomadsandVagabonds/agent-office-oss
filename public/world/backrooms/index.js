@@ -23,7 +23,8 @@
 // loot.js). The one thing it ever tells the office is what you were carrying
 // when you left by the way out.
 import * as THREE from 'three';
-import { resolveLook } from '/core/look.mjs';
+import { resolveLook, sanitizeLookPatch } from '/core/look.mjs';
+import { resolvePerk } from '/core/perks.mjs';
 import { BACKROOMS_DEFAULTS, cleanBackroomsSettings } from '/core/backrooms-settings.mjs';
 import { sketch, toWorld, toLocal, DECK, ARCHETYPES } from './gen.js';
 import { planVisit, floorOf, edition } from './plan.js';
@@ -74,9 +75,11 @@ function gather(office, opt) {
   const tasks = [];
   for (const list of st.tasks?.values?.() || []) for (const t of list || []) if (t && t.title) tasks.push(String(t.title));
   const me = office.walk?.me;
+  const customLook = opt.look ? sanitizeLookPatch(opt.look) : null;
+  const lookPatch = customLook && Object.keys(customLook).length ? customLook : (me?.look || { accessory: 'crown' });
   return {
     name: String(opt.name || me?.name || 'Lead'), projects, agents, tasks,
-    look: resolveLook('lead:' + (me?.id || opt.name || 'lead'), me?.look || { accessory: 'crown' }),
+    look: resolveLook('lead:' + (me?.id || opt.name || 'lead'), lookPatch),
     creations: office.creations || {},
   };
 }
@@ -135,7 +138,9 @@ async function visit(office, opt) {
   const cast = first.cast.map((name) => ({ name, look: byName.get(name) || resolveLook('backrooms:' + name) }));
   const saved = prefs.load();
   let settings = cleanBackroomsSettings({ ...saved, vhs: opt.vhs ?? saved.vhs, mute: opt.mute ?? saved.mute });
-  const camera = new THREE.PerspectiveCamera(FOV, 4 / 3, 0.06, 170);
+  const perk = opt.inventory === false ? resolvePerk('none') : resolvePerk(opt.perk);
+  const fov = perk.fov || FOV;
+  const camera = new THREE.PerspectiveCamera(fov, 4 / 3, 0.06, 170);
   const vhs = createVhs(renderer, camera, { bloom: stage.quality?.fx !== false, level: settings.vhs });
   const sound = createSound(first, settings);
   const hud = createHud(first);
@@ -222,10 +227,10 @@ async function visit(office, opt) {
   // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.
   if (opt.inventory !== false) {
     survival = createSurvival({ hud, sound, interfere(k) { interference = Math.max(interference, k); } }, {
-      canAct, onEnd: why => finish(why),
+      canAct, onEnd: why => finish(why), perk,
     });
     inventory = createInventory({ hud, sound, health: survival.health, camera: survival.camera }, {
-      canAct, review: !!opt.dev?.supplies,
+      canAct, review: !!opt.dev?.supplies, perk, seed: String(seed),
       onOpen(open) {
         input.clear();
         if (open) cur?.env.grip?.release();
@@ -270,7 +275,7 @@ async function visit(office, opt) {
   }
 
   /* ---- a floor: everything that is built for it and thrown away with it ---------------- */
-  const halfFov = () => Math.atan(Math.tan((FOV * Math.PI) / 360) * camera.aspect);
+  const halfFov = () => Math.atan(Math.tan((fov * Math.PI) / 360) * camera.aspect);
   async function build(level, carry, pace) {
     const kit = createKit();
     const f = { level, kit, world: null, player: null, env: null };
@@ -280,7 +285,7 @@ async function visit(office, opt) {
       prepareFurnitureStudy(level, builders);
     }
     const env = f.env = {
-      level, cast, who, kit, sound, hud, vhs, renderer, builders, catalogue: await loadCatalogue(kit), Avatar, layout,
+      level, cast, who, perk, kit, sound, hud, vhs, renderer, builders, catalogue: await loadCatalogue(kit), Avatar, layout,
       plan: office.net?.state?.world?.plan || {}, visit: plan, carry,
       barricadesEnabled: opt.barricades !== false,
       lighting: opt.dev?.lighting || false,
@@ -346,7 +351,7 @@ async function visit(office, opt) {
       env.health = {
         read: survival.health.read,
         damage: amount => available() ? survival.health.damage(amount) : deniedHealth(),
-        heal: amount => available() ? survival.health.heal(amount) : deniedHealth(),
+        heal: (amount, hOpt) => available() ? survival.health.heal(amount, hOpt) : deniedHealth(),
       };
       env.camera = {
         read: survival.camera.read,
@@ -419,13 +424,16 @@ async function visit(office, opt) {
     tally.at(f.level.depth);                              // how far down somebody has got
     if (!f.world.scene.parent) root.add(f.world.scene);
     f.world.scene.position.set(0, 0, 0); f.world.scene.visible = true;
-    const player = f.player = f.env.player = createPlayer(f.world, camera, from || f.level.start, input.state);
+    const player = f.player = f.env.player = createPlayer(f.world, camera, from || f.level.start, input.state, perk);
     inventory?.attend(f.env);
     const me = player.me;
     me.shake = vhs.level === 2 ? 1 : vhs.level === 1 ? 0.5 : 0.25;
     if (from) { me.pitch = from.pitch; me.drop = Math.max(0.01, from.y - (f.world.floorY(me.x, me.z) + player.EYE)); me.dropV = Math.min(from.dropV, -0.4); }
     else me.drop = 1.3;
-    player.on('step', () => sound.play(f.world.current()?.footstep || 'step'));
+    player.on('step', () => {
+      const vol = me.noise ?? 1;
+      if (vol > 0.02) sound.play(f.world.current()?.footstep || 'step', { vol: Math.min(1.45, vol) });
+    });
     if (f.env.grip) player.on('move', (dx, dz, step) => f.env.grip.step(dx, dz, step));
     for (const fn of f.env.ready || []) fn();
     f.world.enter(f.world.roomAt(me.x, me.z) || f.world.rooms[f.level.start.room]);
@@ -711,7 +719,7 @@ async function visit(office, opt) {
   // a way for the dev page (and the curious) to poke at it: always the floor you are on
   const handle = {
     settings: () => settings, setSetting: changeSetting,
-    vhs, hud, plan: () => plan, deck: DECK.map((a) => a.id),
+    vhs, hud, perk, plan: () => plan, deck: DECK.map((a) => a.id),
     get level() { return cur?.level; }, get world() { return cur?.world; }, get player() { return cur?.player; }, get env() { return cur?.env; },
     get state() { return state; }, get paused() { return paused; }, menu, loot: purse, inventory, health: survival?.health, camera: survival?.camera, survival,
     sketch: () => (cur ? sketch(cur.level) : ''),

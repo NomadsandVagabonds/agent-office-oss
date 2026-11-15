@@ -164,8 +164,10 @@ export function build(c) {
       }
       return;
     }
-    const rushing = me.speed > 2.32 || me.world.drop > 0.06;
-    const target = rushing ? 76 + Math.sin(t * 17) * 4 : me.moving ? 29 + (me.speed / 2.32) * (p.limit - 31) : 24 + Math.sin(t * 2.1) * 1.2;
+    const noiseScale = me.world.noise ?? (c.env.perk?.noiseScale ?? 1);
+    const effSpeed = me.speed * (noiseScale <= 0 ? 0.35 : noiseScale);
+    const rushing = effSpeed > 2.32 || me.world.drop > 0.06;
+    const target = rushing ? 76 + Math.sin(t * 17) * 4 : me.moving ? 29 + (effSpeed / 2.32) * (p.limit - 31) : 24 + Math.sin(t * 2.1) * 1.2;
     db += (target - db) * (1 - Math.exp(-(rushing ? 11 : 3.4) * dt));
 
     // only seal once the visitor is clear of every doorway throat so no shutter ever pins them in a wall
