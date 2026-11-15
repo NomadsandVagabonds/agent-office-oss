@@ -771,10 +771,19 @@ function roomContext(world, rt) {
     },
     /** A lit green sign over a doorway. */
     exitSign(dr, text = 'EXIT') {
-      const tex = kit.tex.custom('exit' + text, 64, 20, (g, w, h) => {
-        P(g, '#0d3a22', 0, 0, w, h); P(g, '#1f8a4e', 1, 1, w - 2, h - 2);
-        g.fillStyle = '#eafff0'; g.font = `700 ${text.length > 8 ? 9 : text.length > 5 ? 11 : 14}px ui-monospace, Menlo, Consolas, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillText(text, w / 2, h / 2 + 1);
+      // Lettered to fit its plate, whatever it says: a long one ("EXIT (PROBABLY)") used to run off both ends. What is
+      // in brackets goes underneath and smaller, as small print does. (Drawn at twice the old size, so that it is sharp.)
+      const tex = kit.tex.custom('exit:2:' + text, 128, 40, (g, w, h) => {
+        P(g, '#0d3a22', 0, 0, w, h); P(g, '#1f8a4e', 2, 2, w - 4, h - 4);
+        g.fillStyle = '#eafff0'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        const fit = (line, most, least) => {
+          let px = most;
+          for (; px > least; px--) { g.font = `700 ${px}px ui-monospace, Menlo, Consolas, monospace`; if ((g.measureText ? g.measureText(line).width : line.length * px * 0.6) <= w - 14) break; }
+          g.font = `700 ${px}px ui-monospace, Menlo, Consolas, monospace`;
+        };
+        const two = /^(.+?)\s*(\(.+\))$/.exec(text);
+        if (two) { fit(two[1], 20, 9); g.fillText(two[1], w / 2, 13); fit(two[2], 13, 8); g.fillText(two[2], w / 2, 29); }
+        else { fit(text, text.length > 8 ? 18 : text.length > 5 ? 22 : 28, 9); g.fillText(text, w / 2, h / 2 + 2); }
       }, { clamp: true });
       const p0 = doorPoint(dr, 0.05), y = Math.min(ceilAt(def, p0.x, p0.z) - 0.2, (dr.sill || 0) + (dr.h || 2.05) + 0.26), w = Math.min(dr.w - 0.2, 0.82);
       const p = c.hang(c.shining('exit' + text, tex, 1.9), dr.side, dr.c, y, w, w * 20 / 64, null, WHITE, 0.035);
