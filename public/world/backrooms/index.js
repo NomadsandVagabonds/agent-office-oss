@@ -317,6 +317,8 @@ async function visit(office, opt) {
        * room's own name for itself. The place does not wait for anybody to step out of the way.
        */
       takeAway(inside, key) {
+        const held = env.grip?.held;
+        if (held && inside(held.x, held.z)) env.grip.release();
         const furniture = env.barricades?.takeAway(inside, key) || [];
         if (env.grip?.held?.away) env.grip.release();
         return { cast: env.pursuer?.takeAway?.(inside, key) || [], residents: env.denizens?.takeAway?.(inside, key) || 0, things: env.inventory?.physical?.takeAway?.(inside, key) || 0, furniture: furniture.length };
@@ -575,7 +577,7 @@ async function visit(office, opt) {
     env.handView?.update(dt, canAct() && !inventory?.isOpen && !env.grip?.held);          // (what is in the selected pocket, in the corner of the picture)
     currentUse = canAct() && !inventory?.isOpen ? world.usable(me) : null;
     const grip = env.grip, furniture = grip?.action(currentUse);
-    hud.hint(!!currentUse || !!furniture, furniture ? `E · ${grip.held ? 'Release' : 'Move'} ${furniture.label || furniture.type}` : 'E', !!furniture);
+    hud.hint(!!currentUse || !!furniture, furniture ? grip.blocked ? 'Find space to set down' : `E · ${grip.held ? 'Set down' : 'Move'} ${furniture.label || furniture.type}` : 'E', !!furniture);
     hud.tipHint(grip?.held?.bridge ? performance.now() < tipUntil && tipNote || `R · ${grip.held.deployed ? 'Raise' : 'Lower'} panel` : '');
 
     // the camcorder copes with the dark: more gain (and more noise), then its little lamp

@@ -88,11 +88,12 @@ test('a room-built box uses ordinary grip, collision and removal without a catal
   const f = await fixture(t, { plan: false, prop: true, rot: 1 }), box = f.items.at(-1);
   assert.equal(box.type, 'prop'); assert.equal(box.group.parent, f.world.scene); geometryFits(box);
   const me = { ...f.at(3, 3.8), y: 2.2, yaw: Math.PI / 2, pitch: -.3 }, grip = createFurnitureGrip(f.world, f.env.barricades);
-  grip.update(.016, me); assert.equal(grip.target, box); assert.equal(grip.use(), true);
-  const before = box.group.position.clone(), rev = f.env.barricades.version(0);
-  assert.equal(grip.step(-.04, 0, () => true), true); close(box.group.position.x - before.x, -.04);
-  geometryFits(box); assert.ok(f.env.barricades.version(0) > rev);
+  grip.update(.016, me); assert.equal(grip.target, box); const rev = f.env.barricades.version(0); assert.equal(grip.use(), true);
+  // (carried, since the chair-grab fix: it goes where its carrier goes, and is solid again where it is set down)
+  const before = box.group.position.clone();
+  assert.equal(grip.step(-.04, 0, (dx, dz) => { me.x += dx; me.z += dz; return true; }), true); close(box.group.position.x - before.x, -.04);
   grip.release(); assert.equal(grip.held, null);
+  geometryFits(box); assert.ok(f.env.barricades.version(0) > rev);
   const p = { x: box.x, z: box.z }; box.remove();
   assert.equal(f.world.free(p.x, p.z), true); assert.equal(f.world.furniture.includes(box), false);
 });

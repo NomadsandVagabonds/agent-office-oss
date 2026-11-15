@@ -61,7 +61,7 @@ export function createFurnitureMotion(world) {
   }
   /** Swept, straight movement, at most half a metre per call. Returns its actual delta; a blocked move can be partial. */
   function move(item, dx, dz, { ignoreBody } = {}) {
-    if (!usable(item) || !Number.isFinite(dx) || !Number.isFinite(dz)) return none();
+    if (!usable(item) || item.carried || !Number.isFinite(dx) || !Number.isFinite(dz)) return none();
     const length = Math.hypot(dx, dz);
     if (!Number.isFinite(length) || length < EPS) return none();
     const scale = Math.min(1, MAX_MOVE / length), stride = Math.min(STEP, (item.x1 - item.x0) / 2, (item.z1 - item.z0) / 2);
@@ -76,6 +76,18 @@ export function createFurnitureMotion(world) {
     if (Math.hypot(ax, az) < EPS || item.translate(ax, az) === false) return none();
     if (item.deployed) item.support = bridgeSupport(world, item, item.bridge.axis, item.bridge.bearing);
     return { dx: ax, dz: az, moved: true };
+  }
+  /** A carried prop is intangible in transit. Only setting it down needs a
+   * full footprint/body/floor check; it does not sweep back through the path
+   * the visitor has already walked. Supports a different landing height. */
+  function place(item, x, z) {
+    if (!usable(item) || ![x, z].every(Number.isFinite)) return false;
+    const floor = world.floorY(x, z), dy = floor - item.y;
+    if (!Number.isFinite(floor)) return false;
+    const dx = x - item.x, dz = z - item.z;
+    if (!fits({ ...item, y: floor, top: item.top + dy }, dx, dz)) return false;
+    if (Math.hypot(dx, dz, dy) >= EPS && item.translate(dx, dz, dy) === false) return false;
+    return true;
   }
   /** The first solid movable thing a circular walker would meet on a straight segment, or null. */
   function blocking(a, b, r = 0.22) {
@@ -146,5 +158,5 @@ export function createFurnitureMotion(world) {
     if (checked.ok && !item.tip?.(checked)) return { ok: false, reason: 'busy' };
     return checked;
   }
-  return { move, blocking, shove, tip, takeAway, bringBack, version: room => world.furnitureRevision?.get(room) || 0 };
+  return { move, place, blocking, shove, tip, takeAway, bringBack, version: room => world.furnitureRevision?.get(room) || 0 };
 }
