@@ -48,6 +48,12 @@ export function build(c) {
     }
   }
 
+  // Starting nook for The Retention Clerk toward the rear centre. Kept clear before anything is put down by chance: on
+  // some seeds a shred bin landed against it, her body overlapped the bin, and she could not take a step out of it
+  const startLx = clamp(p.clerkX, -W / 2 + 1.6, W / 2 - 1.6);
+  const startLz = clamp(-D / 2 + 1.85, -D / 2 + 1.3, 0);
+  c.reserve(startLx, startLz, 0.95);
+
   // Overflow shred bins and confetti drifts
   for (let i = 0; i < 3; i++) {
     const sp = c.spot(0.45);
@@ -86,9 +92,6 @@ export function build(c) {
     framed(c, c.mapped('shredsign', tex), signSpot.side, signSpot.at, 1.5, 1.15, 0.48);
   }
 
-  // Starting nook for The Retention Clerk toward the rear centre
-  const startLx = clamp(p.clerkX, -W / 2 + 1.6, W / 2 - 1.6);
-  const startLz = clamp(-D / 2 + 1.85, -D / 2 + 1.3, 0);
   const homeW = c.toWorld(startLx, startLz);
 
   const rig = makeRetentionClerk(c.kit);

@@ -960,7 +960,9 @@ function dress(R, level, o, opt, keeper = false) {
       if (room.kind === 'plain' && rr.chance(0.16)) {                // …the wrong place for a pillar
         const dr = rr.pick(room.doors), deep = dr.side === 'front' || dr.side === 'back' ? room.D : room.W, span = wallLength(room, dr.side);
         const pw = Math.min(dr.w + 0.3, span - 1.9);
-        if (!(dr.sill > 0.01) && deep >= 3.2 && pw >= 0.6 && dr.kind !== 'crawl') {
+        // (…and not at all in a room that has steps in it: a pier before one doorway and another doorway's steps beside it
+        // left the far half of a room, and once the wall that gives, with no way to it. `fits` below did not see it.)
+        if (!room.doors.some((d2) => d2.sill > 0.01) && deep >= 3.2 && pw >= 0.6 && dr.kind !== 'crawl') {
           const p = wallPoint(room, dr.side, dr.c, 1.35), along = dr.side === 'front' || dr.side === 'back';
           // (in the way, but never in the way of everything: a pier that would wall a doorway off — it can, with another
           // doorway's steps beside it — is not built. Found on one seed in sixty once the deck had grown.)

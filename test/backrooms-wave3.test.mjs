@@ -9,6 +9,19 @@ import { PARTY, createPartyState, stepParty, releaseParty } from '../public/worl
 import { BLACKOUT, createBlackoutState, stepBlackout, releaseBlackout, isInBeam } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
 import { WARDEN, createWardenState, stepWarden, releaseWarden } from '../public/world/backrooms/rooms/safety-corridor/rule.js';
 import { PARTNER, createPartnerState, stepPartner } from '../public/world/backrooms/rooms/audit-pod/rule.js';
+import {
+  PLENUM,
+  buildPlenumPlan,
+  plenumFloorY,
+  plenumHeadY,
+  createPlenumRoomState,
+  pullShutterLever,
+  stepPlenumRoom,
+  createPlenumTonerState,
+  snipPlenumToner,
+  releasePlenumToner,
+  stepPlenumToner,
+} from '../public/world/backrooms/rooms/drop-plenum/rule.js';
 
 test('the hand, as a resident asks after it: the selected pocket in the words a room uses; a pink slip is paper to a shredder and still a pink slip', () => {
   // stand-in pockets: one selected thing, a torch that may be lit
@@ -282,3 +295,109 @@ test('the Floor Warden lets go: after the scissors he is back on his rounds and 
   assert.equal(s.phase, 'chasing');
   assert.ok(WARDEN.hurts === 2 && WARDEN.calm >= 4);
 });
+
+test('The Return Plenum: step-ladders rise within step height, firewall breach forces auto-crouch, fragile tiles collapse cleanly, and hoist opens the shutter', () => {
+  const plan = buildPlenumPlan(15, 17, 4.9);
+
+  // Front step-ladder: smooth 0.125 m steps <= 0.26 m from y = 0 up onto y = 2.68 m duct
+  let prevY = plenumFloorY(plan, 0, -2.9, 4.25);
+  assert.equal(prevY, 0);
+  for (let z = 4.125; z >= 1.50; z -= 0.125) {
+    const y = plenumFloorY(plan, 0, -2.9, z);
+    const h = plenumHeadY(plan, 0, -2.9, z);
+    assert.ok(Math.abs(y - prevY) <= 0.26, `front step-ladder jump ${Math.abs(y - prevY)} at z=${z}`);
+    assert.ok(h >= 1.85, `front step-ladder headroom ${h} at z=${z}`);
+    prevY = y;
+  }
+  assert.equal(prevY, PLENUM.deckY);
+
+  // Firewall damper breach: level at deckY, forces auto-crouch while remaining >= 0.62 m passable
+  assert.equal(plenumFloorY(plan, 0, 0, -1.8), PLENUM.deckY);
+  const breachHead = plenumHeadY(plan, 0, 0, -1.8);
+  assert.ok(breachHead >= 0.62 && breachHead < 1.0, `breach headroom ${breachHead}`);
+
+  // North step-ladder: smooth descent from y = 2.68 m back to y = 0
+  prevY = plenumFloorY(plan, 0, 2.8, -3.75);
+  assert.equal(prevY, PLENUM.deckY);
+  for (let z = -3.875; z >= -6.375; z -= 0.125) {
+    const y = plenumFloorY(plan, 0, 2.8, z);
+    const h = plenumHeadY(plan, 0, 2.8, z);
+    assert.ok(Math.abs(y - prevY) <= 0.26, `north step-ladder jump ${Math.abs(y - prevY)} at z=${z}`);
+    assert.ok(h >= 1.85, `north step-ladder headroom ${h} at z=${z}`);
+    prevY = y;
+  }
+  assert.equal(prevY, 0);
+
+  // Fragile acoustic tile creaks on entry, holds if stepped off quickly, and bursts after dwell threshold
+  let rs = createPlenumRoomState();
+  const ft = plan.fragileTiles[0];
+  const tx = (ft.x0 + ft.x1) / 2, tz = (ft.z0 + ft.z1) / 2;
+  assert.equal(plenumFloorY(plan, rs.brokenMask, tx, tz), PLENUM.deckY);
+
+  let step = stepPlenumRoom(rs, plan, { dt: 0.12, x: tx, z: tz, onPlenum: true });
+  rs = step.state;
+  assert.equal(step.creakedTile, 0);
+  assert.equal(step.collapsedTile, -1);
+
+  step = stepPlenumRoom(rs, plan, { dt: 0.30, x: tx, z: tz, onPlenum: true });
+  rs = step.state;
+  assert.equal(step.collapsedTile, 0);
+  assert.equal(plenumFloorY(plan, rs.brokenMask, tx, tz), 0, 'broken tile opens down to the office carpet');
+
+  // Manual chain-hoist lever opens the jammed steel shutter once
+  const lever1 = pullShutterLever(rs);
+  assert.equal(lever1.openedNow, true);
+  assert.equal(lever1.state.shutterOpen, true);
+  assert.equal(pullShutterLever(lever1.state).openedNow, false);
+
+  // Non-Euclidean wraparound duct portal folds East Spur directly to North-West Trunk and back after cooldown
+  let foldState = createPlenumRoomState();
+  const fold1 = stepPlenumRoom(foldState, plan, { dt: 0.05, x: 3.92, z: 1.00, onPlenum: true });
+  assert.ok(fold1.warpedTo, 'stepping into East Duct Mouth warps player across room');
+  assert.equal(fold1.warpedTo.x, plan.portals.east.exitX);
+  assert.equal(fold1.warpedTo.z, plan.portals.east.exitZ);
+  assert.equal(plenumFloorY(plan, 0, fold1.warpedTo.x, fold1.warpedTo.z), PLENUM.deckY, 'portal exit lands on walkable plenum duct');
+
+  // Cooldown prevents instant re-trigger, then stepping into North-West Mouth folds back to East Spur
+  const duringCooldown = stepPlenumRoom(fold1.state, plan, { dt: 0.2, x: -0.78, z: -2.40, onPlenum: true });
+  assert.equal(duringCooldown.warpedTo, null);
+  const afterCooldown = stepPlenumRoom(duringCooldown.state, plan, { dt: 1.2, x: -0.78, z: -2.40, onPlenum: true });
+  assert.ok(afterCooldown.warpedTo, 'stepping into North-West Mouth after cooldown warps back to East Spur');
+  assert.equal(afterCooldown.warpedTo.x, plan.portals.northWest.exitX);
+});
+
+test('Plenum Toner: ignores crouched crawlers, drops on upright sheet-metal clanks, fears lit paper, and recoils from Safety Scissors', () => {
+  let s = createPlenumTonerState(0);
+
+  // Crouching silently directly underneath leaves it perched upside down on the slab
+  for (let i = 0; i < 12; i++) {
+    const r = stepPlenumToner(s, { dt: 0.1, dist: 2.2, onPlenum: true, audible: false, quiet: true });
+    s = r.state;
+    assert.equal(s.phase, 'perched');
+    assert.equal(r.slabK, 1);
+  }
+
+  // Upright movement on galvanized ductwork locks biosonar and triggers drop + chase
+  let sawDrop = false;
+  for (let i = 0; i < 12; i++) {
+    const r = stepPlenumToner(s, { dt: 0.1, dist: 3.5, onPlenum: true, audible: true, quiet: false, clearLine: true });
+    s = r.state;
+    if (r.droppedNow) sawDrop = true;
+  }
+  assert.equal(sawDrop, true);
+  assert.equal(s.phase, 'chasing');
+
+  // Safety Scissors snip blasts it back up onto the slab in recoil
+  const snipped = snipPlenumToner(s);
+  assert.equal(snipped.phase, 'recoil');
+  assert.ok(snipped.recoilT >= 5);
+
+  // Lit paper also drives a chasing Plenum Toner into recoil; landing a bite releases cleanly
+  const fireScared = stepPlenumToner(s, { dt: 0.1, dist: 2.0, onPlenum: true, audible: true, fleeingFire: true });
+  assert.equal(fireScared.state.phase, 'recoil');
+
+  const bite = stepPlenumToner(s, { dt: 0.05, dist: 0.4, onPlenum: true, audible: true, clearLine: true });
+  assert.equal(bite.caught, true);
+  assert.equal(releasePlenumToner(bite.state).phase, 'recoil');
+});
+

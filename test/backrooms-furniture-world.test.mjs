@@ -21,7 +21,7 @@ const kitUrl = browserModule('../public/world/backrooms/kit.js', {
   '../vox/mesher.js': browserModule('../public/world/vox/mesher.js'),
 });
 const [{ buildWorld }, { createKit, Batch }] = await Promise.all([
-  import(browserModule('../public/world/backrooms/world.js', { './kit.js': kitUrl })), import(kitUrl),
+  import(browserModule('../public/world/backrooms/world.js', { './kit.js': kitUrl, './lighting-fixtures.js': browserModule('../public/world/backrooms/lighting-fixtures.js', { './kit.js': kitUrl }) })), import(kitUrl),
 ]);
 const draw = new Proxy({}, { get: (_, name) => name === 'createRadialGradient' ? () => ({ addColorStop() {} }) : () => {}, set: () => true });
 const previousDocument = globalThis.document;
@@ -32,14 +32,15 @@ function room(id, rot = 0) {
   return { id, kind: 'plain', x: id * 8, z: 0, w: 8, d: 8, W: 8, D: 8, H: 3, cx: id * 8 + 4, cz: 4, y: 0, rot,
     look: { tube: '#fffbe0', wall: '#d2c98d' }, light: { power: 1 }, panels: [], doors: [], wins: [] };
 }
-async function make(t, builder, { enabled = true, rot = 0, two = false } = {}) {
+async function make(t, builder, { enabled = true, rot = 0, two = false, lighting = false } = {}) {
   const kit = createKit(), makers = { ...officeProps, trolley }, catalogue = {
     has: type => typeof makers[type] === 'function',
     geo: type => makers[type] ? kit.model(type, makers[type]) : null,
   }, rooms = two ? [room(0, rot), room(1)] : [room(0, rot)];
+  if (lighting) for (const r of rooms) { r.light.mode='normal'; r.panels=[{x:-2,z:0,state:'on'},{x:2,z:0,state:'on'}]; }
   const links = two ? [{ a: 0, b: 1, axis: 'x', at: 8, from: 3, to: 5 }] : [];
   if (two) { rooms[0].doors.push({ to: 1, side: rot ? 'front' : 'right', c: 0, w: 2, h: 2.1 }); rooms[1].doors.push({ to: 0, side: 'left', c: 0, w: 2, h: 2.1 }); }
-  const env = { catalogue, barricadesEnabled: enabled, builders: { plain: c => { if (c.room.id === 0) builder(c); } } };
+  const env = { catalogue, lighting, barricadesEnabled: enabled, builders: { plain: c => { if (c.room.id === 0 || lighting) builder(c); } } };
   const world = await buildWorld(kit, { seed: 'furniture-world', rooms, links, windows: [] }, env);
   env.world = world;
   t.after(() => { world.dispose(); kit.dispose(); });
@@ -146,6 +147,28 @@ test('desktop models, raw screen/paper, added objects, uses and contact shadows 
   assert.equal(world.usable(me), use);
   desk.away = 'hidden-face'; world.refreshFurniture();
   assert.equal(world.usable(me), null, 'a vanished desk cannot leave an invisible usable screen behind');
+});
+
+test('movable desks and carried dynamic meshes pick up current banks across room boundaries', async t => {
+  const world = await make(t, c => {
+    c.light(-2,2,0,'#ffffff',1,{bank:0}); c.light(2,2,0,'#ffffff',1,{bank:1});
+    if (c.room.id) return;
+    const desk=c.prop('desk',-2,0), batch=new Batch();
+    batch.box(-2.1,desk.top,-.1,-1.9,desk.top+.15,.1,[1,1,1]);
+    c.dynamic(batch);
+  }, {two:true,lighting:'dim'});
+  const desk=world.furniture[0], materials=[];
+  desk.group.traverse(o=>{if(o.material?.userData.furnitureLight){materials.push(o.material);assert.equal(o.geometry.userData.banks,0);}});
+  assert.equal(materials.length,2,'desk and carried dynamic object use the probe');
+  world.updateLighting(0); const bright=desk.lightTint.x;
+  desk.translate(4,0); world.updateLighting(1);
+  assert.ok(bright>desk.lightTint.x*2,'the desk darkens under the failed bank');
+  world.setLights(world.rooms[1],.03);
+  desk.translate(6,0); world.updateLighting(2);
+  assert.equal(desk.room,1);
+  const expected=world.lightAt(desk.x,desk.z,(desk.y+desk.top)/2);
+  assert.deepEqual(desk.lightTint.toArray(),expected);
+  for(const m of materials){assert.equal(m.uniforms.uDim.value,1);assert.equal(m.uniforms.uTint.value,desk.lightTint);}
 });
 
 test('stack bases are fixed visibly while stray chairs of the same model still move', async t => {
