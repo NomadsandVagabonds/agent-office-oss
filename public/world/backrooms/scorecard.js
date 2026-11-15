@@ -7,9 +7,11 @@
 //
 //   const card = await showScorecard({ office, reason, kept, run, name });
 //
-// A page that is not the office may give the card its own heading (`brand`)
-// and say where a kept tape can be found again (`share`: the number on the
-// card is then a link to it, and choosing it is asking to walk it again).
+// A page that is not the office may give the card its own heading (`brand`),
+// say where a kept tape can be found again (`share`: the number on the card
+// is then a link to it, and choosing it is asking to walk it again), and add
+// a line of its own once it knows what to say (`also`: the site's book). A
+// `home` action keeps the card up until its return button or a tape is chosen.
 //
 // reason, kept and run are what the visit resolves with (index.js). The rules
 // are not here: what a visit scored and what is kept of it is core/runs.mjs,
@@ -99,9 +101,15 @@ const CSS = `
 .brc-box .v .brc-ic { width: 1.25em; height: 1.25em; }
 .brc-box small { grid-column: 2 / -1; font-size: .84em; opacity: .7; margin-top: -.22em; }
 .brc-seed { font-weight: 500 !important; opacity: .85; overflow: hidden; text-overflow: ellipsis; max-width: 13em; }
-a.brc-seed { color: inherit; text-decoration: underline dotted; text-underline-offset: .22em; cursor: pointer; }
-a.brc-seed:focus-visible { outline: 2px solid currentColor; outline-offset: .15em; }
+a.brc-seed, a.brc-more { color: inherit; text-decoration: underline dotted; text-underline-offset: .22em; cursor: pointer; }
+a.brc-seed:focus-visible, a.brc-more:focus-visible { outline: 2px solid currentColor; outline-offset: .15em; }
 .brc-foot { margin-top: 1.1em; font-size: .68em; letter-spacing: .3em; font-weight: 700; opacity: .5; }
+.brc-actions { display: flex; justify-content: flex-end; margin-top: 1.1em; }
+.brc-home { min-height: 44px; padding: .65em 1em; border: 1px solid #4a3a10; border-radius: 0;
+  background: #4a3a10; color: #f2e7ab; font: inherit; font-weight: 700; cursor: pointer; }
+.brc-home:hover { background: #63501b; }
+.brc-home:focus-visible { outline: 2px solid #4a3a10; outline-offset: 4px; }
+.brc-home:disabled { opacity: .45; cursor: default; }
 .brc-go { position: absolute; right: .2em; bottom: -.1em; opacity: 0; color: #4a3a10; animation: brc-blink 1.1s 1.5s steps(1) infinite; }
 @keyframes brc-in { from { opacity: 0; } }
 @keyframes brc-blink { 0% { opacity: .8; } 50% { opacity: 0; } }
@@ -114,7 +122,7 @@ const el = (tag, cls, ...kids) => { const e = document.createElement(tag); if (c
 /** What is printed at the head of the card, unless whoever shows it says otherwise — and whether there is a jar to be paid into (jar: false where there is no office, and so nothing to spend a coin on). */
 const BRAND = Object.freeze({ over: 'AGENT OFFICE', title: 'Out of Office', jar: true });
 
-/** The card, printed on the wall. → the element (not yet shown). opt: { brand: { over, title, jar }, share: (seed) => href } */
+/** The card, printed on the wall. → the element (not yet shown). opt: { brand: { over, title, jar }, share: (seed) => href, home: { label } } */
 function draw(card, who, opt = {}) {
   const brand = { ...BRAND, ...(opt.brand || {}) };
   const out = card.reason === 'exit', ended = ENDED[card.reason] || ENDED.quit;
@@ -160,8 +168,13 @@ function draw(card, who, opt = {}) {
     box,
     el('div', 'brc-foot', `PATTERN 13/B · ${String(who || '').toUpperCase().slice(0, 24)}`));
   form.setAttribute('role', 'dialog'); form.setAttribute('aria-modal', 'true'); form.setAttribute('aria-label', `${brand.title}, ${replay ? 'a tape played back, ' : ''}${ended}: ${num(card.score)} points`); form.tabIndex = -1;
+  if (opt.home) {
+    const home = el('button', 'brc-home', opt.home.label || 'Return to homepage');
+    home.type = 'button'; home.disabled = true;
+    form.append(el('div', 'brc-actions', home));
+  }
   // (the mark that says it can be put down is not printed: it sits outside what is multiplied into the paper)
-  return el('div', 'brc-veil', el('div', 'brc-wrap', form, el('div', 'brc-go', '▸')));
+  return el('div', 'brc-veil', el('div', 'brc-wrap', form, !opt.home && el('div', 'brc-go', '▸')));
 }
 
 /* ---- the record, where there is no office to keep it ------------------------------------------ */
@@ -181,10 +194,12 @@ function local(report, who) {
 }
 
 /**
- * Show the card for a visit that is over, and resolve when it has been put down (any key, a click, a tap).
- * @param {{office?:object, reason:string, kept?:object, run?:object, name?:string, brand?:{over?:string, title?:string, jar?:boolean}, share?:(seed:string)=>string}} o
+ * Show the card for a visit that is over, and resolve when it has been put down.
+ * @param {{office?:object, reason:string, kept?:object, run?:object, name?:string, brand?:{over?:string, title?:string, jar?:boolean}, home?:{label?:string}, share?:(seed:string)=>string, also?:(card:object, report:object)=>Promise<{icon?:string,label:string,value?:string,href?:string}|null>}} o
  *        run: { seed, seconds, parts: { reached, of }, rooms: { explored, kinds }, cast: { met, survived }, hearts?, edition? } — what index.js counted
  *        brand: what is printed at the head of the card (default: the office's) · share: where a kept tape can be found again
+ *        also: one more line for the card, given the card and what was reported; it may take its time, and may be null
+ *        home: show a return button and wait for it (or a tape); without it, the office's card accepts any key or click
  * @returns {Promise<object>} the card as it was shown (core/runs.mjs: settleRun, with `coins`) — and `again`: the tape's
  *          seed, if it was put down by choosing the tape's number (only where there is a `share`)
  */
@@ -198,24 +213,50 @@ export async function showScorecard(o = {}) {
   // (on the page itself, not in the office's own interface: that steps aside for as long as somebody is out of the
   // building, and takes everything in it out of sight with it)
   const root = document.body;
-  const style = el('style', '', CSS), veil = draw(card, who, { brand: o.brand, share: o.share }), form = veil.querySelector('.brc-form');
-  const number = veil.querySelector('a.brc-seed');
+  const style = el('style', '', CSS), veil = draw(card, who, { brand: o.brand, share: o.share, home: o.home }), form = veil.querySelector('.brc-form');
+  const number = veil.querySelector('a.brc-seed'), home = veil.querySelector('button.brc-home');
   document.head.append(style); root.append(veil);
+  // a line whoever is showing the card wants on it, which it may have to go and ask somebody about: printed when it is known
+  if (typeof o.also === 'function') {
+    Promise.resolve().then(() => o.also(card, report)).then((line) => {
+      if (!line || !veil.isConnected) return;
+      const value = line.href ? Object.assign(el('a', 'v brc-more', line.value || ''), { href: line.href }) : el('span', 'v', line.value || '');
+      veil.querySelector('.brc-box').append(icon(ICONS[line.icon] ? line.icon : 'fresh'), el('span', '', String(line.label || '')), value);
+    }).catch(() => { /* then the card is the card */ });
+  }
   try { form.focus({ preventScroll: true }); } catch { /* it will take a click, then */ }
   let again = false;
   await new Promise((done) => {
     let armed = false;
-    const arm = setTimeout(() => { armed = true; }, 900);                    // nobody puts it down before they have seen it
-    const put = (e) => {
-      if (!armed || (e.type === 'keydown' && ['Shift', 'Control', 'Alt', 'Meta', 'Tab'].includes(e.key))) return;
-      if (e.type === 'pointerup' && e.button > 0) return;                   // (another button is asking the browser something: for the link's address, say)
-      // put down by its tape's number (a click on it, or Enter with it chosen): that is asking for the same building again
-      again = !!number && (e.type === 'keydown' ? e.key === 'Enter' && document.activeElement === number : number.contains(e.target));
-      e.preventDefault(); e.stopPropagation();
+    const arm = setTimeout(() => { armed = true; if (home) home.disabled = false; }, 900); // nobody puts it down before they have seen it
+    const finish = (replay, e) => {
+      if (!armed) { e?.preventDefault(); return; }
+      again = replay;
+      e?.preventDefault(); e?.stopPropagation();
       clearTimeout(arm); window.removeEventListener('keydown', put, true); veil.removeEventListener('pointerup', put);
       veil.remove(); style.remove(); done();
     };
-    number?.addEventListener('click', (e) => e.preventDefault());           // (it is a way of asking, not somewhere to go: the page is already there)
+    const put = (e) => {
+      if (home) {
+        // A key still held from play, Esc, or a click on the score must not
+        // erase it. Buttons and links keep their normal keyboard activation.
+        if (e.type !== 'keydown') return;
+        if (e.key === 'Tab') {
+          const choices = [...form.querySelectorAll('a[href], button:not(:disabled)')];
+          const at = choices.indexOf(document.activeElement);
+          if (choices.length) choices[at < 0 ? (e.shiftKey ? choices.length - 1 : 0) : (at + (e.shiftKey ? -1 : 1) + choices.length) % choices.length].focus();
+          e.preventDefault(); e.stopPropagation();
+        } else if (e.repeat || e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); }
+        else e.stopPropagation();
+        return;
+      }
+      if (!armed || (e.type === 'keydown' && ['Shift', 'Control', 'Alt', 'Meta', 'Tab'].includes(e.key))) return;
+      if (e.type === 'pointerup' && e.button > 0) return;                   // (another button is asking the browser something: for the link's address, say)
+      // put down by its tape's number (a click on it, or Enter with it chosen): that is asking for the same building again
+      finish(!!number && (e.type === 'keydown' ? e.key === 'Enter' && document.activeElement === number : number.contains(e.target)), e);
+    };
+    home?.addEventListener('click', (e) => finish(false, e));
+    number?.addEventListener('click', (e) => { e.preventDefault(); if (home && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) finish(true, e); });
     window.addEventListener('keydown', put, true); veil.addEventListener('pointerup', put);
   });
   return again ? { ...card, again: card.tape.seed } : card;

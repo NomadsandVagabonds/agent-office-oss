@@ -182,6 +182,9 @@ Code ask that by itself. `office claim` says "this is mine for now";
 Specs: [`CONTRACT.md`](CONTRACT.md) (the control plane), [`WORLD.md`](WORLD.md)
 (the world), [`docs/HARNESS.md`](docs/HARNESS.md) (driven sessions and
 delegation), [`CREATIONS.md`](CREATIONS.md), [`KNOWLEDGE.md`](KNOWLEDGE.md).
+The level under the office also builds as a site of its own, BlockRooms:
+[`docs/BLOCKROOMS.md`](docs/BLOCKROOMS.md) (`vercel.json` and `api/` at the
+root are that site's, not the office's).
 
 > **Status of driven sessions.** Everything in `server/harness/` is covered by
 > tests that run real child processes speaking the real wire formats — but the

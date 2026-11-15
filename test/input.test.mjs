@@ -20,14 +20,14 @@ function setup(t) {
   const previous = { window:globalThis.window, document:globalThis.document };
   const window = globalThis.window = new Surface(), document = globalThis.document = new Surface();
   window.matchMedia = () => ({ matches:false }); document.activeElement = { tagName:'BODY' }; document.pointerLockElement = null;
-  const calls = { sound:0, use:0, quit:0, click:0, lock:0, unlock:0, keys:[], wheels:[] };
+  const calls = { sound:0, use:0, menu:0, click:0, lock:0, unlock:0, keys:[], wheels:[] };
   document.exitPointerLock = () => { calls.unlock++; document.pointerLockElement = null; };
   const canvas = { requestPointerLock:() => { calls.lock++; return Promise.resolve(); } }, button = { tagName:'BUTTON' };
   const ui = { blocked:false, intercept:() => false };
   const hud = { use:{}, leave:{}, setTouch() {} };
   const input = createInput({ canvas, hud, stage:{ size:{ w:1000, h:800 } }, sound:{ start:() => calls.sound++ },
     owns:target => target === button, blocked:() => ui.blocked, interceptKey:event => ui.intercept(event),
-    key:key => calls.keys.push(key), use:() => calls.use++, quit:() => calls.quit++, click:() => calls.click++, wheel:step => calls.wheels.push(step) });
+    key:key => calls.keys.push(key), use:() => calls.use++, menu:() => calls.menu++, click:() => calls.click++, wheel:step => calls.wheels.push(step) });
   t.after(() => {
     input.dispose();
     for (const key of ['window', 'document']) if (previous[key] === undefined) delete globalThis[key]; else globalThis[key] = previous[key];
@@ -42,8 +42,8 @@ test('UI key interception precedes Escape, world use and key storage; native but
     const event = h.window.emit('keydown', { key });
     assert.equal(event.defaultPrevented, true); assert.equal(event.stopped, true);
   }
-  assert.equal(h.calls.quit, 0); assert.equal(h.calls.use, 0); assert.equal(h.input.state.keys.size, 0);
-  h.window.emit('keydown', { key:'Escape' }); assert.equal(h.calls.quit, 1);
+  assert.equal(h.calls.menu, 0); assert.equal(h.calls.use, 0); assert.equal(h.input.state.keys.size, 0);
+  h.window.emit('keydown', { key:'Escape' }); assert.equal(h.calls.menu, 1);
   h.input.clear(); h.ui.blocked = true;
   for (const key of ['Enter', ' ']) for (const type of ['keydown', 'keyup']) {
     const event = h.window.emit(type, { key, target:h.button });
@@ -76,6 +76,15 @@ test('opening UI clears all pending input and blocks new world gestures', t => {
   h.window.emit('pointerdown', { target:h.canvas }); assert.equal(h.calls.lock, 2);
 });
 
+test('Esc opens the menu even when an owned button retained keyboard focus', t => {
+  const h = setup(t);
+  h.document.activeElement = h.button;
+  const event = h.window.emit('keydown', { key:'Escape', target:h.button });
+  assert.equal(h.calls.menu, 1); assert.equal(event.defaultPrevented, true);
+  h.window.emit('keydown', { key:'Escape', target:h.button, repeat:true });
+  assert.equal(h.calls.menu, 1);
+});
+
 test('owned touch, pointer and scrolling events reach UI; releases over UI still clear the thumb stick', t => {
   const h = setup(t);
   for (const type of ['pointerdown', 'pointermove', 'pointerup', 'click', 'wheel', 'touchstart', 'touchmove', 'contextmenu']) {
@@ -103,6 +112,39 @@ test('late pointer lock is released while UI is open, and disposal removes every
   h.input.dispose(); assert.equal(h.window.listenerCount, 0); assert.equal(h.document.listenerCount, 0);
 });
 
+test('Esc with the mouse held never reaches the page: the mouse let go while the page still has the visitor is that Esc, and opens the menu', async t => {
+  const h = setup(t), wait = () => new Promise(resolve => setTimeout(resolve, 180));
+  h.document.hasFocus = () => true;
+  // never held: nothing was let go
+  h.document.emit('pointerlockchange'); await wait(); assert.equal(h.calls.menu, 0);
+  // held, then let go by the browser (its own answer to Esc)
+  h.document.pointerLockElement = h.canvas; h.document.emit('pointerlockchange');
+  h.document.pointerLockElement = null; h.document.emit('pointerlockchange');
+  assert.equal(h.calls.menu, 0, 'not at once: another window taking over lets the mouse go too, and says so a moment later');
+  await wait(); assert.equal(h.calls.menu, 1);
+  // let go because another window took over: not leaving
+  h.document.pointerLockElement = h.canvas; h.document.emit('pointerlockchange');
+  h.document.hasFocus = () => false; h.document.pointerLockElement = null; h.document.emit('pointerlockchange');
+  await wait(); assert.equal(h.calls.menu, 1);
+  // let go because the page was put away
+  h.document.hasFocus = () => true; h.document.hidden = true;
+  h.document.pointerLockElement = h.canvas; h.document.emit('pointerlockchange');
+  h.document.pointerLockElement = null; h.document.emit('pointerlockchange');
+  await wait(); assert.equal(h.calls.menu, 1); h.document.hidden = false;
+  // let go by the bag opening, which lets it go on purpose
+  h.document.pointerLockElement = h.canvas; h.document.emit('pointerlockchange');
+  h.ui.blocked = true; h.document.pointerLockElement = null; h.document.emit('pointerlockchange');
+  await wait(); assert.equal(h.calls.menu, 1); h.ui.blocked = false;
+  // taken hold of again before the moment is up: still playing
+  h.document.pointerLockElement = h.canvas; h.document.emit('pointerlockchange');
+  h.document.pointerLockElement = null; h.document.emit('pointerlockchange');
+  h.document.pointerLockElement = h.canvas; h.document.emit('pointerlockchange');
+  await wait(); assert.equal(h.calls.menu, 1);
+  // and nothing is said after the level has gone
+  h.document.pointerLockElement = null; h.document.emit('pointerlockchange'); h.input.dispose();
+  await wait(); assert.equal(h.calls.menu, 1);
+});
+
 test('world keyboard, locked mouse, touch use and wheel controls retain upstream behavior', t => {
   const h = setup(t);
   h.window.emit('keydown', { key:'W' }); assert.equal(h.input.state.keys.has('w'), true);
@@ -123,4 +165,19 @@ test('a pending pointer-lock promise cannot capture the mouse after the visit is
   h.input.dispose();
   h.document.pointerLockElement = h.canvas; finishLock(); await Promise.resolve();
   assert.equal(h.document.pointerLockElement, null); assert.equal(h.calls.unlock, 1);
+});
+
+test('a deliberate menu release cannot reopen the menu after a quick resume', async t => {
+  const h = setup(t);
+  h.document.hasFocus = () => true;
+  h.document.pointerLockElement = h.canvas; h.document.emit('pointerlockchange');
+  h.window.emit('keydown', { key:'w' });
+  h.input.release();
+  assert.equal(h.input.state.keys.size, 0);
+  assert.equal(h.calls.unlock, 1);
+  h.document.emit('pointerlockchange');
+  await new Promise(resolve => setTimeout(resolve, 180));
+  assert.equal(h.calls.menu, 0);
+  h.ui.blocked = true; h.input.capture(); assert.equal(h.calls.lock, 0);
+  h.ui.blocked = false; h.input.capture(); assert.equal(h.calls.lock, 1);
 });

@@ -7,6 +7,8 @@
 // the retention clerk, the safety warden, the efficiency partners) registers a
 // walker here so it stays lit, stays on the carpet, and knows which doorways are
 // shut against it.
+import { makeRng } from './gen.js';
+import { populateAbsorbed } from './absorbed.js';
 
 /**
  * Step a walker `(a.x, a.z)` toward `(tx, tz)` by up to `dist` metres, sliding
@@ -76,6 +78,9 @@ export function createDenizens(env) {
   const list = [];
 
   (env.ready || (env.ready = [])).push(() => {
+    // colleagues the building is keeping (absorbed.js, after Gemini's fifth pack): a few to a part, in its plain rooms,
+    // by dice of their own, so that they move nothing else about a seed
+    populateAbsorbed(env, makeRng(`${env.level.seed}/absorbed`));
     for (const d of list) if (d.group && !d.group.parent) env.world.scene.add(d.group);
   });
 
@@ -100,7 +105,7 @@ export function createDenizens(env) {
           const nearEnough = !distMap || !rt || (distMap.get(rt.id) ?? 99) <= 3;
           d.group.visible = nearEnough && !d.gone && d.visible !== false;
           d.group.position.set(d.x, (d.y ?? world.floorY(d.x, d.z)) + (d.lift || 0), d.z);
-          d.light?.(world.lightAt(d.x, d.z, 1.0));
+          d.light?.(d.sampleLight ? d.sampleLight(world) : world.lightAt(d.x, d.z, 1.0));
         }
       }
     },

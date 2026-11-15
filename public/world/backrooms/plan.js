@@ -18,7 +18,7 @@
 // floors above it had so that it deals different ones while the deck lasts —
 // and what those rooms taught, so that it deals nothing that takes for granted
 // a thing nobody has yet had the chance to learn.
-import { generate, makeRng, MIN_EXIT_STEPS, DECK, ARCHETYPES, lessons, lessonsOf, isBig } from './gen.js';
+import { generate, makeRng, MIN_EXIT_STEPS, MAX_ODD, DECK, ARCHETYPES, lessons, lessonsOf, isBig } from './gen.js';
 import { MIN_OUT_STEPS } from './marks.js';
 import { THEME_IDS } from './themes.js';
 import { WAYS } from './seam.js';
@@ -39,7 +39,9 @@ export const HALL_CHANCE = 0.7;
 /**
  * A visit's hand: the share of the deck it shows, least and most. Which rooms, and in what order, is the seed's
  * business; no room is ever in a visit twice. (The owner: "if we only use 40-70% of rooms each time in a scrambled
- * order it keeps players on their toes." The number follows the deck: it grows as rooms are contributed.)
+ * order it keeps players on their toes." The number follows the deck: it grows as rooms are contributed.) One thing
+ * comes before it: a part is mostly plain rooms (gen.js: MAX_ODD oddities at most), so a short visit of a big deck
+ * shows what its parts can hold and no more.
  */
 export const HAND = Object.freeze([0.4, 0.7]);
 /** How many rooms a part has, however few of them are oddities: long enough to get lost in. */
@@ -53,7 +55,9 @@ export const PART_ROOMS = Object.freeze([20, 28]);
  */
 function dealHand(R, themes, story) {
   const depths = themes.length, N = DECK.length;
-  const size = Math.max(depths, R.int(Math.ceil(N * HAND[0]), Math.floor(N * HAND[1])));
+  // (never more than its parts can hold: a part has MAX_ODD oddities at most, however many rooms the deck has grown to)
+  const most = Math.min(Math.floor(N * HAND[1]), depths * MAX_ODD), least = Math.min(Math.ceil(N * HAND[0]), most);
+  const size = Math.max(depths, R.int(least, most));
   const hands = themes.map(() => []), at = new Map();
   // how many each part gets: as near equal as it goes, the odd ones wherever the seed says
   const cap = themes.map(() => Math.floor(size / depths));

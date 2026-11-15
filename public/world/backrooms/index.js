@@ -5,7 +5,7 @@
 // one with a wall that gives the way the first one did.
 //
 //   const { reason } = await enterBackrooms(office, { name, seed });
-//   reason: 'exit' (you found the way out) | 'caught' (something found you) | 'battery' (the camcorder ran flat) | 'quit' (Esc)
+//   reason: 'exit' (you found the way out) | 'caught' (something found you) | 'battery' (the camcorder ran flat) | 'quit' (Give Up)
 //   …and with it `kept` (what was carried out), `run` (what the visit counted: core/runs.mjs) and `card` (what the
 //   card at the end said, or null if none was shown: scorecard.js; opt.scorecard === false for none)
 //
@@ -24,6 +24,7 @@
 // when you left by the way out.
 import * as THREE from 'three';
 import { resolveLook } from '/core/look.mjs';
+import { BACKROOMS_DEFAULTS, cleanBackroomsSettings } from '/core/backrooms-settings.mjs';
 import { sketch, toWorld, toLocal, DECK, ARCHETYPES } from './gen.js';
 import { planVisit, floorOf, edition } from './plan.js';
 import { createKit } from './kit.js';
@@ -44,13 +45,14 @@ import { hangBelow, goesDown } from './seam.js';
 import { createInventory } from './inventory.js';
 import { createSurvival } from './survival.js';
 import { createTally } from './tally.js';
+import { createMenu } from './menu.js';
 
 const FOV = 62;
 const OWN_LAMP = 0.3;                                    // the camcorder's own lamp, beside a torch: how much of one it is
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const frame = () => new Promise((r) => requestAnimationFrame(r));
 const prefs = {
-  load() { try { return JSON.parse(localStorage.getItem('office.backrooms') || '{}') || {}; } catch { return {}; } },
+  load() { try { return cleanBackroomsSettings(JSON.parse(localStorage.getItem('office.backrooms') || '{}')); } catch { return cleanBackroomsSettings(); } },
   save(p) { try { localStorage.setItem('office.backrooms', JSON.stringify(p)); } catch { /* private mode: fine */ } },
 };
 
@@ -91,7 +93,7 @@ async function buildersFor(level) {
  * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, depths?:number, depth?:number, inventory?:boolean, scorecard?:boolean, replay?:boolean, debug?:boolean, dev?:object, onReady?:Function}} [opt]
  *        depths: how many floors (default: by the seed) · depth: which floor to begin on (default: the top one)
  *        replay: this is a kept tape being played back (seed: the tape's; pursuer: whether the mascot was in it): nothing of the office's is hidden in it
- *        brand, share: handed to the card at the end (scorecard.js), for a page that is not the office
+ *        brand, share, also, home: handed to the card at the end (scorecard.js), for a page that is not the office
  *        inventory: false for a visit without pockets, hearts or a battery that runs down · dev.supplies: one of everything where you land
  * @returns {Promise<{reason:'exit'|'caught'|'battery'|'quit', kept:{card:boolean, coins:number[], batteries:number, told?:Promise<void>}, run:object, card:object|null}>}
  *          run: what the visit came to (tally.js) · card: the scorecard, once put down (opt.scorecard === false: none) · kept: what you brought out (nothing,
@@ -121,9 +123,10 @@ async function visit(office, opt) {
   const byName = new Map(who.agents.map((a) => [a.name, a.look]));
   const cast = first.cast.map((name) => ({ name, look: byName.get(name) || resolveLook('backrooms:' + name) }));
   const saved = prefs.load();
+  let settings = cleanBackroomsSettings({ ...saved, vhs: opt.vhs ?? saved.vhs, mute: opt.mute ?? saved.mute });
   const camera = new THREE.PerspectiveCamera(FOV, 4 / 3, 0.06, 170);
-  const vhs = createVhs(renderer, camera, { bloom: stage.quality?.fx !== false, level: opt.vhs ?? saved.vhs ?? 2 });
-  const sound = createSound(first, { mute: opt.mute ?? saved.mute ?? false });
+  const vhs = createVhs(renderer, camera, { bloom: stage.quality?.fx !== false, level: settings.vhs });
+  const sound = createSound(first, settings);
   const hud = createHud(first);
   hud.setClean(vhs.level === 0);
   // the picture says REC once you are on your feet — unless this is a tape being played back: that one goes on saying PLAY
@@ -145,11 +148,11 @@ async function visit(office, opt) {
   let going = null;
   let out = null;                                         // by the way out: where the camera was when the wall gave, and which way is out
   let pictureKey = '', currentUse = null, light = 0.3, torch = 0, interference = 0, redWash = 0, pendingQuit = false, kept = { card: false, coins: [], batteries: 0 };
-  let inventory = null, survival = null;
-  const canAct = () => state === 'play' && !hold && !going;
+  let inventory = null, survival = null, menu = null, paused = false, gaveUp = false;
+  const canAct = () => !paused && state === 'play' && !hold && !going;
   // A real fall and a chute consume recording time. Waiting for a part to
   // build does not; neither do arrival static or the final leaving picture.
-  const clocksRun = () => state === 'play' || state === 'drop';
+  const clocksRun = () => !paused && (state === 'play' || state === 'drop');
   const u = vhs.uniforms, blank = new THREE.Scene();
   // everything that is built hangs in this: the part you are in at the origin, the part below it under its way down
   const root = new THREE.Scene();
@@ -161,21 +164,24 @@ async function visit(office, opt) {
     if (state === 'done') return;
     const p = vhs.layout(stage.size.w, stage.size.h), key = `${p.x},${p.y},${p.w},${p.h}`;
     if (key !== pictureKey) { pictureKey = key; hud.layout(p); }
-    vhs.render(dt);
+    vhs.render(paused ? 0 : dt);
   };
   stage.setView({ scene: blank, camera, render });
 
   /* ---- hands ----------------------------------------------------------------------- */
   const useIt = () => { if (canAct() && !inventory?.isOpen && currentUse) { const use = currentUse; try { use.use(use); } catch (err) { console.warn('[backrooms] use', err); } } };
   const input = createInput({ canvas, stage, hud, sound,
-    owns: target => !!inventory?.owns(target),
-    interceptKey: event => !!inventory?.handleKey(event),
-    blocked: () => !!inventory?.isOpen,
-    quit: () => finish('quit'), use: useIt, click: () => {}, wheel: () => {},
+    owns: target => !!menu?.owns(target) || (!paused && !!inventory?.owns(target)),
+    interceptKey: event => paused ? !!menu?.handleKey(event) : !!inventory?.handleKey(event),
+    blocked: () => paused || !!inventory?.isOpen,
+    menu: () => setPaused(true), use: useIt, click: () => {}, wheel: () => {},
     key(k) {
       if (k === 'v') setPicture((vhs.level + 2) % 3);
-      else if (k === 'm') { sound.setMute(!sound.muted); prefs.save({ ...prefs.load(), mute: sound.muted }); }
+      else if (k === 'm') changeSetting('mute', !sound.muted);
     } });
+  input.state.sensitivity = settings.sensitivity; input.state.invertY = settings.invertY;
+  menu = createMenu({ host: hud.el, settings, onRequestOpen: () => setPaused(true), onResume: resume,
+    onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting });
   // Six pockets, four hearts, and a camcorder battery that runs down (inventory.js, survival.js): the visit's, not any
   // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.
   if (opt.inventory !== false) {
@@ -187,16 +193,42 @@ async function visit(office, opt) {
       onOpen(open) {
         input.clear();
         if (cur?.player) cur.player.me.vx = cur.player.me.vz = 0;
-        if (open && document.pointerLockElement === canvas) document.exitPointerLock?.();
+        if (open) input.release();
       },
     });
   }
-  function setPicture(lv) {
-    vhs.setLevel(lv);
-    hud.setClean(lv === 0);
-    if (cur?.player) cur.player.me.shake = lv === 2 ? 1 : lv === 1 ? 0.5 : 0.25;
-    pictureKey = '';
-    prefs.save({ ...prefs.load(), vhs: lv });
+  function changeSetting(key, value) {
+    if (!Object.hasOwn(BACKROOMS_DEFAULTS, key)) return;
+    settings = cleanBackroomsSettings({ ...settings, [key]: value });
+    sound.setMute(settings.mute); sound.setMusicVolume(settings.musicVolume); sound.setSfxVolume(settings.sfxVolume);
+    input.state.sensitivity = settings.sensitivity; input.state.invertY = settings.invertY;
+    if (vhs.level !== settings.vhs) {
+      const lv = settings.vhs;
+      vhs.setLevel(lv); hud.setClean(lv === 0);
+      if (cur?.player) cur.player.me.shake = lv === 2 ? 1 : lv === 1 ? 0.5 : 0.25;
+      pictureKey = '';
+    }
+    prefs.save(settings); menu?.update(settings);
+  }
+  function setPicture(lv) { changeSetting('vhs', lv); }
+  function setPaused(on) {
+    if (on && (state === 'done' || state === 'ending' || state === 'through' || pendingQuit)) return;
+    paused = !!on;
+    if (paused) inventory?.close();
+    input.clear();
+    if (cur?.player) cur.player.me.vx = cur.player.me.vz = 0;
+    // A menu pauses both live parts of the building, not just the player's hands.
+    // The bag still behaves as before: it never pauses the run.
+    menu?.setOpen(paused); hud.setPaused(paused); sound.setPaused(paused);
+    if (inventory) inventory.view.el.inert = paused || !canAct();
+    if (paused) {
+      input.release(); hud.hint(false);
+      cur?.env.handView?.update(0, false);
+    }
+  }
+  function resume() {
+    setPaused(false);
+    input.capture();
   }
 
   /* ---- a floor: everything that is built for it and thrown away with it ---------------- */
@@ -329,7 +361,7 @@ async function visit(office, opt) {
    * held where you are, under static, until it is.
    */
   function descend(force, at) {
-    if ((state !== 'play' && state !== 'held') || !cur) return false;
+    if (paused || (state !== 'play' && state !== 'held') || !cur) return false;
     if (cur.level.depth >= plan.depths - 1 || (!force && !goesDown(cur.level.exit.way))) return false;
     inventory?.close();
     if (!ahead) prepare();
@@ -363,7 +395,7 @@ async function visit(office, opt) {
   // how long each ending takes — and one nobody has told this file about takes as long as being caught
   const END = { quit: 0.4, caught: 1.8, exit: 1.4, battery: 1.2 };
   const off = stage.onFrame((dt) => {
-    if (state === 'loading' || state === 'done') return;
+    if (state === 'loading' || state === 'done' || paused) return;
     time += dt; since += dt;
     tally.tick(dt, state === 'play');
     hud.update(dt);
@@ -451,6 +483,7 @@ async function visit(office, opt) {
     if (state === 'done') return;
     state = 'done';
     off();
+    menu?.dispose();
     inventory?.dispose();
     survival?.dispose();
     input.dispose();
@@ -471,13 +504,15 @@ async function visit(office, opt) {
     // of the place was it — plan.js. Only a visit that got out has a tape to say it on.)
     if (why === 'exit') { run.mascot = plan.mascot !== null; try { run.edition = edition(); } catch { /* the tape does not say */ } }
     // (no card for a visit that was told not to show one, or that was stopped before it had really begun)
-    if (opt.scorecard === false || (why === 'quit' && run.seconds < 2)) { done(null); return; }
-    import('./scorecard.js').then((m) => m.showScorecard({ office, reason: why, kept, run, name: who.name, brand: opt.brand, share: opt.share }))
+    if (opt.scorecard === false || (!gaveUp && why === 'quit' && run.seconds < 2)) { done(null); return; }
+    import('./scorecard.js').then((m) => m.showScorecard({ office, reason: why, kept, run, name: who.name, brand: opt.brand, share: opt.share, also: opt.also, home: opt.home }))
       .then(done, (err) => { console.warn('[backrooms] the card would not come up', err); done(null); });
   }
   function finish(why, how) {
     if (state === 'done' || state === 'ending' || state === 'through' || pendingQuit) return;
     reason = why; ending = 0;
+    setPaused(false);
+    if (menu) menu.el.hidden = true;
     inventory?.close();
     hud.hint(false);
     // carried is only kept by leaving by the way out: the card and the tapes (loot.js), and the spare battery packs in
@@ -514,7 +549,7 @@ async function visit(office, opt) {
   const handle = {
     vhs, hud, plan: () => plan, deck: DECK.map((a) => a.id),
     get level() { return cur?.level; }, get world() { return cur?.world; }, get player() { return cur?.player; }, get env() { return cur?.env; },
-    get state() { return state; }, loot: purse, inventory, health: survival?.health, camera: survival?.camera, survival,
+    get state() { return state; }, get paused() { return paused; }, menu, loot: purse, inventory, health: survival?.health, camera: survival?.camera, survival,
     sketch: () => (cur ? sketch(cur.level) : ''),
     /** Stand in a room: by archetype id or room number; x, z in the room's own frame (default: just inside its door). */
     goto(which, x, z, yaw, pitch = 0) {

@@ -18,20 +18,25 @@ const fresh = (t) => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockr
 const all = (dir, base = dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? all(path.join(dir, e.name), base) : [path.relative(base, path.join(dir, e.name)).split(path.sep).join('/')]));
 const IMPORTS = /(?:import|export)\s+(?:[^'"()]*?\s+from\s+)?['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/g;
 
-test('the site is a whole page with everything it asks for beside it, and nothing from anywhere else', (t) => {
+test('the site is two whole pages with everything they ask for beside them, and nothing from anywhere else', (t) => {
   const out = fresh(t), made = build(out, { origin: '' });
   const files = all(out).sort();
   assert.deepEqual(made.files, files, 'what it says it wrote is what is there');
-  const page = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
-  assert.match(page, /^<!doctype html>\n<html lang="en">/, 'a document, not a fragment for somebody else to wrap');
-  for (const need of ['<meta charset="utf-8">', '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">', '<title>BlockRooms</title>', '<meta property="og:title" content="BlockRooms">', '<script type="module" src="./site.js"></script>']) assert.ok(page.includes(need), `the page has no ${need}`);
-  assert.ok(!/<!--[A-Z]+-->/.test(page), 'a mark in the page that nothing filled in');
-  // nothing is fetched from another site: no address of one anywhere in the page (the name of the SVG format, inside the
-  // icon the page carries in itself, is not an address anybody fetches)
-  const elsewhere = [...page.replace(/http:\/\/www\.w3\.org\/2000\/svg/g, '').matchAll(/https?:\/\/[^\s"'<>)]+/g)].map((m) => m[0]);
-  assert.deepEqual(elsewhere, [], 'the page names another site');
-  assert.ok(!files.some((f) => /^(data|public|server|test|tools|docs|hooks)\//.test(f) || /knowledge|transcripts|\.env/.test(f)), 'something of the office\'s own is in the site');
-  assert.ok(files.every((f) => /^(index\.html|site\.js|robots\.txt|og\.jpg|(world|core|vendor)\/.+)$/.test(f)), `a file nobody expected: ${files.find((f) => !/^(index\.html|site\.js|robots\.txt|og\.jpg|(world|core|vendor)\/.+)$/.test(f))}`);
+  const page = fs.readFileSync(path.join(out, 'play.html'), 'utf8'), home = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
+  for (const doc of [page, home]) {
+    assert.match(doc, /^<!doctype html>\n<html lang="en">/, 'a document, not a fragment for somebody else to wrap');
+    for (const need of ['<meta charset="utf-8">', '<meta name="viewport" content="width=device-width, initial-scale=1', '<meta property="og:title" content="BlockRooms">', '<meta http-equiv="Content-Security-Policy"']) assert.ok(doc.includes(need), `a page has no ${need}`);
+    assert.match(doc, /<title>BlockRooms[^<]*<\/title>/);
+    assert.ok(!/<!--[A-Z]+-->/.test(doc), 'a mark in a page that nothing filled in');
+    // nothing is fetched from another site: no address of one anywhere in the page (the name of the SVG format, inside the
+    // pictures a page carries in itself, is not an address anybody fetches)
+    const elsewhere = [...doc.replace(/http:\/\/www\.w3\.org\/2000\/svg/g, '').matchAll(/https?:\/\/[^\s"'<>)]+/g)].map((m) => m[0]);
+    assert.deepEqual(elsewhere, [], 'a page names another site');
+  }
+  assert.ok(page.includes('<script type="module" src="./site.js"></script>') && home.includes('<script type="module" src="./home.js"></script>'));
+  assert.ok(!files.some((f) => /^(data|public|server|test|tools|docs|hooks|api)\//.test(f) || /knowledge|transcripts|\.env/.test(f)), 'something of the office\'s own is in the site');
+  const expected = /^(index\.html|play\.html|site\.js|home\.js|home\.css|art\.js|robots\.txt|og\.jpg|muzak\.mp3|shots\/[\w-]+\.jpg|(world|core|vendor)\/.+)$/;
+  assert.ok(files.every((f) => expected.test(f)), `a file nobody expected: ${files.find((f) => !expected.test(f))}`);
 
   // the import map: three.js and the office's two roots, all beside the page, all there
   const map = JSON.parse(page.match(/<script type="importmap">([^<]+)<\/script>/)[1]);
@@ -43,7 +48,7 @@ test('the site is a whole page with everything it asks for beside it, and nothin
   // (a room's file is fetched when a building has that room: only what the deck itself reads from one is asked for at once)
   const rooms = files.filter((f) => f.startsWith('world/backrooms/rooms/'));
   assert.ok(preloads.length > 40 && preloads.includes('site.js') && preloads.includes('world/backrooms/index.js'), 'the level\'s own modules are asked for at once');
-  assert.ok(rooms.length > 20 && preloads.filter((f) => rooms.includes(f)).length <= 4 && !preloads.includes('world/backrooms/rooms/kanban.js'), 'rooms in files of their own are not');
+  assert.ok(rooms.length > 20 && preloads.filter((f) => rooms.includes(f)).every((f) => /^world\/backrooms\/rooms\/[^/]+\/[^/]+\.js$/.test(f)) && preloads.filter((f) => rooms.includes(f)).length <= 12 && !preloads.includes('world/backrooms/rooms/kanban.js'), 'rooms in files of their own are not');
   assert.equal(new Set(preloads).size, preloads.length);
   for (const f of preloads) assert.ok(files.includes(f), `asked for at once, and not there: ${f}`);
   for (const f of files.filter((n) => /\.m?js$/.test(n))) {
@@ -60,10 +65,44 @@ test('the site is a whole page with everything it asks for beside it, and nothin
   for (const font of [...new Set(files.filter((n) => /\.js$/.test(n)).flatMap((f) => [...fs.readFileSync(path.join(out, f), 'utf8').matchAll(/\.\/vendor\/fonts\/([\w.-]+\.woff2)/g)].map((m) => m[1])))]) assert.ok(files.includes(`vendor/fonts/${font}`), `a font is asked for and is not there: ${font}`);
 });
 
-test('the page holds itself to its own site: its policy allows the one script written into it by what that script says', (t) => {
+test('the front page is the caretaker\'s: every picture it shows is there, every place its script reaches for exists, and its door is the door', (t) => {
+  const out = fresh(t);
+  build(out, { origin: '', now: new Date('2026-11-14T12:00:00Z') });
+  const home = fs.readFileSync(path.join(out, 'index.html'), 'utf8'), script = fs.readFileSync(path.join(out, 'home.js'), 'utf8');
+  assert.ok(home.includes('<link rel="stylesheet" href="./home.css">') && fs.existsSync(path.join(out, 'home.css')) && fs.existsSync(path.join(out, 'art.js')));
+  assert.ok(!/<script\b(?![^>]*\bsrc=)/.test(home), 'no script is written into the front page: its policy would refuse one');
+  assert.equal(home.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/)[1], policyFor(null));
+  assert.ok(policyFor(null).split('; ').includes("script-src 'self'"));
+  const shots = [...home.matchAll(/<img src="\.\/([^"]+)"[^>]*alt="([^"]*)"/g)];
+  assert.ok(shots.length >= 4, 'pictures from inside');
+  for (const [, src, alt] of shots) { assert.ok(fs.existsSync(path.join(out, src)), `${src} is shown and is not there`); assert.ok(alt.length > 20, `${src} says nothing to somebody who cannot see it`); }
+  for (const id of new Set([...script.matchAll(/\$\('([\w-]+)'\)/g)].map((m) => m[1]))) assert.ok(new RegExp(`id="${id}"`).test(home), `home.js reaches for #${id}, which the page does not have`);
+  // Only a door starts the game: the door, an ENTER button, a tape somebody chooses (home.js), the wall for whoever leans
+  // on it. An advert is a picture and so is a screenshot (the owner: nothing drops a visitor into the level without a word).
+  for (const [, to] of home.matchAll(/href="(\.\/play[^"]*)"/g)) assert.equal(to, './play');
+  assert.ok(!/<a\b[^>]*>\s*<img\b/.test(home), 'a picture on the front page is a link');
+  const adverts = script.slice(script.indexOf('const ADS = ['), script.indexOf('];', script.indexOf('const ADS = [')));
+  assert.ok(adverts.includes('plug-card') && !/href|\broom\b|PLAY/.test(adverts), 'an advert leads into the game');
+  assert.ok(!/\?room=/.test(home + script), 'the front page sends somebody to a room');
+  // …and nothing about an advert is called one where a browser can see it: blockers hide by name (ad, ads, sponsor), and did
+  const css = fs.readFileSync(path.join(out, 'home.css'), 'utf8');
+  for (const [where, text] of [['index.html', home.replace(/>[^<]*</g, '><')], ['home.css', css.replace(/\/\*[\s\S]*?\*\//g, '')], ['home.js', script.replace(/\/\/.*$/gm, '')]]) {
+    assert.ok(!/(^|[^a-z])ads?[-_ ."'\]]|[-_.#"' ]ads?([^a-z]|$)|adrow|adwall|advert[a-z]*[-_="]|sponsor/i.test(text.replace(/const ADS\b|\bADS\b|ad\.[a-z]+|\bad\b(?= [=?:)]|\))|const ad\b|Spoof advert/g, '')), `${where} names something the way a blocker hides it`);
+  }
+  assert.ok(home.includes('<a class="door" href="./play" id="door">'), 'the door is a link: it works with nothing switched on');
+  assert.ok(home.includes('<span id="updated">14 November 1998</span>'), 'last updated: the day it was built, of the year it has been for some time');
+  assert.ok(home.includes('Profiting from the world') === false && script.includes('Profiting from the world’s misery so you don’t have to'), 'MECHA\'s slogan is MECHA\'s own, as it is on its wall');
+  // its music, when it is switched on, is the lift's from the office upstairs: a file beside the page, asked of nobody else
+  assert.ok(script.includes("new Audio('./muzak.mp3')") && fs.statSync(path.join(out, 'muzak.mp3')).size > 100000, 'the front page\'s music is not there');
+  assert.deepEqual(fs.readFileSync(path.join(out, 'muzak.mp3')), fs.readFileSync(path.join(ROOT, 'public/audio/elevator-muzak.mp3')));
+  // what a stranger typed is put on the page as text, never as markup
+  assert.ok(!/innerHTML|insertAdjacentHTML|outerHTML|document\.write/.test(script), 'home.js writes markup');
+});
+
+test('the page the level is played on holds itself to its own site: its policy allows the one script written into it by what that script says', (t) => {
   const out = fresh(t);
   build(out, { origin: '' });
-  const page = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
+  const page = fs.readFileSync(path.join(out, 'play.html'), 'utf8');
   const policy = page.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/)[1];
   assert.equal(policy, policyFor());
   const inline = [...page.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !/\bsrc=/.test(m[1]));
@@ -84,23 +123,36 @@ test('where the site is, is given when it is built and written down nowhere', (t
   assert.throws(() => originOf({ SITE_ORIGIN: 'not an address' }), /not an address/);
   const out = fresh(t);
   build(out, { origin: 'https://example.app' });
-  const page = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
-  assert.ok(page.includes('<meta property="og:url" content="https://example.app/">') && page.includes('<link rel="canonical" href="https://example.app/">'));
-  // (the repository itself names no site: not in the page, the script, the build, or what the host is told)
-  for (const f of ['tools/blockrooms/page.html', 'tools/blockrooms/site.js', 'tools/blockrooms/build.mjs', 'vercel.json']) {
+  const home = fs.readFileSync(path.join(out, 'index.html'), 'utf8'), page = fs.readFileSync(path.join(out, 'play.html'), 'utf8');
+  assert.ok(home.includes('<meta property="og:url" content="https://example.app/">') && home.includes('<link rel="canonical" href="https://example.app/">'));
+  assert.ok(page.includes('<meta property="og:url" content="https://example.app/play">') && page.includes('<link rel="canonical" href="https://example.app/play">'));
+  // (the repository itself names no site: not in the pages, the scripts, the build, or what the host is told)
+  for (const f of ['tools/blockrooms/page.html', 'tools/blockrooms/home.html', 'tools/blockrooms/site.js', 'tools/blockrooms/home.js', 'tools/blockrooms/build.mjs', 'vercel.json', 'api/book.mjs']) {
     const named = [...fs.readFileSync(path.join(ROOT, f), 'utf8').matchAll(/\b[a-z0-9-]+\.app\b/g)].map((m) => m[0]).filter((d) => d !== 'example.app');
     assert.deepEqual(named, [], `${f} names a site`);
   }
 });
 
-test('the page\'s own script: a building nobody has had each time, a tape from the address first, and a kept one played back', () => {
+test('the page\'s own script: a building nobody has had, a tape from the address first, a kept one played back, and after the card the front page', () => {
   const src = fs.readFileSync(path.join(ROOT, 'tools/blockrooms/site.js'), 'utf8');
   assert.match(src, /brand: \{ over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false \}/, 'the card is headed BlockRooms here, and has no jar on it: there is no office to spend a coin in');
   assert.match(src, /let next = asSeed\(q\.get\('tape'\)\) \|\| null;/);
   assert.match(src, /const mine = next \? keptTapes\(\)\.find\(\(t\) => t\.seed === seed\) : null;/);
   assert.match(src, /\.\.\.\(mine \? \{ replay: true, pursuer: typeof mine\.mascot === 'boolean' \? mine\.mascot : undefined \} : \{\}\)/, 'only a tape this browser has kept is played back; somebody else\'s is a building like any other');
-  assert.match(src, /if \(result\?\.card\?\.again\) next = /, 'the card put down by its tape\'s number is asking for that building again');
-  assert.ok(!/fetch\(|XMLHttpRequest|sendBeacon|WebSocket/.test(src), 'the page\'s script talks to nobody');
+  assert.match(src, /home: \{ label: 'Return to homepage' \}/, 'the score has an explicit way back to the home page');
+  // when a visit is over (the way out, caught, a flat battery, Give Up) the card comes up, and after the card the front page:
+  // never straight into another building. Only a card put down by its tape's number asks for a building again
+  assert.match(src, /next = result\?\.card\?\.again \? asSeed\(result\.card\.again\) \|\| null : null;\n      if \(!next\) \{ location\.assign\(HOME\); return; \}/, 'a visit that is over does not go home');
+  assert.match(src, /const HOME = '\.\/';/);
+  assert.ok(!/fresh\(\)/.test(src.slice(src.indexOf('room = null;'))), 'a building nobody asked for is begun after the card');
+  // it talks to its own site's book and to nobody else, and says two things: that somebody went in, and (unless they
+  // have said not to, and never for a tape played back) what a visit that got out came to
+  assert.deepEqual([...src.matchAll(/fetch\(([^,)]+)/g)].map((m) => m[1].trim()), ["'./api/book'"]);
+  assert.ok(!/XMLHttpRequest|sendBeacon|WebSocket/.test(src));
+  assert.match(src, /if \(!mine\) tell\(\{ do: 'in' \}\);/);
+  assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit'\) return null;\n  const who = me\(\);\n  if \(!who\.sign\) return null;/);
+  assert.match(src, /tell\(\{ do: 'sign', name: who\.name, message: who\.message, run: report \}\)/);
+  assert.match(src, /let room = !next && q\.get\('room'\) && Object\.hasOwn\(ARCHETYPES, q\.get\('room'\)\) \? q\.get\('room'\) : null;/, 'a room asked for by name is a room of the deck, or it is an ordinary door');
 });
 
 test('what the host is told matches what is built, and only the branch that is for the public is deployed', () => {
@@ -114,6 +166,12 @@ test('what the host is told matches what is built, and only the branch that is f
   assert.deepEqual(cfg.git.deploymentEnabled, { '**': false, 'blockrooms-live': true }, 'helpers push to this repository all day: none of that is to reach the public');
   const everywhere = cfg.headers.find((h) => h.source === '/(.*)').headers.map((h) => h.key);
   for (const key of ['X-Content-Type-Options', 'X-Frame-Options', 'Referrer-Policy']) assert.ok(everywhere.includes(key), `no ${key}`);
+  assert.equal(cfg.cleanUrls, true, 'the page the level is played on is /play');
+  // the book: one function, where the host looks for functions, and it is the three lines it says it is
+  const fn = fs.readFileSync(path.join(ROOT, 'api/book.mjs'), 'utf8');
+  assert.match(fn, /export const GET = \(request\) => handle\(request, ctx\);\nexport const POST = \(request\) => handle\(request, ctx\);/);
+  for (const [, from] of fn.matchAll(/from '(\.\.[^']+)'/g)) assert.ok(fs.existsSync(path.join(ROOT, 'api', from)), `api/book.mjs imports ${from}`);
+  assert.ok(!/['"`][A-Za-z0-9_-]{24,}['"`]/.test(fn), 'nothing that looks like a key is written into it');
 });
 
 test('the sample stager still stages the sample, and a page of its own only when asked', (t) => {

@@ -34,10 +34,17 @@ These are the owner's, and every room is held to them.
 
 1. **Nothing is explained.** No captions, no instructions, no control hints,
    nothing on screen but the camcorder. Words live in the world: on signs,
-   screens, labels, sticky notes.
-2. **One new thing to learn per room.** A room may ask for as much as it
-   likes, as long as at most one thing in it is something the visitor has had
-   no chance to learn yet. Rules already met may come back and combine.
+   screens, labels, sticky notes. The owner's requested Esc menu is the
+   exception: its Controls page explains the hands and the inventory, over
+   the paused camcorder picture. Room puzzles still explain themselves.
+2. **A room may ask for more than one new thing.** This rule used to hold
+   every room to at most one thing the visitor had had no chance to learn.
+   The owner has dropped that: "I am unconvinced this 'one new rule' thing is
+   even necessary. We are targeting adults with this game... we shouldn't
+   think the player is dumb." A room should still say what it teaches and
+   what it takes for granted (rule 3), so the plan can deal the plainest
+   rooms first. A puzzle may borrow the shape of a well-loved mechanic; it
+   may never be a recreation of a particular game's level, look or name.
 3. **Rules stack with depth.** Since nothing is explained, the only teacher is
    the order things are met in. A room says what it is the first place to
    learn (`teaches`) and what it takes for granted (`needs`), and the visit's
@@ -276,7 +283,9 @@ from the visit's seed, two at most, a different two each time.
   They are of this office: colleagues, facilities, things from a workplace
   that has gone wrong.
 - **Cheap.** A few thousand triangles, lit by where it stands (`c.light`), a
-  handful of meshes. No new audio files: `sound.js` voices only.
+  handful of meshes. No new audio files: `sound.js` voices only. (The one
+  file the level does load is the owner's own music, `music/room4.mp3`,
+  played low under everything by `sound.js`. That was the owner's to add.)
 - **Seeded.** Which visit it is in, which floor and which room are decided by
   the seed and nothing else. `Math.random` is for what happens while somebody
   is playing.
@@ -418,6 +427,30 @@ for `CAST_LESSONS` if it teaches something), the line for `cast/index.js`,
 sentences: what its rule is, and how somebody who has not worked it out yet is
 warned before it costs them anything.
 
+## The camcorder menu
+
+Esc opens the transparent camcorder menu; with the mouse captured, the
+browser's release of the mouse opens the same menu. A Menu button gives
+touch screens the same controls. Esc closes a submenu first, then resumes;
+in the inventory it still closes the current card before opening the menu.
+
+The menu pauses the whole visit: its tally, creatures and room hazards,
+both batteries, hit cooldown, fire, falls, and the handover between parts.
+Audio pauses at the same point. Opening the inventory alone does **not**
+pause any of these. Resume clears held input and takes the mouse again when
+the browser allows it.
+
+Settings are remembered in `office.backrooms`: separate music and effects
+levels, master mute, look sensitivity, inverted vertical look, and the
+existing three picture modes. Defaults and saved-value validation live in
+`core/backrooms-settings.mjs`; old saves with only mute and VHS still work.
+Difficulty is visibly unavailable at Normal until it has real game rules.
+
+Give Up confirms ending the recording and shows the scorecard, including
+for a visit shorter than two seconds. The standalone site gives that card
+a Return to homepage button; the Office keeps its return-to-work behavior.
+The end reason remains `quit`, so giving up cannot count as escaping.
+
 ## What a visitor carries
 
 Six pockets, four health points, and a camcorder that runs on batteries (Codex's
@@ -533,7 +566,8 @@ the office is: the seed is the clock, and no building is ever given twice.
 | `supplies.js` | what is lying about in a part of the building, and in which rooms (pure, by the seed) |
 | `cast.js`, `cast/` | who is down here (pure: the cast, who is dealt into a visit, on which floor, in which room) · one file to a creature, `cast/index.js` listing them; `cast/pirate.js` is the mascot; `cast/hunt.js` its rules (pure); `cast/paths.js` and `cast/walk.js` how anything gets about |
 | `pursuer.js`, `reach.js` | the cast's conductor on a floor (and the cardboard colleague) · the rule for being within arm's reach of the mascot (pure: the tape tears, and it moves in the torn frames) |
+| `denizens.js`, `absorbed.js`, `absorbed/` | residents that belong to one room and may walk out of it · colleagues the building is keeping (after Gemini's fifth pack): one to three a part, two thirds sunk into the wall, the carpet or the ceiling of a plain room, by dice of their own. They cannot move and never end a visit: within arm's reach they hold you for a second and a bit (less if you struggle), then leave you alone for three. A crouch goes under the ones in the ceiling and a hop over the hands of the ones in the floor. `absorbed/rule.js` is the rule (pure: how many, who, and the hold), `absorbed/rig.js` draws them |
 | `doors.js`, `doorleaf.js` | which doorways have a pair of fire doors (pure) · the doors themselves |
-| `player.js`, `input.js`, `hud.js`, `vhs.js`, `sound.js` | walking, keys and touch, the camcorder, the tape, the hum |
+| `player.js`, `input.js`, `hud.js`, `vhs.js`, `sound.js` | walking, keys and touch, the camcorder, the tape, the hum (and, from `music/`, the owner's music under it) |
 | `../levels/basement.js` | the floor above it all, and the wall |
 | `../dev/backrooms.js` | the level's own page |
