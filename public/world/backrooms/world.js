@@ -13,6 +13,9 @@ import { FURNITURE, furnitureType, fixedFurnitureReason, onFurniture, overlaps, 
 import { fixedFurnitureFoot } from '../props/trolley.js';
 import { emergencyFixtures } from './lighting-fixtures.js';
 import { planFloorLighting, panelBank, bankLevels, localLightScale } from './lighting.js';
+import { registerMovable } from './movable-props.js';
+import { surfaceAt } from './bridge-rules.js';
+import { bridgeReachable } from './bridge-puzzles.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
 // and how far along it a local coordinate c is (c is x on the front/back walls, z on the side walls)
@@ -97,7 +100,7 @@ export async function buildWorld(kit, level, env, tick) {
     rect: { x0: def.x + T / 2, z0: def.z + T / 2, x1: def.x + def.w - T / 2, z1: def.z + def.d - T / 2 },
   }));
   const throats = level.links.map((link) => ({ link, open: !link.door, a: link.a, b: link.b }));
-  const world = { scene, level, rooms, throats, kit, env, furniture: [], furnitureColliders: [],
+  const world = { scene, level, rooms, throats, kit, env, furniture: [], furnitureColliders: [], movableSurfaces: [],
     furnitureRevision: new Map(rooms.map(rt => [rt.id, 0])) };
   for (const rt of rooms) rt.furnitureRevision = 0;
   /** Invalidate navigation after an explicit collider-state change (e.g. a
@@ -176,6 +179,7 @@ export async function buildWorld(kit, level, env, tick) {
       }
     } else if (!insideAt(x, z, r, opt)) return false;
     const blocked = c => c.on !== false && !ignored(opt.ignoreCollider, c)
+      && !(c.floor && !box)
       && !(c.furniture && opt.furniture === 'phase')
       && !(Number.isFinite(opt.furnitureY) && Number.isFinite(c.top) && opt.furnitureY >= c.top)
       && (!opt.tall || c.tall) && (box ? boxHits(box, c) : hits(c, x, z, r));
@@ -201,20 +205,24 @@ export async function buildWorld(kit, level, env, tick) {
     return null;
   };
   /** Height of the floor here, in the world. */
-  world.floorY = (x, z) => {
+  world.terrainY = (x, z) => {
     const rt = world.roomAt(x, z);
     if (!rt) return 0;
     if (rt.flat) return rt.def.y;
     const p = toLocal(rt.def, x, z);
     return rt.def.y + (rt.floorY ? rt.floorY(p.x, p.z) : floorAt(rt.def, p.x, p.z));
   };
+  world.floorY = (x, z) => surfaceAt(world.movableSurfaces, x, z, world.terrainY(x, z));
   /** How much room there is to stand up in here. */
-  world.headroom = (x, z) => {
+  world.ceilingY = (x, z) => {
     const rt = world.roomAt(x, z);
-    if (!rt || rt.flat) return 9;
+    if (!rt || rt.flat) return world.terrainY(x, z) + 9;
     const p = toLocal(rt.def, x, z);
-    return rt.headY ? rt.headY(p.x, p.z) : headAt(rt.def, p.x, p.z);
+    const terrain = world.terrainY(x, z), localFloor = terrain - (rt.def.y || 0);
+    // Crawl openings still cap clearance when the walking surface is a bridge.
+    return terrain + headAt(rt.def, p.x, p.z, rt.headY ? rt.headY(p.x, p.z) : ceilAt(rt.def, p.x, p.z) - localFloor);
   };
+  world.headroom = (x, z) => world.ceilingY(x, z) - world.floorY(x, z);
   /** May a walker go from one spot to the next? The floor may not jump by more than a stair, and there must be room to crawl. */
   world.passable = (x0, z0, x1, z1) => {
     if (world.headroom(x1, z1) < HEAD) return false;
@@ -248,17 +256,25 @@ export async function buildWorld(kit, level, env, tick) {
    * how high the floor is there, and everything that can be reached on foot from just inside a set of its doorways
    * (flood → one byte per cell; key(point) is a point's cell, at(k) the middle of cell k).
    */
-  world.walkable = (rt) => {
+  world.walkable = (rt, view = world) => {
     const { def } = rt, cell = 0.125, r = 0.225, nx = Math.ceil(def.W / cell), nz = Math.ceil(def.D / cell);
     const key = (p) => Math.floor((p.x + def.W / 2) / cell) + nx * Math.floor((p.z + def.D / 2) / cell);
     const at = (k) => { const i = k % nx; return { x: -def.W / 2 + (i + 0.5) * cell, z: -def.D / 2 + ((k - i) / nx + 0.5) * cell }; };
-    const floor = (x, z) => (rt.flat ? 0 : rt.floorY ? rt.floorY(x, z) : floorAt(def, x, z)), head = (x, z) => (rt.flat ? 9 : rt.headY ? rt.headY(x, z) : headAt(def, x, z));
+    // Keep this per-room grid cheap: no search through every room or every
+    // chair at every cell. Proof copies provide their own surface collection.
+    const surfaces = view.movableSurfaces.filter(f => overlaps(f, rt.rect));
+    const terrain = (x, z) => rt.flat ? 0 : rt.floorY ? rt.floorY(x, z) : floorAt(def, x, z);
+    const floor = (x, z) => {
+      const y = terrain(x, z); if (!surfaces.length) return y;
+      const p = toWorld(def, x, z); return surfaceAt(surfaces, p.x, p.z, y + (def.y || 0)) - (def.y || 0);
+    };
+    const head = (x, z) => (rt.flat ? 9 : headAt(def, x, z, rt.headY ? rt.headY(x, z) : ceilAt(def, x, z) - terrain(x, z))) - (floor(x, z) - terrain(x, z));
     // Include a neighbouring room's desk when it straddles this doorway, without
     // testing every distant movable object at every cell in this room's flood.
-    const nearbyFurniture = world.furnitureColliders.filter(c => overlaps(c, rt.rect, -r));
-    const local = [...new Set([...rt.colliders, ...nearbyFurniture])].map((c) => { const a = toLocal(def, c.x0, c.z0), b = toLocal(def, c.x1, c.z1); return { c, x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z) }; });
+    const nearbyFurniture = view.furnitureColliders.filter(c => overlaps(c, rt.rect, -r));
+    const local = [...new Set([...rt.colliders.filter(c => !c.furniture), ...nearbyFurniture])].map((c) => { const a = toLocal(def, c.x0, c.z0), b = toLocal(def, c.x1, c.z1); return { c, x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z) }; });
     const free = (x, z) => Math.abs(x) <= def.W / 2 - r && Math.abs(z) <= def.D / 2 - r && (rt.clip ? rt.clip(x, z, r) : fitsAt(def, x, z, r)) && head(x, z) >= HEAD
-      && !local.some((q) => { if (q.c.on === false) return false; const dx = x - clamp(x, q.x0, q.x1), dz = z - clamp(z, q.z0, q.z1); return dx * dx + dz * dz < r * r; });
+      && !local.some((q) => { if (q.c.on === false || q.c.floor) return false; const dx = x - clamp(x, q.x0, q.x1), dz = z - clamp(z, q.z0, q.z1); return dx * dx + dz * dz < r * r; });
     const flood = (doors) => {
       const seen = new Uint8Array(nx * nz), queue = [];
       for (const dr of doors) { const k = key(wallPoint(def, dr.side, dr.c, 0.5)); if (!seen[k]) { seen[k] = 1; queue.push(k); } }          // half a metre in: clear of a door that is still shut
@@ -287,6 +303,8 @@ export async function buildWorld(kit, level, env, tick) {
     catch (err) {
       if (env.coopStrict) throw err;
       console.warn(`[backrooms] ${rt.def.arch || rt.def.kind} would not build — leaving it plain`, err);
+      for (const f of [...world.furniture]) if (f.authored && f.room === rt.id) f.remove();
+      rt.bridgePlans = [];
       rt.group.clear(); rt.colliders.length = 0; rt.uses.length = 0; rt.zones.length = 0; rt.ticks.length = 0; rt.flickers.length = 0; rt.lights.length = 0;
       rt.clip = null; rt.floorY = null; rt.headY = null; rt.fold = false;
       ctx = roomContext(world, rt); ctx.shell();
@@ -309,6 +327,7 @@ export async function buildWorld(kit, level, env, tick) {
     const walk = world.walkable(rt);
     const reaches = () => { const seen = walk.flood([def.doors[0]]); return def.doors.every((dr) => seen[walk.key(wallPoint(def, dr.side, dr.c, 0.5))]); };
     if (reaches()) continue;
+    if (bridgeReachable(world, rt)) { rt.bridgePuzzleVerified = true; continue; }
     console.warn(`[backrooms] a doorway of ${def.arch || def.kind} #${def.id} could not be reached — its furniture is no longer solid`);
     for (const c of rt.colliders) if (!c.keep) c.on = false;
     if (!reaches()) { for (const c of rt.colliders) c.on = false; rt.flat = true; rt.clip = () => true; console.warn(`[backrooms] …nor even then: room #${def.id} is now flat and empty to walk in`); }
@@ -374,6 +393,7 @@ export async function buildWorld(kit, level, env, tick) {
       }
   }};
   world.update = (dt, t, me) => {
+    if (!me.frozen) for (const f of world.furniture) f.tick?.(dt);
     world.updateLighting(t);world.updateFlicker(dt);
     const here = world.roomAt(me.x, me.z);
     if (here) world.enter(here);
@@ -508,13 +528,14 @@ function roomContext(world, rt) {
       rt.colliders.push(collider); world.furnitureColliders.push(collider);
       const touching = () => world.rooms.filter(room => overlaps(f, room.rect)).map(room => room.id);
       let lastX = f.x, lastZ = f.z, lastRooms = touching();
-      f.translate = (dx, dz) => {
-        if (f.away || !Number.isFinite(dx) || !Number.isFinite(dz) || Math.hypot(dx, dz) < 1e-6) return false;
+      f.translate = (dx, dz, dy = 0) => {
+        if (f.away || ![dx, dz, dy].every(Number.isFinite) || Math.hypot(dx, dz, dy) < 1e-6) return false;
         const wasSolid = collider.on !== false, oldRooms = touching(), oldRoom = world.rooms.find(room => room.id === f.room);
         for (const k of ['x', 'x0', 'x1']) f[k] += dx;
         for (const k of ['z', 'z0', 'z1']) f[k] += dz;
-        Object.assign(collider, { x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, on: true });
-        f.group.position.x += dx; f.group.position.z += dz;
+        for (const k of ['y', 'top', 'surfaceY']) f[k] += dy;
+        Object.assign(collider, { x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, on: !f.carried });
+        f.group.position.x += dx; f.group.position.z += dz; f.group.position.y += dy;
         const now = world.roomAt(f.x, f.z) || oldRoom;
         if (now && now !== oldRoom) {
           const i = oldRoom?.colliders.indexOf(collider); if (i >= 0) oldRoom.colliders.splice(i, 1);
@@ -531,7 +552,7 @@ function roomContext(world, rt) {
           }
         }
         const nextRooms = touching(), changedRooms = nextRooms.join(',') !== lastRooms.join(',');
-        if (!wasSolid || changedRooms || Math.hypot(f.x - lastX, f.z - lastZ) >= .05) {
+        if (!f.carried && (!wasSolid || changedRooms || Math.hypot(f.x - lastX, f.z - lastZ) >= .05)) {
           for (const id of new Set([...lastRooms, ...oldRooms, ...nextRooms])) {
             const rev = (world.furnitureRevision.get(id) || 0) + 1;
             world.furnitureRevision.set(id, rev); world.rooms.find(room => room.id === id).furnitureRevision = rev;
@@ -801,6 +822,26 @@ function roomContext(world, rt) {
         };
       });
       return holder;
+    },
+    /** Register a room-built c.dynamic/c.add Group. The entire assembly must
+     * have its own group (not a piece of the static room batch). */
+    movable(group, spec) {
+      const f = registerMovable(world, rt, group, spec);
+      if (!f) return null;
+      group.userData.movable = f;
+      if (env.lighting || rt.lighting) f.lightTint = new THREE.Vector3(1, 1, 1);
+      c.after.push(() => {
+        rt.group.updateMatrixWorld(true); world.scene.attach(group);
+        if (f.lightTint) group.traverse(o => o.userData.followFurnitureLight?.(f));
+      });
+      return f;
+    },
+    /** An explicit, bounded solution witness; it is physically rehearsed by
+     * the no-trap validator, from every possible entrance, before accepting it. */
+    bridgeRoute(item, { stand, path = [] } = {}) {
+      if (!item?.bridge || item.room !== rt.id || !stand || !Number.isFinite(stand.x) || !Number.isFinite(stand.z) || !Array.isArray(path) || path.length > 8 || path.some(p => !Number.isFinite(p?.x) || !Number.isFinite(p?.z))) throw Error('bridgeRoute: supply this room\'s cutout, a standing point and up to eight finite hinge waypoints');
+      const plan = { item, stand: { ...stand }, path: path.map(p => ({ ...p })) };
+      (rt.bridgePlans ||= []).push(plan); return plan;
     },
     /** A sheet of paper on the floor. */
     paper(x, z, rot = R.range(-3, 3), color) { c.lay(c.mapped('paper' + (color || ''), kit.tex.paper(color)), x, z, 0.21, 0.297, rot, null, WHITE, floorAt(def, x, z) + 0.006 + R() * 0.004); },
@@ -1116,6 +1157,7 @@ function roomContext(world, rt) {
       rt.group.updateMatrixWorld(true);
       for (const fn of c.after) fn();
       if (moving) for (const object of added) {
+        if (object.userData.movable) continue;
         object.updateMatrixWorld(true);
         // Added objects and c.dynamic holders are authored in room space.
         // Measure there, so a quarter-turned room does not change ownership.

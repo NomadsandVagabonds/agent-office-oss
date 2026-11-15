@@ -12,8 +12,9 @@ Deployment: `ed437082-8346-4085-9846-c8b3cba30be7`, verified 15 November 2026.
 **The long way round** is a fixed four-floor tour: yellow offices, unfinished
 offices, Suburbia, and the combined night finale. Floor 1 keeps pirate, cake and
 moving cutouts; Mother is on floor 2 and The Lines on floor 3. The waterpark
-will come later. The old culvert is included; the new bridge-removal puzzle is
-not. See [the showcase notes](BACKROOMS-COOP-SHOWCASE.md) for the seed, tested
+will come later. The Gap includes removable hoarding bridges: hold with E,
+lower/raise with R, and pull one out from under The Lines. Both players share
+the floor and a teammate standing on a bridge prevents removal. See [the showcase notes](BACKROOMS-COOP-SHOWCASE.md) for the seed, tested
 route, creature changes and limits. The hosted release above is still unchanged.
 
 ## Custom characters and open mic (live)

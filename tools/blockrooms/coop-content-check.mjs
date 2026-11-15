@@ -26,8 +26,8 @@ try{
  })()`);
  const {DECK}=await import('../../public/world/backrooms/gen.js');
  const selected=process.env.COOP_CHECK_ROOMS?.split(',');
- const cases=process.argv.includes('--finale')?[{id:'showcase-finale',options:{only:'mecha',finale:true}}]:DECK.filter(a=>!selected||selected.includes(a.id)).map(a=>({id:a.id,options:{only:a.id,themes:[a.themes?.suburb?'suburb':'yellow'],members:[]}}));
- if(!selected&&!process.argv.includes('--finale'))for(const member of ['pirate','moth','shadow','porter','toner','other-door'])cases.push({id:'cast-'+member,options:{only:member==='the-lines'?'the-culvert':'ceiling-meeting',themes:[member==='the-lines'?'suburb':'yellow'],members:[member]}});
+ const cases=process.argv.includes('--bridge')?['bridge-gap','bridge-lines'].map(id=>({id,options:{only:'the-culvert',themes:['suburb'],members:id==='bridge-lines'?['the-lines']:[]}})):process.argv.includes('--finale')?[{id:'showcase-finale',options:{only:'mecha',finale:true}}]:DECK.filter(a=>!selected||selected.includes(a.id)).map(a=>({id:a.id,options:{only:a.id,themes:[a.themes?.suburb?'suburb':'yellow'],members:[]}}));
+ if(!selected&&!process.argv.includes('--finale')&&!process.argv.includes('--bridge'))for(const member of ['pirate','moth','shadow','porter','toner','other-door'])cases.push({id:'cast-'+member,options:{only:member==='the-lines'?'the-culvert':'ceiling-meeting',themes:[member==='the-lines'?'suburb':'yellow'],members:[member]}});
  if(process.env.COOP_CAST)for(const member of process.env.COOP_CAST.split(','))cases.push({id:'cast-'+member,options:{only:member==='the-lines'?'the-culvert':'ceiling-meeting',themes:[member==='the-lines'?'suburb':'yellow'],members:[member]}});
  const {exercise}=await import('./coop-encounters.mjs');
  const {createSceneSender}=await import('../../public/world/coop/scene-wire.js');
@@ -40,6 +40,11 @@ try{
   review.initialNodes=r.inspect().nodes.length;
   })()`);
   if(process.argv.includes('--encounters'))console.log('Encounter',c.id,await a.ev(`(${exercise.toString()})(review.r,${JSON.stringify(c.id)})`));
+  const checkpoints=await a.ev('review.bridgeChecks||[]');
+  for(const cp of checkpoints){
+   await b.ev(`review.r.apply(${JSON.stringify(cp.state)})`);
+   const floor=await b.ev(`review.r.world.floorY(${cp.x},${cp.z})`);assert.ok(Math.abs(floor-cp.floor)<1e-6,c.id+' guest floor '+cp.label);
+  }
   const sendScene=createSceneSender();
   for(let pass=0;pass<3;pass++){
    const packet=await a.ev(`(()=>{const r=review.r;let out;for(let n=0;n<20;n++)out=r.step(.05,review.state);while(!out)out=r.step(.05,review.state);return JSON.stringify(out)})()`);

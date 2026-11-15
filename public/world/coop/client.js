@@ -40,7 +40,7 @@ if(!realMode)for(let z=0;z<MAP.length;z++)for(let x=0;x<MAP[z].length;x++){
 if(!realMode)box(EXIT.x,1.1,EXIT.z+.8,1.3,2.2,.08,new THREE.MeshBasicMaterial({color:0x577762}));
 const pirate=makePirate(kit,makeRng('coop-pirate'));pirate.show();pirate.hold(0);if(!realMode)scene.add(pirate.group);
 const itemMeshes=new Map(),avatars=new Map(),keys=new Set();let state=null,id=null,socket=null,yaw=Math.PI,pitch=0,selected=0,lastHealth=4,ended=false;
-function send(m){if(realMode&&!['ready','floor-ready','voice','host-paused','real-state'].includes(m.type))m.depth=real?.depth;if(real?.host&&state?.phase==='play'&&['input','select','toggle-light','craft','take','drop','use','exit','revive','emote','trade-request','trade-answer','trade-offer','trade-confirm','trade-cancel'].includes(m.type)){real.command(id,m);return;}if(socket?.readyState===1)socket.send(JSON.stringify(m.type==='real-state'?{...m,state:sceneSender(m.state)}:m));}
+function send(m){if(realMode&&!['ready','floor-ready','voice','host-paused','real-state'].includes(m.type))m.depth=real?.depth;if(real?.host&&state?.phase==='play'&&['input','select','toggle-light','craft','take','drop','use','exit','tip','revive','emote','trade-request','trade-answer','trade-offer','trade-confirm','trade-cancel'].includes(m.type)){real.command(id,m);return;}if(socket?.readyState===1)socket.send(JSON.stringify(m.type==='real-state'?{...m,state:sceneSender(m.state)}:m));}
 let characterChoices=GUEST_PRESETS.map(p=>p.id);
 const characterPicker=createCharacterPicker({root:$('characterSlots'),help:$('characterHelp'),send});characterPicker.update(null,null,false,characterChoices);
 const voice=createVoice({send,enabled:()=>socket?.readyState===1&&!!state&&!ended,button:$('voice'),status:$('voiceStatus'),volume:$('voiceVolume'),indicator:$('voiceIndicator'),mode:$('voiceMode'),mute:$('voiceMute')});
@@ -157,8 +157,9 @@ document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canva
 window.addEventListener('keydown',e=>{if(realMode&&socialUI.key(e))return;if(document.pointerLockElement!==canvas)return;keys.add(e.key.toLowerCase());if(e.repeat)return;
  if(/^[1-6]$/.test(e.key)){if(realMode)send({type:'select',slot:Number(e.key)-1,toggle:true});else selected=Number(e.key)-1;}
  const me=state?.players.find(p=>p.id===id);if(!me||!active())return;
- if(e.key.toLowerCase()==='e'){if(me.gripping){send({type:'exit'});return;}const other=teammate(me);if(other){send(other.health>0?{type:'trade-request'}:{type:'revive',item:selectedItem(me)?.id});return;}const item=nearby(me);if(item)send({type:'take',id:item.id});else send({type:'exit'});}
- if(['q','r'].includes(e.key.toLowerCase()))useItem();
+ if(e.key.toLowerCase()==='e'){if(me.gripping||me.interaction){send({type:'exit'});return;}const other=teammate(me);if(other){send(other.health>0?{type:'trade-request'}:{type:'revive',item:selectedItem(me)?.id});return;}const item=nearby(me);if(item)send({type:'take',id:item.id});else send({type:'exit'});}
+ if(e.key.toLowerCase()==='r'&&me.bridgeGrip)send({type:'tip'});
+ else if(['q','r'].includes(e.key.toLowerCase()))useItem();
  if(e.code==='KeyM'){gameAudio.mute();}
  if(e.key.toLowerCase()==='g')send({type:'drop',id:selectedItem(me)?.id});
 });
@@ -181,6 +182,6 @@ const room=new URLSearchParams(location.search).get('room');if(room)connect(room
 
 document.addEventListener('visibilitychange',()=>{if(realHost)send({type:'host-paused',paused:document.hidden});});
 
-if(realMode){$('newSession').href='/rooms';$('controlsText').innerHTML='V hold to talk / toggle open mic · M mute game audio<br>WASD move · mouse look · Shift run · C crouch · Space jump<br>E pick up / open doors · lean into the taped exit wall together<br>1–6 hold / stow · Q or R use · G drop · F flashlight<br>I or Tab inventory / crafting · B emotes<br>E near partner: trade / revive with selected snack<br>Esc release mouse · Host: keep this tab visible. The game keeps running with this menu open.';$('status').textContent='Start a game, then send your friend the invite link.';}else{const link=document.createElement('a');link.href='/rooms';link.textContent='Try real rooms →';$('panel').append(document.createElement('br'),link);}
+if(realMode){$('newSession').href='/rooms';$('controlsText').innerHTML='V hold to talk / toggle open mic · M mute game audio<br>WASD move · mouse look · Shift run · C crouch · Space jump<br>E pick up / open doors · hold a hoarding, R lower / raise<br>lean into the taped exit wall together<br>1–6 hold / stow · Q or R use · G drop · F flashlight<br>I or Tab inventory / crafting · B emotes<br>E near partner: trade / revive with selected snack<br>Esc release mouse · Host: keep this tab visible. The game keeps running with this menu open.';$('status').textContent='Start a game, then send your friend the invite link.';}else{const link=document.createElement('a');link.href='/rooms';link.textContent='Try real rooms →';$('panel').append(document.createElement('br'),link);}
 
 if(new URLSearchParams(location.search).has('debug'))window.__coop={get avatarLooks(){return [...avatars].map(([id,a])=>({id,character:a.character,look:a.look}));},get inventoryHud(){return inventoryHud;},get runtime(){return real;},get state(){return state;}};

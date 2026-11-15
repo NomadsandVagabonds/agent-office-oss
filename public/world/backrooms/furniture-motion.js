@@ -2,12 +2,15 @@
 // owns the meshes, collisions and room revisions; this only approves moves.
 
 import { furnitureEntryTime } from './furniture-rules.js';
+import { bridgeSupport, canTip, bodyOver } from './bridge-rules.js';
 
 /** Relative weight; player and creature movement rates in metres/second. */
 export const FURNITURE = Object.freeze({
   chair: Object.freeze({ weight: 1, playerSpeed: 1.1, pushSpeed: 0.85 }),
   desk: Object.freeze({ weight: 3, playerSpeed: 0.45, pushSpeed: 0.4 }),
   trolley: Object.freeze({ weight: 1.5, playerSpeed: 0.85, pushSpeed: 0.65 }),
+  prop: Object.freeze({ weight: 1.5, playerSpeed: .75, pushSpeed: .6 }),
+  cutout: Object.freeze({ weight: 1, playerSpeed: .9, pushSpeed: .7 }),
 });
 const STEP = 0.04, MAX_MOVE = 0.5, SAMPLE = 0.1, FLOOR_EPS = 0.012, EPS = 1e-6;
 const none = () => ({ dx: 0, dz: 0, moved: false });
@@ -23,6 +26,9 @@ const distance2 = (p, b) => (p.x - clamp(p.x, b.x0, b.x1)) ** 2 + (p.z - clamp(p
  * world.free accepts opt.bounds (an exact footprint), ignoreCollider and
  * ignoreBody identities. No collider is temporarily disabled during a query.
  */
+/** How far above or below its carrier's floor a carried thing may be set down (a stair and a bit). */
+export const SET_DOWN_STEP = 0.4;
+
 export function createFurnitureMotion(world) {
   const away = new Map();
   function usable(item) {
@@ -32,12 +38,18 @@ export function createFurnitureMotion(world) {
       && item.x1 > item.x0 && item.z1 > item.z0 && item.x1 - item.x0 <= 4 && item.z1 - item.z0 <= 4 && item.top > item.y;
   }
   function fits(item, dx, dz, ignoreBody) {
+    if (item.transition || item.deployed && item.support?.spansGap) return false;
     const bounds = shifted(item, dx, dz), x = item.x + dx, z = item.z + dz;
     if (!world.free(x, z, 0, { bounds, bottom: item.y, top: item.top, ignoreCollider: item.collider, ignoreBody })) return false;
     // The player is not in world.bodies; creatures are. Both stop a desk.
-    for(const player of world.env?.players?.() || [world.env?.player]){
-      const me=player?.me,radius=player?.RADIUS||.22;
-      if(point(me)&&!ignores(ignoreBody,me)&&distance2(me,bounds)<radius*radius-EPS)return false;
+    const players = world.env?.players?.() || [world.env?.player];
+    for (const player of players) {
+      const me = player?.me, radius = player?.RADIUS || .22;
+      if (point(me) && !ignores(ignoreBody, me) && distance2(me, bounds) < radius * radius - EPS) return false;
+    }
+    if (item.deployed) {
+      if (players.some(p=>p?.me && bodyOver(item, {...p.me,r:p.RADIUS||.22})) || (world.bodies || []).some(b=>b.on!==false && !b.airborne && bodyOver(item,b))) return false;
+      return bridgeSupport(world, { ...item, ...bounds }, item.bridge.axis, item.bridge.bearing).ok;
     }
     // Check the interior as well as the corners: four good legs do not make
     // a desk safe to slide over a hole. Furniture does not climb or fall.
@@ -53,7 +65,7 @@ export function createFurnitureMotion(world) {
   }
   /** Swept, straight movement, at most half a metre per call. Returns its actual delta; a blocked move can be partial. */
   function move(item, dx, dz, { ignoreBody } = {}) {
-    if (!usable(item) || !Number.isFinite(dx) || !Number.isFinite(dz)) return none();
+    if (!usable(item) || item.carried || !Number.isFinite(dx) || !Number.isFinite(dz)) return none();
     const length = Math.hypot(dx, dz);
     if (!Number.isFinite(length) || length < EPS) return none();
     const scale = Math.min(1, MAX_MOVE / length), stride = Math.min(STEP, (item.x1 - item.x0) / 2, (item.z1 - item.z0) / 2);
@@ -66,14 +78,30 @@ export function createFurnitureMotion(world) {
       ax = tx; az = tz;
     }
     if (Math.hypot(ax, az) < EPS || item.translate(ax, az) === false) return none();
+    if (item.deployed) item.support = bridgeSupport(world, item, item.bridge.axis, item.bridge.bearing);
     return { dx: ax, dz: az, moved: true };
+  }
+  /** A carried prop is intangible in transit. Only setting it down needs a
+   * full footprint/body/floor check; it does not sweep back through the path
+   * the visitor has already walked. Supports a different landing height. */
+  function place(item, x, z, { from } = {}) {
+    if (!usable(item) || ![x, z].every(Number.isFinite)) return false;
+    const floor = world.floorY(x, z), dy = floor - item.y;
+    if (!Number.isFinite(floor) || item.authored && Math.abs(dy) > FLOOR_EPS) return false;
+    // `from`: the floor its carrier stands on. Nothing is set down more than a step above or below that: not into a pit
+    // (where it would be lost, or stand in the air over one), and not up onto a ledge out of reach.
+    if (Number.isFinite(from) && Math.abs(floor - from) > SET_DOWN_STEP) return false;
+    const dx = x - item.x, dz = z - item.z;
+    if (!fits({ ...item, y: floor, top: item.top + dy }, dx, dz)) return false;
+    if (Math.hypot(dx, dz, dy) >= EPS && item.translate(dx, dz, dy) === false) return false;
+    return true;
   }
   /** The first solid movable thing a circular walker would meet on a straight segment, or null. */
   function blocking(a, b, r = 0.22) {
     if (!point(a) || !point(b) || !Number.isFinite(r) || r < 0 || r > 4) return null;
     let closest = null, at = Infinity;
     for (const item of world.furniture || []) {
-      if (!usable(item) || item.collider.on === false) continue;
+      if (!usable(item) || item.collider.on === false || item.collider.floor) continue;
       const t = furnitureEntryTime(a, b, r, item);
       if (t < at) { at = t; closest = item; }
     }
@@ -131,5 +159,11 @@ export function createFurnitureMotion(world) {
     world.refreshFurniture?.();
     return back;
   }
-  return { move, blocking, shove, takeAway, bringBack, version: room => world.furnitureRevision?.get(room) || 0 };
+  function tip(item, actor) {
+    if (!usable(item)) return { ok: false, reason: 'fixed' };
+    const checked = canTip(world, item, { actor });
+    if (checked.ok && !item.tip?.(checked)) return { ok: false, reason: 'busy' };
+    return checked;
+  }
+  return { move, place, blocking, shove, tip, takeAway, bringBack, version: room => world.furnitureRevision?.get(room) || 0 };
 }

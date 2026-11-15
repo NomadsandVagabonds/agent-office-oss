@@ -17,7 +17,8 @@ The optional curated tour is now four floors, ending in a combined night
 finale. Mother joins floor 2; The Lines joins Suburbia on floor 3. This follow-up
 imports those two creatures from `34b5c98`, not that entire development branch.
 See [the showcase notes](BACKROOMS-COOP-SHOWCASE.md) for exact tested content and
-limits. Waterpark and the newer Gap bridge-removal puzzle are not included.
+limits. The Gap and removable-bridge encounter are now included; waterpark
+is still deferred.
 The current Railway release still has only the random visit selector.
 
 | System | This branch |
@@ -27,7 +28,7 @@ The current Railway release still has only the random visit selector.
 | Cast | Pirate, moth, shadow, porter, waste toner and other door follow the production seeded roster. The prepared showcase also adds Mother and The Lines. Each ticks once under the appropriate living visitor; Mother’s brood chooses per small creature. |
 | Room residents | Production denizen system runs, including absorbed colleagues, paper exchanges, warden drops and MECHA capture. Visibility includes the guest's location. |
 | Lighting | Production failing banks, dim pockets, travelling outages, isolated lamps, emergency lighting, ordinary fluorescent flicker and encounter lighting. Host clock drives both pictures. |
-| Physics | Production furniture registration and movement for chairs, desks and trolleys. Either visitor can drag with E. The other visitor, creatures and walls block movement. Creature barricade contracts remain active. |
+| Physics | Production furniture registration and movement for chairs, desks and trolleys. Either visitor can drag with E. The other visitor, creatures and walls block movement. Creature barricade contracts remain active. The Gap adds carried hoardings, R lower/raise, supported walkable bridges, shared surface state and protection for both visitors. |
 | Flashlights | Loose and mounted beams, matching optical pose, remote beam, both visitors' light available to relevant room encounters. |
 | Inventory | Production six-pocket inventory, crafting, stacks, supplies requested by rooms/creatures, scissors, shared pickups, fires and chalk. Battery/snack density scaled for two players. |
 | Team interactions | Existing snack revives, flat-camera battery rescue, consent-based trades, emotes, push-to-talk and opt-in open mic. |
@@ -92,7 +93,11 @@ human has completed every puzzle naturally.
 - Four-floor follow-up: real two-browser showcase completed all descents and final
   extraction. Mother brood triggering, guest stomping/damage, spent-brood cleanup,
   wet-material replication and The Lines continuing after downing a guest pass.
-- `npm test`: 880/883 pass. Existing failures: Office console child test and its
+- Gap follow-up: both-client carry/lower/cross/raise, partner protection,
+  independent falls and safe-bank revive position pass. The Lines follows onto
+  the bridge and falls when it is raised; the guest R key also passes through
+  the real relay. The complete four-floor route still escapes in both clients.
+- `npm test`: 888/891 pass. Existing failures: Office console child test and its
   parent (`/var` versus `/private/var` on macOS), and the Office usage/status-line
   bridge. The previously observed wake-order timing failure passed this run.
 

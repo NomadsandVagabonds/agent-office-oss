@@ -11,6 +11,65 @@ export async function exercise(r,id){
  const give=(v,type,id,extra={})=>{const out=mutateInventory(sim,v.record,m=>m.add(makeItem(type,id,extra)));check(out.ok,'item added');};
  const useAt=(v,use)=>{v.me.yaw=Math.atan2(v.me.x-use.wx,v.me.z-use.wz);r.command(v.id,{type:'input',f:0,s:0,yaw:v.me.yaw,pitch:0});r.command(v.id,{type:'exit'});};
  reset();
+ if(id==='bridge-gap'||id==='bridge-lines'){
+  if(id==='bridge-lines')env.pursuer.takeAway(()=>true,'bridge-setup');
+  const rt=w.rooms.find(rt=>rt.def.arch==='the-culvert');check(rt&&!rt.flat,'gap is real, not rescue-flattened');
+  const {bridgeReachable}=await import('/world/backrooms/bridge-puzzles.js');check(bridgeReachable(w,rt),'crossing validated from every entrance');
+  const plan=rt.bridgePlans[0],f=plan.item,n=f.bridge.normal,side={x:n.z,z:-n.x};
+  const stand=toWorld(rt.def,plan.stand.x,plan.stand.z),end=toWorld(rt.def,plan.path.at(-1).x,plan.path.at(-1).z);
+  const aim=(v,item)=>{const x=Math.max(item.x0+.015,Math.min(v.me.x,item.x1-.015)),z=Math.max(item.z0+.015,Math.min(v.me.z,item.z1-.015));v.me.yaw=Math.atan2(v.me.x-x,v.me.z-z);v.me.pitch=Math.atan2((item.deployed?item.top:(item.y+item.top)/2)-v.me.y,Math.hypot(x-v.me.x,z-v.me.z));r.command(v.id,{type:'input',f:0,s:0,yaw:v.me.yaw,pitch:v.me.pitch});r.command(v.id,{type:'exit'});};
+  const input=(v,fwd,yaw)=>r.command(v.id,{type:'input',f:fwd,s:0,yaw,pitch:v.me.pitch});
+  h.player.warp(1000,1000,0);g.player.warp(stand.x,stand.z,Math.atan2(-n.x,-n.z));tick(1);
+  aim(g,f);check(g.grip.held===f,'guest E acquires hoarding');
+  for(let i=0;i<100&&Math.hypot(f.hinge.x-end.x,f.hinge.z-end.z)>.035;i++){
+   const delta=(end.x-f.hinge.x)*n.x+(end.z-f.hinge.z)*n.z;if(Math.abs(delta)<.035)break;
+   input(g,Math.sign(delta),Math.atan2(-n.x,-n.z));tick(1);
+  }
+  input(g,0,g.me.yaw);r.command(g.id,{type:'tip'});check(f.transition,'guest R lowers hoarding '+JSON.stringify(g.record.notice));tick(12);
+  check(f.deployed&&f.support.spansGap,'panel becomes a supported bridge');
+  const middle={x:f.hinge.x+n.x*1.5,z:f.hinge.z+n.z*1.5};check(w.terrainY(middle.x,middle.z)<-1&&w.floorY(middle.x,middle.z)>-.1,'bridge supplies real floor');
+  globalThis.review.bridgeChecks=[];
+  const checkpoint=label=>{tick(3);globalThis.review.bridgeChecks.push({label,state:structuredClone(r.inspect().sim),...middle,floor:w.floorY(middle.x,middle.z)});};
+  checkpoint('lowered');
+  // Cross with ordinary movement, then step sideways onto the far bank.
+  for(let i=0;i<200&&(g.me.x-f.hinge.x)*n.x+(g.me.z-f.hinge.z)*n.z<2.75;i++){input(g,1,Math.atan2(-n.x,-n.z));tick(1);}
+  input(g,0,g.me.yaw);check((g.me.x-f.hinge.x)*n.x+(g.me.z-f.hinge.z)*n.z>2.55&&g.healthModel.read().current>0,'guest walks across bridge');
+  const far={x:f.hinge.x+n.x*3.1+side.x*1.05,z:f.hinge.z+n.z*3.1+side.z*1.05};
+  g.player.warp(far.x,far.z,0);tick(1);
+  // A teammate standing on the bridge prevents its removal.
+  h.player.warp(middle.x,middle.z,0);tick(1);aim(g,f);check(g.grip.held===f,'guest can grip the far end '+JSON.stringify({health:g.healthModel.read(),me:g.me,target:g.grip.target?.id,held:g.grip.held?.id,expected:f.id,bounds:[f.x0,f.x1,f.z0,f.z1,f.y,f.top],use:w.usable(g.me)?.label,free:w.free(g.me.x,g.me.z,.22)}));
+  r.command(g.id,{type:'tip'});check(!f.transition&&f.deployed,'cannot pull bridge out from under teammate');
+  h.player.warp(1000,1000,0);input(g,0,g.me.yaw);
+  if(id==='bridge-lines'){
+   // Bring the real creature from its lair through the generated floor. Only
+   // visitor positioning is accelerated; the creature walks every step.
+   g.grip.release();env.pursuer.bringBack('bridge-setup');const lines=env.pursuer.of('the-lines');let at=lines.at();
+   g.player.warp(at.x,at.z+.6,0);tick(35);check(lines.at().mode!=='asleep','The Lines wakes in its lair');
+   const {roomRoute}=await import('/world/backrooms/cast/paths.js');
+   const path=roomRoute(r.level,w.roomAt(lines.at().x,lines.at().z).id,rt.id);
+   const near={x:f.hinge.x-n.x*.8,z:f.hinge.z-n.z*.8};
+   for(const rid of path.slice(1)){
+    const d=r.level.rooms[rid],goal=rid===rt.id?near:{x:d.cx,z:d.cz};g.player.warp(goal.x,goal.z,0);
+    for(let i=0;i<1600&&w.roomAt(lines.at().x,lines.at().z)?.id!==rid;i++){if(i%50===0){g.healthModel.heal(4);g.record.battery=390;}tick(1);}
+    check(w.roomAt(lines.at().x,lines.at().z)?.id===rid,'The Lines follows through room '+rid);
+   }
+   g.player.warp(near.x,near.z,0);
+   for(let i=0;i<1200&&Math.hypot(lines.at().x-near.x,lines.at().z-near.z)>1.65;i++){g.healthModel.heal(4);g.record.battery=390;tick(1);}
+   check(Math.hypot(lines.at().x-near.x,lines.at().z-near.z)<=1.65,'The Lines reaches near bank');g.healthModel.heal(4);
+   g.player.warp(far.x,far.z,0);tick(1);aim(g,f);check(g.grip.held===f,'guest waits at far end with bridge in hand');
+   let on=false;
+   for(let i=0;i<1200;i++){input(g,0,g.me.yaw);tick(1);at=lines.at();if(w.terrainY(at.x,at.z)<-1&&w.floorY(at.x,at.z)>-.1){on=true;break;}}
+   check(on,'The Lines walks onto bridge '+JSON.stringify({at:lines.at(),g:{x:g.me.x,z:g.me.z,health:g.health,held:g.held},phase:sim.phase,floor:w.floorY(lines.at().x,lines.at().z),terrain:w.terrainY(lines.at().x,lines.at().z),middle,far,bridge:[f.x0,f.x1,f.z0,f.z1],room:w.roomAt(lines.at().x,lines.at().z)?.id}));r.command(g.id,{type:'tip'});check(f.transition,'bridge can rise under The Lines');
+   checkpoint('raising-under-creature');tick(80);check(lines.at().mode==='gone','The Lines falls and disappears');
+   check(sim.survived.some(e=>e.id==='the-lines'),'escape from The Lines is recorded');
+  }else{
+   r.command(g.id,{type:'tip'});check(f.transition,'guest raises bridge after teammate clears');checkpoint('raising');tick(12);
+   check(!f.deployed&&w.floorY(middle.x,middle.z)<-1,'bridge removal restores gap');
+   h.player.warp(middle.x,middle.z,0);tick(38);check(h.healthModel.read().current===0,'fall downs only the falling player');check(g.healthModel.read().current>0,'partner remains on intact bank');
+   check(w.floorY(g.me.x,g.me.z)>-1,'partner floor never collapses');check(w.floorY(h.me.x,h.me.z)>-1,'downed player is reachable on bank for revive');
+  }
+  checkpoint('removed');return {bridge:'guest carries, lowers, crosses, raises; partner protected',creature:id==='bridge-lines'?'lured across, dropped, gone':'independent fall checked'};
+ }
  if(id==='chairs'){
   let item=null;
   for(const f of w.furniture.filter(f=>f.collider.on!==false)){

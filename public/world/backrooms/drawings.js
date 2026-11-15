@@ -15,11 +15,11 @@ export const WARNINGS = Object.freeze({
     ['LITTLE ONES GO FOR', 'YOUR FACE. THEY CANT', 'SEE. STAMP ON THEM', 'BEFORE THEY'],
     ['IT WAS STILL WAVING', 'WHEN I CAME BACK.', 'THEN IT DID IT AG'],
   ],
-  // This co-op base has the older culvert, without removable bridges. Only
-  // teach the counterplay that exists here; import the other notes with The Gap.
   'the-lines': [
     ['THE POLES IN THE', 'CORNER ARE NOT POLES.', 'IT STOOD UP WHEN I', 'GOT NEAR AND THEN IT'],
+    ['NO FLOOR = IT STOPS.', 'BUT I PUT THE BOARD', 'ACROSS AND IT CAME', 'OVER THE BOARD AFTER'],
     ['IN DOORWAYS IT FOLDS', 'UP AND DRAGS. SLOW', 'THEN. RUN THEN. IN', 'THE BIG ROOMS IT IS'],
+    ['LIFT THE BOARD WHILE', 'IT IS ON IT. IT WENT', 'DOWN AND I NEVER', 'HEARD IT LAND AND'],
   ],
   pirate: [
     ['THE ONE IN THE HAT', 'ONLY MOVES WHEN YOU', 'ARE NOT LOOKING. SO'],

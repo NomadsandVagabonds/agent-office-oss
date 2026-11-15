@@ -13,7 +13,7 @@ invite link and receives the host's route automatically.
 | --- | --- | --- | --- |
 | 1 | Yellow offices | Moving cutouts, cake/party room, chairs, ceiling meeting, Blackout Bay, Dispatch | Pirate, night porter |
 | 2 | Unfinished offices | Quiet Zone, Mailroom, Copiers, keyboard floor, Return Plenum | Waste Toner, Mother |
-| 3 | Suburbia | Show Home, The Close, Back Garden, lemonade, Model Village, Walk-in, culvert | Desk moth, The Lines |
+| 3 | Suburbia | Show Home, The Close, Back Garden, lemonade, Model Village, Walk-in, The Gap | Desk moth, The Lines |
 | 4 | Night offices | Cover, Many Doors, ceiling plants, MECHA, Last Light, Unsure Hall | Other Door, shadow |
 
 There are 113 rooms across four floors: 26 / 25 / 29 / 33. Ordinary maze accounts
@@ -34,13 +34,31 @@ wet appearance and procedural squish/retch sounds. Co-op changes:
 - The Lines continues after a surviving teammate if it downs the other.
 - Wet materials and spawned brood meshes replicate to the guest.
 
-**The newer Gap bridge-removal puzzle is not included.** Suburbia uses the
-existing culvert and leaning hoardings. The Lines can wake, fold through the
-hallways and pursue visitors, but you cannot pull a bridge out from under it
-in this build. Its rule supports falling; that does not mean the new room's
-counterplay is connected. Reach the next floor together to leave it behind.
-The Lines is explicitly scheduled in this tour; its upstream automatic
-room-linked dealer has not been imported into ordinary random visits.
+## The Gap and its removable bridge
+
+Suburbia now has the complete **Gap** room and The Lines encounter. The lawn
+has a real missing strip, with narrow crossings and loose timber-backed
+hoardings. E holds a hoarding; R lowers it when both ends have support. Cross,
+then E holds the laid bridge and R raises it, including from the far bank.
+The Lines walks onto a supported bridge and falls permanently when the bridge
+is raised beneath it. The shorter panel cannot span the gap.
+
+Both players share panel poses, floor surfaces, collision and navigation
+changes. Raising/lowering checks both visitors, so a partner standing on the
+bridge blocks the action. The Lines deliberately has no blocking body for this
+interaction. Ordinary chairs, desks and trolleys retain their drag behavior;
+loose hoardings can be carried. Hoardings are restored to a stranded bank when
+needed, using the room's existing recovery rule.
+
+A fall affects only that visitor. In co-op the fallen player is downed and
+returned to their last safe bank, where the partner can use a snack to revive
+them. It never lowers the entire room's floor beneath the other player.
+
+This imports the bridge support, movable-panel registry and reachability proof
+from Fable's development branch. A bridge must really connect both banks; the
+room is not silently flattened to make it pass the no-trap check. The Lines
+is explicitly scheduled in this tour; its upstream automatic room-linked
+dealer remains outside the ordinary random-visit integration.
 
 This is a curated selection, not every room in the catalogue. Side branches
 can be missed. Health, camera power, crafting, trading, revives, lighting,
@@ -56,6 +74,9 @@ solo settings/death presentation remain outside this prototype.
   four floors through the real relay with two browsers, retained health, bags,
   battery and mounted light, and reached final extraction in both clients.
   Positioning/time are accelerated; this is not a natural human playthrough.
+  Adding `--bridge` also passed the guest’s real R key through the WebSocket
+  relay, raised the bridge, and replicated the removed floor. The single-window
+  test keeps host visibility logically true to represent two separate computers.
 - `COOP_CHECK_ROOMS=the-culvert COOP_CAST=mother,the-lines node
   tools/blockrooms/coop-content-check.mjs --encounters` checks guest brood
   triggering, E stomping, guest-only damage, The Lines downing one player and
@@ -63,9 +84,21 @@ solo settings/death presentation remain outside this prototype.
   errors. Mother's brood added 20–25 synchronized scene nodes; spent brood and its E interactions are cleaned up.
 - `test/coop-new-creatures.test.mjs` retains Fable's pure creature-rule tests.
 
-Full regression suite: **880/883 pass**. The three failures are the existing
-Office console child/parent (`/var` versus `/private/var`) and Office status-line
-bridge failures. The co-op and new creature checks pass.
+- `node tools/blockrooms/coop-content-check.mjs --bridge --encounters`:
+  guest carries, lowers, walks across and raises a hoarding; the partner blocks
+  removal while on it; per-player fall/downing and safe-bank recovery pass.
+  The real creature walks from its lair onto the bridge, falls and disappears
+  after removal, and awards an evasion. Both browsers agree on floor heights
+  before, during and after tipping. Setup accelerates visitor positioning and
+  temporarily hides the creature while preparing the fixture; pursuit itself
+  runs normally. This is not a claim of a natural human playthrough.
+- `test/backrooms-bridges.test.mjs`: support at both ends, short-panel rejection,
+  real player/creature crossing, swept clearance, both-player protection,
+  rotated/raised rooms and reachability from every entrance.
+
+`npm test`: 888/891 pass. The three existing failures are the Office console
+path-alias assertion, its parent suite, and the Office usage/status-line bridge.
+All Backrooms and co-op unit tests pass.
 
 When the waterpark is ready, integrate its reviewed commit, verify water
 movement/hazards/shared state, place it at floor 4 and move this finale to 5.

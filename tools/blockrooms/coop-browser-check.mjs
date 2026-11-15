@@ -63,6 +63,40 @@ try{
    const guest=await b.ev('testState');assert.equal(guest.depth,depth+1);assert.equal(guest.nodeCount,next.sim.nodeCount);assert.ok(next.sim.players[0].bag.includes(saved.id));assert.equal(next.sim.players[0].health,3);assert.equal(next.sim.players[0].inventory.mountedTorch.id,'carried-light');assert.ok(next.sim.players[0].inventory.mountedTorch.charge<=before.sim.players[0].inventory.mountedTorch.charge);assert.ok(next.sim.players[0].battery<=before.sim.players[0].battery);assert.equal(next.sim.items.filter(i=>i.id===saved.id).length,1);assert.ok(next.sim.items.length>1);assert.equal(guest.items.find(i=>i.id===saved.id).owner,next.sim.players[0].id);
    await checkShowcase();
    console.log('Shared descent:',result.way,'→',next.sim.depth,next.sim.theme,'health/battery/bag retained');
+   if(process.argv.includes('--bridge')&&next.sim.theme==='suburb'){
+    // Two test tabs share a window; represent a host kept visible on the
+    // other computer while the guest captures the mouse. Restore below.
+    await a.ev('Object.defineProperty(document,"hidden",{configurable:true,get:()=>false})');
+    const fixture=await a.ev(`(async()=>{
+     const r=__coop.runtime,w=r.world,env=w.env,{visitors}=r.inspect(),v=visitors[1],rt=w.rooms.find(rt=>rt.def.arch==='the-culvert'),p=rt.bridgePlans[0],f=p.item,{toWorld}=await import('/world/backrooms/gen.js');
+     env.pursuer.takeAway(()=>true,'key-check');const end=toWorld(rt.def,p.path[0].x,p.path[0].z);
+     for(let i=0;i<12&&Math.hypot(end.x-f.hinge.x,end.z-f.hinge.z)>.001;i++)env.barricades.move(f,end.x-f.hinge.x,end.z-f.hinge.z);
+     const n=f.bridge.normal,side={x:n.z,z:-n.x},actor={x:f.hinge.x-n.x*.8,z:f.hinge.z-n.z*.8};
+     const lowered=env.barricades.tip(f,actor);if(!lowered.ok)throw Error('Key fixture '+lowered.reason);for(let i=0;i<12;i++)r.step(.05,__coop.state);
+     v.player.warp(f.hinge.x+n.x*3.1+side.x*1.05,f.hinge.z+n.z*3.1+side.z*1.05);v.me.y=w.floorY(v.me.x,v.me.z)+v.player.EYE;
+     const x=Math.max(f.x0+.015,Math.min(v.me.x,f.x1-.015)),z=Math.max(f.z0+.015,Math.min(v.me.z,f.z1-.015)),yaw=Math.atan2(v.me.x-x,v.me.z-z),pitch=Math.atan2(f.top-v.me.y,Math.hypot(x-v.me.x,z-v.me.z));
+     window.bridgeKeyAim={yaw,pitch};window.bridgeKeyItem=f;return {x:f.hinge.x+n.x*1.5,z:f.hinge.z+n.z*1.5};
+    })()`);
+    // A real click grants mouse capture, then a real R key travels guest →
+    // relay → host. It must tip the held bridge, not use the selected item.
+    await b.cmd('Page.bringToFront');
+    const button=await b.ev('(()=>{const e=document.getElementById("ready"),q=e.getBoundingClientRect();return {x:q.x+q.width/2,y:q.y+q.height/2};})()');
+    for(const type of ['mousePressed','mouseReleased'])await b.cmd('Input.dispatchMouseEvent',{type,...button,button:'left',clickCount:1});
+    await sleep(150);assert.equal(await b.ev('document.pointerLockElement?.id'),'view');
+    await a.ev(`(()=>{const r=__coop.runtime,v=r.inspect().visitors[1];r.command(v.id,{type:'input',f:0,s:0,...bridgeKeyAim});r.command(v.id,{type:'exit'});if(v.grip.held!==bridgeKeyItem)throw Error('Guest did not grip bridge');})()`);
+    await a.cmd('Page.bringToFront');
+    for(let i=0;i<30&&!await b.ev('testState.players.find(p=>p.id===testId).bridgeGrip');i++)await sleep(20);
+    assert.equal(await b.ev('testState.players.find(p=>p.id===testId).bridgeGrip'),true);
+    await b.cmd('Page.bringToFront');
+    for(const type of ['mousePressed','mouseReleased'])await b.cmd('Input.dispatchMouseEvent',{type,...button,button:'left',clickCount:1});
+    assert.equal(await b.ev('document.pointerLockElement?.id'),'view');
+    await b.cmd('Input.dispatchKeyEvent',{type:'keyDown',key:'r',code:'KeyR'});await b.cmd('Input.dispatchKeyEvent',{type:'keyUp',key:'r',code:'KeyR'});
+    await a.cmd('Page.bringToFront');await sleep(800);
+    assert.equal(await a.ev('bridgeKeyItem.deployed'),false,'guest R raises bridge through relay');
+    assert.ok(await b.ev(`__coop.runtime.world.floorY(${fixture.x},${fixture.z})<-1`),'guest receives removed floor');
+    await b.ev('document.exitPointerLock()');await a.ev('delete document.hidden');console.log('Guest R key raises shared bridge through live relay');
+   }
+
   }
   await a.ev('(async()=>{const r=__coop.runtime,{visitors}=r.inspect(),g=await import("/world/backrooms/gen.js"),{flight}=await import("/world/backrooms/seam.js"),def=r.level.rooms[r.level.exit.room],at=g.toWorld(def,0,flight(def.D,false).back+.24);if(r.world.env.pursuer.figure)r.world.env.pursuer.figure.entryGrace=10000;for(const v of visitors)v.player.warp(at.x,at.z,def.rot*Math.PI/2);})()');
   for(let i=0;i<45;i++){await a.ev('(()=>{const r=__coop.runtime,v=r.inspect().visitors[0];r.command(v.id,{type:"input",f:1,s:0,yaw:r.level.rooms[r.level.exit.room].rot*Math.PI/2,pitch:0})})()');await sleep(50);}

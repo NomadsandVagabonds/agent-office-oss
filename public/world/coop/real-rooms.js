@@ -46,7 +46,7 @@ export async function createRealRooms(seed,host,scene,{depth=0,slice=false,route
  createStalkers(env,{members:planOptions.members,hasSurvivor:()=>visitors.some(v=>v.healthModel.read().current>0),withVisitor:scopeNearest
  });
  env.coopBeam=(at,options={})=>visitors.some(v=>inFlashlight({...v.me,mounted:!!v.record.inventory?.mountedTorch},at,{...options,power:lightPower(v.record),los:world.los(v.me.x,v.me.z,at.x,at.z)}));
- env.withVisitor=scopeNearest;env.players=()=>visitors.map(v=>v.player);
+ env.withVisitor=scopeNearest;env.players=()=>visitors.map(v=>v.player);env.forEachVisitor=fn=>{for(const v of visitors)if(v.healthModel.read().current>0)withVisitor(v,()=>fn(v.me));};
  env.vhs={uniforms:{uWhite:{get value(){return active?.record.white||0;},set value(k){if(active)active.record.white=k;}}}};
  env.hasSurvivor=()=>visitors.some(v=>v.healthModel.read().current>0);
  createHand(env);createDenizens(env,{withVisitor:scopeNearest});
@@ -109,6 +109,7 @@ export async function createRealRooms(seed,host,scene,{depth=0,slice=false,route
  function command(id,m){
   const v=visitors.find(v=>v.id===id);if(!v||v.health<=0||v.held||sim.phase!=='play')return;const p=v.record;
   if(socialAct(sim,id,m,socialContext)){for(const p of sim.players)reconcileInventory(sim,p);return;}
+  if(m.type==='tip'){withVisitor(v,()=>{const out=v.grip.tip();if(!out.ok)p.notice={text:({support:'Needs solid ground at both ends',occupied:'Wait until your partner is clear',blocked:'Something is in the way',clearance:'Not enough room to lower it'})[out.reason]||'Cannot move the bridge here',until:sim.time+2};});return;}
   if(withVisitor(v,()=>inventoryAct(sim,p,m,{
    canTake:i=>dist(v.me,i)<1.5&&Math.abs(world.floorY(v.me.x,v.me.z)-i.y)<1.2&&world.los(v.me.x,v.me.z,i.x,i.z),
    dropSpot:i=>{const q=physical.dropSpot(i);return q?{x:q.wx,z:q.wz,y:q.rt.def.y+q.y}:null;},
@@ -132,10 +133,11 @@ export async function createRealRooms(seed,host,scene,{depth=0,slice=false,route
    v.record.white=0;v.record.interference=(v.record.interference||0)*Math.exp(-4*dt);v.record.red=(v.record.red||0)*Math.exp(-3.2*dt);v.health=v.healthModel.read().current;v.record.health=v.health;tickInventory(sim,v.record,dt);
   }
   const live=visitors.filter(v=>v.health>0);if(!live.length)sim.phase='dead';
+  for(const f of world.furniture)f.tick?.(dt);
   world.updateLighting(sim.time);world.updateFlicker(dt);physical.update(dt);population.update(dt,sim.time,visitors);
   for(const v of live){const rt=world.roomAt(v.me.x,v.me.z),key=`${depth}:${rt?.id}`;if(rt&&!sim.visited.includes(key))sim.visited.push(key);}
   if(live.length){if(floorTime>8&&!env.coopAwake){env.pursuer.wake(true);env.coopAwake=true;}env.pursuer.update(dt,sim.time);env.denizens.update(dt,sim.time);}
-  for(const v of visitors)withVisitor(v,()=>{const m=v.me,use=world.usable(m);Object.assign(v.record,{x:m.x,z:m.z,y:m.y,yaw:m.yaw,pitch:m.pitch,health:v.healthModel.read().current,held:v.held,gripping:!!v.grip.held,interaction:v.grip.action(use)?`E · ${v.grip.held?'Release':'Move'} ${(v.grip.held||v.grip.target).type}`:null,usable:use?`E · ${use.label||'Interact'}`:null,hitCooldown:v.healthModel.read().cooldown});v.health=v.record.health;});
+  for(const v of visitors)withVisitor(v,()=>{const m=v.me,use=world.usable(m);Object.assign(v.record,{x:m.x,z:m.z,y:m.y,yaw:m.yaw,pitch:m.pitch,health:v.healthModel.read().current,held:v.held,gripping:!!v.grip.held,bridgeGrip:!!v.grip.held?.bridge,interaction:v.grip.action(use)?(v.grip.held?.bridge?`E · Release hoarding · R · ${v.grip.held.deployed?'Raise':'Lower'}`:`E · ${v.grip.held?'Release':'Move'} ${(v.grip.held||v.grip.target).label||(v.grip.held||v.grip.target).type}`):null,usable:use?`E · ${use.label||'Interact'}`:null,hitCooldown:v.healthModel.read().cooldown});v.health=v.record.health;});
   // Opening the real taped wall creates a shared extraction point. It stays
   // open while the second visitor catches up; entering the stairwell is not a win.
   if(!sim.exit){const ex=level.rooms[level.exit.room];sim.exit={x:ex.cx,z:ex.cz};}
@@ -150,7 +152,7 @@ export async function createRealRooms(seed,host,scene,{depth=0,slice=false,route
   lights.refresh();sim.scene=sceneSync.read();sim.nodes=[];nodes.forEach((n,i)=>{const p=pack(n);if(JSON.stringify(p)!==initial[i])sim.nodes.push([i,...p]);});
   sim.links=world.throats.map(th=>th.open);sim.solids=world.rooms.map(rt=>rt.colliders.map(c=>c.on!==false));
   sim.roomState=world.rooms.flatMap(rt=>rt.coopRead?[[rt.id,rt.coopRead()]]:[]);
-  sim.furniture=world.furniture.map(f=>({x:f.x,z:f.z,away:f.away||null,on:f.collider.on!==false}));
+  sim.furniture=world.furniture.map(f=>({x:f.x,z:f.z,away:f.away||null,on:f.collider.on!==false,...(f.bridge?{bridge:{bounds:Object.fromEntries(['x','z','x0','x1','z0','z1','y','top'].map(k=>[k,f[k]])),deployed:f.deployed,transition:!!f.transition,support:f.support,carried:!!f.carried,hinge:{...f.hinge},offsetX:f.offsetX,offsetZ:f.offsetZ,room:f.room}}:{})}));
   sim.collision=world.rooms.map(rt=>rt.colliders.map(c=>Object.fromEntries(Object.entries(c).filter(([,v])=>typeof v==='number'||typeof v==='boolean'))));
   sim.effects=physical.report();sim.sounds=sounds.slice();sim.nodeCount=nodes.length;sim.castCarry=env.pursuer.carry();sim.pirate={...env.pursuer.at?.()};sim.creatures=env.pursuer.cast();
   sim.opacity=nodes.flatMap((n,i)=>n.material?.transparent?[[i,n.material.opacity]]:[]);
@@ -161,7 +163,16 @@ export async function createRealRooms(seed,host,scene,{depth=0,slice=false,route
   if(host||!s.real||s.nodeCount===undefined)return;
   for(const [id,data]of s.roomState||[])world.rooms[id]?.coopApply?.(data);
   // Effect geometry is in the authoritative scene stream, never simulated twice.
-  for(const [i,f]of (s.furniture||[]).entries()){const item=world.furniture[i];if(item){if(Math.abs(f.x-item.x)+Math.abs(f.z-item.z)>1e-8)item.translate(f.x-item.x,f.z-item.z);item.away=f.away;item.collider.on=f.on;}}
+  for(const [i,f]of (s.furniture||[]).entries()){
+   const item=world.furniture[i];if(!item)continue;
+   if(f.bridge&&item.bridge){
+    const b=f.bridge,old=world.rooms.find(r=>r.id===item.room),next=world.rooms.find(r=>r.id===b.room);
+    if(old!==next&&next){const k=old?.colliders.indexOf(item.collider);if(k>=0)old.colliders.splice(k,1);next.colliders.push(item.collider);}
+    Object.assign(item,b.bounds,{room:b.room,hinge:{...b.hinge},offsetX:b.offsetX,offsetZ:b.offsetZ,deployed:b.deployed,transition:b.transition?{remote:true}:null,support:b.support,carried:b.carried});
+    Object.assign(item.collider,{x0:item.x0,x1:item.x1,z0:item.z0,z1:item.z1,floor:item.deployed&&!item.transition&&!!item.support?.ok,tall:!item.deployed&&item.top-item.y>1.25});
+   }else if(Math.abs(f.x-item.x)+Math.abs(f.z-item.z)>1e-8)item.translate(f.x-item.x,f.z-item.z);
+   item.away=f.away;item.collider.on=f.on;
+  }
   for(const [r,cs]of (s.collision||[]).entries()){const rt=world.rooms[r];if(rt)cs.forEach((c,i)=>{if(rt.colliders[i]){for(const [k,v]of Object.entries(c)){const d=Object.getOwnPropertyDescriptor(rt.colliders[i],k);if(!d?.get||d.set)rt.colliders[i][k]=v;}}else rt.colliders.push({...c});});}
   for(const [i,l]of (s.lighting||[]).entries()){const p=world.rooms[i]?.lighting;if(p&&l){p.preview=l.preview;if(l.cue)p.cue=l.cue;else delete p.cue;}}
   world.updateLighting(s.time);
