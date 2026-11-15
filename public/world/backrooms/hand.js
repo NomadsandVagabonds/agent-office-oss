@@ -31,6 +31,18 @@ function torchGrip() {
   return v;
 }
 
+/** Pinch the bottom of the balloon string; the wrist runs out of the frame. */
+function balloonGrip() {
+  const v = new Vox(), glove = M('#ac9c7d', 2), knuckle = M('#c2b293', 2), cuff = M('#697371', 3), sleeve = M('#465256', 3);
+  v.rbox(-3, -6, -2, 5, 0, 5, 1, glove);
+  v.box(-2, -2, -2, 1, 2, 0, knuckle);
+  v.box(1, -3, 0, 4, 1, 3, knuckle);
+  v.rbox(0, -10, 2, 7, -4, 9, 1, cuff);
+  v.rbox(2, -22, 5, 13, -8, 20, 1, sleeve);
+  v.rbox(7, -36, 14, 20, -18, 33, 1, sleeve);
+  return v;
+}
+
 /** Give a part of the building its hand (env.hand): the selected pocket, in the words its rooms use. */
 export function createHand(env) {
   env.hand = createHandOver(() => env.inventory || null, `hand:${env.level.seed}:${env.level.depth ?? 0}`);
@@ -69,24 +81,24 @@ export function createHandView(env, camera) {
   }
   function model(kind) {
     if (kind === 'pink-slip') return slip();
-    const b = new Batch(true), s = (kit.VOXEL || 0.025) * (kind === 'balloon' ? 0.26 : 0.46);
+    const b = new Batch(true), s = (kit.VOXEL || 0.025) * (kind === 'balloon' ? 0.36 : 0.46);
     const item = kit.model(`inventory:${kind}:v1`, INVENTORY_MODELS[kind]).solid, scale = new THREE.Matrix4().makeScale(s, s, s);
     b.addVox(item, scale);
     if (kind === 'torch') b.addVox(kit.model('hand:torch-grip:v1', torchGrip).solid, scale);
+    if (kind === 'balloon') b.addVox(kit.model('hand:balloon-grip:v1', balloonGrip).solid, scale);
     const mat = kit.surface({ vox: true }), mesh = new THREE.Mesh(kit.geometry(b, [lamp(-1, 3, 1, [0.4, 0.4, 0.4], { k: 8, far: 12, wrap: 0.5 })], [0.8, 0.8, 0.8]), mat);
-    if (kind === 'torch') {
-      // The lens is local -Z, just like the camera. Look down its body, with the
-      // front aimed slightly inward/up and the wrist below the right edge.
-      mesh.rotation.set(0.12, 0.22, -0.08);
+    if (kind === 'torch' || kind === 'balloon') {
+      // The torch points down camera -Z; the balloon rises above its grip.
+      mesh.rotation.set(...(kind === 'balloon' ? [0, -.12, 0] : [0.12, 0.22, -0.08]));
       // A first-person grip is drawn over the room: pressing against a wall
-      // must not cut the torch or the visitor's own fingers out of the frame.
+      // must not cut the held item or the visitor's fingers out of the frame.
       mat.transparent = true;
       mesh.renderOrder = 10000;
       item.computeBoundingBox();
-      return { mesh, mat, hold: [0.24, -0.22, -0.5], fitBounds: item.boundingBox.clone().applyMatrix4(scale) };
+      return { mesh, mat, hold: kind === 'balloon' ? [.22, -.25, -.6] : [0.24, -0.22, -0.5], fitBounds: item.boundingBox.clone().applyMatrix4(scale) };
     }
     mesh.rotation.set(0.25, -0.6, kind === 'paper' ? -0.2 : 0);
-    return { mesh, mat, hold: kind === 'balloon' ? [0.24, -0.2, -0.56] : [0.2, -0.12, -0.5] };
+    return { mesh, mat, hold: [0.2, -0.12, -0.5] };
   }
   function fitPicture() {
     const p = env.vhs.picture, focal = p.h * camera.projectionMatrix.elements[5] / 2;
@@ -135,7 +147,7 @@ export function createHandView(env, camera) {
               if (camera.userData.hand !== view) root.visible = false;
               // Keep the grip's own depth (fingers behind the handle), but discard
               // the room's depth before drawing this final first-person mesh.
-              else if (want === 'torch') {
+              else if (want === 'torch' || want === 'balloon') {
                 // The previous transparent room mesh may have disabled depth writes;
                 // WebGL also applies that mask to clear(), before our material is set.
                 renderer.state.buffers.depth.setMask(true);

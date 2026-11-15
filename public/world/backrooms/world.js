@@ -7,7 +7,7 @@
 // the game needs afterwards: where you can walk and how high the floor and
 // the ceiling are there, what you can use, what moves.
 import * as THREE from 'three';
-import { T, TILE, RISE, RUN, toWorld, toLocal, wallLength, wallPoint, wallSpans, floorAt, ceilAt, fitsAt, stairZones, makeRng, roomPath } from './gen.js';
+import { T, TILE, RISE, RUN, toWorld, toLocal, wallLength, wallPoint, wallSpans, floorAt, ceilAt, headAt, fitsAt, stairZones, makeRng, roomPath } from './gen.js';
 import { Batch, lamp, lightAt, lin, ticks, smooth, WHITE } from './kit.js';
 import { FURNITURE, furnitureType, fixedFurnitureReason, onFurniture, overlaps, worldFootprint, boxHits } from './furniture-policy.js';
 import { fixedFurnitureFoot } from '../props/trolley.js';
@@ -218,7 +218,9 @@ export async function buildWorld(kit, level, env, tick) {
     const rt = world.roomAt(x, z);
     if (!rt || rt.flat) return world.terrainY(x, z) + 9;
     const p = toLocal(rt.def, x, z);
-    return rt.headY ? world.terrainY(x, z) + rt.headY(p.x, p.z) : (rt.def.y || 0) + ceilAt(rt.def, p.x, p.z);
+    const terrain = world.terrainY(x, z), localFloor = terrain - (rt.def.y || 0);
+    // Crawl openings still cap clearance when the walking surface is a bridge.
+    return terrain + headAt(rt.def, p.x, p.z, rt.headY ? rt.headY(p.x, p.z) : ceilAt(rt.def, p.x, p.z) - localFloor);
   };
   world.headroom = (x, z) => world.ceilingY(x, z) - world.floorY(x, z);
   /** May a walker go from one spot to the next? The floor may not jump by more than a stair, and there must be room to crawl. */
@@ -266,7 +268,7 @@ export async function buildWorld(kit, level, env, tick) {
       const y = terrain(x, z); if (!surfaces.length) return y;
       const p = toWorld(def, x, z); return surfaceAt(surfaces, p.x, p.z, y + (def.y || 0)) - (def.y || 0);
     };
-    const head = (x, z) => (rt.flat ? 9 : rt.headY ? rt.headY(x, z) : ceilAt(def, x, z) - terrain(x, z)) - (floor(x, z) - terrain(x, z));
+    const head = (x, z) => (rt.flat ? 9 : headAt(def, x, z, rt.headY ? rt.headY(x, z) : ceilAt(def, x, z) - terrain(x, z))) - (floor(x, z) - terrain(x, z));
     // Include a neighbouring room's desk when it straddles this doorway, without
     // testing every distant movable object at every cell in this room's flood.
     const nearbyFurniture = view.furnitureColliders.filter(c => overlaps(c, rt.rect, -r));

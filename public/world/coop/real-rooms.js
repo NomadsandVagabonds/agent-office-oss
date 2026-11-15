@@ -24,7 +24,7 @@ export async function createRealRooms(seed,host,scene,{depth=0,slice=false}={}){
  let soundSeq=0;const sounds=[];
  const emit=(name,extra={})=>{if(!sim)return;sounds.push({seq:++soundSeq,name,...extra});if(sounds.length>64)sounds.shift();};
  const sound={play:(name,options)=>emit(name,{options,to:active?.id}),playMascot:()=>emit('mascot'),stopMascot:()=>emit('mascot-stop')};
- const env={level,visit,kit,cast,who:{look:resolveLook('visitor'),creations:{}},builders:BUILDERS,catalogue:await loadCatalogue(kit),hatches:new Map(),sound,hud:{glitch:nop,flag:nop},clock:0,
+ const env={level,visit,kit,cast,partySize:2,who:{look:resolveLook('visitor'),creations:{}},builders:BUILDERS,catalogue:await loadCatalogue(kit),hatches:new Map(),sound,hud:{glitch:nop,flag:nop},clock:0,
   play:(name,x,z,reach)=>emit(name,{x,z,reach}),hear:()=>({vol:1,pan:0}),interfere:nop,hold:nop,descend:at=>{if(sim&&active&&depth<visit.depths-1&&!sim.descent)sim.descent={x:at.x,z:at.z,by:active.id,ready:[]};},run:{met:nop,survived:nop},
   end:why=>{if(!sim||!active)return;if(why==='exit'){sim.exit={x:active.me.x,z:active.me.z};sim.exitOpen=true;return;}active.healthModel.damage(4);active.health=0;},
   sees(x,z,o={}){return visitors.some(v=>{if(v.health<=0)return false;const p=v.me,dx=x-p.x,dz=z-p.z,d=Math.hypot(dx,dz);return d<(o.far||40)&&Math.abs(p.pitch)<1.05&&(-Math.sin(p.yaw)*dx-Math.cos(p.yaw)*dz)/Math.max(.01,d)>.6&&env.world.los(p.x,p.z,x,z);});},
@@ -47,7 +47,7 @@ export async function createRealRooms(seed,host,scene,{depth=0,slice=false}={}){
  const pack=n=>[...n.position.toArray(),...n.quaternion.toArray(),...n.scale.toArray(),n.visible?1:0];
  const initial=nodes.map(n=>JSON.stringify(pack(n)));let changed=[];
  const withVisitor=(v,fn)=>{const prev=active,player=env.player;active=v;env.player=v.player;try{return fn();}finally{active=prev;env.player=player;}};
- const population=createPopulation(world,withVisitor);
+ const population=createPopulation(world,withVisitor,{held:()=>env.inventory?.held()});
  const physical=createInventoryWorld(env,{read:()=>active?.record.inventory||{slots:[]}}, {canAct:()=>!host||sim?.phase==='play'});
  env.inventory={physical,fire:physical.fire,held:()=>active?heldItem(active.record):null,torchPower:()=>active?lightPower(active.record):0};
  const lights=createCoopLights(world,kit);let hand=null,handContext=null;

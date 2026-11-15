@@ -2,20 +2,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSurvival } from '../public/world/backrooms/survival.js';
 
-function visit(initial = 'play') {
+function visit(initial = 'play', difficulty = () => 'training-wheels') {
   let phase = initial, held = false;
-  const endings = [], sounds = [], batteries = [], glitches = [], interference = [];
+  const endings = [], sounds = [], batteries = [], glitches = [], interference = [], red = [];
   const env = {
     inventory: { isOpen: false },
     sound: { play: (...args) => sounds.push(args) },
     hud: { battery: state => batteries.push(state), glitch: value => glitches.push(value) },
     interfere: value => interference.push(value),
+    red: value => red.push(value),
   };
   const survival = createSurvival(env, {
     canAct: () => phase === 'play' && !held,
     onEnd: reason => { endings.push(reason); phase = 'ending'; },
+    difficulty,
   });
-  return { env, survival, endings, sounds, batteries, glitches, interference,
+  return { env, survival, endings, sounds, batteries, glitches, interference, red,
     state: () => ({ health: survival.health.read(), camera: survival.camera.read() }),
     phase: value => { phase = value; },
     hold: value => { held = value; },
@@ -38,6 +40,21 @@ test('an open item card keeps camera time and hit cooldown running and permits a
   assert.equal(env.inventory.isOpen, true);
   assert.equal(v.sounds.length, 2); assert.equal(v.interference.length, 2);
   assert.deepEqual(v.endings, []);
+});
+
+test('only a landed hit flashes red, including a lethal hit', () => {
+  let mode = 'training-wheels';
+  const v = visit('play', () => mode), { survival } = v;
+  survival.health.damage(0); assert.deepEqual(v.red, []);
+  survival.health.damage(1); assert.deepEqual(v.red, [.48]);
+  survival.health.damage(1); assert.equal(v.red.length, 1, 'cooldown blocks the flash too');
+  survival.update(2, true);
+  mode = 'tourist'; survival.health.damage(1); assert.equal(v.red.length, 1);
+  mode = 'training-wheels'; v.hold(true); survival.health.damage(1); assert.equal(v.red.length, 1);
+  v.hold(false); survival.health.heal(); assert.equal(v.red.length, 1);
+  survival.health.damage(4); assert.deepEqual(v.red, [.48, .48]);
+  assert.deepEqual(v.endings, ['caught']);
+  const flat = visit(); flat.survival.update(300, true); assert.deepEqual(flat.red, [], 'battery expiry is not a hit');
 });
 
 test('healing and camera recharge remain usable from an open item card', () => {
