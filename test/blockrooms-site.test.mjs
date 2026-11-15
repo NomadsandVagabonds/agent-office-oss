@@ -84,6 +84,12 @@ test('the front page is the caretaker\'s: every picture it shows is there, every
   const adverts = script.slice(script.indexOf('const ADS = ['), script.indexOf('];', script.indexOf('const ADS = [')));
   assert.ok(adverts.includes('plug-card') && !/href|\broom\b|PLAY/.test(adverts), 'an advert leads into the game');
   assert.ok(!/\?room=/.test(home + script), 'the front page sends somebody to a room');
+  // The staff directory has their pictures and their names, and what it knows about each of them is "??????????" (the
+  // owner's word). How any of them works is for whoever goes in to find out.
+  const roster = home.slice(home.indexOf('<table class="roster">'), home.indexOf('</table>', home.indexOf('<table class="roster">')));
+  const staff = [...roster.matchAll(/<tr>\s*<td class="mug">[\s\S]*?<\/td>\s*<td>([\s\S]*?)<\/td>\s*<td>([\s\S]*?)<\/td>\s*<\/tr>/g)];
+  assert.ok(staff.length >= 10, 'the staff directory is not there');
+  for (const [, who, note] of staff) assert.equal(note, '??????????', `the directory says how ${who.replace(/<[^>]+>/g, ' ').trim()} works`);
   // …and nothing about an advert is called one where a browser can see it: blockers hide by name (ad, ads, sponsor), and did
   const css = fs.readFileSync(path.join(out, 'home.css'), 'utf8');
   for (const [where, text] of [['index.html', home.replace(/>[^<]*</g, '><')], ['home.css', css.replace(/\/\*[\s\S]*?\*\//g, '')], ['home.js', script.replace(/\/\/.*$/gm, '')]]) {

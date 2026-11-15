@@ -46,6 +46,8 @@ test('it keeps nothing: no store, no log, no other site; and the page puts the n
   const page = fs.readFileSync(new URL('../tools/blockrooms/home.html', import.meta.url), 'utf8');
   // the owner's line, the place on its second line; with no answer the award is not there at all
   assert.ok(page.includes('<span class="award a4 wide" id="voted" hidden>VOTED 6TH BEST OFFICE PARK<br><small>of <span id="city"></span></small></span>'));
-  assert.ok(page.includes('*** WELCOME *** NEW SCREENSHOTS *** SIGN THE GUESTBOOK ***') && !/VISITOR FROM/.test(page + home), 'the city is said once, on the award');
+  // (the line that runs across the top is whatever the page's author likes, and is only words: the city is not in it)
+  const marquee = page.match(/<div class="marquee"[^>]*><span>([^<]*)<\/span><\/div>/);
+  assert.ok(marquee && !/VISITOR FROM|\bcity\b/i.test(marquee[1]) && !/VISITOR FROM/.test(page + home) && page.split('id="city"').length === 2, 'the city is said once, on the award');
   assert.ok(page.includes('Your city comes from your connection and is not kept.'), 'and the page says so, in as many words');
 });

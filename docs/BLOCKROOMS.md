@@ -18,8 +18,9 @@ spoof banner adverts, screenshots, and a bottom that keeps going.
 **Only a door starts the game** (the owner's rule for this page): the door,
 the ENTER buttons, a tape somebody chooses, and the wall at the bottom for
 whoever leans on it. The adverts and the screenshots are pictures. An advert
-that dropped a visitor into the level without a word was not wanted; one of
-them opens a window of its own (the store), and more may later.
+that dropped a visitor into the level without a word was not wanted; two of
+them open a window of their own (the store, and a notice from the
+consultants), and more may later.
 
 **Nothing on it is called an advert where a browser can see** (no `ad`,
 `ads`, `sponsor` in a class, an id or an attribute): blockers hide by name,
@@ -28,7 +29,16 @@ and one of these was being hidden. They are `plug`s in the markup.
 **The words on it are plain on purpose** (the owner's rule for this page):
 what somebody would really have typed on a home page in 1998, which is
 labels, a welcome and a changelog. No asides, no captions explaining a joke,
-no clever phrases. The trappings do the work.
+no clever phrases. The trappings do the work. The page is Carl's, who works
+in Facilities and keeps it in his lunch break (Gemini's front page): his
+About is a few flat sentences, and it is flat on purpose.
+
+**It says who is down there and not how any of them works** (the owner's
+word): the staff directory has a picture, a name and a department for each
+of the cast, and every note in it is `??????????`. What any of them does
+about a torch, a balloon or being looked at is for whoever goes in to find
+out. A test holds the notes to that, so that a later page cannot put the
+answers back by accident.
 
 ## Build
 
