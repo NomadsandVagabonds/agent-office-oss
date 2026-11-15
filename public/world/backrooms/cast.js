@@ -65,6 +65,9 @@ export const ALL_CAST = Object.freeze([
   Object.freeze({ id: 'toner', name: 'The waste toner',
     rule: 'It clings to the ceiling and listens with clicks — crouch or stand still and it creeps past; walk upright and it drops, zigzags through crawlways, cannot work a door handle, and after hurting you twice melts into black sludge that soon hatches more of its kind.',
     disposition: 'hunts', home: 'roams', weight: 1, teaches: 'hush', needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 1 } }),
+  Object.freeze({ id: 'mimic', name: 'The other door',
+    rule: 'One pair of doors is not doors: it shivers, now and then, and that is all that gives it away. Try it, walk into it or stand in front of it too long, and it opens on nothing and takes hold of you.',
+    disposition: 'hunts', home: 'room', weight: 1, needs: ['doors'], items: ['paper', 'lighter'], fire: 'fears', room: { w: 4, d: 4 }, caught: { hurt: 2 } }),
 ]);
 export const CAST = Object.freeze(ALL_CAST.filter((m) => m.on !== false));
 /** How many of the others turn up in one visit, at most. */
@@ -111,7 +114,7 @@ export function castFor(visit, floor, cast = CAST) {
 
 /**
  * The room a creature that lives in one room lives in, on a floor: a plain room of the size it asked for, a little way in, that is not
- * where you land, not on the way out, not somewhere to crawl, and not the mascot's. Seeded by the floor. → room id, or null (none will do:
+ * where you land, not on the way out, not somewhere to crawl, not the mascot's, and not already somebody else's. Seeded by the floor. → room id, or null (none will do:
  * it is not on this floor after all), and null for anything that roams.
  */
 export function homeFor(level, member) {
@@ -119,5 +122,9 @@ export function homeFor(level, member) {
   const want = member.room || {}, far = roomDistances(level, level.start.room);
   const able = level.rooms.filter((r) => r.kind === 'plain' && !r.crawl && r.H >= 2.2 && !r.shape && !r.lows && !(level.pursuer && level.pursuer.room === r.id)
     && (far.get(r.id) ?? 0) >= (want.far ?? 3) && Math.max(r.W, r.D) >= Math.max(want.w || 0, want.d || 0) && Math.min(r.W, r.D) >= Math.min(want.w || 0, want.d || 0));
-  return able.length ? makeRng(`${level.seed}/home/${member.id}`).pick(able).id : null;
+  if (!able.length) return null;
+  // no two of them have the same room: whoever is earlier on the list has the first pick of the floor
+  const mine = CAST.indexOf(member), theirs = new Set(mine > 0 ? CAST.slice(0, mine).filter((m) => m.home === 'room').map((m) => homeFor(level, m)) : []);
+  const free = able.filter((r) => !theirs.has(r.id));
+  return free.length ? makeRng(`${level.seed}/home/${member.id}`).pick(free).id : null;
 }

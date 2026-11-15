@@ -11,17 +11,28 @@ import { Batch, lin, drawText } from './kit.js';
 import { WALLS } from './world.js';
 import { doorPlan, inTheWay, DOORS } from './doors.js';
 
-const TINTS = ['#5d7a78', '#8a5a45', '#6f6a5a', '#49607c'];
+export const TINTS = ['#5d7a78', '#8a5a45', '#6f6a5a', '#49607c'];
 const WUV = [[0.05, 0.1], [0.05, 0.1], [0.05, 0.1], [0.05, 0.1]];          // the plain part of the leaf's texture
 const smooth = (k) => k * k * (3 - 2 * k);
 
 /** A box whose every face is the plain part of the door texture. (In the room's frame; no top, no underside: nobody sees them.) */
-function slab(b, x0, y0, z0, x1, y1, z1, rgb) {
+export function slab(b, x0, y0, z0, x1, y1, z1, rgb) {
   b.quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], rgb, WUV);
   b.quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], rgb, WUV);
   b.quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], rgb, WUV, 0.88);
   b.quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], rgb, WUV, 0.88);
 }
+
+/** What a leaf is painted with: plain on the left half, its sign on the right. One to a floor's kit, whoever asks. */
+export function leafTexture(kit) {
+  return kit.tex.custom('doorleaf', 128, 64, (g) => {
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#1d4f9c'; g.fillRect(64, 0, 64, 64); g.fillStyle = '#f4f6f8'; g.fillRect(66, 2, 60, 60); g.fillStyle = '#1d4f9c'; g.fillRect(68, 4, 56, 56);
+    drawText(g, ['FIRE DOOR', 'KEEP', 'SHUT'], 68, 6, 56, 52, { color: '#f4f6f8', size: 13, pad: 0 });
+  }, { clamp: true });
+}
+/** Where the sign is on that texture. */
+export const SIGN = [[0.52, 0.02], [0.98, 0.02], [0.98, 0.98], [0.52, 0.98]];
 
 /**
  * Hang the floor's doors. Call once the world is built and somebody is standing in it.
@@ -31,12 +42,7 @@ export function hangDoors(env) {
   const world = env.world, level = env.level, kit = env.kit;
   const list = [], byLink = new Map();
   const api = { list, version: 0, at: (id) => byLink.get(id) || null };
-  const tex = kit.tex.custom('doorleaf', 128, 64, (g) => {
-    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 64, 64);
-    g.fillStyle = '#1d4f9c'; g.fillRect(64, 0, 64, 64); g.fillStyle = '#f4f6f8'; g.fillRect(66, 2, 60, 60); g.fillStyle = '#1d4f9c'; g.fillRect(68, 4, 56, 56);
-    drawText(g, ['FIRE DOOR', 'KEEP', 'SHUT'], 68, 6, 56, 52, { color: '#f4f6f8', size: 13, pad: 0 });
-  }, { clamp: true });
-  const SIGN = [[0.52, 0.02], [0.98, 0.02], [0.98, 0.98], [0.52, 0.98]];
+  const tex = leafTexture(kit);
   const steel = [0.52, 0.53, 0.52], dark = [0.1, 0.1, 0.1];
   const frames = new Map();                                  // room → the batch its door frames are drawn in
 

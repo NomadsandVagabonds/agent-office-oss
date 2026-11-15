@@ -6,5 +6,6 @@ import { create as shadow } from './shadow.js';
 import { create as moth } from './moth.js';
 import { create as porter } from './porter.js';
 import { create as toner } from './toner.js';
+import { create as mimic } from './mimic.js';
 
-export const MAKERS = { pirate, shadow, moth, porter, toner };
+export const MAKERS = { pirate, shadow, moth, porter, toner, mimic };
