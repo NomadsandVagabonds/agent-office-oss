@@ -8,4 +8,7 @@ import { create as porter } from './porter.js';
 import { create as toner } from './toner.js';
 import { create as otherDoor } from './other-door.js';
 
-export const MAKERS = { pirate, shadow, moth, porter, toner, 'other-door': otherDoor };
+import { create as mother } from './mother.js';
+import { create as theLines } from './the-lines.js';
+
+export const MAKERS = { mother, 'the-lines': theLines, pirate, shadow, moth, porter, toner, 'other-door': otherDoor };

@@ -13,17 +13,18 @@ room types, ordinary maze connectors, six cast types, and room residents are
 eligible. Suburbia is explicitly included as the third part of a private visit.
 The existing seeded planner still chooses a subset of rooms and cast for each
 run. **Eligible does not mean every room and creature appears in one visit.**
-The optional curated tour is being revised: waterpark on floor 4, combined
-night finale on floor 5. Its ready finale has six features and 78% quiet maze.
-See [the showcase notes](BACKROOMS-COOP-SHOWCASE.md). The complete tour stays
-unavailable until Gemini's finished waterpark is integrated and tested. The
-current Railway release still has only the random visit selector.
+The optional curated tour is now four floors, ending in a combined night
+finale. Mother joins floor 2; The Lines joins Suburbia on floor 3. This follow-up
+imports those two creatures from `34b5c98`, not that entire development branch.
+See [the showcase notes](BACKROOMS-COOP-SHOWCASE.md) for exact tested content and
+limits. Waterpark and the newer Gap bridge-removal puzzle are not included.
+The current Railway release still has only the random visit selector.
 
 | System | This branch |
 | --- | --- |
 | Rooms | Production dealer and builders, including dynamically imported modules; no co-op feature whitelist. |
 | Suburbia | Included in every normal private visit; its houses, outdoor illusions and resident encounters use the production builders. |
-| Cast | Pirate, moth, shadow, porter, waste toner and other door follow the production seeded roster. Each ticks once under the appropriate living visitor. |
+| Cast | Pirate, moth, shadow, porter, waste toner and other door follow the production seeded roster. The prepared showcase also adds Mother and The Lines. Each ticks once under the appropriate living visitor; Mother’s brood chooses per small creature. |
 | Room residents | Production denizen system runs, including absorbed colleagues, paper exchanges, warden drops and MECHA capture. Visibility includes the guest's location. |
 | Lighting | Production failing banks, dim pockets, travelling outages, isolated lamps, emergency lighting, ordinary fluorescent flicker and encounter lighting. Host clock drives both pictures. |
 | Physics | Production furniture registration and movement for chairs, desks and trolleys. Either visitor can drag with E. The other visitor, creatures and walls block movement. Creature barricade contracts remain active. |
@@ -88,7 +89,10 @@ human has completed every puzzle naturally.
   warning and disconnect feedback pass. Custom character assignment, guest choice,
   both 3D looks, open mic without a held key, V mute, button unmute, blur/focus
   and switching back to push-to-talk also pass. No real microphone was accessed.
-- `npm test`: 872/875 pass. Existing failures: Office console child test and its
+- Four-floor follow-up: real two-browser showcase completed all descents and final
+  extraction. Mother brood triggering, guest stomping/damage, spent-brood cleanup,
+  wet-material replication and The Lines continuing after downing a guest pass.
+- `npm test`: 880/883 pass. Existing failures: Office console child test and its
   parent (`/var` versus `/private/var` on macOS), and the Office usage/status-line
   bridge. The previously observed wake-order timing failure passed this run.
 

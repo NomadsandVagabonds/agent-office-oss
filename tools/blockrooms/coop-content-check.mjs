@@ -21,14 +21,14 @@ try{
  const THREE=await import('three'),{createRealRooms}=await import('/world/coop/real-rooms.js');
  const canvas=document.createElement('canvas');canvas.style='position:fixed;inset:0;z-index:10000';document.body.append(canvas);
  const renderer=new THREE.WebGLRenderer({canvas});renderer.setSize(960,600);const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(70,1.6,.05,100);
- window.review={scene,camera,renderer,r:null};window.makeReview=async(seed,options)=>{review.r?.dispose();const visit=options.finale?(await import("/world/coop/showcase-preview.js")).previewFloor(4):null;review.r=await createRealRooms(seed,${isHost},scene,{slice:true,planOptions:options,visit});};
+ window.review={scene,camera,renderer,r:null};window.makeReview=async(seed,options)=>{review.r?.dispose();const visit=options.finale?(await import("/world/coop/showcase-preview.js")).previewFloor(3):null;review.r=await createRealRooms(seed,${isHost},scene,{slice:true,planOptions:options,visit});};
  window.drawReview=()=>{const r=review.r,rt=r.world.rooms.find(rt=>rt.def.arch);const def=rt?.def||r.level.rooms[0];camera.position.set(def.cx,def.y+1.25,def.cz+Math.min(2,def.D/3));camera.lookAt(def.cx,def.y+1,def.cz-4);renderer.render(scene,camera);};
  })()`);
  const {DECK}=await import('../../public/world/backrooms/gen.js');
  const selected=process.env.COOP_CHECK_ROOMS?.split(',');
  const cases=process.argv.includes('--finale')?[{id:'showcase-finale',options:{only:'mecha',finale:true}}]:DECK.filter(a=>!selected||selected.includes(a.id)).map(a=>({id:a.id,options:{only:a.id,themes:[a.themes?.suburb?'suburb':'yellow'],members:[]}}));
- if(!selected&&!process.argv.includes('--finale'))for(const member of ['pirate','moth','shadow','porter','toner','other-door'])cases.push({id:'cast-'+member,options:{only:'ceiling-meeting',members:[member]}});
- if(process.env.COOP_CAST)for(const member of process.env.COOP_CAST.split(','))cases.push({id:'cast-'+member,options:{only:'ceiling-meeting',members:[member]}});
+ if(!selected&&!process.argv.includes('--finale'))for(const member of ['pirate','moth','shadow','porter','toner','other-door'])cases.push({id:'cast-'+member,options:{only:member==='the-lines'?'the-culvert':'ceiling-meeting',themes:[member==='the-lines'?'suburb':'yellow'],members:[member]}});
+ if(process.env.COOP_CAST)for(const member of process.env.COOP_CAST.split(','))cases.push({id:'cast-'+member,options:{only:member==='the-lines'?'the-culvert':'ceiling-meeting',themes:[member==='the-lines'?'suburb':'yellow'],members:[member]}});
  const {exercise}=await import('./coop-encounters.mjs');
  const {createSceneSender}=await import('../../public/world/coop/scene-wire.js');
  const results=[];
@@ -53,7 +53,11 @@ try{
   assert.equal(signatures[0],signatures[1],c.id+' scene agrees');
   assert.deepEqual(errors.slice(start),[],c.id+' browser errors');
   for(const peer of [a,b])await peer.ev('drawReview()');
-  if(['dispatch','show-home','mecha','last-light'].includes(c.id)){const shot=await b.cmd('Page.captureScreenshot',{format:'png'});fs.writeFileSync(os.tmpdir()+'/coop-full-'+c.id+'.png',Buffer.from(shot.data,'base64'));}
+  if(['cast-mother','cast-the-lines'].includes(c.id)){
+   const at=await a.ev(`review.r.world.env.pursuer.of(${JSON.stringify(c.id.slice(5))}).at()`);
+   for(const peer of [a,b])await peer.ev(`(()=>{const p=${JSON.stringify(at)},w=review.r.world;let eye={x:p.x,z:p.z+2.8};for(let a=0;a<Math.PI*2;a+=Math.PI/4){const x=p.x+Math.sin(a)*2.8,z=p.z+Math.cos(a)*2.8;if(w.free(x,z,.2)&&w.los(x,z,p.x,p.z)){eye={x,z};break;}}review.camera.position.set(eye.x,w.floorY(p.x,p.z)+1.4,eye.z);review.camera.lookAt(p.x,w.floorY(p.x,p.z)+1.1,p.z);review.renderer.render(review.scene,review.camera);})()`);
+  }
+  if(['dispatch','show-home','mecha','last-light','cast-mother','cast-the-lines'].includes(c.id)){const shot=await b.cmd('Page.captureScreenshot',{format:'png'});fs.writeFileSync(os.tmpdir()+'/coop-full-'+c.id+'.png',Buffer.from(shot.data,'base64'));}
   results.push(detail);console.log(JSON.stringify(detail));fs.writeFileSync('/tmp/coop-content-results.json',JSON.stringify(results,null,2));
  }
  console.log('PASS',results.length,'two-client room/cast build and snapshot checks. Behaviour encounter tests are separate.');

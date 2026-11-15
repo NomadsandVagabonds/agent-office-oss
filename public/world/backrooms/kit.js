@@ -297,6 +297,9 @@ const FRAG = `
 uniform sampler2D map;
 uniform float uTorch;
 uniform float uAlpha;
+#ifdef WET
+uniform float uWet;
+#endif
 varying vec3 vLit;
 varying vec3 vAlb;
 varying vec2 vUv;
@@ -330,6 +333,19 @@ void main() {
   if (t.a < 0.5) discard;
   #endif
   c *= t.rgb;
+  #endif
+  #ifdef WET
+  // Something wet (surface({ wet })): it has no light of its own, so what glints on it is the room's light, as bright as
+  // the room is. Each voxel catches it at a slightly different angle, and the edge of the thing shines as a wet edge does.
+  vec3 wn = normal;
+  #ifdef VOXEL
+  wn = normalize(wn + (vec3(voxHash(cell), voxHash(cell + 17.0), voxHash(cell + 31.0)) - 0.5) * 0.55);
+  #endif
+  vec3 wv = normalize(-vView);
+  float glint = pow(max(dot(wn, normalize(wv + vec3(0.2, 0.85, 0.35))), 0.0), 34.0);
+  float rim = pow(1.0 - max(dot(wn, wv), 0.0), 3.0);
+  float room = dot(vLit, vec3(0.333));
+  c += (glint * 1.1 + rim * 0.22) * uWet * (0.12 + room) * vec3(1.0, 0.97, 0.94);
   #endif
   gl_FragColor = vec4(c, uAlpha);
 }`;
@@ -443,12 +459,13 @@ export function createKit() {
   };
 
   /** The one material: baked light × texture, with the per-room dimmer and flicker. */
-  function surface({ map = null, room = null, vox = false, cutout = false, flick = false, banks = false, alpha = 1, side = THREE.FrontSide } = {}) {
+  function surface({ map = null, room = null, vox = false, cutout = false, flick = false, banks = false, alpha = 1, side = THREE.FrontSide, wet = 0 } = {}) {
     const defines = {};
     if (map) defines.MAPPED = 1;
     if (vox) defines.VOXEL = 1;
     if (cutout) defines.CUTOUT = 1;
     if (flick) defines.FLICK = 1;
+    if (wet > 0) defines.WET = 1;                                // (it glints: a thing that is wet, 0…1. Nothing has it unless it asks)
     if (banks) defines.BANKS = typeof banks === 'number' ? banks : 2;
     return own(new THREE.ShaderMaterial({
       defines, vertexShader: VERT, fragmentShader: FRAG, side,
@@ -459,6 +476,7 @@ export function createKit() {
         uMoreBanks: room?.moreBanks || { value: [0, 0] },
         uTint: { value: new THREE.Vector3(1, 1, 1) }, uTorch: shared.uTorch, uAlpha: { value: alpha },
         uTorchOrigin: shared.uTorchOrigin, uTorchDirection: shared.uTorchDirection,
+        ...(wet > 0 ? { uWet: { value: wet } } : {}),
       },
     }));
   }

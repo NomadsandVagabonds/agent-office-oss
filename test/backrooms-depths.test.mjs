@@ -872,6 +872,7 @@ test('drawings on the walls: only ever of something that is in this visit, on it
     });
   }
   assert.ok(withOne / parts > 0.3 && withOne / parts < 0.7, `a drawing on ${withOne} of ${parts} parts`);
-  for (const m of CAST) assert.ok(drawnOf.get(m.id) > 0, `${m.id} is never drawn`);
+  // Room-linked creatures are explicitly scheduled, not drawn by the random cast dealer.
+  for (const m of CAST) if (!m.withRoom) assert.ok(drawnOf.get(m.id) > 0, `${m.id} is never drawn`);
   for (const a of residents) assert.ok(drawnOf.get(a.resident) > 0, `${a.resident} is never drawn`);
 });

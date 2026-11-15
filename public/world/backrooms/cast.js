@@ -52,6 +52,13 @@ export const CAST_LESSONS = Object.freeze({
  *   on           false: retired. It is out of the cast and nothing else has to change
  */
 export const ALL_CAST = Object.freeze([
+  Object.freeze({ id: 'the-lines', name: 'The lines',
+    rule: 'It walks only where there is floor, and over anything that has been laid down — so take up what it is standing on.',
+    disposition: 'hunts', home: 'roams', weight: 0, withRoom: 'the-culvert', needs: [], items: [], fire: 'ignores', caught: { hurt: 1 },
+    themes: { yellow: 0, archive: 0, night: 0, fitout: 0, exec: 0, suburb: 1 } }),
+  Object.freeze({ id: 'mother', name: 'Mother',
+    rule: 'She sways and she waves, and comes over very slowly, and that is all she does herself. Near enough, she heaves and brings up four or five small pink ones that jump for your face. They are blind, and most jumps miss: tread on them before one does not.',
+    disposition: 'hunts', home: 'roams', weight: 1, needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 1 } }),
   Object.freeze({ id: 'pirate', name: 'The mascot', rule: 'It only moves while nobody is looking at it — and it only knows where you are while it can see you.',
     disposition: 'hunts', home: 'roams', always: true, weight: 1, teaches: 'sight', needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 2 }, music: 'mascot' }),
   Object.freeze({ id: 'shadow', name: 'The shadow', rule: 'Stare until it turns white, then look away before the flash to clear it; watch it go off and half your battery goes with it.',

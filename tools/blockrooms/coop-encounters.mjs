@@ -65,6 +65,44 @@ export async function exercise(r,id){
   check(toner.at().mode==='puddle','two actual hits create brood pool '+JSON.stringify(toner.at()));const count=toner.at().count;g.player.warp(r.start.x,r.start.z,0);toner.hurry({hatch:true});tick(10);
   check(toner.at().count>count,'brood spawned new units');return {hatched:toner.at().count-count};
  }
+ if(id==='cast-mother'){
+  const mother=env.pursuer.of('mother'),at=mother.at(),beforeUses=new Set(w.rooms.flatMap(rt=>rt.uses));
+  h.player.warp(r.start.x,r.start.z,0);g.player.warp(at.x,at.z+.8,0);
+  for(let i=0;i<100&&!mother.at().brood;i++)tick(1);
+  check(mother.at().brood>=4,'Mother produces a shared brood for the guest');
+  const brood=mother.at().brood;let stomped=false;
+  for(let i=0;i<35&&!stomped;i++){
+   tick(1);
+   for(const u of w.rooms.flatMap(rt=>rt.uses).filter(u=>!beforeUses.has(u))){
+    g.player.warp(u.wx,u.wz+.15,0);useAt(g,u);
+    if(mother.at().brood<brood){stomped=true;break;}
+   }
+  }
+  check(stomped,'guest E stomps a small one');
+  g.healthModel.tick(5);g.healthModel.heal(4);
+  const random=Math.random;Math.random=()=>.1;
+  try{for(let i=0;i<150&&g.healthModel.read().current===4;i++){
+   const u=w.rooms.flatMap(rt=>rt.uses).find(u=>!beforeUses.has(u)&&u.room);
+   if(u)g.player.warp(u.wx,u.wz+.2,0);tick(1);
+  }}finally{Math.random=random;}
+  check(g.healthModel.read().current<4,'brood can hurt guest');check(h.healthModel.read().current===4,'distant host is untouched');
+  check(r.inspect().nodes.some(n=>n.material?.uniforms?.uWet?.value===1),'wet brood material exists');
+  g.player.warp(r.start.x,r.start.z,0);tick(740);
+  check(!mother.at().brood,'spent brood disappears');
+  check(w.rooms.flatMap(rt=>rt.uses).every(u=>beforeUses.has(u)),'spent brood leaves no stale E interactions');
+  return {mother:'guest triggers brood, stomps with E, takes a hit; host safe; brood and interactions cleaned up'};
+ }
+ if(id==='cast-the-lines'){
+  const lines=env.pursuer.of('the-lines'),at=lines.at();check(Number.isFinite(at.x),'The Lines has a lair');
+  h.player.warp(r.start.x,r.start.z,0);g.player.warp(at.x,at.z+.45,0);g.healthModel.damage(3);g.healthModel.tick(5);
+  for(let i=0;i<100&&g.healthModel.read().current>0;i++)tick(1);
+  check(g.healthModel.read().current===0,'The Lines downs guest');check(h.healthModel.read().current===4,'distant host safe');
+  check(lines.at().mode!=='gone','The Lines remains while a teammate lives');
+  const next=lines.at();h.player.warp(next.x,next.z+.45,0);
+  for(let i=0;i<100&&h.healthModel.read().current===4;i++)tick(1);
+  check(h.healthModel.read().current<4,'The Lines switches to living host');
+  return {lines:'wakes, downs guest, continues hunting host'};
+ }
  if(id==='mecha'){
   const rt=w.rooms.find(rt=>rt.mecha),m=rt.mecha,guard=m.patrol.where(0);let p=toWorld(rt.def,guard.x,guard.z+.25);g.player.warp(p.x,p.z,0);
   for(let i=0;i<150&&!g.held;i++){const at=m.patrol.where(0),p=toWorld(rt.def,at.x,at.z+.2);g.player.warp(p.x,p.z,0);r.step(.05,sim);}

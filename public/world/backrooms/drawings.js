@@ -10,6 +10,17 @@
 // (cast.js `rule`): a test holds them apart. Each creature has a few
 // versions; every one of them stops before it has finished.
 export const WARNINGS = Object.freeze({
+  mother: [
+    ['THE TALL PINK ONE', 'ONLY WAVES. DONT GO', 'AND LOOK. IT SICKS UP'],
+    ['LITTLE ONES GO FOR', 'YOUR FACE. THEY CANT', 'SEE. STAMP ON THEM', 'BEFORE THEY'],
+    ['IT WAS STILL WAVING', 'WHEN I CAME BACK.', 'THEN IT DID IT AG'],
+  ],
+  // This co-op base has the older culvert, without removable bridges. Only
+  // teach the counterplay that exists here; import the other notes with The Gap.
+  'the-lines': [
+    ['THE POLES IN THE', 'CORNER ARE NOT POLES.', 'IT STOOD UP WHEN I', 'GOT NEAR AND THEN IT'],
+    ['IN DOORWAYS IT FOLDS', 'UP AND DRAGS. SLOW', 'THEN. RUN THEN. IN', 'THE BIG ROOMS IT IS'],
+  ],
   pirate: [
     ['THE ONE IN THE HAT', 'ONLY MOVES WHEN YOU', 'ARE NOT LOOKING. SO'],
     ['HAT MAN: IF HE CANT', 'SEE YOU HE DOESNT', 'KNOW WHERE YOU'],

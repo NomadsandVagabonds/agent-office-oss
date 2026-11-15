@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import {createFireSpillMaterial} from '../backrooms/inventory-fire.js';
 const props=['opacity','transparent','visible','depthWrite','depthTest','side','alphaTest'];
-const uniforms=['uTint','uDim','uFlick','uBanks','uMoreBanks','uWhite','uRed','uAlpha','strength'];
+const uniforms=['uTint','uDim','uFlick','uBanks','uMoreBanks','uWhite','uRed','uAlpha','strength','uWet'];
 const encode=v=>v?.toArray?v.toArray():Array.isArray(v)?v.slice():v;
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 export function createSceneSync(root,kit){
@@ -13,7 +13,7 @@ export function createSceneSync(root,kit){
  let baseNodes=0,baseGeo=0,baseMat=0,baseTex=0,initialized=false;
  const texture=t=>{if(!t)return null;if(texIds.has(t))return texIds.get(t);const id=textures.length;texIds.set(t,id);textures.push(t);versions.set(id,t.version);if(initialized){const canvas=t.image;if(!canvas?.toDataURL)throw Error('Unsupported runtime texture');newTex.push({id,data:canvas.toDataURL(),wrapS:t.wrapS,wrapT:t.wrapT,flipY:t.flipY,colorSpace:t.colorSpace});}return id;};
  const material=m=>{if(!m)return null;if(matIds.has(m))return matIds.get(m);const id=materials.length;matIds.set(m,id);materials.push(m);texture(m.map);for(const u of Object.values(m.uniforms||{}))if(u.value?.isTexture)texture(u.value);
-  if(initialized){const base=materials.findIndex((a,i)=>i<id&&a.type===m.type&&a.vertexShader===m.vertexShader&&a.fragmentShader===m.fragmentShader&&equal(a.defines,m.defines));if(base<0&&!['MeshBasicMaterial','MeshLambertMaterial','MeshStandardMaterial'].includes(m.type)&&!m.uniforms?.uTorch&&m.userData.coopEffect!=='paper-fire-spill')throw Error('Unsupported runtime material '+m.type);newMat.push({id,base,type:m.type,effect:m.userData.coopEffect||null,surface:m.uniforms?.uTorch?{vox:!!m.defines?.VOXEL,cutout:!!m.defines?.CUTOUT,flick:!!m.defines?.FLICK,banks:m.defines?.BANKS,side:m.side,alpha:m.uniforms.uAlpha.value}:null,map:texture(m.map),textures:Object.fromEntries(Object.entries(m.uniforms||{}).filter(([,u])=>u.value?.isTexture).map(([k,u])=>[k,texture(u.value)]))});}
+  if(initialized){const base=materials.findIndex((a,i)=>i<id&&a.type===m.type&&a.vertexShader===m.vertexShader&&a.fragmentShader===m.fragmentShader&&equal(a.defines,m.defines));if(base<0&&!['MeshBasicMaterial','MeshLambertMaterial','MeshStandardMaterial'].includes(m.type)&&!m.uniforms?.uTorch&&m.userData.coopEffect!=='paper-fire-spill')throw Error('Unsupported runtime material '+m.type);newMat.push({id,base,type:m.type,effect:m.userData.coopEffect||null,surface:m.uniforms?.uTorch?{vox:!!m.defines?.VOXEL,cutout:!!m.defines?.CUTOUT,flick:!!m.defines?.FLICK,banks:m.defines?.BANKS,side:m.side,wet:m.uniforms.uWet?.value||0,alpha:m.uniforms.uAlpha.value}:null,map:texture(m.map),textures:Object.fromEntries(Object.entries(m.uniforms||{}).filter(([,u])=>u.value?.isTexture).map(([k,u])=>[k,texture(u.value)]))});}
   return id;};
  const geometry=g=>{if(!g)return null;if(geoIds.has(g))return geoIds.get(g);const id=geometries.length;geoIds.set(g,id);geometries.push(g);if(initialized)newGeo.push({id,data:g.toJSON()});return id;};
  const visit=n=>{if(nodeIds.has(n))return;const id=nodes.length;nodeIds.set(n,id);nodes.push(n);const g=geometry(n.geometry),m=Array.isArray(n.material)?n.material.map(material):material(n.material);if(initialized)added.push({id,mesh:!!n.isMesh,geometry:g,material:m,name:n.name});};

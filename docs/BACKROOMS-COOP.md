@@ -7,13 +7,14 @@ Private alpha: hosted on Railway; use the owner's private host bookmark.
 Railway runs game build `bb4551a`, separately from the public BlockRooms site.
 Deployment: `ed437082-8346-4085-9846-c8b3cba30be7`, verified 15 November 2026.
 
-## Curated tour (awaiting waterpark integration)
+## Curated tour (prepared for publication)
 
-The owner reserved floor 4 for Gemini's waterpark. The former floors 4–5 are
-combined into a six-feature night finale at floor 5, with MECHA and Last Light
-separated by maze rooms. Floor 1 keeps the pirate, cake room and moving cutouts.
-The new tour is unavailable until the waterpark is integrated and tested; normal
-random visits still work. See [the showcase notes](BACKROOMS-COOP-SHOWCASE.md).
+**The long way round** is a fixed four-floor tour: yellow offices, unfinished
+offices, Suburbia, and the combined night finale. Floor 1 keeps pirate, cake and
+moving cutouts; Mother is on floor 2 and The Lines on floor 3. The waterpark
+will come later. The old culvert is included; the new bridge-removal puzzle is
+not. See [the showcase notes](BACKROOMS-COOP-SHOWCASE.md) for the seed, tested
+route, creature changes and limits. The hosted release above is still unchanged.
 
 ## Custom characters and open mic (live)
 
