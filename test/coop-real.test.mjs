@@ -1,0 +1,8 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {validRealSnapshot} from '../core/coop-real.js';
+const state=()=>({real:true,phase:'play',time:1,players:['a','b'].map(id=>({id,x:0,z:0,yaw:0,pitch:0,health:4,battery:300,bag:[]})),items:[],nodeCount:1,nodes:[[0,0,0,0,0,0,0,1,1,1,1,1]]});
+test('real snapshots enforce membership, bounded node paths, finite transforms and survival values',()=>{assert.ok(validRealSnapshot(state(),['a','b']));for(const mutate of [s=>s.players[1].id='a',s=>s.players[0].id='intruder',s=>s.nodes[0][0]=1,s=>s.nodes[0][1]=NaN,s=>s.players[0].health=9,s=>s.players[0].battery=-1,s=>s.nodes[0].push(5),s=>s.players[0]=null,s=>s.items=[null],s=>s.tints=[[999,1,1,1]],s=>s.opacity=[[0,null]],s=>s.lights=[NaN],s=>s.solids=[null]]){const s=state();mutate(s);assert.equal(validRealSnapshot(s,['a','b']),false);}});
+test('production inventory snapshots reject invalid charge, duplicate slots and ownership mismatches',()=>{
+ const fixture=()=>{const s=state(),item={id:'t',type:'torch',charge:80,prepared:true};s.items=[{...item,x:0,z:0,owner:'a'}];s.players[0].bag=['t'];s.players[0].inventory={slots:[item,null,null,null,null,null],selected:0,activeTorch:'t'};return s;};
+ assert.equal(validRealSnapshot(fixture(),['a','b']),true);
+ for(const change of [s=>s.items[0].charge=999,s=>s.players[0].inventory.slots[0].charge=-1,s=>s.players[0].inventory.slots[1]=s.players[0].inventory.slots[0],s=>s.items[0].owner='b',s=>s.players[0].inventory.selected=6,s=>s.players[0].inventory.mountedTorch={id:'m',type:'snack'}]){const s=fixture();change(s);assert.equal(validRealSnapshot(s,['a','b']),false);}
+});

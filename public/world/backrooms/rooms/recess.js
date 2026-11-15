@@ -13,25 +13,54 @@
 import * as THREE from 'three';
 import { Batch, drawText, ticks, WHITE } from '../kit.js';
 import { P, scatter } from '../bits.js';
-import { lawn, flat, sheet, upright, beam, daylight, setArt, cutBatch, TIMBER } from '../suburb.js';
+import { Vox, M } from '../../vox/vox.js';
+import { lawn, flat, upright, daylight, setArt, cutBatch, TIMBER } from '../suburb.js';
 
-const RED = [0.66, 0.13, 0.1], BLUE = [0.14, 0.3, 0.62], YELLOW = [0.9, 0.7, 0.12], STEEL = [0.5, 0.52, 0.55], GREEN = [0.16, 0.45, 0.24];
-
-/** A slide, upright, its tower at (x, z) and its chute running out toward +z: into `b`, to be leaned and sunk afterwards. */
-function slide(b, x, z) {
-  const top = 1.5;
-  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) beam(b, [x + sx * 0.4, 0, z + sz * 0.4], [x + sx * 0.4, 2.3, z + sz * 0.4], 0.07, RED);
-  b.box(x - 0.44, top - 0.06, z - 0.44, x + 0.44, top, z + 0.44, BLUE);
-  for (const sx of [-1, 1]) { beam(b, [x + sx * 0.4, 2.2, z - 0.4], [x + sx * 0.4, 2.2, z + 0.4], 0.05, RED); beam(b, [x + sx * 0.4, 1.85, z - 0.4], [x + sx * 0.4, 1.85, z + 0.4], 0.04, RED); }
-  // the ladder, on the far side
-  for (const sx of [-1, 1]) beam(b, [x + sx * 0.25, 0, z - 1.05], [x + sx * 0.25, top + 0.5, z - 0.42], 0.05, STEEL);
-  for (let i = 1; i <= 5; i++) { const k = i / 6; beam(b, [x - 0.25, top * k, z - 1.05 + 0.63 * k * (top / (top + 0.5))], [x + 0.25, top * k, z - 1.05 + 0.63 * k * (top / (top + 0.5))], 0.04, STEEL); }
-  // the chute, its lips, and the bit at the bottom where you stop
-  const a0 = [x - 0.3, top, z + 0.44], a1 = [x + 0.3, top, z + 0.44], b0 = [x - 0.3, 0.28, z + 3.0], b1 = [x + 0.3, 0.28, z + 3.0], c0 = [x - 0.3, 0.26, z + 3.5], c1 = [x + 0.3, 0.26, z + 3.5];
-  sheet(b, b0, b1, a1, a0, 1, 5, null, YELLOW); sheet(b, c0, c1, b1, b0, 1, 1, null, YELLOW);
-  const lip = (p, q) => sheet(b, p, q, [q[0], q[1] + 0.15, q[2]], [p[0], p[1] + 0.15, p[2]], 4, 1, null, YELLOW, 0.85);
-  lip(b0, a0); lip(a1, b1); lip(c0, b0); lip(b1, c1);
-  for (const sx of [-1, 1]) beam(b, [x + sx * 0.3, 0, z + 2.9], [x + sx * 0.3, 0.3, z + 2.9], 0.05, STEEL);
+const tubeRed = M('#b3261e', 0), steel = M('#8d949c', 0), yellow = M('#e8b52a', 0), blue = M('#27508f', 0);
+/** A slide: a tower of red tube with a deck of planks, hooped rails, a ladder up the back and a moulded chute down the front. About the middle of its tower. */
+function slideVox() {
+  const v = new Vox(), top = 60;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) v.tube(sx * 16, 0, sz * 16, sx * 16, 92, sz * 16, 1.5, tubeRed);
+  for (let x = -17; x < 17; x += 5) v.box(x, top - 2, -17, x + 4.4, top, 17, blue);
+  for (const sx of [-1, 1]) { v.tube(sx * 16, 88, -16, sx * 16, 88, 16, 1.2, tubeRed); v.tube(sx * 16, 74, -16, sx * 16, 74, 16, 1, tubeRed); for (let a = 0; a <= 6; a++) v.tube(sx * 16, 92 + Math.sin(a * 0.5236) * 6, -16 + a * 5.33, sx * 16, 92 + Math.sin((a + 1) * 0.5236) * 6, -16 + (a + 1) * 5.33, 1.2, tubeRed); }
+  // the ladder
+  for (const sx of [-1, 1]) v.tube(sx * 10, 0, -42, sx * 10, top + 18, -17, 1.3, steel);
+  for (let i = 1; i <= 6; i++) { const k = i / 7, y = top * k, z = -42 + 25 * k * (top / (top + 18)); v.tube(-10, y, z, 10, y, z, 1, steel); }
+  // the chute: a trough, with a lip either side, and a flat where you are meant to stop
+  const N = 26;                                       // (in steps of ten centimetres: finer than that and the room is over its budget)
+  for (let i = 0; i < N; i++) { const z = 17 + i * 4, y = Math.round(top - 1 - (49 * i) / N); v.box(-11, y - 2, z, 11, y, z + 4, yellow); for (const sx of [-1, 1]) v.box(sx > 0 ? 10 : -12, y, z, sx > 0 ? 12 : -10, y + 5, z + 4, M('#d9a41e', 0)); }
+  v.box(-11, 8, 121, 11, 10, 142, yellow); for (const sx of [-1, 1]) { v.box(sx > 0 ? 10 : -12, 10, 121, sx > 0 ? 12 : -10, 14, 142, M('#d9a41e', 0)); v.tube(sx * 10, 0, 136, sx * 10, 9, 136, 1.2, steel); v.tube(sx * 10, 0, 80, sx * 10, 29, 80, 1.2, steel); }
+  return v;
+}
+/** A swing seat and the two chains it hangs by, `links` voxels of them: rubber with a steel edge, chain that is chain. From under the seat. */
+const swingVox = (links) => () => {
+  const v = new Vox();
+  v.rbox(-11, 0, -4, 11, 2.4, 4, 1, M('#17171a', 2)); for (const sx of [-1, 1]) { v.box(sx > 0 ? 9 : -11, 0.6, -4, sx > 0 ? 11 : -9, 1.8, 4, steel); v.tube(sx * 9, 2, 0, sx * 9, 6, 0, 0.6, steel); }
+  for (const sx of [-1, 1]) for (let y = 6; y < links; y += 3) v.ring(sx * 9, y + 1.5, 0, 1.5, 0.75, steel, (y / 3) % 2 ? 'x' : 'z');
+  return v;
+};
+/** What a seesaw turns on: two legs splayed either side, an axle between. */
+function pivotVox() { const v = new Vox(); for (const sx of [-1, 1]) { v.tube(sx * 5, 17, 0, sx * 7, 0, -9, 1.3, steel); v.tube(sx * 5, 17, 0, sx * 7, 0, 9, 1.3, steel); v.tube(sx * 7, 1, -9, sx * 7, 1, 9, 1, steel); } v.cyl('x', 17, 0, -7, 7, 1.8, M('#5d646c', 0)); return v; }
+/** Its plank: a board with a seat and a handle at either end. About its middle, along z. */
+function plankVox() {
+  const v = new Vox(), board = M('#2f7a44', 2);
+  v.rbox(-4.5, 0, -68, 4.5, 2.6, 68, 1, board); for (let z = -60; z < 60; z += 17) v.box(-4.5, 2.4, z, 4.5, 2.7, z + 1, M('#256338', 2));
+  for (const sz of [-1, 1]) { v.rbox(-6, 2.6, sz > 0 ? 50 : -66, 6, 4.4, sz > 0 ? 66 : -50, 1.5, tubeRed); for (const sx of [-1, 1]) v.tube(sx * 4.6, 2.6, sz * 46, sx * 4.6, 13, sz * 44, 0.8, steel); v.tube(-4.6, 13, sz * 44, 4.6, 13, sz * 44, 0.9, M('#17171a', 0)); }
+  return v;
+}
+/** A coil spring, bolted down. */
+function springVox() { const v = new Vox(); v.box(-5, 0, -5, 5, 1, 5, steel); for (const [x, z] of [[-4, -4], [3, -4], [-4, 3], [3, 3]]) v.set(x, 1, z, M('#17171a', 0)); for (let y = 2; y < 17; y += 2.4) v.ring(0, y, 0, 2.7, 0.7, M('#2a2c30', 0), 'y'); v.cyl('y', 0, 0, 16, 18, 3, steel); return v; }
+/** The sandpit: four sleepers bolted at the corners, and in it what the shredder made, heaped; a bucket, a spade stuck in. */
+function pitVox() {
+  const v = new Vox(), wood = M('#a17c4c', 3), strips = ['#efe9d8', '#e4dfcd', '#f6f3e8', '#d9d3bf', '#cfe0ea'].map((k) => M(k, 2));
+  for (const [x0, z0, x1, z1] of [[-38, -38, 38, -32], [-38, 32, 38, 38], [-38, -32, -32, 32], [32, -32, 38, 32]]) v.rbox(x0, 0, z0, x1, 8, z1, 1, wood);
+  for (const sx of [-35, 35]) for (const sz of [-35, 35]) v.cyl('y', sx, sz, 8, 9, 1.2, M('#5d646c', 0));
+  v.box(-32, 0, -32, 32, 5, 32, strips[1]);
+  for (let i = 0; i < 150; i++) { const a = i * 2.39996, r = 4 + ((i * 37) % 27), x = Math.cos(a) * r, z = Math.sin(a) * r, hgt = 5 + ((i * 13) % 5) * (r < 14 ? 1 : 0.4), t = strips[i % 5]; v.tube(x, hgt, z, x + Math.cos(i) * 3, hgt + ((i * 7) % 3) * 0.4, z + Math.sin(i) * 3, 0.5, t); }
+  v.ellipsoid(-6, 6, 4, 13, 4.5, 11, strips[0]);
+  v.cyl('y', 16, -12, 5, 14, 3.4, tubeRed, 4.6); v.cyl('y', 16, -12, 13, 14, 4.9, M('#efe9d8', 0)); v.carve(13, 7, -15, 19, 15, -9); v.cyl('y', 16, -12, 5, 7, 3.2, tubeRed); v.ring(16, 15, -12, 4.4, 0.5, M('#efe9d8', 0), 'x');
+  v.tube(-18, 6, -14, -22, 24, -17, 0.9, M('#e8b52a', 0)); v.box(-20, 3, -16, -15, 9, -12, blue); v.tube(-23.4, 24, -17.6, -20.6, 24, -16.4, 0.9, M('#e8b52a', 0));
+  return v;
 }
 
 export function build(c) {
@@ -47,53 +76,44 @@ export function build(c) {
 
   /* the slide, leaning and part of the way down; the small one, nearly gone */
   const going = (x, z, lean, tip, down, scale = 1) => {
-    const b = new Batch(); slide(b, x, z);
-    const g = c.dynamic(b, { pivot: [x, 0, z + 1.2], side: THREE.DoubleSide });
-    g.rotation.set(tip, 0, lean); g.position.y -= down; g.scale.setScalar(scale);
+    c.model('recess:slide:2', slideVox, x, z, { y: -down, tilt: [tip, lean], scale, solid: false, shadow: false });
     c.blot(x, z + 1.2, 2.6 * scale, 5.2 * scale, { a: 0.42 }); c.blot(x, z, 1.5 * scale, 1.5 * scale, { a: 0.4 });
   };
   const sx = -0.4, sz = -1.6;
-  going(sx, sz, p.lean * 0.2, -0.07, 0.62);
+  going(sx, sz, p.lean * 0.3, 0.06, 0.8);
   c.solid(sx - 0.55, sz - 0.9, sx + 0.55, sz + 3.3, { tall: false }); c.reserve(sx, sz + 1.2, 2.4);
   const tx = W / 2 - 3.6, tz = -D / 2 + 2.6;
   going(tx, tz, -p.lean * 0.12, 0.1, 1.23, 0.78);
   c.solid(tx - 0.4, tz - 0.4, tx + 0.4, tz + 0.5); c.reserve(tx, tz, 1.2);
 
-  /* two swings, hung from the ceiling: one where it should be, one that nobody could get on, and that one is moving */
-  const wx = -W / 2 + 3.1, wz = -D / 2 + 2.9, seat = (b, x, y) => {
-    for (const s of [-1, 1]) beam(b, [x + s * 0.23, H, wz], [x + s * 0.23, y, wz], 0.022, STEEL);
-    b.box(x - 0.27, y - 0.04, wz - 0.1, x + 0.27, y, wz + 0.1, [0.08, 0.08, 0.09]);
-  };
+  /* two swings, hung from the ceiling on chain: one where it should be, one that nobody could get on, and that one is moving */
+  const wx = -W / 2 + 3.1, wz = -D / 2 + 2.9, VOX = kit.VOXEL;
   for (const k of [0, 1]) {
-    const x = wx + k * 1.15, high = k === p.high;
+    const x = wx + k * 1.15, high = k === p.high, y = high ? 2.05 : 0.5, links = Math.ceil((H - y) / VOX), geo = kit.model('recess:swing:2:' + links, swingVox(links));
     c.hole(x - 0.25, wz - 0.25);
-    if (!high) { seat(c.flat, x, 0.5); c.shadow(x, wz, 0.5, 0.2, 0.4); continue; }
-    const b = new Batch(); seat(b, x, 2.05);
-    const g = c.dynamic(b, { pivot: [x, H, wz], side: THREE.DoubleSide });
+    if (!high) { c.place(geo, x, wz, { y, solid: false, shadow: false }); c.shadow(x, wz, 0.5, 0.2, 0.4); continue; }
+    const b = new Batch(true); b.addVox(geo.solid, new THREE.Matrix4().compose(new THREE.Vector3(x, y, wz), new THREE.Quaternion(), new THREE.Vector3(VOX, VOX, VOX)));
+    const g = c.dynamic(b, { pivot: [x, H, wz] });
     c.tick((dt, t) => { g.rotation.x = Math.sin(t * 1.25) * 0.11; });
   }
   c.reserve(wx + 0.6, wz, 1.3);
 
   /* the seesaw: one end is under the grass */
   { const x = W / 2 - 2.6, z = -0.2;
-    c.flat.box(x - 0.1, 0, z - 0.09, x + 0.1, 0.37, z + 0.09, STEEL, { skip: '-y' });
-    for (const k of [-0.07, 0.07]) beam(c.flat, [x + k, -0.2, z - 1.7], [x + k, 1.04, z + 1.7], 0.13, GREEN);
-    for (const s of [-0.13, 0.13]) beam(c.flat, [x + s, 0.98, z + 1.3], [x + s, 1.24, z + 1.2], 0.03, STEEL);
-    beam(c.flat, [x - 0.13, 1.24, z + 1.2], [x + 0.13, 1.24, z + 1.2], 0.03, STEEL);
+    c.model('recess:pivot', pivotVox, x, z, { solid: false, shadow: false });
+    c.model('recess:plank', plankVox, x, z, { y: 0.44, tilt: [-0.36, 0], solid: false, shadow: false });
     c.blot(x, z - 1.6, 0.9, 0.9, { a: 0.45 }); c.solid(x - 0.15, z - 0.25, x + 0.15, z + 1.75); c.reserve(x, z, 1.9); }
 
-  /* a duck on a spring: board, painted on the side you come in by */
+  /* a duck on a spring: board, painted on the side you come in by; the spring is a spring */
   { const x = -W / 2 + 3.2, z = D / 2 - 3.4, u = art.uv('duck'), v = art.uv('duckBack', true), dx = 0.4 * Math.cos(0.5), dz = 0.4 * Math.sin(0.5);
-    for (let i = 0; i < 5; i++) c.flat.box(x - 0.07 + (i % 2) * 0.02, i * 0.09, z - 0.07, x + 0.07 - (i % 2) * 0.02, i * 0.09 + 0.05, z + 0.07, [0.12, 0.12, 0.13], { skip: i ? '' : '-y' });
+    c.model('recess:spring', springVox, x, z, { solid: false, shadow: false });
     upright(cut, x - dx, z + dz, x + dx, z - dz, 0.42, 1.12, u); upright(cut, x + dx, z - dz, x - dx, z + dz, 0.42, 1.12, v);
     c.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2); c.shadow(x, z, 0.5, 0.4, 0.4); c.reserve(x, z, 0.7); }
 
-  /* the sandpit: what the shredder made, and a bucket */
+  /* the sandpit: what the shredder made, a bucket, a spade */
   { const x = W / 2 - 3.5, z = D / 2 - 3.7, s = 0.95;
-    for (const [bx0, bz0, bx1, bz1] of [[x - s, z - s, x + s, z - s + 0.1], [x - s, z + s - 0.1, x + s, z + s], [x - s, z - s + 0.1, x - s + 0.1, z + s - 0.1], [x + s - 0.1, z - s + 0.1, x + s, z + s - 0.1]]) c.flat.box(bx0, 0, bz0, bx1, 0.2, bz1, TIMBER, { skip: '-y' });
-    c.mapped('recess:shred', kit.tex.carpet('#e4dfcd')).grid([x - s + 0.1, 0.15, z - s + 0.1], [0, 0, 1], [1, 0, 0], ticks(2 * s - 0.2), ticks(2 * s - 0.2), (u, v) => [u / 0.5, v / 0.5]);
+    c.model('recess:pit', pitVox, x, z, { solid: false, shadow: false });
     scatter(c, x, z, 9, 1.3);
-    c.flat.box(x + 0.25, 0.15, z - 0.4, x + 0.42, 0.33, z - 0.23, RED); c.flat.box(x + 0.265, 0.33, z - 0.385, x + 0.405, 0.335, z - 0.245, [0.9, 0.88, 0.8]);
     c.solid(x - s, z - s, x + s, z + s, { tall: false }); c.reserve(x, z, 1.5); }
 
   /* a tree, in the corner, and what is behind it */

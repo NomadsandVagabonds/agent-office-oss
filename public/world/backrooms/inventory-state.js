@@ -9,7 +9,7 @@ export const ITEM_DEFS = Object.freeze({
   paper: Object.freeze({ name: 'Paper', description: 'Blank office paper, warm from a printer you cannot hear.', useLabel: 'Combine', maxStack: CRAFTING_TUNING.maxPaper }),
   lighter: Object.freeze({ name: 'Lighter', description: 'A scratched metal lighter. The wheel catches on the second turn.', useLabel: 'Combine' }),
   tape: Object.freeze({ name: 'Adhesive tape', description: 'A half-used roll of grey tape. The torn end is folded back.', useLabel: 'Combine' }),
-  scissors: Object.freeze({ name: 'Scissors', description: 'Heavy steel scissors with chipped red handles. The hinge is still stiff.', useLabel: 'Use' }),
+  scissors: Object.freeze({ name: 'Scissors', description: 'Heavy steel scissors with chipped red handles. Good for three desperate jabs at close range before the stiff pivot snaps.', useLabel: 'Snip', maxUses: 3 }),
   snack: Object.freeze({ name: 'Wrapped snack', description: 'A sealed oat bar. The wrapper has no date.', useLabel: 'Eat', healAmount: 1 }),
   'pink-slip': Object.freeze({ name: 'Pink slip', description: 'FORM HR-404, Notice of Redundancy. The name on it is yours; the date is last week.', useLabel: 'Use' }),
   opener: Object.freeze({ name: 'Remote', description: 'A grey remote with one button. Nothing on it says what it is for.', useLabel: 'Use' }),
@@ -47,6 +47,10 @@ export function makeItem(type, id, overrides = {}) {
     const uses = overrides.uses ?? definition.maxUses;
     if (!Number.isInteger(uses) || uses < 0 || uses > definition.maxUses) throw new RangeError('Invalid chalk uses.');
     item.uses = uses;
+  } else if (type === 'scissors') {
+    const uses = overrides.uses === undefined ? definition.maxUses : overrides.uses;
+    if (!Number.isInteger(uses) || uses < 0 || uses > definition.maxUses) throw new RangeError('Invalid scissors uses.');
+    item.uses = uses;
   } else if (type === 'paper') {
     const quantity = overrides.quantity === undefined ? 1 : overrides.quantity;
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > definition.maxStack) throw new RangeError('Invalid paper quantity.');
@@ -59,10 +63,26 @@ export function makeItem(type, id, overrides = {}) {
  * Paper shares a slot up to ten sheets; other objects occupy one slot each.
  * Mutations never leak references. Drops retain charge, uses and quantities.
  */
-export function createInventory({ size = 6 } = {}) {
+export function createInventory({ size = 6, initial = null } = {}) {
   if (!Number.isInteger(size) || size < 1 || size > 6) throw new RangeError('Inventory has one to six slots.');
   const slots = Array(size).fill(null);
   let selected = 0, holstered = false, activeTorch = null, mountedTorch = null, revision = 0, crafting = false;
+  // Restore a detached authoritative bag, including empty pockets and mounted equipment.
+  if (initial) {
+    if (!Array.isArray(initial.slots) || initial.slots.length !== size) throw new TypeError('Invalid inventory slots.');
+    initial.slots.forEach((item, i) => { if (item) slots[i] = makeItem(item.type, item.id, item); });
+    if (initial.mountedTorch) {
+      mountedTorch = makeItem(initial.mountedTorch.type, initial.mountedTorch.id, initial.mountedTorch);
+      if (mountedTorch.type !== 'torch' || !mountedTorch.prepared) throw new TypeError('Invalid mounted flashlight.');
+    }
+    const ids = [...slots.filter(Boolean), mountedTorch].filter(Boolean).map(i => i.id);
+    if (new Set(ids).size !== ids.length) throw new TypeError('Duplicate inventory identity.');
+    if (!slotNumber(initial.selected, size)) throw new TypeError('Invalid selected pocket.');
+    selected = initial.selected; holstered = !!initial.holstered;
+    const light = [...slots, mountedTorch].find(i => i?.id === initial.activeTorch);
+    activeTorch = light?.type === 'torch' && light.charge > 0 ? light.id : null;
+    revision = Number.isSafeInteger(initial.revision) && initial.revision >= 0 ? initial.revision : 0;
+  }
   const fail = reason => ({ ok: false, reason });
   const read = () => ({ slots: slots.map(copy), selected, holstered, activeTorch, mountedTorch: copy(mountedTorch), revision });
   const activeLight = () => mountedTorch?.id === activeTorch ? mountedTorch : slots.find(item => item?.id === activeTorch);
@@ -123,7 +143,7 @@ export function createInventory({ size = 6 } = {}) {
     if (selected !== index || holstered !== stow) { selected = index; holstered = stow; revision++; }
     return true;
   }
-  function useSelected({ canMark = true, heal } = {}) {
+  function useSelected({ canMark = true, heal, snip } = {}) {
     if (crafting) return fail('busy');
     const item = slots[selected];
     if (holstered || !item) return fail('empty');
@@ -145,6 +165,20 @@ export function createInventory({ size = 6 } = {}) {
       if (item.uses === 0) slots[selected] = null;
       revision++;
       return { ok: true, action: 'mark', item: used, index: selected };
+    }
+    if (item.type === 'scissors') {
+      if (item.uses <= 0) return fail('broken-scissors');
+      if (typeof snip !== 'function') return fail('no-snip-target');
+      const index = selected;
+      const result = snip(copy(item));
+      if (result?.ok !== true) return fail(result?.reason || 'no-snip-target');
+      if (slots[index]?.id !== item.id) return fail('stale-input');
+      item.uses--;
+      const used = copy(item);
+      const snapped = item.uses === 0;
+      if (snapped) slots[index] = null;
+      revision++;
+      return { ok: true, action: 'snip', snapped, target: result.target || null, item: used, index };
     }
     if (item.type === 'snack') {
       if (typeof heal !== 'function') return fail('health-unavailable');
@@ -290,5 +324,6 @@ export function createInventory({ size = 6 } = {}) {
   }
   return {
     add, remove, select, useSelected, consumeSelected, combine, craft, toggleLight, torchPower, tick, clear, read,
+    torchMounted: () => !!mountedTorch && activeTorch === mountedTorch.id,
   };
 }

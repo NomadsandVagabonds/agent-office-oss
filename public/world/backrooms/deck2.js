@@ -33,6 +33,7 @@ import { serverChasmStash } from './rooms/server-chasm/rule.js';
 import { PLAN as HALL_PLAN, partsOf as hallParts } from './rooms/unsure-hall/rule.js';
 import { homeStash } from './rooms/show-home/layout.js';
 import { plenumStash } from './rooms/drop-plenum/rule.js';
+import { cubicleGridStash } from './rooms/cubicle-grid/rule.js';
 import { fill } from './words.js';
 
 const cornerStash = (r, side) => (side < 0
@@ -400,6 +401,15 @@ export const MORE_DECK = [
   { id: 'lemonade', name: 'The Stand', landmark: 'the lemonade stand that is going down', w: [9, 11], d: [8, 10], h: [2.9, 3.6],
     ports: ['left', 'right'], weight: 1.2, lights: 'normal', themes: { suburb: 1, '*': 0 },
     module: './rooms/lemonade.js', stash: (r) => [-0.3, -r.D / 2 + 0.6, 0.4, -r.D / 2 + 1.2], roll: (R) => ({ side: R.pick([-1, 1]) }) },
+  // A bedroom, and a closet that goes on: a maze a body wide, drawn on in marker. Whoever is down here this visit may be in it.
+  { id: 'walk-in', name: 'The Walk-in', landmark: 'the bedroom with the closet you can get lost in', w: [11, 13], d: [12, 14], h: [2.4, 2.6],
+    ports: ['back'], weight: 1.3, lights: 'dim', themes: { suburb: 1, '*': 0 },
+    module: './rooms/walk-in.js', stash: (r) => [r.W / 2 - 1.3, r.D / 2 - 1.3, r.W / 2 - 0.6, r.D / 2 - 0.6], roll: () => ({}) },
+  // A storm drain across a lawn, and three hoardings on the edge of it: one of them is a bridge.
+  { id: 'the-culvert', name: 'The Culvert', landmark: 'the ditch with the hoardings beside it', w: [10, 12], d: [11, 13], h: [2.9, 3.6],
+    ports: ['left', 'right'], weight: 1.2, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/the-culvert.js', stash: (r, side) => [side * (r.W / 2 - 1.3) - 0.35, -r.D / 2 + 1.9, side * (r.W / 2 - 1.3) + 0.35, -r.D / 2 + 2.6],
+    roll: (R) => ({ side: R.pick([-1, 1]) }) },
   // A playground on fake grass. Most of it is going down into the floor, slowly, and has been for some time.
   { id: 'recess', name: 'Recess', landmark: 'the playground that is going under', w: [12, 14], d: [10, 12], h: [3.3, 4.2],
     ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
@@ -415,13 +425,38 @@ export const MORE_DECK = [
     big: true,
     weight: 1.0,
     lights: 'dark',
-    themes: { yellow: 1.5, night: 1.4, archive: 1.2, fitout: 1.1 },
+    themes: { yellow: 1.5, night: 1.4, archive: 1.2, fitout: 1.1, exec: 1.1 },
     module: './rooms/drop-plenum.js',
     stash: plenumStash,
     roll: (R, o) => ({
       zone: R.pick(['4B-RET', '7A-NORTH', 'SUB-3', 'PLM-9']),
       supervisor: (o.agents.length ? R.pick(o.agents) : 'FACILITIES').slice(0, 14).toUpperCase(),
       ductTone: R.pick([0, 1]),
+    }),
+  },
+  { id: 'last-light', name: 'The Last Light', landmark: 'the long hall losing its lights',
+    module: './rooms/last-light.js', resident: 'lamplighter', items: ['torch'], caught: 1, fire: 'ignores',
+    w: [6, 7], d: [20, 22], h: [2.8, 3.0], ports: ['back'], big: true,
+    weight: .85, lights: 'normal', needs: ['beam'], themes: { night: 1.5, archive: 1.2 },
+    stash: r => [r.W/2-1.4, -r.D*.17-.65, r.W/2-.5, -r.D*.17+.65],
+    roll: R => ({face:R.int(0,7)}) },
+  {
+    id: 'cubicle-grid',
+    resident: 'pit-clerks', items: ['paper'], caught: 2, fire: 'fears',
+    doors: 'own',
+    name: 'The Open-Plan Pit',
+    landmark: 'the sunken cubicle grid you walk across on top',
+    w: [14, 16], d: [16, 18], h: [3.2, 3.6],
+    ports: ['back'],
+    big: true,
+    weight: 1.0,
+    lights: 'normal',
+    themes: { yellow: 1.5, archive: 1.4, night: 1.3, fitout: 1.3, exec: 1.2 },
+    module: './rooms/cubicle-grid.js',
+    stash: cubicleGridStash,
+    roll: (R, o) => ({
+      dept: (o.projects.length ? R.pick(o.projects) : R.pick(['RETENTION', 'BILLING', 'COMPLIANCE', 'QA'])).slice(0, 12).toUpperCase(),
+      brokenSide: R.pick([-1, 1]),
     }),
   },
 ];

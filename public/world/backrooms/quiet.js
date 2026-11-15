@@ -99,7 +99,7 @@ const THEME_QUIET = {
   // the neighbourhood: lawns with nothing on them, a fence across one, the backs of a row of flats; a lawn a few steps down, or up
   // (it has no line in TELLS until it is finished — themes.js `dealt: false` — since TELLS is every finished kind and no other)
   suburb: { motifs: [['fence', 4], ['flats', 3.2], ['dogleg', 0.8]], wrong: ['sunk', 'apertures'],
-    mix: [[0.4, 0.5], [0.36, 0.44], [0.1, 0.16]], hall: [['none', 3], ['nibs', 1]], shapes: ['pit', 'dais', 'stepceil', 'slopeceil'] },
+    mix: [[0.26, 0.34], [0.4, 0.48], [0.22, 0.3]], hall: [['baffle', 3], ['nibs', 2], ['none', 1.5]], shapes: ['pinch', 'ell', 'stairs', 'soffit', 'stepceil', 'slopeceil', 'pit', 'dais'] },
 };
 /**
  * What gives a kind of floor away: the layouts there are more of on it than on any other kind ('none': a room with

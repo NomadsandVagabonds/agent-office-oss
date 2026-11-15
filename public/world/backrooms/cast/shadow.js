@@ -117,6 +117,27 @@ export function create(c) {
       dark = dark.filter((k) => k.t < SHADOW.dark);
     },
     at: () => ({ ...(at || { x: null, z: null }), mode: s.mode, heat: +s.heat.toFixed(2), wait: +s.t.toFixed(1), seen: +seenT.toFixed(1) }),
+    snipTargets() {
+      if (!mesh || !at || s.mode !== 'lurk') return [];
+      const floorY = env.world?.floorY(at.x, at.z) ?? 0;
+      return [{
+        id: 'shadow',
+        x: at.x,
+        z: at.z,
+        y: floorY + 1.05,
+        r: 0.28,
+        priority: 2,
+        snip: () => {
+          if (!at || s.mode !== 'lurk') return false;
+          if (!known) { known = true; c.met(); }
+          c.play('static', at.x, at.z, 6);
+          s = away(R, false);
+          at = null; mesh.visible = false; close = false;
+          c.survived();
+          return { ok: true, target: 'shadow' };
+        },
+      }];
+    },
     /** For the dev page: have it turn up now. */
     hurry() { if (s.mode === 'away') s = { ...s, t: 0 }; },
     dispose() { for (const k of dark) env.world?.setLights(k.rt, 1); mesh?.removeFromParent(); },

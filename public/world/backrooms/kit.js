@@ -16,6 +16,7 @@ import { canvasTexture, shade } from '../scene/textures.js';
 import { meshVox } from '../vox/mesher.js';
 import { VOXEL } from '../vox/vox.js';
 import { bankWeights } from './lighting.js';
+import { FLASHLIGHT_GLSL, FLASHLIGHT_POSES } from './flashlight.js';
 
 const GLOW = 2.3;                              // how hard a self-lit voxel shines
 
@@ -265,6 +266,7 @@ varying vec3 vLit;
 varying vec3 vAlb;
 varying vec2 vUv;
 varying vec3 vView;
+varying vec3 vNormal;
 void main() {
   vUv = uv;
   vec3 lit = aLit;
@@ -288,6 +290,7 @@ void main() {
   vLit = lit * uTint; vAlb = aAlb;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   vView = mv.xyz;
+  vNormal = normalMatrix * normal;
   gl_Position = projectionMatrix * mv;
 }`;
 const FRAG = `
@@ -298,17 +301,19 @@ varying vec3 vLit;
 varying vec3 vAlb;
 varying vec2 vUv;
 varying vec3 vView;
+varying vec3 vNormal;
 #ifdef VOXEL
 varying vec3 vVox;
 varying vec2 vSurf;
 float voxHash(vec3 p) { p = fract(p * vec3(0.1031, 0.1030, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.x + p.y) * p.z); }
 #endif
+${FLASHLIGHT_GLSL}
 void main() {
   vec3 c = vLit;
-  // the camcorder's own little lamp: only matters where the room is dark
-  float d = length(vView);
-  float cone = smoothstep(0.60, 0.97, -vView.z / max(d, 0.0001));
-  vec3 torch = vAlb * (uTorch * cone / (1.0 + d * d * 0.2));
+  // A cone from the physical emitter: close patches are small and bright,
+  // distant patches spread, and grazing walls receive less light.
+  vec3 normal = normalize(vNormal) * (gl_FrontFacing ? 1.0 : -1.0);
+  vec3 torch = vAlb * (uTorch * flashlightBeam(vView, normal));
   #ifdef VOXEL
   c += torch * (1.0 - vSurf.y);
   vec3 cell = floor(vVox + 0.0005);
@@ -336,7 +341,11 @@ void main() {
 export function createKit() {
   const owned = new Set();
   const own = (thing) => { if (thing) owned.add(thing); return thing; };
-  const shared = { uTorch: { value: 0 } };
+  const shared = {
+    uTorch: { value: 0 },
+    uTorchOrigin: { value: new THREE.Vector3(...FLASHLIGHT_POSES.hand.origin) },
+    uTorchDirection: { value: new THREE.Vector3(...FLASHLIGHT_POSES.hand.direction) },
+  };
   const textures = new Map();
   const tex = (key, make) => { if (!textures.has(key)) textures.set(key, own(make())); return textures.get(key); };
 
@@ -449,6 +458,7 @@ export function createKit() {
         uBanks: room?.banks || { value: [1, 1] },
         uMoreBanks: room?.moreBanks || { value: [0, 0] },
         uTint: { value: new THREE.Vector3(1, 1, 1) }, uTorch: shared.uTorch, uAlpha: { value: alpha },
+        uTorchOrigin: shared.uTorchOrigin, uTorchDirection: shared.uTorchDirection,
       },
     }));
   }
@@ -465,6 +475,10 @@ export function createKit() {
     const { lit, flk, banks } = bake(batch, lights, amb, lighting);
     const geo = own(new THREE.BufferGeometry());
     geo.setAttribute('position', new THREE.Float32BufferAttribute(batch.pos, 3));
+    // Flat face normals already exist for the bake; retain them in three bytes
+    // per vertex for the moving beam, rather than another float triplet.
+    const normal = Int8Array.from(batch.nor, n => Math.round(Math.max(-1, Math.min(1, n)) * 127));
+    geo.setAttribute('normal', new THREE.BufferAttribute(normal, 3, true));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(batch.vox ? new Float32Array(batch.verts * 2) : batch.uv, 2));
     geo.setAttribute('aLit', new THREE.BufferAttribute(lit, 3));
     if (flk) geo.setAttribute('aFlk', new THREE.BufferAttribute(flk, 3));

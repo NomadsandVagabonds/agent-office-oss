@@ -401,6 +401,14 @@ const SKETCH = {
     g.beginPath(); g.arc(70, 46, 6, 0, 6.3); g.stroke(); g.beginPath(); g.moveTo(70, 52); g.lineTo(70, 72); g.moveTo(62, 58); g.lineTo(78, 58); g.stroke();
     for (let i = 0; i < 14; i++) { g.beginPath(); g.moveTo(34 + (i * 5) % 12, 8 + (i * 7) % 30); g.lineTo(38 + (i * 3) % 12, 12 + (i * 11) % 30); g.stroke(); }
   },
+  lamplighter(g) {                                                    // dead ceiling strips, a crooked head and the only beam still working
+    for (const [x,y,w] of [[12,8,18],[38,16,14],[60,22,10]]) {
+      g.strokeRect(x,y,w,4);g.beginPath();g.moveTo(x-2,y-3);g.lineTo(x+w+2,y+7);g.stroke();
+    }
+    g.beginPath();g.moveTo(62,36);g.lineTo(76,42);g.lineTo(70,54);g.lineTo(57,48);g.closePath();g.stroke();
+    g.beginPath();g.moveTo(65,52);g.lineTo(62,73);g.lineTo(54,90);g.moveTo(62,73);g.lineTo(70,89);g.moveTo(64,58);g.lineTo(49,77);g.moveTo(64,58);g.lineTo(78,78);g.stroke();
+    g.strokeRect(8,65,15,7);g.beginPath();g.moveTo(23,65);g.lineTo(81,38);g.moveTo(23,72);g.lineTo(81,86);g.stroke();
+  },
   'floor-warden'(g) {                                                 // a hard hat, a stick man running, and scissors bigger than he is
     g.beginPath(); g.arc(30, 24, 8, 0, 6.3); g.stroke(); g.beginPath(); g.arc(30, 22, 10, 3.14, 6.28); g.stroke(); g.beginPath(); g.moveTo(18, 22); g.lineTo(42, 22); g.stroke();
     g.beginPath(); g.moveTo(30, 32); g.lineTo(34, 58); g.moveTo(34, 58); g.lineTo(22, 78); g.moveTo(34, 58); g.lineTo(48, 74); g.moveTo(31, 42); g.lineTo(50, 46); g.stroke();
@@ -422,6 +430,22 @@ const SKETCH = {
     g.strokeRect(50, 40, 38, 46);
     for (let x = 57; x < 88; x += 7) { g.beginPath(); g.moveTo(x, 40); g.lineTo(x, 86); g.stroke(); }
     for (let i = 0; i < 5; i++) { g.beginPath(); g.arc(69, 20, 5 + i * 1.6, i, i + 5.6); g.stroke(); }
+  },
+  'plenum-toner'(g) {                                                 // a step-ladder through ceiling tiles, a duct, and four legs upside down above
+    g.beginPath(); g.moveTo(8, 48); g.lineTo(36, 48); g.moveTo(56, 48); g.lineTo(88, 48); g.stroke();
+    g.beginPath(); g.moveTo(34, 86); g.lineTo(44, 42); g.lineTo(54, 86); g.moveTo(37, 72); g.lineTo(51, 72); g.moveTo(40, 58); g.lineTo(48, 58); g.stroke();
+    g.strokeRect(56, 36, 28, 10);
+    g.beginPath(); g.moveTo(8, 12); g.lineTo(88, 12); g.stroke();
+    for (const [kx, fx] of [[58, 52], [66, 62], [74, 78], [82, 86]]) { g.beginPath(); g.moveTo(70, 22); g.lineTo(kx, 28); g.lineTo(fx, 12); g.stroke(); }
+  },
+  'pit-clerks'(g) {                                                   // a grid of deep square pits, a grinning head clawing over the top, and a door at the back
+    g.strokeRect(12, 42, 72, 44);
+    g.beginPath(); g.moveTo(36, 42); g.lineTo(36, 86); g.moveTo(60, 42); g.lineTo(60, 86); g.moveTo(12, 64); g.lineTo(84, 64); g.stroke();
+    g.beginPath(); g.arc(48, 32, 9, 0, 6.3); g.stroke();
+    g.fillRect(44, 29, 2, 2); g.fillRect(50, 29, 2, 2);
+    g.beginPath(); g.arc(48, 33, 6, 0.2, 2.94); g.stroke();
+    g.beginPath(); g.moveTo(39, 42); g.lineTo(35, 36); g.moveTo(57, 42); g.lineTo(61, 36); g.stroke();
+    g.strokeRect(42, 6, 12, 16);
   },
   unknown(g) { g.beginPath(); g.arc(48, 46, 22, 0.4, 5.6); g.stroke(); g.font = '700 30px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.fillText('?', 48, 58); },
 };

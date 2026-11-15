@@ -10,6 +10,7 @@
 //   &vhs=0|1|2         clean · steady · full camcorder           &mute=1
 //   &barricades=0      without furniture that can be dragged (it is on unless turned off); &study=1 puts a review set by the landing (seed=7)
 //   &lighting=1        fluorescent-bank prototype (off by default); &lighting=dim|failing|travel|emergency|islands forces that treatment in eligible plain rooms
+//   &hallstudy=1       rehearsal controls for the last-light room (use &only=last-light)
 //   &lightstudy=1      comparison controls and a flashlight for reviewing the prototype
 //   &pursuer=1|0       force the thing that follows you in or out; &wake=1 has it already awake, in the room with you
 //   &name=Robin        who you are                               &live=1     borrow names from the running office (GET only)
@@ -32,6 +33,7 @@ import { createStage } from '../engine/stage.js';
 import { enterBackrooms } from '../backrooms/index.js';
 import { LIGHTING_MODES } from '../backrooms/lighting.js';
 import { lightingStudy } from './lighting-study.js';
+import { lastLightStudy } from './last-light-study.js';
 
 // &check=1: listen from the start, so that nothing said while the floor was being built is missed
 const said = [];
@@ -128,7 +130,8 @@ async function go() {
       if (q.get('map')) dev.textContent = handle.sketch();
       console.log(handle.sketch());
       if (q.get('check')) console.log('[check] ' + JSON.stringify(check(handle)));
-      if (q.get('lightstudy') === '1' && handle.env.lighting) closeStudy = lightingStudy(handle);
+      if (q.get('hallstudy') === '1') closeStudy = lastLightStudy(handle);
+      else if (q.get('lightstudy') === '1' && handle.world.hasLighting) closeStudy = lightingStudy(handle);
       document.title = 'ready';
     },
   });

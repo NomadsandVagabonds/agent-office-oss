@@ -130,6 +130,18 @@ export function createInventoryFire(env, { canAct = () => true, clearRay, isDry 
   }
   return {
     request, ignite,
+    sync(records) {
+      for (const f of pool) if (!records.some(r => r.id === f.id)) { f.remaining = 0; draw(f); }
+      for (const r of records) {
+        let f = pool.find(f => f.id === r.id && f.remaining > 0);
+        if (!f) {
+          const rt = world.rooms.find(rt => rt.id === r.room); if (!rt) continue;
+          const result = ignite({ ...r, rt }, r); if (!result.ok) continue;
+          f = pool.find(f => f.id === result.id); f.id = r.id; serial = Math.max(serial, r.id);
+        }
+        f.remaining = Math.max(0, Math.min(f.duration, r.remaining)); draw(f);
+      }
+    },
     occupied(x, z, radius, y) {
       return !disposed && pool.some(f => f.remaining > 0 && !f.away && Math.abs(f.wy - y) < .8 && Math.hypot(f.wx - x, f.wz - z) < FIRE.footprint + radius);
     },
