@@ -30,7 +30,7 @@ function figure() {
 
 export function create(c) {
   const env = c.env, R = c.R, me = c.me, walker = { x: 0, z: 0, r: 0.2, tall: 2.2, opens: false, furniture: 'phase' };
-  let s = away(R, true), mesh = null, at = null, hiss = 0, dark = [], seenT = 0, known = false, close = false;
+  let s = away(R, true), mesh = null, at = null, hiss = 0, dark = [], seenT = 0, known = false, close = false, haunted = false;
 
   function ready() {
     const b = new Batch(true);
@@ -82,6 +82,8 @@ export function create(c) {
     update(dt) {
       if (!mesh) return;
       const m = me(), w = env.world;
+      // a room that asked for company: the first time the visitor is in it, it does not keep them waiting
+      if (c.haunt != null && !haunted && w.roomAt(m.x, m.z)?.id === c.haunt) { haunted = true; if (s.mode === 'away') s = { ...s, t: Math.min(s.t, SHADOW.haunt) }; }
       let looked = false, exposed = false, d = Infinity;
       if (at) {
         const dx = at.x - m.x, dz = at.z - m.z; d = Math.hypot(dx, dz);

@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateVisit } from '../public/world/backrooms/plan.js';
 import fs from 'node:fs';
-import { CAST, ALL_CAST, SUPPORTING, DISPOSITIONS, ITEMS, ROOM_LESSONS, CAST_LESSONS, whoIsDown, castFor, homeFor } from '../public/world/backrooms/cast.js';
+import { CAST, ALL_CAST, SUPPORTING, DISPOSITIONS, ITEMS, ROOM_LESSONS, CAST_LESSONS, whoIsDown, castFor, homeFor, hauntsFor, HAUNT_MOST } from '../public/world/backrooms/cast.js';
 import { THEME_IDS } from '../public/world/backrooms/themes.js';
 import { HUNT, knows, lost, shown, spent, noticeTime, wayOn, handle, atHandle, getsDown, lying, willPeek } from '../public/world/backrooms/cast/hunt.js';
 import { roomRoute, roomCosts, gridPath, straighten } from '../public/world/backrooms/cast/paths.js';
@@ -881,4 +881,20 @@ test('close-quarters scissors (melee.js & snipToner): reach, forward cone, ceili
   const next = stepToner(burst, dt, { d: 0.3 }, () => 0.99);
   assert.equal(next.mode, 'spent');
   assert.equal(next.hatched, false);
+});
+
+test('a room may ask for company, and gets only who roams and is on the part anyway', () => {
+  const level = { seed: 'h1', rooms: [{ id: 0, kind: 'start', arch: null }, { id: 1, kind: 'odd', arch: 'maze' }, { id: 2, kind: 'odd', arch: 'quiet' }, { id: 3, kind: 'odd', arch: 'crowd' }] };
+  const deck = { maze: { haunt: 1 }, quiet: {}, crowd: { haunt: 5 } };
+  assert.equal(hauntsFor(level, [], deck).size, 0, 'nobody dealt: nobody comes');
+  assert.equal(hauntsFor(level, ['pirate', 'porter', 'other-door'], deck).size, 0, 'not the mascot, and nobody with a room of their own');
+  assert.equal(hauntsFor({ ...level, rooms: level.rooms.slice(0, 1) }, ['toner', 'moth'], deck).size, 0, 'no room asks: nobody is sent');
+  const one = hauntsFor(level, ['pirate', 'toner'], deck);
+  assert.deepEqual([...one], [['toner', 1]], 'the first room that asks is served first');
+  const three = hauntsFor(level, ['toner', 'moth', 'shadow'], deck);
+  assert.equal(three.size, 3);
+  assert.equal([...three.values()].filter((r) => r === 1).length, 1, 'at most what it asked for');
+  assert.equal([...three.values()].filter((r) => r === 3).length, HAUNT_MOST, 'and never more than two, whatever it asked for');
+  assert.deepEqual([...hauntsFor(level, ['toner', 'moth', 'shadow'], deck)], [...three], 'the same floor, the same company');
+  assert.equal(hauntsFor(level, ['toner', 'toner'], deck).size, 1, 'nobody is sent twice');
 });

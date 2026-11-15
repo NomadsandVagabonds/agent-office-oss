@@ -414,7 +414,7 @@ through `c`. It never calls `env.end`: being caught is `c.hurt`.
 
 | for | use |
 |---|---|
-| who and where | `c.member` its line · `c.home` its room's id (or null) · `c.R` the seeded source · `c.carried` what it left itself upstairs |
+| who and where | `c.member` its line · `c.home` its room's id (or null) · `c.haunt` a room that asked for company and got you (id, or null: see below) · `c.R` the seeded source · `c.carried` what it left itself upstairs |
 | the visitor | `c.me()` → `{ x, z, yaw, pitch, speed, moving }` · `c.room(x, z)` which room that is · `c.held()` what they are holding (`{ type, … }` or null: there may be no inventory at all) · `c.take(type, n)` · `c.give(item)` |
 | seeing | `c.hidden(x, z, r)` that spot is off their screen or behind a wall · `c.los(ax, az, bx, bz)` a line of sight between two spots, whichever way anybody is facing · `c.drawn(thing)` its room is being drawn at all |
 | getting about | `c.walk.go(walker, { x, z }, metres, keep)` → `{ went, door, cannot, there }` · `c.walk.exits(walker)` · `c.walk.spotIn(walker, room)` · `c.walk.steps(walker, { x, z })` · `c.walk.stand(walker, x, z)` |
@@ -480,6 +480,15 @@ Things to know before they bite:
   chest); return nothing and the corner camera has it. A flat battery,
   giving up and the way out end as they always did, and a hit that is
   survived stays in first person.
+- **Company for a room.** A deck line may say `haunt: 1` or `haunt: 2`: the
+  room asks for that many of the cast, and gets them only from those who roam
+  and are dealt to that part anyway (`hauntsFor()` in `cast.js`: never the
+  mascot, never anybody with `home: 'room'`, nobody if nobody is dealt
+  there). Whoever is sent finds the room's id in `c.haunt`, and what it does
+  about it is its own: the toner hangs there from the start if there is a
+  place to hang, the moth waits at a light of it, the shadow shows itself
+  within a second and a half of the visitor first walking in. Nothing new is
+  made for it, and a creature may ignore it.
 - **More than one body.** There are rooms that change the building and take
   whatever is in them (*A room the way out is through*). The conductor does
   this for you: it asks `at()` where you are, and if that is in the room it

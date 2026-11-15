@@ -7,7 +7,7 @@
 // on. A visit is one roll: the same seed is the same company, on the same
 // floors, in the same rooms — and a seed is only ever given once (index.js:
 // the seed is the clock).
-import { makeRng, roomDistances, wallSpans } from './gen.js';
+import { makeRng, roomDistances, wallSpans, ARCHETYPES } from './gen.js';
 
 /** What a creature is to the visitor. Only one that hunts may end a visit. */
 export const DISPOSITIONS = Object.freeze(['hunts', 'keeps to itself', 'helps']);
@@ -130,4 +130,26 @@ export function homeFor(level, member) {
   const mine = CAST.indexOf(member), theirs = new Set(mine > 0 ? CAST.slice(0, mine).filter((m) => m.home === 'room').map((m) => homeFor(level, m)) : []);
   const free = able.filter((r) => !theirs.has(r.id));
   return free.length ? makeRng(`${level.seed}/home/${member.id}`).pick(free).id : null;
+}
+
+/** How much company a room may ask for at most (a deck line: `haunt: 1` or `haunt: 2`). */
+export const HAUNT_MOST = 2;
+
+/**
+ * Rooms that ask for company (a deck line with `haunt: n`), and who of those dealt to this part keeps them company: nobody new, only
+ * those of the cast who roam and are on this part anyway (never the mascot, never anybody with a room of their own). Seeded by the
+ * floor; at most n to a room; nobody if nobody is dealt here. What keeping a room company means is the creature's own (`c.haunt`).
+ * @param level  a generated floor
+ * @param {string[]} ids  who is dealt to this part (castFor)
+ * @param deck   id → deck line (default: the deck)
+ * @returns {Map<string, number>}  creature id → room id
+ */
+export function hauntsFor(level, ids, deck = ARCHETYPES, cast = CAST) {
+  const out = new Map();
+  const rooms = (level?.rooms || []).filter((r) => r.arch && Number.isInteger(deck[r.arch]?.haunt) && deck[r.arch].haunt > 0 && r.kind !== 'start' && r.kind !== 'exit');
+  if (!rooms.length) return out;
+  const R = makeRng(`${level.seed}/haunt`);
+  const free = R.shuffle(ids.filter((id, i) => ids.indexOf(id) === i).map((id) => cast.find((m) => m.id === id)).filter((m) => m && m.home === 'roams' && !m.always).map((m) => m.id));
+  for (const r of rooms) for (let n = Math.min(HAUNT_MOST, deck[r.arch].haunt); n > 0 && free.length; n--) out.set(free.shift(), r.id);
+  return out;
 }

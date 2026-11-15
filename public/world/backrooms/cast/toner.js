@@ -485,8 +485,10 @@ export function create(c) {
   function ready() {
     geoms = makeSharedGeoms(env.kit, R);
     const probe = { x: 0, z: 0, r: TONER.r, tall: TONER.tall, opens: TONER.opens, crawls: TONER.crawls };
-    const startRoom = pickStartRoom();
-    const spot = c.walk.spotIn(probe, startRoom.id);
+    // a room that asked for company has it hanging there from the start, if there is a place in it to hang (else where it would have been)
+    let startRoom = pickStartRoom(), spot = null;
+    if (c.haunt != null && env.world.rooms[c.haunt]) { const s = c.walk.spotIn(probe, c.haunt); if (c.walk.stand(probe, s.x, s.z)) { startRoom = level.rooms[c.haunt]; spot = s; } }
+    spot ||= c.walk.spotIn(probe, startRoom.id);
     spawnUnit(spot.x, spot.z, perched(() => R(), c.carried), 1, null, R.range(0, Math.PI * 2));
     placed = true;
   }
