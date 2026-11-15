@@ -335,8 +335,22 @@ export function lawn(c, opt = {}) {
     }
   }
   // what is on the walls: clouds, mostly. In some rooms a field of corn, or a row of shops, as described to whoever drew them
-  const paint = opt.paint || R.pick(['sky', 'sky', 'sky', 'corn', 'corn', 'mall', 'mall']), art = setArt(c.kit), low = paint === 'corn' ? 2.75 : paint === 'mall' ? 1.95 : 1.55;
+  const paint = opt.paint || R.pick(['sky', 'sky', 'sky', 'corn', 'corn', 'mall', 'mall', 'melt', 'melt']), art = setArt(c.kit), low = paint === 'corn' ? 2.75 : paint === 'mall' ? 1.95 : 1.55;
   c.rt.paint = paint;
+  if (paint === 'melt') {
+    // the owner's sky: boards of it round the room as far up as a board goes, and the room's own things run with it
+    const b = c.mapped('suburb:melt', meltArt(c.kit)); let n = 0;
+    for (const side of ['back', 'left', 'right', 'front']) for (const [a, e] of c.spans(side, 0.1, 2.2)) for (let i = 0, m = Math.floor((e - a) / MELT.w); i < m; i++, n++) {
+      const at = a + (e - a - m * MELT.w) / 2 + (i + 0.5) * MELT.w, p = c.wallAt(side, at, 0.3), hh = Math.min(MELT.h, c.ceilAt(p.x, p.z) - 0.13), u0 = (n % 2) / 2;
+      c.hang(b, side, at, 0.11 + hh / 2, MELT.w, hh, [[u0, 1 - hh / MELT.h], [u0 + 0.5, 1 - hh / MELT.h], [u0 + 0.5, 1], [u0, 1]], WHITE, 0.008);
+    }
+    if (opt.wrong !== 0 && !s && Math.min(W, D) >= 4.6 && c.ceilAt(0, 0) >= 2.6) {
+      const along = W >= D, hgt = c.ceilAt(0, 0) * 1.25;
+      for (const u of [-1, 1]) { const x = along ? u * W * 0.2 : R.range(-0.6, 0.6), z = along ? R.range(-0.6, 0.6) : u * D * 0.2; if (c.clear(x, z, 0.4)) meltingPole(c, x, z, along ? u : 0.3, along ? 0.3 : u, R.range(0.45, 0.75), hgt); }
+      debris(c, 50); c.rt.weird = 'melting';
+    }
+    return;
+  }
   if (paint !== 'sky') for (const side of ['back', 'left', 'right', 'front']) for (const [a, b] of c.spans(side, 0.12, paint === 'corn' ? 2.2 : 1.5)) {
     const [w, h] = art.size(paint === 'corn' ? 'corn' : 'mallA'), n = Math.floor((b - a) / w);
     for (let i = 0; i < n; i++) onWall(c, paint === 'corn' ? 'corn' : (i + (side.length % 2)) % 2 ? 'mallB' : 'mallA', side, a + (b - a - n * w) / 2 + (i + 0.5) * w, 0.11 + h / 2, { off: 0.006 });
@@ -451,6 +465,56 @@ export function car(c, x, z, along = true, rgb = [0.6, 0.52, 0.38], lift = 0, in
   if (along) c.solid(x - 2.1, z - 0.85, x + 2.1, z + 0.85); else c.solid(x - 0.85, z - 2.1, x + 0.85, z + 2.1);
   c.blot(x, z, along ? 5.2 : 2.6, along ? 2.6 : 5.2, { a: lift ? 0.3 : 0.45 }); c.reserve(x, z, 2.3);
 }
+/* ---- the melt: after the owner's own pictures (nomadsandvagabonds), where telephone poles lean and run like paint ------------- */
+
+const MELT = { w: 2.4, h: 2.6 };
+/** Two boards of it, side by side in one texture: an ochre sky, firs, small houses, poles going over, and everything above them running down in strokes. */
+function meltArt(kit) {
+  return kit.tex.custom('suburb:melt', 192, 104, (g, w, h) => {
+    let k = 97; const r = () => { k = (Math.imul(k, 1664525) + 1013904223) >>> 0; return k / 4294967296; };
+    const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#d7a94c'); sky.addColorStop(0.6, '#e6c877'); sky.addColorStop(1, '#ecd690'); g.fillStyle = sky; g.fillRect(0, 0, w, h);
+    for (let b = 0; b < 2; b++) {
+      const x0 = b * 96; g.save(); g.beginPath(); g.rect(x0, 0, 96, h); g.clip();
+      // firs, and the roofs under them
+      g.fillStyle = '#1f2a1c'; for (let x = x0 - 4; x < x0 + 100; x += 5 + r() * 5) { const th = 16 + r() * 16; g.beginPath(); g.moveTo(x, 78); g.lineTo(x + 4, 78 - th); g.lineTo(x + 8, 78); g.fill(); }
+      for (let x = x0 + 2; x < x0 + 96; x += 22) { const c2 = ['#e9e7dc', '#c9b23a', '#a8322a', '#dfe6ea'][Math.floor(r() * 4)]; P(g, c2, x, 80, 18, 16); g.fillStyle = '#4a3a34'; g.beginPath(); g.moveTo(x - 2, 80); g.lineTo(x + 9, 71); g.lineTo(x + 20, 80); g.fill(); P(g, '#2a3338', x + 3, 84, 4, 5); P(g, '#7a2a22', x + 11, 86, 4, 10); }
+      P(g, '#3f7a3a', x0, 96, 96, 8);
+      // the poles, going over
+      g.strokeStyle = '#3a2416'; g.lineCap = 'round';
+      for (const [px, lean] of b ? [[30, 0.5], [70, -0.25]] : [[22, 0.62], [58, 0.3]]) {
+        const tx = x0 + px + Math.sin(lean) * 62, ty = 78 - Math.cos(lean) * 62; g.lineWidth = 2.4; g.beginPath(); g.moveTo(x0 + px, 80); g.lineTo(tx, ty); g.stroke();
+        g.lineWidth = 1.4; for (let a = 0; a < 4; a++) { const cx = tx - Math.sin(lean) * (6 + a * 7), cy = ty + Math.cos(lean) * (6 + a * 7), ux = Math.cos(lean) * (9 - a), uy = Math.sin(lean) * (9 - a); g.beginPath(); g.moveTo(cx - ux, cy - uy); g.lineTo(cx + ux, cy + uy); g.stroke(); }
+        // …and what was the top of it, running
+        for (let i = 0; i < 16; i++) { g.lineWidth = 0.5 + r() * 2.2; g.strokeStyle = ['#3a2416', '#5a3a1e', '#2a1a10', '#f1e2a8'][Math.floor(r() * 4)]; const sx = tx + (r() - 0.5) * 30, sy = ty + r() * 20; g.beginPath(); g.moveTo(sx, sy); g.bezierCurveTo(sx + 20 + r() * 30, sy + 10 + r() * 20, sx - 30 + r() * 40, sy + 40 + r() * 20, sx + (r() - 0.3) * 50, 100 + r() * 6); g.stroke(); }
+        g.strokeStyle = '#3a2416';
+      }
+      for (let i = 0; i < 46; i++) { g.fillStyle = ['#2a1a10', '#a8322a', '#2b477a', '#f1e2a8', '#5a3a1e'][Math.floor(r() * 5)]; g.beginPath(); g.ellipse(x0 + r() * 96, r() * 70, 0.6 + r() * 1.8, 0.4 + r() * 1.1, r() * 3, 0, 7); g.fill(); }
+      g.restore();
+    }
+  }, { clamp: true });
+}
+/** What has run off a wall and gone on across the grass: a patch of it. */
+function swirlArt(kit) {
+  return kit.tex.custom('suburb:swirl', 96, 96, (g) => { let k = 31; const r = () => { k = (Math.imul(k, 1664525) + 1013904223) >>> 0; return k / 4294967296; }; g.lineCap = 'round';
+    for (let i = 0; i < 22; i++) { g.lineWidth = 1 + r() * 3; g.strokeStyle = ['#f1e2a8', '#e6c877', '#3a2416', '#5a3a1e', '#f1e2a8'][i % 5]; const y = 6 + i * 4; g.beginPath(); g.moveTo(-4, y); g.bezierCurveTo(24, y - 14 + r() * 28, 60, y - 16 + r() * 32, 100, y + (r() - 0.5) * 30); g.stroke(); } }, { clamp: true });
+}
+/** A telephone pole, leaning (`lean` radians toward dx, dz), its arms and its wires going up; and its foot running out across the grass. */
+export function meltingPole(c, x, z, dx, dz, lean, hgt) {
+  const dark = [0.2, 0.12, 0.07], sx = Math.sin(lean), cs = Math.cos(lean), top = [x + dx * sx * hgt, cs * hgt, z + dz * sx * hgt], nx = -dz, nz = dx, ceil = c.ceilAt(top[0], top[2]);
+  beam(c.flat, [x, 0, z], top, 0.13, dark);
+  for (let a = 0; a < 3; a++) { const t = 1 - 0.07 - a * 0.1, p = [x + dx * sx * hgt * t, cs * hgt * t, z + dz * sx * hgt * t], hw = 0.6 - a * 0.1; beam(c.flat, [p[0] - nx * hw, p[1], p[2] - nz * hw], [p[0] + nx * hw, p[1], p[2] + nz * hw], 0.07, dark);
+    for (const k of [-1, 1]) { const e = [p[0] + nx * hw * k, p[1], p[2] + nz * hw * k], m = [e[0] + dx * 0.9 + nx * k * 0.5, Math.min(ceil - 0.3, e[1] + 0.2), e[2] + dz * 0.9 + nz * k * 0.5], u = [m[0] + dx * 0.8 + nx * k * (a - 1) * 0.6, ceil, m[2] + dz * 0.8 + nz * k * (a - 1) * 0.6]; beam(c.flat, e, m, 0.016, [0.04, 0.03, 0.02]); beam(c.flat, m, u, 0.016, [0.04, 0.03, 0.02]); } }
+  const sw = c.mapped('suburb:swirl', swirlArt(c.kit), { cutout: true }), rot = Math.atan2(-dz, dx);
+  for (let i = 0; i < 3; i++) c.lay(sw, x - dx * (0.9 + i * 1.5), z - dz * (0.9 + i * 1.5), 2.2, 1.3 + i * 0.5, rot + (i - 1) * 0.25, null, WHITE, 0.014 + i * 0.001);
+  c.solid(x - 0.1, z - 0.1, x + 0.1, z + 0.1); c.reserve(x, z, 0.5);
+}
+/** What a lawn has on it after: small things, of every colour, everywhere, and a heap of them. */
+export function debris(c, n = 60) {
+  const { W, D, R } = c, cols = [[0.66, 0.16, 0.12], [0.16, 0.28, 0.5], [0.9, 0.85, 0.7], [0.85, 0.68, 0.2], [0.2, 0.2, 0.22], [0.55, 0.4, 0.25]];
+  for (let i = 0; i < n; i++) { const x = R.range(-W / 2 + 0.6, W / 2 - 0.6), z = R.range(-D / 2 + 0.6, D / 2 - 0.6), a = R.range(0.04, 0.16), b = R.range(0.04, 0.22); c.flat.box(x - a, 0, z - b, x + a, R.range(0.015, 0.09), z + b, R.pick(cols), { skip: '-y' }); }
+  for (let i = 0; i < 8; i++) c.paper(R.range(-W / 2 + 0.6, W / 2 - 0.6), R.range(-D / 2 + 0.6, D / 2 - 0.6));
+}
+
 /** A fire that is not the visitor's: two crossed sheets of it, alight for as long as anybody is near, and what it does to the ceiling. */
 export function blaze(c, x, y, z, size = 1) {
   const tex = c.kit.tex.custom('suburb:flame', 32, 48, (g, w, h) => { for (const [col, k] of [['#d8421c', 1], ['#f08a1e', 0.72], ['#ffd65a', 0.42]]) { g.fillStyle = col; for (const [fx, fw, fh] of [[8, 7, 34], [16, 9, 46], [24, 7, 30], [12, 5, 22], [21, 5, 38]]) { g.beginPath(); g.moveTo(fx - fw * k, h); g.quadraticCurveTo(fx - fw * k, h - fh * k * 0.5, fx, h - fh * k); g.quadraticCurveTo(fx + fw * k, h - fh * k * 0.5, fx + fw * k, h); g.fill(); } } }, { clamp: true });
