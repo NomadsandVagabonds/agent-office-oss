@@ -11,6 +11,7 @@
 //   adverts    each is a link into the level
 //   the rest   a figure that moves when it is off screen, a page that gets
 //              longer at the bottom, a wall that gives when it is held
+import { DIFFICULTIES, cleanDifficulty, difficultyOf, difficultyPerk } from './core/difficulty.mjs';
 import { mount, drawLogo, voidTile } from './art.js';
 import { rollName, cleanName, cleanMessage, cleanEntry } from './core/book.mjs';
 import { GENDER, SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, SKIN, HAIR_COLORS, OUTFIT_COLORS, hashId, humanGenderDefaults, resolveLook, sanitizeLookPatch } from './core/look.mjs';
@@ -26,6 +27,18 @@ const day = (at) => new Date(at).toLocaleDateString('en-GB', { day: 'numeric', m
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* until the page closes */ } } };
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const PLAY = './play';
+const difficultyField = $('difficulty');
+for (const d of DIFFICULTIES) {
+  const option = el('option', '', `${d.label}${d.id === 'easy' ? ' (recommended)' : ''}`);
+  option.value = d.id; difficultyField.append(option);
+}
+difficultyField.value = cleanDifficulty(store.get('office.backrooms')?.difficulty);
+const difficultyNote = () => { $('difficulty-note').textContent = difficultyOf(difficultyField.value).note; };
+difficultyField.addEventListener('change', () => {
+  store.set('office.backrooms', { ...store.get('office.backrooms'), difficulty: cleanDifficulty(difficultyField.value) });
+  difficultyNote(); refreshPassSummary(); syncStudioUI();
+});
+difficultyNote();
 
 // a link to a tape from before there was a front page goes straight to the level
 if (new URLSearchParams(location.search).has('tape')) location.replace(PLAY + location.search);
@@ -207,7 +220,7 @@ function drawBarcode(seedText) {
 }
 
 function refreshPassSummary() {
-  const p = resolvePerk(me.perk);
+  const p = difficultyPerk(resolvePerk(me.perk), difficultyField.value);
   const mode = $('pass-mode');
   mode.textContent = me.customLook ? 'CUSTOM EMPLOYEE PASS' : 'RANDOM VISITOR (DEFAULT)';
   mode.classList.toggle('custom', me.customLook);
@@ -597,7 +610,7 @@ function buildStudioOnce() {
 syncStudioUI = () => {
   if (!studio.built) return;
   const look = activeLook();
-  const perk = resolvePerk(me.perk);
+  const perk = difficultyPerk(resolvePerk(me.perk), difficultyField.value);
 
   $('card-code').textContent = perk.code;
   $('card-vitals').replaceChildren(
@@ -745,20 +758,29 @@ function guests(latest) {
 }
 function scores(top, none = 'Nobody yet.') {
   const body = $('scores').tBodies[0];
-  if (!top.length) { body.replaceChildren(el('tr', '', Object.assign(el('td', 'empty', none), { colSpan: 6 }))); return; }
+  if (!top.length) { body.replaceChildren(el('tr', '', Object.assign(el('td', 'empty', none), { colSpan: 7 }))); return; }
   body.replaceChildren(...top.slice(0, 10).map((e, i) => {
     // (no way into somebody else's building from here: the number of a tape is its owner's to give out — the card they came out with has it)
     const td = (cls, text) => el('td', cls, text);
-    return el('tr', i ? '' : 'first', td('n', String(i + 1)), td('', e.name), td('n', num(e.score)), td('n', clock(e.seconds)), td('n', String(e.batteries)), td('n', String(e.hearts)));
+    return el('tr', i ? '' : 'first', td('n', String(i + 1)), td('', e.name), td('', e.difficulty ? difficultyOf(e.difficulty).label : 'Original'), td('n', num(e.score)), td('n', clock(e.seconds)), td('n', String(e.batteries)), td('n', String(e.hearts)));
   }));
 }
 guests([]);
+const scoreDifficulty = $('score-difficulty');
+for (const d of DIFFICULTIES.filter(d => d.multiplier)) {
+  const option = el('option', '', d.label); option.value = d.id; scoreDifficulty.append(option);
+}
+let bookRequest = 0;
+scoreDifficulty.addEventListener('change', () => book());
 async function book() {
+  const request = ++bookRequest;
   let data = null;
   try {
-    const res = await fetch('./api/book', { headers: { accept: 'application/json' } });
+    const bookUrl = './api/book' + (scoreDifficulty.value ? '?difficulty=' + encodeURIComponent(scoreDifficulty.value) : '');
+    const res = await fetch(bookUrl, { headers: { accept: 'application/json' } });
     if (res.ok) data = await res.json();
   } catch { /* no book: this browser's own record, then */ }
+  if (request !== bookRequest) return;
   if (!data || !data.ok) { scores([], mine.best ? `Best on this computer: ${num(mine.best)}` : 'Nobody yet.'); return; }
   counter(data.counter);
   scores((data.top || []).map(cleanEntry).filter(Boolean));

@@ -1,5 +1,6 @@
 // The camcorder's menu. It owns only its controls: pausing time, applying the
 // settings and ending a visit belong to index.js, not to this view.
+import { DIFFICULTIES } from '/core/difficulty.mjs';
 import { h } from '../ui/dom.js';
 import { MENU_CSS } from './menu-style.js';
 import { BACKROOMS_DEFAULTS as DEFAULTS } from '/core/backrooms-settings.mjs';
@@ -88,9 +89,12 @@ export function createMenu({ host, settings = {}, furniture = false, onRequestOp
   fields.set('vhs', { input: picture });
   picture.addEventListener('change', () => change('vhs', Number(picture.value)));
   settingsPage.append(h('div.br-menu-setting', h('label', { htmlFor: picture.id }, 'Picture'), picture));
-  const difficulty = h('select', { id: `${prefix}-difficulty`, disabled: true, 'aria-describedby': `${prefix}-difficulty-note` }, h('option', 'Normal'));
-  settingsPage.append(h('div.br-menu-setting.is-future', h('label', { htmlFor: difficulty.id }, 'Difficulty'), difficulty,
-    h('small', { id: `${prefix}-difficulty-note` }, 'More difficulties are coming later.')));
+  const difficulty = h('select', { id: `${prefix}-difficulty`, 'aria-describedby': `${prefix}-difficulty-note` },
+    DIFFICULTIES.map(d => h('option', { value: d.id }, d.label + (d.id === 'easy' ? ' (recommended)' : ''))));
+  const difficultyNote = h('small', { id: `${prefix}-difficulty-note` });
+  fields.set('difficulty', { input: difficulty });
+  difficulty.addEventListener('change', () => change('difficulty', difficulty.value));
+  settingsPage.append(h('div.br-menu-setting', h('label', { htmlFor: difficulty.id }, 'Difficulty'), difficulty, difficultyNote));
 
   function syncField(key) {
     const field = fields.get(key); if (!field) return;
@@ -102,6 +106,9 @@ export function createMenu({ host, settings = {}, furniture = false, onRequestOp
   function update(next = {}) {
     values = { ...values, ...next };
     for (const key of fields.keys()) syncField(key);
+    difficultyNote.textContent = values.scoreEligible === false
+      ? 'UNSCORED RECORDING. Discoveries still kept. Rooms and supplies change in the next part.'
+      : 'Changing difficulty cancels this recording’s score, even if you change it back. Rooms and supplies change in the next part.';
   }
   const pages = { main, controls, settings: settingsPage, giveup: confirm };
   function show(next) {

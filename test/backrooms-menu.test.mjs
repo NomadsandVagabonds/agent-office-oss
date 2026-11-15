@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 // Resolve the browser import-map root to the same local core module in Node.
 const source = readFileSync(new URL('../public/world/backrooms/menu.js', import.meta.url), 'utf8')
+  .replace("'/core/difficulty.mjs'", JSON.stringify(new URL('../core/difficulty.mjs', import.meta.url).href))
   .replace("'/core/backrooms-settings.mjs'", JSON.stringify(new URL('../core/backrooms-settings.mjs', import.meta.url).href))
   .replace("'../ui/dom.js'", JSON.stringify(new URL('../public/world/ui/dom.js', import.meta.url).href))
   .replace("'./menu-style.js'", JSON.stringify(new URL('../public/world/backrooms/menu-style.js', import.meta.url).href));
@@ -85,7 +86,7 @@ test('settings emit typed values immediately, while restoring preferences emits 
   mute.checked = false; mute.emit('change'); assert.deepEqual(h.calls.changed.at(-1), ['mute', false]);
   const [picture, difficulty] = h.menu.el.querySelectorAll('select');
   picture.value = '0'; picture.emit('change'); assert.deepEqual(h.calls.changed.at(-1), ['vhs', 0]);
-  assert.equal(difficulty.disabled, true);
+  assert.equal(difficulty.disabled, false);
   h.menu.update({ musicVolume: .1, invertY: false });
   assert.equal(music.getAttribute('aria-valuetext'), '10%'); assert.equal(invert.checked, false); assert.equal(h.calls.changed.length, 3);
   inputs[5].checked = true; inputs[5].emit('change'); assert.deepEqual(h.calls.changed.at(-1), ['steadyLighting', true]);
@@ -112,4 +113,16 @@ test('Give up needs its own explicit confirmation and can be backed out of with 
   h.menu.handleKey({ key: 'Escape', target: h.document.activeElement });
   assert.equal(h.calls.quit, 0); assert.equal(h.find('br-menu-confirm').hidden, true);
   h.choices[3].emit('click'); h.find('br-menu-confirm-end').emit('click'); assert.equal(h.calls.quit, 1);
+});
+
+
+test('difficulty selector offers five modes, warns before changes and shows permanent unscored state', t => {
+  const h = setup(t, { difficulty: 'easy', scoreEligible: true });
+  const field = h.menu.el.querySelectorAll('select')[1];
+  assert.equal(field.value, 'easy'); assert.equal(field.children.length, 5);
+  assert.match(h.menu.el.textContent, /even if you change it back/);
+  field.value = 'hard'; field.emit('change');
+  assert.deepEqual(h.calls.changed.at(-1), ['difficulty', 'hard']);
+  h.menu.update({ difficulty: 'easy', scoreEligible: false });
+  assert.match(h.menu.el.textContent, /UNSCORED RECORDING/);
 });

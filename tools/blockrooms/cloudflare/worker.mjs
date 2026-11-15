@@ -2,6 +2,7 @@
 // function has this key. No browser credentials, raw addresses or cookies
 // need to cross from Vercel to this Worker.
 import { createD1Store } from './book-d1.mjs';
+import { validDifficulty } from '../../../core/difficulty.mjs';
 import { cleanEntry } from '../../../core/book.mjs';
 
 const json = (status, body) => new Response(JSON.stringify(body), {
@@ -47,7 +48,9 @@ export function createWorker(makeStore = createD1Store) {
       try {
         let result;
         switch (body.action) {
-          case 'read': result = await store.read(); break;
+          case 'read':
+            if (body.difficulty && body.difficulty !== 'original' && (!validDifficulty(body.difficulty) || body.difficulty === 'tourist')) return json(400, { ok: false });
+            result = await store.read(body.difficulty || ''); break;
           case 'count':
             if (!['hit', 'in'].includes(body.kind) || !hash(body.visitor)) return json(400, { ok: false });
             result = await store.count(body.kind, body.visitor); break;

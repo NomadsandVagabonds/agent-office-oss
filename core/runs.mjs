@@ -28,6 +28,8 @@
 // core/game.mjs says (`payFor`), and the jar is paid what that beats the
 // office's best by.
 
+import { cleanDifficulty, scoreEligible, scoreMultiplier } from './difficulty.mjs';
+
 /** How a visit can end. */
 export const ENDINGS = Object.freeze(['exit', 'caught', 'battery', 'quit']);
 
@@ -67,6 +69,11 @@ export function cleanRun(report = {}) {
     batteries: out ? whole(r.batteries, 0, 200) : 0,
     card: out && r.card === true,
     hearts,
+    ...((r.difficulty !== undefined || r.scoring !== undefined || r.difficultyChanged !== undefined || r.ranked !== undefined) ? {
+      difficulty: cleanDifficulty(r.difficulty, 'training-wheels'), scoring: 1,
+      difficultyChanged: r.difficultyChanged === true,
+      ranked: r.ranked !== false && r.difficultyChanged !== true && r.difficulty !== 'tourist',
+    } : {}),
     // (of the building itself, for whoever plays its tape back: which make of the place it was, and whether the mascot was in it)
     ...(edition(r.edition) ? { edition: edition(r.edition) } : {}),
     ...(typeof r.mascot === 'boolean' ? { mascot: r.mascot } : {}),
@@ -99,7 +106,10 @@ export function scoreRun(run) {
     line('battery', run.batteries, POINTS.battery);
     if (run.hearts) line('heart', run.hearts.left, POINTS.heart);
   }
-  return { total: lines.reduce((n, l) => n + l.points, 0), lines };
+  const base = lines.reduce((n, l) => n + l.points, 0), multiplier = scoreMultiplier(run);
+  const total = Math.floor(base * multiplier);
+  if (run.difficulty || !scoreEligible(run)) lines.push({ id: 'difficulty', count: multiplier, points: total - base });
+  return { total, lines };
 }
 
 /**
@@ -117,7 +127,7 @@ export function cleanRecord(record) {
     tapes: (Array.isArray(r.tapes) ? r.tapes : []).filter((t) => t && typeof t.seed === 'string' && t.seed).slice(0, TAPES_KEPT)
       .map((t) => ({ seed: t.seed.slice(0, 80), at: Number(t.at) || 0, by: String(t.by || '').slice(0, 60), score: whole(t.score, 0, 1e9), seconds: whole(t.seconds, 0, 86400),
         ...(whole(t.plays, 0, 999) ? { plays: whole(t.plays, 0, 999) } : {}), ...(edition(t.edition) ? { edition: edition(t.edition) } : {}),
-        ...(typeof t.mascot === 'boolean' ? { mascot: t.mascot } : {}) })),
+        ...(typeof t.mascot === 'boolean' ? { mascot: t.mascot } : {}), ...(t.difficulty ? { difficulty: cleanDifficulty(t.difficulty), ranked: t.ranked !== false } : {}) })),
   };
 }
 
@@ -145,7 +155,8 @@ export function settleRun(record, run, { at, by = '' } = {}) {
     return {
       record: next,
       card: {
-        reason: run.reason, score: total, lines, seconds: run.seconds, replay: true,
+        reason: run.reason, score: total, lines, seconds: run.seconds,
+        ...(run.difficulty ? { difficulty: run.difficulty, ranked: scoreEligible(run), difficultyChanged: !!run.difficultyChanged } : {}), replay: true,
         best: { score: record.best, was: record.best, beaten: false },
         fresh, seen: count(next), tape: { kept: true, seed: run.seed, plays: tape.plays, first: { at: tape.at, by: tape.by, score: tape.score } },
         runs: { n: record.runs, out: record.out },
@@ -155,12 +166,13 @@ export function settleRun(record, run, { at, by = '' } = {}) {
   const keep = out && run.seed !== '';
   const next = {
     runs: record.runs + 1, out: record.out + (out ? 1 : 0), best: Math.max(record.best, total), ...seen,
-    tapes: keep ? [{ seed: run.seed, at, by: String(by).slice(0, 60), score: total, seconds: run.seconds, ...(run.edition ? { edition: run.edition } : {}), ...(typeof run.mascot === 'boolean' ? { mascot: run.mascot } : {}) }, ...record.tapes].slice(0, TAPES_KEPT) : record.tapes,
+    tapes: keep ? [{ seed: run.seed, at, by: String(by).slice(0, 60), score: total, seconds: run.seconds, ...(run.edition ? { edition: run.edition } : {}), ...(typeof run.mascot === 'boolean' ? { mascot: run.mascot } : {}), ...(run.difficulty ? { difficulty: run.difficulty, ranked: scoreEligible(run) } : {}) }, ...record.tapes].slice(0, TAPES_KEPT) : record.tapes,
   };
   return {
     record: next,
     card: {
       reason: run.reason, score: total, lines, seconds: run.seconds,
+        ...(run.difficulty ? { difficulty: run.difficulty, ranked: scoreEligible(run), difficultyChanged: !!run.difficultyChanged } : {}),
       best: { score: next.best, was: record.best, beaten: total > record.best },
       fresh, seen: count(next),
       tape: keep ? { kept: true, seed: run.seed } : { kept: false },

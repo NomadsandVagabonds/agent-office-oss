@@ -13,6 +13,7 @@ const swaps={
  './doorleaf.js':'export const hangDoors=()=>({update(){}});',
 };
 for(const [name,stub]of Object.entries(swaps))source=source.replace(`'${name}'`,JSON.stringify(url(stub)));
+source=source.replace("'../../../core/difficulty.mjs'",JSON.stringify(new URL('../core/difficulty.mjs',import.meta.url).href));
 const {createStalkers}=await import(url(source));
 function setup(coop){
  const visitors=[{id:'a',x:0,z:0,health:createHealth()},{id:'b',x:20,z:0,health:createHealth()}];

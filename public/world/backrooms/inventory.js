@@ -9,6 +9,7 @@ import { SNIP_TUNING } from './melee.js';
 import { toLocal, makeRng, ARCHETYPES, STASH } from './gen.js';
 import { planSupplies, wantedByRooms } from './supplies.js';
 import { CAST, castFor } from './cast.js';
+import { difficultyOf } from '/core/difficulty.mjs';
 import { starterLoadout } from '/core/perks.mjs';
 
 const MESSAGES = {
@@ -19,7 +20,7 @@ const MESSAGES = {
   'no-mark-space': 'No dry, clear floor here', 'no-drop-space': 'No clear place to set this down',
   'no-mark': 'No dry, clear floor here', 'no-space': 'No clear place to set this down',
   'no-use': 'Nothing to use this on here', 'health-unavailable': 'Keep this for when you need it',
-  'full-health': 'Health is full', 'snack-cap': 'Snacks cannot restore past half health',
+  'snacks-disabled': 'No snacks on this difficulty', 'full-health': 'Health is full', 'snack-cap': 'Snacks cannot restore past half health',
   dead: 'Too late', depleted: 'The camera has stopped',
   unavailable: 'Cannot do that right now',
   'missing-input': 'Choose two ingredients', 'stale-input': 'That item is no longer in the pocket',
@@ -40,7 +41,7 @@ const MESSAGES = {
  * @param {{canAct?:Function, onOpen?:Function, review?:boolean, perk?:object, seed?:string}} [o]  review: one of everything on the floor where you land,
  *        for looking at them (the dev page's &supplies=1). A visit has only what its seed left lying about, plus any chosen department kit.
  */
-export function createInventory(env, { canAct = () => true, onOpen = () => {}, review = false, perk, seed } = {}) {
+export function createInventory(env, { canAct = () => true, onOpen = () => {}, review = false, perk, seed, difficulty = () => 'training-wheels' } = {}) {
   const size = perk?.pockets ?? 6;
   const model = createModel({
     size,
@@ -51,7 +52,8 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
   }), floors = new Map(), retired = new WeakSet();
   if (!review && perk) {
     for (const starter of starterLoadout(perk.id, seed)) {
-      const added = model.add(starter);
+      const allowed = starter.type === 'snack' && difficultyOf(difficulty()).snack === 0 ? { ...starter, type: 'paper', quantity: 3 } : starter;
+      const added = model.add(allowed);
       if (added.ok && starter.mounted) model.mount(added.item.id);
     }
   }
@@ -273,6 +275,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
   function leftByRooms(floor) {
     const { env, physical, id } = floor;
     for (const rt of env.world.rooms) (rt.left || []).forEach((l, i) => {
+      if (l.type === 'snack' && env.level.difficulty && difficultyOf(env.level.difficulty).snack === 0) return;
       const key = id(`left:${rt.id}:${i}`), make = () => makeItem(l.type, key, { quantity: l.quantity, charge: l.charge });
       let ok = false;
       try {

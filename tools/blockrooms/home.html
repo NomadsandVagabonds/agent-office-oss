@@ -100,6 +100,11 @@
     </table>
   </div>
 
+  <div class="signin">
+    <label for="difficulty">DIFFICULTY:</label>
+    <select id="difficulty" aria-describedby="difficulty-note"></select>
+    <p id="difficulty-note"></p>
+  </div>
   <form class="signin" id="signin">
     <label for="name">NAME:</label>
     <input id="name" type="text" maxlength="16" size="17" autocomplete="nickname" autocapitalize="words" spellcheck="false">
@@ -328,12 +333,15 @@
 
 <section class="zone ledger" id="book">
   <div class="cols">
-    <div class="panel white">
+    <div class="panel white score-panel">
       <h2><i data-sprite="star" data-fx="spin" data-scale="2"></i> High scores</h2>
+      <label for="score-difficulty">Show:</label> <select id="score-difficulty"><option value="">All difficulties</option><option value="original">Original scores</option></select>
+      <div class="score-scroll" role="region" aria-label="High scores" tabindex="0">
       <table class="scores" id="scores">
-        <thead><tr><th>#</th><th>Name</th><th>Points</th><th>Time</th><th title="spare batteries">Batt.</th><th title="hearts left">&hearts;</th></tr></thead>
+        <thead><tr><th>#</th><th>Name</th><th>Difficulty</th><th>Points</th><th>Time</th><th title="spare batteries">Batt.</th><th title="hearts left">&hearts;</th></tr></thead>
         <tbody><tr><td colspan="7" class="empty">Loading&hellip;</td></tr></tbody>
       </table>
+      </div>
     </div>
     <div class="panel white">
       <h2><i data-sprite="envelope" data-scale="2"></i> Guestbook</h2>

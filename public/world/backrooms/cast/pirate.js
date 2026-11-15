@@ -501,7 +501,7 @@ export function create(c) {
   function advance(p, step) {
     const to = goal(p), bx = p.x, bz = p.z;
     if (!to) { p.shove = null; return 0; }
-    const got = p.got = walk.go(p, to, p.speed * step, to.keep);
+    const got = p.got = walk.go(p, to, p.speed * (c.speedScale ?? 1) * step, to.keep);
     if (!hiddenAt(p.x, p.z, p.r + 0.3)) { p.x = bx; p.z = bz; return 0; }          // it would have walked into view: it waits instead
     // a fire it can see is as far as it goes that way (cast/fire.rule.js): it stands off, and to hunt.js that is a way it cannot get by
     if (tooNear(p, c.fire(p.x, p.z))) { p.x = bx; p.z = bz; p.got = { went: 0, there: false, cannot: true, door: null }; p.handle = null; p.shove = null; return 0; }
