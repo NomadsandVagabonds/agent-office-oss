@@ -448,7 +448,12 @@ test('in an oddity a coin has a place of its own, where the builder leaves the f
   };
   for (let i = 0; i < 250; i++) check(withLoot(`deck-${i}`));
   // (a room made for a kind of floor that is still being built — themes.js `dealt: false` — is in none of those buildings either)
-  for (const arch of DECK) if (!arch.planned && !arch.headline && FINISHED.some((t) => atHome(arch, t) > 0)) assert.ok(seen.get(arch.id) >= 5, `${arch.id}: only ${seen.get(arch.id) || 0} coins in 250 buildings`);
+  for (const arch of DECK) if (!arch.planned && !arch.headline && FINISHED.some((t) => atHome(arch, t) > 0)) {
+    // Growing the deck can make an existing room rarer in this fixed sample.
+    // Exercise its actual generated stash directly instead of testing its deal frequency here.
+    for (let i = 0; i < 20 && (seen.get(arch.id) || 0) < 5; i++) check(withLoot(`stash-${arch.id}-${i}`, ALL, { only: arch.id }));
+    assert.ok(seen.get(arch.id) >= 5, `${arch.id}: fewer than five generated coin placements checked`);
+  }
   // a room that is never dealt by chance (placed by the plan, or from the news) is not in those buildings at all: ask for
   // each by name, and hold where its coin goes to the same
   for (const arch of DECK) if (arch.planned || arch.headline) {
