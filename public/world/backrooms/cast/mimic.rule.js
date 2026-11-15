@@ -24,6 +24,7 @@ export const MIMIC = Object.freeze({
   facing: 0.5,           // …and "at it" is this much of your heading, or more
   opens: 0.45,           // seconds from door to open mouth
   grips: 0.9,            // seconds it has you before it costs anything
+  held: 1.35,            // metres from its face it holds you at: far enough to see what has you, and the wall round it
   hurts: 2,              // hearts (the deck's `caught`)
   lets: 0.7,             // seconds its arms take to go back in, afterwards
   cue: Object.freeze([1.4, 5.5]),      // seconds between shivers: with you at its face · with you at `far`

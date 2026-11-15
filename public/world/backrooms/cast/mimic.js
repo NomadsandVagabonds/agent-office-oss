@@ -82,16 +82,18 @@ export function create(c) {
     const nx = nw.x - cw.x, nz = nw.z - cw.z, ux = uw.x - cw.x, uz = uw.z - cw.z, y0 = env.world.floorY(cw.x + nx * 0.5, cw.z + nz * 0.5);
     // its arms: links of the same black, each a little out of true with the last
     const arms = new THREE.Group(), cube = kit.own(new THREE.BoxGeometry(1, 1, 1));
-    const grey = kit.own(new THREE.MeshBasicMaterial({ color: 0x1b1b1f }));
+    // …and not quite there: every link is a different grey of static from one frame to the next, so that they can be
+    // made out against the black they come from
+    const snow = [0x050506, 0x1b1b1f, 0x3a3a40, 0x77777f, 0xc9c9d2].map((hex) => kit.own(new THREE.MeshBasicMaterial({ color: hex })));
     const links = [];
     for (let i = 0; i < ARMS; i++) {
       const arm = { across: (i / (ARMS - 1) - 0.5) * (MIMIC.w - 0.5), up: 0.5 + ((i * 5) % ARMS) / ARMS * 1.2, phase: i * 1.7, late: (i % 3) * 0.08, cubes: [] };
-      for (let k = 0; k < LINKS; k++) { const m = new THREE.Mesh(cube, (i + k) % 5 === 0 ? grey : black); arms.add(m); arm.cubes.push(m); }
+      for (let k = 0; k < LINKS; k++) { const m = new THREE.Mesh(cube, snow[0]); arms.add(m); arm.cubes.push(m); }
       links.push(arm);
     }
     arms.visible = false; c.add(arms);
 
-    door = { rt, holder, leaves, frame, hole, arms, links, x: cw.x, z: cw.z, nx, nz, ux, uz, y0, Ul: U, still: true,
+    door = { rt, holder, leaves, frame, hole, arms, links, snow, x: cw.x, z: cw.z, nx, nz, ux, uz, y0, Ul: U, still: true,
       where: (x, z) => ({ across: (x - cw.x) * ux + (z - cw.z) * uz, out: (x - cw.x) * nx + (z - cw.z) * nz }),
       point: (across, out) => ({ x: cw.x + ux * across + nx * out, z: cw.z + uz * across + nz * out }) };
     // E, as on any pair: half a metre in front of it
@@ -130,10 +132,13 @@ export function create(c) {
     reach += (want - reach) * (1 - Math.exp(-18 * dt));
     d.arms.visible = reach > 0.02 && c.drawn({ x: d.x, z: d.z });
     if (!d.arms.visible) return;
-    const eye = d.y0 + 1.0;
+    // they take hold of the body, not the lens: round the chest and the arms, stopping short of where the camcorder is held,
+    // so that from behind it they are seen arriving
+    const chest = d.y0 + 0.95, gap = Math.hypot(me.x - d.x, me.z - d.z) || 1, short = Math.max(0, 1 - 0.32 / gap);
     for (const arm of d.links) {
       const from = d.point(arm.across, 0.02), r = Math.max(0, Math.min(1, reach * 1.15 - arm.late));
-      const tx = me.x + d.ux * arm.across * 0.18, tz = me.z + d.uz * arm.across * 0.18, ty = eye + (arm.up - 1.1) * 0.5;
+      const side = Math.sign(arm.across) || 1, wrap = 0.2 + Math.abs(arm.across) * 0.12;
+      const tx = from.x + (me.x + d.ux * side * wrap - from.x) * short, tz = from.z + (me.z + d.uz * side * wrap - from.z) * short, ty = chest + (arm.up - 1.1) * 0.45;
       for (let k = 0; k < LINKS; k++) {
         const t = ((k + 1) / LINKS) * r, sag = Math.sin(t * Math.PI) * 0.22, wave = Math.sin(clock * 9 + arm.phase + k * 0.8) * 0.05 * (1 - t * 0.5);
         const jx = (Math.random() < 0.12 ? (Math.random() - 0.5) * 0.09 : 0), jy = (Math.random() < 0.12 ? (Math.random() - 0.5) * 0.09 : 0);
@@ -143,6 +148,7 @@ export function create(c) {
         // (in voxels: every link snapped to the same grid as everything else down here)
         m.position.set(Math.round(x / 0.03) * 0.03, Math.round(y / 0.03) * 0.03, Math.round(z / 0.03) * 0.03);
         m.scale.setScalar(size); m.visible = r > 0.02 && Math.random() > 0.04;
+        const roll = Math.random(); m.material = d.snow[roll < 0.42 ? 0 : roll < 0.7 ? 1 : roll < 0.88 ? 2 : roll < 0.97 ? 3 : 4];
       }
     }
   }
@@ -165,10 +171,10 @@ export function create(c) {
       if (s.mode === 'opening' || holds(s)) {
         // it has them: they are going nowhere, and they are brought up to it
         me.slow = Math.min(me.slow, 0.1); me.vx *= Math.exp(-15 * dt); me.vz *= Math.exp(-15 * dt);
-        const to = d.point(Math.max(-0.5, Math.min(0.5, w.across)), s.mode === 'taking' ? 0.12 : 0.8), k = 1 - Math.exp(-(s.mode === 'taking' ? 5 : 3.2) * dt);
+        const to = d.point(Math.max(-0.5, Math.min(0.5, w.across)), s.mode === 'taking' ? 0.12 : MIMIC.held), k = 1 - Math.exp(-(s.mode === 'taking' ? 5 : 3.2) * dt);
         const x = me.x + (to.x - me.x) * k, z = me.z + (to.z - me.z) * k;
         if (s.mode === 'taking' || env.world.free(x, z, 0.22)) { me.x = x; me.z = z; }
-        if (s.mode === 'taking' || !hunted(me)) me.yaw += turnTo(me.yaw, Math.atan2(-(d.x - me.x), -(d.z - me.z))) * (1 - Math.exp(-6 * dt));
+        if (s.mode === 'taking' || !hunted(me)) { me.yaw += turnTo(me.yaw, Math.atan2(-(d.x - me.x), -(d.z - me.z))) * (1 - Math.exp(-6 * dt)); me.pitch += (-0.12 - me.pitch) * (1 - Math.exp(-5 * dt)); }
         env.interfere(s.mode === 'taking' ? 1 : 0.35);
       }
       if (s.strike) {
