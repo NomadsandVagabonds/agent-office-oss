@@ -13,7 +13,7 @@ import { MOTH, resting, flits } from '../public/world/backrooms/cast/moth.rule.j
 import { PORTER, mopping, minds, facesYou } from '../public/world/backrooms/cast/porter.rule.js';
 import { createWalk, clearOfAbsorbed, ABSORBED_GAP } from '../public/world/backrooms/cast/walk.js';
 import { TONER, perched, hatchedBrood, isQuiet, weaveOffset, stepToner, strikeToner } from '../public/world/backrooms/cast/toner.rule.js';
-import { MIMIC, shut, mimics, let_, took, holds, open, inFront, walksInto, cueGap, mimicSpots } from '../public/world/backrooms/cast/mimic.rule.js';
+import { OTHER_DOOR, shut, pretends, let_, took, holds, open, inFront, walksInto, cueGap, doorSpots } from '../public/world/backrooms/cast/other-door.rule.js';
 import { makeRng } from '../public/world/backrooms/gen.js';
 import { FIRE_WAYS, FIRE_FEAR, calm, afraid, tooNear } from '../public/world/backrooms/cast/fire.rule.js';
 import { BLACKOUT, createBlackoutState, stepBlackout } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
@@ -536,7 +536,7 @@ test('the absorbed staff: a hold never turns the visitor\'s head while something
   assert.ok(TUG_SECONDS < A.holdDuration);
   // the ones this is for are the ones that hunt (the waste toner since it came: something dropping off the ceiling at
   // you is not a moment to have your head turned for you); the rest of the hold is as it was
-  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner', 'mimic']);
+  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner', 'other-door']);
   const held = SUNK.stepAbsorbed(SUNK.createAbsorbedState('wall'), { dt, dist: 0.5 });
   assert.ok(held.startedGrab && held.slow === A.slowFactor);
 });
@@ -759,77 +759,77 @@ test('the waste toner: hides on the ceiling clicking sonar, passes over crouch o
 
 test('the other door: walking past it is nothing; trying it, walking into it or standing in front of it opens it', () => {
   const away = { out: 3, across: 0, d: 3, moving: false, toward: 0, used: false, fire: false, rnd: 0.5 };
-  const steps = (s, secs, sense) => { const seen = []; for (let t = 0; t < secs - 1e-9; t += dt) { s = mimics(s, dt, sense); if (s.sprung) seen.push('sprung'); if (s.strike) seen.push('strike'); if (s.shook) seen.push('shook'); } return Object.assign(s, { events: seen }); };
+  const steps = (s, secs, sense) => { const seen = []; for (let t = 0; t < secs - 1e-9; t += dt) { s = pretends(s, dt, sense); if (s.sprung) seen.push('sprung'); if (s.strike) seen.push('strike'); if (s.shook) seen.push('shook'); } return Object.assign(s, { events: seen }); };
   // in its room for five minutes, never in front of it: a door
   let s = steps(shut(), 300, away);
   assert.equal(s.mode, 'door'); assert.ok(!s.events.includes('sprung'));
   // across its face at a walk, close: two metres of wall at 1.4 m/s is under the time it allows
-  assert.ok((MIMIC.w + 2 * MIMIC.aside) / 1.4 < MIMIC.linger * 0.7, 'crossing in front of it is not standing in front of it');
-  s = shut(); for (let x = -1.6; x <= 1.6; x += 1.4 * dt) { s = mimics(s, dt, { ...away, out: 0.7, across: x, moving: true, toward: 0 }); assert.equal(s.mode, 'door'); }
+  assert.ok((OTHER_DOOR.w + 2 * OTHER_DOOR.aside) / 1.4 < OTHER_DOOR.linger * 0.7, 'crossing in front of it is not standing in front of it');
+  s = shut(); for (let x = -1.6; x <= 1.6; x += 1.4 * dt) { s = pretends(s, dt, { ...away, out: 0.7, across: x, moving: true, toward: 0 }); assert.equal(s.mode, 'door'); }
   // …and walking along the wall itself, shoulder to it, is not walking into it
-  s = shut(); for (let x = -1.6; x <= 1.6; x += 1.4 * dt) { s = mimics(s, dt, { ...away, out: 0.3, across: x, moving: true, toward: 0.1 }); assert.equal(s.mode, 'door'); }
+  s = shut(); for (let x = -1.6; x <= 1.6; x += 1.4 * dt) { s = pretends(s, dt, { ...away, out: 0.3, across: x, moving: true, toward: 0.1 }); assert.equal(s.mode, 'door'); }
   // standing in front of it: it lets you look for a while, and then it does not
-  s = steps(shut(), MIMIC.linger - 0.2, { ...away, out: 0.9, d: 0.9 }); assert.equal(s.mode, 'door');
+  s = steps(shut(), OTHER_DOOR.linger - 0.2, { ...away, out: 0.9, d: 0.9 }); assert.equal(s.mode, 'door');
   s = steps(s, 0.3, { ...away, out: 0.9, d: 0.9 }); assert.ok(s.mode !== 'door' && s.events.includes('sprung'));
   // step away and come back: the count starts again
-  s = steps(shut(), MIMIC.linger - 0.3, { ...away, out: 0.9 }); s = mimics(s, dt, away); assert.equal(s.front, 0);
-  s = steps(s, MIMIC.linger - 0.3, { ...away, out: 0.9 }); assert.equal(s.mode, 'door');
+  s = steps(shut(), OTHER_DOOR.linger - 0.3, { ...away, out: 0.9 }); s = pretends(s, dt, away); assert.equal(s.front, 0);
+  s = steps(s, OTHER_DOOR.linger - 0.3, { ...away, out: 0.9 }); assert.equal(s.mode, 'door');
   // E, from where any pair is worked: at once
-  assert.ok(mimics(shut(), dt, { ...away, out: 1.1, used: true }).sprung);
+  assert.ok(pretends(shut(), dt, { ...away, out: 1.1, used: true }).sprung);
   // walking into it: at its face, moving, headed at it. Not standing at it, not backing into it, not beside it
   const at = { ...away, out: 0.4, d: 0.4, moving: true, toward: 1 };
-  assert.ok(walksInto(at) && mimics(shut(), dt, at).sprung);
-  assert.ok(!walksInto({ ...at, moving: false }) && !walksInto({ ...at, toward: -1 }) && !walksInto({ ...at, across: MIMIC.w / 2 + 0.4 }) && !walksInto({ ...at, out: 0.8 }));
-  assert.ok(inFront(0.5, 0) && !inFront(-0.5, 0) && !inFront(MIMIC.near + 0.1, 0) && !inFront(0.5, MIMIC.w), 'the other side of the wall is not in front of it');
+  assert.ok(walksInto(at) && pretends(shut(), dt, at).sprung);
+  assert.ok(!walksInto({ ...at, moving: false }) && !walksInto({ ...at, toward: -1 }) && !walksInto({ ...at, across: OTHER_DOOR.w / 2 + 0.4 }) && !walksInto({ ...at, out: 0.8 }));
+  assert.ok(inFront(0.5, 0) && !inFront(-0.5, 0) && !inFront(OTHER_DOOR.near + 0.1, 0) && !inFront(0.5, OTHER_DOOR.w), 'the other side of the wall is not in front of it');
 });
 
 test('the other door: it has you, it costs two hearts, and then it lets go and is a hole in the wall; or it does not let go', () => {
   const here = { out: 0.9, across: 0, d: 0.9, moving: false, toward: 0, used: true, fire: false, rnd: 0.5 };
-  let s = mimics(shut(), dt, here), strikes = 0, secs = 0;
+  let s = pretends(shut(), dt, here), strikes = 0, secs = 0;
   assert.ok(s.sprung && s.mode === 'opening' && open(s) && !holds(s));
-  for (; secs < 10 && !s.strike; secs += dt) s = mimics(s, dt, { ...here, used: false });
-  assert.ok(Math.abs(secs - (MIMIC.opens + MIMIC.grips)) < 0.1, `it struck after ${secs.toFixed(2)} s`);
+  for (; secs < 10 && !s.strike; secs += dt) s = pretends(s, dt, { ...here, used: false });
+  assert.ok(Math.abs(secs - (OTHER_DOOR.opens + OTHER_DOOR.grips)) < 0.1, `it struck after ${secs.toFixed(2)} s`);
   assert.ok(holds(s) && s.mode === 'gripping');
-  assert.equal(MIMIC.hurts, 2); assert.equal(CAST.find((m) => m.id === 'mimic').caught.hurt, MIMIC.hurts);
+  assert.equal(OTHER_DOOR.hurts, 2); assert.equal(CAST.find((m) => m.id === 'other-door').caught.hurt, OTHER_DOOR.hurts);
   // lived through: the arms go back in, and it is spent for good, whatever is done to it
   let free = let_(s); assert.ok(!holds(free) && open(free));
-  for (let t = 0; t < MIMIC.lets + 0.1; t += dt) { free = mimics(free, dt, here); if (free.strike) strikes++; }
+  for (let t = 0; t < OTHER_DOOR.lets + 0.1; t += dt) { free = pretends(free, dt, here); if (free.strike) strikes++; }
   assert.equal(free.mode, 'spent');
-  for (let t = 0; t < 60; t += dt) { free = mimics(free, dt, here); assert.ok(free.mode === 'spent' && !free.sprung && !free.strike && free.tremor === 0); }
+  for (let t = 0; t < 60; t += dt) { free = pretends(free, dt, here); assert.ok(free.mode === 'spent' && !free.sprung && !free.strike && free.tremor === 0); }
   assert.equal(strikes, 0, 'once');
   // the last of them: it keeps hold, and asks nothing more of anybody (the conductor ends the visit)
   let gone = took(s); assert.ok(holds(gone));
-  for (let t = 0; t < 30; t += dt) { gone = mimics(gone, dt, here); assert.ok(gone.mode === 'taking' && !gone.strike); }
+  for (let t = 0; t < 30; t += dt) { gone = pretends(gone, dt, here); assert.ok(gone.mode === 'taking' && !gone.strike); }
 });
 
 test('the other door: its one tell is a shiver, oftener and harder the nearer you are; and a fire in front of it stops it springing', () => {
   const sense = (d) => ({ out: 3, across: 2.5, d, moving: false, toward: 0, used: false, fire: false, rnd: 0.5 });
-  const count = (d, secs) => { let s = shut(), n = 0, hard = 0; for (let t = 0; t < secs; t += dt) { s = mimics(s, dt, sense(d)); if (s.shook) n++; hard = Math.max(hard, s.tremor); } return { n, hard }; };
-  const near = count(1.5, 120), mid = count(6, 120), far = count(MIMIC.far - 0.5, 120), gone = count(MIMIC.far + 3, 120);
+  const count = (d, secs) => { let s = shut(), n = 0, hard = 0; for (let t = 0; t < secs; t += dt) { s = pretends(s, dt, sense(d)); if (s.shook) n++; hard = Math.max(hard, s.tremor); } return { n, hard }; };
+  const near = count(1.5, 120), mid = count(6, 120), far = count(OTHER_DOOR.far - 0.5, 120), gone = count(OTHER_DOOR.far + 3, 120);
   assert.ok(near.n > mid.n && mid.n > far.n && far.n >= 15, `${near.n} / ${mid.n} / ${far.n} shivers in two minutes`);
   assert.ok(near.hard > mid.hard && mid.hard > far.hard && far.hard > 0.3 && near.hard <= 1);
   assert.equal(gone.n, 0, 'nobody near: nothing');
-  assert.ok(cueGap(0) === MIMIC.cue[0] && cueGap(MIMIC.far) === MIMIC.cue[1] && MIMIC.shiver < 0.3, 'a frame or two, every few seconds: something to catch, not something to miss');
+  assert.ok(cueGap(0) === OTHER_DOOR.cue[0] && cueGap(OTHER_DOOR.far) === OTHER_DOOR.cue[1] && OTHER_DOOR.shiver < 0.3, 'a frame or two, every few seconds: something to catch, not something to miss');
   // paper burning in front of it: stood at, tried, walked into, and it stays a door, flinching the whole time
   let s = shut(), flinches = 0;
-  for (let t = 0; t < 16; t += dt) { s = mimics(s, dt, { out: 0.4, across: 0, d: 0.4, moving: true, toward: 1, used: true, fire: true, rnd: 0.5 }); assert.ok(s.mode === 'door' && !s.sprung); if (s.shook) flinches++; }
-  assert.ok(flinches >= 16 / MIMIC.flinch - 2, `${flinches} flinches in sixteen seconds of fire`);
-  assert.equal(CAST.find((m) => m.id === 'mimic').fire, 'fears');
+  for (let t = 0; t < 16; t += dt) { s = pretends(s, dt, { out: 0.4, across: 0, d: 0.4, moving: true, toward: 1, used: true, fire: true, rnd: 0.5 }); assert.ok(s.mode === 'door' && !s.sprung); if (s.shook) flinches++; }
+  assert.ok(flinches >= 16 / OTHER_DOOR.flinch - 2, `${flinches} flinches in sixteen seconds of fire`);
+  assert.equal(CAST.find((m) => m.id === 'other-door').fire, 'fears');
   // the paper burns out with you still standing there: it has its patience back, from the start
   assert.equal(s.front, 0);
-  s = mimics(s, dt, { out: 0.9, across: 0, d: 0.9, moving: false, toward: 0, used: false, fire: false, rnd: 0.5 }); assert.equal(s.mode, 'door');
+  s = pretends(s, dt, { out: 0.9, across: 0, d: 0.9, moving: false, toward: 0, used: false, fire: false, rnd: 0.5 }); assert.equal(s.mode, 'door');
 });
 
 test('the other door: it hangs on a clear stretch of wall wide enough for a pair, the same place for the same seed', () => {
   const spans = { back: [[-3, 3]], front: [[-3, -1.2], [0.5, 3]], left: [[-1, 1]], right: [] };
-  const a = mimicSpots(spans, makeRng('m1')), b = mimicSpots(spans, makeRng('m1'));
+  const a = doorSpots(spans, makeRng('m1')), b = doorSpots(spans, makeRng('m1'));
   assert.deepEqual(a, b);
   assert.ok(a.length > 4 && a.every((p) => ['back', 'front'].includes(p.side)) && new Set(a.map((p) => p.side)).size === 2, 'only where there is room for it and its frame, and more than one place to try on each');
-  for (const p of a) { const [lo, hi] = spans[p.side].find(([x, y]) => p.at >= x && p.at <= y); assert.ok(p.at - MIMIC.w / 2 >= lo + 0.2 && p.at + MIMIC.w / 2 <= hi - 0.2); }
-  assert.deepEqual(mimicSpots({ back: [[0, 1.5]], front: [], left: [], right: [] }, makeRng('m2')), []);
+  for (const p of a) { const [lo, hi] = spans[p.side].find(([x, y]) => p.at >= x && p.at <= y); assert.ok(p.at - OTHER_DOOR.w / 2 >= lo + 0.2 && p.at + OTHER_DOOR.w / 2 <= hi - 0.2); }
+  assert.deepEqual(doorSpots({ back: [[0, 1.5]], front: [], left: [], right: [] }, makeRng('m2')), []);
   // it is a pair like the floor's own: no wider than doors are hung, and it is never where you land (it takes the lesson of doors for granted)
-  assert.ok(MIMIC.w <= DOORS.widest && MIMIC.h >= DOORS.lowest);
-  const line = CAST.find((m) => m.id === 'mimic');
+  assert.ok(OTHER_DOOR.w <= DOORS.widest && OTHER_DOOR.h >= DOORS.lowest);
+  const line = CAST.find((m) => m.id === 'other-door');
   assert.ok(line.needs.includes('doors') && line.home === 'room' && line.disposition === 'hunts');
-  for (const seed of SEEDS) { const { visit } = generateVisit(seed, office); for (const k of castFor(visit)) if (k.id === 'mimic') assert.ok(k.floor >= 1, `${seed}: it is on the part you land in`); }
+  for (const seed of SEEDS) { const { visit } = generateVisit(seed, office); for (const k of castFor(visit)) if (k.id === 'other-door') assert.ok(k.floor >= 1, `${seed}: it is on the part you land in`); }
 });
