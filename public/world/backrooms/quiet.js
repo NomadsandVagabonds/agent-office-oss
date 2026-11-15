@@ -97,7 +97,6 @@ const THEME_QUIET = {
   exec: { motifs: [['return', 4], ['bays', 2.5], ['dogleg', 1]], wrong: ['sunk', 'apertures'],
     mix: [[0.2, 0.3], [0.5, 0.6], [0.14, 0.2]], hall: [['nibs', 3], ['none', 2]], shapes: ['dais', 'soffit', 'ell', 'pinch', 'slopeceil'] },
   // the neighbourhood: lawns with nothing on them, a fence across one, the backs of a row of flats; a lawn a few steps down, or up
-  // (it has no line in TELLS until it is finished — themes.js `dealt: false` — since TELLS is every finished kind and no other)
   suburb: { motifs: [['fence', 4], ['flats', 3.2], ['dogleg', 0.8]], wrong: ['sunk', 'apertures'],
     mix: [[0.26, 0.34], [0.4, 0.48], [0.22, 0.3]], hall: [['baffle', 3], ['nibs', 2], ['none', 1.5]], shapes: ['pinch', 'ell', 'stairs', 'soffit', 'stepceil', 'slopeceil', 'pit', 'dais'] },
 };
@@ -105,7 +104,7 @@ const THEME_QUIET = {
  * What gives a kind of floor away: the layouts there are more of on it than on any other kind ('none': a room with
  * nothing built in it at all). For the tests, and for anybody describing one.
  */
-export const TELLS = Object.freeze({ yellow: ['parallel', 'dogleg'], archive: ['nibs', 'bays'], night: ['none'], fitout: ['colonnade', 'baffle'], exec: ['return'] });
+export const TELLS = Object.freeze({ yellow: ['parallel', 'dogleg'], archive: ['nibs', 'bays'], night: ['none'], fitout: ['colonnade', 'baffle'], exec: ['return'], suburb: ['fence', 'flats'] });
 
 /**
  * What the plain rooms of one floor are made of. Rolled once a floor, from its own source.
