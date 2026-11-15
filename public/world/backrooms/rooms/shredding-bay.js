@@ -116,11 +116,36 @@ export function build(c) {
     }
   };
 
+  // The building's camera, if she takes the last of somebody (docs/BACKROOMS.md, "The last three seconds"): the visitor's
+  // character is drawn to the mouth of the shredder, tipped in head first, and goes down into the rollers a jolt at a time.
+  let over = false;
+  c.rt.takes = (shot) => {
+    over = true;
+    const fig = shot.figure, yaw = rig.group.rotation.y, mouth = { x: roamer.x + Math.sin(yaw) * 0.62, z: roamer.z + Math.cos(yaw) * 0.62 };
+    c.env.play('shred', roamer.x, roamer.z, 14); c.env.play('whistle', roamer.x, roamer.z, 12);
+    let clock = 0, last = -1;
+    return (t, dt) => {
+      clock += dt;
+      try { rig.animate(dt, clock, false, true); } catch { /* she stands as she is */ }
+      if (!fig) return;
+      const k = Math.min(1, t / 0.8), e = k * k * (3 - 2 * k), fed = Math.max(0, Math.min(1, (t - 0.8) / (shot.seconds - 1.0)));
+      const jolt = Math.floor(fed * 9);                     // the rollers take it in bites
+      if (jolt !== last) { last = jolt; if (jolt > 0) c.env.play('crack', mouth.x, mouth.z, 9); }
+      fig.position.x = shot.x + (mouth.x - shot.x) * e + (Math.random() - 0.5) * 0.02 * fed;
+      fig.position.z = shot.z + (mouth.z - shot.z) * e + (Math.random() - 0.5) * 0.02 * fed;
+      fig.rotation.y = Math.atan2(mouth.x - shot.x, mouth.z - shot.z);
+      fig.rotation.x = 1.25 * e;                            // head first
+      fig.position.y = shot.y + 0.35 * e - 0.5 * (jolt / 9);
+      fig.scale.set(1, Math.max(0.02, 1 - jolt / 9), 1); fig.visible = jolt < 9;
+    };
+  };
+
   const roamer = c.env.denizens?.add({
     x: homeW.x, z: homeW.z, r: 0.34, tall: 1.45, heading: 0,
     group: rig.group,
     light: (rgb) => rig.light(rgb),
     update(dt, time, me) {
+      if (over) return;
       const inRoom = c.world.current() === c.rt;
       const dist = Math.hypot(me.x - roamer.x, me.z - roamer.z);
       const clearLine = c.world.los(roamer.x, roamer.z, me.x, me.z);
@@ -182,6 +207,7 @@ export function build(c) {
         if (res.caught) {
           // through the rollers: two hearts where there are hearts — and if that was not the last of them she lets go and wheels it home
           const hit = c.hurt(SHREDDER.hurts);
+          if (hit.ended) { over = true; return; }
           if (!hit.ended) { rule = releaseShredder(rule); me.pitch = 0; if (hit.landed) { c.env.hud.glitch(0.6); c.survived('retention-clerk'); } }
         }
       }
