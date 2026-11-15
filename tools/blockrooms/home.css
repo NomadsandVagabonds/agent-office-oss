@@ -340,7 +340,12 @@ kbd { display: inline-block; min-width: 1.6em; text-align: center; font: 700 12p
 }
 .studio-stage-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .stage-frame { background: #c9c4a6; border: 3px ridge #fff; padding: 7px; text-align: center; min-width: 0; }
-#char-stage { display: block; width: 192px; max-width: 100%; height: 216px; margin: 0 auto 6px; border: 3px inset #777b80; background: #d6c56c; cursor: pointer; image-rendering: pixelated; image-rendering: crisp-edges; touch-action: manipulation; }
+.stage-viewport { position: relative; width: 204px; max-width: 100%; height: 224px; margin: 0 auto 6px; border: 3px inset #777b80; background: #cfc27c; overflow: hidden; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.stage-viewport.dragging { cursor: grabbing; }
+#char-stage, #char-stage-3d { display: block; width: 100%; height: 100%; }
+#char-stage { image-rendering: pixelated; image-rendering: crisp-edges; }
+#char-stage-3d { position: absolute; inset: 0; }
+.stage-hint { position: absolute; left: 5px; bottom: 4px; padding: 1px 5px; font: 700 9px/1.2 var(--mono); color: #fffbe6; background: rgba(16, 18, 28, .58); border-radius: 2px; pointer-events: none; letter-spacing: .03em; }
 .stage-tools { display: flex; gap: 5px; justify-content: center; margin-bottom: 5px; flex-wrap: wrap; }
 .stage-tools button, .chip-row button, .fun-top button, .preset-strip button, .pin-btn, .studio-foot button, #perk-clear, .id-name-row button {
   font: 700 11.5px/1.15 Arial, Helvetica, sans-serif; background: #c9c4a6; color: #111; border: 2px outset #fff; padding: 4px 7px; cursor: pointer; touch-action: manipulation;
@@ -474,12 +479,13 @@ kbd { display: inline-block; min-width: 1.6em; text-align: center; font: 700 12p
   .studio-stage-col {
     flex: 0 0 auto;
     display: grid;
-    grid-template-columns: 112px minmax(0, 1fr);
+    grid-template-columns: 126px minmax(0, 1fr);
     gap: 6px;
     align-items: stretch;
   }
   .stage-frame { padding: 4px; display: flex; flex-direction: column; justify-content: space-between; }
-  #char-stage { width: 92px; height: 102px; margin: 0 auto 4px; }
+  .stage-viewport { width: 112px; height: 120px; margin: 0 auto 4px; }
+  .stage-hint { font-size: 8px; left: 3px; bottom: 3px; padding: 1px 4px; }
   .stage-tools { flex-direction: column; gap: 3px; margin-bottom: 0; }
   .stage-tools button { font-size: 10px; padding: 3px 4px; width: 100%; min-width: 0; white-space: nowrap; }
   #pose-bar, #backdrop-bar { display: none; }

@@ -424,9 +424,13 @@
     <div class="studio-grid">
       <div class="studio-stage-col">
         <div class="stage-frame">
-          <canvas id="char-stage" width="192" height="216" role="img" aria-label="Character preview"></canvas>
+          <div class="stage-viewport" id="stage-viewport">
+            <canvas id="char-stage" width="192" height="216" role="img" aria-label="Character preview"></canvas>
+            <canvas id="char-stage-3d" width="384" height="432" hidden aria-hidden="true"></canvas>
+            <span class="stage-hint" id="stage-hint">3D &middot; drag to spin</span>
+          </div>
           <div class="stage-tools">
-            <button type="button" id="view-turn">Turn: Front</button>
+            <button type="button" id="view-turn">Spin: Auto</button>
             <button type="button" id="view-zoom">View: Full</button>
           </div>
           <div class="chip-row" id="pose-bar" role="group" aria-label="Preview pose"></div>
@@ -533,6 +537,7 @@
 </div>
 
 <noscript><p class="noscript"><a href="./play">ENTER</a></p></noscript>
+<script type="importmap"><!--IMPORTMAP--></script>
 <script type="module" src="./home.js"></script>
 </body>
 </html>
