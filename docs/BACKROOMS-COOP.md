@@ -4,6 +4,21 @@ Branch: `codex/backrooms-coop`, based on development `a155afc`.
 Private alpha: https://blockrooms-coop-production.up.railway.app/rooms
 Railway runs game build `792b6d8`, separately from the public BlockRooms site.
 
+## Lobby refresh (prepared locally)
+
+The co-op entry page now uses the homepage’s yellow wallpaper, original voxel
+logo and sprites, navy window bars and beveled buttons. Instructions use plain
+player-facing language. The host bookmark still hides the passcode and strips
+it before generating an invite. Esc returns to the compact camcorder overlay
+after play begins. Desktop and 390px layouts, asset loading, two-browser
+joining/ready, and returning to the menu were checked in Chromium.
+
+Artwork is exported from the existing homepage source with
+`node tools/blockrooms/export-lobby-art.mjs`; no external images or dependencies.
+The server serves CSS and SVG with their correct MIME types under `nosniff`.
+Validation: 42/42 co-op tests pass; full suite 821/824, with the same three
+known unrelated console/status-line failures. This refresh is not deployed yet.
+
 ## Try the real rooms
 
 Run `npm run coop`, then open http://127.0.0.1:4488/rooms.

@@ -27,7 +27,7 @@ export function createCoopServer({alphaKey=process.env.COOP_ALPHA_KEY||'',defaul
    const rel=(p==='/'||p==='/rooms')?'public/world/coop/index.html':['/core/coop.js','/core/look.mjs','/core/coop-voice.js'].includes(p)?p.slice(1):`public${p}`;
    const file=path.resolve(root,rel);
    if(!file.startsWith(path.join(root,'public')+path.sep)&&!['core/coop.js','core/look.mjs','core/coop-voice.js'].some(p=>file===path.join(root,p))){res.writeHead(404).end();return;}
-   const types={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.png':'image/png','.jpg':'image/jpeg'};
+   const types={'.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.js':'text/javascript','.mjs':'text/javascript','.png':'image/png','.jpg':'image/jpeg'};
    const data=await readFile(file);res.writeHead(200,{'content-type':types[path.extname(file)]||'application/octet-stream','cache-control':'no-store','X-Content-Type-Options':'nosniff','Permissions-Policy':'microphone=(self), camera=()'}).end(data);
   }catch{res.writeHead(404).end('Not found');}
  });
