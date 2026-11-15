@@ -512,3 +512,26 @@ test('the absorbed staff: never in the mascot\'s plinth room, nor in the home of
   // a floor made by itself, with no visit: only the plinth room
   assert.deepEqual([...SUNK.absorbedKeepOut({ depth: 0, pursuer: { room: 3 }, rooms: [] }, null)], [3]);
 });
+
+test('the absorbed staff and fire: paper burning beside one lets go of whoever it has, and keeps its arms down while it burns', () => {
+  const { ABSORBED: A, createAbsorbedState, stepAbsorbed } = SUNK;
+  // holding somebody: the fire is lit, and that moment they are free
+  let r = stepAbsorbed(createAbsorbedState('floor'), { dt, dist: 0.6 });
+  assert.equal(r.state.phase, 'grabbing');
+  r = stepAbsorbed(r.state, { dt, dist: 0.6, fire: true });
+  assert.ok(r.releasedGrab && r.state.phase === 'cooldown' && r.slow === 1 && r.sinkTo === 0);
+  // for as long as it burns, standing in its arms is nothing: no reach, no grab, and the cooldown never runs down
+  let s = r.state;
+  for (let t = 0; t < 30; t += dt) { r = stepAbsorbed(s, { dt, dist: 0.4, fire: true }); s = r.state; assert.ok(s.phase === 'cooldown' && !r.startedGrab && !r.releasedGrab && s.cooldownLeft === A.cooldownDuration); }
+  assert.equal(s.grabCount, 1);
+  // the paper burns out: a whole cooldown more, and then it is what it was
+  let free = 0;
+  for (; free < 20 && s.phase === 'cooldown'; free += dt) s = stepAbsorbed(s, { dt, dist: 0.4 }).state;
+  assert.ok(Math.abs(free - A.cooldownDuration) < 0.1, `arms down for ${free.toFixed(2)} s after the fire`);
+  s = stepAbsorbed(s, { dt, dist: 0.4 }).state;
+  assert.equal(s.phase, 'grabbing');
+  // one that was only reaching, or doing nothing, is put off the same way; and no fire changes nothing
+  for (const mount of SUNK.ABSORBED_MOUNTS) assert.equal(stepAbsorbed(createAbsorbedState(mount), { dt, dist: 2, fire: true }).state.phase, 'cooldown');
+  assert.deepEqual(stepAbsorbed(createAbsorbedState('wall'), { dt, dist: 2, fire: false }), stepAbsorbed(createAbsorbedState('wall'), { dt, dist: 2 }));
+  assert.ok(A.fireRadius > A.reachRadius.floor && A.fireRadius <= 3, 'further than its arms, nearer than a fire is seen from');
+});

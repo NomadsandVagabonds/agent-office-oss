@@ -23,6 +23,7 @@ export const ABSORBED = Object.freeze({
   hopClearDrop: 0.24,
   ceilingMinH: 2.30,
   ceilingMaxH: 3.45,
+  fireRadius: 2,         // metres: paper burning this near one, and in its sight, keeps its arms down
 });
 
 export const ABSORBED_MOUNTS = Object.freeze(['wall', 'floor', 'ceiling']);
@@ -150,13 +151,21 @@ export function stepAbsorbed(prev, {
   playerDrop = 0,
   struggling = false,
   clearLine = true,
+  fire = false,
 }) {
   const s = { ...prev };
   let startedGrab = false;
   let releasedGrab = false;
   let noticedNow = false;
 
-  if (s.phase === 'cooldown') {
+  if (fire) {
+    // Paper burning beside it (within ABSORBED.fireRadius, in its sight): whoever it has is let go, and the arms stay
+    // down for as long as it burns and a full cooldown after — the cooldown is begun again every moment of the fire.
+    releasedGrab = s.phase === 'grabbing';
+    s.phase = 'cooldown';
+    s.holdLeft = 0;
+    s.cooldownLeft = ABSORBED.cooldownDuration;
+  } else if (s.phase === 'cooldown') {
     s.cooldownLeft = Math.max(0, s.cooldownLeft - dt);
     if (s.cooldownLeft <= 0) {
       s.phase = (clearLine && dist <= ABSORBED.noticeRadius) ? 'reaching' : 'idle';

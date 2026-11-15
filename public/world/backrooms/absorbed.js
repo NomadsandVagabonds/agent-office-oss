@@ -217,8 +217,13 @@ export function spawnAbsorbed(env, { rt, placement, spec }) {
       const inputKeys = env.player?.input?.keys;
       const struggling = Math.hypot(me.wishX || 0, me.wishZ || 0) > 0.25 || !!(inputKeys && (inputKeys.has(' ') || inputKeys.has('Shift')));
 
+      // paper the visitor has set light to, near enough and in its sight (inventory-fire.js): it lets go, and keeps its arms down
+      const burning = env.inventory?.fire?.threatAt?.(reachX, reachZ, placement.wy);
+      const fire = !!burning && Math.hypot(burning.x - reachX, burning.z - reachZ) <= ABSORBED.fireRadius;
+
       const res = stepAbsorbed(rule, {
         dt,
+        fire,
         dist,
         playerSink: me.sink || 0,
         playerDrop: me.drop || 0,
