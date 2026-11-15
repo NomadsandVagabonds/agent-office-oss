@@ -45,10 +45,6 @@ export const WARNINGS = Object.freeze({
     ['DONT WALK UNDER THE', 'CABLES. GO ROUND.', 'IT DROPPED ON'],
     ['THE WIRES ARE ALIVE', 'SHUT THE DOOR ON IT', 'IT CANT WORK THE'],
   ],
-  'plenum-toner': [
-    ['DONT PUT YOUR WEIGHT', 'ON THE STAINED TILES.', 'I WENT THROUGH ONE AND'],
-    ['SOMETHING IS UP IN THE', 'CEILING WITH YOU. KEEP', 'STILL WHEN IT STOPS'],
-  ],
   'retention-clerk': [
     ['SHE WANTS PAPER.', 'ANY PAPER. GIVE HER', 'SOME OR SHE PUTS'],
     ['IF YOU HEAR WHISTLING', 'HAVE A SHEET READY', 'I DIDNT AND MY ARM'],
@@ -77,6 +73,14 @@ export const WARNINGS = Object.freeze({
   'efficiency-partners': [
     ['THE TWO IN SUITS ARE', 'HARMLESS. THEY GAVE', 'ME A PINK'],
     ['TAKE THE PINK FORM.', 'THE SHREDDER LADY', 'WILL HAVE IT IF'],
+  ],
+  'plenum-toner': [
+    ['UP IN THE RED DUCTS', 'KEEP LOW ON SHEET', 'METAL OR THEY DROP'],
+    ['DONT TRUST STAINED', 'CEILING TILES UP TOP', 'THE EAST DUCT FOLDS'],
+  ],
+  'pit-clerks': [
+    ['KEEP ON THE WALL TOPS', 'FALL IN A CUBICLE AND', 'YOU NEVER COME BACK'],
+    ['SMILING ONES CLIMB UP', 'FROM THE DESKS BELOW', 'GET ACROSS AND SHUT'],
   ],
 });
 /** Somebody we have no drawing lessons for yet: they saw it, and that is all they got down. */

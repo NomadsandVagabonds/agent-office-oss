@@ -33,6 +33,7 @@ import { serverChasmStash } from './rooms/server-chasm/rule.js';
 import { PLAN as HALL_PLAN, partsOf as hallParts } from './rooms/unsure-hall/rule.js';
 import { homeStash } from './rooms/show-home/layout.js';
 import { plenumStash } from './rooms/drop-plenum/rule.js';
+import { cubicleGridStash } from './rooms/cubicle-grid/rule.js';
 import { fill } from './words.js';
 
 const cornerStash = (r, side) => (side < 0
@@ -415,7 +416,7 @@ export const MORE_DECK = [
     big: true,
     weight: 1.0,
     lights: 'dark',
-    themes: { yellow: 1.5, night: 1.4, archive: 1.2, fitout: 1.1 },
+    themes: { yellow: 1.5, night: 1.4, archive: 1.2, fitout: 1.1, exec: 1.1 },
     module: './rooms/drop-plenum.js',
     stash: plenumStash,
     roll: (R, o) => ({
@@ -430,6 +431,25 @@ export const MORE_DECK = [
     weight: .85, lights: 'normal', needs: ['beam'], themes: { night: 1.5, archive: 1.2 },
     stash: r => [r.W/2-1.4, -r.D*.17-.65, r.W/2-.5, -r.D*.17+.65],
     roll: R => ({face:R.int(0,7)}) },
+  {
+    id: 'cubicle-grid',
+    resident: 'pit-clerks', items: ['paper'], caught: 2, fire: 'fears',
+    doors: 'own',
+    name: 'The Open-Plan Pit',
+    landmark: 'the sunken cubicle grid you walk across on top',
+    w: [14, 16], d: [16, 18], h: [3.2, 3.6],
+    ports: ['back'],
+    big: true,
+    weight: 1.0,
+    lights: 'normal',
+    themes: { yellow: 1.5, archive: 1.4, night: 1.3, fitout: 1.3, exec: 1.2 },
+    module: './rooms/cubicle-grid.js',
+    stash: cubicleGridStash,
+    roll: (R, o) => ({
+      dept: (o.projects.length ? R.pick(o.projects) : R.pick(['RETENTION', 'BILLING', 'COMPLIANCE', 'QA'])).slice(0, 12).toUpperCase(),
+      brokenSide: R.pick([-1, 1]),
+    }),
+  },
 ];
 
 // Where a tape goes in an entry that does not say so itself: (room, ±1) → [x0, z0, x1, z1] in the room's own frame.
