@@ -44,6 +44,7 @@ import { middle, THIN_BEHIND } from './marks.js';
 import { hangBelow, goesDown } from './seam.js';
 import { createInventory } from './inventory.js';
 import { createSurvival } from './survival.js';
+import { batteryEnding, batteryWarning } from './battery-ending.js';
 import { createTally } from './tally.js';
 import { createMenu } from './menu.js';
 
@@ -395,9 +396,10 @@ async function visit(office, opt) {
 
   /* ---- the loop ---------------------------------------------------------------------- */
   // how long each ending takes — and one nobody has told this file about takes as long as being caught
-  const END = { quit: 0.4, caught: 1.8, exit: 1.4, battery: 1.2 };
+  const END = { quit: 0.4, caught: 1.8, exit: 1.4 };
   const off = stage.onFrame((dt) => {
     if (state === 'loading' || state === 'done' || paused) return;
+    const wasEnding = state === 'ending';                // (a battery that dies during this frame starts its ending at zero)
     time += dt; since += dt;
     tally.tick(dt, state === 'play');
     hud.update(dt);
@@ -440,6 +442,7 @@ async function visit(office, opt) {
     hud.flag('LIGHT', torch > 0.5);
     sound.setHum(light / 0.3);
     if (here?.flickers.length && here.flickerNow < 0.5 && Math.random() < 0.3) sound.play('tick', { vol: 0.7 });
+    hud.batteryWarning((state === 'play' || state === 'drop') ? batteryWarning(survival?.camera.read().remaining) : null);
 
     if (state === 'falling') {
       u.uSnow.value = Math.max(0, u.uSnow.value - dt / 0.8);
@@ -460,12 +463,21 @@ async function visit(office, opt) {
       }
       if (landed > 0.45) { state = 'play'; since = 0; rec(); }
     } else if (state === 'ending') {
-      ending += dt;
-      const k = clamp(ending / (END[reason] ?? END.caught), 0, 1);
-      if (reason === 'quit' || reason === 'battery') u.uBlack.value = k;
-      else if (reason === 'exit') u.uWhite.value = k * k;
-      else { u.uSnow.value = clamp((k - 0.42) / 0.45, 0, 1); if (k > 0.45) u.uRoll.value += dt * (0.4 + k * 2.5); interference = Math.max(interference, 0.5 + 0.5 * k); }   // a look at what got you, then snow
-      if (k >= 1) conclude();
+      if (wasEnding) ending += dt;
+      if (reason === 'battery') {
+        const p = batteryEnding(ending);
+        u.uBlack.value = p.black; u.uSnow.value = p.snow; u.uStaticDark.value = 1;
+        u.uRed.value = 0; u.uWhite.value = 0;
+        hud.batteryEnding({ opacity: p.iconOpacity });
+        sound.setHum(1 - p.black);
+        if (p.over) conclude();
+      } else {
+        const k = clamp(ending / (END[reason] ?? END.caught), 0, 1);
+        if (reason === 'quit') u.uBlack.value = k;
+        else if (reason === 'exit') u.uWhite.value = k * k;
+        else { u.uSnow.value = clamp((k - 0.42) / 0.45, 0, 1); if (k > 0.45) u.uRoll.value += dt * (0.4 + k * 2.5); interference = Math.max(interference, 0.5 + 0.5 * k); }   // a look at what got you, then snow
+        if (k >= 1) conclude();
+      }
     } else if (state === 'through') {
       // out through the wall, and a look back at the floor you were lost on (leaving.js). From out here nothing is in
       // the way of any of it: every room is drawn, for the one time in the visit
@@ -521,7 +533,8 @@ async function visit(office, opt) {
     // your pockets, which are what the office pays for (core/game.mjs)
     if (why === 'exit') kept = { ...kept, ...purse?.bank(), batteries: inventory?.count('battery') ?? 0 };
     if (why === 'caught') sound.play('static', { dur: 1.3 });
-    if (why === 'battery') { hud.flag('BATTERY', true); sound.play('static', { dur: .25, vol: .4 }); }
+    hud.batteryWarning(null);
+    if (why === 'battery') { hud.batteryEnding({ opacity: 1 }); sound.play('static', { dur: 1.6, vol: .25 }); }
     if (state === 'loading' || !cur) pendingQuit = true;
     else if (why === 'exit' && how && cur.player) {
       const me = cur.player.me;

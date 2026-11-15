@@ -18,12 +18,12 @@ const Signal = {
   uniforms: {
     tDiffuse: { value: null }, uRes: { value: new THREE.Vector2(640, 480) }, uTime: { value: 0 },
     uAmt: { value: 1 }, uSoft: { value: 1 }, uTrack: { value: 0 }, uGain: { value: 1 }, uExposure: { value: 1 },
-    uBlack: { value: 0 }, uWhite: { value: 0 }, uRed: { value: 0 }, uSnow: { value: 0 }, uRoll: { value: 0 },
+    uBlack: { value: 0 }, uWhite: { value: 0 }, uRed: { value: 0 }, uSnow: { value: 0 }, uStaticDark: { value: 0 }, uRoll: { value: 0 },
   },
   vertexShader: QUAD,
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform vec2 uRes;
-    uniform float uTime, uAmt, uSoft, uTrack, uGain, uExposure, uBlack, uWhite, uRed, uSnow, uRoll;
+    uniform float uTime, uAmt, uSoft, uTrack, uGain, uExposure, uBlack, uWhite, uRed, uSnow, uStaticDark, uRoll;
     varying vec2 vUv;
     const mat3 YIQ = mat3(0.299, 0.596, 0.211, 0.587, -0.274, -0.523, 0.114, -0.322, 0.312);
     const mat3 RGB = mat3(1.0, 1.0, 1.0, 0.956, -0.272, -1.106, 0.621, -0.647, 1.703);
@@ -71,7 +71,9 @@ const Signal = {
       vec3 c = RGB * vec3(y, iq);
       c = c * (1.0 - 0.05 * uSoft) + 0.03 * uSoft;                 // blacks never quite black
       float snow = hash(vec2(floor(uv.x * uRes.x * 0.5), floor(line * 0.5)) + frame * 13.0);
-      c = mix(c, vec3(snow * 0.8 + 0.06), uSnow);
+      // Losing power leaves dim noise, not a bright full-screen flash.
+      float staticLight = mix(snow * 0.8 + 0.06, snow * 0.12 + 0.008, uStaticDark);
+      c = mix(c, vec3(staticLight), uSnow);
       c = mix(c, vec3(0.0), uBlack);
       c = mix(c, vec3(1.0, 0.98, 0.93), uWhite);
       c = mix(c, vec3(0.78, 0.025, 0.02), uRed);

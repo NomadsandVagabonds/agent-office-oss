@@ -8,6 +8,7 @@
 // lives in one element with class `backrooms` inside #ui, which is the one
 // thing the office leaves visible down here.
 import { h } from '../ui/dom.js';
+import { BATTERY_ENDING } from './battery-ending.js';
 
 const CSS = `
 .backrooms { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 5; color: #f4f1e6;
@@ -26,6 +27,22 @@ const CSS = `
 .backrooms .br-batt i { position: absolute; left: .06em; top: .06em; bottom: .06em; width: 28%; background: currentColor; animation: br-blink 1.6s steps(1) infinite; }
 .backrooms .br-batt.is-managed i { width:calc(100% - .12em); transform-origin:left; animation:none; }
 .backrooms .br-batt.is-managed.is-low i { animation:br-blink 1.6s steps(1) infinite; }
+.backrooms .br-battery-warning { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 60;
+  display: flex; flex-direction: column; align-items: center; gap: .3em; pointer-events: none;
+  color: #f4f1e6; font: 700 clamp(17px, calc(var(--ph, 600px) * .038), 28px)/1 "Courier New", ui-monospace, Menlo, Consolas, monospace;
+  text-shadow: .055em 0 rgba(255, 60, 40, .4), -.055em 0 rgba(60, 220, 255, .35), 0 .08em .1em rgba(0, 0, 0, .8); }
+.backrooms .br-battery-warning[hidden] { display: none; }
+.backrooms .br-battery-glyph { display: block; width: 3.6em; height: 1.7em; overflow: visible;
+  filter: drop-shadow(0 2px 1px rgba(0, 0, 0, .7)); animation: br-battery-flash 1s steps(1) infinite; }
+.backrooms .br-battery-count { min-width: 2ch; text-align: center; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+.backrooms .br-battery-count[hidden] { display: none; }
+@keyframes br-battery-flash { 0%, 100% { opacity: 1; } 55% { opacity: .12; } }
+.backrooms.is-paused .br-battery-warning { visibility: hidden; }
+.backrooms.is-paused .br-battery-glyph { animation-play-state: paused; }
+.backrooms.is-battery-ending .br-battery-glyph { animation: none; }
+.backrooms.is-battery-ending .br-frame > :not(.br-battery-warning),
+.backrooms.is-battery-ending > :not(.br-frame) { opacity: 0 !important; visibility: hidden;
+  transition: opacity .6s linear, visibility 0s .6s; pointer-events: none !important; }
 .backrooms .br-carry { right: 6%; top: calc(6.5% + 1.75em); line-height: 0; letter-spacing: 0; filter: blur(.35px) drop-shadow(0 .08em .1em rgba(0, 0, 0, .8)); }
 .backrooms .br-carry i { display: inline-block; box-sizing: border-box; vertical-align: middle; margin-left: .34em; animation: br-blink .22s steps(1) 4; }
 .backrooms .br-tape { width: 1.16em; height: .7em; border: .1em solid currentColor; border-radius: .08em;
@@ -39,10 +56,23 @@ const CSS = `
 .backrooms .br-leave { position: absolute; right: 10px; top: 8px; width: 34px; height: 34px; display: none; place-items: center; pointer-events: auto; font: 400 18px/1 ui-monospace, Menlo, Consolas, monospace; color: #fff; opacity: .28; }
 .backrooms.touch .br-leave { display: grid; }
 .backrooms.clean .br-osd { display: none; }
-@media (prefers-reduced-motion: reduce) { .backrooms .br-dot, .backrooms .br-batt i, .backrooms .br-batt.is-managed.is-low i, .backrooms .br-carry i { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .backrooms .br-dot, .backrooms .br-batt i, .backrooms .br-batt.is-managed.is-low i, .backrooms .br-carry i, .backrooms .br-battery-glyph { animation: none; } }
 `;
 
 const pad = (n) => String(n).padStart(2, '0');
+
+/** A stepped camcorder glyph, with one last segment until the tape stops. */
+function warningBattery() {
+  const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
+  for (const [name, value] of Object.entries({ class: 'br-battery-glyph', viewBox: '0 0 42 20', 'aria-hidden': 'true', 'shape-rendering': 'crispEdges' })) svg.setAttribute(name, value);
+  const outline = document.createElementNS(ns, 'path');
+  outline.setAttribute('d', 'M2 0H36V2H38V6H42V14H38V18H36V20H2V18H0V2H2Z M3 3V17H35V3Z');
+  outline.setAttribute('fill', 'currentColor'); outline.setAttribute('fill-rule', 'evenodd');
+  const fill = document.createElementNS(ns, 'rect');
+  for (const [name, value] of Object.entries({ x: 6, y: 6, width: 4, height: 8, fill: 'currentColor' })) fill.setAttribute(name, value);
+  svg.append(outline, fill);
+  return { svg, fill };
+}
 
 export function createHud(level) {
   const root = document.getElementById('ui') || document.body;
@@ -52,12 +82,14 @@ export function createHud(level) {
   const counter = h('span', '0:00:00'), stamp = h('div.br-osd.bl'), flags = h('div.br-osd.brr'), held = h('div.br-osd.br-carry');
   const use = h('div.br-use', 'E'), leave = h('div.br-leave', '✕');
   const batteryFill = h('i'), battery = h('span.br-batt', batteryFill);
-  const frame = h('div.br-frame', h('div.br-osd.tl', dot, mode), h('div.br-osd.tr', 'SP  ', counter, battery), held, stamp, flags, use);
+  const warningGlyph = warningBattery(), warningCount = h('span.br-battery-count', { 'aria-hidden': 'true' });
+  const warning = h('div.br-battery-warning', { hidden: true, role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' }, warningGlyph.svg, warningCount);
+  const frame = h('div.br-frame', h('div.br-osd.tl', dot, mode), h('div.br-osd.tr', 'SP  ', counter, battery), held, stamp, flags, use, warning);
   const el = h('div.backrooms', frame, leave);
   root.append(el);
 
   let st = level.stamp;
-  let tape = 0, lastSecond = -1, usable = false, glitch = 0, batterySignature = '', recording = false, paused = false;
+  let tape = 0, lastSecond = -1, usable = false, glitch = 0, batterySignature = '', recording = false, paused = false, batteryEnded = false;
   const flagSet = new Set();
 
   function renderStamp(seconds) {
@@ -67,8 +99,27 @@ export function createHud(level) {
   }
   renderStamp(0);
 
+  function batteryWarning(seconds) {
+    if (batteryEnded) return;
+    const show = Number.isFinite(seconds) && seconds > 0 && seconds <= BATTERY_ENDING.warning;
+    warning.hidden = !show;
+    if (!show) { warning.removeAttribute('aria-label'); warningCount.textContent = ''; return; }
+    const left = Math.ceil(seconds), label = `Camera battery low, ${left} ${left === 1 ? 'second' : 'seconds'} remaining`;
+    if (warningCount.textContent !== String(left)) warningCount.textContent = String(left);
+    if (warning.getAttribute('aria-label') !== label) warning.setAttribute('aria-label', label);
+    warningCount.hidden = false; warningGlyph.fill.setAttribute('visibility', 'visible');
+  }
+
   return {
     el, use, leave,
+    batteryWarning,
+    /** The picture goes first; this empty glyph is the last thing on the tape. */
+    batteryEnding({ opacity = 1 } = {}) {
+      batteryEnded = true; el.classList.add('is-battery-ending'); warning.hidden = false;
+      warningCount.hidden = true; warningGlyph.fill.setAttribute('visibility', 'hidden');
+      warning.setAttribute('aria-label', 'Camera battery empty');
+      warning.style.opacity = String(Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : 1);
+    },
     /** Sit the overlay on the picture: { x, y, w, h } in CSS pixels. */
     layout(p) { for (const [k, v] of [['--px', p.x], ['--py', p.y], ['--pw', p.w], ['--ph', p.h]]) el.style.setProperty(k, `${v}px`); },
     /** Show (or hide) the [E]: there is something here to use. */
@@ -78,11 +129,13 @@ export function createHud(level) {
     /** The existing camcorder glyph is also the run's remaining battery. */
     battery(snapshot) {
       if (!snapshot) {
+        batteryWarning(null);
         if (!batterySignature) return;
         batterySignature = ''; battery.classList.remove('is-managed', 'is-low'); batteryFill.style.transform = '';
         for (const name of ['role', 'aria-label', 'title']) battery.removeAttribute(name);
         return;
       }
+      if (snapshot.remaining > BATTERY_ENDING.warning) batteryWarning(null);
       const fraction = Math.max(0, Math.min(1, snapshot.fraction ?? snapshot.remaining / snapshot.capacity));
       const percentage = Math.round(fraction * 100), seconds = Math.max(0, Math.ceil(snapshot.remaining));
       const low = fraction <= .25, signature = `${percentage}:${seconds}:${low}`;

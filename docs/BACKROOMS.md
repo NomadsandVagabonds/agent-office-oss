@@ -488,6 +488,13 @@ part of the building, and they are on unless a visit is started with
   When it is flat the visit is over (`'battery'`). A battery pack puts two
   minutes back, up to six minutes forty. The clock runs while you are in
   play and while you fall; it does not stop for an open pocket.
+  In the final ten seconds a centered camcorder battery blinks above a
+  countdown; fitting a pack clears that warning. At zero, the picture fades
+  through dark static to black in 2.2 seconds. The empty battery holds until
+  2.7 seconds, fades out by 3.6, and the scorecard opens automatically. These
+  timings live in `battery-ending.js`. The ending cannot be paused or revived.
+  The development page also shows the scorecard by default; `&card=0` skips
+  it for automated checks.
 - **Health.** One camcorder heart with four horizontal layers, filled from
   the bottom: white at four or three points, red at two or one, an empty
   outline at zero. Being caught costs what the creature's line says
@@ -560,8 +567,8 @@ each time it had somebody and they got away.
 
 Before it resolves, the visit shows the card (`scorecard.js`): a wall of the
 yellow paper with the score printed into it in the paper's own ink and a
-picture beside every line. (`opt.scorecard === false` for none; the dev page
-shows it only with `&card=1`, so that a script is never left waiting.) What
+picture beside every line. (`opt.scorecard === false` for none; on the dev
+page, `&card=0` lets an automated check skip it.) What
 the lines are worth is `POINTS` in `core/runs.mjs`; the first four are earned
 however the visit ended, the rest only by getting out. The office keeps the
 best score, every kind of room and resident anybody has met, and the tape
