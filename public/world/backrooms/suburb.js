@@ -17,6 +17,7 @@
 //   sheet, beam    a flat piece and a length of timber between any two points
 //   fence, flat    a run of pickets and a braced flat, anywhere, at any angle
 //   daylight(c)    the tubes of a room too big to be lit one lamp to a panel
+import * as THREE from 'three';
 import { Batch, lin, ticks, WHITE } from './kit.js';
 import { makeCutout } from './cutout.js';
 import { TILE } from './gen.js';
@@ -354,7 +355,9 @@ export function lawn(c, opt = {}) {
   if (room.quiet && room.quiet.kind === 'fence' && room.kind === 'plain' && R.chance(opt.neighbour ?? 0.6)) neighbour(c);
   // …and in some lawns that have nothing else, one thing that whoever built this got wrong (WRONG, below)
   const chance = opt.wrong ?? (!room.quiet && !s && room.kind === 'plain' && Math.min(W, D) >= 3.4 ? 0.4 : 0);
-  if (chance > 0 && R.chance(chance)) { const name = opt.which || R.pick(Object.keys(WRONG)); if (WRONG[name](c) !== false) c.rt.weird = name; }
+  // (for looking at one: `window.__suburbWrong = 'melting'` before the floor is built puts that one on every lawn that can take it)
+  const asked = typeof globalThis !== 'undefined' && WRONG[globalThis.__suburbWrong] ? globalThis.__suburbWrong : opt.which;
+  if (chance > 0 && (R.chance(chance) || asked)) { const name = asked || R.pick([...Object.keys(WRONG), 'melting', 'melting']); if (WRONG[name](c) !== false) c.rt.weird = name; }
 }
 
 /* ---- the neighbour ------------------------------------------------------------------------------------------------ */
@@ -445,9 +448,51 @@ export function car(c, x, z, along = true, rgb = [0.6, 0.52, 0.38], lift = 0, in
   B(-0.9, 0.93, -0.6, 0.4, 0.97, -0.55, [0.6, 0.6, 0.6]); B(-0.9, 0.93, 0.55, 0.4, 0.97, 0.6, [0.6, 0.6, 0.6]);               // somewhere to put the luggage
   const glow = into || c.shining('suburb:lamp', c.kit.tex.white(), 1.6, lin('#ffe9a8'));
   for (const v of [-0.6, 0.6]) { const p = along ? [x + 2.105, z + v] : [x + v, z + 2.105], q = 0.11; const y = 0.22 + lift; if (along) sheet(glow, [p[0], y, p[1] + q], [p[0], y, p[1] - q], [p[0], y + 0.14, p[1] - q], [p[0], y + 0.14, p[1] + q]); else sheet(glow, [p[0] - q, y, p[1]], [p[0] + q, y, p[1]], [p[0] + q, y + 0.14, p[1]], [p[0] - q, y + 0.14, p[1]]); }
+  if (into && into.bare) return;                              // (only the shape of one: whoever asked puts it where it is going)
   c.light(x + (along ? 2.5 : 0), 0.35 + lift, z + (along ? 0 : 2.5), '#ffe9a8', 0.5, { k: 1.1, far: 4 });
   if (along) c.solid(x - 2.1, z - 0.85, x + 2.1, z + 0.85); else c.solid(x - 0.85, z - 2.1, x + 0.85, z + 2.1);
   c.blot(x, z, along ? 5.2 : 2.6, along ? 2.6 : 5.2, { a: lift ? 0.3 : 0.45 }); c.reserve(x, z, 2.3);
+}
+/* ---- the melt: timber that has gone soft (the owner's idea: wooden telephone poles, melting) ------------------------------- */
+
+/**
+ * A wooden telephone pole that is melting, toward (dx, dz): it stands for a metre or two, then goes over like a candle left
+ * in the sun, wood running off its underside and standing in a pool at its foot. Only the pole: its two crossbars are as stiff
+ * and square as the day they went up. Two wires still go up into the ceiling and hold the top; two have come down.
+ */
+export function meltingPole(c, x, z, dx, dz, hgt, R = c.R) {
+  const wood = [0.36, 0.22, 0.12], dark = [0.24, 0.14, 0.07], wire = [0.04, 0.03, 0.02], N = 9, seg = hgt / N, pts = [[x, 0, z]], nx = -dz, nz = dx;
+  for (let i = 1; i <= N; i++) { const a = Math.pow(i / N, 2.4) * 1.75 + Math.sin(i * 1.7) * 0.07, q = pts[i - 1]; pts.push([q[0] + dx * Math.sin(a) * seg, Math.max(0.5, q[1] + Math.cos(a) * seg), q[2] + dz * Math.sin(a) * seg]); }
+  // the pole is what is melting: it thins and thickens as it goes over, and runs off its own underside
+  for (let i = 0; i < N; i++) beam(c.flat, pts[i], pts[i + 1], 0.18 - i * 0.008 + (i % 2) * 0.03, i % 3 ? wood : dark);
+  const drip = (p, len) => { beam(c.flat, p, [p[0], p[1] - len, p[2]], 0.04, wood); c.flat.ball(p[0], p[1] - len, p[2], 0.055, wood, 1.3, 6); };
+  for (const i of [N - 4, N - 2]) drip([pts[i][0], pts[i][1] - 0.06, pts[i][2]], R.range(0.25, 0.6));
+  // its two crossbars are not: square timber, dead straight, a row of insulators on each, exactly as they were put up
+  const ends = [];
+  for (const [i, hw] of [[N - 1, 0.75], [N - 2, 0.6]]) {
+    const p = pts[i]; beam(c.flat, [p[0] - nx * hw, p[1] + 0.09, p[2] - nz * hw], [p[0] + nx * hw, p[1] + 0.09, p[2] + nz * hw], 0.09, dark);
+    for (const k of [-0.9, -0.45, 0.45, 0.9]) { const q = [p[0] + nx * hw * k, p[1] + 0.135, p[2] + nz * hw * k]; c.flat.box(q[0] - 0.03, q[1], q[2] - 0.03, q[0] + 0.03, q[1] + 0.09, q[2] + 0.03, [0.55, 0.62, 0.6]); if (Math.abs(k) > 0.5) ends.push([q[0], q[1] + 0.09, q[2], k]); }
+  }
+  // the wires: two still go up into the ceiling, and are what is holding the top; two have come down
+  for (const [ex, ey, ez, k] of ends) {
+    if (k > 0) { const up = c.ceilAt(ex, ez); beam(c.flat, [ex, ey, ez], [ex - dx * 0.4, up, ez - dz * 0.4], 0.014, wire); c.hole(ex - dx * 0.4 - 0.3, ez - dz * 0.4 - 0.3); }
+    else { const g = [ex + dx * 0.7 + nx * k * 0.4, 0.02, ez + dz * 0.7 + nz * k * 0.4]; beam(c.flat, [ex, ey, ez], g, 0.014, wire); beam(c.flat, g, [g[0] + dx * 1.1, 0.02, g[2] + dz * 1.1 + nz * 0.3], 0.014, wire); }
+  }
+  // the pool, and what has dripped into it since
+  c.flat.ball(x, 0.01, z, 0.62, wood, 0.09, 10); c.flat.ball(x + dx * 0.5, 0.01, z + dz * 0.5, 0.4, dark, 0.08, 8); c.blot(x, z, 1.9, 1.9, { a: 0.4 });
+  for (const i of [N - 4, N - 2]) { const p = pts[i]; c.flat.ball(p[0], 0.01, p[2], 0.2, wood, 0.1, 6); }
+  c.solid(x - 0.12, z - 0.12, x + 0.12, z + 0.12); c.reserve(x, z, 0.8);
+}
+
+/** A fire that is not the visitor's: two crossed sheets of it, alight for as long as anybody is near, and what it does to the ceiling. */
+export function blaze(c, x, y, z, size = 1) {
+  const tex = c.kit.tex.custom('suburb:flame', 32, 48, (g, w, h) => { for (const [col, k] of [['#d8421c', 1], ['#f08a1e', 0.72], ['#ffd65a', 0.42]]) { g.fillStyle = col; for (const [fx, fw, fh] of [[8, 7, 34], [16, 9, 46], [24, 7, 30], [12, 5, 22], [21, 5, 38]]) { g.beginPath(); g.moveTo(fx - fw * k, h); g.quadraticCurveTo(fx - fw * k, h - fh * k * 0.5, fx, h - fh * k); g.quadraticCurveTo(fx + fw * k, h - fh * k * 0.5, fx + fw * k, h); g.fill(); } } }, { clamp: true });
+  const mat = c.kit.own(new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.4, side: THREE.DoubleSide })), geo = c.kit.own(new THREE.PlaneGeometry(1.1 * size, 1.5 * size)), parts = [];
+  mat.color.setRGB(1.7, 1.5, 1.2);
+  for (const rot of [0, Math.PI / 2, Math.PI / 4]) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y + 0.75 * size, z); m.rotation.y = rot; c.add(m); parts.push(m); }
+  c.light(x, y + 0.8, z, '#ff8a2a', 1.1, { k: 1.4, far: 6 });
+  const top = c.ceilAt(x, z); c.blot(x, z, 3.2, 3.2, { rgb: [0.02, 0.02, 0.02], a: 0.75, y: top - 0.004, down: true }); c.blot(x, z, 1.6, 1.6, { rgb: [0, 0, 0], a: 0.8, y: top - 0.005, down: true });
+  c.tick((dt, t) => { parts.forEach((m, i) => { const k = 1 + 0.16 * Math.sin(t * 11 + i * 2.1) + 0.08 * Math.sin(t * 23 + i); m.scale.set(1 + 0.08 * Math.sin(t * 7 + i), k, 1); m.position.y = y + 0.75 * size * k; }); });
 }
 export const WRONG = {
   // one sprinkler head (the one thing here that is where it should be)
@@ -475,6 +520,65 @@ export const WRONG = {
     if (c.ceilAt(w / 2, d / 2) !== c.ceilAt(-w / 2, -d / 2)) return false;
     c.floor.grid([-w / 2, y, -d / 2], [1, 0, 0], [0, 0, 1], ticks(w, 0.6, 0), ticks(d, 0.6, 0), (u, v) => [u / 1.6, v / 1.6]);
     c.flat.box(-0.03, y - 0.07, -0.03, 0.03, y, 0.03, [0.06, 0.06, 0.06]); c.flat.box(-0.02, y - 0.085, -0.02, 0.02, y - 0.07, 0.02, [0.7, 0.55, 0.2]);
+  },
+  // a car, alight, and it has been for some time: nothing is burnt but the ceiling
+  burning(c) { if (WRONG.car(c) === false) return false; blaze(c, 0.3, 0.6, 0, 1.3); blaze(c, -0.5, 0.5, 0.3, 0.9); },
+  // a car, parked where there was room
+  ceilcar(c) {
+    const { W, D } = c, y = c.ceilAt(0, 0), along = W >= D;
+    if (y < 2.6 || c.ceilAt(1.5, 1.5) !== y || Math.max(W, D) < 5.4) return false;
+    const b = new Batch(); b.bare = true; car(c, 0, 0, along, [0.3, 0.42, 0.62], 0.32, b);
+    const g = c.dynamic(b, { pivot: [0, 0, 0] }); g.rotation.z = Math.PI; g.position.y = y - 0.01;
+    c.blot(0, 0, along ? 4.6 : 2.2, along ? 2.2 : 4.6, { a: 0.4 });
+  },
+  // telephone poles, in board, with the wires going where wires go
+  poles(c) {
+    const { W, D } = c, along = W >= D, n = Math.floor((Math.max(W, D) - 2) / 2.4), top = c.ceilAt(0, 0), off = (along ? D : W) * 0.22;
+    if (n < 2 || top < 2.6) return false;
+    let last = null;
+    for (let i = 0; i < n; i++) {
+      const u = (i - (n - 1) / 2) * 2.4, [x, z] = along ? [u, off] : [off, u];
+      if (!c.clear(x, z, 0.3)) { last = null; continue; }
+      c.flat.box(x - 0.07, 0, z - 0.02, x + 0.07, 2.35, z + 0.02, BOARD, { skip: '-y' }); if (along) c.flat.box(x - 0.45, 2.05, z - 0.02, x + 0.45, 2.15, z + 0.02, BOARD); else c.flat.box(x - 0.02, 2.05, z - 0.45, x + 0.02, 2.15, z + 0.45, BOARD);
+      beam(c.flat, [x, 2.15, z], [x, top, z], 0.012, [0.05, 0.05, 0.05]); c.hole(x - 0.3, z - 0.3);
+      if (last) beam(c.flat, [last[0], 2.12, last[1]], [x, 2.12, z], 0.012, [0.05, 0.05, 0.05]);
+      c.solid(x - 0.08, z - 0.05, x + 0.08, z + 0.05); c.shadow(x, z, 0.3, 0.2, 0.3); last = [x, z];
+    }
+  },
+  // telephone poles, in wood, melting
+  melting(c) {
+    const R = c.R; let n = 0;
+    if (c.ceilAt(0, 0) < 2.6) return false;
+    for (let i = 0; i < 3; i++) { const at = c.spot(1.1, { head: 2.6, pad: 0.6 }); if (!at) continue; const a = R.pick([0, 1, 2, 3]) * Math.PI / 2 + R.range(-0.5, 0.5); meltingPole(c, at.x, at.z, Math.cos(a), Math.sin(a), c.ceilAt(at.x, at.z) * R.range(1.05, 1.3)); n++; }
+    return n ? undefined : false;
+  },
+  // front doors. A house has one; so here are some
+  doors(c) {
+    const R = c.R; let n = 0;
+    for (let i = 0; i < 5; i++) {
+      const s = c.spot(0.7, { head: 2.2 }); if (!s) continue;
+      const col = [[0.5, 0.12, 0.1], [0.15, 0.3, 0.2], [0.14, 0.2, 0.4], [0.75, 0.7, 0.2]][i % 4], ajar = R.chance(0.35) ? R.range(0.3, 1.2) : 0;
+      for (const k of [-1, 1]) c.flat.box(s.x + k * 0.5 - 0.04, 0, s.z - 0.05, s.x + k * 0.5 + 0.04, 2.1, s.z + 0.05, WHITEWASH, { skip: '-y' });
+      c.flat.box(s.x - 0.54, 2.06, s.z - 0.05, s.x + 0.54, 2.14, s.z + 0.05, WHITEWASH);
+      const hx = s.x - 0.46, ex = hx + Math.cos(ajar) * 0.92, ez = s.z - Math.sin(ajar) * 0.92;
+      upright(c.flat, hx, s.z, ex, ez, 0.02, 2.06, null, col); upright(c.flat, ex, ez, hx, s.z, 0.02, 2.06, null, col.map((v) => v * 0.8));
+      c.flat.ball(ex - Math.cos(ajar) * 0.1, 1.0, ez + Math.sin(ajar) * 0.1 + 0.04, 0.035, [0.75, 0.6, 0.25]);
+      if (!ajar) c.solid(s.x - 0.54, s.z - 0.05, s.x + 0.54, s.z + 0.05, { tall: true }); else { c.solid(s.x - 0.56, s.z - 0.05, s.x - 0.46, s.z + 0.05); c.solid(s.x + 0.46, s.z - 0.05, s.x + 0.56, s.z + 0.05); }
+      n++;
+    }
+    return n > 1 ? undefined : false;
+  },
+  // the sun, where it was said to be: overhead
+  sun(c) {
+    const y = c.ceilAt(0, 0) - 0.012, tex = c.kit.tex.custom('suburb:sun', 48, 48, (g) => { g.strokeStyle = '#f2b830'; g.lineWidth = 2.5; for (let i = 0; i < 12; i++) { const a = i * 0.5236; g.beginPath(); g.moveTo(24 + Math.cos(a) * 13, 24 + Math.sin(a) * 13); g.lineTo(24 + Math.cos(a) * (i % 2 ? 22 : 18), 24 + Math.sin(a) * (i % 2 ? 22 : 18)); g.stroke(); } blob(g, '#f6cf3a', [[24, 24, 11, 11]]); P(g, '#2a2420', 19, 21, 2, 3); P(g, '#2a2420', 27, 21, 2, 3); P(g, '#2a2420', 20, 28, 8, 1); }, { clamp: true });
+    c.lay(c.mapped('suburb:sun', tex, { cutout: true }), 0, 0, 1.8, 1.8, c.R.range(0, 3), null, WHITE, y, true);
+  },
+  // WELCOME, as often as it was heard
+  mats(c) {
+    const { W, D, R } = c, tex = c.kit.tex.custom('suburb:mats', 128, 96, (g) => { for (let i = 0; i < 4; i++) { const x = (i % 2) * 64, y = Math.floor(i / 2) * 48; P(g, '#6b4a2a', x, y, 64, 48); P(g, '#5a3d22', x + 3, y + 3, 58, 42); garble(g, ['WELCOME', 'WELCOME', 'WELLCOME', 'WELCOM'][i], x + 3, y + 8, 58, 30, { color: '#d9c08a', size: 12, mess: 0.25 + i * 0.2 }, i + 2); } }, { clamp: true }), b = c.mapped('suburb:mats', tex);
+    let n = 0;
+    for (let x = -W / 2 + 1.3; x <= W / 2 - 1.3; x += 0.92) for (let z = -D / 2 + 1.2; z <= D / 2 - 1.2; z += 0.66) { if (!c.clear(x, z, 0.2)) continue; const i = Math.floor(R() * 4), u0 = (i % 2) / 2, v1 = 1 - Math.floor(i / 2) / 2; c.lay(b, x, z, 0.8, 0.56, R.range(-0.06, 0.06), [[u0, v1 - 0.5], [u0 + 0.5, v1 - 0.5], [u0 + 0.5, v1], [u0, v1]], WHITE, 0.014 + (n % 3) * 0.001); n++; }
+    return n > 5 ? undefined : false;
   },
   // flamingos: one was mentioned. Nobody said how many
   flock(c) {
