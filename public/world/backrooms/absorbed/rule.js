@@ -3,6 +3,8 @@
 // have sunk 2/3 into a Backrooms wall, carpet, or acoustic ceiling tile, with
 // 1.5x elongated droopy arms that snare passers-by without ending the tape.
 
+import { CAST, castFor, homeFor } from '../cast.js';
+
 export const ABSORBED = Object.freeze({
   armScale: 1.5,
   noticeRadius: 2.95,
@@ -224,4 +226,21 @@ export const HUNTER_NEAR = 6;
 export const TUG_SECONDS = 0.55;
 export function tugsTheCamera(holdLeft, hunted) {
   return !hunted && holdLeft > ABSORBED.holdDuration - TUG_SECONDS;
+}
+
+/**
+ * The rooms of a part that are somebody else's, where none of the absorbed is put: the room the mascot's plinth is
+ * in, and the home of any of the cast that lives in one room and has been dealt to this part (the night porter's).
+ * @param level  what generate() gave (gen.js)
+ * @param visit  the planned visit (plan.js), or nothing for a floor made by itself
+ * @returns {Set<number>} room ids
+ */
+export function absorbedKeepOut(level, visit) {
+  const out = new Set();
+  if (level.pursuer && Number.isInteger(level.pursuer.room)) out.add(level.pursuer.room);
+  if (visit) for (const k of castFor(visit, level.depth ?? 0)) {
+    const home = homeFor(level, CAST.find((m) => m.id === k.id));
+    if (home !== null) out.add(home);
+  }
+  return out;
 }

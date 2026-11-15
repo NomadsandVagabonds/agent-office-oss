@@ -11,7 +11,7 @@ import { toWorld, wallPoint, wallSpans, floorAt, ceilAt } from './gen.js';
 import { clamp, turnTo } from './bits.js';
 import {
   ABSORBED, ABSORBED_MOUNTS, rollAbsorbedRoster, absorbedCount,
-  createAbsorbedState, stepAbsorbed, tugsTheCamera, HUNTER_NEAR,
+  createAbsorbedState, stepAbsorbed, tugsTheCamera, HUNTER_NEAR, absorbedKeepOut,
 } from './absorbed/rule.js';
 import { CAST } from './cast.js';
 import { makeAbsorbedWorker } from './absorbed/rig.js';
@@ -313,8 +313,11 @@ export function populateAbsorbed(env, R) {
   if (!world) return [];
   const start = level.start || { x: 0, z: 0 };
 
+  // (never in a room that is somebody's: the mascot's plinth room, the porter's — absorbed/rule.js)
+  const theirs = absorbedKeepOut(level, env.visit);
   const candidates = world.rooms.filter((rt) => (
     rt.def.kind === 'plain'
+    && !theirs.has(rt.id)
     && !rt.def.crawl
     && rt.def.W >= 2.8
     && rt.def.D >= 2.8

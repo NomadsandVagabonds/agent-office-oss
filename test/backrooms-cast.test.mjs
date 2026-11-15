@@ -492,3 +492,23 @@ test('the absorbed staff: a hold never turns the visitor\'s head while something
   const held = SUNK.stepAbsorbed(SUNK.createAbsorbedState('wall'), { dt, dist: 0.5 });
   assert.ok(held.startedGrab && held.slow === A.slowFactor);
 });
+
+test('the absorbed staff: never in the mascot\'s plinth room, nor in the home of anybody dealt to the part', () => {
+  let withMascot = 0, withPorter = 0, parts = 0;
+  for (const seed of SEEDS) {
+    const { visit, floors } = generateVisit(seed, office);
+    for (const level of floors) {
+      const out = SUNK.absorbedKeepOut(level, visit);
+      parts++;
+      if (level.pursuer) { withMascot++; assert.ok(out.has(level.pursuer.room), `${seed}, part ${level.depth}: the plinth room is his`); }
+      const porter = castFor(visit, level.depth).find((k) => k.id === 'porter');
+      const home = porter ? homeFor(level, CAST.find((m) => m.id === 'porter')) : null;
+      if (home !== null) { withPorter++; assert.ok(out.has(home), `${seed}, part ${level.depth}: the porter's room is his`); }
+      assert.ok(out.size <= 2 && [...out].every((id) => level.rooms[id]), 'and nothing else is kept from them');
+      if (!level.pursuer && home === null) assert.equal(out.size, 0);
+    }
+  }
+  assert.ok(withMascot > 20 && withPorter > 5 && parts > withMascot, `${withMascot} parts with the mascot, ${withPorter} with the porter, of ${parts}`);
+  // a floor made by itself, with no visit: only the plinth room
+  assert.deepEqual([...SUNK.absorbedKeepOut({ depth: 0, pursuer: { room: 3 }, rooms: [] }, null)], [3]);
+});
