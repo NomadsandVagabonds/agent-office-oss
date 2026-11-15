@@ -9,7 +9,7 @@
 // you are off the grass: the room can always be crossed by its stones.
 import * as THREE from 'three';
 import { P } from '../bits.js';
-import { garble, lawn, daylight, WHITEWASH } from '../suburb.js';
+import { garble, lawn, sprinkler, stone, daylight, WHITEWASH } from '../suburb.js';
 
 export const GREEN = Object.freeze({ hears: 2.7, pace: 1.5, runs: 4, reach: 2.4, arc: 0.45, share: 0.03, every: 0.5, stone: 0.42, edge: 0.5 });
 /** Is somebody at (x, z) going `speed` m/s heard by a head at (hx, hz)? Not on a stone (`onStone`), not on the carpet round the edge (`onEdge`), not going slowly. */
@@ -26,7 +26,7 @@ export function build(c) {
   const stones = [];
   for (let z = D / 2 - 0.9, k = 0; z > -D / 2 + 0.6; z -= 0.8, k++) stones.push([Math.sin(k * 0.9) * 0.9, z]);
   for (let x = 1.2; x < W / 2 - 0.5; x += 0.8) { stones.push([x, Math.sin(x) * 0.5]); stones.push([-x, -Math.sin(x) * 0.5]); }
-  for (const [x, z] of stones) c.flat.box(x - 0.26, 0, z - 0.24, x + 0.26, 0.025, z + 0.24, [0.62, 0.61, 0.57], { skip: '-y' });
+  stones.forEach(([x, z], k) => stone(c, x, z, k, ((k * 7) % 5 - 2) * 0.12));
   // the notice
   { const s = c.wallSpot(1.4, ['back', 'left', 'right'], 0.5, 2.2); if (s) { const tex = kit.tex.custom('green:sign', 128, 64, (g, w, h) => { P(g, '#1f6b3a', 0, 0, w, h); P(g, '#f4f1e4', 3, 3, w - 6, h - 6); garble(g, 'KEEP OFF', 3, 6, w - 6, 26, { color: '#1f6b3a', size: 20, mess: 0.2 }, 4); garble(g, 'THE THE GRASS', 3, 32, w - 6, 24, { color: '#1f6b3a', size: 14, mess: 0.35 }, 7); }, { clamp: true }); c.hang(c.mapped('green:sign', tex), s.side, s.at, 1.6, 1.2, 0.6); c.wbox(s.side, s.at, 1.26, 1.27, 1.93, 0, 0.01, WHITEWASH); } }
   // the heads
@@ -36,7 +36,7 @@ export function build(c) {
   for (let x = -W / 2 + 1.7; x <= W / 2 - 1.7; x += 2.3) for (let z = -D / 2 + 1.7; z <= D / 2 - 1.7; z += 2.3) {
     const hx = x + R.range(-0.3, 0.3), hz = z + R.range(-0.3, 0.3);
     if (stones.some(([sx, sz]) => Math.hypot(sx - hx, sz - hz) < 0.6)) continue;
-    c.flat.box(hx - 0.03, 0, hz - 0.03, hx + 0.03, 0.07, hz + 0.03, [0.06, 0.06, 0.06], { skip: '-y' }); c.flat.box(hx - 0.02, 0.07, hz - 0.02, hx + 0.02, 0.085, hz + 0.02, [0.7, 0.55, 0.2]);
+    sprinkler(c, hx, hz, R.range(0, 6.28));
     const spray = new THREE.Mesh(fan, mat); spray.position.set(hx, 0, hz); spray.visible = false; c.add(spray);
     heads.push({ x: hx, z: hz, spray, on: 0, a: R.range(0, 6.28) });
   }
