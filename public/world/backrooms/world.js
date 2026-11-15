@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import { T, TILE, RISE, RUN, toWorld, toLocal, wallLength, wallPoint, wallSpans, floorAt, ceilAt, headAt, fitsAt, stairZones, makeRng, roomPath } from './gen.js';
 import { Batch, lamp, lightAt, lin, ticks, smooth, WHITE } from './kit.js';
+import { planLighting, panelBank, bankLevels, localLightScale } from './lighting.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
 // and how far along it a local coordinate c is (c is x on the front/back walls, z on the side walls)
@@ -59,13 +60,21 @@ export async function buildWorld(kit, level, env, tick) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
   const rooms = level.rooms.map((def) => ({
-    def, id: def.id, group: new THREE.Group(), u: { flick: { value: 1 }, dim: { value: 1 } },
+    def, id: def.id, group: new THREE.Group(), u: { flick: { value: 1 }, dim: { value: 1 }, banks: { value: [1, 1] } },
+    lighting: planLighting(def, level.seed, env.lighting), bankPanels: [],
     lights: [], amb: [0, 0, 0], level: 0, colliders: [], uses: [], zones: [], ticks: [], flickers: [],
     clip: null, floorY: null, headY: null, fold: false, flat: false, onEnter: null,
     rect: { x0: def.x + T / 2, z0: def.z + T / 2, x1: def.x + def.w - T / 2, z1: def.z + def.d - T / 2 },
   }));
   const throats = level.links.map((link) => ({ link, open: !link.door, a: link.a, b: link.b }));
   const world = { scene, level, rooms, throats, kit, env };
+  let lightingTime = 0;
+  const refreshBanks = (rt) => {
+    if (!rt.lighting) return;
+    rt.u.banks.value = bankLevels(rt.lighting, lightingTime, rt.lightsK ?? 1);
+    for (const mesh of rt.bankPanels) mesh.material.color.copy(mesh.userData.on)
+      .multiplyScalar(Math.max(0.015, rt.u.banks.value[mesh.userData.bank]) * Math.max(0.02, rt.lightsK ?? 1));
+  };
 
   /* ---- how bright each room is, before anything is built ------------------------- */
   for (const rt of rooms) {
@@ -210,6 +219,7 @@ export async function buildWorld(kit, level, env, tick) {
     env.stash?.(ctx);                          // what is hidden in this room, if anything (loot.js): last, so the furniture is where it always was and the coin can see what floor is left
     const t1 = performance.now();
     ctx.finish();
+    refreshBanks(rt);
     world.timing.push([`${rt.def.arch || rt.def.kind}#${rt.id}`, Math.round(t1 - t0), Math.round(performance.now() - t1)]);
     if (tick) await tick(rt.id + 1, rooms.length);
   }
@@ -250,7 +260,14 @@ export async function buildWorld(kit, level, env, tick) {
     const at = world.roomAt(x, z), dist = at ? world.distances(at.id) : new Map();
     for (const r of rooms) r.group.visible = (dist.get(r.id) ?? 99) <= 3 || Math.hypot(r.def.cx - x, r.def.cz - z) <= reach;
   };
+  // Also used for the visible part below/above a way down. Its lighting can
+  // run without waking its creatures, hazards or room-entry callbacks.
+  world.updateLighting = (t) => {
+    lightingTime = t;
+    for (const rt of rooms) refreshBanks(rt);
+  };
   world.update = (dt, t, me) => {
+    world.updateLighting(t);
     const here = world.roomAt(me.x, me.z);
     if (here) world.enter(here);
     for (const rt of rooms) {
@@ -300,13 +317,22 @@ export async function buildWorld(kit, level, env, tick) {
   world.setLights = (rt, k) => {
     rt.lightsK = k; rt.u.dim.value = Math.max(0.03, k);
     if (rt.panelMesh) rt.panelMesh.material.color.copy(rt.panelOn).multiplyScalar(Math.max(0.02, k));
+    refreshBanks(rt);
   };
   /** The light falling on a spot of the world (for things that wander between rooms). */
   world.lightAt = (x, z, y = 1) => {
     const rt = world.roomAt(x, z);
     if (!rt) return [0.2, 0.2, 0.2];
     const p = toLocal(rt.def, x, z), k = rt.u.dim.value;
-    return lightAt(rt.lights, rt.amb, p.x, y, p.z, 0, 1, 0).map((v) => v * k);
+    return lightAt(rt.lights, rt.amb, p.x, y, p.z, 0, 1, 0,
+      { lighting: rt.lighting, banks: rt.u.banks.value, flick: rt.u.flick.value }).map((v) => v * k);
+  };
+  /** Exposure/hum follow the bank above the camera, rather than the whole room's average. */
+  world.illuminationAt = (x, z) => {
+    const rt = world.roomAt(x, z);
+    if (!rt) return 0.3;
+    const p = toLocal(rt.def, x, z);
+    return rt.level * rt.u.dim.value * (rt.lighting ? localLightScale(rt.lighting, rt.lights, rt.u.banks.value, p.x, p.z) : 1);
   };
   world.dispose = () => { scene.traverse((o) => { if (o.userData.dispose) o.userData.dispose(); }); scene.clear(); };
   return world;
@@ -521,9 +547,9 @@ function roomContext(world, rt) {
       holder.position.set(pv[0], pv[1], pv[2]);
       rt.group.add(holder);
       c.after.push(() => {
-        const geo = kit.geometry(batch, opt.unlit ? [] : rt.lights, opt.unlit ? [1.25, 1.25, 1.25] : rt.amb);
+        const geo = kit.geometry(batch, opt.unlit ? [] : rt.lights, opt.unlit ? [1.25, 1.25, 1.25] : rt.amb, opt.unlit ? null : rt.lighting);
         if (!geo) return;
-        const mesh = new THREE.Mesh(geo, kit.surface({ map: opt.map || (batch.vox ? null : kit.tex.white()), vox: batch.vox, room: rt.u, cutout: opt.cutout, flick: geo.userData.flick, side: opt.side }));
+        const mesh = new THREE.Mesh(geo, kit.surface({ map: opt.map || (batch.vox ? null : kit.tex.white()), vox: batch.vox, room: rt.u, cutout: opt.cutout, flick: geo.userData.flick, banks: geo.userData.banks, side: opt.side }));
         mesh.position.set(-pv[0], -pv[1], -pv[2]);
         holder.add(mesh); holder.userData.mesh = mesh;
       });
@@ -720,7 +746,9 @@ function roomContext(world, rt) {
           const q = [corner(-TILE / 2, -TILE), corner(TILE / 2, -TILE), corner(TILE / 2, TILE), corner(-TILE / 2, TILE)];
           if (p.state === 'dead') { dead.quad(q[0], q[1], q[2], q[3], WHITE, uv); continue; }
           const y = top(p.x, p.z), head = clamp((y - floorAt(def, p.x, p.z)) / 2.6, 0.3, 2.5);
-          rt.lights.push(lamp(p.x, y - 0.14, p.z, tube.map((v) => v * 1.05 * def.light.power * Math.pow(head, 1.5)), { axis: [0, -1, 0], floor: 0.24, flick: p.state === 'flicker', k: 3.4 * (head < 1 ? head * head : head), far: 14 * Math.max(0.5, head) }));
+          const bank = rt.lighting ? panelBank(rt.lighting, p) : undefined;
+          rt.lights.push(lamp(p.x, y - 0.14, p.z, tube.map((v) => v * 1.05 * def.light.power * Math.pow(head, 1.5)), { axis: [0, -1, 0], floor: 0.24, flick: p.state === 'flicker' && !rt.lighting, bank, k: 3.4 * (head < 1 ? head * head : head), far: 14 * Math.max(0.5, head) }));
+          if (rt.lighting) { c.shining(`panel-bank-${bank}`, kit.tex.panel(true), 2.5, tube).quad(q[0], q[1], q[2], q[3], WHITE, uv); continue; }
           if (p.state === 'on') { on.quad(q[0], q[1], q[2], q[3], WHITE, uv); continue; }
           const b = new Batch(); b.quad(q[0], q[1], q[2], q[3], WHITE, uv);
           const mesh = new THREE.Mesh(kit.plain(b), kit.glowing(kit.tex.panel(true), 2.5, tube));
@@ -796,17 +824,18 @@ function roomContext(world, rt) {
     finish() {
       const add = (mesh, order = 0) => { mesh.renderOrder = order; mesh.matrixAutoUpdate = false; rt.group.add(mesh); return mesh; };
       for (const [, m] of mapped) {
-        const geo = kit.geometry(m.batch, rt.lights, rt.amb);
-        if (geo) add(new THREE.Mesh(geo, kit.surface({ map: m.texture, room: rt.u, flick: geo.userData.flick, cutout: m.cutout, side: m.side })));
+        const geo = kit.geometry(m.batch, rt.lights, rt.amb, rt.lighting);
+        if (geo) add(new THREE.Mesh(geo, kit.surface({ map: m.texture, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, cutout: m.cutout, side: m.side })));
       }
-      const vg = kit.geometry(c.vox, rt.lights, rt.amb);
-      if (vg) add(new THREE.Mesh(vg, kit.surface({ vox: true, room: rt.u, flick: vg.userData.flick })));
-      const gg = kit.geometry(c.glass, rt.lights, rt.amb);
-      if (gg) add(new THREE.Mesh(gg, kit.surface({ vox: true, room: rt.u, flick: gg.userData.flick, alpha: 0.42 })), 3);
+      const vg = kit.geometry(c.vox, rt.lights, rt.amb, rt.lighting);
+      if (vg) add(new THREE.Mesh(vg, kit.surface({ vox: true, room: rt.u, flick: vg.userData.flick, banks: vg.userData.banks })));
+      const gg = kit.geometry(c.glass, rt.lights, rt.amb, rt.lighting);
+      if (gg) add(new THREE.Mesh(gg, kit.surface({ vox: true, room: rt.u, flick: gg.userData.flick, banks: gg.userData.banks, alpha: 0.42 })), 3);
       for (const [key, m] of shining) {
         const geo = kit.plain(m.batch); if (!geo) continue;
         const mesh = add(new THREE.Mesh(geo, kit.glowing(m.texture, m.power, m.rgb, m.opt)));
         if (key === 'panel') { rt.panelMesh = mesh; rt.panelOn = mesh.material.color.clone(); }
+        if (key.startsWith('panel-bank-')) { mesh.userData.bank = Number(key.at(-1)); mesh.userData.on = mesh.material.color.clone(); rt.bankPanels.push(mesh); }
       }
       if (c.decals.idx.length) {
         const q = c.decals, geo = kit.own(new THREE.BufferGeometry());
