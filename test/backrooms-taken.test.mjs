@@ -97,6 +97,58 @@ test('the colleague who came along goes with the room too; somebody who is nowhe
   assert.equal(env.pursuer.away.follower, undefined);
 });
 
+/* ---- somebody who is more than one body ------------------------------------------------------- */
+
+// The waste toner is not one thing in one place: it is whichever of them are on a ceiling somewhere, and the puddles
+// the fed ones have left. A room that goes takes the ones that are in it and no others, so it puts its own away
+// (takeAway, bringBack and awayWith on what its file returns) and the conductor leaves it to.
+globalThis.__takenPack = {
+  pack: (c) => {
+    const units = [{ x: 2, z: 2 }, { x: 20, z: 2 }, { x: 3, z: 3 }].map((u) => ({ ...u, away: null, mesh: c.add({ visible: true }) }));
+    const it = {
+      ticks: 0, units, at: () => ({ x: 20, z: 2 }), update() { it.ticks++; },                    // (the one it answers for is the one that is elsewhere)
+      takeAway(inside, key) { let n = 0; for (const u of units) if (!u.away && inside(u.x, u.z)) { u.away = key; u.mesh.visible = false; n++; } return n; },
+      bringBack(key) { let n = 0; for (const u of units) if (u.away === key) { u.away = null; u.mesh.visible = true; n++; } return n; },
+      awayWith: () => units.find((u) => u.away)?.away ?? null,
+    };
+    return it;
+  },
+  walker: globalThis.__takenMakers.walker,
+};
+const { createStalkers: createPackStalkers } = await load('pursuer.js', {
+  './gen.js': moduleUrl('export const makeRng = () => () => 0.5;'),
+  './cast.js': moduleUrl('export const CAST = ["pack", "walker"].map((id) => ({ id })); export const castFor = () => CAST.map((m) => ({ id: m.id })); export const homeFor = () => null;'),
+  './cast/index.js': moduleUrl('export const MAKERS = globalThis.__takenPack;'),
+  './cast/walk.js': moduleUrl('export const createWalk = () => ({ go() {} });'),
+  './doorleaf.js': moduleUrl('export const hangDoors = () => ({ update() {} });'),
+});
+
+test('somebody who is more than one body: only those of it that were in the room go, and the rest of it carries on', () => {
+  const room = { uses: [], group: { visible: true, remove() {} } };
+  const env = {
+    level: { seed: 'taken', depth: 0 }, visit: {}, player: { me: { x: 30, z: 30 } },
+    world: { bodies: [], scene: { add() {} }, roomAt: () => room, floorY: () => 0, lightAt: () => [1, 1, 1] }, sees: () => false, play() {},
+  };
+  createPackStalkers(env);
+  for (const fn of env.ready) fn();
+  const pack = env.pursuer.of('pack'), walker = env.pursuer.of('walker'), shown = () => pack.units.map((u) => u.mesh.visible);
+  env.pursuer.update(0.1);
+  assert.deepEqual(env.pursuer.takeAway(inside, 'room:a'), ['pack', 'walker']);
+  assert.deepEqual(shown(), [false, true, false], 'the two that were in the room, and not the one that was not: the conductor has not put the whole of it away');
+  assert.deepEqual(env.pursuer.away, { pack: 'room:a', walker: 'room:a' });
+  for (let i = 0; i < 3; i++) env.pursuer.update(0.1);
+  assert.deepEqual([pack.ticks, walker.ticks], [4, 1], 'what is left of it goes on being run; somebody who is one body and away is not');
+  assert.deepEqual(env.pursuer.takeAway((x) => x > 100, 'room:z'), [], 'a room with none of it in takes none of it');
+  assert.deepEqual(env.pursuer.takeAway((x) => x > 10, 'room:b'), ['pack'], 'and another room can take another of it');
+  assert.deepEqual(shown(), [false, false, false]);
+  assert.deepEqual(env.pursuer.bringBack('room:a'), ['pack', 'walker']);
+  assert.deepEqual(shown(), [true, false, true], 'each comes back with its own room');
+  assert.deepEqual(env.pursuer.away, { pack: 'room:b' });
+  assert.deepEqual(env.pursuer.bringBack('room:b'), ['pack']);
+  assert.deepEqual(env.pursuer.away, {});
+  assert.deepEqual(env.pursuer.bringBack('room:b'), [], 'nobody comes back twice');
+});
+
 /* ---- the residents that walk ------------------------------------------------------------------ */
 
 const { createDenizens } = await load('denizens.js', {

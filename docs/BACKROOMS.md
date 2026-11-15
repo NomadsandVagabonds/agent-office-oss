@@ -295,6 +295,19 @@ Looking back before the fuse finishes still triggers the usual half-battery
 loss and blackout; touching it also triggers that penalty. Failed encounters
 keep the existing return delay. The white figure cannot relocate while armed.
 
+The waste toner (Gemini's) hears and does not see, and is the one member of
+the cast that is more than one body. It hangs from the ceiling, clicking every
+two seconds or so, with black drips falling under it. Upright steps within
+eleven metres turn the clicks to a rattle; 0.65 seconds of walking within 7.5
+metres brings it down (a run, almost at once), and on the floor it is faster
+than anybody runs. Somebody standing still or stooped is not heard at all.
+Each has two bites in it, a heart apiece: after the first it goes back up and
+keeps away for eight to ten seconds; after the second it melts into a puddle
+that is waded at half speed and, a minute later, hatches two or three more,
+which keep to the room they hatched in until they hear somebody. Never more
+than seven are hunting on a part. It cannot open a door, a fire turns it
+back, and it is the only thing that walks into the crawl spaces.
+
 ### What a creature is
 
 - **One rule, never stated, and not somebody else's.** A creature is a rule
@@ -415,6 +428,9 @@ radius, the headroom it needs, and whether it can work a door handle. That is
 all the difference there is between something that is stopped by a shut door
 and slips through a crawl hole (`{ tall: 0.6, opens: false }`) and something
 that opens doors and cannot crawl (the mascot: `{ tall: 1.62, opens: true }`).
+A hole in a wall is anybody's who fits through it; a crawl *space* (a room
+you cannot stand up in) is only for a walker that says `crawls: true`, which
+the waste toner does and the moth, small as it is, does not.
 `go` never teleports and never decides anything: it takes the walker some of
 the way, by whatever rooms lie between, and says what stopped it — `door` (a
 shut pair it is standing at: `env.doors.open(door, 'it')` when your creature
@@ -441,6 +457,16 @@ Things to know before they bite:
 - **Never where it can be seen arriving,** if its rule involves not being
   watched: move, then check `c.hidden` at where it got to, and put it back if
   it would have walked into view. The mascot does this every frame.
+- **More than one body.** There are rooms that change the building and take
+  whatever is in them (*A room the way out is through*). The conductor does
+  this for you: it asks `at()` where you are, and if that is in the room it
+  hides everything you added with `c.add`, takes your `c.body` out of the
+  way, stops running you, and puts it all back when the room is. That is right
+  for one thing in one place. If yours is several, in several places (the
+  waste toner, its brood and its puddles), return `takeAway(inside, key)`,
+  `bringBack(key)` and `awayWith()` from `create` and put away only the ones
+  `inside(x, z)` is true of: the conductor then leaves it to you, and goes on
+  running the rest of you.
 - **A creature that lives in one room and is in every visit that room is in**
   is still part of that room's file. The cast is for what roams, and for what
   should be somewhere different, or nowhere, each time.
@@ -513,9 +539,10 @@ What makes it real and not paint:
   away with the room. The backrooms lore is not nice and considerate and
   waiting to make its changes." Whatever is in the room when it goes, goes
   with it, and is in it, as it was, when that room comes round again:
-  the mascot and the rest of the cast, the colleague who came along, a
-  resident that has walked in, anything put down on its floor, a chalk mark,
-  a fire. While they are away they are not seen, not walked into, cannot be
+  the mascot and the rest of the cast (of the waste toner, the ones that
+  are in the room and no others: a puddle on its carpet goes with its clock
+  stopped), the colleague who came along, a resident that has walked in,
+  anything put down on its floor, a chalk mark, a fire. While they are away they are not seen, not walked into, cannot be
   used and do nothing. (So a chalk mark made to find out whether it is the
   same room says what is true: it is not.) Each of the three rooms keeps its
   own. This is `env.takeAway(inside, key)` and `env.bringBack(key)`

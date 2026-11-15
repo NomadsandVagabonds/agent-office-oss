@@ -25,6 +25,7 @@ export const CAST_LESSONS = Object.freeze({
   averted: 'Some things are better not looked at.',
   led: 'Something that waits for you to catch up is going somewhere.',
   tidy: 'What you knock over, you can stand up again.',
+  hush: 'What hunts by ear passes over you while you keep still or stooped.',
 });
 
 /**
@@ -61,6 +62,9 @@ export const ALL_CAST = Object.freeze([
   Object.freeze({ id: 'porter', name: 'The night porter', rule: 'Leave his bucket alone — and if you have not, stand it up again, because until you do he is looking at you.',
     disposition: 'keeps to itself', home: 'room', weight: 1, teaches: 'tidy', needs: [], items: ['battery'], fire: 'ignores', room: { w: 5, d: 5 },
     caught: { setback: 'his room goes dim, and if you walk out on it every pair of doors on the floor is shut' } }),
+  Object.freeze({ id: 'toner', name: 'The waste toner',
+    rule: 'It clings to the ceiling and listens with clicks — crouch or stand still and it creeps past; walk upright and it drops, zigzags through crawlways, cannot work a door handle, and after hurting you twice melts into black sludge that soon hatches more of its kind.',
+    disposition: 'hunts', home: 'roams', weight: 1, teaches: 'hush', needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 1 } }),
 ]);
 export const CAST = Object.freeze(ALL_CAST.filter((m) => m.on !== false));
 /** How many of the others turn up in one visit, at most. */

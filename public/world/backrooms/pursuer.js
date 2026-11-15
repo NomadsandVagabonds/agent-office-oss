@@ -151,6 +151,9 @@ export function createStalkers(env) {
       const w = W(), gone = [];
       for (const k of live) {
         if (k.dead || k.away) continue;
+        // somebody who is more than one body, in more than one place (the waste toner and what it leaves), puts its own
+        // away: only those of it that were in the room go, and the rest of it carries on
+        if (k.it.takeAway) { if (k.it.takeAway(inside, key)) gone.push(k.id); continue; }
         const at = k.it.at?.();
         if (!at || !Number.isFinite(at.x) || !Number.isFinite(at.z) || !inside(at.x, at.z)) continue;
         // what there is of it to put away: whatever it added to the level, and (the mascot, which builds itself) its figure
@@ -167,6 +170,7 @@ export function createStalkers(env) {
     bringBack(key) {
       const w = W(), back = [];
       for (const k of live) {
+        if (k.it.bringBack) { if (!k.dead && k.it.bringBack(key)) back.push(k.id); continue; }
         if (k.away !== key) continue;
         k.away = null;
         for (const [o, visible] of k.shown || []) o.visible = visible;
@@ -177,7 +181,7 @@ export function createStalkers(env) {
       return back;
     },
     /** Who is away with a room, and which (for the dev page and the tests): { id: key }. */
-    get away() { return Object.fromEntries([...live.filter((k) => k.away).map((k) => [k.id, k.away]), ...(follower?.away ? [['follower', follower.away]] : [])]); },
+    get away() { const with_ = (k) => k.away || (!k.dead && k.it.awayWith?.()) || null; return Object.fromEntries([...live.filter(with_).map((k) => [k.id, with_(k)]), ...(follower?.away ? [['follower', follower.away]] : [])]); },
     /** Where the mascot is and what it is doing (for the dev page) · everybody on this floor: { id: at() }. */
     at: () => pirate?.at() ?? null,
     cast: () => Object.fromEntries(live.map((k) => [k.id, k.dead ? null : k.it.at?.() ?? {}])),

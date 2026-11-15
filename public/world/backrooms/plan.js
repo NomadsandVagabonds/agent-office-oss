@@ -22,7 +22,7 @@ import { generate, makeRng, MIN_EXIT_STEPS, MAX_ODD, DECK, ARCHETYPES, lessons, 
 import { MIN_OUT_STEPS } from './marks.js';
 import { THEME_IDS } from './themes.js';
 import { DEALT } from './seam.js';
-import { whoIsDown, castFor } from './cast.js';
+import { CAST, whoIsDown, castFor } from './cast.js';
 
 export const MIN_FLOORS = 3, MAX_FLOORS = 5;
 /** What everybody knows before they have seen a single room down here: it is how they got in. */
@@ -191,6 +191,8 @@ export function floorOf(visit, i) {
  * are about to walk is what was walked. Worked out once, from a building nobody visits: its plan and every part of it.
  * (Every part, and not the first two as it was: that building has the hallway in its last part, and when the hallway
  * became the way out of its part the first two were as they had always been, and this said nothing had changed.)
+ * And who there is to be dealt into it (cast.js): the same rooms with something else walking them is not what was
+ * walked, and a seed deals a different two of the others the day there is one more of them to deal.
  */
 let make = null;
 export function edition() {
@@ -200,7 +202,8 @@ export function edition() {
     const level = floorOf(visit, i);
     return [level.rooms.map((r) => [r.arch || r.kind, r.x, r.z, r.w, r.d, r.H]), level.links.length, level.start, level.exit];
   });
-  const text = JSON.stringify([visit.depths, visit.floors.map((f) => [f.theme, f.way, f.hand, f.rooms, f.mascot]), parts]);
+  const company = CAST.map((m) => [m.id, m.weight, m.needs || [], m.themes || null]);
+  const text = JSON.stringify([visit.depths, visit.floors.map((f) => [f.theme, f.way, f.hand, f.rooms, f.mascot]), parts, company]);
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193); }
   make = (h >>> 0).toString(36);

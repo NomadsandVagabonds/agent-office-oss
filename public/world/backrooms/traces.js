@@ -354,6 +354,17 @@ const SKETCH = {
     g.beginPath(); g.moveTo(62, 62); g.lineTo(66, 84); g.lineTo(82, 84); g.lineTo(86, 62); g.closePath(); g.stroke();
     g.beginPath(); g.ellipse(74, 62, 12, 3, 0, 0, 6.3); g.stroke(); g.beginPath(); g.arc(74, 60, 12, 3.3, 6.1); g.stroke();
   },
+  toner(g) {                                                         // a ceiling, four jagged legs clinging upside down to a scribbled black knot, drips falling, and somebody stooped low
+    g.beginPath(); g.moveTo(8, 14); g.lineTo(88, 14); g.stroke();
+    for (let i = 0; i < 16; i++) { g.beginPath(); g.moveTo(39 + (i * 5) % 18, 20 + (i * 7) % 12); g.lineTo(43 + (i * 11) % 16, 23 + (i * 3) % 12); g.stroke(); }
+    for (const [kx, ky, fx] of [[24, 34, 15], [35, 38, 29], [61, 38, 67], [72, 34, 81]]) {
+      g.beginPath(); g.moveTo(48, 25); g.lineTo(kx, ky); g.lineTo(fx, 14); g.stroke();
+    }
+    for (const [dx, dy] of [[42, 43], [49, 53], [55, 46]]) g.fillRect(dx, dy, 2.5, 5);
+    g.beginPath(); g.arc(48, 28, 20, 0.55, 1.25); g.stroke(); g.beginPath(); g.arc(48, 28, 27, 1.9, 2.55); g.stroke();
+    g.beginPath(); g.arc(20, 74, 5, 0, 6.3); g.stroke();
+    g.beginPath(); g.moveTo(20, 79); g.lineTo(28, 83); g.lineTo(22, 90); g.moveTo(24, 81); g.lineTo(14, 86); g.stroke();
+  },
   // the residents of rooms (deck2.js `resident`)
   'trunk-line'(g) {                                                  // a ceiling, a knot of loops hanging from it, and an arrow saying go round
     g.beginPath(); g.moveTo(10, 12); g.lineTo(86, 12); g.stroke();

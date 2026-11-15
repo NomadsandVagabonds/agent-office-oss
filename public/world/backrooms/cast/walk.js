@@ -6,8 +6,9 @@
 // decides anything: a creature says where it wants to be, and is told how far
 // it got and what stopped it — a shut door, or no way at all.
 //
-// A walker is any object with { x, z, r, tall, opens? }: where it is, its
-// radius, how much headroom it needs, and whether it can open a door.
+// A walker is any object with { x, z, r, tall, opens?, crawls? }: where it is,
+// its radius, how much headroom it needs, whether it can open a door, and
+// whether it will go into a crawl space (a hole in a wall is anybody's who fits).
 import { toWorld, toLocal, T } from '../gen.js';
 import { roomRoute, roomCosts, gridPath, straighten } from './paths.js';
 
@@ -31,8 +32,12 @@ export function createWalk(env) {
   // (ghost: creatures do not block on one another's bodies. But a colleague the building is keeping — absorbed.js — is
   // not somebody to walk through or stop on: nothing of the cast stands within ABSORBED_GAP of one.)
   const stand = (a, x, z) => W().free(x, z, a.r, { ghost: true }) && W().headroom(x, z) >= a.tall && clearOfAbsorbed(env.absorbed, x, z);
-  /** Rooms it will not go into: ones that fold space, and ones it could not stand up in. */
-  const shy = (a, rt) => !rt || rt.fold || rt.def.crawl || rt.def.H < a.tall + 0.05;
+  /**
+   * Rooms it will not go into: ones that fold space, ones it could not stand up in, and the crawl spaces — unless it
+   * says that it crawls (`crawls` on the walker: the waste toner). Being short enough is not the same thing: the moth
+   * fits through a crawl hole and keeps out of the crawl spaces, as it always has.
+   */
+  const shy = (a, rt) => !rt || rt.fold || (rt.def.crawl && !a.crawls) || rt.def.H < a.tall + 0.05;
   /** What a doorway costs this walker (cast/paths.js): Infinity where it cannot go. */
   const cost = (a) => (d, from, to) => {
     const th = W().throats[d.link], door = doorOf(d.link);

@@ -12,6 +12,7 @@ import { SHADOW, away, watched, drained } from '../public/world/backrooms/cast/s
 import { MOTH, resting, flits } from '../public/world/backrooms/cast/moth.rule.js';
 import { PORTER, mopping, minds, facesYou } from '../public/world/backrooms/cast/porter.rule.js';
 import { createWalk, clearOfAbsorbed, ABSORBED_GAP } from '../public/world/backrooms/cast/walk.js';
+import { TONER, perched, hatchedBrood, isQuiet, weaveOffset, stepToner, strikeToner } from '../public/world/backrooms/cast/toner.rule.js';
 import { FIRE_WAYS, FIRE_FEAR, calm, afraid, tooNear } from '../public/world/backrooms/cast/fire.rule.js';
 import { BLACKOUT, createBlackoutState, stepBlackout } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
 import { ARCHETYPES } from '../public/world/backrooms/gen.js';
@@ -484,6 +485,43 @@ test('the absorbed staff: nothing of the cast walks through one or stops on one'
   assert.equal(walk.stand(it, 4.2, 4.1), true, 'and where there are none, as before');
 });
 
+test('crawl spaces: only a walker that says it crawls goes into one; fitting through the hole is not the same thing', () => {
+  // a room, a crawl space off it through a crawl hole, and nothing shut
+  const rooms = [
+    { id: 0, def: { H: 2.6, doors: [{ link: 0, to: 1, h: 0.8 }] } },
+    { id: 1, def: { H: 0.95, crawl: true, doors: [{ link: 0, to: 0, h: 0.8 }] } },
+  ];
+  const env = { level: { rooms: [] }, world: { rooms, throats: [{ open: true }], roomAt: () => rooms[0], free: () => true, headroom: () => 0.95 } };
+  const walk = createWalk(env);
+  const moth = { x: 0, z: 0, r: 0.1, tall: 0.6, opens: false };
+  const toner = { x: 0, z: 0, r: TONER.r, tall: TONER.tall, opens: TONER.opens, crawls: TONER.crawls };
+  assert.equal(TONER.crawls, true);
+  assert.equal(walk.shy(moth, rooms[1]), true, 'the moth fits through the hole and keeps out of the crawl space, as it always has');
+  assert.deepEqual(walk.exits(moth), []);
+  assert.equal(walk.shy(toner, rooms[1]), false);
+  assert.deepEqual(walk.exits(toner), [{ room: 1, shut: false }], 'the waste toner goes in after you');
+  assert.deepEqual(walk.exits({ ...toner, tall: 1.62 }), [], 'saying so does not get anybody through a hole they do not fit');
+  assert.equal(walk.shy({ ...toner, tall: 1.2 }, rooms[1]), true, '…or into a room they could not be in');
+  env.world.throats[0].open = false;
+  assert.deepEqual(walk.exits(toner), [], 'and a doorway that is shut is shut for it too');
+  // every walker the creature's file makes says so (the ones it only tries a spot with as well: a spot in a crawl space is a spot)
+  const src = fs.readFileSync(new URL('../public/world/backrooms/cast/toner.js', import.meta.url), 'utf8');
+  const walkers = src.match(/tall: TONER\.tall/g) || [], crawlers = src.match(/tall: TONER\.tall, opens: TONER\.opens, crawls: TONER\.crawls/g) || [];
+  assert.ok(walkers.length >= 3 && walkers.length === crawlers.length, `${walkers.length} walkers, ${crawlers.length} of them say they crawl`);
+});
+
+test('the waste toner: the bite that takes the last heart is the last thing any of them does', () => {
+  // (the rule cannot know: being got is the conductor's c.hurt. What the creature's file does with the answer is read here,
+  // and was seen in a browser: before this it stayed on the visitor biting, and buzzing, every frame until the picture went)
+  const src = fs.readFileSync(new URL('../public/world/backrooms/cast/toner.js', import.meta.url), 'utf8');
+  assert.match(src, /const hit = c\.hurt\(TONER\.hitDamage\);\s+(\/\/[^\n]*\n\s+)*if \(hit\.dead \|\| hit\.ended\) \{ over = true; return; \}/, 'nothing more once the visit is ending');
+  assert.match(src, /if \(!placed \|\| !units\.length \|\| over\) return;/, 'and none of the others either');
+  assert.ok(!/env\.end\(/.test(src), 'it never ends a visit itself: being caught is c.hurt');
+  // the rule's own answer to a hit that did not count (they were hit a moment ago) is to go back up, not to try again at once
+  const s = strikeToner({ ...perched(() => 0.5), mode: 'chase' }, { landed: false, dead: false, ended: false }, () => 0.5);
+  assert.equal(s.mode, 'recoil'); assert.equal(s.hits, 0); assert.ok(s.t > 2 && s.t < TONER.recoilTime[1]);
+});
+
 test('the absorbed staff: a hold never turns the visitor\'s head while something that hunts is near and in sight', () => {
   const { ABSORBED: A, tugsTheCamera, HUNTER_NEAR, TUG_SECONDS } = SUNK;
   // nobody about: the first half second of a hold pulls the look round to the face, and then lets it go
@@ -494,8 +532,9 @@ test('the absorbed staff: a hold never turns the visitor\'s head while something
   for (let left = A.holdDuration; left > 0; left -= dt) assert.equal(tugsTheCamera(left, true), false);
   assert.ok(HUNTER_NEAR >= 5 && HUNTER_NEAR <= HUNT.far, 'near enough to matter, and no further than it could see you from');
   assert.ok(TUG_SECONDS < A.holdDuration);
-  // the two this is for are the ones that hunt; the rest of the hold is as it was
-  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow']);
+  // the ones this is for are the ones that hunt (the waste toner since it came: something dropping off the ceiling at
+  // you is not a moment to have your head turned for you); the rest of the hold is as it was
+  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner']);
   const held = SUNK.stepAbsorbed(SUNK.createAbsorbedState('wall'), { dt, dist: 0.5 });
   assert.ok(held.startedGrab && held.slow === A.slowFactor);
 });
@@ -574,4 +613,142 @@ test('the absorbed staff: none is put where a thing lying about could not be pic
   assert.ok(THING_GAP > ABSORBED_GAP + 0.5);
   const placing = fs.readFileSync(new URL('../public/world/backrooms/absorbed.js', import.meta.url), 'utf8');
   assert.ok(/clearOfThings\(s\.wx, s\.wz, company\)/.test(placing) && /env\.pursuer\?\.cast\?\.\(\)/.test(placing));
+});
+
+test('the waste toner: hides on the ceiling clicking sonar, passes over crouch or stillness, weaves fast through crawl holes, stops at shut doors, and melts into glitch slime on its second bite', () => {
+  const deckEntry = CAST.find((m) => m.id === 'toner');
+  assert.ok(deckEntry && deckEntry.caught.hurt === TONER.hitDamage && TONER.hitDamage === 1 && TONER.maxHits === 2);
+  assert.ok(TONER.tall <= 0.55 && TONER.opens === false && TONER.chaseSpeed > 4.2, 'low enough to crawl, fast, and unable to open doors');
+
+  // 1. Perched on the ceiling: standing still or crouching right underneath it never wakes it, while calm sonar clicks sound
+  let s = perched(() => 0.5), pings = 0;
+  for (let t = 0; t < 30; t += dt) {
+    s = stepToner(s, dt, { d: 1.5, los: true, audible: true, moving: true, speed: 1.4, sink: TONER.crouchSink + 0.1 }, () => 0.5);
+    assert.ok(s.mode === 'perch' || s.mode === 'prowl', `crouched visitor stays safe (got ${s.mode})`);
+    assert.equal(s.alert, 0);
+    if (s.sonar === 'ping') pings++;
+  }
+  assert.ok(pings >= 8, `emits periodic sonar clicks while on the ceiling (${pings})`);
+  assert.equal(isQuiet({ moving: false, speed: 0, sink: 0 }), true);
+  assert.equal(isQuiet({ moving: true, speed: 2.0, sink: 0.45 }), true);
+  assert.equal(isQuiet({ moving: true, speed: 2.0, sink: 0 }), false);
+
+  // 2. Upright walking triggers warning clicks first (allowing you to freeze/crouch in time), while sprinting drops it
+  s = perched(() => 0.5);
+  let warns = 0;
+  for (let t = 0; t < TONER.fuseWalk * 0.65; t += dt) {
+    s = stepToner(s, dt, { d: 5, los: true, audible: true, moving: true, speed: 2.0, sink: 0 }, () => 0.5);
+    if (s.sonar === 'warn') warns++;
+  }
+  assert.ok(s.mode !== 'drop' && s.alert > 0.4 && warns >= 1, 'accelerating clicks warn before it drops');
+  for (let t = 0; t < 1.2; t += dt) s = stepToner(s, dt, { d: 5, los: true, audible: true, moving: false, speed: 0, sink: 0.45 }, () => 0.5);
+  assert.equal(s.alert, 0, 'crouching or freezing lets the sonar pass');
+
+  // Sprinting upright within drop range triggers ceiling peel -> floor chase
+  let dropped = 0;
+  for (let t = 0; t < 1.2; t += dt) {
+    s = stepToner(s, dt, { d: 5, los: true, audible: true, moving: true, speed: 3.4, sink: 0 }, () => 0.4);
+    if (s.dropped) dropped++;
+  }
+  assert.equal(dropped, 1);
+  assert.equal(s.mode, 'chase');
+
+  // 3. Never runs in a straight line: weaves widely both left and right with sporadic phase-glitches
+  let minW = Infinity, maxW = -Infinity, glitches = 0;
+  for (let t = 0; t < 2.2; t += dt) {
+    s = stepToner(s, dt, { d: 4, los: true, audible: true, moving: true, speed: 2.0, sink: 0 }, () => 0.35);
+    const w = weaveOffset(s);
+    minW = Math.min(minW, w); maxW = Math.max(maxW, w);
+    if (s.glitch) glitches++;
+  }
+  assert.ok(minW < -0.55 && maxW > 0.55 && glitches >= 2, `weaves [${minW.toFixed(2)}, ${maxW.toFixed(2)}] with ${glitches} glitches`);
+
+  // 4. Shut fire doors stop it cold, and after scratching a moment it climbs back onto the ceiling
+  for (let t = 0; t < TONER.doorGiveUp + 3 * dt; t += dt) {
+    s = stepToner(s, dt, { d: 3, los: false, audible: false, moving: false, speed: 0, sink: 0, blockedByDoor: true }, () => 0.5);
+  }
+  assert.equal(s.mode, 'prowl', 'blocked by a shut door, it climbs back to the ceiling');
+
+  // 5. Two landed 1-damage bites dissolve it into a persistent sticky pool of black glitch slime
+  s = { ...s, mode: 'chase', doorT: 0, lostT: 0 };
+  s = stepToner(s, dt, { d: TONER.touch - 0.1, los: true, audible: true, moving: true, speed: 2, sink: 0 }, () => 0.5);
+  assert.equal(s.bite, true);
+  s = strikeToner(s, { landed: true, dead: false, ended: false }, () => 0.5);
+  assert.equal(s.hits, 1);
+  assert.equal(s.mode, 'recoil', 'after 1st bite (1 damage), phases back up to ceiling for a breather');
+  assert.equal(s.survived, true);
+
+  // Fast-forward past ceiling recoil, drop again, and land the 2nd bite (2 total damage)
+  for (let t = 0; t < TONER.recoilTime[1] + 0.5; t += dt) s = stepToner(s, dt, { d: 6, los: false, audible: false }, () => 0.5);
+  for (let t = 0; t < 1.2; t += dt) s = stepToner(s, dt, { d: 4, los: true, audible: true, moving: true, speed: 3.4, sink: 0 }, () => 0.5);
+  assert.equal(s.mode, 'chase');
+  s = stepToner(s, dt, { d: TONER.touch - 0.1, los: true, audible: true, moving: true, speed: 2, sink: 0 }, () => 0.5);
+  assert.equal(s.bite, true);
+  s = strikeToner(s, { landed: true, dead: false, ended: false }, () => 0.5);
+  assert.equal(s.hits, 2);
+  assert.equal(s.mode, 'dissolving', '2nd landed bite triggers dissolve');
+  assert.equal(s.dissolved, true);
+
+  let melted = 0;
+  for (let t = 0; t < TONER.dissolveTime + 3 * dt; t += dt) {
+    s = stepToner(s, dt, { d: 0.4, los: true, audible: true, moving: true, speed: 2, sink: 0 }, () => 0.5);
+    if (s.melted) melted++;
+  }
+  assert.equal(melted, 1);
+  assert.equal(s.mode, 'puddle');
+  assert.ok(s.inPuddle && s.slow === TONER.puddleSlow, 'stepping in the glitch slime puddle slows movement');
+  const outside = stepToner(s, dt, { d: TONER.puddleRadius + 0.5 }, () => 0.5);
+  assert.ok(outside.mode === 'puddle' && !outside.inPuddle && outside.slow === 1);
+
+  // 6. Brood lifecycle: after ~1 minute (60 s), the puddle ruptures into 'spent' and hatches 2–3 territorial broodlings
+  assert.equal(TONER.broodTime, 60);
+  assert.deepEqual(TONER.broodCount, [2, 3]);
+  let stirPings = 0, hatches = 0, spawned = 0;
+  for (let t = 0; t < TONER.broodTime * 0.5; t += dt) {
+    s = stepToner(s, dt, { d: 8 }, () => 0.8);
+  }
+  assert.equal(s.mode, 'puddle');
+  assert.ok(s.gestation > 0.48 && s.gestation < 0.55, `mid-gestation progress (${s.gestation.toFixed(2)})`);
+
+  for (let t = 0; t < TONER.broodTime * 0.5 + 1; t += dt) {
+    s = stepToner(s, dt, { d: 8 }, () => 0.85);
+    if (s.sonar === 'ping') stirPings++;
+    if (s.hatched) { hatches++; spawned = s.spawnCount; }
+  }
+  assert.ok(stirPings >= 2, `late-stage brooding puddle emits warning clicks (${stirPings})`);
+  assert.equal(hatches, 1, 'puddle hatches once when the 60 s clock expires');
+  assert.ok(spawned >= 2 && spawned <= 3, `spawns 2 or 3 broodlings (got ${spawned})`);
+  assert.equal(s.mode, 'spent');
+
+  // Spent stain stays inert forever (never hatches a second brood) and keeps mild residual tackiness
+  for (let t = 0; t < 120; t += dt) {
+    s = stepToner(s, dt, { d: 0.3 }, () => 0.2);
+    assert.equal(s.hatched, false);
+    assert.equal(s.mode, 'spent');
+  }
+  assert.ok(s.inPuddle && s.slow === TONER.spentSlow);
+  // Check both ends of broodCount rng: 0 -> 2, 0.99 -> 3
+  assert.equal(stepToner({ ...perched(() => 0.5, { mode: 'puddle' }), broodLeft: 0.01 }, dt, { d: 5 }, () => 0.0).spawnCount, 2);
+  assert.equal(stepToner({ ...perched(() => 0.5, { mode: 'puddle' }), broodLeft: 0.01 }, dt, { d: 5 }, () => 0.99).spawnCount, 3);
+
+  // Hatched broodlings are territorial to their birth room until they hear upright footsteps
+  let brood = hatchedBrood(4, () => 0.5);
+  assert.equal(brood.territorial, true);
+  assert.equal(brood.homeRoom, 4);
+  assert.equal(brood.mode, 'recoil', 'emerges from puddle up onto the ceiling');
+  for (let t = 0; t < TONER.emergeTime[1] + 0.2; t += dt) brood = stepToner(brood, dt, { d: 12, audible: false }, () => 0.5);
+  assert.equal(brood.mode, 'perch');
+  assert.equal(brood.territorial, true);
+  assert.equal(brood.homeRoom, 4);
+  // Hearing upright movement wakes a territorial broodling onto the hunt
+  for (let t = 0; t < 1.2; t += dt) brood = stepToner(brood, dt, { d: 5, los: true, audible: true, moving: true, speed: 3.4, sink: 0 }, () => 0.5);
+  assert.equal(brood.mode, 'chase');
+  assert.equal(brood.territorial, true);
+  assert.equal(brood.homeRoom, 4, 'remembers its home room so it can return if it loses the trail');
+  // Once it loses the trail far from home, it keeps prowling back across the ceilings until near homeRoom
+  for (let t = 0; t < TONER.trailMemory + 0.5; t += dt) brood = stepToner(brood, dt, { d: 15, los: false, audible: false, farFromHome: true }, () => 0.5);
+  for (let t = 0; t < 20; t += dt) {
+    brood = stepToner(brood, dt, { d: 15, los: false, audible: false, farFromHome: true }, () => 0.5);
+    assert.equal(brood.mode, 'prowl', 'keeps creeping homeward rather than perching in distant rooms');
+  }
 });

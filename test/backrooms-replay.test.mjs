@@ -44,6 +44,9 @@ test('a tape says which make of the building it was shot in: a few letters that 
   const make = edition();
   assert.match(make, /^[a-z0-9]{4,8}$/, 'short enough to keep on a tape (core/runs.mjs keeps sixteen letters and digits at most)');
   assert.equal(edition(), make, 'and the same every time it is asked');
+  // …or the same building with somebody else in it: who there is to be dealt is part of the make (a seed deals a
+  // different two of the others the day there is one more of them)
+  assert.match(read('../public/world/backrooms/plan.js'), /const company = CAST\.map\(\(m\) => \[m\.id, m\.weight, m\.needs \|\| \[\], m\.themes \|\| null\]\);\s+const text = JSON\.stringify\(\[[^\n]*parts, company\]\);/);
 });
 
 test('the conductor plays a tape back with nothing of the office\'s in it, the picture says PLAY, and the tape of a visit that got out says what it was', () => {
