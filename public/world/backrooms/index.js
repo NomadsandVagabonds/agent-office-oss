@@ -434,6 +434,8 @@ async function visit(office, opt) {
       const vol = me.noise ?? 1;
       if (vol > 0.02) sound.play(f.world.current()?.footstep || 'step', { vol: Math.min(1.45, vol) });
     });
+    // somebody who has run too far (player.js WIND): a recording, made for this, played the moment the breath is gone
+    player.on('winded', () => sound.file(new URL('./breath/pant.mp3', import.meta.url).href, { vol: 0.85 }));
     if (f.env.grip) player.on('move', (dx, dz, step) => f.env.grip.step(dx, dz, step));
     for (const fn of f.env.ready || []) fn();
     f.world.enter(f.world.roomAt(me.x, me.z) || f.world.rooms[f.level.start.room]);
