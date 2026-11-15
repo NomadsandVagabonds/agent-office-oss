@@ -136,9 +136,11 @@ export function build(c) {
   const s = { mode: 'home', waited: 0, sulk: 0, glasses: STAND.glasses, happy: false };
   // her giggle (the owner's ask; made for her, and the one sound down here that is a recording and not the owner's music): only
   // when she is right beside you, louder the longer she has waited, and never while the sound is off or the menu is up
-  const GIGGLE = new URL('./lemonade/giggle.mp3', import.meta.url).href;
+  const GIGGLES = [new URL('./lemonade/giggle.mp3', import.meta.url).href, new URL('./lemonade/giggle2.mp3', import.meta.url).href, new URL('./lemonade/giggle3.mp3', import.meta.url).href];
+  let last = -1;
   let nextGiggle = 2;
-  const giggle = (loud = 0.7) => c.env.sound?.file?.(GIGGLE, { vol: loud });          // through the effects bus: the slider, M and the menu reach it
+  // (three takes of it, and never the same one twice running)
+  const giggle = (loud = 0.7) => { let k = Math.floor(Math.random() * GIGGLES.length); if (k === last) k = (k + 1) % GIGGLES.length; last = k; return c.env.sound?.file?.(GIGGLES[k], { vol: loud }); };          // through the effects bus: the slider, M and the menu reach it
   let took = false, clock = 0;
   c.rt.vendor = s;                                        // (for the dev page and for scripts: what she is doing)
   const put = (bob = 0, shake = 0) => { fig.position.set(me0.x + shake * (Math.random() - 0.5), bob, me0.z + shake * (Math.random() - 0.5)); fig.rotation.y = me0.rot; };
