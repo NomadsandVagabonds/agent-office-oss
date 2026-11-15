@@ -6,7 +6,7 @@ import {createHealth} from '../public/world/backrooms/health-state.js';
 const url=source=>`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;
 let source=readFileSync(new URL('../public/world/backrooms/pursuer.js',import.meta.url),'utf8');
 const swaps={
- './gen.js':'export const makeRng=()=>()=>.5;',
+ './gen.js':'export const makeRng=()=>()=>.5; export const roomDistances=()=>new Map();',
  './cast.js':`export const CAST=[{id:'near'},{id:'far'}];export const castFor=()=>CAST;export const homeFor=()=>null;`,
  './cast/index.js':`const make=c=>({hits:[],at:()=>({x:c.member.id==='near'?0:20,z:0}),update(){this.hits.push({visitor:c.me().id,...c.hurt(4)});}});export const MAKERS={near:make,far:make};`,
  './cast/walk.js':'export const createWalk=()=>({});',

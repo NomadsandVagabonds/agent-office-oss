@@ -31,7 +31,7 @@ export function create(c) {
     const w = env.world, way = roomRoute(level, level.start.room, gap.id, c.walk.cost(walker)) || [gap.id];
     let spot = null;
     // (c.lair: the cast's own choice of where, when it has one to give — cast.js `withRoom`. Without: the same, worked out here)
-    for (const id of [c.lair ?? sleepsIn(way, c.R), ...way.slice().reverse()]) { const def = level.rooms[id]; if (!def || def.crawl || def.H < 2.2) continue; const sp = c.walk.spotIn(walker, id); if (sp && c.walk.stand(walker, sp.x, sp.z)) { spot = sp; break; } }
+    for (const id of [c.lair ?? sleepsIn(way, c.R), ...way.slice().reverse(), ...level.rooms.filter(r => roomRoute(level, r.id, gap.id, c.walk.cost(walker))).map(r => r.id)]) { const def = level.rooms[id]; if (!def || def.crawl || def.H < 2.2 || c.spawnAllowed?.(id) === false) continue; const sp = c.walk.spotIn(walker, id); if (sp && c.walk.stand(walker, sp.x, sp.z)) { spot = sp; break; } }
     if (!spot) return;
     walker.x = lastX = spot.x; walker.z = lastZ = spot.z; rot = c.R.range(0, 6.28); base = w.floorY(spot.x, spot.z);
     mat = kit.surface({ vox: true }); fig = new THREE.Group();
@@ -83,7 +83,7 @@ export function create(c) {
       const px = Math.cos(rot), pz = -Math.sin(rot), hemmed = !c.los(walker.x, walker.z, walker.x + px * 1.5, walker.z + pz * 1.5) || !c.los(walker.x, walker.z, walker.x - px * 1.5, walker.z - pz * 1.5);
       const want = s.mode === 'asleep' ? 0 : folded(w.headroom(walker.x, walker.z), hemmed); q += (want - q) * Math.min(1, dt * (want > q ? 5 : 1.6));
       const bridge = !!w.terrainY && fy - w.terrainY(walker.x, walker.z) > 0.02;
-      // (where it sleeps may be next door to the landing, in plain sight of it: it is not woken from there in the first moments of a part)
+      // Give visitors a moment to get their bearings even if a distant lair is visible from the landing.
       s = minds(s, dt, { d, sees: sees && (s.mode !== 'asleep' || clock >= L.grace), here: c.room(m.x, m.z) === c.room(walker.x, walker.z), floor, fold: q, bridge });
       if (s.woke) { c.play('rattle', walker.x, walker.z, 18); env.interfere(0.35); }
       if (s.fell) { c.play('rattle', walker.x, walker.z, 20); env.interfere(0.6); }

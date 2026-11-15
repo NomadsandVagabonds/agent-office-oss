@@ -341,18 +341,22 @@ export function create(c) {
     return false;
   }
 
-  /** It comes down the way you did: under the hole you fell through, as soon as you are not there to see it land. */
+  /** It followed downstairs, but finds a distant unseen room rather than appearing on the landing. */
   let arriving = null;
   function arrive(dt) {
     arriving.wait -= dt;
     if (arriving.wait > 0) return;
-    const at = level.start, me = env.player.me;
-    if (Math.hypot(me.x - at.x, me.z - at.z) < 5 || !hiddenAt(at.x, at.z, 1.2)) return;          // not while you could watch: it waits up there
+    const body = { r: 0.26, tall: TALL, opens: true }, me = env.player.me;
+    let at = null;
+    for (const id of roamingRooms(level, walk.cost(body))) {
+      at = [walk.spotIn(body, id), ...roamingSpots(level, id)].find(p => p && stand(body, p.x, p.z) && Math.hypot(me.x - p.x, me.z - p.z) >= 5 && hiddenAt(p.x, p.z, 1.2));
+      if (at) break;
+    }
+    if (!at) return;
     const p = mascot(at.x, at.z, Math.atan2(me.x - at.x, me.z - at.z), false);
-    if (!stand(p, at.x, at.z)) { for (let a = 0; a < 12; a++) { const x = at.x + Math.cos(a * 0.52) * 0.9, z = at.z + Math.sin(a * 0.52) * 0.9; if (stand(p, x, z)) { p.x = x; p.z = z; break; } } }
     p.face = arriving.face % p.faces.length; p.show();
     p.state = 'awake'; p.met = 1;
-    // if it was after you up there, it saw which way you went from the hole; if it had lost you, it has no idea
+    // If it was after you upstairs, it remembers which way you went; otherwise it searches.
     p.know = arriving.lost ? lost() : { ...shown(here()), mode: 'search' };
     W().scene.add(p.group);
     if (arriving.card) { p.give(p.face % 2); offer(p); }

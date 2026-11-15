@@ -155,7 +155,7 @@ test('the creature conductor applies per-species damage and live movement scales
   const data = s => `data:text/javascript;base64,${Buffer.from(s).toString('base64')}`;
   let source = readFileSync(new URL('../public/world/backrooms/pursuer.js', import.meta.url), 'utf8');
   const stubs = {
-    './gen.js': 'export const makeRng=()=>()=>.5;',
+    './gen.js': 'export const makeRng=()=>()=>.5; export const roomDistances=()=>new Map();',
     './cast.js': `export const CAST=[{id:'pirate'},{id:'toner'}]; export const castFor=()=>CAST; export const homeFor=()=>null;`,
     './cast/index.js': `const make=c=>({samples:[], update(dt){this.samples.push({dt,speed:c.speedScale,...c.hurt(1)});}}); export const MAKERS={pirate:make,toner:make};`,
     './cast/walk.js': 'export const createWalk=()=>({});',

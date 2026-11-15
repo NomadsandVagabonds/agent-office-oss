@@ -147,7 +147,7 @@ $('create').onclick=async()=>{
  finally{clearTimeout(timeout);$('create').disabled=false;$('create').textContent='Start a game';}
 };
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('invite').value);$('copy').textContent='Copied';}catch{$('invite').focus();$('invite').select();$('copy').textContent='Link selected — press Ctrl+C / ⌘C';}};
-function lock(){gameAudio.start();const request=canvas.requestPointerLock();request?.catch(()=>{$('panel').hidden=false;$('status').textContent='Click Enter / resume to give this tab mouse control.';});}
+function lock(){gameAudio.start();canvas.tabIndex=-1;canvas.focus({preventScroll:true});const request=canvas.requestPointerLock();request?.catch(()=>{$('panel').hidden=false;$('status').textContent='Click Enter / resume to give this tab mouse control.';});}
 $('ready').onclick=()=>{
  gameAudio.start();
  if(state?.phase==='waiting'){send({type:'ready'});$('ready').disabled=true;$('ready').textContent='Waiting for your friend…';return;}
@@ -155,7 +155,14 @@ $('ready').onclick=()=>{
 };
 window.addEventListener('beforeunload',e=>{if(!ended&&state&&['play','loading','descending'].includes(state.phase)){e.preventDefault();e.returnValue='';}});
 canvas.onclick=()=>{if(state?.phase==='play'&&!building&&!ended)lock();};
-document.addEventListener('pointerlockchange',()=>{keys.clear();$('panel').hidden=inventoryHud?.isOpen||socialUI.visible||document.pointerLockElement===canvas;if(!active())send({type:'input',f:0,s:0,yaw,pitch});});
+document.addEventListener('pointerlockchange',()=>{
+ const captured=document.pointerLockElement===canvas;
+ // Capture can finish between keydown and this queued event. Preserve the
+ // first held movement key on entry; releasing the mouse must still stop it.
+ if(!captured)keys.clear();
+ $('panel').hidden=inventoryHud?.isOpen||socialUI.visible||captured;
+ if(!active())send({type:'input',f:0,s:0,yaw,pitch});
+});
 window.addEventListener('blur',()=>{keys.clear();send({type:'input',f:0,s:0,yaw,pitch});});
 document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas){yaw-=e.movementX*.0023;pitch=Math.max(-1.2,Math.min(1.2,pitch-e.movementY*.0023));}});
 window.addEventListener('keydown',e=>{if(realMode&&socialUI.key(e))return;if(document.pointerLockElement!==canvas)return;keys.add(e.key.toLowerCase());if(e.repeat)return;

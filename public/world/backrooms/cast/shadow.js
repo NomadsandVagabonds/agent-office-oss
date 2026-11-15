@@ -48,7 +48,7 @@ export function create(c) {
     const fx = -Math.sin(m.yaw), fz = -Math.cos(m.yaw);
     let best = null;
     for (const p of spots) {
-      if (!p) continue;
+      if (!p || c.spawnAllowed?.(c.room(p.x, p.z)) === false) continue;
       const d = Math.hypot(p.x - m.x, p.z - m.z);
       if (d < SHADOW.near[0] || d > SHADOW.near[1] || !c.walk.stand(walker, p.x, p.z) || !c.hidden(p.x, p.z, 0.6) || !c.los(p.x, p.z, m.x, m.z)) continue;
       // it likes to be just off the edge of the picture, on the way you are going: not behind you

@@ -36,7 +36,7 @@ globalThis.__takenMakers = {
   nowhere: () => { const it = { ticks: 0, at: () => ({ x: null, z: null }), update() { it.ticks++; } }; return it; },
 };
 const { createStalkers } = await load('pursuer.js', {
-  './gen.js': moduleUrl('export const makeRng = () => () => 0.5;'),
+  './gen.js': moduleUrl('export const makeRng = () => () => 0.5; export const roomDistances=()=>new Map();'),
   './cast.js': moduleUrl('export const CAST = ["walker", "mascot", "elsewhere", "nowhere"].map((id) => ({ id })); export const castFor = () => CAST.map((m) => ({ id: m.id })); export const homeFor = () => null;'),
   './cast/index.js': moduleUrl('export const MAKERS = globalThis.__takenMakers;'),
   './cast/walk.js': moduleUrl('export const createWalk = () => ({ go() {} });'),
@@ -121,7 +121,7 @@ globalThis.__takenPack = {
   walker: globalThis.__takenMakers.walker,
 };
 const { createStalkers: createPackStalkers } = await load('pursuer.js', {
-  './gen.js': moduleUrl('export const makeRng = () => () => 0.5;'),
+  './gen.js': moduleUrl('export const makeRng = () => () => 0.5; export const roomDistances=()=>new Map();'),
   './cast.js': moduleUrl('export const CAST = ["pack", "walker"].map((id) => ({ id })); export const castFor = () => CAST.map((m) => ({ id: m.id })); export const homeFor = () => null;'),
   './cast/index.js': moduleUrl('export const MAKERS = globalThis.__takenPack;'),
   './cast/walk.js': moduleUrl('export const createWalk = () => ({ go() {} });'),
@@ -157,7 +157,7 @@ test('somebody who is more than one body: only those of it that were in the room
 /* ---- the residents that walk ------------------------------------------------------------------ */
 
 const { createDenizens } = await load('denizens.js', {
-  './gen.js': moduleUrl('export const makeRng = () => () => 0.5;'),
+  './gen.js': moduleUrl('export const makeRng = () => () => 0.5; export const roomDistances=()=>new Map();'),
   './absorbed.js': moduleUrl('export const populateAbsorbed = () => {};'),
 });
 

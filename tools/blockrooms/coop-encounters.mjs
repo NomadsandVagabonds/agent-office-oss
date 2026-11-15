@@ -11,6 +11,19 @@ export async function exercise(r,id){
  const give=(v,type,id,extra={})=>{const out=mutateInventory(sim,v.record,m=>m.add(makeItem(type,id,extra)));check(out.ok,'item added');};
  const useAt=(v,use)=>{v.me.yaw=Math.atan2(v.me.x-use.wx,v.me.z-use.wz);r.command(v.id,{type:'input',f:0,s:0,yaw:v.me.yaw,pitch:0});r.command(v.id,{type:'exit'});};
  reset();
+ if(id.startsWith('spawn-')){
+  const {roomDistances,ARCHETYPES}=await import('/world/backrooms/gen.js'),{CAST}=await import('/world/backrooms/cast.js');
+  const distance=roomDistances(r.level,r.start.room),hostile=new Set(CAST.filter(c=>c.disposition==='hunts').map(c=>c.id));
+  const placement=()=>{const out=[];for(const [name,at]of Object.entries(env.pursuer.cast()))if(hostile.has(name))for(const p of at?.pack||[at])if(p&&Number.isFinite(p.x)&&Number.isFinite(p.z)){
+   const room=w.roomAt(p.x,p.z);check((distance.get(room?.id)??0)>=2,name+' starts at least two doorways away');out.push([name,p.x,p.z]);
+  }return out;};
+  const before=placement();
+  for(const rt of w.rooms)if(ARCHETYPES[rt.def.arch]?.resident)check((distance.get(rt.id)??0)>=2,'resident room is beyond landing buffer');
+  h.me.pitch=g.me.pitch=1.2;tick(1200);
+  check(visitors.every(v=>v.healthModel.read().current===4),'both visitors remain unharmed at landing for a minute');
+  check(JSON.stringify(placement())===JSON.stringify(before),'hostile cast waits for exploration, without a spawn teleport');
+  return {safeStart:'60 seconds, both players healthy, all hostile placements two rooms away',cast:before.map(p=>p[0])};
+ }
  if(id==='bridge-gap'||id==='bridge-lines'){
   if(id==='bridge-lines')env.pursuer.takeAway(()=>true,'bridge-setup');
   const rt=w.rooms.find(rt=>rt.def.arch==='the-culvert');check(rt&&!rt.flat,'gap is real, not rescue-flattened');
@@ -117,6 +130,9 @@ export async function exercise(r,id){
   g.player.warp(at.bucket.x,at.bucket.z+.65,0);useAt(g,use);tick(3);check(p.at().thanked,'bucket righted');check(g.record.bag.some(id=>sim.items.find(i=>i.id===id)?.type==='battery'),'guest gets reward');check(!h.record.bag.includes('porter:battery'),'host cannot steal reward');return {reward:'guest battery'};
  }
  if(id==='cast-shadow'){
+  const {roomDistances}=await import('/world/backrooms/gen.js'),distance=roomDistances(r.level,r.start.room);
+  const room=r.level.rooms.find(d=>d.kind==='plain'&&!d.crawl&&(distance.get(d.id)??0)>=2&&w.free(d.cx,d.cz,.3));check(room,'safe shadow encounter room');
+  g.player.warp(room.cx,room.cz,0);h.player.warp(room.cx+.7,room.cz,0);
   const shadow=env.pursuer.of('shadow');g.me.pitch=h.me.pitch=1.2;shadow.hurry();
   for(let i=0;i<200&&shadow.at().x===null;i++)r.step(.05,sim);
   let at=shadow.at();check(Number.isFinite(at.x),'shadow placed');

@@ -31,15 +31,16 @@ export function create(c) {
   function startRoom() {
     const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 2.5 && r.kind !== 'start' && r.kind !== 'exit';
     const plain = level.rooms.filter((r) => fits(r) && r.kind === 'plain' && (dist.get(r.id) ?? 0) >= 2), far = level.rooms.filter((r) => fits(r) && (dist.get(r.id) ?? 0) >= 2);
-    const pool = plain.length ? plain : far.length ? far : level.rooms.filter((r) => r.kind !== 'start');
-    const pick = pool.length ? c.R.pick(pool) : level.rooms[0];
+    const pool = plain.length ? plain : far;
+    const pick = pool.length ? c.R.pick(pool) : null;
     // (a room that asked for company has it standing there, if it will fit)
-    if (c.haunt != null && level.rooms[c.haunt] && fits(level.rooms[c.haunt])) { const sp = c.walk.spotIn(walker, c.haunt); if (c.walk.stand(walker, sp.x, sp.z)) return c.haunt; }
-    return pick.id;
+    if (c.haunt != null && level.rooms[c.haunt] && fits(level.rooms[c.haunt]) && (dist.get(c.haunt) ?? 0) >= 2) { const sp = c.walk.spotIn(walker, c.haunt); if (c.walk.stand(walker, sp.x, sp.z)) return c.haunt; }
+    return pick?.id ?? null;
   }
 
   function ready() {
-    const spot = c.walk.spotIn(walker, startRoom());
+    const id = startRoom(); if (id === null) return;
+    const spot = c.walk.spotIn(walker, id);
     walker.x = spot.x; walker.z = spot.z; yaw = c.R.range(0, Math.PI * 2);
     group = new THREE.Group();
     mat = env.kit.surface({ vox: true, wet: 0.55 }); wormMat = env.kit.surface({ vox: true, wet: 1 });   // (she is damp; what she brings up is wet)
@@ -287,7 +288,7 @@ export function create(c) {
       }
       return null;
     },
-    at: () => ({ x: walker.x, z: walker.z, mode: s.mode, brood: worms.filter((w) => !w.dead).length }),
+    at: () => group ? ({ x: walker.x, z: walker.z, mode: s.mode, brood: worms.filter((w) => !w.dead).length }) : null,
     dispose() { for (const w of worms) w.g.removeFromParent(); worms.length = 0; group?.removeFromParent(); group = null; },
   };
 }

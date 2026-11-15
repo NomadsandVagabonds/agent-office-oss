@@ -1,10 +1,11 @@
 // Production rooms, cast, lighting and furniture; one trusted browser authority.
 import * as THREE from 'three';
-import {ARCHETYPES,toWorld} from '../backrooms/gen.js';
+import {ARCHETYPES,toWorld,roomDistances} from '../backrooms/gen.js';
 import {createKit} from '../backrooms/kit.js';
 import {buildWorld,loadCatalogue} from '../backrooms/world.js';
 import {BUILDERS} from '../backrooms/rooms.js';
 import {createStalkers} from '../backrooms/pursuer.js';
+import {CAST} from '../backrooms/cast.js';
 import {createPlayer} from '../backrooms/player.js';
 import {createHealth} from '../backrooms/health-state.js';
 import {resolveLook} from '/core/look.mjs';
@@ -26,10 +27,11 @@ import {createCoopLights} from './lights.js';
 const nop=()=>{},dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 export async function createRealRooms(seed,host,scene,{depth=0,slice=false,route='random',planOptions={},carry=null,visit:reviewVisit=null}={}){
  const kit=createKit(),visit=reviewVisit||coopVisit(seed,{slice,route,...planOptions}),level=floorOf(visit,depth);
+ const fromStart=roomDistances(level,level.start.room),threats=new Set([...CAST.filter(m=>m.disposition==='hunts').map(m=>m.id),'mother-brood']);
  const builders={...BUILDERS};
  for(const id of new Set(level.rooms.map(r=>r.arch))){const a=ARCHETYPES[id];if(a?.module){const mod=await import(new URL(a.module,new URL('../backrooms/index.js',import.meta.url)));if(typeof mod.build!=='function')throw Error('Missing room builder: '+id);builders[id]=mod.build;}}
  const cast=level.cast.map(name=>({name,look:resolveLook(name)}));
- let activeCast=null,castPoint=null,sim=null,visitors=[],active=null,acc=0,started=false,floorTime=0;
+ let activeCast=null,castPoint=null,sim=null,visitors=[],active=null,acc=0,started=false;
  let soundSeq=0;const sounds=[];
  const emit=(name,extra={})=>{if(!sim)return;sounds.push({seq:++soundSeq,name,...extra});if(sounds.length>64)sounds.shift();};
  const sound={play:(name,options)=>emit(name,{options,to:active?.id}),playMascot:()=>emit('mascot'),stopMascot:()=>emit('mascot-stop'),air:k=>emit('air',{k,to:active?.id}),file:(href,options)=>emit('file',{href:String(href),options,to:active?.id})};
@@ -62,7 +64,18 @@ export async function createRealRooms(seed,host,scene,{depth=0,slice=false,route
  const pack=n=>[...n.position.toArray(),...n.quaternion.toArray(),...n.scale.toArray(),n.visible?1:0];
  const initial=nodes.map(n=>JSON.stringify(pack(n)));let changed=[];
  const withVisitor=(v,fn)=>{const prev=active,player=env.player;active=v;env.player=v.player;try{return fn();}finally{active=prev;env.player=player;}};
- function scopeNearest(id,at,tick){const point=Number.isFinite(at?.x)&&Number.isFinite(at?.z)?at:level.start;const room=world.roomAt(point.x,point.z),recent=room?.coopInteraction;const actor=['pirate','moth','shadow','porter','toner','other-door','follower','mother','mother-brood','the-lines'].includes(id);const target=(!actor&&recent?.until>sim?.time&&visitors.find(v=>v.id===recent.id&&v.health>0))||chooseVisitor(visitors,point,id,world);if(!target)return;const before=activeCast,spot=castPoint;activeCast=id;castPoint=point;try{return withVisitor(target,tick);}finally{activeCast=before;castPoint=spot;}}
+ // A newcomer is not a hunt target until they leave the landing's adjacent
+ // rooms. Remember exploration so retreating later does not erase a pursuit.
+ function scopeNearest(id,at,tick){
+  const point=Number.isFinite(at?.x)&&Number.isFinite(at?.z)?at:level.start;
+  const room=world.roomAt(point.x,point.z),recent=room?.coopInteraction;
+  const actor=['pirate','moth','shadow','porter','toner','other-door','follower','mother','mother-brood','the-lines'].includes(id);
+  const candidates=threats.has(id)?visitors.filter(v=>v.explored||(fromStart.get(world.roomAt(v.me.x,v.me.z)?.id)??0)>=2):visitors;
+  const target=(!actor&&recent?.until>sim?.time&&visitors.find(v=>v.id===recent.id&&v.health>0))||chooseVisitor(candidates,point,id,world);
+  if(!target)return;
+  const before=activeCast,spot=castPoint;activeCast=id;castPoint=point;
+  try{return withVisitor(target,tick);}finally{activeCast=before;castPoint=spot;}
+ }
  const population=createPopulation(world,withVisitor,{held:()=>env.inventory?.held()});
  const physical=createInventoryWorld(env,{read:()=>active?.record.inventory||{slots:[]},add:item=>active?mutateInventory(sim,active.record,m=>m.add(item)):{ok:false}}, {canAct:()=>!host||sim?.phase==='play'});
  env.inventory={physical,fire:physical.fire,held:()=>active?heldItem(active.record):null,torchPower:()=>active?lightPower(active.record):0,torchMounted:()=>!!active?.record.inventory?.mountedTorch,
@@ -127,16 +140,16 @@ export async function createRealRooms(seed,host,scene,{depth=0,slice=false,route
  function step(dt,s){
   if(!host)return null;if(!started){if(s?.phase!=='play')return null;syncPlayers(s);}
   if(sim.phase!=='play')return sim;
-  dt=Math.min(.05,dt);sim.time+=dt;floorTime+=dt;
+  dt=Math.min(.05,dt);sim.time+=dt;
   for(const v of visitors){v.healthModel.tick(dt);v.age+=dt;if(v.age>.25)v.input.keys.clear();if(v.age>.5||v.held||v.health<=0)v.grip.release();v.me.frozen=v.health<=0||v.held||!!sim.descent?.ready.includes(v.id);
-   if(v.health>0){v.grip.update(dt,v.me,v.age<.5);v.record.battery=Math.max(0,v.record.battery-dt);if(!v.record.battery)v.healthModel.damage(4);withVisitor(v,()=>v.player.update(dt));v.me.slow=1;v.me.sinkTo=0;}
+   if(v.health>0){v.grip.update(dt,v.me,v.age<.5);v.record.battery=Math.max(0,v.record.battery-dt);if(!v.record.battery)v.healthModel.damage(4);withVisitor(v,()=>v.player.update(dt));if((fromStart.get(world.roomAt(v.me.x,v.me.z)?.id)??0)>=2)v.explored=true;v.me.slow=1;v.me.sinkTo=0;}
    v.record.white=0;v.record.interference=(v.record.interference||0)*Math.exp(-4*dt);v.record.red=(v.record.red||0)*Math.exp(-3.2*dt);v.health=v.healthModel.read().current;v.record.health=v.health;tickInventory(sim,v.record,dt);
   }
   const live=visitors.filter(v=>v.health>0);if(!live.length)sim.phase='dead';
   for(const f of world.furniture)f.tick?.(dt);
   world.updateLighting(sim.time);world.updateFlicker(dt);physical.update(dt);population.update(dt,sim.time,visitors);
   for(const v of live){const rt=world.roomAt(v.me.x,v.me.z),key=`${depth}:${rt?.id}`;if(rt&&!sim.visited.includes(key))sim.visited.push(key);}
-  if(live.length){if(floorTime>8&&!env.coopAwake){env.pursuer.wake(true);env.coopAwake=true;}env.pursuer.update(dt,sim.time);env.denizens.update(dt,sim.time);}
+  if(live.length){env.pursuer.update(dt,sim.time);env.denizens.update(dt,sim.time);}
   for(const v of visitors)withVisitor(v,()=>{const m=v.me,use=world.usable(m);Object.assign(v.record,{x:m.x,z:m.z,y:m.y,yaw:m.yaw,pitch:m.pitch,health:v.healthModel.read().current,held:v.held,gripping:!!v.grip.held,bridgeGrip:!!v.grip.held?.bridge,interaction:v.grip.action(use)?(v.grip.held?.bridge?`E · Release hoarding · R · ${v.grip.held.deployed?'Raise':'Lower'}`:`E · ${v.grip.held?'Release':'Move'} ${(v.grip.held||v.grip.target).label||(v.grip.held||v.grip.target).type}`):null,usable:use?`E · ${use.label||'Interact'}`:null,hitCooldown:v.healthModel.read().cooldown});v.health=v.record.health;});
   // Opening the real taped wall creates a shared extraction point. It stays
   // open while the second visitor catches up; entering the stairwell is not a win.
