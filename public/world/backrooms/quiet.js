@@ -99,6 +99,10 @@ const THEME_QUIET = {
   // the neighbourhood: lawns with nothing on them, a fence across one, the backs of a row of flats; a lawn a few steps down, or up
   suburb: { motifs: [['fence', 4], ['flats', 3.2], ['dogleg', 0.8]], wrong: ['sunk', 'apertures'],
     mix: [[0.26, 0.34], [0.4, 0.48], [0.22, 0.3]], hall: [['baffle', 3], ['nibs', 2], ['none', 1.5]], shapes: ['pinch', 'ell', 'stairs', 'soffit', 'stepceil', 'slopeceil', 'pit', 'dais'] },
+  // the shopping centre: units either side of a concourse (bays), a colonnade of tiled columns, screens to queue round
+  // (no line in TELLS until it is finished — themes.js `dealt: false`)
+  mall: { motifs: [['bays', 4], ['colonnade', 3], ['return', 1.5], ['dogleg', 1]], wrong: ['sunk', 'apertures'],
+    mix: [[0.24, 0.32], [0.42, 0.5], [0.2, 0.28]], hall: [['nibs', 3], ['baffle', 2.5], ['none', 1]], shapes: ['pinch', 'ell', 'stairs', 'soffit', 'stepceil', 'pit', 'dais'] },
 };
 /**
  * What gives a kind of floor away: the layouts there are more of on it than on any other kind ('none': a room with

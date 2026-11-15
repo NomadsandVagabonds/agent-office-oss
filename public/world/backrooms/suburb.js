@@ -476,7 +476,7 @@ function flamingoAt(c, x, z, turn) {
  * A car, sculpted: an estate of about 1975, wood down its sides, a rack on the roof, chrome at either end, its lamps on. Nose toward +x.
  * (rgb: its paint, as '#rrggbb'. door: the driver's door stands open.)
  */
-function carVox(paint, door) {
+export function carVox(paint, door) {
   return () => {
     const v = new Vox(), body = M(paint, 1), dark = M(tone(paint, -0.25), 1), chrome = M('#c9ccd0', 0), glassy = M('#1f2a33', 0), wood = M('#7a4f2a', 3), woodL = M('#a57a48', 3), tyre = M('#17171a', 2);
     v.rbox(-84, 12, -34, 84, 32, 34, 5, body); v.rbox(-80, 8, -32, 80, 14, 32, 2, dark);
