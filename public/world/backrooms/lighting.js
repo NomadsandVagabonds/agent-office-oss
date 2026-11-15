@@ -2,7 +2,9 @@
 // leaves rooms, supplies, furniture and residents where the seed put them.
 import { makeRng } from './gen.js';
 
-export const LIGHTING = Object.freeze({ ambientShare: 0.92, ownLamp: 0.08, gainMax: 1.65, maxBanks: 4 });
+// Almost all bounce belongs to the tubes: a failed bank must lose its ambient
+// contribution too. Keep a faint residual, without the camcorder rescuing it.
+export const LIGHTING = Object.freeze({ ambientShare: .99, blackout: .0025, ownLamp: .025, gainMax: 1.25, maxBanks: 4 });
 export const LIGHTING_MODES = Object.freeze(['failing', 'dim', 'travel', 'emergency', 'islands']);
 const ease = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
 const key = (p) => `${p.x}:${p.z}`;
@@ -64,17 +66,18 @@ export function panelBank(plan, panel) {
 /** Pure visit-clock curves. Culling/frame rate cannot alter a cue's phase. */
 export function bankLevels(plan, time, effect = 1, steady = false) {
   const count = plan.bankCount || 2, ceiling = plan.ceilingBanks || 2;
+  const low = LIGHTING.blackout;
   const working = Array.from({length:count},(_,b) => b<ceiling?1:0);
   // Creature flashes/blackouts retain priority; red backup is off while they own the ceiling.
   if (effect !== 1 || plan.kind === 'steady' || plan.preview === 'working') return working;
-  if (plan.preview === 'outage') return working.map((_,b) => b < ceiling ? .015 : .65);
-  if (plan.kind === 'dim') return working.map((_,b) => b === 0 ? .78 : b < ceiling ? .015 : 0);
-  if (plan.kind === 'islands') return [.88,.008];
+  if (plan.preview === 'outage') return working.map((_,b) => b < ceiling ? low : .65);
+  if (plan.kind === 'dim') return working.map((_,b) => b === 0 ? .78 : b < ceiling ? low : 0);
+  if (plan.kind === 'islands') return [.88,low];
   const t = plan.cue ? time-plan.cue.start : ((time+plan.offset)%plan.period+plan.period)%plan.period;
   if (plan.kind === 'emergency') {
     // A broad red breath, not a sharp strobe: 1.3 s up, 1.3 s down, then quiet.
     const pulse = steady ? .55 : .08+.92*Math.sin(Math.PI*Math.min(t,2.6)/2.6)**2;
-    return [.018,.018,pulse];
+    return [low,low,pulse];
   }
   if (plan.kind === 'travel') {
     if (steady) return working.map(()=>.6);
@@ -82,9 +85,9 @@ export function bankLevels(plan, time, effect = 1, steady = false) {
       const order = plan.cue?.reverse ? ceiling-1-b : b;
       const s = t-order*1.35;
       if (s<0) return 1;
-      if (s<.4) return 1-.985*ease(s/.4);
-      if (s<6 || plan.cue?.hold) return .015;
-      if (s<8) return .015+.985*ease((s-6)/2);
+      if (s<.4) return 1-(1-low)*ease(s/.4);
+      if (s<6 || plan.cue?.hold) return low;
+      if (s<8) return low+(1-low)*ease((s-6)/2);
       return 1;
     });
   }
@@ -92,9 +95,9 @@ export function bankLevels(plan, time, effect = 1, steady = false) {
   let k=1;
   if (t<.35) k=1-.82*ease(t/.35);
   else if (t<1.05) k=.18+.67*ease((t-.35)/.7);
-  else if (t<1.6) k=.85-.835*ease((t-1.05)/.55);
-  else if (t<10) k=.015;
-  else if (t<12.5) k=.015+.985*ease((t-10)/2.5);
+  else if (t<1.6) k=.85-(.85-low)*ease((t-1.05)/.55);
+  else if (t<10) k=low;
+  else if (t<12.5) k=low+(1-low)*ease((t-10)/2.5);
   return [1,k];
 }
 

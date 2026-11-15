@@ -3,6 +3,7 @@
 // picture solid crimson and ends the visit. With the flashlight held, aiming
 // its beam at a Stand-In freezes it in place while any outside the cone creep
 // closer through the dark.
+import { FLASHLIGHT, inFlashlight } from '../../flashlight.js';
 
 export const BLACKOUT = Object.freeze({
   redFillSeconds: 0.92,
@@ -10,7 +11,7 @@ export const BLACKOUT = Object.freeze({
   stalkSpeed: 1.0,
   catchRadius: 0.64,
   beamRange: 9.8,
-  beamCosHalf: 0.76,
+  beamCosHalf: FLASHLIGHT.holdCos,
   hurts: 2,                  // hearts the dark costs, where there are hearts
   grace: 4,                  // seconds, back at the door, in which nothing in here stirs
 });
@@ -23,7 +24,7 @@ export function isInBeam(px, pz, yaw, tx, tz, maxDist = BLACKOUT.beamRange, cosH
   const dx = tx - px, dz = tz - pz;
   const d = Math.hypot(dx, dz);
   if (d > maxDist) return false;
-  if (d < 0.25) return true;
+  if (d < .001) return false;
   const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
   const dot = (dx * fx + dz * fz) / d;
   return dot >= cosHalf;
@@ -38,7 +39,7 @@ export const createBlackoutState = (count = 4) => ({
 /**
  * Step Blackout Bay by `dt` seconds.
  * @param s  state from createBlackoutState()
- * @param o  { dt, inDark, hasFlashlight, px, pz, yaw, targets: [{ x, z, los }] }
+ * @param o  { dt, inDark, hasFlashlight, px, py, pz, yaw, pitch, targets: [{ x, z, los }] }
  */
 /** The dark had somebody, who is still here (and back at the door, where the room put them): everything is as it was, and for a moment nothing stirs. */
 export function releaseBlackout(s) { return { ...createBlackoutState(s.frozen.length), grace: BLACKOUT.grace }; }
@@ -48,10 +49,13 @@ export function stepBlackout(s, o) {
     dt,
     inDark = false,
     hasFlashlight = false,
+    mounted = false,
     byFire = false,
     px = 0,
+    py = 1.1,
     pz = 0,
     yaw = 0,
+    pitch = 0,
     targets = [],
   } = o;
 
@@ -83,7 +87,8 @@ export function stepBlackout(s, o) {
   for (let i = 0; i < targets.length; i++) {
     const t = targets[i];
     const d = Math.hypot(t.x - px, t.z - pz);
-    const litByTorch = !!t.fire || (hasFlashlight && (t.los !== false) && isInBeam(px, pz, yaw, t.x, t.z));
+    const litByTorch = !!t.fire || inFlashlight({x:px,y:py,z:pz,yaw,pitch,mounted},t,
+      {power:hasFlashlight?1:0,los:t.los!==false,bottom:.5,top:1.5,range:BLACKOUT.beamRange});
     frozen.push(litByTorch);
     if (!inDark) {
       speeds.push(0);

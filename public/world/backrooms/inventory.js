@@ -147,6 +147,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     return item?.type === 'torch' ? { ...item, lit: state.activeTorch === item.id && item.charge > 0 } : item;
   }
   const torchPower = () => disposed ? 0 : model.torchPower();
+  const torchMounted = () => !disposed && model.torchMounted();
   /** How many of something are being carried, in any pocket: loose battery packs, sheets of paper, anything else by the piece. */
   function count(type) {
     if (disposed) return 0;
@@ -272,6 +273,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
       fire: { threatAt: (...point) => !disposed && active === floor ? floor.physical.fire.threatAt(...point) : null },
       held: () => available(floor) ? held() : null,
       torchPower: () => !disposed && active === floor ? torchPower() : 0,
+      torchMounted: () => !disposed && active === floor && torchMounted(),
       give: item => available(floor) ? give(item) : unavailable(),
       consumeHeld: (type, amount = 1) => available(floor) ? consumeHeld(type, amount) : unavailable(),
       count: type => !disposed && active === floor ? count(type) : 0,
@@ -329,7 +331,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
       for (const floor of floors.values()) floor.physical.update(playing ? dt : 0);
       view.el.inert = !available(); refresh(); view.tick(dt);
     },
-    torchPower,
+    torchPower, torchMounted,
     report: () => ({ ...snapshot(), open: view.isOpen, floor: active?.env.level.depth ?? null,
       world: active?.physical.report() || { items: [], marks: [], marksMade: 0 } }),
     dispose() {

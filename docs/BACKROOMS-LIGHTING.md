@@ -26,10 +26,10 @@ The study controls are dev-only. Gameplay and camera battery still run.
 | --- | --- |
 | `lighting=1` | Seeded mix: 70% of eligible rooms unchanged; 12% failing; 8% dim; 5% islands; 4% travel candidates; 1% emergency candidates. |
 | `lighting=failing` | One bank hesitates, goes out for about eight seconds, then slowly recovers. |
-| `lighting=dim` | One side remains at 78%, the other at 1.5%. |
+| `lighting=dim` | One side remains at 78%, the other at 0.25%. |
 | `lighting=travel` | Three or four ceiling banks fail in sequence, 1.35 seconds apart, then recover. A passing cycle lasts 64–88 seconds. |
-| `lighting=islands` | One surviving tube, or two in a large ceiling; the others sit at 0.8%. No pulsing. |
-| `lighting=emergency` | Ceiling tubes at 1.8%, with real red wall fixtures. A broad 2.6-second pulse followed by a quiet interval; not a sharp strobe. |
+| `lighting=islands` | One surviving tube, or two in a large ceiling; the others sit at 0.25%. No pulsing. |
+| `lighting=emergency` | Ceiling tubes at 0.25%, with real red wall fixtures. A broad 2.6-second pulse followed by a quiet interval; not a sharp strobe. |
 | omitted | Original lighting/camera response. |
 
 Natural travel candidates require a corridor at least 1.8 times as long as it
@@ -64,8 +64,9 @@ room boundaries. Carried voxel props, mapped surfaces and `c.dynamic` objects
 follow it too. Contact shadows and self-lit screens remain separate. This
 prevents a desk from carrying its old room's red bank with it.
 
-In the prototype the camera's automatic lamp is 8% of the flashlight (instead
-of 30%) and maximum gain is 1.65 (instead of 2.3). Darkness/supply balance and
+The Last Light follow-up reduces the camera's automatic lamp to 2.5% of the
+flashlight and maximum gain to 1.25. Failed banks keep 0.25% output, and 99%
+of ambient bounce belongs to the ceiling banks. Darkness/supply balance and
 natural effect frequency still need longer playtesting.
 
 ## Hook for the proposed hallway encounter

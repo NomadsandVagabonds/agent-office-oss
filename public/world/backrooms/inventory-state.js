@@ -308,5 +308,6 @@ export function createInventory({ size = 6 } = {}) {
   }
   return {
     add, remove, select, useSelected, consumeSelected, combine, craft, toggleLight, torchPower, tick, clear, read,
+    torchMounted: () => !!mountedTorch && activeTorch === mountedTorch.id,
   };
 }
