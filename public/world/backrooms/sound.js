@@ -305,7 +305,7 @@ export function createSound(level, opt = {}) {
     play(name, o) { if (ctx && !muted && !paused && voice[name]) { try { voice[name](o); } catch { /* a sound is never worth an error */ } } },
     /**
      * A recording of a room's own, played once through the effects (so the effects slider, M and the menu reach it):
-     * `href` as the room has it from new URL('./x.mp3', import.meta.url), which is also how the site's build finds the
+     * `href` as the room has it from a new URL of the file beside it against import.meta.url, which is also how the site's build finds the
      * file. o: { vol: 0…1, pan: -1…1 } as for play(). Recordings are the owner's to ask for; voices are the rule.
      */
     file(href, o = {}) {
