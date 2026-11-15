@@ -18,7 +18,7 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
   // `input`: keys held, mouse movement since last frame, and a thumb stick (x: right, y: forward, each −1…1; hurry: pushed
   // past its ring, which is what Shift is) — the visit's own (input.js), so that what is held on one floor is still held on the next
   let stride = 0, floor = world.floorY(start.x, start.z), sway = 0, duck = 0, hopHeld = false;
-  const listeners = { step: null };
+  const listeners = { step: null, move: null };
 
   /** Is there room to be at (x, z)? If the only thing wrong is that you are standing too tall, start ducking. */
   function fits(x, z) {
@@ -28,11 +28,18 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
     return true;
   }
   function move(dx, dz) {
+    const step = (sx, sz) => {
+      const apply = (x, z) => {
+        if (!fits(me.x + x, me.z + z)) return false;
+        me.x += x; me.z += z; return true;
+      };
+      return listeners.move ? listeners.move(sx, sz, apply) : apply(sx, sz);
+    };
     const dist = Math.hypot(dx, dz), n = Math.max(1, Math.ceil(dist / 0.06));
     for (let i = 0; i < n; i++) {
       const sx = dx / n, sz = dz / n;
-      if (fits(me.x + sx, me.z)) me.x += sx; else me.vx *= 0.5;
-      if (fits(me.x, me.z + sz)) me.z += sz; else me.vz *= 0.5;
+      if (sx && !step(sx, 0)) me.vx *= 0.5;
+      if (sz && !step(0, sz)) me.vz *= 0.5;
     }
   }
   /** If something closed around you (a teleport, a door), step out to the nearest free spot. */
@@ -74,7 +81,7 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
     const push = Math.hypot(f, s), len = Math.max(1, push);
     const eyeNow = EYE - me.sink, crouch = clamp((eyeNow - 0.45) / (EYE - 0.45), 0, 1);
     // (a thumb walks unless it is pushed past the ring on purpose: there are rooms where running is noticed)
-    const top = (k.has('Shift') || input.hurry ? HURRY : WALK) * me.slow * (0.42 + 0.58 * crouch);
+    const top = Math.min(k.has('Shift') || input.hurry ? HURRY : WALK, me.gripSpeed ?? Infinity) * me.slow * (0.42 + 0.58 * crouch);
     const sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
     const wx = ((-sin * f + cos * s) / len) * top, wz = ((-cos * f - sin * s) / len) * top;
     me.wishX = push ? wx / top : 0; me.wishZ = push ? wz / top : 0;          // which way you are trying to go (a wall may have other ideas)

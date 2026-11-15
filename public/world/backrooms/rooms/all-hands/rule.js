@@ -72,6 +72,7 @@ export function stepAllHands(state, {
   usedMic = false,
   insideRoom = false,
   distToSpeaker = 99,
+  clearLine = true,
 } = {}) {
   let { phase, slide, timer, speakerProgress, blackout, setbacks } = state;
   let changedSlide = false, triggeredQa = false, stepped = false, setback = false, adjourned = false;
@@ -107,7 +108,7 @@ export function stepAllHands(state, {
         speakerProgress += ALL_HANDS.stepAdvance;
         stepped = true;
       }
-      if (distToSpeaker <= ALL_HANDS.catchRadius) {
+      if (clearLine && distToSpeaker <= ALL_HANDS.catchRadius) {
         setback = true;
         setbacks += 1;
         phase = 'slides';

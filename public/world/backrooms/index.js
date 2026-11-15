@@ -50,6 +50,8 @@ import { createSurvival } from './survival.js';
 import { batteryEnding, batteryWarning } from './battery-ending.js';
 import { createTally } from './tally.js';
 import { createMenu } from './menu.js';
+import { createFurnitureMotion } from './furniture-motion.js';
+import { createFurnitureGrip } from './furniture-grip.js';
 
 const FOV = 62;
 const OWN_LAMP = 0.3;                                    // the camcorder's own lamp, beside a torch: how much of one it is
@@ -94,12 +96,13 @@ async function buildersFor(level) {
 
 /**
  * @param office  the office object (stage, net, …)
- * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, depths?:number, depth?:number, inventory?:boolean, scorecard?:boolean, replay?:boolean, debug?:boolean, dev?:object, onReady?:Function}} [opt]
+ * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, depths?:number, depth?:number, inventory?:boolean, barricades?:boolean, scorecard?:boolean, replay?:boolean, debug?:boolean, dev?:object, onReady?:Function}} [opt]
  *        depths: how many floors (default: by the seed) · depth: which floor to begin on (default: the top one)
  *        replay: this is a kept tape being played back (seed: the tape's; pursuer: whether the mascot was in it): nothing of the office's is hidden in it
  *        brand, share, also, home, anew: handed to the card at the end (scorecard.js), for a page that is not the office
  *        where: a place name, if the page was told one (the site's host says a city): the second line of the banner near the landing (banner.js)
  *        inventory: false for a visit without pockets, hearts or a battery that runs down · dev.supplies: one of everything where you land
+ *        barricades: opt-in movable furniture prototype · dev.barricadeStudy: a review set at the landing (docs/BACKROOMS-BARRICADES.md)
  * @returns {Promise<{reason:'exit'|'caught'|'battery'|'quit', kept:{card:boolean, coins:number[], batteries:number, told?:Promise<void>}, run:object, card:object|null}>}
  *          run: what the visit came to (tally.js) · card: the scorecard, once put down (opt.scorecard === false: none) · kept: what you brought out (nothing,
  *          unless you left by the door); kept.told settles once the office has been told of it
@@ -175,7 +178,11 @@ async function visit(office, opt) {
   stage.setView({ scene: blank, camera, render });
 
   /* ---- hands ----------------------------------------------------------------------- */
-  const useIt = () => { if (canAct() && !inventory?.isOpen && currentUse) { const use = currentUse; try { use.use(use); } catch (err) { console.warn('[backrooms] use', err); } } };
+  const useIt = () => {
+    if (!canAct() || inventory?.isOpen) return;
+    if (cur?.env.grip?.action(currentUse)) { cur.env.grip.use(); return; }
+    if (currentUse) { const use = currentUse; try { use.use(use); } catch (err) { console.warn('[backrooms] use', err); } }
+  };
   // The light, under a thumb (touch.js): what F does, and one thing more. A key can pick the pocket first; a thumb has one
   // button, so if there is a torch that works and it is not the one in the hand, it is taken out and switched on.
   const lightNow = () => {
@@ -205,7 +212,7 @@ async function visit(office, opt) {
       else if (k === 'm') changeSetting('mute', !sound.muted);
     } });
   input.state.sensitivity = settings.sensitivity; input.state.invertY = settings.invertY;
-  menu = createMenu({ host: hud.el, settings, onRequestOpen: () => setPaused(true), onResume: resume,
+  menu = createMenu({ host: hud.el, settings, furniture: opt.barricades === true, onRequestOpen: () => setPaused(true), onResume: resume,
     onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting });
   // Six pockets, four hearts, and a camcorder battery that runs down (inventory.js, survival.js): the visit's, not any
   // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.
@@ -217,6 +224,7 @@ async function visit(office, opt) {
       canAct, review: !!opt.dev?.supplies,
       onOpen(open) {
         input.clear();
+        if (open) cur?.env.grip?.release();
         if (cur?.player) cur.player.me.vx = cur.player.me.vz = 0;
         if (open) input.release();
       },
@@ -239,6 +247,7 @@ async function visit(office, opt) {
   function setPaused(on) {
     if (on && (state === 'done' || state === 'ending' || state === 'through' || pendingQuit)) return;
     paused = !!on;
+    if (paused) cur?.env.grip?.release();
     if (paused) inventory?.close();
     input.clear();
     if (cur?.player) cur.player.me.vx = cur.player.me.vz = 0;
@@ -261,9 +270,15 @@ async function visit(office, opt) {
   async function build(level, carry, pace) {
     const kit = createKit();
     const f = { level, kit, world: null, player: null, env: null };
+    const builders = await buildersFor(level);
+    if (opt.barricades === true && opt.dev?.barricadeStudy && level === first) {
+      const { prepareFurnitureStudy } = await import('./furniture-study.js');
+      prepareFurnitureStudy(level, builders);
+    }
     const env = f.env = {
-      level, cast, who, kit, sound, hud, vhs, renderer, builders: await buildersFor(level), catalogue: await loadCatalogue(kit), Avatar, layout,
+      level, cast, who, kit, sound, hud, vhs, renderer, builders, catalogue: await loadCatalogue(kit), Avatar, layout,
       plan: office.net?.state?.world?.plan || {}, visit: plan, carry,
+      barricadesEnabled: opt.barricades === true,
       where: cleanWhere(opt.where),             // a place name the page was told (the site's host says a city): the banner's second line, and nothing else's
       player: null, world: null, pursuer: null,
       hatches: new Map(),                       // room id → { drop() }: where a door in a floor lets you out
@@ -280,8 +295,12 @@ async function visit(office, opt) {
        * on the floor (inventory-world.js). `inside(x, z)`: where the room was, in this part's world. `key`: the
        * room's own name for itself. The place does not wait for anybody to step out of the way.
        */
-      takeAway(inside, key) { return { cast: env.pursuer?.takeAway?.(inside, key) || [], residents: env.denizens?.takeAway?.(inside, key) || 0, things: env.inventory?.physical?.takeAway?.(inside, key) || 0 }; },
-      bringBack(key) { return { cast: env.pursuer?.bringBack?.(key) || [], residents: env.denizens?.bringBack?.(key) || 0, things: env.inventory?.physical?.bringBack?.(key) || 0 }; },
+      takeAway(inside, key) {
+        const furniture = env.barricades?.takeAway(inside, key) || [];
+        if (env.grip?.held?.away) env.grip.release();
+        return { cast: env.pursuer?.takeAway?.(inside, key) || [], residents: env.denizens?.takeAway?.(inside, key) || 0, things: env.inventory?.physical?.takeAway?.(inside, key) || 0, furniture: furniture.length };
+      },
+      bringBack(key) { return { cast: env.pursuer?.bringBack?.(key) || [], residents: env.denizens?.bringBack?.(key) || 0, things: env.inventory?.physical?.bringBack?.(key) || 0, furniture: env.barricades?.bringBack(key).length || 0 }; },
       /** Is this spot on screen and not behind a wall? */
       sees(x, z, o = {}) {
         const me = f.player?.me; if (!me) return false;
@@ -332,6 +351,10 @@ async function visit(office, opt) {
     purse?.hang(env);
     let breath = performance.now();                       // build as fast as the machine allows, but keep the static moving
     f.world = env.world = await buildWorld(kit, level, env, pace || (async () => { if (performance.now() - breath > 40) { await frame(); breath = performance.now(); } }));
+    if (env.barricadesEnabled) {
+      env.barricades = createFurnitureMotion(f.world);
+      env.grip = createFurnitureGrip(f.world, env.barricades, { sound });
+    }
     inventory?.hang(env);
     return f;
   }
@@ -358,6 +381,7 @@ async function visit(office, opt) {
   }
   function letGo(f) {
     if (!f) return;
+    f.env.grip?.release();
     if (f.player) tally.part(f.world);                    // (a part somebody was in is counted as it goes: after this it is gone)
     inventory?.forget(f.env);
     f.env.pursuer?.dispose?.();
@@ -386,6 +410,7 @@ async function visit(office, opt) {
     if (from) { me.pitch = from.pitch; me.drop = Math.max(0.01, from.y - (f.world.floorY(me.x, me.z) + player.EYE)); me.dropV = Math.min(from.dropV, -0.4); }
     else me.drop = 1.3;
     player.on('step', () => sound.play(f.world.current()?.footstep || 'step'));
+    if (f.env.grip) player.on('move', (dx, dz, step) => f.env.grip.step(dx, dz, step));
     for (const fn of f.env.ready || []) fn();
     f.world.enter(f.world.roomAt(me.x, me.z) || f.world.rooms[f.level.start.room]);
     f.env.denizens?.sync();                              // (their picture is ready even while the fall holds their behaviour)
@@ -410,6 +435,7 @@ async function visit(office, opt) {
   }
   function handover(at) {
     const old = cur, f = ahead.f, me = old.player.me, o = f.world.scene.position.clone();
+    old.env.grip?.release();
     old.env.handView?.hide();                            // (the old hand must not hang in the shaft while the new one is lowered)
     ahead = null;
     f.env.carry = old.env.pursuer?.carry?.() || null;
@@ -488,6 +514,7 @@ async function visit(office, opt) {
     survival?.update(dt, clocksRun());
     const { world, player, env } = cur, me = player.me;
     me.frozen = state !== 'play' || hold;
+    env.grip?.update(dt, me, canAct() && !inventory?.isOpen);
     player.update(dt, time);
     me.slow = 1; me.sinkTo = 0;                              // rooms that slow you or make you stoop say so every frame
     world.update(dt, time, me);
@@ -500,9 +527,10 @@ async function visit(office, opt) {
     if (landed >= 0) landed += dt;
     purse?.update(dt, time, state === 'play');
     inventory?.update(dt, clocksRun());
-    env.handView?.update(dt, canAct() && !inventory?.isOpen);          // (what is in the selected pocket, in the corner of the picture)
+    env.handView?.update(dt, canAct() && !inventory?.isOpen && !env.grip?.held);          // (what is in the selected pocket, in the corner of the picture)
     currentUse = canAct() && !inventory?.isOpen ? world.usable(me) : null;
-    hud.hint(!!currentUse);                               // (only ever the [E]: what a thing is, is for looking at it to say)
+    const grip = env.grip, furniture = grip?.action(currentUse);
+    hud.hint(!!currentUse || !!furniture, furniture ? `E · ${grip.held ? 'Release' : 'Move'} ${furniture.label || furniture.type}` : 'E', !!furniture);
 
     // the camcorder copes with the dark: more gain (and more noise), then its little lamp
     const here = world.current();

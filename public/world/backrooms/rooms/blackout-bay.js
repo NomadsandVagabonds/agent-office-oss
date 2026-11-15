@@ -9,6 +9,7 @@ import { clamp, turnTo, card, framed } from '../bits.js';
 import { placePickup } from '../hand.js';
 import { BLACKOUT, createBlackoutState, stepBlackout, releaseBlackout } from './blackout-bay/rule.js';
 import { buildStandIn } from './blackout-bay/rig.js';
+import { roomBody, moveRoomWalker, roomContact, roomReturn } from '../room-physics.js';
 
 export function build(c) {
   const { W, D, H, R, params: p } = c;
@@ -90,6 +91,7 @@ export function build(c) {
     fig.group.rotation.y = rot;
     c.add(fig.group);
     const entry = { ...fig, hx: sx, hz: sz, x: sx, z: sz, rot, stepTimer: 0.4 + i * 0.25 };
+    roomBody(c, entry);
     c.after.push(() => entry.light(c.sample(entry.x, 1.0, entry.z)));
     standIns.push(entry);
   }
@@ -109,7 +111,7 @@ export function build(c) {
 
     const targets = standIns.map((s) => {
       const sw = c.toWorld(s.x, s.z);
-      return { x: s.x, z: s.z, los: c.world.los(meW.x, meW.z, sw.x, sw.z), fire: !!c.fire(s.x, s.z) };          // (a fire it can see holds it as the beam does)
+      return { x: s.x, z: s.z, los: c.world.los(meW.x, meW.z, sw.x, sw.z), contact: roomContact(c, s, me), fire: !!c.fire(s.x, s.z) };          // sight over a low desk still freezes it; reaching through that desk does not
     });
 
     const res = stepBlackout(rule, {
@@ -138,12 +140,11 @@ export function build(c) {
     for (let i = 0; i < standIns.length; i++) {
       const s = standIns[i];
       const spd = res.speeds[i] || 0;
-      if (!me.inside) {
+      if (!me.inside || rule.grace > 0) {
         // Drift back toward starting stations if visitor backs out of the room
         const dx = s.hx - s.x, dz = s.hz - s.z, d = Math.hypot(dx, dz);
         if (d > 0.05) {
-          const step = Math.min(d, 1.2 * dt);
-          s.x += (dx / d) * step; s.z += (dz / d) * step;
+          moveRoomWalker(c, s, s.hx, s.hz, Math.min(d, 1.2 * dt));
         }
         s.group.position.set(s.x, 0, s.z);
       } else if (spd > 0) {
@@ -151,10 +152,7 @@ export function build(c) {
         const step = Math.min(d, spd * dt);
         const nx = clamp(s.x + (dx / d) * step, -W / 2 + 0.35, W / 2 - 0.35);
         const nz = clamp(s.z + (dz / d) * step, -D / 2 + 0.35, safeZ - 0.45);
-        const nw = c.toWorld(nx, nz);
-        if (c.world.free(nw.x, nw.z, 0.22, { ghost: true })) {
-          s.x = nx; s.z = nz;
-        }
+        moveRoomWalker(c, s, nx, nz, step);
         const want = Math.atan2(me.x - s.x, me.z - s.z);
         s.rot += clamp(turnTo(s.rot, want), -dt * 7, dt * 7);
         s.group.rotation.y = s.rot;
@@ -180,9 +178,10 @@ export function build(c) {
       const hit = c.hurt(BLACKOUT.hurts);
       if (!hit.ended) {
         rule = releaseBlackout(rule);
-        const front = c.room.doors.find((dr) => dr.side === 'front') || c.room.doors[0], at = front ? c.doorPoint(front, 0.7) : { x: 0, z: D / 2 - 0.7 }, w = c.toWorld(at.x, at.z);
-        c.env.player?.warp(w.x, w.z);
-        for (const s of standIns) { s.x = s.hx; s.z = s.hz; s.group.position.set(s.x, 0, s.z); }
+        const front = c.room.doors.find((dr) => dr.side === 'front') || c.room.doors[0], at = front ? c.doorPoint(front, 0.7) : { x: 0, z: D / 2 - 0.7 }, w = roomReturn(c, at.x, at.z);
+        if (w) c.env.player?.warp(w.x, w.z);
+        // They return during the grace period, walking round anything moved
+        // into their old station instead of appearing inside it.
         if (hit.landed) { c.env.hud.glitch(0.7); c.survived('stand-ins'); }
       }
     }

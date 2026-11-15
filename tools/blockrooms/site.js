@@ -132,7 +132,9 @@ async function run() {
     // for a shorter building, a part to begin on, a quiet one, particular kinds of floor)
     const whole = (k) => (q.has(k) && Number.isFinite(Number(q.get(k))) ? Math.floor(Number(q.get(k))) : undefined);
     const dev = q.has('debug') ? { debug: true, depths: whole('depths'), depth: whole('depth'), mute: q.has('mute') ? true : undefined, pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined,
-      themes: q.get('themes') ? q.get('themes').split(',').filter(Boolean) : undefined } : {};
+      themes: q.get('themes') ? q.get('themes').split(',').filter(Boolean) : undefined,
+      // (Codex's furniture that can be dragged, and put in a creature's way: a prototype, off for everybody, on for whoever asks here)
+      barricades: q.get('barricades') === '1' ? true : undefined } : {};
     // ?room=<a room of the deck> is a building with that room where you land (for looking at one room; nothing on
     // the front page leads here. A room nobody has built yet is no room, and the door is an ordinary door)
     let room = !next && q.get('room') && Object.hasOwn(ARCHETYPES, q.get('room')) ? q.get('room') : null;

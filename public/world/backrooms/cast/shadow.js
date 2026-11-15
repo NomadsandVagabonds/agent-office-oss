@@ -29,7 +29,7 @@ function figure() {
 }
 
 export function create(c) {
-  const env = c.env, R = c.R, me = c.me, walker = { x: 0, z: 0, r: 0.2, tall: 2.2, opens: false };
+  const env = c.env, R = c.R, me = c.me, walker = { x: 0, z: 0, r: 0.2, tall: 2.2, opens: false, furniture: 'phase' };
   let s = away(R, true), mesh = null, at = null, hiss = 0, dark = [], seenT = 0, known = false, close = false;
 
   function ready() {

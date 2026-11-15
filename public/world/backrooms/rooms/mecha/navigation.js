@@ -1,10 +1,12 @@
 // MECHA's guards navigate the same solids as the player. This graph is room
 // local and lazy: constructing it before the room finishes would miss cages.
+import { furnitureClear } from '../../furniture-rules.js';
 const CELL = .25, RADIUS = .36, SAMPLE = .08, MAX_CELLS = 12000;
 
 export function createLabNavigation(c) {
-  let graph = null;
+  let graph = null, builtRevision = -1;
   const world = () => c.world || c.env?.world;
+  const revision = () => world()?.furnitureRevision?.get(c.room?.id ?? c.rt?.id) || 0;
   const finite = p => Number.isFinite(p?.x) && Number.isFinite(p?.z);
 
   function free(x, z) {
@@ -22,6 +24,8 @@ export function createLabNavigation(c) {
     const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / SAMPLE));
     const w = world();
     let previous = c.toWorld(ax, az);
+    const end = c.toWorld(bx, bz);
+    if (!furnitureClear(w, previous.x, previous.z, end.x, end.z, RADIUS)) return false;
     for (let i = 1; i <= steps; i++) {
       const t = i / steps, x = ax + (bx - ax) * t, z = az + (bz - az) * t;
       if (i < steps && !free(x, z)) return false;
@@ -33,7 +37,8 @@ export function createLabNavigation(c) {
   }
 
   function build() {
-    if (graph) return graph;
+    const nextRevision = revision();
+    if (graph && builtRevision === nextRevision) return graph;
     if (!world()) return null;
     let cell = CELL, nx = Math.ceil(c.W / cell), nz = Math.ceil(c.D / cell);
     while (nx * nz > MAX_CELLS) { cell *= 1.02; nx = Math.ceil(c.W / cell); nz = Math.ceil(c.D / cell); }
@@ -56,6 +61,7 @@ export function createLabNavigation(c) {
       }
     }
     graph = { points, cells, edges, previous: new Int32Array(count), seen: new Uint32Array(count), queue: new Int32Array(count), serial: 0 };
+    builtRevision = nextRevision;
     return graph;
   }
 
@@ -133,5 +139,5 @@ export function createLabNavigation(c) {
     return out;
   }
 
-  return { free, clear, route, nearest };
+  return { free, clear, route, nearest, revision };
 }

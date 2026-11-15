@@ -10,6 +10,7 @@ import { clamp, turnTo, card, framed } from '../bits.js';
 import { placePickup } from '../hand.js';
 import { PARTY, createPartyState, stepParty, releaseParty } from './mandatory-fun/rule.js';
 import { buildCommitteeMember } from './mandatory-fun/rig.js';
+import { roomBody, moveRoomWalker, roomContact } from '../room-physics.js';
 
 function cakeVox() {
   const v = new Vox();
@@ -106,6 +107,7 @@ export function build(c) {
     m.aimHead(turnTo(hRot, Math.atan2(-hx, D / 2 - hz)), 0, 'idle');
     c.add(m.group);
     const entry = { ...m, variant, idx, hx, hz, x: hx, z: hz, rot: hRot, baseAngle };
+    roomBody(c, entry);
     c.after.push(() => entry.light(c.sample(entry.x, 1.0, entry.z)));
     members.push(entry);
   };
@@ -124,10 +126,11 @@ export function build(c) {
   c.tick((dt, time, me) => {
     const holdingBalloon = !!c.env.hand?.hasBalloon();
     const pastThreshold = me.inside && me.z < thresholdZ;
-    let minDist = Infinity;
+    let minDist = Infinity, contactDist = Infinity;
     for (const m of members) {
       const d = Math.hypot(me.x - m.x, me.z - m.z);
       if (d < minDist) minDist = d;
+      if (d < PARTY.catchRadius && roomContact(c, m, me)) contactDist = Math.min(contactDist, d);
     }
 
     if (!known && me.inside && minDist < 9 && members.some((m) => c.seen(m.x, m.z, { radius: 0.5 }))) { known = true; c.met('fun-committee'); }
@@ -137,6 +140,7 @@ export function build(c) {
       pastThreshold,
       holdingBalloon,
       minDist,
+      contactDist,
     });
     rule = res.state;
 
@@ -153,14 +157,13 @@ export function build(c) {
       for (const m of members) {
         if (m.variant === 'circle') {
           const a = m.baseAngle + rule.dancePhase * 0.52;
-          m.x = ringX + Math.sin(a) * ringR;
-          m.z = ringZ + Math.cos(a) * ringR;
+          moveRoomWalker(c, m, ringX + Math.sin(a) * ringR, ringZ + Math.cos(a) * ringR, PARTY.swarmSpeed * dt);
           m.rot = a + Math.PI;
           m.group.position.set(m.x, Math.abs(Math.sin(rule.dancePhase * 1.8 + m.idx)) * 0.085, m.z);
           m.group.rotation.y = m.rot;
           m.group.rotation.z = Math.sin(rule.dancePhase + m.idx * 1.2) * 0.11;
         } else {
-          m.x = m.hx; m.z = m.hz;
+          moveRoomWalker(c, m, m.hx, m.hz, PARTY.returnSpeed * dt);
           m.group.position.set(m.x, Math.abs(Math.sin(rule.dancePhase * 1.8)) * 0.09, m.z);
           const want = Math.atan2(me.x - m.x, me.z - m.z);
           m.rot += clamp(turnTo(m.rot, want), -dt * 4, dt * 4);
@@ -177,10 +180,7 @@ export function build(c) {
         const step = Math.min(d, res.speed * dt);
         const nx = clamp(m.x + (dx / d) * step, -W / 2 + 0.35, W / 2 - 0.35);
         const nz = clamp(m.z + (dz / d) * step, -D / 2 + 0.35, D / 2 - 0.35);
-        const wProbe = c.toWorld(nx, nz);
-        if (c.world.free(wProbe.x, wProbe.z, 0.22, { ghost: true })) {
-          m.x = nx; m.z = nz;
-        }
+        moveRoomWalker(c, m, nx, nz, step);
         const want = Math.atan2(me.x - m.x, me.z - m.z);
         m.rot += clamp(turnTo(m.rot, want), -dt * 9, dt * 9);
         m.group.position.set(m.x, Math.abs(Math.sin(rule.dancePhase + m.idx * 1.3)) * 0.075, m.z);
@@ -205,9 +205,7 @@ export function build(c) {
         const tz = m.variant === 'circle' ? ringZ + Math.cos(m.baseAngle) * ringR : m.hz;
         const dx = tx - m.x, dz = tz - m.z, d = Math.hypot(dx, dz);
         if (d > 0.02 && res.speed > 0) {
-          const step = Math.min(d, res.speed * dt);
-          m.x += (dx / d) * step;
-          m.z += (dz / d) * step;
+          moveRoomWalker(c, m, tx, tz, Math.min(d, res.speed * dt));
         }
         const want = me.inside && m.variant === 'greeter'
           ? Math.atan2(me.x - m.x, me.z - m.z)
