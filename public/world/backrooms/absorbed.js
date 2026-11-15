@@ -7,6 +7,7 @@
 // but their 1.5x elongated jointed arms will snare anyone who runs carelessly
 // into reach (unless you steer clear, hop over sprawling floor hands, or crouch
 // beneath ceiling hangers).
+import { furnitureClear } from './furniture-rules.js';
 import { toWorld, wallPoint, wallSpans, floorAt, ceilAt } from './gen.js';
 import { clamp, turnTo } from './bits.js';
 import {
@@ -167,7 +168,7 @@ export function spawnAbsorbed(env, { rt, placement, spec }) {
   // while the surrounding 1.06 m arm ring stays walkable to snare careless runners.
   let bodyRef = null;
   if (mount === 'floor') {
-    bodyRef = { x: placement.wx, z: placement.wz, r: 0.21 };
+    bodyRef = { x: placement.wx, z: placement.wz, r: 0.21, get on() { return !denizen.away && !denizen.gone; } };
     world.bodies.push(bodyRef);
   }
 
@@ -177,6 +178,7 @@ export function spawnAbsorbed(env, { rt, placement, spec }) {
 
   const denizen = env.denizens.add({
     kind: 'absorbed',
+    physical: false, // floor mount owns its body above; wall/ceiling forms are not floor obstacles
     mount,
     species: rig.species,
     roomId: rt.id,
@@ -229,6 +231,7 @@ export function spawnAbsorbed(env, { rt, placement, spec }) {
         playerDrop: me.drop || 0,
         struggling,
         clearLine: sameOrLos,
+        contactClear: furnitureClear(world, reachX, reachZ, me.x, me.z, .06),
       });
       rule = res.state;
 
@@ -273,7 +276,8 @@ export function spawnAbsorbed(env, { rt, placement, spec }) {
         const pullK = (1 - Math.exp(-9 * dt)) * Math.max(0.35, rule.grabBlend);
         const nx = me.x + (holdX - me.x) * pullK;
         const nz = me.z + (holdZ - me.z) * pullK;
-        if (world.free(nx, nz, env.player?.RADIUS ?? 0.22)) {
+        if (furnitureClear(world, me.x, me.z, nx, nz, env.player?.RADIUS ?? 0.22)
+          && world.free(nx, nz, env.player?.RADIUS ?? 0.22)) {
           me.x = nx;
           me.z = nz;
         }
@@ -291,7 +295,8 @@ export function spawnAbsorbed(env, { rt, placement, spec }) {
         env.play('rustle', reachX, reachZ, 4.5);
         const pushX = me.x + holdDirX * 0.16;
         const pushZ = me.z + holdDirZ * 0.16;
-        if (world.free(pushX, pushZ, env.player?.RADIUS ?? 0.22)) {
+        if (furnitureClear(world, me.x, me.z, pushX, pushZ, env.player?.RADIUS ?? 0.22)
+          && world.free(pushX, pushZ, env.player?.RADIUS ?? 0.22)) {
           me.x = pushX;
           me.z = pushZ;
         }

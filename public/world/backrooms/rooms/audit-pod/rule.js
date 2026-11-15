@@ -23,7 +23,7 @@ export const createPartnerState = (offset = 0) => ({
 /**
  * Step an Efficiency Partner by `dt` seconds.
  * @param s  state from createPartnerState()
- * @param o  { dt, dist, insideRoom, handEmpty, acceptedViaUse }
+ * @param o  { dt, dist, insideRoom, handEmpty, acceptedViaUse, clearLine, contactClear }
  */
 export function stepPartner(s, o) {
   const {
@@ -32,6 +32,8 @@ export function stepPartner(s, o) {
     insideRoom = false,
     handEmpty = true,
     acceptedViaUse = false,
+    clearLine = true,
+    contactClear = true,
   } = o;
 
   let { phase, timer, clickTimer } = s;
@@ -51,7 +53,7 @@ export function stepPartner(s, o) {
   }
 
   if (phase === 'approaching') {
-    if (dist <= PARTNER.offerDist) {
+    if (clearLine && contactClear && dist <= PARTNER.offerDist) {
       if (handEmpty) {
         gaveSlip = true;
         phase = 'departing';
@@ -66,7 +68,7 @@ export function stepPartner(s, o) {
   }
 
   if (phase === 'offering') {
-    if (acceptedViaUse || handEmpty) {
+    if (clearLine && contactClear && (acceptedViaUse || handEmpty)) {
       gaveSlip = true;
       phase = 'departing';
       timer = PARTNER.cooldown;

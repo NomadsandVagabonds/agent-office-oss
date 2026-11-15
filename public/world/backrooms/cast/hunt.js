@@ -41,6 +41,25 @@ export const HUNT = Object.freeze({
   peekSeen: 0.7,           // seconds after you look away again that it gets up
 });
 
+/** Moving a barricade costs unwatched time before the furniture starts to slide. */
+export const BARRICADE = Object.freeze({ chair: 1.2, trolley: 1.5, desk: 2.4, knock: 0.8, stuck: 1.2, follow: 1 });
+/** Pure wind-up clock. A changed obstacle starts again; watching, a pause or a spent hunter makes no progress. */
+export function heave(previous, dt, item, active = true) {
+  const step = Math.max(0, Math.min(0.1, Number.isFinite(dt) ? dt : 0));
+  if (!item) {
+    if (!previous) return null;
+    // It takes a step after each shove. Briefly losing contact is not a whole new desk to brace against.
+    const idle = (previous.idle || 0) + (active ? step : 0);
+    return idle > BARRICADE.follow ? null : { ...previous, idle, shove: 0, knock: false };
+  }
+  const s = previous?.id === item.id ? previous : { id: item.id, t: 0, next: 0.25, stuck: 0 };
+  if (!active) return { ...s, shove: 0, knock: false };
+  const delay = BARRICADE[item.type] || BARRICADE.desk;
+  const t = s.t + step, knock = step > 0 && t >= s.next;
+  return { ...s, t, idle: 0, next: knock ? t + BARRICADE.knock : s.next, knock,
+    shove: Math.max(0, t - delay) - Math.max(0, s.t - delay) };
+}
+
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /** How long it must have a line of sight to you, d metres off, before it has noticed. */

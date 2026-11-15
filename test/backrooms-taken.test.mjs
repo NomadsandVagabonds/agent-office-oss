@@ -19,6 +19,7 @@ const moduleUrl = (source) => `data:text/javascript;base64,${Buffer.from(source)
 async function load(file, swaps) {
   let source = read(file);
   for (const [from, to] of Object.entries(swaps)) { assert.ok(source.includes(`'${from}'`), `${file} no longer imports ${from}`); source = source.replace(`'${from}'`, JSON.stringify(to)); }
+  source = source.replace(/from '(\.[^']+)'/g, (_, name) => `from '${new URL(name, new URL(file, dir)).href}'`);
   return import(moduleUrl(source));
 }
 /** The room that goes: everything with x under 5. */
@@ -88,13 +89,17 @@ test('the colleague who came along goes with the room too; somebody who is nowhe
   const cutout = { g: { visible: true, position: { set() {} }, rotation: {}, userData: {} }, x: 1, z: 1 };
   assert.equal(env.adopt({ toWorld: (x, z) => ({ x, z }), rt: { group: { remove() {} } }, world: { scene: { add() {} } }, room: { y: 0 } }, cutout), true);
   assert.deepEqual(env.pursuer.follower, { x: 1, z: 1 });
+  const body = env.world.bodies.find(b => b.x === 1 && b.z === 1);
+  assert.ok(body, 'the adopted cutout is a body that stops pushed furniture');
   assert.deepEqual(env.pursuer.takeAway(inside, 'room:a'), ['walker', 'mascot', 'follower']);
   assert.equal(cutout.g.visible, false);
+  assert.ok(!env.world.bodies.includes(body), 'a cutout in an absent room does not block furniture here');
   env.pursuer.update(0.5); env.pursuer.update(0.5);
   assert.equal(cutout.g.visible, false, 'it is not moved, or shown, while it is away');
   assert.equal(of('nowhere').ticks, 2, 'one with no place to be (the shadow, between appearances) is not in any room, and carries on');
   assert.ok(env.pursuer.bringBack('room:a').includes('follower'));
   assert.equal(env.pursuer.away.follower, undefined);
+  assert.equal(env.world.bodies.filter(b => b === body).length, 1, 'restoring the room restores one body');
 });
 
 /* ---- somebody who is more than one body ------------------------------------------------------- */
@@ -251,9 +256,15 @@ test('the hallway takes what is in its room and waits for nothing but the visito
   assert.match(hall, /const nameOf = \(i\) => `unsure-hall:\$\{room\.id\}:\$\{ROOMS\[i\]\}`;/, 'each of the three rooms keeps its own');
   assert.ok(!/busy/.test(hall) && !/now\.busy/.test(rule), 'nothing that is standing in it holds it up');
   assert.match(hall, /s = unsure\(s, dt, \{ watched, inside, near \}\);/);
-  // one call takes the cast, the residents and the floor
-  assert.match(index, /takeAway\(inside, key\) \{ return \{ cast: env\.pursuer\?\.takeAway\?\.\(inside, key\) \|\| \[\], residents: env\.denizens\?\.takeAway\?\.\(inside, key\) \|\| 0, things: env\.inventory\?\.physical\?\.takeAway\?\.\(inside, key\) \|\| 0 \}; \},/);
-  assert.match(index, /bringBack\(key\) \{ return \{ cast: env\.pursuer\?\.bringBack\?\.\(key\) \|\| \[\], residents: env\.denizens\?\.bringBack\?\.\(key\) \|\| 0, things: env\.inventory\?\.physical\?\.bringBack\?\.\(key\) \|\| 0 \}; \},/);
+  // one call takes the cast, the residents, loose items and dragged furniture
+  const taking = index.slice(index.indexOf('takeAway(inside, key)'), index.indexOf('bringBack(key)'));
+  const returning = index.slice(index.indexOf('bringBack(key)'), index.indexOf('/** Is this spot on screen'));
+  for (const service of ['pursuer', 'denizens', 'inventory?.physical']) {
+    assert.ok(taking.includes(`env.${service}?.takeAway?.(inside, key)`));
+    assert.ok(returning.includes(`env.${service}?.bringBack?.(key)`));
+  }
+  assert.ok(taking.includes('env.barricades?.takeAway(inside, key)'));
+  assert.ok(returning.includes('env.barricades?.bringBack(key)'));
   // a fire that is away is no threat, takes up no floor and does not burn down
   assert.match(fire, /f\.remaining > 0 && !f\.away && Math\.abs\(f\.wy - y\)/);
   assert.match(fire, /if \(f\.remaining <= 0 \|\| f\.away \|\|/);

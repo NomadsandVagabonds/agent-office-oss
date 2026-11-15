@@ -2,17 +2,26 @@
 import { createGuard } from './guards.js';
 import { createLabNavigation } from './navigation.js';
 import { createSecurity, stepSecurity, releaseSecurity, CAPTURE_HEARTS, MERCY_SECONDS } from './security.js';
+import { furnitureClear } from '../../furniture-rules.js';
 
 export function createPatrol(c,{visitor,rows,outerX,diversion=()=>null,onChange=()=>{},onRelease=()=>{}}){
-  let security=createSecurity(),clock=0,entered=false,mercy=0,known=false;
+  let security=createSecurity(),clock=0,entered=false,mercy=0,known=false,disposed=false,navRevision=-1;
   const meet=()=>{if(!known){known=true;c.met('mecha-warden');}};
   const nav=createLabNavigation(c),gap=(2.8+outerX)/2;
   const guards=[{x:0,z:rows[2],lane:0},{x:-gap,z:rows[0],lane:-gap},{x:gap,z:rows[3],lane:gap}].map((p,id)=>({
     ...p,id,yaw:id===1?Math.PI:0,model:createGuard(c,{id,x:p.x,z:p.z,variant:id}),
     end:id%2,route:[],repath:0,acquire:0,lastSeen:-100,seen:null,mode:'patrol',moving:false,
   }));
+  const bodies = c.env.barricadesEnabled ? (c.world.bodies ||= []) : null;
+  for (const g of guards) {
+    const p = c.toWorld(g.x,g.z);
+    g.collider = { ...p, r: .36 };
+    if (bodies) bodies.push(g.collider);
+  }
   const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
   function thinClear(a,b){
+    const from=c.toWorld(a.x,a.z),to=c.toWorld(b.x,b.z);
+    if(!furnitureClear(c.world,from.x,from.z,to.x,to.z,.025))return false;
     const n=Math.max(1,Math.ceil(distance(a,b)/.08));
     for(let i=0;i<=n;i++){const p=c.toWorld(a.x+(b.x-a.x)*i/n,a.z+(b.z-a.z)*i/n);
       if(!c.world.free(p.x,p.z,.025,{ghost:true}))return false;}
@@ -32,6 +41,9 @@ export function createPatrol(c,{visitor,rows,outerX,diversion=()=>null,onChange=
     c.env.hold(false);onChange(security);
   }
   function update(dt,t,me){
+    if(disposed)return;
+    const revision=nav.revision();
+    if(revision!==navRevision){navRevision=revision;for(const g of guards){g.route=[];g.repath=0;}}
     if(me.inside&&!entered){entered=true;clock=0;}
     if(me.inside&&security.phase==='patrol'&&!me.world.frozen)clock+=dt;
     const before=security;
@@ -82,10 +94,17 @@ export function createPatrol(c,{visitor,rows,outerX,diversion=()=>null,onChange=
         if(clock>2.5&&mercy<=0&&distance(g,me)<.62&&thinClear(g,me)){capture();}
       }
       g.model.update({x:g.x,z:g.z,yaw:g.yaw,time:t,moving:g.moving,disabled:security.phase==='disabled'});
+      Object.assign(g.collider,c.toWorld(g.x,g.z));
     }
   }
   // hold belongs only to this visit; leaving or disposing never freezes another floor.
-  c.rt.onLeave=()=>{if(security.phase==='captured')c.env.hold(false);};
-  c.rt.group.userData.dispose=()=>{if(security.phase==='captured')c.env.hold(false);};
+  const beforeLeave=c.rt.onLeave, beforeDispose=c.rt.group.userData.dispose;
+  c.rt.onLeave=()=>{beforeLeave?.();if(security.phase==='captured')c.env.hold(false);};
+  c.rt.group.userData.dispose=()=>{
+    if(disposed)return;disposed=true;
+    for(const g of guards){g.collider.on=false;const at=bodies?.indexOf(g.collider)??-1;if(at>=0)bodies.splice(at,1);}
+    if(security.phase==='captured')c.env.hold(false);
+    beforeDispose?.();
+  };
   return {update,disable,state:()=>({...security}),read:()=>({security:{...security},guards:guards.map(g=>({id:g.id,x:g.x,z:g.z,yaw:g.yaw,mode:g.mode,moving:g.moving,eyesOn:g.model.read().eyesOn}))})};
 }

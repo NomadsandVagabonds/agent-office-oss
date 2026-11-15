@@ -102,7 +102,8 @@ export function createStalkers(env) {
     if (follower || !env.player) return false;
     const at = c.toWorld(k.x, k.z);
     c.rt.group.remove(k.g); c.world.scene.add(k.g);
-    follower = { g: k.g, x: at.x, z: at.z, r: 0.2, tall: 1.3, opens: false, speed: 2.7, wait: 0, unseen: 0 };
+    follower = { g: k.g, x: at.x, z: at.z, r: 0.2, tall: 1.3, opens: false, speed: 2.7, wait: 0, unseen: 0, body: { x: at.x, z: at.z, r: 0.2 } };
+    W().bodies.push(follower.body);
     k.g.position.set(at.x, c.room.y, at.z);
     return true;
   };
@@ -116,6 +117,7 @@ export function createStalkers(env) {
     const bx = f.x, bz = f.z;
     walk.go(f, me, f.speed * step, 1.7);                                 // cardboard cannot work a door handle, or get down and crawl: shut a door on it and it waits
     if (!hiddenAt(f.x, f.z, f.r + 0.3)) { f.x = bx; f.z = bz; }
+    f.body.x = f.x; f.body.z = f.z;
     const went = Math.hypot(f.x - bx, f.z - bz);
     f.g.position.set(f.x, w.floorY(f.x, f.z), f.z);
     f.g.rotation.y = Math.atan2(me.x - f.x, me.z - f.z);
@@ -168,7 +170,11 @@ export function createStalkers(env) {
         for (const b of k.out) w.bodies.splice(w.bodies.indexOf(b), 1);
         gone.push(k.id);
       }
-      if (follower && !follower.away && inside(follower.x, follower.z)) { follower.away = key; follower.g.visible = false; gone.push('follower'); }
+      if (follower && !follower.away && inside(follower.x, follower.z)) {
+        follower.away = key; follower.g.visible = false;
+        const i = w.bodies.indexOf(follower.body); if (i >= 0) w.bodies.splice(i, 1);
+        gone.push('follower');
+      }
       return gone;
     },
     /** That room is back, and so is whoever was in it: where they stood, as they were. → who came back. */
@@ -182,7 +188,11 @@ export function createStalkers(env) {
         for (const b of k.out || []) if (!w.bodies.includes(b)) w.bodies.push(b);
         k.shown = k.out = null; back.push(k.id);
       }
-      if (follower && follower.away === key) { follower.away = null; follower.g.visible = drawn(follower); back.push('follower'); }
+      if (follower && follower.away === key) {
+        follower.away = null; follower.g.visible = drawn(follower);
+        if (!w.bodies.includes(follower.body)) w.bodies.push(follower.body);
+        back.push('follower');
+      }
       return back;
     },
     /** Who is away with a room, and which (for the dev page and the tests): { id: key }. */
@@ -193,6 +203,10 @@ export function createStalkers(env) {
     get follower() { return follower ? { x: follower.x, z: follower.z } : null; },
     get figure() { return pirate?.figure ?? null; },
     of: (id) => live.find((k) => k.id === id)?.it ?? null,
-    dispose() { for (const k of live) { try { k.it.dispose?.(); } catch { /* it is going anyway */ } } follower?.g.removeFromParent(); follower = null; },
+    dispose() {
+      for (const k of live) { try { k.it.dispose?.(); } catch { /* it is going anyway */ } }
+      if (follower) { const i = W().bodies.indexOf(follower.body); if (i >= 0) W().bodies.splice(i, 1); follower.g.removeFromParent(); }
+      follower = null;
+    },
   };
 }

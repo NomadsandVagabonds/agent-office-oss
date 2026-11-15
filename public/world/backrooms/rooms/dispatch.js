@@ -109,7 +109,9 @@ export function build(c) {
 
   // Familiar office furniture, repurposed as a packing bench. All large
   // furniture stays behind the pair's reserved floor; the center is clear.
-  const desk = c.prop('desk', work.table.x, work.table.z, { rot: Math.PI, solid: false });
+  // The GPU landslide buries this bench; its visible floor bolts explain why
+  // it stays with the hoard and the pickup line instead of sliding out of it.
+  const desk = c.prop('desk', work.table.x, work.table.z, { rot: Math.PI, solid: false, fixed: true });
   const top = desk?.top || 0.75;
   c.prop('crt', work.table.x - 0.48, work.table.z - 0.06, { y: top, rot: Math.PI, solid: false, shadow: false });
   c.prop('keyboard', work.table.x - 0.4, work.table.z + 0.24, { y: top + 0.01, rot: Math.PI, solid: false, shadow: false });

@@ -20,12 +20,14 @@ import { CATALOGUE as WORKS } from './works.js';
 import { CATALOGUE as FUN } from './fun.js';
 import { CATALOGUE as LIFT } from './lift.js';
 import { CATALOGUE as GAUGES } from './gauges.js';
+import { trolley } from './trolley.js';
 
 const nth = (o, n) => hashId(String(o?.id || o?.type || '')) % n;
 
 export const PROPS = {
   desk: { make: () => O.desk() },
   chair: { make: (o) => O.chair({ color: o.color }), variant: (o) => o.color || '' },
+  trolley: { make: trolley },
   crt: { make: () => O.crt() },
   keyboard: { make: () => O.keyboard() },
   mouse: { make: () => O.mouse() },
