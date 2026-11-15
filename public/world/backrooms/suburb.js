@@ -20,6 +20,7 @@
 import * as THREE from 'three';
 import { Batch, lin, ticks, WHITE } from './kit.js';
 import { makeCutout } from './cutout.js';
+import { Vox, M, glow, tone } from '../vox/vox.js';
 import { TILE } from './gen.js';
 import { FENCE, FLAT } from './quiet.js';
 import { LEAN, REFUSE, lean, pressing } from './marks.js';
@@ -437,53 +438,50 @@ function flamingoAt(c, x, z, turn) {
   upright(cut, x - dx, z - dz, x + dx, z + dz, 0, 1.0, art.uv('flamingo')); upright(cut, x + dx, z + dz, x - dx, z - dz, 0, 1.0, art.uv('flamingoBack', true));
   c.shadow(x, z, 0.3, 0.3, 0.3);
 }
-/** A car, as far down in the lawn as its door handles, its lamps still on. Along x, or along z. */
-export function car(c, x, z, along = true, rgb = [0.6, 0.52, 0.38], lift = 0, into = null) {
-  const body = into || c.flat;
-  const B = (u0, y0, v0, u1, y1, v1, col, o) => (along ? body.box(x + u0, y0 + lift, z + v0, x + u1, y1 + lift, z + v1, col, lift ? {} : o) : body.box(x + v0, y0 + lift, z + u0, x + v1, y1 + lift, z + u1, col, lift ? {} : o));
-  if (lift) for (const u of [-1.5, 1.1]) for (const v of [-0.88, 0.7]) B(u, -lift, v, u + 0.55, 0.12, v + 0.18, [0.05, 0.05, 0.06]);
-  B(-2.1, 0, -0.85, 2.1, 0.42, 0.85, rgb, { skip: '-y' }); B(-2.1, 0.16, -0.86, 2.1, 0.3, 0.86, [0.36, 0.22, 0.12]);          // the body, and the strip of wood down its side
-  B(-1.25, 0.42, -0.74, 0.75, 0.86, 0.74, [0.07, 0.09, 0.11]); B(-1.3, 0.86, -0.78, 0.8, 0.93, 0.78, rgb);                    // glass all round, a roof
-  for (const u of [-1.28, -0.28, 0.72]) for (const v of [-0.76, 0.72]) B(u, 0.42, v, u + 0.07, 0.86, v + 0.04, rgb);
-  B(-0.9, 0.93, -0.6, 0.4, 0.97, -0.55, [0.6, 0.6, 0.6]); B(-0.9, 0.93, 0.55, 0.4, 0.97, 0.6, [0.6, 0.6, 0.6]);               // somewhere to put the luggage
-  const glow = into || c.shining('suburb:lamp', c.kit.tex.white(), 1.6, lin('#ffe9a8'));
-  for (const v of [-0.6, 0.6]) { const p = along ? [x + 2.105, z + v] : [x + v, z + 2.105], q = 0.11; const y = 0.22 + lift; if (along) sheet(glow, [p[0], y, p[1] + q], [p[0], y, p[1] - q], [p[0], y + 0.14, p[1] - q], [p[0], y + 0.14, p[1] + q]); else sheet(glow, [p[0] - q, y, p[1]], [p[0] + q, y, p[1]], [p[0] + q, y + 0.14, p[1]], [p[0] - q, y + 0.14, p[1]]); }
-  if (into && into.bare) return;                              // (only the shape of one: whoever asked puts it where it is going)
-  c.light(x + (along ? 2.5 : 0), 0.35 + lift, z + (along ? 0 : 2.5), '#ffe9a8', 0.5, { k: 1.1, far: 4 });
-  if (along) c.solid(x - 2.1, z - 0.85, x + 2.1, z + 0.85); else c.solid(x - 0.85, z - 2.1, x + 0.85, z + 2.1);
-  c.blot(x, z, along ? 5.2 : 2.6, along ? 2.6 : 5.2, { a: lift ? 0.3 : 0.45 }); c.reserve(x, z, 2.3);
-}
-/* ---- the melt: timber that has gone soft (the owner's idea: wooden telephone poles, melting) ------------------------------- */
-
 /**
- * A wooden telephone pole that is melting, toward (dx, dz): it stands for a metre or two, then goes over like a candle left
- * in the sun, wood running off its underside and standing in a pool at its foot. Only the pole: its two crossbars are as stiff
- * and square as the day they went up. Two wires still go up into the ceiling and hold the top; two have come down.
+ * A car, sculpted: an estate of about 1975, wood down its sides, a rack on the roof, chrome at either end, its lamps on. Nose toward +x.
+ * (rgb: its paint, as '#rrggbb'. door: the driver's door stands open.)
  */
-export function meltingPole(c, x, z, dx, dz, hgt, R = c.R) {
-  const wood = [0.36, 0.22, 0.12], dark = [0.24, 0.14, 0.07], wire = [0.04, 0.03, 0.02], N = 9, seg = hgt / N, pts = [[x, 0, z]], nx = -dz, nz = dx;
-  for (let i = 1; i <= N; i++) { const a = Math.pow(i / N, 2.4) * 1.75 + Math.sin(i * 1.7) * 0.07, q = pts[i - 1]; pts.push([q[0] + dx * Math.sin(a) * seg, Math.max(0.5, q[1] + Math.cos(a) * seg), q[2] + dz * Math.sin(a) * seg]); }
-  // the pole is what is melting: it thins and thickens as it goes over, and runs off its own underside
-  for (let i = 0; i < N; i++) beam(c.flat, pts[i], pts[i + 1], 0.18 - i * 0.008 + (i % 2) * 0.03, i % 3 ? wood : dark);
-  const drip = (p, len) => { beam(c.flat, p, [p[0], p[1] - len, p[2]], 0.04, wood); c.flat.ball(p[0], p[1] - len, p[2], 0.055, wood, 1.3, 6); };
-  for (const i of [N - 4, N - 2]) drip([pts[i][0], pts[i][1] - 0.06, pts[i][2]], R.range(0.25, 0.6));
-  // its two crossbars are not: square timber, dead straight, a row of insulators on each, exactly as they were put up
-  const ends = [];
-  for (const [i, hw] of [[N - 1, 0.75], [N - 2, 0.6]]) {
-    const p = pts[i]; beam(c.flat, [p[0] - nx * hw, p[1] + 0.09, p[2] - nz * hw], [p[0] + nx * hw, p[1] + 0.09, p[2] + nz * hw], 0.09, dark);
-    for (const k of [-0.9, -0.45, 0.45, 0.9]) { const q = [p[0] + nx * hw * k, p[1] + 0.135, p[2] + nz * hw * k]; c.flat.box(q[0] - 0.03, q[1], q[2] - 0.03, q[0] + 0.03, q[1] + 0.09, q[2] + 0.03, [0.55, 0.62, 0.6]); if (Math.abs(k) > 0.5) ends.push([q[0], q[1] + 0.09, q[2], k]); }
-  }
-  // the wires: two still go up into the ceiling, and are what is holding the top; two have come down
-  for (const [ex, ey, ez, k] of ends) {
-    if (k > 0) { const up = c.ceilAt(ex, ez); beam(c.flat, [ex, ey, ez], [ex - dx * 0.4, up, ez - dz * 0.4], 0.014, wire); c.hole(ex - dx * 0.4 - 0.3, ez - dz * 0.4 - 0.3); }
-    else { const g = [ex + dx * 0.7 + nx * k * 0.4, 0.02, ez + dz * 0.7 + nz * k * 0.4]; beam(c.flat, [ex, ey, ez], g, 0.014, wire); beam(c.flat, g, [g[0] + dx * 1.1, 0.02, g[2] + dz * 1.1 + nz * 0.3], 0.014, wire); }
-  }
-  // the pool, and what has dripped into it since
-  c.flat.ball(x, 0.01, z, 0.62, wood, 0.09, 10); c.flat.ball(x + dx * 0.5, 0.01, z + dz * 0.5, 0.4, dark, 0.08, 8); c.blot(x, z, 1.9, 1.9, { a: 0.4 });
-  for (const i of [N - 4, N - 2]) { const p = pts[i]; c.flat.ball(p[0], 0.01, p[2], 0.2, wood, 0.1, 6); }
-  c.solid(x - 0.12, z - 0.12, x + 0.12, z + 0.12); c.reserve(x, z, 0.8);
+function carVox(paint, door) {
+  return () => {
+    const v = new Vox(), body = M(paint, 1), dark = M(tone(paint, -0.25), 1), chrome = M('#c9ccd0', 0), glassy = M('#1f2a33', 0), wood = M('#7a4f2a', 3), woodL = M('#a57a48', 3), tyre = M('#17171a', 2);
+    v.rbox(-84, 12, -34, 84, 32, 34, 5, body); v.rbox(-80, 8, -32, 80, 14, 32, 2, dark);
+    v.rbox(-58, 30, -31, 34, 56, 31, 6, body);                                                             // the cabin, long: it is an estate
+    for (let i = 0; i < 26; i++) v.box(34 + i * 0.5, 32, -30, 35 + i * 0.5, 55 - i, 30, body);             // the windscreen's rake
+    // glass all round, with pillars
+    v.paint(-54, 38, -32, 30, 52, -30, glassy); v.paint(-54, 38, 30, 30, 52, 32, glassy); v.paint(-60, 38, -27, -56, 52, 27, glassy); v.paint(34, 34, -27, 48, 54, 27, glassy);
+    for (const x of [-26, 2]) { v.paint(x, 36, -32, x + 3, 54, -30, body); v.paint(x, 36, 30, x + 3, 54, 32, body); }
+    // the wood, framed in paler wood
+    for (const z of [-35, 34]) { v.box(-72, 15, z, 70, 29, z + 1, wood); v.box(-72, 15, z, 70, 16, z + 1, woodL); v.box(-72, 28, z, 70, 29, z + 1, woodL); for (const x of [-72, -26, 2, 30, 69]) v.box(x, 15, z, x + 1, 29, z + 1, woodL); for (const x of [-12, 14]) v.box(x, 30, z, x + 5, 31.4, z + 1, chrome); }
+    // wheels, in arches, with caps
+    for (const x of [-52, 50]) for (const s of [-1, 1]) { v.carve(x - 15, 0, s > 0 ? 26 : -35, x + 15, 22, s > 0 ? 35 : -26); v.cyl('z', x, 12, s > 0 ? 25 : -33, s > 0 ? 33 : -25, 12.5, tyre); v.cyl('z', x, 12, s > 0 ? 32.4 : -33.6, s > 0 ? 33.6 : -32.4, 6.5, chrome); v.cyl('z', x, 12, s > 0 ? 33 : -34, s > 0 ? 34 : -33, 2.2, dark); }
+    // chrome: bumpers with overriders, a grille, mirrors, a rack
+    for (const x of [-88, 84]) { v.rbox(x, 12, -35, x + 4, 18, 35, 1.5, chrome); for (const z of [-18, 16]) v.box(x + (x > 0 ? 3 : -1), 11, z, x + (x > 0 ? 5 : 1), 21, z + 2, chrome); }
+    v.box(84, 19, -20, 85, 28, 20, M('#2b2f33', 0)); for (let z = -19; z < 20; z += 3) v.box(85, 19, z, 86, 28, z + 1, chrome); v.box(85, 23, -20, 86, 24, 20, chrome);
+    for (const z of [-29, 23]) { v.rbox(84, 20, z, 86, 28, z + 6, 1.5, glow('#fff0b8')); v.box(84, 19, z - 1, 85, 29, z + 7, chrome); v.box(-85, 19, z, -84, 28, z + 6, glow('#c21f1a')); }
+    v.box(-86, 13, -8, -85, 18, 8, M('#e8d9a0', 0)); v.box(86, 13, -8, 87, 18, 8, M('#e8d9a0', 0)); for (const z of [-5, -1, 3]) { v.set(-87, 15, z, dark); v.set(87, 15, z, dark); }
+    for (const s of [-1, 1]) { v.tube(30, 36, s * 32, 32, 38, s * 37, 0.8, chrome); v.rbox(31, 37, s > 0 ? 36 : -39, 34, 41, s > 0 ? 39 : -36, 1, chrome); }
+    for (const z of [-26, 24]) { v.box(-50, 57, z, 26, 58.4, z + 2, chrome); for (const x of [-48, -12, 22]) v.box(x, 55, z, x + 2, 57, z + 2, chrome); } for (const x of [-40, -12, 16]) v.box(x, 57.4, -26, x + 1.4, 58.4, 26, chrome);
+    v.tube(-70, 32, 20, -78, 56, 24, 0.5, chrome);                                                          // an aerial
+    if (door) { v.carve(4, 16, 30, 30, 54, 35); v.box(28, 16, 34, 30, 54, 60, body); v.paint(28, 38, 36, 30, 52, 58, glassy); v.box(27, 15, 34, 28, 29, 60, wood); v.box(4, 14, 22, 28, 30, 30, M('#5a3a26', 2)); v.rbox(8, 26, 10, 22, 34, 26, 2, M('#6b4a30', 2)); v.ring(20, 40, 14, 5, 0.9, M('#1b1614', 0), 'x'); }
+    return v;
+  };
 }
-
+const hexOf = (rgb) => (typeof rgb === 'string' ? rgb : '#' + rgb.map((k) => Math.round(Math.pow(Math.max(0, Math.min(1, k)), 1 / 2.2) * 255).toString(16).padStart(2, '0')).join(''));
+/**
+ * Put a car down at (x, z), nose along +x (or +z). lift: how far its wheels are above the floor's level (0: as it stands; negative:
+ * that far down in the grass). into: a voxel batch of the caller's own, for a car that is going to move (a batch that says `bare`
+ * gets the shape and nothing else: no body to walk into, no lamps' light). opt.door: the driver's door open.
+ */
+export function car(c, x, z, along = true, rgb = [0.6, 0.52, 0.38], lift = 0, into = null, opt = {}) {
+  const geo = c.kit.model('suburb:car:' + hexOf(rgb) + (opt.door ? ':open' : ''), carVox(hexOf(rgb), !!opt.door)), rot = along ? 0 : -Math.PI / 2;
+  if (into) into.addVox(geo.solid, new THREE.Matrix4().compose(new THREE.Vector3(x, lift, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rot, 0)), new THREE.Vector3(c.kit.VOXEL, c.kit.VOXEL, c.kit.VOXEL)));
+  else c.place(geo, x, z, { y: lift, rot, solid: false, shadow: false });
+  if (into && into.bare) return;                              // (only the shape of one: whoever asked puts it where it is going)
+  c.light(x + (along ? 2.5 : 0), 0.6 + lift, z + (along ? 0 : 2.5), '#ffe9a8', 0.5, { k: 1.1, far: 4 });
+  if (along) c.solid(x - 2.1, z - 0.85, x + 2.1, z + 0.85); else c.solid(x - 0.85, z - 2.1, x + 0.85, z + 2.1);
+  c.blot(x, z, along ? 5.2 : 2.6, along ? 2.6 : 5.2, { a: lift < 0 ? 0.5 : 0.35 }); c.reserve(x, z, 2.3);
+}
 /** A fire that is not the visitor's: two crossed sheets of it, alight for as long as anybody is near, and what it does to the ceiling. */
 export function blaze(c, x, y, z, size = 1) {
   const tex = c.kit.tex.custom('suburb:flame', 32, 48, (g, w, h) => { for (const [col, k] of [['#d8421c', 1], ['#f08a1e', 0.72], ['#ffd65a', 0.42]]) { g.fillStyle = col; for (const [fx, fw, fh] of [[8, 7, 34], [16, 9, 46], [24, 7, 30], [12, 5, 22], [21, 5, 38]]) { g.beginPath(); g.moveTo(fx - fw * k, h); g.quadraticCurveTo(fx - fw * k, h - fh * k * 0.5, fx, h - fh * k); g.quadraticCurveTo(fx + fw * k, h - fh * k * 0.5, fx + fw * k, h); g.fill(); } } }, { clamp: true });
@@ -522,13 +520,13 @@ export const WRONG = {
     c.flat.box(-0.03, y - 0.07, -0.03, 0.03, y, 0.03, [0.06, 0.06, 0.06]); c.flat.box(-0.02, y - 0.085, -0.02, 0.02, y - 0.07, 0.02, [0.7, 0.55, 0.2]);
   },
   // a car, alight, and it has been for some time: nothing is burnt but the ceiling
-  burning(c) { if (WRONG.car(c) === false) return false; blaze(c, 0.3, 0.6, 0, 1.3); blaze(c, -0.5, 0.5, 0.3, 0.9); },
+  burning(c) { if (WRONG.car(c) === false) return false; blaze(c, 0.3, 0.75, 0, 1.3); blaze(c, -0.6, 0.7, 0.3, 0.9); },
   // a car, parked where there was room
   ceilcar(c) {
     const { W, D } = c, y = c.ceilAt(0, 0), along = W >= D;
     if (y < 2.6 || c.ceilAt(1.5, 1.5) !== y || Math.max(W, D) < 5.4) return false;
-    const b = new Batch(); b.bare = true; car(c, 0, 0, along, [0.3, 0.42, 0.62], 0.32, b);
-    const g = c.dynamic(b, { pivot: [0, 0, 0] }); g.rotation.z = Math.PI; g.position.y = y - 0.01;
+    const b = new Batch(true); b.bare = true; car(c, 0, 0, along, '#3f5f8a', 0, b);
+    const g = c.dynamic(b, { pivot: [0, 0, 0] }); g.rotation.z = Math.PI; g.position.y = y + 0.19;
     c.blot(0, 0, along ? 4.6 : 2.2, along ? 2.2 : 4.6, { a: 0.4 });
   },
   // telephone poles, in board, with the wires going where wires go
@@ -595,7 +593,7 @@ export const WRONG = {
     if (Math.max(W, D) < 6.6 || Math.min(W, D) < 4.6) return false;
     const x = along ? 0 : c.R.pick([-0.5, 0.5]), z = along ? c.R.pick([-0.5, 0.5]) : 0;
     if (!c.clear(x, z, 0.9) || !c.clear(x + (along ? 1.5 : 0), z + (along ? 0 : 1.5), 0.9) || !c.clear(x - (along ? 1.5 : 0), z - (along ? 0 : 1.5), 0.9)) return false;
-    car(c, x, z, along);
+    car(c, x, z, along, c.R.pick(['#9a8a66', '#7d2a22', '#3f5f8a', '#5f7f5a']), -0.5);
   },
 };
 export function sprinkler(c, x, z) {

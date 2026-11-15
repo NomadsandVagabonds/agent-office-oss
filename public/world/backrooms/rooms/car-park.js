@@ -36,8 +36,7 @@ export function build(c) {
   }
   if (spot) {
     // (in a batch of its own, so that it can go)
-    const b = new Batch(); car(c, spot.x, spot.z, false, [0.6, 0.52, 0.38], 0.32, b);
-    b.box(spot.x - 0.86 - 0.9, 0.5, spot.z + 0.05, spot.x - 0.86, 1.2, spot.z + 0.1, [0.6, 0.52, 0.38]);                          // the driver's door, open
+    const b = new Batch(true); car(c, spot.x, spot.z, false, '#9a8a66', 0, b, { door: true });                                      // its driver's door open
     const body = c.dynamic(b, { pivot: [spot.x, 0, spot.z] }), w = c.toWorld(spot.x, spot.z), SINK = 2.6;
     // Get in, and it goes down through the tarmac with you in it: a second way down from this part, where there is a part
     // below (index.js `descend`). On the last part, and for anybody it will not take, it is a car: it answers and stays.
