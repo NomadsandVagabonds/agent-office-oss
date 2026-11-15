@@ -2,21 +2,13 @@
 // cartridge into the ceiling plenum and grew four hyper-angled, phase-slipping
 // limbs around a knotted black core.
 //
-// It lives upside down on the suspended ceiling by default, sending out sharp
-// echolocation click-trains while black toner droplets fall from the tiles
-// beneath it. Hold crouch (C) or stand still and its clicks pass over you.
-// Walk or sprint upright in earshot and its clicks rattle faster until it peels
-// down the wall and comes after you on all fours — blistering fast, never in a
-// straight line, banking onto corridor walls as it weaves and skittering right
-// through low crawl holes. It has claws, not hands, so a shut fire door stops
-// it cold.
-//
-// Feeding & brood lifecycle: each bite costs 1 heart; on landing its second
-// bite (2 damage dealt — now full) its phase collapses into a brooding pool of
-// black glitch slime on the carpet. Leave that puddle for ~1 minute (60 s) and
-// it swells, ruptures into a spent tar ring, and hatches 2–3 new waste toners
-// that cling to the ceiling around the room where they spawned unless they hear
-// upright movement nearby.
+// Sonar hears upright movement; standing still or crouching avoids waking it.
+// Once alert it stalks the room perimeter, climbing walls and crossing ceilings,
+// then pauses for an audible wind-up before a committed flying leap. Most leaps
+// aim wide; even accurate ones keep their original aim and can be dodged.
+// Crawling contact never damages the visitor. A miss retreats; a landed bite
+// leaves a long recovery before it can attack again. Two landed bites still
+// dissolve it into the existing brooding puddle and territorial hatchlings.
 import * as THREE from 'three';
 import { Vox, M, glow } from '../../vox/vox.js';
 import { Batch, lamp } from '../kit.js';
@@ -24,7 +16,7 @@ import { makeRng, roomDistances } from '../gen.js';
 import { tonerHomes } from '../cast.js';
 import { clamp, turnTo } from '../bits.js';
 import { FIRE_FEAR, calm as unafraid, afraid, tooNear } from './fire.rule.js';
-import { TONER, perched, hatchedBrood, weaveOffset, stepToner, strikeToner, snipToner } from './toner.rule.js';
+import { TONER, perched, hatchedBrood, weaveOffset, planTonerLunge, tonerWallGoal, stepToner, strikeToner, snipToner } from './toner.rule.js';
 
 const S = 0.022;                               // 2.2 cm per voxel: sharp, spindly silhouette
 const VOID = '#050609', TAR = '#0d1018', OIL = '#171c29', SHEEN = '#262e42', STATIC = '#8fa4bd';
@@ -317,7 +309,7 @@ function surfaceBounds(w, x, z) {
 export function create(c) {
   const env = c.env, level = env.level, R = c.R, me = c.me;
   const units = [];
-  let geoms = null, placed = false, nextId = 1, wadeT = 0, seenT = 0, known = false, over = false;
+  let geoms = null, placed = false, nextId = 1, wadeT = 0, seenT = 0, known = false, over = false, packGrace = 0;
 
   function pickStartRoom() {
     const dist = roomDistances(level, level.start.room);
@@ -675,46 +667,63 @@ export function create(c) {
         }
       }
     } else if (unit.s.mode === 'chase') {
-      unit.prowlGoal = null;
       unit.emerging = false;
-      walker.speed = TONER.chaseSpeed;
-      if (tooNear(m, fire) || (fire && d > Math.hypot(fire.x - walker.x, fire.z - walker.z))) {
-        cannot = true;
-      } else {
-        const bx = walker.x, bz = walker.z;
-        const stepDist = TONER.chaseSpeed * (c.speedScale ?? 1) * Math.min(dt, 0.06);
-        const res = c.walk.go(walker, m, stepDist, 0.28);
-        blockedByDoor = !!res.door;
-        cannot = res.cannot;
-        there = res.there;
-
-        // Erratic side-to-side weave perpendicular to travel so it NEVER runs in a straight line
-        if (!blockedByDoor && !cannot && !walker.thru) {
-          const mvx = walker.x - bx, mvz = walker.z - bz, mvLen = Math.hypot(mvx, mvz);
-          const fx = mvLen > 1e-4 ? mvx / mvLen : dx / Math.max(d, 0.01);
-          const fz = mvLen > 1e-4 ? mvz / mvLen : dz / Math.max(d, 0.01);
-          const rx = -fz, rz = fx;
-          const taper = clamp((d - 0.45) / 1.15, 0.18, 1);
-          const latVel = Math.cos(unit.s.weavePhase) * TONER.weaveFreq * TONER.weaveAmp * (unit.s.weaveFlip || 1) * taper;
-          const latDist = Math.min(Math.abs(latVel) * Math.min(dt, 0.06), stepDist * 1.15);
-          if (latDist > 1e-3) {
-            const sgn = latVel >= 0 ? 1 : -1;
-            const got = c.walk.stride(walker, walker.x + rx * sgn * 1.2, walker.z + rz * sgn * 1.2, latDist);
-            if (got < latDist * 0.25) unit.s = { ...unit.s, weaveFlip: -(unit.s.weaveFlip || 1) };
-          }
+      const rt = w.roomAt(walker.x, walker.z);
+      const bx = walker.x, bz = walker.z;
+      unit.wallClock = (unit.wallClock ?? 0) - dt;
+      if (!unit.wallGoal || unit.wallClock <= 0) {
+        if (unit.wallIndex === undefined && rt) {
+          const flip = unit.id % 2 ? 1 : -1;
+          unit.wallIndex = [0,1,2,3].sort((a,b)=>{
+            const A=tonerWallGoal(rt.rect,a,flip), B=tonerWallGoal(rt.rect,b,flip);
+            return Math.hypot(A.x-walker.x,A.z-walker.z)-Math.hypot(B.x-walker.x,B.z-walker.z);
+          })[0]-1;
         }
-        went = Math.hypot(walker.x - bx, walker.z - bz);
-        const aimYaw = went > 1e-4 ? Math.atan2(walker.x - bx, walker.z - bz) : Math.atan2(dx, dz);
-        unit.yaw += clamp(turnTo(unit.yaw, aimYaw), -dt * 16, dt * 16);
-        if (blockedByDoor && Math.random() < dt * 3.2) c.play('rattle', walker.x, walker.z, 7);
-        if (went > 0.02 && Math.random() < dt * 9) c.play('tick', walker.x, walker.z, 5);
+        unit.wallIndex = (unit.wallIndex ?? 0) + 1;
+        unit.wallGoal = rt ? tonerWallGoal(rt.rect, unit.wallIndex, unit.id % 2 ? 1 : -1) : unit.prowlGoal;
+        unit.wallClock = 12;
       }
+      if (unit.wallGoal) {
+        const goal = { ...unit.wallGoal };
+        if (rt) {
+          const wobble = Math.sin(t*2.1+unit.id)*.7;
+          if (Math.abs(goal.x-rt.rect.x0)<.5 || Math.abs(goal.x-rt.rect.x1)<.5) goal.z = clamp(goal.z+wobble,rt.rect.z0+.38,rt.rect.z1-.38);
+          else goal.x = clamp(goal.x+wobble,rt.rect.x0+.38,rt.rect.x1-.38);
+        }
+        const res = c.walk.go(walker, goal, TONER.chaseSpeed * (c.speedScale ?? 1) * Math.min(dt, .06), .28);
+        blockedByDoor = !!res.door; cannot = !!res.cannot;
+        if (res.there || cannot || blockedByDoor) unit.wallClock = 0;
+      }
+      went = Math.hypot(walker.x - bx, walker.z - bz);
+      if (went > .001) unit.yaw += clamp(turnTo(unit.yaw, Math.atan2(walker.x-bx,walker.z-bz)), -dt*8, dt*8);
+    } else if (unit.s.mode === 'lunge' && unit.leap) {
+      // Interpolate a locked straight flight with collision sweeps, never re-aim at the visitor.
+      const k = clamp(1 - (unit.s.t - dt) / TONER.lungeTime, 0, 1);
+      const tx = unit.leap.x0 + (unit.leap.x - unit.leap.x0) * k;
+      const tz = unit.leap.z0 + (unit.leap.z - unit.leap.z0) * k;
+      const bx = walker.x, bz = walker.z, distance = Math.hypot(tx-bx,tz-bz);
+      const steps = Math.max(1, Math.ceil(distance / .1));
+      for (let i=0;i<steps;i++) {
+        const nx = bx + (tx-bx)*(i+1)/steps, nz = bz + (tz-bz)*(i+1)/steps;
+        if (!c.walk.clear(walker,walker.x,walker.z,nx,nz)) { cannot = true; break; }
+        walker.x = nx; walker.z = nz;
+      }
+      went = Math.hypot(walker.x-bx,walker.z-bz);
     }
 
+    const previousMode = unit.s.mode;
+    const jumpK = unit.s.mode === 'lunge' ? clamp(1-(unit.s.t-dt)/TONER.lungeTime,0,1) : 0;
+    const jumpY = unit.leap ? unit.leap.y0 * (1-jumpK) + w.floorY(walker.x,walker.z)*jumpK + Math.sin(jumpK*Math.PI)*.8 : unit.surfY;
+
     unit.s = stepToner(unit.s, dt, {
-      d, los, audible, moving: m.moving, speed: m.speed, sink: m.sink, noiseScale,
+      d: Math.hypot(m.x-walker.x,m.z-walker.z), los: c.los(walker.x,walker.z,m.x,m.z), inReach: jumpY <= w.floorY(m.x,m.z) + 1.35, attackBlocked: packGrace > 0, audible, moving: m.moving, speed: m.speed, sink: m.sink, noiseScale,
       blockedByDoor, cannot, there, farFromHome, fleeingFire: unit.fear.flee,
-    });
+    }, () => R());
+    if (unit.s.mode === 'windup' && previousMode !== 'windup') {
+      unit.leap = { ...planTonerLunge(walker, m, () => R()), x0: walker.x, z0: walker.z, y0: unit.surfY };
+      unit.yaw = Math.atan2(unit.leap.x-walker.x, unit.leap.z-walker.z);
+    }
+    if (unit.s.mode !== 'windup' && unit.s.mode !== 'lunge') unit.leap = null;
     if (unit.s.gaveUp) unit.prowlGoal = null;
     if (unit.emerging && unit.s.mode !== 'recoil') unit.emerging = false;
 
@@ -734,6 +743,7 @@ export function create(c) {
       // that was the last of them (or there is no health down here, and being got is the end): the tape is ending, and
       // none of them does anything more — it was biting again every frame until the picture went, and saying so
       if (hit.dead || hit.ended) { over = true; return; }
+      if (hit.landed) packGrace = TONER.packGrace;
       unit.s = strikeToner(unit.s, hit);
       unit.prowlGoal = null;
       if (unit.s.survived && !unit.s.dissolved) c.survived();
@@ -770,23 +780,28 @@ export function create(c) {
       } else {
         wantBankZ = Math.PI * (1 - k);
       }
-    } else if (unit.s.mode === 'chase' && b.wall && b.wall.dist < 0.72) {
-      // Bank up onto corridor walls whenever its erratic weave sweeps close to one!
-      const wk = clamp(1 - b.wall.dist / 0.72, 0, 1);
-      wantY = b.floorY + wk * 0.78;
-      const sideSign = (Math.cos(unit.yaw) * b.wall.nx - Math.sin(unit.yaw) * b.wall.nz) >= 0 ? -1 : 1;
-      wantBankZ = sideSign * wk * 1.18;
+    } else if (unit.s.mode === 'lunge') {
+      wantY = Math.min(jumpY,b.ceilY-.45);
+    } else if (unit.s.mode === 'windup') {
+      wantY = unit.leap?.y0 ?? unit.surfY; wantBankZ = unit.bankZ;
+    } else if (unit.s.mode === 'chase') {
+      if (b.wall && b.wall.dist < .9) {
+        wantY = b.floorY + Math.min(b.ceilY-b.floorY-.4, 1.2 + .6*Math.sin(t*1.8+unit.id));
+        const sideSign = (Math.cos(unit.yaw)*b.wall.nx-Math.sin(unit.yaw)*b.wall.nz)>=0?-1:1;
+        wantBankZ = sideSign * Math.PI*.5;
+      } else { wantY = b.ceilY-.03; wantBankZ = Math.PI; }
     }
 
     const rateK = unit.s.mode === 'drop' || unit.s.mode === 'chase' ? 20 : unit.emerging ? 3.8 : 10;
     const rate = 1 - Math.exp(-rateK * dt);
-    unit.surfY += (wantY - unit.surfY) * rate;
+    if (unit.s.mode === 'lunge') unit.surfY = wantY;
+    else unit.surfY += (wantY - unit.surfY) * rate;
     unit.bankZ += turnTo(unit.bankZ, wantBankZ) * rate;
     unit.bankX += (wantBankX - unit.bankX) * rate;
     if (unit.emerging && Math.abs(unit.surfY - (b.ceilY - 0.03)) < 0.08) unit.emerging = false;
 
     // Solid floor collider only while physically down on the floor chasing/dropping
-    if (unit.s.mode === 'chase' || unit.s.mode === 'drop') {
+    if ((unit.s.mode === 'lunge' || unit.s.mode === 'drop') && unit.surfY < b.floorY+.6) {
       unit.solidBody.x = walker.x; unit.solidBody.z = walker.z;
     } else {
       unit.solidBody.x = 1e6; unit.solidBody.z = 1e6;
@@ -832,6 +847,7 @@ export function create(c) {
     ready,
     update(dt, t = 0) {
       if (!placed || !units.length || over) return;
+      packGrace = Math.max(0, packGrace - dt);
       wadeT = Math.max(0, wadeT - dt);
       const w = env.world, m = me();
       const snapshot = units.slice();
@@ -908,7 +924,7 @@ export function create(c) {
       if (!placed || !units.length) return [];
       const out = [];
       for (const u of units) {
-        if (u.s.mode === 'drop' || u.s.mode === 'chase' || u.s.mode === 'perch' || u.s.mode === 'prowl') {
+        if (u.s.mode === 'drop' || u.s.mode === 'chase' || u.s.mode === 'windup' || u.s.mode === 'lunge' || u.s.mode === 'perch' || u.s.mode === 'prowl') {
           out.push({
             id: 'toner',
             x: u.walker.x,
@@ -973,7 +989,8 @@ export function create(c) {
       } else if (spot?.chase) {
         const b = surfaceBounds(env.world, u.walker.x, u.walker.z);
         u.surfY = b.floorY; u.bankZ = 0; u.emerging = false;
-        u.s = { ...u.s, mode: 'chase', t: 0, alert: 1, lostT: 0, doorT: 0 };
+        u.wallGoal = null; u.wallIndex = undefined; u.leap = null;
+        u.s = { ...u.s, mode: 'chase', attackT: TONER.stalkTime, t: 0, alert: 1, lostT: 0, doorT: 0 };
       }
     },
 

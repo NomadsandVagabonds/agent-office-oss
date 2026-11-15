@@ -36,17 +36,20 @@ function audio(t, options = {}) {
   }
   class Node {
     connections = [];
+    playbackRate = new Param();
     gain = new Param(); frequency = new Param(); detune = new Param(); Q = new Param(); pan = new Param();
     connect(to) { this.connections.push(to); return to; }
     start() { this.started = true; }
     stop() { this.stopped = true; }
   }
   class Context {
+    decodeAudioData = options.decodeAudioData;
     state = 'running'; currentTime = 12; sampleRate = 8; destination = new Node();
     nodes = []; oscillators = []; media = []; resumes = 0; suspends = 0;
     constructor() { contexts.push(this); }
     make() { const n = new Node(); this.nodes.push(n); return n; }
     createGain() { return this.make(); }
+    createWaveShaper() { return this.make(); }
     createBiquadFilter() { return this.make(); }
     createStereoPanner() { return this.make(); }
     createBufferSource() { return this.make(); }
@@ -211,4 +214,58 @@ test('the mascot\'s music belongs to the mascot: it begins when a part\'s is fir
   assert.ok(MASCOT_GAIN > MUSIC_GAIN && MASCOT_GAIN <= 0.6, 'over the usual music, and still not loud');
   assert.ok(fs.statSync(new URL('music/mascot.mp3', dir)).size > 1000000);
   assert.match(sound, /theme = new Audio\(MASCOT\.href\)/); assert.ok(sound.indexOf('new Audio(MASCOT.href)') > sound.indexOf('function playMascot'), 'the file is not asked for until the piece is');
+});
+
+
+test('toner sonar and attack rattle create audible spatial effects and respect mute', t => {
+  const { sound, contexts } = audio(t, { music: false });
+  sound.start();
+  const ctx = contexts[0];
+  for (const name of ['sonar', 'sonarrattle']) {
+    const before = ctx.nodes.length;
+    sound.play(name, { vol: 0.8, pan: -0.6 });
+    const added = ctx.nodes.slice(before);
+    assert.ok(added.some(n => n.started), `${name} starts audio sources`);
+    assert.ok(added.some(n => n.gain.events.some(e => e[0] === 'ramp' && e[1] > 0.01)), `${name} has a nonzero envelope`);
+    assert.ok(added.some(n => n.pan.value === -0.6), `${name} follows the creature's direction`);
+    sound.setMute(true);
+    const mutedCount = ctx.nodes.length;
+    sound.play(name);
+    assert.equal(ctx.nodes.length, mutedCount, `${name} respects master mute`);
+    sound.setMute(false);
+  }
+});
+
+
+test('toner recordings load, alternate variants, and stop with the sound context', async t => {
+  const oldFetch = globalThis.fetch, requested = [];
+  globalThis.fetch = async url => { requested.push(url); return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) }; };
+  t.after(() => { globalThis.fetch = oldFetch; });
+  let id = 0;
+  const { sound, contexts } = audio(t, { music: false, decodeAudioData: async () => ({ clip: ++id, duration: 0.3 }) });
+  sound.start();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(requested.length, 6);
+  assert.ok(requested.every(url => url.endsWith('.ogg')));
+  const ctx = contexts[0];
+  sound.play('sonar', { pan: -0.4 });
+  const first = ctx.nodes.findLast(n => n.buffer?.clip);
+  assert.ok(first?.started, 'decoded recording plays');
+  assert.equal(first.playbackRate.value, 0.7, 'sonar plays 30% slower');
+  const dry = first.connections.find(n => !n.curve), grit = first.connections.find(n => n.curve);
+  assert.equal(dry.gain.value, 0.82, 'most of the original sound stays dry');
+  assert.equal(grit.oversample, '2x');
+  assert.ok([...grit.curve].every(v => Number.isFinite(v) && Math.abs(v) <= 1));
+  const wet = grit.connections[0];
+  assert.equal(wet.gain.events.filter(e => e[0] === 'ramp' && e[1] === 0.01).length, 2, 'two short glitches affect only the grit layer');
+  assert.ok(wet.gain.events.every(e => Number.isFinite(e[2])), 'glitches have valid audio times');
+  sound.play('sonar');
+  const second = ctx.nodes.findLast(n => n.buffer?.clip);
+  assert.notEqual(first.buffer, second.buffer, 'no immediate repeated variant');
+  sound.play('sonarrattle');
+  const warning = ctx.nodes.findLast(n => n.buffer?.clip);
+  assert.ok(warning.started);
+  assert.equal(warning.playbackRate.value, 0.7, 'warning plays 30% slower');
+  sound.stop();
+  assert.ok(first.stopped && second.stopped && warning.stopped, 'active clips stop on teardown');
 });
