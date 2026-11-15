@@ -27,7 +27,7 @@ import { resolveLook } from '/core/look.mjs';
 import { BACKROOMS_DEFAULTS, cleanBackroomsSettings } from '/core/backrooms-settings.mjs';
 import { sketch, toWorld, toLocal, DECK, ARCHETYPES } from './gen.js';
 import { planVisit, floorOf, edition } from './plan.js';
-import { SHOT, cameraFor, slumps } from './lastshot.js';
+import { SHOT, cameraFor, cameraFrom, slumps } from './lastshot.js';
 import { createKit } from './kit.js';
 import { buildWorld, loadCatalogue } from './world.js';
 import { BUILDERS } from './rooms.js';
@@ -484,11 +484,14 @@ async function visit(office, opt) {
       // whoever took them says what happens (cast: takes(shot)); nobody else of the cast is run again
       const taker = env.pursuer?.taker ?? env.tookBy ?? null;          // (one of the cast, or the room whose resident it was: world.js c.hurt)
       let run = null;
-      try { run = taker?.it?.takes?.({ ...spot, room: rt?.id ?? null, figure: figure.root, seconds: SHOT.seconds }) ?? null; }
+      // (it may also say where to film from — `shot.from = { x, y, z }`, world — for a room the corner is a bad seat in)
+      const told = { ...spot, room: rt?.id ?? null, figure: figure.root, seconds: SHOT.seconds, from: null };
+      try { run = taker?.it?.takes?.(told) ?? null; }
       catch (err) { console.warn(`[backrooms] ${taker?.id} had nothing to show for it`, err); }
+      const f = told.from, seat = f && [f.x, f.y, f.z].every(Number.isFinite) ? cameraFrom(f, spot) : cam;
       hud.building?.(`CAM ${String(((rt?.id ?? 0) % 16) + 1).padStart(2, '0')}`);
       sound.play('tick');
-      return { t: 0, at: 0, acc: 0, cam, figure, run: typeof run === 'function' ? run : null, who: taker?.id ?? null };
+      return { t: 0, at: 0, acc: 0, cam: seat, figure, run: typeof run === 'function' ? run : null, who: taker?.id ?? null };
     } catch (err) { console.warn('[backrooms] the building\'s camera would not come on', err); return null; }
   }
   function lastShot(dt) {

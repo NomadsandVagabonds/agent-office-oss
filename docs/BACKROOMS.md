@@ -469,7 +469,9 @@ Things to know before they bite:
   `{ x, y, z, yaw, room, figure, seconds }`: the spot (`y` is the floor),
   the room's id, the visitor's character (a THREE.Group, yours to move, turn,
   shrink or hide) and how long there is. Return a function `(t, dt)` and it
-  is called ten times a second until `seconds`; return nothing and the
+  is called ten times a second until `seconds`; set `shot.from = { x, y, z }`
+  (world) to say where the camera films from, when the corner is a bad
+  seat; return nothing and the
   character goes down where it stands. No `c.hurt` and no `c.met` from
   inside it. A flat battery, giving up and the way out end as they always
   did, and a hit that is survived stays in first person.
