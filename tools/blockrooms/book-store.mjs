@@ -12,7 +12,7 @@
 //
 // With none of these, there is no store, and the site says so and carries on with
 // what each browser keeps for itself.
-import { remoteStore } from './book-remote.mjs';
+import { remoteStore, remoteTrouble } from './book-remote.mjs';
 
 /**
  * @param {object} [env]  where the address and the token are (default: process.env)
@@ -39,6 +39,26 @@ export function createStore(env = process.env, fetchImpl = globalThis.fetch) {
       return out.map((r) => { if (r && r.error) throw new Error(`the store refused a command: ${String(r.error).slice(0, 120)}`); return r ? r.result : null; });
     },
   };
+}
+
+/**
+ * Why createStore(env) gives nothing, for whoever is connecting a store: "I set
+ * it and the book is still shut" is otherwise a guess between three things.
+ * `settings` is all the public may be told; `says` is for the host's own log,
+ * and names the setting that is wrong without ever repeating its value.
+ * @returns {{settings: 'none' | 'incomplete', says: string} | null} null when there is a store
+ */
+export function storeTrouble(env = process.env) {
+  if (env.BOOK_STORE_URL || env.BOOK_STORE_KEY) {
+    const says = remoteTrouble(env);
+    return says ? { settings: 'incomplete', says } : null;
+  }
+  const url = String(env.KV_REST_API_URL || env.UPSTASH_REDIS_REST_URL || ''), token = String(env.KV_REST_API_TOKEN || env.UPSTASH_REDIS_REST_TOKEN || '');
+  if (!url && !token) return { settings: 'none', says: 'no store settings reach this deployment (BOOK_STORE_URL and BOOK_STORE_KEY): set them for this environment, then deploy again' };
+  if (!url) return { settings: 'incomplete', says: 'the Redis token is set and its address is not' };
+  if (!/^https:\/\//.test(url)) return { settings: 'incomplete', says: 'the Redis address is not an https address' };
+  if (!token) return { settings: 'incomplete', says: 'the Redis address is set and its token is not' };
+  return null;
 }
 
 /**

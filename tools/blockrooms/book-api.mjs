@@ -28,6 +28,8 @@ const MAX_BODY = 4096;
 const json = (status, body, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers } });
 const counterOf = ([hits, into, out]) => ({ hits: Number(hits) || 0, in: Number(into) || 0, out: Number(out) || 0 });
 const COUNTERS = ['MGET', 'br:n:hits', 'br:n:in', 'br:n:out'];
+// with no store, all that anybody outside is told about why: nothing set at all, or a set that will not do
+const SETTINGS = new Set(['none', 'incomplete']);
 
 /** Whoever this is, as something that is the same for them for a while and says nothing about them. */
 function who(request, salt) {
@@ -38,13 +40,14 @@ function who(request, salt) {
 /**
  * Answer a request for the book.
  * @param {Request} request
- * @param {{store: object|null, now?: () => number, salt?: string, blocklist?: string[], adminKey?: string}} ctx
- *        store: null if nothing keeps the book · blocklist: words no name may have in it · adminKey: what strikes a line out
+ * @param {{store: object|null, settings?: string, now?: () => number, salt?: string, blocklist?: string[], adminKey?: string}} ctx
+ *        store: null if nothing keeps the book · settings: with no store, whether the host was given 'none' of its settings or an 'incomplete' set
+ *        blocklist: words no name may have in it · adminKey: what strikes a line out
  * @returns {Promise<Response>}
  */
 export async function handle(request, ctx) {
   const { store } = ctx, now = ctx.now || (() => Date.now()), salt = ctx.salt || 'blockrooms';
-  if (!store) return json(503, { ok: false, why: 'no-store' });
+  if (!store) return json(503, { ok: false, why: 'no-store', ...(SETTINGS.has(ctx.settings) ? { settings: ctx.settings } : {}) });
   try {
     if (request.method === 'GET' || request.method === 'HEAD') {
       if (store.read) {

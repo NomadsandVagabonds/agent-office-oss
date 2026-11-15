@@ -79,6 +79,15 @@ and arrays instead of `503 no-store`. A real completed visit then verifies
 the end-to-end score path. The homepage continues to fall back to local
 browser records if the store is unavailable or the free allowance is reached.
 
+While the book is still shut, its answer says which of three things it is,
+so that nobody has to guess:
+
+| `GET /api/book` answers | What it means |
+|---|---|
+| 503, `"why": "no-store"`, `"settings": "none"` | no store settings reach that deployment at all: they are not set for Production, or it has not been deployed again since they were |
+| 503, `"why": "no-store"`, `"settings": "incomplete"` | some are there and will not do. The function's log names the one that is wrong, once as it starts (`[book] no store: BOOK_STORE_KEY is shorter than 32 characters`) and never repeats what it is set to |
+| 502, `"why": "store"` | the settings are accepted and the Worker did not answer as the store should. The log has what it answered (`[book] the book store answered 401` is a key that is not the Worker's) |
+
 To disconnect, remove `BOOK_STORE_URL` and `BOOK_STORE_KEY` from production
 and redeploy the current live release. Keep the D1 database for recovery;
 deleting it is not necessary. Never repoint the binding at an unrelated

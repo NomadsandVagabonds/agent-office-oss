@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorker } from '../tools/blockrooms/cloudflare/worker.mjs';
-import { createStore } from '../tools/blockrooms/book-store.mjs';
+import { createStore, storeTrouble } from '../tools/blockrooms/book-store.mjs';
 import { handle } from '../tools/blockrooms/book-api.mjs';
 
 const KEY = 'private-test-key-never-used-by-a-real-service', URL = 'https://book.example/book';
@@ -88,4 +88,47 @@ test('book worker: the internet cannot read or write the private database; malfo
   assert.equal((await worker.fetch(request({ action: 'count', kind: 'erase', visitor: 'x'.repeat(22) }), env)).status, 400);
   assert.equal((await worker.fetch(request({ action: 'sign', entry: {}, visitor: 'x'.repeat(22), duplicate: 'y'.repeat(22) }), env)).status, 400);
   assert.equal((await worker.fetch(request({ action: 'strike', id: '../' }), env)).status, 400);
+});
+
+test('book store: with no store, the host is told which setting is wrong and nobody is told what it is set to', async () => {
+  const redis = { KV_REST_API_URL: 'https://redis.example', KV_REST_API_TOKEN: 'a-token-that-is-nobodys-business' };
+  const cases = [
+    [{}, 'none', /no store settings reach this deployment/],
+    [{ BOOK_STORE_URL: URL }, 'incomplete', /^BOOK_STORE_KEY is not set$/],
+    [{ BOOK_STORE_KEY: KEY }, 'incomplete', /^BOOK_STORE_URL is not set$/],
+    [{ BOOK_STORE_URL: URL, BOOK_STORE_KEY: 'a-key-that-is-too-short' }, 'incomplete', /^BOOK_STORE_KEY is shorter than 32 characters$/],
+    [{ BOOK_STORE_URL: 'http://book.example/book', BOOK_STORE_KEY: KEY }, 'incomplete', /^BOOK_STORE_URL is not an https address$/],
+    [{ BOOK_STORE_URL: 'https://book.example/book?key=a-secret-in-the-address', BOOK_STORE_KEY: KEY }, 'incomplete', /^BOOK_STORE_URL has a name, a query or a fragment in it$/],
+    [{ BOOK_STORE_URL: 'not-a-url', BOOK_STORE_KEY: KEY }, 'incomplete', /^BOOK_STORE_URL is not an address$/],
+    [{ BOOK_STORE_URL: URL, ...redis }, 'incomplete', /^BOOK_STORE_KEY is not set$/],   // (the preferred store, half set: Redis is not quietly used instead)
+    [{ KV_REST_API_TOKEN: redis.KV_REST_API_TOKEN }, 'incomplete', /address is not/],
+    [{ KV_REST_API_URL: 'http://redis.example', KV_REST_API_TOKEN: redis.KV_REST_API_TOKEN }, 'incomplete', /not an https address/],
+    [{ UPSTASH_REDIS_REST_URL: 'https://redis.example' }, 'incomplete', /token is not/],
+    [{ BOOK_STORE_URL: URL, BOOK_STORE_KEY: KEY }, null],
+    [redis, null],
+  ];
+  for (const [env, settings, says] of cases) {
+    const trouble = storeTrouble(env), store = createStore(env, async () => new Response('{}'));
+    assert.equal(trouble === null, store !== null, `the reason and the store agree about ${JSON.stringify(Object.keys(env))}`);
+    if (settings === null) { assert.equal(trouble, null); continue; }
+    assert.equal(trouble.settings, settings);
+    assert.match(trouble.says, says);
+    for (const value of Object.values(env)) assert.ok(!trouble.says.includes(value), 'a setting is named and never repeated');
+    // what anybody outside is told is one word of the two, beside the answer the page already understands
+    const res = await handle(new Request('https://blockrooms.example/api/book'), { store, settings: trouble.settings });
+    assert.deepEqual([res.status, await res.json()], [503, { ok: false, why: 'no-store', settings }]);
+    assert.equal(res.headers.get('cache-control'), 'no-store', 'so the first answer after it is connected is not an old one');
+  }
+  // and nothing but those two words gets out that way
+  for (const settings of [undefined, '', 'BOOK_STORE_KEY is shorter than 32 characters', { says: 'x' }]) {
+    const res = await handle(new Request('https://blockrooms.example/api/book'), { store: null, settings });
+    assert.deepEqual(await res.json(), { ok: false, why: 'no-store' });
+  }
+});
+
+test('book function: says why it has no store once, in the log, when it starts', async () => {
+  const fn = (await import('node:fs')).readFileSync(new globalThis.URL('../api/book.mjs', import.meta.url), 'utf8');
+  assert.match(fn, /const trouble = storeTrouble\(\);\nif \(trouble\) console\.warn\(`\[book\] no store: \$\{trouble\.says\}`\);/);
+  assert.match(fn, /settings: trouble \? trouble\.settings : '',/);
+  assert.equal(fn.match(/console\./g).length, 1, 'and that is all it ever writes there');
 });

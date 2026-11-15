@@ -154,7 +154,7 @@ also supported. No client library: this repository still has no dependencies.
 | Variable | What for |
 |---|---|
 | `BOOK_STORE_URL` + `BOOK_STORE_KEY` | private Cloudflare Worker `/book` URL and a shared secret of at least 32 characters. The Worker stores the book in D1. See [the setup guide](BLOCKROOMS-STORE.md). This pair takes priority if configured |
-| `KV_REST_API_URL` + `KV_REST_API_TOKEN`, or `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | optional existing Redis REST store. There is no need to purchase one when using D1. With neither store configured, `/api/book` answers 503 and the home page shows this browser's own scores and tapes instead |
+| `KV_REST_API_URL` + `KV_REST_API_TOKEN`, or `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | optional existing Redis REST store. There is no need to purchase one when using D1. With neither store configured, `/api/book` answers 503 (and says whether it was given no settings or an incomplete set: [the setup guide](BLOCKROOMS-STORE.md#verify-and-recover) has the three answers) and the home page shows this browser's own scores and tapes instead |
 | `BOOK_ADMIN_KEY` | a secret of sixteen characters or more: what strikes a line out of the book. With none set, nothing can be struck |
 | `BOOK_BLOCKLIST` | words no name in the book may have in it, separated by commas. Matched inside a name however it is spelled round (`0` for `o`, dots between letters). The list is the keeper's and is not in this repository |
 | `BOOK_SALT` | salt for the short-lived hashes that stop one visitor counting twice (defaults to the configured store's secret; a separate random value is recommended) |
