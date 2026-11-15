@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SHOT, cameraFor, slumps } from '../public/world/backrooms/lastshot.js';
+import { SHOT, cameraFor, cameraFrom, slumps } from '../public/world/backrooms/lastshot.js';
 
 const read = (f) => readFileSync(new URL(`../public/world/backrooms/${f}`, import.meta.url), 'utf8');
 const room = { x0: 0, z0: 0, x1: 8, z1: 6, y: 0, H: 2.6 };
@@ -38,7 +38,11 @@ test('left to itself the character goes down where it stood; and only being caug
   const src = read('index.js');
   assert.match(src, /if \(why === 'caught' && !\(shot = beginShot\(\)\)\) sound\.play\('static'/, 'a flat battery, giving up and the way out end as they did');
   assert.match(src, /&& !shot && !shotCam\) \{ env\.pursuer\?\.update/, 'nobody of the cast is run once the building has the picture');
-  assert.match(src, /run = taker\?\.it\?\.takes\?\.\(\{ \.\.\.spot, room: rt\?\.id \?\? null, figure: figure\.root, seconds: SHOT\.seconds \}\)/);
+  assert.match(src, /const told = \{ \.\.\.spot, room: rt\?\.id \?\? null, figure: figure\.root, seconds: SHOT\.seconds, from: null \};\n      try \{ run = taker\?\.it\?\.takes\?\.\(told\)/);
+  // whoever took them may say where to film from, and the camera then looks at the spot from there
+  const seat = cameraFrom({ x: 3, y: 2, z: 5 }, { x: 3, y: 0, z: 1 });
+  assert.ok(Math.abs(seat.yaw) < 1e-9 && seat.pitch < 0 && seat.z === 5, 'from +z, looking toward -z and down');
+  assert.match(src, /seat = f && \[f\.x, f\.y, f\.z\]\.every\(Number\.isFinite\) \? cameraFrom\(f, spot\) : cam/);
   // who took them is noted before the hit is made (the visit begins to end inside it), and forgotten if they lived
   const cast = read('pursuer.js');
   assert.match(cast, /const before = taker; taker = k;\n      const hit = env\.health\?\.damage\(n\);\n      if \(hit\) \{ if \(!hit\.dead\) taker = before;/);

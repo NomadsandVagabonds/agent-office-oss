@@ -6,10 +6,11 @@ import { createPlayer } from '../public/world/backrooms/player.js';
 test('older camcorder preferences gain safe defaults without losing mute or picture mode', () => {
   assert.deepEqual(cleanBackroomsSettings({ vhs:0, mute:true }), { ...BACKROOMS_DEFAULTS, vhs:0, mute:true });
   for (const value of [null, [], 'broken', 7]) assert.deepEqual(cleanBackroomsSettings(value), BACKROOMS_DEFAULTS);
-  assert.deepEqual(cleanBackroomsSettings({ musicVolume:NaN, sfxVolume:'loud', sensitivity:Infinity, vhs:9, mute:'false', invertY:'false' }), BACKROOMS_DEFAULTS);
+  assert.deepEqual(cleanBackroomsSettings({ musicVolume:NaN, sfxVolume:'loud', sensitivity:Infinity, vhs:9, mute:'false', invertY:'false', steadyLighting:'false' }), BACKROOMS_DEFAULTS);
   assert.deepEqual(cleanBackroomsSettings({ musicVolume:-4, sfxVolume:12, sensitivity:0, invertY:true }),
     { ...BACKROOMS_DEFAULTS, musicVolume:0, sfxVolume:1, sensitivity:.25, invertY:true });
   assert.equal(cleanBackroomsSettings({ sensitivity:50 }).sensitivity, 2);
+  assert.equal(cleanBackroomsSettings({ steadyLighting:true }).steadyLighting, true);
 });
 
 function playerWith(settings) {

@@ -274,7 +274,31 @@ export function build(c) {
     panels.needsUpdate=true;
   }
   redraw();
+  // The building's camera, if the cage takes the last of somebody (docs/BACKROOMS.md, "The last three seconds"): the
+  // visitor's character is in the cage with the gate shut. The three wardens come and stand in a row in front of it, and
+  // it sits down in the chair and starts work.
+  let over=false;
+  c.rt.takes=(shot)=>{
+    over=true;gateSolid.on=true;gate.rotation.y=0;
+    const fig=shot.figure,n=patrol.count,from=Array.from({length:n},(_,i)=>patrol.where(i));
+    const row=(i)=>({x:visitor.x+(i-(n-1)/2)*.95,z:visitor.z+visitor.d/2+1.25});
+    const seat=c.toWorld(visitor.x,visitor.z-.43),start={x:shot.x,z:shot.z};
+    play('thunk',visitor.x,visitor.z,14);
+    let lit=false;
+    return (t)=>{
+      if(!lit&&t>=.35){lit=true;c.world.setLights(c.rt,4);play('thunk',visitor.x,visitor.z,12);}   // the floods come on: this is meant to be seen
+      const k=Math.min(1,t/1.6),e=k*k*(3-2*k);
+      for(let i=0;i<n;i++){const to=row(i),x=from[i].x+(to.x-from[i].x)*e,z=from[i].z+(to.z-from[i].z)*e;
+        patrol.post(i,x,z,e<1?Math.atan2(to.x-from[i].x,to.z-from[i].z):Math.PI);}
+      if(!fig)return;
+      const s=Math.max(0,Math.min(1,(t-.9)/1.0)),q=s*s*(3-2*s);
+      fig.position.x=start.x+(seat.x-start.x)*q;fig.position.z=start.z+(seat.z-start.z)*q;
+      fig.rotation.y=c.room.rot*Math.PI/2;              // facing the gate, and them
+      fig.position.y=shot.y-.22*q;fig.rotation.x=-.12*q;
+    };
+  };
   c.tick((dt,t,me)=>{
+    if(over)return;
     patrol.update(dt,t,me);
     const captured=['captured','gameover'].includes(patrol.state().phase);
     gateSolid.on=captured;

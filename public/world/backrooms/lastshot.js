@@ -50,6 +50,15 @@ export function cameraFor(room, spot, sees = () => true) {
   return at(spot.x + 0.01, Math.min(top, spot.y + 2.3), spot.z + 0.01);
 }
 
+/**
+ * The camera somewhere it was asked to be (whoever took the visitor may say: `shot.from = { x, y, z }` in its takes()),
+ * looking at where they stood. For a room the corner is a bad seat in: a cage behind other cages, a bay too big.
+ */
+export function cameraFrom(from, spot) {
+  const dx = spot.x - from.x, dz = spot.z - from.z, flat = Math.hypot(dx, dz) || 1e-6;
+  return { x: from.x, y: from.y, z: from.z, yaw: Math.atan2(-dx, -dz), pitch: Math.atan2(spot.y + 0.9 - from.y, flat) };
+}
+
 /** With nobody to say otherwise: how far over the character has gone, 0 (standing) to 1 (down), `t` seconds in. */
 export function slumps(t) {
   const k = Math.max(0, Math.min(1, (t - 0.55) / 0.7));

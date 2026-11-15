@@ -4,6 +4,7 @@
 // after you. Hand her loose memos (or a consultant's pink slip) and she feeds
 // them into the rollers and trundles happily back to her corner; let her catch
 // you empty-handed and into the rollers you go.
+import * as THREE from 'three';
 import { Vox, M } from '../../vox/vox.js';
 import { lin, WHITE } from '../kit.js';
 import { clamp, turnTo, card, framed, scatter } from '../bits.js';
@@ -47,6 +48,12 @@ export function build(c) {
     }
   }
 
+  // Starting nook for The Retention Clerk toward the rear centre. Kept clear before anything is put down by chance: on
+  // some seeds a shred bin landed against it, her body overlapped the bin, and she could not take a step out of it
+  const startLx = clamp(p.clerkX, -W / 2 + 1.6, W / 2 - 1.6);
+  const startLz = clamp(-D / 2 + 1.85, -D / 2 + 1.3, 0);
+  c.reserve(startLx, startLz, 0.95);
+
   // Overflow shred bins and confetti drifts
   for (let i = 0; i < 3; i++) {
     const sp = c.spot(0.45);
@@ -85,9 +92,6 @@ export function build(c) {
     framed(c, c.mapped('shredsign', tex), signSpot.side, signSpot.at, 1.5, 1.15, 0.48);
   }
 
-  // Starting nook for The Retention Clerk toward the rear centre
-  const startLx = clamp(p.clerkX, -W / 2 + 1.6, W / 2 - 1.6);
-  const startLz = clamp(-D / 2 + 1.85, -D / 2 + 1.3, 0);
   const homeW = c.toWorld(startLx, startLz);
 
   const rig = makeRetentionClerk(c.kit);
@@ -116,11 +120,52 @@ export function build(c) {
     }
   };
 
+  // The building's camera, if she takes the last of somebody (docs/BACKROOMS.md, "The last three seconds"): the visitor's
+  // character is drawn to the mouth of the shredder, tipped in head first, and goes down into the rollers a jolt at a time.
+  let over = false;
+  c.rt.takes = (shot) => {
+    over = true;
+    const fig = shot.figure, yaw = rig.group.rotation.y, mouth = { x: roamer.x + Math.sin(yaw) * 0.62, z: roamer.z + Math.cos(yaw) * 0.62 };
+    c.env.play('shred', roamer.x, roamer.z, 14); c.env.play('whistle', roamer.x, roamer.z, 12);
+    let clock = 0, last = -1;
+    // what comes out of the other side: red cubes, a burst with every bite (so that it is plain what the bites are)
+    const out = c.toLocal(roamer.x - Math.sin(yaw) * 0.42, roamer.z - Math.cos(yaw) * 0.42), away = c.toLocal(roamer.x - Math.sin(yaw) * 1.42, roamer.z - Math.cos(yaw) * 1.42);
+    const ax = away.x - out.x, az = away.z - out.z, bits = [];
+    const cube = c.kit.own(new THREE.BoxGeometry(1, 1, 1)), reds = [0xc8261c, 0xa81a14, 0xe0402e].map((hex) => c.kit.own(new THREE.MeshBasicMaterial({ color: hex })));
+    const spray = (n) => {
+      for (let i = 0; i < n && bits.length < 130; i++) {
+        const m = c.add(new THREE.Mesh(cube, reds[bits.length % 3])), size = 0.08 + Math.random() * 0.08, side = (Math.random() - 0.5) * 0.9, go = 1.8 + Math.random() * 2.2;
+        m.scale.setScalar(size); m.position.set(out.x, 0.62, out.z);
+        bits.push({ m, size, vx: ax * go - az * side, vz: az * go + ax * side, vy: 1.2 + Math.random() * 1.8, spin: (Math.random() - 0.5) * 12 });
+      }
+    };
+    return (t, dt) => {
+      clock += dt;
+      for (const b of bits) {
+        if (b.down) continue;
+        b.vy -= 9.8 * dt; b.m.position.x += b.vx * dt; b.m.position.z += b.vz * dt; b.m.position.y += b.vy * dt; b.m.rotation.x += b.spin * dt; b.m.rotation.z += b.spin * 0.7 * dt;
+        if (b.m.position.y <= b.size / 2) { b.m.position.y = b.size / 2; b.m.rotation.set(0, b.spin, 0); b.down = true; }
+      }
+      try { rig.animate(dt, clock, false, true); } catch { /* she stands as she is */ }
+      if (!fig) return;
+      const k = Math.min(1, t / 0.8), e = k * k * (3 - 2 * k), fed = Math.max(0, Math.min(1, (t - 0.8) / (shot.seconds - 1.0)));
+      const jolt = Math.floor(fed * 9);                     // the rollers take it in bites
+      if (jolt !== last) { last = jolt; if (jolt > 0) { c.env.play('crack', mouth.x, mouth.z, 9); spray(14); } }
+      fig.position.x = shot.x + (mouth.x - shot.x) * e + (Math.random() - 0.5) * 0.02 * fed;
+      fig.position.z = shot.z + (mouth.z - shot.z) * e + (Math.random() - 0.5) * 0.02 * fed;
+      fig.rotation.y = Math.atan2(mouth.x - shot.x, mouth.z - shot.z);
+      fig.rotation.x = 1.25 * e;                            // head first
+      fig.position.y = shot.y + 0.35 * e - 0.5 * (jolt / 9);
+      fig.scale.set(1, Math.max(0.02, 1 - jolt / 9), 1); fig.visible = jolt < 9;
+    };
+  };
+
   const roamer = c.env.denizens?.add({
     x: homeW.x, z: homeW.z, r: 0.34, tall: 1.45, heading: 0,
     group: rig.group,
     light: (rgb) => rig.light(rgb),
     update(dt, time, me) {
+      if (over) return;
       const inRoom = c.world.current() === c.rt;
       const dist = Math.hypot(me.x - roamer.x, me.z - roamer.z);
       const clearLine = c.world.los(roamer.x, roamer.z, me.x, me.z);
@@ -182,6 +227,7 @@ export function build(c) {
         if (res.caught) {
           // through the rollers: two hearts where there are hearts — and if that was not the last of them she lets go and wheels it home
           const hit = c.hurt(SHREDDER.hurts);
+          if (hit.ended) { over = true; return; }
           if (!hit.ended) { rule = releaseShredder(rule); me.pitch = 0; if (hit.landed) { c.env.hud.glitch(0.6); c.survived('retention-clerk'); } }
         }
       }

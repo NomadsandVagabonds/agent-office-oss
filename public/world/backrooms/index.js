@@ -27,7 +27,7 @@ import { resolveLook } from '/core/look.mjs';
 import { BACKROOMS_DEFAULTS, cleanBackroomsSettings } from '/core/backrooms-settings.mjs';
 import { sketch, toWorld, toLocal, DECK, ARCHETYPES } from './gen.js';
 import { planVisit, floorOf, edition } from './plan.js';
-import { SHOT, cameraFor, slumps } from './lastshot.js';
+import { SHOT, cameraFor, cameraFrom, slumps } from './lastshot.js';
 import { createKit } from './kit.js';
 import { buildWorld, loadCatalogue } from './world.js';
 import { BUILDERS } from './rooms.js';
@@ -281,6 +281,7 @@ async function visit(office, opt) {
       plan: office.net?.state?.world?.plan || {}, visit: plan, carry,
       barricadesEnabled: opt.barricades !== false,
       lighting: opt.dev?.lighting || false,
+      steadyLighting: () => settings.steadyLighting,
       where: cleanWhere(opt.where),             // a place name the page was told (the site's host says a city): the banner's second line, and nothing else's
       player: null, world: null, pursuer: null,
       hatches: new Map(),                       // room id → { drop() }: where a door in a floor lets you out
@@ -418,6 +419,7 @@ async function visit(office, opt) {
     f.env.denizens?.sync();                              // (their picture is ready even while the fall holds their behaviour)
     vhs.setScene(root);
     if (f.level !== first) hud.setStamp(f.level.stamp);
+    sound.setDepth?.(f.level.depth);                          // (further down the music is another piece, and quieter: sound.js)
     sound.setMains(f.level.hum);
   }
   /**
@@ -480,13 +482,16 @@ async function visit(office, opt) {
       world.scene.add(figure.root, lamp);
       shotKept = { figure, lamp };
       // whoever took them says what happens (cast: takes(shot)); nobody else of the cast is run again
-      const taker = env.pursuer?.taker ?? null;
+      const taker = env.pursuer?.taker ?? env.tookBy ?? null;          // (one of the cast, or the room whose resident it was: world.js c.hurt)
       let run = null;
-      try { run = taker?.it?.takes?.({ ...spot, room: rt?.id ?? null, figure: figure.root, seconds: SHOT.seconds }) ?? null; }
+      // (it may also say where to film from — `shot.from = { x, y, z }`, world — for a room the corner is a bad seat in)
+      const told = { ...spot, room: rt?.id ?? null, figure: figure.root, seconds: SHOT.seconds, from: null };
+      try { run = taker?.it?.takes?.(told) ?? null; }
       catch (err) { console.warn(`[backrooms] ${taker?.id} had nothing to show for it`, err); }
+      const f = told.from, seat = f && [f.x, f.y, f.z].every(Number.isFinite) ? cameraFrom(f, spot) : cam;
       hud.building?.(`CAM ${String(((rt?.id ?? 0) % 16) + 1).padStart(2, '0')}`);
       sound.play('tick');
-      return { t: 0, at: 0, acc: 0, cam, figure, run: typeof run === 'function' ? run : null, who: taker?.id ?? null };
+      return { t: 0, at: 0, acc: 0, cam: seat, figure, run: typeof run === 'function' ? run : null, who: taker?.id ?? null };
     } catch (err) { console.warn('[backrooms] the building\'s camera would not come on', err); return null; }
   }
   function lastShot(dt) {
@@ -680,6 +685,7 @@ async function visit(office, opt) {
 
   // a way for the dev page (and the curious) to poke at it: always the floor you are on
   const handle = {
+    settings: () => settings, setSetting: changeSetting,
     vhs, hud, plan: () => plan, deck: DECK.map((a) => a.id),
     get level() { return cur?.level; }, get world() { return cur?.world; }, get player() { return cur?.player; }, get env() { return cur?.env; },
     get state() { return state; }, get paused() { return paused; }, menu, loot: purse, inventory, health: survival?.health, camera: survival?.camera, survival,

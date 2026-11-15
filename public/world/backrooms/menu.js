@@ -82,6 +82,7 @@ export function createMenu({ host, settings = {}, furniture = false, onRequestOp
   checkbox('mute', 'Mute all audio');
   slider('sensitivity', 'Look sensitivity', .25, 2, .05, n => `${Number(n).toFixed(2)}×`);
   checkbox('invertY', 'Invert vertical look');
+  checkbox('steadyLighting', 'Steady ambient lights');
   const picture = h('select', { id: `${prefix}-vhs` },
     h('option', { value: '0' }, 'Clean'), h('option', { value: '1' }, 'Light VHS'), h('option', { value: '2' }, 'Full VHS'));
   fields.set('vhs', { input: picture });

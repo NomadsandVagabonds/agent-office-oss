@@ -32,6 +32,7 @@ import { compactorStash } from './rooms/compactor-canyon/rule.js';
 import { serverChasmStash } from './rooms/server-chasm/rule.js';
 import { PLAN as HALL_PLAN, partsOf as hallParts } from './rooms/unsure-hall/rule.js';
 import { homeStash } from './rooms/show-home/layout.js';
+import { plenumStash } from './rooms/drop-plenum/rule.js';
 import { fill } from './words.js';
 
 const cornerStash = (r, side) => (side < 0
@@ -404,6 +405,25 @@ export const MORE_DECK = [
     ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
     module: './rooms/recess.js', stash: (r) => [r.W / 2 - 1.55, -r.D / 2 + 0.45, r.W / 2 - 0.9, -r.D / 2 + 1.05],
     roll: (R, o) => ({ rules: [...R.pick(RECESS_RULES), String(o.tasks.length ? R.pick(o.tasks) : 'TODO').toUpperCase()], lean: R.pick([-1, 1]), hops: [1, 2, 3, 4, 4, 6, 7, 9], high: R.int(0, 1) }) },
+  {
+    id: 'drop-plenum',
+    resident: 'plenum-toner', items: ['torch'], caught: 1, fire: 'fears',
+    name: 'The Return Plenum',
+    landmark: 'the step-ladder up into the red drop ceiling',
+    w: [14, 16], d: [16, 18], h: [4.8, 5.1],
+    ports: ['back', 'left', 'right'],
+    big: true,
+    weight: 1.0,
+    lights: 'dark',
+    themes: { yellow: 1.5, night: 1.4, archive: 1.2, fitout: 1.1 },
+    module: './rooms/drop-plenum.js',
+    stash: plenumStash,
+    roll: (R, o) => ({
+      zone: R.pick(['4B-RET', '7A-NORTH', 'SUB-3', 'PLM-9']),
+      supervisor: (o.agents.length ? R.pick(o.agents) : 'FACILITIES').slice(0, 14).toUpperCase(),
+      ductTone: R.pick([0, 1]),
+    }),
+  },
 ];
 
 // Where a tape goes in an entry that does not say so itself: (room, ±1) → [x0, z0, x1, z1] in the room's own frame.
