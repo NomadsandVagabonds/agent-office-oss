@@ -29,7 +29,7 @@ export function createMenu({ host, settings = {}, onRequestOpen, onResume, onGiv
   const controls = h('div.br-menu-controls-page', { hidden: true },
     h('dl.br-menu-controls', CONTROLS.map(([action, keys]) => h('div.br-menu-control', h('dt', action), h('dd', keys)))),
     h('p.br-menu-note', h('strong', 'On a phone'), ' — the ring walks; push past it to run. Drag anywhere else to look. The arrows jump and crouch, the hand interacts, the torch switches your light; tap a pocket to inspect it.'),
-    h('p.br-menu-note', h('strong', 'Recharge the camcorder'), ' — select a battery, open inventory, choose Combine → Camcorder + → Recharge camera.'));
+    h('p.br-menu-note', h('strong', 'Recharge the camcorder'), ' — select a battery and press Q. On a phone, tap its pocket, then Recharge camera. Use Combine to fit a battery to a flashlight instead.'));
   const settingsPage = h('div.br-menu-settings', { hidden: true });
   const confirm = h('div.br-menu-confirm', { hidden: true }, h('p', 'End this recording and see your score?'));
   const content = h('div.br-menu-content', main, controls, settingsPage, confirm);

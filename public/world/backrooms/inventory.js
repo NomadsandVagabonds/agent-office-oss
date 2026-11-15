@@ -48,10 +48,18 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     env.sound.play(result.action === 'heal' ? 'rustle' : 'clack', { vol: .45 }); refresh(); return true;
   };
   function select(index, options) { if (available() && model.select(index, options)) refresh(); }
+  /** Whether the camcorder would take a battery pack's charge now: it is neither flat nor full. */
+  function cameraTakes() {
+    const c = env.camera?.read?.();
+    return !!c && !c.depleted && c.remaining < c.capacity;
+  }
   function use() {
     if (!available()) return unavailable();
     const snapshot = model.read(), item = snapshot.slots[snapshot.selected];
     if (snapshot.holstered) { tell('Hands empty'); return { ok: false, reason: 'empty' }; }
+    // A battery pack in the hand goes straight into the camcorder, whose charge is the time left on the tape. With the
+    // camcorder full there is only a torch to put it in, and that is a combination: the bag opens on it, as it did.
+    if (item?.type === 'battery' && cameraTakes()) return rechargeCamera(snapshot.selected);
     // Put the mark into the world before spending chalk. A bad floor or failed
     // placement never consumes a use. This synchronous action cannot race UI.
     if (item?.type === 'chalk' && item.uses > 0) {
@@ -100,7 +108,9 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     const result = env.camera.recharge();
     if (!result.ok) { tell(result.reason); return; }
     model.remove(item.id); view.cancelCombine(); refresh();
-    env.sound.play('clack', { vol: .45 }); tell('Camera recharged');
+    const added = Math.round(result.added || 0);
+    env.sound.play('clack', { vol: .45 }); tell(`Camera recharged · +${Math.floor(added / 60)}:${String(added % 60).padStart(2, '0')}`);
+    return result;
   }
   // NPCs interact with the selected pocket, not any matching item somewhere
   // in the bag. Snapshots are detached; each successful handoff is explicit.

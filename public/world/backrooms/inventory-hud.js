@@ -349,14 +349,17 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
     text(condition, opened && noticeLeft > 0 ? noticeEl.textContent : snapshot.holstered && selected
       ? `Stowed · ${snapshot.selected + 1} to hold${conditionOf(selected) ? ` · ${conditionOf(selected)}` : ''}` : conditionOf(selected));
     if (detailType !== iconKey(selected)) { specimen.replaceChildren(...(selected ? [itemIcon(selected.type, selected)] : [])); detailType = iconKey(selected); }
+    // a battery pack can go straight into the camcorder while it is neither flat nor full (Q, or this button); a torch
+    // is still fitted by combining
+    const recharges = selected?.type === 'battery' && !!snapshot.camera && !snapshot.camera.depleted && snapshot.camera.remaining < snapshot.camera.capacity;
     const label = selected?.type === 'torch' ? snapshot.activeTorch === selected.id ? 'Switch off' : 'Switch on'
-      : selected?.type === 'chalk' ? 'Mark floor' : selected?.type === 'snack' ? 'Eat' : 'Use';
+      : selected?.type === 'chalk' ? 'Mark floor' : selected?.type === 'snack' ? 'Eat' : recharges ? 'Recharge camera' : 'Use';
     text(useLabel, label);
     // F prefers the mounted light; Q always acts on this inspected item.
     text(useKey, selected?.type === 'torch' && !snapshot.mountedTorch ? 'F' : 'Q');
-    use.hidden = ['battery', 'paper', 'lighter', 'tape'].includes(selected?.type);
-    use.disabled = blocked() || snapshot.holstered || !selected || ['paper', 'pink-slip', 'scissors', 'balloon', 'lighter', 'tape', 'battery'].includes(selected.type)
-      || (selected.type === 'snack' && !canEat()) || (selected.type === 'torch' && selected.charge <= 0);
+    use.hidden = ['paper', 'lighter', 'tape'].includes(selected?.type) || (selected?.type === 'battery' && !recharges);
+    use.disabled = blocked() || snapshot.holstered || !selected || ['paper', 'pink-slip', 'scissors', 'balloon', 'lighter', 'tape'].includes(selected.type)
+      || (selected.type === 'battery' && !recharges) || (selected.type === 'snack' && !canEat()) || (selected.type === 'torch' && selected.charge <= 0);
     combine.hidden = !craftIngredient(selected); combine.disabled = blocked(); combine.classList.toggle('primary', use.hidden);
     drop.disabled = blocked() || snapshot.holstered || !selected;
     if (crafting) redrawCraft();

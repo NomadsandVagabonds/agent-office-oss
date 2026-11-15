@@ -156,3 +156,29 @@ test('direct physical drop cannot allocate the flashlight after it becomes camer
   assert.deepEqual(model.read(), before); assert.deepEqual(physical.report().items, []);
   assert.equal(model.torchPower(), 1);
 });
+
+test('Q on a battery pack puts it straight into the camcorder, and only opens the bag when the camcorder is full', t => {
+  const { inventory, camera, key } = setup(t, makeItem('battery', 'first'), makeItem('battery', 'second'));
+  let began = 0; inventory.view.beginCombine = () => { began++; };
+  camera.tick(60);                                                          // 240 s left of 400
+  assert.equal(key('q'), true);
+  assert.equal(camera.read().remaining, 360, 'a pack is two minutes');
+  assert.equal(inventory.count('battery'), 1, 'and it is spent'); assert.equal(began, 0, 'no bag, no combining');
+  assert.equal(inventory.isOpen, false);
+  key('1', false); key('2'); key('q');                                      // the second pack: only 40 s of room left
+  assert.equal(camera.read().remaining, 400); assert.equal(inventory.count('battery'), 0);
+});
+
+test('with the camcorder full, Q on a battery keeps the pack and offers the combination (a torch), as before', t => {
+  const { inventory, camera, key } = setup(t, makeItem('battery', 'cell'));
+  let began = 0; inventory.view.beginCombine = () => { began++; };
+  camera.recharge(100);                                                     // full: 400 of 400
+  key('q');
+  assert.equal(inventory.count('battery'), 1); assert.equal(camera.read().remaining, 400); assert.equal(began, 1);
+});
+
+test('a stowed battery pack is not spent by Q', t => {
+  const { inventory, camera, key } = setup(t, makeItem('battery', 'cell'));
+  camera.tick(60); key('1'); key('q');
+  assert.equal(inventory.count('battery'), 1); assert.equal(camera.read().remaining, 240);
+});
