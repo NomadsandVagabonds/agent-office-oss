@@ -35,6 +35,7 @@ export function createSurvival(env, { canAct, onEnd, perk, difficulty = () => 't
       const result = healthState.damage(amount);
       if (result.ok) {
         env.sound.play('thunk', { vol: .55 }); env.interfere(.55); env.hud.glitch(.18);
+        env.red?.(.48);
         if (result.dead) finish('caught');
       }
       return result;

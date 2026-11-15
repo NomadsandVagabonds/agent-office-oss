@@ -6,3 +6,15 @@ test('room clocks tick once even with two occupants; zones track both visitors',
 test('guest room stays active when host is elsewhere, and dead visitors leave zones',()=>{const {pop,rooms,events}=fixture(),a=visitor('a',0),b=visitor('b',30);pop.update(.05,0,[a,b]);assert.ok(rooms[3].near);assert.ok(events.some(e=>e[0]==='tick'&&e[1]===3&&e[2]==='b'));events.length=0;b.health=0;pop.update(.05,.05,[a,b]);assert.equal(rooms[3].near,false);assert.ok(events.some(e=>e[0]==='leave'&&e[1]===3&&e[2]==='b'));});
 
 test('a guest leaning on a shared room wall is not masked by its idle host',()=>{const {pop,events}=fixture(),a=visitor('a',0),b=visitor('b',.5);b.me.wishZ=1;pop.update(.05,0,[a,b]);assert.deepEqual(events.filter(e=>e[0]==='tick'&&e[1]===0),[['tick',0,'b']]);});
+
+
+test('room target hook keeps one clock and installs the selected visitor context',()=>{
+ const {rooms}=fixture(),a=visitor('a',0),b=visitor('b',.5);let active,observed;
+ for(const r of rooms)r.zones=[];
+ a.held={type:'balloon'};b.held={type:'paper'};
+ rooms[0].chooseVisitor=people=>{observed=people;return people.find(p=>!p.holdingBalloon)?.id;};
+ rooms[0].ticks=[()=>assert.equal(active.id,'b')];
+ const world={rooms,roomAt:()=>rooms[0],distances:()=>new Map([[0,0]])};
+ const pop=createPopulation(world,(v,fn)=>{const old=active;active=v;try{return fn();}finally{active=old;}},{held:()=>active.held});
+ pop.update(.05,0,[a,b]);assert.deepEqual(observed.map(p=>[p.id,p.holdingBalloon]),[['a',true],['b',false]]);
+});

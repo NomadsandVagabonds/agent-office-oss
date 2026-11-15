@@ -30,7 +30,7 @@ function sourceUrl(name) {
   if (name === 'denizens.js') source = source.replace("import { populateAbsorbed } from './absorbed.js';", 'const populateAbsorbed=()=>{};');
   source = source.replace(/from '([^']+)'/g, (_, spec) => {
     const dest = new URL(spec, file).href;
-    let target = spec === 'three' ? three : dest.endsWith('/kit.js') ? kit : dest.endsWith('/bits.js') ? bits : dest.endsWith('/hand.js') ? hand : dest.endsWith('/rig.js') ? rig : dest;
+    let target = spec === 'three' ? three : dest.endsWith('/kit.js') ? kit : dest.endsWith('/bits.js') ? bits : dest.endsWith('/hand.js') ? hand : dest.endsWith('/rig.js') ? rig : dest.endsWith('/mandatory-fun/dressing.js') ? url('export function dressParty() {}') : dest;
     if (dest === new URL('denizens.js', root).href) target = sourceUrl('denizens.js');
     if (dest === new URL('room-physics.js', root).href) target = sourceUrl('room-physics.js');
     return `from '${target}'`;
