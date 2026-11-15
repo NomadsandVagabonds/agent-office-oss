@@ -29,8 +29,8 @@ import { lawn, daylight, sheet } from '../suburb.js';
 import { movableCutout } from '../movable-cutout.js';
 
 // slab: the gap is made of strips this deep · neck: how wide it is where it can be bridged · deep: how far down, to whoever walks
-// brink: how close to the edge the lawn gives way · falls: seconds of going down · panel: a tall hoarding
-export const GAP = Object.freeze({ slab: 0.5, neck: 2.0, deep: 40, seen: 12, brink: 0.25, falls: 1.7, panel: 3.1 });
+// brink: how close to the edge the lawn gives way · falls: seconds of going down · panel: a tall hoarding · redraw: seconds stranded before one is drawn again
+export const GAP = Object.freeze({ slab: 0.5, neck: 2.0, deep: 40, seen: 12, brink: 0.25, falls: 1.7, panel: 3.1, redraw: 5 });
 // the resident. wake: how near wakes it · late: or this long in the room · speed, and on a bridge · reach, and how long between
 // two of those · stun: how long it stands after one · pole: a leg · spread: how far out it puts its feet · high: its body off the floor
 export const LINES = Object.freeze({ wake: 7.5, late: 16, speed: 2.3, onBridge: 1.25, reach: 1.55, again: 1.7, stun: 1.0, pole: 3.3, spread: 2.2, high: 1.75, stride: 1.15, step: 0.24, legs: 6 });
@@ -118,13 +118,14 @@ export function build(c) {
   lawn(c, { wrong: 0, paint: 'corn', width: 0.4, cloudTop: H - 0.7, neighbour: 0, border: false });
 
   /* the hoardings, at the necks: a tall one on either bank at each, stood back so that it has to be carried up; and one sawn short */
-  const back = 1.1, edge = 0.5;
+  // (eitherEnd: one that is down may be taken up from the far end of it too, and stands up where it stood: across the gap from whoever did it)
+  const back = 1.1, edge = 0.5, talls = [], spots = { '-1': [], 1: [] };
   gap.necks.forEach((zn, i) => {
     const [a, b] = gap.at(zn);
     for (const [side, x0, facing, front] of [[-1, a, 1, i ? 'streetB' : 'streetC'], [1, b, 3, i ? 'streetC' : 'streetB']]) {
       const x = x0 + side * back, z = zn + side * (i ? 0.2 : -0.2);
-      const it = movableCutout(c, { x, z, height: K.panel, facing, front, label: 'Hoarding' });
-      if (it) c.bridgeRoute(it, { stand: { x: x + side * 0.75, z }, path: [{ x: x0 + side * edge, z }] });
+      const it = movableCutout(c, { x, z, height: K.panel, facing, front, label: 'Hoarding', eitherEnd: true });
+      if (it) { c.bridgeRoute(it, { stand: { x: x + side * 0.75, z }, path: [{ x: x0 + side * edge, z }] }); talls.push(it); spots[side].push({ x, z }); }
     }
   });
   { const [a] = gap.at(gap.necks[1]); movableCutout(c, { x: a - s * 0.0 - 2.4, z: gap.necks[1] + 1.6, height: 1.3, facing: 1, front: 'streetA', label: 'Hoarding, sawn short' }); }
@@ -172,6 +173,22 @@ export function build(c) {
     body.position.set(it.x, it.y, it.z); body.rotation.set(Math.sin(it.t * 1.3) * 0.05 * up, it.rot, Math.sin(it.t * 0.9) * 0.06 * up);
   };
   pose(0, false);
+  // the last picture, if it was this that ended the visit: from the lawn beside it, looking up at what it is slung from
+  c.rt.films = (shot) => {
+    for (const a of [0.9, -0.9, 2.4, -2.4]) { const x = it.x + Math.sin(it.rot + a) * 4.2, z = it.z + Math.cos(it.rot + a) * 4.2; if (ok(x, z)) { const q = c.toWorld(x, z), at = c.toWorld(it.x, it.z); return { x: q.x, y: shot.y + 0.7, z: q.z, at: { x: at.x, y: shot.y + it.y, z: at.z } }; } }
+    return null;
+  };
+  // Nobody is left on a bank with no way off it. A hoarding that has been carried off, or stood up on the wrong side, is drawn
+  // again where one was first drawn, on the bank of whoever needs it: the room forgets things, and it forgets that it forgot.
+  let stuck = 0;
+  const redraw = (dt, me) => {
+    const bank = bankOf(me.x, me.z); if (!bank || bridges().length) { stuck = 0; return; }
+    const free = talls.filter((f) => !f.away && !f.deployed && !f.transition && !f.carried), here = free.some((f) => { const q = c.toLocal(f.x, f.z); return f.room === c.rt.id && Math.abs(q.x) < W / 2 && Math.abs(q.z) < D / 2 && bankOf(q.x, q.z) === bank; });
+    if (here || talls.some((f) => f.carried)) { stuck = 0; return; }
+    if ((stuck += dt) < GAP.redraw) return;
+    stuck = 0;
+    for (const f of free) for (const sp of spots[bank]) { const q = c.toWorld(sp.x, sp.z); if (env.barricades?.place?.(f, q.x, q.z)) { env.interfere?.(0.7); env.play?.('rattle', q.x, q.z, 10); return; } }
+  };
   /** A step toward (gx, gz) at speed v, sliding along what it cannot go through. → whether it moved. */
   const go = (gx, gz, v, dt) => {
     const dx = gx - it.x, dz = gz - it.z, d = Math.hypot(dx, dz); if (d < 0.05) return false;
@@ -201,6 +218,8 @@ export function build(c) {
       const [ga, gb] = gap.at(me.z); fall = { x: Math.max(ga + 0.4, Math.min(gb - 0.4, me.x)), z: me.z, y: 0, t: 0 }; env.hold?.(true); env.run?.met?.('the-culvert');
       const q = c.toWorld(me.x, me.z); env.play?.('rattle', q.x, q.z, 6); pose(dt, false); return;
     }
+
+    if (playing) redraw(dt, me);
 
     /* the resident */
     if (it.state === 'gone') return;
