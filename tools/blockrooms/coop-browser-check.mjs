@@ -30,6 +30,30 @@ try{
  const item=await a.ev('(()=>{const r=__coop.runtime,{sim,visitors}=r.inspect(),i=sim.items[0];for(const v of visitors)v.player.warp(i.x,i.z,0);return i.id;})()');await sleep(300);
  await Promise.all([a.ev(`testSocket.send(JSON.stringify({type:'take',id:${JSON.stringify(item)}}))`),b.ev(`testSocket.send(JSON.stringify({type:'take',id:${JSON.stringify(item)}}))`)]);await sleep(500);
  host=await inspect();sb=await b.ev('testState');assert.equal(host.sim.players.filter(p=>p.bag.includes(item)).length,1);assert.equal(sb.items.find(i=>i.id===item).owner,host.sim.items.find(i=>i.id===item).owner);console.log('Contested real pickup has one shared owner');
+ if(process.argv.includes('--social')){
+  assert.equal(sb.items.length,12,'two-player supply budget');
+  const kit=await a.ev('(()=>{const {sim}=__coop.runtime.inspect();for(const p of sim.players)p.bag=[];for(const i of sim.items)i.owner=null;const snack=sim.items.find(i=>i.type==="snack"),battery=sim.items.find(i=>i.type==="battery");snack.owner=sim.players[0].id;battery.owner=sim.players[1].id;sim.players[0].bag=[snack.id];sim.players[1].bag=[battery.id];return {snack:snack.id,battery:battery.id};})()');await sleep(300);
+  const key=async(k,code)=>{await a.cmd('Input.dispatchKeyEvent',{type:'keyDown',key:k,code});await a.cmd('Input.dispatchKeyEvent',{type:'keyUp',key:k,code});};
+  const aim=async()=>{await a.ev('document.getElementById("panel").hidden=true');for(const type of ['mousePressed','mouseReleased'])await a.cmd('Input.dispatchMouseEvent',{type,x:100,y:200,button:'left',clickCount:1});await sleep(100);assert.equal(await a.ev('document.pointerLockElement?.id'),'view');};
+  await aim();await key('e','KeyE');await sleep(300);
+  assert.match(await b.ev('document.getElementById("socialPanel").textContent'),/wants to trade/);
+  await b.ev('[...document.querySelectorAll("#socialPanel button")].find(b=>b.textContent==="Accept trade").click()');await sleep(300);
+  await a.ev(`document.querySelector('[data-item="${kit.snack}"]').click()`);await sleep(250);
+  await a.ev('document.getElementById("tradeConfirm").click()');await sleep(250);
+  await b.ev(`document.querySelector('[data-item="${kit.battery}"]').click()`);await sleep(250);
+  assert.deepEqual((await b.ev('testState')).trade.confirmed,[],'edited offer resets both confirmations');
+  const socialShot=await a.cmd('Page.captureScreenshot',{format:'png'});fs.writeFileSync(os.tmpdir()+'/coop-trade.png',Buffer.from(socialShot.data,'base64'));
+  await a.ev('document.getElementById("tradeConfirm").click()');await b.ev('document.getElementById("tradeConfirm").click()');await sleep(400);
+  sb=await b.ev('testState');assert.equal(sb.trade,null);assert.deepEqual(sb.players.map(p=>p.bag),[[kit.battery],[kit.snack]]);
+  for(const peer of [a,b])await peer.ev('[...document.querySelectorAll("#socialPanel button")].find(b=>b.textContent==="Back to camera").click()');
+  await aim();await key('b','KeyB');await a.ev('[...document.querySelectorAll("#socialPanel button")].find(b=>b.textContent.includes("wave")).click()');await sleep(300);assert.equal((await b.ev('testState')).players[0].emote.kind,'wave');
+  const reviveSnack=await a.ev('(()=>{const {sim,visitors}=__coop.runtime.inspect();const snack=sim.items.find(i=>i.type==="snack"&&i.owner===null);snack.owner=sim.players[0].id;sim.players[0].bag.push(snack.id);visitors[1].healthModel.damage(4);visitors[1].record.battery=0;return snack.id;})()');await sleep(300);
+  assert.equal((await b.ev('testState')).players[1].health,0);
+  await aim();await key('2','Digit2');await key('e','KeyE');await sleep(300);
+  sb=await b.ev('testState');assert.equal(sb.players[1].health,1);assert.ok(sb.players[1].battery>119);assert.equal(sb.items.find(i=>i.id===reviveSnack).owner,'used');assert.equal(sb.items.find(i=>i.id===kit.battery).owner,'used');
+  await a.ev('(()=>{for(const v of __coop.runtime.inspect().visitors){v.healthModel.tick(2);v.healthModel.heal(4);}})()');
+  console.log('Trade consent, changed-offer reconfirmation, shared emote and flat-camera revive passed');
+ }
  // Guest control travels through server and moves the production player controller.
  await a.ev('(()=>{const r=__coop.runtime,{visitors}=r.inspect(),v=visitors[1];for(const room of r.level.rooms){for(let z=room.cz-1;z<=room.cz+1;z+=.5)for(let x=room.cx-1;x<=room.cx+1;x+=.5)if([0,.2,.4,.6,.8,1].every(d=>r.world.free(x,z-d,.23))){v.player.warp(x,z,0);return;}}})()');await sleep(300);
  const before=(await inspect()).visitors[1];

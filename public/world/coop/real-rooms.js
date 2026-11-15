@@ -8,6 +8,7 @@ import {createStalkers} from '../backrooms/pursuer.js';
 import {createPlayer} from '../backrooms/player.js';
 import {createHealth} from '../backrooms/health-state.js';
 import {resolveLook} from '/core/look.mjs';
+import {socialAct,socialTick,supplyPlan} from './social-rules.js';
 import {createPopulation} from './population.js';
 const nop=()=>{},dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 export async function createRealRooms(seed,host,scene){
@@ -39,6 +40,10 @@ export async function createRealRooms(seed,host,scene){
  const initial=nodes.map(n=>JSON.stringify(pack(n)));let changed=[];
  const withVisitor=(v,fn)=>{const prev=active,player=env.player;active=v;env.player=v.player;try{return fn();}finally{active=prev;env.player=player;}};
  const population=createPopulation(world,withVisitor);
+ const socialContext={canReach:(a,b)=>world.los(a.x,a.z,b.x,b.z),revive(id){
+  const v=visitors.find(v=>v.id===id);v.healthModel=createHealth();v.healthModel.damage(3);
+  v.health=1;v.me.frozen=false;v.me.vx=v.me.vz=0;v.input.keys.clear();v.age=1;
+ }};
  function syncPlayers(s){
   sim=JSON.parse(JSON.stringify(s));sim.real=true;
   visitors=sim.players.map((record,i)=>{
@@ -49,14 +54,20 @@ export async function createRealRooms(seed,host,scene){
   });
   const plain=world.rooms.filter(r=>r.def.kind==='plain'&&!r.def.crawl);
   sim.items=[];
-  for(const [i,rt]of plain.slice(0,6).entries()){
-   const pos=world.env.pursuer?findSpace(rt):null;if(pos)sim.items.push({id:'real-'+i,type:i%2?'snack':'battery',...pos,y:world.floorY(pos.x,pos.z),owner:null});
+  const plan=supplyPlan(visitors.length);
+  for(const [i,type]of plan.entries()){
+   // Spread the two-person budget through the floor, with an early supply too.
+   for(let n=0;n<plain.length;n++){
+    const rt=plain[(Math.floor(i*plain.length/plan.length)+n)%plain.length],pos=findSpace(rt);
+    if(pos){sim.items.push({id:'real-'+i,type,...pos,y:world.floorY(pos.x,pos.z),owner:null});break;}
+   }
   }
   active=visitors[0];env.player=active.player;started=true;
  }
- function findSpace(rt){for(let z=-rt.def.D/2+.6;z<rt.def.D/2-.4;z+=.6)for(let x=-rt.def.W/2+.6;x<rt.def.W/2-.4;x+=.6){const p=toWorld(rt.def,x,z);if(world.free(p.x,p.z,.3)&&world.headroom(p.x,p.z)>1.3)return p;}return null;}
+ function findSpace(rt){for(let z=-rt.def.D/2+.6;z<rt.def.D/2-.4;z+=.6)for(let x=-rt.def.W/2+.6;x<rt.def.W/2-.4;x+=.6){const p=toWorld(rt.def,x,z);if(world.free(p.x,p.z,.3)&&world.headroom(p.x,p.z)>1.3&&sim.items.every(i=>dist(i,p)>.85))return p;}return null;}
  function command(id,m){
   const v=visitors.find(v=>v.id===id);if(!v||v.health<=0||sim.phase!=='play')return;const p=v.record;
+  if(socialAct(sim,id,m,socialContext))return;
   if(m.type==='input'&&[m.f,m.s,m.yaw,m.pitch].every(Number.isFinite)){
    v.input.keys.clear();if(m.f>0)v.input.keys.add('w');if(m.f<0)v.input.keys.add('s');if(m.s>0)v.input.keys.add('d');if(m.s<0)v.input.keys.add('a');if(m.run)v.input.keys.add('Shift');
    if(m.crouch)v.input.keys.add('c');if(m.jump)v.input.keys.add(' ');
@@ -88,6 +99,7 @@ export async function createRealRooms(seed,host,scene){
   if(!sim.exit){const ex=level.rooms[level.exit.room];sim.exit={x:ex.cx,z:ex.cz};}
   if(!visitors.some(v=>v.health>0))sim.phase='dead';
   else if(sim.exitOpen&&visitors.filter(v=>v.health>0).every(v=>dist(v.me,sim.exit)<3))sim.phase='escaped';
+  socialTick(sim,socialContext);
   acc+=dt;if(acc<.1&&sim.phase==='play')return null;acc=0;
   sim.nodes=[];nodes.forEach((n,i)=>{const p=pack(n);if(JSON.stringify(p)!==initial[i])sim.nodes.push([i,...p]);});
   sim.links=world.throats.map(th=>th.open);sim.solids=world.rooms.map(rt=>rt.colliders.map(c=>c.on!==false));

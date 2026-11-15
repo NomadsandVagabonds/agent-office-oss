@@ -11,12 +11,19 @@ both. **The host browser must stay visible.** Two computers work better than two
 tabs in one window; switching to the guest tab pauses a hidden host. The guest
 gets an explicit pause message and resumes when the host returns.
 
-WASD moves, mouse looks, Shift runs, C crouches and Space jumps. E picks up or
-operates a door; 1–6 selects, R uses, G drops. Escape releases the mouse without
+WASD moves, mouse looks, Shift runs, C crouches and Space jumps. E picks up, operates a door, or interacts with a nearby teammate; 1–6 selects, R uses, G drops. Escape releases the mouse without
 pausing a visible host. Enable voice in the menu, then hold V to talk.
 At the bottom of the fire stairs, lean into the taped wall. Once somebody has
 opened it, it waits for all living visitors to gather within three metres.
-A dead visitor watches their surviving partner.
+A downed visitor watches their surviving partner and can still be revived.
+Select a snack and press E beside them to restore one heart. An empty camera
+also consumes one battery from the rescuer and restores 120 seconds of power.
+Press B (or the Emotes button) for wave, dance, heart and help signals.
+E beside a living teammate requests a trade. They must accept; each player
+selects what to offer and both confirm before anything moves. An empty offer
+allows gifting. Changing either offer clears both confirmations. Walking away,
+death, timeout or cancelling closes the trade without transferring items.
+Trade screens do not pause hazards or batteries.
 
 `/` still opens the older fixed-map prototype for comparison. Its simulation
 runs on Node; `/rooms` uses the real game modules and a trusted host browser.
@@ -40,12 +47,14 @@ These are deliberately separate review modes, not a hidden public-game flag.
   door links and collider flags. The guest applies authoritative state instead
   of running a second creature simulation. Doors refuse to close on either
   player, including when the pirate operates them.
-- Six shared battery/snack supplies placed on clear floor in ordinary rooms.
+- Twelve shared supplies for two visitors: six batteries and six snacks, twice
+  the six-item solo budget. They are spread across clear floor in ordinary rooms.
   One ID, one owner: simultaneous claims cannot duplicate a pickup. Drop/use
   and the six-slot bags use the prototype inventory rather than production
   crafting. Each player has four health and 300 seconds of camera power,
   capped at 400; a pack adds 120 seconds and a snack restores one heart.
-- A pirate kill costs that visitor their tape, not the whole team's run. The
+- A pirate kill downs that visitor, not the whole team. A selected snack can
+  revive them at close range with clear line of sight and a short hit cooldown. The
   pirate breaks off and can hunt the survivor rather than getting stuck in its
   single-player final-shot animation. Both dead ends the run; survivors can
   finish together. Results stay in this private page, not the public scores.
@@ -77,7 +86,7 @@ visitor may publish world state; guest input is sent only to that host. This
 is **trusted-friend authority**, not server anti-cheat. A hidden or stalled host
 pauses the guest; disconnect ends the session, with no host migration. A late
 snapshot cannot resurrect a disconnected run. Protocol version is
-`blockrooms-coop-2`; restart the server and reload both clients after updating.
+`blockrooms-coop-3`; restart the server and reload both clients after updating.
 
 The fixed maze retains `core/coop.js`'s Node-authoritative movement, pirate,
 survival and items at 20 Hz. The review HTTP/WebSocket server serves only public
@@ -146,7 +155,24 @@ The temporary screenshot is `coop-real-rooms.png` in the system temp directory.
 These checks use no microphone or outside network.
 
 The standalone site build still passes and its asset graph excludes co-op.
-The full repository suite finished at 799/802 passing, with three counted
+The full repository suite finished at 807/810 passing, with three counted
 failures in the pre-existing console temporary-path and
 usage/status-line failures, reproduced previously on unchanged base a155afc.
 No real agent runtimes were launched by these checks.
+
+### Revive, emote and trade checks
+
+All 28 co-op unit/socket tests pass. `social-rules.js` owns consent, offer
+revisions, final bag capacity and atomic transfers; the browser cannot directly
+assign another player's items. Revive consumes the snack (and, only for a flat
+camera, one battery) once. Emotes last three seconds and have a short cooldown.
+Downed bodies remain visible with a rescue marker. These additions apply to
+`/rooms`; the old fixed-grid comparison mode retains its earlier rules.
+
+`node tools/blockrooms/coop-browser-check.mjs --social` also exercises real
+keyboard E/B interaction and mouse controls: recipient acceptance, a changed
+offer resetting confirmation, completed exchange, shared wave, and reviving a
+flat-camera guest with one heart and restored charge. It verifies twelve
+spawned supplies. Its trade screenshot is `coop-trade.png` in the system temp
+directory. No browser errors were observed. Supply density is an initial
+two-person balance and still needs a normal-length human playthrough.
