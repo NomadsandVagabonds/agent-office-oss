@@ -130,7 +130,7 @@ menu/scorecard controls and standalone import paths.
 Validation on this branch:
 
 - Focused gameplay, UI, scoring and store suite: **85/85 passed**.
-- Full `npm test`: **896/899 passed**. The three failures also reproduce on
+- Full `npm test` after the selector pass: **898/901 passed**. The three failures also reproduce on
   untouched base `3d9d477`: console's macOS `/var` versus `/private/var` path
   assertion (and its parent test), plus usage/status-line's missing `source`.
 - Standalone build, import closure checks (including subdirectory hosting) and
@@ -138,3 +138,19 @@ Validation on this branch:
 - Browser smoke check: Easy default; Hard starts at 1/1 heart and 3:45; Settings
   warns before changing, changing away and back remains unscored, and Give Up
   reaches the result page. The home kit summary follows the difficulty.
+
+### Selector style pass
+
+The launch picker uses square Windows-style bevels and a navy selection; Settings
+uses the same control in camcorder colours. Both have keyboard navigation,
+type-ahead and outside dismissal. Arrow-key previews, Escape and Tab do not
+commit a mode change (and therefore cannot accidentally void a run's score).
+Only selecting an option or confirming with Enter/Space applies the change.
+
+Tourist keeps its explanation. Every scored mode shows only its multiplier;
+Settings also keeps the short permanent-score warning. Mechanics stay in this
+review document rather than being revealed by the menu.
+
+Latest targeted menu and standalone-build tests: **14/14 passed**. Browser
+checks cover launch selection, Tourist copy, settings cancellation/commit and
+sticky unscored state. No production deployment was made.

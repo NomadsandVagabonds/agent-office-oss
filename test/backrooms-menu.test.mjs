@@ -7,6 +7,7 @@ const source = readFileSync(new URL('../public/world/backrooms/menu.js', import.
   .replace("'/core/difficulty.mjs'", JSON.stringify(new URL('../core/difficulty.mjs', import.meta.url).href))
   .replace("'/core/backrooms-settings.mjs'", JSON.stringify(new URL('../core/backrooms-settings.mjs', import.meta.url).href))
   .replace("'../ui/dom.js'", JSON.stringify(new URL('../public/world/ui/dom.js', import.meta.url).href))
+  .replace("'../ui/retro-select.js'", JSON.stringify(new URL('../public/world/ui/retro-select.js', import.meta.url).href))
   .replace("'./menu-style.js'", JSON.stringify(new URL('../public/world/backrooms/menu-style.js', import.meta.url).href));
 const { createMenu } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 
@@ -21,6 +22,7 @@ class Element {
   }
   append(...children) { for (const child of children) { child.parent = this; this.children.push(child); } }
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  removeAttribute(name) { this.attributes.delete(name); }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
   addEventListener(name, fn) { const list = this.listeners.get(name) || []; list.push(fn); this.listeners.set(name, list); }
   removeEventListener(name, fn) { this.listeners.set(name, (this.listeners.get(name) || []).filter(f => f !== fn)); }
@@ -30,6 +32,8 @@ class Element {
     for (const fn of this.listeners.get(type) || []) fn(event);
     return event;
   }
+  dispatchEvent(event) { this.emit(event.type); return true; }
+  replaceWith(other) { const parent = this.parent, index = parent.children.indexOf(this); parent.children[index] = other; other.parent = parent; this.parent = null; }
   remove() { if (this.parent) this.parent.children = this.parent.children.filter(c => c !== this); this.parent = null; }
   focus() { this.doc.activeElement = this; }
   blur() { this.doc.activeElement = this.doc.body; }
@@ -52,7 +56,7 @@ class Element {
 
 function setup(t, settings) {
   const before = { document: globalThis.document, Node: globalThis.Node };
-  const document = globalThis.document = {}, Node = globalThis.Node = Element;
+  const document = globalThis.document = new Element('#document'), Node = globalThis.Node = Element;
   document.createElement = tag => new Node(tag, document);
   document.createTextNode = text => { const node = new Node('#text', document); node.textContent = text; return node; };
   document.head = document.createElement('head'); document.body = document.createElement('body'); document.activeElement = document.body;
@@ -120,9 +124,51 @@ test('difficulty selector offers five modes, warns before changes and shows perm
   const h = setup(t, { difficulty: 'easy', scoreEligible: true });
   const field = h.menu.el.querySelectorAll('select')[1];
   assert.equal(field.value, 'easy'); assert.equal(field.children.length, 5);
-  assert.match(h.menu.el.textContent, /even if you change it back/);
+  assert.match(h.menu.el.textContent, /Changing difficulty permanently voids/);
   field.value = 'hard'; field.emit('change');
   assert.deepEqual(h.calls.changed.at(-1), ['difficulty', 'hard']);
   h.menu.update({ difficulty: 'easy', scoreEligible: false });
   assert.match(h.menu.el.textContent, /UNSCORED RECORDING/);
+});
+
+
+test('retro difficulty list previews without changing the run, Escape cancels, Enter commits once', t => {
+  const h = setup(t, { difficulty: 'easy', scoreEligible: true });
+  h.menu.setOpen(true); h.choices[2].emit('click');
+  const button = h.find('retro-select-button'), list = h.find('retro-select-list');
+  button.focus();
+  const key = key => h.menu.handleKey({ key, target: button });
+  key('Enter'); key('End');
+  assert.equal(list.hidden, false);
+  assert.equal(button.getAttribute('aria-activedescendant'), list.children[4].id);
+  assert.deepEqual(h.calls.changed, [], 'previewing Hard must not invalidate a run');
+  key('Escape');
+  assert.equal(list.hidden, true); assert.equal(h.find('br-menu-title').textContent, 'Settings');
+  assert.match(button.textContent, /Easy/);
+  key('Enter'); key('End'); key('Tab');
+  assert.deepEqual(h.calls.changed, [], 'tabbing away also cancels the preview');
+  button.focus(); key('Enter'); key('End'); key('Enter');
+  assert.deepEqual(h.calls.changed, [['difficulty', 'hard']]);
+  assert.match(button.textContent, /Hard/); assert.match(h.menu.el.textContent, /Score ×2/);
+  assert.doesNotMatch(h.menu.el.textContent, /One heart|Larger parts|stronger creatures/);
+  assert.equal(list.hidden, true);
+  h.menu.update({ difficulty: 'tourist' });
+  assert.match(button.textContent, /Tourist/);
+  assert.match(h.menu.el.textContent, /Explore without injury or a battery deadline/);
+});
+
+test('retro list supports click, type-ahead, outside dismissal and cleans its listeners', t => {
+  const h = setup(t, { difficulty: 'easy' });
+  const button = h.find('retro-select-button'), list = h.find('retro-select-list');
+  button.emit('click');
+  button.emit('keydown', { key: 'n' });
+  assert.equal(button.getAttribute('aria-activedescendant'), list.children[3].id);
+  h.document.emit('pointerdown', { target: h.document.body });
+  assert.equal(list.hidden, true); assert.deepEqual(h.calls.changed, []);
+  button.emit('click'); list.children[0].emit('click');
+  assert.deepEqual(h.calls.changed, [['difficulty', 'tourist']]);
+  assert.equal(list.children[0].getAttribute('aria-selected'), 'true');
+  button.emit('click'); h.menu.dispose();
+  assert.equal((h.document.listeners.get('pointerdown') || []).length, 0);
+  assert.equal((h.document.listeners.get('focusin') || []).length, 0);
 });

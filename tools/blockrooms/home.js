@@ -12,6 +12,7 @@
 //   the rest   a figure that moves when it is off screen, a page that gets
 //              longer at the bottom, a wall that gives when it is held
 import { DIFFICULTIES, cleanDifficulty, difficultyOf, difficultyPerk } from './core/difficulty.mjs';
+import { retroSelect } from './world/ui/retro-select.js';
 import { mount, drawLogo, voidTile } from './art.js';
 import { rollName, cleanName, cleanMessage, cleanEntry } from './core/book.mjs';
 import { GENDER, SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, SKIN, HAIR_COLORS, OUTFIT_COLORS, hashId, humanGenderDefaults, resolveLook, sanitizeLookPatch } from './core/look.mjs';
@@ -39,6 +40,7 @@ difficultyField.addEventListener('change', () => {
   difficultyNote(); refreshPassSummary(); syncStudioUI();
 });
 difficultyNote();
+retroSelect(difficultyField, 'Difficulty');
 
 // a link to a tape from before there was a front page goes straight to the level
 if (new URLSearchParams(location.search).has('tape')) location.replace(PLAY + location.search);

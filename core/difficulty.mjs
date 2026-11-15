@@ -5,13 +5,13 @@ export const DIFFICULTIES = Object.freeze([
   { id: 'tourist', label: 'Tourist', multiplier: 0, immune: true, cameraStart: 1, rooms: 1, toner: 0, batteryEvery: 8, batteryShare: 1, snack: .5,
     note: 'Explore without injury or a battery deadline. No score.' },
   { id: 'training-wheels', label: 'Training Wheels', multiplier: .5, cameraStart: 1, rooms: 1, toner: 0, batteryEvery: 8, batteryShare: 1, snack: .5,
-    note: 'The original balance. More supplies, fewer encounters. Score ×0.5.' },
+    note: 'Score ×0.5' },
   { id: 'easy', label: 'Easy', multiplier: 1, cameraStart: 1, rooms: 1, toner: 1, batteryEvery: 12, batteryShare: 1, snack: .65,
-    note: 'Recommended. A threat in every part, with room to recover. Score ×1.' },
+    note: 'Score ×1' },
   { id: 'normal', label: 'Normal', multiplier: 1.5, cameraStart: 1, rooms: 1, toner: 2, batteryEvery: 12, batteryShare: .7, snack: 0,
-    note: 'Fewer battery packs, no snacks, stronger creatures. Score ×1.5.' },
+    note: 'Score ×1.5' },
   { id: 'hard', label: 'Hard', multiplier: 2, cameraStart: .75, rooms: 1.25, toner: 3, batteryEvery: 12, batteryShare: .7, snack: 0, maxHealth: 1,
-    note: 'One heart. Less starting charge. Larger parts. Score ×2.' },
+    note: 'Score ×2' },
 ].map(Object.freeze));
 export const validDifficulty = id => DIFFICULTIES.some(d => d.id === id);
 export const cleanDifficulty = (id, fallback = DEFAULT_DIFFICULTY) => validDifficulty(id) ? id : fallback;

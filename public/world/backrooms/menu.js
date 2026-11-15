@@ -1,7 +1,8 @@
 // The camcorder's menu. It owns only its controls: pausing time, applying the
 // settings and ending a visit belong to index.js, not to this view.
-import { DIFFICULTIES } from '/core/difficulty.mjs';
+import { DIFFICULTIES, difficultyOf } from '/core/difficulty.mjs';
 import { h } from '../ui/dom.js';
+import { retroSelect } from '../ui/retro-select.js';
 import { MENU_CSS } from './menu-style.js';
 import { BACKROOMS_DEFAULTS as DEFAULTS } from '/core/backrooms-settings.mjs';
 
@@ -13,7 +14,7 @@ const CONTROLS = [
 ];
 
 /**
- * Native controls over the frozen picture. onChange(key, value) is immediate;
+ * Camcorder controls over the frozen picture. onChange(key, value) is immediate;
  * the caller applies and saves it. setOpen never invokes pause/resume callbacks.
  */
 export function createMenu({ host, settings = {}, furniture = false, onRequestOpen, onResume, onGiveUp, onChange } = {}) {
@@ -62,7 +63,7 @@ export function createMenu({ host, settings = {}, furniture = false, onRequestOp
 
   function change(key, value) {
     values[key] = value;
-    syncField(key);
+    update();
     onChange?.(key, value);
   }
   function slider(key, label, min, max, step, format) {
@@ -94,25 +95,30 @@ export function createMenu({ host, settings = {}, furniture = false, onRequestOp
   const difficultyNote = h('small', { id: `${prefix}-difficulty-note` });
   fields.set('difficulty', { input: difficulty });
   difficulty.addEventListener('change', () => change('difficulty', difficulty.value));
-  settingsPage.append(h('div.br-menu-setting', h('label', { htmlFor: difficulty.id }, 'Difficulty'), difficulty, difficultyNote));
+  const difficultyWarning = h('small');
+  settingsPage.append(h('div.br-menu-setting', h('label', { htmlFor: difficulty.id }, 'Difficulty'), difficulty, difficultyNote, difficultyWarning));
+  const difficultyPicker = retroSelect(difficulty, 'Difficulty');
 
   function syncField(key) {
     const field = fields.get(key); if (!field) return;
     if (field.input.type === 'checkbox') field.input.checked = !!values[key];
     else if (field.input.value !== String(values[key])) field.input.value = String(values[key]);
+    if (key === 'difficulty') difficultyPicker.sync();
     if (field.output) field.output.textContent = field.format(Number(values[key]));
     if (field.format) field.input.setAttribute('aria-valuetext', field.format(Number(values[key])));
   }
   function update(next = {}) {
     values = { ...values, ...next };
     for (const key of fields.keys()) syncField(key);
-    difficultyNote.textContent = values.scoreEligible === false
-      ? 'UNSCORED RECORDING. Discoveries still kept. Rooms and supplies change in the next part.'
-      : 'Changing difficulty cancels this recording’s score, even if you change it back. Rooms and supplies change in the next part.';
+    difficultyNote.textContent = difficultyOf(values.difficulty).note;
+    difficultyWarning.textContent = values.scoreEligible === false
+      ? 'UNSCORED RECORDING'
+      : 'Changing difficulty permanently voids this run’s score.';
   }
   const pages = { main, controls, settings: settingsPage, giveup: confirm };
   function show(next) {
     if (!pages[next]) return;
+    difficultyPicker.close();
     const was = page; page = next;
     for (const [name, section] of Object.entries(pages)) section.hidden = name !== page;
     title.textContent = { main: 'Paused', controls: 'Controls', settings: 'Settings', giveup: 'Give up?' }[page];
@@ -127,6 +133,7 @@ export function createMenu({ host, settings = {}, furniture = false, onRequestOp
   }
   function setOpen(on) {
     if (disposed || opened === !!on) return;
+    difficultyPicker.close();
     opened = !!on;
     el.classList.toggle('is-open', opened); overlay.hidden = !opened;
     launcher.setAttribute('aria-expanded', String(opened));
@@ -142,6 +149,7 @@ export function createMenu({ host, settings = {}, furniture = false, onRequestOp
   const focusable = () => [...panel.querySelectorAll('button, input, select, [tabindex="0"]')].filter(item => !item.disabled && !item.closest('[hidden]'));
   function handleKey(event) {
     if (!opened || disposed || event.ctrlKey || event.metaKey || event.altKey) return false;
+    if (difficultyPicker.handleKey(event)) return true;
     const key = event.key.toLowerCase();
     if (key === 'escape') {
       if (!event.repeat) { if (page === 'main') onResume?.(); else show('main'); }
@@ -174,6 +182,7 @@ export function createMenu({ host, settings = {}, furniture = false, onRequestOp
       setOpen(false); disposed = true;
       for (const name of events) el.removeEventListener(name, stopBubble);
       el.removeEventListener('keydown', localKey);
+      difficultyPicker.dispose();
       el.remove(); style.remove();
     },
   };
