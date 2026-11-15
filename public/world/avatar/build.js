@@ -340,6 +340,11 @@ export function facePixels(L, expression = 'neutral') {
       if (expression !== 'worried' && expression !== 'focus') {
         put(cx - s, ey + 4, '#5a3836'); put(cx, ey + 5, '#5a3836'); put(cx + s, ey + 4, '#5a3836');
       }
+    } else if (!robot && !animal && !alien && L.gender === 'female') {  // subtle corner lash + soft arched brow
+      put(cx + s * 2, ey + 2, INK);
+      if (expression !== 'worried' && expression !== 'focus') {
+        put(cx - s, ey + 4, '#5a3d38'); put(cx, ey + 5, '#5a3d38'); put(cx + s, ey + 4, '#5a3d38');
+      }
     }
     if (!robot && expression === 'worried') {                          // brows tilted up in the middle
       put(cx - s, ey + 5, INK); put(cx, ey + 4, INK); put(cx + s, ey + 4, INK);
@@ -360,9 +365,10 @@ export function facePixels(L, expression = 'neutral') {
     }
   } else if (!robot && !animal) {                                      // blush + mouth
     const glam = L.facial === 'lashes';
+    const fem = L.gender === 'female';
     if (expression !== 'focus') mirror((s) => { put(s * 7 + (s < 0 ? -1 : 0), 40, '#e8a0a0'); put(s * 7 + (s < 0 ? 0 : -1), 40, '#e8a0a0'); });
     const my = 38;
-    const lip = glam ? '#c95266' : INK;
+    const lip = glam ? '#c95266' : fem ? '#b85c6e' : INK;
     if (expression === 'happy') { for (let x = -3; x < 3; x++) put(x, my, lip); put(-3, my + 1, lip); put(2, my + 1, lip); for (let x = -2; x < 2; x++) put(x, my - 1, glam ? '#e6788c' : '#c96a6a'); }
     else if (expression === 'worried' || expression === 'talk') { for (let x = -1; x < 1; x++) for (let y = 0; y < 2; y++) put(x, my + y - 1, lip); }
     else if (expression === 'focus') { for (let x = -2; x < 2; x++) put(x, my, lip); }
@@ -687,6 +693,18 @@ function buildTorso(L, opt) {
     v.box(-4, 22, 4, 0, 27, 5, M('#f4f0e6', 0));
     v.box(-4, 26, 4, 0, 27, 5, cord);
     v.set(-3, 24, 4, M('#9aa0a6', 0)); v.set(-2, 24, 4, M('#9aa0a6', 0));
+  }
+
+  if (L.gender === 'female' && !robot) {                              // gentle 1-voxel waist taper
+    v.carve(-7, 21, -4, -6, 26, 4);
+    v.carve(6, 21, -4, 7, 26, 4);
+    const sideC = outfit === 'vest' ? oc : ocD;
+    for (let y = 21; y < 26; y++) {
+      for (let z = -3; z < 3; z++) {
+        if (v.has(-6, y, z)) v.set(-6, y, z, sideC);
+        if (v.has(5, y, z)) v.set(5, y, z, sideC);
+      }
+    }
   }
 
   if (L.species === 'dog' || L.species === 'cat') {                    // a tail

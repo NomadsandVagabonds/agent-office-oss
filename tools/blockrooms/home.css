@@ -372,6 +372,8 @@ kbd { display: inline-block; min-width: 1.6em; text-align: center; font: 700 12p
 .pin-btn { flex: 0 0 auto; font-size: 9.5px; padding: 2px 6px; letter-spacing: .06em; }
 .pin-btn.on { border-style: inset; background: #ffd83a; color: #8a1410; }
 
+.gender-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.gender-grid .thumb-btn { flex-direction: row; justify-content: center; gap: 8px; padding: 5px 8px; font-size: 12px; }
 .thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 5px; }
 .thumb-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; background: #f3eed6; border: 2px outset #fff; padding: 4px 3px 3px; cursor: pointer; font: 700 10.5px/1.1 Arial, Helvetica, sans-serif; color: #2a1f06; text-align: center; touch-action: manipulation; }
 .thumb-btn:hover { background: #fff9db; }
@@ -484,6 +486,8 @@ kbd { display: inline-block; min-width: 1.6em; text-align: center; font: 700 12p
   .fun-top { gap: 5px; }
   .mode-pill { margin-left: 0; font-size: 9.5px; }
   .preset-strip button { padding: 5px 7px; font-size: 11px; }
+  .gender-grid { gap: 5px; }
+  .gender-grid .thumb-btn { padding: 4px 6px; font-size: 11px; gap: 6px; }
   .thumb-grid { grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 4px; }
   .thumb-btn { padding: 5px 2px 4px; font-size: 10px; }
   .swatch { width: 28px; height: 28px; }

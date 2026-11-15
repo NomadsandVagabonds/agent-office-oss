@@ -185,6 +185,14 @@ function paintHeadFront(g, L, o) {
         g.fill('#c95266'); g.rect(-1, -19, 3, 1);
         g.fill('#e88396'); g.rect(0, -19, 1, 1);
       }
+    } else if (L.gender === 'female' && L.species !== 'dog' && L.species !== 'cat') {
+      // Natural feminine brows, subtle outer corner lash & warm rose lip when facial === 'none'
+      g.z(HD, HD + 0.7);
+      if (open) {
+        g.fill('#241a18'); g.rect(-4, -24, 1, 1); g.rect(4, -24, 1, 1);
+        g.fill(shade(hc, -10)); g.rect(-3, -25, 2, 1); g.rect(2, -25, 2, 1);
+      }
+      g.fill('#c46877'); g.rect(-1, -19, 2, 1);
     }
   }
   paintAccessory(g, L, o);
@@ -397,6 +405,10 @@ function paintTorso(g, L) {
     g.fill(ocS); g.rect(2, -13, 3, 1);
     g.fill('#9aa2b0'); g.rect(2, -10, 3, 3);
     g.fill('#1b1e24'); g.rect(3, -9, 1, 1);
+  }
+  if (L.gender === 'female' && L.species !== 'robot') {
+    // Subtle tailored waist contour on front silhouette
+    g.fill(ocS); g.rect(-4, -12, 1, 4); g.rect(3, -12, 1, 4);
   }
   g.fill(ocS); g.rect(-5, -8, 10, 2);
   if (L.outfit === 'tunic') { g.fill(ocH); g.rect(-1, -8, 2, 1); }
