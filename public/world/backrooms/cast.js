@@ -66,6 +66,11 @@ export const ALL_CAST = Object.freeze([
   Object.freeze({ id: 'toner', name: 'The waste toner',
     rule: 'It clings to the ceiling and listens with clicks — crouch or stand still and it creeps past; walk upright and it drops, zigzags through crawlways, cannot work a door handle, and after hurting you twice melts into black sludge that soon hatches more of its kind.',
     disposition: 'hunts', home: 'roams', weight: 1, teaches: 'hush', needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 1 } }),
+  // (withRoom: it is in a part if and only if that part has that room; it is not dealt by weight. Its toolbox has c.lair: where it sleeps)
+  Object.freeze({ id: 'the-lines', name: 'The lines',
+    rule: 'It walks only where there is floor, and over anything that has been laid down — so take up what it is standing on.',
+    disposition: 'hunts', home: 'roams', weight: 0, withRoom: 'the-culvert', needs: [], items: [], fire: 'ignores', caught: { hurt: 1 },
+    themes: { yellow: 0, archive: 0, night: 0, fitout: 0, exec: 0, suburb: 1 } }),
   Object.freeze({ id: 'other-door', name: 'The other door',
     rule: 'One pair of doors is not doors: it shivers, now and then, and that is all that gives it away. Try it, walk into it or stand in front of it too long, and it opens on nothing and takes hold of you.',
     disposition: 'hunts', home: 'room', weight: 1, needs: ['doors'], items: ['paper', 'lighter'], fire: 'fears', room: { w: 4, d: 4, wall: 2.3, clear: 1.8 }, caught: { hurt: 2 } }),
