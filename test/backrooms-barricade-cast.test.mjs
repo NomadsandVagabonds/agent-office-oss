@@ -11,15 +11,15 @@ function passage() {
     doors: [{ to: 1 - id, link: 0, h: 3 }] }));
   const rooms = definitions.map(def => ({ id: def.id, def }));
   const link = { id: 0, axis: 'x', at: 2.1, from: -.7, to: .7, a: 0, b: 1 };
-  const item = { id: 'desk', type: 'desk', x: 1.6, z: 0, x0: 1.3, x1: 1.9, z0: -.7, z1: .7, on: true };
+  const item = { id: 'desk', type: 'desk', x: 1.6, z: 0, x0: 1.3, x1: 1.9, z0: -.7, z1: .7, top: .9, on: true };
   const revisions = [0, 0];
   const overlaps = (x, z, r) => item.on && Math.hypot(x - Math.max(item.x0, Math.min(x, item.x1)), z - Math.max(item.z0, Math.min(z, item.z1))) < r;
   const world = { rooms, throats: [{ link, open: true, a: 0, b: 1 }],
     roomAt: x => rooms[x < 2.1 ? 0 : 1], headroom: () => 3, floorY: () => 0, passable: () => true,
-    free(x, z, r) {
+    free(x, z, r, opt = {}) {
       if (x < -2 + r || x > 6.2 - r || Math.abs(z) > 2 - r) return false;
       if (x > 2 - r && x < 2.2 + r && Math.abs(z) > .7 - r) return false;
-      return !overlaps(x, z, r);
+      return opt.furniture === 'phase' || opt.furnitureY >= item.top || !overlaps(x, z, r);
     },
   };
   const env = { world, level: { rooms: definitions }, barricades: {
@@ -50,6 +50,27 @@ test('barricade navigation: a blocked doorway reports its furniture; moving it c
   f.item.on = false; f.revisions[0]++;
   for (let i = 0; i < 140; i++) f.walk.go(f.actor, target, .05);
   assert.ok(Math.hypot(f.actor.x - target.x, f.actor.z - target.z) < .15, 'the cleared doorway can actually be crossed');
+});
+
+test('barricade navigation: phasing ignores furniture only; flight needs actual height and still respects ceilings and lintels', () => {
+  const f = passage(), target = { x: 4.2, z: 0 };
+  const shadow = { ...f.actor, furniture: 'phase', pushes: false };
+  assert.equal(f.walk.stand(shadow, f.item.x, 0), true);
+  assert.equal(f.walk.stand(shadow, 0, 3), false, 'phasing does not erase normal room walls');
+  for (let i = 0; i < 120; i++) f.walk.go(shadow, target, .05);
+  assert.ok(Math.hypot(shadow.x - target.x, shadow.z) < .15);
+  const moth = { ...f.actor, flightY: 1.2, tall: .4, opens: false, pushes: false };
+  assert.equal(f.walk.stand(moth, f.item.x, 0), true, 'a moth really above the desktop may pass');
+  moth.flightY = .6;
+  assert.equal(f.walk.stand(moth, f.item.x, 0), false, 'low flight does not pass through the desktop');
+  moth.flightY = 2.8;
+  assert.equal(f.walk.stand(moth, 0, 0), false, 'the whole wing envelope fits below the ceiling');
+  moth.flightY = 1.2; f.world.throats[0].link.h = 1.4; f.env.level.rooms[0].doors[0].h = 1.4;
+  assert.equal(f.walk.cost(moth)(f.env.level.rooms[0].doors[0], 0, 1), Infinity, 'a low lintel requires descending first');
+  assert.equal(f.walk.stand(moth, 2.1, 0), false);
+  f.world.throats[0].link.h = 3; f.env.level.rooms[0].doors[0].h = 3;
+  for (let i = 0; i < 120; i++) f.walk.go(moth, target, .05);
+  assert.ok(Math.hypot(moth.x - target.x, moth.z) < .15, 'airborne route crosses the low barricade');
 });
 
 test('barricade navigation: an unshiftable doorway is avoided only until its surroundings change', () => {
@@ -124,7 +145,7 @@ function hunter(t) {
   const geometry = new THREE.BoxGeometry(.1, .1, .1), materials = [];
   const kit = { own: v => v, tex: { blob: () => null }, model: () => ({ solid: {} }), geometry: () => geometry,
     surface() { const m = new THREE.ShaderMaterial({ uniforms: { uTint: { value: new THREE.Vector3(1, 1, 1) } } }); materials.push(m); return m; } };
-  let visible = false, fire = false, movable = true, calls = 0, avoided = 0;
+  let visible = false, fire = false, movable = true, calls = 0, avoided = 0, hits = 0;
   const item = { id: 'desk', type: 'desk', x: .8, z: 0 };
   const world = { scene: new THREE.Group(), rooms: [room], throats: [], bodies: [], roomAt: () => room, floorY: () => 0,
     lightAt: () => [.4, .4, .4], los: () => true, passable: () => true, free: () => true };
@@ -134,10 +155,10 @@ function hunter(t) {
     sees: () => visible, play() {}, interfere() {}, hud: { glitch() {} }, sound: { play() {} },
     barricades: { shove(i, actor, dt) { calls++; if (movable) i.x += dt * .5; return { moved: movable }; } } };
   const pirate = create({ env, walk, hidden: () => !visible, drawn: () => true, fire: () => fire ? { x: pirate.figure.x + 1, z: pirate.figure.z, remaining: 5 } : null,
-    met() {}, survived() {}, hurt: () => ({ landed: false }) });
+    met() {}, survived() {}, hurt: () => { hits++; return { landed: false }; } });
   pirate.ready(); const p = pirate.figure; p.state = 'awake'; p.plinth = false; p.know = shown({ x: 8, z: 0, room: 0 });
   t.after(() => { pirate.dispose(); geometry.dispose(); for (const material of materials) material.dispose(); });
-  return { env, pirate, p, item, get calls() { return calls; }, get avoided() { return avoided; },
+  return { env, pirate, p, item, get calls() { return calls; }, get avoided() { return avoided; }, get hits() { return hits; },
     seen(value) { visible = value; }, fire(value) { fire = value; }, blocked() { movable = false; },
     tick(seconds) { for (let i = 0; i < Math.ceil(seconds * 30); i++) { env.clock += 1 / 30; pirate.update(1 / 30); } } };
 }
@@ -157,4 +178,56 @@ test('pirate barricades: a shove rejected by the collision service requests a di
   const f = hunter(t); f.blocked(); f.tick(5);
   assert.ok(f.calls > 0 && f.avoided > 0);
   assert.equal(f.item.x, .8, 'a failed shove never moves the desk anyway');
+});
+
+test('pirate barricades: proximity and crawl grabs cannot reach through a low desk', t => {
+  const f = hunter(t), w = f.env.world;
+  assert.ok(w.bodies.includes(f.p.body), 'the mascot is solid before its first AI tick');
+  f.env.health = {}; f.env.player.me.x = .6;
+  const desk = { x0: .22, x1: .38, z0: -.4, z1: .4, on: true };
+  w.furnitureColliders = [desk];
+  f.seen(true); f.tick(3);
+  assert.equal(f.hits, 0); assert.equal(f.p.near.tears, 0, 'touch pressure does not build through a barricade');
+  f.seen(false); f.tick(1);
+  assert.equal(f.hits, 0, 'unwatched proximity still cannot grab through it');
+  f.p.down = { l: { t: 0, seen: 0, away: 0 }, head: { x: 0, z: 0 }, feet: { x: 0, z: 0 }, yaw: 0 };
+  f.tick(.1); assert.equal(f.hits, 0, 'a head under a crawl hole cannot attack through the desk either');
+  desk.on = false; f.tick(.1);
+  assert.ok(f.hits > 0, 'an unobstructed close encounter still attacks');
+});
+
+test('pirate barricades: stepping off a plinth cannot jump a barricade, including while fleeing fire', t => {
+  const f = hunter(t);
+  f.p.plinth = true;
+  f.env.world.furnitureColliders = [
+    { x0: .34, x1: .45, z0: -.5, z1: .5 }, { x0: -.45, x1: -.34, z0: -.5, z1: .5 },
+    { x0: -.5, x1: .5, z0: .34, z1: .45 }, { x0: -.5, x1: .5, z0: -.45, z1: -.34 },
+  ];
+  f.tick(1);
+  assert.equal(f.p.plinth, true); assert.deepEqual([f.p.x, f.p.z], [0, 0], 'a free endpoint beyond the desk is not a clear step off the plinth');
+  f.fire(true); f.tick(1);
+  assert.equal(f.p.plinth, true); assert.deepEqual([f.p.x, f.p.z], [0, 0], 'fire does not grant a movement bypass');
+  f.fire(false); f.env.world.furnitureColliders = []; f.tick(2);
+  assert.equal(f.p.plinth, false, 'a clear departure still works');
+});
+
+test('pirate barricades: the scripted crawl head cannot appear beyond furniture or attack through its own blocked prone body', t => {
+  const f = hunter(t), w = f.env.world;
+  f.env.health = {}; f.env.player.me.x = 3;
+  f.p.cross = { way: { x: 1.2, z: 0 }, t: 0, turned: 1, will: true, room: true,
+    near: { x: 0, z: 0 }, feet: { x: -.46, z: 0 }, head: { x: .42, z: 0 }, yaw: Math.PI / 2 };
+  const desk = { x0: .22, x1: .38, z0: -.4, z1: .4, on: true };
+  w.furnitureColliders = [desk];
+  f.tick(1);
+  assert.equal(f.p.down, null, 'clear feet and head endpoints do not permit the pose across a desk');
+  desk.on = false; f.tick(.1);
+  assert.ok(f.p.down, 'the unobstructed crawl encounter still plays');
+  assert.ok(f.p.body.x + f.p.body.r >= f.p.down.head.x + .2, 'the registered body covers the extended head');
+  f.env.player.me.x = .9; desk.on = true;
+  f.tick(.1);
+  assert.equal(f.hits, 0, 'even a clear head-to-player ray cannot bypass a desk across the prone body');
+  desk.on = false; f.tick(.1);
+  assert.ok(f.hits > 0, 'the clear crawl grab remains dangerous');
+  f.env.player.me.x = 8; f.p.down.l.t = 8; f.tick(.1);
+  assert.equal(f.p.down, null); assert.equal(f.p.body.r, .3, 'standing again restores the usual body radius');
 });

@@ -19,6 +19,7 @@ const moduleUrl = (source) => `data:text/javascript;base64,${Buffer.from(source)
 async function load(file, swaps) {
   let source = read(file);
   for (const [from, to] of Object.entries(swaps)) { assert.ok(source.includes(`'${from}'`), `${file} no longer imports ${from}`); source = source.replace(`'${from}'`, JSON.stringify(to)); }
+  source = source.replace(/from '(\.[^']+)'/g, (_, name) => `from '${new URL(name, new URL(file, dir)).href}'`);
   return import(moduleUrl(source));
 }
 /** The room that goes: everything with x under 5. */
@@ -88,13 +89,17 @@ test('the colleague who came along goes with the room too; somebody who is nowhe
   const cutout = { g: { visible: true, position: { set() {} }, rotation: {}, userData: {} }, x: 1, z: 1 };
   assert.equal(env.adopt({ toWorld: (x, z) => ({ x, z }), rt: { group: { remove() {} } }, world: { scene: { add() {} } }, room: { y: 0 } }, cutout), true);
   assert.deepEqual(env.pursuer.follower, { x: 1, z: 1 });
+  const body = env.world.bodies.find(b => b.x === 1 && b.z === 1);
+  assert.ok(body, 'the adopted cutout is a body that stops pushed furniture');
   assert.deepEqual(env.pursuer.takeAway(inside, 'room:a'), ['walker', 'mascot', 'follower']);
   assert.equal(cutout.g.visible, false);
+  assert.ok(!env.world.bodies.includes(body), 'a cutout in an absent room does not block furniture here');
   env.pursuer.update(0.5); env.pursuer.update(0.5);
   assert.equal(cutout.g.visible, false, 'it is not moved, or shown, while it is away');
   assert.equal(of('nowhere').ticks, 2, 'one with no place to be (the shadow, between appearances) is not in any room, and carries on');
   assert.ok(env.pursuer.bringBack('room:a').includes('follower'));
   assert.equal(env.pursuer.away.follower, undefined);
+  assert.equal(env.world.bodies.filter(b => b === body).length, 1, 'restoring the room restores one body');
 });
 
 /* ---- the residents that walk ------------------------------------------------------------------ */

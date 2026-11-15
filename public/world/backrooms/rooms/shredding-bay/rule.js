@@ -23,13 +23,13 @@ export const createShredderState = () => ({
 /**
  * Step the Retention Clerk by `dt` seconds.
  * @param s  state from createShredderState()
- * @param o  { dt, dist, insideRoom, holdingPaper, offeredPaper, clearLine }
+ * @param o  { dt, dist, insideRoom, holdingPaper, offeredPaper, clearLine, contactClear }
  */
 /** The rollers had hold of somebody, and they are still here: she lets go, pleased enough, and wheels it back to where she stands. */
 export function releaseShredder(s) { return { ...s, phase: 'leaving', caught: false, timer: 0, whistleTimer: 0.2, rest: SHREDDER.respite }; }
 
 export function stepShredder(s, o) {
-  const { dt, dist, insideRoom = false, holdingPaper = false, offeredPaper = false, clearLine = true } = o;
+  const { dt, dist, insideRoom = false, holdingPaper = false, offeredPaper = false, clearLine = true, contactClear = true } = o;
   let whistled = false, atePaper = false, grabbed = false, caught = s.caught;
   let { phase, timer, whistleTimer } = s;
 
@@ -46,14 +46,14 @@ export function stepShredder(s, o) {
     if (whistleTimer <= 0) { whistleTimer = SHREDDER.whistleEvery; whistled = true; }
 
     // Handing paper voluntarily via E, or bumping into her while holding paper, satisfies her
-    if (offeredPaper || (holdingPaper && clearLine && dist < SHREDDER.catchRadius + 0.15)) {
+    if (clearLine && contactClear && (offeredPaper || (holdingPaper && dist < SHREDDER.catchRadius + 0.15))) {
       phase = 'shredding';
       timer = SHREDDER.shredTime;
       atePaper = true;
       return { state: { phase, timer, whistleTimer, caught }, whistled, atePaper, grabbed, caught, speed: 0, pullProgress: 0 };
     }
 
-    if (clearLine && dist < SHREDDER.catchRadius) {
+    if (clearLine && contactClear && dist < SHREDDER.catchRadius) {
       phase = 'pulling';
       timer = 0;
       grabbed = true;

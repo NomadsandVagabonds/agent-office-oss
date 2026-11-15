@@ -29,7 +29,7 @@ export const createWardenState = () => ({
 /**
  * Step The Floor Warden by `dt` seconds.
  * @param s  state from createWardenState()
- * @param o  { dt, dist, playerSpeed, insideRoom, clearLine }
+ * @param o  { dt, dist, playerSpeed, insideRoom, clearLine, contactClear }
  */
 /** The scissors had somebody, who is still here: he has made his point, and goes back to his rounds. */
 export function releaseWarden(s) { return { ...s, phase: 'patrol', caught: false, chaseTimer: 0, calm: WARDEN.calm }; }
@@ -41,6 +41,7 @@ export function stepWarden(s, o) {
     playerSpeed = 0,
     insideRoom = false,
     clearLine = false,
+    contactClear = true,
   } = o;
 
   let { phase, chaseTimer, tripTimer, snipTimer, patrolDir, caught } = s;
@@ -76,7 +77,7 @@ export function stepWarden(s, o) {
   }
 
   if (phase === 'chasing') {
-    if (clearLine && dist < WARDEN.catchRadius) {
+    if (clearLine && contactClear && dist < WARDEN.catchRadius) {
       caught = true;
       snipped = true;
       return {

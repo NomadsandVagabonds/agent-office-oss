@@ -1,6 +1,8 @@
 // Movable office furniture. Pure geometry and small swept steps: the world
 // owns the meshes, collisions and room revisions; this only approves moves.
 
+import { furnitureEntryTime } from './furniture-rules.js';
+
 /** Relative weight; player and creature movement rates in metres/second. */
 export const FURNITURE = Object.freeze({
   chair: Object.freeze({ weight: 1, playerSpeed: 1.1, pushSpeed: 0.85 }),
@@ -14,39 +16,6 @@ const ignores = (choice, body) => !!body && (choice === body || choice instanceo
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 const shifted = (item, dx, dz) => ({ x0: item.x0 + dx, z0: item.z0 + dz, x1: item.x1 + dx, z1: item.z1 + dz });
 const distance2 = (p, b) => (p.x - clamp(p.x, b.x0, b.x1)) ** 2 + (p.z - clamp(p.z, b.z0, b.z1)) ** 2;
-
-// Entry time of a segment into an open rectangle. Merely touching an edge
-// while moving away is not an obstruction.
-function rectTime(a, dx, dz, b) {
-  let enter = 0, leave = 1;
-  for (const [p, d, lo, hi] of [[a.x, dx, b.x0, b.x1], [a.z, dz, b.z0, b.z1]]) {
-    if (Math.abs(d) < EPS) { if (p <= lo || p >= hi) return Infinity; continue; }
-    const t0 = (lo - p) / d, t1 = (hi - p) / d;
-    enter = Math.max(enter, Math.min(t0, t1)); leave = Math.min(leave, Math.max(t0, t1));
-    if (enter >= leave) return Infinity;
-  }
-  return leave > EPS && enter < 1 - EPS ? Math.max(0, enter) : Infinity;
-}
-function circleTime(a, dx, dz, x, z, r) {
-  const px = a.x - x, pz = a.z - z, c = px * px + pz * pz - r * r;
-  if (c < -EPS) return 0;
-  const aa = dx * dx + dz * dz, dot = px * dx + pz * dz, disc = dot * dot - aa * c;
-  if (aa < EPS * EPS || disc <= 0) return Infinity;
-  const root = Math.sqrt(disc), enter = (-dot - root) / aa, leave = (-dot + root) / aa;
-  return leave > EPS && enter < 1 - EPS ? Math.max(0, enter) : Infinity;
-}
-// A circle swept against a rectangle: two strips and four rounded corners.
-// Using just an expanded box would falsely block diagonal paths near corners.
-function entryTime(a, b, r, item) {
-  const dx = b.x - a.x, dz = b.z - a.z;
-  if (!r) return rectTime(a, dx, dz, item);
-  let t = Math.min(
-    rectTime(a, dx, dz, { x0: item.x0 - r, x1: item.x1 + r, z0: item.z0, z1: item.z1 }),
-    rectTime(a, dx, dz, { x0: item.x0, x1: item.x1, z0: item.z0 - r, z1: item.z1 + r }),
-  );
-  for (const x of [item.x0, item.x1]) for (const z of [item.z0, item.z1]) t = Math.min(t, circleTime(a, dx, dz, x, z, r));
-  return t;
-}
 
 /**
  * world.furniture contains world-coordinate records. translate(dx,dz) owns
@@ -64,7 +33,7 @@ export function createFurnitureMotion(world) {
   }
   function fits(item, dx, dz, ignoreBody) {
     const bounds = shifted(item, dx, dz), x = item.x + dx, z = item.z + dz;
-    if (!world.free(x, z, 0, { bounds, ignoreCollider: item.collider, ignoreBody })) return false;
+    if (!world.free(x, z, 0, { bounds, bottom: item.y, top: item.top, ignoreCollider: item.collider, ignoreBody })) return false;
     // The player is not in world.bodies; creatures are. Both stop a desk.
     const player = world.env?.player, me = player?.me;
     const radius = Number.isFinite(player?.RADIUS) && player.RADIUS > 0 ? player.RADIUS : 0.22;
@@ -104,7 +73,7 @@ export function createFurnitureMotion(world) {
     let closest = null, at = Infinity;
     for (const item of world.furniture || []) {
       if (!usable(item) || item.collider.on === false) continue;
-      const t = entryTime(a, b, r, item);
+      const t = furnitureEntryTime(a, b, r, item);
       if (t < at) { at = t; closest = item; }
     }
     return closest;

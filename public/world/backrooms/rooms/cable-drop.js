@@ -8,6 +8,7 @@ import { TILE } from '../gen.js';
 import { clamp, turnTo, card, framed, doorFrame } from '../bits.js';
 import { placePickup } from '../hand.js';
 import { stepWalker, routeToward } from '../denizens.js';
+import { furnitureClear } from '../furniture-rules.js';
 import { CABLE, createCableState, stepCable, releaseCable } from './cable-drop/rule.js';
 import { dormantTendrilsVox, makeTrunkLine } from './cable-drop/rig.js';
 
@@ -137,7 +138,7 @@ export function build(c) {
 
   const roamer = c.env.denizens?.add({
     x: startW.x, z: startW.z, r: 0.24, tall: 0.62, heading: 0,
-    group: rig.group, visible: false, lift: H - 0.2,
+    group: rig.group, visible: false, physical: false, lift: H - 0.2,
     light: (rgb) => rig.light(rgb),
     update(dt, time, me) {
       tendrils.rotation.z = Math.sin(time * 1.9) * 0.035;
@@ -150,12 +151,17 @@ export function build(c) {
       const shutDoorNear = doors.some((d) => d.isShut() && Math.hypot(d.wPos.x - roamer.x, d.wPos.z - roamer.z) < 1.1 && !c.world.los(roamer.x, roamer.z, me.x, me.z));
       const doorBlocked = nav.doorBlocked || shutDoorNear;
       const clearLine = !doorBlocked && c.world.los(roamer.x, roamer.z, me.x, me.z);
+      const contactClear = furnitureClear(c.world, roamer.x, roamer.z, me.x, me.z, .035);
 
       const res = stepCable(rule, {
         dt, distToDrop: distDrop, distToCreature: distMe,
-        playerSpeed: me.speed, insideRoom: inRoom, doorBlocked, clearLine,
+        playerSpeed: me.speed, insideRoom: inRoom, doorBlocked, clearLine, contactClear,
       });
       rule = res.state;
+      // A desk parked beneath the hatch catches the drop. Stay above it until
+      // the landing is clear; never materialise a floor body inside the desk.
+      const blockedLanding = !roamer.physical && !furnitureClear(c.world, roamer.x, roamer.z, roamer.x, roamer.z, roamer.r);
+      if (blockedLanding && rule.phase === 'hunting') rule = { ...rule, phase: 'dropping', dropProgress: .85 };
 
       if (res.woke) {
         tendrils.visible = false;
@@ -168,11 +174,15 @@ export function build(c) {
       if (rule.phase === 'dropping') {
         const k = rule.dropProgress;
         roamer.lift = (1 - k * k) * (H - 0.55);
+        if (blockedLanding) {
+          const floor = c.world.floorY(roamer.x, roamer.z);
+          for (const f of c.world.furniture || []) if (!f.away && f.collider.on !== false && roamer.x + roamer.r > f.x0 && roamer.x - roamer.r < f.x1 && roamer.z + roamer.r > f.z0 && roamer.z - roamer.r < f.z1) roamer.lift = Math.max(roamer.lift, f.top - floor + .05);
+        }
         rig.pose(time, 0.5, 0.55 + 0.45 * k);
         rig.group.rotation.y = Math.atan2(me.x - roamer.x, me.z - roamer.z);
       } else if (rule.phase === 'hunting' || rule.phase === 'recoiling') {
         if (!known && distMe < 9 && c.env.sees(roamer.x, roamer.z, { radius: 0.5 })) { known = true; c.met('trunk-line'); }
-        roamer.lift = 0;
+        roamer.lift = 0; roamer.physical = true;
         if (res.rattled) {
           const rx = nav.door?.x ?? roamer.x, rz = nav.door?.z ?? roamer.z;
           c.env.play('rattle', rx, rz, 7);

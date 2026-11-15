@@ -150,7 +150,9 @@ export async function buildWorld(kit, level, env, tick) {
     return inside || world.inThroat(x, z, r) || (opt.tall && inWindow(x, z));
   };
   /** Clear of walls, furniture and bodies. bounds supplies an exact AABB footprint;
-   * ignoreCollider/ignoreBody are identity-based exceptions for the body being moved. */
+   * ignoreCollider/ignoreBody are identity-based exceptions for the body being moved.
+   * furniture:'phase' is for apparitions; furnitureY is a flyer's absolute bottom.
+   * Neither permission bypasses walls, closed doors or the room footprint. */
   world.free = (x, z, r = 0.22, opt = {}) => {
     const box = opt.bounds;
     if (box) {
@@ -160,7 +162,10 @@ export async function buildWorld(kit, level, env, tick) {
         if (!insideAt(box.x0 + (box.x1 - box.x0) * ix / nx, box.z0 + (box.z1 - box.z0) * iz / nz, .001, opt)) return false;
       }
     } else if (!insideAt(x, z, r, opt)) return false;
-    const blocked = c => !ignored(opt.ignoreCollider, c) && (!opt.tall || c.tall) && (box ? boxHits(box, c) : hits(c, x, z, r));
+    const blocked = c => c.on !== false && !ignored(opt.ignoreCollider, c)
+      && !(c.furniture && opt.furniture === 'phase')
+      && !(Number.isFinite(opt.furnitureY) && Number.isFinite(c.top) && opt.furnitureY >= c.top)
+      && (!opt.tall || c.tall) && (box ? boxHits(box, c) : hits(c, x, z, r));
     // Grid construction may supply a room-local snapshot for this synchronous query.
     // Actual body movement omits the hint and always tests the current complete set.
     for (const c of opt.furnitureColliders || world.furnitureColliders) if (blocked(c)) return false;
@@ -170,7 +175,10 @@ export async function buildWorld(kit, level, env, tick) {
       for (const c of rt.colliders) if (!c.furniture && blocked(c)) return false;
     }
     // …and whatever is standing about that has a body (pursuer.js). They only ever move while nobody is looking.
-    if (!opt.tall && !opt.ghost) for (const b of world.bodies) if (!ignored(opt.ignoreBody, b) && (box ? boxHits(box, b) : (x - b.x) * (x - b.x) + (z - b.z) * (z - b.z) < (r + b.r) * (r + b.r))) return false;
+    if (!opt.tall && !opt.ghost) for (const b of world.bodies) if (b.on !== false && !ignored(opt.ignoreBody, b)
+      && (!b.airborne || box)
+      && !(box && Number.isFinite(opt.top) && Number.isFinite(b.bottom) && opt.top <= b.bottom)
+      && !(box && Number.isFinite(opt.bottom) && Number.isFinite(b.top) && opt.bottom >= b.top) && (box ? boxHits(box, b) : (x - b.x) * (x - b.x) + (z - b.z) * (z - b.z) < (r + b.r) * (r + b.r))) return false;
     return true;
   };
   /** Things with a body that are not part of any room: [{ x, z, r }], kept up to date by whoever owns them. */
@@ -444,7 +452,7 @@ function roomContext(world, rt) {
       }
       Object.assign(f, worldFootprint(bounds, def, toWorld));
       f.y = (def.y || 0) + f.placement.floor;
-      const collider = f.collider = { x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, tall: false, on: true, furniture: f.id };
+      const collider = f.collider = { x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, get top() { return f.top; }, tall: false, on: true, furniture: f.id };
       rt.colliders.push(collider); world.furnitureColliders.push(collider);
       const touching = () => world.rooms.filter(room => overlaps(f, room.rect)).map(room => room.id);
       let lastX = f.x, lastZ = f.z, lastRooms = touching();
@@ -609,7 +617,7 @@ function roomContext(world, rt) {
     /** Something you cannot walk through, in room coordinates. tall: also blocks the view. */
     solid(x0, z0, x1, z1, opt = {}) {
       const a = toWorld(def, x0, z0), b = toWorld(def, x1, z1);
-      const col = { x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z), tall: !!opt.tall, keep: !!opt.keep, on: opt.on !== false };
+      const col = { x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z), tall: !!opt.tall, keep: !!opt.keep, on: opt.on !== false, ...(Number.isFinite(opt.top) ? { top: (def.y || 0) + opt.top } : {}) };
       rt.colliders.push(col);
       return col;
     },
@@ -650,7 +658,7 @@ function roomContext(world, rt) {
       (opt.batch || c.vox).addVox(geo.solid, mat, opt);
       if (geo.glass) c.glass.addVox(geo.glass, mat, opt);
       if (opt.solid !== false && y0 < 1.0 && y1 > 0.25) {
-        const col = c.solid(x0 + 0.03, z0 + 0.03, x1 - 0.03, z1 - 0.03, { tall: opt.tall ?? y1 > 1.25 });
+        const col = c.solid(x0 + 0.03, z0 + 0.03, x1 - 0.03, z1 - 0.03, { tall: opt.tall ?? y1 > 1.25, top: y1 });
         if (placing !== before) placing.collider = col;
       }
       if (opt.shadow !== false && y0 < 0.3) c.shadow((x0 + x1) / 2, (z0 + z1) / 2, foot.w, foot.d, opt.shadow || 0.45);
@@ -683,7 +691,7 @@ function roomContext(world, rt) {
     crate(x, z, w, h, d, rot = 0, rgb = [0.6, 0.55, 0.45], opt = {}) {
       const y = opt.y || 0, turned = Math.abs(Math.sin(rot)) > 0.7, ww = turned ? d : w, dd = turned ? w : d;
       (opt.batch || c.flat).box(x - ww / 2, y, z - dd / 2, x + ww / 2, y + h, z + dd / 2, rgb, { skip: y ? '' : '-y' });
-      if (opt.solid !== false && y < 1 && h > 0.25) c.solid(x - ww / 2, z - dd / 2, x + ww / 2, z + dd / 2, { tall: opt.tall ?? y + h > 1.25 });
+      if (opt.solid !== false && y < 1 && h > 0.25) c.solid(x - ww / 2, z - dd / 2, x + ww / 2, z + dd / 2, { tall: opt.tall ?? y + h > 1.25, top: y + h });
       if (opt.shadow !== false && y < 0.3) c.shadow(x, z, ww, dd, 0.45);
       return { x0: x - ww / 2, z0: z - dd / 2, x1: x + ww / 2, z1: z + dd / 2, top: y + h, bottom: y, w: ww, d: dd, h, x, z };
     },

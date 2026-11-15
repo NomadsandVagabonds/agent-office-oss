@@ -11,6 +11,8 @@ import { placePickup, isPaper } from '../hand.js';
 import { stepWalker, routeToward } from '../denizens.js';
 import { SHREDDER, createShredderState, stepShredder, releaseShredder } from './shredding-bay/rule.js';
 import { makeRetentionClerk } from './shredding-bay/rig.js';
+import { furnitureClear } from '../furniture-rules.js';
+import { pullPlayer } from '../room-physics.js';
 
 function shredBinVox() {
   const v = new Vox();
@@ -122,11 +124,12 @@ export function build(c) {
       const inRoom = c.world.current() === c.rt;
       const dist = Math.hypot(me.x - roamer.x, me.z - roamer.z);
       const clearLine = c.world.los(roamer.x, roamer.z, me.x, me.z);
+      const contactClear = furnitureClear(c.world, roamer.x, roamer.z, me.x, me.z, .035);
       const holdingPaper = !!c.env.hand?.hasPaper();
       if (!known && dist < 9 && c.env.sees(roamer.x, roamer.z, { radius: 0.5 })) { known = true; c.met('retention-clerk'); }
 
       const res = stepShredder(rule, {
-        dt, dist, insideRoom: inRoom, holdingPaper, offeredPaper, clearLine,
+        dt, dist, insideRoom: inRoom, holdingPaper, offeredPaper, clearLine, contactClear,
       });
       offeredPaper = false;
       rule = res.state;
@@ -166,7 +169,13 @@ export function build(c) {
         const nx = me.x + (throatX - me.x) * Math.min(1, dt * 6);
         const nz = me.z + (throatZ - me.z) * Math.min(1, dt * 6);
         const faceClerk = Math.atan2(me.x - roamer.x, me.z - roamer.z);
-        c.env.player?.warp(nx, nz, faceClerk);
+        if (!clearLine || !contactClear || !pullPlayer(c.world, c.env.player, nx, nz, faceClerk, roamer.body)) {
+          rule = releaseShredder(rule);
+          me.pitch = 0; me.sinkTo = 0;
+          syncUseRoom(roamer.x, roamer.z, rig.group.rotation.y);
+          rig.animate(dt, time, false, false);
+          return;
+        }
         me.pitch = -0.42 * res.pullProgress;
         me.sinkTo = 0.48 * res.pullProgress;
         c.env.interfere(0.55 + 0.45 * res.pullProgress);

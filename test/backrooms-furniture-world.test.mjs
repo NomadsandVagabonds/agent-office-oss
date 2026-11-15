@@ -73,6 +73,48 @@ test('ordinary catalogue chairs/desks/trolleys are consistently movable only wit
   for (const f of on.furniture) assert.equal(on.free(f.x, f.z, .1, { ghost: true }), false, 'furniture blocks creatures too');
 });
 
+test('flying and spectral clearance never grants permission to cross walls', async t => {
+  const world = await make(t, c => { c.prop('desk', 0, 0); c.solid(-2, -3, -1.9, 3, { tall: true }); });
+  const desk = world.furniture[0];
+  assert.equal(world.free(desk.x, desk.z, .1, { ghost: true }), false);
+  assert.equal(world.free(desk.x, desk.z, .1, { ghost: true, furniture: 'phase' }), true);
+  assert.equal(world.free(desk.x, desk.z, .1, { ghost: true, furnitureY: desk.top + .01 }), true);
+  assert.equal(world.free(desk.x, desk.z, .1, { ghost: true, furnitureY: desk.top - .01 }), false);
+  for (const opt of [{ furniture: 'phase' }, { furnitureY: 2.5 }]) {
+    assert.equal(world.free(2.05, 4, .1, { ghost: true, ...opt }), false, 'room obstacle still blocks');
+    assert.equal(world.free(-1, 4, .1, { ghost: true, ...opt }), false, 'outer shell still blocks');
+  }
+  const fixed = await make(t, c => c.prop('desk', 0, 0), { enabled: false });
+  assert.equal(fixed.free(4, 4, .1, { ghost: true, furnitureY: 2 }), true, 'ordinary fixed desks have height too');
+});
+
+test('flight clearance includes raw desktop attachments added after the furniture collider is created', async t => {
+  const world = await make(t, c => {
+    const desk = c.prop('desk', 0, 0);
+    c.flat.box(-.2, desk.top, -.2, .2, desk.top + 1.2, .2, [1, 1, 1]);
+  });
+  const desk = world.furniture[0];
+  assert.ok(desk.top > 1.8);
+  assert.equal(desk.collider.top, desk.top);
+  assert.equal(world.free(desk.x, desk.z, .1, { ghost: true, furnitureY: desk.top - .1 }), false);
+  assert.equal(world.free(desk.x, desk.z, .1, { ghost: true, furnitureY: desk.top + .1 }), true);
+});
+
+test('furniture cannot be dragged into residents; only vertically overlapping airborne bodies block it', async t => {
+  const world = await make(t, c => c.prop('chair', 0, 0)), chair = world.furniture[0], motion = createFurnitureMotion(world);
+  const body = { x: chair.x1 + .15, z: chair.z, r: .2, on: true };
+  world.bodies.push(body);
+  assert.equal(motion.move(chair, .2, 0).moved, false);
+  body.on = false;
+  assert.equal(motion.move(chair, .1, 0).moved, true, 'an absent resident does not leave a ghost obstruction');
+  body.x = chair.x1 + .15; body.on = true; body.airborne = true;
+  body.bottom = chair.top + .1; body.top = body.bottom + .4;
+  assert.equal(world.free(body.x, body.z, .01), true, 'a flyer is not a ground/player collider');
+  assert.equal(motion.move(chair, .1, 0).moved, true, 'low chair passes underneath a moth');
+  body.x = chair.x1 + .15; body.bottom = chair.top - .2;
+  assert.equal(motion.move(chair, .2, 0).moved, false, 'furniture may not enter the actual flying body');
+});
+
 test('desktop models, raw screen/paper, added objects, uses and contact shadows travel with a turned desk', async t => {
   let extra, use;
   const world = await make(t, c => {

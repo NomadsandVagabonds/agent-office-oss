@@ -7,8 +7,9 @@
 // towering Keynote Speaker advances during projector shutter blackouts.
 import { Batch, lin, drawText, WHITE } from '../kit.js';
 import { P, clamp, card } from '../bits.js';
+import { roomBody, moveRoomWalker, roomContact, roomReturn } from '../room-physics.js';
 import {
-  QA_SLIDE, ADJOURNED_SLIDE,
+  ALL_HANDS, QA_SLIDE, ADJOURNED_SLIDE,
   auditoriumFloorY, createAllHandsState, stepAllHands,
 } from './all-hands/rule.js';
 import {
@@ -287,6 +288,26 @@ export function build(c) {
   speaker.group.position.set(0.22, -0.44, speakerStartZ);
   speaker.group.rotation.y = 0;
   c.add(speaker.group);
+  const walker = { x: .22, z: speakerStartZ, group: speaker.group };
+  roomBody(c, walker, { r: .3, tall: 1.8 });
+  // The tall speaker steps off this stage's .66m lip during a blackout.
+  // Visitors use the side stairs. Keep the normal wall/furniture sweeps and
+  // stair limit everywhere else: this permission is only the authored lip
+  // between the stage and its pit, not arbitrary holes. On a setback it
+  // steps back up this same lip as it returns to its starting place.
+  const speakerWorld = Object.create(c.world);
+  speakerWorld.passable = (ax, az, bx, bz) => {
+    if (c.world.passable(ax, az, bx, bz)) return true;
+    const from = c.toLocal(ax, az), to = c.toLocal(bx, bz);
+    const high = auditoriumFloorY(from.x, from.z, W, D), low = auditoriumFloorY(to.x, to.z, W, D);
+    const descending = from.z <= stageZ && to.z > stageZ && to.z < stageZ + .15
+      && Math.abs(high + .44) < .001 && Math.abs(low + 1.10) < .001
+      && high - low <= .7;
+    const returning = state.phase === 'slides' && from.z > stageZ && from.z < stageZ + .15 && to.z <= stageZ
+      && Math.abs(high + 1.10) < .001 && Math.abs(low + .44) < .001 && low - high <= .7;
+    return descending || returning;
+  };
+  const speakerContext = { ...c, world: speakerWorld };
 
   let state = createAllHandsState();
   let lastBlackout = false;
@@ -368,14 +389,14 @@ export function build(c) {
       forceEnterQa();
     }
 
-    const spkX = state.phase === 'qa' ? 0 : 0.22;
-    const spkZ = clamp(speakerStartZ + state.speakerProgress, speakerStartZ, zTop - 0.6);
+    const spkX = walker.x, spkZ = walker.z;
     const dist = Math.hypot(me.x - spkX, me.z - spkZ);
 
     const res = stepAllHands(state, {
       dt,
       insideRoom: me.inside,
       distToSpeaker: dist,
+      clearLine: roomContact(c, walker, me),
     });
     state = res.state;
 
@@ -400,15 +421,22 @@ export function build(c) {
       const mw = c.toWorld(me.x, me.z);
       c.env.play('static', mw.x, mw.z, 14);
       c.env.play('clack', mw.x, mw.z, 12);
-      const backSpot = c.toWorld(0, D / 2 - 1.35);
+      const backSpot = roomReturn(c, 0, D / 2 - 1.35);
       const stageWorld = c.toWorld(0, stageZ);
-      const faceStageYaw = Math.atan2(backSpot.x - stageWorld.x, backSpot.z - stageWorld.z);
-      c.env.player.warp(backSpot.x, backSpot.z, faceStageYaw);
+      if (backSpot) {
+        const faceStageYaw = Math.atan2(backSpot.x - stageWorld.x, backSpot.z - stageWorld.z);
+        c.env.player.warp(backSpot.x, backSpot.z, faceStageYaw);
+      }
     }
 
     if (state.phase !== 'adjourned') {
-      const curX = state.phase === 'qa' ? 0 : 0.22;
-      const curZ = clamp(speakerStartZ + state.speakerProgress, speakerStartZ, zTop - 0.6);
+      const goalX = state.phase === 'qa' ? 0 : 0.22;
+      const goalZ = clamp(speakerStartZ + state.speakerProgress, speakerStartZ, zTop - 0.6);
+      // Each shutter blackout buys one checked step, never a jump to the
+      // accumulated script position after a barricade has held it back.
+      const travel = state.phase === 'qa' ? (res.stepped ? ALL_HANDS.stepAdvance : 0) : 1.8 * dt;
+      moveRoomWalker(speakerContext, walker, goalX, goalZ, travel);
+      const curX = walker.x, curZ = walker.z;
       const curY = auditoriumFloorY(curX, curZ, W, D);
       speaker.group.position.set(curX, curY, curZ);
       speaker.group.rotation.y = me.inside ? Math.atan2(me.x - curX, me.z - curZ) * 0.45 : 0;

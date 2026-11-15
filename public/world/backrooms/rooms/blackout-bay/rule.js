@@ -91,7 +91,7 @@ export function stepBlackout(s, o) {
       speeds.push(0);
     } else {
       speeds.push(BLACKOUT.stalkSpeed);
-      if (!caught && (t.los !== false) && d < BLACKOUT.catchRadius) caught = true;
+      if (!caught && (t.los !== false) && (t.contact !== false) && d < BLACKOUT.catchRadius) caught = true;
     }
   }
 

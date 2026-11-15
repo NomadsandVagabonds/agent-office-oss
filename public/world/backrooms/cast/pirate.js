@@ -39,6 +39,7 @@ import { Batch, lamp, lin, drawText } from '../kit.js';
 import { makeRng, toWorld, roomDistances } from '../gen.js';
 import { P, clamp, turnTo } from '../bits.js';
 import { REACH, calm, beside } from '../reach.js';
+import { furnitureClear } from '../furniture-rules.js';
 import { HUNT, BARRICADE, heave, knows, lost, shown, spent, handle, atHandle, willPeek, getsDown, lying } from './hunt.js';
 import { FIRE_FEAR, calm as unafraid, afraid, tooNear } from './fire.rule.js';
 import { ROAMING, roamsThisFloor, roamingRooms, roamingSpots } from './roaming.rule.js';
@@ -255,6 +256,7 @@ export function create(c) {
       near: calm(), body: { x, z, r: BODY },
     });
     pirate.group.position.set(x, onPlinth ? PLINTH : 0, z); pirate.group.rotation.y = yaw;
+    if (W()?.bodies && !W().bodies.includes(pirate.body)) W().bodies.push(pirate.body);
     return pirate;
   }
 
@@ -288,6 +290,7 @@ export function create(c) {
     const at = c.toWorld(k.x, k.z), p = mascot(at.x, at.z, yaw + (c.room.rot * Math.PI) / 2, true);
     p.group.position.y += c.room.y;
     c.world.scene.add(p.group);
+    if (!c.world.bodies.includes(p.body)) c.world.bodies.push(p.body);
     // the keycard, if it still has it: in the hand on the side its name plate is not, unless that would put the card in the wall
     if (level.loot?.card) {
       const room = (sx) => Math.min(c.W / 2 - Math.abs(k.x + sx * 0.85 * fz), c.D / 2 - Math.abs(k.z - sx * 0.85 * fx));
@@ -314,6 +317,7 @@ export function create(c) {
     // the maze, beyond any low entrance, rather than waiting on an unseen
     // plinth for several minutes or never being made until a later floor.
     const roaming = roamsThisFloor(level, env.visit) && takeTheFloor();
+    if (pirate && !W().bodies.includes(pirate.body)) W().bodies.push(pirate.body);
     if (pirate?.card) offer(pirate);
     // it was after you on the floor above: give it time to find the hole
     if (!roaming && !pirate && env.carry?.awake) arriving = { wait: env.carry.wait ?? (env.carry.lost ? R.range(45, 80) : R.range(16, 28)), face: env.carry.face || 0, card: !!env.carry.card, lost: !!env.carry.lost };
@@ -394,6 +398,7 @@ export function create(c) {
       }
       if (best) { p.x = best.x; p.z = best.z; p.plinth = false; walk.forget(p); }
     }
+    p.body.x = p.x; p.body.z = p.z;
     awaken(p, true);
     return true;
   }
@@ -402,7 +407,9 @@ export function create(c) {
     const w = W(), me = env.player.me, now = Math.hypot(me.x - p.x, me.z - p.z);
     const k = REACH.touch / Math.max(now, 0.05);
     const nx = me.x - (me.x - p.x) * k, nz = me.z - (me.z - p.z) * k;
-    if (p.know.spent > 0) return;
+    const from = p.down?.head || p;
+    if (p.know.spent > 0 || !w.los(from.x, from.z, me.x, me.z) || !furnitureClear(w, from.x, from.z, me.x, me.z, 0.08)
+      || p.down && !furnitureClear(w, p.down.feet.x, p.down.feet.z, from.x, from.z, 0.2)) return;
     // where there is health to take, a grab takes some of it (cast/hunt.js) — and if that was not the last of it, it lets go
     const hit = env.health ? c.hurt(HUNT.grab) : null;
     if (hit && !hit.landed) return;
@@ -410,7 +417,7 @@ export function create(c) {
     const end = () => { if (!hit) env.end('caught'); };            // (a last point taken ends the visit by itself)
     p.state = 'caught'; p.catchT = 0;
     if (p.down) { env.sound.play('thunk'); end(); return; }          // from the hole: it does not get up for this
-    if (w.free(nx, nz, 0.1, { ghost: true }) && w.los(p.x, p.z, nx, nz)) { p.x = nx; p.z = nz; }
+    if (w.free(nx, nz, 0.1, { ghost: true }) && w.los(p.x, p.z, nx, nz) && furnitureClear(w, p.x, p.z, nx, nz, p.r)) { p.x = nx; p.z = nz; }
     p.plinth = false;
     p.yaw = Math.atan2(me.x - p.x, me.z - p.z);
     p.hold(7);
@@ -527,7 +534,7 @@ export function create(c) {
     if (p.state !== 'awake') awaken(p, false);
     if (seen && d < 12) { p.met += dt; if (!p.known && p.met > 0.4) { p.known = true; c.met(); } }
     p.down = null; p.cross = null; p.got = null; p.handle = null; p.shove = null; p.unseen = 0; p.rolled = false;
-    const far = (x, z) => stand(p, x, z) && Math.abs(W().floorY(x, z) - W().floorY(p.x, p.z)) < 0.6;
+    const far = (x, z) => stand(p, x, z) && furnitureClear(W(), p.x, p.z, x, z, p.r) && Math.abs(W().floorY(x, z) - W().floorY(p.x, p.z)) < 0.6;
     if (p.plinth) for (const turn of FIRE_FEAR.turns) {
       const x = p.home.x + Math.sin(fear.away + turn) * 0.95, z = p.home.z + Math.cos(fear.away + turn) * 0.95;
       if (far(x, z)) { p.x = x; p.z = z; p.plinth = false; break; }
@@ -585,7 +592,8 @@ export function create(c) {
       p.tearIn -= dt;
       if (p.tearIn < 0 && d < 9) { p.tearIn = 1.2 + Math.random() * 4.5; p.tearFor = 0.06 + Math.random() * 0.1; env.interfere(0.3); }
       // inside arm's reach the tape will not hold: it tears, and it moves in the torn frames (reach.js)
-      const n = p.near = beside(p.near, dt, d);
+      const touchable = w.los(ex, ez, me.x, me.z) && furnitureClear(w, ex, ez, me.x, me.z, 0.08);
+      const n = p.near = beside(p.near, dt, touchable ? d : Infinity);
       if (d < REACH.arm + 1.4) env.interfere(Math.max(n.noise * 0.75, 0.3 * (1 - (d - REACH.arm) / 1.4)));
       if (n.tear) {
         env.interfere(1); env.hud.glitch(0.5); env.sound.play('static', { dur: 0.22, vol: 0.8 }); env.play('creak', ex, ez, 4);
@@ -596,7 +604,7 @@ export function create(c) {
           // a little nearer, an arm a little higher
           if (p.plinth && n.tears >= 2) {
             const x = p.home.x + (dx / d) * 0.8, z = p.home.z + (dz / d) * 0.8;
-            if (stand(p, x, z) && Math.hypot(me.x - x, me.z - z) > REACH.touch) { p.x = x; p.z = z; p.plinth = false; }
+            if (stand(p, x, z) && furnitureClear(w, p.x, p.z, x, z, p.r) && Math.hypot(me.x - x, me.z - z) > REACH.touch) { p.x = x; p.z = z; p.plinth = false; }
           } else if (!p.plinth && d > REACH.touch + 0.04) {
             const sx = p.x, sz = p.z;
             walk.stride(p, me.x, me.z, Math.min(0.3, d - REACH.touch - 0.02));
@@ -629,7 +637,7 @@ export function create(c) {
         if (p.plinth && p.unseen > 0.45) {                              // down off its plinth, on whichever side is free
           for (const turn of [0, 0.7, -0.7, 1.4, -1.4, 2.2, -2.2, Math.PI]) {
             const x = p.home.x + Math.sin(p.home.yaw + turn) * 0.95, z = p.home.z + Math.cos(p.home.yaw + turn) * 0.95;
-            if (stand(p, x, z) && hiddenAt(x, z)) { p.x = x; p.z = z; p.plinth = false; break; }
+            if (stand(p, x, z) && furnitureClear(w, p.x, p.z, x, z, p.r) && hiddenAt(x, z)) { p.x = x; p.z = z; p.plinth = false; break; }
           }
         }
         const bx = p.x, bz = p.z, went = p.unseen > 0.45 && !p.plinth ? advance(p, dt) : 0;
@@ -645,7 +653,8 @@ export function create(c) {
         // at the hole you crawled through, with your back turned: down on the carpet, its face in the hole
         const c = p.cross;
         if (c && p.unseen > 0.45 && getsDown({ since: c.t, d: Math.hypot(me.x - c.way.x, me.z - c.way.z), turned: c.turned, room: c.room,
-          there: Math.hypot(p.x - c.near.x, p.z - c.near.z) < 0.5 || !!p.got?.there }) && hiddenAt(c.head.x, c.head.z, 0.7)) {
+          there: Math.hypot(p.x - c.near.x, p.z - c.near.z) < 0.5 || !!p.got?.there }) && hiddenAt(c.head.x, c.head.z, 0.7)
+          && furnitureClear(w, p.x, p.z, c.head.x, c.head.z, 0.2) && furnitureClear(w, c.feet.x, c.feet.z, c.head.x, c.head.z, 0.2)) {
           p.down = { l: { t: 0, seen: 0, away: 0 }, head: c.head, feet: c.feet, yaw: c.yaw };
           p.arms[0].rotation.set(0, 0, -1.5); p.arms[1].rotation.set(0, 0, 1.5); p.plumb();
           env.play('shuffle', c.head.x, c.head.z, 6);
@@ -666,7 +675,12 @@ export function create(c) {
       p.group.rotation.set(0, p.yaw, 0);
       if (p.head.scale.x !== 1) { p.head.scale.setScalar(1); p.shadow.visible = true; }
     }
-    p.body.x = p.x; p.body.z = p.z;
+    // The prone pose extends beyond the standing centre. Its conservative
+    // body covers feet to head, so a desk cannot slide through that extension.
+    if (p.down) {
+      p.body.x = (p.down.feet.x + p.down.head.x) / 2; p.body.z = (p.down.feet.z + p.down.head.z) / 2;
+      p.body.r = BODY + Math.hypot(p.down.head.x - p.down.feet.x, p.down.head.z - p.down.feet.z) / 2;
+    } else { p.body.x = p.x; p.body.z = p.z; p.body.r = BODY; }
     if (p.card?.use && p.card.held) { p.plumb(); reach(p); }
     p.lit -= dt;
     if (p.lit < 0 && p.group.visible) { p.lit = 0.2; p.light(w.lightAt(ex, ez, 1.0)); }
