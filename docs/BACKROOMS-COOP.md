@@ -2,9 +2,9 @@
 
 Branch: `codex/backrooms-coop`, based on development `a155afc`.
 Private alpha: https://blockrooms-coop-production.up.railway.app/rooms
-Railway runs game build `792b6d8`, separately from the public BlockRooms site.
+Railway runs game build `b756746`, separately from the public BlockRooms site.
 
-## Lobby refresh (prepared locally)
+## Lobby refresh (live)
 
 The co-op entry page now uses the homepage’s yellow wallpaper, original voxel
 logo and sprites, navy window bars and beveled buttons. Instructions use plain
@@ -17,7 +17,9 @@ Artwork is exported from the existing homepage source with
 `node tools/blockrooms/export-lobby-art.mjs`; no external images or dependencies.
 The server serves CSS and SVG with their correct MIME types under `nosniff`.
 Validation: 42/42 co-op tests pass; full suite 821/824, with the same three
-known unrelated console/status-line failures. This refresh is not deployed yet.
+known unrelated console/status-line failures. Deployed as `b756746`; the live
+HTTPS page, CSS/SVG assets, private host-key stripping, guest invite and both
+players entering a run passed in two Chromium clients.
 
 ## Try the real rooms
 
@@ -264,7 +266,7 @@ browser stores that key for its tab session and strips the fragment before
 constructing invite links. Never send the host bookmark to a guest. The guest
 only opens `/rooms?room=<random-session-id>`, clicks Ready, and optionally enables
 voice. Both still need the host tab visible. Railway project/service: `blockrooms-coop`. Deployed from the explicit artifact
-using game commit `792b6d8`, with one replica and US East configured in the
+using game commit `b756746`, with one replica and US East configured in the
 artifact’s Railway config. The creator key lives only in Railway variables and
 the owner’s private local credential file; it is not committed. Hosted HTTPS/WSS
 checks passed two-client joining, production crafting, mounted lights, shared
