@@ -473,8 +473,13 @@ Things to know before they bite:
   (world) to say where the camera films from, when the corner is a bad
   seat; return nothing and the
   character goes down where it stands. No `c.hurt` and no `c.met` from
-  inside it. A flat battery, giving up and the way out end as they always
-  did, and a hit that is survived stays in first person.
+  inside it. A room's resident does the same through its room: `c.rt.takes`.
+  If the corner would not show it, say where it is filmed from: `films(shot)`
+  beside `takes` (a room: `c.rt.films`) returns `{ x, y, z, at? }` in the
+  world, the camera's place and what it is trained on (else the visitor's
+  chest); return nothing and the corner camera has it. A flat battery,
+  giving up and the way out end as they always did, and a hit that is
+  survived stays in first person.
 - **More than one body.** There are rooms that change the building and take
   whatever is in them (*A room the way out is through*). The conductor does
   this for you: it asks `at()` where you are, and if that is in the room it
