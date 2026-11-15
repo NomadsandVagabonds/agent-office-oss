@@ -6,7 +6,7 @@ export function createPopulation(world, withVisitor) {
   const living=visitors.filter(v=>v.health>0),located=living.map(v=>({v,room:world.roomAt(v.me.x,v.me.z)}));
   const nearby=new Set();for(const {room}of located)if(room)for(const [id,d]of world.distances(room.id))if(d<=1)nearby.add(id);
   for(const rt of world.rooms){
-   rt.group.visible=true;rt.near=nearby.has(rt.id);
+   rt.group.visible=true;rt.near=nearby.has(rt.id)||!!rt.coopHeld;
    const here=located.filter(p=>p.room===rt).map(p=>p.v),before=occupants.get(rt.id)||[];
    if(!before.length&&here.length)withVisitor(here[0],()=>{rt.visits=(rt.visits||0)+1;rt.onEnter?.(rt.visits);});
    if(before.length&&!here.length)withVisitor(before[0],()=>rt.onLeave?.());occupants.set(rt.id,here);
@@ -19,7 +19,9 @@ export function createPopulation(world, withVisitor) {
    if(!rt.near||!living.length)continue;
    // Room clocks stay singular, but a guest pressing a wall must not be
    // masked by an idle host standing in the same room.
-   const target=here.find(v=>v.me.moving||Math.hypot(v.me.wishX||0,v.me.wishZ||0)>.01)||here[0]||living.reduce((a,b)=>Math.hypot(a.me.x-rt.def.cx,a.me.z-rt.def.cz)<Math.hypot(b.me.x-rt.def.cx,b.me.z-rt.def.cz)?a:b);
+   const focus=rt.coopFocus?.()||[],distance=v=>Math.min(...focus.map(p=>{const q=local(v);return Math.hypot(q.x-p.x,q.z-p.z);}));
+   const focused=focus.length&&here.length?here.reduce((a,b)=>distance(a)<=distance(b)?a:b):null;
+   const target=visitors.find(v=>v.id===rt.coopHeld)||here.find(v=>v.id===rt.coopInteraction?.id&&rt.coopInteraction.until>time)||focused||here.find(v=>v.me.moving||Math.hypot(v.me.wishX||0,v.me.wishZ||0)>.01)||here[0]||living.reduce((a,b)=>Math.hypot(a.me.x-rt.def.cx,a.me.z-rt.def.cz)<Math.hypot(b.me.x-rt.def.cx,b.me.z-rt.def.cz)?a:b);
    withVisitor(target,()=>{const p=local(target);for(const fn of rt.ticks)fn(dt,time,p);});
   }
  }};

@@ -1,11 +1,11 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {coopVisit,floorOf,COOP_ROOMS} from '../public/world/coop/visit.js';
+import {coopVisit,floorOf} from '../public/world/coop/visit.js';
 import {carryFloor,beginTransition,floorReady} from '../public/world/coop/transition.js';
 const sample=()=>({phase:'descending',depth:0,depths:3,time:71,players:[{id:'a',health:2,battery:53,hitCooldown:.8,bag:['a-item']},{id:'b',health:0,battery:0,bag:['b-item']}],items:[{id:'a-item',owner:'a'},{id:'b-item',owner:'b'},{id:'ground',owner:null},{id:'eaten',owner:'used'}],trade:{},descent:{},exitOpen:true,nodes:[1],nodeCount:1,visited:['0:1']});
-test('real visit spans 3–5 themed floors, audited rooms and one final wall',()=>{
+test('real visit spans 3–5 themed floors, the production deck and Suburbia and one final wall',()=>{
  for(let seed=0;seed<8;seed++){
   const v=coopVisit('run-'+seed);assert.ok(v.depths>=3&&v.depths<=5);
-  for(let i=0;i<v.depths;i++){const l=floorOf(v,i);assert.equal(l.depth,i);assert.ok(l.rooms.length>=20);assert.equal(l.exit.way==='wall',i===v.depths-1);assert.ok(l.rooms.filter(r=>r.arch).every(r=>COOP_ROOMS.includes(r.arch)));}
+  for(let i=0;i<v.depths;i++){const l=floorOf(v,i);assert.equal(l.depth,i);assert.ok(l.rooms.length>=20);assert.equal(l.exit.way==='wall',i===v.depths-1);assert.ok(v.floors.some(f=>f.theme==='suburb'));}
  }
 });
 test('descent preserves wounds, empty cameras, cooldowns and both bags; ground loot does not follow',()=>{

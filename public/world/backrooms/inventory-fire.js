@@ -31,6 +31,18 @@ function tongue(bend) {
   return v;
 }
 
+// Named factory lets co-op rebuild this effect without accepting shader code
+// from the network. The same material is used by single-player paper fires.
+export function createFireSpillMaterial(){
+  const material = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      uniforms: { strength: { value: .6 } },
+      vertexShader: 'varying vec2 uvFire; void main(){uvFire=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+      fragmentShader: 'varying vec2 uvFire; uniform float strength; void main(){float r=length(uvFire-.5)*2.0;float a=(1.0-smoothstep(.08,1.0,r))*strength;gl_FragColor=vec4(.9,.29,.055,a);}',
+  });
+  material.userData.coopEffect='paper-fire-spill';return material;
+}
+
 export function createInventoryFire(env, { canAct = () => true, clearRay, isDry = () => true } = {}) {
   const { kit, world } = env, pool = [];
   let disposed = false, resources = null, serial = 0;
@@ -71,12 +83,7 @@ export function createInventoryFire(env, { canAct = () => true, clearRay, isDry 
     });
     // A soft warm patch on the carpet. Point lights cannot illuminate the
     // building's baked shader, so the spill is an additive floor surface.
-    const spillMaterial = kit.own(new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-      uniforms: { strength: { value: .6 } },
-      vertexShader: 'varying vec2 uvFire; void main(){uvFire=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
-      fragmentShader: 'varying vec2 uvFire; uniform float strength; void main(){float r=length(uvFire-.5)*2.0;float a=(1.0-smoothstep(.08,1.0,r))*strength;gl_FragColor=vec4(.9,.29,.055,a);}',
-    }));
+    const spillMaterial = kit.own(createFireSpillMaterial());
     const spill = new THREE.Mesh(a.pool, spillMaterial); spill.rotation.x = -Math.PI / 2; spill.position.y = -.006; spill.renderOrder = 1; group.add(spill);
     const smoke = Array.from({ length: 3 }, () => {
       const material = kit.own(new THREE.MeshBasicMaterial({ color: '#807866', transparent: true, opacity: .12, depthWrite: false }));

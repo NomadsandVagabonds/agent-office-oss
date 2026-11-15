@@ -246,3 +246,12 @@ test('furniture motion: returning rooms preserve collision exceptions and discar
   assert.equal(removed.collider.on, false); assert.equal(removed.group.visible, false);
   assert.equal(f.motion.blocking({ x: -2, z: 0 }, { x: 2, z: 0 }), null);
 });
+
+test('co-op furniture stops at either visitor, even while the other is the actor',()=>{
+ const f=fixture(),chair=f.add(),host={me:{x:-3,z:0},RADIUS:.22},guest={me:{x:-.3,z:0},RADIUS:.22};
+ f.world.env.player=host;f.world.env.players=()=>[host,guest];
+ f.motion.move(chair,.5,0,{ignoreBody:host.me});
+ assert.equal(circleHits({...guest.me,r:.22},chair),false);
+ const before=chair.x;guest.me.z=2;f.motion.move(chair,.5,0,{ignoreBody:host.me});
+ assert.ok(chair.x>before,'moving teammate out of the way opens the path');
+});

@@ -220,6 +220,7 @@ function addSaggingCable(flatB, ax, ay, az, bx, by, bz, sag = 0.45, segs = 6, co
 export function build(c) {
   const { W, D, H, R, kit, params: p } = c;
   let cascade = createBellCascade();
+  c.rt.coopRead=()=>structuredClone(cascade);c.rt.coopApply=value=>{cascade=structuredClone(value);};
 
   // Open-backed atrium (`halo` void beyond -D/2); `lights: 'dark'` so we control the murky gloom
   c.shell({ walls: ['front', 'left', 'right'] });

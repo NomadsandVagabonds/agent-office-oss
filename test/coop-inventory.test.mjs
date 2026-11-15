@@ -60,3 +60,14 @@ test('supplies use deterministic production placement with two early torches and
  assert.deepEqual(two,coopSupplies(level,2));assert.equal(two.filter(i=>i.type==='battery').length,one.filter(i=>i.type==='battery').length*2);
  assert.equal(two.filter(i=>i.type==='torch').length,2);assert.equal(two.filter(i=>i.type==='tape').length,2);assert.ok(two.some(i=>i.type==='lighter'));assert.equal(new Set(two.map(i=>i.id)).size,two.length);
 });
+
+test('room gifts and consumed offerings use the same authoritative pockets as trades',async()=>{
+ const {mutateInventory,reconcileInventory}=await import('../public/world/coop/inventory.js');
+ const s={phase:'play',time:0,items:[],players:[],trade:{pending:true}},p={id:'guest',x:1,z:2,y:1.1,bag:[]};s.players=[p];
+ assert.equal(mutateInventory(s,p,m=>m.add(makeItem('paper','offering',{quantity:3}))).ok,true);
+ assert.equal(s.trade,null);assert.deepEqual(p.bag,['offering']);
+ assert.equal(mutateInventory(s,p,m=>m.consumeSelected('paper',1)).ok,true);
+ assert.equal(s.items[0].quantity,2);assert.equal(reconcileInventory(s,p).read().slots[0].quantity,2);
+ assert.equal(mutateInventory(s,p,m=>m.consumeSelected('balloon',1)).ok,false);
+ assert.equal(s.items[0].quantity,2);
+});

@@ -1,6 +1,8 @@
 # Two tapes: private two-player prototype
 
-Branch: `codex/backrooms-coop`, based on development `a155afc`.
+Working branch: `codex/backrooms-coop-full-game`, with Fable development through `2ce180f`.
+Full-content coverage and remaining differences: [BACKROOMS-COOP-COVERAGE.md](BACKROOMS-COOP-COVERAGE.md).
+The full-content changes are local and are **not** in the Railway build below.
 Private alpha: hosted on Railway; use the owner's private host bookmark.
 Railway runs game build `69d7c55`, separately from the public BlockRooms site.
 
@@ -89,7 +91,7 @@ Trade screens do not pause hazards or batteries.
 runs on Node; `/rooms` uses the real game modules and a trusted host browser.
 These are deliberately separate review modes, not a hidden public-game flag.
 
-## Real-room integration now implemented
+## Earlier deployed slice (69d7c55)
 
 - The production generator, room builders, prop catalogue, collision and player
   controller. The production visit planner selects 3–5 themed floors, each
@@ -144,7 +146,7 @@ These are deliberately separate review modes, not a hidden public-game flag.
   world sounds for its listener. M mutes game audio. Loading and host pauses
   pause the sound; a new floor stops the old pirate cue.
 
-## Authority and implementation seams
+## Earlier slice: authority and implementation seams
 
 `real-rooms.js` owns the generated world on the host. The guest sends controls
 through the WebSocket relay; the host validates interactions against its real
@@ -180,7 +182,7 @@ Random 128-bit invites, matching origin/version, two-client capacity, packet and
 buffer bounds, a 64-room cap and one-hour expiry apply to both modes. Restarting
 the server loses all sessions. An invite is access to that private room.
 
-## Not integrated yet
+## Earlier slice: what was not integrated
 
 No full room deck, remaining creatures, movable furniture, full VHS effects, production scorecard/leaderboard, late
 joining, reconnection, saved runs or client movement prediction. Descent uses

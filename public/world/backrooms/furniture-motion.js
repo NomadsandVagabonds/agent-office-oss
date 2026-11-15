@@ -35,9 +35,10 @@ export function createFurnitureMotion(world) {
     const bounds = shifted(item, dx, dz), x = item.x + dx, z = item.z + dz;
     if (!world.free(x, z, 0, { bounds, bottom: item.y, top: item.top, ignoreCollider: item.collider, ignoreBody })) return false;
     // The player is not in world.bodies; creatures are. Both stop a desk.
-    const player = world.env?.player, me = player?.me;
-    const radius = Number.isFinite(player?.RADIUS) && player.RADIUS > 0 ? player.RADIUS : 0.22;
-    if (point(me) && !ignores(ignoreBody, me) && distance2(me, bounds) < radius * radius - EPS) return false;
+    for(const player of world.env?.players?.() || [world.env?.player]){
+      const me=player?.me,radius=player?.RADIUS||.22;
+      if(point(me)&&!ignores(ignoreBody,me)&&distance2(me,bounds)<radius*radius-EPS)return false;
+    }
     // Check the interior as well as the corners: four good legs do not make
     // a desk safe to slide over a hole. Furniture does not climb or fall.
     const nx = Math.ceil((bounds.x1 - bounds.x0) / SAMPLE), nz = Math.ceil((bounds.z1 - bounds.z0) / SAMPLE);

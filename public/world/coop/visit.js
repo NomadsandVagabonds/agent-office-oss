@@ -1,12 +1,12 @@
-// Reuse the production visit plan, with an explicitly audited co-op room deck.
+// Use the production dealer and complete room/cast catalogues. Suburbia is
+// explicitly included in private co-op while it remains opt-in in solo play.
 import {planVisit,floorOf} from '../backrooms/plan.js';
-export const COOP_ROOMS=Object.freeze(['ceiling-meeting','coolers','hall-of-fame','many-doors']);
-export function coopVisit(seed,{slice=false}={}){
- const visit=planVisit(seed,{...(slice?{depths:1}:{}),pursuer:true});
- for(const [i,f]of visit.floors.entries()){
-  f.hand=COOP_ROOMS.filter((_,k)=>k%2===i%2);f.must=[];f.mascot=true;
- }
- return visit;
+export function coopVisit(seed,{slice=false,...options}={}){
+ const base=planVisit(seed,{...options,...(slice?{depths:1}:{})});
+ if(slice||options.themes)return base;
+ const themes=base.floors.map(f=>f.theme);
+ themes[Math.min(2,themes.length-1)]='suburb';
+ return planVisit(seed,{...options,depths:base.depths,themes});
 }
 export {floorOf};
 export {carryFloor} from './transition.js';

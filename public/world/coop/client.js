@@ -4,6 +4,8 @@ import {createCoopAudio} from './audio.js';
 import {createSocialUI} from './social-ui.js';
 import {EMOTES,REACH} from './social-rules.js';
 import {createRealRooms} from './real-rooms.js';
+import {createSceneSender} from './scene-wire.js';
+import {createVhs} from '../backrooms/vhs.js';
 import {createVoice} from './voice.js';
 import * as THREE from 'three';
 import {VERSION,MAP,CELL,EXIT,los} from '/core/coop.js';
@@ -13,13 +15,14 @@ import {makeRng} from '../backrooms/gen.js';
 import {INVENTORY_MODELS} from '../backrooms/inventory-items.js';
 import {Avatar} from '../avatar/rig.js';
 import {resolveLook} from '/core/look.mjs';
-const gameAudio=createCoopAudio();
+const gameAudio=createCoopAudio(),sceneSender=createSceneSender();
 const realMode=location.pathname==='/rooms';let real=null,realHost=false,building=false,hostPaused=false,fatal=null,roomSeed=null,roomSlice=false;
 const $=id=>document.getElementById(id),canvas=$('view'),renderer=new THREE.WebGLRenderer({canvas,antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
 const scene=new THREE.Scene();scene.background=new THREE.Color('#16190e');scene.fog=new THREE.Fog('#232419',10,35);
 scene.add(new THREE.HemisphereLight(0xfff7cd,0x5b5833,2));
 const camera=new THREE.PerspectiveCamera(70,1,.05,60);camera.rotation.order='YXZ';
+const vhs=realMode?createVhs(renderer,camera,{bloom:false,level:2}):null;vhs?.setScene(scene);if(realMode)scene.fog=null;
 const kit=createKit(),wallTex=kit.tex.wallpaper({wall:'#b4ac64',ink:'#989350',pale:'#c2b975',pattern:'diamonds'});
 const material=(map)=>{map.repeat.set(3,3);return new THREE.MeshLambertMaterial({map});};
 const wall=material(wallTex),floor=material(kit.tex.carpet('#8a8354')),ceiling=material(kit.tex.ceiling('#b9b69a'));
@@ -34,7 +37,7 @@ if(!realMode)for(let z=0;z<MAP.length;z++)for(let x=0;x<MAP[z].length;x++){
 if(!realMode)box(EXIT.x,1.1,EXIT.z+.8,1.3,2.2,.08,new THREE.MeshBasicMaterial({color:0x577762}));
 const pirate=makePirate(kit,makeRng('coop-pirate'));pirate.show();pirate.hold(0);if(!realMode)scene.add(pirate.group);
 const itemMeshes=new Map(),avatars=new Map(),keys=new Set();let state=null,id=null,socket=null,yaw=Math.PI,pitch=0,selected=0,lastHealth=4,ended=false;
-function send(m){if(realMode&&!['ready','floor-ready','voice','host-paused','real-state'].includes(m.type))m.depth=real?.depth;if(real?.host&&state?.phase==='play'&&['input','select','toggle-light','craft','take','drop','use','exit','revive','emote','trade-request','trade-answer','trade-offer','trade-confirm','trade-cancel'].includes(m.type)){real.command(id,m);return;}if(socket?.readyState===1)socket.send(JSON.stringify(m));}
+function send(m){if(realMode&&!['ready','floor-ready','voice','host-paused','real-state'].includes(m.type))m.depth=real?.depth;if(real?.host&&state?.phase==='play'&&['input','select','toggle-light','craft','take','drop','use','exit','revive','emote','trade-request','trade-answer','trade-offer','trade-confirm','trade-cancel'].includes(m.type)){real.command(id,m);return;}if(socket?.readyState===1)socket.send(JSON.stringify(m.type==='real-state'?{...m,state:sceneSender(m.state)}:m));}
 const voice=createVoice({send,enabled:()=>socket?.readyState===1&&!!state&&!ended,button:$('voice'),status:$('voiceStatus'),volume:$('voiceVolume'),indicator:$('voiceIndicator')});
 let inventoryHud=null;let resultSerial=0;
 const socialUI=createSocialUI({read:()=>({state,me:state?.players.find(p=>p.id===id),real:realMode}),send,resume:()=>lock(),stop:()=>{inventoryHud?.setOpen(false);keys.clear();send({type:'input',f:0,s:0,yaw,pitch});}});
@@ -60,12 +63,12 @@ const emoteCaption=document.createElement('div');emoteCaption.id='emoteCaption';
 function teammate(me){return realMode&&state.players.find(p=>p.id!==id&&Math.hypot(p.x-me.x,p.z-me.z)<=REACH&&Math.abs((p.y||0)-(me.y||0))<1&&real?.world.los(me.x,me.z,p.x,p.z));}
 function teamPrompt(me,other){if(!other)return '';if(other.health>0)return 'E · request trade';const snack=selectedItem(me)?.type==='snack';return snack?(other.battery<=0?'E · revive · snack + battery':'E · revive · one snack'):'Partner down · select a snack to revive';}
 function signalSprite(){const c=document.createElement('canvas');c.width=128;c.height=128;const g=c.getContext('2d');const tex=new THREE.CanvasTexture(c),mat=new THREE.SpriteMaterial({map:tex,depthTest:true,transparent:true});const sprite=new THREE.Sprite(mat);sprite.scale.set(.55,.55,.55);sprite.userData.paint=kind=>{g.clearRect(0,0,128,128);g.fillStyle='#efefd8';g.font='84px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText(EMOTES[kind]||'＋',64,65);tex.needsUpdate=true;};return sprite;}
-function fail(error){fatal='The game stopped: '+error.message;ended=true;keys.clear();voice.off();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=fatal;socket?.close(1011,'Room runtime failed');}
+function fail(error){fatal='The game stopped: '+error.message;ended=true;keys.clear();voice.off();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=fatal;socket?.close(4011,'Room runtime failed');}
 function active(){return !building&&!inventoryHud?.isOpen&&!socialUI.visible&&!ended&&!hostPaused&&document.pointerLockElement===canvas&&state?.phase==='play'&&state.players.find(p=>p.id===id)?.health>0;}
 const slots=Array.from({length:6},(_,i)=>{const b=document.createElement('button');b.onclick=()=>selected=i;$('bar').append(b);return b;});
 function itemMesh(type){const b=new Batch(true);b.addVox(kit.model('coop:'+type,INVENTORY_MODELS[type]).solid,new THREE.Matrix4().makeScale(.04,.04,.04));return new THREE.Mesh(kit.geometry(b,[lamp(0,3,0,[1,1,1],{k:8})],[.8,.8,.8]),kit.surface({vox:true}));}
 function update(s){state=s;if(s.phase==='play')$('panel').classList.add('has-played');if(realMode)gameAudio.update(s,id);if(real&&!real.host&&!building)real.apply(s);for(const p of s.players){if(p.id!==id&&!avatars.has(p.id)){const a=new Avatar(resolveLook(p.id,{species:'human',outfit:'hoodie',outfitColor:'#498776',accessory:'none'}),{seed:p.id});scene.add(a.root);a.root.position.set(p.x,0,p.z);a.signal=signalSprite();scene.add(a.signal);avatars.set(p.id,a);}}
- for(const item of s.items){if(!itemMeshes.has(item.id)){const m=itemMesh(item.type);scene.add(m);itemMeshes.set(item.id,m);}const m=itemMeshes.get(item.id);m.visible=item.owner===null;m.position.set(item.x,(item.y||0)+.03,item.z);}
+ for(const item of s.items){if(!itemMeshes.has(item.id)){const m=itemMesh(item.type);scene.add(m);itemMeshes.set(item.id,m);}const m=itemMeshes.get(item.id);m.visible=item.owner===null&&!item.away;m.position.set(item.x,(item.y||0)+.03,item.z);}
  const me=s.players.find(p=>p.id===id);if(!me)return;
  $('clock').textContent=`SP ${Math.floor(s.time/60).toString().padStart(2,'0')}:${Math.floor(s.time%60).toString().padStart(2,'0')}`;
  $('vitals').textContent=`♥ ${me.health}/4  ·  BAT ${Math.ceil(me.battery)}s  ·  PARTNER ${s.players.find(p=>p.id!==id)?.health??'—'}/4`;
@@ -86,12 +89,12 @@ function update(s){state=s;if(s.phase==='play')$('panel').classList.add('has-pla
 
  if(!['waiting','play','descending','loading'].includes(s.phase)&&!ended){ended=true;gameAudio.pause(true);voice.off();document.exitPointerLock();$('panel').hidden=false;$('ready').hidden=true;$('status').textContent=({escaped:'The surviving visitors escaped.',dead:'Neither tape was recovered.',disconnected:'Your friend disconnected. Start a new game to try again.'})[s.phase]+(s.depths?` · ${s.visited?.length||0} rooms · ${s.depth+1}/${s.depths} floors · ${Math.floor(s.time/60)}m ${Math.floor(s.time%60)}s`:'');}
 }
-async function buildFloor(depth){
+async function buildFloor(depth,carry=null){
  building=true;inventoryHud?.setOpen(false);gameAudio.pause(true);keys.clear();hostPaused=false;$('panel').hidden=false;$('ready').disabled=true;$('ready').textContent='Loading…';$('status').textContent=depth?'Loading the next floor… Keep this tab visible.':'Loading the first floor… Keep this tab visible.';
  for(const mesh of itemMeshes.values()){scene.remove(mesh);mesh.geometry.dispose();}itemMeshes.clear();
  for(const a of avatars.values()){a.root.visible=false;a.signal.visible=false;}
  const old=real;real=null;old?.dispose();
- const next=await createRealRooms(roomSeed,realHost,scene,{depth,slice:roomSlice});
+ const next=await createRealRooms(roomSeed,realHost,scene,{depth,slice:roomSlice,carry:carry?.castCarry});
  if(ended){next.dispose();return;}
  real=next;gameAudio.floor(real.level,depth);initialized=false;yaw=real.start.yaw;pitch=0;
  $('status').textContent='Floor loaded. Waiting for your friend…';
@@ -102,7 +105,7 @@ async function connect(code){$('ready').disabled=true;$('ready').textContent='Co
  socket.onmessage=async e=>{try{const m=JSON.parse(e.data);
  if(m.type==='floor-load'){
   if(ended)return;state={...m.carry,phase:'loading'};socialUI.update();
-  await buildFloor(m.depth);if(!ended)send({type:'floor-ready',depth:m.depth});return;
+  await buildFloor(m.depth,m.carry);if(!ended)send({type:'floor-ready',depth:m.depth});return;
  }
  if(m.type==='floor-start'){
   if(ended||!real||real.depth!==m.depth)return;building=false;$('ready').disabled=false;hostPaused=false;
@@ -146,13 +149,13 @@ document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canva
 window.addEventListener('keydown',e=>{if(realMode&&socialUI.key(e))return;if(document.pointerLockElement!==canvas)return;keys.add(e.key.toLowerCase());if(e.repeat)return;
  if(/^[1-6]$/.test(e.key)){if(realMode)send({type:'select',slot:Number(e.key)-1,toggle:true});else selected=Number(e.key)-1;}
  const me=state?.players.find(p=>p.id===id);if(!me||!active())return;
- if(e.key.toLowerCase()==='e'){const other=teammate(me);if(other){send(other.health>0?{type:'trade-request'}:{type:'revive',item:selectedItem(me)?.id});return;}const item=nearby(me);if(item)send({type:'take',id:item.id});else send({type:'exit'});}
+ if(e.key.toLowerCase()==='e'){if(me.gripping){send({type:'exit'});return;}const other=teammate(me);if(other){send(other.health>0?{type:'trade-request'}:{type:'revive',item:selectedItem(me)?.id});return;}const item=nearby(me);if(item)send({type:'take',id:item.id});else send({type:'exit'});}
  if(['q','r'].includes(e.key.toLowerCase()))useItem();
  if(e.code==='KeyM'){gameAudio.mute();}
  if(e.key.toLowerCase()==='g')send({type:'drop',id:selectedItem(me)?.id});
 });
 window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
-function nearby(me){return state.items.filter(i=>i.owner===null&&Math.hypot(i.x-me.x,i.z-me.z)<1.5&&(real?real.world.los(me.x,me.z,i.x,i.z):los(me,i))).sort((a,b)=>Math.hypot(a.x-me.x,a.z-me.z)-Math.hypot(b.x-me.x,b.z-me.z))[0];}
+function nearby(me){return state.items.filter(i=>i.owner===null&&!i.away&&Math.hypot(i.x-me.x,i.z-me.z)<1.5&&(real?real.world.los(me.x,me.z,i.x,i.z):los(me,i))).sort((a,b)=>Math.hypot(a.x-me.x,a.z-me.z)-Math.hypot(b.x-me.x,b.z-me.z))[0];}
 setInterval(()=>{if(active())send({type:'input',f:Number(keys.has('w'))-Number(keys.has('s')),s:Number(keys.has('d'))-Number(keys.has('a')),run:keys.has('shift'),crouch:keys.has('c'),jump:keys.has(' '),yaw,pitch});},50);
 let last=performance.now(),initialized=false;
 function frame(now){requestAnimationFrame(frame);const dt=Math.min(.05,(now-last)/1000);last=now;inventoryHud?.tick(dt);
@@ -161,11 +164,11 @@ function frame(now){requestAnimationFrame(frame);const dt=Math.min(.05,(now-last
  if(view){const target=new THREE.Vector3(view.x,view.y??1.1,view.z);if(!initialized){camera.position.copy(target);initialized=true;}else camera.position.lerp(target,1-Math.exp(-22*dt));camera.rotation.set(view===me?pitch:view.pitch,view===me?yaw:view.yaw,0);}
  for(const p of state.players){const a=avatars.get(p.id);if(a){a.root.visible=p!==view&&(realMode||p.health>0);a.root.position.lerp(new THREE.Vector3(p.x,(p.y??1.1)-1.1+(p.health<=0?.25:0),p.z),1-Math.exp(-15*dt));const emote=p.emote?.until>state.time?p.emote.kind:null;a.root.rotation.y=p.yaw+Math.PI+(emote==='dance'?Math.sin(now*.006)*.3:0);a.root.rotation.z=p.health<=0?-Math.PI/2:emote==='dance'?Math.sin(now*.012)*.12:0;a.setPose(p.health<=0?'sleep':emote==='wave'?'wave':emote==='dance'?'cheer':emote==='heart'?'bow':emote==='help'?'ask':'stand');a.signal.visible=p!==view&&(p.health<=0||!!emote);a.signal.position.set(p.x,(p.y??1.1)+.9,p.z);const signal=p.health<=0?'revive':emote;if(a.signal.userData.kind!==signal){a.signal.userData.kind=signal;a.signal.userData.paint(signal);}a.walking=p.health>0&&Math.abs(p.input?.f||0)+Math.abs(p.input?.s||0)>.1?1:0;a.bounce=emote==='dance'?.5:0;a.update(dt);}}
  if(!realMode){pirate.group.position.lerp(new THREE.Vector3(state.pirate.x,0,state.pirate.z),1-Math.exp(-18*dt));pirate.group.rotation.y=state.pirate.yaw;}
- if(me){const item=nearby(me),other=teammate(me);emoteCaption.textContent=me.emote?.until>state.time?`${EMOTES[me.emote.kind]} ${me.emote.kind}`:'';$('notice').textContent=hostPaused?'Host tab paused · waiting for return':state.descent?'Way down found · gather together to descend':me.health<=0?(realMode?'DOWN · your partner can revive you with a snack':'TAPE LOST · watching your partner'):me.notice?.until>state.time?me.notice.text:other?teamPrompt(me,other):item?`E · ${item.type}`:Math.hypot(me.x-(state.exit||EXIT).x,me.z-(state.exit||EXIT).z)<2?(realMode?(state.depth<state.depths-1?'Find the way down · stay together':state.exitOpen?'Way open · gather here with your partner':'Find the taped wall · lean into it together'):'E · leave when both survivors are here'):'';}
+ if(me){const item=nearby(me),other=teammate(me);emoteCaption.textContent=me.emote?.until>state.time?`${EMOTES[me.emote.kind]} ${me.emote.kind}`:'';$('notice').textContent=hostPaused?'Host tab paused · waiting for return':state.descent?'Way down found · gather together to descend':me.health<=0?(realMode?'DOWN · your partner can revive you with a snack':'TAPE LOST · watching your partner'):me.notice?.until>state.time?me.notice.text:me.gripping?me.interaction:other?teamPrompt(me,other):item?`E · ${item.type}`:me.interaction?me.interaction:me.usable?me.usable:Math.hypot(me.x-(state.exit||EXIT).x,me.z-(state.exit||EXIT).z)<2?(realMode?(state.depth<state.depths-1?'Find the way down · stay together':state.exitOpen?'Way open · gather here with your partner':'Find the taped wall · lean into it together'):'E · leave when both survivors are here'):'';}
  if(view&&real)real.renderView(camera,state,view,dt,!inventoryHud?.isOpen&&!socialUI.visible&&!ended);
- }renderer.render(scene,camera);
+ }if(vhs){const me=myself();vhs.uniforms.uTrack.value=me?.interference||0;vhs.uniforms.uRed.value=me?.red||0;vhs.uniforms.uWhite.value=me?.white||0;vhs.render(dt);}else renderer.render(scene,camera);
 }
-function resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();}window.addEventListener('resize',resize);resize();requestAnimationFrame(frame);
+function resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();vhs?.layout(innerWidth,innerHeight);}window.addEventListener('resize',resize);resize();requestAnimationFrame(frame);
 const room=new URLSearchParams(location.search).get('room');if(room)connect(room);
 
 document.addEventListener('visibilitychange',()=>{if(realHost)send({type:'host-paused',paused:document.hidden});});

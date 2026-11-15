@@ -715,7 +715,7 @@ export function create(c) {
       const hit = c.hurt(TONER.hitDamage);
       // that was the last of them (or there is no health down here, and being got is the end): the tape is ending, and
       // none of them does anything more — it was biting again every frame until the picture went, and saying so
-      if (hit.dead || hit.ended) { over = true; return; }
+      if (hit.ended || (hit.dead && hit.ended !== false)) { over = true; return; }
       unit.s = strikeToner(unit.s, hit);
       unit.prowlGoal = null;
       if (unit.s.survived && !unit.s.dissolved) c.survived();
@@ -817,7 +817,7 @@ export function create(c) {
       wadeT = Math.max(0, wadeT - dt);
       const w = env.world, m = me();
       const snapshot = units.slice();
-      for (const unit of snapshot) if (!unit.away) stepUnit(unit, dt, t, w, m);          // (one that is not here does nothing here)
+      for (const unit of snapshot) if (!unit.away) {if(env.withVisitor)env.withVisitor('toner',unit.walker,()=>stepUnit(unit,dt,t,w,me()));else stepUnit(unit, dt, t, w, m);}          // (one that is not here does nothing here)
     },
 
     /**

@@ -239,6 +239,7 @@ export function build(c) {
 
   // 4. Five Towering 8.6-Metre Corroded Shelving Monoliths
   let state = createCompactorState(W, initialSlot);
+  c.rt.coopRead=()=>structuredClone(state);c.rt.coopApply=value=>{state=structuredClone(value);};
   c.rt.clip = (x, z, r) => compactorWalkable(x, z, r, W, D, state);
   const cliffTex = makeArchiveCliffTex(kit);
   const endCapTex = makeEndCapTex(kit);

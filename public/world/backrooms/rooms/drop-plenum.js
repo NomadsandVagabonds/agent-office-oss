@@ -46,6 +46,7 @@ export function build(c) {
   const tex = makePlenumTextures(c, p);
 
   let roomState = createPlenumRoomState();
+  c.rt.coopRead=()=>structuredClone(roomState);c.rt.coopApply=value=>{roomState=structuredClone(value);};
 
   // Heightfield & headroom hooks (preserving any raised outer doorway steps via c.floorAt / headAt)
   c.rt.floorY = (x, z) => Math.max(c.floorAt(x, z), plenumFloorY(plan, roomState.brokenMask, x, z));
