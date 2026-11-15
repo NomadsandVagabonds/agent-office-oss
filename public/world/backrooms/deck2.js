@@ -354,6 +354,12 @@ export const MORE_DECK = [
     module: './rooms/show-home.js', stash: homeStash,
     roll: (R, o) => ({ number: R.pick(HOME_NUMBERS), board: R.pick(HOME_BOARDS).map((t) => fill(t, o, R).toUpperCase()), name: String(o.name || 'occupier').toUpperCase(),
       door: R.pick(['#8c2a22', '#8c2a22', '#2f5a3a', '#27406b']), tree: R.pick([-1, 1]) }) },
+  // Six house fronts round a dead end, a name over each door. Yours opens. The names change places when nobody is looking.
+  { id: 'the-close', name: 'The Close', landmark: 'the six houses that are the same house', w: [15, 17], d: [15, 17], h: [3.3, 4.2],
+    ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/the-close.js', stash: (r) => [r.W / 2 - 1.4, r.D / 2 - 1.4, r.W / 2 - 0.7, r.D / 2 - 0.7],
+    // names[0] is the visitor's; order[i] is whose name front i has to begin with
+    roll: (R, o) => ({ names: [String(o.name || 'you'), ...Array.from({ length: 5 }, (_, i) => (o.agents.length ? o.agents[i % o.agents.length] : 'occupier'))].map((n) => n.toUpperCase()), order: R.shuffle([0, 1, 2, 3, 4, 5]) }) },
   // A playground on fake grass. Most of it is going down into the floor, slowly, and has been for some time.
   { id: 'recess', name: 'Recess', landmark: 'the playground that is going under', w: [12, 14], d: [10, 12], h: [3.3, 4.2],
     ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
