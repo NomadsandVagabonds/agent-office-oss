@@ -175,6 +175,11 @@ export function createHud(level) {
     pictureTop(size) { return thumbs && el.classList.contains('touch') ? thumbs.pictureTop(size) : null; },
     /** Numbers on the stamp lose their place for a moment. */
     glitch(seconds = 0.6) { glitch = Math.max(glitch, seconds); },
+    /** The picture is the building's own camera now, not the camcorder: its label where REC was, and nothing of the camcorder's on it. */
+    building(label) {
+      if (!el.classList.contains('is-cctv')) style.textContent += '\n.backrooms.is-cctv .br-osd.tr, .backrooms.is-cctv .br-osd.brr, .backrooms.is-cctv .br-carry, .backrooms.is-cctv .br-use, .backrooms.is-cctv .br-inventory, .backrooms.is-cctv .br-thumbs, .backrooms.is-cctv ~ .br-inventory { visibility: hidden !important; }';
+      el.classList.add('is-cctv'); mode.textContent = label; dot.style.display = 'none';
+    },
     recording() { recording = true; if (!paused) { mode.textContent = 'REC'; dot.style.display = ''; } },
     setPaused(on) { paused = !!on; el.classList.toggle('is-paused', paused); mode.textContent = paused ? 'PAUSE Ⅱ' : recording ? 'REC' : 'PLAY ▶'; dot.style.display = recording && !paused ? '' : 'none'; },
     update(dt) {
