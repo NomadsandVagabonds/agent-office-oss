@@ -261,6 +261,7 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
   function conditionOf(item) {
     if (item?.type === 'torch') return `${item.id === snapshot.mountedTorch?.id ? 'Mounted · ' : item.prepared ? 'Tape fitted · ' : ''}${percent(item)}% charge · ${isLit(item) ? 'on' : 'off'}`;
     if (item?.type === 'chalk') return `${item.uses} mark${item.uses === 1 ? '' : 's'} left`;
+    if (item?.type === 'scissors') return `${item.uses} snip${item.uses === 1 ? '' : 's'} left`;
     if (item?.type === 'battery') return 'Fits flashlight or camera';
     if (item?.type === 'paper') return `${quantity(item)} / ${ITEM_DEFS.paper.maxStack} sheets`;
     if (item?.type === 'snack') return snapshot.health && snapshot.health.current >= snapshot.health.max ? 'Health is full' : `Restores ${ITEM_DEFS.snack.healAmount} health`;
@@ -342,11 +343,11 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
       // The visible caption and inspection panel carry this information;
       // native title popups cannot be kept clear of the world-use prompt.
       if (slot.type !== iconKey(item)) { slot.icon.replaceChildren(...(item ? [itemIcon(item.type, item)] : [])); slot.type = iconKey(item); }
-      text(slot.amount, item?.type === 'chalk' ? String(item.uses) : item?.type === 'paper' ? String(quantity(item)) : '');
+      text(slot.amount, item?.type === 'chalk' || item?.type === 'scissors' ? String(item.uses) : item?.type === 'paper' ? String(quantity(item)) : '');
       slot.power.hidden = item?.type !== 'torch';
       if (item?.type === 'torch') slot.fill.style.transform = `scaleX(${percent(item) / 100})`;
     }
-    text(caption, !snapshot.holstered && selected ? `${nameOf(selected)}${selected.type === 'torch' ? ` · ${percent(selected)}%` : selected.type === 'chalk' ? ' · ' + selected.uses : selected.type === 'paper' ? ' · ' + quantity(selected) + (quantity(selected) === 1 ? ' sheet' : ' sheets') : ''}` : '');
+    text(caption, !snapshot.holstered && selected ? `${nameOf(selected)}${selected.type === 'torch' ? ` · ${percent(selected)}%` : selected.type === 'chalk' || selected.type === 'scissors' ? ' · ' + selected.uses : selected.type === 'paper' ? ' · ' + quantity(selected) + (quantity(selected) === 1 ? ' sheet' : ' sheets') : ''}` : '');
     text(count, crafting ? 'COMBINE' : `POCKETS  ${snapshot.slots.filter(Boolean).length} / 6`);
     text(title, nameOf(selected));
     text(description, selected ? ITEM_DEFS[selected.type]?.description || '' : 'Pick up an object to carry it here.');
@@ -357,13 +358,13 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
     // is still fitted by combining
     const recharges = selected?.type === 'battery' && !!snapshot.camera && !snapshot.camera.depleted && snapshot.camera.remaining < snapshot.camera.capacity;
     const label = selected?.type === 'torch' ? snapshot.activeTorch === selected.id ? 'Switch off' : 'Switch on'
-      : selected?.type === 'chalk' ? 'Mark floor' : selected?.type === 'snack' ? 'Eat' : recharges ? 'Recharge camera' : 'Use';
+      : selected?.type === 'chalk' ? 'Mark floor' : selected?.type === 'scissors' ? 'Snip' : selected?.type === 'snack' ? 'Eat' : recharges ? 'Recharge camera' : 'Use';
     text(useLabel, label);
     // F prefers the mounted light; Q always acts on this inspected item.
     text(useKey, selected?.type === 'torch' && !snapshot.mountedTorch ? 'F' : 'Q');
     use.hidden = ['paper', 'lighter', 'tape'].includes(selected?.type) || (selected?.type === 'battery' && !recharges);
-    use.disabled = blocked() || snapshot.holstered || !selected || ['paper', 'pink-slip', 'scissors', 'balloon', 'lighter', 'tape'].includes(selected.type)
-      || (selected.type === 'battery' && !recharges) || (selected.type === 'snack' && !canEat()) || (selected.type === 'torch' && selected.charge <= 0);
+    use.disabled = blocked() || snapshot.holstered || !selected || ['paper', 'pink-slip', 'balloon', 'lighter', 'tape'].includes(selected.type)
+      || (selected.type === 'battery' && !recharges) || (selected.type === 'snack' && !canEat()) || (selected.type === 'torch' && selected.charge <= 0) || (selected.type === 'scissors' && selected.uses <= 0);
     combine.hidden = !craftIngredient(selected); combine.disabled = blocked(); combine.classList.toggle('primary', use.hidden);
     drop.disabled = blocked() || snapshot.holstered || !selected;
     if (crafting) redrawCraft();

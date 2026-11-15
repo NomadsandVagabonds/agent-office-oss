@@ -71,7 +71,7 @@ export function build(c) {
   const dangerB = c.mapped('plenum:danger', tex.dangerSign);
   const ceilCarpetB = c.mapped('plenum:ceil-carpet', c.kit.tex.floor(c.look));
   const paperB = c.mapped('plenum:paper', c.kit.tex.paper());
-  const litPanelB = c.shining('plenum:panel', c.kit.tex.panel(true), 2.1, lin('#e5ead2'));
+  const litPanelB = c.shining('plenum:panel', c.kit.tex.panel(true), 2.1, lin(c.look.tube));
   const portalGlowB = c.shining('plenum:portal-glow', tex.portalGlow, 2.25, WHITE);
   const crtGlowB = c.shining('plenum:crt-glow', card(c, 'plenum:crt-screen', ['DESK -1', 'GRAVITY: OFF', 'READY_'], {
     w: 96, h: 72, bg: '#071c0e', fg: '#68ff96', size: 12, pad: 8,
@@ -106,7 +106,7 @@ export function build(c) {
       [lx - 0.3, plan.ceilY - 0.012, lz + 0.6],
       WHITE, uv01,
     );
-    c.light(lx, plan.ceilY - 0.14, lz, '#e3e8cf', pwr, { axis: [0, -1, 0], floor: 0.05, far: 8.2, k: 3.0 });
+    c.light(lx, plan.ceilY - 0.14, lz, c.look.tube, pwr, { axis: [0, -1, 0], floor: 0.05, far: 8.2, k: 3.0 });
   }
   // Weak flickering light from the crooked dangling fluorescent troffer beside the front ladder hole
   c.light(-1.45, plan.ceilY - 0.28, 2.72, '#dbe4c6', 0.62, { flick: true, axis: [0, -1, 0], floor: 0.08, far: 5.8, k: 2.6 });

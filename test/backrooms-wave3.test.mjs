@@ -7,7 +7,7 @@ import { CABLE, createCableState, stepCable, releaseCable } from '../public/worl
 import { SHREDDER, createShredderState, stepShredder, releaseShredder } from '../public/world/backrooms/rooms/shredding-bay/rule.js';
 import { PARTY, createPartyState, stepParty, releaseParty } from '../public/world/backrooms/rooms/mandatory-fun/rule.js';
 import { BLACKOUT, createBlackoutState, stepBlackout, releaseBlackout, isInBeam } from '../public/world/backrooms/rooms/blackout-bay/rule.js';
-import { WARDEN, createWardenState, stepWarden, releaseWarden } from '../public/world/backrooms/rooms/safety-corridor/rule.js';
+import { WARDEN, createWardenState, stepWarden, releaseWarden, parryWarden } from '../public/world/backrooms/rooms/safety-corridor/rule.js';
 import { PARTNER, createPartnerState, stepPartner } from '../public/world/backrooms/rooms/audit-pod/rule.js';
 import {
   PLENUM,
@@ -22,6 +22,17 @@ import {
   releasePlenumToner,
   stepPlenumToner,
 } from '../public/world/backrooms/rooms/drop-plenum/rule.js';
+import {
+  GRID,
+  buildGridPlan,
+  gridFloorY,
+  createGridRoomState,
+  stepGridRoom,
+  createClerkState,
+  snipClerk,
+  releaseClerk,
+  stepClerk,
+} from '../public/world/backrooms/rooms/cubicle-grid/rule.js';
 
 test('the hand, as a resident asks after it: the selected pocket in the words a room uses; a pink slip is paper to a shredder and still a pink slip', () => {
   // stand-in pockets: one selected thing, a torch that may be lit
@@ -186,7 +197,10 @@ test('The Stand-Ins (blackout-bay): unlit crossing floods crimson and kills; fla
   assert.equal(lit.caught, false);
 });
 
-test('The Floor Warden (safety-corridor): ignores walkers, chases runners with scissors, and trips onto them after 8s', () => {
+test('The Floor Warden (safety-corridor): ignores walkers, chases runners at outrunnable speed, trips onto his scissors on escape or shut door, and can be parried', () => {
+  assert.equal(WARDEN.dropsItem, 'scissors');
+  assert.ok(WARDEN.chaseSpeed > 2.55 && WARDEN.chaseSpeed < 3.5, 'faster than walking, slower than a visitor sprinting away');
+
   let s = createWardenState();
   // Walking right past at 2.05 m/s never triggers chase
   for (let i = 0; i < 20; i++) {
@@ -202,7 +216,7 @@ test('The Floor Warden (safety-corridor): ignores walkers, chases runners with s
   assert.equal(run.speed, WARDEN.chaseSpeed);
   s = run.state;
 
-  // Evading for 8 seconds makes him trip on his own scissors and despawn
+  // Evading for WARDEN.evadeDuration (6.5s) makes him trip on his own scissors and despawn
   let sawSnip = false, sawTrip = false, sawDespawn = false;
   for (let i = 0; i < 95; i++) {
     const r = stepWarden(s, { dt: 0.1, dist: 2.2, playerSpeed: 3.65, insideRoom: true, clearLine: true });
@@ -216,6 +230,19 @@ test('The Floor Warden (safety-corridor): ignores walkers, chases runners with s
   assert.equal(sawTrip, true);
   assert.equal(sawDespawn, true);
   assert.equal(s.phase, 'gone');
+
+  // Slamming a fire door in his face mid-sprint also pitches him onto his scissors early
+  let sDoor = stepWarden(createWardenState(), { dt: 0.1, dist: 4.0, playerSpeed: 3.6, insideRoom: true, clearLine: true }).state;
+  for (let i = 0; i < 6; i++) sDoor = stepWarden(sDoor, { dt: 0.1, dist: 3.2, playerSpeed: 3.6, insideRoom: true, clearLine: true }).state;
+  assert.equal(sDoor.phase, 'chasing');
+  const doorTrip = stepWarden(sDoor, { dt: 0.2, dist: 2.5, playerSpeed: 3.6, insideRoom: false, clearLine: false, doorBlocked: true });
+  assert.equal(doorTrip.trippedNow, true);
+  assert.equal(doorTrip.state.phase, 'tripping');
+
+  // Parrying him with held scissors forces him back onto peaceful patrol for WARDEN.calm seconds
+  const parried = parryWarden(sDoor);
+  assert.equal(parried.phase, 'patrol');
+  assert.equal(parried.calm, WARDEN.calm);
 });
 
 test('The Efficiency Partners (audit-pod): auto-give Pink Slip to empty hand, wait politely when holding another item', () => {
@@ -400,4 +427,125 @@ test('Plenum Toner: ignores crouched crawlers, drops on upright sheet-metal clan
   assert.equal(bite.caught, true);
   assert.equal(releasePlenumToner(bite.state).phase, 'recoil');
 });
+
+test('Open-Plan Pit (`cubicle-grid`): partition caps connect South Foyer to North Sanctuary, broken spans force 90-degree turns, slipping off a beam is fatal, and shutting the bulkhead door seals the crossing', () => {
+  for (const brokenSide of [-1, 1]) {
+    const plan = buildGridPlan(15, 17, 3.4, brokenSide);
+
+    // South Foyer and North Safe Sanctuary sit at y = 0; open cubicle centers drop to -3.60 m
+    assert.equal(gridFloorY(plan, 0, plan.gridZ1 + 0.6), 0);
+    assert.equal(gridFloorY(plan, 0, plan.gridZ0 - 0.6), 0);
+    for (const cell of plan.cells) {
+      assert.equal(gridFloorY(plan, cell.cx, cell.cz), GRID.pitDepth);
+    }
+
+    // Center column (x = 0) has a collapsed span in row 2 so holding W straight forward drops into the pit
+    const brokenCenter = plan.brokenSpans.find((b) => b.col === 2);
+    assert.ok(brokenCenter, 'center column has a buckled gap');
+    const midBrokenZ = (brokenCenter.z0 + brokenCenter.z1) / 2;
+    assert.equal(gridFloorY(plan, 0, midBrokenZ), GRID.pitDepth);
+
+    // Intact tightrope route via unbroken side column maintains y = 0 across every 0.125 m step
+    const safeCol = brokenSide < 0 ? 3 : 1;
+    const safeX = plan.colX[safeCol];
+    for (let z = plan.gridZ1 + 0.5; z >= plan.rowZ[3]; z -= 0.125) {
+      assert.equal(gridFloorY(plan, 0, z), 0, `south entry beam at z=${z}`);
+    }
+    const stepDir = safeX > 0 ? 0.125 : -0.125;
+    for (let x = 0; Math.abs(x - safeX) > 0.001; x += stepDir) {
+      assert.equal(gridFloorY(plan, x, plan.rowZ[3]), 0, `row 3 transverse beam at x=${x}`);
+    }
+    for (let z = plan.rowZ[3]; z >= plan.northBeamZ; z -= 0.125) {
+      assert.equal(gridFloorY(plan, safeX, z), 0, `intact side column at x=${safeX}, z=${z}`);
+    }
+    for (let x = safeX; Math.abs(x) > 0.001; x -= stepDir) {
+      assert.equal(gridFloorY(plan, x, plan.northBeamZ), 0, `north collector beam at x=${x}`);
+    }
+    for (let z = plan.northBeamZ; z >= plan.gridZ0 - 0.5; z -= 0.125) {
+      assert.equal(gridFloorY(plan, 0, z), 0, `north bulkhead doorway threshold at z=${z}`);
+    }
+
+    // Crossing from South Foyer onto the grid activates the room; reaching North Sanctuary and shutting the bulkhead door seals it
+    let s = createGridRoomState();
+    s = stepGridRoom(s, plan, { dt: 0.1, x: 0, z: plan.gridZ1 + 0.5, inside: true }).state;
+    const act = stepGridRoom(s, plan, { dt: 0.1, x: 0, z: plan.rowZ[3], inside: true });
+    assert.equal(act.activatedNow, true);
+    s = act.state;
+
+    const notYetShut = stepGridRoom(s, plan, { dt: 0.1, x: 0, z: plan.gridZ0 - 0.4, inside: true, northShut: false });
+    assert.equal(notYetShut.sealedNow, false);
+    const shutNow = stepGridRoom(notYetShut.state, plan, { dt: 0.1, x: 0, z: plan.gridZ0 - 0.4, inside: true, northShut: true });
+    assert.equal(shutNow.sealedNow, true);
+    assert.equal(shutNow.state.sealed, true);
+
+    // Slipping past beamHalfW + slipDist triggers a fatal plummet into the cubicle pit
+    let fallS = act.state;
+    const slip = stepGridRoom(fallS, plan, { dt: 0.05, x: safeX + GRID.beamHalfW + 0.06, z: (plan.rowZ[1] + plan.rowZ[2]) / 2, inside: true });
+    assert.equal(slip.fellNow, true);
+    assert.equal(slip.state.falling, true);
+    let cur = slip.state, died = false;
+    for (let i = 0; i < 15; i++) {
+      const r = stepGridRoom(cur, plan, { dt: 0.1, x: cur.fallX, z: cur.fallZ, inside: true });
+      cur = r.state;
+      if (r.diedNow) died = true;
+    }
+    assert.equal(died, true);
+    assert.ok(cur.fallY < -3.0, `plummet reached cubicle floor (${cur.fallY})`);
+  }
+});
+
+test('Smiling Office Workers (`pit-clerks`): crawl up from sunken cubicles, stalk along intact partition beams, get knocked down by Safety Scissors, fear fire, and cannot pass the shut bulkhead door', () => {
+  const plan = buildGridPlan(15, 17, 3.4, 1);
+  const spec = plan.climbers[0];
+  let c = createClerkState(spec);
+  assert.equal(c.phase, 'seated');
+  assert.equal(c.y, GRID.climbStartY);
+
+  // Stays seated until player steps onto the partition grid
+  c = stepClerk(c, spec, plan, { dt: 1.0, activated: false }).state;
+  assert.equal(c.phase, 'seated');
+
+  // Once activated, wakes after wakeDelay and crawls slowly up out of the cubicle to y = 0
+  let sawCrest = false;
+  for (let i = 0; i < 80; i++) {
+    const r = stepClerk(c, spec, plan, { dt: 0.1, activated: true, px: 0, pz: plan.rowZ[1] });
+    c = r.state;
+    if (r.crestedNow) sawCrest = true;
+    if (c.phase === 'stalking') break;
+  }
+  assert.equal(sawCrest, true);
+  assert.equal(c.phase, 'stalking');
+  assert.equal(c.y, 0);
+
+  // Safety Scissors snip knocks a stalking or cresting worker straight back down into the cubicle pit
+  const snipped = snipClerk(c, spec);
+  assert.equal(snipped.phase, 'falling');
+  let fallC = snipped;
+  for (let i = 0; i < 15; i++) {
+    fallC = stepClerk(fallC, spec, plan, { dt: 0.1, activated: true }).state;
+  }
+  assert.equal(fallC.y, GRID.climbStartY);
+
+  // Lit paper forces a stalking worker into recoil
+  const scared = stepClerk(c, spec, plan, {
+    dt: 0.1, activated: true, px: c.x, pz: c.z, fleeingFire: true, fireX: c.x, fireZ: c.z,
+  });
+  assert.equal(scared.state.phase, 'recoiling');
+
+  // Shutting the North Bulkhead Door blocks pursuing workers on the pit side (`doorBlocked: true`, `caught: false`)
+  let atDoor = { ...c, x: 0, z: plan.northBeamZ, nodeId: 5, targetNode: 5 };
+  const blocked = stepClerk(atDoor, spec, plan, {
+    dt: 0.1, activated: true, sealed: true, px: 0, pz: plan.gridZ0 - 0.35, playerOnNorth: true, northShut: true,
+  });
+  assert.equal(blocked.doorBlocked, true);
+  assert.equal(blocked.caught, false);
+
+  // Once the player leaves the doorway sanctuary, sealed workers climb back down to their desks
+  const retreating = stepClerk(blocked.state, spec, plan, {
+    dt: 0.1, activated: true, sealed: true, px: 0, pz: -plan.D / 2 - 2, playerOnNorth: false, northShut: true,
+  });
+  assert.equal(retreating.state.phase, 'returning');
+  assert.equal(releaseClerk(c).phase, 'recoiling');
+});
+
 

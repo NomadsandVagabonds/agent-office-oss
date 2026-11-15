@@ -1,16 +1,19 @@
-// The Safety Corridor ("the safety monitor with the scissors"): a long
+// The Safety Corridor ("the safety marshall with the giant scissors"): a long
 // safety-striped thoroughfare patrolled by The Floor Warden in a hard-hat and
 // neon high-vis vest. Walk past him and he merely watches; press Shift to run
-// and he blows his pea-whistle and sprints after you at 3.45 m/s, snipping a
-// pair of three-foot chrome office scissors. Keep ahead of him for eight
-// seconds and he trips headlong onto his own blades and vanishes.
+// and he blows his pea-whistle and sprints after you at 3.18 m/s, snipping a
+// pair of three-foot chrome office scissors. Keep ahead of him for 6.5 seconds
+// — or slam a fire door in his face — and he trips headlong onto his own
+// blades, vanishing and leaving a pair of heavy office scissors on the carpet.
 import { lin } from '../kit.js';
+import { toLocal } from '../gen.js';
 import { clamp, turnTo, card, framed, wetSign } from '../bits.js';
 import { buildItemProp } from '../hand.js';
+import { makeItem, ITEM_DEFS } from '../inventory-state.js';
 import { stepWalker, routeToward } from '../denizens.js';
 import { furnitureClear } from '../furniture-rules.js';
-import { WARDEN, createWardenState, stepWarden, releaseWarden } from './safety-corridor/rule.js';
-import { makeFloorWarden } from './safety-corridor/rig.js';
+import { WARDEN, createWardenState, stepWarden, releaseWarden, parryWarden } from './safety-corridor/rule.js';
+import { makeFloorWarden, makeFallenHardHat } from './safety-corridor/rig.js';
 
 export function build(c) {
   const { W, D, params: p } = c;
@@ -65,15 +68,74 @@ export function build(c) {
   let rule = createWardenState();
   let patrolToB = true;
 
-  // Dropped memo stack left behind if he trips and despawns
-  const remnant = buildItemProp(c.kit, 'papers', { view: false });
-  remnant.visible = false;
+  // Knocked-off hard-hat (and fallback scissors prop when visiting without pockets) left where he crashes
+  const hatRemnant = makeFallenHardHat(c.kit);
+  hatRemnant.visible = false;
+  const fallbackScissors = buildItemProp(c.kit, 'scissors');
+  fallbackScissors.visible = false;
+
+  function dropWardenScissors(wx, wz, yaw) {
+    const hatX = wx - Math.sin(yaw) * 0.28, hatZ = wz - Math.cos(yaw) * 0.28;
+    const hatRt = c.world.roomAt(hatX, hatZ);
+    const fx = hatRt ? hatX : wx, fz = hatRt ? hatZ : wz;
+    if (!hatRemnant.parent) c.world.scene.add(hatRemnant);
+    hatRemnant.position.set(fx, c.world.floorY(fx, fz), fz);
+    hatRemnant.rotation.y = yaw + 0.5;
+    hatRemnant.userData.light(c.world.lightAt(fx, fz, 0.5));
+    hatRemnant.visible = true;
+
+    const bladeX = wx + Math.sin(yaw) * 0.24, bladeZ = wz + Math.cos(yaw) * 0.24;
+    const physical = c.env.inventory?.physical;
+    if (physical) {
+      const item = makeItem('scissors', `warden-scissors:${c.rt.id}:${Math.round(wx * 100)}:${Math.round(wz * 100)}`, {
+        uses: ITEM_DEFS.scissors.maxUses,
+      });
+      const tryAt = (px, pz) => {
+        const dropRt = c.world.roomAt(px, pz);
+        if (!dropRt) return false;
+        const loc = toLocal(dropRt.def, px, pz);
+        return physical.spawn(item, { room: dropRt.id, x: loc.x, z: loc.z }).ok;
+      };
+      if (tryAt(bladeX, bladeZ) || tryAt(wx, wz)) return;
+      for (const r of [0.2, 0.36, 0.54, 0.74, 0.96, 1.2, 1.45]) {
+        for (let k = 0; k < 12; k++) {
+          const a = yaw + (k / 12) * Math.PI * 2;
+          if (tryAt(wx + Math.sin(a) * r, wz + Math.cos(a) * r)) return;
+        }
+      }
+      const hostRt = c.world.roomAt(wx, wz) || c.rt;
+      const walk = c.world.walkable(hostRt), seen = walk.flood(hostRt.def.doors), near = [];
+      const targetLoc = toLocal(hostRt.def, wx, wz);
+      for (let i = 0; i < seen.length; i++) if (seen[i]) {
+        const pt = walk.at(i);
+        near.push({ ...pt, d: Math.hypot(pt.x - targetLoc.x, pt.z - targetLoc.z) });
+      }
+      near.sort((a, b) => a.d - b.d);
+      for (const pt of near) if (physical.spawn(item, { room: hostRt.id, x: pt.x, z: pt.z }).ok) return;
+      return;
+    }
+
+    if (!fallbackScissors.parent) c.world.scene.add(fallbackScissors);
+    fallbackScissors.position.set(bladeX, c.world.floorY(bladeX, bladeZ) + 0.01, bladeZ);
+    fallbackScissors.rotation.y = yaw - 0.3;
+    fallbackScissors.userData.light(c.world.lightAt(bladeX, bladeZ, 0.5));
+    fallbackScissors.visible = true;
+  }
 
   let known = false;
   const roamer = c.env.denizens?.add({
+    id: 'floor-warden',
     x: wpA.x, z: wpA.z, r: 0.26, tall: 1.45, heading: 0,
     group: rig.group,
     light: (rgb) => rig.light(rgb),
+    snipTarget: () => (rule.phase === 'chasing' ? { id: 'floor-warden', r: 0.34, priority: 2 } : false),
+    snip() {
+      if (rule.phase !== 'chasing') return false;
+      rule = parryWarden(rule);
+      c.env.play('clack', roamer.x, roamer.z, 9);
+      c.survived('floor-warden');
+      return { ok: true, target: 'floor-warden' };
+    },
     update(dt, time, me) {
       const inRoom = c.world.current() === c.rt;
       const dist = Math.hypot(me.x - roamer.x, me.z - roamer.z);
@@ -81,6 +143,7 @@ export function build(c) {
       const contactClear = furnitureClear(c.world, roamer.x, roamer.z, me.x, me.z, .035);
       if (!known && dist < 9 && c.env.sees(roamer.x, roamer.z, { radius: 0.5 })) { known = true; c.met('floor-warden'); }
 
+      const nav = rule.phase === 'chasing' ? routeToward(c.world, roamer.x, roamer.z, me.x, me.z, { needsOpenDoor: true }) : null;
       const res = stepWarden(rule, {
         dt,
         dist,
@@ -88,6 +151,7 @@ export function build(c) {
         insideRoom: inRoom,
         clearLine,
         contactClear,
+        doorBlocked: !!nav?.doorBlocked,
       });
       rule = res.state;
 
@@ -98,16 +162,15 @@ export function build(c) {
       if (res.snipped) c.env.play('snip', roamer.x, roamer.z, 9);
       if (res.trippedNow) {
         c.survived('floor-warden');                                   // (outrun for as long as it takes: that is getting away from him)
+        c.env.play('snip', roamer.x, roamer.z, 10);
         c.env.play('crack', roamer.x, roamer.z, 10);
         c.env.play('thunk', roamer.x, roamer.z, 10);
-        c.env.interfere(0.6);
+        c.env.interfere(0.65);
       }
       if (res.despawned) {
         roamer.gone = true;
-        if (!remnant.parent) c.world.scene.add(remnant);
-        remnant.position.set(roamer.x, c.world.floorY(roamer.x, roamer.z), roamer.z);
-        remnant.userData.light(c.world.lightAt(roamer.x, roamer.z, 0.5));
-        remnant.visible = true;
+        c.env.interfere(0.45);
+        dropWardenScissors(roamer.x, roamer.z, rig.group.rotation.y);
         return;
       }
 
@@ -121,9 +184,11 @@ export function build(c) {
         const wantYaw = Math.atan2(nextGoal.x - roamer.x, nextGoal.z - roamer.z);
         rig.group.rotation.y += clamp(turnTo(rig.group.rotation.y, wantYaw), -dt * 5, dt * 5);
       } else if (rule.phase === 'chasing' && res.speed > 0) {
-        const nav = routeToward(c.world, roamer.x, roamer.z, me.x, me.z);
-        went = stepWalker(c.world, roamer, nav.tx, nav.tz, res.speed * dt);
-        const wantYaw = Math.atan2(nav.tx - roamer.x, nav.tz - roamer.z);
+        // (the way is found before the rule is stepped, for the door it may be shut out by; on the moment the chase begins
+        // there is none yet, and he does not stand a moment waiting for one)
+        const way = nav || routeToward(c.world, roamer.x, roamer.z, me.x, me.z, { needsOpenDoor: true });
+        went = stepWalker(c.world, roamer, way.tx, way.tz, res.speed * dt, { closedDoor: way.closedDoor });
+        const wantYaw = Math.atan2(way.tx - roamer.x, way.tz - roamer.z);
         rig.group.rotation.y += clamp(turnTo(rig.group.rotation.y, wantYaw), -dt * 9.5, dt * 9.5);
         if (dist < 2.6 && clearLine) c.env.interfere(clamp((2.6 - dist) * 0.25, 0, 0.68));
       }
@@ -140,7 +205,8 @@ export function build(c) {
       }
     },
     dispose() {
-      remnant.removeFromParent();
+      hatRemnant.removeFromParent();
+      fallbackScissors.removeFromParent();
     },
   });
 }

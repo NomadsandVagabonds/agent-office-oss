@@ -1,20 +1,23 @@
 // Pure rule for The Floor Warden (the safety marshall who enforces NO RUNNING
 // IN CORRIDORS by sprinting after runners with giant office scissors).
 // Walk calmly (`playerSpeed <= 2.55`) and he stays on peaceful patrol. Run near
-// him and he blows his pea-whistle and sprints at 3.45 m/s. Evade him for 8
-// seconds and he trips headlong onto his own scissors and despawns.
+// him and he blows his pea-whistle and sprints at 3.18 m/s. Outrun him for 6.5
+// seconds — or slam a fire door shut in his face mid-sprint — and he trips
+// headlong onto his own scissors and leaves them behind on the carpet.
 
 export const WARDEN = Object.freeze({
   runSpeedThreshold: 2.55,
   hearRadius: 11.5,
   patrolSpeed: 0.92,
-  chaseSpeed: 3.45,
+  chaseSpeed: 3.18,
   catchRadius: 0.66,
-  evadeDuration: 8.0,
-  tripDuration: 0.85,
+  evadeDuration: 6.5,
+  doorTripAfter: 0.7,
+  tripDuration: 1.1,
   snipEvery: 0.27,
   hurts: 2,                  // hearts the scissors cost, where there are hearts
   calm: 6,                   // seconds he goes back to his rounds and notices nothing, having made his point
+  dropsItem: 'scissors',     // what remains on the carpet once he falls on his own blades
 });
 
 export const createWardenState = () => ({
@@ -34,6 +37,12 @@ export const createWardenState = () => ({
 /** The scissors had somebody, who is still here: he has made his point, and goes back to his rounds. */
 export function releaseWarden(s) { return { ...s, phase: 'patrol', caught: false, chaseTimer: 0, calm: WARDEN.calm }; }
 
+/** Clashing blades against him mid-sprint forces him to stand down for a moment. */
+export function parryWarden(s) {
+  if (s.phase !== 'chasing') return s;
+  return releaseWarden(s);
+}
+
 export function stepWarden(s, o) {
   const {
     dt,
@@ -42,6 +51,7 @@ export function stepWarden(s, o) {
     insideRoom = false,
     clearLine = false,
     contactClear = true,
+    doorBlocked = false,
   } = o;
 
   let { phase, chaseTimer, tripTimer, snipTimer, patrolDir, caught } = s;
@@ -94,7 +104,7 @@ export function stepWarden(s, o) {
       snipped = true;
     }
 
-    if (chaseTimer >= WARDEN.evadeDuration) {
+    if (chaseTimer >= WARDEN.evadeDuration || (doorBlocked && chaseTimer >= WARDEN.doorTripAfter)) {
       phase = 'tripping';
       tripTimer = 0;
       trippedNow = true;

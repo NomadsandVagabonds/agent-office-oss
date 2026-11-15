@@ -14,7 +14,9 @@ import { MAKERS } from './cast/index.js';
 import { createWalk } from './cast/walk.js';
 import { hangDoors } from './doorleaf.js';
 
-export function createStalkers(env) {
+// Optional private co-op adapters: a bounded review cast, and a visitor scope per tick.
+// Single-player callers keep the seeded cast and their existing env.player.
+export function createStalkers(env, options = {}) {
   const level = env.level;
   const W = () => env.world;
   const walk = createWalk(env);
@@ -54,7 +56,11 @@ export function createStalkers(env) {
       // (who it was is noted before the hit is made: the visit begins to end inside it, and asks)
       const before = taker; taker = k;
       const hit = env.health?.damage(n);
-      if (hit) { if (!hit.dead) taker = before; return { landed: !!hit.ok, dead: !!hit.dead, ended: !!hit.dead }; }
+      if (hit) {
+        const ended = !!hit.dead && !options.hasSurvivor?.();
+        if (!ended) taker = before;
+        return { landed: !!hit.ok, dead: !!hit.dead, ended };
+      }
       if (member.disposition === 'hunts') { env.end('caught'); return { landed: true, dead: true, ended: true }; }
       taker = before;
       return { landed: false, dead: false, ended: false };
@@ -80,7 +86,7 @@ export function createStalkers(env) {
     fire(x, z) { const f = env.inventory?.fire?.threatAt?.(x, z, W().floorY(x, z)); return f ? { x: f.x, z: f.z, remaining: f.remaining } : null; },
   });
   const live = [];
-  for (const cast of castFor(env.visit, level.depth)) {
+  for (const cast of (options.members?.map(id => ({ id })) ?? castFor(env.visit, level.depth))) {
     const member = CAST.find((m) => m.id === cast.id), make = MAKERS[cast.id];
     if (!member || !make) continue;
     // (things: what it has put in the level · bodies: what of it nobody walks through · away: the room it is standing in has gone, and it with it)
@@ -135,7 +141,11 @@ export function createStalkers(env) {
       if (follower && !follower.away) tag(follower, dt);
       for (const k of live) {
         if (k.dead || k.away) continue;                                    // (somebody who is not here does nothing here)
-        try { k.it.update?.(dt, env.clock); } catch (err) { console.warn(`[backrooms] ${k.id} has stopped`, err); k.dead = true; if (k.member.music === 'mascot') env.sound?.stopMascot?.(); }
+        try {
+          const tick = () => k.it.update?.(dt, env.clock);
+          if (options.withVisitor) options.withVisitor(k.id, k.it.at?.(), tick);
+          else tick();
+        } catch (err) { console.warn(`[backrooms] ${k.id} has stopped`, err); k.dead = true; if (k.member.music === 'mascot') env.sound?.stopMascot?.(); }
       }
     },
     /** What goes down the stairs with you: the mascot's (as ever: { awake, face, card, lost }), and under `others` whatever anybody else wants kept. */
@@ -203,6 +213,15 @@ export function createStalkers(env) {
     get follower() { return follower ? { x: follower.x, z: follower.z } : null; },
     get figure() { return pirate?.figure ?? null; },
     of: (id) => live.find((k) => k.id === id)?.it ?? null,
+    snipTargets() {
+      const out = [];
+      for (const k of live) {
+        if (k.dead || k.away) continue;                                    // (somebody who is away with a room cannot be reached either)
+        const list = k.it.snipTargets?.();
+        if (Array.isArray(list)) out.push(...list);
+      }
+      return out;
+    },
     dispose() {
       for (const k of live) { try { k.it.dispose?.(); } catch { /* it is going anyway */ } }
       if (follower) { const i = W().bodies.indexOf(follower.body); if (i >= 0) W().bodies.splice(i, 1); follower.g.removeFromParent(); }

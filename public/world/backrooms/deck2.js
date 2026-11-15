@@ -33,6 +33,7 @@ import { serverChasmStash } from './rooms/server-chasm/rule.js';
 import { PLAN as HALL_PLAN, partsOf as hallParts } from './rooms/unsure-hall/rule.js';
 import { homeStash } from './rooms/show-home/layout.js';
 import { plenumStash } from './rooms/drop-plenum/rule.js';
+import { cubicleGridStash } from './rooms/cubicle-grid/rule.js';
 import { fill } from './words.js';
 
 const cornerStash = (r, side) => (side < 0
@@ -415,13 +416,38 @@ export const MORE_DECK = [
     big: true,
     weight: 1.0,
     lights: 'dark',
-    themes: { yellow: 1.5, night: 1.4, archive: 1.2, fitout: 1.1 },
+    themes: { yellow: 1.5, night: 1.4, archive: 1.2, fitout: 1.1, exec: 1.1 },
     module: './rooms/drop-plenum.js',
     stash: plenumStash,
     roll: (R, o) => ({
       zone: R.pick(['4B-RET', '7A-NORTH', 'SUB-3', 'PLM-9']),
       supervisor: (o.agents.length ? R.pick(o.agents) : 'FACILITIES').slice(0, 14).toUpperCase(),
       ductTone: R.pick([0, 1]),
+    }),
+  },
+  { id: 'last-light', name: 'The Last Light', landmark: 'the long hall losing its lights',
+    module: './rooms/last-light.js', resident: 'lamplighter', items: ['torch'], caught: 1, fire: 'ignores',
+    w: [6, 7], d: [20, 22], h: [2.8, 3.0], ports: ['back'], big: true,
+    weight: .85, lights: 'normal', needs: ['beam'], themes: { night: 1.5, archive: 1.2 },
+    stash: r => [r.W/2-1.4, -r.D*.17-.65, r.W/2-.5, -r.D*.17+.65],
+    roll: R => ({face:R.int(0,7)}) },
+  {
+    id: 'cubicle-grid',
+    resident: 'pit-clerks', items: ['paper'], caught: 2, fire: 'fears',
+    doors: 'own',
+    name: 'The Open-Plan Pit',
+    landmark: 'the sunken cubicle grid you walk across on top',
+    w: [14, 16], d: [16, 18], h: [3.2, 3.6],
+    ports: ['back'],
+    big: true,
+    weight: 1.0,
+    lights: 'normal',
+    themes: { yellow: 1.5, archive: 1.4, night: 1.3, fitout: 1.3, exec: 1.2 },
+    module: './rooms/cubicle-grid.js',
+    stash: cubicleGridStash,
+    roll: (R, o) => ({
+      dept: (o.projects.length ? R.pick(o.projects) : R.pick(['RETENTION', 'BILLING', 'COMPLIANCE', 'QA'])).slice(0, 12).toUpperCase(),
+      brokenSide: R.pick([-1, 1]),
     }),
   },
 ];

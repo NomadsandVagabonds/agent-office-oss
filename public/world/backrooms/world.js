@@ -351,7 +351,7 @@ export async function buildWorld(kit, level, env, tick) {
     lightingTime = t;
     world.lightingTime = t;
     for (const rt of rooms) refreshBanks(rt);
-    if (env.lighting && world.lightAt) for (const f of world.furniture) {
+    if ((env.lighting || world.hasLighting) && world.lightAt) for (const f of world.furniture) {
       if (!f.lightTint || !f.group.visible || f.away) continue;
       const rt = world.roomAt(f.x, f.z);
       f.lightTint.fromArray(world.lightAt(f.x, f.z, (f.y + f.top) / 2 - (rt?.def.y || 0)));
@@ -428,6 +428,7 @@ export async function buildWorld(kit, level, env, tick) {
     return rt.level * rt.u.dim.value * (rt.lighting ? localLightScale(rt.lighting, rt.lights, rt.lightLevels, p.x, p.z) : 1);
   };
   world.dispose = () => { scene.traverse((o) => { if (o.userData.dispose) o.userData.dispose(); }); scene.clear(); };
+  world.hasLighting = rooms.some(rt => !!rt.lighting);
   world.updateLighting(0);
   return world;
 }
@@ -484,7 +485,7 @@ function roomContext(world, rt) {
       world.scene.add(group);
       const record = { id: group.name, type: p.type, label: FURNITURE[p.type], room: rt.id, ...worldFootprint(f, def, toWorld), surfaceY: (def.y || 0) + f.top, group, collider: null };
       p.owner = record; record.placement = p; record.attachments = [];
-      if (env.lighting) record.lightTint = new THREE.Vector3(1, 1, 1);
+      if (env.lighting || rt.lighting) record.lightTint = new THREE.Vector3(1, 1, 1);
       furnitureGroups.push(record); world.furniture.push(record);
     }
     const parentFor = foot => furnitureGroups.find(f => f.type !== 'chair' && onFurniture(f.placement.foot, foot));
@@ -788,7 +789,7 @@ function roomContext(world, rt) {
         const mesh = new THREE.Mesh(geo, kit.surface({ map: opt.map || (batch.vox ? null : kit.tex.white()), vox: batch.vox, room: rt.u, cutout: opt.cutout, flick: geo.userData.flick, banks: geo.userData.banks, side: opt.side }));
         mesh.position.set(-pv[0], -pv[1], -pv[2]);
         holder.add(mesh); holder.userData.mesh = mesh;
-        if (moving && env.lighting && !opt.unlit) mesh.userData.followFurnitureLight = f => {
+        if (moving && (env.lighting || rt.lighting) && !opt.unlit) mesh.userData.followFurnitureLight = f => {
           mesh.geometry = kit.geometry(batch, [], WHITE);
           delete mesh.material.defines.BANKS; delete mesh.material.defines.FLICK;
           mesh.material.uniforms.uDim = {value:1}; mesh.material.uniforms.uFlick = {value:1};
