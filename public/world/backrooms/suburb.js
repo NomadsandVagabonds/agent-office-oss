@@ -40,7 +40,7 @@ const CELLS = {
   flamingo: [448, 0, 24, 40], flamingoBack: [472, 0, 24, 40],
   hillA: [0, 40, 96, 36], hillB: [96, 40, 96, 36], hose: [208, 40, 32, 32],
   tree: [0, 96, 64, 112], treeBack: [64, 96, 64, 112], duck: [128, 96, 32, 28], duckBack: [160, 96, 32, 28], bush: [192, 96, 48, 32],
-  corn: [256, 96, 48, 80], mallA: [304, 96, 96, 48], mallB: [400, 96, 96, 48], carSide: [304, 148, 108, 44], vanSide: [412, 148, 100, 44], pickupSide: [412, 196, 100, 44],
+  corn: [256, 96, 48, 80], mallA: [304, 96, 96, 48], mallB: [400, 96, 96, 48], carSide: [304, 148, 108, 44], vanSide: [412, 148, 100, 44], pickupSide: [412, 196, 100, 44], hedge: [128, 128, 64, 96],
 };
 const SW = 512, SH = 256;
 
@@ -142,6 +142,10 @@ const DRAW = {
     garble(g, 'DELIVRY', 6, 11, 22, 8, { color: '#7a7a76', size: 6, mess: 0.6 }, 5); garble(g, 'FOR YOU', 34, 11, 22, 8, { color: '#7a7a76', size: 6, mess: 0.6 }, 9); },
   pickupSide: (g) => { g.fillStyle = '#e9e7e0'; g.beginPath(); g.moveTo(2, 36); g.lineTo(2, 20); g.lineTo(44, 20); g.lineTo(46, 7); g.lineTo(70, 7); g.lineTo(80, 20); g.lineTo(98, 23); g.lineTo(98, 36); g.fill(); g.fillStyle = '#39414a'; g.beginPath(); g.moveTo(49, 20); g.lineTo(50, 10); g.lineTo(68, 10); g.lineTo(76, 20); g.fill();
     P(g, '#bdbab0', 2, 27, 96, 2); P(g, '#bdbab0', 44, 20, 1, 16); blob(g, '#1d1d1f', [[20, 36, 9, 9], [80, 36, 9, 9]]); blob(g, '#9a9a96', [[20, 36, 4, 4], [80, 36, 4, 4]]); P(g, '#f3e7a6', 95, 23, 3, 4); for (const [x, y] of [[8, 13], [18, 11], [30, 14]]) { P(g, '#c8a473', x, y, 9, 8); P(g, '#a9824f', x, y + 3, 9, 1); } },
+  // a hedge, clipped square, far too tall: leaf on leaf, a few gone brown, and something pale a long way in
+  hedge: (g, w, h) => { P(g, '#2f5f2c', 0, 0, w, h); let k = 77; const r = () => { k = (Math.imul(k, 1664525) + 1013904223) >>> 0; return k / 4294967296; };
+    for (let i = 0; i < 520; i++) { const x = r() * w, y = r() * h; g.fillStyle = ['#3f7a3a', '#4f8f45', '#27522a', '#356b32', '#5a9a4c'][Math.floor(r() * 5)]; g.beginPath(); g.ellipse(x, y, 1.6 + r() * 1.6, 0.9 + r(), r() * 3, 0, 7); g.fill(); }
+    for (let i = 0; i < 9; i++) P(g, '#8a7a3a', r() * w, r() * h, 2, 1); P(g, '#1c3a1c', 0, h - 6, w, 6); for (let x = 3; x < w; x += 9) P(g, '#5a4026', x, h - 6, 2, 6); P(g, '#e9e3cf', 40, 41, 2, 2); P(g, '#e9e3cf', 45, 41, 2, 2); },
   corn, mallA: (g, w, h) => mall(g, w, h, 0), mallB: (g, w, h) => mall(g, w, h, 1),
   bush: (g) => { blob(g, '#4f8f45', [[14, 20, 13, 12], [30, 18, 14, 14], [24, 24, 20, 8]]); blob(g, '#6fae58', [[12, 16, 5, 4], [32, 12, 6, 4]]); },
 };
@@ -357,8 +361,18 @@ export function lawn(c, opt = {}) {
     }
   }
   // what is on the walls: clouds, mostly. In some rooms a field of corn, or a row of shops, as described to whoever drew them
-  const paint = opt.paint || R.pick(['sky', 'sky', 'sky', 'corn', 'corn', 'mall', 'mall']), art = setArt(c.kit), low = paint === 'corn' ? 2.75 : paint === 'mall' ? 1.95 : 1.55;
+  // (a passage is an alley: more often than not it runs between hedges)
+  const alley = Math.min(W, D) < 4 && room.kind === 'plain';
+  const paint = opt.paint || (alley && R.chance(0.6) ? 'hedge' : R.pick(['sky', 'sky', 'sky', 'corn', 'corn', 'mall', 'mall'])), art = setArt(c.kit), low = paint === 'corn' ? 2.75 : paint === 'mall' ? 1.95 : 1.55;
   c.rt.paint = paint;
+  if (paint === 'hedge') {
+    for (const side of ['back', 'left', 'right', 'front']) for (const [a, b] of c.spans(side, 0.05, 1.2)) {
+      const [w, h] = art.size('hedge'), n = Math.max(1, Math.round((b - a) / w)), each = (b - a) / n;
+      for (let i = 0; i < n; i++) { const at = a + (i + 0.5) * each, p = c.wallAt(side, at, 0.3), hh = Math.min(h, c.ceilAt(p.x, p.z) - 0.14), q = c.wallAt(side, at, 0.02), U = q.U, uv = art.uv('hedge', (i + side.length) % 2 === 1);
+        sheet(cutBatch(c), [q.x - U[0] * each / 2, 0.11, q.z - U[2] * each / 2], [q.x + U[0] * each / 2, 0.11, q.z + U[2] * each / 2], [q.x + U[0] * each / 2, 0.11 + hh, q.z + U[2] * each / 2], [q.x - U[0] * each / 2, 0.11 + hh, q.z - U[2] * each / 2], 2, 3, [uv[0], uv[1], uv[2], uv[1] + (uv[3] - uv[1]) * (hh / h)]); }
+    }
+    return;
+  }
   if (paint !== 'sky') for (const side of ['back', 'left', 'right', 'front']) for (const [a, b] of c.spans(side, 0.12, paint === 'corn' ? 2.2 : 1.5)) {
     const [w, h] = art.size(paint === 'corn' ? 'corn' : 'mallA'), n = Math.floor((b - a) / w);
     for (let i = 0; i < n; i++) onWall(c, paint === 'corn' ? 'corn' : (i + (side.length % 2)) % 2 ? 'mallB' : 'mallA', side, a + (b - a - n * w) / 2 + (i + 0.5) * w, 0.11 + h / 2, { off: 0.006 });
