@@ -13,7 +13,10 @@
 //              longer at the bottom, a wall that gives when it is held
 import { mount, drawLogo, voidTile } from './art.js';
 import { rollName, cleanName, cleanMessage, cleanEntry } from './core/book.mjs';
+import { SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, SKIN, HAIR_COLORS, OUTFIT_COLORS, hashId, resolveLook, sanitizeLookPatch } from './core/look.mjs';
+import { DEFAULT_PERK, PERK_LIST, cleanPerk, resolvePerk } from './core/perks.mjs';
 import { cleanRecord, emptyRecord } from './core/runs.mjs';
+import { paintFlatCharacter } from './world/art/character.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, ...kids) => { const e = document.createElement(tag); if (cls) e.className = cls; e.append(...kids.filter((k) => k !== null && k !== undefined && k !== false)); return e; };
@@ -32,22 +35,201 @@ drawLogo($('logo'));
 $('top').style.backgroundImage = `url(${voidTile()})`;
 document.querySelector('.plugrow').style.backgroundImage = $('top').style.backgroundImage;
 
-/* ---- signing: a name and a message ----------------------------------------------------------------- */
+/* ---- signing, employee pass & kit studio --------------------------------------------------------- */
 const ME = 'blockrooms:me';
-// (a name is typed; until one is, the visitor is down under a made-up one)
+// (a name is typed; until one is, the visitor is down under a made-up one; looks & kits stay optional)
 let me = (() => {
   const was = store.get(ME) || {}, typed = cleanName(was.name), spare = cleanName(was.spare) || rollName();
-  return { name: typed || spare, typed: !!typed && typed !== spare, spare, message: cleanMessage(was.message) || '', sign: was.sign !== false };
+  const patch = sanitizeLookPatch(was.look).look;
+  const customLook = !!was.customLook && Object.keys(patch).length > 0;
+  return {
+    name: typed || spare,
+    typed: !!typed && typed !== spare,
+    spare,
+    message: cleanMessage(was.message) || '',
+    sign: was.sign !== false,
+    customLook,
+    look: customLook ? patch : {},
+    perk: cleanPerk(was.perk),
+  };
 })();
-const keep = () => store.set(ME, { name: me.name, spare: me.spare, message: me.message, sign: me.sign });
+const keep = () => store.set(ME, {
+  name: me.name,
+  spare: me.spare,
+  message: me.message,
+  sign: me.sign,
+  customLook: me.customLook,
+  look: me.customLook ? me.look : {},
+  perk: me.perk,
+});
 keep();
+
+const SPECIES_DEFAULT_SKIN = {
+  human: '#e6b184',
+  robot: '#8a93a8',
+  goblin: '#7fa35a',
+  dog: '#c99a62',
+  cat: '#e0a060',
+  alien: '#e0a638',
+};
+const SKIN_SWATCHES = [...SKIN, '#e3aa84', '#e0a638', '#6d4428', '#7fa35a', '#5f8a6a', '#c99a62', '#e0a060', '#9a9aa6', '#3a3a44', '#8a93a8', '#8fd3ff'];
+const HAIR_SWATCHES = [...HAIR_COLORS, '#db7093', '#b53a2a', '#ff5ad6', '#3bd6ff', '#62d94f', '#ff8a1f', '#e8e4f0'];
+const OUTFIT_SWATCHES = [...OUTFIT_COLORS, '#dfa22e', '#e88fb0', '#1f4ea8', '#d9483b', '#d9a426', '#24262e'];
+const WILD_SKINS = ['#e0a638', '#7fa35a', '#8fd3ff', '#f4a8c0', '#ffd83a', '#b695ff', '#e0a060', '#5fd6a8'];
+const WILD_DYES = ['#db7093', '#ff5ad6', '#3bd6ff', '#62d94f', '#ff8a1f', '#ffd83a', '#9c5aff', '#ff3a26', '#ffffff'];
+const WILD_OUTFITS = ['#dfa22e', '#e88fb0', '#ff3a26', '#2a52be', '#ffd83a', '#1f9d55', '#9c3bc9', '#ff7a1f', '#1eb8c9', '#d9388a'];
+
+const LABELS = {
+  species: { human: 'Human', alien: 'Alien', robot: 'Robot', goblin: 'Goblin', dog: 'Dog', cat: 'Cat' },
+  hair: { short: 'Short', side: 'Side Part', long: 'Long', braids: 'Side Braid', bun: 'Top Bun', mohawk: 'Mohawk', bald: 'Bald', cap: 'Cap', beanie: 'Beanie' },
+  facial: { none: 'Clean', lashes: 'Lashes & Hoops', mustache: 'Mustache', beard: 'Beard' },
+  outfit: { tee: 'T-Shirt', hoodie: 'Hoodie', suit: 'Suit & Tie', consul: 'Consul Suit', vest: 'Vest', cardigan: 'Cardigan', tunic: 'Choker Tunic' },
+  accessory: {
+    none: 'None', goggles: 'Goggles', cowboy: 'Cowboy Hat', hoops: 'Hoop Rings', glasses: 'Glasses', shades: 'Shades', monocle: 'Monocle', eyepatch: 'Eyepatch', headphones: 'Phones',
+    flower: 'Flower', partyhat: 'Party Hat', propeller: 'Propeller', tophat: 'Top Hat', crown: 'Crown', halo: 'Halo',
+  },
+};
+
+const PRESETS = [
+  { label: 'Yellow Alien', look: { species: 'alien', skin: '#e0a638', hair: 'bald', hairColor: '#241608', facial: 'none', outfit: 'consul', outfitColor: '#dfa22e', accessory: 'goggles' } },
+  { label: 'Pink Cowgirl', look: { species: 'human', skin: '#e3aa84', hair: 'braids', hairColor: '#db7093', facial: 'lashes', outfit: 'tunic', outfitColor: '#e88fb0', accessory: 'cowboy' } },
+  { label: '98 Intern', look: { species: 'human', skin: '#f3cda8', hair: 'side', hairColor: '#4a2f1a', facial: 'none', outfit: 'vest', outfitColor: '#3f7f9a', accessory: 'glasses' } },
+  { label: 'Exec Suit', look: { species: 'human', skin: '#cd8d5e', hair: 'short', hairColor: '#9aa0ac', facial: 'mustache', outfit: 'suit', outfitColor: '#5a5a66', accessory: 'monocle' } },
+  { label: 'Goblin Clerk', look: { species: 'goblin', skin: '#6b9460', hair: 'short', hairColor: '#241608', facial: 'mustache', outfit: 'cardigan', outfitColor: '#8a5a8f', accessory: 'glasses' } },
+  { label: 'CRT Bot', look: { species: 'robot', skin: '#8a93a8', hair: 'short', hairColor: '#15151c', facial: 'none', outfit: 'hoodie', outfitColor: '#b5483f', accessory: 'headphones' } },
+  { label: 'Night Cat', look: { species: 'cat', skin: '#3a3a44', hair: 'beanie', hairColor: '#15151c', facial: 'none', outfit: 'hoodie', outfitColor: '#3f8a72', accessory: 'shades' } },
+  { label: 'Party Dog', look: { species: 'dog', skin: '#e3c79a', hair: 'short', hairColor: '#7d5836', facial: 'none', outfit: 'tee', outfitColor: '#c9893f', accessory: 'partyhat' } },
+  { label: 'Propeller IT', look: { species: 'human', skin: '#dcab8b', hair: 'bald', hairColor: '#4a2f1a', facial: 'beard', outfit: 'tee', outfitColor: '#5a6fa8', accessory: 'propeller' } },
+  { label: 'VIP Cat', look: { species: 'cat', skin: '#f1e6d2', hair: 'bun', hairColor: '#caa05a', facial: 'none', outfit: 'suit', outfitColor: '#8a5a8f', accessory: 'crown' } },
+];
+
+const POSES = [
+  ['idle', 'Idle'],
+  ['walk', 'Walk'],
+  ['sip', 'Coffee'],
+  ['typing', 'Typing'],
+  ['blocked', 'Panic'],
+];
+const BACKDROPS = [
+  ['paper', 'B1 Paper'],
+  ['pool', 'B2 Pool'],
+  ['carpet', 'B3 Exec'],
+  ['void', 'Void'],
+];
+
+const activeLook = () => (me.customLook ? resolveLook(`visitor:${me.name}`, me.look) : resolveLook(`visitor:${me.name}`));
+
+function blitPixCrop(ctx, pix, { sx = 0, sy = 0, sw = pix.w, sh = pix.h, dx = 0, dy = 0, scale = 2, back = false } = {}) {
+  for (let r = 0; r < sh; r++) {
+    const j = sy + r;
+    if (j < 0 || j >= pix.h) continue;
+    for (let c = 0; c < sw; c++) {
+      const srcI = sx + c;
+      const i = back ? pix.w - 1 - srcI : srcI;
+      if (i < 0 || i >= pix.w) continue;
+      const cell = pix.cells[j * pix.w + i];
+      if (!cell) continue;
+      const col = cell[cell.length - 1];
+      ctx.fillStyle = `rgb(${col.r},${col.g},${col.b})`;
+      ctx.fillRect(dx + c * scale, dy + r * scale, scale, scale);
+    }
+  }
+}
+
+function paintBackdrop(ctx, w, h, kind) {
+  if (kind === 'pool') {
+    ctx.fillStyle = '#d4ece8'; ctx.fillRect(0, 0, w, h);
+    const floorY = Math.round(h * 0.78);
+    ctx.strokeStyle = 'rgba(78, 128, 134, 0.35)'; ctx.lineWidth = 1;
+    for (let x = 0; x < w; x += 16) { ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, floorY); ctx.stroke(); }
+    for (let y = 0; y < floorY; y += 16) { ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(w, y + 0.5); ctx.stroke(); }
+    ctx.fillStyle = '#5fb3bf'; ctx.fillRect(0, floorY, w, h - floorY);
+    ctx.fillStyle = '#9ee2ea'; ctx.fillRect(0, floorY, w, 4);
+    return;
+  }
+  if (kind === 'carpet') {
+    const railY = Math.round(h * 0.54), floorY = Math.round(h * 0.8);
+    ctx.fillStyle = '#efe2c4'; ctx.fillRect(0, 0, w, railY);
+    ctx.fillStyle = '#774e29'; ctx.fillRect(0, railY, w, floorY - railY);
+    ctx.fillStyle = '#bd8a53'; ctx.fillRect(0, railY, w, 4);
+    ctx.fillStyle = '#8d3b3b'; ctx.fillRect(0, floorY, w, h - floorY);
+    ctx.fillStyle = '#e7c79a'; ctx.fillRect(0, floorY + 4, w, 2);
+    return;
+  }
+  if (kind === 'void') {
+    const floorY = Math.round(h * 0.8);
+    ctx.fillStyle = '#07070b'; ctx.fillRect(0, 0, w, floorY);
+    ctx.fillStyle = 'rgba(255, 232, 160, 0.65)';
+    for (let y = 10; y < floorY - 18; y += 26) {
+      for (let x = 14; x < w - 18; x += 38) {
+        ctx.fillRect(x, y, 14, 4);
+      }
+    }
+    ctx.fillStyle = '#181820'; ctx.fillRect(0, floorY, w, h - floorY);
+    ctx.fillStyle = '#2d2d3a'; ctx.fillRect(0, floorY, w, 3);
+    return;
+  }
+  // B1 yellow wallpaper
+  const floorY = Math.round(h * 0.8);
+  ctx.fillStyle = '#d6c56c'; ctx.fillRect(0, 0, w, floorY);
+  ctx.fillStyle = 'rgba(165, 138, 42, 0.24)';
+  for (let x = 6; x < w; x += 18) ctx.fillRect(x, 0, 3, floorY);
+  ctx.fillStyle = '#fffbe0'; ctx.fillRect(Math.round(w * 0.22), 0, Math.round(w * 0.56), 4);
+  ctx.fillStyle = '#5b4127'; ctx.fillRect(0, floorY - 6, w, 6);
+  ctx.fillStyle = '#6f6a50'; ctx.fillRect(0, floorY, w, h - floorY);
+}
+
+function drawPassMug() {
+  const canvas = $('pass-mug');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  paintBackdrop(ctx, 56, 56, 'paper');
+  const pix = paintFlatCharacter(activeLook(), { pose: 'idle' });
+  blitPixCrop(ctx, pix, { sx: 2, sy: 20, sw: 28, sh: 28, dx: 0, dy: 2, scale: 2 });
+}
+
+function drawBarcode(seedText) {
+  const canvas = $('card-barcode');
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  let s = hashId(seedText) || 1;
+  const next = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s; };
+  ctx.fillStyle = '#111111';
+  let x = 6;
+  while (x < canvas.width - 6) {
+    const w = 1 + (next() % 3);
+    if (x + w < canvas.width - 6) ctx.fillRect(x, 2, w, canvas.height - 4);
+    x += w + 1 + (next() % 3);
+  }
+}
+
+function refreshPassSummary() {
+  const p = resolvePerk(me.perk);
+  const mode = $('pass-mode');
+  mode.textContent = me.customLook ? 'CUSTOM EMPLOYEE PASS' : 'RANDOM VISITOR (DEFAULT)';
+  mode.classList.toggle('custom', me.customLook);
+  $('pass-kit').textContent = `${p.code} · ${p.name} (${p.cost}/1 PT)`;
+  $('pass-stats').textContent = `${p.maxHealth} ♥ · ${p.pockets} POCKETS · ${clock(p.cameraStart)} TAPE`;
+  drawPassMug();
+}
+
 const nameBox = $('name'), nameSays = $('name-says'), messageBox = $('message'), messageSays = $('message-says');
-function named(value) {
+const creatorNameBox = $('creator-name');
+let syncStudioUI = () => {};
+
+function named(value, fromStudio = false) {
   const typed = cleanName(value), bad = !typed && !!String(value).trim();
   nameBox.classList.toggle('bad', bad); nameSays.classList.toggle('bad', bad);
   nameSays.textContent = bad ? '16 characters at most. Letters and numbers.' : '';
   me = { ...me, name: typed || me.spare, typed: !!typed };
+  if (fromStudio) nameBox.value = me.typed ? me.name : '';
+  else creatorNameBox.value = me.typed ? me.name : '';
+  nameBox.placeholder = me.spare;
+  creatorNameBox.placeholder = me.spare;
   keep();
+  refreshPassSummary();
+  syncStudioUI();
 }
 function said(value) {
   const text = cleanMessage(value), bad = text === null;
@@ -56,14 +238,396 @@ function said(value) {
   me = { ...me, message: text || '' };
   keep();
 }
+function rollVisitorName() {
+  const spare = rollName();
+  me = { ...me, spare, name: spare, typed: false };
+  nameBox.value = ''; nameBox.placeholder = spare;
+  creatorNameBox.value = ''; creatorNameBox.placeholder = spare;
+  named('');
+}
+
 nameBox.placeholder = me.spare; nameBox.value = me.typed ? me.name : '';
-nameBox.addEventListener('input', () => named(nameBox.value));
+creatorNameBox.placeholder = me.spare; creatorNameBox.value = me.typed ? me.name : '';
+nameBox.addEventListener('input', () => named(nameBox.value, false));
+creatorNameBox.addEventListener('input', () => named(creatorNameBox.value, true));
 messageBox.value = me.message;
 messageBox.addEventListener('input', () => said(messageBox.value));
-$('reroll').addEventListener('click', () => { const spare = rollName(); me = { ...me, spare, name: spare, typed: false }; nameBox.value = ''; nameBox.placeholder = spare; named(''); });
+$('reroll').addEventListener('click', rollVisitorName);
+$('creator-reroll').addEventListener('click', rollVisitorName);
 $('optin').checked = me.sign;
 $('optin').addEventListener('change', (e) => { me = { ...me, sign: e.target.checked }; keep(); });
 $('signin').addEventListener('submit', (e) => { e.preventDefault(); location.href = PLAY; });
+
+/* ---- studio workbench (#creator) ------------------------------------------------------------------- */
+const studio = {
+  open: false,
+  built: false,
+  raf: 0,
+  back: false,
+  zoom: false,
+  pose: 'idle',
+  backdrop: 'paper',
+  tab: 'look',
+  pins: new Set(),
+  rollCount: 0,
+  thumbs: {},
+  swatches: {},
+  perkCards: new Map(),
+  returnFocus: null,
+};
+
+function setCustomLook(patch) {
+  const base = activeLook();
+  const merged = { ...base, ...patch };
+  const clean = sanitizeLookPatch(merged).look;
+  me = { ...me, customLook: true, look: clean };
+  keep();
+  refreshPassSummary();
+  syncStudioUI();
+}
+
+function rollRandomLook() {
+  studio.rollCount += 1;
+  const seed = `${Date.now()}:${Math.random()}:${studio.rollCount}`;
+  const h = hashId(seed);
+  const pickFrom = (arr, shift) => arr[(h >>> shift) % arr.length];
+  const wild = $('wild-colors').checked;
+  const cur = activeLook();
+  const nextSpecies = studio.pins.has('species') ? cur.species : pickFrom(SPECIES, 0);
+  const speciesSkin = SPECIES_DEFAULT_SKIN[nextSpecies] || SKIN[0];
+  const next = {
+    species: nextSpecies,
+    skin: studio.pins.has('skin') ? cur.skin : (wild ? pickFrom(WILD_SKINS, 3) : (nextSpecies === 'human' ? pickFrom(SKIN, 3) : speciesSkin)),
+    hair: studio.pins.has('hair') ? cur.hair : pickFrom(HAIR, 6),
+    hairColor: studio.pins.has('hairColor') ? cur.hairColor : pickFrom(wild ? WILD_DYES : HAIR_COLORS, 9),
+    facial: studio.pins.has('facial') ? cur.facial : pickFrom(FACIAL, 12),
+    outfit: studio.pins.has('outfit') ? cur.outfit : pickFrom(OUTFIT, 15),
+    outfitColor: studio.pins.has('outfitColor') ? cur.outfitColor : pickFrom(wild ? WILD_OUTFITS : OUTFIT_COLORS, 18),
+    accessory: studio.pins.has('accessory') ? cur.accessory : pickFrom(ACCESSORY, 21),
+  };
+  setCustomLook(next);
+}
+
+$('quick-roll').addEventListener('click', () => rollRandomLook());
+
+function renderStage(ms = 0) {
+  const canvas = $('char-stage');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  paintBackdrop(ctx, canvas.width, canvas.height, studio.backdrop);
+
+  const t = calm ? 0 : ms / 1000;
+  const look = activeLook();
+  const blink = !calm && studio.pose === 'idle' && (Math.floor(t * 2.8) % 11 === 0);
+  const step = studio.pose === 'walk' ? (calm ? 1 : (Math.floor(t * 5.2) % 2 ? 1 : -1)) : 0;
+  const bob = !calm && studio.pose === 'walk' && Math.floor(t * 10.4) % 2 ? -2 : 0;
+  const pix = paintFlatCharacter(look, {
+    back: studio.back,
+    pose: studio.pose === 'walk' ? 'idle' : studio.pose,
+    blocked: studio.pose === 'blocked',
+    blink,
+    t,
+    step,
+  });
+
+  if (studio.zoom) {
+    blitPixCrop(ctx, pix, { sx: 0, sy: 20, sw: 32, sh: 32, dx: 0, dy: 12 + bob, scale: 6, back: studio.back });
+  } else {
+    // subtle shadow oval under the shoes
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.26)';
+    ctx.fillRect(68, 174, 56, 8);
+    ctx.fillRect(60, 176, 72, 4);
+    blitPixCrop(ctx, pix, { sx: 0, sy: 16, sw: 32, sh: 48, dx: 32, dy: -8 + bob, scale: 4, back: studio.back });
+  }
+}
+
+function stageTick(ms) {
+  if (!studio.open) { studio.raf = 0; return; }
+  renderStage(ms);
+  if (!calm) studio.raf = requestAnimationFrame(stageTick);
+}
+
+function refreshThumbnails() {
+  if (!studio.built) return;
+  const base = activeLook();
+  for (const [trait, list] of Object.entries(studio.thumbs)) {
+    for (const item of list) {
+      const sample = { ...base, [trait]: item.val };
+      if (trait === 'species' && item.val !== base.species) sample.skin = SPECIES_DEFAULT_SKIN[item.val] || base.skin;
+      if (trait === 'hair' && (sample.species === 'robot' || sample.species === 'alien')) sample.species = 'human';
+      if (trait === 'facial' && (sample.species === 'robot' || sample.species === 'alien')) sample.species = 'human';
+      const ctx = item.canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.fillStyle = '#e6dec2';
+      ctx.fillRect(0, 0, 56, 56);
+      ctx.fillStyle = '#c9be99';
+      ctx.fillRect(0, 46, 56, 10);
+      const pix = paintFlatCharacter(sample, { pose: 'idle' });
+      const sy = trait === 'outfit' ? 34 : 20;
+      blitPixCrop(ctx, pix, { sx: 2, sy, sw: 28, sh: 28, dx: 0, dy: 0, scale: 2 });
+    }
+  }
+}
+
+function selectStudioTab(which) {
+  studio.tab = which === 'perks' ? 'perks' : 'look';
+  const onLook = studio.tab === 'look';
+  $('tab-look').classList.toggle('on', onLook);
+  $('tab-look').setAttribute('aria-selected', String(onLook));
+  $('tab-perks').classList.toggle('on', !onLook);
+  $('tab-perks').setAttribute('aria-selected', String(!onLook));
+  $('panel-look').hidden = !onLook;
+  $('panel-perks').hidden = onLook;
+}
+
+function equipPerk(id) {
+  me = { ...me, perk: cleanPerk(id) };
+  keep();
+  refreshPassSummary();
+  syncStudioUI();
+}
+
+function buildStudioOnce() {
+  if (studio.built) return;
+  studio.built = true;
+
+  $('pose-bar').replaceChildren(...POSES.map(([id, label]) => {
+    const b = el('button', id === studio.pose ? 'on' : '', label);
+    b.type = 'button';
+    b.dataset.pose = id;
+    b.addEventListener('click', () => {
+      studio.pose = id;
+      for (const n of $('pose-bar').querySelectorAll('button')) n.classList.toggle('on', n.dataset.pose === id);
+      renderStage(performance.now());
+    });
+    return b;
+  }));
+
+  $('backdrop-bar').replaceChildren(...BACKDROPS.map(([id, label]) => {
+    const b = el('button', id === studio.backdrop ? 'on' : '', label);
+    b.type = 'button';
+    b.dataset.bg = id;
+    b.addEventListener('click', () => {
+      studio.backdrop = id;
+      for (const n of $('backdrop-bar').querySelectorAll('button')) n.classList.toggle('on', n.dataset.bg === id);
+      renderStage(performance.now());
+    });
+    return b;
+  }));
+
+  $('preset-bar').replaceChildren(...PRESETS.map((pr) => {
+    const b = el('button', '', pr.label);
+    b.type = 'button';
+    b.addEventListener('click', () => {
+      const cur = activeLook();
+      const next = { ...pr.look };
+      for (const pinned of studio.pins) next[pinned] = cur[pinned];
+      setCustomLook(next);
+    });
+    return b;
+  }));
+
+  const makeThumbGroup = (hostId, trait, values) => {
+    const items = values.map((val) => {
+      const canvas = el('canvas', 'thumb-pic');
+      canvas.width = 56; canvas.height = 56;
+      canvas.setAttribute('aria-hidden', 'true');
+      const btn = el('button', 'thumb-btn', canvas, el('span', '', LABELS[trait][val] || val));
+      btn.type = 'button';
+      btn.addEventListener('click', () => {
+        const patch = { [trait]: val };
+        if (trait === 'species' && !studio.pins.has('skin')) patch.skin = SPECIES_DEFAULT_SKIN[val] || SKIN[0];
+        if (trait === 'species' && val === 'alien' && !studio.pins.has('hair')) patch.hair = 'bald';
+        setCustomLook(patch);
+      });
+      return { val, btn, canvas };
+    });
+    studio.thumbs[trait] = items;
+    $(hostId).replaceChildren(...items.map((it) => it.btn));
+  };
+
+  makeThumbGroup('pick-species', 'species', SPECIES);
+  makeThumbGroup('pick-hair', 'hair', HAIR);
+  makeThumbGroup('pick-facial', 'facial', FACIAL);
+  makeThumbGroup('pick-outfit', 'outfit', OUTFIT);
+  makeThumbGroup('pick-accessory', 'accessory', ACCESSORY);
+
+  const makeSwatches = (hostId, inputId, trait, colors) => {
+    const btns = colors.map((hex) => {
+      const b = el('button', 'swatch');
+      b.type = 'button';
+      b.style.background = hex;
+      b.title = hex;
+      b.setAttribute('aria-label', `${trait} ${hex}`);
+      b.addEventListener('click', () => setCustomLook({ [trait]: hex }));
+      return { hex: hex.toLowerCase(), btn: b };
+    });
+    studio.swatches[trait] = btns;
+    $(hostId).replaceChildren(...btns.map((x) => x.btn));
+    $(inputId).addEventListener('input', (e) => setCustomLook({ [trait]: e.target.value }));
+  };
+
+  makeSwatches('pick-skin', 'color-skin', 'skin', SKIN_SWATCHES);
+  makeSwatches('pick-hair-color', 'color-hair', 'hairColor', HAIR_SWATCHES);
+  makeSwatches('pick-outfit-color', 'color-outfit', 'outfitColor', OUTFIT_SWATCHES);
+
+  for (const pinBtn of $('creator').querySelectorAll('[data-pin]')) {
+    pinBtn.addEventListener('click', () => {
+      const k = pinBtn.dataset.pin;
+      if (studio.pins.has(k)) studio.pins.delete(k); else studio.pins.add(k);
+      syncStudioUI();
+    });
+  }
+
+  $('perk-grid').replaceChildren(...PERK_LIST.map((p) => {
+    const icon = el('i');
+    icon.dataset.sprite = p.icon;
+    icon.dataset.scale = '3';
+    const mods = el('ul', 'perk-mods',
+      ...(p.upsides.length || p.downsides.length
+        ? [
+          ...p.upsides.map((u) => el('li', 'up', `+ ${u}`)),
+          ...p.downsides.map((d) => el('li', 'down', `- ${d}`)),
+        ]
+        : [el('li', 'neutral', 'Zero upsides, zero downsides.')]),
+    );
+    const card = el('button', 'perk-card',
+      el('div', 'perk-card-top',
+        icon,
+        el('div', 'perk-title-wrap',
+          el('span', 'perk-title', p.name),
+          el('span', 'perk-dept', `${p.code} · ${p.dept}`),
+        ),
+        el('span', `perk-cost${p.cost === 0 ? ' free' : ''}`, `${p.cost} PT`),
+      ),
+      el('p', 'perk-desc', p.summary),
+      mods,
+    );
+    card.type = 'button';
+    card.addEventListener('click', () => {
+      const nextId = me.perk === p.id && p.id !== DEFAULT_PERK ? DEFAULT_PERK : p.id;
+      equipPerk(nextId);
+    });
+    studio.perkCards.set(p.id, card);
+    return card;
+  }));
+  mount($('perk-grid'));
+}
+
+syncStudioUI = () => {
+  if (!studio.built) return;
+  const look = activeLook();
+  const perk = resolvePerk(me.perk);
+
+  $('card-code').textContent = perk.code;
+  $('card-vitals').replaceChildren(
+    el('span', 'hearts', '♥'.repeat(perk.maxHealth)),
+    el('span', '', `${perk.pockets} POCKETS`),
+    el('span', '', `${clock(perk.cameraStart)} TAPE`),
+    el('span', '', `${perk.fov}° LENS`),
+  );
+  drawBarcode(`${me.name}|${me.customLook ? JSON.stringify(look) : 'random'}|${perk.id}`);
+
+  const pill = $('look-mode-pill');
+  pill.textContent = me.customLook ? 'Saved custom pass' : 'Random each visit';
+  pill.classList.toggle('custom', me.customLook);
+  $('use-random-look').disabled = !me.customLook;
+  $('hair-note').textContent = look.species === 'robot' ? '(Robot chassis uses steel dome + antenna)' : '';
+
+  for (const [trait, list] of Object.entries(studio.thumbs)) {
+    const robotDim = look.species === 'robot' && (trait === 'hair' || trait === 'facial');
+    for (const it of list) {
+      it.btn.classList.toggle('on', me.customLook && look[trait] === it.val);
+      it.btn.classList.toggle('dim', robotDim);
+    }
+  }
+  for (const [trait, list] of Object.entries(studio.swatches)) {
+    const val = String(look[trait] || '').toLowerCase();
+    for (const it of list) it.btn.classList.toggle('on', me.customLook && it.hex === val);
+  }
+  $('color-skin').value = look.skin;
+  $('color-hair').value = look.hairColor;
+  $('color-outfit').value = look.outfitColor;
+
+  for (const pinBtn of $('creator').querySelectorAll('[data-pin]')) {
+    const pinned = studio.pins.has(pinBtn.dataset.pin);
+    pinBtn.classList.toggle('on', pinned);
+    pinBtn.textContent = pinned ? 'PINNED' : 'PIN';
+  }
+
+  $('tab-perks').textContent = `2. DEPARTMENT KIT (${perk.cost}/1 PT)`;
+  const meter = $('perk-meter');
+  meter.textContent = `${perk.cost} / 1 PERK POINT — ${perk.name.toUpperCase()}`;
+  meter.classList.toggle('spent', perk.cost > 0);
+  $('perk-clear').disabled = perk.id === DEFAULT_PERK;
+  for (const [id, card] of studio.perkCards) {
+    const active = id === perk.id;
+    card.classList.toggle('on', active);
+    card.setAttribute('aria-pressed', String(active));
+  }
+
+  refreshThumbnails();
+  renderStage(performance.now());
+};
+
+function openCreator(open) {
+  const win = $('creator');
+  if (open) {
+    buildStudioOnce();
+    studio.returnFocus = document.activeElement;
+    studio.open = true;
+    win.hidden = false;
+    syncStudioUI();
+    $('creator-close').focus();
+    if (!calm && !studio.raf) studio.raf = requestAnimationFrame(stageTick);
+  } else {
+    studio.open = false;
+    if (studio.raf) { cancelAnimationFrame(studio.raf); studio.raf = 0; }
+    win.hidden = true;
+    studio.returnFocus?.focus?.();
+  }
+}
+
+$('open-creator').addEventListener('click', () => openCreator(true));
+$('creator-close').addEventListener('click', () => openCreator(false));
+$('creator-done').addEventListener('click', () => openCreator(false));
+$('creator-enter').addEventListener('click', () => { keep(); location.href = PLAY; });
+$('creator').addEventListener('keydown', (e) => { if (e.key === 'Escape') openCreator(false); });
+$('tab-look').addEventListener('click', () => selectStudioTab('look'));
+$('tab-perks').addEventListener('click', () => selectStudioTab('perks'));
+$('char-stage').addEventListener('click', () => {
+  studio.back = !studio.back;
+  $('view-turn').textContent = studio.back ? 'Turn: Back' : 'Turn: Front';
+  renderStage(performance.now());
+});
+$('view-turn').addEventListener('click', () => {
+  studio.back = !studio.back;
+  $('view-turn').textContent = studio.back ? 'Turn: Back' : 'Turn: Front';
+  renderStage(performance.now());
+});
+$('view-zoom').addEventListener('click', () => {
+  studio.zoom = !studio.zoom;
+  $('view-zoom').textContent = studio.zoom ? 'View: Mugshot' : 'View: Full';
+  renderStage(performance.now());
+});
+$('roll-look').addEventListener('click', () => rollRandomLook());
+$('unpin-all').addEventListener('click', () => { studio.pins.clear(); syncStudioUI(); });
+$('use-random-look').addEventListener('click', () => {
+  me = { ...me, customLook: false, look: {} };
+  keep();
+  refreshPassSummary();
+  syncStudioUI();
+});
+$('perk-clear').addEventListener('click', () => equipPerk(DEFAULT_PERK));
+$('creator-reset').addEventListener('click', () => {
+  studio.pins.clear();
+  me = { ...me, customLook: false, look: {}, perk: DEFAULT_PERK };
+  keep();
+  refreshPassSummary();
+  syncStudioUI();
+});
+
+refreshPassSummary();
 
 /* ---- what this browser remembers ------------------------------------------------------------------- */
 const mine = cleanRecord(store.get('office-backrooms:record')?.record || emptyRecord());

@@ -53,7 +53,7 @@ export const INVENTORY_CSS = `
   left: 50%;
   transform: translateX(-50%);
   pointer-events: auto;
-  width: min(384px, calc(100% - 32px));
+  width: min(calc(var(--slots, 6) * 62px + 12px), calc(100% - 32px));
   bottom: 3.5%;
 }
 .br-inventory .br-inv-meta {
@@ -99,7 +99,7 @@ export const INVENTORY_CSS = `
 .br-inventory .br-inv-health.is-low { color: #de746b; }
 .br-inventory .br-inv-bar {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--slots, 6), minmax(0, 1fr));
   gap: 5px;
   padding: 0;
   background: transparent;
@@ -492,6 +492,10 @@ export const INVENTORY_CSS = `
   .br-inventory .br-inv-bar { gap: 4px; }
   .br-inventory .br-inv-slot { height: 54px; padding: 6px 3px 8px; }
   .br-inventory .br-inv-icon { width: 40px; height: 40px; }
+  .br-inventory[data-slots="7"] .br-inv-slot,
+  .br-inventory[data-slots="8"] .br-inv-slot { height: 50px; padding: 5px 2px 7px; }
+  .br-inventory[data-slots="7"] .br-inv-icon,
+  .br-inventory[data-slots="8"] .br-inv-icon { width: 32px; height: 32px; }
   .br-inventory .br-inv-caption { font-size: 10px; }
   .br-inventory .br-inv-panel,
   .br-inventory.has-health .br-inv-panel {

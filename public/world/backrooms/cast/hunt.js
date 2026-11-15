@@ -63,7 +63,7 @@ export function heave(previous, dt, item, active = true) {
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /** How long it must have a line of sight to you, d metres off, before it has noticed. */
-export function noticeTime(d) { return HUNT.notice[0] + (HUNT.notice[1] - HUNT.notice[0]) * clamp(d / HUNT.far, 0, 1); }
+export function noticeTime(d, far = HUNT.far) { return HUNT.notice[0] + (HUNT.notice[1] - HUNT.notice[0]) * clamp(d / Math.max(0.1, far), 0, 1); }
 
 /** Knowing nothing: where it starts, and where it ends up every time it has lost you. */
 export function lost() { return { mode: 'wander', last: null, seen: 0, since: 0, t: 0, stuck: 0, blind: false, spent: 0, room: null, from: null, been: [], found: false, gaveUp: false }; }
@@ -89,7 +89,8 @@ export function shown(me) { return { ...lost(), mode: 'chase', last: { x: me.x, 
  */
 export function knows(s, dt, sense, rnd = Math.random) {
   const n = { ...s, found: false, gaveUp: false };
-  const inSight = !!sense.los && sense.d <= HUNT.far;
+  const far = sense.far ?? HUNT.far, noticeScale = sense.noticeScale ?? 1;
+  const inSight = !!sense.los && sense.d <= far;
   if (!inSight) n.blind = false;
   n.spent = Math.max(0, (s.spent || 0) - dt);
   const sees = inSight && !n.blind && !(n.spent > 0);
@@ -98,7 +99,7 @@ export function knows(s, dt, sense, rnd = Math.random) {
   // and having given you up, it takes no more notice of you until it has lost sight of you and seen you afresh
   n.stuck = sense.cannot && (s.mode === 'chase' || s.mode === 'search') ? s.stuck + dt : 0;
   if (n.stuck >= HUNT.look) { n.mode = 'wander'; n.gaveUp = true; n.blind = inSight; n.seen = 0; n.stuck = 0; n.t = 0; n.room = null; return n; }
-  if (sees && (s.mode === 'chase' || n.seen >= noticeTime(sense.d))) {
+  if (sees && (s.mode === 'chase' || n.seen >= noticeTime(sense.d, far) * noticeScale)) {
     n.found = s.mode !== 'chase';
     n.mode = 'chase'; n.since = 0; n.t = 0; n.room = null;
     n.last = { x: sense.me.x, z: sense.me.z, room: sense.me.room };
@@ -109,6 +110,11 @@ export function knows(s, dt, sense, rnd = Math.random) {
     n.since = s.since + dt;
     if (n.since <= HUNT.after) { n.last = { x: sense.me.x, z: sense.me.z, room: sense.me.room }; return n; }
     n.mode = 'search'; n.t = 0;
+    return n;
+  }
+  if (sense.heard && !(n.spent > 0)) {
+    n.mode = 'search'; n.since = 0; n.t = 0; n.room = null;
+    n.last = { x: sense.me.x, z: sense.me.z, room: sense.me.room };
     return n;
   }
   if (s.mode === 'search') {
@@ -156,12 +162,12 @@ export function atHandle() { return { t: 0, next: 0.35 }; }
  * @param watched  somebody is looking at the door (from either side)
  * @returns {{t, next, rattle:boolean, open:boolean}}  rattle: you hear it this moment · open: the door is open
  */
-export function handle(h, dt, watched) {
+export function handle(h, dt, watched, holdTime = HUNT.door) {
   if (watched) return { t: h.t, next: h.next, rattle: false, open: false };
   const t = h.t + dt;
   let next = h.next - dt, rattle = false;
   if (next <= 0) { rattle = true; next = HUNT.rattle; }
-  return { t, next, rattle, open: t >= HUNT.door };
+  return { t, next, rattle, open: t >= holdTime };
 }
 
 /** Will it bother getting down to look, this time you have crawled away from it? (Rolled once, when you go through.) */

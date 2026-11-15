@@ -29,6 +29,7 @@ const DESCRIPTIONS = Object.freeze({
   'not-prepared': 'Prepare the flashlight with tape first.',
   'already-mounted': 'This flashlight is already on the camera.',
   'mount-occupied': 'The camera already has a flashlight.',
+  'mount-disabled': 'This kit cannot mount a flashlight to the camera.',
 });
 const failure = (reason, plan = {}) => ({ ...plan, ok: false, reason, description: DESCRIPTIONS[reason] || 'Cannot combine these objects.' });
 
@@ -56,13 +57,18 @@ export function resolveCraftInput(snapshot, ref) {
 }
 
 /** Order-independent recipe preview. No records or services are mutated. */
-export function previewCraft(snapshot, refs, { paperCount = 1 } = {}) {
+export function previewCraft(snapshot, refs, { paperCount = 1, canMountTorch, fireSecondsPerSheet, batterySeconds } = {}) {
   if (!Array.isArray(refs) || refs.length !== 2 || refs.some(ref => !ref)) return failure('missing-input');
   const inputs = refs.map(ref => resolveCraftInput(snapshot, ref));
   const invalid = inputs.find(input => !input.ok);
   if (invalid) return invalid;
   const [a, b] = inputs;
   if ((a.type === 'camera' && b.type === 'camera') || (a.item && b.item && a.item.id === b.item.id)) return failure('duplicate-input');
+  const mountAllowed = (canMountTorch ?? snapshot?.canMountTorch) !== false;
+  const rawSheetSec = fireSecondsPerSheet ?? snapshot?.fireSecondsPerSheet;
+  const sheetSeconds = Number.isFinite(rawSheetSec) && rawSheetSec > 0 ? rawSheetSec : FIRE_SECONDS_PER_SHEET;
+  const rawBattSec = batterySeconds ?? snapshot?.batterySeconds;
+  const camSeconds = Number.isFinite(rawBattSec) && rawBattSec > 0 ? rawBattSec : CAMERA_TUNING.batterySeconds;
   const of = type => inputs.find(input => input.type === type);
   const plan = recipe => ({ ok: true, recipe, ...RECIPES[recipe], inputs });
   if (of('battery') && of('torch')) {
@@ -71,14 +77,14 @@ export function previewCraft(snapshot, refs, { paperCount = 1 } = {}) {
     return charge === CRAFTING_TUNING.torchCharge ? failure('full-charge', out) : out;
   }
   if (of('battery') && of('camera')) {
-    const out = { ...plan('camera-battery'), seconds: CAMERA_TUNING.batterySeconds }, camera = of('camera').camera;
+    const out = { ...plan('camera-battery'), seconds: camSeconds }, camera = of('camera').camera;
     if (camera.depleted || camera.remaining === 0) return failure('depleted', out);
     return camera.remaining === camera.capacity ? failure('full-charge', out) : out;
   }
   if (of('paper') && of('lighter')) {
     const quantity = of('paper').item.quantity;
-    const out = { ...plan('paper-fire'), paperCount, maxPaper: quantity,
-      duration: Number.isSafeInteger(paperCount) ? paperCount * FIRE_SECONDS_PER_SHEET : 0 };
+    const out = { ...plan('paper-fire'), paperCount, maxPaper: quantity, secondsPerSheet: sheetSeconds,
+      duration: Number.isSafeInteger(paperCount) ? paperCount * sheetSeconds : 0 };
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > CRAFTING_TUNING.maxPaper) return failure('invalid-item', out);
     if (!Number.isSafeInteger(paperCount) || paperCount < 1 || paperCount > CRAFTING_TUNING.maxPaper) return failure('invalid-amount', out);
     return paperCount > quantity ? failure('insufficient', out) : out;
@@ -90,6 +96,7 @@ export function previewCraft(snapshot, refs, { paperCount = 1 } = {}) {
   if (of('torch') && of('camera')) {
     const out = plan('mount-torch'), torch = of('torch').item, camera = of('camera').camera;
     if (camera.depleted || camera.remaining === 0) return failure('depleted', out);
+    if (!mountAllowed) return failure('mount-disabled', out);
     if (!torch.prepared) return failure('not-prepared', out);
     if (snapshot.mountedTorch?.id === torch.id) return failure('already-mounted', out);
     if (snapshot.mountedTorch) return failure('mount-occupied', out);

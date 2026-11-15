@@ -63,8 +63,15 @@ export function makeItem(type, id, overrides = {}) {
  * Paper shares a slot up to ten sheets; other objects occupy one slot each.
  * Mutations never leak references. Drops retain charge, uses and quantities.
  */
-export function createInventory({ size = 6 } = {}) {
-  if (!Number.isInteger(size) || size < 1 || size > 6) throw new RangeError('Inventory has one to six slots.');
+export function createInventory({
+  size = 6,
+  canMountTorch = true,
+  fireSecondsPerSheet = CRAFTING_TUNING.fireSecondsPerSheet,
+  batterySeconds,
+  torchDrainRate = 1,
+} = {}) {
+  if (!Number.isInteger(size) || size < 1 || size > 8) throw new RangeError('Inventory has one to eight slots.');
+  const rate = Number.isFinite(torchDrainRate) && torchDrainRate > 0 ? torchDrainRate : 1;
   const slots = Array(size).fill(null);
   let selected = 0, holstered = false, activeTorch = null, mountedTorch = null, revision = 0, crafting = false;
   const fail = reason => ({ ok: false, reason });
@@ -234,7 +241,9 @@ export function createInventory({ size = 6 } = {}) {
     let cameraSnapshot;
     try { if (Array.isArray(refs) && refs.some(ref => ref?.device === 'camera') && typeof camera?.read === 'function') cameraSnapshot = camera.read(); }
     catch { return fail('camera-unavailable'); }
-    const plan = previewCraft({ ...read(), camera: cameraSnapshot }, refs, { paperCount });
+    const plan = previewCraft({ ...read(), camera: cameraSnapshot }, refs, {
+      paperCount, canMountTorch, fireSecondsPerSheet, batterySeconds,
+    });
     if (!plan.ok) return plan;
     const of = type => plan.inputs.find(input => input.type === type);
     if (plan.recipe === 'torch-battery') {
@@ -291,11 +300,26 @@ export function createInventory({ size = 6 } = {}) {
     return { ok: true, recipe: plan.recipe, action, consumed: [consumed], result,
       ...(plan.recipe === 'paper-fire' ? { paperCount: plan.paperCount, duration: plan.duration } : {}) };
   }
+  function mount(id) {
+    if (crafting) return fail('busy');
+    if (canMountTorch === false) return fail('mount-disabled');
+    if (typeof id !== 'string' || !id.trim()) return fail('invalid-input');
+    const index = slots.findIndex(other => other?.id === id);
+    const item = index >= 0 ? slots[index] : null;
+    if (!item || item.type !== 'torch') return fail('invalid-item');
+    if (!item.prepared) return fail('not-prepared');
+    if (mountedTorch?.id === id) return fail('already-mounted');
+    if (mountedTorch) return fail('mount-occupied');
+    mountedTorch = item;
+    slots[index] = null;
+    revision++;
+    return { ok: true, mountedTorch: copy(mountedTorch) };
+  }
   function tick(dt) {
     if (crafting || !Number.isFinite(dt) || dt <= 0 || !torchPower()) return { changed: false, depleted: false };
     const item = activeLight();
     if (!item) { activeTorch = null; revision++; return { changed: true, depleted: false }; }
-    item.charge = Math.max(0, item.charge - dt);
+    item.charge = Math.max(0, item.charge - dt * rate);
     const depleted = item.charge === 0;
     if (depleted) activeTorch = null;
     revision++;
@@ -307,7 +331,7 @@ export function createInventory({ size = 6 } = {}) {
     slots.fill(null); selected = 0; holstered = false; activeTorch = null; mountedTorch = null; revision++;
   }
   return {
-    add, remove, select, useSelected, consumeSelected, combine, craft, toggleLight, torchPower, tick, clear, read,
+    add, remove, select, useSelected, consumeSelected, combine, craft, mount, toggleLight, torchPower, tick, clear, read,
     torchMounted: () => !!mountedTorch && activeTorch === mountedTorch.id,
   };
 }

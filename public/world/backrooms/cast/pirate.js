@@ -466,7 +466,12 @@ export function create(c) {
   function think(p, dt, los, d) {
     const w = W(), me = env.player.me, k0 = p.know, got = p.got || {};
     const choosing = k0.mode === 'wander' && (k0.room === null || got.cannot);
-    const k = p.know = knows(k0, dt, { los, d, me: { x: me.x, z: me.z, room: w.roomAt(me.x, me.z)?.id ?? null }, room: w.roomAt(p.x, p.z)?.id ?? null,
+    const perk = env.perk, crouched = !!me.crouching;
+    const far = HUNT.far * (crouched ? (perk?.crouchSightScale ?? 1) : 1);
+    const noticeScale = crouched ? (perk?.crouchNoticeScale ?? 1) : 1;
+    const alertFar = perk?.sprintAlertFar ?? 0;
+    const heard = alertFar > 0 && !!me.sprinting && !crouched && d <= alertFar && walk.steps(p, me) <= 2;
+    const k = p.know = knows(k0, dt, { los, d, far, noticeScale, heard, me: { x: me.x, z: me.z, room: w.roomAt(me.x, me.z)?.id ?? null }, room: w.roomAt(p.x, p.z)?.id ?? null,
       at: !!got.there, cannot: !!got.cannot, exits: choosing ? walk.exits(p) : null });
     if (k.mode !== k0.mode || k.room !== k0.room) { p.got = null; p.handle = null; p.shove = null; }
     if (k.mode === 'chase') p.hunted = true;
@@ -502,7 +507,8 @@ export function create(c) {
     if (tooNear(p, c.fire(p.x, p.z))) { p.x = bx; p.z = bz; p.got = { went: 0, there: false, cannot: true, door: null }; p.handle = null; p.shove = null; return 0; }
     if (got.door) {
       // a shut door: it works the handle, and you can hear it — unless you are watching the door (cast/hunt.js)
-      const h = p.handle = handle(p.handle || atHandle(), step, env.doors.watched(got.door));
+      const holdTime = HUNT.door * (got.door.by === 'you' ? (env.perk?.doorHoldScale ?? 1) : 1);
+      const h = p.handle = handle(p.handle || atHandle(), step, env.doors.watched(got.door), holdTime);
       if (h.rattle) env.play('rattle', got.door.x, got.door.z, 9);
       if (h.open) { env.doors.open(got.door, 'it'); p.handle = null; }
     } else p.handle = null;

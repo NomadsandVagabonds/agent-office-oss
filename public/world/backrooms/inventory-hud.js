@@ -130,12 +130,13 @@ function heartIcon(id) {
   svg.append(body); return { svg, layers };
 }
 
-export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onOpen } = {}) {
+export function createInventoryHud({ size = 6, host, onSelect, onUse, onDrop, onCraft, onOpen } = {}) {
+  const slotCount = Number.isInteger(size) && size >= 1 && size <= 8 ? size : 6;
   const id = ++instance, icons = createInventoryIcons();
   const itemIcon = (type, item) => icons.icon(type, item) || fallbackItemIcon(type, item);
   const style = h('style', { id:`backrooms-inventory-css-${id}` }, CSS); document.head.append(style);
   const titleId = `br-inventory-title-${id}`, craftTitleId = `br-inventory-craft-${id}`;
-  const count = h('span.br-inv-eyebrow', 'POCKETS  0 / 6');
+  const count = h('span.br-inv-eyebrow', `POCKETS  0 / ${slotCount}`);
   const close = h('button.br-inv-close', { type:'button', 'aria-label':'Close inventory', title:'Close inventory' }, '×');
   const specimen = h('div.br-inv-specimen');
   const title = h('h2.br-inv-title', { id:titleId });
@@ -173,10 +174,12 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
   const caption = h('div.br-inv-caption');
   const heart = heartIcon(id);
   const health = h('div.br-inv-health', { hidden:true, role:'img', 'aria-label':'Health 4 of 4' }, heart.svg);
-  const bar = h('div.br-inv-bar', { role:'group', 'aria-label':'Six inventory slots' });
+  const bar = h('div.br-inv-bar', { role:'group', 'aria-label': slotCount === 6 ? 'Six inventory slots' : `${slotCount} inventory slots` });
+  bar.style.setProperty('--slots', String(slotCount));
   const noticeEl = h('div.br-inv-notice', { role:'status', 'aria-live':'polite', 'aria-atomic':'true' });
   const meta = h('div.br-inv-meta', health, caption), pack = h('div.br-inv-pack', meta, bar);
-  const el = h('div.br-inventory', { 'aria-label':'Inventory' }, panel, pack, noticeEl);
+  pack.style.setProperty('--slots', String(slotCount));
+  const el = h('div.br-inventory', { 'aria-label':'Inventory', dataset:{ slots:String(slotCount) } }, panel, pack, noticeEl);
   const owner = host || document.body;
   owner.append(el);
   // createInput lets owned events reach native buttons and scrolling. Keep
@@ -185,7 +188,7 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
   const ownedEvents = ['keydown', 'keyup', 'keypress', 'pointerdown', 'pointerup', 'pointercancel', 'pointermove',
     'mousedown', 'mouseup', 'mousemove', 'wheel', 'click', 'dblclick', 'contextmenu', 'touchstart', 'touchmove', 'touchend', 'touchcancel'];
   for (const type of ownedEvents) el.addEventListener(type, stopBubble);
-  let snapshot = { slots:Array(6).fill(null), selected:0, holstered:false, activeTorch:null, revision:0 };
+  let snapshot = { slots:Array(slotCount).fill(null), selected:0, holstered:false, activeTorch:null, revision:0 };
   let opened = false, combineFrom = null, craftRefs = [null, null], focusedIngredient = 1, paperCount = 1, craftError = '';
   let noticeLeft = 0, previousFocus = null, disposed = false, detailType = null, signature = '', mountedIconReady = false;
   const prompt = owner.querySelector('.br-use'), stamps = [...owner.querySelectorAll('.br-osd.bl,.br-osd.brr')];
@@ -215,7 +218,7 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
   const overlayObserver = new ResizeObserver(layoutOverlays);
   for (const node of [el, pack, meta, prompt, ...stamps]) if (node) overlayObserver.observe(node);
 
-  const slots = Array.from({ length:6 }, (_, i) => {
+  const slots = Array.from({ length:slotCount }, (_, i) => {
     const icon = h('span.br-inv-icon-wrap'), amount = h('span.br-inv-count'), fill = h('i');
     const power = h('span.br-inv-power', { hidden:true, 'aria-hidden':'true' }, fill);
     const button = h('button.br-inv-slot', { type:'button', 'aria-label':`Slot ${i + 1}: empty`, 'aria-pressed':i === 0 ? 'true':'false', dataset:{ slot:i } },
@@ -234,7 +237,8 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
     onSelect?.(i, options); setOpen(true);
   }
   const blocked = () => !!snapshot.health?.dead || !!snapshot.camera?.depleted;
-  const canEat = () => !blocked() && !!snapshot.health && snapshot.health.current > 0 && snapshot.health.current < snapshot.health.max;
+  const snackCap = () => snapshot.maxSnackHealth ?? snapshot.health?.max ?? 4;
+  const canEat = () => !blocked() && !!snapshot.health && snapshot.health.current > 0 && snapshot.health.current < Math.min(snapshot.health.max, snackCap());
   const craftIngredient = item => !!item && ['battery', 'torch', 'paper', 'lighter', 'tape'].includes(item.type);
   const refEquals = (a, b) => !!a && !!b && (a.device ? a.device === b.device && a.id === b.id : a.slot === b.slot && a.id === b.id);
   const iconKey = item => item ? `${item.type}:${!!item.prepared}` : null;
@@ -264,7 +268,11 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
     if (item?.type === 'scissors') return `${item.uses} snip${item.uses === 1 ? '' : 's'} left`;
     if (item?.type === 'battery') return 'Fits flashlight or camera';
     if (item?.type === 'paper') return `${quantity(item)} / ${ITEM_DEFS.paper.maxStack} sheets`;
-    if (item?.type === 'snack') return snapshot.health && snapshot.health.current >= snapshot.health.max ? 'Health is full' : `Restores ${ITEM_DEFS.snack.healAmount} health`;
+    if (item?.type === 'snack') {
+      if (snapshot.health && snapshot.health.current >= snapshot.health.max) return 'Health is full';
+      if (snapshot.health && snapshot.health.current >= snackCap()) return 'Snack limit reached (50%)';
+      return `Restores ${ITEM_DEFS.snack.healAmount} health`;
+    }
     if (item?.type === 'lighter') return 'Reusable';
     if (item?.type === 'tape') return 'Fits a flashlight';
     return '';
@@ -294,7 +302,7 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
     const label = error || (plan.ok ? `${plan.label}${plan.recipe === 'paper-fire' ? ` · ${plan.duration}s` : ''}` : plan.description);
     let explanation = '';
     if (!error && plan.ok) {
-      explanation = plan.recipe === 'paper-fire' ? `${FIRE_SECONDS_PER_SHEET}s per sheet · lighter kept`
+      explanation = plan.recipe === 'paper-fire' ? `${plan.secondsPerSheet || FIRE_SECONDS_PER_SHEET}s per sheet · lighter kept`
         : plan.recipe === 'camera-battery' ? `+${remainingTime(plan.seconds)} camcorder power`
         : plan.recipe === 'torch-battery' ? 'Flashlight charge restored'
         : plan.recipe === 'tape-torch' ? 'Tape used · flashlight kept'
@@ -324,13 +332,21 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
     detail.hidden = inspectActions.hidden = crafting; craftView.hidden = cameraChoice.hidden = !crafting;
     panel.setAttribute('aria-labelledby', crafting ? craftTitleId : titleId);
     if (snapshot.health) {
-      const current = Math.max(0, Math.min(4, snapshot.health.current));
-      const label = `Health ${current} of ${snapshot.health.max}`;
+      const max = Math.max(1, Math.min(4, snapshot.health.max || 4));
+      const current = Math.max(0, Math.min(max, snapshot.health.current));
+      const label = `Health ${current} of ${max}`;
       if (health.getAttribute('aria-label') !== label) health.setAttribute('aria-label', label);
-      health.classList.toggle('is-low', current > 0 && current <= 2);
-      heart.layers.forEach((layer, i) => layer.setAttribute('visibility', i < current ? 'visible' : 'hidden'));
+      health.classList.toggle('is-low', current > 0 && (max === 4 ? current <= 2 : current < max));
+      const step = 16 / max;
+      heart.layers.forEach((layer, i) => {
+        if (i < max) {
+          layer.setAttribute('y', String((max - 1 - i) * step + .4));
+          layer.setAttribute('height', String(Math.max(1, step - .8)));
+        }
+        layer.setAttribute('visibility', i < current ? 'visible' : 'hidden');
+      });
     }
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < slotCount; i++) {
       const item = snapshot.slots[i], slot = slots[i], chosen = !snapshot.holstered && i === snapshot.selected, conditionText = conditionOf(item);
       slot.button.classList.toggle('is-selected', chosen);
       slot.button.classList.toggle('is-active', isLit(item));
@@ -348,7 +364,7 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
       if (item?.type === 'torch') slot.fill.style.transform = `scaleX(${percent(item) / 100})`;
     }
     text(caption, !snapshot.holstered && selected ? `${nameOf(selected)}${selected.type === 'torch' ? ` · ${percent(selected)}%` : selected.type === 'chalk' || selected.type === 'scissors' ? ' · ' + selected.uses : selected.type === 'paper' ? ' · ' + quantity(selected) + (quantity(selected) === 1 ? ' sheet' : ' sheets') : ''}` : '');
-    text(count, crafting ? 'COMBINE' : `POCKETS  ${snapshot.slots.filter(Boolean).length} / 6`);
+    text(count, crafting ? 'COMBINE' : `POCKETS  ${snapshot.slots.filter(Boolean).length} / ${slotCount}`);
     text(title, nameOf(selected));
     text(description, selected ? ITEM_DEFS[selected.type]?.description || '' : 'Pick up an object to carry it here.');
     text(condition, opened && noticeLeft > 0 ? noticeEl.textContent : snapshot.holstered && selected
@@ -470,7 +486,7 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
       return true;
     }
     if (!opened) return false;
-    if (/^[1-6]$/.test(key)) { if (!e.repeat) activateSlot(Number(key) - 1, { toggle: true }); return true; }
+    if (/^[1-8]$/.test(key) && Number(key) <= slotCount) { if (!e.repeat) activateSlot(Number(key) - 1, { toggle: true }); return true; }
     if (key === 'q') {
       if (!e.repeat && combineFrom === null) {
         if (use.hidden && !combine.hidden) beginCombine(); else if (!use.disabled) use.click();
@@ -480,7 +496,7 @@ export function createInventoryHud({ host, onSelect, onUse, onDrop, onCraft, onO
     if (key === 'g') { if (!e.repeat && combineFrom === null && !drop.disabled) drop.click(); return true; }
     if ((key === 'arrowleft' || key === 'arrowright') && document.activeElement?.matches('.br-inv-slot')) {
       const index = Number(document.activeElement.dataset.slot), direction = key === 'arrowright' ? 1 : -1;
-      slots[(index + direction + 6) % 6].button.focus(); return true;
+      slots[(index + direction + slotCount) % slotCount].button.focus(); return true;
     }
     return false;
   }
