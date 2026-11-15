@@ -166,19 +166,39 @@ async function visit(office, opt) {
   /* ---- the screen is ours from here ---------------------------------------------- */
   const render = (dt) => {
     if (state === 'done') return;
-    const p = vhs.layout(stage.size.w, stage.size.h), key = `${p.x},${p.y},${p.w},${p.h}`;
-    if (key !== pictureKey) { pictureKey = key; hud.layout(p); }
+    // (on a phone held upright the picture goes to the top of the screen and the thumbs have what is under it: hud.pictureTop)
+    const p = vhs.layout(stage.size.w, stage.size.h, hud.pictureTop?.(stage.size)), key = `${p.x},${p.y},${p.w},${p.h},${stage.size.w},${stage.size.h},${hud.thumbs ? 1 : 0}`;
+    if (key !== pictureKey) { pictureKey = key; hud.layout(p, stage.size); }
     vhs.render(paused ? 0 : dt);
   };
   stage.setView({ scene: blank, camera, render });
 
   /* ---- hands ----------------------------------------------------------------------- */
   const useIt = () => { if (canAct() && !inventory?.isOpen && currentUse) { const use = currentUse; try { use.use(use); } catch (err) { console.warn('[backrooms] use', err); } } };
+  // The light, under a thumb (touch.js): what F does, and one thing more. A key can pick the pocket first; a thumb has one
+  // button, so if there is a torch that works and it is not the one in the hand, it is taken out and switched on.
+  const lightNow = () => {
+    if (!inventory) return 'none';
+    if (inventory.torchPower() > 0) return 'on';
+    const s = inventory.model.read();
+    return s.mountedTorch || s.slots.some((item) => item?.type === 'torch' && item.charge > 0) ? 'off' : 'none';
+  };
+  let lightSeen = 0;                                      // (seconds until the button is told again whether there is a light)
+  function thumbLight() {
+    if (!inventory || !canAct() || inventory.isOpen) return;
+    const s = inventory.model.read(), held = s.holstered ? null : s.slots[s.selected];
+    if (!s.mountedTorch && !(held?.type === 'torch' && held.charge > 0)) {
+      const at = s.slots.findIndex((item) => item?.type === 'torch' && item.charge > 0);
+      if (at < 0) return;
+      inventory.select(at);
+    }
+    inventory.toggleLight(); lightSeen = 0;
+  }
   const input = createInput({ canvas, stage, hud, sound,
     owns: target => !!menu?.owns(target) || (!paused && !!inventory?.owns(target)),
     interceptKey: event => paused ? !!menu?.handleKey(event) : !!inventory?.handleKey(event),
     blocked: () => paused || !!inventory?.isOpen,
-    menu: () => setPaused(true), use: useIt, click: () => {}, wheel: () => {},
+    menu: () => setPaused(true), use: useIt, light: thumbLight, click: () => {}, wheel: () => {},
     key(k) {
       if (k === 'v') setPicture((vhs.level + 2) % 3);
       else if (k === 'm') changeSetting('mute', !sound.muted);
@@ -446,6 +466,7 @@ async function visit(office, opt) {
     torch += (wantTorch - torch) * (1 - Math.exp(-3 * dt));
     cur.kit.shared.uTorch.value = torch * 1.5;
     hud.flag('LIGHT', torch > 0.5);
+    if (hud.thumbs && (lightSeen -= dt) <= 0) { lightSeen = 0.2; hud.thumbs.set({ light: lightNow() }); }
     sound.setHum(light / 0.3);
     if (here?.flickers.length && here.flickerNow < 0.5 && Math.random() < 0.3) sound.play('tick', { vol: 0.7 });
     hud.batteryWarning((state === 'play' || state === 'drop') ? batteryWarning(survival?.camera.read().remaining) : null);
@@ -499,10 +520,16 @@ async function visit(office, opt) {
     }
   });
 
+  // A phone put in a pocket, or another app brought up over this one: the tape stops (the menu comes up) instead of the
+  // place going on humming to nobody. Coming back, it is there to be resumed.
+  const away = () => { if (typeof document !== 'undefined' && document.hidden && state === 'play' && !paused) setPaused(true); };
+  if (typeof document !== 'undefined') document.addEventListener?.('visibilitychange', away);
+
   function conclude() {
     if (state === 'done') return;
     state = 'done';
     off();
+    if (typeof document !== 'undefined') document.removeEventListener?.('visibilitychange', away);
     menu?.dispose();
     inventory?.dispose();
     survival?.dispose();

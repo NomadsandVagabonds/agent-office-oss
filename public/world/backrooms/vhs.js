@@ -82,13 +82,14 @@ const Signal = {
 };
 
 const Screen = {
-  uniforms: { tDiffuse: { value: null }, uPicture: { value: new THREE.Vector2(1, 1) }, uSoft: { value: 1 }, uLines: { value: 240 }, uScan: { value: 0.08 } },
+  // uPicture: how much of the window the picture takes, each way · uShift: how far its middle is from the window's, in windows (y up)
+  uniforms: { tDiffuse: { value: null }, uPicture: { value: new THREE.Vector2(1, 1) }, uShift: { value: new THREE.Vector2(0, 0) }, uSoft: { value: 1 }, uLines: { value: 240 }, uScan: { value: 0.08 } },
   vertexShader: QUAD,
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform vec2 uPicture; uniform float uSoft, uLines, uScan;
+    uniform sampler2D tDiffuse; uniform vec2 uPicture, uShift; uniform float uSoft, uLines, uScan;
     varying vec2 vUv;
     void main() {
-      vec2 p = (vUv - 0.5) / uPicture + 0.5;
+      vec2 p = (vUv - 0.5 - uShift) / uPicture + 0.5;
       if (p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
       vec3 c = texture2D(tDiffuse, p).rgb;
       float dy = 0.25 / uLines;
@@ -119,9 +120,12 @@ export function createVhs(renderer, camera, opt = {}) {
   let level = opt.level ?? 2, last = '', time = 0;
   const picture = { x: 0, y: 0, w: 1, h: 1 };            // where the picture sits in the window, CSS pixels
 
-  /** Fit the picture to the window. w, h in CSS pixels. */
-  function layout(w, h) {
-    const ratio = renderer.getPixelRatio(), key = `${w}x${h}@${ratio}/${level}`;
+  /**
+   * Fit the picture to the window. w, h in CSS pixels. `top`: where its top edge goes, px from the window's (a phone held
+   * upright has the picture at the top and its thumbs under it); with none, or no room to spare, it sits in the middle.
+   */
+  function layout(w, h, top = null) {
+    const ratio = renderer.getPixelRatio(), key = `${w}x${h}@${ratio}/${level}/${top ?? ''}`;
     if (key === last) return picture;
     last = key;
     const cw = w * ratio, ch = h * ratio;
@@ -137,7 +141,9 @@ export function createVhs(renderer, camera, opt = {}) {
     s.uLines.value = ih / 2;
     const perLine = ph / (ih / 2);                       // screen pixels per scan-line pair: too few and they would shimmer
     s.uScan.value = level > 0 ? 0.1 * Math.max(0, Math.min(1, (perLine - 2.4) / 1.6)) * (level === 2 ? 1 : 0.5) : 0;
-    Object.assign(picture, { w: pw / ratio, h: ph / ratio, x: (w - pw / ratio) / 2, y: (h - ph / ratio) / 2 });
+    const spare = h - ph / ratio, y = Number.isFinite(top) && top !== null && spare > 0 ? Math.max(0, Math.min(spare, top)) : spare / 2;
+    s.uShift.value.set(0, (spare / 2 - y) / h);            // (the shader counts upwards, the page downwards)
+    Object.assign(picture, { w: pw / ratio, h: ph / ratio, x: (w - pw / ratio) / 2, y });
     return picture;
   }
   function setLevel(next) {

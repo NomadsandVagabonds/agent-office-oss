@@ -114,6 +114,15 @@ a.brc-seed:focus-visible, a.brc-more:focus-visible { outline: 2px solid currentC
 @keyframes brc-in { from { opacity: 0; } }
 @keyframes brc-blink { 0% { opacity: .8; } 50% { opacity: 0; } }
 @media (max-width: 30em) { .brc-veil { font-size: 12.5px; padding: 14px 14px 13vh; } .brc-title { font-size: 2.4em; } }
+/* a phone held sideways is wide and very short: everything a little closer together, and the way home beside the last line, so that it is on the screen without a scroll */
+@media (max-height: 30em) and (min-aspect-ratio: 4/3) {
+  .brc-veil { font-size: 12px; padding: 8px 16px 12vh; place-items: start center; }
+  .brc-title { font-size: 2em; margin: .04em 0 .3em; }
+  .brc-rows { row-gap: .1em; } .brc-ic { width: 1.4em; height: 1.4em; }
+  .brc-total { margin-top: .4em; padding-top: .3em; } .brc-total span:last-child { font-size: 2em; }
+  .brc-box { margin-top: .5em; padding-top: .45em; row-gap: .18em; }
+  .brc-foot { margin-top: .9em; } .brc-actions { position: relative; z-index: 1; margin-top: -2em; }          /* (above the line it now sits beside, which is faint and so would otherwise be drawn over it) */
+}
 @media (prefers-reduced-motion: reduce) { .brc-form { animation: none; } .brc-go { animation: none; opacity: .8; } }
 `;
 

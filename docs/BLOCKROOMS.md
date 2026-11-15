@@ -242,8 +242,14 @@ git push origin <commit>:blockrooms-live
 
 ## Not yet verified
 
-- **Touch.** The level has touch controls (a stick, drag to look, tap E); they
-  have not been re-checked on a real phone since pockets and crafting landed.
+- **A real phone.** The level's touch controls (a drawn thumb stick, drag to
+  look, buttons for a hop, a duck, the light and whatever is in front of
+  you: `docs/BACKROOMS.md`, "On a phone") were checked in a browser pretending
+  to be a phone, with real touches, two fingers at once, on four shapes of
+  screen and both ways up; the bag, the menu and the card under a thumb too.
+  That is not a phone. Not checked on one: how it feels in the hand, the
+  notch and home-bar insets as a real phone reports them, sound starting on
+  the first touch in Safari, and how fast it runs.
 - **Real graphics hardware.** Everything here was checked under software
   rendering, which shows that it works and nothing about how fast.
 - **The function, with a store behind it.** The whole site has deployed from

@@ -3,12 +3,14 @@
 // the battery, a small picture of each thing of the office's you are carrying
 // (a card, a cassette for each tape; nothing until you pick something up). That is
 // all. Nothing here tells you where you are or what to press; the one concession
-// is a small [E] that appears when there is something in front of you to use
-// (and, on a touch screen, a faint ✕, because there is no Esc). Everything
-// lives in one element with class `backrooms` inside #ui, which is the one
-// thing the office leaves visible down here.
+// is a small [E] that appears when there is something in front of you to use.
+// Under a finger there are no keys, so there the camcorder has a thumb stick
+// and four buttons instead (touch.js), and the [E] is a hand among them.
+// Everything lives in one element with class `backrooms` inside #ui, which is
+// the one thing the office leaves visible down here.
 import { h } from '../ui/dom.js';
 import { BATTERY_ENDING } from './battery-ending.js';
+import { createThumbs } from './touch.js';
 
 const CSS = `
 .backrooms { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 5; color: #f4f1e6;
@@ -90,6 +92,7 @@ export function createHud(level) {
 
   let st = level.stamp;
   let tape = 0, lastSecond = -1, usable = false, glitch = 0, batterySignature = '', recording = false, paused = false, batteryEnded = false;
+  let thumbs = null, picture = null, screen = null;      // what a finger is given to press (touch.js), and what it was last laid out for
   const flagSet = new Set();
 
   function renderStamp(seconds) {
@@ -120,10 +123,15 @@ export function createHud(level) {
       warning.setAttribute('aria-label', 'Camera battery empty');
       warning.style.opacity = String(Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : 1);
     },
-    /** Sit the overlay on the picture: { x, y, w, h } in CSS pixels. */
-    layout(p) { for (const [k, v] of [['--px', p.x], ['--py', p.y], ['--pw', p.w], ['--ph', p.h]]) el.style.setProperty(k, `${v}px`); },
+    /** Sit the overlay on the picture: { x, y, w, h } in CSS pixels; size: the whole screen's { w, h }, for what is drawn beside the picture. */
+    layout(p, size) {
+      for (const [k, v] of [['--px', p.x], ['--py', p.y], ['--pw', p.w], ['--ph', p.h]]) el.style.setProperty(k, `${v}px`);
+      picture = { x: p.x, y: p.y, w: p.w, h: p.h };
+      if (size) screen = { w: size.w, h: size.h };
+      if (thumbs && screen) thumbs.layout({ ...screen, picture });
+    },
     /** Show (or hide) the [E]: there is something here to use. */
-    hint(on, label = 'E') { if (!!on !== usable) { usable = !!on; use.classList.toggle('on', usable); } if (on && use.textContent !== label) use.textContent = label; },
+    hint(on, label = 'E') { if (!!on !== usable) { usable = !!on; use.classList.toggle('on', usable); thumbs?.set({ usable }); } if (on && use.textContent !== label) use.textContent = label; },
     /** A word in the corner, the way a camcorder notes that its lamp is on. */
     flag(name, on) { if (on) flagSet.add(name); else flagSet.delete(name); flags.textContent = [...flagSet].join('  '); },
     /** The existing camcorder glyph is also the run's remaining battery. */
@@ -156,7 +164,15 @@ export function createHud(level) {
     /** The date in the corner belongs to the floor you are on; it loses its place for a moment when that changes. */
     setStamp(stamp) { if (!stamp) return; st = stamp; glitch = Math.max(glitch, 0.9); lastSecond = -1; },
     setClean(on) { el.classList.toggle('clean', !!on); },
-    setTouch(on) { el.classList.toggle('touch', !!on); },
+    /** A finger is what is being used (or a mouse is, again): the thumb stick and its buttons come and go with it. */
+    setTouch(on) {
+      el.classList.toggle('touch', !!on);
+      if (on && !thumbs) { thumbs = createThumbs(el); thumbs.set({ usable }); if (screen && picture) thumbs.layout({ ...screen, picture }); }
+    },
+    /** What a finger has to press, once a finger has been used: touch.js (null before that). */
+    get thumbs() { return thumbs; },
+    /** Where the top of the picture goes on this screen, px, or null for the middle (a phone held upright has it at the top: the thumbs are below). */
+    pictureTop(size) { return thumbs && el.classList.contains('touch') ? thumbs.pictureTop(size) : null; },
     /** Numbers on the stamp lose their place for a moment. */
     glitch(seconds = 0.6) { glitch = Math.max(glitch, seconds); },
     recording() { recording = true; if (!paused) { mode.textContent = 'REC'; dot.style.display = ''; } },
@@ -167,6 +183,6 @@ export function createHud(level) {
       const sec = Math.floor(tape);
       if (sec !== lastSecond) { lastSecond = sec; counter.textContent = `${Math.floor(sec / 3600)}:${pad(Math.floor(sec / 60) % 60)}:${pad(sec % 60)}`; renderStamp(sec); }
     },
-    remove() { el.remove(); style.remove(); },
+    remove() { thumbs?.remove(); el.remove(); style.remove(); },
   };
 }

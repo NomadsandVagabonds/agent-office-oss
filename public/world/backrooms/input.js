@@ -4,26 +4,37 @@
 // how far the mouse (or a finger) has moved are kept in one `state` that lasts
 // the whole visit — a key held down as you fall through a ceiling is still
 // held when you land. A mouse looks (locked, or dragged); a finger that lands
-// low on the left is a thumb stick, any other finger looks.
+// low on the left is a thumb stick, a finger on one of the camcorder's buttons
+// presses it, and any other finger looks (touch.js draws the stick and the
+// buttons; touch.rule.js says where they are and what a push means).
+import { THUMBS, stickOf, inZone } from './touch.rule.js';
 
 /**
- * @param {{ canvas, stage, hud, sound, key(k), use(), menu(), click(), wheel(step), owns(target)?, interceptKey(event)?, blocked()? }} o
- *        key: a key went down (once, not on repeat) · use: E, Enter, or a tap on the [E] · click: the mouse button, while it is looking
- *        wheel: ±1 for each notch · owns: native UI events pass through to their target
+ * @param {{ canvas, stage, hud, sound, key(k), use(), light()?, menu(), click(), wheel(step), owns(target)?, interceptKey(event)?, blocked()? }} o
+ *        key: a key went down (once, not on repeat) · use: E, Enter, or a tap on the [E] (or the hand) · light: a tap on the light
+ *        click: the mouse button, while it is looking · wheel: ±1 for each notch · owns: native UI events pass through to their target
  *        interceptKey: UI consumed this key · blocked: UI owns the hands, while the visit keeps running
- * @returns {{ state: {keys:Set, dx:number, dy:number, stick:{x:number,y:number}}, clear(), capture(), release(), dispose() }}
+ * @returns {{ state: {keys:Set, dx:number, dy:number, stick:{x:number,y:number}, hurry:boolean}, clear(), capture(), release(), dispose() }}
+ *          stick: a thumb's push, x right and y forward, together never longer than 1 · hurry: that thumb is past the ring, which is running
  */
 export function createInput(o) {
   const { canvas, stage, hud, sound } = o;
-  const state = { keys: new Set(), dx: 0, dy: 0, stick: { x: 0, y: 0 } };
+  const state = { keys: new Set(), dx: 0, dy: 0, stick: { x: 0, y: 0 }, hurry: false };
   const keys = state.keys;
   let dragging = false, stickId = null, stickAt = null, wheel = 0, live = true, press = null, held = false;
-  const looks = new Map();
+  const looks = new Map(), pressing = new Map();         // fingers that are looking · fingers that are on a button (which one)
   const owns = e => !!o.owns?.(e.target);
   const blocked = () => !!o.blocked?.();
+  const thumbs = () => hud.thumbs || null;
+  function dropStick() {
+    stickId = null; stickAt = null; state.stick.x = state.stick.y = 0; state.hurry = false;
+    thumbs()?.stick(null);
+  }
   function clear() {
-    keys.clear(); state.dx = state.dy = 0; state.stick.x = state.stick.y = 0;
-    dragging = false; stickId = null; stickAt = null; press = null; wheel = 0; looks.clear();
+    keys.clear(); state.dx = state.dy = 0; dropStick();
+    dragging = false; press = null; wheel = 0; looks.clear();
+    for (const name of pressing.values()) thumbs()?.down(name, false);
+    pressing.clear(); thumbs()?.set({ crouched: false });
   }
   function capture() {
     if (!live || blocked() || document.pointerLockElement === canvas) return;
@@ -70,18 +81,32 @@ export function createInput(o) {
     if (e.key === 'Shift') keys.delete('Shift');
     if (!owns(e)) e.stopPropagation();
   };
+  /** One of the camcorder's own buttons, under a finger (touch.js): what a key would have done. */
+  function pressButton(name, id) {
+    pressing.set(id, name); thumbs()?.down(name, true);
+    if (name === 'use') o.use();
+    else if (name === 'light') o.light?.();
+    else if (name === 'jump') keys.add(' ');                                   // (held for as long as the finger is: player.js hops once a press)
+    else if (name === 'crouch') { if (keys.has('c')) keys.delete('c'); else keys.add('c'); thumbs()?.set({ crouched: keys.has('c') }); }     // (a thumb cannot hold C down and look round: one tap ducks, the next stands)
+  }
   const onPointerDown = (e) => {
     sound.start();
+    // whichever is being used is what the screen offers: a finger gets the thumb stick, a mouse is rid of it
     if (e.pointerType === 'touch') hud.setTouch(true);
+    else if (e.pointerType === 'mouse') hud.setTouch(false);
     if (owns(e)) { clear(); return; }
     e.stopPropagation();
     if (blocked()) { clear(); return; }
     if (e.pointerType === 'touch') {
       if (e.target === hud.leave) { o.menu(); return; }
       if (e.target === hud.use) { o.use(); return; }
-      if (hud.owns?.(e.target)) { hud.tap?.(e.target); return; }                // something of the camcorder's own that can be touched
-      if (stickId === null && e.clientX < stage.size.w * 0.4 && e.clientY > stage.size.h * 0.45) { stickId = e.pointerId; stickAt = { x: e.clientX, y: e.clientY }; }
-      else looks.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const t = thumbs(), name = t?.act(e.target);
+      if (name) { pressButton(name, e.pointerId); return; }
+      const zone = t?.zone || { x0: 0, y0: stage.size.h * 0.45, x1: stage.size.w * 0.4, y1: stage.size.h };
+      if (stickId === null && inZone(zone, e.clientX, e.clientY)) {
+        stickId = e.pointerId; stickAt = { x: e.clientX, y: e.clientY };
+        t?.stick({ x: stickAt.x, y: stickAt.y, nx: 0, ny: 0, run: false });
+      } else looks.set(e.pointerId, { x: e.clientX, y: e.clientY });
       return;
     }
     if (e.target === hud.use) { o.use(); return; }
@@ -98,19 +123,27 @@ export function createInput(o) {
     if (blocked()) { clear(); return; }
     if (e.pointerType !== 'touch') return;
     if (e.pointerId === stickId) {
-      const reach = Math.max(46, Math.min(stage.size.w, stage.size.h) * 0.11), dx = (e.clientX - stickAt.x) / reach, dy = (e.clientY - stickAt.y) / reach, len = Math.max(1, Math.hypot(dx, dy));
-      state.stick.x = dx / len; state.stick.y = -dy / len;
+      // a push walks, as fast as it is far; a push past the ring runs, and goes on running until it is back inside it
+      const reach = thumbs()?.reach || Math.max(THUMBS.reach.least, Math.min(stage.size.w, stage.size.h) * THUMBS.reach.share);
+      const push = stickOf(e.clientX - stickAt.x, e.clientY - stickAt.y, reach, state.hurry);
+      state.stick.x = push.x; state.stick.y = push.y; state.hurry = push.run;
+      thumbs()?.stick({ x: stickAt.x, y: stickAt.y, nx: push.nub.x, ny: push.nub.y, run: push.run });
     } else if (looks.has(e.pointerId)) {
       const last = looks.get(e.pointerId);
-      state.dx += (e.clientX - last.x) * 2.6; state.dy += (e.clientY - last.y) * 2.6;
+      state.dx += (e.clientX - last.x) * THUMBS.look; state.dy += (e.clientY - last.y) * THUMBS.look;
       last.x = e.clientX; last.y = e.clientY;
     }
   };
   const onPointerUp = (e) => {
+    // (a phone does not count a finger coming down as having been touched, only one that is lifted: without this the
+    // place would be silent until the second tap)
+    if (e.type !== 'pointercancel') sound.start();
     const pendingPress = press; press = null;
     dragging = false;
-    if (e.pointerId === stickId) { stickId = null; stickAt = null; state.stick.x = 0; state.stick.y = 0; }
+    if (e.pointerId === stickId) dropStick();
     looks.delete(e.pointerId);
+    const name = pressing.get(e.pointerId);
+    if (name) { pressing.delete(e.pointerId); thumbs()?.down(name, false); if (name === 'jump') keys.delete(' '); }
     // A finger released over a UI button must still release its old thumb stick.
     if (owns(e)) return;
     e.stopPropagation();

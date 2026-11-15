@@ -76,3 +76,34 @@ test('warning belongs to the actual picture and remains available in clean and t
   hud.setPaused(false); assert.equal(warning.hidden, false);
   hud.remove(); assert.equal(document.head.children.length, 0); assert.equal(document.body.children.length, 0);
 });
+
+test('a finger gets a thumb stick and four buttons; a mouse gets none; and the picture moves up for a phone held upright', t => {
+  const { hud, document } = setup(t);
+  assert.equal(hud.thumbs, null, 'nothing is made for a finger until there is one');
+  assert.equal(hud.pictureTop({ w: 390, h: 844 }), null);
+  hud.layout({ x: 162, y: 0, w: 520, h: 390 }, { w: 844, h: 390 });
+  hud.hint(true);
+  hud.setTouch(true);
+  const thumbs = hud.thumbs, find = name => hud.el.querySelector(`.br-tb-${name}`);
+  assert.ok(thumbs && hud.el.querySelector('.br-thumbs') && hud.el.querySelector('.br-stick-ring'));
+  for (const name of ['use', 'light', 'jump', 'crouch']) assert.equal(find(name).getAttribute('data-act'), name);
+  assert.equal(find('use').hidden, false, 'there was already something to use when the finger arrived');
+  assert.equal(find('light').hidden, true, 'no light to switch yet');
+  hud.hint(false); assert.equal(find('use').hidden, true);
+  hud.hint(true); assert.equal(find('use').hidden, false);
+  thumbs.set({ light: 'off' }); assert.equal(find('light').hidden, false); assert.equal(find('light').classList.contains('is-on'), false);
+  thumbs.set({ light: 'on' }); assert.equal(find('light').classList.contains('is-on'), true);
+  thumbs.set({ light: 'none' }); assert.equal(find('light').hidden, true);
+  thumbs.set({ crouched: true }); assert.equal(find('crouch').classList.contains('is-on'), true);
+  // laid out for the screen it was given: the ring in the bar on the left, the buttons in the bar on the right
+  assert.ok(thumbs.zone && thumbs.reach > 40);
+  assert.ok(parseFloat(hud.el.querySelector('.br-stick').style.left) < 162 && parseFloat(find('jump').style.left) > 682);
+  // sideways the picture stays in the middle; upright it goes to the top; and with a mouse back in the hand, to the middle again
+  assert.equal(hud.pictureTop({ w: 844, h: 390 }), null);
+  assert.ok(hud.pictureTop({ w: 390, h: 844 }) >= 0);
+  hud.setTouch(false);
+  assert.equal(hud.pictureTop({ w: 390, h: 844 }), null);
+  assert.equal(hud.thumbs, thumbs, '(what was made is kept: the next finger does not make another)');
+  hud.setTouch(true); assert.equal(hud.el.querySelectorAll('.br-thumbs').length, 1);
+  hud.remove(); assert.equal(document.head.children.length, 0);
+});

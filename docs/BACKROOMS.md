@@ -451,6 +451,45 @@ for `CAST_LESSONS` if it teaches something), the line for `cast/index.js`,
 sentences: what its rule is, and how somebody who has not worked it out yet is
 warned before it costs them anything.
 
+## On a phone
+
+A phone has no keys and no mouse, so while a finger is what is being used the
+camcorder has a thumb stick and four buttons (`touch.js` draws them,
+`touch.rule.js` says where they go and what a push means, `input.js`
+listens). Nothing is made for a finger until there is one, and a mouse
+pressed afterwards is rid of them again.
+
+| Under a finger | What it is |
+|---|---|
+| the ring, low on the left | walking: it moves to wherever the thumb comes down, and goes as fast as it is pushed far |
+| the ring, pushed well past its edge | running, until the thumb is back inside it. **A thumb walks unless it means to run**: the Floor Warden, the quiet zone and the cables all notice running, and the first stick ran whenever it was pushed all the way |
+| a drag anywhere else | looking. A second finger looks while the first walks |
+| the up and down arrows | a hop (for as long as it is held), and ducking (one tap ducks, the next stands: a thumb cannot hold C and look round) |
+| the torch | the light: F, and one thing more. If there is a torch that works and it is not in the hand, it is taken out and switched on. Not there at all until there is a light to switch |
+| the hand | E. Only there when there is something in front of you to use: it is the `[E]`, which a finger does not get |
+| a pocket | the bag, as with a mouse; its buttons say nothing about keys |
+| the pause mark | the menu |
+
+**Where they go.** The picture is 4:3 and a phone is not. Held sideways there
+is a black bar either side of the picture, and that is where they are: the
+ring in the left bar, the buttons in the right (two across if the bar has
+room, one column if the phone's notch has taken some of it). Held upright
+the picture goes to the top of the screen and everything else is under it.
+Only where the picture is the whole screen (a tablet) do they sit on it, and
+then above the band along its bottom where the pockets are. The phone's own
+edges (`env(safe-area-inset-*)`) are kept clear. Tests hold all of that on
+nine shapes of screen.
+
+**What they are.** Rings and plain shapes in the viewfinder's own colour: no
+words on them, and no symbols a phone would draw its own way. The menu's
+Controls page says what each does, for whoever goes to look.
+
+Also for a phone: sound is asked for when a finger is *lifted* as well as
+when it comes down (a phone only counts the first as a touch); the page
+hidden (a phone in a pocket, another app in front) stops the tape with the
+menu up; and the card at the end closes up on a short, wide screen so that
+the way home is on it without a scroll.
+
 ## The camcorder menu
 
 Esc opens the transparent camcorder menu; with the mouse captured, the
@@ -619,5 +658,6 @@ the office is: the seed is the clock, and no building is ever given twice.
 | `banner.js`, `banner.rule.js` | the vinyl banner near where a visit lands: "VOTED 6TH BEST OFFICE PARK", and under it of where (a place name the page may hand the level as `where`; otherwise "IN THE TRI-COUNTY AREA"). Where it hangs is by the seed (pure, `bannerSpot`); it is not in the level's data, so a kept tape is the same tape |
 | `doors.js`, `doorleaf.js` | which doorways have a pair of fire doors (pure) · the doors themselves |
 | `player.js`, `input.js`, `hud.js`, `vhs.js`, `sound.js` | walking, keys and touch, the camcorder, the tape, the hum (and, from `music/`, the owner's music under it) |
+| `touch.js`, `touch.rule.js` | what a phone has instead of keys: a thumb stick and four buttons, drawn · where they go on a screen of any shape, which part of it is the stick, and what a push means (pure) |
 | `../levels/basement.js` | the floor above it all, and the wall |
 | `../dev/backrooms.js` | the level's own page |

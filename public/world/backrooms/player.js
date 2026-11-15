@@ -13,10 +13,10 @@ const HOP = 2.75, GRAVITY = 9, CROUCH = 0.5;      // take-off speed (m/s: about 
 const TURN = 2.1, MOUSE = 0.0023, PITCH_MAX = 1.25;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-export function createPlayer(world, camera, start, input = { keys: new Set(), dx: 0, dy: 0, stick: { x: 0, y: 0 } }) {
+export function createPlayer(world, camera, start, input = { keys: new Set(), dx: 0, dy: 0, stick: { x: 0, y: 0 }, hurry: false }) {
   const me = { x: start.x, z: start.z, yaw: start.yaw, pitch: 0, vx: 0, vz: 0, wishX: 0, wishZ: 0, moving: false, speed: 0, slow: 1, sink: 0, sinkTo: 0, duck: 0, y: 0, step: 0, shake: 1, drop: 0, dropV: 0, frozen: false };
-  // `input`: keys held, mouse movement since last frame, and a thumb stick (x: right, y: forward, each −1…1) — the visit's own
-  // (input.js), so that what is held on one floor is still held on the next
+  // `input`: keys held, mouse movement since last frame, and a thumb stick (x: right, y: forward, each −1…1; hurry: pushed
+  // past its ring, which is what Shift is) — the visit's own (input.js), so that what is held on one floor is still held on the next
   let stride = 0, floor = world.floorY(start.x, start.z), sway = 0, duck = 0, hopHeld = false;
   const listeners = { step: null };
 
@@ -73,7 +73,8 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
     }
     const push = Math.hypot(f, s), len = Math.max(1, push);
     const eyeNow = EYE - me.sink, crouch = clamp((eyeNow - 0.45) / (EYE - 0.45), 0, 1);
-    const top = (k.has('Shift') || Math.hypot(input.stick.x, input.stick.y) > 0.92 ? HURRY : WALK) * me.slow * (0.42 + 0.58 * crouch);
+    // (a thumb walks unless it is pushed past the ring on purpose: there are rooms where running is noticed)
+    const top = (k.has('Shift') || input.hurry ? HURRY : WALK) * me.slow * (0.42 + 0.58 * crouch);
     const sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
     const wx = ((-sin * f + cos * s) / len) * top, wz = ((-cos * f - sin * s) / len) * top;
     me.wishX = push ? wx / top : 0; me.wishZ = push ? wz / top : 0;          // which way you are trying to go (a wall may have other ideas)
