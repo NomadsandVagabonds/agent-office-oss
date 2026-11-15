@@ -395,6 +395,10 @@ export const MORE_DECK = [
     ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
     module: './rooms/garage-row.js', stash: (r) => [r.W / 2 - 1.3, r.D / 2 - 1.3, r.W / 2 - 0.65, r.D / 2 - 0.65],
     roll: (R) => ({ nums: Array.from({ length: 8 }, () => R.pick([1, 2, 3, 4, 4, 7, 11, 12, 12, 40, 404])), empty: R.some([0, 1, 2, 3, 4, 5, 6, 7], 3) }) },
+  // A lemonade stand, going down, and the child who keeps it. She has a glass for you.
+  { id: 'lemonade', name: 'The Stand', landmark: 'the lemonade stand that is going down', w: [9, 11], d: [8, 10], h: [2.9, 3.6],
+    ports: ['left', 'right'], weight: 1.2, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/lemonade.js', stash: (r) => [-0.3, -r.D / 2 + 0.6, 0.4, -r.D / 2 + 1.2], roll: (R) => ({ side: R.pick([-1, 1]) }) },
   // A playground on fake grass. Most of it is going down into the floor, slowly, and has been for some time.
   { id: 'recess', name: 'Recess', landmark: 'the playground that is going under', w: [12, 14], d: [10, 12], h: [3.3, 4.2],
     ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
