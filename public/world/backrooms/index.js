@@ -27,7 +27,7 @@ import { resolveLook } from '/core/look.mjs';
 import { BACKROOMS_DEFAULTS, cleanBackroomsSettings } from '/core/backrooms-settings.mjs';
 import { sketch, toWorld, toLocal, DECK, ARCHETYPES } from './gen.js';
 import { planVisit, floorOf, edition } from './plan.js';
-import { SHOT, cameraFor, slumps } from './lastshot.js';
+import { SHOT, cameraFor, cameraFrom, slumps } from './lastshot.js';
 import { createKit } from './kit.js';
 import { buildWorld, loadCatalogue } from './world.js';
 import { BUILDERS } from './rooms.js';
@@ -486,9 +486,13 @@ async function visit(office, opt) {
       let run = null;
       try { run = taker?.it?.takes?.({ ...spot, room: rt?.id ?? null, figure: figure.root, seconds: SHOT.seconds }) ?? null; }
       catch (err) { console.warn(`[backrooms] ${taker?.id} had nothing to show for it`, err); }
+      // …and may say where it is filmed from, if the corner would not show it (films(shot) → { x, y, z, at? }, in the world)
+      let seen = cam;
+      try { seen = cameraFrom(taker?.it?.films?.({ ...spot, room: rt?.id ?? null, seconds: SHOT.seconds }), spot) ?? cam; }
+      catch (err) { console.warn(`[backrooms] ${taker?.id} could not say where to film it from`, err); }
       hud.building?.(`CAM ${String(((rt?.id ?? 0) % 16) + 1).padStart(2, '0')}`);
       sound.play('tick');
-      return { t: 0, at: 0, acc: 0, cam, figure, run: typeof run === 'function' ? run : null, who: taker?.id ?? null };
+      return { t: 0, at: 0, acc: 0, cam: seen, figure, run: typeof run === 'function' ? run : null, who: taker?.id ?? null };
     } catch (err) { console.warn('[backrooms] the building\'s camera would not come on', err); return null; }
   }
   function lastShot(dt) {

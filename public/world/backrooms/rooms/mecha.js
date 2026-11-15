@@ -281,7 +281,7 @@ export function build(c) {
   c.rt.takes=(shot)=>{
     over=true;gateSolid.on=true;gate.rotation.y=0;
     const fig=shot.figure,n=patrol.count,from=Array.from({length:n},(_,i)=>patrol.where(i));
-    const row=(i)=>({x:visitor.x+(i-(n-1)/2)*.95,z:visitor.z+visitor.d/2+1.25});
+    const row=(i)=>({x:visitor.x-visitor.w/2-1.05,z:visitor.z+(i-(n-1)/2)*1.3});   // along the cage's open side (its gate is hard by the wall)
     const seat=c.toWorld(visitor.x,visitor.z-.43),start={x:shot.x,z:shot.z};
     play('thunk',visitor.x,visitor.z,14);
     let lit=false;
@@ -289,13 +289,20 @@ export function build(c) {
       if(!lit&&t>=.35){lit=true;c.world.setLights(c.rt,4);play('thunk',visitor.x,visitor.z,12);}   // the floods come on: this is meant to be seen
       const k=Math.min(1,t/1.6),e=k*k*(3-2*k);
       for(let i=0;i<n;i++){const to=row(i),x=from[i].x+(to.x-from[i].x)*e,z=from[i].z+(to.z-from[i].z)*e;
-        patrol.post(i,x,z,e<1?Math.atan2(to.x-from[i].x,to.z-from[i].z):Math.PI);}
+        patrol.post(i,x,z,e<1?Math.atan2(to.x-from[i].x,to.z-from[i].z):Math.PI/2);}
       if(!fig)return;
       const s=Math.max(0,Math.min(1,(t-.9)/1.0)),q=s*s*(3-2*s);
       fig.position.x=start.x+(seat.x-start.x)*q;fig.position.z=start.z+(seat.z-start.z)*q;
-      fig.rotation.y=c.room.rot*Math.PI/2;              // facing the gate, and them
+      fig.rotation.y=(c.room.rot-1)*Math.PI/2;          // facing them
       fig.position.y=shot.y-.22*q;fig.rotation.x=-.12*q;
     };
+  };
+  // …filmed from the floor beyond the wardens, over their shoulders
+  c.rt.films=(shot)=>{
+    const at=c.toWorld(visitor.x,visitor.z);
+    for(const [dx,dz] of [[-4.6,.65],[-4.6,-.65],[-3.6,.65]]){const p=c.toWorld(visitor.x+dx,visitor.z+dz);
+      if(c.world.roomAt(p.x,p.z)===c.rt)return {x:p.x,y:shot.y+2.55,z:p.z,at:{x:at.x,y:shot.y+.95,z:at.z}};}
+    return null;
   };
   c.tick((dt,t,me)=>{
     if(over)return;

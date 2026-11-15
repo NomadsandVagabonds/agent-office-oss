@@ -13,6 +13,8 @@
 //
 // What happens in those seconds is the taker's to say (cast: `takes(shot)`,
 // docs/BACKROOMS.md). With nothing said, the character goes down where it is.
+// So is where it is filmed from, if the corner would not show it (`films(shot)`:
+// the owner, "let rooms choose where the ending is filmed from").
 
 export const SHOT = Object.freeze({
   seconds: 3,        // how long the building's camera has the picture
@@ -48,6 +50,20 @@ export function cameraFor(room, spot, sees = () => true) {
     if (sees(x, z)) return at(x, Math.min(top, spot.y + 2.1), z);
   }
   return at(spot.x + 0.01, Math.min(top, spot.y + 2.3), spot.z + 0.01);
+}
+
+/**
+ * A camera where the taker asked for one (cast and rooms: `films(shot)`), looking at what it asked to have looked at.
+ * @param from  { x, y, z, at?: { x, y, z } } where it hangs, and what it is trained on (else the visitor's chest)
+ * @param spot  { x, y, z } where the visitor stood (y: the floor)
+ * @returns the same as cameraFor, or null if what was asked for is no place at all (or is on top of what it looks at)
+ */
+export function cameraFrom(from, spot) {
+  const to = from?.at ?? { x: spot.x, y: spot.y + 0.9, z: spot.z };
+  if (![from?.x, from?.y, from?.z, to.x, to.y, to.z].every(Number.isFinite)) return null;
+  const dx = to.x - from.x, dz = to.z - from.z, flat = Math.hypot(dx, dz);
+  if (flat < 0.5) return null;
+  return { x: from.x, y: from.y, z: from.z, yaw: Math.atan2(-dx, -dz), pitch: Math.atan2(to.y - from.y, flat) };
 }
 
 /** With nobody to say otherwise: how far over the character has gone, 0 (standing) to 1 (down), `t` seconds in. */

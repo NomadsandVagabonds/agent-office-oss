@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SHOT, cameraFor, slumps } from '../public/world/backrooms/lastshot.js';
+import { SHOT, cameraFor, cameraFrom, slumps } from '../public/world/backrooms/lastshot.js';
 
 const read = (f) => readFileSync(new URL(`../public/world/backrooms/${f}`, import.meta.url), 'utf8');
 const room = { x0: 0, z0: 0, x1: 8, z1: 6, y: 0, H: 2.6 };
@@ -42,4 +42,16 @@ test('left to itself the character goes down where it stood; and only being caug
   // who took them is noted before the hit is made (the visit begins to end inside it), and forgotten if they lived
   const cast = read('pursuer.js');
   assert.match(cast, /const before = taker; taker = k;\n      const hit = env\.health\?\.damage\(n\);\n      if \(hit\) \{ if \(!hit\.dead\) taker = before;/);
+});
+
+test('a taker may say where it is filmed from, and what is looked at', () => {
+  const spot = { x: 2, y: 0, z: 2, yaw: 0 };
+  const cam = cameraFrom({ x: 2, y: 2, z: 6 }, spot);
+  assert.ok(Math.abs(cam.yaw) < 1e-9, 'it looks toward -z, at the visitor');
+  assert.ok(cam.pitch < 0, 'and down');
+  const aimed = cameraFrom({ x: 2, y: 1, z: 6, at: { x: 6, y: 1, z: 6 } }, spot);
+  assert.ok(Math.abs(aimed.yaw + Math.PI / 2) < 1e-9 && Math.abs(aimed.pitch) < 1e-9, 'at what it was told to look at');
+  assert.equal(cameraFrom(null, spot), null);
+  assert.equal(cameraFrom({ x: NaN, y: 1, z: 1 }, spot), null);
+  assert.equal(cameraFrom({ x: 2, y: 2.5, z: 2.1 }, spot), null, 'not from on top of it');
 });
