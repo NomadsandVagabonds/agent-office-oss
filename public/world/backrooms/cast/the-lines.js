@@ -23,7 +23,7 @@ export function create(c) {
   const { env, level } = c, L = LINES, kit = env.kit;
   const gap = level.rooms.find((r) => r.arch === GAP_ROOM);
   const walker = { x: 0, z: 0, r: 0.34, tall: 1.5, opens: true };
-  let fig = null, body = null, mat = null, legs = [], s = asleep(), rot = 0, y = 0.55, q = 0, drop = 0, clock = 0, base = 0, known = false, doorT = 0, lastX = 0, lastZ = 0;
+  let fig = null, body = null, mat = null, legs = [], s = asleep(), rot = 0, y = 0.55, q = 0, drop = 0, clock = 0, base = 0, known = false, doorT = 0, stuckT = 0, lastX = 0, lastZ = 0;
   const dir = new THREE.Vector3();
 
   function ready() {
@@ -97,7 +97,8 @@ export function create(c) {
       if (s.speed > 0 && d > L.reach * 0.7) {
         const dist = s.speed * Math.min(dt, 0.08), res = c.walk.go(walker, { x: m.x, z: m.z }, dist, 0.5);
         if (res && res.door) { doorT += dt; if (doorT > 0.5) { env.doors?.open?.(res.door, 'it'); doorT = 0; } } else doorT = 0;
-        if (!res || !res.went) c.walk.stride(walker, m.x, m.z, dist);             // (no way to them: as near as there is floor)
+        // (no way to them: it stands as near as the floor goes, and looks again for a way every second: a hoarding may have been let down)
+        if (!res || res.went < 1e-3) { stuckT += dt; if (stuckT > 1) { stuckT = 0; c.walk.forget(walker); } } else stuckT = 0;
         const mx = walker.x - lastX, mz = walker.z - lastZ; moved = Math.hypot(mx, mz) > 1e-4;
         if (moved) { let da = Math.atan2(mx, mz) - rot; da = Math.atan2(Math.sin(da), Math.cos(da)); rot += da * Math.min(1, dt * 3.2); }
       }

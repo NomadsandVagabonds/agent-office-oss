@@ -872,6 +872,8 @@ test('drawings on the walls: only ever of something that is in this visit, on it
     });
   }
   assert.ok(withOne / parts > 0.3 && withOne / parts < 0.7, `a drawing on ${withOne} of ${parts} parts`);
-  for (const m of CAST) assert.ok(drawnOf.get(m.id) > 0, `${m.id} is never drawn`);
+  // (one that comes with a room — cast.js `withRoom` — is not in what a visit plans from its cast, drawings among it: it has its
+  // words in WARNINGS, held to the rules above, and nobody draws it yet)
+  for (const m of CAST) if (!m.withRoom) assert.ok(drawnOf.get(m.id) > 0, `${m.id} is never drawn`);
   for (const a of residents) assert.ok(drawnOf.get(a.resident) > 0, `${a.resident} is never drawn`);
 });
