@@ -20,6 +20,7 @@
 // hundred times) a salted hash of it that cannot be turned back into one.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { blocked, checkRun, cleanEntry, cleanMessage, cleanName, entryOf } from '../../core/book.mjs';
+import { DIFFICULTIES, validDifficulty } from '../../core/difficulty.mjs';
 import { KEEP, AGAIN } from './book-policy.mjs';
 
 export { KEEP, AGAIN };
@@ -50,12 +51,14 @@ export async function handle(request, ctx) {
   if (!store) return json(503, { ok: false, why: 'no-store', ...(SETTINGS.has(ctx.settings) ? { settings: ctx.settings } : {}) });
   try {
     if (request.method === 'GET' || request.method === 'HEAD') {
+      const difficulty = new URL(request.url).searchParams.get('difficulty') || '';
+      if (difficulty && difficulty !== 'original' && (!validDifficulty(difficulty) || difficulty === 'tourist')) return json(400, { ok: false, why: 'difficulty' });
       if (store.read) {
-        const { counter, top, latest } = await store.read();
+        const { counter, top, latest } = await store.read(difficulty);
         return json(200, { ok: true, counter, top: top.map(cleanEntry).filter(Boolean), latest: latest.map(cleanEntry).filter(Boolean) },
           { 'cache-control': 'public, max-age=0, s-maxage=10, stale-while-revalidate=120' });
       }
-      const [n, top, latest] = await store.pipeline([COUNTERS, ['ZREVRANGE', 'br:top', 0, KEEP.showTop - 1], ['LRANGE', 'br:latest', 0, KEEP.showLatest - 1]]);
+      const [n, top, latest] = await store.pipeline([COUNTERS, ['ZREVRANGE', difficulty ? `br:top:${difficulty}` : 'br:top', 0, KEEP.showTop - 1], ['LRANGE', 'br:latest', 0, KEEP.showLatest - 1]]);
       // (a reader is shown what was there a moment ago: the edge keeps it for a few seconds, so that a busy day is one read and not thousands)
       return json(200, { ok: true, counter: counterOf(n), top: (top || []).map(cleanEntry).filter(Boolean), latest: (latest || []).map(cleanEntry).filter(Boolean) },
         { 'cache-control': 'public, max-age=0, s-maxage=10, stale-while-revalidate=120' });
@@ -107,11 +110,13 @@ export async function handle(request, ctx) {
       const [first] = await store.pipeline([['SET', same, 1, 'NX', 'EX', AGAIN.same]]);
       if (!first) return json(409, { ok: false, why: 'signed' });
       const entry = entryOf({ id: randomBytes(9).toString('hex'), at: now(), name, message, run: checked.run, score: checked.score }), line = JSON.stringify(entry);
+      const modeKey = `br:top:${entry.difficulty || 'original'}`;
       let top;
       try {
         [, , , , , top] = await store.pipeline([
           ['ZADD', 'br:top', entry.score, line], ['ZREMRANGEBYRANK', 'br:top', 0, -(KEEP.top + 1)],
           ['LPUSH', 'br:latest', line], ['LTRIM', 'br:latest', 0, KEEP.latest - 1], ['INCR', 'br:n:out'], ['ZREVRANGE', 'br:top', 0, KEEP.top - 1],
+          ['ZADD', modeKey, entry.score, line], ['ZREMRANGEBYRANK', modeKey, 0, -(KEEP.top + 1)],
         ]);
       } catch (err) {
         await store.pipeline([['DEL', same]]).catch(() => null);          // (it was not written: whoever it was may try again)
@@ -130,10 +135,11 @@ export async function handle(request, ctx) {
         const struck = await store.strike(id);
         return struck ? json(200, { ok: true, struck }) : json(404, { ok: false, why: 'line' });
       }
-      const [top, latest] = await store.pipeline([['ZREVRANGE', 'br:top', 0, KEEP.top - 1], ['LRANGE', 'br:latest', 0, KEEP.latest - 1]]);
-      const lines = [...new Set([...(top || []), ...(latest || [])])].filter((line) => cleanEntry(line)?.id === id || (() => { try { return JSON.parse(line).id === id; } catch { return false; } })());
+      const modeKeys = ['br:top', 'br:top:original', ...DIFFICULTIES.filter(d => d.multiplier).map(d => `br:top:${d.id}`)];
+      const lists = await store.pipeline([...modeKeys.map(key => ['ZREVRANGE', key, 0, KEEP.top - 1]), ['LRANGE', 'br:latest', 0, KEEP.latest - 1]]);
+      const lines = [...new Set(lists.flat())].filter((line) => cleanEntry(line)?.id === id || (() => { try { return JSON.parse(line).id === id; } catch { return false; } })());
       if (!lines.length) return json(404, { ok: false, why: 'line' });
-      await store.pipeline(lines.flatMap((line) => [['ZREM', 'br:top', line], ['LREM', 'br:latest', 0, line]]));
+      await store.pipeline(lines.flatMap((line) => [...modeKeys.map(key => ['ZREM', key, line]), ['LREM', 'br:latest', 0, line]]));
       return json(200, { ok: true, struck: lines.length });
     }
     return json(400, { ok: false, why: 'do' });

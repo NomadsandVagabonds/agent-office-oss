@@ -18,6 +18,7 @@
 // it keeps one (/api/book; core/book.mjs): that somebody went in, and — when
 // somebody gets out, and has not unticked the box on the front page — what
 // the visit came to, under the made-up name they were given there.
+import { cleanDifficulty, scoreEligible } from './core/difficulty.mjs';
 import { cleanMessage, cleanName, rollName } from './core/book.mjs';
 import { resolveLook, sanitizeLookPatch } from './core/look.mjs';
 import { cleanPerk } from './core/perks.mjs';
@@ -118,7 +119,7 @@ async function tell(body) {
 }
 /** The line the card gets once the book has answered: that this visit is in it, and where. */
 async function sign(card, report) {
-  if (card.replay || card.reason !== 'exit') return null;
+  if (card.replay || card.reason !== 'exit' || !scoreEligible(report)) return null;
   const who = me();
   if (!who.sign) return null;
   const answer = await tell({ do: 'sign', name: who.name, message: who.message, run: report });
@@ -170,6 +171,7 @@ async function run() {
       const result = await enterBackrooms(office, {
         name: who.name || 'Employee', seed, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: doctored ? undefined : sign,
         look: playerLook, perk: who.perk,
+        difficulty: mine ? cleanDifficulty(mine.difficulty, 'training-wheels') : undefined,
         home: { label: 'Return to homepage' }, anew: { label: 'Go back in' }, where, ...dev,
         ...(room ? { only: [room] } : {}),
         ...(mine ? { replay: true, pursuer: typeof mine.mascot === 'boolean' ? mine.mascot : undefined } : {}),

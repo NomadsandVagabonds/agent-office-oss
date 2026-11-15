@@ -7,6 +7,7 @@
 // on. A visit is one roll: the same seed is the same company, on the same
 // floors, in the same rooms — and a seed is only ever given once (index.js:
 // the seed is the clock).
+import { difficultyOf } from '../../../core/difficulty.mjs';
 import { makeRng, roomDistances, roomPath, wallSpans, ARCHETYPES } from './gen.js';
 
 /** What a creature is to the visitor. Only one that hunts may end a visit. */
@@ -115,6 +116,12 @@ export function castFor(visit, floor, cast = CAST) {
     }
     if (able.length) out.push({ id, floor: R.weighted(able, (k) => k[1])[0] });
   }
+  // Extra mobile threats, spread into separate territories by toner.js. The
+  // authored supporting cast (including friendly residents) still appears.
+  if (cast.some(m => m.id === 'toner')) for (let i = 0; i < visit.depths; i++) {
+    const mode = visit.floors[i].difficulty;
+    if (mode && difficultyOf(mode).toner && !out.some(k => k.id === 'toner' && k.floor === i)) out.push({ id: 'toner', floor: i });
+  }
   return floor === undefined ? out : out.filter((k) => k.floor === null || k.floor === floor);
 }
 
@@ -189,4 +196,20 @@ export function lairFor(level, member) {
   if (able.length) return makeRng(`${level.seed}/lair/${member.id}`).pick(able);
   for (let i = last - 1; i > 0; i--) if (ok(i)) return path[i];
   return null;
+}
+
+/** Separated mobile threat territories. A bad spot is skipped before it consumes a place. */
+export function tonerHomes(level, count, { haunt = null, usable = () => true } = {}) {
+  const dist = roomDistances(level, level.start.room), chosen = [];
+  const eligible = r => r.kind !== 'start' && r.kind !== 'exit' && !r.crawl && r.H >= 2.2 && (dist.get(r.id) ?? 0) >= 4;
+  const R = makeRng(`${level.seed}/toner-territories`);
+  const candidates = R.shuffle(level.rooms.filter(r => r.kind === 'plain' && eligible(r)));
+  const requested = level.rooms.find(r => r.id === haunt && eligible(r));
+  if (requested) candidates.unshift(requested);
+  for (const r of candidates) {
+    if (chosen.some(id => (roomDistances(level, id).get(r.id) ?? 0) < 4) || !usable(r.id)) continue;
+    chosen.push(r.id);
+    if (chosen.length >= count) break;
+  }
+  return chosen;
 }

@@ -5,8 +5,8 @@ const validAmount = amount => Number.isSafeInteger(amount) && amount > 0;
 
 export function createHealth({ max = MAX_HEALTH, regenSeconds = 0, maxSnackHealth = max } = {}) {
   if (!Number.isSafeInteger(max) || max < 1 || max > MAX_HEALTH) throw new RangeError('Max health must be one to four.');
-  const snackCap = Number.isSafeInteger(maxSnackHealth) ? Math.max(1, Math.min(max, maxSnackHealth)) : max;
-  const regenPeriod = Number.isFinite(regenSeconds) && regenSeconds > 0 ? regenSeconds : 0;
+  let snackCap = Number.isSafeInteger(maxSnackHealth) ? Math.max(1, Math.min(max, maxSnackHealth)) : max;
+  let regenPeriod = Number.isFinite(regenSeconds) && regenSeconds > 0 ? regenSeconds : 0;
   let current = max, cooldown = 0, regenElapsed = 0, revision = 0;
   const fail = reason => ({ ok: false, reason });
   const read = () => ({ current, max, dead: current === 0,
@@ -58,5 +58,11 @@ export function createHealth({ max = MAX_HEALTH, regenSeconds = 0, maxSnackHealt
     return { changed: true };
   }
 
-  return { read, damage, heal, tick };
+  function configure({ max: cap = MAX_HEALTH, regenSeconds: regen = 0, maxSnackHealth: snacks = cap } = {}) {
+    max = Math.max(1, Math.min(MAX_HEALTH, Math.floor(cap)));
+    current = Math.min(current, max); // switching modes never heals
+    snackCap = Math.max(1, Math.min(max, snacks));
+    regenPeriod = Math.max(0, regen); regenElapsed = 0; revision++;
+  }
+  return { read, damage, heal, tick, configure };
 }

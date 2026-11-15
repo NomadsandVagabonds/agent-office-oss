@@ -18,6 +18,7 @@
 // floors above it had so that it deals different ones while the deck lasts —
 // and what those rooms taught, so that it deals nothing that takes for granted
 // a thing nobody has yet had the chance to learn.
+import { cleanDifficulty, difficultyOf } from '../../../core/difficulty.mjs';
 import { generate, makeRng, MIN_EXIT_STEPS, MAX_ODD, DECK, ARCHETYPES, lessons, lessonsOf, isBig } from './gen.js';
 import { MIN_OUT_STEPS } from './marks.js';
 import { THEME_IDS, dealtThemes, atHome } from './themes.js';
@@ -151,6 +152,11 @@ export function planVisit(seed, opt = {}) {
     way: ways[i], hand: hands[i], rooms: RP.int(PART_ROOMS[0], PART_ROOMS[1]),
     must: hands[i].filter((id) => ARCHETYPES[id].planned || ARCHETYPES[id].headline), mascot: mascot === i, coins: coins[i],
   }));
+  for (const f of floors) {
+    f.baseRooms = f.rooms;
+    if (opt.difficulty) f.difficulty = cleanDifficulty(opt.difficulty);
+    f.rooms = Math.round(f.baseRooms * (opt.difficulty ? difficultyOf(opt.difficulty).rooms : 1));
+  }
   const visit = { seed: String(seed), depths, floors, mascot, card: !!(want && want.card), headline: story ? story.arch : null, hand: hands.flat() };
   made.set(visit, { opt, levels: [] });
   return visit;
@@ -186,6 +192,7 @@ export function floorOf(visit, i) {
       pursuer: f.mascot, mascot: f.mascot, loot,
     });
     level.depth = k; level.depths = visit.depths;
+    if (f.difficulty) level.difficulty = f.difficulty;
     // the tape is older the further down it was shot: every floor's date is some years before the one above
     if (first) level.stamp = { ...level.stamp, year: memo.levels[k - 1].stamp.year - 2 - (level.stamp.year % 4) };
     memo.levels.push(level);
@@ -223,4 +230,15 @@ export function edition() {
 export function generateVisit(seed, opt = {}) {
   const visit = planVisit(seed, opt);
   return { visit, floors: visit.floors.map((_, i) => floorOf(visit, i)) };
+}
+
+/** Replan only parts not yet entered. Caller disposes any prebuilt part before replacing it. */
+export function changeVisitDifficulty(visit, id, from) {
+  const memo = made.get(visit);
+  if (!memo || !Number.isInteger(from) || from < 0) return;
+  for (const f of visit.floors.slice(from)) {
+    f.difficulty = cleanDifficulty(id);
+    f.rooms = Math.round(f.baseRooms * difficultyOf(id).rooms);
+  }
+  memo.levels.length = Math.min(memo.levels.length, from);
 }

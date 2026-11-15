@@ -21,6 +21,7 @@ import * as THREE from 'three';
 import { Vox, M, glow } from '../../vox/vox.js';
 import { Batch, lamp } from '../kit.js';
 import { makeRng, roomDistances } from '../gen.js';
+import { tonerHomes } from '../cast.js';
 import { clamp, turnTo } from '../bits.js';
 import { FIRE_FEAR, calm as unafraid, afraid, tooNear } from './fire.rule.js';
 import { TONER, perched, hatchedBrood, weaveOffset, stepToner, strikeToner, snipToner } from './toner.rule.js';
@@ -486,10 +487,25 @@ export function create(c) {
     geoms = makeSharedGeoms(env.kit, R);
     const probe = { x: 0, z: 0, r: TONER.r, tall: TONER.tall, opens: TONER.opens, crawls: TONER.crawls };
     // a room that asked for company has it hanging there from the start, if there is a place in it to hang (else where it would have been)
+    const expanded = level.difficulty && !['tourist', 'training-wheels'].includes(level.difficulty);
+    if (expanded) {
+      const spots = new Map();
+      const chosen = tonerHomes(level, c.population ?? 1, { haunt: c.haunt, usable(id) {
+        const s = c.walk.spotIn(probe, id);
+        if (!c.walk.stand(probe, s.x, s.z)) return false;
+        spots.set(id, s); return true;
+      } });
+      chosen.forEach((id, i) => {
+        const s = spots.get(id);
+        // One patrol can find you; extra territories keep the rest spread out.
+        spawnUnit(s.x, s.z, perched(() => R(), null, { territorial: i > 0, homeRoom: id }), 1, null, R.range(0, Math.PI * 2));
+      });
+      if (chosen.length) { placed = true; return; }
+    }
     let startRoom = pickStartRoom(), spot = null;
     if (c.haunt != null && env.world.rooms[c.haunt]) { const s = c.walk.spotIn(probe, c.haunt); if (c.walk.stand(probe, s.x, s.z)) { startRoom = level.rooms[c.haunt]; spot = s; } }
     spot ||= c.walk.spotIn(probe, startRoom.id);
-    spawnUnit(spot.x, spot.z, perched(() => R(), c.carried), 1, null, R.range(0, Math.PI * 2));
+    spawnUnit(spot.x, spot.z, perched(() => R(), expanded ? null : c.carried), 1, null, R.range(0, Math.PI * 2));
     placed = true;
   }
 
@@ -651,7 +667,7 @@ export function create(c) {
           unit.prowlGoal = null;
         } else {
           const bx = walker.x, bz = walker.z;
-          const res = c.walk.go(walker, target, walker.speed * Math.min(dt, 0.08), 0.25);
+          const res = c.walk.go(walker, target, walker.speed * (c.speedScale ?? 1) * Math.min(dt, 0.08), 0.25);
           went = Math.hypot(walker.x - bx, walker.z - bz);
           there = res.there;
           if (res.there || res.cannot || res.door) unit.prowlGoal = null;
@@ -666,7 +682,7 @@ export function create(c) {
         cannot = true;
       } else {
         const bx = walker.x, bz = walker.z;
-        const stepDist = TONER.chaseSpeed * Math.min(dt, 0.06);
+        const stepDist = TONER.chaseSpeed * (c.speedScale ?? 1) * Math.min(dt, 0.06);
         const res = c.walk.go(walker, m, stepDist, 0.28);
         blockedByDoor = !!res.door;
         cannot = res.cannot;

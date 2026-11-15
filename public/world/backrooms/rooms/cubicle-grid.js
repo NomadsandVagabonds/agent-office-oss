@@ -636,6 +636,7 @@ export function build(c) {
         c.env.play('thunk', fw.x, fw.z, 9);
         c.env.hold?.(false);
         c.env.end?.('caught');
+        if (c.env.difficulty?.() === 'tourist') roomState = { ...roomState, falling: false, died: false, fallT: 0, fallY: 0 };
       }
     }
   });

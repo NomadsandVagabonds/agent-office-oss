@@ -11,6 +11,8 @@
 //   adverts    each is a link into the level
 //   the rest   a figure that moves when it is off screen, a page that gets
 //              longer at the bottom, a wall that gives when it is held
+import { DIFFICULTIES, cleanDifficulty, difficultyOf, difficultyPerk } from './core/difficulty.mjs';
+import { retroSelect } from './world/ui/retro-select.js';
 import { mount, drawLogo, voidTile } from './art.js';
 import { rollName, cleanName, cleanMessage, cleanEntry } from './core/book.mjs';
 import { GENDER, SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, SKIN, HAIR_COLORS, OUTFIT_COLORS, hashId, humanGenderDefaults, resolveLook, sanitizeLookPatch } from './core/look.mjs';
@@ -26,6 +28,19 @@ const day = (at) => new Date(at).toLocaleDateString('en-GB', { day: 'numeric', m
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* until the page closes */ } } };
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const PLAY = './play';
+const difficultyField = $('difficulty');
+for (const d of DIFFICULTIES) {
+  const option = el('option', '', `${d.label}${d.id === 'easy' ? ' (recommended)' : ''}`);
+  option.value = d.id; difficultyField.append(option);
+}
+difficultyField.value = cleanDifficulty(store.get('office.backrooms')?.difficulty);
+const difficultyNote = () => { $('difficulty-note').textContent = difficultyOf(difficultyField.value).note; };
+difficultyField.addEventListener('change', () => {
+  store.set('office.backrooms', { ...store.get('office.backrooms'), difficulty: cleanDifficulty(difficultyField.value) });
+  difficultyNote(); refreshPassSummary(); syncStudioUI();
+});
+difficultyNote();
+retroSelect(difficultyField, 'Difficulty');
 
 // a link to a tape from before there was a front page goes straight to the level
 if (new URLSearchParams(location.search).has('tape')) location.replace(PLAY + location.search);
@@ -207,7 +222,7 @@ function drawBarcode(seedText) {
 }
 
 function refreshPassSummary() {
-  const p = resolvePerk(me.perk);
+  const p = difficultyPerk(resolvePerk(me.perk), difficultyField.value);
   const mode = $('pass-mode');
   mode.textContent = me.customLook ? 'CUSTOM EMPLOYEE PASS' : 'RANDOM VISITOR (DEFAULT)';
   mode.classList.toggle('custom', me.customLook);
@@ -261,11 +276,22 @@ $('optin').addEventListener('change', (e) => { me = { ...me, sign: e.target.chec
 $('signin').addEventListener('submit', (e) => { e.preventDefault(); location.href = PLAY; });
 
 /* ---- studio workbench (#creator) ------------------------------------------------------------------- */
+const THEMES_3D = {
+  paper: { bg: '#cfc27c', sky: '#fff9e2', ground: '#786b42', sun: '#fff3d1', rim: '#b8ccff', disc: '#827549', ring: '#bca463' },
+  pool: { bg: '#bce3e0', sky: '#ecffff', ground: '#4a8c95', sun: '#ffffff', rim: '#7eeaf5', disc: '#4d9ba7', ring: '#e4f8f8' },
+  carpet: { bg: '#dfd0b2', sky: '#fff1d9', ground: '#6d3931', sun: '#ffe6bf', rim: '#bbc6ea', disc: '#843333', ring: '#d4a65e' },
+  void: { bg: '#0c0c14', sky: '#9aa4dc', ground: '#221e2e', sun: '#ffeaa8', rim: '#6f8cff', disc: '#1e1e2b', ring: '#dbc36d' },
+};
+
 const studio = {
   open: false,
   built: false,
   raf: 0,
+  lastMs: 0,
   back: false,
+  spinMode: calm ? 'front' : 'auto',
+  yaw: calm ? 0.28 : 0.34,
+  dragging: false,
   zoom: false,
   pose: 'idle',
   backdrop: 'paper',
@@ -276,6 +302,9 @@ const studio = {
   swatches: {},
   perkCards: new Map(),
   returnFocus: null,
+  d3: null,
+  d3Promise: null,
+  d3Failed: false,
 };
 
 function setCustomLook(patch) {
@@ -360,7 +389,171 @@ function rollRandomLook() {
 
 $('quick-roll').addEventListener('click', () => rollRandomLook());
 
-function renderStage(ms = 0) {
+function applyAvatarPose3D(avatar, poseName) {
+  if (!avatar) return;
+  if (poseName === 'walk') {
+    avatar.hold(null);
+    avatar.bounce = 0;
+    avatar.walking = 1;
+    avatar.speed = 1;
+    avatar.setPose('stand');
+    avatar.setExpression('neutral');
+  } else if (poseName === 'sip') {
+    avatar.walking = 0;
+    avatar.bounce = 0;
+    avatar.hold('mug');
+    avatar.setPose('sip');
+    avatar.setExpression('happy');
+  } else if (poseName === 'typing') {
+    avatar.hold(null);
+    avatar.walking = 0;
+    avatar.bounce = 0;
+    avatar.setPose('type');
+    avatar.setExpression('focus');
+  } else if (poseName === 'blocked') {
+    avatar.hold(null);
+    avatar.walking = 0;
+    avatar.bounce = 0.65;
+    avatar.setPose('wave');
+    avatar.setExpression('worried');
+  } else {
+    avatar.hold(null);
+    avatar.walking = 0;
+    avatar.bounce = 0;
+    avatar.setPose('stand');
+    if (avatar.expression !== 'blink') avatar.setExpression('neutral');
+  }
+}
+
+function applyBackdrop3D() {
+  const d3 = studio.d3;
+  const th = THEMES_3D[studio.backdrop] || THEMES_3D.paper;
+  $('stage-viewport').style.background = th.bg;
+  if (!d3) return;
+  d3.scene.background.set(th.bg);
+  d3.hemi.color.set(th.sky);
+  d3.hemi.groundColor.set(th.ground);
+  d3.sun.color.set(th.sun);
+  d3.rim.color.set(th.rim);
+  d3.discMat.color.set(th.disc);
+  d3.ringMat.color.set(th.ring);
+}
+
+function syncStage3DSize() {
+  const d3 = studio.d3;
+  if (!d3) return;
+  const rect = $('stage-viewport').getBoundingClientRect();
+  const w = Math.max(64, Math.round(rect.width || 204));
+  const h = Math.max(64, Math.round(rect.height || 224));
+  if (d3.w === w && d3.h === h) return;
+  d3.w = w;
+  d3.h = h;
+  d3.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  d3.renderer.setSize(w, h, false);
+  d3.camera.aspect = w / h;
+  d3.camera.updateProjectionMatrix();
+}
+
+function syncAvatar3D() {
+  const d3 = studio.d3;
+  if (!d3) return;
+  const look = activeLook();
+  const key = JSON.stringify(look);
+  if (d3.lookKey !== key) {
+    if (d3.avatar) {
+      d3.avatarHolder.remove(d3.avatar.root);
+      d3.avatar.dispose();
+    }
+    d3.avatar = new d3.Avatar(look, { seed: `visitor:${me.name}` });
+    d3.avatarHolder.add(d3.avatar.root);
+    d3.lookKey = key;
+    d3.poseKey = '';
+  }
+  if (d3.poseKey !== studio.pose) {
+    applyAvatarPose3D(d3.avatar, studio.pose);
+    if (studio.pose === 'idle') d3.avatar.snap('stand');
+    d3.poseKey = studio.pose;
+  }
+}
+
+function ensureStage3D() {
+  if (studio.d3 || studio.d3Failed) return studio.d3Promise;
+  if (studio.d3Promise) return studio.d3Promise;
+  studio.d3Promise = Promise.all([
+    import('three'),
+    import('./world/avatar/rig.js'),
+    import('./world/vox/material.js'),
+  ]).then(([THREE, { Avatar }, { voxelUniforms }]) => {
+    const canvas = $('char-stage-3d');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(THEMES_3D.paper.bg);
+    const camera = new THREE.PerspectiveCamera(34, 204 / 224, 0.1, 20);
+    camera.position.set(0, 0.90, 2.72);
+    camera.lookAt(0, 0.76, 0);
+
+    const hemi = new THREE.HemisphereLight('#fff9e2', '#786b42', 1.6);
+    const sun = new THREE.DirectionalLight('#fff3d1', 2.45);
+    sun.position.set(1.8, 3.2, 2.5);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 9;
+    sun.shadow.camera.left = -1.1;
+    sun.shadow.camera.right = 1.1;
+    sun.shadow.camera.top = 1.9;
+    sun.shadow.camera.bottom = -0.3;
+    sun.shadow.bias = -0.0008;
+    const rim = new THREE.DirectionalLight('#b8ccff', 0.85);
+    rim.position.set(-2.0, 1.8, -2.2);
+    scene.add(hemi, sun, sun.target, rim);
+
+    const turntable = new THREE.Group();
+    const discMat = new THREE.MeshLambertMaterial({ color: THEMES_3D.paper.disc });
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.50, 0.06, 36), discMat);
+    disc.position.y = -0.03;
+    disc.receiveShadow = true;
+    const ringMat = new THREE.MeshLambertMaterial({ color: THEMES_3D.paper.ring });
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.476, 0.476, 0.016, 36), ringMat);
+    ring.position.y = -0.007;
+    const avatarHolder = new THREE.Group();
+    turntable.add(disc, ring, avatarHolder);
+    scene.add(turntable);
+
+    studio.d3 = {
+      THREE, Avatar, voxelUniforms, renderer, scene, camera, hemi, sun, rim,
+      turntable, discMat, ringMat, avatarHolder,
+      avatar: null, lookKey: '', poseKey: '', w: 0, h: 0,
+      camY: 0.90, camZ: 2.72, lookY: 0.76,
+    };
+
+    if (typeof ResizeObserver === 'function') {
+      const ro = new ResizeObserver(() => { if (studio.open) { syncStage3DSize(); renderStage(performance.now(), 0); } });
+      ro.observe($('stage-viewport'));
+    }
+
+    canvas.hidden = false;
+    $('char-stage').hidden = true;
+    $('stage-hint').textContent = '3D · drag to spin';
+    applyBackdrop3D();
+    syncStage3DSize();
+    syncAvatar3D();
+    renderStage(performance.now(), 0.016);
+  }).catch(() => {
+    studio.d3Failed = true;
+    $('char-stage-3d').hidden = true;
+    $('char-stage').hidden = false;
+    $('stage-hint').textContent = '2D preview';
+  });
+  return studio.d3Promise;
+}
+
+function renderStage2DFallback(ms = 0) {
   const canvas = $('char-stage');
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
@@ -371,8 +564,9 @@ function renderStage(ms = 0) {
   const blink = !calm && studio.pose === 'idle' && (Math.floor(t * 2.8) % 11 === 0);
   const step = studio.pose === 'walk' ? (calm ? 1 : (Math.floor(t * 5.2) % 2 ? 1 : -1)) : 0;
   const bob = !calm && studio.pose === 'walk' && Math.floor(t * 10.4) % 2 ? -2 : 0;
+  const showBack = Math.cos(studio.yaw) < -0.25;
   const pix = paintFlatCharacter(look, {
-    back: studio.back,
+    back: showBack,
     pose: studio.pose === 'walk' ? 'idle' : studio.pose,
     blocked: studio.pose === 'blocked',
     blink,
@@ -381,20 +575,50 @@ function renderStage(ms = 0) {
   });
 
   if (studio.zoom) {
-    blitPixCrop(ctx, pix, { sx: 0, sy: 20, sw: 32, sh: 32, dx: 0, dy: 12 + bob, scale: 6, back: studio.back });
+    blitPixCrop(ctx, pix, { sx: 0, sy: 20, sw: 32, sh: 32, dx: 0, dy: 12 + bob, scale: 6, back: showBack });
   } else {
-    // subtle shadow oval under the shoes
     ctx.fillStyle = 'rgba(0, 0, 0, 0.26)';
     ctx.fillRect(68, 174, 56, 8);
     ctx.fillRect(60, 176, 72, 4);
-    blitPixCrop(ctx, pix, { sx: 0, sy: 16, sw: 32, sh: 48, dx: 32, dy: -8 + bob, scale: 4, back: studio.back });
+    blitPixCrop(ctx, pix, { sx: 0, sy: 16, sw: 32, sh: 48, dx: 32, dy: -8 + bob, scale: 4, back: showBack });
   }
+}
+
+function renderStage(ms = 0, dtOverride = null) {
+  const dt = dtOverride !== null ? dtOverride : (studio.lastMs ? Math.min(0.05, Math.max(0, (ms - studio.lastMs) / 1000)) : 0.016);
+  studio.lastMs = ms;
+  if (studio.spinMode === 'auto' && !studio.dragging && !calm) {
+    studio.yaw = (studio.yaw + dt * 0.58) % (Math.PI * 2);
+  }
+
+  const d3 = studio.d3;
+  if (!d3) {
+    renderStage2DFallback(ms);
+    return;
+  }
+  syncStage3DSize();
+  syncAvatar3D();
+  d3.voxelUniforms.uTime.value = ms / 1000;
+  d3.turntable.rotation.y = studio.yaw;
+
+  const goalCamY = studio.zoom ? 1.18 : 0.90;
+  const goalCamZ = studio.zoom ? 1.28 : 2.72;
+  const goalLookY = studio.zoom ? 1.12 : 0.76;
+  const k = dt > 0 ? 1 - Math.exp(-12 * dt) : 1;
+  d3.camY += (goalCamY - d3.camY) * k;
+  d3.camZ += (goalCamZ - d3.camZ) * k;
+  d3.lookY += (goalLookY - d3.lookY) * k;
+  d3.camera.position.set(0, d3.camY, d3.camZ);
+  d3.camera.lookAt(0, d3.lookY, 0);
+
+  if (d3.avatar) d3.avatar.update(calm ? 0 : dt, calm);
+  d3.renderer.render(d3.scene, d3.camera);
 }
 
 function stageTick(ms) {
   if (!studio.open) { studio.raf = 0; return; }
   renderStage(ms);
-  if (!calm) studio.raf = requestAnimationFrame(stageTick);
+  studio.raf = requestAnimationFrame(stageTick);
 }
 
 function refreshThumbnails() {
@@ -464,7 +688,7 @@ function buildStudioOnce() {
     b.addEventListener('click', () => {
       studio.pose = id;
       for (const n of $('pose-bar').querySelectorAll('button')) n.classList.toggle('on', n.dataset.pose === id);
-      renderStage(performance.now());
+      renderStage(performance.now(), 0.016);
     });
     return b;
   }));
@@ -476,7 +700,8 @@ function buildStudioOnce() {
     b.addEventListener('click', () => {
       studio.backdrop = id;
       for (const n of $('backdrop-bar').querySelectorAll('button')) n.classList.toggle('on', n.dataset.bg === id);
-      renderStage(performance.now());
+      applyBackdrop3D();
+      renderStage(performance.now(), 0);
     });
     return b;
   }));
@@ -597,7 +822,7 @@ function buildStudioOnce() {
 syncStudioUI = () => {
   if (!studio.built) return;
   const look = activeLook();
-  const perk = resolvePerk(me.perk);
+  const perk = difficultyPerk(resolvePerk(me.perk), difficultyField.value);
 
   $('card-code').textContent = perk.code;
   $('card-vitals').replaceChildren(
@@ -653,18 +878,28 @@ syncStudioUI = () => {
   renderStage(performance.now());
 };
 
+function updateTurnButtonLabel() {
+  const labels = { auto: 'Spin: Auto', front: 'Turn: Front', back: 'Turn: Back', manual: 'Spin: Drag' };
+  $('view-turn').textContent = labels[studio.spinMode] || 'Spin: Auto';
+}
+
 function openCreator(open) {
   const win = $('creator');
   if (open) {
     buildStudioOnce();
     studio.returnFocus = document.activeElement;
     studio.open = true;
+    studio.lastMs = performance.now();
     win.hidden = false;
+    updateTurnButtonLabel();
+    applyBackdrop3D();
     syncStudioUI();
+    ensureStage3D();
     $('creator-close').focus();
-    if (!calm && !studio.raf) studio.raf = requestAnimationFrame(stageTick);
+    if (!studio.raf) studio.raf = requestAnimationFrame(stageTick);
   } else {
     studio.open = false;
+    studio.dragging = false;
     if (studio.raf) { cancelAnimationFrame(studio.raf); studio.raf = 0; }
     win.hidden = true;
     studio.returnFocus?.focus?.();
@@ -678,20 +913,63 @@ $('creator-enter').addEventListener('click', () => { keep(); location.href = PLA
 $('creator').addEventListener('keydown', (e) => { if (e.key === 'Escape') openCreator(false); });
 $('tab-look').addEventListener('click', () => selectStudioTab('look'));
 $('tab-perks').addEventListener('click', () => selectStudioTab('perks'));
-$('char-stage').addEventListener('click', () => {
-  studio.back = !studio.back;
-  $('view-turn').textContent = studio.back ? 'Turn: Back' : 'Turn: Front';
-  renderStage(performance.now());
-});
+{
+  const vp = $('stage-viewport');
+  let dragId = null, startX = 0, lastX = 0, moved = false;
+  vp.addEventListener('pointerdown', (e) => {
+    dragId = e.pointerId;
+    startX = lastX = e.clientX;
+    moved = false;
+    vp.classList.add('dragging');
+    try { vp.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  });
+  vp.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== dragId) return;
+    const dx = e.clientX - lastX;
+    lastX = e.clientX;
+    if (!moved && Math.abs(e.clientX - startX) > 3) {
+      moved = true;
+      studio.dragging = true;
+      studio.spinMode = 'manual';
+      updateTurnButtonLabel();
+    }
+    if (moved) {
+      studio.yaw += dx * 0.018;
+      renderStage(performance.now(), 0);
+    }
+  });
+  const endDrag = (e) => {
+    if (e.pointerId !== dragId) return;
+    dragId = null;
+    studio.dragging = false;
+    vp.classList.remove('dragging');
+    if (!moved) {
+      studio.spinMode = studio.spinMode === 'auto' ? 'front' : 'auto';
+      if (studio.spinMode === 'front') studio.yaw = 0;
+      updateTurnButtonLabel();
+      renderStage(performance.now(), 0);
+    }
+  };
+  vp.addEventListener('pointerup', endDrag);
+  vp.addEventListener('pointercancel', endDrag);
+}
 $('view-turn').addEventListener('click', () => {
-  studio.back = !studio.back;
-  $('view-turn').textContent = studio.back ? 'Turn: Back' : 'Turn: Front';
-  renderStage(performance.now());
+  if (studio.spinMode === 'auto') {
+    studio.spinMode = 'front';
+    studio.yaw = 0;
+  } else if (studio.spinMode === 'front') {
+    studio.spinMode = 'back';
+    studio.yaw = Math.PI;
+  } else {
+    studio.spinMode = 'auto';
+  }
+  updateTurnButtonLabel();
+  renderStage(performance.now(), 0);
 });
 $('view-zoom').addEventListener('click', () => {
   studio.zoom = !studio.zoom;
-  $('view-zoom').textContent = studio.zoom ? 'View: Mugshot' : 'View: Full';
-  renderStage(performance.now());
+  $('view-zoom').textContent = studio.zoom ? 'View: Head' : 'View: Full';
+  renderStage(performance.now(), 0);
 });
 $('roll-look').addEventListener('click', () => rollRandomLook());
 $('unpin-all').addEventListener('click', () => { studio.pins.clear(); syncStudioUI(); });
@@ -745,20 +1023,29 @@ function guests(latest) {
 }
 function scores(top, none = 'Nobody yet.') {
   const body = $('scores').tBodies[0];
-  if (!top.length) { body.replaceChildren(el('tr', '', Object.assign(el('td', 'empty', none), { colSpan: 6 }))); return; }
+  if (!top.length) { body.replaceChildren(el('tr', '', Object.assign(el('td', 'empty', none), { colSpan: 7 }))); return; }
   body.replaceChildren(...top.slice(0, 10).map((e, i) => {
     // (no way into somebody else's building from here: the number of a tape is its owner's to give out — the card they came out with has it)
     const td = (cls, text) => el('td', cls, text);
-    return el('tr', i ? '' : 'first', td('n', String(i + 1)), td('', e.name), td('n', num(e.score)), td('n', clock(e.seconds)), td('n', String(e.batteries)), td('n', String(e.hearts)));
+    return el('tr', i ? '' : 'first', td('n', String(i + 1)), td('', e.name), td('', e.difficulty ? difficultyOf(e.difficulty).label : 'Original'), td('n', num(e.score)), td('n', clock(e.seconds)), td('n', String(e.batteries)), td('n', String(e.hearts)));
   }));
 }
 guests([]);
+const scoreDifficulty = $('score-difficulty');
+for (const d of DIFFICULTIES.filter(d => d.multiplier)) {
+  const option = el('option', '', d.label); option.value = d.id; scoreDifficulty.append(option);
+}
+let bookRequest = 0;
+scoreDifficulty.addEventListener('change', () => book());
 async function book() {
+  const request = ++bookRequest;
   let data = null;
   try {
-    const res = await fetch('./api/book', { headers: { accept: 'application/json' } });
+    const bookUrl = './api/book' + (scoreDifficulty.value ? '?difficulty=' + encodeURIComponent(scoreDifficulty.value) : '');
+    const res = await fetch(bookUrl, { headers: { accept: 'application/json' } });
     if (res.ok) data = await res.json();
   } catch { /* no book: this browser's own record, then */ }
+  if (request !== bookRequest) return;
   if (!data || !data.ok) { scores([], mine.best ? `Best on this computer: ${num(mine.best)}` : 'Nobody yet.'); return; }
   counter(data.counter);
   scores((data.top || []).map(cleanEntry).filter(Boolean));

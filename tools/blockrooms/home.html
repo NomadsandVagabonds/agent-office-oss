@@ -100,6 +100,11 @@
     </table>
   </div>
 
+  <div class="signin">
+    <label for="difficulty">DIFFICULTY:</label>
+    <select id="difficulty" aria-describedby="difficulty-note"></select>
+    <p id="difficulty-note"></p>
+  </div>
   <form class="signin" id="signin">
     <label for="name">NAME:</label>
     <input id="name" type="text" maxlength="16" size="17" autocomplete="nickname" autocapitalize="words" spellcheck="false">
@@ -263,15 +268,19 @@
 <section class="zone pink" id="pictures">
   <h2 class="banner rose">SCREENSHOTS</h2>
   <ul class="gallery">
-    <li><figure><img src="./shots/tetris.jpg" width="640" height="480" loading="lazy" alt="Beige and slate office cubicles stacked five high with wooden planks and a sideways CRT monitor."></figure></li>
-    <li><figure><img src="./shots/shredder.jpg" width="640" height="480" loading="lazy" alt="A tall clerk wearing three crooked pairs of spectacles behind an industrial paper shredder."></figure></li>
-    <li><figure><img src="./shots/ceiling.jpg" width="640" height="480" loading="lazy" alt="An office worker in a blue hoodie hanging upside down out of a cracked acoustic ceiling tile."></figure></li>
-    <li><figure><img src="./shots/allhands.jpg" width="640" height="480" loading="lazy" alt="A large maroon auditorium with empty rows of chairs facing a quarterly headcount slide."></figure></li>
-    <li><figure><img src="./shots/absorbed.jpg" width="640" height="480" loading="lazy" alt="A ginger cat colleague in crooked spectacles emerging from yellow striped wallpaper with long arms."></figure></li>
-    <li><figure><img src="./shots/coolers.jpg" width="640" height="480" loading="lazy" alt="A yellow corridor lined with water coolers, going off into the dark."></figure></li>
-    <li><figure><img src="./shots/keyboard.jpg" width="640" height="480" loading="lazy" alt="A floor made of giant keyboard keys under a screen that says OFFICE BASIC, 64K CARPET FREE, READY."></figure></li>
-    <li><figure><img src="./shots/doors.jpg" width="640" height="480" loading="lazy" alt="A room with a dozen identical doors and a sign: please use the correct door."></figure></li>
-    <li><figure><img src="./shots/party.jpg" width="640" height="480" loading="lazy" alt="A leaving party with a cake and bunting and nobody at it."></figure></li>
+    <li><figure><img src="./shots/gallery-dispatch.jpg" width="1200" height="900" loading="lazy" alt="Jensen and the woman hold graphics cards beside a towering GPU pile and wooden shipping crates."></figure></li>
+    <li><figure><img src="./shots/gallery-shredding-bay.jpg" width="1200" height="900" loading="lazy" alt="A many-faced clerk waits beside the office shredder."></figure></li>
+    <li><figure><img src="./shots/gallery-server-chasm.jpg" width="1200" height="900" loading="lazy" alt="Tall server banks and metal walkways above a deep cable shaft."></figure></li>
+    <li><figure><img src="./shots/gallery-plenum-upper.jpg" width="1200" height="900" loading="lazy" alt="Red-lit beams, ducts and brickwork inside the ceiling plenum."></figure></li>
+    <li><figure><img src="./shots/gallery-cutouts.jpg" width="1200" height="900" loading="lazy" alt="Three cardboard office figures in a wood-panelled room with green carpet."></figure></li>
+    <li><figure><img src="./shots/gallery-mecha.jpg" width="1200" height="900" loading="lazy" alt="Rows of cages and glowing performance displays flank a dark industrial aisle."></figure></li>
+    <li><figure><img src="./shots/gallery-re-org.jpg" width="1200" height="900" loading="lazy" alt="Office cubicles pile into a cavernous room with elevated walkways."></figure></li>
+    <li><figure><img src="./shots/gallery-party.jpg" width="1200" height="900" loading="lazy" alt="Grinning partygoers hold hands around a red balloon."></figure></li>
+    <li><figure><img src="./shots/gallery-toner.jpg" width="1200" height="900" loading="lazy" alt="Toner creatures cling to the ceiling and wall above photocopiers and a tiled floor."></figure></li>
+    <li><figure><img src="./shots/gallery-suburbia.jpg" width="1200" height="900" loading="lazy" alt="A white house and picket fence beneath an office ceiling and artificial sky."></figure></li>
+    <li><figure><img src="./shots/gallery-model-village.jpg" width="1200" height="900" loading="lazy" alt="Miniature houses repeat inside a larger model street beneath an office ceiling."></figure></li>
+    <li><figure><img src="./shots/gallery-mailroom.jpg" width="1200" height="900" loading="lazy" alt="A brass dispatch tube rises from a central pedestal in the tiled mailroom."></figure></li>
+    <li><figure><img src="./shots/gallery-vestibule.jpg" width="1200" height="900" loading="lazy" alt="Glass revolving doors stand in a wood-panelled lobby with green carpet."></figure></li>
   </ul>
 </section>
 
@@ -328,12 +337,15 @@
 
 <section class="zone ledger" id="book">
   <div class="cols">
-    <div class="panel white">
+    <div class="panel white score-panel">
       <h2><i data-sprite="star" data-fx="spin" data-scale="2"></i> High scores</h2>
+      <label for="score-difficulty">Show:</label> <select id="score-difficulty"><option value="">All difficulties</option><option value="original">Original scores</option></select>
+      <div class="score-scroll" role="region" aria-label="High scores" tabindex="0">
       <table class="scores" id="scores">
-        <thead><tr><th>#</th><th>Name</th><th>Points</th><th>Time</th><th title="spare batteries">Batt.</th><th title="hearts left">&hearts;</th></tr></thead>
+        <thead><tr><th>#</th><th>Name</th><th>Difficulty</th><th>Points</th><th>Time</th><th title="spare batteries">Batt.</th><th title="hearts left">&hearts;</th></tr></thead>
         <tbody><tr><td colspan="7" class="empty">Loading&hellip;</td></tr></tbody>
       </table>
+      </div>
     </div>
     <div class="panel white">
       <h2><i data-sprite="envelope" data-scale="2"></i> Guestbook</h2>
@@ -416,9 +428,13 @@
     <div class="studio-grid">
       <div class="studio-stage-col">
         <div class="stage-frame">
-          <canvas id="char-stage" width="192" height="216" role="img" aria-label="Character preview"></canvas>
+          <div class="stage-viewport" id="stage-viewport">
+            <canvas id="char-stage" width="192" height="216" role="img" aria-label="Character preview"></canvas>
+            <canvas id="char-stage-3d" width="384" height="432" hidden aria-hidden="true"></canvas>
+            <span class="stage-hint" id="stage-hint">3D &middot; drag to spin</span>
+          </div>
           <div class="stage-tools">
-            <button type="button" id="view-turn">Turn: Front</button>
+            <button type="button" id="view-turn">Spin: Auto</button>
             <button type="button" id="view-zoom">View: Full</button>
           </div>
           <div class="chip-row" id="pose-bar" role="group" aria-label="Preview pose"></div>
@@ -525,6 +541,7 @@
 </div>
 
 <noscript><p class="noscript"><a href="./play">ENTER</a></p></noscript>
+<script type="importmap"><!--IMPORTMAP--></script>
 <script type="module" src="./home.js"></script>
 </body>
 </html>

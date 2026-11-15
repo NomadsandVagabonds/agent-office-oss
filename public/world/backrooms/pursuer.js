@@ -8,6 +8,7 @@
 // doors are what stand between the cast and you.
 // Also here: the cardboard colleague who sometimes decides to come along, and
 // who cannot open a door.
+import { creatureTuning, difficultyOf } from '../../../core/difficulty.mjs';
 import { makeRng } from './gen.js';
 import * as castList from './cast.js';              // (the whole of it, so that hauntsFor is asked for only where it is used: a stand-in cast list need not have it)
 const { CAST, castFor, homeFor } = castList;
@@ -30,6 +31,8 @@ export function createStalkers(env, options = {}) {
   /** What a creature is handed (the contract). Everything it may need of the level is here or on c.env. (k: the conductor's own note of it.) */
   const toolbox = (k, home, haunt = null, lair = null, member = k.member) => ({
     env, level, member, walk, home,
+    get speedScale() { return creatureTuning(env.difficulty?.() ?? 'training-wheels', member.id).speed ?? 1; },
+    get population() { return Math.max(1, level.difficulty ? difficultyOf(level.difficulty).toner : 1); },
     /** A room that asked for company and got this one (cast.js hauntsFor): its id, or null. What it does about it is its own. */
     haunt,
     /** For one that comes with a room (a cast line with `withRoom`, cast.js lairFor): the room it lies up in, a few doorways before its own — id, or null. */
@@ -60,7 +63,7 @@ export function createStalkers(env, options = {}) {
     hurt(n = 1) {
       // (who it was is noted before the hit is made: the visit begins to end inside it, and asks)
       const before = taker; taker = k;
-      const hit = env.health?.damage(n);
+      const hit = env.health?.damage(creatureTuning(env.difficulty?.() ?? 'training-wheels', member.id).damage ?? n);
       if (hit) {
         const ended = !!hit.dead && !options.hasSurvivor?.();
         if (!ended) taker = before;

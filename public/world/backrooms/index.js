@@ -24,10 +24,11 @@
 // when you left by the way out.
 import * as THREE from 'three';
 import { resolveLook, sanitizeLookPatch } from '/core/look.mjs';
+import { createDifficultyRun, cleanDifficulty, difficultyOf } from '/core/difficulty.mjs';
 import { resolvePerk } from '/core/perks.mjs';
 import { BACKROOMS_DEFAULTS, cleanBackroomsSettings } from '/core/backrooms-settings.mjs';
 import { sketch, toWorld, toLocal, DECK, ARCHETYPES } from './gen.js';
-import { planVisit, floorOf, edition } from './plan.js';
+import { planVisit, floorOf, edition, changeVisitDifficulty } from './plan.js';
 import { SHOT, cameraFor, cameraFrom, slumps } from './lastshot.js';
 import { createKit } from './kit.js';
 import { FLASHLIGHT_POSES } from './flashlight.js';
@@ -123,7 +124,9 @@ async function visit(office, opt) {
   const stage = office.stage, renderer = stage.renderer, canvas = renderer.domElement;
   const who = gather(office, opt);
   const seed = opt.seed ?? Date.now();
-  const ask = { name: who.name, projects: who.projects, agents: who.agents.map((a) => a.name), tasks: who.tasks, only: opt.only, onlyDepth: opt.depth | 0, pursuer: opt.pursuer, count: opt.count, depths: opt.depths, themes: opt.themes };
+  const saved = prefs.load();
+  const difficulty = createDifficultyRun(cleanDifficulty(opt.difficulty ?? saved.difficulty), { ranked: !opt.debug && !opt.only && opt.inventory !== false });
+  const ask = { difficulty: difficulty.current, name: who.name, projects: who.projects, agents: who.agents.map((a) => a.name), tasks: who.tasks, only: opt.only, onlyDepth: opt.depth | 0, pursuer: opt.pursuer, count: opt.count, depths: opt.depths, themes: opt.themes };
   // what the office says is still to be found down here is hidden in this visit; no office keeping count, nothing hidden
   // (and nothing in a tape that is being played back: what was to be found in that building was found, or was not)
   const left = opt.replay ? null : lootLeft(office);
@@ -136,8 +139,7 @@ async function visit(office, opt) {
   // everybody in the visit's cast has a face: the real one, or one rolled from the name
   const byName = new Map(who.agents.map((a) => [a.name, a.look]));
   const cast = first.cast.map((name) => ({ name, look: byName.get(name) || resolveLook('backrooms:' + name) }));
-  const saved = prefs.load();
-  let settings = cleanBackroomsSettings({ ...saved, vhs: opt.vhs ?? saved.vhs, mute: opt.mute ?? saved.mute });
+  let settings = cleanBackroomsSettings({ ...saved, difficulty: difficulty.current, vhs: opt.vhs ?? saved.vhs, mute: opt.mute ?? saved.mute });
   const perk = opt.inventory === false ? resolvePerk('none') : resolvePerk(opt.perk);
   const fov = perk.fov || FOV;
   const camera = new THREE.PerspectiveCamera(fov, 4 / 3, 0.06, 170);
@@ -227,16 +229,16 @@ async function visit(office, opt) {
       }
     } });
   input.state.sensitivity = settings.sensitivity; input.state.invertY = settings.invertY;
-  menu = createMenu({ host: hud.el, settings, furniture: opt.barricades !== false, onRequestOpen: () => setPaused(true), onResume: resume,
+  menu = createMenu({ host: hud.el, settings: { ...settings, scoreEligible: difficulty.report().ranked }, furniture: opt.barricades !== false, onRequestOpen: () => setPaused(true), onResume: resume,
     onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting });
   // Six pockets, four hearts, and a camcorder battery that runs down (inventory.js, survival.js): the visit's, not any
   // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.
   if (opt.inventory !== false) {
     survival = createSurvival({ hud, sound, interfere(k) { interference = Math.max(interference, k); } }, {
-      canAct, onEnd: why => finish(why), perk,
+      canAct, onEnd: why => finish(why), perk, difficulty: () => difficulty.current,
     });
     inventory = createInventory({ hud, sound, health: survival.health, camera: survival.camera }, {
-      canAct, review: !!opt.dev?.supplies, perk, seed: String(seed),
+      canAct, review: !!opt.dev?.supplies, perk, seed: String(seed), difficulty: () => difficulty.current,
       onOpen(open) {
         input.clear();
         if (open) cur?.env.grip?.release();
@@ -248,6 +250,14 @@ async function visit(office, opt) {
   function changeSetting(key, value) {
     if (!Object.hasOwn(BACKROOMS_DEFAULTS, key)) return;
     settings = cleanBackroomsSettings({ ...settings, [key]: value });
+    if (key === 'difficulty' && difficulty.set(settings.difficulty)) {
+      survival?.setDifficulty();
+      // A prebuild can still be yielding. Detach it now; its completion sees
+      // the changed identity and disposes itself rather than becoming current.
+      const old = ahead; ahead = null;
+      if (old?.f) letGo(old.f);
+      changeVisitDifficulty(plan, difficulty.current, (cur?.level.depth ?? 0) + 1);
+    }
     sound.setMute(settings.mute); sound.setMusicVolume(settings.musicVolume); sound.setSfxVolume(settings.sfxVolume);
     input.state.sensitivity = settings.sensitivity; input.state.invertY = settings.invertY;
     if (vhs.level !== settings.vhs) {
@@ -256,7 +266,7 @@ async function visit(office, opt) {
       if (cur?.player) cur.player.me.shake = lv === 2 ? 1 : lv === 1 ? 0.5 : 0.25;
       pictureKey = '';
     }
-    prefs.save(settings); menu?.update(settings);
+    prefs.save(settings); menu?.update({ ...settings, scoreEligible: difficulty.report().ranked });
   }
   function setPicture(lv) { changeSetting('vhs', lv); }
   function setPaused(on) {
@@ -300,11 +310,25 @@ async function visit(office, opt) {
       barricadesEnabled: opt.barricades !== false,
       lighting: opt.dev?.lighting || false,
       steadyLighting: () => settings.steadyLighting,
+      difficulty: () => difficulty.current,
       where: cleanWhere(opt.where),             // a place name the page was told (the site's host says a city): the banner's second line, and nothing else's
       player: null, world: null, pursuer: null,
       hatches: new Map(),                       // room id → { drop() }: where a door in a floor lets you out
       /** The visit is over. how: { nx, nz } — the way out through the wall that gave (thin.js), for an 'exit'. */
-      end: (why, how) => { if (cur === f && canAct()) finish(why, how); },
+      end: (why, how) => {
+        if (cur !== f || !canAct()) return;
+        if (why === 'caught' && difficultyOf(difficulty.current).immune) {
+          // Bottomless pits and other authored instant endings return a tourist
+          // to this part's landing. Merely ignoring the ending would strand them.
+          hold = false;
+          f.env.grip?.release();
+          Object.assign(f.player.me, { drop: 0, dropV: 0, vx: 0, vz: 0, sink: 0, sinkTo: 0, frozen: false, pitch: 0 });
+          f.player.warp(level.start.x, level.start.z, level.start.yaw || 0);
+          f.world.enter(f.world.roomAt(level.start.x, level.start.z));
+          return;
+        }
+        finish(why, how);
+      },
       /** Somebody has gone over an edge they cannot come back from: on down into the next part. at: { x, z } where, in this part's world. */
       descend: (at) => cur === f && descend(false, at || {}),
       /** A room is carrying somebody (a chute): their hands are off the controls until it lets go. */
@@ -604,7 +628,7 @@ async function visit(office, opt) {
     if (hud.thumbs && (lightSeen -= dt) <= 0) { lightSeen = 0.2; hud.thumbs.set({ light: lightNow() }); }
     sound.setHum(light / 0.3);
     if (here?.flickers.length && here.flickerNow < 0.5 && Math.random() < 0.3) sound.play('tick', { vol: 0.7 });
-    hud.batteryWarning((state === 'play' || state === 'drop') ? batteryWarning(survival?.camera.read().remaining) : null);
+    hud.batteryWarning(!difficultyOf(difficulty.current).immune && (state === 'play' || state === 'drop') ? batteryWarning(survival?.camera.read().remaining) : null);
 
     if (state === 'falling') {
       u.uSnow.value = Math.max(0, u.uSnow.value - dt / 0.8);
@@ -684,7 +708,7 @@ async function visit(office, opt) {
     if (opt.debug) delete window.__backrooms;
     // Everything of the visit's is gone from the page. What it came to is written up on a card (scorecard.js), however
     // it ended and whoever started it, and the visit is over when the card has been put down.
-    const why = reason || 'quit', run = tally.report(hearts), done = (card) => resolveVisit({ reason: why, kept, run, card });
+    const why = reason || 'quit', run = { ...tally.report(hearts), ...difficulty.report() }, done = (card) => resolveVisit({ reason: why, kept, run, card });
     // (what whoever plays this tape back will need to be given the same building: was the mascot in it, and which make
     // of the place was it — plan.js. Only a visit that got out has a tape to say it on.)
     if (why === 'exit') { run.mascot = plan.mascot !== null; try { run.edition = edition(); } catch { /* the tape does not say */ } }
