@@ -59,7 +59,9 @@ export function createStalkers(env) {
     /** Something E does, at a spot of the world: { x, z, r, when?(), use() }. It has to look as though it can be used: nothing says so. */
     use(spec) { const rt = W().roomAt(spec.x, spec.z); const u = { r: 1.2, ...spec, wx: spec.x, wz: spec.z, room: rt }; rt?.uses.push(u); return u; },
     /** For the count kept of a visit: the visitor has really seen it, for the first time (say so once) · it had them, and they got away (each time). */
-    met: () => env.run?.met?.(member.id),
+    // (a member of the cast with music of its own — `music` on its line of cast.js — has it begin here: each part's is
+    // met once, so it is once a part, and a piece already playing is not begun again)
+    met: () => { env.run?.met?.(member.id); if (member.music === 'mascot') env.sound?.playMascot?.(); },
     survived: () => env.run?.survived?.(member.id),
     /** Take a share (0…1) of whatever charge the camcorder's battery has left, where it has one. → { ok } */
     drain: (share) => env.camera?.drain?.(share) ?? { ok: false },
@@ -125,7 +127,7 @@ export function createStalkers(env) {
       if (follower) tag(follower, dt);
       for (const k of live) {
         if (k.dead) continue;
-        try { k.it.update?.(dt, env.clock); } catch (err) { console.warn(`[backrooms] ${k.id} has stopped`, err); k.dead = true; }
+        try { k.it.update?.(dt, env.clock); } catch (err) { console.warn(`[backrooms] ${k.id} has stopped`, err); k.dead = true; if (k.member.music === 'mascot') env.sound?.stopMascot?.(); }
       }
     },
     /** What goes down the stairs with you: the mascot's (as ever: { awake, face, card, lost }), and under `others` whatever anybody else wants kept. */

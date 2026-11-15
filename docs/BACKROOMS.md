@@ -307,9 +307,22 @@ keep the existing return delay. The white figure cannot relocate while armed.
   They are of this office: colleagues, facilities, things from a workplace
   that has gone wrong.
 - **Cheap.** A few thousand triangles, lit by where it stands (`c.light`), a
-  handful of meshes. No new audio files: `sound.js` voices only. (The one
-  file the level does load is the owner's own music, `music/room4.mp3`,
-  played low under everything by `sound.js`. That was the owner's to add.)
+  handful of meshes. No new audio files: `sound.js` voices only. (The two
+  files the level does load are the owner's own music: `music/room4.mp3`,
+  played low under everything, and `music/mascot.mp3`, the mascot's. Those
+  were the owner's to add.)
+- **The mascot has music.** A line of the cast may say `music: 'mascot'`,
+  and only the mascot's does. The piece begins the moment a part's mascot
+  has first really been seen (in view and near for a moment: `c.met()`), is
+  played once through in place of the usual music, and the usual music
+  comes back up when it has run out. Nothing else stops it: not losing
+  sight of the mascot, not leaving the room or the part. A mascot that is
+  no more takes it with it. Each part's mascot is met once, so it is once a
+  part at most, and a piece still playing is not begun again. The file is
+  not fetched until that moment; its volume, M and the menu apply to it as
+  to the other. (The owner: "It can stop either when the mascot dies
+  (unlikely) or the track runs out. If they encounter again on a new level
+  it can play again.")
 - **Seeded.** Which visit it is in, which floor and which room are decided by
   the seed and nothing else. `Math.random` is for what happens while somebody
   is playing.

@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { stage } from '../tools/backrooms-sample/stage.mjs';
-import { createSound, MUSIC_GAIN } from '../public/world/backrooms/sound.js';
+import { createSound, MUSIC_GAIN, MASCOT_GAIN } from '../public/world/backrooms/sound.js';
+import { ALL_CAST } from '../public/world/backrooms/cast.js';
 
 const dir = new URL('../public/world/backrooms/', import.meta.url);
 
@@ -57,8 +58,11 @@ function audio(t, options = {}) {
     close() { this.state = 'closed'; return Promise.resolve(); }
   }
   class Track {
-    paused = true; currentTime = 0; plays = 0;
+    paused = true; currentTime = 0; plays = 0; heard = {};
     constructor(src) { this.src = src; tracks.push(this); }
+    addEventListener(type, fn) { (this.heard[type] ||= []).push(fn); }
+    /** As the browser would say it: the piece has run out ('ended'), or would not load ('error'). */
+    say(type) { if (type === 'ended') this.paused = true; for (const fn of this.heard[type] || []) fn(); }
     play() { this.paused = false; this.plays++; return Promise.resolve(); }
     pause() { this.paused = true; }
     removeAttribute(name) { if (name === 'src') this.src = ''; }
@@ -125,11 +129,86 @@ test('audio dials accept only finite levels, and a menu opened before the first 
   sound.start(); assert.equal(contexts.length, 1);
 });
 
-test('music: wherever the level is staged, the file goes with it', () => {
+test('music: wherever the level is staged, both files go with it', () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'br-music-'));
   try {
     const { files } = stage(out, { page: null });
-    assert.ok(files.includes('world/backrooms/music/room4.mp3'));
-    assert.ok(fs.existsSync(path.join(out, 'world/backrooms/music/room4.mp3')));
+    for (const name of ['room4.mp3', 'mascot.mp3']) {
+      assert.ok(files.includes(`world/backrooms/music/${name}`), name);
+      assert.ok(fs.existsSync(path.join(out, `world/backrooms/music/${name}`)), name);
+    }
   } finally { fs.rmSync(out, { recursive: true, force: true }); }
+});
+
+test('the mascot\'s music: not fetched until it is wanted, once through in place of the other, and the other comes back', t => {
+  const { sound, contexts, tracks } = audio(t, { musicVolume:0.6 });
+  assert.equal(sound.playMascot(), false, 'nothing before the first gesture: there is no sound yet');
+  sound.start();
+  const ctx = contexts[0], usual = ctx.media[0].connections[0], musicBus = usual.connections[0];
+  assert.equal(tracks.length, 1, 'only the usual music has been asked for: most visits never hear the other');
+  assert.equal(sound.mascotMusic, null);
+  ctx.currentTime = 40;
+  assert.equal(sound.playMascot(), true);
+  const piece = tracks[1], envelope = ctx.media[1].connections[0];
+  assert.match(piece.src, /\/music\/mascot\.mp3$/);
+  assert.equal(piece.loop, false, 'once through');
+  assert.equal(envelope.connections[0], musicBus, 'through the music\'s own dial, so its volume, M and the menu all apply to it');
+  assert.deepEqual(envelope.gain.events.at(-1), ['ramp', MASCOT_GAIN, 40.8]);
+  assert.deepEqual(usual.gain.events.slice(-2), [['cancel', 40], ['target', 0, 40, 0.5]], 'the usual music gives way');
+  assert.deepEqual([piece.plays, sound.mascotMusic.playing], [1, true]);
+  // asked for again while it is playing (the next part's mascot, met before this has run out): it is not begun again
+  assert.equal(sound.playMascot(), false); assert.equal(piece.plays, 1); assert.equal(tracks.length, 2);
+  // the menu holds it still with everything else, and lets it go on from where it was
+  piece.currentTime = 61;
+  sound.setPaused(true); assert.equal(piece.paused, true);
+  sound.start(); assert.equal(piece.plays, 1, 'a touch on the menu does not start it again');
+  sound.setPaused(false); assert.deepEqual([piece.paused, piece.plays, piece.currentTime], [false, 2, 61]);
+  // it runs out: the usual music comes back up, over a few seconds
+  ctx.currentTime = 260; piece.say('ended');
+  assert.equal(sound.mascotMusic.playing, false);
+  assert.deepEqual(usual.gain.events.slice(-3), [['cancel', 260], ['set', 0, 260], ['ramp', MUSIC_GAIN, 264]]);
+  // …and on another part it may be met again, and is played again from the start, on the same player
+  ctx.currentTime = 400;
+  assert.equal(sound.playMascot(), true);
+  assert.deepEqual([tracks.length, piece.plays, piece.currentTime], [2, 3, 0]);
+  // the mascot is no more: it fades, and the usual music comes back
+  ctx.currentTime = 430; sound.stopMascot();
+  assert.equal(sound.mascotMusic.on, false);
+  assert.deepEqual(envelope.gain.events.at(-1), ['target', 0, 430, 0.4]);
+  assert.deepEqual(usual.gain.events.at(-1), ['ramp', MUSIC_GAIN, 434]);
+  sound.stopMascot(); assert.deepEqual(usual.gain.events.at(-1), ['ramp', MUSIC_GAIN, 434], 'stopping what is not playing does nothing');
+  sound.stop(); assert.equal(piece.src, ''); assert.equal(sound.mascotMusic, null);
+});
+
+test('the mascot\'s music: a phone that will not start it without a touch gets it at the next touch; a file that will not load costs nothing', async t => {
+  const { sound, contexts, tracks } = audio(t);
+  sound.start();
+  const ctx = contexts[0], usual = ctx.media[0].connections[0];
+  // (as a phone does: the piece is refused because nobody touched anything to ask for it)
+  // (the stand-in player is made anew for every test: there is nothing to put back)
+  globalThis.Audio.prototype.play = function play() { if (/mascot/.test(this.src) && !this.allowed) return Promise.reject(new Error('NotAllowedError')); this.paused = false; this.plays++; return Promise.resolve(); };
+  assert.equal(sound.playMascot(), true);
+  await new Promise((r) => setTimeout(r, 0));
+  const piece = tracks[1];
+  assert.deepEqual([piece.plays, piece.paused, sound.mascotMusic.on], [0, true, true], 'refused, and still wanted');
+  piece.allowed = true; sound.start();                                           // the next touch
+  assert.deepEqual([piece.plays, piece.paused], [1, false]);
+  // and one that cannot be had at all: the usual music is back, and nothing is thrown
+  ctx.currentTime = 90; piece.say('error');
+  assert.equal(sound.mascotMusic.on, false);
+  assert.deepEqual(usual.gain.events.at(-1), ['ramp', MUSIC_GAIN, 91]);
+});
+
+test('the mascot\'s music belongs to the mascot: it begins when a part\'s is first met, and only its own end or the mascot\'s stops it', () => {
+  const src = (f) => fs.readFileSync(new URL(f, dir), 'utf8');
+  assert.deepEqual(ALL_CAST.filter((m) => m.music).map((m) => [m.id, m.music]), [['pirate', 'mascot']]);
+  const pursuer = src('pursuer.js'), pirate = src('cast/pirate.js'), sound = src('sound.js');
+  assert.match(pursuer, /met: \(\) => \{ env\.run\?\.met\?\.\(member\.id\); if \(member\.music === 'mascot'\) env\.sound\?\.playMascot\?\.\(\); \},/);
+  // "met" is once for each part's mascot (p.known), after it has been in view and near for a moment: not a glimpse, and never twice in a part
+  assert.equal(pirate.match(/if \(!p\.known && p\.met > 0\.4\) \{ p\.known = true; c\.met\(\); \}/g).length, 2);
+  assert.match(pursuer, /k\.dead = true; if \(k\.member\.music === 'mascot'\) env\.sound\?\.stopMascot\?\.\(\);/, 'a mascot that is no more takes its music with it');
+  assert.equal((pursuer + pirate + src('index.js')).match(/stopMascot/g).length, 1, 'nothing else stops it: leaving the room, the part, or its sight does not');
+  assert.ok(MASCOT_GAIN > MUSIC_GAIN && MASCOT_GAIN <= 0.6, 'over the usual music, and still not loud');
+  assert.ok(fs.statSync(new URL('music/mascot.mp3', dir)).size > 1000000);
+  assert.match(sound, /theme = new Audio\(MASCOT\.href\)/); assert.ok(sound.indexOf('new Audio(MASCOT.href)') > sound.indexOf('function playMascot'), 'the file is not asked for until the piece is');
 });

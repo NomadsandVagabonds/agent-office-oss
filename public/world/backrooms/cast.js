@@ -45,11 +45,13 @@ export const CAST_LESSONS = Object.freeze({
  *   caught       what it costs to be got by it: { hurt: points of health } (and with no health system, a creature that hunts ends the visit) ·
  *                { ends: true } only for one that hunts · { setback: 'in a sentence' } for the rest
  *   room         for home 'room': { w, d } the least floor it needs, metres; far: the fewest doorways from where you land (default 3)
+ *   music        'mascot': it has a piece of music of its own (sound.js), which is played once through from the moment a part's
+ *                has first really been seen, and stopped early only if it is no more
  *   on           false: retired. It is out of the cast and nothing else has to change
  */
 export const ALL_CAST = Object.freeze([
   Object.freeze({ id: 'pirate', name: 'The mascot', rule: 'It only moves while nobody is looking at it — and it only knows where you are while it can see you.',
-    disposition: 'hunts', home: 'roams', always: true, weight: 1, teaches: 'sight', needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 2 } }),
+    disposition: 'hunts', home: 'roams', always: true, weight: 1, teaches: 'sight', needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 2 }, music: 'mascot' }),
   Object.freeze({ id: 'shadow', name: 'The shadow', rule: 'Stare until it turns white, then look away before the flash to clear it; watch it go off and half your battery goes with it.',
     disposition: 'hunts', home: 'roams', weight: 1, teaches: 'averted', needs: [], items: ['battery', 'torch'], fire: 'ignores',
     caught: { setback: 'the room goes dark for a while, and half the camcorder\'s charge is gone' } }),
