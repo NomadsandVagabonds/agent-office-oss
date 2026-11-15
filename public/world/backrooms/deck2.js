@@ -382,6 +382,19 @@ export const MORE_DECK = [
     ports: ['left', 'right'], weight: 1.3, lights: 'normal', themes: { suburb: 1, '*': 0 },
     module: './rooms/bus-stop.js', stash: (r) => [-r.W / 2 + 0.5, -r.D / 2 + 0.5, -r.W / 2 + 1.15, -r.D / 2 + 1.15],
     roll: (R, o) => ({ route: 'ROUTE ' + R.pick(HOME_NUMBERS), rows: (o.tasks.length ? R.shuffle(o.tasks.slice()) : ['TODO']).slice(0, 5).map((t) => String(t).toUpperCase().slice(0, 30)), queue: R.int(3, 6), who: R.shuffle([0, 1, 2, 3, 4, 5, 6, 7]) }) },
+  // A lawn of sprinklers that hear, and a path of stones across it.
+  { id: 'the-green', name: 'The Green', landmark: 'the lawn you are not to walk on', w: [10, 12], d: [9, 11], h: [2.9, 3.6],
+    ports: ['back', 'left', 'right'], weight: 1.2, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/the-green.js', stash: (r) => [r.W / 2 - 1.5, -r.D / 2 + 0.8, r.W / 2 - 0.8, -r.D / 2 + 1.5], roll: () => ({}) },
+  // A neighbourhood to the knee, and on a table in it the same one again.
+  { id: 'model-village', name: 'The Model', landmark: 'the street that comes up to your knee', w: [11, 13], d: [8, 9], h: [2.9, 3.6],
+    ports: ['left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/model-village.js', stash: (r) => [-r.W / 2 + 0.5, -r.D / 2 + 0.5, -r.W / 2 + 1.15, -r.D / 2 + 1.15], roll: (R) => ({ lit: R.int(0, 8) }) },
+  // A room that is all garage doors.
+  { id: 'garage-row', name: 'The Lock-ups', landmark: 'the room that is all garage doors', w: [11, 13], d: [9, 11], h: [2.9, 3.3],
+    ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
+    module: './rooms/garage-row.js', stash: (r) => [r.W / 2 - 1.3, r.D / 2 - 1.3, r.W / 2 - 0.65, r.D / 2 - 0.65],
+    roll: (R) => ({ nums: Array.from({ length: 8 }, () => R.pick([1, 2, 3, 4, 4, 7, 11, 12, 12, 40, 404])), empty: R.some([0, 1, 2, 3, 4, 5, 6, 7], 3) }) },
   // A playground on fake grass. Most of it is going down into the floor, slowly, and has been for some time.
   { id: 'recess', name: 'Recess', landmark: 'the playground that is going under', w: [12, 14], d: [10, 12], h: [3.3, 4.2],
     ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
