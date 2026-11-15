@@ -21,8 +21,9 @@ import { makeRng } from './gen.js';
 /** How much there is. Starting points: this is what play-testing changes. */
 export const SUPPLY = Object.freeze({
   batteryFirst: 4,                  // keep the first pack among this many early eligible rooms
-  batteryEvery: 8,                  // after that, one pack to this many rooms
+  batteryEvery: 28,                 // after that, one pack to this many rooms: two a part, about (it was 8, four a part: more than could ever be used)
   snacks: Object.freeze([0, 1]),    // to a part of the building: fewest, most
+  snack: 0.65,                      // the chance that a part has the most and not the fewest (it was even: one snack in a whole visit)
   torch: Object.freeze([0.7, 0.2]), // keep the first torch likely; fewer redundant ones further down
   torchCharge: Object.freeze([45, 150]),   // seconds of light left in one (a full one is 180): fewest, most
   chalk: 0.25,                      // the chance of a piece of chalk in a part
@@ -76,7 +77,7 @@ export function planSupplies(level, wanted = []) {
   let at = 0;
   const some = () => { const pick = []; for (let k = 0; k < Math.min(SUPPLY.choices, order.length); k++) pick.push(order[(at + k) % order.length].id); at++; return pick; };
   const leave = (type, n, extra = {}) => out.push({ id: `${type}-${n}`, type, rooms: some(), ...extra });
-  for (let n = 0, most = R.int(SUPPLY.snacks[0], SUPPLY.snacks[1]); n < most; n++) leave('snack', n);
+  for (let n = 0, most = R.chance(SUPPLY.snack) ? SUPPLY.snacks[1] : SUPPLY.snacks[0]; n < most; n++) leave('snack', n);
   if (R.chance(SUPPLY.torch[(level.depth ?? 0) > 0 ? 1 : 0])) leave('torch', 0, { charge: R.int(SUPPLY.torchCharge[0], SUPPLY.torchCharge[1]) });
   if (R.chance(SUPPLY.chalk)) leave('chalk', 0);
   // (what was added later draws from a source of its own, so that what was already lying about in a building stays where it was)

@@ -22,7 +22,7 @@ const MASCOT = new URL('./music/mascot.mp3', import.meta.url);
  * pace"), from the third part of a visit on, and quieter than the usual one: the owner, "it is so random that it may
  * get annoying so better at a lower volume than our main track".
  */
-export const DEEP_FROM = 2, DEEP_GAIN = 0.22;
+export const DEEP_FROM = 2, DEEP_GAIN = 0.13;
 const DEEP = new URL('./music/deep.mp3', import.meta.url);
 const volume = (value, fallback = 1) => Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback;
 export function createSound(level, opt = {}) {

@@ -71,7 +71,7 @@ test('sparser supplies retain an early battery opportunity and refill coverage e
     assert.ok(first.rooms.length > 0 && first.rooms.length <= 4);
     assert.ok(first.rooms.every(id => id >= 1 && id <= Math.min(4, eligible)), 'first pack stays in the early group');
     for (const pack of batteries.slice(1)) {
-      assert.ok(pack.rooms.length >= 1 && pack.rooms.length <= 8, 'later packs retain multiple placement opportunities');
+      assert.ok(pack.rooms.length >= 1 && pack.rooms.length <= SUPPLY.batteryEvery, 'later packs retain multiple placement opportunities');
       assert.ok(pack.rooms.every(id => id > 4));
     }
     const coverage = batteries.flatMap(pack => pack.rooms).sort((a, b) => a - b);
@@ -79,15 +79,15 @@ test('sparser supplies retain an early battery opportunity and refill coverage e
   }
 });
 
-test('a typical part has roughly six scattered finds rather than eleven, without reducing every pack to a lone placement', () => {
+test('a typical part has roughly four scattered finds, two of them battery packs, and a snack more often than not', () => {
   let finds = 0, snacks = 0, stacks = 0;
   for (let seed = 0; seed < 1000; seed++) {
     const plan = planSupplies(part(seed, 2));
     finds += plan.length; snacks += plan.filter(s => s.type === 'snack').length; stacks += plan.filter(s => s.type === 'paper').length;
-    assert.equal(plan.filter(s => s.type === 'battery').length, 4, '24 rooms keep an early pack and three later packs');
+    assert.equal(plan.filter(s => s.type === 'battery').length, 2, '24 rooms keep an early pack and one later pack');
   }
-  assert.ok(finds / 1000 >= 5.5 && finds / 1000 <= 6.3, `${finds / 1000} finds per part`);
-  assert.ok(snacks / 1000 >= .4 && snacks / 1000 <= .6, `${snacks / 1000} snacks per part`);
+  assert.ok(finds / 1000 >= 3.6 && finds / 1000 <= 4.5, `${finds / 1000} finds per part`);
+  assert.ok(snacks / 1000 >= SUPPLY.snack - .08 && snacks / 1000 <= SUPPLY.snack + .08, `${snacks / 1000} snacks per part`);
   assert.ok(stacks / 1000 >= .4 && stacks / 1000 <= .6, `${stacks / 1000} paper stacks per part`);
 });
 

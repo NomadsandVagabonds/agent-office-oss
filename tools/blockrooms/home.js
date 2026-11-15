@@ -662,11 +662,11 @@ function guests(latest) {
 }
 function scores(top, none = 'Nobody yet.') {
   const body = $('scores').tBodies[0];
-  if (!top.length) { body.replaceChildren(el('tr', '', Object.assign(el('td', 'empty', none), { colSpan: 7 }))); return; }
+  if (!top.length) { body.replaceChildren(el('tr', '', Object.assign(el('td', 'empty', none), { colSpan: 6 }))); return; }
   body.replaceChildren(...top.slice(0, 10).map((e, i) => {
-    const link = el('a', '', 'play'); link.href = `${PLAY}?tape=${encodeURIComponent(e.seed)}`;
+    // (no way into somebody else's building from here: the number of a tape is its owner's to give out — the card they came out with has it)
     const td = (cls, text) => el('td', cls, text);
-    return el('tr', i ? '' : 'first', td('n', String(i + 1)), td('', e.name), td('n', num(e.score)), td('n', clock(e.seconds)), td('n', String(e.batteries)), td('n', String(e.hearts)), el('td', '', link));
+    return el('tr', i ? '' : 'first', td('n', String(i + 1)), td('', e.name), td('n', num(e.score)), td('n', clock(e.seconds)), td('n', String(e.batteries)), td('n', String(e.hearts)));
   }));
 }
 guests([]);
