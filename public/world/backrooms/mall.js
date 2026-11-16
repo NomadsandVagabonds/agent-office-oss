@@ -59,7 +59,7 @@ function detail(g, kind, n) {
 /** The fronts, one sheet: uv of a kind of front, the right way up for upright(). */
 export function mallFronts(kit) {
   const texture = kit.tex.custom('mall:fronts', FW, FH, (g) => { FRONTS.forEach((k, i) => { g.save(); g.translate((i % 4) * CELL * FINE, (i >> 2) * CELL * FINE); g.scale(FINE, FINE); g.beginPath(); g.rect(0, 0, CELL, CELL); g.clip(); frontOf(g, k, i); detail(g, k, i); g.restore(); }); });
-  return { texture, uv: (kind) => { const i = Math.max(0, FRONTS.indexOf(kind)); const c = CELL * FINE; return [((i % 4) * c + 1) / FW, ((i >> 2) * c + 1) / FH, ((i % 4) * c + c - 1) / FW, ((i >> 2) * c + c - 1) / FH]; } };
+  return { texture, uv: (kind) => { const i = Math.max(0, FRONTS.indexOf(kind)); const c = CELL * FINE, row = 1 - (i >> 2); return [((i % 4) * c + 1) / FW, (row * c + 1) / FH, ((i % 4) * c + c - 1) / FW, (row * c + c - 1) / FH]; } };
 }
 /** The signs, one sheet, lit from inside: eight to a room, lettered from `names`, each a colour of tube. */
 export function mallSigns(kit, key, names, seed = 1) {
@@ -71,7 +71,7 @@ export function mallSigns(kit, key, names, seed = 1) {
       if ((i + seed) % 3 === 0) P(g, 'rgba(26,22,18,0.82)', 3 + ((seed * 37 + i * 61) % 150), y + 3, 46, SROW - 6);                                    // a tube gone, behind some of it
     });
   });
-  return { texture, uv: (i) => [0.5 / SIGN_W, (i * SROW + 0.5) / SIGN_H, 1 - 0.5 / SIGN_W, (i * SROW + SROW - 0.5) / SIGN_H] };
+  return { texture, uv: (i) => [0.5 / SIGN_W, 1 - (i * SROW + SROW - 0.5) / SIGN_H, 1 - 0.5 / SIGN_W, 1 - (i * SROW + 0.5) / SIGN_H] };
 }
 /** A flat piece on the four sides of a block (x0…z1), y0 to y1, each side by what `pick(side)` says: { batch, uv } or null. */
 export function wrap(x0, z0, x1, z1, y0, y1, pick) {
@@ -125,7 +125,8 @@ export function mallNeon(kit, key, names, seed = 1) {
       g.strokeStyle = col; g.lineWidth = 2; g.shadowColor = col; g.shadowBlur = 8; g.strokeRect(5, y + 5, W - 10, ROW - 10); g.restore();
     });
   });
-  return { texture, uv: (i) => [1 / W, (i * ROW + 1) / H, 1 - 1 / W, (i * ROW + ROW - 1) / H], colour: (i) => TUBES[(i + seed) % TUBES.length] };
+  // (a sheet's rows are counted from the bottom of it by what draws it: the first name is the top row)
+  return { texture, uv: (i) => [1 / W, 1 - (i * ROW + ROW - 1) / H, 1 - 1 / W, 1 - (i * ROW + 1) / H], colour: (i) => TUBES[(i + seed) % TUBES.length] };
 }
 export const tube = (i) => TUBES[((i % TUBES.length) + TUBES.length) % TUBES.length];
 
