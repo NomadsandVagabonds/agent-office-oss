@@ -306,9 +306,19 @@ function surfaceBounds(w, x, z) {
   return { rt, floorY, ceilY, wall: near };
 }
 
+/**
+ * How much of them is heard, in seconds. The owner: with several about they were one long noise. So a toner says it has
+ * found somebody (`alert`: once, then not again for that long, and no two of them within `apart` of each other), and winds up
+ * to a leap aloud (`warn`: that is the tell a visitor dodges by, so it is always given, only not every click of it); and the
+ * calm clicking of ones that have found nobody is a rare thing for the whole pack (`calm`), and only from near by.
+ */
+export const HEARD = Object.freeze({ calm: 18, alert: 10, apart: 3, warn: 0.5, near: 14 });
+
 export function create(c) {
   const env = c.env, level = env.level, R = c.R, me = c.me;
   const units = [];
+  const said = { now: 0, calm: -1e9, alert: -1e9 };          // the pack's own clock, and when it last made each sound
+  const calmly = (x, z, d, reach) => { if (d < HEARD.near && said.now - said.calm >= HEARD.calm) { said.calm = said.now; c.play('sonar', x, z, reach); } };
   let geoms = null, placed = false, nextId = 1, wadeT = 0, seenT = 0, known = false, over = false, packGrace = 0;
 
   function pickStartRoom() {
@@ -606,7 +616,7 @@ export function create(c) {
     // 1. Floor-only brooding puddle or spent stain (no movement/LOS/fire work needed)
     if (unit.s.mode === 'puddle' || unit.s.mode === 'spent') {
       unit.s = stepToner(unit.s, dt, { d });
-      if (unit.s.sonar === 'ping') c.play('sonar', walker.x, walker.z, 8.5);
+      if (unit.s.sonar === 'ping') calmly(walker.x, walker.z, d, 8.5);
       if (unit.s.inPuddle) {
         const isSpent = unit.s.mode === 'spent';
         m.slow = Math.min(m.slow, unit.s.slow);
@@ -729,10 +739,10 @@ export function create(c) {
     if (unit.emerging && unit.s.mode !== 'recoil') unit.emerging = false;
 
     // Audio cues: creepy biosonar click-trains & drop rattle
-    if (unit.s.sonar === 'ping') c.play('sonar', walker.x, walker.z, 9.5);
-    else if (unit.s.sonar === 'warn') { c.play('sonarrattle', walker.x, walker.z, 11); if (d < 9) env.interfere(0.18 + 0.25 * unit.s.alert); }
+    if (unit.s.sonar === 'ping') calmly(walker.x, walker.z, d, 9.5);
+    else if (unit.s.sonar === 'warn') { if (said.now - (unit.saidWarn ?? -1e9) >= HEARD.warn) { unit.saidWarn = said.now; c.play('sonarrattle', walker.x, walker.z, 11); } if (d < 9) env.interfere(0.18 + 0.25 * unit.s.alert); }
     else if (unit.s.sonar === 'drop') { c.play('sonarrattle', walker.x, walker.z, 12); c.play('clack', walker.x, walker.z, 9); env.interfere(0.55); }
-    else if (unit.s.sonar === 'chase') c.play('sonar', walker.x, walker.z, 10);
+    else if (unit.s.sonar === 'chase' && said.now - (unit.saidAlert ?? -1e9) >= HEARD.alert && said.now - said.alert >= HEARD.apart) { unit.saidAlert = said.alert = said.now; c.play('sonar', walker.x, walker.z, 10); }
 
     if (unit.s.glitch && d < 9 && unit.s.mode === 'chase') env.interfere(0.28);
 
@@ -848,6 +858,7 @@ export function create(c) {
     ready,
     update(dt, t = 0) {
       if (!placed || !units.length || over) return;
+      said.now += dt;
       packGrace = Math.max(0, packGrace - dt);
       wadeT = Math.max(0, wadeT - dt);
       const w = env.world, m = me();

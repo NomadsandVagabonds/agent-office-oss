@@ -94,12 +94,8 @@ export function build(c) {
   for (const [dx, dz, rot] of [[-0.55, 0.35, 0.4], [0.48, -0.42, 1.9]]) {
     c.lay(c.ceil, hole.x + dx, hole.z + dz, TILE, TILE, rot, [[0, 0], [1, 0], [1, 1], [0, 1]], WHITE, 0.012);
   }
-  // Yellow/black floor hazard box around the hanging leads so observant visitors walk clear
-  const tape = lin('#d6a428');
-  for (const s of [-1, 1]) {
-    c.lay(c.flat, hole.x, hole.z + s * 1.22, 2.44, 0.06, 0, null, tape, 0.01);
-    c.lay(c.flat, hole.x + s * 1.22, hole.z, 0.06, 2.44, 0, null, tape, 0.01);
-  }
+  // (There was a box of yellow tape on the floor round where they hang. The owner had it out: it said where to stand, and
+  // what is up there is for whoever looks up.)
 
   // Dormant tendrils dangling from the plenum hole
   const tendrilBatch = new Batch(true);
