@@ -247,7 +247,7 @@ export function build(c) {
         c.env.interfere(0.55 + 0.45 * res.pullProgress);
         if (res.caught) {
           // through the rollers: two hearts where there are hearts — and if that was not the last of them she lets go and wheels it home
-          const hit = c.hurt(SHREDDER.hurts);
+          const hit = c.hurt(SHREDDER.hurts, roamer);
           if (hit.ended) { over = true; return; }
           if (!hit.ended) { rule = releaseShredder(rule); me.pitch = 0; if (hit.landed) { c.env.hud.glitch(0.6); c.survived('retention-clerk'); } }
         }

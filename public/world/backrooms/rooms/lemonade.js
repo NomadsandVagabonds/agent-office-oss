@@ -159,7 +159,7 @@ export function build(c) {
     const d = Math.hypot(me.x - me0.x, me.z - me0.z), atHome = Math.hypot(home.x - me0.x, home.z - me0.z) < 0.1;
     const did = minds(s, dt, { inside: me.inside, d, took, home: atHome }); took = false;
     if (did === 'gave') { giggle(0.85); c.env.health?.heal?.(1); const w = c.toWorld(me0.x, me0.z); c.env.play?.('click', w.x, w.z, 5); }
-    if (did === 'hit') { c.hurt(1); c.env.interfere?.(1); c.env.hud?.glitch?.(0.5); }
+    if (did === 'hit') { c.hurt(1, c.toWorld(me0.x, me0.z)); c.env.interfere?.(1); c.env.hud?.glitch?.(0.5); }
     nextGiggle -= dt; if (s.mode === 'offer' && me.inside && d < 1.7 && nextGiggle <= 0) { giggle(0.45 + 0.4 * (s.waited / STAND.patience)); nextGiggle = 4 + Math.random() * 3; }
     let bob = 0, shake = 0;
     if (s.mode === 'offer') { go(me.x, me.z, STAND.walk, dt, STAND.reach); if (s.waited > STAND.patience * STAND.shakes) shake = 0.03 * (s.waited / STAND.patience); }

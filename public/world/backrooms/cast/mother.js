@@ -179,7 +179,7 @@ export function create(c) {
           // it has come down where a face was when it jumped: is the face still there, and did it find it?
           const d = Math.hypot(m.x - w.x, m.z - w.z);
           if (c.los(a.fx, a.fz, m.x, m.z) && finds(d)) {
-            const hit = c.hurt(WORM.hurts);
+            const hit = c.hurt(WORM.hurts, { x: a.fx, z: a.fz });   // (thrown back the way it leapt: from where it jumped)
             w.dead = true; w.flat = 0.001; w.x = m.x; w.z = m.z;                  // it is spent either way
             if (hit.ended) { over = true; return; }
             if (hit.landed) { tookOne = true; env.hud?.glitch?.(0.7); env.interfere?.(0.8); c.play('squeak', m.x, m.z, 6); }

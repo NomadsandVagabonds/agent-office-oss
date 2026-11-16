@@ -26,6 +26,8 @@ export function createStalkers(env, options = {}) {
   const hiddenAt = (x, z, r = 0.6) => !env.sees(x, z, { radius: r, margin: 0.2, far: 40 });
   const drawn = (a) => { const rt = W().roomAt(a.x, a.z); return !!rt && rt.group.visible; };
   let follower = null, taker = null;                    // (taker: whoever's hit was the last heart — index.js asks, for the last shot)
+  /** Where a member of the cast says it is (its at(): for which way a blow of its throws the visitor), or null. */
+  const whereIs = (k) => { try { return k.it?.at?.() ?? null; } catch { return null; } };
 
   /* ---- who is on this floor ---------------------------------------------------------------- */
 
@@ -62,14 +64,17 @@ export function createStalkers(env, options = {}) {
      * It has got the visitor. With a health system (env.health, when there is one) this costs `n` points and says what happened:
      * { landed: the hit counted (false: they were hit a moment ago), dead: it was the last of them — the visit is ending, do nothing more }.
      * Without one, a creature that hunts ends the visit ('caught') and anything else does nothing: { landed: false, ended }.
+     * A hit that lands and is survived throws the visitor back from `from` ({ x, z }, world coordinates: where the blow came
+     * from), or, if it does not say, from wherever its own at() says it is (player.js knock).
      */
-    hurt(n = 1) {
+    hurt(n = 1, from = null) {
       // (who it was is noted before the hit is made: the visit begins to end inside it, and asks)
       const before = taker; taker = k;
       const hit = env.health?.damage(creatureTuning(env.difficulty?.() ?? 'training-wheels', member.id).damage ?? n);
       if (hit) {
         const ended = !!hit.dead && !options.hasSurvivor?.();
         if (!ended) taker = before;
+        if (hit.ok && !hit.dead) env.player?.knock?.(from ?? whereIs(k));
         return { landed: !!hit.ok, dead: !!hit.dead, ended };
       }
       if (member.disposition === 'hunts') { env.end('caught'); return { landed: true, dead: true, ended: true }; }
