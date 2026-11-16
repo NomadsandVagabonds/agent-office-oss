@@ -540,7 +540,7 @@ test('the absorbed staff: a hold never turns the visitor\'s head while something
   assert.ok(TUG_SECONDS < A.holdDuration);
   // the ones this is for are the ones that hunt (the waste toner since it came: something dropping off the ceiling at
   // you is not a moment to have your head turned for you); the rest of the hold is as it was
-  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner', 'the-lines', 'mother', 'other-door']);
+  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner', 'the-lines', 'mother', 'head-count', 'other-door']);
   const held = SUNK.stepAbsorbed(SUNK.createAbsorbedState('wall'), { dt, dist: 0.5 });
   assert.ok(held.startedGrab && held.slow === A.slowFactor);
 });
@@ -1010,4 +1010,41 @@ test('Mother: comes over, heaves when near, brings up four or five, and is then 
   assert.equal(trodden(me, [{ x: 0, z: 1 }]), -1, 'not one behind');
   assert.equal(trodden(me, [{ x: 0, z: 0.3 }]), 0, 'but one underfoot, whichever way');
   assert.equal(trodden(me, [{ x: 0, z: -0.6, air: {} }, { x: 0, z: -0.6, dead: true }, { x: 0, z: -(WORM.tread + 0.2) }]), -1, 'not in the air, not twice, not out of reach');
+});
+
+/* ---- head count (cast/head-count.rule.js): it feels the floor --------------------------------------------------- */
+
+test('head count: a step is felt and a still visitor is not, until a hand is on them', async () => {
+  const { HEADS, counting, counts, reach, pace, elbow } = await import('../public/world/backrooms/cast/head-count.rule.js');
+  assert.equal(reach(0), 0, 'standing still is not felt at any distance'); assert.equal(reach(2.05), HEADS.walks); assert.equal(reach(3.7), HEADS.runs);
+  const at = { x: 5, z: 0 };
+  let s = counting();
+  for (let t = 0; t < 30; t += 0.1) s = counts(s, { dt: 0.1, d: 3, speed: 0, at });
+  assert.equal(s.mode, 'counts', 'three metres off and still: it goes on counting');
+  for (let t = 0; t < 5; t += 0.1) s = counts(s, { dt: 0.1, d: HEADS.walks + 1, speed: 2.05, at });
+  assert.equal(s.mode, 'counts', 'a walk, too far off');
+  for (let t = 0; t < 5; t += 0.1) s = counts(s, { dt: 0.1, d: 5, speed: 2.05, at, line: false });
+  assert.equal(s.mode, 'counts', 'nor through a wall');
+  s = counts(s, { dt: 0.1, d: HEADS.walks + 1, speed: 3.7, at }); assert.equal(s.mode, 'counts', 'one step is not enough to be sure');
+  for (let t = 0; t < HEADS.sure + 0.2; t += 0.1) s = counts(s, { dt: 0.1, d: HEADS.walks + 1, speed: 3.7, at });
+  assert.equal(s.mode, 'comes', 'but a run is felt from further'); assert.deepEqual(s.felt, at);
+  assert.ok(pace('comes') > 2.05 && pace('comes') < 3.7, 'faster than a walk, slower than a run');
+  // they stop: it goes to where the step was, and does not know they have moved since
+  s = counts(s, { dt: 0.1, d: 6, speed: 0, at: { x: 9, z: 9 } }); assert.deepEqual(s.felt, at);
+  s = counts(s, { dt: 0.1, d: 6, speed: 0, at: { x: 9, z: 9 }, there: true }); assert.equal(s.mode, 'sweeps');
+  for (let t = 0; t < HEADS.sweep + 0.2; t += 0.1) s = counts(s, { dt: 0.1, d: 3, speed: 0, at });
+  assert.equal(s.mode, 'counts', 'nobody there: back to its count');
+  // a hand on them, still or not
+  s = counts(s, { dt: 0.1, d: HEADS.touch - 0.1, speed: 0, at }); assert.ok(s.took); assert.equal(s.mode, 'recounts');
+  assert.ok(!counts(s, { dt: 0.1, d: 0.2, speed: 3, at }).took, 'it has them once, and counts again');
+  assert.equal(pace('recounts'), 0);
+  for (let t = 0; t < HEADS.recount + 0.2; t += 0.1) s = counts(s, { dt: 0.1, d: 5, speed: 0, at });
+  assert.equal(s.mode, 'counts');
+  assert.ok(!counts(counting(), { dt: 0.1, d: 0.5, speed: 0, at, fire: true }).took, 'not across a fire');
+  assert.ok(!counts(counting(), { dt: 0.1, d: 0.5, speed: 0, at, line: false }).took, 'nor through a wall');
+  // an arm: the elbow is both lengths from where it is joined, and above the straight line
+  const sh = { x: 0, y: 0.7, z: 0 }, hand = { x: 0.9, y: 0, z: 0 }, e = elbow(sh, hand, 0.63, 0.69, { x: 1, z: 0 });
+  assert.ok(Math.abs(Math.hypot(e.x - sh.x, e.y - sh.y, e.z - sh.z) - 0.63) < 1e-6 && Math.abs(Math.hypot(e.x - hand.x, e.y - hand.y, e.z - hand.z) - 0.69) < 1e-6);
+  assert.ok(e.y > 0.45, 'lifted well clear of the straight line from shoulder to hand');
+  const far = elbow(sh, { x: 5, y: 0, z: 0 }, 0.63, 0.69); assert.ok(Number.isFinite(far.x + far.y + far.z), 'a hand out of reach does not break it');
 });
