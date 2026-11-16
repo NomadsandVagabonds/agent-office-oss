@@ -52,6 +52,30 @@ export const SPRITES = {
     '.k..kkkkkkk..k..', 'kk...k.k.k...kk.', 'k....k...k....k.',
     '.....k...k......',
   ]) },
+  // The big ones met further down: three shirts on eight arms and not a head between them; nine pairs of hips in a
+  // row with the front of it stood up on end; somebody too tall, bent double; and somebody senior, carried.
+  head_count: { fps: 2.5, frames: [0, 1].map((f) => {
+    const arms = [0, 2, 5, 7, 8, 10, 13, 15];
+    const arm = (y) => Array.from({ length: 16 }, (_, x) => { const i = arms.indexOf(x); return i < 0 ? '.' : y < 3 ? 's' : i % 2 === f ? '.' : 't'; }).join('');
+    return ['..kk...kk...kk..', '.wkkw.wkkw.wkkw.', '.wwrwwwwrwwwwrw.', 'wwwrwwwwrwwwwrww', 'wwwwwwwwwwwwwwww', 'GwwwGGwwwwGGwwwG', arm(0), arm(1), arm(2), arm(3)];
+  }) },
+  standing_meeting: { fps: 4, frames: [0, 1].map(f => [
+    '..DD............', '.DhhD...........', '.DfhD...........', '.DhfD...........', '..DhD...........',
+    '..DDDDDDDDDDDDD.', '..DdDdDdDdDdDdD.', '..d.r.d.d.r.d.d.',
+    f ? '.d..d..d.d..d.d.' : '..d.d.d.d.d.d.d.',
+    f ? '.kk.kk.kkkk.kkk.' : '.kk.kkkk.kk.kkk.',
+  ]) },
+  intern: { fps: 1.5, frames: [0, 1].map(f => [
+    '....wwww....', '..wwwwwwww..', '.www....www.', '.dd....wwww.', '.dd....s..s.', '.dd....sKKs.', '.dd....stts.',
+    f ? '.dd....swws.' : '.dd....skks.',
+    '.dd....sNNs.', '.dd....s..s.', '.dd....s..s.', '.dd....s..s.', '.dd....s..s.', '.dd....s..s.', '.dd...ts..st', 'kkk.........',
+  ]) },
+  carried_interest: { fps: 3, frames: [0, 1].map(f => [
+    '......ssss......', '......skks......', '.....DDssDD.....', '...DDDDwrwDDDD..', '..DDDDDwrwDDDDD.', '.DDDDDDDrDDDDDDD',
+    '.DDDDDDDDDDDDDDD', '.DDDDDDDDDDDDDD.', '..DDDDDDDDDDDD..',
+    f ? '.hh.hh.hh.hh.hh.' : '..hh.hh.hh.hh.hh',
+    f ? '.H.H..H.H..H.H..' : '..H.H..H.H..H.H.',
+  ]) },
   pit_clerk: { fps: 1.5, frames: [0, 1].map(f => [
     '.....nnnnnn.....', '....nnttttnn....', '....ntwttwtn....', '....ntkttktn....',
     '....tttttttt....', '....tkkkkkkt....', '.....twwwt......', '......tttt......',
