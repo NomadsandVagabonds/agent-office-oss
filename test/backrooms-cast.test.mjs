@@ -540,7 +540,7 @@ test('the absorbed staff: a hold never turns the visitor\'s head while something
   assert.ok(TUG_SECONDS < A.holdDuration);
   // the ones this is for are the ones that hunt (the waste toner since it came: something dropping off the ceiling at
   // you is not a moment to have your head turned for you); the rest of the hold is as it was
-  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner', 'the-lines', 'mother', 'head-count', 'standing-meeting', 'intern', 'other-door']);
+  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner', 'the-lines', 'mother', 'head-count', 'standing-meeting', 'intern', 'carried-interest', 'other-door']);
   const held = SUNK.stepAbsorbed(SUNK.createAbsorbedState('wall'), { dt, dist: 0.5 });
   assert.ok(held.startedGrab && held.slow === A.slowFactor);
 });
@@ -1113,4 +1113,31 @@ test('the intern: it copies what it has watched, a few seconds behind, and loses
   for (let t = 0; t < INTERN.sorry + 0.2; t += 0.1) c2 = copies(c2, { dt: 0.1, d: 3, sees: true }); assert.ok(c2.mode === 'waits' || c2.mode === 'copies'); assert.ok(c2.learnt < 30, 'and is further behind again for it');
   assert.ok(!copies(waiting(), { dt: 0.1, d: 0.2, sees: true, fire: true }).took, 'not across a fire');
   assert.ok(!copies(waiting(), { dt: 0.1, d: 0.2, sees: false }).took, 'nor through a wall');
+});
+
+/* ---- carried interest (cast/carried-interest.rule.js): it is carried, and can be dropped ------------------------- */
+
+test('carried interest: it is carried to you and set down; tread on enough of what carries it and it is on the floor a while', async () => {
+  const { CARRIED, borne, carried, pace, under } = await import('../public/world/backrooms/cast/carried-interest.rule.js');
+  assert.ok(pace(CARRIED.bearers) < 2.05, 'on all ten it is slower than a walk'); assert.equal(pace(CARRIED.needs - 1), 0); assert.ok(pace(CARRIED.needs) > 0 && pace(CARRIED.needs) < pace(CARRIED.bearers), 'and slower the fewer');
+  let s = borne();
+  assert.ok(carried(s, { dt: 0.1, d: 8, sees: true }).comes); assert.ok(!carried(s, { dt: 0.1, d: 8, sees: false }).comes); assert.ok(!carried(s, { dt: 0.1, d: 8, sees: true, fire: true }).comes);
+  // treading on them
+  s = carried(s, { dt: 0.1, d: 3, sees: true, trodden: 2 }); assert.equal(s.bearers, CARRIED.bearers - 2); assert.equal(s.mode, 'borne', 'two gone: it is still carried');
+  for (let n = 0; n < 2; n++) s = carried(s, { dt: 0.1, d: 3, sees: true, trodden: 1 }); assert.equal(s.mode, 'borne', `on ${s.bearers}`);
+  s = carried(s, { dt: 0.1, d: 3, sees: true, trodden: 1 }); assert.equal(s.mode, 'down'); assert.ok(s.drops, 'the fifth puts it on the floor');
+  assert.ok(!carried(s, { dt: 0.1, d: 0.2, sees: true }).took, 'on the floor it is set down on nobody');
+  assert.ok(!carried(s, { dt: 0.1, d: 3, sees: true, trodden: 1 }).drops, 'and it is dropped once, not every time one is trodden on');
+  // more grow, and it is taken up again
+  let t = 0, rose = false; while (t < 60 && !rose) { s = carried(s, { dt: 0.5, d: 6, sees: true }); t += 0.5; rose = !!s.rises; }
+  assert.ok(rose && s.mode === 'borne' && s.bearers === CARRIED.needs + 1, `taken up again on ${s.bearers} after ${t} s`); assert.ok(t >= CARRIED.grows * 2 - 0.6, 'which is a while');
+  for (t = 0; t < CARRIED.grows * 6; t += 0.5) s = carried(s, { dt: 0.5, d: 20, sees: false }); assert.equal(s.bearers, CARRIED.bearers, 'and in the end it has all ten again, and no more');
+  // set down on somebody
+  s = carried(s, { dt: 0.1, d: CARRIED.set - 0.1, sees: true }); assert.ok(s.took); assert.equal(s.mode, 'sits');
+  assert.ok(!carried(s, { dt: 0.1, d: 0.1, sees: true }).took, 'once');
+  for (t = 0; t < CARRIED.sits + 0.2; t += 0.1) s = carried(s, { dt: 0.1, d: 3, sees: true }); assert.equal(s.mode, 'borne');
+  assert.ok(!carried(borne(), { dt: 0.1, d: 0.3, sees: false }).took, 'not through a wall'); assert.ok(!carried(borne(), { dt: 0.1, d: 0.3, sees: true, fire: true }).took, 'nor across a fire');
+  // which one a foot finds
+  const me = { x: 0, z: 0, yaw: 0 };
+  assert.equal(under(me, [{ x: 0, z: -1.2 }, { x: 0.2, z: -0.7 }]), 1); assert.equal(under(me, [{ x: 0, z: -0.7, gone: true }]), -1); assert.equal(under(me, [{ x: 0, z: 1 }]), -1, 'not one behind');
 });
