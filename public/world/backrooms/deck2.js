@@ -475,6 +475,10 @@ export const MORE_DECK = [
     }),
   },
   // Kept out of ordinary visits until the waterpark team's integration pass.
+  { id: 'hanging-changing', name: 'Hanging Changing Rooms', landmark: 'changing partitions suspended above narrow channels',
+    module: './rooms/hanging-changing.js', w: [20,20], d: [26,26], h: [6.2,6.6], ports: ['back'],
+    big: true, weight: 1, lights: 'normal', themes: { waterpark: 1, '*': 0 },
+    stash: r => [-2, r.D/2-2.5, -1, r.D/2-1.5], roll: () => ({}) },
   { id: 'bellmouth-baths', name: 'Bellmouth Baths', landmark: 'the enormous ceramic drain with a gallery around its rim',
     module: './rooms/bellmouth-baths.js', w: [26,28], d: [28,28], h: [9,10], ports: ['back'],
     big: true, weight: 1, lights: 'normal', themes: { waterpark: 1, '*': 0 },

@@ -39,6 +39,7 @@ import { partyStudy } from './party-study.js';
 import { waterparkStudy } from './waterpark-study.js';
 import { returnPoolStudy } from './return-pool-study.js';
 import { bellmouthStudy } from './bellmouth-study.js';
+import { changingStudy } from './hanging-changing-study.js';
 
 // &check=1: listen from the start, so that nothing said while the floor was being built is missed
 const said = [];
@@ -136,7 +137,8 @@ async function go() {
       if (q.get('map')) dev.textContent = handle.sketch();
       console.log(handle.sketch());
       if (q.get('check')) console.log('[check] ' + JSON.stringify(check(handle)));
-      if (q.get('bellstudy') === '1') closeStudy = bellmouthStudy(handle);
+      if (q.get('changingstudy') === '1') closeStudy = changingStudy(handle);
+      else if (q.get('bellstudy') === '1') closeStudy = bellmouthStudy(handle);
       else if (q.get('waterstudy') === '1') closeStudy = waterparkStudy(handle);
       else if (q.get('poolstudy') === '1') closeStudy = returnPoolStudy(handle);
       else if (q.get('partystudy') === '1') closeStudy = partyStudy(handle);

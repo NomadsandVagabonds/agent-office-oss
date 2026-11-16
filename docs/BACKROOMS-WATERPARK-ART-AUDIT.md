@@ -6,8 +6,10 @@
 
 Bellmouth Baths now has a first playable study on `codex/waterpark-bellmouth`.
 See [its review notes](BACKROOMS-BELLMOUTH.md) for the implemented route, remaining
-differences from the brief and validation. The other architecture briefs below
-remain plans.
+differences from the brief and validation. Hanging Changing Rooms also has a
+first playable connector on `codex/waterpark-hanging-changing`; see
+[its route and review notes](BACKROOMS-HANGING-CHANGING.md). The remaining
+architecture briefs below are plans.
 
 ## Direction
 

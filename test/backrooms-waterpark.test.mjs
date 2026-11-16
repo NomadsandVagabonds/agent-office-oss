@@ -57,6 +57,7 @@ const [
 const WATERPARK_ROOMS = [
   'return-pool',
   'bellmouth-baths',
+  'hanging-changing',
   'slide-maze',
   'wave-pool',
   'lazy-river',

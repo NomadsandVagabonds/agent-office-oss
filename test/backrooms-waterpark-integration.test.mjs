@@ -7,7 +7,7 @@ const [{createKit},{buildWorld,loadCatalogue},{generate},{DECK},{toWorld,wallPoi
  import('../public/world/backrooms/kit.js'),import('../public/world/backrooms/world.js'),import('../public/world/backrooms/gen.js'),import('../public/world/backrooms/gen.js'),import('../public/world/backrooms/frame.js'),import('../public/world/backrooms/player.js'),import('../public/vendor/three.module.min.js'),import('../public/world/backrooms/denizens.js')]);
 const draw=new Proxy({}, {get:(_,k)=>k==='measureText'?s=>({width:String(s).length*6}):/Gradient/.test(k)?()=>({addColorStop(){}}):()=>{},set:()=>true});
 const oldDocument=globalThis.document;globalThis.document={createElement:()=>({getContext:()=>draw})};test.after(()=>{globalThis.document=oldDocument;});
-const ids=['bellmouth-baths','slide-maze','return-pool','wave-pool','lazy-river','deep-end','whirlpool-flume','kiddie-lagoon','locker-showers'];
+const ids=['hanging-changing','bellmouth-baths','slide-maze','return-pool','wave-pool','lazy-river','deep-end','whirlpool-flume','kiddie-lagoon','locker-showers'];
 async function fixture(id,rot=0,generated=false){
  const {build}=await import(`../public/world/backrooms/rooms/${id}.js`),defn=DECK.find(a=>a.id===id), kit=createKit(),g=generate('waterpark-integration',{themes:['waterpark']});
  const W=defn.w[rot%2],D=defn.d[rot%2],H=defn.h[rot%2];
@@ -50,6 +50,62 @@ async function walkTo(f,x,z){
  f.input.keys.clear();f.player.me.vx=0;f.player.me.vz=0;
  assert.ok(Math.hypot(f.player.me.x-p.x,f.player.me.z-p.z)<.16,`reached ${x},${z}; at ${JSON.stringify(f.player.me)}`);
 }
+for(const rot of [0,1,2,3])test(`Hanging Changing: dry loop, wet shortcuts and real crouching (${rot})`,async t=>{
+ const f=await fixture('hanging-changing',rot);t.after(()=>f.dispose());assert.deepEqual(f.warnings,[]);
+ const rt=f.world.rooms[0],p=rt.changing.plan;
+ // From either bank, a ray from the lower tread must hit the visible riser.
+ // Finite vertices alone did not catch inward faces that looked like holes.
+ f.world.scene.updateMatrixWorld(true);
+ for(const side of [-1,1]) {
+  const z=p.slabs[0].z+side*1.5,at=toWorld(f.def,-2,z),out=toWorld(f.def,-2,z+side);
+  const ray=new THREE.Raycaster(new THREE.Vector3(at.x,f.def.y-.08,at.z),new THREE.Vector3(out.x-at.x,0,out.z-at.z).normalize(),.001,.3);
+  assert.ok(ray.intersectObject(rt.group,true).length,'channel riser faces its lower tread');
+ }
+ // The long route is walkable without a jump, crouch key, item or encounter.
+ for(const [x,z] of [[0,10],[8,10],[8,5],[-8,5],[-8,-2],[8,-2],[8,-10],[0,-10],[0,-12]]) {
+  await walkTo(f,x,z);assert.ok(f.player.me.duck<.05,'dry route remains standing height');
+ }
+ // Retrace the first bay by its other route: these are actual loops, not a
+ // one-way teleport. All three short passages lower and then release the head.
+ const a=toWorld(f.def,-2,9);f.player.warp(a.x,a.z);f.tick(30);
+ for(const [i,approach] of [[[ -2,9 ]],[[ -2,2.2 ],[2,2.2]],[[2,-2],[-5,-2],[-5,-5],[-3,-5]]].entries()) {
+  for(const [x,z] of approach)await walkTo(f,x,z);
+  const s=p.slabs[i];await walkTo(f,s.slot,s.z);f.tick(45);
+  assert.ok(f.player.me.duck>.4&&f.player.me.sink>.4,`automatically crouches under visible lid: ${JSON.stringify(f.player.me)}; head=${f.world.headroom(f.player.me.x,f.player.me.z)}`);
+  assert.ok(f.player.me.y-f.def.y<.85,'camera clears the underside');
+  assert.ok(Math.abs(f.world.floorY(f.player.me.x,f.player.me.z)-(f.def.y-.48))<.001);
+  const height=f.world.floorY(f.player.me.x,f.player.me.z);
+  const remote=toWorld(f.def,8,10);f.world.floorY(remote.x,remote.z);
+  assert.equal(f.world.floorY(f.player.me.x,f.player.me.z),height,'another player querying dry ground cannot change this floor');
+  await walkTo(f,s.slot,s.z-2.1);f.tick(60);
+  assert.ok(f.player.me.duck<.05&&f.player.me.sink<.05,'stands up after the low passage');
+  assert.ok(Math.abs(f.world.floorY(f.player.me.x,f.player.me.z)-f.def.y)<.001,'climbs out using the visible shallow steps');
+  const blocked=toWorld(f.def,s.slot+2,s.z);
+  assert.equal(f.world.free(blocked.x,blocked.z,.22),false,'narrow slots are solid');
+  const liftedX=s.liftSide>0?s.x1-1.2:s.x0+1.2;
+  const lifted=toWorld(f.def,liftedX,s.z);
+  assert.ok(f.world.free(lifted.x,lifted.z,.22)&&f.world.headroom(lifted.x,lifted.z)>2,'raised slab ends are real standing-height routes');
+ }
+ // Complete a loop around the first repeated bench island from both sides.
+ const loop=toWorld(f.def,-1,5);f.player.warp(loop.x,loop.z);f.tick(20);
+ for(const q of [[5,5],[5,2.4],[-1,2.4],[-1,5]])await walkTo(f,...q);
+ assert.ok(!rt.flat);assert.equal(f.hits.length,0,'quiet connector has no concealed damage');
+});
+test('Hanging Changing: towel cart carries and releases through the standard grip',async t=>{
+ const f=await fixture('hanging-changing');t.after(()=>f.dispose());
+ const [{createFurnitureMotion},{createFurnitureGrip}]=await Promise.all([import('../public/world/backrooms/furniture-motion.js'),import('../public/world/backrooms/furniture-grip.js')]);
+ const cart=f.world.rooms[0].changing.cart,motion=createFurnitureMotion(f.world),grip=createFurnitureGrip(f.world,motion);
+ assert.equal(cart.type,'trolley');assert.ok(f.world.furniture.includes(cart));
+ const pos=toWorld(f.def,8.2,12.2);f.player.warp(pos.x,pos.z,0);f.player.me.pitch=-.42;f.tick(1);
+ f.player.on('move',(dx,dz,step)=>grip.step(dx,dz,step));grip.update(0,f.player.me);
+ assert.equal(grip.target,cart);assert.ok(grip.use());assert.equal(cart.collider.on,false);
+ const before=f.player.me.z;f.input.keys.add('w');
+ for(let i=0;i<60;i++){grip.update(1/60,f.player.me);f.tick();}
+ f.input.keys.clear();assert.ok(before-f.player.me.z>.7&&before-f.player.me.z<1);
+ assert.ok(Math.hypot(cart.x-f.player.me.x,cart.z-f.player.me.z)<1.8);
+ assert.ok(grip.use());assert.equal(cart.collider.on,true);
+ assert.equal(f.world.free(cart.x,cart.z,.22),false,'released cart becomes a barricade');
+});
 for(const rot of [0,1,2,3])test(`Bellmouth: both gallery directions, buttress and basin recovery (${rot})`,async t=>{
  const f=await fixture('bellmouth-baths',rot);t.after(()=>f.dispose());assert.deepEqual(f.warnings,[]);
  const rt=f.world.rooms[0],p=rt.bellmouth.plan;
