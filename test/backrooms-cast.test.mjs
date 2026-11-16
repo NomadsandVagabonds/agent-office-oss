@@ -540,7 +540,7 @@ test('the absorbed staff: a hold never turns the visitor\'s head while something
   assert.ok(TUG_SECONDS < A.holdDuration);
   // the ones this is for are the ones that hunt (the waste toner since it came: something dropping off the ceiling at
   // you is not a moment to have your head turned for you); the rest of the hold is as it was
-  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner', 'the-lines', 'mother', 'head-count', 'standing-meeting', 'other-door']);
+  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner', 'the-lines', 'mother', 'head-count', 'standing-meeting', 'intern', 'other-door']);
   const held = SUNK.stepAbsorbed(SUNK.createAbsorbedState('wall'), { dt, dist: 0.5 });
   assert.ok(held.startedGrab && held.slow === A.slowFactor);
 });
@@ -1083,4 +1083,34 @@ test('the standing meeting: it sees ahead, drums, comes straight, and whoever ha
   for (let i = 1; i < body.length; i++) { const step = Math.hypot(body[i].x - body[i - 1].x, body[i].z - body[i - 1].z); assert.ok(step <= MEETING.gap + 1e-6 && step > MEETING.gap * 0.6, `length ${i} is ${step} behind`); }
   assert.ok(body[body.length - 1].z < 3 - 0.3, 'the tail of it is still round the corner');
   assert.equal(lengths([{ x: 0, z: 0 }, { x: 0, z: -0.01 }]).length, MEETING.parts, 'and before it has been anywhere, it is laid out straight');
+});
+
+/* ---- the intern (cast/intern.rule.js): it does what you did, a little after ------------------------------------- */
+
+test('the intern: it copies what it has watched, a few seconds behind, and loses its place out of sight', async () => {
+  const { INTERN, waiting, copies, behind, was } = await import('../public/world/backrooms/cast/intern.rule.js');
+  assert.equal(behind(0), INTERN.behind); assert.equal(behind(INTERN.learns * 3), INTERN.least); assert.ok(behind(10) < behind(0) && behind(10) > INTERN.least, 'the longer it follows, the less far behind');
+  assert.ok(INTERN.least >= 1.2, 'never so close behind that a pause is the end of you');
+  // what was watched: where they were at a time
+  const trail = [{ x: 0, z: 0, t: 10 }, { x: 2, z: 0, t: 11 }, { x: 2, z: 4, t: 13 }];
+  assert.equal(was(trail, 9), null, 'before it was watching: nowhere');
+  assert.deepEqual(was(trail, 10.5), { x: 1, z: 0 }); assert.deepEqual(was(trail, 12), { x: 2, z: 2 }); assert.deepEqual(was(trail, 20), { x: 2, z: 4 }, 'and where they stopped, it stops');
+  assert.equal(was([], 5), null);
+  // watching, then copying
+  let s = waiting();
+  s = copies(s, { dt: 0.3, d: 8, sees: true }); assert.equal(s.mode, 'waits', 'a glance is not enough');
+  assert.equal(copies(waiting(), { dt: 5, d: INTERN.sees + 2, sees: true }).mode, 'waits', 'nor from too far');
+  s = copies(s, { dt: 0.5, d: 8, sees: true }); assert.ok(s.starts); assert.equal(s.mode, 'copies');
+  for (let t = 0; t < 20; t += 0.5) s = copies(s, { dt: 0.5, d: 6, sees: true }); assert.equal(s.mode, 'copies'); assert.ok(s.learnt >= 19);
+  // out of its sight
+  for (let t = 0; t < INTERN.lost - 1; t += 0.5) s = copies(s, { dt: 0.5, d: 6, sees: false }); assert.equal(s.mode, 'copies', 'for a little while it goes on from memory');
+  s = copies(s, { dt: 0.5, d: 6, sees: true }); assert.equal(s.unseen, 0, 'seen again in time: it has not lost it');
+  for (let t = 0; t < INTERN.lost + 0.5; t += 0.5) s = copies(s, { dt: 0.5, d: 6, sees: false }); assert.equal(s.mode, 'blank');
+  for (let t = 0; t < INTERN.blank + 0.5; t += 0.5) s = copies(s, { dt: 0.5, d: 6, sees: false }); assert.equal(s.mode, 'waits'); assert.equal(s.learnt, 0, 'and has to be shown from the beginning');
+  // having somebody
+  let c2 = copies({ mode: 'copies', t: 0, watched: 1, unseen: 0, learnt: 30 }, { dt: 0.1, d: INTERN.touch - 0.1, sees: true }); assert.ok(c2.took); assert.equal(c2.mode, 'sorry');
+  assert.ok(!copies(c2, { dt: 0.1, d: 0.1, sees: true }).took, 'once, and then it stands back');
+  for (let t = 0; t < INTERN.sorry + 0.2; t += 0.1) c2 = copies(c2, { dt: 0.1, d: 3, sees: true }); assert.ok(c2.mode === 'waits' || c2.mode === 'copies'); assert.ok(c2.learnt < 30, 'and is further behind again for it');
+  assert.ok(!copies(waiting(), { dt: 0.1, d: 0.2, sees: true, fire: true }).took, 'not across a fire');
+  assert.ok(!copies(waiting(), { dt: 0.1, d: 0.2, sees: false }).took, 'nor through a wall');
 });
