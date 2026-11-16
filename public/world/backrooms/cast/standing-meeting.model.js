@@ -45,6 +45,44 @@ export function backVox(k = 0) {
   return v;
 }
 
+/**
+ * What is underneath a length of it, and is only seen when it stands up: a seam down the middle that is a mouth, the whole
+ * length of the thing, with its teeth either side and a second row behind them. It hangs under the hips; along +z, its
+ * middle under the origin.
+ */
+export function bellyVox(k = 0) {
+  const v = new Vox(), skin = skinOf(k + 40), wet = M(WET, 2), gum = M('#8a2a35', 2), dark = M(DARK, 0), tooth = M('#efe7d2', 0), stain = M('#cdb98f', 0);
+  v.ellipsoid(0, -7, 0, 8, 3.2, 8.4, (x, y, z) => (Math.abs(x) < 5 ? wet : skin(x, y, z)));
+  for (let z = -8; z <= 8; z++) {
+    const w = 1 + (Math.abs(Math.sin(z * 0.7 + k)) > 0.6 ? 1 : 0);                     // the seam: not straight, and not shut
+    for (let x = -w; x <= w; x++) for (let y = -11; y <= -5; y++) v.set(x, y, z, y > -7 ? dark : 0);
+    v.set(-w - 1, -10, z, gum); v.set(w + 1, -10, z, gum); v.set(-w - 1, -9, z, gum); v.set(w + 1, -9, z, gum);
+    // teeth, both sides, long and short and not opposite one another; and behind them some more
+    if ((z + 8 + k) % 2 === 0) { const n = 2 + ((z + k + 9) % 3); for (let y = 0; y < n; y++) v.set(-w - 1, -11 - y, z, (z + k) % 5 === 0 ? stain : tooth); }
+    if ((z + 9 + k) % 2 === 0) { const n = 2 + ((z + k + 10) % 3); for (let y = 0; y < n; y++) v.set(w + 1, -11 - y, z, tooth); }
+    if ((z + k + 8) % 3 === 0) { v.set(-w, -8, z, tooth); v.set(w, -8, z, stain); }
+  }
+  return v;
+}
+/** Metres to a voxel of a finger: half the rest of it, so that a finger is a finger and not another leg. */
+export const SF = 0.015;
+/**
+ * The fingers down one side of that mouth: a row of them, thin, each a joint too long, bent in toward it. They are joined
+ * on at the origin and reach along +x and down; the row runs along z. (The other side's is this one turned round.)
+ */
+export function fingersVox(k = 0) {
+  const v = new Vox(), skin = skinOf(k + 50), knuckle = M('#c48a7d', 2), nail = M('#d9cdb0', 0);
+  for (let n = 0; n < 8; n++) {
+    const z = -14 + n * 4 + ((n + k) % 2), len = 9 + ((n * 5 + k * 3) % 6), lean = ((n + k) % 3 - 1) * 1.5;
+    v.tube(0, 0, z, 5, -3, z + lean * 0.4, 0.8, skin); v.set(5, -2, Math.round(z + lean * 0.4), knuckle);
+    v.tube(5, -3, z + lean * 0.4, 5 + len * 0.5, -3 - len * 0.6, z + lean, 0.72, skin); v.set(Math.round(5 + len * 0.5), Math.round(-2 - len * 0.6), Math.round(z + lean), knuckle);
+    v.tube(5 + len * 0.5, -3 - len * 0.6, z + lean, 4 + len * 0.35, -4 - len * 1.15, z + lean * 1.2, 0.62, skin);
+    v.set(Math.round(4 + len * 0.35), Math.round(-5 - len * 1.15), Math.round(z + lean * 1.2), nail);
+  }
+  for (let z = -15; z <= 16; z++) v.set(0, 0, z, skin(0, 0, z));        // the ridge they grow out of
+  return v;
+}
+
 /** A thigh, in the trouser: long, and carried straight out sideways. Along +y from the hip at y 0. (k: whose suit.) */
 export function thighVox(k = 0) {
   const v = new Vox(), cloth = M(SUITS[k % 4], 1), crease = M('#1b1a1c', 1), skin = skinOf(k + 30);

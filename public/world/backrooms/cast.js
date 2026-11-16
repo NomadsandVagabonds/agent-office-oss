@@ -79,7 +79,7 @@ export const ALL_CAST = Object.freeze([
     rule: 'Three of them, joined, on their arms, and not a head between them. It cannot see you or hear you: it feels you walk. Stand still and you are not there, until a hand comes down on you — so stand still somewhere it is not going.',
     disposition: 'hunts', home: 'roams', weight: 1, needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 2 } }),
   Object.freeze({ id: 'standing-meeting', name: 'The standing meeting',
-    rule: 'Nine of them under one back, on short legs, in file. When you are in front of it, it stops and its feet drum, and then it comes straight at you faster than you can run. It cannot turn. Do not outrun it: step out of its line, and let the wall have it.',
+    rule: 'Nine of them under one back, on short legs, in file. When you are in front of it, it stops and stands itself up on end to show you what is underneath, and then it comes down and straight at you faster than you can run. It cannot turn. Do not outrun it: step out of its line, and let the wall have it.',
     disposition: 'hunts', home: 'roams', weight: 1, needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 2 } }),
   Object.freeze({ id: 'other-door', name: 'The other door',
     rule: 'One pair of doors is not doors: it shivers, now and then, and that is all that gives it away. Try it, walk into it or stand in front of it too long, and it opens on nothing and takes hold of you.',

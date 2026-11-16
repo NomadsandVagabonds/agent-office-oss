@@ -4,8 +4,9 @@
 // A long low thing: nine pairs of hips in a row, joined along the top, their
 // legs out sideways and bent the wrong way down to the floor, and more legs
 // off each end. It has no front and no back, and goes either way. It can see,
-// a little, straight out from whichever end is leading. When somebody is in front of it in a clear line it stops, and its
-// legs drum, and then it comes: dead straight, faster than anybody runs, and
+// a little, straight out from whichever end is leading. When somebody is in front of it in a clear line it stops and stands
+// the front of itself up on end, so that what is underneath is seen: a mouth
+// the length of it, and fingers down both sides. Then it comes down, going: dead straight, faster than anybody runs, and
 // it cannot turn. Whoever is still in the line when it arrives is run down.
 // Whoever has stepped out of the line, through a doorway or round a corner or
 // simply aside, watches it go past and into the wall, where it is a while
@@ -20,7 +21,7 @@ export const MEETING = Object.freeze({
   charge: 6.2,             // …and coming: a run is 3.7
   sees: 15,                // metres ahead that it sees
   cone: 0.5,               // radians either side of straight ahead
-  drum: 0.95,              // seconds its legs drum before it comes (the warning)
+  drum: 1.05,              // seconds it stands up on end before it comes (the warning)
   far: 16,                 // metres at most in one charge
   winded: 2.8,             // seconds getting up after it meets a wall
   spent: 1.2,              // …or after a charge that met nothing
