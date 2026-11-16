@@ -56,10 +56,12 @@ export function torsoVox(k = 0) {
   // ribs through it on one side, where it has been dragged
   for (let z = -6; z <= 4; z += 3) { v.tube(5 + (k % 2 ? -10 : 0), 3, z, 8 + (k % 2 ? -16 : 0), -2, z + 1, 0.7, bone); }
   // where the neck ends: a collar still buttoned round it, the wet ring of it, and a hole
-  v.cyl('z', 0, 2, 14, 17, 4.6, collar); v.cyl('z', 0, 2, 17, 20, 3.8, skin, 4.4); v.cyl('z', 0, 2, 20, 21, 4.6, wet);
-  for (let x = -2; x <= 2; x++) for (let y = 0; y <= 4; y++) if ((x * x + (y - 2) * (y - 2)) <= 5) { v.set(x, y, 20, dark); v.set(x, y, 19, dark); }
-  v.box(-1, 3, 18, 0, 5, 21, bone);                                                               // the end of a spine, standing out of it
-  for (let n = 0; n < 6; n++) { const a = n * 1.05 + k; v.set(Math.round(Math.cos(a) * 4.4), 2 + Math.round(Math.sin(a) * 4.4), 21 + (n % 2), wet); }   // it is ragged
+  // where the neck would be: a collar, still buttoned, standing up round nothing. Not a wound: there was never anything in it.
+  // (Each of them wears it differently: pushed over to one side, or fallen in at the front.)
+  const lean = [1.2, -1.6, 0.5][k % 3], sag = [0, 1, 2][k % 3];
+  for (let z = 14; z <= 21; z++) { const t = (z - 14) / 7, cx = lean * t, r = 4.5 + t * 0.6; for (let x = -7; x <= 7; x++) for (let y = -5; y <= 9; y++) { const d = Math.hypot((x - cx) * 0.78, (y - 2) * 1.75); if (d <= r && d > r - 1.5 && !(z > 19 - sag && y < 0 && Math.abs(x - cx) < 2 + sag)) v.set(x, y, z, z === 21 ? collar : (x + z) % 7 === 0 ? M(shade(SHIRTS[k % 3], -0.2), 1) : collar); else if (d <= r - 1.5) v.set(x, y, z, z <= 16 ? dark : 0); } }
+  for (let z = 9; z <= 14; z++) for (let x = -3; x <= 3; x++) for (let y = -1; y <= 5; y++) if (Math.hypot(x * 0.78, (y - 2) * 1.75) <= 3) v.set(x, y, z, dark);   // and it goes down inside further than the shirt does
+  v.set(Math.round(lean) , -2, 20, M('#d9d2bd', 0));                                                // the top button, done up
   v.ring(0, 2, 15, 5, 0.6, strap, 'z');                                                           // the lanyard, round what it was put round
   // counted, on its own back, in fives
   for (let g = 0; g < 2; g++) for (let n = 0; n < 5; n++) { const x = -7 + n + g * 9; for (let z = -9; z <= -5; z++) v.set(n === 4 ? x - 4 + (z + 9) : x, 5 - (Math.abs(x) > 5 ? 1 : 0), n === 4 ? z : z, dark); }

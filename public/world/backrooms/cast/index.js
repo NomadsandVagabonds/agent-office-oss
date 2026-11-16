@@ -10,5 +10,6 @@ import { create as otherDoor } from './other-door.js';
 import { create as theLines } from './the-lines.js';
 import { create as mother } from './mother.js';
 import { create as headCount } from './head-count.js';
+import { create as standingMeeting } from './standing-meeting.js';
 
-export const MAKERS = { pirate, shadow, moth, porter, toner, 'other-door': otherDoor, 'the-lines': theLines, mother, 'head-count': headCount };
+export const MAKERS = { pirate, shadow, moth, porter, toner, 'other-door': otherDoor, 'the-lines': theLines, mother, 'head-count': headCount, 'standing-meeting': standingMeeting };
