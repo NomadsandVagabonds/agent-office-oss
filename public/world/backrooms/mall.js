@@ -10,7 +10,9 @@
 // Here: the painted fronts (one sheet), the lit signs (another), and a hole in
 // a floor that somebody can walk into (the gap's rule, rooms/the-culvert.js).
 import { P } from './bits.js';
-import { Vox, M } from '../vox/vox.js';
+import * as THREE from 'three';
+import { Batch, lamp } from './kit.js';
+import { Vox, M, glow } from '../vox/vox.js';
 import { garble, upright } from './suburb.js';
 
 const FW = 1024, FH = 512, CELL = 128, FINE = 2, SIGN_W = 256, SIGN_H = 256, SROW = 32;
@@ -185,3 +187,137 @@ export function heapVox(n = 0) {
 }
 /** A shoe. A left one. */
 export function shoeVox(colour = '#3a2a1c') { return () => { const v = new Vox(), c = M(colour, 2); v.rbox(-2, 0, -5, 2, 2, 5, 1, M('#17171a', 0)); v.rbox(-2, 1, -5, 2, 4, 1, 2, c); v.rbox(-2, 1, 0, 2, 6, 5, 2, c); v.carve(-1, 4, 1, 1, 6, 4); v.box(-1, 4, -3, 1, 4, -1, M('#e9e4d6', 0)); return v; }; }
+
+/* ---- the ways between: what every plain room of the shopping centre is --------------------------------------------- */
+
+/** A box against a wall: from a to b along it, d0 to d1 out from it, y0 to y1 up. */
+export function wallBox(c, side, a, b, y0, y1, d0, d1, rgb, batch = c.flat) {
+  const p = c.wallAt(side, a, d0), q = c.wallAt(side, b, d1);
+  batch.box(Math.min(p.x, q.x), y0, Math.min(p.z, q.z), Math.max(p.x, q.x), y1, Math.max(p.z, q.z), rgb);
+}
+/** A flat thing on a wall, from a to b along it, y0 to y1, `off` out from it, facing into the room. */
+export function wallFace(c, side, a, b, y0, y1, batch, uv, off = 0.012) { const p = c.wallAt(side, a, off), q = c.wallAt(side, b, off); upright(batch, p.x, p.z, q.x, q.z, y0, y1, uv); }
+const lowest = (c, side, a, b, off = 0.3) => Math.min(...[a, (a + b) / 2, b].map((t) => { const p = c.wallAt(side, t, off); return c.ceilAt(p.x, p.z); }));
+
+/** A shopping trolley, nose toward +x: it nests in the one in front of it. */
+export function trolleyVox() {
+  const v = new Vox(), k = M('#9aa1a8', 0), red = M('#b3261e', 0), tyre = M('#17171a', 2);
+  for (let x = -12; x <= 12; x += 3) { v.tube(x, 12, -8, x, 12, 8, 0.45, k); v.tube(x, 12, -8, x + (x > 0 ? 0 : 0), 26, -8, 0.45, k); v.tube(x, 12, 8, x, 26, 8, 0.45, k); }
+  for (let y = 12; y <= 26; y += 4.5) { v.tube(-12, y, -8, 14, y, -8, 0.45, k); v.tube(-12, y, 8, 14, y, 8, 0.45, k); }
+  for (let z = -8; z <= 8; z += 4) { v.tube(-12, 12, z, 14, 12, z, 0.45, k); v.tube(-12, 12, z, -12, 26, z, 0.45, k); }
+  v.tube(-14, 28, -9, -14, 28, 9, 1.1, red); v.tube(-12, 26, -9, -14, 28, -9, 0.6, k); v.tube(-12, 26, 9, -14, 28, 9, 0.6, k);
+  for (const [x, z] of [[-11, -7], [-11, 7], [12, -6], [12, 6]]) { v.tube(x, 12, z, x, 3, z, 0.6, k); v.cyl('z', x, 2, z - 1, z + 1, 2, tyre); }
+  return v;
+}
+/** A bin, the round steel kind with a lid like a hat; `full`: with the small ones in it. */
+export function binVox(full = false) {
+  return () => { const v = new Vox(), s = M('#7d8288', 0), d = M('#4a4f55', 0);
+    v.cyl('y', 0, 0, 0, 30, 9, s, 10); v.cyl('y', 0, 0, 30, 32, 11, d); v.carve(-8, 6, -8, 8, 32, 8); for (let y = 4; y < 30; y += 6) v.ring(0, y, 0, 9.6, 0.5, d);
+    if (full) for (let i = 0; i < 4; i++) { const a = i * 1.57 + 0.4; v.cyl('y', Math.round(Math.cos(a) * 3.5), Math.round(Math.sin(a) * 3.5), 18 + i * 3, 36 + i * 4, 3.4, s, 3.8); }
+    return v; };
+}
+/** A coin ride: something on a sprung foot, with a box for the coin. What it is depends on what they were told: an orange. */
+function rideVox() {
+  const v = new Vox(), base = M('#2a6fb3', 1), chrome = M('#c9ccd0', 0), seat = M('#b3261e', 1);
+  v.rbox(-14, 0, -10, 14, 4, 10, 2, base, 'xz'); v.cyl('y', 0, 0, 4, 12, 2.4, chrome); for (let y = 5; y < 12; y += 2) v.ring(0, y, 0, 3.2, 0.6, chrome);
+  v.ellipsoid(0, 22, 0, 12, 11, 11, M('#f08a1e', 2)); v.rbox(-6, 31, -6, 6, 34, 6, 2, seat, 'xz'); v.tube(-6, 34, 0, -9, 42, 0, 0.8, chrome); v.tube(-9, 42, -4, -9, 42, 4, 0.8, chrome);
+  v.box(10, 0, -4, 16, 16, 4, M('#d9d2bf', 0)); v.box(16, 10, -1, 16, 12, 1, M('#1a1a1a', 0)); v.box(16, 13, -2, 16, 14, 2, glow('#ff3d9a'));
+  return v;
+}
+
+const STREETS = ['shops', 'shops', 'shops', 'shutters', 'hoarding'], NEON_NAMES = [SHOPS.slice(0, 8), SHOPS.slice(8, 16), ['OPEN', 'CLOSED', 'OPEN CLOSED', 'SALE', 'ENDS', 'SALE ENDS', 'EVERYTHING', 'MUST'], ['YOU ARE HERE', 'YOU WERE HERE', 'THIS WAY', 'THAT WAY', 'EXIT', 'ALSO EXIT', 'MORE SHOPS', 'NO MORE SHOPS']];
+/**
+ * The shopping centre's way of finishing a plain room (rooms.js plain(), last). A street of units along the walls: fronts with
+ * a pilaster between, a fascia over each with its name in tube, a kick plate; or all of them shuttered; or all hoarding. A
+ * passage too narrow for a shop is a service corridor: painted block, pipes along the top, a number, STAFF ONLY. Some of
+ * the light comes from the signs. And in some bare rooms, one thing whoever built this got wrong (MALL_WRONG, below).
+ */
+export function concourse(c, opt = {}) {
+  const { W, D, R, room, kit } = c;
+  if (room.crawl) return;
+  const narrow = Math.min(W, D) < 3.3 && room.kind === 'plain', street = opt.street || (narrow ? (R.chance(0.55) ? 'service' : 'shutters') : R.pick(STREETS));
+  c.rt.street = street;
+  const art = mallFronts(kit), fronts = c.mapped('mall:fronts', art.texture), v = R.int(0, NEON_NAMES.length - 1), neon = mallNeon(kit, 'plain:' + v, NEON_NAMES[v], v + 1), lit = c.shining('mall:neon:plain:' + v, neon.texture, 2.3);
+  const glows = [];
+  if (street === 'service') {
+    // painted block: cream to the roof, and a band of green up to the dado
+    const blockOf = (key, a, b) => c.mapped(key, kit.tex.custom(key, 64, 32, (g, w, h) => { P(g, a, 0, 0, w, h); for (let y = 0; y < h; y += 8) { P(g, b, 0, y, w, 1); for (let x = ((y >> 3) & 1) * 16; x < w; x += 32) P(g, b, x, y, 1, 8); } for (let i = 0; i < 18; i++) P(g, 'rgba(60,50,30,0.14)', (i * 37) % w, (i * 19) % h, 1, 2 + (i % 4)); }));
+    const block = blockOf('mall:block', '#c9c3b0', '#b3ad9a'), dado = blockOf('mall:dado', '#3f6b4f', '#355c43');
+    const stencil = c.mapped('mall:stencil:' + (room.id % 5), kit.tex.custom('mall:stencil:' + (room.id % 5), 64, 32, (g, w, h) => { g.clearRect(0, 0, w, h); garble(g, ['UNIT 14', 'STAFF ONLY', 'NO ENTRY', 'BINS', 'UNIT 14B'][room.id % 5], 0, 0, w, h, { color: '#1c1a17', mess: 0.25 }, room.id); }, { clamp: true }), { cutout: true });
+    for (const side of ['back', 'front', 'left', 'right']) for (const [a, b] of c.spans(side, 0.02, 1.2)) {
+      const top = lowest(c, side, a, b, 0.05); wallFace(c, side, a, b, 1.0, top, block, [0, 0, (b - a) / 1.6, (top - 1.0) / 0.8], 0.008); wallFace(c, side, a, b, 0, 1.0, dado, [0, 0, (b - a) / 1.6, 1.0 / 0.8], 0.008); wallBox(c, side, a, b, 0.98, 1.03, 0, 0.02, [0.16, 0.22, 0.18]);
+      if (b - a > 1.6 && R.chance(0.6)) { const m = R.range(a + 0.6, b - 0.6); wallFace(c, side, m - 0.5, m + 0.5, 1.35, 1.85, stencil, [0, 0, 1, 1], 0.012); }
+      if (side === 'back' || side === 'left') { for (const [y, r, rgb] of [[top - 0.22, 0.05, [0.42, 0.44, 0.46]], [top - 0.36, 0.035, [0.7, 0.25, 0.18]], [top - 0.46, 0.03, [0.85, 0.82, 0.72]]]) wallBox(c, side, a, b, y - r, y + r, 0.03, 0.03 + r * 2, rgb); }
+    }
+    if (R.chance(0.5)) { const ws = c.wallSpot(0.8, ['back', 'front', 'left', 'right'], 0.3, 2); if (ws) { const p = c.wallAt(ws.side, ws.at, 0.35); c.model('mall:bin:0', binVox(false), p.x, p.z, { scale: 1.6, solid: false }); c.solid(p.x - 0.3, p.z - 0.3, p.x + 0.3, p.z + 0.3, { tall: false }); } }
+    return;
+  }
+  // a street: units along each run of wall
+  const kinds = street === 'shutters' ? ['shutter', 'shutter', 'half', 'shutter', 'blinds'] : street === 'hoarding' ? ['hoarding'] : ['office', 'window', 'blinds', 'half', 'door', 'office', 'window', 'shutter', 'open'];
+  let n = 0;
+  for (const side of ['back', 'front', 'left', 'right']) for (const [a, b] of c.spans(side, 0.1, 2.0)) {
+    const len = b - a; if (len < 0.9) continue;
+    const bays = Math.max(1, Math.round(len / R.pick([2.2, 2.6, 3.0]))), bw = len / bays;
+    for (let i = 0; i < bays; i++, n++) {
+      const x0 = a + i * bw, x1 = x0 + bw, top = lowest(c, side, x0, x1), face = Math.min(2.45, top - 0.62), kind = R.pick(kinds);
+      if (face < 1.4) continue;
+      wallFace(c, side, x0 + 0.07, x1 - 0.07, 0, face, fronts, art.uv(kind), 0.06);
+      wallBox(c, side, x0 + 0.04, x1 - 0.04, face, face + 0.5, 0, 0.2, [0.13, 0.12, 0.15]);                                                   // the fascia, and the name on it
+      wallFace(c, side, x0 + 0.12, x1 - 0.12, face + 0.04, face + 0.46, lit, neon.uv((n + room.id) % 8), 0.205);
+      wallBox(c, side, x0 - 0.06, x0 + 0.07, 0, face + 0.5, 0, 0.15, [0.66, 0.52, 0.2]);                                                     // pilasters, brass, either side
+      if (i === bays - 1) wallBox(c, side, x1 - 0.07, x1 + 0.06, 0, face + 0.5, 0, 0.15, [0.66, 0.52, 0.2]);
+      wallBox(c, side, x0 + 0.07, x1 - 0.07, 0, 0.12, 0.05, 0.09, [0.3, 0.26, 0.22]);                                                          // kick plate
+      if (street !== 'shutters' || R.chance(0.3)) glows.push({ side, at: (x0 + x1) / 2, y: face + 0.25, col: neon.colour((n + room.id) % 8) });
+    }
+  }
+  for (const g of R.shuffle(glows).slice(0, street === 'shutters' ? 1 : 3)) { const p = c.wallAt(g.side, g.at, 0.7); c.light(p.x, g.y, p.z, g.col, 0.85, { k: 1.4, far: 4.5 }); }
+  // and in some bare rooms, the one thing got wrong
+  const chance = opt.wrong ?? (!room.shape && room.kind === 'plain' && Math.min(W, D) >= 3.4 ? (room.quiet ? 0.3 : 0.5) : 0);
+  const which = opt.which;
+  if ((chance > 0 && R.chance(chance)) || which) { const name = which || R.pick(Object.keys(MALL_WRONG)); if (MALL_WRONG[name](c) !== false) c.rt.weird = name; }
+}
+
+/** What whoever built the shopping centre got wrong, one to a room, in rooms with nothing else in them. Each returns false if it could not. */
+export const MALL_WRONG = {
+  // every left shoe, put in the one corner
+  shoes(c) { const k = c.corner(1.0); if (!k) return false; const R = c.R, cols = ['#3a2a1c', '#17171a', '#7a3a34', '#c9b08a', '#2a4a6a'];
+    for (const [n, r, y] of [[16, 0.85, 0], [10, 0.55, 0.1], [6, 0.3, 0.2], [2, 0.1, 0.3]]) for (let i = 0; i < n; i++) { const a = (i / n) * 6.283 + R.range(-0.3, 0.3); c.model('mall:shoe:' + (i % 5), shoeVox(cols[i % 5]), k.x + Math.cos(a) * r * R.range(0.5, 1), k.z + Math.sin(a) * r * R.range(0.5, 1), { y: y + R.range(0, 0.05), scale: 1.4, rot: R.range(0, 6.28), tilt: [R.range(-0.6, 0.6), R.range(-0.6, 0.6)], solid: false, shadow: false }); }
+    c.solid(k.x - 0.8, k.z - 0.8, k.x + 0.8, k.z + 0.8, { tall: false }); c.shadow(k.x, k.z, 2, 2, 0.35); },
+  // trolleys, nested, going into the wall: the last of them is mostly in it
+  trolleys(c) { const ws = c.wallSpot(3.4, undefined, 0.6, 1.4); if (!ws) return false; const R = c.R;
+    for (let d = 0.4; d <= 3.3; d += 0.45) { const q = c.wallAt(ws.side, ws.at, d); if (!c.clear(q.x, q.z, 0.5)) return false; }                  // (nowhere a doorway is walked into)
+    for (let i = 0; i < 5; i++) { const p = c.wallAt(ws.side, ws.at, 2.9 - i * 0.62), rot = Math.atan2(-p.n[0], -p.n[2]) - Math.PI / 2; c.model('mall:trolley', trolleyVox, p.x, p.z, { rot: rot + R.range(-0.04, 0.04), solid: false }); }
+    const a = c.wallAt(ws.side, ws.at - 0.4, 0), b = c.wallAt(ws.side, ws.at + 0.4, 3.3); c.solid(Math.min(a.x, b.x), Math.min(a.z, b.z), Math.max(a.x, b.x), Math.max(a.z, b.z), { tall: false }); },
+  // a family, stood round a bin, facing in
+  family(c) { const at = c.spot(1.1, { pad: 0.8 }); if (!at) return false; const dress = ['#39424f', '#7a3a34', '#4a5a40', '#6a4a8a'];
+    c.model('mall:bin:0', binVox(false), at.x, at.z, { scale: 1.5, solid: false });
+    for (let i = 0; i < 4; i++) { const a = i * 1.5708 + 0.3, x = at.x + Math.cos(a) * 0.75, z = at.z + Math.sin(a) * 0.75; c.model('atrium:dummy:' + i + (i === 2 ? ':o' : ''), dummyVox(i, dress[i], i === 2 ? 'orange' : null), x, z, { rot: Math.atan2(at.x - x, at.z - z), scale: i === 3 ? 0.65 : 1, solid: false }); }
+    c.solid(at.x - 1, at.z - 1, at.x + 1, at.z + 1, { tall: false }); },
+  // a ride for a coin, facing the wall, going; nobody on it
+  ride(c) { const ws = c.wallSpot(1.4, undefined, 0.5, 1.6); if (!ws) return false; const p = c.wallAt(ws.side, ws.at, 0.7), env = c.env, kit = c.kit;
+    const b = new Batch(true); b.addVox(kit.model('mall:ride', rideVox).solid, new THREE.Matrix4().makeScale(kit.VOXEL, kit.VOXEL, kit.VOXEL));
+    const mat = kit.surface({ vox: true }), mesh = new THREE.Mesh(kit.geometry(b, [lamp(0.4, 2.4, 1.2, [1.2, 1.2, 1.2], { k: 9, wrap: 0.45, far: 30 })], [0.6, 0.6, 0.6]), mat), g = new THREE.Group(); g.add(mesh);
+    g.position.set(p.x, 0, p.z); g.rotation.y = Math.atan2(-p.n[0], -p.n[2]) + Math.PI / 2; g.userData.light = (rgb) => mat.uniforms.uTint.value.set(rgb[0], rgb[1], rgb[2]); c.add(g);
+    c.solid(p.x - 0.5, p.z - 0.5, p.x + 0.5, p.z + 0.5, { tall: false }); c.light(p.x, 0.6, p.z, '#ff3d9a', 0.5, { k: 1.6, far: 3 });
+    let t0 = c.R.range(0, 5); c.tick((dt, t, me) => { t0 += dt; mesh.rotation.x = Math.sin(t0 * 5.3) * 0.12; mesh.rotation.z = Math.sin(t0 * 3.1) * 0.08; if (me.inside && Math.random() < dt * 0.4) { const w = c.toWorld(p.x, p.z); env.play?.('click', w.x, w.z, 4); } }); },
+  // the handrail of a moving stair, and nothing under it: out of the floor, over, into the floor
+  rail(c) { const at = c.spot(1.4, { pad: 0.6 }); if (!at) return false; const R = c.R, along = c.W > c.D, L = 2.6, hgt = Math.min(2.0, c.ceilAt(at.x, at.z) - 0.4), tube = c.shining('mall:rail', c.kit.tex.white(), 2.1, [0.2, 0.88, 1]);
+    for (let i = 0; i < 24; i++) { const t0 = i / 24, t1 = (i + 1) / 24, s0 = -L / 2 + L * t0, s1 = -L / 2 + L * t1, y0 = Math.sin(Math.PI * t0) * hgt, y1 = Math.sin(Math.PI * t1) * hgt;
+      for (const off of [-0.45, 0.45]) { const [x0, z0, x1, z1] = along ? [at.x + s0, at.z + off, at.x + s1, at.z + off] : [at.x + off, at.z + s0, at.x + off, at.z + s1]; c.flat.box(Math.min(x0, x1) - 0.04, Math.min(y0, y1) - 0.05, Math.min(z0, z1) - 0.04, Math.max(x0, x1) + 0.04, Math.max(y0, y1), Math.max(z0, z1) + 0.04, [0.06, 0.06, 0.07]); tube.box(Math.min(x0, x1) - 0.02, Math.max(y0, y1), Math.min(z0, z1) - 0.02, Math.max(x0, x1) + 0.02, Math.max(y0, y1) + 0.03, Math.max(z0, z1) + 0.02, [1, 1, 1]); } }
+    for (const s of [-1, 1]) { const x = along ? at.x + s * L / 2 : at.x, z = along ? at.z : at.z + s * L / 2; c.blot(x, z, along ? 0.4 : 1.2, along ? 1.2 : 0.4, { a: 0.5 }); }
+    c.light(at.x, 1.2, at.z, '#35e0ff', 0.6, { k: 1.4, far: 3.5 }); void R; },
+  // a queue: posts and belts, folded back on itself four times, round nothing; and at the head of it, nothing
+  queue(c) { const at = c.spot(1.5, { pad: 0.4 }); if (!at) return false; const belt = [0.12, 0.14, 0.4], post = [0.7, 0.72, 0.75];
+    const rows = 4, w = 2.4, gap = 0.75, x0 = at.x - w / 2, z0 = at.z - (rows - 1) * gap / 2;
+    for (let r = 0; r < rows; r++) { const z = z0 + r * gap; for (let k = 0; k <= 3; k++) { const x = x0 + k * (w / 3); c.flat.box(x - 0.03, 0, z - 0.03, x + 0.03, 0.95, z + 0.03, post); c.flat.box(x - 0.08, 0, z - 0.08, x + 0.08, 0.03, z + 0.08, post); }
+      c.flat.box(x0 + (r % 2 ? 0 : 0.4), 0.86, z - 0.012, x0 + w - (r % 2 ? 0.4 : 0), 0.9, z + 0.012, belt); c.solid(x0 + (r % 2 ? 0 : 0.4), z - 0.05, x0 + w - (r % 2 ? 0.4 : 0), z + 0.05, { tall: false }); }
+    const head = z0 + rows * gap - 0.2, sign = c.shining('mall:queue', c.kit.tex.custom('mall:queue', 64, 32, (g, ww, hh) => { P(g, '#f1ead6', 0, 0, ww, hh); P(g, '#b3261e', 0, 0, ww, 6); garble(g, 'PLEASE WAIT', 2, 8, ww - 4, 11, { color: '#1c1812', mess: 0.2 }, 3); garble(g, 'HERE', 2, 19, ww - 4, 11, { color: '#1c1812', mess: 0.4 }, 5); }), 1.3);
+    c.flat.box(x0 - 0.03, 0, head - 0.03, x0 + 0.03, 1.25, head + 0.03, post); upright(sign, x0 - 0.3, head, x0 + 0.3, head, 1.25, 1.55, [0, 0, 1, 1]); upright(sign, x0 + 0.3, head, x0 - 0.3, head, 1.25, 1.55, [0, 0, 1, 1]); },
+  // a bin, and in it, bins
+  bins(c) { const k = c.corner(0.7); if (!k) return false; c.model('mall:bin:full', binVox(true), k.x, k.z, { scale: 2.2, solid: false }); c.model('mall:bin:0', binVox(false), k.x - k.sx * 0.9, k.z, { scale: 1.2, rot: 0.4, tilt: [0, 1.5], solid: false }); c.solid(k.x - 0.55, k.z - 0.55, k.x + 0.55, k.z + 0.55, { tall: false }); },
+  // a shop, stood out in the room: front, fascia, name lit; it is as deep as the board it is painted on
+  shallow(c) { const at = c.spot(1.6, { pad: 0.7 }); if (!at) return false; const art = mallFronts(c.kit), fronts = c.mapped('mall:fronts', art.texture), neon = mallNeon(c.kit, 'plain:0', NEON_NAMES[0], 1), lit = c.shining('mall:neon:plain:0', neon.texture, 2.3), w = 1.25, top = Math.min(2.3, c.ceilAt(at.x, at.z) - 0.6), ply = [0.6, 0.48, 0.34];
+    upright(fronts, at.x - w, at.z, at.x + w, at.z, 0, top, art.uv('open')); upright(c.flat, at.x + w, at.z - 0.06, at.x - w, at.z - 0.06, 0, top + 0.5, null, ply); c.flat.box(at.x - w, top, at.z - 0.06, at.x + w, top + 0.5, at.z + 0.02, [0.13, 0.12, 0.15]);
+    upright(lit, at.x - w + 0.1, at.z + 0.03, at.x + w - 0.1, at.z + 0.03, top + 0.05, top + 0.45, neon.uv(2)); for (const s of [-1, 1]) c.flat.box(at.x + s * w - 0.05, 0, at.z - 0.5, at.x + s * w + 0.05, 0.06, at.z - 0.06, ply);
+    c.solid(at.x - w, at.z - 0.08, at.x + w, at.z + 0.04, { tall: true }); c.light(at.x, 1.4, at.z + 0.8, '#ffe9a8', 0.6, { k: 1.4, far: 3.5 }); },
+};

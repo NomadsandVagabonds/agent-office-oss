@@ -14,6 +14,7 @@ import { thinWall, refuses } from './thin.js';
 import { MORE } from './rooms2.js';
 import { stairwell } from './stairwell.js';
 import { lawn, standing, THINGS } from './suburb.js';
+import { concourse } from './mall.js';
 
 /* ---- the plain rooms, and what somebody left in them ------------------------------- */
 
@@ -270,7 +271,8 @@ function plain(c) {
   for (const item of room.dress) if (item.type === 'marks') refuses(c, item.side, item.at, marks(c, item));          // (likewise the other walls somebody tried: all of them only walls)
   for (const item of room.dress) if (item.type !== 'marks') dressing(c, item);
   if (c.level.pursuer?.room === room.id) c.env.lair?.(c);
-  if (c.level.theme === 'suburb') lawn(c);                // the neighbourhood: carpet showing round the grass, clouds on the walls (last: whatever was hung first keeps its wall)
+  if (c.level.theme === 'suburb') lawn(c);
+  if (c.level.theme === 'mall') concourse(c);             // the shopping centre: units along the walls, their names in tube; or a service way (mall.js)                // the neighbourhood: carpet showing round the grass, clouds on the walls (last: whatever was hung first keeps its wall)
 }
 
 /** Where you land: a hole in the ceiling above you, and the tiles you brought down. */
