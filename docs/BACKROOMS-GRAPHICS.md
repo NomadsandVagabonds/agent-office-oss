@@ -58,6 +58,11 @@ is drawn by code when the level starts.
   has to run this: the build machines only render in software).
 - The budgets written down here.
 
+Whoever is measuring: a fast machine tests the high column and nothing else.
+The numbers that set the budgets come from ordinary laptops and phones, so the
+tour is made to be handed on: one address, a minute and a half, and a summary to
+copy back. **Auto** is what protects a machine nobody measured.
+
 ### 1 · Light that is already paid for
 
 - **A Graphics setting** in the level's own menu. Its default for now is a
@@ -157,17 +162,24 @@ cheap layers, and each layer belongs to a level of quality:
 
 ### 6 · Levels of quality, and the menu
 
-| | low | medium | high |
-|---|---|---|---|
-| phase 1 (stored light, grade, haze) | yes | yes | yes |
-| camcorder lines | as today | more | more |
-| bloom | no | yes | yes |
-| relief and sheen | no | yes | yes |
-| room reflections | flat colour | yes | yes |
-| soft shadows under things | blot | yes | yes |
-| water | still, reflecting | ripples, rings | height field, light under it |
-| dust, fog | no | fog | both |
-| the beams casting shadows | no | no | yes |
+| | classic | low | medium | high | ultra (kept for later) |
+|---|---|---|---|---|---|
+| who it is for | today's look, unchanged; the default until the owner has compared | weak laptops, older phones | the browser's default in time | a good desktop or laptop | a copy that is downloaded and installed |
+| phase 1 (stored light, grade, haze) | no | yes | yes | yes | yes |
+| camcorder lines | as today | as today | more | more | the screen's own |
+| bloom | by host, as today | no | yes | yes | yes |
+| relief and sheen | no | no | yes | yes | yes, finer |
+| room reflections | no | flat colour | yes | yes | redrawn as things move |
+| soft shadows under things | blot | blot | yes | yes | real, from several lights |
+| water | none | still, reflecting | ripples, rings | height field, light under it | the same, larger |
+| dust, fog | no | no | fog | both | both |
+| the beams casting shadows | no | no | no | yes | yes |
+
+Every feature has a row here and nowhere else (`graphics.js` holds the same
+table as data), so a level of quality is a column. **Ultra is a column that is
+not built**: an installed copy can count on a modern graphics interface, more
+memory and no limit on what is fetched, which a page in a browser cannot, and
+when there is one it is filled in rather than drawn a second way.
 
 - **Auto** picks one in the first seconds and scales resolution to hold the
   frame rate; it steps down a level if that is not enough, and says nothing.
