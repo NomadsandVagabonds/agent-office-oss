@@ -229,7 +229,7 @@ async function visit(office, opt) {
     } });
   input.state.sensitivity = settings.sensitivity; input.state.invertY = settings.invertY;
   menu = createMenu({ host: hud.el, settings: { ...settings, scoreEligible: difficulty.report().ranked }, furniture: opt.barricades !== false, onRequestOpen: () => setPaused(true), onResume: resume,
-    onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting });
+    onArchive: opt.onArchive, onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting });
   // Six pockets, four hearts, and a camcorder battery that runs down (inventory.js, survival.js): the visit's, not any
   // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.
   if (opt.inventory !== false) {
@@ -714,7 +714,7 @@ async function visit(office, opt) {
     if (why === 'exit') { run.mascot = plan.mascot !== null; try { run.edition = edition(); } catch { /* the tape does not say */ } }
     // (no card for a visit that was told not to show one, or that was stopped before it had really begun)
     if (opt.scorecard === false || (!gaveUp && why === 'quit' && run.seconds < 2)) { done(null); return; }
-    import('./scorecard.js').then((m) => m.showScorecard({ office, reason: why, kept, run, name: who.name, brand: opt.brand, share: opt.share, also: opt.also, home: opt.home, anew: opt.anew }))
+    import('./scorecard.js').then((m) => m.showScorecard({ office, reason: why, kept, run, name: who.name, brand: opt.brand, share: opt.share, also: opt.also, archive: opt.archive, home: opt.home, anew: opt.anew }))
       .then(done, (err) => { console.warn('[backrooms] the card would not come up', err); done(null); });
   }
   function finish(why, how) {

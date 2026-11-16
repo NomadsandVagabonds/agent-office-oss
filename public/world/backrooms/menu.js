@@ -17,7 +17,7 @@ const CONTROLS = [
  * Camcorder controls over the frozen picture. onChange(key, value) is immediate;
  * the caller applies and saves it. setOpen never invokes pause/resume callbacks.
  */
-export function createMenu({ host, settings = {}, furniture = false, onRequestOpen, onResume, onGiveUp, onChange } = {}) {
+export function createMenu({ host, settings = {}, furniture = false, onRequestOpen, onResume, onGiveUp, onChange, onArchive } = {}) {
   const id = ++instance, prefix = `br-menu-${id}`;
   let opened = false, disposed = false, page = 'main', previousFocus = null;
   let values = { ...DEFAULTS, ...settings };
@@ -51,6 +51,7 @@ export function createMenu({ host, settings = {}, furniture = false, onRequestOp
   const resume = button('Resume', '▶', () => onResume?.());
   const controlsButton = button('Controls', '01', () => show('controls'));
   const settingsButton = button('Settings', '02', () => show('settings'));
+  if (onArchive) button('Your archive', 'Opens in a new tab', onArchive);
   const giveUpButton = button('Give up', '■', () => show('giveup'), '.br-menu-giveup');
   const stay = h('button', { type: 'button' }, 'Keep recording');
   const giveUp = h('button.br-menu-confirm-end', { type: 'button' }, 'Give up');

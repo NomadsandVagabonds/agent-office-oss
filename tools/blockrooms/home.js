@@ -19,6 +19,8 @@ import { GENDER, SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, SKIN, HAIR_COLORS, OU
 import { DEFAULT_PERK, PERK_LIST, cleanPerk, resolvePerk } from './core/perks.mjs';
 import { cleanRecord, emptyRecord } from './core/runs.mjs';
 import { paintFlatCharacter } from './world/art/character.js';
+import { archive, onArchive, startAccounts } from './archive-client.js';
+startAccounts().catch(() => {});
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, ...kids) => { const e = document.createElement(tag); if (cls) e.className = cls; e.append(...kids.filter((k) => k !== null && k !== undefined && k !== false)); return e; };
@@ -247,6 +249,7 @@ function named(value, fromStudio = false) {
   keep();
   refreshPassSummary();
   syncStudioUI();
+  archive.edit({ name: me.name });
 }
 function said(value) {
   const text = cleanMessage(value), bad = text === null;
@@ -273,7 +276,7 @@ $('reroll').addEventListener('click', rollVisitorName);
 $('creator-reroll').addEventListener('click', rollVisitorName);
 $('optin').checked = me.sign;
 $('optin').addEventListener('change', (e) => { me = { ...me, sign: e.target.checked }; keep(); });
-$('signin').addEventListener('submit', (e) => { e.preventDefault(); location.href = PLAY; });
+$('signin').addEventListener('submit', async (e) => { e.preventDefault(); await archive.edit({ name: me.name }); location.href = PLAY; });
 
 /* ---- studio workbench (#creator) ------------------------------------------------------------------- */
 const THEMES_3D = {
@@ -313,6 +316,7 @@ function setCustomLook(patch) {
   const clean = sanitizeLookPatch(merged).look;
   me = { ...me, customLook: true, look: clean };
   keep();
+  archive.edit({ character: clean });          // (the archive keeps the character too: signed in, it is what every device gets)
   refreshPassSummary();
   syncStudioUI();
 }
@@ -995,13 +999,26 @@ $('creator-reset').addEventListener('click', () => {
 refreshPassSummary();
 
 /* ---- what this browser remembers ------------------------------------------------------------------- */
-const mine = cleanRecord(store.get('office-backrooms:record')?.record || emptyRecord());
-if (mine.tapes.length) {
-  $('shelf').replaceChildren(...mine.tapes.map((t) => {
-    const link = el('a', '', 'play'); link.href = `${PLAY}?tape=${encodeURIComponent(t.seed)}`;
-    return el('li', '', el('span', 'label', `${t.at ? day(t.at) : ''}  ${num(t.score)} pts  ${clock(t.seconds)}`), el('span', '', `№ ${t.seed}`), link);
-  }));
-}
+let mine = archive.record();
+onArchive(() => {
+  mine = archive.record();
+  // Signed in, the account's name and character are the last word, on every device. Not signed in, this browser's own
+  // (what the studio keeps) are, and the archive only follows them.
+  const account = String(archive.owner()).startsWith('user:');
+  if (account && document.activeElement !== nameBox) { me.name = archive.profile().name; nameBox.value = me.name; keep(); }
+  const theirs = account ? archive.document().character?.value : null;
+  if (theirs && JSON.stringify(sanitizeLookPatch(theirs).look) !== JSON.stringify(me.customLook ? me.look : null)) {
+    me = { ...me, customLook: true, look: sanitizeLookPatch(theirs).look }; keep(); refreshPassSummary(); syncStudioUI();
+  }
+  $('shelf').replaceChildren(el('li', 'empty', 'None.'));
+  if (mine.tapes.length) {
+    $('shelf').replaceChildren(...mine.tapes.map((t) => {
+      const link = el('a', '', 'play'); link.href = `${PLAY}?tape=${encodeURIComponent(t.seed)}`;
+      return el('li', '', el('span', 'label', `${t.at ? day(t.at) : ''}  ${num(t.score)} pts  ${clock(t.seconds)}`), el('span', '', `№ ${t.seed}`), link);
+    }));
+  }
+
+});
 
 /* ---- the counter, and the book --------------------------------------------------------------------- */
 // (the count did not start at nothing)

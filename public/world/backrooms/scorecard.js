@@ -195,6 +195,7 @@ function draw(card, who, opt = {}) {
       const anew = el('button', 'brc-anew', opt.anew.label || 'Go back in');
       anew.type = 'button'; anew.disabled = true; actions.append(anew);
     }
+    if (opt.archive) { const archive = el('a', 'brc-home quiet', 'Your tape archive'); archive.href = opt.archive.href; actions.append(archive); }
     end.append(actions);
   }
   // (the mark that says it can be put down is not printed: it sits outside what is multiplied into the paper)
@@ -239,7 +240,7 @@ export async function showScorecard(o = {}) {
   // (on the page itself, not in the office's own interface: that steps aside for as long as somebody is out of the
   // building, and takes everything in it out of sight with it)
   const root = document.body;
-  const style = el('style', '', CSS), veil = draw(card, who, { brand: o.brand, share: o.share, home: o.home, anew: o.anew }), form = veil.querySelector('.brc-form');
+  const style = el('style', '', CSS), veil = draw(card, who, { brand: o.brand, share: o.share, archive: o.archive, home: o.home, anew: o.anew }), form = veil.querySelector('.brc-form');
   const number = veil.querySelector('a.brc-seed'), home = veil.querySelector('button.brc-home'), anew = veil.querySelector('button.brc-anew');
   const held = !!(home || anew);                                            // (a card with buttons waits for one of them)
   document.head.append(style); root.append(veil);

@@ -35,7 +35,7 @@ test('the site is two whole pages with everything they ask for beside them, and 
   }
   assert.ok(page.includes('<script type="module" src="./site.js"></script>') && home.includes('<script type="module" src="./home.js"></script>'));
   assert.ok(!files.some((f) => /^(data|public|server|test|tools|docs|hooks|api)\//.test(f) || /knowledge|transcripts|\.env/.test(f)), 'something of the office\'s own is in the site');
-  const expected = /^(index\.html|play\.html|site\.js|home\.js|home\.css|art\.js|robots\.txt|og\.jpg|muzak\.mp3|shots\/[\w-]+\.jpg|(world|core|vendor)\/.+)$/;
+  const expected = /^(index\.html|play\.html|site\.js|home\.js|home\.css|art\.js|archive(?:-page|-client|-storage|-cloud|-preview)?\.js|archive\.css|archive\.html|account-config\.json|robots\.txt|og\.jpg|muzak\.mp3|shots\/[\w-]+\.jpg|(world|core|vendor)\/.+)$/;
   assert.ok(files.every((f) => expected.test(f)), `a file nobody expected: ${files.find((f) => !expected.test(f))}`);
 
   // the import map: three.js and the office's two roots, all beside the page, all there
@@ -54,7 +54,8 @@ test('the site is two whole pages with everything they ask for beside them, and 
   for (const f of files.filter((n) => /\.m?js$/.test(n))) {
     const src = fs.readFileSync(path.join(out, f), 'utf8');
     // (less its block comments: three.js's add-ons show how to import them in theirs, by a name only a bundler knows)
-    for (const m of src.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(IMPORTS)) {
+    // The pinned UMD SDK is a bundle, not an ES module; its diagnostic strings contain import examples.
+    for (const m of (f === 'vendor/supabase-2.119.0.js' ? '' : src).replace(/\/\*[\s\S]*?\*\//g, '').matchAll(IMPORTS)) {
       const spec = m[1] || m[2];
       const to = spec === 'three' ? 'vendor/three.module.min.js' : spec.startsWith('/core/') ? spec.slice(1) : spec.startsWith('/vendor/three-addons/') ? spec.slice(1) : spec.startsWith('.') ? path.posix.normalize(path.posix.join(path.posix.dirname(f), spec)) : null;
       assert.ok(to, `${f} imports ${spec}, which a page with no office cannot give it`);
@@ -148,7 +149,7 @@ test('the page\'s own script: a building nobody has had, a tape from the address
   const src = fs.readFileSync(path.join(ROOT, 'tools/blockrooms/site.js'), 'utf8');
   assert.match(src, /brand: \{ over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false \}/, 'the card is headed BlockRooms here, and has no jar on it: there is no office to spend a coin in');
   assert.match(src, /let next = asSeed\(q\.get\('tape'\)\) \|\| null;/);
-  assert.match(src, /const mine = next \? keptTapes\(\)\.find\(\(t\) => t\.seed === seed\) : null;/);
+  assert.match(src, /const mine = next \? archive\.record\(visitOwner\)\.tapes\.find\(\(t\) => t\.seed === seed\) : null;/);
   assert.match(src, /\.\.\.\(mine \? \{ replay: true, pursuer: typeof mine\.mascot === 'boolean' \? mine\.mascot : undefined \} : \{\}\)/, 'only a tape this browser has kept is played back; somebody else\'s is a building like any other');
   assert.match(src, /difficulty: mine \? cleanDifficulty\(mine\.difficulty, 'training-wheels'\) : undefined/);
   assert.match(src, /home: \{ label: 'Return to homepage' \}/, 'the score has an explicit way back to the home page');
@@ -168,10 +169,10 @@ test('the page\'s own script: a building nobody has had, a tape from the address
   assert.ok(!/localStorage[^;\n]*where|setItem\([^)]*where/.test(src), 'the page does not keep where anybody is');
   assert.ok(!/XMLHttpRequest|sendBeacon|WebSocket/.test(src));
   assert.match(src, /if \(!mine\) tell\(\{ do: 'in' \}\);/);
-  assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit' \|\| !scoreEligible\(report\)\) return null;\n  const who = me\(\);\n  if \(!who\.sign\) return null;/);
+  assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit' \|\| !scoreEligible\(report\)\) return null;\n  const who = \{ \.\.\.me\(\), name: office\.walk\?\.me\?\.name \|\| me\(\)\.name \};\n  if \(!who\.sign\) return null;/);
   assert.match(src, /tell\(\{ do: 'sign', name: who\.name, message: who\.message, run: report \}\)/);
   // a building asked to be other than its seed has it (?debug, ?room=) is for looking at: walking out of one is not a score
-  assert.match(src, /const doctored = !!dev\.debug \|\| !!room;\n      const result = await enterBackrooms\(office, \{\n[^\n]*also: doctored \? undefined : sign,/, 'the book is not signed for a doctored building');
+  assert.match(src, /const doctored = !!dev\.debug \|\| !!room;\n      const result = await enterBackrooms\(office, \{\n[\s\S]*?also: doctored \? undefined : sign,/, 'the book is not signed for a doctored building');
   assert.ok(!/also: sign,/.test(src));
   assert.match(src, /let room = !next && q\.get\('room'\) && Object\.hasOwn\(ARCHETYPES, q\.get\('room'\)\) \? q\.get\('room'\) : null;/, 'a room asked for by name is a room of the deck, or it is an ordinary door');
 });

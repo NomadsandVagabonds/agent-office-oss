@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { accountConfig } from './account-config.mjs';
 // BlockRooms — the level, built as a site of its own: for whoever wants to walk
 // it without an office to run it in. One folder of plain files comes out, to be
 // served by anything that serves files.
@@ -25,8 +26,8 @@
 //                beside this file
 //   robots.txt
 //
-// Nothing in the folder asks for anything from anywhere else, and the page
-// says so in a way a browser enforces (its Content-Security-Policy). The site's
+// Assets come from this site. Optional accounts add exactly one Supabase
+// origin to connect-src; a guest build keeps the original self-only policy. The site's
 // own address is not written down anywhere in this repository: where a link
 // preview needs it whole, it is taken from SITE_ORIGIN (https://example.app),
 // or from what Vercel says the production address is while it builds.
@@ -59,11 +60,11 @@ export const IMPORT_MAP = JSON.stringify({ imports: { three: './vendor/three.mod
  * into the page by the level as it goes (the camcorder's lettering, the card), so those are allowed as they come;
  * pictures are drawn into data and blob addresses.
  */
-export function policyFor(importMap = IMPORT_MAP) {
+export function policyFor(importMap = IMPORT_MAP, accounts = {}) {
   const hash = importMap === null ? '' : ` 'sha256-${crypto.createHash('sha256').update(importMap).digest('base64')}'`;
   return [
     "default-src 'self'", `script-src 'self'${hash}`, "style-src 'self' 'unsafe-inline'", "img-src 'self' data: blob:",
-    "media-src 'self' data: blob:", "font-src 'self'", "connect-src 'self'", "worker-src 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'none'",
+    "media-src 'self' data: blob:", "font-src 'self'", `connect-src 'self'${accounts.url ? " " + accounts.url : ""}`, "worker-src 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'none'",
   ].join('; ');
 }
 
@@ -75,15 +76,16 @@ export function policyFor(importMap = IMPORT_MAP) {
  */
 export function build(out, opt = {}) {
   const origin = opt.origin ?? originOf();
+  const accounts = accountConfig(opt.accountEnv ?? process.env, { local: opt.localAccounts === true });
   fs.mkdirSync(out, { recursive: true });
   const { files, eager } = stage(out, { page: null, three: true });
   const extra = [];
   const put = (name, text) => { fs.writeFileSync(path.join(out, name), text); extra.push(name); };
   const copy = (name) => { if (!fs.existsSync(path.join(HERE, name))) return false; fs.copyFileSync(path.join(HERE, name), path.join(out, name)); extra.push(name); return true; };
 
-  for (const name of ['site.js', 'home.js', 'home.css', 'art.js']) if (!copy(name)) throw new Error(`tools/blockrooms/${name} is not there`);
-  // (the rules of the book, looks and perks: shared by both pages)
-  for (const coreName of ['core/book.mjs', 'core/look.mjs', 'core/perks.mjs', 'core/guest-presets.mjs']) {
+  for (const name of ['site.js', 'home.js', 'home.css', 'art.js', 'archive-page.js', 'archive.css', 'archive-client.js', 'archive-storage.js', 'archive-cloud.js', 'archive-preview.js']) if (!copy(name)) throw new Error(`tools/blockrooms/${name} is not there`);
+  // (the rules of the book, looks and perks, and of the archive: shared by the pages)
+  for (const coreName of ['core/book.mjs', 'core/look.mjs', 'core/perks.mjs', 'core/guest-presets.mjs', 'core/archive.mjs']) {
     if (!files.includes(coreName)) {
       fs.mkdirSync(path.join(out, 'core'), { recursive: true });
       fs.copyFileSync(path.join(HERE, '..', '..', coreName), path.join(out, coreName));
@@ -94,6 +96,9 @@ export function build(out, opt = {}) {
   if (fs.existsSync(stagedItems)) {
     fs.writeFileSync(stagedItems, fs.readFileSync(stagedItems, 'utf8').replaceAll("'/core/look.mjs'", "'../../core/look.mjs'"));
   }
+  fs.mkdirSync(path.join(out, 'vendor'), { recursive: true });
+  for (const name of ['supabase-2.119.0.js', 'LICENSE-supabase.txt', 'NOTICES-supabase.txt']) { fs.copyFileSync(path.join(HERE, 'vendor', name), path.join(out, 'vendor', name)); extra.push('vendor/' + name); }
+  put('account-config.json', JSON.stringify(accounts) + '\n');
   // pictures from inside, for the front page (taken through the level's own camcorder: tools/blockrooms/shots/)
   const shots = path.join(HERE, 'shots');
   if (fs.existsSync(shots)) {
@@ -122,11 +127,12 @@ export function build(out, opt = {}) {
     if (/<!--[A-Z]+-->/.test(page)) throw new Error(`${name} has a mark nothing filled in`);
     return page;
   };
-  put('play.html', fill('page.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor()}">`, OG: og('play'), PRELOAD: preload, IMPORTMAP: IMPORT_MAP }));
+  put('play.html', fill('page.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor(IMPORT_MAP, accounts)}">`, OG: og('play'), PRELOAD: preload, IMPORTMAP: IMPORT_MAP }));
   // the front page says when it was last touched: the day it was built — of a year it has been for some time
   const day = (opt.now || new Date()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' });
-  put('index.html', fill('home.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor()}">`, OG: og(''), IMPORTMAP: IMPORT_MAP })
+  put('index.html', fill('home.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor(IMPORT_MAP, accounts)}">`, OG: og(''), IMPORTMAP: IMPORT_MAP })
     .replace('<span id="updated">recently</span>', `<span id="updated">${day} 1998</span>`));
+  put('archive.html', fill('archive.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor(IMPORT_MAP, accounts)}">`, IMPORTMAP: IMPORT_MAP }));
   return { files: [...extra, ...files].sort(), origin, preloaded: first.length };
 }
 
@@ -134,7 +140,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const out = process.argv[2] && path.resolve(process.argv[2]);
   if (!out) { console.error('usage: node tools/blockrooms/build.mjs <folder>'); process.exit(2); }
   try {
-    const made = build(out);
+    const made = build(out, { localAccounts: process.env.BLOCKROOMS_LOCAL_ACCOUNTS === '1' });
     console.log(made.files.join('\n'));
     console.error(`BlockRooms: ${made.files.length} files in ${out}${made.origin ? `, for ${made.origin}` : ' (no address given: link previews will carry no whole address)'}`);
   } catch (err) { console.error(err.message); process.exit(1); }
