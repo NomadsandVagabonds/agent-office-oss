@@ -17,7 +17,7 @@ import { Batch, lamp } from '../kit.js';
 import {
   eraseNose, eyelessBrow, carvedSmile, bulgingEye, hollowSocket,
   slippedMouth, carveCreases, crookedSpecs, slipRows, tornVox,
-  jointMat, localJointMat,
+  jointMat, localJointMat, faceZ,
 } from '../uncanny.js';
 
 const S = [0.026, 0.0275, 0.026];
@@ -133,7 +133,6 @@ function sculptHumanHorror(head, look, variant, seed) {
     bulgingEye(head, 4.2, 42.5, 4, 4, -1, 0, look.skin, { bloodshot: true });
     slippedMouth(head, -0.5, 36.5, 8, 3, look.skin, { curve: -0.5, slope: 0.2, teeth: true });
     carveCreases(head, look.skin, [[-6, 48, 5, 48, true], [-7, 40, -3, 38, true], [2, 39, 7, 37, true]]);
-    if (look.accessory === 'none') crookedSpecs(head, { leftY: 42, rightY: 40, h: 5, z: 9, frameHex: '#1b1713' });
     slipRows(head, [[36, 38, 1, 0]]);
   } else if (v === 2) {
     // Eyeless blank upper face + stretched open groan/scream maw
@@ -307,25 +306,68 @@ function sculptRobotHorror(head, variant, seed) {
   }
 }
 
+/* ---- a copy that came out wrong ------------------------------------------------------------------------------ */
+// The owner: they should "still look like versions of colleagues but more surreal and eerie, like a copy that went wrong
+// when trying to make a clone". So nothing here is a wound. Whoever it is can be told at a glance, by their hair and their
+// clothes and the colour of them; and then the face is looked at, and it has been put together by something that had the
+// parts and not the plan: an eye too many, or none, or both on one side; a mouth in the wrong place; the whole of it slid.
+const VEIN = '#6d5a6a';
+/** The skin of a copy: theirs, gone to wax, a shade too even, with a vein showing here and there where no vein is. */
+function waxen(col, x, y, z, seed) {
+  const n = noise3(x, y, z, seed);
+  if (Math.abs(Math.sin(x * 0.9 + seed * 3) * 4 + Math.sin(y * 0.5 + z * 0.4) * 3 - z * 0.6) < 0.1) return mix(col, M(VEIN, 1), 0.55);
+  return mix(col, M('#d9cfba', 1), 0.3 + (n > 0.7 ? 0.08 : n < 0.2 ? -0.06 : 0));
+}
+/** Their clothes, copied as well: right, but for being a little grey, as a photocopy of a colour is. */
+const copied = (col) => mix(col, M('#8a8678', 1), 0.24);
+
+/** What is on the front of the face in a patch of it: [[dx, dy, colour]…], so that it can be put somewhere else. */
+function lift(head, x0, y0, x1, y1) {
+  const out = [];
+  for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) { const z = faceZ(head, x, y, 12, 3); if (head.has(x, y, z)) out.push([x - x0, y - y0, head.get(x, y, z)]); }
+  return out;
+}
+const lay = (head, patch, x0, y0) => { for (const [dx, dy, col] of patch) { const z = faceZ(head, x0 + dx, y0 + dy, 12, 3); if (head.has(x0 + dx, y0 + dy, z)) head.set(x0 + dx, y0 + dy, z, col); } };
+/** Skin where a feature was: as though there had never been one. */
+function blank(head, look, x0, y0, x1, y1) {
+  const skin = M(look.skin, 1);
+  for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) { for (let z = 10; z <= 14; z++) if (head.has(x, y, z)) head.set(x, y, z, 0); const z = faceZ(head, x, y, 12, 3); if (head.has(x, y, z)) head.set(x, y, z, skin); }
+}
+/** The five ways it has been seen to come out. (Their own face is the starting point: `buildCharacter`'s, eyes at y 42…47, mouth at y 35…39.) */
+export const WRONG_FACES = 5;
+function wrongFace(head, look, variant) {
+  const eyeL = [-7, 42, -2, 47], eyeR = [2, 42, 7, 47], mouth = [-5, 34, 5, 40];
+  const L = lift(head, ...eyeL), R = lift(head, ...eyeR), Mo = lift(head, ...mouth);
+  switch (((variant % WRONG_FACES) + WRONG_FACES) % WRONG_FACES) {
+    case 0:                                                   // no eyes were put in. The mouth was, and is wider than it was
+      blank(head, look, ...eyeL); blank(head, look, ...eyeR); lay(head, Mo, -8, 34); lay(head, Mo, -2, 34); break;
+    case 1:                                                   // both eyes on the one side, one over the other; nothing on the other
+      blank(head, look, ...eyeR); lay(head, R, -7, 35); blank(head, look, 0, 34, 6, 40); break;
+    case 2:                                                   // a second mouth, where the forehead is
+      lay(head, Mo, -5, 48); break;
+    case 3:                                                   // all of it, slid down and across: too much forehead, and the mouth going off the chin
+      blank(head, look, -8, 33, 8, 48); lay(head, L, -4, 37); lay(head, R, 5, 36); lay(head, Mo, -2, 29); break;
+    default:                                                  // an eye too many, in the middle; and no mouth was put in at all
+      lay(head, L, -3, 48); blank(head, look, ...mouth); break;
+  }
+}
+
 export function buildAbsorbedHeadVox(spec, mount = 'wall') {
   const look = spec.assimilatedLook;
   const parts = buildCharacter(look, { seed: `abs:head:${spec.seed}`, provider: spec.provider });
   const head = parts.head;
-  if (parts.accessory) {
-    head.stamp(weatherAccessory(parts.accessory, spec.seed + 13));
-  }
 
-  switch (look.species) {
-    case 'cat': sculptCatHorror(head, look, spec.faceVariant, spec.seed); break;
-    case 'dog': sculptDogHorror(head, look, spec.faceVariant, spec.seed); break;
-    case 'goblin': sculptGoblinHorror(head, look, spec.faceVariant, spec.seed); break;
-    case 'robot': sculptRobotHorror(head, spec.faceVariant, spec.seed); break;
-    default: sculptHumanHorror(head, look, spec.faceVariant, spec.seed); break;
+  if (look.species === 'robot') sculptRobotHorror(head, spec.faceVariant, spec.seed);
+  else {
+    wrongFace(head, look, spec.faceVariant + spec.seed);
+    const skinRgb = rgbOf(C(look.skin)); head.remap((x, y, z, cur) => (distRgb(rgbOf(cur), skinRgb) <= 60 ? waxen(cur, x, y, z, spec.seed) : cur));
   }
+  // (what they wore on their face was copied too, and put on straight, over whatever is under it now)
+  if (parts.accessory) head.stamp(weatherAccessory(parts.accessory, spec.seed + 13));
 
   droopHeadVox(head, {
     side: spec.droopSide || 1,
-    amp: spec.droopAmp || 3.2,
+    amp: (spec.droopAmp || 3.2) * 0.55,          // (a little: it has not melted, it was made like this)
     seed: spec.seed,
     inverted: mount === 'ceiling',
   });
@@ -356,6 +398,7 @@ function buildLongUpperArmVox(look, surfaceHex, seed) {
     if (y >= -2 && noise3(x, y, z, seed) > 0.42) return mix(cur, surfCol, 0.55);
     return noise3(x, y, z, seed + 7) < 0.2 ? tone(cur, -0.14) : cur;
   });
+  if (look.species !== 'robot') { const skinRgb = rgbOf(C(look.skin)); v.remap((x, y, z, cur) => (distRgb(rgbOf(cur), skinRgb) <= 60 ? waxen(cur, x, y, z, seed) : copied(cur))); }
   return v;
 }
 
@@ -400,6 +443,7 @@ function buildLongForearmVox(look, side, seed) {
   }
 
   v.remap((x, y, z, cur) => (noise3(x, y, z, seed + 31) < 0.22 ? tone(cur, -0.12) : cur));
+  if (look.species !== 'robot') { const skinRgb = rgbOf(C(look.skin)); v.remap((x, y, z, cur) => (distRgb(rgbOf(cur), skinRgb) <= 60 ? waxen(cur, x, y, z, seed) : copied(cur))); }
   return v;
 }
 
@@ -412,6 +456,8 @@ function buildAbsorbedCore(kit, spec, mount, surfaceColors) {
   const sig = `${look.species}:${look.outfit}:${look.outfitColor}:${spec.faceVariant}:${spec.seed}`;
   const keyBase = `abs:core:${sig}:${mount}`;
   const parts = buildCharacter(look, { seed: keyBase, provider: spec.provider });
+  const skinRgb = rgbOf(C(look.skin)), asCopy = (x, y, z, cur) => (distRgb(rgbOf(cur), skinRgb) <= 60 ? waxen(cur, x, y, z, spec.seed) : copied(cur));
+  if (look.species !== 'robot') for (const k of ['torso', 'legUpperL', 'legUpperR', 'legLowerL', 'legLowerR']) parts[k]?.remap(asCopy);
   const b = new Batch(true);
 
   const wallHex = surfaceColors?.wall || '#c8bc84';
@@ -420,76 +466,45 @@ function buildAbsorbedCore(kit, spec, mount, surfaceColors) {
   const stainHex = '#2a2218';
 
   if (mount === 'wall') {
-    // Slice torso below waist (`y < 19`), pitch forward +0.38 rad out of wall,
-    // and clip any voxel behind the wall plane (`z < 0`) so 20 cm walls never bleed!
-    const torso = parts.torso.clone();
-    torso.carve(-12, 0, -12, 12, 19, 12);
-    const surf = M(toCss(tone(wallHex, -0.06)), 2);
-    const surfMid = M(toCss(mix(wallHex, stainHex, 0.26)), 2);
-    const seep = M(toCss(mix(wallHex, stainHex, 0.54)), 2);
-    const fissure = M('#16120c', 1);
-
-    const pitchOut = 0.38;
-    const anchorY = 0.58;
-    const mTorso = new THREE.Matrix4()
-      .makeTranslation(0, anchorY, 0.035)
-      .multiply(new THREE.Matrix4().makeScale(S[0], S[1], S[2]))
-      .multiply(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(pitchOut, 0, spec.slump * 0.35, 'YXZ')))
-      .multiply(new THREE.Matrix4().makeTranslation(0, -21, 0));
-
-    const clippedTorso = new Vox();
-    const v3 = new THREE.Vector3();
-    torso.each((x, y, z, col) => {
-      v3.set(x + 0.5, y + 0.5, z + 0.5).applyMatrix4(mTorso);
-      if (v3.z >= 0.003 && v3.y >= 0.01) {
-        // Blend waist/back seam voxels into damp wallpaper so clothes fuse organically into the wall
-        const c = v3.z < 0.075 ? mix(col, seep, 0.62) : col;
-        clippedTorso.set(x, y, z, c);
-      }
+    // Stood up in the wall, the whole height of them, as somebody backs into a hedge: a shallow relief (the owner's:
+    // "vertically absorbed into the walls instead of whole torso sticking out"). Too tall and too narrow, as a copy is that
+    // was pulled while it was made; and from the chest down less and less of it came out, until at the shoes it is wallpaper.
+    // Nothing of it is behind the wall plane (z < 0), so a wall 20 cm thick never shows it on the other side.
+    const stretch = 1.2 + (spec.seed % 4) * 0.045, narrow = 0.9 - (spec.seed % 3) * 0.04;
+    const surf = M(toCss(tone(wallHex, -0.05)), 2), surfMid = M(toCss(mix(wallHex, stainHex, 0.16)), 2), seam = M(toCss(mix(wallHex, stainHex, 0.4)), 2), paper = M(wallHex, 2);
+    const body = parts.torso.clone();
+    for (const k of ['legUpperL', 'legUpperR', 'legLowerL', 'legLowerR']) if (parts[k]) body.stamp(parts[k]);
+    // how far into the wall each height of them has sunk, in voxels (the head and chest least, the feet most); and how
+    // much of what is left has turned to paper
+    const sunk = (y) => 2 + Math.round(Math.max(0, 30 - y) / 7), gone = (y) => Math.max(0, Math.min(1, (22 - y) / 30));
+    const relief = new Vox();
+    body.each((x, y, z, col) => {
+      const zz = z - sunk(y), g = gone(y), n = noise3(x, y, z, spec.seed);
+      if (zz < 0) return;                                               // (in the wall)
+      if (n < g * 0.42 && zz > 0) return;                                 // (never came out: it is ragged, and thinner as it goes down)
+      relief.set(x, y, zz, g > 0 ? mix(col, paper, Math.min(0.85, g * (0.7 + n * 0.5))) : zz === 0 ? mix(col, seam, 0.5) : col);
     });
-    if (clippedTorso.size) {
-      b.addVox(kit.model(`${keyBase}:torso`, () => clippedTorso).solid, mTorso);
-    }
+    const mBody = new THREE.Matrix4().makeTranslation(0, 0.005, 0.004).multiply(new THREE.Matrix4().makeScale(S[0] * narrow, S[1] * stretch, S[2]));
+    if (relief.size) b.addVox(kit.model(`${keyBase}:relief`, () => relief).solid, mBody);
 
-    // Flush, taut damp-wallpaper assimilation bulge & dark drywall fissure (`z = 0..3.5` voxels)
-    // wrapping organically around the emerging upper body while the lower 2/3 stays swallowed inside the wall!
-    const wallVox = new Vox();
-    // Outer flush stretched-wallpaper scar (`z = 0..2`)
-    wallVox.ellipsoid(0, 29, -0.4, 14.0, 14.5, 2.5, surf);
-    // Mid damp-ring collar & dark fissure right around the emerging ribs/shoulders (`y = 20..38`)
-    wallVox.ellipsoid(0, 28.5, 0.2, 11.2, 11.2, 3.2, surfMid);
-    wallVox.ellipsoid(0, 28.0, 0.8, 8.8, 8.6, 3.6, seep);
-    wallVox.ellipsoid(0, 28.0, 0.5, 7.2, 7.0, 2.2, fissure);
-    // Subtle flush sunken-hip relief tapering flat into the lower wall (`y = 11..22, z = 0..1.8`)
-    const sideS = spec.droopSide || 1;
-    wallVox.ellipsoid(sideS * 1.5, 17.5, -0.6, 7.5, 7.0, 2.3, surf);
-    wallVox.ellipsoid(sideS * 1.8, 17.0, -0.2, 4.8, 5.2, 2.0, surfMid);
-    // Creeping damp tendrils pulling wallpaper tight onto the torso & outward across the wall
-    for (let i = 0; i < 10; i++) {
-      const ang = (i / 10) * Math.PI * 2 + (spec.seed % 5) * 0.35;
-      const ox = Math.cos(ang) * 14.5, oy = 28.5 + Math.sin(ang) * 13.5;
-      const ix = Math.cos(ang) * 6.2, iy = 27.5 + Math.sin(ang) * 5.8;
-      wallVox.tube(ox, Math.max(8, oy), 0.2, ix, Math.max(15, iy), 3.2, 1.1, i % 2 ? surfMid : seep);
-    }
-    wallVox.carve(-20, -4, -10, 20, 48, 0); // strictly `z >= 0`!
+    // the wall round them: swollen a little, the height of them, and darker where it closes on them
+    const wallVox = new Vox(), sideS = spec.droopSide || 1;
+    wallVox.ellipsoid(sideS * 0.6, 26, -0.6, 12.5, 29, 2.1, surf);
+    wallVox.ellipsoid(0, 30, -0.4, 10, 17, 2.2, surfMid);
+    wallVox.ellipsoid(0, 12, -0.5, 7.5, 13, 1.8, surfMid);
+    for (let y = 2; y <= 44; y += 1) { const w = y > 20 ? 8.5 : 6; for (const sx of [-1, 1]) if ((y + spec.seed) % 5) wallVox.set(Math.round(sx * (w + Math.sin(y * 0.6 + spec.seed) * 1.2)), y, 1, seam); }
+    wallVox.carve(-20, -6, -10, 20, 60, 0); // strictly `z >= 0`!
+    b.addVox(kit.model(`${keyBase}:swell`, () => wallVox).solid, mBody);
 
-    const mWall = new THREE.Matrix4()
-      .makeTranslation(0, 0.01, 0.004)
-      .multiply(new THREE.Matrix4().makeScale(S[0], S[1], S[2]));
-    b.addVox(kit.model(`${keyBase}:blister`, () => wallVox).solid, mWall);
-
-    const mapPt = (fx, fy, fz) => new THREE.Vector3(fx, fy, fz)
-      .add(new THREE.Vector3(0, -21, 0))
-      .applyEuler(new THREE.Euler(pitchOut, 0, spec.slump * 0.35, 'YXZ'))
-      .multiply(new THREE.Vector3(S[0], S[1], S[2]))
-      .add(new THREE.Vector3(0, anchorY, 0.035));
-
+    const mapPt = (fx, fy, fz) => new THREE.Vector3(fx * S[0] * narrow, fy * S[1] * stretch + 0.005, (fz - 2) * S[2] + 0.004 + S[2] * 0.5);
     return {
       batch: b,
-      shoulderL: mapPt(JOINT.shoulderL[0], JOINT.shoulderL[1], JOINT.shoulderL[2] + 1.2),
-      shoulderR: mapPt(JOINT.shoulderR[0], JOINT.shoulderR[1], JOINT.shoulderR[2] + 1.2),
-      headPos: mapPt(JOINT.head[0], JOINT.head[1], JOINT.head[2] + 1.0),
-      headBaseRot: [0.16, 0, spec.droopSide * 0.28],
+      shoulderL: mapPt(JOINT.shoulderL[0], JOINT.shoulderL[1], JOINT.shoulderL[2] + 2.6),
+      shoulderR: mapPt(JOINT.shoulderR[0], JOINT.shoulderR[1], JOINT.shoulderR[2] + 2.6),
+      // (the head is a relief too: flattened against the wall and drawn out long, so that the back of it is still inside)
+      headPos: mapPt(JOINT.head[0], JOINT.head[1], JOINT.head[2] + 4.2),
+      headBaseRot: [0.1, 0, spec.droopSide * 0.2],
+      headScale: [narrow * 1.02, 1.1 + (spec.seed % 3) * 0.06, 0.6],
     };
   }
 
@@ -602,7 +617,7 @@ export function makeAbsorbedWorker(kit, spec, mount = 'wall', surface = {}) {
     lamp(-0.35, 0.6, 0.9, [0.42, 0.40, 0.36], { k: 5, wrap: 0.6, far: 16 }),
   ];
   const amb = [0.64, 0.64, 0.64];
-  const mat = kit.surface({ vox: true });
+  const mat = kit.surface({ vox: true, wet: 0.3 });          // (a little too smooth: they catch the light as a waxwork does)
 
   const core = buildAbsorbedCore(kit, enriched, mount, surface);
   const coreMesh = new THREE.Mesh(kit.geometry(core.batch, lights, amb), mat);
@@ -611,6 +626,7 @@ export function makeAbsorbedWorker(kit, spec, mount = 'wall', surface = {}) {
   const sig = `${enriched.assimilatedLook.species}:${enriched.assimilatedLook.outfit}:${enriched.assimilatedLook.outfitColor}:${enriched.assimilatedLook.accessory}:${enriched.faceVariant}:${enriched.seed}`;
   const head = new THREE.Group();
   head.position.copy(core.headPos);
+  if (core.headScale) head.scale.set(core.headScale[0], core.headScale[1], core.headScale[2]);
   const headM4 = localJointMat(S, JOINT.head);
   const headKey = `abs:head:${sig}:${mount}`;
   const bWhole = new Batch(true);
