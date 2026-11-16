@@ -1,6 +1,9 @@
 # How the level should look — a plan
 
-Status: **a plan, not built.** Nothing here has been prototyped; every cost is
+Status: **a plan, not built, and being revised.** It was written against the
+level as it was on 14 November; the level has since gained lighting modes, a
+camcorder lamp, a flashlight and an outdoor floor, and the table and phases
+below have not yet been checked against them. Nothing here has been prototyped; every cost is
 an estimate until phase 0 has measured it. The owner asked for it: the office
 looks like a finished thing and the level under it looks like 2015.
 
