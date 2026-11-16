@@ -13,19 +13,20 @@ import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
 import { MEETING, filing, meets, ahead, lengths } from './standing-meeting.rule.js';
 import { elbow } from './head-count.rule.js';
-import { S, THIGH, SHIN, backVox, thighVox, shinVox, tieVox } from './standing-meeting.model.js';
+import { S, SF, THIGH, SHIN, backVox, bellyVox, fingersVox, thighVox, shinVox, tieVox } from './standing-meeting.model.js';
 
 const TH = THIGH * S, SH = SHIN * S, SHOE = 0.1;
+const REARS = 5;          // how many lengths of it, from the front, it stands up on end
 
 export function create(c) {
   const env = c.env, level = c.level, M = MEETING;
   const walker = { x: 0, z: 0, r: M.r, tall: M.tall, opens: false };
   let s = filing(), group = null, mat = null, backs = [], legs = [], hung = [], trail = [], at = [];
-  let clock = 0, yaw = 0, high = 0.56, goal = null, goalT = 0, known = false, over = false, shake = 0, drag = null;
+  let clock = 0, yaw = 0, high = 0.56, goal = null, goalT = 0, known = false, over = false, shake = 0, drag = null, rear = 0;
   const vx = new THREE.Vector3(), vy = new THREE.Vector3(), vz = new THREE.Vector3(), basis = new THREE.Matrix4();
 
   const LIGHTS = [lamp(0.6, 3.2, 1.4, [1.1, 1.05, 1.0], { k: 9, wrap: 0.45, far: 40 })];
-  const geo = (key, make) => { const b = new Batch(true); b.addVox(env.kit.model(key, make).solid, new THREE.Matrix4().makeScale(S, S, S)); return env.kit.geometry(b, LIGHTS, [0.4, 0.38, 0.38]); };
+  const geo = (key, make, k = S) => { const b = new Batch(true); b.addVox(env.kit.model(key, make).solid, new THREE.Matrix4().makeScale(k, k, k)); return env.kit.geometry(b, LIGHTS, [0.4, 0.38, 0.38]); };
   const part = (g) => { const k = new THREE.Mesh(g, mat); group.add(k); return k; };
   /** Turn a length of limb (made along +y) to run along `dy`, with its front (+z) as near `fz` as that allows. */
   const aim = (mesh, dx, dy, dz, fx, fz, len, made) => {
@@ -49,10 +50,15 @@ export function create(c) {
     trail = [{ x: walker.x, z: walker.z }, { x: walker.x - Math.sin(yaw) * 0.01, z: walker.z - Math.cos(yaw) * 0.01 }];
     mat = env.kit.surface({ vox: true, wet: 0.6 });
     group = new THREE.Group();
-    const back = [0, 1, 2, 3, 4].map((k) => geo('meeting:hips:' + k, () => backVox(k)));
+    const back = [0, 1, 2, 3, 4].map((k) => geo('meeting:hips:' + k, () => backVox(k))), belly = [0, 1, 2].map((k) => geo('meeting:belly:' + k, () => bellyVox(k))), fingers = [0, 1, 2].map((k) => geo('meeting:fingers2:' + k, () => fingersVox(k), SF));
     const thigh = [0, 1, 2, 3].map((k) => geo('meeting:thigh2:' + k, () => thighVox(k))), shin = [0, 1, 2, 3].map((k) => geo('meeting:shin2:' + k, () => shinVox(k))), tie = [0, 1, 2, 3].map((k) => geo('meeting:tie:' + k, () => tieVox(k)));
     for (let i = 0; i < M.parts; i++) {
-      const m = part(back[(i * 2 + 1) % 5]); backs.push({ m, w: 1, roll: 0, turned: i % 2 ? Math.PI : 0 });
+      // (each length is held together in one frame: its hips, what is under them, and the fingers down either side of that)
+      const g = new THREE.Group(); group.add(g);
+      const m = new THREE.Mesh(back[(i * 2 + 1) % 5], mat); m.rotation.y = i % 2 ? Math.PI : 0; g.add(m);
+      g.add(new THREE.Mesh(belly[i % 3], mat));
+      const rows = [-1, 1].map((side) => { const f = new THREE.Mesh(fingers[(i + (side > 0 ? 1 : 0)) % 3], mat); f.position.set(side * 0.13, -0.29, 0); f.rotation.y = side > 0 ? 0 : Math.PI; g.add(f); return { f, side }; });
+      backs.push({ m: g, rows, roll: 0 });
       // a pair of legs to every pair of hips, out to the sides; and off each end of it, two more, because it has no end
       const pairs = [[-1, 0], [1, 0]]; if (i === 0) pairs.push([-1, 1.05], [1, 1.05]); if (i === M.parts - 1) pairs.push([-1, -1.05], [1, -1.05]);
       for (const [side, fan] of pairs) legs.push({ i, side, fan, thigh: part(thigh[(i + (side > 0 ? 1 : 0)) % 4]), shin: part(shin[(i + (side > 0 ? 1 : 0)) % 4]), x: 0, z: 0, fx: 0, fz: 0, tx: 0, tz: 0, k: 1, lift: 0, placed: false });
@@ -67,7 +73,9 @@ export function create(c) {
   /** Stand it where it is: every length of its back along the way it has come, and every leg from its shoe to its hip. */
   function pose(dt, moving) {
     const charging = s.mode === 'charges', drumming = s.mode === 'drums', down = s.mode === 'down';
-    const want = down ? 0.2 : charging ? 0.46 : drumming ? 0.66 : 0.56;
+    const want = down ? 0.2 : charging ? 0.46 : 0.56;
+    // seeing somebody, it stands the front of itself up on end, and shows them what is underneath; and comes down going
+    rear += ((drumming ? 1 : 0) - rear) * Math.min(1, dt * (drumming ? 5 : 9));
     high += (want - high) * Math.min(1, dt * (down ? 9 : 5));
     shake = Math.max(0, shake - dt);
     at = lengths(trail, M.parts, M.gap);
@@ -77,10 +85,23 @@ export function create(c) {
       const wave = moving ? Math.sin(clock * (charging ? 26 : 9) - i * 0.9) * (charging ? 0.03 : 0.022) : Math.sin(clock * 1.6 - i * 0.7) * 0.012;
       const jit = (drumming ? 0.012 : 0) + shake * 0.03;
       b.roll += ((down ? (i % 2 ? 0.5 : -0.4) : Math.sin(clock * 2.2 - i * 0.8) * 0.07) - b.roll) * Math.min(1, dt * 6);
-      p.y = floor + high + wave;
-      b.m.position.set(p.x + (Math.random() - 0.5) * jit, p.y, p.z + (Math.random() - 0.5) * jit);
-      b.m.rotation.set(0, p.yaw + b.turned, b.roll, 'YXZ');
+      p.y = floor + high + wave; p.pitch = 0; p.jit = jit;
+    });
+    if (rear > 0.01 && at.length > REARS) {
+      // (stood up, it faces whoever it has seen, whichever way the rest of it happens to be lying)
+      const base = at[REARS], face = base.yaw + Math.atan2(Math.sin(yaw - base.yaw), Math.cos(yaw - base.yaw)) * Math.min(1, rear * 1.5), fx = Math.sin(face), fz = Math.cos(face);
+      for (let i = REARS - 1; i >= 0; i--) {
+        const prev = at[i + 1], a = rear * (Math.PI / 2) * Math.min(1, (REARS - i) / 1.6) * (1 + Math.sin(clock * 2.1 + i) * 0.05), p = at[i];
+        p.x = prev.x + fx * Math.cos(a) * M.gap; p.z = prev.z + fz * Math.cos(a) * M.gap; p.y = prev.y + Math.sin(a) * M.gap; p.yaw = face; p.pitch = a;
+      }
+    }
+    at.forEach((p, i) => {
+      const b = backs[i];
+      b.m.position.set(p.x + (Math.random() - 0.5) * p.jit, p.y, p.z + (Math.random() - 0.5) * p.jit);
+      b.m.rotation.set(-p.pitch, p.yaw, p.pitch > 0.2 ? 0 : b.roll, 'YXZ');
       b.m.scale.set(1, 1 + Math.sin(clock * 2.6 - i) * 0.04, 1.3);
+      // the fingers either side of the seam are never still; shown, they open out and work
+      for (const r of b.rows) { r.f.rotation.z = (r.side > 0 ? -1 : 1) * (0.25 * Math.min(1, p.pitch) + Math.sin(clock * (5 + (i % 3)) + i * 1.7 + r.side) * (0.1 + 0.22 * Math.min(1, p.pitch))); r.f.rotation.x = Math.sin(clock * 3.3 + i + r.side * 2) * 0.12; }
     });
     // its legs: each foot is put down where its hip is going, and the back ones never wait for the front ones
     const stride = charging ? 0.5 : 0.26, quick = charging ? 0.05 : 0.14, most = charging ? 14 : 7;
@@ -91,6 +112,15 @@ export function create(c) {
     const turn = new Set(due.map(([, n]) => n));
     legs.forEach((l, n) => {
       const p = at[l.i], r = rest(l);
+      if (p.pitch > 0.25) {
+        // off the floor: the legs of what is stood up go out to the sides and forward, and work in the air
+        const px = Math.cos(p.yaw) * l.side, pz = -Math.sin(p.yaw) * l.side, fx = Math.sin(p.yaw), fz = Math.cos(p.yaw), w = Math.sin(clock * 6 + n * 1.3);
+        const hip = { x: p.x + px * 0.2, y: p.y, z: p.z + pz * 0.2 }, ankle = { x: hip.x + px * (0.62 + w * 0.06) + fx * (0.38 + w * 0.1), y: hip.y + 0.05 + Math.cos(clock * 5 + n) * 0.12, z: hip.z + pz * (0.62 + w * 0.06) + fz * (0.38 + w * 0.1) };
+        const e = elbow(hip, ankle, TH, SH, { x: px * 2.4, z: pz * 2.4 });
+        l.thigh.position.set(hip.x, hip.y, hip.z); aim(l.thigh, e.x - hip.x, e.y - hip.y, e.z - hip.z, fx, fz, Math.hypot(e.x - hip.x, e.y - hip.y, e.z - hip.z), TH);
+        l.shin.position.set(e.x, e.y, e.z); aim(l.shin, ankle.x - e.x, ankle.y - e.y, ankle.z - e.z, fx, fz, Math.hypot(ankle.x - e.x, ankle.y - e.y, ankle.z - e.z), SH);
+        l.placed = false; l.k = 1; return;
+      }
       if (!l.placed || Math.hypot(r.x - l.x, r.z - l.z) > 0.9) { l.x = r.x; l.z = r.z; l.k = 1; l.placed = true; }
       if (l.k >= 1 && turn.has(n)) { l.fx = l.x; l.fz = l.z; l.tx = r.x; l.tz = r.z; l.k = 0; }
       if (l.k < 1) {
@@ -98,7 +128,7 @@ export function create(c) {
         if (l.k >= 1) { l.lift = 0; if (charging ? n % 3 === 0 : n % 2 === 0) c.play(charging ? 'thunk' : 'step', l.x, l.z, charging ? 18 : 8); }
       }
       // drumming: every foot of it, on the spot, out of time with the next. Down: they are in the air, and going
-      const drum = drumming ? Math.abs(Math.sin(clock * 34 + n * 1.9)) * 0.09 : down ? 0.25 + Math.abs(Math.sin(clock * 17 + n * 2.3)) * 0.3 : 0;
+      const drum = drumming ? Math.abs(Math.sin(clock * 34 + n * 1.9)) * 0.06 : down ? 0.25 + Math.abs(Math.sin(clock * 17 + n * 2.3)) * 0.3 : 0;
       const fy = env.world.floorY(l.x, l.z) + l.lift + drum, hip = { x: r.hx, y: p.y - 0.05, z: r.hz }, ankle = { x: l.x, y: fy + SHOE, z: l.z };
       const e = elbow(hip, ankle, TH, SH, { x: r.sx * 2.4, z: r.sz * 2.4 });
       const fwx = r.sx, fwz = r.sz;          // (the shoes point the way the legs go: out)
@@ -127,7 +157,6 @@ export function create(c) {
     const dense = []; for (let i = 0; i < pts.length - 1; i++) for (let k = 0; k < 8; k++) dense.push({ x: pts[i].x + (pts[i + 1].x - pts[i].x) * (k / 8), z: pts[i].z + (pts[i + 1].z - pts[i].z) * (k / 8) });
     dense.push(pts[pts.length - 1]); trail = dense; walker.x = end.x; walker.z = end.z;
     yaw = Math.atan2(pts[0].x - pts[1].x, pts[0].z - pts[1].z); goal = null;
-    for (const b of backs) b.turned += 0;
     legs.forEach((l) => { l.i = M.parts - 1 - l.i; l.side = -l.side; l.fan = -l.fan; });
     backs.reverse();
   }
@@ -160,7 +189,7 @@ export function create(c) {
       const before = s.mode;
       s = meets(s, { dt, seen, to, went, blocked, touched, fire: nearFire });
       if (before === 'down' && s.mode === 'files') about();          // up again: and off the way it came, which is as good a way as the other
-      if (s.drums) { c.play('rattle', walker.x, walker.z, 18); env.interfere?.(0.25); }
+      if (s.drums) { c.play('creak', walker.x, walker.z, 18); c.play('rattle', walker.x, walker.z, 18); env.interfere?.(0.3); }
       if (s.goes) { c.play('whir', walker.x, walker.z, 18); }
       if (s.struck) { c.play('crack', walker.x, walker.z, 20); c.play('thunk', walker.x, walker.z, 20); env.interfere?.(0.5); shake = 0.8; }
       if (s.took) {
@@ -182,26 +211,20 @@ export function create(c) {
       const L = c.light(walker.x, walker.z, 1.0); mat.uniforms.uTint.value.set(L[0] * 1.5 + 0.05, L[1] * 1.5 + 0.05, L[2] * 1.5 + 0.05);
       pose(dt, Math.hypot(walker.x - was.x, walker.z - was.z) > 1e-4);
     },
-    /** The building's camera: it goes over the visitor's character and on, and the character goes along under it. */
+    /** The building's camera: it stands up over the visitor's character, shows it what is underneath, and comes down on it. */
     takes(shot) {
       over = true;
-      const fig = shot.figure, dir = s.dir || { x: Math.sin(yaw), z: Math.cos(yaw) };
-      s = { ...s, mode: 'charges', dir }; drag = null;
+      const fig = shot.figure, d0 = Math.hypot(shot.x - walker.x, shot.z - walker.z) || 1, dir = { x: (shot.x - walker.x) / d0, z: (shot.z - walker.z) / d0 };
+      yaw = Math.atan2(dir.x, dir.z); s = { ...s, mode: 'drums', dir };
+      const go = (dist) => { const nx = walker.x + dir.x * dist, nz = walker.z + dir.z * dist; if (c.walk.clear(walker, walker.x, walker.z, nx, nz)) { walker.x = nx; walker.z = nz; moved(nx, nz); return true; } return false; };
+      let fell = false;
       return (t, dt) => {
         clock += dt;
-        const speed = t < 0.9 ? M.charge * 0.55 : Math.max(0, M.charge * 0.55 * (1 - (t - 0.9) / 0.5));
-        if (speed > 0) {
-          const nx = walker.x + dir.x * speed * dt, nz = walker.z + dir.z * speed * dt;
-          if (c.walk.clear(walker, walker.x, walker.z, nx, nz)) { walker.x = nx; walker.z = nz; moved(nx, nz); } else if (s.mode !== 'down') { s = { ...s, mode: 'down', t: 0 }; shake = 0.8; }
-        } else if (s.mode !== 'down') s = { ...s, mode: 'files' };
-        pose(dt, speed > 0 && s.mode === 'charges');
-        if (fig) {
-          const k = Math.min(1, t / 0.25);
-          fig.rotation.x = -1.5 * k; fig.position.y = shot.y - 0.05 * k;
-          // once it is over them they go with it, under the fourth length of it, until it stops
-          const p = at[3]; if (!drag && p && Math.hypot(p.x - shot.x, p.z - shot.z) < 0.5) drag = { x: fig.position.x - p.x, z: fig.position.z - p.z };
-          if (drag && p) { fig.position.x = p.x + drag.x * 0.3; fig.position.z = p.z + drag.z * 0.3; fig.rotation.y = p.yaw; }
-        }
+        const gap = Math.hypot(shot.x - walker.x, shot.z - walker.z);
+        if (t < 1.5) { if (gap > 1.5) go(Math.min(gap - 1.5, 2.2 * dt)); }
+        else { if (s.mode !== 'charges') { s = { ...s, mode: 'charges' }; c.play('thunk', shot.x, shot.z, 18); c.play('squish', shot.x, shot.z, 14); } if (!fell && !go(Math.min(4 * dt, 1.9 - (t - 1.5) * 2))) fell = true; if (t > 2) fell = true; }
+        pose(dt, t < 1.5 ? gap > 1.5 : !fell);
+        if (fig) { const k = Math.max(0, Math.min(1, (t - 1.5) / 0.2)); fig.rotation.x = -1.5 * k; fig.position.y = shot.y - 0.05 * k; fig.rotation.z = t < 1.5 ? Math.sin(t * 21) * 0.05 : 0; }
       };
     },
     /** …filmed from the side, low: the whole length of it going over them. */
