@@ -540,7 +540,7 @@ test('the absorbed staff: a hold never turns the visitor\'s head while something
   assert.ok(TUG_SECONDS < A.holdDuration);
   // the ones this is for are the ones that hunt (the waste toner since it came: something dropping off the ceiling at
   // you is not a moment to have your head turned for you); the rest of the hold is as it was
-  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner', 'the-lines', 'mother', 'head-count', 'other-door']);
+  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner', 'the-lines', 'mother', 'head-count', 'standing-meeting', 'other-door']);
   const held = SUNK.stepAbsorbed(SUNK.createAbsorbedState('wall'), { dt, dist: 0.5 });
   assert.ok(held.startedGrab && held.slow === A.slowFactor);
 });
@@ -1047,4 +1047,40 @@ test('head count: a step is felt and a still visitor is not, until a hand is on 
   assert.ok(Math.abs(Math.hypot(e.x - sh.x, e.y - sh.y, e.z - sh.z) - 0.63) < 1e-6 && Math.abs(Math.hypot(e.x - hand.x, e.y - hand.y, e.z - hand.z) - 0.69) < 1e-6);
   assert.ok(e.y > 0.45, 'lifted well clear of the straight line from shoulder to hand');
   const far = elbow(sh, { x: 5, y: 0, z: 0 }, 0.63, 0.69); assert.ok(Number.isFinite(far.x + far.y + far.z), 'a hand out of reach does not break it');
+});
+
+/* ---- the standing meeting (cast/standing-meeting.rule.js): it comes straight, and cannot turn --------------------- */
+
+test('the standing meeting: it sees ahead, drums, comes straight, and whoever has left the line is not run down', async () => {
+  const { MEETING, filing, meets, ahead, inLine, lengths } = await import('../public/world/backrooms/cast/standing-meeting.rule.js');
+  const at = { x: 0, z: 0 };
+  assert.ok(ahead(at, 0, { x: 0, z: 8 }) && !ahead(at, 0, { x: 0, z: -8 }) && !ahead(at, 0, { x: 8, z: 1 }), 'in front of it, not behind or beside');
+  assert.ok(!ahead(at, 0, { x: 0, z: MEETING.sees + 1 }), 'nor too far off');
+  assert.ok(MEETING.charge > 3.7, 'it is faster than a run: it is not to be outrun'); assert.ok(MEETING.drum >= 0.8, 'and gives fair warning');
+  let s = filing();
+  s = meets(s, { dt: 0.1, seen: false }); assert.equal(s.mode, 'files');
+  assert.equal(meets(s, { dt: 0.1, seen: true, to: { x: 0, z: 1 }, fire: true }).mode, 'files', 'not through a fire');
+  s = meets(s, { dt: 0.1, seen: true, to: { x: 0, z: 1 } }); assert.ok(s.drums); assert.equal(s.mode, 'drums');
+  s = meets(s, { dt: 0.4, seen: true, to: { x: 1, z: 0 } }); assert.deepEqual(s.dir, { x: 1, z: 0 }, 'drumming, it is still taking aim');
+  for (let t = 0; t < MEETING.drum; t += 0.1) s = meets(s, { dt: 0.1, seen: false });
+  assert.equal(s.mode, 'charges'); assert.deepEqual(s.dir, { x: 1, z: 0 });
+  s = meets(s, { dt: 0.1, seen: true, to: { x: 0, z: 1 }, went: 0.6 }); assert.deepEqual(s.dir, { x: 1, z: 0 }, 'once it has gone, that is the way it goes');
+  const first = meets(s, { dt: 0.1, went: 0.6, touched: true }); assert.ok(first.took);
+  assert.ok(!meets(first, { dt: 0.1, went: 0.6, touched: true }).took, 'it runs somebody down once in a charge');
+  const wall = meets(s, { dt: 0.1, went: 0.1, blocked: true }); assert.ok(wall.struck); assert.equal(wall.mode, 'down');
+  let d = wall; for (let t = 0; t < MEETING.winded - 0.2; t += 0.1) d = meets(d, { dt: 0.1, seen: true, to: { x: 0, z: 1 } });
+  assert.equal(d.mode, 'down', 'it is a while getting up, whoever is in front of it');
+  for (let t = 0; t < 0.5; t += 0.1) d = meets(d, { dt: 0.1 }); assert.equal(d.mode, 'files');
+  let far = s; for (let n = 0; n < 40 && far.mode === 'charges'; n++) far = meets(far, { dt: 0.1, went: 0.6 });
+  assert.equal(far.mode, 'down', 'and a charge that meets nothing still ends'); assert.ok(far.run >= MEETING.far && far.rest < MEETING.winded);
+  // the line it runs
+  const dir = { x: 0, z: 1 };
+  assert.ok(inLine(at, dir, { x: 0.3, z: 4 }) && !inLine(at, dir, { x: MEETING.wide + 0.2, z: 4 }) && !inLine(at, dir, { x: 0, z: -2 }), 'a step aside is enough');
+  // the length of it follows where its front has been, round a corner
+  const trail = []; for (let i = 0; i <= 20; i++) trail.push({ x: i * 0.1, z: 3 }); for (let i = 1; i <= 30; i++) trail.push({ x: 2, z: 3 - i * 0.1 });
+  const body = lengths(trail);
+  assert.equal(body.length, MEETING.parts); assert.deepEqual([body[0].x, body[0].z], [0, 3]);
+  for (let i = 1; i < body.length; i++) { const step = Math.hypot(body[i].x - body[i - 1].x, body[i].z - body[i - 1].z); assert.ok(step <= MEETING.gap + 1e-6 && step > MEETING.gap * 0.6, `length ${i} is ${step} behind`); }
+  assert.ok(body[body.length - 1].z < 3 - 0.3, 'the tail of it is still round the corner');
+  assert.equal(lengths([{ x: 0, z: 0 }, { x: 0, z: -0.01 }]).length, MEETING.parts, 'and before it has been anywhere, it is laid out straight');
 });

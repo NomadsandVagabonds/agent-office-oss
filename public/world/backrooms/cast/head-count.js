@@ -43,7 +43,7 @@ export function create(c) {
     mat = env.kit.surface({ vox: true, wet: 0.6 });
     group = new THREE.Group();
     knot = part(geo('heads:knot', knotVox));
-    torsos = LIE.map((a, k) => ({ a, m: part(geo('heads:torso:' + k, () => torsoVox(k))), tilt: 0.34 + k * 0.05 }));
+    torsos = LIE.map((a, k) => ({ a, m: part(geo('heads:torso:' + k, () => torsoVox(k))), tilt: [0.62, 0.3, 0.78][k], roll: [0.12, -0.3, 0.22][k] }));   // (no two of them hold what they have not got the same way)
     tags = LIE.map((a, k) => ({ a, m: part(geo('heads:tag:' + k, () => lanyardVox(k))), swing: 0, v: 0 }));
     const hands = [0, 1].map((k) => geo('heads:hand:' + k, () => handVox(k)));
     arms = ARMS.map(([who, side], i) => ({
@@ -76,7 +76,7 @@ export function create(c) {
       const a = rot + t.a;
       t.m.position.set(walker.x + Math.sin(a) * 0.4, floor + high + 0.08, walker.z + Math.cos(a) * 0.4);
       // each of them still tries to lift what it has not got, and turns it, feeling
-      t.m.rotation.set(0, a, 0); t.m.rotateX(-(t.tilt + Math.sin(clock * (0.9 + k * 0.23) + k * 2) * 0.12 + (coming ? 0.18 : 0))); t.m.rotateZ(Math.sin(clock * (1.4 + k * 0.31) + k) * (again ? 0.3 : 0.16));
+      t.m.rotation.set(0, a, 0); t.m.rotateX(-(t.tilt + Math.sin(clock * (0.9 + k * 0.23) + k * 2) * 0.12 + (coming ? 0.18 : 0))); t.m.rotateZ(t.roll + Math.sin(clock * (1.4 + k * 0.31) + k) * (again ? 0.3 : 0.16));
       const tag = tags[k], nx = walker.x + Math.sin(a) * 0.86, nz = walker.z + Math.cos(a) * 0.86;
       tag.v += (-tag.swing * 18 - tag.v * 2.2 + (moving ? Math.sin(clock * 9 + k) * 6 : Math.sin(clock * 1.9 + k) * 0.6)) * dt; tag.swing += tag.v * dt;
       tag.m.position.set(nx, floor + high + 0.3 + Math.sin(t.tilt) * 0.1, nz); tag.m.rotation.set(tag.swing * 0.5, a, tag.swing);
@@ -93,12 +93,12 @@ export function create(c) {
       const off = Math.hypot(rx - l.x, rz - l.z);
       if (off > 2.2) { l.x = rx; l.z = rz; l.k = 1; }                       // (it was somewhere else a moment ago: its hands are where it is)
       // a hand is put down again when it is left behind; and, counting, one is lifted now and then to pat for whatever may be there
-      const pat = !moving && !coming && l.k >= 1 && stepping === 0 && tapT <= 0 && i === Math.floor(clock * 0.7) % arms.length;
+      const pat = !moving && !coming && l.k >= 1 && stepping < 2 && tapT <= 0 && i === Math.floor(clock * 1.9) % arms.length;
       if (l.k >= 1 && (turn.has(i) || off > 1.1 || (pat && stepping < most))) {
         l.fx = l.x; l.fz = l.z; l.k = 0; stepping++;
         const a = sh.out + (pat ? (Math.random() - 0.5) * 1.2 : 0), r = pat ? far + 0.25 : 0;
         l.tx = pat ? sh.x + Math.sin(a) * r : rx; l.tz = pat ? sh.z + Math.cos(a) * r : rz; l.pat = pat;
-        if (pat) tapT = again ? 0.25 : 0.7 + Math.random() * 0.9;
+        if (pat) tapT = again ? 0.2 : 0.3 + Math.random() * 0.5;
       }
       if (l.k < 1) {
         l.k = Math.min(1, l.k + dt / (l.pat ? 0.34 : quick)); l.x = l.fx + (l.tx - l.fx) * l.k; l.z = l.fz + (l.tz - l.fz) * l.k; l.lift = Math.sin(l.k * Math.PI) * (l.pat ? 0.34 : coming ? 0.16 : 0.22);
@@ -152,7 +152,9 @@ export function create(c) {
         if (!goal || goalT <= 0 || Math.hypot(goal.x - walker.x, goal.z - walker.z) < 0.8) { goal = wander(); goalT = 14 + Math.random() * 10; }
         to = goal;
       }
-      const speed = pace(s.mode) * (c.speedScale ?? 1);
+      // counting, it stops every so often where it is and only its hands go on, feeling about for whatever may be there
+      const listens = s.mode === 'counts' && (clock % 9) < 2.6;
+      const speed = listens ? 0 : pace(s.mode) * (c.speedScale ?? 1);
       if (to && speed > 0) { const got = c.walk.go(walker, to, speed * Math.min(dt, 0.08), 0.2); if (s.mode === 'counts' && got && got.went < 1e-4) goalT = Math.min(goalT, 1.5); }
       const mx = walker.x - lastX, mz = walker.z - lastZ, moved = Math.hypot(mx, mz) > 1e-4;
       if (moved) { let da = Math.atan2(mx, mz) - rot; da = Math.atan2(Math.sin(da), Math.cos(da)); rot += da * Math.min(1, dt * (s.mode === 'comes' ? 7 : 2.5)); }
