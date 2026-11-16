@@ -196,7 +196,7 @@ export function wallBox(c, side, a, b, y0, y1, d0, d1, rgb, batch = c.flat) {
   batch.box(Math.min(p.x, q.x), y0, Math.min(p.z, q.z), Math.max(p.x, q.x), y1, Math.max(p.z, q.z), rgb);
 }
 /** A flat thing on a wall, from a to b along it, y0 to y1, `off` out from it, facing into the room. */
-export function wallFace(c, side, a, b, y0, y1, batch, uv, off = 0.012) { const p = c.wallAt(side, a, off), q = c.wallAt(side, b, off); upright(batch, p.x, p.z, q.x, q.z, y0, y1, uv); }
+export function wallFace(c, side, a, b, y0, y1, batch, uv, off = 0.012, alb) { const p = c.wallAt(side, a, off), q = c.wallAt(side, b, off); upright(batch, p.x, p.z, q.x, q.z, y0, y1, uv, alb); }
 const lowest = (c, side, a, b, off = 0.3) => Math.min(...[a, (a + b) / 2, b].map((t) => { const p = c.wallAt(side, t, off); return c.ceilAt(p.x, p.z); }));
 
 /** A shopping trolley, nose toward +x: it nests in the one in front of it. */

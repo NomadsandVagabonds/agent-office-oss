@@ -421,6 +421,18 @@ export const MORE_DECK = [
   { id: 'moving-stairs', name: 'Moving Stairs', landmark: 'the hall of moving stairs', w: [16, 18], d: [16, 18], h: [8.6, 9],
     ports: ['left', 'right'], weight: 1.3, lights: 'dim', themes: { mall: 1, '*': 0 },
     module: './rooms/moving-stairs.js', stash: (r) => [r.W / 2 - 1.0, r.D / 2 - 1.1, r.W / 2 - 0.4, r.D / 2 - 0.5], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A shop: a hall of photo booths, both sides and two rows up the back; walk past one and it takes your picture. The strips are pinned up everywhere.
+  { id: 'photo-booths', name: 'Photo of You', landmark: 'the row of photo booths', w: [9, 11], d: [5, 6], h: [4.3, 4.6],
+    ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/photo-booths.js', stash: (r) => [-r.W / 2 + 0.3, -0.3, -r.W / 2 + 0.9, 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A shop that sells bags, each with a receipt in it for the bag; the tills print on, and one of them follows you round the floor.
+  { id: 'receipts', name: 'The Receipt Shop', landmark: 'the shop that sells bags', w: [8, 10], d: [8, 9], h: [3.1, 3.5],
+    ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/receipts.js', stash: (r) => [r.W / 2 - 0.9, r.D / 2 - 0.9, r.W / 2 - 0.3, r.D / 2 - 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A shop: the key cutter's, whose every wall is doors of every size to the roof, none of which opens; the blanks hang on strings over your head.
+  { id: 'keys-cut', name: 'Keys Cut', landmark: "the key cutter's, all doors", w: [6, 7], d: [6, 7], h: [3.3, 3.8],
+    ports: ['left', 'right'], weight: 1.1, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/keys-cut.js', stash: (r) => [r.W / 2 - 0.9, r.D / 2 - 0.9, r.W / 2 - 0.3, r.D / 2 - 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
   // A shop: the place that sells the orange drink. Orange and white, a great many oranges, and somebody serving who has one for a head.
   { id: 'the-orange', name: 'The Orange', landmark: 'the place that sells the orange drink', w: [7, 8], d: [7, 8], h: [2.9, 3.3],
     ports: ['left', 'right'], weight: 1.3, lights: 'dim', themes: { mall: 1, '*': 0 },
