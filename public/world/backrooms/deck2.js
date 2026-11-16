@@ -429,10 +429,10 @@ export const MORE_DECK = [
   { id: 'food-court', name: 'The Food Court', landmark: 'the tables round the hole', w: [13, 15], d: [12, 14], h: [3.3, 3.8],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
     module: './rooms/food-court.js', stash: (r) => [r.W / 2 - 1.0, r.D / 2 - 1.0, r.W / 2 - 0.4, r.D / 2 - 0.4], roll: (R) => ({ seed: R.int(1, 9999) }) },
-  // A car park in an office basement: low, every bay the same number, every car the one car, a barrier that works itself.
-  { id: 'level-p', name: 'Level P', landmark: 'the car park where every car is the one car', w: [13, 15], d: [14, 15], h: [2.3, 2.5],
+  // A car park, tall, in the yellow of one: the one car a great many times (stacked to the roof, in a drift, up the wall, on the roof), and a way out that is a ramp down into nothing.
+  { id: 'level-p', name: 'Level P', landmark: 'the car park of the one car', w: [16, 18], d: [16, 18], h: [7.2, 8],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
-    module: './rooms/level-p.js', stash: (r) => [-r.W / 2 + 0.3, -0.35, -r.W / 2 + 0.95, 0.35], roll: (R) => ({ seed: R.int(1, 9999), bay: R.pick(['14', 'P14', '14B', '41']) }) },
+    module: './rooms/level-p.js', stash: (r) => [-r.W / 2 + 0.4, r.D / 2 - 1.1, -r.W / 2 + 1.0, r.D / 2 - 0.5], roll: (R) => ({ seed: R.int(1, 9999), bay: R.pick(['14', 'P14', '14B', '41']) }) },
   // A playground on fake grass. Most of it is going down into the floor, slowly, and has been for some time.
   { id: 'recess', name: 'Recess', landmark: 'the playground that is going under', w: [12, 14], d: [10, 12], h: [3.3, 4.2],
     ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
