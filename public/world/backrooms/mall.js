@@ -130,13 +130,14 @@ export function mallNeon(kit, key, names, seed = 1) {
 export const tube = (i) => TUBES[((i % TUBES.length) + TUBES.length) % TUBES.length];
 
 /** A shop's dummy, as described: the right number of everything, joined by somebody who had not seen one move. pose: 0…3. */
-export function dummyVox(pose = 0, dress = '#39424f') {
+export function dummyVox(pose = 0, dress = '#39424f', head = null) {
   return () => {
     const v = new Vox(), skin = M('#d8cbb4', 0), seam = M('#b3a68e', 0), cloth = M(dress, 2), base = M('#8d949c', 0);
+    const peel = M('#f08a1e', 2);
     v.cyl('y', 0, 0, 0, 1, 8, base); v.cyl('y', 0, 0, 1, 34, 0.8, base);                                         // the stand it is on, up its back
     v.rbox(-5, 34, -3, 5, 54, 3, 2, cloth); v.rbox(-4, 30, -3, 4, 36, 3, 2, cloth); v.box(-5, 44, -3, 5, 44, 3, seam);
     for (const sx of [-1, 1]) { v.tube(sx * 2.5, 30, 0, sx * 3, 16, pose === 2 ? 3 : 0, 1.7, cloth); v.tube(sx * 3, 16, pose === 2 ? 3 : 0, sx * 3, 2, 0, 1.5, skin); v.rbox(sx * 3 - 2, 0, -2, sx * 3 + 2, 2, 5, 1, skin); }
-    v.cyl('y', 0, 0, 54, 57, 1.6, skin); v.ellipsoid(0, 62, 0, 4.2, 5.2, 4.6, skin); v.box(-4, 62, -5, 4, 62, 5, seam);       // a head, with the join round it and nothing on it
+    v.cyl('y', 0, 0, 54, 57, 1.6, skin); if (head === 'orange') { v.ellipsoid(0, 64, 0, 7.5, 7, 7.5, peel); v.cyl('y', 0, 0, 70, 72, 1, M('#3f7a3a', 2)); v.box(1, 71, 0, 5, 71, 2, M('#5f9a48', 2)); } else { v.ellipsoid(0, 62, 0, 4.2, 5.2, 4.6, skin); v.box(-4, 62, -5, 4, 62, 5, seam); }       // a head, with the join round it and nothing on it
     const arm = (sx, a) => { const ex = sx * (7 + a[0]), ey = 44 + a[1], ez = a[2]; v.tube(sx * 5.5, 52, 0, ex, ey, ez, 1.5, cloth); v.tube(ex, ey, ez, ex + sx * a[3], ey + a[4], ez + a[5], 1.3, skin); v.ellipsoid(ex + sx * a[3], ey + a[4], ez + a[5], 1.6, 2, 1.6, skin); };
     const P4 = [[[1, -6, 0, 0, -9, 1], [1, -6, 0, 0, -9, 1]], [[3, 0, 3, 2, 8, 4], [1, -6, 0, 0, -9, 1]], [[2, -2, -4, -3, 9, -3], [2, -2, -4, -3, 9, -3]], [[4, 4, 0, 5, 6, 0], [4, 4, 0, 5, 6, 0]]][pose % 4];
     arm(-1, P4[0]); arm(1, P4[1]);
@@ -153,3 +154,33 @@ export function palmVox() {
     for (let t = 0; t <= 1.001; t += 0.05) { const x = Math.cos(a) * r1 * t, z = Math.sin(a) * r1 * t, y = 110 + 12 * t - 34 * t * t, wide = 5 * Math.sin(Math.PI * Math.min(1, t + 0.08)); v.box(Math.round(x - Math.sin(a) * wide), Math.round(y), Math.round(z - Math.cos(a) * wide), Math.round(x + Math.sin(a) * wide), Math.round(y), Math.round(z + Math.cos(a) * wide), c); } }
   return v;
 }
+
+/* ---- the orange drink ------------------------------------------------------------------------------------------ */
+
+const PEEL = M('#f08a1e', 2);   // (one colour: the grain is the material's. A peel dimpled voxel by voxel is ten times the triangles)
+/** An orange, r voxels: dimpled, a stalk and one leaf. Cut open (cut: true): the inside, which is the wrong colour. */
+export function orangeVox(r = 8, cut = false) {
+  return () => {
+    const v = new Vox(); v.ellipsoid(0, r, 0, r, r * 0.94, r, PEEL); v.cyl('y', 0, 0, r * 1.9, r * 2.05, Math.max(1, r * 0.12), M('#3f7a3a', 2)); v.box(1, Math.round(r * 2), 0, Math.round(r * 0.6), Math.round(r * 2), Math.round(r * 0.25), M('#5f9a48', 2));
+    if (cut) { v.carve(-r, r, 0, r, r * 3, r); v.ellipsoid(0, r, 0, r - 1.2, 0.6, r - 1.2, M('#f6ead0', 0)); for (let a = 0; a < 6.283; a += 0.785) v.tube(0, r, 0, Math.cos(a) * (r - 2), r, Math.sin(a) * (r - 2), 0.5, M('#3a70c9', 0)); v.ellipsoid(0, r, 0, 1.4, 0.7, 1.4, M('#1f2a55', 0)); }
+    return v;
+  };
+}
+/** What makes the drink: a glass tank of oranges going round, a spout, and what has come out of the spout over the years. */
+export function juicerVox() {
+  const v = new Vox(), steel = M('#b9bec4', 0), dark = M('#2a2f36', 0), glass = M('#f4b04a', 0), drink = M('#ff9a1e', 0);
+  v.rbox(-9, 0, -8, 9, 9, 8, 2, steel); v.box(-9, 4, 8, 9, 6, 8, dark); v.cyl('y', 0, 0, 9, 34, 8, glass); v.cyl('y', 0, 0, 34, 37, 9, steel); v.cyl('y', 0, 0, 37, 39, 4, dark);
+  for (let i = 0; i < 9; i++) { const a = i * 2.1, y = 12 + (i * 5) % 20; v.ellipsoid(Math.round(Math.cos(a) * 4.5), y, Math.round(Math.sin(a) * 4.5), 3, 3, 3, PEEL); }
+  v.tube(0, 5, 8, 0, 3, 12, 1.2, steel); v.tube(0, 3, 12, 0, 0, 12, 0.8, drink); v.rbox(-5, -1, 9, 5, 0, 15, 1, M('#8f5a1a', 0));
+  return v;
+}
+/** A paper cup with a lid and a straw, striped; and the same, full to the top of the straw. */
+export function cupVox() { const v = new Vox(), w = M('#f6f1e2', 0), o = M('#f08a1e', 0); v.cyl('y', 0, 0, 0, 9, 2.6, (x, y) => (y % 3 === 1 ? o : w), 3.4); v.cyl('y', 0, 0, 9, 10, 3.7, w); v.tube(1, 10, 0, 2, 15, 0, 0.5, M('#d9433a', 0)); return v; }
+/** A drift of oranges, as high as a desk: what a place that sells them would have a lot of. */
+export function heapVox(n = 0) {
+  return () => { const v = new Vox(); let k = (n + 3) * 2654435761 >>> 0; const r = () => { k = (Math.imul(k, 1664525) + 1013904223) >>> 0; return k / 4294967296; };
+    for (let i = 0; i < 30; i++) { const a = r() * 6.283, d = r() * r() * 22, h = Math.max(0, 22 - d) * (0.5 + r() * 0.6); v.ellipsoid(Math.round(Math.cos(a) * d), Math.round(3 + h), Math.round(Math.sin(a) * d), 3.4, 3.2, 3.4, PEEL); }
+    return v; };
+}
+/** A shoe. A left one. */
+export function shoeVox(colour = '#3a2a1c') { return () => { const v = new Vox(), c = M(colour, 2); v.rbox(-2, 0, -5, 2, 2, 5, 1, M('#17171a', 0)); v.rbox(-2, 1, -5, 2, 4, 1, 2, c); v.rbox(-2, 1, 0, 2, 6, 5, 2, c); v.carve(-1, 4, 1, 1, 6, 4); v.box(-1, 4, -3, 1, 4, -1, M('#e9e4d6', 0)); return v; }; }

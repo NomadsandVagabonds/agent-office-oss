@@ -23,7 +23,7 @@ export function build(c) {
     const xa = x0 + i * K.bay, zf = side * K.lane, zb = side * Math.min(D / 2 - 0.3, K.lane + K.deep), cx = xa + K.bay / 2, cz = (zf + zb) / 2;
     for (const x of i ? [xa] : [xa, xa + bays * K.bay]) c.flat.box(x - 0.05, 0, Math.min(zf, zb), x + 0.05, 0.006, Math.max(zf, zb), paint, { skip: '-y' });
     c.lay(num, cx, zf + side * 0.45, 0.9, 0.45, side > 0 ? Math.PI : 0);
-    if (Math.abs(cz) < 1.4 && Math.abs(cx) > W / 2 - 2.2) continue;
+    if (side > 0 && Math.abs(cx) < K.bay * 0.75) continue;                                                  // (the way in from the front is between these: left empty)
     if (k === desk) { c.prop('desk', cx, cz, { rot: Math.PI / 2 }); continue; }
     if (R.chance(0.14)) { c.blot(cx, cz, 1.5, 2.6, { a: 0.5 }); continue; }                               // a bay with only what dripped from it
     // (the one car, cut coarser: there are a great many of it)

@@ -16,7 +16,7 @@
 import { ticks } from '../kit.js';
 import { P } from '../bits.js';
 import { upright, sheet } from '../suburb.js';
-import { SHOPS, FRONTS, mallFronts, mallNeon, tube, dummyVox, palmVox, voidIn } from '../mall.js';
+import { SHOPS, FRONTS, mallFronts, mallNeon, tube, dummyVox, palmVox, voidIn, orangeVox, juicerVox, cupVox, heapVox, shoeVox } from '../mall.js';
 import { Vox, M, glow } from '../../vox/vox.js';
 
 // gallery: how high, how deep · run: the length of a flight · wide: its width · bay: a shop's width · down: how far the wrong one can be walked
@@ -54,14 +54,39 @@ export function build(c) {
   const names = R.shuffle(SHOPS.slice()), neon = mallNeon(kit, 'atrium:' + p.seed, names, p.seed), lit = c.shining('mall:neon:atrium:' + p.seed, neon.texture, 2.4);
   const kinds = (row) => R.shuffle(['window', 'office', 'blinds', 'half', 'shutter', 'hoarding', 'door', 'window', 'open', 'office']).slice(0, bays).map((k, i) => (row && i === 1 ? 'window' : k));
   const lower = kinds(0), upper = kinds(1);
+  // Three of the lower row are not painted: they go back, a stride and a half, and what they sell is in them
+  const free = R.shuffle(Array.from({ length: bays }, (_, i) => i).filter((i) => { const m = -W / 2 + (i + 0.5) * bw; return Math.abs(m - xUp) > half + 0.3 + bw / 2 && Math.abs(m - xDn) > half + 0.3 + bw / 2; }));
+  const real = new Map([[free[0], 'orange'], [free[1], 'shoes'], [free[2], 'people']].filter(([i]) => i !== undefined));
+  const recess = (i, what) => {
+    const xa = -W / 2 + i * bw + 0.12, xb = xa + bw - 0.24, zb = zE - 1.25, top = G - 0.3, mid = (xa + xb) / 2;
+    const skin = what === 'orange' ? [0.95, 0.55, 0.14] : what === 'shoes' ? [0.42, 0.3, 0.2] : [0.2, 0.18, 0.24];
+    sheet(c.flat, [xa, 0, zb], [xb, 0, zb], [xb, top, zb], [xa, top, zb], 3, 3, null, skin); sheet(c.flat, [xa, 0, zE], [xa, 0, zb], [xa, top, zb], [xa, top, zE], 2, 3, null, skin.map((v) => v * 0.8)); sheet(c.flat, [xb, 0, zb], [xb, 0, zE], [xb, top, zE], [xb, top, zb], 2, 3, null, skin.map((v) => v * 0.8));
+    sheet(c.flat, [xa, 0.02, zb], [xa, 0.02, zE], [xb, 0.02, zE], [xb, 0.02, zb], 2, 3, null, [0.5, 0.46, 0.4]); sheet(c.flat, [xa, top, zE], [xa, top, zb], [xb, top, zb], [xb, top, zE], 2, 3, null, [0.16, 0.15, 0.18]);
+    for (const x of [xa - 0.06, xb]) c.flat.box(x, 0, zE - 0.05, x + 0.06, top, zE + 0.03, [0.66, 0.52, 0.2]); c.flat.box(xa - 0.06, top, zE - 0.05, xb + 0.06, top + 0.08, zE + 0.03, [0.66, 0.52, 0.2]);   // a brass frame, and no glass in it
+    c.light(mid, top - 0.5, zE - 0.5, what === 'orange' ? '#ffb02e' : what === 'shoes' ? '#ffe2a8' : '#b46bff', 0.8, { k: 1.4, far: 4 });
+    const put = (key, make, x, z, o = {}) => c.model(key, make, x, z, { solid: false, shadow: false, ...o });
+    if (what === 'orange') {
+      c.flat.box(xa + 0.1, 0, zE - 0.5, xb - 0.1, 0.95, zE - 0.14, [0.94, 0.52, 0.12]); c.flat.box(xa + 0.06, 0.95, zE - 0.54, xb - 0.06, 1.0, zE - 0.1, [0.93, 0.9, 0.82]);
+      for (let x = xa + 0.1; x < xb - 0.2; x += 0.4) c.flat.box(x, 0.02, zE - 0.14, x + 0.2, 0.9, zE - 0.13, [0.96, 0.94, 0.88]);
+      put('orange:juicer', juicerVox, xa + 0.5, zE - 0.34, { y: 1.0, rot: Math.PI }); for (let k = 0; k < 4; k++) put('orange:cup', cupVox, mid - 0.2 + k * 0.17, zE - 0.28 - (k % 2) * 0.1, { y: 1.0 });
+      put('atrium:orange', orangeVox(16, false), xb - 0.55, zE - 0.75, { y: 1.5 }); put('orange:heap:1', heapVox(1), xb - 0.5, zE - 0.85, { scale: 0.9 });
+      put('atrium:server', dummyVox(1, '#f4efe0', 'orange'), mid - 0.1, zE - 0.95, { rot: 0 });
+    } else if (what === 'shoes') {
+      const cols = ['#3a2a1c', '#17171a', '#7a3a34', '#c9b08a'];
+      for (let r = 0; r < 5; r++) { c.flat.box(xa + 0.05, 0.35 + r * 0.42, zb, xb - 0.05, 0.38 + r * 0.42, zb + 0.32, [0.6, 0.46, 0.3]); for (let k = 0; k < 7; k++) put('atrium:shoe:' + ((r + k) % 4), shoeVox(cols[(r + k) % 4]), xa + 0.25 + k * ((xb - xa - 0.5) / 6), zb + 0.17, { y: 0.38 + r * 0.42, rot: -1.5708 }); }
+      put('atrium:shoe:0', shoeVox(cols[0]), mid, zE - 0.45, { y: 0.02, scale: 5, rot: -1.2 });                    // …and the one in the window, which is the size they thought a shoe is
+    } else {
+      for (let k = 0; k < 7; k++) put('atrium:dummy:' + (k % 4), dummyVox(k % 4, ['#39424f', '#7a3a34', '#4a5a40', '#6a4a8a'][k % 4]), xa + 0.3 + (k % 4) * ((xb - xa - 0.6) / 3) + (k > 3 ? 0.25 : 0), k > 3 ? zE - 0.85 : zE - 0.28, { rot: 0, scale: k === 5 ? 1.25 : 1 });   // a shop full of them, up at the front, as near as they can get
+    }
+  };
   for (let i = 0; i < bays; i++) {
     const xa = -W / 2 + i * bw, xb = xa + bw, up = Math.abs((xa + xb) / 2 - xUp) < half + 0.3, dn = Math.abs((xa + xb) / 2 - xDn) < half + 0.3;
-    upright(fronts, xa, zE, xb, zE, 0, G - 0.22, art.uv(up || dn ? 'shutter' : lower[i]));                                                // (behind a flight: shut)
+    if (real.has(i)) recess(i, real.get(i)); else upright(fronts, xa, zE, xb, zE, 0, G - 0.22, art.uv(up || dn ? 'shutter' : lower[i]));                                                // (behind a flight: shut)
     upright(fronts, xa, -D / 2 + 0.03, xb, -D / 2 + 0.03, G, G + 2.7, art.uv(upper[i]));
     upright(lit, xa + 0.25, -D / 2 + 0.05, xb - 0.25, -D / 2 + 0.05, G + 2.75, G + 3.3, neon.uv(i % 8));
     if (!up && !dn) upright(lit, xa + 0.3, zE + 0.08, xb - 0.3, zE + 0.08, G - 0.95, G - 0.42, neon.uv((i + 4) % 8));
     if (i % 2 === 0) c.light((xa + xb) / 2, G + 2.6, -D / 2 + 1.0, neon.colour(i % 8), 0.9, { k: 1.3, far: 7 });
-    else c.light((xa + xb) / 2, 2.0, zE + 1.1, neon.colour((i + 4) % 8), 0.8, { k: 1.3, far: 6 });
+    else if (!real.has(i)) c.light((xa + xb) / 2, 2.0, zE + 1.1, neon.colour((i + 4) % 8), 0.8, { k: 1.3, far: 6 });
   }
   c.solid(-W / 2, zE - 0.3, xUp - half, zE, { tall: true }); c.solid(xUp + half, zE - 0.3, W / 2, zE, { tall: false });            // under the gallery, behind the fronts: nowhere
   // …and on the other three walls the storeys go on up, each smaller than the last, because that is what was said: it goes up and up
@@ -94,11 +119,11 @@ export function build(c) {
     sheet(rails, [xa, G + K.rail + 0.04, zE + 0.16], [xb, G + K.rail + 0.04, zE + 0.16], [xb, G + K.rail + 0.1, zE + 0.16], [xa, G + K.rail + 0.1, zE + 0.16], 1, 1, null); }
 
   /* the concourse: water, palms, and the people who came */
-  const cz = (zTop + D / 2) / 2 + 0.2;
+  const cz = Math.min((zTop + D / 2) / 2 + 0.2, D / 2 - 2.6);                                          // (clear of the way in at the front)
   c.model('atrium:fountain', fountainVox, 0, cz, { solid: false }); c.solid(-1.45, cz - 1.45, 1.45, cz + 1.45, { tall: false }); c.light(0, 2.6, cz, '#bfe6ff', 0.9, { k: 1.2, far: 6 });
   for (const [sx, sz] of [[-1, 1], [1, 1]]) { const x = sx * (W / 2 - 1.3), z = sz > 0 ? D / 2 - 1.3 : zTop + 0.4 + (sx > 0 ? 1.2 : 0); if (Math.abs(z) < 1.3) continue; c.model('atrium:palm', palmVox, x, z, { rot: R.range(0, 6), scale: 1.25, solid: false }); c.solid(x - 0.3, z - 0.3, x + 0.3, z + 0.3, { tall: false }); }
   const dress = ['#39424f', '#7a3a34', '#4a5a40', '#6a4a8a'];
-  for (let i = 0; i < 4; i++) { const a = -0.9 + i * 0.6, x = Math.sin(a) * 2.3, z = cz + Math.cos(a) * 2.3 + 0.2; c.model('atrium:dummy:' + i, dummyVox(i, dress[i]), x, z, { rot: Math.atan2(-x, D / 2 - z), scale: i === 3 ? 0.62 : 1, solid: false }); c.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, { tall: false }); }   // a family, facing the way in
+  for (let i = 0; i < 4; i++) { const a = (i < 2 ? -1 : 1) * (1.15 + (i % 2) * 0.55), x = Math.sin(a) * 2.2, z = Math.min(D / 2 - 1.7, cz + Math.cos(a) * 2.2); c.model('atrium:dummy:' + i, dummyVox(i, dress[i]), x, z, { rot: Math.atan2(-x, D / 2 - z), scale: i === 3 ? 0.62 : 1, solid: false }); c.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, { tall: false }); }   // a family, facing the way in
   for (let i = 0; i < bays; i++) if (upper[i] === 'window') c.model('atrium:dummy:' + (i % 4), dummyVox(i % 4, dress[i % 4]), -W / 2 + (i + 0.5) * bw + R.range(-0.5, 0.5), -D / 2 + 0.5, { y: G, rot: 0, solid: false, shadow: false });        // up on the gallery, at the rail side of the glass, looking down
   void tube; void glow; void M; void Vox;
 }

@@ -417,6 +417,10 @@ export const MORE_DECK = [
   { id: 'the-atrium', name: 'The Atrium', landmark: 'the two floors of shops, and the way down to more', w: [16, 18], d: [14, 16], h: [7.6, 8.6],
     ports: ['left', 'right'], weight: 1.4, lights: 'dim', themes: { mall: 1, '*': 0 },
     module: './rooms/the-atrium.js', stash: (r) => [-r.W / 2 + 0.4, r.D / 2 - 1.1, -r.W / 2 + 1.0, r.D / 2 - 0.5], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A shop: the place that sells the orange drink. Orange and white, a great many oranges, and somebody serving who has one for a head.
+  { id: 'the-orange', name: 'The Orange', landmark: 'the place that sells the orange drink', w: [7, 8], d: [7, 8], h: [2.9, 3.3],
+    ports: ['left', 'right'], weight: 1.3, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/the-orange.js', stash: (r) => [-r.W / 2 + 0.35, r.D / 2 - 1.9, -r.W / 2 + 0.95, r.D / 2 - 1.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
   // A tea point scaled up: bolted tables, counters with lit boards, and the middle of the floor left out behind a rail with a length missing.
   { id: 'food-court', name: 'The Food Court', landmark: 'the tables round the hole', w: [13, 15], d: [12, 14], h: [3.3, 3.8],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
