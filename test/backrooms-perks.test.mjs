@@ -401,3 +401,100 @@ test('male/female modifier: human defaults differ cleanly for boy vs girl while 
   assert.ok(female3d.torso.map.size < male3d.torso.map.size, 'female 3D torso has subtle 1-voxel waist taper');
   assert.notDeepEqual(facePixels(maleLook, 'neutral'), facePixels(femaleLook, 'neutral'), 'female 3D neutral face has soft brow/lash/rose lip cues');
 });
+
+test('alien hair & headwear: all hair styles, facial hair, and accessories fit the tall cranium without collisions', async () => {
+  const { buildCharacter, hatTop } = await import('../public/world/avatar/build.js');
+  assert.ok(hatTop({ species: 'alien' }) > hatTop({ species: 'human' }));
+
+  // Unpinned alien defaults stay sleek while manual overrides always win
+  for (let i = 0; i < 60; i++) {
+    const rolled = resolveLook(`alien-roll-${i}`, { species: 'alien' });
+    assert.equal(rolled.facial, 'none');
+    assert.ok(['bald', 'cap', 'beanie', 'mohawk'].includes(rolled.hair));
+  }
+  assert.equal(resolveLook('alien-custom', { species: 'alien', hair: 'braids', facial: 'beard' }).hair, 'braids');
+  assert.equal(resolveLook('alien-custom', { species: 'alien', hair: 'braids', facial: 'beard' }).facial, 'beard');
+
+  const base = resolveLook('alien-fit', {
+    species: 'alien',
+    skin: '#e0a638',
+    hair: 'bald',
+    hairColor: '#4a2f1a',
+    facial: 'none',
+    outfit: 'consul',
+    outfitColor: '#3f7f9a',
+    accessory: 'none',
+  });
+  const bare = buildCharacter(base, { seed: 'alien-fit' }).head;
+  const closedHatSeats = { partyhat: 56, tophat: 55, propeller: 55, cowboy: 53 };
+  const dirs = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+
+  for (const acc of ACCESSORY) {
+    const look = { ...base, accessory: acc };
+    // 2D front + back sprites render cleanly within canvas bounds
+    const front2d = paintFlatCharacter(look, { back: false, pose: 'idle' });
+    const back2d = paintFlatCharacter(look, { back: true, pose: 'idle' });
+    assert.ok(front2d.extent() && back2d.extent(), `2D alien sprite renders with accessory ${acc}`);
+
+    if (acc === 'none') continue;
+    const { accessory } = buildCharacter(look, { seed: 'alien-fit' });
+    assert.ok(accessory && accessory.map.size > 0, `3D alien accessory ${acc} builds voxels`);
+
+    let overlap = 0;
+    let zFight = 0;
+    let accMaxY = -99;
+    accessory.each((x, y, z) => {
+      if (y > accMaxY) accMaxY = y;
+      if (bare.has(x, y, z)) {
+        overlap++;
+        for (const [dx, dy, dz] of dirs) {
+          if (!bare.has(x + dx, y + dy, z + dz) && !accessory.has(x + dx, y + dy, z + dz)) zFight++;
+        }
+      }
+    });
+    assert.equal(zFight, 0, `alien accessory ${acc} has zero coplanar z-fighting faces with cranium`);
+
+    if (closedHatSeats[acc] !== undefined) {
+      let pokeOut = 0;
+      bare.each((x, y, z) => {
+        if (y >= closedHatSeats[acc] && !accessory.has(x, y, z)) pokeOut++;
+      });
+      assert.equal(pokeOut, 0, `closed hat ${acc} fully encloses the upper alien dome`);
+    } else {
+      assert.equal(overlap, 0, `surface/open accessory ${acc} has zero voxel overlap with alien cranium`);
+      if (acc === 'headphones') {
+        let domeAboveArch = 0;
+        bare.each((x, y) => { if (y >= accMaxY - 1) domeAboveArch++; });
+        assert.equal(domeAboveArch, 0, 'headphone arch clears the top of the alien dome');
+      }
+    }
+  }
+
+  for (const hair of HAIR) {
+    const look = { ...base, hair };
+    assert.ok(paintFlatCharacter(look, { back: false }).extent() && paintFlatCharacter(look, { back: true }).extent());
+    if (hair === 'bald') continue;
+    const { head } = buildCharacter(look, { seed: 'alien-fit' });
+    let hairMaxY = -99;
+    head.each((x, y, z) => {
+      if (!bare.has(x, y, z) && y > hairMaxY) hairMaxY = y;
+    });
+    if (hair === 'mohawk') {
+      assert.ok(hairMaxY >= 63, 'alien mohawk crest rides above the y=57 dome');
+    } else {
+      let bareTopExposed = 0;
+      bare.each((x, y, z) => {
+        if (y >= 53 && !head.has(x, y + 1, z)) bareTopExposed++;
+      });
+      assert.equal(bareTopExposed, 0, `alien hair ${hair} covers the upper dome with zero bald patches`);
+    }
+  }
+
+  for (const facial of FACIAL) {
+    if (facial === 'none') continue;
+    const look = { ...base, facial };
+    assert.ok(paintFlatCharacter(look, { back: false }).extent());
+    const { head } = buildCharacter(look, { seed: 'alien-fit' });
+    assert.ok(head.map.size > bare.map.size, `alien facial ${facial} adds sculpted voxels`);
+  }
+});

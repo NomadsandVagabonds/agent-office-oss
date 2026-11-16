@@ -27,6 +27,8 @@ const OUTFIT_POOL = ['tee', 'hoodie', 'suit', 'vest', 'cardigan'];
 const ACC_POOL = ['none', 'none', 'glasses', 'headphones', 'monocle', 'halo', 'partyhat',
   'crown', 'tophat', 'flower', 'eyepatch', 'shades', 'propeller'];
 const FACE_POOL = ['none', 'none', 'none', 'mustache', 'beard'];
+const ALIEN_HAIR_POOL = ['bald', 'bald', 'bald', 'bald', 'cap', 'beanie', 'mohawk'];
+const ALIEN_FACE_POOL = ['none'];
 const HUMAN_FEMALE_HAIR_POOL = ['long', 'long', 'bun', 'braids', 'side', 'short', 'beanie'];
 const HUMAN_MALE_HAIR_POOL = ['short', 'short', 'side', 'cap', 'beanie', 'mohawk', 'bald'];
 const HUMAN_FEMALE_FACE_POOL = ['none', 'none', 'none', 'lashes'];
@@ -75,10 +77,11 @@ export function resolveLook(seed, character) {
   const gender = GENDER.includes(c.gender) ? c.gender : pick(GENDER, h >>> 24);
   const species = SPECIES.includes(c.species) ? c.species : pick(SPECIES_POOL, h >>> 21);
   const skinPool = SPECIES_SKIN[species] || SKIN;
+  const isAlien = species === 'alien';
   const humanFemale = species === 'human' && gender === 'female';
   const humanMale = species === 'human' && gender === 'male';
-  const hairPool = humanFemale ? HUMAN_FEMALE_HAIR_POOL : humanMale ? HUMAN_MALE_HAIR_POOL : HAIR_POOL;
-  const facePool = humanFemale ? HUMAN_FEMALE_FACE_POOL : humanMale ? HUMAN_MALE_FACE_POOL : FACE_POOL;
+  const hairPool = isAlien ? ALIEN_HAIR_POOL : humanFemale ? HUMAN_FEMALE_HAIR_POOL : humanMale ? HUMAN_MALE_HAIR_POOL : HAIR_POOL;
+  const facePool = isAlien ? ALIEN_FACE_POOL : humanFemale ? HUMAN_FEMALE_FACE_POOL : humanMale ? HUMAN_MALE_FACE_POOL : FACE_POOL;
   const outfitPool = humanFemale ? HUMAN_FEMALE_OUTFIT_POOL : humanMale ? HUMAN_MALE_OUTFIT_POOL : OUTFIT_POOL;
   const outfitColorPool = humanFemale ? HUMAN_FEMALE_OUTFIT_COLORS : OUTFIT_COLORS;
   const accPool = humanFemale ? HUMAN_FEMALE_ACC_POOL : ACC_POOL;
