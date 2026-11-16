@@ -36,7 +36,8 @@ test('where it hangs: near where a visit lands, over everybody\'s head, clear of
       assert.ok(Math.abs(floorAt(room, x, z)) <= 0.02 && ceilAt(room, x, z) - BANNER.under - BANNER.tall >= BANNER.clear, `seed ${seed}: somebody could walk into it`);
       for (const p of room.pillars || []) assert.ok(!(Math.abs(x - p.x) < p.w / 2 && Math.abs(z - p.z) < p.d / 2) || (p.h ?? Infinity) < BANNER.clear, `seed ${seed}: it hangs through something`);
     }
-    assert.ok(Math.abs(spot.top - (ceilAt(room, spot.x, spot.z) - BANNER.under)) < 1e-6);
+    assert.ok(Math.abs(spot.top - (ceilAt(room, spot.x, spot.z) - BANNER.under)) <= 0.000501,
+      `seed ${seed}: the stored banner height must match the ceiling within its half-millimetre rounding`);
   }
   assert.ok(hung >= 72, `a banner in ${hung} of 80 buildings`);
   assert.ok(landing >= hung * 0.8, `in the room one lands in, mostly: ${landing} of ${hung}`);

@@ -296,6 +296,7 @@ void main() {
 const FRAG = `
 uniform sampler2D map;
 uniform float uTorch;
+uniform float uCameraLamp;
 uniform float uAlpha;
 #ifdef WET
 uniform float uWet;
@@ -316,7 +317,10 @@ void main() {
   // A cone from the physical emitter: close patches are small and bright,
   // distant patches spread, and grazing walls receive less light.
   vec3 normal = normalize(vNormal) * (gl_FrontFacing ? 1.0 : -1.0);
-  vec3 torch = vAlb * (uTorch * flashlightBeam(vView, normal));
+  float beam = 0.0;
+  if (uTorch > 0.0001) beam += uTorch * flashlightBeam(vView, normal);
+  if (uCameraLamp > 0.0001) beam += uCameraLamp * camcorderBeam(vView, normal);
+  vec3 torch = vAlb * beam;
   #ifdef VOXEL
   c += torch * (1.0 - vSurf.y);
   vec3 cell = floor(vVox + 0.0005);
@@ -359,6 +363,7 @@ export function createKit() {
   const own = (thing) => { if (thing) owned.add(thing); return thing; };
   const shared = {
     uTorch: { value: 0 },
+    uCameraLamp: { value: 0 },
     uTorchOrigin: { value: new THREE.Vector3(...FLASHLIGHT_POSES.hand.origin) },
     uTorchDirection: { value: new THREE.Vector3(...FLASHLIGHT_POSES.hand.direction) },
   };
@@ -486,6 +491,7 @@ export function createKit() {
         uTint: { value: new THREE.Vector3(1, 1, 1) }, uTorch: shared.uTorch, uAlpha: { value: alpha },
         uTorchOrigin: shared.uTorchOrigin, uTorchDirection: shared.uTorchDirection,
         ...(wet > 0 ? { uWet: { value: wet } } : {}),
+        uCameraLamp: shared.uCameraLamp,
       },
     }));
   }

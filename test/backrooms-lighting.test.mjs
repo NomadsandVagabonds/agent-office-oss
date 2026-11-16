@@ -75,14 +75,18 @@ test('lighting is opt-in, deterministic and leaves the generated layout untouche
 });
 
 test('most eligible rooms retain their steady lighting; every ceiling bank has tubes', () => {
-  let affected = 0;
+  let affected = 0, persistent = 0, outages = 0;
   for (let id = 0; id < 1000; id++) {
     const room = {...fixture,id}, plan = planLighting(room, 'distribution', true);
     if (!plan) continue;
     affected++;
+    if (plan.kind === 'dim' || plan.kind === 'islands') persistent++;
+    if (plan.kind === 'travel' || plan.kind === 'emergency') outages++;
     assert.deepEqual([...new Set(room.panels.map(p => panelBank(plan,p)))].sort(), Array.from({length:plan.ceilingBanks},(_,i)=>i));
   }
-  assert.ok(affected > 250 && affected < 350, `${affected}/1000 affected`);
+  assert.ok(affected > 350 && affected < 450, `${affected}/1000 affected`);
+  assert.ok(persistent > 200 && persistent < 300, `${persistent}/1000 persistent dark pockets`);
+  assert.ok(outages > 25 && outages < 75, `${outages}/1000 full outage candidates remain rare`);
 });
 
 test('a failing bank has a long dark dwell and slow recovery, independent of sampling rate', () => {
@@ -199,6 +203,7 @@ test('real world meshes, visible tubes, probes and encounter overrides share ban
     for(let i=0;i<normals.count;i++)assert.ok(Math.abs(Math.hypot(normals.getX(i),normals.getY(i),normals.getZ(i))-1)<.015);
     assert.equal(o.material.uniforms.uTorchOrigin,kit.shared.uTorchOrigin);
     assert.equal(o.material.uniforms.uTorchDirection,kit.shared.uTorchDirection);
+    assert.equal(o.material.uniforms.uCameraLamp,kit.shared.uCameraLamp);
     before.push(o.geometry);
   }});
   assert.ok(before.length>0);

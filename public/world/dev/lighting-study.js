@@ -20,19 +20,19 @@ export function lightingStudy(handle) {
   profile.onchange = () => { const url = new URL(location.href); url.searchParams.set('lighting',profile.value); location.assign(url); };
   const world = handle.world;
   const rooms = world.rooms.filter(r=>r.lighting).sort((a,b)=>b.def.W*b.def.D-a.def.W*a.def.D);
-  const room = field('Room',rooms.map(r=>[String(r.id),`${r.id} · ${r.def.W} × ${r.def.D} m`]));
+  const room = field('Room',rooms.map(r=>[String(r.id),`${r.id} · ${r.lighting.kind} · ${r.def.W} × ${r.def.D} m`]));
   const mode = field('Banks',[['cycle','Seeded cycle'],['working','All ceiling on'],['outage','Ceiling off']]);
   const apply = () => { for (const r of rooms) r.lighting.preview = mode.value === 'cycle' ? null : mode.value; };
   const visit = () => {
     const r = rooms.find(r=>r.id===Number(room.value)); if (!r) return;
-    const alongX = r.lighting.kind === 'travel' ? r.lighting.axis !== 'x' : r.lighting.axis === 'x';
+    const alongZ = r.def.D >= r.def.W;
     let spot = null;
     for (const inset of [.9,1.5,2,2.5]) for (const shift of [0,-1,1,-2,2]) {
-      const x = alongX ? shift : r.def.W/2-inset, z = alongX ? r.def.D/2-inset : shift;
+      const x = alongZ ? shift : r.def.W/2-inset, z = alongZ ? r.def.D/2-inset : shift;
       const p = toWorld(r.def,x,z);
       if (!spot && handle.world.roomAt(p.x,p.z) === r && handle.world.free(p.x,p.z,.24)) spot={x,z};
     }
-    if (spot) handle.goto(r.id,spot.x,spot.z,alongX?0:Math.PI/2,.04);
+    if (spot) handle.goto(r.id,spot.x,spot.z,alongZ?0:Math.PI/2,.04);
   };
   room.onchange = visit; mode.onchange = apply;
   const torch = document.createElement('button'); torch.textContent='Flashlight on / off';
@@ -44,6 +44,20 @@ export function lightingStudy(handle) {
     status.textContent = `Flashlight ${bag.torchPower()>0 ? 'on' : 'off'}`;
   };
   el.append(torch);
+  const near = document.createElement('button'); near.textContent='Near wall · camera beam';
+  near.onclick=()=>{
+    const r=rooms.find(r=>r.id===Number(room.value));if(!r)return;
+    for(const z of [0,-1,1,-2,2]) {
+      const x=r.def.W/2-.75,p=toWorld(r.def,x,z);
+      if(!world.free(p.x,p.z,.24))continue;
+      handle.goto(r.id,x,z,-Math.PI/2,0);break;
+    }
+    mode.value='outage';apply();
+    if(handle.inventory?.torchPower()>0)handle.inventory.toggleLight();
+  };
+  const across=document.createElement('button');across.textContent='Across room';across.onclick=visit;
+  const down=document.createElement('button');down.textContent='Look at carpet';down.onclick=()=>{handle.player.me.pitch=-.55;};
+  el.append(near,across,down);
   const replay = document.createElement('button'); replay.textContent = 'Replay cue';
   replay.onclick = () => { mode.value='cycle'; apply(); for (const r of rooms) { world.clearLightingCue(r); r.lighting.offset=-(world.lightingTime||0); } };
   el.append(replay);
@@ -59,12 +73,13 @@ export function lightingStudy(handle) {
   const reading = document.createElement('output'); el.append(reading);
   const timer = setInterval(() => {
     if (handle.world !== world) {
-      room.disabled=mode.disabled=torch.disabled=replay.disabled=blackout.disabled=true;
+      room.disabled=mode.disabled=torch.disabled=replay.disabled=blackout.disabled=near.disabled=across.disabled=down.disabled=true;
       reading.textContent='Floor changed. Reload to restart the study.';
       return;
     }
     const r = rooms.find(r=>r.id===Number(room.value));
-    reading.textContent = r ? `Banks: ${r.lightLevels.map(v=>Math.round(v*100)+'%').join(' / ')}` : 'No eligible rooms on this floor.';
+    const shared=handle.env.kit.shared;
+    reading.textContent = r ? `Banks: ${r.lightLevels.map(v=>Math.round(v*100)+'%').join(' / ')} · Camera lamp ${shared.uCameraLamp.value.toFixed(3)} · Torch ${shared.uTorch.value.toFixed(2)}` : 'No eligible rooms on this floor.';
   }, 300);
   document.body.append(el); visit(); apply();
   return ()=>{ clearInterval(timer); el.remove(); };

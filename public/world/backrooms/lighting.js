@@ -4,7 +4,8 @@ import { makeRng } from './gen.js';
 
 // Almost all bounce belongs to the tubes: a failed bank must lose its ambient
 // contribution too. Keep a faint residual, without the camcorder rescuing it.
-export const LIGHTING = Object.freeze({ ambientShare: .99, blackout: .0025, ownLamp: .025, gainMax: 1.25, maxBanks: 4 });
+export const LIGHTING = Object.freeze({ ambientShare: .99, blackout: .0025, gainMax: 1.25, maxBanks: 4 });
+export const LIGHTING_MIX = Object.freeze({ steady: .60, failing: .10, dim: .15, islands: .10, travel: .04, emergency: .01 });
 export const LIGHTING_MODES = Object.freeze(['failing', 'dim', 'travel', 'emergency', 'islands']);
 const ease = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
 const key = (p) => `${p.x}:${p.z}`;
@@ -14,7 +15,14 @@ export function planLighting(room, seed, mode = false) {
   const panels = room.panels.filter(p => p.state !== 'dead');
   if (panels.length < 2) return null;
   const rng = makeRng(`${seed}:lighting:${room.id}`), roll = rng(), forced = LIGHTING_MODES.includes(mode);
-  let kind = forced ? mode : roll < .70 ? 'steady' : roll < .82 ? 'failing' : roll < .90 ? 'dim' : roll < .95 ? 'islands' : roll < .99 ? 'travel' : 'emergency';
+  let kind = mode;
+  if (!forced) {
+    let ceiling = 0;
+    for (const [name, share] of Object.entries(LIGHTING_MIX)) {
+      ceiling += share;
+      if (roll < ceiling) { kind = name; break; }
+    }
+  }
   if (kind === 'steady') return null;
   let axis = room.W > room.D ? 'x' : 'z';
   const rowsOn = a => [...new Set(panels.map(p => p[a]))].sort((a,b) => a-b);
