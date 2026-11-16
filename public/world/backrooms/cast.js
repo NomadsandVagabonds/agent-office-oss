@@ -40,6 +40,7 @@ export const CAST_LESSONS = Object.freeze({
  *   weight       how often it is dealt, for the others: 1 is ordinary, 3 at most, 0 never
  *   teaches      the one lesson it is the first place to learn (CAST_LESSONS) — optional
  *   needs        lessons it takes for granted (CAST_LESSONS or ROOM_LESSONS). One that needs anything is never on the floor you land on
+ *   deep         true: never on the floor you land on, whatever it needs (the ones that are a lot to meet in the first minute)
  *   themes       { yellow, archive, night, fitout, exec } → a multiplier on how likely each kind of floor is to be its floor. 0 keeps it off one
  *   items        the things a visitor might carry that change what it does (ITEMS) — so that whoever writes an item knows who is waiting for it
  *   fire         what a fire lit by the visitor is to it (cast/fire.rule.js FIRE_WAYS): 'fears' (will not go near one, and backs off from one
@@ -76,17 +77,17 @@ export const ALL_CAST = Object.freeze([
     rule: 'She sways and she waves, and comes over very slowly, and that is all she does herself. Near enough, she heaves and brings up four or five small pink ones that jump for your face. They are blind, and most jumps miss: tread on them before one does not.',
     disposition: 'hunts', home: 'roams', weight: 1, needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 1 } }),
   Object.freeze({ id: 'head-count', name: 'Head count',
-    rule: 'Three of them, joined, on their arms, and not a head between them. It cannot see you or hear you: it feels you walk. Stand still and you are not there, until a hand comes down on you — so stand still somewhere it is not going.',
-    disposition: 'hunts', home: 'roams', weight: 1, needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 2 } }),
+    rule: 'Three of them, joined, on their arms, and not a head between them. It cannot see you or hear you and does not know you are there: it goes about the floor with no idea where it is going. It is not coming for you. A hand comes down on whoever it walks into — so do not be where it is going.',
+    disposition: 'hunts', home: 'roams', weight: 1, deep: true, needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 2 } }),
   Object.freeze({ id: 'standing-meeting', name: 'The standing meeting',
-    rule: 'Nine of them under one back, on short legs, in file. When you are in front of it, it stops and stands itself up on end to show you what is underneath, and then it comes down and straight at you faster than you can run. It cannot turn. Do not outrun it: step out of its line, and let the wall have it.',
-    disposition: 'hunts', home: 'roams', weight: 1, needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 2 } }),
+    rule: 'Nine of them under one back, on short legs, in file. When you are in front of it, it stops and stands itself up on end to show you what is underneath, and then it comes down and goes, faster than you can run. It cannot turn, and it only ever runs corner to corner of the building, like a bishop: whichever of the four ways is nearest you. Do not outrun it: get off its diagonal, and let the wall have it. Whatever it hits, it lies there a while; then it finds you and takes a line again.',
+    disposition: 'hunts', home: 'roams', weight: 1, deep: true, needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 2 } }),
   Object.freeze({ id: 'intern', name: 'The intern',
     rule: 'Too tall, bent double, its head hung between its arms the wrong way up. It is learning by watching you: where you walked it walks, where you stopped it stops, a few seconds behind, and a little less behind the longer it follows. Do not stand still and do not come back the way you went. Out of its sight for a while, it loses its place.',
-    disposition: 'hunts', home: 'roams', weight: 1, needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 1 } }),
+    disposition: 'hunts', home: 'roams', weight: 1, deep: true, needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 1 } }),
   Object.freeze({ id: 'carried-interest', name: 'Carried interest',
     rule: 'Somebody senior, too big to walk, carried along on ten small things. It comes for you slowly, and is set down on you. Tread on what carries it and it is on the floor until more grow — but it howls when it is dropped, and the camera does not like the howl.',
-    disposition: 'hunts', home: 'roams', weight: 1, needs: [], items: ['paper', 'lighter', 'battery'], fire: 'fears', caught: { hurt: 2 } }),
+    disposition: 'hunts', home: 'roams', weight: 1, deep: true, needs: [], items: ['paper', 'lighter', 'battery'], fire: 'fears', caught: { hurt: 2 } }),
   Object.freeze({ id: 'other-door', name: 'The other door',
     rule: 'One pair of doors is not doors: it shivers, now and then, and that is all that gives it away. Try it, walk into it or stand in front of it too long, and it opens on nothing and takes hold of you.',
     disposition: 'hunts', home: 'room', weight: 1, needs: ['doors'], items: ['paper', 'lighter'], fire: 'fears', room: { w: 4, d: 4, wall: 2.3, clear: 1.8 }, caught: { hurt: 2 } }),
@@ -129,7 +130,7 @@ export function castFor(visit, floor, cast = CAST) {
     if (m.always) { out.push({ id, floor: null }); continue; }
     const R = makeRng(`cast:${visit.seed}:${id}`), able = [];
     for (let i = 0; i < visit.depths; i++) {
-      const w = (i === 0 && (m.needs || []).length ? 0 : 1) * ((m.themes || {})[visit.floors[i].theme] ?? 1);
+      const w = (i === 0 && ((m.needs || []).length || m.deep) ? 0 : 1) * ((m.themes || {})[visit.floors[i].theme] ?? 1);
       if (w > 0) able.push([i, w]);
     }
     if (able.length) out.push({ id, floor: R.weighted(able, (k) => k[1])[0] });

@@ -119,6 +119,12 @@ test('Hard caps every kit at one heart with no regen, keeps kit battery perks an
   assert.equal(creatureTuning('normal', 'pirate').damage, 3);
   assert.equal(creatureTuning('normal', 'toner').damage, 1);
   assert.equal(creatureTuning('hard', 'toner').speed, 1.12);
+  // the big ones further down: slower and a heart a hit below Normal, and as they are written from Normal up
+  for (const id of ['head-count', 'standing-meeting', 'carried-interest']) {
+    for (const mode of ['tourist', 'training-wheels', 'easy']) assert.deepEqual(creatureTuning(mode, id), { speed: .85, damage: 1 }, mode + ' ' + id);
+    for (const mode of ['normal', 'hard']) assert.deepEqual(creatureTuning(mode, id), {}, mode + ' ' + id);
+  }
+  for (const id of ['intern', 'mother']) { assert.deepEqual(creatureTuning('easy', id), { speed: .85 }); assert.deepEqual(creatureTuning('hard', id), {}); }
 });
 
 test('book API rejects changed/tourist scores and filters each difficulty from its own retained board', async () => {

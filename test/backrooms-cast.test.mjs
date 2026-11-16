@@ -1012,36 +1012,23 @@ test('Mother: comes over, heaves when near, brings up four or five, and is then 
   assert.equal(trodden(me, [{ x: 0, z: -0.6, air: {} }, { x: 0, z: -0.6, dead: true }, { x: 0, z: -(WORM.tread + 0.2) }]), -1, 'not in the air, not twice, not out of reach');
 });
 
-/* ---- head count (cast/head-count.rule.js): it feels the floor --------------------------------------------------- */
+/* ---- head count (cast/head-count.rule.js): blind, and going nowhere in particular ------------------------------- */
 
-test('head count: a step is felt and a still visitor is not, until a hand is on them', async () => {
-  const { HEADS, counting, counts, reach, pace, elbow } = await import('../public/world/backrooms/cast/head-count.rule.js');
-  assert.equal(reach(0), 0, 'standing still is not felt at any distance'); assert.equal(reach(2.05), HEADS.walks); assert.equal(reach(3.7), HEADS.runs);
-  const at = { x: 5, z: 0 };
+test('head count: it does not know anybody is there, and a hand comes down on whoever is in its way', async () => {
+  const { HEADS, counting, counts, pace, elbow } = await import('../public/world/backrooms/cast/head-count.rule.js');
   let s = counting();
-  for (let t = 0; t < 30; t += 0.1) s = counts(s, { dt: 0.1, d: 3, speed: 0, at });
-  assert.equal(s.mode, 'counts', 'three metres off and still: it goes on counting');
-  for (let t = 0; t < 5; t += 0.1) s = counts(s, { dt: 0.1, d: HEADS.walks + 1, speed: 2.05, at });
-  assert.equal(s.mode, 'counts', 'a walk, too far off');
-  for (let t = 0; t < 5; t += 0.1) s = counts(s, { dt: 0.1, d: 5, speed: 2.05, at, line: false });
-  assert.equal(s.mode, 'counts', 'nor through a wall');
-  s = counts(s, { dt: 0.1, d: HEADS.walks + 1, speed: 3.7, at }); assert.equal(s.mode, 'counts', 'one step is not enough to be sure');
-  for (let t = 0; t < HEADS.sure + 0.2; t += 0.1) s = counts(s, { dt: 0.1, d: HEADS.walks + 1, speed: 3.7, at });
-  assert.equal(s.mode, 'comes', 'but a run is felt from further'); assert.deepEqual(s.felt, at);
-  assert.ok(pace('comes') > 2.05 && pace('comes') < 3.7, 'faster than a walk, slower than a run');
-  // they stop: it goes to where the step was, and does not know they have moved since
-  s = counts(s, { dt: 0.1, d: 6, speed: 0, at: { x: 9, z: 9 } }); assert.deepEqual(s.felt, at);
-  s = counts(s, { dt: 0.1, d: 6, speed: 0, at: { x: 9, z: 9 }, there: true }); assert.equal(s.mode, 'sweeps');
-  for (let t = 0; t < HEADS.sweep + 0.2; t += 0.1) s = counts(s, { dt: 0.1, d: 3, speed: 0, at });
-  assert.equal(s.mode, 'counts', 'nobody there: back to its count');
+  // nothing a visitor does a little way off is anything to it: it has one way of going about, and no way of coming
+  for (let t = 0; t < 30; t += 0.1) { s = counts(s, { dt: 0.1, d: HEADS.touch + 0.3 }); assert.equal(s.mode, 'counts'); assert.ok(!s.took); }
+  assert.deepEqual(Object.keys(counts(s, { dt: 0.1, d: 3, speed: 3.7, at: { x: 5, z: 0 } })).sort(), ['mode', 't'], 'it keeps nothing about where anybody is');
+  assert.ok(pace('counts') < 2.05 && pace('counts') === HEADS.slow, 'slower than a walk, whatever is going on');
   // a hand on them, still or not
-  s = counts(s, { dt: 0.1, d: HEADS.touch - 0.1, speed: 0, at }); assert.ok(s.took); assert.equal(s.mode, 'recounts');
-  assert.ok(!counts(s, { dt: 0.1, d: 0.2, speed: 3, at }).took, 'it has them once, and counts again');
+  s = counts(s, { dt: 0.1, d: HEADS.touch - 0.1 }); assert.ok(s.took); assert.equal(s.mode, 'recounts');
+  assert.ok(!counts(s, { dt: 0.1, d: 0.2 }).took, 'it has them once, and counts again');
   assert.equal(pace('recounts'), 0);
-  for (let t = 0; t < HEADS.recount + 0.2; t += 0.1) s = counts(s, { dt: 0.1, d: 5, speed: 0, at });
+  for (let t = 0; t < HEADS.recount + 0.2; t += 0.1) s = counts(s, { dt: 0.1, d: 5 });
   assert.equal(s.mode, 'counts');
-  assert.ok(!counts(counting(), { dt: 0.1, d: 0.5, speed: 0, at, fire: true }).took, 'not across a fire');
-  assert.ok(!counts(counting(), { dt: 0.1, d: 0.5, speed: 0, at, line: false }).took, 'nor through a wall');
+  assert.ok(!counts(counting(), { dt: 0.1, d: 0.5, fire: true }).took, 'not across a fire');
+  assert.ok(!counts(counting(), { dt: 0.1, d: 0.5, line: false }).took, 'nor through a wall');
   // an arm: the elbow is both lengths from where it is joined, and above the straight line
   const sh = { x: 0, y: 0.7, z: 0 }, hand = { x: 0.9, y: 0, z: 0 }, e = elbow(sh, hand, 0.63, 0.69, { x: 1, z: 0 });
   assert.ok(Math.abs(Math.hypot(e.x - sh.x, e.y - sh.y, e.z - sh.z) - 0.63) < 1e-6 && Math.abs(Math.hypot(e.x - hand.x, e.y - hand.y, e.z - hand.z) - 0.69) < 1e-6);
@@ -1049,30 +1036,51 @@ test('head count: a step is felt and a still visitor is not, until a hand is on 
   const far = elbow(sh, { x: 5, y: 0, z: 0 }, 0.63, 0.69); assert.ok(Number.isFinite(far.x + far.y + far.z), 'a hand out of reach does not break it');
 });
 
-/* ---- the standing meeting (cast/standing-meeting.rule.js): it comes straight, and cannot turn --------------------- */
+/* ---- the standing meeting (cast/standing-meeting.rule.js): corner to corner, like a bishop, and cannot turn ------ */
 
-test('the standing meeting: it sees ahead, drums, comes straight, and whoever has left the line is not run down', async () => {
-  const { MEETING, filing, meets, ahead, inLine, lengths } = await import('../public/world/backrooms/cast/standing-meeting.rule.js');
-  const at = { x: 0, z: 0 };
+test('the standing meeting: it sees ahead, drums, and runs one of four diagonals; whoever is off the line is not run down', async () => {
+  const { MEETING, DIAGONALS, diagonal, takes, filing, meets, ahead, inLine, lengths } = await import('../public/world/backrooms/cast/standing-meeting.rule.js');
+  const at = { x: 0, z: 0 }, Q = Math.SQRT1_2, onOne = (d) => DIAGONALS.some((k) => Math.abs(k.x - d.x) < 1e-9 && Math.abs(k.z - d.z) < 1e-9);
   assert.ok(ahead(at, 0, { x: 0, z: 8 }) && !ahead(at, 0, { x: 0, z: -8 }) && !ahead(at, 0, { x: 8, z: 1 }), 'in front of it, not behind or beside');
   assert.ok(!ahead(at, 0, { x: 0, z: MEETING.sees + 1 }), 'nor too far off');
   assert.ok(MEETING.charge > 3.7, 'it is faster than a run: it is not to be outrun'); assert.ok(MEETING.drum >= 0.8, 'and gives fair warning');
+  // the four ways it goes, and which it takes
+  assert.equal(DIAGONALS.length, 4); for (const d of DIAGONALS) assert.ok(Math.abs(Math.abs(d.x) - Q) < 1e-9 && Math.abs(Math.abs(d.z) - Q) < 1e-9);
+  assert.deepEqual(diagonal({ x: 0.9, z: 0.44 }), { x: Q, z: Q }); assert.deepEqual(diagonal({ x: -0.2, z: -0.98 }), { x: -Q, z: -Q });
+  for (let a = 0; a < 6.28; a += 0.1) { const to = { x: Math.sin(a), z: Math.cos(a) }, d = diagonal(to); assert.ok(onOne(d) && d.x * to.x + d.z * to.z >= Math.cos(Math.PI / 4) - 1e-9, 'the nearest of the four: never more than an eighth of a turn off'); }
+  assert.deepEqual(takes({ x: 0.9, z: 0.44 }), { x: Q, z: Q });
+  assert.deepEqual(takes({ x: 0.9, z: 0.44 }, (d) => d.z < 0), { x: Q, z: -Q }, 'against a wall that way, the next nearest, if that is still towards them');
+  assert.equal(takes({ x: Q, z: Q }, (d) => !(d.x > 0 && d.z > 0)), null, 'but it does not go off sideways');
+  assert.equal(takes({ x: 0, z: 1 }, () => false), null);
   let s = filing();
   s = meets(s, { dt: 0.1, seen: false }); assert.equal(s.mode, 'files');
   assert.equal(meets(s, { dt: 0.1, seen: true, to: { x: 0, z: 1 }, fire: true }).mode, 'files', 'not through a fire');
-  s = meets(s, { dt: 0.1, seen: true, to: { x: 0, z: 1 } }); assert.ok(s.drums); assert.equal(s.mode, 'drums');
-  s = meets(s, { dt: 0.4, seen: true, to: { x: 1, z: 0 } }); assert.deepEqual(s.dir, { x: 1, z: 0 }, 'drumming, it is still taking aim');
+  s = meets(s, { dt: 0.1, seen: true, to: { x: 0.3, z: 0.95 } }); assert.ok(s.drums); assert.equal(s.mode, 'drums');
+  assert.deepEqual(s.dir, { x: Q, z: Q }, 'whatever way they are, the line it takes is a diagonal');
+  s = meets(s, { dt: 0.4, seen: true, to: { x: -Q, z: Q } }); assert.deepEqual(s.dir, { x: Q, z: Q }, 'and stood up on end, it does not take another: that is the time there is to get off it');
   for (let t = 0; t < MEETING.drum; t += 0.1) s = meets(s, { dt: 0.1, seen: false });
-  assert.equal(s.mode, 'charges'); assert.deepEqual(s.dir, { x: 1, z: 0 });
-  s = meets(s, { dt: 0.1, seen: true, to: { x: 0, z: 1 }, went: 0.6 }); assert.deepEqual(s.dir, { x: 1, z: 0 }, 'once it has gone, that is the way it goes');
-  const first = meets(s, { dt: 0.1, went: 0.6, touched: true }); assert.ok(first.took);
-  assert.ok(!meets(first, { dt: 0.1, went: 0.6, touched: true }).took, 'it runs somebody down once in a charge');
+  assert.equal(s.mode, 'charges'); assert.deepEqual(s.dir, { x: Q, z: Q });
+  s = meets(s, { dt: 0.1, seen: true, to: { x: 0, z: 1 }, went: 0.6 }); assert.deepEqual(s.dir, { x: Q, z: Q }, 'once it has gone, that is the way it goes');
+  // whatever it hits, it goes down
+  const first = meets(s, { dt: 0.1, went: 0.6, touched: true }); assert.ok(first.took); assert.equal(first.mode, 'down', 'into somebody: and down in a heap');
+  assert.equal(first.rest, MEETING.winded); assert.ok(!meets(first, { dt: 0.1, touched: true }).took, 'it has them once');
   const wall = meets(s, { dt: 0.1, went: 0.1, blocked: true }); assert.ok(wall.struck); assert.equal(wall.mode, 'down');
-  let d = wall; for (let t = 0; t < MEETING.winded - 0.2; t += 0.1) d = meets(d, { dt: 0.1, seen: true, to: { x: 0, z: 1 } });
-  assert.equal(d.mode, 'down', 'it is a while getting up, whoever is in front of it');
-  for (let t = 0; t < 0.5; t += 0.1) d = meets(d, { dt: 0.1 }); assert.equal(d.mode, 'files');
+  let d = wall; for (let t = 0; t < MEETING.winded - 0.2; t += 0.1) d = meets(d, { dt: 0.1, seen: true, to: { x: 0, z: 1 }, again: { x: 0, z: 1 } });
+  assert.equal(d.mode, 'down', 'it is a while getting up, whoever is there');
+  let up = d; for (let t = 0; t < 0.5; t += 0.1) up = meets(up, { dt: 0.1 }); assert.equal(up.mode, 'files', 'nobody to be found: it goes about again');
+  let on = d; for (let t = 0; t < 0.5 && on.mode === 'down'; t += 0.1) on = meets(on, { dt: 0.1, again: { x: -0.9, z: -0.44 } });
+  assert.equal(on.mode, 'drums', 'somebody to be found: it takes a line for them, and stands up on end again'); assert.ok(on.drums); assert.deepEqual(on.dir, { x: -Q, z: -Q });
+  let burnt = d; for (let t = 0; t < 0.5 && burnt.mode === 'down'; t += 0.1) burnt = meets(burnt, { dt: 0.1, again: { x: 0, z: 1 }, fire: true });
+  assert.equal(burnt.mode, 'files', 'not with a fire by it');
   let far = s; for (let n = 0; n < 40 && far.mode === 'charges'; n++) far = meets(far, { dt: 0.1, went: 0.6 });
   assert.equal(far.mode, 'down', 'and a charge that meets nothing still ends'); assert.ok(far.run >= MEETING.far && far.rest < MEETING.winded);
+  // every way it ever goes, through a long run of it, is one of the four
+  let any = filing(), turn = 0;
+  for (let n = 0; n < 2000; n++) {
+    turn += 0.37; const to = { x: Math.sin(turn), z: Math.cos(turn) };
+    any = meets(any, { dt: 0.1, seen: n % 3 === 0, to, again: n % 2 ? to : null, went: 0.6, blocked: n % 17 === 0, touched: n % 29 === 0 });
+    if (any.dir) assert.ok(onOne(any.dir), 'off the diagonal at ' + n);
+  }
   // the line it runs
   const dir = { x: 0, z: 1 };
   assert.ok(inLine(at, dir, { x: 0.3, z: 4 }) && !inLine(at, dir, { x: MEETING.wide + 0.2, z: 4 }) && !inLine(at, dir, { x: 0, z: -2 }), 'a step aside is enough');
@@ -1140,4 +1148,18 @@ test('carried interest: it is carried to you and set down; tread on enough of wh
   // which one a foot finds
   const me = { x: 0, z: 0, yaw: 0 };
   assert.equal(under(me, [{ x: 0, z: -1.2 }, { x: 0.2, z: -0.7 }]), 1); assert.equal(under(me, [{ x: 0, z: -0.7, gone: true }]), -1); assert.equal(under(me, [{ x: 0, z: 1 }]), -1, 'not one behind');
+});
+
+/* ---- the big ones are met further down --------------------------------------------------------------------------- */
+
+test('the cast: head count, the standing meeting, the intern and carried interest are never on the floor you land on', async () => {
+  const { planVisit } = await import('../public/world/backrooms/plan.js');
+  const deep = CAST.filter((m) => m.deep).map((m) => m.id).sort();
+  assert.deepEqual(deep, ['carried-interest', 'head-count', 'intern', 'standing-meeting']);
+  const met = new Map(deep.map((id) => [id, 0]));
+  for (let seed = 1; seed <= 400; seed++) {
+    const visit = planVisit(`deep-${seed}`, office);
+    for (const k of castFor(visit)) if (met.has(k.id)) { assert.ok(k.floor > 0, `${k.id} on the landing floor of deep-${seed}`); met.set(k.id, met.get(k.id) + 1); }
+  }
+  for (const [id, n] of met) assert.ok(n > 20, `${id} is still met, further down (${n} of 400)`);
 });

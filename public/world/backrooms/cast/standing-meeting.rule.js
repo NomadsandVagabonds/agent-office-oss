@@ -7,10 +7,16 @@
 // a little, straight out from whichever end is leading. When somebody is in front of it in a clear line it stops and stands
 // the front of itself up on end, so that what is underneath is seen: a mouth
 // the length of it, and fingers down both sides. Then it comes down, going: dead straight, faster than anybody runs, and
-// it cannot turn. Whoever is still in the line when it arrives is run down.
-// Whoever has stepped out of the line, through a doorway or round a corner or
-// simply aside, watches it go past and into the wall, where it is a while
-// getting its legs back under it.
+// it cannot turn.
+//
+// And it only ever runs one of four ways: corner to corner of the building,
+// like a bishop on a board. It takes whichever of the four is nearest to where
+// they are, stood up on end, and that is the way it goes, whatever they do
+// after. So it is only ever coming for somebody who is on one of its
+// diagonals: a step off the line and it goes past, and into the wall. Whatever
+// it hits — a wall, or them — it goes down in a heap, and is a while getting
+// its legs back under it. Up again, it finds them, takes a diagonal, and comes
+// again.
 
 export const MEETING = Object.freeze({
   r: 0.38, tall: 0.95,     // the front of it, which is what walks: low
@@ -23,11 +29,33 @@ export const MEETING = Object.freeze({
   cone: 0.5,               // radians either side of straight ahead
   drum: 1.05,              // seconds it stands up on end before it comes (the warning)
   far: 16,                 // metres at most in one charge
-  winded: 2.8,             // seconds getting up after it meets a wall
+  winded: 2.8,             // seconds getting up after it meets a wall, or somebody
   spent: 1.2,              // …or after a charge that met nothing
   hurts: 2,
   fire: 3,
 });
+
+const Q = Math.SQRT1_2;
+/** The four ways it runs: corner to corner of the building. */
+export const DIAGONALS = Object.freeze([{ x: Q, z: Q }, { x: Q, z: -Q }, { x: -Q, z: -Q }, { x: -Q, z: Q }].map(Object.freeze));
+
+/** The four, nearest first to the way given. */
+export const diagonals = (to) => DIAGONALS.slice().sort((a, b) => (b.x * to.x + b.z * to.z) - (a.x * to.x + a.z * to.z));
+
+/** The one of the four nearest to the way given. */
+export const diagonal = (to) => { const d = diagonals(to)[0]; return { x: d.x, z: d.z }; };
+
+/**
+ * The way it takes, from where it is, for somebody that way: the nearest of the four that it can start along. It will take the
+ * next nearest if the first is against a wall, so long as that is still towards them; and none, if neither is.
+ * @param to    the way to them (a unit vector)
+ * @param open  (dir) => can it start that way?
+ * @returns {{x:number, z:number}|null}
+ */
+export function takes(to, open = () => true) {
+  for (const d of diagonals(to).slice(0, 2)) if (d.x * to.x + d.z * to.z > 0.2 && open(d)) return { x: d.x, z: d.z };
+  return null;
+}
 
 /** As it is first found: in file. */
 export const filing = () => ({ mode: 'files', t: 0, dir: null, run: 0, hit: false });
@@ -49,36 +77,37 @@ export function inLine(at, dir, spot, wide = MEETING.wide) {
 /**
  * A moment of it.
  * @param s  its state
- * @param o  { dt, seen: the visitor is ahead of it in a clear line, to: { x, z } the way to them (a unit vector), went: metres it
- *             got this moment while charging, blocked: it could go no further, touched: it has reached somebody in its line,
- *             fire: a fire is near it or in its way }
+ * @param o  { dt, seen: the visitor is ahead of it in a clear line, to: { x, z } the way it would take for them (takes()), went:
+ *             metres it got this moment while charging, blocked: it could go no further, touched: it has reached somebody in its
+ *             line, fire: a fire is near it or in its way, again: { x, z } down, the way it would take for them if it got up
+ *             now (it finds them whichever way they are, getting up) }
  * @returns the next state; `drums` on the moment it stops to, `goes` on the moment it comes, `struck` when it meets a wall,
- *          `took` when it runs somebody down
+ *          `took` when it runs somebody down. The way it goes is always one of the four
  */
 export function meets(s, o) {
-  const { dt, seen = false, to = null, went = 0, blocked = false, touched = false, fire = false } = o;
+  const { dt, seen = false, to = null, went = 0, blocked = false, touched = false, fire = false, again = null } = o;
   let { mode, t, dir, run, hit } = s;
   t += dt;
   if (mode === 'files') {
-    if (seen && to && !fire) return { mode: 'drums', t: 0, dir: { x: to.x, z: to.z }, run: 0, hit: false, drums: true };
+    if (seen && to && !fire) return { mode: 'drums', t: 0, dir: diagonal(to), run: 0, hit: false, drums: true };
     return { mode, t, dir: null, run: 0, hit: false };
   }
   if (mode === 'drums') {
-    // it is still taking aim while it drums; once it goes, that is the way it goes
+    // it took its line as it stood up, and it does not take another: stood on end is the time there is to get off it
     if (fire) return filing();
-    if (seen && to) dir = { x: to.x, z: to.z };
     if (t >= MEETING.drum) return { mode: 'charges', t: 0, dir, run: 0, hit: false, goes: true };
     return { mode, t, dir, run, hit };
   }
   if (mode === 'charges') {
     run += went;
     const took = touched && !hit; if (took) hit = true;
-    if (blocked) return { mode: 'down', t: 0, dir, run, hit, struck: true, took, rest: MEETING.winded };
+    if (took) return { mode: 'down', t: 0, dir, run, hit, took, rest: MEETING.winded };          // into them: and down in a heap on the far side
+    if (blocked) return { mode: 'down', t: 0, dir, run, hit, struck: true, rest: MEETING.winded };
     if (run >= MEETING.far) return { mode: 'down', t: 0, dir, run, hit, took, rest: MEETING.spent };
     return { mode, t, dir, run, hit, took };
   }
-  // down: getting its legs back under it
-  if (t >= (s.rest ?? MEETING.winded)) return filing();
+  // down: getting its legs back under it. Up, it takes a line for whoever is there to be found, and stands up on end again
+  if (t >= (s.rest ?? MEETING.winded)) return again && !fire ? { mode: 'drums', t: 0, dir: diagonal(again), run: 0, hit: false, drums: true } : filing();
   return { mode, t, dir, run, hit, rest: s.rest };
 }
 

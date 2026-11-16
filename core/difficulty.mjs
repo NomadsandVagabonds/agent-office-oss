@@ -18,10 +18,13 @@ export const cleanDifficulty = (id, fallback = DEFAULT_DIFFICULTY) => validDiffi
 export const difficultyOf = id => DIFFICULTIES.find(d => d.id === cleanDifficulty(id));
 
 // Explicit species tuning. A speed change never changes tell/fuse/cooldown clocks.
+// The big ones met further down (and Mother): slower, and a heart a hit, below Normal. On Normal and Hard they are as written.
+const GENTLER = Object.freeze({ mother: { speed: .85 }, 'head-count': { speed: .85, damage: 1 }, 'standing-meeting': { speed: .85, damage: 1 },
+  intern: { speed: .85 }, 'carried-interest': { speed: .85, damage: 1 } });
 export const CREATURE_DIFFICULTY = Object.freeze({
-  'training-wheels': { pirate: { speed: 1 }, toner: { speed: 1 } },
-  tourist: { pirate: { speed: 1 }, toner: { speed: 1 } },
-  easy: { pirate: { speed: 1, damage: 2 }, toner: { speed: 1, damage: 1 }, 'other-door': { damage: 2 } },
+  'training-wheels': { pirate: { speed: 1 }, toner: { speed: 1 }, ...GENTLER },
+  tourist: { pirate: { speed: 1 }, toner: { speed: 1 }, ...GENTLER },
+  easy: { pirate: { speed: 1, damage: 2 }, toner: { speed: 1, damage: 1 }, 'other-door': { damage: 2 }, ...GENTLER },
   normal: { pirate: { speed: 1.12, damage: 3 }, toner: { speed: 1.08, damage: 1 }, 'other-door': { damage: 3 } },
   hard: { pirate: { speed: 1.2, damage: 3 }, toner: { speed: 1.12, damage: 2 }, 'other-door': { damage: 3 } },
 });

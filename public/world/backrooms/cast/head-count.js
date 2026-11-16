@@ -1,8 +1,8 @@
 // The Backrooms — head count. Three of the staff joined at the hips, face down,
 // walking on eight arms; where each neck ends there is a collar, a lanyard and
-// a hole. It has no head to see or hear with: it feels the floor
-// (head-count.rule.js). Walk, and it knows where. Stand still, and you are not
-// there, until a hand comes down on you.
+// a hole. It has no head to see or hear with, and does not know anybody is
+// there (head-count.rule.js): it goes about the floor with no idea where it is
+// going, and a hand comes down on whoever is in the way.
 //
 // Voxels (head-count.model.js), posed every frame: each arm is planted on the
 // floor by its hand and worked out back to the shoulder, elbow up and out.
@@ -132,9 +132,8 @@ export function create(c) {
       const m = c.me(), d = Math.hypot(m.x - walker.x, m.z - walker.z), line = d < 20 && c.los(walker.x, walker.z, m.x, m.z);
       const fire = c.fire(walker.x, walker.z), nearFire = !!fire && Math.hypot(fire.x - walker.x, fire.z - walker.z) < H.fire;
       if (!known && d < 10 && line && !c.hidden(walker.x, walker.z, 0.6)) { known = true; c.met(); }
-      const there = !!s.felt && Math.hypot(s.felt.x - walker.x, s.felt.z - walker.z) < 0.7, was = s.mode;
-      s = counts(s, { dt, d, speed: m.speed ?? 0, at: m, line, there, fire: nearFire });
-      if (s.begins) { c.play('rattle', walker.x, walker.z, 16); env.interfere?.(0.3); shudder = 0.5; }
+      const was = s.mode;
+      s = counts(s, { dt, d, line, fire: nearFire });
       if (s.took) {
         const hit = c.hurt(H.hurts);
         if (hit.ended) { over = true; return; }
@@ -142,11 +141,9 @@ export function create(c) {
         shudder = 1.2;
       }
       if (was === 'recounts' && s.mode === 'counts') goal = null;
-      // where it is going: to the step it felt; round the place it was felt; or on with its count
+      // where it is going: on with its count, into whichever room is next. It is not going anywhere for anybody
       let to = null;
       if (nearFire) to = { x: walker.x * 2 - fire.x, z: walker.z * 2 - fire.z };
-      else if (s.mode === 'comes' && s.felt) to = s.felt;
-      else if (s.mode === 'sweeps' && s.felt) { sweepA += dt * 1.1; to = { x: s.felt.x + Math.sin(sweepA) * 1.3, z: s.felt.z + Math.cos(sweepA) * 1.3 }; }
       else if (s.mode === 'counts') {
         goalT -= dt;
         if (!goal || goalT <= 0 || Math.hypot(goal.x - walker.x, goal.z - walker.z) < 0.8) { goal = wander(); goalT = 14 + Math.random() * 10; }
@@ -157,7 +154,7 @@ export function create(c) {
       const speed = listens ? 0 : pace(s.mode) * (c.speedScale ?? 1);
       if (to && speed > 0) { const got = c.walk.go(walker, to, speed * Math.min(dt, 0.08), 0.2); if (s.mode === 'counts' && got && got.went < 1e-4) goalT = Math.min(goalT, 1.5); }
       const mx = walker.x - lastX, mz = walker.z - lastZ, moved = Math.hypot(mx, mz) > 1e-4;
-      if (moved) { let da = Math.atan2(mx, mz) - rot; da = Math.atan2(Math.sin(da), Math.cos(da)); rot += da * Math.min(1, dt * (s.mode === 'comes' ? 7 : 2.5)); }
+      if (moved) { let da = Math.atan2(mx, mz) - rot; da = Math.atan2(Math.sin(da), Math.cos(da)); rot += da * Math.min(1, dt * 2.5); }
       else if (s.mode === 'recounts') rot += dt * 0.5;
       lastX = walker.x; lastZ = walker.z;
       group.visible = c.drawn(walker);
@@ -168,7 +165,6 @@ export function create(c) {
     takes(shot) {
       over = true;
       const fig = shot.figure, from = { x: walker.x, z: walker.z };
-      s = { ...s, mode: 'comes' };
       return (t, dt) => {
         clock += dt;
         const k = Math.min(1, t / 1.1), e = k * k * (3 - 2 * k), down = Math.max(0, Math.min(1, (t - 0.5) / 0.7));
@@ -187,7 +183,7 @@ export function create(c) {
       }
       return null;
     },
-    at: () => ({ x: walker.x, z: walker.z, mode: s.mode, sure: +s.sure.toFixed(2) }),
+    at: () => ({ x: walker.x, z: walker.z, mode: s.mode }),
     dispose() { group?.removeFromParent(); group = null; },
   };
 }

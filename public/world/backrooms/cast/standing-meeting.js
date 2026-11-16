@@ -2,8 +2,9 @@
 // tail, on eighteen short legs in suit trousers and office shoes: nearer a
 // centipede than anything that ever sat round a table. It goes about in file.
 // When somebody is in front of it, it stops, drums, and comes straight, faster
-// than anybody runs, and cannot turn (standing-meeting.rule.js): get out of
-// the line, and it goes past and into the wall.
+// than anybody runs, and cannot turn (standing-meeting.rule.js) — and only
+// ever corner to corner of the building, like a bishop: get off its diagonal,
+// and it goes past and into the wall.
 //
 // Voxels (standing-meeting.model.js), posed every frame. Each length of it
 // follows where the one in front has been, and each foot is put down on the
@@ -11,7 +12,7 @@
 import * as THREE from 'three';
 import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
-import { MEETING, filing, meets, ahead, lengths } from './standing-meeting.rule.js';
+import { MEETING, filing, meets, ahead, lengths, takes } from './standing-meeting.rule.js';
 import { elbow } from './head-count.rule.js';
 import { S, SF, THIGH, SHIN, backVox, bellyVox, fingersVox, thighVox, shinVox, tieVox } from './standing-meeting.model.js';
 
@@ -160,6 +161,11 @@ export function create(c) {
     legs.forEach((l) => { l.i = M.parts - 1 - l.i; l.side = -l.side; l.fan = -l.fan; });
     backs.reverse();
   }
+  /** The diagonal it would take from a spot for somebody: one it has floor to start along (standing-meeting.rule.js takes()). */
+  const lineFor = (p, m) => {
+    const d = Math.hypot(m.x - p.x, m.z - p.z); if (d < 0.3) return null;
+    return takes({ x: (m.x - p.x) / d, z: (m.z - p.z) / d }, (dir) => c.walk.clear(walker, p.x, p.z, p.x + dir.x * 1.2, p.z + dir.z * 1.2));
+  };
   const moved = (x, z) => { if (Math.hypot(x - trail[0].x, z - trail[0].z) > 0.04) { trail.unshift({ x, z }); if (trail.length > 140) trail.length = 140; } };
 
   return {
@@ -174,7 +180,14 @@ export function create(c) {
       const tail = at[at.length - 1];
       if (s.mode === 'files' && tail && !(ahead(walker, yaw, m) && c.los(walker.x, walker.z, m.x, m.z)) && ahead(tail, tail.yaw + Math.PI, m) && c.los(tail.x, tail.z, m.x, m.z)) about();
       const d2 = Math.hypot(m.x - walker.x, m.z - walker.z);
-      const seen = d2 > 0.3 && ahead(walker, yaw, m) && c.los(walker.x, walker.z, m.x, m.z), to = d2 > 1e-6 ? { x: (m.x - walker.x) / d2, z: (m.z - walker.z) / d2 } : null;
+      const seen = d2 > 0.3 && ahead(walker, yaw, m) && c.los(walker.x, walker.z, m.x, m.z), to = seen ? lineFor(walker, m) : null;
+      // down, it is finding them again, with whichever end of it is nearer: getting up, that end is the front, and takes the line
+      let again = null, turns = false;
+      if (s.mode === 'down') {
+        const ends = [[walker, false], [tail, true]].filter(([p]) => p && Math.hypot(m.x - p.x, m.z - p.z) <= M.sees && c.los(p.x, p.z, m.x, m.z))
+          .sort((a, b) => Math.hypot(m.x - a[0].x, m.z - a[0].z) - Math.hypot(m.x - b[0].x, m.z - b[0].z));
+        for (const [p, isTail] of ends) { const line = lineFor(p, m); if (line) { again = line; turns = isTail; break; } }
+      }
       // charging: straight on, as far as there is floor to go straight on over
       let went = 0, blocked = false, touched = false, was = { x: walker.x, z: walker.z };
       if (s.mode === 'charges' && s.dir) {
@@ -187,8 +200,9 @@ export function create(c) {
         touched = at.slice(0, 6).some((p) => Math.hypot(p.x - m.x, p.z - m.z) < M.wide) || Math.hypot(walker.x - m.x, walker.z - m.z) < M.wide + 0.1;
       }
       const before = s.mode;
-      s = meets(s, { dt, seen, to, went, blocked, touched, fire: nearFire });
-      if (before === 'down' && s.mode === 'files') about();          // up again: and off the way it came, which is as good a way as the other
+      s = meets(s, { dt, seen, to, went, blocked, touched, fire: nearFire, again });
+      // up again: and off the way it came, which is as good a way as the other — or, with somebody to go for, whichever end found them leads
+      if (before === 'down' && (s.mode === 'files' || (s.mode === 'drums' && turns))) about();
       if (s.drums) { c.play('creak', walker.x, walker.z, 18); c.play('rattle', walker.x, walker.z, 18); env.interfere?.(0.3); }
       if (s.goes) { c.play('whir', walker.x, walker.z, 18); }
       if (s.struck) { c.play('crack', walker.x, walker.z, 20); c.play('thunk', walker.x, walker.z, 20); env.interfere?.(0.5); shake = 0.8; }

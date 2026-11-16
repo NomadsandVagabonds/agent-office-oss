@@ -233,7 +233,7 @@ export function edition() {
     const level = floorOf(visit, i);
     return [level.rooms.map((r) => [r.arch || r.kind, r.x, r.z, r.w, r.d, r.H]), level.links.length, level.start, level.exit];
   });
-  const company = CAST.map((m) => [m.id, m.weight, m.needs || [], m.themes || null]);
+  const company = CAST.map((m) => [m.id, m.weight, m.needs || [], m.themes || null, ...(m.deep ? ['deep'] : [])]);
   const text = JSON.stringify([visit.depths, visit.floors.map((f) => [f.theme, f.way, f.hand, f.rooms, f.mascot]), parts, company]);
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193); }
