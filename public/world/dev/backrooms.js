@@ -22,6 +22,9 @@
 //   &supplies=1        one of everything that can be carried, on the floor where you land (for looking at them: a visit has only what its seed left lying about)
 //   &check=1           once the floor is up, one line on the console that a script can read — `[check] {…}`: for every oddity on it, how
 //                      long it took to build, what it put down (meshes, triangles, solids, lights…), and everything the level warned about
+//   &perf=1            a read-out in the top right: frame times over the last 5 s, draw calls, triangles, memory, sizes, the room (perf.js)
+//   &bench=1           the read-out and a fixed tour of the floor you land on; at the end `[bench] {…}` on the console and the title
+//                      `bench done` (tools/backrooms-bench.mjs runs it for three seeds; docs/BACKROOMS-GRAPHICS.md, phase 0)
 //   &loot=1            something to find: the keycard (in the mascot's hand) and coins 1–4; &loot=card,1,3 for some of it. There is no
 //                      office here to keep count, so a stand-in does, in this page's memory, and says so on the console: what you leave
 //                      by the door with is gone the next visit (any key), everything else is down there again. Without it: no loot.
@@ -64,6 +67,8 @@ const num = (k, d) => (q.has(k) && q.get(k) !== '' && Number.isFinite(Number(q.g
 const stage = createStage(document.getElementById('stage'), { fx: q.get('fx') === '1', shadows: false, preserve: true, pixelRatio: num('dpr', 1) });
 stage.start();
 window.__stage = stage;              // renderer.info, for checking that a visit leaves nothing behind
+// &perf=1 / &bench=1: the measuring tape, only fetched when asked for
+const perf = q.get('perf') === '1' || q.get('bench') === '1' ? (await import('./perf.js')).createPerf(stage, { bench: q.get('bench') === '1', params: q }) : null;
 
 const look = (species, outfitColor, accessory, extra) => ({ species, outfitColor, accessory, ...extra });
 const agents = [
@@ -135,6 +140,7 @@ async function go() {
       if (q.get('map')) dev.textContent = handle.sketch();
       console.log(handle.sketch());
       if (q.get('check')) console.log('[check] ' + JSON.stringify(check(handle)));
+      perf?.attach(handle);
       if (q.get('tonerstudy') === '1') closeStudy = tonerStudy(handle);
       else if (q.get('partystudy') === '1') closeStudy = partyStudy(handle);
       else if (q.get('bridgestudy') === '1') closeStudy = bridgeStudy(handle);
@@ -144,6 +150,7 @@ async function go() {
     },
   });
   window.__backroomsResult = result;
+  perf?.detach();
   closeStudy?.();
   stage.setView(null);
   document.title = `over: ${result.reason}`;

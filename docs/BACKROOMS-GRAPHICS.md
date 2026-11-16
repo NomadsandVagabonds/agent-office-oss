@@ -63,6 +63,49 @@ The numbers that set the budgets come from ordinary laptops and phones, so the
 tour is made to be handed on: one address, a minute and a half, and a summary to
 copy back. **Auto** is what protects a machine nobody measured.
 
+**Built: the read-out and the tour.** Both are on the dev page only and off
+unless asked for; without the flags the page does not even fetch them.
+
+- `/world/dev/backrooms.html?seed=7&perf=1` puts a small read-out in the top
+  right corner, redrawn four times a second. *frame* is the time from one frame
+  to the next, measured on the page itself: the last one, and the mean, 95th
+  percentile and worst of the last five seconds (16.7 ms is 60 a second, 33.3
+  is 30). *draws* and *tris* are what the level's scene pass drew in the last
+  frame: the draw calls and triangles that survived being culled, so what is
+  in view, not what is built. (The level draws through the camcorder's
+  effect composer, so the renderer's own count only ever holds the last
+  full-screen pass; the page adds up every render call of a frame instead, and
+  counts the ones that drew the level's scene apart from *all passes*.)
+  *held* is textures and geometries in memory. *picture* is the size the
+  camcorder draws the level at, which with the camcorder on is a few hundred
+  lines whatever the screen; *canvas* is the screen's buffer; *dpr* is the
+  pixel ratio used, with the device's own beside it. Then the room you are in.
+- `&bench=1` adds a fixed tour of the floor you land on (`perf-stats.js`,
+  `stations`): the room you land in, then every oddity in the order the floor
+  lists them, first just inside its door looking in, then from its centre
+  turning one slow circle in four seconds, with a second to settle after each
+  jump that is not measured. It is moved by the dev handle, not by keys, so it
+  is the same walk for the same seed on any machine: about a minute. At the
+  end the page title becomes `bench done`, the console gets one line
+  `[bench] {…}` (seed, the flags that change the picture, browser, renderer,
+  sizes, and for each station and overall the frame time's mean, p50, p95, p99
+  and worst, and the draw calls' and triangles' mean and largest), and a
+  summary appears under the read-out with a *copy result* button.
+- `node tools/backrooms-bench.mjs` runs the tour headless for seeds 7, 21 and
+  88 against an office that is already running (`--base
+  http://localhost:4317`; also `--seeds`, `--size`, `--flags 'vhs=0'`,
+  `--out`), writes every result to one JSON file and prints a table. It needs
+  Playwright and its Chromium to be installed already. The build machines draw
+  in software, so their numbers compare one version of the level with another
+  on the same machine and say nothing about real hardware.
+
+**To measure a laptop or a phone**: with the office running on a computer the
+device can reach, open `/world/dev/backrooms.html?seed=7&bench=1` on it, leave
+it alone (no keys, no touching) until the title or the read-out says
+`bench done`, then press *copy result* and send the line, or on a phone take a
+screenshot of the summary. Say what the device is and whether it was plugged
+in. Leave the window at its usual size: the size is part of the result.
+
 ### 1 · Light that is already paid for
 
 - **A Graphics setting** in the level's own menu. Its default for now is a
