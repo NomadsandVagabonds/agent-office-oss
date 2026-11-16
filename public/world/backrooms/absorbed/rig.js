@@ -320,6 +320,28 @@ function waxen(col, x, y, z, seed) {
 }
 /** Their clothes, copied as well: right, but for being a little grey, as a photocopy of a colour is. */
 const copied = (col) => mix(col, M('#8a8678', 1), 0.24);
+/**
+ * The paper of a wall, a voxel at a time: the same motif the wall itself is printed with (kit.js `wallpaper`: a 32 by 32
+ * repeat, and one of its squares is as near as makes no difference one of these voxels). So that what they are wearing is
+ * the wall. (The owner: "what if their clothing is the same colour and pattern as the wallpaper, like they are slowly
+ * becoming the wall".) `paper`: { wall, ink, pale, pattern } of the room's look.
+ */
+export function paperAt(paper, x, y) {
+  const { wall = '#c8bc84', ink = wall, pale = wall, pattern } = paper || {}, w = 32, m = (v, k) => ((Math.round(v) % k) + k) % k;
+  const px = m(x, w), py = m(-y, w);                                     // (the wall's rows count down from the top)
+  if (pattern === 'stripes') return m(px - 2, 8) < 2 ? ink : m(px - 5, 8) === 0 ? pale : wall;
+  if (pattern === 'dots') { const row = Math.floor((py + 6) / 8), ox = row % 2 ? 6 : 2; return m(py - 2, 8) < 2 && m(px - ox, 8) < 2 ? ink : wall; }
+  if (pattern === 'diamonds') { const row = Math.floor((py + 12) / 16), cx = row % 2 ? 12 : 4, dx = Math.abs(m(px - cx + 8, 16) - 8), dy = Math.abs(m(py - 4 + 8, 16) - 8); return dx + dy <= 2 ? (dx + dy === 0 ? pale : ink) : wall; }
+  if (pattern === 'trellis') return m(px - py, 16) === 0 || m(px + py + 1, 16) === 0 ? ink : wall;
+  if (pattern === 'sprigs') { const row = Math.floor((py + 11) / 16), cx = row % 2 ? 13 : 5, dx = m(px - cx + 8, 16) - 8, dy = m(py - 5 + 8, 16) - 8; return (dx === 0 && dy >= 0 && dy <= 3) || (dy === 1 && Math.abs(dx) <= 1) ? ink : wall; }
+  if (pattern === 'blocks' || pattern === 'board' || pattern === 'panel' || pattern === 'mall' || pattern === 'sky') return m(py, 8) === 0 && pattern === 'blocks' ? ink : wall;
+  const k = m(px, 8); return m(py - 3, 8) === (k < 4 ? k : 7 - k) ? ink : wall;          // (the rest: the zigzag)
+}
+/** A voxel of what they have on, in a room papered like that: the paper, a little rubbed where the cloth still shows through it. */
+function papered(col, x, y, z, seed, paper) {
+  const n = noise3(x, y, z, seed + 3);
+  return n > 0.9 ? mix(M(paperAt(paper, x, y), 2), col, 0.45) : M(paperAt(paper, x, y), 2);
+}
 
 /** What is on the front of the face in a patch of it: [[dx, dy, colour]…], so that it can be put somewhere else. */
 function lift(head, x0, y0, x1, y1) {
@@ -398,7 +420,7 @@ function buildLongUpperArmVox(look, surfaceHex, seed) {
     if (y >= -2 && noise3(x, y, z, seed) > 0.42) return mix(cur, surfCol, 0.55);
     return noise3(x, y, z, seed + 7) < 0.2 ? tone(cur, -0.14) : cur;
   });
-  if (look.species !== 'robot') { const skinRgb = rgbOf(C(look.skin)); v.remap((x, y, z, cur) => (distRgb(rgbOf(cur), skinRgb) <= 60 ? waxen(cur, x, y, z, seed) : copied(cur))); }
+  if (look.species !== 'robot') { const skinRgb = rgbOf(C(look.skin)); v.remap((x, y, z, cur) => (distRgb(rgbOf(cur), skinRgb) <= 60 ? waxen(cur, x, y, z, seed) : look.paper ? papered(cur, x, y, z, seed, look.paper) : copied(cur))); }
   return v;
 }
 
@@ -443,7 +465,7 @@ function buildLongForearmVox(look, side, seed) {
   }
 
   v.remap((x, y, z, cur) => (noise3(x, y, z, seed + 31) < 0.22 ? tone(cur, -0.12) : cur));
-  if (look.species !== 'robot') { const skinRgb = rgbOf(C(look.skin)); v.remap((x, y, z, cur) => (distRgb(rgbOf(cur), skinRgb) <= 60 ? waxen(cur, x, y, z, seed) : copied(cur))); }
+  if (look.species !== 'robot') { const skinRgb = rgbOf(C(look.skin)); v.remap((x, y, z, cur) => (distRgb(rgbOf(cur), skinRgb) <= 60 ? waxen(cur, x, y, z, seed) : look.paper ? papered(cur, x, y, z, seed, look.paper) : copied(cur))); }
   return v;
 }
 
@@ -453,10 +475,11 @@ function buildLongForearmVox(look, side, seed) {
  */
 function buildAbsorbedCore(kit, spec, mount, surfaceColors) {
   const look = spec.assimilatedLook;
-  const sig = `${look.species}:${look.outfit}:${look.outfitColor}:${spec.faceVariant}:${spec.seed}`;
+  const paper = surfaceColors?.paper || { wall: surfaceColors?.wall };
+  const sig = `${look.species}:${look.outfit}:${look.outfitColor}:${spec.faceVariant}:${spec.seed}:${paper.wall}:${paper.ink}:${paper.pattern}`;
   const keyBase = `abs:core:${sig}:${mount}`;
   const parts = buildCharacter(look, { seed: keyBase, provider: spec.provider });
-  const skinRgb = rgbOf(C(look.skin)), asCopy = (x, y, z, cur) => (distRgb(rgbOf(cur), skinRgb) <= 60 ? waxen(cur, x, y, z, spec.seed) : copied(cur));
+  const skinRgb = rgbOf(C(look.skin)), asCopy = (x, y, z, cur) => (distRgb(rgbOf(cur), skinRgb) <= 60 ? waxen(cur, x, y, z, spec.seed) : papered(cur, x, y, z, spec.seed, paper));
   if (look.species !== 'robot') for (const k of ['torso', 'legUpperL', 'legUpperR', 'legLowerL', 'legLowerR']) parts[k]?.remap(asCopy);
   const b = new Batch(true);
 
@@ -609,7 +632,7 @@ export function makeAbsorbedWorker(kit, spec, mount = 'wall', surface = {}) {
 
   const enriched = {
     ...spec,
-    assimilatedLook: assimilateLook(spec.look, surfHex),
+    assimilatedLook: { ...assimilateLook(spec.look, surfHex), paper: surface.paper || { wall: surface.wall } },
   };
 
   const lights = [
@@ -623,7 +646,7 @@ export function makeAbsorbedWorker(kit, spec, mount = 'wall', surface = {}) {
   const coreMesh = new THREE.Mesh(kit.geometry(core.batch, lights, amb), mat);
 
   // Head + intermittent bad-frame VHS head tear
-  const sig = `${enriched.assimilatedLook.species}:${enriched.assimilatedLook.outfit}:${enriched.assimilatedLook.outfitColor}:${enriched.assimilatedLook.accessory}:${enriched.faceVariant}:${enriched.seed}`;
+  const sig = `${enriched.assimilatedLook.species}:${enriched.assimilatedLook.outfit}:${enriched.assimilatedLook.outfitColor}:${enriched.assimilatedLook.accessory}:${enriched.faceVariant}:${enriched.seed}:${surface.paper?.wall || surface.wall}:${surface.paper?.ink}:${surface.paper?.pattern}`;
   const head = new THREE.Group();
   head.position.copy(core.headPos);
   if (core.headScale) head.scale.set(core.headScale[0], core.headScale[1], core.headScale[2]);
