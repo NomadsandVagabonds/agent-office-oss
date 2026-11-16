@@ -425,10 +425,10 @@ export const MORE_DECK = [
   { id: 'the-orange', name: 'The Orange', landmark: 'the place that sells the orange drink', w: [7, 8], d: [7, 8], h: [2.9, 3.3],
     ports: ['left', 'right'], weight: 1.3, lights: 'dim', themes: { mall: 1, '*': 0 },
     module: './rooms/the-orange.js', stash: (r) => [-r.W / 2 + 0.35, r.D / 2 - 1.9, -r.W / 2 + 0.95, r.D / 2 - 1.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
-  // A tea point scaled up: bolted tables, counters with lit boards, and the middle of the floor left out behind a rail with a length missing.
-  { id: 'food-court', name: 'The Food Court', landmark: 'the tables round the hole', w: [13, 15], d: [12, 14], h: [3.3, 3.8],
+  // A hall with little shops round the edge, each selling the one thing it was told about at the size it was told; tables bolted down, and another over each on the roof; the middle of the floor left out.
+  { id: 'food-court', name: 'The Food Court', landmark: 'the tables round the hole', w: [16, 18], d: [15, 17], h: [7, 7.8],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
-    module: './rooms/food-court.js', stash: (r) => [r.W / 2 - 1.0, r.D / 2 - 1.0, r.W / 2 - 0.4, r.D / 2 - 0.4], roll: (R) => ({ seed: R.int(1, 9999) }) },
+    module: './rooms/food-court.js', stash: (r) => [r.W / 2 - 1.0, -2.6, r.W / 2 - 0.4, -2.0], roll: (R) => ({ seed: R.int(1, 9999) }) },
   // A car park, tall, in the yellow of one: the one car a great many times (stacked to the roof, in a drift, up the wall, on the roof), and a way out that is a ramp down into nothing.
   { id: 'level-p', name: 'Level P', landmark: 'the car park of the one car', w: [16, 18], d: [16, 18], h: [7.2, 8],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
