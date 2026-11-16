@@ -417,6 +417,10 @@ export const MORE_DECK = [
   { id: 'the-atrium', name: 'The Atrium', landmark: 'the two floors of shops, and the way down to more', w: [16, 18], d: [14, 16], h: [7.6, 8.6],
     ports: ['left', 'right'], weight: 1.4, lights: 'dim', themes: { mall: 1, '*': 0 },
     module: './rooms/the-atrium.js', stash: (r) => [-r.W / 2 + 0.4, r.D / 2 - 1.1, -r.W / 2 + 1.0, r.D / 2 - 0.5], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A hall given over to moving stairs, which go everywhere; two of them can be ridden, and one of those only takes whoever stands still.
+  { id: 'moving-stairs', name: 'Moving Stairs', landmark: 'the hall of moving stairs', w: [16, 18], d: [16, 18], h: [8.6, 9],
+    ports: ['left', 'right'], weight: 1.3, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/moving-stairs.js', stash: (r) => [r.W / 2 - 1.0, r.D / 2 - 1.1, r.W / 2 - 0.4, r.D / 2 - 0.5], roll: (R) => ({ seed: R.int(1, 9999) }) },
   // A shop: the place that sells the orange drink. Orange and white, a great many oranges, and somebody serving who has one for a head.
   { id: 'the-orange', name: 'The Orange', landmark: 'the place that sells the orange drink', w: [7, 8], d: [7, 8], h: [2.9, 3.3],
     ports: ['left', 'right'], weight: 1.3, lights: 'dim', themes: { mall: 1, '*': 0 },
