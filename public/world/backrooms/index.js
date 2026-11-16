@@ -398,7 +398,7 @@ async function visit(office, opt) {
     }
     /** What creatures tell the visit, for the card at the end: this one was met; this one was got away from. */
     env.run = { met: (id) => tally.met(id), survived: (id) => tally.survived(id) };
-    createStalkers(env);
+    createStalkers(env, opt.debug && opt.dev?.cast?.length ? { members: opt.dev.cast } : {});   // (the dev page may name who is down here: for looking at them)
     // the residents of rooms (denizens.js), and the visitor's hand as they ask after it; the picture washed red (0…1) by a room that does that
     createHand(env); createHandView(env, camera); createDenizens(env);
     // the banner an office park puts up about itself, near where a visit lands (banner.js): once the part is built
