@@ -20,6 +20,7 @@ import { mapLayout, bakeShadows, packShadows, layoutUniforms, sampleMap, bakeDoo
 import { doorPlan, DOORS } from './doors.js';
 import { bridgeReachable } from './bridge-puzzles.js';
 import { LEVEL_DESK, deskVox } from './desk.model.js';
+import { chooseUse } from './use.rule.js';
 import { WORKSTATION, chairVox, crtVox, keyboardVox, keyboardKeysVox } from './workstation.model.js';
 import { STORAGE, cabinetVox, boxesVox } from './storage.model.js';
 import { WALLFIT, socketVox, exitBoxVox } from './wallfit.model.js';
@@ -692,7 +693,7 @@ export async function buildWorld(kit, level, env, tick) {
   };
   /** The nearest usable thing the player is facing, or null. */
   world.usable = (me) => {
-    let best = null, bestScore = Infinity;
+    let best = null, bestScore = Infinity, item = null, itemScore = Infinity;
     const fx = -Math.sin(me.yaw), fz = -Math.cos(me.yaw);
     for (const rt of rooms) {
       if (!rt.near) continue;
@@ -704,10 +705,13 @@ export async function buildWorld(kit, level, env, tick) {
         const facing = d < 0.45 ? 1 : (dx * fx + dz * fz) / d;
         if (facing < (use.cone ?? 0.55)) continue;
         const score = d * (1.6 - facing);
-        if (score < bestScore && (d < 0.6 || world.los(me.x, me.z, use.wx - (dx / d) * 0.3, use.wz - (dz / d) * 0.3))) { best = use; bestScore = score; }
+        if (score >= bestScore && !(use.inventoryItem && score < itemScore)) continue;
+        if (!(d < 0.6 || world.los(me.x, me.z, use.wx - (dx / d) * 0.3, use.wz - (dz / d) * 0.3))) continue;
+        if (score < bestScore) { best = use; bestScore = score; }
+        if (use.inventoryItem && score < itemScore) { item = use; itemScore = score; }
       }
     }
-    return best;
+    return chooseUse(best, item);                         // (something to pick up in a doorway is taken before the door is worked: use.rule.js)
   };
   /** Turn a room's ceiling up or down (0 = out, 1 = as built): the tubes, and everything they light. */
   world.setLights = (rt, k) => {
