@@ -69,6 +69,9 @@ const WATERPARK_ROOMS = [
   'locker-showers',
   'smiler-maze',
   'dive-tower',
+  'flume-connector',
+  'flooded-cubicles',
+  'office-beach-day',
 ];
 
 test('waterpark.rule.js stays 100% pure (no three.js, DOM, or I/O)', () => {
@@ -393,8 +396,8 @@ test('waterpark theme isolation & generation: undealt by default, strictly isola
           assert.ok(WATERPARK_ROOMS.includes(id), `unexpected special ${id} on waterpark floor`);
           seenSpecials.add(id);
         }
-        if (f.hand.includes('smiler-maze') && floorOf(visit, f.depth).picked.includes('dive-tower')) {
-          seenSpecials.add('dive-tower');
+        if (f.hand.includes('smiler-maze') || f.hand.includes('flume-connector')) {
+          for (const id of floorOf(visit, f.depth).picked) seenSpecials.add(id);
         }
       }
     }

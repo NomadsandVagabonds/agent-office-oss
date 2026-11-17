@@ -1,0 +1,214 @@
+import { Batch, lin, WHITE } from '../kit.js';
+import { M, Vox } from '../../vox/vox.js';
+import { clock, CLOCK_FACE } from '../../props/lounge.js';
+import { desklamp } from '../../props/office.js';
+import { beachUmbrellaVox, buildFlume, loungerVox } from '../waterpark.js';
+import { evalFlume } from '../waterpark.rule.js';
+import { poolTextures, tiledPlane } from './return-pool/art.js';
+import { showerWater } from './locker-showers/water.js';
+import {
+  beachPlan, beachFloor, BEACH_FLOOR, BEACH_BED, BEACH_WATER, TUBE_RADIUS,
+} from './flume-connector/plan.js';
+
+const CLOCK_X = -1.7, CLOCK_Y = -.56, CLOCK_SCALE = .034;
+const CEILING = .10;
+const CURB = lin('#788b9a'), DECK = lin('#bcad91');
+
+function clockAtFive() {
+  const v = clock(), { x, y } = CLOCK_FACE, ink = M('#282927',0), z = 2.4;
+  v.tube(x,y,z,x,y+6.35,z,.48,ink);
+  v.tube(x,y,z,x+2.45,y-4.21,z,.64,ink);
+  return v;
+}
+
+function mural(kit, W) {
+  const width = 512, height = 128;
+  return kit.tex.custom('beach-day:painted-ocean',width,height,g=>{
+    const sunX = Math.round((.5 + CLOCK_X / W) * width);
+    const sunY = Math.round((CEILING - CLOCK_Y) / (CEILING - BEACH_FLOOR) * height);
+    g.fillStyle='#617888'; g.fillRect(0,0,width,height);
+    g.fillStyle='#395f74'; g.fillRect(0,59,width,69);
+    g.fillStyle='#34576a'; g.fillRect(0,92,width,36);
+    for(const [x,y] of [[29,37],[217,42],[364,31],[441,47]]){
+      g.fillStyle='#aeb7ae';g.fillRect(x,y+6,49,4);
+      g.fillRect(x+9,y+3,31,4);g.fillRect(x+15,y,18,5);
+    }
+    for(let i=0;i<12;i++){
+      const x=(i*105)%width,y=66+(i*13)%43;
+      g.fillStyle=i%3?'#72909a':'#93a7a3';
+      g.fillRect(x,y,17+i%4*6,2);g.fillRect(x+5,y-2,8+i%4*6,2);
+    }
+    g.fillStyle='#a4ad9d';
+    for(let x=0;x<width;x+=5){
+      const y=99-Math.round(10*Math.sin(x*.028)+5*Math.sin(x*.066));
+      g.fillRect(x,y,5,1+(x%3===0));
+    }
+    // The clock occupies the unpainted middle. The rays are on the wall texture.
+    for(let i=0;i<8;i++){
+      const a=i*Math.PI/4+.07,b=a+.09+(i%3)*.04;
+      g.fillStyle=i%2?'#cea053':'#e1b75f';
+      g.beginPath();g.moveTo(sunX+Math.cos(a)*18,sunY+Math.sin(a)*18);
+      g.lineTo(sunX+Math.cos(b)*(31+(i*3)%9),sunY+Math.sin(b)*(32+(i*7)%8));
+      g.lineTo(sunX+Math.cos(a+.21)*18,sunY+Math.sin(a+.21)*18);g.closePath();g.fill();
+    }
+    for(let i=0;i<140;i++){
+      const x=(i*53+29)%width,y=(i*31+17)%height;
+      g.fillStyle=i%3?'#44596044':'#dfdbb630';g.fillRect(x,y,1+i%5,1+(i%4===0));
+    }
+    for(let i=0;i<39;i++){
+      const x=(i*81+47)%width;
+      g.fillStyle=i%2?'#57645578':'#293f4278';g.fillRect(x,116+(i%5),2+i%4,12);
+    }
+  },{clamp:true});
+}
+
+function towels() {
+  const v=new Vox();
+  for(const [i,hex] of ['#a58f60','#ddd1af','#c2a980'].entries()){
+    v.rbox(-10+i, i*3, -7, 10+i, i*3+3, 7, 1, M(hex,2));
+    v.paint(-9+i,i*3,-7,-6+i,i*3+3,7,M('#be9768',2));
+  }
+  return v;
+}
+
+function sheet(batch, rect, gaps, y, down=false) {
+  const xs=[...new Set([rect.x0,rect.x1,...gaps.flatMap(q=>[Math.max(rect.x0,q.x0),Math.min(rect.x1,q.x1)])])].sort((a,b)=>a-b);
+  const zs=[...new Set([rect.z0,rect.z1,...gaps.flatMap(q=>[Math.max(rect.z0,q.z0),Math.min(rect.z1,q.z1)])])].sort((a,b)=>a-b);
+  for(let m=1;m<xs.length;m++)for(let n=1;n<zs.length;n++){
+    const x0=xs[m-1],x1=xs[m],z0=zs[n-1],z1=zs[n];
+    const x=(x0+x1)*.5,z=(z0+z1)*.5;
+    if(x<rect.x0||x>rect.x1||z<rect.z0||z>rect.z1)continue;
+    if(!gaps.some(q=>x>q.x0&&x<q.x1&&z>q.z0&&z<q.z1))tiledPlane(batch,x0,z0,x1,z1,y,down);
+  }
+}
+
+function architecture(c,p) {
+  const {H,W}=c,{front,left,right,back,entry,hole,exitStairs,sideStairs,basin}=p;
+  const tex=poolTextures(c.kit), box=(b,coords,col=WHITE)=>b.box(...coords,col,{uv:1.6,step:.75});
+  const wall=c.mapped('beach:painted-plaster',tex.tile,{wet:.22});
+  const carpet=c.mapped('beach:carpet',c.kit.tex.carpet('#776859'));
+  const tile=c.mapped('beach:pool-tile',tex.deep,{wet:.67});
+  const ceiling=c.mapped('beach:ceiling',c.kit.tex.ceiling(c.look.ceil));
+  c.shell({floor:false,ceiling:false,panels:false,skirting:false,sockets:false,wallAlb:lin('#766962')});
+  const bounds={x0:left,x1:right,z0:back,z1:front};
+  sheet(carpet,bounds,[...basin,entry,exitStairs,sideStairs],BEACH_FLOOR);
+  sheet(ceiling,bounds,[entry,hole,exitStairs,sideStairs],CEILING,true);
+  tiledPlane(ceiling,left,back,right,front,H,true);
+  const stage = { ...entry, z1:front };
+  box(carpet,[stage.x0,-.20,stage.z0,stage.x1,0,stage.z1],DECK);
+  for(const t of p.treads)box(wall,[t.x0,t.y-.18,t.z0,t.x1,t.y,t.z1],DECK);
+  for(const b of [[left-.10,BEACH_FLOOR,back,left,0,front],
+    [right,BEACH_FLOOR,back,right+.10,0,front],[left,BEACH_FLOOR,front,right,0,front+.10],
+    [left,BEACH_FLOOR,back-.10,right,0,back]])box(wall,b,lin('#737d7a'));
+  c.board(c.mapped('beach:wall-mural',mural(c.kit,W)),0,(BEACH_FLOOR+CEILING)/2,back+.013,W,CEILING-BEACH_FLOOR,0);
+  c.model('beach:clock-at-five',clockAtFive,CLOCK_X,back+.03,{
+    y:CLOCK_Y-CLOCK_FACE.y*CLOCK_SCALE,scale:CLOCK_SCALE/.025,solid:false,shadow:false,
+  });
+
+  const water=new Batch();
+  for(const [i,q] of basin.entries()){
+    tiledPlane(tile,q.x0,q.z0,q.x1,q.z1,BEACH_BED);
+    tiledPlane(water,q.x0,q.z0,q.x1,q.z1,BEACH_WATER);
+    for(const x of [q.x0,q.x1])box(tile,[x-.047,BEACH_BED,q.z0,x+.047,BEACH_FLOOR+.053,q.z1],CURB);
+    if(i===0)box(tile,[q.x0,BEACH_BED,q.z0-.07,q.x1,BEACH_FLOOR+.053,q.z0+.04],CURB);
+    if(i===basin.length-1)box(tile,[q.x0,BEACH_BED,q.z1-.04,q.x1,BEACH_FLOOR+.053,q.z1+.07],CURB);
+    if(i<basin.length-1){
+      const n=basin[i+1];
+      for(const [x0,x1] of [[Math.min(q.x0,n.x0),Math.max(q.x0,n.x0)],[Math.min(q.x1,n.x1),Math.max(q.x1,n.x1)]])
+        box(tile,[x0,BEACH_BED,q.z1-.05,x1,BEACH_FLOOR+.053,q.z1+.05],CURB);
+    }
+  }
+  showerWater(c,water,tex.water);
+  buildFlume(c,'beach:ceiling-feed',p.drop,{radius:TUBE_RADIUS,color:'#b76555',interior:true,alpha:.98,steps:20});
+  const rim=lin('#687170');
+  for(const x of [hole.x0-.025,hole.x1+.025])box(c.flat,[x-.03,CEILING-.075,hole.z0-.03,x+.03,CEILING+.12,hole.z1],rim);
+  box(c.flat,[hole.x0,CEILING-.075,hole.z0-.045,hole.x1,CEILING+.12,hole.z0+.03],rim);
+  for(const x of [-.74,.73]){
+    box(c.flat,[x-.018,CEILING+.18,hole.z0+.2,x+.018,H,hole.z0+.238],rim);
+  }
+
+  const tube=c.shining('beach:last-fluorescent',c.kit.tex.panel(true),1.17,lin('#d5ded9'));
+  for(const [x,z,lit] of [[-2.74,2.12,true],[2.58,1.35,false],[-2.34,-2.52,false]]){
+    box(c.flat,[x-.25,CEILING-.121,z-.74,x+.25,CEILING-.006,z+.74],lin('#545953'));
+    if(lit)c.lay(tube,x,z,.34,1.42,0,null,WHITE,CEILING-.126,true);
+  }
+  c.light(-2.74,CEILING-.24,2.12,'#c9d8dc',1.11,{far:7.3,k:4.2});
+  c.light(CLOCK_X,CEILING-.14,back+.68,'#e7c48d',.72,{far:3.6,k:2.1});
+  c.light(4.02,BEACH_FLOOR+1.55,-2.75,'#ffc78c',1.58,{far:6.3,k:4.1,axis:[-.46,-.72,.23],floor:.31});
+  c.light(left+.22,1.53,.25,'#dfd6ba',1.03,{far:6,k:2.8});
+  c.light(.24,.59,front-.7,'#e3ab8c',.58,{far:3,k:1.8});
+
+  c.model('beach:umbrella',beachUmbrellaVox('#c98956'),3.3,-2.82,{
+    y:BEACH_FLOOR,scale:1.54,rot:.30,solid:false,shadow:false,
+  });
+  for(const [i,x,z,rot] of [[0,2.75,-1.95,Math.PI+.32],[1,1.60,-2.39,Math.PI+.10],[2,.60,-2.98,Math.PI-.14]]){
+    c.model('beach:lounger:'+i,loungerVox(i===0?'#c6ae90':'#b9b3a6'),x,z,{
+      y:BEACH_FLOOR+.005,rot,scale:i===0?1.25:1.14,solid:true,shadow:false,
+    });
+    c.blot(x,z,.86,1.62,{y:BEACH_FLOOR+.012,a:.41});
+  }
+  const cabinet=c.prop('cabinet',4.05,-3.0,{y:BEACH_FLOOR,rot:-.21,shadow:false});
+  c.model('beach:desklamp',()=>desklamp({color:'#b67958'}),4.02,-2.75,{
+    y:cabinet.top-.012,rot:-.84,solid:false,shadow:false,
+  });
+  c.model('beach:towels',towels,-2.96,-3.20,{y:BEACH_FLOOR,solid:false,shadow:false});
+  c.prop('bin',4.67,-3.58,{y:BEACH_FLOOR,shadow:false});
+  for(let i=0;i<7;i++){
+    const x=.58+i*.21+(i%2?.12:-.09),z=-.18-i*.237;
+    c.blot(x,z,.13,.25,{y:BEACH_FLOOR+.009,a:.54,rgb:lin('#394446')});
+  }
+}
+
+export function build(c) {
+  const p=beachPlan(c.room),{rt,env}=c;
+  rt.amb=lin('#b7a995',.12);
+  rt.floorY=(x,z)=>beachFloor(p,x,z);
+  rt.headY=(x,z)=>{
+    const inRect=q=>x>=q.x0&&x<=q.x1&&z>=q.z0&&z<=q.z1;
+    return (inRect(p.entry)||inRect(p.exitStairs)||inRect(p.sideStairs)||inRect(p.hole)?c.H:CEILING)-rt.floorY(x,z);
+  };
+  architecture(c,p);
+  const rides=new WeakMap();
+  rt.beachDay={plan:p,sunHour:5,ride:body=>rides.get(body)};
+  const toWorld=(x,z)=>c.toWorld(x,z);
+  const set=(player,x,y,z,pitch,yaw)=>{
+    player.setRidePose({...toWorld(x,z),y:c.room.y+y,yaw,pitch});
+  };
+  const ceilingMouth=evalFlume(p.drop,1);
+  c.zone({ x0:-c.W/2,x1:c.W/2,z0:-c.D/2,z1:c.D/2,stay(dt,me){
+    const player=env.player,actor=me.world;
+    if(!player||player.me!==actor||actor.frozen)return;
+    const ride=rides.get(actor);
+    const yaw=c.room.rot*Math.PI/2;
+    if(ride){
+      ride.elapsed+=dt;
+      if(ride.elapsed<.78){
+        const u=Math.min(1,ride.elapsed/.78);
+        const f=evalFlume(p.drop,.19+.81*u);
+        const mix=Math.min(1,u*4);
+        set(player,ride.x+(f.x-ride.x)*mix,ride.y+(f.y-ride.y)*mix,ride.z+(f.z-ride.z)*mix,f.pitch,yaw);
+      }else{
+        const t=Math.min(1,(ride.elapsed-.78)/.55),sink=t*t;
+        const landingY=BEACH_BED+player.EYE;
+        set(player,ceilingMouth.x+(p.landing.x-ceilingMouth.x)*t,ceilingMouth.y+(landingY-ceilingMouth.y)*sink,
+          ceilingMouth.z+(p.landing.z-ceilingMouth.z)*t,-.65*(1-t),yaw);
+        if(t>=1){
+          const at=toWorld(p.landing.x,p.landing.z);
+          player.setRidePose(null);
+          player.warp(at.x,at.z,yaw);
+          env.play?.('wade',at.x,at.z,7);
+          env.interfere?.(.26);
+          rides.delete(actor);
+        }
+      }
+      return;
+    }
+    if(actor.y-c.room.y<.43||Math.abs(me.x)>.47||me.z>p.front-.42||me.z<p.front-.96)return;
+    const step=c.toLocal(actor.x+actor.wishX,actor.z+actor.wishZ);
+    if(step.z>me.z-.25)return;
+    if(env.grip?.held)env.grip.release();
+    rides.set(actor,{elapsed:0,x:me.x,y:actor.y-c.room.y,z:me.z});
+    env.play?.('rattle',actor.x,actor.z,5);
+    set(player,me.x,actor.y-c.room.y,me.z,actor.pitch,actor.yaw);
+  }});
+}

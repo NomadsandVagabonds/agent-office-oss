@@ -215,8 +215,9 @@ const DECK1 = [
 // (an entry with `on: false` has been retired: it is not in the deck, and nothing else needs to know)
 export const DECK = [...DECK1, ...MORE_DECK].filter((a) => a.on !== false);
 export const ARCHETYPES = Object.fromEntries(DECK.map((a) => [a.id, a]));
-const PAIR_LEADS = new Map(DECK.filter(a => a.adjoins).map(a => [a.adjoins, a]));
-export const encounterLead = id => PAIR_LEADS.get(id) || ARCHETYPES[id];
+const adjoining = a => typeof a.adjoins === 'string' ? [{ id: a.adjoins, side: 'back' }] : a.adjoins || [];
+const ENCOUNTER_LEADS = new Map(DECK.flatMap(a => adjoining(a).map(({ id }) => [id, a])));
+export const encounterLead = id => ENCOUNTER_LEADS.get(id) || ARCHETYPES[id];
 
 // Nothing down here is ever explained, so the only teacher is the order things are met in. A deck entry says what its
 // room is the first place to learn (`teaches`: one thing, at most) and what it takes for granted (`needs`); the visit's
@@ -409,6 +410,24 @@ function build(R, o, opt) {
     const v = worldSide(room, local) % 2 === 0 ? p.x : p.z;
     return { from: v - dw / 2, to: v + dw / 2 };
   }
+  // On the fork, both destination rooms share the lead's back wall line.
+  // Claim the return corridor in a single placement, with a door at each end.
+  function joinBranches(lead, branches) {
+    const back = worldSide(lead, 'back'), alongX = back % 2 === 0;
+    const coord = alongX ? 'x' : 'z', span = alongX ? 'w' : 'd';
+    const face = alongX ? lead.z + (back === 0 ? lead.d : 0) : lead.x + (back === 1 ? lead.w : 0);
+    const lo = Math.min(...branches.map(r => r[coord])), hi = Math.max(...branches.map(r => r[coord] + r[span]));
+    const across = hi - lo, depth = 3, beyond = face - (back >= 2 ? depth : 0);
+    const [x, z, w, d] = alongX ? [lo, beyond, across, depth] : [beyond, lo, depth, across];
+    if (!fits(x, z, w, d)) return null;
+    const hall = addRoom({ kind: 'plain', H: WALL_H }, x, z, w, d, 0);
+    hall.y = lead.y;
+    for (const r of branches) {
+      const mid = r[coord] + r[span] / 2;
+      addLink(r, hall, alongX ? 'z' : 'x', face, mid - .9, mid + .9);
+    }
+    return hall;
+  }
 
   /* the room you land in */
   const start = addRoom({ kind: 'start' }, -3, -3, R.int(5, 7), R.int(5, 7), 0);
@@ -503,18 +522,24 @@ function build(R, o, opt) {
         if (!(first && byStart(arch)) && R.chance(0.18)) step(hub, room, R.pick([2, 4, 4]));
         const placed = [room];
         if (arch.adjoins) {
-          const next = ARCHETYPES[arch.adjoins];
-          const companion = attach(room, worldSide(room, 'back'), {
-            kind: 'special', arch: next.id, lw: R.int(...next.w), ld: R.int(...next.d),
-            centred: true, H: R.range(...next.h), fixed: portSpan(room, 'back', 0, 1.8),
-          });
-          if (!companion) { undo(room); continue; }
-          const onward = attach(companion, worldSide(companion, 'back'), {
-            kind: 'plain', lw: 4, ld: 4, H: WALL_H, fixed: portSpan(companion, 'back', 0, 1.8),
-          });
-          if (!onward) { undo(companion); undo(room); continue; }
-          companion.name = next.name;
-          placed.push(companion);
+          const sockets = adjoining(arch);
+          for (const { id, side } of sockets) {
+            const next = ARCHETYPES[id];
+            const companion = attach(room, worldSide(room, side), {
+              kind: 'special', arch: next.id, lw: R.int(...next.w), ld: R.int(...next.d),
+              centred: true, H: R.range(...next.h), fixed: portSpan(room, side, 0, arch.door || 1.8),
+            });
+            if (!companion) break;
+            companion.name = next.name;
+            placed.push(companion);
+          }
+          const companion = placed[1];
+          const onward = placed.length !== sockets.length + 1 ? null
+            : arch.rejoin ? joinBranches(room, placed.slice(1))
+            : attach(companion, worldSide(companion, 'back'), {
+              kind: 'plain', lw: 4, ld: 4, H: WALL_H, fixed: portSpan(companion, 'back', 0, 1.8),
+            });
+          if (!onward) { for (const failed of placed.reverse()) undo(failed); continue; }
           hubs.push(onward);
         }
         hubs.push(...fresh);
