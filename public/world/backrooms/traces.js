@@ -447,6 +447,14 @@ const SKETCH = {
     g.beginPath(); g.moveTo(39, 42); g.lineTo(35, 36); g.moveTo(57, 42); g.lineTo(61, 36); g.stroke();
     g.strokeRect(42, 6, 12, 16);
   },
+  'lane-keeper'(g) {                                                // a cap and goggles at the end of a string of floats; water, crossed-out feet
+    g.strokeRect(67,20,16,20);g.strokeRect(64,15,22,7);
+    for(const x of [69,77])g.strokeRect(x,25,5,5);
+    for(let i=0;i<6;i++){const x=16+i*9,y=54+Math.sin(i)*7;g.strokeRect(x,y,9,7);}
+    g.beginPath();g.moveTo(71,41);g.lineTo(61,51);g.moveTo(72,42);g.lineTo(87,54);g.lineTo(82,62);g.stroke();
+    for(const y of [47,69]){g.beginPath();g.moveTo(7,y);for(let x=10;x<91;x+=7)g.lineTo(x,y+Math.sin(x)*2);g.stroke();}
+    g.beginPath();g.moveTo(16,77);g.lineTo(16,88);g.lineTo(24,88);g.moveTo(31,77);g.lineTo(31,88);g.lineTo(39,88);g.moveTo(11,92);g.lineTo(43,74);g.stroke();
+  },
   unknown(g) { g.beginPath(); g.arc(48, 46, 22, 0.4, 5.6); g.stroke(); g.font = '700 30px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.fillText('?', 48, 58); },
 };
 

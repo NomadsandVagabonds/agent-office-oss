@@ -55,6 +55,8 @@ const [
 ]);
 
 const WATERPARK_ROOMS = [
+  'channel-hall',
+  'nested-thresholds',
   'return-pool',
   'bellmouth-baths',
   'hanging-changing',

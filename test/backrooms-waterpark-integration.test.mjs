@@ -7,7 +7,7 @@ const [{createKit},{buildWorld,loadCatalogue},{generate},{DECK},{toWorld,wallPoi
  import('../public/world/backrooms/kit.js'),import('../public/world/backrooms/world.js'),import('../public/world/backrooms/gen.js'),import('../public/world/backrooms/gen.js'),import('../public/world/backrooms/frame.js'),import('../public/world/backrooms/player.js'),import('../public/vendor/three.module.min.js'),import('../public/world/backrooms/denizens.js')]);
 const draw=new Proxy({}, {get:(_,k)=>k==='measureText'?s=>({width:String(s).length*6}):/Gradient/.test(k)?()=>({addColorStop(){}}):()=>{},set:()=>true});
 const oldDocument=globalThis.document;globalThis.document={createElement:()=>({getContext:()=>draw})};test.after(()=>{globalThis.document=oldDocument;});
-const ids=['hanging-changing','bellmouth-baths','slide-maze','return-pool','wave-pool','lazy-river','deep-end','whirlpool-flume','kiddie-lagoon','locker-showers'];
+const ids=['channel-hall','nested-thresholds','hanging-changing','bellmouth-baths','slide-maze','return-pool','wave-pool','lazy-river','deep-end','whirlpool-flume','kiddie-lagoon','locker-showers'];
 async function fixture(id,rot=0,generated=false){
  const {build}=await import(`../public/world/backrooms/rooms/${id}.js`),defn=DECK.find(a=>a.id===id), kit=createKit(),g=generate('waterpark-integration',{themes:['waterpark']});
  const W=defn.w[rot%2],D=defn.d[rot%2],H=defn.h[rot%2];
@@ -38,6 +38,21 @@ function checkBudget(rt,t){
  assert.ok(cost.meshes<=45&&cost.detailMeshes<=12,`${rt.def?.arch || rt.id}: mesh budget ${JSON.stringify(cost)}`);
  assert.ok(cost.lights<=16,`${rt.def?.arch || rt.id}: light budget ${cost.lights}`);
 }
+test('Lane Keeper: its floating body stays connected at different speeds and frame rates',async t=>{
+ const f=await fixture('channel-hall');t.after(()=>f.dispose());
+ const {rig,state}=f.world.rooms[0].channelHall;
+ const connected=()=>{
+  let previous=rig.head.position;
+  for(const part of rig.parts){
+   const at=part.position,space=Math.hypot(at.x-previous.x,at.z-previous.z);
+   assert.ok(space>.54&&space<.66,`float spacing ${space}`);previous=at;
+  }
+ };
+ connected();
+ for(const [speed,dt]of [[.38,1/60],[1.8,.1],[2.2,1/30]])for(let i=0;i<120;i++){
+  state.z+=speed*dt;rig.update(state,i*dt);connected();
+ }
+});
 for(const id of ids)for(const rot of [0,1])test(`${id}: actual builder, runtime and doorways (${rot})`,async t=>{
  const f=await fixture(id,rot);t.after(()=>f.dispose());assert.deepEqual(f.warnings,[]);
  const rt=f.world.rooms[0];assert.ok(!rt.flat);
@@ -236,4 +251,34 @@ test('occupied lagoon floats kick both legs independently without replacing the 
  assert.ok(legs[0].quaternion.angleTo(legs[1].quaternion)>.02,'feet do not move in unison');
  assert.ok(Math.abs(a.position.y)<.2,'the ring still bobs at the surface');
  assert.equal(f.hits.length,0,'idle animation does not add damage');
+});
+
+for(const rot of [0,1,2,3])test(`Lane Archive: dry circuit and wet plinth recovery (${rot})`,async t=>{
+ const f=await fixture('channel-hall',rot);t.after(()=>f.dispose());const rt=f.world.rooms[0],p=rt.channelHall.plan;
+ // Both dry banks are real reversible paths, including the low vestibules.
+ for(const q of [[0,p.D/2-1.2],[-4.8,p.D/2-1.2],[-4.8,-p.D/2+1.2],[0,-p.D/2+1.2],[4.8,-p.D/2+1.2],[4.8,p.D/2-1.2],[0,p.D/2-1.2]])await walkTo(f,...q);
+ assert.equal(f.hits.length,0,'no dry-route damage');
+ // The same geometry supports either visitor; no local swimmer toggles floorY.
+ const at=toWorld(f.def,0,2);f.player.warp(at.x,at.z);f.tick(30);
+ const before=f.world.floorY(at.x,at.z),other=toWorld(f.def,5,2);f.world.floorY(other.x,other.z);assert.equal(f.world.floorY(at.x,at.z),before);
+ rt.channelHall.state.pump=999;await walkTo(f,0,p.island.z);f.tick(30);
+ assert.ok(Math.abs(f.world.floorY(f.player.me.x,f.player.me.z)-f.def.y+.32)<.001,'optional plinth is dry physical ground');
+ await walkTo(f,4.9,p.island.z);f.tick(30);assert.ok(f.player.me.y-f.def.y>1,'visible stairs climb out');
+ assert.ok(rt.channelHall.cart&&f.world.furniture.includes(rt.channelHall.cart),'cart uses the shared grip');
+});
+for(const rot of [0,1,2,3])test(`Narrowing Bays: crouch route and standing side loop (${rot})`,async t=>{
+ const f=await fixture('nested-thresholds',rot);t.after(()=>f.dispose());const rt=f.world.rooms[0],last=rt.thresholds.frames.at(-1);
+ for(const q of [[0,6],[0,3],[0,-1],[0,last.z]])await walkTo(f,...q);f.tick(60);
+ assert.ok(f.player.me.duck>.4,'last visible frame forces crouching');
+ await walkTo(f,0,-f.def.D/2+1.5);f.tick(60);assert.ok(f.player.me.duck<.1,'head clears the frame');
+ for(const q of [[3.6,-f.def.D/2+1.5],[3.6,f.def.D/2-1.5],[0,f.def.D/2-1.5]]){
+  await walkTo(f,...q);assert.ok(f.player.me.duck<.1,'side route stays standing-height');
+ }
+ assert.equal(f.hits.length,0);
+});
+test('Lane Archive: contact reaches the health hook, followed by a recovery window',async t=>{
+ const f=await fixture('channel-hall');t.after(()=>f.dispose());const rt=f.world.rooms[0],s=rt.channelHall.state;
+ const at=toWorld(f.def,1.2,2);f.player.warp(at.x,at.z);f.tick(30);
+ s.x=1.2;s.z=2.5;s.phase='hunt';s.notice=2;f.tick();assert.equal(f.hits.length,1);
+ f.tick(90);assert.equal(f.hits.length,1,'one room resident cannot hit again during recovery');
 });

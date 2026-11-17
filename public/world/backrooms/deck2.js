@@ -504,6 +504,16 @@ export const MORE_DECK = [
       brokenSide: R.pick([-1, 1]),
     }),
   },
+  // The channel hall and quiet threshold connector extend the review wing.
+  { id: 'channel-hall', name: 'The Lane Archive', landmark: 'stacked shuttered offices over a sunken swimming lane',
+    module: './rooms/channel-hall.js', w: [18,18], d: [26,28], h: [10.6,11], ports: ['back'],
+    resident: 'lane-keeper', caught: 1, fire: 'ignores', items: [],
+    big: true, weight: .85, lights: 'normal', themes: { waterpark: .85, '*': 0 },
+    stash: () => [-.45,-3.2,.45,-2.4], roll: () => ({}) },
+  { id: 'nested-thresholds', name: 'The Narrowing Bays', landmark: 'changing-room frames that grow smaller along a wet corridor',
+    module: './rooms/nested-thresholds.js', w: [10,10], d: [18,20], h: [3.4,3.6], ports: ['back'],
+    weight: 1.5, lights: 'normal', themes: { waterpark: 1.5, '*': 0 },
+    stash: r => [3.3,-r.D/2+1.2,4,-r.D/2+1.9], roll: () => ({}) },
   // Kept out of ordinary visits until the waterpark team's integration pass.
   { id: 'hanging-changing', name: 'Hanging Changing Rooms', landmark: 'changing partitions suspended above narrow channels',
     module: './rooms/hanging-changing.js', w: [20,20], d: [26,26], h: [6.2,6.6], ports: ['back'],

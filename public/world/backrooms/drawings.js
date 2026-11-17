@@ -10,6 +10,10 @@
 // (cast.js `rule`): a test holds them apart. Each creature has a few
 // versions; every one of them stops before it has finished.
 export const WARNINGS = Object.freeze({
+  'lane-keeper': [
+    ['THE ROPE HAS A HEAD', 'I STOPPED MOVING AND', 'IT WENT'],
+    ['IT WENT TO THE PUMP', 'KEEP YOUR FEET STILL', 'UNTIL THE'],
+  ],
   pirate: [
     ['THE ONE IN THE HAT', 'ONLY MOVES WHEN YOU', 'ARE NOT LOOKING. SO'],
     ['HAT MAN: IF HE CANT', 'SEE YOU HE DOESNT', 'KNOW WHERE YOU'],
