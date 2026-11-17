@@ -7,7 +7,7 @@ import { card, wallVox } from './bits.js';
 import { LIFT, surroundVox, liftLeafVox, callPlateVox } from './lift.model.js';
 import { cutoutArt } from './cutout.js';
 import { MORE3 } from './rooms4.js';
-import { LIFT_ODDS, liftPress, liftCompany } from './rooms/lift/rule.js';
+import { LIFT_CAR, LIFT_ODDS, liftPress, liftCompany } from './rooms/lift/rule.js';
 
 /**
  * A lift lobby. The doors open, and sometimes there is a car: the front stands out from the wall as a shaft (CD deep, to the
@@ -17,7 +17,7 @@ import { LIFT_ODDS, liftPress, liftCompany } from './rooms/lift/rule.js';
 function lift(c) {
   const { W, D, H, R, params: p } = c, kit = c.kit;
   c.shell({ sockets: false });
-  const steel = lin(p.doors), dark = steel.map((v) => v * 0.55), OW = 1.5, OH = 2.02, CD = 1.5, F = CD;      // F: how far out of the wall the doors are
+  const steel = lin(p.doors), dark = steel.map((v) => v * 0.55), OW = 1.5, OH = 2.02, CD = LIFT_CAR, F = CD;      // F: how far out of the wall the doors are
   const wood = lin('#8a7552'), lining = lin('#9a9078'), floorC = lin('#3a3730');
   // the surround is sculpted (lift.model.js): panels of brushed steel, an architrave stepping into the opening, a sill
   const SIDE = 0.9, HEAD = 0.34, colour = p.doors;

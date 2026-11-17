@@ -59,3 +59,19 @@ test('a creature is one of the two that the cast can put there', () => {
 test('the odds can be set by a room that wants none: a lift that is never a car', () => {
   assert.ok(sample(500, { ...BOTH, odds: { ...LIFT_ODDS, car: 0 } }).every((r) => r.kind !== 'car'));
 });
+
+test('nothing the building hangs or leaves is ever in a lift\'s car: the coin place and every coin spot keep out of it', async () => {
+  const { generate, coinSpots, STASH } = await import('../public/world/backrooms/gen.js');
+  const { LIFT_CAR } = await import('../public/world/backrooms/rooms/lift/rule.js');
+  let seen = 0;
+  for (let i = 0; i < 60 && seen < 12; i++) {
+    const level = generate(`lift-coins-${i}`, { name: 'Robin', projects: ['Webstore'], agents: ['Ivory Marten', 'Amber Vireo'], tasks: ['x'], only: 'lift' });
+    for (const r of level.rooms.filter((q) => q.arch === 'lift')) {
+      seen++;
+      const front = -r.D / 2 + LIFT_CAR;
+      for (const side of [-1, 1]) { const [, z0, , z1] = STASH.lift(r, side); assert.ok(z0 >= front && z1 <= r.D / 2, `the place for a coin is in front of the car (${z0}..${z1}, car to ${front})`); }
+      assert.ok(coinSpots(r).every((s) => s.z >= front), 'and so is every spot a coin could hang at');
+    }
+  }
+  assert.ok(seen >= 6, 'enough lifts to mean something');
+});

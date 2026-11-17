@@ -27,6 +27,7 @@ import { T, WALL_H, DOOR_H, TILE, RISE, RUN, SIDES, toWorld, toLocal, wallLength
 import { fill, wrap } from './words.js';
 import { warningFor } from './drawings.js';
 import { MORE_DECK, MORE_STASH } from './deck2.js';
+import { LIFT_CAR } from './rooms/lift/rule.js';
 import { themeOf, THEMES, atHome } from './themes.js';
 import { thinPlace, decoyMarks, TAPE_LABELS, PRINT_CHANCE } from './marks.js';
 import { goesDown } from './seam.js';
@@ -1192,7 +1193,7 @@ const STASH1 = {
     : about(s * (r.W / 2 - 0.95), -r.D / 2 + 0.95, 0.2)),                                       // (a ring) outside it, in a far corner
   'wet-floor': (r) => about(r.params.puddle[0] * r.W, r.params.puddle[1] * r.D, 0.25),          // in the one wet patch
   'hall-of-fame': (r) => (r.doors.some((d) => d.side === 'back') ? [-0.3, -r.D / 2 + 3.2, 0.3, -r.D / 2 + 4.4] : [-0.3, -r.D / 2 + 1.6, 0.3, -r.D / 2 + 2.6]),   // the far end, by the last frame
-  lift: (r) => [-0.3, -r.D / 2 + 1.85, 0.3, r.D / 2 - 1.6],                                     // on the mat, waiting for the lift: past the car (the 1.5 m behind its doors: rooms3.js lift), and a good pace short of the doorway
+  lift: (r) => [-0.3, -r.D / 2 + LIFT_CAR + 0.35, 0.3, r.D / 2 - 1.6],                                     // on the mat, waiting for the lift: past the car (the 1.5 m behind its doors: rooms3.js lift), and a good pace short of the doorway
   museum: (r, s) => (s > 0 ? [2.1, 2.35, r.W / 2 - 0.7, r.D / 2 - 0.7] : [-r.W / 2 + 0.7, 2.35, -2.1, r.D / 2 - 0.7]),   // a corner by the door: behind you while you look at the exhibits
   photo: (r) => about(0, -r.D / 2 + 1.3, 0.08),                                                 // on the cross of tape: your place in the photograph
   nested: (r, s) => { const d = [[0, 1], [1, 0], [0, -1], [-1, 0]][(r.params.turn + 2) % 4];     // in the room inside the room, round the side its own little room opens on
@@ -1213,6 +1214,7 @@ const coinClear = (room) => ({ doors: room.doors.map((d) => wallPoint(room, d.si
 export function coinFits(room, x, z, r = COIN_R, at = coinClear(room)) {
   if (Math.abs(x) > room.W / 2 - r - 0.2 || Math.abs(z) > room.D / 2 - r - 0.2 || !fitsAt(room, x, z, r + 0.1)) return false;
   for (const p of at.doors) if (Math.hypot(x - p.x, z - p.z) < 1.25) return false;
+  if (room.arch === 'lift' && z < -room.D / 2 + LIFT_CAR + r + 0.1) return false;                // (the lift's car, and the doorway of it: only what the lift gives is ever in there)
   for (const q of room.pillars || []) if (Math.abs(x - q.x) < q.w / 2 + r + 0.1 && Math.abs(z - q.z) < q.d / 2 + r + 0.1) return false;
   for (const b of room.blocks || []) if (x > b.x0 - r - 0.1 && x < b.x1 + r + 0.1 && z > b.z0 - r - 0.1 && z < b.z1 + r + 0.1) return false;
   for (const s of at.stairs) if (x > s.x0 - r && x < s.x1 + r && z > s.z0 - r && z < s.z1 + r) return false;
