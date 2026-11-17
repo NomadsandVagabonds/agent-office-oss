@@ -7,6 +7,7 @@ import { Batch, lin, atlas, drawText, ticks, smooth, WHITE } from './kit.js';
 import { TILE } from './gen.js';
 import { P, clamp, framed, card, doorLeaf, doorFrame, wetSign } from './bits.js';
 import { MORE2 } from './rooms3.js';
+import { vendingGear } from './vending-machine.js';
 
 /** A pool, full to the brim with stress balls (or packing peanuts, or shredded paper). You can wade in. */
 function stressPool(c) {
@@ -272,45 +273,15 @@ function tinyDoor(c) {
   });
 }
 
-/** A dark room lit by vending machines. Every slot of every machine holds the same thing. */
+/** A dark room lit by vending machines. Every machine is the same, and sells (vending-machine.js). */
 function vending(c) {
-  const { W, D, R, params: p } = c, kit = c.kit;
+  const { W, D, R, params: p } = c;
   c.shell();
   c.rt.noTorch = true; c.rt.level = Math.max(c.rt.level, 0.13);
-  const front = kit.tex.custom('vend' + p.item, 64, 116, (g, w, h) => {
-    P(g, '#15171c', 0, 0, w, h); P(g, p.color, 2, 2, w - 4, 20);
-    drawText(g, p.item.length > 10 ? p.item.split(/ (?=[^ ]*$)/) : [p.item], 2, 2, w - 4, 20, { color: '#fffbe8', size: 9, pad: 4, leading: 1.05 });
-    P(g, '#e9eef0', 4, 26, 40, 62);
-    for (let r = 0; r < 5; r++) { P(g, '#9aa3a8', 4, 37 + r * 12, 40, 2); for (let k = 0; k < 4; k++) { P(g, p.color, 7 + k * 10, 28 + r * 12, 6, 9); P(g, '#ffffff', 8 + k * 10, 29 + r * 12, 1, 6); } }
-    P(g, '#0a0b0d', 47, 26, 13, 10); drawText(g, [p.price], 47, 26, 13, 10, { color: '#ff5a3c', size: 6, pad: 1 });
-    for (let r = 0; r < 4; r++) for (let k = 0; k < 3; k++) P(g, '#c8ccd0', 48 + k * 4, 40 + r * 4, 3, 3);
-    P(g, '#0a0b0d', 50, 60, 7, 2); P(g, '#3a3f4a', 48, 66, 11, 8);
-    P(g, '#0a0b0d', 8, 94, 36, 14); P(g, '#2a2d34', 10, 96, 32, 4); drawText(g, ['PUSH'], 8, 101, 36, 7, { color: '#8a9098', size: 5, pad: 1 });
-  }, { clamp: true });
-  const body = lin('#2b2f38'), glowB = c.shining('vendfront', front, 1.25), MW = 0.96, MH = 1.78, MD = 0.7;
   const sides = p.both ? [-1, 1] : [R.pick([-1, 1])];
   const n = Math.max(2, Math.floor((D - 2.4) / 1.12)), sulk = R.chance(0.5) ? R.int(1, n - 1) : -1;
-  const bought = [], itemGeo = kit.own(new THREE.BoxGeometry(0.07, 0.09, 0.07)), itemMat = kit.own(new THREE.MeshBasicMaterial({ color: p.color }));
-  itemMat.color.multiplyScalar(0.5);
-  let count = 0;
-  for (const sx of sides) for (let i = 0; i < n; i++, count++) {
-    const z = D / 2 - 1.5 - i * 1.12, xw = sx * W / 2, xf = xw - sx * MD, turned = sx === sides[0] && i === sulk;
-    c.flat.box(Math.min(xw, xf), 0, z - MW / 2, Math.max(xw, xf), MH, z + MW / 2, body, { skip: '-y' });
-    c.solid(Math.min(xw, xf), z - MW / 2, Math.max(xw, xf), z + MW / 2, { tall: true });
-    c.shadow((xw + xf) / 2, z, MD, MW, 0.5);
-    if (turned) { for (let v = 0; v < 6; v++) c.flat.box(xf - sx * 0.004 - 0.004, 0.5 + v * 0.07, z - 0.3, xf - sx * 0.004 + 0.004, 0.53 + v * 0.07, z + 0.3, [0.05, 0.05, 0.06]); continue; }
-    const x = xf - sx * 0.006, a = sx < 0 ? z + MW / 2 : z - MW / 2, b = sx < 0 ? z - MW / 2 : z + MW / 2;
-    glowB.quad([x, 0.02, a], [x, 0.02, b], [x, MH - 0.02, b], [x, MH - 0.02, a]);
-    c.light(xf - sx * 0.45, 1.05, z, p.glow, 0.42, { k: 1.1, far: 5.5, wrap: 0.5 });
-    c.use({ x: xf - sx * 0.3, z, r: 1.15, label: `buy ${p.item.toLowerCase()}`, use: () => {
-      const w = c.toWorld(xf, z); c.env.play('thunk', w.x, w.z, 5);
-      if (bought.length >= 24) return;
-      const item = new THREE.Mesh(itemGeo, itemMat), k = bought.length;
-      item.position.set(xf - sx * (0.16 + (k % 4) * 0.11 + Math.random() * 0.03), 0.045, z + ((k * 7) % 5 - 2) * 0.13);
-      item.rotation.y = k * 1.3;
-      c.add(item); bought.push(item);
-    } });
-  }
+  const gear = vendingGear(c, sides.length * n - (sulk >= 0 ? 1 : 0));
+  for (const sx of sides) for (let i = 0; i < n; i++) gear.add({ sx, z: D / 2 - 1.5 - i * 1.12, turned: sx === sides[0] && i === sulk });
 }
 
 /** Office plants, growing the only way left to them: down through the ceiling. */

@@ -17,6 +17,7 @@ import { lawn, standing, THINGS } from './suburb.js';
 import { poolroom, poolStanding, POOL_THINGS } from './waterpark.js';
 import { concourse } from './mall.js';
 import { forestRoom, forestStanding, FOREST_THINGS } from './forest.js';
+import { siteOf, standMachine } from './vending-machine.js';
 
 /* ---- the plain rooms, and what somebody left in them ------------------------------- */
 
@@ -276,7 +277,9 @@ function plain(c) {
   if (c.level.theme === 'waterpark') poolroom(c);
   if (c.level.theme === 'suburb') lawn(c);
   if (c.level.theme === 'mall') concourse(c);
+  if (c.level.theme === 'forest' && siteOf(c.level).has(room.id)) standMachine(c);          // (the moss would take every wall: the machine first)
   if (c.level.theme === 'forest') forestRoom(c);          // the offsite reserve: carpet & outlets round the moss, gravel trail, spotter, and woodland wrongness
+  if (siteOf(c.level).has(room.id)) standMachine(c);          // (a floor with no Refreshments room: its one machine; vending-machine.js)
 }
 
 /** Where you land: a hole in the ceiling above you, and the tiles you brought down. */
