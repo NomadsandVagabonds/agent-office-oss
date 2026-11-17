@@ -128,10 +128,10 @@ export function build(c) {
 
   /* the detail: what stands proud and gives the place its depth. In a batch of its own (atrium:detail) so a low setting can leave it out;
      nothing in it is walked into, stood on or read */
-  const det = c.mapped('atrium:detail', kit.tex.white()), steel = [0.42, 0.4, 0.44], brassD = [0.66, 0.52, 0.2], cream = [0.86, 0.82, 0.74];
+  const det = c.mapped('atrium:detail', kit.tex.white(), { detail: true }), steel = [0.42, 0.4, 0.44], brassD = [0.66, 0.52, 0.2], cream = [0.86, 0.82, 0.74];
   // the gallery's underside: a soffit with a fascia, and downlights let into it, every 1.6 m, lit
   det.box(-W / 2, G - 0.36, zE - 0.05, W / 2, G - 0.22, zE + 0.1, [0.2, 0.19, 0.22]);
-  const cans = c.shining('atrium:cans', kit.tex.white(), 1.8, [1, 0.92, 0.78]);
+  const cans = c.shining('atrium:cans', kit.tex.white(), 1.8, [1, 0.92, 0.78], { detail: true });
   for (let x = -W / 2 + 0.8; x < W / 2 - 0.4; x += 1.6) { if (Math.abs(x - xUp) < half + 0.2 || Math.abs(x - xDn) < half + 0.2) continue; const z = zE - 0.7;
     det.box(x - 0.13, G - 0.24, z - 0.13, x + 0.13, G - 0.22, z + 0.13, steel); cans.box(x - 0.08, G - 0.245, z - 0.08, x + 0.08, G - 0.24, z + 0.08, [1, 1, 1]); }
   // the gallery's columns: round, clad in brass bands, with a capital and a plinth; real, so they are walked round
