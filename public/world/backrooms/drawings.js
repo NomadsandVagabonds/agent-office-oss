@@ -71,6 +71,11 @@ export const WARNINGS = Object.freeze({
     ['IN DOORWAYS IT FOLDS', 'UP AND DRAGS. SLOW', 'THEN. RUN THEN. IN', 'THE BIG ROOMS IT IS'],
     ['LIFT THE BOARD WHILE', 'IT IS ON IT. IT WENT', 'DOWN AND I NEVER', 'HEARD IT LAND AND'],
   ],
+  dummies: [
+    ['DONT GO BACK THE', 'WAY YOU CAME. THERE', 'WAS ONE MORE EVERY', 'TIME AND IT WAS ME'],
+    ['THEY STAND WHERE', 'YOU LEFT FROM. SAME', 'WAY ROUND. I WENT', 'BETWEEN TWO AND'],
+    ['A SHOVE KNOCKS ONE', 'BACK. IT STAYS. DO', 'NOT SQUEEZE PAST', 'THEM. GO ROUND OR'],
+  ],
   // the residents of rooms (deck2.js `resident`)
   'trunk-line': [
     ['DONT WALK UNDER THE', 'CABLES. GO ROUND.', 'IT DROPPED ON'],

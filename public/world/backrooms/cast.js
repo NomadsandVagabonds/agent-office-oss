@@ -89,6 +89,11 @@ export const ALL_CAST = Object.freeze([
   Object.freeze({ id: 'carried-interest', name: 'Carried interest',
     rule: 'Somebody senior, too big to walk, carried along on ten small things. It comes for you slowly, and is set down on you. Tread on what carries it and it is on the floor until more grow — but it howls when it is dropped, and the camera does not like the howl.',
     disposition: 'hunts', home: 'roams', weight: 1, deep: true, heavy: true, needs: [], items: ['paper', 'lighter', 'battery'], fire: 'fears', caught: { hurt: 2 } }),
+  // (withTheme: on a part if and only if that part is that kind of floor; never dealt by weight. The shopping centre's own)
+  Object.freeze({ id: 'dummies', name: 'The dummies',
+    rule: 'Every time you come back into a room, one more of them is stood where you stood when you last went out of it.',
+    disposition: 'hunts', home: 'roams', weight: 0, withTheme: 'mall', needs: [], items: [], fire: 'ignores', caught: { hurt: 1 },
+    themes: { yellow: 0, archive: 0, night: 0, fitout: 0, exec: 0, suburb: 0, mall: 1 } }),
   Object.freeze({ id: 'other-door', name: 'The other door',
     rule: 'One pair of doors is not doors: it shivers, now and then, and that is all that gives it away. Try it, walk into it or stand in front of it too long, and it opens on nothing and takes hold of you.',
     disposition: 'hunts', home: 'room', weight: 1, needs: ['doors'], items: ['paper', 'lighter'], fire: 'fears', room: { w: 4, d: 4, wall: 2.3, clear: 1.8 }, caught: { hurt: 2 } }),
@@ -105,7 +110,7 @@ export const SUPPORTING = 2;
  */
 export function whoIsDown(seed, cast = CAST) {
   const R = makeRng(`cast:${seed}`), out = cast.filter((m) => m.always).map((m) => m.id);
-  const pool = cast.filter((m) => !m.always && !m.withRoom && m.weight > 0);          // (one that comes with a room is not dealt: withRoomFor)
+  const pool = cast.filter((m) => !m.always && !m.withRoom && !m.withTheme && m.weight > 0);          // (one that comes with a room is not dealt: withRoomFor)
   for (let n = Math.min(SUPPORTING, pool.length); n > 0 && pool.length; n--) {
     const m = R.weighted(pool, (k) => k.weight);
     out.push(m.id); pool.splice(pool.indexOf(m), 1);
@@ -181,7 +186,7 @@ export function hauntsFor(level, ids, deck = ARCHETYPES, cast = CAST) {
   const rooms = (level?.rooms || []).filter((r) => r.arch && Number.isInteger(deck[r.arch]?.haunt) && deck[r.arch].haunt > 0 && r.kind !== 'start' && r.kind !== 'exit');
   if (!rooms.length) return out;
   const R = makeRng(`${level.seed}/haunt`), fromStart = level.start ? roomDistances(level, level.start.room) : new Map();
-  const free = R.shuffle(ids.filter((id, i) => ids.indexOf(id) === i).map((id) => cast.find((m) => m.id === id)).filter((m) => m && m.home === 'roams' && !m.always && !m.withRoom).map((m) => m.id));
+  const free = R.shuffle(ids.filter((id, i) => ids.indexOf(id) === i).map((id) => cast.find((m) => m.id === id)).filter((m) => m && m.home === 'roams' && !m.always && !m.withRoom && !m.withTheme).map((m) => m.id));
   for (const r of rooms) for (let n = Math.min(HAUNT_MOST, deck[r.arch].haunt); n > 0 && free.length; n--) {
     const i = free.findIndex(id => cast.find(m => m.id === id)?.disposition !== 'hunts' || (fromStart.get(r.id) ?? 0) >= 2);
     if (i < 0) break; out.set(free.splice(i, 1)[0], r.id);
@@ -200,7 +205,8 @@ export const LAIR = Object.freeze([2, 4]);
  */
 export function withRoomFor(level, cast = CAST) {
   const here = new Set((level?.rooms || []).map((r) => r.arch).filter(Boolean));
-  return cast.filter((m) => m.withRoom && !m.always && here.has(m.withRoom)).map((m) => m.id);
+  // …and one that comes with a kind of floor (a cast line with `withTheme: '<theme id>'`): on a part if and only if it is that kind
+  return cast.filter((m) => !m.always && ((m.withRoom && here.has(m.withRoom)) || (m.withTheme && level?.theme === m.withTheme))).map((m) => m.id);
 }
 
 /**
