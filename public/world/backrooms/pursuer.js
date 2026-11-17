@@ -26,6 +26,8 @@ export function createStalkers(env, options = {}) {
   const hiddenAt = (x, z, r = 0.6) => !env.sees(x, z, { radius: r, margin: 0.2, far: 40 });
   const drawn = (a) => { const rt = W().roomAt(a.x, a.z); return !!rt && rt.group.visible; };
   let follower = null, taker = null;                    // (taker: whoever's hit was the last heart — index.js asks, for the last shot)
+  /** Where a member of the cast says it is (its at(): for which way a blow of its throws the visitor), or null. */
+  const whereIs = (k) => { try { return k.it?.at?.() ?? null; } catch { return null; } };
 
   /* ---- who is on this floor ---------------------------------------------------------------- */
 
@@ -65,6 +67,7 @@ export function createStalkers(env, options = {}) {
      * A hit that comes from in front in the moment after a shove does not land (shove.rule.js): { landed: false, blocked: true } —
      * unless it is one of the heavy ones (`heavy` on its line of cast.js). `from`: where the hit is coming from, for one that
      * is more than one body; otherwise it is wherever the creature says it is (at()).
+     * A hit that does land and is survived throws the visitor back from the same place (player.js knock).
      */
     hurt(n = 1, from = null) {
       // (env.blocked is the level's: index.js. A floor without it — a test's, a review's — has no shove, and every hit lands)
@@ -78,6 +81,7 @@ export function createStalkers(env, options = {}) {
       if (hit) {
         const ended = !!hit.dead && !options.hasSurvivor?.();
         if (!ended) taker = before;
+        if (hit.ok && !hit.dead) env.player?.knock?.(from ?? whereIs(k));
         return { landed: !!hit.ok, dead: !!hit.dead, ended };
       }
       if (member.disposition === 'hunts') { env.end('caught'); return { landed: true, dead: true, ended: true }; }

@@ -88,7 +88,7 @@ test('the heavy ones are not moved and not turned aside; nothing dies of a shove
     assert.ok(!/c\.hurt|\.dead = true|dissolv|env\.end/.test(body), `a shove ends nothing of ${id}`);
   }
   // the more-than-one-bodied say where the hit is coming from
-  assert.match(read('cast/toner.js'), /c\.hurt\(TONER\.hitDamage, walker\)/); assert.match(read('cast/mother.js'), /c\.hurt\(WORM\.hurts, w\)/);
+  assert.match(read('cast/toner.js'), /c\.hurt\(TONER\.hitDamage, walker\)/); assert.match(read('cast/mother.js'), /c\.hurt\(WORM\.hurts, \{ x: a\.fx, z: a\.fz \}\)/);
 });
 
 test('a click is the scissors if they are in the hand and a shove if not; a thumb\'s hand shoves when there is nothing to use', () => {

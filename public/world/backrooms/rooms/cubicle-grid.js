@@ -557,7 +557,7 @@ export function build(c) {
           c.env.interfere(0.72);
           c.env.red?.(0.65);
           c.env.play('static', denizen.x, denizen.z, 8);
-          if (c.env.health) c.env.health.damage(GRID.hurts);
+          if (c.env.health) { const hit = c.env.health.damage(GRID.hurts); if (hit?.ok && !hit.dead) c.env.player?.knock?.(denizen); }
           else c.env.end?.('caught');
         }
       },
