@@ -819,7 +819,7 @@ export function build(c) {
           c.env.play('dissolve', denizen.x, denizen.z, 8);
           c.env.interfere(0.95);
           if (!known) { known = true; c.met('plenum-toner'); }
-          const hit = c.hurt(PLENUM.hurt);
+          const hit = c.hurt(PLENUM.hurt, denizen);
           if (!hit.ended) {
             tState = releasePlenumToner(tState);
             if (hit.landed) {
