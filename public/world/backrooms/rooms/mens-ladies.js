@@ -21,7 +21,7 @@ import { dummyVox, wallFace, wallBox } from '../mall.js';
 import { VOXEL as S } from '../../vox/vox.js';
 
 // tunnel: the fitting rooms down the middle (frames, how each shrinks, how far apart) · deck: the office, up three steps · aisle: kept clear down the middle
-export const STORE = Object.freeze({ frames: 6, shrink: 0.8, gap: 0.78, frameW: 2.5, frameH: 2.75, deck: 0.51, deckW: 3.4, deckD: 3.0, step: 0.3, aisle: 1.3, rail: 2.0, jacket: 0.085, jackets: 170 });   // jackets: how many the rails hold in all (what the budget for triangles allows)
+export const STORE = Object.freeze({ frames: 6, shrink: 0.8, gap: 0.78, frameW: 2.5, frameH: 2.75, deck: 0.51, deckW: 3.4, deckD: 3.0, step: 0.3, aisle: 1.3, rail: 2.0, jacket: 0.085, jackets: 175 });   // jackets: how many the rails hold in all (what the budget for triangles allows)
 
 /* the room's palette: dusty rose, beige, taupe, cream, a grey-green wall; pink for the fitting rooms; nothing that is not one of these */
 export const PAL = Object.freeze({
@@ -139,56 +139,87 @@ export function build(c) {
     c.leave('snack', dx + 0.35, dz + 0.1, { y: y + 0.78 });
   }
 
-  /* 3 · the rails: rows across the room either side of the way down the middle; jackets on them in the room's colours, a few hung the other way */
+  /* 3 · what stands on the floor. First the things the room is built round (the rail going into the floor, the planter, two plinths,
+     a half-wall, two four-way racks), each keeping its ground; then rails, in rows, in what room is left */
   const jk = (ci) => 'store:jacket:' + ci, made = new Map(), jacketOf = (ci, back) => { const k = ci + (back ? 'b' : ''); if (!made.has(k)) { const v = jacketVox(PAL.cloth[ci])(); made.set(k, back ? v.turned(2) : v); } return made.get(k); };
-  const zFront = D / 2 - 1.4, zRail0 = frames[0].z + 1.6, rails = [];
+  const zFront = D / 2 - 1.4, zRail0 = frames[0].z + 1.6, rails = [], half = K.aisle / 2 + 0.35, cream = rgb('#d8ccb8');
   let jackets = K.jackets;
-  const railAt = (xa, xb, z, y = 1.55, fall = 0) => {
-    if (Math.floor((xb - xa - 0.16) / K.jacket) > jackets) return;                                                                                               // fall: how far it has gone down by its far end
-    const feet = [xa, xb], top = (x) => y - fall * ((x - xa) / (xb - xa));
-    for (const xe of feet) { const yt = top(xe); if (yt > 0.2) { flat.box(xe - 0.022, 0, z - 0.022, xe + 0.022, yt, z + 0.022, rack); flat.box(xe - 0.03, 0, z - 0.28, xe + 0.03, 0.035, z + 0.28, rack); flat.box(xe - 0.035, 0.035, z - 0.03, xe + 0.035, 0.07, z + 0.03, rack); } }
-    sheet(flat, [xa, top(xa) - 0.02, z], [xb, top(xb) - 0.02, z], [xb, top(xb) + 0.02, z], [xa, top(xa) + 0.02, z], 4, 1, null, rack);
-    sheet(flat, [xa, top(xa) + 0.02, z - 0.015], [xb, top(xb) + 0.02, z - 0.015], [xb, top(xb) + 0.02, z + 0.015], [xa, top(xa) + 0.02, z + 0.015], 4, 1, null, rack);
-    // the jackets on it, as one: packed, so that what is between them is not drawn
-    const n = Math.floor((xb - xa - 0.16) / K.jacket), seed = rails.length * 7 + 3; jackets -= n;
-    c.model('store:rail:' + rails.length + ':' + n, () => { const v = new Vox(); for (let i = 0; i < n; i++) { const ci = (i * 3 + seed + (i % 5 === 2 ? 2 : 0)) % PAL.cloth.length, j = jacketOf(ci, i % 7 === 3); v.stamp(j, Math.round(i * K.jacket / S), 0, 0, false); } return v; },
-      xa + 0.1, z, { y: y - 0.83, solid: false, shadow: false });
-    if (!fall) c.solid(xa - 0.05, z - 0.3, xb + 0.05, z + 0.3, { tall: false });
-    rails.push({ xa, xb, z });
-  };
-  const half = K.aisle / 2 + 0.35;
-  for (let z = zRail0; z < zFront; z += 1.75) for (const s of [-1, 1]) {
-    const inner = s * half, outer = s * (W / 2 - 1.2), xa = Math.min(inner, outer), xb = Math.max(inner, outer); if (xb - xa < 1.2) continue;
-    // in short lengths, with gaps to get between them
-    for (let x = xa; x + 1.2 <= xb; x += K.rail + 0.9) { const x1 = Math.min(xb, x + K.rail); if (deck && z < deck.z1 + 3 * K.step + 0.8 && x1 > deck.x0 - 0.3 && x < deck.x1 + 0.3) continue;
-      if (![x, (x + x1) / 2, x1].every((q) => c.clear(q, z, 0.32))) continue;
-      railAt(x, x1, z); }
-  }
-  // one rail, along the way down the middle, that goes on into the floor: its jackets with it; the carpet torn round where it goes in
-  { const s = R.pick([-1, 1]), x = s * (K.aisle / 2 + 0.05), za = zFront - 1.9, zb = za - 4.2;
-    if ([za, (za + zb) / 2].every((z) => c.clear(x, z, 0.25))) {
-      const y0 = 1.55, slope = 1.55 / 2.6, yAt = (z) => y0 - Math.max(0, (za - 1.4 - z)) * slope, hole = za - 1.4 - y0 / slope;
+  const fits = (x0, z0, x1, z1, r = 0.22) => [[x0, z0], [x1, z0], [x0, z1], [x1, z1], [(x0 + x1) / 2, (z0 + z1) / 2]].every(([x, z]) => c.clear(x, z, r));
+  const keep = (x0, z0, x1, z1) => { for (let x = x0; x <= x1 + 1e-6; x += Math.max(0.3, (x1 - x0) / Math.ceil((x1 - x0) / 0.5))) for (let z = z0; z <= z1 + 1e-6; z += Math.max(0.3, (z1 - z0) / Math.ceil((z1 - z0) / 0.5))) c.reserve(x, z, 0.3); };
+  const box4 = (x0, z0, x1, z1, y0, y1, col, b = flat) => b.box(x0, y0, z0, x1, y1, z1, col);
+  const plinth = (x, z, w, d, h) => { box4(x - w, z - d, x + w, z + d, 0, h, cream); box4(x - w - 0.02, z - d - 0.02, x + w + 0.02, z + d + 0.02, h, h + 0.04, wood); det.box(x - w - 0.005, 0.0, z - d - 0.005, x + w + 0.005, 0.08, z + d + 0.005, rgb('#5a4048')); c.solid(x - w - 0.03, z - d - 0.03, x + w + 0.03, z + d + 0.03, { tall: false }); keep(x - w, z - d, x + w, z + d); };
+
+  // (a) one rail, along the way down the middle, that goes on into the floor, steeply, with its jackets; the carpet torn open where it goes in
+  { const s = R.pick([-1, 1]), x = s * (K.aisle / 2 + 0.05), za = zFront - 1.7, run = 0.7, drop = 1.25;                                    // flat for `run`, then down 1.55 m in `drop`
+    const hole = za - run - drop, y0 = 1.55, yAt = (z) => y0 - Math.max(0, Math.min(1.7, (za - run - z) / drop)) * y0;
+    if (fits(x - 0.3, hole - 0.6, x + 0.3, za + 0.05)) {
       flat.box(x - 0.022, 0, za - 0.022, x + 0.022, y0, za + 0.022, rack); flat.box(x - 0.28, 0, za - 0.03, x + 0.28, 0.035, za + 0.03, rack);
-      for (let z = za; z > hole - 0.6; z -= 0.12) { const y = yAt(z), y1 = yAt(z - 0.12); sheet(flat, [x, y - 0.02, z], [x, y1 - 0.02, z - 0.12], [x, y1 + 0.02, z - 0.12], [x, y + 0.02, z], 1, 1, null, rack); sheet(flat, [x - 0.015, y + 0.02, z], [x - 0.015, y1 + 0.02, z - 0.12], [x + 0.015, y1 + 0.02, z - 0.12], [x + 0.015, y + 0.02, z], 1, 1, null, rack); }
-      // its jackets, as one, going down with it (turned to hang across the way it goes)
-      const n = Math.floor((za - 0.12 - (hole - 0.5)) / K.jacket);
-      c.model('store:sinking:' + n, () => { const v = new Vox(); for (let i = 0; i < n; i++) { const z = za - 0.12 - i * K.jacket; v.stamp(jacketOf((i * 2 + 3) % PAL.cloth.length, false).turned(1), 0, Math.round((yAt(z) - yAt(za - 0.12)) / S), -Math.round(i * K.jacket / S), false); } return v; },
-        x, za - 0.12, { y: yAt(za - 0.12) - 0.83, solid: false, shadow: false });
-      for (let k = 0; k < 14; k++) { const a = (k / 14) * 6.283, r = 0.32 + ((k * 7) % 5) * 0.035; det.box(x + Math.cos(a) * r - 0.05, 0.001, hole + Math.sin(a) * r * 1.6 - 0.05, x + Math.cos(a) * r + 0.05, 0.03 + (k % 3) * 0.01, hole + Math.sin(a) * r * 1.6 + 0.05, rgb(k % 2 ? PAL.fleck[0] : PAL.fleck[2])); }
-      det.box(x - 0.3, 0.0015, hole - 0.5, x + 0.3, 0.003, hole + 0.5, [0.08, 0.05, 0.06]);
-      c.solid(x - 0.3, hole - 0.5, x + 0.3, za + 0.05, { tall: false });
+      for (let z = za; z > hole - 0.15; z -= 0.1) { const y = yAt(z), y1 = yAt(z - 0.1); sheet(flat, [x, y - 0.02, z], [x, y1 - 0.02, z - 0.1], [x, y1 + 0.02, z - 0.1], [x, y + 0.02, z], 1, 1, null, rack); sheet(flat, [x - 0.015, y + 0.02, z], [x - 0.015, y1 + 0.02, z - 0.1], [x + 0.015, y1 + 0.02, z - 0.1], [x + 0.015, y + 0.02, z], 1, 1, null, rack); }
+      // its jackets, as one, going down with it; only those still partly above the carpet
+      const zs = []; for (let z = za - 0.12; yAt(z) - 0.83 + 0.72 > 0.02; z -= K.jacket) zs.push(z);
+      c.model('store:sinking:' + zs.length, () => { const v = new Vox(); zs.forEach((z, i) => v.stamp(jacketOf((i * 2 + 3) % PAL.cloth.length, false).turned(1), 0, Math.round((yAt(z) - yAt(zs[0])) / S), -Math.round((zs[0] - z) / S), false)); return v; },
+        x, zs[0], { y: yAt(zs[0]) - 0.83, solid: false, shadow: false });
+      jackets -= zs.length;
+      // the hole: black, its edge the jute backing showing, the carpet round it lifted in tongues
+      const hx = 0.42, hz = 0.62, edge = (a) => 1 + 0.18 * Math.sin(a * 5) + 0.1 * Math.sin(a * 11 + 1);
+      det.box(x - hx, 0.0015, hole - hz, x + hx, 0.0025, hole + hz, [0.03, 0.02, 0.025]);
+      for (let k = 0; k < 28; k++) { const a = (k / 28) * 6.283, e = edge(a), cx = x + Math.cos(a) * hx * e, cz = hole + Math.sin(a) * hz * e;
+        det.box(cx - 0.035, 0.0, cz - 0.035, cx + 0.035, 0.014, cz + 0.035, rgb('#8a7a5a'));                                              // the backing, at the edge
+        const o = 0.07 + (k % 3) * 0.03, lift = 0.02 + ((k * 5) % 4) * 0.012; det.box(cx + Math.cos(a) * o - 0.05, 0.0, cz + Math.sin(a) * o - 0.05, cx + Math.cos(a) * o + 0.05, lift, cz + Math.sin(a) * o + 0.05, rgb(PAL.fleck[k % 3])); }
+      c.solid(x - 0.3, hole - hz - 0.1, x + 0.3, za + 0.05, { tall: false }); keep(x - 0.35, hole - hz, x + 0.35, za + 0.1);
     } }
 
-  /* 4 · the planter, with a dummy in it to the chest; in the room's way, not the aisle's */
-  { const s = R.pick([-1, 1]), px = s * (K.aisle / 2 + 1.6), pz = (zRail0 + zFront) / 2 + R.range(-0.4, 0.4);
-    if (c.clear(px, pz, 0.85)) {
-      const w = 0.6, hgt = 0.5, cream = rgb('#d8ccb8');
-      flat.box(px - w, 0, pz - w, px + w, hgt, pz - w + 0.12, cream); flat.box(px - w, 0, pz + w - 0.12, px + w, hgt, pz + w, cream); flat.box(px - w, 0, pz - w + 0.12, px - w + 0.12, hgt, pz + w - 0.12, cream); flat.box(px + w - 0.12, 0, pz - w + 0.12, px + w, hgt, pz + w - 0.12, cream);
-      flat.box(px - w - 0.02, hgt, pz - w - 0.02, px + w + 0.02, hgt + 0.04, pz - w + 0.14, wood); flat.box(px - w - 0.02, hgt, pz + w - 0.14, px + w + 0.02, hgt + 0.04, pz + w + 0.02, wood); flat.box(px - w - 0.02, hgt, pz - w + 0.14, px - w + 0.14, hgt + 0.04, pz + w - 0.14, wood); flat.box(px + w - 0.14, hgt, pz - w + 0.14, px + w + 0.02, hgt + 0.04, pz + w - 0.14, wood);
-      flat.box(px - w + 0.12, 0.38, pz - w + 0.12, px + w - 0.12, 0.4, pz + w - 0.12, [0.16, 0.12, 0.12]);
+  // (b) the planter, with a dummy in it to the chest
+  { const s = R.pick([-1, 1]), px = s * (half + 1.3), pz = (zRail0 + zFront) / 2 + R.range(-0.4, 0.4), w = 0.6, hgt = 0.5;
+    if (fits(px - w, pz - w, px + w, pz + w, 0.3)) {
+      box4(px - w, pz - w, px + w, pz - w + 0.12, 0, hgt, cream); box4(px - w, pz + w - 0.12, px + w, pz + w, 0, hgt, cream); box4(px - w, pz - w + 0.12, px - w + 0.12, pz + w - 0.12, 0, hgt, cream); box4(px + w - 0.12, pz - w + 0.12, px + w, pz + w - 0.12, 0, hgt, cream);
+      box4(px - w - 0.02, pz - w - 0.02, px + w + 0.02, pz - w + 0.14, hgt, hgt + 0.04, wood); box4(px - w - 0.02, pz + w - 0.14, px + w + 0.02, pz + w + 0.02, hgt, hgt + 0.04, wood); box4(px - w - 0.02, pz - w + 0.14, px - w + 0.14, pz + w - 0.14, hgt, hgt + 0.04, wood); box4(px + w - 0.14, pz - w + 0.14, px + w + 0.02, pz + w - 0.14, hgt, hgt + 0.04, wood);
+      box4(px - w + 0.12, pz - w + 0.12, px + w - 0.12, pz + w - 0.12, 0.38, 0.4, [0.16, 0.12, 0.12]);
       c.model('store:dummy:sunk', dummyVox(0, PAL.cloth[1]), px, pz, { y: -0.98, rot: Math.atan2(-px, -pz) * 0.4, solid: false });
-      c.solid(px - w - 0.05, pz - w - 0.05, px + w + 0.05, pz + w + 0.05, { tall: false });
+      c.solid(px - w - 0.05, pz - w - 0.05, px + w + 0.05, pz + w + 0.05, { tall: false }); keep(px - w, pz - w, px + w, pz + w);
     } }
+
+  // (c) two plinths by the way down the middle: on one a dummy cut off at the chest by the top of it, on the other shirts, folded, in piles
+  for (let k = 0; k < 2; k++) { const s = k ? 1 : -1, x = s * (half + 0.55), z = zRail0 + 0.9 + k * 2.6 + R.range(-0.2, 0.2);
+    if (!fits(x - 0.45, z - 0.45, x + 0.45, z + 0.45, 0.25)) continue;
+    plinth(x, z, 0.42, 0.42, 0.45);
+    if (k === 0) c.model('store:dummy:bust', dummyVox(1, PAL.cloth[4]), x, z, { y: -0.62, rot: -s * 0.5, solid: false });
+    else for (let p = 0; p < 3; p++) { const px = x - 0.22 + p * 0.22; for (let q = 0; q < 4 + (p % 2); q++) { const col = rgb(PAL.cloth[(p * 3 + q) % PAL.cloth.length]); det.box(px - 0.1, 0.49 + q * 0.045, z - 0.13, px + 0.1, 0.53 + q * 0.045, z + 0.13, col); det.box(px - 0.1, 0.525 + q * 0.045, z - 0.13, px + 0.1, 0.533 + q * 0.045, z - 0.05, col.map((v) => v * 0.85)); } } }
+
+  // (d) a half-wall, panelled, a wood cap, across in front of the fitting rooms on one side: the room in two
+  { const s = deckSide ? -deckSide : R.pick([-1, 1]), x0 = s * (frames[0].w / 2 + 0.9), x1 = s * (frames[0].w / 2 + 0.9 + 2.8), z = zRail0 - 0.55, xa = Math.min(x0, x1), xb = Math.max(x0, x1);
+    if (fits(xa, z - 0.2, xb, z + 0.2)) { box4(xa, z - 0.08, xb, z + 0.08, 0, 1.05, rgb(PAL.wall)); box4(xa - 0.03, z - 0.11, xb + 0.03, z + 0.11, 1.05, 1.1, wood); det.box(xa - 0.005, 0, z - 0.085, xb + 0.005, 0.1, z + 0.085, rgb('#5a4048'));
+      for (let x = xa + 0.4; x < xb - 0.1; x += 0.4) for (const sz of [-1, 1]) det.box(x - 0.006, 0.1, z + sz * 0.08 - 0.003, x + 0.006, 1.05, z + sz * 0.08 + 0.003, rgb(PAL.seam));
+      c.solid(xa - 0.03, z - 0.11, xb + 0.03, z + 0.11, { tall: true }); keep(xa, z - 0.15, xb, z + 0.15); } }
+
+  // (e) two four-way racks: a post, four arms, jackets on each arm hung across it
+  const fourWay = (cx, cz) => { const L = 0.62, y = 1.4, n = Math.floor((L - 0.14) / K.jacket); if (4 * n > jackets || !fits(cx - L - 0.1, cz - L - 0.1, cx + L + 0.1, cz + L + 0.1, 0.2)) return false;
+    flat.box(cx - 0.025, 0, cz - 0.025, cx + 0.025, y + 0.05, cz + 0.025, rack); flat.box(cx - 0.3, 0, cz - 0.03, cx + 0.3, 0.035, cz + 0.03, rack); flat.box(cx - 0.03, 0, cz - 0.3, cx + 0.03, 0.035, cz + 0.3, rack);
+    flat.box(cx - L, y - 0.015, cz - 0.015, cx + L, y + 0.015, cz + 0.015, rack); flat.box(cx - 0.015, y - 0.015, cz - L, cx + 0.015, y + 0.015, cz + L, rack);
+    c.model('store:fourway:' + n, () => { const v = new Vox(), st = Math.round(K.jacket / S); for (let i = 0; i < n; i++) { const d = Math.round(0.14 / S) + i * st;
+      v.stamp(jacketOf((i * 2) % PAL.cloth.length, false), d, 0, 0, false); v.stamp(jacketOf((i * 2 + 1) % PAL.cloth.length, true), -d - 1, 0, 0, false);
+      v.stamp(jacketOf((i * 2 + 2) % PAL.cloth.length, false).turned(1), 0, 0, d, false); v.stamp(jacketOf((i * 2 + 3) % PAL.cloth.length, false).turned(3), 0, 0, -d - 1, false); } return v; },
+      cx, cz, { y: y - 0.83, solid: false, shadow: false });
+    jackets -= 4 * n; c.solid(cx - L, cz - 0.3, cx + L, cz + 0.3, { tall: false }); c.solid(cx - 0.3, cz - L, cx + 0.3, cz + L, { tall: false }); keep(cx - L, cz - L, cx + L, cz + L); return true; };
+  for (const s of [-1, 1]) fourWay(s * (half + 2.6 + R.range(0, 0.6)), zRail0 + 2.0 + R.range(0, 1.4));
+
+  // (f) the rails, in rows, in what room is left
+  const railAt = (xa, xb, z, y = 1.55) => {
+    const n = Math.floor((xb - xa - 0.16) / K.jacket); if (n < 6 || n > jackets) return;
+    for (const xe of [xa, xb]) { flat.box(xe - 0.022, 0, z - 0.022, xe + 0.022, y, z + 0.022, rack); flat.box(xe - 0.03, 0, z - 0.28, xe + 0.03, 0.035, z + 0.28, rack); flat.box(xe - 0.035, 0.035, z - 0.03, xe + 0.035, 0.07, z + 0.03, rack); }
+    flat.box(xa, y - 0.02, z - 0.015, xb, y + 0.02, z + 0.015, rack);
+    const seed = rails.length * 7 + 3; jackets -= n;                                                                                         // (its jackets as one: what is between them is not drawn)
+    c.model('store:rail:' + rails.length + ':' + n, () => { const v = new Vox(); for (let i = 0; i < n; i++) { const ci = (i * 3 + seed + (i % 5 === 2 ? 2 : 0)) % PAL.cloth.length; v.stamp(jacketOf(ci, i % 7 === 3), Math.round(i * K.jacket / S), 0, 0, false); } return v; },
+      xa + 0.1, z, { y: y - 0.83, solid: false, shadow: false });
+    c.solid(xa - 0.05, z - 0.3, xb + 0.05, z + 0.3, { tall: false }); keep(xa, z - 0.3, xb, z + 0.3); rails.push({ xa, xb, z });
+  };
+  for (let z = zRail0; z < zFront; z += 1.75) for (const s of [-1, 1]) {
+    const inner = s * half, outer = s * (W / 2 - 1.2), xa = Math.min(inner, outer), xb = Math.max(inner, outer); if (xb - xa < 1.2) continue;
+    for (let x = xa; x + 1.2 <= xb; x += 0.3) { const x1 = Math.min(xb, x + K.rail);                                                       // (in short lengths, where there is the room for one)
+      if (deck && z < deck.z1 + 3 * K.step + 0.8 && x1 > deck.x0 - 0.3 && x < deck.x1 + 0.3) continue;
+      if (!fits(x, z - 0.3, x1, z + 0.3)) continue;
+      railAt(x, x1, z); x += K.rail + 0.6; }
+  }
 
   /* 5 · the walls: a board of jackets in relief, a mirror with the office in it, panelling come away with the office behind it */
   const spansOf = (side, need) => c.spans(side, 0.3, 2.6).filter(([a, b]) => b - a >= need);
@@ -209,15 +240,39 @@ export function build(c) {
   { const side = deckSide === -1 ? 'right' : 'left', m = take(side, 1.3);
     if (m != null) { wallBox(c, side, m - 0.6, m + 0.6, 0.55, 2.45, 0, 0.05, rgb('#6a4a30')); const gl = c.shining('store:mirror', office('store:mirror', 48, 80), 0.7, [0.85, 0.88, 0.9]); wallFace(c, side, m - 0.52, m + 0.52, 0.63, 2.37, gl, [0, 0, 1, 1], 0.052);
       wallBox(c, side, m - 0.52, m - 0.4, 0.63, 2.37, 0.052, 0.054, [0.95, 0.95, 1], det); } }
-  // where the panelling has come away: a skin of it stood off the wall, with a ragged hole, and through the hole, the office
-  { const side = deckSide === 1 ? 'right' : 'left', m = take(side, 2.6) ?? take(side === 'left' ? 'right' : 'left', 2.6) ?? take('front', 2.6);
-    if (m != null) { const sd = used[used.length - 1].side, a = m - 1.3, b = m + 1.3, off = 0.22, hole = (u, y) => { const r = 0.62 + 0.12 * Math.sin(u * 9 + y * 5) + 0.08 * Math.sin(u * 23 - y * 11); return Math.hypot((u - m) / 1.0, (y - 1.3) / 1.2) < r * 1.15; };
-      const view = c.shining('store:behind', office('store:behind', 64, 64), 0.6, [0.9, 0.9, 0.95]); wallFace(c, sd, a + 0.1, b - 0.1, 0.1, 2.5, view, [0, 0, 1, 1], 0.015);
-      for (let u = a; u < b - 0.001; u += 0.1) for (let y = 0; y < 2.6 - 0.001; y += 0.1) { if (hole(u + 0.05, y + 0.05)) continue; const edge = hole(u + 0.15, y + 0.05) || hole(u - 0.05, y + 0.05) || hole(u + 0.05, y + 0.15) || hole(u + 0.05, y - 0.05);
-        wallBox(c, sd, u, u + 0.1, y, y + 0.1, off - 0.05, off, rgb(edge ? PAL.plaster : PAL.wall), edge ? det : flat); if (edge) wallBox(c, sd, u, u + 0.1, y, y + 0.1, off - 0.06, off - 0.05, rgb('#b8a890'), det); }
-      wallBox(c, sd, a - 0.04, a, 0, 2.6, 0, off, rgb(PAL.seam)); wallBox(c, sd, b, b + 0.04, 0, 2.6, 0, off, rgb(PAL.seam));
-      const p0 = c.wallAt(sd, a, 0), p1 = c.wallAt(sd, b, off); c.solid(Math.min(p0.x, p1.x), Math.min(p0.z, p1.z), Math.max(p0.x, p1.x), Math.max(p0.z, p1.z), { tall: true });
-      for (let k = 0; k < 7; k++) { const p = c.wallAt(sd, m - 0.5 + k * 0.17, off + 0.08 + (k % 3) * 0.06); det.box(p.x - 0.05, 0.002, p.z - 0.04, p.x + 0.05, 0.012 + (k % 2) * 0.01, p.z + 0.04, rgb(PAL.plaster)); } } }
+  // where the panelling has come away: a skin of it stood well off the wall, a ragged hole in it, and in the gap, a slice of the office,
+  // built: cubicle panels, a desk and its set, a chair, a lower roof with its light; the rest of the office painted on the wall behind
+  { const side = deckSide === 1 ? 'right' : 'left', need = 3.2, m = take(side, need) ?? take(side === 'left' ? 'right' : 'left', need) ?? take('front', need);
+    if (m != null) { const sd = used[used.length - 1].side, a = m - need / 2, b = m + need / 2, off = 0.75, top = Math.min(H - 0.05, 3.0), cell = 0.1;
+      const hole = (u, y) => { const r = 0.62 + 0.12 * Math.sin(u * 9 + y * 5) + 0.08 * Math.sin(u * 23 - y * 11); return Math.hypot((u - m) / 1.25, (y - 1.3) / 1.3) < r * 1.15 && y > 0.12; };
+      const at = (u, d, y0, y1, col, bt) => wallBox(c, sd, u[0], u[1], y0, y1, d[0], d[1], col, bt), skin = rgb(shade(PAL.wall, 0.62));   // (plain colour reads lighter than the papered wall: taken down to match)
+      // the skin, a row at a time, the whole of each run of it in one piece; its torn edge, plaster, a cell at a time
+      for (let y = 0; y < top - 1e-6; y += cell) { let run = null; const y1 = Math.min(top, y + cell);
+        for (let u = a; u < b - 1e-6; u += cell) { const inH = hole(u + cell / 2, y + cell / 2), edge = !inH && (hole(u + cell * 1.5, y + cell / 2) || hole(u - cell / 2, y + cell / 2) || hole(u + cell / 2, y + cell * 1.5) || hole(u + cell / 2, y - cell / 2));
+          if (!inH && !edge) { if (run === null) run = u; continue; }
+          if (run !== null) { at([run, u], [off - 0.06, off], y, y1, skin, flat); run = null; }
+          if (edge) { at([u, u + cell], [off - 0.05, off - 0.005], y, y1, rgb(PAL.plaster), det); at([u, u + cell], [off - 0.07, off - 0.05], y, y1, rgb('#8a7a5a'), det); } }
+        if (run !== null) at([run, b], [off - 0.06, off], y, y1, skin, flat); }
+      for (let u = a + 0.4; u < b - 0.1; u += 0.4) if (!hole(u, 0.6) && !hole(u, 2.0)) at([u - 0.006, u + 0.006], [off, off + 0.003], 0.12, top, rgb(PAL.seam), det);
+      at([a - 0.05, a], [0, off], 0, top, rgb(PAL.seam), flat); at([b, b + 0.05], [0, off], 0, top, rgb(PAL.seam), flat); at([a - 0.05, b + 0.05], [0, off], top - 0.01, top, rgb(PAL.seam), flat);
+      // behind: the office's floor, its lower roof and a light in it, cubicle panels across, a desk with a set, a chair; painted beyond
+      const view = c.shining('store:behind', office('store:behind', 64, 64), 0.55, [0.9, 0.9, 0.95]); wallFace(c, sd, a + 0.05, b - 0.05, 0, top, view, [0, 0, 2, 1], 0.012);
+      at([a, b], [0.01, off - 0.06], 0, 0.006, rgb('#6c6870'), det); at([a, b], [0.01, off - 0.06], 2.45, 2.47, rgb('#c8c0c8'), det);
+      const lamp = c.shining('store:behind:lamp', kit.tex.white(), 1.2, [0.95, 0.92, 1], { detail: true }); at([m - 0.5, m + 0.5], [0.15, 0.45], 2.44, 2.45, [1, 1, 1], lamp);
+      for (const u of [m - 0.85, m + 0.7]) { at([u - 0.03, u + 0.03], [0.02, off - 0.12], 0, 1.4, rgb('#6c7684'), det); at([u - 0.04, u + 0.04], [0.02, off - 0.1], 1.4, 1.43, rgb('#9a9ca0'), det); }
+      at([m - 0.8, m + 0.65], [0.02, 0.5], 0.72, 0.75, rgb('#b0a28c'), det); at([m - 0.78, m - 0.74], [0.04, 0.48], 0, 0.72, rgb('#8a8d90'), det);
+      { const q = c.wallAt(sd, m - 0.1, 0.24); c.model('store:crt', crtVox, q.x, q.z, { y: 0.8, rot: Math.atan2(q.n[0], q.n[2]), scale: 1.3, solid: false, shadow: false });
+        const ch = c.wallAt(sd, m + 0.25, 0.58); c.model('store:chair', chairVox, ch.x, ch.z, { rot: Math.atan2(q.n[0], q.n[2]) + 0.4, scale: 0.95, solid: false, shadow: false }); }
+      const p0 = c.wallAt(sd, a - 0.05, 0), p1 = c.wallAt(sd, b + 0.05, off); c.solid(Math.min(p0.x, p1.x), Math.min(p0.z, p1.z), Math.max(p0.x, p1.x), Math.max(p0.z, p1.z), { tall: true });
+      for (let k = 0; k < 9; k++) { const q = c.wallAt(sd, m - 0.7 + k * 0.17, off + 0.06 + (k % 3) * 0.07); det.box(q.x - 0.05, 0.0, q.z - 0.04, q.x + 0.05, 0.012 + (k % 2) * 0.012, q.z + 0.04, rgb(k % 2 ? PAL.plaster : '#b8a890')); } } }
+  // two rails on the walls, one over the other, where there is wall for them: the jackets hung across the wall
+  for (const side of ['left', 'right']) { const m = take(side, 2.4); if (m == null) continue;
+    for (const [y, n0] of [[2.05, 0], [1.2, 1]]) { const n = Math.floor(2.1 / K.jacket); if (n > jackets) continue; jackets -= n;
+      wallBox(c, side, m - 1.2, m + 1.2, y - 0.015, y + 0.015, 0.33, 0.36, rack); for (const k of [-1.1, 1.1]) wallBox(c, side, m + k - 0.015, m + k + 0.015, y - 0.015, y + 0.015, 0, 0.36, rack);
+      const q = c.wallAt(side, m - 1.05, 0.345), turn = side === 'left' ? 1 : 3, dir = c.wallAt(side, m + 1, 0); const ux = Math.sign(dir.x - q.x), uz = Math.sign(dir.z - q.z);
+      c.model('store:wallrail:' + side + ':' + n0 + ':' + n, () => { const v = new Vox(), st = Math.round(K.jacket / S); for (let i = 0; i < n; i++) v.stamp(jacketOf((i * 3 + n0 * 2 + 1) % PAL.cloth.length, false).turned(turn), ux * i * st, 0, uz * i * st, false); return v; },
+        q.x, q.z, { y: y - 0.83, solid: false, shadow: false }); }
+    const p0 = c.wallAt(side, m - 1.2, 0), p1 = c.wallAt(side, m + 1.2, 0.62); c.solid(Math.min(p0.x, p1.x), Math.min(p0.z, p1.z), Math.max(p0.x, p1.x), Math.max(p0.z, p1.z), { tall: true }); }
 
   /* 6 · a table of old sets, stacked, by the way in: the office again, sold */
   { const s = deckSide ? -deckSide : R.pick([-1, 1]), tx = s * (W / 2 - 1.6), tz = zFront - 0.2;
