@@ -19,8 +19,8 @@ export function diveStudy(handle) {
   const {plan}=tower.diving;
   button('Towel return entrance',()=>go(maze,0,maze.def.D/2-1,0,0));
   button('Tower entrance',()=>go(tower,0,tower.def.D/2-1,0,-.18));
-  button('Final platform',()=>go(tower,-1.62,-.4,0,-.28));
-  button('Pool landing',()=>go(tower,plan.landing.x,plan.landing.z,-.91,.07));
+  button('Final platform',()=>go(tower,-1.62,-1.27,0,-1.14));
+  button('Pool landing',()=>go(tower,plan.landing.x,plan.landing.z,-.70,.10));
   button('Hide controls',()=>{panel.hidden=true;});
   const note=document.createElement('p');
   note.textContent='Walk or run toward the lit edge to jump. H shows this panel.';

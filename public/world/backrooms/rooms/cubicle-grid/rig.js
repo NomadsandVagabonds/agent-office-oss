@@ -1,7 +1,7 @@
 // Procedural textures, sunken-cubicle props, and articulated Smiling Office
 // Worker (`pit-clerks`) rigs for `cubicle-grid` ("The Open-Plan Pit").
 import * as THREE from 'three';
-import { Vox, M, glow } from '../../../vox/vox.js';
+import { Vox, M, glow, tone } from '../../../vox/vox.js';
 import { buildCharacter, JOINT } from '../../../avatar/build.js';
 import { Batch, lamp, drawText } from '../../kit.js';
 import { P } from '../../bits.js';
@@ -19,6 +19,7 @@ const CLIMBER_STAFF = [
   { skin: '#e2c29e', hair: 'long', hairColor: '#2c221c', outfit: 'tee', outfitColor: '#566878', provider: 'opencode' },
   { skin: '#dfc5a6', hair: 'short', hairColor: '#5e3424', outfit: 'hoodie', outfitColor: '#635c70', provider: 'custom' },
 ];
+const TRUNKS = ['#cf6352', '#37978d', '#deaf52', '#5963aa', '#92537e'];
 
 export function makeGridTextures(c, p) {
   const { kit, look } = c;
@@ -177,10 +178,40 @@ function buildSmilingHeadVox(spec, idx) {
   return head;
 }
 
-function buildClimberLimbs(kit, idx) {
+function dressInSwimTrunks(parts, skinHex, idx) {
+  const skin = M(skinHex, 1), shadow = tone(skin, -.12);
+  const fabric = M(TRUNKS[idx % TRUNKS.length], 2);
+  const hem = tone(fabric, -.24), piping = tone(fabric, .38);
+  const cord = M('#e1d9b6', 2);
+  parts.torso.paint(-7, 18, -4, 7, 36, 4, (_x, y, z) => z < 0 || y < 24 ? shadow : skin);
+  parts.torso.rbox(-7, 18, -4, 7, 22, 4, 1, fabric, 'xz');
+  parts.torso.paint(-7, 20, -4, 7, 22, 4, hem);
+  parts.torso.decal('+z', -1, 18, 1, 21, cord);
+  parts.torso.decal('+z', 1, 19, 2, 21, cord);
+
+  for (const [side, x] of [['L', -6], ['R', 1]]) {
+    for (const part of ['Upper', 'Lower']) {
+      const arm = parts['arm' + part + side];
+      arm.each((ax, y, z) => arm.set(ax, y, z, z < 0 ? shadow : skin));
+    }
+    const thigh = parts['legUpper' + side];
+    thigh.paint(x, 9, -3, x + 5, 12, 3, skin);
+    thigh.rbox(x - 1, 12, -4, x + 6, 19, 4, 1, fabric, 'xz');
+    thigh.paint(x - 1, 12, -4, x + 6, 13, 4, hem);
+    thigh.paint(x - 1, 14, -4, x + 6, 15, 4, piping);
+    parts['legLower' + side] = new Vox()
+      .rbox(x, 2, -2, x + 5, 10, 2, 1, skin, 'xz')
+      .rbox(x, 0, -2, x + 5, 3, 4, 1, skin);
+  }
+}
+
+function buildClimberLimbs(kit, idx, swimTrunks) {
   const spec = CLIMBER_STAFF[idx % CLIMBER_STAFF.length];
   const look = pallorLook(spec, { pallor: 0.58, tint: '#dfdac8' });
-  const parts = buildCharacter(look, { seed: `cg:body:${idx}`, provider: spec.provider });
+  const parts = buildCharacter(swimTrunks ? { ...look, outfit: 'tee' } : look,
+    { seed: `cg:body:${idx}`, provider: swimTrunks ? undefined : spec.provider });
+  if (swimTrunks) dressInSwimTrunks(parts, look.skin, idx);
+  const bodyKey = swimTrunks ? `cg:${idx}:swim` : `cg:${idx}`;
 
   // Pale clammy fingertips
   const gripCol = M('#cfc9b4', 1);
@@ -190,7 +221,7 @@ function buildClimberLimbs(kit, idx) {
   // Hunched torso + bent scrambling legs baked into one compact body batch
   const bodyB = new Batch(true);
   const addBody = (key, vox, m) => {
-    const mod = kit.model(`cg:${idx}:${key}`, () => vox);
+    const mod = kit.model(`${bodyKey}:${key}`, () => vox);
     if (mod.solid) bodyB.addVox(mod.solid, m);
   };
   addBody('torso', parts.torso, jointMat(S, JOINT.hips, 0.22, 0, 0, 1.04));
@@ -200,14 +231,14 @@ function buildClimberLimbs(kit, idx) {
   addBody('legLR', parts.legLowerR, jointMat(S, JOINT.hipR, -0.18, 0, 0.08));
 
   const armLB = new Batch(true);
-  const armULMod = kit.model(`cg:${idx}:armUL`, () => parts.armUpperL);
-  const armLLMod = kit.model(`cg:${idx}:armLL`, () => parts.armLowerL);
+  const armULMod = kit.model(`${bodyKey}:armUL`, () => parts.armUpperL);
+  const armLLMod = kit.model(`${bodyKey}:armLL`, () => parts.armLowerL);
   if (armULMod.solid) armLB.addVox(armULMod.solid, localJointMat(S, JOINT.shoulderL, 0, 0, 0, 1.12));
   if (armLLMod.solid) armLB.addVox(armLLMod.solid, localJointMat(S, JOINT.shoulderL, -0.18, 0, 0, 1.12));
 
   const armRB = new Batch(true);
-  const armURMod = kit.model(`cg:${idx}:armUR`, () => parts.armUpperR);
-  const armLRMod = kit.model(`cg:${idx}:armLR`, () => parts.armLowerR);
+  const armURMod = kit.model(`${bodyKey}:armUR`, () => parts.armUpperR);
+  const armLRMod = kit.model(`${bodyKey}:armLR`, () => parts.armLowerR);
   if (armURMod.solid) armRB.addVox(armURMod.solid, localJointMat(S, JOINT.shoulderR, 0, 0, 0, 1.12));
   if (armLRMod.solid) armRB.addVox(armLRMod.solid, localJointMat(S, JOINT.shoulderR, -0.18, 0, 0, 1.12));
 
@@ -219,12 +250,12 @@ function buildClimberLimbs(kit, idx) {
 }
 
 /** Articulated Smiling Office Worker rig (`4` small meshes sharing `1` material). */
-export function buildSmilingClimber(kit, idx = 0) {
+export function buildSmilingClimber(kit, idx = 0, { swimTrunks = false } = {}) {
   const lights = [lamp(0.2, 2.5, 0.9, [1.25, 1.25, 1.22], { k: 8, wrap: 0.5, far: 24 })];
   const amb = [0.56, 0.56, 0.54];
   const mat = kit.surface({ vox: true });
 
-  const { bodyB, armLB, armRB, headB } = buildClimberLimbs(kit, idx);
+  const { bodyB, armLB, armRB, headB } = buildClimberLimbs(kit, idx, swimTrunks);
 
   const bodyGroup = new THREE.Group();
   const bodyMesh = new THREE.Mesh(kit.geometry(bodyB, lights, amb), mat);

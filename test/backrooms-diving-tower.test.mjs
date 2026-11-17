@@ -47,25 +47,31 @@ test('a player can run the maze, chain the hops, plunge once and walk out while 
   const old=globalThis.document;
   globalThis.document={createElement:()=>({getContext:()=>draw})};
   t.after(()=>{globalThis.document=old;});
-  const [{createKit},{buildWorld,loadCatalogue},{createPlayer},THREE,{BUILDERS},mazeBuilder,towerBuilder]=await Promise.all([
+  const [{createKit},{buildWorld,loadCatalogue},{createPlayer},THREE,{BUILDERS},mazeBuilder,towerBuilder,{buildSmilingClimber}]=await Promise.all([
     import('../public/world/backrooms/kit.js'),import('../public/world/backrooms/world.js'),
     import('../public/world/backrooms/player.js'),import('../public/vendor/three.module.min.js'),
     import('../public/world/backrooms/rooms.js'),import('../public/world/backrooms/rooms/smiler-maze.js'),
     import('../public/world/backrooms/rooms/dive-tower.js'),
+    import('../public/world/backrooms/rooms/cubicle-grid/rig.js'),
   ]);
   const level=generate('diving-traverse',{theme:'waterpark',hand:[MAZE],only:[TOWER],rooms:23,pursuer:false});
   const maze=level.rooms.find(r=>r.arch===MAZE),tower=level.rooms.find(r=>r.arch===TOWER);
-  const kit=createKit(),sounds=[],hurt=[],escaped=[];
+  const kit=createKit(),sounds=[],hurt=[],met=[],escaped=[];
   const env={kit,level,catalogue:await loadCatalogue(kit),hatches:new Map(),coopStrict:true,
     builders:{...BUILDERS,[MAZE]:mazeBuilder.build,[TOWER]:towerBuilder.build},
     play(name){sounds.push(name);},interfere(){},health:{damage(n){hurt.push(n);return {ok:true};}},
-    run:{met(){},survived(name){escaped.push(name);}}};
+    run:{met(name){met.push(name);},survived(name){escaped.push(name);}}};
   const world=await buildWorld(kit,level,env);
   t.after(()=>{world.dispose();kit.dispose();});
   const input={keys:new Set(),dx:0,dy:0,stick:{x:0,y:0}};
   const camera=new THREE.PerspectiveCamera();
   const player=env.player=createPlayer(world,camera,{...toWorld(maze,0,maze.D/2-.75),yaw:maze.rot*Math.PI/2},input);
   const chase=world.rooms[maze.id].smilerChase,towerRuntime=world.rooms[tower.id];
+  const swim=chase.pack[0].rig, office=buildSmilingClimber(kit,0);
+  assert.deepEqual(swim.head.children[0].geometry.attributes.aAlb.array,
+    office.head.children[0].geometry.attributes.aAlb.array,'the same Smiling Office Worker face');
+  assert.notDeepEqual(swim.bodyGroup.children[0].geometry.attributes.aAlb.array,
+    office.bodyGroup.children[0].geometry.attributes.aAlb.array,'the costumes use separate geometry');
   assert.equal(towerRuntime.diving.chase,chase);
   assert.equal(towerRuntime.flat,false,'the authored stairs pass the ordinary doorway reachability proof');
   let time=0;
@@ -89,6 +95,8 @@ test('a player can run the maze, chain the hops, plunge once and walk out while 
   walk(tower,0,tower.D/2-.75);
 
   const {plan,getRide}=towerRuntime.diving;
+  assert.ok(plan.platforms.at(-1).y-plan.water>=12,'the high dive is at least twelve metres above water');
+  assert.ok(plan.water-plan.bottom>2.8,'the catching basin is deep enough to dive into');
   for(const [i,hop] of plan.flights.entries()){
     const offset=i===0?1.36:0; // a clearly off-centre approach to the first lip
     if(i===0)walk(tower,offset,hop.from.nose+.75);
@@ -102,9 +110,13 @@ test('a player can run the maze, chain the hops, plunge once and walk out while 
     assert.equal(getRide(player.me),undefined);
     const at=toLocal(tower,player.me.x,player.me.z);
     assert.ok(Math.hypot(at.x-hop.x,at.z-hop.z)<1e-7,'landing is centred on the board or pool');
-    if(hop.plunge)assert.ok(lowest<plan.water,'the camera goes below the waterline');
+    if(hop.plunge){
+      assert.ok(lowest<plan.water-.8,'the dive goes well below the waterline');
+      assert.ok(camera.position.y-tower.y>plan.water,'the swimmer returns above water');
+    }
   }
-  assert.deepEqual(escaped,['smilers']);
+  assert.deepEqual(met,['pit-clerks']);
+  assert.deepEqual(escaped,['pit-clerks']);
   assert.equal(sounds.filter(s=>s==='towerSplash').length,1);
   assert.equal(hurt.length,0,'a steady walk and the marked jumps are enough to escape');
 
@@ -117,6 +129,10 @@ test('a player can run the maze, chain the hops, plunge once and walk out while 
     assert.ok(toLocal(tower,a.group.position.x,a.group.position.z).z>=last.nose);
   }
   walk(tower,0,-4.48);
+  walk(tower,0,-8.45);
+  walk(tower,-8.17,-8.45);
+  walk(tower,-8.17,-11.45);
+  walk(tower,0,-11.45);
   walk(tower,0,-tower.D/2+.38);
   const onward=level.rooms[tower.doors.find(d=>d.side==='back').to];
   const entry=onward.doors.find(d=>d.to===tower.id);

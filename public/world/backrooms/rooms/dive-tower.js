@@ -1,9 +1,10 @@
+import * as THREE from 'three';
 import { Batch, lin, WHITE } from '../kit.js';
 import { pipe } from '../pool-finish.js';
 import { tiledPlane } from './return-pool/art.js';
 import { collisionFlumeVox, FLUME_CELL } from './channel-hall/collision-art.js';
 import { showerWater } from './locker-showers/water.js';
-import { divePlan, towerFloor, inPool, flightAt, MAZE } from './dive-tower/plan.js';
+import { divePlan, towerSupport, inPool, flightAt, MAZE } from './dive-tower/plan.js';
 
 const steel=lin('#aab7b0'), dark=lin('#35494b'), mustard=lin('#978152');
 const box=(batch,bounds,color=WHITE,step=.75)=>batch.box(...bounds,color,{uv:1.6,step});
@@ -22,18 +23,19 @@ function towerTile(kit){
   });
 }
 
-function rail(c, ax,az,bx,bz,y){
-  for(const h of [.42,.82])pipe(c.flat,[ax,y+h,az],[bx,y+h,bz],.025,steel,8);
+function rail(c, ax,az,bx,bz,y,endY=y){
+  for(const h of [.42,.82])pipe(c.flat,[ax,y+h,az],[bx,endY+h,bz],.025,steel,8);
   const posts=Math.ceil(Math.hypot(bx-ax,bz-az)/.82);
   for(let i=0;i<=posts;i++){
-    const x=ax+(bx-ax)*i/posts,z=az+(bz-az)*i/posts;
-    pipe(c.flat,[x,y+.015,z],[x,y+.84,z],.024,steel,8);
-    box(c.flat,[x-.065,y+.004,z-.065,x+.065,y+.025,z+.065],dark);
+    const x=ax+(bx-ax)*i/posts,z=az+(bz-az)*i/posts,base=y+(endY-y)*i/posts;
+    pipe(c.flat,[x,base+.015,z],[x,base+.84,z],.024,steel,8);
+    box(c.flat,[x-.065,base+.004,z-.065,x+.065,base+.025,z+.065],dark);
   }
 }
 
 function architecture(c,p){
   const {W,D,H}=c, left=-W/2,right=W/2,front=D/2,back=-D/2;
+  const {pool, deckY, water, bottom}=p;
   const tile=towerTile(c.kit);
   c.shell({floor:false,wallTex:tile,panels:false,sockets:false,skirting:false});
   const wall=c.mapped('tower:wet-wall',tile,{wet:.74});
@@ -44,34 +46,49 @@ function architecture(c,p){
 
   for(const [x0,z0,x1,z1] of [[left,back,left+.12,front],[right-.12,back,right,front],
     [left,front-.12,right,front],[left,back,right,back+.12]]){
-    box(wall,[x0,p.bottom-.04,z0,x1,0,z1],WHITE,1);
-    box(wall,[x0,-5.26,z0,x1,-4.96,z1],lin('#57757d'));
+    box(wall,[x0,deckY-.04,z0,x1,0,z1],WHITE,1);
+    for (const y of [-5.24,-10.55]) box(wall,[x0,y,z0,x1,y+.24,z1],lin('#57757d'));
   }
-  tiledPlane(floor,left,back,right,front,p.bottom);
+  const {x0,x1,z0,z1}=pool;
+  for(const [ax,az,bx,bz] of [[left,back,right,z0],[left,z1,right,front],
+    [left,z0,x0,z1],[x1,z0,right,z1]]){
+    tiledPlane(floor,ax,az,bx,bz,deckY);
+  }
+  tiledPlane(floor,x0,z0,x1,z1,bottom);
+  for (const bounds of [[x0-.14,bottom,z0,x0,deckY,z1],
+    [x1,bottom,z0,x1+.14,deckY,z1],[x0,bottom,z0-.14,x1,deckY,z0],
+    [x0,bottom,z1,x1,deckY,z1+.14]]){
+    box(wall,bounds,lin('#718e99'));
+    box(stair,[bounds[0],deckY,bounds[2],bounds[3],deckY+.018,bounds[5]],lin('#a7bdbb'));
+  }
   box(wall,[left,-.24,p.platforms[0].nose,right,0,front]);
-  const {rim}=p;
-  box(stair,[rim.x0,-.22,rim.z0,rim.x1,0,rim.z1]);
-  for(const [index,tread] of p.treads.entries()){
-    const {x0,x1,z0,z1,y}=tread;
-    box(stair,[x0,p.bottom-.06,z0,x1,y,z1],index%37%4===0? lin('#adb4a8'):WHITE,1.4);
-    const lip=index<37?z0:z1;
-    box(c.flat,[x0+.07,y+.004,lip-.014,x1-.07,y+.02,lip+.014],dark,1.4);
+  for (const landing of p.landings) {
+    box(stair,[landing.x0,landing.y-.24,landing.z0,landing.x1,landing.y,landing.z1]);
   }
-  // Hide the return stair behind tiled wings. From the boards all you
-  // see below is a lit low opening above the water.
-  for(const [x0,x1] of [[-1.74,-1.48],[1.48,1.74]]){
-    box(wall,[x0,p.bottom,-D/2+1.65,x1,1.1,-4.90],lin('#7d9b9e'),1);
-    c.solid(x0,-D/2+1.65,x1,-4.9,{keep:true,tall:true});
+  for(const {x0,x1,z0,z1,y,axis,lip} of [...p.treads,...p.poolSteps]){
+    box(stair,[x0,y-.25,z0,x1,y,z1],WHITE,1.4);
+    const edge=axis==='x'?[lip-.016,y+.004,z0+.07,lip+.016,y+.019,z1-.07]
+      :[x0+.07,y+.004,lip-.016,x1-.07,y+.019,lip+.016];
+    box(c.flat,edge,dark,1.4);
   }
-  box(wall,[-1.48,p.bottom+1.61,-5.04,1.48,p.bottom+1.94,-4.9]);
+  // At water level the sign marks the submerged steps and the first return flight.
+  for(const x of [-1.63,1.63]) {
+    box(wall,[x-.1,deckY,z0-.18,x+.1,deckY+1.96,z0]);
+  }
+  box(wall,[-1.73,deckY+1.65,z0-.18,1.73,deckY+1.96,z0]);
   const exitLettering=c.kit.tex.custom('tower:pool-exit',128,24,g=>{
     g.fillStyle='#235749';g.fillRect(0,0,128,24);
     g.fillStyle='#c6e6ba';g.font='bold 16px monospace';g.textAlign='center';
     g.fillText('POOL EXIT',64,18);
   });
-  c.board(c.shining('tower:exit',exitLettering,1.1),0,p.bottom+1.78,-4.889,1.42,.266,0);
-  c.lay(railTop,0,-4.92,2.18,.105,0,null,WHITE,p.bottom+1.605,true);
-  c.light(-.6,p.bottom+1.26,-4.60,'#f3cc85',1.65,{far:5.8,k:3.2});
+  c.board(c.shining('tower:exit',exitLettering,1.1),0,deckY+1.80,z0+.011,1.42,.266,0);
+  c.lay(railTop,0,z0-.08,2.18,.105,0,null,WHITE,deckY+1.645,true);
+  c.light(-.45,deckY+1.26,z0+.3,'#f3cc85',1.65,{far:6,k:3.4});
+  c.light(-7.5,deckY/2+1.3,-9.65,'#d8ddd2',1.4,{far:7,k:3.1});
+  c.light(-.2,1.8,-11.72,'#e0cfaf',1.25,{far:6,k:3.6});
+  rail(c,5.96,-9.8,5.96,p.platforms[0].nose,deckY,0);
+  rail(c,0,-7.56,-7.65,-7.56,deckY,deckY/2);
+  rail(c,-7.65,-10.40,-.95,-10.40,deckY/2,0);
   // An edge stripe is visible from the corridor. Railings frame the launch
   // and the much broader landing on the far side of each short gap.
   rail(c,left+.17,p.platforms[0].nose+.08,-2.28,p.platforms[0].nose+.08,0);
@@ -118,25 +135,24 @@ function architecture(c,p){
     c.lay(light,x,z,.25,1.36,0,null,WHITE,H-.134,true);
     c.light(x,H-.22,z,'#c3dce1',1.85,{far:11,k:12,axis:[0,-1,0],floor:.38});
   }
-  for(const [x,z] of [[-5.9,-4.55],[3.5,-6.7]]){
-    c.light(x,p.bottom+.92,z,'#7fc8c5',1.3,{far:5.2,k:2.25});
-    box(wall,[x-.34,p.bottom,z-.34,x+.34,p.bottom+.52,z+.34],lin('#617f7d'));
-    c.lay(light,x,z,.39,.38,0,null,WHITE,p.bottom+.524);
+  for(const [x,z] of [[-6.52,-4.55],[3.5,-6.7]]){
+    c.light(x,water-.32,z,'#75d6dd',1.8,{far:7,k:4.4});
+    box(wall,[x-.34,bottom,z-.34,x+.34,bottom+.52,z+.34],lin('#617f7d'));
+    c.lay(light,x,z,.39,.38,0,null,WHITE,bottom+.524);
   }
-  const ladderX=right-.17;
-  for(const z of [-2.35,-1.61])pipe(c.flat,[ladderX,p.bottom+.22,z],[ladderX,p.bottom+3.15,z],.026,steel,8);
-  for(let i=0;i<10;i++)pipe(c.flat,[ladderX,p.bottom+.29+i*.268,-2.35],[ladderX,p.bottom+.29+i*.268,-1.61],.022,steel,8);
+  c.light(4.55,water+2.7,-3.45,'#85c7d5',1.75,{far:7.4,k:5.8,axis:[0,-1,0],floor:.36});
+  const ladderX=x1-.11;
+  for(const z of [-3.58,-2.84])pipe(c.flat,[ladderX,bottom+.72,z],[ladderX,deckY+1.09,z],.026,steel,8);
+  for(let i=0;i<10;i++)pipe(c.flat,[ladderX,bottom+.83+i*.268,-3.58],[ladderX,bottom+.83+i*.268,-2.84],.022,steel,8);
 
-  const basin=new Batch(), q=p.pool;
-  tiledPlane(basin,q.x0,q.z0,-1.74,q.z1,p.water);
-  tiledPlane(basin,1.74,q.z0,q.x1,q.z1,p.water);
-  tiledPlane(basin,-1.74,-4.90,1.74,q.z1,p.water);
+  const basin=new Batch();
+  tiledPlane(basin,x0,z0,x1,z1,water);
   const ripple=c.kit.tex.custom('tower:water',128,128,g=>{
-    g.fillStyle='#294845';g.fillRect(0,0,128,128);
+    g.fillStyle='#246572';g.fillRect(0,0,128,128);
     for(let z=0;z<128;z++)for(let x=0;x<128;x++){
       const a=Math.sin(x*Math.PI/16+1.5*Math.sin(z*Math.PI/32));
       const b=Math.sin(z*Math.PI/16+1.3*Math.sin(x*Math.PI/32));
-      g.fillStyle=`rgba(124,190,174,${.02+.22*Math.max(0,1-Math.abs(a+b)*5)**3})`;
+      g.fillStyle=`rgba(144,220,220,${.02+.39*Math.max(0,1-Math.abs(a+b)*5)**3})`;
       g.fillRect(x,z,1,1);
     }
   });
@@ -146,7 +162,7 @@ function architecture(c,p){
 export function build(c){
   const plan=divePlan(c.room),{rt,env}=c;
   rt.amb=lin('#8faeb1',.24);
-  rt.floorY=(x,z)=>towerFloor(plan,x,z);
+  rt.floorY=(x,z)=>towerSupport(plan,x,z);
   rt.headY=(x,z)=>c.H-rt.floorY(x,z);
   architecture(c,plan);
   const lead=rt.def.doors.map(d=>c.world.rooms[d.to]).find(r=>r?.def.arch===MAZE);
@@ -154,6 +170,18 @@ export function build(c){
   chase?.addTower(c,plan);
   const rides=new WeakMap(), riding=chase?.riding??new WeakSet();
   rt.diving={plan,chase,getRide:actor=>rides.get(actor)};
+  const rippleGeometry=c.kit.own(new THREE.RingGeometry(.28,.42,36).rotateX(-Math.PI/2));
+  const rippleMaterial=c.kit.own(new THREE.MeshBasicMaterial({
+    color:0xd6faff,transparent:true,depthWrite:false,opacity:0,
+  }));
+  const ripple=new THREE.Mesh(rippleGeometry,rippleMaterial);
+  ripple.visible=false;ripple.renderOrder=5;c.add(ripple);
+  let rippleAge=Infinity;
+  const veil=new THREE.Mesh(c.kit.own(new THREE.BoxGeometry(.42,.42,.42)),
+    c.kit.own(new THREE.MeshBasicMaterial({
+      color:0x0d6178,transparent:true,opacity:.38,depthTest:false,depthWrite:false,side:THREE.BackSide,
+    })));
+  veil.visible=false;veil.renderOrder=999;c.add(veil);
 
   const place=(p,yaw,pitch,player)=>{
     const xy=c.toWorld(p.x,p.z);
@@ -168,21 +196,23 @@ export function build(c){
       const {hop,yaw,pitch}=ride;
       const u=Math.min(1,ride.time/hop.seconds);
       let p=flightAt(ride.from,ride.to,u,hop.plunge);
-      let tilt=pitch-(hop.plunge?Math.sin(u*Math.PI)*.27:0);
+      let tilt=hop.plunge ? Math.max(-1.22,pitch-Math.sin(u*Math.PI)*.85) : pitch;
+      if(hop.plunge && p.y<=plan.water && !ride.splash){
+        ride.splash=true;
+        const at=c.toWorld(hop.x,hop.z);
+        env.play?.('towerSplash',at.x,at.z,9);
+        env.interfere?.(.42);
+        ripple.position.set(hop.x,plan.water+.014,hop.z);
+        rippleAge=0;
+        chase?.escape(actor);
+      }
       if(hop.plunge&&u>=1){
-        if(!ride.splash){
-          ride.splash=true;
-          const at=c.toWorld(hop.x,hop.z);
-          env.play?.('towerSplash',at.x,at.z,9);
-          env.interfere?.(.42);
-          chase?.escape(actor);
-        }
-        const rise=Math.min(1,(ride.time-hop.seconds)/.46);
-        p={...p,y:plan.water-.22+(hop.y+player.EYE-plan.water+.22)*rise};
+        const rise=Math.min(1,(ride.time-hop.seconds)/.68);
+        p={...p,y:ride.to.y+(hop.y+player.EYE-ride.to.y)*rise};
         tilt=pitch*(.45+.55*rise);
       }
       place(p,yaw,tilt,player);
-      if(u>=1&&(!hop.plunge||ride.time>=hop.seconds+.46)){
+      if(u>=1&&(!hop.plunge||ride.time>=hop.seconds+.68)){
         const at=c.toWorld(hop.x,hop.z);
         player.setRidePose(null);
         player.warp(at.x,at.z,yaw);
@@ -198,12 +228,21 @@ export function build(c){
     if(!hop)return;
     if(env.grip?.held)env.grip.release();
     const from={x:me.x,z:me.z,y:actor.y-(c.room.y||0)};
-    const to={x:hop.x,z:hop.z,y:hop.plunge?plan.water-.22:hop.y+player.EYE};
+    const to={x:hop.x,z:hop.z,y:hop.plunge?plan.water-.94:hop.y+player.EYE};
     riding.add(actor);
     rides.set(actor,{from,to,hop,time:0,yaw:actor.yaw,pitch:actor.pitch,splash:false});
     place(from,actor.yaw,actor.pitch,player);
   }});
-  c.tick((_dt,_time,me)=>{
+  c.tick((dt,_time,me)=>{
+    rippleAge+=dt;
+    ripple.visible=rippleAge<1.08;
+    if(ripple.visible){
+      ripple.scale.setScalar(1+rippleAge*6);
+      rippleMaterial.opacity=.72*(1-rippleAge/1.08);
+    }
+    const eye=me.world.y-(c.room.y||0);
+    veil.visible=me.inside&&eye<plan.water&&inPool(plan,me.x,me.z);
+    if(veil.visible)veil.position.set(me.x,eye,me.z);
     const wet=me.inside&&inPool(plan,me.x,me.z)&&!riding.has(me.world);
     rt.footstep=wet?'wade':'stone';
     if(wet){
