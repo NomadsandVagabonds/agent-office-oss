@@ -18,7 +18,7 @@ export function registerMovable(world, rt, group, { foot, type = 'prop', label =
     || (cutout.thickness ?? BRIDGE.thickness) <= 0 || (cutout.thickness ?? BRIDGE.thickness) > .18
     || cutout.width < BRIDGE.width || cutout.height < .8 || Math.max(cutout.width, cutout.height) > BRIDGE.max)) throw Error('movable: cutouts need facing 0–3 and a rigid panel .72–4m wide / .8–4m high / at most .18m thick');
   const def = rt.def, f = { id: `movable:${rt.id}:${world.furniture.length}`, type, label: String(label).slice(0, 60), room: rt.id,
-    ...worldFootprint(foot, def, toWorld), group, authored: true, deployed: false, transition: null, support: null, offsetX: 0, offsetZ: 0 };
+    ...worldFootprint(foot, def, toWorld), group, authored: true, deployed: false, transition: null, support: null, offsetX: 0, offsetY: 0, offsetZ: 0 };
   f.collider = { x0: f.x0, x1: f.x1, z0: f.z0, z1: f.z1, get top() { return f.top; }, on: true, tall: f.top - f.y > 1.25, furniture: f.id, floor: false, keep: true };
   rt.colliders.push(f.collider);
   if (!world.env.barricadesEnabled) { delete f.collider.furniture; return null; } // fixed geometry still has a body
@@ -33,12 +33,12 @@ export function registerMovable(world, rt, group, { foot, type = 'prop', label =
     Object.assign(f, box);
     Object.assign(f.collider, { x0: f.x0, x1: f.x1, z0: f.z0, z1: f.z1, tall: !f.deployed && f.top - f.y > 1.25, floor: f.deployed && !f.transition && !!f.support?.ok });
   };
-  f.translate = (dx, dz) => {
-    if (f.away || f.transition || !Number.isFinite(dx) || !Number.isFinite(dz) || Math.hypot(dx, dz) < 1e-6) return false;
+  f.translate = (dx, dz, dy = 0) => {
+    if (f.away || f.transition || ![dx, dz, dy].every(Number.isFinite) || Math.hypot(dx, dz, dy) < 1e-6) return false;
     const before = { ...f };
-    f.offsetX += dx; f.offsetZ += dz;
-    bounds({ x: f.x + dx, z: f.z + dz, x0: f.x0 + dx, x1: f.x1 + dx, z0: f.z0 + dz, z1: f.z1 + dz });
-    group.position.x += dx; group.position.z += dz;
+    f.offsetX += dx; f.offsetY += dy; f.offsetZ += dz;
+    bounds({ x: f.x + dx, z: f.z + dz, x0: f.x0 + dx, x1: f.x1 + dx, z0: f.z0 + dz, z1: f.z1 + dz, y: f.y + dy, top: f.top + dy });
+    group.position.x += dx; group.position.y += dy; group.position.z += dz;
     if (f.hinge) { f.hinge.x += dx; f.hinge.z += dz; }
     const next = world.roomAt(f.x, f.z);
     if (next && next.id !== f.room) {
@@ -61,7 +61,8 @@ export function registerMovable(world, rt, group, { foot, type = 'prop', label =
       const box = worldFootprint(cutoutBounds(base, angle), def, toWorld);
       for (const k of ['x', 'x0', 'x1']) box[k] += f.offsetX + dx;
       for (const k of ['z', 'z0', 'z1']) box[k] += f.offsetZ + dz;
-      box.y = (def.y || 0) + base.y; // feet / underside rest on the ground
+      box.y = (def.y || 0) + base.y + f.offsetY; // feet / underside rest on the ground
+      box.top += f.offsetY;
       return box;
     };
     const poseVisual = angle => {
