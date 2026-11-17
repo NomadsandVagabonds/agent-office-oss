@@ -91,7 +91,10 @@ export function voidIn(c, inHole, opt = {}) {
   let fall = null;
   c.rt.floorY = (x, z) => (fall ? fall.y : inHole(x, z) ? -deep : ground(x, z));
   c.rt.headY = (x, z) => H - c.rt.floorY(x, z);
-  const open = (x, z) => { const q = c.toWorld(x, z); return env.world.floorY(q.x, q.z) < -1; };
+  // (opt.relative: an edge is where the floor beside you is a metre lower than where you stand *and* below the room's floor; so a
+  //  floor that goes down into the hole, a stair, can be stood on all the way, and it is the edge of it that is the edge)
+  let here = 0;
+  const open = (x, z) => { const q = c.toWorld(x, z), f = env.world.floorY(q.x, q.z); return opt.relative ? f - (c.rt.def?.y || 0) < Math.min(-1, here - 1) : f < -1; };   // (without it: as it always was)
   c.tick((dt, t, me) => {
     if (fall) {
       fall.t += dt; fall.y = Math.max(-80, (fall.y0 || 0) - 0.5 * 9.8 * fall.t * fall.t);
@@ -102,6 +105,7 @@ export function voidIn(c, inHole, opt = {}) {
       return;
     }
     if (!me.inside || env.player?.me?.frozen) return;
+    here = ground(me.x, me.z);
     for (let a = 0; a < 8; a++) if (open(me.x + Math.sin(a * 0.7854) * brink, me.z + Math.cos(a * 0.7854) * brink)) {
       fall = { x: me.x, z: me.z, y: ground(me.x, me.z), t: 0, y0: ground(me.x, me.z) }; env.hold?.(true); env.run?.met?.(c.room.arch);
       const q = c.toWorld(me.x, me.z); env.play?.('rattle', q.x, q.z, 6); return;
