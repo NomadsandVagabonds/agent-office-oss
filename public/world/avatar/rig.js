@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { VOXEL } from '../vox/vox.js';
 import { meshVox } from '../vox/mesher.js';
 import { voxelMaterial, voxelGlassMaterial } from '../vox/material.js';
-import { JOINT, buildCharacter, buildMug, facePixels } from './build.js';
+import { JOINT, buildCharacter, buildMug, facePixels, hatTop } from './build.js';
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 
