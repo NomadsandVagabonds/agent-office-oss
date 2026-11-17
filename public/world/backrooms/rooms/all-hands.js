@@ -240,7 +240,7 @@ export function build(c) {
 
   // Stark metal lectern stage-right
   const lecternX = -1.55, lecternZ = stageZ - 1.15;
-  c.model('ah:lectern', lecternVox, lecternX, lecternZ, { y: -0.44, rot: Math.PI, solid: true, shadow: false });
+  c.place(kit.model('ah:lectern', lecternVox, { ao: false }), lecternX, lecternZ, { y: -0.44, rot: Math.PI, solid: true, shadow: false, scale: lecternVox.scale });
 
   // 5. Giant Harsh 4:3 Overhead Projection Screen (`6.2m × 4.2m`) Burning Through the Dark
   const screenTex = kit.tex.live(256, 176, (g, w, h) => drawKeynoteSlide(g, w, h, 0, p, false), { clamp: true });
