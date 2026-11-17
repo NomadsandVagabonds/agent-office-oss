@@ -22,7 +22,7 @@ export const leafSize = (w, h) => ({ W: Math.max(24, Math.round(w / LEAF.voxel))
  * @param {{w:number, h:number, colour:string, hatch?:number[], bar?:boolean}} o  metres across and high, and the door's colour ·
  *        hatch [x0, x1, y0, y1] (metres from the hinge and the floor): in place of the slit, an opening right through the leaf
  *        with a pale bezel and wire bars, that can be seen through · bar: a bar to push right across both faces, in place
- *        of the plate and the pull
+ *        of the plate and the pull ('push': on the push face only, and the pull stays on the other)
  * @returns {Vox}
  */
 export function leafVox({ w, h, colour, hatch = null, bar = false }) {
@@ -78,7 +78,7 @@ export function leafVox({ w, h, colour, hatch = null, bar = false }) {
     B(x0 + 3, y0 + 6, T, x1 - 3, y1 - 6, T, M('#a3a6a3', 0));
   }
   // the side you pull: a bar on two posts, on a back plate
-  if (!bar) {
+  if (bar !== true) {
     const x0 = W - stile - 7, x1 = W - stile - 2, y0 = y(0.92), y1 = y(1.3), bx = W - stile - 5;
     B(x0, y0, -1, x1, y1, -1, steel);
     for (const yy of [y0 + 3, y1 - 3]) B(bx, yy - 1, -4, bx + 1, yy, -2, steelD);
@@ -91,7 +91,7 @@ export function leafVox({ w, h, colour, hatch = null, bar = false }) {
     for (const f of [0.25, 0.5, 0.75]) { const bx = Math.round(x0 + (x1 - x0) * f), by = Math.round(y0 + (y1 - y0) * f); B(bx, y0, mid, bx, y1, mid, wire); B(x0, by, mid, x1, by, mid, wire); }
   }
   // the bar: across the leaf at the height of a hand, on a bracket at each end, both faces
-  if (bar) for (const [z0, z1, zb] of [[T + 1, T + 3, T], [-4, -2, -1]]) {
+  if (bar) for (const [z0, z1, zb] of bar === 'push' ? [[T + 1, T + 3, T]] : [[T + 1, T + 3, T], [-4, -2, -1]]) {
     const by = y(0.89), x0 = Math.round(0.14 / (w / W)), x1 = W - 1 - x0;
     B(x0, by - 1, Math.min(z0, z1), x1, by + 2, Math.max(z0, z1), M('#c2bdae', 0));
     for (const x of [x0, x1 - 2]) B(x, by - 2, Math.min(zb, z0), x + 2, by + 3, Math.max(zb, z0), steelD);

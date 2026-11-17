@@ -38,7 +38,22 @@ export function card(c, key, lines, o = {}) {
 export function scatter(c, x, z, n, spread = 1.2, color) {
   for (let i = 0; i < n; i++) c.paper(clamp(x + c.R.range(-spread, spread), -c.W / 2 + 0.25, c.W / 2 - 0.25), clamp(z + c.R.range(-spread, spread), -c.D / 2 + 0.25, c.D / 2 - 0.25), undefined, color);
 }
+/**
+ * A meshed model (kit.model(…).solid) put against a wall: its x along the wall from `at`, its y up from `y`, its z out
+ * of the wall from `off`; sx, sy, sz: metres to a voxel each way. Into `batch`, a voxel batch (c.vox if none).
+ */
+export function wallVox(c, batch, solid, side, at, y, off, sx, sy = sx, sz = sx) {
+  const p = c.wallAt(side, at, off), m = new THREE.Matrix4();
+  m.set(p.U[0] * sx, 0, p.n[0] * sz, p.x,
+    0, sy, 0, y,
+    p.U[2] * sx, 0, p.n[2] * sz, p.z,
+    0, 0, 0, 1);
+  (batch || c.vox).addVox(solid, m);
+  return p;
+}
 /** A colour as the kit keeps it (linear, 0…1) back to the '#rrggbb' a model is sculpted in. */
+export const hexColour = (rgb) => hexOf(rgb);
+
 const hexOf = (rgb) => '#' + rgb.map((v) => Math.round(255 * Math.max(0, Math.min(1, v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055))).toString(16).padStart(2, '0')).join('');
 /**
  * The sculpted wooden door (wooddoor.model.js) put into a voxel batch, anywhere and any way up: `foot` is the middle of

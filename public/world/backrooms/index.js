@@ -247,7 +247,7 @@ async function visit(office, opt) {
       }
     } });
   input.state.sensitivity = settings.sensitivity; input.state.invertY = settings.invertY;
-  menu = createMenu({ host: hud.el, settings: { ...settings, scoreEligible: difficulty.report().ranked }, furniture: opt.barricades !== false, graphics: !!opt.debug, onRequestOpen: () => setPaused(true), onResume: resume,
+  menu = createMenu({ host: hud.el, settings: { ...settings, scoreEligible: difficulty.report().ranked }, furniture: opt.barricades !== false, graphics: true, onRequestOpen: () => setPaused(true), onResume: resume,
     onArchive: opt.onArchive, onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting });
   // Six pockets, four hearts, and a camcorder battery that runs down (inventory.js, survival.js): the visit's, not any
   // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.

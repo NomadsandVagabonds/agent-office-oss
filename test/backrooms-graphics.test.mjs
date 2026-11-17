@@ -151,10 +151,11 @@ test('index.js hands the tier to the kit, the grade to the camcorder on every la
   assert.match(dev, /graphics: q\.get\('graphics'\) \|\| undefined/);
 });
 
-test('the Graphics row is offered only to a visit made for looking at the level, until the owner says otherwise', async () => {
+test('the Graphics row is offered to everybody, and starts at Classic', async () => {
   const fs = await import('node:fs');
   const read = (p) => fs.readFileSync(new URL(`../public/world/backrooms/${p}`, import.meta.url), 'utf8');
-  assert.match(read('index.js'), /furniture: opt\.barricades !== false, graphics: !!opt\.debug, onRequestOpen/);
+  assert.match(read('index.js'), /furniture: opt\.barricades !== false, graphics: true, onRequestOpen/);
+  assert.equal(cleanBackroomsSettings({}).graphics, 'classic', 'nobody is moved off the picture they had');
   const menu = read('menu.js');
   assert.match(menu, /graphics: offerGraphics = true,/, 'offered unless told not to (the dev page, the tests)');
   assert.match(menu, /if \(offerGraphics\) settingsPage\.append\(h\('div\.br-menu-setting', h\('label', \{ htmlFor: graphics\.id \}, 'Graphics'\), graphics\)\);/);
