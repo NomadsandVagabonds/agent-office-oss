@@ -140,7 +140,8 @@ test('auto never thrashes, stays between low and medium, and says nothing while 
 
 test('index.js hands the tier to the kit, the grade to the camcorder on every landing, and auto the frame time', () => {
   const index = readFileSync(new URL('../public/world/backrooms/index.js', import.meta.url), 'utf8');
-  assert.match(index, /createKit\(\{ gfx: \{ contact: gfx\(\)\.contact, bounce: gfx\(\)\.bounce \} \}\)/);
+  // (the dev page's own &gfx= comes first; otherwise the kit gets what the level of quality says)
+  assert.match(index, /createKit\(\{ gfx: opt\.dev\?\.gfx \|\| opt\.gfx \|\| \{ contact: gfx\(\)\.contact, bounce: gfx\(\)\.bounce \} \}\)/);
   assert.match(index, /vhs\.setGrade\(gradeOf\(themeOf\(f\.level\.theme\)\)\)/);
   assert.match(index, /autoStep\(gfxAuto, time, stage\.frameMs/);
   assert.match(index, /graphics: opt\.graphics \?\? saved\.graphics/);
