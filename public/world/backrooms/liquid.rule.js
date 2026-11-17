@@ -46,13 +46,17 @@ export const LIQUID = Object.freeze({
                       //  behind it through in the water's own colours (2 m of the waterpark's: 55 % in its clearest channel)
   glowKeep: 0.6,      // of what water takes off something that lights itself (brighter than the room's light there), given back
   saturate: 1.6,      // (the sheet's picture averages its pale caustic lines in: its colour is pushed back out by this)
-  // the caustic net: the old sheet's own picture, its pale lines (brighter than its average) laid on what is seen through
-  // the water as light, where the eye's ray meets the bed, strongest in shallow water
-  caustic: 1.5,       // how much brighter a full line makes what is under it
-  causticLift: 0.18,  // and a little light of its own (of the room's light), so a dark bed shows it too
-  causticFade: 0.35,  // per metre of water it fades by (e^-)
-  causticSwim: 0.02,  // of the picture it sways by with the clock, and the ripple's tilt moves it (dancing)
-  causticDrift: Object.freeze([0.018, 0.035]),   // of the picture it drifts by for each unit of a room's phase (as the return pool's sheet did)
+  // the caustics: light playing on what is under the water, worked out where the eye's ray reaches it (no picture read).
+  // Two layers of an iterated wave pattern at different scales, moving with the clock in different directions; where
+  // their bright lines cross they are brighter. On 5 cm cells, bent by the ripple's slope, softer and wider with depth
+  caustic: 1.3,       // how much brighter the brightest of it makes what it lands on (it only ever brightens, never tints)
+  causticCell: 0.05,  // metres: its cells, in the room's frame
+  causticScale: Object.freeze([8.3, 5.9]),   // the two layers' scales (radians per metre; never a whole multiple of each other)
+  causticSpeed: Object.freeze([0.9, 0.67]),  // and how fast each changes shape with the clock
+  causticBend: 1.5,   // how far the ripple's slope moves it, per metre of water over it
+  causticSharp: Object.freeze([8, 3]),       // how sharp its lines are in shallow water, and at 2 m (lower is softer and wider)
+  causticFade: 0.35,  // per metre of a clear sheet's water it fades by (e^-, times the murk squared: the dark pools show none)
+  causticDrift: Object.freeze([0.06, 0.02]), // metres it drifts for each unit of a room's phase, as the ripple does
   rings: 8,           // (the wake's slots: none used yet)
   fallbackTint: Object.freeze([0.03, 0.24, 0.3]),  // linear, for a sheet whose picture cannot be read
 });
@@ -155,10 +159,7 @@ uniform vec3 uDeep;
 uniform vec3 uAbsorb;
 uniform vec3 uScatter;
 uniform vec4 uKeep;
-uniform sampler2D map;
-uniform vec3 uUvU;
-uniform vec3 uUvV;
-uniform vec2 uCaustic;
+uniform float uCaustic;
 uniform vec3 uEyeRoom;
 uniform vec4 uRings[${LIQUID.rings}];
 uniform int uRingN;
@@ -182,16 +183,23 @@ float liquidHeight(vec2 p) {
 // what the surface mirrors, for a normal and the way to the eye (view space), at this pixel: for now a flat tint of the
 // room's light where it is (the mirror's sample takes its place later)
 vec3 reflection(vec3 n, vec3 v, vec2 uv, vec3 light) { return light * ${f(LIQUID.sky)}; }
-// the old sheet's caustic net where the ray meets what is under the water (p: the room's frame), as a share 0…1 of a
-// full line: its picture, as the sheet laid it (uUvU, uUvV: its texture coordinates from the room's x, z), drifting
-// with the room's phase, swaying with the clock and moved by the ripple's tilt. uCaustic: the picture's average
-// brightness, and 1 where it has lines to give (0: none)
-float caustic(vec2 p, vec2 bend) {
-  vec2 t = vec2(dot(uUvU, vec3(p, 1.0)), dot(uUvV, vec3(p, 1.0)));
-  t += vec2(uPhase * ${f(LIQUID.causticDrift[0])}, sin(uPhase * 0.22) * ${f(LIQUID.causticDrift[1])});
-  t += ${f(LIQUID.causticSwim)} * vec2(sin(uTime * 0.41 + p.y * 0.7), cos(uTime * 0.33 + p.x * 0.6)) + bend * 0.6;
-  float l = dot(texture2D(map, t).rgb, vec3(0.299, 0.587, 0.114));
-  return uCaustic.y * clamp((l - uCaustic.x) / max(1.0 - uCaustic.x, 0.05), 0.0, 1.0);
+// one layer of the caustics at q (radians), at s: a net of wavy lines (where a warped sum of two waves is near nought)
+// whose warp moves with s, so its lines bend, meet and part and never hold one shape. 1 on a line, falling to 0 off it
+float causticLayer(vec2 q, float s, float sharp) {
+  vec2 w = q + 0.9 * vec2(sin(q.y * 1.3 + s), sin(q.x * 1.1 - s * 0.8));
+  float f = sin(w.x) + sin(w.y);
+  return exp(-f * f * sharp);
+}
+// the caustics where the ray reaches what is under the water (p: the room's frame), 0…1, after thick metres of water
+// whose ripple has that slope there: two layers, turned against each other and at scales that never line up, brighter
+// where their lines cross
+float caustic(vec2 p, vec2 slope, float thick) {
+  vec2 q = p + slope * ${f(LIQUID.causticBend)} * thick - vec2(${f(LIQUID.causticDrift[0])}, ${f(LIQUID.causticDrift[1])}) * uPhase;
+  q = (floor(q / ${f(LIQUID.causticCell)}) + 0.5) * ${f(LIQUID.causticCell)};
+  float e = mix(${f(LIQUID.causticSharp[0])}, ${f(LIQUID.causticSharp[1])}, clamp(thick * 0.5, 0.0, 1.0));
+  float a = causticLayer(mat2(0.8, -0.6, 0.6, 0.8) * q * ${f(LIQUID.causticScale[0])}, uTime * ${f(LIQUID.causticSpeed[0])}, e);
+  float b = causticLayer(mat2(0.28, 0.96, -0.96, 0.28) * q * ${f(LIQUID.causticScale[1])} + vec2(13.7, 5.1), uTime * ${f(LIQUID.causticSpeed[1])} + 2.3, e);
+  return clamp(0.35 * (a + b) + a * b, 0.0, 1.0);
 }
 void main() {
   vec2 uv = gl_FragCoord.xy / uSize;
@@ -219,10 +227,11 @@ void main() {
   vec3 light = vLit;
   // (something that lights itself, a drowned screen: brighter than the room's light here, before the net is laid on)
   float lit = dot(under, vec3(0.299, 0.587, 0.114)) / max(dot(light, vec3(0.299, 0.587, 0.114)), 0.05);
-  // light dancing on the bed: the caustic net where the ray reaches it, fading with the water over it
+  // light playing on the bed where the ray reaches it, fading with the water over it (and far faster in a murky one).
+  // It only brightens what it lands on: what is under keeps its own colour
   vec3 dir = normalize(vRoom - uEyeRoom);
-  float k = caustic(vRoom.xz + dir.xz * thick, bend) * exp(-${f(LIQUID.causticFade)} * thick);
-  under = under * (1.0 + ${f(LIQUID.caustic)} * k) + light * ${f(LIQUID.causticLift)} * k;
+  float k = caustic(vRoom.xz + dir.xz * thick, slope, thick) * exp(-${f(LIQUID.causticFade / LIQUID.keep)} * uKeep.w * thick);
+  under *= 1.0 + uCaustic * k;
   // (uKeep: the water's own colours, scaled to its clearest, and how fast what it lets through at least falls)
   vec3 T = max(exp(-uAbsorb * thick), uKeep.rgb * exp(-uKeep.w * thick));
   // (and keeps more of its light than the water would leave it)

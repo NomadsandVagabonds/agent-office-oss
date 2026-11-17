@@ -805,13 +805,16 @@ and the waterpark is not dealt (`dealt: false`). The dev page reaches it with
   deep clear water, not fog, while the green rooms' murk is untouched; what
   lights itself under it, brighter than the room's light there, a drowned
   screen, keeps more of its light), with a little of the water's own colour as
-  soon as there is any depth of it, giving way again with depth; the old sheet's own caustic net laid back on as light where the
-  eye's ray meets the bed (the sheet's picture, mapped from the room's x and z
-  as the sheet mapped it, its lines being what is brighter than its average;
-  blocky, as the picture is; strongest in shallow water and fading slowly with
-  depth, e^-0.35 per metre, so it still lies on the deep end's bed;
-  drifting with the room's phase as the return pool's sheet did, swaying with
-  the clock and moved by the ripple); a pale line where the surface is within
+  soon as there is any depth of it, giving way again with depth; light playing on what is under it, worked out in the shader where the eye's ray
+  reaches the bed (no picture read: the sheet's picture gives the water its tint
+  and nothing else): two layers of a net of wavy lines, turned against each
+  other and at scales that never line up, each bending, meeting and parting
+  with the clock, brighter where their lines cross; on 5 cm cells of the room's
+  frame, moved by the same ripple slope that bends the bed, softer and wider
+  with depth, drifting with the room's phase, fading by e^-0.35 per metre of a
+  clear sheet's water (times the murk squared, so the dark green pools show
+  none); it only brightens what it lands on, by up to 1.3 times, and never
+  tints it; a pale line where the surface is within
   6 cm of what is behind it (the basin's walls, the floats, the steps), as
   bright as the room and what is
   under it; a ripple worked out on 5 cm cells of the room's own frame, its
@@ -855,12 +858,24 @@ and the waterpark is not dealt (`dealt: false`). The dev page reaches it with
   kit's shader) does not reach the new surface, nor does the flashlight's own
   patch: the beam lights the bed, which is seen through the water, but not the
   surface itself. The showers' film and the stream sheets are not marked.
+- **Known faults.**
+  1. ~~The deep end's desk top went lime under the caustic net.~~ Fixed: the
+     net added the room's own light on top of a pale desk the water had
+     already turned green, and brightened it up to 2.5 times; the caustics
+     now only multiply what is under them, by at most 1.3 times, so they
+     brighten it and keep its colour.
+  2. A see-through thing below the surface is hidden by the water rather than
+     seen through it (it is drawn after the water).
+  3. A pool behind a wall but in the frustum still asks for the split draw: it
+     costs the copy and changes nothing seen.
+  4. The drowned monitor's screen is no brighter than under the old sheet.
 - **Cost class.** While a surface is in view: one full-screen copy of the
   scene's colour and depth (High at Full VHS: 1440 × 1080, half float and
   depth, about 19 MB held while the tier has water and a pool has been seen),
   the scene's draws split between two renders (the same draws and triangles in
-  all), and on the water's pixels three ripple evaluations and five texture
-  reads. Counted with `&perf=1` at Full VHS, seed 7, the code before and after
+  all), and on the water's pixels three ripple evaluations, four texture
+  reads and the caustics' two layers (a handful of sines and two exponentials;
+  the texture read the first version's net took is gone). Counted with `&perf=1` at Full VHS, seed 7, the code before and after
   (draws of the level's scene / all passes / triangles):
 
   | | before | after |
@@ -960,6 +975,11 @@ vendored files. It is decided after phases 1 to 7 are measured.
 - **The deep end's drowned monitors (17 Nov):** leave them glowing. Every
   workstation on the bottom of the pool keeps its lit screen, under the old
   sheet and under the new water.
+- **The water's caustics (17 Nov):** the owner found the tile-like caustic net
+  (the old sheet's picture laid on the bed) fake, "almost like tile grout",
+  and asked for a moving, blurred, refracted one, or none. It is now worked
+  out in the shader and moves; a variant with none was pictured alongside.
+  Shown both, the owner chose the faint moving one (strength 1.3).
 
 ## The ten-minute check, before the Graphics row is for everybody
 
