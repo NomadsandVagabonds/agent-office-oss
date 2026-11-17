@@ -208,6 +208,35 @@ handed to the kit when a part is built (`gfx: { contact, bounce, shadows, doorli
   goes at most half way, takes the floor's colour, and is only as bright as
   what is behind it: a dark end of a corridor stays dark, and where nothing was
   drawn (the void past a view) is left black.
+- **How much haze, and from where, per kind of floor.** Two optional numbers
+  on a theme's `grade`: `hazeK`, times the tier's haze strength (clamped
+  0..2, missing 1), and `hazeFrom`, the metres from the eye before the haze
+  begins (clamped 0..30, missing 8). `graphics.js gradeOf` cleans and clamps
+  them; `vhs.js` hands the shader `uHaze` = the tier's `haze` × `hazeK`
+  (kept when either the tier or the floor changes) and `uHazeFrom`, which
+  stands in the shader where the constant 8 was. Missing, both are exactly
+  what the shader had (the tier's strength times 1, from 8 m): checked in
+  one page load with the clock paused, the copier room on seed 7 at Medium
+  and High with the old Signal shader and the new one swapped in by hand,
+  0 of 576,000 pixels different, while the new shader with the start moved
+  to 6 m, or with half the strength, differs. Classic and Low have no haze
+  whatever a floor says (the tier's strength is 0), and the depth texture is
+  still asked for by the tier alone. Two uniforms: no draw or triangle more.
+  **The forest** (`forest`) sets `hazeK: 0.5`, `hazeFrom: 12` and a neutral
+  grey haze colour `[0.78, 0.78, 0.78]` in place of the pale green: its
+  rooms are dark by design, and the review found them going grey-green and
+  milky at Medium and High (`docs/FOREST-REVIEW.md` section 2, point 5,
+  proposal 5). With half the haze from 12 m in grey, the far end of a room
+  takes a little neutral air and no green; `clear-cut` (bright) keeps its
+  depth. **The haze is not what made `tree-farm` milky**, though: it is so
+  short a room (18.8 × 17.8 m) that the haze barely reaches anything in it,
+  and the haze is only as bright as what is behind it. Measured at High (one
+  load, the camcorder's switches off one at a time), the darkest quarter of
+  the picture is luma 11 at Classic and 17 at High, and stays 17 with the
+  haze off altogether; with the bloom from what shines (`glow`) off it is
+  12, and the grade takes about 1 more. What lifts the aisles is the drip
+  bags' glow, which is the review's proposal 8 (turn down what shines on
+  this floor), not this.
 - **What is held in the hand** is drawn last, over the room (`hand.js`). It
   used to clear the room's depth to get there, which with haze on left the
   whole room reading as the void: the haze went out for as long as anything
