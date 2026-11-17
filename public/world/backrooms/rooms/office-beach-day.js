@@ -131,6 +131,57 @@ function hangPelican(c) {
   });
 }
 
+function sandTrail(c) {
+  const atlas = c.kit.tex.custom('beach:sand-trail', 64, 64, g => {
+    const shape = (ox, oy, color, points) => {
+      g.fillStyle = color;
+      g.beginPath();
+      g.moveTo(ox + points[0][0], oy + points[0][1]);
+      for (const [x, y] of points.slice(1)) g.lineTo(ox + x, oy + y);
+      g.closePath();
+      g.fill();
+    };
+    // Bare heel, sole and toes, with enough shag showing through to look damp.
+    const wet = '#4d4931';
+    shape(0, 0, wet, [[12, 10], [20, 9], [23, 12], [20, 19], [17, 22], [17, 25],
+      [14, 29], [9, 28], [8, 24], [11, 19], [10, 15]]);
+    g.fillStyle = wet;
+    for (const [x, y, w, h] of [[11, 3, 4, 5], [16, 3, 3, 4], [20, 5, 2, 3], [23, 7, 2, 3], [25, 10, 2, 2]]) {
+      g.fillRect(x, y, w, h);
+    }
+    g.fillStyle = '#777047';
+    for (const [x, y] of [[14, 12], [19, 11], [15, 16], [11, 24], [13, 27]]) g.fillRect(x, y, 1, 2);
+
+    shape(32, 0, '#673527', [[8, 13], [11, 10], [16, 11], [18, 8], [22, 10], [24, 15],
+      [21, 20], [16, 21], [14, 23], [8, 21], [7, 17]]);
+    shape(0, 32, '#642d23', [[8, 6], [13, 7], [17, 4], [19, 8], [25, 10], [24, 15],
+      [28, 19], [24, 23], [17, 26], [12, 25], [6, 27], [7, 22], [4, 17], [9, 13]]);
+    shape(32, 32, '#43312b', [[5, 9], [11, 8], [13, 5], [18, 7], [22, 6], [26, 10],
+      [25, 15], [29, 19], [26, 24], [22, 25], [21, 29], [14, 27], [9, 23], [3, 22], [6, 17]]);
+    shape(32, 32, '#352a28', [[7, 13], [14, 9], [18, 11], [22, 9], [21, 15], [25, 19],
+      [23, 23], [17, 25], [11, 21], [7, 21], [10, 17]]);
+    g.fillStyle = '#774131';
+    for (const [x, y] of [[55, 6], [40, 24], [60, 22], [8, 36], [24, 38], [9, 60], [60, 57]]) {
+      g.fillRect(x, y, 2, 1);
+    }
+  }, { clamp: true });
+  const trail = c.mapped('beach:footprints-on-carpet', atlas, { cutout: true });
+  const mark = (tile, x, z, w, d, yaw, mirror = false) => {
+    const u = (tile % 2) * .5, v = (.5 - Math.floor(tile / 2) * .5);
+    const left = mirror ? u + .5 : u, right = mirror ? u : u + .5;
+    c.lay(trail, x, z, w, d, yaw, [[left, v], [right, v], [right, v + .5], [left, v + .5]],
+      WHITE, BEACH_FLOOR + .008);
+  };
+  // Two wet feet, two limping steps with their missing prints, then just a stain.
+  mark(0, .20, .76, .23, .34, -.25);
+  mark(0, .55, .62, .23, .34, -.43, true);
+  mark(0, .54, .21, .23, .34, -.28);
+  mark(1, .93, .15, .28, .28, -.41);
+  mark(0, .78, -.34, .22, .32, -.37);
+  mark(2, 1.17, -.44, .37, .38, -.20);
+  mark(3, 1.26, -1.03, .60, .53, -.53);
+}
+
 function sheet(batch, rect, gaps, y, down=false) {
   const xs=[...new Set([rect.x0,rect.x1,...gaps.flatMap(q=>[Math.max(rect.x0,q.x0),Math.min(rect.x1,q.x1)])])].sort((a,b)=>a-b);
   const zs=[...new Set([rect.z0,rect.z1,...gaps.flatMap(q=>[Math.max(rect.z0,q.z0),Math.min(rect.z1,q.z1)])])].sort((a,b)=>a-b);
@@ -217,10 +268,7 @@ function architecture(c,p) {
   c.model('beach:towels',towels,-2.96,-3.20,{y:BEACH_FLOOR,solid:false,shadow:false});
   hangPelican(c);
   c.prop('bin',4.67,-3.58,{y:BEACH_FLOOR,shadow:false});
-  for(let i=0;i<7;i++){
-    const x=.58+i*.21+(i%2?.12:-.09),z=-.18-i*.237;
-    c.blot(x,z,.13,.25,{y:BEACH_FLOOR+.009,a:.54,rgb:lin('#394446')});
-  }
+  sandTrail(c);
 }
 
 export function build(c) {
