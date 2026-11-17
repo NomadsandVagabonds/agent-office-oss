@@ -77,6 +77,7 @@ async function visit(t, options = {}) {
     createHand: noop, createHandView(env) { env.handView = { update: noop, hide: noop, dispose: noop }; },
     createDenizens(env) { env.denizens = { update: noop, sync: noop, dispose: noop }; },
     hangBanner: noop,                                    // (the banner near the landing is drawn, and nothing here draws)
+    createBeamShadows: () => ({ draw: noop, dispose: noop, size: 0 }),          // (beam shadows: Classic, so never drawn)
     createLoot: noop, lootLeft: () => null, leaving: noop, middle: () => ({ x: 0, z: 0 }), THIN_BEHIND: 4,
     createInventory(env, options) { bagActions = options; return bag; },
     createMenu(options) { menuActions = options; return { el: {}, owns: () => false, handleKey: () => false, setOpen: noop, update: noop, dispose: noop }; },

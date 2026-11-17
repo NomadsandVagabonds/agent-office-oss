@@ -182,6 +182,7 @@ handed to the kit when a part is built (`gfx: { contact, bounce }`).
 | haze beyond 8 m | — | — | yes | yes |
 | corner darkening / bounce (bake) | 0 / 0 | 0.7 / 0 | 1 / 0.7 | 1 / 1 |
 | a room's detail batches (`c.detail`) | drawn | hidden | drawn | drawn |
+| the flashlight casts shadows (`beamShadows`) | — | — | — | yes, a 1024² depth picture |
 
 - **Classic** draws exactly what the level drew before the setting existed.
 - **The camcorder stays the look.** The tape's lines and the scene's size are
@@ -243,6 +244,67 @@ handed to the kit when a part is built (`gfx: { contact, bounce }`).
   being built, and it never touches the Picture setting.
 - Measured only in software rendering so far; the costs in the table are
   guesses until phase 0 is run on real hardware.
+
+### Beam shadows (built)
+
+At High the flashlight is stopped by what is in its way: a copier throws its
+shape on the wall behind it, a doorway's frame cuts the beam off where it
+reaches the next room, and somebody standing in the beam puts their head on
+the wall. The switch is `beamShadows` in `graphics.js` (its own lines beside
+the table): the size of a square depth picture, 0 for off. It is 0 in Classic,
+Low and Medium, 1024 at High.
+
+- **The pass.** Each frame the flashlight is on (`uTorch` above the shader's
+  own threshold) and held or mounted, the parts of the building that are up
+  are drawn once more, depth only, from the flashlight's emitter
+  (`beam-shadows.js`, called from `index.js` just before the camcorder draws).
+  Its frustum is the beam's outer cone (18°) and a degree more, out to the
+  beam's reach (14 m). Only what is visible is drawn (the rooms the world has
+  shown) and only what the frustum holds. Cut-outs are cut out (`CUTOUT`,
+  `alphaTest`); instanced meshes go through as they are. Nothing held in the
+  hand (draw order 10000 and above) and nothing that writes no depth (blots,
+  decals, the round shadows under things) is drawn into it.
+- **The shader.** In the kit's surface shader only the flashlight's share of
+  the light is multiplied by the shadow: nine hardware comparisons of the
+  picture (a 3 × 3 kernel 1.25 texels apart), the point pushed out along its
+  normal by a texel and a half and more on a grazing wall, and the outer 2 % of
+  the picture fading to unshadowed. The code is in `beam-shadows.rule.js`
+  (`BEAM_SHADOW_GLSL`) and only compiled where `BEAM_SHADOWS` is defined; the
+  two places it touches in `kit.js`'s shader are marked `// --- beam shadows ---` (and one import).
+- **Who takes it and who throws it.** Everything drawn with the kit's surface
+  shader takes it: walls, floors, ceilings, furniture, voxel models, cut-outs,
+  and the creatures built on it: the dummies, the stand-ins of the Last Light
+  and Blackout Bay, the absorbed, carried interest, the head count, the intern,
+  the mother, the moth, the other door's frame, the pirate, the porter, the
+  shadow, the standing meeting, the lines and the toner (the wet ones too).
+  Everything opaque throws it, including what is drawn with a material of its
+  own and so does not take it: the office's avatars (the shared voxel Lambert
+  material), glowing panels and signs. What is held in the hand neither takes
+  it nor throws it.
+- **Not shadowed.** The camcorder's own lamp: its emitter is 4 cm under the
+  lens and it reaches 2.2 m, so anything it throws lies behind what throws it
+  as the lens sees it. A pass for it would cost as much as the flashlight's and
+  show nothing. A visit without pockets lights from the eye, and draws no pass
+  for the same reason. Co-op's partner's beam (`coop/lights.js`) is not
+  shadowed this round.
+- **Off is as before.** With the switch at 0 nothing is allocated, no pass is
+  drawn and no material gets the define: every surface compiles the shader it
+  did. `test/backrooms-gfx-beamshadows.test.mjs` pins it, and Classic drawn by
+  the code before and after this, from the same frozen scene, differed in no
+  pixel (two rooms, Clean and Full VHS).
+- **Resolution.** 512² and 1024² look the same up close (a texel is a few
+  millimetres at 1.5 m, under a voxel either way); 1024² keeps the edge under a
+  voxel to the far end of the beam, for 5 MB of targets. The emitter moves
+  every frame with the hand; the comparisons are filtered, and stepping past a
+  copier showed no shimmer.
+- **Cost (software rendering, so only relative):** the pass drew 36 draw calls
+  and 43,000 triangles standing in the copiers room (the scene pass: 71 and
+  50,000); High went from about 590 to 750 ms a frame with it, against 280 for
+  Classic.
+- **What it cannot show.** The emitter is 15 cm to the right of the eye and
+  12 cm below it, so most of a shadow lies behind the thing that throws it:
+  the visible part is a band to its upper left, widest when the wall is well
+  behind it, as with a real torch held at the chest.
 
 ### 2 · Light that behaves
 
