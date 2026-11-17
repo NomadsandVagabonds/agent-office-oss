@@ -18,8 +18,9 @@ function before(w, h, ratio, level) {
 
 test('Classic is the level as it was: the same sizes at every Picture level, bloom as the host has it, nothing new switched on', () => {
   const p = profile('classic');
-  assert.deepEqual(p, { tier: 'classic', lines: { 0: null, 1: 660, 2: 540 }, supersample: 1, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: 'host', grade: 0, haze: 0, contact: 0, bounce: 0, detail: true });
+  assert.deepEqual(p, { tier: 'classic', lines: { 0: null, 1: 660, 2: 540 }, supersample: 1, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: 'host', grade: 0, haze: 0, contact: 0, bounce: 0, detail: true, beamShadows: 0 });
   // (detail: true is everything drawn, as it always was: a room's detail batches are hidden only at low)
+  // (beamShadows 0: the flashlight casts no shadow, no depth pass is drawn and the kit's shader is as it was: backrooms-gfx-beamshadows)
   for (const [w, h] of [[1280, 800], [1920, 1080], [390, 844], [844, 390], [2560, 1440], [800, 600], [320, 240], [3840, 2160]])
     for (const ratio of [1, 1.5, 2, 3]) for (const level of [0, 1, 2]) {
       const { sw, sh, ...size } = internalSize(w, h, ratio, level, p), was = before(w, h, ratio, level);

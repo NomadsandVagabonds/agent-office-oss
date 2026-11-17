@@ -37,6 +37,7 @@ import { BUILDERS } from './rooms.js';
 import { createPlayer } from './player.js';
 import { createVhs } from './vhs.js';
 import { profile as graphicsProfile, autoStart, autoStep, gradeOf, showDetail } from './graphics.js';
+import { createBeamShadows } from './beam-shadows.js';
 import { themeOf } from './themes.js';
 import { createHud } from './hud.js';
 import { createSound } from './sound.js';
@@ -177,6 +178,7 @@ async function visit(office, opt) {
   // build does not; neither do arrival static or the final leaving picture.
   const clocksRun = () => !paused && (state === 'play' || state === 'drop');
   const u = vhs.uniforms, blank = new THREE.Scene();
+  const beamShadows = createBeamShadows(renderer);           // (beam shadows: nothing is allocated until the switch is on)
   // everything that is built hangs in this: the part you are in at the origin, the part below it under its way down
   const root = new THREE.Scene();
   root.background = new THREE.Color(0x000000);
@@ -188,6 +190,10 @@ async function visit(office, opt) {
     // (on a phone held upright the picture goes to the top of the screen and the thumbs have what is under it: hud.pictureTop)
     const p = vhs.layout(stage.size.w, stage.size.h, hud.pictureTop?.(stage.size)), key = `${p.x},${p.y},${p.w},${p.h},${stage.size.w},${stage.size.h},${hud.thumbs ? 1 : 0}`;
     if (key !== pictureKey) { pictureKey = key; hud.layout(p, stage.size); }
+    // --- beam shadows --- the flashlight's depth picture, before the picture it shadows (graphics.js beamShadows: 0 is off, and then nothing is made or drawn)
+    const shadowSize = cur && !paused ? gfx().beamShadows : -1;           // (-1: paused, the picture as it was)
+    if (shadowSize > 0 || (!shadowSize && beamShadows.size)) beamShadows.draw(shadowSize, camera, [cur, ahead?.f, above?.f].filter(Boolean).map((f) => f.world.scene), cur.kit.shared);
+    // --- end beam shadows ---
     vhs.render(paused ? 0 : dt);
   };
   stage.setView({ scene: blank, camera, render });
@@ -738,6 +744,7 @@ async function visit(office, opt) {
     if (ahead?.f) letGo(ahead.f);
     ahead = null;
     vhs.dispose();
+    beamShadows.dispose();                                  // (beam shadows)
     renderer.setRenderTarget(null);
     if (opt.debug) delete window.__backrooms;
     // Everything of the visit's is gone from the page. What it came to is written up on a card (scorecard.js), however
