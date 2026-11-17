@@ -147,7 +147,9 @@ export function woodlandDynamicLight(c, opt = {}) {
   c.rt.u.banks.value = [1, 1];
   c.rt.u.moreBanks.value = [1, 1];
 
-  const tube = lin(opt.tubeHex || '#dcf596');
+  // (office white. The tubes were chartreuse, `#dcf596`: green light on green walls, moss and hedge has no shape, and
+  // a green thing reads as green when the light on it is not. docs/FOREST-REVIEW.md §2)
+  const tube = lin(opt.tubeHex || '#fffbe9');
   const warmOfficeTube = lin('#ffbe66');
   const deadBatch = c.mapped('forest:dead-panel', kit.tex.panel(false));
   const uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
@@ -222,7 +224,9 @@ export function woodlandDynamicLight(c, opt = {}) {
   }
 
   // Slanted volumetric god-ray shafts & drifting lit forest pollen under up to 5 live troffers!
-  if (opt.shafts !== false && liveSpots.length > 0 && H >= 3.2) {
+  // (off unless a room asks, `shafts: true`: they were drawn under every live panel whether or not anything was in the
+  // air, fell on nothing, and through the camcorder only added grey. None of the fifteen rooms asks. docs/FOREST-REVIEW.md §2)
+  if (opt.shafts === true && liveSpots.length > 0 && H >= 3.2) {
     addLightShafts(c, liveSpots.slice(0, opt.maxShafts ?? 5), {
       tint: opt.shaftTint || (mode === 'ember' ? [1.0, 0.72, 0.38] : [0.76, 0.96, 0.74]),
       strength: opt.shaftStrength ?? (mode === 'ember' ? 0.11 : 0.13),

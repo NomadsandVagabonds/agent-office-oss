@@ -1087,7 +1087,9 @@ export function plantationSpruceVox(tallVoxels = 92, greenDrip = false) {
 
     // Prominent Q4 inventory barcode plaque at eye height
     v.rbox(-2.4, 39, 2.9, 2.4, 44.5, 4.2, 0.5, tag);
-    v.box(-1.8, 40.2, 3.9, 1.8, 42.2, 4.5, ink);
+    // (a barcode: bars of two widths, tall. It was one black bar, which across a grid of trunks read as a row of
+    // dashes: the owner's "dashed black lines")
+    for (const [bx0, bx1] of [[-2, -1], [0, 0.5], [1, 2]]) v.box(bx0, 40, 3.9, bx1, 43.6, 4.5, ink);
 
     // Hanging IV sap-drip pouch & vertical feed tube!
     v.rbox(4.0, 49, -1.4, 7.0, 56, 1.4, 0.5, bag);
