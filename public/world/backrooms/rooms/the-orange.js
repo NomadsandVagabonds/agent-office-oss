@@ -11,8 +11,9 @@
 import * as THREE from 'three';
 import { Batch, lamp } from '../kit.js';
 import { P } from '../bits.js';
+import { Vox, M } from '../../vox/vox.js';
 import { upright } from '../suburb.js';
-import { mallNeon, dummyVox, orangeVox, juicerVox, cupVox, heapVox } from '../mall.js';
+import { mallNeon, dummyVox, orangeVox, juicerVox, cupVox, heapVox, wallBox } from '../mall.js';
 
 export const ORANGE = Object.freeze({ counter: 2.3, turn: 1.6, big: 0.5 });
 const S = 0.025, MENU = ['ORANGE', 'ORANGE LARGE', 'NOT ORANGE', 'THE ORANGE ONE', 'DRINK', 'ORANGE ORANGE', 'ASK', 'SAME AGAIN'];
@@ -41,6 +42,29 @@ export function build(c) {
   for (const [cx, cz, k] of [[-W / 2 + 0.8, D / 2 - 0.8, 0], [W / 2 - 0.8, D / 2 - 0.9, 1], [W / 2 - 0.7, zc + 0.7, 2], [-W / 2 + 0.7, -D / 2 + 0.7, 3], [W / 2 - 0.9, -D / 2 + 0.8, 4]]) { if (Math.abs(cz) < 1.2 && Math.abs(cx) > W / 2 - 1.6) continue; c.model('orange:heap:' + k, heapVox(k), cx, cz, { rot: R.range(0, 6), scale: k < 3 ? 1.2 : 1.6, solid: false }); if (cz > zc) c.solid(cx - 0.45, cz - 0.45, cx + 0.45, cz + 0.45, { tall: false }); }
   for (let i = 0; i < 6; i++) { const x = R.range(-W / 2 + 0.6, W / 2 - 0.6), z = R.range(zc + 0.5, D / 2 - 0.6); if (Math.abs(x) < 0.9 && z > D / 2 - 1.8) continue; c.model(i % 2 ? 'orange:cut' : 'orange:one', orangeVox(5, !!(i % 2)), x, z, { rot: R.range(0, 6), tilt: i % 2 ? [R.range(-0.5, 0.5), R.range(-0.5, 0.5)] : [0, 0], solid: false }); c.blot(x, z, 0.5, 0.5, { a: 0.3 }); }
 
+  /* the detail: pendant shades, stools, a chiller of bottles, what is kept on the counter, a shelf of jars. Batch `orange:detail` for
+     what is only looked at; stools and the chiller are walked into, so they are in the room's own */
+  { const det = c.mapped('orange:detail', kit.tex.white()), chrome = [0.75, 0.77, 0.8], white = [0.94, 0.92, 0.86], orange = [0.94, 0.52, 0.12];
+    const shades = c.shining('orange:shades', kit.tex.white(), 1.7, [1, 0.72, 0.32]);
+    // pendants over the counter: a flex, a shade like half an orange, the bulb in it lit
+    for (let x = -W / 2 + 1.0; x < W / 2 - 0.6; x += 1.4) { const y = H - 0.9; det.box(x - 0.006, y + 0.2, zc + 0.35 - 0.006, x + 0.006, H, zc + 0.35 + 0.006, [0.1, 0.1, 0.1]);
+      c.model('orange:shade', () => { const v = new Vox(); v.ellipsoid(0, 6, 0, 9, 8, 9, M('#f08a1e', 1)); v.carve(-9, 0, -9, 9, 6, 9); v.carve(-7, 5, -7, 7, 6, 7); v.cyl('y', 0, 0, 13, 15, 2, M('#3f7a3a', 1)); return v; }, x, zc + 0.35, { y: y, solid: false, shadow: false });
+      shades.box(x - 0.05, y + 0.08, zc + 0.3, x + 0.05, y + 0.15, zc + 0.4, [1, 1, 1]); }
+    // stools at the counter: a chrome stem, a foot ring, a seat in orange vinyl; screwed down
+    for (let x = -W / 2 + 0.9; x < W / 2 - 0.6; x += 0.9) { const z = zc + 0.55; c.model('orange:stool', () => { const v = new Vox(), cr = M('#c9ccd0', 0); v.cyl('y', 0, 0, 0, 1, 8, cr); v.cyl('y', 0, 0, 1, 28, 1.2, cr); v.ring(0, 12, 0, 6, 0.7, cr); v.cyl('y', 0, 0, 28, 30, 6, M('#2a2a2e', 0)); v.cyl('y', 0, 0, 30, 33, 7.5, M('#e8761c', 2), 7); return v; }, x, z, { solid: false });
+      c.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, { tall: false }); }
+    // the chiller: a glass door, shelves of bottles of the drink, lit inside; against the side wall, clear of the way in
+    { const side = R.pick(['left', 'right']), sp = c.spans(side, 0.4, 2.2).find(([a, b]) => b - a > 1.2); if (sp) { const m = sp[0] + 0.7, p0 = c.wallAt(side, m - 0.5, 0), p1 = c.wallAt(side, m + 0.5, 0.7);
+      c.flat.box(Math.min(p0.x, p1.x), 0, Math.min(p0.z, p1.z), Math.max(p0.x, p1.x), 2.0, Math.max(p0.z, p1.z), white); c.solid(Math.min(p0.x, p1.x), Math.min(p0.z, p1.z), Math.max(p0.x, p1.x), Math.max(p0.z, p1.z), { tall: true });
+      const lit = c.shining('orange:chiller', kit.tex.white(), 1.3, [0.95, 0.98, 1]); wallBox(c, side, m - 0.44, m + 0.44, 0.15, 1.85, 0.7, 0.705, [1, 1, 1], lit);
+      for (let y = 0.25; y < 1.8; y += 0.4) { wallBox(c, side, m - 0.44, m + 0.44, y - 0.01, y, 0.1, 0.69, chrome, det); for (let k = 0; k < 6; k++) { const s0 = m - 0.38 + k * 0.15; wallBox(c, side, s0, s0 + 0.07, y, y + 0.22, 0.6, 0.67, orange, det); wallBox(c, side, s0 + 0.02, s0 + 0.05, y + 0.22, y + 0.28, 0.62, 0.65, white, det); } }
+      wallBox(c, side, m - 0.5, m + 0.5, 1.88, 2.0, 0.7, 0.72, orange, det); c.light(c.wallAt(side, m, 1.0).x, 1.2, c.wallAt(side, m, 1.0).z, '#e8f4ff', 0.5, { k: 1.6, far: 3 }); } }
+    // on the counter: a straw holder, a napkin box, a till; on the back wall a shelf of jars, each with oranges in it
+    for (let x = -W / 2 + 1.3; x < W / 2 - 1; x += 2.4) { det.box(x - 0.05, 1.0, zc - 0.15, x + 0.05, 1.22, zc - 0.05, [0.85, 0.9, 0.95]); for (let k = 0; k < 6; k++) det.box(x - 0.035 + (k % 3) * 0.03, 1.2, zc - 0.13 + Math.floor(k / 3) * 0.04, x - 0.03 + (k % 3) * 0.03, 1.32, zc - 0.125 + Math.floor(k / 3) * 0.04, [0.85, 0.2, 0.18]);
+      det.box(x + 0.25, 1.0, zc - 0.2, x + 0.45, 1.09, zc - 0.08, [0.2, 0.2, 0.22]); det.box(x + 0.28, 1.09, zc - 0.18, x + 0.42, 1.12, zc - 0.1, white); }
+    det.box(-W / 2 + 0.4, 1.35, -D / 2 + 0.02, W / 2 - 0.4, 1.38, -D / 2 + 0.3, [0.66, 0.52, 0.2]);
+    for (let x = -W / 2 + 0.6; x < W / 2 - 0.5; x += 0.45) { c.model('orange:jar', () => { const v = new Vox(), g = M('#d8e6e0', 0); v.cyl('y', 0, 0, 0, 10, 4, g); v.carve(-3, 1, -3, 3, 10, 3); for (let k = 0; k < 3; k++) v.ellipsoid(-1 + k, 2 + k * 3, (k % 2) * 1 - 0.5, 1.6, 1.6, 1.6, M('#f08a1e', 2)); v.cyl('y', 0, 0, 10, 12, 4.2, M('#c9a43a', 0)); return v; }, x, -D / 2 + 0.16, { y: 1.38, solid: false, shadow: false }); }
+    }
   /* what moves: the big one over the counter, going round; and who is serving */
   const mat = kit.surface({ vox: true }), mesh = (key, make, k = S) => { const b = new Batch(true); b.addVox(kit.model(key, make).solid, new THREE.Matrix4().makeScale(k, k, k)); return new THREE.Mesh(kit.geometry(b, [lamp(0.4, 2.6, 1.2, [1.25, 1.0, 0.7], { k: 9, wrap: 0.5, far: 30 })], [0.7, 0.6, 0.5]), mat); };
   const big = mesh('orange:big', orangeVox(22, false), S * 1.0), who = mesh('orange:server', dummyVox(1, '#f4efe0', 'orange')), fig = new THREE.Group();
