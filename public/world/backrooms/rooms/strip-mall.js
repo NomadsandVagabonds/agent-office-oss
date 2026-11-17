@@ -5,7 +5,7 @@
 // middle one of those, the same three again.
 import { ticks } from '../kit.js';
 import { P } from '../bits.js';
-import { lawn, upright, daylight, garble, WHITEWASH } from '../suburb.js';
+import { lawn, upright, brace, daylight, garble, WHITEWASH } from '../suburb.js';
 
 export function build(c) {
   const { W, D, H, params: p, kit } = c;
@@ -59,8 +59,16 @@ export function build(c) {
   for (const s of [-1, 1]) { c.flat.box(s * half - 0.05, 0, -D / 2, s * half + 0.05, fh, zf, WHITEWASH, { skip: '-y' }); c.solid(s * half - 0.05, -D / 2, s * half + 0.05, zf, { tall: true, keep: true }); }
   c.flat.box(-half, fh, -D / 2, half, fh + 0.05, zf + 0.5, WHITEWASH);
   // inside: board, carpet, and the parade again at a little over half the size; and again in its door
-  const back = c.mapped('parade:board', kit.tex.carpet('#b8935f')), zi = zf - 0.06;
-  back.grid([-half, 0, zi], [-1, 0, 0], [0, 1, 0], [0, -wide].map(Math.abs), [0, fh], (u, v) => [u / 0.8, v / 0.8]);
+  // the back of the front, seen from inside: the back of a stage flat. Bare board in the same three pieces as the front (the door
+  // stays a door), battens up it and a rail along it, and two braces down to the floor. (It faced the front before, and spanned the
+  // door, so from inside the front was not there: the owner's playthrough)
+  const back = c.mapped('parade:board', kit.tex.carpet('#b8935f')), zi = zf - 0.06, timber = [0.55, 0.42, 0.28];
+  const board = (xa, xb, y0, y1) => upright(back, xb, zi, xa, zi, y0, y1, [xa / 0.8, y0 / 0.8, xb / 0.8, y1 / 0.8]);   // (b to a: it faces in)
+  board(-half, -dw, 0, fh); board(dw, half, 0, fh); board(-dw, dw, 2.0, fh);
+  for (let x = -half + 0.05; x <= half; x += 1.2) if (Math.abs(x) > dw + 0.06) c.flat.box(x - 0.035, 0, zi - 0.07, x + 0.035, fh, zi - 0.001, timber);
+  for (const y of [0.9, 2.05]) { c.flat.box(-half, y - 0.04, zi - 0.07, -dw - 0.03, y + 0.04, zi - 0.001, timber); c.flat.box(dw + 0.03, y - 0.04, zi - 0.07, half, y + 0.04, zi - 0.001, timber); }
+  c.flat.box(-dw - 0.03, 0, zi - 0.07, -dw, 2.04, zi - 0.001, timber); c.flat.box(dw, 0, zi - 0.07, dw + 0.03, 2.04, zi - 0.001, timber); c.flat.box(-dw - 0.03, 2.0, zi - 0.07, dw + 0.03, 2.06, zi - 0.001, timber);
+  for (const x of [-half * 0.55, half * 0.55]) { brace(c, x, zi - 0.07, 0, -1, 0.85, 1.8); c.solid(x - 0.25, zi - 0.95, x + 0.25, zi - 0.07, { tall: false, keep: true }); }
   { const k = 0.56, w2 = wide * k, z2 = zf - 2.0, h2 = fh * k; upright(shop, -w2 / 2, z2, w2 / 2, z2, 0, h2, full);
     c.flat.box(-half, h2, -D / 2 + 0.02, half, fh, z2, [0.03, 0.03, 0.035]); for (const s of [-1, 1]) c.flat.box(s * w2 / 2, 0, z2 - 0.02, s * half, h2, z2, [0.03, 0.03, 0.035], { skip: '-y' });
     c.solid(-half, z2 - 0.1, half, z2, { tall: true, keep: true });
