@@ -171,3 +171,11 @@ test('the pieces are wired the way they are described: the stick\'s numbers come
   assert.match(index, /vhs\.layout\(stage\.size\.w, stage\.size\.h, hud\.pictureTop\?\.\(stage\.size\)\)/);
   assert.match(index, /light: thumbLight,/);
 });
+
+test('on the smallest phones held upright the stick sits clear of the camcorder\'s battery marks; on the others it is where it was', () => {
+  const view = (w, h) => ({ w, h, picture: { x: 0, y: 12, w, h: Math.round(w * 0.75) }, safe: { top: 0, right: 0, bottom: 0, left: 0 } });
+  const small = placeOf(view(320, 568)).stick, floor = 568 - THUMBS.gap;
+  assert.ok(Math.abs((small.y + small.r) - (floor - THUMBS.lift)) < 1e-6, 'the ring ends THUMBS.lift above the bottom');
+  assert.ok(small.y + small.r <= 568 - 100, `the ring's bottom is at ${(small.y + small.r).toFixed(0)}: the battery marks are at about 470 there`);
+  for (const [w, h] of [[390, 844], [430, 932], [412, 915]]) { const s = placeOf(view(w, h)).stick; assert.ok(Math.abs((s.y + s.r) - (h - THUMBS.gap - h * 0.12)) < 1e-6, `${w}×${h} moved`); }
+});
