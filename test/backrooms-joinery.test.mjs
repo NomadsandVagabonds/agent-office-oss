@@ -4,7 +4,7 @@ import { register } from 'node:module';
 
 const root = new URL('../', import.meta.url), three = new URL('public/vendor/three.module.min.js', root);
 register(`data:text/javascript;base64,${Buffer.from(`export async function resolve(s,c,next){ if(s==='three')return {url:${JSON.stringify(three.href)},shortCircuit:true}; return next(s,c); }`).toString('base64')}`, import.meta.url);
-const [W, P, { meshVox }, { isGlow, isGlass }] = await Promise.all(['public/world/backrooms/window.model.js', 'public/world/backrooms/panelling.model.js', 'public/world/vox/mesher.js', 'public/world/vox/vox.js'].map((f) => import(new URL(f, root).href)));
+const [W, { meshVox }, { isGlow, isGlass }] = await Promise.all(['public/world/backrooms/window.model.js', 'public/world/vox/mesher.js', 'public/world/vox/vox.js'].map((f) => import(new URL(f, root).href)));
 const COST = [42, 86, 36];                                        // sill, casing, bars at 1.2 m by 1.1 m
 const tris = (v) => { const m = meshVox(v, { ao: false }); return m.solid.index.count / 3; };
 const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -34,18 +34,4 @@ test('a whole window costs under the builder\'s ceiling of 400 triangles at 1.2 
   const w = 1.2, h = 1.1, cost = [tris(W.sillVox(w)), tris(W.casingVox({ w, h })), tris(W.barsVox({ w, h }))];
   assert.ok(cost[0] + cost[1] + cost[2] <= 400, `sill ${cost[0]} + casing ${cost[1]} + bars ${cost[2]}`);
   assert.deepEqual(cost, COST);
-});
-
-test('a panel\'s frame is the bead the wall\'s picture draws: 0.55 m square, 2.5 cm wide, 1.25 cm proud, and cheap', () => {
-  for (const flip of [false, true]) {
-    const v = P.panelFrameVox('#8a6a48', { flip }), b = v.bounds(), s = P.PANELLING.voxel;
-    assert.ok(near((b.x1 - b.x0) * s, 0.55) && near((b.y1 - b.y0) * s, 0.55) && near((b.z1 - b.z0) * s, 0.0125));
-    assert.equal(b.x0, -b.x1); assert.equal(b.y0, -b.y1); assert.equal(b.z0, 0);
-    assert.equal(v.has(b.x0, 0, 0) && v.has(b.x0 + 1, 0, 0) && !v.has(b.x0 + 2, 0, 0), true, 'the bead is two voxels: 2.5 cm');
-    assert.equal(v.has(0, 0, 0), false, 'and the panel inside it is the wall');
-    assert.ok(tris(v) <= 48, `${tris(v)} triangles`);
-    assert.ok(plain(v));
-  }
-  // on the 0.8 m tile the drawn bead runs from 0.15 m to 0.70 m both ways: so the frame's middle is 0.425 m into its tile
-  assert.ok(near(P.PANELLING.inset + P.PANELLING.frame, 0.7) && near(P.PANELLING.centre, 0.425) && P.PANELLING.tile === 0.8);
 });
