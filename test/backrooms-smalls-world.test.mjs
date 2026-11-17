@@ -56,10 +56,13 @@ test('the bin and the trolley are the level\'s own, meshed without corner shadin
   w.dispose();
 });
 
-test('why the cooler is not swapped: the level\'s bottle is over a thousand glass triangles more a cooler, and a corridor stands ten or more', async (t) => {
+// (the cooler was held back because its bottle was over a thousand glass triangles more a cooler, and a corridor stands ten or
+//  more of them. The cast made the bottle lighter than the office's the same hour this test was written, and the two met in the
+//  lead's merge: so what is pinned now is that the reason is gone. The switch itself is still the builder's to make, with its proof.)
+test('the cooler is not swapped yet, and its bottle is no longer the reason: it is no heavier in glass than the office\'s', async (t) => {
   const { kit, catalogue } = await make(t, () => {});
   const mine = kit.model('t:cooler', S.coolerVox, { ao: false }), theirs = catalogue.geo('cooler', {});
-  assert.ok(tris(mine.glass) - tris(theirs.glass) > 1000, `${tris(mine.glass)} against ${tris(theirs.glass)}`);
+  assert.ok(tris(mine.glass) <= tris(theirs.glass), `${tris(mine.glass)} against ${tris(theirs.glass)}`);
 });
 
 test('bounds, foot and collider are the office\'s, to the bit, in every pose', async (t) => {
