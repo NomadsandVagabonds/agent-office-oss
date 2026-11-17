@@ -31,10 +31,10 @@ test('the level\'s bin, trolley and cooler are exactly the size of the office\'s
 
 test('what they cost to draw, meshed the way the level meshes them', () => {
   const cost = (name) => { const m = meshVox(MAKE[name](), { ao: false }); return [tris(m.solid), tris(m.glass)]; };
-  assert.deepEqual(cost('bin'), [1480, 0]);
+  assert.deepEqual(cost('bin'), [1216, 0]);
   assert.deepEqual(cost('trolley'), [1264, 0]);
   const [solid, glass] = cost('cooler');
-  assert.ok(solid <= 1300 && glass <= 2200, `cooler ${solid} + ${glass} glass`);
+  assert.ok(solid <= 1300 && glass <= 1100, `cooler ${solid} + ${glass} glass`);
 });
 
 test('the cooler: the bottle and the cup tube are glass, and nothing shines but a light over each tap', () => {

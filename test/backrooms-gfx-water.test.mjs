@@ -17,7 +17,7 @@ register('data:text/javascript,' + encodeURIComponent(`export function resolve(s
 }`), import.meta.url);
 const THREE = await import('three');
 const { createKit, Batch, WHITE } = await import('../public/world/backrooms/kit.js');
-const { markLiquid, settleLiquid, liquidMeshes, collectLiquids, createLiquidView, averageColour, sheetTint, sheetMapping, OVER_LAYER } = await import('../public/world/backrooms/liquid.js');
+const { markLiquid, settleLiquid, liquidMeshes, collectLiquids, createLiquidView, averageColour, sheetTint, OVER_LAYER } = await import('../public/world/backrooms/liquid.js');
 const { LIQUID, flatness, underwater, holdStep, waterColours, LIQUID_FRAG, LIQUID_VERT } = await import('../public/world/backrooms/liquid.rule.js');
 const { createVhs } = await import('../public/world/backrooms/vhs.js');
 const { castsBeamShadow, HELD_ORDER } = await import('../public/world/backrooms/beam-shadows.rule.js');
@@ -189,12 +189,8 @@ test('the tint is the old sheet\'s: its picture\'s average times its colour, mur
   const u = w.rec.pairs[0].material.uniforms, col = waterColours(tint, 0.63);
   assert.deepEqual(u.uDeep.value.toArray().map((v) => +v.toFixed(5)), col.deep.map((v) => +v.toFixed(5)));
   assert.ok(u.uAbsorb.value.x > u.uAbsorb.value.y, 'red goes first in a green pool');
-  // the caustic net: the sheet's own picture, laid again from the room's x and z as the sheet laid it (the grid's uv is (z, x) here)
-  assert.equal(u.map.value, w.mesh.material.uniforms.map.value); assert.equal(u.uCaustic.value.y, 1);
-  assert.ok(Math.abs(u.uCaustic.value.x - (0.299 * g[0] + 0.587 * g[1] + 0.114 * g[2])) < 1e-6, 'its lines are what is brighter than its average');
-  const at = sheetMapping(w.mesh.geometry, w.rec.toRoom[0]);
-  assert.deepEqual([at.u.toArray(), at.v.toArray()].map((a) => a.map((x) => +x.toFixed(4) + 0)), [[0, 1, 1.5], [1, 0, 2]]);
-  assert.equal(sheetMapping(new THREE.BufferGeometry(), w.rec.toRoom[0]), null);
+  // the caustics are worked out, not read from the sheet's picture: the picture gives the tint (its average) and nothing else
+  assert.equal(u.map, undefined); assert.ok(!/texture2D\(map/.test(LIQUID_FRAG));
   assert.ok(waterColours(tint, 0.82).absorb[1] > waterColours(tint, 0.52).absorb[1], 'a murkier sheet absorbs faster');
   assert.ok(waterColours(tint, 0.63).absorb[2] > 3 * waterColours(tint, 0.52).absorb[2], 'the green rooms\' sheets stay murk, much more than the waterpark\'s');
   // however much a clear sheet absorbs, 2 m of it keeps about 55 % in its clearest channel; a murky sheet's floor is far lower
@@ -359,7 +355,11 @@ test('what the surface is made of: the kit\'s shader text untouched; the room\'s
   assert.match(LIQUID_FRAG, /vec3 reflection\(vec3 n, vec3 v, vec2 uv, vec3 light\) \{ return light \* /, 'one function where the mirror goes');
   assert.match(LIQUID_FRAG, /if \(rd < gl_FragCoord\.z\) ruv = uv;/, 'the ripple never fetches what is above the water');
   assert.match(LIQUID_FRAG, /uniform vec4 uRings\[\d+\];\nuniform int uRingN;/, 'the wake\'s slot');
-  assert.match(LIQUID_FRAG, /float k = caustic\(vRoom\.xz \+ dir\.xz \* thick, bend\) \* exp\(/, 'the caustic net where the ray reaches the bed, fading with depth');
+  assert.match(LIQUID_FRAG, /float k = caustic\(vRoom\.xz \+ dir\.xz \* thick, slope, thick\) \* exp\(-[\d.]+ \* uKeep\.w \* thick\);/, 'the caustics where the ray reaches the bed, fading with depth, far faster in a murky pool');
+  assert.match(LIQUID_FRAG, /  under \*= 1\.0 \+ uCaustic \* k;/, 'they only brighten what they land on: no colour of their own');
+  assert.match(LIQUID_FRAG, /q = \(floor\(q \/ [\d.]+\) \+ 0\.5\) \* [\d.]+;/, 'on cells of the room\'s frame');
+  assert.ok(/uTime \* [\d.]+( \+ [\d.]+)?, e\);/.test(LIQUID_FRAG), 'they change with the clock');
+  assert.ok(LIQUID.causticScale[0] / LIQUID.causticScale[1] % 1 !== 0, 'two layers at scales that do not line up');
   assert.ok(!/Math\.random|\bR\./.test(B('liquid.js') + B('liquid.rule.js')), 'nothing seeded, nothing random: the ripple is timed by the clock');
 });
 

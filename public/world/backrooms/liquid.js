@@ -60,31 +60,12 @@ export function sheetTint(mesh) {
   return { tint: avg.map((v, i) => v * a[i]), alpha: Number.isFinite(u.uAlpha?.value) ? u.uAlpha.value : LIQUID.absorbAlpha };
 }
 
-/**
- * How the sheet laid its picture: its texture coordinates as u = U·(x, z, 1), v = V·(x, z, 1) of the room's frame,
- * from its first triangle (the waterpark's sheets are mapped straight from x and z). null where they cannot be read.
- */
-export function sheetMapping(geo, toRoom) {
-  const uv = geo?.attributes?.uv, pos = geo?.attributes?.position;
-  if (!uv || !pos || pos.count < 3) return null;
-  const m = new THREE.Matrix4().fromArray(toRoom), v = new THREE.Vector3(), ids = geo.index ? [0, 1, 2].map((i) => geo.index.getX(i)) : [0, 1, 2];
-  const P = ids.map((i) => v.fromBufferAttribute(pos, i).applyMatrix4(m).toArray());
-  const A = new THREE.Matrix3().set(P[0][0], P[0][2], 1, P[1][0], P[1][2], 1, P[2][0], P[2][2], 1);
-  if (Math.abs(A.determinant()) < 1e-9) return null;
-  A.invert();
-  const solve = (k) => new THREE.Vector3(...ids.map((i) => (k ? uv.getY(i) : uv.getX(i)))).applyMatrix3(A);
-  return { u: solve(0), v: solve(1) };
-}
-
 /** The water's material for one sheet: the room's light uniforms are the sheet's own objects (its dimmer, flicker, banks). */
 export function waterMaterial(old, rec, toRoom, shared) {
   const m = old.material, u = m.uniforms, defines = {};
   if (m.defines?.FLICK) defines.FLICK = m.defines.FLICK;
   if (m.defines?.BANKS) defines.BANKS = m.defines.BANKS;
   const { tint, alpha } = sheetTint(old), col = waterColours(tint, alpha);
-  // (the caustic net: the sheet's own picture, where it can be read and laid again)
-  const map = u.map?.value || null, avg = averageColour(map), at = sheetMapping(old.geometry, toRoom);
-  const net = !!(map && avg && at);
   const material = new THREE.ShaderMaterial({
     defines, vertexShader: LIQUID_VERT, fragmentShader: LIQUID_FRAG, side: THREE.DoubleSide, transparent: false, depthWrite: true, depthTest: true,
     uniforms: {
@@ -95,8 +76,6 @@ export function waterMaterial(old, rec, toRoom, shared) {
       uToRoom: { value: new THREE.Matrix4().fromArray(toRoom) }, uRoomToView: { value: new THREE.Matrix3() },
       uDeep: { value: new THREE.Vector3(...col.deep) }, uAbsorb: { value: new THREE.Vector3(...col.absorb) }, uScatter: { value: new THREE.Vector3(...col.scatter) },
       uKeep: { value: new THREE.Vector4(...col.keep, col.keepRate) },
-      map: { value: map }, uUvU: { value: net ? at.u : new THREE.Vector3() }, uUvV: { value: net ? at.v : new THREE.Vector3() },
-      uCaustic: { value: new THREE.Vector2(net ? 0.299 * avg[0] + 0.587 * avg[1] + 0.114 * avg[2] : 1, net ? 1 : 0) },
       uEyeRoom: { value: new THREE.Vector3() },
     },
   });
@@ -112,7 +91,7 @@ export function waterMaterial(old, rec, toRoom, shared) {
 export function createLiquidView() {
   const shared = {
     tScene: { value: null }, tDepth: { value: null }, uSize: { value: new THREE.Vector2(1, 1) }, uClip: { value: new THREE.Vector2(0.06, 170) },
-    uTime: { value: 0 }, uRings: { value: Array.from({ length: LIQUID.rings }, () => new THREE.Vector4()) }, uRingN: { value: 0 },
+    uTime: { value: 0 }, uCaustic: { value: LIQUID.caustic }, uRings: { value: Array.from({ length: LIQUID.rings }, () => new THREE.Vector4()) }, uRingN: { value: 0 },
   };
   let copy = null, copyMat = null, quad = null, hold = { last: -Infinity, split: false };
   const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
