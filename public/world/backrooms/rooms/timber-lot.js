@@ -300,9 +300,6 @@ export function build(c) {
       const speedNow = Math.hypot(me.vx || 0, me.vz || 0);
       const clearLine = inRoom && c.world.los(roamer.x, roamer.z, me.x, me.z);
 
-      const torchOn = (c.env.inventory?.torchPower?.() || 0) > 0.05;
-      const beamOnBuck = torchOn && clearLine && !!c.env.sees?.(roamer.x, roamer.z, { radius: 0.45, margin: -0.15 });
-      const rustled = (c.rt.forestAlert || 0) > 0.05;
       const keys = c.env.player?.input?.keys;
       const crouched = !!(keys && keys.has('c'));
       const running = !crouched && speedNow > 2.45;
@@ -341,8 +338,10 @@ export function build(c) {
         dist: Math.hypot(me.x - roamer.x, me.z - roamer.z),
         distHome: Math.hypot(curLoc.x - homeLx, curLoc.z - homeLz),
         clearLine,
-        beamOnBuck,
-        rustled,
+        // (it wakes to somebody in its space, or running near it, and to nothing else: a torch beam and the bracken used
+        // to wake it as well, which was three rules where a creature has one. docs/FOREST-REVIEW.md §3)
+        beamOnBuck: false,
+        rustled: false,
         running,
         heardCall,
         callX,

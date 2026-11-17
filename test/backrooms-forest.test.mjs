@@ -413,7 +413,11 @@ test('Dynamic 4-bank woodland lighting (`stepCanopyBanks`) & interactive water r
     assert.deepEqual(steady, stepCanopyBanks(mode, 99.2, { steady: true }), `${mode}: steady accessibility mode never animates`);
     const a = stepCanopyBanks(mode, 1.0, { seed: 7 });
     const b = stepCanopyBanks(mode, 3.4, { seed: 7 });
-    assert.notDeepEqual(a, b, `${mode}: dynamic mode animates banks over time`);
+    // (the ceiling's three banks hold still; only what the room lights itself with moves, and a lantern does not)
+    assert.deepEqual(a.slice(0, 3), b.slice(0, 3), `${mode}: the ceiling's banks do not move`);
+    assert.deepEqual(a.slice(0, 3), steady.slice(0, 3), `${mode}: and are the steady levels`);
+    if (mode === 'canopy') assert.equal(a[3], b[3], 'a lantern is steady');
+    else assert.notEqual(a[3], b[3], `${mode}: the room's own light moves`);
     assert.ok(a.every((v) => v > 0 && v <= 1.35));
     assert.deepEqual(stepCanopyBanks(mode, 4.0, { effect: 0.2 }), [1, 1, 1, 0], 'creature blackouts bypass canopy modulation cleanly');
   }

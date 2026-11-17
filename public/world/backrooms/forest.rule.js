@@ -194,7 +194,7 @@ export function stepDuckboard(s, dt, activeIdx = -1) {
 /* ---- 4. Centerpiece Hunter: THE COAT-RACK BUCK (`stag.js`) --------------- */
 
 export const BUCK = Object.freeze({
-  hurt: 2,                // two hearts on antler impact
+  hurt: 1,                // a heart on antler impact (it was two, half of everything: more than a room's resident should take)
   beamRange: 12.0,        // distance at which a direct torch beam wakes it
   earRange: 9.2,          // distance at which dry-bracken crunching or running wakes it
   personalSpace: 2.15,    // standing right up against the "coat-rack" wakes it even in the dark
@@ -505,7 +505,7 @@ export const FACILITATOR = Object.freeze({
   offerReach: 1.35,
   strikeReach: 0.78,
   restTime: 9.0,
-  rations: 2,
+  rations: 1,
   hurt: 1,
 });
 
@@ -872,54 +872,35 @@ export const CANOPY_LIGHT = Object.freeze({
 });
 
 /**
- * Pure visit-clock 4-bank dynamic lighting curves `[b0, b1, b2, b3]` for forest rooms:
- *   - Banks `0..2`: ceiling troffer zones modulated by wind-swayed plenum boughs & ballast dips
- *   - Bank `3`: warm campfire / glowing ember / CRT phosphor / headlight accent bounce
- * Respects `steady = true` accessibility mode and creature blackouts (`effect !== 1`).
+ * The four banks of a forest room's light, `[b0, b1, b2, b3]`, at a moment of the visit's clock.
+ *   - Banks `0..2` are the ceiling's tubes, and they hold still: each mode has its own fixed levels, so a room has
+ *     bright bays and dull ones, and they stay where they are. (They used to swell and fade on a ten-second sway, in
+ *     every room, all the time. The owner, on playing it: "the lighting and fog effects need work"; the review,
+ *     `docs/FOREST-REVIEW.md` §2: a tube does not do that, and it hid the one tube that is meant to be failing.)
+ *   - Bank `3` is whatever the room lights itself with, and only that moves, where it is a thing that moves: a fire
+ *     (`ember`), a screen under water (`swamp`), a machine's lamps (`clearcut`), a slow glow (`islands`). A lantern
+ *     (`canopy`) is steady.
+ * `steady` (the accessibility setting) holds bank 3 as well. A creature's blackout or flash (`effect !== 1`) owns the
+ * ceiling untouched.
  */
+const CEILING = Object.freeze({
+  ember: [0.76, 0.22, 0.68, 0.92],
+  swamp: [0.78, 0.34, 0.72, 0.95],
+  islands: [0.95, 0.16, 0.42, 0.85],
+  clearcut: [0.96, 0.88, 0.34, 0.90],
+  canopy: [0.92, 0.68, 0.82, 0.85],
+});
 export function stepCanopyBanks(mode = 'canopy', time = 0, { steady = false, effect = 1, seed = 0 } = {}) {
   if (effect !== 1) return [1, 1, 1, 0];
-  if (steady) {
-    if (mode === 'ember') return [0.76, 0.22, 0.68, 0.92];
-    if (mode === 'swamp') return [0.78, 0.34, 0.72, 0.95];
-    if (mode === 'islands') return [0.95, 0.16, 0.42, 0.85];
-    if (mode === 'clearcut') return [0.96, 0.88, 0.34, 0.90];
-    return [0.92, 0.68, 0.82, 0.85];
-  }
-  const ph = (seed % 97) * 0.13;
-  const t = time + ph;
-  // Wind-swayed canopy shadow waves drifting across the 3 overhead ceiling banks
-  const sway0 = 0.78 + 0.22 * Math.sin(t * 0.62) + 0.08 * Math.sin(t * 1.43 + 0.7);
-  const sway1 = 0.56 + 0.28 * Math.sin(t * 0.54 + 2.1) + 0.09 * Math.cos(t * 1.31);
-  const sway2 = 0.70 + 0.24 * Math.sin(t * 0.58 + 4.2) + 0.08 * Math.sin(t * 1.19 + 1.9);
-
-  // Subtle ballast dip every ~19 s on bank 1
-  const cyc = ((t % 19) + 19) % 19;
-  const dip = cyc < 0.28 ? 0.24 : cyc < 0.52 ? 0.82 : 1.0;
-
-  if (mode === 'ember') {
-    const fire = 0.86 + 0.26 * Math.sin(t * 6.8) + 0.14 * Math.cos(t * 11.3 + 0.8);
-    return [clamp(sway0 * 0.82, 0.12, 1.05), clamp(0.14 + 0.10 * Math.sin(t * 0.9), 0.06, 0.35), clamp(sway2 * 0.74, 0.12, 1.0), clamp(fire, 0.45, 1.32)];
-  }
-  if (mode === 'swamp') {
-    const crt = 0.88 + 0.18 * Math.sin(t * 2.4) + (Math.sin(t * 17.0) > 0.92 ? -0.28 : 0);
-    return [clamp(sway0 * 0.88, 0.18, 1.08), clamp(sway1 * 0.52 * dip, 0.08, 0.72), clamp(sway2 * 0.84, 0.18, 1.05), clamp(crt, 0.42, 1.22)];
-  }
-  if (mode === 'islands') {
-    const breath = 0.84 + 0.16 * Math.sin(t * 1.35);
-    return [clamp(0.92 + 0.10 * Math.sin(t * 0.7), 0.72, 1.08), 0.11, clamp(0.32 + 0.16 * Math.sin(t * 0.5 + 1.4), 0.14, 0.55), clamp(breath, 0.6, 1.15)];
-  }
-  if (mode === 'clearcut') {
-    // Bright raw graded side (banks 0..1), moody shadowed remnant woods (bank 2), pulsing diesel/CRT glare (bank 3)
-    const glare = 0.85 + 0.22 * Math.sin(t * 3.2);
-    return [clamp(0.96 + 0.06 * Math.sin(t * 0.8), 0.82, 1.08), clamp(0.86 * dip, 0.20, 1.02), clamp(sway2 * 0.48, 0.18, 0.68), clamp(glare, 0.55, 1.20)];
-  }
-  return [
-    clamp(sway0, 0.22, 1.10),
-    clamp(sway1 * dip, 0.12, 1.02),
-    clamp(sway2, 0.22, 1.08),
-    clamp(0.84 + 0.16 * Math.sin(t * 1.9), 0.55, 1.12),
-  ];
+  const [b0, b1, b2, own] = CEILING[mode] || CEILING.canopy;
+  if (steady || mode === 'canopy' || !CEILING[mode]) return [b0, b1, b2, own];
+  const t = time + (seed % 97) * 0.13;
+  let b3 = own;
+  if (mode === 'ember') b3 = clamp(0.86 + 0.26 * Math.sin(t * 6.8) + 0.14 * Math.cos(t * 11.3 + 0.8), 0.45, 1.32);
+  else if (mode === 'swamp') b3 = clamp(0.88 + 0.18 * Math.sin(t * 2.4) + (Math.sin(t * 17.0) > 0.92 ? -0.28 : 0), 0.42, 1.22);
+  else if (mode === 'islands') b3 = clamp(0.84 + 0.16 * Math.sin(t * 1.35), 0.6, 1.15);
+  else if (mode === 'clearcut') b3 = clamp(0.85 + 0.22 * Math.sin(t * 3.2), 0.55, 1.20);
+  return [b0, b1, b2, b3];
 }
 
 /** Ring buffer of up to 6 expanding `[x, z, startTime, strength]` water ripples for `forest-fx.js`. */
