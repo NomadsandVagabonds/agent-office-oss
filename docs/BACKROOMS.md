@@ -213,11 +213,35 @@ Things to know before they bite:
 
 ### 4. What a room may cost
 
-Measured on the nineteen rooms that are there now, the heaviest is 55,000
-triangles, and none has more than 43 meshes or 16 lights. Stay inside that:
-**60,000 triangles, 45 meshes, 16 lights.** A set piece may have
-twice the triangles, since it is the only one on its floor. Batches are what
-keep the mesh count down: everything drawn into the same batch is one mesh.
+The owner has asked for more detail in rooms (November 2026), so the budget is
+in two parts. Until frame times from ordinary laptops and phones are in, these
+are the figures:
+
+| | a room | a set piece (the only one on its floor) |
+|---|---|---|
+| triangles in its ordinary batches | 120,000 | 240,000 |
+| triangles in all, with its detail batches | 250,000 | 500,000 |
+| meshes | 45, and up to 12 more that are detail | the same |
+| lights | 16 | 16 |
+
+- **Ordinary batches** are the room itself: its shell, its furniture, anything
+  that is walked into, read or used. A weak machine always draws these, so
+  this half of the budget is the worst case, and it is what the older rooms
+  were built to (the heaviest of the first nineteen was 55,000).
+- **Detail batches** are everything a room could lose and still be the same
+  room: mouldings, frames, relief, clutter that nothing depends on. They go in
+  batches of their own, marked as detail (the kit's `detail: true`, which
+  sets `mesh.userData.detail`; until that option is on the live branch, a
+  batch of its own with a name that says so). A low graphics setting leaves
+  them out. Nothing collidable, readable or usable may be in one.
+- **Draw calls cost more than triangles here.** Everything drawn into the same
+  batch is one mesh; spend the allowance inside batches, not on more of them.
+- **Lights stay at 16.** Baked and real-time shadows cost per light.
+- **A room over about 250,000 triangles in all is over.** A room near it says
+  in its audit row what it costs to build (the dev page's `&check=1` prints
+  triangles, meshes and build time).
+- This applies to new rooms and to rooms being reworked. A room nobody is
+  touching stays as it is.
 
 ### 5. Trying it
 
