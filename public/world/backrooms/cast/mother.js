@@ -12,7 +12,7 @@ import { Batch, lamp } from '../kit.js';
 import { S, SW, RING, LIMB, ringVox, mouthVox, limbVox, endVox, footVox, wormVox } from './mother.model.js';
 import { MOTHER, WORM, swaying, sways, finds, trodden } from './mother.rule.js';
 import { canLeave } from './paths.js';
-import { slide } from '../shove.rule.js';
+import { SHOVE, slide } from '../shove.rule.js';
 
 const SEGS = 14, SEG_H = MOTHER.height / SEGS, RING_H = RING * S, LIMB_H = LIMB * S;
 
@@ -290,17 +290,26 @@ export function create(c) {
       }
       return null;
     },
-    /** A shove (shove.rule.js): the small ones are batted away, out of the air or off the floor, and lie on their backs. Mother is not moved. */
+    /**
+     * A shove (shove.rule.js): the small ones are batted away, out of the air or off the floor, and lie on their backs.
+     * Mother herself gives as the heavy ones do: half a step, a short moment stood, and then she is what she was.
+     */
     shoveTargets() {
       if (!group || over) return [];
-      return worms.filter((w) => !w.dead && !w.remove && !w.air?.born).map((w) => ({ id: 'mother-brood', x: w.x, z: w.z, y: w.y ?? env.world.floorY(w.x, w.z), r: 0.2, shove: (dir) => {
+      const herself = { id: 'mother', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 0.9, r: G.r, shove: (dir) => {
+        const to = slide(walker, dir, (x0, z0, x1, z1) => c.walk.clear(walker, x0, z0, x1, z1), SHOVE.heavy.push);
+        if (to) { walker.x = to.x; walker.z = to.z; }
+        c.stall(SHOVE.heavy.stagger); c.play('creak', walker.x, walker.z, 12);
+        return true;
+      } };
+      return [herself, ...worms.filter((w) => !w.dead && !w.remove && !w.air?.born).map((w) => ({ id: 'mother-brood', x: w.x, z: w.z, y: w.y ?? env.world.floorY(w.x, w.z), r: 0.2, shove: (dir) => {
         if (w.dead) return false;
         if (w.air) { w.air = null; w.jumps = Math.max(0, (w.jumps ?? 1) - 1); if (w.jumps <= 0) w.life = Math.min(w.life, 3); }
-        const to = slide(w, dir, (x0, z0, x1, z1) => c.walk.clear(w, x0, z0, x1, z1), 1.4);
+        const to = slide(w, dir, (x0, z0, x1, z1) => c.walk.clear(w, x0, z0, x1, z1));
         if (to) { w.x = to.x; w.z = to.z; }
         w.y = env.world.floorY(w.x, w.z) + 0.04; w.dazed = WORM.dazed * 1.6; c.play('squeak', w.x, w.z, 6);
         return true;
-      } }));
+      } }))];
     },
     at: () => group ? ({ x: walker.x, z: walker.z, mode: s.mode, brood: worms.filter((w) => !w.dead).length }) : null,
     dispose() { for (const w of worms) w.g.removeFromParent(); worms.length = 0; group?.removeFromParent(); group = null; },

@@ -12,8 +12,8 @@
 import * as THREE from 'three';
 import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
-import { INTERN, waiting, copies, behind, was, pushed } from './intern.rule.js';
-import { slide } from '../shove.rule.js';
+import { INTERN, waiting, copies, behind, was } from './intern.rule.js';
+import { SHOVE, slide } from '../shove.rule.js';
 import { canLeave } from './paths.js';
 import { elbow } from './head-count.rule.js';
 import { S, BACK, NECK, backVox, neckVox, headVox } from './intern.model.js';
@@ -173,13 +173,13 @@ export function create(c) {
       }
       return null;
     },
-    /** A shove (shove.rule.js): it goes back a step, and has lost its place in what it was copying. */
+    /** A shove (shove.rule.js): it goes back and stands a moment. What it has learnt, and where it was in it, it keeps. */
     shoveTargets() {
-      if (!group || over || s.mode === 'sorry') return [];
+      if (!group || over) return [];
       return [{ id: 'intern', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 0.9, r: I.r, shove: (dir) => {
         const to = slide(walker, dir, (x0, z0, x1, z1) => c.walk.clear(walker, x0, z0, x1, z1));
         if (to) { walker.x = to.x; walker.z = to.z; }
-        s = pushed(s); trail = []; c.play('creak', walker.x, walker.z, 10);
+        c.stall(SHOVE.stagger); c.play('creak', walker.x, walker.z, 10);
         return true;
       } }];
     },

@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
 import { CARRIED, borne, carried, pace, under } from './carried-interest.rule.js';
+import { SHOVE, slide } from '../shove.rule.js';
 import { fitsDoor, canLeave } from './paths.js';
 import { S, SB, weightVox, armVox, bearerVox } from './carried-interest.model.js';
 
@@ -154,6 +155,16 @@ export function create(c) {
         if (c.room(x, z) !== null && c.room(x, z) === c.room(shot.x, shot.z) && c.los(x, z, shot.x, shot.z)) return { x, y: shot.y + 1.4, z, at: { x: shot.x, y: shot.y + 0.6, z: shot.z } };
       }
       return null;
+    },
+    /** A shove (shove.rule.js): too heavy to turn aside, but its bearers give: half a step back, and a short moment stood. Then on, as they were. */
+    shoveTargets() {
+      if (!group || over) return [];
+      return [{ id: 'carried-interest', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 0.6, r: K.r, shove: (dir) => {
+        const to = slide(walker, dir, (x0, z0, x1, z1) => c.walk.clear(walker, x0, z0, x1, z1), SHOVE.heavy.push);
+        if (to) { walker.x = to.x; walker.z = to.z; }
+        shake = 0.6; c.stall(SHOVE.heavy.stagger); c.play('thunk', walker.x, walker.z, 14);
+        return true;
+      } }];
     },
     at: () => ({ x: walker.x, z: walker.z, mode: s.mode, bearers: s.bearers }),
     dispose() { group?.removeFromParent(); group = null; },
