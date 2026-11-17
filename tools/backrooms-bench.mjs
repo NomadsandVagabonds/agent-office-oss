@@ -4,7 +4,11 @@
 // already (`--base`, default http://localhost:4317). docs/BACKROOMS-GRAPHICS.md, phase 0, says what the numbers mean.
 //
 //   node tools/backrooms-bench.mjs [--base http://localhost:4317] [--seeds 7,21,88] [--out file.json]
-//        [--size 1280x720] [--flags 'vhs=0&dpr=1'] [--timeout 300]
+//        [--size 1280x720] [--flags 'vhs=0&dpr=1'] [--stress 4|auto] [--timeout 300]
+//
+// --stress n draws the level's scene n times a frame (the page's &stress=n); --stress auto steps it up at the first station
+// until the frame time falls off, prints that table and the headroom, then tours unstressed. It multiplies today's scene: it
+// says nothing about features that are not built, and does not raise the internal resolution.
 //
 // Headless Chromium here draws in software (SwiftShader): the numbers compare one build of the level with another on the
 // same machine and say nothing about how it runs on real hardware.
@@ -16,7 +20,7 @@ import { join } from 'node:path';
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => { const i = argv.indexOf(`--${name}`); return i >= 0 && argv[i + 1] !== undefined ? argv[i + 1] : fallback; };
 if (argv.includes('--help') || argv.includes('-h')) {
-  console.log('node tools/backrooms-bench.mjs [--base http://localhost:4317] [--seeds 7,21,88] [--out file.json] [--size 1280x720] [--flags "vhs=0&dpr=1"] [--timeout 300]');
+  console.log('node tools/backrooms-bench.mjs [--base http://localhost:4317] [--seeds 7,21,88] [--out file.json] [--size 1280x720] [--flags "vhs=0&dpr=1"] [--stress 4|auto] [--timeout 300]');
   process.exit(0);
 }
 const base = arg('base', `http://localhost:${process.env.OFFICE_PORT || 4317}`).replace(/\/$/, '');
@@ -25,6 +29,8 @@ const out = arg('out', join(tmpdir(), `backrooms-bench-${new Date().toISOString(
 const [width, height] = arg('size', '1280x720').split('x').map(Number);
 const extra = new URLSearchParams(arg('flags', ''));
 const timeout = Number(arg('timeout', 300)) * 1000;
+const stress = arg('stress', '');
+if (stress && !/^(auto|\d+)$/.test(stress)) { console.error(`backrooms-bench: --stress is a whole number or auto, not ${stress}`); process.exit(2); }
 
 async function loadPlaywright() {
   try { return createRequire('/opt/')('playwright'); } catch { /* not there: try the ordinary way */ }
@@ -44,6 +50,7 @@ const results = [];
 try {
   for (const seed of seeds) {
     const q = new URLSearchParams({ seed, bench: '1', mute: '1', pursuer: '0', card: '0' });
+    if (stress) q.set('stress', stress);
     for (const [k, v] of extra) q.set(k, v);
     const page = await browser.newPage({ viewport: { width, height } });
     const errors = [];
@@ -84,6 +91,12 @@ const widths = rows[0].map((_, i) => Math.max(...rows.map((row) => row[i].length
 console.log(`Backrooms bench · ${base} · ${width}x${height} · ${results[0]?.report?.gpu || 'renderer unknown'}`);
 console.log('SOFTWARE RENDERING: these numbers compare builds on this machine and say nothing about real hardware.');
 for (const row of rows) console.log(row.map((c, i) => c.padEnd(widths[i])).join('  '));
+for (const r of results) {
+  const st = r.report?.stress;
+  if (st?.asked === 'auto') console.log(`  seed ${r.seed} stress auto: ${st.table.map((t) => `×${t.n} ${t.mean} ms`).join(' · ')} → headroom ${st.why === 'top' && st.headroom === 32 ? '≥ 32' : `≈ ${st.headroom}`}× (${st.why === 'fell' ? 'fell off' : st.why === 'top' ? 'never fell off' : 'not measured'})`);
+  else if (st) console.log(`  seed ${r.seed}: the scene drawn ${st.n} times a frame`);
+}
+if (stress) console.log('  (stress multiplies today\'s scene pass: it does not predict features not built yet, nor raise the internal resolution)');
 for (const r of results) for (const e of r.errors) console.log(`  seed ${r.seed}: ${e}`);
 console.log(`written: ${out}`);
 process.exit(results.every((r) => r.report && !r.report.aborted && !r.errors.length) ? 0 : 1);

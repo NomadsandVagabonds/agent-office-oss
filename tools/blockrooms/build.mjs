@@ -18,6 +18,9 @@ import { accountConfig } from './account-config.mjs';
 //   world/ core/ every module the level imports, found by reading the imports
 //                (tools/backrooms-sample/stage.mjs does this part), and the
 //                rules of the book (core/book.mjs), which both pages share
+//   world/dev/perf.js, perf-stats.js
+//                the measuring tape, for /play?debug&bench=1 (or &perf=1):
+//                imported by site.js only when asked for, and not preloaded
 //   vendor/      three.js and the add-ons the level uses, the fonts it asks
 //                for, and the licences they are under
 //   shots/       pictures from inside, for the front page
@@ -39,6 +42,8 @@ import { fileURLToPath } from 'node:url';
 import { stage } from '../backrooms-sample/stage.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+/** The measuring tape's modules, at their paths in the site (and under public/ in the repository). */
+export const PERF = Object.freeze(['world/dev/perf.js', 'world/dev/perf-stats.js']);
 
 /** Where the site will be, whole (https://host), or '' if nobody has said. Never a path, a query or a trailing slash. */
 export function originOf(env = process.env) {
@@ -92,6 +97,10 @@ export function build(out, opt = {}) {
       extra.push(coreName);
     }
   }
+  // (the dev page's measuring tape: site.js imports it under ?debug&perf=1 or &bench=1 and at no other time. It imports
+  // nothing but its own sums, so it needs nothing else staged)
+  fs.mkdirSync(path.join(out, 'world', 'dev'), { recursive: true });
+  for (const name of PERF) { fs.copyFileSync(path.join(HERE, '..', '..', 'public', name), path.join(out, name)); extra.push(name); }
   const stagedItems = path.join(out, 'world', 'art', 'items.js');
   if (fs.existsSync(stagedItems)) {
     fs.writeFileSync(stagedItems, fs.readFileSync(stagedItems, 'utf8').replaceAll("'/core/look.mjs'", "'../../core/look.mjs'"));

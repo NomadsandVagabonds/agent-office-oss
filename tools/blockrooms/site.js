@@ -18,7 +18,7 @@
 // it keeps one (/api/book; core/book.mjs): that somebody went in, and — when
 // somebody gets out, and has not unticked the box on the front page — what
 // the visit came to, under the made-up name they were given there.
-import { cleanDifficulty, scoreEligible } from './core/difficulty.mjs';
+import { DEFAULT_DIFFICULTY, cleanDifficulty, scoreEligible } from './core/difficulty.mjs';
 import { cleanMessage, cleanName, rollName } from './core/book.mjs';
 import { resolveLook, sanitizeLookPatch } from './core/look.mjs';
 import { cleanPerk } from './core/perks.mjs';
@@ -154,6 +154,15 @@ async function run() {
       // (and whoever is looking, or filming, may name who is down there: `cast=mother,intern` puts exactly those on every part)
       dev: (() => { const d = {}; if (['1', 'dim', 'failing', 'travel', 'emergency', 'islands'].includes(q.get('lighting'))) d.lighting = q.get('lighting');
         const cast = (q.get('cast') || '').split(',').filter(Boolean); if (cast.length) d.cast = cast; return Object.keys(d).length ? d : undefined; })() } : {};
+    // (and, under ?debug only, the dev page's measuring tape: &perf=1 a read-out, &bench=1 a fixed tour of the floor you
+    // land on, &stress=<n>|auto the scene drawn more than once a frame — world/dev/perf.js. Fetched only when asked for, so
+    // without them nothing of it is loaded or run. A bench run is the tape's building on the default difficulty and the full
+    // camcorder (unless &vhs= says otherwise), quiet and with nothing following, and is never a kept tape played back: one
+    // address is then the same walk on any machine)
+    const bench = !!dev.debug && q.get('bench') === '1';
+    const perf = dev.debug && (bench || q.get('perf') === '1') ? (await import('./world/dev/perf.js')).createPerf(office.stage, { bench, params: q }) : null;
+    if (perf) dev.onReady = (handle) => perf.attach(handle);
+    if (bench) Object.assign(dev, { mute: true, pursuer: dev.pursuer ?? false, difficulty: DEFAULT_DIFFICULTY, vhs: ['0', '1', '2'].includes(q.get('vhs')) ? Number(q.get('vhs')) : 2 });
     // ?room=<a room of the deck> is a building with that room where you land (for looking at one room; nothing on
     // the front page leads here. A room nobody has built yet is no room, and the door is an ordinary door)
     let room = !next && q.get('room') && Object.hasOwn(ARCHETYPES, q.get('room')) ? q.get('room') : null;
@@ -173,9 +182,9 @@ async function run() {
       const playerLook = theirs ? resolveLook(`visitor:${seed}`, theirs) : who.customLook ? resolveLook(`visitor:${seed}`, who.look) : resolveLook(`visitor:${seed}`);
       office.walk = { me: { id: visitOwner, name: playerName, look: playerLook } };
       office.game.report = (_place, report) => archive.report(report, visitId, visitOwner, playerName);
-      const mine = next ? archive.record(visitOwner).tapes.find((t) => t.seed === seed) : null;
+      const mine = next && !bench ? archive.record(visitOwner).tapes.find((t) => t.seed === seed) : null;
       next = null;
-      if (!mine) tell({ do: 'in' });                      // (he keeps count of who goes in. A tape played back is nobody going anywhere)
+      if (!mine && !dev.debug) tell({ do: 'in' });        // (he keeps count of who goes in. A tape played back, or a visit for checking the site, is nobody going anywhere)
       // a building that was asked to be other than its seed has it (?debug, ?room=) is for looking at, and getting out of
       // one is not a score: the book is not signed for it (it was, by anybody checking the site who walked out)
       const doctored = !!dev.debug || !!room;
@@ -189,6 +198,7 @@ async function run() {
         ...(mine ? { replay: true, pursuer: typeof mine.mascot === 'boolean' ? mine.mascot : undefined } : {}),
       });
       room = null;
+      perf?.detach();
       // A card put down by its tape's number asks for that building again; put down by Go back in, it asks for a
       // building nobody has had. Its return button takes the visitor to the front page, where the door and high
       // scores are. Esc opens the menu; Give Up ends the recording, then the score stays until the visitor chooses

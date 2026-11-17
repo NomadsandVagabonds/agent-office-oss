@@ -25,6 +25,8 @@
 //   &perf=1            a read-out in the top right: frame times over the last 5 s, draw calls, triangles, memory, sizes, the room (perf.js)
 //   &bench=1           the read-out and a fixed tour of the floor you land on; at the end `[bench] {…}` on the console and the title
 //                      `bench done` (tools/backrooms-bench.mjs runs it for three seeds; docs/BACKROOMS-GRAPHICS.md, phase 0)
+//   &stress=4          with &perf=1 or &bench=1: the level's scene drawn 4 times a frame (1…32), same picture, to measure a machine
+//                      past its display's refresh rate; &stress=auto with &bench=1 steps it up at the first station first (perf.js)
 //   &loot=1            something to find: the keycard (in the mascot's hand) and coins 1–4; &loot=card,1,3 for some of it. There is no
 //                      office here to keep count, so a stand-in does, in this page's memory, and says so on the console: what you leave
 //                      by the door with is gone the next visit (any key), everything else is down there again. Without it: no loot.

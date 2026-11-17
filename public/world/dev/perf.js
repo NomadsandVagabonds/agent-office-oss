@@ -15,14 +15,34 @@
 // only ever holds its last call (a full-screen quad). Here renderer.render is wrapped on this page's renderer only, and
 // after each call the numbers that call left in renderer.info are added up: the calls that drew the level's scene
 // (`handle.root`) are the scene pass, and every call together is all passes. Nothing about how anything is drawn changes.
-import { WINDOW_MS, REDRAW_MS, summarize, stations, tourSeconds, yawAt, drawFlags, benchReport, summaryText } from './perf-stats.js';
+//
+// &stress=<n> (1…32) the scene pass is drawn n times a frame: n − 1 extra renders of the same scene and camera into the
+//          target the real one is about to draw into, which is cleared again before the real one (the camcorder's render
+//          pass has autoClear off and clears once itself), so the picture is the one the real render leaves and the scene
+//          pass costs about n times as much. The draws line counts the real render; the extras are in *all passes*.
+// &stress=auto (with &bench=1) at the first station, before the tour: n stepped up (STRESS_LADDER) until the frame time
+//          falls off the unstressed one or n is 32 (perf-stats.js stressStep), then the tour runs unstressed. What it
+//          measures and what it does not: perf-stats.js, above STRESS_LADDER.
+// The camcorder's internal line count cannot be raised from here: vhs.js fixes it inside layout() and keeps its composer
+// to itself, so there is no &lines=.
+import { WINDOW_MS, REDRAW_MS, summarize, stations, tourSeconds, yawAt, drawFlags, benchReport, summaryText, stressOf, stressBegin, stressStep } from './perf-stats.js';
 
 export function createPerf(stage, { bench = false, params = new URLSearchParams(location.search) } = {}) {
   const renderer = stage.renderer, info = renderer.info;
   let handle = null, root = null, internal = null;
   const acc = { calls: 0, tris: 0, all: 0 };              // what this frame has drawn so far
+  const asked = stressOf(params.get('stress'));          // a number, 'auto', or null
+  let stressN = typeof asked === 'number' ? asked : 1;   // how many times the scene is drawn this frame
   const original = renderer.render;
   renderer.render = function (scene, camera) {
+    if (stressN > 1 && root && scene === root) {
+      for (let k = 1; k < stressN; k++) {
+        const c = info.autoReset ? 0 : info.render.calls;
+        original.call(this, scene, camera);
+        acc.all += info.render.calls - c;
+      }
+      if (!this.autoClear) this.clear(this.autoClearColor, this.autoClearDepth, this.autoClearStencil);   // (with autoClear on, render clears)
+    }
     const c0 = info.autoReset ? 0 : info.render.calls, t0 = info.autoReset ? 0 : info.render.triangles;
     original.call(this, scene, camera);
     const calls = info.render.calls - c0, tris = info.render.triangles - t0;
@@ -69,7 +89,7 @@ export function createPerf(stage, { bench = false, params = new URLSearchParams(
     live.textContent = [
       `frame ${f.ms.toFixed(1)}  avg ${s.mean ?? '–'}  p95 ${s.p95 ?? '–'}  worst ${s.worst ?? '–'} ms (5 s)`,
       `fps   ${fps.toFixed(1)}`,
-      `draws ${f.calls} scene · ${f.all} all passes · tris ${f.tris}`,
+      `draws ${f.calls} scene · ${f.all} all passes · tris ${f.tris}${stressN > 1 || asked ? ` · stress ×${stressN}${asked === 'auto' ? ' (auto)' : ''}` : ''}`,
       `held  ${mem.textures} textures · ${mem.geometries} geometries`,
       `size  picture ${z.picture || '–'} · canvas ${z.canvas} · dpr ${z.dpr} (device ${z.devicePixelRatio})`,
       `room  ${at ? `${at.id} ${at.room} · floor ${at.floor}` : '–'}${tour ? ` · tour ${Math.min(tour.i + 1, tour.list.length)}/${tour.list.length}` : ''}`,
@@ -98,6 +118,17 @@ export function createPerf(stage, { bench = false, params = new URLSearchParams(
     }
     if (handle.state !== 'play' || handle.level?.depth !== tour.depth) return end(`the visit moved on (${handle.state}, floor ${handle.level?.depth})`);
     const st = tour.list[tour.i], def = roomDef(st.room), t = (now - tour.at) / 1000;
+    if (tour.phase === 'stress') {                       // &stress=auto, standing at the first station before it is measured
+      tour.stress = stressStep(tour.stress, now, lastFrame?.ms);
+      stressN = tour.stress.n;
+      if (def) { handle.player.me.yaw = yawAt(st, 0) + (def.rot * Math.PI) / 2; handle.player.me.pitch = 0; }
+      if (tour.stress.done) {
+        console.log(`[bench] stress auto: ${tour.stress.table.map((r) => `×${r.n} ${r.mean} ms`).join(', ')} → headroom ${tour.stress.headroom}× (${tour.stress.why})`);
+        tour.phase = 'settle'; tour.at = now;            // and settle again, unstressed, before the station is measured
+      }
+      return;
+    }
+    if (tour.phase === 'settle' && t >= st.settle && asked === 'auto' && !tour.stress) { tour.phase = 'stress'; tour.stress = stressBegin(now); return; }
     if (tour.phase === 'settle' && t >= st.settle) { tour.phase = 'hold'; tour.at = now; tour.stood[tour.i] = handle.where()?.id ?? null; }
     const held = tour.phase === 'hold' ? (now - tour.at) / 1000 : 0;
     if (def) { handle.player.me.yaw = yawAt(st, held) + (def.rot * Math.PI) / 2; handle.player.me.pitch = 0; }
@@ -109,8 +140,11 @@ export function createPerf(stage, { bench = false, params = new URLSearchParams(
   }
   function end(aborted) {
     const t = tour; tour = null;
-    const report = benchReport({ seed: params.get('seed') ?? t.seed, flags: drawFlags(params), ua: navigator.userAgent, gpu: gpuName(), sizes: sizeNow(),
-      list: t.list, frames: t.frames, stood: t.stood, seconds: t.began ? (performance.now() - t.began) / 1000 : 0, aborted });
+    const stress = asked === 'auto' ? { asked, n: 1, table: t.stress?.table ?? [], headroom: t.stress?.headroom ?? null, why: t.stress?.why ?? null }
+      : asked ? { asked, n: asked } : null;
+    if (asked === 'auto') stressN = 1;
+    const report = benchReport({ seed: params.get('seed') ?? params.get('tape') ?? t.seed, flags: drawFlags(params), ua: navigator.userAgent, gpu: gpuName(), sizes: sizeNow(),
+      list: t.list, frames: t.frames, stood: t.stood, seconds: t.began ? (performance.now() - t.began) / 1000 : 0, aborted, stress });
     window.__bench = report;
     console.log('[bench] ' + JSON.stringify(report));
     done.style.cssText = 'margin-top:6px;padding-top:5px;border-top:1px solid #e9e3cf55;user-select:text;pointer-events:auto;white-space:pre-wrap;overflow-wrap:anywhere';   // wraps on a phone, so all of it is in a screenshot
@@ -130,8 +164,8 @@ export function createPerf(stage, { bench = false, params = new URLSearchParams(
       handle = next; root = next.root;
       if (bench && !tour) {
         const list = stations(next.level);
-        tour = { list, i: 0, phase: 'wait', at: 0, frames: [], stood: [], began: 0, seed: next.level.seed, depth: null };
-        console.log(`[bench] touring ${list.length} stations, about ${Math.round(tourSeconds(list))} s once the floor is reached`);
+        tour = { list, i: 0, phase: 'wait', at: 0, frames: [], stood: [], began: 0, seed: next.level.seed, depth: null, stress: null };
+        console.log(`[bench] touring ${list.length} stations, about ${Math.round(tourSeconds(list))} s once the floor is reached${asked === 'auto' ? ', after up to 18 s of stress steps at the first' : asked > 1 ? `, the scene drawn ${asked} times a frame` : ''}`);
       }
     },
     /** The visit is over: a tour still running stops and says so. */

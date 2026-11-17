@@ -63,8 +63,9 @@ The numbers that set the budgets come from ordinary laptops and phones, so the
 tour is made to be handed on: one address, a minute and a half, and a summary to
 copy back. **Auto** is what protects a machine nobody measured.
 
-**Built: the read-out and the tour.** Both are on the dev page only and off
-unless asked for; without the flags the page does not even fetch them.
+**Built: the read-out and the tour.** Both are on the dev page, and on the
+BlockRooms site under `?debug` (below), and off unless asked for; without the
+flags neither page even fetches them.
 
 - `/world/dev/backrooms.html?seed=7&perf=1` puts a small read-out in the top
   right corner, redrawn four times a second. *frame* is the time from one frame
@@ -105,6 +106,42 @@ it alone (no keys, no touching) until the title or the read-out says
 `bench done`, then press *copy result* and send the line, or on a phone take a
 screenshot of the summary. Say what the device is and whether it was plugged
 in. Leave the window at its usual size: the size is part of the result.
+
+**Without an office: the BlockRooms site.** The same read-out and tour are on
+the built site, under its `?debug` flag and nowhere else:
+`https://<the site>/play?debug&tape=7&bench=1` (or `&perf=1` for the read-out
+alone; `/?debug&tape=7&bench=1` on the front page goes straight through to
+it). Any laptop or phone with a browser can open it; nothing needs to be
+running. The tape is the seed, so the same address is the same walk on every
+machine; a bench run there is also on the default difficulty, the full
+camcorder (unless `&vhs=0|1|2`), quiet, with nothing following you, and never
+a kept tape played back. Your saved settings that change the light
+(steady lighting) are still yours. Like any `?debug` visit it is not counted
+as somebody going in and walking out of it signs nothing. Without these
+flags the site does not fetch the measuring modules at all.
+
+**Stress: past the refresh rate.** A fast machine reads its display's
+refresh interval at every station (8.3 ms at 120 Hz): that says there is
+headroom, not how much. `&stress=<n>` (1…32, with `&perf=1` or `&bench=1`,
+on the dev page or the site) draws the level's scene n times a frame — the
+same scene and camera n − 1 extra times into the target the real render is
+about to use, cleared again before it — so the scene pass costs about n
+times as much and the picture does not change. `&stress=auto` (with
+`&bench=1`) steps n through 1, 2, 3, 4, 6, 8, 12, 16, 24, 32 at the first
+station, about 1.75 s each, until the mean frame time is over 1.25× the
+unstressed one or n is 32; it reports the table of n → mean ms and
+*headroom ≈ k×*, the largest n that still held the unstressed frame time
+within 10%, then runs the ordinary tour unstressed. Both are in the
+`[bench]` line (`stress`) and the summary;
+`node tools/backrooms-bench.mjs --stress auto` does the same headless. What
+it measures: how many times today's scene pass fits in a frame on that
+machine. What it does not: what features that are not built yet will cost
+(they are not in the scene to multiply), anything about the camcorder's own
+passes after the scene (drawn once), or a higher internal resolution. The
+camcorder's line count is fixed inside `vhs.js` (`layout`), which keeps its
+composer to itself, so the dev tool cannot raise it without editing that
+file; there is no `&lines=`. At `&vhs=0` the picture is the window, up to
+1680 pixels wide, and on the dev page `&dpr=` raises it.
 
 ### 1 · Light that is already paid for
 
