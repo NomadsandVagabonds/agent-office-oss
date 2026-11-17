@@ -376,17 +376,57 @@ High also holds the corner darkening and bounce):
 | re-org (walls only) | 14.8 × 16.8 × 11.5 | 130 → 222 ms | 17 ms | 159 KB |
 | a whole floor (all its rooms) | 34 rooms | 241 → 693 ms | | 0.96 MB |
 
-The worst room's map took 68 ms, inside the 250 ms asked for, so nothing is
-baked in slices or put off until a room is near; the map is made in the room's
-own bake, as the part is built. No room gains a mesh or a triangle. Texture
-memory: 1 MB or so a floor; the largest set piece the deck allows (28 × 28 m,
-12 m high) would be about 0.6 MB, a 20 × 20 m room with four banks about 1.3 MB.
+No room gains a mesh or a triangle. Texture memory: 1 MB or so a floor; the
+largest set piece the deck allows (28 × 28 m, 12 m high) would be about 0.6 MB,
+a 20 × 20 m room with four banks about 1.3 MB.
 
-**Fell back** (no floor in the map; walls only, if any): rooms with their own
-floor heights (`rt.floorY`: the all-hands, the re-org, the mall's floors and
-other set pieces), a pit or a dais, a room with no shell floor (the halo rooms,
-the culvert, the atrium…), a room flattened by the no-trap check. A room with
-nothing standing in it has no map at all.
+**What a frame pays.** A part is built a room at a time (`world.js`
+`buildWorld`, `tick` awaited between rooms; the part below is built while the
+visitor walks, three frames between rooms, `index.js` `prepare`). With a map to
+make, a room is three slices, each its own frame: its build, then its map and
+what darkens what (`ctx.shade()`), then the bake of its meshes (`finish`); the
+breaths between them are one frame each, so a room takes the frames it took
+before. Nothing is drawn until the part is: the part below is hung in the scene
+only once it is ready, so no room is seen with half a map. Classic and Low have
+no map, and build and tick exactly as before. Measured on the build machine
+(software rendering, a 480 × 270 window, seeds 7 and 21: the frames themselves
+are slow here, about 75 ms at Classic and 105 ms at Medium with nothing being
+built, so only the comparison means anything; the bake is JavaScript on the
+main thread, and those milliseconds are this CPU's):
+
+| the part below, built ahead | worst frame | largest piece one frame pays | ready after |
+|---|---|---|---|
+| Classic | 253 / 370 ms | 156 / 265 ms (a room's build and bake) | 7.3 / 12.5 s |
+| Medium, before the slices | 485 / 434 ms | 340 / 302 ms (the same, with the map) | 19.2 / 31.5 s |
+| Medium | 223 / 303 ms | 120 / 171 ms (the largest room's build) | 10.3 / 16.4 s |
+| High | 209 ms | 105 ms | 10.3 s |
+
+The first part (behind the loading picture) has its worst frame in one room's
+own build at every tier (the copiers, about 350 ms, the first time the
+catalogue's models are made), not in a map. The re-org's bell rebuilds
+nothing: what it moves is moved by its own tick.
+
+**Fell back** (no floor in the map; walls only), by room, from the rooms
+themselves and the dev page across seeds 7, 21 and 88, floors 0–2, every
+archetype dealt on its own, and the mall and waterpark floors:
+
+- their own floor heights (`rt.floorY`): the all-hands, the re-org, the
+  keyboard floor, the cubicle grid, the drop plenum, the culvert; the mall's
+  food court, level P, moving stairs and atrium; every waterpark room (the
+  bellmouth baths, the deep end, the hanging changing rooms, the kiddie lagoon,
+  the lazy river, the return pool, the slide maze, the wave pool, the
+  whirlpool flume); the exit when its stairs are the floor.
+- no floor of the shell's (they lay their own): the exit's stairwell, the
+  stress pool, the tiny door.
+- a pit or a dais in a plain room (pits seen; a dais would do the same), and a
+  room the no-trap check flattens (none seen).
+
+The mall's plain rooms keep their floor. **No map at all:** a room with nothing
+standing in it and no doorway's light reaching it (a few plain rooms, the
+landing, the culvert now and then); and a room whose map would hold only a wall
+or two that nothing shades and no doorway lights, so it is dropped: the coolers
+and the server chasm (the shell's front wall only, the rest their own), and the
+odd landing with one small thing in it.
 
 **Light through a doorway** (`doorlight`; `&gfx=doorlight` on the dev page).
 Once every room of a part is built (the room next door's lamps are known only
@@ -410,11 +450,24 @@ follow the doorway or the room beyond. Bodies standing in the patch are lit by
 it (`world.lightAt`). Through the doorway's light is 2.5× the bake's own
 falloff (`DOOR_GAIN`): the bake was tuned for rooms lit by their own tubes and a
 large ambient share, and through a doorway there is no ambient to carry it.
-Cost: at most 29 ms a room on the same floors (the copiers 22, the mailroom 19,
-the cutouts 29), done a room at a time with the loading picture kept moving in
-between (about 1 s of the part's build in all, in slices); the doorways'
-texture is four bytes a texel at the map's size, which brings a floor's maps to
-about 3.3–3.5 MB. A frame pays one more lookup and four multiplies.
+Cost: at most 33 ms a room on the same floors (the copiers 22, the mailroom 19,
+the cutouts 29), about 0.2 s for a whole floor, done a room at a time with one
+frame between rooms; the doorways' texture is four bytes a texel at the map's
+size, which brings a floor's maps to about 3.3–4.2 MB. A frame pays one more
+lookup and four multiplies.
+
+**Not waited for.** The first part bakes its doorways behind the loading
+picture. The part below is ready (can be fallen into) once its rooms and maps
+are; its doorways' light fills in after (`world.doorsLit`; `env.lateDoorLight`,
+set for a part built ahead), the rooms round the landing first. Each room's
+doorways arrive whole, in one frame; until then the room draws as it does
+without them. In a part being played in, a doorway's light that arrives comes
+up over 0.8 s (`DOOR_FADE`) rather than appearing; in a part still hanging
+unlit below, it is at full when it arrives, as before. A part thrown away stops
+its pass. Waiting at the way down from the first moment (the dev page's
+`descend()` as play begins, seed 7, software): Classic 8.9 s, Medium 22.5 s
+when the doorways were waited for, 12.6 s now. Of that 22.5 s, 9 s was the
+doorway pass: 0.2 s of work and three frames between each of its 29 rooms.
 
 ### 2 · Light that behaves
 

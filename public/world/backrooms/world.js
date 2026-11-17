@@ -70,7 +70,9 @@ function copyChunks(batch, chunks, decals = false) {
 // its own tubes and a big ambient share: through a doorway there is no ambient to carry it, and the eye goes to it.
 // SPILL_DOOR: the old glow at a doorway from a brighter room next door, kept at this share when the doorway's own light
 // is baked (it still lights the ceiling and what stands there, which the map does not reach).
-const DOOR_GAIN = 2.5, SPILL_DOOR = 0.5;
+// DOOR_FADE: seconds a doorway's light takes to come up when it is baked late (env.lateDoorLight) while its part is being
+// drawn and lit frame by frame.
+const DOOR_GAIN = 2.5, SPILL_DOOR = 0.5, DOOR_FADE = 0.8;
 const CONTACT = 0.7, SELF = 0.45, SELF_H = 0.4, BOUNCE_FLOOR = 0.6, BOUNCE_WALL = 0.4, EDGE = 0.9, SHADE_BODY = 0.75;
 const NO_OCCLUDERS = [];
 
@@ -335,7 +337,9 @@ export async function buildWorld(kit, level, env, tick) {
         const level = k === 0 ? 1 : k === 1 ? N.u.flick.value : (N.lighting ? lv[k - 2] ?? 1 : 1), w = d.share[k] * level;
         r += w * d.tint[k][0]; g += w * d.tint[k][1]; b += w * d.tint[k][2];
       }
-      const k = d.peak * open * N.u.dim.value * DOOR_GAIN;
+      // (baked late: it comes up over DOOR_FADE seconds from the first frame it is drawn, not all at once)
+      if (d.late && d.since === undefined) d.since = lightingTime;
+      const k = d.peak * open * N.u.dim.value * DOOR_GAIN * (d.late ? Math.min(1, (lightingTime - d.since) / DOOR_FADE) : 1);
       d.u.set(r * k, g * k, b * k);
     }
   };
@@ -536,18 +540,25 @@ export async function buildWorld(kit, level, env, tick) {
     emergencyFixtures(ctx);
     env.stash?.(ctx);                          // what is hidden in this room, if anything (loot.js): last, so the furniture is where it always was and the coin can see what floor is left
     const t1 = performance.now();
+    let baked = 0;
+    // (kit.gfx.shadows, .doorlight) the room's light map in a slice of its own, with a breath before and after it, so a
+    // frame pays the room's build, its map or its bake but never two of them. tick's third argument asks for a short
+    // breath: the three are short, so a room still takes the breaths it took before, only spread over its pieces
+    const sliced = !!tick && !!kit.gfx && (kit.gfx.shadows > 0 || kit.gfx.doorlight > 0);
+    if (sliced) {
+      await tick(rt.id, rooms.length, true);
+      const s0 = performance.now(); ctx.shade(); baked += performance.now() - s0;
+      await tick(rt.id, rooms.length, true);
+    }
+    const t2 = performance.now();
     ctx.finish();
     refreshBanks(rt);
-    world.timing.push([`${rt.def.arch || rt.def.kind}#${rt.id}`, Math.round(t1 - t0), Math.round(performance.now() - t1)]);
-    if (tick) await tick(rt.id + 1, rooms.length);
+    world.timing.push([`${rt.def.arch || rt.def.kind}#${rt.id}`, Math.round(t1 - t0), Math.round(baked + performance.now() - t2)]);
+    if (tick) await tick(rt.id + 1, rooms.length, sliced);
   }
   // (kit.gfx.doorlight) the light through the doorways, now that every room's lamps are known
-  if (kit.gfx?.doorlight > 0) {
-    const t0 = performance.now(), leaves = leafBoxes(level);
-    // (a room at a time, the loading picture kept moving between them: the part below is built while somebody walks)
-    for (const rt of rooms) { doorLight(world, rt, leaves); if (tick) await tick(rooms.length, rooms.length); }
-    world.timing.push(['door light', Math.round(performance.now() - t0), Math.max(0, ...rooms.map((rt) => rt.doorStats?.ms || 0))]);
-  }
+  const lateDoors = kit.gfx?.doorlight > 0 && !!env.lateDoorLight && !!tick;
+  if (kit.gfx?.doorlight > 0 && !lateDoors) await doorPass(world, tick);
   const tCheck = performance.now();
 
   // nothing may wall a doorway off. Walk every room the way the player would; if a doorway cannot be reached,
@@ -599,7 +610,7 @@ export async function buildWorld(kit, level, env, tick) {
   };
   world.clearLightingCue = rt => { if (rooms.includes(rt) && rt.lighting) delete rt.lighting.cue; };
   world.updateLighting = (t) => {
-    lightingTime = t;
+    lightingTime = t; world.litAt = performance.now();
     world.lightingTime = t;
     for (const rt of rooms) refreshBanks(rt);
     for (const rt of rooms) if (rt.doorLight) refreshDoorLight(rt);
@@ -696,10 +707,42 @@ export async function buildWorld(kit, level, env, tick) {
     const p = toLocal(rt.def, x, z);
     return rt.level * rt.u.dim.value * (rt.lighting ? localLightScale(rt.lighting, rt.lights, rt.lightLevels, p.x, p.z) : 1);
   };
-  world.dispose = () => { scene.traverse((o) => { if (o.userData.dispose) o.userData.dispose(); }); scene.clear(); };
+  world.dispose = () => { world.disposed = true; scene.traverse((o) => { if (o.userData.dispose) o.userData.dispose(); }); scene.clear(); };
   world.hasLighting = rooms.some(rt => !!rt.lighting);
   world.updateLighting(0);
+  // (env.lateDoorLight) the part is ready without the light through its doorways; it fills in a room at a time, the
+  // rooms round the landing first, each arriving whole and fading up. It stops when the part is thrown away.
+  world.doorsLit = lateDoors ? doorPass(world, tick, true) : null;
   return world;
+}
+
+/** (kit.gfx.doorlight) Every room's light from next door, a room at a time, `tick` awaited between rooms. Late: after the
+ * part is ready, nearest the landing first; whatever is baked late fades up (refreshDoorLight), and a part thrown away
+ * (world.dispose) is not touched again. */
+async function doorPass(world, tick, late = false) {
+  const { rooms, level } = world, t0 = performance.now(), leaves = leafBoxes(level);
+  let order = rooms;
+  if (late) {
+    world.doorsPending = true;
+    const at = world.roomAt(level.start.x, level.start.z), dist = at ? world.distances(at.id) : new Map();
+    order = [...rooms].sort((a, b) => (dist.get(a.id) ?? 99) - (dist.get(b.id) ?? 99) || a.id - b.id);
+  }
+  // (a room at a time, the loading picture kept moving between them: the part below is built while somebody walks; a
+  // room's doorways are a few tens of milliseconds at most, so a short breath between rooms)
+  for (const rt of order) {
+    if (late) { if (tick) await tick(rooms.length, rooms.length, true); if (world.disposed) return; }
+    doorLight(world, rt, leaves);
+    if (late && rt.doorLight) {
+      // (the part lit frame by frame, being played in: it fades up; hung below unlit, or not yet looked at: at once, as
+      // it would have been had it been baked before the part was ready)
+      const live = world.lightingTime > 0 && performance.now() - world.litAt < 250;
+      for (const d of rt.doorLight) d.late = live;
+      world.refreshDoorLight(rt);
+    }
+    if (!late && tick) await tick(rooms.length, rooms.length, true);
+  }
+  world.doorsPending = false;
+  world.timing.push(['door light', Math.round(performance.now() - t0), Math.max(0, ...rooms.map((rt) => rt.doorStats?.ms || 0))]);
 }
 
 /* ---- the toolbox a room is built with ------------------------------------------------ */
@@ -717,7 +760,7 @@ function roomContext(world, rt) {
   // (kit.gfx only) what stands in the room, for contact darkening: every box drawn into the room's own batches, every model, every pillar
   const gfxOn = kit.gfx?.contact > 0 || kit.gfx?.shadows > 0 || kit.gfx?.doorlight > 0, standing = [];
   const shadowsOn = kit.gfx?.shadows > 0, doorOn = kit.gfx?.doorlight > 0, mapOn = shadowsOn || doorOn;
-  let gfxShell = null;
+  let gfxShell = null, shaded = null;
   const noteBoxes = (batch, structural) => {
     const original = batch.box;
     batch.box = function (x0, y0, z0, x1, y1, z1, ...rest) {
@@ -1467,10 +1510,17 @@ function roomContext(world, rt) {
     },
 
     /* ---- done: bake and hand the meshes over ----------------------------------------- */
-    finish() {
+    /** The furniture sorted out, what darkens what worked out and the light map baked: the first half of finish, which
+     * buildWorld runs in a slice of its own when there is a map to bake (finish then goes straight on to the meshes). */
+    shade() {
+      if (shaded) return;
       if (moving) separateFurniture();
-      const g = kit.gfx && (kit.gfx.contact > 0 || kit.gfx.bounce > 0) ? gfxRoom() : null;
+      shaded = { g: kit.gfx && (kit.gfx.contact > 0 || kit.gfx.bounce > 0) ? gfxRoom() : null };
       if (mapOn) shadowRoom();
+    },
+    finish() {
+      c.shade();
+      const { g } = shaded;
       const add = (mesh, order = 0, parent = rt.group) => { mesh.renderOrder = order; mesh.matrixAutoUpdate = false; parent.add(mesh); return mesh; };
       const bake = (batch, make, order = 0, unlit = false, key = null) => {
         let last = null;

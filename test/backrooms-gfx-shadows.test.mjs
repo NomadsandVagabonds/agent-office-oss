@@ -354,3 +354,93 @@ test('a doorway\'s light follows the doorway (shut: none) and the room beyond (i
   world.updateLighting(0);
   assert.ok(world.lightAt(p.x, p.z, 1)[0] < lit);
 });
+
+
+/* ---- what a frame pays while a part is built (world.js buildWorld, doorPass) ----------------------------------------- */
+
+/** The fixture's floor built with a tick, recording what it was called with and how far the room it was in had got. */
+async function paced(t, { gfx, late = false, stopAfter = Infinity } = {}) {
+  const level = generate(7, { count: 0 }), kit = gfx === undefined ? createKit() : createKit({ gfx }), calls = [];
+  let rooms = null, built = null;
+  const builders = { plain: (c) => { rooms = c.world.rooms; built = c.world; furnish(c); } };
+  const tick = async (i, n, short) => {
+    const rt = short ? rooms[i] : null;
+    calls.push({ i, short: !!short, map: rt ? !!rt.shadowStats : null, meshes: rt ? rt.group.children.length : null });
+    if (calls.length >= stopAfter) built.dispose();
+    await new Promise((r) => setImmediate(r));                // (a frame, as far as the build can tell)
+  };
+  const world = await buildWorld(kit, level, { catalogue: catalogueOf(kit), barricadesEnabled: true, builders, lateDoorLight: late }, tick);
+  t.after(() => { world.dispose(); kit.dispose(); });
+  return { world, calls };
+}
+const doorsOf = (world) => world.rooms.map((rt) => [rt.doorStats?.doors ?? null, rt.lm?.C ? Array.from(rt.lm.C.data).reduce((a, v) => (Math.imul(a, 31) + v) >>> 0, 0) : null,
+  (rt.doorLight || []).map((d) => [d.link, d.peak, d.share])]);
+
+test('a part built with a tick: without a map nothing changes; with one, each room\'s map is a slice of its own', async (t) => {
+  // no map: the same ticks as ever (one a room, then the no-trap check's), none of them short, the same baked numbers
+  for (const gfx of [undefined, { contact: 1, bounce: 0.7, shadows: 0, doorlight: 0 }]) {
+    const { world, calls } = await paced(t, { gfx });
+    assert.equal(calls.filter((c) => c.short).length, 0);
+    assert.deepEqual(calls.slice(0, world.rooms.length).map((c) => c.i), world.rooms.map((rt) => rt.id + 1));
+    if (!gfx) assert.deepEqual(world.rooms.slice(0, 6).map((rt) => fingerprint(world, rt)), BEFORE);
+  }
+  // a map: a breath before it (the room built, no map yet) and after it (the map, no mesh of the bake yet), then the bake
+  // and a breath after the room; all three short, so a room takes as many frames as it did (index.js prepare)
+  const gfx = { contact: 1, bounce: 0.7, shadows: 1, doorlight: 1 };
+  const { world, calls } = await paced(t, { gfx }), eager = await fixture(t, { gfx }), N = world.rooms.length;
+  assert.deepEqual(calls.slice(0, 3 * N).map((c) => [c.i, c.short]), world.rooms.flatMap((rt) => [[rt.id, true], [rt.id, true], [rt.id + 1, true]]));
+  for (const rt of world.rooms) {
+    const mine = calls.slice(3 * rt.id, 3 * rt.id + 2);
+    assert.deepEqual(mine.map((c) => c.map), [false, true]);
+    assert.equal(mine[0].meshes, mine[1].meshes, 'no mesh is handed over with its map');
+    assert.ok(rt.group.children.length > mine[1].meshes, 'the bake comes after the map');
+  }
+  // sliced or not, the same rooms: the same vertex light, the same maps, the same light through the doorways
+  assert.deepEqual(world.rooms.map((rt) => fingerprint(world, rt)), eager.world.rooms.map((rt) => fingerprint(eager.world, rt)));
+  assert.deepEqual(world.rooms.map((rt) => rt.lm?.A?.data.length ?? null), eager.world.rooms.map((rt) => rt.lm?.A?.data.length ?? null));
+  assert.deepEqual(doorsOf(world), doorsOf(eager.world));
+});
+
+test('lateDoorLight: the part is ready before its doorways\' light, which arrives a room at a time, whole, fading up; never after it is thrown away', async (t) => {
+  const gfx = { shadows: 1, doorlight: 1 }, eager = await fixture(t, { gfx });
+  // without a tick there is nobody to pace it: lateDoorLight is not taken up
+  const kit0 = createKit({ gfx }), w0 = await buildWorld(kit0, generate(7, { count: 0 }), { catalogue: catalogueOf(kit0), barricadesEnabled: true, builders: { plain: furnish }, lateDoorLight: true });
+  t.after(() => { w0.dispose(); kit0.dispose(); });
+  assert.equal(w0.doorsLit, null); assert.deepEqual(doorsOf(w0), doorsOf(eager.world));
+
+  const { world } = await paced(t, { gfx, late: true });
+  assert.equal(world.doorsPending, true);
+  assert.ok(world.rooms.every((rt) => !rt.doorLight && !rt.doorStats), 'ready with no doorway baked yet');
+  for (const rt of world.rooms) if (rt.lm) for (const m of rt.lm.materials) assert.equal(m.defines.DOORLIGHT, undefined, 'a room draws as it does without the doorways\' light');
+  // being played in (lit frame by frame) while it fills in
+  let now = 10; const frames = setInterval(() => world.updateLighting((now += 0.016)), 5);
+  await world.doorsLit; clearInterval(frames);
+  assert.equal(world.doorsPending, false);
+  assert.deepEqual(doorsOf(world), doorsOf(eager.world), 'baked late, the same light');
+  for (const rt of world.rooms) if (rt.doorLight) for (const m of rt.lm.materials) assert.equal(m.defines.DOORLIGHT, 1);
+  // so it fades up from when it arrived (DOOR_FADE), where the one baked before the part was ready is at full at once
+  const i = world.rooms.findIndex((rt) => rt.doorLight?.some((d) => d.late)), d = world.rooms[i].doorLight.find((x) => x.late), e = eager.world.rooms[i].doorLight[world.rooms[i].doorLight.indexOf(d)];
+  assert.ok(d, 'a doorway that arrived while the part was being lit');
+  eager.world.updateLighting(d.since + 0.4); world.updateLighting(d.since + 0.4);
+  assert.ok(d.u.length() > 0 && d.u.length() < e.u.length() * 0.75, 'half way up');
+  eager.world.updateLighting(d.since + 1); world.updateLighting(d.since + 1);
+  assert.ok(Math.abs(d.u.length() - e.u.length()) < 1e-9);
+  // hung below and not lit frame by frame (the part ahead before anybody is near): no fade, at full as it arrives
+  const still = await paced(t, { gfx, late: true });
+  await still.world.doorsLit;
+  for (const rt of still.world.rooms) for (const x of rt.doorLight || []) { assert.equal(x.late, false); assert.ok(x.peak === 0 || x.u.length() > 0 || !x.throat.open); }
+
+  // thrown away half way: nothing more is baked into it
+  const rooms = world.rooms.length, cut = await paced(t, { gfx, late: true, stopAfter: 3 * rooms + 3 });
+  await cut.world.doorsLit;
+  const done = cut.world.rooms.filter((rt) => rt.doorStats).length;
+  assert.ok(done < rooms, `${done} of ${rooms} rooms were reached before it was thrown away`);
+  assert.equal(cut.world.timing.some(([w]) => w === 'door light'), false);
+});
+
+test('index.js: only the part built ahead takes its doorways\' light late, and its pace gives a short breath one frame', () => {
+  const src = readFileSync(new URL('public/world/backrooms/index.js', root), 'utf8');
+  assert.match(src, /lateDoorLight: !!pace,/, 'the first part (no pace: the loading picture) is built whole, doorways and all');
+  assert.match(src, /const pace = async \(i, n, short\) => \{ await frame\(\); if \(!short\) \{ await frame\(\); await frame\(\); \} \};/);
+  assert.match(src, /autoStep\(gfxAuto, time, stage\.frameMs, !!ahead && \(!ahead\.f \|\| !!ahead\.f\.world\.doorsPending\)\)/, 'Auto does not count the frames of a doorway pass as the machine being slow');
+});

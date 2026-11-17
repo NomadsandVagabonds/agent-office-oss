@@ -328,6 +328,8 @@ async function visit(office, opt) {
       level, cast, who, perk, kit, sound, hud, vhs, renderer, builders, catalogue: await loadCatalogue(kit), Avatar, layout,
       plan: office.net?.state?.world?.plan || {}, visit: plan, carry,
       barricadesEnabled: opt.barricades !== false,
+      // (a part built ahead is ready once its rooms and light maps are; the light through its doorways fills in after: world.js doorPass)
+      lateDoorLight: !!pace,
       lighting: opt.dev?.lighting || false,
       steadyLighting: () => settings.steadyLighting,
       difficulty: () => difficulty.current,
@@ -457,7 +459,9 @@ async function visit(office, opt) {
     const index = cur.level.depth + 1, over = cur;
     if (index >= plan.depths) return;
     const mine = ahead = { index, f: null, failed: false };
-    const pace = async () => { await frame(); await frame(); await frame(); };
+    // (a room, then three frames; a short breath (world.js: between a room's build, its light map and its bake, and
+    // between rooms' doorways), one)
+    const pace = async (i, n, short) => { await frame(); if (!short) { await frame(); await frame(); } };
     (async () => {
       try {
         const f = await build(floor(index), null, pace);
@@ -648,7 +652,7 @@ async function visit(office, opt) {
     light += (lvl - light) * (1 - Math.exp(-2.2 * dt));
     u.uGain.value = clamp(Math.pow(0.3 / Math.max(light, 0.04), 0.55), 0.9, variedLight ? LIGHTING.gainMax : 2.3);
     vhs.setAmbient(light);
-    if (gfxAuto && (gfxAuto = autoStep(gfxAuto, time, stage.frameMs, !!ahead && !ahead.f)).changed) { vhs.setProfile(gfx()); pictureKey = ''; showDetail(root, gfx()); }
+    if (gfxAuto && (gfxAuto = autoStep(gfxAuto, time, stage.frameMs, !!ahead && (!ahead.f || !!ahead.f.world.doorsPending))).changed) { vhs.setProfile(gfx()); pictureKey = ''; showDetail(root, gfx()); }
     // The camera only reveals nearby surfaces. Its broad lamp is independent
     // of the narrow inventory flashlight and never supplies creature power.
     const wantTorch = inventory ? inventory.torchPower() : env.hand?.hasFlashlight?.() ? 1 : 0;
