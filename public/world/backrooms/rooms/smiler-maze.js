@@ -37,7 +37,7 @@ export function build(c) {
   }
   block(c.flat,[-W/2+.09,1.7,-D/2+.065,-W/2+.16,2.17,-D/2+.7],cheek);
 
-  const chase=createChase(c,plan);
+  const chase=createChase(c);
   rt.smilerChase=chase;
   c.zone({x0:-W/2,x1:W/2,z0:-D/2,z1:D/2,stay(_dt,me){
     if(me.z < D/2-2.2 && !me.world.frozen) chase.start();

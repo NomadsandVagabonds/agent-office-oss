@@ -41,7 +41,7 @@ register(`data:text/javascript,${encodeURIComponent(`export function resolve(s,c
  return next(s,c);
 }`)}`,import.meta.url);
 
-test('a player can run the maze, chain the hops, plunge once and walk out while the same horde stops above the pool',async t=>{
+async function diveFixture(t){
   const draw=new Proxy({},{get:(_,k)=>k==='measureText'?s=>({width:String(s).length*6})
     : /Gradient/.test(k)?()=>({addColorStop(){}}):()=>{},set:()=>true});
   const old=globalThis.document;
@@ -67,18 +67,11 @@ test('a player can run the maze, chain the hops, plunge once and walk out while 
   const camera=new THREE.PerspectiveCamera();
   const player=env.player=createPlayer(world,camera,{...toWorld(maze,0,maze.D/2-.75),yaw:maze.rot*Math.PI/2},input);
   const chase=world.rooms[maze.id].smilerChase,towerRuntime=world.rooms[tower.id];
-  const swim=chase.pack[0].rig, office=buildSmilingClimber(kit,0);
-  assert.deepEqual(swim.head.children[0].geometry.attributes.aAlb.array,
-    office.head.children[0].geometry.attributes.aAlb.array,'the same Smiling Office Worker face');
-  assert.notDeepEqual(swim.bodyGroup.children[0].geometry.attributes.aAlb.array,
-    office.bodyGroup.children[0].geometry.attributes.aAlb.array,'the costumes use separate geometry');
-  assert.equal(towerRuntime.diving.chase,chase);
-  assert.equal(towerRuntime.flat,false,'the authored stairs pass the ordinary doorway reachability proof');
   let time=0;
-  function tick(){
-    player.update(1/60);
-    player.me.slow=1;
-    world.update(1/60,time+=1/60,player.me);
+  function tick(current=player){
+    current.update(1/60);
+    current.me.slow=1;
+    world.update(1/60,time+=1/60,current.me);
   }
   function walk(room,x,z){
     const goal=toWorld(room,x,z);
@@ -90,6 +83,20 @@ test('a player can run the maze, chain the hops, plunge once and walk out while 
     input.keys.clear();player.me.vx=0;player.me.vz=0;
     assert.ok(distance()<.12,`walk to ${room.arch??room.kind} ${x},${z}, at ${JSON.stringify(toLocal(room,player.me.x,player.me.z))}`);
   }
+  return {world,env,level,maze,tower,kit,sounds,hurt,met,escaped,THREE,createPlayer,buildSmilingClimber,
+    player,input,camera,chase,towerRuntime,tick,walk};
+}
+
+test('a player can run the maze, chain the hops, plunge once and walk out while the same horde stops above the pool',async t=>{
+  const {world,env,level,maze,tower,kit,sounds,hurt,met,escaped,THREE,createPlayer,buildSmilingClimber,
+    player,input,camera,chase,towerRuntime,tick,walk}=await diveFixture(t);
+  const swim=chase.pack[0].rig, office=buildSmilingClimber(kit,0);
+  assert.deepEqual(swim.head.children[0].geometry.attributes.aAlb.array,
+    office.head.children[0].geometry.attributes.aAlb.array,'the same Smiling Office Worker face');
+  assert.notDeepEqual(swim.bodyGroup.children[0].geometry.attributes.aAlb.array,
+    office.bodyGroup.children[0].geometry.attributes.aAlb.array,'the costumes use separate geometry');
+  assert.equal(towerRuntime.diving.chase,chase);
+  assert.equal(towerRuntime.flat,false,'the authored stairs pass the ordinary doorway reachability proof');
   for(const [x,z] of mazePlan(maze).route.slice(0,-1))walk(maze,x,z);
   assert.ok(chase.started);
   walk(tower,0,tower.D/2-.75);
@@ -146,9 +153,26 @@ test('a player can run the maze, chain the hops, plunge once and walk out while 
   const waiting=env.player=createPlayer(world,new THREE.PerspectiveCamera(),
     {...toWorld(tower,last.x,last.nose+.42),yaw:tower.rot*Math.PI/2},
     {keys:new Set(),dx:0,dy:0,stick:{x:0,y:0}});
-  for(let n=0;n<35;n++){
-    waiting.update(1/60);
-    world.update(1/60,time+=1/60,waiting.me);
-  }
+  for(let n=0;n<35;n++)tick(waiting);
   assert.deepEqual(hurt,[1]);
+});
+
+test('the pack closes on a stopped visitor and turns back when they retreat off the route',async t=>{
+  const {world,maze,player,chase,hurt,walk,tick}=await diveFixture(t);
+  walk(maze,4.60,5.41);
+  walk(maze,4.60,4.42);
+  for(let i=0;i<72;i++)tick();
+  const leader=chase.pack[1];
+  const before=toLocal(maze,leader.x,leader.z);
+  assert.ok(leader.group.visible && before.x>1,'the leader has entered the bay');
+
+  walk(maze,4.56,6.74);
+  for(let i=0;i<180;i++)tick();
+  const after=toLocal(maze,leader.x,leader.z);
+  assert.ok(after.z>before.z+.5,'the same leader reverses toward the retreating visitor');
+  assert.ok(hurt.length>0,'standing still within reach gets the visitor hit');
+  const toVisitor=Math.atan2(player.me.x-leader.x,player.me.z-leader.z);
+  assert.ok(Math.cos(toVisitor-leader.group.rotation.y)>.7,'the leader faces the visitor, including off the authored route');
+  assert.ok(chase.pack.every(actor=>world.free(actor.x,actor.z,actor.r,{ghost:true})),
+    'the pack stays clear of the maze walls and furniture');
 });
