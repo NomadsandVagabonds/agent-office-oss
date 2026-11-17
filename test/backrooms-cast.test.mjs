@@ -1238,3 +1238,21 @@ test('the dummies never wall anybody in: one that would cut a doorway off from a
   assert.equal(cameBack(cameBack(blank(), 2, desked, { x: 1.8, z: 0, yaw: 0 }).s, 2, desked, { x: 1.8, z: 0, yaw: 0 }).stood, null, 'so it is not put there');
 });
 
+
+/* ---- nobody is put in a room they cannot get out of -------------------------------------------------------------- */
+
+test('the big ones start in a room with a doorway they fit, and go on only through doorways they fit', async () => {
+  const { fitsDoor, canLeave } = await import('../public/world/backrooms/cast/paths.js');
+  assert.ok(fitsDoor({ h: 2.05 }, 1.05) && !fitsDoor({ h: 0.8 }, 1.05) && fitsDoor({ h: 0.8 }, 0.5), 'a hole to crawl through is a way for what is low enough');
+  assert.ok(fitsDoor({}, 1.9) && !fitsDoor(null, 1), 'a doorway that does not say is a whole one; no doorway is none');
+  assert.equal(canLeave({ doors: [{ h: 0.8 }, { h: 0.8 }] }, 1.05), false, 'every way out a crawl hole: it would stand there for ever');
+  assert.equal(canLeave({ doors: [{ h: 0.8 }, { h: 2.05 }] }, 1.05), true); assert.equal(canLeave({ doors: [] }, 1), false); assert.equal(canLeave(null, 1), false);
+  // such rooms are really dealt (so this is not about nothing): some room of a real floor has only crawl holes for something a metre tall
+  let shut = 0, rooms = 0;
+  for (const seed of SEEDS.slice(0, 40)) { const { floors } = generateVisit(seed, office); for (const level of floors) for (const r of level.rooms) { if (!r.doors.length || r.crawl) continue; rooms++; if (!canLeave(r, 1.05)) shut++; } }
+  assert.ok(shut > 0 && shut < rooms * 0.1, `${shut} of ${rooms} rooms have only crawl holes for a way out`);
+  // each of them asks, where it picks a room to start in and where it picks a room to go on to
+  const read = (id) => fs.readFileSync(new URL(`../public/world/backrooms/cast/${id}.js`, import.meta.url), 'utf8');
+  for (const id of ['head-count', 'standing-meeting', 'intern', 'carried-interest']) assert.match(read(id), /fits = \(r\) => [^;\n]*&& canLeave\(r, walker\.tall\);/, `${id} may be put where it cannot leave`);
+  for (const id of ['head-count', 'standing-meeting', 'carried-interest']) assert.match(read(id), /ways = \(here\?\.doors \|\| \[\]\)\.filter\(\(d\) => fitsDoor\(d, walker\.tall\)\)\.map\(\(d\) => level\.rooms\[d\.to\]\)/, `${id} may set off for a doorway it cannot use`);
+});

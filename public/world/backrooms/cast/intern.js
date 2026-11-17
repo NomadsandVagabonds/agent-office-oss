@@ -14,6 +14,7 @@ import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
 import { INTERN, waiting, copies, behind, was, pushed } from './intern.rule.js';
 import { slide } from '../shove.rule.js';
+import { canLeave } from './paths.js';
 import { elbow } from './head-count.rule.js';
 import { S, BACK, NECK, backVox, neckVox, headVox } from './intern.model.js';
 import { UPPER, FORE, upperVox, foreVox, handVox, lanyardVox } from './head-count.model.js';
@@ -39,7 +40,7 @@ export function create(c) {
   };
 
   function startRoom() {
-    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 2.2 && r.kind !== 'start' && r.kind !== 'exit' && (dist.get(r.id) ?? 0) >= 2;
+    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 2.2 && r.kind !== 'start' && r.kind !== 'exit' && (dist.get(r.id) ?? 0) >= 2 && canLeave(r, walker.tall);
     const plain = level.rooms.filter((r) => fits(r) && r.kind === 'plain' && (dist.get(r.id) ?? 0) >= 3), far = level.rooms.filter(fits);
     const pool = plain.length ? plain : far.length ? far : level.rooms.filter((r) => r.kind !== 'start');
     const pick = pool.length ? c.R.pick(pool) : level.rooms[0];

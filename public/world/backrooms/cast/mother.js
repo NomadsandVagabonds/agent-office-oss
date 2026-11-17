@@ -11,6 +11,7 @@ import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
 import { S, SW, RING, LIMB, ringVox, mouthVox, limbVox, endVox, footVox, wormVox } from './mother.model.js';
 import { MOTHER, WORM, swaying, sways, finds, trodden } from './mother.rule.js';
+import { canLeave } from './paths.js';
 import { slide } from '../shove.rule.js';
 
 const SEGS = 14, SEG_H = MOTHER.height / SEGS, RING_H = RING * S, LIMB_H = LIMB * S;
@@ -30,7 +31,7 @@ export function create(c) {
   const smallOne = (parent) => { const g = new THREE.Group(), parts = wormGeo.map((w, k) => { const p = part(g, w, wormMat); p.scale.setScalar(1 - k * 0.1); return p; }); parent.add(g); return { g, parts }; };
 
   function startRoom() {
-    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 2.5 && r.kind !== 'start' && r.kind !== 'exit';
+    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 2.5 && r.kind !== 'start' && r.kind !== 'exit' && canLeave(r, walker.tall);
     const plain = level.rooms.filter((r) => fits(r) && r.kind === 'plain' && (dist.get(r.id) ?? 0) >= 2), far = level.rooms.filter((r) => fits(r) && (dist.get(r.id) ?? 0) >= 2);
     const pool = plain.length ? plain : far;
     const pick = pool.length ? c.R.pick(pool) : null;
