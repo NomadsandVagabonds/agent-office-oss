@@ -65,9 +65,14 @@ function check(handle) {
     const { meshes, triangles, detailMeshes, detailTriangles } = roomCost(rt.group);
     const timing = world.timing.find(([what]) => what === `${rt.def.arch}#${rt.id}`) || [];
     return { arch: rt.def.arch, room: rt.id, size: [rt.def.W, rt.def.D, rt.def.H], buildMs: timing[1], bakeMs: timing[2], meshes, triangles, detailMeshes, detailTriangles,
-      solids: rt.colliders.length, lights: rt.lights.length, uses: rt.uses.length, zones: rt.zones.length, ticks: rt.ticks.length };
+      solids: rt.colliders.length, lights: rt.lights.length, uses: rt.uses.length, zones: rt.zones.length, ticks: rt.ticks.length,
+      ...(rt.shadowStats ? { shadows: rt.shadowStats } : {}), ...(rt.doorStats ? { doors: rt.doorStats } : {}) };
   });
-  return { seed: String(level.seed), floor: level.depth, rooms, said };
+  // (the whole floor: every room's build and bake, and what its light maps hold, at the Graphics setting it was built at)
+  const all = world.timing.filter(([what]) => what.includes('#'));
+  const floorMs = { build: all.reduce((n, t) => n + t[1], 0), bake: all.reduce((n, t) => n + t[2], 0), worstBake: all.reduce((m, t) => Math.max(m, t[2]), 0),
+    mapBytes: world.rooms.reduce((n, rt) => n + (rt.shadowStats?.bytes || 0) + (rt.doorStats?.bytes || 0), 0) };
+  return { seed: String(level.seed), floor: level.depth, rooms, floorMs, said };
 }
 import { DECK } from '../backrooms/gen.js';
 
@@ -141,7 +146,9 @@ async function go() {
     inventory: q.get('inventory') !== '0', barricades: q.get('barricades') !== '0',
     dev: { supplies: q.get('supplies') === '1', cast: (q.get('cast') || '').split(',').filter(Boolean), barricadeStudy: q.get('barricades') === '1' && q.get('study') === '1',
       bridgeStudy: q.get('bridgestudy') === '1',
-      // &gfx=contact,bounce (each at 1) or &gfx=contact:0.6,bounce:0.5: contact darkening and bounced colour, baked with each room (kit.js gfxOf)
+      // &gfx=contact,bounce (each at 1) or &gfx=contact:0.6,bounce:0.5: contact darkening and bounced colour, baked with each room (kit.js gfxOf);
+      // &gfx=shadows: the tubes' shadows in each room's light map (shadowmap.js)
+      // &gfx=fixtures: each ceiling light the sculpted fitting (ceiling.model.js), its tubes lit as the flat panel's were
       gfx: q.get('gfx') ? Object.fromEntries(q.get('gfx').split(',').map((s) => s.split(':')).map(([k, v]) => [k, v ? Number(v) : 1])) : null,
       lighting: ['1', ...LIGHTING_MODES].includes(q.get('lighting')) ? q.get('lighting') : false,
       owns: target => !!target?.closest?.('[data-lighting-study]') },

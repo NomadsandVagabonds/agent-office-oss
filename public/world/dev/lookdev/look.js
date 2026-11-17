@@ -370,7 +370,7 @@ function heightFrom(THREE, texture, kind) {
 }
 
 /* ---- what a vertex is made of, guessed from its colour (the room contract says nothing yet) -- */
-function matOf(r, g, b) {
+export function matOf(r, g, b) {
   // linear → roughly sRGB
   const s = (v) => Math.pow(Math.max(0, v), 1 / 2.2);
   const R = s(r), G = s(g), B = s(b), mx = Math.max(R, G, B), mn = Math.min(R, G, B), sat = mx ? (mx - mn) / mx : 0;

@@ -1192,7 +1192,7 @@ const STASH1 = {
     : about(s * (r.W / 2 - 0.95), -r.D / 2 + 0.95, 0.2)),                                       // (a ring) outside it, in a far corner
   'wet-floor': (r) => about(r.params.puddle[0] * r.W, r.params.puddle[1] * r.D, 0.25),          // in the one wet patch
   'hall-of-fame': (r) => (r.doors.some((d) => d.side === 'back') ? [-0.3, -r.D / 2 + 3.2, 0.3, -r.D / 2 + 4.4] : [-0.3, -r.D / 2 + 1.6, 0.3, -r.D / 2 + 2.6]),   // the far end, by the last frame
-  lift: (r) => [-0.3, -r.D / 2 + 0.75, 0.3, -r.D / 2 + 1],                                      // on the mat, waiting for the lift
+  lift: (r) => [-0.3, -r.D / 2 + 1.85, 0.3, r.D / 2 - 1.6],                                     // on the mat, waiting for the lift: past the car (the 1.5 m behind its doors: rooms3.js lift), and a good pace short of the doorway
   museum: (r, s) => (s > 0 ? [2.1, 2.35, r.W / 2 - 0.7, r.D / 2 - 0.7] : [-r.W / 2 + 0.7, 2.35, -2.1, r.D / 2 - 0.7]),   // a corner by the door: behind you while you look at the exhibits
   photo: (r) => about(0, -r.D / 2 + 1.3, 0.08),                                                 // on the cross of tape: your place in the photograph
   nested: (r, s) => { const d = [[0, 1], [1, 0], [0, -1], [-1, 0]][(r.params.turn + 2) % 4];     // in the room inside the room, round the side its own little room opens on

@@ -485,8 +485,20 @@ export function create(c) {
     }
   }
 
+  /**
+   * One more of them, where something on the floor says (the conductor's summon()): hanging from the ceiling over the spot,
+   * and that room its own to keep. Whoever else is on the floor stays where they were.
+   */
+  function appear(spot) {
+    if (!geoms || c.room(spot.x, spot.z) == null) return false;
+    spawnUnit(spot.x, spot.z, perched(() => R(), null, { territorial: true, homeRoom: c.room(spot.x, spot.z) }), 1, null, Number.isFinite(spot.yaw) ? spot.yaw : R.range(0, Math.PI * 2));
+    placed = true;
+    return true;
+  }
+
   function ready() {
     geoms = makeSharedGeoms(env.kit, R);
+    if (c.summoned) return;                         // (called up by something on the floor, not dealt: it takes no place but the one it is given — appear())
     const probe = { x: 0, z: 0, r: TONER.r, tall: TONER.tall, opens: TONER.opens, crawls: TONER.crawls };
     // a room that asked for company has it hanging there from the start, if there is a place in it to hang (else where it would have been)
     const expanded = level.difficulty && !['tourist', 'training-wheels'].includes(level.difficulty);
@@ -855,7 +867,7 @@ export function create(c) {
   }
 
   return {
-    ready,
+    ready, appear,
     update(dt, t = 0) {
       if (!placed || !units.length || over) return;
       said.now += dt;

@@ -247,7 +247,7 @@ async function visit(office, opt) {
       }
     } });
   input.state.sensitivity = settings.sensitivity; input.state.invertY = settings.invertY;
-  menu = createMenu({ host: hud.el, settings: { ...settings, scoreEligible: difficulty.report().ranked }, furniture: opt.barricades !== false, graphics: !!opt.debug, onRequestOpen: () => setPaused(true), onResume: resume,
+  menu = createMenu({ host: hud.el, settings: { ...settings, scoreEligible: difficulty.report().ranked }, furniture: opt.barricades !== false, graphics: true, onRequestOpen: () => setPaused(true), onResume: resume,
     onArchive: opt.onArchive, onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting });
   // Six pockets, four hearts, and a camcorder battery that runs down (inventory.js, survival.js): the visit's, not any
   // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.
@@ -313,7 +313,7 @@ async function visit(office, opt) {
   const halfFov = () => Math.atan(Math.tan((fov * Math.PI) / 360) * camera.aspect);
   async function build(level, carry, pace) {
     // light worked out once per room, beyond the lamps (kit.js gfxOf): what the Graphics setting's level says, unless the dev page asks for its own
-    const kit = createKit({ gfx: opt.dev?.gfx || opt.gfx || { contact: gfx().contact, bounce: gfx().bounce } });
+    const kit = createKit({ gfx: opt.dev?.gfx || opt.gfx || { contact: gfx().contact, bounce: gfx().bounce, shadows: gfx().shadows, doorlight: gfx().doorlight, fixtures: gfx().fixtures } });
     const f = { level, kit, world: null, player: null, env: null };
     const builders = await buildersFor(level);
     if (opt.barricades !== false && opt.dev?.barricadeStudy && level === first) {
@@ -328,6 +328,8 @@ async function visit(office, opt) {
       level, cast, who, perk, kit, sound, hud, vhs, renderer, builders, catalogue: await loadCatalogue(kit), Avatar, layout,
       plan: office.net?.state?.world?.plan || {}, visit: plan, carry,
       barricadesEnabled: opt.barricades !== false,
+      // (a part built ahead is ready once its rooms and light maps are; the light through its doorways fills in after: world.js doorPass)
+      lateDoorLight: !!pace,
       lighting: opt.dev?.lighting || false,
       steadyLighting: () => settings.steadyLighting,
       difficulty: () => difficulty.current,
@@ -457,7 +459,9 @@ async function visit(office, opt) {
     const index = cur.level.depth + 1, over = cur;
     if (index >= plan.depths) return;
     const mine = ahead = { index, f: null, failed: false };
-    const pace = async () => { await frame(); await frame(); await frame(); };
+    // (a room, then three frames; a short breath (world.js: between a room's build, its light map and its bake, and
+    // between rooms' doorways), one)
+    const pace = async (i, n, short) => { await frame(); if (!short) { await frame(); await frame(); } };
     (async () => {
       try {
         const f = await build(floor(index), null, pace);
@@ -648,7 +652,7 @@ async function visit(office, opt) {
     light += (lvl - light) * (1 - Math.exp(-2.2 * dt));
     u.uGain.value = clamp(Math.pow(0.3 / Math.max(light, 0.04), 0.55), 0.9, variedLight ? LIGHTING.gainMax : 2.3);
     vhs.setAmbient(light);
-    if (gfxAuto && (gfxAuto = autoStep(gfxAuto, time, stage.frameMs, !!ahead && !ahead.f)).changed) { vhs.setProfile(gfx()); pictureKey = ''; showDetail(root, gfx()); }
+    if (gfxAuto && (gfxAuto = autoStep(gfxAuto, time, stage.frameMs, !!ahead && (!ahead.f || !!ahead.f.world.doorsPending))).changed) { vhs.setProfile(gfx()); pictureKey = ''; showDetail(root, gfx()); }
     // The camera only reveals nearby surfaces. Its broad lamp is independent
     // of the narrow inventory flashlight and never supplies creature power.
     const wantTorch = inventory ? inventory.torchPower() : env.hand?.hasFlashlight?.() ? 1 : 0;

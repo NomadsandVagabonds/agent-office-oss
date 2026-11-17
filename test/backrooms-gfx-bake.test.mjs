@@ -56,9 +56,11 @@ function fingerprint(world, rt) {
   return [Number(sum.toFixed(6)), hash];
 }
 // Recorded from the code before contact darkening and bounce existed (the same fixture, run against that commit's kit and world).
+// (re-recorded when the level got a desk of its own, desk.model.js: rooms 0, 2, 3 and 5 hold a desk and only its vertices moved the numbers; rooms 1 and 4 are as first recorded)
+// (re-recorded when the shell's sockets became wallfit.model.js's sculpted plate: rooms 0, 1, 2, 3 and 5 have sockets and only their vertices moved the numbers; room 4 has none and is as before)
 const BEFORE = {
-  barricades: [[1917.143025, 3831347603], [1217.726786, 2194159146], [985.762989, 3578396258], [1783.472141, 2833727947], [481.926592, 1625426114], [4863.595473, 1182328622]],
-  fixed: [[1917.143025, 3831347603], [1217.726786, 2194159146], [985.762989, 3578396258], [1783.472141, 2833727947], [481.926592, 1625426114], [4863.595473, 1182328622]],
+  barricades: [[1962.817741, 2883781810], [1384.956301, 3814377304], [985.90547, 174593279], [1884.541065, 1578071958], [481.926592, 1625426114], [4821.231215, 2148082110]],
+  fixed: [[1962.817741, 2883781810], [1384.956301, 3814377304], [985.90547, 174593279], [1884.541065, 1578071958], [481.926592, 1625426114], [4821.231215, 2148082110]],
 };
 
 test('gfx: off unless asked for, and off is the bake there was before, number for number', async (t) => {

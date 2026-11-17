@@ -60,6 +60,16 @@ export function stillThrough(room, standing) {
 }
 
 /**
+ * One of them has been pushed: may it come to rest here (x, z: the room's frame)? The same as where one may be put down: off the walls,
+ * clear of the doorways, apart from the others in the room; and the way through still open with it there.
+ * placed: those stood in this room, `one` among them (it is not in its own way).
+ */
+export function mayRest(room, placed, one, x, z) {
+  const others = placed.filter((p) => p !== one);
+  return mayStand(x, z, room, others) && stillThrough(room, [...others, { x, z }]);
+}
+
+/**
  * The visitor has come into a room (id) that they have been in before, and left it last time from `spot`: does one more stand
  * there now? Not on the first visit; not past the room's or the floor's share; not where it may not stand.
  * → the next state, and `stood`: the one put down this time, or null.

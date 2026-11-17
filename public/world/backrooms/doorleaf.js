@@ -24,10 +24,14 @@ export function slab(b, x0, y0, z0, x1, y1, z1, rgb) {
   b.quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], rgb, WUV, 0.88);
 }
 
-/** A leaf this size in this floor's colour, sculpted (doorleaf.model.js) and meshed once for the floor. */
-export function leafModel(kit, w, h, tint) {
-  const { W, H } = leafSize(w, h), colour = TINTS[tint % TINTS.length];
-  return { ...kit.model(`leaf:${tint % TINTS.length}:${W}x${H}`, () => leafVox({ w, h, colour }), { ao: false }), W, H, w, h };          // (flat faces merge: a floor has a dozen pairs)
+/**
+ * A leaf this size in this floor's colour, sculpted (doorleaf.model.js) and meshed once for the floor.
+ * o, for a room that hangs a door of its own: { colour, hatch, bar } as leafVox takes them.
+ */
+export function leafModel(kit, w, h, tint, o = null) {
+  const { W, H } = leafSize(w, h), colour = o?.colour || TINTS[tint % TINTS.length];
+  const key = o ? `leaf:${colour}:${W}x${H}:${o.hatch ? o.hatch.map((n) => Math.round(n * 100)).join('.') : ''}:${o.bar === 'push' ? 'pushbar' : o.bar ? 'bar' : ''}` : `leaf:${tint % TINTS.length}:${W}x${H}`;
+  return { ...kit.model(key, () => leafVox({ w, h, colour, hatch: o?.hatch, bar: o?.bar }), { ao: false }), W, H, w, h };          // (flat faces merge: a floor has a dozen pairs)
 }
 /**
  * Put a leaf in a voxel batch: hinged at `p` ([x, z], the room's frame), standing on `y0`, running along `run` to its

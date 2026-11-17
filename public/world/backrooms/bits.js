@@ -1,10 +1,13 @@
 // The Backrooms — bits and pieces several rooms share: picture frames, cards
 // with words on, door leaves, wet-floor signs, standees that turn to look at
 // you, loose paper.
+import * as THREE from 'three';
 import { Vox, M } from '../vox/vox.js';
 import { lin, drawText, WHITE } from './kit.js';
 import { makeCutout } from './cutout.js';
 import { WETSIGN, boardVox, frameVox } from './wetsign.model.js';
+import { WOODDOOR, woodDoorVox, doorSize } from './wooddoor.model.js';
+import { WALLFIT, frameVox as mouldingVox, frameSize } from './wallfit.model.js';
 
 export const P = (g, col, x, y, w, h) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -12,9 +15,15 @@ export const turnTo = (from, to) => { let d = (to - from) % (Math.PI * 2); if (d
 
 /** A slab of wood behind a picture: reads as a frame. */
 export function framed(c, batch, side, at, y, w, h, uv, wood = [0.2, 0.12, 0.06], alb = WHITE) {
-  const t = 0.04;
-  c.wbox(side, at, w + t * 2, y - h / 2 - t, y + h / 2 + t, 0, 0.024, wood);
-  return c.hang(batch, side, at, y, w, h, uv, alb, 0.028);
+  // the frame is a sculpted moulding (wallfit.model.js) standing proud of what it frames, which sits back in it
+  const colour = hexOf(wood), { W, H } = frameSize(w, h), model = c.kit.model(`frame:${colour}:${W}x${H}`, () => mouldingVox({ w, h, colour }), { ao: false });
+  const p = c.wallAt(side, at, 0), sx = w / W, sy = h / H, sz = WALLFIT.deep / 4, m = new THREE.Matrix4();
+  m.set(p.U[0] * sx, 0, p.n[0] * sz, p.x,
+    0, sy, 0, y,
+    p.U[2] * sx, 0, p.n[2] * sz, p.z,
+    0, 0, 0, 1);
+  c.vox.addVox(model.solid, m);
+  return c.hang(batch, side, at, y, w, h, uv, alb, 0.009);
 }
 /** A texture with a few lines of text on a coloured card. */
 export function card(c, key, lines, o = {}) {
@@ -30,10 +39,49 @@ export function scatter(c, x, z, n, spread = 1.2, color) {
   for (let i = 0; i < n; i++) c.paper(clamp(x + c.R.range(-spread, spread), -c.W / 2 + 0.25, c.W / 2 - 0.25), clamp(z + c.R.range(-spread, spread), -c.D / 2 + 0.25, c.D / 2 - 0.25), undefined, color);
 }
 /**
- * A door leaf made of boxes, flat against a wall (or into `batch`, to swing later). → the handle's wall coordinate.
- * o.k: how thick it all is (1: a door; a door made smaller is thinner too).
+ * A meshed model (kit.model(…).solid) put against a wall: its x along the wall from `at`, its y up from `y`, its z out
+ * of the wall from `off`; sx, sy, sz: metres to a voxel each way. Into `batch`, a voxel batch (c.vox if none).
+ */
+export function wallVox(c, batch, solid, side, at, y, off, sx, sy = sx, sz = sx) {
+  const p = c.wallAt(side, at, off), m = new THREE.Matrix4();
+  m.set(p.U[0] * sx, 0, p.n[0] * sz, p.x,
+    0, sy, 0, y,
+    p.U[2] * sx, 0, p.n[2] * sz, p.z,
+    0, 0, 0, 1);
+  (batch || c.vox).addVox(solid, m);
+  return p;
+}
+/** A colour as the kit keeps it (linear, 0…1) back to the '#rrggbb' a model is sculpted in. */
+export const hexColour = (rgb) => hexOf(rgb);
+
+const hexOf = (rgb) => '#' + rgb.map((v) => Math.round(255 * Math.max(0, Math.min(1, v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055))).toString(16).padStart(2, '0')).join('');
+/**
+ * The sculpted wooden door (wooddoor.model.js) put into a voxel batch, anywhere and any way up: `foot` is the middle of
+ * its bottom edge at its back, and `across`, `up` and `out` are the three ways it runs from there (unit [x, y, z]).
+ * w, h and t: how wide, tall and thick it is to be, metres. flip: the lever on the other side.
+ */
+export function woodLeaf(c, batch, foot, across, up, out, w, h, t, rgb, flip = false) {
+  const colour = hexOf(rgb), { W, H } = doorSize(w, h), model = c.kit.model(`wooddoor:${colour}:${W}x${H}`, () => woodDoorVox({ w, h, colour }), { ao: false });
+  const sx = (w / W) * (flip ? -1 : 1), sy = h / H, sz = t / WOODDOOR.thick, m = new THREE.Matrix4();
+  m.set(across[0] * sx, up[0] * sy, out[0] * sz, foot[0],
+    across[1] * sx, up[1] * sy, out[1] * sz, foot[1],
+    across[2] * sx, up[2] * sy, out[2] * sz, foot[2],
+    0, 0, 0, 1);
+  batch.addVox(model.solid, m);
+}
+/**
+ * A wooden door leaf flat against a wall (or into `batch`, to swing later: a voxel batch, `new Batch(true)`).
+ * → the handle's wall coordinate. o.k: how thick it all is (1: a door; a door made smaller is thinner too).
+ * (Given a flat batch it still makes the old leaf of boxes, for whoever has not been told.)
  */
 export function doorLeaf(c, side, at, w, h, rgb, o = {}) {
+  const batch = o.batch, k = o.k ?? 1, d0 = o.d0 ?? 0.012, hx = (o.hinge === 'right' ? -1 : 1) * (w / 2 - w * 0.09);
+  if (batch && !batch.vox) return boxLeaf(c, side, at, w, h, rgb, o);
+  const p = c.wallAt(side, at, d0), y0 = o.y0 ?? 0.02;
+  woodLeaf(c, batch || c.vox, [p.x, y0, p.z], [p.U[0], 0, p.U[2]], [0, 1, 0], [p.n[0], 0, p.n[2]], w, h - y0, 0.04 * k, rgb, o.hinge === 'right');
+  return hx;
+}
+function boxLeaf(c, side, at, w, h, rgb, o = {}) {
   const batch = o.batch, k = o.k ?? 1, d0 = o.d0 ?? 0.012, d1 = d0 + 0.04 * k, dark = rgb.map((v) => v * 0.72), lite = rgb.map((v) => Math.min(1, v * 1.18));
   c.wbox(side, at, w, o.y0 ?? 0.02, h, d0, d1, rgb, { batch });
   const pw = w * 0.34, gap = w * 0.08;
