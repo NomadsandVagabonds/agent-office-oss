@@ -62,23 +62,32 @@ export function build(c) {
     scatter(c, sp.x, sp.z, 5, 0.75, i === 1 ? '#f3b3c0' : undefined);
   }
 
-  // Sorting table near the front side with a fresh sheaf of loose papers
-  let placedPapers = false;
+  // Sorting table near the front side (dressing: nothing can rest on movable furniture, inventory-world.js, so no paper on it)
   for (const sx of [p.deskSide, -p.deskSide]) {
     const tx = sx * (W / 2 - 1.35), tz = clamp(D / 2 - 1.95, -0.8, D / 2 - 1.45);
     if (!c.clear(tx, tz, 0.62)) continue;
-    const desk = c.prop(c.hasProp('desk') ? 'desk' : 'cafetable', tx, tz, {
+    c.prop(c.hasProp('desk') ? 'desk' : 'cafetable', tx, tz, {
       rot: sx > 0 ? -Math.PI / 2 : Math.PI / 2,
       fallback: [0.75, 0.74, 1.2],
     });
-    placePickup(c, 'papers', tx, tz, desk.top, { label: 'take unfiled memos' });
     c.reserve(tx, tz, 0.72);
-    placedPapers = true;
+    // the sheaf that is meant for the visitor lies on clear floor beside it, in plain sight, and a second a pace inside the door
+    const beside = [[sx * -0.85, 0], [0, -0.85], [0, 0.85], [sx * -0.85, -0.7]].map(([dx, dz]) => ({ x: tx + dx, z: tz + dz })).find((q) => c.clear(q.x, q.z, 0.3));
+    if (beside) placePickup(c, 'papers', beside.x, beside.z, 0, { label: 'take unfiled memos' });
     break;
   }
-  if (!placedPapers) {
-    const sp = c.spot(0.5);
-    if (sp) placePickup(c, 'papers', sp.x, sp.z, 0, { label: 'take unfiled memos' });
+  // a pace inside a door the visitor may come in by: on floor that is clear, never in the doorway itself
+  for (const dr of (c.rt?.def?.doors ?? [])) {
+    let put = false;
+    for (const d of [2.0, 2.2, 2.5, 2.8]) {
+      const q = c.doorPoint(dr, d);
+      for (const off of [0, 0.6, -0.6, 1.0, -1.0]) {
+        const x = q.x + (dr.side === 'left' || dr.side === 'right' ? 0 : off), z = q.z + (dr.side === 'left' || dr.side === 'right' ? off : 0);
+        if (c.clear(x, z, 0.3)) { placePickup(c, 'papers', x, z, 0, { label: 'take unfiled memos' }); c.reserve(x, z, 0.4); put = true; break; }
+      }
+      if (put) break;
+    }
+    if (put) break;
   }
 
   // Framed retention policy sign

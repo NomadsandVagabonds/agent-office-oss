@@ -85,7 +85,8 @@ export function stepShredder(s, o) {
 
   if (phase === 'leaving') {
     whistleTimer -= dt;
-    if (whistleTimer <= 0) { if (whistle()) { whistled = true; whistleTimer = gap() * 1.4; } else whistleTimer = SHREDDER.whistleGap - since + 0.05; }
+    // (fed paper she is done with you for good, and quiet: no rest to count down. Only after a taste of you does she whistle her way home)
+    if (s.rest > 0 && whistleTimer <= 0) { if (whistle()) { whistled = true; whistleTimer = gap() * 1.4; } else whistleTimer = SHREDDER.whistleGap - since + 0.05; }
     // (after paper she is done with you for good; after a taste of you, only for a while)
     const rest = s.rest > 0 ? s.rest - dt : undefined;
     if (rest !== undefined && rest <= 0) return { state: { phase: 'waiting', timer: 0.6, whistleTimer: 1.1, caught: false, since, whistles }, whistled, chirp, atePaper, grabbed, caught: false, speed: 0, pullProgress: 0 };
