@@ -14,7 +14,7 @@ import { ticks } from '../kit.js';
 import { P } from '../bits.js';
 import { Vox, M, glow } from '../../vox/vox.js';
 import { upright, sheet } from '../suburb.js';
-import { voidIn, mallNeon, dummyVox, orangeVox, juicerVox, cupVox, heapVox } from '../mall.js';
+import { voidIn, mallNeon, dummyVox, orangeVox, juicerVox, cupVox, heapVox, binVox } from '../mall.js';
 
 export const COURT = Object.freeze({ holeW: 4.6, holeD: 3.4, rail: 0.95, gap: 1.3, pitch: 2.7, seen: 14, stall: 1.7, canopy: 2.7 });
 
@@ -79,6 +79,8 @@ export function build(c) {
   const neon = mallNeon(kit, 'court:' + p.seed, kinds.map((k) => names[k]).concat(['FOOD', 'EAT HERE']), p.seed), lit = c.shining('mall:neon:court:' + p.seed, neon.texture, 2.4);
   const skins = { sandwich: [0.55, 0.42, 0.24], chips: [0.78, 0.2, 0.16], soup: [0.2, 0.34, 0.3], tray: [0.42, 0.2, 0.16], hot: [0.6, 0.12, 0.1], orange: [0.94, 0.52, 0.12] };
   const put = (key, make, x, z, o = {}) => c.model(key, make, x, z, { solid: false, shadow: false, ...o });
+  /* what is only looked at goes in `court:detail` (nothing in it is stood on, walked into or read) */
+  const det = c.mapped('court:detail', kit.tex.white()), menus = c.shining('court:menus', kit.tex.white(), 0.75, [0.95, 0.8, 0.55]), bulbs = c.shining('court:bulbs', kit.tex.white(), 2.6, [1, 0.82, 0.5]), glowB = c.shining('court:tills', kit.tex.white(), 1.4, [0.6, 1, 0.7]);
   const stall = (i, xa, xb, wall, dir) => {
     const kind = kinds[i], zf = wall + dir * K.stall, mid = (xa + xb) / 2, sk = skins[kind], top = K.canopy, fx = (a, b) => (dir > 0 ? [a, b] : [b, a]), [l, r] = fx(xa, xb);
     c.flat.box(xa, 0, Math.min(zf, zf - dir * 0.55), xb, 0.95, Math.max(zf, zf - dir * 0.55), sk); c.flat.box(xa - 0.04, 0.95, Math.min(zf + dir * 0.05, zf - dir * 0.6), xb + 0.04, 1.0, Math.max(zf + dir * 0.05, zf - dir * 0.6), [0.9, 0.87, 0.78]);
@@ -90,6 +92,16 @@ export function build(c) {
     c.solid(xa - 0.04, Math.min(wall, zf + dir * 0.06), xb + 0.04, Math.max(wall, zf + dir * 0.06), { tall: false });
     c.light(mid, top - 0.5, zf - dir * 0.6, neon.colour(i), 0.9, { k: 1.3, far: 5.5 });
     const zc = zf - dir * 0.28, zr = (wall + zf) / 2, yr = top + 0.55, ry = dir > 0 ? 0 : Math.PI;
+    { // the detail of it: a menu board lit from behind, tiles behind the counter, a sneeze guard, a till; bulbs along the front of its roof
+      const zw = wall + dir * 0.03, zb = (u) => [Math.min(zw, zw + dir * u), Math.max(zw, zw + dir * u)], [m0, m1] = zb(0.04), [t0, t1] = zb(0.02);
+      menus.box(xa + 0.25, 1.62, m0, xb - 0.25, 2.42, m1, [1, 1, 1]); const [f0, f1] = zb(0.05); det.box(xa + 0.2, 1.57, f0, xb - 0.2, 1.62, f1, [0.12, 0.12, 0.14]); det.box(xa + 0.2, 2.42, f0, xb - 0.2, 2.47, f1, [0.12, 0.12, 0.14]);
+      const [l0, l1] = zb(0.045); for (let row = 0; row < 5; row++) for (let x = xa + 0.35; x < xb - 0.5; x += (xb - xa) / 3) { const w = 0.3 + ((row * 7 + Math.round(x * 3)) % 5) * 0.06; det.box(x, 2.26 - row * 0.15, l0, x + w, 2.32 - row * 0.15, l1, [0.16, 0.14, 0.12]); det.box(x + w + 0.08, 2.26 - row * 0.15, l0, x + w + 0.2, 2.32 - row * 0.15, l1, sk.map((v) => v * 0.8)); }
+      for (let x = xa + 0.1; x < xb - 0.1; x += 0.15) for (let y = 1.0; y < 1.55; y += 0.15) det.box(x + 0.006, y + 0.006, t0, x + 0.144, y + 0.144, t1, ((x * 6.67 + y * 6.67) | 0) % 2 ? [0.86, 0.84, 0.78] : sk.map((v) => v * 0.9 + 0.08));
+      const gz = zf - dir * 0.42; for (const x of [xa + 0.25, mid, xb - 0.25]) det.box(x - 0.012, 1.0, gz - 0.012, x + 0.012, 1.42, gz + 0.012, [0.78, 0.8, 0.84]);
+      det.box(xa + 0.2, 1.42, Math.min(gz, gz + dir * 0.3), xb - 0.2, 1.435, Math.max(gz, gz + dir * 0.3), [0.72, 0.82, 0.84]); det.box(xa + 0.2, 1.4, gz - 0.015, xb - 0.2, 1.445, gz + 0.015, [0.78, 0.8, 0.84]);
+      const tx = xb - 0.45, tz = zf - dir * 0.18; det.box(tx - 0.16, 1.0, tz - 0.12, tx + 0.16, 1.1, tz + 0.12, [0.18, 0.18, 0.2]); det.box(tx - 0.12, 1.1, tz - 0.1, tx + 0.12, 1.12, tz + 0.04, [0.82, 0.8, 0.74]); det.box(tx - 0.1, 1.12, tz - 0.02, tx + 0.1, 1.26, tz + 0.0, [0.12, 0.12, 0.14]); glowB.box(tx - 0.08, 1.14, tz + 0.001 * dir - 0.004, tx + 0.08, 1.24, tz + 0.001 * dir + 0.004, [0.5, 1, 0.6]);
+      const bz = zf + dir * 0.26; for (let x = xa + 0.12; x < xb - 0.05; x += 0.2) bulbs.box(x - 0.025, top - 0.04, bz - 0.025, x + 0.025, top + 0.01, bz + 0.025, [1, 1, 1]);
+    }
     if (kind === 'sandwich') { put('court:sandwich', sandwichVox, mid, zr, { y: yr, scale: 2.4, rot: R.range(-0.15, 0.15) }); put('court:sandwich', sandwichVox, mid, zc, { y: 1.0, scale: 0.9 }); }
     else if (kind === 'chips') { put('court:chip', chipVox, mid, zr, { y: yr, scale: 2.2, rot: 0.1 }); put('court:chip', chipVox, mid + 0.3, zr, { y: yr + 0.5, scale: 2.2, rot: -0.35, tilt: [0, 0.25] }); put('court:chip', chipVox, mid, zc, { y: 1.0, scale: 0.6 }); }
     else if (kind === 'soup') { put('court:pot', potVox, mid, zr, { y: yr, scale: 2.2 }); put('court:pot', potVox, mid - 0.5, zc, { y: 1.0, scale: 0.7 }); c.light(mid, yr + 1.6, zr, '#ffb347', 0.7, { k: 1.4, far: 4 }); }
@@ -117,6 +129,16 @@ export function build(c) {
     if (k % 3 === 1) put('court:diner:' + (k % 4), dummyVox(k % 4, ['#39424f', '#7a3a34', '#4a5a40', '#6a4a8a'][k % 4]), x + 0.78, z, { rot: -Math.PI / 2 });               // somebody stood at one, facing their tray
     k++;
   }
+  /* the edge of the hole: a nosing of dark stone round it and down the lip; over it in the roof, a coffer, lit round its cove, as if something was meant to hang there */
+  { const n = 0.14, stone = [0.2, 0.19, 0.2];
+    det.box(-hx - n, 0, -hz - n, hx + n, 0.012, -hz, stone); det.box(-hx - n, 0, hz, hx + n, 0.012, hz + n, stone); det.box(-hx - n, 0, -hz, -hx, 0.012, hz, stone); det.box(hx, 0, -hz, hx + n, 0.012, hz, stone);
+    det.box(-hx, -0.22, -hz, hx, 0, -hz + 0.01, stone); det.box(-hx, -0.22, hz - 0.01, hx, 0, hz, stone); det.box(-hx, -0.22, -hz, -hx + 0.01, 0, hz, stone); det.box(hx - 0.01, -0.22, -hz, hx, 0, hz, stone);
+    const cx = hx + 0.6, cz = hz + 0.6, y0 = H - 0.55, rim = [0.22, 0.2, 0.24], cove = c.shining('court:cove', kit.tex.white(), 1.6, [1, 0.36, 0.66]);
+    det.box(-cx, y0, -cz, cx, H, -cz + 0.3, rim); det.box(-cx, y0, cz - 0.3, cx, H, cz, rim); det.box(-cx, y0, -cz + 0.3, -cx + 0.3, H, cz - 0.3, rim); det.box(cx - 0.3, y0, -cz + 0.3, cx, H, cz - 0.3, rim);
+    cove.box(-cx + 0.3, y0 + 0.02, -cz + 0.3, cx - 0.3, y0 + 0.06, -cz + 0.34, [1, 1, 1]); cove.box(-cx + 0.3, y0 + 0.02, cz - 0.34, cx - 0.3, y0 + 0.06, cz - 0.3, [1, 1, 1]); cove.box(-cx + 0.3, y0 + 0.02, -cz + 0.34, -cx + 0.34, y0 + 0.06, cz - 0.34, [1, 1, 1]); cove.box(cx - 0.34, y0 + 0.02, -cz + 0.34, cx - 0.3, y0 + 0.06, cz - 0.34, [1, 1, 1]);
+    det.box(-0.02, y0 - 0.9, -0.02, 0.02, H, 0.02, [0.1, 0.1, 0.1]); det.box(-0.12, y0 - 0.95, -0.12, 0.12, y0 - 0.9, 0.12, [0.72, 0.56, 0.2]);   // (the hook it was meant to hang from: nothing on it)
+    // bins at two corners of the hole, for the trays; they are walked into
+    for (const [sx, sz] of [[-1, -1], [1, 1]]) { const x = sx * (hx + 0.75), z = sz * (hz + 0.75); c.model('mall:bin:0', binVox(false), x, z, { scale: 1.5, solid: false }); c.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, { tall: false }); det.box(x - 0.24, 0.5, z - 0.17, x + 0.24, 0.53, z + 0.17, [0.54, 0.23, 0.17]); } }
   /* FOOD, over the hole, pointing down it */
   upright(lit, -1.3, hz - 0.2, 1.3, hz - 0.2, 3.3, 4.0, neon.uv(6)); upright(lit, 1.3, hz - 0.2, -1.3, hz - 0.2, 3.3, 4.0, neon.uv(6)); for (const x of [-1.25, 1.25]) c.flat.box(x - 0.02, 4.0, hz - 0.22, x + 0.02, H, hz - 0.18, [0.1, 0.1, 0.12]);
   const arrow = c.shining('court:arrow', kit.tex.white(), 2.2, [1, 0.24, 0.6]); for (let i = 0; i < 4; i++) arrow.box(-0.5 + i * 0.12, 3.15 - i * 0.14, hz - 0.22, 0.5 - i * 0.12, 3.25 - i * 0.14, hz - 0.18, [1, 1, 1]);

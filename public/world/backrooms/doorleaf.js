@@ -10,6 +10,7 @@ import { toWorld, toLocal, T } from './gen.js';
 import { Batch, lin, drawText } from './kit.js';
 import { WALLS } from './world.js';
 import { doorPlan, inTheWay, DOORS } from './doors.js';
+import { LEAF, leafVox, leafSize, signSpan } from './doorleaf.model.js';
 
 export const TINTS = ['#5d7a78', '#8a5a45', '#6f6a5a', '#49607c'];
 const WUV = [[0.05, 0.1], [0.05, 0.1], [0.05, 0.1], [0.05, 0.1]];          // the plain part of the leaf's texture
@@ -22,6 +23,27 @@ export function slab(b, x0, y0, z0, x1, y1, z1, rgb) {
   b.quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], rgb, WUV, 0.88);
   b.quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], rgb, WUV, 0.88);
 }
+
+/** A leaf this size in this floor's colour, sculpted (doorleaf.model.js) and meshed once for the floor. */
+export function leafModel(kit, w, h, tint) {
+  const { W, H } = leafSize(w, h), colour = TINTS[tint % TINTS.length];
+  return { ...kit.model(`leaf:${tint % TINTS.length}:${W}x${H}`, () => leafVox({ w, h, colour }), { ao: false }), W, H, w, h };          // (flat faces merge: a floor has a dozen pairs)
+}
+/**
+ * Put a leaf in a voxel batch: hinged at `p` ([x, z], the room's frame), standing on `y0`, running along `run` to its
+ * meeting edge and showing the face you push toward `face` (both unit [x, z]). `sink`: how far behind p the slab starts.
+ */
+export function addLeaf(b, model, p, y0, run, face, sink = 0) {
+  const sx = model.w / model.W, sy = model.h / model.H, S = LEAF.voxel, m = new THREE.Matrix4();
+  m.set(run[0] * sx, 0, face[0] * S, p[0] - face[0] * sink,
+    0, sy, 0, y0,
+    run[1] * sx, 0, face[1] * S, p[1] - face[1] * sink,
+    0, 0, 0, 1);
+  return b.addVox(model.solid, m);
+}
+/** How thick the sculpted slab is, metres. */
+export const LEAF_THICK = LEAF.core * LEAF.voxel;
+export { signSpan };
 
 /** What a leaf is painted with: plain on the left half, its sign on the right. One to a floor's kit, whoever asks. */
 export function leafTexture(kit) {
@@ -43,7 +65,6 @@ export function hangDoors(env) {
   const list = [], byLink = new Map();
   const api = { list, version: 0, at: (id) => byLink.get(id) || null };
   const tex = leafTexture(kit);
-  const steel = [0.52, 0.53, 0.52], dark = [0.1, 0.1, 0.1];
   const frames = new Map();                                  // room → the batch its door frames are drawn in
 
   for (const plan of doorPlan(level)) {
@@ -58,20 +79,19 @@ export function hangDoors(env) {
     if (!room) continue;
     const rgb = lin(TINTS[plan.tint % TINTS.length]), leaves = [], cols = [];
     for (const side of [-1, 1]) {
-      const b = new Batch(), a0 = side * half, a1 = side * (half + DOORS.thick);
-      const box = (aa, ab, oa, ob, y0, y1, col) => { const p = at(aa, oa), q = at(ab, ob); slab(b, Math.min(p[0], q[0]), y0, Math.min(p[1], q[1]), Math.max(p[0], q[0]), y1, Math.max(p[1], q[1]), col); };
-      box(a0, a1, 0, L, 0.012, h, rgb);
-      // on each face: a steel kick plate; on the face you push, a plate, and on the other a bar to pull
-      for (const [f, face] of [[a0 - side * 0.004, -side], [a1 + side * 0.004, side]]) {
-        box(f, f - face * 0.004, 0.02, L - 0.02, 0.02, 0.26, steel);
-        if (face === side) box(f, f - face * 0.004, L - 0.2, L - 0.08, 1.0, 1.32, steel);
-        else { box(f, f + face * 0.045, L - 0.15, L - 0.12, 0.92, 1.3, steel); }
-        // …and the sign, at eye level
-        const p0 = at(f + face * 0.002, L / 2 + face * 0.16), p1 = at(f + face * 0.002, L / 2 - face * 0.16);
+      const a0 = side * half, a1 = side * (half + DOORS.thick);
+      // the leaf itself is sculpted; only its sign is a picture, a hair off each sunk panel
+      const vb = new Batch(true), model = leafModel(kit, L, h - 0.012, plan.tint), span = signSpan(L);
+      addLeaf(vb, model, at(a0, 0), 0.012, [n[0], n[2]], [U[0] * side, U[2] * side]);
+      const b = new Batch();
+      for (const [f, face] of [[a0 - side * 0.003, -side], [a0 + side * (LEAF_THICK + 0.003), side]]) {
+        const p0 = at(f, span.mid + face * span.half), p1 = at(f, span.mid - face * span.half);
         b.quad([p0[0], 1.36, p0[1]], [p1[0], 1.36, p1[1]], [p1[0], 1.68, p1[1]], [p0[0], 1.68, p0[1]], [1, 1, 1], SIGN);
       }
       const pv = at(a0, 0), holder = new THREE.Group();
       holder.position.set(pv[0], 0, pv[1]); rt.group.add(holder);
+      const vgeo = kit.geometry(vb, rt.lights, rt.amb), body = new THREE.Mesh(vgeo, kit.surface({ vox: true, room: rt.u, flick: vgeo.userData.flick, side: THREE.DoubleSide }));
+      body.position.set(-pv[0], 0, -pv[1]); holder.add(body);
       const geo = kit.geometry(b, rt.lights, rt.amb), mesh = new THREE.Mesh(geo, kit.surface({ map: tex, room: rt.u, flick: geo.userData.flick, side: THREE.DoubleSide }));
       mesh.position.set(-pv[0], 0, -pv[1]); holder.add(mesh);
       leaves.push({ holder, turn: -side * Math.PI / 2 });

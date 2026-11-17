@@ -457,7 +457,7 @@ through `c`. It never calls `env.end`: being caught is `c.hurt`.
 | being there | `c.add(object)` into the scene, in world coordinates · `c.body({ x, z, r })` a body nobody walks through · `c.light(x, z)` the light falling there · `c.play(name, x, z, reach)` |
 | things to use | `c.use({ x, z, r, when, use })` something `E` does at a spot of the world. Nothing says so on screen: it has to look as though it can be used |
 | keeping count | `c.met()` once, the first time in a visit that the visitor has really seen it (in view, and near enough to know what it is) · `c.survived()` each time it had them and they got away: a grab they lived through, a chase it lost them in |
-| catching them | `c.hurt(n, from?)` → `{ landed, dead, ended, blocked? }` (`blocked`: the visitor shoved as it reached them, and it did not land; treat it as a miss. `from`: `{ x, z }` where the hit comes from, for one that is more than one body) · `c.drain(share)` takes that share of the camcorder's charge, where it has a battery |
+| catching them | `c.hurt(n, from?)` → `{ landed, dead, ended, blocked? }`. `from`: `{ x, z }`, world coordinates, where the hit comes from (left out, wherever your `at()` says you are). A hit survived throws them back from there. `blocked`: the visitor shoved as it reached them from in front, and it did not land; treat it as a miss · `c.drain(share)` takes that share of the camcorder's charge, where it has a battery |
 | being shoved | optional `shoveTargets()` on what `create` returns → `[{ id, x, z, y?, r, shove(dir) }]`: what a pair of hands could push (`shove.rule.js`). `shove(dir)` does whatever a push does to it (`slide()` moves it back as far as there is floor) and returns whether it took any notice. It never hurts or ends anything. `heavy: true` on its line of `cast.js` means a shove neither moves it nor turns its hit aside |
 | fire | `c.fire(x, z)` → the fire that spot is within sight and reach of, `{ x, z, remaining }`, or null (always null in a visit without pockets). `afraid()` and `tooNear()` in `cast/fire.rule.js` are the fear, pure: the mascot uses them, and so can anything else that `fears` |
 | the rest | `c.env`: `env.doors`, `env.interfere(0…1)`, `env.hud.glitch(seconds)`, `env.kit` for models and textures |
@@ -491,6 +491,16 @@ Things to know before they bite:
   creature that `hunts` ends the visit and anything else does nothing. After a
   hit that was survived, let go: back off, or go away for a while (the mascot
   keeps away for 14 to 24 seconds and takes no notice of you until then).
+- **A hit throws them.** A hit that lands and is survived shoves the visitor
+  back a little under a metre from whatever dealt it, feet on the floor,
+  and for a moment their own legs have little say (`player.js`, `KNOCK`;
+  walls stop it as they stop a walk). With the moment of grace the health
+  already gives after a hit, that is the room there is to get away in. It is
+  thrown from `c.hurt(n, from)`'s `from`, or from where your `at()` says you
+  are: say `from` when the blow is not where `at()` points (one of a pack,
+  something that leapt). A room's `c.hurt(n, from)` takes `from` in world
+  coordinates too (a denizen's own `x, z`, or `c.toWorld(…)`); without it the
+  visitor goes straight back from where they are looking.
 - **Items may not be there either.** `c.held()` is null where there is no
   inventory. A creature has to make sense with empty hands.
 - **Never where it can be seen arriving,** if its rule involves not being
@@ -915,7 +925,7 @@ the office is: the seed is the clock, and no building is ever given twice.
 | `denizens.js`, `absorbed.js`, `absorbed/` | residents that belong to one room and may walk out of it · colleagues the building is keeping (after Gemini's fifth pack): one to three a part, two thirds sunk into the wall, the carpet or the ceiling of a plain room, by dice of their own. They cannot move and never end a visit: within arm's reach they hold you for a second and a bit (less if you struggle), then leave you alone for three. A crouch goes under the ones in the ceiling and a hop over the hands of the ones in the floor. `absorbed/rule.js` is the rule (pure: how many, who, and the hold), `absorbed/rig.js` draws them |
 | `banner.js`, `banner.rule.js` | the vinyl banner near where a visit lands: "VOTED 6TH BEST OFFICE PARK", and under it of where (a place name the page may hand the level as `where`; otherwise "IN THE TRI-COUNTY AREA"). Where it hangs is by the seed (pure, `bannerSpot`); it is not in the level's data, so a kept tape is the same tape |
 | `doors.js`, `doorleaf.js` | which doorways have a pair of fire doors (pure) · the doors themselves |
-| `player.js`, `input.js`, `hud.js`, `vhs.js`, `sound.js` | walking, keys and touch, the camcorder, the tape, the hum (and, from `music/`, the owner's music under it). Breath is `WIND` in `player.js`: about eight seconds of running from fresh, then out of breath for a few seconds (no running, a walk at half pace) with a recording of panting (`breath/pant.mp3`); nothing on the screen says how much is left |
+| `player.js`, `input.js`, `hud.js`, `vhs.js`, `sound.js` | walking, keys and touch, the camcorder, the tape, the hum (and, from `music/`, the owner's music under it). Breath is `WIND` in `player.js`: about eight seconds of running from fresh, then out of breath for a few seconds (no running, a walk at half pace) with a recording of panting (`breath/pant.mp3`); nothing on the screen says how much is left. Being hit is `KNOCK`: a hit survived throws you back from whatever dealt it |
 | `touch.js`, `touch.rule.js` | what a phone has instead of keys: a thumb stick and four buttons, drawn · where they go on a screen of any shape, which part of it is the stick, and what a push means (pure) |
 | `../levels/basement.js` | the floor above it all, and the wall |
 | `../dev/backrooms.js` | the level's own page |

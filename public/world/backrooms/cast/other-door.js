@@ -11,7 +11,7 @@ import { toWorld, wallPoint, wallSpans } from '../gen.js';
 import { Batch, lin } from '../kit.js';
 import { turnTo } from '../bits.js';
 import { DOORS, doorTint } from '../doors.js';
-import { TINTS, SIGN, slab, leafTexture } from '../doorleaf.js';
+import { SIGN, leafTexture, leafModel, addLeaf, signSpan, LEAF_THICK } from '../doorleaf.js';
 import { CAST } from '../cast.js';
 import { HUNTER_NEAR } from '../absorbed/rule.js';
 import { OTHER_DOOR, shut, pretends, let_, took, holds, open, doorSpots } from './other-door.rule.js';
@@ -49,22 +49,21 @@ export function create(c) {
 
   function hang(rt, at, n, U) {
     const def = rt.def, half = OTHER_DOOR.w / 2, h = OTHER_DOOR.h - 0.015, T0 = 0.004, T1 = T0 + DOORS.thick * 0.5;
-    const rgb = lin(TINTS[doorTint(level) % TINTS.length]), steel = [0.52, 0.53, 0.52], tex = leafTexture(kit);
+    const tex = leafTexture(kit);
     // (everything it is made of is put in with c.add, so that a room that takes what is in it takes this: the pieces
     // are made in the room's own frame, in a group that sits exactly where the room's does)
     const root = new THREE.Group(), holder = new THREE.Group(), leaves = [];
     root.position.copy(rt.group.position); root.quaternion.copy(rt.group.quaternion); root.scale.copy(rt.group.scale);
     root.add(holder); c.add(root);
     for (const side of [-1, 1]) {
-      const b = new Batch();
-      const box = (a0, a1, o0, o1, y0, y1, col) => { const p = at(a0, o0), q = at(a1, o1); slab(b, Math.min(p[0], q[0]), y0, Math.min(p[1], q[1]), Math.max(p[0], q[0]), y1, Math.max(p[1], q[1]), col); };
-      const j = side * (half - 0.012), m = side * 0.004;                 // from its jamb to where the two meet
-      box(j, m, T0, T1, 0.012, h, rgb);
-      box(j - side * 0.02, m + side * 0.02, T1, T1 + 0.004, 0.02, 0.26, steel);                                  // the kick plate
-      box(m + side * 0.08, m + side * 0.2, T1, T1 + 0.004, 1.0, 1.32, steel);                                    // the plate you push
-      const mid = (j + m) / 2, p0 = at(mid - 0.16, T1 + 0.003), p1 = at(mid + 0.16, T1 + 0.003);                 // the sign, at eye level
+      // the same sculpted leaf as any pair on the floor (doorleaf.js), let into the wall to half its thickness
+      const j = side * (half - 0.012), m = side * 0.004, w = Math.abs(j - m);                 // from its jamb to where the two meet
+      const vb = new Batch(true), model = leafModel(kit, w, h - 0.012, doorTint(level)), span = signSpan(w);
+      addLeaf(vb, model, at(j, T1), 0.012, [-U[0] * side, -U[1] * side], [n[0], n[1]], LEAF_THICK);
+      const vgeo = kit.geometry(vb, rt.lights, rt.amb), mesh = new THREE.Mesh(vgeo, kit.surface({ vox: true, room: rt.u, flick: vgeo.userData.flick, side: THREE.DoubleSide }));
+      const b = new Batch(), mid = j - side * span.mid, p0 = at(mid - span.half, T1 + 0.003), p1 = at(mid + span.half, T1 + 0.003);                 // the sign, at eye level
       b.quad([p0[0], 1.36, p0[1]], [p1[0], 1.36, p1[1]], [p1[0], 1.68, p1[1]], [p0[0], 1.68, p0[1]], [1, 1, 1], SIGN);
-      const geo = kit.geometry(b, rt.lights, rt.amb), mesh = new THREE.Mesh(geo, kit.surface({ map: tex, room: rt.u, flick: geo.userData.flick, side: THREE.DoubleSide }));
+      const geo = kit.geometry(b, rt.lights, rt.amb); mesh.add(new THREE.Mesh(geo, kit.surface({ map: tex, room: rt.u, flick: geo.userData.flick, side: THREE.DoubleSide })));
       holder.add(mesh); leaves.push(mesh);
     }
     // the frame it hangs in: the room's own trim, as round any pair

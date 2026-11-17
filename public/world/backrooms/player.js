@@ -19,16 +19,24 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
  * Nothing on the screen says how much is left; you hear it when it is gone (index.js plays the panting).
  */
 export const WIND = Object.freeze({ run: 8, back: 9, still: 5, spent: 3.4, slow: 0.5 });
+/**
+ * Being hit. A blow that lands shoves you back from whatever dealt it: `speed` m/s to begin with, losing it at `fade` a
+ * second (about speed / fade metres in all, most of it in the first half second), feet on the floor the whole way; and for
+ * `stagger` seconds your own legs have only `legs` of their say. A wall stops it as it stops a walk, and you slide along it.
+ * With the health's moment of grace after a hit (health-state.js), it is the room there is to get away in.
+ */
+export const KNOCK = Object.freeze({ speed: 5, fade: 5.5, stagger: 0.3, legs: 0.25 });
 
 export function createPlayer(world, camera, start, input = { keys: new Set(), dx: 0, dy: 0, stick: { x: 0, y: 0 }, hurry: false }, perk = null) {
   const walkSpeed = WALK * (perk?.walkScale ?? 1);
   const hurrySpeed = HURRY * (perk?.sprintScale ?? 1);
   const crouchFloor = perk?.crouchSpeedFloor ?? 0.42;
   const baseNoise = perk?.noiseScale ?? 1;
-  const me = { x: start.x, z: start.z, yaw: start.yaw, pitch: 0, vx: 0, vz: 0, wishX: 0, wishZ: 0, moving: false, speed: 0, slow: 1, sink: 0, sinkTo: 0, duck: 0, y: 0, step: 0, shake: 1, drop: 0, dropV: 0, frozen: false, crouching: false, sprinting: false, noise: baseNoise, wind: 1, winded: 0, shoveT: 0, shoveCool: 0, shoveRest: 0, punch: 0 };
+  const me = { x: start.x, z: start.z, yaw: start.yaw, pitch: 0, vx: 0, vz: 0, wishX: 0, wishZ: 0, moving: false, speed: 0, slow: 1, sink: 0, sinkTo: 0, duck: 0, y: 0, step: 0, shake: 1, drop: 0, dropV: 0, frozen: false, crouching: false, sprinting: false, noise: baseNoise, wind: 1, winded: 0, shoveT: 0, shoveCool: 0, shoveRest: 0, punch: 0, kx: 0, kz: 0, staggered: 0 };
   // `input`: keys held, mouse movement since last frame, and a thumb stick (x: right, y: forward, each −1…1; hurry: pushed
   // past its ring, which is what Shift is) — the visit's own (input.js), so that what is held on one floor is still held on the next
   let stride = 0, floor = world.floorY(start.x, start.z), sway = 0, duck = 0, hopHeld = false;
+  let ridePose = null;
   const listeners = { step: null, move: null, winded: null };
   const windRun = WIND.run * (perk?.windScale ?? 1);
 
@@ -50,8 +58,8 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
     const dist = Math.hypot(dx, dz), n = Math.max(1, Math.ceil(dist / 0.06));
     for (let i = 0; i < n; i++) {
       const sx = dx / n, sz = dz / n;
-      if (sx && !step(sx, 0)) me.vx *= 0.5;
-      if (sz && !step(0, sz)) me.vz *= 0.5;
+      if (sx && !step(sx, 0)) { me.vx *= 0.5; me.kx = 0; }
+      if (sz && !step(0, sz)) { me.vz *= 0.5; me.kz = 0; }
     }
   }
   /** If something closed around you (a teleport, a door), step out to the nearest free spot. */
@@ -63,7 +71,17 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
     }
   }
 
+  function applyRidePose() {
+    const p = ridePose;
+    Object.assign(me, { x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch,
+      vx: 0, vz: 0, speed: 0, moving: false, drop: 0, dropV: 0 });
+    camera.position.set(p.x, p.y, p.z);
+    camera.rotation.set(p.pitch, p.yaw, p.bank || 0, 'YXZ');
+  }
   function update(dt) {
+    // An authored chute owns the camera until it releases it. Gravity and the
+    // unstick search must not pull a rider through the tube wall mid-ride.
+    if (ridePose) { input.dx = 0; input.dy = 0; applyRidePose(); return; }
     const k = input.keys;
     // looking
     const sensitivity = input.sensitivity ?? 1;
@@ -102,12 +120,22 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
     const wx = ((-sin * f + cos * s) / len) * top, wz = ((-cos * f - sin * s) / len) * top;
     me.wishX = push ? wx / top : 0; me.wishZ = push ? wz / top : 0;          // which way you are trying to go (a wall may have other ideas)
     const ease = 1 - Math.exp(-(push ? 9 : 12) * dt);
-    me.vx += (wx - me.vx) * ease; me.vz += (wz - me.vz) * ease;
+    // (just hit: your legs have little say for a moment, and whatever threw you has the rest — KNOCK)
+    if (me.frozen) { me.kx = 0; me.kz = 0; me.staggered = 0; }
+    const legs = me.staggered > 0 ? KNOCK.legs : 1;
+    me.vx += (wx * legs - me.vx) * ease; me.vz += (wz * legs - me.vz) * ease;
     const bx = me.x, bz = me.z;
     // how low the ceiling is here, and a pace ahead: duck before you get there
     duck = Math.max(0, EYE - (world.headroom(me.x, me.z) - 0.2));
     if (push) { const ax = me.x + (wx / top) * 0.32, az = me.z + (wz / top) * 0.32; if (world.free(ax, az, RADIUS * 0.6)) duck = Math.max(duck, EYE - (world.headroom(ax, az) - 0.2)); }
-    if (Math.abs(me.vx) + Math.abs(me.vz) > 0.002) move(me.vx * dt, me.vz * dt);
+    const gx = me.vx + me.kx, gz = me.vz + me.kz;
+    if (Math.abs(gx) + Math.abs(gz) > 0.002) move(gx * dt, gz * dt);
+    if (me.kx || me.kz) {
+      const fade = Math.exp(-KNOCK.fade * dt);
+      me.kx *= fade; me.kz *= fade;
+      if (Math.hypot(me.kx, me.kz) < 0.05) { me.kx = 0; me.kz = 0; }
+    }
+    if (me.staggered > 0) me.staggered = Math.max(0, me.staggered - dt);
     unstick();
     me.duck = duck;
     const went = Math.hypot(me.x - bx, me.z - bz);
@@ -154,6 +182,14 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
 
   return {
     me, input, update, RADIUS, EYE,
+    setRidePose(pose) {
+      if (pose && !['x','y','z','yaw','pitch'].every(k => Number.isFinite(pose[k]))) return false;
+      if (pose && pose.bank !== undefined && !Number.isFinite(pose.bank)) return false;
+      ridePose = pose ? { ...pose } : null;
+      if (ridePose) applyRidePose();
+      else { floor = world.floorY(me.x, me.z); me.drop = 0; me.dropV = 0; camera.rotation.z = 0; }
+      return true;
+    },
     on(event, fn) { listeners[event] = fn; },
     /**
      * Both hands out (shove.rule.js). It costs breath, and there is none to be had out of breath or straight after another.
@@ -167,7 +203,21 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
       if (got.spent) { me.winded = WIND.spent; listeners.winded?.(me); }
       return true;
     },
-    /** Put the player somewhere else, as is (used by rooms that fold space). */
-    warp(x, z, yaw) { me.x = x; me.z = z; if (yaw !== undefined) me.yaw = yaw; floor = world.floorY(x, z); },
+    /** Put the player somewhere else, as is (used by rooms that fold space). Whatever was throwing you does not come along. */
+    warp(x, z, yaw) { me.x = x; me.z = z; if (yaw !== undefined) me.yaw = yaw; floor = world.floorY(x, z); me.kx = 0; me.kz = 0; },
+    /**
+     * A blow has landed: be thrown back from `from` ({ x, z }, world coordinates: where whatever dealt it is). Nobody said
+     * where, or it is on top of you: straight back from where you are looking. Not while something has hold of you (frozen).
+     * → whether you were thrown.
+     */
+    knock(from) {
+      if (me.frozen) return false;
+      const said = Number.isFinite(from?.x) && Number.isFinite(from?.z);
+      let dx = said ? me.x - from.x : 0, dz = said ? me.z - from.z : 0, d = Math.hypot(dx, dz);
+      if (!(d > 0.05)) { dx = Math.sin(me.yaw); dz = Math.cos(me.yaw); d = 1; }
+      me.kx = (dx / d) * KNOCK.speed; me.kz = (dz / d) * KNOCK.speed;
+      me.vx = 0; me.vz = 0; me.staggered = KNOCK.stagger;
+      return true;
+    },
   };
 }

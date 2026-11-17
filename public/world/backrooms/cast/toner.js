@@ -750,7 +750,7 @@ export function create(c) {
     if (unit.s.bite) {
       c.play('buzz', walker.x, walker.z, 8);
       env.interfere(0.85);
-      const hit = c.hurt(TONER.hitDamage, walker);
+      const hit = c.hurt(TONER.hitDamage, walker);           // (the one that bit, not the pack's lead: thrown back from it, and it is what a shove turns aside)
       // that was the last of them (or there is no health down here, and being got is the end): the tape is ending, and
       // none of them does anything more — it was biting again every frame until the picture went, and saying so
       if (hit.ended || (hit.dead && hit.ended !== false)) { over = true; return; }

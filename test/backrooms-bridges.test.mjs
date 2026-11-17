@@ -187,3 +187,13 @@ test('co-op bridge removal checks both visitors, including the guest outside env
   guest.me=f.at(2.5,-2.2);
   assert.equal(canTip(f.world,item,{actor:host.me}).ok,true);
 });
+
+test('something a room authored comes to rest at another height only where a carrier stands to put it, and never more than a step from them', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../public/world/backrooms/furniture-motion.js', import.meta.url), 'utf8');
+  // the step from the carrier's floor is asked first, for everything; then the authored thing with nobody's floor given stays put
+  assert.match(src, /if \(Number\.isFinite\(from\) && Math\.abs\(floor - from\) > SET_DOWN_STEP\) return false;\s+(\/\/[^\n]*\n\s+)+if \(item\.authored && Math\.abs\(dy\) > FLOOR_EPS && !Number\.isFinite\(from\)\) return false;/);
+  // …and what a room authors moves its picture and its collider up and down together (movable-props.js)
+  const props = fs.readFileSync(new URL('../public/world/backrooms/movable-props.js', import.meta.url), 'utf8');
+  assert.match(props, /f\.translate = \(dx, dz, dy = 0\) => \{/); assert.match(props, /group\.position\.x \+= dx; group\.position\.y \+= dy; group\.position\.z \+= dz;/);
+});

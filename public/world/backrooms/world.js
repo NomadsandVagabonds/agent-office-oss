@@ -1004,13 +1004,19 @@ function roomContext(world, rt) {
     /**
      * The room's resident has got the visitor: n hearts where there is health, and the end of the tape only where there is none or that
      * was the last of them (as a creature's c.hurt: pursuer.js). → { landed, dead, ended }. After one that was survived: let go.
+     * A hit that lands and is survived throws the visitor back from `from` ({ x, z } in WORLD coordinates, as c.toWorld gives
+     * and as a denizen's own x, z are: where the blow came from); without it, straight back from where they are looking (player.js knock).
      */
-    hurt(n = 1) {
+    hurt(n = 1, from = null) {
       // (if this is the last of them, it was this room's doing: the building's camera asks the room what to show — rt.takes(shot),
       // as a creature's takes(shot). Noted before the hit, because the hit is what ends the visit.)
       const before = env.tookBy; env.tookBy = { id: def.arch || null, it: rt };
       const hit = env.health?.damage(n);
-      if (hit) { const ended=!!hit.dead&&!env.hasSurvivor?.();if (!ended) env.tookBy = before; return { landed: !!hit.ok, dead: !!hit.dead, ended }; }
+      if (hit) {
+        const ended = !!hit.dead && !env.hasSurvivor?.(); if (!ended) env.tookBy = before;
+        if (hit.ok && !hit.dead) env.player?.knock?.(from);
+        return { landed: !!hit.ok, dead: !!hit.dead, ended };
+      }
       env.end('caught'); return { landed: true, dead: true, ended: true };
     },
     /** For the count kept of a visit: the resident (its own id) has really been seen, once · it had the visitor and they got away, each time. */

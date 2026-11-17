@@ -103,6 +103,10 @@ const THEME_QUIET = {
   // (no line in TELLS until it is finished — themes.js `dealt: false`)
   mall: { motifs: [['bays', 4], ['colonnade', 3], ['return', 1.5], ['dogleg', 1]], wrong: ['sunk', 'apertures'],
     mix: [[0.24, 0.32], [0.42, 0.5], [0.2, 0.28]], hall: [['nibs', 3], ['baffle', 2.5], ['none', 1]], shapes: ['pinch', 'ell', 'stairs', 'soffit', 'stepceil', 'pit', 'dais'] },
+  // Repeating shower stalls and tiled corridors between the pools.
+  waterpark: { motifs: [['cabanas', 3.4], ['colonnade', 2.4], ['bays', 1.8], ['dogleg', 1.2]], wrong: ['sunk', 'apertures'],
+    mix: [[0.36, 0.46], [0.38, 0.48], [0.1, 0.16]], hall: [['nibs', 3], ['none', 2]], shapes: ['pit', 'dais', 'stepceil', 'slopeceil'] },
+
 };
 /**
  * What gives a kind of floor away: the layouts there are more of on it than on any other kind ('none': a room with
@@ -127,6 +131,7 @@ export function vocabulary(R, themeId) {
     return: () => ({ off: R.pick([0.16, 0.22]), gap: R.pick([1.1, 1.3]), arm: R.pick([1.0, 1.3]) }),
     fence: () => ({ band: R.pick([-0.14, 0.1, 0.2]), gate: R.pick([-0.25, 0, 0.25]), gap: R.pick([1.1, 1.3]) }),
     flats: () => ({ off: R.pick([0.1, 0.16]), gap: R.pick([1.1, 1.3]), missing: R.int(0, 2), face: R.pick([-1, 1]) }),
+    cabanas: () => ({ every: R.pick([1.8, 2.0]), reach: R.pick([1.25, 1.45]), both: R.chance(0.4) }),
   };
   // (what a floor's corridors do is rolled from a source of its own, so that it moves nothing a floor always had)
   const RH = R.fork('hall'), hall = RH.weighted(q.hall, (k) => k[1])[0];
@@ -218,6 +223,17 @@ export function motif(room, m, t) {
       P(u - FLAT.t / 2, v0, u + FLAT.t / 2, v0 + FLAT.w, { h, prop: 'flat', face, art: i });
       // (the painted side faces the bigger half of the room; the brace goes out behind, toward the nearer wall)
       if (i % 2 === 0) P(u + face * FLAT.t / 2, v0 + FLAT.w / 2 - 0.06, u + face * (FLAT.t / 2 + FLAT.brace), v0 + FLAT.w / 2 + 0.06, { h: 0.34, prop: 'brace', face });
+    }
+  } else if (m.kind === 'cabanas') {
+    // tiled locker-room shower stalls projecting from one or both long walls, leaving a wide lane down the middle
+    if (A < 4.6 || B < 4.4) return null;
+    const reach = Math.min(1.45, B * 0.32, m.reach ?? 1.35), every = m.every ?? 1.9, n = Math.floor((A - 2.1) / every) + 1;
+    if (n < 2) return null;
+    const sides = m.both && B >= 6.8 ? [-1, 1] : [-1];
+    for (const s of sides) for (let i = 0; i < n; i++) {
+      const u = -((n - 1) * every) / 2 + i * every;
+      if (s < 0) P(u - 0.06, -B / 2, u + 0.06, -B / 2 + reach, { h: 2.05, prop: 'cabana' });
+      else P(u - 0.06, B / 2 - reach, u + 0.06, B / 2, { h: 2.05, prop: 'cabana' });
     }
   } else if (m.kind === 'nibs') {
     // a corridor: piers in pairs, one each side, the same distance apart all the way down

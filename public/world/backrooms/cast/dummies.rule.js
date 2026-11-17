@@ -13,7 +13,7 @@
  * nearer each other than this, with the visitor between, is a squeeze · reach: how near the line between them the visitor has to
  * be · again: seconds before the same pair can have them again · hurt: hearts
  */
-export const DUMMIES = Object.freeze({ keep: 1.1, door: 1.05, apart: 0.75, most: 6, all: 24, squeeze: 1.15, reach: 0.32, again: 3.5, hurt: 1, wall: 0.4 });
+export const DUMMIES = Object.freeze({ keep: 1.1, door: 1.05, apart: 0.75, most: 6, all: 24, squeeze: 1.15, reach: 0.32, again: 3.5, hurt: 1, wall: 0.4, body: 0.24, widest: 0.34, cell: 0.1 });
 
 export const blank = () => ({ rooms: new Map(), placed: [], last: null, cool: new Map() });
 
@@ -41,6 +41,25 @@ export function mayStand(x, z, room, others = []) {
 }
 
 /**
+ * Could the widest thing that walks (DUMMIES.widest: the mascot's body and a little) still get from every doorway of the room to
+ * every other, with these standing? A flood over a grid of the room's floor, the room's walls and each dummy's body in the way.
+ * room.blocks: what of the room's own stands in the way, [{ x0, z0, x1, z1 }] in its frame (what is solid and on).
+ */
+export function stillThrough(room, standing) {
+  const K = DUMMIES, n = Math.ceil(room.W / K.cell), m = Math.ceil(room.D / K.cell), clear = K.body + K.widest;
+  const free = (i, j) => { const x = -room.W / 2 + (i + 0.5) * K.cell, z = -room.D / 2 + (j + 0.5) * K.cell;
+    if (Math.abs(x) > room.W / 2 - K.widest || Math.abs(z) > room.D / 2 - K.widest) return false;
+    if ((room.blocks || []).some((b) => x > b.x0 - K.widest && x < b.x1 + K.widest && z > b.z0 - K.widest && z < b.z1 + K.widest)) return false;
+    return !standing.some((o) => Math.hypot(x - o.x, z - o.z) < clear); };
+  const cellOf = (x, z) => [Math.max(0, Math.min(n - 1, Math.floor((x + room.W / 2) / K.cell))), Math.max(0, Math.min(m - 1, Math.floor((z + room.D / 2) / K.cell)))];
+  const starts = room.doors.map((d) => { const k = Math.hypot(d.x, d.z) || 1; return cellOf(d.x - (d.x / k) * 0.5, d.z - (d.z / k) * 0.5); });   // half a metre in from each
+  if (starts.length < 2) return true;
+  const seen = new Uint8Array(n * m), q = [starts[0]]; seen[starts[0][0] + n * starts[0][1]] = 1;
+  while (q.length) { const [i, j] = q.pop(); for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= n || b >= m || seen[a + n * b] || !free(a, b)) continue; seen[a + n * b] = 1; q.push([a, b]); } }
+  return starts.every(([i, j]) => seen[i + n * j]);
+}
+
+/**
  * The visitor has come into a room (id) that they have been in before, and left it last time from `spot`: does one more stand
  * there now? Not on the first visit; not past the room's or the floor's share; not where it may not stand.
  * → the next state, and `stood`: the one put down this time, or null.
@@ -49,6 +68,7 @@ export function cameBack(s, id, room, spot) {
   const n = { ...s, rooms: new Map(s.rooms), placed: s.placed.slice() }, mine = n.placed.filter((p) => p.room === id);
   const seen = n.rooms.get(id) || 0; n.rooms.set(id, seen + 1);
   if (seen < 1 || !spot || mine.length >= DUMMIES.most || n.placed.length >= DUMMIES.all || !mayStand(spot.x, spot.z, room, mine)) return { s: n, stood: null };
+  if (!stillThrough(room, [...mine, spot])) return { s: n, stood: null };                                // (never the one that would wall a way off)
   const stood = { room: id, x: spot.x, z: spot.z, yaw: spot.yaw, crouch: spot.crouch, n: n.placed.length };
   n.placed.push(stood);
   return { s: n, stood };
