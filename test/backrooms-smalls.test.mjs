@@ -44,8 +44,9 @@ test('the cooler: the bottle and the cup tube are glass, and nothing shines but 
   assert.ok(glass > 2000, 'a bottle of it');
   for (const [x] of lights) bx.add(x < -5 ? 'cold' : 'hot');
   assert.equal(bx.size, 2, 'one over the cold tap and one over the hot');
-  assert.equal(lights.length, 8, 'two voxels square each, one deep');
-  for (const [, y, z] of lights) { assert.ok(y === 50 || y === 51); assert.equal(z, 15, 'on the face of the cabinet, not in it'); }
+  // the office's are one voxel each, at (−6, 25, 7) and (0, 25, 7): ours are those two voxels doubled, no more and no less
+  const want = []; for (const x0 of [-12, 0]) for (const dx of [0, 1]) for (const y of [50, 51]) for (const z of [14, 15]) want.push([x0 + dx, y, z].join());
+  assert.deepEqual(lights.map((l) => l.join()).sort(), want.sort());
   assert.equal(binVox().size > 0 && trolleyVox().size > 0, true);
   let other = 0; for (const make of [binVox, trolleyVox]) make().each((x, y, z, c) => { if (isGlow(c) || isGlass(c)) other++; });
   assert.equal(other, 0, 'the bin and the trolley have neither');
