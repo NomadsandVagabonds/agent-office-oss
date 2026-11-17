@@ -11,6 +11,7 @@ import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
 import { HEADS, counting, counts, pace, elbow, turned } from './head-count.rule.js';
 import { slide } from '../shove.rule.js';
+import { fitsDoor, canLeave } from './paths.js';
 import { S, UPPER, FORE, knotVox, torsoVox, upperVox, foreVox, handVox, lanyardVox } from './head-count.model.js';
 
 const UP = new THREE.Vector3(0, 1, 0), U = UPPER * S, F = FORE * S;
@@ -30,7 +31,7 @@ export function create(c) {
   const part = (g) => { const k = new THREE.Mesh(g, mat); group.add(k); return k; };
 
   function startRoom() {
-    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 1.4 && r.kind !== 'start' && r.kind !== 'exit';
+    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 1.4 && r.kind !== 'start' && r.kind !== 'exit' && canLeave(r, walker.tall);          // (…and that it can get out of: not one whose every doorway is a hole to crawl through)
     const plain = level.rooms.filter((r) => fits(r) && r.kind === 'plain' && (dist.get(r.id) ?? 0) >= 3), far = level.rooms.filter((r) => fits(r) && (dist.get(r.id) ?? 0) >= 2);
     const pool = plain.length ? plain : far.length ? far : level.rooms.filter((r) => r.kind !== 'start');
     const pick = pool.length ? c.R.pick(pool) : level.rooms[0];
@@ -119,7 +120,7 @@ export function create(c) {
 
   /** Somewhere to go on with its count: the middle of a room next to the one it is in. */
   function wander() {
-    const here = level.rooms[c.room(walker.x, walker.z) ?? -1], ways = (here?.doors || []).map((d) => level.rooms[d.to]).filter((r) => r && !r.crawl && r.H >= 1.4 && r.kind !== 'start');
+    const here = level.rooms[c.room(walker.x, walker.z) ?? -1], ways = (here?.doors || []).filter((d) => fitsDoor(d, walker.tall)).map((d) => level.rooms[d.to]).filter((r) => r && !r.crawl && r.H >= 1.4 && r.kind !== 'start');
     let to = ways.length ? ways[Math.floor(Math.random() * ways.length)] : here;
     if (!to) return null;
     // shoved, it goes on whichever way is furthest from where the shove came from; and then it has forgotten
