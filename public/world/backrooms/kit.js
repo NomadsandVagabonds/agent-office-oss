@@ -726,9 +726,17 @@ export function createKit(opt = {}) {
       for (let y = 0; y < h; y += 5) for (let x = ((y / 5) | 0) % 2 ? -5 : 0; x < w; x += 10) P(g, shade(c, (r() - 0.5) * 0.24), x, y, 9, 4);
     })),
     /** A sheet of paper with a few lines of something on it. */
-    paper: (color = '#f4f1e6') => tex('paper' + color, () => canvasTexture(16, 22, (g, w, h) => {
-      P(g, color, 0, 0, w, h); P(g, shade(color, -0.12), 0, h - 1, w, 1); P(g, shade(color, -0.12), w - 1, 0, 1, h);
-      for (let y = 3; y < h - 3; y += 3) P(g, shade(color, -0.45), 2, y, y % 2 ? 9 : 11, 1);
+    // (a loose sheet lying about is litter, and has to look it: the owner could not tell these from the paper that can be
+    //  picked up, which is a crisp white clipped stack (inventory-items.js). So: dulled and yellowed, creased across the
+    //  middle, a corner turned down, and somebody's tread across it. Nothing lying flat and trodden is worth bending for.)
+    paper: (color = '#f4f1e6') => tex('litter' + color, () => canvasTexture(16, 22, (g, w, h) => {
+      const sheet = shade(color, -0.2);
+      P(g, sheet, 0, 0, w, h); P(g, shade(sheet, -0.14), 0, h - 1, w, 1); P(g, shade(sheet, -0.14), w - 1, 0, 1, h);
+      for (let y = 3; y < h - 3; y += 3) P(g, shade(sheet, -0.22), 2, y, y % 2 ? 9 : 11, 1);            // what was typed on it, faded
+      P(g, shade(sheet, -0.2), 0, 10, w, 1); P(g, shade(sheet, 0.08), 0, 11, w, 1);                    // the crease
+      for (let k = 0; k < 4; k++) P(g, shade(sheet, -0.16 - k * 0.07), w - 4 + k, 0, 1, 4 - k);       // the corner turned down
+      for (let k = 0; k < 5; k++) P(g, '#4a4640', 5 + (k % 2), 12 + k * 2, 7, 1);                        // the tread of a shoe
+      P(g, '#4a4640', 4, 13, 1, 8); P(g, '#4a4640', 12, 13, 1, 8);
     }, { clamp: true })),
     /** Anything else: a texture drawn by the caller, remembered under `key`. */
     custom: (key, w, h, draw, opt) => tex('x' + key, () => canvasTexture(w, h, draw, opt)),
