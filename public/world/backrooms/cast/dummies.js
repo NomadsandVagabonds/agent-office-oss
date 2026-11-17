@@ -17,7 +17,11 @@ export function create(c) {
   let s = blank(), here = null, trail = [], clock = 0, mat = null, geo = { up: [], low: [] }, met = false, over = false;
   const left = new Map(), stood = [];                                     // room id → where they stood when they last left it · what is standing
   const roomInfo = new Map();
-  const info = (id) => { if (!roomInfo.has(id)) { const def = level.rooms[id]; roomInfo.set(id, { W: def.W, D: def.D, doors: def.doors.map((d) => { const p = wallPoint(def, d.side, d.c, 0); return toLocal(def, p.x, p.z); }) }); } return roomInfo.get(id); };
+  // the room as the rule needs it: its size, its doorways, and what of its own is solid (asked each time: a door shut or furniture moved)
+  const info = (id) => { const def = level.rooms[id], rt = env.world.rooms[id];
+    if (!roomInfo.has(id)) roomInfo.set(id, { W: def.W, D: def.D, doors: def.doors.map((d) => { const p = wallPoint(def, d.side, d.c, 0); return { x: p.x, z: p.z }; }) });   // (wallPoint is in the room's own frame already)
+    const blocks = (rt?.colliders || []).filter((k) => k.on !== false && !k.floor).map((k) => { const a = toLocal(def, k.x0, k.z0), b = toLocal(def, k.x1, k.z1); return { x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z) }; });
+    return { ...roomInfo.get(id), blocks }; };
 
   function ready() {
     mat = kit.surface({ vox: true });
