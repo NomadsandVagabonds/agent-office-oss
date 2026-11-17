@@ -17,7 +17,7 @@
 import { P } from '../bits.js';
 import { Vox, M } from '../../vox/vox.js';
 import { upright, sheet } from '../suburb.js';
-import { dummyVox, wallFace, wallBox } from '../mall.js';
+import { dummyVox, wallFace, wallBox, MALL_TEX } from '../mall.js';
 import { VOXEL as S } from '../../vox/vox.js';
 
 // tunnel: the fitting rooms down the middle (frames, how each shrinks, how far apart) · deck: the office, up three steps · aisle: kept clear down the middle
@@ -56,9 +56,9 @@ function plantVox() { const v = new Vox(), pot = M('#b8a48a', 1), g = M('#4f6a42
 
 export function build(c) {
   const { W, D, H, R, kit } = c, K = STORE;
-  const wallT = kit.tex.custom('store:wall', 32, 32, (g, w, h) => { P(g, PAL.wall, 0, 0, w, h); for (let x = 0; x < w; x += 16) { P(g, PAL.seam, x, 0, 1, h); P(g, '#8a8d83', x + 1, 0, 1, h); } for (let i = 0; i < 30; i++) P(g, 'rgba(0,0,0,0.05)', (i * 37) % w, (i * 53) % h, 1, 2); });
-  const carpetT = kit.tex.custom('store:carpet', 32, 32, (g, w, h) => { P(g, PAL.carpet, 0, 0, w, h); for (let i = 0; i < 260; i++) P(g, PAL.fleck[i % 3], (i * 29 + (i >> 3)) % w, (i * 47) % h, 1, 1); });
-  const ceilT = kit.tex.custom('store:ceil', 32, 32, (g, w, h) => { P(g, PAL.tile, 0, 0, w, h); for (let i = 0; i < 70; i++) P(g, '#a8929a', (i * 31) % w, (i * 17) % h, 1, 1); P(g, PAL.grid, 0, 0, w, 1); P(g, PAL.grid, 0, 0, 1, h); });
+  const wallT = MALL_TEX.panel(kit, 'store:wall:64', PAL.wall);
+  const carpetT = MALL_TEX.carpet(kit, 'mall:carpet:64', PAL.carpet, PAL.fleck);
+  const ceilT = MALL_TEX.tile(kit, 'mall:tile:64', PAL.tile, PAL.grid);
   c.shell({ wallTex: wallT, floorTex: carpetT, ceilTex: ceilT, panels: false });
   const det = c.detail, flat = c.flat, rack = rgb(PAL.rack), pink = rgb(PAL.pink), wood = rgb(PAL.wood);
   const zBack = -D / 2;

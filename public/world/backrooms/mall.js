@@ -86,6 +86,37 @@ export function wrap(x0, z0, x1, z1, y0, y1, pick) {
  * inHole(x, z) in the room's own frame. The floor as the building has it is what counts, so anything laid across is floor.
  * As rooms/the-culvert.js, which was the first.
  */
+/* ---- the shopping centre's surfaces (docs/MALL-STYLE.md): drawn at 64 px to a repeat, so a pixel is a voxel (2.5 cm at 1.6 m) ---- */
+const lcg = (seed) => { let k = seed >>> 0; return () => { k = (Math.imul(k, 1664525) + 1013904223) >>> 0; return k / 4294967296; }; };
+const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+const shadeHex = (hex, k) => '#' + [16, 8, 0].map((b) => Math.max(0, Math.min(255, Math.round(((parseInt(hex.slice(1), 16) >> b) & 255) * k))).toString(16).padStart(2, '0')).join('');
+export const MALL_TEX = {
+  /** Contract carpet: a small diamond repeat a shade off the ground, tufts in three colours, a few darker threads. */
+  carpet(kit, key, base, flecks = [shadeHex(base, 1.14), shadeHex(base, 0.86), shadeHex(base, 1.24)]) {
+    return kit.tex.custom(key, 64, 64, (g, w, h) => { const r = lcg(key.length * 977 + 13); g.fillStyle = base; g.fillRect(0, 0, w, h);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const d = Math.abs(((x + 8) % 16) - 8) + Math.abs(((y + 8) % 16) - 8); if (d === 7 || d === 3) { g.fillStyle = hexA(shadeHex(base, 1.3), 0.85); g.fillRect(x, y, 1, 1); } else if (d === 0) { g.fillStyle = hexA(shadeHex(base, 0.78), 0.9); g.fillRect(x, y, 1, 1); } }
+      for (let i = 0; i < 520; i++) { g.fillStyle = flecks[i % flecks.length]; g.fillRect(Math.floor(r() * w), Math.floor(r() * h), 1, 1); }
+      for (let i = 0; i < 14; i++) { g.fillStyle = hexA(shadeHex(base, 0.7), 0.5); g.fillRect(Math.floor(r() * w), Math.floor(r() * h), 1 + Math.floor(r() * 3), 1); } });
+  },
+  /** Panelling: boards a stride across (16 px), a groove and its lit edge between, veneer running up them, scuffs low down. */
+  panel(kit, key, base) {
+    return kit.tex.custom(key, 64, 64, (g, w, h) => { const r = lcg(key.length * 131 + 7); g.fillStyle = base; g.fillRect(0, 0, w, h);
+      for (let x = 0; x < w; x += 16) { const t = 0.97 + r() * 0.05; g.fillStyle = shadeHex(base, t); g.fillRect(x + 1, 0, 14, h);
+        for (let k = 0; k < 2; k++) { const gx = x + 3 + Math.floor(r() * 10), y0 = Math.floor(r() * h), len = 12 + Math.floor(r() * 30); g.fillStyle = hexA(shadeHex(base, r() < 0.5 ? 0.92 : 1.05), 0.35); g.fillRect(gx, y0, 1, Math.min(len, h - y0)); }   // (a little grain, not stripes)
+        g.fillStyle = shadeHex(base, 0.62); g.fillRect(x, 0, 1, h); g.fillStyle = shadeHex(base, 1.16); g.fillRect(x + 1, 0, 1, h); }
+      for (let i = 0; i < 10; i++) { g.fillStyle = hexA('#000000', 0.08 + r() * 0.08); g.fillRect(Math.floor(r() * w), h - 2 - Math.floor(r() * 10), 2 + Math.floor(r() * 5), 1); }
+      for (let i = 0; i < 6; i++) { g.fillStyle = hexA('#000000', 0.25); g.fillRect(Math.floor(r() * w), Math.floor(r() * h), 1, 1); } });
+  },
+  /** A ceiling tile: mineral fibre, its fissures, a bevelled edge lit on two sides and shadowed on two. One tile to a repeat. */
+  tile(kit, key, base, grid) {
+    return kit.tex.custom(key, 64, 64, (g, w, h) => { const r = lcg(key.length * 53 + 3); g.fillStyle = base; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 160; i++) { const x = Math.floor(r() * w), y = Math.floor(r() * h), len = 1 + Math.floor(r() * 3), dir = r() < 0.5; g.fillStyle = hexA(shadeHex(base, 0.72), 0.7); g.fillRect(x, y, dir ? len : 1, dir ? 1 : len); }
+      for (let i = 0; i < 200; i++) { g.fillStyle = hexA(shadeHex(base, 1.1), 0.5); g.fillRect(Math.floor(r() * w), Math.floor(r() * h), 1, 1); }
+      g.fillStyle = grid; g.fillRect(0, 0, w, 2); g.fillRect(0, 0, 2, h);
+      g.fillStyle = shadeHex(base, 1.12); g.fillRect(2, 2, w - 2, 1); g.fillRect(2, 2, 1, h - 2); g.fillStyle = shadeHex(base, 0.84); g.fillRect(2, h - 1, w - 2, 1); g.fillRect(w - 1, 2, 1, h - 2); });
+  },
+};
+
 export function voidIn(c, inHole, opt = {}) {
   const { H } = c, deep = opt.deep ?? 40, brink = opt.brink ?? 0.25, falls = opt.falls ?? 1.7, env = c.env, ground = opt.floor || (() => 0);   // (opt.floor: how high the floor is where it is not hole)
   let fall = null;
