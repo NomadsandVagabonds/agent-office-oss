@@ -19,6 +19,7 @@ import { surfaceAt } from './bridge-rules.js';
 import { mapLayout, bakeShadows, packShadows, layoutUniforms, sampleMap, bakeDoorway, packDoorways, lampPoints, groupOf, groupCount, SHADOWS } from './shadowmap.js';
 import { doorPlan, DOORS } from './doors.js';
 import { bridgeReachable } from './bridge-puzzles.js';
+import { LEVEL_DESK, deskVox } from './desk.model.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
 // and how far along it a local coordinate c is (c is x on the front/back walls, z on the side walls)
@@ -1165,9 +1166,13 @@ function roomContext(world, rt) {
     },
     /** Something from the office's catalogue (desk, chair, cooler…), or a plain crate if it is not there. */
     prop(type, x, z, opt = {}) {
-      const geo = env.catalogue.geo(type, opt.o);
+      // (a desk is the level's own, desk.model.js: the office desk's bounds exactly at half-size voxels, so its foot,
+      // its collider and its top are where they were; only where the catalogue has a desk at all, so nothing gains one)
+      const own = type === 'desk' && env.catalogue.has('desk') ? kit.model('level:desk', deskVox, { ao: false }) : null;
+      const geo = own || env.catalogue.geo(type, opt.o);
       if (geo) {
-        const foot = c.place(geo, x, z, { ...opt, furnitureType: type });
+        const k = own ? LEVEL_DESK.scale : 1, scale = !own ? opt.scale : Array.isArray(opt.scale) ? opt.scale.map((n) => n * k) : (opt.scale || 1) * k;
+        const foot = c.place(geo, x, z, { ...opt, scale, furnitureType: type });
         if (moving && opt.batch && furnitureType(type)) {
           // A transforming room owns this entire batch. Its furniture is
           // bolted to that scenery, with the bolts in the same moving mesh.

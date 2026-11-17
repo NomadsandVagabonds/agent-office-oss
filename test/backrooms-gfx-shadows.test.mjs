@@ -58,7 +58,8 @@ function fingerprint(world, rt) {
   return [Number(sum.toFixed(6)), hash];
 }
 // Recorded from the code before there were tube shadows (the same fixture as backrooms-gfx-bake.test.mjs, BEFORE).
-const BEFORE = [[1917.143025, 3831347603], [1217.726786, 2194159146], [985.762989, 3578396258], [1783.472141, 2833727947], [481.926592, 1625426114], [4863.595473, 1182328622]];
+// (re-recorded when the level got a desk of its own, desk.model.js: rooms 0, 2, 3 and 5 hold a desk and only its vertices moved the numbers; rooms 1 and 4 are as first recorded)
+const BEFORE = [[1798.331663, 4105674958], [1217.726786, 2194159146], [977.463381, 1141414623], [1699.294322, 1393588218], [481.926592, 1625426114], [4640.263823, 2301343724]];
 const materialsOf = (world, rt) => meshesOf(world, rt).map((m) => m.material).filter((m) => m.defines);
 
 test('shadows: off unless asked for; off, nothing of it runs and the bake is the one there was before', async (t) => {
