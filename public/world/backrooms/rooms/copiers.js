@@ -76,11 +76,13 @@ export function build(c) {
       const rot = sx < 0 ? 0 : Math.PI;
       c.reserve(cx, cz, 0.85);
       const variant = idx % COPIER.variants;                 // (the machine and its lid are sculpted: copiers/model.js)
-      c.model('copier:' + variant, () => copierVox(variant), cx, cz, { rot, tall: false, scale: COPIER.scale });
+      // (meshed without per-corner shading, so its flat faces merge; and solid where the old machine was solid, whatever sticks out of this one)
+      c.place(kit.model('copier:' + variant, () => copierVox(variant), { ao: false }), cx, cz, { rot, scale: COPIER.scale, solid: false });
+      c.solid(Math.min(cx - faceDir * 0.35, cx + faceDir * 0.625) + 0.03, cz - 0.42, Math.max(cx - faceDir * 0.35, cx + faceDir * 0.625) - 0.03, cz + 0.42, { tall: false, top: 0.925 });
 
       // hinged document-feeder lid propped open toward the ceiling so the green scan bar glares into the room
       const lidAngle = p.lids[idx % p.lids.length], hingeX = cx - faceDir * 0.28, lidW = 0.52, lidZ = 0.72;
-      c.model('copier-lid', lidVox, hingeX, cz, { rot, y: 0.8875, tilt: [0, lidAngle], scale: COPIER.scale, solid: false, shadow: false });
+      c.place(kit.model('copier-lid', lidVox, { ao: false }), hingeX, cz, { rot, y: 0.8875, tilt: [0, lidAngle], scale: COPIER.scale, solid: false, shadow: false });
       // one green lamp to a pair, on alternate sides, and never past what a room may light (16)
       if ((row + s) % 2 === 0 && c.rt.lights.length < 16) c.light(cx + faceDir * 0.1, 0.96, cz, '#54ff98', 0.22, { k: 0.85, far: 3.4 });
 

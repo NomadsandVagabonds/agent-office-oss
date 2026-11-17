@@ -51,12 +51,12 @@ export function leafVox({ w, h, colour }) {
     for (const [sx, sy] of [[4, 4], [W - 5, 4], [4, kick - 2], [W - 5, kick - 2], [W >> 1, 4], [W >> 1, kick - 2]]) v.set(sx, sy, z, steelD);
     for (let x = 3; x < W - 3; x++) for (let yy = 3; yy < kick; yy++) {
       // scratches run along it, low down, where the trolleys go; a dent or two above
-      if (yy < kick - 3 && noise3(Math.floor(x / 6), yy, z, 7) > (yy < 9 ? 0.82 : 0.95)) v.set(x, yy, z, scuff);
+      if (yy < kick - 3 && noise3(Math.floor(x / 9), yy, z, 7) > (yy < 9 ? 0.86 : 0.97)) v.set(x, yy, z, scuff);
     }
   }
   // paint gone at the foot of the meeting edge and along the bottom, where it catches
-  for (let x = 0; x < W; x++) for (let yy = 0; yy < 5; yy++) for (const z of [-1, T]) if (v.has(x, yy, z) && noise3(Math.floor(x / 3), yy, z, 3) > 0.8) v.set(x, yy, z, bare);
-  for (let yy = kick + 3; yy < lock1 + 30; yy++) for (const z of [-1, T]) for (let x = W - 3; x < W; x++) if (noise3(x, Math.floor(yy / 3), z, 11) > 0.9) v.set(x, yy, z, worn);
+  for (let x = 0; x < W; x++) for (let yy = 0; yy < 5; yy++) for (const z of [-1, T]) if (v.has(x, yy, z) && noise3(Math.floor(x / 5), yy >> 1, z, 3) > 0.84) v.set(x, yy, z, bare);
+  for (let yy = kick + 3; yy < lock1 + 30; yy++) for (const z of [-1, T]) for (let x = W - 3; x < W; x++) if (noise3(1, Math.floor(yy / 4), z, 11) > 0.86) v.set(x, yy, z, worn);
 
   // the window: a slit of wired glass in a dark steel frame, both faces (the pane does not see through: a shut door is a wall)
   if (hasWindow) {
@@ -64,7 +64,7 @@ export function leafVox({ w, h, colour }) {
     B(x0 - 1, y0 - 1, -1, x1 + 1, y1 + 1, T, black);
     K(x0, y0, -1, x1, y1, -1); K(x0, y0, T, x1, y1, T);
     B(x0, y0, 0, x1, y1, T - 1, M(PANE, 0));
-    for (let x = x0; x <= x1; x++) for (let yy = y0; yy <= y1; yy++) if ((x + yy) % 6 === 0 || (x - yy + 600) % 6 === 0) { v.set(x, yy, 0, M(WIRE, 0)); v.set(x, yy, T - 1, M(WIRE, 0)); }
+    for (let x = x0; x <= x1; x++) for (let yy = y0; yy <= y1; yy++) if ((x - x0) % 4 === 2 || (yy - y0) % 5 === 2) { v.set(x, yy, 0, M(WIRE, 0)); v.set(x, yy, T - 1, M(WIRE, 0)); }
   }
 
   // the side you push: a plate for the hand, worn bright in the middle
