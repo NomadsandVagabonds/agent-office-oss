@@ -59,7 +59,7 @@ export function wetSign(c, x, z, rot, lines, fallen = false) {
   const cs = Math.cos(rot), sn = Math.sin(rot);
   const pt = (lx, y, lz) => [x + lx * cs + lz * sn, y, z - lx * sn + lz * cs];
   const board = (model, at, turn, tilt, y = 0) => c.place(model, at[0], at[2], { rot: turn, tilt: [tilt, 0], y, scale, solid: false, shadow: false });
-  const boards = c.kit.model('wetsign:board', boardVox);
+  const boards = c.kit.model('wetsign:board', boardVox, { ao: false });
   if (fallen) {
     // folded flat where it went over, and the other half of another a step away: the boards lying, the words up
     for (const [ox, oz, turn, up] of [[0, 0, rot, 0.026], [sn * 0.34, cs * 0.34, rot + 2.6, 0.03]]) {
@@ -71,7 +71,7 @@ export function wetSign(c, x, z, rot, lines, fallen = false) {
   }
   // the two boards are sculpted (wetsign.model.js); what they say is laid in the well of each, a hair proud
   board(boards, pt(0, 0, spread), rot, -lean); board(boards, pt(0, 0, -spread), rot + Math.PI, -lean);
-  board(c.kit.model('wetsign:frame', frameVox), pt(0, 0, 0), rot, 0);
+  board(c.kit.model('wetsign:frame', frameVox, { ao: false }), pt(0, 0, 0), rot, 0);
   const on = (t) => spread + (top - spread) * t + 0.004, y0 = 0.08, y1 = h - rim * 3.4, hw = w / 2 - rim;
   batch.quad(pt(-hw, y0, on(y0 / h)), pt(hw, y0, on(y0 / h)), pt(hw, y1, on(y1 / h)), pt(-hw, y1, on(y1 / h)));
   batch.quad(pt(hw, y0, -on(y0 / h)), pt(-hw, y0, -on(y0 / h)), pt(-hw, y1, -on(y1 / h)), pt(hw, y1, -on(y1 / h)));

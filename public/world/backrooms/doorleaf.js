@@ -27,7 +27,7 @@ export function slab(b, x0, y0, z0, x1, y1, z1, rgb) {
 /** A leaf this size in this floor's colour, sculpted (doorleaf.model.js) and meshed once for the floor. */
 export function leafModel(kit, w, h, tint) {
   const { W, H } = leafSize(w, h), colour = TINTS[tint % TINTS.length];
-  return { ...kit.model(`leaf:${tint % TINTS.length}:${W}x${H}`, () => leafVox({ w, h, colour })), W, H, w, h };
+  return { ...kit.model(`leaf:${tint % TINTS.length}:${W}x${H}`, () => leafVox({ w, h, colour }), { ao: false }), W, H, w, h };          // (flat faces merge: a floor has a dozen pairs)
 }
 /**
  * Put a leaf in a voxel batch: hinged at `p` ([x, z], the room's frame), standing on `y0`, running along `run` to its
