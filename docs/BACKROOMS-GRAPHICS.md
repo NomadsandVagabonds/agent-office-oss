@@ -487,6 +487,44 @@ The wait for somebody who goes straight to the way down when play begins
 This wait, tier by tier, is the number wanted from ordinary machines, more
 than their frame times.
 
+### Shining batches that light the room (built)
+
+A room draws what shines (tubes, neon, lamps, signs) with `c.shining`, which is
+drawn unlit, and until now lit the room beside it with lamps placed by hand
+(`c.light`). `c.shining(key, texture, power, rgb, { lights: { power, k, far, … } })`
+does both in one call (`shining-lights.rule.js`, hooked in `world.js`
+`c.shining`): every piece added to that batch afterwards (each outermost `box`,
+`quad`, `tri`, `ball`, `grid` or `addVox` call, measured by the vertices it
+added) also puts ordinary lamps (`kit.js` `lamp`) on the room's list, as
+`c.light` does, at the moment the piece is added:
+
+- one at the piece's middle; a long thin piece (at least 0.9 m, and three
+  times longer than its next side) two along it, three from 1.8 m, so a tube
+  lights as a line; the power is per piece and shared between its lamps;
+- in the batch's `rgb` (or `lights.color`), with `lights.power`, and `k`, `far`,
+  `axis`, `floor`, `wrap`, `flick`, `bank` handed to the lamp unchanged: the
+  same lamp, in the same place on the list, as `c.light(x, y, z, rgb, power, { k, … })`
+  written just after the piece (the test proves it bit for bit, at Classic and
+  Medium, with barricades and banks). So the bake, tube shadows, doorway light,
+  the flicker and the banks cannot tell them apart;
+- at most 16 a batch, the room's whole budget of lights (`lights.cap` may lower it, not raise it); past it the
+  two nearest of the batch's lamps become one, weighted by power, in the
+  earlier one's place. Positions come only from the geometry: no seed is read.
+
+It is opt-in per room and the same at every tier (it only adds lamps; each
+tier bakes them as it bakes any lamp). Without `lights` nothing of it runs: four
+seeds' floors (472 rooms, Classic and Medium, banks on and off) bake to the
+same bits as before. A room that adopts it and drops its hand-placed lights is a
+content change for that room, as any change to its lamps is. The lamps count
+toward the room's 16 lights (`budget.js`), and a batch at its cap is over that
+by itself. A lamp at the middle of a tube on a wall lights the wall behind it
+only at a graze; `offset` (a few tenths of a metre into the room, as the exit
+signs' hand-placed lamps are) gives the wall its pool. The cost is bake time,
+not draws: no mesh or triangle is added. On the build machine, an 8 m room
+with 24 short tubes in one batch: the vertex bake 0.7 → 0.7 → 0.9 ms at Classic
+and 1.1 → 1.4 → 1.7 ms at Medium, and the tube-shadow map 2 → 5 → 9 ms, for
+none → 10 → 24 lamps from the batch.
+
 ### Ceiling fixtures (built)
 
 `fixtures` (`&gfx=fixtures` on the dev page; Medium and High). Each ceiling
