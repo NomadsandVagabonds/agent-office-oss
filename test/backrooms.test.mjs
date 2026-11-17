@@ -459,12 +459,14 @@ test('in an oddity a coin has a place of its own, where the builder leaves the f
   // a room that is never dealt by chance (placed by the plan, or from the news) is not in those buildings at all: ask for
   // each by name, and hold where its coin goes to the same
   for (const arch of DECK) if (arch.planned || arch.headline) {
-    for (let i = 0; i < 100; i++) {
-      const level = withLoot(`asked-${arch.id}-${i}`, ALL, { only: arch.id });
+    // A through room can have fewer chances to hide a coin than a dead end.
+    let visits = 0;
+    while (visits < 100 || (visits < 300 && (seen.get(arch.id) || 0) < 5)) {
+      const level = withLoot(`asked-${arch.id}-${visits++}`, ALL, { only: arch.id });
       assert.ok(level.rooms.some((r) => r.arch === arch.id), `${arch.id}: asked for by name, and not there`);
       check(level);
     }
-    assert.ok(seen.get(arch.id) >= 5, `${arch.id}: only ${seen.get(arch.id) || 0} coins in 100 buildings that had it`);
+    assert.ok(seen.get(arch.id) >= 5, `${arch.id}: only ${seen.get(arch.id) || 0} coins in ${visits} buildings that had it`);
   }
 });
 
