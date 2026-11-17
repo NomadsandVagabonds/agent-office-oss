@@ -44,7 +44,7 @@ export function build(c) {
 
   /* the detail: pendant shades, stools, a chiller of bottles, what is kept on the counter, a shelf of jars. Batch `orange:detail` for
      what is only looked at; stools and the chiller are walked into, so they are in the room's own */
-  { const det = c.mapped('orange:detail', kit.tex.white()), chrome = [0.75, 0.77, 0.8], white = [0.94, 0.92, 0.86], orange = [0.94, 0.52, 0.12];
+  { const det = c.mapped('orange:detail', kit.tex.white(), { detail: true }), chrome = [0.75, 0.77, 0.8], white = [0.94, 0.92, 0.86], orange = [0.94, 0.52, 0.12];
     const shades = c.shining('orange:shades', kit.tex.white(), 1.7, [1, 0.72, 0.32]);
     // pendants over the counter: a flex, a shade like half an orange, the bulb in it lit
     for (let x = -W / 2 + 1.0; x < W / 2 - 0.6; x += 1.4) { const y = H - 0.9; det.box(x - 0.006, y + 0.2, zc + 0.35 - 0.006, x + 0.006, H, zc + 0.35 + 0.006, [0.1, 0.1, 0.1]);

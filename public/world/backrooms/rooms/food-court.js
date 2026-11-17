@@ -80,7 +80,7 @@ export function build(c) {
   const skins = { sandwich: [0.55, 0.42, 0.24], chips: [0.78, 0.2, 0.16], soup: [0.2, 0.34, 0.3], tray: [0.42, 0.2, 0.16], hot: [0.6, 0.12, 0.1], orange: [0.94, 0.52, 0.12] };
   const put = (key, make, x, z, o = {}) => c.model(key, make, x, z, { solid: false, shadow: false, ...o });
   /* what is only looked at goes in `court:detail` (nothing in it is stood on, walked into or read) */
-  const det = c.mapped('court:detail', kit.tex.white()), menus = c.shining('court:menus', kit.tex.white(), 0.75, [0.95, 0.8, 0.55]), bulbs = c.shining('court:bulbs', kit.tex.white(), 2.6, [1, 0.82, 0.5]), glowB = c.shining('court:tills', kit.tex.white(), 1.4, [0.6, 1, 0.7]);
+  const det = c.mapped('court:detail', kit.tex.white(), { detail: true }), menus = c.shining('court:menus', kit.tex.white(), 0.75, [0.95, 0.8, 0.55]), bulbs = c.shining('court:bulbs', kit.tex.white(), 2.6, [1, 0.82, 0.5], { detail: true }), glowB = c.shining('court:tills', kit.tex.white(), 1.4, [0.6, 1, 0.7], { detail: true });
   const stall = (i, xa, xb, wall, dir) => {
     const kind = kinds[i], zf = wall + dir * K.stall, mid = (xa + xb) / 2, sk = skins[kind], top = K.canopy, fx = (a, b) => (dir > 0 ? [a, b] : [b, a]), [l, r] = fx(xa, xb);
     c.flat.box(xa, 0, Math.min(zf, zf - dir * 0.55), xb, 0.95, Math.max(zf, zf - dir * 0.55), sk); c.flat.box(xa - 0.04, 0.95, Math.min(zf + dir * 0.05, zf - dir * 0.6), xb + 0.04, 1.0, Math.max(zf + dir * 0.05, zf - dir * 0.6), [0.9, 0.87, 0.78]);
@@ -133,7 +133,7 @@ export function build(c) {
   { const n = 0.14, stone = [0.2, 0.19, 0.2];
     det.box(-hx - n, 0, -hz - n, hx + n, 0.012, -hz, stone); det.box(-hx - n, 0, hz, hx + n, 0.012, hz + n, stone); det.box(-hx - n, 0, -hz, -hx, 0.012, hz, stone); det.box(hx, 0, -hz, hx + n, 0.012, hz, stone);
     det.box(-hx, -0.22, -hz, hx, 0, -hz + 0.01, stone); det.box(-hx, -0.22, hz - 0.01, hx, 0, hz, stone); det.box(-hx, -0.22, -hz, -hx + 0.01, 0, hz, stone); det.box(hx - 0.01, -0.22, -hz, hx, 0, hz, stone);
-    const cx = hx + 0.6, cz = hz + 0.6, y0 = H - 0.55, rim = [0.22, 0.2, 0.24], cove = c.shining('court:cove', kit.tex.white(), 1.6, [1, 0.36, 0.66]);
+    const cx = hx + 0.6, cz = hz + 0.6, y0 = H - 0.55, rim = [0.22, 0.2, 0.24], cove = c.shining('court:cove', kit.tex.white(), 1.6, [1, 0.36, 0.66], { detail: true });
     det.box(-cx, y0, -cz, cx, H, -cz + 0.3, rim); det.box(-cx, y0, cz - 0.3, cx, H, cz, rim); det.box(-cx, y0, -cz + 0.3, -cx + 0.3, H, cz - 0.3, rim); det.box(cx - 0.3, y0, -cz + 0.3, cx, H, cz - 0.3, rim);
     cove.box(-cx + 0.3, y0 + 0.02, -cz + 0.3, cx - 0.3, y0 + 0.06, -cz + 0.34, [1, 1, 1]); cove.box(-cx + 0.3, y0 + 0.02, cz - 0.34, cx - 0.3, y0 + 0.06, cz - 0.3, [1, 1, 1]); cove.box(-cx + 0.3, y0 + 0.02, -cz + 0.34, -cx + 0.34, y0 + 0.06, cz - 0.34, [1, 1, 1]); cove.box(cx - 0.34, y0 + 0.02, -cz + 0.34, cx - 0.3, y0 + 0.06, cz - 0.34, [1, 1, 1]);
     det.box(-0.02, y0 - 0.9, -0.02, 0.02, H, 0.02, [0.1, 0.1, 0.1]); det.box(-0.12, y0 - 0.95, -0.12, 0.12, y0 - 0.9, 0.12, [0.72, 0.56, 0.2]);   // (the hook it was meant to hang from: nothing on it)
