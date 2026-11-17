@@ -40,6 +40,8 @@ export const CAST_LESSONS = Object.freeze({
  *   weight       how often it is dealt, for the others: 1 is ordinary, 3 at most, 0 never
  *   teaches      the one lesson it is the first place to learn (CAST_LESSONS) — optional
  *   needs        lessons it takes for granted (CAST_LESSONS or ROOM_LESSONS). One that needs anything is never on the floor you land on
+ *   heavy        true: too heavy for a pair of hands. A shove does not move it, and does not turn its hit aside (shove.rule.js)
+ *   deep         true: never on the floor you land on, whatever it needs (the ones that are a lot to meet in the first minute)
  *   themes       { yellow, archive, night, fitout, exec } → a multiplier on how likely each kind of floor is to be its floor. 0 keeps it off one
  *   items        the things a visitor might carry that change what it does (ITEMS) — so that whoever writes an item knows who is waiting for it
  *   fire         what a fire lit by the visitor is to it (cast/fire.rule.js FIRE_WAYS): 'fears' (will not go near one, and backs off from one
@@ -72,9 +74,26 @@ export const ALL_CAST = Object.freeze([
     rule: 'It walks only where there is floor, and over anything that has been laid down — so take up what it is standing on.',
     disposition: 'hunts', home: 'roams', weight: 0, withRoom: 'the-culvert', needs: [], items: [], fire: 'ignores', caught: { hurt: 1 },
     themes: { yellow: 0, archive: 0, night: 0, fitout: 0, exec: 0, suburb: 1 } }),
-  Object.freeze({ id: 'greeter', name: 'The greeter',
-    rule: 'It sways and it waves, and comes over very slowly, and that is all it does itself. Near enough, it heaves and brings up four or five small pink ones that jump for your face. They are blind, and most jumps miss: tread on them before one does not.',
+  Object.freeze({ id: 'mother', name: 'Mother',
+    rule: 'She sways and she waves, and comes over very slowly, and that is all she does herself. Near enough, she heaves and brings up four or five small pink ones that jump for your face. They are blind, and most jumps miss: tread on them before one does not.',
     disposition: 'hunts', home: 'roams', weight: 1, needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 1 } }),
+  Object.freeze({ id: 'head-count', name: 'Head count',
+    rule: 'Three of them, joined, on their arms, and not a head between them. It cannot see you or hear you and does not know you are there: it goes about the floor with no idea where it is going. It is not coming for you. A hand comes down on whoever it walks into — so do not be where it is going.',
+    disposition: 'hunts', home: 'roams', weight: 1, deep: true, needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 2 } }),
+  Object.freeze({ id: 'standing-meeting', name: 'The standing meeting',
+    rule: 'Nine of them under one back, on short legs, in file. When you are in front of it, it stops and stands itself up on end to show you what is underneath, and then it comes down and goes, faster than you can run. It cannot turn, and it only ever runs corner to corner of the building, like a bishop: whichever of the four ways is nearest you. Do not outrun it: get off its diagonal, and let the wall have it. Whatever it hits, it lies there a while; then it finds you and takes a line again.',
+    disposition: 'hunts', home: 'roams', weight: 1, deep: true, heavy: true, needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 2 } }),
+  Object.freeze({ id: 'intern', name: 'The intern',
+    rule: 'Too tall, bent double, its head hung between its arms the wrong way up. It is learning by watching you: where you walked it walks, where you stopped it stops, a few seconds behind, and a little less behind the longer it follows. Do not stand still and do not come back the way you went. Out of its sight for a while, it loses its place.',
+    disposition: 'hunts', home: 'roams', weight: 1, deep: true, needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 1 } }),
+  Object.freeze({ id: 'carried-interest', name: 'Carried interest',
+    rule: 'Somebody senior, too big to walk, carried along on ten small things. It comes for you slowly, and is set down on you. Tread on what carries it and it is on the floor until more grow — but it howls when it is dropped, and the camera does not like the howl.',
+    disposition: 'hunts', home: 'roams', weight: 1, deep: true, heavy: true, needs: [], items: ['paper', 'lighter', 'battery'], fire: 'fears', caught: { hurt: 2 } }),
+  // (withTheme: on a part if and only if that part is that kind of floor; never dealt by weight. The shopping centre's own)
+  Object.freeze({ id: 'dummies', name: 'The dummies',
+    rule: 'Every time you come back into a room, one more of them is stood where you stood when you last went out of it.',
+    disposition: 'hunts', home: 'roams', weight: 0, withTheme: 'mall', needs: [], items: [], fire: 'ignores', caught: { hurt: 1 },
+    themes: { yellow: 0, archive: 0, night: 0, fitout: 0, exec: 0, suburb: 0, mall: 1 } }),
   Object.freeze({ id: 'other-door', name: 'The other door',
     rule: 'One pair of doors is not doors: it shivers, now and then, and that is all that gives it away. Try it, walk into it or stand in front of it too long, and it opens on nothing and takes hold of you.',
     disposition: 'hunts', home: 'room', weight: 1, needs: ['doors'], items: ['paper', 'lighter'], fire: 'fears', room: { w: 4, d: 4, wall: 2.3, clear: 1.8 }, caught: { hurt: 2 } }),
@@ -91,7 +110,7 @@ export const SUPPORTING = 2;
  */
 export function whoIsDown(seed, cast = CAST) {
   const R = makeRng(`cast:${seed}`), out = cast.filter((m) => m.always).map((m) => m.id);
-  const pool = cast.filter((m) => !m.always && !m.withRoom && m.weight > 0);          // (one that comes with a room is not dealt: withRoomFor)
+  const pool = cast.filter((m) => !m.always && !m.withRoom && !m.withTheme && m.weight > 0);          // (one that comes with a room is not dealt: withRoomFor)
   for (let n = Math.min(SUPPORTING, pool.length); n > 0 && pool.length; n--) {
     const m = R.weighted(pool, (k) => k.weight);
     out.push(m.id); pool.splice(pool.indexOf(m), 1);
@@ -108,13 +127,16 @@ export function whoIsDown(seed, cast = CAST) {
  */
 export function castFor(visit, floor, cast = CAST) {
   if (!visit) return cast.filter((m) => m.always).map((m) => ({ id: m.id, floor: null }));
+  // Private curated visits may schedule the production cast explicitly. Ordinary
+  // visits keep exactly the seeded dealer below. Entries are authored, not input.
+  if (Array.isArray(visit.company)) return visit.company.filter(m => cast.some(c => c.id === m.id) && Number.isInteger(m.floor) && m.floor >= 0 && m.floor < visit.depths && (floor === undefined || m.floor === floor));
   const out = [];
   for (const id of whoIsDown(visit.seed, cast)) {
     const m = cast.find((k) => k.id === id);
     if (m.always) { out.push({ id, floor: null }); continue; }
     const R = makeRng(`cast:${visit.seed}:${id}`), able = [];
     for (let i = 0; i < visit.depths; i++) {
-      const w = (i === 0 && (m.needs || []).length ? 0 : 1) * ((m.themes || {})[visit.floors[i].theme] ?? 1);
+      const w = (i === 0 && ((m.needs || []).length || m.deep) ? 0 : 1) * ((m.themes || {})[visit.floors[i].theme] ?? 1);
       if (w > 0) able.push([i, w]);
     }
     if (able.length) out.push({ id, floor: R.weighted(able, (k) => k[1])[0] });
@@ -163,9 +185,12 @@ export function hauntsFor(level, ids, deck = ARCHETYPES, cast = CAST) {
   const out = new Map();
   const rooms = (level?.rooms || []).filter((r) => r.arch && Number.isInteger(deck[r.arch]?.haunt) && deck[r.arch].haunt > 0 && r.kind !== 'start' && r.kind !== 'exit');
   if (!rooms.length) return out;
-  const R = makeRng(`${level.seed}/haunt`);
-  const free = R.shuffle(ids.filter((id, i) => ids.indexOf(id) === i).map((id) => cast.find((m) => m.id === id)).filter((m) => m && m.home === 'roams' && !m.always && !m.withRoom).map((m) => m.id));
-  for (const r of rooms) for (let n = Math.min(HAUNT_MOST, deck[r.arch].haunt); n > 0 && free.length; n--) out.set(free.shift(), r.id);
+  const R = makeRng(`${level.seed}/haunt`), fromStart = level.start ? roomDistances(level, level.start.room) : new Map();
+  const free = R.shuffle(ids.filter((id, i) => ids.indexOf(id) === i).map((id) => cast.find((m) => m.id === id)).filter((m) => m && m.home === 'roams' && !m.always && !m.withRoom && !m.withTheme).map((m) => m.id));
+  for (const r of rooms) for (let n = Math.min(HAUNT_MOST, deck[r.arch].haunt); n > 0 && free.length; n--) {
+    const i = free.findIndex(id => cast.find(m => m.id === id)?.disposition !== 'hunts' || (fromStart.get(r.id) ?? 0) >= 2);
+    if (i < 0) break; out.set(free.splice(i, 1)[0], r.id);
+  }
   return out;
 }
 
@@ -180,7 +205,8 @@ export const LAIR = Object.freeze([2, 4]);
  */
 export function withRoomFor(level, cast = CAST) {
   const here = new Set((level?.rooms || []).map((r) => r.arch).filter(Boolean));
-  return cast.filter((m) => m.withRoom && !m.always && here.has(m.withRoom)).map((m) => m.id);
+  // …and one that comes with a kind of floor (a cast line with `withTheme: '<theme id>'`): on a part if and only if it is that kind
+  return cast.filter((m) => !m.always && ((m.withRoom && here.has(m.withRoom)) || (m.withTheme && level?.theme === m.withTheme))).map((m) => m.id);
 }
 
 /**
@@ -194,7 +220,8 @@ export function lairFor(level, member) {
   const room = level.rooms.find((r) => r.arch === member.withRoom);
   const path = room && roomPath(level, level.start.room, room.id);
   if (!path) return null;
-  const last = path.length - 1, ok = (i) => i > 0 && i < last && path[i] !== level.exit?.room && path[i] !== level.start.room;
+  const fromStart = roomDistances(level, level.start.room);
+  const last = path.length - 1, ok = (i) => (fromStart.get(path[i]) ?? 0) >= 2 && i > 0 && i < last && path[i] !== level.exit?.room && path[i] !== level.start.room;
   const able = []; for (let back = LAIR[0]; back <= LAIR[1]; back++) if (ok(last - back)) able.push(path[last - back]);
   if (able.length) return makeRng(`${level.seed}/lair/${member.id}`).pick(able);
   for (let i = last - 1; i > 0; i--) if (ok(i)) return path[i];

@@ -40,6 +40,7 @@ const pick = (list, n) => list[n % list.length];
 /* ---- the head ------------------------------------------------------------ */
 
 const HX = 9, HY0 = 35, HY1 = 52, HZ = 8;            // skull: 18 wide, 17 tall, 16 deep
+export const hatTop = (L) => (L && L.species === 'alien' ? 57 : HY1);
 
 function skull(v, color, r = 5) { v.rbox(-HX, HY0, -HZ, HX, HY1, HZ, r, color); }
 
@@ -52,6 +53,33 @@ function shell(v, color, keep, { grow = 1, r = 5 } = {}) {
   probe.each((x, y, z) => {
     if (v.has(x, y, z)) return;
     if (keep(x, y, z)) v.set(x, y, z, fn ? fn(x, y, z) : flat);
+  });
+}
+
+/** Surface-conforming shell dilated around the sculpted alien cranium. */
+function alienShell(v, cranium, color, keep, grow = 1) {
+  const probe = new Vox();
+  const R = grow <= 1 ? 1 : 2;
+  const maxD2 = grow <= 1 ? 2 : 5;
+  cranium.each((cx, cy, cz) => {
+    if (cranium.has(cx + 1, cy, cz) && cranium.has(cx - 1, cy, cz)
+      && cranium.has(cx, cy + 1, cz) && cranium.has(cx, cy - 1, cz)
+      && cranium.has(cx, cy, cz + 1) && cranium.has(cx, cy, cz - 1)) return;
+    for (let dy = -R; dy <= R; dy++) {
+      for (let dx = -R; dx <= R; dx++) {
+        for (let dz = -R; dz <= R; dz++) {
+          const d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 === 0 || d2 > maxD2) continue;
+          const x = cx + dx, y = cy + dy, z = cz + dz;
+          if (!v.has(x, y, z) && !cranium.has(x, y, z)) probe.set(x, y, z, 1);
+        }
+      }
+    }
+  });
+  const fn = typeof color === 'function' ? color : null;
+  const flat = fn ? 0 : C(color);
+  probe.each((x, y, z) => {
+    if (!v.has(x, y, z) && keep(x, y, z)) v.set(x, y, z, fn ? fn(x, y, z) : flat);
   });
 }
 
@@ -142,8 +170,10 @@ function buildHead(L, seed) {
     v.box(-1, 44, 8, 1, 45, 9, skD);
     v.box(-2, 41, 8, -1, 43, 9, M('#2b1c0a', 0));
     v.box(1, 41, 8, 2, 43, 9, M('#2b1c0a', 0));
-    buildHair(v, L, seed);
-    buildFacialHair(v, L);
+    const cranium = new Vox();
+    v.each((x, y, z, c) => { if (y >= 37) cranium.set(x, y, z, c); });
+    buildHair(v, L, seed, cranium);
+    buildFacialHair(v, L, cranium);
     return v;
   }
 
@@ -195,9 +225,10 @@ function buildHead(L, seed) {
   return v;
 }
 
-function buildHair(v, L, seed) {
+function buildHair(v, L, seed, cranium = null) {
   const style = L.hair;
   const animal = L.species === 'dog' || L.species === 'cat';
+  const alien = L.species === 'alien' && cranium !== null;
   if (style === 'bald') return;
   if (animal && !['cap', 'beanie', 'mohawk', 'bun', 'braids'].includes(style)) return;       // fur is the hairdo
   const oc = L.outfitColor;
@@ -209,6 +240,15 @@ function buildHair(v, L, seed) {
 
   if (style === 'cap') {
     const cap = M(oc, 2);
+    if (alien) {
+      alienShell(v, cranium, cap, (x, y) => y >= 50, 1);
+      const brim = new Vox();
+      brim.rbox(-8, 50, 7, 8, 52, 14, 2, tone(cap, -0.18), 'xz');
+      brim.each((x, y, z, c) => { if (!v.has(x, y, z)) v.set(x, y, z, c); });
+      v.box(-1, 58, -1, 1, 60, 1, tone(cap, 0.2));
+      alienShell(v, cranium, streak, (x, y, z) => y >= 42 && y < 50 && z <= -5, 1);
+      return;
+    }
     shell(v, cap, (x, y) => y >= 47, { grow: 1 });
     v.rbox(-7, 47, HZ, 7, 49, HZ + 6, 2, tone(cap, -0.18), 'xz');     // the brim
     v.box(-1, HY1 + 1, -1, 1, HY1 + 2, 1, tone(cap, 0.2));
@@ -217,17 +257,93 @@ function buildHair(v, L, seed) {
   }
   if (style === 'beanie') {
     const knit = M(oc, 3);
+    if (alien) {
+      alienShell(v, cranium, knit, (x, y) => y >= 49, 1);
+      alienShell(v, cranium, tone(knit, -0.2), (x, y) => y >= 48 && y < 52, 2);
+      v.sphere(-0.5, 60, -0.5, 2.4, tone(knit, 0.25));
+      return;
+    }
     shell(v, knit, (x, y) => y >= 46, { grow: 1 });
     shell(v, tone(knit, -0.2), (x, y) => y >= 45 && y < 48, { grow: 2 });           // folded rim
     v.sphere(-0.5, HY1 + 3, -0.5, 2.4, tone(knit, 0.25));
     return;
   }
   if (style === 'mohawk') {
+    if (alien) {
+      for (let z = -9; z <= 7; z++) {
+        let surfY = -1;
+        for (let y = 57; y >= 46; y--) { if (cranium.has(-1, y, z) || cranium.has(0, y, z)) { surfY = y; break; } }
+        if (surfY < 0) continue;
+        const h = 4 + Math.round(3 * Math.sin(((z + 9) / 17) * Math.PI)) + (noise3(0, 0, z, seed) > 0.6 ? 1 : 0);
+        for (let y = surfY + 1; y <= surfY + h; y++) for (let x = -1; x < 1; x++) v.set(x, y, z, streak(x, y, z));
+      }
+      alienShell(v, cranium, tone(M(L.hairColor, 2), -0.1), (x, y, z) => y >= 49 && y < 56 && Math.abs(x) <= 7 && z <= 3 && noise3(x, y, z, seed) > 0.58, 1);
+      return;
+    }
     for (let z = -HZ - 1; z <= HZ; z++) {
       const h = 4 + Math.round(3 * Math.sin(((z + HZ + 1) / (2 * HZ + 1)) * Math.PI)) + (noise3(0, 0, z, seed) > 0.6 ? 1 : 0);
       for (let y = HY1 - 2; y < HY1 + h; y++) for (let x = -1; x < 1; x++) v.set(x, y, z, streak(x, y, z));
     }
     shell(v, tone(M(L.hairColor, 2), -0.1), (x, y, z) => y >= 44 && Math.abs(x) <= 6 && z <= 2 && y < 50 && noise3(x, y, z, seed) > 0.55, { grow: 0 });
+    return;
+  }
+
+  if (alien) {
+    const backTo = (style === 'long' || style === 'braids') ? 37 : 40;
+    const closedHat = ['partyhat', 'tophat', 'propeller', 'cowboy'].includes(L.accessory);
+    const hatCeiling = L.accessory === 'cowboy' ? 54 : L.accessory === 'partyhat' ? 56 : 55;
+    alienShell(v, cranium, streak, (x, y, z) => {
+      if (closedHat && y >= hatCeiling) return false;
+      if (L.accessory === 'crown' && y >= 55 && Math.hypot(x + 0.5, z + 0.25) >= 6.8) return false;
+      if (L.accessory === 'headphones' && z >= -4 && z <= 4 && (y >= 58 || Math.abs(x + 0.5) >= 10.2)) return false;
+      if (y >= 51) return z <= 6 || y >= 53;
+      if (z <= -5) return y >= backTo;
+      if (Math.abs(x) >= 8 && z <= 2) return y >= ((style === 'long' || style === 'braids') ? 38 : 45);
+      return false;
+    }, 1);
+    if (style === 'long' || style === 'braids') {
+      alienShell(v, cranium, streak, (x, y, z) => y < 52 && ((z <= -5 && y >= backTo) || (Math.abs(x) >= 8 && z <= 2 && y >= 38)), 2);
+    }
+    if (style === 'long') {
+      const sheet = new Vox();
+      sheet.rbox(-11, 26, -11, 11, 43, -4, 3, streak, 'xz');
+      for (const s of [-1, 1]) sheet.rbox(s < 0 ? -12 : 10, 28, -4, s < 0 ? -10 : 12, 47, 3, 1, streak);
+      sheet.each((x, y, z, c) => { if (!cranium.has(x, y, z)) v.set(x, y, z, c); });
+    } else if (style === 'braids') {
+      const baseHair = M(L.hairColor, 2), bandC = tone(baseHair, -0.28), hiHair = tone(baseHair, 0.16);
+      const casc = new Vox();
+      casc.rbox(-11, 26, -11, 11, 44, -4, 3, streak, 'xz');
+      casc.rbox(10, 29, -6, 14, 49, 0, 2, streak);
+      casc.tube(11, 35, -2, 14, 27, 0, 2.2, streak);
+      casc.rbox(-14, 39, -3, -10, 51, 5, 2, streak);
+      casc.rbox(-14, 33, -5, -11, 41, 0, 2, streak);
+      casc.box(-15, 42, 2, -13, 45, 5, M('#e2bd5a', 0));
+      casc.tube(-12, 35, -1, -14, 28, 1.5, 2.9, streak);
+      casc.cyl('y', -14, 1.5, 27, 29, 3.2, bandC);
+      casc.tube(-14, 27, 1.5, -16, 21, 2.5, 2.5, streak);
+      casc.sphere(-16.2, 20.5, 2.7, 1.9, hiHair);
+      casc.each((x, y, z, c) => { if (!cranium.has(x, y, z)) v.set(x, y, z, c); });
+    }
+    for (let x = -9; x <= 8; x++) {
+      let drop;
+      if (style === 'side') drop = 2 + Math.round((x + 9) / 5);
+      else if (style === 'long') drop = Math.abs(x + 0.5) > 5.5 ? 5 : 2;
+      else if (style === 'braids') drop = x < -5 ? 5 : x > 4 ? 4 : 1;
+      else if (style === 'bun') drop = 2;
+      else drop = 2 + (noise3(x, 0, 0, seed) > 0.5 ? 1 : 0);
+      for (let y = Math.max(49, 54 - drop); y < 54; y++) {
+        for (let z = 9; z >= 4; z--) {
+          if (cranium.has(x, y, z - 1)) {
+            if (!v.has(x, y, z)) v.set(x, y, z, streak(x, y, z));
+            break;
+          }
+        }
+      }
+    }
+    if (style === 'bun') {
+      v.sphere(-0.5, 59.5, -5.5, 4.2, streak);
+      v.ring(-0.5, 56.5, -5.5, 3.8, 0.9, M('#e0705f', 0), 'y');
+    }
     return;
   }
 
@@ -275,23 +391,48 @@ function buildHair(v, L, seed) {
   }
 }
 
-function buildHoopEarrings(v, color = '#e58ea6', glint = '#ffdbe6') {
+function buildHoopEarrings(v, color = '#e58ea6', glint = '#ffdbe6', alien = false) {
   const ring = M(color, 0), shine = M(glint, 0);
+  const y0 = alien ? 39 : 33, y1 = alien ? 46 : 40, yc = alien ? 42.5 : 36.5;
+  const z0 = alien ? -2 : 0, z1 = alien ? 4 : 6, zc = alien ? 1.0 : 3.0;
   for (const s of [-1, 1]) {
-    const x = s < 0 ? -HX - 1 : HX;
-    for (let y = 33; y <= 40; y++) {
-      for (let z = 0; z <= 6; z++) {
-        const dy = (y - 36.5) / 3.3, dz = (z - 3.0) / 2.7;
+    const x = alien ? (s < 0 ? -10 : 9) : (s < 0 ? -HX - 1 : HX);
+    for (let y = y0; y <= y1; y++) {
+      for (let z = z0; z <= z1; z++) {
+        const dy = (y - yc) / 3.3, dz = (z - zc) / 2.7;
         const d2 = dy * dy + dz * dz;
-        if (d2 >= 0.44 && d2 <= 1.12) v.set(x, y, z, z >= 5 && y >= 36 ? shine : ring);
+        if (d2 >= 0.44 && d2 <= 1.12) v.set(x, y, z, z >= z1 - 1 && y >= yc - 0.5 ? shine : ring);
       }
     }
   }
 }
 
-function buildFacialHair(v, L) {
+function buildFacialHair(v, L, cranium = null) {
   if (L.species === 'robot' || !L.facial || L.facial === 'none') return;
   const hc = M(L.hairColor, 2);
+  if (L.species === 'alien' && cranium) {
+    if (L.facial === 'mustache') {
+      for (let x = -5; x <= 4; x++) {
+        const yLo = (x <= -4 || x >= 3) ? 39 : 40;
+        const yHi = (x <= -4 || x >= 3) ? 40 : 41;
+        for (let y = yLo; y <= yHi; y++) {
+          for (let z = 9; z >= 5; z--) {
+            if (cranium.has(x, y, z - 1)) { v.set(x, y, z, hc); break; }
+          }
+        }
+      }
+    } else if (L.facial === 'beard') {
+      alienShell(v, cranium, hc, (x, y, z) => y >= 37 && y <= 42 && z >= -1 && (Math.abs(x + 0.5) >= 3.5 || y <= 39), 1);
+      for (let x = -4; x <= 3; x++) {
+        for (let z = 9; z >= 6; z--) {
+          if (cranium.has(x, 40, z - 1)) { v.set(x, 40, z, hc); break; }
+        }
+      }
+    } else if (L.facial === 'lashes') {
+      buildHoopEarrings(v, '#e58ea6', '#ffdbe6', true);
+    }
+    return;
+  }
   if (L.facial === 'mustache') {
     v.box(-4, 39, HZ, 4, 41, HZ + 1, hc);
     v.box(-5, 38, HZ, -3, 40, HZ + 1, hc); v.box(3, 38, HZ, 5, 40, HZ + 1, hc);
@@ -398,11 +539,25 @@ export function buildAccessory(L) {
   if (!acc || acc === 'none') return { model: null, spin: null };
   const v = new Vox();
   let spin = null;
-  const top = HY1;
+  const alien = L.species === 'alien';
+  const top = hatTop(L);
   switch (acc) {
     case 'glasses': case 'shades': {
       const frame = M(acc === 'shades' ? '#141414' : '#1c1812', 0);
       const lens = acc === 'shades' ? M('#1d2a33', 0) : glass('#bcd6e6');
+      if (alien) {
+        for (const s of [-1, 1]) {
+          const x0 = s < 0 ? -9 : 2;
+          v.box(x0, 42, 9, x0 + 7, 49, 10, frame);
+          v.box(x0 + 1, 43, 9, x0 + 6, 48, 10, lens);
+          const armX = s < 0 ? -11 : 10;
+          for (let z = -1; z <= 9; z++) v.set(armX, 46, z, frame);
+          v.set(s < 0 ? -10 : 9, 46, 9, frame);
+        }
+        v.box(-2, 46, 9, 2, 47, 10, frame);
+        if (acc === 'shades') { v.set(-7, 47, 9, M('#3a5a6a', 0)); v.set(4, 47, 9, M('#3a5a6a', 0)); }
+        break;
+      }
       for (const s of [-1, 1]) {
         const x0 = s < 0 ? -8 : 2;
         v.box(x0, 40, HZ, x0 + 6, 47, HZ + 1, frame);
@@ -416,6 +571,12 @@ export function buildAccessory(L) {
     }
     case 'monocle': {
       const gold = M('#e8c45a', 0);
+      if (alien) {
+        v.box(2, 42, 9, 9, 49, 10, gold);
+        v.box(3, 43, 9, 8, 48, 10, glass('#dff0f7'));
+        for (let i = 0; i < 6; i++) v.set(8 + (i > 2 ? 1 : 0), 41 - i, 9, M('#caa24a', 0));
+        break;
+      }
       v.box(2, 40, HZ, 8, 47, HZ + 1, gold);
       v.box(3, 41, HZ, 7, 46, HZ + 1, glass('#dff0f7'));
       for (let i = 0; i < 6; i++) v.set(7 + (i > 2 ? 1 : 0), 39 - i, HZ, M('#caa24a', 0));
@@ -423,6 +584,18 @@ export function buildAccessory(L) {
     }
     case 'eyepatch': {
       const k = M('#161616', 1);
+      if (alien) {
+        v.box(2, 43, 9, 8, 49, 10, k);
+        for (let y = 47; y <= 48; y++) {
+          for (let x = -11; x <= 10; x++) {
+            for (let z = -11; z <= 10; z++) {
+              const r = Math.hypot((x + 0.5) / 10.5, (z + 0.5 + 0.4) / 9.9);
+              if (r >= 0.96 && r <= 1.07) v.set(x, y, z, k);
+            }
+          }
+        }
+        break;
+      }
       v.box(2, 41, HZ, 8, 47, HZ + 1, k);
       const probe = new Vox(); probe.rbox(-HX - 1, 46, -HZ - 1, HX + 1, 48, HZ + 1, 6, 1, 'xz');
       probe.each((x, y, z) => { if (Math.abs(x) >= HX || Math.abs(z) >= HZ - 1 || z >= HZ - 1 || z <= -HZ) v.set(x, y, z, k); });
@@ -430,6 +603,23 @@ export function buildAccessory(L) {
     }
     case 'headphones': {
       const k = M('#33303a', 0), pad = M('#4a4654', 2);
+      if (alien) {
+        for (let y = 48; y <= 60; y++) {
+          for (let x = -13; x <= 12; x++) {
+            const r = Math.hypot((x + 0.5) / 11.7, (y - 47.5) / 12.2);
+            if (r >= 0.90 && r <= 1.03) {
+              for (let z = -2; z <= 1; z++) v.set(x, y, z, k);
+            }
+          }
+        }
+        for (const s of [-1, 1]) {
+          const x0 = s < 0 ? -14 : 11;
+          v.rbox(x0, 40, -4, x0 + 3, 50, 4, 2, k);
+          v.rbox(s < 0 ? -11 : 10, 41, -3, s < 0 ? -10 : 11, 49, 3, 1, pad);
+          v.set(s < 0 ? -14 : 13, 45, 0, glow('#86e0a8'));
+        }
+        break;
+      }
       v.ring(-0.5, 43, -0.5, 10.6, 1.1, k, 'z');
       v.carve(-14, 30, -3, 14, 44, 3);                                 // keep only the arc over the top
       for (const s of [-1, 1]) {
@@ -441,11 +631,12 @@ export function buildAccessory(L) {
       break;
     }
     case 'halo':
-      v.ring(-0.5, top + 6, -0.5, 6.5, 1.0, glow('#ffd27a'), 'y');
+      v.ring(-0.5, top + 6, -0.5, alien ? 7.0 : 6.5, 1.0, glow('#ffd27a'), 'y');
       break;
     case 'partyhat': {
+      const baseR = alien ? 7.2 : 6.2;
       for (let y = 0; y < 13; y++) {
-        const r = 6.2 * (1 - y / 13.5);
+        const r = baseR * (1 - y / 13.5);
         const band = Math.floor((y + 1) / 3) % 2 === 0;
         v.cyl('y', -0.5, -0.5, top - 1 + y, top + y, r, M(band ? '#e0705f' : '#f0d24b', 1));
       }
@@ -454,33 +645,49 @@ export function buildAccessory(L) {
     }
     case 'crown': {
       const gold = M('#e8c45a', 0);
-      v.cyl('y', -0.5, -0.5, top - 1, top + 3, 7.6, gold);
-      v.cyl('y', -0.5, -0.5, top - 1, top + 6, 6.4, 0);
-      const probe = new Vox(); probe.cyl('y', -0.5, -0.5, top + 3, top + 4, 7.6, 1); probe.cyl('y', -0.5, -0.5, top + 3, top + 4, 6.4, 0);
+      const cBase = alien ? 55 : top - 1;
+      const rOut = alien ? 8.2 : 7.6;
+      const rIn = alien ? 6.9 : 6.4;
+      const zCenter = alien ? -0.25 : -0.5;
+      v.cyl('y', -0.5, zCenter, cBase, cBase + 4, rOut, gold);
+      v.cyl('y', -0.5, zCenter, cBase, cBase + 7, rIn, 0);
+      const probe = new Vox();
+      probe.cyl('y', -0.5, zCenter, cBase + 4, cBase + 5, rOut, 1);
+      probe.cyl('y', -0.5, zCenter, cBase + 4, cBase + 5, rIn, 0);
       probe.each((x, y, z) => {
-        const a = Math.atan2(z + 0.5, x + 0.5);
+        const a = Math.atan2(z - zCenter, x + 0.5);
         const spike = Math.max(0, Math.round(3 * Math.pow(Math.abs(Math.cos(a * 2.5)), 3)));
         for (let k = 0; k < spike; k++) v.set(x, y + k, z, gold);
       });
-      v.paint(-8, top, -8, 8, top + 1, 8, (x, y, z, cur) => ((x + z + 99) % 5 === 0 ? M('#e0705f', 0) : cur));
+      v.paint(-9, cBase + 1, -9, 9, cBase + 2, 9, (x, y, z, cur) => ((x + z + 99) % 5 === 0 ? M('#e0705f', 0) : cur));
       break;
     }
     case 'tophat': {
       const k = M('#1c1c22', 2);
-      v.cyl('y', -0.5, -0.5, top - 1, top + 1, 10.4, k);
-      v.cyl('y', -0.5, -0.5, top + 1, top + 12, 7.2, k);
-      v.paint(-9, top + 1, -9, 9, top + 4, 9, M('#8a3a4a', 1));
+      const tBase = alien ? 55 : top - 1;
+      const brimR = alien ? 10.8 : 10.4;
+      const cylR = alien ? 7.6 : 7.2;
+      v.cyl('y', -0.5, -0.5, tBase, tBase + 2, brimR, k);
+      v.cyl('y', -0.5, -0.5, tBase + 2, tBase + 13, cylR, k);
+      v.paint(-9, tBase + 2, -9, 9, tBase + 5, 9, M('#8a3a4a', 1));
       break;
     }
     case 'flower': {
       const petal = M('#e87aae', 1);
-      for (const [dy, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, -1], [1, -1], [-1, 1]]) v.sphere(HX + 1, 47 + dy, 1 + dz, 1.3, petal);
-      v.box(HX + 1, 46, 0, HX + 3, 48, 2, M('#f0d24b', 0));
+      const fx = alien ? HX + 2 : HX + 1;
+      const fy = alien ? 50 : 47;
+      for (const [dy, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, -1], [1, -1], [-1, 1]]) v.sphere(fx, fy + dy, 1 + dz, 1.3, petal);
+      v.box(fx, fy - 1, 0, fx + 2, fy + 1, 2, M('#f0d24b', 0));
       break;
     }
     case 'propeller': {
-      for (let y = 0; y < 5; y++) v.cyl('y', -0.5, -0.5, top - 1 + y, top + y, 7.2 - y * 1.3, M(y % 2 ? '#3f7f9a' : '#d8493f', 1));
-      v.box(-1, top + 4, -1, 1, top + 7, 1, M('#5a5a66', 0));
+      if (alien) {
+        for (let y = 0; y < 5; y++) v.cyl('y', -0.5, -0.5, 55 + y, 56 + y, 8.2 - y * 1.25, M(y % 2 ? '#3f7f9a' : '#d8493f', 1));
+        v.box(-1, 60, -1, 1, 64, 1, M('#5a5a66', 0));
+      } else {
+        for (let y = 0; y < 5; y++) v.cyl('y', -0.5, -0.5, top - 1 + y, top + y, 7.2 - y * 1.3, M(y % 2 ? '#3f7f9a' : '#d8493f', 1));
+        v.box(-1, top + 4, -1, 1, top + 7, 1, M('#5a5a66', 0));
+      }
       spin = new Vox();
       spin.rbox(-7, 0, -1, 7, 1, 1, 1, M('#e8c45a', 0), 'xz');
       spin.box(-1, 0, -1, 1, 2, 1, M('#5a5a66', 0));
@@ -489,15 +696,17 @@ export function buildAccessory(L) {
     case 'cowboy': {
       const felt = M('#bfa77a', 2), feltHi = tone(felt, 0.14), feltSh = tone(felt, -0.18);
       const band = M('#b53f38', 1), buckle = M('#ddb65c', 0);
+      const cTop = alien ? 55 : top;
+      const brimRx = alien ? 17.4 : 16.6, brimRz = alien ? 15.6 : 14.8;
       // Wide Stetson brim with upturned side wings & subtle front dip
-      for (let x = -17; x <= 16; x++) {
-        for (let z = -15; z <= 15; z++) {
-          const nx = (x + 0.5) / 16.6, nz = (z + 0.5) / 14.8;
+      for (let x = -18; x <= 17; x++) {
+        for (let z = -16; z <= 16; z++) {
+          const nx = (x + 0.5) / brimRx, nz = (z + 0.5) / brimRz;
           const r2 = nx * nx + nz * nz;
           if (r2 > 1) continue;
-          const sideCurl = Math.round(Math.max(0, (Math.abs(x + 0.5) - 8.8) / 1.75));
-          const frontDip = z >= 9 && Math.abs(x + 0.5) < 6.5 ? -1 : 0;
-          const by = top - 2 + sideCurl + frontDip;
+          const sideCurl = Math.round(Math.max(0, (Math.abs(x + 0.5) - (alien ? 9.4 : 8.8)) / 1.75));
+          const frontDip = z >= (alien ? 10 : 9) && Math.abs(x + 0.5) < 6.5 ? -1 : 0;
+          const by = cTop - 2 + sideCurl + frontDip;
           v.set(x, by, z, r2 > 0.78 ? feltHi : feltSh);
           v.set(x, by + 1, z, sideCurl >= 2 ? feltHi : felt);
         }
@@ -505,65 +714,76 @@ export function buildAccessory(L) {
       // Tapered cattleman crown with center pinch crease
       for (let dy = 0; dy < 11; dy++) {
         const t = dy / 10;
-        const rx = 8.6 - t * 2.2, rz = 9.2 - t * 1.7;
-        for (let x = -9; x <= 8; x++) {
-          for (let z = -9; z <= 8; z++) {
+        const rx = (alien ? 9.0 : 8.6) - t * 2.2, rz = (alien ? 9.5 : 9.2) - t * 1.7;
+        for (let x = -10; x <= 9; x++) {
+          for (let z = -10; z <= 9; z++) {
             const nx = (x + 0.5) / rx, nz = (z + 0.5) / rz;
             if (nx * nx + nz * nz > 1) continue;
             if (dy >= 9 && Math.abs(x + 0.5) < 1.3 && Math.abs(z + 0.5) < 4.5) continue; // center crease
             const isBand = dy >= 1 && dy <= 2;
             const c = isBand ? band : dy >= 8 ? feltHi : felt;
-            v.set(x, top + dy, z, c);
+            v.set(x, cTop + dy, z, c);
           }
         }
       }
       // Small side ribbon clasp on the hatband
-      v.box(7, top + 1, 1, 9, top + 3, 3, buckle);
+      const bx = alien ? 8 : 7;
+      v.box(bx, cTop + 1, 1, bx + 2, cTop + 3, 3, buckle);
       break;
     }
     case 'hoops': {
-      buildHoopEarrings(v, '#e8c45a', '#fff3c0');
+      buildHoopEarrings(v, '#e8c45a', '#fff3c0', alien);
       break;
     }
     case 'goggles': {
       // Round brushed-silver goggle housings with deep convex obsidian lenses & temple straps
       const rim = M('#8f96a3', 0), rimHi = M('#c5ccd9', 0), rimSh = M('#59606c', 0);
       const lens = M('#111318', 0), glint1 = M('#dfe8f4', 0), glint2 = M('#5d6f86', 0);
-      const cy = L.species === 'alien' ? 46.0 : 45.0;
-      const yMin = L.species === 'alien' ? 41 : 40, yMax = L.species === 'alien' ? 50 : 49;
+      const cy = alien ? 46.0 : 45.0;
+      const yMin = alien ? 41 : 40, yMax = alien ? 50 : 49;
+      const zShift = alien ? 1 : 0;
       for (const s of [-1, 1]) {
-        const cx = s * 4.6;
-        for (let x = -9; x <= 8; x++) {
+        const cx = s * (alien ? 4.8 : 4.6);
+        for (let x = -10; x <= 9; x++) {
           for (let y = yMin; y <= yMax; y++) {
             const dx = (x + 0.5) - cx, dy = (y + 0.5) - cy;
             const r = Math.hypot(dx, dy);
             if (r > 4.15) continue;
             if (r >= 2.75) {
               const rc = dy > 1.2 ? rimHi : dy < -1.4 ? rimSh : rim;
-              const zBack = Math.abs(x + 0.5) >= 6.8 ? 5 : 7;
-              for (let z = zBack; z <= 9; z++) v.set(x, y, z, rc);
+              const zBack = alien
+                ? (Math.abs(x + 0.5) >= 7.6 ? 7 : 9)
+                : (Math.abs(x + 0.5) >= 6.8 ? 5 : 7);
+              for (let z = zBack; z <= 9 + zShift; z++) v.set(x, y, z, rc);
             } else {
-              v.set(x, y, 7, lens);
-              v.set(x, y, 8, lens);
+              if (!alien) v.set(x, y, 7, lens);
+              v.set(x, y, 8 + zShift, lens);
               if (r < 2.05) {
                 const isGlint1 = dx >= -1.7 && dx <= -0.4 && dy >= 0.4 && dy <= 1.7;
                 const isGlint2 = !isGlint1 && dx >= -2.0 && dx <= 0.2 && dy >= 0.0 && dy <= 2.0 && (dx + dy > -0.6);
-                v.set(x, y, 9, isGlint1 ? glint1 : isGlint2 ? glint2 : lens);
+                v.set(x, y, 9 + zShift, isGlint1 ? glint1 : isGlint2 ? glint2 : lens);
               }
             }
           }
         }
         // Flush silver side strap hugging the temple
-        const sx = s < 0 ? -9 : 8, sy = Math.round(cy);
-        for (let z = 0; z <= 6; z++) {
+        const sx = alien ? (s < 0 ? -10 : 9) : (s < 0 ? -9 : 8);
+        const sy = Math.round(cy);
+        for (let z = alien ? 1 : 0; z <= (alien ? 7 : 6); z++) {
           v.set(sx, sy, z, rimHi);
           v.set(sx, sy - 1, z, rimSh);
+        }
+        if (alien) {
+          v.set(s < 0 ? -11 : 10, sy, 0, rimHi);
+          v.set(s < 0 ? -11 : 10, sy - 1, 0, rimSh);
+          v.set(s < 0 ? -9 : 8, sy, 8, rimHi);
+          v.set(s < 0 ? -9 : 8, sy - 1, 8, rimSh);
         }
       }
       // Sculpted silver bridge between lenses
       const by = Math.round(cy);
-      v.box(-2, by, 8, 2, by + 2, 10, rim);
-      v.box(-2, by + 1, 8, 2, by + 2, 10, rimHi);
+      v.box(-2, by, 8 + zShift, 2, by + 2, 10 + zShift, rim);
+      v.box(-2, by + 1, 8 + zShift, 2, by + 2, 10 + zShift, rimHi);
       break;
     }
     default:

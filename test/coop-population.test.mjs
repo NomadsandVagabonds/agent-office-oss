@@ -7,6 +7,11 @@ test('guest room stays active when host is elsewhere, and dead visitors leave zo
 
 test('a guest leaning on a shared room wall is not masked by its idle host',()=>{const {pop,events}=fixture(),a=visitor('a',0),b=visitor('b',.5);b.me.wishZ=1;pop.update(.05,0,[a,b]);assert.deepEqual(events.filter(e=>e[0]==='tick'&&e[1]===0),[['tick',0,'b']]);});
 
+test('capture stays scoped to its guest while another player moves, and danger focus can select an idle guest',()=>{
+ const {pop,rooms,events}=fixture(),a=visitor('a',0),b=visitor('b',.5);a.me.moving=true;rooms[0].coopHeld='b';pop.update(.05,0,[a,b]);
+ assert.deepEqual(events.filter(e=>e[0]==='tick'&&e[1]===0),[['tick',0,'b']]);events.length=0;
+ rooms[0].coopHeld=null;rooms[0].coopFocus=()=>[{x:.5,z:0}];pop.update(.05,.05,[a,b]);assert.deepEqual(events.filter(e=>e[0]==='tick'&&e[1]===0),[['tick',0,'b']]);
+});
 
 test('room target hook keeps one clock and installs the selected visitor context',()=>{
  const {rooms}=fixture(),a=visitor('a',0),b=visitor('b',.5);let active,observed;

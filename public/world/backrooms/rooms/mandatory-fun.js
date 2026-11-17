@@ -138,10 +138,10 @@ export function build(c) {
     if (id !== targetId) { targetId = id; rule = { ...createPartyState(), welcomed: welcomed.has(id) }; danceAt = null; }
     const visible = seesVisitor(me);
     if (holdingBalloon && !rule.welcomed && rule.mode !== 'gathering' && rule.mode !== 'partying') gatherAround(me);
-    let minDist = Infinity, contactDist = Infinity;
+    let minDist = Infinity, contactDist = Infinity, nearest = null;
     for (const m of members) {
       const d = Math.hypot(me.x - m.x, me.z - m.z);
-      if (d < minDist) minDist = d;
+      if (d < minDist) { minDist = d; nearest = m; }
       if (d < PARTY.catchRadius && roomContact(c, m, me)) contactDist = Math.min(contactDist, d);
     }
 
@@ -212,7 +212,7 @@ export function build(c) {
         c.env.interfere(1);
         // A hit costs a heart; survivors are still chased until they escape or show a balloon.
         if (!known) { known = true; c.met('fun-committee'); }
-        const hit = c.hurt(PARTY.hurts);
+        const hit = c.hurt(PARTY.hurts, nearest && c.toWorld(nearest.x, nearest.z));
         if (hit.ended) { over = true; return; }
         if (!hit.ended) { rule = releaseParty(rule); if (hit.landed) { c.env.hud.glitch(0.5); c.survived('fun-committee'); } }
       }

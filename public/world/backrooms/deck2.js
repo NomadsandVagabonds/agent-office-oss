@@ -413,18 +413,46 @@ export const MORE_DECK = [
     module: './rooms/the-culvert.js', stash: (r, side) => [side * (r.W / 2 - 1.3) - 0.35, -r.D / 2 + 0.5, side * (r.W / 2 - 1.3) + 0.35, -r.D / 2 + 1.1],
     roll: (R) => ({ side: R.pick([-1, 1]) }) },
   // The shopping centre (themes.js `mall`: still being built, `dealt: false`). Rooms made for it, and dealt nowhere else.
-  // Nine shop units made of office partition, three by three, and shutters down across some of the ways between them.
-  { id: 'the-concourse', name: 'The Concourse', landmark: 'the units, one to nine', w: [11, 13], d: [11, 13], h: [2.6, 2.9],
-    ports: ['left', 'right', 'back'], weight: 1.3, lights: 'dim', themes: { mall: 1, '*': 0 },
-    module: './rooms/the-concourse.js', stash: (r) => [-r.W / 2 + 0.3, r.D / 2 - 1.0, -r.W / 2 + 0.95, r.D / 2 - 0.35], roll: (R) => ({ seed: R.int(1, 9999) }) },
-  // A tea point scaled up: bolted tables, counters with lit boards, and the middle of the floor left out behind a rail with a length missing.
-  { id: 'food-court', name: 'The Food Court', landmark: 'the tables round the hole', w: [13, 15], d: [12, 14], h: [3.3, 3.8],
+  // A warehouse bay with a shopping centre stood up in it: a gallery of shops a storey up, a flight to it, another going down into nothing, and only neon to see by.
+  { id: 'the-atrium', name: 'The Atrium', landmark: 'the two floors of shops, and the way down to more', w: [16, 18], d: [14, 16], h: [7.6, 8.6],
+    ports: ['left', 'right'], weight: 1.4, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/the-atrium.js', stash: (r) => [-r.W / 2 + 0.4, r.D / 2 - 1.1, -r.W / 2 + 1.0, r.D / 2 - 0.5], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A hall given over to moving stairs, which go everywhere; two of them can be ridden, and one of those only takes whoever stands still.
+  { id: 'moving-stairs', name: 'Moving Stairs', landmark: 'the hall of moving stairs', w: [16, 18], d: [16, 18], h: [8.6, 9],
+    ports: ['left', 'right'], weight: 1.3, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/moving-stairs.js', stash: (r) => [r.W / 2 - 1.0, r.D / 2 - 1.1, r.W / 2 - 0.4, r.D / 2 - 0.5], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A shop: a hall of photo booths, both sides and two rows up the back; walk past one and it takes your picture. The strips are pinned up everywhere.
+  { id: 'photo-booths', name: 'Photo of You', landmark: 'the row of photo booths', w: [9, 11], d: [5, 6], h: [4.3, 4.6],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
-    module: './rooms/food-court.js', stash: (r) => [r.W / 2 - 1.0, r.D / 2 - 1.0, r.W / 2 - 0.4, r.D / 2 - 0.4], roll: (R) => ({ seed: R.int(1, 9999) }) },
-  // A car park in an office basement: low, every bay the same number, every car the one car, a barrier that works itself.
-  { id: 'level-p', name: 'Level P', landmark: 'the car park where every car is the one car', w: [13, 15], d: [14, 15], h: [2.3, 2.5],
+    module: './rooms/photo-booths.js', stash: (r) => [-r.W / 2 + 0.3, -0.3, -r.W / 2 + 0.9, 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A shop that sells bags, each with a receipt in it for the bag; the tills print on, and one of them follows you round the floor.
+  { id: 'receipts', name: 'The Receipt Shop', landmark: 'the shop that sells bags', w: [8, 10], d: [8, 9], h: [3.1, 3.5],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
-    module: './rooms/level-p.js', stash: (r) => [-r.W / 2 + 0.3, -0.35, -r.W / 2 + 0.95, 0.35], roll: (R) => ({ seed: R.int(1, 9999), bay: R.pick(['14', 'P14', '14B', '41']) }) },
+    module: './rooms/receipts.js', stash: (r) => [r.W / 2 - 0.9, r.D / 2 - 0.9, r.W / 2 - 0.3, r.D / 2 - 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A shop: the key cutter's, whose every wall is doors of every size to the roof, none of which opens; the blanks hang on strings over your head.
+  { id: 'keys-cut', name: 'Keys Cut', landmark: "the key cutter's, all doors", w: [6, 7], d: [6, 7], h: [3.3, 3.8],
+    ports: ['left', 'right'], weight: 1.1, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/keys-cut.js', stash: (r) => [r.W / 2 - 0.9, r.D / 2 - 0.9, r.W / 2 - 0.3, r.D / 2 - 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A shop: the department store, all office clothes; the dummies are having a meeting; fitting rooms along the back, and in the glass of the last one, somebody where you stand.
+  { id: 'mens-ladies', name: 'Mens Ladies', landmark: 'the department store', w: [12, 14], d: [11, 13], h: [3.4, 3.9],
+    ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/mens-ladies.js', stash: (r) => [-r.W / 2 + 0.3, r.D / 2 - 0.9, -r.W / 2 + 0.9, r.D / 2 - 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A grotto, in July: a cottage of plywood with snow on it, a queue folded five times to its door, a sack in the big chair, a camera that goes off, a present.
+  { id: 'the-grotto', name: 'The Grotto', landmark: 'the grotto, in July', w: [10, 12], d: [9, 11], h: [3.3, 3.7],
+    ports: ['left', 'right'], weight: 1.1, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/the-grotto.js', stash: (r) => [-r.W / 2 + 0.3, r.D / 2 - 0.9, -r.W / 2 + 0.9, r.D / 2 - 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A shop: the place that sells the orange drink. Orange and white, a great many oranges, and somebody serving who has one for a head.
+  { id: 'the-orange', name: 'The Orange', landmark: 'the place that sells the orange drink', w: [7, 8], d: [7, 8], h: [2.9, 3.3],
+    ports: ['left', 'right'], weight: 1.3, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/the-orange.js', stash: (r) => [-r.W / 2 + 0.35, r.D / 2 - 1.9, -r.W / 2 + 0.95, r.D / 2 - 1.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A hall with little shops round the edge, each selling the one thing it was told about at the size it was told; tables bolted down, and another over each on the roof; the middle of the floor left out.
+  { id: 'food-court', name: 'The Food Court', landmark: 'the tables round the hole', w: [16, 18], d: [15, 17], h: [7, 7.8],
+    ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/food-court.js', stash: (r) => [r.W / 2 - 1.0, -2.6, r.W / 2 - 0.4, -2.0], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A car park, tall, in the yellow of one: the one car a great many times (stacked to the roof, in a drift, up the wall, on the roof), and a way out that is a ramp down into nothing.
+  { id: 'level-p', name: 'Level P', landmark: 'the car park of the one car', w: [16, 18], d: [16, 18], h: [7.2, 8],
+    ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/level-p.js', stash: (r) => [-r.W / 2 + 0.4, r.D / 2 - 1.1, -r.W / 2 + 1.0, r.D / 2 - 0.5], roll: (R) => ({ seed: R.int(1, 9999), bay: R.pick(['14', 'P14', '14B', '41']) }) },
   // A playground on fake grass. Most of it is going down into the floor, slowly, and has been for some time.
   { id: 'recess', name: 'Recess', landmark: 'the playground that is going under', w: [12, 14], d: [10, 12], h: [3.3, 4.2],
     ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
@@ -449,10 +477,12 @@ export const MORE_DECK = [
       ductTone: R.pick([0, 1]),
     }),
   },
+  // (the owner's: one to be met often. It used to take the blackout bay for granted — `needs: ['beam']` — which had to be dealt to an
+  // earlier part, and so it was in one visit in a hundred; that is gone, and its weight is the most a room may have, three: about half of all visits. A part takes one big room, so the other big ones are a little rarer for it)
   { id: 'last-light', name: 'The Last Light', landmark: 'the long hall losing its lights',
     module: './rooms/last-light.js', resident: 'lamplighter', items: ['torch'], caught: 1, fire: 'ignores',
     w: [6, 7], d: [20, 22], h: [2.8, 3.0], ports: ['back'], big: true,
-    weight: .85, lights: 'normal', needs: ['beam'], themes: { night: 1.5, archive: 1.2 },
+    weight: 3, lights: 'normal', themes: { night: 1.5, archive: 1.2 },
     stash: r => [r.W/2-1.4, -r.D*.17-.65, r.W/2-.5, -r.D*.17+.65],
     roll: R => ({face:R.int(0,7)}) },
   {

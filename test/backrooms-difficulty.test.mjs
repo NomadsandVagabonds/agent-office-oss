@@ -119,6 +119,12 @@ test('Hard caps every kit at one heart with no regen, keeps kit battery perks an
   assert.equal(creatureTuning('normal', 'pirate').damage, 3);
   assert.equal(creatureTuning('normal', 'toner').damage, 1);
   assert.equal(creatureTuning('hard', 'toner').speed, 1.12);
+  // the big ones further down: slower and a heart a hit below Normal, and as they are written from Normal up
+  for (const id of ['head-count', 'standing-meeting', 'carried-interest']) {
+    for (const mode of ['tourist', 'training-wheels', 'easy']) assert.deepEqual(creatureTuning(mode, id), { speed: .85, damage: 1 }, mode + ' ' + id);
+    for (const mode of ['normal', 'hard']) assert.deepEqual(creatureTuning(mode, id), {}, mode + ' ' + id);
+  }
+  for (const id of ['intern', 'mother']) { assert.deepEqual(creatureTuning('easy', id), { speed: .85 }); assert.deepEqual(creatureTuning('hard', id), {}); }
 });
 
 test('book API rejects changed/tourist scores and filters each difficulty from its own retained board', async () => {
@@ -155,7 +161,7 @@ test('the creature conductor applies per-species damage and live movement scales
   const data = s => `data:text/javascript;base64,${Buffer.from(s).toString('base64')}`;
   let source = readFileSync(new URL('../public/world/backrooms/pursuer.js', import.meta.url), 'utf8');
   const stubs = {
-    './gen.js': 'export const makeRng=()=>()=>.5;',
+    './gen.js': 'export const makeRng=()=>()=>.5; export const roomDistances=()=>new Map();',
     './cast.js': `export const CAST=[{id:'pirate'},{id:'toner'}]; export const castFor=()=>CAST; export const homeFor=()=>null;`,
     './cast/index.js': `const make=c=>({samples:[], update(dt){this.samples.push({dt,speed:c.speedScale,...c.hurt(1)});}}); export const MAKERS={pirate:make,toner:make};`,
     './cast/walk.js': 'export const createWalk=()=>({});',

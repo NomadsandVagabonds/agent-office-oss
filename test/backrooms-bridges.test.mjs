@@ -176,3 +176,14 @@ test('hiding a deployed panel removes its surface and invalidates navigation; re
   assert.ok(f.env.barricades.version(0) > rev);
   f.env.barricades.bringBack('scenery'); close(f.world.floorY(p.x, p.z), 1.78);
 });
+
+
+test('co-op bridge removal checks both visitors, including the guest outside env.player', async t => {
+  const f=await fixture(t,{plan:false}),item=moveToBank(f),near=f.at(-1.5,2.1);
+  deploy(f,item,near);
+  const host={me:{...near},RADIUS:.22},guest={me:f.at(-1.5,0),RADIUS:.22};
+  f.env.player=host;f.env.players=()=>[host,guest];
+  assert.equal(canTip(f.world,item,{actor:host.me}).reason,'occupied');
+  guest.me=f.at(2.5,-2.2);
+  assert.equal(canTip(f.world,item,{actor:host.me}).ok,true);
+});

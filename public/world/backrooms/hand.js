@@ -67,6 +67,7 @@ export function createHandView(env, camera) {
     const b = new Batch(); b.quad([-0.085, -0.11, 0], [0.085, -0.11, 0], [0.085, 0.11, 0], [-0.085, 0.11, 0]);
     const mat = kit.surface({ map: tex, side: THREE.DoubleSide }), mesh = new THREE.Mesh(kit.geometry(b, [], [1, 1, 1]), mat);
     mesh.rotation.set(-0.12, -0.5, 0.1);
+    mat.transparent = true; mesh.renderOrder = 10000;                       // (drawn over the room, as every held thing is: see onBeforeRender below)
     // (near enough to read, far enough not to stand between the visitor and the room: about a ninth of the picture, in its corner)
     return { mesh, mat, hold: [0.215, -0.085, -0.56] };
   }
@@ -93,6 +94,10 @@ export function createHandView(env, camera) {
       return { mesh, mat, hold: kind === 'balloon' ? [.22, -.25, -.6] : [0.24, -0.22, -0.5], fitBounds: itemBounds };
     }
     mesh.rotation.set(0.25, -0.6, kind === 'paper' ? -0.2 : 0);
+    // Held 0.5 m in front of a camera that can be 0.22 m from a wall: like the torch and the balloon, it is drawn over the
+    // room (last, with the room's depth discarded), or the wall would hide it whenever the visitor stood close to one.
+    mat.transparent = true;
+    mesh.renderOrder = 10000;
     return { mesh, mat, hold: [0.2, -0.12, -0.5] };
   }
   function fitPicture() {
@@ -142,7 +147,7 @@ export function createHandView(env, camera) {
               if (camera.userData.hand !== view) root.visible = false;
               // Keep the grip's own depth (fingers behind the handle), but discard
               // the room's depth before drawing this final first-person mesh.
-              else if (want === 'torch' || want === 'balloon') {
+              else {
                 // The previous transparent room mesh may have disabled depth writes;
                 // WebGL also applies that mask to clear(), before our material is set.
                 renderer.state.buffers.depth.setMask(true);

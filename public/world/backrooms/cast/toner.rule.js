@@ -1,22 +1,12 @@
 // The Backrooms — the waste toner's rule. Pure: no three.js, no DOM.
 //
-// Feral waste toner out of a broken copier drum, clinging upside down to the
-// suspended ceiling on four multi-jointed black limbs. It has no eyes: it sends
-// out trains of sharp echolocation clicks and listens for upright footsteps.
-//   - Keep still, or stay stooped (holding C or crawling through a low gap),
-//     and its clicks pass straight over you while it creeps across the tiles.
-//   - Walk or sprint upright within earshot and its click-train rattles faster,
-//     drawing it across the ceiling until it peels down a wall and chases.
-//   - On the floor and walls it bursts fast, never running in a straight line —
-//     it weaves and phase-slips from side to side, skittering straight through
-//     crawl holes, but it cannot work a door handle: shut fire doors hold it.
-//   - Feeding & brood lifecycle: each bite takes 1 heart. After the first bite
-//     it scrambles back to the ceiling; on landing its second bite (2 damage —
-//     now full) it dissolves into a sticky pool of black glitch slime. Leave
-//     that puddle for ~1 minute (60 s) and it hatches 2–3 new waste toners that
-//     nest on the ceiling around the room where they spawned unless they hear
-//     the visitor moving upright nearby.
-
+// Sonar hears upright movement; standing still or crouching avoids waking it.
+// Once alert it stalks the room perimeter, climbing walls and crossing ceilings,
+// then pauses for an audible wind-up before a committed flying leap. Most leaps
+// aim wide; even accurate ones keep their original aim and can be dodged.
+// Crawling contact never damages the visitor. A miss retreats; a landed bite
+// leaves a long recovery before it can attack again. Two landed bites still
+// dissolve it into the existing brooding puddle and territorial hatchlings.
 export const TONER = Object.freeze({
   tall: 0.5,                       // low enough for 0.8 m crawl doorways, partition holes, and 0.95 m crawl tunnels
   r: 0.2,
@@ -26,26 +16,33 @@ export const TONER = Object.freeze({
   maxHits: 2,                      // full after dealing 2 total damage: dissolves into a brooding slime pool
   touch: 0.72,                     // bite reach while on the floor
   prowlSpeed: 1.5,                 // creeping upside down across the ceiling grid
-  chaseSpeed: 4.85,                // blistering forward burst speed while weaving
+  chaseSpeed: 2.3,                // wall stalking; flying leaps use their own fixed duration
+  stalkTime: 4.5,                  // wall circuits before another jump can begin
+  windupTime: 0.95,                // stationary audible tell; aim locks at its start
+  lungeTime: 0.8,
+  lungeRange: 6,
+  aimChance: 0.25,                 // accurate aim, not guaranteed damage: movement still dodges it
+  missWidth: 2.2,
+  packGrace: 12,                   // no other toner can chain a hit during this recovery
   weaveAmp: 1.08,                  // metres of lateral zig-zag either side of its line
   weaveFreq: 5.8,                  // rad/s base lateral weave frequency
   glitchEvery: Object.freeze([0.28, 0.68]),   // seconds between sporadic phase-jumps during a chase
-  pingEvery: Object.freeze([1.85, 2.65]),     // seconds between calm ceiling sonar clicks
-  warnEvery: 0.22,                 // seconds between frantic warning clicks while locking on
-  chasePingEvery: 0.34,            // seconds between sonar clicks during active pursuit
+  pingEvery: Object.freeze([1.85 / 0.7, 2.65 / 0.7]),     // seconds between calm ceiling sonar clicks
+  warnEvery: 0.22 / 0.7,                 // seconds between frantic warning clicks while locking on
+  chasePingEvery: 0.34 / 0.7,            // seconds between sonar clicks during active pursuit
   listenFar: 11,                   // metres within which upright movement is heard
   dropFar: 7.5,                    // metres within which full lock-on drops it off the ceiling
   crouchSink: 0.26,                // me.sink (from holding C or ducking in a crawlway) that keeps you below its sonar
   quietSpeed: 0.28,                // m/s below which standing counts as silent
   sprintSpeed: 2.55,               // m/s above which sprinting locks its sonar almost at once
-  fuseWalk: 0.65,                  // seconds of upright walking in earshot before it drops (long enough to freeze or press C)
-  fuseSprint: 0.14,                // seconds of upright sprinting in drop range before it drops
+  fuseWalk: 1.4,                  // seconds of upright walking in earshot before it drops (long enough to freeze or press C)
+  fuseSprint: 0.75,                // seconds of upright sprinting in drop range before it drops
   perchStay: Object.freeze([5, 9]),           // seconds hanging under one tile before creeping to another spot
   prowlSpan: Object.freeze([6, 11]),          // seconds creeping across ceilings before perching again
-  dropTime: 0.36,                  // seconds peeling off the ceiling / down a wall onto the floor
+  dropTime: 0.55,                  // seconds peeling off the ceiling / down a wall onto the floor
   trailMemory: 3.2,                // seconds without sight or sound before it climbs back up to the ceiling
   doorGiveUp: 2.6,                 // seconds scratching at a shut door before giving up and climbing back up
-  recoilTime: Object.freeze([7.5, 10.5]),     // seconds it stays up on the ceiling ignoring you after its first bite
+  recoilTime: Object.freeze([16, 20]),     // seconds it stays up on the ceiling ignoring you after its first bite
   emergeTime: Object.freeze([1.4, 2.2]),      // seconds newly hatched broodlings take to scramble up onto their room's ceiling
   dissolveTime: 1.15,              // seconds of glitch-melt after its second bite before becoming a floor puddle
   broodTime: 60,                   // seconds (~1 min) a gorged puddle incubates before splitting into 2–3 new toners
@@ -77,6 +74,25 @@ export function weaveOffset(s) {
   return clamp(wave * flip, -1, 1) * TONER.weaveAmp;
 }
 
+/** Fixed launch endpoint. Inaccurate leaps aim sideways, never secretly cancel damage. */
+export function planTonerLunge(from, target, rnd = Math.random) {
+  const dx = target.x - from.x, dz = target.z - from.z, d = Math.hypot(dx, dz);
+  const fx = d > .001 ? dx / d : 0, fz = d > .001 ? dz / d : 1;
+  const accurate = rnd() < TONER.aimChance;
+  const offset = accurate ? 0 : (rnd() < .5 ? -1 : 1) * TONER.missWidth;
+  return { x: target.x - fz * offset, z: target.z + fx * offset, accurate };
+}
+
+/** Alternate corners along the room perimeter instead of pathing into the visitor. */
+export function tonerWallGoal(rect, phase, flip = 1) {
+  const pad = .38, corners = [
+    [rect.x0 + pad, rect.z0 + pad], [rect.x1 - pad, rect.z0 + pad],
+    [rect.x1 - pad, rect.z1 - pad], [rect.x0 + pad, rect.z1 - pad],
+  ];
+  const i = ((phase * flip) % 4 + 4) % 4;
+  return { x: corners[i][0], z: corners[i][1] };
+}
+
 /**
  * Starting state for a waste toner.
  * `opt.territorial`: true for puddle-hatched brood, which stay around `opt.homeRoom` unless they hear the visitor.
@@ -100,6 +116,7 @@ export function perched(rnd = Math.random, carried = null, opt = {}) {
     glitchT: between(TONER.glitchEvery, rnd),
     lostT: 0,
     doorT: 0,
+    attackT: TONER.stalkTime,
     seekingSound: false,
     sonar: null,
     dropped: false,
@@ -217,7 +234,21 @@ export function stepToner(s, dt, sense = {}, rnd = Math.random) {
 
   // 3. Backing away from a fire overrides hunting or biting
   if (sense.fleeingFire) {
+    if (s.mode === 'windup' || s.mode === 'lunge') return strikeToner(base, {}, rnd);
     return { ...base, alert: 0, seekingSound: false, glitch: rnd() < dt * 8 };
+  }
+
+  // A jump commits to its aim. Fire, a door, or pack recovery cancels it safely.
+  if (s.mode === 'windup' || s.mode === 'lunge') {
+    const quiet = isQuiet(sense);
+    if (s.mode === 'windup' && quiet) return { ...base, mode: 'chase',
+      t: 0, attackT: TONER.stalkTime, alert: 0, lostT: 0, sonar: null };
+    const blocked = sense.blockedByDoor || sense.cannot || sense.attackBlocked;
+    const t = s.t - dt;
+    if (blocked || (s.mode === 'lunge' && t <= 0)) return strikeToner(base, {}, rnd);
+    if (s.mode === 'windup') return { ...base, mode: t <= 0 ? 'lunge' : 'windup',
+      t: t <= 0 ? TONER.lungeTime : t, ping: (s.ping ?? 0) <= dt ? TONER.warnEvery : s.ping-dt, sonar: t <= 0 ? 'drop' : (s.ping ?? 0) <= dt ? 'warn' : null };
+    return { ...base, t, bite: !quiet && d <= TONER.touch && !!sense.los && sense.inReach !== false };
   }
 
   // 4. Post-bite ceiling cooldown (or broodling emerging up onto the ceiling)
@@ -302,6 +333,7 @@ export function stepToner(s, dt, sense = {}, rnd = Math.random) {
       return {
         ...base,
         mode: 'chase',
+        attackT: TONER.stalkTime,
         t: 0,
         ping: TONER.chasePingEvery * 0.5,
         glitchT: between(TONER.glitchEvery, rnd),
@@ -349,7 +381,7 @@ export function stepToner(s, dt, sense = {}, rnd = Math.random) {
   }
 
   const quiet = isQuiet(sense);
-  const tracked = !!sense.los || (!quiet && !!sense.audible && d <= listenFar);
+  const tracked = !quiet && !!sense.audible && d <= listenFar;
   const lostT = tracked ? 0 : (s.lostT || 0) + dt;
   if (lostT >= TONER.trailMemory) {
     return {
@@ -368,10 +400,15 @@ export function stepToner(s, dt, sense = {}, rnd = Math.random) {
     };
   }
 
-  const bite = !blocked && d <= TONER.touch && (!!sense.los || d <= 0.55);
+  const attackT = quiet ? TONER.stalkTime : Math.max(0, (s.attackT ?? TONER.stalkTime) - dt);
+  if (!quiet && tracked && !blocked && !sense.attackBlocked && sense.los && d <= TONER.lungeRange && attackT <= 0) {
+    return { ...base, mode: 'windup', t: TONER.windupTime, attackT, sonar: 'warn' };
+  }
+  const bite = false; // Crawling past the visitor is not an automatic contact attack.
   return {
     ...base,
     mode: 'chase',
+    attackT,
     weavePhase,
     weaveFlip,
     glitchT,
@@ -390,12 +427,12 @@ export function stepToner(s, dt, sense = {}, rnd = Math.random) {
  */
 export function strikeToner(s, hit = {}, rnd = Math.random) {
   const base = clearFlags(s);
-  if (hit.ended || hit.dead) return { ...base, survived: false, dissolving: false };
+  if (hit.ended || (hit.dead && hit.ended !== false)) return { ...base, survived: false, dissolving: false };
   if (!hit.landed) {
     return {
       ...base,
       mode: 'recoil',
-      t: between(TONER.recoilTime, rnd) * 0.45,
+      t: between(TONER.recoilTime, rnd) * 0.65,
       ping: between(TONER.pingEvery, rnd),
       alert: 0,
       lostT: 0,
@@ -448,7 +485,7 @@ export function strikeToner(s, hit = {}, rnd = Math.random) {
  */
 export function snipToner(s, rnd = Math.random) {
   const base = clearFlags(s);
-  if (s.mode === 'drop' || s.mode === 'chase' || s.mode === 'perch' || s.mode === 'prowl') {
+  if (s.mode === 'drop' || s.mode === 'chase' || s.mode === 'windup' || s.mode === 'lunge' || s.mode === 'perch' || s.mode === 'prowl') {
     return {
       ...base,
       mode: 'recoil',

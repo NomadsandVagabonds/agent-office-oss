@@ -1,0 +1,74 @@
+/* The caretaker added another page to the same 1998 site. Reuse its paper,
+   pixel pictures, system fonts and raised grey controls. */
+body.archive-page { margin:0; padding:20px 12px 40px; border:0; text-align:left; }
+.archive-page .cabinet { max-width:840px; margin:auto; border:3px ridge #d4d0c8; background:#ffffef; }
+.archive-page nav { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:8px 12px; background:#c0c0c0; border-bottom:2px ridge #eee; font:bold 14px "Times New Roman",serif; }
+.archive-page nav .play { color:#fff; background:#008040; border:3px outset #66cc99; padding:3px 18px; text-decoration:none; font:bold 18px Arial,sans-serif; }
+.archive-header { position:relative; padding:18px 12px 12px; text-align:center; background-color:#050507; color:#ffffcc; }
+#archive-logo { display:block; max-width:min(75vw,290px); height:auto; margin:0 auto 10px; image-rendering:pixelated; }
+.archive-header h1 { font:bold 24px "Comic Sans MS","Chalkboard SE",cursive; color:#00ff00; margin:4px 0; }
+.archive-header p { font:14px "Times New Roman",serif; margin:6px 0; }
+.header-pictures { display:flex; justify-content:center; align-items:center; gap:28px; margin-top:12px; }
+.archive-page main { padding:12px; }
+.archive-page h2 { font:bold 22px "Times New Roman",serif; margin:0 0 10px; }
+.archive-page h3 { font:bold 16px "Times New Roman",serif; }
+.archive-page p { line-height:1.35; }
+.archive-page button { font:bold 13px Arial,sans-serif; color:#000; background:#d4d0c8; border:3px outset #e5e5e5; border-radius:0; padding:7px 12px; cursor:pointer; }
+.archive-page button:active:not(:disabled) { border-style:inset; }
+.archive-page button:disabled { color:#666; cursor:default; }
+.archive-page input,.archive-page select { box-sizing:border-box; min-width:0; width:100%; background:#fff; border:2px inset #ccc; border-radius:0; color:#000; padding:6px; font:16px Arial,sans-serif; }
+.archive-page label { display:block; font:14px "Times New Roman",serif; margin:0 0 4px; }
+.archive-page button:focus-visible,.archive-page input:focus-visible,.archive-page select:focus-visible,.archive-page a:focus-visible { outline:2px solid #0000ee; outline-offset:3px; }
+.archive-page [hidden] { display:none!important; }
+.status-strip { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; padding:7px 10px; margin-bottom:14px; border:2px inset #c0c0c0; background:#ffffcc; font:12px "Courier New",monospace; }
+.connection,.identity,.records,.discoveries { position:relative; margin-bottom:16px; padding:38px 12px 12px; border:3px ridge #c0c0c0; background:#ffffef; }
+.archive-page .index { position:absolute; left:0; right:0; top:0; margin:0; padding:4px 8px; background:#000080; color:#fff; font:bold 12px Arial,sans-serif; }
+.connection { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+.connection-form { align-self:center; min-width:0; }
+.google { width:100%; margin-bottom:12px; }
+.input-row { display:flex; gap:5px; }
+.input-row button { white-space:nowrap; }
+.fine { font-size:13px; }
+#auth-status,#look-status { font:12px/1.4 "Courier New",monospace; min-height:17px; margin:9px 0 0; overflow-wrap:anywhere; }
+.error { color:#a00000; }
+#code-form { margin-top:12px; }
+#code-address,#email-address { overflow-wrap:anywhere; }
+.archive-page .text-button { color:#0000ee; background:none; border:0; padding:8px 0; text-decoration:underline; font:13px "Times New Roman",serif; }
+.identity { display:grid; grid-template-columns:190px 1fr; gap:20px; padding-top:12px; background:#e5e5ff; }
+.portrait { padding:28px 8px 8px; border:2px inset #c0c0c0; background:#c0c0c0; align-self:start; position:relative; }
+.portrait .index { font-size:10px; background:#800000; }
+#portrait { height:230px; background:#000; }
+#portrait canvas { display:block; width:100%; height:100%; }
+.portrait-caption { font:9px/1.5 "Courier New",monospace; text-align:center; margin:7px 0 0; }
+.identity-form { min-width:0; }
+.identity-form>p { font-size:13px; }
+.look-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px 8px; margin:12px 0; }
+.look-fields label { font-size:12px; }
+.look-fields input[type=color] { height:34px; padding:2px; }
+.form-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.section-head { display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px; }
+#record-counts { font:12px "Courier New",monospace; }
+.archive-page .tapes { display:block; list-style:none; padding:0; margin:10px 0 0; border:2px outset #ddd; background:#c0c0c0; }
+.archive-page .tape { display:flex; align-items:center; justify-content:space-between; gap:10px; white-space:normal; padding:7px 8px; margin:2px; border:1px inset #aaa; background:#fff; color:#000; font:14px "Times New Roman",serif; }
+.archive-page .tape a { overflow-wrap:anywhere; font:13px "Courier New",monospace; }
+.archive-page .tape small { flex-shrink:0; font:12px "Times New Roman",serif; }
+.archive-page .tapes .empty { color:#000; padding:12px; background:#fff; text-align:center; font:14px "Times New Roman",serif; }
+.discoveries { background:#e7eddf; }
+.discoveries .index { background:#006600; }
+.discovery-columns { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.discovery-columns ul { list-style:square; padding-left:18px; columns:2; font:13px/1.5 "Times New Roman",serif; }
+.discovery-columns li { break-inside:avoid; }
+.archive-page footer { text-align:center; padding:4px 12px 16px; font:12px/1.6 "Times New Roman",serif; }
+@media(max-width:600px) {
+  body.archive-page { padding:8px; }
+  .archive-page main { padding:8px; }
+  .connection { grid-template-columns:1fr; gap:8px; }
+  .identity { grid-template-columns:1fr; gap:14px; }
+  .portrait { width:185px; justify-self:center; }
+  #portrait { height:215px; }
+  .discovery-columns ul { columns:1; }
+  .archive-page .tape { flex-wrap:wrap; }
+  .archive-header h1 { font-size:22px; }
+  .look-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media(prefers-reduced-motion:reduce) { .archive-page .rainbow { animation:none; } }

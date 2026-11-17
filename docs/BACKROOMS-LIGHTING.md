@@ -24,7 +24,7 @@ The study controls are dev-only. Gameplay and camera battery still run.
 
 | Flag | Treatment |
 | --- | --- |
-| `lighting=1` | Seeded mix: 70% of eligible rooms unchanged; 12% failing; 8% dim; 5% islands; 4% travel candidates; 1% emergency candidates. |
+| `lighting=1` | Seeded mix: 60% of eligible rooms unchanged; 10% failing; 15% dim; 10% islands; 4% travel candidates; 1% emergency candidates. |
 | `lighting=failing` | One bank hesitates, goes out for about eight seconds, then slowly recovers. |
 | `lighting=dim` | One side remains at 78%, the other at 0.25%. |
 | `lighting=travel` | Three or four ceiling banks fail in sequence, 1.35 seconds apart, then recover. A passing cycle lasts 64–88 seconds. |
@@ -64,10 +64,12 @@ room boundaries. Carried voxel props, mapped surfaces and `c.dynamic` objects
 follow it too. Contact shadows and self-lit screens remain separate. This
 prevents a desk from carrying its old room's red bank with it.
 
-The Last Light follow-up reduces the camera's automatic lamp to 2.5% of the
-flashlight and maximum gain to 1.25. Failed banks keep 0.25% output, and 99%
-of ambient bounce belongs to the ceiling banks. Darkness/supply balance and
-natural effect frequency still need longer playtesting.
+The Last Light follow-up caps camera gain at 1.25. Failed banks keep 0.25%
+output, and 99% of ambient bounce belongs to the ceiling banks. The subsequent
+[camcorder lamp pass](BACKROOMS-CAMCORDER-LIGHT.md) gives the camera a separate,
+broad beam with a 2.2 metre limit, and increases persistent dim/island rooms
+from 13% to 25% of eligible rooms. Darkness/supply balance and natural effect
+frequency still need longer playtesting.
 
 ## Hook for the proposed hallway encounter
 

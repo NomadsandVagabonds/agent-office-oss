@@ -1,0 +1,57 @@
+// The Backrooms — a shop of the shopping centre (themes.js `mall`): The
+// Orange ("the place that sells the orange drink"). Somebody was told there
+// is a place in a shopping centre where they squeeze oranges and you drink
+// it, and that it is very orange, and that the person behind the counter
+// is friendly. So: everything is orange and white, in stripes. There are a
+// great many oranges, in the machines and in drifts in the corners and one
+// very large one going round over the counter. Cut open, they are not the
+// right colour inside. The person behind the counter has an orange for a
+// head and turns to keep facing whoever came in. There is a drink on the
+// counter, poured. It can be drunk.
+import * as THREE from 'three';
+import { Batch, lamp } from '../kit.js';
+import { P } from '../bits.js';
+import { upright } from '../suburb.js';
+import { mallNeon, dummyVox, orangeVox, juicerVox, cupVox, heapVox } from '../mall.js';
+
+export const ORANGE = Object.freeze({ counter: 2.3, turn: 1.6, big: 0.5 });
+const S = 0.025, MENU = ['ORANGE', 'ORANGE LARGE', 'NOT ORANGE', 'THE ORANGE ONE', 'DRINK', 'ORANGE ORANGE', 'ASK', 'SAME AGAIN'];
+
+export function build(c) {
+  const { W, D, H, R, params: p, kit } = c, K = ORANGE;
+  const stripes = kit.tex.custom('orange:wall', 32, 32, (g, w, h) => { for (let x = 0; x < w; x += 8) P(g, (x / 8) % 2 ? '#f08a1e' : '#f4efe0', x, 0, 8, h); for (let i = 0; i < 60; i++) P(g, 'rgba(120,60,10,0.18)', (i * 37) % w, (i * 53) % h, 1, 2 + (i % 4)); P(g, '#b3661a', 0, h - 5, w, 5); });
+  const tiles = kit.tex.custom('orange:floor', 32, 32, (g, w, h) => { for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) { P(g, (x + y) % 2 ? '#f08a1e' : '#f4efe0', x * 16, y * 16, 16, 16); P(g, 'rgba(0,0,0,0.25)', x * 16, y * 16, 16, 1); P(g, 'rgba(0,0,0,0.25)', x * 16, y * 16, 1, 16); } for (let i = 0; i < 40; i++) P(g, 'rgba(150,80,10,0.3)', (i * 29) % w, (i * 47) % h, 2, 1); });
+  c.shell({ wallTex: stripes, floorTex: tiles, panels: false });
+  const zc = -D / 2 + K.counter;                                                                     // the counter's front; behind it, the back wall
+  /* the counter: laminate, a brass foot rail, and what is kept on it */
+  c.flat.box(-W / 2 + 0.3, 0, zc - 0.6, W / 2 - 0.3, 0.95, zc, [0.94, 0.52, 0.12]); c.flat.box(-W / 2 + 0.25, 0.95, zc - 0.66, W / 2 - 0.25, 1.0, zc + 0.06, [0.93, 0.9, 0.82]);
+  for (let x = -W / 2 + 0.3; x < W / 2 - 0.3; x += 0.5) c.flat.box(x, 0.02, zc, x + 0.25, 0.9, zc + 0.012, [0.96, 0.94, 0.88]);
+  c.flat.box(-W / 2 + 0.3, 0.16, zc + 0.1, W / 2 - 0.3, 0.2, zc + 0.14, [0.7, 0.55, 0.2]);
+  c.solid(-W / 2, zc - 0.66, W / 2, zc + 0.06, { tall: false });
+  const n = Math.max(3, Math.floor((W - 1.4) / 1.1));
+  for (let i = 0; i < n; i++) { const x = -W / 2 + 0.9 + i * ((W - 1.8) / (n - 1)); if (i % 2 === 0) c.model('orange:juicer', juicerVox, x, zc - 0.34, { y: 1.0, rot: Math.PI, solid: false, shadow: false }); else for (let k = 0; k < 3; k++) c.model('orange:cup', cupVox, x + (k - 1) * 0.16, zc - 0.2 - (k % 2) * 0.14, { y: 1.0, solid: false, shadow: false }); }
+  const sx = R.pick([-1, 1]) * R.range(0.4, W / 2 - 1.3);
+  c.model('orange:cup', cupVox, sx, zc - 0.08, { y: 1.0, scale: 1.3, solid: false, shadow: false }); c.leave('snack', sx + 0.25, zc - 0.1, { y: 1.02 });
+  /* the board: what there is, in tube; and the name of the place, twice */
+  const names = R.shuffle(MENU.slice()), neon = mallNeon(kit, 'orange:' + p.seed, names, 2), lit = c.shining('mall:neon:orange:' + p.seed, neon.texture, 2.4);
+  const rows = Math.min(4, Math.floor((H - 1.7) / 0.42));
+  for (let r = 0; r < rows; r++) for (const side of [-1, 1]) upright(lit, side < 0 ? -W / 2 + 0.4 : 0.2, -D / 2 + 0.04, side < 0 ? -0.2 : W / 2 - 0.4, -D / 2 + 0.04, H - 0.35 - (r + 1) * 0.42, H - 0.35 - r * 0.42, neon.uv((r * 2 + (side > 0 ? 1 : 0)) % 8));
+  c.light(-W / 4, H - 0.9, -D / 2 + 0.9, '#ffb02e', 1.0, { k: 1.2, far: 7 }); c.light(W / 4, H - 0.9, -D / 2 + 0.9, '#ff5a3c', 0.9, { k: 1.2, far: 7 }); c.light(0, H - 0.5, D / 4, '#ffd9a0', 0.55, { k: 1.4, far: 6 });
+  /* oranges: drifts in the corners; some cut, to show the inside */
+  for (const [cx, cz, k] of [[-W / 2 + 0.8, D / 2 - 0.8, 0], [W / 2 - 0.8, D / 2 - 0.9, 1], [W / 2 - 0.7, zc + 0.7, 2], [-W / 2 + 0.7, -D / 2 + 0.7, 3], [W / 2 - 0.9, -D / 2 + 0.8, 4]]) { if (Math.abs(cz) < 1.2 && Math.abs(cx) > W / 2 - 1.6) continue; c.model('orange:heap:' + k, heapVox(k), cx, cz, { rot: R.range(0, 6), scale: k < 3 ? 1.2 : 1.6, solid: false }); if (cz > zc) c.solid(cx - 0.45, cz - 0.45, cx + 0.45, cz + 0.45, { tall: false }); }
+  for (let i = 0; i < 6; i++) { const x = R.range(-W / 2 + 0.6, W / 2 - 0.6), z = R.range(zc + 0.5, D / 2 - 0.6); if (Math.abs(x) < 0.9 && z > D / 2 - 1.8) continue; c.model(i % 2 ? 'orange:cut' : 'orange:one', orangeVox(5, !!(i % 2)), x, z, { rot: R.range(0, 6), tilt: i % 2 ? [R.range(-0.5, 0.5), R.range(-0.5, 0.5)] : [0, 0], solid: false }); c.blot(x, z, 0.5, 0.5, { a: 0.3 }); }
+
+  /* what moves: the big one over the counter, going round; and who is serving */
+  const mat = kit.surface({ vox: true }), mesh = (key, make, k = S) => { const b = new Batch(true); b.addVox(kit.model(key, make).solid, new THREE.Matrix4().makeScale(k, k, k)); return new THREE.Mesh(kit.geometry(b, [lamp(0.4, 2.6, 1.2, [1.25, 1.0, 0.7], { k: 9, wrap: 0.5, far: 30 })], [0.7, 0.6, 0.5]), mat); };
+  const big = mesh('orange:big', orangeVox(22, false), S * 1.0), who = mesh('orange:server', dummyVox(1, '#f4efe0', 'orange')), fig = new THREE.Group();
+  big.position.set(0, H - 1.55, zc - 0.3); who.position.set(R.range(-1, 1), 0, zc - 1.25); fig.add(big, who); c.add(fig);
+  c.flat.box(-0.02, H - 0.45, zc - 0.32, 0.02, H, zc - 0.28, [0.2, 0.2, 0.22]);
+  let t0 = 0, face = 0;
+  c.tick((dt, t, me) => {
+    t0 += dt; big.rotation.y = t0 * K.big; big.position.y = H - 1.55 + Math.sin(t0 * 0.7) * 0.03;
+    if (!me.inside) return;
+    // it keeps its front to whoever came in, and its place opposite them along the counter: never quickly
+    const want = Math.atan2(me.x - who.position.x, me.z - who.position.z); let d = want - face; d = Math.atan2(Math.sin(d), Math.cos(d)); face += d * Math.min(1, dt * K.turn); who.rotation.y = face;
+    const tx = Math.max(-W / 2 + 0.8, Math.min(W / 2 - 0.8, me.x)); who.position.x += (tx - who.position.x) * Math.min(1, dt * 0.5);
+  });
+}

@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { VOXEL } from '../vox/vox.js';
 import { meshVox } from '../vox/mesher.js';
 import { voxelMaterial, voxelGlassMaterial } from '../vox/material.js';
-import { JOINT, buildCharacter, buildMug, facePixels } from './build.js';
+import { JOINT, buildCharacter, buildMug, facePixels, hatTop } from './build.js';
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 
@@ -155,13 +155,14 @@ export class Avatar {
     this.head = node(JOINT.head, JOINT.hips, this.torso);
     this.head.add(partMesh(P.head, JOINT.head));
     if (P.accessory) this.head.add(partMesh(P.accessory, JOINT.head));
+    const topY = hatTop(look);
     if (P.spin) {
       this.spinner = partMesh(P.spin, [0, 0, 0]);
-      this.spinner.position.set(0, JOINT.hat[1] + 6 - JOINT.head[1], 0);
+      this.spinner.position.set(0, topY + 6 - JOINT.head[1], 0);
       this.head.add(this.spinner);
     }
     this.hat = new THREE.Group();                        // custom creation hats attach here
-    this.hat.position.set(0, JOINT.hat[1] - JOINT.head[1], 0);
+    this.hat.position.set(0, topY - JOINT.head[1], 0);
     this.head.add(this.hat);
 
     this.faces = {};

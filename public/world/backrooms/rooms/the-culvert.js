@@ -55,10 +55,11 @@ export function build(c) {
   const gap = gapOf(W, D, s, R), { sl, n } = gap;
   c.shell({ floor: false, panels: false });
   daylight(c, 3, 3, 1, 1);
-  // the hole, as whoever walks here has it. (While somebody is going down it, the whole room is as deep as they have got: cubicle-grid's way.)
-  let fall = null;
+  // Real terrain stays fixed for co-op. The solo fall retains its existing room-floor animation.
+  const falls = new WeakMap(), safe = new WeakMap();
+  let soloFall = null;
   const inGap = (x, z) => { if (Math.abs(z) >= D / 2) return false; const [a, b] = gap.at(z); return x > a && x < b; };
-  c.rt.floorY = (x, z) => (fall ? fall.y : inGap(x, z) ? -K.deep : 0);
+  c.rt.floorY = (x, z) => (!c.env.coopStrict && soloFall ? soloFall.y : inGap(x, z) ? -K.deep : 0);
   c.rt.headY = (x, z) => H - c.rt.floorY(x, z);
 
   /* the lawn, either side; the squares along the break, which never got their grass; under all of it, nothing */
@@ -101,7 +102,7 @@ export function build(c) {
   c.leave('opener', s * (W / 2 - 2.0), -D / 2 + 2.0, { y: 0 });
 
   const env = c.env;
-  const open = (x, z) => { const q = c.toWorld(x, z); return env.world.floorY(q.x, q.z) < -1; };
+  const open = (x, z) => { const q = c.toWorld(x, z); return env.world.floorY(q.x, q.z) < c.room.y - 1; };
   const bankOf = (x, z) => { const [a, b] = gap.at(z); return x <= a ? -1 : x >= b ? 1 : 0; };
   /** The hoardings that are down, as this room has them: { x0, x1, z } — the two ends, and where across. */
   const bridges = () => (env.world.furniture || []).filter((f) => f.authored && f.room === c.rt.id && f.bridge && f.deployed && !f.transition && !f.away).map((f) => {
@@ -109,33 +110,62 @@ export function build(c) {
   });
   // Nobody is left on a bank with no way off it. A hoarding that has been carried off, or stood up on the wrong side, is drawn
   // again where one was first drawn, on the bank of whoever needs it: the room forgets things, and it forgets that it forgot.
-  let stuck = 0;
+  const stuck = new WeakMap();
   const redraw = (dt, me) => {
-    const bank = bankOf(me.x, me.z); if (!bank || bridges().length) { stuck = 0; return; }
+    const body = env.player.me, bank = bankOf(me.x, me.z); if (!bank || bridges().length) { stuck.set(body,0); return; }
     const free = talls.filter((f) => !f.away && !f.deployed && !f.transition && !f.carried), here = free.some((f) => { const q = c.toLocal(f.x, f.z); return f.room === c.rt.id && Math.abs(q.x) < W / 2 && Math.abs(q.z) < D / 2 && bankOf(q.x, q.z) === bank; });
-    if (here || talls.some((f) => f.carried)) { stuck = 0; return; }
-    if ((stuck += dt) < GAP.redraw) return;
-    stuck = 0;
+    if (here || talls.some((f) => f.carried)) { stuck.set(body,0); return; }
+    const wait=(stuck.get(body)||0)+dt;stuck.set(body,wait);if(wait<GAP.redraw)return;
+    stuck.set(body,0);
     for (const f of free) for (const sp of spots[bank]) { const q = c.toWorld(sp.x, sp.z); if (env.barricades?.place?.(f, q.x, q.z)) { env.interfere?.(0.7); env.play?.('rattle', q.x, q.z, 10); return; } }
   };
 
-  c.tick((dt, t, me) => {
+  // Each visitor falls independently. The room's floor stays put for their
+  // partner and for the creature; only the falling visitor's camera descends.
+  const tickVisitor = (dt, body) => {
+    const p=c.toLocal(body.x,body.z), me={...p,inside:env.world.roomAt(body.x,body.z)===c.rt};
+    const fall=falls.get(body);
+    if(fall){
+      fall.t+=dt;fall.y=-Math.min(20,.5*9.8*fall.t*fall.t);
+      if(!env.coopStrict)env.player.warp(body.x,body.z);
+      body.y=c.room.y+1.35-Math.min(20,.5*9.8*fall.t*fall.t);
+      body.pitch=Math.min(.95,body.pitch+dt*1.3);
+      env.red?.(Math.min(.9,fall.t*.5));env.interfere?.(.3+.5*Math.min(1,fall.t/K.falls));
+      if(fall.t>=K.falls){
+        falls.delete(body);env.hold?.(false);
+        // In co-op a downed visitor must remain reachable for a snack revive.
+        if(env.coopStrict){env.player.warp(fall.back.x,fall.back.z);body.y=env.world.floorY(body.x,body.z)+(env.player.EYE||1.35);}
+        env.end?.('caught');
+      }
+      return;
+    }
+    if(!me.inside||body.frozen)return;
+    for(let a=0;a<8;a++)if(open(me.x+Math.sin(a*.7854)*K.brink,me.z+Math.cos(a*.7854)*K.brink)){
+      const [ga,gb]=gap.at(me.z),side=me.x<(ga+gb)/2?-1:1;
+      const back=safe.get(body)||c.toWorld(side<0?ga-.8:gb+.8,me.z);
+      falls.set(body,{t:0,back});env.hold?.(true);env.run?.met?.('the-culvert');
+      const q=c.toWorld(me.x,me.z);env.play?.('rattle',q.x,q.z,6);return;
+    }
+    if(env.world.terrainY(body.x,body.z)>=c.room.y-.2)safe.set(body,{x:body.x,z:body.z});redraw(dt,me);
+  };
+  if (!env.coopStrict) c.tick((dt, t, me) => {
     /* the visitor, going in */
-    if (fall) {
-      fall.t += dt; fall.y = Math.max(-80, -0.5 * 9.8 * fall.t * fall.t);
-      const q = c.toWorld(fall.x, fall.z); env.player?.warp?.(q.x, q.z);
+    if (soloFall) {
+      soloFall.t += dt; soloFall.y = Math.max(-80, -0.5 * 9.8 * soloFall.t * soloFall.t);
+      const q = c.toWorld(soloFall.x, soloFall.z); env.player?.warp?.(q.x, q.z);
       const eye = env.player?.me; if (eye) eye.pitch = Math.min(0.95, eye.pitch + dt * 1.3);          // the strip of ceiling, getting narrower
-      env.red?.(Math.min(0.9, fall.t * 0.5)); env.interfere?.(0.3 + 0.5 * Math.min(1, fall.t / K.falls));
-      if (fall.t >= K.falls && !fall.over) { fall.over = true; env.hold?.(false); env.end?.('caught'); if (env.difficulty?.() === 'tourist') fall = null; }
+      env.red?.(Math.min(0.9, soloFall.t * 0.5)); env.interfere?.(0.3 + 0.5 * Math.min(1, soloFall.t / K.falls));
+      if (soloFall.t >= K.falls && !soloFall.over) { soloFall.over = true; env.hold?.(false); env.end?.('caught'); if (env.difficulty?.() === 'tourist') soloFall = null; }
       return;
     }
     if (!me.inside || env.player?.me?.frozen) return;
     // the lawn ends where it ends: within a step of the break with nothing let down there, and it is not there to stand on.
     // (The floor as the building has it now is what counts: a hoarding that is down is floor, and has an edge either side.)
     for (let a = 0; a < 8; a++) if (open(me.x + Math.sin(a * 0.7854) * K.brink, me.z + Math.cos(a * 0.7854) * K.brink)) {
-      const [ga, gb] = gap.at(me.z); fall = { x: Math.max(ga + 0.4, Math.min(gb - 0.4, me.x)), z: me.z, y: 0, t: 0 }; env.hold?.(true); env.run?.met?.('the-culvert');
+      const [ga, gb] = gap.at(me.z); soloFall = { x: Math.max(ga + 0.4, Math.min(gb - 0.4, me.x)), z: me.z, y: 0, t: 0 }; env.hold?.(true); env.run?.met?.('the-culvert');
       const q = c.toWorld(me.x, me.z); env.play?.('rattle', q.x, q.z, 6); return;
     }
     redraw(dt, me);
   });
+  else c.tick((dt)=>{if(env.forEachVisitor)env.forEachVisitor(body=>tickVisitor(dt,body));else if(env.player?.me)tickVisitor(dt,env.player.me);});
 }

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--CSP-->
+<meta name="robots" content="noindex">
+<title>BlockRooms — Your tape archive</title>
+<link rel="stylesheet" href="./home.css">
+<link rel="stylesheet" href="./archive.css">
+<script type="importmap"><!--IMPORTMAP--></script>
+<script type="module" src="./archive-page.js"></script>
+</head>
+<body class="paper archive-page">
+<a class="skip" href="#archive-main">Skip to archive</a>
+<div class="cabinet">
+<nav aria-label="Archive navigation"><a href="./">[ HOME ]</a><a class="play" href="./play">ENTER</a></nav>
+<header class="archive-header"><canvas id="archive-logo" role="img" aria-label="BlockRooms"></canvas><h1>VISITOR FILES</h1><p>Recovered tapes &middot; sightings &middot; visitor photograph</p><div class="header-pictures" aria-hidden="true"><i data-sprite="tape" data-scale="3"></i><i data-sprite="camcorder" data-scale="3"></i><i data-sprite="floppy" data-scale="3"></i></div></header>
+<hr class="rainbow">
+<main id="archive-main">
+<div class="status-strip"><span id="save-status" role="status" aria-live="polite">Saved on this device</span><button id="sync" type="button" hidden>Sync now</button></div>
+<section class="connection" aria-labelledby="connection-title">
+<div><p class="index">VISITORS’ REGISTER</p><h2 id="connection-title">Save your file</h2><p>Sign in to open your file on another computer. Tapes and sightings already on this computer will be added.</p><p class="fine">You can play without signing in. Your email is private. The guestbook uses your nickname.</p></div>
+<div class="connection-form">
+<div id="signed-in" hidden><p>Signed in as <strong id="email-address"></strong></p><button id="sign-out" type="button">Sign out on this device</button></div>
+<div id="sign-in">
+<button id="google" class="google" type="button" disabled>Continue with Google</button>
+<form id="email-form"><label for="email">Or use an email code</label><div class="input-row"><input id="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com"><button id="send-code" type="submit" disabled>Send code</button></div></form>
+<form id="code-form" hidden><label for="code">Six-digit code sent to <span id="code-address"></span></label><div class="input-row"><input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required><button type="submit">Sign in</button></div><button id="change-email" class="text-button" type="button">Use a different email</button></form>
+</div>
+<p id="auth-status" role="status" aria-live="polite">Checking cloud saves…</p>
+</div>
+</section>
+<section class="identity" aria-labelledby="identity-title">
+<div class="portrait"><p class="index">VISITOR PHOTOGRAPH</p><div id="portrait" role="img" aria-label="Your voxel character preview"></div><p class="portrait-caption">PLEASE KEEP PHOTOGRAPH UP TO DATE</p></div>
+<div class="identity-form"><h2 id="identity-title">Your visitor file</h2><p>Name and appearance for your next visit.</p>
+<form id="character-form"><label for="nickname">Nickname <small>(shown in game)</small></label><input id="nickname" maxlength="16" autocomplete="nickname" required><div id="look-fields" class="look-fields"></div><div class="form-actions"><button type="submit">Save changes</button><button id="random-look" type="button">Random</button></div><p id="look-status" role="status"></p></form></div>
+</section>
+<section aria-labelledby="shelf-title" class="records"><p class="index">TAPE LIBRARY</p><div class="section-head"><h2 id="shelf-title">Recovered tapes</h2><span id="record-counts"></span></div><p class="fine">Your twelve most recent escapes. Replays use the current build; older tapes may lead to a changed building.</p><ol id="tape-list" class="tapes"></ol></section>
+<section class="discoveries" aria-labelledby="seen-title"><p class="index">SIGHTINGS LOG</p><h2 id="seen-title">Recorded sightings</h2><div class="discovery-columns"><div><h3 id="rooms-title">Rooms</h3><ul id="rooms-list" aria-labelledby="rooms-title"></ul></div><div><h3 id="cast-title">Residents</h3><ul id="cast-list" aria-labelledby="cast-title"></ul></div></div></section>
+</main>
+<footer>Progress saves at the end of each visit. A visit in progress stays on its current device.<br><a href="./play">Just play →</a> · <a href="./">Return to homepage</a></footer>
+</div>
+</body>
+</html>

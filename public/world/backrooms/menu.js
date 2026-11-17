@@ -9,7 +9,7 @@ import { BACKROOMS_DEFAULTS as DEFAULTS } from '/core/backrooms-settings.mjs';
 let instance = 0;
 const CONTROLS = [
   ['Walk', 'W A S D'], ['Look', 'Mouse / drag'], ['Run', 'Shift'], ['Crouch / jump', 'C / Space'],
-  ['Interact', 'E / Enter'], ['Select / stow pocket', '1 – 6'], ['Inventory', 'I / Tab'], ['Use item', 'Q'],
+  ['Interact', 'E / Enter'], ['Shove', 'Click'], ['Select / stow pocket', '1 – 6'], ['Inventory', 'I / Tab'], ['Use item', 'Q'],
   ['Drop item', 'G'], ['Flashlight', 'F'], ['VHS picture', 'V'], ['Mute sound', 'M'], ['Pause menu', 'Esc'],
 ];
 
@@ -17,7 +17,7 @@ const CONTROLS = [
  * Camcorder controls over the frozen picture. onChange(key, value) is immediate;
  * the caller applies and saves it. setOpen never invokes pause/resume callbacks.
  */
-export function createMenu({ host, settings = {}, furniture = false, onRequestOpen, onResume, onGiveUp, onChange } = {}) {
+export function createMenu({ host, settings = {}, furniture = false, onRequestOpen, onResume, onGiveUp, onChange, onArchive } = {}) {
   const id = ++instance, prefix = `br-menu-${id}`;
   let opened = false, disposed = false, page = 'main', previousFocus = null;
   let values = { ...DEFAULTS, ...settings };
@@ -31,7 +31,7 @@ export function createMenu({ host, settings = {}, furniture = false, onRequestOp
   const controls = h('div.br-menu-controls-page', { hidden: true },
     h('dl.br-menu-controls', CONTROLS.map(([action, keys]) => h('div.br-menu-control', h('dt', action), h('dd', keys)))),
     furniture ? h('p.br-menu-note', h('strong', 'Move furniture'), ' — look at a chair, desk, trolley or loose scenery panel and press E (or tap the hand) to grab it. Walk to push or pull; press again to release. While holding a timber-backed panel, R (or its on-screen prompt) lowers or raises it. Both ends need solid support. Raise bridges from their hinged end, with nobody on them. For a desk with a working computer, aim below the tabletop. Bolted, braced, buried and suspended furniture stays fixed.') : null,
-    h('p.br-menu-note', h('strong', 'On a phone'), ' — the ring walks; push past it to run. Drag anywhere else to look. The arrows jump and crouch, the hand interacts, the torch switches your light; tap a pocket to inspect it.'),
+    h('p.br-menu-note', h('strong', 'On a phone'), ' — the ring walks; push past it to run. Drag anywhere else to look. The arrows jump and crouch, the hand interacts (and shoves, with nothing in front of it to use), the torch switches your light; tap a pocket to inspect it.'),
     h('p.br-menu-note', h('strong', 'Recharge the camcorder'), ' — select a battery and press Q. On a phone, tap its pocket, then Recharge camera. Use Combine to fit a battery to a flashlight instead.'));
   const settingsPage = h('div.br-menu-settings', { hidden: true });
   const confirm = h('div.br-menu-confirm', { hidden: true }, h('p', 'End this recording and see your score?'));
@@ -51,6 +51,7 @@ export function createMenu({ host, settings = {}, furniture = false, onRequestOp
   const resume = button('Resume', '▶', () => onResume?.());
   const controlsButton = button('Controls', '01', () => show('controls'));
   const settingsButton = button('Settings', '02', () => show('settings'));
+  if (onArchive) button('Your archive', 'Opens in a new tab', onArchive);
   const giveUpButton = button('Give up', '■', () => show('giveup'), '.br-menu-giveup');
   const stay = h('button', { type: 'button' }, 'Keep recording');
   const giveUp = h('button.br-menu-confirm-end', { type: 'button' }, 'Give up');

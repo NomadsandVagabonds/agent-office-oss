@@ -200,7 +200,7 @@ export function build(c) {
         c.env.interfere(1);
         // the scissors: two hearts where there are hearts — and if that was not the last of them, he has made his point and goes back to his rounds
         if (!known) { known = true; c.met('floor-warden'); }
-        const hit = c.hurt(WARDEN.hurts);
+        const hit = c.hurt(WARDEN.hurts, roamer);
         if (!hit.ended) { rule = releaseWarden(rule); if (hit.landed) { c.env.hud.glitch(0.6); c.survived('floor-warden'); } }
       }
     },

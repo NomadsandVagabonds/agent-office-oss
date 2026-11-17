@@ -9,7 +9,7 @@
 // Also here: the cardboard colleague who sometimes decides to come along, and
 // who cannot open a door.
 import { creatureTuning, difficultyOf } from '../../../core/difficulty.mjs';
-import { makeRng } from './gen.js';
+import { makeRng, roomDistances } from './gen.js';
 import * as castList from './cast.js';              // (the whole of it, so that hauntsFor is asked for only where it is used: a stand-in cast list need not have it)
 const { CAST, castFor, homeFor } = castList;
 import { MAKERS } from './cast/index.js';
@@ -21,16 +21,21 @@ import { hangDoors } from './doorleaf.js';
 export function createStalkers(env, options = {}) {
   const level = env.level;
   const W = () => env.world;
+  const fromStart = roomDistances(level, level.start?.room);
   const walk = createWalk(env);
   const hiddenAt = (x, z, r = 0.6) => !env.sees(x, z, { radius: r, margin: 0.2, far: 40 });
   const drawn = (a) => { const rt = W().roomAt(a.x, a.z); return !!rt && rt.group.visible; };
   let follower = null, taker = null;                    // (taker: whoever's hit was the last heart — index.js asks, for the last shot)
+  /** Where a member of the cast says it is (its at(): for which way a blow of its throws the visitor), or null. */
+  const whereIs = (k) => { try { return k.it?.at?.() ?? null; } catch { return null; } };
 
   /* ---- who is on this floor ---------------------------------------------------------------- */
 
   /** What a creature is handed (the contract). Everything it may need of the level is here or on c.env. (k: the conductor's own note of it.) */
   const toolbox = (k, home, haunt = null, lair = null, member = k.member) => ({
     env, level, member, walk, home,
+    /** Hostile placements must leave the landing and its adjacent rooms empty. */
+    spawnAllowed: id => fromStart.has(id) && fromStart.get(id) >= 2,
     get speedScale() { return creatureTuning(env.difficulty?.() ?? 'training-wheels', member.id).speed ?? 1; },
     get population() { return Math.max(1, level.difficulty ? difficultyOf(level.difficulty).toner : 1); },
     /** A room that asked for company and got this one (cast.js hauntsFor): its id, or null. What it does about it is its own. */
@@ -59,14 +64,24 @@ export function createStalkers(env, options = {}) {
      * It has got the visitor. With a health system (env.health, when there is one) this costs `n` points and says what happened:
      * { landed: the hit counted (false: they were hit a moment ago), dead: it was the last of them — the visit is ending, do nothing more }.
      * Without one, a creature that hunts ends the visit ('caught') and anything else does nothing: { landed: false, ended }.
+     * A hit that comes from in front in the moment after a shove does not land (shove.rule.js): { landed: false, blocked: true } —
+     * unless it is one of the heavy ones (`heavy` on its line of cast.js). `from`: where the hit is coming from, for one that
+     * is more than one body; otherwise it is wherever the creature says it is (at()).
+     * A hit that does land and is survived throws the visitor back from the same place (player.js knock).
      */
-    hurt(n = 1) {
+    hurt(n = 1, from = null) {
+      // (env.blocked is the level's: index.js. A floor without it — a test's, a review's — has no shove, and every hit lands)
+      if (!member.heavy && env.blocked) {
+        const at = from || k.it?.at?.() || null;
+        if (env.blocked(at)) { env.play?.('thunk', at?.x, at?.z, 8); env.interfere?.(0.25); return { landed: false, dead: false, ended: false, blocked: true }; }
+      }
       // (who it was is noted before the hit is made: the visit begins to end inside it, and asks)
       const before = taker; taker = k;
       const hit = env.health?.damage(creatureTuning(env.difficulty?.() ?? 'training-wheels', member.id).damage ?? n);
       if (hit) {
         const ended = !!hit.dead && !options.hasSurvivor?.();
         if (!ended) taker = before;
+        if (hit.ok && !hit.dead) env.player?.knock?.(from ?? whereIs(k));
         return { landed: !!hit.ok, dead: !!hit.dead, ended };
       }
       if (member.disposition === 'hunts') { env.end('caught'); return { landed: true, dead: true, ended: true }; }
@@ -104,13 +119,13 @@ export function createStalkers(env, options = {}) {
     // (things: what it has put in the level · bodies: what of it nobody walks through · away: the room it is standing in has gone, and it with it)
     const k = { id: member.id, member, it: null, things: [], bodies: [], away: null, shown: null };
     try { k.it = make(toolbox(k, homeFor(level, member), haunts.get(member.id) ?? null, castList.lairFor?.(level, member) ?? null)); live.push(k); }
-    catch (err) { console.warn(`[backrooms] ${member.id} would not be made — the floor does without`, err); }
+    catch (err) { if(env.coopStrict)throw err;console.warn(`[backrooms] ${member.id} would not be made — the floor does without`, err); }
   }
   const pirate = live.find((k) => k.id === 'pirate')?.it || null;
   // once the floor is up and somebody is standing on it: its doors are hung, and everybody takes their places
   (env.ready ||= []).push(() => {
     env.doors = hangDoors(env);
-    for (const k of live) { try { k.it.ready?.(); } catch (err) { console.warn(`[backrooms] ${k.id} would not take its place`, err); k.dead = true; } }
+    for (const k of live) { try { k.it.ready?.(); } catch (err) { if(env.coopStrict)throw err;console.warn(`[backrooms] ${k.id} would not take its place`, err); k.dead = true; } }
   });
 
   /* ---- the colleague who comes along --------------------------------------------------- */
@@ -150,14 +165,14 @@ export function createStalkers(env, options = {}) {
       if (!env.player || !env.world) return;
       env.clock += dt;
       env.doors?.update(dt);
-      if (follower && !follower.away) tag(follower, dt);
+      if (follower && !follower.away) {if(options.withVisitor)options.withVisitor('follower',follower,()=>tag(follower,dt));else tag(follower, dt);}
       for (const k of live) {
         if (k.dead || k.away) continue;                                    // (somebody who is not here does nothing here)
         try {
           const tick = () => k.it.update?.(dt, env.clock);
           if (options.withVisitor) options.withVisitor(k.id, k.it.at?.(), tick);
           else tick();
-        } catch (err) { console.warn(`[backrooms] ${k.id} has stopped`, err); k.dead = true; if (k.member.music === 'mascot') env.sound?.stopMascot?.(); }
+        } catch (err) { if(env.coopStrict)throw err;console.warn(`[backrooms] ${k.id} has stopped`, err); k.dead = true; if (k.member.music === 'mascot') env.sound?.stopMascot?.(); }
       }
     },
     /** What goes down the stairs with you: the mascot's (as ever: { awake, face, card, lost }), and under `others` whatever anybody else wants kept. */
@@ -230,6 +245,16 @@ export function createStalkers(env, options = {}) {
       for (const k of live) {
         if (k.dead || k.away) continue;                                    // (somebody who is away with a room cannot be reached either)
         const list = k.it.snipTargets?.();
+        if (Array.isArray(list)) out.push(...list);
+      }
+      return out;
+    },
+    /** What a shove could move (shove.rule.js): whatever each of them offers — [{ id, x, z, y?, r, shove(dir) }]. */
+    shoveTargets() {
+      const out = [];
+      for (const k of live) {
+        if (k.dead || k.away) continue;
+        const list = k.it.shoveTargets?.();
         if (Array.isArray(list)) out.push(...list);
       }
       return out;

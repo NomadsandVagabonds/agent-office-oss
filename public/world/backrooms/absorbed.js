@@ -162,6 +162,7 @@ export function spawnAbsorbed(env, { rt, placement, spec }) {
   const look = rt.def.look || {};
   const rig = makeAbsorbedWorker(kit, spec, placement.mount, {
     wall: look.wall,
+    paper: { wall: look.wall, ink: look.ink, pale: look.pale, pattern: look.pattern },          // (what the wall is printed with: they are wearing it)
     carpet: look.carpet,
     ceil: look.ceil,
     ceilH: placement.ceilH,

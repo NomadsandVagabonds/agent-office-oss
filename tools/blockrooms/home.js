@@ -19,6 +19,8 @@ import { GENDER, SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, SKIN, HAIR_COLORS, OU
 import { DEFAULT_PERK, PERK_LIST, cleanPerk, resolvePerk } from './core/perks.mjs';
 import { cleanRecord, emptyRecord } from './core/runs.mjs';
 import { paintFlatCharacter } from './world/art/character.js';
+import { archive, onArchive, startAccounts } from './archive-client.js';
+startAccounts().catch(() => {});
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, ...kids) => { const e = document.createElement(tag); if (cls) e.className = cls; e.append(...kids.filter((k) => k !== null && k !== undefined && k !== false)); return e; };
@@ -247,6 +249,7 @@ function named(value, fromStudio = false) {
   keep();
   refreshPassSummary();
   syncStudioUI();
+  archive.edit({ name: me.name });
 }
 function said(value) {
   const text = cleanMessage(value), bad = text === null;
@@ -273,7 +276,7 @@ $('reroll').addEventListener('click', rollVisitorName);
 $('creator-reroll').addEventListener('click', rollVisitorName);
 $('optin').checked = me.sign;
 $('optin').addEventListener('change', (e) => { me = { ...me, sign: e.target.checked }; keep(); });
-$('signin').addEventListener('submit', (e) => { e.preventDefault(); location.href = PLAY; });
+$('signin').addEventListener('submit', async (e) => { e.preventDefault(); await archive.edit({ name: me.name }); location.href = PLAY; });
 
 /* ---- studio workbench (#creator) ------------------------------------------------------------------- */
 const THEMES_3D = {
@@ -313,6 +316,7 @@ function setCustomLook(patch) {
   const clean = sanitizeLookPatch(merged).look;
   me = { ...me, customLook: true, look: clean };
   keep();
+  archive.edit({ character: clean });          // (the archive keeps the character too: signed in, it is what every device gets)
   refreshPassSummary();
   syncStudioUI();
 }
@@ -601,9 +605,10 @@ function renderStage(ms = 0, dtOverride = null) {
   d3.voxelUniforms.uTime.value = ms / 1000;
   d3.turntable.rotation.y = studio.yaw;
 
-  const goalCamY = studio.zoom ? 1.18 : 0.90;
-  const goalCamZ = studio.zoom ? 1.28 : 2.72;
-  const goalLookY = studio.zoom ? 1.12 : 0.76;
+  const isAlien = activeLook().species === 'alien';
+  const goalCamY = studio.zoom ? (isAlien ? 1.28 : 1.18) : (isAlien ? 0.96 : 0.90);
+  const goalCamZ = studio.zoom ? (isAlien ? 1.44 : 1.28) : (isAlien ? 2.90 : 2.72);
+  const goalLookY = studio.zoom ? (isAlien ? 1.22 : 1.12) : (isAlien ? 0.82 : 0.76);
   const k = dt > 0 ? 1 - Math.exp(-12 * dt) : 1;
   d3.camY += (goalCamY - d3.camY) * k;
   d3.camZ += (goalCamZ - d3.camZ) * k;
@@ -638,14 +643,17 @@ function refreshThumbnails() {
       }
       if (trait === 'species' && item.val !== base.species) {
         sample.skin = SPECIES_DEFAULT_SKIN[item.val] || base.skin;
-        if (item.val === 'human') {
+        if (item.val === 'alien') {
+          sample.hair = 'bald';
+          sample.facial = 'none';
+        } else if (item.val === 'human') {
           const defs = humanGenderDefaults(base.gender);
           if (sample.hair === 'bald') sample.hair = defs.hair;
           if (sample.outfit === 'consul') sample.outfit = defs.outfit;
         }
       }
-      if (trait === 'hair' && (sample.species === 'robot' || sample.species === 'alien')) { sample.species = 'human'; sample.skin = SPECIES_DEFAULT_SKIN.human; }
-      if (trait === 'facial' && (sample.species === 'robot' || sample.species === 'alien')) { sample.species = 'human'; sample.skin = SPECIES_DEFAULT_SKIN.human; }
+      if (trait === 'hair' && sample.species === 'robot') { sample.species = 'human'; sample.skin = SPECIES_DEFAULT_SKIN.human; }
+      if (trait === 'facial' && sample.species === 'robot') { sample.species = 'human'; sample.skin = SPECIES_DEFAULT_SKIN.human; }
       const ctx = item.canvas.getContext('2d');
       ctx.imageSmoothingEnabled = false;
       ctx.fillStyle = '#e6dec2';
@@ -653,7 +661,7 @@ function refreshThumbnails() {
       ctx.fillStyle = '#c9be99';
       ctx.fillRect(0, 46, 56, 10);
       const pix = paintFlatCharacter(sample, { pose: 'idle' });
-      const sy = trait === 'outfit' ? 34 : 20;
+      const sy = trait === 'outfit' ? 34 : (sample.species === 'alien' ? 16 : 20);
       blitPixCrop(ctx, pix, { sx: 2, sy, sw: 28, sh: 28, dx: 0, dy: 0, scale: 2 });
     }
   }
@@ -991,13 +999,26 @@ $('creator-reset').addEventListener('click', () => {
 refreshPassSummary();
 
 /* ---- what this browser remembers ------------------------------------------------------------------- */
-const mine = cleanRecord(store.get('office-backrooms:record')?.record || emptyRecord());
-if (mine.tapes.length) {
-  $('shelf').replaceChildren(...mine.tapes.map((t) => {
-    const link = el('a', '', 'play'); link.href = `${PLAY}?tape=${encodeURIComponent(t.seed)}`;
-    return el('li', '', el('span', 'label', `${t.at ? day(t.at) : ''}  ${num(t.score)} pts  ${clock(t.seconds)}`), el('span', '', `№ ${t.seed}`), link);
-  }));
-}
+let mine = archive.record();
+onArchive(() => {
+  mine = archive.record();
+  // Signed in, the account's name and character are the last word, on every device. Not signed in, this browser's own
+  // (what the studio keeps) are, and the archive only follows them.
+  const account = String(archive.owner()).startsWith('user:');
+  if (account && document.activeElement !== nameBox) { me.name = archive.profile().name; nameBox.value = me.name; keep(); }
+  const theirs = account ? archive.document().character?.value : null;
+  if (theirs && JSON.stringify(sanitizeLookPatch(theirs).look) !== JSON.stringify(me.customLook ? me.look : null)) {
+    me = { ...me, customLook: true, look: sanitizeLookPatch(theirs).look }; keep(); refreshPassSummary(); syncStudioUI();
+  }
+  $('shelf').replaceChildren(el('li', 'empty', 'None.'));
+  if (mine.tapes.length) {
+    $('shelf').replaceChildren(...mine.tapes.map((t) => {
+      const link = el('a', '', 'play'); link.href = `${PLAY}?tape=${encodeURIComponent(t.seed)}`;
+      return el('li', '', el('span', 'label', `${t.at ? day(t.at) : ''}  ${num(t.score)} pts  ${clock(t.seconds)}`), el('span', '', `№ ${t.seed}`), link);
+    }));
+  }
+
+});
 
 /* ---- the counter, and the book --------------------------------------------------------------------- */
 // (the count did not start at nothing)

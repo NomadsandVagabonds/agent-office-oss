@@ -96,6 +96,7 @@ export function build(c) {
     standIns.push(entry);
   }
 
+  c.rt.coopFocus=()=>standIns;
   let rule = createBlackoutState(standIns.length);
   let wasRed = false, known = false;
 
@@ -111,7 +112,7 @@ export function build(c) {
 
     const targets = standIns.map((s) => {
       const sw = c.toWorld(s.x, s.z);
-      return { x: s.x, z: s.z, los: c.world.los(meW.x, meW.z, sw.x, sw.z), contact: roomContact(c, s, me), fire: !!c.fire(s.x, s.z) };          // sight over a low desk still freezes it; reaching through that desk does not
+      return { x: s.x, z: s.z, los: c.world.los(meW.x, meW.z, sw.x, sw.z), contact: roomContact(c, s, me), fire: !!c.fire(s.x, s.z), lit:!!c.env.coopBeam?.({...sw,y:c.room.y},{bottom:.5,top:1.5,range:BLACKOUT.beamRange}) };          // sight over a low desk still freezes it; reaching through that desk does not
     });
 
     const res = stepBlackout(rule, {
@@ -119,7 +120,7 @@ export function build(c) {
       inDark,
       hasFlashlight,
       mounted: !!c.env.inventory?.torchMounted?.(),
-      byFire: !!c.fire(me.x, me.z),          // paper burning within sight is light enough to stand in
+      byFire: !!c.fire(me.x, me.z)||!!c.env.coopBeam?.({...meW,y:c.room.y},{bottom:.5,top:1.5}),          // paper burning within sight is light enough to stand in
       px: me.x,
       py: (me.world?.y ?? ((c.room.y||0)+1.1))-(c.room.y||0),
       pz: me.z,

@@ -53,7 +53,7 @@ async function visit(t, options = {}) {
   const input = { state: { keys: new Set(), stick: { x: 0, y: 0 }, dx: 0, dy: 0 }, clear: noop, release: noop, capture: noop, dispose: noop };
   let bagActions;
   const bag = { isOpen: false, view: { el: {} }, hang: noop, attend: noop, forget: noop, update: noop, dispose: noop,
-    owns: () => false, handleKey: () => false, torchPower: () => 0, count: () => 0,
+    owns: () => false, handleKey: () => false, torchPower: () => 0, torchMounted: () => false, count: () => 0,
     close() { if (this.isOpen) { this.isOpen = false; bagActions.onOpen(false); } },
   };
   const def = { id: 0, kind: 'start', W: 8, D: 8, H: 3, cx: 0, cz: 0, rot: 0, y: 0, way: 'hole' };
@@ -63,7 +63,7 @@ async function visit(t, options = {}) {
     sketch: noop, toWorld: (r, x, z) => ({ x, z }), toLocal: (r, x, z) => ({ x, z }), DECK: [], ARCHETYPES: {},
     planVisit: (_seed, opt) => ({ depths: 2, difficulty: opt.difficulty }), floorOf: (plan, depth) => ({ ...level(depth), difficulty: plan.difficulty }), edition: () => 'test',
     changeVisitDifficulty(plan, id) { plan.difficulty = id; },
-    createKit: () => ({ shared: { uTorch: { value: 0 }, uTorchOrigin: { value: new THREE.Vector3() }, uTorchDirection: { value: new THREE.Vector3() } }, dispose: noop }), BUILDERS: {}, loadCatalogue: async () => ({}),
+    createKit: () => ({ shared: { uTorch: { value: 0 }, uCameraLamp: { value: 0 }, uTorchOrigin: { value: new THREE.Vector3() }, uTorchDirection: { value: new THREE.Vector3() } }, dispose: noop }), BUILDERS: {}, loadCatalogue: async () => ({}),
     async buildWorld(kit, level, env) {
       const room = { id: 0, def: level.rooms[0], group: { visible: true }, level: 0.3, u: { dim: { value: 1 } }, flickers: [], visits: 0 };
       let current = null;
@@ -222,4 +222,23 @@ test('Tourist returns from an authored fatal pit without ending the visit or kee
   handle.finish('quit'); tick(10);
   const result = await v.finished;
   assert.equal(result.run.ranked, false);
+});
+
+test('the conductor keeps camera illumination separate from inventory power and respects authored darkness',async t=>{
+  const v=await visit(t), room=v.handle.world.rooms[0], shared=v.handle.env.kit.shared;
+  room.level=.002;
+  for(let i=0;i<40;i++)v.tick(.1);
+  assert.ok(shared.uCameraLamp.value>.08,'the camera reveals nearby surfaces in a dark room');
+  assert.equal(shared.uTorch.value,0,'camera illumination cannot masquerade as a powered flashlight');
+  assert.equal(v.bag.torchPower(),0);
+  room.noTorch=true;v.tick(.1);
+  assert.equal(shared.uCameraLamp.value,0,'an authored no-lamp encounter takes effect immediately');
+  v.bag.torchPower=()=>1;
+  for(let i=0;i<20;i++)v.tick(.1);
+  assert.ok(shared.uTorch.value>1.4,'the real flashlight still works inside the encounter');
+  room.noTorch=false;room.level=.3;v.bag.torchPower=()=>0;
+  for(let i=0;i<40;i++)v.tick(.1);
+  assert.ok(shared.uCameraLamp.value<.001);
+  assert.ok(shared.uTorch.value<.001);
+  v.tick(301);v.tick(BATTERY_ENDING.duration);await v.finished;
 });

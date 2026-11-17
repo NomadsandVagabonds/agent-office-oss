@@ -31,7 +31,7 @@ import { sketch, toWorld, toLocal, DECK, ARCHETYPES } from './gen.js';
 import { planVisit, floorOf, edition, changeVisitDifficulty } from './plan.js';
 import { SHOT, cameraFor, cameraFrom, slumps } from './lastshot.js';
 import { createKit } from './kit.js';
-import { FLASHLIGHT_POSES } from './flashlight.js';
+import { FLASHLIGHT_POSES, camcorderLampPower } from './flashlight.js';
 import { buildWorld, loadCatalogue } from './world.js';
 import { BUILDERS } from './rooms.js';
 import { createPlayer } from './player.js';
@@ -50,6 +50,7 @@ import { middle, THIN_BEHIND } from './marks.js';
 import { hangBelow, goesDown } from './seam.js';
 import { createInventory } from './inventory.js';
 import { strikeSnip } from './melee.js';
+import { shoveWindow, strikeShove, blocks } from './shove.rule.js';
 import { createSurvival } from './survival.js';
 import { batteryEnding, batteryWarning } from './battery-ending.js';
 import { createTally } from './tally.js';
@@ -59,7 +60,6 @@ import { createFurnitureGrip } from './furniture-grip.js';
 import { LIGHTING } from './lighting.js';
 
 const FOV = 62;
-const OWN_LAMP = 0.3;                                    // the camcorder's own lamp, beside a torch: how much of one it is
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const frame = () => new Promise((r) => requestAnimationFrame(r));
 const prefs = {
@@ -165,7 +165,7 @@ async function visit(office, opt) {
   let hold = false, landed = -1, heldAt = null;           // a room has the controls (a chute) · seconds since you came down in a new part · where you went over, while held
   let going = null;
   let out = null;                                         // by the way out: where the camera was when the wall gave, and which way is out
-  let pictureKey = '', currentUse = null, light = 0.3, torch = 0, interference = 0, redWash = 0, pendingQuit = false, kept = { card: false, coins: [], batteries: 0 };
+  let pictureKey = '', currentUse = null, light = 0.3, torch = 0, cameraLamp = 0, interference = 0, redWash = 0, pendingQuit = false, kept = { card: false, coins: [], batteries: 0 };
   let inventory = null, survival = null, menu = null, paused = false, gaveUp = false;
   const canAct = () => !paused && state === 'play' && !hold && !going;
   // A real fall and a chute consume recording time. Waiting for a part to
@@ -188,10 +188,12 @@ async function visit(office, opt) {
   stage.setView({ scene: blank, camera, render });
 
   /* ---- hands ----------------------------------------------------------------------- */
-  const useIt = () => {
+  // (finger: a thumb has no mouse button. Its hand, with nothing in front of it to use, is the two hands a click is)
+  const useIt = (how) => {
     if (!canAct() || inventory?.isOpen) return;
     if (cur?.env.grip?.action(currentUse)) { cur.env.grip.use(); return; }
-    if (currentUse) { const use = currentUse; try { use.use(use); } catch (err) { console.warn('[backrooms] use', err); } }
+    if (currentUse) { const use = currentUse; try { use.use(use); } catch (err) { console.warn('[backrooms] use', err); } return; }
+    if (how?.finger) clickIt();
   };
   // The light, under a thumb (touch.js): what F does, and one thing more. A key can pick the pocket first; a thumb has one
   // button, so if there is a torch that works and it is not the one in the hand, it is taken out and switched on.
@@ -212,7 +214,12 @@ async function visit(office, opt) {
     }
     inventory.toggleLight(); lightSeen = 0;
   }
-  const clickIt = () => { if (canAct() && !inventory?.isOpen && inventory?.held()?.type === 'scissors') inventory.snip({ quietMiss: true }); };
+  // A click: the scissors, if they are in the hand; otherwise both hands, out in front (shove.rule.js).
+  const clickIt = () => {
+    if (!canAct() || inventory?.isOpen) return;
+    if (inventory?.held()?.type === 'scissors') { inventory.snip({ quietMiss: true }); return; }
+    cur?.env.shove?.();
+  };
   let tipNote = '', tipUntil = 0;
   const input = createInput({ canvas, stage, hud, sound,
     owns: target => !!menu?.owns(target) || (!paused && !!inventory?.owns(target)) || (opt.debug && !!opt.dev?.owns?.(target)),
@@ -230,7 +237,7 @@ async function visit(office, opt) {
     } });
   input.state.sensitivity = settings.sensitivity; input.state.invertY = settings.invertY;
   menu = createMenu({ host: hud.el, settings: { ...settings, scoreEligible: difficulty.report().ranked }, furniture: opt.barricades !== false, onRequestOpen: () => setPaused(true), onResume: resume,
-    onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting });
+    onArchive: opt.onArchive, onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting });
   // Six pockets, four hearts, and a camcorder battery that runs down (inventory.js, survival.js): the visit's, not any
   // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.
   if (opt.inventory !== false) {
@@ -368,6 +375,21 @@ async function visit(office, opt) {
       play(name, x, z, reach) { const at = x === undefined ? {} : env.hear(x, z, reach); if (at.vol === undefined || at.vol > 0.02) sound.play(name, at); },
       /** More static on the tape (0..1), for a moment; things that interfere call this every frame. */
       interfere(k) { interference = Math.max(interference, k); },
+      /**
+       * Both hands out (shove.rule.js): whatever is right in front is pushed back a step, if it can be, and for a moment a
+       * hit from in front does not land. It costs breath; with something being carried there are no hands for it.
+       * → { ok, moved: [ids] }
+       */
+      shove() {
+        const me = f.player?.me;
+        if (!me || !f.world || !f.player.shove || env.grip?.held) return { ok: false, reason: 'unavailable' };
+        if (!f.player.shove(shoveWindow(env.difficulty?.()))) return { ok: false, reason: 'no-breath' };
+        const moved = strikeShove(me, env.pursuer?.shoveTargets?.() || [], (ax, az, bx, bz) => f.world.los(ax, az, bx, bz));
+        sound.play(moved.length ? 'thunk' : 'shuffle', { vol: moved.length ? 0.8 : 1 });
+        return { ok: true, moved };
+      },
+      /** Is a hit from there turned aside: did they shove as it reached them? (pursuer.js asks, for every hit but the heavy ones') */
+      blocked: (from) => blocks(env.player?.me ?? f.player?.me, from),
       /** Close-quarters scissor jab against whatever hostile entity or hazard is right in front of the lens. */
       snip() {
         const me = f.player?.me;
@@ -398,7 +420,7 @@ async function visit(office, opt) {
     }
     /** What creatures tell the visit, for the card at the end: this one was met; this one was got away from. */
     env.run = { met: (id) => tally.met(id), survived: (id) => tally.survived(id) };
-    createStalkers(env);
+    createStalkers(env, opt.debug && opt.dev?.cast?.length ? { members: opt.dev.cast } : {});   // (the dev page may name who is down here: for looking at them)
     // the residents of rooms (denizens.js), and the visitor's hand as they ask after it; the picture washed red (0…1) by a room that does that
     createHand(env); createHandView(env, camera); createDenizens(env);
     // the banner an office park puts up about itself, near where a visit lands (banner.js): once the part is built
@@ -610,17 +632,18 @@ async function visit(office, opt) {
     const lvl = variedLight ? world.illuminationAt(me.x, me.z) : here ? here.level * here.u.dim.value : 0.3;
     light += (lvl - light) * (1 - Math.exp(-2.2 * dt));
     u.uGain.value = clamp(Math.pow(0.3 / Math.max(light, 0.04), 0.55), 0.9, variedLight ? LIGHTING.gainMax : 2.3);
-    // …which with pockets is a weak one, enough not to walk into the furniture: a torch in the hand is the light, and
-    // it works wherever its owner switches it on
-    const lamp = light < 0.11 && !here?.noTorch ? 1 : 0;
-    const ownLamp = variedLight ? LIGHTING.ownLamp : OWN_LAMP;
-    const wantTorch = inventory ? Math.max(inventory.torchPower(), lamp * ownLamp) : Math.max(lamp * (variedLight ? ownLamp : 1), env.hand?.hasFlashlight?.() ? 1 : 0);          // (no pockets: a torch in the hand is simply on)
+    // The camera only reveals nearby surfaces. Its broad lamp is independent
+    // of the narrow inventory flashlight and never supplies creature power.
+    const wantTorch = inventory ? inventory.torchPower() : env.hand?.hasFlashlight?.() ? 1 : 0;
     torch += (wantTorch - torch) * (1 - Math.exp(-3 * dt));
+    cameraLamp += (camcorderLampPower(light, !!here?.noTorch) - cameraLamp) * (1 - Math.exp(-3 * dt));
+    if (here?.noTorch) cameraLamp = 0;
     const torchPose = inventory?.torchPower() > 0
       ? (inventory.torchMounted() ? FLASHLIGHT_POSES.mounted : FLASHLIGHT_POSES.hand)
       : FLASHLIGHT_POSES.camera;
     for (const floor of [cur, ahead?.f, above?.f]) if (floor) {
       floor.kit.shared.uTorch.value = torch * 1.5;
+      floor.kit.shared.uCameraLamp.value = cameraLamp;
       floor.kit.shared.uTorchOrigin.value.fromArray(torchPose.origin);
       floor.kit.shared.uTorchDirection.value.fromArray(torchPose.direction);
     }
@@ -714,7 +737,7 @@ async function visit(office, opt) {
     if (why === 'exit') { run.mascot = plan.mascot !== null; try { run.edition = edition(); } catch { /* the tape does not say */ } }
     // (no card for a visit that was told not to show one, or that was stopped before it had really begun)
     if (opt.scorecard === false || (!gaveUp && why === 'quit' && run.seconds < 2)) { done(null); return; }
-    import('./scorecard.js').then((m) => m.showScorecard({ office, reason: why, kept, run, name: who.name, brand: opt.brand, share: opt.share, also: opt.also, home: opt.home, anew: opt.anew }))
+    import('./scorecard.js').then((m) => m.showScorecard({ office, reason: why, kept, run, name: who.name, brand: opt.brand, share: opt.share, also: opt.also, archive: opt.archive, home: opt.home, anew: opt.anew }))
       .then(done, (err) => { console.warn('[backrooms] the card would not come up', err); done(null); });
   }
   function finish(why, how) {
