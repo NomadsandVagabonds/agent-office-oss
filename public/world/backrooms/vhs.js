@@ -144,7 +144,8 @@ const Screen = {
 class SupersamplePass extends Pass {
   constructor(camera) {
     super();
-    this.needsSwap = false; this.enabled = false; this.scene = null; this.camera = camera;
+    // (an empty scene until setScene, as the RenderPass has: a tier that starts supersampled may draw before anything has landed)
+    this.needsSwap = false; this.enabled = false; this.scene = new THREE.Scene(); this.camera = camera;
     this.target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
     this.material = new THREE.ShaderMaterial({
       uniforms: { tScene: { value: null }, uStep: { value: new THREE.Vector2() } }, vertexShader: QUAD, depthTest: false, depthWrite: false,

@@ -198,6 +198,30 @@ handed to the kit when a part is built (`gfx: { contact, bounce }`).
   goes at most half way, takes the floor's colour, and is only as bright as
   what is behind it: a dark end of a corridor stays dark, and where nothing was
   drawn (the void past a view) is left black.
+- **What is held in the hand** is drawn last, over the room (`hand.js`). It
+  used to clear the room's depth to get there, which with haze on left the
+  whole room reading as the void: the haze went out for as long as anything
+  was held. Where a depth texture is being read, the held thing is now drawn
+  into the nearest sliver of the depth range instead (`holdInFront`): it is
+  still in front of everything, the room keeps its depth and its haze, and the
+  held thing reads as nearer than the haze begins. Classic and Low have no
+  depth texture and clear the depth as before. Nothing else is drawn that way:
+  the pockets' icons are drawn by a renderer of their own, and the menu and
+  the card are the page's.
+- **Changing tier during a visit** (in the menu, or Auto) changes the picture
+  at once: the camcorder's targets are remade, nothing errors, and Classic
+  afterwards is Classic before to the pixel (checked paused, so the picture is
+  a still: classic → medium → high → low → auto → classic, 0 of 691,200
+  pixels different). The bake is not redone. Darkening and bounce are worked
+  out per part as it is built, so the part somebody is in keeps the bake it was
+  built with, and so does the part below if it was already built (it is, a few
+  seconds after landing, when the way down is a hole); a part built after the
+  change has the new tier's.
+- **A tier that draws the scene larger than the tape** (Medium, High, Auto at
+  Full or Light VHS) used to stop a visit dead if it was the saved setting: the
+  camcorder drew the larger scene before anything had landed, when it had no
+  scene yet, and threw on the first frame (the picture stayed black). It now
+  has an empty scene until the first landing, as the ordinary pass always had.
 - **Auto** starts at Medium; about 3 s of frames over 24 ms steps it down to
   Low, about 10 s under 13 ms at Low steps it back once; never two changes
   within 15 s, never more than three a visit, never while the next part is

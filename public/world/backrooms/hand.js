@@ -34,6 +34,31 @@ function balloonGrip() {
   return v;
 }
 
+/*
+ * How a held thing gets in front of the room. As it always was: the room's depth is cleared, then the thing is drawn.
+ * But when the picture is drawn into a target with a depth texture, somebody reads that depth after the scene is drawn
+ * (the Graphics setting's haze: vhs.js, medium and high), and clearing it would leave the whole room reading as the
+ * void, unhazed, for as long as anything is in the hand. Then the thing is drawn into the nearest sliver of the depth
+ * range instead: in front of everything, its own parts still in order, read by the haze as nearer than the haze begins,
+ * and the room's depth left as it was. Classic has no depth texture, so it never takes this path.
+ */
+export const HELD_DEPTH_SLIVER = 0.002;
+let squeezed = false;
+/** Before a held mesh draws. `first`: the mesh that, as before, clears the room's depth when nothing reads it. */
+export function holdInFront(renderer, first = true) {
+  if (renderer.getRenderTarget?.()?.depthTexture) { renderer.getContext().depthRange(0, HELD_DEPTH_SLIVER); squeezed = true; return 'sliver'; }
+  if (!first) return 'as-drawn';
+  // The previous transparent room mesh may have disabled depth writes;
+  // WebGL also applies that mask to clear(), before our material is set.
+  renderer.state.buffers.depth.setMask(true);
+  renderer.clearDepth();
+  return 'cleared';
+}
+/** After a held mesh draws: the depth range back to whole, if holdInFront narrowed it. */
+export function letGoOfFront(renderer) {
+  if (squeezed) { renderer.getContext().depthRange(0, 1); squeezed = false; }
+}
+
 /** Give a part of the building its hand (env.hand): the selected pocket, in the words its rooms use. */
 export function createHand(env) {
   env.hand = createHandOver(() => env.inventory || null, `hand:${env.level.seed}:${env.level.depth ?? 0}`);
@@ -146,14 +171,13 @@ export function createHandView(env, camera) {
             m.mesh.onBeforeRender = renderer => {
               if (camera.userData.hand !== view) root.visible = false;
               // Keep the grip's own depth (fingers behind the handle), but discard
-              // the room's depth before drawing this final first-person mesh.
-              else {
-                // The previous transparent room mesh may have disabled depth writes;
-                // WebGL also applies that mask to clear(), before our material is set.
-                renderer.state.buffers.depth.setMask(true);
-                renderer.clearDepth();
-              }
+              // the room's depth before drawing this final first-person mesh
+              // (or, while the haze reads that depth, draw in front of it: holdInFront).
+              else holdInFront(renderer);
             };
+            m.mesh.onAfterRender = letGoOfFront;
+            // (a part of it with a mesh of its own, the balloon's glove: in front of the room too, while the haze reads its depth)
+            m.mesh.traverse((o) => { if (o !== m.mesh && o.isMesh) { o.onBeforeRender = (renderer) => holdInFront(renderer, false); o.onAfterRender = letGoOfFront; } });
             made.set(want, m); root.add(m.mesh);
           }
           shown = made.get(want); shown.mesh.visible = true;
