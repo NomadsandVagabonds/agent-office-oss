@@ -149,3 +149,13 @@ test('index.js hands the tier to the kit, the grade to the camcorder on every la
   const dev = readFileSync(new URL('../public/world/dev/backrooms.js', import.meta.url), 'utf8');
   assert.match(dev, /graphics: q\.get\('graphics'\) \|\| undefined/);
 });
+
+test('the Graphics row is offered only to a visit made for looking at the level, until the owner says otherwise', async () => {
+  const fs = await import('node:fs');
+  const read = (p) => fs.readFileSync(new URL(`../public/world/backrooms/${p}`, import.meta.url), 'utf8');
+  assert.match(read('index.js'), /furniture: opt\.barricades !== false, graphics: !!opt\.debug, onRequestOpen/);
+  const menu = read('menu.js');
+  assert.match(menu, /graphics: offerGraphics = true,/, 'offered unless told not to (the dev page, the tests)');
+  assert.match(menu, /if \(offerGraphics\) settingsPage\.append\(h\('div\.br-menu-setting', h\('label', \{ htmlFor: graphics\.id \}, 'Graphics'\), graphics\)\);/);
+  assert.match(menu, /fields\.set\('graphics', \{ input: graphics \}\);/, 'and kept and obeyed either way');
+});

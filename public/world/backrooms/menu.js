@@ -19,7 +19,7 @@ const CONTROLS = [
  * Camcorder controls over the frozen picture. onChange(key, value) is immediate;
  * the caller applies and saves it. setOpen never invokes pause/resume callbacks.
  */
-export function createMenu({ host, settings = {}, furniture = false, onRequestOpen, onResume, onGiveUp, onChange, onArchive } = {}) {
+export function createMenu({ host, settings = {}, furniture = false, graphics: offerGraphics = true, onRequestOpen, onResume, onGiveUp, onChange, onArchive } = {}) {
   const id = ++instance, prefix = `br-menu-${id}`;
   let opened = false, disposed = false, page = 'main', previousFocus = null;
   let values = { ...DEFAULTS, ...settings };
@@ -96,7 +96,9 @@ export function createMenu({ host, settings = {}, furniture = false, onRequestOp
   const graphics = h('select', { id: `${prefix}-graphics` }, GRAPHICS.map(([value, label]) => h('option', { value }, label)));
   fields.set('graphics', { input: graphics });
   graphics.addEventListener('change', () => change('graphics', graphics.value));
-  settingsPage.append(h('div.br-menu-setting', h('label', { htmlFor: graphics.id }, 'Graphics'), graphics));
+  // (offerGraphics false: the setting is kept and obeyed, but its row is not offered. index.js offers it only to a visit made
+  // for looking at the level, until the owner says the tiers are for everybody)
+  if (offerGraphics) settingsPage.append(h('div.br-menu-setting', h('label', { htmlFor: graphics.id }, 'Graphics'), graphics));
   const difficulty = h('select', { id: `${prefix}-difficulty`, 'aria-describedby': `${prefix}-difficulty-note` },
     DIFFICULTIES.map(d => h('option', { value: d.id }, d.label + (d.id === 'easy' ? ' (recommended)' : ''))));
   const difficultyNote = h('small', { id: `${prefix}-difficulty-note` });
