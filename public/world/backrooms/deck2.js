@@ -445,6 +445,10 @@ export const MORE_DECK = [
   { id: 'the-orange', name: 'The Orange', landmark: 'the place that sells the orange drink', w: [7, 8], d: [7, 8], h: [2.9, 3.3],
     ports: ['left', 'right'], weight: 1.3, lights: 'dim', themes: { mall: 1, '*': 0 },
     module: './rooms/the-orange.js', stash: (r) => [-r.W / 2 + 0.35, r.D / 2 - 1.9, -r.W / 2 + 0.95, r.D / 2 - 1.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A shop of televisions: every set on demonstration, on as you pass and off behind you, all on the same channel; the big one has a camera on it, and shows the shop a little late, and somebody stood where you were.
+  { id: 'the-sets', name: 'The Sets', landmark: 'the shop of televisions', w: [9, 11], d: [8, 10], h: [3.2, 3.6],
+    ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/the-sets.js', stash: (r) => [-r.W / 2 + 0.3, -0.3, -r.W / 2 + 0.9, 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
   // A hall with little shops round the edge, each selling the one thing it was told about at the size it was told; tables bolted down, and another over each on the roof; the middle of the floor left out.
   { id: 'food-court', name: 'The Food Court', landmark: 'the tables round the hole', w: [16, 18], d: [15, 17], h: [7, 7.8],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
