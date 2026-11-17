@@ -18,6 +18,16 @@ export const GLOW_DEPTH = Object.freeze({
   tap: 0.25,          // the four reads, in pixels of the emissive picture from its middle
 });
 
+/**
+ * How much of the bloom one shining batch makes (kit.glowing's and c.shining's option `bloom`, carried as the material's
+ * userData.bloom next to userData.glow): a number, 1 unless given, held to 0…3; anything that is not a number is 1.
+ * glow.js scales what that batch draws into the emissive picture by it, on top of its class's own share (a picture's
+ * `over`), and never how the batch is drawn in the scene. 0: it adds nothing to the bloom.
+ */
+export const GLOW_STRENGTH = Object.freeze({ fallback: 1, min: 0, max: 3 });
+export const glowStrength = (v, k = GLOW_STRENGTH) =>
+  (typeof v === 'number' && !Number.isNaN(v) ? Math.min(k.max, Math.max(k.min, v)) : k.fallback);
+
 /** Does a fragment at linear distance z shine, against the nearest of the scene's depths read at its pixel (zs)? */
 export const glowVisible = (z, zs, k = GLOW_DEPTH) => !(z > zs + z * k.share + k.metres);
 

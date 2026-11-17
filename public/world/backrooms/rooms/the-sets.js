@@ -140,7 +140,7 @@ export function build(c) {
     feed = { ax, az, bx, bz, y0: 0.5 + o.y0, y1: 0.5 + o.y1, kx, kz, ky: ky + 0.15, look };
   }
   /* the name over the shelves, in tube; a card on the counter */
-  const neon = mallNeon(kit, 'sets:' + p.seed, ['TELEVISION', 'ALL SETS ON', 'COLOUR', 'RENTALS', 'SAME CHANNEL', 'DEMONSTRATION', 'TV', 'CH 3'], p.seed), lit = c.shining('mall:neon:sets:' + p.seed, neon.texture, 2.3);
+  const neon = mallNeon(kit, 'sets:' + p.seed, ['TELEVISION', 'ALL SETS ON', 'COLOUR', 'RENTALS', 'SAME CHANNEL', 'DEMONSTRATION', 'TV', 'CH 3'], p.seed), lit = c.shining('mall:neon:sets:' + p.seed, neon.texture, 2.3, undefined, { bloom: 2 });
   const ny = Math.min(H - 0.12, (levels[levels.length - 1] || 1) + 0.95);
   if (ny - 0.45 > levels[levels.length - 1] + 0.7) { upright(lit, -2.2, z0 + 0.05, 0, z0 + 0.05, ny - 0.45, ny, neon.uv(0)); upright(lit, 0.2, z0 + 0.05, 2.4, z0 + 0.05, ny - 0.45, ny, neon.uv(1)); }
   const card = c.mapped('sets:card', kit.tex.custom('sets:card', 64, 32, (g, w, h) => { P(g, '#f1ead6', 0, 0, w, h); P(g, '#b3261e', 0, 0, w, 7); g.fillStyle = '#1a1a1a'; g.font = 'bold 8px monospace'; g.textAlign = 'center'; g.fillText('ALL SETS ON', w / 2, 17); g.fillText('DEMONSTRATION', w / 2, 27); }));

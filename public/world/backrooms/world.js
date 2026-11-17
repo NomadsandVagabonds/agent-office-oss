@@ -26,6 +26,7 @@ import { STORAGE, cabinetVox, boxesVox } from './storage.model.js';
 import { SMALLS, binVox, trolleyVox, coolerVox } from './smalls.model.js';
 import { WALLFIT, socketVox, exitBoxVox } from './wallfit.model.js';
 import { markLiquid } from './liquid.mark.js';
+import { shineLights } from './shining-lights.rule.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
 // and how far along it a local coordinate c is (c is x on the front/back walls, z on the side walls)
@@ -1056,9 +1057,24 @@ function roomContext(world, rt) {
       }
       return mapped.get(key).batch;
     },
-    /** A batch that shines by itself (unlit): lit panels, screens, signs. */
+    /**
+     * A batch that shines by itself (unlit): lit panels, screens, signs. opt: detail, transparent, alphaTest, side,
+     * depthWrite, and bloom (0…3, default 1: how strongly it feeds the glow at Medium and High; kit.glowing, glow.js;
+     * how it is drawn does not change). One mesh per key, with the options of the key's first call: a key asked for
+     * again with another bloom adds to the first batch at the first number, so two strengths need two keys.
+     * opt.lights { power, k, far, axis, floor, wrap, flick, bank, color, offset, cap } (shining-lights.rule.js): what is
+     * added to the batch from then on lights the room too, as c.light(x, y, z, color ?? rgb, power, { k, … }) at each
+     * piece's middle would (two or three along a long thin one, the power shared; at most 16 a batch, the nearest merged).
+     */
     shining(key, texture, power = 1, rgb = WHITE, opt = {}) {
-      if (!shining.has(key)) { shining.set(key, { batch: track(new Batch(), key === 'panel'), texture, power, rgb, opt }); if (opt.detail) shining.get(key).batch.detail = true; }
+      if (!shining.has(key)) {
+        shining.set(key, { batch: track(new Batch(), key === 'panel'), texture, power, rgb, opt }); if (opt.detail) shining.get(key).batch.detail = true;
+        if (opt.lights) {
+          const col = opt.lights.color, tone = typeof col === 'string' ? lin(col) : Array.isArray(col) ? col : rgb;
+          shineLights(shining.get(key).batch, tone, opt.lights, (x, y, z, l, o) => { const L = lamp(x, y, z, l, o); rt.lights.push(L); return L; },
+            (L) => { const i = rt.lights.indexOf(L); if (i >= 0) rt.lights.splice(i, 1); });
+        }
+      }
       return shining.get(key).batch;
     },
     get flat() { return c.mapped('flat', kit.tex.white()); },

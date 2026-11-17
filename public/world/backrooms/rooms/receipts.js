@@ -29,7 +29,7 @@ export function build(c) {
   c.flat.box(-W / 2 + 0.3, 0, zc - 0.55, W / 2 - 0.3, 0.95, zc, [0.36, 0.3, 0.26]); c.flat.box(-W / 2 + 0.25, 0.95, zc - 0.6, W / 2 - 0.25, 1.0, zc + 0.05, [0.85, 0.82, 0.74]); c.solid(-W / 2, zc - 0.6, W / 2, zc + 0.05, { tall: false });
   const tills = [], nt = Math.max(2, Math.floor((W - 1.2) / 1.5));
   for (let i = 0; i < nt; i++) { const x = -W / 2 + 0.9 + i * ((W - 1.8) / (nt - 1)); c.model('receipts:till', tillVox, x, zc - 0.3, { y: 1.0, rot: Math.PI, scale: 1, solid: false, shadow: false }); tills.push(x); }
-  const neon = mallNeon(kit, 'receipts:' + p.seed, ['THE RECEIPT SHOP', 'ALL SALES FINAL', 'BAGS', 'RECEIPTS', 'KEEP YOUR RECEIPT', 'NO RECEIPT NO', 'RECEIPT SHOP', 'BAGS FOR LIFE'], p.seed), lit = c.shining('mall:neon:receipts:' + p.seed, neon.texture, 2.4);
+  const neon = mallNeon(kit, 'receipts:' + p.seed, ['THE RECEIPT SHOP', 'ALL SALES FINAL', 'BAGS', 'RECEIPTS', 'KEEP YOUR RECEIPT', 'NO RECEIPT NO', 'RECEIPT SHOP', 'BAGS FOR LIFE'], p.seed), lit = c.shining('mall:neon:receipts:' + p.seed, neon.texture, 2.4, undefined, { bloom: 2 });
   upright(lit, -W / 2 + 0.6, -D / 2 + 0.04, W / 2 - 0.6, -D / 2 + 0.04, H - 0.85, H - 0.25, neon.uv(0)); upright(lit, -W / 4, -D / 2 + 0.04, W / 4, -D / 2 + 0.04, H - 1.5, H - 1.05, neon.uv(1));
   c.light(0, H - 0.8, zc + 0.5, '#ffd9a0', 0.8, { k: 1.3, far: 6 });
   /* the shelves: two runs down the room, to the roof, bags on every shelf */

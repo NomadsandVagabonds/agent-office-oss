@@ -50,7 +50,7 @@ export function build(c) {
   for (const x of [x0, x1]) { const [a, b] = x === x0 ? [z1, z0] : [z0, z1]; upright(cottage, x, a, x, b, 0, top, [0, 0, K.hutD / 1.2, top / 1.2]); upright(cottage, x + (x === x0 ? 0.06 : -0.06), b, x + (x === x0 ? 0.06 : -0.06), a, 0, top, [0, 0, K.hutD / 1.2, top / 1.2]); c.solid(x - 0.04, z0, x + 0.04, z1, { tall: true }); }
   for (const s of [-1, 1]) sheet(c.flat, [x0 - 0.2, top, z1 + 0.25], [x1 + 0.2, top, z1 + 0.25], [x1 + 0.2, top + 0.7, (z0 + z1) / 2], [x0 - 0.2, top + 0.7, (z0 + z1) / 2], 2, 1, null, [0.95, 0.94, 0.9]), void s;   // the roof, snow on it
   c.flat.box(x0, top, z0, x1, top + 0.02, z1, [0.2, 0.18, 0.16]);
-  const name = mallNeon(kit, 'grotto:' + p.seed, ['GROTTO', 'SANTAS GROTTO', 'MERRY', 'HO HO', 'JULY', 'CLOSED FOR', 'OPEN', 'QUEUE HERE'], p.seed), lit = c.shining('mall:neon:grotto:' + p.seed, name.texture, 2.4);
+  const name = mallNeon(kit, 'grotto:' + p.seed, ['GROTTO', 'SANTAS GROTTO', 'MERRY', 'HO HO', 'JULY', 'CLOSED FOR', 'OPEN', 'QUEUE HERE'], p.seed), lit = c.shining('mall:neon:grotto:' + p.seed, name.texture, 2.4, undefined, { bloom: 2 });
   upright(lit, hx - 1.5, z1 + 0.27, hx + 1.5, z1 + 0.27, top + 0.15, top + 0.65, name.uv(1));
   const bulbs = c.shining('grotto:bulbs', kit.tex.white(), 2.4, [1, 0.8, 0.4]); for (let t = 0; t <= 1.001; t += 0.05) { const x = dx0 - 0.1 + t * (doorW + 0.2), y = 2.1 + Math.sin(Math.PI * t) * 0.3; bulbs.box(x - 0.025, y - 0.025, z1 + 0.04, x + 0.025, y + 0.025, z1 + 0.09, [1, 1, 1]); }
   c.light(hx, top - 0.4, z1 + 1.0, '#ffd27a', 0.9, { k: 1.4, far: 5 });
