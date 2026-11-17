@@ -996,6 +996,66 @@ function sculptOpener(s) {
   s.pop();
 }
 
+function sculptCall(s) {
+  // Turned white-birchwood & tarnished-brass Ranger Trail Call whistle on a braided green lanyard
+  s.push();
+  if (s.grounded && !s.held) {
+    s.translate(0, 2.66, 0);
+    s.rotateX(90 * DEG);
+    s.rotateZ(18 * DEG);
+  } else {
+    s.translate(0, 1.4, 0);
+    s.rotateX(78 * DEG);
+    s.rotateZ(-14 * DEG);
+  }
+
+  // Turned birchwood resonator sleeve (`y = -4.8 .. 1.8`) with finger groove & dark bark lenticels
+  s.lathe([
+    [0, -4.8, '#9c845e', 0.88, true],
+    [2.35, -4.6, '#cdb994', 0.94, true],
+    [2.68, -3.2, '#ded0b2', 1.02],
+    [2.18, -1.5, '#b59d74', 0.90, true],
+    [2.62, 0.4, '#d6c6a4', 1.0],
+    [2.45, 1.75, '#bfa77c', 0.96, true],
+    [0, 1.8, '#8a724d', 0.85, true],
+  ], 18, {
+    colorFn: (th, y, _r, _j, _i, col) => {
+      if (Math.abs(y + 3.0) < 0.28 && Math.sin(th * 2.0 + 0.6) > 0.72) return '#423629';
+      if (Math.abs(y - 0.5) < 0.24 && Math.cos(th * 2.0 - 1.1) > 0.76) return '#423629';
+      return col;
+    },
+  });
+
+  // Tarnished brass whistle mouthpiece & fipple sound-window (`y = 1.75 .. 5.6`)
+  s.lathe([
+    [1.88, 1.75, '#8c6d24', 0.9, true],
+    [2.05, 2.35, '#cfa648', 1.06],
+    [1.72, 4.4, '#b89038', 1.0],
+    [1.48, 5.55, '#dfc06c', 1.08, true],
+    [0.65, 5.6, '#3b2d10', 0.65, true],
+    [0, 5.1, '#261d0a', 0.5, true],
+  ], 18);
+  s.push();
+  s.translate(0, 3.1, -1.65);
+  s.bevelBox(1.4, 0.9, 0.7, 0.08, '#2b210d', { seg: 1, ao: 0.55 });
+  s.pop();
+
+  // Brass lanyard eyelet ring at base (`y = -5.6`) + braided forest-green lanyard loop
+  const ringPts = [];
+  for (let i = 0; i <= 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    ringPts.push([Math.cos(a) * 1.15, -5.55 + Math.sin(a) * 1.15, 0]);
+  }
+  s.tube(ringPts, 0.26, 8, '#c79f42', { ao: 1.04 });
+
+  const cordPts = [
+    [0, -6.5, 0.1], [-1.6, -8.0, 0.4], [-2.1, -10.2, 0.2],
+    [0, -11.4, -0.2], [2.0, -9.9, -0.1], [1.4, -7.8, 0.2], [0, -6.5, 0.1],
+  ];
+  s.tube(cordPts, 0.34, 8, (t) => (Math.floor(t * 14) % 2 ? '#2b593c' : '#3d7350'), { ao: 0.96 });
+  s.pop();
+}
+
 function sculptBalloon(s) {
   const yBase = s.icon ? 14 : 28.6;
   if (!s.icon) s.translate(0, 0.05, 0);
@@ -1146,6 +1206,7 @@ export const balloon = makeEntry(sculptBalloon);
 export const lighter = makeEntry(sculptLighter);
 export const tape = makeEntry(sculptTape);
 export const opener = makeEntry(sculptOpener);
+export const call = makeEntry(sculptCall);
 export const camcorder = makeEntry(sculptCamcorder);
 
 torch.grip = sculptTorchGrip;
@@ -1161,6 +1222,7 @@ export const INVENTORY_MODELS = Object.freeze({
   lighter,
   tape,
   opener,
+  call,
   'pink-slip': pinkSlip,
 });
 

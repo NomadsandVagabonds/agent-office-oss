@@ -107,6 +107,9 @@ const THEME_QUIET = {
   waterpark: { motifs: [['cabanas', 3.4], ['colonnade', 2.4], ['bays', 1.8], ['dogleg', 1.2]], wrong: ['sunk', 'apertures'],
     mix: [[0.36, 0.46], [0.38, 0.48], [0.1, 0.16]], hall: [['nibs', 3], ['none', 2]], shapes: ['pit', 'dais', 'stepceil', 'slopeceil'] },
 
+  // the offsite wilderness reserve: staggered hedgerow baffles, doglegs, trunks punching through ceiling tiles, sunken peat hollows
+  forest: { motifs: [['thicket', 4.2], ['dogleg', 2.6], ['return', 2.2], ['bays', 1.6]], wrong: ['sunk', 'apertures'],
+    mix: [[0.14, 0.22], [0.56, 0.66], [0.14, 0.22]], hall: [['baffle', 4.5], ['nibs', 2]], shapes: ['ell', 'pinch', 'forest', 'pit', 'dais', 'stepceil', 'slopeceil'] },
 };
 /**
  * What gives a kind of floor away: the layouts there are more of on it than on any other kind ('none': a room with
@@ -132,6 +135,7 @@ export function vocabulary(R, themeId) {
     fence: () => ({ band: R.pick([-0.14, 0.1, 0.2]), gate: R.pick([-0.25, 0, 0.25]), gap: R.pick([1.1, 1.3]) }),
     flats: () => ({ off: R.pick([0.1, 0.16]), gap: R.pick([1.1, 1.3]), missing: R.int(0, 2), face: R.pick([-1, 1]) }),
     cabanas: () => ({ every: R.pick([1.8, 2.0]), reach: R.pick([1.25, 1.45]), both: R.chance(0.4) }),
+    thicket: () => ({ every: R.pick([2.1, 2.4]), rail: R.chance(0.55), shift: R.pick([-0.22, 0.22]) }),
   };
   // (what a floor's corridors do is rolled from a source of its own, so that it moves nothing a floor always had)
   const RH = R.fork('hall'), hall = RH.weighted(q.hall, (k) => k[1])[0];
@@ -234,6 +238,31 @@ export function motif(room, m, t) {
       const u = -((n - 1) * every) / 2 + i * every;
       if (s < 0) P(u - 0.06, -B / 2, u + 0.06, -B / 2 + reach, { h: 2.05, prop: 'cabana' });
       else P(u - 0.06, B / 2 - reach, u + 0.06, B / 2, { h: 2.05, prop: 'cabana' });
+    }
+  } else if (m.kind === 'thicket') {
+    // staggered 2.38 m sightline-blocking hedgerow baffles + ceiling-piercing trunks so you weave around blind turns
+    if (A < 4.6 || B < 4.8) return null;
+    const every = m.every ?? 2.3, n = Math.floor((B - 2.4) / every) + 1;
+    if (n < 2) return null;
+    const s = 0.46;
+    const hReach = Math.min(2.1, A * 0.42);
+    for (let i = 0; i < n; i++) {
+      const v = (i - (n - 1) / 2) * every;
+      const side = i % 2 ? -1 : 1;
+      if (A >= 5.2 && hReach >= 1.15) {
+        const hx0 = side < 0 ? -A / 2 + 1.05 : A / 2 - 1.05 - hReach;
+        const hx1 = side < 0 ? -A / 2 + 1.05 + hReach : A / 2 - 1.05;
+        P(hx0, v - 0.21, hx1, v + 0.21, { h: 2.38, prop: 'hedge' });
+        const tx = side < 0 ? hx1 + 0.28 : hx0 - 0.28;
+        if (Math.abs(tx) < A / 2 - 1.05) {
+          P(tx - s / 2, v - s / 2, tx + s / 2, v + s / 2, { prop: 'trunk', bark: i % 3 === 0 ? 'birch' : 'pine' });
+        }
+      } else {
+        const u = A * (side * 0.18 + (m.shift ?? 0) * 0.35);
+        if (Math.abs(u) <= A / 2 - 1.15) {
+          P(u - s / 2, v - s / 2, u + s / 2, v + s / 2, { prop: 'trunk', bark: i % 3 === 0 ? 'birch' : 'pine' });
+        }
+      }
     }
   } else if (m.kind === 'nibs') {
     // a corridor: piers in pairs, one each side, the same distance apart all the way down

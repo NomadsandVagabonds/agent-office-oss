@@ -90,6 +90,18 @@ export const THEMES = {
     dressing: ['floatring', 'floatring', 'noodle', 'noodle', 'lounger', 'wetsign', 'ladder'],
     hum: 60,
     grade: { lift: [0, 0.004, 0.01], gamma: [0.98, 1, 1.02], gain: [0.96, 1, 1.03], sat: 1, haze: [0.72, 0.9, 0.95] } },
+
+  // An offsite wilderness reserve built indoors by something that had only ever had forests, camping and leadership
+  // retreats described to it in HR slides and lumber orders: rolled moss and pine needles stopping short of the office
+  // carpet, gnarled trunks punching through suspended ceiling tiles, stepped Pacific Northwest rock/dirt mounds, and
+  // painted pixel-tree plasterboard partitions. Still being built (forest.js)
+  forest: { id: 'forest', own: true, dealt: false, families: { pine: 12, birch: 6 }, patterns: ['boughs'], tubes: ['#e8f5df', '#f5f2da', '#dcefe2'],
+    light: { dead: [0.22, 0.46], flicker: 0.45, modes: [['dim', 6], ['normal', 3], ['one', 2]] },
+    rooms: [0.04, 0.22, 0.38, 0.72], heights: [[3.5, 32], [4.0, 30], [4.6, 18], [3.1, 16]],
+    dressing: ['stump', 'stump', 'backpack', 'lantern', 'lantern', 'trailpost', 'wetsign', 'ladder', 'boxes'],
+    hum: 50,
+    // (the camcorder's grade for this kind of floor, added in the merge: every theme has one since the graphics pass. A damp, cool green; gentle)
+    grade: { lift: [0, 0.005, 0.002], gamma: [1.01, 1, 1.01], gain: [0.97, 1.01, 0.96], sat: 0.94, haze: [0.74, 0.88, 0.72] } },
 };
 
 export const THEME_IDS = Object.keys(THEMES);
