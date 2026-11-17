@@ -26,11 +26,12 @@ export function nosingVox(n) {
   b(0, 0, 0, N - 1, 0, 0, pale); b(0, 0, 1, N - 1, 0, 1, groove); b(0, 0, 2, N - 1, 0, 3, yellow); b(0, 0, 4, N - 1, 0, 4, groove);
   b(0, 0, 5, N - 1, 0, 6, steel); b(0, 0, 7, N - 1, 0, 7, M(tone(STEEL, -0.2), 0));
   // where people walk (down the middle, and by the rail) the paint has gone, in patches a shoe wide
-  for (let x = 0; x < N; x += 8) {
-    const u = x / N, traffic = Math.max(1 - Math.abs(u - 0.5) * 3.2, 1 - Math.abs(u - 0.14) * 9);
-    if (noise3(x >> 3, 2, 5, 13) < traffic * 0.95) { b(x, 0, 2, Math.min(N - 1, x + 7), 0, 3, bright); if (noise3(x >> 3, 4, 1, 13) < traffic * 0.7) b(x, 0, 0, Math.min(N - 1, x + 7), 0, 0, bright); }
+  // (in lengths of 15 cm, lip and ribs together: every edge between worn and painted is triangles, sixteen treads to a flight)
+  for (let x = 0; x < N; x += 24) {
+    const u = (x + 12) / N, traffic = Math.max(1 - Math.abs(u - 0.5) * 3.2, 1 - Math.abs(u - 0.14) * 9);
+    if (noise3(x >> 3, 2, 5, 13) < traffic * 0.95) { b(x, 0, 2, Math.min(N - 1, x + 23), 0, 3, bright); b(x, 0, 0, Math.min(N - 1, x + 23), 0, 0, bright); }
   }
-  for (let x = 6; x < N - 4; x += 64) b(x, 0, 5, x + 1, 0, 6, screw);
+  b(6, 0, 5, 7, 0, 6, screw);
   b(N - 8, 0, 5, N - 7, 0, 6, screw);
   return v;
 }

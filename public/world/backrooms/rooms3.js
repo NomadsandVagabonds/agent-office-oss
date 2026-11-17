@@ -124,7 +124,7 @@ function lift(c) {
       if (occupied()) { phase = 'opening'; t0 = open * 1.1; }
       else { open = Math.max(0, 1 - t0 / 1.1); if (open <= 0) { phase = 'idle'; visit++; light.material.color.copy(unlit); show(p.floors[(visit * 3) % p.floors.length]); } }
     }
-    doorWall.on = open < 0.9;
+    doorWall.on = open < 0.9 || now.kind !== 'car';         // (bricks, a cutout and a poster are a wall however far the doors are open: only a car is walked into)
     const k = open * open * (3 - 2 * open) * (OW / 2 - 0.03);
     left.position.x = -k; right.position.x = k;
   });
