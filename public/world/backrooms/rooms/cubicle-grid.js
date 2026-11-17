@@ -11,6 +11,8 @@ import * as THREE from 'three';
 import { Batch, lin, ticks, WHITE } from '../kit.js';
 import { headAt } from '../gen.js';
 import { clamp, card, framed, wetSign, doorFrame } from '../bits.js';
+import { leafModel, addLeaf, LEAF_THICK } from '../doorleaf.js';
+import { PIT_DESK, pitDeskVox } from './cubicle-grid/desk.model.js';
 import {
   GRID,
   buildGridPlan,
@@ -34,27 +36,10 @@ function hangBulkheadDoor(c, zLine, doorHalfW) {
   const dh = 2.06;
   const hx = -dw / 2, hz = zLine - 0.04;
 
-  const leafB = new Batch();
-  const steel = lin('#6a332d'), trim = lin('#d8d2c2'), barCol = [0.76, 0.74, 0.68], wireCol = lin('#25282c');
-  const wx0 = hx + dw * 0.28, wx1 = hx + dw * 0.72, wy0 = 1.04, wy1 = 1.58;
-  // Door leaf built around a real barred vision cutout so you can see the grinning clerks pressed outside once shut!
-  leafB.box(hx, 0.02, hz - 0.024, hx + dw, wy0, hz + 0.024, steel);
-  leafB.box(hx, wy1, hz - 0.024, hx + dw, dh, hz + 0.024, steel);
-  leafB.box(hx, wy0, hz - 0.024, wx0, wy1, hz + 0.024, steel);
-  leafB.box(wx1, wy0, hz - 0.024, hx + dw, wy1, hz + 0.024, steel);
-  // Vision window steel bezel + security wire bars
-  leafB.box(wx0 - 0.025, wy0 - 0.025, hz - 0.032, wx1 + 0.025, wy0, hz + 0.032, trim);
-  leafB.box(wx0 - 0.025, wy1, hz - 0.032, wx1 + 0.025, wy1 + 0.025, hz + 0.032, trim);
-  leafB.box(wx0 - 0.025, wy0, hz - 0.032, wx0, wy1, hz + 0.032, trim);
-  leafB.box(wx1, wy0, hz - 0.032, wx1 + 0.025, wy1, hz + 0.032, trim);
-  for (const f of [0.25, 0.50, 0.75]) {
-    const bx = wx0 + (wx1 - wx0) * f;
-    leafB.box(bx - 0.006, wy0, hz - 0.008, bx + 0.006, wy1, hz + 0.008, wireCol);
-    const by = wy0 + (wy1 - wy0) * f;
-    leafB.box(wx0, by - 0.006, hz - 0.008, wx1, by + 0.006, hz + 0.008, wireCol);
-  }
-  // Push-bar on both faces
-  leafB.box(hx + 0.14, 0.86, hz - 0.052, hx + dw - 0.14, 0.92, hz + 0.052, barCol);
+  // The leaf is the floor's sculpted fire door (doorleaf.model.js) in this room's red, with a barred hatch cut right
+  // through it so you can see the grinning clerks pressed outside once shut, and a bar to push on both faces.
+  const leafB = new Batch(true);
+  addLeaf(leafB, leafModel(c.kit, dw, dh - 0.02, 0, { colour: '#6a332d', hatch: [dw * 0.28, dw * 0.72, 1.02, 1.56], bar: true }), [hx, hz], 0.02, [1, 0], [0, 1], LEAF_THICK / 2);
 
   const door = c.dynamic(leafB, { pivot: [hx, 0, hz] });
   const bar = c.solid(-doorHalfW, zLine - 0.13, doorHalfW, zLine + 0.13, { tall: true, on: false });
@@ -93,25 +78,9 @@ function hangOuterDoor(c, dr) {
   const p = c.wallAt(dr.side, dr.c, 0.03), U = p.U, n = p.n;
   const hx = p.x - U[0] * (dw / 2), hz = p.z - U[2] * (dw / 2);
 
-  const leafB = new Batch();
-  const steel = lin('#6a332d'), trim = lin('#d8d2c2'), barCol = [0.76, 0.74, 0.68];
-  const x0 = Math.min(hx, hx + U[0] * dw) - Math.abs(n[0]) * 0.024;
-  const x1 = Math.max(hx, hx + U[0] * dw) + Math.abs(n[0]) * 0.024;
-  const z0 = Math.min(hz, hz + U[2] * dw) - Math.abs(n[2]) * 0.024;
-  const z1 = Math.max(hz, hz + U[2] * dw) + Math.abs(n[2]) * 0.024;
-  leafB.box(x0, 0.02, z0, x1, dh, z1, steel);
-  leafB.box(
-    Math.min(hx + U[0] * 0.14, hx + U[0] * (dw - 0.14)) - Math.abs(n[0]) * 0.05, 0.94,
-    Math.min(hz + U[2] * 0.14, hz + U[2] * (dw - 0.14)) - Math.abs(n[2]) * 0.05,
-    Math.max(hx + U[0] * 0.14, hx + U[0] * (dw - 0.14)) + Math.abs(n[0]) * 0.05, 1.00,
-    Math.max(hz + U[2] * 0.14, hz + U[2] * (dw - 0.14)) + Math.abs(n[2]) * 0.05, barCol,
-  );
-  leafB.box(
-    Math.min(hx + U[0] * (dw * 0.35), hx + U[0] * (dw * 0.65)) - Math.abs(n[0]) * 0.028, 1.35,
-    Math.min(hz + U[2] * (dw * 0.35), hz + U[2] * (dw * 0.65)) - Math.abs(n[2]) * 0.028,
-    Math.max(hx + U[0] * (dw * 0.35), hx + U[0] * (dw * 0.65)) + Math.abs(n[0]) * 0.028, 1.62,
-    Math.max(hz + U[2] * (dw * 0.35), hz + U[2] * (dw * 0.65)) + Math.abs(n[2]) * 0.028, trim,
-  );
+  // The same sculpted leaf, red, with the bar across it (and the slit of wired glass any fire door has).
+  const leafB = new Batch(true);
+  addLeaf(leafB, leafModel(c.kit, dw, dh - 0.02, 0, { colour: '#6a332d', bar: true }), [hx, hz], 0.02, [U[0], U[2]], [n[0], n[2]], LEAF_THICK / 2);
   const door = c.dynamic(leafB, { pivot: [hx, 0, hz] });
 
   const cx = p.x, cz = p.z;
@@ -426,9 +395,8 @@ export function build(c) {
     const deskAgainstNorth = (cell.id % 2 === 0);
     const dz = deskAgainstNorth ? iz0 + 0.38 : iz1 - 0.38;
     const dw = Math.min(1.28, (ix1 - ix0) * 0.68);
-    c.flat.box(mx - dw / 2, pitY + 0.70, dz - 0.32, mx + dw / 2, pitY + 0.75, dz + 0.32, deskWood);
-    c.flat.box(mx - dw / 2 + 0.04, pitY, dz - 0.28, mx - dw / 2 + 0.10, pitY + 0.70, dz + 0.28, darkSteel);
-    c.flat.box(mx + dw / 2 - 0.10, pitY, dz - 0.28, mx + dw / 2 - 0.04, pitY + 0.70, dz + 0.28, darkSteel);
+    // (the desk is sculpted: cubicle-grid/desk.model.js. Nobody can stand down there, so it is not solid, as the boxes were not)
+    { const variant = cell.id % PIT_DESK.variants; c.place(c.kit.model('cg:desk:' + variant, () => pitDeskVox(variant), { ao: false }), mx, dz, { y: pitY, rot: deskAgainstNorth ? 0 : Math.PI, scale: [PIT_DESK.scale * dw / PIT_DESK.w, PIT_DESK.scale, PIT_DESK.scale], solid: false, shadow: false }); }
 
     // Bulky beige CRT + glowing screen facing into the cubicle (and angled slightly up)
     const crtX = mx + (cell.col % 2 === 0 ? -0.18 : 0.18);

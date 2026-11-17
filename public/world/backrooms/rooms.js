@@ -8,7 +8,7 @@ import { Vox, M } from '../vox/vox.js';
 import { Batch, lin, atlas, drawText, WHITE } from './kit.js';
 import { makeCutout, drawPortrait } from './cutout.js';
 import { TILE, RISE, RUN, wallPoint, pinchHalf } from './gen.js';
-import { P, clamp, turnTo, framed, card, scatter, doorLeaf, doorFrame, wetSign, standee, mugVox, floorPlan } from './bits.js';
+import { P, clamp, turnTo, framed, card, scatter, doorLeaf, doorFrame, woodLeaf, wetSign, standee, mugVox, floorPlan } from './bits.js';
 import { marks, trace } from './traces.js';
 import { thinWall, refuses } from './thin.js';
 import { MORE } from './rooms2.js';
@@ -21,12 +21,12 @@ import { concourse } from './mall.js';
 
 /** A door where a door has no business being: `w` wide on a wall, its foot at y0, its head at y1. */
 function wallDoor(c, side, at, w, y0, y1, rgb) {
-  const cream = lin('#e2d8bd'), dark = rgb.map((v) => v * 0.72), h = y1 - y0;
+  const cream = lin('#e2d8bd'), h = y1 - y0;
   c.wbox(side, at - w / 2 - 0.035, 0.07, y0 - 0.02, y1 + 0.07, 0, 0.05, cream); c.wbox(side, at + w / 2 + 0.035, 0.07, y0 - 0.02, y1 + 0.07, 0, 0.05, cream);
   c.wbox(side, at, w, y1, y1 + 0.07, 0, 0.05, cream); c.wbox(side, at, w + 0.14, y0 - 0.06, y0, 0, 0.07, cream);
-  c.wbox(side, at, w - 0.02, y0, y1 - 0.005, 0.012, 0.052, rgb);
-  if (h > 0.9) for (const px of [-w * 0.21, w * 0.21]) for (const [a, b] of [[0.09, 0.42], [0.48, 0.9]]) c.wbox(side, at + px, w * 0.34, y0 + h * a, y0 + h * b, 0.052, 0.058, dark);
-  c.wbox(side, at + w * 0.38, 0.14, y0 + Math.min(0.95, h * 0.47) - 0.012, y0 + Math.min(0.95, h * 0.47) + 0.012, 0.052, 0.1, [0.74, 0.7, 0.56]);
+  // the leaf is the sculpted door (wooddoor.model.js), however much of one the wall had room for
+  const p = c.wallAt(side, at, 0.012);
+  woodLeaf(c, c.vox, [p.x, y0, p.z], [p.U[0], 0, p.U[2]], [0, 1, 0], [p.n[0], 0, p.n[2]], w - 0.02, h - 0.005, 0.04, rgb);
 }
 
 /** Somewhere a door could lie flat (0.86 × 1.9 m, long side deep): open floor if there is any, else any level patch beside the way through. */
@@ -51,10 +51,8 @@ function floorDoor(c, item) {
   const wood = lin('#7a5230'), cream = lin('#e2d8bd'), w = 0.86, l = 1.9, x0 = s.x - w / 2, z0 = s.z - l / 2;
   for (const [a, b, e, f] of [[x0 - 0.07, z0 - 0.07, x0 + w + 0.07, z0], [x0 - 0.07, z0 + l, x0 + w + 0.07, z0 + l + 0.07], [x0 - 0.07, z0, x0, z0 + l], [x0 + w, z0, x0 + w + 0.07, z0 + l]]) c.flat.box(a, 0, b, e, 0.03, f, cream, { skip: '-y' });
   c.flat.quad([x0, 0.004, z0 + l], [x0 + w, 0.004, z0 + l], [x0 + w, 0.004, z0], [x0, 0.004, z0], [0.003, 0.003, 0.003]);
-  const leaf = new Batch();
-  leaf.box(x0 + 0.01, 0.008, z0 + 0.01, x0 + w - 0.01, 0.036, z0 + l - 0.01, wood);
-  for (const px of [0.09, 0.5]) for (const pz of [0.1, 0.52]) leaf.box(x0 + w * px, 0.036, z0 + l * pz, x0 + w * (px + 0.38), 0.042, z0 + l * (pz + 0.36), wood.map((v) => v * 0.72));
-  leaf.box(x0 + w - 0.2, 0.036, z0 + l * 0.48, x0 + w - 0.06, 0.07, z0 + l * 0.5, [0.74, 0.7, 0.56]);
+  const leaf = new Batch(true);                 // the sculpted door, lying on its back
+  woodLeaf(c, leaf, [s.x, 0.008, z0 + 0.01], [1, 0, 0], [0, 0, 1], [0, 1, 0], w - 0.02, l - 0.02, 0.028, wood);
   const door = c.dynamic(leaf, { pivot: [x0, 0.02, s.z] });
   let open = 0, fell = false;
   const here = c.toWorld(s.x, s.z);
@@ -75,10 +73,8 @@ function ceilDoor(c) {
   const wood = lin('#7a5230'), cream = lin('#e2d8bd'), w = 0.86, l = 1.9, x0 = s.x - w / 2, z0 = s.z - l / 2, y = c.ceilAt(s.x, s.z);
   for (const [a, b, e, f] of [[x0 - 0.07, z0 - 0.07, x0 + w + 0.07, z0], [x0 - 0.07, z0 + l, x0 + w + 0.07, z0 + l + 0.07], [x0 - 0.07, z0, x0, z0 + l], [x0 + w, z0, x0 + w + 0.07, z0 + l]]) c.flat.box(a, y - 0.04, b, e, y, f, cream);
   c.flat.quad([x0, y - 0.003, z0], [x0 + w, y - 0.003, z0], [x0 + w, y - 0.003, z0 + l], [x0, y - 0.003, z0 + l], [0.003, 0.003, 0.003]);
-  const leaf = new Batch();
-  leaf.box(x0 + 0.01, y - 0.04, z0 + 0.01, x0 + w - 0.01, y - 0.012, z0 + l - 0.01, wood);
-  for (const px of [0.09, 0.5]) for (const pz of [0.1, 0.52]) leaf.box(x0 + w * px, y - 0.046, z0 + l * pz, x0 + w * (px + 0.38), y - 0.04, z0 + l * (pz + 0.36), wood.map((v) => v * 0.72));
-  leaf.box(x0 + w - 0.2, y - 0.075, z0 + l * 0.48, x0 + w - 0.06, y - 0.04, z0 + l * 0.5, [0.74, 0.7, 0.56]);
+  const leaf = new Batch(true);                 // the sculpted door, face down
+  woodLeaf(c, leaf, [s.x, y - 0.012, z0 + 0.01], [1, 0, 0], [0, 0, 1], [0, -1, 0], w - 0.02, l - 0.02, 0.028, wood);
   const door = c.dynamic(leaf, { pivot: [x0, y - 0.02, s.z] });
   let swing = 0;
   const here = c.toWorld(s.x, s.z);
@@ -530,7 +526,7 @@ function manyDoors(c) {
       const pt = c.wallAt(side, at, 0.3);
       c.hang(plateB, side, at, DH + 0.24, 0.6, 0.255, plates.uv(isReal ? p.codes.length : n % p.codes.length), WHITE, 0.012);
       if (!isReal) {
-        const fake = new Batch(), right = n % 2 === 1;
+        const fake = new Batch(true), right = n % 2 === 1;
         doorLeaf(c, side, at, DW - 0.02, DH - 0.01, tone.map((v) => v * (0.9 + (n % 3) * 0.06)), { batch: fake, hinge: right ? 'right' : 'left' });
         const pin = c.wallAt(side, at + (right ? 1 : -1) * (DW / 2 - 0.01), 0.03), node = c.dynamic(fake, { pivot: [pin.x, 0, pin.z] });
         let rattle = 0;
@@ -539,7 +535,7 @@ function manyDoors(c) {
         continue;
       }
       // the real one: a leaf that swings, light under it, and a doorway behind
-      const leaf = new Batch();
+      const leaf = new Batch(true);
       doorLeaf(c, side, at, DW - 0.02, DH - 0.01, tone, { batch: leaf, hinge: 'left' });
       const hinge = c.wallAt(side, at - DW / 2 + 0.01, 0.03);
       const door = c.dynamic(leaf, { pivot: [hinge.x, 0, hinge.z] });
