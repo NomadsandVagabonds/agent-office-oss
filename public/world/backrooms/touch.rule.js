@@ -20,6 +20,7 @@ export const THUMBS = Object.freeze({
   look: 2.6,           // a finger drags the view this much further than a mouse would
   upright: 1.05,       // taller than wide by this much is a phone held upright
   pockets: 0.74,       // of the picture's height: below this is where the pockets and the heart are drawn
+  lift: 90,            // px: upright, the stick's ring ends at least this far above the bottom of the screen
 });
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -85,7 +86,9 @@ export function placeOf(view) {
 
   // the stick
   let sx, sy;
-  if (tall) { sx = left + r + w * 0.05; sy = floor - r - h * 0.12; }                        // (upright, thumbs sit a little higher than the bottom of the phone)
+  // (upright, thumbs sit a little higher than the bottom of the phone — and on the smallest phones never so low that the
+  // ring lies over the camcorder's battery marks, which sit just above the bottom edge there: THUMBS.lift)
+  if (tall) { sx = left + r + w * 0.05; sy = floor - r - Math.max(h * 0.12, THUMBS.lift); }
   else if (leftBar >= 2 * r + 2 * gap) { sx = safe.left + leftBar / 2; sy = floor - r - h * 0.1; }
   else if (leftBar >= r) { sx = safe.left + r + 4; sy = floor - r - h * 0.1; }
   else { sx = left + r; sy = shelf - r; }

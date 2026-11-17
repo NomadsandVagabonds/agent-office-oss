@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
 import { MEETING, filing, meets, ahead, lengths, takes, floored } from './standing-meeting.rule.js';
+import { fitsDoor, canLeave } from './paths.js';
 import { elbow } from './head-count.rule.js';
 import { S, SF, THIGH, SHIN, backVox, bellyVox, fingersVox, thighVox, shinVox, tieVox } from './standing-meeting.model.js';
 
@@ -37,7 +38,7 @@ export function create(c) {
   };
 
   function startRoom() {
-    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 1.4 && r.kind !== 'start' && r.kind !== 'exit' && (dist.get(r.id) ?? 0) >= 2;
+    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 1.4 && r.kind !== 'start' && r.kind !== 'exit' && (dist.get(r.id) ?? 0) >= 2 && canLeave(r, walker.tall);
     const long = level.rooms.filter((r) => fits(r) && r.kind === 'plain' && Math.max(r.W, r.D) >= 6 && (dist.get(r.id) ?? 0) >= 3), plain = level.rooms.filter((r) => fits(r) && r.kind === 'plain'), far = level.rooms.filter(fits);
     const pool = long.length ? long : plain.length ? plain : far.length ? far : level.rooms.filter((r) => r.kind !== 'start');
     const pick = pool.length ? c.R.pick(pool) : level.rooms[0];
@@ -145,7 +146,7 @@ export function create(c) {
 
   /** Somewhere to go on to, in file: the middle of a room next to the one it is in. */
   function wander() {
-    const here = level.rooms[c.room(walker.x, walker.z) ?? -1], ways = (here?.doors || []).map((d) => level.rooms[d.to]).filter((r) => r && !r.crawl && r.H >= 1.4 && r.kind !== 'start');
+    const here = level.rooms[c.room(walker.x, walker.z) ?? -1], ways = (here?.doors || []).filter((d) => fitsDoor(d, walker.tall)).map((d) => level.rooms[d.to]).filter((r) => r && !r.crawl && r.H >= 1.4 && r.kind !== 'start');
     const to = ways.length ? ways[Math.floor(Math.random() * ways.length)] : here;
     if (!to) return null;
     const sp = c.walk.spotIn(walker, to.id); return { x: sp.x + (Math.random() - 0.5) * 2, z: sp.z + (Math.random() - 0.5) * 2 };

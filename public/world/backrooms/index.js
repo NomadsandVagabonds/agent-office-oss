@@ -36,6 +36,9 @@ import { buildWorld, loadCatalogue } from './world.js';
 import { BUILDERS } from './rooms.js';
 import { createPlayer } from './player.js';
 import { createVhs } from './vhs.js';
+import { profile as graphicsProfile, autoStart, autoStep, gradeOf, showDetail } from './graphics.js';
+import { createBeamShadows } from './beam-shadows.js';
+import { themeOf } from './themes.js';
 import { createHud } from './hud.js';
 import { createSound } from './sound.js';
 import { createInput } from './input.js';
@@ -139,11 +142,14 @@ async function visit(office, opt) {
   // everybody in the visit's cast has a face: the real one, or one rolled from the name
   const byName = new Map(who.agents.map((a) => [a.name, a.look]));
   const cast = first.cast.map((name) => ({ name, look: byName.get(name) || resolveLook('backrooms:' + name) }));
-  let settings = cleanBackroomsSettings({ ...saved, difficulty: difficulty.current, vhs: opt.vhs ?? saved.vhs, mute: opt.mute ?? saved.mute });
+  let settings = cleanBackroomsSettings({ ...saved, difficulty: difficulty.current, vhs: opt.vhs ?? saved.vhs, mute: opt.mute ?? saved.mute, graphics: opt.graphics ?? saved.graphics });
   const perk = opt.inventory === false ? resolvePerk('none') : resolvePerk(opt.perk);
   const fov = perk.fov || FOV;
   const camera = new THREE.PerspectiveCamera(fov, 4 / 3, 0.06, 170);
-  const vhs = createVhs(renderer, camera, { bloom: stage.quality?.fx !== false, level: settings.vhs });
+  // the Graphics setting (graphics.js): the tier the picture and the bake are at; 'auto' steps between two of them
+  let gfxAuto = settings.graphics === 'auto' ? autoStart() : null;
+  const gfx = () => graphicsProfile(gfxAuto ? gfxAuto.tier : settings.graphics);
+  const vhs = createVhs(renderer, camera, { bloom: stage.quality?.fx !== false, level: settings.vhs, profile: gfx() });
   const sound = createSound(first, settings);
   const hud = createHud(first);
   hud.setClean(vhs.level === 0);
@@ -172,6 +178,7 @@ async function visit(office, opt) {
   // build does not; neither do arrival static or the final leaving picture.
   const clocksRun = () => !paused && (state === 'play' || state === 'drop');
   const u = vhs.uniforms, blank = new THREE.Scene();
+  const beamShadows = createBeamShadows(renderer);           // (beam shadows: nothing is allocated until the switch is on)
   // everything that is built hangs in this: the part you are in at the origin, the part below it under its way down
   const root = new THREE.Scene();
   root.background = new THREE.Color(0x000000);
@@ -183,6 +190,10 @@ async function visit(office, opt) {
     // (on a phone held upright the picture goes to the top of the screen and the thumbs have what is under it: hud.pictureTop)
     const p = vhs.layout(stage.size.w, stage.size.h, hud.pictureTop?.(stage.size)), key = `${p.x},${p.y},${p.w},${p.h},${stage.size.w},${stage.size.h},${hud.thumbs ? 1 : 0}`;
     if (key !== pictureKey) { pictureKey = key; hud.layout(p, stage.size); }
+    // --- beam shadows --- the flashlight's depth picture, before the picture it shadows (graphics.js beamShadows: 0 is off, and then nothing is made or drawn)
+    const shadowSize = cur && !paused ? gfx().beamShadows : -1;           // (-1: paused, the picture as it was)
+    if (shadowSize > 0 || (!shadowSize && beamShadows.size)) beamShadows.draw(shadowSize, camera, [cur, ahead?.f, above?.f].filter(Boolean).map((f) => f.world.scene), cur.kit.shared);
+    // --- end beam shadows ---
     vhs.render(paused ? 0 : dt);
   };
   stage.setView({ scene: blank, camera, render });
@@ -236,7 +247,7 @@ async function visit(office, opt) {
       }
     } });
   input.state.sensitivity = settings.sensitivity; input.state.invertY = settings.invertY;
-  menu = createMenu({ host: hud.el, settings: { ...settings, scoreEligible: difficulty.report().ranked }, furniture: opt.barricades !== false, onRequestOpen: () => setPaused(true), onResume: resume,
+  menu = createMenu({ host: hud.el, settings: { ...settings, scoreEligible: difficulty.report().ranked }, furniture: opt.barricades !== false, graphics: !!opt.debug, onRequestOpen: () => setPaused(true), onResume: resume,
     onArchive: opt.onArchive, onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting });
   // Six pockets, four hearts, and a camcorder battery that runs down (inventory.js, survival.js): the visit's, not any
   // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.
@@ -273,6 +284,7 @@ async function visit(office, opt) {
       if (cur?.player) cur.player.me.shake = lv === 2 ? 1 : lv === 1 ? 0.5 : 0.25;
       pictureKey = '';
     }
+    if (key === 'graphics') { gfxAuto = settings.graphics === 'auto' ? autoStart() : null; vhs.setProfile(gfx()); pictureKey = ''; showDetail(root, gfx()); }
     prefs.save(settings); menu?.update({ ...settings, scoreEligible: difficulty.report().ranked });
   }
   function setPicture(lv) { changeSetting('vhs', lv); }
@@ -300,7 +312,8 @@ async function visit(office, opt) {
   /* ---- a floor: everything that is built for it and thrown away with it ---------------- */
   const halfFov = () => Math.atan(Math.tan((fov * Math.PI) / 360) * camera.aspect);
   async function build(level, carry, pace) {
-    const kit = createKit();
+    // light worked out once per room, beyond the lamps (kit.js gfxOf): what the Graphics setting's level says, unless the dev page asks for its own
+    const kit = createKit({ gfx: opt.dev?.gfx || opt.gfx || { contact: gfx().contact, bounce: gfx().bounce } });
     const f = { level, kit, world: null, player: null, env: null };
     const builders = await buildersFor(level);
     if (opt.barricades !== false && opt.dev?.barricadeStudy && level === first) {
@@ -430,6 +443,7 @@ async function visit(office, opt) {
     purse?.hang(env);
     let breath = performance.now();                       // build as fast as the machine allows, but keep the static moving
     f.world = env.world = await buildWorld(kit, level, env, pace || (async () => { if (performance.now() - breath > 40) { await frame(); breath = performance.now(); } }));
+    showDetail(f.world.scene, gfx());                      // (what its rooms marked as detail: hidden at a low Graphics setting)
     if (env.barricadesEnabled) {
       env.barricades = createFurnitureMotion(f.world);
       env.grip = createFurnitureGrip(f.world, env.barricades, { sound });
@@ -499,6 +513,7 @@ async function visit(office, opt) {
     f.world.enter(f.world.roomAt(me.x, me.z) || f.world.rooms[f.level.start.room]);
     f.env.denizens?.sync();                              // (their picture is ready even while the fall holds their behaviour)
     vhs.setScene(root);
+    vhs.setGrade(gradeOf(themeOf(f.level.theme)));          // (the camcorder's grade is the kind of floor's: graphics.js)
     if (f.level !== first) hud.setStamp(f.level.stamp);
     sound.setDepth?.(f.level.depth);                          // (further down the music is another piece, and quieter: sound.js)
     sound.setMains(f.level.hum);
@@ -632,6 +647,8 @@ async function visit(office, opt) {
     const lvl = variedLight ? world.illuminationAt(me.x, me.z) : here ? here.level * here.u.dim.value : 0.3;
     light += (lvl - light) * (1 - Math.exp(-2.2 * dt));
     u.uGain.value = clamp(Math.pow(0.3 / Math.max(light, 0.04), 0.55), 0.9, variedLight ? LIGHTING.gainMax : 2.3);
+    vhs.setAmbient(light);
+    if (gfxAuto && (gfxAuto = autoStep(gfxAuto, time, stage.frameMs, !!ahead && !ahead.f)).changed) { vhs.setProfile(gfx()); pictureKey = ''; showDetail(root, gfx()); }
     // The camera only reveals nearby surfaces. Its broad lamp is independent
     // of the narrow inventory flashlight and never supplies creature power.
     const wantTorch = inventory ? inventory.torchPower() : env.hand?.hasFlashlight?.() ? 1 : 0;
@@ -727,6 +744,7 @@ async function visit(office, opt) {
     if (ahead?.f) letGo(ahead.f);
     ahead = null;
     vhs.dispose();
+    beamShadows.dispose();                                  // (beam shadows)
     renderer.setRenderTarget(null);
     if (opt.debug) delete window.__backrooms;
     // Everything of the visit's is gone from the page. What it came to is written up on a card (scorecard.js), however

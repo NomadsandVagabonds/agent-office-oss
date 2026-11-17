@@ -2,33 +2,10 @@
 // its line in the deck is in deck2.js, and this file is the whole of it).
 // A dim reprographics hall whose copiers scan the empty air as you walk past. One of them has printed the way on.
 import * as THREE from 'three';
-import { Vox, M } from '../../vox/vox.js';
+import { COPIER, copierVox, lidVox } from './copiers/model.js';
 import { Batch, lin, drawText, smooth, WHITE } from '../kit.js';
 import { roomDistances } from '../gen.js';
 import { P, clamp, card, framed, scatter } from '../bits.js';
-
-const copierVox = () => {
-  const v = new Vox();
-  const body = M('#d6cfbc', 0), shade = M('#b8b09c', 0), dark = M('#282b30', 0), tray = M('#8f8979', 0);
-  const glass = M('#173b2c', 0), led = M('#49e882', 0, { glow: true });
-  // main pedestal cabinet (local voxel x across depth, z along aisle: 28 × 35 × 36 -> 0.70m × 0.88m × 0.90m)
-  v.box(-14, 0, -18, 14, 34, 18, body);
-  v.box(-14, 0, -18, 14, 3, 18, dark);
-  // three paper cassette drawers on the aisle-facing (+x) front
-  for (const [y0, y1] of [[5, 12], [13, 20], [21, 28]]) {
-    v.box(13, y0, -15, 15, y1, 15, shade);
-    v.box(14, y0 + 2, -4, 15, y1 - 2, 4, dark);
-  }
-  // recessed dark scan platen on top + angled control strip with ready LED
-  v.box(-12, 34, -16, 10, 35, 16, dark);
-  v.box(-10, 34, -14, 8, 35, 14, glass);
-  v.box(10, 33, -16, 15, 36, 16, shade);
-  v.box(12, 35, 8, 14, 37, 12, led);
-  // side output catch tray extending into the aisle
-  v.box(14, 24, -12, 25, 26, 12, tray);
-  v.box(24, 25, -12, 25, 27, 12, tray);
-  return v;
-};
 
 /** Photocopiers with their lids propped open; pass one and its green lamp scans the dark and spits out a page. */
 export function build(c) {
@@ -98,22 +75,14 @@ export function build(c) {
       const cx = sx * (W / 2 - 0.68), faceDir = -sx;                 // left row faces +x, right row faces -x
       const rot = sx < 0 ? 0 : Math.PI;
       c.reserve(cx, cz, 0.85);
-      c.model('copier', copierVox, cx, cz, { rot, tall: false });
+      const variant = idx % COPIER.variants;                 // (the machine and its lid are sculpted: copiers/model.js)
+      // (meshed without per-corner shading, so its flat faces merge; and solid where the old machine was solid, whatever sticks out of this one)
+      c.place(kit.model('copier:' + variant, () => copierVox(variant), { ao: false }), cx, cz, { rot, scale: COPIER.scale, solid: false });
+      c.solid(Math.min(cx - faceDir * 0.35, cx + faceDir * 0.625) + 0.03, cz - 0.42, Math.max(cx - faceDir * 0.35, cx + faceDir * 0.625) - 0.03, cz + 0.42, { tall: false, top: 0.925 });
 
       // hinged document-feeder lid propped open toward the ceiling so the green scan bar glares into the room
       const lidAngle = p.lids[idx % p.lids.length], hingeX = cx - faceDir * 0.28, lidW = 0.52, lidZ = 0.72;
-      const dx = faceDir * Math.cos(lidAngle) * lidW, dy = Math.sin(lidAngle) * lidW;
-      const lidTop = [hingeX + dx, 0.88 + dy, cz];
-      // underside (white feeder mat) + top shell
-      const h0 = [hingeX, 0.88, cz - lidZ / 2], h1 = [hingeX, 0.88, cz + lidZ / 2];
-      const t0 = [lidTop[0], lidTop[1], cz - lidZ / 2], t1 = [lidTop[0], lidTop[1], cz + lidZ / 2];
-      if (faceDir > 0) {
-        c.flat.quad(h0, t0, t1, h1, [0.92, 0.92, 0.9]);
-        c.flat.quad(h1, t1, t0, h0, beige);
-      } else {
-        c.flat.quad(h1, t1, t0, h0, [0.92, 0.92, 0.9]);
-        c.flat.quad(h0, t0, t1, h1, beige);
-      }
+      c.place(kit.model('copier-lid', lidVox, { ao: false }), hingeX, cz, { rot, y: 0.8875, tilt: [0, lidAngle], scale: COPIER.scale, solid: false, shadow: false });
       // one green lamp to a pair, on alternate sides, and never past what a room may light (16)
       if ((row + s) % 2 === 0 && c.rt.lights.length < 16) c.light(cx + faceDir * 0.1, 0.96, cz, '#54ff98', 0.22, { k: 0.85, far: 3.4 });
 

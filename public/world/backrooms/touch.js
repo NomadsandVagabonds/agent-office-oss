@@ -34,7 +34,8 @@ const CSS = `
 .br-thumbs .br-tb.is-down { opacity: .96; background: rgba(244, 241, 230, .28); transform: translate(-50%, -50%) scale(.93); }
 .br-thumbs .br-tb.is-on { opacity: .92; background: #f4f1e6; color: #15140f; border-color: #f4f1e6; }
 .br-thumbs .br-tb[hidden] { display: none; }
-.br-thumbs .br-tb-use { opacity: .92; animation: br-thumb-in .16s ease-out; }
+.br-thumbs .br-tb-use { opacity: .4; }
+.br-thumbs .br-tb-use.is-ready { opacity: .92; animation: br-thumb-in .16s ease-out; }
 .br-thumbs .br-tb-light .br-rays { visibility: hidden; }
 .br-thumbs .br-tb-light.is-on .br-rays { visibility: visible; }
 @keyframes br-thumb-in { from { opacity: 0; transform: translate(-50%, -50%) scale(.7); } }
@@ -84,7 +85,7 @@ export function createThumbs(host) {
   const stick = h('div.br-stick', h('i.br-stick-run'), h('i.br-stick-ring'), h('i.br-stick-nub'));
   const buttons = {};
   for (const name of ['light', 'jump', 'use', 'crouch']) buttons[name] = h(`div.br-tb.br-tb-${name}`, { role: 'button', 'aria-label': LABELS[name], 'data-act': name }, icon(name));
-  buttons.use.hidden = true; buttons.light.hidden = true;
+  buttons.light.hidden = true;                           // (the hand is never hidden: see set())
   const probe = h('div.br-thumbs-edges', { 'aria-hidden': 'true' });
   const el = h('div.br-thumbs', stick, Object.values(buttons), probe);
   host.append(el);
@@ -132,9 +133,11 @@ export function createThumbs(host) {
       stick.style.left = px(s.x); stick.style.top = px(s.y);
       stick.style.setProperty('--nx', px(s.nx || 0)); stick.style.setProperty('--ny', px(s.ny || 0));
     },
-    /** usable: there is something in front of you · light: 'none' | 'off' | 'on' · crouched: you are ducking */
+    /** usable: there is something in front of you (the hand shows plainly; otherwise faintly) · light: 'none' | 'off' | 'on' · crouched: you are ducking */
     set(patch) {
-      if ('usable' in patch && buttons.use.hidden === !!patch.usable) { buttons.use.hidden = !patch.usable; if (!patch.usable) buttons.use.classList.remove('is-down'); }
+      // (the hand is always there: with something in front of you it uses it, and with nothing it is the two hands a mouse's
+      // click is — a shove, index.js useIt. `usable` only says how plainly it shows)
+      if ('usable' in patch) buttons.use.classList.toggle('is-ready', !!patch.usable);
       if ('light' in patch) { const has = patch.light === 'off' || patch.light === 'on'; if (buttons.light.hidden === has) buttons.light.hidden = !has; buttons.light.classList.toggle('is-on', patch.light === 'on'); }
       if ('crouched' in patch) buttons.crouch.classList.toggle('is-on', !!patch.crouched);
     },

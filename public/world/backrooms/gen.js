@@ -94,6 +94,9 @@ const FAMILIES = [
   { id: 'sky', weight: 0, wall: [203, 0.46, 0.72], carpet: [106, 0.34, 0.37], trim: [44, 0.12, 0.88], floor: 'turf' },
   // …and one for the shopping centre (themes.js `mall`): oatmeal partition fabric, terrazzo with a brass strip, brown trim
   { id: 'oatmeal', weight: 0, wall: [36, 0.2, 0.66], carpet: [28, 0.12, 0.62], trim: [22, 0.32, 0.28], floor: 'terrazzo' },
+  // Ceramic pool tile families, used only by the waterpark.
+  { id: 'pool', weight: 0, wall: [188, 0.28, 0.84], carpet: [182, 0.36, 0.68], trim: [196, 0.42, 0.34], floor: 'pooltile' },
+  { id: 'seafoam', weight: 0, wall: [172, 0.30, 0.80], carpet: [176, 0.34, 0.64], trim: [188, 0.40, 0.30], floor: 'pooltile' },
 ];
 const PATTERNS = ['dots', 'dots', 'dots', 'diamonds', 'stripes', 'trellis', 'sprigs', 'chevrons'];
 const TUBES = ['#fff6dc', '#fff6dc', '#fffbe9', '#f3ffe6', '#ffeec4', '#eef6ff'];
@@ -729,7 +732,7 @@ function build(R, o, opt) {
 const DRESSING = ['boxes', 'boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'highdoor', 'highdoor'];
 // what the plain-room builder (rooms.js) knows how to put down, of everything a theme may ask for; and how many plain rooms have anything
 const KNOWN_THINGS = new Set(['boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'cabinet', 'shelving', 'armchair', 'globe',
-  'mailbox', 'flamingo', 'hose']);                                        // (the neighbourhood's: suburb.js builds them)
+  'mailbox', 'flamingo', 'hose', 'floatring', 'noodle', 'lounger']);                                        // (the neighbourhood's: suburb.js builds them)
 export const THING_CHANCE = 0.06;
 /** What an earlier visitor may have left in a plain room (traces.js builds them): a floor has two or three, each a different one. */
 export const TRACES = Object.freeze(['camp', 'arrows', 'note', 'measure', 'map', 'queue', 'drawing']);
@@ -905,7 +908,7 @@ function dress(R, level, o, opt, keeper = false) {
         const along = room.W > room.D ? 1 : 0, flip = rr.chance(0.5) ? 2 : 0;
         const turns = Math.abs(room.W - room.D) < 0.01 ? [0, 1, 2, 3].map((k) => (k + flip) % 4) : [(along + flip) % 4, (along + flip + 2) % 4];
         for (const t of turns) {
-          const whole = motif(room, m, t), plan = whole && (m.kind === 'nibs' || m.kind === 'bays' || m.kind === 'colonnade' || m.kind === 'baffle') ? pruned(room, whole, m.kind === 'baffle' ? 2 : 3) : whole;
+          const whole = motif(room, m, t), plan = whole && (m.kind === 'nibs' || m.kind === 'bays' || m.kind === 'colonnade' || m.kind === 'baffle' || m.kind === 'cabanas') ? pruned(room, whole, m.kind === 'baffle' || m.kind === 'cabanas' ? 2 : 3) : whole;
           if (!plan || !fits(room, plan)) continue;
           room.pillars.push(...plan.pillars);
           room.quiet = { kind: m.kind, turn: t };

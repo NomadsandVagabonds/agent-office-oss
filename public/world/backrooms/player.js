@@ -36,6 +36,7 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
   // `input`: keys held, mouse movement since last frame, and a thumb stick (x: right, y: forward, each −1…1; hurry: pushed
   // past its ring, which is what Shift is) — the visit's own (input.js), so that what is held on one floor is still held on the next
   let stride = 0, floor = world.floorY(start.x, start.z), sway = 0, duck = 0, hopHeld = false;
+  let ridePose = null;
   const listeners = { step: null, move: null, winded: null };
   const windRun = WIND.run * (perk?.windScale ?? 1);
 
@@ -70,7 +71,17 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
     }
   }
 
+  function applyRidePose() {
+    const p = ridePose;
+    Object.assign(me, { x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch,
+      vx: 0, vz: 0, speed: 0, moving: false, drop: 0, dropV: 0 });
+    camera.position.set(p.x, p.y, p.z);
+    camera.rotation.set(p.pitch, p.yaw, p.bank || 0, 'YXZ');
+  }
   function update(dt) {
+    // An authored chute owns the camera until it releases it. Gravity and the
+    // unstick search must not pull a rider through the tube wall mid-ride.
+    if (ridePose) { input.dx = 0; input.dy = 0; applyRidePose(); return; }
     const k = input.keys;
     // looking
     const sensitivity = input.sensitivity ?? 1;
@@ -171,6 +182,14 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
 
   return {
     me, input, update, RADIUS, EYE,
+    setRidePose(pose) {
+      if (pose && !['x','y','z','yaw','pitch'].every(k => Number.isFinite(pose[k]))) return false;
+      if (pose && pose.bank !== undefined && !Number.isFinite(pose.bank)) return false;
+      ridePose = pose ? { ...pose } : null;
+      if (ridePose) applyRidePose();
+      else { floor = world.floorY(me.x, me.z); me.drop = 0; me.dropV = 0; camera.rotation.z = 0; }
+      return true;
+    },
     on(event, fn) { listeners[event] = fn; },
     /**
      * Both hands out (shove.rule.js). It costs breath, and there is none to be had out of breath or straight after another.

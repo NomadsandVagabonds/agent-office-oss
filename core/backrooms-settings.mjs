@@ -1,8 +1,10 @@
 // The camcorder's saved settings. Pure rules, shared with tests; storage stays
 // with the visit. Older saves only have vhs and mute, and still read as before.
 import { cleanDifficulty, DEFAULT_DIFFICULTY } from './difficulty.mjs';
+// (the same list as public/world/backrooms/graphics.js GRAPHICS, which says what each one switches; a test holds them equal)
+export const BACKROOMS_GRAPHICS = Object.freeze(['classic', 'low', 'medium', 'high', 'auto']);
 export const BACKROOMS_DEFAULTS = Object.freeze({
-  difficulty: DEFAULT_DIFFICULTY, vhs: 2, mute: false, musicVolume: 1, sfxVolume: 1, sensitivity: 1, invertY: false, steadyLighting: false,
+  difficulty: DEFAULT_DIFFICULTY, vhs: 2, mute: false, musicVolume: 1, sfxVolume: 1, sensitivity: 1, invertY: false, steadyLighting: false, graphics: 'classic',
 });
 
 export function cleanBackroomsSettings(value) {
@@ -15,5 +17,6 @@ export function cleanBackroomsSettings(value) {
     mute: p.mute === true,
     musicVolume: number('musicVolume', 0, 1), sfxVolume: number('sfxVolume', 0, 1),
     sensitivity: number('sensitivity', .25, 2), invertY: p.invertY === true, steadyLighting: p.steadyLighting === true,
+    graphics: BACKROOMS_GRAPHICS.includes(p.graphics) ? p.graphics : BACKROOMS_DEFAULTS.graphics,
   };
 }

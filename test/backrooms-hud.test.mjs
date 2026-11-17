@@ -87,10 +87,11 @@ test('a finger gets a thumb stick and four buttons; a mouse gets none; and the p
   const thumbs = hud.thumbs, find = name => hud.el.querySelector(`.br-tb-${name}`);
   assert.ok(thumbs && hud.el.querySelector('.br-thumbs') && hud.el.querySelector('.br-stick-ring'));
   for (const name of ['use', 'light', 'jump', 'crouch']) assert.equal(find(name).getAttribute('data-act'), name);
-  assert.equal(find('use').hidden, false, 'there was already something to use when the finger arrived');
+  assert.equal(find('use').hidden, false); assert.equal(find('use').classList.contains('is-ready'), true, 'there was already something to use when the finger arrived');
   assert.equal(find('light').hidden, true, 'no light to switch yet');
-  hud.hint(false); assert.equal(find('use').hidden, true);
-  hud.hint(true); assert.equal(find('use').hidden, false);
+  // the hand is always there for a finger (with nothing to use it is a shove: index.js useIt); only how plainly it shows changes
+  hud.hint(false); assert.equal(find('use').hidden, false); assert.equal(find('use').classList.contains('is-ready'), false);
+  hud.hint(true); assert.equal(find('use').hidden, false); assert.equal(find('use').classList.contains('is-ready'), true);
   thumbs.set({ light: 'off' }); assert.equal(find('light').hidden, false); assert.equal(find('light').classList.contains('is-on'), false);
   thumbs.set({ light: 'on' }); assert.equal(find('light').classList.contains('is-on'), true);
   thumbs.set({ light: 'none' }); assert.equal(find('light').hidden, true);
