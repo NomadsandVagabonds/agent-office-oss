@@ -107,7 +107,16 @@ for(const rot of [0,1,2,3])test(`showers: actual bench route, wet recovery and o
 
 for(const rot of [0,1,2,3])test(`showers: walk through locker, preserve height and bearing, walk back through fold (${rot})`,async t=>{
  const f=await fixture(rot);t.after(()=>f.dispose());assert.deepEqual(f.warnings,[]);const [a,b]=f.rt.showerFold.plan.folds;
- for(const q of [[3.8,f.def.D/2-2],[3.8,5.5],[4.45,5.5],[5.8,5.5],[7,5.5],[7,a.z+.4]])await walkTo(f,...q);
+ for(const q of [[3.8,f.def.D/2-2],[3.8,5.5],[4.45,5.5],[5.8,5.5],[7,5.5],[7,.55]])await walkTo(f,...q);
+ assert.ok(!f.player.me.crouching,'the first frames let the visitor stand');
+ await walkTo(f,7,a.z+.4);
+ assert.ok(f.player.me.crouching,'the repeated frames lead into a real crawl without holding a key');
+ f.world.scene.updateMatrixWorld(true);
+ const body = f.player.me;
+ const overhead = new THREE.Raycaster(new THREE.Vector3(body.x, body.y, body.z), new THREE.Vector3(0,1,0));
+ const ceiling = overhead.intersectObject(f.rt.group,true).find(hit => !hit.object.material?.transparent);
+ assert.ok(ceiling,'the low tiled ceiling exists above the camera');
+ assert.ok(Math.abs(ceiling.point.y-f.world.ceilingY(body.x,body.z))<.025,'rendered clearance matches the player controller');
  const yaw=rot*Math.PI/2;f.player.me.yaw=yaw;f.input.keys.add('w');
  const y=f.world.floorY(f.player.me.x,f.player.me.z);
  for(let i=0;i<150&&local(f).x>0;i++)f.tick();
@@ -116,7 +125,10 @@ for(const rot of [0,1,2,3])test(`showers: walk through locker, preserve height a
  assert.equal(f.player.me.yaw,yaw,'fold preserves world bearing in rotated rooms');
  assert.ok(Math.abs(f.world.floorY(f.player.me.x,f.player.me.z)-y)<.001,'fold preserves floor height');
  assert.ok(f.world.free(f.player.me.x,f.player.me.z,f.player.RADIUS),'visitor never lands inside solid geometry');
- for(const q of [[b.x,-9.2],[-3.8,-9.2],[b.x,-9.2],[b.x,a.z-.5]])await walkTo(f,...q);
+ for(const q of [[b.x,-9.2],[-3.8,-9.2]])await walkTo(f,...q);
+ f.tick(45);
+ assert.ok(!f.player.me.crouching,'the visitor stands again on returning to the pool');
+ for(const q of [[b.x,-9.2],[b.x,a.z-.5]])await walkTo(f,...q);
  f.tick(120);
  f.player.me.yaw=yaw+Math.PI;f.input.keys.add('w');
  for(let i=0;i<150&&local(f).x<0;i++)f.tick();

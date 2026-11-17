@@ -25,8 +25,11 @@ on one part. This pass does not depend on the pending lighting/water upgrade.
   boardwalk, wet steps and navigation share one height function. Stepping off
   costs movement speed but does not trap or hurt a visitor.
 - Twenty-seven detailed lockers form the right wall. The over-wide open locker
-  enters a cyan corridor behind the bank. Follow it through the falling-water
-  screen and emerge behind the showers on the other side of the room.
+  leads to a corridor whose repeated frames grow narrower and lower, from
+  2.32 m of clearance to an 89 cm crawl. The player stoops automatically.
+  Three taps sound behind the visitor as they approach the falling-water
+  screen. Walking through it leads to a short passage behind the showers on
+  the other side of the room.
 - The translation preserves heading, elevation and a carried prop. It is
   reversible immediately. If furniture or another physical obstruction fills
   the destination, the fold refuses the crossing and the visitor can retreat.
@@ -35,7 +38,7 @@ on one part. This pass does not depend on the pending lighting/water upgrade.
   The normal seeded stash remains on a dry rear corner. There is no mandatory
   interaction or resident in this room.
 
-The upper shower landings and ceiling door are inaccessible scenery. The
+The upper shower landings, ceiling door and inverted bay are inaccessible scenery. The
 locker connection is a matched, concealed translation, **not a live-rendered
 portal** or a solution for stacked walkable floors. Each visitor has separate
 crossing history; two networked clients have not yet been manually playtested.
@@ -50,7 +53,9 @@ crossing history; two networked clients have not yet been manually playtested.
   a lost ring and an ordinary movable dirty-towel cart complete the dressing.
 - Stepped ceiling slabs compress the distant sightline. Two upper shower bays
   hang above the walking route. A hollow cyan voxel flume passes through a real
-  ceiling opening beside exposed pipes and framing.
+  ceiling opening beside exposed pipes and framing. Midway across, an
+  upside-down shower runs into a grate above it and an inverted door opens
+  into a dark recess. The working lights grow sparser around this bay.
 - Mineral tide marks, repaired grout, bleached enamel and acoustic-tile stains
   are procedural textures. No reference image or binary asset is bundled.
 - White-pink fluorescents, an amber shower and a cold locker passage establish
@@ -72,7 +77,7 @@ resources are disposed by the kit, and renderer/viewport/scissor/lamp state is
 restored even if rendering throws. The viewport test specifically covers a
 large canvas with a smaller VHS target.
 
-The tested room sizes peak at **100,006 base triangles, 21 meshes and 14 authored
+The tested room sizes peak at **101,794 base triangles, 22 meshes and 14 authored
 lights**, below the existing room limits. The extra reflection pass is outside
 that geometry count: mobile/integrated-GPU timing still needs measurement.
 This is a stronger architectural prototype, not a claim that the current
@@ -81,10 +86,11 @@ illumination.
 
 ## Local review
 
-`http://127.0.0.1:44352/?themes=waterpark&depths=1&room=locker-showers&only=locker-showers&pursuer=0&mute=1&seed=17&vhs=1&inventory=0&showerstudy=1`
+`http://127.0.0.1:44352/?themes=waterpark&depths=1&room=locker-showers&only=locker-showers&pursuer=0&mute=0&seed=17&vhs=1&inventory=0&showerstudy=1`
 
-The development panel provides entrance, cross-room, shower, locker and reverse
-viewpoints. `inventory=0` is for an untimed art review. Remove it or use
+The development panel provides entrance, inverted shower, locker and crawl
+viewpoints. Choose **Crawl and cross** and walk forward to try the fold.
+`inventory=0` is for an untimed art review. Remove it or use
 `inventory=1` to play with the usual camera battery and health.
 
 ```sh
@@ -98,10 +104,10 @@ node tools/blockrooms/serve.mjs /tmp/blockrooms-waterpark-channel-review 44352
   **94/94 pass**. Traversal uses the actual player controller at all four room
   rotations; it covers the walkway, both banks, wet recovery, regular exits,
   locker entry, forward/reverse folds, blocked destinations and carried props.
-- Production build: **353 files**, passes.
-- Safari visual review covered the entrance, cross-room composition, upper
-  shower construction, caustics and corrected water reflection. Final manual
-  passage traversal remains to be checked; automated controller checks pass.
+- Production build: **354 files**, passes.
+- Chrome rendered the updated main room, inverted bay and corridor. A browser
+  control check crossed the screen in both directions while crouched. Controller
+  tests also check that the authored roof matches the collision clearance.
 - Full `npm test`: **1,116/1,123 pass**. The seven failures match the existing
   baseline: four Return Pool cart-placement assertions, the console `/var`
   versus `/private/var` assertion and its parent, and the usage/status-line

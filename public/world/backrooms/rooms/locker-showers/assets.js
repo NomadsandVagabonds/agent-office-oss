@@ -10,8 +10,8 @@ export {showerTextures} from './textures.js';
 const C={steel:lin('#a8aaa0'),edge:lin('#d0cdc0'),dark:lin('#3f4b48'),rust:lin('#82604d'),
   brass:lin('#b59a6b'),ivory:lin('#c9b9a5'),pink:lin('#c58f96'),latch:lin('#bdb7a5')};
 const box=(b,q,col=WHITE,uv=.6)=>b.box(...q,col,{step:.8,uv});
-const matrix=({x=0,y=0,z=0,rot=0,tilt=0}={})=>new THREE.Matrix4().compose(
-  new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt,rot,0,'YXZ')),new THREE.Vector3(1,1,1));
+const matrix=({x=0,y=0,z=0,rot=0,tilt=0,roll=0}={})=>new THREE.Matrix4().compose(
+  new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt,rot,roll,'YXZ')),new THREE.Vector3(1,1,1));
 function append(dst,src,m){
   const base=dst.verts,p=new THREE.Vector3(),n=new THREE.Vector3(),nm=new THREE.Matrix3().getNormalMatrix(m);
   for(let i=0;i<src.verts;i++){
@@ -109,8 +109,8 @@ export function lockerBank(c,{x,z,y=0,count=6,spacing=.62,rot=0,openIndex=-1,hei
 
 /** Jambed 1m office door with a real wired-glass cutout. open is radians; tilt
  * rotates the entire assembly around X (useful for the door in the ceiling). */
-export function officeDoor(c,{x,z,y=0,rot=0,tilt=0,open=0}={}){
-  const frame=new Batch(),leaf=new Batch(),hardware=new Batch(),glass=new Batch(),pose={x,y,z,rot,tilt};
+export function officeDoor(c,{x,z,y=0,rot=0,tilt=0,roll=0,open=0}={}){
+  const frame=new Batch(),leaf=new Batch(),hardware=new Batch(),glass=new Batch(),pose={x,y,z,rot,tilt,roll};
   for(const xx of [-.55,.55]){
     box(frame,[xx-.045,0,-.075,xx+.045,2.2,.075],C.ivory);
     box(frame,[xx-.055,0,.065,xx+.055,2.22,.09],C.edge);
@@ -143,8 +143,8 @@ export function officeDoor(c,{x,z,y=0,rot=0,tilt=0,open=0}={}){
 }
 
 /** Brass riser and mixer with a faceted rain head and individual water jets. */
-export function shower(c,{x,z,y=0,rot=0,run=true,reverse=false}={}){
-  const b=new Batch(),pose={x,y,z,rot},m=matrix(pose);
+export function shower(c,{x,z,y=0,rot=0,roll=0,run=true,reverse=false}={}){
+  const b=new Batch(),pose={x,y,z,rot,roll},m=matrix(pose);
   pipe(b,[0,.55,0],[0,1.88,0],.026,C.brass);
   pipe(b,[0,1.88,0],[0,2.02,.16],.026,C.brass);
   pipe(b,[0,2.02,.16],[0,2.02,.38],.025,C.brass);

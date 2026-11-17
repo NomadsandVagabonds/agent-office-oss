@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import {showerWater} from './locker-showers/water.js';
 import {showerGlaze} from './locker-showers/glaze.js';
-import {foldScreens} from './locker-showers/fold-screen.js';
+import {lockerTunnel} from './locker-showers/locker-tunnel.js';
 import {Batch,lin,WHITE} from '../kit.js';
 import {pipe} from '../pool-finish.js';
 import {innerTubeVox} from '../waterpark.js';
@@ -19,7 +19,7 @@ const box=(b,q,col=WHITE)=>b.box(...q,col,{step:.8,uv:1.6});
 
 export function build(c){
   const {W,D,H,rt,env}=c,p=showerPlan(c.room),t=showerTextures(c.kit);
-  rt.amb=lin('#c8b2b0',.18);rt.level=.96;
+  rt.amb=lin('#c8b2b0',.13);rt.level=.96;
   c.shell({floor:false,ceiling:false,panels:false,sockets:false,skirting:false,wallTex:t.pink});
   const pink=c.mapped('showers:pink',t.pink,{wet:.8}),floor=c.mapped('showers:floor',t.floor,{wet:.88});
   const ceiling=c.mapped('showers:ceiling',t.ceiling),wood=c.mapped('showers:walkway',t.wood,{wet:.85});
@@ -64,7 +64,7 @@ export function build(c){
   });
   const surface=showerWater(c,water,waterTex);
   const solid=(x0,z0,x1,z1,top=2.6)=>c.solid(x0,z0,x1,z1,{keep:true,top,tall:top>1.8});
-  const wall=(x0,z0,x1,z1,y0=0,y1=2.65)=>{box(pink,[x0,y0,z0,x1,y1,z1]);if(y0<.3)solid(x0,z0,x1,z1,y1);};
+  const wall=(x0,z0,x1,z1,y0=0,y1=2.65,color=WHITE)=>{box(pink,[x0,y0,z0,x1,y1,z1],color);if(y0<.3)solid(x0,z0,x1,z1,y1);};
 
   // Lockers form one wall, but an over-wide locker opening exposes a long
   // cyan service passage behind their normal half-metre depth.
@@ -95,26 +95,29 @@ export function build(c){
     for(const yy of [.10,1.15])c.board(grime,-4.13,yy,z-1.27,.32,.55,Math.PI/2);
   }
   // The service passage behind these cells is entered from the last bay.
-  wall(-8.85,-4.8,-6.56,-4.65,0,2.65);
+  wall(-W/2+.65,-4.8,-6.55,-4.65,0,2.65);
   wall(5.49,-7.55,8.85,-7.4,0,2.65);
-  // Repeated tight throats are deliberately identical on both sides of the
-  // fold. The far shower/baffle hides the translated view from the main room.
-  for(const x of [7,-7.45])for(const z of [-5.3,-6.3]){
-    for(const side of [-1,1])wall(x+side*1.2-.09,z-.10,x+side*1.2+.09,z+.10,0,2.66);
-    box(ceiling,[x-1.2,2.34,z-.12,x+1.2,2.66,z+.12]);
-  }
-  for(const x of [7,-7.45])shower(c,{x:x-.7,z:-5.65,rot:Math.PI/2,run:true});
-  foldScreens(c,p.folds);
+  lockerTunnel(c,p,{pink,ceiling,wall,box});
 
   // Stepped roof presses the sightline down as you approach the distant door.
+  const invertedBay = { left: -3.98, right: -.23, front: -2.55, back: -5.94, floor: 4.43 };
+  const bayOpening = [invertedBay.left,invertedBay.right,invertedBay.back,invertedBay.front];
   const levels=[[6,p.end+.8,4.8],[2,6,4.45],[-2,2,4.1],[-6,-2,3.7],[-p.end-.8,-6,3.1]];
   for(const [z0,z1,y]of levels){
     if(z1<=z0)continue;
     if(z0===6)cutSlab(ceiling,-4.2,4.6,z0,z1,y,.18,[-3.5,-1.65,7.1,8.65]);
+    else if(z0===-6)cutSlab(ceiling,-4.2,4.6,z0,z1,y,.18,bayOpening);
     else box(ceiling,[-4.2,y,z0,4.6,y+.18,z1]);
     box(pink,[-4.2,y,z0-.09,4.6,H,z0+.09]);
-    for(let x=-3.8;x<4.5;x+=.6)box(c.flat,[x-.012,y-.017,z0,x+.012,y,z1],steel);
-    for(let z=z0+.55;z<z1;z+=.6)box(c.flat,[-4.2,y-.016,z,4.6,y,z+.018],steel);
+    for(let x=-3.8;x<4.5;x+=.6){
+      const spans = z0===-6 && x<invertedBay.right ? [[z0,invertedBay.back],[invertedBay.front,z1]] : [[z0,z1]];
+      for (const [a,b] of spans) box(c.flat,[x-.012,y-.017,a,x+.012,y,b],steel);
+    }
+    for(let z=z0+.55;z<z1;z+=.6){
+      const spans = z0===-6 && z>invertedBay.back && z<invertedBay.front
+        ? [[-4.2,invertedBay.left],[invertedBay.right,4.6]] : [[-4.2,4.6]];
+      for (const [a,b] of spans) box(c.flat,[a,y-.016,z,b,y,z+.018],steel);
+    }
   }
   box(ceiling,[-W/2,H,-D/2,W/2,H+.12,D/2]);
   for(const side of [-1,1]){
@@ -133,6 +136,23 @@ export function build(c){
     for(const zz of [z-1.2,z,z+1.2])pipe(c.flat,[-3.93,y,zz],[-3.93,y+.95,zz],.025,steel);
   }
   officeDoor(c,{x:1.8,y:4.7,z:8.6,tilt:Math.PI/2,open:.12});
+  // Another bay has turned over inside the ceiling. Its fittings keep
+  // their own gravity: water rises from the lowest point into its drain.
+  const invertedFloor=invertedBay.floor;
+  box(pink,[invertedBay.left,invertedFloor,invertedBay.back,invertedBay.right,invertedFloor+.19,invertedBay.front]);
+  box(pink,[invertedBay.left,2.19,-5.42,-1.73,invertedFloor,-5.25]);
+  box(pink,[-.65,2.19,-5.42,invertedBay.right,invertedFloor,-5.25]);
+  // Solid returns and an unlit recess behind the upside-down door.
+  box(pink,[-1.74,2.19,invertedBay.back,-.64,2.30,-5.25]);
+  for(const x of [-1.74,-.66])box(pink,[x,2.30,invertedBay.back,x+.022,invertedFloor,-5.25],lin('#816e70'));
+  box(pink,[-1.74,2.30,invertedBay.back,-.64,invertedFloor,invertedBay.back+.035],lin('#413840'));
+  box(pink,[-3.98,2.52,-5.25,-3.77,invertedFloor,-2.55]);
+  box(pink,[-.47,3.07,-5.25,-.23,invertedFloor,-2.55]);
+  for(const [left,right,bottom] of [[-3.98,-2.92,2.68],[-2.92,-1.67,2.91],[-1.67,-.23,3.14]]){
+    box(pink,[left,bottom,-2.67,right,3.72,-2.55]);
+  }
+  officeDoor(c,{x:-1.19,y:invertedFloor,z:-5.18,roll:Math.PI,open:-.72});
+  shower(c,{x:-2.74,y:invertedFloor-.018,z:-5.19,roll:Math.PI});
   const flume=new Batch(true),spec={id:'cyan-shower',color:'#5d9d9b',radius:.59,pts:[[-8.8,3.55,7.4],[-6.3,3.55,7.4],[-3.0,3.58,7.5],[-2.3,5.2,7.8],[-4.5,5.65,4.5],[-8.8,5.4,3.5]]};
   c.model('showers:upper-flume',()=>collisionFlumeVox(spec),0,0,{batch:flume,scale:FLUME_CELL/.025,solid:false,shadow:false});c.dynamic(flume,{wet:.8});
   for(const x of [-3.4,-1.72])box(c.flat,[x-.025,4.76,7.08,x+.025,4.84,8.68],steel);
@@ -165,23 +185,29 @@ export function build(c){
   const lamp=c.shining('showers:fluorescent',c.kit.tex.panel(true),1.75,lin('#ffe0db'));
   const fitting=(x,y,z,color,power=1.3,far=6)=>{
     box(c.flat,[x-.19,y,z-.7,x+.19,y+.09,z+.7],cream);
+    if (!power) {
+      box(c.flat,[x-.145,y-.014,z-.62,x+.145,y,z+.62],dark);
+      return;
+    }
     for(const dx of [-.105,.105])c.lay(lamp,x+dx,z,.07,1.26,0,null,WHITE,y-.012,true);
     c.light(x,y-.12,z,color,power,{far,k:7.5,axis:[0,-1,0],floor:.32});
   };
-  for(const [z,y]of [[8.9,4.7],[4.4,4.35],[.5,4],[-3.8,3.6],[-8.4,3]])fitting(.1,y,z,'#f8cbd0',3.0,8.5);
-  for(const z of [7.7,3.6,-.8,-5.1])fitting(7,2.52,z,'#91e0d8',2.0,5.3);
-  fitting(-7.45,2.52,-6.2,'#91e0d8',2.0,5.3);
+  fitting(.1,4.7,8.9,'#f8cbd0',3.0,7.3);
+  fitting(.1,4.35,4.4,'#f8cbd0',1.5,6.4);
+  fitting(.1,4,.5,'#efbbc3',2.5,6.5);
+  fitting(.1,3.6,-3.8,'#f8cbd0',0);
+  fitting(.1,3,-8.4,'#d3e5db',1.65,5.6);
+  c.lay(lamp,-2.2,-3.22,1.05,.14,0,null,WHITE,invertedFloor-.022,true);
+  c.light(-2.2,4.12,-3.22,'#e79e73',1.6,{far:3.7,k:3.4});
   c.light(-4.6,4.45,7.8,'#efb96f',2.5,{far:5.2,k:5.0});
   c.light(-4.65,1.8,4.3,'#efd9ad',.85,{far:3.5,k:1.1});
   fitting(0,2.5,D/2-1,'#e3d6c6',1.0,4);fitting(0,2.5,-D/2+1,'#e3d6c6',1.0,4);
 
   const visits=new WeakMap(),runtime={plan:p,folds:0,blocked:0,cart,surface};
-  c.zone({x0:-8.8,z0:-7.1,x1:8.8,z1:-4.9,stay(dt,me){
+  c.zone({x0:-8.8,z0:-7.1,x1:8.8,z1:-4.9,stay(_dt,me){
     const actor=me.world;if(!actor||env.player?.me!==actor||actor.frozen)return;
-    let state=visits.get(actor);if(!state){state={previous:null,cooldown:0};visits.set(actor,state);}
-    state.cooldown=Math.max(0,state.cooldown-dt);
-    if(state.cooldown===0)for(const fold of p.folds){
-      const target=foldCrossing(fold,state.previous,me);if(!target)continue;
+    for(const fold of p.folds){
+      const target=foldCrossing(fold,visits.get(actor),me);if(!target)continue;
       const at=c.toWorld(target.x,target.z),r=env.player.RADIUS||.22;
       const clear=c.world.roomAt(at.x,at.z)===rt&&c.world.free(at.x,at.z,r)&&Math.abs(c.world.floorY(at.x,at.z)-c.world.floorY(actor.x,actor.z))<.05;
       if(clear){
@@ -189,17 +215,37 @@ export function build(c){
         // be folded out from underneath somebody else.
         const held=env.grip?.held;if(held&&!held.carried){runtime.blocked++;break;}
         held?.translate(at.x-actor.x,at.z-actor.z,0);
-        env.player.warp(at.x,at.z,actor.yaw);runtime.folds++;state.cooldown=0;
-        state.previous=target;return;
+        env.player.warp(at.x,at.z,actor.yaw);runtime.folds++;
+        visits.set(actor,target);return;
       }
       runtime.blocked++;
     }
-    state.previous={x:me.x,z:me.z};
+    visits.set(actor,{x:me.x,z:me.z});
   },leave(me){if(me.world)visits.delete(me.world);}});
+
+  // Once per approach, three taps come from behind the player in the
+  // passage. The emitter is close, but its short reach keeps it out of the pool.
+  for (const fold of p.folds) {
+    const source = c.toWorld(fold.x, fold.z - fold.dir * .95);
+    const near = fold.z - fold.dir * .42, far = fold.z - fold.dir * .62;
+    c.zone({ x0: fold.x - fold.half, x1: fold.x + fold.half,
+      z0: Math.min(near, far), z1: Math.max(near, far),
+      enter(me) {
+        if (!me.world?.frozen) env.play?.('knock', source.x, source.z, .65);
+      },
+    });
+  }
+  const upsideDownDrain = c.toWorld(-2.74,-4.81);
+  let hush = 0;
   c.tick((dt,time,me)=>{
     const wet=me.inside&&showerFloor(p,me.x,me.z)<p.water;
     if(wet&&me.world)me.world.slow=Math.min(me.world.slow??1,.8);
     rt.footstep=wet?'wade':'stone';
+    hush -= dt;
+    if (me.inside && hush <= 0 && Math.hypot(me.x+2.74,me.z+4.81) < 5.5) {
+      hush = .81;
+      env.play?.('changingShower', upsideDownDrain.x, upsideDownDrain.z, 2.0);
+    }
   });
   rt.showerFold=runtime;
   showerGlaze(c);
