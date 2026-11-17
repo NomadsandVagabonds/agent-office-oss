@@ -96,12 +96,17 @@ export function voidIn(c, inHole, opt = {}) {
   let here = 0;
   const open = (x, z) => { const q = c.toWorld(x, z), f = env.world.floorY(q.x, q.z); return opt.relative ? f - (c.rt.def?.y || 0) < Math.min(-1, here - 1) : f < -1; };   // (without it: as it always was)
   c.tick((dt, t, me) => {
+    if (fall && fall.over) {                                                                                    // (the visit goes on — the Tourist — and the game is putting them back:
+      if (!me.inside || Math.hypot(me.x - fall.x, me.z - fall.z) > 1.5) { fall = null; return; }                //  hold the fall where it ended until they have been put somewhere else,
+      fall.wait = (fall.wait || 0) + dt; if (fall.wait > 0.5) { fall.wait = 0; env.end?.('caught'); }          //  asking again if the game could not act just then)
+      return;                                                                                                   //  else they are still over the hole and it starts again)
+    }
     if (fall) {
       fall.t += dt; fall.y = Math.max(-80, (fall.y0 || 0) - 0.5 * 9.8 * fall.t * fall.t);
       const q = c.toWorld(fall.x, fall.z); env.player?.warp?.(q.x, q.z);
       const eye = env.player?.me; if (eye) eye.pitch = Math.min(0.95, eye.pitch + dt * 1.3);
       env.red?.(Math.min(0.9, fall.t * 0.5)); env.interfere?.(0.3 + 0.5 * Math.min(1, fall.t / falls));
-      if (fall.t >= falls && !fall.over) { fall.over = true; env.hold?.(false); env.end?.('caught'); if (env.difficulty?.() === 'tourist') fall = null; }
+      if (fall.t >= falls && !fall.over) { fall.over = true; env.hold?.(false); env.end?.('caught'); }
       return;
     }
     if (!me.inside || env.player?.me?.frozen) return;
