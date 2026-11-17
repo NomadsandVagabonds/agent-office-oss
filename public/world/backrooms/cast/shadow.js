@@ -140,6 +140,16 @@ export function create(c) {
         },
       }];
     },
+    /** Stand at this spot now, already there to be seen (the conductor's summon()). After that it is what it always is. */
+    appear(spot) {
+      if (!mesh) return false;
+      const m = me();
+      at = { x: spot.x, z: spot.z }; walker.x = at.x; walker.z = at.z; close = false;
+      mesh.position.set(at.x, env.world.floorY(at.x, at.z), at.z);
+      mesh.rotation.y = Number.isFinite(spot.yaw) ? spot.yaw : Math.atan2(m.x - at.x, m.z - at.z);
+      s = { ...away(R), mode: 'lurk', stare: 0, heat: 0, t: SHADOW.stay[1] };
+      return true;
+    },
     /** For the dev page: have it turn up now. */
     hurry() { if (s.mode === 'away') s = { ...s, t: 0 }; },
     dispose() { for (const k of dark) env.world?.setLights(k.rt, 1); mesh?.removeFromParent(); },

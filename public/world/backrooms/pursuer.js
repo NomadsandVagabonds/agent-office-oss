@@ -18,6 +18,9 @@ import { hangDoors } from './doorleaf.js';
 
 // Optional private co-op adapters: a bounded review cast, and a visitor scope per tick.
 // Single-player callers keep the seeded cast and their existing env.player.
+/** Who can be called up at a spot after the floor is built (summon()): those with an `appear` of their own. */
+export const SUMMONABLE = new Set(['toner', 'shadow']);
+
 export function createStalkers(env, options = {}) {
   const level = env.level;
   const W = () => env.world;
@@ -240,6 +243,30 @@ export function createStalkers(env, options = {}) {
     get follower() { return follower ? { x: follower.x, z: follower.z } : null; },
     get figure() { return pirate?.figure ?? null; },
     of: (id) => live.find((k) => k.id === id)?.it ?? null,
+    /**
+     * Something on the floor has one of the cast in it (a lift car, say): put them at this spot now. spot: { x, z, yaw? }, world.
+     * If they are on the floor already this is one more appearance of theirs; if they were not dealt, they are made here, outside
+     * the deal (castFor and homeFor are not asked and nobody else moves), and go with the floor like the rest. Only those who know
+     * how to turn up somewhere (an `appear` of their own: SUMMONABLE). Whoever calls must decide by the seed, never by chance, or
+     * two visitors on one floor see different things. Returns the creature, or null: nobody came.
+     */
+    summon(id, spot) {
+      if (!SUMMONABLE.has(id) || !spot || !Number.isFinite(spot.x) || !Number.isFinite(spot.z) || !W()?.roomAt(spot.x, spot.z)) return null;
+      let k = live.find((q) => q.id === id), fresh = false;
+      if (k && (k.dead || k.away)) return null;
+      try {
+        if (!k) {
+          const member = CAST.find((m) => m.id === id), make = MAKERS[id];
+          if (!member || !make) return null;
+          k = { id, member, it: null, things: [], bodies: [], away: null, shown: null, summoned: true }; fresh = true;
+          k.it = make(Object.assign(toolbox(k, null), { summoned: true }));
+          k.it.ready?.();
+        }
+        if (!k.it.appear?.(spot)) { if (fresh) { try { k.it.dispose?.(); } catch { /* it never arrived */ } } return null; }
+        if (fresh) live.push(k);
+        return k.it;
+      } catch (err) { if (env.coopStrict) throw err; console.warn(`[backrooms] ${id} would not be called up`, err); if (fresh) { try { k.it?.dispose?.(); } catch { /* it never arrived */ } } return null; }
+    },
     snipTargets() {
       const out = [];
       for (const k of live) {
