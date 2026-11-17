@@ -8,7 +8,7 @@
 //
 // By the fire stands **The Retreat Facilitator** (`makeFacilitatorRig` +
 // `stepFacilitator`): she walks up offering a glowing coat-hanger roasted
-// skewer (`[E]` accepts it, healing `+1 heart` up to 2 times!). Turn your back
+// skewer (`[E]` accepts it, healing `+1 heart`, once). Turn your back
 // within 4.5 m for 1.35 s, sprint away mid-pitch, or stall 13.5 s, and her clay
 // grin head swivels 180° backwards like an owl before she lunges for 1 heart!
 

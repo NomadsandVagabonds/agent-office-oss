@@ -194,7 +194,7 @@ export function stepDuckboard(s, dt, activeIdx = -1) {
 /* ---- 4. Centerpiece Hunter: THE COAT-RACK BUCK (`stag.js`) --------------- */
 
 export const BUCK = Object.freeze({
-  hurt: 2,                // two hearts on antler impact
+  hurt: 1,                // a heart on antler impact (it was two, half of everything: more than a room's resident should take)
   beamRange: 12.0,        // distance at which a direct torch beam wakes it
   earRange: 9.2,          // distance at which dry-bracken crunching or running wakes it
   personalSpace: 2.15,    // standing right up against the "coat-rack" wakes it even in the dark
@@ -505,7 +505,7 @@ export const FACILITATOR = Object.freeze({
   offerReach: 1.35,
   strikeReach: 0.78,
   restTime: 9.0,
-  rations: 2,
+  rations: 1,
   hurt: 1,
 });
 
