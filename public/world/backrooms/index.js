@@ -292,7 +292,7 @@ async function visit(office, opt) {
   /* ---- a floor: everything that is built for it and thrown away with it ---------------- */
   const halfFov = () => Math.atan(Math.tan((fov * Math.PI) / 360) * camera.aspect);
   async function build(level, carry, pace) {
-    const kit = createKit();
+    const kit = createKit({ gfx: opt.dev?.gfx || opt.gfx || null });   // light worked out once per room, beyond the lamps (kit.js gfxOf): off unless asked for
     const f = { level, kit, world: null, player: null, env: null };
     const builders = await buildersFor(level);
     if (opt.barricades !== false && opt.dev?.barricadeStudy && level === first) {

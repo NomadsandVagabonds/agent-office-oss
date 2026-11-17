@@ -131,6 +131,8 @@ async function go() {
     inventory: q.get('inventory') !== '0', barricades: q.get('barricades') !== '0',
     dev: { supplies: q.get('supplies') === '1', cast: (q.get('cast') || '').split(',').filter(Boolean), barricadeStudy: q.get('barricades') === '1' && q.get('study') === '1',
       bridgeStudy: q.get('bridgestudy') === '1',
+      // &gfx=contact,bounce (each at 1) or &gfx=contact:0.6,bounce:0.5: contact darkening and bounced colour, baked with each room (kit.js gfxOf)
+      gfx: q.get('gfx') ? Object.fromEntries(q.get('gfx').split(',').map((s) => s.split(':')).map(([k, v]) => [k, v ? Number(v) : 1])) : null,
       lighting: ['1', ...LIGHTING_MODES].includes(q.get('lighting')) ? q.get('lighting') : false,
       owns: target => !!target?.closest?.('[data-lighting-study]') },
     onReady(handle) {

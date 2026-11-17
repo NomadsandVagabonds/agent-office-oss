@@ -57,6 +57,96 @@ function copyChunks(batch, chunks, decals = false) {
   return result;
 }
 
+/* ---- light worked out once with the room, beyond the lamps (kit.gfx: off unless asked for) ----------------------
+ * Contact: where something stands on the floor or against a wall, the floor and wall near it (and anything else beside
+ * it) are a little darker, and so are its own lower sides, near the floor. Bounce: the carpet's colour, as lit as the
+ * carpet is where it comes from, a little way up the walls and under things; the wallpaper's on the floor and ceiling
+ * by the walls. Both from what the room already knows once it is built: the boxes, models and pillars put down in it
+ * (no triangles are traced, and none are added: the floor's vertices every half metre carry the gradient, and the
+ * round blot under each thing is still the sharp part). Nothing runs per frame. */
+const CONTACT = 0.7, SELF = 0.45, SELF_H = 0.4, BOUNCE_FLOOR = 0.6, BOUNCE_WALL = 0.4, EDGE = 0.9;
+const NO_OCCLUDERS = [];
+
+/** The things that darken what is near them, kept in a 1 m grid of the room's floor: near(x, z) → the few that may reach there. */
+function occluderGrid(list) {
+  const cells = new Map(), key = (i, j) => (i + 1024) * 2048 + (j + 1024);
+  for (const o of list) {
+    for (let i = Math.floor(o.x0 - o.R); i <= Math.floor(o.x1 + o.R); i++) for (let j = Math.floor(o.z0 - o.R); j <= Math.floor(o.z1 + o.R); j++) {
+      const k = key(i, j); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(o);
+    }
+  }
+  return (x, z) => cells.get(key(Math.floor(x), Math.floor(z))) || NO_OCCLUDERS;
+}
+
+/**
+ * What one batch gets from kit.gfx, for kit.bake: → { ao, bounce } or null. key: which of the room's batches
+ * ('floor', 'wall', 'ceil' are the shell's). g: { near, floorAt, W, D, floorRgb, wallRgb, sides } for the room; near is
+ * null for a batch that moves (a desk that can be dragged keeps only what is its own: its lower sides, the bounce under it).
+ */
+function gfxExtra(batch, key, gfx, g) {
+  const n = batch.verts;
+  if (!n) return null;
+  const pos = batch.pos, nor = batch.nor, glow = batch.vox ? batch.sf : null, { contact, bounce } = gfx;
+  const shell = key === 'wall' || key === 'floor' || key === 'ceil', edgeOf = key === 'floor' || key === 'ceil';
+  const hw = g.W / 2, hd = g.D / 2;
+  let ao = null, w = null, src = null, rgb = null;
+  for (let i = 0; i < n; i++) {
+    if (glow && glow[i * 2 + 1] > 0.5) continue;                     // (what shines by itself is not lit at all)
+    const j = i * 3, px = pos[j], py = pos[j + 1], pz = pos[j + 2], nx = nor[j], ny = nor[j + 1], nz = nor[j + 2];
+    const hgt = py - g.floorAt(px, pz);
+    if (contact > 0) {
+      let k = 1;
+      if (g.near) {
+        let open = 1;
+        for (const o of g.near(px, pz)) {
+          const R = o.R;
+          if (px < o.x0 - R || px > o.x1 + R || pz < o.z0 - R || pz > o.z1 + R || py < o.y0 - R || py > o.y1 + R) continue;
+          // a vertex inside a thing is its own (or something tucked in it): it is not shaded by it. The floor never is.
+          if (key !== 'floor' && px >= o.x0 && px <= o.x1 && pz >= o.z0 && pz <= o.z1 && py > o.y0 + 0.02 && py < o.y1 + 0.02) continue;
+          const dx = clamp(px, o.x0, o.x1) - px, dy = clamp(py, o.y0, o.y1) - py, dz = clamp(pz, o.z0, o.z1) - pz, d = Math.hypot(dx, dy, dz);
+          if (d >= R) continue;
+          const cx = (o.x0 + o.x1) / 2 - px, cy = (o.y0 + o.y1) / 2 - py, cz = (o.z0 + o.z1) / 2 - pz;
+          const f = (cx * nx + cy * ny + cz * nz) / (Math.hypot(cx, cy, cz) || 1);          // in front of this surface, and how much of what it faces
+          if (f <= 0) continue;
+          open *= 1 - (1 - smooth(d / R)) * Math.sqrt(f);
+        }
+        k *= 1 - contact * CONTACT * (1 - open);
+      }
+      // its own lower sides and underneath, near the floor (the shell's walls have their own: world.js shell)
+      if (!shell && ny < 0.6 && hgt > -0.03 && hgt < SELF_H) k *= 1 - contact * SELF * (1 - smooth(hgt / SELF_H)) * (ny < -0.5 ? 1 : 0.8);
+      if (k < 1) { if (!ao) ao = new Float32Array(n).fill(1); ao[i] = k; }
+    }
+    if (bounce > 0) {
+      let wt = 0, sx = 0, sy = 0, sz = 0, snx = 0, sny = 1, snz = 0, col = null;
+      if (edgeOf) {
+        // the wallpaper's colour on the floor (and the ceiling) near a wall: from the wall beside it, half a metre off the floor (or below the ceiling)
+        if (g.wallRgb && (key === 'floor' ? ny > 0.7 : ny < -0.7)) {
+          let best = Infinity, side = null;
+          for (const [name, dist] of [['back', pz + hd], ['front', hd - pz], ['left', px + hw], ['right', hw - px]]) if (g.sides.has(name) && dist < best) { best = dist; side = name; }
+          if (side && best < EDGE && best > -0.05) {
+            wt = bounce * BOUNCE_WALL * (1 - smooth(Math.max(0, best) / EDGE)); col = g.wallRgb;
+            sx = side === 'left' ? -hw + 0.02 : side === 'right' ? hw - 0.02 : px; sz = side === 'back' ? -hd + 0.02 : side === 'front' ? hd - 0.02 : pz;
+            snx = side === 'left' ? 1 : side === 'right' ? -1 : 0; snz = side === 'back' ? 1 : side === 'front' ? -1 : 0; sny = 0;
+            sy = key === 'floor' ? py + 0.5 : py - 0.45;
+          }
+        }
+      } else if (g.floorRgb && ny < 0.3 && hgt > -0.03) {
+        // the carpet's colour, up the lower part of anything that faces it: walls, the sides of things, their undersides most
+        const reach = ny < -0.5 ? 1.5 : 0.9;
+        if (hgt < reach) {
+          wt = bounce * BOUNCE_FLOOR * (1 - smooth(hgt / reach)) * (ny < 0 ? 1 : 1 - ny / 0.3); col = g.floorRgb;
+          sx = clamp(px + nx * 0.3, -hw + 0.05, hw - 0.05); sz = clamp(pz + nz * 0.3, -hd + 0.05, hd - 0.05); sy = g.floorAt(sx, sz);
+        }
+      }
+      if (wt > 1e-4) {
+        if (!w) { w = new Float32Array(n); src = new Float32Array(n * 6); rgb = new Float32Array(n * 3); }
+        w[i] = wt; src.set([sx, sy, sz, snx, sny, snz], i * 6); rgb[j] = col[0]; rgb[j + 1] = col[1]; rgb[j + 2] = col[2];
+      }
+    }
+  }
+  return ao || w ? { ao, bounce: w ? { w, src, rgb } : null } : null;
+}
+
 /**
  * The office's furniture catalogue, if it will load (other people are still writing it).
  * Only the recipes are borrowed: each thing is meshed here, for this level, and thrown away with it.
@@ -468,6 +558,39 @@ function roomContext(world, rt) {
   const stairs = stairZones(def, 0.7);
   const moving = env.barricadesEnabled === true, placements = [], batches = new Map(), decalChunks = [], added = [];
   let placing = null;
+  // (kit.gfx only) what stands in the room, for contact darkening: every box drawn into the room's own batches, every model, every pillar
+  const gfxOn = kit.gfx?.contact > 0, standing = [];
+  let gfxShell = null;
+  const noteBoxes = (batch, structural) => {
+    const original = batch.box;
+    batch.box = function (x0, y0, z0, x1, y1, z1, ...rest) {
+      standing.push({ x0: Math.min(x0, x1), y0: Math.min(y0, y1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), y1: Math.max(y0, y1), z1: Math.max(z0, z1), placing, structural });
+      return original.call(this, x0, y0, z0, x1, y1, z1, ...rest);
+    };
+  };
+  const ownBatch = (batch) => batch === c.vox || [...mapped.values()].some((m) => m.batch === batch);
+  /** (kit.gfx) Once the room is built and its furniture sorted: what darkens what, and the colours that bounce. */
+  const gfxRoom = () => {
+    const ground = (x, z) => (rt.flat ? 0 : rt.floorY ? rt.floorY(x, z) : floorAt(def, x, z));
+    const ownerOf = (s) => (!moving ? null : s.placing ? s.placing.owner || null : s.structural ? null
+      : furnitureGroups.find((f) => f.type !== 'chair' && onFurniture(f.placement.foot, { x0: s.x0, z0: s.z0, x1: s.x1, z1: s.z1, bottom: s.y0, top: s.y1 })) || null);
+    // only what stands on the floor (or on something that does), big enough to matter, and not anything that can be dragged about
+    const fit = standing.filter((s) => {
+      const w = s.x1 - s.x0, d = s.z1 - s.z0, h = s.y1 - s.y0;
+      return h >= 0.15 && Math.max(w, d) >= 0.1 && Math.min(w, d) >= 0.015 && w * d <= 0.4 * W * D && !ownerOf(s);
+    });
+    const grounded = fit.filter((s) => s.y0 <= ground((s.x0 + s.x1) / 2, (s.z0 + s.z1) / 2) + 0.06);
+    const stacked = fit.filter((s) => !grounded.includes(s) && grounded.some((b) => overlaps(s, b) && Math.abs(s.y0 - b.y1) < 0.08));
+    const occluders = [...grounded, ...stacked].map((s) => ({ ...s, R: clamp(0.25 + 0.5 * Math.min(s.y1 - s.y0, Math.max(s.x1 - s.x0, s.z1 - s.z0)), 0.25, 0.75) }));
+    // what can be dragged keeps its round blot, a little darker, since the floor round it is not darkened for it
+    if (kit.gfx.contact > 0) for (const f of furnitureGroups) for (let i = 3; i < f.decals.col.length; i += 4) f.decals.col[i] = Math.min(0.8, f.decals.col[i] * (1 + 0.6 * kit.gfx.contact));
+    const mul = (a, b) => a.map((v, i) => v * b[i]);
+    const room = { near: occluders.length ? occluderGrid(occluders) : null, floorAt: ground, W, D, sides: gfxShell?.sides || new Set(),
+      floorRgb: gfxShell?.fAlb && mapped.get('floor')?.batch.verts ? mul(lin(look.carpet), gfxShell.fAlb) : null,
+      wallRgb: gfxShell?.wAlb && mapped.get('wall')?.batch.verts ? mul(lin(look.wall), gfxShell.wAlb) : null };
+    room.moving = { ...room, near: null };
+    return room;
+  };
   const track = (batch, structural = false) => {
     if (!moving || batches.has(batch)) return batch;
     const entry = { batch, chunks: [], structural }; batches.set(batch, entry);
@@ -596,7 +719,10 @@ function roomContext(world, rt) {
 
     /** A batch drawn with `texture` and lit by the bake. One mesh per key. */
     mapped(key, texture, opt = {}) {
-      if (!mapped.has(key)) mapped.set(key, { batch: track(new Batch(), ['wall', 'floor', 'ceil'].includes(key)), texture, ...opt });
+      if (!mapped.has(key)) {
+        mapped.set(key, { batch: track(new Batch(), ['wall', 'floor', 'ceil'].includes(key)), texture, ...opt });
+        if (gfxOn) noteBoxes(mapped.get(key).batch, ['wall', 'floor', 'ceil'].includes(key));
+      }
       return mapped.get(key).batch;
     },
     /** A batch that shines by itself (unlit): lit panels, screens, signs. */
@@ -728,6 +854,7 @@ function roomContext(world, rt) {
       const foot = { x0, z0, x1, z1, top: y1, bottom: y0, w: x1 - x0, d: z1 - z0, h: y1 - y0, x, z };
       const before = placing;
       if (moving && !opt.batch) { placing = { type: opt.furnitureType, foot, opt }; placements.push(placing); }
+      if (gfxOn && (!opt.batch || ownBatch(opt.batch))) standing.push({ x0, y0, z0, x1, y1, z1, placing, structural: false });
       (opt.batch || c.vox).addVox(geo.solid, mat, opt);
       if (geo.glass) c.glass.addVox(geo.glass, mat, opt);
       if (opt.solid !== false && y0 < 1.0 && y1 > 0.25) {
@@ -907,6 +1034,8 @@ function roomContext(world, rt) {
       const ceilB = opt.ceilTex ? c.mapped('ceil', opt.ceilTex) : c.ceil;
       const edge = (a, la, b, lb) => 0.76 + 0.24 * smooth(Math.min(a, la - a, b, lb - b) / 0.45);
       const trim = opt.trim || lin(look.trim), wAlb = opt.wallAlb || WHITE, fAlb = opt.floorAlb || WHITE;
+      const sides = opt.walls === false ? [] : (opt.walls || ['back', 'front', 'left', 'right']);
+      if (kit.gfx) gfxShell = { fAlb: opt.floor !== false ? fAlb : null, wAlb: sides.length ? wAlb : null, sides: new Set(sides) };
 
       /* the floor: flat, or stepping down into a pit, or up onto a dais */
       if (opt.floor !== false) {
@@ -955,7 +1084,6 @@ function roomContext(world, rt) {
       }
 
       /* the walls: each is cut to the ceiling above it, with holes for doorways (some up a few stairs) and windows */
-      const sides = opt.walls === false ? [] : (opt.walls || ['back', 'front', 'left', 'right']);
       let run = 0;
       for (const side of ['back', 'right', 'front', 'left']) {
         const w = WALLS[side], len = wallLength(def, side), o = w.o(W, D), U = w.U, n = w.n;
@@ -1090,6 +1218,7 @@ function roomContext(world, rt) {
       if (y0 > 0.01) c.ceil.grid([x - w / 2, y0, z - d / 2], [1, 0, 0], [0, 0, 1], [0, w], [0, d], (u, v) => [(x - w / 2 + u) / TILE, (z - d / 2 + v) / TILE], WHITE, () => 0.75);
       if (opt.skirting !== false && y0 < 0.01) c.flat.box(x - w / 2 - 0.02, 0, z - d / 2 - 0.02, x + w / 2 + 0.02, 0.11, z + d / 2 + 0.02, trim, { skip: '-y' });
       if (opt.solid !== false && y0 < 1.0) c.solid(x - w / 2, z - d / 2, x + w / 2, z + d / 2, { tall: h > 1.25, keep: true });
+      if (gfxOn && ownBatch(wb)) standing.push({ x0: x - w / 2, y0, z0: z - d / 2, x1: x + w / 2, y1: h, z1: z + d / 2, placing, structural: wb === mapped.get('wall')?.batch });
       reserved.push([x, z, Math.hypot(w, d) / 2 + 0.15]);
     },
     /** A lit green sign over a doorway. */
@@ -1118,12 +1247,17 @@ function roomContext(world, rt) {
     /* ---- done: bake and hand the meshes over ----------------------------------------- */
     finish() {
       if (moving) separateFurniture();
+      const g = kit.gfx ? gfxRoom() : null;
       const add = (mesh, order = 0, parent = rt.group) => { mesh.renderOrder = order; mesh.matrixAutoUpdate = false; parent.add(mesh); return mesh; };
-      const bake = (batch, make, order = 0, unlit = false) => {
+      const bake = (batch, make, order = 0, unlit = false, key = null) => {
         let last = null;
         for (const { batch: part, owner } of [{ batch }, ...(batches.get(batch)?.moving || [])]) {
           const probeLit = !unlit && owner?.lightTint;
-          const geo = unlit ? kit.plain(part) : probeLit ? kit.geometry(part, [], WHITE) : kit.geometry(part, rt.lights, rt.amb, rt.lighting);
+          // (kit.gfx: the same bake, with the darkening and bounce worked out for this batch; what moves keeps only its own)
+          const extra = g && !unlit && key ? gfxExtra(part, key, kit.gfx, owner ? g.moving : g) : null;
+          const geo = unlit ? kit.plain(part)
+            : extra ? (probeLit ? kit.geometry(part, [], WHITE, null, extra) : kit.geometry(part, rt.lights, rt.amb, rt.lighting, extra))
+            : probeLit ? kit.geometry(part, [], WHITE) : kit.geometry(part, rt.lights, rt.amb, rt.lighting);
           if (geo) {
             const material = make(geo);
             if (probeLit) {
@@ -1135,10 +1269,10 @@ function roomContext(world, rt) {
         }
         return last;
       };
-      for (const [, m] of mapped) {
-        bake(m.batch, geo => kit.surface({ map: m.texture, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, cutout: m.cutout, side: m.side }));
+      for (const [key, m] of mapped) {
+        bake(m.batch, geo => kit.surface({ map: m.texture, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, cutout: m.cutout, side: m.side }), 0, false, key);
       }
-      bake(c.vox, geo => kit.surface({ vox: true, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks }));
+      bake(c.vox, geo => kit.surface({ vox: true, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks }), 0, false, 'vox');
       bake(c.glass, geo => kit.surface({ vox: true, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, alpha: 0.42 }), 3);
       for (const [key, m] of shining) {
         const mesh = bake(m.batch, () => kit.glowing(m.texture, m.power, m.rgb, m.opt), 0, true);
