@@ -1056,7 +1056,12 @@ function roomContext(world, rt) {
       }
       return mapped.get(key).batch;
     },
-    /** A batch that shines by itself (unlit): lit panels, screens, signs. */
+    /**
+     * A batch that shines by itself (unlit): lit panels, screens, signs. opt: detail, transparent, alphaTest, side,
+     * depthWrite, and bloom (0…3, default 1: how strongly it feeds the glow at Medium and High; kit.glowing, glow.js;
+     * how it is drawn does not change). One mesh per key, with the options of the key's first call: a key asked for
+     * again with another bloom adds to the first batch at the first number, so two strengths need two keys.
+     */
     shining(key, texture, power = 1, rgb = WHITE, opt = {}) {
       if (!shining.has(key)) { shining.set(key, { batch: track(new Batch(), key === 'panel'), texture, power, rgb, opt }); if (opt.detail) shining.get(key).batch.detail = true; }
       return shining.get(key).batch;

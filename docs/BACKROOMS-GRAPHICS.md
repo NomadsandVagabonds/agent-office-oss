@@ -577,6 +577,29 @@ one is made only from what shines by itself, and replaces it at those tiers.
   see-through and writes no depth: that is light painted on to something (the
   all-hands microphone's pool on the stage, the lamp halo of `rooms.js`), and
   blooming it would bloom the room's light again.
+- **How strongly each batch blooms.** `kit.glowing(map, power, rgb, { bloom })`
+  and so `c.shining(key, texture, power, rgb, { bloom })`: a number, 1 unless
+  given, held to 0…3 (`glow.rule.js` `glowStrength`; anything not a number is
+  1), carried as the material's `userData.bloom` beside `userData.glow`. It
+  scales only what that batch draws into the emissive picture (its stand-in's
+  colour is its colour × the number), on top of its class's own share: a
+  picture still gets only 15 % over itself, so a neon fascia at 3 throws three
+  times the halo and its words stay readable (looked at in the-orange at High,
+  plain and Full VHS: the field round the letters goes from black to a warm
+  haze, the letters still read). How the batch itself is drawn does not change,
+  the kit's scene shader has no new text or uniform, and Classic and Low, which
+  have no glow, ignore it. At 0 a lamp is left out of the emissive picture (one
+  draw fewer; in the fallback it is drawn black, as it still hides what is
+  behind it) and a picture is drawn black with its mark, so a neighbour's glow
+  still leaves it crisp. The pass reads the number every frame, so the dev
+  page's handle can try one out: set `userData.bloom` on a shining mesh's
+  material from `__backrooms.root`. A `c.shining` key keeps the options of its
+  first call: asked for again with another number, it adds to the first batch
+  at the first number, so two strengths need two keys. With no `bloom` given
+  anywhere the stand-ins, draw list and uniforms are the ones there were: in
+  the copier room at Medium and High, Clean, the same paused frame through the
+  old pass and the new one differs in 0 of 576,000 pixels, and draws and
+  triangles are unchanged. Pinned by `test/backrooms-gfx-glow-strength.test.mjs`.
 - **How it is drawn** (`glow.js`, a pass in the camcorder's chain where the
   tier's bloom is, after the scene and before the tape's signal). Each frame
   what shines is drawn once more, at half the size the scene is drawn at (High:

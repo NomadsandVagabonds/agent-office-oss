@@ -42,7 +42,7 @@ test('the kit\'s shader: off, it is the shader it was; the blocks are delimited 
   assert.equal(src.split('// --- end emissive bloom ---').length - 1, 3);
   assert.match(src, /\/\/ --- end tube shadows ---\n\/\/ --- emissive bloom ---\n\$\{GLOW_DEPTH_GLSL\}\n\/\/ --- end emissive bloom ---\n\$\{FLASHLIGHT_GLSL\}\n/);
   assert.ok(GLOW_DEPTH_GLSL.trim().startsWith('#if defined(EMISSIVE_BLOOM) && defined(EMISSIVE_BLOOM_DEPTH)') && GLOW_DEPTH_GLSL.trim().endsWith('#endif'));
-  assert.match(src, /    \/\/ --- emissive bloom ---\n(    \/\/[^\n]*\n)+    m\.userData\.glow = !map \|\| map === textures\.get\('white'\) \|\| map === textures\.get\('pntrue'\) \? 'lamp' : 'picture';\n    \/\/ --- end emissive bloom ---\n    return m;/);
+  assert.match(src, /    \/\/ --- emissive bloom ---\n(    \/\/[^\n]*\n)+    m\.userData\.glow = !map \|\| map === textures\.get\('white'\) \|\| map === textures\.get\('pntrue'\) \? 'lamp' : 'picture';\n(    \/\/[^\n]*\n)*    m\.userData\.bloom = glowStrength\(opt\.bloom\);\n    \/\/ --- end emissive bloom ---\n    return m;/);
   assert.match(src, /  #endif\n  \/\/ --- emissive bloom ---\n  #ifdef EMISSIVE_BLOOM\n[\s\S]*?  return;\n  #endif\n  \/\/ --- end emissive bloom ---\n  gl_FragColor = vec4\(c, uAlpha\);\n\}`;/,
     'the last thing before the surface\'s own colour is written, and all of it inside #ifdef EMISSIVE_BLOOM');
 
