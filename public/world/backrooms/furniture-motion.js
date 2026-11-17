@@ -87,10 +87,14 @@ export function createFurnitureMotion(world) {
   function place(item, x, z, { from } = {}) {
     if (!usable(item) || ![x, z].every(Number.isFinite)) return false;
     const floor = world.floorY(x, z), dy = floor - item.y;
-    if (!Number.isFinite(floor) || item.authored && Math.abs(dy) > FLOOR_EPS) return false;
+    if (!Number.isFinite(floor)) return false;
     // `from`: the floor its carrier stands on. Nothing is set down more than a step above or below that: not into a pit
     // (where it would be lost, or stand in the air over one), and not up onto a ledge out of reach.
     if (Number.isFinite(from) && Math.abs(floor - from) > SET_DOWN_STEP) return false;
+    // Something a room authored (movable-props.js) may come to rest at another height now that its translate() moves its
+    // picture and its collider up and down together — but only where somebody is standing to put it: with no carrier's
+    // floor given, it stays at the height it is.
+    if (item.authored && Math.abs(dy) > FLOOR_EPS && !Number.isFinite(from)) return false;
     const dx = x - item.x, dz = z - item.z;
     if (!fits({ ...item, y: floor, top: item.top + dy }, dx, dz)) return false;
     if (Math.hypot(dx, dz, dy) >= EPS && item.translate(dx, dz, dy) === false) return false;

@@ -243,6 +243,9 @@ export function createSound(level, opt = {}) {
     step: (o = {}) => burst({ vol: 0.07 * (o.vol ?? 1), dur: 0.09, freq: 300 + Math.random() * 120, q: 0.5 }),
     stone: (o = {}) => { burst({ vol: 0.09 * (o.vol ?? 1), dur: 0.07, freq: 900 + Math.random() * 300, q: 0.7 }); burst({ vol: 0.03 * (o.vol ?? 1), dur: 0.5, freq: 600, q: 0.5, attack: 0.05, when: 0.04 }); },
     wade: (o = {}) => burst({ vol: 0.08 * (o.vol ?? 1), dur: 0.16, freq: 1400 + Math.random() * 900, q: 1.2, type: 'bandpass' }),
+    // A steady, locally audible shower behind a changing partition. Overlap
+    // soft envelopes; no recording or global soundtrack transition required.
+    changingShower: (o = {}) => burst({ vol: .075 * (o.vol ?? 1), pan: o.pan, dur: 1.1, freq: 3400, q: .65, type: 'bandpass', attack: .15 }),
     rustle: (o = {}) => burst({ vol: 0.07 * (o.vol ?? 1), pan: o.pan, dur: 0.12, freq: 3200 + Math.random() * 1500, q: 0.9, type: 'bandpass' }),
     tick: (o = {}) => burst({ vol: 0.05 * (o.vol ?? 1), pan: o.pan, dur: 0.025, freq: 3800, q: 2, type: 'highpass', attack: 0.001 }),
     shuffle: (o = {}) => burst({ vol: 0.12 * (o.vol ?? 1), pan: o.pan, dur: 0.22, freq: 620, q: 1.4, type: 'bandpass', attack: 0.03 }),

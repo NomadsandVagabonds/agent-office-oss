@@ -391,6 +391,7 @@ export function createKit() {
       // fabric-wrapped partition, oatmeal (themes.js `mall`): the walls of a 1980s office park, which is what the shops are made of
       else if (look.pattern === 'mall') { for (let y = 0; y < h; y++) for (let x = (y & 1); x < w; x += 2) { const n = r(); if (n > 0.62) P(g, shade(wall, 0.05), x, y, 1, 1); else if (n < 0.3) P(g, shade(wall, -0.06), x, y, 1, 1); } for (let x = 0; x < w; x += 16) { P(g, shade(wall, -0.2), x, 0, 1, h); P(g, shade(wall, 0.08), x + 1, 0, 1, h); } }
       else if (look.pattern === 'sky') { for (let x = 0; x < w; x += 8) P(g, shade(wall, (r() - 0.5) * 0.04), x, 0, 8, h); for (let i = 0; i < 4; i++) P(g, shade(wall, 0.07), (r() * w) | 0, (r() * h) | 0, 2, 3 + ((r() * 4) | 0)); }
+      else if (look.pattern === 'tiles') { P(g, shade(ink, 0.08), 0, 0, w, h); for (let y = 0; y < h; y += 8) for (let x = 0; x < w; x += 8) { const band = y === 24; P(g, band ? ink : shade(wall, (r() - 0.5) * 0.06), x + 1, y + 1, 7, 7); P(g, pale, x + 1, y + 1, 3, 1); } }
       else if (look.pattern === 'sprigs') { for (let y = 5; y < h; y += 16) for (let x = ((y - 5) / 16) % 2 ? 13 : 5; x < w; x += 16) { P(g, ink, x, y, 1, 4); P(g, ink, x - 1, y + 1, 3, 1); P(g, pale, x - 1, y - 1, 1, 1); P(g, pale, x + 1, y - 1, 1, 1); P(g, pale, x, y - 2, 1, 1); } }
       else { for (let y = 3; y < h; y += 8) for (let x = 0; x < w; x++) { const k = x % 8; P(g, ink, x, y + (k < 4 ? k : 7 - k), 1, 1); } }
     })),
@@ -403,6 +404,15 @@ export function createKit() {
     })),
     /** What is underfoot on this floor of the building: carpet, mostly — but lino in Records, screed where they are still fitting out, and something deeper upstairs. */
     floor: (look) => (look.floor === 'terrazzo' ? T.terrazzo(look.carpet) : look.floor === 'turf' ? T.turf(look.carpet) : look.floor === 'lino' ? T.lino(look.carpet) : look.floor === 'screed' ? T.screed(look.carpet) : look.floor === 'plush' ? T.plush(look.carpet, look.pale) : T.carpet(look.carpet)),
+    /** Ceramic pool mosaic. */
+    pooltile: (color) => tex('ptile' + color, () => canvasTexture(64, 64, (g, w, h) => {
+      const r = lcg(parseInt(color.slice(1), 16) + 53);
+      P(g, shade(color, -0.22), 0, 0, w, h);
+      for (let y = 0; y < h; y += 8) for (let x = 0; x < w; x += 8) {
+        P(g, shade(color, (r() - 0.45) * 0.12), x + 1, y + 1, 7, 7);
+        P(g, shade(color, 0.16), x + 1, y + 1, 2, 1);
+      }
+    })),
     /** Fake grass off a roll, 1.6 m wide: the stripes of a mown lawn are printed in, and the joins between rolls show. */
     /** Terrazzo in 0.8 m squares, chips of three stones in it, a brass strip between: a shopping centre's floor, laid in an office. */
     terrazzo: (color) => tex('terrazzo' + color, () => canvasTexture(64, 64, (g, w, h) => {
