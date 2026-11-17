@@ -94,3 +94,12 @@ export function straighten(cells, clear) {
   }
   return out;
 }
+
+/**
+ * Can something this tall get through this doorway? (d: one of a room's doors, as gen.js lists them: `h` is the height of
+ * the opening, and some are holes to crawl through.) What a walker is charged for a doorway (walk.js) asks the same.
+ */
+export const fitsDoor = (d, tall) => !!d && !(Number.isFinite(d.h) && d.h < tall);
+
+/** Has this room a doorway that something this tall can leave by? A room with none is one it would stand in for ever. */
+export const canLeave = (room, tall) => (room?.doors || []).some((d) => fitsDoor(d, tall));
