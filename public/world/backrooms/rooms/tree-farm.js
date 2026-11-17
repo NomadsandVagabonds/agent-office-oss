@@ -9,11 +9,11 @@
 //
 // Orange sawbuck "ROW CLOSED" barricades block selected cross-aisles so you
 // weave deep between the claustrophobic spruce rows to reach the central
-// Harvest Irrigation Manifold (`[E]` or `call` flushes the ceiling sap lines,
-// lighting up the green exit-row beacons, beside `battery` + `snack` supplies!).
+// Harvest Irrigation Manifold, with a `battery` and a `snack` left on it.
+// Nothing in the room can be used: it is a place, not a puzzle.
 
 import {
-  forestRoom, woodlandLight, trailSign, registerCallTarget,
+  forestRoom, woodlandLight, trailSign,
   placeVoxStack, buildForestWater, peatWaterTex, plenumBreach,
   ensureForestDetail, campLanternVox,
   CEDAR_TIMBER, BRASS_TRIM, BLAZE_ORANGE,
@@ -168,22 +168,12 @@ export function build(c) {
     region: (x, z) => Math.abs(x) > 1.35 && Math.abs(z) > 1.35,
   });
 
-  // Interactive Irrigation Flush (`[E]` at manifold OR `call` whistle): pulses green Bank-3 sap glow & ripples!
+  // The manifold's own green lamp. Nothing here can be used: the manifold used to answer E (and the Trail Call) with two
+  // sounds, a ripple and fifteen seconds of battery added without a sign, in a room of marks on a grid and lights on
+  // some trees, which made a room with no puzzle look exactly like one (the owner: "press E in one room around some
+  // lights? Maybe a puzzle but not clear"; docs/FOREST-REVIEW.md §4). It is a plantation, and the manifold is plumbing.
   c.light(0, 1.35, 0, '#4dff88', 0.88, { bank: 3, k: 2.0, far: 8.5 });
-  let flushed = false;
-  const flushLines = () => {
-    const mw = c.toWorld(0, 0);
-    c.env.play?.('glug', mw.x, mw.z, 10);
-    c.env.play?.('ding', mw.x, mw.z, 9);
-    water?.spawnRipple(-2.2, 0, 1.35);
-    water?.spawnRipple(2.2, 0, 1.35);
-    if (!flushed) {
-      flushed = true;
-      c.env.camera?.recharge?.(15);
-    }
-  };
-  c.use({ x: 0, z: 0, r: 1.75, label: 'flush sap manifold', use: flushLines });
-  registerCallTarget(c, 0, 0, flushLines, { r: 14 });
+  void water;
 
   const spSign = c.wallSpot(1.55, ['front', 'left', 'right']);
   if (spSign) {

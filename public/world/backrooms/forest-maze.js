@@ -172,9 +172,8 @@ export function cordwoodStackTex(kit) {
         P(g, '#59391c', cx - 1, cy - 1, 2, 2);
       }
     }
-    for (const [tx, ty] of [[22, 38], [86, 70], [54, 102]]) {
-      P(g, '#eceee6', tx, ty, 11, 7); P(g, '#1b1d1e', tx + 2, ty + 2, 7, 3);
-    }
+    // (no inventory tags on the log ends: three a tile, each a black bar on white, tiled into diagonal lines of dashes
+    // across every cordwood wall on the floor. docs/FOREST-REVIEW.md §4)
   });
 }
 

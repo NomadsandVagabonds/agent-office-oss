@@ -5,8 +5,7 @@
 // indoor pine grove, its cabin roof jammed flat against the 5.6 m suspended
 // acoustic ceiling grid with popped ceiling tiles hanging round its eaves!
 // Climb the wooden stairs to the lookout cab (`y = 2.40 m`) to pick up a
-// guaranteed Trail Call (`call`) whistle and rotate the brass Osborne Fire-
-// Finder Alidade (`[E]`), sweeping a golden beam across the grove below!
+// guaranteed Trail Call (`call`) whistle beside the brass Osborne Fire-Finder.
 
 import { Batch } from '../kit.js';
 import {
@@ -96,25 +95,8 @@ export function build(c) {
   alidadeB.box(-0.02, cabY + 1.05, cz + 0.42, 0.02, cabY + 1.09, cz + 2.8, [1.0, 0.88, 0.45]);
   const alidadeMesh = c.dynamic(alidadeB, { pivot: [0, cabY + 0.96, cz] });
 
-  let sector = p.sector || 0;
-  const cabW = c.toWorld(0, cz);
-  c.use({
-    x: 0,
-    z: cz,
-    r: 1.75,
-    label: 'rotate fire-finder',
-    when: () => (c.env.player?.me ? (c.env.player.me.y - (c.room.y || 0)) > cabY - 0.4 : true),
-    use: () => {
-      sector = (sector + 1) % 4;
-      c.env.play?.('clack', cabW.x, cabW.z, 8);
-      c.env.play?.('ding', cabW.x, cabW.z, 7);
-    },
-  });
-
-  c.tick((dt) => {
-    const want = (sector * Math.PI) / 2 + 0.35;
-    alidadeMesh.rotation.y += (want - alidadeMesh.rotation.y) * Math.min(1, dt * 5.0);
-  });
+  // It points where the seed left it and cannot be used: turning it a quarter and a ding was all it ever did.
+  alidadeMesh.rotation.y = ((p.sector || 0) * Math.PI) / 2 + 0.35;
 
   // Cab lantern & backpack in 1 `placeVoxStack` mesh + dense claustrophobic forest crowding the tower base!
   const voxEntries = [
