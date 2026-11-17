@@ -39,7 +39,10 @@ export function build(c) {
   const { W, D, H, R, params: p, kit } = c, K = GROTTO, env = c.env;
   c.shell({ panels: false, wallAlb: [0.42, 0.4, 0.44], floorAlb: [0.7, 0.7, 0.72] });
   /* the hut, against the back wall: plywood painted as a cottage with snow on it, a door you go in at, and the inside */
-  const hx = R.range(-W / 2 + K.hutW / 2 + 0.6, W / 2 - K.hutW / 2 - 0.6), z0 = -D / 2, z1 = z0 + K.hutD, x0 = hx - K.hutW / 2, x1 = hx + K.hutW / 2, top = K.hutH;
+  // (the hut along a stretch of the back wall with no doorway in it: rule 5)
+  const lo = -W / 2 + K.hutW / 2 + 0.6, hi = W / 2 - K.hutW / 2 - 0.6, fits = c.spans('back', 0.1).map(([a, b]) => { const p = c.wallAt('back', a).x, q = c.wallAt('back', b).x; return [Math.max(lo, Math.min(p, q) + K.hutW / 2), Math.min(hi, Math.max(p, q) - K.hutW / 2)]; }).filter(([a, b]) => b >= a);
+  const pick = fits.length ? R.pick(fits) : [lo, hi];
+  const hx = R.range(pick[0], pick[1]), z0 = -D / 2, z1 = z0 + K.hutD, x0 = hx - K.hutW / 2, x1 = hx + K.hutW / 2, top = K.hutH;
   const cottage = c.mapped('grotto:cottage', kit.tex.custom('grotto:cottage', 64, 64, (g, w, h) => { P(g, '#7a4f2a', 0, 0, w, h); for (let y = 0; y < h; y += 8) { P(g, '#5a3a20', 0, y, w, 1); P(g, '#8a5f36', 0, y + 1, w, 2); } P(g, '#f4f2ec', 0, 0, w, 10); for (let x = 0; x < w; x += 6) P(g, '#f4f2ec', x, 10, 4, 3 + (x % 5)); for (let i = 0; i < 12; i++) P(g, '#ffffff', (i * 23) % w, (i * 37) % 60, 2, 2); }));
   const doorW = 1.0, dx0 = hx - doorW / 2, dx1 = hx + doorW / 2;
   for (const [a, b] of [[x0, dx0], [dx1, x1]]) { upright(cottage, a, z1, b, z1, 0, top, [0, 0, (b - a) / 1.2, top / 1.2]); upright(cottage, b, z1 - 0.06, a, z1 - 0.06, 0, top, [0, 0, (b - a) / 1.2, top / 1.2]); c.solid(a, z1 - 0.08, b, z1 + 0.02, { tall: true }); }
@@ -63,10 +66,18 @@ export function build(c) {
   /* the queue: posts and belts, folded on itself five times, from the way in to the door */
   const qx0 = hx - Math.min(2.6, W / 2 - 1.2), qx1 = hx + Math.min(2.6, W / 2 - 1.2), belt = [0.5, 0.12, 0.12], post = [0.78, 0.66, 0.24];
   for (let r = 0; r < K.folds; r++) { const z = z1 + 1.0 + r * K.pitch; if (z > D / 2 - 1.2) break; const open = r % 2 ? qx1 : qx0, xa = r % 2 ? qx0 : qx0 + 0.7, xb = r % 2 ? qx1 - 0.7 : qx1;
-    if (r > 0) for (let x = xa; x <= xb + 0.01; x += (xb - xa) / 4) { c.flat.box(x - 0.03, 0, z - 0.03, x + 0.03, 0.95, z + 0.03, post); c.flat.box(x - 0.09, 0, z - 0.09, x + 0.09, 0.03, z + 0.09, post); }
-    if (r > 0) { c.flat.box(xa, 0.86, z - 0.012, xb, 0.9, z + 0.012, belt); c.solid(xa, z - 0.05, xb, z + 0.05, { tall: false }); } void open; }
+    if (r === 0) continue;
+    // (a belt stops short of the way to any doorway: rule 5. It is cut into the lengths that are clear, each with a post at both ends)
+    const ok = (x) => c.clear(x, z, 0.15), runs = []; let a0 = null;
+    for (let x = xa; x <= xb + 0.001; x += 0.1) { if (ok(x)) { if (a0 === null) a0 = x; } else if (a0 !== null) { runs.push([a0, x - 0.1]); a0 = null; } }
+    if (a0 !== null) runs.push([a0, xb]);
+    for (const [ra, rb] of runs) { if (rb - ra < 0.6) continue;
+      for (let x = ra, n = Math.max(1, Math.round((rb - ra) / 1.1)); x <= rb + 0.01; x += (rb - ra) / n) { c.flat.box(x - 0.03, 0, z - 0.03, x + 0.03, 0.95, z + 0.03, post); c.flat.box(x - 0.09, 0, z - 0.09, x + 0.09, 0.03, z + 0.09, post); }
+      c.flat.box(ra, 0.86, z - 0.012, rb, 0.9, z + 0.012, belt); c.solid(ra, z - 0.05, rb, z + 0.05, { tall: false }); }
+    void open; }
   /* the tree, the calendar, the snow that was put down, and the two who help */
-  const tx = hx > 0 ? -W / 2 + 1.3 : W / 2 - 1.3, tz = -D / 2 + 1.3; c.model('grotto:tree', treeVox, tx, tz, { scale: 1.2, solid: false }); c.solid(tx - 0.65, tz - 0.65, tx + 0.65, tz + 0.65, { tall: false }); c.light(tx, 1.6, tz + 0.6, '#ff3d9a', 0.7, { k: 1.4, far: 4 });
+  const tx = hx > 0 ? -W / 2 + 1.3 : W / 2 - 1.3, tz = -D / 2 + 1.3;
+  if (c.clear(tx, tz, 0.65)) { c.model('grotto:tree', treeVox, tx, tz, { scale: 1.2, solid: false }); c.solid(tx - 0.65, tz - 0.65, tx + 0.65, tz + 0.65, { tall: false }); c.light(tx, 1.6, tz + 0.6, '#ff3d9a', 0.7, { k: 1.4, far: 4 }); }
   const cal = c.mapped('grotto:cal', kit.tex.custom('grotto:cal', 32, 48, (g, w, h) => { P(g, '#f4efe0', 0, 0, w, h); P(g, '#b3261e', 0, 0, w, 12); garble(g, 'JULY', 1, 1, w - 2, 10, { color: '#f4efe0', mess: 0.1 }, 2); for (let y = 16; y < h - 2; y += 6) for (let x = 2; x < w - 2; x += 4) P(g, '#8a8680', x, y, 2, 3); P(g, '#b3261e', 14, 28, 4, 4); }));
   { const side = hx > 0 ? 'left' : 'right', sp = c.spans(side, 0.4, 2); if (sp.length) { const m = (sp[0][0] + sp[0][1]) / 2; wallFace(c, side, m - 0.3, m + 0.3, 1.3, 2.2, cal, [0, 0, 1, 1], 0.012); } }
   for (let i = 0; i < 9; i++) { const x = R.range(-W / 2 + 0.6, W / 2 - 0.6), z = R.range(z1 + 0.5, D / 2 - 0.6); c.flat.box(x - R.range(0.3, 0.7), 0, z - R.range(0.2, 0.5), x + R.range(0.3, 0.7), 0.025, z + R.range(0.2, 0.5), [0.96, 0.95, 0.92], { skip: '-y' }); }
