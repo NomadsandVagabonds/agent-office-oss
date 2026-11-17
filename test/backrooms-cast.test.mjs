@@ -540,7 +540,7 @@ test('the absorbed staff: a hold never turns the visitor\'s head while something
   assert.ok(TUG_SECONDS < A.holdDuration);
   // the ones this is for are the ones that hunt (the waste toner since it came: something dropping off the ceiling at
   // you is not a moment to have your head turned for you); the rest of the hold is as it was
-  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner', 'the-lines', 'mother', 'head-count', 'standing-meeting', 'intern', 'carried-interest', 'other-door']);
+  assert.deepEqual(CAST.filter((m) => m.disposition === 'hunts').map((m) => m.id), ['pirate', 'shadow', 'toner', 'the-lines', 'mother', 'head-count', 'standing-meeting', 'intern', 'carried-interest', 'dummies', 'other-door']);
   const held = SUNK.stepAbsorbed(SUNK.createAbsorbedState('wall'), { dt, dist: 0.5 });
   assert.ok(held.startedGrab && held.slow === A.slowFactor);
 });
@@ -1163,3 +1163,56 @@ test('the cast: head count, the standing meeting, the intern and carried interes
   }
   for (const [id, n] of met) assert.ok(n > 20, `${id} is still met, further down (${n} of 400)`);
 });
+
+/* ---- the dummies (cast/dummies.rule.js): the shopping centre's own ------------------------------------------------- */
+
+test('one that comes with a kind of floor is on a part if and only if it is that kind, and is never dealt by weight', () => {
+  const dummies = { id: 'dummies', home: 'roams', weight: 0, withTheme: 'mall' }, plain = { id: 'plain', home: 'roams', weight: 1 }, cast = [dummies, plain];
+  const floor = (theme) => ({ seed: 'm', theme, rooms: [{ id: 0, kind: 'start', arch: null, doors: [] }], start: { room: 0 } });
+  assert.deepEqual(withRoomFor(floor('mall'), cast), ['dummies']);
+  assert.deepEqual(withRoomFor(floor('suburb'), cast), [], 'another kind of floor: not on the part');
+  assert.deepEqual(withRoomFor(floor('mall'), [plain]), [], 'nobody comes with a kind of floor unless their line says so');
+  for (const seed of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) assert.ok(!whoIsDown(seed, cast).includes('dummies'), 'never dealt by weight');
+  assert.equal(hauntsFor({ seed: 'h', rooms: [{ id: 1, kind: 'odd', arch: 'maze' }] }, ['dummies'], { maze: { haunt: 2 } }, cast).size, 0, 'and is not sent to keep another room company');
+  const real = ALL_CAST.find((m) => m.id === 'dummies');
+  assert.ok(real && real.withTheme === 'mall' && real.weight === 0 && real.home === 'roams' && !real.always);
+});
+
+test('the dummies: one more where you stood when you left, the second time and after; never by a doorway; a room and a floor hold so many', async () => {
+  const { DUMMIES: K, blank, leftFrom, cameBack, mayStand } = await import('../public/world/backrooms/cast/dummies.rule.js');
+  const room = { W: 8, D: 8, doors: [{ x: 4, z: 0 }, { x: 0, z: -4 }] };
+  // where they stood when they left: a step back in from the end of the way they went, facing as they faced at the end
+  const left = leftFrom([{ x: -2, z: 0, yaw: 0 }, { x: 0, z: 0, yaw: 0.2 }, { x: 1.2, z: 0, yaw: 0.4 }, { x: 3.5, z: 0, yaw: 1.5, crouch: true }]);
+  assert.deepEqual(left, { x: 1.2, z: 0, yaw: 1.5, crouch: true });
+  assert.equal(leftFrom([]), null);
+  let s = blank(), r = cameBack(s, 7, room, { x: 0, z: 0, yaw: 0 });
+  assert.equal(r.stood, null, 'the first time in a room, nobody');
+  r = cameBack(r.s, 7, room, { x: 0, z: 0, yaw: 0.3, crouch: false });
+  assert.deepEqual([r.stood.x, r.stood.z, r.stood.yaw, r.stood.crouch], [0, 0, 0.3, false], 'the second time, one, as they stood');
+  assert.equal(cameBack(r.s, 7, room, { x: 0.2, z: 0.1, yaw: 0 }).stood, null, 'not on top of another');
+  // never by a doorway, never against a wall
+  for (const d of room.doors) assert.ok(!mayStand(d.x - Math.sign(d.x) * (K.door - 0.05), d.z - Math.sign(d.z) * (K.door - 0.05), room));
+  assert.ok(!mayStand(3.95, 2, room) && !mayStand(-2, -3.95, room));
+  assert.ok(mayStand(4 - K.wall - 0.01, 2, room), 'by a wall, but not too near it, where there is no doorway');
+  // a room holds K.most; a floor K.all
+  s = blank(); for (let i = 0; i < 20; i++) s = cameBack(s, 3, room, { x: -3 + (i % 6) * 0.9 + 0.3, z: -2 + Math.floor(i / 6) * 0.9 + 1, yaw: 0 }).s;
+  assert.equal(s.placed.filter((p) => p.room === 3).length, K.most);
+  s = blank(); for (let id = 0; id < 30; id++) for (let k = 0; k < 4; k++) s = cameBack(s, id, room, { x: -3 + k, z: 2, yaw: 0 }).s;
+  assert.equal(s.placed.length, K.all);
+});
+
+test('the dummies: between two that stand close, they have you, once in a while; between two far apart, or beside them, not', async () => {
+  const { DUMMIES: K, blank, cameBack, squeezed } = await import('../public/world/backrooms/cast/dummies.rule.js');
+  const room = { W: 8, D: 8, doors: [{ x: 4, z: 0 }] };
+  let s = blank(); s = cameBack(s, 1, room, { x: 0, z: 0, yaw: 0 }).s; s = cameBack(s, 1, room, { x: 0, z: 0, yaw: 0 }).s; s = cameBack(s, 1, room, { x: 1, z: 0, yaw: 0 }).s;
+  assert.equal(s.placed.length, 2);
+  let r = squeezed(s, 1, 0.5, 0.05, 10); assert.deepEqual(r.hit, [0, 1], 'between them');
+  assert.equal(squeezed(r.s, 1, 0.5, 0.05, 10 + K.again - 0.1).hit, null, 'not again so soon');
+  assert.deepEqual(squeezed(r.s, 1, 0.5, 0.05, 10 + K.again + 0.1).hit, [0, 1], 'and again after');
+  assert.equal(squeezed(s, 1, 0.5, 0.6, 10).hit, null, 'beside them, not between');
+  assert.equal(squeezed(s, 1, -0.5, 0, 10).hit, null, 'past the end of them, not between');
+  assert.equal(squeezed(s, 2, 0.5, 0.05, 10).hit, null, 'in another room, not at all');
+  let far = blank(); far = cameBack(far, 1, room, { x: -2, z: 0, yaw: 0 }).s; far = cameBack(far, 1, room, { x: -2, z: 0, yaw: 0 }).s; far = cameBack(far, 1, room, { x: 0, z: 0, yaw: 0 }).s;
+  assert.equal(squeezed(far, 1, -1, 0, 10).hit, null, 'two far apart are not a squeeze');
+});
+
