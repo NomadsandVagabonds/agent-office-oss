@@ -23,7 +23,7 @@ import { LEVEL_DESK, deskVox } from './desk.model.js';
 import { chooseUse } from './use.rule.js';
 import { WORKSTATION, chairVox, crtVox, keyboardVox, keyboardKeysVox } from './workstation.model.js';
 import { STORAGE, cabinetVox, boxesVox } from './storage.model.js';
-import { SMALLS, binVox, trolleyVox } from './smalls.model.js';
+import { SMALLS, binVox, trolleyVox, coolerVox } from './smalls.model.js';
 import { WALLFIT, socketVox, exitBoxVox } from './wallfit.model.js';
 import { markLiquid } from './liquid.mark.js';
 
@@ -804,11 +804,13 @@ function levelProp(kit, catalogue, type, o = {}) {
     const entry = catalogue.entry?.(type), n = Number(entry?.variant?.({ id: `${type}:${o.variant ?? 'backrooms'}`, type, ...o }) || 0);
     return { geo: model(`level:boxes:${n}`, () => boxesVox(n)), scale: STORAGE.scale };
   }
-  // (the office's bin is always one colour, whatever o.color a room hands it (the museum does): so is this one, in its own blue)
-  if (type === 'bin') return { geo: model('level:bin', () => binVox({ colour: '#3f7f9a' })), scale: SMALLS.scale };   // (the teal the office's bin is: the swap is of the model, not of its colour)
+  // (the office's bin is always one colour, whatever o.color a room hands it (the museum does): so is this one, in the teal
+  // the office's is, binVox's own default: the swap is of the model, not of its colour)
+  if (type === 'bin') return { geo: model('level:bin', binVox), scale: SMALLS.scale };
   if (type === 'trolley') return { geo: model('level:trolley', trolleyVox), scale: SMALLS.scale };
-  // (not the water cooler, smalls.model.js coolerVox: its bottle is twice the office's in glass triangles, about 1,090 more a
-  // cooler, and the coolers corridor stands ten to two dozen of them: 11,000 to 26,000 more triangles in one room)
+  // (the water cooler's bottle and cup tube are glass: c.place puts them into the room's glass batch, as it does the office's,
+  // and tint, noGlow and shadow act on it as on the office's; its only glow is the two tap lights)
+  if (type === 'cooler') return { geo: model('level:cooler', coolerVox), scale: SMALLS.scale };
   return null;
 }
 
@@ -1213,10 +1215,10 @@ function roomContext(world, rt) {
     },
     /** Something from the office's catalogue (desk, chair, cooler…), or a plain crate if it is not there. */
     prop(type, x, z, opt = {}) {
-      // (a desk, a chair, a monitor, a keyboard, a filing cabinet, a stack of boxes, a bin and a trolley are the level's own:
-      // desk.model.js, workstation.model.js, storage.model.js, smalls.model.js, each the office's bounds exactly at half-size
-      // voxels, so its foot, its collider and its top are where they were; only where the catalogue has that thing at all,
-      // so nothing gains one.
+      // (a desk, a chair, a monitor, a keyboard, a filing cabinet, a stack of boxes, a bin, a trolley and a water cooler are
+      // the level's own: desk.model.js, workstation.model.js, storage.model.js, smalls.model.js, each the office's bounds
+      // exactly at half-size voxels, so its foot, its collider and its top are where they were; only where the catalogue has
+      // that thing at all, so nothing gains one.
       // The chair is in the cloth the office's would have been; the boxes are the stack the office's would have been, of
       // its three; the monitor is on. A keyboard's keys are laid over its case as detail (c.place, `over`), and only where
       // it stays put: the case alone is a whole keyboard)
