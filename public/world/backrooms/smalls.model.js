@@ -28,13 +28,12 @@ const ARROWS = [                       // the three arrows chasing each other, a
 ];
 
 /** A recycling bin: a moulded body, a lid a little proud of it with a swing flap stuck half open, and what did not go in. */
-export function binVox({ colour = '#3f6fae' } = {}) {
+export function binVox({ colour = '#3f7f9a' } = {}) {
   const v = new Vox(), b = box(v), p = paint(v);
   const blue = M(colour, 0), dark = M(tone(colour, -0.3), 0), lite = M(tone(colour, 0.22), 0), white = M('#f1ead8', 0), black = M('#1c1d21', 0), scuff = M(tone(colour, -0.14), 0);
   v.rbox(-18, 0, -18, 18, 34, 18, 8, blue, 'xz');
   p(-18, 0, -18, 17, 3, 17, dark);
   for (const x of [-18, 17]) for (let y = 4; y < 30; y++) for (let z = -9; z <= 8; z += 6) v.has(x, y, z) && v.set(x, y, z, scuff);      // the ribs it was moulded with
-  for (let x = -18; x <= 17; x++) for (let z = -18; z <= 17; z++) for (let y = 4; y < 9; y++) if (v.has(x, y, z) && noise3(x >> 1, y, z >> 1, 31) > 0.83) v.set(x, y, z, scuff);
   v.rbox(-20, 32, -20, 20, 40, 20, 8, dark, 'xz');                                                    // the lid
   v.carve(-12, 36, -12, 12, 40, 12); p(-12, 34, -12, 11, 35, 11, black);
   b(-12, 38, -12, 11, 39, -3, lite); b(-12, 36, -2, 11, 37, 1, lite);                                 // the flap, and where it has stuck
@@ -81,7 +80,7 @@ export function trolleyVox() {
 export function coolerVox() {
   const v = new Vox(), b = box(v), p = paint(v);
   const WHITE = '#e6e2d6', white = M(WHITE, 0), grey = M(tone(WHITE, -0.2), 0), dark = M(tone(WHITE, -0.5), 0), seam = M(tone(WHITE, -0.32), 0), yellowed = M('#d9d2bd', 0);
-  const steel = M('#8f9488', 0), slot = M('#4d5049', 0), paper = M('#f1ead8', 0), blue = M('#3f6fae', 0), red = M('#b5443a', 0);
+  const steel = M('#8f9488', 0), slot = M('#4d5049', 0), paper = M('#f1ead8', 0), blue = M('#3f7f9a', 0), red = M('#c0463a', 0);
   const water = glass('#7fc4e8'), air = glass('#c9e6f4'), CX = -4;                                     // (the cabinet sits left of centre; the cups hang on its right)
   // the cabinet: rounded at the front, square at the back where the wall is; a dark plinth, a grey lower panel with its door
   v.rbox(-20, 0, -16, 12, 56, 16, 4, white, 'xz');
@@ -102,12 +101,15 @@ export function coolerVox() {
   b(-12, 28, 10, -7, 35, 15, paper); b(-11, 35, 11, -8, 35, 14, M('#9fd0ea', 0)); b(-12, 34, 10, -7, 34, 15, M('#dcd4c0', 0));   // somebody's cup, left under the cold tap
   // the bottle, upside down in its collar: neck, shoulder, body; ribs round it, the air at what is now the top, two bubbles on their way
   v.cyl('y', CX, 0, 56, 60, 11.2, grey); v.cyl('y', CX, 0, 59, 60, 11.2, seam);
-  v.cyl('y', CX, 0, 58, 62, 5.2, water); v.cyl('y', CX, 0, 62, 68, 7.2, water, 13.8); v.cyl('y', CX, 0, 68, 90, 13.8, water); v.cyl('y', CX, 0, 90, 92, 11.2, water);
-  for (const y of [74, 82]) p(-20, y, -16, 11, y + 1, 15, air);
-  p(-20, 86, -16, 11, 91, 15, air);
-  for (const [x, y, z] of [[-8, 78, 12], [0, 70, 12], [-3, 80, 11]]) v.has(x, y, z) && v.set(x, y, z, air);
+  // (the glass is drawn at the office's own fineness and each voxel of it doubled: a round bottle at twice the fineness
+  // is twice the triangles, and a corridor holds two dozen of these)
+  const coarse = new Vox(), HX = CX / 2;
+  coarse.cyl('y', HX, 0, 29, 31, 2.6, water); coarse.cyl('y', HX, 0, 31, 34, 3.6, water, 6.9); coarse.cyl('y', HX, 0, 34, 45, 6.9, water); coarse.cyl('y', HX, 0, 45, 46, 5.6, water);
+  for (const y of [37, 41]) coarse.paint(-10, y, -8, 6, y + 1, 8, air);
+  coarse.paint(-10, 43, -8, 6, 46, 8, air);
+  coarse.cyl('y', 8, 2, 13, 26, 2.05, glass('#cfe3e8'));
+  coarse.each((x, y, z, c) => { for (let dx = 0; dx < 2; dx++) for (let dy = 0; dy < 2; dy++) for (let dz = 0; dz < 2; dz++) v.set(2 * x + dx, 2 * y + dy, 2 * z + dz, c); });
   // the cups: a glass tube of them on two brackets, a cap, the next one waiting at the bottom
-  v.cyl('y', 16, 4, 26, 52, 4.1, glass('#cfe3e8'));
   b(14, 28, 2, 17, 50, 5, paper); for (let y = 30; y <= 48; y += 3) b(14, y, 2, 17, y, 5, M('#ddd6c4', 0));
   v.cyl('y', 16, 4, 52, 54, 4.1, grey); v.cyl('y', 16, 4, 22, 26, 3, paper);
   b(12, 30, 2, 13, 33, 5, grey); b(12, 44, 2, 13, 47, 5, grey);
