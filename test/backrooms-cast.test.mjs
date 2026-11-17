@@ -1256,3 +1256,27 @@ test('the big ones start in a room with a doorway they fit, and go on only throu
   for (const id of ['head-count', 'standing-meeting', 'intern', 'carried-interest']) assert.match(read(id), /fits = \(r\) => [^;\n]*&& canLeave\(r, walker\.tall\);/, `${id} may be put where it cannot leave`);
   for (const id of ['head-count', 'standing-meeting', 'carried-interest']) assert.match(read(id), /ways = \(here\?\.doors \|\| \[\]\)\.filter\(\(d\) => fitsDoor\(d, walker\.tall\)\)\.map\(\(d\) => level\.rooms\[d\.to\]\)/, `${id} may set off for a doorway it cannot use`);
 });
+
+/* ---- a place to stand in a room is a place that can be stood in --------------------------------------------------- */
+
+test('somewhere to stand in a room: the nearest place to its middle that fits, however much of the middle is taken', () => {
+  // a room 8 × 8 with a block 3 × 3 in the middle of it (a basin's island, a bank of desks): further than a few cells from the centre
+  const def = { cx: 10, cz: -4, W: 8, D: 8, H: 3, rot: 0, doors: [] }, rt = { id: 0, def };
+  const solid = (x, z) => Math.abs(x - def.cx) < 1.5 && Math.abs(z - def.cz) < 1.5;
+  const world = { rooms: [rt], throats: [], roomAt: (x, z) => (Math.abs(x - def.cx) <= 4 && Math.abs(z - def.cz) <= 4 ? rt : null),
+    free: (x, z, r = 0) => !solid(x + r, z) && !solid(x - r, z) && !solid(x, z + r) && !solid(x, z - r) && Math.abs(x - def.cx) <= 4 - r && Math.abs(z - def.cz) <= 4 - r,
+    headroom: () => 3, floorY: () => 0, passable: () => true };
+  const walk = createWalk({ level: { rooms: [def] }, world });
+  for (const who of [{ r: 0.26, tall: 1.62 }, { r: 0.5, tall: 1.05 }, { r: 0.18, tall: 0.5 }]) {
+    const it = { x: 0, z: 0, ...who }, at = walk.spotIn(it, 0);
+    assert.ok(walk.stand(it, at.x, at.z), `r ${who.r}: put at (${at.x.toFixed(2)}, ${at.z.toFixed(2)}), where it cannot stand`);
+    const off = Math.max(Math.abs(at.x - def.cx), Math.abs(at.z - def.cz));
+    assert.ok(off >= 1.5 + who.r - 0.13 && off <= 1.5 + who.r + 0.3, `r ${who.r}: ${off.toFixed(2)} m from the middle: beside the block, not across the room`);
+  }
+  // a room with a clear middle still gives its middle
+  const open = createWalk({ level: { rooms: [def] }, world: { ...world, free: (x, z, r = 0) => Math.abs(x - def.cx) <= 4 - r && Math.abs(z - def.cz) <= 4 - r } });
+  const mid = open.spotIn({ x: 0, z: 0, r: 0.3, tall: 1.6 }, 0); assert.ok(Math.hypot(mid.x - def.cx, mid.z - def.cz) < 0.2);
+  // and one with nowhere at all gives its bare middle back (whoever asked has to ask stand())
+  const full = createWalk({ level: { rooms: [def] }, world: { ...world, free: () => false } });
+  assert.deepEqual(full.spotIn({ x: 0, z: 0, r: 0.3, tall: 1.6 }, 0), { x: def.cx, z: def.cz });
+});
