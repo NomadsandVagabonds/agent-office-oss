@@ -215,6 +215,8 @@ const DECK1 = [
 // (an entry with `on: false` has been retired: it is not in the deck, and nothing else needs to know)
 export const DECK = [...DECK1, ...MORE_DECK].filter((a) => a.on !== false);
 export const ARCHETYPES = Object.fromEntries(DECK.map((a) => [a.id, a]));
+const PAIR_LEADS = new Map(DECK.filter(a => a.adjoins).map(a => [a.adjoins, a]));
+export const encounterLead = id => PAIR_LEADS.get(id) || ARCHETYPES[id];
 
 // Nothing down here is ever explained, so the only teacher is the order things are met in. A deck entry says what its
 // room is the first place to learn (`teaches`: one thing, at most) and what it takes for granted (`needs`); the visit's
@@ -417,7 +419,8 @@ function build(R, o, opt) {
   /* deal the oddities */
   // (a part of a visit is told exactly which oddities it has — `hand`, plan.js: a visit shows part of the deck, and no
   // room twice — and how many rooms it is to be; a floor asked for by itself deals its own, five to eight of them)
-  const hand = Array.isArray(opt.hand) ? opt.hand.map((id) => ARCHETYPES[id]).filter(Boolean) : null;
+  const leads = ids => [...new Set([].concat(ids || []).map(encounterLead).filter(Boolean))];
+  const hand = Array.isArray(opt.hand) ? leads(opt.hand) : null;
   const want = hand ? Math.max(1, hand.length) : opt.count || R.int(MIN_ODD, MAX_ODD);
   let deck = [];
   // (a room that is only ever there because the visit's plan asked for it — `planned`, or one staged from the news — is
@@ -427,19 +430,20 @@ function build(R, o, opt) {
   // that keeps to its own may be very few: a floor is not held to more oddities than there are for it)
   let able = Infinity;
   if (hand) deck = hand.slice();
-  else { const pool = DECK.filter((a) => !a.planned && !a.headline && ready(a, known) && atHome(a, theme.id) > 0); able = pool.length; while (pool.length) { const pickd = R.weighted(pool, (a) => a.weight * atHome(a, theme.id)); deck.push(pickd); pool.splice(pool.indexOf(pickd), 1); } }
-  if (opt.only) { const forced = [].concat(opt.only).map((id) => ARCHETYPES[id]).filter(Boolean); deck = [...forced, ...deck.filter((a) => !forced.includes(a))]; }
+  else { const pool = DECK.filter((a) => encounterLead(a.id) === a && !a.planned && !a.headline && ready(a, known) && atHome(a, theme.id) > 0); able = pool.length; while (pool.length) { const pickd = R.weighted(pool, (a) => a.weight * atHome(a, theme.id)); deck.push(pickd); pool.splice(pool.indexOf(pickd), 1); } }
+  const forced = leads(opt.only);
+  if (forced.length) deck = [...forced, ...deck.filter(a => !forced.includes(a))];
   // a floor further down keeps clear of what the floors above it had, for as long as the deck lasts…
-  if (opt.avoid && opt.avoid.length) { const had = new Set(opt.avoid); deck = [...deck.filter((a) => !had.has(a.id)), ...deck.filter((a) => had.has(a.id))]; }
+  if (opt.avoid && opt.avoid.length) { const had = new Set(leads(opt.avoid)); deck = [...deck.filter(a => !had.has(a)), ...deck.filter(a => had.has(a))]; }
   // …and may insist on a room of its own, somewhere among the ones it would have had anyway
-  const must = [].concat(opt.must || []).map((id) => ARCHETYPES[id]).filter(Boolean);
+  const must = leads(opt.must);
   if (must.length) { deck = deck.filter((a) => !must.includes(a)); for (const a of must) deck.splice(R.int(0, Math.min(want - 1, deck.length)), 0, a); }
   // A room the way out is through (`gate`: deck2.js) is not dealt with the others. It goes in last of all, with the
   // lobby and the fire exit hung off it and off nothing else, so that there is no way to them but through it.
   const gate = deck.find((a) => a.gate) || null;
   if (gate) deck = deck.filter((a) => a !== gate);
   /** Is this the room a building was asked for by name (`only`), which is put where you land? */
-  const byStart = (arch) => !!opt.only && [].concat(opt.only).includes(arch.id);
+  const byStart = arch => forced.includes(arch);
 
   const sides = () => R.shuffle([0, 1, 2, 3]);
   function connector(from) {                 // a plain room off a hub or a port
@@ -497,10 +501,26 @@ function build(R, o, opt) {
         if (!room) continue;
         room.name = arch.name;
         if (!(first && byStart(arch)) && R.chance(0.18)) step(hub, room, R.pick([2, 4, 4]));
+        const placed = [room];
+        if (arch.adjoins) {
+          const next = ARCHETYPES[arch.adjoins];
+          const companion = attach(room, worldSide(room, 'back'), {
+            kind: 'special', arch: next.id, lw: R.int(...next.w), ld: R.int(...next.d),
+            centred: true, H: R.range(...next.h), fixed: portSpan(room, 'back', 0, 1.8),
+          });
+          if (!companion) { undo(room); continue; }
+          const onward = attach(companion, worldSide(companion, 'back'), {
+            kind: 'plain', lw: 4, ld: 4, H: WALL_H, fixed: portSpan(companion, 'back', 0, 1.8),
+          });
+          if (!onward) { undo(companion); undo(room); continue; }
+          companion.name = next.name;
+          placed.push(companion);
+          hubs.push(onward);
+        }
         hubs.push(...fresh);
         if (port) port.used = true;
         for (const local of arch.ports) if (wallLength(room, local) >= 3.2) ports.push({ room, local });
-        return room;
+        return placed;
       }
       for (const r of fresh.reverse()) undo(r);
     }
@@ -509,11 +529,16 @@ function build(R, o, opt) {
   // Only an authored co-op finale asks for two landmarks. Normal generation
   // retains the one-set-piece limit; this cannot grow beyond two.
   const setPieceLimit = opt.setPieces === 2 ? 2 : 1;
+  let dealt = 0, setPieces = 0;
   for (const arch of deck) {
-    if (specials.length >= want - (gate ? 1 : 0)) break;
-    if (isBig(arch) && specials.filter((r) => isBig(ARCHETYPES[r.arch])).length >= setPieceLimit) continue;
-    const room = placeSpecial(arch, specials.length === 0);
-    if (room) specials.push(room);
+    if (dealt >= want - (gate ? 1 : 0)) break;
+    if (isBig(arch) && setPieces >= setPieceLimit) continue;
+    const placed = placeSpecial(arch, specials.length === 0);
+    if (placed) {
+      specials.push(...placed);
+      dealt++;
+      if (isBig(arch)) setPieces++;
+    }
   }
 
   /* params for each oddity — and the rooms that hide a way on behind a real door */
@@ -697,7 +722,7 @@ function build(R, o, opt) {
   depth = distances(start);
   for (const room of rooms) room.depth = depth.get(room.id) ?? -1;
   if (rooms.some((r) => r.depth < 0)) return null;
-  if (specials.length < (hand ? Math.max(hand.length ? 1 : 0, hand.length - 1) : Math.min(MIN_ODD, want, able)) || (opt.only && [].concat(opt.only).some((id) => ARCHETYPES[id] && !specials.some((r) => r.arch === id)))) return null;
+  if (dealt + (gate ? 1 : 0) < (hand ? Math.max(hand.length ? 1 : 0, hand.length - 1) : Math.min(MIN_ODD, want, able)) || forced.some(a => !specials.some(r => r.arch === a.id))) return null;
   if (must.some((a) => !specials.some((r) => r.arch === a.id))) return null;
   if (1 - specials.length / rooms.length < QUIET[0]) return null;              // (a floor that could not be made quiet enough is dealt again)
 

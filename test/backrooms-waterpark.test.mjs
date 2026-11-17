@@ -43,7 +43,7 @@ const [
   { buildWorld },
   { THEMES, atHome, dealtThemes },
   { DECK, generate, toWorld },
-  { planVisit },
+  { planVisit, floorOf },
 ] = await Promise.all([
   import('../public/world/backrooms/waterpark.rule.js'),
   import('../public/world/backrooms/waterpark.js'),
@@ -67,6 +67,8 @@ const WATERPARK_ROOMS = [
   'whirlpool-flume',
   'kiddie-lagoon',
   'locker-showers',
+  'smiler-maze',
+  'dive-tower',
 ];
 
 test('waterpark.rule.js stays 100% pure (no three.js, DOM, or I/O)', () => {
@@ -390,6 +392,9 @@ test('waterpark theme isolation & generation: undealt by default, strictly isola
           if (id === 'dispatch' || id === 'mecha') continue; // headline story placed by plan.js
           assert.ok(WATERPARK_ROOMS.includes(id), `unexpected special ${id} on waterpark floor`);
           seenSpecials.add(id);
+        }
+        if (f.hand.includes('smiler-maze') && floorOf(visit, f.depth).picked.includes('dive-tower')) {
+          seenSpecials.add('dive-tower');
         }
       }
     }
