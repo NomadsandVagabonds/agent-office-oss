@@ -204,14 +204,12 @@ export function build(c) {
     }
   });
 
-  // Diegetic Cairn Tally Sign (no HUD text!) telling the visitor the ring count & whistle clue
+  // The survey board: the ring count and nothing else (the arrows and the bell are for the visitor to find)
   const spSign = c.wallSpot(1.55, ['front', 'back', 'left', 'right']);
   if (spSign) {
     trailSign(c, spSign.side, spSign.at, 1.52, [
       'TRAIL LOOP SURVEY',
-      `TRUE STUMP = ${targetRings} RINGS`,
-      'DECOY ARROWS TURN UNSEEN',
-      'SOUND CALL FOR ECHO',
+      `${targetRings} RINGS`,
     ], { seed: 91 + targetRings, warn: true, mess: 0.14 });
   }
   const spMural = c.wallSpot(3.0, ['left', 'right', 'back']);

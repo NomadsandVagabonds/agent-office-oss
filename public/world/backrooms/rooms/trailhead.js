@@ -174,8 +174,7 @@ export function build(c) {
   if (spSign) {
     trailSign(c, spSign.side, spSign.at, 1.52, [
       p.parkName || 'SYNERGY PINES',
-      'TAKE TRAIL CALL AT BOOTH',
-      'SPIN DIAL FOR EXIT BEARING',
+      'ALL VISITORS MUST BE EXPECTED',
       `PERMIT: ${p.permit || 'Q4-GRASS'}`,
     ], { seed: 31, warn: true });
   }

@@ -159,7 +159,6 @@ export function build(c) {
   if (spSign) {
     trailSign(c, spSign.side, spSign.at, 1.52, [
       'WINDFALL CORE SHAFT',
-      'AUTHORIZED ROOT DESCENT [E]',
       'MIND HVAC SAP DUCTS',
     ], { seed: 151, warn: true });
   }

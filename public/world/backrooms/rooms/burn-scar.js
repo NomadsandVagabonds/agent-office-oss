@@ -324,5 +324,5 @@ export function build(c) {
 
   // a routed board by the door, the reserve's own, as if nothing has happened
   const sign = c.wallSpot(1.4, ['front'], 0.35, 2.0);
-  if (sign) trailSign(c, sign.side, sign.at, 1.5, ['SECTOR 7 · CONTROLLED BURN', 'THANK YOU FOR PARTICIPATING', 'STAY LOW · STAY ON TEAM'], { seed: p.seed % 97, warn: true });
+  if (sign) trailSign(c, sign.side, sign.at, 1.5, ['SECTOR 7 · CONTROLLED BURN', 'THANK YOU FOR PARTICIPATING'], { seed: p.seed % 97, warn: true });
 }

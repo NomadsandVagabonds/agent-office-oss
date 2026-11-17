@@ -273,7 +273,6 @@ export function build(c) {
   if (spSign) {
     trailSign(c, spSign.side, spSign.at, 1.52, [
       'CYPRESS FEN ANNEX',
-      'KEEP MOVING ON WET PLANKS',
       'DO NOT REBOOT DROWNED DESKS',
     ], { seed: 127, warn: true });
   }
