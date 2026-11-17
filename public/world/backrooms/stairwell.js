@@ -19,6 +19,7 @@ import { Batch, lin, drawText, WHITE } from './kit.js';
 import { RISE, RUN, T, makeRng } from './gen.js';
 import { P, doorFrame, floorPlan, card, wetSign } from './bits.js';
 import { leafModel, addLeaf, LEAF_THICK } from './doorleaf.js';
+import { STAIRS, nosingVox, railVox, bracketVox } from './stairs.model.js';
 import { gives } from './thin.js';
 import { GAP, flight, holeIn, ledgeAt, ductIn, pushes } from './seam.js';
 import { camp, rationList, tallyMark, tapeMark } from './traces.js';
@@ -77,22 +78,27 @@ export function stairwell(c) {
   // the landing you step onto, then the flight: each stair a block of the same concrete with a worn yellow edge
   c.floor.grid([-W / 2, 0, zL], [0, 0, 1], [1, 0, 0], [0, 0.2, zF - zL - 0.16, zF - zL], xs, (u, v) => [v / 0.8, u / 0.8], grey, (u, v) => (v < 0.2 || v > W - 0.2 ? 0.8 : 1));
   // …and a line of shadow at the back, under the stair above, so that from the top it reads as a flight and not a ramp
-  const stairs = c.mapped('stairs', con), edge = [0.72, 0.57, 0.12], tread = [1, 1, 0.98];
+  const stairs = c.mapped('stairs', con), tread = [1, 1, 0.98];
+  const NOSE = Math.round((W - 0.04) / STAIRS.nosing.voxel), nose = kit.model('stairs:nosing:' + NOSE, () => nosingVox(NOSE), { ao: false });
   for (let i = 1; i <= n; i++) {
     const y = -i * RISE, z1 = zL - (i - 1) * RUN, z0 = z1 - RUN, k = shadeAt(z0);
     stairs.box(-W / 2, y - 0.5, z0, W / 2, y, z1, tread.map((v) => v * k), { uv: 0.8, skip: '-y-x+x' });
-    c.flat.box(-W / 2 + 0.02, y, z0 + 0.008, W / 2 - 0.02, y + 0.004, z0 + 0.055, edge.map((v) => v * k));
+    // (the nosing: drawn, not solid. It lies where the painted edge lay and stands 4 mm off the tread, as that did)
+    c.vox.addVox(nose.solid, new THREE.Matrix4().set((W - 0.04) / NOSE, 0, 0, -W / 2 + 0.02, 0, 0.004, 0, y, 0, 0, 0.047 / STAIRS.nosing.deep, z0 + 0.008, 0, 0, 0, 1), { tint: [k, k, k] });
     c.flat.box(-W / 2, y, z1 - 0.05, W / 2, y + 0.003, z1, [0.1 * k, 0.1 * k, 0.1 * k]);
   }
-  // a steel rail down one side, on brackets
-  const steel = [0.42, 0.44, 0.46], rx = -W / 2 + 0.1, t = 0.022;
+  // a steel rail down one side, on brackets: a tube from the landing to the foot of the flight, and a level length along
+  // the landing; each turns in to the wall where it ends. Drawn, not solid (stairs.model.js): nobody is stopped by it.
+  const rx = -W / 2 + 0.1, RV = STAIRS.rail.voxel;
   const railY = (z) => 0.94 - SLOPE * Math.max(0, zL - z), za = zL + 0.15, zb = zB + 0.1;
-  for (const [da, db] of [[[rx - t, t], [rx + t, t]], [[rx + t, t], [rx + t, -t]], [[rx + t, -t], [rx - t, -t]]]) {       // its top, its side, its underside
-    const a = [da[0], railY(za) + da[1], za], b = [db[0], railY(za) + db[1], za], e = [db[0], railY(zb) + db[1], zb], f = [da[0], railY(zb) + da[1], zb];
-    c.flat.quad(a, b, e, f, steel); c.flat.quad(f, e, b, a, steel);
-  }
-  for (let z = za - 0.2; z > zb; z -= 1.15) c.flat.box(-W / 2, railY(z) - 0.05, z - 0.015, rx, railY(z) - 0.02, z + 0.015, steel.map((v) => v * shadeAt(z)));
-  c.flat.box(rx - t, 0.94 - t, za, rx + t, 0.94 + t, zF - 0.45, steel);
+  const fall = railY(zb) - 0.94, len = Math.hypot(fall, zb - za), dy = fall / len, dz = (zb - za) / len, lineY = (z) => 0.94 + fall * (z - za) / (zb - za);
+  const along = (n, wall) => kit.model(`stairs:rail:${n}:${wall}`, () => railVox(n, { wall }), { ao: false }).solid;
+  // (down the flight: the model's z is the way the rail falls, its x is toward the wall, its y square to both)
+  c.vox.addVox(along(Math.round(len / RV), 1), new THREE.Matrix4().set(-RV, 0, 0, rx, 0, -dz * RV, dy * RV, 0.94, 0, dy * RV, dz * RV, za, 0, 0, 0, 1));
+  c.vox.addVox(along(Math.round((zF - 0.45 - za) / RV), -1), new THREE.Matrix4().set(RV, 0, 0, rx, 0, RV, 0, 0.94, 0, 0, RV, za, 0, 0, 0, 1));
+  const bracket = kit.model('stairs:bracket', bracketVox, { ao: false }).solid;
+  for (let z = za - 0.2; z > zb; z -= 1.15) c.vox.addVox(bracket, new THREE.Matrix4().set(RV, 0, 0, -W / 2, 0, RV, 0, lineY(z), 0, 0, RV, z, 0, 0, 0, 1), { tint: [shadeAt(z), shadeAt(z), shadeAt(z)] });
+  c.vox.addVox(bracket, new THREE.Matrix4().set(RV, 0, 0, -W / 2, 0, RV, 0, 0.94, 0, 0, RV, (za + zF - 0.45) / 2, 0, 0, 0, 1));
 
   /* ---- light: one bulkhead over the landing that has seen better days ---------------------------- */
   const lampB = new Batch(), ly = 2.6 - 0.07, lz = zL + 0.65;
