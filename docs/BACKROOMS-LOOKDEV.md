@@ -40,7 +40,8 @@ features. Then it shows the picture through the level's real camcorder
 | `look.js` | the proposed shading: the patch, lamps, cube picture, torch depth map, haze, dust, grade |
 | `bake.js` | h1: tube shadows baked into the vertices and a floor lightmap |
 | `water.js` | e: the water surface, the wet map |
-| `tools/lookdev-shots.mjs` | the pictures and the frame times |
+| `rooms2.js`, `look2.js`, `movers.js`, `water2.js` | round two (below): its rooms, its passes, the figure, chair and held torch, its water |
+| `tools/lookdev-shots.mjs` | the pictures and the frame times (`--round 2` for round two's) |
 
 ## Opening it
 
@@ -204,3 +205,269 @@ Not checked:
 - Determinism across machines: the pictures are the same run to run here.
 - The bake times are for one room on the build machine's CPU, on the main
   thread; the level builds a floor's rooms while you walk.
+
+## Round two
+
+Round two stands on the level as it now draws at **High** (`graphics.js`):
+its baked tube shadows per bank, the light through doorways, the sculpted
+fittings, the grade, the haze past 8 m, the tier's tight bloom and the scene
+drawn twice the tape's size. That is the baseline, and it is not approximated:
+the lab boots the level with `graphics: 'high'` and draws it through the
+camcorder with High's profile (`lab.js`: `gfx=` in the address, `high` for
+every round-two room). The flashlight's own beam shadows are High too, but no
+round-two picture has the torch on. Round one's rooms stay on Classic and
+draw as they did.
+
+| file | what |
+|---|---|
+| `rooms2.js` | the rooms: `r2office` (the copier room), `r2bank` (a plain room in the bank mode), `r2door` (the dark room and the lit mailroom), `r2lino` (a corridor of Records' lino), `r2shiny` (the mailroom on lino), `r2pool` (the waterpark's wading lagoon) |
+| `look2.js` | the features: two small patches to the kit's shader (`movers`, `materials`), the extra pictures (a material picture, the movers' depth pictures, the floor's mirror, an emissive picture) and the screen passes; the result goes to the camcorder as a full-screen quad that also writes the scene's depth, so the tier's haze still reads it |
+| `movers.js` | the figure (standing, or caught mid-stride), the dragged office chair with the level's round blot, the held torch drawn in front exactly as `hand.js` draws it (`holdInFront`) |
+| `water2.js` | the pool's surface |
+
+Address: `room=r2office&features=movers,ao&vhs=2`, plus `variant=stand|stride`
+(the movers), `held=1` (the torch in the hand), `flicker=1` (`r2bank`: its
+second bank failing, pinned to `t`), `features=chosen` (that room's choice),
+`dbg=mv|ao|ssr|planar|shafts|bloom|g|emit|water` (one of the lab's own
+pictures in place of the scene). Pictures:
+`node tools/lookdev-shots.mjs --round 2 --base http://localhost:4434 --out <dir> [--only 1a,6s] [--scale 2]`.
+Every picture is LEFT = High as the level draws it now, RIGHT = the feature,
+the same camera and the same frame; files are `<n>-<feature>-<what>-vhs0.png`
+(clean) and `-vhs2.png` (Full VHS); the strips have the baseline as their top
+row. Sheets: `sheet-vhs0.png`, `sheet-vhs2.png` (one picture of each feature),
+`sheet-all-chosen.png` (the combination, through the tape). Made at device
+scale 2 (2560 × 1600 at vhs0; the scene 1440 × 1080 under the tape); nothing
+ran out of memory. Software rendering, so no frame times: "cost" below is a
+class, counted, not measured.
+
+### 1 · Shadows of what moves (`movers`)
+
+**Tried.** The figure and the chair are on a layer of their own. Each frame the
+up to four tubes that light them most (the room's own tubes, weighed by what
+each brings to the movers' middle) get three depth pictures each, 512², of the
+movers alone, from points 0.45 m apart along the tube, looking down (130°).
+The room's own surfaces within 4 m of the movers take each of those tubes'
+share of light off as far as its three points are hidden (2 × 2 comparisons
+each), and 60 % of the hidden tubes' part of the ambient with it, as the
+level's own bake does; never more than the tubes bring there, so a mover
+standing in a baked shadow does not darken it twice. The chair's round blot
+goes while this is on. Not done: the movers do not shadow each other or
+themselves, and they do not shadow the air.
+
+**Pictures.** `1-moving-shadows-standing`, `1-moving-shadows-midstride` (the
+bank room, one bank failed: the figure under the two tubes still lit),
+`1-moving-shadows-lit-room` (the copier room, everything on).
+
+**Verdict: worth it, at High.** With one bank out the figure's shape lands on
+the partition, stepped at the voxel scale, and the chair stands in a shadow
+of its own base; both survive Full VHS. In the fully lit copier room it is
+faint and soft, the same lesson as round one: a figure 0.4 m wide under a
+1.2 m tube with a dozen others around has a wide, weak penumbra, which is how
+such rooms are. It reads best exactly where the horror is (failing banks,
+emergency light, a black-out with one tube).
+
+**Cost class.** 12 tiny depth passes a frame (the movers only: a few hundred
+triangles each; one 1536 × 2048 depth target), and on the room's pixels within
+4 m of a mover up to 4 lamp evaluations and 48 texture reads. Two tubes and
+two points would halve it and still read.
+
+**In the game.** A layer (or list) of what moves (the pursuer, the cast,
+dragged furniture); a depth atlas made once a frame before the scene; a block
+in `kit.js`'s fragment shader beside `lightmapped()`; the tubes chosen per
+mover from `rt.lights` with their bank and flicker levels (`world.js` already
+has them for `lightAt`). Medium could keep the blot.
+
+### 2 · Ambient occlusion from the screen (`ao`)
+
+**Tried.** Horizon-based (the GTAO integral): from the scene's depth alone, at
+the size the scene is drawn under the tape, four directions a pixel, eight
+steps each way out to 0.42 m, then a 4 × 4 blur weighted by depth. The face's
+normal comes from the depth (of each pair of neighbours, the one on the same
+face), so a flat voxel face is exactly flat and nothing smears across it. What
+is held in the hand (drawn into the depth range's nearest sliver, `hand.js`)
+is skipped both ways: it is not darkened and it darkens nothing, so there is
+no halo round it. Applied to the whole colour at 0.85 (the level's picture has
+no separate ambient term to apply it to).
+
+**Pictures.** `2-ao-held` (the copiers close, the torch in the hand),
+`2-ao-room`.
+
+**Verdict: worth it, cheap, but quiet.** Clean at vhs0: creases, the copiers'
+feet, the trays, the corners, no halo round the torch, flat faces untouched.
+Through Full VHS it is only a slight deepening of corners and feet; with the
+baked tube shadows already there it adds less than it would to a flat-lit
+picture. It does cover what moves, which the bake cannot.
+
+**Cost class.** One full-screen pass at the scene's size (68 depth reads a
+pixel) and one blur (16). **In the game:** the depth texture the haze already
+reads at Medium and High; the held-item sliver already exists; a pass before
+the supersample's filter in `vhs.js`.
+
+### 3 · Reflections on hard floors and glass (`ssr`, `planar`)
+
+**Tried.** A material picture (one more pass of the scene: normal and what a
+surface is, by round one's guess: lino by texture, glass, metal by colour).
+*SSR*: at half size, a ray marched through the depth picture (up to 56 growing
+steps, then 5 halvings), the colour fetched where it hits, faded at the
+picture's edges and with distance, a little jitter by roughness. *Planar*: the
+room drawn once more from under the floor's plane (an oblique near plane clips
+what is below it), looked up where each floor pixel is, blurred by roughness.
+Both with Schlick fresnel and both at twice what bare lino would give
+(`reflK: 2`, a waxed floor): bare, it is too faint to pay for, as round one
+found.
+
+**Pictures.** `3-ssr-corridor`, `3-planar-corridor`,
+`3-planar-vs-ssr-corridor` (LEFT planar, RIGHT SSR), `3-ssr-glass-mailroom`.
+
+**Verdict: planar is the better value for floors; SSR is not worth it.** The
+planar mirror is exact for a flat floor, shows what the screen does not (the
+tube overhead, above the top of the picture, lies in the floor), costs one
+more draw of the room at half size, and is steady. SSR misses everything
+off-screen (the overhead tubes, which are the point), leaves speckle where
+rays miss or graze, and smears the walls; on the mailroom's glass tube it adds
+almost nothing. Both survive Full VHS as a soft sheen with the tube's bright
+patch; without a tube in it, a reflection does not survive the tape.
+
+**Cost class.** Planar: one more scene pass at half size per reflecting plane
+(a room has one floor), 5 lookups a floor pixel. SSR: a material and normal
+picture (one more pass, or a second target of the main pass), then up to 61
+depth reads a reflective pixel at half size. **In the game:** the room contract
+has to say which floors are hard (the materials the plan already drafts), and
+the floor's height per room; for SSR a normal target.
+
+### 4 · Light in the air (`shafts`)
+
+**Tried.** At half size, each pixel's line of sight marched in 28 steps (with
+noise, then blurred): the air lit by the room's nearest eight tubes (only
+downward out of the fittings, falling off) and by the next room's lamps
+through the doorway's opening (three points a lamp, a ray-plane test against
+the opening: a door-shaped prism of light). Nothing else shadows it. The
+failing tube: `r2bank` with its second bank stuttering, eight steps pinned to
+`t`; the tubes, their light and the air follow it together.
+
+**Pictures.** `4-shafts-doorway`, `4-shafts-tubes`,
+`4-shafts-failing-tube-strip` (top row the baseline; five frames 1/6 s apart).
+
+**Verdict: only at a doorway from a lit room into a dark one, and thinner than
+shown.** The doorway's beam has the opening's shape and survives the tape, but
+it lifts the whole dark room's blacks a little, which costs the dark more than
+the beam gives. Under the tubes of a lit room it is a uniform pale veil that
+greys the yellow (round one's warning again): not worth it. In the failing-tube
+strip the room's own light carries the flicker; the air adds nothing that
+survives the tape at this density.
+
+**Cost class.** One half-size pass, 28 steps × (8 tubes + 8 lamps × 3 opening
+tests) of arithmetic and one depth read; a blur. **In the game:** the depth
+texture; the doorways with their openings and the lamps beyond (`world.js`
+`doorLight` has both); the door leaves as blockers (they are not, here).
+
+### 5 · Bloom for the fittings (`bloom`)
+
+**Tried.** In place of the tier's bloom (which blooms anything bright enough,
+the walls under a tube included): an emissive picture (the scene again, every
+lit surface black, only what shines by itself drawn: the fittings' tubes and
+pans, signs, screens), at half size, down a chain of six halvings and back up,
+added in the tubes' own warm white at 0.5. With `materials` on, the brightest
+highlights (above 2.2) join it.
+
+**Pictures.** `5-bloom` (looking up at the fittings), `5-bloom-room`.
+
+**Verdict: worth it.** The fittings glow as fittings, through the tape, and the
+yellow walls keep their colour because nothing lit blooms. At Full VHS the
+louvre's lines soften inside the glow; 0.35 would keep more of them.
+
+**Cost class.** One more scene pass (emissive only; could be a second target of
+the main pass) and a chain of small passes about the size of the one it
+replaces. **In the game:** the glowing materials are already their own
+(`kit.glowing`, the panels' batches); `vhs.js`'s bloom fed from them.
+
+### 6 · Water, again (`water`)
+
+**Tried** in the waterpark's wading lagoon (`r2pool`): a real basin, 0.42 m
+deep, so the water has depth to colour. The level's own surface there (a
+translucent sheet with a caustic texture) is the baseline; the lab's replaces
+it: the room's mirror image about the water's plane (as `planar`), the scene
+under it displaced by the ripple and absorbed by the length of water the eye
+looks through (red first, so a clear pool goes green-blue with depth), a ripple
+worked out on 5 cm cells with its slope stepped, a pale line a cell wide where
+the surface meets the basin's walls, the floats and the wader's legs (the
+scene's depth just behind the surface), and a wake: rings left along the
+wader's path over the last two seconds.
+
+**Pictures.** `6-water`, `6-water-wide`, `6-water-strip` (five frames 0.2 s
+apart; top row the baseline).
+
+**Verdict: worth it, in rooms that have a basin.** It reads as water now: the
+floats and the tubes in it, the tiles under it bent and blue-green with depth,
+the legs under the surface, the edge line, and it stays blocky. Both survive
+Full VHS. The wake is too faint to read at this camera and through the tape;
+it needs a stronger, slower ring or a foam line behind the legs. On a flat
+flooded carpet (round one) none of the depth would be there.
+
+**Cost class.** One more scene pass at half size (the mirror) and the surface's
+own pass: per water pixel three ripple evaluations of up to 12 rings and 4
+texture reads. **In the game:** the depth texture and the opaque scene before
+the water (one copy); the room contract's liquid surfaces (a basin and its
+level); the waders' positions over the last two seconds.
+
+### 7 · Materials (`materials`)
+
+**Tried.** On round one's keepers only: lino (roughness 0.2), metal (0.32,
+tinted by its colour), glass (0.06), each a GGX highlight of the room's 16
+strongest tubes, each tube a 0.9 m line (the point on it nearest the reflected
+ray). With a floor reflection on, the floor's highlight is left to the
+reflection (it is the same light); the reflections take their blur from the
+roughness, and the bloom takes the brightest highlights.
+
+**Pictures.** `7-materials-mailroom` (lino), `7-materials-with-planar-and-bloom`
+(LEFT planar and bloom, RIGHT the same with materials), `7-materials-copiers`.
+
+**Verdict: lino yes; metal and glass wait for the contract.** The tubes'
+streaks on the mailroom's lino are the most convincing modern touch in the
+round and survive the tape. The copiers come out as plastic by the colour rule
+(cream), so they gain nothing: that picture shows no change, and nothing in the
+round tested metal properly.
+
+**Cost class.** A 16-lamp loop on lino, metal and glass pixels only. **In the
+game:** the room contract's materials; `kit.js`'s fragment shader.
+
+### The combination (`chosen`)
+
+Per room (`rooms2.js` `chosen`): the office movers, AO, bloom and materials;
+the bank room movers, AO, bloom; the doorway shafts, AO, bloom; the corridor
+the planar floor, materials, AO, bloom; the pool the water, movers, AO, bloom.
+`sheet-all-chosen.png` and `all-chosen-*-vhs0.png` / `-vhs2.png`. The yellow
+keeps its colour in all of them (no grade was added, and the bloom takes
+nothing lit); the doorway room is greyer than it should be, which is the
+shafts.
+
+### Ranked, best value first
+
+1. **Bloom from what shines**: about the cost of today's bloom; the fittings
+   read through the tape; the yellow is untouched.
+2. **Water in basins**: the biggest visible change, and it finally reads as
+   water; needs the contract's liquids.
+3. **Planar floor reflection** (hard floors only, waxed): steady, shows the
+   tubes, one half-size pass.
+4. **Highlights on lino** (materials): cheap and convincing; metal and glass
+   wait for the contract.
+5. **Shadows of what moves**: strong in failing light, faint in full light;
+   12 tiny passes and a lookup loop.
+6. **AO from the screen**: clean, no halos, but quiet through the tape.
+7. **Shafts**: only through a doorway into a dark room, and thinner.
+8. **SSR**: not worth it here; planar does the floors better and glass barely
+   shows it.
+
+### What looks wrong, and what was not done
+
+- The doorway's shafts lift the dark room's blacks; their light also passes
+  through the open door leaves (not blockers here, as in round one).
+- SSR's speckle where rays miss, at vhs0; the tape's softness hides it.
+- The wake does not read at Full VHS.
+- `7-materials-copiers` shows no change (the copiers are not metal by the
+  lab's colour rule).
+- The movers do not shadow themselves or each other; the figure is lit by one
+  tint, as the level lights what moves.
+- Materials and reflections hang on the lab's guess of what each surface is;
+  a real build needs the room to say.
+- No frame times (software rendering).
