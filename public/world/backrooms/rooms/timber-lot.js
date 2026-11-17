@@ -426,14 +426,12 @@ export function build(c) {
     rig,
   };
 
-  // Clear diegetic Forestry / Cloakroom warning board
+  // The cloakroom's board: a name and a disclaimer (what wakes the rack is for the visitor to find)
   const spSign = c.wallSpot(1.55, ['front', 'left', 'right']);
   if (spSign) {
     trailSign(c, spSign.side, spSign.at, 1.52, [
       'CLEAR-CUT CLOAKROOM',
-      'NO TORCH BEAM ON RACKS',
-      'CROUCH [C] IN DRY BRACKEN',
-      'LEAN ORANGE BLAZE TO FELL',
+      'COATS LEFT AT OWN RISK',
     ], { seed: 61, warn: true });
   }
   const spMural = c.wallSpot(3.1, ['back', 'left', 'right']);

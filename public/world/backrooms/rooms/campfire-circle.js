@@ -330,9 +330,7 @@ export function build(c) {
   if (spSign) {
     trailSign(c, spSign.side, spSign.at, 1.52, [
       'MANDATORY CAMPFIRE',
-      'ACCEPT RATION [E] (+1 HEART)',
-      'DO NOT TURN YOUR BACK',
-      'NO SPRINTING MID-SHARE',
+      'ATTENDANCE IS BEING TAKEN',
     ], { seed: 109, warn: true });
   }
   const spMural = c.wallSpot(3.0, ['back', 'left', 'right']);

@@ -131,8 +131,7 @@ export function build(c) {
   if (spSign) {
     trailSign(c, spSign.side, spSign.at, 1.52, [
       `WINDTHROW PARCEL ${p.galeCode || 'W-12'}`,
-      'DUCK UNDER LEANING TRUNKS',
-      'LEAN NOTCHED PINE TO BRIDGE PIT',
+      'NO WIND WAS RECORDED',
     ], { seed: 241 + R.int(0, 9), warn: true });
   }
 }
