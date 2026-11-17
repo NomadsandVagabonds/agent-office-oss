@@ -204,7 +204,7 @@ export function build(c) {
       if (res.atePaper) {
         c.env.hand?.consume(isPaper);
         c.env.play('shred', roamer.x, roamer.z, 9);
-        c.env.play('whistle', roamer.x, roamer.z, 9);
+        if (res.chirp) c.env.play('whistle', roamer.x, roamer.z, 9);               // (pleased: but never on the heels of the last one)
       }
       if (res.grabbed) {
         if (!known) { known = true; c.met('retention-clerk'); }          // (if you had not seen her before, you have now)

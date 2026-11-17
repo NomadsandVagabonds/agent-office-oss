@@ -3,7 +3,8 @@
 // is the pockets' business (inventory*.js); what a resident asks about it is
 // items.js. This is the part of the two that needs three.js.
 import * as THREE from 'three';
-import { Batch, lamp, drawText } from './kit.js';
+import { Batch, lamp, drawText, lin } from './kit.js';
+import { handAt, showing } from './shove-hands.rule.js';
 import { INVENTORY_MODELS, sculptTorchGrip } from './inventory-items.js';
 import { Vox, M } from '../vox/vox.js';
 import { KINDS, ITEM_IDS, isPaper, isBalloon, isFlashlight, createHandOver } from './items.js';
@@ -125,6 +126,31 @@ export function createHandView(env, camera) {
     mesh.renderOrder = 10000;
     return { mesh, mat, hold: [0.2, -0.12, -0.5] };
   }
+  /**
+   * Both hands, for a shove (shove-hands.rule.js: where they go): a forearm in a sleeve coming up from below the frame, the back of a
+   * hand held up flat with the fingers up and a thumb to the inside. Plain boxes, 84 triangles each, drawn over the room as every
+   * held thing is. The left one is the right one mirrored.
+   */
+  let hands = null;
+  function makeHands() {
+    const skin = lin('#d6a883'), knuckle = lin('#c4916c'), sleeve = lin('#6f7681'), cuff = lin('#9aa0a8'), b = new Batch(false);
+    b.box(-0.02, -0.022, 0.12, 0.02, 0.022, 0.24, sleeve);                  // the sleeve, back toward the camera
+    b.box(-0.022, -0.024, 0.11, 0.022, 0.024, 0.13, cuff);                 // its cuff
+    b.box(-0.024, -0.024, 0.0, 0.024, 0.024, 0.11, skin);                   // the wrist and forearm
+    b.box(-0.04, -0.012, -0.05, 0.04, 0.095, 0.0, skin);                    // the back of the hand, standing up
+    for (const x of [-0.03, -0.01, 0.01, 0.03]) b.box(x - 0.0085, 0.095, -0.045, x + 0.0085, 0.175 - Math.abs(x) * 0.8, -0.005, x === -0.03 || x === 0.03 ? skin : knuckle);   // four fingers
+    b.box(-0.075, 0.015, -0.04, -0.042, 0.045, -0.012, skin);               // the thumb, to the inside
+    const group = new THREE.Group(), made = [];
+    for (const side of [-1, 1]) {
+      const mat = kit.surface({ vox: false, side: THREE.DoubleSide }), mesh = new THREE.Mesh(kit.geometry(b, ITEM_LIGHTS(), ITEM_AMB), mat);
+      mat.transparent = true; mesh.renderOrder = 10000; mesh.scale.x = side;                      // (the left is the right, turned over)
+      mesh.onBeforeRender = (renderer) => { if (camera.userData.hand !== view) root.visible = false; else holdInFront(renderer); };
+      mesh.onAfterRender = letGoOfFront;
+      group.add(mesh); made.push({ side, mesh, mat });
+    }
+    group.visible = false; root.add(group);
+    return { group, made };
+  }
   function fitPicture() {
     const p = env.vhs.picture, focal = p.h * camera.projectionMatrix.elements[5] / 2;
     const key = `${type}:${p.w}:${p.h}:${focal}`;
@@ -183,13 +209,25 @@ export function createHandView(env, camera) {
           shown = made.get(want); shown.mesh.visible = true;
         }
       }
-      root.visible = !!shown;
-      if (!shown) return;
+      // a shove: both hands out and back, while the pulse lasts (and not with the scissors in the hand: that click is the jab)
+      const meP = env.player.me, striking = show && showing(meP.punch || 0, { scissors: type === 'scissors' });
+      if (striking && !hands) hands = makeHands();
+      if (hands) {
+        hands.group.visible = striking;
+        if (striking) for (const h of hands.made) { const a = handAt(meP.punch, h.side); h.mesh.position.set(a.x, a.y, a.z); h.mesh.rotation.set(a.pitch, a.yaw, 0); }
+      }
+      root.visible = !!shown || striking;
+      if (!shown && !striking) return;
       if (!root.parent) env.world.scene.add(root);
       // Two parts can be alive together. Hide the previous hand before Three
       // builds its draw list, rather than relying on a late render callback.
       if (camera.userData.hand !== view) camera.userData.hand?.hide();
       camera.userData.hand = view;
+      if (!shown) {                                                  // (nothing in the hand: only the hands of a shove, lit like the rest)
+        root.position.copy(camera.position).sub(env.world.scene.position); root.quaternion.copy(camera.quaternion);
+        const L = env.world.lightAt(meP.x, meP.z, 1.2); for (const h of hands.made) h.mat.uniforms.uTint.value.set(Math.max(0.16, L[0] * 1.25), Math.max(0.16, L[1] * 1.25), Math.max(0.16, L[2] * 1.25));
+        return;
+      }
       fitPicture();
       const me = env.player.me, pace = Math.min(1, (me.speed || 0) / 2);
       t += dt * (1 + pace * 5); swing += (pace - swing) * (1 - Math.exp(-6 * dt));
@@ -205,6 +243,7 @@ export function createHandView(env, camera) {
         shown.mesh.rotation.set(0.25 - thrust * 0.56, -0.6 + thrust * 0.36, thrust * 0.4);
       }
       shown.mesh.position.copy(at);
+      if (hands?.group.visible) { const L2 = env.world.lightAt(me.x, me.z, 1.2); for (const h of hands.made) h.mat.uniforms.uTint.value.set(Math.max(0.16, L2[0] * 1.25), Math.max(0.16, L2[1] * 1.25), Math.max(0.16, L2[2] * 1.25)); }
       if (type === 'balloon') shown.mesh.rotation.z = Math.sin(t * 0.5) * 0.09 + swing * 0.12;
       // lit by where you are standing — and a torch that is switched on is its own light
       const L = env.world.lightAt(me.x, me.z, 1.2), on = type === 'torch' && item.lit, k = on ? 1.45 : 1.25, floor = on ? 0.22 : 0.16;
@@ -212,7 +251,7 @@ export function createHandView(env, camera) {
     },
     hide() { root.visible = false; },
     jab() { jabT = 1; },
-    dispose() { root.removeFromParent(); if (camera.userData.hand === view) camera.userData.hand = null; },
+    dispose() { hands = null; root.removeFromParent(); if (camera.userData.hand === view) camera.userData.hand = null; },
   };
   env.handView = view;
   return view;
