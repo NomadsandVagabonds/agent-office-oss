@@ -265,7 +265,7 @@ export function concourse(c, opt = {}) {
       if (b - a > 1.6 && R.chance(0.6)) { const m = R.range(a + 0.6, b - 0.6); wallFace(c, side, m - 0.5, m + 0.5, 1.35, 1.85, stencil, [0, 0, 1, 1], 0.012); }
       if (side === 'back' || side === 'left') { for (const [y, r, rgb] of [[top - 0.22, 0.05, [0.42, 0.44, 0.46]], [top - 0.36, 0.035, [0.7, 0.25, 0.18]], [top - 0.46, 0.03, [0.85, 0.82, 0.72]]]) wallBox(c, side, a, b, y - r, y + r, 0.03, 0.03 + r * 2, rgb); }
     }
-    if (R.chance(0.5)) { const ws = c.wallSpot(0.8, ['back', 'front', 'left', 'right'], 0.3, 2); if (ws) { const p = c.wallAt(ws.side, ws.at, 0.35); c.model('mall:bin:0', binVox(false), p.x, p.z, { scale: 1.6, solid: false }); c.solid(p.x - 0.3, p.z - 0.3, p.x + 0.3, p.z + 0.3, { tall: false }); } }
+    if (R.chance(0.5) && Math.min(W, D) >= 2.6) { const ws = c.wallSpot(0.8, ['back', 'front', 'left', 'right'], 0.3, 2), p = ws && c.wallAt(ws.side, ws.at, 0.35); if (p && c.clear(p.x, p.z, 0.35)) { c.model('mall:bin:0', binVox(false), p.x, p.z, { scale: 1.6, solid: false }); c.solid(p.x - 0.3, p.z - 0.3, p.x + 0.3, p.z + 0.3, { tall: false }); } }
     return;
   }
   // a street: units along each run of wall
