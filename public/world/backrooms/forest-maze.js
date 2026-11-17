@@ -724,6 +724,11 @@ void main() {
 }`;
 
 export function addMistVeils(c, segments, opt = {}) {
+  // Off. The veils were flat upright cards of one colour: pale panels standing in the lane of a dark room, dark blotches
+  // in a lit one, gone as you walked up to them (the owner: "the lighting and fog effects need work";
+  // docs/FOREST-REVIEW.md §2). Thirteen rooms still call this, and get nothing, so that a room which earns mist can ask
+  // for it again with `opt.force` once there is a mist worth having (a height band of the camcorder's own haze).
+  if (!opt.force) return null;
   if (!segments?.length) return null;
   const { H, kit } = c;
   const pos = [], uv = [], idx = [];

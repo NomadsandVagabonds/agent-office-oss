@@ -222,7 +222,9 @@ export function woodlandDynamicLight(c, opt = {}) {
   }
 
   // Slanted volumetric god-ray shafts & drifting lit forest pollen under up to 5 live troffers!
-  if (opt.shafts !== false && liveSpots.length > 0 && H >= 3.2) {
+  // (off unless a room asks, `shafts: true`: they were drawn under every live panel whether or not anything was in the
+  // air, fell on nothing, and through the camcorder only added grey. None of the fifteen rooms asks. docs/FOREST-REVIEW.md §2)
+  if (opt.shafts === true && liveSpots.length > 0 && H >= 3.2) {
     addLightShafts(c, liveSpots.slice(0, opt.maxShafts ?? 5), {
       tint: opt.shaftTint || (mode === 'ember' ? [1.0, 0.72, 0.38] : [0.76, 0.96, 0.74]),
       strength: opt.shaftStrength ?? (mode === 'ember' ? 0.11 : 0.13),
