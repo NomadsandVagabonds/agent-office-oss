@@ -64,8 +64,9 @@ export function chairVox({ colour = '#4d5a78' } = {}) {
  * A beige monitor of the kind with a tube in it: the case tapering to the back with slots along the top and sides,
  * a bezel, the glass set back behind it, a row of little wheels under the picture and a lamp that is on, a foot it
  * swivels on. The glass is lit a little and has a line or two on it: it was left on.
+ * @param {{dead?:boolean}} [o] dead: no power. The glass is black, nothing is on it and the lamp is out: nothing of it shines.
  */
-export function crtVox() {
+export function crtVox({ dead = false } = {}) {
   const v = new Vox(), B = box(v);
   const body = M(CREAM, 0), shade = M(tone(CREAM, -0.14), 0), deep = M(tone(CREAM, -0.3), 0), dark = M('#1b1c1e', 0);
   B(-20, 6, -18, 19, 39, 17, body);
@@ -77,12 +78,12 @@ export function crtVox() {
   B(-19, 8, 17, 18, 38, 17, shade); v.carve(-15, 14, 16, 15, 37, 18);                                       // the bezel, and the well the glass sits in
   B(-14, 14, 15, 13, 35, 15, M('#0c1410', 0)); B(-15, 13, 16, 14, 13, 16, deep); B(-15, 36, 16, 14, 36, 16, deep); B(-15, 13, 16, -15, 36, 16, deep); B(14, 13, 16, 14, 36, 16, deep);
   // what is on it: a prompt, two short lines above, all of it the green of that phosphor
-  const ink = glow('#57d98a'), dim = M('#12241a', 0);
+  const ink = dead ? M('#0c1410', 0) : glow('#57d98a'), dim = M(dead ? '#0c1410' : '#12241a', 0);
   B(-11, 31, 15, 2, 31, 15, ink); B(-11, 28, 15, -3, 28, 15, ink); B(-11, 19, 15, -10, 19, 15, ink); B(-8, 19, 15, -7, 20, 15, ink);
   for (let y = 17; y <= 34; y += 6) B(-13, y, 15, 12, y, 15, dim);                    // the lines of the raster, faintly
   B(-11, 31, 15, 2, 31, 15, ink); B(-11, 28, 15, -3, 28, 15, ink);
   // under the picture: a badge, the wheels for brightness and the rest, the switch and its lamp
-  B(-15, 9, 17, -8, 10, 17, deep); for (const x of [0, 3, 6]) B(x, 9, 17, x + 1, 10, 17, deep); B(11, 9, 17, 13, 10, 17, shade); v.set(15, 10, 17, glow('#86e0a8'));
+  B(-15, 9, 17, -8, 10, 17, deep); for (const x of [0, 3, 6]) B(x, 9, 17, x + 1, 10, 17, deep); B(11, 9, 17, 13, 10, 17, shade); v.set(15, 10, 17, dead ? deep : glow('#86e0a8'));
   // slots: along the top, down each side toward the back
   for (let x = -14; x < 14; x += 3) v.carve(x, 39, -12, x + 1, 40, 4);
   for (const x of [-20, 19]) for (let y = 14; y < 34; y += 3) v.carve(x, y, -4, x + 1, y + 1, 8);
@@ -92,23 +93,35 @@ export function crtVox() {
   return v;
 }
 
-/** A keyboard: a wedge of a case, higher at the back, every key its own, a long bar at the front, three lamps, a lead. */
+/** The rows of a keyboard: where each is (z), the height its keys stand on, whether it is the row with the bar. */
+const ROWS = [[-6, 4, false], [-3, 3, false], [0, 3, false], [3, 2, false], [6, 2, true]];
+const eachKey = (fn) => ROWS.forEach(([z, y, bar], r) => {
+  for (let x = -22; x <= 20; x += 3) { if (bar && x >= -10 && x <= 8) continue; fn(x, y, z, x < -16 || x > 14 || (r === 0 && (x + 22) % 12 === 9), false); }
+  if (bar) fn(-10, y, z, false, true);
+});
+
+/**
+ * A keyboard's case: a wedge, higher at the back, with one red key and three lamps along its top edge and a lead out
+ * of the back. Whole by itself: where the keys go, the case is marked in their colours, flat, so that it does not
+ * look bare without them. (The keys are `keyboardKeysVox`, to be laid over it at the same place and scale; they are
+ * fine detail, and a low setting may leave them out.)
+ */
 export function keyboardVox() {
   const v = new Vox(), B = box(v);
-  const caseC = M(tone(CREAM, -0.12), 0), key = M(CREAM, 0), keyD = M(tone(CREAM, -0.2), 0), grey = M('#a9a290', 0), dark = M('#1b1c1e', 0);
+  const caseC = M(tone(CREAM, -0.12), 0), key = M(tone(CREAM, -0.03), 0), grey = M('#a9a290', 0), dark = M('#1b1c1e', 0);
   B(-24, 0, -8, 23, 1, 7, caseC); B(-24, 2, -8, 23, 2, 2, caseC); B(-24, 3, -8, 23, 3, -4, caseC);          // the wedge
   for (const [x, z] of [[-24, -8], [23, -8], [-24, 7], [23, 7]]) v.carve(x, 0, z, x + 1, 4, z + 1);
-  const rows = [[-6, 4, false], [-3, 3, false], [0, 3, false], [3, 2, false], [6, 2, true]];               // z of the row, the height its keys stand on, the bar row
-  rows.forEach(([z, y, bar], r) => {
-    for (let x = -22; x <= 20; x += 3) {
-      if (bar && x >= -10 && x <= 8) continue;
-      const mod = x < -16 || x > 14 || (r === 0 && (x + 22) % 12 === 9);
-      B(x, y, z - 1, x + 1, y + 1, z, mod ? grey : key); v.set(x, y, z, mod ? keyD : keyD);
-    }
-    if (bar) B(-10, y, z - 1, 9, y + 1, z, key);
-  });
+  eachKey((x, y, z, mod, bar) => B(x, y - 1, z - 1, bar ? 9 : x + 1, y - 1, z, mod ? grey : key));          // the key field, flat, on the steps of the wedge
   B(-22, 4, -8, -21, 5, -8, M('#c96a5a', 0));                                                               // the one red key
   for (const x of [15, 18, 21]) v.set(x, 4, -8, x === 15 ? glow('#86e0a8') : dark);                          // lamps: one of them lit
   B(-2, 2, -8, -1, 3, -8, dark);                                                                            // the lead
+  return v;
+}
+
+/** The keys alone, every one its own, and the long bar at the front: laid over `keyboardVox` at the same place and scale. */
+export function keyboardKeysVox() {
+  const v = new Vox(), B = box(v);
+  const key = M(CREAM, 0), keyD = M(tone(CREAM, -0.2), 0), grey = M('#a9a290', 0);
+  eachKey((x, y, z, mod, bar) => { B(x, y, z - 1, bar ? 9 : x + 1, y + 1, z, mod ? grey : key); if (!bar) v.set(x, y, z, keyD); });
   return v;
 }
