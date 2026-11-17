@@ -750,7 +750,7 @@ export function create(c) {
     if (unit.s.bite) {
       c.play('buzz', walker.x, walker.z, 8);
       env.interfere(0.85);
-      const hit = c.hurt(TONER.hitDamage);
+      const hit = c.hurt(TONER.hitDamage, walker);
       // that was the last of them (or there is no health down here, and being got is the end): the tape is ending, and
       // none of them does anything more — it was biting again every frame until the picture went, and saying so
       if (hit.ended || (hit.dead && hit.ended !== false)) { over = true; return; }
@@ -930,6 +930,20 @@ export function create(c) {
       const first = units[0];
       if (!first || first.s.hits <= 0) return null;
       return { hits: first.s.hits, mode: first.s.mode === 'puddle' ? 'puddle' : undefined };
+    },
+
+    /** A shove (shove.rule.js): one of them that is coming — dropping, chasing, wound up, in the air — is batted aside, as a bite that missed is. */
+    shoveTargets() {
+      if (!placed || !units.length) return [];
+      return units.filter((u) => u.s.mode === 'drop' || u.s.mode === 'chase' || u.s.mode === 'windup' || u.s.mode === 'lunge').map((u) => ({
+        id: 'toner', x: u.walker.x, z: u.walker.z, y: u.surfY + 0.18, r: 0.34,
+        shove: () => {
+          if (!(u.s.mode === 'drop' || u.s.mode === 'chase' || u.s.mode === 'windup' || u.s.mode === 'lunge')) return false;
+          u.s = strikeToner(u.s, { landed: false }); u.prowlGoal = null;
+          c.play('buzz', u.walker.x, u.walker.z, 8);
+          return true;
+        },
+      }));
     },
 
     snipTargets() {

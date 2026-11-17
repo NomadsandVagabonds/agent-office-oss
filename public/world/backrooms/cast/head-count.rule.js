@@ -14,6 +14,7 @@ export const HEADS = Object.freeze({
   touch: 1.0,              // metres: nearer than this a hand is on you, still or not
   hurts: 2,
   recount: 4.5,            // seconds it counts again after having somebody
+  turned: 1.4,             // seconds it is finding its hands again after being shoved (shove.rule.js)
   fire: 3,                 // metres: it will not come this near a fire
 });
 
@@ -34,6 +35,9 @@ export function counts(s, o) {
   if (d <= HEADS.touch && line && !fire) return { mode: 'recounts', t: 0, took: true };
   return { mode: 'counts', t };
 }
+
+/** Shoved: it is turned aside, and is a moment finding its hands before it goes on — some other way. */
+export const turned = () => ({ mode: 'recounts', t: HEADS.recount - HEADS.turned });
 
 /** How fast it goes, doing what it is doing. */
 export const pace = (mode) => (mode === 'recounts' ? 0 : HEADS.slow);

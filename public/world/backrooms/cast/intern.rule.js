@@ -30,6 +30,9 @@ export const INTERN = Object.freeze({
 });
 
 /** As it is first found: waiting to be shown. */
+/** Shoved (shove.rule.js): it has lost its place, and what it had learnt of how near to follow is halved. */
+export const pushed = (s) => ({ mode: 'blank', t: 0, watched: 0, unseen: 0, learnt: (s.learnt || 0) * 0.5 });
+
 export const waiting = () => ({ mode: 'waits', t: 0, watched: 0, unseen: 0, learnt: 0 });
 
 /** How many seconds behind it is, having followed for this long. */
