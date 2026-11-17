@@ -143,7 +143,7 @@ export function officeDoor(c,{x,z,y=0,rot=0,tilt=0,roll=0,open=0}={}){
 }
 
 /** Brass riser and mixer with a faceted rain head and individual water jets. */
-export function shower(c,{x,z,y=0,rot=0,roll=0,run=true,reverse=false}={}){
+export function shower(c,{x,z,y=0,rot=0,roll=0,run=true,reverse=false,occupied=false}={}){
   const b=new Batch(),pose={x,y,z,rot,roll},m=matrix(pose);
   pipe(b,[0,.55,0],[0,1.88,0],.026,C.brass);
   pipe(b,[0,1.88,0],[0,2.02,.16],.026,C.brass);
@@ -175,6 +175,24 @@ export function shower(c,{x,z,y=0,rot=0,roll=0,run=true,reverse=false}={}){
       const endX=xx*1.7,endZ=.38+(zz-.38)*1.7,uv=[[i*.17,0],[i*.17+.02,0],[i*.17+.02,reverse?-1:1],[i*.17,reverse?-1:1]];
       water.quad([endX-.004,.025,endZ],[endX+.004,.025,endZ],[xx+.003,1.928,zz],[xx-.003,1.928,zz],col,uv);
       water.quad([endX,.025,endZ+.004],[endX,.025,endZ-.004],[xx,1.928,zz-.003],[xx,1.928,zz+.003],col,uv);
+    }
+    // The spray breaks over the bather and runs down in front of its chest.
+    if (occupied) {
+      const runoff = lin('#e4ede4');
+      for (let i = 0; i < 8; i++) {
+        const start = (i - 3.5) * .028;
+        const end = start * 1.7;
+        const lane = i * .17;
+        const lip = .485 + (i % 3) * .013;
+        const lead = .565 + (i % 3) * .016;
+        const shoulder = 1.48 - (i % 3) * .18;
+        water.quad([end-.003,shoulder,lead],[end+.003,shoulder,lead],
+          [start+.003,1.928,lip],[start-.003,1.928,lip],
+          runoff,[[lane,0],[lane+.02,0],[lane+.02,.32],[lane,.32]]);
+        water.quad([end-.004,.18,lead+.03],[end+.004,.18,lead+.03],
+          [end+.003,shoulder,lead],[end-.003,shoulder,lead],
+          runoff,[[lane,-.68],[lane+.02,-.68],[lane+.02,0],[lane,0]]);
+      }
     }
     append(context(c).water,water,m);
   }

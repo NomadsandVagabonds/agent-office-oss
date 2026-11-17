@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import {showerWater} from './locker-showers/water.js';
 import {showerGlaze} from './locker-showers/glaze.js';
 import {lockerTunnel} from './locker-showers/locker-tunnel.js';
+import {showerFigure} from './locker-showers/figures.js';
 import {Batch,lin,WHITE} from '../kit.js';
 import {pipe} from '../pool-finish.js';
 import {innerTubeVox} from '../waterpark.js';
@@ -90,7 +91,9 @@ export function build(c){
     // The leaf opens into the bay; its jambs and leaf agree with the artwork.
     for(const zz of [z-.10,z+1.0])solid(-4.45,zz-.055,-4.28,zz+.055,2.22);
     solid(-5.39,z+.91,-4.33,z+1.02,2.1);
-    shower(c,{x:-6.39,z:z-.45,rot:Math.PI/2,run:i!==3});
+    const occupied=i===0||i===2;
+    const spray=shower(c,{x:-6.39,z:z-.45,rot:Math.PI/2,run:i!==3,occupied});
+    if(occupied)showerFigure(c,spray,i/2);
     hangingTowel(c,{x:-4.16,y:1.93,z:z-1.15,rot:Math.PI/2});
     for(const yy of [.10,1.15])c.board(grime,-4.13,yy,z-1.27,.32,.55,Math.PI/2);
   }
@@ -200,7 +203,8 @@ export function build(c){
   c.lay(lamp,-2.2,-3.22,1.05,.14,0,null,WHITE,invertedFloor-.022,true);
   c.light(-2.2,4.12,-3.22,'#e79e73',1.6,{far:3.7,k:3.4});
   c.light(-4.6,4.45,7.8,'#efb96f',2.5,{far:5.2,k:5.0});
-  c.light(-4.65,1.8,4.3,'#efd9ad',.85,{far:3.5,k:1.1});
+  c.light(-5.37,1.68,7.75,'#efd9bd',.59,{far:2.7,k:1.2});
+  c.light(-5.42,1.64,-3.68,'#c0d3c6',.31,{far:2.5,k:1.2});
   fitting(0,2.5,D/2-1,'#e3d6c6',1.0,4);fitting(0,2.5,-D/2+1,'#e3d6c6',1.0,4);
 
   const visits=new WeakMap(),runtime={plan:p,folds:0,blocked:0,cart,surface};

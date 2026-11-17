@@ -188,3 +188,25 @@ test('a visitor can immediately reverse a fold without a cooldown swallowing the
  assert.ok(Math.abs(local(f).x-a.x)<.01,'turning back is allowed immediately; standing still still cannot ping-pong');
  population.update(1/60,3/60,[visitor]);assert.ok(Math.abs(local(f).x-a.x)<.01);
 });
+
+test('a shower figure sways in place and only turns toward a visitor it can see', async t => {
+ const f = await fixture(1);
+ t.after(() => f.dispose());
+ const body = f.rt.group.getObjectByName('shower-figure');
+ const head = body.getObjectByName('shower-figure-head');
+ const anchor = body.position.clone();
+
+ warpLocal(f, -3.82, 6.8);
+ f.tick(120);
+ assert.ok(head.rotation.y > .12, 'the head angles toward a visitor at the stall opening');
+ const leaning = body.rotation.x;
+ f.tick(180);
+ assert.ok(Math.abs(body.rotation.x - leaning) > .005, 'the torso continues its slow sway');
+ assert.ok(Math.abs(head.rotation.y) <= .28, 'it never turns enough to follow a visitor all the way around');
+
+ warpLocal(f, -5.45, 6);
+ f.tick(240);
+ assert.ok(Math.abs(head.rotation.y) < .01, 'the dividing wall cuts its view');
+ assert.ok(body.position.equals(anchor), 'its base never moves from the shower');
+ assert.equal(f.hits.length, 0);
+});

@@ -35,8 +35,10 @@ on one part. This pass does not depend on the pending lighting/water upgrade.
   the destination, the fold refuses the crossing and the visitor can retreat.
   A laid bridge cannot be moved through the fold under another visitor.
 - The regular back/left exits remain reachable without using the locker route.
-  The normal seeded stash remains on a dry rear corner. There is no mandatory
-  interaction or resident in this room.
+  The normal seeded stash remains on a dry rear corner.
+- Two pale figures stand under the running showers, with an empty shower between
+  them. Their torsos sway and their heads turn a little when they can see someone
+  at the stall opening. They stay on their drains and cause no damage.
 
 The upper shower landings, ceiling door and inverted bay are inaccessible scenery. The
 locker connection is a matched, concealed translation, **not a live-rendered
@@ -77,7 +79,7 @@ resources are disposed by the kit, and renderer/viewport/scissor/lamp state is
 restored even if rendering throws. The viewport test specifically covers a
 large canvas with a smaller VHS target.
 
-The tested room sizes peak at **101,794 base triangles, 22 meshes and 14 authored
+The tested room sizes peak at **118,382 base triangles, 27 meshes and 15 authored
 lights**, below the existing room limits. The extra reflection pass is outside
 that geometry count: mobile/integrated-GPU timing still needs measurement.
 This is a stronger architectural prototype, not a claim that the current
@@ -88,7 +90,7 @@ illumination.
 
 `http://127.0.0.1:44352/?themes=waterpark&depths=1&room=locker-showers&only=locker-showers&pursuer=0&mute=0&seed=17&vhs=1&inventory=0&showerstudy=1`
 
-The development panel provides entrance, inverted shower, locker and crawl
+The development panel provides entrance, occupied shower, inverted shower, locker and crawl
 viewpoints. Choose **Crawl and cross** and walk forward to try the fold.
 `inventory=0` is for an untimed art review. Remove it or use
 `inventory=1` to play with the usual camera battery and health.
@@ -101,17 +103,17 @@ node tools/blockrooms/serve.mjs /tmp/blockrooms-waterpark-channel-review 44352
 ## Validation
 
 - Focused room, navigation, deck-contract, wet-material and reflection checks:
-  **94/94 pass**. Traversal uses the actual player controller at all four room
+  **95/95 pass**. Traversal uses the actual player controller at all four room
   rotations; it covers the walkway, both banks, wet recovery, regular exits,
   locker entry, forward/reverse folds, blocked destinations and carried props.
-- Production build: **354 files**, passes.
+- Production build: **355 files**, passes.
 - Chrome rendered the updated main room, inverted bay and corridor. A browser
   control check crossed the screen in both directions while crouched. Controller
   tests also check that the authored roof matches the collision clearance.
-- Full `npm test`: **1,116/1,123 pass**. The seven failures match the existing
-  baseline: four Return Pool cart-placement assertions, the console `/var`
-  versus `/private/var` assertion and its parent, and the usage/status-line
-  `source` failure. No new failure remains.
+- Full `npm test`: **1,115/1,124 pass**. This includes seven baseline failures
+  across Return Pool cart placement, console path handling and the usage
+  status line. The mail ordering check and its parent also failed in the full
+  run and passed on isolated rerun.
 - `git diff --check`: passes.
 
 Keep this on the review branch until the pending renderer work is reconciled,
