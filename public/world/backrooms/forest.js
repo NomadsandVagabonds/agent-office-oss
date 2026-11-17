@@ -829,6 +829,13 @@ export function placeVoxStack(c, stackKey, entries, opt = {}) {
  * `[E]` is pressed while holding `call` within `r` metres (mirroring `suburb.js` `roller`).
  */
 export function registerCallTarget(c, x, z, onCall, opt = {}) {
+  // Cut (the lead, on docs/FOREST-REVIEW.md §3). The Trail Call was a remote control for the floor: held, it made E live
+  // anywhere within 11 to 16 m of a room's centre and fired that room's event from there (dropped the bridge, stopped the
+  // bulldozer, shut the eyes, rang the true post), which skipped every room's own discovery and lit the E mark across
+  // whole rooms with nothing in front of the visitor. No room leaves one any more and no room answers one. The item is
+  // still defined (inventory-state.js) and the rooms' calls are left as they are, so it can come back as one thing that
+  // does the same everywhere: `opt.force` registers as before.
+  if (!opt.force) return;
   const r = opt.r ?? 12.5;
   const hasCall = () => c.env.inventory?.held?.()?.type === 'call';
   const w = c.toWorld(x, z);
