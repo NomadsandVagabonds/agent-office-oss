@@ -21,6 +21,7 @@ import { installFreightDuo } from './dispatch/duo.js';
 import { addGPU } from './dispatch/figures.js';
 import { createFreightWear } from './dispatch/crates.js';
 import { installFreightHoard } from './dispatch/hoard.js';
+import { dispatchFind, besideWayDown, orderTargets } from './dispatch/find.rule.js';
 
 const tint = (rgb, k) => rgb.map((v) => v * k);
 
@@ -73,7 +74,7 @@ function crate(c, spec, opt = {}) {
 
 function destination(c) {
   const occupied = c.env.pursuer?.at()?.room;
-  const rooms = c.R.fork('dispatch-destination').shuffle(c.world.rooms.filter((r) => r.def.kind === 'plain' && !r.def.crawl && r.def.id !== c.room.id && r.id !== c.level.pursuer?.room && r.id !== occupied));
+  const rooms = orderTargets(c.R.fork('dispatch-destination').shuffle(c.world.rooms.filter((r) => r.def.kind === 'plain' && !r.def.crawl && r.def.id !== c.room.id && r.id !== c.level.pursuer?.room && r.id !== occupied)), besideWayDown(c.level));   // (the rooms beside the way down first: a short cut)
   for (const rt of rooms) {
     const walk = c.world.walkable(rt), reached = walk.flood(rt.def.doors), options = [];
     for (let i = 0; i < reached.length; i++) {
@@ -106,6 +107,12 @@ export function build(c) {
     c.flat.box(p.x - 0.25, 0, p.z - 0.25, p.x + 0.25, 0.13, p.z + 0.25, lin(c.look.trim));
   }
   crate(c, portal, { portal: true, wear });
+  // What finding it pays: one rare thing lying behind the crate, on clear floor, in plain sight of the opening
+  const find = dispatchFind(c.R.fork('dispatch-find'));
+  for (const [dx, dz] of [[-1.15, 0.95], [1.15, 0.95], [-1.15, 1.45], [1.15, 1.45], [0, 0.8], [-1.6, 1.2], [1.6, 1.2]]) {
+    const x = portal.x + dx, z = -c.D / 2 + dz;
+    if (c.clear(x, z, 0.3)) { c.leave(find.type, x, z, { charge: find.charge }); c.reserve(x, z, 0.4); break; }
+  }
 
   // Familiar office furniture, repurposed as a packing bench. All large
   // furniture stays behind the pair's reserved floor; the center is clear.
