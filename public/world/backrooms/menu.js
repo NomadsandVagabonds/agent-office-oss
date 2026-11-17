@@ -96,8 +96,8 @@ export function createMenu({ host, settings = {}, furniture = false, graphics: o
   const graphics = h('select', { id: `${prefix}-graphics` }, GRAPHICS.map(([value, label]) => h('option', { value }, label)));
   fields.set('graphics', { input: graphics });
   graphics.addEventListener('change', () => change('graphics', graphics.value));
-  // (offerGraphics false: the setting is kept and obeyed, but its row is not offered. index.js offers it only to a visit made
-  // for looking at the level, until the owner says the tiers are for everybody)
+  // (offerGraphics false: the setting is kept and obeyed, but its row is not offered. index.js offers it to everybody since
+  // the owner's ten-minute check passed, 17 Nov; it starts at Classic, which is the picture everybody had before)
   if (offerGraphics) settingsPage.append(h('div.br-menu-setting', h('label', { htmlFor: graphics.id }, 'Graphics'), graphics));
   const difficulty = h('select', { id: `${prefix}-difficulty`, 'aria-describedby': `${prefix}-difficulty-note` },
     DIFFICULTIES.map(d => h('option', { value: d.id }, d.label + (d.id === 'easy' ? ' (recommended)' : ''))));
