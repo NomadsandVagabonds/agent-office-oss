@@ -25,6 +25,7 @@ import { Vox, M } from '../../vox/vox.js';
 import { upright, sheet } from '../suburb.js';
 import { mallNeon, voidIn, dummyVox } from '../mall.js';
 import { PAL, jacketVox } from './mens-ladies.js';
+import { canLeave } from '../cast/paths.js';
 
 // floor: the one above · run: a flight's length · half: half its width · speed: how fast a stair carries · cover, again, near: the covered way
 // belts, belt, slot, fast: the belts · shaft: how wide · deep: how far down its walls are drawn · dive: the stair into it (where it levels
@@ -102,16 +103,19 @@ export function build(c) {
     if (hasLanding) { flat.box(xS, ledgeY - 0.18, zl1, W / 2, ledgeY, zl0, rgb('#8a7f78')); carpet.grid([xS, ledgeY + 0.003, zl1], [0, 0, 1], [1, 0, 0], ticks(zl0 - zl1), ticks(K.shaft), (u, v) => [(xS + v) / 1.6, (zl1 + u) / 1.6]);
     for (const z of goesOn ? [zl0, zl1] : [zl0]) { const x0 = xS + 2 * K.half + 0.1; flat.box(x0, ledgeY + 0.95, z - 0.03, W / 2, ledgeY + 1.0, z + 0.03, rgb(PAL.wood)); flat.box(x0, ledgeY + 0.5, z - 0.015, W / 2, ledgeY + 0.53, z + 0.015, rgb('#c9ccd0')); for (let x = x0; x <= W / 2 + 1e-6; x += (W / 2 - x0) / 3) flat.box(x - 0.02, ledgeY, z - 0.02, x + 0.02, ledgeY + 0.95, z + 0.02, rgb('#c9ccd0')); c.solid(x0, z - 0.05, W / 2, z + 0.05, { tall: true }); }   // (a rail, open: the way on down is seen through it)
     const dz = (zl0 + zl1) / 2; door('far', dz, ledgeY);
-    // the one that can be reached is a way out: through it is somewhere else on this floor, a room nobody came to by its doorway
-    c.use({ x: W / 2 - 0.6, z: dz, r: 1.3, label: 'go through the door', when: () => !!env.player?.warp, use: () => {
-      const here = c.room.id, rooms = env.level?.rooms || c.level?.rooms || [], w = env.world;
-      const plain = rooms.filter((r) => r.id !== here && r.kind === 'plain'), pool = plain.length ? plain : rooms.filter((r) => r.id !== here);
-      for (let tries = 0; tries < 24 && pool.length; tries++) { const r = pool[Math.floor(Math.random() * pool.length)];
-        const e = Math.max(0, Math.min(r.W, r.D) - 1.6), x = r.cx + (Math.random() - 0.5) * e, z = r.cz + (Math.random() - 0.5) * e;   // (inside it however it is turned)   // (a spot in it: on its floor, free, no hole)
-        if (w.free?.(x, z, 0.3) === false || Math.abs(w.floorY(x, z) - (r.y || 0)) > 0.05) continue;
-        const me = c.toWorld(W / 2 - 0.6, dz); env.play?.('door', me.x, me.z, 8); env.hud?.glitch?.(0.5); env.interfere?.(0.6);
-        env.player.warp(x, z); env.play?.('door', x, z, 8); return; }
-      env.play?.('knock', c.toWorld(W / 2 - 0.4, dz).x, c.toWorld(W / 2 - 0.4, dz).z, 8); } });   // (nowhere it could find: it is locked, and somebody knocks back) c.light(W / 2 - 0.8, ledgeY + 2.0, dz, '#ffd9a0', 0.7, { k: 1.4, far: 4 });
+    // the one that can be reached is a way out: through it is somewhere else on this floor. Where, is chosen when the room is built, from
+    // the seed: a plain room (not the start, not the exit, not a special room — the lift is one), one a creature of the mascot's size can
+    // leave, and in it a few spots, tried in turn when the door is used, the first that is floor and free. Only whoever uses it goes through
+    // (in a visit with others, the others stay where they are)
+    const lvl = env.level || c.level, outs = lvl ? R.shuffle(lvl.rooms.filter((r) => r.id !== c.room.id && r.kind === 'plain' && !r.crawl && canLeave(r, 1.62)).map((r) => r.id)).slice(0, 4) : [];
+    const tries = outs.map((id) => ({ id, at: Array.from({ length: 5 }, () => [R.range(-0.5, 0.5), R.range(-0.5, 0.5)]) }));
+    c.use({ x: W / 2 - 0.6, z: dz, r: 1.3, label: 'go through the door', when: () => !!env.player?.warp && tries.length > 0, use: () => {
+      const w = env.world, me = c.toWorld(W / 2 - 0.6, dz);
+      for (const t of tries) { const r = lvl.rooms[t.id], e = Math.max(0, Math.min(r.W, r.D) - 1.6);
+        for (const [u, v] of t.at) { const x = r.cx + u * e, z = r.cz + v * e;
+          if (w.free?.(x, z, 0.3) === false || Math.abs(w.floorY(x, z) - (r.y || 0)) > 0.05) continue;
+          env.play?.('door', me.x, me.z, 8); env.hud?.glitch?.(0.5); env.interfere?.(0.6); env.player.warp(x, z); env.play?.('door', x, z, 8); return; } }
+      env.play?.('knock', me.x, me.z, 8); } });                                                                                       // (nowhere: it is locked, and somebody knocks back)
     c.leave('battery', W / 2 - 0.7, dz - 0.6, { y: ledgeY }); c.leave('snack', W / 2 - 0.7, dz + 0.6, { y: ledgeY }); }
     for (const y of [-2.5, -7.5]) c.light(xS + K.shaft / 2, y, (zs0 + zs1) / 2, '#ffd9a0', 0.5, { k: 1.4, far: 6 });
     // the edge of the hall along the shaft: a balustrade, but where the stair goes over
