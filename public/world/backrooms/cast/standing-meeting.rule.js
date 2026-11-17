@@ -112,6 +112,16 @@ export function meets(s, o) {
 }
 
 /**
+ * Shoved (shove.rule.js). Coming, it is far too heavy: nothing. Going about or stood up on end, it goes over, and is a
+ * moment getting up — and then finds whoever did it.
+ * @returns the state it is in after, or null: it took no notice
+ */
+export function floored(s) {
+  if (s.mode !== 'files' && s.mode !== 'drums') return null;
+  return { mode: 'down', t: 0, dir: s.dir, run: 0, hit: false, rest: MEETING.spent };
+}
+
+/**
  * Where each length of it is: the front is where it is, and every length behind follows where the one in front has been.
  * @param trail  [{ x, z }] where its front has been, newest first
  * @returns [{ x, z, yaw }] one for each length, nose first

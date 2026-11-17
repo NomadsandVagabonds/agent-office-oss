@@ -8,6 +8,7 @@
 // Space is a small hop and C (held) a crouch. Neither is needed to get
 // anywhere: you still duck by yourself under anything low, and a hop clears
 // nothing a step would not. They are there because hands expect them.
+import { SHOVE, tryShove } from './shove.rule.js';
 const RADIUS = 0.22, EYE = 1.1, WALK = 2.05, HURRY = 3.7;
 const HOP = 2.75, GRAVITY = 9, CROUCH = 0.5;      // take-off speed (m/s: about 0.4 m of air), and how far a held crouch lowers the eye
 const TURN = 2.1, MOUSE = 0.0023, PITCH_MAX = 1.25;
@@ -24,7 +25,7 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
   const hurrySpeed = HURRY * (perk?.sprintScale ?? 1);
   const crouchFloor = perk?.crouchSpeedFloor ?? 0.42;
   const baseNoise = perk?.noiseScale ?? 1;
-  const me = { x: start.x, z: start.z, yaw: start.yaw, pitch: 0, vx: 0, vz: 0, wishX: 0, wishZ: 0, moving: false, speed: 0, slow: 1, sink: 0, sinkTo: 0, duck: 0, y: 0, step: 0, shake: 1, drop: 0, dropV: 0, frozen: false, crouching: false, sprinting: false, noise: baseNoise, wind: 1, winded: 0 };
+  const me = { x: start.x, z: start.z, yaw: start.yaw, pitch: 0, vx: 0, vz: 0, wishX: 0, wishZ: 0, moving: false, speed: 0, slow: 1, sink: 0, sinkTo: 0, duck: 0, y: 0, step: 0, shake: 1, drop: 0, dropV: 0, frozen: false, crouching: false, sprinting: false, noise: baseNoise, wind: 1, winded: 0, shoveT: 0, shoveCool: 0, shoveRest: 0, punch: 0 };
   // `input`: keys held, mouse movement since last frame, and a thumb stick (x: right, y: forward, each −1…1; hurry: pushed
   // past its ring, which is what Shift is) — the visit's own (input.js), so that what is held on one floor is still held on the next
   let stride = 0, floor = world.floorY(start.x, start.z), sway = 0, duck = 0, hopHeld = false;
@@ -117,8 +118,13 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
     me.crouching = me.sink >= 0.26;
     me.sprinting = push > 0 && running && me.sink < 0.2 && me.moving;
     if (me.winded > 0) me.winded = Math.max(0, me.winded - dt);
+    // a shove (shove.rule.js): the moment it turns a hit aside, the wait for the next, and the lurch of the camcorder
+    if (me.shoveT > 0) me.shoveT = Math.max(0, me.shoveT - dt);
+    if (me.shoveCool > 0) me.shoveCool = Math.max(0, me.shoveCool - dt);
+    if (me.shoveRest > 0) me.shoveRest = Math.max(0, me.shoveRest - dt);
+    if (me.punch > 0) me.punch = Math.max(0, me.punch - dt / 0.3);
     if (me.sprinting) { me.wind = Math.max(0, me.wind - dt / windRun); if (me.wind <= 0) { me.winded = WIND.spent; listeners.winded?.(me); } }
-    else me.wind = Math.min(1, me.wind + dt / (me.moving ? WIND.back : WIND.still));
+    else if (!(me.shoveRest > 0)) me.wind = Math.min(1, me.wind + dt / (me.moving ? WIND.back : WIND.still));
     me.noise = me.crouching && perk?.id === 'night-cleaner' ? 0 : baseNoise;
     // the bob of somebody carrying a camcorder
     stride += went * 2.6;
@@ -137,10 +143,11 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
     }
     const bob = Math.sin(stride * 2) * 0.016 * Math.min(1, me.speed / WALK) * me.shake;
     me.y = floor + EYE - me.sink + bob + me.drop;
-    camera.position.set(me.x, me.y, me.z);
+    const lurch = me.punch > 0 ? Math.sin(me.punch * Math.PI) : 0;          // (both hands go out, and the camcorder goes with them)
+    camera.position.set(me.x - Math.sin(me.yaw) * lurch * 0.07, me.y - lurch * 0.02, me.z - Math.cos(me.yaw) * lurch * 0.07);
     const hand = me.shake * 0.5;
     camera.rotation.set(
-      me.pitch + Math.sin(sway * 1.3 + 1) * 0.004 * hand,
+      me.pitch - lurch * 0.035 + Math.sin(sway * 1.3 + 1) * 0.004 * hand,
       me.yaw + Math.sin(sway * 0.9) * 0.005 * hand,
       Math.sin(stride) * 0.006 * Math.min(1, me.speed / WALK) * me.shake + Math.sin(sway * 0.7 + 2) * 0.003 * hand, 'YXZ');
   }
@@ -148,6 +155,18 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
   return {
     me, input, update, RADIUS, EYE,
     on(event, fn) { listeners[event] = fn; },
+    /**
+     * Both hands out (shove.rule.js). It costs breath, and there is none to be had out of breath or straight after another.
+     * @param window  seconds for which a hit from in front will not land
+     * @returns whether they shoved
+     */
+    shove(window = 0.3) {
+      const got = tryShove(me);
+      if (!got.ok) return false;
+      me.wind = got.wind; me.shoveT = window; me.shoveCool = SHOVE.cooldown; me.shoveRest = SHOVE.rest; me.punch = 1;
+      if (got.spent) { me.winded = WIND.spent; listeners.winded?.(me); }
+      return true;
+    },
     /** Put the player somewhere else, as is (used by rooms that fold space). */
     warp(x, z, yaw) { me.x = x; me.z = z; if (yaw !== undefined) me.yaw = yaw; floor = world.floorY(x, z); },
   };

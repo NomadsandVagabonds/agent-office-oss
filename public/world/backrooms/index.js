@@ -50,6 +50,7 @@ import { middle, THIN_BEHIND } from './marks.js';
 import { hangBelow, goesDown } from './seam.js';
 import { createInventory } from './inventory.js';
 import { strikeSnip } from './melee.js';
+import { shoveWindow, strikeShove, blocks } from './shove.rule.js';
 import { createSurvival } from './survival.js';
 import { batteryEnding, batteryWarning } from './battery-ending.js';
 import { createTally } from './tally.js';
@@ -187,10 +188,12 @@ async function visit(office, opt) {
   stage.setView({ scene: blank, camera, render });
 
   /* ---- hands ----------------------------------------------------------------------- */
-  const useIt = () => {
+  // (finger: a thumb has no mouse button. Its hand, with nothing in front of it to use, is the two hands a click is)
+  const useIt = (how) => {
     if (!canAct() || inventory?.isOpen) return;
     if (cur?.env.grip?.action(currentUse)) { cur.env.grip.use(); return; }
-    if (currentUse) { const use = currentUse; try { use.use(use); } catch (err) { console.warn('[backrooms] use', err); } }
+    if (currentUse) { const use = currentUse; try { use.use(use); } catch (err) { console.warn('[backrooms] use', err); } return; }
+    if (how?.finger) clickIt();
   };
   // The light, under a thumb (touch.js): what F does, and one thing more. A key can pick the pocket first; a thumb has one
   // button, so if there is a torch that works and it is not the one in the hand, it is taken out and switched on.
@@ -211,7 +214,12 @@ async function visit(office, opt) {
     }
     inventory.toggleLight(); lightSeen = 0;
   }
-  const clickIt = () => { if (canAct() && !inventory?.isOpen && inventory?.held()?.type === 'scissors') inventory.snip({ quietMiss: true }); };
+  // A click: the scissors, if they are in the hand; otherwise both hands, out in front (shove.rule.js).
+  const clickIt = () => {
+    if (!canAct() || inventory?.isOpen) return;
+    if (inventory?.held()?.type === 'scissors') { inventory.snip({ quietMiss: true }); return; }
+    cur?.env.shove?.();
+  };
   let tipNote = '', tipUntil = 0;
   const input = createInput({ canvas, stage, hud, sound,
     owns: target => !!menu?.owns(target) || (!paused && !!inventory?.owns(target)) || (opt.debug && !!opt.dev?.owns?.(target)),
@@ -367,6 +375,21 @@ async function visit(office, opt) {
       play(name, x, z, reach) { const at = x === undefined ? {} : env.hear(x, z, reach); if (at.vol === undefined || at.vol > 0.02) sound.play(name, at); },
       /** More static on the tape (0..1), for a moment; things that interfere call this every frame. */
       interfere(k) { interference = Math.max(interference, k); },
+      /**
+       * Both hands out (shove.rule.js): whatever is right in front is pushed back a step, if it can be, and for a moment a
+       * hit from in front does not land. It costs breath; with something being carried there are no hands for it.
+       * → { ok, moved: [ids] }
+       */
+      shove() {
+        const me = f.player?.me;
+        if (!me || !f.world || !f.player.shove || env.grip?.held) return { ok: false, reason: 'unavailable' };
+        if (!f.player.shove(shoveWindow(env.difficulty?.()))) return { ok: false, reason: 'no-breath' };
+        const moved = strikeShove(me, env.pursuer?.shoveTargets?.() || [], (ax, az, bx, bz) => f.world.los(ax, az, bx, bz));
+        sound.play(moved.length ? 'thunk' : 'shuffle', { vol: moved.length ? 0.8 : 1 });
+        return { ok: true, moved };
+      },
+      /** Is a hit from there turned aside: did they shove as it reached them? (pursuer.js asks, for every hit but the heavy ones') */
+      blocked: (from) => blocks(env.player?.me ?? f.player?.me, from),
       /** Close-quarters scissor jab against whatever hostile entity or hazard is right in front of the lens. */
       snip() {
         const me = f.player?.me;
