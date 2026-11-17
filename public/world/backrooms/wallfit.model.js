@@ -2,8 +2,8 @@
 // A frame for a notice or a picture; a socket; a light switch; the box an exit sign's lamp lives in. In every one
 // x runs along the wall (0 is the middle), y up (0 is the middle, but the exit box hangs from its top), and z out of
 // the wall: the back is z = 0. Quarter-size voxels (6.25 mm): place with `scale: WALLFIT.scale`.
-// The frame is hung by bits.js `framed()`. The other three are models only: sockets and exit signs are drawn by the
-// shell (world.js), which is the graphics pass's to change.
+// The frame is hung by bits.js `framed()`; the socket and the exit box by the shell (world.js `c.socket()` and
+// `c.exitSign()`). The switch is a model only: nothing places one.
 import { Vox, M, glow, tone, noise3 } from '../vox/vox.js';
 
 export const WALLFIT = Object.freeze({ scale: 0.25, voxel: 0.00625, moulding: 0.04, deep: 0.025, plate: Object.freeze([0.075, 0.115]) });
@@ -58,13 +58,14 @@ export function switchVox() {
  * The box behind an exit sign's lit face: w metres along the wall and h high, 3 cm deep, hung from its top edge
  * (y = 0 is its top). Pressed steel, a rib round the face, a conduit going up out of it, a screw at each end, a test
  * button and the little lamp that says the battery is charging.
+ * up: how far it is from the top of the box to the ceiling, metres, so that the conduit reaches (without it, a 9 cm stub).
  */
-export function exitBoxVox({ w, h }) {
+export function exitBoxVox({ w, h, up = 0 }) {
   const v = new Vox(), B = box(v), hx = Math.max(8, Math.round(w / V / 2)), H = Math.max(8, Math.round(h / V)), D = 4;
   const steel = M('#23302a', 0), rib = M('#33443b', 0), screw = M('#8d8a80', 0);
   B(-hx, -H, 0, hx - 1, -1, D, steel);
   B(-hx, -H, D + 1, hx - 1, -H + 1, D + 1, rib); B(-hx, -2, D + 1, hx - 1, -1, D + 1, rib); B(-hx, -H, D + 1, -hx + 1, -1, D + 1, rib); B(hx - 2, -H, D + 1, hx - 1, -1, D + 1, rib);
-  B(-2, 0, 1, 1, 14, 3, M('#6f736f', 0)); B(-3, 0, 0, 2, 1, 4, rib);                              // the conduit, and its gland
+  B(-2, 0, 1, 1, up > 0 ? Math.max(2, Math.round(up / V) - 1) : 14, 3, M('#6f736f', 0)); B(-3, 0, 0, 2, 1, 4, rib);                              // the conduit, and its gland
   for (const x of [-hx + 3, hx - 4]) v.set(x, -(H >> 1), D + 1, screw);
   v.set(hx - 6, -H, D - 1, M('#c9c6ba', 0)); v.set(hx - 9, -H, D - 1, glow('#e8452c'));            // under it: the test button, the charge lamp
   return v;
