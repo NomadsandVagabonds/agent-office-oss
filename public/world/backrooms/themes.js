@@ -20,39 +20,48 @@
 //   dealt      false: still being built. It is in nobody's visit until this line goes: only ever a floor that was asked
 //              for by name (plan.js `themes`; the dev page's &themes=), which is how a new kind of floor is made in the
 //              open, a room at a time. Taking the line out is also what holds it to the tests of a finished one
+//   grade      how the camcorder colours this kind of floor at a Graphics setting above Classic (graphics.js, vhs.js), on the
+//              picture as it would be seen: lift (added to the shadows), gamma, gain (times the highlights), each R G B;
+//              sat (1: as it is); haze, the colour distance fades toward (times how lit the room is). Never read by the
+//              generator. Missing: graphics.js NEUTRAL_GRADE
 
 export const THEMES = {
   // the one everybody remembers: mono-yellow, humming, slightly damp
   yellow: { id: 'yellow', families: null, patterns: null, tubes: null, light: { dead: [0.06, 0.3], flicker: 0.4, modes: [['normal', 1]] },
-    rooms: null, heights: null, dressing: null, hum: null },
+    rooms: null, heights: null, dressing: null, hum: null,
+    grade: { lift: [0.01, 0.005, 0], gamma: [1.02, 1, 0.98], gain: [1.03, 1, 0.96], sat: 1.05, haze: [1, 0.86, 0.52] } },
 
   // Records. Painted blockwork, lino, long narrow rooms, a tube in every one that is on its way out
   archive: { id: 'archive', families: { records: 12, beige: 3, sage: 2, mint: 1 }, patterns: ['blocks', 'blocks', 'blocks', 'stripes'], tubes: ['#eef6ff', '#f3ffe6', '#eef6ff', '#fffbe9'],
     light: { dead: [0.22, 0.5], flicker: 0.75, modes: [['normal', 5], ['dim', 4], ['one', 1]] },
     rooms: [0.07, 0.42, 0.62, 0.9], heights: [[2.6, 40], [2.2, 30], [2.9, 6], [1.75, 10]],
     dressing: ['boxes', 'boxes', 'boxes', 'cabinet', 'cabinet', 'cabinet', 'papers', 'papers', 'shelving', 'shelving', 'bin', 'clock', 'stain', 'ladder', 'fan', 'tile', 'highdoor', 'trolley'],
-    hum: 50 },
+    hum: 50,
+    grade: { lift: [-0.002, 0.004, 0.012], gamma: [0.98, 1, 1.03], gain: [0.97, 1, 1.04], sat: 0.9, haze: [0.78, 0.86, 0.92] } },
 
   // Out of hours. The same building with the lights off: a panel here and there left on for the cleaners
   night: { id: 'night', families: { blue: 6, yellow: 5, lilac: 2, mint: 2 }, patterns: null, tubes: ['#dfe9ff', '#eef6ff', '#e6f0ff'],
     light: { dead: [0.3, 0.6], flicker: 0.5, modes: [['dark', 9], ['one', 7], ['dim', 3]] },
     rooms: null, heights: null,
     dressing: ['wetsign', 'wetsign', 'bin', 'bin', 'chair', 'plant', 'lamp', 'lamp', 'lamp', 'papers', 'coat', 'fan', 'clock', 'trolley', 'trolley', 'highdoor', 'tile'],
-    hum: 60 },
+    hum: 60,
+    grade: { lift: [-0.002, 0.004, 0.018], gamma: [0.97, 0.99, 1.05], gain: [0.94, 0.98, 1.04], sat: 0.86, haze: [0.42, 0.52, 0.8] } },
 
   // Being refurbished, and has been for some time: bare board with the joints taped, screed underfoot, half the ceiling still to go in
   fitout: { id: 'fitout', families: { board: 14 }, patterns: ['board'], tubes: ['#fffbe9', '#fff6dc', '#f3ffe6'],
     light: { dead: [0.35, 0.6], flicker: 0.3, modes: [['normal', 6], ['dim', 3], ['one', 1]] },
     rooms: [0.05, 0.2, 0.34, 0.7], heights: [[2.6, 30], [2.9, 20], [3.3, 20], [4.4, 12]],
     dressing: ['ladder', 'ladder', 'ladder', 'tile', 'tile', 'tile', 'boxes', 'boxes', 'rolls', 'rolls', 'rolls', 'trestle', 'trestle', 'bin', 'wetsign', 'worklamp', 'worklamp', 'papers', 'highdoor'],
-    hum: 50 },
+    hum: 50,
+    grade: { lift: [0.01, 0.008, 0.004], gamma: [1, 1, 0.98], gain: [1.01, 1, 0.97], sat: 0.88, haze: [0.88, 0.84, 0.76] } },
 
   // The top floor, which is down here as well: panelling, a deep carpet, lamps instead of tubes wherever they could manage it
   exec: { id: 'exec', families: { panel: 12, lilac: 1 }, patterns: ['panel'], tubes: ['#ffeec4', '#fff6dc', '#ffe9b8'],
     light: { dead: [0.15, 0.4], flicker: 0.15, modes: [['normal', 4], ['dim', 5], ['one', 1]] },
     rooms: [0.03, 0.16, 0.3, 0.62], heights: [[2.9, 30], [3.3, 30], [2.6, 20], [4.4, 8]],
     dressing: ['lamp', 'lamp', 'lamp', 'plant', 'plant', 'chair', 'clock', 'clock', 'frame', 'frame', 'frame', 'poster', 'coat', 'coat', 'globe', 'armchair', 'armchair', 'highdoor'],
-    hum: 50 },
+    hum: 50,
+    grade: { lift: [0.01, 0.002, -0.004], gamma: [1.03, 1, 0.97], gain: [1.04, 0.99, 0.95], sat: 1.05, haze: [0.95, 0.76, 0.5] } },
 
   // A neighbourhood, as an office remembered one and built it indoors: sky-blue emulsion, fake grass cut short of the walls
   // so that the carpet shows, every tube working because it is always the middle of the day (suburb.js)
@@ -61,7 +70,8 @@ export const THEMES = {
     // (mostly passages: a neighbourhood is got about by alleys, between fences and the backs of things. A lawn is where one comes out)
     rooms: [0.1, 0.36, 0.6, 0.9], heights: [[2.6, 34], [2.2, 22], [2.9, 16], [3.3, 10], [1.75, 10], [4.4, 6]],
     dressing: ['mailbox', 'mailbox', 'flamingo', 'flamingo', 'hose', 'hose', 'wetsign', 'ladder', 'boxes'],
-    hum: 60 },
+    hum: 60,
+    grade: { lift: [0, 0.004, 0.01], gamma: [0.99, 1, 1.02], gain: [1, 1.01, 1.03], sat: 1.08, haze: [0.76, 0.88, 1] } },
 
   // A shopping centre at closing time, as a 1980s office park remembered one and built it out of itself: partition walls for
   // shopfronts, terrazzo where the carpet tile ran out, half the tubes already off. Mostly passages. Still being built (mall.js)
@@ -69,7 +79,8 @@ export const THEMES = {
     light: { dead: [0.3, 0.55], flicker: 0.3, modes: [['dim', 5], ['normal', 2], ['one', 1]] },
     rooms: [0.1, 0.38, 0.62, 0.9], heights: [[2.6, 40], [2.2, 24], [2.9, 16], [3.3, 10], [1.75, 6], [4.4, 4]],
     dressing: ['plant', 'plant', 'plant', 'wetsign', 'wetsign', 'bin', 'boxes', 'chair', 'clock', 'ladder'],
-    hum: 50 },
+    hum: 50,
+    grade: { lift: [0.012, 0.005, 0], gamma: [1.02, 1, 0.97], gain: [1.04, 0.99, 0.94], sat: 0.96, haze: [1, 0.8, 0.56] } },
   // An indoor waterpark and Poolrooms annex, built inside the office by something that had only ever had swimming,
   // recreation and hydration described to it: grouted ceramic tile stopping short of the damp carpet, chlorinated basins
   // under a suspended acoustic ceiling. Still being built (waterpark.js)
@@ -77,9 +88,8 @@ export const THEMES = {
     light: { dead: [0.04, 0.18], flicker: 0.22, modes: [['normal', 1]] },
     rooms: [0.02, 0.12, 0.22, 0.56], heights: [[2.9, 24], [3.3, 34], [3.8, 22], [4.4, 14]],
     dressing: ['floatring', 'floatring', 'noodle', 'noodle', 'lounger', 'wetsign', 'ladder'],
-    hum: 60 },
-
-
+    hum: 60,
+    grade: { lift: [0, 0.004, 0.01], gamma: [0.98, 1, 1.02], gain: [0.96, 1, 1.03], sat: 1, haze: [0.72, 0.9, 0.95] } },
 };
 
 export const THEME_IDS = Object.keys(THEMES);

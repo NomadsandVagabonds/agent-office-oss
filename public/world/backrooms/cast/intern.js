@@ -24,6 +24,8 @@ const U = UPPER * S, F = FORE * S, LEG = 1.35, TH = THIGH * S * LEG, SH = SHIN *
 export function create(c) {
   const env = c.env, level = c.level, I = INTERN;
   const walker = { x: 0, z: 0, r: I.r, tall: I.tall, opens: false };
+  /** Can it get through this doorway of room r at all? (A room whose every doorway is a crawl hole to it is no room to start in, nor to set off for.) */
+  const way = (d, r) => { const cost = c.walk.cost?.(walker); return !cost || cost(d, r.id, d.to) < Infinity; };
   let s = waiting(), group = null, mat = null, back = null, neck = null, head = null, tag = null, limbs = [], trail = [];
   let clock = 0, rot = 0, low = 0, known = false, over = false, lastX = 0, lastZ = 0, sampleT = 0, swing = 0, swingV = 0, nod = 0, look = 0;
   const vx = new THREE.Vector3(), vy = new THREE.Vector3(), vz = new THREE.Vector3(), basis = new THREE.Matrix4();
@@ -39,7 +41,7 @@ export function create(c) {
   };
 
   function startRoom() {
-    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 2.2 && r.kind !== 'start' && r.kind !== 'exit' && (dist.get(r.id) ?? 0) >= 2;
+    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 2.2 && r.kind !== 'start' && r.kind !== 'exit' && r.doors.some((d) => way(d, r)) && (dist.get(r.id) ?? 0) >= 2;
     const plain = level.rooms.filter((r) => fits(r) && r.kind === 'plain' && (dist.get(r.id) ?? 0) >= 3), far = level.rooms.filter(fits);
     const pool = plain.length ? plain : far.length ? far : level.rooms.filter((r) => r.kind !== 'start');
     const pick = pool.length ? c.R.pick(pool) : level.rooms[0];

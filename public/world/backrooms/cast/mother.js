@@ -18,6 +18,8 @@ const SEGS = 14, SEG_H = MOTHER.height / SEGS, RING_H = RING * S, LIMB_H = LIMB 
 export function create(c) {
   const env = c.env, level = c.level, G = MOTHER;
   const walker = { x: 0, z: 0, r: G.r, tall: G.tall, opens: false };
+  /** Can it get through this doorway of room r at all? (A room whose every doorway is a crawl hole to it is no room to start in, nor to set off for.) */
+  const way = (d, r) => { const cost = c.walk.cost?.(walker); return !cost || cost(d, r.id, d.to) < Infinity; };
   const worms = [];
   let s = swaying(), group = null, segs = [], arms = [], feet = [], lips = [], mat = null, wormMat = null, wormGeo = [], peeping = [];
   let clock = 0, yaw = 0, lean = 0, walked = 0, known = false, over = false, tookOne = false, hadBrood = false;
@@ -30,7 +32,7 @@ export function create(c) {
   const smallOne = (parent) => { const g = new THREE.Group(), parts = wormGeo.map((w, k) => { const p = part(g, w, wormMat); p.scale.setScalar(1 - k * 0.1); return p; }); parent.add(g); return { g, parts }; };
 
   function startRoom() {
-    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 2.5 && r.kind !== 'start' && r.kind !== 'exit';
+    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 2.5 && r.kind !== 'start' && r.kind !== 'exit' && r.doors.some((d) => way(d, r));
     const plain = level.rooms.filter((r) => fits(r) && r.kind === 'plain' && (dist.get(r.id) ?? 0) >= 2), far = level.rooms.filter((r) => fits(r) && (dist.get(r.id) ?? 0) >= 2);
     const pool = plain.length ? plain : far;
     const pick = pool.length ? c.R.pick(pool) : null;

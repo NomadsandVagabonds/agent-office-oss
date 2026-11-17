@@ -21,6 +21,8 @@ const ARMS = [[0, -1], [0, 1], [1, -1], [1, 1], [2, -1], [2, 1], [-1, -1], [-1, 
 export function create(c) {
   const env = c.env, level = c.level, H = HEADS;
   const walker = { x: 0, z: 0, r: H.r, tall: H.tall, opens: false };
+  /** Can it get through this doorway of room r at all? (A room whose every doorway is a crawl hole to it is no room to start in, nor to set off for.) */
+  const way = (d, r) => { const cost = c.walk.cost?.(walker); return !cost || cost(d, r.id, d.to) < Infinity; };
   let s = counting(), group = null, mat = null, knot = null, torsos = [], arms = [], tags = [];
   let clock = 0, rot = 0, high = 0.6, goal = null, goalT = 0, known = false, over = false, lastX = 0, lastZ = 0, sweepA = 0, tapT = 0, shudder = 0, shovedFrom = null;
   const dir = new THREE.Vector3();
@@ -30,7 +32,7 @@ export function create(c) {
   const part = (g) => { const k = new THREE.Mesh(g, mat); group.add(k); return k; };
 
   function startRoom() {
-    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 1.4 && r.kind !== 'start' && r.kind !== 'exit';
+    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 1.4 && r.kind !== 'start' && r.kind !== 'exit' && r.doors.some((d) => way(d, r));
     const plain = level.rooms.filter((r) => fits(r) && r.kind === 'plain' && (dist.get(r.id) ?? 0) >= 3), far = level.rooms.filter((r) => fits(r) && (dist.get(r.id) ?? 0) >= 2);
     const pool = plain.length ? plain : far.length ? far : level.rooms.filter((r) => r.kind !== 'start');
     const pick = pool.length ? c.R.pick(pool) : level.rooms[0];
@@ -119,7 +121,7 @@ export function create(c) {
 
   /** Somewhere to go on with its count: the middle of a room next to the one it is in. */
   function wander() {
-    const here = level.rooms[c.room(walker.x, walker.z) ?? -1], ways = (here?.doors || []).map((d) => level.rooms[d.to]).filter((r) => r && !r.crawl && r.H >= 1.4 && r.kind !== 'start');
+    const here = level.rooms[c.room(walker.x, walker.z) ?? -1], ways = (here?.doors || []).filter((d) => way(d, here)).map((d) => level.rooms[d.to]).filter((r) => r && !r.crawl && r.H >= 1.4 && r.kind !== 'start');
     let to = ways.length ? ways[Math.floor(Math.random() * ways.length)] : here;
     if (!to) return null;
     // shoved, it goes on whichever way is furthest from where the shove came from; and then it has forgotten

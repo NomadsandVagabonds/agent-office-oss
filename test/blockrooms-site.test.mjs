@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build, originOf, policyFor, IMPORT_MAP } from '../tools/blockrooms/build.mjs';
+import { build, originOf, policyFor, IMPORT_MAP, PERF } from '../tools/blockrooms/build.mjs';
 import { stage } from '../tools/backrooms-sample/stage.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -51,6 +51,8 @@ test('the site is two whole pages with everything they ask for beside them, and 
   assert.ok(rooms.length > 20 && preloads.filter((f) => rooms.includes(f)).every((f) => /^world\/backrooms\/rooms\/[^/]+\/[^/]+\.js$/.test(f)) && preloads.filter((f) => rooms.includes(f)).length <= 12 && !preloads.includes('world/backrooms/rooms/kanban.js'), 'rooms in files of their own are not');
   assert.equal(new Set(preloads).size, preloads.length);
   for (const f of preloads) assert.ok(files.includes(f), `asked for at once, and not there: ${f}`);
+  // (the measuring tape, for ?debug&bench=1, is there to be imported when asked for, and is not asked for at once)
+  for (const f of PERF) assert.ok(files.includes(f) && !preloads.includes(f), `${f} is not there, or is preloaded`);
   for (const f of files.filter((n) => /\.m?js$/.test(n))) {
     const src = fs.readFileSync(path.join(out, f), 'utf8');
     // (less its block comments: three.js's add-ons show how to import them in theirs, by a name only a bundler knows)
@@ -149,7 +151,7 @@ test('the page\'s own script: a building nobody has had, a tape from the address
   const src = fs.readFileSync(path.join(ROOT, 'tools/blockrooms/site.js'), 'utf8');
   assert.match(src, /brand: \{ over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false \}/, 'the card is headed BlockRooms here, and has no jar on it: there is no office to spend a coin in');
   assert.match(src, /let next = asSeed\(q\.get\('tape'\)\) \|\| null;/);
-  assert.match(src, /const mine = next \? archive\.record\(visitOwner\)\.tapes\.find\(\(t\) => t\.seed === seed\) : null;/);
+  assert.match(src, /const mine = next && !bench \? archive\.record\(visitOwner\)\.tapes\.find\(\(t\) => t\.seed === seed\) : null;/, 'a bench run is never a kept tape played back');
   assert.match(src, /\.\.\.\(mine \? \{ replay: true, pursuer: typeof mine\.mascot === 'boolean' \? mine\.mascot : undefined \} : \{\}\)/, 'only a tape this browser has kept is played back; somebody else\'s is a building like any other');
   assert.match(src, /difficulty: mine \? cleanDifficulty\(mine\.difficulty, 'training-wheels'\) : undefined/);
   assert.match(src, /home: \{ label: 'Return to homepage' \}/, 'the score has an explicit way back to the home page');
@@ -168,7 +170,10 @@ test('the page\'s own script: a building nobody has had, a tape from the address
   assert.match(src, /home: \{ label: 'Return to homepage' \}, anew: \{ label: 'Go back in' \}, where, \.\.\.dev,/);
   assert.ok(!/localStorage[^;\n]*where|setItem\([^)]*where/.test(src), 'the page does not keep where anybody is');
   assert.ok(!/XMLHttpRequest|sendBeacon|WebSocket/.test(src));
-  assert.match(src, /if \(!mine\) tell\(\{ do: 'in' \}\);/);
+  assert.match(src, /if \(!mine && !dev\.debug\) tell\(\{ do: 'in' \}\);/);
+  // the measuring tape is only under ?debug, and only imported when asked for
+  assert.match(src, /const bench = !!dev\.debug && q\.get\('bench'\) === '1';\n\s*const perf = dev\.debug && \(bench \|\| q\.get\('perf'\) === '1'\) \? \(await import\('\.\/world\/dev\/perf\.js'\)\)/);
+  assert.ok(!/^import[^\n]*perf/m.test(src), 'the measuring tape is not imported up front');
   assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit' \|\| !scoreEligible\(report\)\) return null;\n  const who = \{ \.\.\.me\(\), name: office\.walk\?\.me\?\.name \|\| me\(\)\.name \};\n  if \(!who\.sign\) return null;/);
   assert.match(src, /tell\(\{ do: 'sign', name: who\.name, message: who\.message, run: report \}\)/);
   // a building asked to be other than its seed has it (?debug, ?room=) is for looking at: walking out of one is not a score

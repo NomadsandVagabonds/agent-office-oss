@@ -173,9 +173,28 @@ export function lamp(x, y, z, rgb, o = {}) {
     floor: o.floor ?? 0.25, flick: !!o.flick, bank: o.bank, far2: (o.far ?? 14) ** 2 };
 }
 
-/** Light every vertex of a batch. → { lit, flk } (flk only if a flickering light reaches it). */
-export function bake(batch, lights, amb, lighting = null) {
+/**
+ * The switch for light worked out once with each room, beyond the lamps (createKit({ gfx })): `contact`, how dark it
+ * gets where things stand on the floor or against a wall, and `bounce`, how much of the carpet's colour comes back
+ * up the walls and the wallpaper's onto the edges of the floor and ceiling. Each 0…1; → null when both are 0, and
+ * then nothing of it runs (world.js asks kit.gfx before doing any of the work).
+ */
+export function gfxOf(o) {
+  const k = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(1, Number(v))) : 0);
+  const contact = k(o?.contact), bounce = k(o?.bounce);
+  return contact > 0 || bounce > 0 ? { contact, bounce } : null;
+}
+
+/**
+ * Light every vertex of a batch. → { lit, flk } (flk only if a flickering light reaches it).
+ * extra (only with kit.gfx; world.js works it out): { ao, bounce } — ao, a further darkening per vertex (0…1, with
+ * the batch's own); bounce { w, src, rgb }, light that comes off another surface: per vertex, how much (w), the
+ * point it comes from and that point's facing (src, six numbers), and its colour (rgb). The light arriving at the
+ * source is gathered from the same lamps, banks and flicker as everything else, so banks still add up to the bake.
+ */
+export function bake(batch, lights, amb, lighting = null, extra = null) {
   const n = batch.verts, pos = batch.pos, nor = batch.nor, alb = batch.alb, ao = batch.ao, sf = batch.sf;
+  const cao = extra?.ao || null, bw = extra?.bounce?.w || null, bsrc = extra?.bounce?.src, brgb = extra?.bounce?.rgb;
   const lit = new Float32Array(n * 3);
   let flk = null;
   const count = lighting ? lighting.bankCount || 2 : 0;
@@ -203,22 +222,38 @@ export function bake(batch, lights, amb, lighting = null) {
     const j = i * 3, ar = alb[j], ag = alb[j + 1], ab = alb[j + 2];
     if (batch.vox && sf[i * 2 + 1] > 0.5) { lit[j] = ar * GLOW; lit[j + 1] = ag * GLOW; lit[j + 2] = ab * GLOW; continue; }
     const px = pos[j], py = pos[j + 1], pz = pos[j + 2], nx = nor[j], ny = nor[j + 1], nz = nor[j + 2];
-    const hemi = 0.8 + 0.2 * ny, k = ao[i];
+    const hemi = 0.8 + 0.2 * ny, k = cao ? ao[i] * cao[i] : ao[i];
+    // (bounce: the surface this vertex sees, at s, facing sn; w × its colour of whatever light arrives there)
+    const w = bw ? bw[i] : 0, s = i * 6;
+    const sx = w ? bsrc[s] : 0, sy = w ? bsrc[s + 1] : 0, sz = w ? bsrc[s + 2] : 0, snx = w ? bsrc[s + 3] : 0, sny = w ? bsrc[s + 4] : 0, snz = w ? bsrc[s + 5] : 0;
+    const shemi = 0.8 + 0.2 * sny, wr = w ? w * brgb[j] : 0, wg = w ? w * brgb[j + 1] : 0, wb = w ? w * brgb[j + 2] : 0;
     gather(steady, px, py, pz, nx, ny, nz);
     const base = 1 - (lighting?.ambientShare || 0);
     lit[j] = ar * k * (amb[0] * hemi * base + sum[0]); lit[j + 1] = ag * k * (amb[1] * hemi * base + sum[1]); lit[j + 2] = ab * k * (amb[2] * hemi * base + sum[2]);
+    if (w) {
+      gather(steady, sx, sy, sz, snx, sny, snz);
+      lit[j] += ar * k * wr * (amb[0] * shemi * base + sum[0]); lit[j + 1] += ag * k * wg * (amb[1] * shemi * base + sum[1]); lit[j + 2] += ab * k * wb * (amb[2] * shemi * base + sum[2]);
+    }
     if (banks) {
       const weights = bankWeights(lights, px, pz, count, lighting.ceilingBanks || count);
+      const sw = w ? bankWeights(lights, sx, sz, count, lighting.ceilingBanks || count) : null;
       for (let b = 0; b < count; b++) {
         gather(bankLights[b], px, py, pz, nx, ny, nz);
         for (let c = 0; c < 3; c++) banks[b][j + c] = alb[j + c] * k * (sum[c] + amb[c] * hemi * lighting.ambientShare * weights[b]);
+        if (w) {
+          gather(bankLights[b], sx, sy, sz, snx, sny, snz);
+          for (let c = 0; c < 3; c++) banks[b][j + c] += alb[j + c] * k * w * brgb[j + c] * (sum[c] + amb[c] * shemi * lighting.ambientShare * sw[b]);
+        }
       }
     }
     if (flicker.length) {
+      let fr = 0, fg = 0, fb = 0;
+      if (w) { gather(flicker, sx, sy, sz, snx, sny, snz); fr = wr * sum[0]; fg = wg * sum[1]; fb = wb * sum[2]; }
       gather(flicker, px, py, pz, nx, ny, nz);
-      if (sum[0] + sum[1] + sum[2] > 1e-4) {
+      if (sum[0] + sum[1] + sum[2] + fr + fg + fb > 1e-4) {
         if (!flk) flk = new Float32Array(n * 3);
         flk[j] = ar * k * sum[0]; flk[j + 1] = ag * k * sum[1]; flk[j + 2] = ab * k * sum[2];
+        if (w) { flk[j] += ar * k * fr; flk[j + 1] += ag * k * fg; flk[j + 2] += ab * k * fb; }
       }
     }
   }
@@ -358,7 +393,8 @@ void main() {
  * Everything a level needs to build rooms, and one place that remembers what
  * to throw away afterwards.
  */
-export function createKit() {
+export function createKit(opt = {}) {
+  const gfx = gfxOf(opt.gfx);                    // (null unless contact darkening or bounce was asked for)
   const owned = new Set();
   const own = (thing) => { if (thing) owned.add(thing); return thing; };
   const shared = {
@@ -512,10 +548,10 @@ export function createKit() {
     return m;
   }
 
-  /** Batch → geometry with its light baked in. */
-  function geometry(batch, lights, amb, lighting = null) {
+  /** Batch → geometry with its light baked in. extra: see bake() (world.js passes it only when kit.gfx is set). */
+  function geometry(batch, lights, amb, lighting = null, extra = null) {
     if (!batch.verts) return null;
-    const { lit, flk, banks } = bake(batch, lights, amb, lighting);
+    const { lit, flk, banks } = bake(batch, lights, amb, lighting, extra);
     const geo = own(new THREE.BufferGeometry());
     geo.setAttribute('position', new THREE.Float32BufferAttribute(batch.pos, 3));
     // Flat face normals already exist for the bake; retain them in three bytes
@@ -559,7 +595,7 @@ export function createKit() {
   }
 
   return {
-    own, shared, tex: T, surface, glowing, geometry, plain, model, VOXEL,
+    own, shared, tex: T, surface, glowing, geometry, plain, model, VOXEL, gfx,
     dispose() { for (const thing of owned) thing.dispose?.(); owned.clear(); textures.clear(); models.clear(); },
   };
 }

@@ -15,6 +15,8 @@ import { S, SB, weightVox, armVox, bearerVox } from './carried-interest.model.js
 export function create(c) {
   const env = c.env, level = c.level, K = CARRIED;
   const walker = { x: 0, z: 0, r: K.r, tall: K.tall, opens: false };
+  /** Can it get through this doorway of room r at all? (A room whose every doorway is a crawl hole to it is no room to start in, nor to set off for.) */
+  const way = (d, r) => { const cost = c.walk.cost?.(walker); return !cost || cost(d, r.id, d.to) < Infinity; };
   let s = borne(), group = null, mat = null, small = null, weight = null, arms = [], bearers = [], use = null;
   let clock = 0, rot = 0, high = 0.98, tilt = 0, goal = null, goalT = 0, known = false, over = false, lastX = 0, lastZ = 0, pending = 0, shake = 0, walked = 0;
 
@@ -22,7 +24,7 @@ export function create(c) {
   const geo = (key, make, k) => { const b = new Batch(true); b.addVox(env.kit.model(key, make).solid, new THREE.Matrix4().makeScale(k, k, k)); return env.kit.geometry(b, LIGHTS, [0.4, 0.38, 0.38]); };
 
   function startRoom() {
-    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 2.2 && r.kind !== 'start' && r.kind !== 'exit' && (dist.get(r.id) ?? 0) >= 2;
+    const dist = roomDistances(level, level.start.room), fits = (r) => !r.crawl && r.H >= 2.2 && r.kind !== 'start' && r.kind !== 'exit' && r.doors.some((d) => way(d, r)) && (dist.get(r.id) ?? 0) >= 2;
     const plain = level.rooms.filter((r) => fits(r) && r.kind === 'plain' && Math.min(r.W, r.D) >= 4 && (dist.get(r.id) ?? 0) >= 3), far = level.rooms.filter(fits);
     const pool = plain.length ? plain : far.length ? far : level.rooms.filter((r) => r.kind !== 'start');
     const pick = pool.length ? c.R.pick(pool) : level.rooms[0];
@@ -90,7 +92,7 @@ export function create(c) {
   }
 
   function wander() {
-    const here = level.rooms[c.room(walker.x, walker.z) ?? -1], ways = (here?.doors || []).map((d) => level.rooms[d.to]).filter((r) => r && !r.crawl && r.H >= 2.2 && r.kind !== 'start');
+    const here = level.rooms[c.room(walker.x, walker.z) ?? -1], ways = (here?.doors || []).filter((d) => way(d, here)).map((d) => level.rooms[d.to]).filter((r) => r && !r.crawl && r.H >= 2.2 && r.kind !== 'start');
     const to = ways.length ? ways[Math.floor(Math.random() * ways.length)] : here;
     if (!to) return null;
     const sp = c.walk.spotIn(walker, to.id); return { x: sp.x, z: sp.z };

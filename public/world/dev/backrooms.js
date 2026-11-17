@@ -8,6 +8,7 @@
 //   &themes=night,exec what kind of floor each part is, top down (themes.js; the rest are as the seed has them). The only
 //                      way onto a kind that is still being built (`dealt: false`), which is in nobody's visit
 //   &vhs=0|1|2         clean · steady · full camcorder           &mute=1
+//   &graphics=classic|low|medium|high|auto   the Graphics setting (graphics.js), over the saved one
 //   &barricades=0      without furniture that can be dragged (it is on unless turned off); &study=1 puts a review set by the landing (seed=7)
 //   &lighting=1        fluorescent-bank prototype (off by default); &lighting=dim|failing|travel|emergency|islands forces that treatment in eligible plain rooms
 //   &hallstudy=1       rehearsal controls for the last-light room (use &only=last-light)
@@ -22,6 +23,11 @@
 //   &supplies=1        one of everything that can be carried, on the floor where you land (for looking at them: a visit has only what its seed left lying about)
 //   &check=1           once the floor is up, one line on the console that a script can read — `[check] {…}`: for every oddity on it, how
 //                      long it took to build, what it put down (meshes, triangles, solids, lights…), and everything the level warned about
+//   &perf=1            a read-out in the top right: frame times over the last 5 s, draw calls, triangles, memory, sizes, the room (perf.js)
+//   &bench=1           the read-out and a fixed tour of the floor you land on; at the end `[bench] {…}` on the console and the title
+//                      `bench done` (tools/backrooms-bench.mjs runs it for three seeds; docs/BACKROOMS-GRAPHICS.md, phase 0)
+//   &stress=4          with &perf=1 or &bench=1: the level's scene drawn 4 times a frame (1…32), same picture, to measure a machine
+//                      past its display's refresh rate; &stress=auto with &bench=1 steps it up at the first station first (perf.js)
 //   &loot=1            something to find: the keycard (in the mascot's hand) and coins 1–4; &loot=card,1,3 for some of it. There is no
 //                      office here to keep count, so a stand-in does, in this page's memory, and says so on the console: what you leave
 //                      by the door with is gone the next visit (any key), everything else is down there again. Without it: no loot.
@@ -38,6 +44,7 @@ import { lastLightStudy } from './last-light-study.js';
 import { bridgeStudy } from './bridge-study.js';
 import { tonerStudy } from './toner-study.js';
 import { partyStudy } from './party-study.js';
+import { roomCost } from '../backrooms/budget.js';
 import { waterparkStudy } from './waterpark-study.js';
 import { returnPoolStudy } from './return-pool-study.js';
 import { bellmouthStudy } from './bellmouth-study.js';
@@ -54,10 +61,10 @@ if (new URLSearchParams(location.search).get('check')) {
 function check(handle) {
   const { world, level } = handle;
   const rooms = world.rooms.filter((rt) => rt.def.kind === 'special').map((rt) => {
-    let meshes = 0, triangles = 0;
-    rt.group.traverse((o) => { if (!o.isMesh || !o.geometry) return; meshes++; const g = o.geometry; triangles += Math.round((g.index ? g.index.count : g.attributes.position ? g.attributes.position.count : 0) / 3); });
+    // (meshes and triangles: its ordinary batches; detailMeshes and detailTriangles: what it marked as detail, which low leaves out)
+    const { meshes, triangles, detailMeshes, detailTriangles } = roomCost(rt.group);
     const timing = world.timing.find(([what]) => what === `${rt.def.arch}#${rt.id}`) || [];
-    return { arch: rt.def.arch, room: rt.id, size: [rt.def.W, rt.def.D, rt.def.H], buildMs: timing[1], bakeMs: timing[2], meshes, triangles,
+    return { arch: rt.def.arch, room: rt.id, size: [rt.def.W, rt.def.D, rt.def.H], buildMs: timing[1], bakeMs: timing[2], meshes, triangles, detailMeshes, detailTriangles,
       solids: rt.colliders.length, lights: rt.lights.length, uses: rt.uses.length, zones: rt.zones.length, ticks: rt.ticks.length };
   });
   return { seed: String(level.seed), floor: level.depth, rooms, said };
@@ -69,6 +76,8 @@ const num = (k, d) => (q.has(k) && q.get(k) !== '' && Number.isFinite(Number(q.g
 const stage = createStage(document.getElementById('stage'), { fx: q.get('fx') === '1', shadows: false, preserve: true, pixelRatio: num('dpr', 1) });
 stage.start();
 window.__stage = stage;              // renderer.info, for checking that a visit leaves nothing behind
+// &perf=1 / &bench=1: the measuring tape, only fetched when asked for
+const perf = q.get('perf') === '1' || q.get('bench') === '1' ? (await import('./perf.js')).createPerf(stage, { bench: q.get('bench') === '1', params: q }) : null;
 
 const look = (species, outfitColor, accessory, extra) => ({ species, outfitColor, accessory, ...extra });
 const agents = [
@@ -127,10 +136,13 @@ async function go() {
     depth: q.has('depth') ? num('depth', 0) : undefined, depths: q.has('depths') ? num('depths', 3) : undefined,
     themes: q.get('themes') ? q.get('themes').split(',').filter(Boolean) : undefined,
     pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined, vhs: q.has('vhs') ? num('vhs', 2) : undefined, mute: q.has('mute') ? q.get('mute') !== '0' : undefined,
+    graphics: q.get('graphics') || undefined,
     debug: true, scorecard: q.get('card') !== '0', home: { label: 'Return to homepage' }, where: q.get('where') || undefined,
     inventory: q.get('inventory') !== '0', barricades: q.get('barricades') !== '0',
     dev: { supplies: q.get('supplies') === '1', cast: (q.get('cast') || '').split(',').filter(Boolean), barricadeStudy: q.get('barricades') === '1' && q.get('study') === '1',
       bridgeStudy: q.get('bridgestudy') === '1',
+      // &gfx=contact,bounce (each at 1) or &gfx=contact:0.6,bounce:0.5: contact darkening and bounced colour, baked with each room (kit.js gfxOf)
+      gfx: q.get('gfx') ? Object.fromEntries(q.get('gfx').split(',').map((s) => s.split(':')).map(([k, v]) => [k, v ? Number(v) : 1])) : null,
       lighting: ['1', ...LIGHTING_MODES].includes(q.get('lighting')) ? q.get('lighting') : false,
       owns: target => !!target?.closest?.('[data-lighting-study]') },
     onReady(handle) {
@@ -140,6 +152,7 @@ async function go() {
       if (q.get('map')) dev.textContent = handle.sketch();
       console.log(handle.sketch());
       if (q.get('check')) console.log('[check] ' + JSON.stringify(check(handle)));
+      perf?.attach(handle);
       if (q.get('finishstudy') === '1') closeStudy = poolFinishStudy(handle);
       else if (q.get('changingstudy') === '1') closeStudy = changingStudy(handle);
       else if (q.get('bellstudy') === '1') closeStudy = bellmouthStudy(handle);
@@ -154,6 +167,7 @@ async function go() {
     },
   });
   window.__backroomsResult = result;
+  perf?.detach();
   closeStudy?.();
   stage.setView(null);
   document.title = `over: ${result.reason}`;

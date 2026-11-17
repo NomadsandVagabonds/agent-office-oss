@@ -7,6 +7,8 @@ import { MENU_CSS } from './menu-style.js';
 import { BACKROOMS_DEFAULTS as DEFAULTS } from '/core/backrooms-settings.mjs';
 
 let instance = 0;
+// the Graphics setting's choices, in order (graphics.js says what each switches)
+const GRAPHICS = [['classic', 'Classic'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['auto', 'Auto']];
 const CONTROLS = [
   ['Walk', 'W A S D'], ['Look', 'Mouse / drag'], ['Run', 'Shift'], ['Crouch / jump', 'C / Space'],
   ['Interact', 'E / Enter'], ['Shove', 'Click'], ['Select / stow pocket', '1 – 6'], ['Inventory', 'I / Tab'], ['Use item', 'Q'],
@@ -17,7 +19,7 @@ const CONTROLS = [
  * Camcorder controls over the frozen picture. onChange(key, value) is immediate;
  * the caller applies and saves it. setOpen never invokes pause/resume callbacks.
  */
-export function createMenu({ host, settings = {}, furniture = false, onRequestOpen, onResume, onGiveUp, onChange, onArchive } = {}) {
+export function createMenu({ host, settings = {}, furniture = false, graphics: offerGraphics = true, onRequestOpen, onResume, onGiveUp, onChange, onArchive } = {}) {
   const id = ++instance, prefix = `br-menu-${id}`;
   let opened = false, disposed = false, page = 'main', previousFocus = null;
   let values = { ...DEFAULTS, ...settings };
@@ -91,6 +93,12 @@ export function createMenu({ host, settings = {}, furniture = false, onRequestOp
   fields.set('vhs', { input: picture });
   picture.addEventListener('change', () => change('vhs', Number(picture.value)));
   settingsPage.append(h('div.br-menu-setting', h('label', { htmlFor: picture.id }, 'Picture'), picture));
+  const graphics = h('select', { id: `${prefix}-graphics` }, GRAPHICS.map(([value, label]) => h('option', { value }, label)));
+  fields.set('graphics', { input: graphics });
+  graphics.addEventListener('change', () => change('graphics', graphics.value));
+  // (offerGraphics false: the setting is kept and obeyed, but its row is not offered. index.js offers it only to a visit made
+  // for looking at the level, until the owner says the tiers are for everybody)
+  if (offerGraphics) settingsPage.append(h('div.br-menu-setting', h('label', { htmlFor: graphics.id }, 'Graphics'), graphics));
   const difficulty = h('select', { id: `${prefix}-difficulty`, 'aria-describedby': `${prefix}-difficulty-note` },
     DIFFICULTIES.map(d => h('option', { value: d.id }, d.label + (d.id === 'easy' ? ' (recommended)' : ''))));
   const difficultyNote = h('small', { id: `${prefix}-difficulty-note` });
