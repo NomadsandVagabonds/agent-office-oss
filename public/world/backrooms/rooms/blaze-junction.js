@@ -21,6 +21,7 @@ import {
 import { thicket } from '../forest-thicket.js';
 import { occluderWall, addMistVeils } from '../forest-maze.js';
 import { makeBlazePuzzle, stepBlazePuzzle } from '../forest.rule.js';
+import { makeItem } from '../inventory-state.js';
 
 export function build(c) {
   const { W, D, R, params: p } = c;
@@ -60,8 +61,24 @@ export function build(c) {
   // it's visible; if we want solving the puzzle to dispense the reward cleanly, we can ALSO give +charge / +heal
   // or slide the crate lid open to reveal the items tucked inside `(cx, cz)`! Let's tuck a `battery` & `bandage`
   // inside at `y = 0.14` and keep a solid cover or let opening the cache lift the lid + chime!
-  c.leave('snack', cx - 0.18, cz + 0.04, { y: 0.49 });
-  c.leave('battery', cx + 0.18, cz + 0.04, { y: 0.49 });
+  // (What is in the cache is not in the room until the cache opens: see `giveCache`. Left with `c.leave` it lay beside
+  // the box from the start and was taken without touching a post.)
+  let given = false;
+  const giveCache = () => {
+    if (given) return;
+    given = true;
+    {
+      const physical = c.env.inventory?.physical;
+      if (!physical?.spawn) return;
+      const spots = [[cx - 0.2, cz + 0.62], [cx + 0.2, cz + 0.62], [cx, cz + 0.8], [cx - 0.5, cz + 0.7], [cx + 0.5, cz + 0.7], [cx, cz + 1.0]];
+      for (const type of ['snack', 'battery']) {
+        for (let k = 0; k < spots.length; k++) {
+          const [x, z] = spots[k];
+          if (physical.spawn(makeItem(type, `blaze-${c.room.id}-${type}`), { room: c.rt.id, x, z })?.ok) { spots.splice(k, 1); break; }
+        }
+      }
+    }
+  };
 
   // 2. Ring of 5 Trail Blaze Posts + Countable Growth-Ring Stumps (`rRing`)
   const rRing = Math.min(3.85, Math.min(W, D) * 0.5 - 2.05);
@@ -117,10 +134,9 @@ export function build(c) {
           c.env.play?.('ding', pw.x, pw.z, 11);
           const cw = c.toWorld(cx, cz);
           c.env.play?.('door', cw.x, cw.z, 10);
-          c.env.camera?.recharge?.(28); // rewards camera battery recharge too!
+          giveCache();
         } else if (res.shocked) {
-          c.env.play?.('buzz', pw.x, pw.z, 9);
-          c.env.camera?.drain?.(0.12);
+          c.env.play?.('buzz', pw.x, pw.z, 9);                 // (a wrong latch answers, and costs nothing: it took 12% of the battery)
           c.env.interfere?.(0.65);
           c.env.hud?.glitch?.(0.4);
         }

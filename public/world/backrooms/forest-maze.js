@@ -172,9 +172,8 @@ export function cordwoodStackTex(kit) {
         P(g, '#59391c', cx - 1, cy - 1, 2, 2);
       }
     }
-    for (const [tx, ty] of [[22, 38], [86, 70], [54, 102]]) {
-      P(g, '#eceee6', tx, ty, 11, 7); P(g, '#1b1d1e', tx + 2, ty + 2, 7, 3);
-    }
+    // (no inventory tags on the log ends: three a tile, each a black bar on white, tiled into diagonal lines of dashes
+    // across every cordwood wall on the floor. docs/FOREST-REVIEW.md §4)
   });
 }
 
@@ -724,6 +723,11 @@ void main() {
 }`;
 
 export function addMistVeils(c, segments, opt = {}) {
+  // Off. The veils were flat upright cards of one colour: pale panels standing in the lane of a dark room, dark blotches
+  // in a lit one, gone as you walked up to them (the owner: "the lighting and fog effects need work";
+  // docs/FOREST-REVIEW.md §2). Thirteen rooms still call this, and get nothing, so that a room which earns mist can ask
+  // for it again with `opt.force` once there is a mist worth having (a height band of the camcorder's own haze).
+  if (!opt.force) return null;
   if (!segments?.length) return null;
   const { H, kit } = c;
   const pos = [], uv = [], idx = [];

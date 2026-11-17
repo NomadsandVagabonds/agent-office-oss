@@ -12,14 +12,12 @@
 // At `(0, 0)`, a glassy dark Mirror Pool (`buildForestWater`) reflects the
 // upside-down ceiling forest right-side-up beneath an Upside-Down Executive
 // Workstation bolted directly to the ceiling tiles, with a dangling orange ID
-// lanyard cord (`[E]` or `call` shakes the ceiling drawer loose, sending ripples
-// across the pool beside `tape` + `battery` supplies!).
+// lanyard, beside `tape` + `battery` supplies. Nothing in the room can be used.
 
 import {
-  forestRoom, woodlandLight, trailSign, registerCallTarget,
+  forestRoom, woodlandLight, trailSign,
   placeVoxStack, buildForestWater, peatWaterTex, plenumBreach,
   ensureForestDetail, campLanternVox, stumpVox,
-  CEDAR_TIMBER, BLAZE_ORANGE, BRASS_TRIM,
 } from '../forest.js';
 import { thicket, keepLane } from '../forest-thicket.js';
 import { buildBlindRingMaze, addMistVeils } from '../forest-maze.js';
@@ -112,10 +110,7 @@ export function build(c) {
     { key: 'forest:inv:lantern', make: campLanternVox(), x: 1.95, y: 0.46, z: 1.55, scale: 0.026 },
   ];
 
-  // Dangling orange lanyard pull-cord dropping from the upside-down ceiling desk to `(0, 1.95)` at pool's south edge!
-  c.flat.box(-0.012, 1.42, 1.88, 0.012, H - 0.35, 1.90, BLAZE_ORANGE);
-  c.flat.box(-0.045, 1.30, 1.87, 0.045, 1.43, 1.91, BRASS_TRIM);
-  c.flat.box(-0.22, H - 0.42, 0.0, 0.02, H - 0.36, 1.90, CEDAR_TIMBER);
+  // (there was a lanyard cord here to pull. It creaked, rippled the pool and did nothing else: gone. docs/FOREST-REVIEW.md §3)
   plenumBreach(c, -0.3, -0.3, 2, 401);
 
   const det = ensureForestDetail(c);
@@ -186,20 +181,7 @@ export function build(c) {
 
   if (c.rt.lights.length < 13) c.light(0, 1.15, 0, '#62ffd2', 0.82, { bank: 3, k: 1.8, far: 6.5 });
 
-  let pulled = false;
-  const pullCeilingCord = () => {
-    const pw = c.toWorld(0, 0);
-    c.env.play?.('creak', pw.x, pw.z, 10);
-    c.env.play?.('splash', pw.x, pw.z, 9);
-    water?.spawnRipple(0, 0, 1.45);
-    water?.spawnRipple(-0.85, 0.65, 1.05);
-    if (!pulled) {
-      pulled = true;
-      c.env.camera?.recharge?.(15);
-    }
-  };
-  c.use({ x: 0, z: 1.88, r: 1.65, label: 'pull ceiling desk lanyard', use: pullCeilingCord });
-  registerCallTarget(c, 0, 0, pullCeilingCord, { r: 14 });
+  void water;
 
   const spSign = c.wallSpot(1.55, ['front', 'left', 'right']);
   if (spSign) {

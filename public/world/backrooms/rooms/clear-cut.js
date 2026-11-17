@@ -282,6 +282,8 @@ export function build(c) {
   let dozer = makeDozer(dozerX0, dozerEnds);
   let wantShutoff = false;
   let hitCooldown = 0;
+  let stall = 0;
+  let struckThem = false;
   let beepClock = 0;
   let rumbleClock = 0;
   let metDozer = false;
@@ -293,7 +295,7 @@ export function build(c) {
   c.add(dozerRig);
   c.after.push(() => dozerRig.userData.light(c.sample(dozer.x, 1.1, laneZ)));
 
-  // Live moving collider for the 3.1 m × 1.8 m tracked bulldozer chassis
+  // The machine's own box, 3.1 m × 1.8 m, which goes where it goes. It is never driven into the visitor (see the tick)
   const a0 = c.toWorld(dozer.x - 1.55, laneZ - 0.88);
   const b0 = c.toWorld(dozer.x + 1.55, laneZ + 0.88);
   const dozerCol = {
@@ -327,7 +329,28 @@ export function build(c) {
 
   c.tick((dt, t, me) => {
     hitCooldown = Math.max(0, hitCooldown - dt);
-    const step = stepDozer(dozer, dt, { inside: me.inside, shutoff: wantShutoff });
+    stall = Math.max(0, stall - dt);
+    // Nothing pushes the visitor (docs/BACKROOMS.md): the machine is solid, and so it never drives into somebody. With a
+    // visitor in the lane just ahead of whichever end is leading, it strikes once (a heart, and `c.hurt` throws them back
+    // from it), stands for a moment, and then waits for as long as they are still in its way. It used to carry on, and
+    // its box carried them down the lane with it at a heart every two seconds.
+    const going = dozer.mode === 'forward' ? 1 : dozer.mode === 'reverse' ? -1 : 0;
+    const lead = going > 0 ? dozer.x + 1.55 : dozer.x - 1.45;
+    const gap = going > 0 ? me.x - lead : lead - me.x;
+    const inWay = me.inside && going !== 0 && Math.abs(me.z - laneZ) < 1.15 && gap > -0.45 && gap < 0.55;
+    // (once: having struck somebody it does not strike again until they have been out of its lane)
+    if (!me.inside || Math.abs(me.z - laneZ) >= 1.15) struckThem = false;
+    if (inWay && !struckThem && hitCooldown <= 0) {
+      struckThem = true;
+      hitCooldown = 4.0;
+      stall = 2.5;
+      const from = c.toWorld(dozer.x, laneZ);
+      c.hurt(1, from);
+      c.env.interfere?.(0.85);
+      c.env.hud?.glitch?.(0.5);
+      c.env.play?.('thunk', from.x, from.z, 10);
+    }
+    const step = stepDozer(dozer, inWay || stall > 0 ? 0 : dt, { inside: me.inside, shutoff: wantShutoff });
     wantShutoff = false;
     dozer = step.state;
 
@@ -377,17 +400,6 @@ export function build(c) {
         }
       }
 
-      // Blade / rear bumper knock if visitor stands directly in its path while moving
-      if (me.inside && step.dir !== 0 && hitCooldown <= 0) {
-        const frontEdge = step.dir > 0 ? dozer.x + 1.72 : dozer.x - 1.65;
-        if (Math.abs(me.x - frontEdge) < 0.48 && Math.abs(me.z - laneZ) < 0.98) {
-          hitCooldown = 2.0;
-          c.hurt(1);
-          c.env.interfere?.(0.85);
-          c.env.hud?.glitch?.(0.5);
-          c.env.play?.('thunk', wDozer.x, wDozer.z, 10);
-        }
-      }
     } else {
       dozerRig.position.set(dozer.x, 0, laneZ);
       dozerRig.rotation.z = 0;
