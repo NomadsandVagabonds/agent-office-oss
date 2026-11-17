@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRng } from '../public/world/backrooms/gen.js';
-import { LIFT_ODDS, LIFT_ITEMS, liftCompany, liftPress } from '../public/world/backrooms/rooms/lift/rule.js';
+import { LIFT_ODDS, LIFT_ITEMS, liftCompany, liftPress, doorwayWall } from '../public/world/backrooms/rooms/lift/rule.js';
 
 const P = { behind: ['bricks', 'bricks', 'cutout', 'poster', 'bricks'] };
 const sample = (n, opt, seed = 'lift-test') => { const R = makeRng(seed); return Array.from({ length: n }, (_, i) => liftPress(R, P, i, opt)); };
@@ -74,4 +74,10 @@ test('nothing the building hangs or leaves is ever in a lift\'s car: the coin pl
     }
   }
   assert.ok(seen >= 6, 'enough lifts to mean something');
+});
+
+test('the doorway is a wall while the doors are shut or part open, and with the doors open only where there is a car', () => {
+  for (const kind of ['car', 'bricks', 'cutout', 'poster']) { assert.equal(doorwayWall(0, kind), true); assert.equal(doorwayWall(0.5, kind), true); }
+  assert.equal(doorwayWall(1, 'car'), false, 'open on a car: walk in');
+  for (const kind of ['bricks', 'cutout', 'poster']) assert.equal(doorwayWall(1, kind), true, kind + ': a wall however far the doors are open');
 });

@@ -42,3 +42,10 @@ export function liftPress(R, p, visit, { item = true, who = [], scale = 1, odds 
   if (q < creatureTo && who.length) return { kind: 'car', inside: 'creature', who: who[Math.floor(pick * who.length) % who.length] };
   return { kind: 'car', inside: 'empty' };
 }
+
+/**
+ * Is the doorway a wall now? Shut doors are; open ones are only where there is a car to walk into: bricks, a cutout and a poster
+ * are a wall however far the doors are open (the lead found a visitor walking through the bricks).
+ * @param open  0 shut … 1 open · kind  what a press came out as ('car' | 'bricks' | 'cutout' | 'poster')
+ */
+export const doorwayWall = (open, kind) => open < 0.9 || kind !== 'car';

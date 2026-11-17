@@ -7,7 +7,7 @@ import { card, wallVox } from './bits.js';
 import { LIFT, surroundVox, liftLeafVox, callPlateVox } from './lift.model.js';
 import { cutoutArt } from './cutout.js';
 import { MORE3 } from './rooms4.js';
-import { LIFT_CAR, LIFT_ODDS, liftPress, liftCompany } from './rooms/lift/rule.js';
+import { LIFT_CAR, LIFT_ODDS, liftPress, liftCompany, doorwayWall } from './rooms/lift/rule.js';
 
 /**
  * A lift lobby. The doors open, and sometimes there is a car: the front stands out from the wall as a shaft (CD deep, to the
@@ -95,7 +95,7 @@ function lift(c) {
     const env = c.env, difficulty = env.difficulty?.(), shared = !!env.coopStrict || (env.players?.().length || 1) > 1, landing = (env.level?.depth ?? 0) === 0;
     const company = landing || shared || typeof env.pursuer?.summon !== 'function' ? { who: [], scale: 0 } : liftCompany(difficulty);
     now = liftPress(R, p, visit, { item: !given.item && !shared, who: given.creature ? [] : company.who, scale: company.scale, odds: p.odds || LIFT_ODDS });
-    hideFlat();
+    hideFlat(); shown = false;
     if (now.kind !== 'car') { extras.bricks.visible = true; if (extras[now.kind]) extras[now.kind].visible = true; return; }
     if (now.inside === 'item') {
       const id = `lift-${c.rt.id}-${visit}`;
@@ -105,7 +105,9 @@ function lift(c) {
     }
   };
   /** The doors are all the way open: whoever the car holds is there to be seen (and not before, so that nothing lands unseen). */
+  let shown = false;
   const reveal = () => {
+    if (shown) return; shown = true;
     if (now.kind !== 'car' || now.inside !== 'creature' || given.creature) return;
     const q = carSpot(); let h = null;
     try { h = c.env.pursuer?.summon?.(now.who, { x: q.x, z: q.z }); } catch { h = null; }
@@ -118,13 +120,13 @@ function lift(c) {
       const i = Math.floor(t0 / 0.42);
       if (i < p.floors.length) show(p.floors[i]);
       else { phase = 'opening'; t0 = 0; c.env.play('ding', here.x, here.z, 8); c.env.play('slide', here.x, here.z, 6); arrive(); }
-    } else if (phase === 'opening') { open = Math.min(1, t0 / 1.1); if (open >= 1) { phase = 'open'; t0 = 0; reveal(); } }
+    } else if (phase === 'opening') { open = Math.min(1, t0 / 1.1); if (open >= (p.revealAt ?? 0.15)) reveal(); if (open >= 1) { phase = 'open'; t0 = 0; reveal(); } }
     else if (phase === 'open') { if (occupied()) t0 = Math.min(t0, 3.9); if (t0 > 4) { phase = 'closing'; t0 = 0; c.env.play('slide', here.x, here.z, 6); } }
     else if (phase === 'closing') {
       if (occupied()) { phase = 'opening'; t0 = open * 1.1; }
       else { open = Math.max(0, 1 - t0 / 1.1); if (open <= 0) { phase = 'idle'; visit++; light.material.color.copy(unlit); show(p.floors[(visit * 3) % p.floors.length]); } }
     }
-    doorWall.on = open < 0.9 || now.kind !== 'car';         // (bricks, a cutout and a poster are a wall however far the doors are open: only a car is walked into)
+    doorWall.on = doorwayWall(open, now.kind);              // (bricks, a cutout and a poster are a wall however far the doors are open: only a car is walked into)
     const k = open * open * (3 - 2 * open) * (OW / 2 - 0.03);
     left.position.x = -k; right.position.x = k;
   });
