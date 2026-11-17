@@ -182,6 +182,7 @@ saying what it does. In outline:
 | furniture | `c.prop(type, x, z, { rot, y, o })` anything from the office's catalogue (`desk`, `chair`, `crt`, `cooler`, `shelving`, `boxes`…; `c.hasProp(type)` asks) · `c.model(key, make, x, z)` a voxel model of your own (`Vox` from `../../vox/vox.js`), meshed once · `c.crate(…)` a plain painted block · `c.wallProp(type, side, at)` |
 | flat things | `c.hang(batch, side, at, y, w, h)` on a wall · `c.lay(batch, x, z, w, d, rot)` on the floor · `c.board(…)` standing · `c.wbox(side, at, w, y0, y1, d0, d1, rgb)` a box against a wall · `c.paper(x, z)` · `c.blot(…)` a stain |
 | surfaces to draw on | `c.flat` (plain colour), `c.wall`, `c.floor`, `c.ceil` · `c.mapped(key, texture)` lit by the room · `c.shining(key, texture, power)` lit by itself: screens, signs · textures from `c.kit.tex.custom(key, w, h, draw)` and `atlas(…)`, `drawText(…)` in `kit.js` |
+| fine detail (see *What a room may cost*) | `c.detail` a plain-colour batch like `c.flat`, marked as detail · `c.mapped(key, texture, { detail: true })` · `c.shining(key, texture, power, rgb, { detail: true })`: the same batches, marked, and nothing else different. A low Graphics setting hides them. Never anything walked into, read or used |
 | light | `c.light(x, y, z, color, power)`. Light is baked into the room once, when it is built: lights do not move, and things that move are lit by where they started |
 | where things can go | `c.spot(r)` a free bit of floor · `c.corner()` · `c.wallSpot(need)` a free stretch of wall · `c.spans(side)` · `c.clear(x, z, r)` · `c.reserve(x, z, r)` · `c.doorPoint(door, off)` |
 | things that happen | `c.tick((dt, t, me) => …)` every frame while somebody is in the room or next door (`me.x`, `me.z`, `me.yaw`, `me.inside`, `me.moving`, `me.speed`) · `c.zone({ x0, z0, x1, z1, enter, leave, stay })` · `c.use({ x, z, r, label, use, when })` something `E` does · `c.seen(x, z)` is that spot on their screen · `c.dynamic(batch, { pivot })` a part that moves · `c.rt.onEnter`, `c.rt.onLeave` |
@@ -230,16 +231,25 @@ are the figures:
   were built to (the heaviest of the first nineteen was 55,000).
 - **Detail batches** are everything a room could lose and still be the same
   room: mouldings, frames, relief, clutter that nothing depends on. They go in
-  batches of their own, marked as detail (the kit's `detail: true`, which
-  sets `mesh.userData.detail`; until that option is on the live branch, a
-  batch of its own with a name that says so). A low graphics setting leaves
-  them out. Nothing collidable, readable or usable may be in one.
+  batches of their own, marked as detail: `c.detail` (plain colour, like
+  `c.flat`), or `detail: true` in the options of `c.mapped` and `c.shining`,
+  which set `mesh.userData.detail`. A low Graphics setting leaves them out
+  (it hides them; it does not skip building them). Nothing collidable,
+  readable or usable may be in one. A key's options are the ones it was
+  first asked for with, so give a detail batch a key of its own. The mark is
+  only the flag: a mesh a room makes itself and flags by hand
+  (`mesh.userData.detail = true`, as the waterpark's rooms do with their
+  `waterpark-detail` mesh) is hidden and counted the same, wherever it is in
+  the room's group.
 - **Draw calls cost more than triangles here.** Everything drawn into the same
   batch is one mesh; spend the allowance inside batches, not on more of them.
 - **Lights stay at 16.** Baked and real-time shadows cost per light.
 - **A room over about 250,000 triangles in all is over.** A room near it says
   in its audit row what it costs to build (the dev page's `&check=1` prints
-  triangles, meshes and build time).
+  triangles and meshes in its ordinary batches, `detailTriangles` and
+  `detailMeshes` in its detail ones, and build time). The figures are
+  `ROOM_BUDGET` in `budget.js`, and `overBudget(roomCost(group))` says what
+  is over.
 - This applies to new rooms and to rooms being reworked. A room nobody is
   touching stays as it is.
 
@@ -264,7 +274,7 @@ the live floor (`goto`, `where`, `world`, `level`).
 
 ```
 [check] {"seed":"7","floor":0,"rooms":[{"arch":"kanban","room":1,"size":[8.8,6.8,2.6],"buildMs":84,"bakeMs":4,
-  "meshes":9,"triangles":9628,"solids":2,"lights":7,"uses":1,"zones":0,"ticks":0}, …],"said":[]}
+  "meshes":9,"triangles":9628,"detailMeshes":0,"detailTriangles":0,"solids":2,"lights":7,"uses":1,"zones":0,"ticks":0}, …],"said":[]}
 ```
 
 `said` is everything the level warned about while it built. It must be empty.

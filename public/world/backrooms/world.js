@@ -721,16 +721,25 @@ function roomContext(world, rt) {
     mapped(key, texture, opt = {}) {
       if (!mapped.has(key)) {
         mapped.set(key, { batch: track(new Batch(), ['wall', 'floor', 'ceil'].includes(key)), texture, ...opt });
+        if (opt.detail) mapped.get(key).batch.detail = true;            // (fine detail: see c.detail)
         if (gfxOn) noteBoxes(mapped.get(key).batch, ['wall', 'floor', 'ceil'].includes(key));
       }
       return mapped.get(key).batch;
     },
     /** A batch that shines by itself (unlit): lit panels, screens, signs. */
     shining(key, texture, power = 1, rgb = WHITE, opt = {}) {
-      if (!shining.has(key)) shining.set(key, { batch: track(new Batch(), key === 'panel'), texture, power, rgb, opt });
+      if (!shining.has(key)) { shining.set(key, { batch: track(new Batch(), key === 'panel'), texture, power, rgb, opt }); if (opt.detail) shining.get(key).batch.detail = true; }
       return shining.get(key).batch;
     },
     get flat() { return c.mapped('flat', kit.tex.white()); },
+    /**
+     * Fine detail the room could lose and still be the same room (mouldings, frames, relief, clutter nothing depends on):
+     * a batch like c.flat whose mesh is marked `userData.detail`, which a low Graphics setting hides (graphics.js
+     * showDetail). `detail: true` in the options of c.mapped and c.shining marks theirs the same way, and nothing else
+     * about them changes. It counts toward the room's detail budget (docs/BACKROOMS.md). Nothing collidable, readable or
+     * usable may go in one: put that in an ordinary batch. (A key's options are the ones it was first asked for with.)
+     */
+    get detail() { return c.mapped('detail', kit.tex.white(), { detail: true }); },
     get wall() { return c.mapped('wall', kit.tex.wallpaper(look)); },
     get floor() { return c.mapped('floor', kit.tex.floor(look)); },
     get ceil() { return c.mapped('ceil', kit.tex.ceiling(look.ceil)); },
@@ -1265,6 +1274,7 @@ function roomContext(world, rt) {
               material.uniforms.uTint.value = owner.lightTint; material.userData.furnitureLight = true;
             }
             last = add(new THREE.Mesh(geo, material), order, owner?.group || rt.group);
+            if (batch.detail) last.userData.detail = true;            // (c.detail: hidden at a low Graphics setting)
           }
         }
         return last;

@@ -27,6 +27,21 @@ const TABLE = {
   high: { lines: { 0: null, 1: 660, 2: 540 }, supersample: 2, sceneCap: 2560, widthCap: 2560, msaa: 4, bloom: true, grade: 1, haze: 1, contact: 1, bounce: 1 },
 };
 
+// detail: whether what rooms mark as detail (world.js `c.detail`, or `detail: true` to c.mapped and c.shining) is drawn.
+// Only low leaves it out; classic draws everything, as it always did (and before the option existed nothing was marked).
+for (const [t, on] of Object.entries({ classic: true, low: false, medium: true, high: true })) TABLE[t].detail = on;
+/**
+ * Show or hide what rooms marked as detail (mesh.userData.detail) under `object`, for a profile: hidden only where the
+ * profile says detail: false. Nothing collidable, readable or usable is ever in a detail batch, so this is only
+ * `visible`. → how many meshes it changed.
+ */
+export function showDetail(object, p) {
+  const on = p?.detail !== false;
+  let changed = 0;
+  object?.traverse?.((o) => { if (o.userData?.detail && o.visible !== on) { o.visible = on; changed++; } });
+  return changed;
+}
+
 export const cleanGraphics = (v) => (GRAPHICS.includes(v) ? v : DEFAULT_GRAPHICS);
 
 /** Everything a tier switches, as a fresh plain object. 'auto' reads as where it starts (medium); anything else as classic. */

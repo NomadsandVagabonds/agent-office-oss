@@ -181,6 +181,7 @@ handed to the kit when a part is built (`gfx: { contact, bounce }`).
 | grade for the kind of floor | — | yes | yes | yes |
 | haze beyond 8 m | — | — | yes | yes |
 | corner darkening / bounce (bake) | 0 / 0 | 0.7 / 0 | 1 / 0.7 | 1 / 1 |
+| a room's detail batches (`c.detail`) | drawn | hidden | drawn | drawn |
 
 - **Classic** draws exactly what the level drew before the setting existed.
 - **The camcorder stays the look.** The tape's lines and the scene's size are
@@ -222,6 +223,20 @@ handed to the kit when a part is built (`gfx: { contact, bounce }`).
   camcorder drew the larger scene before anything had landed, when it had no
   scene yet, and threw on the first frame (the picture stayed black). It now
   has an empty scene until the first landing, as the ordinary pass always had.
+- **Detail batches** are a room's fine detail in batches of their own
+  (`c.detail`, or `detail: true` to `c.mapped` and `c.shining`: see "What a
+  room may cost" in `docs/BACKROOMS.md`). Their meshes carry
+  `userData.detail` (so does any mesh a room flags by hand, such as a theme's
+  own `waterpark-detail` mesh: `showDetail` looks for the flag on every mesh
+  in the part, at any depth, not for how it was made), and `showDetail` in
+  `graphics.js` sets them visible or not
+  by the tier's `detail`: when a part is built, and on every tier change
+  (in the menu or by Auto), in every part that is up. They are always built;
+  Low only hides them, so they cost memory and build time at every tier. A
+  detail batch still darkens what it stands near in the bake (and Low has
+  corner darkening at 0.7), so a hidden one can leave a faint shadow: keep
+  detail to things small enough that this does not read. No room marks any
+  yet, so no tier hides anything today.
 - **Auto** starts at Medium; about 3 s of frames over 24 ms steps it down to
   Low, about 10 s under 13 ms at Low steps it back once; never two changes
   within 15 s, never more than three a visit, never while the next part is

@@ -36,7 +36,7 @@ import { buildWorld, loadCatalogue } from './world.js';
 import { BUILDERS } from './rooms.js';
 import { createPlayer } from './player.js';
 import { createVhs } from './vhs.js';
-import { profile as graphicsProfile, autoStart, autoStep, gradeOf } from './graphics.js';
+import { profile as graphicsProfile, autoStart, autoStep, gradeOf, showDetail } from './graphics.js';
 import { themeOf } from './themes.js';
 import { createHud } from './hud.js';
 import { createSound } from './sound.js';
@@ -278,7 +278,7 @@ async function visit(office, opt) {
       if (cur?.player) cur.player.me.shake = lv === 2 ? 1 : lv === 1 ? 0.5 : 0.25;
       pictureKey = '';
     }
-    if (key === 'graphics') { gfxAuto = settings.graphics === 'auto' ? autoStart() : null; vhs.setProfile(gfx()); pictureKey = ''; }
+    if (key === 'graphics') { gfxAuto = settings.graphics === 'auto' ? autoStart() : null; vhs.setProfile(gfx()); pictureKey = ''; showDetail(root, gfx()); }
     prefs.save(settings); menu?.update({ ...settings, scoreEligible: difficulty.report().ranked });
   }
   function setPicture(lv) { changeSetting('vhs', lv); }
@@ -437,6 +437,7 @@ async function visit(office, opt) {
     purse?.hang(env);
     let breath = performance.now();                       // build as fast as the machine allows, but keep the static moving
     f.world = env.world = await buildWorld(kit, level, env, pace || (async () => { if (performance.now() - breath > 40) { await frame(); breath = performance.now(); } }));
+    showDetail(f.world.scene, gfx());                      // (what its rooms marked as detail: hidden at a low Graphics setting)
     if (env.barricadesEnabled) {
       env.barricades = createFurnitureMotion(f.world);
       env.grip = createFurnitureGrip(f.world, env.barricades, { sound });
@@ -641,7 +642,7 @@ async function visit(office, opt) {
     light += (lvl - light) * (1 - Math.exp(-2.2 * dt));
     u.uGain.value = clamp(Math.pow(0.3 / Math.max(light, 0.04), 0.55), 0.9, variedLight ? LIGHTING.gainMax : 2.3);
     vhs.setAmbient(light);
-    if (gfxAuto && (gfxAuto = autoStep(gfxAuto, time, stage.frameMs, !!ahead && !ahead.f)).changed) { vhs.setProfile(gfx()); pictureKey = ''; }
+    if (gfxAuto && (gfxAuto = autoStep(gfxAuto, time, stage.frameMs, !!ahead && !ahead.f)).changed) { vhs.setProfile(gfx()); pictureKey = ''; showDetail(root, gfx()); }
     // The camera only reveals nearby surfaces. Its broad lamp is independent
     // of the narrow inventory flashlight and never supplies creature power.
     const wantTorch = inventory ? inventory.torchPower() : env.hand?.hasFlashlight?.() ? 1 : 0;

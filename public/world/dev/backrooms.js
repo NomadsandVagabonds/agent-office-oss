@@ -44,6 +44,7 @@ import { lastLightStudy } from './last-light-study.js';
 import { bridgeStudy } from './bridge-study.js';
 import { tonerStudy } from './toner-study.js';
 import { partyStudy } from './party-study.js';
+import { roomCost } from '../backrooms/budget.js';
 
 // &check=1: listen from the start, so that nothing said while the floor was being built is missed
 const said = [];
@@ -55,10 +56,10 @@ if (new URLSearchParams(location.search).get('check')) {
 function check(handle) {
   const { world, level } = handle;
   const rooms = world.rooms.filter((rt) => rt.def.kind === 'special').map((rt) => {
-    let meshes = 0, triangles = 0;
-    rt.group.traverse((o) => { if (!o.isMesh || !o.geometry) return; meshes++; const g = o.geometry; triangles += Math.round((g.index ? g.index.count : g.attributes.position ? g.attributes.position.count : 0) / 3); });
+    // (meshes and triangles: its ordinary batches; detailMeshes and detailTriangles: what it marked as detail, which low leaves out)
+    const { meshes, triangles, detailMeshes, detailTriangles } = roomCost(rt.group);
     const timing = world.timing.find(([what]) => what === `${rt.def.arch}#${rt.id}`) || [];
-    return { arch: rt.def.arch, room: rt.id, size: [rt.def.W, rt.def.D, rt.def.H], buildMs: timing[1], bakeMs: timing[2], meshes, triangles,
+    return { arch: rt.def.arch, room: rt.id, size: [rt.def.W, rt.def.D, rt.def.H], buildMs: timing[1], bakeMs: timing[2], meshes, triangles, detailMeshes, detailTriangles,
       solids: rt.colliders.length, lights: rt.lights.length, uses: rt.uses.length, zones: rt.zones.length, ticks: rt.ticks.length };
   });
   return { seed: String(level.seed), floor: level.depth, rooms, said };
