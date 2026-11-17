@@ -18,6 +18,7 @@ import { VOXEL } from '../vox/vox.js';
 import { bankWeights } from './lighting.js';
 import { FLASHLIGHT_GLSL, FLASHLIGHT_POSES } from './flashlight.js';
 import { BEAM_SHADOW_GLSL } from './beam-shadows.rule.js';   // (beam shadows: only compiled where BEAM_SHADOWS is defined, beam-shadows.js)
+import { GLOW_DEPTH_GLSL } from './glow.rule.js';             // (emissive bloom: only compiled in glow.js's stand-ins)
 
 const GLOW = 2.3;                              // how hard a self-lit voxel shines
 
@@ -499,6 +500,9 @@ vec3 lightmapped(vec3 c) {
 }
 #endif
 // --- end tube shadows ---
+// --- emissive bloom ---
+${GLOW_DEPTH_GLSL}
+// --- end emissive bloom ---
 ${FLASHLIGHT_GLSL}
 // --- beam shadows ---
 ${BEAM_SHADOW_GLSL}
@@ -552,6 +556,29 @@ void main() {
   float room = dot(vLit, vec3(0.333));
   c += (glint * 1.1 + rim * 0.22) * uWet * (0.12 + room) * vec3(1.0, 0.97, 0.94);
   #endif
+  // --- emissive bloom ---
+  #ifdef EMISSIVE_BLOOM
+  // (the picture the bloom is made from, glow.js: only what shines by itself. A self-lit voxel (bake: its light is its
+  // colour × GLOW) gives what it shows; everything else is black and only hides what is behind it. The beams' patch,
+  // the room's light and the wet glint are light, not emission: none of it is here. Alpha 0 where it shines: what a
+  // screen shows is left crisp under its glow, as a sign's is)
+  vec3 emitted = vec3(0.0);
+  float plainly = 1.0;
+  #ifdef VOXEL
+  emitted = vLit * step(0.5, vSurf.y);
+  plainly = 1.0 - step(0.5, vSurf.y);
+  #endif
+  #ifdef MAPPED
+  emitted *= t.rgb;
+  #endif
+  #ifdef EMISSIVE_BLOOM_DEPTH
+  // (only what shines is drawn, and the scene's own depth hides it: nothing is written where it does not shine)
+  if (plainly > 0.5 || glowHidden()) discard;
+  #endif
+  gl_FragColor = vec4(emitted, plainly);
+  return;
+  #endif
+  // --- end emissive bloom ---
   gl_FragColor = vec4(c, uAlpha);
 }`;
 
@@ -716,6 +743,12 @@ export function createKit(opt = {}) {
   function glowing(map, power = 1, rgb = WHITE, opt = {}) {
     const m = own(new THREE.MeshBasicMaterial({ map, transparent: !!opt.transparent, alphaTest: opt.alphaTest || 0, side: opt.side || THREE.FrontSide, depthWrite: opt.depthWrite !== false }));
     m.color.setRGB(rgb[0] * power, rgb[1] * power, rgb[2] * power);
+    // --- emissive bloom ---
+    // (it shines: glow.js draws it into the bloom's picture. A plain light, white or the lit panel's picture, is a 'lamp'
+    // and its glow is laid over it in full; anything else has something on it to read (a sign, a notice, a slide) and is
+    // a 'picture', which the glow goes round and leaves crisp)
+    m.userData.glow = !map || map === textures.get('white') || map === textures.get('pntrue') ? 'lamp' : 'picture';
+    // --- end emissive bloom ---
     return m;
   }
 
