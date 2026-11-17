@@ -433,6 +433,10 @@ export const MORE_DECK = [
   { id: 'keys-cut', name: 'Keys Cut', landmark: "the key cutter's, all doors", w: [6, 7], d: [6, 7], h: [3.3, 3.8],
     ports: ['left', 'right'], weight: 1.1, lights: 'dim', themes: { mall: 1, '*': 0 },
     module: './rooms/keys-cut.js', stash: (r) => [r.W / 2 - 0.9, r.D / 2 - 0.9, r.W / 2 - 0.3, r.D / 2 - 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+  // A shop: the department store, all office clothes; the dummies are having a meeting; fitting rooms along the back, and in the glass of the last one, somebody where you stand.
+  { id: 'mens-ladies', name: 'Mens Ladies', landmark: 'the department store', w: [12, 14], d: [11, 13], h: [3.4, 3.9],
+    ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
+    module: './rooms/mens-ladies.js', stash: (r) => [-r.W / 2 + 0.3, r.D / 2 - 0.9, -r.W / 2 + 0.9, r.D / 2 - 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
   // A shop: the place that sells the orange drink. Orange and white, a great many oranges, and somebody serving who has one for a head.
   { id: 'the-orange', name: 'The Orange', landmark: 'the place that sells the orange drink', w: [7, 8], d: [7, 8], h: [2.9, 3.3],
     ports: ['left', 'right'], weight: 1.3, lights: 'dim', themes: { mall: 1, '*': 0 },
