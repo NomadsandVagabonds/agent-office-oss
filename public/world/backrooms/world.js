@@ -15,6 +15,7 @@ import { emergencyFixtures } from './lighting-fixtures.js';
 import { planFloorLighting, panelBank, bankLevels, localLightScale } from './lighting.js';
 import { registerMovable } from './movable-props.js';
 import { surfaceAt } from './bridge-rules.js';
+import { mapLayout, bakeShadows, packShadows, layoutUniforms, sampleMap } from './shadowmap.js';
 import { bridgeReachable } from './bridge-puzzles.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
@@ -64,7 +65,7 @@ function copyChunks(batch, chunks, decals = false) {
  * by the walls. Both from what the room already knows once it is built: the boxes, models and pillars put down in it
  * (no triangles are traced, and none are added: the floor's vertices every half metre carry the gradient, and the
  * round blot under each thing is still the sharp part). Nothing runs per frame. */
-const CONTACT = 0.7, SELF = 0.45, SELF_H = 0.4, BOUNCE_FLOOR = 0.6, BOUNCE_WALL = 0.4, EDGE = 0.9;
+const CONTACT = 0.7, SELF = 0.45, SELF_H = 0.4, BOUNCE_FLOOR = 0.6, BOUNCE_WALL = 0.4, EDGE = 0.9, SHADE_BODY = 0.75;
 const NO_OCCLUDERS = [];
 
 /** The things that darken what is near them, kept in a 1 m grid of the room's floor: near(x, z) → the few that may reach there. */
@@ -145,6 +146,48 @@ function gfxExtra(batch, key, gfx, g) {
     }
   }
   return ao || w ? { ao, bounce: w ? { w, src, rgb } : null } : null;
+}
+
+/* ---- the tubes' shadows, baked (kit.gfx.shadows: off unless asked for) ------------------------------------------
+ * What stands in the room is what the contact darkening already records (`standing`: boxes drawn into the room's own
+ * batches, models put down, pillars), less anything that can be dragged about (it keeps its round blot instead, and
+ * leaves no shadow behind). A model is not its bounding box: its triangles are gathered into columns 10 cm across, so a
+ * chair throws a seat and four legs, not a crate. shadowmap.js does the rest. */
+const SHADOW_COL = 0.1, SHADOW_COLS = 6, BLOT_FADE = 0.3;
+
+/** Bytes of a room's light map (shadowmap.js) → a texture the kit owns: read with linear filtering, no mipmaps. */
+function mapTexture(kit, layout, q) {
+  const t = kit.own(new THREE.DataTexture(q.data, layout.width, layout.height, q.channels === 2 ? THREE.RGFormat : THREE.RGBAFormat));
+  t.magFilter = t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.unpackAlignment = 1; t.needsUpdate = true;
+  return t;
+}
+
+/** A voxel model's triangles (batch indices i0…i1) as a few boxes: columns, merged along x where alike. */
+function modelColumns(batch, i0, i1, box) {
+  const w = box.x1 - box.x0, d = box.z1 - box.z0;
+  const nx = clamp(Math.ceil(w / SHADOW_COL), 1, SHADOW_COLS), nz = clamp(Math.ceil(d / SHADOW_COL), 1, SHADOW_COLS), cw = w / nx, cd = d / nz;
+  const lo = new Float32Array(nx * nz).fill(Infinity), hi = new Float32Array(nx * nz).fill(-Infinity), p = batch.pos, idx = batch.idx;
+  for (let t = i0; t + 2 < i1; t += 3) {
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (let k = 0; k < 3; k++) { const v = idx[t + k] * 3, x = p[v], y = p[v + 1], z = p[v + 2]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+    const a0 = clamp(Math.floor((x0 - box.x0) / cw + 1e-4), 0, nx - 1), a1 = clamp(Math.ceil((x1 - box.x0) / cw - 1e-4) - 1, a0, nx - 1);
+    const b0 = clamp(Math.floor((z0 - box.z0) / cd + 1e-4), 0, nz - 1), b1 = clamp(Math.ceil((z1 - box.z0) / cd - 1e-4) - 1, b0, nz - 1);
+    for (let j = b0; j <= b1; j++) for (let i = a0; i <= a1; i++) { const c = j * nx + i; if (y0 < lo[c]) lo[c] = y0; if (y1 > hi[c]) hi[c] = y1; }
+  }
+  const out = [];
+  let filled = 0;
+  for (let j = 0; j < nz; j++) {
+    let run = null;
+    for (let i = 0; i <= nx; i++) {
+      const c = j * nx + i, ok = i < nx && hi[c] - lo[c] > 0.02;
+      if (ok) filled += hi[c] - lo[c];
+      if (run && ok && Math.abs(lo[c] - run.y0) < 0.03 && Math.abs(hi[c] - run.y1) < 0.03) { run.x1 = box.x0 + (i + 1) * cw; run.y0 = Math.min(run.y0, lo[c]); run.y1 = Math.max(run.y1, hi[c]); continue; }
+      if (run) out.push(run);
+      run = ok ? { x0: box.x0 + i * cw, x1: box.x0 + (i + 1) * cw, z0: box.z0 + j * cd, z1: box.z0 + (j + 1) * cd, y0: lo[c], y1: hi[c] } : null;
+    }
+  }
+  // (nearly solid: the one box is the same shadow for less)
+  return !out.length || filled >= 0.85 * nx * nz * (box.y1 - box.y0) ? [{ x0: box.x0, y0: box.y0, z0: box.z0, x1: box.x1, y1: box.y1, z1: box.z1 }] : out;
 }
 
 /**
@@ -531,7 +574,15 @@ export async function buildWorld(kit, level, env, tick) {
     if (!rt) return [0.2, 0.2, 0.2];
     const p = toLocal(rt.def, x, z), k = rt.u.dim.value;
     return lightAt(rt.lights, rt.amb, p.x, y, p.z, 0, 1, 0,
-      { lighting: rt.lighting, banks: rt.lightLevels, flick: rt.u.flick.value }).map((v) => v * k);
+      { lighting: rt.lighting, banks: rt.lightLevels, flick: rt.u.flick.value, ...(rt.lm?.shadows ? { shade: world.shadeAt(rt, p.x, p.z) } : {}) }).map((v) => v * k);
+  };
+  /** (kit.gfx.shadows) How much of each group's light reaches the floor here past what stands in the room, for a body
+   * standing on it: most of the floor's own share (a body's head can be clear of a shadow its feet are in). */
+  world.shadeAt = (rt, x, z) => {
+    const m = rt.lm; if (!m?.shadows) return undefined;
+    const a = sampleMap(m.layout, m.A.data, m.A.channels, rt.def.W, rt.def.D, x, 0, z), b = m.B ? sampleMap(m.layout, m.B.data, 2, rt.def.W, rt.def.D, x, 0, z) : null;
+    if (!a) return undefined;
+    return [...a, ...(b || [])].map((v) => 1 - SHADE_BODY * (1 - v));
   };
   /** Exposure/hum follow the bank above the camera, rather than the whole room's average. */
   world.illuminationAt = (x, z) => {
@@ -559,7 +610,8 @@ function roomContext(world, rt) {
   const moving = env.barricadesEnabled === true, placements = [], batches = new Map(), decalChunks = [], added = [];
   let placing = null;
   // (kit.gfx only) what stands in the room, for contact darkening: every box drawn into the room's own batches, every model, every pillar
-  const gfxOn = kit.gfx?.contact > 0, standing = [];
+  const gfxOn = kit.gfx?.contact > 0 || kit.gfx?.shadows > 0, standing = [];
+  const shadowsOn = kit.gfx?.shadows > 0;
   let gfxShell = null;
   const noteBoxes = (batch, structural) => {
     const original = batch.box;
@@ -608,6 +660,45 @@ function roomContext(world, rt) {
     }
     return batch;
   };
+  /** (kit.gfx.shadows) The room's light map: what stands in it, the floor and walls it falls on, baked (shadowmap.js). */
+  function shadowRoom() {
+    const t0 = performance.now();
+    // (a floor that is not one flat rectangle at the room's level keeps the light it has: no floor in the map)
+    const floorOk = !!(gfxShell?.fAlb && mapped.get('floor')?.batch.verts) && !rt.floorY && !rt.flat && !(def.shape && (def.shape.kind === 'pit' || def.shape.kind === 'dais'));
+    const walls = gfxShell?.wAlb && mapped.get('wall')?.batch.verts ? gfxShell.sides : new Set();
+    let top = H;
+    for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) top = Math.max(top, ceilAt(def, -W / 2 + (W * i) / 4, -D / 2 + (D * j) / 4));
+    const ownerOf = (s) => (!moving ? null : s.placing ? s.placing.owner || null : s.structural ? null
+      : furnitureGroups.find((f) => f.type !== 'chair' && onFurniture(f.placement.foot, { x0: s.x0, z0: s.z0, x1: s.x1, z1: s.z1, bottom: s.y0, top: s.y1 })) || null);
+    const fixed = standing.filter((s) => {
+      const w = s.x1 - s.x0, d = s.z1 - s.z0, h = s.y1 - s.y0;
+      return h >= 0.15 && Math.max(w, d) >= 0.08 && Math.min(w, d) >= 0.01 && w * d <= 0.4 * W * D && !ownerOf(s);
+    });
+    const boxes = fixed.flatMap((s) => s.parts || [{ x0: s.x0, y0: s.y0, z0: s.z0, x1: s.x1, y1: s.y1, z1: s.z1 }]);
+    rt.shadowBoxes = boxes;
+    const layout = boxes.length && (floorOk || walls.size) ? mapLayout({ W, D, H: top, floor: floorOk, walls }) : null;
+    const res = layout ? bakeShadows({ layout, lights: rt.lights, amb: rt.amb, lighting: rt.lighting, boxes }) : null;
+    rt.shadowStats = { ms: 0, boxes: boxes.length, floor: floorOk, walls: walls.size, bytes: 0, texels: 0, touched: 0 };
+    if (res) {
+      const packed = packShadows(layout, res.ratio);
+      const A = mapTexture(kit, layout, packed.A), B = packed.B ? mapTexture(kit, layout, packed.B) : null;
+      rt.lm = { layout, shadows: true, A: packed.A, B: packed.B, materials: [],
+        uniforms: { uLm: { value: layoutUniforms(layout, W, D).map((v) => new THREE.Vector4(...v)) }, uLmA: { value: A }, uLmB: { value: B || A } } };
+      // where a still thing's shadow is baked now, the round blot under it is mostly not needed
+      const q = c.decals;
+      for (let v = 0; v + 3 < q.pos.length / 3; v += 4) {
+        if (q.pos[v * 3 + 1] > 0.02) continue;
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        for (let k = 0; k < 4; k++) { const x = q.pos[(v + k) * 3], z = q.pos[(v + k) * 3 + 2]; x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+        const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+        if (fixed.some((s) => Math.abs((s.x0 + s.x1) / 2 - cx) < 0.03 && Math.abs((s.z0 + s.z1) / 2 - cz) < 0.03 && Math.abs(s.x1 - s.x0 + 0.24 - (x1 - x0)) < 0.06 && Math.abs(s.z1 - s.z0 + 0.24 - (z1 - z0)) < 0.06))
+          for (let k = 0; k < 4; k++) q.col[(v + k) * 4 + 3] *= BLOT_FADE;
+      }
+      Object.assign(rt.shadowStats, { texels: layout.width * layout.height, touched: res.touched, polygons: res.polygons,
+        bytes: packed.A.data.length + (packed.B?.data.length || 0), size: [layout.width, layout.height], cell: layout.cell });
+    }
+    rt.shadowStats.ms = Math.round(performance.now() - t0);
+  }
   const furnitureGroups = [];
   function separateFurniture() {
     const candidates = placements.filter(p => furnitureType(p.type));
@@ -863,8 +954,12 @@ function roomContext(world, rt) {
       const foot = { x0, z0, x1, z1, top: y1, bottom: y0, w: x1 - x0, d: z1 - z0, h: y1 - y0, x, z };
       const before = placing;
       if (moving && !opt.batch) { placing = { type: opt.furnitureType, foot, opt }; placements.push(placing); }
-      if (gfxOn && (!opt.batch || ownBatch(opt.batch))) standing.push({ x0, y0, z0, x1, y1, z1, placing, structural: false });
-      (opt.batch || c.vox).addVox(geo.solid, mat, opt);
+      const stood = gfxOn && (!opt.batch || ownBatch(opt.batch)) ? { x0, y0, z0, x1, y1, z1, placing, structural: false } : null;
+      if (stood) standing.push(stood);
+      const into = opt.batch || c.vox, i0 = into.idx.length;
+      into.addVox(geo.solid, mat, opt);
+      // (kit.gfx.shadows: what it really is, in columns, while its triangles are still where they were put)
+      if (stood && shadowsOn) stood.parts = modelColumns(into, i0, into.idx.length, stood);
       if (geo.glass) c.glass.addVox(geo.glass, mat, opt);
       if (opt.solid !== false && y0 < 1.0 && y1 > 0.25) {
         const col = c.solid(x0 + 0.03, z0 + 0.03, x1 - 0.03, z1 - 0.03, { tall: opt.tall ?? y1 > 1.25, top: y1 });
@@ -1199,7 +1294,9 @@ function roomContext(world, rt) {
         const other = world.rooms[dr.to], gap = other.level - rt.level;
         if (gap < 0.05) continue;
         const p = doorPoint(dr, -0.3), n = WALLS[dr.side].n;
-        rt.lights.push(lamp(p.x, dr.sill + Math.min(1.45, dr.h * 0.7), p.z, lin(other.def.look.tube).map((v) => v * gap * 5.5 * (dr.w / 1.8) * Math.min(1, dr.h / 2)), { axis: n, floor: 0.1, k: 3.2, wrap: 0.4 }));
+        const spill = lamp(p.x, dr.sill + Math.min(1.45, dr.h * 0.7), p.z, lin(other.def.look.tube).map((v) => v * gap * 5.5 * (dr.w / 1.8) * Math.min(1, dr.h / 2)), { axis: n, floor: 0.1, k: 3.2, wrap: 0.4 });
+        spill.spill = dr.to;                     // (not a lamp of this room's: nothing standing here shadows it)
+        rt.lights.push(spill);
       }
       // wall sockets, low down, here and there
       if (opt.sockets !== false && !def.crawl) for (let i = 0, nSock = R.int(1, 3); i < nSock; i++) {
@@ -1262,7 +1359,8 @@ function roomContext(world, rt) {
     /* ---- done: bake and hand the meshes over ----------------------------------------- */
     finish() {
       if (moving) separateFurniture();
-      const g = kit.gfx ? gfxRoom() : null;
+      const g = kit.gfx && (kit.gfx.contact > 0 || kit.gfx.bounce > 0) ? gfxRoom() : null;
+      if (shadowsOn) shadowRoom();
       const add = (mesh, order = 0, parent = rt.group) => { mesh.renderOrder = order; mesh.matrixAutoUpdate = false; parent.add(mesh); return mesh; };
       const bake = (batch, make, order = 0, unlit = false, key = null) => {
         let last = null;
@@ -1274,7 +1372,7 @@ function roomContext(world, rt) {
             : extra ? (probeLit ? kit.geometry(part, [], WHITE, null, extra) : kit.geometry(part, rt.lights, rt.amb, rt.lighting, extra))
             : probeLit ? kit.geometry(part, [], WHITE) : kit.geometry(part, rt.lights, rt.amb, rt.lighting);
           if (geo) {
-            const material = make(geo);
+            const material = make(geo, owner);
             if (probeLit) {
               material.uniforms.uDim = {value:1}; material.uniforms.uFlick = {value:1};
               material.uniforms.uTint.value = owner.lightTint; material.userData.furnitureLight = true;
@@ -1286,9 +1384,9 @@ function roomContext(world, rt) {
         return last;
       };
       for (const [key, m] of mapped) {
-        bake(m.batch, geo => kit.surface({ map: m.texture, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, cutout: m.cutout, side: m.side }), 0, false, key);
+        bake(m.batch, (geo, owner) => kit.surface({ map: m.texture, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, cutout: m.cutout, side: m.side, lm: owner ? null : rt.lm }), 0, false, key);
       }
-      bake(c.vox, geo => kit.surface({ vox: true, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks }), 0, false, 'vox');
+      bake(c.vox, (geo, owner) => kit.surface({ vox: true, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, lm: owner ? null : rt.lm }), 0, false, 'vox');
       bake(c.glass, geo => kit.surface({ vox: true, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, alpha: 0.42 }), 3);
       for (const [key, m] of shining) {
         const mesh = bake(m.batch, () => kit.glowing(m.texture, m.power, m.rgb, m.opt), 0, true);

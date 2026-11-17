@@ -182,8 +182,10 @@ export function lamp(x, y, z, rgb, o = {}) {
  */
 export function gfxOf(o) {
   const k = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(1, Number(v))) : 0);
-  const contact = k(o?.contact), bounce = k(o?.bounce);
-  return contact > 0 || bounce > 0 ? { contact, bounce } : null;
+  const contact = k(o?.contact), bounce = k(o?.bounce), shadows = k(o?.shadows);
+  // (shadows: the tubes' shadows, baked per room into a small picture of its floor and walls (shadowmap.js), each bank
+  // apart. Only named when it is on, so that what was asked for before it existed reads as it did.)
+  return contact > 0 || bounce > 0 || shadows > 0 ? { contact, bounce, ...(shadows > 0 ? { shadows } : {}) } : null;
 }
 
 /**
@@ -261,13 +263,19 @@ export function bake(batch, lights, amb, lighting = null, extra = null) {
   return { lit, flk, banks };
 }
 
-/** The light arriving at a point facing (nx, ny, nz) — for things that move after the bake. */
+/**
+ * The light arriving at a point facing (nx, ny, nz) — for things that move after the bake. runtime.shade, if given:
+ * the share of each group's light that reaches the spot past what stands in the room ([steady, flicker, bank 0…3],
+ * shadowmap.js); without it, every share is whole.
+ */
 export function lightAt(lights, amb, x, y, z, nx = 0, ny = 1, nz = 0, runtime = {}) {
   const probe = { verts: 1, pos: [x, y, z], nor: [nx, ny, nz], alb: [1, 1, 1], ao: [1], sf: [0, 0], vox: false };
   const { lit, flk, banks } = bake(probe, lights, amb, runtime.lighting);
-  return [0, 1, 2].map((c) => lit[c] + (flk ? flk[c] * (runtime.flick ?? 1) : 0)
-    + (banks ? banks.reduce((sum,bank,b) => sum + bank[c] * (runtime.banks?.[b] ?? 1),0) : 0));
+  const s = runtime.shade || NO_SHADE;
+  return [0, 1, 2].map((c) => lit[c] * (s[0] ?? 1) + (flk ? flk[c] * (runtime.flick ?? 1) * (s[1] ?? 1) : 0)
+    + (banks ? banks.reduce((sum,bank,b) => sum + bank[c] * (runtime.banks?.[b] ?? 1) * (s[2 + b] ?? 1),0) : 0));
 }
+const NO_SHADE = [];
 
 /* ---- the kit ----------------------------------------------------------------- */
 
@@ -303,6 +311,41 @@ varying vec3 vAlb;
 varying vec2 vUv;
 varying vec3 vView;
 varying vec3 vNormal;
+// --- tube shadows (lightmap) ---
+#ifdef LIGHTMAP
+uniform vec4 uLm[6];
+varying vec3 vLmPos;
+flat varying float vLmRegion;
+#ifdef TUBESHADOW
+#ifdef FLICK
+varying vec3 vLmF;
+#endif
+#ifdef BANKS
+varying vec3 vLmB0;
+varying vec3 vLmB1;
+#if BANKS > 2
+varying vec3 vLmB2;
+#endif
+#if BANKS > 3
+varying vec3 vLmB3;
+#endif
+#endif
+#endif
+// which part of the room's light map a vertex is on: 1 the floor, 2 back, 3 front, 4 left, 5 right wall; 0 none
+float lmRegion() {
+  vec3 p = position, n = normal;
+  // (inside the room only: the strip of floor in a doorway, in the wall's thickness, keeps its own light)
+  if (abs(p.x) > uLm[5].x + 0.002 || abs(p.z) > uLm[5].y + 0.002) return 0.0;
+  if (uLm[0].x > 0.0 && n.y > 0.7 && abs(p.y) < 0.04) return 1.0;
+  if (abs(n.y) >= 0.3) return 0.0;
+  if (uLm[1].x > 0.0 && n.z > 0.7 && abs(p.z + uLm[5].y) < 0.04) return 2.0;
+  if (uLm[2].x > 0.0 && n.z < -0.7 && abs(p.z - uLm[5].y) < 0.04) return 3.0;
+  if (uLm[3].x > 0.0 && n.x > 0.7 && abs(p.x + uLm[5].x) < 0.04) return 4.0;
+  if (uLm[4].x > 0.0 && n.x < -0.7 && abs(p.x - uLm[5].x) < 0.04) return 5.0;
+  return 0.0;
+}
+#endif
+// --- end tube shadows ---
 void main() {
   vUv = uv;
   vec3 lit = aLit;
@@ -324,6 +367,32 @@ void main() {
   lit = mix(lit, aLit, aSurf.y);
   #endif
   vLit = lit * uTint; vAlb = aAlb;
+  // --- tube shadows (lightmap) ---
+  #ifdef LIGHTMAP
+  // (in the room's own frame: the room's meshes are never moved inside its group. Each group's share of the light as
+  // the line above added it up, so the fragment can take its own shadow off each)
+  vLmPos = position; vLmRegion = lmRegion();
+  #ifdef TUBESHADOW
+  float lmOwn = 1.0;
+  #ifdef VOXEL
+  if (aSurf.y > 0.5) { vLmRegion = 0.0; lmOwn = 0.0; }
+  #endif
+  #ifdef FLICK
+  vLmF = aFlk * uFlick * uDim * uTint * lmOwn;
+  #endif
+  #ifdef BANKS
+  vLmB0 = aBank0 * uBanks.x * uDim * uTint * lmOwn;
+  vLmB1 = aBank1 * uBanks.y * uDim * uTint * lmOwn;
+  #if BANKS > 2
+  vLmB2 = aBank2 * uMoreBanks.x * uDim * uTint * lmOwn;
+  #endif
+  #if BANKS > 3
+  vLmB3 = aBank3 * uMoreBanks.y * uDim * uTint * lmOwn;
+  #endif
+  #endif
+  #endif
+  #endif
+  // --- end tube shadows ---
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   vView = mv.xyz;
   vNormal = normalMatrix * normal;
@@ -347,12 +416,83 @@ varying vec3 vVox;
 varying vec2 vSurf;
 float voxHash(vec3 p) { p = fract(p * vec3(0.1031, 0.1030, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.x + p.y) * p.z); }
 #endif
+// --- tube shadows (lightmap) ---
+#ifdef LIGHTMAP
+uniform vec4 uLm[6];
+varying vec3 vLmPos;
+flat varying float vLmRegion;
+// where in the light map this spot is: its position on its floor or wall snapped to the step grid (a voxel-scale edge),
+// kept inside the room, then the region's own scale and offset (shadowmap.js layoutUniforms)
+vec2 lmUv(float k) {
+  vec3 p = vLmPos;
+  vec2 q, o, hi; vec4 m;
+  if (k < 1.5) { q = p.xz; m = uLm[0]; o = -uLm[5].xy; hi = uLm[5].xy; }
+  else if (k < 3.5) { q = p.xy; m = k < 2.5 ? uLm[1] : uLm[2]; o = vec2(-uLm[5].x, 0.0); hi = vec2(uLm[5].x, 1e4); }
+  else { q = p.zy; m = k < 4.5 ? uLm[3] : uLm[4]; o = vec2(-uLm[5].y, 0.0); hi = vec2(uLm[5].y, 1e4); }
+  q = clamp((floor((q - o) / uLm[5].z) + 0.5) * uLm[5].z + o, o, hi);
+  return q * m.xy + m.zw;
+}
+#ifdef TUBESHADOW
+uniform sampler2D uLmA;
+#if defined(BANKS) && BANKS > 2
+uniform sampler2D uLmB;
+#endif
+#ifdef FLICK
+varying vec3 vLmF;
+#endif
+#ifdef BANKS
+varying vec3 vLmB0;
+varying vec3 vLmB1;
+#if BANKS > 2
+varying vec3 vLmB2;
+#endif
+#if BANKS > 3
+varying vec3 vLmB3;
+#endif
+#endif
+// each group of the room's lamps loses what its own channel says is hidden here: steady (r), flicker (g), banks 0, 1
+// (b, a), banks 2, 3 (the second map's r, g). One or two lookups, no lamps.
+vec3 tubeShadows(vec3 c, vec2 uv) {
+  vec4 a = texture2D(uLmA, uv);
+  vec3 rest = c, lost = vec3(0.0);
+  #ifdef FLICK
+  rest -= vLmF; lost += vLmF * (1.0 - a.g);
+  #endif
+  #ifdef BANKS
+  rest -= vLmB0 + vLmB1; lost += vLmB0 * (1.0 - a.b) + vLmB1 * (1.0 - a.a);
+  #if BANKS > 2
+  vec4 b = texture2D(uLmB, uv);
+  rest -= vLmB2; lost += vLmB2 * (1.0 - b.r);
+  #endif
+  #if BANKS > 3
+  rest -= vLmB3; lost += vLmB3 * (1.0 - b.g);
+  #endif
+  #endif
+  return c - lost - max(rest, vec3(0.0)) * (1.0 - a.r);
+}
+#endif
+vec3 lightmapped(vec3 c) {
+  float k = floor(vLmRegion + 0.5);
+  if (k < 0.5) return c;
+  vec2 uv = lmUv(k);
+  #ifdef TUBESHADOW
+  c = tubeShadows(c, uv);
+  #endif
+  return c;
+}
+#endif
+// --- end tube shadows ---
 ${FLASHLIGHT_GLSL}
 // --- beam shadows ---
 ${BEAM_SHADOW_GLSL}
 // --- end beam shadows ---
 void main() {
   vec3 c = vLit;
+  // --- tube shadows (lightmap) ---
+  #ifdef LIGHTMAP
+  c = lightmapped(c);
+  #endif
+  // --- end tube shadows ---
   // A cone from the physical emitter: close patches are small and bright,
   // distant patches spread, and grazing walls receive less light.
   vec3 normal = normalize(vNormal) * (gl_FrontFacing ? 1.0 : -1.0);
@@ -528,7 +668,7 @@ export function createKit(opt = {}) {
   };
 
   /** The one material: baked light × texture, with the per-room dimmer and flicker. */
-  function surface({ map = null, room = null, vox = false, cutout = false, flick = false, banks = false, alpha = 1, side = THREE.FrontSide, wet = 0 } = {}) {
+  function surface({ map = null, room = null, vox = false, cutout = false, flick = false, banks = false, alpha = 1, side = THREE.FrontSide, wet = 0, lm = null } = {}) {
     const defines = {};
     if (map) defines.MAPPED = 1;
     if (vox) defines.VOXEL = 1;
@@ -536,7 +676,9 @@ export function createKit(opt = {}) {
     if (flick) defines.FLICK = 1;
     if (wet > 0) defines.WET = 1;                                // (it glints: a thing that is wet, 0…1. Nothing has it unless it asks)
     if (banks) defines.BANKS = typeof banks === 'number' ? banks : 2;
-    return own(new THREE.ShaderMaterial({
+    // (lm: a room's light map (world.js, shadowmap.js): only the room's own still meshes are handed one)
+    if (lm) { defines.LIGHTMAP = 1; if (lm.shadows) defines.TUBESHADOW = 1; }
+    const material = own(new THREE.ShaderMaterial({
       defines, vertexShader: VERT, fragmentShader: FRAG, side,
       transparent: alpha < 1, depthWrite: alpha >= 1,
       uniforms: {
@@ -547,8 +689,11 @@ export function createKit(opt = {}) {
         uTorchOrigin: shared.uTorchOrigin, uTorchDirection: shared.uTorchDirection,
         ...(wet > 0 ? { uWet: { value: wet } } : {}),
         uCameraLamp: shared.uCameraLamp,
+        ...(lm ? lm.uniforms : {}),
       },
     }));
+    if (lm) lm.materials.push(material);
+    return material;
   }
   /** Something that shines by itself (a lit panel, a screen, a sign): `power` above 1 blooms. */
   function glowing(map, power = 1, rgb = WHITE, opt = {}) {

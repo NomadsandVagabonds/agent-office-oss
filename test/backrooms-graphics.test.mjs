@@ -18,7 +18,7 @@ function before(w, h, ratio, level) {
 
 test('Classic is the level as it was: the same sizes at every Picture level, bloom as the host has it, nothing new switched on', () => {
   const p = profile('classic');
-  assert.deepEqual(p, { tier: 'classic', lines: { 0: null, 1: 660, 2: 540 }, supersample: 1, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: 'host', grade: 0, haze: 0, contact: 0, bounce: 0, detail: true, beamShadows: 0 });
+  assert.deepEqual(p, { tier: 'classic', lines: { 0: null, 1: 660, 2: 540 }, supersample: 1, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: 'host', grade: 0, haze: 0, contact: 0, bounce: 0, detail: true, beamShadows: 0, shadows: 0 });
   // (detail: true is everything drawn, as it always was: a room's detail batches are hidden only at low)
   // (beamShadows 0: the flashlight casts no shadow, no depth pass is drawn and the kit's shader is as it was: backrooms-gfx-beamshadows)
   for (const [w, h] of [[1280, 800], [1920, 1080], [390, 844], [844, 390], [2560, 1440], [800, 600], [320, 240], [3840, 2160]])
@@ -47,7 +47,7 @@ test('vhs.js leaves the picture alone while grade and haze are 0, and Classic le
 test('every tier says everything it switches, in range, and the cost only goes up from low to medium to high', () => {
   for (const tier of GRAPHICS) {
     const p = profile(tier);
-    for (const k of ['grade', 'haze', 'contact', 'bounce']) assert.ok(p[k] >= 0 && p[k] <= 1, `${tier}.${k}`);
+    for (const k of ['grade', 'haze', 'contact', 'bounce', 'shadows']) assert.ok(p[k] >= 0 && p[k] <= 1, `${tier}.${k}`);
     assert.ok([true, false, 'host'].includes(p.bloom)); assert.ok([0, 1, 2, 4, 8].includes(p.msaa));
     assert.ok(p.lines[1] >= 300 && p.lines[2] >= 300 && p.lines[0] === null && p.widthCap >= 640 && p.supersample >= 1 && p.supersample <= 2);
   }
@@ -58,7 +58,7 @@ test('every tier says everything it switches, in range, and the cost only goes u
   for (const [a, b] of [[low, medium], [medium, high]]) {
     for (const lv of [1, 2]) assert.ok(a.lines[lv] <= b.lines[lv]);
     assert.ok(a.widthCap <= b.widthCap && a.msaa <= b.msaa && +a.bloom <= +b.bloom);
-    for (const k of ['grade', 'haze', 'contact', 'bounce']) assert.ok(a[k] <= b[k], k);
+    for (const k of ['grade', 'haze', 'contact', 'bounce', 'shadows']) assert.ok(a[k] <= b[k], k);
     for (const lv of [0, 1, 2]) for (const [w, h, r] of [[1280, 800, 2], [1920, 1080, 1], [390, 844, 3]]) assert.ok(cost(a, lv, w, h, r) <= cost(b, lv, w, h, r));
   }
   for (const lv of [0, 1, 2]) for (const [w, h, r] of [[1280, 800, 2], [1920, 1080, 1], [390, 844, 3]])
@@ -143,7 +143,7 @@ test('auto never thrashes, stays between low and medium, and says nothing while 
 test('index.js hands the tier to the kit, the grade to the camcorder on every landing, and auto the frame time', () => {
   const index = readFileSync(new URL('../public/world/backrooms/index.js', import.meta.url), 'utf8');
   // (the dev page's own &gfx= comes first; otherwise the kit gets what the level of quality says)
-  assert.match(index, /createKit\(\{ gfx: opt\.dev\?\.gfx \|\| opt\.gfx \|\| \{ contact: gfx\(\)\.contact, bounce: gfx\(\)\.bounce \} \}\)/);
+  assert.match(index, /createKit\(\{ gfx: opt\.dev\?\.gfx \|\| opt\.gfx \|\| \{ contact: gfx\(\)\.contact, bounce: gfx\(\)\.bounce, shadows: gfx\(\)\.shadows \} \}\)/);
   assert.match(index, /vhs\.setGrade\(gradeOf\(themeOf\(f\.level\.theme\)\)\)/);
   assert.match(index, /autoStep\(gfxAuto, time, stage\.frameMs/);
   assert.match(index, /graphics: opt\.graphics \?\? saved\.graphics/);

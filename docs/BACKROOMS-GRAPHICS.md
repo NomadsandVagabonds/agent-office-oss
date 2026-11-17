@@ -169,7 +169,7 @@ Esc → Settings → **Graphics**: Classic (the default), Low, Medium, High,
 Auto; saved with the other preferences, and `&graphics=` on the dev page.
 What each tier switches is one table, `profile()` in
 `public/world/backrooms/graphics.js`, read by the camcorder (`vhs.js`) and
-handed to the kit when a part is built (`gfx: { contact, bounce }`).
+handed to the kit when a part is built (`gfx: { contact, bounce, shadows }`).
 
 | | Classic | Low | Medium | High |
 |---|---|---|---|---|
@@ -183,6 +183,7 @@ handed to the kit when a part is built (`gfx: { contact, bounce }`).
 | corner darkening / bounce (bake) | 0 / 0 | 0.7 / 0 | 1 / 0.7 | 1 / 1 |
 | a room's detail batches (`c.detail`) | drawn | hidden | drawn | drawn |
 | the flashlight casts shadows (`beamShadows`) | — | — | — | yes, a 1024² depth picture |
+| tube shadows (baked light map, per bank) | — | — | yes | yes |
 
 - **Classic** draws exactly what the level drew before the setting existed.
 - **The camcorder stays the look.** The tape's lines and the scene's size are
@@ -242,6 +243,9 @@ handed to the kit when a part is built (`gfx: { contact, bounce }`).
   Low, about 10 s under 13 ms at Low steps it back once; never two changes
   within 15 s, never more than three a visit, never while the next part is
   being built, and it never touches the Picture setting.
+- **Tube shadows** are not at Low, though a frame pays only a lookup for them:
+  the part being walked into pays their bake on the main thread, and Low is
+  for the machines that can least afford it. See the next section.
 - Measured only in software rendering so far; the costs in the table are
   guesses until phase 0 is run on real hardware.
 
@@ -305,6 +309,83 @@ Low and Medium, 1024 at High.
   12 cm below it, so most of a shadow lies behind the thing that throws it:
   the visible part is a band to its upper left, widest when the wall is well
   behind it, as with a real torch held at the chest.
+
+### Tube shadows and doorway light (built)
+
+The first of phase 2, and what the owner chose from the look-dev lab (h1, h3).
+Medium and High; `&gfx=shadows` on the dev page (with `contact`, `bounce`).
+Classic and Low run none of it: no box is gathered, no map is made, no
+material is given the shader's block, every baked number is as before
+(`test/backrooms-gfx-shadows.test.mjs`).
+
+**What is stored.** Each room that has something standing in it gets one small
+texture (`shadowmap.js`, built in `world.js` `shadowRoom`): its floor at 5 cm a
+texel (10 cm when the floor would need more than 60,000 texels) and each of its
+walls at 10 cm, packed side by side with a one-texel gutter. For each group of
+lamps the bake keeps apart (steady, flickering, and each lighting bank) a texel
+holds how much of that group's light still arrives there, 0…1. Rooms without
+banks need two channels (RG8: steady, flicker); rooms with banks four (RGBA8:
+steady, flicker, banks 0 and 1) and a second RG8 texture with more than two
+banks. The vertex attributes are not touched: the shader takes each group's
+share of the vertex light off by its own channel, so a bank that fails takes its
+shadows with it and the rest keep theirs, and a flickering tube's shadow
+flickers with it.
+
+**What casts.** What the contact darkening records as standing in the room
+(boxes drawn into its own batches, models, pillars), less anything that can be
+dragged (chairs, desks and trolleys while the barricades are on: they keep their
+round blot, made a little darker, and leave no shadow behind when moved). A
+model is not its bounding box: its triangles are gathered into columns 10 cm
+across (at most 6 × 6), merged where alike, so a fixed chair throws a seat and
+legs and a copier only what is drawn. Boxes within 25 cm of a lamp are its
+fitting and cast nothing from it; things hung flat on a wall shade nothing on
+that wall. Light from next door (the spill lamp at a doorway) is never
+shadowed. A still thing whose shadow is baked has its round blot faded to 30 %.
+
+**How.** Each ceiling tube is four points along its 1.2 m (other lamps one);
+for each point and each box near enough, the box's shadow on the floor and each
+wall is projected and filled in, so the cost goes with the area of shadow, not
+the room's area times its lamps. Where a group's lamps are hidden, 60 % of its
+share of the room's ambient light goes with them, and at least 30 % of a group
+that has ambient light stays (the bounce off the lit floor round a shadow); the
+red backup lamps, which bring none, can go black.
+
+**Drawing.** One lookup a pixel (two with more than two banks), no loop over
+lamps. The position is snapped to a 5 cm grid before a bilinear lookup, so the
+edge steps at voxel scale even where the map is 10 cm. Only the room's own still
+meshes read it (not glass, nothing that moves, nothing held, nothing shining by
+itself); within them only surfaces on the floor at the room's level and on its
+four walls, inside the room. Up to five more vertex outputs (one per group) and
+one flat one.
+
+**Bodies.** `world.lightAt` (creatures, the cast, dragged furniture, what is
+held) reads the floor's channels where it stands, at 75 % (a head can be clear
+of a shadow the feet are in).
+
+**What it costs** (seed 7, the dev page's `&check=1`, software rendering on
+the build machine; `map` is the shadows' own share of a room's bake, which at
+High also holds the corner darkening and bounce):
+
+| room | size | bake, Classic → High | of it, the map | map bytes |
+|---|---|---|---|---|
+| copiers | 6.8 × 11.8 | 39 → 129 ms | 68 ms | 141 KB |
+| mailroom | 8.8 × 6.8 | 7 → 71 ms | 62 ms | 70 KB |
+| cutouts | 7.8 × 7.8 | 30 → 85 ms | 39 ms | 68 KB |
+| all-hands (walls only) | 19.8 × 20.8 × 8.7 | 95 → 130 ms | 3 ms | 150 KB |
+| re-org (walls only) | 14.8 × 16.8 × 11.5 | 130 → 222 ms | 17 ms | 159 KB |
+| a whole floor (all its rooms) | 34 rooms | 241 → 693 ms | | 0.96 MB |
+
+The worst room's map took 68 ms, inside the 250 ms asked for, so nothing is
+baked in slices or put off until a room is near; the map is made in the room's
+own bake, as the part is built. No room gains a mesh or a triangle. Texture
+memory: 1 MB or so a floor; the largest set piece the deck allows (28 × 28 m,
+12 m high) would be about 0.6 MB, a 20 × 20 m room with four banks about 1.3 MB.
+
+**Fell back** (no floor in the map; walls only, if any): rooms with their own
+floor heights (`rt.floorY`: the all-hands, the re-org, the mall's floors and
+other set pieces), a pit or a dais, a room with no shell floor (the halo rooms,
+the culvert, the atrium…), a room flattened by the no-trap check. A room with
+nothing standing in it has no map at all.
 
 ### 2 · Light that behaves
 

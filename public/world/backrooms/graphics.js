@@ -20,11 +20,14 @@ export const GRAPHICS_LABELS = { classic: 'Classic', low: 'Low', medium: 'Medium
 // scan lines and noise untouched (1: the scene is drawn at the tape's size, as it always was). sceneCap: the most
 // pixels across the scene may be drawn at. msaa: samples at the edges. bloom: true | false | 'host' (as the stage's
 // post-processing is: on in the office, off on the dev page and the site). grade, haze, contact, bounce: strengths 0..1.
+// shadows: the ceiling tubes' shadows, baked with each room into a small light map of its floor and walls, bank by bank
+// (0 or 1; kit.js gfxOf, shadowmap.js). Not at low: a frame pays one lookup for it, but the part being walked into
+// pays its bake, and that lands on the weakest machines' main thread while they walk.
 const TABLE = {
-  classic: { lines: { 0: null, 1: 660, 2: 540 }, supersample: 1, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: 'host', grade: 0, haze: 0, contact: 0, bounce: 0 },
-  low: { lines: { 0: null, 1: 600, 2: 480 }, supersample: 1, sceneCap: 1280, widthCap: 1280, msaa: 2, bloom: false, grade: 1, haze: 0, contact: 0.7, bounce: 0 },
-  medium: { lines: { 0: null, 1: 660, 2: 540 }, supersample: 1.5, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: true, grade: 1, haze: 1, contact: 1, bounce: 0.7 },
-  high: { lines: { 0: null, 1: 660, 2: 540 }, supersample: 2, sceneCap: 2560, widthCap: 2560, msaa: 4, bloom: true, grade: 1, haze: 1, contact: 1, bounce: 1 },
+  classic: { lines: { 0: null, 1: 660, 2: 540 }, supersample: 1, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: 'host', grade: 0, haze: 0, contact: 0, bounce: 0, shadows: 0 },
+  low: { lines: { 0: null, 1: 600, 2: 480 }, supersample: 1, sceneCap: 1280, widthCap: 1280, msaa: 2, bloom: false, grade: 1, haze: 0, contact: 0.7, bounce: 0, shadows: 0 },
+  medium: { lines: { 0: null, 1: 660, 2: 540 }, supersample: 1.5, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: true, grade: 1, haze: 1, contact: 1, bounce: 0.7, shadows: 1 },
+  high: { lines: { 0: null, 1: 660, 2: 540 }, supersample: 2, sceneCap: 2560, widthCap: 2560, msaa: 4, bloom: true, grade: 1, haze: 1, contact: 1, bounce: 1, shadows: 1 },
 };
 
 // detail: whether what rooms mark as detail (world.js `c.detail`, or `detail: true` to c.mapped and c.shining) is drawn.
