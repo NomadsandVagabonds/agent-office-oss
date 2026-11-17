@@ -20,6 +20,7 @@ import { mapLayout, bakeShadows, packShadows, layoutUniforms, sampleMap, bakeDoo
 import { doorPlan, DOORS } from './doors.js';
 import { bridgeReachable } from './bridge-puzzles.js';
 import { LEVEL_DESK, deskVox } from './desk.model.js';
+import { WALLFIT, socketVox, exitBoxVox } from './wallfit.model.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
 // and how far along it a local coordinate c is (c is x on the front/back walls, z on the side walls)
@@ -793,6 +794,15 @@ function roomContext(world, rt) {
     if (!voxed.has(key)) { const b = track(new Batch(true), !!opt.structural); if (opt.detail) b.detail = true; voxed.set(key, b); }
     return voxed.get(key);
   };
+  /** A sculpted wall fitting (wallfit.model.js) on the wall at p (c.wallAt, 0 off it), its origin at height y, into a
+   * batch the room already has (c.flat, at a white spot of its texture, for what has nothing that shines; else c.vox),
+   * so that its sockets and signs cost it no mesh apiece. Nothing of it is solid, and it is not gathered as standing
+   * by itself (an exit sign says for its box what the plain one stood as). */
+  const wallFit = (geo, p, y, into, opt) => {
+    const s = WALLFIT.voxel;
+    mat.set(p.U[0] * s, 0, p.n[0] * s, p.x, 0, s, 0, y, p.U[2] * s, 0, p.n[2] * s, p.z, 0, 0, 0, 1);
+    into.addVox(geo.solid, mat, opt);
+  };
   const reserved = [], kept = [];                         // floor already spoken for: [x, z, radius] · and wall: [side, from, to]
   const mat = new THREE.Matrix4(), quat = new THREE.Quaternion(), eul = new THREE.Euler(), vec = new THREE.Vector3(), scl = new THREE.Vector3();
   const doorPoint = (dr, off = 0) => wallPoint(def, dr.side, dr.c, off);
@@ -1535,16 +1545,16 @@ function roomContext(world, rt) {
       }
       return c;
     },
-    /** A wall socket: a cream plate with two slots. */
+    /**
+     * A wall socket: the sculpted plate (wallfit.model.js), its middle at height y. Now and then something is plugged
+     * into it, its lead hanging down to the skirting: which, is a hash of the room and the spot, so the seeded source is
+     * not drawn on and the same seed has the same plugs (and never where the lead would go through the floor).
+     */
     socket(side, at, y = 0.3) {
-      const p = c.wallAt(side, at, 0), n = p.n, U = p.U;
-      const part = (du, dy, w, h, k, rgb) => {
-        const cx = p.x + U[0] * du + n[0] * k / 2, cz = p.z + U[2] * du + n[2] * k / 2, hw = Math.abs(U[0]) * w / 2 + Math.abs(n[0]) * k / 2, hd = Math.abs(U[2]) * w / 2 + Math.abs(n[2]) * k / 2;
-        c.flat.box(cx - hw, y + dy - h / 2, cz - hd, cx + hw, y + dy + h / 2, cz + hd, rgb);
-      };
-      part(0, 0, 0.075, 0.115, 0.008, [0.82, 0.78, 0.66]);
-      part(-0.012, 0.022, 0.008, 0.026, 0.011, [0.12, 0.11, 0.1]); part(0.012, 0.022, 0.008, 0.026, 0.011, [0.12, 0.11, 0.1]);
-      part(-0.012, -0.026, 0.008, 0.026, 0.011, [0.12, 0.11, 0.1]); part(0.012, -0.026, 0.008, 0.026, 0.011, [0.12, 0.11, 0.1]);
+      let h = 2166136261;
+      for (const ch of `${def.id}:${side}:${Math.round(at * 1000)}:${Math.round(y * 1000)}`) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+      const variant = y >= 0.25 && (h >>> 0) % 3 === 0 ? 1 : 0;
+      wallFit(kit.model(`wallfit:socket:${variant}`, () => socketVox(variant), { ao: false }), c.wallAt(side, at, 0), y, c.flat, { uv: [0.5, 0.5] });
     },
     /** A block of wall standing in the room, floor to ceiling unless opt.h says otherwise (wallpapered, skirted, solid). */
     pillar(x, z, w, d, opt = {}) {
@@ -1582,8 +1592,15 @@ function roomContext(world, rt) {
       const p0 = doorPoint(dr, 0.05), y = Math.min(ceilAt(def, p0.x, p0.z) - 0.2, (dr.sill || 0) + (dr.h || 2.05) + 0.26), w = Math.min(dr.w - 0.2, 0.82);
       const p = c.hang(c.shining('exit' + text, tex, 1.9), dr.side, dr.c, y, w, w * 20 / 64, null, WHITE, 0.035);
       c.light(p.x + p.n[0] * 0.2, y, p.z + p.n[2] * 0.2, '#58e08c', 0.3, { k: 0.9, far: 4 });
-      const hw = w / 2 + 0.02, U = p.U, n = p.n, cx = p.x - n[0] * 0.02, cz = p.z - n[2] * 0.02;
-      c.flat.box(cx - Math.abs(U[0]) * hw - Math.abs(n[0]) * 0.015, y - w * 0.18, cz - Math.abs(U[2]) * hw - Math.abs(n[2]) * 0.015, cx + Math.abs(U[0]) * hw + Math.abs(n[0]) * 0.015, y + w * 0.18, cz + Math.abs(U[2]) * hw + Math.abs(n[2]) * 0.015, [0.1, 0.12, 0.1]);
+      // the box behind the face (wallfit.model.js), as wide and as tall as the plain box it took the place of, hung from
+      // that box's top edge; the face sits in its rib (in c.vox: its charge lamp shines)
+      const bw = w + 0.04, bh = w * 0.36, half = w * 0.18;
+      wallFit(kit.model(`wallfit:exit:${bw.toFixed(4)}x${bh.toFixed(4)}`, () => exitBoxVox({ w: bw, h: bh }), { ao: false }), c.wallAt(dr.side, dr.c, 0), y + half, c.vox);
+      // (kit.gfx: it stands in the room as that plain box did, 3 cm off the wall, so the tubes' shadows are as they were)
+      if (gfxOn) {
+        const hw = w / 2 + 0.02, U = p.U, n = p.n, cx = p.x - n[0] * 0.02, cz = p.z - n[2] * 0.02, ax = Math.abs(U[0]) * hw + Math.abs(n[0]) * 0.015, az = Math.abs(U[2]) * hw + Math.abs(n[2]) * 0.015;
+        standing.push({ x0: cx - ax, y0: y - half, z0: cz - az, x1: cx + ax, y1: y + half, z1: cz + az, placing, structural: false });
+      }
     },
 
     /* ---- done: bake and hand the meshes over ----------------------------------------- */
