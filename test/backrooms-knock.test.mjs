@@ -14,19 +14,18 @@ const visitor = (keys = [], world = open, start = { x: 0, z: 0, yaw: 0 }) => {
 const run = (p, seconds, each) => { for (let t = 0; t < seconds; t += 1 / 60) { p.update(1 / 60, t); each?.(p.me, t); } };
 const reach = KNOCK.speed / KNOCK.fade;
 
-test('a blow throws you straight back from whatever dealt it, about speed / fade metres, most of it at once, with a hop', () => {
+test('a blow shoves you straight back from whatever dealt it, about speed / fade metres, most of it at once, feet on the floor', () => {
   const { p } = visitor();
   assert.equal(p.knock({ x: 0, z: -1 }), true);                     // in front of you (yaw 0 looks toward −z)
-  p.update(1 / 60);
-  assert.ok(p.me.drop > 0, 'off the floor a little');
-  run(p, 0.5);
+  let lifted = 0;
+  run(p, 0.5, (me) => { lifted = Math.max(lifted, me.drop, Math.abs(me.dropV)); });
   const early = p.me.z;
-  run(p, 2);
+  run(p, 2, (me) => { lifted = Math.max(lifted, me.drop, Math.abs(me.dropV)); });
+  assert.equal(lifted, 0, 'no hop: never off the floor');
   assert.ok(Math.abs(p.me.x) < 1e-9, 'straight back, not sideways');
   assert.ok(p.me.z > reach * 0.95 && p.me.z < reach * 1.15, `about ${reach.toFixed(2)} m (${p.me.z.toFixed(2)})`);
   assert.ok(early > p.me.z * 0.85, `most of it in the first half second (${early.toFixed(2)} of ${p.me.z.toFixed(2)})`);
   assert.equal(p.me.kx, 0); assert.equal(p.me.kz, 0);
-  assert.equal(p.me.drop, 0, 'and back on the floor');
 });
 
 test('it is a bounce even while you are walking into it: your legs have little say for a moment', () => {
@@ -36,7 +35,7 @@ test('it is a bounce even while you are walking into it: your legs have little s
   p.knock({ x: 0, z: z0 - 0.6 });
   let furthest = -Infinity;
   run(p, 0.6, (me) => { furthest = Math.max(furthest, me.z - z0); });
-  assert.ok(furthest > 0.8, `thrown back ${furthest.toFixed(2)} m with W held`);
+  assert.ok(furthest > reach * 0.6, `thrown back ${furthest.toFixed(2)} m with W held (of ${reach.toFixed(2)})`);
 });
 
 test('a wall stops it as it stops a walk, and you slide along it', () => {
@@ -45,7 +44,7 @@ test('a wall stops it as it stops a walk, and you slide along it', () => {
   p.knock({ x: -1, z: -1 });                                         // thrown toward +x and +z: the wall is at +z
   run(p, 2);
   assert.ok(p.me.z < 0.4, `not through the wall (${p.me.z.toFixed(2)})`);
-  assert.ok(p.me.x > 0.6, `along it (${p.me.x.toFixed(2)})`);
+  assert.ok(p.me.x > reach * 0.6, `along it (${p.me.x.toFixed(2)})`);
 });
 
 test('nobody said where from, or said nothing usable, or it is on top of you: straight back from where you are looking', () => {

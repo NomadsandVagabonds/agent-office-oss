@@ -456,8 +456,8 @@ Things to know before they bite:
   creature that `hunts` ends the visit and anything else does nothing. After a
   hit that was survived, let go: back off, or go away for a while (the mascot
   keeps away for 14 to 24 seconds and takes no notice of you until then).
-- **A hit throws them.** A hit that lands and is survived knocks the visitor
-  back about a metre and a quarter from whatever dealt it, with a small hop,
+- **A hit throws them.** A hit that lands and is survived shoves the visitor
+  back a little under a metre from whatever dealt it, feet on the floor,
   and for a moment their own legs have little say (`player.js`, `KNOCK`;
   walls stop it as they stop a walk). With the moment of grace the health
   already gives after a hit, that is the room there is to get away in. It is

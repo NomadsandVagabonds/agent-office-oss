@@ -19,12 +19,12 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
  */
 export const WIND = Object.freeze({ run: 8, back: 9, still: 5, spent: 3.4, slow: 0.5 });
 /**
- * Being hit. A blow that lands throws you back from whatever dealt it: `speed` m/s to begin with, losing it at `fade` a
- * second (about speed / fade metres in all, most of it in the first half second), with a small `hop` off the floor; and for
+ * Being hit. A blow that lands shoves you back from whatever dealt it: `speed` m/s to begin with, losing it at `fade` a
+ * second (about speed / fade metres in all, most of it in the first half second), feet on the floor the whole way; and for
  * `stagger` seconds your own legs have only `legs` of their say. A wall stops it as it stops a walk, and you slide along it.
  * With the health's moment of grace after a hit (health-state.js), it is the room there is to get away in.
  */
-export const KNOCK = Object.freeze({ speed: 7, fade: 5.5, hop: 1.3, stagger: 0.3, legs: 0.25 });
+export const KNOCK = Object.freeze({ speed: 5, fade: 5.5, stagger: 0.3, legs: 0.25 });
 
 export function createPlayer(world, camera, start, input = { keys: new Set(), dx: 0, dy: 0, stick: { x: 0, y: 0 }, hurry: false }, perk = null) {
   const walkSpeed = WALK * (perk?.walkScale ?? 1);
@@ -179,7 +179,6 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
       if (!(d > 0.05)) { dx = Math.sin(me.yaw); dz = Math.cos(me.yaw); d = 1; }
       me.kx = (dx / d) * KNOCK.speed; me.kz = (dz / d) * KNOCK.speed;
       me.vx = 0; me.vz = 0; me.staggered = KNOCK.stagger;
-      if (me.drop === 0 && me.dropV === 0 && me.sink < 0.12) { me.dropV = KNOCK.hop; me.drop = 0.001; }
       return true;
     },
   };
