@@ -169,7 +169,7 @@ Esc → Settings → **Graphics**: Classic (the default), Low, Medium, High,
 Auto; saved with the other preferences, and `&graphics=` on the dev page.
 What each tier switches is one table, `profile()` in
 `public/world/backrooms/graphics.js`, read by the camcorder (`vhs.js`) and
-handed to the kit when a part is built (`gfx: { contact, bounce, shadows, doorlight }`).
+handed to the kit when a part is built (`gfx: { contact, bounce, shadows, doorlight, fixtures }`).
 
 | | Classic | Low | Medium | High |
 |---|---|---|---|---|
@@ -185,6 +185,7 @@ handed to the kit when a part is built (`gfx: { contact, bounce, shadows, doorli
 | the flashlight casts shadows (`beamShadows`) | — | — | — | yes, a 1024² depth picture |
 | tube shadows (baked light map, per bank) | — | — | yes | yes |
 | light through doorways (in the same map) | — | — | yes | yes |
+| ceiling lights as sculpted fittings (`fixtures`) | — | — | yes | yes |
 
 - **Classic** draws exactly what the level drew before the setting existed.
 - **The camcorder stays the look.** The tape's lines and the scene's size are
@@ -468,6 +469,79 @@ its pass. Waiting at the way down from the first moment (the dev page's
 `descend()` as play begins, seed 7, software): Classic 8.9 s, Medium 22.5 s
 when the doorways were waited for, 12.6 s now. Of that 22.5 s, 9 s was the
 doorway pass: 0.2 s of work and three frames between each of its 29 rooms.
+
+The wait for somebody who goes straight to the way down when play begins
+(software rendering, tape and seed 7), on the dev page and on the built site
+(a 480 × 360 window):
+
+| | dev page | built site (480 × 360) |
+|---|---|---|
+| Classic | 8.9 s | 14.2 s |
+| Medium | 12.6 s | 30.1 s |
+
+This wait, tier by tier, is the number wanted from ordinary machines, more
+than their frame times.
+
+### Ceiling fixtures (built)
+
+`fixtures` (`&gfx=fixtures` on the dev page; Medium and High). Each ceiling
+light the shell draws (`world.js` `shell`) is the sculpted fitting of
+`ceiling.model.js` instead of the flat panel: the housing let into the ceiling
+(trim, sloped pan, lamp holders), its two tubes, and the louvre under them, on
+the ceiling plane over the panel, in half-size voxels (`CEILING.scale`). The
+panel's two tiles are left out of the ceiling sheet (`Batch.grid`'s `keepOf`),
+so the pan is seen through the opening. A fitting goes only where both tiles
+were left out whole, at the height of the ceiling there and with the ceiling
+level across the panel; anywhere else (a sloping ceiling, a tile cut short at a
+wall) the light stays the flat panel.
+
+- **What shines is the flat panel's.** The tubes, and the inside of the pan
+  (its pale faces above the trim that face down or inward: `world.js` `panOf`),
+  are drawn into the very batch the flat panel would have been in (`panel`,
+  `panel-bank-N`, or a flickering light's own mesh), at two spots of the
+  panel's own texture (`Batch.addVox` with `uv`): the tubes at its white strip,
+  the pan at its diffuser shade, a little under them. So a lit fitting is a
+  glowing opening about as bright as the panel was, and blooms as it did; and
+  the dimmer, the banks, the flicker, the emergency mode's dead ceiling,
+  islands and a creature's black-out turn tubes and pan exactly as they turned
+  the panel: the per-frame code is untouched. A dead light is
+  `lightVox({ dead: true })`: grey tubes (one gone) and its pan darkened to
+  0.3 (the inside of an unlit box is in its own shadow, which the bake does not
+  know), lit by the room, in no glowing batch.
+- **Housing and louvre** are two voxel batches of the room's own
+  (`world.js` `voxBatch`, the shell's and not handed to rooms: baked and drawn
+  as `c.vox`, each one mesh however many lights the room has), lit by the bake
+  bank by bank like the walls. The blades do not shine; they are drawn at 0.6 of
+  the model's colour so that they read as lines across the glow and, when the
+  light is out, darker than the tiles. The louvre's batch is marked as detail,
+  as `c.detail` marks boxes, so Low leaves it out (and a fitting forced on at
+  Low is a recessed glowing box). Neither is put down with `c.place`, so nothing
+  of a fitting is gathered as standing for the tube shadows or the contact
+  darkening (the shadow map's bytes are the same with and without fittings); the
+  flashlight's beam shadows draw them, as everything.
+- **The lamps and the plan do not move.** The same lamps at the same places,
+  nothing drawn from the room's seeded stream, `generate()` unchanged. Off
+  (Classic, Low), not a mesh, a triangle or a baked number differs.
+- **Cost**, meshed `{ ao: false }`: a lit light is 280 triangles of housing
+  (142 of it the shining inside of the pan) and 72 of tubes, 240 of louvre
+  (detail); a dead one 422 + 84, louvre 336; less six (its two tiles and the
+  flat quad). A room gains at most one ordinary and one detail mesh: what
+  shines joins meshes it had. On seed 7: the copier room (9 lights, 5 dead)
+  +3,884 triangles ordinary and +2,640 detail, meshes 22 → 22 (the dead panels'
+  batch goes, the housing's comes) and one detail mesh; a plain 6.8 × 7.8 m room
+  (9 lights, 1 dead) +3,268 and +2,256, meshes 12 → 12 and one detail mesh. The
+  most lights a room has had is 56 (a set piece): at most about 28,000 ordinary
+  and 19,000 detail triangles more.
+- **Not placed**: the vent (`ventVox`), since the level draws no ceiling vent
+  today, and the sagging tile (`sagVox`), since a damaged tile is only ever a
+  missing one (`c.hole`) and choosing new places for it would take from the seed.
+- **The louvre at a shallow angle.** The first louvre (cross blades 2.5 cm
+  deep every 10 cm) hid the whole opening below about 16° above the eye, and a
+  lit fitting across a room was a grey grid. The model's louvre is now one voxel
+  deep with a cross blade every 20 cm (cut-off about 3.6°), and a lit fitting
+  reads as a bright light from across the copier room.
+
+`test/backrooms-gfx-fixtures.test.mjs` pins all of the above.
 
 ### 2 · Light that behaves
 

@@ -12,6 +12,7 @@ import { Batch, lamp, lightAt, lin, ticks, smooth, WHITE } from './kit.js';
 import { FURNITURE, furnitureType, fixedFurnitureReason, onFurniture, overlaps, worldFootprint, boxHits } from './furniture-policy.js';
 import { fixedFurnitureFoot } from '../props/trolley.js';
 import { emergencyFixtures } from './lighting-fixtures.js';
+import { CEILING, lightVox } from './ceiling.model.js';
 import { planFloorLighting, panelBank, bankLevels, localLightScale } from './lighting.js';
 import { registerMovable } from './movable-props.js';
 import { surfaceAt } from './bridge-rules.js';
@@ -28,6 +29,37 @@ const WALLS = {
   right: { n: [-1, 0, 0], U: [0, 0, 1], o: (W, D) => [W / 2, 0, -D / 2], s: (c, W, D) => c + D / 2 },
 };
 const UP = [0, 1, 0], VOX = 0.025, STEP = 0.26, HEAD = 0.62;
+// (kit.gfx.fixtures) where on the flat panel's texture its tubes are white: the sculpted tubes are drawn with that one
+// spot of it, in the same batch the flat panel would have been in, so that they shine and fail exactly as it did
+const TUBE_UV = [7 / 24, 0.5];
+// …and where it is the diffuser's shade, a little under the tubes: the inside of a lit fitting's pan, seen through its
+// louvre, shines at it (in the same batch, so it goes dark exactly when the tubes do). A fitting that is out has the
+// inside of its pan in the shadow of its own box (the bake has no shadow of its own there): DARK_PAN. The blades are
+// lit by the room, a little darker than the model paints them so that they read as lines across the glow: LOUVRE.
+const PAN_UV = [2.5 / 24, 0.5], DARK_PAN = [0.3, 0.3, 0.3], LOUVRE = [0.6, 0.6, 0.6];
+const pans = new WeakMap();
+/** A meshed housing (ceiling.model.js) split in two: the pan's inside (its pale faces above the trim that face down or
+ * in, what is seen through the louvre) and the rest (trim, holders, the pan's back). Each its own compact geometry. */
+export function panOf(geo) {
+  if (pans.has(geo)) return pans.get(geo);
+  const p = geo.attributes.position, n = geo.attributes.normal, col = geo.attributes.color, idx = geo.index.array, pick = [[], []];
+  for (let t = 0; t < idx.length; t += 3) {
+    let cx = 0, cy = 0, cz = 0, lum = 0;
+    for (let k = 0; k < 3; k++) { const v = idx[t + k]; cx += p.getX(v) / 3; cy += p.getY(v) / 3; cz += p.getZ(v) / 3; lum += (col.getX(v) + col.getY(v) + col.getZ(v)) / 9; }
+    const v = idx[t], ny = n.getY(v), inward = -(n.getX(v) * cx + n.getZ(v) * cz) > 0;
+    pick[cy > 1 && lum > 0.6 && (ny < -0.5 || (Math.abs(ny) < 0.5 && inward)) ? 0 : 1].push(idx[t], idx[t + 1], idx[t + 2]);
+  }
+  const compact = (list) => {
+    const map = new Map(), out = new THREE.BufferGeometry(), attrs = Object.entries(geo.attributes), data = attrs.map(() => []);
+    const index = list.map((v) => { if (!map.has(v)) { map.set(v, map.size); attrs.forEach(([, a], k) => { for (let c = 0; c < a.itemSize; c++) data[k].push(a.array[v * a.itemSize + c]); }); } return map.get(v); });
+    attrs.forEach(([name, a], k) => out.setAttribute(name, new THREE.Float32BufferAttribute(data[k], a.itemSize)));
+    out.setIndex(index);
+    return list.length ? out : null;
+  };
+  const split = { inside: compact(pick[0]), rest: compact(pick[1]) };
+  pans.set(geo, split);
+  return split;
+}
 const P = (g, col, x, y, w, h) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 /** Vertex positions from a to b with one at every ceiling-tile seam (seams are at multiples of TILE). */
@@ -750,7 +782,16 @@ async function doorPass(world, tick, late = false) {
 function roomContext(world, rt) {
   const { kit, env, level } = world, { def } = rt, { W, D } = def, H = def.H, look = def.look;
   const R = makeRng(`${level.seed}/build/${def.id}`);
-  const mapped = new Map(), shining = new Map();
+  const mapped = new Map(), shining = new Map(), voxed = new Map();
+  /**
+   * (the shell's own, not the rooms': kit.gfx.fixtures) a voxel batch besides c.vox, baked and drawn as c.vox is.
+   * opt.detail marks its mesh as detail (as c.detail does for boxes: hidden at a low Graphics setting); opt.structural
+   * keeps it the room's own, never carried off with furniture that can be dragged. (A key's options are its first ones.)
+   */
+  const voxBatch = (key, opt = {}) => {
+    if (!voxed.has(key)) { const b = track(new Batch(true), !!opt.structural); if (opt.detail) b.detail = true; voxed.set(key, b); }
+    return voxed.get(key);
+  };
   const reserved = [], kept = [];                         // floor already spoken for: [x, z, radius] · and wall: [side, from, to]
   const mat = new THREE.Matrix4(), quat = new THREE.Quaternion(), eul = new THREE.Euler(), vec = new THREE.Vector3(), scl = new THREE.Vector3();
   const doorPoint = (dr, off = 0) => wallPoint(def, dr.side, dr.c, off);
@@ -1320,10 +1361,26 @@ function roomContext(world, rt) {
         } else rect(all.x0, all.z0, all.x1, all.z1, 0);
       }
 
+      /* (kit.gfx.fixtures) the lights that are sculpted fittings: each one's two tiles are left out of the sheet below. A
+       * fitting goes only where both were, whole and at the height of the ceiling there; anywhere else (a slope, a tile cut
+       * short at a wall, a light under no sheet) the light is the flat panel it always was. */
+      const fitOn = kit.gfx?.fixtures > 0 && opt.panels !== false && opt.ceiling !== false, opened = new Map();
+      const near = (a, b) => Math.abs(a - b) < 0.005;
+      const levelUnder = (p) => { const y = top(p.x, p.z); for (const dx of [-1, 0, 1]) for (const dz of [-1, 0, 1]) if (Math.abs(top(p.x + dx * TILE * 0.49, p.z + dz * TILE * 0.98) - y) > 0.002) return false; return true; };
+      const openFor = (x0, x1, z0, z1, y) => {
+        for (const p of def.panels) {
+          if (!near(x0, p.x - TILE / 2) || !near(x1, p.x + TILE / 2) || !((near(z0, p.z - TILE) && near(z1, p.z)) || (near(z0, p.z) && near(z1, p.z + TILE)))) continue;
+          if (Math.abs(y - top(p.x, p.z)) > 0.002 || !levelUnder(p)) return true;
+          opened.set(p, (opened.get(p) || 0) + 1);
+          return false;
+        }
+        return true;
+      };
       /* the ceiling: one sheet, two sheets at different heights, or a slope — and perhaps a beam under it */
       if (opt.ceiling !== false) {
         const cAlb = opt.ceilAlb || WHITE;
-        const sheet = (x0, z0, x1, z1, yOf) => { if (x1 - x0 > 0.01 && z1 - z0 > 0.01) ceilB.grid([x0, 0, z0], [1, 0, 0], [0, 0, 1], tiles(x0, x1), tiles(z0, z1), (u, v) => [(x0 + u) / TILE, (z0 + v) / TILE], cAlb, (u, v) => edge(x0 + u + W / 2, W, z0 + v + D / 2, D), (u, v, x, z) => yOf(x, z)); };
+        const sheet = (x0, z0, x1, z1, yOf) => { if (x1 - x0 > 0.01 && z1 - z0 > 0.01) ceilB.grid([x0, 0, z0], [1, 0, 0], [0, 0, 1], tiles(x0, x1), tiles(z0, z1), (u, v) => [(x0 + u) / TILE, (z0 + v) / TILE], cAlb, (u, v) => edge(x0 + u + W / 2, W, z0 + v + D / 2, D), (u, v, x, z) => yOf(x, z),
+          fitOn ? (u, v, du, dv) => openFor(x0 + u - du / 2, x0 + u + du / 2, z0 + v - dv / 2, z0 + v + dv / 2, yOf(x0 + u, z0 + v)) : null); };
         if (s && s.kind === 'stepceil') {
           const hNeg = s.dir > 0 ? s.h1 : s.h2, hPos = s.dir > 0 ? s.h2 : s.h1, lo = Math.min(hNeg, hPos), rows = ticks(Math.abs(hPos - hNeg), 0.45, 0.08), buv = (u, v) => [u / 0.8, (lo + v) / 0.8], shade = () => 0.86;
           if (s.axis === 'x') {
@@ -1427,16 +1484,31 @@ function roomContext(world, rt) {
       if (opt.panels !== false) {
         const tube = lin(look.tube), on = c.shining('panel', kit.tex.panel(true), 2.5, tube), dead = c.mapped('dead', kit.tex.panel(false));
         const uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
+        /** (kit.gfx.fixtures) The sculpted light for panel p, on the ceiling plane over it: the housing in a batch of the
+         * room's own, the louvre in one marked as detail, and the tubes and the inside of the pan into `glow`, the batch
+         * the flat panel would have been drawn in (a dead light's grey tubes and darkened pan are lit by the room, with its
+         * housing). None of it stands in the room:
+         * nothing of it is gathered for the tubes' shadows, which take a lamp's fitting as casting nothing. */
+        const fitting = (p, glow) => {
+          const dead = p.state === 'dead', part = (name) => kit.model(`ceiling:${name}:${dead ? 'dead' : 'lit'}`, () => lightVox({ dead })[name], { ao: false }).solid;
+          const into = voxBatch('fixture', { structural: true }), pan = panOf(part('housing'));
+          mat.compose(vec.set(p.x, top(p.x, p.z), p.z), quat.identity(), scl.setScalar(VOX * CEILING.scale));
+          into.addVox(pan.rest, mat);
+          voxBatch('louvre', { structural: true, detail: true }).addVox(part('louvre'), mat, { tint: LOUVRE });
+          if (dead) { into.addVox(pan.inside, mat, { tint: DARK_PAN }); into.addVox(part('tubes'), mat); }
+          else { glow.addVox(pan.inside, mat, { uv: PAN_UV }); glow.addVox(part('tubes'), mat, { uv: TUBE_UV }); }
+        };
         for (const p of def.panels) {
           const corner = (dx, dz) => [p.x + dx, top(p.x + dx * 0.98, p.z + dz * 0.98) - 0.006, p.z + dz];
           const q = [corner(-TILE / 2, -TILE), corner(TILE / 2, -TILE), corner(TILE / 2, TILE), corner(-TILE / 2, TILE)];
-          if (p.state === 'dead') { dead.quad(q[0], q[1], q[2], q[3], WHITE, uv); continue; }
+          const fit = opened.get(p) === 2, lay = (b) => (fit ? fitting(p, b) : b.quad(q[0], q[1], q[2], q[3], WHITE, uv));
+          if (p.state === 'dead') { lay(dead); continue; }
           const y = top(p.x, p.z), head = clamp((y - floorAt(def, p.x, p.z)) / 2.6, 0.3, 2.5);
           const bank = rt.lighting ? panelBank(rt.lighting, p) : undefined;
           rt.lights.push(lamp(p.x, y - 0.14, p.z, tube.map((v) => v * 1.05 * def.light.power * Math.pow(head, 1.5)), { axis: [0, -1, 0], floor: 0.24, flick: p.state === 'flicker' && !rt.lighting, bank, k: 3.4 * (head < 1 ? head * head : head), far: 14 * Math.max(0.5, head) }));
-          if (rt.lighting) { c.shining(`panel-bank-${bank}`, kit.tex.panel(true), 2.5, tube).quad(q[0], q[1], q[2], q[3], WHITE, uv); continue; }
-          if (p.state === 'on') { on.quad(q[0], q[1], q[2], q[3], WHITE, uv); continue; }
-          const b = new Batch(); b.quad(q[0], q[1], q[2], q[3], WHITE, uv);
+          if (rt.lighting) { lay(c.shining(`panel-bank-${bank}`, kit.tex.panel(true), 2.5, tube)); continue; }
+          if (p.state === 'on') { lay(on); continue; }
+          const b = new Batch(); lay(b);
           const mesh = new THREE.Mesh(kit.plain(b), kit.glowing(kit.tex.panel(true), 2.5, tube));
           mesh.userData.on = mesh.material.color.clone();
           rt.flickers.push(mesh); rt.group.add(mesh);
@@ -1547,6 +1619,7 @@ function roomContext(world, rt) {
         bake(m.batch, (geo, owner) => kit.surface({ map: m.texture, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, cutout: m.cutout, side: m.side, lm: owner ? null : rt.lm }), 0, false, key);
       }
       bake(c.vox, (geo, owner) => kit.surface({ vox: true, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, lm: owner ? null : rt.lm }), 0, false, 'vox');
+      for (const [key, b] of voxed) bake(b, (geo, owner) => kit.surface({ vox: true, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, lm: owner ? null : rt.lm }), 0, false, key);
       bake(c.glass, geo => kit.surface({ vox: true, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, alpha: 0.42 }), 3);
       for (const [key, m] of shining) {
         const mesh = bake(m.batch, () => kit.glowing(m.texture, m.power, m.rgb, m.opt), 0, true);

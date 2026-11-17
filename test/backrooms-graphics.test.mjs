@@ -18,7 +18,7 @@ function before(w, h, ratio, level) {
 
 test('Classic is the level as it was: the same sizes at every Picture level, bloom as the host has it, nothing new switched on', () => {
   const p = profile('classic');
-  assert.deepEqual(p, { tier: 'classic', lines: { 0: null, 1: 660, 2: 540 }, supersample: 1, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: 'host', grade: 0, haze: 0, contact: 0, bounce: 0, detail: true, beamShadows: 0, shadows: 0, doorlight: 0 });
+  assert.deepEqual(p, { tier: 'classic', lines: { 0: null, 1: 660, 2: 540 }, supersample: 1, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: 'host', grade: 0, haze: 0, contact: 0, bounce: 0, detail: true, beamShadows: 0, shadows: 0, doorlight: 0, fixtures: 0 });
   // (detail: true is everything drawn, as it always was: a room's detail batches are hidden only at low)
   // (beamShadows 0: the flashlight casts no shadow, no depth pass is drawn and the kit's shader is as it was: backrooms-gfx-beamshadows)
   for (const [w, h] of [[1280, 800], [1920, 1080], [390, 844], [844, 390], [2560, 1440], [800, 600], [320, 240], [3840, 2160]])
@@ -143,7 +143,7 @@ test('auto never thrashes, stays between low and medium, and says nothing while 
 test('index.js hands the tier to the kit, the grade to the camcorder on every landing, and auto the frame time', () => {
   const index = readFileSync(new URL('../public/world/backrooms/index.js', import.meta.url), 'utf8');
   // (the dev page's own &gfx= comes first; otherwise the kit gets what the level of quality says)
-  assert.match(index, /createKit\(\{ gfx: opt\.dev\?\.gfx \|\| opt\.gfx \|\| \{ contact: gfx\(\)\.contact, bounce: gfx\(\)\.bounce, shadows: gfx\(\)\.shadows, doorlight: gfx\(\)\.doorlight \} \}\)/);
+  assert.match(index, /createKit\(\{ gfx: opt\.dev\?\.gfx \|\| opt\.gfx \|\| \{ contact: gfx\(\)\.contact, bounce: gfx\(\)\.bounce, shadows: gfx\(\)\.shadows, doorlight: gfx\(\)\.doorlight, fixtures: gfx\(\)\.fixtures \} \}\)/);
   assert.match(index, /vhs\.setGrade\(gradeOf\(themeOf\(f\.level\.theme\)\)\)/);
   assert.match(index, /autoStep\(gfxAuto, time, stage\.frameMs/);
   assert.match(index, /graphics: opt\.graphics \?\? saved\.graphics/);

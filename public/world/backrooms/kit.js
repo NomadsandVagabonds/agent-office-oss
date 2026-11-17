@@ -56,9 +56,10 @@ export class Batch {
   /**
    * A flat sheet: origin o, unit edge directions U and V, cut at the distances in us and vs.
    * It faces U × V. uvOf(u, v) → [s, t]; aoOf(u, v) → 0..1 darkening for creases;
-   * liftOf, if given, moves each vertex to its own height.
+   * liftOf, if given, moves each vertex to its own height. keepOf(u, v, du, dv), if given, is asked about each cell (its
+   * middle and its size): false leaves it out (a hole in the sheet, its corners still there for the cells round it).
    */
-  grid(o, U, V, us, vs, uvOf, alb = WHITE, aoOf = null, liftOf = null) {
+  grid(o, U, V, us, vs, uvOf, alb = WHITE, aoOf = null, liftOf = null, keepOf = null) {
     const nx = U[1] * V[2] - U[2] * V[1], ny = U[2] * V[0] - U[0] * V[2], nz = U[0] * V[1] - U[1] * V[0];
     const base = this.verts, nu = us.length, nv = vs.length;
     for (const v of vs) for (const u of us) {
@@ -72,6 +73,7 @@ export class Batch {
       this.ao.push(aoOf ? aoOf(u, v) : 1);
     }
     for (let j = 0; j < nv - 1; j++) for (let i = 0; i < nu - 1; i++) {
+      if (keepOf && !keepOf((us[i] + us[i + 1]) / 2, (vs[j] + vs[j + 1]) / 2, us[i + 1] - us[i], vs[j + 1] - vs[j])) continue;
       const a = base + j * nu + i;
       this.idx.push(a, a + 1, a + nu + 1, a, a + nu + 1, a + nu);
     }
@@ -137,7 +139,8 @@ export class Batch {
   /**
    * Fold a meshed voxel model in, moved by `m`. The model keeps its own
    * colours and ambient occlusion; tint multiplies them, mono repaints the
-   * whole thing in shades of one colour.
+   * whole thing in shades of one colour. opt.uv [s, t]: into a batch that is not a voxel one (one drawn with a texture,
+   * or one that shines by itself), every vertex at that one spot of its texture, and nothing of the voxel kept.
    */
   addVox(geo, m, opt = {}) {
     if (!geo) return this;
@@ -146,7 +149,8 @@ export class Batch {
     const tint = opt.tint, mono = opt.mono;
     for (let i = 0; i < p.count; i++) {
       v.fromBufferAttribute(p, i); q.fromBufferAttribute(n, i);
-      this.vx.push(v.x - q.x * 0.5, v.y - q.y * 0.5, v.z - q.z * 0.5);
+      if (opt.uv) this.uv.push(opt.uv[0], opt.uv[1]);
+      else this.vx.push(v.x - q.x * 0.5, v.y - q.y * 0.5, v.z - q.z * 0.5);
       v.applyMatrix4(m); q.applyMatrix3(nm).normalize();
       this.pos.push(v.x, v.y, v.z); this.nor.push(q.x, q.y, q.z);
       let r = c.getX(i), g = c.getY(i), b = c.getZ(i);
@@ -154,7 +158,7 @@ export class Batch {
       if (mono && !glow) { const l = (r * 0.3 + g * 0.55 + b * 0.15) * 1.9 + 0.08; r = mono[0] * l; g = mono[1] * l; b = mono[2] * l; }
       if (tint) { r *= tint[0]; g *= tint[1]; b *= tint[2]; }
       this.alb.push(r, g, b); this.ao.push(1);
-      this.sf.push(t ? t.getX(i) : 0, opt.noGlow ? 0 : glow);
+      if (!opt.uv) this.sf.push(t ? t.getX(i) : 0, opt.noGlow ? 0 : glow);
     }
     const index = geo.index.array, flip = m.determinant() < 0;
     for (let k = 0; k < index.length; k += 3) this.idx.push(base + index[k], base + index[k + (flip ? 2 : 1)], base + index[k + (flip ? 1 : 2)]);
@@ -182,12 +186,13 @@ export function lamp(x, y, z, rgb, o = {}) {
  */
 export function gfxOf(o) {
   const k = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(1, Number(v))) : 0);
-  const contact = k(o?.contact), bounce = k(o?.bounce), shadows = k(o?.shadows), doorlight = k(o?.doorlight);
+  const contact = k(o?.contact), bounce = k(o?.bounce), shadows = k(o?.shadows), doorlight = k(o?.doorlight), fixtures = k(o?.fixtures) > 0 ? 1 : 0;
   // (shadows: the tubes' shadows, baked per room into a small picture of its floor and walls (shadowmap.js), each bank
-  // apart. doorlight: the light of the room next door through each doorway, in the same picture. Each only named when it
-  // is on, so that what was asked for before they existed reads as it did.)
-  return contact > 0 || bounce > 0 || shadows > 0 || doorlight > 0
-    ? { contact, bounce, ...(shadows > 0 ? { shadows } : {}), ...(doorlight > 0 ? { doorlight } : {}) } : null;
+  // apart. doorlight: the light of the room next door through each doorway, in the same picture. fixtures: each ceiling
+  // light the sculpted fitting (world.js shell), on or off. Each only named when it is on, so that what was asked for
+  // before they existed reads as it did.)
+  return contact > 0 || bounce > 0 || shadows > 0 || doorlight > 0 || fixtures > 0
+    ? { contact, bounce, ...(shadows > 0 ? { shadows } : {}), ...(doorlight > 0 ? { doorlight } : {}), ...(fixtures > 0 ? { fixtures } : {}) } : null;
 }
 
 /**
@@ -555,7 +560,7 @@ void main() {
  * to throw away afterwards.
  */
 export function createKit(opt = {}) {
-  const gfx = gfxOf(opt.gfx);                    // (null unless contact darkening or bounce was asked for)
+  const gfx = gfxOf(opt.gfx);                    // (null unless something of it was asked for)
   const owned = new Set();
   const own = (thing) => { if (thing) owned.add(thing); return thing; };
   const shared = {
