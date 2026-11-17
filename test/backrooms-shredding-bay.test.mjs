@@ -50,3 +50,13 @@ test('the numbers the owner asked for', () => {
   assert.ok(SHREDDER.whistleEvery - SHREDDER.whistleSpread >= 9 && SHREDDER.whistleEvery + SHREDDER.whistleSpread <= 12);
   assert.equal(SHREDDER.whistleGap, 6);
 });
+
+test('fed paper she is done with you for good, and silent: no whistling in the leaving phase, ever', () => {
+  let s = createShredderState(), res;
+  for (let t = 0; t < 2; t += 0.1) s = stepShredder(s, { dt: 0.1, dist: 3, insideRoom: true, clearLine: true, contactClear: true }).state;
+  res = stepShredder(s, { dt: 0.1, dist: 1, offeredPaper: true, holdingPaper: true, clearLine: true, contactClear: true }); s = res.state;
+  assert.equal(res.atePaper, true);
+  let whistles = 0, phase = s.phase;
+  for (let t = 0; t < 600; t += 0.1) { res = stepShredder(s, { dt: 0.1, dist: 30, clearLine: true, contactClear: true }); s = res.state; phase = s.phase; if (res.whistled || res.chirp) whistles++; }
+  assert.equal(phase, 'leaving'); assert.equal(whistles, 0);
+});
