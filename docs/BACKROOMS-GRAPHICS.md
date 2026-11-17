@@ -169,7 +169,7 @@ Esc → Settings → **Graphics**: Classic (the default), Low, Medium, High,
 Auto; saved with the other preferences, and `&graphics=` on the dev page.
 What each tier switches is one table, `profile()` in
 `public/world/backrooms/graphics.js`, read by the camcorder (`vhs.js`) and
-handed to the kit when a part is built (`gfx: { contact, bounce, shadows }`).
+handed to the kit when a part is built (`gfx: { contact, bounce, shadows, doorlight }`).
 
 | | Classic | Low | Medium | High |
 |---|---|---|---|---|
@@ -184,6 +184,7 @@ handed to the kit when a part is built (`gfx: { contact, bounce, shadows }`).
 | a room's detail batches (`c.detail`) | drawn | hidden | drawn | drawn |
 | the flashlight casts shadows (`beamShadows`) | — | — | — | yes, a 1024² depth picture |
 | tube shadows (baked light map, per bank) | — | — | yes | yes |
+| light through doorways (in the same map) | — | — | yes | yes |
 
 - **Classic** draws exactly what the level drew before the setting existed.
 - **The camcorder stays the look.** The tape's lines and the scene's size are
@@ -313,7 +314,7 @@ Low and Medium, 1024 at High.
 ### Tube shadows and doorway light (built)
 
 The first of phase 2, and what the owner chose from the look-dev lab (h1, h3).
-Medium and High; `&gfx=shadows` on the dev page (with `contact`, `bounce`).
+Medium and High; `&gfx=shadows,doorlight` on the dev page (with `contact`, `bounce`).
 Classic and Low run none of it: no box is gathered, no map is made, no
 material is given the shader's block, every baked number is as before
 (`test/backrooms-gfx-shadows.test.mjs`).
@@ -386,6 +387,34 @@ floor heights (`rt.floorY`: the all-hands, the re-org, the mall's floors and
 other set pieces), a pit or a dais, a room with no shell floor (the halo rooms,
 the culvert, the atrium…), a room flattened by the no-trap check. A room with
 nothing standing in it has no map at all.
+
+**Light through a doorway** (`doorlight`; `&gfx=doorlight` on the dev page).
+Once every room of a part is built (the room next door's lamps are known only
+then: `world.js` `doorLight`, `shadowmap.js` `bakeDoorway`), each room with a
+map gets the light of its neighbours through up to four of its doorways (the
+brightest), one channel a doorway in a further RGBA8 texture at the map's size.
+For each point of each lamp next door, the opening's two faces (this side of
+the wall and the far side) are projected onto the floor and each wall but the
+doorway's own, and where both shapes overlap the light comes through: a
+door-shaped patch on the floor and up the side walls, with the frame's edges.
+What stands near the doorway on either side, and the open leaves of a hung door
+(`doors.js` says where they stand open), cut it. Each frame each doorway's light
+is that patch × how open the doorway is (a hung door's swing, `doorleaf.js`
+`k`; a doorway shut any other way: `world.throats`) × how lit the room beyond
+is (its banks, its flicker, its dimmer: a creature's black-out next door puts
+it out), in that room's tubes' colours (`uDoorL`, four numbers). A shut door
+lets nothing through. The old glow at a doorway from a brighter room next door
+(a lamp in the bake) is kept at half at this tier: it still lights the ceiling
+and what stands by the door, which the map does not reach, and it does not
+follow the doorway or the room beyond. Bodies standing in the patch are lit by
+it (`world.lightAt`). Through the doorway's light is 2.5× the bake's own
+falloff (`DOOR_GAIN`): the bake was tuned for rooms lit by their own tubes and a
+large ambient share, and through a doorway there is no ambient to carry it.
+Cost: at most 29 ms a room on the same floors (the copiers 22, the mailroom 19,
+the cutouts 29), done a room at a time with the loading picture kept moving in
+between (about 1 s of the part's build in all, in slices); the doorways'
+texture is four bytes a texel at the map's size, which brings a floor's maps to
+about 3.3–3.5 MB. A frame pays one more lookup and four multiplies.
 
 ### 2 · Light that behaves
 

@@ -273,6 +273,107 @@ export function bakeShadows({ layout, lights, amb, lighting = null, boxes }) {
  * and, with more than two banks, B (RG: banks 2 and 3). Texels nothing hides are 255; each region's gutter repeats its
  * edge. → { A: { data, channels }, B?: { data, channels } }
  */
+/* ---- light through a doorway (the Graphics setting's `doorlight`) -------------------------------------------------
+ * The lamps of the room next door, seen through the opening: for each of their points, the opening's two faces (this
+ * room's side of the wall and the other room's) are projected onto the floor and each wall, and where both shapes
+ * overlap the light comes through. What stands on either side near the doorway, and the open leaves of a hung door,
+ * cut it as they cut the tubes' light. One channel a doorway: added light, not a share, scaled each frame by how open
+ * the doorway is and how bright the room next door is (world.js). */
+
+/** A planar polygon ([[x, y, z], …]) cut to lo ≤ p[a] ≤ hi. */
+function clipAxis(poly, a, lo, hi) {
+  const cut = (pts, keep, at) => {
+    const out = [];
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], q = pts[(i + 1) % pts.length], pin = keep(p[a]), qin = keep(q[a]);
+      if (pin) out.push(p);
+      if (pin !== qin) { const t = (at - p[a]) / (q[a] - p[a]); out.push(p.map((v, k) => v + t * (q[k] - v))); }
+    }
+    return out;
+  };
+  let pts = cut(poly, (v) => v >= lo, lo);
+  if (pts.length >= 3) pts = cut(pts, (v) => v <= hi, hi);
+  return pts.length >= 3 ? pts : null;
+}
+
+/** The overlap of two convex polygons (2D, counter-clockwise) → polygon or null. */
+function overlap(subject, clip) {
+  let out = subject;
+  for (let i = 0; i < clip.length && out.length; i++) {
+    const a = clip[i], b = clip[(i + 1) % clip.length], side = (p) => (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+    const pts = out; out = [];
+    for (let k = 0; k < pts.length; k++) {
+      const p = pts[k], q = pts[(k + 1) % pts.length], sp = side(p), sq = side(q);
+      if (sp >= 0) out.push(p);
+      if ((sp >= 0) !== (sq >= 0)) { const t = sp / (sp - sq); out.push([p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])]); }
+    }
+  }
+  return out.length >= 3 ? out : null;
+}
+
+/**
+ * The light one doorway lets into a room. faces: the opening on this room's side of the wall and on the far side (each
+ * four [x, y, z] corners, in this room's frame); lamps: [{ L (a lamp, moved into this room's frame), g (its group in its
+ * own room), pts }]; boxes: what stands near the doorway on either side, in this room's frame; skip: the region the
+ * doorway is in (its own wall). → { patch: Float32Array over the atlas, energy: per group the light it brings, peak } or null.
+ */
+export function bakeDoorway({ layout, faces, lamps, boxes, skip, groups = 6 }) {
+  const N = layout.width * layout.height, P = [0, 0, 0], eps = 0.02;
+  let patch = null, peak = 0;
+  const energy = new Float64Array(groups);
+  const mid = [0, 1, 2].map((k) => faces[0].reduce((s, p) => s + p[k], 0) / 4);
+  for (const r of layout.list) {
+    if (r.name === skip) continue;
+    const size = r.nu * r.nv, lit = new Int32Array(size).fill(-1), blocked = new Int32Array(size).fill(-1), list = [];
+    let cur = 0;
+    for (const l of lamps) {
+      const L = l.L, reach = lampReach(L, 2);
+      if (Math.hypot(L.x - mid[0], L.y - mid[1], L.z - mid[2]) > reach) continue;
+      const near = boxes.filter((b) => boxDist(b, L.x, L.y, L.z) < reach);
+      for (const S of l.pts) {
+        const lo = r.at < S[r.a] ? r.at : S[r.a] + eps, hi = r.at < S[r.a] ? S[r.a] - eps : r.at;
+        const f0 = clipAxis(faces[0], r.a, lo, hi), f1 = f0 && clipAxis(faces[1], r.a, lo, hi);
+        if (!f1) continue;
+        const p0 = hull(project(f0.flat(), S, r)), p1 = p0 && hull(project(f1.flat(), S, r));
+        const shape = p1 && overlap(p0, p1);
+        if (!shape) continue;
+        cur++; list.length = 0;
+        const cu = (S[r.u] - r.o[0]) / r.cell - 0.5, cv = (S[r.v] - r.o[1]) / r.cell - 0.5, far = (reach + 1) / r.cell;
+        fill(shape, r, cu, cv, far, (k) => { lit[k] = cur; list.push(k); });
+        if (!list.length) continue;
+        for (const b of near) {
+          if (inside(b, S, 0.02)) continue;
+          const corners = boxBetween(b, S, r); if (!corners) continue;
+          const poly = hull(project(corners, S, r)); if (!poly) continue;
+          fill(poly, r, cu, cv, far, (k) => { if (lit[k] === cur) blocked[k] = cur; });
+        }
+        const nn = r.n, share = 1 / l.pts.length;
+        for (const k of list) {
+          if (blocked[k] === cur) continue;
+          const i = k % r.nu, j = (k - i) / r.nu;
+          texelPoint(r, i, j, P);
+          const I = lampLum(L, P[0], P[1], P[2], nn[0], nn[1], nn[2], S[0], S[1], S[2]) * share;
+          if (!(I > 0)) continue;
+          if (!patch) patch = new Float32Array(N);
+          const a = (r.py + j) * layout.width + r.px + i;
+          patch[a] += I; energy[l.g] += I;
+        }
+      }
+    }
+  }
+  if (!patch) return null;
+  for (let a = 0; a < N; a++) if (patch[a] > peak) peak = patch[a];
+  return peak > 1e-5 ? { patch, energy, peak } : null;
+}
+
+/** Up to four doorways' patches → RGBA bytes (one doorway a channel, stored as the square root of its share of its peak). */
+export function packDoorways(layout, patches) {
+  const N = layout.width * layout.height, data = new Uint8Array(N * 4);
+  patches.forEach((p, d) => { for (let a = 0; a < N; a++) if (p.patch[a] > 0) data[a * 4 + d] = Math.round(Math.sqrt(Math.min(1, p.patch[a] / p.peak)) * 255); });
+  gutter(layout, data, 4);
+  return { data, channels: 4 };
+}
+
 export function packShadows(layout, ratio) {
   const N = layout.width * layout.height, G = ratio.length;
   const byte = (g, a) => (ratio[g] ? Math.round(Math.max(0, Math.min(1, ratio[g][a])) * 255) : 255);

@@ -182,10 +182,12 @@ export function lamp(x, y, z, rgb, o = {}) {
  */
 export function gfxOf(o) {
   const k = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(1, Number(v))) : 0);
-  const contact = k(o?.contact), bounce = k(o?.bounce), shadows = k(o?.shadows);
+  const contact = k(o?.contact), bounce = k(o?.bounce), shadows = k(o?.shadows), doorlight = k(o?.doorlight);
   // (shadows: the tubes' shadows, baked per room into a small picture of its floor and walls (shadowmap.js), each bank
-  // apart. Only named when it is on, so that what was asked for before it existed reads as it did.)
-  return contact > 0 || bounce > 0 || shadows > 0 ? { contact, bounce, ...(shadows > 0 ? { shadows } : {}) } : null;
+  // apart. doorlight: the light of the room next door through each doorway, in the same picture. Each only named when it
+  // is on, so that what was asked for before they existed reads as it did.)
+  return contact > 0 || bounce > 0 || shadows > 0 || doorlight > 0
+    ? { contact, bounce, ...(shadows > 0 ? { shadows } : {}), ...(doorlight > 0 ? { doorlight } : {}) } : null;
 }
 
 /**
@@ -471,12 +473,22 @@ vec3 tubeShadows(vec3 c, vec2 uv) {
   return c - lost - max(rest, vec3(0.0)) * (1.0 - a.r);
 }
 #endif
+#ifdef DOORLIGHT
+// the light of the rooms next door through up to four doorways, one a channel (the square root of its share of its
+// brightest), each scaled by how open the doorway is and how lit that room is (uDoorL, world.js)
+uniform sampler2D uLmC;
+uniform vec3 uDoorL[4];
+#endif
 vec3 lightmapped(vec3 c) {
   float k = floor(vLmRegion + 0.5);
   if (k < 0.5) return c;
   vec2 uv = lmUv(k);
   #ifdef TUBESHADOW
   c = tubeShadows(c, uv);
+  #endif
+  #ifdef DOORLIGHT
+  vec4 d = texture2D(uLmC, uv); d *= d;
+  c += vAlb * (d.r * uDoorL[0] + d.g * uDoorL[1] + d.b * uDoorL[2] + d.a * uDoorL[3]);
   #endif
   return c;
 }
@@ -677,7 +689,7 @@ export function createKit(opt = {}) {
     if (wet > 0) defines.WET = 1;                                // (it glints: a thing that is wet, 0…1. Nothing has it unless it asks)
     if (banks) defines.BANKS = typeof banks === 'number' ? banks : 2;
     // (lm: a room's light map (world.js, shadowmap.js): only the room's own still meshes are handed one)
-    if (lm) { defines.LIGHTMAP = 1; if (lm.shadows) defines.TUBESHADOW = 1; }
+    if (lm) { defines.LIGHTMAP = 1; if (lm.shadows) defines.TUBESHADOW = 1; if (lm.doors) defines.DOORLIGHT = 1; }
     const material = own(new THREE.ShaderMaterial({
       defines, vertexShader: VERT, fragmentShader: FRAG, side,
       transparent: alpha < 1, depthWrite: alpha >= 1,
