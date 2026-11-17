@@ -125,5 +125,30 @@ export function build(c) {
   const dress = ['#39424f', '#7a3a34', '#4a5a40', '#6a4a8a'];
   for (let i = 0; i < 4; i++) { const a = (i < 2 ? -1 : 1) * (1.15 + (i % 2) * 0.55), x = Math.sin(a) * 2.2, z = Math.min(D / 2 - 1.7, cz + Math.cos(a) * 2.2); c.model('atrium:dummy:' + i, dummyVox(i, dress[i]), x, z, { rot: Math.atan2(-x, D / 2 - z), scale: i === 3 ? 0.62 : 1, solid: false }); c.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, { tall: false }); }   // a family, facing the way in
   for (let i = 0; i < bays; i++) if (upper[i] === 'window') c.model('atrium:dummy:' + (i % 4), dummyVox(i % 4, dress[i % 4]), -W / 2 + (i + 0.5) * bw + R.range(-0.5, 0.5), -D / 2 + 0.5, { y: G, rot: 0, solid: false, shadow: false });        // up on the gallery, at the rail side of the glass, looking down
-  void tube; void glow; void M; void Vox;
+
+  /* the detail: what stands proud and gives the place its depth. In a batch of its own (atrium:detail) so a low setting can leave it out;
+     nothing in it is walked into, stood on or read */
+  const det = c.mapped('atrium:detail', kit.tex.white()), steel = [0.42, 0.4, 0.44], brassD = [0.66, 0.52, 0.2], cream = [0.86, 0.82, 0.74];
+  // the gallery's underside: a soffit with a fascia, and downlights let into it, every 1.6 m, lit
+  det.box(-W / 2, G - 0.36, zE - 0.05, W / 2, G - 0.22, zE + 0.1, [0.2, 0.19, 0.22]);
+  const cans = c.shining('atrium:cans', kit.tex.white(), 1.8, [1, 0.92, 0.78]);
+  for (let x = -W / 2 + 0.8; x < W / 2 - 0.4; x += 1.6) { if (Math.abs(x - xUp) < half + 0.2 || Math.abs(x - xDn) < half + 0.2) continue; const z = zE - 0.7;
+    det.box(x - 0.13, G - 0.24, z - 0.13, x + 0.13, G - 0.22, z + 0.13, steel); cans.box(x - 0.08, G - 0.245, z - 0.08, x + 0.08, G - 0.24, z + 0.08, [1, 1, 1]); }
+  // the gallery's columns: round, clad in brass bands, with a capital and a plinth; real, so they are walked round
+  for (let x = -W / 2 + K.bay; x < W / 2 - 0.5; x += K.bay * 2) { if (Math.abs(x - xUp) < half + 0.8 || Math.abs(x - xDn) < half + 0.8) continue; const z = zE + 0.35;
+    c.model('atrium:column', () => { const v = new Vox(), m = M('#c9c0ae', 1), b = M('#a8843a', 0), d = M('#2a2830', 0); const top = Math.round((G - 0.36) / 0.025);
+      v.rbox(-9, 0, -9, 9, 5, 9, 2, d); v.cyl('y', 0, 0, 5, top - 6, 6.5, m); for (let y = 20; y < top - 10; y += 22) v.cyl('y', 0, 0, y, y + 2, 7, b); v.cyl('y', 0, 0, top - 6, top - 3, 8, b); v.rbox(-9, top - 3, -9, 9, top, 9, 1, d); return v; }, x, z, { solid: false });
+    c.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, { tall: true }); }
+  // benches round the fountain, facing it; a bin by each; and a directory, which is a map of a different floor
+  for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4, r = 2.25, bx = Math.sin(a) * r, bz = cz + Math.cos(a) * r; if (bz > D / 2 - 1.2 || bz < zTop + 0.4) continue;
+    c.model('atrium:bench', () => { const v = new Vox(), wood = M('#7a4f2a', 3), iron = M('#2a2830', 0); for (const x of [-26, 26]) { v.box(x - 1, 0, -7, x + 1, 16, -6, iron); v.box(x - 1, 0, 6, x + 1, 16, 7, iron); v.box(x - 1, 15, -8, x + 1, 17, 8, iron); v.box(x - 1, 17, 6, x + 1, 32, 8, iron); } for (let z = -7; z <= 3; z += 3.5) v.box(-30, 17, z, 30, 18, z + 2.5, wood); for (let y = 21; y <= 30; y += 4) v.box(-30, y, 7, 30, y + 2.5, 8, wood); return v; }, bx, bz, { rot: a + Math.PI, solid: false });
+    c.solid(bx - 0.75, bz - 0.75, bx + 0.75, bz + 0.75, { tall: false }); }
+  { const tx = -W / 2 + 1.0, tz = zTop + 1.2; if (Math.abs(tz) > 1.6 || tx < -W / 2 + 2) { c.flat.box(tx - 0.3, 0, tz - 0.1, tx + 0.3, 2.0, tz + 0.1, [0.16, 0.15, 0.18]); c.solid(tx - 0.32, tz - 0.12, tx + 0.32, tz + 0.12, { tall: true });
+    const map = c.shining('atrium:map', kit.tex.custom('atrium:map', 64, 128, (g, w, h) => { P(g, '#1a1820', 0, 0, w, h); P(g, '#f1ead6', 3, 3, w - 6, 18); for (let k = 0; k < 9; k++) { P(g, ['#ff3d9a', '#35e0ff', '#ffb02e'][k % 3], 6 + (k % 3) * 18, 26 + Math.floor(k / 3) * 26, 15, 22); } P(g, '#b3261e', 30, 110, 5, 5); P(g, '#f1ead6', 3, 118, w - 6, 6); }), 1.2);
+    upright(map, tx - 0.26, tz + 0.105, tx + 0.26, tz + 0.105, 0.5, 1.9, [0, 0, 1, 1]); upright(map, tx + 0.26, tz - 0.105, tx - 0.26, tz - 0.105, 0.5, 1.9, [0, 0, 1, 1]); } }
+  // the gallery's railing: a brass handrail with a round top and glass panels between the posts
+  const glassR = c.mapped('mall:glass', kit.tex.custom('mall:glass', 32, 64, (g, gw, gh) => { g.clearRect(0, 0, gw, gh); g.fillStyle = 'rgba(255,255,255,0.28)'; for (let y = 0; y < gh; y++) { if (y % 9 < 6) g.fillRect(6 + y * 0.18 | 0, y, 2, 1); if (y % 13 < 4) g.fillRect(17 + y * 0.18 | 0, y, 1, 1); } g.fillStyle = 'rgba(200,190,170,0.5)'; g.fillRect(0, gh - 3, gw, 3); }), { cutout: true });
+  for (const [xa, xb] of [[-W / 2, xUp - half - 0.08], [xUp + half + 0.08, W / 2]]) { for (let x = xa + 0.2; x < xb - 0.2; x += 1.2) { const x1 = Math.min(xb - 0.05, x + 1.2); upright(glassR, x + 0.05, zE + 0.11, x1 - 0.05, zE + 0.11, G + 0.08, G + 0.92, [0, 0, 1, 1]); upright(glassR, x1 - 0.05, zE + 0.11, x + 0.05, zE + 0.11, G + 0.08, G + 0.92, [0, 0, 1, 1]); }
+    det.box(xa, G + K.rail - 0.02, zE + 0.06, xb, G + K.rail + 0.04, zE + 0.16, brassD); }
+  void tube; void glow; void M; void Vox; void cream;
 }
