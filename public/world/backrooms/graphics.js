@@ -53,6 +53,12 @@ export function showDetail(object, p) {
 const BEAM_SHADOWS = { classic: 0, low: 0, medium: 0, high: 1024 };
 for (const t of Object.keys(TABLE)) TABLE[t].beamShadows = BEAM_SHADOWS[t];
 
+// glow: the bloom made only from what shines by itself (glow.js: the tubes and lit pans, signs and every shining batch,
+// self-lit voxels), in place of the tier's bloom, which takes anything bright enough, a lit yellow wall included (0 or 1).
+// At 0 the camcorder's chain is the one it was: no pass, no picture, no material made. Its own lines, as beamShadows'.
+const GLOW = { classic: 0, low: 0, medium: 1, high: 1 };
+for (const t of Object.keys(TABLE)) TABLE[t].glow = GLOW[t];
+
 export const cleanGraphics = (v) => (GRAPHICS.includes(v) ? v : DEFAULT_GRAPHICS);
 
 /** Everything a tier switches, as a fresh plain object. 'auto' reads as where it starts (medium); anything else as classic. */
@@ -87,7 +93,10 @@ export function internalSize(w, h, ratio, level, p = profile(DEFAULT_GRAPHICS)) 
 export function cost(p, level = 2, w = 1280, h = 800, ratio = 2) {
   const { iw, ih, sw, sh } = internalSize(w, h, ratio, level, p), base = internalSize(w, h, ratio, 2, TABLE.classic);
   const px = (sw * sh) / (base.iw * base.ih), tape = (iw * ih) / (base.iw * base.ih);
-  return px * (0.55 + 0.1 * p.msaa) + tape * ((p.bloom === true ? 0.35 : 0) + 0.04 * p.grade + 0.12 * (p.haze > 0 ? 1 : 0)) + (sw > iw ? 0.1 * tape : 0);
+  // (glow: its chain costs about what the tier's bloom does, and its picture is only what shines drawn once more, at a
+  // quarter of the pixels: about a sixth of the scene's draws, glow.js)
+  return px * (0.55 + 0.1 * p.msaa) + tape * ((p.bloom === true || p.glow > 0 ? 0.35 : 0) + 0.04 * p.grade + 0.12 * (p.haze > 0 ? 1 : 0)) + (sw > iw ? 0.1 * tape : 0)
+    + (p.glow > 0 ? (px * 0.25 * 0.55) / 6 : 0);
 }
 
 // 'auto': start at medium; step down to low once frames have stayed slow, back up once if they stay quick.

@@ -167,6 +167,9 @@ file; there is no `&lines=`. At `&vhs=0` the picture is the window, up to
 
 Esc → Settings → **Graphics**: Classic (the default), Low, Medium, High,
 Auto; saved with the other preferences, and `&graphics=` on the dev page.
+Since 17 Nov the row is offered on every visit, all five choices, default
+Classic (it was held back to `?debug` visits until the ten-minute check below
+came back).
 What each tier switches is one table, `profile()` in
 `public/world/backrooms/graphics.js`, read by the camcorder (`vhs.js`) and
 handed to the kit when a part is built (`gfx: { contact, bounce, shadows, doorlight, fixtures }`).
@@ -177,7 +180,7 @@ handed to the kit when a part is built (`gfx: { contact, bounce, shadows, doorli
 | scene under the tape (Full and Light VHS) | the tape's size | the tape's size | 1.5×, at most 1680 across | 2×, at most 2560 across |
 | Clean picture, most pixels across | 1680 | 1280 | 1680 | 2560 |
 | edge smoothing (MSAA) | 4× | 2× | 4× | 4× |
-| bloom | as the host (office on; dev page, site off) | off | on, tight | on, tight |
+| bloom | as the host (office on; dev page, site off) | off | from what shines (`glow`) | from what shines (`glow`) |
 | grade for the kind of floor | — | yes | yes | yes |
 | haze beyond 8 m | — | — | yes | yes |
 | corner darkening / bounce (bake) | 0 / 0 | 0.7 / 0 | 1 / 0.7 | 1 / 1 |
@@ -186,6 +189,7 @@ handed to the kit when a part is built (`gfx: { contact, bounce, shadows, doorli
 | tube shadows (baked light map, per bank) | — | — | yes | yes |
 | light through doorways (in the same map) | — | — | yes | yes |
 | ceiling lights as sculpted fittings (`fixtures`) | — | — | yes | yes |
+| bloom from what shines only (`glow`), in place of the thresholded bloom | — | — | yes | yes |
 
 - **Classic** draws exactly what the level drew before the setting existed.
 - **The camcorder stays the look.** The tape's lines and the scene's size are
@@ -543,6 +547,129 @@ wall) the light stays the flat panel.
 
 `test/backrooms-gfx-fixtures.test.mjs` pins all of the above.
 
+### Bloom from what shines (built)
+
+`glow` in `graphics.js` (its own lines beside the table, as `beamShadows`): 0 in
+Classic and Low, 1 at Medium and High (and Auto). The look-dev lab's best-value
+finding (`BACKROOMS-LOOKDEV.md`, round two, 5): the tier's bloom took anything
+bright enough, so a pale yellow wall under a tube bloomed and washed out. This
+one is made only from what shines by itself, and replaces it at those tiers.
+
+- **What emits.** What the kit draws as shining (`kit.glowing`, which now marks
+  its material `userData.glow`), at the colour it is drawn that frame, so a bank
+  turned down, a failing tube and the emergency mode's dead ceiling glow as much
+  as they shine. Two kinds: a **lamp** (a plain light: the white texture or the
+  lit panel's, so the ceiling's panels, the sculpted fittings' tubes and pans,
+  `panel-bank-N`, a flickering light's own mesh, plain glowing strips and
+  buttons), whose glow is laid over it in full; and a **picture** (anything else
+  that shines: exit signs, notices, slides, neon, labels), which the glow goes
+  round as a halo and lays only 15 % of itself over, so what it says stays as
+  crisp as it is drawn. And the voxels that light themselves (`bake()`: a voxel
+  whose glow is above 0.5 is its colour × `GLOW`): screens, lamps, the exit
+  box's charge lamp, a creature's eyes; treated as pictures.
+- **What does not.** Every lit surface, however bright: walls, floors,
+  ceilings, furniture, a dead fitting (grey, in no shining batch), the louvre's
+  blades (they cross the glow as lines), the flashlight's and the camcorder
+  lamp's patch (light, not emission: the kit's emissive part reads nothing of
+  either beam, nor the wet glint), avatars, the office's own Lambert material,
+  sprites, whatever is held in the hand, and a shining sheet that is
+  see-through and writes no depth: that is light painted on to something (the
+  all-hands microphone's pool on the stage, the lamp halo of `rooms.js`), and
+  blooming it would bloom the room's light again.
+- **How it is drawn** (`glow.js`, a pass in the camcorder's chain where the
+  tier's bloom is, after the scene and before the tape's signal). Each frame
+  what shines is drawn once more, at half the size the scene is drawn at (High:
+  the tape's size; Medium: three quarters of it), without multisampling, into a
+  picture of its own, and nothing else is: a lamp as it is; a picture as it is
+  with its alpha set to a quarter, the mark that says "leave me crisp"; and of a
+  kit mesh only the triangles whose voxels light themselves (worked out once per
+  geometry, `glowFaces`: a small copy of those triangles and their corners), by
+  a twin (the kit's own shader and uniforms with `EMISSIVE_BLOOM` defined: what
+  it shows, alpha 0). A kit mesh with no such voxel, every wall, floor, piece of
+  furniture, avatar and held thing is not drawn at all.
+- **Hiding by the scene's own depth.** At Medium and High the camcorder keeps a
+  depth texture of the scene it has just drawn, for the haze (`vhs.js`: the
+  supersampled scene's, or at Clean the picture's own; multisampled, and
+  resolved by three.js as the haze already relies on); held things are written
+  into its nearest sliver (`hand.js` `holdInFront`). Every fragment of what
+  shines reads that depth at its pixel (`glow.rule.js`: four reads a quarter of
+  one of its own pixels from the middle, the nearest kept) and is left out where
+  the scene is nearer by more than 1 % of the distance and 2 cm: a wall, a
+  copier, a door frame or the hand hides a tube without being drawn again,
+  while a ceiling seen at a slant 8 m off keeps its own tubes. The shader text
+  is `GLOW_DEPTH_GLSL`, compiled only where `EMISSIVE_BLOOM_DEPTH` is defined
+  (the stand-ins of this path). **The fallback:** where a profile has glow and
+  no depth texture (none does today), the pass draws as the first version did:
+  everything that hides anything again, black where it does not shine, kit
+  meshes whole, the picture's own depth doing the hiding; so the feature never
+  silently breaks. Both paths are pinned.
+- The level's materials and geometries are only swapped for the one draw and
+  put back; none is changed. Then the lab's chain: six halvings down, five steps
+  back up, each adding the level it lands on (the first, the shining thing
+  itself hardly blurred, at half), added over the scene at 0.5 in the tubes'
+  warm white (1, 0.97, 0.9): in full where the picture's alpha says lamp or
+  nothing, at 15 % where it says picture. The kit's shader blocks are marked
+  `// --- emissive bloom ---` and only compiled with `EMISSIVE_BLOOM`, which
+  only the twins have.
+- **A room that draws the scene itself.** A room may render the scene again
+  mid-frame (the mall's television sets, `rooms/the-sets.js`, draw it into
+  their own small picture from a room tick, before the camcorder draws). The
+  stand-ins are only on inside the pass's own draw, and every material,
+  visibility, the background, the render target, clear colour, autoClear and
+  the shadow maps' autoUpdate are put back in a `finally` even if the draw
+  throws; nothing reads state left by the other draw (the only `onBeforeRender`
+  in the level is the hand's, which sets and undoes its own per draw). The
+  sets' live screen is a `c.shining` picture, so it glows as a picture does (a
+  halo, its picture crisp, the map followed each frame); what their camera sees
+  is the scene without glow.
+- **Readable signs.** A first version laid the whole glow over everything that
+  shone, and an exit sign's letters drowned in their own light. With the
+  picture's mark, WAY OUT reads as clearly as at the tier before it, at Clean and
+  Full VHS, close and from across a room, at Medium and High; a slide's words in
+  the all-hands room and the quiet zone's meter likewise.
+- **Cost.** Per frame: what shines in view drawn once more, at a quarter of
+  the scene's pixels, unsmoothed, and twelve small screen passes in place of the
+  tier's bloom's (that pass is switched off, not removed). Counted with the dev
+  page's `&perf=1` read-out at Full VHS, seed 7, the code before and after,
+  standing at the same spot (draws of the level's scene / all passes /
+  triangles):
+
+  | | before | after |
+  |---|---|---|
+  | Medium, copier room | 60 / 76 / 61,528 | 71 / 86 / 67,196 |
+  | Medium, a plain room | 61 / 77 / 47,010 | 71 / 86 / 51,516 |
+  | High, copier room | 60 / 76 / 61,528 | 71 / 86 / 67,196 |
+  | High, a plain room | 61 / 77 / 47,010 | 71 / 86 / 51,516 |
+
+  About a sixth more draws of the scene and a tenth more triangles (the panels,
+  the exit sign and the few voxel faces that light themselves); the first
+  version, which drew every occluder again in black, doubled both (117 / 132 /
+  123,034 in the copier room). Medium and High draw the same things; they
+  differ in pixels. Frame times are not given: these machines render in
+  software, and a millisecond measured there says nothing about a graphics
+  card. Memory at Full VHS: the picture 720 × 540 (half float, and its depth)
+  4.7 MB and the chain 2.1 MB at High; about 3.8 MB at Medium; at Clean it
+  follows the window (at 2560 × 1600, about 18 MB). A program per kind of kit
+  surface and of shining material is compiled the first frame it is on.
+  `cost()` counts it.
+- **Off is as before.** At 0 no pass is made and the chain is the five passes
+  it was; no target, material or define exists; Classic keeps the host's bloom
+  and Low none. A kit surface's shader, with its block taken out, is the text it
+  was (recorded). Switching the tier at run time puts the pass in or takes it
+  out and lets go of everything it made: in one page load High → Classic →
+  High → Classic → High through the menu's setting (`setSetting('graphics', …)`
+  on the dev page's handle), then Auto, whose stepper took it from Medium to Low
+  by itself, with no error; each removal released all twelve targets and the
+  renderer's textures and programs came back to the same counts each time
+  (78 / 62 textures, 28 / 17 programs). `test/backrooms-gfx-glow.test.mjs` pins
+  all of it.
+- **Not covered.** A fire's embers and flames (`inventory-fire.js`) and co-op's
+  stand-in rooms (`coop/client.js`) are not marked as shining, so none glows.
+  The held torch's lens does not glow: the torch is not a voxel model with a
+  self-lit voxel. Something drawn with its own vertex shader that moves its
+  corners is drawn undisplaced in the black. The glow does not light anything:
+  it is in the picture, not in the room.
+
 ### 2 · Light that behaves
 
 - Pools under the tubes, light through a doorway onto the next room's floor,
@@ -586,10 +713,11 @@ it helps, one small texture drawn by code:
 
 ### 4 · Water and other liquids
 
-There is no liquid surface in the level today. The wet-floor room's puddle is
-blots, the atrium's fountain is dry, the garden's paddling pool is a voxel
-model, and the hook for a flooded room (`floodMark` in `inventory-world.js`)
-is not used. So this phase starts from nothing.
+The level has liquid surfaces today, all in the waterpark (more than ten: its
+basins through `createBasin` in `waterpark.js`, `waterMesh` in
+`rooms/return-pool/art.js`, `bellWater` in `rooms/bellmouth/art.js`, and the
+showers' film); elsewhere the wet-floor room's puddle is blots, the atrium's
+fountain is dry and the garden's paddling pool is a voxel model.
 
 Nothing is simulated as a fluid. A surface that looks like one is built from
 cheap layers, and each layer belongs to a level of quality:
@@ -683,11 +811,16 @@ vendored files. It is decided after phases 1 to 7 are measured.
   what moves), reflections from the screen on top of each room's stored
   picture, light shafts and lit dust.
 
+- **After round two of the look-dev lab (17 Nov):** build bloom from what
+  shines first, then water (the waterpark is a whole kind of floor, so it is
+  the bigger unlock), then the mirror floor. The stepped shadows under fixed
+  chairs are fine for now; refining them is low priority.
+
 ## The ten-minute check, before the Graphics row is for everybody
 
-The Graphics row in Settings is shown only on a `?debug` visit until this has
-come back clean. Everything here is on the BlockRooms site; nothing needs an
-office running. Classic is what everybody has today and needs no checking.
+This check came back, and since 17 Nov the Graphics row is public: offered on
+every visit, all five choices, default Classic. Everything here is on the
+BlockRooms site; nothing needs an office running. Classic is what everybody has today and needs no checking.
 
 **Where:** `https://<the site>/play?debug&tape=7`. Open Settings, set
 **Graphics**, leave Picture at Full VHS. The setting is kept on that device.
@@ -733,6 +866,11 @@ Software rendering on the build machines says nothing; these are real machines.
 | date | machine | picture | frames | in view (most) | headroom |
 |---|---|---|---|---|---|
 | 17 Nov | Apple M4 Max laptop, 120 Hz, Chrome | 720×540 (Full VHS), dpr 1.5 | 8.3 ms at every station (the display's own rate); worst 11.4 ms; one 59 ms frame on a first run, not seen again | 75 draws, 69,000 triangles | the scene drawn 32 times a frame still held 8.3 ms: at least 32× |
+
+**The ten-minute check (17 Nov).** The owner ran it and reports that every
+step passed. No device list, no seconds for the wait at the way down and no
+`[bench]` lines came back with it, so this is a pass by eye on the owner's own
+devices, not a measurement: the table above still has one machine in it.
 
 No ordinary laptop and no phone has been measured yet. Those set medium and low.
 
