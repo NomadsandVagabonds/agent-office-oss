@@ -61,6 +61,23 @@ test('balloon has a visible FPS model, with a grip, phone framing and wall-safe 
   selected=null;view.update(.1,true);assert.equal(group.visible,false);
 });
 
+test('everything that can be held is drawn over the room, so that a wall close to the visitor never hides it', async t => {
+  const { INVENTORY_MODELS } = await import('../public/world/backrooms/inventory-items.js');
+  const kit=createKit(), camera=new THREE.PerspectiveCamera(62,16/9,.06,170); camera.updateProjectionMatrix();
+  t.after(()=>kit.dispose());
+  assert.ok(Object.keys(INVENTORY_MODELS).length>=8, 'there are things to hold');
+  for (const kind of Object.keys(INVENTORY_MODELS)) {
+    const env={kit, vhs:{picture:{w:1280,h:720}}, inventory:{held:()=>({type:kind,lit:false,charge:10})},player:{me:{x:0,z:0,speed:0}},world:{scene:new THREE.Group(),lightAt:()=>[.5,.5,.5]}};
+    const view=createHandView(env,camera); view.update(.1,true);
+    const group=env.world.scene.children[0], mesh=group.children[0];
+    assert.ok(group.visible&&mesh.visible&&mesh.geometry.attributes.position.count>0, `${kind}: held in the hand`);
+    assert.equal(mesh.renderOrder,10000,`${kind}: drawn last`); assert.equal(mesh.material.transparent,true,`${kind}: after the room`);
+    const calls=[]; mesh.onBeforeRender({state:{buffers:{depth:{setMask:v=>calls.push(v)}}},clearDepth:()=>calls.push('clear')});
+    assert.deepEqual(calls,[true,'clear'],`${kind}: the room's depth is discarded before it is drawn`);
+    view.dispose();
+  }
+});
+
 for (const partySize of [1,2]) test(`party leaves ${partySize} distinct, reachable balloon pickup(s)`, async t => {
   const { build } = await import('../public/world/backrooms/rooms/mandatory-fun.js');
   const kit=createKit(), generated=generate('party-balloons');
