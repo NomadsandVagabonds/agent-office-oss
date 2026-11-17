@@ -1216,3 +1216,20 @@ test('the dummies: between two that stand close, they have you, once in a while;
   assert.equal(squeezed(far, 1, -1, 0, 10).hit, null, 'two far apart are not a squeeze');
 });
 
+test('the dummies never wall anybody in: one that would cut a doorway off from another is not put down', async () => {
+  const { DUMMIES: K, blank, cameBack, stillThrough } = await import('../public/world/backrooms/cast/dummies.rule.js');
+  // a room 5 wide, doorways at either end: a line of them across its middle would close it
+  const room = { W: 5, D: 6, doors: [{ x: 0, z: -3 }, { x: 0, z: 3 }] };
+  assert.ok(stillThrough(room, []));
+  assert.ok(!stillThrough(room, [-2, -1.2, -0.4, 0.4, 1.2, 2].map((x) => ({ x, z: 0 }))), 'a line across: closed');
+  let s = blank();
+  for (const x of [-2, -1.2, -0.4, 0.4, 1.2, 2]) { s = cameBack(s, 5, room, { x, z: 0, yaw: 0 }).s; s = cameBack(s, 5, room, { x, z: 0, yaw: 0 }).s; }
+  const here = s.placed.filter((p) => p.room === 5);
+  assert.ok(here.length > 0 && here.length < 6, `some stood, not all (${here.length})`);
+  assert.ok(stillThrough(room, here), 'and whatever stood, the way through is still there');
+  // however many times, and wherever, the way through stays: try a great many spots
+  let t = blank(); for (let k = 0; k < 400; k++) { const x = ((k * 37) % 41) / 41 * 4 - 2, z = ((k * 53) % 47) / 47 * 5 - 2.5; t = cameBack(t, 9, room, { x, z, yaw: 0 }).s; }
+  assert.ok(stillThrough(room, t.placed.filter((p) => p.room === 9)));
+  void K;
+});
+
