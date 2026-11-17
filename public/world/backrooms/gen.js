@@ -94,6 +94,9 @@ const FAMILIES = [
   { id: 'sky', weight: 0, wall: [203, 0.46, 0.72], carpet: [106, 0.34, 0.37], trim: [44, 0.12, 0.88], floor: 'turf' },
   // …and one for the shopping centre (themes.js `mall`): oatmeal partition fabric, terrazzo with a brass strip, brown trim
   { id: 'oatmeal', weight: 0, wall: [36, 0.2, 0.66], carpet: [28, 0.12, 0.62], trim: [22, 0.32, 0.28], floor: 'terrazzo' },
+  // …and two for the offsite wilderness reserve (themes.js `forest`): weathered cream-sage plasterboard over deep dark moss carpet
+  { id: 'pine', weight: 0, wall: [68, 0.15, 0.55], carpet: [112, 0.30, 0.19], trim: [34, 0.22, 0.36], floor: 'moss' },
+  { id: 'birch', weight: 0, wall: [50, 0.17, 0.59], carpet: [104, 0.28, 0.21], trim: [36, 0.20, 0.40], floor: 'moss' },
 ];
 const PATTERNS = ['dots', 'dots', 'dots', 'diamonds', 'stripes', 'trellis', 'sprigs', 'chevrons'];
 const TUBES = ['#fff6dc', '#fff6dc', '#fffbe9', '#f3ffe6', '#ffeec4', '#eef6ff'];
@@ -729,7 +732,8 @@ function build(R, o, opt) {
 const DRESSING = ['boxes', 'boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'highdoor', 'highdoor'];
 // what the plain-room builder (rooms.js) knows how to put down, of everything a theme may ask for; and how many plain rooms have anything
 const KNOWN_THINGS = new Set(['boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'cabinet', 'shelving', 'armchair', 'globe',
-  'mailbox', 'flamingo', 'hose']);                                        // (the neighbourhood's: suburb.js builds them)
+  'mailbox', 'flamingo', 'hose',                                           // (the neighbourhood's: suburb.js builds them)
+  'stump', 'backpack', 'lantern', 'trailpost']);                           // (the offsite reserve's: forest.js builds them)
 export const THING_CHANCE = 0.06;
 /** What an earlier visitor may have left in a plain room (traces.js builds them): a floor has two or three, each a different one. */
 export const TRACES = Object.freeze(['camp', 'arrows', 'note', 'measure', 'map', 'queue', 'drawing']);

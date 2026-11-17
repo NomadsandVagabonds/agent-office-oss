@@ -391,6 +391,12 @@ export function createKit() {
       // fabric-wrapped partition, oatmeal (themes.js `mall`): the walls of a 1980s office park, which is what the shops are made of
       else if (look.pattern === 'mall') { for (let y = 0; y < h; y++) for (let x = (y & 1); x < w; x += 2) { const n = r(); if (n > 0.62) P(g, shade(wall, 0.05), x, y, 1, 1); else if (n < 0.3) P(g, shade(wall, -0.06), x, y, 1, 1); } for (let x = 0; x < w; x += 16) { P(g, shade(wall, -0.2), x, 0, 1, h); P(g, shade(wall, 0.08), x + 1, 0, 1, h); } }
       else if (look.pattern === 'sky') { for (let x = 0; x < w; x += 8) P(g, shade(wall, (r() - 0.5) * 0.04), x, 0, 8, h); for (let i = 0; i < 4; i++) P(g, shade(wall, 0.07), (r() * w) | 0, (r() * h) | 0, 2, 3 + ((r() * 4) | 0)); }
+      else if (look.pattern === 'boughs') {
+        for (let x = 0; x < w; x += 4) P(g, shade(wall, (r() - 0.5) * 0.06), x, 0, 4, h);
+        P(g, shade(wall, -0.08), 15, 0, 1, h); P(g, shade(wall, 0.05), 16, 0, 1, h);
+        for (let i = 0; i < 28; i++) P(g, shade(ink, (r() - 0.5) * 0.12), (r() * w) | 0, (r() * h) | 0, 2, 2);
+        P(g, shade(ink, -0.14), 0, h - 2, w, 2);
+      }
       else if (look.pattern === 'sprigs') { for (let y = 5; y < h; y += 16) for (let x = ((y - 5) / 16) % 2 ? 13 : 5; x < w; x += 16) { P(g, ink, x, y, 1, 4); P(g, ink, x - 1, y + 1, 3, 1); P(g, pale, x - 1, y - 1, 1, 1); P(g, pale, x + 1, y - 1, 1, 1); P(g, pale, x, y - 2, 1, 1); } }
       else { for (let y = 3; y < h; y += 8) for (let x = 0; x < w; x++) { const k = x % 8; P(g, ink, x, y + (k < 4 ? k : 7 - k), 1, 1); } }
     })),
@@ -402,7 +408,26 @@ export function createKit() {
       for (let y = 0; y < h; y += 2) for (let x = (y / 2) & 1 ? 1 : 0; x < w; x += 2) { const n = r(); if (n > 0.66) P(g, shade(color, 0.08), x, y, 1, 1); else if (n < 0.3) P(g, shade(color, -0.1), x, y, 1, 1); }
     })),
     /** What is underfoot on this floor of the building: carpet, mostly — but lino in Records, screed where they are still fitting out, and something deeper upstairs. */
-    floor: (look) => (look.floor === 'terrazzo' ? T.terrazzo(look.carpet) : look.floor === 'turf' ? T.turf(look.carpet) : look.floor === 'lino' ? T.lino(look.carpet) : look.floor === 'screed' ? T.screed(look.carpet) : look.floor === 'plush' ? T.plush(look.carpet, look.pale) : T.carpet(look.carpet)),
+    floor: (look) => (look.floor === 'moss' ? T.moss(look.carpet) : look.floor === 'terrazzo' ? T.terrazzo(look.carpet) : look.floor === 'turf' ? T.turf(look.carpet) : look.floor === 'lino' ? T.lino(look.carpet) : look.floor === 'screed' ? T.screed(look.carpet) : look.floor === 'plush' ? T.plush(look.carpet, look.pale) : T.carpet(look.carpet)),
+    /** Damp forest moss and bark mulch rolled out in strips (themes.js `forest`), speckled with fallen brown pine needles. */
+    moss: (color) => tex('moss' + color, () => canvasTexture(128, 128, (g, w, h) => {
+      const r = lcg(parseInt(color.slice(1), 16) + 71);
+      P(g, color, 0, 0, w, h);
+      for (let i = 0; i < 34; i++) {
+        const dark = i % 3 === 0;
+        g.fillStyle = shade(color, dark ? -0.18 - r() * 0.10 : 0.06 + r() * 0.14);
+        g.beginPath(); g.ellipse(r() * w, r() * h, 5 + r() * 14, 4 + r() * 10, r() * 3.1, 0, 7); g.fill();
+      }
+      for (let y = 0; y < h; y += 2) for (let x = (y / 2) & 1; x < w; x += 2) {
+        const n = r();
+        if (n > 0.78) P(g, shade(color, 0.17), x, y, 2, 1);
+        else if (n < 0.22) P(g, '#3d2c1b', x, y, 2, 2);
+      }
+      for (let i = 0; i < 16; i++) { P(g, '#8fa377', (r() * (w - 3)) | 0, (r() * (h - 3)) | 0, 2, 2); }
+      for (let i = 0; i < 68; i++) P(g, i % 3 ? '#7c5b36' : '#9c7548', (r() * (w - 4)) | 0, (r() * h) | 0, 3, 1);
+      P(g, shade(color, -0.30), 0, 0, 2, h);
+      P(g, shade(color, 0.09), 2, 0, 1, h);
+    })),
     /** Fake grass off a roll, 1.6 m wide: the stripes of a mown lawn are printed in, and the joins between rolls show. */
     /** Terrazzo in 0.8 m squares, chips of three stones in it, a brass strip between: a shopping centre's floor, laid in an office. */
     terrazzo: (color) => tex('terrazzo' + color, () => canvasTexture(64, 64, (g, w, h) => {

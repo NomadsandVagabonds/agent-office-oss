@@ -103,6 +103,9 @@ const THEME_QUIET = {
   // (no line in TELLS until it is finished — themes.js `dealt: false`)
   mall: { motifs: [['bays', 4], ['colonnade', 3], ['return', 1.5], ['dogleg', 1]], wrong: ['sunk', 'apertures'],
     mix: [[0.24, 0.32], [0.42, 0.5], [0.2, 0.28]], hall: [['nibs', 3], ['baffle', 2.5], ['none', 1]], shapes: ['pinch', 'ell', 'stairs', 'soffit', 'stepceil', 'pit', 'dais'] },
+  // the offsite wilderness reserve: staggered hedgerow baffles, doglegs, trunks punching through ceiling tiles, sunken peat hollows
+  forest: { motifs: [['thicket', 4.2], ['dogleg', 2.6], ['return', 2.2], ['bays', 1.6]], wrong: ['sunk', 'apertures'],
+    mix: [[0.14, 0.22], [0.56, 0.66], [0.14, 0.22]], hall: [['baffle', 4.5], ['nibs', 2]], shapes: ['ell', 'pinch', 'forest', 'pit', 'dais', 'stepceil', 'slopeceil'] },
 };
 /**
  * What gives a kind of floor away: the layouts there are more of on it than on any other kind ('none': a room with
@@ -127,6 +130,7 @@ export function vocabulary(R, themeId) {
     return: () => ({ off: R.pick([0.16, 0.22]), gap: R.pick([1.1, 1.3]), arm: R.pick([1.0, 1.3]) }),
     fence: () => ({ band: R.pick([-0.14, 0.1, 0.2]), gate: R.pick([-0.25, 0, 0.25]), gap: R.pick([1.1, 1.3]) }),
     flats: () => ({ off: R.pick([0.1, 0.16]), gap: R.pick([1.1, 1.3]), missing: R.int(0, 2), face: R.pick([-1, 1]) }),
+    thicket: () => ({ every: R.pick([2.1, 2.4]), rail: R.chance(0.55), shift: R.pick([-0.22, 0.22]) }),
   };
   // (what a floor's corridors do is rolled from a source of its own, so that it moves nothing a floor always had)
   const RH = R.fork('hall'), hall = RH.weighted(q.hall, (k) => k[1])[0];
@@ -218,6 +222,31 @@ export function motif(room, m, t) {
       P(u - FLAT.t / 2, v0, u + FLAT.t / 2, v0 + FLAT.w, { h, prop: 'flat', face, art: i });
       // (the painted side faces the bigger half of the room; the brace goes out behind, toward the nearer wall)
       if (i % 2 === 0) P(u + face * FLAT.t / 2, v0 + FLAT.w / 2 - 0.06, u + face * (FLAT.t / 2 + FLAT.brace), v0 + FLAT.w / 2 + 0.06, { h: 0.34, prop: 'brace', face });
+    }
+  } else if (m.kind === 'thicket') {
+    // staggered 2.38 m sightline-blocking hedgerow baffles + ceiling-piercing trunks so you weave around blind turns
+    if (A < 4.6 || B < 4.8) return null;
+    const every = m.every ?? 2.3, n = Math.floor((B - 2.4) / every) + 1;
+    if (n < 2) return null;
+    const s = 0.46;
+    const hReach = Math.min(2.1, A * 0.42);
+    for (let i = 0; i < n; i++) {
+      const v = (i - (n - 1) / 2) * every;
+      const side = i % 2 ? -1 : 1;
+      if (A >= 5.2 && hReach >= 1.15) {
+        const hx0 = side < 0 ? -A / 2 + 1.05 : A / 2 - 1.05 - hReach;
+        const hx1 = side < 0 ? -A / 2 + 1.05 + hReach : A / 2 - 1.05;
+        P(hx0, v - 0.21, hx1, v + 0.21, { h: 2.38, prop: 'hedge' });
+        const tx = side < 0 ? hx1 + 0.28 : hx0 - 0.28;
+        if (Math.abs(tx) < A / 2 - 1.05) {
+          P(tx - s / 2, v - s / 2, tx + s / 2, v + s / 2, { prop: 'trunk', bark: i % 3 === 0 ? 'birch' : 'pine' });
+        }
+      } else {
+        const u = A * (side * 0.18 + (m.shift ?? 0) * 0.35);
+        if (Math.abs(u) <= A / 2 - 1.15) {
+          P(u - s / 2, v - s / 2, u + s / 2, v + s / 2, { prop: 'trunk', bark: i % 3 === 0 ? 'birch' : 'pine' });
+        }
+      }
     }
   } else if (m.kind === 'nibs') {
     // a corridor: piers in pairs, one each side, the same distance apart all the way down

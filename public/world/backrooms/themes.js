@@ -70,6 +70,16 @@ export const THEMES = {
     rooms: [0.1, 0.38, 0.62, 0.9], heights: [[2.6, 40], [2.2, 24], [2.9, 16], [3.3, 10], [1.75, 6], [4.4, 4]],
     dressing: ['plant', 'plant', 'plant', 'wetsign', 'wetsign', 'bin', 'boxes', 'chair', 'clock', 'ladder'],
     hum: 50 },
+
+  // An offsite wilderness reserve built indoors by something that had only ever had forests, camping and leadership
+  // retreats described to it in HR slides and lumber orders: rolled moss and pine needles stopping short of the office
+  // carpet, gnarled trunks punching through suspended ceiling tiles, stepped Pacific Northwest rock/dirt mounds, and
+  // painted pixel-tree plasterboard partitions. Still being built (forest.js)
+  forest: { id: 'forest', own: true, dealt: false, families: { pine: 12, birch: 6 }, patterns: ['boughs'], tubes: ['#e8f5df', '#f5f2da', '#dcefe2'],
+    light: { dead: [0.22, 0.46], flicker: 0.45, modes: [['dim', 6], ['normal', 3], ['one', 2]] },
+    rooms: [0.04, 0.22, 0.38, 0.72], heights: [[3.5, 32], [4.0, 30], [4.6, 18], [3.1, 16]],
+    dressing: ['stump', 'stump', 'backpack', 'lantern', 'lantern', 'trailpost', 'wetsign', 'ladder', 'boxes'],
+    hum: 50 },
 };
 
 export const THEME_IDS = Object.keys(THEMES);
