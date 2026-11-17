@@ -182,6 +182,43 @@ function sandTrail(c) {
   mark(3, 1.26, -1.03, .60, .53, -.53);
 }
 
+function loungerHandprint(c, model, x, z, { y, rot, scale }) {
+  const tex = c.kit.tex.custom('beach:lounger-handprint', 64, 64, g => {
+    g.fillStyle = '#773528';
+    g.beginPath();
+    g.moveTo(26, 24);
+    for (const [px, py] of [[43, 24], [51, 32], [49, 43], [58, 49], [62, 59], [55, 55],
+      [52, 60], [39, 48], [30, 45], [21, 41], [12, 35], [11, 29], [17, 30], [25, 36]]) {
+      g.lineTo(px, py);
+    }
+    g.closePath();
+    g.fill();
+    // Open fingers above the palm, with the heel dragged toward the rail.
+    for (const [px, py, w, h] of [[19, 12, 5, 17], [27, 5, 5, 24], [35, 4, 5, 25], [43, 9, 5, 22]]) {
+      g.fillRect(px + 1, py, w - 2, 2);
+      g.fillRect(px, py + 2, w, h - 2);
+    }
+    g.fillStyle = '#562a23';
+    g.fillRect(29, 32, 15, 6);
+    g.fillRect(34, 38, 11, 5);
+    g.fillStyle = '#984e39';
+    for (const [px, py, w] of [[51, 52, 8], [53, 56, 6], [58, 61, 4]]) g.fillRect(px, py, w, 1);
+  }, { clamp: true });
+  const print = c.mapped('beach:lounger-handprint', tex, { cutout: true });
+  const x0 = -2, z0 = -24, width = 12, length = 16;
+  const unit = c.kit.VOXEL * scale, cs = Math.cos(rot), sn = Math.sin(rot);
+  const point = (px, py, pz) => [x + unit * (px * cs + pz * sn), y + unit * py + .0015, z + unit * (pz * cs - px * sn)];
+  const uv = (px, pz) => [(px - x0) / width, (pz - z0) / length];
+  // Project only onto the existing webbing and rail, leaving gaps between the straps.
+  for (let pz = z0; pz < z0 + length; pz++) for (let px = x0; px < x0 + width; px++) {
+    let top = 10;
+    while (top >= 8 && !model.has(px, top, pz)) top--;
+    if (top < 8) continue;
+    const corners = [[px, pz + 1], [px + 1, pz + 1], [px + 1, pz], [px, pz]];
+    print.quad(...corners.map(([u, v]) => point(u, top + 1, v)), WHITE, corners.map(([u, v]) => uv(u, v)));
+  }
+}
+
 function sheet(batch, rect, gaps, y, down=false) {
   const xs=[...new Set([rect.x0,rect.x1,...gaps.flatMap(q=>[Math.max(rect.x0,q.x0),Math.min(rect.x1,q.x1)])])].sort((a,b)=>a-b);
   const zs=[...new Set([rect.z0,rect.z1,...gaps.flatMap(q=>[Math.max(rect.z0,q.z0),Math.min(rect.z1,q.z1)])])].sort((a,b)=>a-b);
@@ -256,9 +293,11 @@ function architecture(c,p) {
     y:BEACH_FLOOR,scale:1.54,rot:.30,solid:false,shadow:false,
   });
   for(const [i,x,z,rot] of [[0,2.75,-1.95,Math.PI+.32],[1,1.60,-2.39,Math.PI+.10],[2,.60,-2.98,Math.PI-.14]]){
-    c.model('beach:lounger:'+i,loungerVox(i===0?'#c6ae90':'#b9b3a6'),x,z,{
-      y:BEACH_FLOOR+.005,rot,scale:i===0?1.25:1.14,solid:true,shadow:false,
-    });
+    const make = loungerVox(i === 0 ? '#c6ae90' : '#b9b3a6');
+    const printed = i === 1 ? make() : null;
+    const placement = { y: BEACH_FLOOR + .005, rot, scale: i === 0 ? 1.25 : 1.14, solid: true, shadow: false };
+    c.model('beach:lounger:' + i, printed ? () => printed : make, x, z, placement);
+    if (printed) loungerHandprint(c, printed, x, z, placement);
     c.blot(x,z,.86,1.62,{y:BEACH_FLOOR+.012,a:.41});
   }
   const cabinet=c.prop('cabinet',4.05,-3.0,{y:BEACH_FLOOR,rot:-.21,shadow:false});
