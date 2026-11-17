@@ -75,8 +75,8 @@ export function build(c) {
   const tinsel = c.shining('grotto:tinsel', kit.tex.white(), 0.9, [0.9, 0.62, 0.18]);
   for (let z = z1 + 0.8; z < D / 2 - 0.4; z += 1.7) for (let t = 0; t < 1; t += 1 / 40) { const x = -W / 2 + t * W, y = H - 0.1 - Math.abs(Math.sin(t * Math.PI * 5)) * 0.35; tinsel.box(x, y - 0.012, z - 0.012, x + W / 40, y + 0.012, z + 0.012, [1, 1, 1]); }
   /* go near the chair and the camera goes off */
-  let last = -9, clock = 0, flash = 0;
-  c.tick((dt, t, me) => { clock += dt; if (flash > 0) { flash -= dt; if (flash <= 0) c.world.setLights(c.rt, 1); }
+  let last = -9, clock = 0, flash = 0, before = 1;
+  c.tick((dt, t, me) => { clock += dt; if (flash > 0) { flash -= dt; if (flash <= 0) c.world.setLights(c.rt, before); }
     if (!me.inside || env.player?.me?.frozen) return;
-    if (Math.abs(me.x - hx) < 0.9 && me.z < z0 + 1.7 && clock - last > 4) { last = clock; flash = 0.18; c.world.setLights(c.rt, 4); env.interfere?.(0.3); const w = c.toWorld(cam.x, cam.z); env.play?.('shutter', w.x, w.z, 8); } });
+    if (Math.abs(me.x - hx) < 0.9 && me.z < z0 + 1.7 && clock - last > 4) { last = clock; if (flash <= 0) before = c.rt.lightsK ?? 1; flash = 0.18; c.world.setLights(c.rt, Math.max(before, 0.3) * 4); env.interfere?.(0.3); const w = c.toWorld(cam.x, cam.z); env.play?.('shutter', w.x, w.z, 8); } });
 }

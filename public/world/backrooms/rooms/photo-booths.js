@@ -68,14 +68,14 @@ export function build(c) {
   /* the one in the middle: somebody who has been waiting their turn a long time */
   c.model('booths:waiting', dummyVox(0, '#39424f'), c.R.range(-W / 4, W / 4), c.R.range(-0.4, 0.4), { rot: Math.PI / 2, solid: true });
   /* walk past, and it takes you */
-  let flash = 0, clock = 0;
+  let flash = 0, clock = 0, before = 1;                                      // (what the room's light was before the flash: put back, not switched on)
   c.tick((dt, t, me) => {
     clock += dt;
-    if (flash > 0) { flash -= dt; if (flash <= 0) c.world.setLights(c.rt, 1); }
+    if (flash > 0) { flash -= dt; if (flash <= 0) c.world.setLights(c.rt, before); }
     if (!me.inside || env.player?.me?.frozen) return;
     for (const b of booths) {
       if (b.y > 0.1 || clock - b.last < K.rest) continue;
-      if (Math.hypot(me.x - b.x, me.z - b.z) < K.pass) { b.last = clock; flash = K.flash; c.world.setLights(c.rt, 4); env.interfere?.(0.25); const w = c.toWorld(b.x, b.z); env.play?.('click', w.x, w.z, 6);
+      if (Math.hypot(me.x - b.x, me.z - b.z) < K.pass) { b.last = clock; if (flash <= 0) before = c.rt.lightsK ?? 1; flash = K.flash; c.world.setLights(c.rt, Math.max(before, 0.3) * 4); env.interfere?.(0.25); const w = c.toWorld(b.x, b.z); env.play?.('click', w.x, w.z, 6);
         // …and one of the ones up there takes you too, a moment later, though there is nobody up there to
         const up = booths.filter((q) => q.y > 0.1); if (up.length) { const q = up[(clock * 7 | 0) % up.length]; q.last = clock; setTimeout?.(() => { const w2 = c.toWorld(q.x, q.z); env.play?.('click', w2.x, w2.z, 9); }, 700); }
         break; }
