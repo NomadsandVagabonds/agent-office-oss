@@ -18,7 +18,7 @@ import { VOXEL } from '../vox/vox.js';
 import { bankWeights } from './lighting.js';
 import { FLASHLIGHT_GLSL, FLASHLIGHT_POSES } from './flashlight.js';
 import { BEAM_SHADOW_GLSL } from './beam-shadows.rule.js';   // (beam shadows: only compiled where BEAM_SHADOWS is defined, beam-shadows.js)
-import { GLOW_DEPTH_GLSL } from './glow.rule.js';             // (emissive bloom: only compiled in glow.js's stand-ins)
+import { GLOW_DEPTH_GLSL, glowStrength } from './glow.rule.js';             // (emissive bloom: only compiled in glow.js's stand-ins)
 
 const GLOW = 2.3;                              // how hard a self-lit voxel shines
 
@@ -772,7 +772,10 @@ export function createKit(opt = {}) {
     if (lm) lm.materials.push(material);
     return material;
   }
-  /** Something that shines by itself (a lit panel, a screen, a sign): `power` above 1 blooms. */
+  /**
+   * Something that shines by itself (a lit panel, a screen, a sign): `power` above 1 blooms. opt: transparent,
+   * alphaTest, side, depthWrite; bloom (0…3, default 1: how strongly it feeds the Medium/High glow, glow.js; not how it is drawn).
+   */
   function glowing(map, power = 1, rgb = WHITE, opt = {}) {
     const m = own(new THREE.MeshBasicMaterial({ map, transparent: !!opt.transparent, alphaTest: opt.alphaTest || 0, side: opt.side || THREE.FrontSide, depthWrite: opt.depthWrite !== false }));
     m.color.setRGB(rgb[0] * power, rgb[1] * power, rgb[2] * power);
@@ -781,6 +784,9 @@ export function createKit(opt = {}) {
     // and its glow is laid over it in full; anything else has something on it to read (a sign, a notice, a slide) and is
     // a 'picture', which the glow goes round and leaves crisp)
     m.userData.glow = !map || map === textures.get('white') || map === textures.get('pntrue') ? 'lamp' : 'picture';
+    // (opt.bloom: how much of the bloom this one makes, 0…3, 1 unless given (glow.rule.js glowStrength): glow.js scales
+    // what it adds to the bloom's picture, read each frame, and how it is drawn here is not touched)
+    m.userData.bloom = glowStrength(opt.bloom);
     // --- end emissive bloom ---
     return m;
   }
