@@ -9,8 +9,8 @@
 import * as THREE from 'three';
 import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
-import { HEADS, counting, counts, pace, elbow, turned } from './head-count.rule.js';
-import { slide } from '../shove.rule.js';
+import { HEADS, counting, counts, pace, elbow } from './head-count.rule.js';
+import { SHOVE, slide } from '../shove.rule.js';
 import { fitsDoor, canLeave } from './paths.js';
 import { S, UPPER, FORE, knotVox, torsoVox, upperVox, foreVox, handVox, lanyardVox } from './head-count.model.js';
 
@@ -23,7 +23,7 @@ export function create(c) {
   const env = c.env, level = c.level, H = HEADS;
   const walker = { x: 0, z: 0, r: H.r, tall: H.tall, opens: false };
   let s = counting(), group = null, mat = null, knot = null, torsos = [], arms = [], tags = [];
-  let clock = 0, rot = 0, high = 0.6, goal = null, goalT = 0, known = false, over = false, lastX = 0, lastZ = 0, sweepA = 0, tapT = 0, shudder = 0, shovedFrom = null;
+  let clock = 0, rot = 0, high = 0.6, goal = null, goalT = 0, known = false, over = false, lastX = 0, lastZ = 0, sweepA = 0, tapT = 0, shudder = 0;
   const dir = new THREE.Vector3();
 
   const LIGHTS = [lamp(0.6, 3.2, 1.4, [1.1, 1.05, 1.0], { k: 9, wrap: 0.45, far: 40 })];
@@ -123,9 +123,6 @@ export function create(c) {
     const here = level.rooms[c.room(walker.x, walker.z) ?? -1], ways = (here?.doors || []).filter((d) => fitsDoor(d, walker.tall)).map((d) => level.rooms[d.to]).filter((r) => r && !r.crawl && r.H >= 1.4 && r.kind !== 'start');
     let to = ways.length ? ways[Math.floor(Math.random() * ways.length)] : here;
     if (!to) return null;
-    // shoved, it goes on whichever way is furthest from where the shove came from; and then it has forgotten
-    if (shovedFrom && ways.length) { const far = (r) => Math.hypot(r.x + (r.w ?? r.W ?? 0) / 2 - shovedFrom.x, r.z + (r.d ?? r.D ?? 0) / 2 - shovedFrom.z); to = ways.slice().sort((a, b) => far(b) - far(a))[0]; }
-    shovedFrom = null;
     const sp = c.walk.spotIn(walker, to.id); return { x: sp.x + (Math.random() - 0.5) * 1.5, z: sp.z + (Math.random() - 0.5) * 1.5 };
   }
 
@@ -188,13 +185,13 @@ export function create(c) {
       }
       return null;
     },
-    /** A shove (shove.rule.js): it is pushed back a step and turned aside, and when it has found its hands it goes some other way. */
+    /** A shove (shove.rule.js): it is pushed back and stands a moment; its count is where it was, and it goes on with it. */
     shoveTargets() {
-      if (!group || over || s.mode === 'recounts') return [];
+      if (!group || over) return [];
       return [{ id: 'head-count', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 0.6, r: H.r, shove: (dir) => {
         const to = slide(walker, dir, (x0, z0, x1, z1) => c.walk.clear(walker, x0, z0, x1, z1));
         if (to) { walker.x = to.x; walker.z = to.z; }
-        const m = c.me(); shovedFrom = { x: m.x, z: m.z }; s = turned(); goal = null; shudder = 0.8;
+        shudder = 0.8; c.stall(SHOVE.stagger);
         c.play('creak', walker.x, walker.z, 10);
         return true;
       } }];
