@@ -7,6 +7,7 @@ import { lin, drawText, WHITE } from './kit.js';
 import { makeCutout } from './cutout.js';
 import { WETSIGN, boardVox, frameVox } from './wetsign.model.js';
 import { WOODDOOR, woodDoorVox, doorSize } from './wooddoor.model.js';
+import { WALLFIT, frameVox as mouldingVox, frameSize } from './wallfit.model.js';
 
 export const P = (g, col, x, y, w, h) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -14,9 +15,15 @@ export const turnTo = (from, to) => { let d = (to - from) % (Math.PI * 2); if (d
 
 /** A slab of wood behind a picture: reads as a frame. */
 export function framed(c, batch, side, at, y, w, h, uv, wood = [0.2, 0.12, 0.06], alb = WHITE) {
-  const t = 0.04;
-  c.wbox(side, at, w + t * 2, y - h / 2 - t, y + h / 2 + t, 0, 0.024, wood);
-  return c.hang(batch, side, at, y, w, h, uv, alb, 0.028);
+  // the frame is a sculpted moulding (wallfit.model.js) standing proud of what it frames, which sits back in it
+  const colour = hexOf(wood), { W, H } = frameSize(w, h), model = c.kit.model(`frame:${colour}:${W}x${H}`, () => mouldingVox({ w, h, colour }), { ao: false });
+  const p = c.wallAt(side, at, 0), sx = w / W, sy = h / H, sz = WALLFIT.deep / 4, m = new THREE.Matrix4();
+  m.set(p.U[0] * sx, 0, p.n[0] * sz, p.x,
+    0, sy, 0, y,
+    p.U[2] * sx, 0, p.n[2] * sz, p.z,
+    0, 0, 0, 1);
+  c.vox.addVox(model.solid, m);
+  return c.hang(batch, side, at, y, w, h, uv, alb, 0.009);
 }
 /** A texture with a few lines of text on a coloured card. */
 export function card(c, key, lines, o = {}) {
