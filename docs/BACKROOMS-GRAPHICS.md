@@ -163,6 +163,48 @@ file; there is no `&lines=`. At `&vhs=0` the picture is the window, up to
   window up to 1680 pixels wide at Clean). Bloom becomes a choice of the
   quality level and not of which page the level is in.
 
+### The Graphics setting (built)
+
+Esc → Settings → **Graphics**: Classic (the default), Low, Medium, High,
+Auto; saved with the other preferences, and `&graphics=` on the dev page.
+What each tier switches is one table, `profile()` in
+`public/world/backrooms/graphics.js`, read by the camcorder (`vhs.js`) and
+handed to the kit when a part is built (`gfx: { contact, bounce }`).
+
+| | Classic | Low | Medium | High |
+|---|---|---|---|---|
+| tape lines, Full VHS / Light VHS | 540 / 660 | 480 / 600 | 540 / 660 | 540 / 660 |
+| scene under the tape (Full and Light VHS) | the tape's size | the tape's size | 1.5×, at most 1680 across | 2×, at most 2560 across |
+| Clean picture, most pixels across | 1680 | 1280 | 1680 | 2560 |
+| edge smoothing (MSAA) | 4× | 2× | 4× | 4× |
+| bloom | as the host (office on; dev page, site off) | off | on, tight | on, tight |
+| grade for the kind of floor | — | yes | yes | yes |
+| haze beyond 8 m | — | — | yes | yes |
+| corner darkening / bounce (bake) | 0 / 0 | 0.7 / 0 | 1 / 0.7 | 1 / 1 |
+
+- **Classic** draws exactly what the level drew before the setting existed.
+- **The camcorder stays the look.** The tape's lines and the scene's size are
+  two things: Medium and High draw the scene larger than the tape and bring
+  it down with a small filter before the tape's own softness, smear, scan
+  lines and noise, as a good lens records onto a soft medium. The tape keeps
+  today's lines at every tier above Low: more of them (720 was tried at High)
+  made its wobble and scan lines look thin and digital.
+- **The grade** is a few numbers per kind of floor (`grade` in `themes.js`:
+  lift, gamma, gain, saturation) applied in the camcorder's signal pass after
+  its exposure curve and before its noise and smear. It changes on the way
+  down into a part of another kind. It tints shadows; it does not darken them.
+- **Haze** reads the depth of the drawn picture (a depth texture on the
+  camcorder's multisampled targets, only while haze is on). It starts at 8 m,
+  goes at most half way, takes the floor's colour, and is only as bright as
+  what is behind it: a dark end of a corridor stays dark, and where nothing was
+  drawn (the void past a view) is left black.
+- **Auto** starts at Medium; about 3 s of frames over 24 ms steps it down to
+  Low, about 10 s under 13 ms at Low steps it back once; never two changes
+  within 15 s, never more than three a visit, never while the next part is
+  being built, and it never touches the Picture setting.
+- Measured only in software rendering so far; the costs in the table are
+  guesses until phase 0 is run on real hardware.
+
 ### 2 · Light that behaves
 
 - Pools under the tubes, light through a doorway onto the next room's floor,

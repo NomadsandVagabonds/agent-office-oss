@@ -8,6 +8,7 @@
 //   &themes=night,exec what kind of floor each part is, top down (themes.js; the rest are as the seed has them). The only
 //                      way onto a kind that is still being built (`dealt: false`), which is in nobody's visit
 //   &vhs=0|1|2         clean · steady · full camcorder           &mute=1
+//   &graphics=classic|low|medium|high|auto   the Graphics setting (graphics.js), over the saved one
 //   &barricades=0      without furniture that can be dragged (it is on unless turned off); &study=1 puts a review set by the landing (seed=7)
 //   &lighting=1        fluorescent-bank prototype (off by default); &lighting=dim|failing|travel|emergency|islands forces that treatment in eligible plain rooms
 //   &hallstudy=1       rehearsal controls for the last-light room (use &only=last-light)
@@ -129,6 +130,7 @@ async function go() {
     depth: q.has('depth') ? num('depth', 0) : undefined, depths: q.has('depths') ? num('depths', 3) : undefined,
     themes: q.get('themes') ? q.get('themes').split(',').filter(Boolean) : undefined,
     pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined, vhs: q.has('vhs') ? num('vhs', 2) : undefined, mute: q.has('mute') ? q.get('mute') !== '0' : undefined,
+    graphics: q.get('graphics') || undefined,
     debug: true, scorecard: q.get('card') !== '0', home: { label: 'Return to homepage' }, where: q.get('where') || undefined,
     inventory: q.get('inventory') !== '0', barricades: q.get('barricades') !== '0',
     dev: { supplies: q.get('supplies') === '1', cast: (q.get('cast') || '').split(',').filter(Boolean), barricadeStudy: q.get('barricades') === '1' && q.get('study') === '1',

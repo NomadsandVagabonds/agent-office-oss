@@ -48,7 +48,7 @@ async function visit(t, options = {}) {
     batteryEnding({ opacity }) { this.ending = true; icons.push(opacity); },
     remove() { this.removed = true; },
   };
-  const vhs = { uniforms, level: 2, layout: () => ({ x: 0, y: 0, w: 800, h: 600 }), render: noop, setScene: noop, setLevel: noop, dispose: noop };
+  const vhs = { uniforms, level: 2, layout: () => ({ x: 0, y: 0, w: 800, h: 600 }), render: noop, setScene: noop, setLevel: noop, setProfile: noop, setGrade: noop, setAmbient: noop, dispose: noop };
   const sound = { play: noop, setHum: noop, setMains: noop, setPaused: noop, setMute: noop, setMusicVolume: noop, setSfxVolume: noop, stop: noop };
   const input = { state: { keys: new Set(), stick: { x: 0, y: 0 }, dx: 0, dy: 0 }, clear: noop, release: noop, capture: noop, dispose: noop };
   let bagActions;
@@ -86,7 +86,7 @@ async function visit(t, options = {}) {
   const beforeDocument = globalThis.document;
   globalThis.document = { activeElement: null };
   t.after(() => { delete globalThis[key]; if (beforeDocument === undefined) delete globalThis.document; else globalThis.document = beforeDocument; });
-  const real = new Set(['./player.js', './survival.js', './tally.js', './seam.js', './battery-ending.js', './banner.rule.js', './flashlight.js']);
+  const real = new Set(['./player.js', './survival.js', './tally.js', './seam.js', './battery-ending.js', './banner.rule.js', './flashlight.js', './graphics.js', './themes.js']);
   let source = readFileSync(new URL('index.js', directory), 'utf8').replace(/^import (.+) from '([^']+)';$/gm, (_, names, path) => {
     if (path === 'three') return `import ${names} from ${JSON.stringify(new URL('../public/vendor/three.module.min.js', import.meta.url).href)};`;
     if (path === '/core/backrooms-settings.mjs') return `import ${names} from ${JSON.stringify(new URL('../core/backrooms-settings.mjs', import.meta.url).href)};`;
