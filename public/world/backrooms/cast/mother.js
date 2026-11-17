@@ -11,6 +11,7 @@ import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
 import { S, SW, RING, LIMB, ringVox, mouthVox, limbVox, endVox, footVox, wormVox } from './mother.model.js';
 import { MOTHER, WORM, swaying, sways, finds, trodden } from './mother.rule.js';
+import { slide } from '../shove.rule.js';
 
 const SEGS = 14, SEG_H = MOTHER.height / SEGS, RING_H = RING * S, LIMB_H = LIMB * S;
 
@@ -179,7 +180,7 @@ export function create(c) {
           // it has come down where a face was when it jumped: is the face still there, and did it find it?
           const d = Math.hypot(m.x - w.x, m.z - w.z);
           if (c.los(a.fx, a.fz, m.x, m.z) && finds(d)) {
-            const hit = c.hurt(WORM.hurts);
+            const hit = c.hurt(WORM.hurts, w);
             w.dead = true; w.flat = 0.001; w.x = m.x; w.z = m.z;                  // it is spent either way
             if (hit.ended) { over = true; return; }
             if (hit.landed) { tookOne = true; env.hud?.glitch?.(0.7); env.interfere?.(0.8); c.play('squeak', m.x, m.z, 6); }
@@ -287,6 +288,18 @@ export function create(c) {
         if (c.room(x, z) !== null && c.room(x, z) === c.room(shot.x, shot.z) && c.los(x, z, shot.x, shot.z)) return { x, y: shot.y + 1.9, z, at: { x: mx, y: shot.y + 1.0, z: mz } };
       }
       return null;
+    },
+    /** A shove (shove.rule.js): the small ones are batted away, out of the air or off the floor, and lie on their backs. Mother is not moved. */
+    shoveTargets() {
+      if (!group || over) return [];
+      return worms.filter((w) => !w.dead && !w.remove && !w.air?.born).map((w) => ({ id: 'mother-brood', x: w.x, z: w.z, y: w.y ?? env.world.floorY(w.x, w.z), r: 0.2, shove: (dir) => {
+        if (w.dead) return false;
+        if (w.air) { w.air = null; w.jumps = Math.max(0, (w.jumps ?? 1) - 1); if (w.jumps <= 0) w.life = Math.min(w.life, 3); }
+        const to = slide(w, dir, (x0, z0, x1, z1) => c.walk.clear(w, x0, z0, x1, z1), 1.4);
+        if (to) { w.x = to.x; w.z = to.z; }
+        w.y = env.world.floorY(w.x, w.z) + 0.04; w.dazed = WORM.dazed * 1.6; c.play('squeak', w.x, w.z, 6);
+        return true;
+      } }));
     },
     at: () => group ? ({ x: walker.x, z: walker.z, mode: s.mode, brood: worms.filter((w) => !w.dead).length }) : null,
     dispose() { for (const w of worms) w.g.removeFromParent(); worms.length = 0; group?.removeFromParent(); group = null; },

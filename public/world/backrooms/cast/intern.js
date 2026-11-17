@@ -12,7 +12,8 @@
 import * as THREE from 'three';
 import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
-import { INTERN, waiting, copies, behind, was } from './intern.rule.js';
+import { INTERN, waiting, copies, behind, was, pushed } from './intern.rule.js';
+import { slide } from '../shove.rule.js';
 import { elbow } from './head-count.rule.js';
 import { S, BACK, NECK, backVox, neckVox, headVox } from './intern.model.js';
 import { UPPER, FORE, upperVox, foreVox, handVox, lanyardVox } from './head-count.model.js';
@@ -170,6 +171,16 @@ export function create(c) {
         if (c.room(x, z) !== null && c.room(x, z) === c.room(shot.x, shot.z) && c.los(x, z, shot.x, shot.z)) return { x, y: shot.y + 1.3, z, at: { x: cx, y: shot.y + 0.8, z: cz } };
       }
       return null;
+    },
+    /** A shove (shove.rule.js): it goes back a step, and has lost its place in what it was copying. */
+    shoveTargets() {
+      if (!group || over || s.mode === 'sorry') return [];
+      return [{ id: 'intern', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 0.9, r: I.r, shove: (dir) => {
+        const to = slide(walker, dir, (x0, z0, x1, z1) => c.walk.clear(walker, x0, z0, x1, z1));
+        if (to) { walker.x = to.x; walker.z = to.z; }
+        s = pushed(s); trail = []; c.play('creak', walker.x, walker.z, 10);
+        return true;
+      } }];
     },
     at: () => ({ x: walker.x, z: walker.z, mode: s.mode, behind: +behind(s.learnt).toFixed(2) }),
     dispose() { group?.removeFromParent(); group = null; },

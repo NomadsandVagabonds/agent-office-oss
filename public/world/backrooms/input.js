@@ -84,7 +84,7 @@ export function createInput(o) {
   /** One of the camcorder's own buttons, under a finger (touch.js): what a key would have done. */
   function pressButton(name, id) {
     pressing.set(id, name); thumbs()?.down(name, true);
-    if (name === 'use') o.use();
+    if (name === 'use') o.use({ finger: true });                               // (with nothing in front of it to use, a thumb's hand shoves: index.js)
     else if (name === 'light') o.light?.();
     else if (name === 'jump') keys.add(' ');                                   // (held for as long as the finger is: player.js hops once a press)
     else if (name === 'crouch') { if (keys.has('c')) keys.delete('c'); else keys.add('c'); thumbs()?.set({ crouched: keys.has('c') }); }     // (a thumb cannot hold C down and look round: one tap ducks, the next stands)
@@ -99,7 +99,7 @@ export function createInput(o) {
     if (blocked()) { clear(); return; }
     if (e.pointerType === 'touch') {
       if (e.target === hud.leave) { o.menu(); return; }
-      if (e.target === hud.use) { o.use(); return; }
+      if (e.target === hud.use) { o.use({ finger: true }); return; }
       if (e.target === hud.tip) { o.key('r'); return; }
       const t = thumbs(), name = t?.act(e.target);
       if (name) { pressButton(name, e.pointerId); return; }

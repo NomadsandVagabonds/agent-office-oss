@@ -41,6 +41,7 @@ import { P, clamp, turnTo } from '../bits.js';
 import { REACH, calm, beside } from '../reach.js';
 import { furnitureClear } from '../furniture-rules.js';
 import { HUNT, BARRICADE, heave, knows, lost, shown, spent, handle, atHandle, willPeek, getsDown, lying } from './hunt.js';
+import { slide } from '../shove.rule.js';
 import { FIRE_FEAR, calm as unafraid, afraid, tooNear } from './fire.rule.js';
 import { ROAMING, roamsThisFloor, roamingRooms, roamingSpots } from './roaming.rule.js';
 
@@ -744,6 +745,19 @@ export function create(c) {
         fig.rotation.y = Math.atan2(dx, dz);                // facing it
         fig.rotation.x = -1.45 * e;
       };
+    },
+    /** A shove (shove.rule.js): awake and on its feet, it slides back a step, and that is all — it is still there, and still looking. */
+    shoveTargets() {
+      const p = pirate;
+      if (!p || p.state !== 'awake' || p.down) return [];
+      return [{ id: 'pirate', x: p.x, z: p.z, y: (W()?.floorY(p.x, p.z) ?? 0) + 1.0, r: 0.32, shove: (dir) => {
+        if (pirate !== p || p.state !== 'awake' || p.down) return false;
+        const to = slide(p, dir, (x0, z0, x1, z1) => walk.clear(p, x0, z0, x1, z1));
+        if (!to) return false;
+        if (!p.known) { p.known = true; c.met(); }
+        p.x = to.x; p.z = to.z; p.plinth = false; p.handle = null; walk.forget(p); p.body.x = p.x; p.body.z = p.z;
+        return true;
+      } }];
     },
     snipTargets() {
       if (!pirate || pirate.state === 'caught' || pirate.know?.spent > 0) return [];
