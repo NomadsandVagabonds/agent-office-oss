@@ -1,6 +1,7 @@
 // The Flume Knot: worn municipal pool galleries above a suspended crawl maze.
 // An upward-running flume is the room's central impossible image.
 
+import {finishPoolRoom} from '../pool-finish.js';
 import * as THREE from 'three';
 import { Batch, lin, ticks, WHITE } from '../kit.js';
 import { clamp, turnTo, scatter } from '../bits.js';
@@ -805,4 +806,5 @@ export function build(c) {
       c.env.player?.setRidePose(null);
     }
   };
+  finishPoolRoom(c,'slide-maze');
 }

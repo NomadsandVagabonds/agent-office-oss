@@ -1,5 +1,6 @@
 // Review-only waterpark room. A second pool is suspended upside down; the
 // far changing tunnel returns to the entrance until circulation is reversed.
+import {finishPoolRoom} from '../pool-finish.js';
 import { Batch, lin, WHITE } from '../kit.js';
 import { poolPlan, poolFloor, poolState, stepPool, turnValve, RETURN_POOL } from './return-pool/rule.js';
 import { poolTextures, tiledPlane, waterMesh, officeDesk, valveVox, wakeRig } from './return-pool/art.js';
@@ -184,4 +185,5 @@ export function build(c) {
     wake.fins[0].rotation.y=Math.atan2(me.x-s.wake.x,me.z-s.wake.z);
   });
   rt.returnPool={plan:p,get state(){return {...s,wake:{...s.wake}};},valve,carts};
+  finishPoolRoom(c,'return-pool');
 }

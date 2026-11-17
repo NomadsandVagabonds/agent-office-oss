@@ -8,8 +8,11 @@ export function towelCart(variant) {
   const rubber = M('#293e38', 0), canvas = M('#7f8c70', 0), seam = M('#526953', 0);
   const cloth = ['#d0ceb0', '#b6bc9c', '#9cae97', '#d9d3b5'].map(c => M(c, 0)), dirt = M('#7f8060', 0);
   for (const x of [-23, 20]) for (const z of [-14, 11]) {
-    v.box(x, 0, z, x + 3, 5, z + 4, rubber);
-    v.box(x - 1, 3, z - 1, x + 4, 7, z, steel);
+    // Castor, fork, axle and swivel plate; same footprint as the old blocks.
+    v.cyl('x',2.5,z+2,x,x+3,2.5,rubber);
+    v.cyl('x',2.5,z+2,x-1,x+4,.7,worn);
+    for(const xx of [x-1,x+3])v.box(xx,2,z+1,xx+1,6,z+3,steel);
+    v.box(x-1,6,z-1,x+4,7,z+4,worn);
     v.box(x, 7, z, x + 2, 39, z + 2, steel);
   }
   v.box(-25, 7, -16, 25, 9, 16, steel);
@@ -20,6 +23,7 @@ export function towelCart(variant) {
     for (let x = -20; x < 23; x += 9) {
       v.box(x, 11, z, x + 1, 29 - Math.abs(x % 3), z + 1, seam);
       v.box(x + 2, 11, z, x + 7, 14 + Math.abs(x % 7), z + 1, dirt);
+      for(let y=13;y<29;y+=4)v.set(x,y,z+1,worn);
     }
     for (const x of [-23, 21]) v.box(x, 24, z, x + 2, 27, z + 1, rust);
   }
@@ -32,14 +36,21 @@ export function towelCart(variant) {
   for (let i = 0; i < 13; i++) {
     const x = -21 + (i * 13 + variant * 7) % 28, z = -12 + (i * 7) % 13, y = 28 + Math.floor(i / 4) * 4;
     const color = cloth[(i + variant) % cloth.length];
-    v.box(x, y, z, x + 13, y + 3, z + 10, color);
-    v.box(x + 1, y + 1, z + 10, x + 12, y + 1, z + 10, dirt);
-    if (i % 3 === 0) v.box(x + 3, y + 3, z + 2, x + 7, y + 3, z + 6, dirt);
+    v.rbox(x, y, z, x + 13, y + 3, z + 10, 1, color);
+    v.box(x+1,y+1,z+9,x+12,y+2,z+10,seam);
+    v.box(x+1,y+2,z+9,x+12,y+3,z+10,color);
+    v.box(x+2,y+2,z+1,x+3,y+3,z+9,cloth[(i+variant+1)%cloth.length]);
+    if (i % 3 === 0) v.box(x + 3, y + 2, z + 2, x + 7, y + 3, z + 6, dirt);
   }
   // One heavy towel folded over the front rim, with a faded hotel stripe.
   v.box(-13 + variant * 9, 21, 16, -1 + variant * 9, 35, 17, cloth[0]);
-  v.box(-12 + variant * 9, 23, 18, -2 + variant * 9, 24, 18, seam);
-  v.box(-12 + variant * 9, 22, 18, -10 + variant * 9, 29, 18, dirt);
+  v.box(-12 + variant * 9, 23, 17, -2 + variant * 9, 24, 18, seam);
+  v.box(-12 + variant * 9, 22, 17, -10 + variant * 9, 29, 18, dirt);
+  for(let i=0;i<4;i++) {
+    const x=-13+variant*9+i*3;
+    v.box(x,20+i%2,17,x+1,34,18,cloth[i%2]);
+    v.box(x,23,18,x+1,24,19,seam);
+  }
   return v;
 }
 

@@ -17,6 +17,7 @@
 //     surges the upward magenta siphon, and calms the current for 8.5 s so visitors
 //     can wade to the submerged west bench supply.
 
+import {finishPoolRoom} from '../pool-finish.js';
 import * as THREE from 'three';
 import { Batch, WHITE } from '../kit.js';
 import { goesDown } from '../seam.js';
@@ -25,7 +26,7 @@ import {
   poolSign, depthTile, alienMural,
   innerTubeVox, loungerVox, noodleVox, logBoatVox,
   beachUmbrellaVox, spaJetPillarVox, wetLockerVox,
-  makeVoxGroup, placeVoxStack,
+  makeVoxGroup, makeInnerTube, placeVoxStack,
   COPING, CHROME, BRASS, GROUT_DARK, poolTileTex,
 } from '../waterpark.js';
 import {
@@ -73,7 +74,7 @@ function addColumnShell(batch, rings, segs = 12) {
 
 export function build(c) {
   const { W, D, H, params: p, kit } = c;
-  c.shell({ panels: false, floor: false });
+  c.shell({ panels: false, floor: false, wallTex:poolTileTex(c.kit,'white') });
   natatoriumLight(c, 3, 3, 1, 1.05);
   poolroom(c, { wrong: 0, footbath: false, signs: false });
 
@@ -366,12 +367,12 @@ export function build(c) {
   // 3 dynamic Vox floats orbiting in the Jacuzzi (`r = 1.45..2.25`):
   // two occupied inner tubes (kicking slacks & dress shoes!) + one log-flume boat spinning sideways!
   const orbitSpecs = [
-    { key: 'wp:tube:#f2c12e:1', make: innerTubeVox('#f2c12e', true), r: 1.50, ang: 0.35, omega: 0.78, yOff: -0.05, sideways: false },
-    { key: 'wp:tube:#ff5c8a:1', make: innerTubeVox('#ff5c8a', true), r: 2.16, ang: 2.45, omega: 0.58, yOff: -0.05, sideways: false },
+    { color: '#f2c12e', r: 1.50, ang: 0.35, omega: 0.78, yOff: -0.05, sideways: false },
+    { color: '#ff5c8a', r: 2.16, ang: 2.45, omega: 0.58, yOff: -0.05, sideways: false },
     { key: 'wp:logboat', make: logBoatVox(), r: 1.84, ang: 4.55, omega: 0.66, yOff: -0.09, sideways: true },
   ];
   const orbiters = orbitSpecs.map((sp) => {
-    const g = makeVoxGroup(kit, sp.key, sp.make, 0.03);
+    const g = sp.color ? makeInnerTube(kit, sp.color, true) : makeVoxGroup(kit, sp.key, sp.make, 0.03);
     g.position.set(Math.cos(sp.ang) * sp.r, waterY + sp.yOff, Math.sin(sp.ang) * sp.r);
     c.add(g);
     return { ...sp, g };
@@ -487,6 +488,7 @@ export function build(c) {
       for (let i = 0; i < orbiters.length; i++) {
         const o = orbiters[i];
         o.ang += dt * o.omega * calmFactor * spaState.spin;
+        o.g.userData.kick?.(t, i * 2.1, .18 * calmFactor);
         const rWave = o.r + Math.sin(t * 1.4 + i * 2.1) * 0.06;
         o.g.position.set(
           Math.cos(o.ang) * rWave,
@@ -548,4 +550,5 @@ export function build(c) {
       c.env.hold?.(false);
     }
   };
+  finishPoolRoom(c,'whirlpool-flume');
 }

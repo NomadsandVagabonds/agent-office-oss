@@ -1,5 +1,6 @@
 // Bellmouth Baths: the room itself is a tiled drain, at municipal-pool scale.
 // Review wing only. Quiet architecture, reversible routes, no forced encounter.
+import {finishPoolRoom} from '../pool-finish.js';
 import {lin,WHITE} from '../kit.js';
 import {bellPlan,bellPoint,bellFloor,bellInside,bellHead,SECTORS} from './bellmouth/rule.js';
 import {bellTextures,face,beam,bellWater} from './bellmouth/art.js';
@@ -104,8 +105,8 @@ export function build(c) {
   c.board(c.mapped('bell:depth',t.marker),1.95,.65,p.rz*.93,.5,.25,Math.PI);
   // Familiar fluorescent fittings repeated around an excessive volume.
   const lamps=c.shining('bell:lamps',kit.tex.panel(true),1.35,lin('#e5e5c5'));
-  for(let i=0;i<16;i++) {
-    const a=(i+.5)*Math.PI*2/16,[x,,z]=bellPoint(p,a,.96,0),y=H-.75;
+  for(let i=0;i<8;i++) {
+    const a=(i+.5)*Math.PI*2/8,[x,,z]=bellPoint(p,a,.96,0),y=H-.75;
     box(c.flat,x-.18,y,z-.6,x+.18,y+.12,z+.6,steel);
     c.lay(lamps,x,z,.26,1.08,0,null,WHITE,y-.01,true);
     c.light(x,y-.2,z,'#dbe5c9',2.7,{far:16,k:18,axis:[0,-1,0],floor:.12});
@@ -119,4 +120,5 @@ export function build(c) {
     if(wet&&me.world)me.world.slow=Math.min(me.world.slow??1,.76);
   });
   rt.bellmouth={plan:p};
+  finishPoolRoom(c,'bellmouth-baths');
 }

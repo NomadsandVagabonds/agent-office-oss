@@ -1,5 +1,6 @@
 // An empty, reversible connector. Giant changing partitions hang over shallow
 // channels; repeated ordinary furniture is the player's unreliable landmark.
+import {finishPoolRoom} from '../pool-finish.js';
 import {Batch,lin,WHITE} from '../kit.js';
 import {changingPlan,changingFloor,changingCeiling,slabBottom} from './hanging-changing/plan.js';
 import {bellTextures,face} from './bellmouth/art.js';
@@ -43,7 +44,7 @@ export function build(c) {
     tiledPlane(c.ceil,-W/2,previous,W/2,s.z-1.15,H,true);
     for(const side of [-1,1])box(tile,-W/2,H,s.z+side*1.15-.06,W/2,H+2.8,s.z+side*1.15+.06);
     tiledPlane(tile,-W/2,s.z-1.15,W/2,s.z+1.15,H+2.8,true);
-    for(const x of [-W/2+2,W/2-2])fitting(x,s.z,H+2.55,2.1);
+    fitting(s.liftSide*(W/2-2),s.z,H+2.55,2.6);
     previous=s.z+1.15;
   }
   tiledPlane(c.ceil,-W/2,previous,W/2,D/2,H,true);
@@ -82,7 +83,7 @@ export function build(c) {
     c.light(end+(i===1?-1.6:1.6),2.6,s.z,'#d8dfcb',1.25,{far:7,k:5});
     // A bright sliver from the next bay reveals the underside; it is a local
     // pool of light rather than an emissive water plane.
-    c.light(end+(i===1?1.2:-1.2),1.8,s.z-.95,'#dbe3c6',.85,{far:4,k:2.4});
+    if(i===1)c.light(end+1.2,1.8,s.z-.95,'#dbe3c6',.85,{far:4,k:2.4});
   }
   // Ordinary fixed benches: timber slats, cast feet and visible anchor bolts.
   const bench=(x,z)=>{
@@ -109,7 +110,7 @@ export function build(c) {
     box(green,x-1.71,0,z-.19,x+1.71,.62,z+.19);
     c.solid(x-1.71,z-.19,x+1.71,z+.19,{keep:true,tall:true});
     hooks(x,z+.23);bench(x,z+.84);
-    fitting(x-2.7,z+.7,Math.abs(z)>D/2-2?2.6:3.45,.9);
+    if(Math.abs(z)<D/2-2)fitting(x-2.7,z+.7,3.45,.9);
     // The low fitting really hangs from a stem instead of levitating itself.
     if(Math.abs(z)<D/2-2)box(c.flat,x-2.72,3.54,z+.68,x-2.68,H,z+.72,steel);
   }
@@ -167,4 +168,5 @@ export function build(c) {
     if(me.inside&&shower<=0) {shower=.65;c.env.play?.('changingShower',source.x,source.z,8);}
   });
   rt.changing={plan:p,cart};
+  finishPoolRoom(c,'hanging-changing');
 }

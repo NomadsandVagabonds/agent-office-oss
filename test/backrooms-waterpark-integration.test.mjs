@@ -26,9 +26,22 @@ async function fixture(id,rot=0,generated=false){
  let time=0; const tick=(n=1)=>{for(let i=0;i<n;i++){player.update(1/60);player.me.slow=1;player.me.sinkTo=0;time+=1/60;world.update(1/60,time,player.me);env.denizens.update(1/60,time);}};
  return {world,kit,env,player,input,def,hits,tick,warnings,dispose(){env.denizens.dispose?.();world.dispose();kit.dispose();}};
 }
+function checkBudget(rt,t){
+ const cost={base:0,detail:0,meshes:0,detailMeshes:0,lights:rt.lights.length};
+ rt.group.traverse(o=>{if(!o.isMesh)return;const detail=!!o.userData.detail;
+  cost[detail?'detail':'base']+=(o.geometry.index?.count??o.geometry.attributes.position.count)/3;
+  cost[detail?'detailMeshes':'meshes']++;
+ });
+ t.diagnostic(`${rt.def?.arch || rt.id}: ${JSON.stringify(cost)}`);
+ assert.ok(cost.base<=120000,`${rt.def?.arch || rt.id}: ordinary geometry budget ${cost.base}`);
+ assert.ok(cost.base+cost.detail<=250000,`${rt.def?.arch || rt.id}: combined geometry budget`);
+ assert.ok(cost.meshes<=45&&cost.detailMeshes<=12,`${rt.def?.arch || rt.id}: mesh budget ${JSON.stringify(cost)}`);
+ assert.ok(cost.lights<=16,`${rt.def?.arch || rt.id}: light budget ${cost.lights}`);
+}
 for(const id of ids)for(const rot of [0,1])test(`${id}: actual builder, runtime and doorways (${rot})`,async t=>{
  const f=await fixture(id,rot);t.after(()=>f.dispose());assert.deepEqual(f.warnings,[]);
  const rt=f.world.rooms[0];assert.ok(!rt.flat);
+ checkBudget(rt,t);
  // A room can be navigable with broken render attributes (e.g. a CSS string
  // passed where linear RGB is expected). Catch that independently of nav.
  rt.group.traverse(node=>{
@@ -174,6 +187,7 @@ test('Drain Spa: a last-floor drain is not offered; an interrupted ride releases
 test('Flume Knot: a generated floor keeps the rider in the room through boarding and landing',async t=>{
  const f=await fixture('slide-maze',0,true);t.after(()=>f.dispose());
  assert.deepEqual(f.warnings,[],'no generated room needed navigation repair');
+ checkBudget(f.world.rooms.find(r=>r.id===f.def.id),t);
  for(const d of f.env.denizens.all())d.gone=true;
  const rt=f.world.rooms.find(r=>r.id===f.def.id),b=rt.flumeMaze.bounds;
  const start=toWorld(f.def,4.65,b.bz1+2.6);f.player.warp(start.x,start.z);f.tick(15);
@@ -188,6 +202,7 @@ test('Flume Knot: a generated floor keeps the rider in the room through boarding
 for(const id of ids.filter(id=>id!=='slide-maze'))test(`${id}: builds in a complete generated waterpark floor`,async t=>{
  const f=await fixture(id,0,true);t.after(()=>f.dispose());assert.deepEqual(f.warnings,[]);
  assert.ok(f.world.rooms.every(rt=>!rt.flat),'all generated rooms retain their authored geometry');f.tick(90);
+ checkBudget(f.world.rooms.find(r=>r.id===f.def.id),t);
  assert.equal(f.world.current()?.id,f.def.id);assert.ok(Number.isFinite(f.player.me.y));
 });
 
@@ -199,4 +214,26 @@ test('Flume Knot: the abyss slide on the last floor returns to the dry gallery',
  for(let i=0;i<1000&&rt.sliding();i++)f.tick();f.tick(30);
  assert.equal(rt.sliding(),false);assert.equal(rt.flumeMaze.lower,false);assert.equal(f.player.me.frozen,false);
  assert.ok(f.player.me.y-f.def.y>.8);assert.ok(f.world.free(f.player.me.x,f.player.me.z,.22));
+});
+
+// Regression: cyl's taper radius was mistaken for a hollow centre, leaving
+// solid discs. The opening must remain visible all the way through the ring.
+test('inflatable tube has an open bore and a rounded, continuous vinyl wall',async()=>{
+ const {innerTubeVox}=await import('../public/world/backrooms/waterpark.js');
+ const v=innerTubeVox()();
+ for(let y=0;y<10;y++)for(let x=-3;x<=3;x++)for(let z=-3;z<=3;z++)assert.equal(v.has(x,y,z),false);
+ for(const [x,z] of [[10,0],[-11,0],[0,10],[0,-11]])for(let y=1;y<8;y++)assert.ok(v.has(x,y,z),'inflated wall is continuous');
+ assert.equal(v.has(14,0,0),false,'cross-section tapers at the bottom');
+ assert.ok(v.has(14,4,0),'cross-section swells around the middle');
+});
+test('occupied lagoon floats kick both legs independently without replacing the hazard motion',async t=>{
+ const f=await fixture('kiddie-lagoon');t.after(()=>f.dispose());
+ const bathers=[];f.world.rooms[0].group.traverse(g=>{if(g.name==='inverted-bather')bathers.push(g);});
+ assert.equal(bathers.length,5);
+ const a=bathers[0],legs=a.children.filter(g=>g.name.startsWith('bather-'));
+ const starts=legs.map(g=>g.quaternion.clone());f.tick(45);
+ assert.equal(legs.length,2);assert.ok(legs.every((g,i)=>g.quaternion.angleTo(starts[i])>.01));
+ assert.ok(legs[0].quaternion.angleTo(legs[1].quaternion)>.02,'feet do not move in unison');
+ assert.ok(Math.abs(a.position.y)<.2,'the ring still bobs at the surface');
+ assert.equal(f.hits.length,0,'idle animation does not add damage');
 });

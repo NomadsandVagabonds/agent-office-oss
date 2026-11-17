@@ -8,17 +8,18 @@
 // drywall past drowned office workstations and an inverted air-pocket bell, and
 // kick `Space` to surface at the far diving tower.
 
+import {finishPoolRoom} from '../pool-finish.js';
 import * as THREE from 'three';
 import { Batch, WHITE } from '../kit.js';
 import {
-  poolroom, natatoriumLight, createBasin, addTranslucent,
+  poolTileTex, poolroom, natatoriumLight, createBasin, addTranslucent,
   poolSign, depthTile, poolLadderVox, lifeRingVox, placeVox,
   COPING, CHROME,
 } from '../waterpark.js';
 
 export function build(c) {
   const { W, D, H, params: p } = c;
-  c.shell({ panels: false, floor: false });
+  c.shell({ panels: false, floor: false, wallTex:poolTileTex(c.kit,'white') });
   natatoriumLight(c, 3, 3, 1, 1.04);
   poolroom(c, { wrong: 0, footbath: false, signs: false });
 
@@ -137,4 +138,5 @@ export function build(c) {
 
   void H;
   void basin;
+  finishPoolRoom(c,'deep-end');
 }

@@ -11,6 +11,7 @@
 // valves (`E · turn mixing valve`) inside the maze lanes to vent the scalding
 // steam gates and pop open the jammed Sanctum Supply Locker at the center!
 
+import {finishPoolRoom} from '../pool-finish.js';
 import * as THREE from 'three';
 import { Batch, ticks, WHITE } from '../kit.js';
 import { wetSign } from '../bits.js';
@@ -26,7 +27,7 @@ import {
 
 export function build(c) {
   const { W, D, H, params: p, kit } = c;
-  c.shell({ panels: false });
+  c.shell({ panels: false, wallTex:poolTileTex(c.kit,'white') });
   natatoriumLight(c, 3, 3, 1, 1.06);
   poolroom(c, { wrong: 0, footbath: false, signs: false });
 
@@ -367,4 +368,5 @@ export function build(c) {
   });
 
   void W; void D;
+  finishPoolRoom(c,'locker-showers');
 }

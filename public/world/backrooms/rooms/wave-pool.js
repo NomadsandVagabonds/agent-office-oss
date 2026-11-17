@@ -7,6 +7,7 @@
 // toward the damp-carpeted shoreline. Duck completely underwater (`C`) or stand
 // in the lee of a tiled breakwater bollard to let the surge pass harmlessly!
 
+import {finishPoolRoom} from '../pool-finish.js';
 import * as THREE from 'three';
 import { Batch, lin, WHITE } from '../kit.js';
 import {
@@ -18,7 +19,7 @@ import { waveState, wavePush } from '../waterpark.rule.js';
 
 export function build(c) {
   const { W, D, H, params: p, kit } = c;
-  c.shell({ panels: false, floor: false });
+  c.shell({ panels: false, floor: false, wallTex:poolTileTex(c.kit,'white') });
   natatoriumLight(c, 4, 4, 2, 1.08);
   poolroom(c, { wrong: 0, footbath: false, signs: false });
 
@@ -43,10 +44,30 @@ export function build(c) {
   // Dynamic rolling wave crest + foam lip spanning the basin width
   const waveW = bx1 - bx0 - 0.16;
   const crestBatch = new Batch();
-  // Translucent-looking layered turquoise body + bright whitewater foam barrel on top
-  crestBatch.box(-waveW / 2, -0.35, -0.65, waveW / 2, 0.36, 0.55, [0.16, 0.72, 0.84]);
-  crestBatch.box(-waveW / 2, 0.18, -0.35, waveW / 2, 0.58, 0.48, [0.34, 0.86, 0.94]);
-  crestBatch.box(-waveW / 2, 0.48, -0.15, waveW / 2, 0.74, 0.58, [0.90, 0.98, 1.0]);
+  // Faceted curling cross-section with a broken foam lip, not a stack of
+  // rectangular slabs. The old hazard bounds and timing are unchanged.
+  const profile=[[-.65,-.35],[-.55,.05],[-.32,.42],[.02,.65],[.38,.68],[.58,.49],[.30,.34],[.10,.36],[.05,.18],[.55,-.35]];
+  let lastJitter=0;
+  for(let x=-waveW/2,i=0;x<waveW/2;x+=.32,i++){
+    const end=Math.min(waveW/2,x+.32),jitter=.025*Math.sin(i*1.7),nextJitter=.025*Math.sin((i+1)*1.7);
+    lastJitter=nextJitter;
+    for(let k=0;k<profile.length;k++){
+      const [z0,y0]=profile[k],[z1,y1]=profile[(k+1)%profile.length];
+      const col=lin(k===3||k===4?'#d4e2cf':k===5||k===6?'#9cbcab':k<3?'#518e83':'#317367');
+      crestBatch.quad([x,y0+jitter,z0],[x,y1+jitter,z1],[end,y1+nextJitter,z1],[end,y0+nextJitter,z0],col);
+    }
+    if(i%5!==2){
+      const w=.08+(i%3)*.035,z=.20+(i%4)*.045;
+      crestBatch.box(x+.04,.66+jitter,z,Math.min(end,x+.04+w),.685+jitter,z+.06,lin('#dce5ce'));
+    }
+  }
+  // The shore-side promenade sees the ends of the moving sheet too.
+  const caps=THREE.ShapeUtils.triangulateShape(profile.map(([z,y])=>new THREE.Vector2(z,y)),[]);
+  for(const [side,jitter] of [[-1,0],[1,lastJitter]])for(const face of caps){
+    const pts=face.map(i=>[side*waveW/2,profile[i][1]+jitter,profile[i][0]]);
+    if(side>0)pts.reverse();
+    crestBatch.tri(...pts,lin('#518e83'));
+  }
   const crestMesh = c.dynamic(crestBatch, { pivot: [0, -0.06, bz0] });
   crestMesh.visible = false;
   c.rt.wavePool = { get crestZ() { return crestMesh.visible ? crestMesh.position.z : null; } };
@@ -167,4 +188,5 @@ export function build(c) {
 
   void H;
   void basin;
+  finishPoolRoom(c,'wave-pool');
 }

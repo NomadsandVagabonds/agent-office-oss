@@ -8,17 +8,18 @@
 // calmly past them and they only twitch; splash fast (`speed > 2.3`) right
 // beside an occupied float and it lunges!
 
+import {finishPoolRoom} from '../pool-finish.js';
 import * as THREE from 'three';
 import { Batch } from '../kit.js';
 import {
-  poolroom, natatoriumLight, createBasin, makeVoxGroup, placeVox, addTranslucent,
-  mushroomVox, innerTubeVox, noodleVox, poolSign, depthTile,
+  poolTileTex, poolroom, natatoriumLight, createBasin, makeVoxGroup, makeInnerTube, placeVox, addTranslucent,
+  mushroomVox, noodleVox, poolSign, depthTile,
   COPING,
 } from '../waterpark.js';
 
 export function build(c) {
   const { W, D, R, kit } = c;
-  c.shell({ panels: false, floor: false });
+  c.shell({ panels: false, floor: false, wallTex:poolTileTex(c.kit,'white') });
   natatoriumLight(c, 3, 3, 1, 1.05);
   poolroom(c, { wrong: 0, footbath: false, signs: false });
 
@@ -58,7 +59,7 @@ export function build(c) {
     const ang = (i / count) * Math.PI * 2 + 0.25;
     const rad = (i % 3 === 0 ? 1.85 : 2.85) * Math.min(1, (bx1 - 0.8) / 3.4);
     const hx = Math.cos(ang) * rad, hz = Math.sin(ang) * rad;
-    const g = makeVoxGroup(kit, `wp:lagoon:${col}:${occupied ? 1 : 0}`, innerTubeVox(col, occupied), 0.031);
+    const g = makeInnerTube(kit, col, occupied, 0.031);
     g.position.set(hx, waterY - 0.06, hz);
     g.rotation.y = ang + 1.1;
     c.add(g);
@@ -101,6 +102,7 @@ export function build(c) {
       for (const f of rings) {
         f.cooldown = Math.max(0, f.cooldown - dt);
         const dist = me.inside ? Math.hypot(me.x - f.x, me.z - f.z) : 99;
+        f.g.userData.kick?.(t, f.phase, splashingFast && dist < 1.35 ? 1 : 0);
 
         if (f.occupied && splashingFast && dist < 1.35 && f.cooldown <= 0) {
           // Startled submerged office worker kicks & lunges!
@@ -137,4 +139,5 @@ export function build(c) {
     'WALK SLOWLY IN BASIN',
     'SHOES MUST FACE CEILING',
   ], { seed: 89, warn: true, mess: 0.22 });
+  finishPoolRoom(c,'kiddie-lagoon');
 }

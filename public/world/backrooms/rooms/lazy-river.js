@@ -16,12 +16,13 @@
 // Hold `C` in the canal to duck completely underwater until its scan passes, or
 // freeze dead still on dry deck outside the water.
 
+import {finishPoolRoom} from '../pool-finish.js';
 import * as THREE from 'three';
 import { Batch, WHITE } from '../kit.js';
 import { clamp, turnTo } from '../bits.js';
 import { furnitureClear } from '../furniture-rules.js';
 import {
-  poolroom, natatoriumLight, createBasin, makeVoxGroup, placeVoxStack,
+  poolroom, natatoriumLight, createBasin, makeVoxGroup, makeInnerTube, placeVoxStack,
   innerTubeVox, alienMural, poolSign, depthTile,
   COPING, CHROME, poolTileTex,
 } from '../waterpark.js';
@@ -33,7 +34,7 @@ import { makeGuardStandRig } from '../guard-stand.js';
 
 export function build(c) {
   const { W, D, H, R, params: p, kit } = c;
-  c.shell({ panels: false, floor: false });
+  c.shell({ panels: false, floor: false, wallTex:poolTileTex(c.kit,'white') });
   natatoriumLight(c, 3, 3, 1, 1.08);
   poolroom(c, { wrong: 0, footbath: false, signs: false });
 
@@ -91,7 +92,7 @@ export function build(c) {
   // Glitched alien-waterpark oddities baked into ONE single `Batch(true)` mesh (`placeVoxStack`):
   //   - Towering crooked columns of vinyl inner tubes in clear outer deck corners (with inverted legs mid-stack!)
   //   - Upside-down inner tubes fused flat against the acoustic ceiling tiles above the canal!
-  const tubePalette = ['#f2c12e', '#ff5c8a', '#29b6d8', '#6fd96c', '#ff8833'];
+  const tubePalette = ['#bc9c4d', '#af6a61', '#538a88', '#708963', '#b57d4e'];
   const stackEntries = [];
   const cornerSpots = [
     [-W * 0.5 + 1.35, -D * 0.5 + 1.35],
@@ -101,11 +102,11 @@ export function build(c) {
   ];
   let builtTowers = 0;
   for (const [cx, cz] of cornerSpots) {
-    if (builtTowers >= 3 || !c.clear(cx, cz, 0.72)) continue;
-    const count = 7 + (builtTowers * 2);
+    if (builtTowers >= 1 || !c.clear(cx, cz, 0.72)) continue;
+    const count = 9;
     for (let k = 0; k < count; k++) {
       const col = tubePalette[(k + builtTowers * 2) % tubePalette.length];
-      const occ = builtTowers === 1 && k === count - 1;
+      const occ = k === count - 2;
       stackEntries.push({
         key: `wp:stacktube:${col}:${occ ? 1 : 0}`,
         make: innerTubeVox(col, occ),
@@ -146,7 +147,7 @@ export function build(c) {
     if (!sp) continue;
     alienMural(c, sp.side, sp.at, Math.min(1.65, H * 0.5), 3.1, 1.85, muralVariant % 3, 41 + muralVariant * 13 + R.int(0, 9));
     muralVariant++;
-    if (muralVariant >= 4) break;
+    if (muralVariant >= 3) break;
   }
 
   // Suspended red `ADULT SWIM / NO RUNNING` indicator box hanging on chrome rods over the island
@@ -165,7 +166,7 @@ export function build(c) {
   for (let i = 0; i < floatCols.length; i++) {
     const col = floatCols[i];
     const occ = i === 1;
-    const g = makeVoxGroup(kit, `wp:rivertube:${col}:${occ ? 1 : 0}`, innerTubeVox(col, occ), 0.03);
+    const g = makeInnerTube(kit, col, occ);
     const ang = (i / floatCols.length) * Math.PI * 2;
     g.position.set(Math.cos(ang) * rMid, -0.10, Math.sin(ang) * rMid);
     c.add(g);
@@ -467,6 +468,7 @@ export function build(c) {
         const rr = rMid + f.rOff + Math.sin(t * 0.9 + i) * 0.08;
         f.g.position.set(Math.cos(f.ang) * rr, -0.11 + Math.sin(t * 2.4 + i * 1.3) * 0.025, Math.sin(f.ang) * rr);
         f.g.rotation.y = -f.ang * dir + t * 0.25;
+        f.g.userData.kick?.(t, i * 1.37);
       }
 
       const cur = me.inside ? riverCurrent(me.x, me.z, rInner + 0.08, rOuter - 0.08, 1.55, dir) : { vx: 0, vz: 0, inCanal: false };
@@ -495,4 +497,5 @@ export function build(c) {
     'WHISTLE = ADULT SWIM',
     'SUBMERGE [C] IN CANAL',
   ], { seed: 53, warn: true, mess: 0.22 });
+  finishPoolRoom(c,'lazy-river');
 }

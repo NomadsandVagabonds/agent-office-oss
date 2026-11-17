@@ -17,6 +17,7 @@
 //   Vox models           3 cm sculpted inner tubes, occupied leg-floats, ladders, loungers, Skimmer, Lifeguard, mushroom
 
 import * as THREE from 'three';
+import {basinFinish,poolDetail} from './pool-finish.js';
 import { Vox, M } from '../vox/vox.js';
 import { Batch, lamp, lin, ticks, drawText, WHITE } from './kit.js';
 import { TILE } from './gen.js';
@@ -71,10 +72,10 @@ export function garble(g, text, x, y, w, h, opt = {}, seed = 1) {
 /** Ceramic mosaic tile texture (white, seafoam, cobalt, or emerald). */
 export function poolTileTex(kit, variant = 'seafoam') {
   const palettes = {
-    white: ['#e4eff1', '#d6e7ea', '#eef6f7', '#c5dce0', '#96b9c0'],
-    seafoam: ['#b9e3df', '#a3d7d2', '#cbece8', '#8ec7c2', '#5f9ea0'],
-    cobalt: ['#2d6d9a', '#255d86', '#3c80ae', '#1f4d70', '#163854'],
-    emerald: ['#2b7a78', '#226564', '#3a918e', '#1b4f4e', '#123837'],
+    white: ['#d9dec9', '#cbd2c1', '#e6e6d2', '#b8c3b2', '#7b8b7e'],
+    seafoam: ['#9fbca9', '#91b2a0', '#b4c8b4', '#7fa38f', '#536e60'],
+    cobalt: ['#416875', '#395d6a', '#587e87', '#304d59', '#243c43'],
+    emerald: ['#427866', '#396754', '#568672', '#2e5142', '#263f33'],
   };
   const pal = palettes[variant] || palettes.seafoam;
   return kit.tex.custom('wp:mosaic:' + variant, 64, 64, (g, w, h) => {
@@ -86,8 +87,12 @@ export function poolTileTex(kit, variant = 'seafoam') {
         const pick = r();
         const col = pick < 0.45 ? pal[0] : pick < 0.72 ? pal[1] : pick < 0.92 ? pal[2] : pal[3];
         P(g, col, x + 1, y + 1, 7, 7);
-        // subtle specular glaze corner on each ceramic square
-        P(g, pal[2], x + 1, y + 1, 2, 1);
+        // Glaze edge, recessed grout and occasional chipped corners. Small
+        // value differences keep the repeating mosaic from becoming confetti.
+        P(g, pal[2], x + 1, y + 1, 6, 1);
+        P(g, pal[3], x + 7, y + 2, 1, 6);
+        if(pick<.08)P(g, pal[4], x+1, y+6, 2, 2);
+        if(pick>.92)P(g, pal[1], x+3, y+3, 3, 2);
       }
     }
   });
@@ -409,44 +414,83 @@ export function natatoriumLight(c, cols = 3, rows = 3, every = 1, power = 1.05) 
 
 /* ---- 3 cm sculpted voxel models (Vox, never plain boxes) ------------------ */
 
-/** Toroidal vinyl inner tube, optionally with upside-down office slacks & oxfords sticking out! */
+// Shared with the articulated bathers. A crooked knee, trouser cuff and actual
+// heel/toe silhouette read as a person underwater, rather than two black rods.
+function batherLeg(v, side, ox=0, oy=0) {
+  const cloth=M('#353b3b',2),fold=M('#252d2c',2),sock=M('#797c6e',2);
+  const leather=M('#48392e',1),toe=M('#55473a',1),sole=M('#20231f',2);
+  const knee=side*.8,ankle=side*1.5,z=side<0?-2:1;
+  const leg=(a,b,r,m)=>v.tube(a[0]+ox,a[1]+oy,a[2],b[0]+ox,b[1]+oy,b[2],r,m);
+  leg([0,0,0],[knee,10,1.4],2.35,cloth);
+  leg([knee,10,1.4],[ankle,19,z],1.85,cloth);
+  leg([knee+side*1.4,9,1.4],[ankle+side*1.1,17,z],.55,fold);
+  v.rbox(ox+ankle-2,oy+17,z-2,ox+ankle+2,oy+19,z+2,.6,fold);
+  v.cyl('y',ox+ankle,z,oy+19,oy+21,1.3,sock);
+  v.rbox(ox+ankle-2.3,oy+21,z-2.4,ox+ankle+2.3,oy+24,z+5.5,1.2,leather);
+  v.rbox(ox+ankle-2.1,oy+23,z+2,ox+ankle+2.1,oy+25,z+5.6,1,toe);
+  v.box(ox+ankle-2.3,oy+24,z-2.3,ox+ankle+2.3,oy+25,z+5.3,sole);
+  v.box(ox+ankle-1.7,oy+25,z-1.8,ox+ankle+1.7,oy+26,z+.4,sole);
+  for(const zz of [2,3.5])v.box(ox+ankle-1.5,oy+25,z+zz,ox+ankle+1.5,oy+25.6,z+zz+.5,leather);
+}
+
+/** Air-filled vinyl ring with a true open bore, moulded handles and patch. */
 export function innerTubeVox(colorHex = '#f2c12e', occupied = false) {
   return () => {
     const v = new Vox();
-    const top = M(colorHex, 1), seam = M('#f5f7f8', 1), handle = M('#22282c', 1), valve = M('#d0d8dc', 0);
-    // Plump multi-ring torus profile (radius ~14 voxels = 0.35 m outer, 0.15 m inner hole)
-    const R = 10.5, rTube = 4.2;
-    for (let y = 0; y <= 9; y++) {
-      const dy = y - 4.5;
-      if (Math.abs(dy) > rTube) continue;
-      const span = Math.sqrt(rTube * rTube - dy * dy);
-      const mat = Math.abs(dy) <= 0.8 ? seam : top;
-      v.cyl('y', 0, 0, y, y + 1, R + span, mat, Math.max(2.5, R - span));
+    const rgb=new THREE.Color(colorHex);
+    const shade=f=>M('#'+rgb.clone().multiplyScalar(f).getHexString(),1);
+    const top=M(colorHex,1), underside=shade(.62), seam=shade(.78), worn=shade(1.16);
+    const handle=M('#343b32',1),valve=M('#737b66',1),patch=M('#b9b08a',2);
+    // Voxel centres sample an elliptical torus. cyl's last argument is a
+    // taper radius, not an inner radius: the previous model filled its hole.
+    const R=10.3;
+    for(let x=-16;x<16;x++)for(let z=-16;z<16;z++)for(let y=0;y<10;y++){
+      const radius=Math.hypot(x+.5,z+.5),dy=y+.5-4.5;
+      if(((radius-R)/4.8)**2+(dy/4.1)**2>1)continue;
+      const weld=y===4&&(radius>14||radius<6.5);
+      const scuff=y>6&&x<-6&&z>4&&((x*7+z*3)&7)<2;
+      v.set(x,y,z,weld?seam:y<3?underside:scuff?worn:top);
     }
-    // Two moulded black grab handles on opposite sides + inflation stem
+    // Handle arches have daylight under the grip; bases are bonded to vinyl.
     for (const sx of [-1, 1]) {
-      v.tube(sx * (R + 2.2), 7.5, -2.5, sx * (R + 3.0), 8.6, 0, 0.85, handle);
-      v.tube(sx * (R + 3.0), 8.6, 0, sx * (R + 2.2), 7.5, 2.5, 0.85, handle);
-    }
-    v.cyl('y', 0, R + 1.5, 8, 10, 0.8, valve);
-
-    if (occupied) {
-      const slacks = M('#2d333d', 2), crease = M('#1f242c', 2), sock = M('#17181c', 2), shoe = M('#382318', 1), sole = M('#121010', 1);
-      // Upside-down office worker wedged through the ring: two trouser legs kicking straight into the air
-      for (const [sx, tiltZ, hLeg] of [[-1, -2.2, 24], [1, 2.4, 22]]) {
-        const bx = sx * 2.8;
-        v.tube(bx * 0.7, 2, 0, bx + sx * 0.8, hLeg, tiltZ, 2.1, slacks);
-        v.tube(bx + sx * 0.8, hLeg - 6, tiltZ * 0.7, bx + sx * 0.8, hLeg, tiltZ, 2.25, crease);
-        // Ankle & sock
-        v.cyl('y', bx + sx * 0.8, tiltZ, hLeg, hLeg + 3, 1.4, sock);
-        // Inverted dress shoe sole facing the ceiling!
-        const fx = Math.round(bx + sx * 0.8), fz = Math.round(tiltZ);
-        v.rbox(fx - 2, hLeg + 3, fz - 2, fx + 2, hLeg + 5, fz + 5, 1, shoe);
-        v.box(fx - 2, hLeg + 5, fz - 2, fx + 2, hLeg + 6, fz + 5, sole);
+      for(const z of [-3.5,3.5]){
+        v.rbox(sx*R-1.6,7,z-1.5,sx*R+1.6,9,z+1.5,.6,seam);
+        v.tube(sx*R,8,z,sx*R,11,z,.85,handle);
       }
+      v.tube(sx*R,11,-3.5,sx*R,11,3.5,.9,handle);
     }
+    v.cyl('y',0,-R,8,9.5,1.6,seam);
+    v.cyl('y',0,-R,9.5,11,.9,valve);
+    v.rbox(-3,8,8,2,9,12,.5,patch);
+    v.box(-2,9,9,1,9.7,10,seam);
+    if(occupied)for(const side of [-1,1])batherLeg(v,side,side*2.5,2);
     return v;
   };
+}
+
+/** Two independently moving legs, reusing cached voxel models. Room rules
+ * drive kick strength; animation itself cannot move a hazard or cause damage. */
+export function makeInnerTube(kit,color,occupied=false,scale=.03){
+  const g=makeVoxGroup(kit,`wp:vinyl:${color}`,innerTubeVox(color),scale);
+  g.name=occupied?'inverted-bather':'inner-tube';
+  if(!occupied)return g;
+  const legs=[-1,1].map(side=>{
+    const leg=makeVoxGroup(kit,`wp:bather-leg:${side}`,()=>{const v=new Vox();batherLeg(v,side);return v;},scale);
+    leg.name=side<0?'bather-left-leg':'bather-right-leg';
+    leg.position.set(side*2.5*scale,2*scale,0);g.add(leg);return leg;
+  });
+  const light=g.userData.light;
+  g.userData.light=rgb=>{light(rgb);for(const leg of legs)leg.userData.light(rgb);};
+  g.userData.kick=(time,phase=0,agitation=0)=>{
+    const burst=Math.max(0,Math.sin(time*.74+phase))**12;
+    for(let i=0;i<legs.length;i++){
+      const side=i?1:-1,p=phase+i*2.3;
+      legs[i].rotation.x=Math.sin(time*1.25+p)*.07+Math.sin(time*7.5+p)*(burst*.16+agitation*.31);
+      legs[i].rotation.z=side*.045+Math.cos(time*1.65+p)*.035+Math.sin(time*5.3+p)*agitation*.12;
+      legs[i].rotation.y=Math.sin(time*1.1+p)*.07;
+    }
+  };
+  return g;
 }
 
 /** White-and-orange rescue life ring with perimeter rope. */
@@ -480,10 +524,11 @@ export function poolLadderVox() {
       v.tube(rx, 45, -3.5, rx, 43, -9.5, 1.0, steel);
       v.tube(rx, 43, -9.5, rx, 30, -10.5, 1.0, steel);
       v.cyl('y', rx, -10.5, 29, 31, 2.0, brass);
+      for(const dx of [-2,2])v.set(rx+dx,31,-10.5,M('#57645d',0));
     }
     for (const y of [8, 18, 28]) {
       v.rbox(-7, y, -1.5, 7, y + 1.5, 1.5, 0.5, steel);
-      v.box(-5.5, y + 1.4, -1, 5.5, y + 2, 1, grip);
+      for(let x=-5;x<=5;x+=2)v.box(x,y+1.4,-1,x+.7,y+2,1,grip);
     }
     return v;
   };
@@ -492,21 +537,31 @@ export function poolLadderVox() {
 /** Slatted poolside sun-lounger with striped vinyl webbing. */
 export function loungerVox(stripeHex = '#2b8da8') {
   return () => {
-    const v = new Vox(), frame = M('#eef2f3', 1), s1 = M(stripeHex, 1), s2 = M('#f6f8f8', 1);
+    const v = new Vox(), frame = M('#c9cfc0', 1), s1 = M(stripeHex, 1), s2 = M('#d9d9bd', 1);
+    const rubber=M('#34473f',0),hinge=M('#8a7956',0),worn=M('#9aa995',0);
     // Side rails + four legs
     for (const sx of [-1, 1]) {
       const x = sx * 9;
       v.tube(x, 9, -24, x, 9, 10, 1.0, frame);
       v.tube(x, 9, 10, x, 21, 24, 1.0, frame);
-      for (const lz of [-20, 8, 20]) v.tube(x, 0, lz, x, lz > 12 ? 17 : 9, lz, 0.95, frame);
+      for (const lz of [-20, 8, 20]) {
+        v.tube(x, 1, lz, x, lz > 12 ? 17 : 9, lz, 0.95, frame);
+        v.box(x-1,0,lz-1,x+1,1,lz+1,rubber);
+      }
       // Curved armrest
       v.tube(x, 9, -4, x, 14, -4, 0.85, frame);
       v.tube(x, 14, -4, x, 15, 11, 0.85, frame);
+      v.cyl('x',10,9,x-1.5,x+1.5,2,hinge);
+      v.cyl('x',10,9,x-2,x+2,.6,rubber);
+      v.tube(x,6,7,x,15,18,.75,frame);
+      // Notched recline rack and rolled strap ends are real silhouettes.
+      for(let z=12;z<20;z+=2)v.box(x-1,12,z,x+1,13,z+1,worn);
     }
     // Webbing straps along seat and reclined backrest
     for (let i = 0; i < 9; i++) {
       const z0 = -22 + i * 3.5;
       v.rbox(-8.5, 8.8, z0, 8.5, 9.8, z0 + 2.4, 0.4, i % 2 ? s1 : s2);
+      for(const x of [-9,8])v.box(x,8,z0,x+1,10,z0+2.4,i%2?s1:s2);
     }
     for (let i = 0; i < 4; i++) {
       const u = (i + 0.5) / 4;
@@ -541,7 +596,15 @@ export function mushroomVox() {
     // Underside gills & domed polka-dot cap
     v.ellipsoid(0, 53, 0, 21, 3.5, 21, gill);
     v.ellipsoid(0, 56, 0, 23, 9.5, 23, cap);
-    v.carve(-25, 44, -25, 25, 51.5, 25);
+    // Underside relief, drain nozzles and a service collar. Keep the stalk
+    // connected to the cap instead of carving through its neck.
+    for(let i=0;i<16;i++) {
+      const a=i*Math.PI/8,co=Math.cos(a),si=Math.sin(a);
+      v.tube(co*6,50,si*6,co*20,52,si*20,.65,stalkShade);
+      v.cyl('y',co*19,si*19,49,52,1,M('#667c64',0));
+    }
+    v.cyl('y',0,0,9,11,7.2,M('#a2a78a',0),6);
+    for(const x of [-3,3])v.box(x,10,6,x+1,13,7,M('#697c65',0));
     const spots = [[0, 64, 0, 4.2], [11, 61, 6, 3.4], [-12, 60, 5, 3.6], [5, 60, -13, 3.5], [-8, 61, -10, 3.2], [15, 57, -5, 3.0], [-15, 57, 9, 2.8]];
     for (const [sx, sy, sz, sr] of spots) v.ellipsoid(sx, sy, sz, sr, 2.0, sr, spot);
     return v;
@@ -724,19 +787,18 @@ export function wetLockerVox(towelHex = '#ff5c8a', inverted = false) {
     // Louvred vents top & bottom + brass number plate + handle
     for (const vy of [36, 38.5, 41, 6, 8.5]) {
       v.box(-4.5, vy, 7.2, 4.5, vy + 1.1, 8.0, vent);
+      v.box(-4.5,vy+1.1,7.4,4.5,vy+1.7,8.6,body);
     }
+    for(const y of [9,30])v.box(-6.4,y,7.3,-5.5,y+4,8.7,brass);
+    v.box(-2,32.5,8,0,33,8.5,vent);v.box(1,32.5,8,1.5,33.5,8.5,vent);
     v.box(-2.2, 32, 7.3, 2.2, 34.2, 8.0, brass);
     v.box(3.6, 21, 7.3, 4.8, 26, 8.3, M('#cfdbe2', 0));
-    if (inverted) {
-      // When bolted upside-down to ceiling (`tilt: [Math.PI, ...]`), +Y points DOWN toward the floor!
-      v.tube(-2.5, 39, 7.5, -3.6, 49, 9.2, 1.6, towel);
-      v.tube(-3.6, 49, 9.2, -3.1, 57, 8.6, 1.45, stripe);
-      v.tube(-3.1, 57, 8.6, -3.5, 62, 8.3, 1.25, towel);
-    } else {
-      // Soggy striped pool towel pinched out of the lower door gap!
-      v.tube(-2.5, 13, 7.5, -3.8, 4, 9.2, 1.5, towel);
-      v.tube(-3.8, 4, 9.2, -3.2, -3.5, 8.6, 1.35, stripe);
-      v.tube(-3.2, -3.5, 8.6, -3.6, -7.5, 8.4, 1.15, towel);
+    // Flat folded cloth with ridges, an uneven hem and a woven stripe. Reads
+    // as a towel at walking distance, rather than a dangling coloured cable.
+    for(let i=0;i<7;i++){
+      const x=-5+i,z=8+(i%3===1?1:0),lo=inverted?39:Math.max(1,2+i%3),hi=inverted?59-i%3:20;
+      v.box(x,lo,z,x+1,hi,z+1,towel);
+      const y=inverted?54:6;v.box(x,y,z+1,x+1,y+1,z+1,stripe);
     }
     return v;
   };
@@ -1024,6 +1086,22 @@ export function buildFlume(c, key, pts, opt = {}) {
     }
   }
 
+  // Raised bolted collars sit outside the existing tube; the crawling bore
+  // and its floor remain unchanged. One shared detail draw for every flume.
+  const fittings=poolDetail(c).batch;
+  for(let i=6;i<steps-2;i+=8){
+    const f=frames[i],before=frames[i-1],after=frames[i+1];
+    const a={...f,x:f.x+(before.x-after.x)*.06,y:f.y+(before.y-after.y)*.06,z:f.z+(before.z-after.z)*.06};
+    const d={...f,x:f.x+(after.x-before.x)*.06,y:f.y+(after.y-before.y)*.06,z:f.z+(after.z-before.z)*.06};
+    const innerA=ringPts(a,1.005),innerD=ringPts(d,1.005),outerA=ringPts(a,1.07),outerD=ringPts(d,1.07);
+    for(let j=0;j<sides;j++){
+      fittings.quad(outerA[j],outerA[j+1],outerD[j+1],outerD[j],ribRgb);
+      fittings.quad(innerA[j+1],outerA[j+1],outerA[j],innerA[j],ribRgb);
+      fittings.quad(innerD[j],outerD[j],outerD[j+1],innerD[j+1],ribRgb);
+      if(j%2===0){const q=outerA[j];fittings.box(q[0]-.024,q[1]-.024,q[2]-.024,q[0]+.024,q[1]+.024,q[2]+.024,lin('#c3c3a7'));}
+    }
+  }
+
   if (!opt.batch) {
     addTranslucent(c, shell, { alpha: opt.alpha ?? 0.76, side: THREE.FrontSide, order: 3 });
   }
@@ -1128,6 +1206,8 @@ export function createBasin(c, spec) {
     layStrip(dx0, Math.max(dz0, bz0), bx0, Math.min(dz1, bz1));
     layStrip(bx1, Math.max(dz0, bz0), dx1, Math.min(dz1, bz1));
   }
+
+  basinFinish(c,spec);
 
   // White ceramic bullnose coping around basin lip
   const cw = 0.18;
