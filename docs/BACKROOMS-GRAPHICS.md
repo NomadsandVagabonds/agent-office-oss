@@ -683,6 +683,11 @@ vendored files. It is decided after phases 1 to 7 are measured.
   what moves), reflections from the screen on top of each room's stored
   picture, light shafts and lit dust.
 
+- **After round two of the look-dev lab (17 Nov):** build bloom from what
+  shines first, then water (the waterpark is a whole kind of floor, so it is
+  the bigger unlock), then the mirror floor. The stepped shadows under fixed
+  chairs are fine for now; refining them is low priority.
+
 ## The ten-minute check, before the Graphics row is for everybody
 
 The Graphics row in Settings is shown only on a `?debug` visit until this has
@@ -733,6 +738,11 @@ Software rendering on the build machines says nothing; these are real machines.
 | date | machine | picture | frames | in view (most) | headroom |
 |---|---|---|---|---|---|
 | 17 Nov | Apple M4 Max laptop, 120 Hz, Chrome | 720×540 (Full VHS), dpr 1.5 | 8.3 ms at every station (the display's own rate); worst 11.4 ms; one 59 ms frame on a first run, not seen again | 75 draws, 69,000 triangles | the scene drawn 32 times a frame still held 8.3 ms: at least 32× |
+
+**The ten-minute check (17 Nov).** The owner ran it and reports that every
+step passed. No device list, no seconds for the wait at the way down and no
+`[bench]` lines came back with it, so this is a pass by eye on the owner's own
+devices, not a measurement: the table above still has one machine in it.
 
 No ordinary laptop and no phone has been measured yet. Those set medium and low.
 
