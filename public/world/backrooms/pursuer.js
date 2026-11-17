@@ -58,6 +58,12 @@ export function createStalkers(env, options = {}) {
     hidden: hiddenAt, drawn,
     /** The visitor: { x, z, yaw, pitch, speed, moving … } (player.js), and which room they are in. */
     me: () => env.player.me,
+    /**
+     * A shove has reached it (its own shoveTargets() says so): for this many seconds it is not ticked and no hit of its
+     * lands. Nothing of its rule is touched, so afterwards it is exactly what it was, with the same thing in mind.
+     */
+    stall: (seconds) => { if (seconds > 0) { k.stall = Math.max(k.stall || 0, seconds); k.settle = true; } },
+    get stalled() { return (k.stall || 0) > 0; },
     room: (x, z) => W().roomAt(x, z)?.id ?? null,
     /** Is there a line of sight between two spots? (walls, tall furniture and shut doors are in the way; a visitor's facing is not) */
     los: (ax, az, bx, bz) => W().los(ax, az, bx, bz),
@@ -78,6 +84,7 @@ export function createStalkers(env, options = {}) {
      * A hit that does land and is survived throws the visitor back from the same place (player.js knock).
      */
     hurt(n = 1, from = null) {
+      if (k.stall > 0) return { landed: false, dead: false, ended: false, stalled: true };            // (shoved a moment ago: its hand is not on anybody)
       // (env.blocked is the level's: index.js. A floor without it — a test's, a review's — has no shove, and every hit lands)
       if (!member.heavy && env.blocked) {
         const at = from || k.it?.at?.() || null;
@@ -176,8 +183,12 @@ export function createStalkers(env, options = {}) {
       if (follower && !follower.away) {if(options.withVisitor)options.withVisitor('follower',follower,()=>tag(follower,dt));else tag(follower, dt);}
       for (const k of live) {
         if (k.dead || k.away) continue;                                    // (somebody who is not here does nothing here)
+        // (shoved: it stands where it was put, c.stall. One tick of no time at all first, so that it is drawn where it was put)
+        const settle = !!k.settle; k.settle = false;
+        if (k.stall > 0) { k.stall = Math.max(0, k.stall - dt); if (!settle) continue; }
+        const step = settle ? 1e-4 : dt;
         try {
-          const tick = () => k.it.update?.(dt, env.clock);
+          const tick = () => k.it.update?.(step, env.clock);
           if (options.withVisitor) options.withVisitor(k.id, k.it.at?.(), tick);
           else tick();
         } catch (err) { if(env.coopStrict)throw err;console.warn(`[backrooms] ${k.id} has stopped`, err); k.dead = true; if (k.member.music === 'mascot') env.sound?.stopMascot?.(); }

@@ -59,35 +59,105 @@ test('what is pushed goes as far as there is floor for, and no further', () => {
   assert.equal(slide(at, dir, () => false), null, 'against something, it stays where it is');
 });
 
-test('what each of the cast does about it (their own rules)', async () => {
-  const H = await import('../public/world/backrooms/cast/head-count.rule.js');
-  const turned = H.turned(); assert.equal(turned.mode, 'recounts');
-  let s = turned, t = 0; while (s.mode === 'recounts' && t < 10) { s = H.counts(s, { dt: 0.1, d: 0.5 }); assert.ok(!s.took, 'turned aside, its hand is not on anybody'); t += 0.1; }
-  assert.ok(Math.abs(t - H.HEADS.turned) < 0.25, `it is ${H.HEADS.turned} s finding its hands, not the whole recount (${t.toFixed(1)})`);
-  const M = await import('../public/world/backrooms/cast/standing-meeting.rule.js');
-  assert.equal(M.floored({ mode: 'charges', dir: { x: 1, z: 0 } }), null, 'coming, it is not to be stopped');
-  assert.equal(M.floored({ mode: 'down' }), null);
-  for (const mode of ['files', 'drums']) { const d = M.floored({ mode, dir: null }); assert.equal(d.mode, 'down'); assert.equal(d.rest, M.MEETING.spent, 'over for a moment, not for long'); }
-  const I = await import('../public/world/backrooms/cast/intern.rule.js');
-  const p = I.pushed({ mode: 'copies', learnt: 20 }); assert.equal(p.mode, 'blank'); assert.equal(p.learnt, 10, 'and it has lost half of what it had learnt');
-  assert.ok(!I.copies(p, { dt: 0.1, d: 0.2, sees: true }).took, 'blank, it has nobody');
+test('the numbers: further, a stagger, and the heavy ones give', () => {
+  assert.equal(SHOVE.push, 1.6); assert.equal(SHOVE.stagger, 0.6);
+  assert.deepEqual({ ...SHOVE.heavy }, { push: 0.8, stagger: 0.3 });
+  // what keeps it a chance to run and never a weapon is what it was
+  assert.equal(SHOVE.breath, 0.3); assert.equal(SHOVE.cooldown, 1.0); assert.equal(SHOVE.rest, 2.5);
+  assert.deepEqual({ ...SHOVE.window }, { tourist: 0.5, 'training-wheels': 0.5, easy: 0.45, normal: 0.32, hard: 0.22 });
+  assert.deepEqual(slide({ x: 0, z: 0 }, { x: 0, z: 1 }, () => true, SHOVE.heavy.push), { x: 0, z: 0.8 });
 });
 
-test('the heavy ones are not moved and not turned aside; nothing dies of a shove', () => {
+// The conductor with its neighbours swapped for stubs (as coop-cast.test.mjs loads it), and one of the cast that keeps a
+// rule of its own: a count, a target, and a hit it tries to land every tick. Its shove is what the real ones' are.
+const url = (source) => `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;
+async function floor() {
+  let source = read('pursuer.js');
+  const swaps = {
+    './gen.js': 'export const makeRng=()=>()=>.5; export const roomDistances=()=>new Map();',
+    './cast.js': `export const CAST=[{id:'walker'},{id:'boulder',heavy:true}];export const castFor=()=>CAST;export const homeFor=()=>null;`,
+    './cast/index.js': `const make=c=>{const it={x:1,z:0,ticks:0,time:0,state:{mode:'counts',n:7,target:'a'},hits:[],ready(){},at:()=>({x:it.x,z:it.z}),
+      update(dt){it.ticks++;it.time+=dt;it.state={...it.state,n:it.state.n+1};it.x-=dt;it.hits.push(c.hurt(1));},
+      shoveTargets:()=>[{id:c.member.id,x:it.x,z:it.z,r:0.3,shove:(dir)=>{const far=c.member.heavy?0.8:1.6;it.x+=dir.x*far;it.z+=dir.z*far;c.stall(c.member.heavy?0.3:0.6);return true;}}]};return it;};
+      export const MAKERS={walker:make,boulder:make};`,
+    './cast/walk.js': 'export const createWalk=()=>({});',
+    './doorleaf.js': 'export const hangDoors=()=>({update(){}});',
+  };
+  for (const [name, stub] of Object.entries(swaps)) source = source.replace(`'${name}'`, JSON.stringify(url(stub)));
+  source = source.replace("'../../../core/difficulty.mjs'", JSON.stringify(new URL('../core/difficulty.mjs', import.meta.url).href));
+  const { createStalkers } = await import(url(source));
+  let hearts = 3;
+  const env = { level: { seed: 'test', depth: 0 }, world: {}, player: { me: { id: 'a', x: 0, z: 0, yaw: -Math.PI / 2 } }, sees: () => false, clock: 0,
+    health: { damage: () => { hearts--; return { ok: true, dead: false }; } } };
+  createStalkers(env); for (const f of env.ready || []) f();
+  return { env, p: env.pursuer, hearts: () => hearts };
+}
+
+test('shoved, one of the cast is moved, stands the stagger out landing no hit, and is then exactly what it was', async () => {
+  const { env, p } = await floor(), it = p.of('walker'), dt = 0.05;
+  p.update(dt); const before = { ...it.state }, x0 = it.x, hits0 = it.hits.length, landed = () => it.hits.filter((h) => h.landed).length, landed0 = landed();
+  assert.equal(it.hits.at(-1).landed, true, 'unshoved, its hit lands');
+  const moved = strikeShove(env.player.me, p.shoveTargets().filter((t) => t.id === 'walker'));
+  assert.deepEqual(moved, ['walker']);
+  assert.ok(Math.abs(it.x - (x0 + SHOVE.push)) < 1e-9, `pushed ${SHOVE.push} m (${(it.x - x0).toFixed(2)})`);
+  // the stagger: one tick of no time at all (so that it is drawn where it was put), and then none
+  let t = 0; const xPut = it.x;
+  while (t < SHOVE.stagger - 1e-9) { p.update(dt); t += dt; }
+  assert.equal(it.hits.length, hits0 + 1); assert.equal(it.hits.at(-1).landed, false); assert.equal(it.hits.at(-1).stalled, true);
+  assert.equal(landed(), landed0, 'nobody is hurt by it while it stands');
+  assert.ok(Math.abs(it.x - xPut) < 1e-3, 'and it has not come on');
+  assert.equal(it.state.mode, before.mode); assert.equal(it.state.target, before.target); assert.equal(it.state.n, before.n + 1, 'its rule is where it was (the one settling tick aside)');
+  // …and afterwards it carries on: it comes on again and its hit lands again
+  p.update(dt); p.update(dt);
+  assert.ok(it.x < xPut - dt, 'it comes on again'); assert.equal(it.hits.at(-1).landed, true);
+  assert.equal(it.state.mode, 'counts'); assert.equal(it.state.target, 'a');
+});
+
+test('a heavy one gives 0.8 m and stands 0.3 s; its hit is still not turned aside by the window', async () => {
+  const { env, p } = await floor(), it = p.of('boulder'), dt = 0.05;
+  p.update(dt); const x0 = it.x;
+  strikeShove(env.player.me, p.shoveTargets().filter((t) => t.id === 'boulder'));
+  assert.ok(Math.abs(it.x - (x0 + SHOVE.heavy.push)) < 1e-9);
+  const n = it.hits.length; let t = 0;
+  while (t < SHOVE.heavy.stagger - 1e-9) { p.update(dt); t += dt; }
+  assert.equal(it.hits.length, n + 1); assert.equal(it.hits.at(-1).stalled, true);
+  // the window is open (a shove a moment ago), the hit comes from in front, and it lands all the same: heavy
+  env.blocked = () => true; p.update(dt); p.update(dt);
+  assert.equal(it.hits.at(-1).landed, true, 'heavy: not turned aside');
+  const light = p.of('walker'); assert.equal(light.hits.at(-1).blocked, true, 'where a light one\'s is');
+});
+
+test('every one of the cast answers a shove, or cannot be reached by one', () => {
   assert.deepEqual(CAST.filter((m) => m.heavy).map((m) => m.id).sort(), ['carried-interest', 'standing-meeting']);
-  const conductor = read('pursuer.js');
-  // the hit is turned aside before anything is noted of who took the last heart, and before any health is asked for
-  assert.match(conductor, /hurt\(n = 1, from = null\) \{\s+\/\/[^\n]*\n\s+if \(!member\.heavy && env\.blocked\) \{\s+const at = from \|\| k\.it\?\.at\?\.\(\) \|\| null;\s+if \(env\.blocked\(at\)\) \{[^\n]*return \{ landed: false, dead: false, ended: false, blocked: true \}; \}\s+\}\s+\/\/[^\n]*\n\s+const before = taker; taker = k;/);
-  assert.match(read('index.js'), /blocked: \(from\) => blocks\(env\.player\?\.me \?\? f\.player\?\.me, from\),/);
-  assert.match(conductor, /shoveTargets\(\) \{\s+const out = \[\];\s+for \(const k of live\) \{\s+if \(k\.dead \|\| k\.away\) continue;/);
-  assert.ok(!/shoveTargets/.test(read('cast/carried-interest.js')), 'carried interest offers nothing to push');
-  for (const id of ['pirate', 'toner', 'mother', 'head-count', 'standing-meeting', 'intern']) {
-    const src = read(`cast/${id}.js`), at = src.indexOf('shoveTargets()');
-    assert.ok(at > 0, `${id} says what a shove does to it`);
-    const body = src.slice(at, src.indexOf('\n    },\n', at));
-    assert.ok(!/c\.hurt|\.dead = true|dissolv|env\.end/.test(body), `a shove ends nothing of ${id}`);
+  const body = (id) => { const src = read(`cast/${id}.js`), at = src.indexOf('    shoveTargets()'); assert.ok(at > 0, `${id} says what a shove does to it`); return src.slice(at, src.indexOf('\n    },\n', at)); };
+  // moved the full push and stood the full stagger, with nothing of their rule put back
+  for (const id of ['pirate', 'head-count', 'intern']) {
+    const b = body(id);
+    assert.match(b, /clear\((p|walker), x0, z0, x1, z1\)\);/, `${id} goes the whole push (no shorter distance is asked for)`);
+    assert.match(b, /c\.stall\(SHOVE\.stagger\)/, `${id} stands the stagger`);
+    assert.ok(!/\bs = /.test(b), `${id}'s rule is not put back`);
   }
-  // the more-than-one-bodied say where the hit is coming from
+  // the heavy ones, and Mother herself: half a step and a short stand, whatever they are doing
+  for (const id of ['standing-meeting', 'carried-interest', 'mother']) {
+    const b = body(id);
+    assert.match(b, /slide\(walker, dir, [^\n]*SHOVE\.heavy\.push\)/, `${id} gives 0.8 m`);
+    assert.match(b, /c\.stall\(SHOVE\.heavy\.stagger\)/, `${id} stands 0.3 s`);
+    assert.ok(!/\bs = /.test(b), `${id}'s rule is not put back`);
+    assert.ok(!/s\.mode [!=]==/.test(b.split('shove:')[0]), `${id} gives in any mode`);
+  }
+  // where there is no floor behind it, it is still stood: the stall does not wait on the slide
+  for (const id of ['pirate', 'head-count', 'intern', 'standing-meeting', 'carried-interest', 'mother']) assert.ok(!/if \(!to\) return false/.test(body(id)), `${id} with its back to a wall is still stalled`);
+  // the ones that are many bodies answer body by body: a toner coming is batted aside (its own recoil), a small one is batted away and dazed, a dummy is slid
+  assert.match(body('toner'), /strikeToner\(u\.s, \{ landed: false \}\)/); assert.match(body('mother'), /w\.dazed = WORM\.dazed \* 1\.6/); assert.match(body('dummies'), /slide\(o, dir,/);
+  // and those a pair of hands cannot reach say nothing: a figure with no body, a thing on wires in a culvert, a door, a moth, a porter who is not there to be pushed
+  for (const id of ['shadow', 'the-lines', 'other-door', 'moth', 'porter']) assert.ok(!/shoveTargets/.test(read(`cast/${id}.js`)), `${id} offers nothing to push`);
+  // nothing dies of a shove
+  for (const id of ['pirate', 'toner', 'mother', 'head-count', 'standing-meeting', 'carried-interest', 'intern', 'dummies']) assert.ok(!/c\.hurt|\.dead = true|dissolv|env\.end/.test(body(id)), `a shove ends nothing of ${id}`);
+  // the hit of one that is stood is refused before anything else is asked; then the window, for all but the heavy
+  const conductor = read('pursuer.js');
+  assert.match(conductor, /hurt\(n = 1, from = null\) \{\s+if \(k\.stall > 0\) return \{ landed: false, dead: false, ended: false, stalled: true \};/);
+  assert.match(conductor, /if \(!member\.heavy && env\.blocked\) \{\s+const at = from \|\| k\.it\?\.at\?\.\(\) \|\| null;\s+if \(env\.blocked\(at\)\) \{[^\n]*return \{ landed: false, dead: false, ended: false, blocked: true \}; \}/);
+  assert.match(read('index.js'), /blocked: \(from\) => blocks\(env\.player\?\.me \?\? f\.player\?\.me, from\),/);
   assert.match(read('cast/toner.js'), /c\.hurt\(TONER\.hitDamage, walker\)/); assert.match(read('cast/mother.js'), /c\.hurt\(WORM\.hurts, \{ x: a\.fx, z: a\.fz \}\)/);
 });
 

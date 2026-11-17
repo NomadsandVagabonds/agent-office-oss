@@ -12,7 +12,8 @@
 import * as THREE from 'three';
 import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
-import { MEETING, filing, meets, ahead, lengths, takes, floored } from './standing-meeting.rule.js';
+import { MEETING, filing, meets, ahead, lengths, takes } from './standing-meeting.rule.js';
+import { SHOVE, slide } from '../shove.rule.js';
 import { fitsDoor, canLeave } from './paths.js';
 import { elbow } from './head-count.rule.js';
 import { S, SF, THIGH, SHIN, backVox, bellyVox, fingersVox, thighVox, shinVox, tieVox } from './standing-meeting.model.js';
@@ -251,12 +252,13 @@ export function create(c) {
       }
       return null;
     },
-    /** A shove (shove.rule.js) at the front of it: going about or stood up, it goes over for a moment. Coming, it is not to be stopped. */
+    /** A shove (shove.rule.js): too heavy to turn aside, but it gives: half a step back, and a shorter moment stood. Whatever it was doing it goes on doing. */
     shoveTargets() {
-      if (!group || over || (s.mode !== 'files' && s.mode !== 'drums')) return [];
-      return [{ id: 'standing-meeting', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 0.5, r: 0.5, shove: () => {
-        const next = floored(s); if (!next) return false;
-        s = next; shake = 0.6; c.play('thunk', walker.x, walker.z, 14); c.play('creak', walker.x, walker.z, 12);
+      if (!group || over) return [];
+      return [{ id: 'standing-meeting', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 0.5, r: 0.5, shove: (dir) => {
+        const to = slide(walker, dir, (x0, z0, x1, z1) => c.walk.clear(walker, x0, z0, x1, z1), SHOVE.heavy.push);
+        if (to) { walker.x = to.x; walker.z = to.z; }
+        shake = 0.6; c.stall(SHOVE.heavy.stagger); c.play('thunk', walker.x, walker.z, 14); c.play('creak', walker.x, walker.z, 12);
         return true;
       } }];
     },

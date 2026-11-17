@@ -4,16 +4,18 @@
 // two hands out in front, for a moment. It hurts nothing and it ends nothing.
 // What it does:
 //
-//   · whatever is right in front is pushed back a step, if it is the kind of
-//     thing that can be pushed (each of the cast says what a push does to it:
-//     its own shoveTargets());
+//   · whatever is right in front is pushed back a good step and stands a moment
+//     where it is put — the stagger — before it carries on exactly as it was
+//     (each of the cast says what a push does to it: its own shoveTargets()).
+//     The heavy ones give less and stand less, but they give: nothing is left
+//     standing in a doorway with somebody shut in behind it and no answer;
 //   · and for a moment after — the window — a hit that comes from in front
 //     does not land. That is the timing: shove as it reaches you, not before.
 //
 // It costs breath (the same breath running costs: player.js), and there is a
 // second before the next. Out of breath, there is no shove at all. So it is a
 // way through a doorway, or one hit turned aside, and never a way of standing
-// one's ground.
+// one's ground: shoved late, the hit still lands.
 
 export const SHOVE = Object.freeze({
   reach: 1.35,             // metres from the visitor to the edge of what is pushed
@@ -23,7 +25,9 @@ export const SHOVE = Object.freeze({
   cooldown: 1.0,           // seconds before the next
   breath: 0.3,             // of a full breath: the fourth in a row is the last of it
   rest: 2.5,               // seconds after a shove before any breath comes back (or standing still would pay for the next)
-  push: 1.1,               // metres something is pushed back
+  push: 1.6,               // metres something is pushed back
+  stagger: 0.6,            // seconds it then neither comes on nor lands a hit; after that it is what it was
+  heavy: Object.freeze({ push: 0.8, stagger: 0.3 }),      // …for the ones too heavy to turn aside (cast.js `heavy`)
   blockReach: 2.6,         // metres: a hit from further off than this is not one a pair of hands turns aside
   blockDot: 0.1,           // …nor one from behind or beside
   // seconds after the shove that a hit from in front does not land: the easier the visit, the longer
