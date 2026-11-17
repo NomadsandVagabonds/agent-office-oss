@@ -214,17 +214,8 @@ export function auditoriumSeatVox() {
   return v.downsample(2, 0.12);
 }
 
-/** Stark institutional metal lectern with tangled mic wire. */
-export function lecternVox() {
-  const v = new Vox();
-  const putty = M('#58564c', 0), dark = M('#262624', 0), mic = M('#16171a', 0);
-  v.box(-10, 0, -7, 10, 2, 7, dark);
-  v.box(-3, 2, -3, 3, 34, 3, dark);
-  v.box(-11, 33, -8, 11, 37, 8, putty);
-  v.tube(0, 37, 1, 0, 45, -3, 0.65, mic);
-  v.sphere(0, 45, -3.5, 1.2, M('#34363c', 0));
-  return v;
-}
+// (the lectern is sculpted in its own file: lectern.model.js)
+export { LECTERN, lecternVox } from './lectern.model.js';
 
 /** Lone standing floor Q&A microphone with blood-red ON AIR ring in the dark pit. */
 export function qaMicVox() {
