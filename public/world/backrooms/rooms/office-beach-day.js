@@ -6,6 +6,7 @@ import { beachUmbrellaVox, buildFlume, loungerVox } from '../waterpark.js';
 import { evalFlume } from '../waterpark.rule.js';
 import { poolTextures, tiledPlane } from './return-pool/art.js';
 import { showerWater } from './locker-showers/water.js';
+import { beachSpill } from './flume-connector/water.js';
 import {
   beachPlan, beachFloor, BEACH_FLOOR, BEACH_BED, BEACH_WATER, TUBE_RADIUS,
 } from './flume-connector/plan.js';
@@ -71,6 +72,65 @@ function towels() {
   return v;
 }
 
+function shagCarpet(kit) {
+  return kit.tex.custom('beach:shag', 64, 64, (g, w, h) => {
+    g.fillStyle = '#c3a253';
+    g.fillRect(0, 0, w, h);
+    const tufts = ['#a28443', '#b1924d', '#c8a759', '#d9b969', '#e3c779'];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const grain = ((x * 619) ^ (y * 977) ^ (x * y * 131)) >>> 0;
+      if (grain % 7 > 2) continue;
+      g.fillStyle = '#95783d';
+      g.fillRect(x, (y + 1) % h, 1, 1);
+      g.fillStyle = tufts[(grain >>> 4) % tufts.length];
+      g.fillRect(x, y, 1, 1 + (grain % 3 === 0));
+    }
+  });
+}
+
+function pelicanCutout() {
+  const bird = new Vox(), cream = M('#e0d7b6', 1), chalk = M('#f2e7bd', 1);
+  const bill = M('#e7a952', 1), pouch = M('#b37242', 1), eye = M('#302a23', 1);
+  const wing = M('#8a8b80', 1), cardboard = M('#a27c4f', 2);
+  const oval = (x, y, cx, cy, rx, ry) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 < 1;
+  for (let y = 0; y < 22; y++) for (let x = -29; x < 29; x++) {
+    const end = Math.abs(x + .5);
+    const neckLift = x < 0 ? 1 : 0;
+    const headY = 15 + neckLift;
+    let ink;
+    if (oval(x, y, 0, 6, 17.5, 6)) ink = y < 3 ? cardboard : cream;
+    if (oval(x, y, 0, 8, 11.6, 3.5)) ink = y < 7 ? wing : chalk;
+    if (oval(end, y, 13, 10 + neckLift, 3.7, 6.5)) ink = cream;
+    if (oval(end, y, 15, headY, 5.1, 4.6)) ink = chalk;
+    const pouchBottom = headY - 5 + Math.floor(((end - 19) / 4) ** 2);
+    if (end >= 17 && end < 28 && y >= pouchBottom && y < headY + 2) {
+      ink = y < headY ? pouch : bill;
+    }
+    if (end > 15 && end < 17.5 && y === headY + 2) ink = eye;
+    if (ink) bird.box(x, y, 0, x + 1, y + 1, 1, ink);
+  }
+  return bird;
+}
+
+function hangPelican(c) {
+  const x = -2.03, z = 1.40, y = CEILING - .96;
+  const pivot = [x, CEILING - .017, z];
+  const bird = new Batch(true), string = new Batch();
+  c.model('beach:cardboard-pelican', pelicanCutout, x, z, {
+    y, scale: [1, 1, .42], solid: false, shadow: false, batch: bird,
+  });
+  string.box(x - .004, y + .225, z - .004, x + .004, pivot[1], z + .004, lin('#c5b896'));
+  c.flat.box(x - .032, pivot[1], z - .026, x + .032, CEILING + .006, z + .026, lin('#ad9364'));
+  const hanger = c.dynamic(string, { pivot });
+  const cutout = c.dynamic(bird, { pivot });
+  hanger.name = 'beach:pelican-mobile';
+  hanger.add(cutout);
+  cutout.position.set(0, 0, 0);
+  c.tick((_dt, time) => {
+    hanger.rotation.set(.055 * Math.sin(time * .97), -.44 + .38 * Math.sin(time * .72), .095 * Math.sin(time * 1.23));
+  });
+}
+
 function sheet(batch, rect, gaps, y, down=false) {
   const xs=[...new Set([rect.x0,rect.x1,...gaps.flatMap(q=>[Math.max(rect.x0,q.x0),Math.min(rect.x1,q.x1)])])].sort((a,b)=>a-b);
   const zs=[...new Set([rect.z0,rect.z1,...gaps.flatMap(q=>[Math.max(rect.z0,q.z0),Math.min(rect.z1,q.z1)])])].sort((a,b)=>a-b);
@@ -86,7 +146,8 @@ function architecture(c,p) {
   const {H,W}=c,{front,left,right,back,entry,hole,exitStairs,sideStairs,basin}=p;
   const tex=poolTextures(c.kit), box=(b,coords,col=WHITE)=>b.box(...coords,col,{uv:1.6,step:.75});
   const wall=c.mapped('beach:painted-plaster',tex.tile,{wet:.22});
-  const carpet=c.mapped('beach:carpet',c.kit.tex.carpet('#776859'));
+  const carpet=c.mapped('beach:carpet',shagCarpet(c.kit));
+  const serviceDeck=c.mapped('beach:service-deck',c.kit.tex.screed('#766e62'));
   const tile=c.mapped('beach:pool-tile',tex.deep,{wet:.67});
   const ceiling=c.mapped('beach:ceiling',c.kit.tex.ceiling(c.look.ceil));
   c.shell({floor:false,ceiling:false,panels:false,skirting:false,sockets:false,wallAlb:lin('#766962')});
@@ -95,7 +156,7 @@ function architecture(c,p) {
   sheet(ceiling,bounds,[entry,hole,exitStairs,sideStairs],CEILING,true);
   tiledPlane(ceiling,left,back,right,front,H,true);
   const stage = { ...entry, z1:front };
-  box(carpet,[stage.x0,-.20,stage.z0,stage.x1,0,stage.z1],DECK);
+  box(serviceDeck,[stage.x0,-.20,stage.z0,stage.x1,0,stage.z1],DECK);
   for(const t of p.treads)box(wall,[t.x0,t.y-.18,t.z0,t.x1,t.y,t.z1],DECK);
   for(const b of [[left-.10,BEACH_FLOOR,back,left,0,front],
     [right,BEACH_FLOOR,back,right+.10,0,front],[left,BEACH_FLOOR,front,right,0,front+.10],
@@ -119,7 +180,8 @@ function architecture(c,p) {
     }
   }
   showerWater(c,water,tex.water);
-  buildFlume(c,'beach:ceiling-feed',p.drop,{radius:TUBE_RADIUS,color:'#b76555',interior:true,alpha:.98,steps:20});
+  buildFlume(c,'beach:ceiling-feed',p.drop,{radius:TUBE_RADIUS,color:'#b76555',interior:true,alpha:1,steps:20});
+  beachSpill(c, p);
   const rim=lin('#687170');
   for(const x of [hole.x0-.025,hole.x1+.025])box(c.flat,[x-.03,CEILING-.075,hole.z0-.03,x+.03,CEILING+.12,hole.z1],rim);
   box(c.flat,[hole.x0,CEILING-.075,hole.z0-.045,hole.x1,CEILING+.12,hole.z0+.03],rim);
@@ -135,6 +197,7 @@ function architecture(c,p) {
   c.light(-2.74,CEILING-.24,2.12,'#c9d8dc',1.11,{far:7.3,k:4.2});
   c.light(CLOCK_X,CEILING-.14,back+.68,'#e7c48d',.72,{far:3.6,k:2.1});
   c.light(4.02,BEACH_FLOOR+1.55,-2.75,'#ffc78c',1.58,{far:6.3,k:4.1,axis:[-.46,-.72,.23],floor:.31});
+  c.light(1.65,CEILING-.21,.35,'#e4d7af',.77,{far:5.2,k:3.4,axis:[-.19,-.91,.37],floor:.26});
   c.light(left+.22,1.53,.25,'#dfd6ba',1.03,{far:6,k:2.8});
   c.light(.24,.59,front-.7,'#e3ab8c',.58,{far:3,k:1.8});
 
@@ -152,6 +215,7 @@ function architecture(c,p) {
     y:cabinet.top-.012,rot:-.84,solid:false,shadow:false,
   });
   c.model('beach:towels',towels,-2.96,-3.20,{y:BEACH_FLOOR,solid:false,shadow:false});
+  hangPelican(c);
   c.prop('bin',4.67,-3.58,{y:BEACH_FLOOR,shadow:false});
   for(let i=0;i<7;i++){
     const x=.58+i*.21+(i%2?.12:-.09),z=-.18-i*.237;

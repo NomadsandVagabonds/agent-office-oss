@@ -4,6 +4,7 @@ import { poolTextures, tiledPlane } from './return-pool/art.js';
 import { showerWater } from './locker-showers/water.js';
 import { buildFlume } from '../waterpark.js';
 import { AXIS_Y, TUBE_RADIUS } from './flume-connector/plan.js';
+import { officeRunnel } from './flume-connector/water.js';
 
 export function build(c) {
   const { W, D, H } = c, front = D / 2, back = -front, left = -W / 2, right = -left;
@@ -29,8 +30,9 @@ export function build(c) {
   tiledPlane(basin,halfDeck,back+.75,right,front-.75,water);
   showerWater(c,basin,material.water);
   buildFlume(c,'office-mouth',[[0,AXIS_Y,front+.10],[0,AXIS_Y,front-.05],[0,AXIS_Y,front-.64]],
-    { radius: TUBE_RADIUS, color: '#6d9e91', interior: true, alpha: .98, steps: 5 });
+    { radius: TUBE_RADIUS, color: '#6d9e91', interior: true, alpha: 1, steps: 5 });
   tiledPlane(tile,-.52,front-.68,.52,front+.08,0.008);
+  officeRunnel(c, front);
 
   const dividers = c.mapped('flooded-office:partitions',c.kit.tex.carpet('#637676'),{wet:.32});
   const phosphor = c.kit.tex.custom('flooded-office:phosphor',64,48,g=>{

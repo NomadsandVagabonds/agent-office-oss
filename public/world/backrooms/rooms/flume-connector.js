@@ -1,6 +1,7 @@
 import { lin, WHITE } from '../kit.js';
 import { M, Vox } from '../../vox/vox.js';
 import { flumePlan, nearestTube, tubeSamples, TUBE_RADIUS, WALK_HALF, AXIS_Y } from './flume-connector/plan.js';
+import { tubeRunnels } from './flume-connector/water.js';
 
 const CELL = .058;
 const COLORS = ['#c8a351', '#6d9e91', '#b76555'];
@@ -44,6 +45,7 @@ export function build(c) {
       c.flat.quad(edge(a, -1), edge(b, -1), edge(b, 1), edge(a, 1), i % 7 ? color : WHITE);
     }
   }
+  tubeRunnels(c, runs);
   c.light(0, .68, c.D / 2 - .44, '#f2d4a8', .86, { far: 3.1, k: 1.7 });
   c.light(-c.W / 2 + .47, .65, .09, '#96d4c0', .63, { far: 2.3, k: 1.6 });
   c.light(c.W / 2 - .47, .63, .07, '#dc9474', .64, { far: 2.7, k: 1.6 });

@@ -51,11 +51,13 @@ export function beachPlan({ W, D }) {
   const entry = { x0: left, x1: right, z0: front - 1.19, z1: front + .18 };
   const sideStairs = { x0: right - 1.66, x1: right, z0: -.13, z1: entry.z0 };
   const exitStairs = { x0: left - .16, x1: left + 3.78, z0: -.92, z1: .92 };
-  // Three spans make a chamfered, nearly empty kiddie pool without a dense mesh.
+  // Shallow water and a wide, stepped shoreline leave a carpet beach all around.
   const basin = [
-    { x0: -1.22, x1: .88, z0: 1.06, z1: 1.42 },
-    { x0: -1.67, x1: 1.30, z0: 1.42, z1: 3.02 },
-    { x0: -1.22, x1: .88, z0: 3.02, z1: 3.36 },
+    { x0: -2.44, x1: 1.68, z0: 1.03, z1: 1.33 },
+    { x0: -3.24, x1: 2.25, z0: 1.33, z1: 1.67 },
+    { x0: -3.70, x1: 2.92, z0: 1.67, z1: 2.87 },
+    { x0: -3.40, x1: 2.46, z0: 2.87, z1: 3.23 },
+    { x0: -2.74, x1: 1.88, z0: 3.23, z1: 3.57 },
   ];
   const drop = [[0, AXIS_Y, front + .12], [0, AXIS_Y, front - .52],
     [.04, .48, front - 1.18], [.04, .29, front - 1.71], [.04, -.18, front - 2.22], [.04, -.64, front - 2.49]];
