@@ -147,7 +147,9 @@ export function woodlandDynamicLight(c, opt = {}) {
   c.rt.u.banks.value = [1, 1];
   c.rt.u.moreBanks.value = [1, 1];
 
-  const tube = lin(opt.tubeHex || '#dcf596');
+  // (office white. The tubes were chartreuse, `#dcf596`: green light on green walls, moss and hedge has no shape, and
+  // a green thing reads as green when the light on it is not. docs/FOREST-REVIEW.md §2)
+  const tube = lin(opt.tubeHex || '#fffbe9');
   const warmOfficeTube = lin('#ffbe66');
   const deadBatch = c.mapped('forest:dead-panel', kit.tex.panel(false));
   const uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
