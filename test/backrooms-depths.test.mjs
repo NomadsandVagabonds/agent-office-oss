@@ -814,7 +814,7 @@ test('a kind of floor that is still being built is in nobody\'s visit, and any k
   // today no kind of floor keeps to its own and no room keeps off any: everything is at home everywhere, as it always was
   for (const a of DECK) for (const t of THEME_IDS) assert.ok(atHome(a, t) >= 1 || THEMES[t].own || (a.themes && (a.themes[t] === 0 || a.themes['*'] === 0)), `${a.id} on ${t}`);
   // the plan and the generator both ask it, and a visit's hand is counted and drawn from the rooms at home in that visit
-  assert.match(src, /const deck = DECK\.filter\(\(a\) => themes\.some\(\(t\) => atHome\(a, t\) > 0\)\);\n  const depths = themes\.length, N = deck\.length;/);
+  assert.match(src, /const deck = DECK\.filter\(\(a\) => encounterLead\(a\.id\) === a && themes\.some\(\(t\) => atHome\(a, t\) > 0\)\);\n  const depths = themes\.length, N = deck\.length;/);
   assert.ok(!/a\.themes && a\.themes\[/.test(src) && !/a\.themes && a\.themes\[/.test(read('../public/world/backrooms/gen.js')), 'nobody reads a line\'s themes for themselves');
   assert.match(read('../public/world/backrooms/gen.js'), /ready\(a, known\) && atHome\(a, theme\.id\) > 0\)/);
   // nobody's visit is made this way: the office's lift and the site's door ask for nothing (the dev page and ?debug do)
@@ -856,14 +856,14 @@ test('drawings on the walls: only ever of something that is in this visit, on it
   // A rare follow-up to the beam lesson: retain a real seed that draws its resident.
   // (which seed that is moves whenever the dealing does: 198 while the cast had a 'greeter', 299 when she became 'mother',
   // 264 since every visit is four parts with the suburb second or third)
-  for (const seed of [...SEEDS, 'visit-264']) {
-    const { visit, floors } = visitFor(seed), company = castFor(visit);
+  const checkDrawings = (seed, { visit, floors }, count = true) => {
+    const company = castFor(visit);
     floors.forEach((level, i) => {
-      parts++;
+      if (count) parts++;
       const drawings = level.rooms.flatMap((r) => r.dress.filter((d) => d.type === 'trace' && d.kind === 'drawing'));
       assert.ok(drawings.length <= 1, `seed ${seed}, part ${i}: ${drawings.length} drawings`);
       for (const d of drawings) {
-        withOne++;
+        if (count) withOne++;
         const lives = residents.find((a) => a.resident === d.of);
         if (lives) {                                              // somebody who lives in a room: that room is in this part or the next
           assert.ok([floors[i], floors[i + 1]].some((l) => l && l.picked.includes(lives.id)), `seed ${seed}, part ${i}: a drawing of ${d.of}, whose room is not here or below`);
@@ -879,8 +879,13 @@ test('drawings on the walls: only ever of something that is in this visit, on it
         drawnOf.set(d.of, (drawnOf.get(d.of) || 0) + 1);
       }
     });
-  }
+  };
+  for (const seed of [...SEEDS, 'visit-264']) checkDrawings(seed, visitFor(seed));
   assert.ok(withOne / parts > 0.3 && withOne / parts < 0.7, `a drawing on ${withOne} of ${parts} parts`);
+  // The waterpark is still review-only. Its resident cannot appear in the
+  // live mix above, but its drawings obey the same here-or-next-part rule.
+  const waterparkDrawingSeed = 'waterpark-drawing-3';
+  checkDrawings(waterparkDrawingSeed, generateVisit(waterparkDrawingSeed, { themes: ['waterpark', 'waterpark', 'waterpark', 'waterpark'] }), false);
   // (one that comes with a room — cast.js `withRoom` — is not in what a visit plans from its cast, drawings among it: it has its
   // words in WARNINGS, held to the rules above, and nobody draws it yet)
   for (const m of CAST) if (!m.withRoom && !m.withTheme) assert.ok(drawnOf.get(m.id) > 0, `${m.id} is never drawn`);

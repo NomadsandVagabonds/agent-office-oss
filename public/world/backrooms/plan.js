@@ -19,7 +19,7 @@
 // and what those rooms taught, so that it deals nothing that takes for granted
 // a thing nobody has yet had the chance to learn.
 import { cleanDifficulty, difficultyOf } from '../../../core/difficulty.mjs';
-import { generate, makeRng, MIN_EXIT_STEPS, MAX_ODD, DECK, ARCHETYPES, lessons, lessonsOf, isBig } from './gen.js';
+import { generate, makeRng, MIN_EXIT_STEPS, MAX_ODD, DECK, ARCHETYPES, lessons, lessonsOf, isBig, encounterLead } from './gen.js';
 import { MIN_OUT_STEPS } from './marks.js';
 import { THEME_IDS, dealtThemes, featuredThemes, atHome } from './themes.js';
 import { DEALT } from './seam.js';
@@ -63,7 +63,7 @@ function dealHand(R, themes, story) {
   // the deck this visit is dealt from: every room that is at home on one of its kinds of floor (themes.js atHome). A room
   // made for a kind of floor this visit has none of is not counted and not drawn: it could go nowhere, and counting it
   // would only make everybody else's hand bigger. (Today that is no room at all: each is at home everywhere.)
-  const deck = DECK.filter((a) => themes.some((t) => atHome(a, t) > 0));
+  const deck = DECK.filter((a) => encounterLead(a.id) === a && themes.some((t) => atHome(a, t) > 0));
   const depths = themes.length, N = deck.length;
   // (never more than its parts can hold: a part has MAX_ODD oddities at most, however many rooms the deck has grown to)
   const most = Math.min(Math.floor(N * HAND[1]), depths * MAX_ODD), least = Math.min(Math.ceil(N * HAND[0]), most);

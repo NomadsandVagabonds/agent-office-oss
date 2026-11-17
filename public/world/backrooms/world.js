@@ -1310,7 +1310,7 @@ function roomContext(world, rt) {
       c.after.push(() => {
         const geo = kit.geometry(batch, opt.unlit ? [] : rt.lights, opt.unlit ? [1.25, 1.25, 1.25] : rt.amb, opt.unlit ? null : rt.lighting);
         if (!geo) return;
-        const mesh = new THREE.Mesh(geo, kit.surface({ map: opt.map || (batch.vox ? null : kit.tex.white()), vox: batch.vox, room: rt.u, cutout: opt.cutout, flick: geo.userData.flick, banks: geo.userData.banks, side: opt.side }));
+        const mesh = new THREE.Mesh(geo, kit.surface({ map: opt.map || (batch.vox ? null : kit.tex.white()), vox: batch.vox, room: rt.u, cutout: opt.cutout, flick: geo.userData.flick, banks: geo.userData.banks, side: opt.side, wet: opt.wet }));
         mesh.position.set(-pv[0], -pv[1], -pv[2]);
         holder.add(mesh); holder.userData.mesh = mesh;
         if (moving && (env.lighting || rt.lighting) && !opt.unlit) mesh.userData.followFurnitureLight = f => {
@@ -1707,7 +1707,7 @@ function roomContext(world, rt) {
         return last;
       };
       for (const [key, m] of mapped) {
-        bake(m.batch, (geo, owner) => kit.surface({ map: m.texture, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, cutout: m.cutout, side: m.side, lm: owner ? null : rt.lm }), 0, false, key);
+        bake(m.batch, (geo, owner) => kit.surface({ map: m.texture, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, cutout: m.cutout, side: m.side, wet: m.wet, lm: owner ? null : rt.lm }), 0, false, key);
       }
       bake(c.vox, (geo, owner) => kit.surface({ vox: true, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, lm: owner ? null : rt.lm }), 0, false, 'vox');
       for (const [key, b] of voxed) bake(b, (geo, owner) => kit.surface({ vox: true, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, lm: owner ? null : rt.lm }), 0, false, key);
