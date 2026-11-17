@@ -1,137 +1,185 @@
-# The shopping centre: how a room of it is made
+# The shopping centre: notes on making a room of it
 
 The shopping centre (`themes.js` `mall`, still `dealt: false`) is a fever
 dream of a mall, remembered by people who worked in a 1980s office park and
-built out of that office park. This is what a room of it has to be, learned
-from the clothes shop (`rooms/mens-ladies.js`, the first room taken all the
-way) and the hall of moving stairs (`rooms/moving-stairs.js`, the second).
-The owner's two reference pictures are the standard. A room that does not
-meet this is not finished, however much is in it.
+built out of that office park. The ideas list is `docs/MALL-PLAN.md`.
 
-The ideas list is `docs/MALL-PLAN.md`; this is how to build them.
+This file is in two parts, and they are not the same kind of thing.
 
-## 1 · One palette to a room
+- **Part one is rules.** They keep the game working, fair and inside its
+  budget. Every room keeps them.
+- **Part two is not rules.** It is what worked in the clothes shop
+  (`rooms/mens-ladies.js`) and the hall of moving stairs
+  (`rooms/moving-stairs.js`), written down so the next room can use it or
+  do the opposite on purpose. A floor of rooms that all follow the same
+  recipe is a floor nobody remembers. The owner: surprising things are what
+  good games thrive on.
 
-- Pick four or five colours and use nothing else. The clothes shop:
-  dusty rose, beige, taupe, cream, a grey-green wall, and one accent (pink,
-  for the fitting rooms). `PAL` in `rooms/mens-ladies.js` is the shopping
-  centre's default; a room may shift it (the TV shop's blue-grey carpet,
-  The Orange's orange and white) but keeps to as few colours.
-- Even the props come from it: the jackets are the palette, the dummies are
-  dressed in it, the signs are its red.
-- Neon is the exception, and only as light: a few tubes, not a colour scheme.
-  Saturated red banners across a room (the clothes shop's first version) are
-  what this rule is for.
+---
 
-## 2 · Something to look at down the middle
+## Part one · Rules
 
-- Every room has one thing that pulls the eye and the feet: the fitting
-  rooms going away in pink frames to a corridor of doors; the shaft of doors
-  with a stair down into it; the big set with a camera on it.
-- Lay the room out so you see it from the way in, framed: rails either
-  side of an aisle, a half-wall, a column.
-- Layer it: something near (a rail, a plinth), something in the middle (a
-  dummy, a bench), the thing at the back.
-
-## 3 · The office is still in it
-
-- The shop is in an office park, and you can see the office: in a mirror
-  (cubicles, not you); behind panelling that has come away (built, not
-  painted, at least the first metre: partitions, a desk, a beige set, a
-  chair, a lower roof with its light); up three steps in a corner (a raised
-  deck with a desk on it).
-- Office things are sold as if they were the shop's: a table of stacked
-  monitors, flipcharts, filing cabinets.
-
-## 4 · What is wrong is built, not written
-
-- The strangeness is in the space: a rail going into the floor (into an
-  unmarked carpet, no hole: the owner); a dummy in a planter to the chest;
-  frames each smaller than the last; a shaft with doors where nobody could
-  reach; stairs that loop like a ride.
-- Words are allowed to be nearly words (`garble`, `mallNeon`), but a room
-  whose strangeness is all in its signs is not done.
-- Repetition is a tool, not a fill: one thing repeated past sense (the
-  frames, the doors, the sets) beats many things repeated a little.
-
-## 5 · Shape, height and depth
-
-- No room is a flat box with things standing in it. Give it at least one
-  change of height (steps up to a deck with `c.rt.floorY`; a drop with
-  `voidIn`, `relative: true` where a stair goes down into it), one half-wall
-  or plinth, and one thing with depth behind a surface (a recessed bay, a
-  tunnel, a gap in panelling).
-- Set pieces are placed first and keep their ground (`c.reserve`); what
-  fills (rails, tables) goes only where `c.clear` says, and never across the
-  way to a doorway.
-
-## 6 · Models: voxels, but not boxes
-
-- Voxels at 2.5 cm. Sculpt the thing (a jacket has shoulders, sleeves, a
-  lapel, buttons, a hanger), then keep it cheap: many of the same thing in a
-  row are stamped into **one** model (`Vox.stamp`), so the faces between them
-  are not drawn (the clothes shop's rails went from 203k to 119k triangles).
-- `Vox.box` is half-open (`x0 ≤ x < x1`): a box of one row is `y, y + 1`,
-  not `y, y`. A zero-thickness box draws nothing.
-- Anything that can be got behind is drawn from behind: two faces, or a
-  back (the back of a stage flat: bare board, battens, a brace). One-sided
-  pieces vanish from behind (the owner found the Parade's).
-
-## 7 · Surfaces
-
-- Walls, floors and ceilings are drawn at 64 px to a 1.6 m repeat, so a
-  pixel is a voxel: `MALL_TEX` in `mall.js` (`carpet`, `panel`, `tile`).
-  A 32 px texture beside 2.5 cm voxels looks like a smaller game.
-- Carpet: contract carpet, a small diamond repeat in the ground's own tones,
-  tufts. Panelling: boards, a groove and its lit edge, a little grain, scuffs
-  low down. Ceiling: mineral tiles with fissures and a bevel, one to a repeat.
-- `wallFace` faces into the room on every wall (it did not on the left and
-  front ones before 17 Nov).
-
-## 8 · Light
-
-- Rooms say where light is with `c.light` and what shines with
-  `c.shining`. There is no other path, and a room does not add a Graphics
-  switch of its own.
-- At Medium and High what shines blooms (`glow.js`, the builder's). A room
-  is toned at Classic and keeps Classic exactly as it is when it is changed
-  for the higher tiers only. Per-batch bloom strength, lights made from a
-  shining batch's own boxes, and light through a shop window are the
-  builder's to add (asked 17 Nov); use them when they land, not before.
-- Ceiling fittings are drawn as geometry (a frame, two tubes, a diffuser)
-  where the shell does not draw them.
-
-## 9 · Budget
+### Budget
 
 - 120,000 triangles in a room's ordinary batches, up to 250,000 with detail
   (`c.detail`, `{ detail: true }`), 45 meshes and 12 more that are detail,
   16 lights. What is only looked at goes in detail; what is walked into,
   stood on or read does not.
-- Cap what fills (the clothes shop holds 175 jackets) so the biggest
+- Where a room fills itself (rails, tables, sets), cap it so its biggest
   dealt size stays under: sweep eight seeds and quote the range.
 
-## 10 · Before it is pushed
+### Never a trap, never unfair
 
-- Eight seeds of the room with `&check=1`: no error, no doorway warning,
-  triangles in range.
-- From every doorway, every other doorway on plain floor (no belt, no
-  moving stair, no hole) for r 0.22, and the room's middle out for the
-  mascot (r 0.26).
-- A fall: once on Easy (the ending) and once on the Tourist (one fall, then
-  the floor's start).
-- A look from behind anything free-standing; a look at High.
+- From every doorway to every other on plain floor (no belt, no moving
+  stair, no hole) for r 0.22; the room's middle out for the mascot (r 0.26).
+- Set pieces keep their ground (`c.reserve`); what fills goes only where
+  `c.clear` says, never across the way to a doorway.
+- A drop ends a careless visit only by a ride or a visible edge, never by
+  walking in. Check it once on Easy (the ending) and once on the Tourist
+  (one fall, then the floor's start).
+- A creature put in the room can leave it.
+
+### Things that must not look broken
+
+- Anything free-standing a visitor can get behind has a back: two faces, or
+  the back of a stage flat (bare board, battens, a brace). The owner found
+  the Parade's missing.
+- `Vox.box` is half-open (`x0 ≤ x < x1`): one row is `y, y + 1`. A
+  zero-thickness box draws nothing.
+- `wallFace` faces into the room on every wall (fixed 17 Nov); glass that
+  should be clear is a cut-out with clear pixels, not a tint.
+
+### Light
+
+- Light through `c.light`, what shines through `c.shining`. No other path,
+  no Graphics switch of a room's own.
+- Classic stays exactly as it is when a room is changed for Medium and High
+  only. The builder's per-batch bloom, lights from a shining batch's boxes
+  and light through a shop window are to be used when they land, not
+  worked round before.
+
+### Before a push
+
+- Eight seeds with `&check=1`: no error, no doorway warning, triangles in
+  range. A look from behind anything free-standing. A look at High.
 - A row in `docs/AUDIT-LOG.md`, five columns, saying what was not checked.
+
+---
+
+## Part two · What has worked (use it, bend it, or do the opposite)
+
+Each of these is a note about why something landed, not a requirement. The
+best next room may break most of them. Questions are more use than answers
+here, so each comes with one.
+
+**A limited palette** made the clothes shop read as one place and let one
+accent (the pink frames) carry. *But:* a room that is suddenly all one
+colour, or violently clashing, or colourless, can be the surprise. *Ask:*
+what does this room's colour do to someone walking in from the last?
+
+**Somewhere the eye goes** (the frames going away, the shaft of doors)
+gave the clothes shop and the hall a reason to walk in. *But:* a room with
+nothing to look at, or ten things, or its point behind you as you enter,
+is another kind of feeling. *Ask:* where does the visitor look first, and
+is that the room you meant?
+
+**The office showing through** (the mirror, the torn panelling, the deck)
+tied the mall to the backrooms. *But:* one room can be wholly mall, with not
+a trace of the office, and be stranger for it. *Ask:* where is the seam
+between the two in this room, if there is one?
+
+**Strangeness built, not written** (a rail into the carpet, a dummy in a
+planter) worked better than SALE banners. *But:* words can be the strange
+thing when it is the right room for words: a wall of receipts, a tannoy that
+almost speaks. *Ask:* would this still be strange with the sound off and the
+signs blank?
+
+**Height and depth** (a deck, a shaft, a tunnel) stopped the rooms feeling
+like boxes. *But:* a dead-flat, low, endless room is its own dread. *Ask:*
+what does the visitor's body do in here?
+
+**Repetition past sense** (frames, doors, sets) beat lots of different
+things a little. *But:* one single object alone in a big room can do more.
+*Ask:* what is there one of, and what is there too many of?
+
+**Voxel craft:** sculpt the thing properly (a jacket with lapels), then make
+it cheap (stamp a row of them into one model: the rails went from 203k to
+119k triangles). Surfaces at 64 px to a 1.6 m repeat match the voxels
+(`MALL_TEX` in `mall.js`: `carpet`, `panel`, `tile`). These are tools, not
+a look: a room drawn deliberately crude, or flat-shaded, or all one
+texture, is allowed if it is on purpose.
+
+**Do something no other room does.** This is the only note close to a rule.
+Before building, list what the other mall rooms already do (a shaft, a
+camera feed, frames going away, a hole in the floor) and make sure this one
+has at least one thing that is not on the list: a new way to move, a new way
+to see, a new thing that is wrong. If a room could be described as "like
+the clothes shop but with X", it is not done yet.
+
+## Weirdness that has worked, to steal from
+
+Inspiration, from these floors and the backrooms idea itself. Take any of
+them somewhere new.
+
+- **The almost-right copy.** A thing remembered by someone who never quite
+  saw it: lettering that is nearly letters, a shop selling one sandwich, a
+  grotto in July. Wrong in a way you can't name at once.
+- **Too many of one thing.** Doors up a shaft past any use, frames inside
+  frames, a car stacked to the roof, every set on the same channel.
+- **Scale slips.** A sandwich a stride long; the same three shops again
+  inside the middle one's door, smaller; a model village with itself on a
+  table.
+- **Two places in one.** The mall in the office: cubicles behind the
+  panelling, monitors sold as stock, a deck with a desk on it.
+- **It notices you.** The sets wake as you pass; the camera shows someone
+  where you stood; the dummies are one more each time you come back; the
+  covered stair gives you the same stretch again if you hurry.
+- **The quiet failure.** The tannoy chimes and never speaks; the fountain is
+  a water cooler and dry; a door is locked and somebody knocks back.
+- **Physics gone politely wrong.** A rail going into the carpet as if into
+  water; tables bolted to the ceiling; stairs that loop like a ride.
+- **Unreachable places.** Doors high on a wall, a corridor painted at the end
+  of a tunnel, an office glimpsed through a hole you can't fit through.
+- **Liminal emptiness.** A big lit room with nothing in it, a hum, carpet to
+  the walls. Sometimes the strangest room has no set piece at all.
+
+## Notes on gameplay
+
+Also inspiration, from what has played well or badly so far.
+
+- **Teach by showing.** The belts and the stair into the shaft are readable
+  before they are dangerous: the slot is black and in view, the stair visibly
+  moves. A visitor should be able to tell why they died.
+- **A choice beats a hazard.** The covered stair (stand and it takes you,
+  hurry and it holds you) and the landing (step off, or ride on to the drop)
+  give the visitor something to decide. A hole with no choice is just a hole.
+- **Reward the curious.** Something on the landing (a battery, a snack, a
+  door that goes elsewhere) pays for going down. Put the good things where
+  only the brave or nosy go.
+- **Rhythm across the floor.** A loud set piece next to a quiet plain room
+  makes both work. Not every room needs to be the biggest.
+- **Let creatures matter.** The dummies punish coming back; the lines punish
+  being followed to the gap. A room that changes how a creature behaves in it
+  (somewhere to hide, somewhere it cannot follow) earns its place.
+- **Make it readable at speed.** When something is chasing, the way out
+  should be findable: light the doorways, don't hide them behind the set
+  piece.
+- **Co-op and the Tourist.** A trick that ends a visit should have a gentler
+  version on the Tourist and should not strand the others in co-op.
 
 ## Where each room is
 
-| Room | Palette | Focal point | Office in it | Built strangeness | Height / depth | Surfaces |
-|---|---|---|---|---|---|---|
-| Clothes shop (`mens-ladies`) | yes | fitting-room frames | mirror, torn panelling, deck | sinking rail, planted dummy | deck, tunnel, torn wall | 64 px |
-| Moving stairs (`moving-stairs`) | yes | shaft of doors | shop window, benches | rides, the shaft | shaft, landing, upper floor | 64 px |
-| TV shop (`the-sets`) | own (blue-grey) | the big set's camera | sets themselves | figure in the feed | flat: to do | carpet 64 px; walls to do |
-| The Orange | own (orange) | the big orange | — to do | server with an orange head | flat: to do | 32 px: to do |
-| Food court | mixed: to do | the hole, FOOD | — to do | tables on the roof | the hole | 32 px: to do |
-| Atrium | mixed: to do | the gallery | — to do | storeys going up | gallery, the drop | 32 px: to do |
-| Level P | car-park yellow | the stacked cars | — | cars up the wall | the ramp down | 64 px wall |
-| Photo booths, receipts, keys-cut, grotto | mixed: to do | each has one | — to do | each has one | flat: to do | 32 px: to do |
-| The streets (plain rooms, `concourse`) | per street | — | service corridors | `MALL_WRONG` | flat | kit patterns: to do |
+Not a checklist: what each has that is its own, and what it shares that it
+could stop sharing.
+
+| Room | Its own thing | Shares with others (could change) |
+|---|---|---|
+| Clothes shop | frames going away to a corridor; rail into the carpet | rails, dummies |
+| Moving stairs | shaft of doors; rides that loop; a door that goes elsewhere | the mauve palette of the clothes shop |
+| TV shop | sets that wake as you pass; the camera's late picture | dummies |
+| The Orange | everything orange; the server with an orange head | neon menu |
+| Food court | tables on the roof; the hole in the floor | neon, the hole (atrium, level-p) |
+| Atrium | storeys going up, each smaller | neon, the hole |
+| Level P | one car, stacked to the roof | the hole |
+| Photo booths, receipts, keys-cut, grotto | a booth that flashes; a receipt that follows; doors that are walls; July | neon fascias |
+| The streets (`concourse`) | `MALL_WRONG`, one wrong thing a room | shopfronts throughout |
