@@ -79,7 +79,7 @@ export function trolleyVox() {
  */
 export function coolerVox() {
   const v = new Vox(), b = box(v), p = paint(v);
-  const WHITE = '#e6e2d6', white = M(WHITE, 0), grey = M(tone(WHITE, -0.2), 0), dark = M(tone(WHITE, -0.5), 0), seam = M(tone(WHITE, -0.32), 0), yellowed = M('#d9d2bd', 0);
+  const WHITE = '#e6e2d6', white = M(WHITE, 0), grey = M(tone(WHITE, -0.2), 0), dark = M(tone(WHITE, -0.5), 0), seam = M(tone(WHITE, -0.32), 0);
   const steel = M('#8f9488', 0), slot = M('#4d5049', 0), paper = M('#f1ead8', 0), blue = M('#3f7f9a', 0), red = M('#c0463a', 0);
   const water = glass('#7fc4e8'), air = glass('#c9e6f4'), CX = -4;                                     // (the cabinet sits left of centre; the cups hang on its right)
   // the cabinet: rounded at the front, square at the back where the wall is; a dark plinth, a grey lower panel with its door
@@ -88,7 +88,6 @@ export function coolerVox() {
   p(-20, 0, -16, 11, 3, 15, dark); p(-20, 4, -16, 11, 21, 15, grey);
   for (let y = 5; y <= 20; y++) { for (const x of [-15, 6]) v.has(x, y, 15) && v.set(x, y, 15, seam); }
   p(-15, 20, 15, 6, 20, 15, seam); b(2, 11, 16, 3, 14, 16, steel);                                    // the door, and its catch
-  for (let x = -20; x <= 11; x++) for (let z = -16; z <= 15; z++) for (let y = 4; y < 8; y++) if (v.has(x, y, z) && noise3(x >> 1, y, z >> 1, 47) > 0.84) v.set(x, y, z, yellowed);
   // the alcove, the drip tray standing out of it, and what has dried in the tray
   v.carve(-16, 26, 10, 8, 48, 16); p(-16, 26, 8, 7, 47, 9, grey); p(-16, 24, 10, 7, 25, 15, grey);
   b(-16, 24, 10, 7, 27, 19, steel); for (let x = -14; x <= 4; x += 3) b(x, 27, 12, x + 1, 27, 17, slot);
@@ -115,7 +114,7 @@ export function coolerVox() {
   b(12, 30, 2, 13, 33, 5, grey); b(12, 44, 2, 13, 47, 5, grey);
   // the back: vents; one side: the water company's label
   for (let y = 10; y < 48; y += 6) p(-14, y, -16, 5, y + 1, -16, slot);
-  p(-20, 44, -8, -20, 55, 3, blue); p(-20, 47, -4, -20, 52, -1, paper); p(-20, 53, -3, -20, 53, -2, paper); p(-20, 46, -3, -20, 46, -2, paper); p(-20, 44, -8, -20, 44, 3, paper);
+  p(-20, 44, -8, -20, 55, 3, blue); p(-20, 47, -4, -20, 54, -1, paper); p(-20, 49, -6, -20, 52, 1, paper); p(-20, 44, -8, -20, 44, 3, paper);      // (a white cross on teal, as the office's)
   return v;
 }
 
