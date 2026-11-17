@@ -229,7 +229,7 @@ export function build(c) {
     let dirty = false;
     for (const s of sets) {
       const d = me.inside ? Math.hypot(me.x - s.x, me.z - s.z) : 99, want = s.always ? me.inside || d < 8 : s.on ? d < K.far : d < K.near;
-      if (want !== s.want) { s.want = want; s.wait = want ? R.range(0.1, 0.7) : R.range(0.4, 1.4); }
+      if (want !== s.want) { s.want = want; s.wait = want ? 0.1 + Math.random() * 0.6 : 0.4 + Math.random(); }   // (run-time dice: not the room's seeded R)
       if (s.wait > 0) { s.wait -= step; if (s.wait <= 0 && !!s.on !== s.want) { s.on = s.want ? 1 : 0; s.boot = s.on ? 0.25 : 0; if (s.on && hiss <= 0) { const w = c.toWorld(s.x, s.z); env.play?.('static', w.x, w.z, 9); hiss = 0.3; } dirty = true; } }
       if (s.boot > 0) { s.boot -= step; dirty = true; }
       if (s.on && (me.inside || s.always)) { paintCell(s, clock); dirty = true; }
