@@ -20,6 +20,11 @@ import { hangDoors } from './doorleaf.js';
 // Single-player callers keep the seeded cast and their existing env.player.
 /** Who can be called up at a spot after the floor is built (summon()): those with an `appear` of their own. */
 export const SUMMONABLE = new Set(['toner', 'shadow']);
+/**
+ * May this one be called up on a visit of this difficulty? Only those who can turn up somewhere at all; and no toner on a
+ * visit whose difficulty has none (core/difficulty.mjs `toner: 0`): whatever asks, such a visit stays without one.
+ */
+export const maySummon = (id, difficulty) => SUMMONABLE.has(id) && !(id === 'toner' && difficulty && !difficultyOf(difficulty).toner);
 
 export function createStalkers(env, options = {}) {
   const level = env.level;
@@ -248,10 +253,11 @@ export function createStalkers(env, options = {}) {
      * If they are on the floor already this is one more appearance of theirs; if they were not dealt, they are made here, outside
      * the deal (castFor and homeFor are not asked and nobody else moves), and go with the floor like the rest. Only those who know
      * how to turn up somewhere (an `appear` of their own: SUMMONABLE). Whoever calls must decide by the seed, never by chance, or
-     * two visitors on one floor see different things. Returns the creature, or null: nobody came.
+     * two visitors on one floor see different things. Each call for the toner is one more toner: whoever calls keeps its own count.
+     * No toner comes to a visit whose difficulty has none (maySummon). Returns the creature, or null: nobody came.
      */
     summon(id, spot) {
-      if (!SUMMONABLE.has(id) || !spot || !Number.isFinite(spot.x) || !Number.isFinite(spot.z) || !W()?.roomAt(spot.x, spot.z)) return null;
+      if (!maySummon(id, level.difficulty || env.difficulty?.()) || !spot || !Number.isFinite(spot.x) || !Number.isFinite(spot.z) || !W()?.roomAt(spot.x, spot.z)) return null;
       let k = live.find((q) => q.id === id), fresh = false;
       if (k && (k.dead || k.away)) return null;
       try {
