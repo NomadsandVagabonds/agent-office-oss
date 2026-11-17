@@ -1238,3 +1238,13 @@ test('the dummies never wall anybody in: one that would cut a doorway off from a
   assert.equal(cameBack(cameBack(blank(), 2, desked, { x: 1.8, z: 0, yaw: 0 }).s, 2, desked, { x: 1.8, z: 0, yaw: 0 }).stood, null, 'so it is not put there');
 });
 
+
+test('the dummies: one shoved comes to rest only where one may be stood', async () => {
+  const { mayRest } = await import('../public/world/backrooms/cast/dummies.rule.js');
+  const room = { W: 8, D: 8, doors: [{ x: 0, z: 4 }], blocks: [] }, a = { room: 1, x: 0, z: 0 }, b = { room: 1, x: 2, z: 0 }, placed = [a, b];
+  assert.equal(mayRest(room, placed, a, 1.5, 0), false, 'not into another');
+  assert.equal(mayRest(room, placed, a, 0, 3.4), false, 'not before a doorway');
+  assert.equal(mayRest(room, placed, a, -3.8, 0), false, 'not against a wall');
+  assert.equal(mayRest(room, placed, a, -1, -1), true, 'somewhere free');
+  assert.equal(mayRest(room, placed, a, 0, 0), true, 'where it was: it is not in its own way');
+});

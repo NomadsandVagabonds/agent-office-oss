@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { Batch, lamp } from '../kit.js';
 import { toLocal, toWorld, wallPoint } from '../gen.js';
 import { slide } from '../shove.rule.js';
-import { DUMMIES, blank, leftFrom, cameBack, squeezed } from './dummies.rule.js';
+import { DUMMIES, blank, leftFrom, cameBack, squeezed, mayRest } from './dummies.rule.js';
 import { S, dummyVox } from './dummies.model.js';
 
 export function create(c) {
@@ -79,8 +79,12 @@ export function create(c) {
     shoveTargets() {
       if (over) return [];
       return stood.map((o) => ({ id: 'dummies', x: o.x, z: o.z, y: env.world.floorY(o.x, o.z) + 0.9, r: 0.24, shove: (dir) => {
-        const to = slide(o, dir, (x0, z0, x1, z1) => c.walk.clear({ x: o.x, z: o.z, r: 0.24, tall: 1.7 }, x0, z0, x1, z1));
-        if (to) { o.x = to.x; o.z = to.z; o.body.x = to.x; o.body.z = to.z; o.mesh.position.x = to.x; o.mesh.position.z = to.z; const def = level.rooms[o.p.room], q = toLocal(def, to.x, to.z); o.p.x = q.x; o.p.z = q.z; }
+        const end = slide(o, dir, (x0, z0, x1, z1) => c.walk.clear({ x: o.x, z: o.z, r: 0.24, tall: 1.7 }, x0, z0, x1, z1));
+        // (it comes to rest only where one may be stood: dummies.rule.js mayRest. Not there: as far along as it may, or not at all)
+        const def = level.rooms[o.p.room], room = info(o.p.room), mine = s.placed.filter((p) => p.room === o.p.room);
+        let to = null;
+        if (end) for (const f of [1, 0.75, 0.5, 0.25]) { const x = o.x + (end.x - o.x) * f, z = o.z + (end.z - o.z) * f, q = toLocal(def, x, z); if (mayRest(room, mine, o.p, q.x, q.z)) { to = { x, z }; break; } }
+        if (to) { o.x = to.x; o.z = to.z; o.body.x = to.x; o.body.z = to.z; o.mesh.position.x = to.x; o.mesh.position.z = to.z; const q = toLocal(def, to.x, to.z); o.p.x = q.x; o.p.z = q.z; }
         o.rock = 0.8; c.play('creak', o.x, o.z, 8); return true; } }));
     },
     dispose() { for (const o of stood) { o.mesh.removeFromParent(); const i = env.world.bodies.indexOf(o.body); if (i >= 0) env.world.bodies.splice(i, 1); } },
