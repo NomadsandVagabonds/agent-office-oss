@@ -49,12 +49,15 @@ export function lightVox({ dead = false } = {}) {
     for (const [cx, cy] of [[x, y], [x + 2, y], [x, y + 2], [x + 2, y + 2]]) t.carve(cx, cy, a[2], cx + 1, cy + 1, b[2]);   // round, as near as three voxels go
     if (dead) for (const z0 of [a[2], b[2] - 7]) for (let z = z0; z < z0 + 7; z++) for (let dx = 0; dx < 3; dx++) for (let dy = 0; dy < 3; dy++) if (t.has(x + dx, y + dy, z)) t.set(x + dx, y + dy, z, burnt);
   });
-  // the louvre: three blades the long way and one across every 10 cm, standing on edge just inside the trim
+  // the louvre: two blades the long way and one across every 20 cm, a single voxel deep (1.25 cm), just inside the trim.
+  // (Shallow and wide on purpose: a blade h deep in a cell s wide hides the lamps from anybody looking up at less than
+  // atan(h / s). At 2.5 cm in 10 cm cells that was 14 degrees, and every light more than a few metres off went grey and
+  // the room looked dim; this is under 4 degrees, so a light still shows from the far end of the biggest room.)
   const drop = (z) => (dead ? Math.round(Math.max(0, (z + HZ) / (2 * HZ) - 0.45) * 7) : 0);          // (dead: one end has come off its clips and hangs)
   for (let z = -HZ + 2; z <= HZ - 3; z++) {
     const d = drop(z);
-    for (const x of [-12, -1, 0, 11]) L(x, -d, z, x, 1 - d, z, blade);
-    if ((z + HZ) % 8 === 4) L(-HX + 2, -d, z, HX - 3, 1 - d, z, blade);
+    for (const x of [-8, 7]) L(x, -d, z, x, -d, z, blade);
+    if ((z + HZ) % 16 === 8) L(-HX + 2, -d, z, HX - 3, -d, z, blade);
   }
   // a dead one has what dead lights have: flies in the pan, and a brown line where the ballast cooked
   if (dead) {
