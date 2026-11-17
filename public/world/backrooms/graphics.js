@@ -22,12 +22,13 @@ export const GRAPHICS_LABELS = { classic: 'Classic', low: 'Low', medium: 'Medium
 // post-processing is: on in the office, off on the dev page and the site). grade, haze, contact, bounce: strengths 0..1.
 // shadows: the ceiling tubes' shadows, baked with each room into a small light map of its floor and walls, bank by bank
 // (0 or 1; kit.js gfxOf, shadowmap.js). Not at low: a frame pays one lookup for it, but the part being walked into
-// pays its bake, and that lands on the weakest machines' main thread while they walk.
+// pays its bake, and that lands on the weakest machines' main thread while they walk. doorlight: the light of the room
+// next door through each doorway, in the same light map, dimmed as the doorway shuts or that room's tubes fail (0 or 1).
 const TABLE = {
-  classic: { lines: { 0: null, 1: 660, 2: 540 }, supersample: 1, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: 'host', grade: 0, haze: 0, contact: 0, bounce: 0, shadows: 0 },
-  low: { lines: { 0: null, 1: 600, 2: 480 }, supersample: 1, sceneCap: 1280, widthCap: 1280, msaa: 2, bloom: false, grade: 1, haze: 0, contact: 0.7, bounce: 0, shadows: 0 },
-  medium: { lines: { 0: null, 1: 660, 2: 540 }, supersample: 1.5, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: true, grade: 1, haze: 1, contact: 1, bounce: 0.7, shadows: 1 },
-  high: { lines: { 0: null, 1: 660, 2: 540 }, supersample: 2, sceneCap: 2560, widthCap: 2560, msaa: 4, bloom: true, grade: 1, haze: 1, contact: 1, bounce: 1, shadows: 1 },
+  classic: { lines: { 0: null, 1: 660, 2: 540 }, supersample: 1, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: 'host', grade: 0, haze: 0, contact: 0, bounce: 0, shadows: 0, doorlight: 0 },
+  low: { lines: { 0: null, 1: 600, 2: 480 }, supersample: 1, sceneCap: 1280, widthCap: 1280, msaa: 2, bloom: false, grade: 1, haze: 0, contact: 0.7, bounce: 0, shadows: 0, doorlight: 0 },
+  medium: { lines: { 0: null, 1: 660, 2: 540 }, supersample: 1.5, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: true, grade: 1, haze: 1, contact: 1, bounce: 0.7, shadows: 1, doorlight: 1 },
+  high: { lines: { 0: null, 1: 660, 2: 540 }, supersample: 2, sceneCap: 2560, widthCap: 2560, msaa: 4, bloom: true, grade: 1, haze: 1, contact: 1, bounce: 1, shadows: 1, doorlight: 1 },
 };
 
 // detail: whether what rooms mark as detail (world.js `c.detail`, or `detail: true` to c.mapped and c.shining) is drawn.

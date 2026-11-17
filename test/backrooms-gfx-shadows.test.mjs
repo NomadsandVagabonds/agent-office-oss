@@ -21,7 +21,7 @@ globalThis.document = { createElement: () => ({ getContext: () => draw, style: {
 test.after(() => { if (previousDocument === undefined) delete globalThis.document; else globalThis.document = previousDocument; });
 
 const B = new URL('public/world/backrooms/', root);
-const [{ buildWorld, loadCatalogue }, { createKit, gfxOf, lamp, lightAt }, { generate, ARCHETYPES }, makers, SM, { profile }] = await Promise.all([
+const [{ buildWorld, loadCatalogue }, { createKit, gfxOf, lamp, lightAt }, { generate, ARCHETYPES, toWorld }, makers, SM, { profile }] = await Promise.all([
   import(new URL('world.js', B).href), import(new URL('kit.js', B).href), import(new URL('gen.js', B).href), import(new URL('public/world/props/office.js', root).href),
   import(new URL('shadowmap.js', B).href), import(new URL('graphics.js', B).href)]);
 const { mapLayout, bakeShadows, packShadows, sampleMap, SHADOWS } = SM;
@@ -267,4 +267,90 @@ test('the shader: every line of it is in its own marked blocks, each switched of
   assert.equal(m.defines.LIGHTMAP, 1); assert.equal(m.defines.TUBESHADOW, 1); assert.equal(lm.materials[0], m);
   assert.equal(m.uniforms.uLmA, lm.uniforms.uLmA, 'the room\'s map, shared');
   kit.dispose();
+});
+
+/* ---- light through a doorway (kit.gfx.doorlight) ------------------------------------------------------------------ */
+
+test('doorlight: off unless asked for; on its own it bakes no shadow, and of the vertex bake only halves the old glow at a doorway', async (t) => {
+  for (const o of [{ doorlight: 0 }, { doorlight: 'x' }]) assert.equal(gfxOf(o), null);
+  assert.deepEqual(gfxOf({ doorlight: 1 }), { contact: 0, bounce: 0, doorlight: 1 });
+  assert.equal(profile('classic').doorlight, 0); assert.equal(profile('low').doorlight, 0);
+  assert.equal(profile('medium').doorlight, 1); assert.equal(profile('high').doorlight, 1);
+  const { world } = await fixture(t, { barricades: true, gfx: { doorlight: 1 } }), off = await fixture(t, { barricades: true });
+  world.rooms.forEach((rt, i) => {
+    const a = off.world.rooms[i].lights, b = rt.lights;
+    assert.equal(a.length, b.length);
+    a.forEach((L, k) => { const s = L.spill !== undefined ? 0.5 : 1; for (const c of ['r', 'g', 'b']) assert.ok(Math.abs(b[k][c] - L[c] * s) < 1e-12); });
+    if (!a.some((L) => L.spill !== undefined) && i < 6) assert.deepEqual(fingerprint(world, rt), BEFORE[i]);
+  });
+  let lit = 0;
+  for (const rt of world.rooms) {
+    if (rt.lm) assert.equal(rt.lm.shadows, false);
+    if (rt.doorLight) { lit++; for (const m of rt.lm.materials) { assert.equal(m.defines.DOORLIGHT, 1); assert.equal(m.defines.TUBESHADOW, undefined); } }
+  }
+  assert.ok(lit > 3, `${lit} rooms take light through a doorway`);
+});
+
+test('a doorway lets the next room\'s tube through in the doorway\'s shape, and what stands in the way cuts it', () => {
+  const W = 6, D = 6, layout = mapLayout({ W, D, H: 2.6, floor: true, walls: new Set(['back', 'front', 'left', 'right']) });
+  // a doorway in the back wall (z = −3), 1 m wide at x 0, 2 m high; the lamp next door 2 m beyond it
+  const face = (out) => [[-0.5, 0], [0.5, 0], [0.5, 2], [-0.5, 2]].map(([x, y]) => [x, y, -3 - out]);
+  const L = tube(0, -5.2);
+  const lamps = [{ L, g: 0, pts: SM.lampPoints(L) }];
+  const res = SM.bakeDoorway({ layout, faces: [face(0), face(0.2)], lamps, boxes: [], skip: 'back', groups: 2 });
+  assert.ok(res && res.peak > 0 && res.energy[0] > 0 && !res.energy[1]);
+  const floorAtOf = (p) => (x, z) => { const r = layout.regions.floor, i = Math.floor((x + 3) / r.cell), j = Math.floor((z + 3) / r.cell); return p[(r.py + j) * layout.width + r.px + i]; };
+  const at = floorAtOf(res.patch);
+  assert.ok(at(0, -2.6) > 0, 'just inside the doorway, in line with it');
+  assert.equal(at(-2, -2.8), 0, 'beside the doorway, behind the wall');
+  assert.equal(at(2.5, -2.9), 0);
+  assert.ok(res.patch.filter((v) => v > 0).length > 20);
+  // a crate just inside the doorway: behind it, no light
+  const crate = { x0: -0.3, y0: 0, z0: -2.6, x1: 0.3, y1: 1.5, z1: -2.3 };
+  const cut = SM.bakeDoorway({ layout, faces: [face(0), face(0.2)], lamps, boxes: [crate], skip: 'back', groups: 2 });
+  assert.ok(at(0, -1.9) > 0 && floorAtOf(cut.patch)(0, -1.9) === 0, 'in the crate\'s shadow');
+  // packed: a doorway a channel, the square root of its share of its peak
+  const packed = SM.packDoorways(layout, [res]);
+  const v = sampleMap(layout, packed.data, 4, W, D, 0.02, 0, -2.6);
+  assert.ok(v[0] > 0 && v[1] === 0 && v[2] === 0 && v[3] === 0);
+});
+
+test('a doorway\'s light follows the doorway (shut: none) and the room beyond (its banks, its dimmer)', async (t) => {
+  const { world } = await fixture(t, { barricades: true, lighting: 'dim', gfx: { shadows: 1, doorlight: 1 } });
+  world.updateLighting(0);
+  const rooms = world.rooms.filter((rt) => rt.doorLight?.length);
+  assert.ok(rooms.length > 3);
+  // shut a doorway: its light is gone, the other doorways' are not
+  const rt = rooms.find((r) => r.doorLight.length >= 2) || rooms[0], [d0, d1] = rt.doorLight;
+  assert.ok(d0.u.length() > 0);
+  const before1 = d1?.u.clone();
+  d0.throat.open = false; world.updateLighting(0);
+  assert.equal(d0.u.length(), 0, 'a shut doorway lets nothing through');
+  if (d1) assert.ok(d1.u.equals(before1), 'the other doorway is as it was');
+  // a hung door half shut: half its light
+  d0.throat.open = true; world.env.doors = { at: (link) => (link === d0.link ? { k: 0.5 } : null) };
+  world.updateLighting(0);
+  const half = d0.u.length(); world.env.doors = null; world.updateLighting(0);
+  assert.ok(Math.abs(half - d0.u.length() / 2) < 1e-9);
+  // the room beyond turned down: its doorway's light with it; a room beyond whose banks fail: less of it
+  const full = d0.u.length();
+  world.setLights(d0.other, 0.02); world.updateLighting(0);
+  assert.ok(d0.u.length() < full * 0.05);
+  world.setLights(d0.other, 1); world.updateLighting(0);
+  const banked = rooms.flatMap((r) => r.doorLight).find((d) => d.other.lighting && d.share.slice(2).some((s) => s > 0.3));
+  assert.ok(banked, 'a doorway from a room with banks');
+  banked.other.lighting.preview = 'working'; world.updateLighting(0);
+  const on = banked.u.length();
+  delete banked.other.lighting.preview; world.updateLighting(0);
+  assert.ok(banked.u.length() < on, 'a failing bank next door: less light through the doorway');
+  // a body standing in it is lit by it (world.lightAt), and not when the doorway is shut
+  const m = rt.lm, r = m.layout.regions.floor;
+  let best = null, bestV = 0;
+  if (r) for (let j = 0; j < r.nv; j += 2) for (let i = 0; i < r.nu; i += 2) { const v = m.C.data[((r.py + j) * m.layout.width + r.px + i) * 4]; if (v > bestV) { bestV = v; best = [r.o[0] + (i + 0.5) * r.cell, r.o[1] + (j + 0.5) * r.cell]; } }
+  assert.ok(best);
+  const p = toWorld(rt.def, best[0], best[1]);
+  const lit = world.lightAt(p.x, p.z, 1)[0];
+  for (const d of rt.doorLight) d.throat.open = false;
+  world.updateLighting(0);
+  assert.ok(world.lightAt(p.x, p.z, 1)[0] < lit);
 });

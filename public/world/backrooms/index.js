@@ -313,7 +313,7 @@ async function visit(office, opt) {
   const halfFov = () => Math.atan(Math.tan((fov * Math.PI) / 360) * camera.aspect);
   async function build(level, carry, pace) {
     // light worked out once per room, beyond the lamps (kit.js gfxOf): what the Graphics setting's level says, unless the dev page asks for its own
-    const kit = createKit({ gfx: opt.dev?.gfx || opt.gfx || { contact: gfx().contact, bounce: gfx().bounce, shadows: gfx().shadows } });
+    const kit = createKit({ gfx: opt.dev?.gfx || opt.gfx || { contact: gfx().contact, bounce: gfx().bounce, shadows: gfx().shadows, doorlight: gfx().doorlight } });
     const f = { level, kit, world: null, player: null, env: null };
     const builders = await buildersFor(level);
     if (opt.barricades !== false && opt.dev?.barricadeStudy && level === first) {
