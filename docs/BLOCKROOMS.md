@@ -97,9 +97,26 @@ build takes it from `SITE_ORIGIN` (`https://…`), or, on Vercel, from
 | `/play?tape=<seed>` | that building first. A finished visit keeps its tape (its seed); while the card for it is on the wall the address bar shows this address, so copying it hands the building on. (`/?tape=` from before there was a home page goes straight through.) |
 | the tape's number on the card | a link to the same address; choosing it walks the building again |
 | `/play?room=<a room of the deck>` | a building with that room where you land, for looking at one room. Nothing on the home page leads here. A room that does not exist is an ordinary door |
-| `/play?debug` (with `depths=`, `depth=`, `mute`, `pursuer=0`, `themes=`, `cast=`) | for checking, not playing: exposes the level's handle as `window.__backrooms` and allows a shorter building, or particular kinds of floor (`themes=night,exec`, top down: the only way onto a kind that is still being built). A building asked for with `debug` or `room=` is not the one its seed gives, so walking out of it does not sign the book |
+| `/play?debug` (with `depths=`, `depth=`, `mute`, `pursuer=0`, `themes=`, `cast=`) | for checking, not playing: exposes the level's handle as `window.__backrooms` and allows a shorter building, or particular kinds of floor (`themes=night,exec`, top down: the only way onto a kind that is still being built). A building asked for with `debug` or `room=` is not the one its seed gives, so walking out of it does not sign the book, and going into it is not counted as somebody going in |
+| `/play?debug&tape=7&bench=1` (or `&perf=1`; with `&stress=<n>` or `&stress=auto`) | the level's measuring tape, for any laptop or phone with no office to run: a read-out of frame times and draw calls, and with `bench=1` a fixed tour of the floor you land on (about a minute; the title becomes `bench done`, the summary has a *copy result* button). See the paragraph after this table |
 | `/api/book` | the visitors' book (below) |
 | `/api/where` | the city a visitor's connection appears to come from, for one of the awards on the home page (below) |
+
+**Measuring a laptop or a phone.** Open
+`https://<the site>/play?debug&tape=7&bench=1` on it (`/?debug&tape=7&bench=1`
+goes straight through), leave it alone — no keys, no touching — until the
+title or the read-out says `bench done`, then press *copy result* and send
+the line, or take a screenshot of the summary; say what the device is and
+whether it was plugged in. The tape is the seed, so the same address is the
+same walk on any machine; a bench run is also on the default difficulty and
+the full camcorder (`&vhs=0|1|2` for another), quiet, with nothing following,
+and never a kept tape played back. `&stress=auto` adds a short step-up at the
+first station that says how many times over the scene still fits in a frame
+(*headroom ≈ k×*) on a machine too fast for the plain tour to tell; it
+multiplies today's scene, and predicts nothing about what is not built yet.
+Only under `debug`: without these flags the measuring modules
+(`world/dev/perf.js`, `perf-stats.js`) are not fetched at all.
+docs/BACKROOMS-GRAPHICS.md (phase 0) says what the numbers mean.
 
 A tape this browser has kept is **played back**: the picture says PLAY where
 a visit says REC, nothing is hidden in it, and it scores but cannot beat the

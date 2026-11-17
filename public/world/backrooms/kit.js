@@ -173,9 +173,28 @@ export function lamp(x, y, z, rgb, o = {}) {
     floor: o.floor ?? 0.25, flick: !!o.flick, bank: o.bank, far2: (o.far ?? 14) ** 2 };
 }
 
-/** Light every vertex of a batch. → { lit, flk } (flk only if a flickering light reaches it). */
-export function bake(batch, lights, amb, lighting = null) {
+/**
+ * The switch for light worked out once with each room, beyond the lamps (createKit({ gfx })): `contact`, how dark it
+ * gets where things stand on the floor or against a wall, and `bounce`, how much of the carpet's colour comes back
+ * up the walls and the wallpaper's onto the edges of the floor and ceiling. Each 0…1; → null when both are 0, and
+ * then nothing of it runs (world.js asks kit.gfx before doing any of the work).
+ */
+export function gfxOf(o) {
+  const k = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(1, Number(v))) : 0);
+  const contact = k(o?.contact), bounce = k(o?.bounce);
+  return contact > 0 || bounce > 0 ? { contact, bounce } : null;
+}
+
+/**
+ * Light every vertex of a batch. → { lit, flk } (flk only if a flickering light reaches it).
+ * extra (only with kit.gfx; world.js works it out): { ao, bounce } — ao, a further darkening per vertex (0…1, with
+ * the batch's own); bounce { w, src, rgb }, light that comes off another surface: per vertex, how much (w), the
+ * point it comes from and that point's facing (src, six numbers), and its colour (rgb). The light arriving at the
+ * source is gathered from the same lamps, banks and flicker as everything else, so banks still add up to the bake.
+ */
+export function bake(batch, lights, amb, lighting = null, extra = null) {
   const n = batch.verts, pos = batch.pos, nor = batch.nor, alb = batch.alb, ao = batch.ao, sf = batch.sf;
+  const cao = extra?.ao || null, bw = extra?.bounce?.w || null, bsrc = extra?.bounce?.src, brgb = extra?.bounce?.rgb;
   const lit = new Float32Array(n * 3);
   let flk = null;
   const count = lighting ? lighting.bankCount || 2 : 0;
@@ -203,22 +222,38 @@ export function bake(batch, lights, amb, lighting = null) {
     const j = i * 3, ar = alb[j], ag = alb[j + 1], ab = alb[j + 2];
     if (batch.vox && sf[i * 2 + 1] > 0.5) { lit[j] = ar * GLOW; lit[j + 1] = ag * GLOW; lit[j + 2] = ab * GLOW; continue; }
     const px = pos[j], py = pos[j + 1], pz = pos[j + 2], nx = nor[j], ny = nor[j + 1], nz = nor[j + 2];
-    const hemi = 0.8 + 0.2 * ny, k = ao[i];
+    const hemi = 0.8 + 0.2 * ny, k = cao ? ao[i] * cao[i] : ao[i];
+    // (bounce: the surface this vertex sees, at s, facing sn; w × its colour of whatever light arrives there)
+    const w = bw ? bw[i] : 0, s = i * 6;
+    const sx = w ? bsrc[s] : 0, sy = w ? bsrc[s + 1] : 0, sz = w ? bsrc[s + 2] : 0, snx = w ? bsrc[s + 3] : 0, sny = w ? bsrc[s + 4] : 0, snz = w ? bsrc[s + 5] : 0;
+    const shemi = 0.8 + 0.2 * sny, wr = w ? w * brgb[j] : 0, wg = w ? w * brgb[j + 1] : 0, wb = w ? w * brgb[j + 2] : 0;
     gather(steady, px, py, pz, nx, ny, nz);
     const base = 1 - (lighting?.ambientShare || 0);
     lit[j] = ar * k * (amb[0] * hemi * base + sum[0]); lit[j + 1] = ag * k * (amb[1] * hemi * base + sum[1]); lit[j + 2] = ab * k * (amb[2] * hemi * base + sum[2]);
+    if (w) {
+      gather(steady, sx, sy, sz, snx, sny, snz);
+      lit[j] += ar * k * wr * (amb[0] * shemi * base + sum[0]); lit[j + 1] += ag * k * wg * (amb[1] * shemi * base + sum[1]); lit[j + 2] += ab * k * wb * (amb[2] * shemi * base + sum[2]);
+    }
     if (banks) {
       const weights = bankWeights(lights, px, pz, count, lighting.ceilingBanks || count);
+      const sw = w ? bankWeights(lights, sx, sz, count, lighting.ceilingBanks || count) : null;
       for (let b = 0; b < count; b++) {
         gather(bankLights[b], px, py, pz, nx, ny, nz);
         for (let c = 0; c < 3; c++) banks[b][j + c] = alb[j + c] * k * (sum[c] + amb[c] * hemi * lighting.ambientShare * weights[b]);
+        if (w) {
+          gather(bankLights[b], sx, sy, sz, snx, sny, snz);
+          for (let c = 0; c < 3; c++) banks[b][j + c] += alb[j + c] * k * w * brgb[j + c] * (sum[c] + amb[c] * shemi * lighting.ambientShare * sw[b]);
+        }
       }
     }
     if (flicker.length) {
+      let fr = 0, fg = 0, fb = 0;
+      if (w) { gather(flicker, sx, sy, sz, snx, sny, snz); fr = wr * sum[0]; fg = wg * sum[1]; fb = wb * sum[2]; }
       gather(flicker, px, py, pz, nx, ny, nz);
-      if (sum[0] + sum[1] + sum[2] > 1e-4) {
+      if (sum[0] + sum[1] + sum[2] + fr + fg + fb > 1e-4) {
         if (!flk) flk = new Float32Array(n * 3);
         flk[j] = ar * k * sum[0]; flk[j + 1] = ag * k * sum[1]; flk[j + 2] = ab * k * sum[2];
+        if (w) { flk[j] += ar * k * fr; flk[j + 1] += ag * k * fg; flk[j + 2] += ab * k * fb; }
       }
     }
   }
@@ -358,7 +393,8 @@ void main() {
  * Everything a level needs to build rooms, and one place that remembers what
  * to throw away afterwards.
  */
-export function createKit() {
+export function createKit(opt = {}) {
+  const gfx = gfxOf(opt.gfx);                    // (null unless contact darkening or bounce was asked for)
   const owned = new Set();
   const own = (thing) => { if (thing) owned.add(thing); return thing; };
   const shared = {
@@ -391,6 +427,7 @@ export function createKit() {
       // fabric-wrapped partition, oatmeal (themes.js `mall`): the walls of a 1980s office park, which is what the shops are made of
       else if (look.pattern === 'mall') { for (let y = 0; y < h; y++) for (let x = (y & 1); x < w; x += 2) { const n = r(); if (n > 0.62) P(g, shade(wall, 0.05), x, y, 1, 1); else if (n < 0.3) P(g, shade(wall, -0.06), x, y, 1, 1); } for (let x = 0; x < w; x += 16) { P(g, shade(wall, -0.2), x, 0, 1, h); P(g, shade(wall, 0.08), x + 1, 0, 1, h); } }
       else if (look.pattern === 'sky') { for (let x = 0; x < w; x += 8) P(g, shade(wall, (r() - 0.5) * 0.04), x, 0, 8, h); for (let i = 0; i < 4; i++) P(g, shade(wall, 0.07), (r() * w) | 0, (r() * h) | 0, 2, 3 + ((r() * 4) | 0)); }
+      else if (look.pattern === 'tiles') { P(g, shade(ink, 0.08), 0, 0, w, h); for (let y = 0; y < h; y += 8) for (let x = 0; x < w; x += 8) { const band = y === 24; P(g, band ? ink : shade(wall, (r() - 0.5) * 0.06), x + 1, y + 1, 7, 7); P(g, pale, x + 1, y + 1, 3, 1); } }
       else if (look.pattern === 'sprigs') { for (let y = 5; y < h; y += 16) for (let x = ((y - 5) / 16) % 2 ? 13 : 5; x < w; x += 16) { P(g, ink, x, y, 1, 4); P(g, ink, x - 1, y + 1, 3, 1); P(g, pale, x - 1, y - 1, 1, 1); P(g, pale, x + 1, y - 1, 1, 1); P(g, pale, x, y - 2, 1, 1); } }
       else { for (let y = 3; y < h; y += 8) for (let x = 0; x < w; x++) { const k = x % 8; P(g, ink, x, y + (k < 4 ? k : 7 - k), 1, 1); } }
     })),
@@ -403,6 +440,15 @@ export function createKit() {
     })),
     /** What is underfoot on this floor of the building: carpet, mostly — but lino in Records, screed where they are still fitting out, and something deeper upstairs. */
     floor: (look) => (look.floor === 'terrazzo' ? T.terrazzo(look.carpet) : look.floor === 'turf' ? T.turf(look.carpet) : look.floor === 'lino' ? T.lino(look.carpet) : look.floor === 'screed' ? T.screed(look.carpet) : look.floor === 'plush' ? T.plush(look.carpet, look.pale) : T.carpet(look.carpet)),
+    /** Ceramic pool mosaic. */
+    pooltile: (color) => tex('ptile' + color, () => canvasTexture(64, 64, (g, w, h) => {
+      const r = lcg(parseInt(color.slice(1), 16) + 53);
+      P(g, shade(color, -0.22), 0, 0, w, h);
+      for (let y = 0; y < h; y += 8) for (let x = 0; x < w; x += 8) {
+        P(g, shade(color, (r() - 0.45) * 0.12), x + 1, y + 1, 7, 7);
+        P(g, shade(color, 0.16), x + 1, y + 1, 2, 1);
+      }
+    })),
     /** Fake grass off a roll, 1.6 m wide: the stripes of a mown lawn are printed in, and the joins between rolls show. */
     /** Terrazzo in 0.8 m squares, chips of three stones in it, a brass strip between: a shopping centre's floor, laid in an office. */
     terrazzo: (color) => tex('terrazzo' + color, () => canvasTexture(64, 64, (g, w, h) => {
@@ -502,10 +548,10 @@ export function createKit() {
     return m;
   }
 
-  /** Batch → geometry with its light baked in. */
-  function geometry(batch, lights, amb, lighting = null) {
+  /** Batch → geometry with its light baked in. extra: see bake() (world.js passes it only when kit.gfx is set). */
+  function geometry(batch, lights, amb, lighting = null, extra = null) {
     if (!batch.verts) return null;
-    const { lit, flk, banks } = bake(batch, lights, amb, lighting);
+    const { lit, flk, banks } = bake(batch, lights, amb, lighting, extra);
     const geo = own(new THREE.BufferGeometry());
     geo.setAttribute('position', new THREE.Float32BufferAttribute(batch.pos, 3));
     // Flat face normals already exist for the bake; retain them in three bytes
@@ -549,7 +595,7 @@ export function createKit() {
   }
 
   return {
-    own, shared, tex: T, surface, glowing, geometry, plain, model, VOXEL,
+    own, shared, tex: T, surface, glowing, geometry, plain, model, VOXEL, gfx,
     dispose() { for (const thing of owned) thing.dispose?.(); owned.clear(); textures.clear(); models.clear(); },
   };
 }

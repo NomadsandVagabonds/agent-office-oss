@@ -88,7 +88,7 @@ test('settings emit typed values immediately, while restoring preferences emits 
   assert.equal(music.getAttribute('aria-valuetext'), '35%');
   music.value = '0.6'; music.emit('input'); assert.deepEqual(h.calls.changed, [['musicVolume', .6]]);
   mute.checked = false; mute.emit('change'); assert.deepEqual(h.calls.changed.at(-1), ['mute', false]);
-  const [picture, difficulty] = h.menu.el.querySelectorAll('select');
+  const [picture, , difficulty] = h.menu.el.querySelectorAll('select');
   picture.value = '0'; picture.emit('change'); assert.deepEqual(h.calls.changed.at(-1), ['vhs', 0]);
   assert.equal(difficulty.disabled, false);
   h.menu.update({ musicVolume: .1, invertY: false });
@@ -120,9 +120,20 @@ test('Give up needs its own explicit confirmation and can be backed out of with 
 });
 
 
+test('Graphics sits after Picture, offers the five tiers in order, starts at Classic and says which was picked', async t => {
+  const { GRAPHICS, GRAPHICS_LABELS } = await import('../public/world/backrooms/graphics.js');
+  const h = setup(t), [picture, graphics] = h.menu.el.querySelectorAll('select');
+  assert.equal(picture.id.endsWith('-vhs'), true); assert.equal(graphics.id.endsWith('-graphics'), true);
+  assert.deepEqual(graphics.children.map(o => o.value), GRAPHICS);
+  assert.deepEqual(graphics.children.map(o => o.textContent), GRAPHICS.map(g => GRAPHICS_LABELS[g]));
+  assert.equal(graphics.value, 'classic');
+  graphics.value = 'medium'; graphics.emit('change'); assert.deepEqual(h.calls.changed.at(-1), ['graphics', 'medium']);
+  h.menu.update({ graphics: 'auto' }); assert.equal(graphics.value, 'auto'); assert.equal(h.calls.changed.length, 1);
+});
+
 test('difficulty selector offers five modes, warns before changes and shows permanent unscored state', t => {
   const h = setup(t, { difficulty: 'easy', scoreEligible: true });
-  const field = h.menu.el.querySelectorAll('select')[1];
+  const field = h.menu.el.querySelectorAll('select')[2];
   assert.equal(field.value, 'easy'); assert.equal(field.children.length, 5);
   assert.match(h.menu.el.textContent, /Changing difficulty permanently voids/);
   field.value = 'hard'; field.emit('change');

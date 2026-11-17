@@ -4,6 +4,7 @@
 import { Vox, M } from '../vox/vox.js';
 import { lin, drawText, WHITE } from './kit.js';
 import { makeCutout } from './cutout.js';
+import { WETSIGN, boardVox, frameVox } from './wetsign.model.js';
 
 export const P = (g, col, x, y, w, h) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -54,14 +55,26 @@ export function doorFrame(c, side, at, w, h, rgb = lin('#e2d8bd'), depth = 0.05,
 /** A yellow A-frame sign. texts: two lines. */
 export function wetSign(c, x, z, rot, lines, fallen = false) {
   const tex = card(c, 'wet' + lines.join('|'), lines, { w: 48, h: 80, bg: '#f2c318', fg: '#201a08', edge: '#c79a0c', size: 11, pad: 6 });
-  const batch = c.mapped('wet' + lines.join('|'), tex), inner = lin('#8a6c08'), w = 0.3, h = 0.6, spread = 0.17;
+  const { w, h, spread, top, rim, scale } = WETSIGN, batch = c.mapped('wet' + lines.join('|'), tex), lean = Math.atan2(spread - top, h);
   const cs = Math.cos(rot), sn = Math.sin(rot);
   const pt = (lx, y, lz) => [x + lx * cs + lz * sn, y, z - lx * sn + lz * cs];
-  if (fallen) { c.lay(batch, x, z, w, h, rot, null, WHITE, 0.012); c.lay(batch, x + sn * 0.34, z + cs * 0.34, w, h, rot + 2.6, null, WHITE, 0.02); return; }
-  batch.quad(pt(-w / 2, 0, spread), pt(w / 2, 0, spread), pt(w / 2, h, 0.01), pt(-w / 2, h, 0.01));
-  batch.quad(pt(w / 2, 0, -spread), pt(-w / 2, 0, -spread), pt(-w / 2, h, -0.01), pt(w / 2, h, -0.01));
-  c.flat.quad(pt(w / 2, 0, spread), pt(-w / 2, 0, spread), pt(-w / 2, h, 0.01), pt(w / 2, h, 0.01), inner);
-  c.flat.quad(pt(-w / 2, 0, -spread), pt(w / 2, 0, -spread), pt(w / 2, h, -0.01), pt(-w / 2, h, -0.01), inner);
+  const board = (model, at, turn, tilt, y = 0) => c.place(model, at[0], at[2], { rot: turn, tilt: [tilt, 0], y, scale, solid: false, shadow: false });
+  const boards = c.kit.model('wetsign:board', boardVox, { ao: false });
+  if (fallen) {
+    // folded flat where it went over, and the other half of another a step away: the boards lying, the words up
+    for (const [ox, oz, turn, up] of [[0, 0, rot, 0.026], [sn * 0.34, cs * 0.34, rot + 2.6, 0.03]]) {
+      const c2 = Math.cos(turn), s2 = Math.sin(turn);
+      board(boards, [x + ox + s2 * h / 2, 0, z + oz + c2 * h / 2], turn, -Math.PI / 2, up);
+      c.lay(batch, x + ox, z + oz, w - rim * 2, h - rim * 3, turn, null, WHITE, up + 0.004);
+    }
+    return;
+  }
+  // the two boards are sculpted (wetsign.model.js); what they say is laid in the well of each, a hair proud
+  board(boards, pt(0, 0, spread), rot, -lean); board(boards, pt(0, 0, -spread), rot + Math.PI, -lean);
+  board(c.kit.model('wetsign:frame', frameVox, { ao: false }), pt(0, 0, 0), rot, 0);
+  const on = (t) => spread + (top - spread) * t + 0.004, y0 = 0.08, y1 = h - rim * 3.4, hw = w / 2 - rim;
+  batch.quad(pt(-hw, y0, on(y0 / h)), pt(hw, y0, on(y0 / h)), pt(hw, y1, on(y1 / h)), pt(-hw, y1, on(y1 / h)));
+  batch.quad(pt(hw, y0, -on(y0 / h)), pt(-hw, y0, -on(y0 / h)), pt(-hw, y1, -on(y1 / h)), pt(hw, y1, -on(y1 / h)));
   c.shadow(x, z, 0.3, 0.3, 0.4);
 }
 /** A standee that turns to face you whenever you are not looking. → { group, x, z } */

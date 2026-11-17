@@ -9,6 +9,7 @@ import { DECK, ARCHETYPES, STASH, LESSONS, lessons, isBig, generate } from '../p
 import { MORE_DECK } from '../public/world/backrooms/deck2.js';
 import { planVisit, floorOf, KNOWN_AT_START } from '../public/world/backrooms/plan.js';
 import { THEME_IDS } from '../public/world/backrooms/themes.js';
+import { ROOM_BUDGET, overBudget } from '../public/world/backrooms/budget.js';
 
 const dir = new URL('../public/world/backrooms/', import.meta.url);
 const office = { name: 'Robin', projects: ['Webstore', 'Mobile App', 'Infra'], agents: ['Ivory Marten', 'Amber Vireo', 'Ember Numbat', 'Olive Heron'], tasks: ['Cache the product catalogue'] };
@@ -141,4 +142,32 @@ test('somebody lives in a room: it says who, what a catch costs and what they ca
     }
   }
   if (lived.length) assert.ok(withOne > 0 && withOne < parts, `rooms with residents are dealt, and not to every part (${withOne} of ${parts})`);
+});
+
+test('the budget is the one in docs/BACKROOMS.md, line for line', () => {
+  const doc = readFileSync(new URL('../docs/BACKROOMS.md', import.meta.url), 'utf8');
+  const section = doc.slice(doc.indexOf('### 4. What a room may cost'), doc.indexOf('### 5. Trying it'));
+  const n = (s) => Number(s.replace(/,/g, ''));
+  const row = (label) => { const m = new RegExp(`\\| ${label} \\| ([^|]+) \\| ([^|]+) \\|`).exec(section); assert.ok(m, label); return [m[1].trim(), m[2].trim()]; };
+  const [ord, ordBig] = row('triangles in its ordinary batches'), [all, allBig] = row('triangles in all, with its detail batches');
+  assert.deepEqual([n(ord), n(ordBig)], [ROOM_BUDGET.room.ordinaryTriangles, ROOM_BUDGET.setPiece.ordinaryTriangles]);
+  assert.deepEqual([n(all), n(allBig)], [ROOM_BUDGET.room.allTriangles, ROOM_BUDGET.setPiece.allTriangles]);
+  const [m] = row('meshes'); assert.match(m, new RegExp(`^${ROOM_BUDGET.room.meshes}, and up to ${ROOM_BUDGET.room.detailMeshes} more that are detail$`));
+  const [l, lBig] = row('lights'); assert.deepEqual([Number(l), Number(lBig)], [ROOM_BUDGET.room.lights, ROOM_BUDGET.setPiece.lights]);
+  assert.match(section, /`c\.detail`/, 'the document names the toolbox form');
+});
+
+test('what a room may cost: ordinary batches and detail batches are counted apart, and detail never buys ordinary', () => {
+  // the figures (docs/BACKROOMS.md, "What a room may cost")
+  const room = { meshes: 45, triangles: 120000, detailMeshes: 12, detailTriangles: 130000 };
+  assert.deepEqual(overBudget(room, { lights: 16 }), [], 'a room exactly at every limit');
+  assert.equal(overBudget({ ...room, triangles: 120001, detailTriangles: 0 }).length, 1, 'over in its ordinary batches, though not in all');
+  assert.equal(overBudget({ ...room, detailTriangles: 130001 }).length, 1, 'over in all');
+  assert.equal(overBudget({ ...room, meshes: 46 }).length, 1);
+  assert.equal(overBudget({ ...room, detailMeshes: 13 }).length, 1);
+  assert.equal(overBudget(room, { lights: 17 }).length, 1);
+  assert.deepEqual(overBudget({ ...room, triangles: 240000, detailTriangles: 260000 }, { setPiece: true }), [], 'a set piece has twice the triangles');
+  assert.equal(overBudget({ ...room, triangles: 240000, detailTriangles: 260000 }).length, 2, 'which a room does not');
+  // detail triangles never buy ordinary ones: an ordinary-heavy room is over whatever its detail
+  assert.ok(overBudget({ meshes: 1, triangles: 130000, detailMeshes: 0, detailTriangles: 0 }).some((s) => /ordinary/.test(s)));
 });

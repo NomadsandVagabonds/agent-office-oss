@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backrooms look-dev lab</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font: 12px ui-monospace, Menlo, Consolas, monospace; color: #f1ead8; }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  /* the level's own overlay (REC, battery, hints) is hidden: the lab is about the picture under it */
+  #ui { display: none; }
+  #lab { position: fixed; right: 6px; top: 4px; z-index: 20; opacity: .55; white-space: pre; pointer-events: none; }
+  body.shot #lab { display: none; }
+</style>
+<script>
+  // Determinism: the level uses Math.random only for things that happen while somebody stands in a room (rule 9), but
+  // the lab wants the same picture every time, so every call is answered from a fixed sequence.
+  (() => { let s = 0x2545f491; Math.random = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; }; })();
+</script>
+<script type="importmap">{ "imports": { "three": "/vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<div id="stage"></div>
+<div id="ui"></div>
+<div id="lab"></div>
+<script type="module" src="/world/dev/lookdev/lab.js"></script>
+</body>
+</html>

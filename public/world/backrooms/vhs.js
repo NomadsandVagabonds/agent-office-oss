@@ -11,6 +11,10 @@ import { EffectComposer } from '/vendor/three-addons/postprocessing/EffectCompos
 import { RenderPass } from '/vendor/three-addons/postprocessing/RenderPass.js';
 import { ShaderPass } from '/vendor/three-addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from '/vendor/three-addons/postprocessing/UnrealBloomPass.js';
+import { Pass, FullScreenQuad } from '/vendor/three-addons/postprocessing/Pass.js';
+import { profile, bloomOn, internalSize } from './graphics.js';
+
+const HAZE_LIGHT = 1.6;                                  // the haze's brightness for each unit of the room's light
 
 const QUAD = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
 
@@ -19,18 +23,48 @@ const Signal = {
     tDiffuse: { value: null }, uRes: { value: new THREE.Vector2(640, 480) }, uTime: { value: 0 },
     uAmt: { value: 1 }, uSoft: { value: 1 }, uTrack: { value: 0 }, uGain: { value: 1 }, uExposure: { value: 1 },
     uBlack: { value: 0 }, uWhite: { value: 0 }, uRed: { value: 0 }, uSnow: { value: 0 }, uStaticDark: { value: 0 }, uRoll: { value: 0 },
+    // the Graphics setting (graphics.js): both 0 at Classic, and then the picture is exactly what it was before them
+    uGrade: { value: 0 }, uHaze: { value: 0 },
+    uLift: { value: new THREE.Vector3(0, 0, 0) }, uGamma: { value: new THREE.Vector3(1, 1, 1) }, uGainRGB: { value: new THREE.Vector3(1, 1, 1) }, uSat: { value: 1 },
+    tDepth: { value: null }, uNear: { value: 0.06 }, uFar: { value: 170 }, uHazeColor: { value: new THREE.Vector3(0.8, 0.78, 0.72) }, uHazeLight: { value: 0.3 },
   },
   vertexShader: QUAD,
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform vec2 uRes;
     uniform float uTime, uAmt, uSoft, uTrack, uGain, uExposure, uBlack, uWhite, uRed, uSnow, uStaticDark, uRoll;
+    uniform float uGrade, uHaze, uSat, uNear, uFar, uHazeLight; uniform vec3 uLift, uGamma, uGainRGB, uHazeColor; uniform sampler2D tDepth;
     varying vec2 vUv;
     const mat3 YIQ = mat3(0.299, 0.596, 0.211, 0.587, -0.274, -0.523, 0.114, -0.322, 0.312);
     const mat3 RGB = mat3(1.0, 1.0, 1.0, 0.956, -0.272, -1.106, 0.621, -0.647, 1.703);
     float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
     // a gentle shoulder: bright things wash out toward white, the way cheap video does
     vec3 film(vec3 c) { return 1.0 - exp(-c * (1.3 * uExposure * uGain)); }
-    vec3 see(vec2 uv) { return pow(film(texture2D(tDiffuse, clamp(uv, 0.001, 0.999)).rgb), vec3(0.4545)); }
+    // the air: nothing nearer than 8 m, then exponentially toward the floor's colour; never more than about half way.
+    // The air is only as bright as what is behind it (and the room it hangs in): a dark end of a corridor stays dark,
+    // it is not fogged grey. Where nothing was drawn (the depth is the far plane) it is left alone: the void stays black
+    vec3 haze(vec3 c, vec2 uv) {
+      float d = texture2D(tDepth, uv).x;
+      if (d >= 0.99999) return c;
+      float z = uNear * uFar / (uFar - d * (uFar - uNear));
+      float k = (1.0 - exp(-max(z - 8.0, 0.0) * 0.05)) * 0.5 * uHaze;
+      float l = dot(c, vec3(0.299, 0.587, 0.114));
+      vec3 air = uHazeColor / max(dot(uHazeColor, vec3(0.299, 0.587, 0.114)), 0.001) * l * 1.08 + uHazeColor * min(uHazeLight, l) * 0.3;
+      return mix(c, air, k);
+    }
+    // the floor's grade (themes.js), on the picture as seen: lift into the shadows, gain on the highlights, gamma, saturation
+    vec3 grade(vec3 c) {
+      vec3 g = pow(max(c * uGainRGB + uLift * (1.0 - c), 0.0), 1.0 / uGamma);
+      g = mix(vec3(dot(g, vec3(0.299, 0.587, 0.114))), g, uSat);
+      return mix(c, g, uGrade);
+    }
+    vec3 see(vec2 uv) {
+      vec2 at = clamp(uv, 0.001, 0.999);
+      vec3 c = texture2D(tDiffuse, at).rgb;
+      if (uHaze > 0.0) c = haze(c, at);
+      c = pow(film(c), vec3(0.4545));
+      if (uGrade > 0.0) c = grade(c);
+      return c;
+    }
     void main() {
       vec2 uv = vUv;
       uv.y = fract(uv.y + uRoll);
@@ -103,9 +137,44 @@ const Screen = {
 };
 
 /**
+ * The scene drawn larger than the tape (graphics.js `supersample`) and brought down to the tape's size with a small tent
+ * filter: what a camera with a good lens records onto a soft medium. Only on while a tier asks for it; otherwise the
+ * RenderPass draws the scene at the tape's size, as it always did.
+ */
+class SupersamplePass extends Pass {
+  constructor(camera) {
+    super();
+    // (an empty scene until setScene, as the RenderPass has: a tier that starts supersampled may draw before anything has landed)
+    this.needsSwap = false; this.enabled = false; this.scene = new THREE.Scene(); this.camera = camera;
+    this.target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
+    this.material = new THREE.ShaderMaterial({
+      uniforms: { tScene: { value: null }, uStep: { value: new THREE.Vector2() } }, vertexShader: QUAD, depthTest: false, depthWrite: false,
+      fragmentShader: `
+        uniform sampler2D tScene; uniform vec2 uStep; varying vec2 vUv;
+        // four bilinear taps, each a little under half a tape pixel from the middle: a tent over the scene's pixels
+        void main() {
+          vec3 c = texture2D(tScene, vUv + vec2(-uStep.x, -uStep.y)).rgb + texture2D(tScene, vUv + vec2(uStep.x, -uStep.y)).rgb
+                 + texture2D(tScene, vUv + vec2(-uStep.x, uStep.y)).rgb + texture2D(tScene, vUv + vec2(uStep.x, uStep.y)).rgb;
+          gl_FragColor = vec4(c * 0.25, 1.0);
+        }`,
+    });
+    this.quad = new FullScreenQuad(this.material);
+  }
+  setSize() {}                                           // (its own size is set by layout(), not by the composer)
+  resize(sw, sh, iw, ih) { this.target.setSize(sw, sh); this.material.uniforms.uStep.value.set(0.375 / iw, 0.375 / ih); }
+  render(renderer, writeBuffer, readBuffer) {
+    renderer.setRenderTarget(this.target); renderer.clear(); renderer.render(this.scene, this.camera);
+    this.material.uniforms.tScene.value = this.target.texture;
+    renderer.setRenderTarget(readBuffer); this.quad.render(renderer);
+  }
+  dispose() { this.target.depthTexture?.dispose(); this.target.dispose(); this.material.dispose(); this.quad.dispose(); }
+}
+
+/**
  * @param {THREE.WebGLRenderer} renderer
  * @param {THREE.PerspectiveCamera} camera
- * @param {{bloom?:boolean, level?:number}} [opt]
+ * @param {{bloom?:boolean, level?:number, profile?:object}} [opt]  bloom: whether the host has bloom (Classic follows it)
+ *        profile: graphics.js profile(tier); Classic if none
  */
 export function createVhs(renderer, camera, opt = {}) {
   const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
@@ -113,11 +182,19 @@ export function createVhs(renderer, camera, opt = {}) {
   composer.setPixelRatio(1);
   const renderPass = new RenderPass(new THREE.Scene(), camera);
   const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.55, 0.92);
-  bloom.enabled = opt.bloom !== false;
+  const hostBloom = opt.bloom !== false;
+  bloom.enabled = hostBloom;
   const signal = new ShaderPass(Signal), screen = new ShaderPass(Screen);
-  composer.addPass(renderPass); composer.addPass(bloom); composer.addPass(signal); composer.addPass(screen);
+  const superPass = new SupersamplePass(camera);           // (off unless a tier draws the scene larger than the tape)
+  composer.addPass(renderPass); composer.addPass(superPass); composer.addPass(bloom); composer.addPass(signal); composer.addPass(screen);
   const u = signal.uniforms, s = screen.uniforms;
-  let level = opt.level ?? 2, last = '', time = 0;
+  // (the haze reads the depth of whatever the scene was drawn into, when there is one)
+  const signalRender = signal.render.bind(signal);
+  signal.render = (r, write, read, dt, mask) => {
+    u.tDepth.value = (superPass.enabled ? superPass.target.depthTexture : read.depthTexture) || null; u.uNear.value = camera.near; u.uFar.value = camera.far;
+    signalRender(r, write, read, dt, mask);
+  };
+  let level = opt.level ?? 2, last = '', time = 0, prof = profile('classic');
   const picture = { x: 0, y: 0, w: 1, h: 1 };            // where the picture sits in the window, CSS pixels
 
   /**
@@ -125,16 +202,15 @@ export function createVhs(renderer, camera, opt = {}) {
    * upright has the picture at the top and its thumbs under it); with none, or no room to spare, it sits in the middle.
    */
   function layout(w, h, top = null) {
-    const ratio = renderer.getPixelRatio(), key = `${w}x${h}@${ratio}/${level}/${top ?? ''}`;
+    const ratio = renderer.getPixelRatio(), key = `${w}x${h}@${ratio}/${level}/${top ?? ''}/${prof.tier}`;
     if (key === last) return picture;
     last = key;
-    const cw = w * ratio, ch = h * ratio;
-    let pw = cw, ph = ch, iw, ih;
-    if (level > 0) {                                     // a 4:3 picture, a few hundred lines tall
-      pw = Math.min(cw, (ch * 4) / 3); ph = (pw * 3) / 4;
-      ih = Math.round(Math.max(300, Math.min(ph, level === 2 ? 540 : 660))); iw = Math.round((ih * 4) / 3);
-    } else { const k = Math.min(1, 1680 / cw); iw = Math.round(cw * k); ih = Math.round(ch * k); }
+    // a 4:3 picture a few hundred lines tall (levels 2 and 1), or the whole window (0): graphics.js internalSize
+    const { cw, ch, pw, ph, iw, ih, sw, sh } = internalSize(w, h, ratio, level, prof);
     composer.setSize(iw, ih);
+    superPass.enabled = sw > iw; renderPass.enabled = !superPass.enabled;
+    if (superPass.enabled) superPass.resize(sw, sh, iw, ih);
+    for (const rt of [composer.renderTarget1, composer.renderTarget2, superPass.target]) if (rt.depthTexture) Object.assign(rt.depthTexture.image, { width: rt.width, height: rt.height });
     camera.aspect = iw / ih; camera.updateProjectionMatrix();
     u.uRes.value.set(iw, ih);
     s.uPicture.value.set(pw / cw, ph / ch);
@@ -154,12 +230,46 @@ export function createVhs(renderer, camera, opt = {}) {
     last = '';
   }
   setLevel(level);
+  /** A Graphics tier's picture (graphics.js profile): lines, edge smoothing, bloom, grade and haze strength. */
+  function setProfile(p) {
+    prof = p;
+    bloom.enabled = bloomOn(p, hostBloom);
+    // a tier's own bloom is tighter than the office's: a glow round the tubes, not a wash over the dark end of a corridor
+    // (the widest blurs are left out: they are what spread a tube over everything)
+    const own = p.bloom !== 'host';
+    bloom.strength = own ? 0.3 : 0.32; bloom.radius = own ? 0 : 0.55;
+    bloom.compositeMaterial.uniforms.bloomFactors.value = own ? [1, 0.5, 0, 0, 0] : [1, 0.8, 0.6, 0.4, 0.2];
+    u.uGrade.value = p.grade; u.uHaze.value = p.haze;
+    // haze needs the depth of the picture: a depth texture on both of the composer's targets (resolved from the
+    // multisampled one by three.js), only while some haze is asked for. Classic leaves the targets as they were
+    const depth = p.haze > 0;
+    for (const rt of [composer.renderTarget1, composer.renderTarget2, superPass.target]) {
+      let dirty = false;
+      if (rt.samples !== p.msaa) { rt.samples = p.msaa; dirty = true; }
+      if (depth !== !!rt.depthTexture) {
+        rt.depthTexture?.dispose();
+        rt.depthTexture = depth ? new THREE.DepthTexture(rt.width, rt.height) : null;
+        dirty = true;
+      }
+      if (dirty) rt.dispose();
+    }
+    last = '';
+  }
+  /** The kind of floor's grade and haze colour (graphics.js gradeOf). */
+  function setGrade(g) {
+    u.uLift.value.fromArray(g.lift); u.uGamma.value.fromArray(g.gamma); u.uGainRGB.value.fromArray(g.gain); u.uSat.value = g.sat;
+    u.uHazeColor.value.fromArray(g.haze);
+  }
+  if (opt.profile) setProfile(opt.profile);
 
   return {
-    picture, layout, setLevel, uniforms: u, bloom,
+    picture, layout, setLevel, setProfile, setGrade, uniforms: u, bloom,
     get level() { return level; },
-    setScene(scene) { renderPass.scene = scene; },
+    get profile() { return prof; },
+    /** How lit the room is (index.js `light`, 0.3 a lit room): the haze is as bright as the air it hangs in. */
+    setAmbient(light) { u.uHazeLight.value = Math.max(0, light) * HAZE_LIGHT; },
+    setScene(scene) { renderPass.scene = scene; superPass.scene = scene; },
     render(dt) { time += dt; u.uTime.value = time; composer.render(dt); },
-    dispose() { composer.dispose(); target.dispose(); bloom.dispose(); signal.dispose?.(); screen.dispose?.(); signal.material?.dispose(); screen.material?.dispose(); },
+    dispose() { composer.renderTarget1.depthTexture?.dispose(); composer.renderTarget2.depthTexture?.dispose(); composer.dispose(); superPass.dispose(); target.dispose(); bloom.dispose(); signal.dispose?.(); screen.dispose?.(); signal.material?.dispose(); screen.material?.dispose(); },
   };
 }
