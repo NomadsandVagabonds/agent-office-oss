@@ -6,6 +6,7 @@ import { Vox, M } from '../../vox/vox.js';
 import { Batch, lin, drawText, smooth, WHITE } from '../kit.js';
 import { roomDistances } from '../gen.js';
 import { P, clamp, card, framed } from '../bits.js';
+import { MAILDESK, deskVox, breechVox } from './mailroom/desk.model.js';
 
 const canisterVox = (band = '#b5342c') => () => {
   const v = new Vox(), brass = M('#d4a74a', 0), tube = M('#e4decb', 0), cap = M('#3a352e', 0), stripe = M(band, 0);
@@ -56,9 +57,9 @@ export function build(c) {
   // central dispatch pedestal + clear vertical vacuum sight-tube up to the ceiling manifold
   const mx = 0, mz = -0.15, topY = H - 0.22;
   c.reserve(mx, mz, 1.15);
-  c.flat.box(mx - 0.56, 0, mz - 0.44, mx + 0.56, 0.88, mz + 0.44, enamel, { skip: '-y' });
-  c.flat.box(mx - 0.6, 0.86, mz - 0.48, mx + 0.6, 0.92, mz + 0.48, brass);
-  c.flat.box(mx - 0.6, 0, mz - 0.48, mx + 0.6, 0.09, mz + 0.48, darkBrass, { skip: '-y' });
+  // (the desk is sculpted, mailroom/desk.model.js: the same outer box as the three blocks it was, its top flat at 0.92.
+  // Drawn only: the solid, the shadow and the dial below are the room's, as they were)
+  c.place(kit.model('mail:desk:' + p.brass, () => deskVox(p.brass), { ao: false }), mx, mz, { scale: MAILDESK.desk.scale, solid: false, shadow: false });
   c.solid(mx - 0.58, mz - 0.46, mx + 0.58, mz + 0.46, { tall: false });
   c.shadow(mx, mz, 1.2, 0.96, 0.5);
 
@@ -75,8 +76,7 @@ export function build(c) {
 
   // open brass dispatch funnel on the +z lip + spare canisters in a wire side-basket
   const bx = mx, bz = mz + 0.2;
-  c.flat.box(bx - 0.13, 0.92, bz - 0.13, bx + 0.13, 1.06, bz + 0.13, brass);
-  c.flat.box(bx - 0.09, 1.05, bz - 0.09, bx + 0.09, 1.07, bz + 0.09, dark);
+  c.place(kit.model('mail:breech:' + p.brass, () => breechVox(p.brass), { ao: false }), bx, bz, { y: 0.92, scale: MAILDESK.breech.scale, solid: false, shadow: false });
   // clear acrylic vertical riser from breech (1.06) to ceiling diverter box (topY)
   for (const [rx, rz] of [[-0.11, -0.11], [0.11, -0.11], [-0.11, 0.11], [0.11, 0.11]]) {
     c.flat.box(bx + rx - 0.012, 1.04, bz + rz - 0.012, bx + rx + 0.012, topY, bz + rz + 0.012, brass);
