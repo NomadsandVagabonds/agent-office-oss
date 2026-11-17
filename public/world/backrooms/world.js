@@ -20,6 +20,8 @@ import { mapLayout, bakeShadows, packShadows, layoutUniforms, sampleMap, bakeDoo
 import { doorPlan, DOORS } from './doors.js';
 import { bridgeReachable } from './bridge-puzzles.js';
 import { LEVEL_DESK, deskVox } from './desk.model.js';
+import { WORKSTATION, chairVox, crtVox, keyboardVox, keyboardKeysVox } from './workstation.model.js';
+import { STORAGE, cabinetVox, boxesVox } from './storage.model.js';
 import { WALLFIT, socketVox, exitBoxVox } from './wallfit.model.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
@@ -781,6 +783,24 @@ async function doorPass(world, tick, late = false) {
 
 /* ---- the toolbox a room is built with ------------------------------------------------ */
 
+/** What the level puts down for c.prop(type) in place of the office's: { geo, scale, over? } (over: detail laid on it at
+ * the same place), or null where the office's own is drawn. o is the layout object the office's would have been made for. */
+function levelProp(kit, catalogue, type, o = {}) {
+  const ws = WORKSTATION.scale, model = (key, make) => kit.model(key, make, { ao: false });
+  if (type === 'desk') return { geo: model('level:desk', deskVox), scale: LEVEL_DESK.scale };
+  // (the office's chair is made in o.color, or its own blue where there is none; its mesh is shared by colour)
+  if (type === 'chair') return { geo: model(`level:chair:${o.color || ''}`, () => chairVox({ colour: o.color || undefined })), scale: ws };
+  if (type === 'crt') return { geo: model('level:crt', crtVox), scale: ws };
+  if (type === 'keyboard') return { geo: model('level:keyboard', keyboardVox), scale: ws, over: model('level:keyboard:keys', keyboardKeysVox) };
+  if (type === 'cabinet') return { geo: model('level:cabinet', cabinetVox), scale: STORAGE.scale };
+  if (type === 'boxes') {
+    // (the office picks one of its three stacks by the layout object, as catalogue.geo makes it: the same pick, the same stack)
+    const entry = catalogue.entry?.(type), n = Number(entry?.variant?.({ id: `${type}:${o.variant ?? 'backrooms'}`, type, ...o }) || 0);
+    return { geo: model(`level:boxes:${n}`, () => boxesVox(n)), scale: STORAGE.scale };
+  }
+  return null;
+}
+
 function roomContext(world, rt) {
   const { kit, env, level } = world, { def } = rt, { W, D } = def, H = def.H, look = def.look;
   const R = makeRng(`${level.seed}/build/${def.id}`);
@@ -788,10 +808,11 @@ function roomContext(world, rt) {
   /**
    * (the shell's own, not the rooms': kit.gfx.fixtures) a voxel batch besides c.vox, baked and drawn as c.vox is.
    * opt.detail marks its mesh as detail (as c.detail does for boxes: hidden at a low Graphics setting); opt.structural
-   * keeps it the room's own, never carried off with furniture that can be dragged. (A key's options are its first ones.)
+   * keeps it the room's own, never carried off with furniture that can be dragged; opt.uncarried: what of it would be
+   * carried off is left out instead (it would be a mesh of its own on each thing that carries some). (A key's options are its first ones.)
    */
   const voxBatch = (key, opt = {}) => {
-    if (!voxed.has(key)) { const b = track(new Batch(true), !!opt.structural); if (opt.detail) b.detail = true; voxed.set(key, b); }
+    if (!voxed.has(key)) { const b = track(new Batch(true), !!opt.structural); if (opt.detail) b.detail = true; if (opt.uncarried) b.uncarried = true; voxed.set(key, b); }
     return voxed.get(key);
   };
   /** A sculpted wall fitting (wallfit.model.js) on the wall at p (c.wallAt, 0 off it), its origin at height y, into a
@@ -991,7 +1012,7 @@ function roomContext(world, rt) {
         if (!groups.has(q.owner)) groups.set(q.owner, []);
         groups.get(q.owner).push(q);
       }
-      entry.moving = [...groups].map(([owner, chunks]) => ({ owner, batch: copyChunks(entry.batch, chunks) }));
+      entry.moving = entry.batch.uncarried ? [] : [...groups].map(([owner, chunks]) => ({ owner, batch: copyChunks(entry.batch, chunks) }));
       if (groups.size) {
         const still = copyChunks(entry.batch, entry.chunks.filter(q => !q.owner));
         for (const key of ['pos', 'nor', 'uv', 'alb', 'ao', 'idx', 'vx', 'sf']) entry.batch[key] = still[key];
@@ -1163,6 +1184,11 @@ function roomContext(world, rt) {
       if (stood) standing.push(stood);
       const into = opt.batch || c.vox, i0 = into.idx.length;
       into.addVox(geo.solid, mat, opt);
+      // (c.prop's own: what is laid over a model as fine detail, the keys on a keyboard, at the same place, into the room's
+      // one batch of it, hidden at a low Graphics setting. Placed now, so that it belongs to whatever the model belongs to:
+      // on something that can be dragged it is left out, not left behind, and the thing carries what it always carried.
+      // Nor into a batch a room gives it: nothing of that one mesh could be left out without the rest)
+      if (opt.over && !opt.batch) voxBatch('prop-detail', { detail: true, uncarried: true }).addVox(opt.over.solid, mat, opt);
       // (kit.gfx.shadows: what it really is, in columns, while its triangles are still where they were put)
       if (stood && mapOn) stood.parts = modelColumns(into, i0, into.idx.length, stood);
       if (geo.glass) c.glass.addVox(geo.glass, mat, opt);
@@ -1176,13 +1202,17 @@ function roomContext(world, rt) {
     },
     /** Something from the office's catalogue (desk, chair, cooler…), or a plain crate if it is not there. */
     prop(type, x, z, opt = {}) {
-      // (a desk is the level's own, desk.model.js: the office desk's bounds exactly at half-size voxels, so its foot,
-      // its collider and its top are where they were; only where the catalogue has a desk at all, so nothing gains one)
-      const own = type === 'desk' && env.catalogue.has('desk') ? kit.model('level:desk', deskVox, { ao: false }) : null;
-      const geo = own || env.catalogue.geo(type, opt.o);
+      // (a desk, a chair, a monitor, a keyboard, a filing cabinet and a stack of boxes are the level's own: desk.model.js,
+      // workstation.model.js, storage.model.js, each the office's bounds exactly at half-size voxels, so its foot, its
+      // collider and its top are where they were; only where the catalogue has that thing at all, so nothing gains one.
+      // The chair is in the cloth the office's would have been; the boxes are the stack the office's would have been, of
+      // its three; the monitor is on. A keyboard's keys are laid over its case as detail (c.place, `over`), and only where
+      // it stays put: the case alone is a whole keyboard)
+      const own = env.catalogue.has(type) ? levelProp(kit, env.catalogue, type, opt.o) : null;
+      const geo = own ? own.geo : env.catalogue.geo(type, opt.o);
       if (geo) {
-        const k = own ? LEVEL_DESK.scale : 1, scale = !own ? opt.scale : Array.isArray(opt.scale) ? opt.scale.map((n) => n * k) : (opt.scale || 1) * k;
-        const foot = c.place(geo, x, z, { ...opt, scale, furnitureType: type });
+        const k = own ? own.scale : 1, scale = !own ? opt.scale : Array.isArray(opt.scale) ? opt.scale.map((n) => n * k) : (opt.scale || 1) * k;
+        const foot = c.place(geo, x, z, { ...opt, scale, furnitureType: type, over: own?.over });
         if (moving && opt.batch && furnitureType(type)) {
           // A transforming room owns this entire batch. Its furniture is
           // bolted to that scenery, with the bolts in the same moving mesh.

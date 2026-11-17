@@ -245,7 +245,7 @@ function walls(c) {
   }
 }
 
-/** The workstation in the carpet: the office's own desk, chair, monitor, keyboard and mouse, full size, sunk where the plan says. */
+/** The workstation in the carpet: a desk, chair, monitor, keyboard and mouse at the office's full size (c.prop's own, the mouse the office's), sunk where the plan says. */
 function sunken(c) {
   const ok = (c.room.props || []).every((p) => c.hasProp(p.type));
   for (const p of c.room.props || []) {
