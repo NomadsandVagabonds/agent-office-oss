@@ -149,7 +149,7 @@ export function build(c) {
   const box4 = (x0, z0, x1, z1, y0, y1, col, b = flat) => b.box(x0, y0, z0, x1, y1, z1, col);
   const plinth = (x, z, w, d, h) => { box4(x - w, z - d, x + w, z + d, 0, h, cream); box4(x - w - 0.02, z - d - 0.02, x + w + 0.02, z + d + 0.02, h, h + 0.04, wood); det.box(x - w - 0.005, 0.0, z - d - 0.005, x + w + 0.005, 0.08, z + d + 0.005, rgb('#5a4048')); c.solid(x - w - 0.03, z - d - 0.03, x + w + 0.03, z + d + 0.03, { tall: false }); keep(x - w, z - d, x + w, z + d); };
 
-  // (a) one rail, along the way down the middle, that goes on into the floor, steeply, with its jackets; the carpet torn open where it goes in
+  // (a) one rail, along the way down the middle, that goes on into the floor, steeply, with its jackets, and the floor takes it without a mark
   { const s = R.pick([-1, 1]), x = s * (K.aisle / 2 + 0.05), za = zFront - 1.7, run = 0.7, drop = 1.25;                                    // flat for `run`, then down 1.55 m in `drop`
     const hole = za - run - drop, y0 = 1.55, yAt = (z) => y0 - Math.max(0, Math.min(1.7, (za - run - z) / drop)) * y0;
     if (fits(x - 0.3, hole - 0.6, x + 0.3, za + 0.05)) {
@@ -160,12 +160,8 @@ export function build(c) {
       c.model('store:sinking:' + zs.length, () => { const v = new Vox(); zs.forEach((z, i) => v.stamp(jacketOf((i * 2 + 3) % PAL.cloth.length, false).turned(1), 0, Math.round((yAt(z) - yAt(zs[0])) / S), -Math.round((zs[0] - z) / S), false)); return v; },
         x, zs[0], { y: yAt(zs[0]) - 0.83, solid: false, shadow: false });
       jackets -= zs.length;
-      // the hole: black, its edge the jute backing showing, the carpet round it lifted in tongues
-      const hx = 0.42, hz = 0.62, edge = (a) => 1 + 0.18 * Math.sin(a * 5) + 0.1 * Math.sin(a * 11 + 1);
-      det.box(x - hx, 0.0015, hole - hz, x + hx, 0.0025, hole + hz, [0.03, 0.02, 0.025]);
-      for (let k = 0; k < 28; k++) { const a = (k / 28) * 6.283, e = edge(a), cx = x + Math.cos(a) * hx * e, cz = hole + Math.sin(a) * hz * e;
-        det.box(cx - 0.035, 0.0, cz - 0.035, cx + 0.035, 0.014, cz + 0.035, rgb('#8a7a5a'));                                              // the backing, at the edge
-        const o = 0.07 + (k % 3) * 0.03, lift = 0.02 + ((k * 5) % 4) * 0.012; det.box(cx + Math.cos(a) * o - 0.05, 0.0, cz + Math.sin(a) * o - 0.05, cx + Math.cos(a) * o + 0.05, lift, cz + Math.sin(a) * o + 0.05, rgb(PAL.fleck[k % 3])); }
+      // (no hole: it goes into the carpet as if the carpet were water, and the carpet is not disturbed)
+      const hz = 0.2;
       c.solid(x - 0.3, hole - hz - 0.1, x + 0.3, za + 0.05, { tall: false }); keep(x - 0.35, hole - hz, x + 0.35, za + 0.1);
     } }
 
