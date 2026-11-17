@@ -43,12 +43,13 @@ export function mayStand(x, z, room, others = []) {
 /**
  * Could the widest thing that walks (DUMMIES.widest: the mascot's body and a little) still get from every doorway of the room to
  * every other, with these standing? A flood over a grid of the room's floor, the room's walls and each dummy's body in the way.
- * (The room's own furniture is not known here; the dummies only ever add to what is in the way, never decide alone what is.)
+ * room.blocks: what of the room's own stands in the way, [{ x0, z0, x1, z1 }] in its frame (what is solid and on).
  */
 export function stillThrough(room, standing) {
   const K = DUMMIES, n = Math.ceil(room.W / K.cell), m = Math.ceil(room.D / K.cell), clear = K.body + K.widest;
   const free = (i, j) => { const x = -room.W / 2 + (i + 0.5) * K.cell, z = -room.D / 2 + (j + 0.5) * K.cell;
     if (Math.abs(x) > room.W / 2 - K.widest || Math.abs(z) > room.D / 2 - K.widest) return false;
+    if ((room.blocks || []).some((b) => x > b.x0 - K.widest && x < b.x1 + K.widest && z > b.z0 - K.widest && z < b.z1 + K.widest)) return false;
     return !standing.some((o) => Math.hypot(x - o.x, z - o.z) < clear); };
   const cellOf = (x, z) => [Math.max(0, Math.min(n - 1, Math.floor((x + room.W / 2) / K.cell))), Math.max(0, Math.min(m - 1, Math.floor((z + room.D / 2) / K.cell)))];
   const starts = room.doors.map((d) => { const k = Math.hypot(d.x, d.z) || 1; return cellOf(d.x - (d.x / k) * 0.5, d.z - (d.z / k) * 0.5); });   // half a metre in from each

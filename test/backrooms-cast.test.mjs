@@ -1231,5 +1231,10 @@ test('the dummies never wall anybody in: one that would cut a doorway off from a
   let t = blank(); for (let k = 0; k < 400; k++) { const x = ((k * 37) % 41) / 41 * 4 - 2, z = ((k * 53) % 47) / 47 * 5 - 2.5; t = cameBack(t, 9, room, { x, z, yaw: 0 }).s; }
   assert.ok(stillThrough(room, t.placed.filter((p) => p.room === 9)));
   void K;
+  // …and what of the room's own is in the way counts: a desk across most of it, and one dummy in what is left, is closed
+  const desked = { ...room, blocks: [{ x0: -2.5, z0: -0.3, x1: 1.0, z1: 0.3 }] };
+  assert.ok(stillThrough(desked, []), 'a way round the desk');
+  assert.ok(!stillThrough(desked, [{ x: 1.8, z: 0 }]), 'and one stood in it closes it');
+  assert.equal(cameBack(cameBack(blank(), 2, desked, { x: 1.8, z: 0, yaw: 0 }).s, 2, desked, { x: 1.8, z: 0, yaw: 0 }).stood, null, 'so it is not put there');
 });
 
