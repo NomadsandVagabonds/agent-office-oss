@@ -14,6 +14,7 @@ import { UnrealBloomPass } from '/vendor/three-addons/postprocessing/UnrealBloom
 import { Pass, FullScreenQuad } from '/vendor/three-addons/postprocessing/Pass.js';
 import { profile, bloomOn, internalSize } from './graphics.js';
 import { GlowPass } from './glow.js';
+import { createLiquidView } from './liquid.js';
 
 const HAZE_LIGHT = 1.6;                                  // the haze's brightness for each unit of the room's light
 
@@ -147,6 +148,7 @@ class SupersamplePass extends Pass {
     super();
     // (an empty scene until setScene, as the RenderPass has: a tier that starts supersampled may draw before anything has landed)
     this.needsSwap = false; this.enabled = false; this.scene = new THREE.Scene(); this.camera = camera;
+    this.draw = null;                                      // (water, liquid.js: the scene in two parts, while a surface is in view)
     this.target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
     this.material = new THREE.ShaderMaterial({
       uniforms: { tScene: { value: null }, uStep: { value: new THREE.Vector2() } }, vertexShader: QUAD, depthTest: false, depthWrite: false,
@@ -164,7 +166,8 @@ class SupersamplePass extends Pass {
   setSize() {}                                           // (its own size is set by layout(), not by the composer)
   resize(sw, sh, iw, ih) { this.target.setSize(sw, sh); this.material.uniforms.uStep.value.set(0.375 / iw, 0.375 / ih); }
   render(renderer, writeBuffer, readBuffer) {
-    renderer.setRenderTarget(this.target); renderer.clear(); renderer.render(this.scene, this.camera);
+    renderer.setRenderTarget(this.target); renderer.clear();
+    if (this.draw) this.draw(renderer, this.target, () => renderer.render(this.scene, this.camera)); else renderer.render(this.scene, this.camera);
     this.material.uniforms.tScene.value = this.target.texture;
     renderer.setRenderTarget(readBuffer); this.quad.render(renderer);
   }
@@ -199,6 +202,16 @@ export function createVhs(renderer, camera, opt = {}) {
   let glow = null;                                       // (bloom from what shines, glow.js: made only while a tier's glow is on)
   const sceneDepth = (read) => (superPass.enabled ? superPass.target.depthTexture : read.depthTexture) || null;
   const picture = { x: 0, y: 0, w: 1, h: 1 };            // where the picture sits in the window, CSS pixels
+  // --- water ---
+  // (liquid.js: made only while a tier's water is on. While a surface of a part that is up has been in view in the last
+  // half second, the scene is drawn in two parts, the opaque first and the water over a copy of it; otherwise, and
+  // always at 0, the scene's pass is the one it always was)
+  let liquids = null, split = false;
+  const drawScene = (r, target, under) => (split && liquids ? liquids.draw(r, renderPass.scene, camera, target, under) : under());
+  superPass.draw = drawScene;
+  const renderPassRender = renderPass.render.bind(renderPass);
+  renderPass.render = (r, write, read, dt, mask) => drawScene(r, read, () => renderPassRender(r, write, read, dt, mask));
+  // --- end water ---
 
   /**
    * Fit the picture to the window. w, h in CSS pixels. `top`: where its top edge goes, px from the window's (a phone held
@@ -243,6 +256,10 @@ export function createVhs(renderer, camera, opt = {}) {
     if (p.glow > 0 && !glow) { glow = new GlowPass(camera, renderPass.scene, undefined, sceneDepth); composer.insertPass(glow, composer.passes.indexOf(bloom) + 1); }
     else if (!(p.glow > 0) && glow) { composer.removePass(glow); glow.dispose(); glow = null; }
     bloom.enabled = bloomOn(p, hostBloom) && !glow;
+    // --- water --- (graphics.js water: at 0 the view and everything it made are let go, every room's sheet as it was)
+    if (p.water > 0 && !liquids) liquids = createLiquidView();
+    else if (!(p.water > 0) && liquids) { liquids.release(renderPass.scene); liquids = null; split = false; }
+    // --- end water ---
     // a tier's own bloom is tighter than the office's: a glow round the tubes, not a wash over the dark end of a corridor
     // (the widest blurs are left out: they are what spread a tube over everything)
     const own = p.bloom !== 'host';
@@ -276,12 +293,14 @@ export function createVhs(renderer, camera, opt = {}) {
     get level() { return level; },
     /** The bloom from what shines while a tier has it on (glow.js), else null; and the chain as it stands. */
     get glow() { return glow; },
+    /** The water's view while a tier has it on (liquid.js), else null: its `force` ('split' | 'single') is the dev page's. */
+    get liquids() { return liquids; },
     get passes() { return composer.passes.slice(); },
     get profile() { return prof; },
     /** How lit the room is (index.js `light`, 0.3 a lit room): the haze is as bright as the air it hangs in. */
     setAmbient(light) { u.uHazeLight.value = Math.max(0, light) * HAZE_LIGHT; },
     setScene(scene) { renderPass.scene = scene; superPass.scene = scene; if (glow) glow.scene = scene; },
-    render(dt) { time += dt; u.uTime.value = time; composer.render(dt); },
-    dispose() { glow?.dispose(); glow = null; composer.renderTarget1.depthTexture?.dispose(); composer.renderTarget2.depthTexture?.dispose(); composer.dispose(); superPass.dispose(); target.dispose(); bloom.dispose(); signal.dispose?.(); screen.dispose?.(); signal.material?.dispose(); screen.material?.dispose(); },
+    render(dt) { time += dt; u.uTime.value = time; split = !!liquids && liquids.frame(renderPass.scene, camera, time); composer.render(dt); },
+    dispose() { liquids?.release(renderPass.scene); liquids = null; glow?.dispose(); glow = null; composer.renderTarget1.depthTexture?.dispose(); composer.renderTarget2.depthTexture?.dispose(); composer.dispose(); superPass.dispose(); target.dispose(); bloom.dispose(); signal.dispose?.(); screen.dispose?.(); signal.material?.dispose(); screen.material?.dispose(); },
   };
 }

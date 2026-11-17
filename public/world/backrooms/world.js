@@ -23,6 +23,7 @@ import { LEVEL_DESK, deskVox } from './desk.model.js';
 import { WORKSTATION, chairVox, crtVox, keyboardVox, keyboardKeysVox } from './workstation.model.js';
 import { STORAGE, cabinetVox, boxesVox } from './storage.model.js';
 import { WALLFIT, socketVox, exitBoxVox } from './wallfit.model.js';
+import { markLiquid } from './liquid.mark.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
 // and how far along it a local coordinate c is (c is x on the front/back walls, z on the side walls)
@@ -1364,6 +1365,13 @@ function roomContext(world, rt) {
     zone(spec) { rt.zones.push({ in: false, ...spec }); return spec; },
     /** Runs every frame while you are in this room or next door: fn(dt, t, me) with me in room coordinates. */
     tick(fn) { rt.ticks.push(fn); },
+    /**
+     * Mark a sheet this room drew as a liquid's surface (liquid.js): `target` the mesh, the group it is put in once the
+     * room is lit, or the batch it is drawn from; opt { kind: 'water', phase ({ value }: drifts its ripple), flow, y }.
+     * It draws nothing and changes nothing of the sheet; where the Graphics setting has water, a flat one is drawn as
+     * water. → a handle { disturb() } (which does nothing yet). Call it while building, not from a tick.
+     */
+    liquid(target, opt = {}) { return markLiquid(c, target, opt); },
     /** Is a point of this room on the player's screen right now? */
     seen(x, z, opt) { const p = toWorld(def, x, z); return env.sees(p.x, p.z, opt); },
 
