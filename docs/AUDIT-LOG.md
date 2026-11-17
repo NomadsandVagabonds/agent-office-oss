@@ -189,4 +189,6 @@ starts with. When an audit has been through an entry, it says so under it.
 
 ## Audits
 
+- **17 Nov, the gameplay session: a whole visit to the way out on each difficulty, against a local score book** (the built site served with its in-memory book; nothing real written; ranked pages, not `?debug`; four parts, about a minute each; the ending by `finish('exit')`, not by leaning on the wall). The card and the book agree on every mode: Training Wheels ×0.5 (1,055 of a base 2,110), Easy ×1 (2,110), Normal ×1.5 (3,165), Hard ×2 (3,670 of a base 1,835: one heart, so "still in one piece" is worth less); each signed, and each appears in its own mode's table and no other, by the API's filter and by the front page's. Tourist and a `?debug` visit show UNSCORED RECORDING and do not sign. A kept tape played back to the way out shows its points again and does not sign again. The book itself refused the session's first, instant visits (under 12 s and two rooms a part) with 422, which is its own check working. No console errors. Not tried: the real way out through the wall, a typed name or message, a strike, a second signing by one browser in quick succession, a visit under real pressure from the cast and the battery.
+
 None yet.
