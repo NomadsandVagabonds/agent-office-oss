@@ -196,7 +196,7 @@ export function wallBox(c, side, a, b, y0, y1, d0, d1, rgb, batch = c.flat) {
   batch.box(Math.min(p.x, q.x), y0, Math.min(p.z, q.z), Math.max(p.x, q.x), y1, Math.max(p.z, q.z), rgb);
 }
 /** A flat thing on a wall, from a to b along it, y0 to y1, `off` out from it, facing into the room. */
-export function wallFace(c, side, a, b, y0, y1, batch, uv, off = 0.012) { const p = c.wallAt(side, a, off), q = c.wallAt(side, b, off); upright(batch, p.x, p.z, q.x, q.z, y0, y1, uv); }
+export function wallFace(c, side, a, b, y0, y1, batch, uv, off = 0.012, alb) { const p = c.wallAt(side, a, off), q = c.wallAt(side, b, off); upright(batch, p.x, p.z, q.x, q.z, y0, y1, uv, alb); }
 const lowest = (c, side, a, b, off = 0.3) => Math.min(...[a, (a + b) / 2, b].map((t) => { const p = c.wallAt(side, t, off); return c.ceilAt(p.x, p.z); }));
 
 /** A shopping trolley, nose toward +x: it nests in the one in front of it. */
@@ -271,6 +271,15 @@ export function concourse(c, opt = {}) {
     }
   }
   for (const g of R.shuffle(glows).slice(0, street === 'shutters' ? 1 : 3)) { const p = c.wallAt(g.side, g.at, 0.7); c.light(p.x, g.y, p.z, g.col, 0.85, { k: 1.4, far: 4.5 }); }
+  // a speaker in the ceiling. Now and then, while somebody is here, it chimes as if it were going to say something, and does not;
+  // where the units are shuttered, now and then one is heard to come down, somewhere you are not looking
+  { const sx = R.range(-W / 4, W / 4), sz = R.range(-D / 4, D / 4), top = c.ceilAt(sx, sz), env = c.env;
+    c.flat.box(sx - 0.14, top - 0.02, sz - 0.14, sx + 0.14, top, sz + 0.14, [0.85, 0.84, 0.8]); for (let k = -2; k <= 2; k++) c.flat.box(sx - 0.1, top - 0.025, sz + k * 0.04 - 0.008, sx + 0.1, top - 0.02, sz + k * 0.04 + 0.008, [0.3, 0.3, 0.32]);
+    let wait = R.range(8, 30), ding = 0;
+    c.tick((dt, t, me) => { if (!me.inside) return; wait -= dt;
+      if (ding > 0) { ding -= dt; if (ding <= 0) { const w = c.toWorld(sx, sz); env.play?.('ding', w.x, w.z, 30); } }
+      if (wait > 0) return; wait = R.range(35, 75);
+      const w = c.toWorld(sx, sz); if (street === 'shutters' && R.chance(0.6)) { const q = c.wallAt(R.pick(['back', 'front', 'left', 'right']), 0, 0.2), v = c.toWorld(q.x, q.z); env.play?.('rattle', v.x, v.z, 16); } else { env.play?.('ding', w.x, w.z, 30); ding = 0.55; } }); }
   // and in some bare rooms, the one thing got wrong
   const chance = opt.wrong ?? (!room.shape && room.kind === 'plain' && Math.min(W, D) >= 3.4 ? (room.quiet ? 0.3 : 0.5) : 0);
   const which = opt.which;

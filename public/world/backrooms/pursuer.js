@@ -62,8 +62,16 @@ export function createStalkers(env, options = {}) {
      * It has got the visitor. With a health system (env.health, when there is one) this costs `n` points and says what happened:
      * { landed: the hit counted (false: they were hit a moment ago), dead: it was the last of them — the visit is ending, do nothing more }.
      * Without one, a creature that hunts ends the visit ('caught') and anything else does nothing: { landed: false, ended }.
+     * A hit that comes from in front in the moment after a shove does not land (shove.rule.js): { landed: false, blocked: true } —
+     * unless it is one of the heavy ones (`heavy` on its line of cast.js). `from`: where the hit is coming from, for one that
+     * is more than one body; otherwise it is wherever the creature says it is (at()).
      */
-    hurt(n = 1) {
+    hurt(n = 1, from = null) {
+      // (env.blocked is the level's: index.js. A floor without it — a test's, a review's — has no shove, and every hit lands)
+      if (!member.heavy && env.blocked) {
+        const at = from || k.it?.at?.() || null;
+        if (env.blocked(at)) { env.play?.('thunk', at?.x, at?.z, 8); env.interfere?.(0.25); return { landed: false, dead: false, ended: false, blocked: true }; }
+      }
       // (who it was is noted before the hit is made: the visit begins to end inside it, and asks)
       const before = taker; taker = k;
       const hit = env.health?.damage(creatureTuning(env.difficulty?.() ?? 'training-wheels', member.id).damage ?? n);
@@ -233,6 +241,16 @@ export function createStalkers(env, options = {}) {
       for (const k of live) {
         if (k.dead || k.away) continue;                                    // (somebody who is away with a room cannot be reached either)
         const list = k.it.snipTargets?.();
+        if (Array.isArray(list)) out.push(...list);
+      }
+      return out;
+    },
+    /** What a shove could move (shove.rule.js): whatever each of them offers — [{ id, x, z, y?, r, shove(dir) }]. */
+    shoveTargets() {
+      const out = [];
+      for (const k of live) {
+        if (k.dead || k.away) continue;
+        const list = k.it.shoveTargets?.();
         if (Array.isArray(list)) out.push(...list);
       }
       return out;
