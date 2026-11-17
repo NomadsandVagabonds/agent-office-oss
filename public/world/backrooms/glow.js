@@ -20,10 +20,15 @@
 //   - the result is added over the scene in the tubes' own warm white, before the tape's signal: in full over and round
 //     a lamp, and round a picture or a self-lit voxel but only a small share over it (where the alpha marks it), so
 //     that what a sign says stays as crisp as it is drawn and the glow is a halo round it.
+// Each shining batch adds to the picture as strongly as its own `bloom` says (kit.glowing's option, userData.bloom, 1
+// unless given, 0…3; glow.rule.js glowStrength): its stand-in's colour is its colour × that, read every frame, so a neon
+// fascia can bloom harder than a ceiling panel without either being drawn differently. At 1 the stand-ins are exactly
+// the ones there were before the option. At 0 a lamp is not drawn at all (exact; without the scene's depth it is drawn
+// black, as it still hides what is behind it) and a picture is drawn black with its mark (so it stays crisp).
 // The level's materials are never changed: each is swapped for its stand-in for the length of the one draw, and put back.
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from '/vendor/three-addons/postprocessing/Pass.js';
-import { GLOW_DEPTH_GLSL } from './glow.rule.js';
+import { GLOW_DEPTH_GLSL, glowStrength } from './glow.rule.js';
 
 /**
  * The numbers: how strong, in what colour, how much of each step of the chain comes back up (the lab's, 5 · bloom; mix[0]
@@ -158,10 +163,10 @@ export function createGlowMaterials() {
   /**
    * What shines, as it is this frame (its colour and picture followed: a room may dim it or change what it shows): a
    * picture with its alpha the mark (k.pictureAlpha); exact, with the scene's depth read before anything is drawn.
-   * A lamp, not exact, is drawn as it is.
+   * A lamp, not exact, at its own strength 1, is drawn as it is. strength: glowStrength of its userData.bloom, this frame.
    */
-  function shining(m, mark, exact) {
-    if (!mark && !exact) return m;
+  function shining(m, mark, exact, strength = 1) {
+    if (!mark && !exact && strength === 1) return m;
     const x = entry(m), k = (mark ? 'picture' : 'shine') + (exact ? 'X' : '');
     let p = x[k];
     if (!p) {
@@ -179,12 +184,18 @@ export function createGlowMaterials() {
       x[k] = p;
     }
     p.color.copy(m.color); p.map = m.map;
+    if (strength !== 1) p.color.multiplyScalar(strength);   // (its own share of the bloom: the batch itself is not touched)
     return p;
   }
   function standIn(m, exact = false) {
     const role = glowRole(m);
     if (role === 'skip') return skipped;
-    if (role === 'shine' || role === 'picture') return shining(m, role === 'picture', exact);
+    if (role === 'shine' || role === 'picture') {
+      const strength = glowStrength(m.userData.bloom);
+      // (a lamp at 0 adds nothing: not drawn where the scene's depth does the hiding, black where it must still hide)
+      if (strength === 0 && role === 'shine') return exact ? skipped : black(m);
+      return shining(m, role === 'picture', exact, strength);
+    }
     if (exact) return role === 'kit' ? twin(m, true) : skipped;           // (black and depth-only: the scene's depth does their hiding)
     return role === 'kit' ? twin(m, false) : role === 'black' ? black(m) : m;
   }

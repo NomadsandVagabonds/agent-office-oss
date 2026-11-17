@@ -291,8 +291,7 @@ export function build(c) {
   if (spSign) {
     trailSign(c, spSign.side, spSign.at, 1.52, [
       `OLD GROWTH STAND ${p.standCode || 'OG-09'}`,
-      'MIND LANYARD WIND CHIMES',
-      'BEAM LOCKS TIMBER AUDITOR',
+      'ALL STEMS ARE ACCOUNTED FOR',
     ], { seed: 211 + R.int(0, 9), warn: true });
   }
 }

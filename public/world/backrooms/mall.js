@@ -86,6 +86,37 @@ export function wrap(x0, z0, x1, z1, y0, y1, pick) {
  * inHole(x, z) in the room's own frame. The floor as the building has it is what counts, so anything laid across is floor.
  * As rooms/the-culvert.js, which was the first.
  */
+/* ---- the shopping centre's surfaces (docs/MALL-STYLE.md): drawn at 64 px to a repeat, so a pixel is a voxel (2.5 cm at 1.6 m) ---- */
+const lcg = (seed) => { let k = seed >>> 0; return () => { k = (Math.imul(k, 1664525) + 1013904223) >>> 0; return k / 4294967296; }; };
+const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+const shadeHex = (hex, k) => '#' + [16, 8, 0].map((b) => Math.max(0, Math.min(255, Math.round(((parseInt(hex.slice(1), 16) >> b) & 255) * k))).toString(16).padStart(2, '0')).join('');
+export const MALL_TEX = {
+  /** Contract carpet: a small diamond repeat a shade off the ground, tufts in three colours, a few darker threads. */
+  carpet(kit, key, base, flecks = [shadeHex(base, 1.14), shadeHex(base, 0.86), shadeHex(base, 1.24)]) {
+    return kit.tex.custom(key, 64, 64, (g, w, h) => { const r = lcg(key.length * 977 + 13); g.fillStyle = base; g.fillRect(0, 0, w, h);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const d = Math.abs(((x + 8) % 16) - 8) + Math.abs(((y + 8) % 16) - 8); if (d === 7 || d === 3) { g.fillStyle = hexA(shadeHex(base, 1.3), 0.85); g.fillRect(x, y, 1, 1); } else if (d === 0) { g.fillStyle = hexA(shadeHex(base, 0.78), 0.9); g.fillRect(x, y, 1, 1); } }
+      for (let i = 0; i < 520; i++) { g.fillStyle = flecks[i % flecks.length]; g.fillRect(Math.floor(r() * w), Math.floor(r() * h), 1, 1); }
+      for (let i = 0; i < 14; i++) { g.fillStyle = hexA(shadeHex(base, 0.7), 0.5); g.fillRect(Math.floor(r() * w), Math.floor(r() * h), 1 + Math.floor(r() * 3), 1); } });
+  },
+  /** Panelling: boards a stride across (16 px), a groove and its lit edge between, veneer running up them, scuffs low down. */
+  panel(kit, key, base) {
+    return kit.tex.custom(key, 64, 64, (g, w, h) => { const r = lcg(key.length * 131 + 7); g.fillStyle = base; g.fillRect(0, 0, w, h);
+      for (let x = 0; x < w; x += 16) { const t = 0.97 + r() * 0.05; g.fillStyle = shadeHex(base, t); g.fillRect(x + 1, 0, 14, h);
+        for (let k = 0; k < 2; k++) { const gx = x + 3 + Math.floor(r() * 10), y0 = Math.floor(r() * h), len = 12 + Math.floor(r() * 30); g.fillStyle = hexA(shadeHex(base, r() < 0.5 ? 0.92 : 1.05), 0.35); g.fillRect(gx, y0, 1, Math.min(len, h - y0)); }   // (a little grain, not stripes)
+        g.fillStyle = shadeHex(base, 0.62); g.fillRect(x, 0, 1, h); g.fillStyle = shadeHex(base, 1.16); g.fillRect(x + 1, 0, 1, h); }
+      for (let i = 0; i < 10; i++) { g.fillStyle = hexA('#000000', 0.08 + r() * 0.08); g.fillRect(Math.floor(r() * w), h - 2 - Math.floor(r() * 10), 2 + Math.floor(r() * 5), 1); }
+      for (let i = 0; i < 6; i++) { g.fillStyle = hexA('#000000', 0.25); g.fillRect(Math.floor(r() * w), Math.floor(r() * h), 1, 1); } });
+  },
+  /** A ceiling tile: mineral fibre, its fissures, a bevelled edge lit on two sides and shadowed on two. One tile to a repeat. */
+  tile(kit, key, base, grid) {
+    return kit.tex.custom(key, 64, 64, (g, w, h) => { const r = lcg(key.length * 53 + 3); g.fillStyle = base; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 160; i++) { const x = Math.floor(r() * w), y = Math.floor(r() * h), len = 1 + Math.floor(r() * 3), dir = r() < 0.5; g.fillStyle = hexA(shadeHex(base, 0.72), 0.7); g.fillRect(x, y, dir ? len : 1, dir ? 1 : len); }
+      for (let i = 0; i < 200; i++) { g.fillStyle = hexA(shadeHex(base, 1.1), 0.5); g.fillRect(Math.floor(r() * w), Math.floor(r() * h), 1, 1); }
+      g.fillStyle = grid; g.fillRect(0, 0, w, 2); g.fillRect(0, 0, 2, h);
+      g.fillStyle = shadeHex(base, 1.12); g.fillRect(2, 2, w - 2, 1); g.fillRect(2, 2, 1, h - 2); g.fillStyle = shadeHex(base, 0.84); g.fillRect(2, h - 1, w - 2, 1); g.fillRect(w - 1, 2, 1, h - 2); });
+  },
+};
+
 export function voidIn(c, inHole, opt = {}) {
   const { H } = c, deep = opt.deep ?? 40, brink = opt.brink ?? 0.25, falls = opt.falls ?? 1.7, env = c.env, ground = opt.floor || (() => 0);   // (opt.floor: how high the floor is where it is not hole)
   let fall = null;
@@ -264,7 +295,7 @@ export function concourse(c, opt = {}) {
   if (room.crawl) return;
   const narrow = Math.min(W, D) < 3.3 && room.kind === 'plain', street = opt.street || (narrow ? (R.chance(0.55) ? 'service' : 'shutters') : R.pick(STREETS));
   c.rt.street = street;
-  const art = mallFronts(kit), fronts = c.mapped('mall:fronts', art.texture), v = R.int(0, NEON_NAMES.length - 1), neon = mallNeon(kit, 'plain:' + v, NEON_NAMES[v], v + 1), lit = c.shining('mall:neon:plain:' + v, neon.texture, 2.3);
+  const art = mallFronts(kit), fronts = c.mapped('mall:fronts', art.texture), v = R.int(0, NEON_NAMES.length - 1), neon = mallNeon(kit, 'plain:' + v, NEON_NAMES[v], v + 1), lit = c.shining('mall:neon:plain:' + v, neon.texture, 2.3, undefined, { bloom: 2 });
   const glows = [];
   if (street === 'service') {
     // painted block: cream to the roof, and a band of green up to the dado
@@ -389,7 +420,7 @@ export const MALL_WRONG = {
   // a bin, and in it, bins
   bins(c) { const k = c.corner(0.7); if (!k) return false; c.model('mall:bin:full', binVox(true), k.x, k.z, { scale: 2.2, solid: false }); c.model('mall:bin:0', binVox(false), k.x - k.sx * 0.9, k.z, { scale: 1.2, rot: 0.4, tilt: [0, 1.5], solid: false }); c.solid(k.x - 0.55, k.z - 0.55, k.x + 0.55, k.z + 0.55, { tall: false }); },
   // a shop, stood out in the room: front, fascia, name lit; it is as deep as the board it is painted on
-  shallow(c) { const at = c.spot(1.6, { pad: 0.7 }); if (!at) return false; const art = mallFronts(c.kit), fronts = c.mapped('mall:fronts', art.texture), neon = mallNeon(c.kit, 'plain:0', NEON_NAMES[0], 1), lit = c.shining('mall:neon:plain:0', neon.texture, 2.3), w = 1.25, top = Math.min(2.3, c.ceilAt(at.x, at.z) - 0.6), ply = [0.6, 0.48, 0.34];
+  shallow(c) { const at = c.spot(1.6, { pad: 0.7 }); if (!at) return false; const art = mallFronts(c.kit), fronts = c.mapped('mall:fronts', art.texture), neon = mallNeon(c.kit, 'plain:0', NEON_NAMES[0], 1), lit = c.shining('mall:neon:plain:0', neon.texture, 2.3, undefined, { bloom: 2 }), w = 1.25, top = Math.min(2.3, c.ceilAt(at.x, at.z) - 0.6), ply = [0.6, 0.48, 0.34];
     upright(fronts, at.x - w, at.z, at.x + w, at.z, 0, top, art.uv('open')); upright(c.flat, at.x + w, at.z - 0.06, at.x - w, at.z - 0.06, 0, top + 0.5, null, ply); c.flat.box(at.x - w, top, at.z - 0.06, at.x + w, top + 0.5, at.z + 0.02, [0.13, 0.12, 0.15]);
     upright(lit, at.x - w + 0.1, at.z + 0.03, at.x + w - 0.1, at.z + 0.03, top + 0.05, top + 0.45, neon.uv(2)); for (const s of [-1, 1]) c.flat.box(at.x + s * w - 0.05, 0, at.z - 0.5, at.x + s * w + 0.05, 0.06, at.z - 0.06, ply);
     c.solid(at.x - w, at.z - 0.08, at.x + w, at.z + 0.04, { tall: true }); c.light(at.x, 1.4, at.z + 0.8, '#ffe9a8', 0.6, { k: 1.4, far: 3.5 }); },

@@ -414,8 +414,7 @@ export function build(c) {
   if (spSign) {
     trailSign(c, spSign.side, spSign.at, 1.52, [
       'PARCEL B REZONING SITE',
-      'STAND CLEAR OF GRADING BLADE',
-      'REAR SHUTOFF FOR WILDLIFE HALT',
+      'WILDLIFE HAS BEEN NOTIFIED',
     ], { seed: (p.seed || 17) % 89, warn: true });
   }
 }

@@ -18,7 +18,7 @@ import { Batch, lamp } from '../kit.js';
 import { P } from '../bits.js';
 import { Vox, M, VOXEL } from '../../vox/vox.js';
 import { upright } from '../suburb.js';
-import { mallNeon, dummyVox, wallBox, wallFace } from '../mall.js';
+import { mallNeon, dummyVox, wallBox, wallFace, MALL_TEX } from '../mall.js';
 const wallFace2 = (c, side, a, b, y0, y1, batch) => wallFace(c, side, a, b, y0, y1, batch, [0, 0, 1, 1], 0.014);
 
 export const SETS = Object.freeze({ most: 64, shelf: 0.56, aisle: 1.5, near: 2.3, far: 4.2, fps: 10, cols: 8, cellW: 64, cellH: 48, feed: [160, 120], feedEvery: 0.2, lag: 2.2, gone: 1.1 });
@@ -84,7 +84,7 @@ function drawCard(g, w, h) {
 export function build(c) {
   const { W, D, H, R, params: p, kit, env } = c, K = SETS;
   const wallT = kit.tex.custom('sets:wall', 32, 32, (g, w, h) => { P(g, '#8c8f94', 0, 0, w, h); P(g, '#7d8085', 0, 0, w, 1); for (let i = 0; i < 40; i++) P(g, 'rgba(0,0,0,0.08)', (i * 37) % w, (i * 53) % h, 1, 1); });
-  const carpet = kit.tex.custom('sets:carpet', 32, 32, (g, w, h) => { P(g, '#2c3142', 0, 0, w, h); for (let i = 0; i < 160; i++) P(g, ['#363c50', '#22263a', '#3e3346'][i % 3], (i * 29) % w, (i * 47) % h, 1, 1); for (let x = 0; x < w; x += 16) P(g, 'rgba(160,40,40,0.25)', x, 0, 1, h); });
+  const carpet = MALL_TEX.carpet(kit, 'sets:carpet:64', '#2c3142', ['#363c50', '#22263a', '#3e3346']);
   c.shell({ wallTex: wallT, floorTex: carpet, panels: false });
 
   /* the screens: one picture with a cell for each set */
@@ -140,7 +140,7 @@ export function build(c) {
     feed = { ax, az, bx, bz, y0: 0.5 + o.y0, y1: 0.5 + o.y1, kx, kz, ky: ky + 0.15, look };
   }
   /* the name over the shelves, in tube; a card on the counter */
-  const neon = mallNeon(kit, 'sets:' + p.seed, ['TELEVISION', 'ALL SETS ON', 'COLOUR', 'RENTALS', 'SAME CHANNEL', 'DEMONSTRATION', 'TV', 'CH 3'], p.seed), lit = c.shining('mall:neon:sets:' + p.seed, neon.texture, 2.3);
+  const neon = mallNeon(kit, 'sets:' + p.seed, ['TELEVISION', 'ALL SETS ON', 'COLOUR', 'RENTALS', 'SAME CHANNEL', 'DEMONSTRATION', 'TV', 'CH 3'], p.seed), lit = c.shining('mall:neon:sets:' + p.seed, neon.texture, 2.3, undefined, { bloom: 2 });
   const ny = Math.min(H - 0.12, (levels[levels.length - 1] || 1) + 0.95);
   if (ny - 0.45 > levels[levels.length - 1] + 0.7) { upright(lit, -2.2, z0 + 0.05, 0, z0 + 0.05, ny - 0.45, ny, neon.uv(0)); upright(lit, 0.2, z0 + 0.05, 2.4, z0 + 0.05, ny - 0.45, ny, neon.uv(1)); }
   const card = c.mapped('sets:card', kit.tex.custom('sets:card', 64, 32, (g, w, h) => { P(g, '#f1ead6', 0, 0, w, h); P(g, '#b3261e', 0, 0, w, 7); g.fillStyle = '#1a1a1a'; g.font = 'bold 8px monospace'; g.textAlign = 'center'; g.fillText('ALL SETS ON', w / 2, 17); g.fillText('DEMONSTRATION', w / 2, 27); }));

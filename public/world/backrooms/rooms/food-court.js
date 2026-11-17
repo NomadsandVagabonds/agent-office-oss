@@ -76,7 +76,7 @@ export function build(c) {
 
   /* the little shops round the edge: a counter, a roof over it with the name in tube, and on the roof the thing it sells */
   const kinds = R.shuffle(['sandwich', 'chips', 'soup', 'tray', 'hot', 'orange']), names = { sandwich: 'SANDWICH (1)', chips: 'CHIPS AND CHIP', soup: 'SOUP OF THE DAY: DAY', tray: 'TRAY', hot: 'HOT', orange: 'THE ORANGE ONE' };
-  const neon = mallNeon(kit, 'court:' + p.seed, kinds.map((k) => names[k]).concat(['FOOD', 'EAT HERE']), p.seed), lit = c.shining('mall:neon:court:' + p.seed, neon.texture, 2.4);
+  const neon = mallNeon(kit, 'court:' + p.seed, kinds.map((k) => names[k]).concat(['FOOD', 'EAT HERE']), p.seed), lit = c.shining('mall:neon:court:' + p.seed, neon.texture, 2.4, undefined, { bloom: 2 });
   const skins = { sandwich: [0.55, 0.42, 0.24], chips: [0.78, 0.2, 0.16], soup: [0.2, 0.34, 0.3], tray: [0.42, 0.2, 0.16], hot: [0.6, 0.12, 0.1], orange: [0.94, 0.52, 0.12] };
   const put = (key, make, x, z, o = {}) => c.model(key, make, x, z, { solid: false, shadow: false, ...o });
   /* what is only looked at goes in `court:detail` (nothing in it is stood on, walked into or read) */

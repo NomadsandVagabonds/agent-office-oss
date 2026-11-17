@@ -23,9 +23,10 @@ import { LEVEL_DESK, deskVox } from './desk.model.js';
 import { chooseUse } from './use.rule.js';
 import { WORKSTATION, chairVox, crtVox, keyboardVox, keyboardKeysVox } from './workstation.model.js';
 import { STORAGE, cabinetVox, boxesVox } from './storage.model.js';
-import { SMALLS, binVox, trolleyVox } from './smalls.model.js';
+import { SMALLS, binVox, trolleyVox, coolerVox } from './smalls.model.js';
 import { WALLFIT, socketVox, exitBoxVox } from './wallfit.model.js';
 import { markLiquid } from './liquid.mark.js';
+import { shineLights } from './shining-lights.rule.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
 // and how far along it a local coordinate c is (c is x on the front/back walls, z on the side walls)
@@ -804,11 +805,13 @@ function levelProp(kit, catalogue, type, o = {}) {
     const entry = catalogue.entry?.(type), n = Number(entry?.variant?.({ id: `${type}:${o.variant ?? 'backrooms'}`, type, ...o }) || 0);
     return { geo: model(`level:boxes:${n}`, () => boxesVox(n)), scale: STORAGE.scale };
   }
-  // (the office's bin is always one colour, whatever o.color a room hands it (the museum does): so is this one, in its own blue)
-  if (type === 'bin') return { geo: model('level:bin', () => binVox({ colour: '#3f7f9a' })), scale: SMALLS.scale };   // (the teal the office's bin is: the swap is of the model, not of its colour)
+  // (the office's bin is always one colour, whatever o.color a room hands it (the museum does): so is this one, in the teal
+  // the office's is, binVox's own default: the swap is of the model, not of its colour)
+  if (type === 'bin') return { geo: model('level:bin', binVox), scale: SMALLS.scale };
   if (type === 'trolley') return { geo: model('level:trolley', trolleyVox), scale: SMALLS.scale };
-  // (not the water cooler, smalls.model.js coolerVox: its bottle is twice the office's in glass triangles, about 1,090 more a
-  // cooler, and the coolers corridor stands ten to two dozen of them: 11,000 to 26,000 more triangles in one room)
+  // (the water cooler's bottle and cup tube are glass: c.place puts them into the room's glass batch, as it does the office's,
+  // and tint, noGlow and shadow act on it as on the office's; its only glow is the two tap lights)
+  if (type === 'cooler') return { geo: model('level:cooler', coolerVox), scale: SMALLS.scale };
   return null;
 }
 
@@ -1054,9 +1057,24 @@ function roomContext(world, rt) {
       }
       return mapped.get(key).batch;
     },
-    /** A batch that shines by itself (unlit): lit panels, screens, signs. */
+    /**
+     * A batch that shines by itself (unlit): lit panels, screens, signs. opt: detail, transparent, alphaTest, side,
+     * depthWrite, and bloom (0…3, default 1: how strongly it feeds the glow at Medium and High; kit.glowing, glow.js;
+     * how it is drawn does not change). One mesh per key, with the options of the key's first call: a key asked for
+     * again with another bloom adds to the first batch at the first number, so two strengths need two keys.
+     * opt.lights { power, k, far, axis, floor, wrap, flick, bank, color, offset, cap } (shining-lights.rule.js): what is
+     * added to the batch from then on lights the room too, as c.light(x, y, z, color ?? rgb, power, { k, … }) at each
+     * piece's middle would (two or three along a long thin one, the power shared; at most 16 a batch, the nearest merged).
+     */
     shining(key, texture, power = 1, rgb = WHITE, opt = {}) {
-      if (!shining.has(key)) { shining.set(key, { batch: track(new Batch(), key === 'panel'), texture, power, rgb, opt }); if (opt.detail) shining.get(key).batch.detail = true; }
+      if (!shining.has(key)) {
+        shining.set(key, { batch: track(new Batch(), key === 'panel'), texture, power, rgb, opt }); if (opt.detail) shining.get(key).batch.detail = true;
+        if (opt.lights) {
+          const col = opt.lights.color, tone = typeof col === 'string' ? lin(col) : Array.isArray(col) ? col : rgb;
+          shineLights(shining.get(key).batch, tone, opt.lights, (x, y, z, l, o) => { const L = lamp(x, y, z, l, o); rt.lights.push(L); return L; },
+            (L) => { const i = rt.lights.indexOf(L); if (i >= 0) rt.lights.splice(i, 1); });
+        }
+      }
       return shining.get(key).batch;
     },
     get flat() { return c.mapped('flat', kit.tex.white()); },
@@ -1213,10 +1231,10 @@ function roomContext(world, rt) {
     },
     /** Something from the office's catalogue (desk, chair, cooler…), or a plain crate if it is not there. */
     prop(type, x, z, opt = {}) {
-      // (a desk, a chair, a monitor, a keyboard, a filing cabinet, a stack of boxes, a bin and a trolley are the level's own:
-      // desk.model.js, workstation.model.js, storage.model.js, smalls.model.js, each the office's bounds exactly at half-size
-      // voxels, so its foot, its collider and its top are where they were; only where the catalogue has that thing at all,
-      // so nothing gains one.
+      // (a desk, a chair, a monitor, a keyboard, a filing cabinet, a stack of boxes, a bin, a trolley and a water cooler are
+      // the level's own: desk.model.js, workstation.model.js, storage.model.js, smalls.model.js, each the office's bounds
+      // exactly at half-size voxels, so its foot, its collider and its top are where they were; only where the catalogue has
+      // that thing at all, so nothing gains one.
       // The chair is in the cloth the office's would have been; the boxes are the stack the office's would have been, of
       // its three; the monitor is on. A keyboard's keys are laid over its case as detail (c.place, `over`), and only where
       // it stays put: the case alone is a whole keyboard)

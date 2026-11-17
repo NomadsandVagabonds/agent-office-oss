@@ -155,7 +155,6 @@ export function build(c) {
     trailSign(c, spSign.side, spSign.at, 1.52, [
       `LOOKOUT CAB ${p.towerCode || 'T-04'}`,
       'ROOF CLEARANCE: 0.00 M',
-      'TRAIL CALL ON UPPER DESK',
     ], { seed: 139 + R.int(0, 9), warn: true });
   }
 }

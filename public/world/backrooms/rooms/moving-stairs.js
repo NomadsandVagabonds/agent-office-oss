@@ -23,7 +23,7 @@ import { ticks } from '../kit.js';
 import { P } from '../bits.js';
 import { Vox, M } from '../../vox/vox.js';
 import { upright, sheet } from '../suburb.js';
-import { mallNeon, voidIn, dummyVox } from '../mall.js';
+import { mallNeon, voidIn, dummyVox, MALL_TEX } from '../mall.js';
 import { PAL, jacketVox } from './mens-ladies.js';
 import { canLeave } from '../cast/paths.js';
 
@@ -45,9 +45,9 @@ export function build(c) {
   const { W, D, H, R, params: p, kit } = c, K = STAIRS, G = K.floor, env = c.env;
   const zT = -D / 2 + K.deep, zB = zT + K.run, xA = -W / 5, xB = W / 5, yOf = (z) => G * Math.max(0, Math.min(1, (zB - z) / K.run));
   const onA = (x, z) => Math.abs(x - xA) < K.half && z >= zT && z <= zB, onB = (x, z) => Math.abs(x - xB) < K.half && z >= zT && z <= zB;
-  const wallT = kit.tex.custom('stairs:wall', 32, 32, (g, w, h) => { P(g, '#94767c', 0, 0, w, h); for (let x = 0; x < w; x += 16) { P(g, '#7e6268', x, 0, 1, h); P(g, '#a4868c', x + 1, 0, 1, h); } for (let i = 0; i < 40; i++) P(g, 'rgba(0,0,0,0.05)', (i * 37) % w, (i * 53) % h, 1, 2); });
-  const ceilT = kit.tex.custom('stairs:ceil', 32, 32, (g, w, h) => { P(g, PAL.tile, 0, 0, w, h); for (let i = 0; i < 90; i++) P(g, '#8a6e78', (i * 31) % w, (i * 17) % h, 1, 1); P(g, PAL.grid, 0, 0, w, 1); P(g, PAL.grid, 0, 0, 1, h); });
-  const carpetT = kit.tex.custom('store:carpet', 32, 32, (g, w, h) => { P(g, PAL.carpet, 0, 0, w, h); for (let i = 0; i < 260; i++) P(g, PAL.fleck[i % 3], (i * 29 + (i >> 3)) % w, (i * 47) % h, 1, 1); });
+  const wallT = MALL_TEX.panel(kit, 'stairs:wall:64', '#94767c');
+  const ceilT = MALL_TEX.tile(kit, 'mall:tile:64', PAL.tile, PAL.grid);
+  const carpetT = MALL_TEX.carpet(kit, 'mall:carpet:64', PAL.carpet, PAL.fleck);
   c.shell({ floor: false, panels: false, skirting: false, wallTex: wallT, ceilTex: ceilT });
   const flat = c.flat, det = c.detail, carpet = c.mapped('stairs:carpet', carpetT);
 
@@ -80,7 +80,7 @@ export function build(c) {
   const pink = c.shining('stairs:pink', kit.tex.white(), 1.8, [1, 0.5, 0.72]), warm = c.shining('stairs:warm', kit.tex.white(), 1.7, [1, 0.82, 0.55]), lilac = c.shining('stairs:lilac', kit.tex.white(), 1.7, [0.86, 0.72, 1]);
 
   /* the shaft: its walls drawn down to the bottom, panelled, darker as they go; doors on them at every height, each with its lamp */
-  { const shaftT = c.mapped('stairs:shaft', kit.tex.custom('stairs:shaft', 32, 32, (g, w, h) => { P(g, '#b8aa96', 0, 0, w, h); for (let x = 0; x < w; x += 8) { P(g, '#a4967f', x, 0, 1, h); P(g, '#c6b8a4', x + 1, 0, 1, h); } for (let i = 0; i < 30; i++) P(g, 'rgba(0,0,0,0.05)', (i * 13) % w, (i * 29) % h, 1, 2); }));
+  { const shaftT = c.mapped('stairs:shaft', MALL_TEX.panel(kit, 'stairs:shaft:64', '#b8aa96'));
     const bands = [0, -2, -4.5, -7.5, -11, K.bottom], shade = (y) => Math.max(0.3, 1 + y / 22);
     for (let i = 0; i + 1 < bands.length; i++) { const y1 = bands[i], y0 = bands[i + 1], a = shade((y0 + y1) / 2), al = [a, a, a * 0.97], uv = (s, t) => [s * 4, t * (y1 - y0) / 1.6];
       sheet(shaftT, [W / 2, y0, zs0], [W / 2, y0, zs1], [W / 2, y1, zs1], [W / 2, y1, zs0], 6, 2, uv, al);                    // the far wall
@@ -236,7 +236,7 @@ export function build(c) {
   { const tube = c.shining('stairs:panels', kit.tex.white(), 1.1, [0.95, 0.88, 1]);
     for (let x = -W / 2 + 1.8; x < xS - 0.8; x += 3.2) for (let z = zT + 1.5; z < D / 2 - 0.8; z += 3.2) { det.box(x - 0.62, H - 0.03, z - 0.32, x + 0.62, H - 0.005, z + 0.32, rgb('#c8b8c4')); tube.box(x - 0.56, H - 0.035, z - 0.26, x + 0.56, H - 0.03, z + 0.26, [1, 1, 1]); }
     for (let z = zs0 + 1.2; z < zs1 - 0.6; z += 2.2) { det.box(xS + 1.0, H - 0.03, z - 0.3, W / 2 - 0.4, H - 0.005, z + 0.3, rgb('#c8b8c4')); tube.box(xS + 1.06, H - 0.035, z - 0.24, W / 2 - 0.46, H - 0.03, z + 0.24, [1, 1, 1]); } }
-  const neon = mallNeon(kit, 'stairs:' + p.seed, ['UP', 'ALSO UP', 'TO ALL FLOORS', 'STAND STILL', 'KEEP WALKING', 'DOWN IS UP', 'THIS WAY UP', 'DOWN'], p.seed), lit = c.shining('mall:neon:stairs:' + p.seed, neon.texture, 2.2);
+  const neon = mallNeon(kit, 'stairs:' + p.seed, ['UP', 'ALSO UP', 'TO ALL FLOORS', 'STAND STILL', 'KEEP WALKING', 'DOWN IS UP', 'THIS WAY UP', 'DOWN'], p.seed), lit = c.shining('mall:neon:stairs:' + p.seed, neon.texture, 2.2, undefined, { bloom: 2 });
   for (const [x, i] of [[xA, 3], [xB, 5]]) { upright(lit, x + 1.0, zB + 0.35, x - 1.0, zB + 0.35, 2.3, 2.8, neon.uv(i)); upright(lit, x - 1.0, zB + 0.35, x + 1.0, zB + 0.35, 2.3, 2.8, neon.uv((i + 1) % 8)); for (const s of [-1, 1]) flat.box(x + s - 0.02, 2.8, zB + 0.33, x + s + 0.02, H, zB + 0.37, [0.2, 0.18, 0.2]); }
   upright(lit, dx + 0.9, zs1 + 0.02, dx - 0.9, zs1 + 0.02, 2.3, 2.75, neon.uv(7)); upright(lit, dx - 0.9, zs1 + 0.01, dx + 0.9, zs1 + 0.01, 2.3, 2.75, neon.uv(7));
 

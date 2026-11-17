@@ -274,8 +274,7 @@ export function build(c) {
   if (spSign) {
     trailSign(c, spSign.side, spSign.at, 1.52, [
       'CANOPY ROPE WALK',
-      'SOUND CALL OR CRANK WINCH',
-      'CROUCH [C] UNDER COCOONS',
+      'ONE COLLEAGUE AT A TIME',
     ], { seed: 73, warn: true });
   }
 }

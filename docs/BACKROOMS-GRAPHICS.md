@@ -487,6 +487,44 @@ The wait for somebody who goes straight to the way down when play begins
 This wait, tier by tier, is the number wanted from ordinary machines, more
 than their frame times.
 
+### Shining batches that light the room (built)
+
+A room draws what shines (tubes, neon, lamps, signs) with `c.shining`, which is
+drawn unlit, and until now lit the room beside it with lamps placed by hand
+(`c.light`). `c.shining(key, texture, power, rgb, { lights: { power, k, far, … } })`
+does both in one call (`shining-lights.rule.js`, hooked in `world.js`
+`c.shining`): every piece added to that batch afterwards (each outermost `box`,
+`quad`, `tri`, `ball`, `grid` or `addVox` call, measured by the vertices it
+added) also puts ordinary lamps (`kit.js` `lamp`) on the room's list, as
+`c.light` does, at the moment the piece is added:
+
+- one at the piece's middle; a long thin piece (at least 0.9 m, and three
+  times longer than its next side) two along it, three from 1.8 m, so a tube
+  lights as a line; the power is per piece and shared between its lamps;
+- in the batch's `rgb` (or `lights.color`), with `lights.power`, and `k`, `far`,
+  `axis`, `floor`, `wrap`, `flick`, `bank` handed to the lamp unchanged: the
+  same lamp, in the same place on the list, as `c.light(x, y, z, rgb, power, { k, … })`
+  written just after the piece (the test proves it bit for bit, at Classic and
+  Medium, with barricades and banks). So the bake, tube shadows, doorway light,
+  the flicker and the banks cannot tell them apart;
+- at most 16 a batch, the room's whole budget of lights (`lights.cap` may lower it, not raise it); past it the
+  two nearest of the batch's lamps become one, weighted by power, in the
+  earlier one's place. Positions come only from the geometry: no seed is read.
+
+It is opt-in per room and the same at every tier (it only adds lamps; each
+tier bakes them as it bakes any lamp). Without `lights` nothing of it runs: four
+seeds' floors (472 rooms, Classic and Medium, banks on and off) bake to the
+same bits as before. A room that adopts it and drops its hand-placed lights is a
+content change for that room, as any change to its lamps is. The lamps count
+toward the room's 16 lights (`budget.js`), and a batch at its cap is over that
+by itself. A lamp at the middle of a tube on a wall lights the wall behind it
+only at a graze; `offset` (a few tenths of a metre into the room, as the exit
+signs' hand-placed lamps are) gives the wall its pool. The cost is bake time,
+not draws: no mesh or triangle is added. On the build machine, an 8 m room
+with 24 short tubes in one batch: the vertex bake 0.7 → 0.7 → 0.9 ms at Classic
+and 1.1 → 1.4 → 1.7 ms at Medium, and the tube-shadow map 2 → 5 → 9 ms, for
+none → 10 → 24 lamps from the batch.
+
 ### Ceiling fixtures (built)
 
 `fixtures` (`&gfx=fixtures` on the dev page; Medium and High). Each ceiling
@@ -577,6 +615,29 @@ one is made only from what shines by itself, and replaces it at those tiers.
   see-through and writes no depth: that is light painted on to something (the
   all-hands microphone's pool on the stage, the lamp halo of `rooms.js`), and
   blooming it would bloom the room's light again.
+- **How strongly each batch blooms.** `kit.glowing(map, power, rgb, { bloom })`
+  and so `c.shining(key, texture, power, rgb, { bloom })`: a number, 1 unless
+  given, held to 0…3 (`glow.rule.js` `glowStrength`; anything not a number is
+  1), carried as the material's `userData.bloom` beside `userData.glow`. It
+  scales only what that batch draws into the emissive picture (its stand-in's
+  colour is its colour × the number), on top of its class's own share: a
+  picture still gets only 15 % over itself, so a neon fascia at 3 throws three
+  times the halo and its words stay readable (looked at in the-orange at High,
+  plain and Full VHS: the field round the letters goes from black to a warm
+  haze, the letters still read). How the batch itself is drawn does not change,
+  the kit's scene shader has no new text or uniform, and Classic and Low, which
+  have no glow, ignore it. At 0 a lamp is left out of the emissive picture (one
+  draw fewer; in the fallback it is drawn black, as it still hides what is
+  behind it) and a picture is drawn black with its mark, so a neighbour's glow
+  still leaves it crisp. The pass reads the number every frame, so the dev
+  page's handle can try one out: set `userData.bloom` on a shining mesh's
+  material from `__backrooms.root`. A `c.shining` key keeps the options of its
+  first call: asked for again with another number, it adds to the first batch
+  at the first number, so two strengths need two keys. With no `bloom` given
+  anywhere the stand-ins, draw list and uniforms are the ones there were: in
+  the copier room at Medium and High, Clean, the same paused frame through the
+  old pass and the new one differs in 0 of 576,000 pixels, and draws and
+  triangles are unchanged. Pinned by `test/backrooms-gfx-glow-strength.test.mjs`.
 - **How it is drawn** (`glow.js`, a pass in the camcorder's chain where the
   tier's bloom is, after the scene and before the tape's signal). Each frame
   what shines is drawn once more, at half the size the scene is drawn at (High:

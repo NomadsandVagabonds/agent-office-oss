@@ -203,8 +203,7 @@ export function build(c) {
   if (spSign) {
     trailSign(c, spSign.side, spSign.at, 1.52, [
       `SAPLING ARCHIVE ${p.fileCode || 'REC-58'}`,
-      'CROUCH [C] BELOW EYE SCARS',
-      'TORCH BEAM SHUTS LENTICELS',
+      'RETENTION PERIOD: 80 YEARS',
     ], { seed: 257 + R.int(0, 9), warn: true });
   }
 }

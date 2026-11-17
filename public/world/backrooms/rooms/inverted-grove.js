@@ -205,8 +205,7 @@ export function build(c) {
   if (spSign) {
     trailSign(c, spSign.side, spSign.at, 1.52, [
       `INVERTED COPPICE ${p.groveCode || 'INV-04'}`,
-      'MIND LOW CEILING CROWNS',
-      'CHECK MIRROR POOL FOR DESK',
+      'THIS SIDE UP',
     ], { seed: 271 + R.int(0, 9), warn: true });
   }
 }
