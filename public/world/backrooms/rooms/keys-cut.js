@@ -45,7 +45,7 @@ export function build(c) {
   const zc = -D / 2 + K.counter;
   c.flat.box(-W / 2 + 0.2, 0, zc - 0.5, W / 2 - 0.2, 0.95, zc, [0.3, 0.33, 0.36]); c.flat.box(-W / 2 + 0.15, 0.95, zc - 0.55, W / 2 - 0.15, 1.0, zc + 0.05, [0.7, 0.68, 0.62]); c.solid(-W / 2, zc - 0.55, W / 2, zc + 0.05, { tall: false });
   const mx = R.range(-W / 4, W / 4); c.model('keys:machine', machineVox, mx, zc - 0.25, { y: 1.0, rot: Math.PI, solid: false, shadow: false });
-  const neon = mallNeon(kit, 'keys:' + p.seed, ['KEYS CUT', 'HEELS', 'KEYS CUT HEELS', 'WHILE YOU WAIT', 'ANY KEY', 'NO KEY', 'DOORS', 'KEYS KEYS'], p.seed), lit = c.shining('mall:neon:keys:' + p.seed, neon.texture, 2.4);
+  const neon = mallNeon(kit, 'keys:' + p.seed, ['KEYS CUT', 'HEELS', 'KEYS CUT HEELS', 'WHILE YOU WAIT', 'ANY KEY', 'NO KEY', 'DOORS', 'KEYS KEYS'], p.seed), lit = c.shining('mall:neon:keys:' + p.seed, neon.texture, 2.4, undefined, { bloom: 2 });
   for (const [z, i, s] of [[zc + 0.06, 2, 1], [zc - 0.56, 0, -1]]) upright(lit, -s * (W / 2 - 0.4), z, s * (W / 2 - 0.4), z, 1.02, 1.38, neon.uv(i));
   c.light(mx, 1.5, zc + 0.3, '#ffb02e', 0.8, { k: 1.3, far: 5 }); c.light(0, H - 0.5, D / 4, '#ffe9c2', 0.6, { k: 1.4, far: 6 });
   /* heels, on a shelf along a side */

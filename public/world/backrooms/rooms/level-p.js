@@ -108,7 +108,7 @@ export function build(c) {
       wallBox(c, 'back', m - 0.9, m - 0.72, 0.3, 0.9, 0.05, 0.23, [0.75, 0.1, 0.08], det); } }
   }
   /* what it says, in tube; and the yellow it is all in */
-  const neon = mallNeon(kit, 'levelp:' + p.seed, ['WAY OUT', 'LEVEL P', 'PAY HERE', String(p.bay), 'WAY OUT', 'LEVEL P', 'PAY HERE', 'YOUR CAR'], p.seed + 2), lit = c.shining('mall:neon:levelp:' + p.seed, neon.texture, 2.4);
+  const neon = mallNeon(kit, 'levelp:' + p.seed, ['WAY OUT', 'LEVEL P', 'PAY HERE', String(p.bay), 'WAY OUT', 'LEVEL P', 'PAY HERE', 'YOUR CAR'], p.seed + 2), lit = c.shining('mall:neon:levelp:' + p.seed, neon.texture, 2.4, undefined, { bloom: 2 });
   upright(lit, rx1, rzTop + 0.3, rx0, rzTop + 0.3, 2.3, 2.85, neon.uv(0)); upright(lit, rx0, rzTop + 0.3, rx1, rzTop + 0.3, 2.3, 2.85, neon.uv(4)); for (const x of [rx0 + 0.05, rx1 - 0.05]) c.flat.box(x - 0.02, 2.85, rzTop + 0.28, x + 0.02, H, rzTop + 0.32, [0.1, 0.1, 0.12]);
   upright(lit, -W / 2 + 2.6, 0.04 - 0.0 + 0.0 - 0.0 + 0.5, -W / 2 + 5.4, 0.5, 2.5, 3.0, neon.uv(2));
   upright(lit, 2, D / 2 - 0.05, -1.4, D / 2 - 0.05, H - 1.6, H - 0.7, neon.uv(1)); upright(lit, 6.5, D / 2 - 0.05, 3.5, D / 2 - 0.05, 3.2, 3.8, neon.uv(7));
