@@ -13,6 +13,7 @@ import { ShaderPass } from '/vendor/three-addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from '/vendor/three-addons/postprocessing/UnrealBloomPass.js';
 import { Pass, FullScreenQuad } from '/vendor/three-addons/postprocessing/Pass.js';
 import { profile, bloomOn, internalSize } from './graphics.js';
+import { GlowPass } from './glow.js';
 
 const HAZE_LIGHT = 1.6;                                  // the haze's brightness for each unit of the room's light
 
@@ -195,6 +196,8 @@ export function createVhs(renderer, camera, opt = {}) {
     signalRender(r, write, read, dt, mask);
   };
   let level = opt.level ?? 2, last = '', time = 0, prof = profile('classic');
+  let glow = null;                                       // (bloom from what shines, glow.js: made only while a tier's glow is on)
+  const sceneDepth = (read) => (superPass.enabled ? superPass.target.depthTexture : read.depthTexture) || null;
   const picture = { x: 0, y: 0, w: 1, h: 1 };            // where the picture sits in the window, CSS pixels
 
   /**
@@ -210,6 +213,7 @@ export function createVhs(renderer, camera, opt = {}) {
     composer.setSize(iw, ih);
     superPass.enabled = sw > iw; renderPass.enabled = !superPass.enabled;
     if (superPass.enabled) superPass.resize(sw, sh, iw, ih);
+    if (glow) glow.resize(sw, sh);
     for (const rt of [composer.renderTarget1, composer.renderTarget2, superPass.target]) if (rt.depthTexture) Object.assign(rt.depthTexture.image, { width: rt.width, height: rt.height });
     camera.aspect = iw / ih; camera.updateProjectionMatrix();
     u.uRes.value.set(iw, ih);
@@ -233,7 +237,12 @@ export function createVhs(renderer, camera, opt = {}) {
   /** A Graphics tier's picture (graphics.js profile): lines, edge smoothing, bloom, grade and haze strength. */
   function setProfile(p) {
     prof = p;
-    bloom.enabled = bloomOn(p, hostBloom);
+    // bloom from what shines (graphics.js glow): in place of the tier's bloom, its pass where that one is; at 0 there is
+    // no such pass and nothing of it is made, and the chain is the one it always was
+    // (the pass reads the scene's depth where there is one, as the haze does: then it draws only what shines)
+    if (p.glow > 0 && !glow) { glow = new GlowPass(camera, renderPass.scene, undefined, sceneDepth); composer.insertPass(glow, composer.passes.indexOf(bloom) + 1); }
+    else if (!(p.glow > 0) && glow) { composer.removePass(glow); glow.dispose(); glow = null; }
+    bloom.enabled = bloomOn(p, hostBloom) && !glow;
     // a tier's own bloom is tighter than the office's: a glow round the tubes, not a wash over the dark end of a corridor
     // (the widest blurs are left out: they are what spread a tube over everything)
     const own = p.bloom !== 'host';
@@ -265,11 +274,14 @@ export function createVhs(renderer, camera, opt = {}) {
   return {
     picture, layout, setLevel, setProfile, setGrade, uniforms: u, bloom,
     get level() { return level; },
+    /** The bloom from what shines while a tier has it on (glow.js), else null; and the chain as it stands. */
+    get glow() { return glow; },
+    get passes() { return composer.passes.slice(); },
     get profile() { return prof; },
     /** How lit the room is (index.js `light`, 0.3 a lit room): the haze is as bright as the air it hangs in. */
     setAmbient(light) { u.uHazeLight.value = Math.max(0, light) * HAZE_LIGHT; },
-    setScene(scene) { renderPass.scene = scene; superPass.scene = scene; },
+    setScene(scene) { renderPass.scene = scene; superPass.scene = scene; if (glow) glow.scene = scene; },
     render(dt) { time += dt; u.uTime.value = time; composer.render(dt); },
-    dispose() { composer.renderTarget1.depthTexture?.dispose(); composer.renderTarget2.depthTexture?.dispose(); composer.dispose(); superPass.dispose(); target.dispose(); bloom.dispose(); signal.dispose?.(); screen.dispose?.(); signal.material?.dispose(); screen.material?.dispose(); },
+    dispose() { glow?.dispose(); glow = null; composer.renderTarget1.depthTexture?.dispose(); composer.renderTarget2.depthTexture?.dispose(); composer.dispose(); superPass.dispose(); target.dispose(); bloom.dispose(); signal.dispose?.(); screen.dispose?.(); signal.material?.dispose(); screen.material?.dispose(); },
   };
 }
