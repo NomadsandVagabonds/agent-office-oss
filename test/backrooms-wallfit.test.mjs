@@ -105,3 +105,16 @@ test('wallfit: on a floor, which sockets have something plugged in is the seed\'
   assert.equal(JSON.stringify(generate(7, { count: 0 })), fresh);
   for (const rt of a.world.rooms) assert.ok(meshes(rt).length <= 45);
 });
+
+test('wallfit: the exit box\'s conduit reaches the ceiling over it, however low the sign hangs, and costs no triangle', async (t) => {
+  // (the highest thing in the room's voxel batch is the conduit's top: within a voxel of the ceiling, never through it by more)
+  const top = (rt) => Math.max(...meshes(rt).filter((m) => m.geometry.attributes.aSurf).flatMap((m) => { const p = m.geometry.attributes.position, out = []; for (let i = 0; i < p.count; i++) out.push(p.getY(i)); return out; }));
+  const bw = 0.82 + 0.04, bh = 0.82 * 0.36, stub = cost(exitBoxVox({ w: bw, h: bh }));
+  for (const [door, up] of [[DOOR, '0.14'], [{ ...DOOR, h: 1.6 }, '0.59']]) {
+    const { rt, keys } = await oneRoom(t, (c) => c.exitSign(door, 'EXIT'));
+    const key = keys.find((k) => k.startsWith('wallfit:exit:'));
+    assert.ok(key.endsWith('^' + up), `${key}: the gap to the ceiling, to the centimetre, is in the model's name`);
+    assert.ok(Math.abs(top(rt) - 2.6) <= 0.0126, `the conduit's top is at ${top(rt)}, the ceiling at 2.6`);
+    assert.equal(cost(exitBoxVox({ w: bw, h: bh, up: Number(up) })), stub, 'a longer conduit is the same triangles');
+  }
+});

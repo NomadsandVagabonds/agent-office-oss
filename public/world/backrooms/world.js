@@ -1595,7 +1595,9 @@ function roomContext(world, rt) {
       // the box behind the face (wallfit.model.js), as wide and as tall as the plain box it took the place of, hung from
       // that box's top edge; the face sits in its rib (in c.vox: its charge lamp shines)
       const bw = w + 0.04, bh = w * 0.36, half = w * 0.18;
-      wallFit(kit.model(`wallfit:exit:${bw.toFixed(4)}x${bh.toFixed(4)}`, () => exitBoxVox({ w: bw, h: bh }), { ao: false }), c.wallAt(dr.side, dr.c, 0), y + half, c.vox);
+      // (its conduit runs up to the ceiling over the sign, however low the sign hangs: to the centimetre, so signs at one drop share a model)
+      const up = Math.max(0, Math.round((ceilAt(def, p0.x, p0.z) - (y + half)) * 100) / 100);
+      wallFit(kit.model(`wallfit:exit:${bw.toFixed(4)}x${bh.toFixed(4)}^${up.toFixed(2)}`, () => exitBoxVox({ w: bw, h: bh, up }), { ao: false }), c.wallAt(dr.side, dr.c, 0), y + half, c.vox);
       // (kit.gfx: it stands in the room as that plain box did, 3 cm off the wall, so the tubes' shadows are as they were)
       if (gfxOn) {
         const hw = w / 2 + 0.02, U = p.U, n = p.n, cx = p.x - n[0] * 0.02, cz = p.z - n[2] * 0.02, ax = Math.abs(U[0]) * hw + Math.abs(n[0]) * 0.015, az = Math.abs(U[2]) * hw + Math.abs(n[2]) * 0.015;
