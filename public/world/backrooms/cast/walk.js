@@ -15,6 +15,20 @@ import { overlaps } from '../furniture-policy.js';
 import { roomRoute, roomCosts, gridPath, straighten } from './paths.js';
 
 const CELL = 0.125, STEP = 0.26;
+/**
+ * How far from the face of the wall, into the room the leaves swing into, a body of radius `r` has to stand for a pair of
+ * doors `w` wide to open (or shut) without a leaf going through it. Each leaf is `w/2 − 0.012` long and hangs from just outside
+ * its jamb (doorleaf.js), so it sweeps a quarter of a circle of that radius about its hinge; a body on the middle line is clear
+ * of it when it is that radius, plus its own, from the hinge. Pure. (A door's own way through, doors.js inTheWay, only says what
+ * is in the doorway itself.)
+ */
+export function swingClearance(w, r, margin = 0.03) {
+  const half = w / 2, reach = half - 0.012 + r + margin, hinge = half + 0.022;
+  return reach > hinge ? Math.sqrt(reach * reach - hinge * hinge) : 0;
+}
+/** Where a walker waits to go through a doorway: a spot this far from the wall's face, unless it is a pair of doors that swing at it. */
+export const WAIT = 0.45;
+
 /** What a shut door costs a walker that can open one, in rooms: it would go some way round sooner than stop and work a handle. */
 export const DOOR_COST = 3;
 /** A furnished doorway is usable, but going around is usually quicker than clearing it. */
@@ -136,11 +150,20 @@ export function createWalk(env) {
   }
 
   /** The two ends of the way through a doorway from one room into the next: a spot just inside each. */
-  function through(from, to) {
+  function through(from, to, a) {
     const d = from.def.doors.find((k) => k.to === to.id), l = W().throats[d.link].link, mid = (l.from + l.to) / 2;
     const c = l.axis === 'x' ? { x: l.at, z: mid, nx: 1, nz: 0 } : { x: mid, z: l.at, nx: 0, nz: 1 };
-    const s = Math.sign((to.def.cx - c.x) * c.nx + (to.def.cz - c.z) * c.nz) || 1, k = T / 2 + 0.45;
-    return { link: d.link, A: { x: c.x - c.nx * s * k, z: c.z - c.nz * s * k }, B: { x: c.x + c.nx * s * k, z: c.z + c.nz * s * k } };
+    const s = Math.sign((to.def.cx - c.x) * c.nx + (to.def.cz - c.z) * c.nz) || 1, k = T / 2 + WAIT;
+    const at = (kk, sign) => ({ x: c.x + c.nx * s * kk * sign, z: c.z + c.nz * s * kk * sign });
+    let A = at(k, -1);
+    // Given a walker (go() does): on the side a pair of doors swing into, wait out of their sweep, or the leaf goes through the
+    // body that opened it. Not there to stand (furniture just inside, or no room): the old spot.
+    const door = a && Number.isFinite(a.r) ? doorOf(d.link) : null;
+    if (door && door.room === from.id) {
+      const far = at(T / 2 + Math.max(WAIT, swingClearance(door.w, a.r)), -1);
+      if (stand(a, far.x, far.z)) A = far;
+    }
+    return { link: d.link, A, B: at(k, 1) };
   }
 
   /** Across the room it is in, toward a spot of that room: follow the way round the furniture. → how far it got. */
@@ -211,7 +234,7 @@ export function createWalk(env) {
     }
     const path = roomRoute(level, here.id, there.id, cost(a));
     if (!path || path.length < 2) { out.cannot = true; return out; }
-    const t = through(here, w.rooms[path[1]]), dA = Math.hypot(t.A.x - a.x, t.A.z - a.z);
+    const t = through(here, w.rooms[path[1]], a), dA = Math.hypot(t.A.x - a.x, t.A.z - a.z);
     out.link = t.link;
     if (dA > 0.12) { out.went = cross(a, here, t.A.x, t.A.z, dist); if (out.went > 1e-3 || Math.hypot(t.A.x - a.x, t.A.z - a.z) > 0.3) { stopped(a, t.B, out); return out; } }
     const door = doorOf(t.link);
