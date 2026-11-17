@@ -683,6 +683,49 @@ vendored files. It is decided after phases 1 to 7 are measured.
   what moves), reflections from the screen on top of each room's stored
   picture, light shafts and lit dust.
 
+## The ten-minute check, before the Graphics row is for everybody
+
+The Graphics row in Settings is shown only on a `?debug` visit until this has
+come back clean. Everything here is on the BlockRooms site; nothing needs an
+office running. Classic is what everybody has today and needs no checking.
+
+**Where:** `https://<the site>/play?debug&tape=7`. Open Settings, set
+**Graphics**, leave Picture at Full VHS. The setting is kept on that device.
+
+**On each of: Safari on a Mac, Firefox, a phone (its own browser), and one
+ordinary laptop if there is one.** At **Medium**, then at **High**:
+
+1. **Does it start?** The fall, then the first floor, with a picture. A black
+   or frozen picture is a fail: say which browser and which tier.
+2. **Look up** in the first lit room. Each light should be a recessed fitting
+   with tubes and a thin grid, glowing. Grey or black fittings in a lit room
+   are a fail.
+3. **Find something standing** (a copier, a partition, a pillar). It should
+   sit in a soft, stepped shadow on the floor. A jagged line across a floor,
+   or a floor that is black, is a fail.
+4. **Stand in a doorway** to a brighter room: a paler patch of floor on the
+   darker side. Subtle is fine; a hard flash when it appears is worth a note.
+5. **High only: the flashlight** (pick one up, or use the one you start with).
+   Point it past a door frame or at somebody: the frame or the body should cut
+   the beam and throw a shadow. Stripes or speckle all over lit walls is a fail.
+6. **Go straight to the way down** on the second floor you reach, as fast as
+   you can, and count the seconds of static before the next floor plays.
+7. **Change Graphics in the menu** from High to Classic and back while
+   standing in a room. The picture should change and nothing should break.
+
+**Then the number.** On the same device open
+`https://<the site>/play?debug&tape=7&bench=1` at Medium and again at High, let
+the tour finish (about a minute), and press **copy** on the read-out.
+
+**Send back, per device and tier:** the browser and device; pass or fail for 1
+to 5 and 7 with a word on any fail; the seconds from 6; the copied `[bench]`
+line. A screenshot of anything that looks wrong is worth more than a
+description.
+
+**Co-op at Medium** needs two people in one building: both at Medium, one
+holds a flashlight, the other should see its beam on the walls. If that is not
+to hand, say so and it stays on the list below.
+
 ## What has been measured
 
 Software rendering on the build machines says nothing; these are real machines.
