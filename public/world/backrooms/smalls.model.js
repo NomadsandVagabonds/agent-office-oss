@@ -97,7 +97,7 @@ export function coolerVox() {
   // two taps: a white body, a steel spout, a paddle to push a cup against, a light over each
   for (const [x, col, lit] of [[-12, blue, '#2a8cff'], [0, red, '#ff3b2a']]) {
     b(x, 40, 10, x + 3, 43, 13, white); b(x + 1, 36, 12, x + 2, 39, 13, steel); b(x, 42, 14, x + 3, 45, 15, col); b(x, 42, 15, x + 3, 42, 15, M('#2b2c2e', 0));
-    b(x + 1, 50, 15, x + 2, 51, 15, glow(lit));
+    b(x, 50, 14, x + 1, 51, 15, glow(lit));                                                             // (the office's one voxel at (x, 25, 7), doubled: the same place, the same size)
   }
   b(-12, 28, 10, -7, 35, 15, paper); b(-11, 35, 11, -8, 35, 14, M('#9fd0ea', 0)); b(-12, 34, 10, -7, 34, 15, M('#dcd4c0', 0));   // somebody's cup, left under the cold tap
   // the bottle, upside down in its collar: neck, shoulder, body; ribs round it, the air at what is now the top, two bubbles on their way
