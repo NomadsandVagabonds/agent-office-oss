@@ -59,7 +59,8 @@ function fingerprint(world, rt) {
 // Recorded from the code before there were fittings (the same fixture as backrooms-gfx-bake.test.mjs, BEFORE).
 // (re-recorded when the level got a desk of its own, desk.model.js: rooms 0, 2, 3 and 5 hold a desk and only its vertices moved the numbers; rooms 1 and 4 are as first recorded)
 // (re-recorded when the shell's sockets became wallfit.model.js's sculpted plate: rooms 0, 1, 2, 3 and 5 have sockets and only their vertices moved the numbers; room 4 has none and is as before)
-const BEFORE = [[1962.817741, 2883781810], [1384.956301, 3814377304], [985.90547, 174593279], [1884.541065, 1578071958], [481.926592, 1625426114], [4821.231215, 2148082110]];
+// (re-recorded when the chair, monitor, keyboard, filing cabinet and boxes became the level's own, workstation.model.js and storage.model.js: every one of rooms 0 to 5 holds a cabinet or a chair, and only their vertices moved the numbers)
+const BEFORE = [[1584.031356, 2252140634], [1049.094746, 1223968603], [822.373768, 2617162352], [1393.958369, 2383361265], [423.041536, 1938364466], [3911.317837, 2896181836]];
 const counts = (world) => world.rooms.map((rt) => { let tri = 0; const m = meshesOf(world, rt); for (const o of m) tri += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; return [m.length, tri]; });
 const vertsOf = (m) => m?.geometry.attributes.position.count || 0;
 // how many vertices one light's tubes are, meshed as the world meshes them

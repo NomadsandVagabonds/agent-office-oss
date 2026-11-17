@@ -859,6 +859,16 @@ description.
 holds a flashlight, the other should see its beam on the walls. If that is not
 to hand, say so and it stays on the list below.
 
+## What the owner should look at next
+
+The Graphics row is public, so what nobody has checked is now a real player's
+risk. One line each, newest first:
+
+- **Bloom from what shines (17 Nov).** On Safari and on a phone, at Medium:
+  look at a lit sign and a ceiling tube. Each should have a soft halo. A black
+  or missing picture, or black fittings, is a fail. (It reads the scene's depth
+  as the haze does; that is the part not proven on those browsers.)
+
 ## What has been measured
 
 Software rendering on the build machines says nothing; these are real machines.

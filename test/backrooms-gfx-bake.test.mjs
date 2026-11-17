@@ -58,9 +58,10 @@ function fingerprint(world, rt) {
 // Recorded from the code before contact darkening and bounce existed (the same fixture, run against that commit's kit and world).
 // (re-recorded when the level got a desk of its own, desk.model.js: rooms 0, 2, 3 and 5 hold a desk and only its vertices moved the numbers; rooms 1 and 4 are as first recorded)
 // (re-recorded when the shell's sockets became wallfit.model.js's sculpted plate: rooms 0, 1, 2, 3 and 5 have sockets and only their vertices moved the numbers; room 4 has none and is as before)
+// (re-recorded when the chair, monitor, keyboard, filing cabinet and boxes became the level's own, workstation.model.js and storage.model.js: every one of rooms 0 to 5 holds a cabinet or a chair, and only their vertices moved the numbers)
 const BEFORE = {
-  barricades: [[1962.817741, 2883781810], [1384.956301, 3814377304], [985.90547, 174593279], [1884.541065, 1578071958], [481.926592, 1625426114], [4821.231215, 2148082110]],
-  fixed: [[1962.817741, 2883781810], [1384.956301, 3814377304], [985.90547, 174593279], [1884.541065, 1578071958], [481.926592, 1625426114], [4821.231215, 2148082110]],
+  barricades: [[1584.031356, 2252140634], [1049.094746, 1223968603], [822.373768, 2617162352], [1393.958369, 2383361265], [423.041536, 1938364466], [3911.317837, 2896181836]],
+  fixed: [[1584.031356, 2252140634], [1049.094746, 1223968603], [822.373768, 2617162352], [1393.958369, 2383361265], [423.041536, 1938364466], [3911.317837, 2896181836]],
 };
 
 test('gfx: off unless asked for, and off is the bake there was before, number for number', async (t) => {
