@@ -12,7 +12,7 @@
 import { P } from './bits.js';
 import * as THREE from 'three';
 import { Batch, lamp } from './kit.js';
-import { Vox, M, glow } from '../vox/vox.js';
+import { Vox, M, glow, tone } from '../vox/vox.js';
 import { garble, upright } from './suburb.js';
 
 const FW = 1024, FH = 512, CELL = 128, FINE = 2, SIGN_W = 256, SIGN_H = 256, SROW = 32;
@@ -135,15 +135,31 @@ export const tube = (i) => TUBES[((i % TUBES.length) + TUBES.length) % TUBES.len
 /** A shop's dummy, as described: the right number of everything, joined by somebody who had not seen one move. pose: 0…3. */
 export function dummyVox(pose = 0, dress = '#39424f', head = null) {
   return () => {
-    const v = new Vox(), skin = M('#d8cbb4', 0), seam = M('#b3a68e', 0), cloth = M(dress, 2), base = M('#8d949c', 0);
-    const peel = M('#f08a1e', 2);
-    v.cyl('y', 0, 0, 0, 1, 8, base); v.cyl('y', 0, 0, 1, 34, 0.8, base);                                         // the stand it is on, up its back
-    v.rbox(-5, 34, -3, 5, 54, 3, 2, cloth); v.rbox(-4, 30, -3, 4, 36, 3, 2, cloth); v.box(-5, 44, -3, 5, 44, 3, seam);
-    for (const sx of [-1, 1]) { v.tube(sx * 2.5, 30, 0, sx * 3, 16, pose === 2 ? 3 : 0, 1.7, cloth); v.tube(sx * 3, 16, pose === 2 ? 3 : 0, sx * 3, 2, 0, 1.5, skin); v.rbox(sx * 3 - 2, 0, -2, sx * 3 + 2, 2, 5, 1, skin); }
-    v.cyl('y', 0, 0, 54, 57, 1.6, skin); if (head === 'orange') { v.ellipsoid(0, 64, 0, 7.5, 7, 7.5, peel); v.cyl('y', 0, 0, 70, 72, 1, M('#3f7a3a', 2)); v.box(1, 71, 0, 5, 71, 2, M('#5f9a48', 2)); } else { v.ellipsoid(0, 62, 0, 4.2, 5.2, 4.6, skin); v.box(-4, 62, -5, 4, 62, 5, seam); }       // a head, with the join round it and nothing on it
-    const arm = (sx, a) => { const ex = sx * (7 + a[0]), ey = 44 + a[1], ez = a[2]; v.tube(sx * 5.5, 52, 0, ex, ey, ez, 1.5, cloth); v.tube(ex, ey, ez, ex + sx * a[3], ey + a[4], ez + a[5], 1.3, skin); v.ellipsoid(ex + sx * a[3], ey + a[4], ez + a[5], 1.6, 2, 1.6, skin); };
-    const P4 = [[[1, -6, 0, 0, -9, 1], [1, -6, 0, 0, -9, 1]], [[3, 0, 3, 2, 8, 4], [1, -6, 0, 0, -9, 1]], [[2, -2, -4, -3, 9, -3], [2, -2, -4, -3, 9, -3]], [[4, 4, 0, 5, 6, 0], [4, 4, 0, 5, 6, 0]]][pose % 4];
-    arm(-1, P4[0]); arm(1, P4[1]);
+    // a display dummy, as a shop has them: fibreglass the colour of a plaster, jointed with a dark ring at every joint, on a chrome
+    // rod from a round foot; dressed for the office in a jacket and trousers; no face, but a brow and the ghost of a nose
+    const v = new Vox(), skin = M('#d9ccb5', 0), shade = M('#c4b59c', 0), seam = M('#7d7262', 0), cloth = M(dress, 2), dark = M(tone(dress, -0.22), 2);
+    const chrome = M('#b9bec4', 0), foot = M('#3a3d42', 0), shirt = M('#e9e4d6', 1), peel = M('#f08a1e', 2);
+    const limb = (x0, y0, z0, x1, y1, z1, r0, r1, m) => { const n = Math.max(2, Math.ceil(Math.hypot(x1 - x0, y1 - y0, z1 - z0))); for (let i = 0; i <= n; i++) { const t = i / n; v.ellipsoid(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, z0 + (z1 - z0) * t, r0 + (r1 - r0) * t, r0 + (r1 - r0) * t, r0 + (r1 - r0) * t, m); } };
+    const joint = (x, y, z, r) => { v.ellipsoid(x, y, z, r, r, r, skin); v.ring(x, y, z, r, 0.45, seam, 'y'); };
+    // the foot it stands on, and the rod up into the calf
+    v.cyl('y', 0, 0, 0, 1, 10, foot, 10); v.cyl('y', 0, 0, 1, 2, 9, chrome, 8); v.cyl('y', 0, 0, 2, 14, 0.7, chrome);
+    // legs: in trousers, a stride for some poses; shoes
+    const stride = pose === 1 ? 4 : pose === 3 ? -3 : 0;
+    for (const sx of [-1, 1]) { const dz = sx * stride * 0.5;
+      limb(sx * 3, 33, 0, sx * 3.1, 18, dz * 0.6, 2.9, 2.3, cloth); joint(sx * 3.1, 18, dz * 0.6, 2.2); limb(sx * 3.1, 18, dz * 0.6, sx * 3.1, 4, dz, 2.2, 1.7, cloth);
+      v.rbox(sx * 3.1 - 1.8, 0, dz - 2.5, sx * 3.1 + 1.8, 3, dz + 4, 1, foot); }
+    // pelvis, waist, chest: the jacket over a shirt, buttoned once, lapels
+    v.ellipsoid(0, 34, 0, 5.4, 4, 3.4, dark); limb(0, 36, 0, 0, 41, 0, 4.2, 4.0, cloth); v.ellipsoid(0, 46, 0, 6.2, 6.4, 3.8, cloth);
+    v.box(-1, 41, 3, 1, 52, 4, shirt); for (let y = 42; y < 52; y++) { const k = Math.round((52 - y) * 0.35); v.set(-1 - k, y, 4, dark); v.set(1 + k, y, 4, dark); } v.set(0, 42, 4, M('#c9a43a', 0));
+    v.ellipsoid(0, 51, 0, 6.6, 2.6, 3.6, cloth);                                                                                   // the shoulders, padded
+    // arms: by the pose; shoulder and elbow joints showing at the cuff
+    const P4 = [[[2, -9, 0, 0, -10, 1], [2, -9, 0, 0, -10, 1]], [[3, -2, 4, 3, 8, 4], [2, -9, 0, 0, -10, 1]], [[2, -4, -4, -3, 7, -3], [2, -4, -4, -3, 7, -3]], [[5, 2, 0, 6, 4, 0], [5, 2, 0, 6, 4, 0]]][pose % 4];
+    for (const [sx, a] of [[-1, P4[0]], [1, P4[1]]]) { const s0 = [sx * 6.6, 50, 0], e = [sx * (6.8 + a[0]), 50 + a[1] - 1, a[2]], h = [e[0] + sx * a[3], e[1] + a[4], e[2] + a[5]];
+      joint(...s0, 2.2); limb(...s0, ...e, 2.2, 1.8, cloth); v.ring(e[0], e[1], e[2], 1.8, 0.5, dark, 'y'); limb(...e, ...h, 1.4, 1.1, skin); v.ellipsoid(h[0], h[1] - 1, h[2], 1.3, 2.1, 1.0, skin); }
+    // neck and head: an egg, a brow, the ghost of a nose; the join round the neck
+    v.cyl('y', 0, 0, 52, 56, 1.7, skin); v.ring(0, 54, 0, 1.8, 0.4, seam, 'y');
+    if (head === 'orange') { v.ellipsoid(0, 63, 0, 7.2, 6.8, 7.2, peel); v.cyl('y', 0, 0, 69, 71, 1, M('#3f7a3a', 2)); v.box(1, 70, 0, 5, 70, 2, M('#5f9a48', 2)); for (let a = 0; a < 6.28; a += 0.9) v.set(Math.round(Math.cos(a) * 7.2), 63 + Math.round(Math.sin(a * 2) * 2), Math.round(Math.sin(a) * 7.2), M('#d9761c', 2)); }
+    else { v.ellipsoid(0, 61, 0, 4.1, 5.4, 4.6, skin); v.ellipsoid(0, 62.5, 3.3, 3.2, 1.0, 1.2, shade); v.box(0, 59, 4, 0, 61, 5, shade); v.ellipsoid(0, 64.5, -0.5, 4.2, 2.6, 4.4, skin); }
     return v;
   };
 }
@@ -261,7 +277,7 @@ export function concourse(c, opt = {}) {
     for (let i = 0; i < bays; i++, n++) {
       const x0 = a + i * bw, x1 = x0 + bw, top = lowest(c, side, x0, x1), face = Math.min(2.45, top - 0.62), kind = R.pick(kinds);
       if (face < 1.4) continue;
-      wallFace(c, side, x0 + 0.07, x1 - 0.07, 0, face, fronts, art.uv(kind), 0.06);
+      builtFront(c, side, x0 + 0.07, x1 - 0.07, face, kind, n, fronts, art);
       wallBox(c, side, x0 + 0.04, x1 - 0.04, face, face + 0.5, 0, 0.2, [0.13, 0.12, 0.15]);                                                   // the fascia, and the name on it
       wallFace(c, side, x0 + 0.12, x1 - 0.12, face + 0.04, face + 0.46, lit, neon.uv((n + room.id) % 8), 0.205);
       wallBox(c, side, x0 - 0.06, x0 + 0.07, 0, face + 0.5, 0, 0.15, [0.66, 0.52, 0.2]);                                                     // pilasters, brass, either side
@@ -284,6 +300,43 @@ export function concourse(c, opt = {}) {
   const chance = opt.wrong ?? (!room.shape && room.kind === 'plain' && Math.min(W, D) >= 3.4 ? (room.quiet ? 0.3 : 0.5) : 0);
   const which = opt.which;
   if ((chance > 0 && R.chance(chance)) || which) { const name = which || R.pick(Object.keys(MALL_WRONG)); if (MALL_WRONG[name](c) !== false) c.rt.weird = name; }
+}
+
+/**
+ * A shop's front, built and not painted: the painted front set back 0.28 m into a reveal, so that it is behind a real opening;
+ * a frame of brown anodised section round it with a transom bar and mullions standing proud of the glass; a sill; a door in
+ * its own frame with a push plate and a handle; the glass a pane of its own, faintly lit from the shop behind, a hand's breadth
+ * in front of the painted inside; a stepped threshold. (The owner: "Voxel should not mean worse than HL1 looks.")
+ */
+export function builtFront(c, side, a, b, face, kind, n, fronts, art) {
+  const R = c.R, deep = 0.28, frame = [0.24, 0.19, 0.15], frameL = [0.36, 0.3, 0.24], sill = [0.62, 0.58, 0.52], wall = [0.5, 0.46, 0.4], w = b - a;
+  // the reveal: two cheeks, a head, a sill
+  wallBox(c, side, a - 0.02, a + 0.06, 0, face, 0, deep + 0.06, wall); wallBox(c, side, b - 0.06, b + 0.02, 0, face, 0, deep + 0.06, wall);
+  wallBox(c, side, a, b, face - 0.08, face, 0, deep + 0.06, wall.map((v) => v * 0.8));
+  wallFace(c, side, a + 0.06, b - 0.06, 0, face - 0.08, fronts, art.uv(kind), 0.02);                                                       // what is in the shop, painted, at the back of the reveal
+  if (kind === 'shutter' || kind === 'hoarding') { wallBox(c, side, a + 0.06, b - 0.06, face - 0.2, face - 0.08, deep - 0.06, deep, [0.3, 0.31, 0.32]); return; }   // (a shutter's box over it, and nothing to look through)
+  // the frame: outer, transom, mullions, a door's posts
+  const fd0 = deep - 0.02, fd1 = deep + 0.05, door = kind === 'door' || kind === 'office' || kind === 'open', dw = Math.min(0.95, w * 0.36), dx0 = n % 2 ? b - 0.12 - dw : a + 0.12, dx1 = dx0 + dw, tr = face - 0.42;
+  wallBox(c, side, a + 0.06, a + 0.12, 0.12, face - 0.08, fd0, fd1, frame); wallBox(c, side, b - 0.12, b - 0.06, 0.12, face - 0.08, fd0, fd1, frame);
+  wallBox(c, side, a + 0.06, b - 0.06, face - 0.14, face - 0.08, fd0, fd1, frame); wallBox(c, side, a + 0.06, b - 0.06, tr - 0.03, tr + 0.03, fd0, fd1, frame);
+  wallBox(c, side, a + 0.06, b - 0.06, 0.08, 0.14, fd0, fd1 + 0.02, frameL); wallBox(c, side, a + 0.02, b - 0.02, 0, 0.08, fd0 - 0.02, fd1 + 0.08, sill);   // the bottom rail, the step
+  // the glass: clear, so that the shop shows through it; only the light catches on it, in two streaks, and dust along the bottom
+  const pane = (s0, s1, y0, y1) => { if (s1 - s0 < 0.12) return; const glass = c.mapped('mall:glass', c.kit.tex.custom('mall:glass', 32, 64, (g, gw, gh) => { g.clearRect(0, 0, gw, gh); g.fillStyle = 'rgba(255,255,255,0.28)'; for (let y = 0; y < gh; y++) { if (y % 9 < 6) g.fillRect(6 + y * 0.18 | 0, y, 2, 1); if (y % 13 < 4) g.fillRect(17 + y * 0.18 | 0, y, 1, 1); } g.fillStyle = 'rgba(200,190,170,0.5)'; g.fillRect(0, gh - 3, gw, 3); }), { cutout: true });
+    wallFace(c, side, s0, s1, y0, y1, glass, [0, 0, Math.max(1, Math.round((s1 - s0) / 0.8)), 1], deep + 0.012); };
+  if (door) {
+    wallBox(c, side, dx0 - 0.03, dx0 + 0.03, 0.12, tr, fd0, fd1, frame); wallBox(c, side, dx1 - 0.03, dx1 + 0.03, 0.12, tr, fd0, fd1, frame);
+    wallBox(c, side, dx0 + 0.03, dx1 - 0.03, 0.14, 0.32, deep - 0.01, deep + 0.03, frameL);                                                   // the door's kick rail
+    wallBox(c, side, (dx0 + dx1) / 2 + (n % 2 ? -1 : 1) * (dw / 2 - 0.12), (dx0 + dx1) / 2 + (n % 2 ? -1 : 1) * (dw / 2 - 0.12) + 0.03, 0.95, 1.35, deep + 0.03, deep + 0.09, [0.72, 0.62, 0.3]);   // a bar handle
+    wallBox(c, side, (dx0 + dx1) / 2 - 0.1, (dx0 + dx1) / 2 + 0.1, 1.15, 1.3, deep + 0.03, deep + 0.035, [0.7, 0.68, 0.62]);                                       // PUSH, on a plate
+    pane(dx0 + 0.03, dx1 - 0.03, 0.34, tr - 0.03);
+    const [s0, s1] = n % 2 ? [a + 0.12, dx0 - 0.03] : [dx1 + 0.03, b - 0.12]; pane(s0, s1, 0.14, tr - 0.03);
+    const m = (s0 + s1) / 2; if (s1 - s0 > 1.2) wallBox(c, side, m - 0.025, m + 0.025, 0.14, tr, fd0, fd1, frame);                             // a mullion in a wide one
+  } else {
+    const k = Math.max(1, Math.round((w - 0.24) / 0.9)), each = (w - 0.24) / k;
+    for (let i = 0; i < k; i++) { const s0 = a + 0.12 + i * each, s1 = s0 + each; pane(s0 + 0.03, s1 - 0.03, 0.14, tr - 0.03); if (i) wallBox(c, side, s0 - 0.025, s0 + 0.025, 0.14, tr, fd0, fd1, frame); }
+  }
+  pane(a + 0.12, b - 0.12, tr + 0.03, face - 0.14);                                                                                         // the fanlight over the transom
+  if (R.chance(0.5)) { const y = R.range(0.9, 1.6), s0 = R.range(a + 0.25, b - 0.6); wallBox(c, side, s0, s0 + 0.22, y, y + 0.3, deep + 0.014, deep + 0.016, R.pick([[0.92, 0.84, 0.3], [0.94, 0.92, 0.86], [0.88, 0.34, 0.24]])); }   // a notice, taped on the glass
 }
 
 /** What whoever built the shopping centre got wrong, one to a room, in rooms with nothing else in them. Each returns false if it could not. */
