@@ -108,7 +108,7 @@ export function build(c) {
   c.solid(xDn - half - 0.1, zE + 0.1, xDn + half + 0.1, zE + 0.25, { tall: false });
   { const dark = c.mapped('atrium:void', kit.tex.custom('atrium:void', 4, 4, (g) => P(g, '#000', 0, 0, 4, 4))), k = [0, 0, 0], xa = xDn - half, xb = xDn + half, y = -9;
     sheet(dark, [xa, y, zE + 0.3], [xa, y, zTop], [xa, 0, zTop], [xa, 0, zE + 0.3], 1, 1, null, k); sheet(dark, [xb, y, zTop], [xb, y, zE + 0.3], [xb, 0, zE + 0.3], [xb, 0, zTop], 1, 1, null, k); sheet(dark, [xa, y, zE + 0.3], [xb, y, zE + 0.3], [xb, 0, zE + 0.3], [xa, 0, zE + 0.3], 1, 1, null, k); sheet(dark, [xb, y, zTop], [xa, y, zTop], [xa, -0.02, zTop], [xb, -0.02, zTop], 1, 1, null, k); }
-  const more = mallNeon(kit, 'atrium:more', ['MORE SHOPS', 'LOWER LEVEL', 'UP', 'UP', 'UP', 'UP', 'LOWER LEVEL', 'MORE SHOPS'], 3), moreB = c.shining('mall:neon:atrium:more', more.texture, 2.6);
+  const more = mallNeon(kit, 'atrium:more', ['MORE SHOPS', 'LOWER LEVEL', 'UP UP UP', 'THIS WAY UP', 'UP', 'UP', 'LOWER LEVEL', 'MORE SHOPS'], 3), moreB = c.shining('mall:neon:atrium:more', more.texture, 2.6);
   upright(moreB, xDn + 1.0, zTop + 0.25, xDn - 1.0, zTop + 0.25, 2.25, 2.75, more.uv(0)); upright(moreB, xDn - 1.0, zTop + 0.25, xDn + 1.0, zTop + 0.25, 2.25, 2.75, more.uv(1));
   upright(moreB, xUp + 0.8, zTop + 0.25, xUp - 0.8, zTop + 0.25, 2.3, 2.7, more.uv(2)); upright(moreB, xUp - 0.8, zTop + 0.25, xUp + 0.8, zTop + 0.25, 2.3, 2.7, more.uv(3));
   for (const x of [xDn - 1.0, xDn + 1.0, xUp - 0.8, xUp + 0.8]) c.flat.box(x - 0.02, 2.75, zTop + 0.23, x + 0.02, H, zTop + 0.27, [0.1, 0.1, 0.12]);
