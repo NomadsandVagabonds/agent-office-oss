@@ -22,8 +22,9 @@
 //              open, a room at a time. Taking the line out is also what holds it to the tests of a finished one
 //   grade      how the camcorder colours this kind of floor at a Graphics setting above Classic (graphics.js, vhs.js), on the
 //              picture as it would be seen: lift (added to the shadows), gamma, gain (times the highlights), each R G B;
-//              sat (1: as it is); haze, the colour distance fades toward (times how lit the room is). Never read by the
-//              generator. Missing: graphics.js NEUTRAL_GRADE
+//              sat (1: as it is); haze, the colour distance fades toward (times how lit the room is); hazeK, times the
+//              tier's haze strength (0..2, missing 1); hazeFrom, metres from the eye before the haze begins (0..30,
+//              missing 8). Never read by the generator. Missing: graphics.js NEUTRAL_GRADE
 
 export const THEMES = {
   // the one everybody remembers: mono-yellow, humming, slightly damp
@@ -101,7 +102,7 @@ export const THEMES = {
     dressing: ['stump', 'stump', 'backpack', 'lantern', 'lantern', 'trailpost', 'wetsign', 'ladder', 'boxes'],
     hum: 50,
     // (the camcorder's grade for this kind of floor, added in the merge: every theme has one since the graphics pass. A damp, cool green; gentle)
-    grade: { lift: [0, 0.005, 0.002], gamma: [1.01, 1, 1.01], gain: [0.97, 1.01, 0.96], sat: 0.94, haze: [0.74, 0.88, 0.72] } },
+    grade: { lift: [0, 0.005, 0.002], gamma: [1.01, 1, 1.01], gain: [0.97, 1.01, 0.96], sat: 0.94, haze: [0.78, 0.78, 0.78], hazeK: 0.5, hazeFrom: 12 } },
 };
 
 export const THEME_IDS = Object.keys(THEMES);

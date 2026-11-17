@@ -29,26 +29,27 @@ const Signal = {
     uGrade: { value: 0 }, uHaze: { value: 0 },
     uLift: { value: new THREE.Vector3(0, 0, 0) }, uGamma: { value: new THREE.Vector3(1, 1, 1) }, uGainRGB: { value: new THREE.Vector3(1, 1, 1) }, uSat: { value: 1 },
     tDepth: { value: null }, uNear: { value: 0.06 }, uFar: { value: 170 }, uHazeColor: { value: new THREE.Vector3(0.8, 0.78, 0.72) }, uHazeLight: { value: 0.3 },
+    uHazeFrom: { value: 8 },                             // (where the haze begins, m: the kind of floor's, graphics.js gradeOf)
   },
   vertexShader: QUAD,
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform vec2 uRes;
     uniform float uTime, uAmt, uSoft, uTrack, uGain, uExposure, uBlack, uWhite, uRed, uSnow, uStaticDark, uRoll;
-    uniform float uGrade, uHaze, uSat, uNear, uFar, uHazeLight; uniform vec3 uLift, uGamma, uGainRGB, uHazeColor; uniform sampler2D tDepth;
+    uniform float uGrade, uHaze, uSat, uNear, uFar, uHazeLight, uHazeFrom; uniform vec3 uLift, uGamma, uGainRGB, uHazeColor; uniform sampler2D tDepth;
     varying vec2 vUv;
     const mat3 YIQ = mat3(0.299, 0.596, 0.211, 0.587, -0.274, -0.523, 0.114, -0.322, 0.312);
     const mat3 RGB = mat3(1.0, 1.0, 1.0, 0.956, -0.272, -1.106, 0.621, -0.647, 1.703);
     float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
     // a gentle shoulder: bright things wash out toward white, the way cheap video does
     vec3 film(vec3 c) { return 1.0 - exp(-c * (1.3 * uExposure * uGain)); }
-    // the air: nothing nearer than 8 m, then exponentially toward the floor's colour; never more than about half way.
+    // the air: nothing nearer than uHazeFrom (8 m unless the kind of floor says), then exponentially toward the floor's colour; never more than about half way.
     // The air is only as bright as what is behind it (and the room it hangs in): a dark end of a corridor stays dark,
     // it is not fogged grey. Where nothing was drawn (the depth is the far plane) it is left alone: the void stays black
     vec3 haze(vec3 c, vec2 uv) {
       float d = texture2D(tDepth, uv).x;
       if (d >= 0.99999) return c;
       float z = uNear * uFar / (uFar - d * (uFar - uNear));
-      float k = (1.0 - exp(-max(z - 8.0, 0.0) * 0.05)) * 0.5 * uHaze;
+      float k = (1.0 - exp(-max(z - uHazeFrom, 0.0) * 0.05)) * 0.5 * uHaze;
       float l = dot(c, vec3(0.299, 0.587, 0.114));
       vec3 air = uHazeColor / max(dot(uHazeColor, vec3(0.299, 0.587, 0.114)), 0.001) * l * 1.08 + uHazeColor * min(uHazeLight, l) * 0.3;
       return mix(c, air, k);
@@ -199,6 +200,7 @@ export function createVhs(renderer, camera, opt = {}) {
     signalRender(r, write, read, dt, mask);
   };
   let level = opt.level ?? 2, last = '', time = 0, prof = profile('classic');
+  let hazeK = 1;                                         // (the kind of floor's share of the tier's haze: setGrade)
   let glow = null;                                       // (bloom from what shines, glow.js: made only while a tier's glow is on)
   const sceneDepth = (read) => (superPass.enabled ? superPass.target.depthTexture : read.depthTexture) || null;
   const picture = { x: 0, y: 0, w: 1, h: 1 };            // where the picture sits in the window, CSS pixels
@@ -265,7 +267,7 @@ export function createVhs(renderer, camera, opt = {}) {
     const own = p.bloom !== 'host';
     bloom.strength = own ? 0.3 : 0.32; bloom.radius = own ? 0 : 0.55;
     bloom.compositeMaterial.uniforms.bloomFactors.value = own ? [1, 0.5, 0, 0, 0] : [1, 0.8, 0.6, 0.4, 0.2];
-    u.uGrade.value = p.grade; u.uHaze.value = p.haze;
+    u.uGrade.value = p.grade; u.uHaze.value = p.haze * hazeK;
     // haze needs the depth of the picture: a depth texture on both of the composer's targets (resolved from the
     // multisampled one by three.js), only while some haze is asked for. Classic leaves the targets as they were
     const depth = p.haze > 0;
@@ -281,10 +283,13 @@ export function createVhs(renderer, camera, opt = {}) {
     }
     last = '';
   }
-  /** The kind of floor's grade and haze colour (graphics.js gradeOf). */
+  /** The kind of floor's grade, haze colour, haze strength (times the tier's) and where the haze begins (graphics.js gradeOf). */
   function setGrade(g) {
     u.uLift.value.fromArray(g.lift); u.uGamma.value.fromArray(g.gamma); u.uGainRGB.value.fromArray(g.gain); u.uSat.value = g.sat;
     u.uHazeColor.value.fromArray(g.haze);
+    // (absent, 1 and 8: the tier's own strength, times 1, and the 8 m the shader always had)
+    hazeK = Number.isFinite(g.hazeK) ? g.hazeK : 1; u.uHaze.value = prof.haze * hazeK;
+    u.uHazeFrom.value = Number.isFinite(g.hazeFrom) ? g.hazeFrom : 8;
   }
   if (opt.profile) setProfile(opt.profile);
 
