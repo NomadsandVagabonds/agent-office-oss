@@ -30,7 +30,7 @@ export function slab(b, x0, y0, z0, x1, y1, z1, rgb) {
  */
 export function leafModel(kit, w, h, tint, o = null) {
   const { W, H } = leafSize(w, h), colour = o?.colour || TINTS[tint % TINTS.length];
-  const key = o ? `leaf:${colour}:${W}x${H}:${o.hatch ? o.hatch.map((n) => Math.round(n * 100)).join('.') : ''}:${o.bar ? 'bar' : ''}` : `leaf:${tint % TINTS.length}:${W}x${H}`;
+  const key = o ? `leaf:${colour}:${W}x${H}:${o.hatch ? o.hatch.map((n) => Math.round(n * 100)).join('.') : ''}:${o.bar === 'push' ? 'pushbar' : o.bar ? 'bar' : ''}` : `leaf:${tint % TINTS.length}:${W}x${H}`;
   return { ...kit.model(key, () => leafVox({ w, h, colour, hatch: o?.hatch, bar: o?.bar }), { ao: false }), W, H, w, h };          // (flat faces merge: a floor has a dozen pairs)
 }
 /**

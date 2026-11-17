@@ -3,7 +3,8 @@
 // the talking. Same contract as rooms.js.
 import * as THREE from 'three';
 import { Batch, lin, WHITE } from './kit.js';
-import { card } from './bits.js';
+import { card, wallVox } from './bits.js';
+import { LIFT, surroundVox, liftLeafVox, callPlateVox } from './lift.model.js';
 import { cutoutArt } from './cutout.js';
 import { MORE3 } from './rooms4.js';
 
@@ -12,11 +13,9 @@ function lift(c) {
   const { W, D, R, params: p } = c, kit = c.kit;
   c.shell({ sockets: false });
   const steel = lin(p.doors), dark = steel.map((v) => v * 0.55), OW = 1.5, OH = 2.02;
-  // the surround: three slabs of brushed steel with a hole in the middle
-  c.wbox('back', -(OW / 2 + 0.45), 0.9, 0, OH + 0.34, 0, 0.11, steel);
-  c.wbox('back', OW / 2 + 0.45, 0.9, 0, OH + 0.34, 0, 0.11, steel);
-  c.wbox('back', 0, OW, OH, OH + 0.34, 0, 0.11, steel);
-  c.wbox('back', 0, OW, 0, 0.02, 0, 0.11, dark);
+  // the surround is sculpted (lift.model.js): panels of brushed steel, an architrave stepping into the opening, a sill
+  const SIDE = 0.9, HEAD = 0.34, colour = p.doors;
+  wallVox(c, c.vox, kit.model(`lift:surround:${colour}`, () => surroundVox({ ow: OW, oh: OH, side: SIDE, head: HEAD, colour }), { ao: false }).solid, 'back', 0, 0, 0, LIFT.voxel, LIFT.voxel, 0.11 / LIFT.deep);
   // what is behind the doors
   c.hang(c.mapped('brick', kit.tex.brick()), 'back', 0, OH / 2, OW, OH, [[0, 0], [OW / 1.0, 0], [OW / 1.0, OH / 1.0], [0, OH / 1.0]], WHITE, 0.012);
   const who = c.env.cast[p.who % Math.max(1, c.env.cast.length)];
@@ -31,7 +30,8 @@ function lift(c) {
     extras.poster = c.dynamic(b, { map: tex }); }
   for (const k of Object.keys(extras)) extras[k].visible = false;
   // the doors themselves: two leaves that slide away behind the surround
-  const leaf = (sx) => { const b = new Batch(); c.wbox('back', sx * OW / 4, OW / 2, 0.02, OH, 0.05, 0.075, steel, { batch: b }); c.wbox('back', sx * (OW / 2 - 0.02), 0.012, 0.02, OH, 0.075, 0.08, dark, { batch: b }); c.wbox('back', sx * OW / 4, OW / 2 - 0.16, 0.25, OH - 0.25, 0.075, 0.078, steel.map((v) => v * 0.9), { batch: b }); return c.dynamic(b); };
+  const leaf = (sx) => { const b = new Batch(true), w = OW / 2, model = kit.model(`lift:leaf:${colour}`, () => liftLeafVox({ w, h: OH - 0.02, colour }), { ao: false });
+    wallVox(c, b, model.solid, 'back', sx * OW / 4, 0.02, 0.05, -sx * LIFT.voxel, LIFT.voxel, 0.028 / (LIFT.leafDeep + 1)); return c.dynamic(b); };       // (mirrored for the right one: the rubber is at the edge they meet at)
   const left = leaf(-1), right = leaf(1);
   // the sign, the floor indicator, the button
   c.hang(c.mapped('liftsign', card(c, 'lift' + p.sign, [p.sign], { w: 112, h: 22, bg: '#2a2d34', fg: '#e8e2d0', size: 12 })), 'back', 0, OH + 0.24, 0.9, 0.18, null, WHITE, 0.113);
@@ -40,7 +40,7 @@ function lift(c) {
   show(p.floors[0]);
   { const b = new Batch(); c.hang(b, 'back', 0, OH + 0.09, 0.26, 0.13, null, WHITE, 0.113); c.add(new THREE.Mesh(kit.plain(b), kit.glowing(dial, 1.5))); }
   const bx = OW / 2 + 0.3, btn = new Batch();
-  c.wbox('back', bx, 0.12, 0.92, 1.16, 0.11, 0.118, dark);
+  wallVox(c, c.vox, kit.model(`lift:plate:${colour}`, () => callPlateVox({ colour }), { ao: false }).solid, 'back', bx, 1.04, 0.11, LIFT.plateVoxel, LIFT.plateVoxel, 0.008 / 3);
   c.hang(btn, 'back', bx, 1.04, 0.05, 0.05, null, WHITE, 0.12);
   const light = c.add(new THREE.Mesh(kit.plain(btn), kit.glowing(kit.tex.white(), 1, [0.45, 0.4, 0.3])));
   const lit = new THREE.Color().setRGB(2.2, 1.5, 0.5), unlit = light.material.color.clone();

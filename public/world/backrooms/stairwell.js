@@ -18,6 +18,7 @@ import * as THREE from 'three';
 import { Batch, lin, drawText, WHITE } from './kit.js';
 import { RISE, RUN, T, makeRng } from './gen.js';
 import { P, doorFrame, floorPlan, card, wetSign } from './bits.js';
+import { leafModel, addLeaf, LEAF_THICK } from './doorleaf.js';
 import { gives } from './thin.js';
 import { GAP, flight, holeIn, ledgeAt, ductIn, pushes } from './seam.js';
 import { camp, rationList, tallyMark, tapeMark } from './traces.js';
@@ -170,12 +171,10 @@ function fireDoor(c) {
   const { D, kit } = c, dr = c.room.doors[0], zF = D / 2, other = c.world.rooms[dr.to];
   /* ---- the door: steel, a bar to push, and a notice --------------------------------------------- */
   const dw = dr.w - 0.05, dh = dr.h - 0.02, zd = zF + T / 2, steelDoor = lin('#6f7a80'), bar = [0.7, 0.72, 0.7];
-  const leaf = new Batch(), hx = dr.c - dw / 2;
-  leaf.box(hx, dr.sill + 0.02, zd - 0.022, hx + dw, dr.sill + dh, zd + 0.022, steelDoor);
-  leaf.box(hx + 0.08, dr.sill + 0.98, zd + 0.022, hx + dw - 0.08, dr.sill + 1.06, zd + 0.075, bar);                                  // the bar, on the side you leave by
-  for (const x of [hx + 0.1, hx + dw - 0.14]) leaf.box(x, dr.sill + 0.96, zd + 0.022, x + 0.04, dr.sill + 1.08, zd + 0.06, [0.2, 0.2, 0.21]);
-  leaf.box(hx + dw - 0.36, dr.sill + 1.36, zd - 0.026, hx + dw - 0.12, dr.sill + 1.74, zd + 0.026, [0.03, 0.035, 0.04]);              // a slit of wired glass with nothing behind it
-  for (let k = 1; k < 4; k++) leaf.box(hx + dw - 0.36 + k * 0.06, dr.sill + 1.36, zd + 0.026, hx + dw - 0.355 + k * 0.06, dr.sill + 1.74, zd + 0.028, [0.3, 0.32, 0.33]);
+  // the leaf is the sculpted fire door (doorleaf.model.js) in this one's steel: a bar across the side you leave by, a
+  // pull on the other, the slit of wired glass with nothing behind it
+  const leaf = new Batch(true), hx = dr.c - dw / 2;
+  addLeaf(leaf, leafModel(kit, dw, dh - 0.02, 0, { colour: '#6f7a80', bar: 'push' }), [hx, zd], dr.sill + 0.02, [1, 0], [0, 1], LEAF_THICK / 2);
   const notice = kit.tex.custom('firedoor', 96, 40, (g, w, h) => {
     P(g, '#1f8a4e', 0, 0, w, h); P(g, '#eafff0', 2, 2, w - 4, 1); P(g, '#eafff0', 2, h - 3, w - 4, 1);
     drawText(g, ['FIRE EXIT'], 0, 3, w, 20, { color: '#eafff0', size: 15, pad: 8 }); drawText(g, ['KEEP SHUT'], 0, 22, w, 14, { color: '#bfe8cf', size: 9, pad: 8 });
