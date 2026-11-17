@@ -34,7 +34,7 @@ export function build(c) {
   const sx = R.pick([-1, 1]) * R.range(0.4, W / 2 - 1.3);
   c.model('orange:cup', cupVox, sx, zc - 0.08, { y: 1.0, scale: 1.3, solid: false, shadow: false }); c.leave('snack', sx + 0.25, zc - 0.1, { y: 1.02 });
   /* the board: what there is, in tube; and the name of the place, twice */
-  const names = R.shuffle(MENU.slice()), neon = mallNeon(kit, 'orange:' + p.seed, names, 2), lit = c.shining('mall:neon:orange:' + p.seed, neon.texture, 2.4);
+  const names = R.shuffle(MENU.slice()), neon = mallNeon(kit, 'orange:' + p.seed, names, 2), lit = c.shining('mall:neon:orange:' + p.seed, neon.texture, 2.4, undefined, { bloom: 2 });
   const rows = Math.min(4, Math.floor((H - 1.7) / 0.42));
   for (let r = 0; r < rows; r++) for (const side of [-1, 1]) upright(lit, side < 0 ? -W / 2 + 0.4 : 0.2, -D / 2 + 0.04, side < 0 ? -0.2 : W / 2 - 0.4, -D / 2 + 0.04, H - 0.35 - (r + 1) * 0.42, H - 0.35 - r * 0.42, neon.uv((r * 2 + (side > 0 ? 1 : 0)) % 8));
   c.light(-W / 4, H - 0.9, -D / 2 + 0.9, '#ffb02e', 1.0, { k: 1.2, far: 7 }); c.light(W / 4, H - 0.9, -D / 2 + 0.9, '#ff5a3c', 0.9, { k: 1.2, far: 7 }); c.light(0, H - 0.5, D / 4, '#ffd9a0', 0.55, { k: 1.4, far: 6 });

@@ -295,7 +295,7 @@ export function concourse(c, opt = {}) {
   if (room.crawl) return;
   const narrow = Math.min(W, D) < 3.3 && room.kind === 'plain', street = opt.street || (narrow ? (R.chance(0.55) ? 'service' : 'shutters') : R.pick(STREETS));
   c.rt.street = street;
-  const art = mallFronts(kit), fronts = c.mapped('mall:fronts', art.texture), v = R.int(0, NEON_NAMES.length - 1), neon = mallNeon(kit, 'plain:' + v, NEON_NAMES[v], v + 1), lit = c.shining('mall:neon:plain:' + v, neon.texture, 2.3);
+  const art = mallFronts(kit), fronts = c.mapped('mall:fronts', art.texture), v = R.int(0, NEON_NAMES.length - 1), neon = mallNeon(kit, 'plain:' + v, NEON_NAMES[v], v + 1), lit = c.shining('mall:neon:plain:' + v, neon.texture, 2.3, undefined, { bloom: 2 });
   const glows = [];
   if (street === 'service') {
     // painted block: cream to the roof, and a band of green up to the dado
@@ -420,7 +420,7 @@ export const MALL_WRONG = {
   // a bin, and in it, bins
   bins(c) { const k = c.corner(0.7); if (!k) return false; c.model('mall:bin:full', binVox(true), k.x, k.z, { scale: 2.2, solid: false }); c.model('mall:bin:0', binVox(false), k.x - k.sx * 0.9, k.z, { scale: 1.2, rot: 0.4, tilt: [0, 1.5], solid: false }); c.solid(k.x - 0.55, k.z - 0.55, k.x + 0.55, k.z + 0.55, { tall: false }); },
   // a shop, stood out in the room: front, fascia, name lit; it is as deep as the board it is painted on
-  shallow(c) { const at = c.spot(1.6, { pad: 0.7 }); if (!at) return false; const art = mallFronts(c.kit), fronts = c.mapped('mall:fronts', art.texture), neon = mallNeon(c.kit, 'plain:0', NEON_NAMES[0], 1), lit = c.shining('mall:neon:plain:0', neon.texture, 2.3), w = 1.25, top = Math.min(2.3, c.ceilAt(at.x, at.z) - 0.6), ply = [0.6, 0.48, 0.34];
+  shallow(c) { const at = c.spot(1.6, { pad: 0.7 }); if (!at) return false; const art = mallFronts(c.kit), fronts = c.mapped('mall:fronts', art.texture), neon = mallNeon(c.kit, 'plain:0', NEON_NAMES[0], 1), lit = c.shining('mall:neon:plain:0', neon.texture, 2.3, undefined, { bloom: 2 }), w = 1.25, top = Math.min(2.3, c.ceilAt(at.x, at.z) - 0.6), ply = [0.6, 0.48, 0.34];
     upright(fronts, at.x - w, at.z, at.x + w, at.z, 0, top, art.uv('open')); upright(c.flat, at.x + w, at.z - 0.06, at.x - w, at.z - 0.06, 0, top + 0.5, null, ply); c.flat.box(at.x - w, top, at.z - 0.06, at.x + w, top + 0.5, at.z + 0.02, [0.13, 0.12, 0.15]);
     upright(lit, at.x - w + 0.1, at.z + 0.03, at.x + w - 0.1, at.z + 0.03, top + 0.05, top + 0.45, neon.uv(2)); for (const s of [-1, 1]) c.flat.box(at.x + s * w - 0.05, 0, at.z - 0.5, at.x + s * w + 0.05, 0.06, at.z - 0.06, ply);
     c.solid(at.x - w, at.z - 0.08, at.x + w, at.z + 0.04, { tall: true }); c.light(at.x, 1.4, at.z + 0.8, '#ffe9a8', 0.6, { k: 1.4, far: 3.5 }); },
