@@ -266,6 +266,29 @@ for(const rot of [0,1,2,3])test(`Lane Archive: dry circuit and wet plinth recove
  await walkTo(f,4.9,p.island.z);f.tick(30);assert.ok(f.player.me.y-f.def.y>1,'visible stairs climb out');
  assert.ok(rt.channelHall.cart&&f.world.furniture.includes(rt.channelHall.cart),'cart uses the shared grip');
 });
+for(const rot of [0,1,2,3])test(`Lane Archive: the wet office has a real entrance and solid glass (${rot})`,async t=>{
+ const f=await fixture('channel-hall',rot);t.after(()=>f.dispose());
+ for(const q of [[4.8,f.def.D/2-1.2],[7.6,8.9],[7.6,6.1],[6.8,6.1],[7.6,6.1],[7.6,8.9],[4.8,8.9]])await walkTo(f,...q);
+ const pane=toWorld(f.def,5.94,4.2);assert.equal(f.world.free(pane.x,pane.z,.22),false,'the visible pane cannot be walked through');
+ assert.equal(f.hits.length,0,'the office remains on dry ground');
+ // A missing tile is genuinely absent, rather than black paint on a slab.
+ f.world.scene.updateMatrixWorld(true);
+ for(const [x,expected]of [[6.8,false],[6.2,true]]){
+  const p=toWorld(f.def,x,5.2),ray=new THREE.Raycaster(new THREE.Vector3(p.x,f.def.y+2.8,p.z),new THREE.Vector3(0,1,0),.001,.35);
+  assert.equal(ray.intersectObject(f.world.rooms[0].group,true).length>0,expected,'open service bay versus intact suspended ceiling');
+ }
+});
+test('collision flumes retain an open bore all along both voxel curves',async()=>{
+ const {COLLISION_FLUMES,FLUME_CELL,collisionFlumeVox}=await import('../public/world/backrooms/rooms/channel-hall/collision-art.js');
+ const {evalFlume}=await import('../public/world/backrooms/waterpark.rule.js');
+ for(const spec of COLLISION_FLUMES){
+  const v=collisionFlumeVox(spec);assert.ok(v.map.size>500,'a substantial shell remains');
+  for(let i=0;i<=120;i++){
+   const p=evalFlume(spec.pts,i/120);
+   assert.equal(v.has(Math.round(p.x/FLUME_CELL),Math.round(p.y/FLUME_CELL),Math.round(p.z/FLUME_CELL)),false,`${spec.id}: bore at ${i}`);
+  }
+ }
+});
 for(const rot of [0,1,2,3])test(`Narrowing Bays: crouch route and standing side loop (${rot})`,async t=>{
  const f=await fixture('nested-thresholds',rot);t.after(()=>f.dispose());const rt=f.world.rooms[0],last=rt.thresholds.frames.at(-1);
  for(const q of [[0,6],[0,3],[0,-1],[0,last.z]])await walkTo(f,...q);f.tick(60);

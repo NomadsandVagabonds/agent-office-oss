@@ -6,6 +6,18 @@ Branch: `codex/waterpark-channel-hall`, based on `b70b49c` (`codex/waterpark-det
 
 An 18 × 26–28 m hall, almost eleven metres tall. Shuttered office windows repeat above a sunken swimming lane. Offset galleries, a high diagonal stair, deep ceramic soffits, corbels and suspended fittings make the office proportions disagree. The palette is aged ivory, dull green, oxidised metal and faded red plastic.
 
+### Office / pool collision pass
+
+The owner's two references establish the next direction: pool infrastructure physically occupying ordinary offices, and repeated office doors and wet galleries disappearing into an oversized building. This pass applies that direction to the Lane Archive first; it is not a redesign of every waterpark room.
+
+- A coral voxel flume bends across the hall and occupies upper office doorways. A yellow flume passes through an actual opening in a suspended acoustic ceiling. Both are continuous hollow shells, with stepped silhouettes and raised joints.
+- A glass office sits directly beside the lane, with mineral streaks, ceramic dado, aluminium frames, a catalogue desk, CRT, keyboard, lamp, chair, filing cabinet and plant. It has a reachable open entrance; the glazing is solid.
+- Paper stacks, damp binders, a carpet remnant and pool rings bring the scale back down to familiar objects. A filing cabinet stands partly submerged on the basin floor.
+- Upper red doors have closers, handles, kickplates and inset glazing. Broken ceiling grids, exposed services and a hanging tile show where the waterpark has displaced office construction.
+- Both dry circulation routes, the pump and the optional supply crossing remain usable. The added office can be entered and left at all four room rotations without stepping into the creature's lane.
+
+The references' deep multi-storey descent is a direction for a future traversable atrium. This version borrows the repeated galleries and doors, not stacked player floors. The high flumes are scenery, not rideable slides. Wet reflections, caustics and the pending lighting/water renderer are not introduced by this geometry pass.
+
 - Enter under a low vestibule and emerge into the central void. Both dry banks lead to the opposite vestibule and join at each end, making a reversible circuit.
 - Shallow 16 cm steps descend into the lane. The central inspection plinth holds the room's seeded supply, when supplied. This is an optional reason to leave the dry route; no key, pump use or encounter is required to exit.
 - Every bank and the plinth can be climbed back onto. The visible treads and collision floor use the same height function. A second visitor's floor queries cannot change the local player's elevation.
@@ -42,7 +54,7 @@ Connector:
 
 `http://127.0.0.1:44352/?themes=waterpark&depths=1&room=nested-thresholds&only=nested-thresholds&pursuer=0&mute=1&seed=17&vhs=1&inventory=1&channelstudy=1`
 
-`channelstudy=1` adds development-only camera shortcuts and the creature/pump state. H hides the panel. E at the pump uses the real interaction; the panel does not trigger it. `inventory=0` is useful for an untimed art inspection, but disables the health and battery systems.
+`channelstudy=1` adds development-only camera shortcuts and the creature/pump state. New shortcuts show the office/pool junction, wet office and broken ceiling. H or **Hide review panel** hides the panel. E at the pump uses the real interaction; the panel does not trigger it. `inventory=0` is useful for an untimed art inspection, but disables the health and battery systems.
 
 ```sh
 node --input-type=module -e "import {stage} from './tools/backrooms-sample/stage.mjs'; import fs from 'node:fs'; stage('/tmp/blockrooms-waterpark-channel-review',{three:true}); fs.copyFileSync('public/world/dev/backrooms.html','/tmp/blockrooms-waterpark-channel-review/index.html'); fs.cpSync('public/world/dev','/tmp/blockrooms-waterpark-channel-review/world/dev',{recursive:true});"
@@ -51,12 +63,14 @@ node tools/blockrooms/serve.mjs /tmp/blockrooms-waterpark-channel-review 44352
 
 Safari checks covered the hall's entrance and stacked galleries, the narrowed passage, and starting the pump with E (the live state changed to lured). Audio was muted. The Mac locked before the last creature close-up; the final distance-sampled float animation is covered by the runtime test but has not had a final visual pass. This is not a claim of mobile performance or a complete manual playthrough.
 
+The collision pass was partially inspected in Safari: the new coral flume, office glass, plant and rings rendered. Final camera-angle and lighting review remains incomplete: subsequent native captures failed (`SCStreamErrorDomain -3811`) or returned an unusable partial window. The local review page has the final geometry and camera shortcuts ready for inspection.
+
 ## Validation
 
-- Focused room, generation, drawing and creature checks: **124/124 pass**. These include real-controller traversal at all four rotations, automatic crouching, dry and wet recovery routes, health callback/recovery, pump timing, furniture blocking, visitor swaps, frame-rate-independent float spacing, theme isolation and generated-room builds.
-- The tested Lane Archive sizes peak at **90,454 base + 3,264 detail triangles**, 32 base + 1 detail meshes, and ten authored lights. Narrowing Bays peaks at **10,876 + 1,016 triangles**, 9 + 1 meshes, and six lights. Generated layouts also pass the established room budget checks.
-- Production build: **346 files**, passes.
-- Full `npm test`: **1,093/1,100 pass**. The seven failures match the previous detail review: four Return Pool cart-placement assertions, the console `/var` versus `/private/var` assertion and its parent, and the usage/status-line `source` failure. No new failure remains. An earlier run also saw the unrelated harness-wake ordering test fail; it passed on the final full run.
+- Focused room integration and Lane Keeper checks: **77/77 pass**. These include real-controller traversal at all four rotations, automatic crouching, dry and wet recovery routes, health callback/recovery, pump timing, furniture blocking, visitor swaps, frame-rate-independent float spacing and generated-room builds. New checks cover the wet office entrance and solid glazing, the actual ceiling opening, and open bores along both flume curves.
+- The tested Lane Archive sizes peak at **119,788 base + 3,444 detail triangles**, 38 base + 1 detail meshes, and eleven authored lights. These use the existing per-room budget measurement; catalogue furniture is separated by the engine. Narrowing Bays peaks at **10,876 + 1,016 triangles**, 9 + 1 meshes, and six lights. Generated layouts also pass the established room budget checks.
+- Production build: **347 files**, passes.
+- Full `npm test`: **1,098/1,105 pass**. The seven failures match the previous detail review: four Return Pool cart-placement assertions, the console `/var` versus `/private/var` assertion and its parent, and the usage/status-line `source` failure. No new failure remains.
 - `git diff --check`: passes.
 
 ## Before release
