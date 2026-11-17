@@ -6,6 +6,8 @@
 // floor, or has somebody in it, a third each. What the lobby has already given is not given again (`left`), and whatever
 // cannot be given (no creature may come here, or none came) is an empty car: never a broken one, never a free second helping.
 
+/** How deep the car is behind its doors, from the wall (the lobby's front stands this far out: rooms3.js lift). Loot, coins and supplies keep out of it (gen.js coinFits). */
+export const LIFT_CAR = 1.5;
 export const LIFT_ODDS = Object.freeze({ car: 0.45, empty: 1 / 3, item: 1 / 3, creature: 1 / 3, snack: 0.5 });
 /** What a car may hold on its floor: something worth the wait (the owner: a high value item, a snack or the scissors). No battery: batteries are the score's currency, and the lift is not a way to farm them. */
 export const LIFT_ITEMS = Object.freeze(['snack', 'scissors']);
