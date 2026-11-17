@@ -282,6 +282,37 @@ light gathered from the screen. The vendored three.js is r180 and only its
 WebGL build is in the repository, so it means a second way of drawing and new
 vendored files. It is decided after phases 1 to 7 are measured.
 
+## What the owner has decided since
+
+- **High is the target, and it is not held back.** The level is designed for
+  the high column first; medium and low are what is left when things are
+  switched off, and auto protects a machine nobody measured. Lower levels can
+  be cut further later if phones need it.
+- **The camcorder stays the look.** "VHS of modern AAA voxels": some blur is
+  welcome, it does the work of anti-aliasing. So medium and high draw the scene
+  larger than the tape and bring it down, and the tape's own softness, smear,
+  scan lines and noise are left alone. Full VHS stays the default.
+- **Light and shadow first.** Of everything proposed, what the tubes, the
+  beams and the doorways do is where the budget goes: baked where nothing
+  moves, real-time where something does. Light through a doorway is a keeper.
+- **WebGL2 first, WebGPU later.** Everything in the high column is built on the
+  renderer the level has. The newer one is a later port, once the look is
+  proven.
+- **Beyond the table above, for high:** real-time shadows from the tubes and
+  from both beams, ambient shadowing worked out from the screen (so it covers
+  what moves), reflections from the screen on top of each room's stored
+  picture, light shafts and lit dust.
+
+## What has been measured
+
+Software rendering on the build machines says nothing; these are real machines.
+
+| date | machine | picture | frames | in view (most) | headroom |
+|---|---|---|---|---|---|
+| 17 Nov | Apple M4 Max laptop, 120 Hz, Chrome | 720×540 (Full VHS), dpr 1.5 | 8.3 ms at every station (the display's own rate); worst 11.4 ms; one 59 ms frame on a first run, not seen again | 75 draws, 69,000 triangles | the scene drawn 32 times a frame still held 8.3 ms: at least 32× |
+
+No ordinary laptop and no phone has been measured yet. Those set medium and low.
+
 ## What has been agreed
 
 1. **Who owns the files.** One session owns the drawing code for this work:
