@@ -42,6 +42,11 @@ export function showDetail(object, p) {
   return changed;
 }
 
+// beamShadows: the flashlight casts shadows (beam-shadows.js): the size of its square depth picture, 0 for off (nothing of
+// it is made or drawn, and the kit's shader is as it was). Its own lines, so that the table above stays as it is.
+const BEAM_SHADOWS = { classic: 0, low: 0, medium: 0, high: 1024 };
+for (const t of Object.keys(TABLE)) TABLE[t].beamShadows = BEAM_SHADOWS[t];
+
 export const cleanGraphics = (v) => (GRAPHICS.includes(v) ? v : DEFAULT_GRAPHICS);
 
 /** Everything a tier switches, as a fresh plain object. 'auto' reads as where it starts (medium); anything else as classic. */

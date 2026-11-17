@@ -257,10 +257,22 @@ export function createWalk(env) {
     const t = through(a, b), dx = t.B.x - t.A.x, dz = t.B.z - t.A.z, len = Math.hypot(dx, dz) || 1;
     return { x: t.B.x + (dx / len) * (k - 0.45), z: t.B.z + (dz / len) * (k - 0.45) };
   }
-  /** Somewhere to stand in a room: as near its middle as this walker fits. */
+  /**
+   * Somewhere to stand in a room: as near its middle as this walker fits. The middle of a room is often taken (a pillar, an
+   * island of desks, the block in the middle of a basin) for further than nearCell looks, so then the whole room is
+   * looked over for the nearest place it does fit. Only a room with nowhere at all for it gives its bare middle back:
+   * ask stand() of what this returns before putting anybody there.
+   */
   function spotIn(a, id) {
     const rt = W().rooms[id], g = grid(a, rt), k = nearCell(rt, g, rt.def.cx, rt.def.cz);
-    return g.ok[k] ? middle(rt, g, k) : { x: rt.def.cx, z: rt.def.cz };
+    if (g.ok[k]) return middle(rt, g, k);
+    let best = null, bd = Infinity;
+    for (let i = 0; i < g.ok.length; i++) {
+      if (!g.ok[i]) continue;
+      const m = middle(rt, g, i), d = (m.x - rt.def.cx) ** 2 + (m.z - rt.def.cz) ** 2;
+      if (d < bd) { bd = d; best = m; }
+    }
+    return best || { x: rt.def.cx, z: rt.def.cz };
   }
   /** How many doorways it is, for this walker, from where it is to a spot (Infinity: no way). */
   function steps(a, target) {

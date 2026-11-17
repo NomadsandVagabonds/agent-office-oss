@@ -6,8 +6,9 @@
 // level's grid (frame.js TILE: 0.6 m by 1.2 m); a vent and a tile are one square of it (0.6 by 0.6). Nothing hangs
 // more than 1.25 cm below the ceiling but the sagging tile (7.5 cm) and the dead light's dropped louvre (5 cm).
 //
-// A light comes as two models so that the tubes can shine and dim by themselves: `housing` (the trim, the pan, the
-// lamp holders, the louvre: lit like any surface) and `tubes` (the glass only). TUBES says where each tube's two ends
+// A light comes as three models: `housing` (the trim, the pan, the lamp holders: lit like any surface, and whole
+// without the other two), `tubes` (the glass only, so that it can shine and dim by itself) and `louvre` (the blades
+// under the lamps: fine detail that a low setting may leave out). TUBES says where each tube's two ends
 // are, in voxels of the model, for whoever softens a shadow by sampling along it.
 import { Vox, M, glow, noise3 } from '../vox/vox.js';
 
@@ -24,10 +25,10 @@ const TRIM = '#d9d6cc', PAN = '#eeeee6', BLADE = '#c9c9c0', STEEL = '#8d908e', D
  * A recessed light: a trim round the hole, a white pan sloping up to the lamps, two tubes in their holders, and under
  * them a louvre of thin blades that hides the glass from anybody not standing beneath it.
  * @param {{dead?:boolean}} [o] dead: it is out. One tube is black at the ends and the other is gone; the louvre has dropped at one end.
- * @returns {{housing:Vox, tubes:Vox}}
+ * @returns {{housing:Vox, tubes:Vox, louvre:Vox}}
  */
 export function lightVox({ dead = false } = {}) {
-  const h = new Vox(), t = new Vox(), B = box(h), T = box(t);
+  const h = new Vox(), t = new Vox(), l = new Vox(), B = box(h), T = box(t), L = box(l);
   const trim = M(TRIM, 0), pan = M(PAN, 0), blade = M(BLADE, 0), steel = M(STEEL, 0), dark = M(DARK, 0);
   // the box above the ceiling, open underneath; and the trim that sits on the grid, a voxel proud of the tiles
   B(-HX + 1, 7, -HZ + 1, HX - 2, 7, HZ - 2, pan);
@@ -52,15 +53,15 @@ export function lightVox({ dead = false } = {}) {
   const drop = (z) => (dead ? Math.round(Math.max(0, (z + HZ) / (2 * HZ) - 0.45) * 7) : 0);          // (dead: one end has come off its clips and hangs)
   for (let z = -HZ + 2; z <= HZ - 3; z++) {
     const d = drop(z);
-    for (const x of [-12, -1, 0, 11]) B(x, -d, z, x, 1 - d, z, blade);
-    if ((z + HZ) % 8 === 4) B(-HX + 2, -d, z, HX - 3, 1 - d, z, blade);
+    for (const x of [-12, -1, 0, 11]) L(x, -d, z, x, 1 - d, z, blade);
+    if ((z + HZ) % 8 === 4) L(-HX + 2, -d, z, HX - 3, 1 - d, z, blade);
   }
   // a dead one has what dead lights have: flies in the pan, and a brown line where the ballast cooked
   if (dead) {
     for (let k = 0; k < 9; k++) h.set(Math.round((noise3(k, 1, 2, 5) - 0.5) * 30), 7, Math.round((noise3(k, 3, 4, 5) - 0.5) * 80), dark);
     B(12, 7, -30, 16, 7, -10, M('#b9a37a', 1));
   }
-  return { housing: h, tubes: t };
+  return { housing: h, tubes: t, louvre: l };
 }
 
 /** An air vent, one square: a frame, slats set at a slant with the dark of the duct between them, and the dust the air leaves on the frame. */

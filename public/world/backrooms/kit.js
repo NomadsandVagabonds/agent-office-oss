@@ -17,6 +17,7 @@ import { meshVox } from '../vox/mesher.js';
 import { VOXEL } from '../vox/vox.js';
 import { bankWeights } from './lighting.js';
 import { FLASHLIGHT_GLSL, FLASHLIGHT_POSES } from './flashlight.js';
+import { BEAM_SHADOW_GLSL } from './beam-shadows.rule.js';   // (beam shadows: only compiled where BEAM_SHADOWS is defined, beam-shadows.js)
 
 const GLOW = 2.3;                              // how hard a self-lit voxel shines
 
@@ -347,6 +348,9 @@ varying vec2 vSurf;
 float voxHash(vec3 p) { p = fract(p * vec3(0.1031, 0.1030, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.x + p.y) * p.z); }
 #endif
 ${FLASHLIGHT_GLSL}
+// --- beam shadows ---
+${BEAM_SHADOW_GLSL}
+// --- end beam shadows ---
 void main() {
   vec3 c = vLit;
   // A cone from the physical emitter: close patches are small and bright,
@@ -354,6 +358,11 @@ void main() {
   vec3 normal = normalize(vNormal) * (gl_FrontFacing ? 1.0 : -1.0);
   float beam = 0.0;
   if (uTorch > 0.0001) beam += uTorch * flashlightBeam(vView, normal);
+  // --- beam shadows ---
+  #ifdef BEAM_SHADOWS
+  if (beam > 0.0) beam *= beamShadow(vView, normal);
+  #endif
+  // --- end beam shadows ---
   if (uCameraLamp > 0.0001) beam += uCameraLamp * camcorderBeam(vView, normal);
   vec3 torch = vAlb * beam;
   #ifdef VOXEL
