@@ -70,5 +70,6 @@ export function bellWater(c,tex,p) {
       'texture2D(map, vUv + vec2(sin(uBellWater * 0.7) * 0.012, uBellWater * 0.008))');
     const mesh=new THREE.Mesh(c.kit.geometry(batch,c.rt.lights,c.rt.amb),material);mesh.renderOrder=4;group.add(mesh);
   });
+  c.liquid?.(group,{kind:'water',phase,y:p.water});
   return {phase,group};
 }

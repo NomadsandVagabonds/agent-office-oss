@@ -59,6 +59,13 @@ for (const t of Object.keys(TABLE)) TABLE[t].beamShadows = BEAM_SHADOWS[t];
 const GLOW = { classic: 0, low: 0, medium: 1, high: 1 };
 for (const t of Object.keys(TABLE)) TABLE[t].glow = GLOW[t];
 
+// water: the surface of what a room marked as a liquid (world.js `c.liquid`, liquid.js): depth-tinted, rippled in steps,
+// a pale line where it meets things, drawn over a copy of the scene so far (vhs.js splits the scene's draw while one is in
+// view). 0 is off: nothing is made, the scene is drawn in one pass, and each room's own sheet is drawn as it was. 2 is
+// for the mirror (to come); today 1 and 2 draw the same. Its own lines, as glow's.
+const WATER = { classic: 0, low: 0, medium: 1, high: 2 };
+for (const t of Object.keys(TABLE)) TABLE[t].water = WATER[t];
+
 export const cleanGraphics = (v) => (GRAPHICS.includes(v) ? v : DEFAULT_GRAPHICS);
 
 /** Everything a tier switches, as a fresh plain object. 'auto' reads as where it starts (medium); anything else as classic. */

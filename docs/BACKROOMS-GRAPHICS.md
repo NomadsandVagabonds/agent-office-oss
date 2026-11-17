@@ -190,6 +190,7 @@ handed to the kit when a part is built (`gfx: { contact, bounce, shadows, doorli
 | light through doorways (in the same map) | — | — | yes | yes |
 | ceiling lights as sculpted fittings (`fixtures`) | — | — | yes | yes |
 | bloom from what shines only (`glow`), in place of the thresholded bloom | — | — | yes | yes |
+| water: a marked flat sheet drawn as water while in view (`water`) | — | — | yes (1) | yes (2: the mirror, to come; draws as 1 today) |
 
 - **Classic** draws exactly what the level drew before the setting existed.
 - **The camcorder stays the look.** The tape's lines and the scene's size are
@@ -740,6 +741,147 @@ cheap layers, and each layer belongs to a level of quality:
 - Where it applies first: the wet-floor room, the cooler rooms, the flooded
   rooms, puddles under ceiling holes.
 
+### Water (built: the surface)
+
+`water` in `graphics.js` (its own lines beside the table, as `glow`): 0 in
+Classic and Low, 1 at Medium, 2 at High (and Auto starts at 1). 2 is kept for
+the mirror (push three); today 1 and 2 draw the same. The look-dev lab's
+second-best finding (`BACKROOMS-LOOKDEV.md`, round two, 6), adapted to the real
+rooms: the lab found its surface by a guess, drew one rectangle in a scene of
+its own with no depth test, rippled on the world's grid and had no case for an
+eye under the water; none of that is kept. This is push one of four (the mark
+and the surface); the wake, the currents and the mirror are to come.
+
+**No ordinary visit can reach it yet**: the only liquids are the waterpark's,
+and the waterpark is not dealt (`dealt: false`). The dev page reaches it with
+`&themes=waterpark` and `&graphics=medium` or `high`.
+
+- **The contract** (`world.js` `roomContext`, the mark in `liquid.mark.js`, which imports no three.js so that the
+  rooms' own node tests load it as they load `world.js`): `c.liquid(target, { kind:
+  'water', phase, flow, y })` marks a sheet the room already drew; it draws
+  nothing. The target is the mesh, the group the mesh is put in once the room
+  is lit, or the batch it is drawn from (the waterpark's helpers make their
+  mesh in `c.after`). The mark is kept in `rt.liquids`; once the room is built
+  (`c.after`) it finds its mesh(es) and measures them in the room's frame: flat
+  (corners within 1 cm up and down) or refused, quietly (the sheet stays as
+  it is). It returns `{ disturb() }`, which does nothing yet (the wake). `phase`
+  (a `{ value }`, the room's own uniform object) drifts the ripple: the return
+  pool's drift turns round with its valve. `flow` and `y` are stored and not
+  read yet (`flow` is push four's). At every tier the mark is all a room's
+  build does: no material, mesh or texture is made there, and a room built in
+  node (the waterpark's tests) is as it was.
+- **What a room does**: nothing more than the one call. The waterpark's three
+  helpers each have one line, written as an optional call so that a context
+  without it is safe (the reviewer allowed exactly these; nothing else in those
+  files is touched, `test/backrooms-gfx-water.test.mjs` pins it against
+  `origin/blockrooms-live`):
+  - `public/world/backrooms/waterpark.js` line 1261, in `createBasin` after its
+    sheet: `  c.liquid?.(waterSurf, { kind: 'water', y: waterY });`
+  - `public/world/backrooms/waterpark.js` line 1688, the footbath in
+    `poolroom`: `      c.liquid?.(wb, { kind: 'water', y: 0.15 });`
+  - `public/world/backrooms/rooms/return-pool/art.js` line 51, in `waterMesh`:
+    `  c.liquid?.(group, { kind: 'water', phase, y });`
+  - `public/world/backrooms/rooms/bellmouth/art.js` line 73, in `bellWater`:
+    `  c.liquid?.(group,{kind:'water',phase,y:p.water});`
+- **The surface** (`liquid.js`, its numbers and shader text in
+  `liquid.rule.js`). Where the tier has water, the first frame a marked flat
+  sheet's part is drawn, a second mesh is put beside it on the same geometry
+  (rectangles, the bellmouth's 60-sector fan, the changing room's three strips:
+  anything flat) with a material of its own. It is lit by the sheet's own
+  baked light and the room's very uniform objects (dimmer, flicker, banks,
+  tint): a pool in a room that has gone dark is dark. Its tint is the sheet's:
+  its picture's average colour (pushed back towards its hue, since the picture
+  averages its pale caustic lines in) times its vertex colour, and its opacity
+  sets how murky, steeply (as the seventh power: the green rooms' 0.63 and
+  0.82 sheets stay dark green murk, the waterpark's 0.52 and 0.56 stay clear):
+  the return pool stays green, the deep end emerald. What it draws: what is
+  under it, from a copy of the opaque scene, nudged by the ripple and absorbed
+  by the length of water the eye looks through to reach it (from the copy's
+  depth; red first, so a bed goes blue-green with depth and the floats'
+  undersides, the deep end's desk and its drowned monitor show under the
+  surface; however much a clear sheet's water absorbs, it lets at least
+  e^-0.3 per metre of what is behind it through in its own colours, so 2 m of
+  the waterpark's keeps 55 % in its clearest channel and a deep pool reads as
+  deep clear water, not fog, while the green rooms' murk is untouched; what
+  lights itself under it, brighter than the room's light there, a drowned
+  screen, keeps more of its light), with a little of the water's own colour as
+  soon as there is any depth of it, giving way again with depth; the old sheet's own caustic net laid back on as light where the
+  eye's ray meets the bed (the sheet's picture, mapped from the room's x and z
+  as the sheet mapped it, its lines being what is brighter than its average;
+  blocky, as the picture is; strongest in shallow water and fading slowly with
+  depth, e^-0.35 per metre, so it still lies on the deep end's bed;
+  drifting with the room's phase as the return pool's sheet did, swaying with
+  the clock and moved by the ripple); a pale line where the surface is within
+  6 cm of what is behind it (the basin's walls, the floats, the steps), as
+  bright as the room and what is
+  under it; a ripple worked out on 5 cm cells of the room's own frame, its
+  slope stepped, laid flat where a cell is under about two pixels (no speckle
+  far off); fresnel towards a flat tint of the room's light (one function,
+  `reflection()`, where push three's mirror goes). No wake: the rings'
+  uniforms are there and none is set. The new mesh is never visible outside
+  the camcorder's own draw, so whatever else draws the scene (the mall's
+  television sets, the bloom's picture, the flashlight's shadows) sees each
+  room's sheet as it always was. It throws no beam shadow
+  (`userData.noBeamShadow`) and does not shine.
+- **The split pass** (`vhs.js`; only while a marked surface of a part that is
+  up has been in view in the last half second: its box against the camera's
+  frustum, held 0.5 s so it cannot flicker at the edge of the picture). Into
+  the scene's own target (multisampled, at the supersampled size): (1) under:
+  everything opaque, by the ordinary draw itself (what is see-through, the
+  water and what is held are put on a layer of their own for the length of the
+  draw, the camera kept off it); (2) a copy of that picture and its depth into
+  a plain pair at the scene's size; (3) over, into the same target, not
+  cleared: the water (it writes depth, so the haze and the bloom read the
+  surface), then everything see-through, then what is held (`holdInFront` as
+  ever). Layers, visibility, the background, autoClear and the render target
+  are put back in a `finally`. Nothing depends on one render a frame or on the
+  scene being untouched, so a room that draws the scene itself mid-frame is
+  unaffected. **When no surface is in view the old single pass runs exactly as
+  before, at every tier**, and at 0 nothing of it exists (no view, no copy, no
+  material, no mesh).
+- **The eye under the surface** (its plane plus 2 cm): that surface is not
+  drawn, the room's own sheet is (the waterpark's veil and underside as now),
+  and it does not count as in view. The return pool's upside-down upper pool is
+  always over the eye, so it keeps its own sheet.
+- **The two ways are the same where there is no water.** At the kiddie
+  lagoon's doorway looking out, the two-part draw forced on and off gives the
+  same picture: 0 of 576,000 pixels differ, at High (Clean) and at Medium
+  (Full VHS), paused. With the pool in view, only the water's pixels differ.
+- **What is lost under water.** What is see-through is drawn after the water,
+  so a see-through thing below the surface (a blot on a pool's bed, the
+  submerged end of a translucent flume) is hidden by it rather than seen
+  through it.
+- **Not reached.** Co-op's beam (`public/world/coop/lights.js` patches the
+  kit's shader) does not reach the new surface, nor does the flashlight's own
+  patch: the beam lights the bed, which is seen through the water, but not the
+  surface itself. The showers' film and the stream sheets are not marked.
+- **Cost class.** While a surface is in view: one full-screen copy of the
+  scene's colour and depth (High at Full VHS: 1440 × 1080, half float and
+  depth, about 19 MB held while the tier has water and a pool has been seen),
+  the scene's draws split between two renders (the same draws and triangles in
+  all), and on the water's pixels three ripple evaluations and five texture
+  reads. Counted with `&perf=1` at Full VHS, seed 7, the code before and after
+  (draws of the level's scene / all passes / triangles):
+
+  | | before | after |
+  |---|---|---|
+  | Medium, kiddie lagoon (water in view) | 43 / 58 / 88,114 | 43 / 59 / 88,114 |
+  | High, kiddie lagoon (water in view) | 43 / 58 / 88,114 | 43 / 59 / 88,114 |
+  | Medium, deep end (water in view) | 109 / 124 / 111,382 | 109 / 125 / 111,382 |
+  | High, deep end (water in view) | 109 / 124 / 111,382 | 109 / 125 / 111,382 |
+  | Medium, copier room (dry) | 87 / 102 / 63,678 | 87 / 102 / 63,678 |
+  | High, copier room (dry) | 87 / 102 / 63,678 | 87 / 102 / 63,678 |
+
+  With water in view the scene's draws are the same in number (the water's
+  mesh is drawn in place of the room's sheet, and the rest are split between
+  the two renders), plus one pass, the copy. A dry room is the same before
+  and after. The test for "in view" is the surface's box against the frustum,
+  not whether a wall is in the way: a pool in the next room, behind a wall but
+  in the frustum, also asks for the split (at the cost above, and nothing
+  different on the screen).
+
+  Software rendering, so no milliseconds.
+
 ### 5 · Air
 
 - Dust in the light under a tube and in the beams.
@@ -815,6 +957,9 @@ vendored files. It is decided after phases 1 to 7 are measured.
   shines first, then water (the waterpark is a whole kind of floor, so it is
   the bigger unlock), then the mirror floor. The stepped shadows under fixed
   chairs are fine for now; refining them is low priority.
+- **The deep end's drowned monitors (17 Nov):** leave them glowing. Every
+  workstation on the bottom of the pool keeps its lit screen, under the old
+  sheet and under the new water.
 
 ## The ten-minute check, before the Graphics row is for everybody
 

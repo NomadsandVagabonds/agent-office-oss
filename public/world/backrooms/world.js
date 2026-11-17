@@ -20,9 +20,11 @@ import { mapLayout, bakeShadows, packShadows, layoutUniforms, sampleMap, bakeDoo
 import { doorPlan, DOORS } from './doors.js';
 import { bridgeReachable } from './bridge-puzzles.js';
 import { LEVEL_DESK, deskVox } from './desk.model.js';
+import { chooseUse } from './use.rule.js';
 import { WORKSTATION, chairVox, crtVox, keyboardVox, keyboardKeysVox } from './workstation.model.js';
 import { STORAGE, cabinetVox, boxesVox } from './storage.model.js';
 import { WALLFIT, socketVox, exitBoxVox } from './wallfit.model.js';
+import { markLiquid } from './liquid.mark.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
 // and how far along it a local coordinate c is (c is x on the front/back walls, z on the side walls)
@@ -691,7 +693,7 @@ export async function buildWorld(kit, level, env, tick) {
   };
   /** The nearest usable thing the player is facing, or null. */
   world.usable = (me) => {
-    let best = null, bestScore = Infinity;
+    let best = null, bestScore = Infinity, item = null, itemScore = Infinity;
     const fx = -Math.sin(me.yaw), fz = -Math.cos(me.yaw);
     for (const rt of rooms) {
       if (!rt.near) continue;
@@ -703,10 +705,13 @@ export async function buildWorld(kit, level, env, tick) {
         const facing = d < 0.45 ? 1 : (dx * fx + dz * fz) / d;
         if (facing < (use.cone ?? 0.55)) continue;
         const score = d * (1.6 - facing);
-        if (score < bestScore && (d < 0.6 || world.los(me.x, me.z, use.wx - (dx / d) * 0.3, use.wz - (dz / d) * 0.3))) { best = use; bestScore = score; }
+        if (score >= bestScore && !(use.inventoryItem && score < itemScore)) continue;
+        if (!(d < 0.6 || world.los(me.x, me.z, use.wx - (dx / d) * 0.3, use.wz - (dz / d) * 0.3))) continue;
+        if (score < bestScore) { best = use; bestScore = score; }
+        if (use.inventoryItem && score < itemScore) { item = use; itemScore = score; }
       }
     }
-    return best;
+    return chooseUse(best, item);                         // (something to pick up in a doorway is taken before the door is worked: use.rule.js)
   };
   /** Turn a room's ceiling up or down (0 = out, 1 = as built): the tubes, and everything they light. */
   world.setLights = (rt, k) => {
@@ -1364,6 +1369,13 @@ function roomContext(world, rt) {
     zone(spec) { rt.zones.push({ in: false, ...spec }); return spec; },
     /** Runs every frame while you are in this room or next door: fn(dt, t, me) with me in room coordinates. */
     tick(fn) { rt.ticks.push(fn); },
+    /**
+     * Mark a sheet this room drew as a liquid's surface (liquid.js): `target` the mesh, the group it is put in once the
+     * room is lit, or the batch it is drawn from; opt { kind: 'water', phase ({ value }: drifts its ripple), flow, y }.
+     * It draws nothing and changes nothing of the sheet; where the Graphics setting has water, a flat one is drawn as
+     * water. → a handle { disturb() } (which does nothing yet). Call it while building, not from a tick.
+     */
+    liquid(target, opt = {}) { return markLiquid(c, target, opt); },
     /** Is a point of this room on the player's screen right now? */
     seen(x, z, opt) { const p = toWorld(def, x, z); return env.sees(p.x, p.z, opt); },
 
