@@ -11,6 +11,9 @@ import { difficultyOf } from '../../../core/difficulty.mjs';
 import { makeRng, roomDistances, roomPath, wallSpans, ARCHETYPES } from './gen.js';
 
 /** What a creature is to the visitor. Only one that hunts may end a visit. */
+// (how much each of them takes, cast/health.rule.js: the conductor asks through here)
+export { HEALTH, TIER, healthOf, fresh, struck, aged, finished } from './cast/health.rule.js';
+
 export const DISPOSITIONS = Object.freeze(['hunts', 'keeps to itself', 'helps']);
 /** Things a visitor may be carrying that a creature can care about (the inventory's item types). */
 export const ITEMS = Object.freeze(['torch', 'battery', 'chalk', 'paper', 'pink-slip', 'scissors', 'snack', 'balloon', 'lighter', 'tape', 'opener', 'call']);

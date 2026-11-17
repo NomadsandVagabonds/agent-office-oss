@@ -131,7 +131,10 @@ export function create(c) {
         priority: 2,
         snip: () => {
           if (!at || s.mode !== 'lurk') return false;
+          const hit = c.struck?.(1);                                  // (cast/health.rule.js: basic, one jab is the end of it on this floor)
+          if (hit && !hit.ok) return false;
           if (!known) { known = true; c.met(); }
+          if (hit?.killed) { c.play('static', at.x, at.z, 6); c.survived(); return { ok: true, target: 'shadow' }; }      // (it stands where it was through its going: the conductor takes it off the floor)
           c.play('static', at.x, at.z, 6);
           s = away(R, false);
           at = null; mesh.visible = false; close = false;

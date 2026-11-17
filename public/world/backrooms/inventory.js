@@ -106,7 +106,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     active.env.interfere?.(result.snapped ? 0.55 : 0.38);
     env.hud?.glitch?.(result.snapped ? 0.42 : 0.26);
     refresh();
-    tell(result.snapped ? 'The scissors snapped' : `${result.item.uses} snip${result.item.uses === 1 ? '' : 's'} left`);
+    // (nothing is said: the crack and the empty hand are the telling, and there is no count to give)
     return result;
   }
   function use() {

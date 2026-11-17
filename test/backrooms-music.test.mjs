@@ -210,7 +210,8 @@ test('the mascot\'s music belongs to the mascot: it begins when a part\'s is fir
   // "met" is once for each part's mascot (p.known), after it has been in view and near for a moment: not a glimpse, and never twice in a part
   assert.equal(pirate.match(/if \(!p\.known && p\.met > 0\.4\) \{ p\.known = true; c\.met\(\); \}/g).length, 2);
   assert.match(pursuer, /k\.dead = true; if \(k\.member\.music === 'mascot'\) env\.sound\?\.stopMascot\?\.\(\);/, 'a mascot that is no more takes its music with it');
-  assert.equal((pursuer + pirate + src('index.js')).match(/stopMascot/g).length, 1, 'nothing else stops it: leaving the room, the part, or its sight does not');
+  assert.match(pursuer, /if \(k\.vital\.killed && k\.member\.music === 'mascot'\) env\.sound\?\.stopMascot\?\.\(\);/, 'nor one that a second jab has finished');
+  assert.equal((pursuer + pirate + src('index.js')).match(/stopMascot/g).length, 2, 'nothing else stops it: leaving the room, the part, or its sight does not');
   assert.ok(MASCOT_GAIN > MUSIC_GAIN && MASCOT_GAIN <= 0.6, 'over the usual music, and still not loud');
   assert.ok(fs.statSync(new URL('music/mascot.mp3', dir)).size > 1000000);
   assert.match(sound, /theme = new Audio\(MASCOT\.href\)/); assert.ok(sound.indexOf('new Audio(MASCOT.href)') > sound.indexOf('function playMascot'), 'the file is not asked for until the piece is');

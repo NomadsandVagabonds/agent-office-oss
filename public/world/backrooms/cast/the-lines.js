@@ -15,6 +15,7 @@ import * as THREE from 'three';
 import { Batch, lamp } from '../kit.js';
 import { roomRoute } from './paths.js';
 import { LINES, asleep, sleepsIn, folded, minds } from './the-lines.rule.js';
+import { HEALTH } from './health.rule.js';
 import { S, bodyVox, poleVox, sinewVox } from './the-lines.model.js';
 
 const GAP_ROOM = 'the-culvert', UP = new THREE.Vector3(0, 1, 0);
@@ -106,6 +107,20 @@ export function create(c) {
       lastX = walker.x; lastZ = walker.z;
       const lit = c.light(walker.x, walker.z, 1.6); mat.uniforms.uTint.value.set(lit[0] * 1.5 + 0.05, lit[1] * 1.5 + 0.05, lit[2] * 1.5 + 0.05);
       pose(dt, moved);
+    },
+    /**
+     * A jab (melee.js) at the flesh between the poles: it takes one (cast/health.rule.js) and, not finished, flinches. The
+     * target is wide and tall, because the thing is: it hangs overhead, and a jab upward at it must be able to land.
+     */
+    snipTargets() {
+      if (!fig || !fig.visible || s.mode === 'gone' || s.mode === 'falling') return [];
+      return [{ id: 'the-lines', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 1.4, r: 0.75, verticalReach: 2.2, priority: 2, snip: () => {
+        const hit = c.struck(HEALTH.jab); if (!hit.ok) return false;
+        if (!known) { known = true; c.met(); }
+        if (!hit.killed) c.stall(HEALTH.flinch);
+        c.play('rattle', walker.x, walker.z, 16); env.interfere(0.5); c.survived();
+        return { ok: true, target: 'the-lines' };
+      } }];
     },
     at: () => (fig ? { x: walker.x, z: walker.z, mode: s.mode, fold: +q.toFixed(2) } : { x: null, z: null, mode: 'absent' }),
     /** What it does with whoever it has got, for the last picture: stands up over them, all of it, and comes down. */
