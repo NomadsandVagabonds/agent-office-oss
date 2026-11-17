@@ -36,7 +36,7 @@ export function build(c) {
   const curtain = c.mapped('booths:curtain', kit.tex.custom('booths:curtain', 32, 64, (g, w, h) => { for (let x = 0; x < w; x++) { const v = 0.5 + 0.5 * Math.sin(x * 0.8); P(g, `rgb(${70 + v * 40 | 0},${18 + v * 10 | 0},${24 + v * 12 | 0})`, x, 0, 1, h); } P(g, '#c9a43a', 0, 0, w, 3); for (let x = 2; x < w; x += 6) P(g, '#8a7a3a', x, 0, 2, 4); }));
   const strip = c.mapped('booths:strips', kit.tex.custom('booths:strips', 132, 128, strips));
   const neon = mallNeon(kit, 'booths:' + p.seed, ['PHOTOS', 'PHOTO OF YOU', '4 FOR', 'SMILE', 'DONT SMILE', 'AGAIN', 'NEXT', 'STAY STILL'], p.seed), lit = c.shining('mall:neon:booths:' + p.seed, neon.texture, 2.4);
-  const inside = c.shining('booths:inside', kit.tex.custom('booths:inside', 16, 16, (g, w, h) => { P(g, '#cfd6dc', 0, 0, w, h); P(g, '#e8eef2', 2, 2, w - 4, h - 4); }), 1.5, [0.9, 0.95, 1.0]);
+  const inside = c.shining('booths:inside', kit.tex.custom('booths:inside', 16, 16, (g, w, h) => { P(g, '#cfd6dc', 0, 0, w, h); P(g, '#e8eef2', 2, 2, w - 4, h - 4); }), 0.85, [0.9, 0.95, 1.0]);   // (at Medium and High it blooms: kept below white)
   const booths = [];
   /** A booth against a wall, its open front toward the room: body, seat, curtain part drawn, a lit top, the slot and a strip in it. */
   const booth = (side, at, y, n) => {

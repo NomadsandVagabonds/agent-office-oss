@@ -49,7 +49,7 @@ export function build(c) {
   for (const [x, z] of [[-W / 2 + 0.7, D / 2 - 0.7], [W / 2 - 0.7, zc + 0.8]]) if (c.clear(x, z, 0.6)) { for (let k = 0; k < 9; k++) c.flat.box(x - 0.5 + R.range(0, 0.2), k * 0.05, z - 0.4 + R.range(0, 0.2), x + 0.5 - R.range(0, 0.2), k * 0.05 + 0.04, z + 0.4 - R.range(0, 0.2), PAPER); c.solid(x - 0.5, z - 0.4, x + 0.5, z + 0.4, { tall: false }); }
   /* the long one: it comes out of the till nearest the middle and goes, along the floor, wherever the visitor has been in here */
   const start = tills.reduce((a, b) => (Math.abs(b) < Math.abs(a) ? b : a)), trail = [[start, zc + 0.15]], crumbs = [];
-  const geo = new THREE.BufferGeometry(), pos = new Float32Array(K.most * 2 * 3 * 3 * 2), mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.78, 0.76, 0.7), side: THREE.DoubleSide });
+  const geo = new THREE.BufferGeometry(), pos = new Float32Array(K.most * 2 * 3 * 3 * 2), mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.49, 0.45), side: THREE.DoubleSide });   // (unlit, so as dim as the paper would be in here, not paper in daylight)
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setDrawRange(0, 0);
   const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; c.add(mesh);
   let len = 0;
