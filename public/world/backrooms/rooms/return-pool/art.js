@@ -48,6 +48,7 @@ export function waterMesh(c, tex, x0, z0, x1, z1, y, down = false) {
     const mesh = new THREE.Mesh(c.kit.geometry(batch, c.rt.lights, c.rt.amb), material);
     mesh.renderOrder = 4; group.add(mesh);
   });
+  c.liquid?.(group, { kind: 'water', phase, y });
   return { group, phase };
 }
 

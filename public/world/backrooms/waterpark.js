@@ -1258,6 +1258,7 @@ export function createBasin(c, spec) {
     side: THREE.DoubleSide,
     order: 4,
   });
+  c.liquid?.(waterSurf, { kind: 'water', y: waterY });
 
   // Expanding splash ripple ring + underwater aquamarine camera veil (only visible while camera is below waterY!)
   const rippleGeo = new THREE.RingGeometry(0.18, 0.26, 18);
@@ -1684,6 +1685,7 @@ export function poolroom(c, opt = {}) {
       const wb = new Batch();
       wb.grid([-hw, 0.15, -hd], [0, 0, 1], [1, 0, 0], ticks(hd * 2, 0.8, 0), ticks(hw * 2, 0.8, 0), (u, v) => [v / 1.5, u / 1.5], [0.88, 1.0, 1.0]);
       addTranslucent(c, wb, { map: causticWaterTex(c.kit, 'aqua'), alpha: 0.56, side: THREE.DoubleSide, order: 4 });
+      c.liquid?.(wb, { kind: 'water', y: 0.15 });
       const basin = {
         inBasin: (x, z) => Math.abs(x) < hw && Math.abs(z) < hd,
         waterY: 0.15,
