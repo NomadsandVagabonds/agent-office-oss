@@ -61,7 +61,7 @@ export function build(c) {
   const seats = ['#c8642d', '#8a5a2c', '#5a7a5a', '#b8922e'];
   for (let i = 0; i < 5; i++) c.model('court:tbl:' + (i % 4), () => tableVox(seats[i % 4])().downsample(2), R.range(-hx + 0.9, hx - 0.9), R.range(-hz + 0.9, hz - 0.9), { y: -2.2 - i * 2.3, scale: 2, rot: R.range(0, 6), tilt: [R.range(-0.5, 0.5), R.range(-0.5, 0.5)], solid: false, shadow: false });
   /* the rail: brass, a tube along the top of it, all the way round but for one length */
-  const side = R.int(0, 3), brass = [0.72, 0.56, 0.2], post = (x, z) => c.flat.box(x - 0.03, 0, z - 0.03, x + 0.03, K.rail, z + 0.03, brass), tubeB = c.shining('court:rail', kit.tex.white(), 1.3, [1, 0.69, 0.18]);
+  const side = R.int(0, 3), brass = [0.72, 0.56, 0.2], post = (x, z) => c.flat.box(x - 0.03, 0, z - 0.03, x + 0.03, K.rail, z + 0.03, brass), tubeB = c.shining('court:rail', kit.tex.white(), 2.0, [1, 0.69, 0.18]);
   const runs = [[-hx, hz, hx, hz], [hx, hz, hx, -hz], [hx, -hz, -hx, -hz], [-hx, -hz, -hx, hz]];
   runs.forEach(([ax, az, bx, bz], i) => {
     const len = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / len, uz = (bz - az) / len, g0 = i === side ? R.range(0.5, len - K.gap - 0.5) : -9, g1 = g0 + K.gap;
@@ -76,11 +76,11 @@ export function build(c) {
 
   /* the little shops round the edge: a counter, a roof over it with the name in tube, and on the roof the thing it sells */
   const kinds = R.shuffle(['sandwich', 'chips', 'soup', 'tray', 'hot', 'orange']), names = { sandwich: 'SANDWICH (1)', chips: 'CHIPS AND CHIP', soup: 'SOUP OF THE DAY: DAY', tray: 'TRAY', hot: 'HOT', orange: 'THE ORANGE ONE' };
-  const neon = mallNeon(kit, 'court:' + p.seed, kinds.map((k) => names[k]).concat(['FOOD', 'EAT HERE']), p.seed), lit = c.shining('mall:neon:court:' + p.seed, neon.texture, 1.9);
+  const neon = mallNeon(kit, 'court:' + p.seed, kinds.map((k) => names[k]).concat(['FOOD', 'EAT HERE']), p.seed), lit = c.shining('mall:neon:court:' + p.seed, neon.texture, 2.4);
   const skins = { sandwich: [0.55, 0.42, 0.24], chips: [0.78, 0.2, 0.16], soup: [0.2, 0.34, 0.3], tray: [0.42, 0.2, 0.16], hot: [0.6, 0.12, 0.1], orange: [0.94, 0.52, 0.12] };
   const put = (key, make, x, z, o = {}) => c.model(key, make, x, z, { solid: false, shadow: false, ...o });
   /* what is only looked at goes in `court:detail` (nothing in it is stood on, walked into or read) */
-  const det = c.mapped('court:detail', kit.tex.white(), { detail: true }), menus = c.shining('court:menus', kit.tex.white(), 0.6, [0.95, 0.8, 0.55]), bulbs = c.shining('court:bulbs', kit.tex.white(), 1.6, [1, 0.82, 0.5], { detail: true }), glowB = c.shining('court:tills', kit.tex.white(), 1.4, [0.6, 1, 0.7], { detail: true });
+  const det = c.mapped('court:detail', kit.tex.white(), { detail: true }), menus = c.shining('court:menus', kit.tex.white(), 0.75, [0.95, 0.8, 0.55]), bulbs = c.shining('court:bulbs', kit.tex.white(), 2.6, [1, 0.82, 0.5], { detail: true }), glowB = c.shining('court:tills', kit.tex.white(), 1.4, [0.6, 1, 0.7], { detail: true });
   const stall = (i, xa, xb, wall, dir) => {
     const kind = kinds[i], zf = wall + dir * K.stall, mid = (xa + xb) / 2, sk = skins[kind], top = K.canopy, fx = (a, b) => (dir > 0 ? [a, b] : [b, a]), [l, r] = fx(xa, xb);
     c.flat.box(xa, 0, Math.min(zf, zf - dir * 0.55), xb, 0.95, Math.max(zf, zf - dir * 0.55), sk); c.flat.box(xa - 0.04, 0.95, Math.min(zf + dir * 0.05, zf - dir * 0.6), xb + 0.04, 1.0, Math.max(zf + dir * 0.05, zf - dir * 0.6), [0.9, 0.87, 0.78]);
@@ -133,7 +133,7 @@ export function build(c) {
   { const n = 0.14, stone = [0.2, 0.19, 0.2];
     det.box(-hx - n, 0, -hz - n, hx + n, 0.012, -hz, stone); det.box(-hx - n, 0, hz, hx + n, 0.012, hz + n, stone); det.box(-hx - n, 0, -hz, -hx, 0.012, hz, stone); det.box(hx, 0, -hz, hx + n, 0.012, hz, stone);
     det.box(-hx, -0.22, -hz, hx, 0, -hz + 0.01, stone); det.box(-hx, -0.22, hz - 0.01, hx, 0, hz, stone); det.box(-hx, -0.22, -hz, -hx + 0.01, 0, hz, stone); det.box(hx - 0.01, -0.22, -hz, hx, 0, hz, stone);
-    const cx = hx + 0.6, cz = hz + 0.6, y0 = H - 0.55, rim = [0.22, 0.2, 0.24], cove = c.shining('court:cove', kit.tex.white(), 1.0, [1, 0.36, 0.66], { detail: true });
+    const cx = hx + 0.6, cz = hz + 0.6, y0 = H - 0.55, rim = [0.22, 0.2, 0.24], cove = c.shining('court:cove', kit.tex.white(), 1.6, [1, 0.36, 0.66], { detail: true });
     det.box(-cx, y0, -cz, cx, H, -cz + 0.3, rim); det.box(-cx, y0, cz - 0.3, cx, H, cz, rim); det.box(-cx, y0, -cz + 0.3, -cx + 0.3, H, cz - 0.3, rim); det.box(cx - 0.3, y0, -cz + 0.3, cx, H, cz - 0.3, rim);
     cove.box(-cx + 0.3, y0 + 0.02, -cz + 0.3, cx - 0.3, y0 + 0.06, -cz + 0.34, [1, 1, 1]); cove.box(-cx + 0.3, y0 + 0.02, cz - 0.34, cx - 0.3, y0 + 0.06, cz - 0.3, [1, 1, 1]); cove.box(-cx + 0.3, y0 + 0.02, -cz + 0.34, -cx + 0.34, y0 + 0.06, cz - 0.34, [1, 1, 1]); cove.box(cx - 0.34, y0 + 0.02, -cz + 0.34, cx - 0.3, y0 + 0.06, cz - 0.34, [1, 1, 1]);
     det.box(-0.02, y0 - 0.9, -0.02, 0.02, H, 0.02, [0.1, 0.1, 0.1]); det.box(-0.12, y0 - 0.95, -0.12, 0.12, y0 - 0.9, 0.12, [0.72, 0.56, 0.2]);   // (the hook it was meant to hang from: nothing on it)
@@ -141,7 +141,7 @@ export function build(c) {
     for (const [sx, sz] of [[-1, -1], [1, 1]]) { const x = sx * (hx + 0.75), z = sz * (hz + 0.75); c.model('mall:bin:0', binVox(false), x, z, { scale: 1.5, solid: false }); c.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, { tall: false }); det.box(x - 0.24, 0.5, z - 0.17, x + 0.24, 0.53, z + 0.17, [0.54, 0.23, 0.17]); } }
   /* FOOD, over the hole, pointing down it */
   upright(lit, -1.3, hz - 0.2, 1.3, hz - 0.2, 3.3, 4.0, neon.uv(6)); upright(lit, 1.3, hz - 0.2, -1.3, hz - 0.2, 3.3, 4.0, neon.uv(6)); for (const x of [-1.25, 1.25]) c.flat.box(x - 0.02, 4.0, hz - 0.22, x + 0.02, H, hz - 0.18, [0.1, 0.1, 0.12]);
-  const arrow = c.shining('court:arrow', kit.tex.white(), 1.5, [1, 0.24, 0.6]); for (let i = 0; i < 4; i++) arrow.box(-0.5 + i * 0.12, 3.15 - i * 0.14, hz - 0.22, 0.5 - i * 0.12, 3.25 - i * 0.14, hz - 0.18, [1, 1, 1]);
+  const arrow = c.shining('court:arrow', kit.tex.white(), 2.2, [1, 0.24, 0.6]); for (let i = 0; i < 4; i++) arrow.box(-0.5 + i * 0.12, 3.15 - i * 0.14, hz - 0.22, 0.5 - i * 0.12, 3.25 - i * 0.14, hz - 0.18, [1, 1, 1]);
   c.light(0, 3.0, 0, '#ff3d9a', 0.9, { k: 1.2, far: 7 }); c.light(-W / 4, H - 1.2, 1.5, '#ffb02e', 0.8, { k: 1.2, far: 8 }); c.light(W / 4, H - 1.2, -1.5, '#35e0ff', 0.8, { k: 1.2, far: 8 });
   void M; void Vox;
 }
