@@ -75,7 +75,7 @@ test('it is three metres and bends under a ceiling, further through a doorway, a
 test('its line: it hunts, roams, is met further down, fears fire; a drawing warns of it; its file stands in a doorway no longer than it should', () => {
   const m = CAST.find((k) => k.id === 'middle-manager');
   assert.ok(m && m.disposition === 'hunts' && m.home === 'roams' && m.deep === true && m.weight > 0 && m.fire === 'fears' && !m.heavy);
-  assert.ok(WARNINGS['middle-manager'].length >= 3);
+  assert.deepEqual(WARNINGS['middle-manager'], [['LOOK AT ITS SHOES.', 'ONLY ITS SHOES. IF', 'IT STARTS TO SWELL']], 'the owner, 18 Nov: the shoes line is enough');
   for (const lines of WARNINGS['middle-manager']) assert.ok(!lines.join(' ').includes(m.rule.toUpperCase().slice(0, 20)));
   const src = readFileSync(new URL('../public/world/backrooms/cast/middle-manager.js', import.meta.url), 'utf8');
   // nobody keeps a doorway (doorway.rule.js): it asks, every moment it stands, and goes a room away when it is due

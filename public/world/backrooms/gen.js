@@ -25,7 +25,7 @@
 
 import { T, WALL_H, DOOR_H, TILE, RISE, RUN, SIDES, toWorld, toLocal, wallLength, wallPoint, floorAt, ceilAt, headAt, stairZones, pinchHalf, fitsAt, wallSpans } from './frame.js';
 import { fill, wrap } from './words.js';
-import { warningFor } from './drawings.js';
+import { warningFor, WARNINGS } from './drawings.js';
 import { MORE_DECK, MORE_STASH } from './deck2.js';
 import { LIFT_CAR } from './rooms/lift/rule.js';
 import { themeOf, THEMES, atHome } from './themes.js';
@@ -1097,7 +1097,7 @@ function dress(R, level, o, opt, keeper = false) {
     const kinds = RTr.shuffle(TRACES.filter((k) => k !== 'drawing')), placed = [], want = RTr.int(2, 3);
     // a drawing of something that is down here — only ever of something that is (`drawn`: who, from the visit's plan:
     // whoever is on this part or the one below it). On most parts that have anybody to draw, it is the first thing placed.
-    const drawn = (Array.isArray(opt.drawn) ? opt.drawn : []).filter((id) => typeof id === 'string' && id);
+    const drawn = (Array.isArray(opt.drawn) ? opt.drawn : []).filter((id) => typeof id === 'string' && id && WARNINGS[id]);          // (nobody draws a thing with no warning of its own: drawings.js)
     if (drawn.length && RTr.fork('drawing').chance(0.6)) kinds.unshift('drawing');
     for (const room of able) {
       if (placed.length >= want) break;
