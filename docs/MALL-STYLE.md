@@ -185,4 +185,4 @@ could stop sharing.
 | Receipts | a receipt that follows you, printed, charged by the metre on the till's display; tear it off and it reels back the way you came | neon fascias |
 | Keys cut | doors that are walls; the machine cuts you a key to one of them, and behind it is a smaller door it does not fit; somebody knocks | neon fascias |
 | Grotto | July; paper snow that falls only while you stand still and stops in the air when you move | neon fascias, a camera (its bulb only) |
-| The streets (`concourse`) | `MALL_WRONG`, one wrong thing a room | shopfronts throughout |
+| The streets (`concourse`) | `MALL_WRONG`, one wrong thing a room; a directory that draws the floor as it is, and you on it twice | shopfronts throughout |
