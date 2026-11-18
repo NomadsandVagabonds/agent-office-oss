@@ -21,10 +21,10 @@ globalThis.document = { createElement: () => ({ getContext: () => draw, style: {
 test.after(() => { if (previousDocument === undefined) delete globalThis.document; else globalThis.document = previousDocument; });
 
 const B = new URL('public/world/backrooms/', root);
-const [{ buildWorld, panOf }, { createKit, lin }, { generate, TILE }, makers, { profile }, { SHINING_LIGHTS }, { lightVox, CEILING }, { meshVox }] = await Promise.all([
+const [{ buildWorld, panOf }, { createKit, lin }, { generate, TILE }, makers, { profile }, { SHINING_LIGHTS }, { lightVox, CEILING }, { meshVox }, { FITTINGS, poolLightVox, battenVox, canVox }] = await Promise.all([
   import(new URL('world.js', B).href), import(new URL('kit.js', B).href), import(new URL('gen.js', B).href),
   import(new URL('public/world/props/office.js', root).href), import(new URL('graphics.js', B).href), import(new URL('shining-lights.rule.js', B).href),
-  import(new URL('ceiling.model.js', B).href), import(new URL('public/world/vox/mesher.js', root).href)]);
+  import(new URL('ceiling.model.js', B).href), import(new URL('public/world/vox/mesher.js', root).href), import(new URL('fittings.model.js', B).href)]);
 const catalogueOf = (kit) => ({ has: (type) => typeof makers[type] === 'function', entry: () => null, geo: (type) => (makers[type] ? kit.model(type, makers[type]) : null) });
 const tier = (name) => { const p = profile(name); return { contact: p.contact, bounce: p.bounce, shadows: p.shadows, doorlight: p.doorlight, fixtures: p.fixtures }; };
 const CLASSIC = null, LOW = tier('low'), MEDIUM = tier('medium'), HIGH = tier('high');
@@ -115,6 +115,11 @@ test('a quarter turn lays it along x: the flat panel 1.2 m across x, the fitting
 // one lit light's tubes and pan, as the world meshes them: what the shell's fitting puts into the batch the flat panel was in
 const TUBES = meshVox(lightVox().tubes, { ao: false }).solid, PAN = panOf(meshVox(lightVox().housing, { ao: false }).solid);
 const GLOW_VERTS = TUBES.attributes.position.count + PAN.inside.attributes.position.count;
+// the other kinds (fittings.model.js), meshed as the world meshes them: vertices of what shines, of the body, of the fine parts; lit and dead
+const vc = (v) => (v ? meshVox(v, { ao: false }).solid?.attributes.position.count || 0 : 0);
+const POOL = { lens: vc(poolLightVox().lens), body: vc(poolLightVox().housing), deadBody: vc(poolLightVox({ dead: true }).housing) + vc(poolLightVox({ dead: true }).lens), fine: 0 };
+const BATTEN = (len, dead = false) => { const p = battenVox({ len, dead }); return { lens: dead ? 0 : vc(p.tube), body: vc(p.channel) + (dead ? vc(p.tube) : 0), fine: vc(p.holders) }; };
+const CAN = (dead = false) => { const p = canVox({ dead }); return { lens: dead ? 0 : vc(p.disc), body: vc(p.trim) + (dead ? vc(p.disc) : 0), fine: 0 }; };
 
 test('medium and high: the shell\'s own fitting, mounted on the ceiling\'s face: the same parts and batches, 10 cm lower', async (t) => {
   for (const gfx of [MEDIUM, HIGH]) {
@@ -248,13 +253,109 @@ test('the waterpark\'s natatoriumLight: every room that calls it is, at classic 
       assert.deepEqual(room(now), room(was), `${arch} ${JSON.stringify(args)} at ${gfx ? 'low' : 'classic'}, lighting ${lighting}`);
       assert.equal(now.rt.lights.length, Math.min(12, Array.from({ length: (args[0] ?? 3) * (args[1] ?? 3) }, (_, k) => k).filter((k) => (Math.floor(k / (args[1] ?? 3)) + (k % (args[1] ?? 3)) * 2) % (args[2] ?? 1) === 0).length));
     }
-    // medium and high: the same lamps, and the fitting in place of every panel (one housing and one louvre mesh)
+    // medium and high: the same lamps, and the troffer in place of every panel (one housing and one louvre mesh). (The pool
+    // light was tried here and did not read better from across the room: BACKROOMS-GRAPHICS.md "Ceiling fixtures (built)")
     for (const gfx of [MEDIUM, HIGH]) {
       const was = await build(lv, d, (c) => natatoriumBefore(c, ...args), { gfx, lighting: false }), now = await build(lv, d, (c) => natatoriumLight(c, ...args), { gfx, lighting: false });
       assert.deepEqual(now.rt.lights, was.rt.lights, `${arch}: the same lamps`);
       const n = (args[0] ?? 3) * (args[1] ?? 3);
       assert.equal(vertsOf(now.rt.panelMesh), n * GLOW_VERTS, `${arch}: every panel is a fitting`);
       assert.equal(vox(now.rt).filter((m) => m.userData.detail).length, 1);
+      // and the same rooms with the pool light instead: its lens in the shell's batch, its body in the room's, nothing detail
+      const pool = await build(lv, d, (c) => { const fitting = c.fitting; c.fitting = (x, z, o) => fitting(x, z, { ...o, kind: 'pool' }); natatoriumLight(c, ...args); c.fitting = fitting; }, { gfx, lighting: false });
+      assert.deepEqual(pool.rt.lights, was.rt.lights);
+      assert.equal(vertsOf(pool.rt.panelMesh), n * POOL.lens, `${arch}: every panel a pool light`);
+      assert.equal(vox(pool.rt).filter((m) => m.userData.detail).length, 0);
     }
+    for (const gfx of [CLASSIC, LOW]) {
+      const was = await build(lv, d, (c) => natatoriumBefore(c, ...args), { gfx, lighting: false });
+      const pool = await build(lv, d, (c) => { const fitting = c.fitting; c.fitting = (x, z, o) => fitting(x, z, { ...o, kind: 'pool' }); natatoriumLight(c, ...args); c.fitting = fitting; }, { gfx, lighting: false });
+      assert.deepEqual(room(pool), room(was), `${arch}: the pool light at ${gfx ? 'low' : 'classic'} is the panel to the byte`);
+    }
+  }
+});
+
+/* ---- the other kinds: the pool light, the batten, the can, and the troffer as a closed box ---- */
+
+const white = (r) => meshes(r.rt).filter((m) => m.material.type === 'MeshBasicMaterial' && m.material.map === r.kit.tex.white());
+const extent = (m) => { const p = m.geometry.attributes.position, lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+  for (let i = 0; i < p.count; i++) for (const [k, v] of [p.getX(i), p.getY(i), p.getZ(i)].entries()) { lo[k] = Math.min(lo[k], v); hi[k] = Math.max(hi[k], v); }
+  return { lo, hi, size: hi.map((v, k) => Number((v - lo[k]).toFixed(4))) }; };
+const fitted = (r) => { const v = vox(r.rt); return { body: v.filter((m) => !m.userData.detail).reduce((n, m) => n + vertsOf(m), 0), fine: v.filter((m) => m.userData.detail).reduce((n, m) => n + vertsOf(m), 0) }; };
+
+test('the default kind is the troffer, to the byte; the pool light is the troffer\'s flat panel at classic and low, lamp and all', async (t) => {
+  const place = (opt) => (c) => { c.shell({ panels: false }); for (const p of SPOTS) c.fitting(p.x, p.z, { dead: p.state === 'dead', flick: p.state === 'flicker', ...opt }); };
+  for (const gfx of [CLASSIC, LOW, MEDIUM]) {
+    const plain = room(await oneRoom(t, place({}), { gfx, panels: SPOTS }));
+    for (const opt of [{ kind: 'troffer' }, { kind: 'nonsense' }, { kind: undefined }, { surface: false }]) assert.deepEqual(room(await oneRoom(t, place(opt), { gfx, panels: SPOTS })), plain, `${JSON.stringify(opt)} at ${JSON.stringify(gfx)}`);
+    if (gfx !== MEDIUM) for (const opt of [{ kind: 'pool' }, { surface: true }]) assert.deepEqual(room(await oneRoom(t, place(opt), { gfx, panels: SPOTS })), plain, `${JSON.stringify(opt)}: its classic form is the panel`);
+  }
+});
+
+test('medium and high: each kind\'s parts in their batches, lit and dead, hung from `y` by its own depth', async (t) => {
+  const H = 2.9, y = 2.3;   // (hung from y: a beam's underside, 60 cm under the ceiling)
+  const cases = [
+    ['pool', {}, POOL, { lens: 0, body: POOL.deadBody, fine: 0 }, FITTINGS.pool.deep],
+    ['batten', { len: 1.2 }, BATTEN(1.2), BATTEN(1.2, true), FITTINGS.batten.deep],
+    ['batten', { len: 0.6 }, BATTEN(0.6), BATTEN(0.6, true), FITTINGS.batten.deep],
+    ['can', {}, CAN(), CAN(true), FITTINGS.can.deep]];
+  for (const gfx of [MEDIUM, HIGH]) for (const [kind, extra, on, off, deep] of cases) {
+    const lit = await oneRoom(t, (c) => { c.shell({ panels: false }); c.fitting(0.3, 0, { kind, y, ...extra }); }, { gfx, H });
+    const glow = kind === 'pool' ? [lit.rt.panelMesh] : white(lit);
+    assert.equal(glow.length, 1, `${kind}: one shining mesh`);
+    assert.equal(vertsOf(glow[0]), on.lens, `${kind}: what shines`);
+    if (kind === 'pool') {
+      // the lens at the panel texture's ridge (about two thirds of white at the panel's power, not clipped), its ribs at the
+      // dark border: never the diffuser's shade, which clips to white
+      const uv = glow[0].geometry.attributes.uv, seen = new Set();
+      for (let i = 0; i < uv.count; i++) seen.add(`${uv.getX(i).toFixed(5)},${uv.getY(i).toFixed(5)}`);
+      assert.deepEqual([...seen].sort(), [`${(0.5 / 24).toFixed(5)},0.50000`, '0.50000,0.50000']);
+    }
+    assert.deepEqual(fitted(lit), { body: on.body, fine: on.fine }, `${kind} ${JSON.stringify(extra)}: its body in the room's batch, its fine parts detail`);
+    // hung from y: its lowest face `deep` under it, nothing above it
+    const all = vox(lit.rt).map(extent).concat(glow.map(extent)), lo = Math.min(...all.map((e) => e.lo[1])), hi = Math.max(...all.map((e) => e.hi[1]));
+    assert.ok(Math.abs(lo - (y - deep)) < 1e-5 && hi <= y + 1e-5, `${kind}: from ${lo} to ${hi}, hung from ${y}`);
+    const dead = await oneRoom(t, (c) => { c.shell({ panels: false }); c.fitting(0.3, 0, { kind, y, dead: true, ...extra }); }, { gfx, H });
+    assert.equal(dead.rt.panelMesh, undefined); assert.equal(white(dead).length, 0, `${kind} dead: nothing shines`);
+    assert.deepEqual(fitted(dead), { body: off.body, fine: off.fine }, `${kind} dead`);
+  }
+  // the troffer as a closed box: the same tubes and louvre, the closed housing, its lowest face (the trim) as the open one's
+  const shut = await oneRoom(t, (c) => { c.shell({ panels: false }); c.fitting(0.3, 0, { surface: true }); }, { gfx: MEDIUM }), open = await oneRoom(t, (c) => { c.shell({ panels: false }); c.fitting(0.3, 0); }, { gfx: MEDIUM });
+  const housing = (s) => panOf(meshVox(lightVox({ surface: s }).housing, { ao: false }).solid);
+  assert.equal(vertsOf(shut.rt.panelMesh), TUBES.attributes.position.count + housing(true).inside.attributes.position.count);
+  assert.deepEqual(fitted(shut).fine, fitted(open).fine, 'the same louvre');
+  assert.equal(fitted(shut).body, housing(true).rest.attributes.position.count);
+  assert.deepEqual(shut.rt.lights, open.rt.lights);
+  // a quarter turn turns every kind
+  for (const [kind, extra] of [['pool', {}], ['batten', { len: 1.8 }]]) {
+    const r = await oneRoom(t, (c) => { c.shell({ panels: false }); c.fitting(0.3, 0, { kind, rot: Math.PI / 2, ...extra }); }, { gfx: MEDIUM });
+    const e = extent(vox(r.rt).find((m) => !m.userData.detail)).size;
+    assert.ok(e[0] > e[2], `${kind} turned: along x`);
+  }
+});
+
+test('classic and low: the batten a flat lit strip and the can a flat lit square, at the power given; no lamp unless given one; `len`', async (t) => {
+  for (const gfx of [CLASSIC, LOW]) {
+    for (const [want, len] of [[undefined, 1.2], [1.12, 1.2], [0.5, 0.6], [0.8, 0.6], [2.4, 1.8], [1.8, 1.8]]) {
+      const r = await oneRoom(t, (c) => { c.shell({ panels: false }); c.fitting(0.3, 0, { kind: 'batten', y: 2.0, len: want }); }, { gfx, H: 2.6 });
+      const [m] = white(r), e = extent(m);
+      assert.equal(vertsOf(m), 4, 'one quad');
+      assert.deepEqual(e.size, [FITTINGS.batten.wide, 0, len].map((v) => Number(v.toFixed(4))), `len ${want} is ${len}`);
+      assert.ok(Math.abs(e.lo[1] - (2.0 - 0.006)) < 1e-6, '6 mm under what it hangs from');
+      assert.deepEqual(m.material.color.toArray().map((v) => Number(v.toFixed(5))), lin(r.rt.def.look.tube).map((v) => Number((v * 1.6).toFixed(5))), 'the theme\'s tube at 1.6');
+      assert.equal(r.rt.lights.length, 0, 'no lamp');
+    }
+    const can = await oneRoom(t, (c) => { c.shell({ panels: false }); c.fitting(0.3, 0, { kind: 'can', power: 2.2, tube: '#ffe0b0', detail: true, light: { power: 0.3, k: 1, far: 3 } }); }, { gfx });
+    const [m] = white(can);
+    assert.deepEqual(extent(m).size, [FITTINGS.can.across, 0, FITTINGS.can.across].map((v) => Number(v.toFixed(4))));
+    assert.equal(m.userData.detail, true, 'detail when asked (Low hides it, as the rooms\' own cans)');
+    assert.deepEqual(m.material.color.toArray().map((v) => Number(v.toFixed(5))), lin('#ffe0b0').map((v) => Number((v * 2.2).toFixed(5))));
+    assert.equal(can.rt.lights.length, 1, 'a lamp when given one');
+    assert.deepEqual([can.rt.lights[0].y, can.rt.lights[0].r].map((v) => Number(v.toFixed(6))), [Number((2.6 - 0.14).toFixed(6)), Number((lin('#ffe0b0')[0] * 0.3).toFixed(6))]);
+    const dead = await oneRoom(t, (c) => { c.shell({ panels: false }); c.fitting(0.3, 0, { kind: 'can', dead: true }); }, { gfx });
+    assert.equal(white(dead).length, 0, 'out: grey, in the room\'s own batch');
+    // their own batch, by key: two keys, two meshes
+    const two = await oneRoom(t, (c) => { c.shell({ panels: false }); c.fitting(0.3, 0, { kind: 'batten' }); c.fitting(-0.3, 0, { kind: 'batten', key: 'rail', power: 1.1 }); c.fitting(1, 1, { kind: 'can' }); }, { gfx });
+    assert.equal(white(two).length, 3);
   }
 });
