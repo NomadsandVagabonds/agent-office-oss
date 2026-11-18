@@ -117,7 +117,9 @@ export function makeStickyNote(kit, colour = '#f4e04d', seed = 0) {
   return {
     group,
     mesh,
-    light(rgb) { mat.uniforms.uTint.value.set(rgb[0] * 1.2 + 0.05, rgb[1] * 1.2 + 0.05, rgb[2] * 1.2 + 0.05); },
+    // lit by the room, but never past full: a bright room let it out to near white, and it is its colour that makes it a note
+    // from across a room (the cast: "saturated paper rather than near-white"). A dark one keeps a floor, so it still shows.
+    light(rgb) { const f = (v) => Math.min(1, Math.max(0.3, v * 0.95 + 0.04)); mat.uniforms.uTint.value.set(f(rgb[0]), f(rgb[1]), f(rgb[2])); },
     pose,
   };
 }
