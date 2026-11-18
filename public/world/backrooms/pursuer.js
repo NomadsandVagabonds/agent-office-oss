@@ -140,7 +140,7 @@ export function createStalkers(env, options = {}) {
      */
     fire(x, z) { const f = env.inventory?.fire?.threatAt?.(x, z, W().floorY(x, z)); return f ? { x: f.x, z: f.z, remaining: f.remaining } : null; },
   });
-  const staged = { woke: false, beside: false };
+  const staged = { woke: false, beside: false, called: false };
   const mascotDead = !!env.carry?.dead;               // (the mascot was finished on a part above: it is in no part below)
   const live = [], dealt = (options.members?.map(id => ({ id })) ?? castFor(env.visit, level.depth)).filter((k) => !(mascotDead && CAST.find((m) => m.id === k.id)?.music === 'mascot'));
   // …and whoever comes with a room this floor has (cast.js withRoomFor: extra, in nobody's place)
@@ -203,13 +203,24 @@ export function createStalkers(env, options = {}) {
       //  `beside`: the visitor is put a step and a half from the one named, facing it, as soon as it is somewhere to be put beside)
       if (options.wake && !staged.woke && pirate?.at?.()) { staged.woke = true; try { pirate.wake(true); } catch { /* it will wake by itself */ } }
       if (options.beside && !staged.beside) {
-        const who = live.find((k) => k.id === options.beside && !k.dead && !k.away), a = who?.it.at?.();
+        const who = live.find((k) => k.id === options.beside && !k.dead && !k.away);
+        // (one that has nowhere to stand yet and can be called up — the shadow, which only takes a place out of the picture,
+        // and from somebody standing still may find none — is put in plain sight a few steps off first: once, after a moment)
+        if (who && !staged.called && env.clock > 0.5 && !Number.isFinite(who.it.at?.()?.x) && typeof who.it.appear === 'function') {
+          staged.called = true; const m = env.player.me, w = W();
+          for (let i = 0; i < 16; i++) {
+            const ang = m.yaw + (i * Math.PI) / 8, x = m.x - Math.sin(ang) * 2.5, z = m.z - Math.cos(ang) * 2.5;
+            if (!w.roomAt(x, z) || !w.free(x, z, 0.3) || !w.los(m.x, m.z, x, z)) continue;
+            try { if (who.it.appear({ x, z })) break; } catch { break; }
+          }
+        }
+        const a = who?.it.at?.();
         if (a && Number.isFinite(a.x) && Number.isFinite(a.z)) {
           const w = W();
           for (let i = 0; i < 16 && !staged.beside; i++) {
             const ang = (i * Math.PI) / 8, x = a.x + Math.cos(ang) * 1.5, z = a.z + Math.sin(ang) * 1.5;
             if (!w.roomAt(x, z) || !w.free(x, z, 0.3) || !w.los(x, z, a.x, a.z)) continue;
-            env.player.warp?.(x, z, Math.atan2(-(a.x - x), -(a.z - z))); staged.beside = true;
+            env.player.warp?.(x, z, Math.atan2(-(a.x - x), -(a.z - z)) + (Number(who.it.aside) || 0)); staged.beside = true;          // (aside: one that goes off when stared at says how far off it to look)
           }
         }
       }

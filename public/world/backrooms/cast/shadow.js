@@ -167,6 +167,8 @@ export function create(c) {
       s = { ...away(R), mode: 'lurk', stare: 0, heat: 0, t: SHADOW.stay[1] };
       return true;
     },
+    /** For the dev page's beside: look this far off it (radians), out of the stare that arms it and still within a jab. */
+    aside: 0.6,
     /** For the dev page: have it turn up now. */
     hurry() { if (s.mode === 'away') s = { ...s, t: 0 }; },
     dispose() { for (const k of dark) env.world?.setLights(k.rt, 1); mesh?.removeFromParent(); },
