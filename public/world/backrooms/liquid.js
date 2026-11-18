@@ -30,8 +30,20 @@
 // (`handle.disturb(x, z, strength)`, world coordinates); the visitor starts them by being in the water (feel(), which
 // index.js calls once a frame). Where the tier has no water there is no view, rec.disturb is never set, and the handle's
 // call does nothing.
+//
+// The mirror (water 2, High only; createLiquidView's setLevel): of the surfaces in view this frame, the one nearest the eye
+// that faces up and has the eye above it (pickMirror) gets a planar reflection. Inside the camcorder's draw, before
+// anything else, the scene is drawn once more by a camera of its own, mirrored about that surface's plane, with an
+// oblique near plane at the water (nothing under the surface is drawn into it), into a picture at half the scene's size
+// (mirrorPass). Left out of it: every marked sheet and the water, what is held in front of the camera, a room's detail
+// batches, and anything a builder marked userData.noReflect (on a mesh or a group). The flashlight's beam and its shadow
+// lookup are taken into the mirror camera's space so a lit wall is lit in the mirror as it is in the room; the
+// camcorder's own lamp (fixed to the eye in the kit's shader) is left out of it. Everything changed for it is put back
+// in a finally. Every surface on that plane samples it (LIQUID_FRAG reflection(), MIRROR defined); the rest keep the
+// flat tint. At water 1 (Medium) none of it exists: no define, no picture, no pass.
 import * as THREE from 'three';
-import { LIQUID, underwater, holdStep, toLinear, waterColours, wakeStart, wakeStep, wakeFill, wadeStep, LIQUID_VERT, LIQUID_FRAG, COPY_FRAG, LIQUID_UNDER_FRAG, seesUnderside } from './liquid.rule.js';
+import { LIQUID, underwater, holdStep, toLinear, waterColours, wakeStart, wakeStep, wakeFill, wadeStep, LIQUID_VERT, LIQUID_FRAG, COPY_FRAG, LIQUID_UNDER_FRAG, seesUnderside,
+  MIRROR, mirrorPlane, reflectMatrix, planeInView, obliqueProjection, mirrorSize, pickMirror, mirrorLeaves } from './liquid.rule.js';
 import { HELD_ORDER } from './beam-shadows.rule.js';
 import { collectLiquids } from './liquid.mark.js';
 
@@ -71,6 +83,7 @@ export function sheetTint(mesh) {
 /** The water's material for one sheet: the room's light uniforms are the sheet's own objects (its dimmer, flicker, banks). */
 export function waterMaterial(old, rec, toRoom, shared) {
   const m = old.material, u = m.uniforms, defines = {};
+  // (MIRROR is set by the view itself at water 2: liquid.js frame)
   if (m.defines?.FLICK) defines.FLICK = m.defines.FLICK;
   if (m.defines?.BANKS) defines.BANKS = m.defines.BANKS;
   const { tint, alpha } = sheetTint(old), col = waterColours(tint, alpha);
@@ -85,6 +98,7 @@ export function waterMaterial(old, rec, toRoom, shared) {
       uDeep: { value: new THREE.Vector3(...col.deep) }, uAbsorb: { value: new THREE.Vector3(...col.absorb) }, uScatter: { value: new THREE.Vector3(...col.scatter) },
       uKeep: { value: new THREE.Vector4(...col.keep, col.keepRate) },
       uEyeRoom: { value: new THREE.Vector3() },
+      uMirrorOn: { value: 0 },                            // (1 only inside the camcorder's draw, on the water level that has the mirror)
       // (the wake's rings are the surface's own, not shared: liquid.js frame() sets them from its pool)
       uRings: rec.wake?.u.uRings || { value: Array.from({ length: LIQUID.rings }, () => new THREE.Vector4()) }, uRingN: rec.wake?.u.uRingN || { value: 0 },
     },
@@ -96,7 +110,8 @@ export function waterMaterial(old, rec, toRoom, shared) {
 /** The same surface seen from below: the top's very uniforms, the underside's shader (made the first time an eye is under it). */
 export function undersideMaterial(pair, rec) {
   const top = pair.material;
-  const material = new THREE.ShaderMaterial({ defines: { ...top.defines }, vertexShader: LIQUID_VERT, fragmentShader: LIQUID_UNDER_FRAG,
+  const { MIRROR: _mirror, ...defines } = top.defines || {};    // (no mirror seen from below)
+  const material = new THREE.ShaderMaterial({ defines, vertexShader: LIQUID_VERT, fragmentShader: LIQUID_UNDER_FRAG,
     uniforms: top.uniforms, side: THREE.DoubleSide, transparent: false, depthWrite: true, depthTest: true });
   material.name = `liquid:${rec.kind}:underside`;
   rec.kit?.own?.(material);
@@ -138,12 +153,101 @@ export function createLiquidView() {
   const shared = {
     tScene: { value: null }, tDepth: { value: null }, uSize: { value: new THREE.Vector2(1, 1) }, uClip: { value: new THREE.Vector2(0.06, 170) },
     uTime: { value: 0 }, uCaustic: { value: LIQUID.caustic },
+    tMirror: { value: null }, uMirror: { value: new THREE.Matrix4() },   // (the mirror's picture and the way into it: water 2 only)
   };
   let copy = null, copyMat = null, quad = null, hold = { last: -Infinity, split: false };
   const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const list = [], frustum = new THREE.Frustum(), pv = new THREE.Matrix4(), inv = new THREE.Matrix4(), eye = new THREE.Vector3(), at = new THREE.Vector3();
   const box = new THREE.Box3(), mv = new THREE.Matrix4();
-  const stats = { marks: 0, up: 0, inView: 0, under: 0, below: 0, split: false, draws: 0, rings: 0 };
+  const stats = { marks: 0, up: 0, inView: 0, under: 0, below: 0, split: false, draws: 0, rings: 0,
+    mirror: { on: false, surfaces: 0, size: null, calls: 0, triangles: 0, left: { noReflect: 0, liquid: 0, held: 0, detail: 0, sheet: 0 }, drawn: 0 } };
+  // --- the mirror (water 2) ---
+  let level = 1, mirrorRec = null, mirrorTarget = null;
+  const mirrorCam = new THREE.PerspectiveCamera();
+  mirrorCam.matrixAutoUpdate = false; mirrorCam.matrixWorldAutoUpdate = false;
+  const cands = [], FLIP = new THREE.Matrix4().makeScale(-1, 1, 1), mA = new THREE.Matrix4(), mB = new THREE.Matrix4(), mT = new THREE.Matrix4(), mTi = new THREE.Matrix4();
+  const pPoint = new THREE.Vector3(), pNormal = new THREE.Vector3();
+  const worldPlane = (rec) => {
+    const g = rec.rt.group.matrixWorld;
+    pPoint.set(0, rec.plane.y, 0).applyMatrix4(g); pNormal.set(0, 1, 0).transformDirection(g);
+    return mirrorPlane(pNormal.toArray(), pPoint.toArray());
+  };
+  /**
+   * The room mirrored about `rec`'s plane, into the mirror's picture (half the size of `target`, the scene's). Puts back,
+   * in a finally, everything it changes: what it hid, the beam's uniforms, the renderer's target, clear colour, autoClear
+   * and shadow maps, the scene's background. The visitor's own camera is never touched: the mirror has its own.
+   */
+  function mirrorPass(renderer, scene, camera, target, rec) {
+    const [w, h] = mirrorSize(target.width, target.height);
+    if (!mirrorTarget) mirrorTarget = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, depthBuffer: true });
+    else if (mirrorTarget.width !== w || mirrorTarget.height !== h) mirrorTarget.setSize(w, h);
+    const ms = stats.mirror;
+    ms.size = [w, h]; for (const k of Object.keys(ms.left)) ms.left[k] = 0;
+    // the mirror's camera: the eye's, mirrored about the plane, and turned over side to side so it is a camera again
+    // (matrixWorld = R · C · F); its near plane moved onto the water
+    const plane = worldPlane(rec);
+    camera.updateMatrixWorld();
+    mirrorCam.matrix.fromArray(reflectMatrix(plane)).multiply(camera.matrixWorld).multiply(FLIP);
+    mirrorCam.matrixWorld.copy(mirrorCam.matrix); mirrorCam.matrixWorldInverse.copy(mirrorCam.matrixWorld).invert();
+    mirrorCam.projectionMatrix.fromArray(obliqueProjection(camera.projectionMatrix.toArray(), planeInView(plane, mirrorCam.matrixWorldInverse.toArray())));
+    mirrorCam.projectionMatrixInverse.copy(mirrorCam.projectionMatrix).invert();
+    mirrorCam.near = camera.near; mirrorCam.far = camera.far;
+    mirrorCam.layers.mask = camera.layers.mask & ~OVER;
+    // from the eye's view space to the mirror's (T), for the beam; and to the mirror's picture, for the surface
+    mT.multiplyMatrices(mirrorCam.matrixWorldInverse, camera.matrixWorld); mTi.copy(mT).invert();
+    const sheets = new Set();
+    for (const r of list) for (const m of r.meshes || []) sheets.add(m);
+    const hidden = [], origins = new Map(), aims = new Map(), lamps = new Map(), shadows = new Map();
+    const was = renderer.getRenderTarget?.() ?? null, autoClear = renderer.autoClear, bg = scene.background;
+    const shadowAuto = renderer.shadowMap?.autoUpdate, clear = new THREE.Color(), clearAlpha = renderer.getClearAlpha?.() ?? 1;
+    renderer.getClearColor?.(clear);
+    const info = renderer.info, c0 = info?.render?.calls ?? 0, t0 = info?.render?.triangles ?? 0;
+    try {
+      scene.traverseVisible((o) => {
+        const why = sheets.has(o) ? 'sheet' : mirrorLeaves(o, HELD_ORDER);
+        if (why) { ms.left[why]++; hidden.push(o); o.visible = false; return; }
+        if (!o.material) return;
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+          const u = m?.uniforms;
+          if (!u) continue;
+          if (u.uTorchOrigin?.value?.isVector3 && !origins.has(u.uTorchOrigin.value)) origins.set(u.uTorchOrigin.value, u.uTorchOrigin.value.clone());
+          if (u.uTorchDirection?.value?.isVector3 && !aims.has(u.uTorchDirection.value)) aims.set(u.uTorchDirection.value, u.uTorchDirection.value.clone());
+          if (u.uCameraLamp && !lamps.has(u.uCameraLamp)) lamps.set(u.uCameraLamp, u.uCameraLamp.value);
+          if (u.uBeamShadowMatrix?.value?.isMatrix4 && !shadows.has(u.uBeamShadowMatrix.value)) shadows.set(u.uBeamShadowMatrix.value, u.uBeamShadowMatrix.value.clone());
+        }
+      });
+      // the beam where it is, seen from the mirror (its origin and direction live in the eye's view space); its shadow
+      // looked up from there; the camcorder's own lamp is fixed to the eye in the kit's shader, and is left out
+      for (const [v, orig] of origins) v.copy(orig).applyMatrix4(mT);
+      for (const [v, orig] of aims) v.copy(orig).transformDirection(mT);
+      for (const u of lamps.keys()) u.value = 0;
+      for (const [m, orig] of shadows) m.copy(orig).multiply(mTi);
+      scene.background = null;
+      if (renderer.shadowMap) renderer.shadowMap.autoUpdate = false;
+      renderer.autoClear = false;
+      renderer.setRenderTarget(mirrorTarget);
+      renderer.setClearColor?.(0x000000, 1);
+      renderer.state?.buffers?.depth?.setMask?.(true);
+      renderer.clear(true, true, false);
+      renderer.render(scene, mirrorCam);
+      shared.tMirror.value = mirrorTarget.texture;
+      shared.uMirror.value.multiplyMatrices(mirrorCam.projectionMatrix, mT);
+      ms.drawn++;
+    } finally {
+      for (const o of hidden) o.visible = true;
+      for (const [v, orig] of origins) v.copy(orig);
+      for (const [v, orig] of aims) v.copy(orig);
+      for (const [u, orig] of lamps) u.value = orig;
+      for (const [m, orig] of shadows) m.copy(orig);
+      scene.background = bg;
+      if (renderer.shadowMap) renderer.shadowMap.autoUpdate = shadowAuto;
+      renderer.setClearColor?.(clear, clearAlpha);
+      renderer.autoClear = autoClear;
+      renderer.setRenderTarget(was);
+      if (info && !info.autoReset) { ms.calls = info.render.calls - c0; ms.triangles = info.render.triangles - t0; }
+    }
+  }
+  // --- end the mirror ---
   let clock = 0, body = null;                             // (the camcorder's clock as of the last frame; the visitor's wade)
   const toPart = new THREE.Matrix4(), pt = new THREE.Vector3();
   // a point in the part's coordinates (the world's, as c.toWorld gives them) in a surface's room frame
@@ -201,6 +305,14 @@ export function createLiquidView() {
   const view = {
     /** 'split' | 'single' | null: the dev page's, to see the two ways side by side. */
     force: null, stats, shared,
+    /** The tier's water (graphics.js): 2 has the mirror; under 2 its picture is let go and no surface compiles it. */
+    setLevel(n) {
+      level = Number(n) || 0;
+      if (level < 2) { mirrorRec = null; stats.mirror.on = false; mirrorTarget?.dispose(); mirrorTarget = null; shared.tMirror.value = null; }
+    },
+    get level() { return level; },
+    /** The surface that has the mirror this frame (null for none), and the mirror's picture and camera, for the dev page and the tests. */
+    get mirror() { return mirrorRec ? { rec: mirrorRec, target: mirrorTarget, camera: mirrorCam } : null; },
     get split() { return hold.split; },
     get copy() { return copy; },
     get marks() { return list.slice(); },
@@ -213,8 +325,15 @@ export function createLiquidView() {
       eye.setFromMatrixPosition(camera.matrixWorld);
       let seen = false;
       Object.assign(stats, { marks: list.length, up: 0, inView: 0, under: 0, below: 0, rings: 0 });
+      cands.length = 0;
+      const mirrors = level >= 2;
       for (const rec of list) {
         if (rec.state === 'marked') upgrade(rec);
+        // (the mirror's define on the top, only at water 2: Medium's surfaces compile exactly the shader they had)
+        if (rec.state === 'up') for (const p of rec.pairs) if (!!p.material.defines.MIRROR !== mirrors) {
+          if (mirrors) p.material.defines.MIRROR = 1; else delete p.material.defines.MIRROR;
+          p.material.needsUpdate = true;
+        }
         rec.live = false; rec.under = false; rec.below = false;
         if (rec.state !== 'up') continue;
         stats.up++;
@@ -237,11 +356,18 @@ export function createLiquidView() {
           if (!shown(p.old)) continue;
           box.copy(p.old.geometry.boundingBox).applyMatrix4(p.old.matrixWorld);
           box.min.y -= LIQUID.margin; box.max.y += LIQUID.margin;
-          if (frustum.intersectsBox(box)) { seen = true; stats.inView++; break; }
+          if (frustum.intersectsBox(box)) {
+            seen = true; stats.inView++;
+            // (a candidate for the mirror: in view, facing up, the eye well over it; how far the eye is from it)
+            if (mirrors && !rec.under && at.y > rec.plane.y + MIRROR.above && (rec.edge ||= sheetRim(rec)).facesUp) cands.push({ rec, dist: box.distanceToPoint(eye) });
+            break;
+          }
         }
       }
       hold = holdStep(hold, now, seen, view.force);
       stats.split = hold.split;
+      mirrorRec = mirrors && hold.split ? pickMirror(cands, mirrorRec) : null;
+      stats.mirror.on = !!mirrorRec;
       return hold.split;
     },
     /**
@@ -251,8 +377,21 @@ export function createLiquidView() {
     draw(renderer, scene, camera, target, under) {
       if (!target?.depthTexture) return under();
       const was = renderer.getRenderTarget?.() ?? target, autoClear = renderer.autoClear, bg = scene.background, camMask = camera.layers.mask;
-      const swapped = [], moved = [];
+      const swapped = [], moved = [], lit = [];
       try {
+        // the mirror first (water 2, a surface chosen this frame): into its own picture, everything it changed put back
+        stats.mirror.surfaces = 0;
+        if (mirrorRec && level >= 2) {
+          mirrorPass(renderer, scene, camera, target, mirrorRec);
+          const y = worldPlane(mirrorRec);
+          for (const rec of list) {
+            if (!rec.live || rec.under || !rec.pairs) continue;
+            const o = worldPlane(rec);
+            if (Math.abs(o[3] - y[3]) > MIRROR.samePlane || o[1] < 0.999) continue;
+            for (const p of rec.pairs) { p.material.uniforms.uMirrorOn.value = 1; lit.push(p); }
+            stats.mirror.surfaces++;
+          }
+        }
         // the water on, the room's sheet off, where the sheet is shown and the eye is above it
         for (const rec of list) {
           if (!rec.live || (rec.under && !rec.below)) continue;
@@ -285,6 +424,7 @@ export function createLiquidView() {
         renderer.setRenderTarget(target); renderer.render(scene, camera);
         stats.draws++;
       } finally {
+        for (const p of lit) p.material.uniforms.uMirrorOn.value = 0;
         for (let i = 0; i < moved.length; i += 2) moved[i].layers.mask = moved[i + 1];
         for (const p of swapped) { p.water.visible = false; p.old.visible = true; p.water.material = p.material; }
         camera.layers.mask = camMask; scene.background = bg; renderer.autoClear = autoClear;
@@ -326,6 +466,7 @@ export function createLiquidView() {
     dispose() {
       copy?.depthTexture?.dispose(); copy?.dispose(); copyMat?.dispose(); quad?.geometry.dispose();
       copy = copyMat = quad = null; hold = { last: -Infinity, split: false };
+      mirrorTarget?.dispose(); mirrorTarget = null; mirrorRec = null; shared.tMirror.value = null;
     },
   };
   return view;
