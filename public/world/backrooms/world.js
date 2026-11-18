@@ -26,7 +26,7 @@ import { STORAGE, cabinetVox, boxesVox } from './storage.model.js';
 import { SMALLS, binVox, trolleyVox, coolerVox } from './smalls.model.js';
 import { WALLFIT, socketVox, exitBoxVox } from './wallfit.model.js';
 import { markLiquid } from './liquid.mark.js';
-import { shineLights } from './shining-lights.rule.js';
+import { shineLights, lampSet } from './shining-lights.rule.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
 // and how far along it a local coordinate c is (c is x on the front/back walls, z on the side walls)
@@ -44,7 +44,7 @@ const TUBE_UV = [7 / 24, 0.5];
 // louvre, shines at it (in the same batch, so it goes dark exactly when the tubes do). A fitting that is out has the
 // inside of its pan in the shadow of its own box (the bake has no shadow of its own there): DARK_PAN. The blades are
 // lit by the room, a little darker than the model paints them so that they read as lines across the glow: LOUVRE.
-const PAN_UV = [2.5 / 24, 0.5], DARK_PAN = [0.3, 0.3, 0.3], LOUVRE = [0.6, 0.6, 0.6];
+const PAN_UV = [2.5 / 24, 0.5], DARK_PAN = [0.3, 0.3, 0.3], LOUVRE = [0.6, 0.6, 0.6], UP_AXIS = new THREE.Vector3(0, 1, 0);
 const pans = new WeakMap();
 /** A meshed housing (ceiling.model.js) split in two: the pan's inside (its pale faces above the trim that face down or
  * in, what is seen through the louvre) and the rest (trim, holders, the pan's back). Each its own compact geometry. */
@@ -841,6 +841,55 @@ function roomContext(world, rt) {
   const reserved = [], kept = [];                         // floor already spoken for: [x, z, radius] · and wall: [side, from, to]
   const mat = new THREE.Matrix4(), quat = new THREE.Quaternion(), eul = new THREE.Euler(), vec = new THREE.Vector3(), scl = new THREE.Vector3();
   const doorPoint = (dr, off = 0) => wallPoint(def, dr.side, dr.c, off);
+  /** (kit.gfx.fixtures) The sculpted light (ceiling.model.js), its origin (the middle of its trim's top, on the ceiling
+   * plane it is let into) at (x, y, z), along z or, turned (a quarter turn), along x: the housing in a batch of the
+   * room's own, the louvre in one marked as detail, and the tubes and the inside of the pan into `glow`, the batch the
+   * flat panel would have been drawn in (a dead light's grey tubes and darkened pan are lit by the room, with its
+   * housing). None of it stands in the room: nothing of it is gathered for the tubes' shadows, which take a lamp's
+   * fitting as casting nothing. (The shell's, in the opening it leaves in the sheet; and c.fitting's.) */
+  const fitting = (x, y, z, turn, dead, glow) => {
+    const part = (name) => kit.model(`ceiling:${name}:${dead ? 'dead' : 'lit'}`, () => lightVox({ dead })[name], { ao: false }).solid;
+    const into = voxBatch('fixture', { structural: true }), pan = panOf(part('housing'));
+    mat.compose(vec.set(x, y, z), turn ? quat.setFromAxisAngle(UP_AXIS, Math.PI / 2) : quat.identity(), scl.setScalar(VOX * CEILING.scale));
+    into.addVox(pan.rest, mat);
+    voxBatch('louvre', { structural: true, detail: true }).addVox(part('louvre'), mat, { tint: LOUVRE });
+    if (dead) { into.addVox(pan.inside, mat, { tint: DARK_PAN }); into.addVox(part('tubes'), mat); }
+    else { glow.addVox(pan.inside, mat, { uv: PAN_UV }); glow.addVox(part('tubes'), mat, { uv: TUBE_UV }); }
+  };
+  const PANEL_UV = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  /**
+   * One ceiling light, as the shell draws each of its panels and c.fitting the ones a room places: the flat lit panel
+   * (TILE across, two along, 6 mm under the ceiling `top(x, z)` at each corner), or where `o.fit` is a height the
+   * sculpted fitting with its origin there; and its lamp. o: { state ('on' | 'dead' | 'flicker'), turn (along x),
+   * fit, tube (the lit panel's colour, linear), key (a batch name of its own for a tube that is not the theme's: '' for
+   * the shell's own batches), bank (its lighting bank, rt.lighting only), lamp (x, y, z, rgb, opt, power): hands the
+   * room the lamp; null for none; light { power, k, far, floor }: what of the shell's lamp is given instead }.
+   * A lit light shines in the shell's batch ('panel', or 'panel-bank-N' under the lighting banks); one that cannot
+   * decide in a mesh of its own, as the shell's; a dead one is grey in 'dead'. The lamp is the shell's: 14 cm under
+   * the ceiling, shining down, as bright as the room's light and its height make it.
+   */
+  const ceilingLight = (x, z, top, o) => {
+    const at = (dx, dz) => (o.turn ? [dz, -dx] : [dx, dz]);
+    const corner = (dx, dz) => { const [a, b] = at(dx, dz); return [x + a, top(x + a * 0.98, z + b * 0.98) - 0.006, z + b]; };
+    const q = [corner(-TILE / 2, -TILE), corner(TILE / 2, -TILE), corner(TILE / 2, TILE), corner(-TILE / 2, TILE)];
+    const fit = o.fit !== null && o.fit !== undefined, lay = (b) => (fit ? fitting(x, o.fit, z, !!o.turn, o.state === 'dead', b) : b.quad(q[0], q[1], q[2], q[3], WHITE, PANEL_UV));
+    const tube = o.tube, key = o.key || '';
+    if (o.state === 'dead') { lay(c.mapped('dead', kit.tex.panel(false))); return; }
+    const y = top(x, z), head = clamp((y - floorAt(def, x, z)) / 2.6, 0.3, 2.5), bank = o.bank, L = o.light || {};
+    if (o.lamp) {
+      const power = L.power !== undefined ? L.power : null;
+      o.lamp(x, y - 0.14, z, power === null ? tube.map((v) => v * 1.05 * def.light.power * Math.pow(head, 1.5)) : tube.map((v) => v * power),
+        { axis: [0, -1, 0], floor: L.floor ?? 0.24, flick: o.state === 'flicker' && !rt.lighting, bank, k: L.k ?? 3.4 * (head < 1 ? head * head : head), far: L.far ?? 14 * Math.max(0.5, head) },
+        power === null ? 1.05 * def.light.power * Math.pow(head, 1.5) : power);
+    }
+    if (rt.lighting) { lay(c.shining(key ? `panel-bank-${key}-${bank}` : `panel-bank-${bank}`, kit.tex.panel(true), 2.5, tube)); return; }
+    if (o.state === 'on') { lay(c.shining(key ? `panel:${key}` : 'panel', kit.tex.panel(true), 2.5, tube)); return; }
+    const b = new Batch(); lay(b);
+    const mesh = new THREE.Mesh(kit.plain(b), kit.glowing(kit.tex.panel(true), 2.5, tube));
+    mesh.userData.on = mesh.material.color.clone();
+    rt.flickers.push(mesh); rt.group.add(mesh);
+  };
+  let shellTop = (x, z) => ceilAt(def, x, z), fitLamps = null;
   const stairs = stairZones(def, 0.7);
   const moving = env.barricadesEnabled === true, placements = [], batches = new Map(), decalChunks = [], added = [];
   let placing = null;
@@ -1102,6 +1151,35 @@ function roomContext(world, rt) {
       const l = lamp(x, y, z, rgb.map((v) => v * power), opt);
       rt.lights.push(l);
       return l;
+    },
+    /**
+     * A ceiling light at (x, z), as the shell puts one in each of its panels: for a room whose shell has `panels: false`
+     * and that lights its own ceiling. At Classic and Low (kit.gfx.fixtures off) it is the shell's flat lit panel, in
+     * the shell's batch at the shell's power and colour (0.6 m across, 1.2 m along, 6 mm under the ceiling); at Medium
+     * and High the sculpted fitting (ceiling.model.js) by the shell's own code, mounted on the ceiling's face (its
+     * housing 10 cm deep under it, since the sheet is already drawn) in place of the panel. And the shell's lamp for it.
+     * opt: y (the ceiling it is under, flat at that height: for a room with `ceiling: false`, its own ceiling, or the
+     * underside of a beam; default the shell's ceiling there) · rot (radians: a quarter turn, or three, lays it along x;
+     * any other angle is the nearest of those) · dead (out: grey, no lamp) · flick (it cannot decide: a mesh of its own
+     * that stutters, as the shell's) · bank (its lighting bank, where the room has banks: default the shell's for that
+     * spot) · tube (its colour, '#rrggbb' or linear: default the theme's; another colour is a batch of its own, which
+     * setLights' dimmer does not turn down) · light (false: no lamp, for a room that lights itself; { power, k, far,
+     * floor }: those of the lamp instead of the shell's, power as c.light's). The lamps of a room's fittings are kept
+     * within 16 as a shining batch keeps its own (shining-lights.rule.js lampSet: past it the nearest two become one);
+     * with the room's other lights they must still be 16 at most (budget.js), so a room with many fittings gives some
+     * `light: false`. Nothing is read from the room's seeded stream; nothing of it is solid or stands in the room.
+     */
+    fitting(x, z, opt = {}) {
+      const top = opt.y !== undefined ? () => opt.y : shellTop, theme = lin(look.tube);
+      const tube = opt.tube === undefined ? theme : typeof opt.tube === 'string' ? lin(opt.tube) : opt.tube;
+      const key = tube.every((v, i) => v === theme[i]) ? '' : tube.map((v) => v.toFixed(4)).join(',');
+      const turn = Math.abs(Math.round((opt.rot || 0) / (Math.PI / 2))) % 2 === 1;
+      const state = opt.dead ? 'dead' : opt.flick ? 'flicker' : 'on';
+      if (opt.light !== false && !fitLamps) fitLamps = lampSet({}, (lx, ly, lz, l, o) => { const L = lamp(lx, ly, lz, l, o); rt.lights.push(L); return L; },
+        (L) => { const i = rt.lights.indexOf(L); if (i >= 0) rt.lights.splice(i, 1); });
+      ceilingLight(x, z, top, { state, turn, tube, key, fit: kit.gfx?.fixtures > 0 ? top(x, z) - CEILING.deep : null,
+        bank: rt.lighting ? (opt.bank ?? panelBank(rt.lighting, { x, z })) : undefined,
+        light: typeof opt.light === 'object' ? opt.light : null, lamp: opt.light === false ? null : (lx, ly, lz, rgb, o, w) => fitLamps.put(lx, ly, lz, rgb, w, o) });
     },
     /** The light at a spot, for things that are added after the bake. */
     sample: (x, y, z, nx = 0, ny = 1, nz = 0) => lightAt(rt.lights, rt.amb, x, y, z, nx, ny, nz),
@@ -1415,6 +1493,7 @@ function roomContext(world, rt) {
     shell(opt = {}) {
       const s = opt.H !== undefined ? null : def.shape, hNom = opt.H ?? H;
       const top = (x, z) => (opt.H !== undefined ? opt.H : ceilAt(def, x, z));
+      shellTop = top;                                      // (what a room's c.fitting sits under, unless it says opt.y)
       const wallB = opt.wallTex ? c.mapped('wall', opt.wallTex) : c.wall;
       const floorB = opt.floorTex ? c.mapped('floor', opt.floorTex) : c.floor;
       const ceilB = opt.ceilTex ? c.mapped('ceil', opt.ceilTex) : c.ceil;
@@ -1564,37 +1643,13 @@ function roomContext(world, rt) {
 
       // the tubes: lit ones shine and light the room, dead ones are just grey, a few cannot decide
       if (opt.panels !== false) {
-        const tube = lin(look.tube), on = c.shining('panel', kit.tex.panel(true), 2.5, tube), dead = c.mapped('dead', kit.tex.panel(false));
-        const uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
-        /** (kit.gfx.fixtures) The sculpted light for panel p, on the ceiling plane over it: the housing in a batch of the
-         * room's own, the louvre in one marked as detail, and the tubes and the inside of the pan into `glow`, the batch
-         * the flat panel would have been drawn in (a dead light's grey tubes and darkened pan are lit by the room, with its
-         * housing). None of it stands in the room:
-         * nothing of it is gathered for the tubes' shadows, which take a lamp's fitting as casting nothing. */
-        const fitting = (p, glow) => {
-          const dead = p.state === 'dead', part = (name) => kit.model(`ceiling:${name}:${dead ? 'dead' : 'lit'}`, () => lightVox({ dead })[name], { ao: false }).solid;
-          const into = voxBatch('fixture', { structural: true }), pan = panOf(part('housing'));
-          mat.compose(vec.set(p.x, top(p.x, p.z), p.z), quat.identity(), scl.setScalar(VOX * CEILING.scale));
-          into.addVox(pan.rest, mat);
-          voxBatch('louvre', { structural: true, detail: true }).addVox(part('louvre'), mat, { tint: LOUVRE });
-          if (dead) { into.addVox(pan.inside, mat, { tint: DARK_PAN }); into.addVox(part('tubes'), mat); }
-          else { glow.addVox(pan.inside, mat, { uv: PAN_UV }); glow.addVox(part('tubes'), mat, { uv: TUBE_UV }); }
-        };
-        for (const p of def.panels) {
-          const corner = (dx, dz) => [p.x + dx, top(p.x + dx * 0.98, p.z + dz * 0.98) - 0.006, p.z + dz];
-          const q = [corner(-TILE / 2, -TILE), corner(TILE / 2, -TILE), corner(TILE / 2, TILE), corner(-TILE / 2, TILE)];
-          const fit = opened.get(p) === 2, lay = (b) => (fit ? fitting(p, b) : b.quad(q[0], q[1], q[2], q[3], WHITE, uv));
-          if (p.state === 'dead') { lay(dead); continue; }
-          const y = top(p.x, p.z), head = clamp((y - floorAt(def, p.x, p.z)) / 2.6, 0.3, 2.5);
-          const bank = rt.lighting ? panelBank(rt.lighting, p) : undefined;
-          rt.lights.push(lamp(p.x, y - 0.14, p.z, tube.map((v) => v * 1.05 * def.light.power * Math.pow(head, 1.5)), { axis: [0, -1, 0], floor: 0.24, flick: p.state === 'flicker' && !rt.lighting, bank, k: 3.4 * (head < 1 ? head * head : head), far: 14 * Math.max(0.5, head) }));
-          if (rt.lighting) { lay(c.shining(`panel-bank-${bank}`, kit.tex.panel(true), 2.5, tube)); continue; }
-          if (p.state === 'on') { lay(on); continue; }
-          const b = new Batch(); lay(b);
-          const mesh = new THREE.Mesh(kit.plain(b), kit.glowing(kit.tex.panel(true), 2.5, tube));
-          mesh.userData.on = mesh.material.color.clone();
-          rt.flickers.push(mesh); rt.group.add(mesh);
-        }
+        // (the lit and the dead panels' batches made first, whether or not a panel is put in them: the order of the room's meshes)
+        const tube = lin(look.tube);
+        c.shining('panel', kit.tex.panel(true), 2.5, tube); c.mapped('dead', kit.tex.panel(false));
+        // (each through ceilingLight, as a room's own c.fitting is: lit, dead or flickering, its lamp, its bank; a fitting
+        // where its two tiles were left out of the sheet, else the flat panel)
+        for (const p of def.panels) ceilingLight(p.x, p.z, top, { state: p.state, fit: opened.get(p) === 2 ? top(p.x, p.z) : null, tube,
+          bank: rt.lighting ? panelBank(rt.lighting, p) : undefined, lamp: (x, y, z, rgb, o) => rt.lights.push(lamp(x, y, z, rgb, o)) });
       }
       // light spilling in from a brighter room next door
       for (const dr of def.doors) {
