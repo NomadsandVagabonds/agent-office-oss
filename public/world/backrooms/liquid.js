@@ -44,9 +44,18 @@
 // camcorder's own lamp (fixed to the eye in the kit's shader) is left out of it. Everything changed for it is put back
 // in a finally. Every surface on that plane samples it (LIQUID_FRAG reflection(), MIRROR defined); the rest keep the
 // flat tint. At water 1 (Medium) none of it exists: no define, no picture, no pass.
+//
+// The swell (a wave across a surface: handle.swell, liquid.mark.js; the Surge Basin's surge). While a room asks for one,
+// its surface is drawn on a denser copy of its sheet's grid (swellGeometry: SWELL.rows along the room's z, SWELL.cols
+// across, the sheet's own light, picture and banks taken between its vertices) with SWELL defined on its material (and on
+// its underside's): each vertex raised, the slope, the foam, the mirror weakened on raised water, the cap under the eye
+// (liquid.rule.js). The rings it starts where it breaks come from swellRings. Asked for nothing (between surges, every
+// other surface), the surface has its sheet's geometry and no define: exactly as it was. A sheet that is not a whole grid,
+// or whose room frame is turned or tilted against its own, is not swelled (rec.swellRefused says why).
 import * as THREE from 'three';
-import { LIQUID, underwater, holdStep, toLinear, waterColours, wakeStart, wakeStep, wakeFill, wadeStep, LIQUID_VERT, LIQUID_FRAG, COPY_FRAG, LIQUID_UNDER_FRAG, seesUnderside,
-  MIRROR, mirrorPlane, reflectMatrix, planeInView, obliqueProjection, mirrorSize, pickMirror, mirrorLeaves, screenCover, mirrorGate, mirrorWeight, mirrorDue } from './liquid.rule.js';
+import { LIQUID, underwater, holdStep, toLinear, waterColours, pinnedTint, wakeStart, wakeStep, wakeFill, wadeStep, LIQUID_VERT, LIQUID_FRAG, COPY_FRAG, LIQUID_UNDER_FRAG, seesUnderside,
+  MIRROR, mirrorPlane, reflectMatrix, planeInView, obliqueProjection, mirrorSize, pickMirror, mirrorLeaves, screenCover, mirrorGate, mirrorWeight, mirrorDue,
+  SWELL, swellRings } from './liquid.rule.js';
 import { HELD_ORDER } from './beam-shadows.rule.js';
 import { collectLiquids } from './liquid.mark.js';
 
@@ -75,9 +84,12 @@ export function averageColour(tex) {
   return out;
 }
 
-/** The sheet's own colour: its picture's average times its vertex colour (aAlb), and its opacity. */
+/**
+ * The sheet's own colour: its picture's average times its vertex colour (aAlb), and its opacity. (A picture that was
+ * changed for Classic after its water was approved stands for the colour it was approved with: SHEET_TINTS.)
+ */
 export function sheetTint(mesh) {
-  const u = mesh.material?.uniforms || {}, avg = averageColour(u.map?.value) || LIQUID.fallbackTint, alb = mesh.geometry?.attributes?.aAlb;
+  const u = mesh.material?.uniforms || {}, avg = pinnedTint(averageColour(u.map?.value)) || LIQUID.fallbackTint, alb = mesh.geometry?.attributes?.aAlb;
   const a = [0, 0, 0];
   if (alb && alb.count) { for (let i = 0; i < alb.count; i++) { a[0] += alb.getX(i); a[1] += alb.getY(i); a[2] += alb.getZ(i); } a[0] /= alb.count; a[1] /= alb.count; a[2] /= alb.count; } else a.fill(1);
   return { tint: avg.map((v, i) => v * a[i]), alpha: Number.isFinite(u.uAlpha?.value) ? u.uAlpha.value : LIQUID.absorbAlpha };
@@ -104,10 +116,62 @@ export function waterMaterial(old, rec, toRoom, shared) {
       uMirrorOn: { value: 0 },                            // (1 only inside the camcorder's draw, on the water level that has the mirror)
       // (the wake's rings are the surface's own, not shared: liquid.js frame() sets them from its pool)
       uRings: rec.wake?.u.uRings || { value: Array.from({ length: LIQUID.rings }, () => new THREE.Vector4()) }, uRingN: rec.wake?.u.uRingN || { value: 0 },
+      // (the swell's, the surface's own: read only where SWELL is defined)
+      uSwell: rec.swellU?.uSwell || { value: new THREE.Vector4() }, uSwellBox: rec.swellU?.uSwellBox || { value: new THREE.Vector4() },
     },
   });
   material.name = `liquid:${rec.kind}`;
   return material;
+}
+
+/**
+ * The swell's copy of a sheet's geometry: the sheet must be a whole grid (every column at every row; its corners at the
+ * same height); → a geometry of the same attributes on rows `rowStep` apart along z and columns `colStep` apart along x
+ * (each attribute taken bilinearly between the sheet's own vertices: its baked light, banks, picture and colour), facing
+ * the way the sheet's first triangle does; or null (with why) for anything else.
+ */
+export function swellGeometry(geo, rowStep = SWELL.rows, colStep = SWELL.cols) {
+  const pos = geo?.attributes?.position;
+  if (!pos || pos.count < 4) return { geometry: null, why: 'nothing drawn' };
+  const key = (v) => Math.round(v * 1e4);
+  const xs = [...new Set(Array.from({ length: pos.count }, (_, i) => key(pos.getX(i))))].sort((a, b) => a - b);
+  const zs = [...new Set(Array.from({ length: pos.count }, (_, i) => key(pos.getZ(i))))].sort((a, b) => a - b);
+  if (xs.length < 2 || zs.length < 2 || xs.length * zs.length !== pos.count) return { geometry: null, why: 'not a grid' };
+  const at = new Map();
+  for (let i = 0; i < pos.count; i++) at.set(key(pos.getX(i)) + ',' + key(pos.getZ(i)), i);
+  if (at.size !== pos.count) return { geometry: null, why: 'not a grid' };
+  const X = xs.map((v) => v / 1e4), Z = zs.map((v) => v / 1e4), y = pos.getY(0);
+  const x0 = X[0], x1 = X[X.length - 1], z0 = Z[0], z1 = Z[Z.length - 1];
+  const cols = Math.max(2, Math.round((x1 - x0) / colStep) + 1), rows = Math.max(2, Math.round((z1 - z0) / rowStep) + 1);
+  const names = Object.keys(geo.attributes), out = new THREE.BufferGeometry(), arrs = {};
+  for (const k of names) arrs[k] = new Float32Array(cols * rows * geo.attributes[k].itemSize);
+  const seg = (a, v) => { let i = 0; while (i < a.length - 2 && a[i + 1] < v) i++; return [i, Math.min(1, Math.max(0, (v - a[i]) / (a[i + 1] - a[i])))]; };
+  for (let r = 0; r < rows; r++) {
+    const zz = z0 + (z1 - z0) * r / (rows - 1), [iz, fz] = seg(Z, zz);
+    for (let q = 0; q < cols; q++) {
+      const xx = x0 + (x1 - x0) * q / (cols - 1), [ix, fx] = seg(X, xx), vi = r * cols + q;
+      const c00 = at.get(xs[ix] + ',' + zs[iz]), c10 = at.get(xs[ix + 1] + ',' + zs[iz]), c01 = at.get(xs[ix] + ',' + zs[iz + 1]), c11 = at.get(xs[ix + 1] + ',' + zs[iz + 1]);
+      for (const k of names) {
+        const A = geo.attributes[k], n = A.itemSize, src = A.array;
+        for (let j = 0; j < n; j++) arrs[k][vi * n + j] = (src[c00 * n + j] * (1 - fx) + src[c10 * n + j] * fx) * (1 - fz) + (src[c01 * n + j] * (1 - fx) + src[c11 * n + j] * fx) * fz;
+      }
+      arrs.position[vi * 3] = xx; arrs.position[vi * 3 + 1] = y; arrs.position[vi * 3 + 2] = zz;
+    }
+  }
+  for (const k of names) out.setAttribute(k, new THREE.BufferAttribute(arrs[k], geo.attributes[k].itemSize));
+  // facing as the sheet's first triangle does
+  const idx = geo.index, a0 = idx ? idx.getX(0) : 0, a1 = idx ? idx.getX(1) : 1, a2 = idx ? idx.getX(2) : 2;
+  const ux = pos.getX(a1) - pos.getX(a0), uz = pos.getZ(a1) - pos.getZ(a0), wx = pos.getX(a2) - pos.getX(a0), wz = pos.getZ(a2) - pos.getZ(a0);
+  const up = uz * wx - ux * wz > 0, I = [];
+  for (let r = 0; r < rows - 1; r++) for (let q = 0; q < cols - 1; q++) {
+    const a = r * cols + q, b = a + 1, c = a + cols, d = c + 1;
+    if (up) I.push(a, c, b, b, c, d); else I.push(a, b, c, b, d, c);
+  }
+  out.setIndex(I);
+  out.computeBoundingBox();
+  out.boundingBox.max.y += 1; out.boundingBox.min.y -= 0.25;     // (as high as a swell stands, and its trough)
+  out.boundingSphere = out.boundingBox.getBoundingSphere(new THREE.Sphere());
+  return { geometry: out, cols, rows, triangles: I.length / 3 };
 }
 
 /** The same surface seen from below: the top's very uniforms, the underside's shader (made the first time an eye is under it). */
@@ -291,6 +355,8 @@ export function createLiquidView() {
   function upgrade(rec) {
     rec.pairs = [];
     wakeOf(rec);
+    rec.swellU = { uSwell: { value: new THREE.Vector4() }, uSwellBox: { value: new THREE.Vector4() } };
+    rec.swellOn = false; rec.swellLast = null; rec.swellState = {};
     rec.meshes.forEach((old, i) => {
       const m = old.material;
       if (!old.parent || !old.geometry?.attributes?.aLit || !m?.isShaderMaterial || !m.uniforms) return;
@@ -308,6 +374,43 @@ export function createLiquidView() {
       rec.pairs.push({ old, water, material, rec });
     });
     if (rec.pairs.length) rec.state = 'up'; else { rec.state = 'refused'; rec.reason = 'not a kit sheet'; rec.pairs = null; rec.wake = null; rec.disturb = null; }
+  }
+  // the swell, once a frame for a surface that is up: its geometry and define on while one is asked for, off (the sheet's
+  // own, no define: as it was) while none is; its uniforms; the rings where it breaks
+  const ROOM_UP = (m) => { const e = m; return Math.abs(e[4]) < 1e-6 && Math.abs(e[5] - 1) < 1e-6 && Math.abs(e[6]) < 1e-6 && Math.abs(e[1]) < 1e-6 && Math.abs(e[9]) < 1e-6 && Math.abs(e[10] - 1) < 1e-6; };
+  function setSwellDefine(p, on) {
+    for (const m of [p.material, p.under]) {
+      if (!m || !!m.defines.SWELL === on) continue;
+      if (on) m.defines.SWELL = 1; else delete m.defines.SWELL;
+      m.needsUpdate = true;
+    }
+  }
+  function swellFrame(rec, now) {
+    // (asked for each tick: an ask nobody has repeated for a few frames, its room no longer ticking, is let go)
+    rec.swellStale = rec.swellFresh ? 0 : (rec.swellStale || 0) + 1; rec.swellFresh = false;
+    const ask = rec.swellStale > 10 ? null : rec.swell;
+    let on = !!ask && !rec.swellRefused;
+    if (on) for (const p of rec.pairs) {
+      if (p.dense === undefined) {
+        const i = rec.meshes.indexOf(p.old);
+        if (!ROOM_UP(rec.toRoom[i] || [])) { p.dense = null; rec.swellRefused = 'turned in its room'; }
+        else { const g = swellGeometry(p.old.geometry); p.dense = g.geometry; if (!g.geometry) rec.swellRefused = g.why; else rec.swellCost = { cols: g.cols, rows: g.rows, triangles: g.triangles }; }
+      }
+      if (!p.dense) on = false;
+    }
+    for (const p of rec.pairs) {
+      const g = on ? p.dense : p.old.geometry;
+      if (p.water.geometry !== g) p.water.geometry = g;
+      setSwellDefine(p, on);
+    }
+    rec.swellOn = on;
+    if (!on) { rec.swellLast = null; return; }
+    rec.edge ||= sheetRim(rec);
+    const r = rec.edge.rim;
+    rec.swellU.uSwell.value.set(ask.at, ask.height, rec.plane.y, ask.breaking);
+    rec.swellU.uSwellBox.value.set(r.x0, r.z0, r.x1, r.z1);
+    for (const ring of swellRings(rec.swellLast, ask.at, ask.breaking, rec.swellBreaks, rec.swellBeach, now, rec.swellState)) wakeStart(rec.wake.pool, ring.x, ring.z, ring.strength, now);
+    rec.swellLast = ask.at;
   }
   // (shown: the sheet and everything it hangs from are visible, up to the top; a room may hide its own sheet)
   const shown = (o) => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
@@ -359,6 +462,7 @@ export function createLiquidView() {
         rec.live = false; rec.under = false; rec.below = false;
         if (rec.state !== 'up') continue;
         stats.up++;
+        swellFrame(rec, now);
         // the wake: what has faded let go, the rest handed to the shader (none: uRingN 0, and the surface is as it was)
         const w = rec.wake;
         w.u.uRingN.value = wakeFill(wakeStep(w.pool, now), now, w.u.uRings.value);
@@ -377,7 +481,7 @@ export function createLiquidView() {
         for (const p of rec.pairs) {
           if (!shown(p.old)) continue;
           box.copy(p.old.geometry.boundingBox).applyMatrix4(p.old.matrixWorld);
-          box.min.y -= LIQUID.margin; box.max.y += LIQUID.margin;
+          box.min.y -= LIQUID.margin; box.max.y += LIQUID.margin + (rec.swellOn ? rec.swell.height : 0);
           if (frustum.intersectsBox(box)) {
             seen = true; stats.inView++;
             // (a candidate for the mirror: in view, facing up, the eye well over it; how far the eye is from it)
@@ -503,8 +607,9 @@ export function createLiquidView() {
     release(scene) {
       for (const rec of collectLiquids(scene)) {
         if (rec.state !== 'up') continue;
-        for (const p of rec.pairs) { p.water.parent?.remove(p.water); p.material.dispose(); p.under?.dispose(); }
+        for (const p of rec.pairs) { p.water.parent?.remove(p.water); p.material.dispose(); p.under?.dispose(); p.dense?.dispose(); }
         rec.pairs = null; rec.state = 'marked'; rec.live = false; rec.wake = null; rec.disturb = null;
+        rec.swellU = null; rec.swellOn = false; rec.swellLast = null; rec.swellRefused = undefined;
       }
       body = null;
       view.dispose();

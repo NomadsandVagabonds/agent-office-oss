@@ -1176,7 +1176,9 @@ and the waterpark is not dealt (`dealt: false`). The dev page reaches it with
   baked light and the room's very uniform objects (dimmer, flicker, banks,
   tint): a pool in a room that has gone dark is dark. Its tint is the sheet's:
   its picture's average colour (pushed back towards its hue, since the picture
-  averages its pale caustic lines in) times its vertex colour, and its opacity
+  averages its pale caustic lines in) times its vertex colour (for a sheet
+  whose picture was redrawn after its water was approved, the old picture's
+  average: "the pinned sheets", below), and its opacity
   sets how murky, steeply (as the seventh power: the green rooms' 0.63 and
   0.82 sheets stay dark green murk, the waterpark's 0.52 and 0.56 stay clear):
   the return pool stays green, the deep end emerald. What it draws: what is
@@ -1214,6 +1216,54 @@ and the waterpark is not dealt (`dealt: false`). The dev page reaches it with
   television sets, the bloom's picture, the flashlight's shadows) sees each
   room's sheet as it always was. It throws no beam shadow
   (`userData.noBeamShadow`) and does not shine.
+- **What the surface reads from the room's sheet, and the pinned sheets.**
+  Read once, when the surface is made (`liquid.js` `sheetTint`, then
+  `waterColours` in `liquid.rule.js`): the average colour of the sheet's
+  picture (`map`, read from its canvas), the sheet's vertex colour (`aAlb`)
+  and its opacity (`uAlpha`); its light uniforms are shared, as above. Nothing
+  else of the sheet's material: not its shader text, not what a builder's
+  `finishMaterial` adds to it (the waterpark's lamp reflections,
+  `pool-optics.js` `basinOptics`, rewrite the Classic sheet's shader and add
+  uniforms of their own; they leave `map`, `uAlpha` and the vertex colour as
+  they were, and the sheet is hidden while the surface is drawn, and left out
+  of the mirror, so at Medium and High none of the reflection is seen: in
+  the deep end, one page load with the clock paused, on the deck, across the
+  water and under it, plain and Full VHS, at Medium and at High, with the
+  reflection as built, with its ceiling picture black and with the Classic
+  sheet not drawn at all, the pictures are the same but for the camcorder's
+  blinking REC mark, 1,280 pixels).
+  **The pinned sheets** (18 Nov, `SHEET_TINTS` and `pinnedTint` in
+  `liquid.rule.js`): the waterpark's builder redrew `causticWaterTex` for
+  Classic as muted teal ripples (no pale web), greyer and greener than the
+  caustic cells and about half as bright. Read as it is, every pool that uses
+  it changed at Medium and High with no change of ours: the deep end went a
+  dark grey-green (its blue absorbed 0.47 per metre where it was 0.24, its
+  own colour half as bright and green over blue; the underside from below a
+  dark emerald), the aqua pools a little darker and greener. The water was
+  approved as it was, so a picture that was changed for Classic after its
+  water had been approved now stands for the colour it was approved with: it
+  is recognised by its average (within 0.004 on each channel) and the
+  surface takes the old picture's average in its place, with the sheet's own
+  vertex colour and opacity as ever. Pinned: the aqua, emerald and deep
+  caustic sheets (the wave pool, the lazy river, the Drain Spa, the deep end,
+  the footbaths). The numbers each sheet gives (absorb per metre r / g / b,
+  deep colour, keep r / g / b and its rate, murk):
+
+  | sheet (opacity) | before (759cace) | today, read as it is | pinned |
+  |---|---|---|---|
+  | aqua, 0.52 (wave pool, lazy river, Drain Spa) | 0.715 / 0.277 / 0.150; deep 0.012 / 0.158 / 0.200; keep 0.058 / 0.788 / 1, 0.30; murk 1.00 | 0.750 / 0.177 / 0.150; deep 0 / 0.078 / 0.082; keep 0 / 0.955 / 1, 0.30 | as before |
+  | emerald, 0.54 (deep end) | 0.835 / 0.195 / 0.243; deep 0.023 / 0.129 / 0.121; keep 0.181 / 1 / 0.939, 0.51; murk 1.30 | 0.977 / 0.195 / 0.470; deep 0 / 0.060 / 0.039; keep 0 / 1 / 0.648, 0.51 | as before |
+  | aqua, 0.56 (footbath) | 1.201 / 0.465 / 0.252; deep as aqua; keep as aqua, 0.85; murk 1.68 | 1.260 / 0.297 / 0.252; deep and keep as aqua today | as before |
+  | calm, 0.52 (kiddie lagoon) | 0.750 / 0.310 / 0.150; deep 0 / 0.071 / 0.097; keep 0 / 0.733 / 1, 0.30; murk 1.00 | the same | not pinned: the same |
+
+  (Murk is the opacity's alone, and no opacity changed.) A pin lets go by
+  itself when its picture changes (its average no longer matches): the
+  surface then follows the new picture, as any other sheet's does. **When a
+  builder retunes a pool's Classic sheet on purpose**, check that room's
+  Medium and High; if it is to keep its old water, add the new picture's
+  average and the approved tint to `SHEET_TINTS`. To give a pool the colour
+  of its new sheet instead, take its entry out. The kiddie lagoon's calm
+  sheet is not pinned: its water was approved from that sheet.
 - **The split pass** (`vhs.js`; only while a marked surface of a part that is
   up has been in view in the last half second: its box against the camera's
   frustum, held 0.5 s so it cannot flicker at the edge of the picture). Into
@@ -1773,40 +1823,134 @@ nothing of the waterpark's is changed for it.
      picture and is clamped: a thin strip there repeats its last row of
      pixels.
 
-### Water (sample: a calmer Classic sheet, the kiddie lagoon only)
+### Water (built: the swell)
 
-At Classic and Low the waterpark's older pools and the plain rooms' footbaths
-draw their water as `causticWaterTex`: glowing aqua cells in a white web, the
-brightest thing in the room (`docs/WATERPARK-REVIEW-2.md`, section 5). As a
-sample for the owner's eye, one room draws a calm sheet instead.
+The Surge Basin's wave. The owner said "the wave looks fake compared to the
+rest of our water": it was a solid green-and-cream curl sliding over the
+pool. At Medium and High the pool's own surface now rises into the wave. At
+Classic and Low the room draws a see-through strip of the same shape. The
+surge's rule (`waterpark.rule.js`: `waveState`, `wavePush`, the timing, the
+pier shelter) is not touched, and nor are the swimmer, `rt.floorY` or
+`rt.wavePool.crestZ`.
 
-- **What.** `waterpark.js` `calmWaterTex(kit)` and its palette
-  `CALM_WATER.lagoon`: one deep teal (`#2f7f8e`) with large patches a shade
-  darker or lighter in 4 px texels (seeded value noise from fixed numbers),
-  no web, no pale cells; drawn at the same opacity, 0.52. Nothing else in the
-  helper changed: `createBasin` already takes `waterTex` and `waterAlpha`.
-- **Where.** `rooms/kiddie-lagoon.js` only: `createBasin(c, { …, waterTex:
-  calmWaterTex(kit), waterAlpha: CALM_WATER.lagoon.alpha, … })`. Every other
-  basin and every footbath keeps the caustic cells.
-- **Medium and High.** The water there takes its tint from the sheet
-  picture's average colour and its murk from the opacity. The opacity is
-  unchanged (murk 1.0), and the hue is close to the old one, so how fast
-  each colour goes through the water barely moves (absorb per metre, red /
-  green / blue: 0.715 / 0.277 / 0.150 before, 0.750 / 0.310 / 0.150 after);
-  the water's own colour (`deep`, `scatter`) is a little under half as bright,
-  because the old average had the white web in it: the lagoon at Medium and
-  High is a shade darker and less milky, otherwise the same.
-- **Not tried at large.** Two other looks were pictured beside it and not
-  kept: the return pool's dark green at 0.63 (murk 3.8 at Medium and High,
-  which turns the shallow lagoon into a murky pond there) and a pale clear
-  blue at 0.42 (murk 0.22: near glass at Medium and High).
-- **To roll it out** to another pool: the same two keys on its `createBasin`
-  call (a deeper pool may want its own entry in `CALM_WATER`, darker, as
-  `causticWaterTex` has `deep` and `emerald`); for the footbaths, the `map`
-  of the footbath's `addTranslucent` in `poolroom`. Check each room's Medium
-  and High after, since its tint follows. **To remove it:** take the two keys
-  out of the kiddie lagoon's call (it goes back to `waterTone: 'aqua'`), then
-  `calmWaterTex`, `CALM_WATER` and `test/backrooms-waterpark-calm-water.test.mjs`.
+- **The call** (the toolbox: `docs/BACKROOMS.md`, liquids). The handle
+  `c.liquid` returns (and `createBasin` keeps as `info.water`) has
+  `swell({ at, height, breaking })`. Call it once a tick while there is a wave
+  and with `null` when there is none. `at` is the crest line's z in the room's
+  frame (it travels toward +z), `height` is the room's own (it is drawn at
+  `SWELL.scale`, 0.85, of it: the rule's 0.72 m gives about 0.6 m, today's
+  height), and `breaking` (0 to 1) is how far it is breaking on the far end.
+  `swellBreaks(rects, beach)` is called once at build: the rectangles it breaks
+  on (the piers) and the far end it breaks along. Both only store what they
+  are told and return whether the surface is drawn as water now (false at
+  Classic and Low, in node, or for a refused sheet). If nobody repeats an ask
+  for ten frames (its room no longer ticks), it is let go.
+- **The surface rises for real.** The sheet is a 1 m grid (240 vertices), too
+  coarse for a 0.5 m face. While a swell is asked for, `liquid.js` draws the
+  surface on a denser copy of the sheet's grid (`swellGeometry`: rows 6 cm
+  apart along z and columns 0.5 m apart across, each attribute taken between
+  the sheet's own vertices: its baked light, banks, picture and colour). The
+  copy is made once and swapped in only during a surge. `SWELL` is defined on
+  the surface's material (and on its underside's). The vertex shader raises
+  each vertex by `swellAt`. The shape (liquid.rule.js `swellUnit`) is a steep
+  face 0.55 m ahead of the crest, a gentler back 1.1 m behind it, a long low
+  swell ahead (12 % falling off over 2.6 m) and a short trough 1.9 m behind
+  (16 %). The crest line bends across the pool as the old crest's did. It
+  fades out within 0.7 m of the sheet's sides and near its ends (no skirt). A
+  sheet that is not a whole grid, or whose room frame is turned against its
+  own, is not swelled (`rec.swellRefused`).
+- **It reads as the water it is.** The fragment adds the swell's slope to the
+  ripple's on the ripple's own cells, stepped by 0.08. The refraction, the
+  colour through it (thicker where it stands), the contact line where it meets
+  the piers, the fresnel and the mirror then follow as they do for calm water.
+  The steep face catches the ceiling a little (`glint` 0.14, only where it
+  faces it squarely: a stronger catch read as a white band). The trough
+  darkens by up to 30 %.
+- **Foam.** Foam is the surface's own cells: 8 cm, halved (up to three times)
+  near the eye so that none spans more than 9 pixels. There are a few at the
+  crest (32 % at most, less as it stands taller). They spill down the face and
+  trail behind only as it breaks on the beach. Each cell fades in and out on a
+  slow clock of its own: the foam churns in place and does not scroll. It is
+  off-white, the contact line's colour at 0.8, mixed in at half, so through the
+  tape it stays a broken, low-contrast band.
+- **The eye.** The water never stands over the eye. Within 0.5 m of it the
+  face is held 15 cm under the eye's height, and it is its own height again
+  from 1.2 m. The camera is gameplay's and is not moved. An eye under the
+  plane (a dive) is left alone: the crest passes overhead, because the
+  underside uses the same vertex shader and takes the same slope.
+- **The mirror at High.** On raised water the flat plane's picture would be
+  painted inside the face. The mirror's weight falls from 2 cm of rise and is
+  gone by 20 cm (the flat tint there).
+- **Rings where it breaks** (`swellRings`, into the surface's own eight
+  slots). Two rings (strength 2) on a pier's seaward face as the crest reaches
+  it, one by each side as it passes (1.5), and one along the beach every
+  0.3 s while it breaks (1.7).
+- **The stand-in.** The room's drawn wave carries `liquidStandIn`, so the
+  camcorder's draw hides it while the surface is drawn (and in the mirror's
+  pass) and shows it again in its `finally`. Ticks always see it as the room
+  set it, so `crestZ` still reads it.
+- **Classic and Low** (`rooms/wave-pool.js`). The old curl is gone. The room
+  now draws a see-through strip (`addTranslucent`, alpha 0.7, drawn after the
+  sheet) of `swellUnit`'s shape in the pool water's teal (causticWaterTex's
+  aqua, 61 / 129 / 131, a little lifted toward the crest). It has a broken
+  pale foam top in 4 px texels and a darker trough strip behind. It is
+  1,008 triangles (24 spans × 21 rows; the curl was 992) and is moved and
+  raised by the tick as the curl was.
+- **What did not change.** Measured against the tree before (seed 7,
+  960 × 600, software rendering, every clock the water reads pinned):
+  - Calm water at Medium and High is the same to the pixel: 0 of 576,000
+    pixels differ in the Surge Basin from the beach, the pier and the
+    promenade (before and after a surge in the same load), the kiddie lagoon
+    and the deep end.
+    The control, the same load in a surge, differs in 221,153 (Medium) and
+    241,331 (High) pixels.
+  - Classic: every room of the waterpark floors of seeds 3 and 7 (40 and 32
+    rooms) is the same to the number (geometry, bake, lamps, materials).
+  - The Surge Basin at Classic and Low differs only in the wave's own mesh.
+- **Cost.**
+
+  | | Medium and High | Classic and Low |
+  |---|---|---|
+  | water, outside a surge | the sheet's 420 triangles | the sheet's 420 |
+  | water, during a surge (4.8 s of each 11.5 s) | 14,392 | the sheet's 420 |
+  | the room's drawn wave | not drawn (the stand-in) | 1,008 during a surge (was 992), none outside |
+
+  No new draw call, pass, target or texture read. Per vertex, during a surge:
+  one `swellAt` (about three `exp`, three `sin`, four `smoothstep`). Per water
+  pixel: three of them (the cell and one each way), one `reflect`, two hashes
+  and a `sin` for the foam. Outside a surge none of it is compiled. Software
+  rendering, so no milliseconds.
+- **Tests.** `test/backrooms-gfx-water-swell.test.mjs` covers the numbers, the
+  walls, the eye, the mirror, that every part is behind `SWELL`, the rings,
+  the dense copy, the frame on and off, nothing at water 0, and the room's
+  calls. `test/backrooms-waterpark-integration.test.mjs` covers the strip
+  (see-through, its triangles, its profile) and the crest reading, which is
+  unchanged. `test/backrooms-gfx-water-standin.test.mjs` covers the one mark
+  on the wave.
+- **Known faults.**
+  1. At Classic the strip is faint from the beach, a soft swell of the same
+     teal with a little foam. From in the water the eye can stand inside it:
+     there is no cap at Classic.
+  2. At Classic its lamp reflections are not on it (the sheet's
+     `pool-optics.js` reflection is the sheet's).
+  3. The swell only travels along its room's +z, and only on a sheet whose
+     room frame is not turned against its own (all the waterpark's are not).
+  4. The eye test for the underside is the flat plane: with the cap, an eye
+     is never inside the crest above the plane, but a diver just under the
+     plane sees the crest's underside pass over.
+  5. Rings share the surface's eight slots with the visitor's own wake.
+
+### Water at Classic: the pools' own sheets (decided)
+
+The owner, 18 Nov, shown both side by side: "ripples with light reflections".
+Every pool's Classic and Low water is the waterpark builder's sheet
+(`causticWaterTex`, now muted teal ripples, with the ceiling lamps' reflection
+from `pool-optics.js`). A calm flat teal sheet of ours (`calmWaterTex`) was
+tried in the kiddie lagoon alone as a sample and has been taken out; the lagoon
+draws the default sheet like the rest. "All water is see-through" (the owner,
+the same day): anything drawn as water at Classic, the wave included, is
+translucent like the sheets. At Medium and High the surface keeps the colour
+it was approved with (the surface section, "the pinned sheets").
 
 ### 5 · Air
 
@@ -1883,6 +2027,9 @@ vendored files. It is decided after phases 1 to 7 are measured.
   shines first, then water (the waterpark is a whole kind of floor, so it is
   the bigger unlock), then the mirror floor. The stepped shadows under fixed
   chairs are fine for now; refining them is low priority.
+- **The pools' Classic water (18 Nov):** ripples with light reflections, the
+  waterpark builder's sheet, in every pool; the calm sample is not kept. All
+  water is see-through.
 - **The deep end's drowned monitors (17 Nov):** leave them glowing. Every
   workstation on the bottom of the pool keeps its lit screen, under the old
   sheet and under the new water.

@@ -11,8 +11,9 @@ import {waveCaissons} from './wave-pool/caissons.js';
 import {finishPoolRoom} from '../pool-finish.js';
 import * as THREE from 'three';
 import { Batch, WHITE } from '../kit.js';
+import { SWELL, swellUnit, swellCrestZ } from '../liquid.rule.js';
 import {
-  poolroom, natatoriumLight, createBasin,
+  poolroom, natatoriumLight, createBasin, addTranslucent,
   poolSign, depthTile, loungerVox, lifeRingVox, innerTubeVox, placeVox,
   COPING, GROUT_DARK, poolTileTex,
 } from '../waterpark.js';
@@ -42,56 +43,47 @@ export function build(c) {
     { x: 2.3 + shift * 0.4, z: -2.1, w: 1.45, d: 0.55 },
   ];
 
-  // Dynamic rolling wave crest + foam lip spanning the basin width
-  const waveW = bx1 - bx0 - 0.16;
-  const crestBatch = new Batch();
-  // Faceted curling cross-section with a broken foam lip, not a stack of
-  // rectangular slabs. The old hazard bounds and timing are unchanged.
-  const profile=[[-.65,-.35],[-.55,.05],[-.32,.42],[.02,.65],[.38,.68],[.58,.49],[.30,.34],[.10,.36],[.05,.18],[.55,-.35]];
-  function crestPoint(x, k) {
-    const [z,y]=profile[k];
-    const sweep=.15*Math.sin(x*1.5) + .07*Math.sin(x*3.3+.5);
-    const roll=.10*Math.cos(x*1.7) + .055*Math.sin(x*3.7);
-    return [x, y + Math.max(y,0)*roll, bz0 + z + sweep];
-  }
-  // Broken runs of foam gather on the rolled lip, leaving wet green gaps
-  // across its width. Map the cross-section continuously around the curve.
-  const rollerSkin = kit.tex.custom('surge:breaking-water', 256, 80, (g, width, height) => {
-    g.fillStyle = '#387b72';
-    g.fillRect(0, 0, width, height);
-    for (let x = 0; x < width; x++) {
-      const a = 2 * Math.PI * x / width;
-      const roll = Math.sin(3*a) + .5*Math.sin(7*a + .7);
-      const lip = 33 + 3*roll + 1.7*Math.sin(13*a);
-      const widthOfFoam = Math.max(0, 3.6 + 3.4*roll + 1.6*Math.cos(9*a));
-      g.fillStyle = '#60a49a';
-      g.fillRect(x, lip-9, 1, 16 + 3*Math.sin(4*a));
-      g.fillStyle = '#8bbcb0';
-      g.fillRect(x, lip-3, 1, 6 + widthOfFoam);
-      g.fillStyle = '#d5dfc8';
-      g.fillRect(x, lip, 1, widthOfFoam);
-      if (Math.sin(15*a + roll) > .3) g.fillRect(x, lip+8+3*Math.cos(8*a), 1, 1.5);
+  // The wave as the room draws it (Classic and Low): a see-through strip of the water's own swell (liquid.rule.js
+  // swellUnit: the shape the surface itself rises into at Medium and High), in the pool water's muted teal, with a
+  // broken pale foam top in 4 px texels and a darker trough behind, moved and raised by the tick as the crest always
+  // was. At Medium and High the surface rises (`water.swell`, below) and this is its stand-in, hidden for the
+  // camcorder's draw. The hazard's bounds and timing are unchanged.
+  const stripX0 = bx0 + 0.08, stripX1 = bx1 - 0.08, spans = 24;
+  // rows (metres ahead of the crest), closer near it; the first and last tuck under the sheet
+  const rowsD = [-2.4, -2.1, -1.8, -1.5, -1.2, -0.9, -0.6, -0.4, -0.25, -0.1, 0, 0.1, 0.2, 0.3, 0.45, 0.6, 0.8, 1.05, 1.35, 1.7, 2.05, 2.4];
+  const wallFade = (x) => { const t = Math.max(0, Math.min(1, Math.min(x - stripX0, stripX1 - x) / SWELL.wall)); return t * t * (3 - 2 * t); };
+  const stripPoint = (x, r) => {
+    const d = rowsD[r], h = r === 0 || r === rowsD.length - 1 ? 0 : swellUnit(d) * (1 + SWELL.vary[0] * Math.sin(x * SWELL.vary[1] + SWELL.vary[2])) * wallFade(x);
+    return [x, h, d + swellCrestZ(0, x)];
+  };
+  const stripSkin = kit.tex.custom('surge:swell-strip', 256, 256, (g, w, h) => {
+    // 64 × 64 texels of 4 px: v runs from behind the crest (0, the canvas's foot) to ahead of it (1, its top)
+    const hash = (i, j) => { let k = (i * 374761393 + j * 668265263) | 0; k = Math.imul(k ^ (k >>> 13), 1274126177); return ((k ^ (k >>> 16)) >>> 0) / 4294967296; };
+    for (let r = 0; r < 64; r++) for (let q = 0; q < 64; q++) {
+      const d = -2.4 + (r + 0.5) / 64 * 4.8, u = swellUnit(d), n = hash(q, r);
+      // the pool water's teal (causticWaterTex aqua), a little lifted toward the crest; the trough a shade darker
+      let col = u < -0.03 ? [28, 76, 86] : [61 + 70 * u, 129 + 68 * u, 131 + 56 * u];
+      if (d > 0.15 && u > 0.3) col = col.map((v) => v - 8);           // the face, a little darker than the crest
+      const foam = d > -0.32 && d < 0.14 ? 0.5 : d > -0.6 && d < 0.3 ? 0.18 : 0;
+      if (n < foam) col = n < foam * 0.55 ? [222, 234, 226] : [168, 202, 196];
+      g.fillStyle = `rgb(${col.map((v) => Math.round(Math.max(0, Math.min(255, v)))).join(',')})`;
+      g.fillRect(q * 4, (63 - r) * 4, 4, 4);
     }
   });
-  const spans=Math.ceil(waveW/.29);
-  for(let i=0;i<spans;i++){
-    const x=waveW*(i/spans-.5),end=waveW*((i+1)/spans-.5);
-    for(let k=0;k<profile.length;k++){
-      const next=(k+1)%profile.length;
-      const v = 1-k/profile.length, nextV = 1-(k+1)/profile.length;
-      const uv = [[x/3.8,v],[x/3.8,nextV],[end/3.8,nextV],[end/3.8,v]];
-      crestBatch.quad(crestPoint(x,k),crestPoint(x,next),crestPoint(end,next),crestPoint(end,k),WHITE,uv);
+  const stripBatch = new Batch();
+  for (let i = 0; i < spans; i++) {
+    const xa = stripX0 + (stripX1 - stripX0) * i / spans, xb = stripX0 + (stripX1 - stripX0) * (i + 1) / spans;
+    for (let r = 0; r < rowsD.length - 1; r++) {
+      const va = (rowsD[r] + 2.4) / 4.8, vb = (rowsD[r + 1] + 2.4) / 4.8;
+      stripBatch.quad(stripPoint(xa, r), stripPoint(xa, r + 1), stripPoint(xb, r + 1), stripPoint(xb, r), WHITE,
+        [[xa / 3.8, va], [xa / 3.8, vb], [xb / 3.8, vb], [xb / 3.8, va]]);
     }
   }
-  const caps=THREE.ShapeUtils.triangulateShape(profile.map(([z,y])=>new THREE.Vector2(z,y)),[]);
-  for(const side of [-1,1])for(const face of caps){
-    const pts=face.map(k=>crestPoint(side*waveW/2,k));
-    if(side>0)pts.reverse();
-    crestBatch.tri(...pts,WHITE);
-  }
-  const crestMesh = c.dynamic(crestBatch, { pivot: [0, 0, bz0], wet: .75, map: rollerSkin });
-  crestMesh.name='surge-crest';
+  const crestMesh = addTranslucent(c, stripBatch, { map: stripSkin, alpha: 0.7, side: THREE.FrontSide, order: 5 });
+  c.after.push(() => { crestMesh.userData.mesh = crestMesh.children[0]; });
+  crestMesh.name = 'surge-crest';
   crestMesh.visible = false;
+  crestMesh.userData.liquidStandIn = true;        // (at Medium and High the water's own swell is drawn in its place)
   c.rt.wavePool = { get crestZ() { return crestMesh.visible ? crestMesh.position.z : null; } };
   const cobTile = c.mapped('wp:pier:cobalt', poolTileTex(kit, 'cobalt'));
   const klaxonMesh=waveCaissons(c,cobTile,bx0,bx1,bz0,-maxDepth);
@@ -99,7 +91,7 @@ export function build(c) {
   let klaxonPlayed = false;
   let surgeHitCooldown = 0;
 
-  createBasin(c, {
+  const basin = createBasin(c, {
     x0: bx0, z0: bz0, x1: bx1, z1: bz1,
     depth: maxDepth,
     waterY: -0.05,
@@ -127,11 +119,13 @@ export function build(c) {
 
       if (ws.active) {
         crestMesh.visible = true;
-        crestMesh.position.set(0, -0.05 + (ws.amp - 0.62) * 0.6, ws.crestZ);
-        crestMesh.scale.set(1, Math.max(0.25, ws.amp / 0.72), 1);
+        crestMesh.position.set(0, -0.065, ws.crestZ);
+        crestMesh.scale.set(1, Math.max(0.05, ws.amp * SWELL.scale), 1);
       } else {
         crestMesh.visible = false;
       }
+      // the water's own swell at Medium and High (nothing at Classic and Low): where the crest is, how high, how far broken
+      info.water?.swell?.(ws.active ? { at: ws.crestZ, height: ws.amp, breaking: Math.max(0, Math.min(1, (ws.u - 0.55) / 0.35)) } : null);
 
       if (me.inside && me.world && info.inBasin(me.x, me.z)) {
         const sheltered = piers.some((pr) => Math.abs(me.x - pr.x) <= pr.w * 0.58 && me.z > pr.z && me.z < pr.z + 2.1);
@@ -157,6 +151,9 @@ export function build(c) {
       }
     },
   });
+
+  // what the water's swell breaks on (rings at Medium and High): the piers, and the beach along its far end
+  basin.water?.swellBreaks?.(piers.map((pr) => ({ x0: pr.x - pr.w / 2, z0: pr.z - pr.d / 2, x1: pr.x + pr.w / 2, z1: pr.z + pr.d / 2 })), { z: bz1, x0: bx0, x1: bx1 });
 
   // Render the two tiled breakwater bollards with yellow/black hazard stripe caps
   for (const pr of piers) {

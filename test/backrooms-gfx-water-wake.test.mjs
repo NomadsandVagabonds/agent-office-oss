@@ -202,7 +202,10 @@ test('the feed: index.js gives the visitor to the view once a frame, only while 
   const src = B('index.js');
   assert.match(src, /    world\.update\(dt, time, me\);\n    \/\/ --- water --- [^\n]*\n    if \(state === 'play' && !me\.frozen\) vhs\.liquids\?\.feel\(world\.scene, me\.x, me\.z, me\.y - player\.EYE \+ me\.sink, me\.y, me\.speed\);[^\n]*\n    \/\/ --- end water ---\n/);
   assert.equal(src.split('vhs.liquids?.feel(').length - 1, 1);
-  for (const f of ['player.js', 'waterpark.js', 'waterpark.rule.js', 'pursuer.js']) assert.ok(!/\.disturb\(|liquids\?\.feel|wakeStart/.test(B(f)), `${f}: nothing of the wake`);
+  for (const f of ['player.js', 'waterpark.rule.js', 'pursuer.js']) assert.ok(!/\.disturb\(|liquids\?\.feel|wakeStart/.test(B(f)), `${f}: nothing of the wake`);
+  // (waterpark.js keeps the basin's handle so a room can ring the water; it never rings it itself and never feeds the visitor)
+  assert.ok(!/liquids\?\.feel|wakeStart/.test(B('waterpark.js')), 'waterpark.js: no visitor feed');
+  assert.equal(B('waterpark.js').split('.disturb(').length - 1, 1, 'waterpark.js: disturb named once, in the comment on the handle');
   assert.ok(!/Math\.random|\bR\(|\brng\b|makeRng/.test(B('liquid.js') + B('liquid.rule.js') + B('liquid.mark.js')), 'nothing seeded, nothing random');
 });
 
