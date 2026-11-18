@@ -387,3 +387,42 @@ you stand.
 pass. The Flume Knot's slides and sump hatch, the Other Changing Room's locker fold and shower figures, the Drain
 Spa's valve, and the Diving Well's dive (all read only). Tube toners and the skimmer in play. Any part but the first
 of a visit. Difficulty settings other than the default. Whether the Return Pool's far door is ever the only way on.
+
+---
+
+## 9. Afterwards: the three things first only read, now played
+
+18 November, after the first fixes (on `baa82b2` and the live merge after it). Played with real key presses as before.
+
+**The Other Changing Room: the locker fold works both ways.** From the open locker I walked down the corridor
+behind it. The eye stoops by itself as the frames close in (from 1.10 m to 0.69 m; no key pressed), and at the
+seam I came out of the shower-side passage on the far side of the room, still facing the same way. Walking back the
+way I came returned me to the locker corridor. No damage, no sign, nothing pressed. It is the quietest good trick on
+the floor, and a player finds it by walking into a locker that is bigger than it should be.
+
+**The Diving Well: the dive works, and now nothing tells it.** Swimming on the surface, the partition stops you.
+Holding C sinks the eye under it (to about 1.5 m below the deck). I crossed under with C held, came up on the far
+side with Space, and walked out up the far steps onto the deck where the torch lies. No hearts lost, and the air
+lasted. With the `HOLD [C]` boards gone (`5734bce`), this is now a room you work out: a wall that stops at the water,
+a torch on the other side, and a pool you can see under.
+
+**The Flume Knot: slides and the sump hatch work; they all want E.**
+
+- **The plunge.** E on the platform at the head of the plunge slide gives about two seconds of ride and lands you
+  in the flooded lower hall. One E pressed during the moment the game holds you still after arriving was ignored
+  (the visit's own start, not the room).
+- **The cliff.** I could not walk back up the 1.45 m cliff to the deck. The room says so with a depth tile and a
+  `DROP 1.5M` mark, which is a pool's own voice.
+- **The sump hatch.** E at the chrome hatch in the far wall of the lower hall put me on the dry deck behind it, the
+  side the back door is on. So the plunge is a short cut across the room, not a trap.
+- **The abyss slide.** E in the lower hall took me to the next part at once (on a two-part visit).
+- **Not tried:** the bail-out chute in the crawl tubes.
+
+Every one of these is a bare E: the camcorder lights its small mark and nothing says what will happen. For a
+slide you can see, that is fine. For the hatch it is a guess that pays. The abyss slide is the floor's other way
+down that needs E (with the Drain Spa's drain); the forest review asked for ways down to be walked into, and the
+same holds here.
+
+**One more sign line taken off.** `WALK SLOWLY IN BASIN` (Toadstool Lagoon) was struck: walking slowly is exactly
+what keeps you alive among the floats (hurrying past them cost me two hearts), so it was the room's rule, not a
+pool's notice.
