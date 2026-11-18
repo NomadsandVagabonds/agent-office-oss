@@ -132,6 +132,38 @@ Supabase handles verified same-email identity linking. We do not link accounts
 by trusting email text in the browser or request access to Google contacts,
 Drive, calendars or any other Google data.
 
+## Status on the live site (18 Nov)
+
+The live build reports `{"enabled":false}` at `/account-config.json`: none of the hosted setup above has been done,
+so the archive page shows saves on this computer only and no sign-in. Nothing in the code is missing for sign-in to
+work; what is missing is the setup above, in this order, by whoever holds the accounts (the owner, or Codex with the
+owner):
+
+1. A Supabase project for BlockRooms; apply both migrations in `supabase/migrations/` in name order.
+2. Auth URL settings: the site's own origin as the site URL, and its `/archive` as an allowed redirect.
+3. A Google Cloud OAuth client (type: web application). Authorised redirect URI: the Supabase project's
+   `https://<project>.supabase.co/auth/v1/callback`. Paste its client ID and secret into Supabase → Authentication →
+   Providers → Google. Publish the Google consent screen (out of "testing"), or only listed test users can sign in.
+4. Email codes: production SMTP in Supabase, and the code template, as in step 4 above.
+5. Vercel: set `BLOCKROOMS_SUPABASE_URL` and `BLOCKROOMS_SUPABASE_PUBLISHABLE_KEY` (the publishable key, never the
+   secret or service-role key; the build refuses one) for Production, then redeploy.
+6. Check: `/account-config.json` reads `"enabled":true`; sign in with Google on a phone and a computer; finish a
+   visit; see the file on the other device.
+
+## Who has signed up
+
+`supabase/migrations/202611180001_signups.sql` adds two views for the owner, in a schema the web API does not serve
+and that no browser key can read:
+
+- `owner.signups`: one row per account: email, how they signed in (Google or email code), when they signed up, when
+  they last signed in, and whether and when they have saved a visit.
+- `owner.signups_by_day`: per day, how many signed up, with Google, with an email code, and how many have saved.
+
+Read them in the Supabase dashboard's SQL editor (`select * from owner.signups_by_day;`). Supabase's own
+Authentication → Users page lists the same accounts. These are personal email addresses: they are for knowing how
+many people signed up and for support, not for mailing anybody; the sign-in page tells players their email is
+private, and a mailing list would need its own opt-in and wording first.
+
 ## Review limits / follow-up
 
 This saves the record **at visit completion**, not an active run's world state.

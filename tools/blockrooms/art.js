@@ -82,6 +82,50 @@ export const SPRITES = {
     '..tt.dddddd.tt..', '..ttdddlldddtt..', '....dddllldd....', '....dddddddd....',
     f ? '....dd....dd....' : '.....dd..dd.....', '.....dd..dd.....', '....kkk..kkk....',
   ]) },
+  // Today's arrivals (18 Nov): somebody very tall in a suit who fills out the more you look at him; the notes that come
+  // off the wall; and the waterpark's own: the lifeguard's chair, the one who keeps the lanes, the floats with legs in them,
+  // the towel return and the thing that skims the pool. And two of the things you carry: scissors, and paper.
+  middle_manager: { fps: 0.7, frames: [[
+    '.....ll.....', '....llll....', '....llll....', '.....ll.....', '....KwUK....', '...KKwUKK...',
+    '..K.KcUK.K..', '..K.KwcK.K..', '..K.KKKK.K..', '..s.KKKK.s..', '....KKKK....', '....K..K....',
+    '....K..K....', '....K..K....', '....K..K....', '....K..K....', '....K..K....', '...kk..kk...',
+  ], [
+    '....llll....', '...llllll...', '...lkllkl...', '...lkkkkl...', '....llll....', '..KKKwUKKK..',
+    '.KKKKwUKKKK.', 'KKKKKcUKKKKK', 'KKKKKwcKKKKK', 's.KKKKKKKK.s', '..KKKKKKKK..', '...KK..KK...',
+    '....K..K....', '....K..K....', '....K..K....', '....K..K....', '....K..K....', '...kk..kk...',
+  ]] },
+  sticky_notes: { fps: 2, frames: [[
+    '..yyyy......', '..yKKy......', '..yyyy...pp.', '.........pp.', '....ee......', '....ee......',
+  ], [
+    '...yyyy.....', '...yKKy..pp.', '...yyyy..pp.', '............', '.....ee.....', '.....ee.....',
+  ]] },
+  lifeguard_chair: { frames: [[
+    '...wwwwww...', '...wrrrrw...', '...wrrrrw...', '...wwwwww...', '..wwwwwwww..', '..w......w..', '..ww....ww..',
+    '..w.w..w.w..', '..w..ww..w..', '..w..ww..w..', '..w.w..w.w..', '..ww....ww..', '..w......w..', '.kk......kk.',
+  ]] },
+  lane_keeper: { fps: 1, frames: [0, 1].map(f => [
+    '.......ss.......', '......skks......', '......ssss......',
+    f ? 'rwrwrw.ss.rwrwrw' : 'wrwrwr.ss.wrwrwr',
+    'cccccccccccccccc', f ? 'cbcccbcccbcccbcc' : 'ccbcccbcccbcccbc',
+  ]) },
+  bathers: { fps: 2, frames: [0, 1].map(f => [
+    f ? '..k......k..' : '...k....k...', f ? '..s......s..' : '...s....s...', '...t....t...', '...t....t...',
+    '...tt..tt...', '..pppppppp..', '.pp......pp.', '..pppppppp..', 'cccccccccccc',
+  ]) },
+  towel_return: { fps: 1.5, frames: [0, 1].map(f => [
+    '....tttt....', '...ttwwtt...', '...tkttkt...', '...tkkkkt...', '....tttt....',
+    f ? '.t..tttt..t.' : 't...tttt...t', '.tt.tttt.tt.', '....bbbb....', '....b..b....', '....t..t....', '...tt..tt...',
+  ]) },
+  skimmer: { fps: 1, frames: [0, 1].map(f => [
+    '.....G......', '.....G......', '.....G......', '.....G......', '....GGG.....',
+    '..wwwwwww...', '..wkkkkkw...', f ? 'cccwwwwwcccc' : 'ccccwwwwwccc', 'cccccccccccc',
+  ]) },
+  scissors: { frames: [[
+    '..G....G..', '...G..G...', '....GG....', '....GG....', '...G..G...', '..rr..rr..', '.r..rr..r.', '..rr..rr..',
+  ]] },
+  paper: { frames: [[
+    'wwwwwww.', 'wKKKKww.', 'wwwwwww.', 'wKKKKKw.', 'wwwwwww.', 'wKKKww..', 'wwwwww..',
+  ]] },
   battery: { frames: [[
     '...kkk...', '..kGGGk..', '.kkkkkkk.', '.kyyyyyk.', '.kyykyyk.', '.kykkkyk.', '.kyykyyk.', '.kyyyyyk.',
     '.kkkkkkk.', '.kKKKKKk.', '.kKKKKKk.', '.kKKKKKk.', '.kKKKKKk.', '.kKKKKKk.', '.kkkkkkk.',
