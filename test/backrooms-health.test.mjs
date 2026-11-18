@@ -169,3 +169,12 @@ test('"got away from" counts once a creature a floor, however many jabs it took'
   assert.equal(cable.match(/c\.survived\('trunk-line'\)/g).length, 1); assert.equal(cable.match(/escaped\(\)/g).length, 3);
 });
 
+
+test('one whose update throws is stopped, and leaves no body standing where it stopped (an invisible wall, in a doorway as like as not)', async () => {
+  const { p, bodies } = await floor(), it = p.of('mother'), dt = 0.05;
+  p.update(dt); assert.ok(bodies.includes(it.body), 'it stands in the way while it is going');
+  const warn = console.warn; console.warn = () => {};
+  try { it.update = () => { throw new Error('broken'); }; p.update(dt); } finally { console.warn = warn; }
+  assert.equal(bodies.includes(it.body), false, 'stopped, nobody walks into it');
+  const n = it.ticks; p.update(dt); assert.equal(it.ticks, n, 'and it is not asked again');
+});

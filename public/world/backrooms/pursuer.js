@@ -254,7 +254,9 @@ export function createStalkers(env, options = {}) {
           const tick = () => k.it.update?.(step, env.clock);
           if (options.withVisitor) options.withVisitor(k.id, k.it.at?.(), tick);
           else tick();
-        } catch (err) { if(env.coopStrict)throw err;console.warn(`[backrooms] ${k.id} has stopped`, err); k.dead = true; if (k.member.music === 'mascot') env.sound?.stopMascot?.(); }
+        } catch (err) { if(env.coopStrict)throw err;console.warn(`[backrooms] ${k.id} has stopped`, err); k.dead = true; if (k.member.music === 'mascot') env.sound?.stopMascot?.();
+          // (and it is nobody's to walk round: a body left standing where it stopped would be an invisible wall, in a doorway as like as not)
+          for (const b of [...k.bodies, k.it.figure?.body].filter(Boolean)) { const i = W().bodies.indexOf(b); if (i >= 0) W().bodies.splice(i, 1); } }
       }
     },
     /** What goes down the stairs with you: the mascot's (as ever: { awake, face, card, lost }), and under `others` whatever anybody else wants kept. */
