@@ -16,6 +16,7 @@ import { INTERN, waiting, copies, behind, was } from './intern.rule.js';
 import { SHOVE, slide } from '../shove.rule.js';
 import { HEALTH } from './health.rule.js';
 import { canLeave } from './paths.js';
+import { at as doorwayAt, fresh as unkept, camps } from './doorway.rule.js';
 import { elbow } from './head-count.rule.js';
 import { S, BACK, NECK, backVox, neckVox, headVox } from './intern.model.js';
 import { UPPER, FORE, upperVox, foreVox, handVox, lanyardVox } from './head-count.model.js';
@@ -27,7 +28,7 @@ export function create(c) {
   const env = c.env, level = c.level, I = INTERN;
   const walker = { x: 0, z: 0, r: I.r, tall: I.tall, opens: false };
   let s = waiting(), group = null, mat = null, back = null, neck = null, head = null, tag = null, limbs = [], trail = [];
-  let dying = null, jolt = 0, clock = 0, rot = 0, low = 0, known = false, over = false, lastX = 0, lastZ = 0, sampleT = 0, swing = 0, swingV = 0, nod = 0, look = 0;
+  let kept = unkept(c.R), away = null, awayT = 0, dying = null, jolt = 0, clock = 0, rot = 0, low = 0, known = false, over = false, lastX = 0, lastZ = 0, sampleT = 0, swing = 0, swingV = 0, nod = 0, look = 0;
   const vx = new THREE.Vector3(), vy = new THREE.Vector3(), vz = new THREE.Vector3(), basis = new THREE.Matrix4();
 
   const LIGHTS = [lamp(0.6, 3.2, 1.4, [1.1, 1.05, 1.0], { k: 9, wrap: 0.45, far: 40 })];
@@ -161,6 +162,18 @@ export function create(c) {
         const to = was(trail, clock - behind(s.learnt));
         if (to) c.walk.go(walker, to, I.fast * (c.speedScale ?? 1) * Math.min(dt, 0.08), 0.05);
       } else if (nearFire) c.walk.go(walker, { x: walker.x * 2 - fire.x, z: walker.z * 2 - fire.z }, 1.2 * dt);
+      // never long in a doorway (cast/doorway.rule.js): waiting or blank in one — which is where it most often stops, where you
+      // went out of its sight — after a while it goes a room away, out of sight of it, and waits there instead
+      if (s.mode !== 'copies' && !nearFire) {
+        const dw = c.walk.doorways(walker.x, walker.z), way = doorwayAt(walker, dw.ways, dw.down);
+        kept = camps(kept, dt, away ? null : way, c.R);
+        if (kept.due && !away) { const room = c.room(m.x, m.z); away = c.walk.elsewhere(walker, way, c.R, { not: room }); awayT = 25; if (!away) kept = unkept(c.R); }
+      } else { away = null; kept = unkept(c.R); }
+      if (away) {
+        awayT -= dt; const bx = walker.x, bz = walker.z;
+        c.walk.go(walker, away, I.fast * 0.45 * (c.speedScale ?? 1) * Math.min(dt, 0.08), 0.05);
+        if (Math.hypot(away.x - walker.x, away.z - walker.z) < 0.2 || awayT <= 0 || (bx === walker.x && bz === walker.z && awayT < 24)) { away = null; trail = []; }
+      }
       const mx = walker.x - lastX, mz = walker.z - lastZ, moved = Math.hypot(mx, mz) > 1e-4;
       const face = moved ? Math.atan2(mx, mz) : sees ? Math.atan2(m.x - walker.x, m.z - walker.z) : rot;
       rot += Math.atan2(Math.sin(face - rot), Math.cos(face - rot)) * Math.min(1, dt * (moved ? 6 : 1.5));
@@ -214,6 +227,8 @@ export function create(c) {
         return { ok: true, target: 'intern' };
       } }];
     },
+    /** For the dev page: stand it here, now (world coordinates). */
+    put(x, z) { walker.x = x; walker.z = z; return true; },
     at: () => ({ x: walker.x, z: walker.z, mode: s.mode, behind: +behind(s.learnt).toFixed(2) }),
     dispose() { group?.removeFromParent(); group = null; },
   };

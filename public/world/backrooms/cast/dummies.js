@@ -19,7 +19,7 @@ export function create(c) {
   const roomInfo = new Map();
   // the room as the rule needs it: its size, its doorways, and what of its own is solid (asked each time: a door shut or furniture moved)
   const info = (id) => { const def = level.rooms[id], rt = env.world.rooms[id];
-    if (!roomInfo.has(id)) roomInfo.set(id, { W: def.W, D: def.D, doors: def.doors.map((d) => { const p = wallPoint(def, d.side, d.c, 0); return { x: p.x, z: p.z }; }) });   // (wallPoint is in the room's own frame already)
+    if (!roomInfo.has(id)) roomInfo.set(id, { W: def.W, D: def.D, none: def.kind === 'exit' || !!def.crawl, doors: def.doors.map((d) => { const p = wallPoint(def, d.side, d.c, 0); return { x: p.x, z: p.z }; }) });   // (wallPoint is in the room's own frame already)
     const blocks = (rt?.colliders || []).filter((k) => k.on !== false && !k.floor).map((k) => { const a = toLocal(def, k.x0, k.z0), b = toLocal(def, k.x1, k.z1); return { x0: Math.min(a.x, b.x), z0: Math.min(a.z, b.z), x1: Math.max(a.x, b.x), z1: Math.max(a.z, b.z) }; });
     return { ...roomInfo.get(id), blocks }; };
 

@@ -47,7 +47,7 @@ import { ROAMING, roamsThisFloor, roamingRooms, roamingSpots } from './roaming.r
 import { HEALTH } from './health.rule.js';
 
 const SC = 1.25, S = 0.025 * SC;                 // sculpted chunkier than the furniture: one voxel is 3.1 cm
-const TALL = ROAMING.tall, PLINTH = 0.16, BODY = 0.3; // BODY: how much floor it takes up, as a radius (with yours, that is REACH.touch)
+const TALL = ROAMING.tall, PLINTH = 0.16, BODY = 0.3, DOWN_BODY = 0.25; // BODY: how much floor it takes up, as a radius (with yours, that is REACH.touch)
 const SKIN = '#7ea04a', SKIN_D = '#56733a', BEARD = '#1e1a1c', FELT = '#4d311d', BRAID = '#b39245', COAT = '#b9923a', SHIRT = '#2c8a79';
 const BELT = '#221a16', GOLD = '#e2ba48', SASH = '#7f7392', BOOT = '#2b1d15', CLOTH = '#393843';
 const CARD = 0.02;                               // metres to a voxel of the keycard in its hand: a size down from the office's, or it would be a placard
@@ -688,12 +688,18 @@ export function create(c) {
       p.group.rotation.set(0, p.yaw, 0);
       if (p.head.scale.x !== 1) { p.head.scale.setScalar(1); p.shadow.visible = true; }
     }
-    // The prone pose extends beyond the standing centre. Its conservative
-    // body covers feet to head, so a desk cannot slide through that extension.
+    // Lying at a hole, its body is at the feet end and no further: its head is in the crawl's mouth, and a body there would
+    // seal the mouth with something that only moves while unseen, in the one place you must face it to go in (the lead:
+    // "the mouth is never sealed"). The head end is a sliver of nothing.
+    // So it has two: its whole length, feet to head, which only furniture meets (airborne: a desk cannot be slid through
+    // it), and one at its feet end, which is the one the visitor meets.
     if (p.down) {
       p.body.x = (p.down.feet.x + p.down.head.x) / 2; p.body.z = (p.down.feet.z + p.down.head.z) / 2;
-      p.body.r = BODY + Math.hypot(p.down.head.x - p.down.feet.x, p.down.head.z - p.down.feet.z) / 2;
-    } else { p.body.x = p.x; p.body.z = p.z; p.body.r = BODY; }
+      p.body.r = BODY + Math.hypot(p.down.head.x - p.down.feet.x, p.down.head.z - p.down.feet.z) / 2; p.body.airborne = true;
+      if (!p.feetBody) p.feetBody = { x: 0, z: 0, r: BODY, on: false };
+      if (!w.bodies.includes(p.feetBody)) w.bodies.push(p.feetBody);
+      p.feetBody.x = p.down.feet.x + (p.down.head.x - p.down.feet.x) * DOWN_BODY; p.feetBody.z = p.down.feet.z + (p.down.head.z - p.down.feet.z) * DOWN_BODY; p.feetBody.on = true;
+    } else { p.body.x = p.x; p.body.z = p.z; p.body.r = BODY; p.body.airborne = false; if (p.feetBody) p.feetBody.on = false; }
     if (p.card?.use && p.card.held) { p.plumb(); reach(p); }
     p.lit -= dt;
     if (p.lit < 0 && p.group.visible) { p.lit = 0.2; p.light(w.lightAt(ex, ez, 1.0)); }
@@ -790,7 +796,11 @@ export function create(c) {
      * It has been finished (the conductor, when its dying is over): the body stays where it fell, because of what it may
      * be holding — the keycard is still on its wrist, and is taken from it there as it was taken from it standing.
      */
-    fell() { if (pirate?.card?.use) reach(pirate); return !!pirate; },
+    fell() {
+      if (pirate?.card?.use) reach(pirate);
+      if (pirate?.feetBody) { const i = env.world.bodies.indexOf(pirate.feetBody); if (i >= 0) env.world.bodies.splice(i, 1); }          // (fallen, nobody walks into it: as its main body, which the conductor takes)
+      return !!pirate;
+    },
     /**
      * Its dying (cast/health.rule.js: 0 → 1 over HEALTH.dying seconds; the conductor calls this and nothing else of it).
      * Standing: its face tears, its head snaps back, its arms fly out — and then, stiff as it always is, it goes over

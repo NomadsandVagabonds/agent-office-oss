@@ -159,6 +159,9 @@ Health for the cast (`cast/health.rule.js`, the conductor's `c.struck` / `c.vita
 was written for one visitor. Nothing in it is sent to anybody else. This section says what that means, and how
 much of it has been seen rather than read.
 
+The sticky notes (`cast/sticky-notes.js`) are not carried either: each page has its own notes, and a note stuck on one
+visitor's lens is that page's alone (`env.hand.stick`), as is what they drain. Not run with two visitors.
+
 The same holds for somebody a room keeps (`resident.js`): `env.residents` is that page's own list, a jab or a shove
 on one is resolved where the click happened, and its `vital` and its stagger are sent to nobody unless its room puts
 them in its own `coopRead` / `coopApply`. Not run with two visitors.
