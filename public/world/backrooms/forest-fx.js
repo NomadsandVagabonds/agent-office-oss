@@ -100,6 +100,7 @@ export function ensureForestDetail(c) {
           room: c.rt.u,
           flick: geo.userData.flick,
           banks: geo.userData.banks,
+          bloom: c.rt.forestBloom ?? 0.6,   // (forest.js FOREST_BLOOM: the detail scatter's mushrooms and veins)
         });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.name = `forest:detail-vox:${c.room.id}`;

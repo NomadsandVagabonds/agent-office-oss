@@ -34,7 +34,7 @@ export function build(c) {
   forestRoom(c, { wrong: 0, spotter: false, trail: false, signs: false, thicket: false });
 
   // 1. Sculpted River-Cobble, Desk-Fan & Cellophane "Campfire" (`cellophaneFireVox`) + Flickering Flame Tip + Ceiling Soot!
-  placeVox(c, 'forest:cellofire', cellophaneFireVox(), 0, 0, { scale: 0.034 });
+  placeVox(c, 'forest:cellofire', cellophaneFireVox(), 0, 0, { scale: 0.034, bloom: 1 });   // (a light to see by: full glow)
   const flameB = new Batch();
   flameB.box(-0.10, 0.55, -0.03, 0.10, 0.98, 0.03, [1.0, 0.52, 0.14]);
   flameB.box(-0.03, 0.55, -0.10, 0.03, 0.94, 0.10, [1.0, 0.82, 0.26]);

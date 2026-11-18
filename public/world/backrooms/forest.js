@@ -731,8 +731,17 @@ export function makeFacilitatorRig(kit, tag = 'facil') {
 }
 
 /** Build a lit Three.js Group from a `Vox` maker at `scale` (default 3 cm/voxel), always keeping full voxel AO unless `opt.ao === false`. */
+/**
+ * How strongly the forest's own glowing voxels (drip bags, fibre veins, mushrooms, lantern glass) feed the glow at Medium
+ * and High (kit.surface's `bloom`, glow.js; never how they are drawn, and nothing at Classic or Low). At 1 they lifted
+ * the dark of a dark room into a milk: the builder measured tree-farm's darkest quarter at 11.1 at Classic, 17.4 at High
+ * and 12.1 at High with the bloom off. A room may set `c.rt.forestBloom` for everything of its own (tree-farm does), and
+ * a thing that is a light to see by (a fire, the hollow tree's mouth) asks for `bloom: 1`.
+ */
+export const FOREST_BLOOM = 0.6;
+
 export function makeVoxGroup(kit, key, make, scale = 0.03, opt = {}) {
-  const mat = kit.surface({ vox: true, room: opt.room });
+  const mat = kit.surface({ vox: true, room: opt.room, bloom: opt.bloom ?? FOREST_BLOOM });
   const q = new Batch(true);
   const flat = opt.ao === false;
   q.addVox(kit.model(flat ? `${key}:flat` : key, make, flat ? { ao: false } : undefined).solid, new THREE.Matrix4().makeScale(scale, scale, scale));
@@ -750,7 +759,7 @@ export function makeVoxGroup(kit, key, make, scale = 0.03, opt = {}) {
 
 /** Place a single sculpted `Vox` prop in room `c` with automatic room-dimming & spatial light sampling. */
 export function placeVox(c, key, make, x, z, opt = {}) {
-  const g = makeVoxGroup(c.kit, key, make, opt.scale ?? 0.03, { ao: opt.ao, room: c.rt.u, detail: opt.detail });
+  const g = makeVoxGroup(c.kit, key, make, opt.scale ?? 0.03, { ao: opt.ao, room: c.rt.u, detail: opt.detail, bloom: opt.bloom ?? c.rt.forestBloom });
   const y = opt.y ?? 0;
   g.position.set(x, y, z);
   if (opt.rot) g.rotation.y = opt.rot;
@@ -806,6 +815,7 @@ export function placeVoxStack(c, stackKey, entries, opt = {}) {
       room: c.rt.u,
       flick: geo.userData.flick,
       banks: geo.userData.banks,
+      bloom: opt.bloom ?? c.rt.forestBloom ?? FOREST_BLOOM,
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = opt.detail ? `${stackKey}:detail` : stackKey;

@@ -26,6 +26,9 @@ import { occluderWall, addMistVeils, buildPnwTerrain } from '../forest-maze.js';
 export function build(c) {
   const { W, D, H, R, kit, params: p } = c;
   c.shell({ panels: false });
+  // (the drip bags feed the glow at a fifth of full, where the rest of the floor's glowing voxels are at 0.6: two
+  // dozen of them in a dark room were what turned its dark to milk at Medium and High. forest.js FOREST_BLOOM)
+  c.rt.forestBloom = 0.2;
   woodlandLight(c, 3, 3, 1, 0.92, {
     mode: 'islands',
     deadRatio: 0.45,
