@@ -143,6 +143,20 @@ export function create(c) {
         },
       }];
     },
+    /**
+     * Its going (cast/health.rule.js: basic, one jab; the conductor calls this and nothing else of it). It goes down into
+     * the floor where it stood, as a shadow does when the light that threw it moves: flatter and wider, darker, and then
+     * nothing. It leaves no body: there was never anything there to leave.
+     */
+    dies(progress) {
+      if (!mesh || !at) return;
+      const k = Math.max(0, Math.min(1, progress)), e = k * k * (3 - 2 * k);
+      mesh.visible = k < 0.98;
+      mesh.position.set(at.x, env.world.floorY(at.x, at.z), at.z);
+      mesh.scale.set(1 + 0.9 * e, Math.max(0.02, 1 - e), 1 + 0.9 * e);
+      mesh.rotation.x = -0.25 * e;
+      const L = mesh.material.uniforms.uTint.value; L.multiplyScalar(1 - 0.5 * e);
+    },
     /** Stand at this spot now, already there to be seen (the conductor's summon()). After that it is what it always is. */
     appear(spot) {
       if (!mesh) return false;

@@ -19,7 +19,7 @@ export function create(c) {
   const env = c.env, level = c.level, K = CARRIED;
   const walker = { x: 0, z: 0, r: K.r, tall: K.tall, opens: false };
   let s = borne(), group = null, mat = null, small = null, weight = null, arms = [], bearers = [], use = null;
-  let clock = 0, rot = 0, high = 0.98, tilt = 0, goal = null, goalT = 0, known = false, over = false, lastX = 0, lastZ = 0, pending = 0, shake = 0, walked = 0;
+  let dying = null, jolt = 0, clock = 0, rot = 0, high = 0.98, tilt = 0, goal = null, goalT = 0, known = false, over = false, lastX = 0, lastZ = 0, pending = 0, shake = 0, walked = 0;
 
   const LIGHTS = [lamp(0.6, 3.2, 1.4, [1.1, 1.05, 1.0], { k: 9, wrap: 0.45, far: 40 })];
   const geo = (key, make, k) => { const b = new Batch(true); b.addVox(env.kit.model(key, make).solid, new THREE.Matrix4().makeScale(k, k, k)); return env.kit.geometry(b, LIGHTS, [0.4, 0.38, 0.38]); };
@@ -54,25 +54,27 @@ export function create(c) {
     const floor = env.world.floorY(walker.x, walker.z), down = s.mode === 'down', sits = s.mode === 'sits';
     const left = bearers.filter((b) => !b.gone).length;
     // how high it rides: on their hands; lower, the fewer of them; on the floor without enough, or set down on somebody
-    const want = down ? 0.5 : sits ? 0.56 : 0.98 - (K.bearers - left) * 0.035;
-    high += (want - high) * Math.min(1, dt * (down || sits ? 7 : 2.5));
-    shake = Math.max(0, shake - dt);
-    tilt += ((down ? 0.22 : 0) - tilt) * Math.min(1, dt * 4);
+    // (dying: what carries it gives way all at once and it comes down on them, over to one side: dies(). A jab: it jerks: flinch())
+    const crush = dying === null ? 0 : Math.max(0, Math.min(1, dying / 0.35)), limp = dying === null ? 0 : Math.max(0, Math.min(1, (dying - 0.35) / 0.4));
+    const want = dying !== null ? 0.98 * (1 - crush) + 0.36 * crush : down ? 0.5 : sits ? 0.56 : 0.98 - (K.bearers - left) * 0.035;
+    high += (want - high) * Math.min(1, dt * (dying !== null ? 12 : down || sits ? 7 : 2.5));
+    shake = dying === null ? Math.max(0, shake - dt) : 0;
+    tilt += ((dying !== null ? 0.55 * crush : down ? 0.22 : 0) - tilt) * Math.min(1, dt * (dying !== null ? 8 : 4));
     // it leans the way of whichever side has lost the most from under it
     let lx = 0, lz = 0; for (const b of bearers) if (b.gone) { lx += Math.cos(b.a); lz += Math.sin(b.a); }
     const wob = moving ? Math.sin(clock * 5.2) * 0.035 : Math.sin(clock * 1.4) * 0.012, jit = shake * 0.03;
-    weight.position.set(walker.x + (Math.random() - 0.5) * jit, floor + high + Math.abs(wob) * 0.4, walker.z + (Math.random() - 0.5) * jit);
+    weight.position.set(walker.x + (Math.random() - 0.5) * jit, floor + high + Math.abs(wob) * 0.4 * (1 - crush) + 0.12 * jolt, walker.z + (Math.random() - 0.5) * jit);
     weight.rotation.set(lz * 0.035 + wob + tilt * Math.sin(clock * 3) * 0.3, rot, -lx * 0.035 + Math.cos(clock * 4.7) * (moving ? 0.03 : 0.008) + tilt, 'YXZ');
     const breath = 1 + Math.sin(clock * (down ? 6 : 1.3)) * (down ? 0.03 : 0.018); weight.scale.set(breath, 1 / breath, breath);
     for (const arm of arms) {
-      const px = Math.cos(rot) * arm.side, pz = -Math.sin(rot) * arm.side, flail = down ? Math.sin(clock * 11 + arm.side) * 0.9 : Math.sin(clock * 1.7 + arm.side) * 0.18;
+      const px = Math.cos(rot) * arm.side, pz = -Math.sin(rot) * arm.side, flail = (down || (dying !== null && limp < 1) ? Math.sin(clock * 11 + arm.side) * 0.9 * (1 - limp) : Math.sin(clock * 1.7 + arm.side) * 0.18) + 0.6 * jolt + 0.5 * limp;
       arm.m.position.set(walker.x + px * 0.68, floor + high + 0.2, walker.z + pz * 0.68);
       arm.m.rotation.set(-0.7 + flail * 0.5, rot, -arm.side * (2.75 + flail * 0.7), 'YXZ');          // (they hang; dropped, they beat at the air)
     }
     // (they shuffle: each keeps where it put itself down until the weight has gone on past it, then catches up, four at most)
     let lifting = bearers.filter((b) => !b.gone && b.k < 1).length;
     bearers.forEach((b, i) => {
-      const a = b.a + rot; b.x = walker.x + Math.sin(a) * b.r; b.z = walker.z + Math.cos(a) * b.r;
+      const a = b.a + rot, r = b.r * (1 + 0.35 * crush); b.x = walker.x + Math.sin(a) * r; b.z = walker.z + Math.cos(a) * r;
       const fy = env.world.floorY(b.x, b.z);
       if (b.gone) {
         // trodden flat: it stays where it was put down, and is gone before another has grown
@@ -82,6 +84,7 @@ export function create(c) {
       }
       b.grown = Math.min(1, b.grown + dt / 1.2); b.fx = undefined;
       if (b.px === undefined || b.k === undefined || Math.hypot(b.x - b.px, b.z - b.pz) > 0.8) { b.px = b.x; b.pz = b.z; b.k = 1; }
+      if (dying !== null) { b.px = b.x; b.pz = b.z; b.k = 1; }                       // (crushed where they stood: no more shuffling)
       if (b.k >= 1 && lifting < 4 && Math.hypot(b.x - b.px, b.z - b.pz) > 0.14) { b.sx = b.px; b.sz = b.pz; b.k = 0; lifting++; }
       let hop = 0, reach = 0;
       if (b.k < 1) {
@@ -89,7 +92,7 @@ export function create(c) {
         b.px = b.sx + (b.x - b.sx) * b.k; b.pz = b.sz + (b.z - b.sz) * b.k;
         hop = Math.sin(b.k * Math.PI) * 0.05; reach = Math.sin(b.k * Math.PI) * 0.16;                   // (up off its feet, stretched long, and down)
       }
-      const squat = (down || sits ? 0.55 : 1 - (0.98 - high) * 0.5) * b.grown;
+      const squat = ((down || sits ? 0.55 : 1 - (0.98 - high) * 0.5) * (1 - crush) + 0.22 * crush) * b.grown;
       b.m.visible = true; b.m.position.set(b.px, env.world.floorY(b.px, b.pz) + hop, b.pz); b.m.rotation.set(0, a + Math.sin(clock * 3 + b.phase) * 0.2, Math.sin(clock * 6 + b.phase) * (down ? 0.2 : 0.05));
       b.m.scale.set(b.grown * (1 + (1 - squat) * 0.4) * (1 - reach * 0.5), Math.max(0.05, squat * (1 + reach)), b.grown * (1 + (1 - squat) * 0.4) * (1 - reach * 0.5));
     });
@@ -111,6 +114,24 @@ export function create(c) {
 
   return {
     ready,
+    /** A jab that did not finish it (the conductor, while stalled: hurt, seconds since): it jerks up off them, arms flung. A shove: it holds. */
+    flinch(hurt, dt = 0) {
+      if (!group || hurt == null || !(hurt < HEALTH.flinch)) return;
+      jolt = Math.exp(-hurt * 7) * Math.min(1, hurt * 30) * (1 - hurt / HEALTH.flinch);
+      clock += dt; pose(dt, false); jolt = 0;
+    },
+    /**
+     * Its dying (cast/health.rule.js; the conductor calls this and nothing else of it). Everything that carries it gives way
+     * at once, squashed and pushed out from under it; it comes down on them and over to one side; its arms beat at the air
+     * and then lie. Nothing random.
+     */
+    dies(progress, dt = 0) {
+      if (!group) return;
+      dying = Math.max(0, Math.min(1, progress));
+      clock += dt * (1 - 0.7 * dying); pose(dt, false);
+    },
+    /** Finished, it lies where it fell, on them: its last pose, drawn once. */
+    fell() { return !!group; },
     update(dt) {
       if (!group || over) return;
       clock += dt;
