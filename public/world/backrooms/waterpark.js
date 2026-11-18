@@ -1020,12 +1020,14 @@ export function addTranslucent(c, batch, opt = {}) {
 export function buildFlume(c, key, pts, opt = {}) {
   const radius = opt.radius ?? 0.66;
   const enclosed = opt.enclosed !== false;
-  const wantInner = !enclosed || !!opt.interior;
+  const molded = !!opt.molded;
+  const wantInner = molded || !enclosed || !!opt.interior;
   const rgb = lin(opt.color || '#1ec8e6');
+  const stripeRgb = molded ? lin('#f2ce97') : null;
   const ribRgb = rgb.map((v) => Math.min(1, v * 0.62 + 0.05));
   const innerRgb = rgb.map((v) => Math.min(1, v * 0.88 + 0.08));
-  const steps = opt.steps || Math.max(18, Math.ceil(flumeLength(pts) / 0.30));
-  const sides = enclosed ? 12 : 8;
+  const steps = opt.steps || Math.max(18, Math.ceil(flumeLength(pts) / (molded ? 0.40 : 0.30)));
+  const sides = molded ? 20 : enclosed ? 12 : 8;
   const arc0 = enclosed ? 0 : -Math.PI * 0.68;
   const arc1 = enclosed ? Math.PI * 2 : Math.PI * 0.68;
 
@@ -1049,10 +1051,26 @@ export function buildFlume(c, key, pts, opt = {}) {
     return out;
   };
 
+  // The gelcoat has one continuous reflection across panel edges. Give each
+  // corner its radial normal while leaving the joint and rim edges faceted.
+  function skinQuad(a, b, d, e, color, f0, f1, inward = false) {
+    const start = shell.nor.length;
+    shell.quad(a, b, d, e, color);
+    if (!molded) return;
+    const centers = inward ? [f0, f1, f1, f0] : [f0, f0, f1, f1];
+    const scale = inward ? -1 / (radius * 0.955) : 1 / radius;
+    for (const [i, point] of [a, b, d, e].entries()) {
+      const frame = centers[i], k = start + 3 * i;
+      shell.nor[k] = (point[0] - frame.x) * scale;
+      shell.nor[k + 1] = (point[1] - frame.y) * scale;
+      shell.nor[k + 2] = (point[2] - frame.z) * scale;
+    }
+  }
+
   for (let i = 0; i < steps; i++) {
     const f0 = frames[i], f1 = frames[i + 1];
     // Every 4th ring is a darker molded fiberglass flange seam on a watertight continuous radius!
-    const isRib = (i % 4 === 2) && i > 0 && i < steps - 1;
+    const isRib = !molded && (i % 4 === 2) && i > 0 && i < steps - 1;
     const baseRgb = isRib ? ribRgb : rgb;
     const ring0 = ringPts(f0, 1.0);
     const ring1 = ringPts(f1, 1.0);
@@ -1060,13 +1078,15 @@ export function buildFlume(c, key, pts, opt = {}) {
     for (let s = 0; s < sides; s++) {
       const aMid = arc0 + ((arc1 - arc0) * (s + 0.5)) / sides;
       const shadeK = 0.78 + 0.32 * (0.5 - 0.5 * Math.cos(aMid));
+      // A faded cream side stripe runs continuously through successive slide sections.
+      const paint = molded && (s === sides / 4 || s === sides * 3 / 4 - 1) ? stripeRgb : baseRgb;
       const colOut = [
-        Math.min(1, baseRgb[0] * shadeK),
-        Math.min(1, baseRgb[1] * shadeK),
-        Math.min(1, baseRgb[2] * shadeK),
+        Math.min(1, paint[0] * shadeK),
+        Math.min(1, paint[1] * shadeK),
+        Math.min(1, paint[2] * shadeK),
       ];
       // Outward-facing radial normal (`U x T = -V` at bottom `a = 0`) for clean FrontSide culling!
-      shell.quad(ring0[s], ring0[s + 1], ring1[s + 1], ring1[s], colOut);
+      skinQuad(ring0[s], ring0[s + 1], ring1[s + 1], ring1[s], colOut, f0, f1);
     }
 
     if (wantInner) {
@@ -1081,7 +1101,7 @@ export function buildFlume(c, key, pts, opt = {}) {
           Math.min(1, innerRgb[2] * shadeK),
         ];
         // Inward-facing radial normal so inside of open troughs / crawl tubes renders cleanly with FrontSide!
-        shell.quad(in0[s], in1[s], in1[s + 1], in0[s + 1], colIn);
+        skinQuad(in0[s], in1[s], in1[s + 1], in0[s + 1], colIn, f0, f1, true);
       }
     }
   }
@@ -1089,7 +1109,27 @@ export function buildFlume(c, key, pts, opt = {}) {
   // Raised bolted collars sit outside the existing tube; the crawling bore
   // and its floor remain unchanged. One shared detail draw for every flume.
   const fittings=poolDetail(c).batch;
-  for(let i=6;i<steps-2;i+=8){
+  const joints = [];
+  if (molded) {
+    // A joint every mould length in metres, including on the long sweeping bends.
+    let distance = 0, nextJoint = 1.6;
+    for (let i = 1; i < steps; i++) {
+      const f = frames[i], prev = frames[i - 1];
+      distance += Math.hypot(f.x - prev.x, f.y - prev.y, f.z - prev.z);
+      if (distance >= nextJoint) { joints.push(i); nextJoint += 2.2; }
+    }
+    // Close just the exposed wall thickness, so the mouth reads as rolled plastic.
+    for (const i of [0, steps]) {
+      const outer = ringPts(frames[i]), inner = ringPts(frames[i], 0.955);
+      for (let j = 0; j < sides; j++) {
+        if (i === 0) shell.quad(outer[j], inner[j], inner[j+1], outer[j+1], ribRgb);
+        else shell.quad(outer[j+1], inner[j+1], inner[j], outer[j], ribRgb);
+      }
+    }
+  } else {
+    for (let i = 6; i < steps - 2; i += 8) joints.push(i);
+  }
+  for(const i of joints){
     const f=frames[i],before=frames[i-1],after=frames[i+1];
     const a={...f,x:f.x+(before.x-after.x)*.06,y:f.y+(before.y-after.y)*.06,z:f.z+(before.z-after.z)*.06};
     const d={...f,x:f.x+(after.x-before.x)*.06,y:f.y+(after.y-before.y)*.06,z:f.z+(after.z-before.z)*.06};
@@ -1098,7 +1138,7 @@ export function buildFlume(c, key, pts, opt = {}) {
       fittings.quad(outerA[j],outerA[j+1],outerD[j+1],outerD[j],ribRgb);
       fittings.quad(innerA[j+1],outerA[j+1],outerA[j],innerA[j],ribRgb);
       fittings.quad(innerD[j],outerD[j],outerD[j+1],innerD[j+1],ribRgb);
-      if(j%2===0){const q=outerA[j];fittings.box(q[0]-.024,q[1]-.024,q[2]-.024,q[0]+.024,q[1]+.024,q[2]+.024,lin('#c3c3a7'));}
+      if(j%(molded?4:2)===0){const q=outerA[j];fittings.box(q[0]-.024,q[1]-.024,q[2]-.024,q[0]+.024,q[1]+.024,q[2]+.024,lin('#c3c3a7'));}
     }
   }
 
@@ -1118,6 +1158,15 @@ export function buildFlume(c, key, pts, opt = {}) {
       if (opt.solidStruts !== false && floorBase === 0) c.solid(p.x - 0.14, p.z - 0.14, p.x + 0.14, p.z + 0.14);
     }
   }
+}
+
+/** Sealed-gallery slides share a wet, opaque gelcoat and a single shell draw per room. */
+export function buildOverheadFlumes(c, specs) {
+  const batch = new Batch();
+  for (const spec of specs) {
+    buildFlume(c, spec.id, spec.pts, { radius: spec.radius, color: spec.color, molded: true, batch });
+  }
+  return c.dynamic(batch, { wet: 0.78 });
 }
 
 /* ---- recessed chlorinated basin + wading + underwater swimming ------------ */
