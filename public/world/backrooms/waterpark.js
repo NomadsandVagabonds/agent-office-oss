@@ -1241,7 +1241,8 @@ export function createBasin(c, spec) {
     }
   }
 
-  // Translucent double-sided caustic water surface (seen through from above AND overhead when submerged!)
+  // Translucent caustic water surface, drawn from above only: seen from below, the caustic picture was a bright
+  // lattice of opaque-looking cells (Classic and Low; at Medium and High the water is drawn by liquid.js).
   const waterSurf = new Batch();
   waterSurf.grid(
     [bx0, waterY, bz0], [0, 0, 1], [1, 0, 0],
@@ -1249,13 +1250,14 @@ export function createBasin(c, spec) {
     (u, v) => [(bx0 + v) / 1.9, (bz0 + u) / 1.9],
     [0.88, 1.0, 1.0]
   );
-  addTranslucent(c, waterSurf, {
+  const waterHolder = addTranslucent(c, waterSurf, {
     map: waterTex,
     alpha: spec.waterAlpha ?? 0.52,
-    side: THREE.DoubleSide,
     order: 4,
   });
   c.liquid?.(waterSurf, { kind: 'water', y: waterY });
+  // (addTranslucent reads `opt.side || DoubleSide`, and FrontSide is 0: so the side is set on the sheet once it is made)
+  c.after.push(() => waterHolder.traverse((o) => { if (o.isMesh) o.material.side = THREE.FrontSide; }));
 
   // Expanding splash ripple ring + underwater aquamarine camera veil (only visible while camera is below waterY!)
   const rippleGeo = new THREE.RingGeometry(0.18, 0.26, 18);

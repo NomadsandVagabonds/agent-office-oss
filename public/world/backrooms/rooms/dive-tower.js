@@ -47,7 +47,8 @@ function architecture(c,p){
   for(const [x0,z0,x1,z1] of [[left,back,left+.12,front],[right-.12,back,right,front],
     [left,front-.12,right,front],[left,back,right,back+.12]]){
     box(wall,[x0,deckY-.04,z0,x1,0,z1],WHITE,1);
-    for (const y of [-5.24,-10.55]) box(wall,[x0,y,z0,x1,y+.24,z1],lin('#57757d'));
+    // The bands stand 1.5 cm proud of the wall: flush, they shared its face and fought it (black dashes at every tier).
+    for (const y of [-5.24,-10.55]) box(wall,[x0===left?x0:x0-.015,y,z0===back?z0:z0-.015,x1===right?x1:x1+.015,y+.24,z1===front?z1:z1+.015],lin('#57757d'));
   }
   const {x0,x1,z0,z1}=pool;
   for(const [ax,az,bx,bz] of [[left,back,right,z0],[left,z1,right,front],
