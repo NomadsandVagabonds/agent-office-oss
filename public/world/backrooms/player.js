@@ -10,6 +10,10 @@
 // nothing a step would not. They are there because hands expect them.
 import { SHOVE, tryShove } from './shove.rule.js';
 const RADIUS = 0.22, EYE = 1.1, WALK = 2.05, HURRY = 3.7;
+/** The step the world lets a body take (world.js STEP): the most the floor may differ between where you stand and where you are put. */
+const STEP = 0.26, UNSTICK_ANY = 3;   // (and how long you may be shut in, with no free spot on your own floor, before any free spot will do)
+/** A deliberate creep: C held while stooped under something low (a crawl, a tube) is at most this fast, m/s. It is under the 0.92 that a thing which listens lets pass (waterpark.rule.js, slide-maze.js); the plain crawl, with no C, is as fast as it ever was. */
+export const CREEP = 0.75;
 const HOP = 2.75, GRAVITY = 9, CROUCH = 0.5;      // take-off speed (m/s: about 0.4 m of air), and how far a held crouch lowers the eye
 const TURN = 2.1, MOUSE = 0.0023, PITCH_MAX = 1.25;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -62,13 +66,26 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
       if (sz && !step(0, sz)) { me.vz *= 0.5; me.kz = 0; }
     }
   }
-  /** If something closed around you (a teleport, a door), step out to the nearest free spot. */
-  function unstick() {
-    if (world.free(me.x, me.z, RADIUS)) return;
-    for (let r = 0.1; r < 2.5; r += 0.1) for (let a = 0; a < 12; a++) {
-      const x = me.x + Math.cos(a * 0.5236) * r, z = me.z + Math.sin(a * 0.5236) * r;
-      if (world.free(x, z, RADIUS)) { me.x = x; me.z = z; return; }
-    }
+  /**
+   * If something closed around you (a teleport, a door, a body that came to stand where you are), step out to the nearest free
+   * spot ON THE FLOOR YOU ARE ON (within a step of it): never over an edge, down a hole, off a raised strip into the hall below
+   * (the Flume Knot's tube: a toner's body at your side moved you a tenth of a metre over its lip, 2.3 m down). If there is no
+   * such spot, stay put: whatever is in the way moves, and there is a way out of it on this floor then. Only when you have been
+   * shut in for `stuck` seconds on end is any free spot, whatever its floor, better than none.
+   */
+  let shutIn = 0;
+  function unstick(dt = 0) {
+    if (world.free(me.x, me.z, RADIUS)) { shutIn = 0; return; }
+    shutIn += dt;
+    const here = world.floorY(me.x, me.z), find = (anyFloor) => {
+      for (let r = 0.1; r < 2.5; r += 0.1) for (let a = 0; a < 12; a++) {
+        const x = me.x + Math.cos(a * 0.5236) * r, z = me.z + Math.sin(a * 0.5236) * r;
+        if (world.free(x, z, RADIUS) && (anyFloor || Math.abs(world.floorY(x, z) - here) <= STEP)) { me.x = x; me.z = z; return true; }
+      }
+      return false;
+    };
+    if (find(false)) { shutIn = 0; return; }
+    if (shutIn > UNSTICK_ANY) { find(true); shutIn = 0; }
   }
 
   function applyRidePose() {
@@ -115,10 +132,12 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
     const sprintingInput = k.has('Shift') || input.hurry;
     const running = sprintingInput && !(me.winded > 0);          // out of breath: Shift does nothing until it is back
     const eyeNow = EYE - me.sink, crouch = clamp((eyeNow - 0.45) / (EYE - 0.45), 0, 1);
+    const creeping = !me.frozen && k.has('c') && duck > 0.05;                    // (C held, and stooped under something low: a careful crawl)
     const top = Math.min(running ? hurrySpeed : walkSpeed, me.gripSpeed ?? Infinity) * me.slow * (me.winded > 0 ? WIND.slow : 1) * (crouchFloor + (1 - crouchFloor) * crouch);
+    const topC = creeping ? Math.min(top, CREEP) : top;
     const sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
-    const wx = ((-sin * f + cos * s) / len) * top, wz = ((-cos * f - sin * s) / len) * top;
-    me.wishX = push ? wx / top : 0; me.wishZ = push ? wz / top : 0;          // which way you are trying to go (a wall may have other ideas)
+    const wx = ((-sin * f + cos * s) / len) * topC, wz = ((-cos * f - sin * s) / len) * topC;
+    me.wishX = push ? wx / topC : 0; me.wishZ = push ? wz / topC : 0;          // which way you are trying to go (a wall may have other ideas)
     const ease = 1 - Math.exp(-(push ? 9 : 12) * dt);
     // (just hit: your legs have little say for a moment, and whatever threw you has the rest — KNOCK)
     if (me.frozen) { me.kx = 0; me.kz = 0; me.staggered = 0; }
@@ -127,7 +146,7 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
     const bx = me.x, bz = me.z;
     // how low the ceiling is here, and a pace ahead: duck before you get there
     duck = Math.max(0, EYE - (world.headroom(me.x, me.z) - 0.2));
-    if (push) { const ax = me.x + (wx / top) * 0.32, az = me.z + (wz / top) * 0.32; if (world.free(ax, az, RADIUS * 0.6)) duck = Math.max(duck, EYE - (world.headroom(ax, az) - 0.2)); }
+    if (push) { const ax = me.x + (wx / topC) * 0.32, az = me.z + (wz / topC) * 0.32; if (world.free(ax, az, RADIUS * 0.6)) duck = Math.max(duck, EYE - (world.headroom(ax, az) - 0.2)); }
     const gx = me.vx + me.kx, gz = me.vz + me.kz;
     if (Math.abs(gx) + Math.abs(gz) > 0.002) move(gx * dt, gz * dt);
     if (me.kx || me.kz) {
@@ -136,7 +155,7 @@ export function createPlayer(world, camera, start, input = { keys: new Set(), dx
       if (Math.hypot(me.kx, me.kz) < 0.05) { me.kx = 0; me.kz = 0; }
     }
     if (me.staggered > 0) me.staggered = Math.max(0, me.staggered - dt);
-    unstick();
+    unstick(dt);
     me.duck = duck;
     const went = Math.hypot(me.x - bx, me.z - bz);
     me.speed = went / Math.max(dt, 1e-4);
