@@ -96,7 +96,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     const result = model.useSelected({
       snip: () => active.env.snip ? active.env.snip() : { ok: false, reason: 'no-snip-target' },
     });
-    active.env.handView?.landed?.({ ok: result.ok, snapped: result.snapped });       // (for the hand to show a hit, a miss and a snap differently)
+    active.env.handView?.landed?.({ ok: result.ok, snapped: !!result.snapped });   // (the hand shows a hit, a miss and a snap differently: hand.js)
     if (!result.ok) {
       env.sound.play('snip', { vol: .38 });
       if (!quietMiss) tell(result.reason);

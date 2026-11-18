@@ -131,12 +131,18 @@ export function autoStep(s, now, frameMs, busy = false, k = AUTO) {
   return { ...n, tier: next, changes: n.changes + 1, ups: n.ups + (next === 'medium' ? 1 : 0), lastChange: now, slowSince: null, quickSince: null, changed: true };
 }
 
-// A grade that changes nothing, for a kind of floor that has none of its own.
-export const NEUTRAL_GRADE = Object.freeze({ lift: [0, 0, 0], gamma: [1, 1, 1], gain: [1, 1, 1], sat: 1, haze: [0.8, 0.78, 0.72] });
+// A grade that changes nothing, for a kind of floor that has none of its own. hazeK: times the tier's haze strength;
+// hazeFrom: metres from the eye before the haze begins (vhs.js; 8 is where it has always begun)
+export const NEUTRAL_GRADE = Object.freeze({ lift: [0, 0, 0], gamma: [1, 1, 1], gain: [1, 1, 1], sat: 1, haze: [0.8, 0.78, 0.72], hazeK: 1, hazeFrom: 8 });
+// how far a kind of floor may move its haze: none to twice the tier's; from the eye out to 30 m
+export const HAZE_K_RANGE = Object.freeze([0, 2]);
+export const HAZE_FROM_RANGE = Object.freeze([0, 30]);
 /** A theme's grade (themes.js `grade`), every number present. */
 export function gradeOf(theme) {
   const g = (theme && theme.grade) || {};
   const tri = (v, d) => (Array.isArray(v) && v.length === 3 && v.every(Number.isFinite) ? v.slice() : d.slice());
+  const num = (v, d, [lo, hi]) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d);
   return { lift: tri(g.lift, NEUTRAL_GRADE.lift), gamma: tri(g.gamma, NEUTRAL_GRADE.gamma), gain: tri(g.gain, NEUTRAL_GRADE.gain),
-    sat: Number.isFinite(g.sat) ? g.sat : 1, haze: tri(g.haze, NEUTRAL_GRADE.haze) };
+    sat: Number.isFinite(g.sat) ? g.sat : 1, haze: tri(g.haze, NEUTRAL_GRADE.haze),
+    hazeK: num(g.hazeK, NEUTRAL_GRADE.hazeK, HAZE_K_RANGE), hazeFrom: num(g.hazeFrom, NEUTRAL_GRADE.hazeFrom, HAZE_FROM_RANGE) };
 }
