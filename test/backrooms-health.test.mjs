@@ -35,14 +35,14 @@ test('a hit hurts, the last one starts it dying, and dying it goes in as long as
 
 // The conductor with its neighbours swapped for stubs (as coop-cast.test.mjs loads it); the health rule is the real one.
 const url = (source) => `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;
-async function floor() {
+async function floor(carry = null) {
   let source = read('pursuer.js');
   const rule = new URL('../public/world/backrooms/cast/health.rule.js', import.meta.url).href;
   const swaps = {
     './gen.js': 'export const makeRng=()=>()=>.5; export const roomDistances=()=>new Map();',
     './cast.js': `export * from ${JSON.stringify(rule)};export const CAST=[{id:'pirate',music:'mascot'},{id:'mother'},{id:'moth'}];export const castFor=()=>CAST;export const homeFor=()=>null;`,
     './cast/index.js': `const make=c=>{const it={x:1,z:0,ticks:0,hits:[],died:[],disposed:false,keeps:c.member.id==='pirate',ready(){c.add({removeFromParent(){it.removed=true;}});c.body(it.body={x:1,z:0,r:.3});},at:()=>({x:it.x,z:it.z}),
-      update(dt){it.ticks++;it.hits.push(c.hurt(1));it.vital=c.vital;},dies(p){it.died.push(p);},fell(){return it.keeps;},dispose(){it.disposed=true;},
+      update(dt){it.ticks++;it.hits.push(c.hurt(1));it.vital=c.vital;},carry:()=>c.member.id==='pirate'?{awake:true,face:3}:null,dies(p){it.died.push(p);},fell(){return it.keeps;},dispose(){it.disposed=true;},
       snipTargets:()=>[{id:c.member.id,x:it.x,z:it.z,r:.3,snip:()=>{const hit=c.struck(1);if(!hit.ok)return false;if(!hit.killed)c.stall(0.6);return{ok:true,target:c.member.id};}}],
       shoveTargets:()=>[{id:c.member.id,x:it.x,z:it.z,r:.3,shove:()=>true}]};return it;};
       export const MAKERS={pirate:make,mother:make,moth:make};`,
@@ -54,7 +54,7 @@ async function floor() {
   const { createStalkers } = await import(url(source));
   const stopped = [], bodies = [];
   const env = { level: { seed: 'test', depth: 0 }, world: { bodies, scene: { add() {} } }, player: { me: { id: 'a', x: 0, z: 0, yaw: -Math.PI / 2 } }, sees: () => false, clock: 0,
-    health: { damage: () => ({ ok: true, dead: false }) }, sound: { stopMascot: () => stopped.push(1) } };
+    health: { damage: () => ({ ok: true, dead: false }) }, sound: { stopMascot: () => stopped.push(1) }, carry };
   createStalkers(env); for (const f of env.ready || []) f();
   return { env, p: env.pursuer, stopped, bodies };
 }
@@ -126,3 +126,30 @@ test('every one of the cast that can be hit offers a target and takes health; no
   assert.match(body('cast/the-lines.js'), /r: 0\.75, verticalReach: 2\.2/);
   for (const id of ['moth', 'porter', 'other-door', 'dummies']) assert.ok(!/snipTargets/.test(read(`cast/${id}.js`)), `${id} offers nothing to jab`);
 });
+
+test('a mascot that has been finished is dead for the visit; one only put off still follows', async () => {
+  const dt = 0.05;
+  { const { p } = await floor(); p.update(dt); assert.deepEqual(p.carry(), { awake: true, face: 3, others: {} }, 'whole, it goes down as it always did');
+    assert.ok(jab(p, 'pirate')); for (let t = 0; t < 1; t += dt) p.update(dt);
+    assert.deepEqual(p.carry(), { awake: true, face: 3, others: {} }, 'hurt and put off, it still follows'); }
+  const { p } = await floor(); p.update(dt);
+  assert.ok(jab(p, 'pirate')); for (let t = 0; t < 1; t += dt) p.update(dt); assert.ok(jab(p, 'pirate'));
+  assert.deepEqual(p.carry(), { dead: true, others: {} }, 'finished, even while it is still going down');
+  for (let t = 0; t < 3; t += dt) p.update(dt);
+  const down = p.carry(); assert.deepEqual(down, { dead: true, others: {} }, 'and when it lies there');
+  // the part below is built with that: no mascot in it, and the fact goes on down
+  const below = await floor(down);
+  assert.equal(below.p.of('pirate'), null); assert.deepEqual(Object.keys(below.p.cast()).sort(), ['moth', 'mother']);
+  below.p.update(dt); assert.deepEqual(below.p.carry(), { dead: true, others: {} });
+  assert.equal((await floor(below.p.carry())).p.of('pirate'), null, 'nor in the part below that');
+});
+
+test('when Mother is finished her small ones go with her, at once', () => {
+  const src = read('cast/mother.js'), at = src.indexOf("id: 'mother', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 0.9, r: G.r, priority: 2, snip:");
+  assert.ok(at > 0); const jabbed = src.slice(at, src.indexOf("return { ok: true, target: 'mother' };", at));
+  assert.match(jabbed, /if \(!hit\.killed\) c\.stall\(HEALTH\.flinch\);[\s\S]*else for \(const w of worms\) if \(!w\.dead && !w\.remove\) \{ const flying = !!w\.air; w\.air = null; w\.dead = true; w\.orphaned = true; w\.flat = flying \? 99 : 0\.001; if \(flying\) w\.g\.visible = false; \}/);
+  // a dead one is nothing to tread on, and offers nothing to jab or push
+  assert.match(src, /when:\(\)=>!over && !w\.dead && trodden\(c\.me\(\), \[w\]\)===0/);
+  assert.equal(src.match(/worms\.filter\(\(w\) => !w\.dead && !w\.remove && !w\.air\?\.born\)/g).length, 2);
+});
+

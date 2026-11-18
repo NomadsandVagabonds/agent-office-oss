@@ -140,7 +140,8 @@ export function createStalkers(env, options = {}) {
     fire(x, z) { const f = env.inventory?.fire?.threatAt?.(x, z, W().floorY(x, z)); return f ? { x: f.x, z: f.z, remaining: f.remaining } : null; },
   });
   const staged = { woke: false, beside: false };
-  const live = [], dealt = options.members?.map(id => ({ id })) ?? castFor(env.visit, level.depth);
+  const mascotDead = !!env.carry?.dead;               // (the mascot was finished on a part above: it is in no part below)
+  const live = [], dealt = (options.members?.map(id => ({ id })) ?? castFor(env.visit, level.depth)).filter((k) => !(mascotDead && CAST.find((m) => m.id === k.id)?.music === 'mascot'));
   // …and whoever comes with a room this floor has (cast.js withRoomFor: extra, in nobody's place)
   if (!options.members) { try { for (const id of castList.withRoomFor?.(level) ?? []) if (!dealt.some((k) => k.id === id)) dealt.push({ id }); } catch (err) { console.warn('[backrooms] nobody came with a room on this floor', err); } }
   let haunts = new Map();
@@ -246,7 +247,10 @@ export function createStalkers(env, options = {}) {
     },
     /** What goes down the stairs with you: the mascot's (as ever: { awake, face, card, lost }), and under `others` whatever anybody else wants kept. */
     carry() {
-      const mine = pirate?.carry?.() || null, others = {};
+      // (a mascot that has been finished is dead for the visit: nothing of it goes down the stairs but the fact, and no
+      // part below has one — `mascotDead` above. One that was only put off follows as it always did)
+      const mk = live.find((k) => k.it === pirate), finishedHere = !!mk && (!!castList.finished?.(mk.vital) || !!mk.fallen);
+      const mine = mascotDead || finishedHere ? { dead: true } : pirate?.carry?.() || null, others = {};
       for (const k of live) if (k.it !== pirate && !k.dead) { const c = k.it.carry?.(); if (c) others[k.id] = c; }
       return mine || Object.keys(others).length ? { ...(mine || {}), others } : null;
     },
