@@ -208,6 +208,7 @@ export function createStalkers(env, options = {}) {
             if (k.vital.gone) {
               k.dead = true; let stays = false;
               try { stays = !!k.it.fell?.(); } catch { stays = false; }
+              k.fallen = stays;                                             // (its body is still in the level: a room that goes takes it too — takeAway)
               const figure = k.it.figure;
               for (const b of [...k.bodies, figure?.body].filter(Boolean)) { const i = W().bodies.indexOf(b); if (i >= 0) W().bodies.splice(i, 1); }
               if (!stays) { try { k.it.dispose?.(); } catch { /* it is going anyway */ } for (const o of k.things) o.removeFromParent?.(); }
@@ -246,7 +247,7 @@ export function createStalkers(env, options = {}) {
     takeAway(inside, key) {
       const w = W(), gone = [];
       for (const k of live) {
-        if (k.dead || k.away) continue;
+        if ((k.dead && !k.fallen) || k.away) continue;                     // (one that is finished but lies where it fell goes with the room it lies in)
         // somebody who is more than one body, in more than one place (the waste toner and what it leaves), puts its own
         // away: only those of it that were in the room go, and the rest of it carries on
         if (k.it.takeAway) { if (k.it.takeAway(inside, key)) gone.push(k.id); continue; }

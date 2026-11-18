@@ -79,6 +79,10 @@ test('the mascot: the first jab hurts it and it stands a moment; the second fini
   assert.equal(it.removed, undefined, 'the mascot says its body stays (fell): what it holds is still there to be taken'); assert.equal(it.disposed, false);
   assert.equal(bodies.includes(it.body), false, 'but nobody walks into it');
   p.update(dt); assert.equal(it.ticks, ticks, 'and it is gone for this floor');
+  // the room it lies in goes away, and comes back: the body goes and comes with it (it would hang in nothing otherwise)
+  const thing = { visible: true, removeFromParent() {} }; it.figure = { group: thing, body: null };
+  assert.ok(p.takeAway((x, z) => Math.abs(x - it.x) < 1 && Math.abs(z - it.z) < 1, 'hall').includes('pirate')); assert.equal(thing.visible, false);
+  assert.ok(p.bringBack('hall').includes('pirate')); assert.equal(thing.visible, true);
 });
 
 test('a boss takes three; gone, it is taken off the floor; what cannot be hit has no health', async () => {
@@ -88,6 +92,7 @@ test('a boss takes three; gone, it is taken off the floor; what cannot be hit ha
   assert.ok(jab(p, 'mother')); assert.equal(p.vital('mother').dying, 0);
   for (let t = 0; t < dyingOf('mother') + 0.1; t += dt) p.update(dt);
   assert.equal(it.removed, true); assert.equal(it.disposed, true); assert.equal(bodies.includes(it.body), false);
+  { const went = p.takeAway(() => true, 'hall'); assert.equal(went.includes('mother'), false, 'one that left no body is not put away with a room'); assert.ok(went.includes('moth')); }
   assert.equal(p.vital('moth'), null); assert.equal(jab(p, 'moth'), false, 'a jab at a moth is a jab at the air');
   assert.equal(p.of('moth').hits.at(-1).landed, true, 'and it is as it was');
 });
@@ -99,8 +104,12 @@ test('every one of the cast that can be hit offers a target and takes health; no
   for (const id of ['head-count', 'intern', 'standing-meeting', 'carried-interest', 'mother', 'the-lines']) assert.match(body(`cast/${id}.js`), /if \(!hit\.killed\) c\.stall\(HEALTH\.flinch\)/, `${id} flinches`);
   // the mascot keeps its break-off on the hit that does not finish it, and falls with what it holds
   const pirate = read('cast/pirate.js');
-  assert.match(body('cast/pirate.js'), /if \(hit\?\.killed\) \{[^\n]*return \{ ok: true, target: 'pirate' \}; \}\s+if \(pirate\.state !== 'awake'\) awaken\(pirate, false\);\s+breakOff\(pirate\);/);
-  assert.match(pirate, /fell\(\) \{ return !!pirate; \}/);
+  assert.match(body('cast/pirate.js'), /if \(hit\?\.killed\) \{[^\n]*return \{ ok: true, target: 'pirate' \}; \}[^\n]*\n\s+if \(pirate\.state !== 'awake'\) awaken\(pirate, false\);\s+breakOff\(pirate\);/);
+  // broken off by the first jab it can still take the second (found in a browser: it could not, and so could not be finished)
+  assert.equal(body('cast/pirate.js').match(/\(pirate\.know\?\.spent > 0 && !c\.vital\)/g).length, 2, 'in the list and in the jab itself');
+  // and the [E] for the card goes to the hand where it fell, at the kill and again when its dying is over
+  assert.match(body('cast/pirate.js'), /if \(hit\?\.killed\) \{[^\n]*if \(pirate\.card\?\.use\) reach\(pirate\);/);
+  assert.match(pirate, /fell\(\) \{ if \(pirate\?\.card\?\.use\) reach\(pirate\); return !!pirate; \}/);
   // the many-bodied keep their own: a toner two and its hatchling one, finished into a spent crust; a small one of Mother's goes at one jab
   const toner = read('cast/toner.js');
   assert.match(toner, /unit\.vital = fresh\('toner'\);/); assert.match(toner, /young\.vital = fresh\('toner-brood'\);/);
