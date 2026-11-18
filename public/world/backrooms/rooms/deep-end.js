@@ -80,10 +80,8 @@ export function build(c) {
     g.fillStyle = '#134e5e'; g.fillRect(6, 6, tw - 12, 22);
     g.fillStyle = '#f4fbfb'; g.font = '700 11px ui-monospace, monospace'; g.textAlign = 'center';
     g.fillText('DIVING WELL CLEARANCE', tw / 2, 21);
-    g.fillStyle = '#13303a'; g.font = '700 11px ui-monospace, monospace';
-    g.fillText('HOLD [C] TO DIVE UNDER WALL', tw / 2, 48);
     g.fillStyle = '#a62822'; g.font = '700 10px ui-monospace, monospace';
-    g.fillText(`SPACE TO SURFACE · DEPTH ${p.code || '404 FT'}`, tw / 2, 69);
+    g.fillText(`DEPTH ${p.code || '404 FT'}`, tw / 2, 69);
   }, { clamp: true });
   c.mapped(signKey, signTex).quad([-1.02, 0.54, 0.13], [1.02, 0.54, 0.13], [1.02, 1.40, 0.13], [-1.02, 1.40, 0.13], WHITE);
 
@@ -131,9 +129,6 @@ export function build(c) {
   depthTile(c, 0, 0.045, bz0 - 0.08, 'NO FLOOR', Math.PI, 37);
   poolSign(c, 'left', 2.2, 1.55, [
     'DEEP DIVING WELL',
-    'SUBMERGED WALL AHEAD',
-    'HOLD [C] TO DIVE DEEP',
-    'AIR BELL AT MID-POOL',
   ], { seed: 61, mess: 0.18 });
 
   void H;
