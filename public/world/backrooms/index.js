@@ -45,6 +45,7 @@ import { createInput } from './input.js';
 import { createStalkers } from './pursuer.js';
 import { createHand, createHandView } from './hand.js';
 import { createDenizens } from './denizens.js';
+import { createResidents } from './resident.js';
 import { hangBanner } from './banner.js';
 import { cleanWhere } from './banner.rule.js';
 import { createLoot, lootLeft } from './loot.js';
@@ -404,7 +405,7 @@ async function visit(office, opt) {
         const me = f.player?.me;
         if (!me || !f.world || !f.player.shove || env.grip?.held) return { ok: false, reason: 'unavailable' };
         if (!f.player.shove(shoveWindow(env.difficulty?.()))) return { ok: false, reason: 'no-breath' };
-        const moved = strikeShove(me, env.pursuer?.shoveTargets?.() || [], (ax, az, bx, bz) => f.world.los(ax, az, bx, bz));
+        const moved = strikeShove(me, [...(env.pursuer?.shoveTargets?.() || []), ...(env.residents?.shoveTargets?.() || [])], (ax, az, bx, bz) => f.world.los(ax, az, bx, bz));
         sound.play(moved.length ? 'thunk' : 'shuffle', { vol: moved.length ? 0.8 : 1 });
         return { ok: true, moved };
       },
@@ -417,6 +418,7 @@ async function visit(office, opt) {
         const targets = [
           ...(env.pursuer?.snipTargets?.() || []),
           ...(env.denizens?.snipTargets?.() || []),
+          ...(env.residents?.snipTargets?.() || []),          // (somebody a room keeps: resident.js)
         ];
         return strikeSnip(me, targets, (ax, az, bx, bz) => f.world.los(ax, az, bx, bz));
       },
@@ -443,7 +445,7 @@ async function visit(office, opt) {
     // (whoever is looking may name who is down here, be put beside one of them, and have the mascot awake: ?debug only — docs/BACKROOMS.md)
     createStalkers(env, opt.debug ? { ...(opt.dev?.cast?.length ? { members: opt.dev.cast } : {}), beside: opt.dev?.beside || null, wake: !!opt.dev?.wake } : {});
     // the residents of rooms (denizens.js), and the visitor's hand as they ask after it; the picture washed red (0…1) by a room that does that
-    createHand(env); createHandView(env, camera); createDenizens(env);
+    createHand(env); createHandView(env, camera); createDenizens(env); createResidents(env);
     // the banner an office park puts up about itself, near where a visit lands (banner.js): once the part is built
     if ((level.depth | 0) === 0) (env.ready || (env.ready = [])).push(() => { try { hangBanner(env); } catch (err) { console.warn('[backrooms] the banner would not hang', err); } });
     env.red = (k) => { redWash = Math.max(redWash, k); };
@@ -638,7 +640,7 @@ async function visit(office, opt) {
     // --- water --- the visitor wading or swimming leaves a wake (liquid.js feel; only while a tier's water is on)
     if (state === 'play' && !me.frozen) vhs.liquids?.feel(world.scene, me.x, me.z, me.y - player.EYE + me.sink, me.y, me.speed);          // (feet: where the eye is, less its height)
     // --- end water ---
-    if (state !== 'held' && state !== 'drop' && !shot && !shotCam) { env.pursuer?.update(dt, time); env.denizens?.update(dt, time); }          // (nothing gets you while the building has you; and once its camera has the picture, nobody is run but whoever took you)
+    if (state !== 'held' && state !== 'drop' && !shot && !shotCam) { env.pursuer?.update(dt, time); env.denizens?.update(dt, time); env.residents?.update(dt); }          // (nothing gets you while the building has you; and once its camera has the picture, nobody is run but whoever took you)
     redWash *= Math.exp(-3.2 * dt); u.uRed.value = clamp(redWash, 0, 1);
     // the part below: begun once you have found your feet in this one, and only drawn from where it could be seen
     if (state === 'play' && !ahead && since > 4 && goesDown(cur.level.exit.way)) prepare();
