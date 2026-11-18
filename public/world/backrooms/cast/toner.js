@@ -918,8 +918,70 @@ export function create(c) {
     }
   }
 
+  /**
+   * What the building's camera shows when a toner has had the last of somebody (lastshot.js; shot.figure is them). The one
+   * nearest springs at them from where it was, lands on their chest and takes them over backwards; it rides them down,
+   * clings, and bites, its body pumping, its legs dug in; and at the end it goes soft and spreads over them, a stain
+   * coming out from under. Time since the shot only, and where everybody was: nothing random.
+   */
+  function takes(shot) {
+    const live = units.filter((u) => u.s.mode !== 'spent' && u.s.mode !== 'puddle');
+    const pool = live.length ? live : units;
+    if (!pool.length) return undefined;
+    const unit = pool.reduce((a, u) => (Math.hypot(u.walker.x - shot.x, u.walker.z - shot.z) < Math.hypot(a.walker.x - shot.x, a.walker.z - shot.z) ? u : a));
+    const rig = unit.rig, fig = shot.figure, floor = shot.y;
+    let dx = unit.walker.x - shot.x, dz = unit.walker.z - shot.z, d = Math.hypot(dx, dz);
+    if (d < 0.3) { dx = -Math.sin(shot.yaw); dz = -Math.cos(shot.yaw); d = 1; }
+    dx /= d; dz /= d;
+    const from = { x: shot.x + dx * 1.7, y: Math.min(floor + 1.6, Math.max(floor, unit.surfY ?? floor)), z: shot.z + dz * 1.7 };
+    const ease = (v) => { const k = clamp(v, 0, 1); return k * k * (3 - 2 * k); };
+    rig.root.visible = true; rig.puddle.visible = false; rig.stain.visible = false; rig.body.scale.set(1, 1, 1); rig.body.position.set(0, 0, 0);
+    for (const dr of rig.drips) { dr.active = false; dr.m.visible = false; }
+    rig.light(c.light(shot.x, shot.z, 0.6));
+    return (t) => {
+      // the visitor: struck at 0.32 s, over backwards by 0.9
+      const a = 1.45 * ease((t - 0.3) / 0.6);
+      if (fig) { fig.rotation.y = Math.atan2(dx, dz); fig.rotation.x = -a; }
+      const chest = { x: shot.x - dx * 1.1 * Math.sin(a), y: floor + 1.1 * Math.cos(a) + 0.08, z: shot.z - dz * 1.1 * Math.sin(a) };
+      let x, y, z, pitch;
+      if (t < 0.32) {
+        // the spring: a flat, fast arc, legs out ahead of it
+        const k = t / 0.32;
+        x = from.x + (chest.x - from.x) * k; z = from.z + (chest.z - from.z) * k;
+        y = from.y + (chest.y - from.y) * k + Math.sin(k * Math.PI) * 0.35; pitch = -0.5;
+      } else { x = chest.x; y = chest.y; z = chest.z; pitch = -0.2 * (1 - a / 1.45); }
+      rig.root.position.set(x, y, z);
+      rig.root.rotation.set(0, Math.atan2(-dx, -dz), 0);
+      rig.orient.rotation.set(pitch, 0, 0);
+      // biting: it pumps, its legs dig in and let go, its torn frames come with the bites
+      const bite = t > 0.9 && t < 2.3 ? Math.max(0, Math.sin((t - 0.9) * 13)) : 0;
+      const melt = ease((t - 2.2) / 0.7);
+      rig.body.scale.set((1 + 0.12 * bite) * (1 + 0.6 * melt), Math.max(0.06, (1 - 0.25 * bite) * (1 - 0.9 * melt)), (1 + 0.12 * bite) * (1 + 0.6 * melt));
+      const torn = bite > 0.6 || (t < 0.45 && Math.floor(t * 20) % 2 === 0);
+      if (torn !== rig.slip) rig.show(rig.variant, torn);
+      rig.limbs.forEach((l, i) => {
+        if (t < 0.32) { l.g.rotation.set(-0.7 * l.sz, 0, 0.25 * l.sx); return; }
+        const grip = 0.6 + 0.25 * Math.sin(t * 13 + i * 1.6) * (t < 2.3 ? 1 : 0);
+        l.g.rotation.set(0.35 * l.sz, 0, -grip * l.sx * (1 - 0.7 * melt));
+      });
+      for (const st of rig.streaks) {
+        const u = st.userData, p = (t * 3 + u.phase) % 1;
+        st.position.set(Math.cos(u.angle + t * 2) * u.rad, 0.04 + p * 0.3, Math.sin(u.angle + t * 2) * u.rad);
+        st.visible = melt < 0.5 && ((Math.floor(t * 19) + Math.round(u.phase * 3)) % 3) !== 0;
+      }
+      if (melt > 0) {
+        rig.puddle.visible = true;
+        rig.puddle.position.set(chest.x, floor + 0.006, chest.z);
+        rig.puddle.scale.set(0.3 + 0.9 * melt, 1, 0.3 + 0.9 * melt);
+        rig.puddleSlab.scale.set(1, 0.3 * melt, 1);
+        rig.puddleStainMat.opacity = 0.6 * melt;
+        rig.shards.forEach((sh) => { sh.visible = false; });
+      }
+    };
+  }
+
   return {
-    ready, appear,
+    ready, appear, takes,
     update(dt, t = 0) {
       if (!placed || !units.length || over) return;
       said.now += dt;
