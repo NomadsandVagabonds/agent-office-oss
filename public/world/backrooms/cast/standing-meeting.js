@@ -26,7 +26,7 @@ export function create(c) {
   const env = c.env, level = c.level, M = MEETING;
   const walker = { x: 0, z: 0, r: M.r, tall: M.tall, opens: false };
   let s = filing(), group = null, mat = null, backs = [], legs = [], hung = [], trail = [], at = [];
-  let clock = 0, yaw = 0, high = 0.56, goal = null, goalT = 0, known = false, over = false, shake = 0, drag = null, rear = 0;
+  let dying = null, hit = null, clock = 0, yaw = 0, high = 0.56, goal = null, goalT = 0, known = false, over = false, shake = 0, drag = null, rear = 0;
   const vx = new THREE.Vector3(), vy = new THREE.Vector3(), vz = new THREE.Vector3(), basis = new THREE.Matrix4();
 
   const LIGHTS = [lamp(0.6, 3.2, 1.4, [1.1, 1.05, 1.0], { k: 9, wrap: 0.45, far: 40 })];
@@ -76,8 +76,9 @@ export function create(c) {
 
   /** Stand it where it is: every length of its back along the way it has come, and every leg from its shoe to its hip. */
   function pose(dt, moving) {
-    const charging = s.mode === 'charges', drumming = s.mode === 'drums', down = s.mode === 'down';
-    const want = down ? 0.2 : charging ? 0.46 : 0.56;
+    // (dying: down for good — flat, its legs going, and then still, a length at a time from the front: dies())
+    const charging = s.mode === 'charges' && dying === null, drumming = s.mode === 'drums' && dying === null, down = s.mode === 'down' || dying !== null;
+    const want = dying !== null ? 0.09 : down ? 0.2 : charging ? 0.46 : 0.56;
     // seeing somebody, it stands the front of itself up on end, and shows them what is underneath; and comes down going
     rear += ((drumming ? 1 : 0) - rear) * Math.min(1, dt * (drumming ? 5 : 9));
     high += (want - high) * Math.min(1, dt * (down ? 9 : 5));
@@ -85,11 +86,12 @@ export function create(c) {
     at = lengths(trail, M.parts, M.gap);
     at.forEach((p, i) => {
       const b = backs[i], floor = env.world.floorY(p.x, p.z);
+      const still = dying === null ? 0 : Math.max(0, Math.min(1, (dying - 0.12 - 0.55 * i / at.length) / 0.2)); b.still = still;
       // a wave goes down the length of it as it walks; drumming, every length of it trembles; down, it lies as it fell
-      const wave = moving ? Math.sin(clock * (charging ? 26 : 9) - i * 0.9) * (charging ? 0.03 : 0.022) : Math.sin(clock * 1.6 - i * 0.7) * 0.012;
-      const jit = (drumming ? 0.012 : 0) + shake * 0.03;
-      b.roll += ((down ? (i % 2 ? 0.5 : -0.4) : Math.sin(clock * 2.2 - i * 0.8) * 0.07) - b.roll) * Math.min(1, dt * 6);
-      p.y = floor + high + wave; p.pitch = 0; p.jit = jit;
+      const wave = (moving ? Math.sin(clock * (charging ? 26 : 9) - i * 0.9) * (charging ? 0.03 : 0.022) : Math.sin(clock * 1.6 - i * 0.7) * 0.012) * (1 - still);
+      const jit = ((drumming ? 0.012 : 0) + shake * 0.03) * (1 - still);
+      b.roll += ((down ? (i % 2 ? 0.5 + 0.8 * still : -0.4 - 0.8 * still) : Math.sin(clock * 2.2 - i * 0.8) * 0.07) - b.roll) * Math.min(1, dt * 6);
+      p.y = floor + high + wave + (hit ? hit.e * 0.1 * Math.max(0, Math.sin(i * 0.8 - hit.t * 26)) : 0); p.pitch = 0; p.jit = jit;
     });
     if (rear > 0.01 && at.length > REARS) {
       // (stood up, it faces whoever it has seen, whichever way the rest of it happens to be lying)
@@ -105,13 +107,14 @@ export function create(c) {
       b.m.rotation.set(-p.pitch, p.yaw, p.pitch > 0.2 ? 0 : b.roll, 'YXZ');
       b.m.scale.set(1, 1 + Math.sin(clock * 2.6 - i) * 0.04, 1.3);
       // the fingers either side of the seam are never still; shown, they open out and work
-      for (const r of b.rows) { r.f.rotation.z = (r.side > 0 ? -1 : 1) * (0.25 * Math.min(1, p.pitch) + Math.sin(clock * (5 + (i % 3)) + i * 1.7 + r.side) * (0.1 + 0.22 * Math.min(1, p.pitch))); r.f.rotation.x = Math.sin(clock * 3.3 + i + r.side * 2) * 0.12; }
+      const live = 1 - (b.still || 0);
+      for (const r of b.rows) { r.f.rotation.z = (r.side > 0 ? -1 : 1) * (0.25 * Math.min(1, p.pitch) + Math.sin(clock * (5 + (i % 3)) + i * 1.7 + r.side) * (0.1 + 0.22 * Math.min(1, p.pitch)) * live + 0.5 * (1 - live)); r.f.rotation.x = Math.sin(clock * 3.3 + i + r.side * 2) * 0.12 * live; }
     });
     // its legs: each foot is put down where its hip is going, and the back ones never wait for the front ones
     const stride = charging ? 0.5 : 0.26, quick = charging ? 0.05 : 0.14, most = charging ? 14 : 7;
     let stepping = legs.filter((l) => l.k < 1).length;
     // (a thigh goes straight out from the hip, sideways — or, off the ends of it, out along the way it lies — and the knee is the wrong way up)
-    const rest = (l) => { const p = at[l.i], out = l.fan ? p.yaw + (l.fan > 0 ? 0 : Math.PI) + l.side * 0.55 : p.yaw + l.side * Math.PI / 2, sx = Math.sin(out), sz = Math.cos(out), px = Math.cos(p.yaw) * l.side, pz = -Math.sin(p.yaw) * l.side, lead = moving ? (charging ? 0.3 : 0.12) : 0, far = down ? 1.0 : 0.66; return { hx: p.x + px * 0.2 + (l.fan ? sx * 0.12 : 0), hz: p.z + pz * 0.2 + (l.fan ? sz * 0.12 : 0), x: p.x + px * 0.2 + sx * far + Math.sin(p.yaw) * lead, z: p.z + pz * 0.2 + sz * far + Math.cos(p.yaw) * lead, sx, sz }; };
+    const rest = (l) => { const p = at[l.i], out = l.fan ? p.yaw + (l.fan > 0 ? 0 : Math.PI) + l.side * 0.55 : p.yaw + l.side * Math.PI / 2, sx = Math.sin(out), sz = Math.cos(out), px = Math.cos(p.yaw) * l.side, pz = -Math.sin(p.yaw) * l.side, lead = moving ? (charging ? 0.3 : 0.12) : 0, far = down ? 1.0 - 0.55 * (backs[l.i].still || 0) : 0.66; return { hx: p.x + px * 0.2 + (l.fan ? sx * 0.12 : 0), hz: p.z + pz * 0.2 + (l.fan ? sz * 0.12 : 0), x: p.x + px * 0.2 + sx * far + Math.sin(p.yaw) * lead, z: p.z + pz * 0.2 + sz * far + Math.cos(p.yaw) * lead, sx, sz }; };
     const due = legs.map((l, n) => { if (!l.placed || l.k < 1) return [0, n]; const r = rest(l); return [Math.hypot(r.x - l.x, r.z - l.z), n]; }).filter(([d]) => d > stride).sort((a, b) => b[0] - a[0]).slice(0, Math.max(0, most - stepping));
     const turn = new Set(due.map(([, n]) => n));
     legs.forEach((l, n) => {
@@ -132,7 +135,7 @@ export function create(c) {
         if (l.k >= 1) { l.lift = 0; if (charging ? n % 3 === 0 : n % 2 === 0) c.play(charging ? 'thunk' : 'step', l.x, l.z, charging ? 18 : 8); }
       }
       // drumming: every foot of it, on the spot, out of time with the next. Down: they are in the air, and going
-      const drum = drumming ? Math.abs(Math.sin(clock * 34 + n * 1.9)) * 0.06 : down ? 0.25 + Math.abs(Math.sin(clock * 17 + n * 2.3)) * 0.3 : 0;
+      const drum = drumming ? Math.abs(Math.sin(clock * 34 + n * 1.9)) * 0.06 : down ? (0.25 + Math.abs(Math.sin(clock * 17 + n * 2.3)) * 0.3) * (1 - 0.6 * (backs[l.i].still || 0)) : 0;
       const fy = env.world.floorY(l.x, l.z) + l.lift + drum, hip = { x: r.hx, y: p.y - 0.05, z: r.hz }, ankle = { x: l.x, y: fy + SHOE, z: l.z };
       const e = elbow(hip, ankle, TH, SH, { x: r.sx * 2.4, z: r.sz * 2.4 });
       const fwx = r.sx, fwz = r.sz;          // (the shoes point the way the legs go: out)
@@ -173,6 +176,26 @@ export function create(c) {
 
   return {
     ready,
+    /**
+     * Its dying (cast/health.rule.js; the conductor calls this and nothing else of it). It goes down flat with every leg
+     * in the air and going, and then it goes still a length at a time, from the front to the back: each length rolls
+     * over onto its side, its fingers open and stop, its legs fold in. Its clock of dying only, slowing as it goes.
+     */
+    /**
+     * A jab that did not finish it (the conductor, while it stands stalled after one: hurt, seconds since it). A hump runs
+     * back down the length of it from the front, as from a blow. After a shove (hurt large, or none) it holds.
+     */
+    flinch(hurt, dt = 0) {
+      if (!group || hurt == null || !(hurt < HEALTH.flinch)) return;
+      hit = { e: Math.exp(-hurt * 3) * (1 - hurt / HEALTH.flinch), t: hurt };
+      clock += dt; pose(dt, false); hit = null;
+    },
+    dies(progress, dt = 0) {
+      if (!group) return;
+      dying = Math.max(0, Math.min(1, progress));
+      clock += dt * (1 - 0.8 * dying);
+      pose(dt, false);
+    },
     update(dt) {
       if (!group || over) return;
       clock += dt; dt = Math.min(dt, 0.08);
