@@ -16,7 +16,7 @@ import { makeRng, roomDistances } from '../gen.js';
 import { tonerHomes } from '../cast.js';
 import { clamp, turnTo } from '../bits.js';
 import { FIRE_FEAR, calm as unafraid, afraid, tooNear } from './fire.rule.js';
-import { fresh, struck, aged } from './health.rule.js';
+import { HEALTH, fresh, struck, aged } from './health.rule.js';
 import { TONER, perched, hatchedBrood, weaveOffset, planTonerLunge, tonerWallGoal, stepToner, strikeToner, snipToner } from './toner.rule.js';
 
 const S = 0.022;                               // 2.2 cm per voxel: sharp, spindly silhouette
@@ -623,6 +623,49 @@ export function create(c) {
     });
   }
 
+  /**
+   * A toner being finished (its own `vital.dying`, 0 → 1: health.rule.js), drawn over the spent stain it has already
+   * become. The jab knocks it off whatever it was clinging to; it drops (turning upright as it falls if it was on the
+   * ceiling or a wall), lands, splays, its legs curl in and twitch, and it melts down flat into the stain. Its clock
+   * only: the same for anyone watching.
+   */
+  function dieToner(unit, vis, floorY) {
+    const rig = unit.rig, walker = unit.walker, sec = unit.vital.dying * HEALTH.dying;
+    if (!unit.fall) unit.fall = { y: Math.max(floorY, unit.surfY), bz: unit.bankZ, bx: unit.bankX, yaw: unit.yaw };
+    const f = unit.fall, drop = f.y - floorY, land = Math.max(0.12, Math.sqrt(2 * drop / 9.8)), after = sec - land;
+    const y = Math.max(floorY, f.y - 4.9 * sec * sec);
+    const turn = clamp(sec / land, 0, 1), ease = turn * turn * (3 - 2 * turn);
+    const upright = f.bz > Math.PI ? 2 * Math.PI : f.bz < -Math.PI ? -2 * Math.PI : 0;
+    rig.root.visible = vis;
+    rig.root.position.set(walker.x, y + (after < 0 && drop < 0.05 ? Math.sin(Math.PI * clamp(sec / land, 0, 1)) * 0.12 : 0), walker.z);
+    rig.root.rotation.set(0, f.yaw, 0);
+    rig.orient.rotation.set(f.bx * (1 - ease), 0, f.bz + (upright - f.bz) * ease);
+    // the jab tears it: torn frames, then whole
+    const torn = sec < 0.25 && Math.floor(sec * 26) % 2 === 0;
+    if (torn !== rig.slip) rig.show(rig.variant, torn);
+    // landed: splat, then the melt (the same flattening as a toner's own dissolve) from half way through
+    const splat = after > 0 ? Math.min(1, after / 0.08) * (1 + 0.35 * Math.exp(-after * 9) * Math.cos(after * 30)) : 0;
+    const melt = clamp((unit.vital.dying - 0.5) / 0.5, 0, 1), m2 = melt * melt * (3 - 2 * melt);
+    rig.body.scale.set(1 + 0.22 * splat + 0.55 * m2, Math.max(0.05, (1 - 0.3 * splat) * (1 - 0.95 * m2)), 1 + 0.22 * splat + 0.55 * m2);
+    rig.body.position.set(0, 0, 0);
+    // legs: flailing as it drops, splayed when it hits, then drawing in and twitching as it goes
+    rig.limbs.forEach((l, i) => {
+      if (after < 0) { const fl = Math.sin(sec * 34 + i * 1.7) * 0.55; l.g.rotation.set(fl * l.sz, fl * 0.3 * l.sx, -0.5 * l.sx); return; }
+      const curl = clamp((after - 0.12) / 0.4, 0, 1), tw = Math.sin(after * 41 + i * 2.3) * Math.exp(-after * 3) * 0.3 * (i % 2 ? 1 : 0.5);
+      l.g.rotation.set((0.25 * curl + tw) * l.sz, 0, l.sx * (0.7 * (1 - curl) - 0.9 * curl) * (1 - 0.6 * m2));
+    });
+    for (const st of rig.streaks) st.visible = sec < 0.35 && ((Math.floor(sec * 19) + Math.round(st.userData.phase * 3)) % 3) !== 0;
+    // the stain spreads out from under it as it goes
+    if (melt > 0) {
+      rig.puddle.visible = vis;
+      rig.puddle.position.set(walker.x, floorY + 0.005, walker.z);
+      rig.puddle.scale.set(0.3 + 0.64 * m2, 1, 0.3 + 0.64 * m2);
+      rig.puddleSlab.scale.set(1, 0.36 * m2, 1);
+      rig.puddleStainMat.opacity = 0.46 * m2;
+      rig.shards.forEach((sh, i) => { sh.position.set(sh.userData.bx, 0.008, sh.userData.bz); sh.scale.set(0.85, 0.25 * m2, 0.85); sh.visible = i % 2 === 0 && m2 > 0.3; });
+    } else rig.puddle.visible = false;
+  }
+
   function stepUnit(unit, dt, t, w, m) {
     const walker = unit.walker, rig = unit.rig;
     const vis = c.drawn(walker);
@@ -641,6 +684,12 @@ export function create(c) {
       }
       if (unit.s.hatched) hatchPuddle(unit, d);
       unit.solidBody.x = 1e6; unit.solidBody.z = 1e6;
+      if (unit.vital?.dying != null && !unit.vital.gone && unit.s.mode === 'spent') {          // (being finished: drawn going down)
+        dieToner(unit, vis, w?.floorY(walker.x, walker.z) ?? unit.surfY);
+        rig.light(c.light(walker.x, walker.z, 0.2));
+        return;
+      }
+      if (unit.fall) { unit.fall = null; rig.body.scale.set(1, 1, 1); rig.orient.rotation.set(0, 0, 0); }
       rig.root.visible = false;
       animatePuddle(unit, dt, t, vis);
       stepDroplets(unit, dt, false, walker.x, unit.surfY, walker.z, unit.surfY, false);

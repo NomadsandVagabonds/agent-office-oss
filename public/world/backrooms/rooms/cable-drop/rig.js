@@ -5,7 +5,8 @@
 import * as THREE from 'three';
 import { Vox, M, glow } from '../../../vox/vox.js';
 import { Batch, lamp } from '../../kit.js';
-import { createCord, settleCord, stepCord } from './cord.js';
+import { createCord, settleCord, stepCord, kickCord } from './cord.js';
+import { HEALTH } from '../../cast/health.rule.js';
 
 const S = 0.028;
 
@@ -208,8 +209,12 @@ const STRIDE = 0.95;                // metres walked per full step of both legs 
  * the creature's own motion and the clock: nothing random. Collision and rule are the room's and are not touched.
  * Cost: 8 meshes (body, head, 2 arms, 3 leads, shadow) where there were 5.
  *
- * pose(t, speed, crouch): t the room's clock (s), speed m/s it actually went this frame, crouch 1 standing … 0.46 under
- * the crawl header (and 0.55 → 1 as it unfolds from the drop).
+ * pose(t, speed, crouch, { hurt, recoil }): t the room's clock (s), speed m/s it actually went this frame, crouch 1
+ * standing … 0.46 under the crawl header (and 0.55 → 1 as it unfolds from the drop); hurt: seconds since a jab landed
+ * (it snaps back, its cables whip), recoil: 1 → 0 through the time it hangs back after one (it stands coiled, and
+ * uncoils at the end of it).
+ * die(progress, t): its dying, 0 → 1 (cast/health.rule.js): the cables go slack, it folds at the pelvis, its legs go
+ * out from under it and it slumps into a heap of cable on the floor.
  */
 export function makeTrunkLine(kit) {
   const mat = kit.surface({ vox: true }), m4 = new THREE.Matrix4().makeScale(S, S, S);
@@ -257,7 +262,7 @@ export function makeTrunkLine(kit) {
   const brest = Float32Array.from(bpos.array), brestN = Float32Array.from(bnor.array, (v) => v / 127);
   bg.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.8, 0), 1.6);
 
-  let bodyKey = '', lastT = null, phase = 0, moving = 0, fold = 0, lastY = null, falling = false, landT = -1, ground = -Infinity, settled = false;
+  let bodyKey = '', lastHurt = Infinity, lastT = null, phase = 0, moving = 0, fold = 0, lastY = null, falling = false, landT = -1, ground = -Infinity, settled = false;
   const wp = new THREE.Vector3(), inv = new THREE.Matrix4(), gq = new THREE.Quaternion(), dirV = new THREE.Vector3();
   const qL = [0, 0, 0, 1], qR = [0, 0, 0, 1], qS = [0, 0, 0, 1], v3 = [0, 0, 0];
   const setQ = (q, ax, ay, az, ang) => { const s = Math.sin(ang / 2); q[0] = ax * s; q[1] = ay * s; q[2] = az * s; q[3] = Math.cos(ang / 2); return q; };
@@ -271,7 +276,12 @@ export function makeTrunkLine(kit) {
 
   return {
     group, head, armL, armR, mat,
-    pose(t, speed, crouch = 1) {
+    pose(t, speed, crouch = 1, o = {}) { frame(t, speed, crouch, o.hurt ?? Infinity, o.recoil ?? 0, null); },
+    die(progress, t) { const k = Math.max(0, Math.min(1, progress)); frame(t, 0, 1, k * HEALTH.dying, 0, k); },
+    light(rgb) { mat.uniforms.uTint.value.set(rgb[0], rgb[1], rgb[2]); },
+  };
+
+  function frame(t, speed, crouch, hurt, recoil, dying) {
       const dt = lastT === null ? 0 : Math.max(0, Math.min(0.1, t - lastT)); lastT = t;
       group.scale.set(1, 1, 1);
       // how it is going: steps by the distance gone, a lurch when it hurries, a fold under a low ceiling
@@ -295,23 +305,29 @@ export function makeTrunkLine(kit) {
 
       // the legs: each swings from its hip and lifts its foot; the other half a step behind
       const mv = moving, swing = 0.42 * mv, lean = 0.2 * mv;
-      const squash = Math.max(0, Math.min(1, fold + Math.max(0, bounce) * 0.45));
-      const hipY = HIP * (1 - 0.5 * squash) + Math.abs(Math.sin(phase)) * 0.03 * mv;
-      const pitch = squash * 1.15 + lean + bounce * 0.18, roll = Math.sin(phase) * 0.07 * mv;
+      // a jab: it snaps back from it (and its cables are whipped, below); hanging back: hunched over and coiled
+      const jolt = hurt < 0.6 ? Math.exp(-hurt * 7) * (1 - hurt / 0.6) : 0;
+      const coil = recoil > 0 ? Math.min(1, recoil * 5) : 0;
+      // dying: it folds and goes down; by the end it is a heap on the floor
+      const fall = dying === null ? 0 : smooth01(dying / 0.55);
+      const squash = Math.max(0, Math.min(1, fold + Math.max(0, bounce) * 0.45 + coil * 0.3, fall));
+      const hipY = (HIP * (1 - 0.5 * squash) + Math.abs(Math.sin(phase)) * 0.03 * mv) * (1 - 0.82 * fall) - (dying === null ? 0 : 0.05 * smooth01((dying - 0.7) / 0.3));
+      const pitch = squash * 1.15 + lean + bounce * 0.18 - 0.45 * jolt + 0.4 * coil + Math.sin(t * 23) * 0.025 * coil + 0.4 * fall;
+      const roll = Math.sin(phase) * 0.07 * mv + 0.35 * fall;
       setQ(qS, 1, 0, 0, pitch); mul(qS, setQ(qL, 0, 0, 1, roll), qS);
       const aL = Math.sin(phase) * swing, aR = -aL;
       setQ(qL, 1, 0, 0, aL); setQ(qR, 1, 0, 0, aR);
       const liftL = Math.max(0, Math.cos(phase)) * 0.08 * mv, liftR = Math.max(0, -Math.cos(phase)) * 0.08 * mv;
       const arr = bpos.array, narr = bnor.array;
       // (stood still, unfolded, done bouncing, and already drawn so: the body is left as it is)
-      const key = `${mv.toFixed(3)}:${squash.toFixed(3)}:${bounce.toFixed(3)}:${mv > 0.001 ? phase.toFixed(3) : 0}`;
+      const key = `${mv.toFixed(3)}:${squash.toFixed(3)}:${bounce.toFixed(3)}:${pitch.toFixed(3)}:${roll.toFixed(3)}:${hipY.toFixed(3)}:${mv > 0.001 ? phase.toFixed(3) : 0}`;
       if (key !== bodyKey) { bodyKey = key;
       for (let k = 0; k < brest.length; k += 3) {
         const x = brest[k], y = brest[k + 1], z = brest[k + 2];
         if (y < HIP - 0.5 * S) {
           const left = x < 0, q = left ? qL : qR, hx = left ? -4 * S : 4 * S, low = 1 - y / HIP;
           turn(q, x - hx, y - HIP, z, v3);
-          const sx = 1 + 0.9 * squash, sy = 1 - 0.5 * squash;
+          const sx = 1 + 0.9 * squash + 0.8 * fall, sy = (1 - 0.5 * squash) * (1 - 0.75 * fall);
           arr[k] = (v3[0] + hx) * sx; arr[k + 1] = (v3[1] + HIP) * sy + (left ? liftL : liftR) * low * low; arr[k + 2] = v3[2];
           turn(q, brestN[k], brestN[k + 1], brestN[k + 2], v3);
         } else {
@@ -325,7 +341,13 @@ export function makeTrunkLine(kit) {
 
       // the head rides the top of the spine, and nods with it
       spinePoint(0, 51 * S, 0, hipY, v3); head.position.set(v3[0], v3[1], v3[2]);
-      head.rotation.set(pitch * 0.55 + Math.sin(t * 3.1) * 0.08 - bounce * 0.25, Math.sin(t * 2.3) * 0.22, 0.14 + Math.cos(t * 2.7) * 0.08);
+      const alive = dying === null ? 1 : 1 - smooth01(dying / 0.4);
+      head.rotation.set(pitch * 0.55 + Math.sin(t * 3.1) * 0.08 * alive - bounce * 0.25 - 0.6 * jolt + 0.5 * coil + 0.5 * fall,
+        Math.sin(t * 2.3) * 0.22 * alive, 0.14 + Math.cos(t * 2.7) * 0.08 * alive + 0.9 * fall);
+
+      // the blow reaches the cables: they are flung back and up, away from it
+      if (hurt < lastHurt) { dirV.set(0, 2.2, -3.2).applyQuaternion(group.getWorldQuaternion(gq)); for (const c of cables) kickCord(c.cord, dirV.x, dirV.y, dirV.z); }
+      lastHurt = hurt;
 
       // the cables: each hangs from where its root has gone to, in the world, so that they lag, swing and trail
       group.updateMatrixWorld(true);
@@ -337,19 +359,21 @@ export function makeTrunkLine(kit) {
         c.holder.getWorldPosition(wp);
         // which way it would lie if it were rod: arms swing with the gait and reach forward on the hunt; leads trail back
         if (c.arm) {
-          const reach = -0.15 - 0.95 * mv - 0.6 * squash, sw = Math.sin(phase + (c.side < 0 ? 0 : Math.PI)) * 0.5 * mv;
+          const reach = -0.15 - 0.95 * mv - 0.6 * squash - 1.9 * coil + 0.5 * fall, sw = Math.sin(phase + (c.side < 0 ? 0 : Math.PI)) * 0.5 * mv;
           dirV.set(-c.side * 0.25 * (1 - squash), -Math.cos(reach + sw), -Math.sin(reach + sw)).normalize();
         } else dirV.set(0, -1, -0.35).normalize();
         dirV.applyQuaternion(gq);
         const root = [wp.x, wp.y, wp.z], dir = [dirV.x, dirV.y, dirV.z];
         if (!settled) settleCord(c.cord, wp.x, wp.y, wp.z, dir[0], dir[1], dir[2]);
         let reachTo = null;
-        if (c.arm && mv > 0.3) {
+        if (c.arm && mv > 0.3 && dying === null) {
           // the plug claws go for what is in front of it, a little to their own side
           wp.set(c.side * 0.18, 0.95, 1.05); group.localToWorld(wp);
           reachTo = [wp.x, wp.y, wp.z];
         }
-        stepCord(c.cord, dt, { root, dir, stiff: c.stiff, drag: c.drag, reach: reachTo, pull: 5 * mv, floor: ground + 0.02, rough: 0.7 });
+        // dying, they are only cable: no shape of their own left, and they lie where they fall
+        const stiff = dying === null ? c.stiff + (c.arm ? 0.35 * coil : 0) : c.stiff * (1 - fall);
+        stepCord(c.cord, dt, { root, dir, stiff, drag: c.drag + 1.5 * fall, reach: reachTo, pull: 5 * mv, floor: ground + 0.02, rough: 0.7 + 0.25 * fall });
         inv.copy(c.holder.matrixWorld).invert();
         const P = c.cord.p, L = c.local;
         for (let i = 0; i <= c.n; i++) {
@@ -359,7 +383,7 @@ export function makeTrunkLine(kit) {
         c.bend(L);
       }
       settled = true;
-    },
-    light(rgb) { mat.uniforms.uTint.value.set(rgb[0], rgb[1], rgb[2]); },
-  };
+  }
 }
+
+const smooth01 = (v) => { const k = v < 0 ? 0 : v > 1 ? 1 : v; return k * k * (3 - 2 * k); };

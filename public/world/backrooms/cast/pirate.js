@@ -44,6 +44,7 @@ import { HUNT, BARRICADE, heave, knows, lost, shown, spent, handle, atHandle, wi
 import { SHOVE, slide } from '../shove.rule.js';
 import { FIRE_FEAR, calm as unafraid, afraid, tooNear } from './fire.rule.js';
 import { ROAMING, roamsThisFloor, roamingRooms, roamingSpots } from './roaming.rule.js';
+import { HEALTH } from './health.rule.js';
 
 const SC = 1.25, S = 0.025 * SC;                 // sculpted chunkier than the furniture: one voxel is 3.1 cm
 const TALL = ROAMING.tall, PLINTH = 0.16, BODY = 0.3; // BODY: how much floor it takes up, as a radius (with yours, that is REACH.touch)
@@ -790,6 +791,52 @@ export function create(c) {
      * be holding — the keycard is still on its wrist, and is taken from it there as it was taken from it standing.
      */
     fell() { return !!pirate; },
+    /**
+     * Its dying (cast/health.rule.js: 0 → 1 over HEALTH.dying seconds; the conductor calls this and nothing else of it).
+     * Standing: its face tears, its head snaps back, its arms fly out — and then, stiff as it always is, it goes over
+     * backwards from the feet like a mannequin pushed, hits the carpet, rocks once and lies on its back with its arms out
+     * to the sides, the keycard's wrist on the floor beside it where it can be taken. Already down on its front at a
+     * hole: it shudders, its face goes down into the carpet and its arms twitch out flat. Nothing random: the clock of
+     * its dying only.
+     */
+    dies(progress) {
+      const p = pirate; if (!p) return;
+      const k = Math.max(0, Math.min(1, progress)), sec = k * HEALTH.dying;
+      if (!p.death) {
+        const floor = W()?.floorY(p.x, p.z) ?? p.group.position.y;
+        p.death = { y0: p.group.position.y, floor, yaw: p.group.rotation.y, down: !!p.down, lean: p.head.rotation.z };
+      }
+      const d = p.death, shake = Math.exp(-sec * 9) * Math.min(1, sec * 30);
+      // the tear: its face slips, frame on frame, for the first of it, and then it is the face it had
+      const slip = sec < 0.3 && Math.floor(sec * 24) % 2 === 0;
+      if (slip !== p.slip) { p.slip = slip; p.show(); }
+      if (d.down) {
+        const drop = Math.min(1, Math.max(0, (sec - 0.15) / 0.4)), drop2 = drop * drop * (3 - 2 * drop), tw = Math.sin(sec * 31) * Math.exp(-sec * 3.5) * 0.22;
+        p.head.rotation.set(-Math.PI / 2 - 0.25 + 0.65 * drop2 + shake * 0.2, 0, 0.3 * drop2);
+        p.arms[0].rotation.set(0, 0, -1.5 - tw); p.arms[1].rotation.set(0, 0, 1.5 - tw * 0.7);
+      } else {
+        // stiff for a moment, then over from the feet, faster as it goes (it does not bend)
+        const u = Math.min(1, Math.max(0, (sec - 0.16) / 0.5)), after = sec - 0.66;
+        let a = -(Math.PI / 2) * u * u;
+        if (after > 0) a += 0.16 * Math.exp(-after * 7) * Math.abs(Math.sin(after * 16));          // it hits, and rocks on its back
+        const lie = Math.sin(-a);                                                                // (0 standing … 1 flat)
+        p.group.position.y = d.y0 + (d.floor - d.y0) * Math.min(1, u * u * 1.4) + 0.12 * lie;   // (off its plinth if it was on one)
+        p.group.rotation.set(a, d.yaw, 0);
+        // arms: flung out with the blow, then lying out to its sides on the floor
+        const fling = Math.min(1, sec / 0.12), out = 1.55 * fling - 0.2 * Math.max(0, Math.min(1, (sec - 0.7) / 0.3));
+        const flop = after > 0 ? Math.sin(after * 14) * Math.exp(-after * 6) * 0.25 : 0;
+        p.arms[0].rotation.set(-0.15 * lie + flop, 0, -out); p.arms[1].rotation.set(-0.15 * lie - flop, 0, out);
+        // the head: back with the blow, and at the end it rolls to one side
+        const roll = Math.max(0, Math.min(1, (sec - 0.72) / 0.35));
+        p.head.rotation.set(-0.55 * shake + 0.25 * lie, 0, d.lean + (d.lean >= 0 ? 0.55 : -0.55) * roll * roll * (3 - 2 * roll));
+        p.shadow.visible = lie < 0.5;
+      }
+      if (p.card) {
+        // the card on its ribbon goes down along the arm and lies on the carpet beyond the hand
+        if (d.down || p.group.rotation.x < -0.6) p.card.hang.quaternion.identity(); else p.plumb();
+        if (p.card.use && p.card.held) reach(p);
+      }
+    },
     dispose() { if (pirate) { const i = W()?.bodies.indexOf(pirate.body); if (i >= 0) W().bodies.splice(i, 1); } pirate?.group.removeFromParent(); pirate = null; },
   };
 }
