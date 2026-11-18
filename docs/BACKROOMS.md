@@ -204,7 +204,10 @@ Things to know before they bite:
   a room.
 - **Nothing pushes the visitor.** No moving walls, no colliders that travel.
   If something carries them, take the controls for a second and move them
-  along a path (`c.env.player.warp`), camera level, then let go.
+  along a path (`c.env.player.warp`), camera level, then let go. The one
+  exception is water (the owner, 18 November): moving water may push someone
+  in it, as the waterpark's Surge Basin surge, the Drain Spa's vortex and the
+  Lazy Loop's current do, by adding to their own velocity, never by a collider.
 - **Glass and anything see-through is expensive** and sorts badly. Few panes,
   simple tints.
 - **A creature that lives in one room is part of that room's file**: its model

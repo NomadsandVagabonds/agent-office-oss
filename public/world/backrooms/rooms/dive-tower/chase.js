@@ -2,7 +2,9 @@ import { createWalk } from '../../cast/walk.js';
 import { buildSmilingClimber } from '../cubicle-grid/rig.js';
 import { flightAt, TOWER } from './plan.js';
 
-const COUNT = 6;
+// Four, and fairly slow (the owner, 18 Nov: "A and also they should be fairly slow"): about 55% of a walk, so a
+// visitor who keeps walking gets through hurt but alive and one who stops is caught. (Was six, at 1.40-1.52 m/s.)
+const COUNT = 4;
 const RESIDENT = 'towel-return';
 const SPREAD = Math.PI * 2 / COUNT;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -20,8 +22,8 @@ function buildPack(c) {
     const spawn = c.toWorld(lane * (row ? 1.55 : 1.08), c.D / 2 - (row ? 1.02 : 1.58));
     return {
       ...spawn, rig, group, row, lane, r: .21, tall: 1.37, board: 0,
-      speed: [1.48, 1.52, 1.46, 1.40, 1.50, 1.43][i],
-      delay: [.47, .25, .70, 1.12, .94, 1.30][i], attackUntil: 0,
+      speed: [1.12, 1.16, 1.10, 1.06][i],
+      delay: [.47, .25, .70, 1.12][i], attackUntil: 0,
     };
   });
 }
