@@ -177,7 +177,7 @@ could stop sharing.
 | Clothes shop | frames going away to a corridor; rail into the carpet | rails, dummies |
 | Moving stairs | shaft of doors; rides that loop; a door that goes elsewhere | the mauve palette of the clothes shop |
 | TV shop | sets that wake as you pass; the camera's late picture | dummies |
-| The Orange | everything orange; the server with an orange head | neon menu |
+| The Orange | everything orange; the server with an orange head; a board that serves everyone but you (take a number: it stops one short) | neon menu |
 | Food court | tables on the roof; the hole in the floor | neon, the hole (atrium, level-p) |
 | Atrium | storeys going up, each smaller | neon, the hole |
 | Level P | one car, stacked to the roof | the hole |

@@ -65,6 +65,43 @@ export function build(c) {
     det.box(-W / 2 + 0.4, 1.35, -D / 2 + 0.02, W / 2 - 0.4, 1.38, -D / 2 + 0.3, [0.66, 0.52, 0.2]);
     for (let x = -W / 2 + 0.6; x < W / 2 - 0.5; x += 0.45) { c.model('orange:jar', () => { const v = new Vox(), g = M('#d8e6e0', 0); v.cyl('y', 0, 0, 0, 10, 4, g); v.carve(-3, 1, -3, 3, 10, 3); for (let k = 0; k < 3; k++) v.ellipsoid(-1 + k, 2 + k * 3, (k % 2) * 1 - 0.5, 1.6, 1.6, 1.6, M('#f08a1e', 2)); v.cyl('y', 0, 0, 10, 12, 4.2, M('#c9a43a', 0)); return v; }, x, -D / 2 + 0.16, { y: 1.38, solid: false, shadow: false }); }
     }
+  /* take a number: a ticket machine at the end of the counter, and a board over it that says who is being served. It counts up
+     towards yours and stops one short. Take another and it moves on one, and stops one short of that. Nobody else is queueing */
+  { const spot = [[-W / 2 + 0.42, zc + 0.42], [-W / 2 + 0.42, zc + 1.1], [W / 2 - 0.42, zc + 1.5], [W / 2 - 0.42, zc + 2.1]].find(([x, z]) => c.clear(x, z, 0.3));
+    if (spot) { const [tx, tz] = spot, face = tx < 0 ? Math.PI / 2 : -Math.PI / 2;
+      c.model('orange:ticket', () => { const v = new Vox(), cr = M('#c9ccd0', 0), red = M('#d23a22', 1);
+        v.cyl('y', 0, 0, 0, 1, 7, M('#3a3d42', 0)); v.cyl('y', 0, 0, 1, 44, 1.4, cr);
+        v.box(-5, 43, -4, 5, 56, 5, red); v.box(-4, 55, -3, 4, 57, 4, red); v.box(-5, 49, 5, 5, 50, 6, M('#f4efe0', 0));
+        v.box(-1, 45, 5, 2, 49, 7, M('#f4efe0', 0)); v.box(-3, 51, 5, 3, 54, 6, M('#1a1a1e', 0)); v.box(-2, 52, 6, 2, 53, 7, M('#f08a1e', 2));   // the tongue of the next ticket; a slot and a label
+        return v; }, tx, tz, { rot: face, solid: false, shadow: false });
+      c.solid(tx - 0.12, tz - 0.12, tx + 0.12, tz + 0.12, { tall: true });
+      const bw = 128, bh = 64, board = kit.tex.live(bw, bh, () => {}), g = board.image.getContext('2d');
+      board.generateMipmaps = false; board.minFilter = THREE.LinearFilter;
+      let served = Math.floor(R.range(21, 88)), mine = 0, next = 0;
+      const paint = () => { g.fillStyle = '#0b0605'; g.fillRect(0, 0, bw, bh); g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillStyle = '#f08a1e'; g.font = 'bold 11px monospace'; g.fillText('NOW SERVING', bw / 2, 9);
+        g.shadowColor = '#ff3020'; g.shadowBlur = 6; g.fillStyle = '#ff4a2a'; g.font = 'bold 34px monospace'; g.fillText(String(served % 100).padStart(2, '0'), bw / 2, 36); g.shadowBlur = 0;
+        if (mine) { g.fillStyle = '#f4efe0'; g.font = 'bold 9px monospace'; g.fillText('YOU ' + String(mine % 100).padStart(2, '0'), bw / 2, 58); }
+        g.fillStyle = 'rgba(0,0,0,0.3)'; for (let y = 0; y < bh; y += 2) g.fillRect(0, y, bw, 1); board.needsUpdate = true; };
+      paint();
+      // hung from the ceiling over the end of the counter, readable from both ways along the room
+      const bx = tx < 0 ? Math.max(-W / 2 + 1.25, -W / 4) : Math.min(W / 2 - 1.25, W / 4), bz = zc + 0.95, by0 = Math.max(1.95, H - 0.85), by1 = by0 + 0.34;
+      const lit = c.shining('orange:serving', board, 1.6, [1, 1, 1], { bloom: 1 });
+      c.board(lit, bx, (by0 + by1) / 2, bz + 0.032, 0.66, 0.33, 0); c.board(lit, bx, (by0 + by1) / 2, bz - 0.032, 0.66, 0.33, Math.PI);
+      c.flat.box(bx - 0.36, by0 - 0.02, bz - 0.03, bx + 0.36, by1 + 0.02, bz + 0.03, [0.2, 0.18, 0.18]);
+      for (const s of [-1, 1]) c.flat.box(bx + s * 0.28 - 0.008, by1 + 0.02, bz - 0.008, bx + s * 0.28 + 0.008, H, bz + 0.008, [0.6, 0.62, 0.65]);
+      const at = c.toWorld(bx, bz);
+      const u = c.use({ x: tx + (tx < 0 ? 0.45 : -0.45), z: tz, r: 1.0, label: 'take a number', use: () => {
+        mine = mine ? mine + 1 : served + 2 + Math.floor(Math.random() * 3); next = 2.5 + Math.random() * 2; u.label = 'take another number'; paint();
+        const w = c.toWorld(tx, tz); c.env.play?.('click', w.x, w.z, 6);
+      } });
+      c.tick((dt, t, me) => {
+        if (!me.inside || !mine || served >= mine - 1) return;
+        next -= dt; if (next > 0) return;
+        served++; next = 5 + Math.random() * 5; paint(); c.env.play?.('ding', at.x, at.z, 12);   // (run-time dice: not the room's R)
+      });
+    } }
+
   /* what moves: the big one over the counter, going round; and who is serving */
   const mat = kit.surface({ vox: true }), mesh = (key, make, k = S) => { const b = new Batch(true); b.addVox(kit.model(key, make).solid, new THREE.Matrix4().makeScale(k, k, k)); return new THREE.Mesh(kit.geometry(b, [lamp(0.4, 2.6, 1.2, [1.25, 1.0, 0.7], { k: 9, wrap: 0.5, far: 30 })], [0.7, 0.6, 0.5]), mat); };
   const big = mesh('orange:big', orangeVox(22, false), S * 1.0), who = mesh('orange:server', dummyVox(1, '#f4efe0', 'orange')), fig = new THREE.Group();
