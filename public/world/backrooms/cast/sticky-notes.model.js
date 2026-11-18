@@ -74,9 +74,14 @@ export function makeStickyNote(kit, colour = '#f4e04d', seed = 0) {
   const G = 8, cell = NOTE_SIZE / G, k = ((Math.round(seed) % 3) + 3) % 3, lift = new Map();
   const patch = (x0, x1, y0, y1, alb, off) => { const at = b.verts; b.quad([x0, y0, 0], [x1, y0, 0], [x1, y1, 0], [x0, y1, 0], alb); for (let i = at; i < b.verts; i++) lift.set(i, off); };
   patch(-h, h, -2 * cell, 0, lin(colour, 1.08), 0.0006);
-  for (let line = 0; line < 3; line++) {
+  // (and on the back as well, as seen from behind: one that flies or tumbles turns its back to you as often as its face,
+  // and a blank one reads as a coloured square, not a note)
+  for (const side of [1, -1]) for (let line = 0; line < 3; line++) {
     const top = (2 + line * 2) * cell + cell * 0.3, end = G - 1 - ((k + line) % 3);
-    for (let x = 1; x < end; x++) if ((x * 7 + line * 3 + k) % 5 !== 0) patch(-h + x * cell, -h + (x + 1) * cell, -top - cell * 0.4, -top, lin('#2a2f4a'), 0.0012);
+    for (let x = 1; x < end; x++) if ((x * 7 + line * 3 + k) % 5 !== 0) {
+      const x0 = side * (-h + x * cell), x1 = side * (-h + (x + 1) * cell);
+      patch(Math.min(x0, x1), Math.max(x0, x1), -top - cell * 0.4, -top, lin('#2a2f4a'), side * 0.0012);
+    }
   }
   const geo = kit.geometry(b, [], [1, 1, 1]);
   const mat = kit.surface({ side: THREE.DoubleSide });
