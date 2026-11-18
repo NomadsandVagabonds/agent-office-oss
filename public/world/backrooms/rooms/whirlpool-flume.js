@@ -357,7 +357,6 @@ export function build(c) {
     'CENTRIFUGAL SPA UNIT 04',
     `BROTH TEMP: ${p.temp || '104 F'}`,
     'SIPHON FLOW: UP TO CEILING',
-    'VALVE REVERSES VORTEX SPIN',
     'SUCTION DRAIN UNGUARDED',
   ], { seed: 73, warn: true, mess: 0.25 });
   depthTile(c, 0, 0.046, hs + 0.22, `SPA ${p.temp || '104 F'}`, 0, 71);

@@ -3,7 +3,7 @@ import { buildSmilingClimber } from '../cubicle-grid/rig.js';
 import { flightAt, TOWER } from './plan.js';
 
 const COUNT = 6;
-const RESIDENT = 'pit-clerks';
+const RESIDENT = 'towel-return';
 const SPREAD = Math.PI * 2 / COUNT;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 const heading = (a, b) => Math.atan2(b.x - a.x, b.z - a.z);

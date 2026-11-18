@@ -122,8 +122,8 @@ test('a player can run the maze, chain the hops, plunge once and walk out while 
       assert.ok(camera.position.y-tower.y>plan.water,'the swimmer returns above water');
     }
   }
-  assert.deepEqual(met,['pit-clerks']);
-  assert.deepEqual(escaped,['pit-clerks']);
+  assert.deepEqual(met,['towel-return']);
+  assert.deepEqual(escaped,['towel-return']);
   assert.equal(sounds.filter(s=>s==='towerSplash').length,1);
   assert.equal(hurt.length,0,'a steady walk and the marked jumps are enough to escape');
 

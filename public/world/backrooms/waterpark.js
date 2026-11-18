@@ -1367,7 +1367,6 @@ export function createBasin(c, spec) {
         if (!drained || !drained.ok) c.hurt(1);
       }
 
-      c.env.hud?.flag?.('SUBMERGED', swimmer.submerged);
       if (swimmer.submerged) {
         veilMesh.visible = true;
         veilMesh.position.set(me.x, me.world.y - (c.room.y || 0), me.z);
@@ -1378,7 +1377,6 @@ export function createBasin(c, spec) {
     } else if (!me.inside && veilMesh.visible) {
       veilMesh.visible = false;
       dynamicSupportY = null;
-      c.env.hud?.flag?.('SUBMERGED', false);
     }
 
     if (rippleAge < 1.2) {
@@ -1398,7 +1396,6 @@ export function createBasin(c, spec) {
     prevLeave?.();
     dynamicSupportY = null;
     veilMesh.visible = false;
-    c.env.hud?.flag?.('SUBMERGED', false);
   };
 
   return info;
