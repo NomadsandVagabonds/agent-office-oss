@@ -24,7 +24,7 @@ export const HEALTH = Object.freeze({
 export const TIER = Object.freeze({
   'the-lines': 'boss', 'standing-meeting': 'boss', mother: 'boss', 'carried-interest': 'boss', 'head-count': 'boss',
   pirate: 'medium', 'trunk-line': 'medium', toner: 'medium', intern: 'medium',
-  shadow: 'basic', 'toner-brood': 'basic', 'mother-brood': 'basic',
+  shadow: 'basic', 'toner-brood': 'basic', 'mother-brood': 'basic', 'middle-manager': 'basic',
   // somebody a room keeps (resident.js): the waterpark's
   'guard-stand': 'medium', 'lane-keeper': 'medium', 'flume-toner': 'medium', 'plenum-toner': 'medium',
   'inverted-bathers': 'basic', 'towel-return': 'basic', 'pool-skimmer': 'basic',

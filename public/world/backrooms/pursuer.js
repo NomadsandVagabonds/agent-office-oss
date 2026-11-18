@@ -218,7 +218,7 @@ export function createStalkers(env, options = {}) {
         if (a && Number.isFinite(a.x) && Number.isFinite(a.z)) {
           const w = W();
           for (let i = 0; i < 16 && !staged.beside; i++) {
-            const ang = (i * Math.PI) / 8, x = a.x + Math.cos(ang) * 1.5, z = a.z + Math.sin(ang) * 1.5;
+            const ang = (i * Math.PI) / 8, apart = Number(who.it.apart) || 1.5, x = a.x + Math.cos(ang) * apart, z = a.z + Math.sin(ang) * apart;          // (apart: one that goes off when you are near says how far)
             if (!w.roomAt(x, z) || !w.free(x, z, 0.3) || !w.los(x, z, a.x, a.z)) continue;
             env.player.warp?.(x, z, Math.atan2(-(a.x - x), -(a.z - z)) + (Number(who.it.aside) || 0)); staged.beside = true;          // (aside: one that goes off when stared at says how far off it to look)
           }

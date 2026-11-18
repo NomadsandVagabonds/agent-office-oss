@@ -92,6 +92,9 @@ export const ALL_CAST = Object.freeze([
   Object.freeze({ id: 'carried-interest', name: 'Carried interest',
     rule: 'Somebody senior, too big to walk, carried along on ten small things. It comes for you slowly, and is set down on you. Tread on what carries it and it is on the floor until more grow — but it howls when it is dropped, and the camera does not like the howl.',
     disposition: 'hunts', home: 'roams', weight: 1, deep: true, heavy: true, needs: [], items: ['paper', 'lighter', 'battery'], fire: 'fears', caught: { hurt: 2 } }),
+  Object.freeze({ id: 'middle-manager', name: 'The middle manager',
+    rule: 'Three metres of somebody in a suit, bent under the ceiling. Look it in the eye and it comes for you for as long as you hold the look, and every look leaves it fatter and slower. Near you, or full, it goes off — and it reaches as far as everything it has put on. Watch it out of the corner of your eye.',
+    disposition: 'hunts', home: 'roams', weight: 1, deep: true, needs: [], items: ['paper', 'lighter'], fire: 'fears', caught: { hurt: 2 } }),
   // (withTheme: on a part if and only if that part is that kind of floor; never dealt by weight. The shopping centre's own)
   Object.freeze({ id: 'dummies', name: 'The dummies',
     rule: 'Every time you come back into a room, one more of them is stood where you stood when you last went out of it.',
