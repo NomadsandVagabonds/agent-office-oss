@@ -257,10 +257,12 @@ export function build(c) {
       const a = (k / 10) * Math.PI * 2 + ring * 0.3;
       const px = Math.cos(a) * rr, pz = Math.sin(a) * rr;
       const col = ring === 2 ? [0.90, 0.99, 1.0] : ring === 1 ? [0.42, 0.95, 0.99] : [0.22, 0.88, 0.96];
-      vortexBatch.box(px - 0.13, yy, pz - 0.065, px + 0.13, yy + 0.032, pz + 0.065, col);
+      // Foam is a thin see-through patch on the water, not a block under it (from below, the blocks read as slabs).
+      const ca = Math.cos(a), sa = Math.sin(a), p = (u, w) => [px + u * -sa + w * ca, yy + 0.032, pz + u * ca + w * sa];
+      vortexBatch.quad(p(-0.13, -0.065), p(0.13, -0.065), p(0.13, 0.065), p(-0.13, 0.065), col);
     }
   }
-  const vortexMesh = c.dynamic(vortexBatch, { pivot: [0, waterY, 0] });
+  const vortexMesh = addTranslucent(c, vortexBatch, { alpha: 0.72, side: THREE.DoubleSide, order: 5 });
 
   // ---- 3. Sculpted 3 cm `Vox` Wrongness (Batched into ONE `placeVoxStack`) --
   const neX = hs + 0.38, neZ = -hs - 0.38;
