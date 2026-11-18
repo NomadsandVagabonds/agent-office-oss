@@ -478,7 +478,14 @@ is that patch × how open the doorway is (a hung door's swing, `doorleaf.js`
 `k`; a doorway shut any other way: `world.throats`) × how lit the room beyond
 is (its banks, its flicker, its dimmer: a creature's black-out next door puts
 it out), in that room's tubes' colours (`uDoorL`, four numbers). A shut door
-lets nothing through. The old glow at a doorway from a brighter room next door
+lets nothing through. A window between two rooms (`gen.js` windows,
+`def.wins`) is one more doorway to this pass: its sill at the hole's bottom,
+as tall as the hole, always open, no leaf, and its cross of bars standing in
+it (`world.js` `windowBars`: the rail is too low a box to be gathered as
+standing, so both bars are given), so the patch on the floor below it carries
+the cross. It competes with the doorways for the four channels, the brightest
+kept. It has no glow lamp at any tier: Classic and Low draw a window exactly as
+before. The old glow at a doorway from a brighter room next door
 (a lamp in the bake) is kept at half at this tier: it still lights the ceiling
 and what stands by the door, which the map does not reach, and it does not
 follow the doorway or the room beyond. Bodies standing in the patch are lit by
@@ -540,9 +547,7 @@ is 4 % of what it is under it), so a strong shop lamp over a dim concourse
 leaks through the wall beyond that, in a stepped arc. A pane with its own
 colour and the doorway's strength needs the bake to know which side of a wall
 a lamp is on, or the shop to be a room of its own with a window between (the
-generator's windows, `hole.win`, pass no doorway light today; `doorLight`
-could take them as doorways with a sill and a head, but that changes the maps
-of every room that has one, so it is the owner's call). Pictures and numbers:
+generator's windows pass doorway light since 18 Nov, above). Pictures and numbers:
 the study of 18 Nov (map bake for the test room 1–3 ms with the shop, 0–2 ms
 without; no mesh or triangle added).
 
@@ -1209,6 +1214,9 @@ vendored files. It is decided after phases 1 to 7 are measured.
   and asked for a moving, blurred, refracted one, or none. It is now worked
   out in the shader and moves; a variant with none was pictured alongside.
   Shown both, the owner chose the faint moving one (strength 1.3).
+- **Windows between rooms (18 Nov):** a window between two rooms passes
+  light like a doorway at Medium and High (`doorlight`); Classic does not
+  move, and a window gets no glow lamp there.
 
 ## The ten-minute check, before the Graphics row is for everybody
 

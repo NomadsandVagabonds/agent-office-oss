@@ -230,13 +230,27 @@ function leafBoxes(level) {
   return out;
 }
 
+/** A window's throat: never shut (no leaf, and nothing closes it). */
+const OPEN_WINDOW = Object.freeze({ open: true });
+/** The cross of bars in a window, in the middle of the wall's thickness, in this room's frame (as the shell draws them,
+ * c.wbox: the upright 4 cm, the rail 4 cm, both 3 cm deep). The rail is too low a box to be gathered as standing, so
+ * both are given here. */
+function windowBars(def, dr) {
+  const box = (a, b, y0, y1) => { const p = wallPoint(def, dr.side, a, -T / 2 - 0.015), q = wallPoint(def, dr.side, b, -T / 2 + 0.015);
+    return { x0: Math.min(p.x, q.x), y0, z0: Math.min(p.z, q.z), x1: Math.max(p.x, q.x), y1, z1: Math.max(p.z, q.z) }; };
+  const cy = dr.sill + dr.h / 2;
+  return [box(dr.c - 0.02, dr.c + 0.02, dr.sill, dr.sill + dr.h), box(dr.c - dr.w / 2, dr.c + dr.w / 2, cy - 0.02, cy + 0.02)];
+}
 /** (kit.gfx.doorlight) One room's light from next door, baked into its light map. */
 function doorLight(world, rt, leaves) {
   const m = rt.lm, def = rt.def;
   if (!m) return;
   const t0 = performance.now(), found = [];
-  for (const dr of def.doors) {
-    const N = world.rooms[dr.to], th = world.throats.find((t) => t.link.id === dr.link);
+  // (a window between two rooms, gen.js windows, is a doorway here: its sill at the hole's y0, as tall as the hole, always
+  // open, no leaf; and the cross of bars in the middle of the wall stands in it. Classic keeps no lamp for it, as it never did)
+  const wins = (def.wins || []).map((w) => ({ side: w.side, c: w.c, w: w.w, sill: w.y0, h: w.y1 - w.y0, to: w.to, link: `win:${w.win}`, win: w }));
+  for (const dr of [...def.doors, ...wins]) {
+    const N = world.rooms[dr.to], th = dr.win ? OPEN_WINDOW : world.throats.find((t) => t.link.id === dr.link);
     if (!N || !th || !N.lights.length) continue;
     const wl = WALLS[dr.side], n = wl.n, U = wl.U, mid = wallPoint(def, dr.side, dr.c, 0), y0 = dr.sill || 0, y1 = y0 + dr.h;
     const face = (out) => [[-1, y0], [1, y0], [1, y1], [-1, y1]].map(([k, y]) => [mid.x + U[0] * k * dr.w / 2 - n[0] * out, y, mid.z + U[2] * k * dr.w / 2 - n[2] * out]);
@@ -247,7 +261,7 @@ function doorLight(world, rt, leaves) {
     });
     const near = (b) => Math.hypot((b.x0 + b.x1) / 2 - mid3[0], (b.z0 + b.z1) / 2 - mid3[2]) < 3.5;
     const leaf = leaves.get(dr.link), boxes = [...(rt.shadowBoxes || []).filter(near), ...(N.shadowBoxes || []).map((b) => boxAcross(mv, b)).filter(near),
-      ...(leaf ? leaf.boxes.map((b) => boxAcross(across(world.rooms[leaf.room].def, def), b)) : [])];
+      ...(leaf ? leaf.boxes.map((b) => boxAcross(across(world.rooms[leaf.room].def, def), b)) : []), ...(dr.win ? windowBars(def, dr) : [])];
     const res = bakeDoorway({ layout: m.layout, faces: [face(0), face(T)], lamps, boxes, skip: dr.side, groups: groupCount(N.lighting) });
     if (!res) continue;
     // each group's colour (its lamps' colour at unit brightness), for the frame to mix by the levels of the room beyond
@@ -258,8 +272,11 @@ function doorLight(world, rt, leaves) {
     found.push({ dr, N, th, res, total, share: [...res.energy].map((e) => e / total), tint });
   }
   found.sort((a, b) => b.total - a.total);
-  const kept = found.slice(0, SHADOWS.maxDoors);
-  rt.doorStats = { ms: 0, doors: kept.length, of: def.doors.length };
+  // (doorways first: a doorway's light is how the ways out of a room are read, so a window never takes one's place among
+  // those kept. Windows, brightest first, fill only what the doorways leave)
+  const doorways = found.filter((f) => !f.dr.win).slice(0, SHADOWS.maxDoors);
+  const kept = [...doorways, ...found.filter((f) => f.dr.win).slice(0, SHADOWS.maxDoors - doorways.length)];
+  rt.doorStats = { ms: 0, doors: kept.length, of: def.doors.length, ...(wins.length ? { windows: kept.filter((k) => k.dr.win).length, ofWindows: wins.length } : {}) };
   if (kept.length) {
     const packed = packDoorways(m.layout, kept.map((k) => k.res));
     m.C = packed; m.doors = true;
