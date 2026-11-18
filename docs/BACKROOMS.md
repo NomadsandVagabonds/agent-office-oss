@@ -304,6 +304,27 @@ making it.
 
 ## Adding a creature
 
+### Putting a creature next to you (for looking, filming, testing)
+
+On the play page (`/play?debug&…`) and the dev page (`/world/dev/backrooms.html?…`), under `debug` only (the play
+page reads none of this without it, and a visit so made is not scored):
+
+- `&cast=toner,intern` deals exactly those to every part (ids from `cast.js`). It does not put them near you: they
+  start where they always start, which for a hunter is at least two rooms from the landing.
+- `&beside=toner` puts **you** a step and a half from that one, facing it, as soon as it is on the floor. This is
+  the switch that makes one reachable. It works for anybody with an `at()`: `pirate`, `toner`, `shadow` (once it has
+  turned up), `head-count`, `intern`, `standing-meeting`, `carried-interest`, `mother`, `the-lines`.
+- The mascot is not on every part: a seed gives it one part of the visit (on most, the last). `&pursuer=1` only
+  says the visit has one. To have it on the floor you load, make that floor the only one: `&pursuer=1&depths=1`.
+  Add `&wake=1` to have it awake and after you, and `&loot=card` (dev page) to have the keycard on its wrist.
+- A creature that comes with a room needs the room: the lines with `&room=the-culvert&themes=suburb`, the trunk
+  line (a resident of its room, not of the cast) with `&room=cable-drop`.
+
+So: `…?debug&cast=pirate,head-count&beside=head-count`, or `…?debug&pursuer=1&depths=1&wake=1&beside=pirate`.
+From the console, `__backrooms.env.pursuer.cast()` says who is on the floor and where, and
+`__backrooms.env.pursuer.vital('pirate')` its health. `env.pursuer.at()` is the mascot's alone: it is null for
+anybody else, and null when the mascot is on another part.
+
 A creature is three things: a line in the cast, which is pure data; a file
 that builds it and works it; and one rule, kept where a test can run it.
 `cast/pirate.js`, its line in `cast.js` and its rules in `cast/hunt.js` are
