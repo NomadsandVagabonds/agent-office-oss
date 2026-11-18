@@ -1515,7 +1515,9 @@ nothing of the waterpark's is changed for it.
   0.3 m; which surface, the hold, one water level; none under, too near,
   facing down or out of view; what is left out, the marks; the beam in the
   mirror's space and put back; everything put back when the mirror's draw
-  throws; Medium and back from High; the shader text; nothing random).
+  throws; Medium and back from High; the shader text; nothing random; the
+  sliver: `screenCover` in numbers, the gate's two thresholds, the weight's
+  fade, and a pool turned into view and back out).
   `backrooms-gfx-water-wake` counts the copy's reads outside the mirror's
   block.
 - **Cost.** Counted in one load each, at High, seed 7,
@@ -1544,6 +1546,34 @@ nothing of the waterpark's is changed for it.
   mirror's triangles at most). On the water's pixels: one texture read, a
   matrix, a few multiplies. Medium and a dry room: identical draws. Software
   rendering, so no milliseconds.
+- **A sliver is not worth the room drawn again.** Before the pass, the chosen
+  surface's rim (`sheetRim`, its extent at its plane) is put through the
+  camera's projection, clipped to the view on all six planes and measured: its
+  share of the picture (`screenCover`, no pixels read). The pass comes on from
+  1.25 % of the picture and goes off under 1 % (`coverOn`, `coverOff`:
+  `mirrorGate`, so it cannot flicker at the edge); under it the water has the
+  flat tint, exactly as at Medium. Its weight on the water fades in from 1 % to
+  3 % (`mirrorWeight`, a smoothstep; `uMirrorOn` is that weight, and at 1 the
+  shader returns the mirror itself, not a mix, so a whole pool is the picture
+  it was). A grazing sliver has a strong fresnel term, so the switch was
+  checked rather than assumed: turning into the kiddie lagoon from its doorway
+  by 0.01 rad a step, the pass comes on at 1.34 % (weight 0.075) and the frame
+  with the mirror differs from the same frame without it by at most **2
+  levels** (3,405 pixels); turning back out it stays on down to 1.21 % (weight
+  0.03, at most 1 level) and goes off at 1.08 %, where its weight is 0. At Full
+  VHS it comes on at 1.34 % too, at most 2 levels outside the REC light. The
+  doorway walk in 13 steps (High, Clean picture), draws of the level's scene
+  before → after: steps 0 to 4 (no water) 25, 27, 22, 22, 23 both ways; step 5
+  (0.74 % of the picture: 909 water pixels) **43 → 26**, the mirror's 17 draws
+  gone; steps 6 to 12 (2.9 % to 41 %) 39, 36, 35, 40, 57, 84, 112 both ways and
+  0 pixels different (step 6, at 2.92 %, weight 0.996: 1,083 pixels by at most
+  1 level). At Full VHS, 41 → 25 at step 5 and nothing else. With a pool in full
+  view (the kiddie lagoon across and at your feet, the deep end) the picture is
+  the merged mirror's to the pixel and the draws are the same; Medium and a dry
+  room at High, 0 pixels and the same draws. The area is the rim's box, not
+  what is seen of the water: a wall in front of part of the pool is not taken
+  off (2.92 % by the rim at step 6 where about 2.1 % of the picture is water),
+  so it errs towards drawing the mirror.
 - **Can High afford it?** The table at the top asks nothing of draws for
   High, and the one real machine measured (an M4 Max) held its frame with the
   scene drawn 32 times. On an ordinary laptop's integrated graphics, doubling
@@ -1551,11 +1581,11 @@ nothing of the waterpark's is changed for it.
   biggest single thing High asks for, and nobody has measured it. If it is too
   much, cheaper in this order: (1) every other frame, the mirror a frame
   stale (halves the added draws; a slight slide against the contact line when
-  the eye turns fast); (2) only within N metres of the surface (say 12) or
-  only while the surface covers more than a tenth of the picture: the
-  doorway's sliver of pool (a frame with under a thousand water pixels) pays the
-  whole mirror (16 to 18 draws there); (3) only the surface's own room drawn
-  in it (the parts next door, behind walls, are drawn and hidden). A quarter
+  the eye turns fast); (2) a higher threshold for the sliver test above
+  (`coverOn`, `coverOff`, `coverFull` together; from 3 % to 10 % the doorway's
+  steps 6 and 7 would save their 16 draws each, and the fade would be over a
+  wider band of a still small pool); (3) only the surface's own room drawn in
+  it (the parts next door, behind walls, are drawn and hidden). A quarter
   size picture would save fill, not draws: here the draws are the cost.
 - **Known faults.**
   1. It is faint where the eye is high over the water and looking down (the
@@ -1568,8 +1598,10 @@ nothing of the waterpark's is changed for it.
      the floor.
   2. The return pool's upside-down upper pool is a marked sheet, so it is left
      out of the lower pool's mirror: the mirror shows the ceiling behind it.
-  3. A sliver of pool at the edge of the picture pays for the whole mirror
-     (above).
+  3. A small pool in the picture still pays for the whole mirror: a sliver
+     under about 1 % is skipped (above), but from 1.25 % up every draw of the
+     mirror is paid (16 at the doorway for 2 to 6 % of the picture), and the
+     test is the rim's box, so a pool mostly behind a wall counts in full.
   4. The camcorder's lamp is not in it (above): in a dark room, what only that
      lamp lights is darker in the mirror than in the room.
   5. Only one water level a frame: a pool at another height in view at the

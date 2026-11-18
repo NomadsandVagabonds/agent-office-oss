@@ -228,6 +228,13 @@ export const MIRROR = Object.freeze({
   capLeast: 0.4,      //  ... and at least this
   dim: 0.85,          // what the water gives back of it (on top of fresnel)
   tint: 0.35,         // how far it is taken toward the water's own colour
+  // a sliver of water is not worth the room drawn again: how much of the picture the chosen surface's rim covers
+  // (screenCover) decides. The pass comes on at `coverOn` and goes off under `coverOff` (no flicker at the edge); its
+  // weight fades in from `coverOff` to `coverFull` (smoothstep), so where it comes on it is still almost nothing (4 %)
+  // and where it goes off it is nothing: the switch is never seen, even on a grazing sliver with a strong fresnel term
+  coverOff: 0.01,
+  coverOn: 0.0125,
+  coverFull: 0.03,
 });
 
 /** A plane through `point` facing along `normal` (both [x, y, z]): → [nx, ny, nz, d], n·p + d = 0, n of length 1. */
@@ -260,6 +267,45 @@ export function obliqueProjection(P, clip) {
   const out = P.slice();
   out[2] = clip[0] * k; out[6] = clip[1] * k; out[10] = clip[2] * k + 1; out[14] = clip[3] * k;
   return out;
+}
+
+/**
+ * How much of the picture a flat polygon covers: `points` its corners in order ([x, y, z] each, world), `viewProj` the
+ * camera's projection × view (sixteen, column by column). Clipped to the view (all six planes, in clip space, so a
+ * polygon running behind the eye is cut at the near plane, not turned inside out), then its area on the screen as a
+ * share of the picture: 0…1.
+ */
+export function screenCover(points, viewProj) {
+  const e = viewProj;
+  let poly = (points || []).map(([x, y, z]) => [e[0] * x + e[4] * y + e[8] * z + e[12], e[1] * x + e[5] * y + e[9] * z + e[13], e[2] * x + e[6] * y + e[10] * z + e[14], e[3] * x + e[7] * y + e[11] * z + e[15]]);
+  // (w ± x, w ± y, w ± z ≥ 0: inside)
+  for (const [i, sign] of [[0, 1], [0, -1], [1, 1], [1, -1], [2, 1], [2, -1]]) {
+    const d = (p) => p[3] + sign * p[i], out = [];
+    for (let k = 0; k < poly.length; k++) {
+      const a = poly[k], b = poly[(k + 1) % poly.length], da = d(a), db = d(b);
+      if (da >= 0) out.push(a);
+      if ((da >= 0) !== (db >= 0)) { const t = da / (da - db); out.push(a.map((v, j) => v + (b[j] - v) * t)); }
+    }
+    poly = out;
+    if (poly.length < 3) return 0;
+  }
+  let area = 0;
+  for (let k = 0; k < poly.length; k++) {
+    const a = poly[k], b = poly[(k + 1) % poly.length];
+    area += (a[0] / a[3]) * (b[1] / b[3]) - (b[0] / b[3]) * (a[1] / a[3]);
+  }
+  return Math.min(1, Math.abs(area) / 2 / 4);
+}
+
+/** The pass's switch for a surface covering `cover` of the picture, `on` what it was last frame: → on or off. */
+export const mirrorGate = (on, cover, k = MIRROR) => (on ? cover >= k.coverOff : cover >= k.coverOn);
+
+/** The mirror's weight on the water for a surface covering `cover` of the picture: 0 at coverOff, 1 from coverFull. */
+export function mirrorWeight(cover, k = MIRROR) {
+  if (!(cover > k.coverOff)) return 0;
+  if (cover >= k.coverFull) return 1;
+  const t = (cover - k.coverOff) / (k.coverFull - k.coverOff);
+  return t * t * (3 - 2 * t);
 }
 
 /** The mirror's picture for a scene target w × h: → [w, h], at least 1 each way. */
@@ -392,8 +438,9 @@ float liquidHeight(vec2 p) {
 // what the surface mirrors, for a normal and the way to the eye (view space), at this pixel
 #ifdef MIRROR
 // (High, water 2: the room drawn once more, mirrored about this surface's plane, into a picture of its own: liquid.js
-// mirrorPass. uMirror takes a point in the eye's view space to that picture; uMirrorOn is 1 only on the one water level
-// that has the mirror this frame, and only inside the camcorder's draw. The lookup is moved by the ripple's stepped
+// mirrorPass. uMirror takes a point in the eye's view space to that picture; uMirrorOn is its weight (mirrorWeight: 1 once
+// the surface covers enough of the picture, fading to 0 for a sliver), above 0 only on the one water level that has the
+// mirror this frame, and only inside the camcorder's draw. The lookup is moved by the ripple's stepped
 // tilt, so the mirror wobbles in blocks as the bed does; its brightest is held to a few times the room's light here, so
 // a ceiling tube stays a patch and is not drawn out into a white bar; dimmed, and taken a little toward the water's own
 // colour. A surface without the mirror this frame keeps the flat tint)
@@ -402,14 +449,16 @@ uniform mat4 uMirror;
 uniform float uMirrorOn;
 vec3 reflection(vec3 n, vec3 v, vec2 uv, vec3 light) {
   vec3 flatTint = light * ${f(LIQUID.sky)};
-  if (uMirrorOn < 0.5) return flatTint;
+  if (uMirrorOn <= 0.0) return flatTint;
   vec4 m = uMirror * vec4(vView, 1.0);
   vec3 up = normalize(uRoomToView * vec3(0.0, 1.0, 0.0));
   vec2 q = m.xy / max(m.w, 1e-4) * 0.5 + 0.5 + (n - up).xy * ${f(MIRROR.wobble)};
   vec3 r = texture2D(tMirror, clamp(q, vec2(0.002), vec2(0.998))).rgb;
   float l = dot(r, vec3(0.299, 0.587, 0.114)), cap = max(dot(light, vec3(0.299, 0.587, 0.114)) * ${f(MIRROR.cap)}, ${f(MIRROR.capLeast)});
   r *= min(1.0, cap / max(l, 1e-5));
-  return r * ${f(MIRROR.dim)} * mix(vec3(1.0), uKeep.rgb, ${f(MIRROR.tint)});
+  r *= ${f(MIRROR.dim)} * mix(vec3(1.0), uKeep.rgb, ${f(MIRROR.tint)});
+  // (a sliver: faded in toward the flat tint; whole, exactly the mirror)
+  return uMirrorOn >= 1.0 ? r : mix(flatTint, r, uMirrorOn);
 }
 #else
 // (Medium, and any surface at High while the mirror is off: a flat tint of the room's light where it is)
