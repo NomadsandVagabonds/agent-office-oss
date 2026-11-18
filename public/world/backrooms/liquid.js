@@ -24,6 +24,9 @@
 // surface's underside is drawn in the same place with a material of its own (LIQUID_UNDER_FRAG, the same uniforms),
 // and the waterpark's veil over it as ever; under the plane anywhere else (outside the rim, or under the return pool's
 // upside-down upper pool) the room's own sheet is. Everything changed for the draw is put back in a finally.
+// What a room draws itself in place of what the water now draws (a mesh marked userData.liquidStandIn: the waterpark's
+// pale splash ring in createBasin) is hidden for the length of that draw in each room whose surface is drawn, and put
+// back in the same finally: Classic and Low, and any frame the room's surface is not drawn, keep it as it was.
 //
 // The wake: each surface that is up keeps a small pool of rings (liquid.rule.js wakeStart / wakeStep / wakeFill), timed by
 // the camcorder's own clock (frame()'s `now`). A room or a creature starts one through the handle c.liquid gave it
@@ -405,8 +408,13 @@ export function createLiquidView() {
     draw(renderer, scene, camera, target, under) {
       if (!target?.depthTexture) return under();
       const was = renderer.getRenderTarget?.() ?? target, autoClear = renderer.autoClear, bg = scene.background, camMask = camera.layers.mask;
-      const swapped = [], moved = [], lit = [];
+      const swapped = [], moved = [], lit = [], stood = [];
       try {
+        // what a room draws itself in place of what the water now does (userData.liquidStandIn: the waterpark's pale splash
+        // ring), hidden in each room whose surface is drawn this frame, before anything is drawn (the mirror too)
+        const rooms = new Set();
+        for (const rec of list) if (rec.live && (!rec.under || rec.below) && rec.pairs?.some((p) => shown(p.old))) rooms.add(rec.rt.group);
+        for (const g of rooms) g.traverse((o) => { if (o.userData?.liquidStandIn && o.visible) { o.visible = false; stood.push(o); } });
         // the mirror first (water 2, a surface chosen this frame): into its own picture, everything it changed put back
         stats.mirror.surfaces = 0;
         if (mirrorRec && level >= 2) {
@@ -461,6 +469,7 @@ export function createLiquidView() {
         renderer.setRenderTarget(target); renderer.render(scene, camera);
         stats.draws++;
       } finally {
+        for (const o of stood) o.visible = true;
         for (const p of lit) p.material.uniforms.uMirrorOn.value = 0;
         for (let i = 0; i < moved.length; i += 2) moved[i].layers.mask = moved[i + 1];
         for (const p of swapped) { p.water.visible = false; p.old.visible = true; p.water.material = p.material; }

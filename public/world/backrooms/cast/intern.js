@@ -73,7 +73,7 @@ export function create(c) {
     low += (want - low) * Math.min(1, dt * 3);
     // (dying: its hands and feet stay where they are and it comes down between them, front first: dies(). A jab: it jerks back: flinch())
     const fall = dying === null ? 0 : (() => { const u = Math.max(0, Math.min(1, dying / 0.45)); return u * u; })(), fall2 = dying === null ? 0 : Math.max(0, Math.min(1, (dying - 0.15) / 0.45));
-    const sh = { x: walker.x + fx * (0.42 - 0.12 * jolt), y: floor + ((1.02 - low * 0.9) + Math.sin(clock * 1.7) * 0.02) * (1 - fall) + 0.22 * fall + 0.1 * jolt, z: walker.z + fz * (0.42 - 0.12 * jolt) };
+    const sh = { x: walker.x + fx * (0.42 - 0.3 * jolt) + px * 0.12 * jolt, y: floor + ((1.02 - low * 0.9) + Math.sin(clock * 1.7) * 0.02) * (1 - fall) + 0.22 * fall + 0.38 * jolt, z: walker.z + fz * (0.42 - 0.3 * jolt) + pz * 0.12 * jolt };
     const hip = { x: walker.x - fx * 0.42, y: floor + ((1.24 - low * 0.7) + Math.sin(clock * 1.7 + 1) * 0.025) * (1 - fall2) + 0.3 * fall2, z: walker.z - fz * 0.42 };
     const bx = sh.x - hip.x, by = sh.y - hip.y, bz = sh.z - hip.z, bl = Math.hypot(bx, by, bz);
     back.position.set(hip.x, hip.y, hip.z); aim(back, bx, by, bz, 0, 1, 0, bl, BACK * S);            // (its spine is uppermost)
@@ -106,7 +106,7 @@ export function create(c) {
       }
     });
     // the head: it hangs, and swings as it goes, and whatever else it is doing it is looking at them
-    swingV += (-swing * 16 - swingV * 2.4 + (moving ? Math.sin(clock * 8.5) * 5 : 0) + jolt * 40) * dt; swing += swingV * dt;
+    swingV += (-swing * 16 - swingV * 2.4 + (moving ? Math.sin(clock * 8.5) * 5 : 0) + jolt * 160) * dt; swing += swingV * dt;
     nod += ((dying !== null ? -0.9 * fall : blank ? 0.9 : sorry ? -0.35 : keen ? 0.15 : 0) - nod) * Math.min(1, dt * (dying !== null ? 6 : 3));
     const nb = { x: sh.x + fx * 0.1, y: sh.y - 0.06, z: sh.z + fz * 0.1 }, nl = NECK * S;
     const ndx = fx * (0.28 + nod * 0.5) + px * swing * 0.5, ndy = -1 + Math.abs(nod) * 0.25, ndz = fz * (0.28 + nod * 0.5) + pz * swing * 0.5, nn = Math.hypot(ndx, ndy, ndz);
@@ -121,10 +121,10 @@ export function create(c) {
 
   return {
     ready,
-    /** A jab that did not finish it (the conductor, while stalled: hurt, seconds since): its front jerks up and back, its head swings. A shove: it holds. */
+    /** A jab that did not finish it (the conductor, while stalled: hurt, seconds since): it rears up and back off its hands, twisting, its head whipped round. A shove: it holds. */
     flinch(hurt, dt = 0) {
       if (!group || hurt == null || !(hurt < HEALTH.flinch)) return;
-      jolt = Math.exp(-hurt * 7) * Math.min(1, hurt * 30) * (1 - hurt / HEALTH.flinch);
+      jolt = Math.exp(-hurt * 9) * Math.min(1, hurt * 40) * (1 - hurt / HEALTH.flinch);       // (a hard, short rear: it has to read)
       clock += dt; pose(dt, false, c.me()); jolt = 0;
     },
     /**

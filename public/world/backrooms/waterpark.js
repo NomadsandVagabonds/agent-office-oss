@@ -1355,6 +1355,7 @@ export function createBasin(c, spec) {
   const rippleMesh = new THREE.Mesh(rippleGeo, rippleMat);
   rippleMesh.position.y = waterY + 0.012;
   c.add(rippleMesh);
+  rippleMesh.userData.liquidStandIn = true;
 
   const veilGeo = new THREE.BoxGeometry(0.42, 0.42, 0.42);
   const veilMat = new THREE.MeshBasicMaterial({ color: 0x0d7b8c, transparent: true, opacity: 0, depthWrite: false, depthTest: false, side: THREE.BackSide });
