@@ -610,6 +610,53 @@ for `CAST_LESSONS` if it teaches something), the line for `cast/index.js`,
 sentences: what its rule is, and how somebody who has not worked it out yet is
 warned before it costs them anything.
 
+## Bringing a room's resident into health and within reach of a shove
+
+Not built. This is what it would take, written down because the waterpark's review asks for it and it touches the
+conductor. Today three kinds of thing can hurt a visitor, and only the first is whole:
+
+| | jabbed | shoved | health | stagger |
+| --- | --- | --- | --- | --- |
+| the cast (`cast/*.js`, run by the conductor `pursuer.js`) | its `snipTargets()` | its `shoveTargets()` | `c.struck` / `c.vital` | `c.stall` |
+| a denizen (a room's thing registered with `env.denizens.add`: the trunk line) | its `snip()` | no | its own, if it keeps one (the trunk line does) | no |
+| a resident private to its room (the Lane Keeper, the Towel Return's six, the forest's hazards) | no | no | no | no |
+
+`index.js` asks only `env.pursuer` and `env.denizens` for jab targets and only `env.pursuer` for shove targets, so a
+resident that lives in its room's closure cannot be reached by a hand at all, whatever its room does.
+
+What it takes, in the order it would be done:
+
+1. **Be findable.** One way for a room to say "this is here and can be touched": the room registers its resident as a
+   denizen, or a new `c.resident({ id, at, r, snip, shove })` on the room's toolbox that keeps a list on the room.
+   Then one more line each in `index.js` where the jab and the shove gather their targets, and
+   `denizens.shoveTargets()` beside its `snipTargets()`. This part is the cast session's (`index.js`, `denizens.js`).
+2. **A tier.** A line for each id in `TIER` in `cast/health.rule.js` (basic 1, medium 2, boss 3), or in `UNHITTABLE`
+   with the reason. Which is which is the owner's to say, as it was for the cast.
+3. **Keep its own health.** There is no conductor for a resident, so it does what the trunk line does
+   (`rooms/cable-drop.js`): `let vital = fresh(id)`; `vital = struck(vital)` in its `snip()`; `vital = aged(vital, dt)`
+   at the top of its own tick; and while `vital.dying !== null` it steps no rule and hurts nobody, and at `vital.gone`
+   it takes itself out (its body, its [E], its collider). About eight lines a resident.
+4. **Stand when shoved.** `c.stall` is the conductor's. A resident keeps a number: set to `SHOVE.stagger` (or
+   `SHOVE.heavy.stagger`) by its `shove(dir)`, counted down in its tick, and while it is above nought the rule is not
+   stepped and `c.hurt` is not called. Where it goes when pushed is `slide(at, dir, clear)` with the room's own idea of
+   clear: a Lane Keeper slides along its lane and nowhere else; a thing fixed to a wall does not slide and only stands.
+5. **Say what its death does to the room.** The cast only roam; a resident is often what its room is about. Each room
+   must answer, before any code: with it finished, is every way out still open (never a trap), does the room's own
+   puzzle still resolve (the pump the Lane Keeper guards), and does the room go quiet or stay as it was? A resident
+   whose room needs it alive is `UNHITTABLE`, and is still shovable.
+6. **Count it once.** "Got away from" is once a creature a floor: the room wraps its `c.survived(id)` in a flag, as
+   the trunk line's `escaped()` does.
+7. **Co-op.** A room that already has `coopRead` / `coopApply` carries its resident's state there; `vital` and the
+   stagger number go in the same record. A room without them is in the gap written down in
+   `BACKROOMS-COOP-COVERAGE.md`.
+8. **Tests, each room.** Its tier against the table; a jab takes one and the last starts it dying; shoved it stands
+   and does not hurt; finished, the room's ways out are still open.
+
+Whose it is: steps 1 and 2 are the cast session's and small. Steps 3 to 8 are in each room's own file, so they are
+its builder's: the waterpark's through the owner (Codex), the forest's through the owner (Gemini). A helper that
+does 3, 4 and 6 for a room in one call (`resident(id)` → `{ hit(), shoved(seconds), tick(dt), escaped(), vital }`)
+would make each room's part four lines, and would be worth writing before the first of them, not after the third.
+
 ## A room the way out is through
 
 Most of what is odd down here is beside the way out. One room is the way out.
