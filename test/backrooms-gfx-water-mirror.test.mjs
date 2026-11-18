@@ -17,7 +17,7 @@ register('data:text/javascript,' + encodeURIComponent(`export function resolve(s
 const THREE = await import('three');
 const { createKit, Batch } = await import('../public/world/backrooms/kit.js');
 const { markLiquid, createLiquidView } = await import('../public/world/backrooms/liquid.js');
-const { LIQUID_FRAG, LIQUID_UNDER_FRAG, MIRROR, mirrorPlane, reflectMatrix, planeInView, obliqueProjection, mirrorSize, pickMirror, mirrorLeaves } = await import('../public/world/backrooms/liquid.rule.js');
+const { LIQUID_FRAG, LIQUID_UNDER_FRAG, MIRROR, mirrorPlane, reflectMatrix, planeInView, obliqueProjection, mirrorSize, pickMirror, mirrorLeaves, screenCover, mirrorGate, mirrorWeight } = await import('../public/world/backrooms/liquid.rule.js');
 const { createVhs } = await import('../public/world/backrooms/vhs.js');
 const { HELD_ORDER } = await import('../public/world/backrooms/beam-shadows.rule.js');
 
@@ -264,7 +264,8 @@ test('the shader: Medium\'s reflection() word for word where MIRROR is not defin
   assert.ok(LIQUID_FRAG.slice(els, end).includes('vec3 reflection(vec3 n, vec3 v, vec2 uv, vec3 light) { return light * 0.100000; }\n'), 'the flat tint, as it was');
   const mir = LIQUID_FRAG.slice(at, els);
   assert.match(mir, /uniform sampler2D tMirror;\nuniform mat4 uMirror;\nuniform float uMirrorOn;\n/);
-  assert.match(mir, /if \(uMirrorOn < 0\.5\) return flatTint;/, 'a surface without it this frame: the tint');
+  assert.match(mir, /if \(uMirrorOn <= 0\.0\) return flatTint;/, 'a surface without it this frame: the tint');
+  assert.match(mir, /return uMirrorOn >= 1\.0 \? r : mix\(flatTint, r, uMirrorOn\);/, 'whole: exactly the mirror; a sliver: faded toward the tint');
   assert.match(mir, /vec4 m = uMirror \* vec4\(vView, 1\.0\);/, 'where this point of the surface is in the mirror');
   assert.match(mir, /\+ \(n - up\)\.xy \* [\d.]+;/, 'moved by the ripple\'s stepped tilt: it wobbles in blocks');
   assert.match(mir, /r \*= min\(1\.0, cap \/ max\(l, 1e-5\)\);/, 'its brightest held down');
@@ -285,6 +286,56 @@ test('nothing seeded read, nothing random: the same frames choose the same mirro
   try {
     for (let i = 1; i < 4; i++) { view.frame(scene, cam, i); view.draw(r, scene, cam, t, () => r.render(scene, cam)); assert.equal(view.mirror.rec, p.rec); }
   } finally { Math.random = rnd; }
+  view.release(scene); p.kit.dispose();
+});
+
+test('a sliver of water: its share of the picture, in numbers', () => {
+  const cam = new THREE.PerspectiveCamera(90, 1, 0.1, 100); look(cam, [0, 0, 0], [0, 0, -1]);
+  const PV = new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).toArray();
+  // a square facing the eye 1 m away, as wide as the view (90 degrees): the whole picture; a quarter of it: a quarter
+  const sq = (x0, y0, x1, y1, z = -1) => [[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]];
+  assert.ok(near(screenCover(sq(-1, -1, 1, 1), PV), 1, 1e-9));
+  assert.ok(near(screenCover(sq(0, 0, 1, 1), PV), 0.25, 1e-9));
+  assert.ok(near(screenCover(sq(-0.1, -0.1, 0.1, 0.1), PV), 0.01, 1e-9), 'a tenth across each way: 1 %');
+  assert.ok(near(screenCover(sq(-5, -5, 5, 5), PV), 1, 1e-9), 'bigger than the view: clipped to it');
+  assert.ok(near(screenCover(sq(0.5, -1, 3, 1), PV), 0.25, 1e-9), 'half off the side: what is left');
+  assert.equal(screenCover(sq(-1, -1, 1, 1, 1), PV), 0, 'behind the eye: nothing');
+  assert.equal(screenCover(sq(2, 2, 3, 3), PV), 0, 'off to one side: nothing');
+  // a floor running from under the eye out ahead (behind it too): cut at the near plane, the lower half of the picture
+  const floor = [[-50, -1, 10], [50, -1, 10], [50, -1, -50], [-50, -1, -50]];
+  const c = screenCover(floor, PV); assert.ok(c > 0.45 && c <= 0.5, `the floor: ${c}`);
+  assert.equal(screenCover([], PV), 0);
+});
+
+test('the pass for a sliver: on from coverOn, off under coverOff, its weight fading in from coverOff to coverFull', () => {
+  assert.ok(MIRROR.coverOff < MIRROR.coverOn && MIRROR.coverOn < MIRROR.coverFull);
+  assert.deepEqual([0.005, 0.011, 0.0125, 0.02].map((c) => mirrorGate(false, c)), [false, false, true, true], 'off: on only from coverOn');
+  assert.deepEqual([0.005, 0.0099, 0.01, 0.011].map((c) => mirrorGate(true, c)), [false, false, true, true], 'on: kept down to coverOff');
+  assert.equal(mirrorWeight(0), 0); assert.equal(mirrorWeight(MIRROR.coverOff), 0, 'nothing where it goes off');
+  assert.ok(mirrorWeight(MIRROR.coverOn) < 0.05, 'almost nothing where it comes on');
+  assert.equal(mirrorWeight(MIRROR.coverFull), 1); assert.equal(mirrorWeight(0.5), 1);
+  assert.ok(near(mirrorWeight((MIRROR.coverOff + MIRROR.coverFull) / 2), 0.5, 1e-12));
+  for (let c = 0; c < 0.05; c += 0.001) assert.ok(mirrorWeight(c + 0.001) >= mirrorWeight(c), 'never less for more');
+  // in a scene: a pool seen as a sliver at the picture's edge, then turned to
+  const p = pool(), { scene, cam } = stage(p.group), view = createLiquidView(); view.setLevel(2);
+  const run = (yaw) => { cam.position.set(0, 1.6, 4); cam.rotation.set(-0.3, yaw, 0, 'YXZ'); cam.updateMatrixWorld(); view.frame(scene, cam, 0); return view.stats.mirror; };
+  const steps = [];
+  for (let yaw = 1.5; yaw >= -0.01; yaw -= 0.05) { const s = run(yaw); steps.push({ yaw, cover: s.cover, on: s.on, weight: s.weight }); }
+  const first = steps.findIndex((s) => s.on);
+  assert.ok(first > 0, 'off while it is a sliver');
+  assert.ok(steps.slice(0, first).every((s) => s.cover < MIRROR.coverOn) && steps[first].cover >= MIRROR.coverOn);
+  assert.ok(steps.slice(first).every((s) => s.on), 'on from there');
+  assert.ok(steps.at(-1).weight === 1 && steps.at(-1).cover > MIRROR.coverFull);
+  // drawn while off: no mirror pass, the water's weight 0 (the flat tint); while on, the weight the cover gives
+  const r = fakeRenderer(), seen = [], render = r.render.bind(r);
+  r.render = (s, c) => { render(s, c); seen.push(p.rec.pairs[0].material.uniforms.uMirrorOn.value); };
+  run(steps[first - 1].yaw); view.draw(r, scene, cam, target(), () => r.render(scene, cam));
+  assert.equal(r.log.length, 3, 'no mirror pass for a sliver'); assert.ok(seen.every((v) => v === 0));
+  // back the other way: kept on down to coverOff (the hysteresis), then off
+  run(0); const back = [];
+  for (let yaw = 0; yaw <= 1.5; yaw += 0.05) { const s = run(yaw); back.push({ ...s }); }
+  const last = back.findIndex((s) => !s.on);
+  assert.ok(last > 0 && back[last].cover < MIRROR.coverOff && back.slice(0, last).every((s) => s.cover >= MIRROR.coverOff));
   view.release(scene); p.kit.dispose();
 });
 
