@@ -1517,7 +1517,9 @@ nothing of the waterpark's is changed for it.
   mirror's space and put back; everything put back when the mirror's draw
   throws; Medium and back from High; the shader text; nothing random; the
   sliver: `screenCover` in numbers, the gate's two thresholds, the weight's
-  fade, and a pool turned into view and back out).
+  fade, and a pool turned into view and back out; every other frame:
+  `mirrorDue`, alternate passes, the drawn frame's matrix used between, and a
+  draw forced by a surface coming back into view, another surface, a resize).
   `backrooms-gfx-water-wake` counts the copy's reads outside the mirror's
   block.
 - **Cost.** Counted in one load each, at High, seed 7,
@@ -1574,14 +1576,47 @@ nothing of the waterpark's is changed for it.
   what is seen of the water: a wall in front of part of the pool is not taken
   off (2.92 % by the rim at step 6 where about 2.1 % of the picture is water),
   so it errs towards drawing the mirror.
+- **Every other frame: a switch, off.** `MIRROR.every` in `liquid.rule.js`:
+  1, every frame, the default and what ships; 2, the pass on alternate frames;
+  3, one frame in three. To try it live without editing code, on the dev page
+  (or the site under `?debug`) at High: `__backrooms.vhs.liquids.mirrorEvery =
+  2` in the console (back with `= 1`; the view is made again, at the default,
+  when the tier drops to Classic or Low and comes back). Between passes the
+  water reads the picture it holds through the matrix it was drawn with (its
+  world-to-picture matrix kept from that frame, times this frame's camera), not
+  this frame's, so the picture does not slide against the room when the eye
+  turns. A pass is always drawn when there is no picture, when it is another
+  surface's, when the size changed (a resize, a tier), on the first frame a
+  surface has the mirror again after none did, and twice in one frame
+  (`mirrorDue`). **What it saves**, High, Clean picture, the eye turning: the
+  kiddie lagoon alternates 85 and 45 draws of the level's scene (an average of
+  65.5 a frame against 85.7 every frame), the deep end 241 and 134 (187.8
+  against 241.0): the mirror's whole share on every second frame, half of
+  what the mirror adds over a run. **What it costs in look**: the
+  reflection on an in-between frame is the room as seen from where the eye was
+  a frame before. Turning on the spot there is no parallax (the eye is where
+  it was) and the picture does not slide: what differs is the mirror's own
+  pixels resampled a frame's turn apart, the edges of reflected things by a
+  pixel. Turning at 90 degrees a second, frames 1/60 s apart, across the
+  kiddie lagoon (one load, the clock stepped by hand, the ripple held still),
+  every = 2 against every = 1: the fresh frames 0 pixels different; the
+  in-between frames 89,000 to 97,000 pixels, the 99th percentile of those 17
+  levels and the largest 55, on outlines of reflected things; at the green
+  float's contact line, the largest 31 levels, the line itself in the same
+  place. At Full VHS the largest is 24 (99th percentile 12), the float's
+  contact line 10. The deep end, plain: largest 43, 99th percentile 10.
+  Walking adds the parallax of a frame's travel (about 2 cm at a walk): not
+  measured. At 1 the code path and picture are today's: a pool in full view at
+  High (the kiddie lagoon across and at your feet, the deep end, plain; the
+  kiddie lagoon across at Full VHS) 0 pixels different from the code before the switch, the same
+  draws.
 - **Can High afford it?** The table at the top asks nothing of draws for
   High, and the one real machine measured (an M4 Max) held its frame with the
   scene drawn 32 times. On an ordinary laptop's integrated graphics, doubling
   the draw calls in the waterpark's rooms (to about 290 in the heaviest) is the
   biggest single thing High asks for, and nobody has measured it. If it is too
-  much, cheaper in this order: (1) every other frame, the mirror a frame
-  stale (halves the added draws; a slight slide against the contact line when
-  the eye turns fast); (2) a higher threshold for the sliver test above
+  much, cheaper in this order: (1) every other frame (built, off: the next
+  paragraph); (2) a higher threshold for the sliver test above
   (`coverOn`, `coverOff`, `coverFull` together; from 3 % to 10 % the doorway's
   steps 6 and 7 would save their 16 draws each, and the fade would be over a
   wider band of a still small pool); (3) only the surface's own room drawn in

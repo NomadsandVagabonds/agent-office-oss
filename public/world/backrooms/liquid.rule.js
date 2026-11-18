@@ -235,7 +235,22 @@ export const MIRROR = Object.freeze({
   coverOff: 0.01,
   coverOn: 0.0125,
   coverFull: 0.03,
+  // how often the pass runs while a surface keeps the mirror: 1 every frame (the default), 2 every other frame (3 every
+  // third); in between, the water reads the last picture through the matrix it was drawn with (mirrorDue). The camcorder's
+  // view can be told otherwise while running (liquid.js `mirrorEvery`), for trying it on a real machine
+  every: 1,
 });
+
+/**
+ * Is the mirror's pass due this frame? `last` the picture it holds ({ rec, frame, w, h }: the surface it was drawn for, the
+ * camcorder's frame number then, its size), or null; `now` this frame's ({ rec, frame, w, h }), `every` 1 to 3. Due when
+ * there is no picture, it is another surface's, the size changed (a resize, a tier), or `every` frames have gone by.
+ */
+export function mirrorDue(last, now, every = MIRROR.every) {
+  const n = Math.max(1, Math.min(3, Math.round(Number(every)) || 1));
+  if (!last || !now || last.rec !== now.rec || last.w !== now.w || last.h !== now.h) return true;
+  return !(now.frame - last.frame < n && now.frame > last.frame);
+}
 
 /** A plane through `point` facing along `normal` (both [x, y, z]): → [nx, ny, nz, d], n·p + d = 0, n of length 1. */
 export function mirrorPlane(normal, point) {
