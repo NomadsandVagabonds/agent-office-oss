@@ -106,7 +106,7 @@ export function build(c) {
   /* what the drill set out among the trees, and what the heat did to it */
   // the cause: the HR campfire, cellophane and a desk fan, still "burning" in the middle of what it burned
   const fire = c.spot(0.75, { near: [0, -0.5, 2.4], head: 2.2 }) || { x: 0, z: -0.5 };
-  placeVox(c, 'forest:cellofire', cellophaneFireVox(), fire.x, fire.z, { scale: 0.032 });
+  placeVox(c, 'forest:cellofire', cellophaneFireVox(), fire.x, fire.z, { scale: 0.032, bloom: 1 });
   c.solid(fire.x - 0.45, fire.z - 0.45, fire.x + 0.45, fire.z + 0.45);
   c.light(fire.x, 0.55, fire.z, '#ff8a2a', 0.95, { bank: 3, k: 1.7, far: 7.0 });
   c.reserve(fire.x, fire.z, 1.2);
