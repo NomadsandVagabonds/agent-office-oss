@@ -98,7 +98,7 @@ export function build(c) {
   /* the one in the middle: somebody who has been waiting their turn a long time, by the stool they were sat on. They move only in a
      flash: each picture you are taken in, they are nearer, as on the strips (four), and in the last they are just behind you. Turn
      round and they have no face to speak of. Reach for them and they are not there; leave, and they are back by the stool */
-  const seat = { x: c.R.range(-W / 4, W / 4), z: c.R.range(-0.4, 0.4) }, stool = { x: seat.x + 0.45, z: seat.z };
+  const seat = { x: c.R.range(-W / 4, W / 4), z: c.R.range(-0.2, 0.2) }, stool = { x: seat.x + 0.45, z: seat.z };
   for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) c.flat.box(stool.x + dx * 0.13 - 0.015, 0, stool.z + dz * 0.13 - 0.015, stool.x + dx * 0.13 + 0.015, 0.44, stool.z + dz * 0.13 + 0.015, [0.7, 0.72, 0.75]);
   c.flat.box(stool.x - 0.18, 0.44, stool.z - 0.18, stool.x + 0.18, 0.5, stool.z + 0.18, [0.55, 0.14, 0.12]); c.detail.box(stool.x - 0.14, 0.15, stool.z - 0.14, stool.x + 0.14, 0.17, stool.z + 0.14, [0.7, 0.72, 0.75]);
   c.solid(stool.x - 0.19, stool.z - 0.19, stool.x + 0.19, stool.z + 0.19, { tall: false });

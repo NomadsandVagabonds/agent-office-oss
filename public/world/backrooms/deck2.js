@@ -35,6 +35,9 @@ import { homeStash } from './rooms/show-home/layout.js';
 import { plenumStash } from './rooms/drop-plenum/rule.js';
 import { cubicleGridStash } from './rooms/cubicle-grid/rule.js';
 import { fill } from './words.js';
+/** A shop of the shopping centre's place for a coin: half a metre square from (x, z), in the room's frame. A stash of several of
+ * these, apart, keeps one of them more than 1.25 m from every doorway however the doorways fall (gen.js coinFits). */
+const mallZone = (x, z) => [x, z, x + 0.5, z + 0.5];
 
 const cornerStash = (r, side) => (side < 0
   ? [-r.W / 2 + 0.65, -r.D / 2 + 0.65, -r.W / 2 + 1.35, -r.D / 2 + 1.35]
@@ -424,15 +427,15 @@ export const MORE_DECK = [
   // A shop: a hall of photo booths, both sides and two rows up the back; walk past one and it takes your picture. The strips are pinned up everywhere.
   { id: 'photo-booths', name: 'Photo of You', landmark: 'the row of photo booths', w: [9, 11], d: [5, 6], h: [4.3, 4.6],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
-    module: './rooms/photo-booths.js', stash: (r) => [-r.W / 2 + 0.3, -0.3, -r.W / 2 + 0.9, 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+    module: './rooms/photo-booths.js', stash: (r) => [-1, 1].flatMap((sx) => [-1, 1].map((sz) => mallZone(sx * r.W / 4 - 0.25, sz > 0 ? 0.65 : -1.15))), roll: (R) => ({ seed: R.int(1, 9999) }) },
   // A shop that sells bags, each with a receipt in it for the bag; the tills print on, and one of them follows you round the floor.
   { id: 'receipts', name: 'The Receipt Shop', landmark: 'the shop that sells bags', w: [8, 10], d: [8, 9], h: [3.1, 3.5],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
-    module: './rooms/receipts.js', stash: (r) => [r.W / 2 - 0.9, r.D / 2 - 0.9, r.W / 2 - 0.3, r.D / 2 - 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+    module: './rooms/receipts.js', stash: (r) => [mallZone(-r.W / 2 + 0.6, r.D / 4 - 0.25), mallZone(r.W / 2 - 1.1, r.D / 4 - 0.25), mallZone(-r.W / 4 - 0.25, r.D / 2 - 1.1), mallZone(r.W / 4 - 0.25, r.D / 2 - 1.1), mallZone(r.W / 2 - 1.1, r.D / 2 - 1.1)], roll: (R) => ({ seed: R.int(1, 9999) }) },
   // A shop: the key cutter's, whose every wall is doors of every size to the roof, none of which opens; the blanks hang on strings over your head.
   { id: 'keys-cut', name: 'Keys Cut', landmark: "the key cutter's, all doors", w: [6, 7], d: [6, 7], h: [3.3, 3.8],
     ports: ['left', 'right'], weight: 1.1, lights: 'dim', themes: { mall: 1, '*': 0 },
-    module: './rooms/keys-cut.js', stash: (r) => [r.W / 2 - 0.9, r.D / 2 - 0.9, r.W / 2 - 0.3, r.D / 2 - 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+    module: './rooms/keys-cut.js', stash: (r) => [mallZone(-r.W / 2 + 0.6, r.D / 2 - 1.1), mallZone(r.W / 2 - 1.1, r.D / 2 - 1.1), mallZone(-r.W / 2 + 0.6, r.D / 4 - 0.25), mallZone(r.W / 2 - 1.1, r.D / 4 - 0.25), mallZone(-r.W / 4 - 0.25, r.D / 2 - 1.1), mallZone(r.W / 4 - 0.25, r.D / 2 - 1.1), mallZone(-0.25, -0.25)], roll: (R) => ({ seed: R.int(1, 9999) }) },
   // A shop: the department store, all office clothes; the dummies are having a meeting; fitting rooms along the back, and in the glass of the last one, somebody where you stand.
   { id: 'mens-ladies', name: 'Mens Ladies', landmark: 'the department store', w: [12, 14], d: [11, 13], h: [3.4, 3.9],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
@@ -440,7 +443,7 @@ export const MORE_DECK = [
   // A grotto, in July: a cottage of plywood with snow on it, a queue folded five times to its door, a sack in the big chair, a camera that goes off, a present.
   { id: 'the-grotto', name: 'The Grotto', landmark: 'the grotto, in July', w: [10, 12], d: [9, 11], h: [3.3, 3.7],
     ports: ['left', 'right'], weight: 1.1, lights: 'dim', themes: { mall: 1, '*': 0 },
-    module: './rooms/the-grotto.js', stash: (r) => [-r.W / 2 + 0.3, r.D / 2 - 0.9, -r.W / 2 + 0.9, r.D / 2 - 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+    module: './rooms/the-grotto.js', stash: (r) => [mallZone(-r.W / 2 + 0.6, r.D / 2 - 1.1), mallZone(-r.W / 4 - 0.25, r.D / 2 - 1.1), mallZone(r.W / 4 - 0.25, r.D / 2 - 1.1), mallZone(r.W / 2 - 1.1, r.D / 2 - 1.1)], roll: (R) => ({ seed: R.int(1, 9999) }) },
   // A shop: the place that sells the orange drink. Orange and white, a great many oranges, and somebody serving who has one for a head.
   { id: 'the-orange', name: 'The Orange', landmark: 'the place that sells the orange drink', w: [7, 8], d: [7, 8], h: [2.9, 3.3],
     ports: ['left', 'right'], weight: 1.3, lights: 'dim', themes: { mall: 1, '*': 0 },
@@ -448,7 +451,7 @@ export const MORE_DECK = [
   // A shop of televisions: every set on demonstration, on as you pass and off behind you, all on the same channel; the big one has a camera on it, and shows the shop a little late, and somebody stood where you were.
   { id: 'the-sets', name: 'The Sets', landmark: 'the shop of televisions', w: [9, 11], d: [8, 10], h: [3.2, 3.6],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
-    module: './rooms/the-sets.js', stash: (r) => [-r.W / 2 + 0.3, -0.3, -r.W / 2 + 0.9, 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+    module: './rooms/the-sets.js', stash: (r) => [mallZone(-r.W / 2 + 0.6, -r.D / 4 - 0.25), mallZone(r.W / 2 - 1.1, -r.D / 4 - 0.25), mallZone(-r.W / 4 - 0.25, -0.25), mallZone(r.W / 4 - 0.25, -0.25), mallZone(-0.25, r.D / 4 - 0.25)], roll: (R) => ({ seed: R.int(1, 9999) }) },
   // A hall with little shops round the edge, each selling the one thing it was told about at the size it was told; tables bolted down, and another over each on the roof; the middle of the floor left out.
   { id: 'food-court', name: 'The Food Court', landmark: 'the tables round the hole', w: [16, 18], d: [15, 17], h: [7, 7.8],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
