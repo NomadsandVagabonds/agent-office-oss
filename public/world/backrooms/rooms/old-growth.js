@@ -166,6 +166,7 @@ export function build(c) {
   let auditor = makeAuditor(homeX, homeZ);
   let known = false;
   let stride = 0;
+  let restLevel = null;
 
   function moveAuditor(walker, tx, tz, dist) {
     const stand = (wx, wz) => {
@@ -233,7 +234,12 @@ export function build(c) {
         c.met('timber-auditor');
       }
 
-      const bankLv = c.rt.lightLevels ? (c.rt.lightLevels[0] + c.rt.lightLevels[1] + c.rt.lightLevels[2]) / 3 : 1;
+      // (how lit the room is, of how lit it is at rest: 1 in its ordinary light, which is steady now, so the Auditor's
+      // boost in the dark bites only when something really darkens the room. It used to be the banks' bare mean, which
+      // at rest here is 0.51, under the rule's 0.55: a boost that was always on)
+      const mean = c.rt.lightLevels ? (c.rt.lightLevels[0] + c.rt.lightLevels[1] + c.rt.lightLevels[2]) / 3 : 1;
+      if (restLevel === null && mean > 0) restLevel = mean;
+      const bankLv = (restLevel ? mean / restLevel : 1) * (c.rt.lightsK ?? 1);
       const chimeNow = pendingChime;
       pendingChime = null;
 
