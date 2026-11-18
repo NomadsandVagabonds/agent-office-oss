@@ -121,16 +121,6 @@ export function finishPoolRoom(c,kind){
   if(!['bellmouth-baths','hanging-changing'].includes(kind))services(c,b);
   if(kind==='wave-pool'){
     overheadRibs(c,b,[-D*.28,0,D*.28],H-.95);
-    const z=-D/2+2.05,w=(W-4.9)/4;
-    for(let i=0;i<4;i++){
-      const x=-W/2+2.45+(i+.5)*w;
-      // Big pressure necks terminate in the caisson housing. Rings and flange
-      // bolts make the grille wall read as equipment, not painted rectangles.
-      pipe(c.flat,[x,1.5,z],[x,H-.12,z],.24,C.green,12);
-      flange(b,[x,1.6,z],[x,2.65,z],.24);
-      for(let yy=.05;yy<1.5;yy+=.3)box(b,[x-w*.38,yy,z+.37],[x+w*.38,yy+.032,z+.405],C.steel);
-      for(const xx of [-.32,.32])bolts(b,x+xx,2.13,z,.045,.50);
-    }
   }else if(kind==='lazy-river'){
     // A low circular coffer floats over the canal; one offset inner ring makes
     // the lifeguard seem to stand off-centre in a badly repeated institution.

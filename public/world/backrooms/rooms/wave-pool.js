@@ -7,18 +7,19 @@
 // toward the damp-carpeted shoreline. Duck completely underwater (`C`) or stand
 // in the lee of a tiled breakwater bollard to let the surge pass harmlessly!
 
+import {waveCaissons} from './wave-pool/caissons.js';
 import {finishPoolRoom} from '../pool-finish.js';
 import * as THREE from 'three';
-import { Batch, lin, WHITE } from '../kit.js';
+import { Batch, WHITE } from '../kit.js';
 import {
   poolroom, natatoriumLight, createBasin,
   poolSign, depthTile, loungerVox, lifeRingVox, innerTubeVox, placeVox,
-  COPING, CHROME, GROUT_DARK, poolTileTex,
+  COPING, GROUT_DARK, poolTileTex,
 } from '../waterpark.js';
 import { waveState, wavePush } from '../waterpark.rule.js';
 
 export function build(c) {
-  const { W, D, H, params: p, kit } = c;
+  const { W, D, params: p, kit } = c;
   c.shell({ panels: false, floor: false, wallTex:poolTileTex(c.kit,'white') });
   natatoriumLight(c, 4, 4, 2, 1.08);
   poolroom(c, { wrong: 0, footbath: false, signs: false });
@@ -47,40 +48,58 @@ export function build(c) {
   // Faceted curling cross-section with a broken foam lip, not a stack of
   // rectangular slabs. The old hazard bounds and timing are unchanged.
   const profile=[[-.65,-.35],[-.55,.05],[-.32,.42],[.02,.65],[.38,.68],[.58,.49],[.30,.34],[.10,.36],[.05,.18],[.55,-.35]];
-  let lastJitter=0;
-  for(let x=-waveW/2,i=0;x<waveW/2;x+=.32,i++){
-    const end=Math.min(waveW/2,x+.32),jitter=.025*Math.sin(i*1.7),nextJitter=.025*Math.sin((i+1)*1.7);
-    lastJitter=nextJitter;
+  function crestPoint(x, k) {
+    const [z,y]=profile[k];
+    const sweep=.15*Math.sin(x*1.5) + .07*Math.sin(x*3.3+.5);
+    const roll=.10*Math.cos(x*1.7) + .055*Math.sin(x*3.7);
+    return [x, y + Math.max(y,0)*roll, bz0 + z + sweep];
+  }
+  // Broken runs of foam gather on the rolled lip, leaving wet green gaps
+  // across its width. Map the cross-section continuously around the curve.
+  const rollerSkin = kit.tex.custom('surge:breaking-water', 256, 80, (g, width, height) => {
+    g.fillStyle = '#387b72';
+    g.fillRect(0, 0, width, height);
+    for (let x = 0; x < width; x++) {
+      const a = 2 * Math.PI * x / width;
+      const roll = Math.sin(3*a) + .5*Math.sin(7*a + .7);
+      const lip = 33 + 3*roll + 1.7*Math.sin(13*a);
+      const widthOfFoam = Math.max(0, 3.6 + 3.4*roll + 1.6*Math.cos(9*a));
+      g.fillStyle = '#60a49a';
+      g.fillRect(x, lip-9, 1, 16 + 3*Math.sin(4*a));
+      g.fillStyle = '#8bbcb0';
+      g.fillRect(x, lip-3, 1, 6 + widthOfFoam);
+      g.fillStyle = '#d5dfc8';
+      g.fillRect(x, lip, 1, widthOfFoam);
+      if (Math.sin(15*a + roll) > .3) g.fillRect(x, lip+8+3*Math.cos(8*a), 1, 1.5);
+    }
+  });
+  const spans=Math.ceil(waveW/.29);
+  for(let i=0;i<spans;i++){
+    const x=waveW*(i/spans-.5),end=waveW*((i+1)/spans-.5);
     for(let k=0;k<profile.length;k++){
-      const [z0,y0]=profile[k],[z1,y1]=profile[(k+1)%profile.length];
-      const col=lin(k===3||k===4?'#d4e2cf':k===5||k===6?'#9cbcab':k<3?'#518e83':'#317367');
-      crestBatch.quad([x,y0+jitter,z0],[x,y1+jitter,z1],[end,y1+nextJitter,z1],[end,y0+nextJitter,z0],col);
-    }
-    if(i%5!==2){
-      const w=.08+(i%3)*.035,z=.20+(i%4)*.045;
-      crestBatch.box(x+.04,.66+jitter,z,Math.min(end,x+.04+w),.685+jitter,z+.06,lin('#dce5ce'));
+      const next=(k+1)%profile.length;
+      const v = 1-k/profile.length, nextV = 1-(k+1)/profile.length;
+      const uv = [[x/3.8,v],[x/3.8,nextV],[end/3.8,nextV],[end/3.8,v]];
+      crestBatch.quad(crestPoint(x,k),crestPoint(x,next),crestPoint(end,next),crestPoint(end,k),WHITE,uv);
     }
   }
-  // The shore-side promenade sees the ends of the moving sheet too.
   const caps=THREE.ShapeUtils.triangulateShape(profile.map(([z,y])=>new THREE.Vector2(z,y)),[]);
-  for(const [side,jitter] of [[-1,0],[1,lastJitter]])for(const face of caps){
-    const pts=face.map(i=>[side*waveW/2,profile[i][1]+jitter,profile[i][0]]);
+  for(const side of [-1,1])for(const face of caps){
+    const pts=face.map(k=>crestPoint(side*waveW/2,k));
     if(side>0)pts.reverse();
-    crestBatch.tri(...pts,lin('#518e83'));
+    crestBatch.tri(...pts,WHITE);
   }
-  const crestMesh = c.dynamic(crestBatch, { pivot: [0, -0.06, bz0] });
+  const crestMesh = c.dynamic(crestBatch, { pivot: [0, 0, bz0], wet: .75, map: rollerSkin });
+  crestMesh.name='surge-crest';
   crestMesh.visible = false;
   c.rt.wavePool = { get crestZ() { return crestMesh.visible ? crestMesh.position.z : null; } };
-
-  // Rotating/flashing amber klaxon dome above the pneumatic wave grates
-  const klaxonBatch = new Batch();
-  klaxonBatch.box(-0.18, -0.12, -0.18, 0.18, 0.18, 0.18, [0.98, 0.62, 0.12]);
-  const klaxonMesh = c.dynamic(klaxonBatch, { pivot: [0, 2.35, bz0 - 0.25] });
+  const cobTile = c.mapped('wp:pier:cobalt', poolTileTex(kit, 'cobalt'));
+  const klaxonMesh=waveCaissons(c,cobTile,bx0,bx1,bz0,-maxDepth);
 
   let klaxonPlayed = false;
   let surgeHitCooldown = 0;
 
-  const basin = createBasin(c, {
+  createBasin(c, {
     x0: bx0, z0: bz0, x1: bx1, z1: bz1,
     depth: maxDepth,
     waterY: -0.05,
@@ -94,8 +113,8 @@ export function build(c) {
       const ws = waveState(t, bz0 + 0.6, bz1 - 0.4);
 
       if (ws.klaxon) {
-        klaxonMesh.rotation.y = t * 9.0;
-        klaxonMesh.scale.setScalar(1.0 + 0.25 * Math.sin(t * 22));
+        klaxonMesh.visible = true;
+        klaxonMesh.rotation.y = t * 6.2;
         if (!klaxonPlayed && me.inside) {
           klaxonPlayed = true;
           const w = c.toWorld(0, bz0);
@@ -103,7 +122,7 @@ export function build(c) {
         }
       } else {
         klaxonPlayed = false;
-        klaxonMesh.scale.setScalar(0.85);
+        klaxonMesh.visible = false;
       }
 
       if (ws.active) {
@@ -140,7 +159,6 @@ export function build(c) {
   });
 
   // Render the two tiled breakwater bollards with yellow/black hazard stripe caps
-  const cobTile = c.mapped('wp:pier:cobalt', poolTileTex(kit, 'cobalt'));
   for (const pr of piers) {
     const fY = slopeFloor(pr.x, pr.z);
     cobTile.box(pr.x - pr.w / 2, fY, pr.z - pr.d / 2, pr.x + pr.w / 2, 0.85, pr.z + pr.d / 2, WHITE, { uv: 0.7 });
@@ -148,19 +166,6 @@ export function build(c) {
     c.solid(pr.x - pr.w / 2, pr.z - pr.d / 2, pr.x + pr.w / 2, pr.z + pr.d / 2);
   }
 
-  // Pneumatic Wave-Caisson Wall at bz0: 4 dark flooded chambers behind vertical steel bars!
-  const nBays = 4, bayW = (bx1 - bx0 - 1.0) / nBays;
-  c.flat.box(bx0, -maxDepth, bz0 - 0.48, bx1, 2.25, bz0 + 0.04, [0.16, 0.22, 0.26]);
-  for (let i = 0; i < nBays; i++) {
-    const cx = bx0 + 0.5 + (i + 0.5) * bayW;
-    const xA = cx - bayW * 0.38, xB = cx + bayW * 0.38;
-    // Deep black pneumatic maw
-    c.flat.box(xA, -maxDepth + 0.05, bz0 - 0.42, xB, 1.45, bz0 + 0.06, [0.02, 0.03, 0.04]);
-    // Rusted vertical steel grate bars
-    for (let bx = xA + 0.18; bx < xB - 0.1; bx += 0.26) {
-      c.flat.box(bx - 0.025, -maxDepth + 0.05, bz0 + 0.03, bx + 0.025, 1.45, bz0 + 0.08, [0.34, 0.25, 0.20]);
-    }
-  }
   c.light(0, 1.85, bz0 + 0.6, '#ffae38', 0.78, { k: 2.6, far: 9 });
 
   // Backrooms shoreline wrongness: poolside loungers lined up at the tideline, one waterlogged office filing cabinet in the surf, and life rings
@@ -186,7 +191,5 @@ export function build(c) {
     'NO FILING IN BREAKERS',
   ], { w: 2.1, h: 0.92, seed: 29, warn: true, mess: 0.22 });
 
-  void H;
-  void basin;
   finishPoolRoom(c,'wave-pool');
 }

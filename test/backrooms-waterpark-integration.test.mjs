@@ -241,6 +241,23 @@ test('inflatable tube has an open bore and a rounded, continuous vinyl wall',asy
  assert.equal(v.has(14,0,0),false,'cross-section tapers at the bottom');
  assert.ok(v.has(14,4,0),'cross-section swells around the middle');
 });
+test('Surge Basin: the visible crest tracks the hazard from the gates to the beach', async t => {
+  const f = await fixture('wave-pool', 1);
+  t.after(() => f.dispose());
+  const room = f.world.rooms[0];
+  const mesh = room.group.getObjectByName('surge-crest').userData.mesh;
+  mesh.geometry.computeBoundingBox();
+  for (const frames of [255, 90, 100]) {
+    f.tick(frames);
+    const center = mesh.geometry.boundingBox.getCenter(new THREE.Vector3());
+    room.group.worldToLocal(mesh.localToWorld(center));
+    assert.ok(Number.isFinite(room.wavePool.crestZ));
+    assert.ok(Math.abs(center.z - room.wavePool.crestZ) < .18, 'surface and push travel together');
+  }
+  f.tick(90);
+  assert.equal(room.wavePool.crestZ, null, 'crest has passed');
+});
+
 test('occupied lagoon floats kick both legs independently without replacing the hazard motion',async t=>{
  const f=await fixture('kiddie-lagoon');t.after(()=>f.dispose());
  const bathers=[];f.world.rooms[0].group.traverse(g=>{if(g.name==='inverted-bather')bathers.push(g);});
