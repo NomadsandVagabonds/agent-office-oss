@@ -10,7 +10,7 @@
 //
 // So: watch it out of the corner of your eye, never straight at it; a jab finishes it at once (it is barely there), but at
 // arm's length it goes off on you; a shove puts it back a step, and a shove while it is swelling puts it off.
-// It never stands in a doorway for long: after a while there it goes and stands somewhere else.
+// It never stands in a doorway for long (doorway.rule.js): after a while there it goes a room away.
 
 export const MANAGER = Object.freeze({
   cone: 0.2,             // radians from the middle of the picture (plus its own width) that is looking it in the eye
@@ -24,13 +24,13 @@ export const MANAGER = Object.freeze({
   meeting: 0.12,         // put on for every new meeting, however short
   stare: 0.08,           // put on for every second of looking
   near: 1.5,             // metres: this near, it stops and goes off
-  swells: 0.7,           // seconds from stopping to going off (a shove in this time puts it off)
+  swells: 1.0,           // seconds from stopping to going off: it shakes, its arms lift, it swells — a shove in this time puts it off
   ripens: 1.2,           // full, seconds before it goes off wherever it is
   blast: Object.freeze({ thin: 1.6, full: 4.2 }),   // metres it reaches when it goes off, from its thinnest to full
   hurts: Object.freeze({ near: 2, far: 1 }),       // hearts: in the inner half of its reach · in the outer half
   drift: 0.22,           // metres a second, the step or two it takes on its own
   wanders: Object.freeze([7, 16]),                 // seconds between one step or two and the next
-  doorway: 6,            // seconds it will stand in a doorway before it goes somewhere else
+  leaves: 0.9,           // metres a second, going elsewhere from a doorway it has kept long enough (doorway.rule.js)
   r: 0.3,
   ducks: 2.0,            // metres: as low as it can fold itself to go under something (it goes through a doorway of this)
   clear: 0.1,            // metres it keeps between its crown and the ceiling

@@ -42,7 +42,7 @@ test('near you it stops and goes off a moment later; a shove in that moment puts
   s = minds(s, dt, { eyed: true, d: M.near - 0.1 }); assert.equal(s.mode, 'swells'); assert.equal(s.swelling, true); assert.equal(s.speed, 0);
   const shoved = off(s); assert.equal(shoved.mode, 'stands'); assert.equal(shoved.fat, s.fat);
   let gone = null; for (let t = 0; t < 2 && !gone; t += dt) { s = minds(s, dt, { eyed: false, d: M.near - 0.1 }); if (s.bursts) gone = t; }
-  assert.ok(gone !== null && Math.abs(gone - M.swells) < 0.1, `it went off ${gone}`); assert.equal(s.mode, 'gone');
+  assert.ok(gone !== null && Math.abs(gone - M.swells) < 0.1, `it went off ${gone}`); assert.ok(M.swells >= 1, 'a second of warning: it is seen to swell before it goes'); assert.equal(s.mode, 'gone');
   assert.equal(minds(s, dt, { eyed: true, d: 1 }).bursts, false, 'once');
   // full: it does not need to be near
   let f = { ...fresh(), fat: 1 }; f = minds(f, dt, { eyed: false, d: 30 }); assert.equal(f.mode, 'swells');
@@ -75,8 +75,8 @@ test('its line: it hunts, roams, is met further down, fears fire; a drawing warn
   assert.ok(WARNINGS['middle-manager'].length >= 3);
   for (const lines of WARNINGS['middle-manager']) assert.ok(!lines.join(' ').includes(m.rule.toUpperCase().slice(0, 20)));
   const src = readFileSync(new URL('../public/world/backrooms/cast/middle-manager.js', import.meta.url), 'utf8');
-  assert.match(src, /inDoor > Mg\.doorway/);
-  assert.ok(M.doorway > 0 && M.doorway <= 10);
+  // nobody keeps a doorway (doorway.rule.js): it asks, every moment it stands, and goes a room away when it is due
+  assert.match(src, /kept = camps\(kept, dt, dw, c\.R\);/); assert.match(src, /if \(kept\.due && !leaving\) \{ const to = away\(dw\);/);
   // a jab sets it off before the count takes it (once it is dying it lands nothing: the burst has to come first)
   assert.match(src, /s = popped\(s\); burst\(\);\s+c\.struck\(HEALTH\.jab\);/);
   // no face: its head is three pale tones of one smooth egg and nothing else (the owner: "no hair or glasses.and no face")

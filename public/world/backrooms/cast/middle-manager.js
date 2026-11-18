@@ -7,7 +7,7 @@
 // Voxels, posed every frame (middle-manager.model.js): a body thin and a body full, and between them the one there is
 // is let out to the width it has reached. It folds at the hips and the neck to keep its head under whatever is above it.
 import * as THREE from 'three';
-import { roomDistances } from '../gen.js';
+import { roomDistances, roomPath } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
 import { MANAGER, fresh, minds, eyed, off, popped, blastAt, reach, bend } from './middle-manager.rule.js';
 import { SHOVE, slide } from '../shove.rule.js';
@@ -15,6 +15,7 @@ import { HEALTH } from './health.rule.js';
 import { canLeave } from './paths.js';
 import { elbow } from './head-count.rule.js';
 import { calm as unafraid, afraid } from './fire.rule.js';
+import { DOORWAY, at as doorwayAt, fresh as unkept, camps, elsewhere } from './doorway.rule.js';
 import { S, TORSO, NECK, UPPER, FORE, HAND, THIGH, SHIN, SHOE, HEAD, torsoVox, neckVox, headVox, sleeveVox, handVox, trouserVox, shoeVox } from './middle-manager.model.js';
 
 const T = TORSO * S, N = NECK * S, U = UPPER * S, F = FORE * S, TH = THIGH * S, SH = SHIN * S, FOOT = SHOE * S;
@@ -25,7 +26,7 @@ export function create(c) {
   const env = c.env, level = c.level, Mg = MANAGER;
   const walker = { x: 0, z: 0, r: Mg.r, tall: Mg.ducks, opens: false };
   let s = fresh(), fear = unafraid(), group = null, mat = null, thin = null, full = null, neck = null, head = null, limbs = [], shoes = [];
-  let rot = 0, lean = 0, phase = 0, clock = 0, lastX = 0, lastZ = 0, known = false, over = false, wanderT = 0, goal = null, goalT = 0, inDoor = 0, debris = null;
+  let rot = 0, lean = 0, phase = 0, clock = 0, lastX = 0, lastZ = 0, known = false, over = false, wanderT = 0, goal = null, goalT = 0, leaving = false, kept = unkept(c.R), debris = null;
   const doors = new Map();
   const vx = new THREE.Vector3(), vy = new THREE.Vector3(), vz = new THREE.Vector3(), basis = new THREE.Matrix4();
 
@@ -78,8 +79,23 @@ export function create(c) {
     for (const d of doorsOf(rt)) if (Math.hypot(d.x - walker.x, d.z - walker.z) < 0.9) h = Math.min(h, d.h);
     return h;
   }
-  /** Is it standing in a doorway? */
-  const doorway = () => { const rt = env.world.roomAt(walker.x, walker.z); return rt ? doorsOf(rt).find((d) => Math.hypot(d.x - walker.x, d.z - walker.z) < 0.8) || null : null; };
+  /** Is it standing in a doorway, a crawl's mouth or the way down (doorway.rule.js)? */
+  const doorway = () => { const rt = env.world.roomAt(walker.x, walker.z); return rt ? doorwayAt(walker, doorsOf(rt), level.rooms[rt.id]?.kind === 'exit') : null; };
+  /** Somewhere a room or two away that the doorway cannot be seen from (doorway.rule.js elsewhere). */
+  function away(way) {
+    const here = env.world.roomAt(walker.x, walker.z), m = c.me(); if (!here) return null;
+    // (and not past the visitor: it is going away from the doorway, not into them — near them, it goes off)
+    const mine = m ? env.world.roomAt(m.x, m.z)?.id : null;
+    const dist = roomDistances(level, here.id), spots = [];
+    for (const [rid, n] of dist) {
+      if (n < DOORWAY.away[0] || n > DOORWAY.away[1] || level.rooms[rid]?.kind === 'exit' || level.rooms[rid]?.crawl) continue;
+      if (rid === mine || (roomPath(level, here.id, rid) || []).slice(1).includes(mine)) continue;          // (nor through their room on the way)
+      const p = c.walk.spotIn(walker, rid); if (!p || !c.walk.stand(walker, p.x, p.z)) continue;
+      if (m && Math.hypot(p.x - m.x, p.z - m.z) < Mg.near * 3) continue;
+      spots.push({ x: p.x, z: p.z, rooms: n, sees: way.down ? false : c.los(p.x, p.z, way.x, way.z) });
+    }
+    return elsewhere(way, spots, c.R);
+  }
 
   /** Stand it: legs from the floor, the body folded under what is above it, the arms hanging, the head down and on them. */
   function pose(dt, moved, m) {
@@ -193,15 +209,13 @@ export function create(c) {
 
   function wander(dt, m, sees) {
     const here = env.world.roomAt(walker.x, walker.z);
-    // never long in a doorway: after a while there, it goes and stands somewhere else (the room on the far side of it)
-    const dw = doorway(); inDoor = dw ? inDoor + dt : 0;
-    if (dw && inDoor > Mg.doorway && !goal) {
-      const to = [dw.to, here?.id].filter((r) => r != null && level.rooms[r]).map((r) => c.walk.spotIn(walker, r)).find((p) => p && Math.hypot(p.x - walker.x, p.z - walker.z) > 1.5);
-      if (to) { goal = to; goalT = 8; }
-    }
+    // never long in a doorway: after a while there — how long is the floor's to say, each time — it goes a room or two away,
+    // somewhere the doorway cannot be seen from (doorway.rule.js)
+    const dw = doorway(); kept = camps(kept, dt, dw, c.R);
+    if (kept.due && !leaving) { const to = away(dw); if (to) { goal = to; goalT = 30; leaving = true; wanderT = c.R.range(Mg.wanders[0], Mg.wanders[1]); } else kept = unkept(c.R); }
     // and now and then, a step or two
     wanderT -= dt;
-    if (!goal && wanderT <= 0 && here) {
+    if (!goal && wanderT <= 0 && here && !dw) {
       wanderT = c.R.range(Mg.wanders[0], Mg.wanders[1]);
       const a = c.R.range(0, Math.PI * 2), dist = c.R.range(0.4, 1.2), x = walker.x + Math.sin(a) * dist, z = walker.z + Math.cos(a) * dist;
       if (c.walk.stand(walker, x, z)) { goal = { x, z }; goalT = 6; }
@@ -209,8 +223,8 @@ export function create(c) {
     if (goal) {
       goalT -= dt;
       const before = { x: walker.x, z: walker.z };
-      c.walk.go(walker, goal, Mg.drift * (dw ? 2.5 : 1) * Math.min(dt, 0.08), 0.05);
-      if (Math.hypot(goal.x - walker.x, goal.z - walker.z) < 0.15 || goalT <= 0 || (before.x === walker.x && before.z === walker.z)) goal = null;
+      c.walk.go(walker, goal, (leaving ? Mg.leaves : Mg.drift) * Math.min(dt, 0.08), 0.05);
+      if (Math.hypot(goal.x - walker.x, goal.z - walker.z) < 0.15 || goalT <= 0 || (!leaving && before.x === walker.x && before.z === walker.z)) { goal = null; leaving = false; }
     }
   }
 
@@ -242,7 +256,7 @@ export function create(c) {
         if (s.swelling) c.play('creak', walker.x, walker.z, 12);
         if (s.mode === 'swells') { env.interfere?.(0.2 + 0.6 * Math.min(1, s.swell / Mg.swells)); if (Math.random() < dt * 6) c.play('squeak', walker.x, walker.z, 8); }
         if (s.bursts) { burst(); return; }
-        if (s.mode === 'comes') { goal = null; c.walk.go(walker, { x: m.x, z: m.z }, s.speed * (c.speedScale ?? 1) * Math.min(dt, 0.08), 0.05); }
+        if (s.mode === 'comes') { goal = null; leaving = false; c.walk.go(walker, { x: m.x, z: m.z }, s.speed * (c.speedScale ?? 1) * Math.min(dt, 0.08), 0.05); }
         else if (s.mode === 'stands') wander(dt, m, sight);
       }
       const mx = walker.x - lastX, mz = walker.z - lastZ, moved = Math.hypot(mx, mz);
@@ -272,6 +286,8 @@ export function create(c) {
         return { ok: true, target: 'middle-manager' };
       } }];
     },
+    /** For the dev page: stand it here, now (world coordinates). */
+    put(x, z) { if (!group || over) return false; walker.x = lastX = x; walker.z = lastZ = z; goal = null; leaving = false; pose(0, 0, c.me()); return true; },
     /** For the dev page's beside: stand this far off it and look this far aside (near, it goes off; in the eye, it comes). */
     apart: 5, aside: 0.7,
     at: () => ({ x: walker.x, z: walker.z, mode: s.mode, fat: +s.fat.toFixed(2), speed: +s.speed.toFixed(2) }),
