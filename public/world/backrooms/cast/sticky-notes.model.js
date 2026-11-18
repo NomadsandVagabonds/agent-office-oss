@@ -18,8 +18,10 @@
 import * as THREE from 'three';
 import { Batch, lin } from '../kit.js';
 
-export const NOTE_SIZE = 0.085;       // metres along a side: a little larger than a real one, so it reads across a room
+export const NOTE_SIZE = 0.135;       // metres along a side: well over a real one's, so it reads as a note from across a room (the lead: at 8.5 cm, "only a small speck")
 const ROWS = 5;
+// (its curls were set for a sheet of 8.5 cm: a bigger one bends through the same angles, not further)
+const CURL = 0.085 / NOTE_SIZE;
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const smooth = (u) => { const k = clamp(u, 0, 1); return k * k * (3 - 2 * k); };
@@ -87,7 +89,7 @@ export function makeStickyNote(kit, colour = '#f4e04d', seed = 0) {
     const p = notePose(state, seed);
     inner.visible = !p.hidden;
     if (p.hidden) return;
-    bend(p.k, p.from);
+    bend(p.k * CURL, p.from);
     inner.rotation.set(p.pitch, p.yaw, p.roll, 'YXZ');
     inner.position.set(0, p.bob, 0);
   }
