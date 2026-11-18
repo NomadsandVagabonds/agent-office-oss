@@ -96,8 +96,8 @@ export function build(c) {
     det.box(-W / 2, H - 1.05, -2.6, W / 2, H - 0.75, -2.1, duct); for (let x = -W / 2 + 0.6; x < W / 2; x += 1.2) det.box(x - 0.02, H - 1.07, -2.62, x + 0.02, H - 0.73, -2.08, duct.map((v) => v * 0.85));
     det.box(-W / 2, H - 0.62, 3.4, W / 2, H - 0.58, 3.8, tray); for (const z of [3.45, 3.75]) det.box(-W / 2, H - 0.62, z - 0.01, W / 2, H - 0.52, z + 0.01, tray); for (const [z, col] of [[3.52, [0.1, 0.1, 0.1]], [3.6, [0.7, 0.2, 0.15]], [3.68, [0.15, 0.3, 0.6]]]) det.box(-W / 2, H - 0.58, z - 0.018, W / 2, H - 0.545, z + 0.018, col);
     // light fittings: a batten under each beam, its tube lit
-    const tubeL = c.shining('levelp:tubes', kit.tex.white(), 1.6, [1, 0.82, 0.55], { detail: true });
-    for (let x = -W / 2 + 1.8; x < W / 2; x += 3.6) for (const z of [-4.5, 0.9, 5.5]) { if (Math.abs(z) > D / 2 - 0.6) continue; det.box(x - 0.07, H - 0.67, z - 0.6, x + 0.07, H - 0.57, z + 0.6, [0.82, 0.8, 0.74]); tubeL.box(x - 0.035, H - 0.7, z - 0.56, x + 0.035, H - 0.67, z + 0.56, [1, 1, 1]); }
+    // (the shell's batten, `c.fitting` kind 'batten', 1.2 m along z, hung from the beam's underside; the room lights itself, so no lamp)
+    for (let x = -W / 2 + 1.8; x < W / 2; x += 3.6) for (const z of [-4.5, 0.9, 5.5]) { if (Math.abs(z) > D / 2 - 0.6) continue; c.fitting(x, z, { kind: 'batten', len: 1.2, y: H - 0.55, tube: [1, 0.82, 0.55], power: 1.6, detail: true, light: false }); }
     // the columns' corners guarded in yellow steel to knee height; wheel stops in the row of bays
     for (const [x, z] of [[-4, 4.6], [3.6, -1.8], [-1.2, -0.6]]) if (clear(x, z, 0.4)) for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) det.box(x + sx * 0.25 - (sx > 0 ? 0.06 : 0), 0, z + sz * 0.25 - (sz > 0 ? 0.06 : 0), x + sx * 0.25 + (sx < 0 ? 0.06 : 0), 0.9, z + sz * 0.25 + (sz < 0 ? 0.06 : 0), guard);
     for (let i = 0; i < 5; i++) { const x = 2.4 + i * 2.5; if (x > W / 2 - 1.3) break; det.box(x - 0.6, 0, D / 2 - 0.55, x + 0.6, 0.1, D / 2 - 0.4, [0.62, 0.6, 0.56]); det.box(x - 0.55, 0.1, D / 2 - 0.53, x - 0.35, 0.11, D / 2 - 0.42, guard); det.box(x + 0.35, 0.1, D / 2 - 0.53, x + 0.55, 0.11, D / 2 - 0.42, guard); }
