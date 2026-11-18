@@ -560,7 +560,7 @@ export function makeGuardStandRig(kit, tag = 'guard-stand') {
   leftArmPivot.add(makePart('larm', leftClawArmVox));
   spinePivot.add(leftArmPivot);
 
-  function pose({ unfold = 0, stride = 0, speed = 0, time = 0, mode = 'chair', headYaw = 0, dt = 0.016, turnRate = 0, strikeK = 0 }) {
+  function pose({ unfold = 0, stride = 0, speed = 0, time = 0, mode = 'chair', headYaw = 0, dt = 0.016, turnRate = 0, strikeK = 0, hurt = Infinity }) {
     const g = guardStandGait(unfold, stride, speed, time, mode);
     pelvisGroup.position.y = g.pelvisY;
     pelvisGroup.rotation.set(g.pelvisPitch, 0, g.pelvisRoll, 'YXZ');
@@ -616,6 +616,36 @@ export function makeGuardStandRig(kit, tag = 'guard-stand') {
     bellySpring.aX = clamp(bellySpring.aX + bellySpring.vX * stepDt, -0.8, 0.8);
     bellyHolder.rotation.z = bellySpring.aZ + Math.sin(time * 2.3) * (0.04 + 0.10 * unfold);
     bellyHolder.rotation.x = bellySpring.aX + Math.cos(time * 1.9) * (0.03 + 0.09 * unfold);
+
+    // a jab (hurt: seconds since one landed): the backrest snaps back, the head with it, the seat jumps on its legs
+    if (hurt < 0.6) {
+      const e = Math.exp(-hurt * 7) * Math.min(1, hurt * 30) * (1 - hurt / 0.6);
+      spinePivot.rotation.x -= 0.4 * e; headPivot.rotation.x -= 0.45 * e; pelvisGroup.position.y += 0.08 * e;
+      rightArmPivot.rotation.x -= 0.6 * e; leftArmPivot.rotation.x -= 0.5 * e;
+    }
+  }
+
+  /**
+   * Its dying, 0 → 1 (cast/health.rule.js): its legs go out from under it one after another, sprawling flat; the seat
+   * comes down between them and tips; the backrest slumps forward over it, the head hanging, the arms gone slack. What
+   * hangs off it still swings. Its clock of dying only (and the room's time, for what still swings). Nothing random.
+   */
+  function die(progress, time = 0, dt = 0.016) {
+    const k = Math.max(0, Math.min(1, progress)), ease = (v) => { const u = Math.max(0, Math.min(1, v)); return u * u * (3 - 2 * u); };
+    pose({ unfold: 1, stride: 0, speed: 0, time, mode: 'scan', dt });
+    const f = ease(k / 0.55), late = ease((k - 0.3) / 0.5), mix = (a, b, w) => a + (b - a) * w;
+    pelvisGroup.position.y = mix(pelvisGroup.position.y, 0.28, f) + (f > 0.98 ? Math.sin((k - 0.55) * 30) * 0.02 * (1 - k) : 0);
+    pelvisGroup.rotation.z += 0.22 * f; pelvisGroup.rotation.x -= 0.08 * f;
+    legs.forEach((lg, i) => {
+      const s = ease((k - i * 0.07) / 0.4);
+      lg.femur.rotation.z = mix(lg.femur.rotation.z, 0.05, s);
+      lg.tibia.rotation.z = mix(lg.tibia.rotation.z, -0.12, s);
+      lg.tarsus.rotation.z = mix(lg.tarsus.rotation.z, -0.32, s);
+    });
+    spinePivot.rotation.x = mix(spinePivot.rotation.x, 0.72, late); spinePivot.rotation.z = 0.12 * late;
+    headPivot.rotation.set(mix(headPivot.rotation.x, 0.65, late), headPivot.rotation.y * (1 - late), 0.4 * late);
+    rightArmPivot.rotation.x = mix(rightArmPivot.rotation.x, 0.35, late); rightArmPivot.rotation.z = mix(rightArmPivot.rotation.z, 0.5, late);
+    leftArmPivot.rotation.x = mix(leftArmPivot.rotation.x, 0.3, late); leftArmPivot.rotation.z = mix(leftArmPivot.rotation.z, -0.45, late);
   }
 
   pose({ unfold: 0, stride: 0, speed: 0, time: 0, mode: 'chair' });
@@ -632,6 +662,7 @@ export function makeGuardStandRig(kit, tag = 'guard-stand') {
     leftArmPivot,
     legs,
     pose,
+    die,
     light(rgb) {
       mat.uniforms.uTint.value.set(
         rgb[0] * 1.38 + 0.06,
