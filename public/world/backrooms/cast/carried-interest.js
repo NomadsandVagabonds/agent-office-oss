@@ -60,14 +60,15 @@ export function create(c) {
     high += (want - high) * Math.min(1, dt * (dying !== null ? 12 : down || sits ? 7 : 2.5));
     shake = dying === null ? Math.max(0, shake - dt) : 0;
     tilt += ((dying !== null ? 0.55 * crush : down ? 0.22 : 0) - tilt) * Math.min(1, dt * (dying !== null ? 8 : 4));
+    const kick = 0.3 * jolt;                                                       // (a jab: it is knocked over to one side, for a moment)
     // it leans the way of whichever side has lost the most from under it
     let lx = 0, lz = 0; for (const b of bearers) if (b.gone) { lx += Math.cos(b.a); lz += Math.sin(b.a); }
     const wob = moving ? Math.sin(clock * 5.2) * 0.035 : Math.sin(clock * 1.4) * 0.012, jit = shake * 0.03;
-    weight.position.set(walker.x + (Math.random() - 0.5) * jit, floor + high + Math.abs(wob) * 0.4 * (1 - crush) + 0.12 * jolt, walker.z + (Math.random() - 0.5) * jit);
-    weight.rotation.set(lz * 0.035 + wob + tilt * Math.sin(clock * 3) * 0.3, rot, -lx * 0.035 + Math.cos(clock * 4.7) * (moving ? 0.03 : 0.008) + tilt, 'YXZ');
+    weight.position.set(walker.x + (Math.random() - 0.5) * jit, floor + high + Math.abs(wob) * 0.4 * (1 - crush) + 0.34 * jolt, walker.z + (Math.random() - 0.5) * jit);
+    weight.rotation.set(lz * 0.035 + wob + tilt * Math.sin(clock * 3) * 0.3, rot, -lx * 0.035 + Math.cos(clock * 4.7) * (moving ? 0.03 : 0.008) + tilt + kick, 'YXZ');
     const breath = 1 + Math.sin(clock * (down ? 6 : 1.3)) * (down ? 0.03 : 0.018); weight.scale.set(breath, 1 / breath, breath);
     for (const arm of arms) {
-      const px = Math.cos(rot) * arm.side, pz = -Math.sin(rot) * arm.side, flail = (down || (dying !== null && limp < 1) ? Math.sin(clock * 11 + arm.side) * 0.9 * (1 - limp) : Math.sin(clock * 1.7 + arm.side) * 0.18) + 0.6 * jolt + 0.5 * limp;
+      const px = Math.cos(rot) * arm.side, pz = -Math.sin(rot) * arm.side, flail = (down || (dying !== null && limp < 1) ? Math.sin(clock * 11 + arm.side) * 0.9 * (1 - limp) : Math.sin(clock * 1.7 + arm.side) * 0.18) + 1.5 * jolt + 0.5 * limp;
       arm.m.position.set(walker.x + px * 0.68, floor + high + 0.2, walker.z + pz * 0.68);
       arm.m.rotation.set(-0.7 + flail * 0.5, rot, -arm.side * (2.75 + flail * 0.7), 'YXZ');          // (they hang; dropped, they beat at the air)
     }
@@ -92,7 +93,7 @@ export function create(c) {
         b.px = b.sx + (b.x - b.sx) * b.k; b.pz = b.sz + (b.z - b.sz) * b.k;
         hop = Math.sin(b.k * Math.PI) * 0.05; reach = Math.sin(b.k * Math.PI) * 0.16;                   // (up off its feet, stretched long, and down)
       }
-      const squat = ((down || sits ? 0.55 : 1 - (0.98 - high) * 0.5) * (1 - crush) + 0.22 * crush) * b.grown;
+      const squat = ((down || sits ? 0.55 : 1 - (0.98 - high) * 0.5) * (1 - crush) + 0.22 * crush) * b.grown * (1 - 0.35 * jolt);
       b.m.visible = true; b.m.position.set(b.px, env.world.floorY(b.px, b.pz) + hop, b.pz); b.m.rotation.set(0, a + Math.sin(clock * 3 + b.phase) * 0.2, Math.sin(clock * 6 + b.phase) * (down ? 0.2 : 0.05));
       b.m.scale.set(b.grown * (1 + (1 - squat) * 0.4) * (1 - reach * 0.5), Math.max(0.05, squat * (1 + reach)), b.grown * (1 + (1 - squat) * 0.4) * (1 - reach * 0.5));
     });
@@ -114,10 +115,10 @@ export function create(c) {
 
   return {
     ready,
-    /** A jab that did not finish it (the conductor, while stalled: hurt, seconds since): it jerks up off them, arms flung. A shove: it holds. */
+    /** A jab that did not finish it (the conductor, while stalled: hurt, seconds since): it is thrown up off them and over to one side, arms flung wide, and they squash under it as it lands. A shove: it holds. */
     flinch(hurt, dt = 0) {
       if (!group || hurt == null || !(hurt < HEALTH.flinch)) return;
-      jolt = Math.exp(-hurt * 7) * Math.min(1, hurt * 30) * (1 - hurt / HEALTH.flinch);
+      jolt = Math.exp(-hurt * 9) * Math.min(1, hurt * 40) * (1 - hurt / HEALTH.flinch);       // (hard and short: it has to read)
       clock += dt; pose(dt, false); jolt = 0;
     },
     /**
