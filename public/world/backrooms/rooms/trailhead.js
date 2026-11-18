@@ -56,7 +56,6 @@ export function build(c) {
   // Guaranteed themed item pickup: the Trail Call (`call`) whistle waiting on the service counter!
   placeVox(c, 'forest:kiosk:lantern', campLanternVox(), bx - 0.68, bz + bd / 2 + 0.02, { y: 1.09, scale: 0.026 });
   if (c.rt.lights.length < 13) c.light(bx - 0.68, 1.38, bz + bd / 2 + 0.12, '#ffd584', 0.68, { bank: 3, k: 1.5, far: 5.8 });
-  c.leave('call', bx + 0.38, bz + bd / 2 + 0.02, { y: 1.09 });
 
   // 2. Chrome Office Subway Turnstile standing absurdly beside a split-rail log post on the +X side
   const tx = Math.min(2.25, W * 0.22), tz = -1.15;

@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { HEALTH, TIER, UNHITTABLE, healthOf, fresh, struck, aged, finished } from '../public/world/backrooms/cast/health.rule.js';
+import { HEALTH, TIER, UNHITTABLE, healthOf, dyingOf, fresh, struck, aged, finished } from '../public/world/backrooms/cast/health.rule.js';
 import { ALL_CAST } from '../public/world/backrooms/cast.js';
 
 const read = (p) => fs.readFileSync(new URL(`../public/world/backrooms/${p}`, import.meta.url), 'utf8');
@@ -19,14 +19,15 @@ test('the tiers are the owner\'s: basic 1, medium 2, boss 3; a jab takes 1', () 
   for (const m of ALL_CAST) assert.ok(healthOf(m.id) > 0 || UNHITTABLE.includes(m.id), `${m.id} has a health or is said to have none`);
 });
 
-test('a hit hurts, the last one starts it dying, and dying it goes in HEALTH.dying seconds', () => {
-  let h = fresh('pirate'); assert.deepEqual(h, { hp: 2, max: 2, hurt: Infinity, dying: null, gone: false });
+test('a hit hurts, the last one starts it dying, and dying it goes in as long as its size takes', () => {
+  let h = fresh('pirate'); assert.deepEqual(h, { hp: 2, max: 2, hurt: Infinity, dying: null, gone: false, takes: 1.6 });
   h = struck(h); assert.equal(h.hp, 1); assert.equal(h.killed, false); assert.equal(h.hurt, 0); assert.equal(finished(h), false);
   h = aged(h, 0.25); assert.equal(h.hurt, 0.25); assert.equal(h.dying, null);
   h = struck(h); assert.equal(h.hp, 0); assert.equal(h.killed, true); assert.equal(h.dying, 0); assert.equal(finished(h), true);
   const again = struck(h); assert.equal(again.killed, false, 'one that is dying is not finished twice'); assert.equal(again.hp, 0);
-  h = aged(h, HEALTH.dying / 2); assert.ok(Math.abs(h.dying - 0.5) < 1e-9); assert.equal(h.gone, false);
-  h = aged(h, HEALTH.dying); assert.equal(h.dying, 1); assert.equal(h.gone, true);
+  h = aged(h, dyingOf('pirate') / 2); assert.ok(Math.abs(h.dying - 0.5) < 1e-9); assert.equal(h.gone, false);
+  h = aged(h, dyingOf('pirate')); assert.equal(h.dying, 1); assert.equal(h.gone, true);
+  assert.deepEqual([dyingOf('shadow'), dyingOf('pirate'), dyingOf('mother'), dyingOf('moth')], [1.2, 1.6, 2.4, HEALTH.dying], 'the bigger, the longer it lies there');
   let boss = fresh('mother'); for (let i = 0; i < 2; i++) { boss = struck(boss); assert.equal(boss.killed, false); } assert.equal(struck(boss).killed, true, 'three for a boss');
   assert.equal(struck(fresh('shadow')).killed, true, 'one for a basic');
   assert.equal(struck(null), null); assert.equal(aged(null, 1), null);
@@ -72,7 +73,7 @@ test('the mascot: the first jab hurts it and it stands a moment; the second fini
   const ticks = it.ticks; assert.deepEqual(jab(p, 'pirate'), { ok: true, target: 'pirate' });
   assert.equal(p.vital('pirate').dying, 0); assert.equal(stopped.length, 1, 'its music goes with it');
   assert.equal(p.snipTargets().some((t) => t.id === 'pirate'), false, 'dying, it is not jabbed again'); assert.equal(p.shoveTargets().some((t) => t.id === 'pirate'), false, 'nor pushed');
-  let t = 0; while (t < HEALTH.dying + 2 * dt) { p.update(dt); t += dt; }
+  let t = 0; while (t < dyingOf('pirate') + 2 * dt) { p.update(dt); t += dt; }
   assert.equal(it.ticks, ticks, 'dying, it is not ticked: it lands nothing'); assert.ok(it.died.length > 10 && it.died.at(-1) === 1, 'its dying is handed to it, 0 to 1, for whoever draws it');
   assert.equal(p.vital('pirate').gone, true);
   assert.equal(it.removed, undefined, 'the mascot says its body stays (fell): what it holds is still there to be taken'); assert.equal(it.disposed, false);
@@ -85,7 +86,7 @@ test('a boss takes three; gone, it is taken off the floor; what cannot be hit ha
   p.update(dt);
   for (let i = 0; i < 2; i++) { assert.ok(jab(p, 'mother')); assert.equal(p.vital('mother').dying, null); for (let t = 0; t < 0.7; t += dt) p.update(dt); }
   assert.ok(jab(p, 'mother')); assert.equal(p.vital('mother').dying, 0);
-  for (let t = 0; t < HEALTH.dying + 0.1; t += dt) p.update(dt);
+  for (let t = 0; t < dyingOf('mother') + 0.1; t += dt) p.update(dt);
   assert.equal(it.removed, true); assert.equal(it.disposed, true); assert.equal(bodies.includes(it.body), false);
   assert.equal(p.vital('moth'), null); assert.equal(jab(p, 'moth'), false, 'a jab at a moth is a jab at the air');
   assert.equal(p.of('moth').hits.at(-1).landed, true, 'and it is as it was');

@@ -85,7 +85,7 @@ export function build(c) {
   // Central Osborne Fire-Finder Alidade Pedestal inside the cab (`0, cz`) + Guaranteed `call` Whistle!
   c.flat.box(-0.28, cabY, cz - 0.28, 0.28, cabY + 0.94, cz + 0.28, CEDAR_TIMBER);
   c.flat.box(0.55, cabY, cz - hw + 0.16, 1.35, cabY + 0.82, cz - hw + 0.68, CEDAR_TIMBER); // map desk
-  c.leave('call', 0.95, cz - hw + 0.42, { y: cabY + 0.82 });
+  c.leave('battery', 0.95, cz - hw + 0.42, { y: cabY + 0.82 });   // (what the climb earns: it was the Trail Call, which is cut)
 
   const alidadeB = new Batch();
   alidadeB.box(-0.24, cabY + 0.94, cz - 0.24, 0.24, cabY + 0.99, cz + 0.24, BRASS_TRIM);

@@ -74,10 +74,6 @@ function fallbackItemIcon(type, item) {
     rect(10,4,12,24,'#5b605c'); rect(11,5,10,22,'#8b8f8a');
     rect(13,8,6,6,'#7a3229'); rect(14,9,4,4,'#a8473b');
     rect(13,18,6,1,'#b9bdb4'); rect(13,21,6,1,'#b9bdb4'); rect(11,25,10,2,'#6c716c');
-  } else if (type === 'call') {
-    rect(6,11,12,10,'#9c845e'); rect(7,12,10,8,'#cdb994'); rect(8,13,8,2,'#e2d2b0');
-    rect(18,13,7,6,'#7c5f1f'); rect(18,14,6,4,'#b8923a'); rect(19,12,3,2,'#533e13');
-    rect(24,15,3,2,'#b8923a'); rect(25,17,3,6,'#2f5e41'); rect(22,22,5,2,'#2f5e41');
   } else if (type === 'snack') {
     rect(7,2,18,4,'#875737'); rect(7,26,18,4,'#875737');
     for (const x of [7, 11, 15, 19, 23]) { rect(x,2,1,4,'#d1a06a'); rect(x,26,1,4,'#d1a06a'); }
