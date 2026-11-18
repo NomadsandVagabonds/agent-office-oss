@@ -15,7 +15,7 @@ import { makeBather } from './kiddie-lagoon/rig.js';
 import { resident } from '../resident.js';
 import {
   poolTileTex, poolroom, natatoriumLight, createBasin, makeVoxGroup, makeInnerTube, placeVox, addTranslucent,
-  mushroomVox, noodleVox, poolSign, depthTile, calmWaterTex, CALM_WATER,
+  mushroomVox, noodleVox, poolSign, depthTile,
   COPING,
 } from '../waterpark.js';
 
@@ -126,9 +126,6 @@ export function build(c) {
     tile: 'white',
     wallTile: 'seafoam',
     waterTone: 'aqua',
-    // the calm sheet at Classic and Low (a sample; without these two keys it is the caustic sheet of waterTone)
-    waterTex: calmWaterTex(kit),
-    waterAlpha: CALM_WATER.lagoon.alpha,
     stepsSide: 'both',
     onTick: (info, dt, t, me) => {
       fountainClock.value = t;

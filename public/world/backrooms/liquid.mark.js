@@ -2,7 +2,7 @@
 // liquid's surface; once the room is built (c.after) the mark finds its mesh(es) and measures them in the room's frame,
 // and that is all, at every tier: nothing is made and the room's sheet is exactly as it was. No three.js is imported
 // here (the rooms' own tests load world.js, and with it this, as plain modules): the matrices are the meshes' own.
-import { flatness } from './liquid.rule.js';
+import { flatness, swellAsk } from './liquid.rule.js';
 
 /**
  * c.liquid (world.js): mark what a room drew as a liquid's surface. Records the mark in rt.liquids; at c.after time it
@@ -10,16 +10,30 @@ import { flatness } from './liquid.rule.js';
  * coordinates, as c.toWorld gives them), strength 1 a body walking through it (0 to 2). It starts a ring only where
  * the tier draws the water and the surface is up (liquid.js sets rec.disturb); anywhere else (Classic, Low, a sheet
  * that was refused, a room built in node) it does nothing and says so: false.
+ * Also swell(s): a wave across the surface, asked for once a tick while there is one (s: { at, height, breaking } in the
+ * ROOM's frame: the crest line at z = at, travelling toward +z, `height` the room's own (drawn at SWELL.scale of it),
+ * `breaking` 0 to 1 as it breaks on the far end), null when there is none; and swellBreaks(rects, beach) once: what it
+ * breaks on ({ x0, z0, x1, z1 } each, room frame: rings as the crest reaches and passes them) and the far end it breaks
+ * along ({ z, x0, x1 }). Both only keep what they are told; liquid.js draws it where the tier has water. → whether the
+ * surface is drawn as water now (false at Classic and Low, in node, or for a refused sheet).
  */
 export function markLiquid(c, target, opt = {}) {
   const rt = c.rt;
   const phase = opt.phase && typeof opt.phase === 'object' && 'value' in opt.phase ? opt.phase : Number.isFinite(opt.phase) ? { value: opt.phase } : null;
   const rec = { kind: opt.kind || 'water', phase, flow: opt.flow ?? null, y: Number.isFinite(opt.y) ? opt.y : null,
     rt, kit: c.kit, target, meshes: [], toRoom: [], plane: null, state: 'marked', reason: null, pairs: null, under: false, live: false,
-    wake: null, disturb: null };
+    wake: null, disturb: null, swell: null, swellBreaks: null, swellBeach: null };
   (rt.liquids ||= []).push(rec);
   c.after?.push?.(() => settleLiquid(rec));
-  return { disturb: (x, z, strength = 1) => (rec.disturb ? rec.disturb(x, z, strength) : false) };
+  return {
+    disturb: (x, z, strength = 1) => (rec.disturb ? rec.disturb(x, z, strength) : false),
+    swell: (s) => { rec.swell = swellAsk(s); rec.swellFresh = true; return rec.state === 'up'; },
+    swellBreaks: (rects, beach = null) => {
+      rec.swellBreaks = (rects || []).filter((b) => [b?.x0, b?.z0, b?.x1, b?.z1].every(Number.isFinite)).map(({ x0, z0, x1, z1 }) => ({ x0, z0, x1, z1 }));
+      rec.swellBeach = beach && [beach.z, beach.x0, beach.x1].every(Number.isFinite) ? { z: beach.z, x0: beach.x0, x1: beach.x1 } : null;
+      return rec.state === 'up';
+    },
+  };
 }
 
 const isBatch = (t) => !!t && Array.isArray(t.pos) && Array.isArray(t.idx) && !t.isObject3D;

@@ -18,7 +18,7 @@ register('data:text/javascript,' + encodeURIComponent(`export function resolve(s
 const THREE = await import('three');
 const { createKit, Batch, WHITE } = await import('../public/world/backrooms/kit.js');
 const { markLiquid, settleLiquid, liquidMeshes, collectLiquids, createLiquidView, averageColour, sheetTint, sheetRim, OVER_LAYER } = await import('../public/world/backrooms/liquid.js');
-const { LIQUID, flatness, underwater, holdStep, waterColours, LIQUID_FRAG, LIQUID_VERT, LIQUID_UNDER_FRAG, UNDERSIDE, seesUnderside } = await import('../public/world/backrooms/liquid.rule.js');
+const { LIQUID, flatness, underwater, holdStep, waterColours, SHEET_TINTS, pinnedTint, LIQUID_FRAG, LIQUID_VERT, LIQUID_UNDER_FRAG, UNDERSIDE, seesUnderside } = await import('../public/world/backrooms/liquid.rule.js');
 const { createVhs } = await import('../public/world/backrooms/vhs.js');
 const { castsBeamShadow, HELD_ORDER } = await import('../public/world/backrooms/beam-shadows.rule.js');
 const { glowRole } = await import('../public/world/backrooms/glow.js');
@@ -200,6 +200,57 @@ test('the tint is the old sheet\'s: its picture\'s average times its colour, mur
   assert.deepEqual(waterColours(null), waterColours(LIQUID.fallbackTint), 'a picture that cannot be read: a pool colour of its own');
   assert.ok(waterColours([0.2, 0.3, 0.3]).deep[0] < 0.2 * LIQUID.deep, 'the pale caustic lines averaged in are pushed back out');
   w.kit.dispose();
+});
+
+test('a sheet changed for Classic after its water was approved keeps the approved water: the waterpark\'s caustic sheets, not the lagoon\'s', async () => {
+  // a canvas that paints what is filled on it (#rrggbb and rgb()), for the waterpark's real pictures
+  const paint = () => {
+    const o = { style: {}, width: 0, height: 0, d: null, getContext() {
+      o.d ||= new Float64Array(o.width * o.height * 4);
+      return { fillStyle: '#000', fillRect(x, y, w, h) {
+        const s = this.fillStyle, c = s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/\d+/g).map(Number);
+        for (let j = Math.max(0, y | 0); j < Math.min(o.height, (y + h) | 0); j++) for (let i = Math.max(0, x | 0); i < Math.min(o.width, (x + w) | 0); i++) o.d.set([...c.slice(0, 3), 255], (j * o.width + i) * 4);
+      }, getImageData: () => ({ data: Uint8ClampedArray.from(o.d) }) };
+    } };
+    return o;
+  };
+  const was = globalThis.document;
+  globalThis.document = { createElement: paint };
+  let pics;
+  try {
+    const wp = await import('../public/world/backrooms/waterpark.js'), kit = createKit();
+    pics = { aqua: wp.causticWaterTex(kit, 'aqua'), emerald: wp.causticWaterTex(kit, 'emerald'), deep: wp.causticWaterTex(kit, 'deep') };
+  } finally { globalThis.document = was; }
+  // each pinned sheet is recognised by its picture as the waterpark draws it now, and stands for the colour it was approved with
+  const pinned = Object.fromEntries(SHEET_TINTS.sheets.map((s) => [s.sheet.replace('waterpark ', ''), s]));
+  for (const k of ['aqua', 'emerald', 'deep']) {
+    const avg = averageColour(pics[k]);
+    assert.ok(avg.every((v, i) => Math.abs(v - pinned[k].average[i]) < SHEET_TINTS.within / 4), `${k}: today's picture is the one pinned`);
+    assert.deepEqual(pinnedTint(avg), [...pinned[k].tint]);
+  }
+  // (the colours they were approved with: the caustic cells' averages, 759cace)
+  assert.deepEqual([...pinned.aqua.tint], [0.19684, 0.47806, 0.56639]);
+  assert.deepEqual([...pinned.emerald.tint], [0.19262, 0.38966, 0.37334]);
+  // through a real sheet: the approved water, per metre (red / green / blue), its deep colour and what it keeps
+  const numbers = (tex, alpha) => {
+    const w = upgraded({ tex, alpha }), { scene, cam } = stage(w.rt.group), view = createLiquidView(); view.frame(scene, cam, 0);
+    const u = w.rec.pairs[0].material.uniforms, r = (v) => v.toArray().map((x) => +x.toFixed(3));
+    const out = { absorb: r(u.uAbsorb.value), deep: r(u.uDeep.value), keep: r(u.uKeep.value) };
+    w.kit.dispose();
+    return out;
+  };
+  // (within 0.002: the sheet's vertex colour is read back from single floats)
+  const near = (got, want, msg) => { for (const k of Object.keys(want)) want[k].forEach((v, i) => assert.ok(Math.abs(got[k][i] - v) <= 0.002, `${msg}: ${k}[${i}] ${got[k][i]} for ${v}`)); };
+  near(numbers(pics.aqua, 0.52), { absorb: [0.715, 0.277, 0.15], deep: [0.012, 0.158, 0.2], keep: [0.058, 0.788, 1, 0.3] }, 'the aqua pools: as approved');
+  near(numbers(pics.emerald, 0.54), { absorb: [0.835, 0.195, 0.243], deep: [0.023, 0.129, 0.121], keep: [0.181, 1, 0.939, 0.509] }, 'the deep end: as approved');
+  near(numbers(pics.aqua, 0.56), { absorb: [1.201, 0.465, 0.252] }, 'a footbath: its own murk, as approved');
+  // (read as they are, the new pictures gave the deep end a green body: blue going twice as fast, half the deep colour)
+  const raw = waterColours(averageColour(pics.emerald).map((v, i) => v * [0.88, 1, 1][i]), 0.54);
+  assert.ok(raw.absorb[2] > 1.9 * 0.243 && raw.deep[1] < 0.5 * 0.129);
+  // a pin lets go when its picture changes; nothing to read stays nothing
+  const off = pinned.emerald.average.map((v) => v + 1.5 * SHEET_TINTS.within);
+  assert.deepEqual(pinnedTint(off), off);
+  assert.equal(pinnedTint(null), null);
 });
 
 test('in view: the old single pass when no surface is, the split when one is, held half a second; under the plane outside the rim, the old sheet', () => {
@@ -405,7 +456,7 @@ test('the helper lines in the waterpark\'s files: each once, and nothing else of
   // (recorded from origin/blockrooms-live at 21500d9, each file as it was before its line went in. When the waterpark's
   // builder changes one of these files, re-record its hash: the line itself must stay, once)
   const lines = [
-    ['waterpark.js', "  c.liquid?.(waterSurf, { kind: 'water', y: waterY });\n"],
+    ['waterpark.js', "  const water = c.liquid?.(waterSurf, { kind: 'water', y: waterY });\n"],
     ['waterpark.js', "      c.liquid?.(wb, { kind: 'water', y: 0.15 });\n"],
     ['rooms/return-pool/art.js', "  c.liquid?.(group, { kind: 'water', phase, y });\n"],
     ['rooms/bellmouth/art.js', "  c.liquid?.(group,{kind:'water',phase,y:p.water});\n"],
@@ -419,7 +470,7 @@ test('the helper lines in the waterpark\'s files: each once, and nothing else of
   }
   // where each goes: after the basin's sheet, the footbath's sheet, and before each art helper hands its group back
   // (18 Nov: the waterpark's builder put one line of its own between, the lamps the Classic sheet reflects: pool-optics.js)
-  assert.match(B('waterpark.js'), /    order: 4,\n(?:    finishMaterial: [^\n]*\n)?  \}\);\n  c\.liquid\?\.\(waterSurf, \{ kind: 'water', y: waterY \}\);\n/);
+  assert.match(B('waterpark.js'), /    order: 4,\n(?:    finishMaterial: [^\n]*\n)?  \}\);\n  const water = c\.liquid\?\.\(waterSurf, \{ kind: 'water', y: waterY \}\);\n/);
   assert.match(B('waterpark.js'), /alpha: 0\.56, side: THREE\.DoubleSide, order: 4 \}\);\n      c\.liquid\?\.\(wb, \{ kind: 'water', y: 0\.15 \}\);\n/);
   assert.match(B('rooms/return-pool/art.js'), /  c\.liquid\?\.\(group, \{ kind: 'water', phase, y \}\);\n  return \{ group, phase \};/);
   assert.match(B('rooms/bellmouth/art.js'), /  c\.liquid\?\.\(group,\{kind:'water',phase,y:p\.water\}\);\n  return \{phase,group\};/);
@@ -442,3 +493,9 @@ test('what the surface is made of: the kit\'s shader text untouched; the room\'s
   assert.ok(!/Math\.random|\bR\./.test(B('liquid.js') + B('liquid.rule.js')), 'nothing seeded, nothing random: the ripple is timed by the clock');
 });
 
+
+test('a basin keeps its water\'s handle: a room can ring the surface at Medium and High; at Classic and Low it does nothing', () => {
+  const src = B('waterpark.js');
+  assert.match(src, /  const water = c\.liquid\?\.\(waterSurf, \{ kind: 'water', y: waterY \}\);\n/);
+  assert.match(src, /    get swimmer\(\) \{ return swimmer; \},\n    water,[^\n]*\n  \};\n  c\.rt\.basin = info;\n/);
+});
