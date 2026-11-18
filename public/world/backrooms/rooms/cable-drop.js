@@ -159,7 +159,7 @@ export function build(c) {
       // (its health: the mark of the last jab ages; dying, it does nothing and hurts nobody, and then it is gone from this floor)
       vital = aged(vital, dt);
       if (vital.dying !== null && !vital.gone) rig.die(vital.dying, time);                 // (going down into a heap of cable: rig.js)
-      if (vital.dying !== null) { roamer.physical = false; if (vital.gone) roamer.gone = true; return; }
+      if (vital.dying !== null) { roamer.physical = false; return; }                      // (gone, the heap of it stays where it fell: drawn once, then left)
 
       const inRoom = c.world.current() === c.rt;
       const distDrop = Math.hypot(me.x - startW.x, me.z - startW.z);

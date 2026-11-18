@@ -127,6 +127,8 @@ export function create(c) {
       body.position.y += 0.22 * e * Math.abs(Math.cos(hurt * 9));
       body.rotation.z += 0.32 * e * Math.sin(hurt * 14 + 0.6); body.rotation.x -= 0.18 * e;
     },
+    /** Finished, it lies where it fell (the conductor leaves its things when this says so): its last pose, drawn once, nothing more. */
+    fell() { return !!fig; },
     dies(progress) {
       if (!fig) return;
       const k = Math.max(0, Math.min(1, progress)), fl = base - drop, ease = (v) => { const t = Math.max(0, Math.min(1, v)); return t * t * (3 - 2 * t); };

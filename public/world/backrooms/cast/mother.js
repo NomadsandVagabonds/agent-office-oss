@@ -257,6 +257,8 @@ export function create(c) {
       whip = Math.exp(-hurt * 5) * Math.min(1, hurt * 25) * (1 - hurt / HEALTH.flinch);
       clock += dt; pose(dt); whip = 0;
     },
+    /** Finished, it lies where it fell (the conductor leaves its things when this says so): its last pose, drawn once, nothing more. */
+    fell() { for (const w of worms) if (w.air && !w.dead) w.g.visible = false; return !!group; },      // (none of hers left hanging in the air)
     dies(progress, dt = 0) {
       if (!group) return;
       dying = Math.max(0, Math.min(1, progress));

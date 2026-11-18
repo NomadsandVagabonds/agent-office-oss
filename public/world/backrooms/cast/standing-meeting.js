@@ -190,6 +190,8 @@ export function create(c) {
       hit = { e: Math.exp(-hurt * 3) * (1 - hurt / HEALTH.flinch), t: hurt };
       clock += dt; pose(dt, false); hit = null;
     },
+    /** Finished, it lies where it fell (the conductor leaves its things when this says so): its last pose, drawn once, nothing more. */
+    fell() { return !!group; },
     dies(progress, dt = 0) {
       if (!group) return;
       dying = Math.max(0, Math.min(1, progress));
