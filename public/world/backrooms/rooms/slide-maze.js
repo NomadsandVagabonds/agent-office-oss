@@ -9,6 +9,7 @@ import { stepWalker } from '../denizens.js';
 import { furnitureClear } from '../furniture-rules.js';
 import { roomReturn } from '../room-physics.js';
 import { goesDown } from '../seam.js';
+import { resident } from '../resident.js';
 import { makePlenumTonerRig } from './drop-plenum/rig.js';
 import {
   createBasin, buildFlume, poolSign, depthTile,
@@ -20,7 +21,10 @@ import {
   TUBE_TONER, makeTubeToner, stepTubeToner, snipTubeToner, releaseTubeToner,
 } from '../waterpark.rule.js';
 
-import { FLUME_PALETTE as paint, flumeTextures, flumeChamber, flumeHall, flumeLights } from './slide-maze/art.js';
+import { FLUME_PALETTE as paint, flumeTextures, flumeHall, flumeLights } from './slide-maze/art.js';
+
+import { moldedJunction, JOINT_LENGTH, FORK_ARM_LENGTH, SHELL_SIDES } from './slide-maze/junction.js';
+import { gallerySleeve, galleryMarker, lowerCrossing } from './slide-maze/gallery.js';
 
 /* ---- Modular zero-clip cylindrical crawl-tube maze builder ---------------- */
 
@@ -72,12 +76,11 @@ function buildCrawlMaze(c, bz0, flumeBatch) {
   };
 
   // Straight fiberglass segments meet the rounded junctions at their collars.
-  const hubPad = 0.76;
+  const hubPad = JOINT_LENGTH;
   const tubeSpecs = [
-    { x0: -3.0, z0: 2.05, x1: -3.0, z1: 1.25 + hubPad, color: paint.yellow, axis: 'z' },
-    { x0: -3.0, z0: 1.25 - hubPad, x1: -3.0, z1: -1.35 + hubPad, color: paint.yellow, axis: 'z', portholeSide: -1 },
-    { x0: -3.0 + hubPad, z0: 1.25, x1: 0.0 - hubPad, z1: 1.25, color: paint.blue, axis: 'x', portholeSide: -1 },
-    { x0: 0.0 + hubPad, z0: 1.25, x1: 3.0 - hubPad, z1: 1.25, color: paint.blue, axis: 'x', portholeSide: 1 },
+    { x0: -3.0, z0: 1.25 - FORK_ARM_LENGTH, x1: -3.0, z1: -1.35 + hubPad, color: paint.yellow, axis: 'z', portholeSide: -1 },
+    { x0: -3.0 + FORK_ARM_LENGTH, z0: 1.25, x1: 0.0 - hubPad, z1: 1.25, color: paint.blue, axis: 'x', portholeSide: -1 },
+    { x0: 0.0 + hubPad, z0: 1.25, x1: 3.0 - hubPad, z1: 1.25, color: paint.blue, axis: 'x', gallery: true },
     { x0: 3.0, z0: 1.25 - hubPad, x1: 3.0, z1: -1.35 + hubPad, color: paint.red, axis: 'z', portholeSide: 1 },
     { x0: -3.0 + hubPad, z0: -1.35, x1: 0.0 - hubPad, z1: -1.35, color: paint.red, axis: 'x' },
     { x0: 0.0 + hubPad, z0: -1.35, x1: 3.0 - hubPad, z1: -1.35, color: paint.blue, axis: 'x' },
@@ -87,7 +90,7 @@ function buildCrawlMaze(c, bz0, flumeBatch) {
     { x0: -3.0, z0: -1.35 - hubPad, x1: -3.0, z1: -3.08, color: paint.blue, axis: 'z', portholeSide: -1 },
   ];
 
-  const sides = 14;
+  const sides = SHELL_SIDES;
   const emitCylinder = (spec) => {
     const rgb = lin(spec.color);
     const inRgb = rgb.map((v) => Math.min(1, v * 0.90 + 0.08));
@@ -102,6 +105,10 @@ function buildCrawlMaze(c, bz0, flumeBatch) {
     const rz1 = Math.max(spec.z0, spec.z1) + (spec.axis === 'x' ? 0.32 : 0.10);
     c.flat.box(rx0, CRAWL_FLOOR_Y - 0.03, rz0, rx1, CRAWL_FLOOR_Y + 0.01, rz1, COPING, { skip: '-y' });
 
+    if (spec.gallery) {
+      gallerySleeve(c,flumeBatch,spec,CRAWL_AXIS_Y,CRAWL_R);
+      return;
+    }
     for (let i = 0; i < nSegs; i++) {
       const u0 = i / nSegs, u1 = (i + 1) / nSegs;
       const ax = spec.x0 + (spec.x1 - spec.x0) * u0;
@@ -171,7 +178,7 @@ function buildCrawlMaze(c, bz0, flumeBatch) {
 
   for (const spec of tubeSpecs) emitCylinder(spec);
 
-  for (const h of Object.values(nodes)) flumeChamber(c, flumeBatch, h, CRAWL_FLOOR_Y, CRAWL_AXIS_Y, CRAWL_R);
+  for (const h of Object.values(nodes)) moldedJunction(c,flumeBatch,h,CRAWL_FLOOR_Y,CRAWL_AXIS_Y,CRAWL_R,h===nodes.NW);
 
   return { inCrawl, nodes };
 }
@@ -295,6 +302,8 @@ export function build(c) {
   // ---------------------------------------------------------------------------
   const flumeBatch = new Batch();
   const crawl = buildCrawlMaze(c, bz0, flumeBatch);
+  const crossingHead = lowerCrossing(c,flumeBatch,bx0,bz1,LOWER_Y);
+  galleryMarker(c);
 
   c.light(0, CRAWL_AXIS_Y + .15, 1.25, '#c8bd90', .26, { k: 1.3, far: 3.6 });
 
@@ -357,7 +366,8 @@ export function build(c) {
   const prevHeadY = c.rt.headY;
   c.rt.headY = (x, z) => {
     if (lowerLatched) {
-      return crawl.inCrawl(x, z) ? (CRAWL_FLOOR_Y - LOWER_Y - 0.06) : (prevHeadY ? prevHeadY(x, z) : H);
+      const ceiling=crawl.inCrawl(x,z) ? CRAWL_FLOOR_Y-LOWER_Y-.06 : (prevHeadY ? prevHeadY(x,z) : H);
+      return Math.min(ceiling,crossingHead(x,z));
     }
     // Inside the cylindrical tubes, headroom is 0.96 m (>= 0.85 HEAD, < 1.10 EYE -> automatic crouch-crawl!)
     if (crawl.inCrawl(x, z) && z <= nMouthZ + 0.05 && z >= sMouthZ - 0.05) return 0.96;
@@ -539,7 +549,7 @@ export function build(c) {
   //    Safety Scissors snip!
   // ---------------------------------------------------------------------------
   const tonerSpawns = [
-    { key: 'cyan-magenta', lx: 1.5, lz: 1.25, patrolA: [-1.2, 1.25], patrolB: [3.0, 1.25], patrolC: [3.0, -1.1] },
+    { key: 'cyan-magenta', lx: 3.0, lz: -.68, patrolA: [-1.2, 1.25], patrolB: [3.0, 1.25], patrolC: [3.0, -1.1] },
     { key: 'coral-emerald', lx: 0.0, lz: -2.2, patrolA: [-2.2, -1.35], patrolB: [0.0, -1.35], patrolC: [0.0, -3.7] },
   ];
 
@@ -564,21 +574,8 @@ export function build(c) {
       light: () => {
         rig.light(c.world.lightAt(denizen.x, denizen.z, CRAWL_AXIS_Y));
       },
-      snipTarget: () => (
-        tState.phase === 'dropping' || tState.phase === 'chasing'
-          ? { id: 'flume-toner', y: (denizen.y ?? c.room.y + CRAWL_FLOOR_Y) + 0.24, r: 0.40, priority: 3 }
-          : false
-      ),
-      snip() {
-        if (tState.phase !== 'dropping' && tState.phase !== 'chasing') return false;
-        tState = snipTubeToner(tState);
-        c.env.play?.('clack', denizen.x, denizen.z, 9);
-        c.env.play?.('sonarrattle', denizen.x, denizen.z, 10);
-        c.env.interfere?.(0.45);
-        c.survived('flume-toner');
-        return { ok: true, target: 'flume-toner' };
-      },
       update(dt, time, me) {
+        if (life?.out || life?.stalled) return;          // dying, gone, or let go after a shove: it does nothing
         const inRoom = c.world.current() === c.rt;
         const meLoc = c.toLocal(me.x, me.z);
         const playerRelY = me.y - c.room.y;
@@ -646,11 +643,21 @@ export function build(c) {
             tState = releaseTubeToner(tState);
             if (hit.landed) {
               c.env.hud?.glitch?.(0.65);
-              c.survived('flume-toner');
+              if (life) life.escaped(); else c.survived('flume-toner');
             }
           }
         }
       },
+    });
+    // Health and a shove, as a toner has (resident.js; medium). A jab short of the last does what a snip did: it
+    // recoils. A shove makes it let go, by its own rule. Gone, the tubes are only tubes.
+    const life = denizen && resident(c.env, 'flume-toner', {
+      of: denizen, r: 0.40, priority: 3,
+      at: () => ({ x: denizen.x, z: denizen.z, y: (denizen.y ?? c.room.y + CRAWL_FLOOR_Y) + 0.24 }),
+      when: () => tState.phase === 'dropping' || tState.phase === 'chasing', recoils: true,
+      hit: () => { knownToner = true; tState = snipTubeToner(tState); c.env.play?.('clack', denizen.x, denizen.z, 9); c.env.play?.('sonarrattle', denizen.x, denizen.z, 10); c.env.interfere?.(0.45); },
+      shoved: () => { tState = releaseTubeToner(tState); return true; },
+      gone: () => { denizen.gone = true; },
     });
   }
 

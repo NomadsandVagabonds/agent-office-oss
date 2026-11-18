@@ -151,12 +151,16 @@ export function create(c) {
     dies(progress) {
       if (!mesh || !at) return;
       const k = Math.max(0, Math.min(1, progress)), e = k * k * (3 - 2 * k);
-      mesh.visible = k < 0.98;
+      // the jab: it goes white all at once, stutters on and off, and jerks up tall — then down into the floor
+      const flash = Math.exp(-k * 9), early = k < 0.2;
+      mesh.visible = k < 0.98 && !(early && Math.floor(k * 70) % 3 === 0);
       mesh.position.set(at.x, env.world.floorY(at.x, at.z), at.z);
-      mesh.scale.set(1 + 0.9 * e, Math.max(0.02, 1 - e), 1 + 0.9 * e);
+      mesh.scale.set((1 + 0.9 * e) * (1 - 0.25 * flash), Math.max(0.02, (1 - e) * (1 + 0.35 * flash)), (1 + 0.9 * e) * (1 - 0.25 * flash));
       mesh.rotation.x = -0.25 * e;
-      const L = mesh.material.uniforms.uTint.value; L.multiplyScalar(1 - 0.5 * e);
+      const v = 4 * flash + 0.02 * (1 - flash);                                           // (white, then a shadow's own dark)
+      mesh.material.uniforms.uTint.value.set(v, v, v);
     },
+
     /** Stand at this spot now, already there to be seen (the conductor's summon()). After that it is what it always is. */
     appear(spot) {
       if (!mesh) return false;
@@ -167,6 +171,8 @@ export function create(c) {
       s = { ...away(R), mode: 'lurk', stare: 0, heat: 0, t: SHADOW.stay[1] };
       return true;
     },
+    /** For the dev page's beside: look this far off it (radians), out of the stare that arms it and still within a jab. */
+    aside: 0.6,
     /** For the dev page: have it turn up now. */
     hurry() { if (s.mode === 'away') s = { ...s, t: 0 }; },
     dispose() { for (const k of dark) env.world?.setLights(k.rt, 1); mesh?.removeFromParent(); },

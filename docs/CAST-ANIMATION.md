@@ -126,3 +126,29 @@ static voxel groups.
   be allowed into its draw block).
 - Timing: none asked for yet. A death that plays out needs `dying` to last
   long enough to be seen, about 1–2 s. That is a cast-session number.
+
+## Looking at a fast move: slow the page down
+
+There is no query or handle for this in the game. It is a Playwright init script
+of my own that runs before the page's code, keeps its own clock, and lets the
+page set how fast that clock runs:
+
+```js
+await page.addInitScript(() => {
+  window.__rate = 1;                                   // 1 = real time, 0.1 = a tenth
+  const real = performance.now.bind(performance); let base = real(), virt = base;
+  const now = () => { const r = real(); virt += (r - base) * window.__rate; base = r; return virt; };
+  performance.now = now;
+  const raf = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = (cb) => raf(() => cb(now()));
+});
+```
+
+Load `/play?debug&mute&vhs=0&pursuer=0` (add `room=<arch>` or `cast=<id>&beside=<id>`
+to stage someone), wait for `window.__backrooms.world`, then in one `evaluate`
+set `window.__rate = 0.1` and start the move, for example
+`window.__backrooms.env.hand.wipe()` or `.swat(1)`, and screenshot every half
+second or so. The software renderer is slow, so the first frame still comes a
+little late: the wipe (0.42 s) lasts about 4 s at a tenth, and the swat (0.26 s)
+about 2.6 s. Set `__rate` back to 1 afterwards. It changes only the clock the
+page reads, so the game itself is untouched.

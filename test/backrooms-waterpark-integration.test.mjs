@@ -172,6 +172,36 @@ for(const rot of [0,1,2,3])test(`Flume Knot: walk both mouths, ride down, walk t
  assert.ok(f.world.free(f.player.me.x,f.player.me.z,.22));
 });
 
+test('Flume Knot: crawl through the first fork and see the boarding gate again through the high port',async t=>{
+ const f=await fixture('slide-maze');t.after(()=>f.dispose());
+ for(const d of f.env.denizens.all())d.gone=true;
+ const rt=f.world.rooms[0];
+ await walkTo(f,-3,rt.flumeMaze.bounds.bz1+1.8);
+ await walkTo(f,-3,1.25);await walkTo(f,1.5,1.25);
+ assert.ok(f.player.me.duck>.2);
+ assert.equal(f.world.floorY(f.player.me.x,f.player.me.z),f.def.y+.84);
+ rt.group.updateWorldMatrix(true,true);
+ function firstSurface(from,to){
+  const start=rt.group.localToWorld(new THREE.Vector3(...from));
+  const end=rt.group.localToWorld(new THREE.Vector3(...to));
+  const direction=end.clone().sub(start).normalize();
+  return new THREE.Raycaster(start,direction,0,start.distanceTo(end)+.025).intersectObject(rt.group,true)[0];
+ }
+ const mainGate=firstSurface([-1.815,1.05,3.10],[-1.815,1.05,2.22]);
+ const portView=firstSurface([1.5,f.player.me.y-f.def.y,1.25],[1.514,2.50,.01]);
+ assert.ok(mainGate&&portView,'both gate numbers are visible at player height');
+ assert.equal(portView.object.uuid,mainGate.object.uuid,'both views reach the numbered sign through the opening');
+});
+
+test('Drain Spa: the wristband rises into the siphon and reappears under the water',async t=>{
+ const f=await fixture('whirlpool-flume');t.after(()=>f.dispose());
+ const rt=f.world.rooms[0], band=rt.group.getObjectByName('siphon-wristband');
+ const start=band.position.y;f.tick(100);assert.ok(band.visible&&band.position.y>start+.30);
+ f.tick(98);assert.ok(band.visible&&band.position.y>1.62,'reaches the pipe lip');
+ f.tick(30);assert.equal(band.visible,false,'hidden in the throat');
+ f.tick(40);assert.ok(band.visible&&band.position.y<-.05,'resets below the surface');
+});
+
 test('Diving well: dive under the partition, surface and reach the far deck',async t=>{
  const f=await fixture('deep-end');t.after(()=>f.dispose());const rt=f.world.rooms[0];
  const b=rt.basin.bounds;
@@ -261,9 +291,10 @@ test('Surge Basin: the visible crest tracks the hazard from the gates to the bea
 
 test('occupied lagoon floats kick both legs independently without replacing the hazard motion',async t=>{
  const f=await fixture('kiddie-lagoon');t.after(()=>f.dispose());
- const bathers=[];f.world.rooms[0].group.traverse(g=>{if(g.name==='inverted-bather')bathers.push(g);});
+ // (each bather is its rig's group, rooms/kiddie-lagoon/rig.js, around the waterpark's occupied tube: the outer one counts)
+ const bathers=[];f.world.rooms[0].group.traverse(g=>{if(g.name==='inverted-bather'&&g.parent?.name!=='inverted-bather')bathers.push(g);});
  assert.equal(bathers.length,5);
- const a=bathers[0],legs=a.children.filter(g=>g.name.startsWith('bather-'));
+ const a=bathers[0],legs=[];a.traverse(g=>{if(g.name.startsWith('bather-'))legs.push(g);});
  const starts=legs.map(g=>g.quaternion.clone());f.tick(45);
  assert.equal(legs.length,2);assert.ok(legs.every((g,i)=>g.quaternion.angleTo(starts[i])>.01));
  assert.ok(legs[0].quaternion.angleTo(legs[1].quaternion)>.02,'feet do not move in unison');

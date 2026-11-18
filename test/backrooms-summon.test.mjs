@@ -66,3 +66,18 @@ test('for whoever is looking: `beside` puts the visitor a step and a half from t
   const quiet = []; const env2 = { ...env, player: { me, warp: (...a) => quiet.push(a) }, pursuer: null, ready: [] };
   createStalkers(env2); env2.pursuer.summon('toner', { x: 10, z: 5 }); env2.pursuer.update(0.05); assert.equal(quiet.length, 0);
 });
+
+test('the dev page\'s beside: one with nowhere to stand yet is called up first, and one that goes off when stared at is looked at aside', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = (p) => readFileSync(new URL(`../public/world/backrooms/${p}`, import.meta.url), 'utf8');
+  const conductor = src('pursuer.js'), shadow = src('cast/shadow.js');
+  // (the shadow only takes a place out of the picture: from somebody standing still it may find none, and beside had nothing to stand by)
+  assert.match(conductor, /!staged\.called && env\.clock > 0\.5 && !Number\.isFinite\(who\.it\.at\?\.\(\)\?\.x\) && typeof who\.it\.appear === 'function'/);
+  assert.match(conductor, /\+ \(Number\(who\.it\.aside\) \|\| 0\)\); staged\.beside = true;/);
+  // its stare at a step and a half (SHADOW.cone + its own width) is less than the aside, and the aside is well inside a jab
+  const { SHADOW } = await import('../public/world/backrooms/cast/shadow.rule.js');
+  const { SNIP_TUNING } = await import('../public/world/backrooms/melee.js');
+  const aside = Number(/aside: ([\d.]+),/.exec(shadow)[1]);
+  assert.ok(aside > SHADOW.cone + Math.atan2(0.25, 1.5), 'not a stare');
+  assert.ok(aside < Math.acos(SNIP_TUNING.minDot), 'within a jab');
+});

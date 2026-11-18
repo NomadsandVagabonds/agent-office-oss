@@ -31,6 +31,7 @@ import {
   GUARD_STAND, makeGuardStand, stepGuardStand, snipGuardStand,
 } from '../waterpark.rule.js';
 import { makeGuardStandRig } from '../guard-stand.js';
+import { resident } from '../resident.js';
 
 export function build(c) {
   const { W, D, H, R, params: p, kit } = c;
@@ -188,6 +189,7 @@ export function build(c) {
   let over = false;
   let frozen = false;
   let strikeFlash = 0;
+  let now = 0;                                           // the room's time, for what still swings as it goes
 
   // Spider-stilt navigation: ignores the 0.78 m canal step height so its 1.47 m PVC chair legs
   // stride straight off the island into chest-deep water and out onto the pool deck!
@@ -310,18 +312,10 @@ export function build(c) {
     heading: baseHomeYaw,
     group: rig.group,
     light: (rgb) => rig.light(rgb),
-    snipTarget: () => (rule.mode !== 'chair' && rule.mode !== 'recoil' ? { id: 'guard-stand', r: 0.48, priority: 2 } : false),
-    snip() {
-      if (rule.mode === 'chair' || rule.mode === 'recoil') return false;
-      if (!known) { known = true; c.met('guard-stand'); }
-      rule = snipGuardStand(rule);
-      c.env.play?.('clack', roamer.x, roamer.z, 9);
-      c.env.play?.('creak', roamer.x, roamer.z, 8);
-      c.survived('guard-stand');
-      return { ok: true, target: 'guard-stand' };
-    },
     update(dt, time, me) {
+      now = time;
       if (over || frozen) return;
+      if (life?.out || life?.stalled) return;            // dying, gone, or shoved: it does nothing and lands nothing
       const inRoom = c.world.current() === c.rt;
       const pLoc = c.toLocal(me.x, me.z);
       const rLoc = c.toLocal(roamer.x, roamer.z);
@@ -407,7 +401,7 @@ export function build(c) {
         if (hit?.ended) { over = true; return; }
         if (hit?.landed) {
           c.env.hud?.glitch?.(0.55);
-          c.survived('guard-stand');
+          if (life) life.escaped(); else c.survived('guard-stand');
         }
       }
 
@@ -426,12 +420,26 @@ export function build(c) {
         dt,
         turnRate: dt > 1e-4 ? turnDelta / dt : 0,
         strikeK: Math.sin(strikeFlash * Math.PI),
+        hurt: life ? life.hurt : Infinity,
       });
 
       const alertOn = rule.mode === 'whistle' || rule.mode === 'scan' || rule.mode === 'surge';
       adultMesh.visible = alertOn;
       adultMesh.scale.setScalar(rule.mode === 'whistle' || rule.mode === 'surge' ? 0.96 + 0.08 * Math.sin(time * 18) : 1);
     },
+  });
+
+  // Health and a shove, as the cast has (resident.js; medium: two jabs). A jab short of the last does what a snip
+  // always did: it recoils. Gone, the river is as it was, with nobody on the deck: no door it held, none it opens.
+  const life = roamer && resident(c.env, 'guard-stand', {
+    of: roamer,
+    r: 0.48,
+    when: () => rule.mode !== 'chair' && rule.mode !== 'recoil',
+    recoils: true,
+    hit: () => { known = true; rule = snipGuardStand(rule); c.env.play?.('clack', roamer.x, roamer.z, 9); c.env.play?.('creak', roamer.x, roamer.z, 8); },
+    move: (to) => { roamer.x = to.x; roamer.z = to.z; },
+    dies: (k, dt) => { now += dt; adultMesh.visible = false; rig.die(k, now, dt); },
+    gone: () => { roamer.physical = false; },             // the heap stays where it fell: not posed again, no target, nothing in the way
   });
 
   // Expose state/rig on room runtime for deterministic playtest probes & studio inspection
@@ -445,6 +453,7 @@ export function build(c) {
     toLocal: c.toLocal,
     toWorld: c.toWorld,
     roamer,
+    get life() { return life; },
     rig,
   };
 

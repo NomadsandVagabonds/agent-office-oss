@@ -37,43 +37,6 @@ export function flumeTextures(kit) {
   return {paint,deck,bed,fiberglass,water};
 }
 
-// Round junction chambers replace the draft's transparent square cages.
-// Cardinal door sectors line up with the existing tube routes.
-export function flumeChamber(c,batch,h,floorY,axisY,radius) {
-  const col=lin(h.color), rim=col.map(v=>v*.64), steel=lin('#666e60');
-  const y0=floorY-.035,y1=axisY+radius+.045,r=.84,n=16;
-  const quad=(a,b,d,e,color)=>{batch.quad(a,b,d,e,color);batch.quad(e,d,b,a,color);};
-  c.flat.box(h.x-.69,floorY-.04,h.z-.69,h.x+.69,floorY+.012,h.z+.69,lin('#a8ac96'));
-  c.flat.box(h.x-.08,-1.45,h.z-.08,h.x+.08,floorY-.04,h.z+.08,steel);
-  c.flat.box(h.x-.22,-1.45,h.z-.22,h.x+.22,-1.37,h.z+.22,lin('#545d4f'));
-  for(let i=0;i<n;i++){
-    const a=(i-.5)*Math.PI*2/n,b=(i+.5)*Math.PI*2/n,m=(a+b)/2;
-    const side=Math.abs(Math.cos(m))>Math.abs(Math.sin(m))?(Math.cos(m)>0?'e':'w'):(Math.sin(m)>0?'n':'s');
-    const axis=side==='e'?0:side==='n'?Math.PI/2:side==='w'?Math.PI:-Math.PI/2;
-    const delta=Math.atan2(Math.sin(m-axis),Math.cos(m-axis));
-    const open=h.open[side]&&Math.abs(delta)<.98;
-    const p=(t,y,rad=r)=>[h.x+Math.cos(t)*rad,y,h.z+Math.sin(t)*rad];
-    if(!open){
-      quad(p(a,y0),p(b,y0),p(b,y1),p(a,y1),col);
-      quad(p(a,y0+.12,r+.015),p(b,y0+.12,r+.015),p(b,y0+.18,r+.015),p(a,y0+.18,r+.015),rim);
-    } else {
-      // Follow the tube aperture instead of laying a low roof across its mouth.
-      const lip=t=>Math.sqrt(Math.max(0,radius*radius-(r*Math.sin(t-axis))**2));
-      const loA=Math.max(y0,axisY-lip(a)),loB=Math.max(y0,axisY-lip(b));
-      const hiA=axisY+lip(a),hiB=axisY+lip(b);
-      quad(p(a,y0),p(b,y0),p(b,loB),p(a,loA),rim);
-      quad(p(a,hiA),p(b,hiB),p(b,y1),p(a,y1),rim);
-    }
-    // Shallow domed cap and its rolled flange clear the tube's full diameter.
-    const rings=[[r,y1],[r+.025,y1+.035],[.70,y1+.10],[.39,y1+.16],[0,y1+.18]];
-    for(let j=0;j<rings.length-1;j++){
-      const [ra,ya]=rings[j],[rb,yb]=rings[j+1];
-      quad(p(a,ya,ra),p(b,ya,ra),p(b,yb,rb),p(a,yb,rb),j===0?rim:col);
-    }
-    if(i%2===0){const x=h.x+Math.cos(m)*.86,z=h.z+Math.sin(m)*.86;c.flat.box(x-.018,y1+.04,z-.018,x+.018,y1+.074,z+.018,steel);}
-  }
-}
-
 export function flumeHall(c,tex,{bx0,bx1,bz0,bz1}) {
   const steel=lin('#707b6b'),dark=lin('#39483f'),rust=lin('#796044');
   // The wall has a real construction: ceramic dado, cracked paint, a pipe run.
