@@ -190,7 +190,7 @@ handed to the kit when a part is built (`gfx: { contact, bounce, shadows, doorli
 | light through doorways (in the same map) | — | — | yes | yes |
 | ceiling lights as sculpted fittings (`fixtures`) | — | — | yes | yes |
 | bloom from what shines only (`glow`), in place of the thresholded bloom | — | — | yes | yes |
-| water: a marked flat sheet drawn as water while in view (`water`) | — | — | yes (1) | yes (2: the mirror, to come; draws as 1 today) |
+| water: a marked flat sheet drawn as water while in view (`water`) | — | — | yes (1) | yes (2: and the room mirrored in the nearest water level, half size) |
 
 - **Classic** draws exactly what the level drew before the setting existed.
 - **The camcorder stays the look.** The tape's lines and the scene's size are
@@ -1019,8 +1019,9 @@ cheap layers, and each layer belongs to a level of quality:
 ### Water (built: the surface)
 
 `water` in `graphics.js` (its own lines beside the table, as `glow`): 0 in
-Classic and Low, 1 at Medium, 2 at High (and Auto starts at 1). 2 is kept for
-the mirror (push three); today 1 and 2 draw the same. The look-dev lab's
+Classic and Low, 1 at Medium, 2 at High (and Auto starts at 1). 2 adds the
+mirror (push three: "Water (built: the mirror)", below); otherwise 1 and 2 draw
+the same. The look-dev lab's
 second-best finding (`BACKROOMS-LOOKDEV.md`, round two, 6), adapted to the real
 rooms: the lab found its surface by a guess, drew one rectangle in a scene of
 its own with no depth test, rippled on the world's grid and had no case for an
@@ -1402,6 +1403,183 @@ gameplay file and nothing of the waterpark's is changed for it.
      rings are not seen from below.~~ The underside (above) is drawn with the
      top's ripple and wake slope: a ring overhead tilts Snell's window as it
      passes, and adds no light of its own.
+
+### Water (built: the mirror)
+
+Push three of four. `water` 2 (High) only: the room mirrored in the water. At
+Medium (1) none of it exists (no define, no picture, no pass) and the picture
+is the one it was, to the pixel (below). No room file, no gameplay file and
+nothing of the waterpark's is changed for it.
+
+- **Which water.** One planar reflection a frame, for one water level. Of the
+  marked surfaces in view this frame (the split draw's own test: the box
+  against the frustum), those that face up (`sheetRim`) and have the eye at
+  least 5 cm over their plane (`MIRROR.above`; nearer, the clip plane would run
+  through the eye) are candidates; the nearest to the eye (to its box) has the
+  mirror (`pickMirror`). The one that had it last frame keeps it unless
+  another is a metre nearer (`switchBy`), so two pools at much the same
+  distance do not trade it frame by frame. Every surface on that same plane
+  (within 1 cm) shares it; the rest keep the flat tint. No mirror when nothing
+  qualifies (the split's half-second hold keeps the split, not the mirror),
+  when the eye is under the surface (the underside is drawn, as before), or
+  under 2.
+- **The pass** (`liquid.js` `mirrorPass`, run first inside the camcorder's
+  split draw, before anything is drawn into the scene's target). A camera of
+  its own, never the visitor's: its world matrix is the eye's mirrored about
+  the plane and turned over side to side (R · C · F, so it is a proper camera
+  and nothing is drawn inside out); its projection is the eye's with the near
+  plane moved onto the water (an oblique near plane, `obliqueProjection`), so
+  nothing under the surface is drawn into it and the frustum culls what is
+  under it. Its picture is half the scene's target each way (`MIRROR.scale`),
+  half float, no MSAA: at High at Full VHS the scene is 1440 × 1080 and the
+  mirror 720 × 540, the tape's own size, so anything finer would be lost to
+  the tape; the ripple's wobble blurs it further. Every frame, not every
+  other: a mirror a frame old, looked up with this frame's matrix, slides
+  against the contact line when the eye turns quickly, and the cost is draws,
+  not pixels (below).
+- **What is in it.** The room(s) the camcorder draws, with their ordinary
+  materials, baked light, tube shadows and doorway light. Left out, hidden for
+  the pass and shown again in its `finally`: every marked sheet and the water
+  (`userData.liquid`), what is held in front of the camera (renderOrder from
+  `HELD_ORDER`: the visitor's hands and torch; hidden rather than drawn, so
+  their `onBeforeRender` never sees the mirror's camera), a room's detail
+  batches (`userData.detail`), and **anything marked `userData.noReflect =
+  true`** (on a mesh, or on a group: everything in it). That is the one mark
+  for builders (`docs/BACKROOMS.md`, the toolbox); nothing marks it yet. Not
+  in it: the bloom's pre-pass (a pass of its own, after) and the flashlight's
+  shadow pass (not drawn again for the mirror). The beam itself is: its origin
+  and direction live in the eye's view space, so for the pass they are taken
+  into the mirror camera's space (`T = Vm · C`), and its shadow lookup matrix
+  is given `T⁻¹`, so a wall the torch lights is lit (and shadowed, where the
+  surface already takes the beam's shadow) in the mirror as in the room. The
+  camcorder's own lamp is fixed to the eye in the kit's shader (constants, not
+  uniforms), so it is turned off for the pass (`uCameraLamp` 0): the
+  reflection of what only that lamp lights is darker than the thing.
+- **What is put back** (in a `finally`, also when the draw throws): what was
+  hidden, the beam's origin, direction and shadow matrix, the camcorder lamp,
+  the renderer's target, clear colour and alpha, autoClear and the shadow
+  maps' autoUpdate, the scene's background; `uMirrorOn` back to 0 on every
+  surface once the split draw ends. The visitor's camera, its layers and its
+  matrices are never touched.
+- **The surface** (`LIQUID_FRAG`, behind `#ifdef MIRROR`, which is set on the
+  top's material only at 2; the underside never has it). `reflection()` keeps
+  its signature: with `uMirrorOn` 0, or without the define (Medium), it is the
+  flat tint it was, word for word. With it: the surface's point taken into the
+  mirror's picture (`uMirror`, the eye's view space to the mirror's clip
+  space), moved by the ripple's stepped tilt (`(n − up).xy × 0.3` of the
+  picture: blocks, as the bed bends), its brightest held to 2.5 times the
+  room's light at the surface (at least 0.4: a ceiling tube stays a patch,
+  never a bar), times 0.85, and taken 35 % toward the water's own colour. It
+  is weighted by the fresnel term the surface already had (0.02 straight down,
+  rising towards grazing), so across a pool from a low eye the room is there,
+  and at your feet the bed is. The caustics, the depth tint, the contact line,
+  the wake and the underside are as they were.
+- **The TV shop** (`rooms/the-sets.js`, another builder's) draws the scene
+  from its own camera into its own target in a room tick, five times a second.
+  Ticks run before the camcorder draws, so in a frame the order is: the shop's
+  render (it sees the scene as the room has it: the water's meshes off, the
+  mirror's state not set, the beam in the eye's space), then the beam shadows'
+  pass, then the camcorder: the mirror pass, the split draw, the bloom's
+  pre-pass. The mirror's pass sees the shop's screen showing the picture the
+  shop drew last; the shop never sees the mirror's picture (only the water
+  reads it, and the water is drawn only inside the camcorder's draw). Neither
+  calls the other: no recursion, and each leaves what it changed as it found
+  it.
+- **Proof that nothing else moved** (one page load each, the page's clock
+  paused, the camcorder drawn by hand, HEAD's `liquid.js` grafted onto the
+  live view and HEAD's shader put on its surfaces, against this change's; seed
+  7, `themes=waterpark&only=<room>`, 960 × 600):
+  - Medium, Clean picture, this change against HEAD: 0 of 576,000 pixels
+    differ in the kiddie lagoon (across, and looking down), the deep end, the
+    lazy river, the return pool, the bellmouth, and seed 7's dry landing; the
+    same draws and triangles each. At Full VHS the same rooms: 0 in the kiddie
+    lagoon and the lazy river, and in the deep end, the return pool and the
+    bellmouth 1,279 to 1,280 pixels, every one inside the camcorder's blinking
+    REC light (a 40 × 39 box at 116..155, 33..71, which differs between any
+    two pictures of a load), 0 outside it.
+  - High, the kiddie lagoon's doorway turning into view, thirteen steps: with
+    no water in view (five steps) the new code at 2 against HEAD, 0 pixels and
+    the same draws; at every step this change at 1 against HEAD, 0 pixels (so
+    "before" below is HEAD's High). A dry room at High: the same draws (50 /
+    36,670 both ways).
+  - Turning into view: the mirror comes on in the frame the first water
+    pixels do; that frame differs from the same frame without the mirror in
+    907 pixels, at most 19 levels, all of them water at the picture's edge;
+    then 12,202, 28,258, 47,916 as more of the pool comes in. Nothing pops.
+  - Nothing under the water in the mirror: a bright box wholly under the
+    kiddie lagoon's surface (6 to 26 cm down) changes the mirror's own
+    picture in 0 pixels; the same box 30 cm over the water changes it in
+    4,656 (max 231 levels). The floats are cut at the waterline in it.
+- **Tests**: `test/backrooms-gfx-water-mirror.test.mjs` (the switch per
+  tier; the plane, reflection and oblique projection in numbers for water at
+  0.3 m; which surface, the hold, one water level; none under, too near,
+  facing down or out of view; what is left out, the marks; the beam in the
+  mirror's space and put back; everything put back when the mirror's draw
+  throws; Medium and back from High; the shader text; nothing random).
+  `backrooms-gfx-water-wake` counts the copy's reads outside the mirror's
+  block.
+- **Cost.** Counted in one load each, at High, seed 7,
+  `themes=waterpark&only=<room>`, the renderer's calls and triangles over one
+  frame, before (water 1, which is HEAD's High) and after (draws of the level's
+  scene / all passes / triangles; the mirror's own share in brackets):
+
+  | Full VHS | before | after | the mirror |
+  |---|---|---|---|
+  | kiddie lagoon, low across | 45 / 61 / 95,332 | 86 / 102 / 178,212 | 41 / 82,880 |
+  | kiddie lagoon, at your feet | 24 / 40 / 44,706 | 46 / 62 / 90,192 | 22 / 45,486 |
+  | deep end, from the deck | 135 / 151 / 220,336 | 244 / 260 / 397,764 | 109 / 177,428 |
+  | lazy river | 55 / 71 / 157,120 | 106 / 122 / 301,386 | 51 / 144,266 |
+  | return pool | 142 / 158 / 207,444 | 275 / 291 / 412,784 | 133 / 205,340 |
+  | bellmouth | 148 / 164 / 241,446 | 287 / 303 / 459,010 | 139 / 217,564 |
+  | seed 7's landing (dry) | 50 / 65 / 36,670 | 50 / 65 / 36,670 | none |
+
+  **Plainly: while a pool is in view at High, the scene is drawn twice: 80 to
+  95 % more draw calls and triangles.** The mirror's picture: 720 × 540 at
+  Full VHS (half float colour and a depth buffer, about 4.7 MB, held while the
+  tier is High and a pool has been in view; let go when the tier drops); 480 ×
+  300 in the Clean picture at 960 × 600. Leaving the detail batches out of it
+  saves, at High, 2 draws and 10,284 triangles in the kiddie lagoon, 7 and
+  31,292 in the deep end, 3 and 14,472 in the lazy river, 7 and 27,000 in the
+  return pool, 9 and 21,048 in the bellmouth: real but small (a tenth of the
+  mirror's triangles at most). On the water's pixels: one texture read, a
+  matrix, a few multiplies. Medium and a dry room: identical draws. Software
+  rendering, so no milliseconds.
+- **Can High afford it?** The table at the top asks nothing of draws for
+  High, and the one real machine measured (an M4 Max) held its frame with the
+  scene drawn 32 times. On an ordinary laptop's integrated graphics, doubling
+  the draw calls in the waterpark's rooms (to about 290 in the heaviest) is the
+  biggest single thing High asks for, and nobody has measured it. If it is too
+  much, cheaper in this order: (1) every other frame, the mirror a frame
+  stale (halves the added draws; a slight slide against the contact line when
+  the eye turns fast); (2) only within N metres of the surface (say 12) or
+  only while the surface covers more than a tenth of the picture: the
+  doorway's sliver of pool (a frame with under a thousand water pixels) pays the
+  whole mirror (16 to 18 draws there); (3) only the surface's own room drawn
+  in it (the parts next door, behind walls, are drawn and hidden). A quarter
+  size picture would save fill, not draws: here the draws are the cost.
+- **Known faults.**
+  1. It is faint where the eye is high over the water and looking down (the
+     fresnel term is water's own: 2 % straight down, about 15 % at 70
+     degrees): from the deck the deep end's far wall and sign are only a
+     ghost in it, and the return pool's dark water shows its lamps and screens
+     a little more than its walls. Across the kiddie lagoon from a low eye the
+     floats, the mushroom's stem and the ceiling's tubes read; at your feet it
+     is the bed, as wanted. It reads as a pool's surface, not a mirror laid on
+     the floor.
+  2. The return pool's upside-down upper pool is a marked sheet, so it is left
+     out of the lower pool's mirror: the mirror shows the ceiling behind it.
+  3. A sliver of pool at the edge of the picture pays for the whole mirror
+     (above).
+  4. The camcorder's lamp is not in it (above): in a dark room, what only that
+     lamp lights is darker in the mirror than in the room.
+  5. Only one water level a frame: a pool at another height in view at the
+     same time (a lower room seen through a hole, say) keeps the flat tint.
+  6. The beam's shadow is in it only on surfaces the eye's own view has
+     already given the beam's shadow to (`receivesBeamShadow`, patched once
+     each when seen); elsewhere the mirror's beam lights with no shadow.
+  7. Near the picture's edges the ripple's offset reads past the mirror's
+     picture and is clamped: a thin strip there repeats its last row of
+     pixels.
 
 ### 5 · Air
 

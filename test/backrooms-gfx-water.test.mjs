@@ -31,7 +31,7 @@ const oldDocument = globalThis.document;
 globalThis.document = { createElement: () => ({ getContext: () => draw }) };
 test.after(() => { globalThis.document = oldDocument; });
 
-test('the switch: 0 in Classic and Low, 1 at Medium, 2 at High (the mirror, to come: today it draws as 1), Auto as Medium', () => {
+test('the switch: 0 in Classic and Low, 1 at Medium, 2 at High (the mirror: backrooms-gfx-water-mirror), Auto as Medium', () => {
   assert.deepEqual(GRAPHICS.map((t) => profile(t).water), [0, 0, 1, 2, 1]);
   assert.match(B('graphics.js'), /const WATER = \{ classic: 0, low: 0, medium: 1, high: 2 \};\nfor \(const t of Object\.keys\(TABLE\)\) TABLE\[t\]\.water = WATER\[t\];/);
 });
@@ -353,7 +353,7 @@ test('vhs.js: at 0 no view and one pass, exactly as before; at 1 and 2 a view; b
   assert.equal(vhs.liquids, null);
   vhs.setProfile(profile('low')); assert.equal(vhs.liquids, null);
   vhs.setProfile(profile('medium')); const view = vhs.liquids; assert.ok(view);
-  vhs.setProfile(profile('high')); assert.equal(vhs.liquids, view, 'one view while it stays on (1 and 2 draw the same)');
+  vhs.setProfile(profile('high')); assert.equal(vhs.liquids, view, 'one view while it stays on (2 adds the mirror to it)');
   const w = upgraded(), { scene } = stage(w.rt.group);
   vhs.setScene(scene); cam.position.set(0, 1.6, 2.5); cam.lookAt(0, -0.05, 0);
   assert.equal(view.frame(scene, cam, 0), true);
