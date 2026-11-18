@@ -80,7 +80,12 @@ test('its line: it hunts, roams, is met further down, fears fire; a drawing warn
   // a jab sets it off before the count takes it (once it is dying it lands nothing: the burst has to come first)
   assert.match(src, /s = popped\(s\); burst\(\);\s+c\.struck\(HEALTH\.jab\);/);
   // no face: its head is three pale tones of one smooth egg and nothing else (the owner: "no hair or glasses.and no face")
+  const model = readFileSync(new URL('../public/world/backrooms/cast/middle-manager.model.js', import.meta.url), 'utf8');
   const head = MODEL.headVox(), tones = new Set(); head.each((x, y, z, c) => tones.add(c & 0xffffff));
   assert.ok(tones.size <= 3, `its head is ${tones.size} colours`);
-  for (const c of tones) assert.ok(((c >> 16) & 255) > 190 && ((c >> 8) & 255) > 190 && (c & 255) > 180, 'pale, all of it');
+  // pale skin, all of it, and not white: somebody's, once (the lead: our own, not a paper-white head)
+  for (const c of tones) { const r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255; assert.ok(r > 170 && g > 145 && b > 125, 'pale'); assert.ok(r - b > 25, 'skin, not white'); }
+  // its tell is its body: nothing of the picture comes from looking at it or being near it, and nothing grows out of it
+  assert.ok(!/interfere/.test(src), 'no static from it'); assert.ok(!/tendril|tentacle/i.test(src + model), 'nothing out of its back');
+  assert.match(model, /a size too short/);
 });

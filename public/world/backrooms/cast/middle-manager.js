@@ -54,10 +54,10 @@ export function create(c) {
     walker.x = lastX = spot.x; walker.z = lastZ = spot.z; rot = c.R.range(0, Math.PI * 2); wanderT = c.R.range(Mg.wanders[0], Mg.wanders[1]);
     mat = env.kit.surface({ vox: true, wet: 0.2 });
     group = new THREE.Group();
-    thin = part(geo('manager:torso:thin2', () => torsoVox(false))); full = part(geo('manager:torso:full2', () => torsoVox(true).downsample(2), 2));          // (big enough to be built at half the grain) full.visible = false;
-    neck = part(geo('manager:neck', neckVox)); head = part(geo('manager:head', headVox));
-    const upper = geo('manager:upper', () => sleeveVox(UPPER)), fore = geo('manager:fore', () => sleeveVox(FORE, true)), hand = geo('manager:hand', handVox);
-    const thigh = geo('manager:thigh', () => trouserVox(THIGH)), shin = geo('manager:shin', () => trouserVox(SHIN)), shoe = geo('manager:shoe', shoeVox);
+    thin = part(geo('manager:torso:thin3', () => torsoVox(false))); full = part(geo('manager:torso:full3', () => torsoVox(true).downsample(2), 2));          // (big enough to be built at half the grain) full.visible = false;
+    neck = part(geo('manager:neck', neckVox)); head = part(geo('manager:head2', headVox));
+    const upper = geo('manager:upper2', () => sleeveVox(UPPER)), fore = geo('manager:fore2', () => sleeveVox(FORE, true)), hand = geo('manager:hand2', handVox);
+    const thigh = geo('manager:thigh', () => trouserVox(THIGH)), shin = geo('manager:shin2', () => trouserVox(SHIN, 5.2, true)), shoe = geo('manager:shoe', shoeVox);
     for (const side of [-1, 1]) limbs.push({ arm: true, side, a: part(upper), b: part(fore), end: part(hand) });
     for (const side of [-1, 1]) { limbs.push({ arm: false, side, a: part(thigh), b: part(shin), end: null }); shoes.push(part(shoe)); }
     c.add(group);
@@ -111,7 +111,7 @@ export function create(c) {
     const hip = { x: walker.x - fx * hipBack, y: floor + BODY.hip - kneel + Math.abs(Math.sin(phase)) * 0.02, z: walker.z - fz * hipBack };
     const dir = { x: fx * Math.sin(lean), y: Math.cos(lean), z: fz * Math.sin(lean) }, front = { x: fx * Math.cos(lean), y: -Math.sin(lean), z: fz * Math.cos(lean) };
     // the body: thin, let out as it fattens; past half, the full one, let out the rest of the way
-    const widen = 1 + swell * 0.3 + shake;
+    const widen = 1 + swell * 0.45 + shake;
     thin.visible = fat < 0.5; full.visible = !thin.visible;
     const body = thin.visible ? thin : full, wide = (thin.visible ? 1 + fat * 1.3 : 0.5 + (fat - 0.5)) * widen;
     body.position.set(hip.x, hip.y, hip.z); aim(body, dir.x, dir.y, dir.z, front.x, front.y, front.z, T, T, wide);
@@ -156,7 +156,6 @@ export function create(c) {
     over = true;
     const m = c.me(), d = Math.hypot(m.x - walker.x, m.z - walker.z), at = { x: walker.x, z: walker.z }, fat = s.fat;
     c.play('crack', at.x, at.z, 16); c.play('shred', at.x, at.z, 14);
-    if (d < 9) env.interfere?.(Math.min(1, 1.2 - d / 9));
     let ended = false;
     const n = c.los(at.x, at.z, m.x, m.z) ? blastAt(fat, d) : 0;
     if (n > 0) {
@@ -252,9 +251,10 @@ export function create(c) {
         c.walk.go(walker, { x: walker.x + Math.sin(fear.away), z: walker.z + Math.cos(fear.away) }, fear.step, 0.05);
       } else {
         s = minds(s, dt, { eyed: eye, d });
-        if (s.meets) { c.play('ding', walker.x, walker.z, 10); env.interfere?.(0.12); }
+        if (s.meets) c.play('ding', walker.x, walker.z, 10);
         if (s.swelling) c.play('creak', walker.x, walker.z, 12);
-        if (s.mode === 'swells') { env.interfere?.(0.2 + 0.6 * Math.min(1, s.swell / Mg.swells)); if (Math.random() < dt * 6) c.play('squeak', walker.x, walker.z, 8); }
+        // (its tell is all in its body: it swells, it shakes, its arms lift, its buttons go, and the cloth creaks. Nothing of the picture)
+        if (s.mode === 'swells' && Math.random() < dt * 6) c.play('squeak', walker.x, walker.z, 8);
         if (s.bursts) { burst(); return; }
         if (s.mode === 'comes') { goal = null; leaving = false; c.walk.go(walker, { x: m.x, z: m.z }, s.speed * (c.speedScale ?? 1) * Math.min(dt, 0.08), 0.05); }
         else if (s.mode === 'stands') wander(dt, m, sight);

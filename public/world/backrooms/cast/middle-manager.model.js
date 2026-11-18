@@ -2,9 +2,10 @@
 //
 // Somebody who has been in the building a long time and has been stretched by it: three metres, so that under an
 // ordinary ceiling it stands bent, its head down, and in a doorway it folds nearly in half; and thin enough to stand
-// sideways in one. A suit almost black, a white shirt, a dark tie, a lanyard with a badge on it whose photograph is
-// blank too. Long legs, longer arms, hands with fingers too long by a joint. And where the face should be, nothing: a
-// head like an egg, pale, smooth, turned to you.
+// sideways in one. A tired grey-brown suit a size too short for it, so that the wrists and the ankles show; an
+// off-white shirt; a dull patterned tie; a lanyard and a big badge whose photograph is blank. Long legs, longer arms,
+// hands with fingers too long by a joint. And where the face should be, nothing: a head like an egg, sallow, smooth,
+// turned to you.
 // Then the same suit with far too much in it: the jacket will not close, the shirt has gone at the buttons, the tie lies
 // on top of it all.
 //
@@ -22,7 +23,8 @@ export const HEAD = 34;                            // voxels from the neck to th
 /** How tall it stands, metres, straight up. */
 export const STANDS = (THIGH + SHIN + SHOE + TORSO + NECK + HEAD) * S;
 
-const SUIT = '#17181c', SUIT2 = '#1d1e23', SHIRT = '#e4e3de', TIE = '#0f1014', SKIN = '#e9e6df', SKIN2 = '#dcd8d0', SKIN3 = '#cfcac1';
+const SUIT = '#47433c', SUIT2 = '#3d3a34', SHIRT = '#d9d5c6', TIE = '#5d5a3c', TIE2 = '#77653f', SOCK = '#22262e', SKIN = '#d8c4b1', SKIN2 = '#cbb5a1', SKIN3 = '#bca390';
+const LANYARD = '#3f7f86';
 
 /** A smooth solid of revolution about +y: radius r(k) at height k = 0…1 of `len`, and `depth` its front-to-back share. */
 function lathe(v, len, r, color, depth = 1, x0 = 0, z0 = 0) {
@@ -36,7 +38,7 @@ function lathe(v, len, r, color, depth = 1, x0 = 0, z0 = 0) {
 /** Its body from the hips (y 0) to the shoulders (y TORSO). `full`: the same suit with too much in it. */
 export function torsoVox(full = false) {
   const v = new Vox(), suit = M(SUIT, 0), suit2 = M(SUIT2, 0), shirt = M(SHIRT, 0), tie = M(TIE, 0), skin = M(SKIN2, 0), button = M('#08080a', 0);
-  const strap = M('#2a3140', 0), card = M('#d8d6d0', 0), blank = M('#bdbab3', 0);
+  const tie2 = M(TIE2, 0), strap = M(LANYARD, 0), card = M('#ece9df', 0), blank = M('#b9b4a8', 0), band = M(LANYARD, 0), clip = M('#9a9a96', 0);
   // thin: a waist like a wrist, a narrow chest, and the shoulders squared by the jacket. Full: round, lowest at the belly
   const w = full ? (k) => 15 + Math.sin(Math.min(1, k * 1.12) * Math.PI) * 17 + (k > 0.86 ? (k - 0.86) * 30 : 0) : (k) => 7 + k * 5 + (k > 0.84 ? (k - 0.84) * 45 : 0);
   const d = full ? 0.95 : 0.62;
@@ -51,13 +53,15 @@ export function torsoVox(full = false) {
   const front = (x, y) => { let z = 60; while (z > -60 && !v.has(x, y, z)) z--; return z; };
   // the tie: narrow and dark, from the collar down; full, it lies on top of the belly and stops well short
   const tieFrom = full ? Math.round(TORSO * 0.5) : Math.round(TORSO * 0.18);
-  for (let y = tieFrom; y <= TORSO - 2; y++) { const wd = y > TORSO - 6 ? 2 : y < tieFrom + 4 ? 2 : 1; for (let x = -wd; x <= wd; x++) v.set(x, y, front(x, y) + 1, tie); }
+  for (let y = tieFrom; y <= TORSO - 2; y++) { const wd = y > TORSO - 6 ? 2 : y < tieFrom + 4 ? 2 : 1; for (let x = -wd; x <= wd; x++) v.set(x, y, front(x, y) + 1, (x + y) % 5 < 2 ? tie2 : tie); }          // (a dull diagonal stripe)
   // buttons: done up when it is thin; strained apart when it is full
   for (const y of full ? [14, 24, 34] : [16, 26]) { if (full) for (const sx of [-1, 1]) v.set(sx * (7 + (y % 3)), y, front(sx * 7, y), button); else v.set(2, y, front(2, y) + 1, button); }
-  // the lanyard and the badge on its chest; its photograph is as blank as its face. Full, the badge has gone into a crease
-  const bx = full ? 10 : 4, by = full ? 30 : 34;
-  for (let y = by + 9; y <= TORSO - 1; y++) v.set(full ? 8 : 3, y, front(full ? 8 : 3, y) + 1, strap);
-  for (let x = bx; x <= bx + 6; x++) for (let y = by; y <= by + 9; y++) v.set(x, y, front(x, y) + 1, x > bx + 1 && x < bx + 5 && y > by + 2 && y < by + 7 ? blank : card);
+  // the lanyard, round its neck and down, and the badge on it, big, at the middle of its chest: its photograph is as blank
+  // as its face. Full, the lanyard is pulled taut over the belly and the badge rides up on it
+  const bx = full ? -5 : -4, by = full ? 44 : 30, bw = 10, bh = 14;
+  for (const sx of [-1, 1]) for (let y = by + bh; y <= TORSO - 1; y++) { const x = Math.round(sx * (2 + (y - by - bh) * (full ? 0.5 : 0.18))); v.set(x, y, front(x, y) + 1, strap); }
+  for (let x = bx; x <= bx + bw - 1; x++) for (let y = by; y <= by + bh - 1; y++) v.set(x, y, front(x, y) + 2, y >= by + bh - 3 ? band : x > bx + 2 && x < bx + 7 && y > by + 3 && y < by + 9 ? blank : card);
+  v.set(bx + 4, by + bh, front(bx + 4, by + bh) + 2, clip); v.set(bx + 5, by + bh, front(bx + 5, by + bh) + 2, clip);
   // the jacket's shoulders: squared, sharp
   for (const sx of [-1, 1]) v.ellipsoid(sx * (full ? 30 : 13), TORSO - 3, 0, full ? 8 : 6, 4, full ? 10 : 6, suit);
   return v;
@@ -72,19 +76,19 @@ export function neckVox() {
 }
 
 /**
- * Its head: an egg, longer than a head, narrower at the bottom, pale and perfectly smooth. Nothing on it at all. Only the
+ * Its head: an egg, longer than a head, narrower at the bottom, sallow and perfectly smooth. Nothing on it at all. Only the
  * light shows where a face would be: the front is a shade paler. The neck joins underneath at the origin; front on +z.
  */
 export function headVox() {
-  const v = new Vox(), pale = M(SKIN, 0), mid = M(SKIN2, 0), back = M(SKIN3, 0);
+  const v = new Vox(), pale = M(SKIN, 0), mid = M(SKIN2, 0), back = M(SKIN3, 0);          // (sallow, not white: somebody's, once)
   lathe(v, HEAD, (k) => { const t = k * 2 - 1; return Math.max(0.5, Math.sqrt(Math.max(0, 1 - t * t)) * (9.5 + k * 1.8)); }, (x, y, z) => (z > 3 ? pale : z > -4 ? mid : back), 1.05);
   return v;
 }
 
-/** An arm's length of sleeve, along +y, `len` voxels, narrowing; `cuff`: the shirt shows at the end of it. */
+/** An arm's length of sleeve, along +y, `len` voxels, narrowing; `cuff`: it is too short — a band of shirt cuff, then the wrist. */
 export function sleeveVox(len, cuff = false, wide = 4.6) {
-  const v = new Vox(), suit = M(SUIT, 0), shirt = M(SHIRT, 0);
-  lathe(v, len, (k) => wide - k * 1.3, (x, y) => (cuff && y > len - 3 ? shirt : suit));
+  const v = new Vox(), suit = M(SUIT, 0), shirt = M(SHIRT, 0), skin = M(SKIN2, 0);
+  lathe(v, len, (k) => (cuff && k > 0.86 ? 2.6 : wide - k * 1.3), (x, y) => (cuff && y > len * 0.92 ? skin : cuff && y > len * 0.82 ? shirt : suit));
   return v;
 }
 
@@ -99,10 +103,10 @@ export function handVox() {
   return v;
 }
 
-/** A trouser leg, along +y, narrowing to the ankle. */
-export function trouserVox(len, wide = 5.2) {
-  const v = new Vox(), suit = M(SUIT, 0), crease = M(SUIT2, 0);
-  lathe(v, len, (k) => wide - k * 1.4, (x, y, z) => (x === 0 && z > 0 ? crease : suit));
+/** A trouser leg, along +y, narrowing to the ankle; `short`: it stops short of the shoe, over a thin sock and a band of shin. */
+export function trouserVox(len, wide = 5.2, short = false) {
+  const v = new Vox(), suit = M(SUIT, 0), crease = M(SUIT2, 0), sock = M(SOCK, 0), skin = M(SKIN3, 0);
+  lathe(v, len, (k) => (short && k > 0.84 ? 2.8 : wide - k * 1.4), (x, y, z, k) => (short && k > 0.92 ? sock : short && k > 0.84 ? skin : x === 0 && z > 0 ? crease : suit));
   return v;
 }
 
