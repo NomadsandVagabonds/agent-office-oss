@@ -69,6 +69,8 @@ export function create(c) {
       arm.m.position.set(walker.x + px * 0.68, floor + high + 0.2, walker.z + pz * 0.68);
       arm.m.rotation.set(-0.7 + flail * 0.5, rot, -arm.side * (2.75 + flail * 0.7), 'YXZ');          // (they hang; dropped, they beat at the air)
     }
+    // (they shuffle: each keeps where it put itself down until the weight has gone on past it, then catches up, four at most)
+    let lifting = bearers.filter((b) => !b.gone && b.k < 1).length;
     bearers.forEach((b, i) => {
       const a = b.a + rot; b.x = walker.x + Math.sin(a) * b.r; b.z = walker.z + Math.cos(a) * b.r;
       const fy = env.world.floorY(b.x, b.z);
@@ -79,9 +81,17 @@ export function create(c) {
         return;
       }
       b.grown = Math.min(1, b.grown + dt / 1.2); b.fx = undefined;
-      const step = moving ? Math.abs(Math.sin(walked * 14 + b.phase)) * 0.04 : 0, squat = (down || sits ? 0.55 : 1 - (0.98 - high) * 0.5) * b.grown;
-      b.m.visible = true; b.m.position.set(b.x, fy + step, b.z); b.m.rotation.set(0, a + Math.sin(clock * 3 + b.phase) * 0.2, Math.sin(clock * 6 + b.phase) * (down ? 0.2 : 0.05));
-      b.m.scale.set(b.grown * (1 + (1 - squat) * 0.4), Math.max(0.05, squat), b.grown * (1 + (1 - squat) * 0.4));
+      if (b.px === undefined || b.k === undefined || Math.hypot(b.x - b.px, b.z - b.pz) > 0.8) { b.px = b.x; b.pz = b.z; b.k = 1; }
+      if (b.k >= 1 && lifting < 4 && Math.hypot(b.x - b.px, b.z - b.pz) > 0.14) { b.sx = b.px; b.sz = b.pz; b.k = 0; lifting++; }
+      let hop = 0, reach = 0;
+      if (b.k < 1) {
+        b.k = Math.min(1, b.k + dt / 0.2);
+        b.px = b.sx + (b.x - b.sx) * b.k; b.pz = b.sz + (b.z - b.sz) * b.k;
+        hop = Math.sin(b.k * Math.PI) * 0.05; reach = Math.sin(b.k * Math.PI) * 0.16;                   // (up off its feet, stretched long, and down)
+      }
+      const squat = (down || sits ? 0.55 : 1 - (0.98 - high) * 0.5) * b.grown;
+      b.m.visible = true; b.m.position.set(b.px, env.world.floorY(b.px, b.pz) + hop, b.pz); b.m.rotation.set(0, a + Math.sin(clock * 3 + b.phase) * 0.2, Math.sin(clock * 6 + b.phase) * (down ? 0.2 : 0.05));
+      b.m.scale.set(b.grown * (1 + (1 - squat) * 0.4) * (1 - reach * 0.5), Math.max(0.05, squat * (1 + reach)), b.grown * (1 + (1 - squat) * 0.4) * (1 - reach * 0.5));
     });
     // the one spot to use is under whichever of them a foot would find
     const m = c.me(), j = under(m, bearers);
