@@ -17,8 +17,8 @@ register('data:text/javascript,' + encodeURIComponent(`export function resolve(s
 }`), import.meta.url);
 const THREE = await import('three');
 const { createKit, Batch, WHITE } = await import('../public/world/backrooms/kit.js');
-const { markLiquid, settleLiquid, liquidMeshes, collectLiquids, createLiquidView, averageColour, sheetTint, OVER_LAYER } = await import('../public/world/backrooms/liquid.js');
-const { LIQUID, flatness, underwater, holdStep, waterColours, LIQUID_FRAG, LIQUID_VERT } = await import('../public/world/backrooms/liquid.rule.js');
+const { markLiquid, settleLiquid, liquidMeshes, collectLiquids, createLiquidView, averageColour, sheetTint, sheetRim, OVER_LAYER } = await import('../public/world/backrooms/liquid.js');
+const { LIQUID, flatness, underwater, holdStep, waterColours, LIQUID_FRAG, LIQUID_VERT, LIQUID_UNDER_FRAG, UNDERSIDE, seesUnderside } = await import('../public/world/backrooms/liquid.rule.js');
 const { createVhs } = await import('../public/world/backrooms/vhs.js');
 const { castsBeamShadow, HELD_ORDER } = await import('../public/world/backrooms/beam-shadows.rule.js');
 const { glowRole } = await import('../public/world/backrooms/glow.js');
@@ -202,7 +202,7 @@ test('the tint is the old sheet\'s: its picture\'s average times its colour, mur
   w.kit.dispose();
 });
 
-test('in view: the old single pass when no surface is, the split when one is, held half a second; under the surface, the old sheet', () => {
+test('in view: the old single pass when no surface is, the split when one is, held half a second; under the plane outside the rim, the old sheet', () => {
   assert.deepEqual(holdStep(null, 0, false), { last: -Infinity, split: false });
   let s = holdStep(null, 1, true); assert.equal(s.split, true);
   s = holdStep(s, 1.3, false); assert.equal(s.split, true, 'held');
@@ -221,17 +221,95 @@ test('in view: the old single pass when no surface is, the split when one is, he
   w.rt.group.visible = false; assert.equal(view.frame(scene, cam, 20), false); w.rt.group.visible = true;
   // a room may hide its own sheet: then neither is drawn
   w.mesh.visible = false; assert.equal(view.frame(scene, cam, 30), false); w.mesh.visible = true;
-  // under the surface: the old sheet is drawn (with the waterpark's veil), and the surface does not count as in view
-  cam.position.set(0, -0.5, 0); cam.lookAt(1, -0.5, 0); cam.updateMatrixWorld();
-  assert.equal(view.frame(scene, cam, 40), false); assert.equal(w.rec.under, true);
+  // under the plane but outside the rim (a lower room beside the pool): the old sheet is drawn, not in view
+  cam.position.set(3, -0.5, 0); cam.lookAt(0, -0.05, 0); cam.updateMatrixWorld();
+  assert.equal(view.frame(scene, cam, 40), false); assert.deepEqual([w.rec.under, w.rec.below], [true, false]);
   view.force = 'split'; assert.equal(view.frame(scene, cam, 40), true);
   const r = fakeRenderer(); view.draw(r, scene, cam, target(), () => r.render(scene, cam));
   assert.ok(r.log.at(-1).drawn.includes(w.mesh), 'under it: the room\'s own sheet, see-through, drawn over');
   assert.ok(!r.log.at(-1).drawn.includes(w.rec.pairs[0].water));
+  view.force = null;
+  // (the underside, in the water inside the rim, has a test of its own below)
   // no depth to read: the ordinary draw
   const r2 = fakeRenderer(); let n = 0; view.draw(r2, scene, cam, new THREE.WebGLRenderTarget(4, 4), () => n++);
   assert.deepEqual([n, r2.log.length], [1, 0]);
   w.kit.dispose();
+});
+
+test('the eye in the water: the surface\'s underside, only inside the rim of a pool that faces up; put back after the draw', () => {
+  const rim = { x0: -2, z0: -1.5, x1: 2, z1: 1.5 };
+  assert.equal(seesUnderside({ x: 0, y: -0.5, z: 0 }, -0.05, rim, true), true);
+  assert.equal(seesUnderside({ x: 0, y: 0.5, z: 0 }, -0.05, rim, true), false, 'over it: the top');
+  assert.equal(seesUnderside({ x: 3, y: -0.5, z: 0 }, -0.05, rim, true), false, 'outside the rim');
+  assert.equal(seesUnderside({ x: 0, y: -0.5, z: 0 }, -0.05, rim, false), false, 'a sheet facing down (the return pool\'s upper pool) keeps its own');
+  assert.equal(seesUnderside({ x: 0, y: -0.5, z: 0 }, -0.05, null, true), false);
+
+  const w = upgraded(), { scene, cam } = stage(w.rt.group), view = createLiquidView();
+  view.frame(scene, cam, 0);
+  const [pair] = w.rec.pairs, top = pair.material;
+  assert.equal(pair.under, undefined, 'nothing of the underside is made until an eye is under it');
+  const edge = sheetRim(w.rec);
+  assert.equal(edge.facesUp, true, 'the waterpark\'s way of laying a sheet faces up');
+  for (const [k, v] of Object.entries(rim)) assert.ok(Math.abs(edge.rim[k] - v) < 1e-6, k);
+  // the same sheet laid the other way round faces down (as the return pool's upper pool is)
+  const down = sheetRoom(); down.batch.idx.length = 0; down.batch.pos.length = 0;
+  down.batch.grid([-2, -0.05, -1.5], [1, 0, 0], [0, 0, 1], [0, 1, 2, 3, 4], [0, 1, 2, 3], (a, b) => [a, b], [0.88, 1, 1]);
+  markLiquid(down.c, down.holder, { y: -0.05 }); for (const fn of down.after) fn();
+  assert.equal(sheetRim(down.rt.liquids[0]).facesUp, false);
+
+  // in the water, inside the rim, looking up: in view, the split, the underside drawn in the sheet's place
+  cam.position.set(0.3, -0.6, 0.2); cam.lookAt(0.3, 1, -0.4); cam.updateMatrixWorld();
+  assert.equal(view.frame(scene, cam, 10), true);
+  assert.deepEqual([w.rec.under, w.rec.below, view.stats.below, view.stats.inView], [true, true, 1, 1]);
+  const r = fakeRenderer(), render = r.render.bind(r), seen = [];
+  r.render = (s, c) => { render(s, c); seen.push(r.log.at(-1).drawn.map((o) => o.material.name || '')); };
+  view.draw(r, scene, cam, target(), () => r.render(scene, cam));
+  assert.ok(pair.under, 'made the first time'); assert.equal(pair.under.fragmentShader, LIQUID_UNDER_FRAG); assert.equal(pair.under.vertexShader, LIQUID_VERT);
+  assert.equal(pair.under.uniforms, top.uniforms, 'the top\'s very uniforms: the room\'s light, its phase, the copy');
+  assert.deepEqual(seen.at(-1), ['liquid:water:underside']); assert.ok(!r.log.at(-1).drawn.includes(w.mesh), 'the room\'s sheet is not drawn');
+  assert.equal(pair.water.material, top, 'put back'); assert.equal(pair.water.visible, false); assert.equal(w.mesh.visible, true);
+  // back over it: the top, and the underside made once is kept for the next dive
+  const under = pair.under;
+  cam.position.set(0, 1.6, 2.5); cam.lookAt(0, -0.05, 0); cam.updateMatrixWorld();
+  view.frame(scene, cam, 11); assert.equal(w.rec.below, false);
+  const r2 = fakeRenderer(), render2 = r2.render.bind(r2), seen2 = [];
+  r2.render = (s, c) => { render2(s, c); seen2.push(r2.log.at(-1).drawn.map((o) => o.material.name || '')); };
+  view.draw(r2, scene, cam, target(), () => r2.render(scene, cam));
+  assert.deepEqual(seen2.at(-1), ['liquid:water']); assert.equal(pair.under, under);
+  // let go of with the rest
+  let gone = 0; under.addEventListener('dispose', () => gone++);
+  view.release(scene); assert.equal(gone, 1);
+  // the underside's shader: the top's own functions (the ripple and the wake's rings below too), its own main
+  assert.ok(LIQUID_UNDER_FRAG.startsWith(LIQUID_FRAG.slice(0, LIQUID_FRAG.lastIndexOf('void main() {'))));
+  assert.equal(LIQUID_UNDER_FRAG.split('void main() {').length, 2);
+  // the top's ripple and the wake's slope, line for line: a ring passing over tilts the window as it tilts the top; the
+  // wake's crest and trough light (and its stirred caustics) are the top's alone, so a ring seen from below adds no light
+  const topMain = LIQUID_FRAG.slice(LIQUID_FRAG.lastIndexOf('void main() {'));
+  assert.ok(LIQUID_UNDER_FRAG.includes(topMain.slice(0, topMain.indexOf('\n', topMain.indexOf('  vec3 n = normalize(uRoomToView')) + 1)));
+  assert.ok(LIQUID_UNDER_FRAG.includes('wk += wakeRing(rp, uRings[i], h0, rc);'));
+  assert.ok(!/wk\.[yzw]/.test(LIQUID_UNDER_FRAG.slice(LIQUID_UNDER_FRAG.indexOf('vec3 ray = normalize(vView);'))), 'no light of the wake\'s below');
+  assert.match(LIQUID_UNDER_FRAG, /float w = smoothstep\(0\.631000, 0\.691000, cosUp\);/, 'Snell\'s window, about 48.6 degrees round straight up');
+  assert.ok(Math.abs(Math.acos(UNDERSIDE.window) * 180 / Math.PI - 48.6) < 0.1);
+  assert.match(LIQUID_UNDER_FRAG, /if \(texture2D\(tDepth, ruv\)\.x < gl_FragCoord\.z\) ruv = uv;/, 'never bent onto what is in the water in front of it');
+  w.kit.dispose(); down.kit.dispose();
+});
+
+test('the caustics never lift what they land on past the brighter of itself and the room\'s light there', () => {
+  // (a pale step in shallow water was lit up past the deck beside it: the Diving Well's glowing steps)
+  assert.match(LIQUID_FRAG, /  vec3 bare = under;\n  under \*= 1\.0 \+ uCaustic \* k;\n/);
+  const L = 'vec3(0.299, 0.587, 0.114)';
+  assert.ok(LIQUID_FRAG.includes(`  under *= min(1.0, max(dot(bare, ${L}), dot(light, ${L})) / max(dot(under, ${L}), 1e-5));\n`));
+  assert.ok(LIQUID_FRAG.indexOf('vec3 light = vLit;') < LIQUID_FRAG.indexOf('vec3 bare = under;'), 'the room\'s light at the surface, known by then');
+  // what it does, in numbers (the shader's arithmetic, here): a dark bed as before; a pale step held at the room's light
+  const lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+  const lift = (bare, light, k) => { const u = bare.map((v) => v * (1 + LIQUID.caustic * k)); const s = Math.min(1, Math.max(lum(bare), lum(light)) / Math.max(lum(u), 1e-5)); return u.map((v) => v * s); };
+  const light = [0.85, 1.18, 1.23];                       // (the Diving Well's light at its surface, measured)
+  const bed = [0.03, 0.13, 0.1], step = [0.82, 1.05, 1.1]; // (its bed and its top step, under the surface, measured)
+  assert.deepEqual(lift(bed, light, 1), bed.map((v) => v * (1 + LIQUID.caustic)), 'the bed: the full 2.3 times');
+  assert.ok(Math.abs(lum(lift(step, light, 1)) - lum(light)) < 1e-9, 'the step: no brighter than the room\'s light');
+  assert.deepEqual(lift(step, light, 0), step, 'and nothing where there is no caustic');
+  const lamp = [3, 3, 3];
+  for (const v of lift(lamp, light, 1)) assert.ok(Math.abs(v - 3) < 1e-9, 'a lamp under the water: as bright as it is, never dimmed');
 });
 
 test('the order: what is held stays last and in front; what is see-through is drawn after the water; nothing else moves', () => {

@@ -376,7 +376,11 @@ void main() {
   // It only brightens what it lands on: what is under keeps its own colour
   vec3 dir = normalize(vRoom - uEyeRoom);
   float k = caustic(vRoom.xz + dir.xz * thick, slope, thick) * exp(-${f(LIQUID.causticFade / LIQUID.keep)} * uKeep.w * thick);
+  vec3 bare = under;
   under *= 1.0 + uCaustic * k;
+  // (but never past the brighter of itself and the room's light here: a pale step in shallow water is not lit up past
+  // the deck beside it; a darker bed, which it cannot reach, is as it was)
+  under *= min(1.0, max(dot(bare, vec3(0.299, 0.587, 0.114)), dot(light, vec3(0.299, 0.587, 0.114))) / max(dot(under, vec3(0.299, 0.587, 0.114)), 1e-5));
   // (inside a fresh ring the light on the bed is stirred: brighter for its first moments)
   if (uRingN > 0) under *= 1.0 + ${f(LIQUID.wakeStir)} * min(wk.w, 1.5) * (0.35 + k);
   // (uKeep: the water's own colours, scaled to its clearest, and how fast what it lets through at least falls)
@@ -404,4 +408,51 @@ varying vec2 vUv;
 void main() {
   gl_FragColor = texture2D(tColor, vUv);
   gl_FragDepthEXT = texture2D(tDepth, vUv).x;
+}`;
+
+// ---- the surface seen from below (the eye in the water) ----
+// Under a surface that has its water below it, inside its rim, the eye sees the surface's underside: a dim skin, no
+// mirror. Within the cone overhead that light from above gets through (Snell's window: the critical angle of water to
+// air, 48.6 degrees from straight up, tilted by the ripple's stepped cells, so its edge is blocky like the top), what is
+// above, a little bent by the ripple, darkened and tinted by the water between the eye and the surface; outside it, the
+// pool's own colour, lit by the room. The room's veil (the waterpark's) is drawn over it as ever.
+export const UNDERSIDE = Object.freeze({
+  window: 0.661,      // the cosine of the critical angle, water to air: inside the cone, what is above; outside, the pool
+  windowSoft: 0.03,   // its edge, softened by this much of the cosine either way
+  through: 0.55,      // of what is above, at most, that the skin lets through (it is dim)
+  bend: 0.06,         // how far the ripple's tilt moves what is seen through it, of the picture
+  own: 0.7,           // outside the window: the water's deep colour lit by the room, times this
+});
+
+/**
+ * Is the eye under a surface it should see the underside of? `eye` and `rim` in the surface's room frame (rim: the
+ * sheet's extent, { x0, z0, x1, z1 }), `facesUp`: the sheet's water is below it (a pool, not the return pool's
+ * upside-down upper pool, which keeps its own sheet). Under the plane but outside the rim (a lower room beside it): no.
+ */
+export function seesUnderside(eye, planeY, rim, facesUp, k = LIQUID) {
+  return !!facesUp && !!rim && underwater(eye.y, planeY, k) && eye.x >= rim.x0 && eye.x <= rim.x1 && eye.z >= rim.z0 && eye.z <= rim.z1;
+}
+
+/** The underside's fragment shader: the top's own uniforms and functions, and the top's own ripple with the wake's rings
+ * (the same cells, the same stepped slope: the window's edge is blocky as the top is, and a ring tilts it as it passes;
+ * the wake's crest and trough light are the top's alone), then a main of its own. */
+const TOP_MAIN = LIQUID_FRAG.slice(LIQUID_FRAG.lastIndexOf('void main() {'));
+const TOP_SLOPE = TOP_MAIN.slice(0, TOP_MAIN.indexOf('\n', TOP_MAIN.indexOf('  vec3 n = normalize(uRoomToView')) + 1);
+export const LIQUID_UNDER_FRAG = LIQUID_FRAG.slice(0, LIQUID_FRAG.lastIndexOf('void main() {')) + TOP_SLOPE + `  vec3 ray = normalize(vView);                               // from the eye up to the surface
+  float cosUp = dot(ray, n);
+  // the water between the eye and the surface
+  float d = length(vView);
+  vec3 T = max(exp(-uAbsorb * d), uKeep.rgb * exp(-uKeep.w * d));
+  vec3 light = vLit;
+  vec3 own = uDeep * light;
+  // inside the window: what is above, nudged by the ripple's tilt (never to something in the water in front of it)
+  vec2 ruv = clamp(uv + (n - up).xy * ${f(UNDERSIDE.bend)}, vec2(0.5) / uSize, vec2(1.0) - vec2(0.5) / uSize);
+  if (texture2D(tDepth, ruv).x < gl_FragCoord.z) ruv = uv;
+  vec3 above = texture2D(tScene, ruv).rgb * ${f(UNDERSIDE.through)};
+  vec3 inside = above * T + own * (1.0 - T)
+    + uScatter * light * (1.0 - exp(-${f(LIQUID.scatterDepth)} * d)) * exp(-${f(LIQUID.scatterFade)} * d);
+  // outside it: the pool's own colour (what the underside mirrors is the pool, and the pool is that colour)
+  vec3 outside = own * ${f(UNDERSIDE.own)};
+  float w = smoothstep(${f(UNDERSIDE.window - UNDERSIDE.windowSoft)}, ${f(UNDERSIDE.window + UNDERSIDE.windowSoft)}, cosUp);
+  gl_FragColor = vec4(mix(outside, inside, w), 1.0);
 }`;
