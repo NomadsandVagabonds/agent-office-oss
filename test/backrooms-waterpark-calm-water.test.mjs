@@ -53,19 +53,26 @@ test('only the kiddie lagoon uses it, through createBasin\'s waterTex and waterA
   assert.doesNotMatch(room, /causticWaterTex/);
 });
 
-test('the default look is unchanged: the caustic cells, at 0.52, and the liquid mark is still made', () => {
+test('the default sheet: causticWaterTex at 0.52, and the liquid mark is still made', () => {
   const w = src('waterpark.js');
   assert.match(w, /const waterTex = spec\.waterTex \|\| causticWaterTex\(kit, spec\.waterTone \|\| \(depth > 1\.2 \? 'deep' : 'aqua'\)\);/);
-  assert.match(w, /addTranslucent\(c, waterSurf, \{\n\s*map: waterTex,\n\s*alpha: spec\.waterAlpha \?\? 0\.52,\n\s*side: THREE\.FrontSide,\n\s*order: 4,\n\s*\}\);\n\s*c\.liquid\?\.\(waterSurf, \{ kind: 'water', y: waterY \}\);/);
+  assert.match(w, /addTranslucent\(c, waterSurf, \{\n\s*map: waterTex,\n\s*alpha: spec\.waterAlpha \?\? 0\.52,\n\s*side: THREE\.FrontSide,\n\s*order: 4,\n(?:\s*finishMaterial: [^\n]*\n)?\s*\}\);\n\s*c\.liquid\?\.\(waterSurf, \{ kind: 'water', y: waterY \}\);/);
+  // (18 Nov: the optional line is the waterpark's builder's own, the ceiling lamps the caustic sheet reflects at Classic
+  // (pool-optics.js); it is not given to a pool with a sheet of its own, so the calm lagoon is as it was)
+  assert.match(w, /finishMaterial: c\.rt\.poolLampMap && !spec\.waterTex \?/);
   // the footbaths' sheet
   assert.match(w, /addTranslucent\(c, wb, \{ map: causticWaterTex\(c\.kit, 'aqua'\), alpha: 0\.56, side: THREE\.DoubleSide, order: 4 \}\);\n\s*c\.liquid\?\.\(wb, \{ kind: 'water', y: 0\.15 \}\);/);
-  // what the caustic picture draws: the base, then 2 px cells of the pale web and the mid band (counted as it was)
-  const kit = createKit();
-  const r = drawn(wp.causticWaterTex(kit, 'aqua'));
-  assert.deepEqual(r[0], ['#138ba1', 0, 0, 64, 64]);
-  assert.equal(r.filter((x) => x[0] === '#e8feff').length, CAUSTIC_HI);
-  assert.equal(r.filter((x) => x[0] === '#32b8cf').length, CAUSTIC_MID);
-  kit.dispose?.();
+  // what the default picture draws. 18 Nov: the waterpark's builder replaced the caustic web with muted ripples
+  // (causticWaterTex keeps its name), so the default look DID change, by the builder's own hand; what is pinned now is
+  // that picture: 96 x 96, a texel at a time, every shade near the tint with nothing pale, the same every time
+  const r = drawn(wp.causticWaterTex(createKit(), 'aqua')), again = drawn(wp.causticWaterTex(createKit(), 'aqua'));
+  assert.deepEqual(r, again);
+  assert.equal(r.length, 96 * 96);
+  for (const [col, , , w, h] of r) {
+    const m = /^rgb\((\d+),(\d+),(\d+)\)$/.exec(col);
+    assert.ok(m && w === 1 && h === 1, col);
+    assert.ok(Math.max(+m[1], +m[2], +m[3]) < 180, col);
+  }
 });
 
 test('the calm picture: one colour and large patches a shade off, in 4 px texels, nothing pale, the same every time', () => {
@@ -89,5 +96,3 @@ test('the calm picture: one colour and large patches a shade off, in 4 px texels
   assert.doesNotMatch(body, /Math\.random/);
 });
 
-// the caustic picture's pale-web and mid-band cells, as drawn before the sample (unchanged by it)
-const CAUSTIC_HI = 236, CAUSTIC_MID = 236;

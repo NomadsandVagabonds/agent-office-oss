@@ -4,6 +4,7 @@ import { poolTextures, tiledPlane } from './return-pool/art.js';
 import { showerWater } from './locker-showers/water.js';
 import { buildFlume } from '../waterpark.js';
 import { AXIS_Y, TUBE_RADIUS } from './flume-connector/plan.js';
+import { payrollWindow, partitionFace, timeClockRack } from './flooded-cubicles/payroll.js';
 import { officeRunnel } from './flume-connector/water.js';
 
 export function build(c) {
@@ -34,7 +35,10 @@ export function build(c) {
   tiledPlane(tile,-.52,front-.68,.52,front+.08,0.008);
   officeRunnel(c, front);
 
-  const dividers = c.mapped('flooded-office:partitions',c.kit.tex.carpet('#637676'),{wet:.32});
+  payrollWindow(c, material);
+  timeClockRack(c);
+  const dividers = partitionFace(c);
+  const rail = lin('#a6aa97');
   const phosphor = c.kit.tex.custom('flooded-office:phosphor',64,48,g=>{
     g.fillStyle='#102f26';g.fillRect(0,0,64,48);
     g.fillStyle='#7ec889';g.fillRect(6,8,40,2);
@@ -43,11 +47,18 @@ export function build(c) {
   const screen = c.shining('flooded-office:monitor',phosphor,1.22);
   for (const [x,z] of [[-2.42,1.18],[-2.42,-1.55],[2.55,-1.50]]) {
     const edge = x < 0 ? -.73 : .73;
-    dividers.box(x-1.01,bed,z+edge-.065,x+1.01,1.03,z+edge+.065,WHITE,{uv:1.6});
+    const panelZ=z+edge, top=1.19;
+    c.flat.box(x-1.01,bed,panelZ-.065,x+1.01,top,panelZ+.065,rail);
+    for(const side of [-1,1]) {
+      c.board(dividers,x,(top+bed)/2,panelZ+side*.067,1.94,top-bed-.06,side<0?Math.PI:0);
+    }
+    c.flat.box(x-.04,bed,panelZ-.071,x+.006,top,panelZ+.071,rail);
     c.solid(x-1.01,z+edge-.065,x+1.01,z+edge+.065,{keep:true,tall:true});
-    c.prop('desk',x,z,{ y:bed, solid:true });
-    c.prop('crt',x+.18,z-.03,{ y:bed+.766, solid:false });
-    if(z>0)c.board(screen,x+.18,bed+.766+CRT_SCREEN.y*.025,z-.03+CRT_SCREEN.z*.025,CRT_SCREEN.w*.025,CRT_SCREEN.h*.025,0);
+    const desk=c.prop('desk',x,z,{y:bed,solid:true});
+    c.prop('crt',x+.18,z-.03,{ y:desk.top, solid:false });
+    c.board(screen,x+.18,desk.top+CRT_SCREEN.y*.025,z-.03+CRT_SCREEN.z*.025,CRT_SCREEN.w*.025,CRT_SCREEN.h*.025,0);
+    c.prop('keyboard',x+.16,z+.23,{y:desk.top,solid:false,shadow:false});
+    if(z>0)c.prop('desklamp',x-.52,z-.11,{y:desk.top,solid:false,shadow:false});
   }
   c.prop('cabinet',3.66,1.43,{ y:bed, rot:Math.PI/2 });
   c.prop('chair',2.44,.60,{ y:bed, rot:1.32 });

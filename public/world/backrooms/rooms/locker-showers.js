@@ -7,11 +7,11 @@ import {lockerTunnel} from './locker-showers/locker-tunnel.js';
 import {showerFigure} from './locker-showers/figures.js';
 import {Batch,lin,WHITE} from '../kit.js';
 import {pipe} from '../pool-finish.js';
-import {innerTubeVox} from '../waterpark.js';
+import {innerTubeVox,buildOverheadFlumes} from '../waterpark.js';
 import {face} from './bellmouth/art.js';
 import {tiledPlane} from './return-pool/art.js';
 import {towelCart} from './return-pool/dressing.js';
-import {collisionFlumeVox,FLUME_CELL,cutSlab} from './channel-hall/collision-art.js';
+import {cutSlab} from './channel-hall/collision-art.js';
 import {showerPlan,showerFloor,showerCeiling,showerCuts,foldCrossing} from './locker-showers/plan.js';
 import {showerTextures,lockerBank,officeDoor,shower,hangingTowel,wetBenchSegment} from './locker-showers/assets.js';
 
@@ -156,8 +156,8 @@ export function build(c){
   }
   officeDoor(c,{x:-1.19,y:invertedFloor,z:-5.18,roll:Math.PI,open:-.72});
   shower(c,{x:-2.74,y:invertedFloor-.018,z:-5.19,roll:Math.PI});
-  const flume=new Batch(true),spec={id:'cyan-shower',color:'#5d9d9b',radius:.59,pts:[[-8.8,3.55,7.4],[-6.3,3.55,7.4],[-3.0,3.58,7.5],[-2.3,5.2,7.8],[-4.5,5.65,4.5],[-8.8,5.4,3.5]]};
-  c.model('showers:upper-flume',()=>collisionFlumeVox(spec),0,0,{batch:flume,scale:FLUME_CELL/.025,solid:false,shadow:false});c.dynamic(flume,{wet:.8});
+  const spec={id:'cyan-shower',color:'#5d9d9b',radius:.59,pts:[[-8.8,3.55,7.4],[-6.3,3.55,7.4],[-3.0,3.58,7.5],[-2.3,5.2,7.8],[-4.5,5.65,4.5],[-8.8,5.4,3.5]]};
+  buildOverheadFlumes(c,[spec]);
   for(const x of [-3.4,-1.72])box(c.flat,[x-.025,4.76,7.08,x+.025,4.84,8.68],steel);
   for(const z of [7.1,8.65])box(c.flat,[-3.52,4.76,z-.025,-1.63,4.84,z+.025],steel);
   for(const z of [7.4,8.3])pipe(c.flat,[-3.5,5.03,z],[-1.65,5.03,z],.025,rust);
