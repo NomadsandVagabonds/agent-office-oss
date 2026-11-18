@@ -418,7 +418,8 @@ test('the helper lines in the waterpark\'s files: each once, and nothing else of
     text[f] = text[f].replace(line, '');
   }
   // where each goes: after the basin's sheet, the footbath's sheet, and before each art helper hands its group back
-  assert.match(B('waterpark.js'), /    order: 4,\n  \}\);\n  c\.liquid\?\.\(waterSurf, \{ kind: 'water', y: waterY \}\);\n/);
+  // (18 Nov: the waterpark's builder put one line of its own between, the lamps the Classic sheet reflects: pool-optics.js)
+  assert.match(B('waterpark.js'), /    order: 4,\n(?:    finishMaterial: [^\n]*\n)?  \}\);\n  c\.liquid\?\.\(waterSurf, \{ kind: 'water', y: waterY \}\);\n/);
   assert.match(B('waterpark.js'), /alpha: 0\.56, side: THREE\.DoubleSide, order: 4 \}\);\n      c\.liquid\?\.\(wb, \{ kind: 'water', y: 0\.15 \}\);\n/);
   assert.match(B('rooms/return-pool/art.js'), /  c\.liquid\?\.\(group, \{ kind: 'water', phase, y \}\);\n  return \{ group, phase \};/);
   assert.match(B('rooms/bellmouth/art.js'), /  c\.liquid\?\.\(group,\{kind:'water',phase,y:p\.water\}\);\n  return \{phase,group\};/);

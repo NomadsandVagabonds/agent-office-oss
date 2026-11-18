@@ -121,16 +121,6 @@ export function finishPoolRoom(c,kind){
   if(!['bellmouth-baths','hanging-changing'].includes(kind))services(c,b);
   if(kind==='wave-pool'){
     overheadRibs(c,b,[-D*.28,0,D*.28],H-.95);
-    const z=-D/2+2.05,w=(W-4.9)/4;
-    for(let i=0;i<4;i++){
-      const x=-W/2+2.45+(i+.5)*w;
-      // Big pressure necks terminate in the caisson housing. Rings and flange
-      // bolts make the grille wall read as equipment, not painted rectangles.
-      pipe(c.flat,[x,1.5,z],[x,H-.12,z],.24,C.green,12);
-      flange(b,[x,1.6,z],[x,2.65,z],.24);
-      for(let yy=.05;yy<1.5;yy+=.3)box(b,[x-w*.38,yy,z+.37],[x+w*.38,yy+.032,z+.405],C.steel);
-      for(const xx of [-.32,.32])bolts(b,x+xx,2.13,z,.045,.50);
-    }
   }else if(kind==='lazy-river'){
     // A low circular coffer floats over the canal; one offset inner ring makes
     // the lifeguard seem to stand off-centre in a badly repeated institution.
@@ -144,13 +134,6 @@ export function finishPoolRoom(c,kind){
     }
   }else if(kind==='deep-end'){
     overheadRibs(c,b,[-D*.28,D*.28],H-.65);
-    // The submerged partition is a bolted pressure bulkhead with a double
-    // seam and drain mouths, rather than one plain wall stopping in water.
-    for(const sign of [-1,1])for(let x=-W/2+1.8;x<W/2-1.7;x+=.55){
-      const spans=sign>0&&Math.abs(x)<1.08?[[-.76,.50],[1.44,H-.05]]:[[-.76,H-.05]];
-      for(const [lo,hi] of spans)box(b,[x-.016,lo,sign*.15-.012],[x+.016,hi,sign*.15+.012],C.steel);
-      for(const y of [-.62,.25,1.65])box(b,[x-.038,y,sign*.17-.02],[x+.038,y+.07,sign*.17+.02],C.dark);
-    }
     for(const side of [-1,1]){
       const x=side*(W/2-1.72);
       pipe(c.flat,[x,-1.75,-D/2+2],[x,-1.75,D/2-2],.10,C.green);

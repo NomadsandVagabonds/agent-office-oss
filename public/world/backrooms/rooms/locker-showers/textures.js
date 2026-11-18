@@ -114,9 +114,12 @@ export function showerTextures(kit){
     g.strokeStyle='#667d745f';g.lineWidth=.7;
     for(let i=-256;i<256;i+=16){g.beginPath();g.moveTo(i,0);g.lineTo(i+256,256);g.stroke();g.beginPath();g.moveTo(i+256,0);g.lineTo(i,256);g.stroke();}
   });
-  const cloth=kit.tex.custom('folded-shower:terry-cloth',128,128,g=>{
+  return {pink,mauve,floor,ceiling,wood,grime,glass,cloth:terryCloth(kit)};
+}
+
+export function terryCloth(kit) {
+  return kit.tex.custom('folded-shower:terry-cloth',128,128,g=>{
     fill(g,'#d4c7ab',0,0,128,128);
     for(let y=0;y<128;y+=2)for(let x=0;x<128;x+=2){const n=hash(x,y,88);fill(g,n%3?'#fff1ce38':'#5d5b453c',x,y,1,1+n%2);}
   });
-  return {pink,mauve,floor,ceiling,wood,grime,glass,cloth};
 }

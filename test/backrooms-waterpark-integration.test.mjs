@@ -242,6 +242,23 @@ test('inflatable tube has an open bore and a rounded, continuous vinyl wall',asy
  assert.equal(v.has(14,0,0),false,'cross-section tapers at the bottom');
  assert.ok(v.has(14,4,0),'cross-section swells around the middle');
 });
+test('Surge Basin: the visible crest tracks the hazard from the gates to the beach', async t => {
+  const f = await fixture('wave-pool', 1);
+  t.after(() => f.dispose());
+  const room = f.world.rooms[0];
+  const mesh = room.group.getObjectByName('surge-crest').userData.mesh;
+  mesh.geometry.computeBoundingBox();
+  for (const frames of [255, 90, 100]) {
+    f.tick(frames);
+    const center = mesh.geometry.boundingBox.getCenter(new THREE.Vector3());
+    room.group.worldToLocal(mesh.localToWorld(center));
+    assert.ok(Number.isFinite(room.wavePool.crestZ));
+    assert.ok(Math.abs(center.z - room.wavePool.crestZ) < .18, 'surface and push travel together');
+  }
+  f.tick(90);
+  assert.equal(room.wavePool.crestZ, null, 'crest has passed');
+});
+
 test('occupied lagoon floats kick both legs independently without replacing the hazard motion',async t=>{
  const f=await fixture('kiddie-lagoon');t.after(()=>f.dispose());
  const bathers=[];f.world.rooms[0].group.traverse(g=>{if(g.name==='inverted-bather')bathers.push(g);});
@@ -279,16 +296,36 @@ for(const rot of [0,1,2,3])test(`Lane Archive: the wet office has a real entranc
   assert.equal(ray.intersectObject(f.world.rooms[0].group,true).length>0,expected,'open service bay versus intact suspended ceiling');
  }
 });
-test('collision flumes retain an open bore all along both voxel curves',async()=>{
- const {COLLISION_FLUMES,FLUME_CELL,collisionFlumeVox}=await import('../public/world/backrooms/rooms/channel-hall/collision-art.js');
- const {evalFlume}=await import('../public/world/backrooms/waterpark.rule.js');
- for(const spec of COLLISION_FLUMES){
-  const v=collisionFlumeVox(spec);assert.ok(v.map.size>500,'a substantial shell remains');
-  for(let i=0;i<=120;i++){
-   const p=evalFlume(spec.pts,i/120);
-   assert.equal(v.has(Math.round(p.x/FLUME_CELL),Math.round(p.y/FLUME_CELL),Math.round(p.z/FLUME_CELL)),false,`${spec.id}: bore at ${i}`);
+test('Lane Archive: the overhead flumes keep their round bore through bends and open mouths', async t => {
+  const f = await fixture('channel-hall');
+  t.after(() => f.dispose());
+  const {COLLISION_FLUMES} = await import('../public/world/backrooms/rooms/channel-hall/collision-art.js');
+  const {sampleFlumeFrames} = await import('../public/world/backrooms/waterpark.rule.js');
+  const {flumes} = f.world.rooms[0].channelHall.officeCollision;
+  const mesh = flumes.userData.mesh;
+  mesh.updateWorldMatrix(true, false);
+  function firstHit(point, direction, distance) {
+    const origin = mesh.localToWorld(point.clone());
+    direction.transformDirection(mesh.matrixWorld);
+    return new THREE.Raycaster(origin, direction, 0, distance).intersectObject(mesh, false)[0];
   }
- }
+  for (const spec of COLLISION_FLUMES) {
+    const frames = sampleFlumeFrames(spec.pts, 24);
+    for (const frame of frames.slice(1, -1)) {
+      const point = new THREE.Vector3(frame.x, frame.y, frame.z);
+      for (let spoke = 0; spoke < 8; spoke++) {
+        const a = spoke * Math.PI / 4, u = Math.cos(a), v = Math.sin(a);
+        const dir = new THREE.Vector3(frame.ux*u+frame.vx*v, frame.uy*u+frame.vy*v, frame.uz*u+frame.vz*v);
+        const hit = firstHit(point, dir, spec.radius);
+        assert.ok(hit && hit.distance > 0.88 * spec.radius, spec.id + ' inner wall at ' + frame.u);
+      }
+    }
+    for (const [frame, sign] of [[frames[0], 1], [frames.at(-1), -1]]) {
+      const inward = new THREE.Vector3(frame.tx, frame.ty, frame.tz).multiplyScalar(sign);
+      const outside = new THREE.Vector3(frame.x, frame.y, frame.z).addScaledVector(inward, -0.12);
+      assert.equal(firstHit(outside, inward, 0.24), undefined, spec.id + ' open end');
+    }
+  }
 });
 for(const rot of [0,1,2,3])test(`Narrowing Bays: crouch route and standing side loop (${rot})`,async t=>{
  const f=await fixture('nested-thresholds',rot);t.after(()=>f.dispose());const rt=f.world.rooms[0],last=rt.thresholds.frames.at(-1);
