@@ -43,7 +43,7 @@
 // flat tint. At water 1 (Medium) none of it exists: no define, no picture, no pass.
 import * as THREE from 'three';
 import { LIQUID, underwater, holdStep, toLinear, waterColours, wakeStart, wakeStep, wakeFill, wadeStep, LIQUID_VERT, LIQUID_FRAG, COPY_FRAG, LIQUID_UNDER_FRAG, seesUnderside,
-  MIRROR, mirrorPlane, reflectMatrix, planeInView, obliqueProjection, mirrorSize, pickMirror, mirrorLeaves } from './liquid.rule.js';
+  MIRROR, mirrorPlane, reflectMatrix, planeInView, obliqueProjection, mirrorSize, pickMirror, mirrorLeaves, screenCover, mirrorGate, mirrorWeight } from './liquid.rule.js';
 import { HELD_ORDER } from './beam-shadows.rule.js';
 import { collectLiquids } from './liquid.mark.js';
 
@@ -163,6 +163,16 @@ export function createLiquidView() {
     mirror: { on: false, surfaces: 0, size: null, calls: 0, triangles: 0, left: { noReflect: 0, liquid: 0, held: 0, detail: 0, sheet: 0 }, drawn: 0 } };
   // --- the mirror (water 2) ---
   let level = 1, mirrorRec = null, mirrorTarget = null;
+  // (the surface chosen for the mirror, whether the pass is on for it (its cover's hysteresis), and its weight on the water)
+  let chosen = null, gateOn = false, weight = 0;
+  const corner = new THREE.Vector3();
+  // the share of the picture a surface's rim covers (its sheet's extent in its room frame, at its plane)
+  const coverOf = (rec) => {
+    const { rim } = rec.edge ||= sheetRim(rec);
+    if (!rim) return 0;
+    const g = rec.rt.group.matrixWorld, y = rec.plane.y;
+    return screenCover([[rim.x0, rim.z0], [rim.x1, rim.z0], [rim.x1, rim.z1], [rim.x0, rim.z1]].map(([x, z]) => corner.set(x, y, z).applyMatrix4(g).toArray()), pv.elements);
+  };
   const mirrorCam = new THREE.PerspectiveCamera();
   mirrorCam.matrixAutoUpdate = false; mirrorCam.matrixWorldAutoUpdate = false;
   const cands = [], FLIP = new THREE.Matrix4().makeScale(-1, 1, 1), mA = new THREE.Matrix4(), mB = new THREE.Matrix4(), mT = new THREE.Matrix4(), mTi = new THREE.Matrix4();
@@ -308,7 +318,7 @@ export function createLiquidView() {
     /** The tier's water (graphics.js): 2 has the mirror; under 2 its picture is let go and no surface compiles it. */
     setLevel(n) {
       level = Number(n) || 0;
-      if (level < 2) { mirrorRec = null; stats.mirror.on = false; mirrorTarget?.dispose(); mirrorTarget = null; shared.tMirror.value = null; }
+      if (level < 2) { mirrorRec = chosen = null; gateOn = false; weight = 0; stats.mirror.on = false; mirrorTarget?.dispose(); mirrorTarget = null; shared.tMirror.value = null; }
     },
     get level() { return level; },
     /** The surface that has the mirror this frame (null for none), and the mirror's picture and camera, for the dev page and the tests. */
@@ -366,8 +376,16 @@ export function createLiquidView() {
       }
       hold = holdStep(hold, now, seen, view.force);
       stats.split = hold.split;
-      mirrorRec = mirrors && hold.split ? pickMirror(cands, mirrorRec) : null;
-      stats.mirror.on = !!mirrorRec;
+      const pick = mirrors && hold.split ? pickMirror(cands, chosen) : null;
+      // (a sliver of water is not worth the room drawn again: the pass is on while the surface covers enough of the
+      // picture, with a margin either way; its weight fades in above that, so the switch is never seen)
+      if (pick !== chosen) gateOn = false;
+      chosen = pick;
+      const cover = pick ? coverOf(pick) : 0;
+      gateOn = !!pick && mirrorGate(gateOn, cover);
+      weight = gateOn ? mirrorWeight(cover) : 0;
+      mirrorRec = gateOn && weight > 0 ? pick : null;
+      Object.assign(stats.mirror, { on: !!mirrorRec, chosen: !!pick, cover, weight });
       return hold.split;
     },
     /**
@@ -388,7 +406,7 @@ export function createLiquidView() {
             if (!rec.live || rec.under || !rec.pairs) continue;
             const o = worldPlane(rec);
             if (Math.abs(o[3] - y[3]) > MIRROR.samePlane || o[1] < 0.999) continue;
-            for (const p of rec.pairs) { p.material.uniforms.uMirrorOn.value = 1; lit.push(p); }
+            for (const p of rec.pairs) { p.material.uniforms.uMirrorOn.value = weight; lit.push(p); }
             stats.mirror.surfaces++;
           }
         }
@@ -466,7 +484,7 @@ export function createLiquidView() {
     dispose() {
       copy?.depthTexture?.dispose(); copy?.dispose(); copyMat?.dispose(); quad?.geometry.dispose();
       copy = copyMat = quad = null; hold = { last: -Infinity, split: false };
-      mirrorTarget?.dispose(); mirrorTarget = null; mirrorRec = null; shared.tMirror.value = null;
+      mirrorTarget?.dispose(); mirrorTarget = null; mirrorRec = chosen = null; gateOn = false; weight = 0; shared.tMirror.value = null;
     },
   };
   return view;
