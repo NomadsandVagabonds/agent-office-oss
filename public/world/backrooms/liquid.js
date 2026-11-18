@@ -20,8 +20,10 @@
 //      multisampled, and is drawn into again next);
 //   3. over: the water (it writes depth: the haze and the bloom read the surface), the see-through things, then what is
 //      held (hand.js holdInFront, as ever), into the same target, which is not cleared.
-// Where the eye is under a surface (its plane plus 2 cm), that surface is not drawn: the room's sheet is, and the
-// waterpark's veil, as now. Everything changed for the draw is put back in a finally.
+// Where the eye is under a surface (its plane plus 2 cm) and in its water (inside its rim, a sheet facing up), the
+// surface's underside is drawn in the same place with a material of its own (LIQUID_UNDER_FRAG, the same uniforms),
+// and the waterpark's veil over it as ever; under the plane anywhere else (outside the rim, or under the return pool's
+// upside-down upper pool) the room's own sheet is. Everything changed for the draw is put back in a finally.
 //
 // The wake: each surface that is up keeps a small pool of rings (liquid.rule.js wakeStart / wakeStep / wakeFill), timed by
 // the camcorder's own clock (frame()'s `now`). A room or a creature starts one through the handle c.liquid gave it
@@ -29,7 +31,7 @@
 // index.js calls once a frame). Where the tier has no water there is no view, rec.disturb is never set, and the handle's
 // call does nothing.
 import * as THREE from 'three';
-import { LIQUID, underwater, holdStep, toLinear, waterColours, wakeStart, wakeStep, wakeFill, wadeStep, LIQUID_VERT, LIQUID_FRAG, COPY_FRAG } from './liquid.rule.js';
+import { LIQUID, underwater, holdStep, toLinear, waterColours, wakeStart, wakeStep, wakeFill, wadeStep, LIQUID_VERT, LIQUID_FRAG, COPY_FRAG, LIQUID_UNDER_FRAG, seesUnderside } from './liquid.rule.js';
 import { HELD_ORDER } from './beam-shadows.rule.js';
 import { collectLiquids } from './liquid.mark.js';
 
@@ -91,6 +93,42 @@ export function waterMaterial(old, rec, toRoom, shared) {
   return material;
 }
 
+/** The same surface seen from below: the top's very uniforms, the underside's shader (made the first time an eye is under it). */
+export function undersideMaterial(pair, rec) {
+  const top = pair.material;
+  const material = new THREE.ShaderMaterial({ defines: { ...top.defines }, vertexShader: LIQUID_VERT, fragmentShader: LIQUID_UNDER_FRAG,
+    uniforms: top.uniforms, side: THREE.DoubleSide, transparent: false, depthWrite: true, depthTest: true });
+  material.name = `liquid:${rec.kind}:underside`;
+  rec.kit?.own?.(material);
+  return material;
+}
+
+/**
+ * A flat mark's rim and which way it faces, in its room's frame (for the eye under it): → { rim: { x0, z0, x1, z1 },
+ * facesUp } — facesUp when the sheet's first triangle turns its front to the ceiling (a pool, its water below it; the
+ * return pool's upside-down upper pool faces down).
+ */
+export function sheetRim(rec) {
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity, facesUp = null;
+  const m = new THREE.Matrix4(), p = new THREE.Vector3(), a = new THREE.Vector3(), b = new THREE.Vector3();
+  rec.meshes.forEach((mesh, i) => {
+    const pos = mesh.geometry?.attributes?.position;
+    if (!pos) return;
+    m.fromArray(rec.toRoom[i]);
+    for (let j = 0; j < pos.count; j++) {
+      p.fromBufferAttribute(pos, j).applyMatrix4(m);
+      x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z);
+    }
+    if (facesUp !== null || pos.count < 3) return;
+    const idx = mesh.geometry.index, at = (k) => (idx ? idx.getX(k) : k);
+    p.fromBufferAttribute(pos, at(0)).applyMatrix4(m);
+    a.fromBufferAttribute(pos, at(1)).applyMatrix4(m).sub(p);
+    b.fromBufferAttribute(pos, at(2)).applyMatrix4(m).sub(p);
+    facesUp = a.cross(b).y > 0;
+  });
+  return { rim: Number.isFinite(x0) ? { x0, z0, x1, z1 } : null, facesUp: !!facesUp };
+}
+
 /**
  * The camcorder's view of the marks (vhs.js makes one only while a tier's water is on). frame() once a frame before the
  * scene is drawn: → whether to draw it in two parts. draw() does that, into a target the caller has set and cleared,
@@ -105,7 +143,7 @@ export function createLiquidView() {
   const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const list = [], frustum = new THREE.Frustum(), pv = new THREE.Matrix4(), inv = new THREE.Matrix4(), eye = new THREE.Vector3(), at = new THREE.Vector3();
   const box = new THREE.Box3(), mv = new THREE.Matrix4();
-  const stats = { marks: 0, up: 0, inView: 0, under: 0, split: false, draws: 0, rings: 0 };
+  const stats = { marks: 0, up: 0, inView: 0, under: 0, below: 0, split: false, draws: 0, rings: 0 };
   let clock = 0, body = null;                             // (the camcorder's clock as of the last frame; the visitor's wade)
   const toPart = new THREE.Matrix4(), pt = new THREE.Vector3();
   // a point in the part's coordinates (the world's, as c.toWorld gives them) in a surface's room frame
@@ -174,10 +212,10 @@ export function createLiquidView() {
       frustum.setFromProjectionMatrix(pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
       eye.setFromMatrixPosition(camera.matrixWorld);
       let seen = false;
-      Object.assign(stats, { marks: list.length, up: 0, inView: 0, under: 0, rings: 0 });
+      Object.assign(stats, { marks: list.length, up: 0, inView: 0, under: 0, below: 0, rings: 0 });
       for (const rec of list) {
         if (rec.state === 'marked') upgrade(rec);
-        rec.live = false; rec.under = false;
+        rec.live = false; rec.under = false; rec.below = false;
         if (rec.state !== 'up') continue;
         stats.up++;
         // the wake: what has faded let go, the rest handed to the shader (none: uRingN 0, and the surface is as it was)
@@ -187,7 +225,14 @@ export function createLiquidView() {
         if (!rec.pairs.some((p) => shown(p.old))) continue;
         rec.live = true;
         at.copy(eye).applyMatrix4(inv.copy(rec.rt.group.matrixWorld).invert());
-        if ((rec.under = underwater(at.y, rec.plane.y))) { stats.under++; continue; }
+        if ((rec.under = underwater(at.y, rec.plane.y))) {
+          stats.under++;
+          // (in the water, inside its rim, under a pool's surface: its underside is drawn; anywhere else under the plane,
+          // the room's own sheet, as before)
+          rec.edge ||= sheetRim(rec);
+          if (!(rec.below = seesUnderside(at, rec.plane.y, rec.edge.rim, rec.edge.facesUp))) continue;
+          stats.below++;
+        }
         for (const p of rec.pairs) {
           if (!shown(p.old)) continue;
           box.copy(p.old.geometry.boundingBox).applyMatrix4(p.old.matrixWorld);
@@ -210,8 +255,11 @@ export function createLiquidView() {
       try {
         // the water on, the room's sheet off, where the sheet is shown and the eye is above it
         for (const rec of list) {
-          if (!rec.live || rec.under) continue;
-          for (const p of rec.pairs) if (shown(p.old)) { p.water.visible = true; p.old.visible = false; swapped.push(p); }
+          if (!rec.live || (rec.under && !rec.below)) continue;
+          for (const p of rec.pairs) if (shown(p.old)) {
+            if (rec.below) p.water.material = p.under ||= undersideMaterial(p, rec);
+            p.water.visible = true; p.old.visible = false; swapped.push(p);
+          }
         }
         // what is drawn after the copy: the water, everything see-through, what is held
         scene.traverseVisible((o) => {
@@ -238,7 +286,7 @@ export function createLiquidView() {
         stats.draws++;
       } finally {
         for (let i = 0; i < moved.length; i += 2) moved[i].layers.mask = moved[i + 1];
-        for (const p of swapped) { p.water.visible = false; p.old.visible = true; }
+        for (const p of swapped) { p.water.visible = false; p.old.visible = true; p.water.material = p.material; }
         camera.layers.mask = camMask; scene.background = bg; renderer.autoClear = autoClear;
         renderer.setRenderTarget(was);
       }
@@ -269,7 +317,7 @@ export function createLiquidView() {
     release(scene) {
       for (const rec of collectLiquids(scene)) {
         if (rec.state !== 'up') continue;
-        for (const p of rec.pairs) { p.water.parent?.remove(p.water); p.material.dispose(); }
+        for (const p of rec.pairs) { p.water.parent?.remove(p.water); p.material.dispose(); p.under?.dispose(); }
         rec.pairs = null; rec.state = 'marked'; rec.live = false; rec.wake = null; rec.disturb = null;
       }
       body = null;
