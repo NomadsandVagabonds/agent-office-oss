@@ -43,7 +43,7 @@
 // flat tint. At water 1 (Medium) none of it exists: no define, no picture, no pass.
 import * as THREE from 'three';
 import { LIQUID, underwater, holdStep, toLinear, waterColours, wakeStart, wakeStep, wakeFill, wadeStep, LIQUID_VERT, LIQUID_FRAG, COPY_FRAG, LIQUID_UNDER_FRAG, seesUnderside,
-  MIRROR, mirrorPlane, reflectMatrix, planeInView, obliqueProjection, mirrorSize, pickMirror, mirrorLeaves, screenCover, mirrorGate, mirrorWeight } from './liquid.rule.js';
+  MIRROR, mirrorPlane, reflectMatrix, planeInView, obliqueProjection, mirrorSize, pickMirror, mirrorLeaves, screenCover, mirrorGate, mirrorWeight, mirrorDue } from './liquid.rule.js';
 import { HELD_ORDER } from './beam-shadows.rule.js';
 import { collectLiquids } from './liquid.mark.js';
 
@@ -165,6 +165,10 @@ export function createLiquidView() {
   let level = 1, mirrorRec = null, mirrorTarget = null;
   // (the surface chosen for the mirror, whether the pass is on for it (its cover's hysteresis), and its weight on the water)
   let chosen = null, gateOn = false, weight = 0;
+  // (every other frame, MIRROR.every 2: the picture it holds and the world-to-picture matrix it was drawn with; the
+  // camcorder's frame count; null whenever no surface has the mirror, so the first frame one comes into view draws)
+  let held = null, frameNo = 0;
+  const heldVP = new THREE.Matrix4();
   const corner = new THREE.Vector3();
   // the share of the picture a surface's rim covers (its sheet's extent in its room frame, at its plane)
   const coverOf = (rec) => {
@@ -242,6 +246,8 @@ export function createLiquidView() {
       renderer.render(scene, mirrorCam);
       shared.tMirror.value = mirrorTarget.texture;
       shared.uMirror.value.multiplyMatrices(mirrorCam.projectionMatrix, mT);
+      heldVP.multiplyMatrices(mirrorCam.projectionMatrix, mirrorCam.matrixWorldInverse);
+      held = { rec, frame: frameNo, w, h };
       ms.drawn++;
     } finally {
       for (const o of hidden) o.visible = true;
@@ -318,9 +324,11 @@ export function createLiquidView() {
     /** The tier's water (graphics.js): 2 has the mirror; under 2 its picture is let go and no surface compiles it. */
     setLevel(n) {
       level = Number(n) || 0;
-      if (level < 2) { mirrorRec = chosen = null; gateOn = false; weight = 0; stats.mirror.on = false; mirrorTarget?.dispose(); mirrorTarget = null; shared.tMirror.value = null; }
+      if (level < 2) { mirrorRec = chosen = null; gateOn = false; weight = 0; held = null; stats.mirror.on = false; mirrorTarget?.dispose(); mirrorTarget = null; shared.tMirror.value = null; }
     },
     get level() { return level; },
+    /** How often the mirror's pass runs (MIRROR.every unless set here: 1, 2 or 3), e.g. `__backrooms.vhs.liquids.mirrorEvery = 2` on the dev page. */
+    mirrorEvery: MIRROR.every,
     /** The surface that has the mirror this frame (null for none), and the mirror's picture and camera, for the dev page and the tests. */
     get mirror() { return mirrorRec ? { rec: mirrorRec, target: mirrorTarget, camera: mirrorCam } : null; },
     get split() { return hold.split; },
@@ -328,6 +336,7 @@ export function createLiquidView() {
     get marks() { return list.slice(); },
     /** Once a frame, before the scene is drawn: the marks of the parts that are up, made into water where they are not yet, and whether one is in view. */
     frame(scene, camera, now) {
+      frameNo++;
       list.length = 0; collectLiquids(scene, list);
       shared.uTime.value = now; clock = now;
       camera.updateMatrixWorld();
@@ -385,6 +394,7 @@ export function createLiquidView() {
       gateOn = !!pick && mirrorGate(gateOn, cover);
       weight = gateOn ? mirrorWeight(cover) : 0;
       mirrorRec = gateOn && weight > 0 ? pick : null;
+      if (!mirrorRec) held = null;
       Object.assign(stats.mirror, { on: !!mirrorRec, chosen: !!pick, cover, weight });
       return hold.split;
     },
@@ -400,7 +410,16 @@ export function createLiquidView() {
         // the mirror first (water 2, a surface chosen this frame): into its own picture, everything it changed put back
         stats.mirror.surfaces = 0;
         if (mirrorRec && level >= 2) {
-          mirrorPass(renderer, scene, camera, target, mirrorRec);
+          const [w, h] = mirrorSize(target.width, target.height);
+          stats.mirror.fresh = mirrorDue(held, { rec: mirrorRec, frame: frameNo, w, h }, view.mirrorEvery);
+          if (stats.mirror.fresh) mirrorPass(renderer, scene, camera, target, mirrorRec);
+          else {
+            // (a frame in between: the last picture, looked up through the matrix it was drawn with, from where the eye is
+            // now: the reflection is of the room as seen from where the eye was then, but it does not slide)
+            camera.updateMatrixWorld();
+            shared.uMirror.value.multiplyMatrices(heldVP, camera.matrixWorld);
+            stats.mirror.skipped = (stats.mirror.skipped || 0) + 1;
+          }
           const y = worldPlane(mirrorRec);
           for (const rec of list) {
             if (!rec.live || rec.under || !rec.pairs) continue;
@@ -484,7 +503,7 @@ export function createLiquidView() {
     dispose() {
       copy?.depthTexture?.dispose(); copy?.dispose(); copyMat?.dispose(); quad?.geometry.dispose();
       copy = copyMat = quad = null; hold = { last: -Infinity, split: false };
-      mirrorTarget?.dispose(); mirrorTarget = null; mirrorRec = chosen = null; gateOn = false; weight = 0; shared.tMirror.value = null;
+      mirrorTarget?.dispose(); mirrorTarget = null; mirrorRec = chosen = null; gateOn = false; weight = 0; held = null; shared.tMirror.value = null;
     },
   };
   return view;

@@ -17,7 +17,7 @@ register('data:text/javascript,' + encodeURIComponent(`export function resolve(s
 const THREE = await import('three');
 const { createKit, Batch } = await import('../public/world/backrooms/kit.js');
 const { markLiquid, createLiquidView } = await import('../public/world/backrooms/liquid.js');
-const { LIQUID_FRAG, LIQUID_UNDER_FRAG, MIRROR, mirrorPlane, reflectMatrix, planeInView, obliqueProjection, mirrorSize, pickMirror, mirrorLeaves, screenCover, mirrorGate, mirrorWeight } = await import('../public/world/backrooms/liquid.rule.js');
+const { LIQUID_FRAG, LIQUID_UNDER_FRAG, MIRROR, mirrorPlane, reflectMatrix, planeInView, obliqueProjection, mirrorSize, pickMirror, mirrorLeaves, screenCover, mirrorGate, mirrorWeight, mirrorDue } = await import('../public/world/backrooms/liquid.rule.js');
 const { createVhs } = await import('../public/world/backrooms/vhs.js');
 const { HELD_ORDER } = await import('../public/world/backrooms/beam-shadows.rule.js');
 
@@ -337,6 +337,46 @@ test('the pass for a sliver: on from coverOn, off under coverOff, its weight fad
   const last = back.findIndex((s) => !s.on);
   assert.ok(last > 0 && back[last].cover < MIRROR.coverOff && back.slice(0, last).every((s) => s.cover >= MIRROR.coverOff));
   view.release(scene); p.kit.dispose();
+});
+
+test('every other frame (MIRROR.every 2): off by default; the pass on alternate frames, the picture between read through the matrix it was drawn with', () => {
+  assert.equal(MIRROR.every, 1, 'every frame unless a real machine asks for less');
+  const a = { id: 'a' }, b = { id: 'b' }, at = (rec, frame, w = 64, h = 48) => ({ rec, frame, w, h });
+  assert.equal(mirrorDue(null, at(a, 5), 2), true, 'no picture yet: drawn');
+  assert.equal(mirrorDue(at(a, 4), at(a, 5), 1), true, 'every frame at 1');
+  assert.equal(mirrorDue(at(a, 4), at(a, 5), 2), false); assert.equal(mirrorDue(at(a, 4), at(a, 6), 2), true);
+  assert.equal(mirrorDue(at(a, 4), at(a, 6), 3), false); assert.equal(mirrorDue(at(a, 4), at(a, 7), 3), true);
+  assert.equal(mirrorDue(at(a, 4), at(b, 5), 2), true, 'another surface: drawn');
+  assert.equal(mirrorDue(at(a, 4, 64, 48), at(a, 5, 32, 24), 2), true, 'a new size: drawn');
+  assert.equal(mirrorDue(at(a, 4), at(a, 4), 2), true, 'twice in one frame: drawn again, never trusted');
+  assert.equal(mirrorDue(at(a, 4), at(a, 5), 9), false, 'clamped to 3'); assert.equal(mirrorDue(at(a, 4), at(a, 5), 0), true, 'and to 1');
+
+  const kit = createKit(), p1 = pool({ kit }), p3 = pool({ kit, at: [6, -0.4, -4] });
+  const { scene, cam } = stage(p1.group, p3.group), view = createLiquidView(); view.setLevel(2);
+  const passes = (t = target()) => { view.frame(scene, cam, 0); const r = fakeRenderer(); view.draw(r, scene, cam, t, () => r.render(scene, cam)); return r.log.filter((l) => l.camera === view.mirror?.camera).length; };
+  look(cam, [0, 1.6, 2.5], [0, -0.05, -3]); scene.updateMatrixWorld(true);
+  const t0 = target();
+  assert.deepEqual([1, 2, 3, 4].map(() => passes(t0)), [1, 1, 1, 1], 'at 1: every frame');
+  view.mirrorEvery = 2;
+  assert.deepEqual([1, 2, 3, 4, 5].map(() => passes(t0)), [0, 1, 0, 1, 0], 'at 2: alternate frames');
+  // the frame it is drawn: what it was drawn with kept; the next, turned a little, reads it through that and not this frame's
+  view.mirrorEvery = 2; passes(t0); if (view.stats.mirror.fresh === false) passes(t0);
+  assert.equal(view.stats.mirror.fresh, true);
+  const mc = view.mirror.camera, drawnVP = new THREE.Matrix4().multiplyMatrices(mc.projectionMatrix, mc.matrixWorldInverse);
+  cam.rotation.y += 0.03; cam.position.x += 0.02; cam.updateMatrixWorld();
+  passes(t0); assert.equal(view.stats.mirror.fresh, false);
+  const W = new THREE.Vector3(0.7, -0.05, -1.5);                      // a point on the water
+  const viaNow = new THREE.Vector4(...W.clone().applyMatrix4(cam.matrixWorldInverse).toArray(), 1).applyMatrix4(view.shared.uMirror.value);
+  const whenDrawn = new THREE.Vector4(W.x, W.y, W.z, 1).applyMatrix4(drawnVP);
+  assert.ok(near(viaNow.x / viaNow.w, whenDrawn.x / whenDrawn.w, 1e-9) && near(viaNow.y / viaNow.w, whenDrawn.y / whenDrawn.w, 1e-9), 'the same place in the picture it was drawn into: no sliding');
+  // the first frame a surface comes into view always draws; another surface, or a new size, draws at once
+  look(cam, [0, 1.6, 2.5], [0, 1.6, 9]); passes(t0); assert.equal(view.mirror, null);
+  look(cam, [0, 1.6, 2.5], [0, -0.05, -3]);
+  for (let i = 0; i < 4; i++) { look(cam, [0, 1.6, 2.5], [0, 1.6, 9]); passes(t0); look(cam, [0, 1.6, 2.5], [0, -0.05, -3]); assert.equal(passes(t0), 1, `back in view (${i}): drawn`); }
+  passes(t0); assert.equal(view.stats.mirror.fresh, false);
+  assert.equal(passes(target(128, 96)), 1, 'resized: drawn');
+  look(cam, [6, 1.2, -1], [6, -0.45, -4]); assert.equal(passes(t0), 1); assert.equal(view.mirror.rec, p3.rec, 'another surface: drawn');
+  view.release(scene); kit.dispose();
 });
 
 test('the mark is documented where builders look', () => {
