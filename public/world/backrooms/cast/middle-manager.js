@@ -25,7 +25,7 @@ const PAPER = ['#f2efe6', '#e9e4d6', '#f6f3ec', '#d9d3c2', '#f2e9a6', '#dfe9f2']
 export function create(c) {
   const env = c.env, level = c.level, Mg = MANAGER;
   const walker = { x: 0, z: 0, r: Mg.r, tall: Mg.ducks, opens: false };
-  let s = fresh(), fear = unafraid(), group = null, mat = null, thin = null, full = null, neck = null, head = null, heads = [], limbs = [], shoes = [];
+  let s = fresh(), fear = unafraid(), group = null, mat = null, thin = null, full = null, neck = null, rawNeck = null, head = null, heads = [], limbs = [], shoes = [];
   let reel = 0, popped2 = false, extras = [], rot = 0, lean = 0, phase = 0, clock = 0, lastX = 0, lastZ = 0, known = false, over = false, wanderT = 0, goal = null, goalT = 0, leaving = false, kept = unkept(c.R), debris = null;
   const doors = new Map();
   const vx = new THREE.Vector3(), vy = new THREE.Vector3(), vz = new THREE.Vector3(), basis = new THREE.Matrix4();
@@ -55,12 +55,12 @@ export function create(c) {
     mat = env.kit.surface({ vox: true, wet: 0.2 });
     group = new THREE.Group();
     thin = part(geo('manager:torso:thin3', () => torsoVox(false))); full = part(geo('manager:torso:full4', () => torsoVox(true).downsample(2), 2));          // (big enough to be built at half the grain) full.visible = false;
-    neck = part(geo('manager:neck', neckVox));
+    neck = part(geo('manager:neck', () => neckVox(false))); rawNeck = part(geo('manager:neck:raw', () => neckVox(true)));
     // its face, as fed as it is: sad, nothing, pleased, the grin (the owner's). One head each; the one it has on is shown
-    heads = Array.from({ length: FACES }, (_, f) => part(geo(`manager:head3:${f}`, () => headVox(f)))); head = heads[0];
-    const upper = geo('manager:upper3', () => sleeveVox(UPPER)), fore = geo('manager:fore3', () => sleeveVox(FORE, true)), watch = geo('manager:fore3:watch', () => sleeveVox(FORE, true, 4.6, true)), hand = geo('manager:hand3', handVox);
+    heads = Array.from({ length: FACES }, (_, f) => part(geo(`manager:head4:${f}`, () => headVox(f)))); head = heads[0];
+    const upper = geo('manager:upper3', () => sleeveVox(UPPER)), fore = geo('manager:fore3', () => sleeveVox(FORE, true)), watch = geo('manager:fore3:watch', () => sleeveVox(FORE, true, 4.6, true)), hand = geo('manager:hand3', () => handVox(false)), rawHand = geo('manager:hand3:raw', () => handVox(true));
     const thigh = geo('manager:thigh', () => trouserVox(THIGH)), shin = geo('manager:shin2', () => trouserVox(SHIN, 5.2, true)), shoe = geo('manager:shoe', shoeVox);
-    for (const side of [-1, 1]) limbs.push({ arm: true, side, a: part(upper), b: part(side < 0 ? watch : fore), end: part(hand) });          // (a watch on its left wrist)
+    for (const side of [-1, 1]) limbs.push({ arm: true, side, a: part(upper), b: part(side < 0 ? watch : fore), end: part(hand), raw: part(rawHand) });          // (a watch on its left wrist; and a hand that has turned)
     for (const side of [-1, 1]) { limbs.push({ arm: false, side, a: part(thigh), b: part(shin), end: null }); shoes.push(part(shoe)); }
     c.add(group);
     // (gone off, it is nobody's to walk round: its body is let go)
@@ -121,7 +121,9 @@ export function create(c) {
     const sh = { x: hip.x + dir.x * T, y: hip.y + dir.y * T, z: hip.z + dir.z * T }, half = (thin.visible ? 13 : 34) * S * wide;          // (its shoulders are where the jacket's shoulders are, however far out it has got)
     // the neck and the head: down further than the body, and turned to whoever it is having its meeting with
     const na = lean * Mg.neck, ha = lean * Mg.head, nd = { x: fx * Math.sin(na), y: Math.cos(na), z: fz * Math.sin(na) };
-    neck.position.set(sh.x, sh.y, sh.z); aim(neck, nd.x, nd.y, nd.z, fx * Math.cos(na), -Math.sin(na), fz * Math.cos(na), N, N, B.neck);
+    // (fed near to full, its neck and its hands have turned too: raw, engorged)
+    const turned = swell > 0 || fat >= 0.8; neck.visible = !turned; rawNeck.visible = turned; const nk = turned ? rawNeck : neck;
+    nk.position.set(sh.x, sh.y, sh.z); aim(nk, nd.x, nd.y, nd.z, fx * Math.cos(na), -Math.sin(na), fz * Math.cos(na), N, N, B.neck);
     const hb = { x: sh.x + nd.x * N, y: sh.y + nd.y * N, z: sh.z + nd.z * N };
     const look = m ? Math.atan2(m.x - hb.x, m.z - hb.z) : rot, turn = Math.atan2(Math.sin(look - rot), Math.cos(look - rot)), tl = Math.max(-1, Math.min(1, turn));
     const face = swell > 0 || fat >= 0.8 ? 3 : fat >= 0.5 ? 2 : fat >= 0.22 ? 1 : 0;
@@ -140,7 +142,8 @@ export function create(c) {
         const hl = Math.min(F, Math.hypot(hand.x - e.x, hand.y - e.y, hand.z - e.z));
         l.b.position.set(e.x, e.y, e.z); aim(l.b, hand.x - e.x, hand.y - e.y, hand.z - e.z, fx, 0, fz, F, F, B.arm * 0.92);
         const hx = e.x + (hand.x - e.x) / (hl || 1) * F, hy = e.y + (hand.y - e.y) / (hl || 1) * F, hz = e.z + (hand.z - e.z) / (hl || 1) * F;
-        l.end.position.set(hx, hy, hz); aim(l.end, hand.x - e.x, hand.y - e.y, hand.z - e.z, fx, 0, fz, HAND * S, HAND * S, B.hand);
+        l.end.visible = !turned; l.raw.visible = turned; const hd = turned ? l.raw : l.end;
+        hd.position.set(hx, hy, hz); aim(hd, hand.x - e.x, hand.y - e.y, hand.z - e.z, fx, 0, fz, HAND * S, HAND * S, B.hand);
       } else {
         // its feet: one in front of the other, the far one lifting
         const ph = phase + (l.side > 0 ? Math.PI : 0), fore = moved > 0 || s.speed > 0 ? Math.sin(ph) * stride * 0.5 : 0, lift = moved > 0 ? Math.max(0, Math.cos(ph)) * 0.12 : 0;

@@ -26,6 +26,25 @@ export const STANDS = (THIGH + SHIN + SHOE + TORSO + NECK + HEAD) * S;
 const SUIT = '#47433c', SUIT2 = '#3d3a34', SHIRT = '#d9d5c6', TIE = '#5d5a3c', TIE2 = '#77653f', SOCK = '#22262e', SKIN = '#d8c4b1', SKIN2 = '#cbb5a1', SKIN3 = '#bca390';
 const LANYARD = '#3f7f86';
 
+/**
+ * Its skin as it gets near to full: the same flesh as the lines and Mother (cast/mother.model.js) — four reds that do not
+ * agree, a bruise where three waves meet, a vein now and then — at this finer grain (0.4: the same size of blotch on it).
+ * (The owner: "on the final stages the skin converts to be similar to what we used on telephone pole monster, mother etc.
+ * Like it is getting engorged".)
+ */
+const RAW = ['#b4756a', '#a5645b', '#c48a7d', '#8f5148'], BRUISE = '#5e3540', VEIN = '#4a2a3c';
+export function fleshOf(k = 0, grain = 0.4) {
+  const raw = RAW.map((c) => M(c, 0)), bruise = M(BRUISE, 0), vein = M(VEIN, 0);
+  return (X, Y, Z) => {
+    const x = X * grain, y = Y * grain, z = Z * grain, h = Math.sin(x * 0.61 + y * 1.3 + k * 2.1) + Math.sin(z * 0.83 - y * 0.7 + k) + Math.sin((x + z) * 0.37 - k * 1.7);
+    if (h > 2.15) return bruise;
+    if (Math.abs(Math.sin(x * 0.9 + k * 3) * 4 + Math.sin(y * 0.5 + z * 0.4) * 3 - z * 0.6) < 0.2) return vein;
+    return raw[Math.abs(Math.floor(h * 1.4 + 8)) % 4];
+  };
+}
+/** How much of it has turned, by face (0…3): none, none, blotches up from the neck, all of it. */
+export const TURNED = Object.freeze([0, 0, 0.4, 1]);
+
 /** A smooth solid of revolution about +y: radius r(k) at height k = 0…1 of `len`, and `depth` its front-to-back share. */
 function lathe(v, len, r, color, depth = 1, x0 = 0, z0 = 0) {
   for (let y = 0; y <= len; y++) {
@@ -42,7 +61,7 @@ function lathe(v, len, r, color, depth = 1, x0 = 0, z0 = 0) {
  */
 export function torsoVox(full = false) {
   const v = new Vox(), suit = M(SUIT, 0), suit2 = M(SUIT2, 0), shirt = M(SHIRT, 0), tie = M(TIE, 0), tie2 = M(TIE2, 0), skin = M(SKIN2, 0), belly = M(SKIN, 0), navel = M(SKIN3, 0), button = M('#08080a', 0);
-  const strap = M(LANYARD, 0), card = M('#ece9df', 0), blank = M('#b9b4a8', 0), band = M(LANYARD, 0), clip = M('#9a9a96', 0), paper = M('#f3f0e6', 0), paper2 = M('#e2dccb', 0);
+  const strap = M(LANYARD, 0), card = M('#ece9df', 0), blank = M('#b9b4a8', 0), band = M(LANYARD, 0), clip = M('#9a9a96', 0), paper = M('#f3f0e6', 0), paper2 = M('#e2dccb', 0), flesh = fleshOf(3, 0.5);
   // thin: a waist like a wrist, a narrow chest, and the shoulders squared by the jacket. Full: round as a sack, lowest at the belly
   const w = full ? (k) => 18 + Math.sin(Math.min(1, k * 1.15) * Math.PI) * 26 + (k > 0.86 ? (k - 0.86) * 40 : 0) : (k) => 7 + k * 5 + (k > 0.84 ? (k - 0.84) * 45 : 0);
   const d = full ? 1.0 : 0.62;
@@ -54,12 +73,12 @@ export function torsoVox(full = false) {
     const open = Math.abs(x) < 9 + k * 12, gape = k < 0.62 && Math.abs(x) < 15 - k * 12;
     // the seams down its sides have gone: paper in the splits
     if (Math.abs(Math.abs(x) - rx * 0.93) < 1.2 && Math.abs(z) < rx * 0.35 && y % 5 < 3) return y % 2 ? paper : paper2;
-    if (front && gape) return y === 14 && Math.abs(x) < 2 ? navel : belly;
+    if (front && gape) return y === 14 && Math.abs(x) < 2 ? navel : flesh(x, y, z);          // (the belly, engorged: raw, veined)
     if (front && open) return Math.abs(Math.abs(x) - (15 - k * 12)) < 1.5 && y % 3 === 0 ? paper : shirt;          // (and at the torn edge of the shirt)
     return Math.abs(x) > rx * 0.82 ? suit2 : suit;
   }, d);
   // full: the belly comes out further in front than the rest of it
-  if (full) v.ellipsoid(0, Math.round(TORSO * 0.32), Math.round(w(0.32) * 0.75), 17, 15, 10, (x, y, z) => (z > 0 && Math.abs(x) < 15 - (y / TORSO) * 12 ? (y === 14 && Math.abs(x) < 2 ? navel : belly) : suit));
+  if (full) v.ellipsoid(0, Math.round(TORSO * 0.32), Math.round(w(0.32) * 0.75), 17, 15, 10, (x, y, z) => (z > 0 && Math.abs(x) < 15 - (y / TORSO) * 12 ? (y === 14 && Math.abs(x) < 2 ? navel : flesh(x, y, z)) : suit));
   const front = (x, y) => { let z = 90; while (z > -90 && !v.has(x, y, z)) z--; return z; };
   // the tie: narrow, from the collar down; full, it lies on top of the belly and stops well short
   const tieFrom = full ? Math.round(TORSO * 0.55) : Math.round(TORSO * 0.18);
@@ -79,9 +98,9 @@ export function torsoVox(full = false) {
 }
 
 /** Its neck and its collar: long, thin, along +y from the shoulders. */
-export function neckVox() {
-  const v = new Vox(), skin = M(SKIN2, 0), shirt = M(SHIRT, 0);
-  lathe(v, NECK, (k) => 3.6 - k * 0.6, skin);
+export function neckVox(raw = false) {
+  const v = new Vox(), skin = M(SKIN2, 0), shirt = M(SHIRT, 0), flesh = fleshOf(11);
+  lathe(v, NECK, (k) => 3.6 - k * 0.6, raw ? flesh : skin);
   lathe(v, 5, () => 5.5, shirt);
   return v;
 }
@@ -100,7 +119,9 @@ export const FACES = 4;
  */
 export function headVox(face = 0) {
   const v = new Vox(), pale = M(SKIN, 0), mid = M(SKIN2, 0), back = M(SKIN3, 0);          // (sallow, not white: somebody's, once)
-  lathe(v, HEAD, (k) => { const t = k * 2 - 1; return Math.max(0.5, Math.sqrt(Math.max(0, 1 - t * t)) * (9.5 + k * 1.8)); }, (x, y, z) => (z > 3 ? pale : z > -4 ? mid : back), 1.05);
+  // (fed far enough, it turns: blotches of raw flesh up from the neck, and at the last all of it, engorged)
+  const flesh = fleshOf(7), turned = TURNED[face] ?? 0, turns = (x, y, z) => turned >= 1 || (turned > 0 && (1 - y / HEAD) * 1.4 + Math.sin(x * 0.7 + z * 0.5) * 0.25 + Math.sin(y * 0.9 - x * 0.3) * 0.2 > 1 - turned);
+  lathe(v, HEAD, (k) => { const t = k * 2 - 1; return Math.max(0.5, Math.sqrt(Math.max(0, 1 - t * t)) * (9.5 + k * 1.8)); }, (x, y, z) => (turns(x, y, z) ? flesh(x, y, z) : z > 3 ? pale : z > -4 ? mid : back), 1.05);
   const black = M('#0b0a0a', 0), smear = M('#2a211e', 0), stain = M('#5e5149', 0);
   const front = (x, y) => { for (let z = 20; z > 0; z--) if (v.has(x, y, z)) return z; return null; };
   const dot = (x, y, c, deep = 2) => { const z = front(x, y); if (z === null) return; for (let d = 0; d < deep; d++) v.set(x, y, z - d, c); };
@@ -152,13 +173,14 @@ export function sleeveVox(len, cuff = false, wide = 4.6, watch = false) {
 }
 
 /** A hand: long, pale, the fingers apart and too long by a joint, a little curled, the knuckles standing out. Along +y from the wrist. */
-export function handVox() {
-  const v = new Vox(), skin = M(SKIN2, 0), knuckle = M(SKIN3, 0), nail = M('#e3d6c6', 0);
+export function handVox(raw = false) {
+  const flesh = fleshOf(5), pale = M(SKIN2, 0), knuckle = M(raw ? BRUISE : SKIN3, 0), nail = M(raw ? '#d9cdb0' : '#e3d6c6', 0);
+  const skin = (x, y, z) => (raw ? flesh(x, y, z) : pale), v = new Vox();
   lathe(v, 7, (k) => 3.2 - k * 0.4, skin, 0.55);
   for (const [x, len, curl] of [[-3, 15, 1], [-1, 19, 2], [1, 19, 2], [3, 16, 1]]) {
-    for (let y = 7; y <= 7 + len; y++) { const z = Math.round(((y - 7) / len) ** 2 * curl * 2), j = (y - 7) % 7 === 0; v.set(x, y, z, j ? knuckle : y === 7 + len ? nail : skin); if (j) v.set(x, y, z + 1, knuckle); }
+    for (let y = 7; y <= 7 + len; y++) { const z = Math.round(((y - 7) / len) ** 2 * curl * 2), j = (y - 7) % 7 === 0; v.set(x, y, z, j ? knuckle : y === 7 + len ? nail : skin(x, y, z)); if (j) v.set(x, y, z + 1, knuckle); }
   }
-  for (let y = 0; y <= 10; y++) v.set(-4 - Math.round(y * 0.25), y + 1, Math.round(y * 0.3), skin);         // the thumb
+  for (let y = 0; y <= 10; y++) { const x = -4 - Math.round(y * 0.25), z = Math.round(y * 0.3); v.set(x, y + 1, z, skin(x, y + 1, z)); }         // the thumb
   return v;
 }
 

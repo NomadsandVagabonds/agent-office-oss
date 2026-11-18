@@ -91,7 +91,14 @@ test('its line: it hunts, roams, is met further down, fears fire; a drawing warn
   // the owner, after the first faces: "too cartoony … more glitch/horror/bakcrooms … smeared growing black pupils instead of cartoon white … ones"
   const black = heads.map((m) => [...m.values()].filter((c) => c === 0x0b0a0a).length);
   for (let f = 1; f < 4; f++) assert.ok(black[f] > black[f - 1] * 1.3, `the black grows: ${black}`);
-  for (let f = 0; f < 4; f++) for (const c of heads[f].values()) { const r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255; assert.ok(!(r > 225 && g > 225 && b > 215), 'nothing white in its face'); assert.ok(!(r > g + 60), 'nothing red in its mouth'); }
+  for (let f = 0; f < 4; f++) for (const c of heads[f].values()) { const r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255; assert.ok(!(r > 225 && g > 225 && b > 215), 'nothing white in its face'); if (f < 2) assert.ok(!(r > g + 60), 'unfed, nothing raw'); }
+  // fed near to full it turns (the owner: "the skin converts to be similar to what we used on telephone pole monster, mother etc. Like it is getting engorged"):
+  // Mother's own reds — some of the head on the smile, nearly all of it on the grin
+  const RAW = [0xb4756a, 0xa5645b, 0xc48a7d, 0x8f5148, 0x5e3540, 0x4a2a3c], rawShare = (f) => [...heads[f].values()].filter((c) => RAW.includes(c)).length / heads[f].size;
+  assert.equal(rawShare(1), 0); assert.ok(rawShare(2) > 0.05 && rawShare(2) < 0.6, `the smile: blotches (${rawShare(2).toFixed(2)})`); assert.ok(rawShare(3) > 0.7, `the grin: engorged (${rawShare(3).toFixed(2)})`);
+  const mother = readFileSync(new URL('../public/world/backrooms/cast/mother.model.js', import.meta.url), 'utf8');
+  assert.match(mother, /const RAW = \['#b4756a', '#a5645b', '#c48a7d', '#8f5148'\], BRUISE = '#5e3540'/, 'the same flesh as Mother');
+  assert.match(src, /const turned = swell > 0 \|\| fat >= 0\.8;/, 'its neck and hands turn with it');
   assert.ok(has(0, '#2a211e'), 'the dark runs from its eyes, unfed');
   const tones = new Map(); for (const c of heads[1].values()) tones.set(c, (tones.get(c) || 0) + 1);
   const skin = [...tones].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([c]) => c);
