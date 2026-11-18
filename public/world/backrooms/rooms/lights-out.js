@@ -23,6 +23,10 @@ export function build(c) {
   c.shell({ panels: false, floorTex: kit.tex.carpet(OFFICE_CARPET) });
   // the office's own ceiling, every light of it out, and next to nothing to see by: the tents are the light
   c.rt.amb = [0.03, 0.032, 0.036];
+  // (The room reports one light for each doorway and none else. Those are the shell's own: the light that falls in
+  // through a doorway from next door, 1.4 m up at the threshold (`spill`). They are meant to be here. A dark room with
+  // its doorways lit from outside is how the rest of the building does a dark room; with the camcorder's own lamp,
+  // which comes on in the dark, they are why the walls here read grey and not black.)
   for (const [fx, fz] of [[-W / 4, -D / 4], [W / 4, -D / 4], [-W / 4, D / 4], [W / 4, D / 4]]) c.fitting(Math.round(fx / 0.6) * 0.6 + 0.3, Math.round(fz / 0.6) * 0.6, { dead: true });
 
   // a dozen pitches, in rows that somebody paced out and nobody checked: a grid, each tent a little off its mark
