@@ -15,5 +15,6 @@ import { create as standingMeeting } from './standing-meeting.js';
 import { create as intern } from './intern.js';
 import { create as carriedInterest } from './carried-interest.js';
 import { create as middleManager } from './middle-manager.js';
+import { create as stickyNotes } from './sticky-notes.js';
 
-export const MAKERS = { pirate, shadow, moth, porter, toner, 'other-door': otherDoor, 'the-lines': theLines, dummies, mother, 'head-count': headCount, 'standing-meeting': standingMeeting, intern, 'carried-interest': carriedInterest, 'middle-manager': middleManager };
+export const MAKERS = { pirate, shadow, moth, porter, toner, 'other-door': otherDoor, 'the-lines': theLines, dummies, mother, 'head-count': headCount, 'standing-meeting': standingMeeting, intern, 'carried-interest': carriedInterest, 'middle-manager': middleManager, 'sticky-notes': stickyNotes };
