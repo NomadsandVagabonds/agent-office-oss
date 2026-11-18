@@ -1089,8 +1089,11 @@ and the waterpark is not dealt (`dealt: false`). The dev page reaches it with
   frame, moved by the same ripple slope that bends the bed, softer and wider
   with depth, drifting with the room's phase, fading by e^-0.35 per metre of a
   clear sheet's water (times the murk squared, so the dark green pools show
-  none); it only brightens what it lands on, by up to 1.3 times, and never
-  tints it; a pale line where the surface is within
+  none); it only brightens what it lands on (by up to 2.3 times: `under *=
+  1 + 1.3 k`), and never tints it, and never past the brighter of what it lands
+  on and the room's light at the surface there (`vLit`): a dark bed takes all of
+  it, a pale step in shallow water is held at the room's light, and something
+  brighter than that (a lamp, a screen) is left as bright as it is; a pale line where the surface is within
   6 cm of what is behind it (the basin's walls, the floats, the steps), as
   bright as the room and what is
   under it; a ripple worked out on 5 cm cells of the room's own frame, its
@@ -1118,10 +1121,28 @@ and the waterpark is not dealt (`dealt: false`). The dev page reaches it with
   unaffected. **When no surface is in view the old single pass runs exactly as
   before, at every tier**, and at 0 nothing of it exists (no view, no copy, no
   material, no mesh).
-- **The eye under the surface** (its plane plus 2 cm): that surface is not
-  drawn, the room's own sheet is (the waterpark's veil and underside as now),
-  and it does not count as in view. The return pool's upside-down upper pool is
-  always over the eye, so it keeps its own sheet.
+- **The eye under the surface** (its plane plus 2 cm). In the water (inside
+  the sheet's rim, in its room frame, and the sheet facing up: its first
+  triangle's front to the ceiling, `sheetRim`, `seesUnderside`) the surface's
+  **underside** is drawn in the sheet's place, and counts as in view: the same
+  mesh with a second material, made the first time an eye is under it
+  (`undersideMaterial`, the top's very uniform objects, `LIQUID_UNDER_FRAG`),
+  put back to the top's material in the draw's `finally`. Seen from below it is
+  a dim skin with no mirror: within Snell's window (the critical angle of water
+  to air, 48.6 degrees round straight up, `UNDERSIDE.window`, softened by 0.03
+  of its cosine), what is above, from the copy, at most 0.55 of it, nudged by
+  the ripple's tilt (never onto something in the water in front of it),
+  darkened and tinted by the length of water from the eye to the surface as
+  the top's water darkens what is under it, with the water's own colour in
+  scatter; outside the window, the pool's own colour (its deep colour lit by
+  the room, times 0.7). The window's edge is worked out with the top's very
+  ripple, cells and stepped slope (the top's shader text up to its normal,
+  wake included), so it is blocky as the top is, and a ring passing over tilts
+  it; the wake's crest and trough light is the top's alone, so a ring seen from
+  below adds no light. The waterpark's veil (the cyan box round the eye) is
+  drawn over it as ever. Under the plane anywhere else, the room's own sheet as
+  before and not in view: outside the rim (a lower room beside a pool), and
+  under the return pool's upside-down upper pool, which faces down.
 - **The two ways are the same where there is no water.** At the kiddie
   lagoon's doorway looking out, the two-part draw forced on and off gives the
   same picture: 0 of 576,000 pixels differ, at High (Clean) and at Medium
@@ -1147,6 +1168,76 @@ and the waterpark is not dealt (`dealt: false`). The dev page reaches it with
   4. The drowned monitor's screen is no brighter than under the old sheet.
   5. The wake (next section) has faults of its own, listed there; the first is
      that from the deck its rings read with dark edges.
+  6. **From below (waterpark review 2, its 5): the room's own things.** At
+     every tier, Classic included, what sits in the water near its surface is
+     the room's, and is not ours to change: the Drain Spa's "stack of opaque
+     cyan slabs" is its whirlpool vortex, `vortexBatch` in
+     `rooms/whirlpool-flume.js` (the loop round lines 252 to 263, thirty
+     opaque boxes 26 by 13 by 3.2 cm at 19 to 3 cm under the surface, bright
+     cyan and white, drawn with `c.dynamic`): from the deck they read as foam,
+     from under the water as big flat slabs overhead. Making them see-through
+     (`addTranslucent`, as its flume is) or thin foam lines would be the
+     builder's. The Diving Well's slabs were its sheet: `createBasin`'s
+     `waterSurf` in `waterpark.js` (lines 1245 to 1258, the caustic picture at
+     0.54, double-sided), whose pale webbing from below reads as a lattice of
+     slabs; at Medium and High the underside now replaces it, at Classic and
+     Low it is as it was (the builder's, if Classic is to change: a
+     `side: THREE.FrontSide` sheet and an underside of its own, or the webbing
+     left off the underside). The veil (`veilMat`, waterpark.js line 1269,
+     0.34 to 0.48 cyan, no depth test) lies over everything under the water at
+     every tier, ours included.
+  7. **The Diving Well's pale steps.** Over the steps the caustics went up to
+     2.3 times on white tile already as bright as the room's light, and
+     blew out in white blocks: now held at the room's light (above), which
+     takes off the glitter (8,177 to 11,602 of 576,000 pixels, at most 39 levels, in a
+     view over the steps at Medium and High; the bed, the desk and the walls
+     unchanged).
+     The steps stay pale: they are white tile (`COPING`, `createBasin`'s steps)
+     under 30 cm of clear water in a room lit at about 1.2 at its surface, with
+     four cyan lamps under the water (`deep-end.js` line 96) that the bake
+     lights as if through air; taken out (a throwaway trial), the steps are
+     hardly darker. The old sheet hid half of them; the new surface is clear.
+     Darker steps would be the builder's (a tile tint), or light under a marked
+     surface taken through the water by the bake (shared, not done).
+  8. **From below, what is see-through above the water is not seen.** The
+     underside writes depth and what is see-through is drawn after it, so the
+     Drain Spa's translucent flumes and splash column, over the water, are hidden
+     by the underside rather than seen through Snell's window (the copy it
+     reads holds only what is opaque). As fault 2, the other way up.
+  9. The underside is a flat colour outside the window (the pool's own,
+     lit by the room): no picture of the pool's walls mirrored in it.
+- **The underside's cost.** Nothing at Classic and Low, nor while no eye is
+  under a surface: the same draws and the same picture (below). With the eye in
+  the water it is the top's cost (the split, the copy, the surface in the
+  sheet's place: same mesh, same triangles), where before the eye under water
+  had the single pass; its shader is the top's ripple and a window, cheaper
+  than the top (no caustics, one texture read of each). A second material per
+  surface, made the first time an eye is under it. Counted in the Diving Well,
+  seed 7, Full VHS, the renderer's calls and triangles over every pass of one
+  frame, HEAD (`92884f8`) and this change in the same page load:
+
+  | Diving Well | before | after |
+  |---|---|---|
+  | Medium, on the deck, the pool in view | 148 / 219,323 | 148 / 219,323 |
+  | High, on the deck, the pool in view | 148 / 219,323 | 148 / 219,323 |
+  | Medium, under the water, looking up | 69 / 131,639 | 70 / 131,641 |
+  | High, under the water, looking up | 69 / 131,639 | 70 / 131,641 |
+  | Medium, under the water, looking across | 124 / 208,029 | 125 / 208,031 |
+  | High, under the water, looking across | 124 / 208,029 | 125 / 208,031 |
+
+  (The one call and two triangles are the copy's quad.)
+- **Proof that nothing else moved** (one page load each, the clock paused,
+  HEAD's `liquid.js` grafted onto the live view and HEAD's shader put back on
+  its materials, against this change's): with the eye over the water, the
+  underside's plumbing (this change's `liquid.js` with HEAD's shader, against
+  HEAD's both) gives the same picture, 0 of 576,000 pixels, in the Diving Well
+  (on the deck, over the steps) and the Drain Spa (on the deck), at Medium and
+  High, plain and Full VHS (at Full VHS outside the camcorder's blinking box,
+  which differs between any two draws, as its own controls show). The caustic
+  cap moves only pale things in shallow water: 8,177 to 11,602 pixels over the
+  Diving Well's steps, 19,000 to 32,000 on the decks' views (the steps, the
+  Drain Spa's benches, the edge of a niche lamp), at most 39 levels; the beds,
+  the walls and the desks not at all.
 - **Cost class.** While a surface is in view: one full-screen copy of the
   scene's colour and depth (High at Full VHS: 1440 × 1080, half float and
   depth, about 19 MB held while the tier has water and a pool has been seen),
@@ -1307,8 +1398,10 @@ gameplay file and nothing of the waterpark's is changed for it.
   6. The visitor's footprint test is the surface's box in its room frame: the
      bellmouth's round fan counts its corners (the feet must also be under the
      plane, which the deck there is not).
-  7. Under the surface the surface is not drawn (as before), so a swimmer's
-     rings are not seen from below.
+  7. ~~Under the surface the surface is not drawn (as before), so a swimmer's
+     rings are not seen from below.~~ The underside (above) is drawn with the
+     top's ripple and wake slope: a ring overhead tilts Snell's window as it
+     passes, and adds no light of its own.
 
 ### 5 · Air
 
