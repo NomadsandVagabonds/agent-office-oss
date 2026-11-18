@@ -553,6 +553,7 @@ export function build(c) {
     { key: 'coral-emerald', lx: 0.0, lz: -2.2, patrolA: [-2.2, -1.35], patrolB: [0.0, -1.35], patrolC: [0.0, -3.7] },
   ];
 
+  const LOUD_FOR = 0.15;
   let knownToner = false;
   for (let i = 0; i < tonerSpawns.length; i++) {
     const sp = tonerSpawns[i];
@@ -562,6 +563,7 @@ export function build(c) {
     let now = 0, fellFrom = null;                           // (the room's time, for its going; where it fell from)
     const waypoints = [sp.patrolA, sp.patrolB, sp.patrolC, sp.patrolB];
     let wpIdx = 1;
+    let loudFor = 0;                    // how long you have been loud in the tubes, without a let-up
 
     const denizen = c.env.denizens?.add({
       id: 'flume-toner',
@@ -582,8 +584,11 @@ export function build(c) {
         const meLoc = c.toLocal(me.x, me.z);
         const playerRelY = me.y - c.room.y;
         const inTubes = inRoom && crawl.inCrawl(meLoc.x, meLoc.z) && playerRelY >= CRAWL_FLOOR_Y - 0.15;
-        // Crawling slowly (< 0.92 m/s) or holding still lets you slip past its sonar!
-        const audible = inTubes && me.moving && me.speed > 0.92;
+        // Crawling slowly (< 0.92 m/s) or holding still lets you slip past its sonar! It hears a scramble that lasts
+        // (`LOUD_FOR` s over the line), not one frame's jolt: a careful creep that bumps the end of a tube reads ~3 m/s for
+        // a frame (player.js). (An average or a peak-hold over 0.2 s would carry that jolt over the line, not take it out.)
+        loudFor = inTubes && me.moving && me.speed > 0.92 ? loudFor + dt : 0;
+        const audible = loudFor >= LOUD_FOR;
         const dist = Math.hypot(me.x - denizen.x, me.z - denizen.z);
 
         if (!knownToner && inRoom && dist < 7.0 && c.env.sees?.(denizen.x, denizen.z, { radius: 0.45 })) {
