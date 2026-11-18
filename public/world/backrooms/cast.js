@@ -13,7 +13,7 @@ import { makeRng, roomDistances, roomPath, wallSpans, ARCHETYPES } from './gen.j
 /** What a creature is to the visitor. Only one that hunts may end a visit. */
 export const DISPOSITIONS = Object.freeze(['hunts', 'keeps to itself', 'helps']);
 /** Things a visitor may be carrying that a creature can care about (the inventory's item types). */
-export const ITEMS = Object.freeze(['torch', 'battery', 'chalk', 'paper', 'pink-slip', 'scissors', 'snack', 'balloon', 'lighter', 'tape', 'opener', 'call']);
+export const ITEMS = Object.freeze(['torch', 'battery', 'chalk', 'paper', 'pink-slip', 'scissors', 'snack', 'balloon', 'lighter', 'tape', 'opener']);
 /** What everybody knows before they have met anybody: the rooms' own first lessons (gen.js LESSONS). */
 export const ROOM_LESSONS = Object.freeze(['lean', 'unwatched']);
 /**

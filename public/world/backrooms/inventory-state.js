@@ -13,7 +13,6 @@ export const ITEM_DEFS = Object.freeze({
   snack: Object.freeze({ name: 'Wrapped snack', description: 'A sealed oat bar. The wrapper has no date.', useLabel: 'Eat', healAmount: 1 }),
   'pink-slip': Object.freeze({ name: 'Pink slip', description: 'FORM HR-404, Notice of Redundancy. The name on it is yours; the date is last week.', useLabel: 'Use' }),
   opener: Object.freeze({ name: 'Remote', description: 'A grey remote with one button. Nothing on it says what it is for.', useLabel: 'Use' }),
-  call: Object.freeze({ name: 'Trail call', description: 'A tarnished brass bird-call in a birch sleeve, hung on a green lanyard. Something in the trees answers it.', useLabel: 'Use' }),
   balloon: Object.freeze({ name: 'Red balloon', description: 'A red balloon on a curling string. It tugs upward without a breeze.', useLabel: 'Use' }),
 });
 const ITEM_ALIASES = Object.freeze({

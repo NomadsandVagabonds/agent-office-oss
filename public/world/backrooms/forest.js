@@ -828,32 +828,10 @@ export function placeVoxStack(c, stackKey, entries, opt = {}) {
  * Register a target that answers the carried **Trail Call (`call`)** whistle when
  * `[E]` is pressed while holding `call` within `r` metres (mirroring `suburb.js` `roller`).
  */
-export function registerCallTarget(c, x, z, onCall, opt = {}) {
-  // Cut (the lead, on docs/FOREST-REVIEW.md §3). The Trail Call was a remote control for the floor: held, it made E live
-  // anywhere within 11 to 16 m of a room's centre and fired that room's event from there (dropped the bridge, stopped the
-  // bulldozer, shut the eyes, rang the true post), which skipped every room's own discovery and lit the E mark across
-  // whole rooms with nothing in front of the visitor. No room leaves one any more and no room answers one. The item is
-  // still defined (inventory-state.js) and the rooms' calls are left as they are, so it can come back as one thing that
-  // does the same everywhere: `opt.force` registers as before.
-  if (!opt.force) return;
-  const r = opt.r ?? 12.5;
-  const hasCall = () => c.env.inventory?.held?.()?.type === 'call';
-  const w = c.toWorld(x, z);
-  c.use({
-    x,
-    z,
-    r,
-    cone: opt.cone ?? -1,
-    label: opt.label || 'sound the call',
-    when: () => hasCall() && (!opt.when || opt.when()),
-    use: () => {
-      const me = c.env.player?.me;
-      const wx = me ? me.x : w.x, wz = me ? me.z : w.z;
-      c.env.play?.('whistle', wx, wz, 13);
-      c.rt.lastCall = { x, z, wx, wz, time: performance.now() * 0.001 };
-      onCall?.({ x, z, wx, wz });
-    },
-  });
+export function registerCallTarget() {
+  // Cut, with its item (the lead, on docs/FOREST-REVIEW.md §3). The Trail Call was a remote control for the floor: held,
+  // it made E live anywhere within 11 to 16 m of a room's centre and fired that room's event from there, which skipped
+  // every room's own discovery and lit the E mark across whole rooms. Seven rooms still call this and get nothing.
 }
 
 /**
@@ -1550,8 +1528,13 @@ export function forestRoom(c, opt = {}) {
     }
     thicket(c, {
       lanes,
+      routes: true,   // (a plain room's own baffles stand across the straight lanes: keep the way that is really walked)
       trees: s ? Math.round((W * D) / 4.2) : undefined,
       hillsOpt: { density: 1.15 },
+      // (no stepped mounds in a plain room that has baffles or partitions of its own: on one floor in about thirty a
+      // mound came up in such a room's doorway approach, a metre high, and the doorway could not be walked to. Why the
+      // mound's own apron round a doorway did not hold there is not found; an open plain room keeps its mounds)
+      ...((room.pillars?.length || room.panels?.length) ? { hills: false } : {}),
     });
   }
 }

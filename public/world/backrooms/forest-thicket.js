@@ -62,6 +62,80 @@ export function doorLanes(c, hub = [0, 0], width = 1.3) {
   }
 }
 
+/**
+ * Keep clear the way a visitor really has from the first doorway to each of the others, round whatever already stands
+ * in the room. A straight lane from a doorway to the middle (`doorLanes`) is no use in a plain room whose own layout
+ * (quiet.js: hedge baffles, trunks, a dogleg) stands across it: the visitor goes round, over ground nobody reserved,
+ * and the thicket planted there. On about one forest floor in four that walled a doorway off, and the level's safety
+ * net then switched every collider in the room off (trunks you walk through). This walks the room on a quarter-metre
+ * grid, with a berth round whatever cannot be walked so far, and reserves the route it finds. Draws nothing from the seed.
+ */
+export function doorRoutes(c, width = 1.3) {
+  const { W, D } = c, doors = c.room.doors || [];
+  if (doors.length < 2) return 0;
+  const step = 0.25, nx = Math.floor(W / step), nz = Math.floor(D / step);
+  if (nx < 2 || nz < 2) return 0;
+  const cols = (c.rt.colliders || []).filter((k) => k.on !== false);
+  const at = (i, j) => [-W / 2 + (i + 0.5) * step, -D / 2 + (j + 0.5) * step];
+  // (what can be walked is the level's own answer, the one its doorway check will ask afterwards: world.walkable knows
+  // about a plain room's thin partitions and low places as well as what is solid. Failing that, only what is solid)
+  let walk = null;
+  try { walk = c.world?.walkable?.(c.rt) || null; walk?.free(0, 0); } catch { walk = null; }
+  const open = (pad) => {
+    const free = new Uint8Array(nx * nz);
+    for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+      const [x, z] = at(i, j);
+      if (walk) {
+        free[i * nz + j] = walk.free(x, z) && walk.free(x + pad, z) && walk.free(x - pad, z) && walk.free(x, z + pad) && walk.free(x, z - pad) ? 1 : 0;
+      } else {
+        const w = c.toWorld(x, z), q = pad + 0.22;
+        free[i * nz + j] = cols.some((k) => w.x > k.x0 - q && w.x < k.x1 + q && w.z > k.z0 - q && w.z < k.z1 + q) ? 0 : 1;
+      }
+    }
+    return free;
+  };
+  const cellOf = (free, p) => {
+    let best = -1, bd = Infinity;
+    for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+      if (!free[i * nz + j]) continue;
+      const [x, z] = at(i, j), d = Math.hypot(x - p.x, z - p.z);
+      if (d < bd) { bd = d; best = i * nz + j; }
+    }
+    return best;
+  };
+  let kept = 0;
+  const from = c.doorPoint(doors[0], 0.6);
+  for (let n = 1; n < doors.length; n++) {
+    const to = c.doorPoint(doors[n], 0.6);
+    // (as wide a berth as there is: a tight gap between two baffles is still the way, if it is the only one)
+    for (const pad of [0.3, 0.15, 0.02]) {
+      const free = open(pad), a = cellOf(free, from), b = cellOf(free, to);
+      if (a < 0 || b < 0) continue;
+      const prev = new Int32Array(nx * nz).fill(-1), queue = [a];
+      prev[a] = a;
+      for (let q = 0; q < queue.length && prev[b] < 0; q++) {
+        const k = queue[q], i = Math.floor(k / nz), j = k % nz;
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const ii = i + di, jj = j + dj;
+          if (ii < 0 || jj < 0 || ii >= nx || jj >= nz) continue;
+          const kk = ii * nz + jj;
+          if (free[kk] && prev[kk] < 0) { prev[kk] = k; queue.push(kk); }
+        }
+      }
+      if (prev[b] < 0) continue;
+      const [bx, bz] = at(Math.floor(b / nz), b % nz), [ax, az] = at(Math.floor(a / nz), a % nz);
+      keepLane(c, to.x, to.z, bx, bz, width);
+      keepLane(c, from.x, from.z, ax, az, width);
+      for (let k = b, m = 0; ; k = prev[k], m++) {
+        if (m % 2 === 0 || k === a) { const [x, z] = at(Math.floor(k / nz), k % nz); c.reserve(x, z, width / 2); kept++; }
+        if (k === a) break;
+      }
+      break;
+    }
+  }
+  return kept;
+}
+
 export function thicket(c, opt = {}) {
   const { W, D, R, kit } = c;
   const area = W * D;
@@ -71,6 +145,7 @@ export function thicket(c, opt = {}) {
 
   // Reserve walking lanes BEFORE building stepped Pacific Northwest rock/dirt hills & planting trees!
   if (opt.hub !== null) doorLanes(c, opt.hub || [0, 0], opt.laneWidth ?? 1.35);
+  if (opt.routes) doorRoutes(c, opt.laneWidth ?? 1.35);
   for (const [x0, z0, x1, z1, w] of opt.lanes || []) keepLane(c, x0, z0, x1, z1, w ?? 1.35);
 
   // Build Pacific Northwest stepped rock/dirt/moss hills automatically unless disabled or already built!
