@@ -732,9 +732,13 @@ test('the visit\'s hand: a visit shows 40–70% of the deck, in an order of its 
     // (40–70% of the deck — or, in a short visit of a deck grown big, what its parts can hold: MAX_ODD oddities a part comes first)
     // (the deck a visit is dealt from is every room at home on one of its kinds of floor, as plan.js counts it: a room made
     // for a kind of floor the visit has no part of is not in it)
-    const N = DECK.filter((a) => visit.floors.some((f) => atHome(a, f.theme) > 0)).length;
+    // (…and a room brought by another is not counted: the one that brings it is)
+    const N = DECK.filter((a) => encounterLead(a.id) === a && visit.floors.some((f) => atHome(a, f.theme) > 0)).length;
     const share = visit.hand.length / N, holds = (visit.depths * MAX_ODD) / N;
-    assert.ok(share >= Math.min(HAND[0], holds) - 1e-9 && share <= Math.min(HAND[1], holds) + 1e-9, `seed ${seed}: the hand is ${visit.hand.length} of ${N} rooms, in ${visit.depths} parts`);
+    // (a part that keeps to rooms of its own — themes.js `own` — may come one short of full: it has few enough that the one set
+    // piece and the one resident a part may have can leave nothing that fits the last place. Seen now that a visit can have three such parts)
+    const short = visit.floors.filter((f) => THEMES[f.theme].own).length / N;
+    assert.ok(share >= Math.min(HAND[0], holds) - short - 1e-9 && share <= Math.min(HAND[1], holds) + 1e-9, `seed ${seed}: the hand is ${visit.hand.length} of ${N} rooms, in ${visit.depths} parts`);
     least = Math.min(least, all.length / N); most = Math.max(most, all.length / N);
     orders.add(all.join('>'));
   }
