@@ -81,3 +81,11 @@ function tick(c, o) {
     }
   }
 }
+
+/** A blow: the cable is given a sudden speed (m/s), more of it the further out along it a point is. */
+export function kickCord(c, vx, vy, vz) {
+  for (let i = 1; i <= c.n; i++) {
+    const k = i * 3, w = (i / c.n) * CORD_STEP;
+    c.q[k] -= vx * w; c.q[k + 1] -= vy * w; c.q[k + 2] -= vz * w;
+  }
+}

@@ -120,7 +120,8 @@ test('every one of the cast that can be hit offers a target and takes health; no
   const cable = read('rooms/cable-drop.js');
   assert.match(cable, /vital = fresh\('trunk-line'\)/);
   assert.match(cable, /snipTarget: \(\) => \(rule\.phase !== 'dormant' && !finished\(vital\) \? \{ id: 'trunk-line', r: 0\.55, verticalReach: 2\.4, priority: 2 \} : false\),/);
-  assert.match(cable, /if \(vital\.dying !== null\) \{ roamer\.physical = false; if \(vital\.gone\) roamer\.gone = true; return; \}/);
+  // (dying and after: it is nobody's to hit or walk into; once gone its heap of cable stays drawn where it fell — the lead's call)
+  assert.match(cable, /if \(vital\.dying !== null\) \{ roamer\.physical = false; return; \}/);
   // the lines can be reached at all: a target where there was none, tall enough for a thing overhead
   assert.match(body('cast/the-lines.js'), /r: 0\.75, verticalReach: 2\.2/);
   for (const id of ['moth', 'porter', 'other-door', 'dummies']) assert.ok(!/snipTargets/.test(read(`cast/${id}.js`)), `${id} offers nothing to jab`);

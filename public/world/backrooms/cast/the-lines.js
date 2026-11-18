@@ -26,6 +26,7 @@ export function create(c) {
   const walker = { x: 0, z: 0, r: 0.34, tall: 1.5, opens: true };
   let fig = null, body = null, mat = null, legs = [], s = asleep(), rot = 0, y = 0.55, q = 0, drop = 0, clock = 0, base = 0, known = false, doorT = 0, stuckT = 0, lastX = 0, lastZ = 0;
   const dir = new THREE.Vector3();
+  let dead = null;                                                                // (where it stood when it was finished: dies())
 
   function ready() {
     if (!gap) return;                                                            // (no gap in this part: nothing of it is here)
@@ -107,6 +108,43 @@ export function create(c) {
       lastX = walker.x; lastZ = walker.z;
       const lit = c.light(walker.x, walker.z, 1.6); mat.uniforms.uTint.value.set(lit[0] * 1.5 + 0.05, lit[1] * 1.5 + 0.05, lit[2] * 1.5 + 0.05);
       pose(dt, moved);
+    },
+    /**
+     * Its dying (cast/health.rule.js; the conductor calls this and nothing else of it). It shudders where it was hit, then
+     * its poles give way one after another, each swinging out from its foot and down until it lies nearly flat, the feet
+     * skidding outward, and the body comes down between them onto the floor, tipping, the sinews dragged out long. Its
+     * clock of dying only: the same for anyone watching.
+     */
+    /**
+     * A jab that did not finish it (the conductor, while it stands stalled after one: hurt, seconds since it). The body
+     * jerks up between its poles and rolls away from the blow, and drops back, the poles where they stood. After a shove
+     * (hurt large, or none) it holds as it was.
+     */
+    flinch(hurt) {
+      if (!fig || hurt == null || !(hurt < HEALTH.flinch)) return;
+      pose(0, false);
+      const e = Math.exp(-hurt * 6) * (1 - hurt / HEALTH.flinch);
+      body.position.y += 0.22 * e * Math.abs(Math.cos(hurt * 9));
+      body.rotation.z += 0.32 * e * Math.sin(hurt * 14 + 0.6); body.rotation.x -= 0.18 * e;
+    },
+    /** Finished, it lies where it fell (the conductor leaves its things when this says so): its last pose, drawn once, nothing more. */
+    fell() { return !!fig; },
+    dies(progress) {
+      if (!fig) return;
+      const k = Math.max(0, Math.min(1, progress)), fl = base - drop, ease = (v) => { const t = Math.max(0, Math.min(1, v)); return t * t * (3 - 2 * t); };
+      if (!dead) dead = { y, legs: legs.map((l) => ({ x: l.pole.position.x, z: l.pole.position.z, d: new THREE.Vector3(0, 1, 0).applyQuaternion(l.pole.quaternion) })) };
+      const fall = ease((k - 0.12) / 0.62), shudder = Math.sin(k * 70) * 0.05 * Math.max(0, 1 - k * 2.5);
+      const by = fl + dead.y * (1 - fall * fall) + 0.16 * fall + (fall > 0.98 ? Math.sin((k - 0.74) * 40) * 0.03 * (1 - k) : 0);
+      legs.forEach((l, i) => {
+        const L0 = dead.legs[i], b = ease((k - 0.05 - ((i * 2) % 6) * 0.06) / 0.3);          // (one after another, not in a row)
+        const ox = L0.x - walker.x, oz = L0.z - walker.z, on = Math.hypot(ox, oz) || 1, ux = ox / on, uz = oz / on;
+        const fx = L0.x + ux * 0.3 * b, fz = L0.z + uz * 0.3 * b;
+        dir.set(L0.d.x + (ux - L0.d.x) * b, L0.d.y + (0.1 - L0.d.y) * b, L0.d.z + (uz - L0.d.z) * b).normalize();
+        l.pole.position.set(fx, fl, fz); l.pole.quaternion.setFromUnitVectors(UP, dir);
+        const kx = fx + dir.x * L.pole, ky = fl + dir.y * L.pole, kz = fz + dir.z * L.pole, hx = walker.x + Math.sin(rot + l.a) * 0.45, hz = walker.z + Math.cos(rot + l.a) * 0.45;
+        dir.set(hx - kx, by + 0.2 - ky, hz - kz); const len = dir.length(); l.sinew.position.set(kx, ky, kz); l.sinew.quaternion.setFromUnitVectors(UP, dir.normalize()); l.sinew.scale.set(1, len, 1);
+      });
+      body.position.set(walker.x + shudder, by, walker.z); body.rotation.set(0.3 * fall, rot, 0.45 * fall + shudder);
     },
     /**
      * A jab (melee.js) at the flesh between the poles: it takes one (cast/health.rule.js) and, not finished, flinches. The
