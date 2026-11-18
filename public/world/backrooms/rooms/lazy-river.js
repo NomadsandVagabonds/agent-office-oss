@@ -189,6 +189,7 @@ export function build(c) {
   let over = false;
   let frozen = false;
   let strikeFlash = 0;
+  let now = 0;                                           // the room's time, for what still swings as it goes
 
   // Spider-stilt navigation: ignores the 0.78 m canal step height so its 1.47 m PVC chair legs
   // stride straight off the island into chest-deep water and out onto the pool deck!
@@ -312,6 +313,7 @@ export function build(c) {
     group: rig.group,
     light: (rgb) => rig.light(rgb),
     update(dt, time, me) {
+      now = time;
       if (over || frozen) return;
       if (life?.out || life?.stalled) return;            // dying, gone, or shoved: it does nothing and lands nothing
       const inRoom = c.world.current() === c.rt;
@@ -418,6 +420,7 @@ export function build(c) {
         dt,
         turnRate: dt > 1e-4 ? turnDelta / dt : 0,
         strikeK: Math.sin(strikeFlash * Math.PI),
+        hurt: life ? life.hurt : Infinity,
       });
 
       const alertOn = rule.mode === 'whistle' || rule.mode === 'scan' || rule.mode === 'surge';
@@ -435,7 +438,8 @@ export function build(c) {
     recoils: true,
     hit: () => { known = true; rule = snipGuardStand(rule); c.env.play?.('clack', roamer.x, roamer.z, 9); c.env.play?.('creak', roamer.x, roamer.z, 8); },
     move: (to) => { roamer.x = to.x; roamer.z = to.z; },
-    gone: () => { roamer.gone = true; },
+    dies: (k, dt) => { now += dt; adultMesh.visible = false; rig.die(k, now, dt); },
+    gone: () => { roamer.physical = false; },             // the heap stays where it fell: not posed again, no target, nothing in the way
   });
 
   // Expose state/rig on room runtime for deterministic playtest probes & studio inspection
