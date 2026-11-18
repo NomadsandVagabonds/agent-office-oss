@@ -1176,7 +1176,9 @@ and the waterpark is not dealt (`dealt: false`). The dev page reaches it with
   baked light and the room's very uniform objects (dimmer, flicker, banks,
   tint): a pool in a room that has gone dark is dark. Its tint is the sheet's:
   its picture's average colour (pushed back towards its hue, since the picture
-  averages its pale caustic lines in) times its vertex colour, and its opacity
+  averages its pale caustic lines in) times its vertex colour (for a sheet
+  whose picture was redrawn after its water was approved, the old picture's
+  average: "the pinned sheets", below), and its opacity
   sets how murky, steeply (as the seventh power: the green rooms' 0.63 and
   0.82 sheets stay dark green murk, the waterpark's 0.52 and 0.56 stay clear):
   the return pool stays green, the deep end emerald. What it draws: what is
@@ -1214,6 +1216,54 @@ and the waterpark is not dealt (`dealt: false`). The dev page reaches it with
   television sets, the bloom's picture, the flashlight's shadows) sees each
   room's sheet as it always was. It throws no beam shadow
   (`userData.noBeamShadow`) and does not shine.
+- **What the surface reads from the room's sheet, and the pinned sheets.**
+  Read once, when the surface is made (`liquid.js` `sheetTint`, then
+  `waterColours` in `liquid.rule.js`): the average colour of the sheet's
+  picture (`map`, read from its canvas), the sheet's vertex colour (`aAlb`)
+  and its opacity (`uAlpha`); its light uniforms are shared, as above. Nothing
+  else of the sheet's material: not its shader text, not what a builder's
+  `finishMaterial` adds to it (the waterpark's lamp reflections,
+  `pool-optics.js` `basinOptics`, rewrite the Classic sheet's shader and add
+  uniforms of their own; they leave `map`, `uAlpha` and the vertex colour as
+  they were, and the sheet is hidden while the surface is drawn, and left out
+  of the mirror, so at Medium and High none of the reflection is seen: in
+  the deep end, one page load with the clock paused, on the deck, across the
+  water and under it, plain and Full VHS, at Medium and at High, with the
+  reflection as built, with its ceiling picture black and with the Classic
+  sheet not drawn at all, the pictures are the same but for the camcorder's
+  blinking REC mark, 1,280 pixels).
+  **The pinned sheets** (18 Nov, `SHEET_TINTS` and `pinnedTint` in
+  `liquid.rule.js`): the waterpark's builder redrew `causticWaterTex` for
+  Classic as muted teal ripples (no pale web), greyer and greener than the
+  caustic cells and about half as bright. Read as it is, every pool that uses
+  it changed at Medium and High with no change of ours: the deep end went a
+  dark grey-green (its blue absorbed 0.47 per metre where it was 0.24, its
+  own colour half as bright and green over blue; the underside from below a
+  dark emerald), the aqua pools a little darker and greener. The water was
+  approved as it was, so a picture that was changed for Classic after its
+  water had been approved now stands for the colour it was approved with: it
+  is recognised by its average (within 0.004 on each channel) and the
+  surface takes the old picture's average in its place, with the sheet's own
+  vertex colour and opacity as ever. Pinned: the aqua, emerald and deep
+  caustic sheets (the wave pool, the lazy river, the Drain Spa, the deep end,
+  the footbaths). The numbers each sheet gives (absorb per metre r / g / b,
+  deep colour, keep r / g / b and its rate, murk):
+
+  | sheet (opacity) | before (759cace) | today, read as it is | pinned |
+  |---|---|---|---|
+  | aqua, 0.52 (wave pool, lazy river, Drain Spa) | 0.715 / 0.277 / 0.150; deep 0.012 / 0.158 / 0.200; keep 0.058 / 0.788 / 1, 0.30; murk 1.00 | 0.750 / 0.177 / 0.150; deep 0 / 0.078 / 0.082; keep 0 / 0.955 / 1, 0.30 | as before |
+  | emerald, 0.54 (deep end) | 0.835 / 0.195 / 0.243; deep 0.023 / 0.129 / 0.121; keep 0.181 / 1 / 0.939, 0.51; murk 1.30 | 0.977 / 0.195 / 0.470; deep 0 / 0.060 / 0.039; keep 0 / 1 / 0.648, 0.51 | as before |
+  | aqua, 0.56 (footbath) | 1.201 / 0.465 / 0.252; deep as aqua; keep as aqua, 0.85; murk 1.68 | 1.260 / 0.297 / 0.252; deep and keep as aqua today | as before |
+  | calm, 0.52 (kiddie lagoon) | 0.750 / 0.310 / 0.150; deep 0 / 0.071 / 0.097; keep 0 / 0.733 / 1, 0.30; murk 1.00 | the same | not pinned: the same |
+
+  (Murk is the opacity's alone, and no opacity changed.) A pin lets go by
+  itself when its picture changes (its average no longer matches): the
+  surface then follows the new picture, as any other sheet's does. **When a
+  builder retunes a pool's Classic sheet on purpose**, check that room's
+  Medium and High; if it is to keep its old water, add the new picture's
+  average and the approved tint to `SHEET_TINTS`. To give a pool the colour
+  of its new sheet instead, take its entry out. The kiddie lagoon's calm
+  sheet is not pinned: its water was approved from that sheet.
 - **The split pass** (`vhs.js`; only while a marked surface of a part that is
   up has been in view in the last half second: its box against the camera's
   frustum, held 0.5 s so it cannot flicker at the edge of the picture). Into
@@ -1804,7 +1854,8 @@ sample for the owner's eye, one room draws a calm sheet instead.
   call (a deeper pool may want its own entry in `CALM_WATER`, darker, as
   `causticWaterTex` has `deep` and `emerald`); for the footbaths, the `map`
   of the footbath's `addTranslucent` in `poolroom`. Check each room's Medium
-  and High after, since its tint follows. **To remove it:** take the two keys
+  and High after, since its tint follows (unless its sheet is pinned: the
+  surface section, "the pinned sheets"). **To remove it:** take the two keys
   out of the kiddie lagoon's call (it goes back to `waterTone: 'aqua'`), then
   `calmWaterTex`, `CALM_WATER` and `test/backrooms-waterpark-calm-water.test.mjs`.
 

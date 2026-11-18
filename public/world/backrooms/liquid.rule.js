@@ -199,6 +199,32 @@ export function wadeStep(state, { wet = false, speed = 0, now = 0 } = {}, k = LI
 export const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 
 /**
+ * Sheets whose picture was changed for Classic after the water drawn from it had been approved: the surface keeps the
+ * colour it was approved with. Each is recognised by its picture's average (linear, as averageColour reads it), within
+ * `within` on every channel, and the water takes `tint` in place of that average (the average of the picture it was
+ * approved with; times the sheet's vertex colour and with the sheet's own opacity, as ever). Any other picture, or one of
+ * these drawn again differently, is read as it is: a pin lets go by itself when its picture changes.
+ * 18 Nov: the waterpark's caustic sheets (`causticWaterTex`) became muted ripples, greyer and greener than the caustic
+ * cells, at about half the brightness; read as they are, the deep end at Medium and High went a dark grey-green and
+ * the aqua pools teal. The kiddie lagoon's calm sheet is not here: its water was approved from that sheet.
+ */
+export const SHEET_TINTS = Object.freeze({
+  within: 0.004,
+  sheets: Object.freeze([
+    Object.freeze({ sheet: 'waterpark aqua', average: Object.freeze([0.0504, 0.2278, 0.2354]), tint: Object.freeze([0.19684, 0.47806, 0.56639]) }),
+    Object.freeze({ sheet: 'waterpark emerald', average: Object.freeze([0.0376, 0.1723, 0.1282]), tint: Object.freeze([0.19262, 0.38966, 0.37334]) }),
+    Object.freeze({ sheet: 'waterpark deep', average: Object.freeze([0.021, 0.1007, 0.1309]), tint: Object.freeze([0.19095, 0.3475, 0.39074]) }),
+  ]),
+});
+
+/** The tint a picture's average stands for: a pinned sheet's (SHEET_TINTS), or the average itself. */
+export function pinnedTint(average, k = SHEET_TINTS) {
+  if (!Array.isArray(average) || average.length !== 3) return average;
+  for (const s of k.sheets) if (s.average.every((v, i) => Math.abs(v - average[i]) <= k.within)) return s.tint.slice();
+  return average;
+}
+
+/**
  * The water's own colours, from the sheet it replaces: `tint` its picture's average (linear) times its vertex colour,
  * `alpha` its opacity. → { deep, absorb }: deep is what a long way through it looks like (lit by the room), absorb how
  * fast each channel goes per metre (the channels the tint has least of first, and all faster in a murkier sheet).

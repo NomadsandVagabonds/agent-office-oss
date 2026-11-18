@@ -45,7 +45,7 @@
 // in a finally. Every surface on that plane samples it (LIQUID_FRAG reflection(), MIRROR defined); the rest keep the
 // flat tint. At water 1 (Medium) none of it exists: no define, no picture, no pass.
 import * as THREE from 'three';
-import { LIQUID, underwater, holdStep, toLinear, waterColours, wakeStart, wakeStep, wakeFill, wadeStep, LIQUID_VERT, LIQUID_FRAG, COPY_FRAG, LIQUID_UNDER_FRAG, seesUnderside,
+import { LIQUID, underwater, holdStep, toLinear, waterColours, pinnedTint, wakeStart, wakeStep, wakeFill, wadeStep, LIQUID_VERT, LIQUID_FRAG, COPY_FRAG, LIQUID_UNDER_FRAG, seesUnderside,
   MIRROR, mirrorPlane, reflectMatrix, planeInView, obliqueProjection, mirrorSize, pickMirror, mirrorLeaves, screenCover, mirrorGate, mirrorWeight, mirrorDue } from './liquid.rule.js';
 import { HELD_ORDER } from './beam-shadows.rule.js';
 import { collectLiquids } from './liquid.mark.js';
@@ -75,9 +75,12 @@ export function averageColour(tex) {
   return out;
 }
 
-/** The sheet's own colour: its picture's average times its vertex colour (aAlb), and its opacity. */
+/**
+ * The sheet's own colour: its picture's average times its vertex colour (aAlb), and its opacity. (A picture that was
+ * changed for Classic after its water was approved stands for the colour it was approved with: SHEET_TINTS.)
+ */
 export function sheetTint(mesh) {
-  const u = mesh.material?.uniforms || {}, avg = averageColour(u.map?.value) || LIQUID.fallbackTint, alb = mesh.geometry?.attributes?.aAlb;
+  const u = mesh.material?.uniforms || {}, avg = pinnedTint(averageColour(u.map?.value)) || LIQUID.fallbackTint, alb = mesh.geometry?.attributes?.aAlb;
   const a = [0, 0, 0];
   if (alb && alb.count) { for (let i = 0; i < alb.count; i++) { a[0] += alb.getX(i); a[1] += alb.getY(i); a[2] += alb.getZ(i); } a[0] /= alb.count; a[1] /= alb.count; a[2] /= alb.count; } else a.fill(1);
   return { tint: avg.map((v, i) => v * a[i]), alpha: Number.isFinite(u.uAlpha?.value) ? u.uAlpha.value : LIQUID.absorbAlpha };
