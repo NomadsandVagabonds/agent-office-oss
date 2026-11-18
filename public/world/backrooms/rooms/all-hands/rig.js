@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { Vox, M, glow } from '../../../vox/vox.js';
 import { buildCharacter, JOINT } from '../../../avatar/build.js';
+import { legsFor, legsOf } from '../../walk-legs.js';
 import { Batch, lamp } from '../../kit.js';
 import {
   pallorLook, mottleHead, stretchHead, eraseNose, bulgingEye, hollowSocket,
@@ -100,10 +101,23 @@ export function makeKeynoteSpeaker(kit) {
   head.add(headWhole, headTorn);
   group.add(bodyMesh, head);
 
+  // Its legs (walk-legs.js; modelled 1.14 long from the hip). Walking up the aisle it walks. In the questions it is only
+  // ever seen standing: each blackout it is a step nearer, caught in the middle of it, the other foot ahead each time.
+  const hip = JOINT.hipL[1] * S[1], knee = (JOINT.hipL[1] - (JOINT.hipL[1] - JOINT.kneeL[1]) * 1.14) * S[1];
+  const keep = (x) => Math.abs(x) > 7 * S[0];                                      // (its long arms hang past its hips: not legs)
+  const step = legsFor(bodyMesh, { hip, knee, stride: 1.0, swing: 0.45, fold: 0.8, keep }), stance = legsOf(bodyMesh, { hip, knee, keep });
+  let lastX = null, lastZ = 0, lead = 1, posed = 0;
+
   return {
     group,
     head,
     animate(time, qaMode, blackout) {
+      const x = group.position.x, z = group.position.z, jump = lastX === null ? 0 : Math.hypot(x - lastX, z - lastZ);
+      lastX = x; lastZ = z;
+      if (jump > 0.12) lead = -lead;
+      if (qaMode) {
+        if (posed !== lead) { posed = lead; stance(lead > 0 ? -0.38 : 0.3, lead > 0 ? 0.08 : 0.5, lead > 0 ? 0.3 : -0.38, lead > 0 ? 0.5 : 0.08); }
+      } else { posed = 0; step(x, z, time); }
       const glitch = blackout || (qaMode && Math.floor(time * 13) % 7 === 0) || (time % 3.9 > 3.76);
       headWhole.visible = !glitch;
       headTorn.visible = glitch;
