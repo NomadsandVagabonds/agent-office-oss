@@ -318,6 +318,9 @@ page reads none of this without it, and a visit so made is not scored):
 - The mascot is not on every part: a seed gives it one part of the visit (on most, the last). `&pursuer=1` only
   says the visit has one. To have it on the floor you load, make that floor the only one: `&pursuer=1&depths=1`.
   Add `&wake=1` to have it awake and after you, and `&loot=card` (dev page) to have the keycard on its wrist.
+- A toner beside you is still on the ceiling, out of a hand's reach: it comes down when you **walk** under it, not
+  while you stand. Jabbed and not finished, it goes back up and ignores everybody for 16 to 20 seconds
+  (`TONER.recoilTime`), in which it is no target and drops on nobody; then it prowls again. The second jab finishes it.
 - A creature that comes with a room needs the room: the lines with `&room=the-culvert&themes=suburb`, the trunk
   line (a resident of its room, not of the cast) with `&room=cable-drop`.
 
