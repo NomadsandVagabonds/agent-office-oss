@@ -1,6 +1,7 @@
 import { createWalk } from '../../cast/walk.js';
 import { buildSmilingClimber } from '../cubicle-grid/rig.js';
 import { flightAt, TOWER } from './plan.js';
+import { resident } from '../../resident.js';
 
 // Four, and fairly slow (the owner, 18 Nov: "A and also they should be fairly slow"): about 55% of a walk, so a
 // visitor who keeps walking gets through hurt but alive and one who stops is caught. (Was six, at 1.40-1.52 m/s.)
@@ -40,6 +41,14 @@ export function createChase(c) {
     get absorbed() { return env.absorbed; },
   });
   let tower, time = 0, began = null;
+  // Health and a shove for each of them (resident.js; basic: one jab each). A shove stands one still on the spot (nothing is
+  // pushed off a stair). One that goes is only gone: the tower and its pool are as they were for whoever is left.
+  for (const actor of pack) actor.life = resident(env, RESIDENT, {
+    at: () => ({ x: actor.x, z: actor.z, y: actor.group.position.y + 0.75 }), r: actor.r + 0.12,
+    when: () => actor.group.visible && !actor.jump,
+    gone: () => { actor.group.visible = false; actor.gone = true; },
+  });
+  const idle = (actor) => actor.gone || actor.life?.out || actor.life?.stalled;
 
   function addTower(ctx, plan) { tower = { ctx, plan, last: plan.platforms.length - 1 }; }
 
@@ -55,13 +64,13 @@ export function createChase(c) {
   function escape(body) {
     if (safe.has(body)) return;
     safe.add(body);
-    if (began !== null) c.survived(RESIDENT);
+    if (began !== null) { const life = pack[0]?.life; if (life) life.escaped(); else c.survived(RESIDENT); }
   }
 
   function catchVisitor(context, { world: body }) {
     if (began === null || body.frozen || safe.has(body) || riding.has(body) || (hitAt.get(body) ?? 0) > time) return;
     for (const actor of pack) {
-      if (!actor.group.visible || actor.jump || distance(body, actor) > .62) continue;
+      if (!actor.group.visible || actor.jump || idle(actor) || distance(body, actor) > .62) continue;
       if (Math.abs(body.y - 1.1 - actor.group.position.y) > .54) continue;
       if (!walk.clear(actor, actor.x, actor.z, body.x, body.z)) continue;
       context.hurt(1, actor);
@@ -162,7 +171,7 @@ export function createChase(c) {
     if (world.roomAt(body.x, body.z)?.id === foyer) catchVisitor(c, { world: body });
     const targetBoard = boardOf(body);
     for (const [i, actor] of pack.entries()) {
-      if (now < began + actor.delay) continue;
+      if (now < began + actor.delay || idle(actor)) continue;
       if (!actor.group.visible) {
         if (!walk.stand(actor, actor.x, actor.z)) continue;
         actor.group.visible = true;
