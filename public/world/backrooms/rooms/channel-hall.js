@@ -8,7 +8,8 @@ import {pipe,poolDetail} from '../pool-finish.js';
 import {furnitureClear} from '../furniture-rules.js';
 import {channelPlan,channelFloor,channelCuts,channelWet,keeperState,stepKeeper,startPump,LANE_KEEPER} from './channel-hall/rule.js';
 import {resident} from '../resident.js';
-import {slattedBench,pumpAssembly,officeWindow,keeperRig,laneFloatVox} from './channel-hall/assets.js';
+import {slattedBench,pumpAssembly,officeWindow,laneFloatVox} from './channel-hall/assets.js';
+import {makeLaneKeeper} from './channel-hall/rig.js';
 import {collideOfficeAndPool,cutSlab} from './channel-hall/collision-art.js';
 
 export function build(c) {
@@ -129,14 +130,15 @@ export function build(c) {
       for(let i=0;i<3;i++)box(detail,[side*8.5-.02,2.6-i*.12,z-.01,side*8.5+.02,2.63-i*.12,z+.02],red);
     }
   }
-  const rig=keeperRig(c,p);rig.update(s,0);let known=false,sound=0;
+  const rig=makeLaneKeeper(c,p);rig.update(s,0);let known=false,sound=0,clock=0;
   // Health and a shove (resident.js; medium: two jabs), reachable from the bank or the water at the surface. A jab
-  // short of the last sends it into the recovery a landed hit gives it. Gone, the lane is only water: nothing it kept shut.
+  // short of the last sends it into the recovery a landed hit gives it. Going, it sinks and its line goes slack
+  // (channel-hall/rig.js die); gone, the lane is only water and the floats left on it: nothing it kept shut.
   const life=resident(env,'lane-keeper',{
     at:()=>{const q=c.toWorld(s.x,s.z);return {x:q.x,z:q.z,y:(c.room.y||0)+p.water+.3};},r:.4,
     when:()=>s.phase!=='recover',recoils:true,
     hit:()=>{known=true;s.recovery=LANE_KEEPER.recovery;s.phase='recover';s.notice=0;},
-    gone:()=>{for(const g of [rig.head,...rig.parts,...rig.hands])g.visible=false;},
+    dies:(k)=>rig.die(k,clock),
   });
   const clear=(ax,az,bx,bz,r)=>{
     const a=c.toWorld(ax,az),b=c.toWorld(bx,bz);return furnitureClear(c.world,a.x,a.z,b.x,b.z,r);
@@ -147,7 +149,7 @@ export function build(c) {
     rt.footstep=wet?'wade':'stone';
     if(life.out||life.stalled){s.hit=s.warn=s.escaped=false;}
     else stepKeeper(s,dt,{...me,key:me.world,grounded:!(me.world?.drop>.12)},p,{clear});
-    if(!life.gone)rig.update(s,time);
+    clock=time;if(life.dying===null)rig.update(s,time,life.hurt);
     if(!known&&me.inside&&c.seen(s.x,s.z,{height:.35})){known=true;c.met('lane-keeper');}
     if(s.escaped)life.escaped();
     if(s.hit){const hit=c.hurt(1,c.toWorld(s.x,s.z));if(hit.landed)env.interfere?.(.12);}
