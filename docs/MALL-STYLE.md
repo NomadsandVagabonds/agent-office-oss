@@ -183,5 +183,6 @@ could stop sharing.
 | Level P | one car, stacked to the roof | the hole |
 | Photo booths | a booth that flashes; the one waiting moves only in the flash, nearer each picture, as the strips show; the booths light the hall | neon fascias, a dummy |
 | Receipts | a receipt that follows you, printed, charged by the metre on the till's display; tear it off and it reels back the way you came | neon fascias |
-| Keys-cut, grotto | doors that are walls; July | neon fascias |
+| Keys cut | doors that are walls; the machine cuts you a key to one of them, and behind it is a smaller door it does not fit; somebody knocks | neon fascias |
+| Grotto | July | neon fascias |
 | The streets (`concourse`) | `MALL_WRONG`, one wrong thing a room | shopfronts throughout |
