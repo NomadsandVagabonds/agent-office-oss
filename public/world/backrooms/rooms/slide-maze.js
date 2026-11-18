@@ -559,6 +559,7 @@ export function build(c) {
     const startW = c.toWorld(sp.lx, sp.lz);
     const rig = makePlenumTonerRig(c.kit, 'tube-' + sp.key);
     let tState = makeTubeToner(i);
+    let now = 0, fellFrom = null;                           // (the room's time, for its going; where it fell from)
     const waypoints = [sp.patrolA, sp.patrolB, sp.patrolC, sp.patrolB];
     let wpIdx = 1;
 
@@ -575,6 +576,7 @@ export function build(c) {
         rig.light(c.world.lightAt(denizen.x, denizen.z, CRAWL_AXIS_Y));
       },
       update(dt, time, me) {
+        now = time;
         if (life?.out || life?.stalled) return;          // dying, gone, or let go after a shove: it does nothing
         const inRoom = c.world.current() === c.rt;
         const meLoc = c.toLocal(me.x, me.z);
@@ -631,7 +633,7 @@ export function build(c) {
           rig.group.rotation.y += clamp(turnTo(rig.group.rotation.y, wantYaw), -dt * 4, dt * 4);
         }
 
-        rig.pose(time, tState.phase, res.slabK, went / Math.max(dt, 1e-3), 0);
+        rig.pose(time, tState.phase, res.slabK, went / Math.max(dt, 1e-3), 0, life ? life.hurt : Infinity);
 
         if (res.caught && c.world.los(denizen.x, denizen.z, me.x, me.z) && furnitureClear(c.world, denizen.x, denizen.z, me.x, me.z, .12)) {
           c.env.play?.('sonarrattle', denizen.x, denizen.z, 9);
@@ -657,7 +659,9 @@ export function build(c) {
       when: () => tState.phase === 'dropping' || tState.phase === 'chasing', recoils: true,
       hit: () => { knownToner = true; tState = snipTubeToner(tState); c.env.play?.('clack', denizen.x, denizen.z, 9); c.env.play?.('sonarrattle', denizen.x, denizen.z, 10); c.env.interfere?.(0.45); },
       shoved: () => { tState = releaseTubeToner(tState); return true; },
-      gone: () => { denizen.gone = true; },
+      // (it lets go of the tube's crown and comes down to its floor the right way up, as the rig rights it, and melts there)
+      dies: (k, dt) => { now += dt; fellFrom ??= denizen.y; const e = Math.min(1, k / 0.3); denizen.y = fellFrom + (c.room.y + CRAWL_FLOOR_Y + 0.02 - fellFrom) * e * e; rig.die(k, now); },
+      gone: () => { denizen.physical = false; },             // (melted flat where it was: it stays, not posed again, no target, nothing in the way)
     });
   }
 
