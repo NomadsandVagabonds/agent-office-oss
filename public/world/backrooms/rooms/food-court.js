@@ -126,7 +126,7 @@ export function build(c) {
     if (Math.abs(x) < 1.3 && z > D / 2 - K.stall - 2.6) continue;
     const key = 'court:tbl:' + (k % 4), rot = (k % 2) * 0.785, seat = seats[k % 4], mk = () => tableVox(seat)().downsample(2);   // (cut coarser: there are two dozen)
     c.model(key, mk, x, z, { rot, scale: 2, solid: false }); c.solid(x - 0.5, z - 0.5, x + 0.5, z + 0.5, { tall: false });
-    put(key, mk, x, z, { y: H, scale: 2, rot: -rot, tilt: [Math.PI, 0] }); tray(x + 0.1, H - 0.76, z - 0.1, -1);
+    put('court:tbl:roof:' + (k % 4), () => { const v = tableVox(seat)(); v.rbox(-12, 27, -12, 12, 30, 12, 3, M('#d8ccb0', 1), 'xz'); return v.downsample(3); }, x, z, { y: H, scale: 3, rot: -rot, tilt: [Math.PI, 0] });   // (the roof's: seven metres up and dim, cut coarser still, the top made thick enough to come through it) tray(x + 0.1, H - 0.76, z - 0.1, -1);
     if (R.chance(0.6)) tray(x + R.range(-0.15, 0.15), 0.76, z + R.range(-0.15, 0.15));
     if (k % 3 === 1) put('court:diner:' + (k % 4), dummyVox(k % 4, ['#39424f', '#7a3a34', '#4a5a40', '#6a4a8a'][k % 4]), x + 0.78, z, { rot: -Math.PI / 2 });               // somebody stood at one, facing their tray
     k++;
