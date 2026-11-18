@@ -423,22 +423,21 @@ export function build(c) {
   });
 
   // Centerpiece Themed Way Down (`goesDown` + `env.hold` + 2.4 s spiral + `env.descend`)
-  c.use({
-    x: 0,
-    z: 0,
-    r: 2.15,
-    label: 'enter the drain',
-    when: () => !going && goesDown(c.level.exit.way) && !!c.env.descend,
-    use: () => {
-      c.env.play?.('glug', wCenter.x, wCenter.z, 9);
-      c.env.play?.('slide', wCenter.x, wCenter.z, 8);
-      c.env.interfere?.(0.5);
-      if (goesDown(c.level.exit.way) && c.env.hold && c.env.descend) {
-        c.env.hold(true);
-        going = 0.001;
-      }
-    },
-  });
+  // The drain is a way down only where the visit goes down, and it is not pressed: whoever is in its throat
+  // (the current carries a wader there) is taken. No key, no prompt (the owner: no button-press level transitions).
+  const DRAIN_TAKES = 0.6;
+  const drainOffered = () => !going && goesDown(c.level.exit.way) && !!c.env.descend;
+  const enterDrain = () => {
+    c.env.play?.('glug', wCenter.x, wCenter.z, 9);
+    c.env.play?.('slide', wCenter.x, wCenter.z, 8);
+    c.env.interfere?.(0.5);
+    if (goesDown(c.level.exit.way) && c.env.hold && c.env.descend) {
+      c.env.hold(true);
+      going = 0.001;
+    }
+  };
+  c.rt.whirlpoolSpa.drainOffered = drainOffered;
+  c.rt.whirlpoolSpa.enterDrain = enterDrain;
 
   let vortexYaw = 0;
   let siphonYaw = 0;
@@ -505,6 +504,8 @@ export function build(c) {
           o.g.rotation.z = Math.cos(t * 1.9 + i * 1.5) * 0.07;
         }
       }
+
+      if (me.inside && me.world && !me.world.frozen && drainOffered() && Math.hypot(me.x, me.z) < DRAIN_TAKES) enterDrain();
 
       // Whirlpool current pushing wading swimmers (`whirlpoolField` from `waterpark.rule.js`)
       if (!going && me.inside && me.world && info.inBasin(me.x, me.z)) {

@@ -188,10 +188,10 @@ test('Diving well: dive under the partition, surface and reach the far deck',asy
 
 test('Drain Spa: a last-floor drain is not offered; an interrupted ride releases controls',async t=>{
  const f=await fixture('whirlpool-flume');t.after(()=>f.dispose());const rt=f.world.rooms[0];
- const drain=rt.uses.find(u=>u.label==='enter the drain');
- assert.equal(drain.when(),false,'no fake way down on final floor');
+ assert.equal(rt.uses.some(u=>/drain/.test(u.label)),false,'the drain is not pressed');
+ assert.equal(rt.whirlpoolSpa.drainOffered(),false,'no fake way down on final floor');
  f.env.level.exit.way='chute';f.env.descend=()=>true;
- assert.ok(drain.when());drain.use();f.tick(20);
+ assert.ok(rt.whirlpoolSpa.drainOffered());rt.whirlpoolSpa.enterDrain();f.tick(20);
  assert.ok(f.player.me.frozen);rt.onLeave();
  assert.equal(f.player.me.frozen,false);const y=f.player.me.y;
  f.input.keys.add('w');f.tick(30);f.input.keys.clear();
@@ -225,7 +225,8 @@ test('Flume Knot: the abyss slide on the last floor returns to the dry gallery',
  const f=await fixture('slide-maze');t.after(()=>f.dispose());for(const d of f.env.denizens.all())d.gone=true;
  const rt=f.world.rooms[0];rt.uses.find(u=>u.label.includes('plunge')).use();
  for(let i=0;i<1000&&rt.sliding();i++)f.tick();
- assert.ok(rt.flumeMaze.lower);const abyss=rt.uses.find(u=>u.label.includes('lower level'));assert.ok(abyss.when());abyss.use();
+ assert.ok(rt.flumeMaze.lower);assert.equal(rt.uses.some(u=>/lower level/.test(u.label)),false,'the abyss slide is not pressed');
+ const m=rt.flumeMaze.abyssMouth,at=toWorld(f.def,m.x,m.z);f.player.warp(at.x,at.z);f.tick(2);assert.ok(rt.sliding(),'stepping into its mouth takes you');
  for(let i=0;i<1000&&rt.sliding();i++)f.tick();f.tick(30);
  assert.equal(rt.sliding(),false);assert.equal(rt.flumeMaze.lower,false);assert.equal(f.player.me.frozen,false);
  assert.ok(f.player.me.y-f.def.y>.8);assert.ok(f.world.free(f.player.me.x,f.player.me.z,.22));
