@@ -67,14 +67,16 @@ test('the kit\'s shader for the scene is untouched: nothing of it in FRAG or VER
   // (its own words for the emissive bloom block, EMISSIVE_BLOOM and "emissive bloom"/"the bloom", are older than this)
   const bare = frag.replace(/EMISSIVE_BLOOM(_DEPTH)?|emissive bloom|the bloom/g, '');
   for (const word of ['bloom', 'Bloom', 'uStrength', 'userData', 'glowStrength', 'GLOW_STRENGTH']) assert.ok(!bare.includes(word), `FRAG has no ${word}`);
-  for (const o of [{}, { vox: true }, { map: new THREE.Texture(), cutout: true }]) {
+  for (const o of [{}, { vox: true }, { map: new THREE.Texture(), cutout: true }, { vox: true, bloom: 0.6 }, { vox: true, bloom: 0 }]) {
     const s = kit.surface(o);
+    assert.ok(!s.fragmentShader.includes('uGlowStrength') && s.fragmentShader.includes('gl_FragColor = vec4(emitted, plainly);'), 'the scene\'s surface writes what it emits unscaled');
     assert.ok(!/bloom|uBloom|uStrength/i.test(s.fragmentShader.replace(/EMISSIVE_BLOOM(_DEPTH)?|emissive bloom|the bloom/g, '')), 'no new text in the surface\'s shader');
     assert.ok(!/bloom/i.test(s.vertexShader));
     assert.ok(!Object.keys(s.uniforms).some((k) => /bloom|strength/i.test(k)), 'no new uniform on the room\'s surface');
   }
-  // the option reaches only the one line in glowing()'s emissive bloom block
-  assert.equal(src.split('glowStrength(').length - 1, 1);
+  // the option reaches only one line in glowing()'s emissive bloom block and one in surface(), both storing userData
+  assert.equal(src.split('glowStrength(').length - 1, 2);
+  assert.match(src, /\n    material\.userData\.bloom = glowStrength\(bloom\);[^\n]*\n    return material;\n  \}/);
   assert.match(src, /    m\.userData\.bloom = glowStrength\(opt\.bloom\);\n    \/\/ --- end emissive bloom ---\n    return m;/);
   kit.dispose();
 });
@@ -188,4 +190,122 @@ test('c.shining: two keys that differ only in `bloom` are two batches; a key ask
   const byBloom = lit.map((o) => [o.material.userData.bloom, o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3]).sort((a, b) => a[0] - b[0]);
   assert.deepEqual(byBloom, [[0.5, 4], [1, 2], [3, 2]], 'three meshes: soft (both of its quads, at its first number), plain at 1, hard at 3');
   assert.deepEqual(new Set(lit.map((o) => o.material.color.toArray().join())).size, 1, 'all drawn the same');
+});
+
+// ---- kit surfaces: their self-lit voxels (the twin) take the same number ----
+
+/** One kit surface each: a voxel mesh with a lit triangle and a dark one (exact draws only the lit one). */
+function voxScene(kit, opt = {}) {
+  const s = new THREE.Scene(), geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 1, 1, 0, 2, 0, 0, 3, 0, 0, 3, 1, 0], 3));
+  geo.setAttribute('aSurf', new THREE.Float32BufferAttribute([0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0], 2));
+  geo.setIndex([0, 1, 2, 3, 4, 5]);
+  const forest = new THREE.Mesh(geo, kit.surface({ vox: true, flick: true, ...opt })), other = new THREE.Mesh(geo, kit.surface({ vox: true, flick: true }));
+  s.add(forest, other);
+  return { s, forest, other };
+}
+
+test('kit.surface: bloom stored as userData only (1 unless given, clamped), a new material each call, program unchanged', () => {
+  const kit = createKit();
+  const plain = kit.surface({ vox: true }), soft = kit.surface({ vox: true, bloom: 0.6 }), hot = kit.surface({ vox: true, bloom: 9 }), off = kit.surface({ vox: true, bloom: -2 });
+  assert.deepEqual([plain.userData.bloom, soft.userData.bloom, hot.userData.bloom, off.userData.bloom, kit.surface({ bloom: '2' }).userData.bloom], [1, 0.6, 3, 0, 1]);
+  for (const m of [soft, hot, off]) {
+    assert.notEqual(m, plain, 'never a shared material: a strength set on one is not another\'s');
+    assert.equal(m.fragmentShader, plain.fragmentShader); assert.equal(m.vertexShader, plain.vertexShader);
+    assert.deepEqual(m.defines, plain.defines); assert.deepEqual(Object.keys(m.uniforms), Object.keys(plain.uniforms));
+    assert.equal(m.customProgramCacheKey(), plain.customProgramCacheKey());
+    for (const k of ['transparent', 'depthWrite', 'side', 'blending']) assert.equal(m[k], plain[k], k);
+  }
+  assert.notEqual(kit.surface({ vox: true }), plain, 'the same options twice are two materials');
+  assert.deepEqual(Object.keys(plain.userData), ['bloom']);
+  kit.dispose();
+});
+
+test('kit surface, no strength set: the twin there always was (no multiply, the same uniforms object, defines and draw list)', () => {
+  const kit = createKit();
+  for (const exact of [true, false]) {
+    const now = voxScene(kit), old = voxScene(kit);
+    for (const o of old.s.children) delete o.material.userData.bloom;        // (as the kit made them before the option)
+    const mats = createGlowMaterials();
+    const look = (sc) => {
+      const saved = mats.swap(sc.s, exact);
+      const out = sc.s.children.map((o) => [o.material.name, JSON.stringify(o.material.defines), o.material.fragmentShader === sc.forest.material.fragmentShader ? 'same' : 'other',
+        exact ? Object.keys(o.material.uniforms).sort().join() : o.material.uniforms === saved[1 + 4 * sc.s.children.indexOf(o)].uniforms, o.geometry.index.count]);
+      out.push(mats.stats.drawn);
+      mats.restore(saved);
+      return out;
+    };
+    const a = look(now), b = look(old);
+    assert.deepEqual(a, b);
+    assert.equal(a[0][0], exact ? 'glow:kit:exact' : 'glow:kit');
+    if (!exact) assert.equal(a[0][3], true, 'not exact: the surface\'s own uniforms object, as before');
+    assert.ok(!a.some((r) => Array.isArray(r) && String(r[3]).includes('uGlowStrength')));
+    assert.equal(mats.twins, 4, 'one twin per surface, none scaled');
+    mats.dispose();
+  }
+  kit.dispose();
+});
+
+test('kit surface at a strength: a scaled twin of its own, emitted × uGlowStrength, read each frame; the surface is untouched', () => {
+  const kit = createKit();
+  for (const exact of [true, false]) {
+    const { s, forest, other } = voxScene(kit, { bloom: 0.6 });
+    const surf = forest.material, before = [surf.fragmentShader, JSON.stringify(surf.defines), Object.keys(surf.uniforms).join(), surf.version];
+    const mats = createGlowMaterials();
+    let saved = mats.swap(s, exact);
+    const tw = forest.material;
+    assert.equal(tw.name, (exact ? 'glow:kit:exact' : 'glow:kit') + ':scaled');
+    assert.equal(tw.uniforms.uGlowStrength.value, 0.6);
+    assert.match(tw.fragmentShader, /uniform float uGlowStrength;\nvoid main\(\) \{/);
+    assert.ok(tw.fragmentShader.includes('gl_FragColor = vec4(emitted * uGlowStrength, plainly);'));
+    assert.equal(tw.fragmentShader.replace('uniform float uGlowStrength;\n', '').replace('emitted * uGlowStrength', 'emitted'), surf.fragmentShader, 'that one line and its declaration, nothing else');
+    assert.equal(tw.uniforms.uDim, surf.uniforms.uDim, 'the room\'s dimmer, the same object');
+    assert.ok(!('uGlowStrength' in surf.uniforms), 'not on the room\'s surface');
+    assert.equal(tw.defines.EMISSIVE_BLOOM, 1);
+    assert.equal(other.material.name, exact ? 'glow:kit:exact' : 'glow:kit', 'its neighbour keeps the plain twin');
+    if (exact) assert.equal(forest.geometry.index.count, 3, 'still only its lit triangles');
+    mats.restore(saved);
+    assert.deepEqual([surf.fragmentShader, JSON.stringify(surf.defines), Object.keys(surf.uniforms).join(), surf.version], before);
+    // set at run time: the next frame reads it, clamped; the same scaled twin, no new program
+    surf.userData.bloom = 7; saved = mats.swap(s, exact);
+    assert.equal(forest.material, tw); assert.equal(tw.uniforms.uGlowStrength.value, 3);
+    mats.restore(saved);
+    // back to 1: the plain twin again
+    surf.userData.bloom = 1; saved = mats.swap(s, exact);
+    assert.equal(forest.material.name, exact ? 'glow:kit:exact' : 'glow:kit');
+    mats.restore(saved);
+    // and a shader the kit did not write (no emitted line) keeps its plain twin
+    surf.userData.bloom = 2; const keep = surf.fragmentShader; surf.fragmentShader = keep.replace('gl_FragColor = vec4(emitted, plainly);', 'gl_FragColor = vec4(emitted, 1.0 - plainly * 0.0 - (1.0 - plainly));');
+    saved = mats.swap(s, exact); assert.ok(!forest.material.name.endsWith(':scaled')); mats.restore(saved); surf.fragmentShader = keep;
+    // disposed with the surface
+    let gone = 0; tw.addEventListener('dispose', () => gone++); surf.dispose(); assert.equal(gone, 1);
+    mats.dispose();
+  }
+  kit.dispose();
+});
+
+test('kit surface at 0: left out where the scene\'s depth hides (one draw fewer); without it, drawn emitting nothing so it still hides', () => {
+  const kit = createKit();
+  const none = voxScene(kit), zero = voxScene(kit, { bloom: 0 });
+  const mats = createGlowMaterials();
+  let saved = mats.swap(none.s, true); const drawn = mats.stats.drawn; mats.restore(saved);
+  saved = mats.swap(zero.s, true);
+  assert.equal(mats.stats.drawn, drawn - 1); assert.equal(zero.forest.material.visible, false);
+  assert.equal(zero.forest.geometry.index.count, 6, 'its own geometry: nothing swapped in');
+  mats.restore(saved);
+  saved = mats.swap(zero.s, false);
+  assert.equal(zero.forest.material.name, 'glow:kit:scaled'); assert.equal(zero.forest.material.uniforms.uGlowStrength.value, 0);
+  assert.equal(zero.forest.material.depthWrite, true, 'still writes depth: what is behind it stays hidden, cut-outs as they are');
+  mats.restore(saved);
+  // an array of materials takes the same way (standIn)
+  const multi = new THREE.Mesh(zero.forest.geometry, [kit.surface({ vox: true, bloom: 0 }), kit.surface({ vox: true, bloom: 2 })]);
+  const sc = new THREE.Scene(); sc.add(multi);
+  saved = mats.swap(sc, true); assert.equal(multi.material[0].visible, false); assert.equal(multi.material[1].uniforms.uGlowStrength.value, 2); mats.restore(saved);
+  mats.dispose(); kit.dispose();
+});
+
+test('kit surface strength at Classic and Low: no pass, nothing reads it; vhs.js is not touched by it', () => {
+  for (const tier of ['classic', 'low']) assert.equal(profile(tier).glow, 0);
+  assert.ok(!B('vhs.js').includes('uGlowStrength') && !B('kit.js').includes('uGlowStrength'), 'the uniform lives only in glow.js\'s scaled twins');
+  assert.equal(B('glow.js').split('glowStrength(').length - 1, 3, 'read for shining materials, for kit surfaces in standIn and in the exact swap');
 });
