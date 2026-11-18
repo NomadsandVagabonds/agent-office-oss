@@ -217,7 +217,8 @@ export function createStalkers(env, options = {}) {
         }
         // (shoved: it stands where it was put, c.stall. One tick of no time at all first, so that it is drawn where it was put)
         const settle = !!k.settle; k.settle = false;
-        if (k.stall > 0) { k.stall = Math.max(0, k.stall - dt); if (!settle) continue; }
+        // (…and while it stands there it may draw being hit, as `dies` draws a death: a pose only, nothing moved, nothing landed)
+        if (k.stall > 0) { k.stall = Math.max(0, k.stall - dt); if (!settle) { try { k.it.flinch?.(k.vital ? k.vital.hurt : null, dt); } catch { /* a pose that failed is not a reason to stop the floor */ } continue; } }
         const step = settle ? 1e-4 : dt;
         try {
           const tick = () => k.it.update?.(step, env.clock);
