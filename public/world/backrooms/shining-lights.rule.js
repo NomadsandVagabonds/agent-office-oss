@@ -27,29 +27,24 @@ export function lampSpots(x0, y0, z0, x1, y1, z1) {
 }
 
 /**
- * Make `batch` light the room: from now on, each outermost call that adds vertices to it adds lamps through
- * `add(x, y, z, rgb, opt)` (→ the lamp it made, which the room keeps), each of power `lights.power / n` (n the lamps
- * of that piece) in `rgb` (linear), with `lights.offset` [dx, dy, dz] added to its place if given. Past the cap
- * (`lights.cap`, at most SHINING_LIGHTS.cap) the nearest two of the batch's lamps become one, weighted by power, in
- * the place of the earlier one; the later is handed to `drop(lamp)`. → the batch's own lamps (a live list).
+ * A room's lamps kept within a cap, as one shining batch keeps its own (shineLights, below; world.js c.fitting keeps the
+ * room's ceiling fittings' lamps in one too): `put(x, y, z, rgb, w, opt)` adds the lamp `add(x, y, z, rgb, opt)` makes
+ * (rgb linear, as handed to the lamp; w the power it carries, for merging) and → it. Past the cap (`lights.cap`, at
+ * most SHINING_LIGHTS.cap) the nearest two of the set's lamps become one, weighted by power, in the place of the
+ * earlier one; the later is handed to `drop(lamp)`. → { own: the set's lamps ({ L, w }, a live list), put }.
  */
-export function shineLights(batch, rgb, lights, add, drop) {
-  const power = Number.isFinite(Number(lights.power)) ? Number(lights.power) : 1;
-  const cap = Math.max(1, Math.min(SHINING_LIGHTS.cap, Math.floor(Number(lights.cap) || SHINING_LIGHTS.cap)));
-  const off = Array.isArray(lights.offset) ? lights.offset.map((v) => Number(v) || 0) : null;
-  const opt = {};
-  for (const name of PASSED) if (lights[name] !== undefined) opt[name] = lights[name];
+export function lampSet(lights, add, drop) {
+  const cap = Math.max(1, Math.min(SHINING_LIGHTS.cap, Math.floor(Number(lights?.cap) || SHINING_LIGHTS.cap)));
   const own = [];                      // { L, w }: the lamp, and the power it carries (for merging)
   const merge = (a, b) => {            // b into a
     const W = a.w + b.w, A = a.L, B = b.L;
     A.x = (A.x * a.w + B.x * b.w) / W; A.y = (A.y * a.w + B.y * b.w) / W; A.z = (A.z * a.w + B.z * b.w) / W;
     A.r += B.r; A.g += B.g; A.b += B.b; a.w = W;
   };
-  const place = (p, share) => {
-    const x = p[0] + (off ? off[0] : 0), y = p[1] + (off ? off[1] : 0), z = p[2] + (off ? off[2] : 0);
-    const next = { L: add(x, y, z, rgb.map((v) => v * share), opt), w: share };
+  const put = (x, y, z, rgb, w, opt) => {
+    const next = { L: add(x, y, z, rgb, opt), w };
     own.push(next);
-    if (own.length <= cap) return;
+    if (own.length <= cap) return next.L;
     // the nearest two (ties: the earliest pair), the later into the earlier
     let bi = 0, bj = 1, best = Infinity;
     for (let i = 0; i < own.length; i++) for (let j = i + 1; j < own.length; j++) {
@@ -59,6 +54,27 @@ export function shineLights(batch, rgb, lights, add, drop) {
     merge(own[bi], own[bj]);
     drop(own[bj].L);
     own.splice(bj, 1);
+    return next.L;
+  };
+  return { own, put };
+}
+
+/**
+ * Make `batch` light the room: from now on, each outermost call that adds vertices to it adds lamps through
+ * `add(x, y, z, rgb, opt)` (→ the lamp it made, which the room keeps), each of power `lights.power / n` (n the lamps
+ * of that piece) in `rgb` (linear), with `lights.offset` [dx, dy, dz] added to its place if given. Past the cap
+ * (`lights.cap`, at most SHINING_LIGHTS.cap) the nearest two of the batch's lamps become one (lampSet, above).
+ * → the batch's own lamps (a live list).
+ */
+export function shineLights(batch, rgb, lights, add, drop) {
+  const power = Number.isFinite(Number(lights.power)) ? Number(lights.power) : 1;
+  const off = Array.isArray(lights.offset) ? lights.offset.map((v) => Number(v) || 0) : null;
+  const opt = {};
+  for (const name of PASSED) if (lights[name] !== undefined) opt[name] = lights[name];
+  const set = lampSet(lights, add, drop);
+  const place = (p, share) => {
+    const x = p[0] + (off ? off[0] : 0), y = p[1] + (off ? off[1] : 0), z = p[2] + (off ? off[2] : 0);
+    set.put(x, y, z, rgb.map((v) => v * share), share, opt);
   };
   let depth = 0;
   for (const name of ['grid', 'quad', 'tri', 'ball', 'box', 'addVox']) {
@@ -83,5 +99,5 @@ export function shineLights(batch, rgb, lights, add, drop) {
       return out;
     };
   }
-  return own;
+  return set.own;
 }
