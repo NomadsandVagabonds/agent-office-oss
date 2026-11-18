@@ -272,7 +272,10 @@ function doorLight(world, rt, leaves) {
     found.push({ dr, N, th, res, total, share: [...res.energy].map((e) => e / total), tint });
   }
   found.sort((a, b) => b.total - a.total);
-  const kept = found.slice(0, SHADOWS.maxDoors);
+  // (doorways first: a doorway's light is how the ways out of a room are read, so a window never takes one's place among
+  // those kept. Windows, brightest first, fill only what the doorways leave)
+  const doorways = found.filter((f) => !f.dr.win).slice(0, SHADOWS.maxDoors);
+  const kept = [...doorways, ...found.filter((f) => f.dr.win).slice(0, SHADOWS.maxDoors - doorways.length)];
   rt.doorStats = { ms: 0, doors: kept.length, of: def.doors.length, ...(wins.length ? { windows: kept.filter((k) => k.dr.win).length, ofWindows: wins.length } : {}) };
   if (kept.length) {
     const packed = packDoorways(m.layout, kept.map((k) => k.res));
