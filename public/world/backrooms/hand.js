@@ -8,6 +8,7 @@ import { handAt, showing } from './shove-hands.rule.js';
 import { INVENTORY_MODELS, sculptTorchGrip } from './inventory-items.js';
 import { Vox, M } from '../vox/vox.js';
 import { KINDS, ITEM_IDS, isPaper, isBalloon, isFlashlight, createHandOver } from './items.js';
+import { heldScissors } from './hand-scissors.js';
 
 export { ITEM_IDS, isPaper, isBalloon, isFlashlight };
 
@@ -74,7 +75,7 @@ export function createHand(env) {
  */
 export function createHandView(env, camera) {
   const kit = env.kit, root = new THREE.Group(), made = new Map(), at = new THREE.Vector3(), rest = new THREE.Vector3();
-  let shown = null, type = null, t = 0, swing = 0, jabT = 0, layoutKey = '';
+  let shown = null, type = null, t = 0, swing = 0, layoutKey = '';
   root.visible = false;
   /** FORM HR-404, as a sheet of paper held up: the one thing down here that is meant to be read. */
   function slip() {
@@ -99,6 +100,7 @@ export function createHandView(env, camera) {
   }
   function model(kind) {
     if (kind === 'pink-slip') return slip();
+    if (kind === 'scissors') return heldScissors(kit, ITEM_LIGHTS(), ITEM_AMB);   // (a fist round them, and two halves on a pin: hand-scissors.js)
     const b = new Batch(false), s = (kit.VOXEL || 0.025) * (kind === 'balloon' ? 0.36 : 0.46);
     INVENTORY_MODELS[kind].sculpt(b, s, { grounded: false, held: true });
     const itemBounds = kind === 'torch' || kind === 'balloon' ? boundsFromBatch(b) : null;
@@ -187,7 +189,9 @@ export function createHandView(env, camera) {
   const view = {
     /** Every frame, for the part somebody is in. show: false while the bag is open, somebody is being carried, or the tape is ending. */
     update(dt, show) {
-      const item = show ? env.inventory?.held?.() ?? null : null, want = item && INVENTORY_MODELS[item.type] ? item.type : null;
+      const item = show ? env.inventory?.held?.() ?? null : null;
+      // (a pair coming apart goes on being shown until the blade has fallen, though the pockets have already let go of it)
+      const want = item && INVENTORY_MODELS[item.type] ? item.type : show && made.get('scissors')?.busy() ? 'scissors' : null;
       if (want !== type) {
         if (shown) shown.mesh.visible = false;
         type = want; shown = null;
@@ -231,18 +235,10 @@ export function createHandView(env, camera) {
       fitPicture();
       const me = env.player.me, pace = Math.min(1, (me.speed || 0) / 2);
       t += dt * (1 + pace * 5); swing += (pace - swing) * (1 - Math.exp(-6 * dt));
-      if (jabT > 0) jabT = Math.max(0, jabT - dt / 0.28);
       root.position.copy(camera.position).sub(env.world.scene.position); root.quaternion.copy(camera.quaternion);
       at.set(rest.x + Math.sin(t * 1.1) * 0.006 * swing, rest.y + Math.abs(Math.sin(t * 1.1)) * 0.014 * swing + Math.sin(t * 0.35) * 0.003, rest.z);
-      if (type === 'scissors') {
-        const u = jabT > 0 ? 1 - jabT : 0;
-        const thrust = u > 0 ? Math.sin(Math.pow(u, 0.55) * Math.PI) : 0;
-        at.x -= thrust * 0.088;
-        at.y += thrust * 0.045;
-        at.z -= thrust * 0.165;
-        shown.mesh.rotation.set(0.25 - thrust * 0.56, -0.6 + thrust * 0.36, thrust * 0.4);
-      }
-      shown.mesh.position.copy(at);
+      if (type === 'scissors') shown.update(dt, at);           // (the jab, and how it went: hand-scissors.rule.js)
+      else shown.mesh.position.copy(at);
       if (hands?.group.visible) { const L2 = env.world.lightAt(me.x, me.z, 1.2); for (const h of hands.made) h.mat.uniforms.uTint.value.set(Math.max(0.16, L2[0] * 1.25), Math.max(0.16, L2[1] * 1.25), Math.max(0.16, L2[2] * 1.25)); }
       if (type === 'balloon') shown.mesh.rotation.z = Math.sin(t * 0.5) * 0.09 + swing * 0.12;
       // lit by where you are standing — and a torch that is switched on is its own light
@@ -250,7 +246,10 @@ export function createHandView(env, camera) {
       shown.mat.uniforms.uTint.value.set(Math.max(floor, L[0] * k) * (on ? 1.1 : 1), Math.max(floor, L[1] * k), Math.max(floor, L[2] * k) * (on ? 0.85 : 1));
     },
     hide() { root.visible = false; },
-    jab() { jabT = 1; },
+    /** The scissors' click: a jab starts. */
+    jab() { made.get('scissors')?.jab(); },
+    /** How the jab went, once it is known (inventory.js): { ok, snapped }. A hit, a miss and a break each look their own. */
+    landed(result) { made.get('scissors')?.landed(result); },
     dispose() { hands = null; root.removeFromParent(); if (camera.userData.hand === view) camera.userData.hand = null; },
   };
   env.handView = view;
