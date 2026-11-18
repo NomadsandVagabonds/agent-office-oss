@@ -801,7 +801,7 @@ export function create(c) {
      */
     dies(progress) {
       const p = pirate; if (!p) return;
-      const k = Math.max(0, Math.min(1, progress)), sec = k * HEALTH.dying;
+      const k = Math.max(0, Math.min(1, progress)), sec = k * (c.vital?.takes || HEALTH.dying);          // (seconds: the rest of a longer dying is it lying there)
       if (!p.death) {
         const floor = W()?.floorY(p.x, p.z) ?? p.group.position.y;
         p.death = { y0: p.group.position.y, floor, yaw: p.group.rotation.y, down: !!p.down, lean: p.head.rotation.z };

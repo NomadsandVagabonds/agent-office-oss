@@ -630,7 +630,7 @@ export function create(c) {
    * only: the same for anyone watching.
    */
   function dieToner(unit, vis, floorY) {
-    const rig = unit.rig, walker = unit.walker, sec = unit.vital.dying * HEALTH.dying;
+    const rig = unit.rig, walker = unit.walker, sec = unit.vital.dying * (unit.vital.takes || HEALTH.dying);
     if (!unit.fall) unit.fall = { y: Math.max(floorY, unit.surfY), bz: unit.bankZ, bx: unit.bankX, yaw: unit.yaw };
     const f = unit.fall, drop = f.y - floorY, land = Math.max(0.12, Math.sqrt(2 * drop / 9.8)), after = sec - land;
     const y = Math.max(floorY, f.y - 4.9 * sec * sec);
