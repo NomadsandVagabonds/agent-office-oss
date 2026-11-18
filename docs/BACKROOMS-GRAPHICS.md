@@ -1474,16 +1474,32 @@ gameplay file and nothing of the waterpark's is changed for it.
   `exp2`, a `sqrt`), its distance from the eye, one hash for the broken crest
   and the stirred bed. At most eight rings (24 evaluations). With none: three
   skipped branches. Software rendering, so no milliseconds.
-- **Who could hide the waterpark's own splash ring, and how.** `createBasin`
-  (`waterpark.js`) adds an unnamed `RingGeometry` (pale, `#dafcff`,
-  see-through) straight to the room's group (`c.add`) and, on each splash,
-  sets its place, scale and opacity, never `.visible`: hidden, it would stay
-  hidden. From this side it can only be found by its shape and colour, which
-  is fishing. The clean way is one line in `createBasin` after `c.add(rippleMesh);`:
-  `rippleMesh.userData.liquidStandIn = true;`, and the camcorder's draw
-  (`liquid.js` `draw`) turning off, for the length of its own draw, whatever
-  in a drawn surface's room carries that mark, as it does the room's sheet.
-  Not done: it is another builder's file.
+- **Stand-ins: what a room draws itself that the water now does.** A mesh
+  in a room marked `userData.liquidStandIn = true` is hidden for the length of
+  the camcorder's own draw in each room whose surface is drawn that frame
+  (Medium and High, the surface up and drawn: the same rooms whose sheet is
+  swapped for the water, the eye above it or in it), before anything else is
+  drawn, so the mirror at High leaves it out too; it is put back in the same
+  `finally`, and one a room has hidden itself stays hidden. Classic and Low,
+  and any frame the room's surface is not drawn, keep it exactly as it was.
+  The one marked today is the waterpark's pale splash ring (`createBasin`,
+  `waterpark.js`: `rippleMesh.userData.liquidStandIn = true;` after
+  `c.add(rippleMesh);`): its splashes are the visitor's (going in, and wading),
+  which the visitor's feed already gives the wake. Not marked, each its own
+  drawn ring on water that is not a marked surface or not a splash: the dive
+  tower's plunge ring (`rooms/dive-tower.js`, its own pool, unmarked) and the
+  flume connector's two looping spill ripples (`rooms/flume-connector/water.js`,
+  `beach-spill-ripple`). Tests: `test/backrooms-gfx-water-standin.test.mjs`.
+  Proof (one load each, clock paused, drawn by hand, the kiddie lagoon from its
+  doorway): with no splash the picture is the same with and without the mark,
+  0 of 576,000 pixels at High plain and Medium Full VHS (outside the
+  camcorder's blinking REC light, which differs between any two pictures);
+  with a splash set on the ring, 7,755 pixels change at High, all on the
+  ring's footprint but one at its edge, and 8,805 at Medium Full VHS, all
+  within 12 pixels of it (the tape's smear); at Classic and Low, 0 either way.
+  Built in node, a whole waterpark floor on two seeds (`qa-wp1` and 7) is the
+  same object for object (place, visibility, geometry, materials) but for the
+  mark on each basin's ring (two and four of them).
 - **Known faults (the wake).**
   1. **From the deck it reads, but as rings with dark edges.** At 3 m (wading)
      and 3.6 m (a drop into the deep end), High and Medium, plain and Full VHS,
@@ -1495,8 +1511,9 @@ gameplay file and nothing of the waterpark's is changed for it.
      for less legibility.
   2. The far cells (20 cm) are big blocks; on a slant they can look like
      square patches more than water.
-  3. The waterpark's own splash ring still shows on each splash (above), much
-     stronger than the wake.
+  3. The waterpark's splash ring is hidden at Medium and High (stand-ins,
+     above); the dive tower's plunge ring and the flume connector's spill
+     ripples are drawn rings still.
   4. Rings stop at the surface's edge (they never cross a wall) but do not
      reflect from it, and they run on under the floats and out the other side:
      the surface knows nothing of what stands in it, and nothing cheap would
