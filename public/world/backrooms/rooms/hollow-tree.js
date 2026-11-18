@@ -45,6 +45,7 @@ export function build(c) {
   // Full per-vertex AO (`~46k` tris) gives deep shadowed bark flutes & glowing sap interior!
   placeVox(c, `forest:ancient:bole:${tallVox}`, ancientHollowTreeVox(tallVox), cx, cz, {
     scale: boleScale,
+    bloom: 1,   // (the lit mouth is what the room is seen by)
   });
   c.blot(cx, cz, 4.6, 4.6, { rgb: [0.04, 0.03, 0.02], a: 0.62 });
 
