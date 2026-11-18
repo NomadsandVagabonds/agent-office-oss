@@ -104,7 +104,11 @@ export function create(c) {
           const nx = n.p.x + dx / dd * step, nz = n.p.z + dz / dd * step;
           // (it may always come back in off a wall; it may not go out to one)
           if (inside(nx, nz) || !inside(n.p.x, n.p.z)) { n.p.x = nx; n.p.z = nz; } else n.goal = goal(n);
-          n.p.y += dy / dd * step; n.heading += Math.atan2(Math.sin(Math.atan2(dx, dz) - n.heading), Math.cos(Math.atan2(dx, dz) - n.heading)) * Math.min(1, dt * 3);
+          n.p.y += dy / dd * step;
+          // (going round, it keeps its written face to you, whichever way it goes: the back of a note is blank, and the writing
+          // is what makes it a note and not a square of paper — and paper that keeps turning to you is wrong in the right way)
+          const face = Math.atan2(L.x - n.p.x, L.z - n.p.z);
+          n.heading += Math.atan2(Math.sin(face - n.heading), Math.cos(face - n.heading)) * Math.min(1, dt * 3);
         } else if (n.s.mode === 'dive') {
           const dx = L.x - n.p.x, dy = L.y - n.p.y, dz = L.z - n.p.z, dd = Math.hypot(dx, dy, dz) || 1, step = Math.min(dd, NOTES.diveSpeed * dt);
           n.p.x += dx / dd * step; n.p.y += dy / dd * step; n.p.z += dz / dd * step; n.heading = Math.atan2(dx, dz);
