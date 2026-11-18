@@ -24,10 +24,12 @@ const TRIM = '#d9d6cc', PAN = '#eeeee6', BLADE = '#c9c9c0', STEEL = '#8d908e', D
 /**
  * A recessed light: a trim round the hole, a white pan sloping up to the lamps, two tubes in their holders, and under
  * them a louvre of thin blades that hides the glass from anybody not standing beneath it.
- * @param {{dead?:boolean}} [o] dead: it is out. One tube is black at the ends and the other is gone; the louvre has dropped at one end.
+ * @param {{dead?:boolean, surface?:boolean}} [o] dead: it is out. One tube is black at the ends and the other is gone; the louvre has dropped at one end.
+ *        surface: it is fixed under a ceiling, not let into one: the same face, tubes and louvre in a closed box with plain upright
+ *        sides and a top, where the pan's sloping sides would show as an open tray.
  * @returns {{housing:Vox, tubes:Vox, louvre:Vox}}
  */
-export function lightVox({ dead = false } = {}) {
+export function lightVox({ dead = false, surface = false } = {}) {
   const h = new Vox(), t = new Vox(), l = new Vox(), B = box(h), T = box(t), L = box(l);
   const trim = M(TRIM, 0), pan = M(PAN, 0), blade = M(BLADE, 0), steel = M(STEEL, 0), dark = M(DARK, 0);
   // the box above the ceiling, open underneath; and the trim that sits on the grid, a voxel proud of the tiles
@@ -39,6 +41,11 @@ export function lightVox({ dead = false } = {}) {
   B(-HX, -1, -HZ, HX - 1, 0, -HZ + 1, trim); B(-HX, -1, HZ - 2, HX - 1, 0, HZ - 1, trim);
   B(-HX, -1, -HZ, -HX + 1, 0, HZ - 1, trim); B(HX - 2, -1, -HZ, HX - 1, 0, HZ - 1, trim);
   B(-1, 6, -HZ + 2, 0, 6, HZ - 3, M('#dcdcd2', 0));                                                // the ridge between the two lamps
+  if (surface) {                                                                                   // the box round it: four upright sides and a lid
+    const side = M('#cfccc1', 0);
+    B(-HX, 1, -HZ, -HX, 7, HZ - 1, side); B(HX - 1, 1, -HZ, HX - 1, 7, HZ - 1, side); B(-HX, 1, -HZ, HX - 1, 7, -HZ, side); B(-HX, 1, HZ - 1, HX - 1, 7, HZ - 1, side);
+    B(-HX, 7, -HZ, HX - 1, 7, HZ - 1, side);                                                         // (the lid is the pan's own height: the box is CEILING.deep and no deeper)
+  }
   // lamp holders at both ends of each tube, and the tubes
   TUBES.forEach(([a, b], i) => {
     const x = Math.floor(a[0]) - 1, y = Math.floor(a[1]) - 1;
