@@ -136,7 +136,6 @@ export function build(c) {
   poolSign(c, 'right', 0, 1.55, [
     'JUNIOR LAGOON',
     'NO SPLASHING NEAR STAFF',
-    'WALK SLOWLY IN BASIN',
     'SHOES MUST FACE CEILING',
   ], { seed: 89, warn: true, mess: 0.22 });
   finishPoolRoom(c,'kiddie-lagoon');
