@@ -15,7 +15,12 @@
 //   - fresnel toward a flat tint of the room's light (reflection(): where the mirror's sample will go, later);
 //   - lit by the room's light as the old sheet was, its own baked light with the room's dimmer, flicker and banks: a
 //     pool in a room that has gone dark is dark.
-// No wake yet: the rings' uniforms are there (uRings, uRingN) and none is ever set.
+//   - the wake: rings where something disturbed it (handle.disturb, liquid.mark.js; the visitor wading, liquid.js
+//     feel), each a short train of waves spreading at a fixed speed, fading with age and with the distance it has gone.
+//     Its slope is added to the ripple's on cells of its own (the ripple's 5 cm near, 10 and 20 cm further off, so it
+//     stays in blocks where the ripple's own cells lie flat), so it bends the bed in blocks; its crest is a broken band
+//     of brighter cells, a darker trough just behind it, and the light on the bed is stirred inside a fresh one. A small
+//     pool of them a surface (uRings, uRingN); none set, the surface is exactly as it was without them.
 
 export const LIQUID = Object.freeze({
   flat: 0.01,         // metres: a sheet is flat if its corners span less than this, up and down, in its room's frame
@@ -57,7 +62,42 @@ export const LIQUID = Object.freeze({
   causticSharp: Object.freeze([8, 3]),       // how sharp its lines are in shallow water, and at 2 m (lower is softer and wider)
   causticFade: 0.35,  // per metre of a clear sheet's water it fades by (e^-, times the murk squared: the dark pools show none)
   causticDrift: Object.freeze([0.06, 0.02]), // metres it drifts for each unit of a room's phase, as the ripple does
-  rings: 8,           // (the wake's slots: none used yet)
+  // the wake: rings where something disturbed the water (x, z in the room's frame, its age by the camcorder's clock, strength)
+  rings: 8,           // a surface's slots (the shader's array): when full, the faintest is replaced
+  wakeSpeed: 0.42,    // metres a second its front spreads
+  wakeFrom: 0.14,     // metres: its front's radius when it starts (about a body's)
+  wakeLife: 2.6,      // seconds: it fades to nothing at this age (smoothly, to no slope at all: it is dropped then, with nothing to pop)
+  wakeDamp: 0.5,      // per second it fades by (e^-), on top of that
+  wakeWave: 0.25,     // metres from one of its crests to the next, near (five of the ripple's cells); never under 3 of its own cells
+  wakeWaves: Object.freeze([1.5, 3]), // how many of them in its train: each ring's own, between these (jittered: wakeJitter)
+  wakeWiden: 0.35,    // its train widens by this, a second
+  wakeHeight: 0.012,  // metres high at strength 1
+  wakeSpread: 3,      // its height falls as 1/√(1 + this × metres gone): it spreads its energy round a longer ring
+  wakeWobble: 1.6,    // how far the ripple's own height moves a ring's front (metres per metre): no ring is a true circle
+  wakeMost: 2,        // the strongest a ring may be
+  wakeJitter: 0.3,    // a ring's strength is its asking times 1 ± this/2 (from where and when it starts: wakeHash, no seeded stream)
+  // the ring has cells of its own: the ripple's 5 cm near, 10 cm and then 20 cm further off, so that it stays in blocks
+  // without speckle where the ripple's own cells lie flat (it is not flattened with distance as the ripple is)
+  wakePixels: 5,      // pixels a ring's cell should span at least (on average over its two sides, seen at a slant): its
+                      //  cells double (to two doublings) until they do
+  wakeSlopeStep: 0.04,// its slope, stepped (its own, added to the ripple's)
+  // what carries across a pool: light and dark more than the bend
+  wakeCrest: 2.2,     // how much brighter its crest makes the water at strength 1, fresh (a broken band: some of its cells)
+  wakeCrestCells: 0.35, // (the share of a crest's cells left out)
+  wakeTrough: 1.0,    // how much darker the trough just behind the crest
+  wakeStir: 0.6,      // the bed inside a fresh ring, brighter by this for its first wakeStirTime seconds (the light stirred)
+  wakeStirTime: 0.5,
+  wakeNear: Object.freeze([0.8, 3, 0.45]), // metres from the eye: nearer than the first a ring is this much (the third) of
+                      //  itself, full from the second (near rings gentler than far: the eye is right over them)
+  // the visitor's own wake (liquid.js feel, from index.js once a frame): a ring as they go in, and one for each
+  // wadeEvery metres they move through it, as strong as they are quick
+  wadeEvery: 0.45,    // metres moved through water between two rings (walking: one about every 0.35 s; running, closer in time)
+  wadeMoving: 0.25,   // m/s: slower than this is standing still (player.js `moving`)
+  wadeWalk: 1.45,     // m/s: a ring of strength 1 (wading is slowed: player.js WALK 2.05 is about 1.3 m/s in the kiddie lagoon)
+  wadeLeast: 0.3,
+  wadeMost: 1.3,
+  wadeEntry: 1.5,     // the ring as they go in (more for coming in quick)
+  wadeDeep: 1.4,      // metres: an eye further than this under the surface is too deep to disturb it
   fallbackTint: Object.freeze([0.03, 0.24, 0.3]),  // linear, for a sheet whose picture cannot be read
 });
 
@@ -79,6 +119,79 @@ export function holdStep(state, now, seen, force = null, k = LIQUID) {
   const last = seen ? now : state?.last ?? -Infinity;
   const split = force === 'split' ? true : force === 'single' ? false : now - last < k.hold;
   return { last, split };
+}
+
+/** What is left of a ring of strength 1 at this age (seconds): 1 when it starts, nothing at wakeLife and after (and before 0). */
+export function ringLeft(age, k = LIQUID) {
+  if (!(age >= 0) || age >= k.wakeLife) return 0;
+  const t = 1 - age / k.wakeLife;
+  return Math.exp(-k.wakeDamp * age) * t * t;
+}
+
+/** 0…1 from a place and a time (and which of a ring's numbers): the same for the same, no seeded stream read. */
+export function wakeHash(x, z, t, i = 0) {
+  const v = Math.sin(x * 12.9898 + z * 78.233 + t * 37.719 + i * 4.581) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+/**
+ * A disturbance: a ring starts at x, z (the surface's room frame) at `now` (seconds of the camcorder's clock), into
+ * `pool` (an array, a surface's). Full, the faintest is replaced (the oldest, of rings as strong). → whether one started.
+ */
+export function wakeStart(pool, x, z, strength, now, k = LIQUID) {
+  const s0 = Math.min(k.wakeMost, Number(strength));
+  if (!Array.isArray(pool) || !Number.isFinite(x) || !Number.isFinite(z) || !(s0 > 0) || !Number.isFinite(now)) return false;
+  // (each ring a little its own: its strength and how many waves it has, from where and when it starts)
+  const s = Math.min(k.wakeMost, s0 * (1 + k.wakeJitter * (wakeHash(x, z, now, 1) - 0.5)));
+  const n = k.wakeWaves[0] + (k.wakeWaves[1] - k.wakeWaves[0]) * wakeHash(x, z, now, 2);
+  const ring = { x, z, t0: now, s, n };
+  if (pool.length < k.rings) { pool.push(ring); return true; }
+  let at = 0, least = Infinity;
+  for (let i = 0; i < pool.length; i++) {
+    const left = pool[i].s * ringLeft(now - pool[i].t0, k);
+    if (left < least || (left === least && pool[i].t0 < pool[at].t0)) { least = left; at = i; }
+  }
+  pool[at] = ring;
+  return true;
+}
+
+/** The pool at `now`: the rings faded to nothing (or from a clock that went back) dropped. → the pool. */
+export function wakeStep(pool, now, k = LIQUID) {
+  if (!Array.isArray(pool)) return pool;
+  let n = 0;
+  for (const r of pool) { const age = now - r.t0; if (age >= 0 && age < k.wakeLife) pool[n++] = r; }
+  pool.length = n;
+  return pool;
+}
+
+/**
+ * The shader's rings from the pool at `now`: each slot of `out` set to (x, z, age, waves × 4 + strength) (strength is
+ * under 4, so the shader takes the two apart). → how many (uRingN).
+ */
+export function wakeFill(pool, now, out, k = LIQUID) {
+  const n = Math.min(pool?.length || 0, out.length, k.rings);
+  for (let i = 0; i < n; i++) {
+    const r = pool[i], v = out[i], age = now - r.t0, w = Math.round(((r.n ?? LIQUID.wakeWaves[0]) - 1) * 16) * 4 + Math.min(r.s, 3.999);
+    if (v.set) v.set(r.x, r.z, age, w); else { v[0] = r.x; v[1] = r.z; v[2] = age; v[3] = w; }
+  }
+  return n;
+}
+
+/**
+ * The visitor's own wake, once a frame: `wet` whether they are in a surface's water, `speed` how quick (m/s), `now` the
+ * camcorder's clock. → { state, ring }: ring the strength of a ring to start where they are (0 for none). One as they go
+ * in; then one for each wadeEvery metres moved through it (speed × time), as strong as they are quick: a walk lays them
+ * further apart in time than a run. A clock that stands still (paused) starts nothing.
+ */
+export function wadeStep(state, { wet = false, speed = 0, now = 0 } = {}, k = LIQUID) {
+  const was = state || { wet: false, acc: 0, last: now };
+  const dt = Math.max(0, Math.min(0.25, now - (Number.isFinite(was.last) ? was.last : now)));
+  const v = Number(speed) || 0, quick = Math.max(k.wadeLeast, Math.min(k.wadeMost, v / k.wadeWalk));
+  if (!wet) return { state: { wet: false, acc: 0, last: now }, ring: 0 };
+  if (!was.wet) return { state: { wet: true, acc: 0, last: now }, ring: Math.min(k.wakeMost, k.wadeEntry + 0.3 * quick) };
+  let acc = was.acc, ring = 0;
+  if (v > k.wadeMoving) { acc += v * dt; if (acc >= k.wadeEvery - 1e-9) { acc = Math.max(0, acc - k.wadeEvery); ring = quick; } }
+  return { state: { wet: true, acc: Math.min(acc, k.wadeEvery), last: now }, ring };
 }
 
 /** sRGB (0…1) to linear, as the picture's texture is read. */
@@ -166,18 +279,31 @@ uniform int uRingN;
 varying vec3 vLit;
 varying vec3 vRoom;
 varying vec3 vView;
+// one ring of the wake at p, on cells rc wide: (its height, its crest, its trough, the light it stirs inside it). w: x, z,
+// age, waves × 4 + strength (wakeFill). Its front at wakeFrom + wakeSpeed × age, moved a little by the ripple's own height
+// there (base); its leading crest at the front, a trough just behind, then its other waves, as many as it has; its waves
+// never shorter than three of its cells (so far off, on wide cells, it is a band and not speckle); fading with age (to
+// nothing at wakeLife) and with the distance gone
+vec4 wakeRing(vec2 p, vec4 w, float base, float rc) {
+  float q = floor(w.w / 4.0), s = w.w - q * 4.0, waves = q / 16.0 + 1.0;
+  float age = w.z, r = length(p - w.xy);
+  float front = ${f(LIQUID.wakeFrom)} + ${f(LIQUID.wakeSpeed)} * age + base * ${f(LIQUID.wakeWobble)};
+  float d = r - front, lambda = max(${f(LIQUID.wakeWave)}, 3.0 * rc);
+  float width = 0.5 * waves * lambda * (1.0 + ${f(LIQUID.wakeWiden)} * age), e = d + 0.4 * width;
+  float t = clamp(1.0 - age / ${f(LIQUID.wakeLife)}, 0.0, 1.0);
+  float a = s * exp(-${f(LIQUID.wakeDamp)} * age) * t * t * inversesqrt(1.0 + ${f(LIQUID.wakeSpread)} * r);
+  float env = a * exp(-e * e / (width * width)) * (1.0 - smoothstep(0.25 * lambda, 0.5 * lambda, d));
+  float wave = cos(d * 6.2831853 / lambda);
+  return vec4(${f(LIQUID.wakeHeight)} * env * wave,
+    env * smoothstep(0.6, 0.95, wave) * smoothstep(-0.5 * lambda, -0.25 * lambda, d),
+    env * smoothstep(0.6, 0.95, -wave) * smoothstep(-1.0 * lambda, -0.75 * lambda, d),
+    s * (1.0 - smoothstep(0.0, ${f(LIQUID.wakeStirTime)}, age)) * (1.0 - smoothstep(front - 0.05, front, r)));
+}
 float liquidDepth(float d) { return uClip.x * uClip.y / (uClip.y - d * (uClip.y - uClip.x)); }
 // the surface's height at p (the room's frame, metres): a few slow waves, drifted by the room's phase
 float liquidHeight(vec2 p) {
   vec2 q = p - vec2(${f(LIQUID.drift[0])}, ${f(LIQUID.drift[1])}) * uPhase;
   float h = ${f(LIQUID.ripple)} * (0.006 * sin(q.x * 3.1 + uTime * 1.3) + 0.005 * sin(q.y * 2.3 - uTime * 1.1) + 0.003 * sin((q.x + q.y) * 5.7 + uTime * 2.1));
-  // (the wake's rings, x, z, age, strength: none is set yet)
-  for (int i = 0; i < ${LIQUID.rings}; i++) {
-    if (i >= uRingN) break;
-    vec4 w = uRings[i];
-    float r = length(p - w.xy), front = w.z * 0.55;
-    h += 0.05 * exp(-pow((r - front) * 9.0, 2.0)) * w.w * exp(-w.z * 1.1) / (1.0 + r * 2.0) * sin((r - front) * 40.0);
-  }
   return h;
 }
 // what the surface mirrors, for a normal and the way to the eye (view space), at this pixel: for now a flat tint of the
@@ -211,6 +337,25 @@ void main() {
   // (far off, where a cell is a pixel or two, the steps would only be speckle: there it lies flat)
   vec2 fw = fwidth(vRoom.xz);
   slope *= clamp((cell / max(max(fw.x, fw.y), 1e-5) - ${f(LIQUID.sharp[0])}) / ${f(LIQUID.sharp[1] - LIQUID.sharp[0])}, 0.0, 1.0);
+  // the wake: its own slope, on cells of its own that widen far off (5, 10, 20 cm: at least wakePixels each) instead of
+  // lying flat, added to the ripple's; gentler right under the eye. wk: its height, crest, trough and stirred light here
+  vec4 wk = vec4(0.0);
+  if (uRingN > 0) {
+    float rc = cell * exp2(clamp(ceil(log2(${f(LIQUID.wakePixels)} * sqrt(max(fw.x * fw.y, 1e-10)) / cell)), 0.0, 2.0));
+    vec2 rp = (floor(vRoom.xz / rc) + 0.5) * rc;
+    float g = mix(${f(LIQUID.wakeNear[2])}, 1.0, smoothstep(${f(LIQUID.wakeNear[0])}, ${f(LIQUID.wakeNear[1])}, distance(vec3(rp.x, vRoom.y, rp.y), uEyeRoom)));
+    float wx = 0.0, wz = 0.0;
+    for (int i = 0; i < ${LIQUID.rings}; i++) {
+      if (i >= uRingN) break;
+      wk += wakeRing(rp, uRings[i], h0, rc);
+      wx += wakeRing(rp + vec2(rc, 0.0), uRings[i], h0, rc).x;
+      wz += wakeRing(rp + vec2(0.0, rc), uRings[i], h0, rc).x;
+    }
+    slope += floor(vec2(wx - wk.x, wz - wk.x) * g / rc / ${f(LIQUID.wakeSlopeStep)} + 0.5) * ${f(LIQUID.wakeSlopeStep)};
+    // (its crest a broken band: some of its cells left out, a fixed scatter of them)
+    wk.y *= g * step(${f(LIQUID.wakeCrestCells)}, fract(sin(dot(floor(vRoom.xz / rc), vec2(127.1, 311.7))) * 43758.5453));
+    wk.z *= g;
+  }
   vec3 up = normalize(uRoomToView * vec3(0.0, 1.0, 0.0));
   vec3 n = normalize(uRoomToView * normalize(vec3(-slope.x, 1.0, -slope.y)));
   vec3 v = normalize(-vView);
@@ -232,6 +377,8 @@ void main() {
   vec3 dir = normalize(vRoom - uEyeRoom);
   float k = caustic(vRoom.xz + dir.xz * thick, slope, thick) * exp(-${f(LIQUID.causticFade / LIQUID.keep)} * uKeep.w * thick);
   under *= 1.0 + uCaustic * k;
+  // (inside a fresh ring the light on the bed is stirred: brighter for its first moments)
+  if (uRingN > 0) under *= 1.0 + ${f(LIQUID.wakeStir)} * min(wk.w, 1.5) * (0.35 + k);
   // (uKeep: the water's own colours, scaled to its clearest, and how fast what it lets through at least falls)
   vec3 T = max(exp(-uAbsorb * thick), uKeep.rgb * exp(-uKeep.w * thick));
   // (and keeps more of its light than the water would leave it)
@@ -244,6 +391,8 @@ void main() {
   float edge = 1.0 - smoothstep(${f(LIQUID.edge * 0.5)}, ${f(LIQUID.edge)}, behind);
   float seen = clamp(0.7 * dot(light, vec3(0.333)) + 0.5 * dot(under, vec3(0.4)), 0.0, 1.5);
   col = mix(col, ${v3(LIQUID.edgeColor)} * seen, edge * ${f(LIQUID.edgeMix)});
+  // the wake's light and dark: its crest brighter, the trough just behind it darker (what the eye picks up across a pool)
+  if (uRingN > 0) col *= 1.0 + (clamp(wk.y * ${f(LIQUID.wakeCrest)}, 0.0, 0.9) - clamp(wk.z * ${f(LIQUID.wakeTrough)}, 0.0, 0.35)) * (1.0 - edge);
   gl_FragColor = vec4(col, 1.0);
 }`;
 

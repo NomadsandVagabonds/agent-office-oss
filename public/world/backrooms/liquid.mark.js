@@ -4,21 +4,22 @@
 // here (the rooms' own tests load world.js, and with it this, as plain modules): the matrices are the meshes' own.
 import { flatness } from './liquid.rule.js';
 
-// (what c.liquid hands back: the wake is to come, so it does nothing yet, at any tier)
-const STILL = Object.freeze({ disturb() {} });
-
 /**
  * c.liquid (world.js): mark what a room drew as a liquid's surface. Records the mark in rt.liquids; at c.after time it
- * finds the mesh(es) and measures them. → a handle { disturb() } that does nothing yet.
+ * finds the mesh(es) and measures them. → a handle { disturb(x, z, strength) }: a ring in the water at x, z (WORLD
+ * coordinates, as c.toWorld gives them), strength 1 a body walking through it (0 to 2). It starts a ring only where
+ * the tier draws the water and the surface is up (liquid.js sets rec.disturb); anywhere else (Classic, Low, a sheet
+ * that was refused, a room built in node) it does nothing and says so: false.
  */
 export function markLiquid(c, target, opt = {}) {
   const rt = c.rt;
   const phase = opt.phase && typeof opt.phase === 'object' && 'value' in opt.phase ? opt.phase : Number.isFinite(opt.phase) ? { value: opt.phase } : null;
   const rec = { kind: opt.kind || 'water', phase, flow: opt.flow ?? null, y: Number.isFinite(opt.y) ? opt.y : null,
-    rt, kit: c.kit, target, meshes: [], toRoom: [], plane: null, state: 'marked', reason: null, pairs: null, under: false, live: false };
+    rt, kit: c.kit, target, meshes: [], toRoom: [], plane: null, state: 'marked', reason: null, pairs: null, under: false, live: false,
+    wake: null, disturb: null };
   (rt.liquids ||= []).push(rec);
   c.after?.push?.(() => settleLiquid(rec));
-  return STILL;
+  return { disturb: (x, z, strength = 1) => (rec.disturb ? rec.disturb(x, z, strength) : false) };
 }
 
 const isBatch = (t) => !!t && Array.isArray(t.pos) && Array.isArray(t.idx) && !t.isObject3D;

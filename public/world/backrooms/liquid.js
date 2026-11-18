@@ -22,8 +22,14 @@
 //      held (hand.js holdInFront, as ever), into the same target, which is not cleared.
 // Where the eye is under a surface (its plane plus 2 cm), that surface is not drawn: the room's sheet is, and the
 // waterpark's veil, as now. Everything changed for the draw is put back in a finally.
+//
+// The wake: each surface that is up keeps a small pool of rings (liquid.rule.js wakeStart / wakeStep / wakeFill), timed by
+// the camcorder's own clock (frame()'s `now`). A room or a creature starts one through the handle c.liquid gave it
+// (`handle.disturb(x, z, strength)`, world coordinates); the visitor starts them by being in the water (feel(), which
+// index.js calls once a frame). Where the tier has no water there is no view, rec.disturb is never set, and the handle's
+// call does nothing.
 import * as THREE from 'three';
-import { LIQUID, underwater, holdStep, toLinear, waterColours, LIQUID_VERT, LIQUID_FRAG, COPY_FRAG } from './liquid.rule.js';
+import { LIQUID, underwater, holdStep, toLinear, waterColours, wakeStart, wakeStep, wakeFill, wadeStep, LIQUID_VERT, LIQUID_FRAG, COPY_FRAG } from './liquid.rule.js';
 import { HELD_ORDER } from './beam-shadows.rule.js';
 import { collectLiquids } from './liquid.mark.js';
 
@@ -77,6 +83,8 @@ export function waterMaterial(old, rec, toRoom, shared) {
       uDeep: { value: new THREE.Vector3(...col.deep) }, uAbsorb: { value: new THREE.Vector3(...col.absorb) }, uScatter: { value: new THREE.Vector3(...col.scatter) },
       uKeep: { value: new THREE.Vector4(...col.keep, col.keepRate) },
       uEyeRoom: { value: new THREE.Vector3() },
+      // (the wake's rings are the surface's own, not shared: liquid.js frame() sets them from its pool)
+      uRings: rec.wake?.u.uRings || { value: Array.from({ length: LIQUID.rings }, () => new THREE.Vector4()) }, uRingN: rec.wake?.u.uRingN || { value: 0 },
     },
   });
   material.name = `liquid:${rec.kind}`;
@@ -91,16 +99,37 @@ export function waterMaterial(old, rec, toRoom, shared) {
 export function createLiquidView() {
   const shared = {
     tScene: { value: null }, tDepth: { value: null }, uSize: { value: new THREE.Vector2(1, 1) }, uClip: { value: new THREE.Vector2(0.06, 170) },
-    uTime: { value: 0 }, uCaustic: { value: LIQUID.caustic }, uRings: { value: Array.from({ length: LIQUID.rings }, () => new THREE.Vector4()) }, uRingN: { value: 0 },
+    uTime: { value: 0 }, uCaustic: { value: LIQUID.caustic },
   };
   let copy = null, copyMat = null, quad = null, hold = { last: -Infinity, split: false };
   const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const list = [], frustum = new THREE.Frustum(), pv = new THREE.Matrix4(), inv = new THREE.Matrix4(), eye = new THREE.Vector3(), at = new THREE.Vector3();
   const box = new THREE.Box3(), mv = new THREE.Matrix4();
-  const stats = { marks: 0, up: 0, inView: 0, under: 0, split: false, draws: 0 };
+  const stats = { marks: 0, up: 0, inView: 0, under: 0, split: false, draws: 0, rings: 0 };
+  let clock = 0, body = null;                             // (the camcorder's clock as of the last frame; the visitor's wade)
+  const toPart = new THREE.Matrix4(), pt = new THREE.Vector3();
+  // a point in the part's coordinates (the world's, as c.toWorld gives them) in a surface's room frame
+  const inRoom = (rec, x, y, z) => pt.set(x, y, z).applyMatrix4(toPart.copy(rec.rt.group.matrix).invert());
+
+  // the wake of a surface that is up: its pool, its uniforms, where it is (its room frame), and the call that starts a ring
+  function wakeOf(rec) {
+    const box = new THREE.Box3(), part = new THREE.Box3(), m = new THREE.Matrix4();
+    rec.meshes.forEach((old, i) => {
+      if (!old.geometry?.attributes?.position) return;
+      if (!old.geometry.boundingBox) old.geometry.computeBoundingBox();
+      box.union(part.copy(old.geometry.boundingBox).applyMatrix4(m.fromArray(rec.toRoom[i])));
+    });
+    rec.wake = { pool: [], box, u: { uRings: { value: Array.from({ length: LIQUID.rings }, () => new THREE.Vector4()) }, uRingN: { value: 0 } } };
+    rec.disturb = (x, z, strength = 1) => {
+      if (!rec.wake || !Number.isFinite(x) || !Number.isFinite(z)) return false;
+      const p = inRoom(rec, x, rec.plane.y, z);
+      return wakeStart(rec.wake.pool, p.x, p.z, strength, clock);
+    };
+  }
 
   function upgrade(rec) {
     rec.pairs = [];
+    wakeOf(rec);
     rec.meshes.forEach((old, i) => {
       const m = old.material;
       if (!old.parent || !old.geometry?.attributes?.aLit || !m?.isShaderMaterial || !m.uniforms) return;
@@ -117,7 +146,7 @@ export function createLiquidView() {
       if (!old.geometry.boundingBox) old.geometry.computeBoundingBox();
       rec.pairs.push({ old, water, material, rec });
     });
-    if (rec.pairs.length) rec.state = 'up'; else { rec.state = 'refused'; rec.reason = 'not a kit sheet'; rec.pairs = null; }
+    if (rec.pairs.length) rec.state = 'up'; else { rec.state = 'refused'; rec.reason = 'not a kit sheet'; rec.pairs = null; rec.wake = null; rec.disturb = null; }
   }
   // (shown: the sheet and everything it hangs from are visible, up to the top; a room may hide its own sheet)
   const shown = (o) => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
@@ -140,17 +169,21 @@ export function createLiquidView() {
     /** Once a frame, before the scene is drawn: the marks of the parts that are up, made into water where they are not yet, and whether one is in view. */
     frame(scene, camera, now) {
       list.length = 0; collectLiquids(scene, list);
-      shared.uTime.value = now;
+      shared.uTime.value = now; clock = now;
       camera.updateMatrixWorld();
       frustum.setFromProjectionMatrix(pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
       eye.setFromMatrixPosition(camera.matrixWorld);
       let seen = false;
-      Object.assign(stats, { marks: list.length, up: 0, inView: 0, under: 0 });
+      Object.assign(stats, { marks: list.length, up: 0, inView: 0, under: 0, rings: 0 });
       for (const rec of list) {
         if (rec.state === 'marked') upgrade(rec);
         rec.live = false; rec.under = false;
         if (rec.state !== 'up') continue;
         stats.up++;
+        // the wake: what has faded let go, the rest handed to the shader (none: uRingN 0, and the surface is as it was)
+        const w = rec.wake;
+        w.u.uRingN.value = wakeFill(wakeStep(w.pool, now), now, w.u.uRings.value);
+        stats.rings += w.u.uRingN.value;
         if (!rec.pairs.some((p) => shown(p.old))) continue;
         rec.live = true;
         at.copy(eye).applyMatrix4(inv.copy(rec.rt.group.matrixWorld).invert());
@@ -210,13 +243,36 @@ export function createLiquidView() {
         renderer.setRenderTarget(was);
       }
     },
+    /**
+     * The visitor, once a frame (index.js): in the part `part` (its scene; null for any), at x, z, their feet at `foot`
+     * and the eye at `eye` (heights in the part's coordinates; feet in the air over it are not in it: a jump in starts
+     * its ring as they reach the water), going at `speed` m/s. In a surface's water (over it, the feet under its plane,
+     * the eye not too far under it) leaves a ring as they go in, then one every wadeEvery metres moved
+     * through it (liquid.rule.js wadeStep), by the camcorder's clock. → the strength of the ring started, or 0.
+     */
+    feel(part, x, z, foot, eye, speed) {
+      if (![x, z, foot, eye].every(Number.isFinite)) return 0;
+      let hit = null, at = null;
+      for (const rec of list) {
+        if (rec.state !== 'up' || !rec.wake || (part && rec.rt.group.parent !== part)) continue;
+        const p = inRoom(rec, x, foot, z), b = rec.wake.box, y = rec.plane.y;
+        if (p.x < b.min.x || p.x > b.max.x || p.z < b.min.z || p.z > b.max.z) continue;
+        if (!(p.y < y - LIQUID.under) || p.y + (eye - foot) < y - LIQUID.wadeDeep) continue;
+        hit = rec; at = { x: p.x, z: p.z }; break;
+      }
+      const step = wadeStep(body, { wet: !!hit, speed, now: clock });
+      body = step.state;
+      if (hit && step.ring > 0 && wakeStart(hit.wake.pool, at.x, at.z, step.ring, clock)) return step.ring;
+      return 0;
+    },
     /** Every part under `scene` back as Classic has it: the water's meshes taken out and let go, and the copy. */
     release(scene) {
       for (const rec of collectLiquids(scene)) {
         if (rec.state !== 'up') continue;
         for (const p of rec.pairs) { p.water.parent?.remove(p.water); p.material.dispose(); }
-        rec.pairs = null; rec.state = 'marked'; rec.live = false;
+        rec.pairs = null; rec.state = 'marked'; rec.live = false; rec.wake = null; rec.disturb = null;
       }
+      body = null;
       view.dispose();
     },
     dispose() {
