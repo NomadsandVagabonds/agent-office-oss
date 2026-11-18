@@ -364,10 +364,10 @@ test('stepSkimmer: ignores still waders and dry-deck walkers, surges on ripples,
   assert.equal(sk.mode, 'recoil');
 });
 
-test('waterpark theme isolation & generation: undealt by default, strictly isolated, deals all review rooms when requested', () => {
+test('waterpark theme isolation & generation: dealt, strictly isolated, deals all review rooms when requested', () => {
   assert.equal(THEMES.waterpark.own, true);
-  assert.equal(THEMES.waterpark.dealt, false);
-  assert.ok(!dealtThemes().includes('waterpark'), 'waterpark stays out of normal visits while dealt: false');
+  assert.notEqual(THEMES.waterpark.dealt, false);
+  assert.ok(dealtThemes().includes('waterpark'), 'the waterpark is dealt to ordinary visits (the owner, 18 Nov)');
 
   // Every waterpark room belongs exclusively to waterpark (`*`: 0), and no regular room leaks onto waterpark (`own: true`)
   for (const id of WATERPARK_ROOMS) {

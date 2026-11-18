@@ -76,7 +76,7 @@ export const THEMES = {
 
   // A shopping centre at closing time, as a 1980s office park remembered one and built it out of itself: partition walls for
   // shopfronts, terrazzo where the carpet tile ran out, half the tubes already off. Mostly passages. Still being built (mall.js)
-  mall: { id: 'mall', own: true, dealt: false, families: { oatmeal: 12 }, patterns: ['mall'], tubes: ['#ffe9c2', '#ffdcae', '#fff0d6'],
+  mall: { id: 'mall', own: true, featured: true, families: { oatmeal: 12 }, patterns: ['mall'], tubes: ['#ffe9c2', '#ffdcae', '#fff0d6'],
     light: { dead: [0.3, 0.55], flicker: 0.3, modes: [['dim', 5], ['normal', 2], ['one', 1]] },
     rooms: [0.1, 0.38, 0.62, 0.9], heights: [[2.6, 40], [2.2, 24], [2.9, 16], [3.3, 10], [1.75, 6], [4.4, 4]],
     dressing: ['plant', 'plant', 'plant', 'wetsign', 'wetsign', 'bin', 'boxes', 'chair', 'clock', 'ladder'],
@@ -85,7 +85,7 @@ export const THEMES = {
   // An indoor waterpark and Poolrooms annex, built inside the office by something that had only ever had swimming,
   // recreation and hydration described to it: grouted ceramic tile stopping short of the damp carpet, chlorinated basins
   // under a suspended acoustic ceiling. Still being built (waterpark.js)
-  waterpark: { id: 'waterpark', own: true, dealt: false, families: { pool: 12, seafoam: 6 }, patterns: ['tiles'], tubes: ['#e8fbff', '#eef6ff', '#f3ffe6'],
+  waterpark: { id: 'waterpark', own: true, featured: true, families: { pool: 12, seafoam: 6 }, patterns: ['tiles'], tubes: ['#e8fbff', '#eef6ff', '#f3ffe6'],
     light: { dead: [0.04, 0.18], flicker: 0.22, modes: [['normal', 1]] },
     rooms: [0.02, 0.12, 0.22, 0.56], heights: [[2.9, 24], [3.3, 34], [3.8, 22], [4.4, 14]],
     dressing: ['floatring', 'floatring', 'noodle', 'noodle', 'lounger', 'wetsign', 'ladder'],
@@ -96,7 +96,7 @@ export const THEMES = {
   // retreats described to it in HR slides and lumber orders: rolled moss and pine needles stopping short of the office
   // carpet, gnarled trunks punching through suspended ceiling tiles, stepped Pacific Northwest rock/dirt mounds, and
   // painted pixel-tree plasterboard partitions. Still being built (forest.js)
-  forest: { id: 'forest', own: true, dealt: false, families: { pine: 12, birch: 6 }, patterns: ['boughs'], tubes: ['#e8f5df', '#f5f2da', '#dcefe2'],
+  forest: { id: 'forest', own: true, featured: true, families: { pine: 12, birch: 6 }, patterns: ['boughs'], tubes: ['#e8f5df', '#f5f2da', '#dcefe2'],
     light: { dead: [0.22, 0.46], flicker: 0.45, modes: [['dim', 6], ['normal', 3], ['one', 2]] },
     rooms: [0.04, 0.22, 0.38, 0.72], heights: [[3.5, 32], [4.0, 30], [4.6, 18], [3.1, 16]],
     dressing: ['stump', 'stump', 'backpack', 'lantern', 'lantern', 'trailpost', 'wetsign', 'ladder', 'boxes'],
@@ -114,8 +114,9 @@ export const THEME_IDS = Object.keys(THEMES);
 export const atHome = (line, id, themes = THEMES) => (line.themes && line.themes[id]) ?? (themes[id] && themes[id].own ? 0 : (line.themes && line.themes['*']) ?? 1);
 /** The kinds of floor a visit may be dealt: every one that is not still being built (`dealt: false`). */
 /**
- * The kinds of floor that are not an office (`featured: true`): every visit has one of them, on a middle part (plan.js), so
- * that no visit is offices all the way down. One for now; the day there are more, a visit is dealt one of them.
+ * The kinds of floor that are not an office (`featured: true`): the neighbourhood, the shopping centre, the waterpark, the
+ * forest. The plan no longer treats them differently (plan.js: every part under the first is any finished kind, at random);
+ * the mark is kept for whoever needs to ask which floors are not offices.
  */
 export const featuredThemes = (themes = THEMES) => Object.keys(themes).filter((id) => themes[id].featured && themes[id].dealt !== false);
 export const dealtThemes = (themes = THEMES) => Object.keys(themes).filter((id) => themes[id].dealt !== false);

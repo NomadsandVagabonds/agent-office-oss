@@ -303,10 +303,10 @@ test('Trail Loop (`makeBlazePuzzle` & `stepBlazePuzzle`): unwatched decoy arrows
   assert.deepEqual(win.state.pointTo, [3, 3, 3, 3, 3]);
 });
 
-test('forest theme isolation, generation, and WRONG table: undealt by default, strictly isolated, deals all 8 rooms when requested', () => {
+test('forest theme isolation, generation, and WRONG table: dealt, strictly isolated, deals all 8 rooms when requested', () => {
   assert.equal(THEMES.forest.own, true);
-  assert.equal(THEMES.forest.dealt, false);
-  assert.ok(!dealtThemes().includes('forest'), 'forest stays out of normal visits while dealt: false');
+  assert.notEqual(THEMES.forest.dealt, false);
+  assert.ok(dealtThemes().includes('forest'), 'the forest is dealt to ordinary visits (the owner, 18 Nov)');
   assert.equal(WRONG_KEYS.length, 8, 'all 8 plain-room forest wrongnesses exist');
 
   for (const id of FOREST_ROOMS) {

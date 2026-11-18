@@ -100,7 +100,6 @@ const THEME_QUIET = {
   suburb: { motifs: [['fence', 4], ['flats', 3.2], ['dogleg', 0.8]], wrong: ['sunk', 'apertures'],
     mix: [[0.26, 0.34], [0.4, 0.48], [0.22, 0.3]], hall: [['baffle', 3], ['nibs', 2], ['none', 1.5]], shapes: ['pinch', 'ell', 'stairs', 'soffit', 'stepceil', 'slopeceil', 'pit', 'dais'] },
   // the shopping centre: units either side of a concourse (bays), a colonnade of tiled columns, screens to queue round
-  // (no line in TELLS until it is finished — themes.js `dealt: false`)
   mall: { motifs: [['bays', 4], ['colonnade', 3], ['return', 1.5], ['dogleg', 1]], wrong: ['sunk', 'apertures'],
     mix: [[0.24, 0.32], [0.42, 0.5], [0.2, 0.28]], hall: [['nibs', 3], ['baffle', 2.5], ['none', 1]], shapes: ['pinch', 'ell', 'stairs', 'soffit', 'stepceil', 'pit', 'dais'] },
   // Repeating shower stalls and tiled corridors between the pools.
@@ -113,9 +112,11 @@ const THEME_QUIET = {
 };
 /**
  * What gives a kind of floor away: the layouts there are more of on it than on any other kind ('none': a room with
- * nothing built in it at all). For the tests, and for anybody describing one.
+ * nothing built in it at all). For the tests, and for anybody describing one. null: a floor whose plain rooms are told by
+ * what its own file builds in every one of them, not by a layout (the shopping centre's are streets of shopfronts: mall.js).
  */
-export const TELLS = Object.freeze({ yellow: ['parallel', 'dogleg'], archive: ['nibs', 'bays'], night: ['none'], fitout: ['colonnade', 'baffle'], exec: ['return'], suburb: ['fence', 'flats'] });
+export const TELLS = Object.freeze({ yellow: ['parallel', 'dogleg'], archive: ['nibs', 'bays'], night: ['none'], fitout: ['colonnade', 'baffle'], exec: ['return'], suburb: ['fence', 'flats'],
+  mall: null, waterpark: ['cabanas'], forest: ['thicket'] });
 
 /**
  * What the plain rooms of one floor are made of. Rolled once a floor, from its own source.

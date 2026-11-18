@@ -21,7 +21,7 @@
 import { cleanDifficulty, difficultyOf } from '../../../core/difficulty.mjs';
 import { generate, makeRng, MIN_EXIT_STEPS, MAX_ODD, DECK, ARCHETYPES, lessons, lessonsOf, isBig, encounterLead } from './gen.js';
 import { MIN_OUT_STEPS } from './marks.js';
-import { THEME_IDS, dealtThemes, featuredThemes, atHome } from './themes.js';
+import { THEME_IDS, dealtThemes, atHome } from './themes.js';
 import { DEALT } from './seam.js';
 import { CAST, whoIsDown, castFor } from './cast.js';
 
@@ -131,11 +131,11 @@ export function planVisit(seed, opt = {}) {
   // …unless particular kinds were asked for, top down: the way to look at one, and the only way onto one that is still
   // being built. A part nothing was asked for is what it would have been
   const asked = [].concat(opt.themes ?? []).map(String);
-  // one part of every visit is not an office (themes.js `featured`): the second or the third, never where you land and never the last
-  const RF = R.fork('featured'), feats = featuredThemes().filter((id) => below.includes(id));
-  const feature = feats.length && depths >= 3 ? RF.pick(feats) : null, featureAt = feature ? RF.int(1, Math.min(2, depths - 2)) : -1;
-  const rest = below.filter((id) => id !== feature);
-  const under = (i) => (i === featureAt ? feature : rest[(i - 1 - (featureAt > 0 && i > featureAt ? 1 : 0)) % rest.length]);
+  // only the floor you land on is promised: the yellow office. Every part under it is any kind of floor that is finished, an
+  // office or not, no kind twice in a visit while there are kinds left (the owner, 18 Nov: "only the first floor should be
+  // guaranteed the yellow office. All other 3 can be random"). A visit may be offices all the way down, or have none below
+  // the first; a place that is not an office may be the last part.
+  const under = (i) => below[(i - 1) % below.length];
   const themes = Array.from({ length: depths }, (_, i) => (THEME_IDS.includes(asked[i]) ? asked[i] : i === 0 ? 'yellow' : under(i)));
   // how each part but the last ends, behind its fire door: a different way down each time, while there are ways left
   // (rolled from a source of its own, so that which they are changes nothing else about a visit)

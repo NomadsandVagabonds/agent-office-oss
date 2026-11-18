@@ -615,7 +615,9 @@ function build(R, o, opt) {
   // (A floor asked for by itself, on a kind that keeps to its own and has fewer rooms made for it yet than a floor has
   // oddities, is still a floor's length: eighteen rooms. Nobody else's is touched: every other kind has five and more.)
   const sparse = !hand && able < MIN_ODD ? 17 : 0;
-  const target = Math.min(MAX_ROOMS - 1, Math.max((opt.rooms | 0) - 1, sparse, Math.ceil(specials.length / (1 - R.range(QUIET[0] + 0.02, QUIET[1]))) - 1));
+  // (two short of the most a floor may have: the fire exit is still to come, and the last thing added here can be a room and the
+  // passage to it. Only a floor with a great many oddities gets this far: the waterpark's, whose rooms bring rooms with them)
+  const target = Math.min(MAX_ROOMS - 2, Math.max((opt.rooms | 0) - 1, sparse, Math.ceil(specials.length / (1 - R.range(QUIET[0] + 0.02, QUIET[1]))) - 1));
   for (let guard = 0; rooms.length < target && guard < 200; guard++) {
     const open = ports.filter((p) => !p.used);
     // (a part with few oddities in it is mostly this: it grows on from its newest room as often as not, so that it is long as well as wide)

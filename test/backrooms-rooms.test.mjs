@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { DECK, ARCHETYPES, STASH, LESSONS, lessons, isBig, generate } from '../public/world/backrooms/gen.js';
+import { DECK, ARCHETYPES, STASH, LESSONS, lessons, isBig, generate, encounterLead } from '../public/world/backrooms/gen.js';
 import { MORE_DECK } from '../public/world/backrooms/deck2.js';
 import { planVisit, floorOf, KNOWN_AT_START } from '../public/world/backrooms/plan.js';
 import { THEME_IDS } from '../public/world/backrooms/themes.js';
@@ -116,8 +116,10 @@ test('pacing: two rooms in three are plain on every floor, no doorway from one o
       const quiet = 1 - odd.length / level.rooms.length;
       least = Math.min(least, quiet);
       assert.ok(quiet >= 0.65, `seed pace-${seed}, floor ${i}: only ${Math.round(quiet * 100)}% of its rooms are plain`);
-      for (const r of odd) for (const d of r.doors) assert.notEqual(level.rooms[d.to].kind, 'special', `seed pace-${seed}, floor ${i}: ${r.arch} opens straight into ${level.rooms[d.to].arch}`);
-      assert.ok(odd.filter((r) => isBig(ARCHETYPES[r.arch])).length <= 1, `seed pace-${seed}, floor ${i}: more than one set piece`);
+      // (a room that brings another with it — gen.js `adjoins`: the maze and its tower, the tubes and the two rooms they join — is one encounter, and opens into its own)
+      const one = (a, b) => !!a && !!b && encounterLead(a).id === encounterLead(b).id;
+      for (const r of odd) for (const d of r.doors) { const o = level.rooms[d.to]; assert.ok(o.kind !== 'special' || one(r.arch, o.arch), `seed pace-${seed}, floor ${i}: ${r.arch} opens straight into ${o.arch}`); }
+      assert.ok(odd.filter((r) => isBig(ARCHETYPES[r.arch]) && encounterLead(r.arch).id === r.arch).length <= 1, `seed pace-${seed}, floor ${i}: more than one set piece`);
     }
   }
   assert.ok(floors > 100 && least < 1);

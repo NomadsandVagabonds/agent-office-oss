@@ -52,9 +52,8 @@ test('random co-op and solo retain the live four-floor dealer independently of t
   const after=planVisit(seed),random=coopVisit(seed);
   assert.deepEqual(after,before);assert.deepEqual(random,before);
   assert.equal(after.depths,4);assert.equal(after.floors[0].theme,'yellow');
-  assert.ok([1,2].includes(after.floors.findIndex(f=>f.theme==='suburb')));
-  assert.equal(after.floors.filter(f=>f.theme==='suburb').length,1);
-  assert.ok(after.floors.every(f=>f.theme!=='mall'&&!f.setPieces));
+  assert.equal(new Set(after.floors.map(f=>f.theme)).size,4);
+  assert.ok(after.floors.every(f=>!f.setPieces));
   assert.equal(after.company,undefined);
   if(after.headline)for(const f of after.floors)if(f.must.includes(after.headline))assert.ok(atHome(ARCHETYPES[after.headline],f.theme)>0);
  }

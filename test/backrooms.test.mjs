@@ -7,7 +7,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { generate, sketch, DECK, ARCHETYPES, SIDES, T, RISE, toWorld, wallLength, wallPoint, floorAt, ceilAt, headAt, fitsAt, stairZones,
   roomDistances, roomPath, makeRng, MIN_EXIT_STEPS, MIN_ODD, MAX_ODD, MAX_ROOMS, coinSpots, STASH, THING_CHANCE, TRACES } from '../public/world/backrooms/gen.js';
 import { layoutOf, standable, motif, fits, TELLS, HALLS, NARROW, LOW, HIGH } from '../public/world/backrooms/quiet.js';
-import { dealtThemes, atHome } from '../public/world/backrooms/themes.js';
+import { THEMES, dealtThemes, atHome } from '../public/world/backrooms/themes.js';
 // (Every kind of floor that is finished. One still being built — themes.js `dealt: false` — is in nobody's visit and is
 // not held to these until that line goes: taking it out is what holds a new kind of floor to all of them.)
 const FINISHED = dealtThemes();
@@ -497,6 +497,8 @@ test('each kind of floor repeats in its own way', () => {
   const share = (theme, kinds) => { let n = 0, all = 0; for (const level of floorsOf(theme)) for (const r of walkable(level)) { all++; if (kinds.includes(kindOf(r)) || (kinds.includes('none') && r.quiet && r.quiet.kind === 'bare')) n++; } return n / all; };
   assert.deepEqual(Object.keys(TELLS).sort(), FINISHED.slice().sort(), 'every kind of floor has something that gives it away');
   for (const theme of FINISHED) {
+    // (a floor that dresses every plain room itself — the shopping centre's streets — is told by that, and says so with null)
+    if (TELLS[theme] === null) { assert.equal(THEMES[theme].own, true, `${theme} has no layout that gives it away, and is not a floor with rooms of its own`); continue; }
     const own = share(theme, TELLS[theme]);
     assert.ok(own >= 0.08, `${theme}: only ${Math.round(own * 100)}% of its plain rooms are ${TELLS[theme].join(' or ')}`);
     for (const other of FINISHED) if (other !== theme) assert.ok(own > share(other, TELLS[theme]), `${theme} is told by ${TELLS[theme].join(' and ')}, and ${other} has more of them`);

@@ -4,7 +4,7 @@
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { generate, MAX_ODD, MAX_ROOMS, DECK, ARCHETYPES, LESSONS, lessons, ready, lessonsOf, roomDistances, roomPath, MIN_EXIT_STEPS, EXIT_DEPTH, T, sketch, wallPoint, wallLength, toWorld, floorAt, ceilAt, headAt, fitsAt } from '../public/world/backrooms/gen.js';
+import { generate, encounterLead, MAX_ODD, MAX_ROOMS, DECK, ARCHETYPES, LESSONS, lessons, ready, lessonsOf, roomDistances, roomPath, MIN_EXIT_STEPS, EXIT_DEPTH, T, sketch, wallPoint, wallLength, toWorld, floorAt, ceilAt, headAt, fitsAt } from '../public/world/backrooms/gen.js';
 import { MIN_OUT_STEPS, THIN_W, MARK_W, LEAN, REFUSE, MARK_STYLES, PRINT_CHANCE, PRINTED, lean, pressing, answer, TAPE_LABELS } from '../public/world/backrooms/marks.js';
 import { REACH, calm, beside, closeness, grabChance } from '../public/world/backrooms/reach.js';
 import { planVisit, floorOf, generateVisit, MIN_FLOORS, MAX_FLOORS, MIN_VISIT_STEPS, KNOWN_AT_START } from '../public/world/backrooms/plan.js';
@@ -27,8 +27,8 @@ const SEEDS = Array.from({ length: 120 }, (_, i) => `visit-${i}`);
 const visits = new Map();
 const visitFor = (seed, opt = office) => { const k = seed + JSON.stringify(opt.loot || 0); if (!visits.has(k)) visits.set(k, generateVisit(seed, opt)); return visits.get(k); };
 
-test('a visit is planned from its seed: four floors, yellow on top, one that is not an office second or third, the wall that gives only on the last', () => {
-  const sizes = new Map(), orders = new Set(), under = new Set(), ways = new Set();
+test('a visit is planned from its seed: four floors, yellow on top, any finished kind of floor under it and none twice, the wall that gives only on the last', () => {
+  const sizes = new Map(), orders = new Set(), under = new Set(), ways = new Set(), notOffice = [0, 0, 0];
   for (const seed of SEEDS) {
     const plan = planVisit(seed, office);
     assert.deepEqual(plan, planVisit(seed, office), `seed ${seed}: the same seed plans the same visit`);
@@ -37,7 +37,8 @@ test('a visit is planned from its seed: four floors, yellow on top, one that is 
     assert.equal(plan.floors.length, plan.depths);
     assert.equal(plan.floors[0].theme, 'yellow', 'you always land in the yellow');
     assert.equal(plan.depths, 4, 'four parts, every time: the number is not the seed\'s to roll (the scores)');
-    assert.ok([1, 2].includes(plan.floors.findIndex((fl) => fl.theme === 'suburb')), `seed ${seed}: the floor that is not an office is the second or the third (${plan.floors.map((fl) => fl.theme)})`);
+    // (only the first floor is promised: under it, any finished kind, office or not, on any part, the last included — the owner, 18 Nov)
+    plan.floors.slice(1).forEach((fl, k) => { if (THEMES[fl.theme].featured) notOffice[k]++; });
     assert.equal(new Set(plan.floors.map((f) => f.theme)).size, plan.depths, `seed ${seed}: two floors of one kind`);
     // one building: nothing in the plan numbers or names a part of it, and every part but the last ends in a way down that is its own while there are ways left
     assert.ok(!JSON.stringify(plan).match(/"(label|below)"/), `seed ${seed}: the plan numbers its parts`);
@@ -58,6 +59,7 @@ test('a visit is planned from its seed: four floors, yellow on top, one that is 
   }
   for (let n = MIN_FLOORS; n <= MAX_FLOORS; n++) assert.ok(sizes.get(n) > 5, `visits of ${n} floors: ${sizes.get(n) || 0} in ${SEEDS.length}`);
   assert.deepEqual([...under].sort(), dealtThemes().filter((id) => id !== 'yellow').sort(), 'every kind of floor that is finished turns up under the yellow one');
+  assert.ok(notOffice.every((n) => n > SEEDS.length * 0.2), `a place that is not an office turns up on the second, the third and the last part alike (${notOffice} of ${SEEDS.length})`);
   assert.deepEqual([...ways].sort(), [...DEALT].sort(), 'every way down a visit is dealt turns up somewhere');
   assert.deepEqual([...DEALT].sort(), ['chute', 'hole', 'ledge'], 'and those are falling, climbing down and sliding: never a flight of stairs');
   // (four parts, yellow first, the suburb second or third, two of the four office kinds in the other two places: 24 orders in all)
@@ -692,7 +694,8 @@ test('the hallway is the way out of its part: the fire exit is beyond it and now
     }
     assert.equal(visit.depths, floors.length);
   }
-  assert.ok(counts[2] === 0 && counts[1] > SEEDS.length * 0.5 && counts[0] > SEEDS.length * 0.1, `visits with none, one, two: ${counts}`);
+  // (the hallway is at home in offices only, and a visit's lower parts are any kind of floor now: fewer visits have somewhere to put it than when all but one part was an office)
+  assert.ok(counts[2] === 0 && counts[1] > SEEDS.length * 0.3 && counts[0] > SEEDS.length * 0.1, `visits with none, one, two: ${counts}`);
   // asked for by name (the page that shows one room), it is where you land, and the way out is still through it
   for (let i = 0; i < 12; i++) {
     const level = generate(`only-hall-${i}`, { ...office, only: HALL }), room = level.rooms.find((r) => r.arch === HALL);
@@ -717,7 +720,8 @@ test('the visit\'s hand: a visit shows 40–70% of the deck, in an order of its 
     assert.deepEqual(visit.hand.slice().sort(), visit.floors.flatMap((f) => f.hand).sort());
     floors.forEach((level, i) => {
       const hand = visit.floors[i].hand;
-      for (const id of level.picked) assert.ok(hand.includes(id), `seed ${seed}, part ${i}: ${id} was not in this part's hand`);
+      // (a room that is brought by another — gen.js `adjoins` — is not dealt itself: the one that brings it is)
+      for (const id of level.picked) assert.ok(hand.includes(id) || hand.includes(encounterLead(id).id), `seed ${seed}, part ${i}: ${id} was not in this part's hand`);
       assert.ok(level.picked.length >= hand.length - 1, `seed ${seed}, part ${i}: dealt ${hand}, built ${level.picked}`);
       assert.ok(hand.length >= 1 && hand.length <= MAX_ODD, `seed ${seed}, part ${i}: ${hand.length} oddities`);
       // long enough to get lost in, however few of its rooms are oddities; and mostly plain
