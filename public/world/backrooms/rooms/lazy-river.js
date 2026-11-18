@@ -431,7 +431,6 @@ export function build(c) {
       const alertOn = rule.mode === 'whistle' || rule.mode === 'scan' || rule.mode === 'surge';
       adultMesh.visible = alertOn;
       adultMesh.scale.setScalar(rule.mode === 'whistle' || rule.mode === 'surge' ? 0.96 + 0.08 * Math.sin(time * 18) : 1);
-      if (inRoom) c.env.hud?.flag?.('ADULT SWIM', alertOn);
     },
   });
 
@@ -442,7 +441,6 @@ export function build(c) {
     setFrozen(v, alertOn = false) {
       frozen = !!v;
       adultMesh.visible = !!alertOn;
-      c.env.hud?.flag?.('ADULT SWIM', !!alertOn);
     },
     toLocal: c.toLocal,
     toWorld: c.toWorld,
@@ -486,7 +484,6 @@ export function build(c) {
   const prevLeave = c.rt.onLeave;
   c.rt.onLeave = () => {
     prevLeave?.();
-    c.env.hud?.flag?.('ADULT SWIM', false);
   };
 
   depthTile(c, 0, 0.045, rOuter + 0.22, 'LAZY LOOP 0.8M', 0, 17);
@@ -495,7 +492,6 @@ export function build(c) {
     'LAZY RIVER RULES',
     'NO RUNNING ON WET DECK',
     'WHISTLE = ADULT SWIM',
-    'SUBMERGE [C] IN CANAL',
   ], { seed: 53, warn: true, mess: 0.22 });
   finishPoolRoom(c,'lazy-river');
 }
