@@ -29,7 +29,8 @@ export const SUPPLY = Object.freeze({
   torchCharge: Object.freeze([45, 150]),   // seconds of light left in one (a full one is 180): fewest, most
   chalk: 0.25,                      // the chance of a piece of chalk in a part
   paper: Object.freeze([3, 5]),     // sheets in a stack of paper
-  stacks: Object.freeze([0, 1]),    // stacks of paper to a part
+  stacks: Object.freeze([0, 1]),    // stacks of paper to a part: the first, that was always there; the plenty below is on top of it
+  paperRooms: 3.5,                  // PAPER, VERY COMMON (the owner, 18 Nov: it is what the shop is paid in): one more stack of loose paper to about this many rooms of a part, so about one room in three or four has a sheaf to take. Set it higher for less, 0 for none
   lighter: 0.25,                    // the chance of a lighter in a part (it is kept: one is enough for a visit)
   tape: 0.2,                        // the chance of a roll of tape in a part
   choices: 4,                       // rooms offered for each thing, in order: the first with clear floor gets it
@@ -99,5 +100,22 @@ export function planSupplies(level, wanted = []) {
     const keep = Math.max(0, (packs.length * d.batteryShare - 1) / Math.max(1, packs.length - 1));
     return out.filter(p => (d.snack !== 0 || p.type !== 'snack') && (p.type !== 'battery' || p.id === 'battery-0' || RR.chance(keep)));
   }
+  return out;
+}
+
+/**
+ * Paper in plenty: the stacks that can be taken, on top of whatever planSupplies leaves (it is a list of its own, drawn from a
+ * stream of its own, so that nothing else's place or number changes). One stack to about SUPPLY.paperRooms rooms, no two in
+ * the same room, never in a crawl space or where you land or the way down (supplyRooms). Decorative litter is not this.
+ * @returns {{id:string, type:'paper', quantity:number, rooms:number[], plenty:true}[]}
+ */
+export function plentyOfPaper(level) {
+  const every = SUPPLY.paperRooms;
+  if (!(every > 0)) return [];
+  const rooms = supplyRooms(level).filter((r) => !r.crawl);
+  if (!rooms.length) return [];
+  const R = makeRng(`${level.seed}/paper-plenty/${level.depth ?? 0}`), want = rooms.length / every;
+  const count = Math.min(rooms.length, Math.floor(want) + (R.chance(want - Math.floor(want)) ? 1 : 0)), order = R.shuffle(rooms), out = [];
+  for (let n = 0; n < count; n++) out.push({ id: `paper-plenty-${n}`, type: 'paper', quantity: R.int(SUPPLY.paper[0], SUPPLY.paper[1]), rooms: [0, 1, 2, 3].map((k) => order[(n + k * 7) % order.length].id).filter((id, i, a) => a.indexOf(id) === i), plenty: true });
   return out;
 }
