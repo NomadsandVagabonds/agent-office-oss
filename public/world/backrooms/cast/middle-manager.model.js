@@ -75,13 +75,44 @@ export function neckVox() {
   return v;
 }
 
+/** How fed it looks: 0 sad, 1 nothing, 2 pleased, 3 the grin (cast/middle-manager.js picks it by how fat it is). */
+export const FACES = 4;
+
 /**
- * Its head: an egg, longer than a head, narrower at the bottom, sallow and perfectly smooth. Nothing on it at all. Only the
- * light shows where a face would be: the front is a shade paler. The neck joins underneath at the origin; front on +z.
+ * Its head: an egg, longer than a head, narrower at the bottom, sallow and smooth, and on it a face drawn as a child draws
+ * one, small, in the middle of all that egg. Unfed it is sad: a mouth turned down and two streaks of tears. Fed, the mouth
+ * straightens, then turns up, and at the last it is a grin from one side of the head to the other, under two eyes gone
+ * wide and white. The neck joins underneath at the origin; front on +z.
+ * @param face 0…3 (FACES)
  */
-export function headVox() {
+export function headVox(face = 0) {
   const v = new Vox(), pale = M(SKIN, 0), mid = M(SKIN2, 0), back = M(SKIN3, 0);          // (sallow, not white: somebody's, once)
   lathe(v, HEAD, (k) => { const t = k * 2 - 1; return Math.max(0.5, Math.sqrt(Math.max(0, 1 - t * t)) * (9.5 + k * 1.8)); }, (x, y, z) => (z > 3 ? pale : z > -4 ? mid : back), 1.05);
+  const ink = M('#2a1f1c', 0), tear = M('#9fb4c2', 0), white = M('#f1eee4', 0), tooth = M('#e8e2cf', 0), gum = M('#5a2a2a', 0);
+  // paint onto the front of the egg: the voxel nearest the viewer at (x, y), and the one behind it, so it reads from the side
+  const front = (x, y) => { for (let z = 20; z > 0; z--) if (v.has(x, y, z)) return z; return null; };
+  const dot = (x, y, c, deep = 2) => { const z = front(x, y); if (z === null) return; for (let d = 0; d < deep; d++) v.set(x, y, z - d, c); };
+  const EY = 21, MY = 11;
+  if (face < 3) {
+    // small eyes, close together; sad, the brows go up in the middle and the tears run from them
+    for (const sx of [-1, 1]) {
+      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) dot(sx * 3 + (sx > 0 ? dx : -dx), EY + dy, ink);
+      if (face === 0) { for (let t = 0; t <= 4; t++) dot(sx * (6 - t), EY + 1 + t, ink, 1); for (let y = EY - 1; y >= EY - 9; y--) dot(sx * (4 + ((EY - y) > 5 ? 1 : 0)), y, tear, 1); }
+    }
+    // the mouth: down at the ends, then straight, then up
+    for (let x = -4; x <= 4; x++) {
+      const k = (x / 4) ** 2, y = face === 0 ? MY + Math.round(2 * (1 - k)) : face === 1 ? MY : MY + Math.round(2 * k);
+      dot(x, y, ink);
+    }
+  } else {
+    // the grin, and the eyes: wide, white, a speck of black in each, too high and too far apart
+    for (const sx of [-1, 1]) for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) if (dx * dx + dy * dy <= 10) dot(sx * 4 + dx, EY + 1 + dy, dx === 0 && dy === 0 ? ink : white, 1);
+    for (let x = -8; x <= 8; x++) {
+      const k = (x / 8) ** 2, top = MY + Math.round(3 * k) + 1, bottom = MY - 4 + Math.round(6 * k);
+      for (let y = bottom; y <= top; y++) dot(x, y, y === top ? tooth : y === bottom ? ink : y === top - 1 && x % 2 === 0 ? tooth : gum, 1);
+      dot(x, top + 1, ink, 1);
+    }
+  }
   return v;
 }
 

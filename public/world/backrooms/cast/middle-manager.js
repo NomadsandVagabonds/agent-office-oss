@@ -16,7 +16,7 @@ import { canLeave } from './paths.js';
 import { elbow } from './head-count.rule.js';
 import { calm as unafraid, afraid } from './fire.rule.js';
 import { DOORWAY, at as doorwayAt, fresh as unkept, camps, elsewhere } from './doorway.rule.js';
-import { S, TORSO, NECK, UPPER, FORE, HAND, THIGH, SHIN, SHOE, HEAD, torsoVox, neckVox, headVox, sleeveVox, handVox, trouserVox, shoeVox } from './middle-manager.model.js';
+import { S, TORSO, NECK, UPPER, FORE, HAND, THIGH, SHIN, SHOE, HEAD, FACES, torsoVox, neckVox, headVox, sleeveVox, handVox, trouserVox, shoeVox } from './middle-manager.model.js';
 
 const T = TORSO * S, N = NECK * S, U = UPPER * S, F = FORE * S, TH = THIGH * S, SH = SHIN * S, FOOT = SHOE * S;
 const BODY = { hip: TH + SH + FOOT, torso: T, neck: N, head: HEAD * S };
@@ -25,7 +25,7 @@ const PAPER = ['#f2efe6', '#e9e4d6', '#f6f3ec', '#d9d3c2', '#f2e9a6', '#dfe9f2']
 export function create(c) {
   const env = c.env, level = c.level, Mg = MANAGER;
   const walker = { x: 0, z: 0, r: Mg.r, tall: Mg.ducks, opens: false };
-  let s = fresh(), fear = unafraid(), group = null, mat = null, thin = null, full = null, neck = null, head = null, limbs = [], shoes = [];
+  let s = fresh(), fear = unafraid(), group = null, mat = null, thin = null, full = null, neck = null, head = null, heads = [], limbs = [], shoes = [];
   let rot = 0, lean = 0, phase = 0, clock = 0, lastX = 0, lastZ = 0, known = false, over = false, wanderT = 0, goal = null, goalT = 0, leaving = false, kept = unkept(c.R), debris = null;
   const doors = new Map();
   const vx = new THREE.Vector3(), vy = new THREE.Vector3(), vz = new THREE.Vector3(), basis = new THREE.Matrix4();
@@ -55,7 +55,9 @@ export function create(c) {
     mat = env.kit.surface({ vox: true, wet: 0.2 });
     group = new THREE.Group();
     thin = part(geo('manager:torso:thin3', () => torsoVox(false))); full = part(geo('manager:torso:full3', () => torsoVox(true).downsample(2), 2));          // (big enough to be built at half the grain) full.visible = false;
-    neck = part(geo('manager:neck', neckVox)); head = part(geo('manager:head2', headVox));
+    neck = part(geo('manager:neck', neckVox));
+    // its face, as fed as it is: sad, nothing, pleased, the grin (the owner's). One head each; the one it has on is shown
+    heads = Array.from({ length: FACES }, (_, f) => part(geo(`manager:head3:${f}`, () => headVox(f)))); head = heads[0];
     const upper = geo('manager:upper2', () => sleeveVox(UPPER)), fore = geo('manager:fore2', () => sleeveVox(FORE, true)), hand = geo('manager:hand2', handVox);
     const thigh = geo('manager:thigh', () => trouserVox(THIGH)), shin = geo('manager:shin2', () => trouserVox(SHIN, 5.2, true)), shoe = geo('manager:shoe', shoeVox);
     for (const side of [-1, 1]) limbs.push({ arm: true, side, a: part(upper), b: part(fore), end: part(hand) });
@@ -121,6 +123,8 @@ export function create(c) {
     neck.position.set(sh.x, sh.y, sh.z); aim(neck, nd.x, nd.y, nd.z, fx * Math.cos(na), -Math.sin(na), fz * Math.cos(na), N, N, 1 + fat * 0.6);
     const hb = { x: sh.x + nd.x * N, y: sh.y + nd.y * N, z: sh.z + nd.z * N };
     const look = m ? Math.atan2(m.x - hb.x, m.z - hb.z) : rot, turn = Math.atan2(Math.sin(look - rot), Math.cos(look - rot)), tl = Math.max(-1, Math.min(1, turn));
+    const face = swell > 0 || fat >= 0.8 ? 3 : fat >= 0.5 ? 2 : fat >= 0.22 ? 1 : 0;
+    heads.forEach((h, f) => { h.visible = f === face; }); head = heads[face];
     head.position.set(hb.x, hb.y, hb.z); aim(head, Math.sin(rot + tl) * Math.sin(ha), Math.cos(ha), Math.cos(rot + tl) * Math.sin(ha), Math.sin(rot + tl) * Math.cos(ha), -Math.sin(ha), Math.cos(rot + tl) * Math.cos(ha), 1, 1, 1 + fat * 0.25);
     head.rotateZ(Math.sin(clock * 0.7) * 0.06 + shake * 2);
     const swing = moved > 0 ? Math.sin(phase) : 0;
@@ -286,8 +290,8 @@ export function create(c) {
         return { ok: true, target: 'middle-manager' };
       } }];
     },
-    /** For the dev page: stand it here, now (world coordinates). */
-    put(x, z) { if (!group || over) return false; walker.x = lastX = x; walker.z = lastZ = z; goal = null; leaving = false; pose(0, 0, c.me()); return true; },
+    /** For the dev page: stand it here, now (world coordinates), and as fed as `fat` says if it says. */
+    put(x, z, fat) { if (!group || over) return false; walker.x = lastX = x; walker.z = lastZ = z; goal = null; leaving = false; if (Number.isFinite(fat)) s = { ...s, fat: Math.max(0, Math.min(1, fat)) }; pose(0, 0, c.me()); return true; },
     /** For the dev page's beside: stand this far off it and look this far aside (near, it goes off; in the eye, it comes). */
     apart: 5, aside: 0.7,
     at: () => ({ x: walker.x, z: walker.z, mode: s.mode, fat: +s.fat.toFixed(2), speed: +s.speed.toFixed(2) }),

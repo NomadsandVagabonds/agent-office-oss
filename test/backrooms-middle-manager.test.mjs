@@ -79,13 +79,19 @@ test('its line: it hunts, roams, is met further down, fears fire; a drawing warn
   assert.match(src, /kept = camps\(kept, dt, dw, c\.R\);/); assert.match(src, /if \(kept\.due && !leaving\) \{ const to = away\(dw\);/);
   // a jab sets it off before the count takes it (once it is dying it lands nothing: the burst has to come first)
   assert.match(src, /s = popped\(s\); burst\(\);\s+c\.struck\(HEALTH\.jab\);/);
-  // no face: its head is three pale tones of one smooth egg and nothing else (the owner: "no hair or glasses.and no face")
-  const model = readFileSync(new URL('../public/world/backrooms/cast/middle-manager.model.js', import.meta.url), 'utf8');
-  const head = MODEL.headVox(), tones = new Set(); head.each((x, y, z, c) => tones.add(c & 0xffffff));
-  assert.ok(tones.size <= 3, `its head is ${tones.size} colours`);
-  // pale skin, all of it, and not white: somebody's, once (the lead: our own, not a paper-white head)
-  for (const c of tones) { const r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255; assert.ok(r > 170 && g > 145 && b > 125, 'pale'); assert.ok(r - b > 25, 'skin, not white'); }
+  // its face, as fed as it is (the owner: "starts as Sad face upside down u with tears and as it gets fed it goes from sad to
+  // neutral to happy to creepily huge grin and big eyes"): four heads, each different, the egg itself sallow skin, not white
+  assert.equal(MODEL.FACES, 4);
+  const heads = [0, 1, 2, 3].map((f) => { const m = new Map(); MODEL.headVox(f).each((x, y, z, c) => m.set(`${x},${y},${z}`, c & 0xffffff)); return m; });
+  for (let f = 1; f < 4; f++) assert.ok([...heads[f]].some(([k, c]) => heads[f - 1].get(k) !== c), `face ${f} is not face ${f - 1}`);
+  const has = (f, hex) => [...heads[f].values()].includes(parseInt(hex.slice(1), 16));
+  assert.ok(has(0, '#9fb4c2') && !has(1, '#9fb4c2'), 'tears, only when sad'); assert.ok(has(3, '#f1eee4') && !has(2, '#f1eee4'), 'the eyes gone wide and white, only at the last');
+  const tones = new Map(); for (const c of heads[1].values()) tones.set(c, (tones.get(c) || 0) + 1);
+  const skin = [...tones].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([c]) => c);
+  for (const c of skin) { const r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255; assert.ok(r > 170 && g > 145 && b > 125, 'pale'); assert.ok(r - b > 25, 'skin, not white'); }
+  assert.match(src, /const face = swell > 0 \|\| fat >= 0\.8 \? 3 : fat >= 0\.5 \? 2 : fat >= 0\.22 \? 1 : 0;/);
   // its tell is its body: nothing of the picture comes from looking at it or being near it, and nothing grows out of it
+  const model = readFileSync(new URL('../public/world/backrooms/cast/middle-manager.model.js', import.meta.url), 'utf8');
   assert.ok(!/interfere/.test(src), 'no static from it'); assert.ok(!/tendril|tentacle/i.test(src + model), 'nothing out of its back');
   assert.match(model, /a size too short/);
 });
