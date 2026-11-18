@@ -35,3 +35,16 @@ test('knocked, it comes to rest lying flat; the same moment is the same pose', (
   assert.ok(Math.abs(rest.pitch + Math.PI / 2) < 1e-9 && Math.abs(rest.k) < 1e-9);
   for (const mode of ['wall', 'peel', 'flutter', 'dive', 'knocked']) assert.deepEqual(notePose({ mode, t: 0.2, time: 3.3, heading: 0.5 }, 3), notePose({ mode, t: 0.2, time: 3.3, heading: 0.5 }, 3));
 });
+
+test('it has writing on it: scribble in front of the sheet, ending somewhere else on each note of a room', (t) => {
+  const kit = createKit(); t.after(() => kit.dispose());
+  const ink = (n) => { const a = n.mesh.geometry.attributes, out = []; for (let i = 0; i < a.position.count; i++) if (a.aAlb.getX(i) < 0.1 && a.aAlb.getZ(i) < 0.2) out.push([a.position.getX(i), a.position.getY(i), a.position.getZ(i)]); return out; };
+  const a = makeStickyNote(kit, '#f4e04d', 0), b = makeStickyNote(kit, '#f4e04d', 1);
+  a.pose({ mode: 'wall', time: 0 });
+  const wa = ink(a);
+  assert.ok(wa.length >= 3 * 4 * 4, 'three lines of it');
+  assert.ok(wa.every((p) => p[2] > 0.002), 'in front of the paper');
+  assert.notDeepEqual(wa.map((p) => p[0]).sort(), ink(b).map((p) => p[0]).sort(), 'another note, other words');
+  a.pose({ mode: 'peel', t: 0.5, time: 1 });
+  assert.ok(Math.max(...ink(a).map((p) => p[2])) > 0.01, 'and it curls with the sheet');
+});

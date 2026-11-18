@@ -68,6 +68,16 @@ export function makeStickyNote(kit, colour = '#f4e04d', seed = 0) {
   const b = new Batch();
   // the sheet: facing +z, from the glued edge (y 0) down; a little darker toward the free edge, where it lifts
   b.grid([h, 0, 0], [-1, 0, 0], [0, -1, 0], [0, NOTE_SIZE], rows, null, lin(colour), (u, v) => 1 - 0.12 * (v / NOTE_SIZE));
+  // and on it (the cast's stand-in, noteVox: "words live in the world"), on an 8 × 8 grid: the glue strip along the top two
+  // rows, a shade lighter; then three lines of scribble in dark ink, each ending somewhere else, with gaps, so it reads as
+  // writing from across a room and not as a rule. Which note of the room it is (seed) moves the ends and the gaps.
+  const G = 8, cell = NOTE_SIZE / G, k = ((Math.round(seed) % 3) + 3) % 3, lift = new Map();
+  const patch = (x0, x1, y0, y1, alb, off) => { const at = b.verts; b.quad([x0, y0, 0], [x1, y0, 0], [x1, y1, 0], [x0, y1, 0], alb); for (let i = at; i < b.verts; i++) lift.set(i, off); };
+  patch(-h, h, -2 * cell, 0, lin(colour, 1.08), 0.0006);
+  for (let line = 0; line < 3; line++) {
+    const top = (2 + line * 2) * cell + cell * 0.3, end = G - 1 - ((k + line) % 3);
+    for (let x = 1; x < end; x++) if ((x * 7 + line * 3 + k) % 5 !== 0) patch(-h + x * cell, -h + (x + 1) * cell, -top - cell * 0.4, -top, lin('#2a2f4a'), 0.0012);
+  }
   const geo = kit.geometry(b, [], [1, 1, 1]);
   const mat = kit.surface({ side: THREE.DoubleSide });
   const mesh = new THREE.Mesh(geo, mat);
@@ -75,13 +85,17 @@ export function makeStickyNote(kit, colour = '#f4e04d', seed = 0) {
   const inner = new THREE.Group(), group = new THREE.Group();
   group.name = 'sticky-note';
   inner.add(mesh); group.add(inner);
-  const pos = geo.attributes.position, down = Float32Array.from({ length: pos.count }, (_, i) => -pos.getY(i));
+  const pos = geo.attributes.position, down = Float32Array.from({ length: pos.count }, (_, i) => -pos.getY(i)), proud = Float32Array.from({ length: pos.count }, (_, i) => lift.get(i) || 0);
   let lastK = NaN, lastFrom = NaN;
 
   function bend(k, from) {
     if (Math.abs(k - lastK) < 1e-4 && Math.abs(from - lastFrom) < 1e-6) return;          // (still: nothing redrawn)
     lastK = k; lastFrom = from;
-    for (let i = 0; i < pos.count; i++) { const [y, z] = bentAt(down[i], k, from); pos.setY(i, y); pos.setZ(i, z + 0.0015); }
+    for (let i = 0; i < pos.count; i++) {
+      // (what is on the sheet stands off it along the sheet's own face, however far that face has turned)
+      const [y, z] = bentAt(down[i], k, from), a = Math.max(0, down[i] - from) * k, off = 0.0015 + proud[i];
+      pos.setY(i, y + Math.sin(a) * off); pos.setZ(i, z + Math.cos(a) * off);
+    }
     pos.needsUpdate = true;
   }
 
