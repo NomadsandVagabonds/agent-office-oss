@@ -14,6 +14,7 @@ import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
 import { MEETING, filing, meets, ahead, lengths, takes } from './standing-meeting.rule.js';
 import { SHOVE, slide } from '../shove.rule.js';
+import { HEALTH } from './health.rule.js';
 import { fitsDoor, canLeave } from './paths.js';
 import { elbow } from './head-count.rule.js';
 import { S, SF, THIGH, SHIN, backVox, bellyVox, fingersVox, thighVox, shinVox, tieVox } from './standing-meeting.model.js';
@@ -260,6 +261,17 @@ export function create(c) {
         if (to) { walker.x = to.x; walker.z = to.z; }
         shake = 0.6; c.stall(SHOVE.heavy.stagger); c.play('thunk', walker.x, walker.z, 14); c.play('creak', walker.x, walker.z, 12);
         return true;
+      } }];
+    },
+    /** A jab (melee.js): it takes one (cast/health.rule.js). Not finished by it, it flinches: it stands a moment and lands nothing. */
+    snipTargets() {
+      if (!group || over) return [];
+      return [{ id: 'standing-meeting', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 0.5, r: 0.5, priority: 2, snip: () => {
+        const hit = c.struck(HEALTH.jab); if (!hit.ok) return false;
+        if (!known) { known = true; c.met(); }
+        if (!hit.killed) c.stall(HEALTH.flinch); shake = 0.6;
+        c.play('thunk', walker.x, walker.z, 12); c.survived();
+        return { ok: true, target: 'standing-meeting' };
       } }];
     },
     at: () => ({ x: walker.x, z: walker.z, mode: s.mode, yaw }),

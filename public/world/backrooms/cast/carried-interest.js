@@ -11,6 +11,7 @@ import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
 import { CARRIED, borne, carried, pace, under } from './carried-interest.rule.js';
 import { SHOVE, slide } from '../shove.rule.js';
+import { HEALTH } from './health.rule.js';
 import { fitsDoor, canLeave } from './paths.js';
 import { S, SB, weightVox, armVox, bearerVox } from './carried-interest.model.js';
 
@@ -164,6 +165,17 @@ export function create(c) {
         if (to) { walker.x = to.x; walker.z = to.z; }
         shake = 0.6; c.stall(SHOVE.heavy.stagger); c.play('thunk', walker.x, walker.z, 14);
         return true;
+      } }];
+    },
+    /** A jab (melee.js): it takes one (cast/health.rule.js). Not finished by it, it flinches: it stands a moment and lands nothing. */
+    snipTargets() {
+      if (!group || over) return [];
+      return [{ id: 'carried-interest', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 0.6, r: K.r, priority: 2, snip: () => {
+        const hit = c.struck(HEALTH.jab); if (!hit.ok) return false;
+        if (!known) { known = true; c.met(); }
+        if (!hit.killed) c.stall(HEALTH.flinch); shake = 0.8;
+        c.play('thunk', walker.x, walker.z, 12); c.survived();
+        return { ok: true, target: 'carried-interest' };
       } }];
     },
     at: () => ({ x: walker.x, z: walker.z, mode: s.mode, bearers: s.bearers }),
