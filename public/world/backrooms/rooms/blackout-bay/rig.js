@@ -120,6 +120,7 @@ export function buildStandIn(kit, who, idx = 0) {
   const mesh = new THREE.Mesh(kit.geometry(b, lights, amb), mat);
   const group = new THREE.Group();
   group.add(mesh);
+  group.name = 'stand-in';                                                        // (for the dev page to find)
   // Its legs walk while it comes on in the dark (walk-legs.js), by how far the room has moved it: read as it is drawn, so
   // nothing in the room has to ask (a frame behind, which nobody standing in the dark will see). Still, it is still.
   const step = legsFor(mesh, { hip: JOINT.hipL[1] * S[1], knee: JOINT.kneeL[1] * S[1], stride: 0.85, swing: 0.5, fold: 0.85,

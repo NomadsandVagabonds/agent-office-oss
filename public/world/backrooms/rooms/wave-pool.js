@@ -182,7 +182,6 @@ export function build(c) {
   poolSign(c, 'back', 0, 3.05, [
     `${p.dept || 'Q3 TIDE'} WAVE POOL`,
     'HORN SOUNDS BEFORE SURGE',
-    'DIVE UNDER [C] OR USE PIER',
     'NO FILING IN BREAKERS',
   ], { w: 2.1, h: 0.92, seed: 29, warn: true, mess: 0.22 });
 
