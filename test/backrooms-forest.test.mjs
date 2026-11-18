@@ -37,6 +37,7 @@ const [
     stepCanopyBanks, makeRippleState, pushWaterRipple,
     AUDITOR, makeAuditor, stepAuditor, snipAuditor,
     EYEBIRCH, makeEyeGrove, stepEyeGrove,
+    LIGHTS_OUT, nearestTent,
   },
   { WRONG_KEYS },
   { makeCoatRackBuckRig },
@@ -61,6 +62,7 @@ const [
 ]);
 
 const FOREST_ROOMS = [
+  'lights-out',
   'trailhead',
   'timber-lot',
   'canopy-walk',
@@ -566,10 +568,11 @@ test('buildWorld builds all 15 forest deck rooms and all 8 forced WRONG oddities
       const maxOrdTris = isBig(arch) ? 240000 : 120000;
       const maxTotalTris = isBig(arch) ? 500000 : 250000;
       assert.ok(rt.lights.length <= 16, `${id}: lights ${rt.lights.length} > 16`);
-      assert.equal(rt.lighting?.bankCount, 4, `${id}: expected 4-bank dynamic woodland lighting`);
+      // (lights-out is the one forest room with no ceiling light and no planting: a dark room of tents on bare carpet)
+      if (id !== 'lights-out') assert.equal(rt.lighting?.bankCount, 4, `${id}: expected 4-bank dynamic woodland lighting`);
       assert.ok(ordMeshes <= 45, `${id}: ordinary meshes ${ordMeshes} > 45`);
       assert.ok(detMeshes <= 12, `${id}: detail meshes ${detMeshes} > 12`);
-      assert.ok(detTris > 0, `${id}: expected detail: true meshes to carry woodland detail`);
+      if (id !== 'lights-out') assert.ok(detTris > 0, `${id}: expected detail: true meshes to carry woodland detail`);
       assert.ok(ordTris <= maxOrdTris, `${id}: ordinary triangles ${Math.round(ordTris)} > ${maxOrdTris}`);
       assert.ok(totalTris <= maxTotalTris, `${id}: total triangles ${Math.round(totalTris)} > ${maxTotalTris}`);
       if (['old-growth', 'tree-farm', 'windthrow', 'nursery-aisles', 'inverted-grove'].includes(id)) {
@@ -660,4 +663,19 @@ test('whole forest floors build with every doorway of every room reachable (no "
       assert.deepEqual(said.filter((w) => /could not be reached|nor even then|would not build/.test(w)), [], `tape ${tape}: ${level.rooms.length} rooms`);
     } finally { world.dispose(); }
   }
+});
+
+test('Lights Out (`nearestTent`): the nearest tent within reach is the dark one, one at a time, and none with nobody near', () => {
+  const tents = [{ x: 0, z: 0 }, { x: 4, z: 0 }, { x: 0, z: 5 }];
+  assert.equal(nearestTent(tents, 20, 20), -1, 'nobody near: every tent lit');
+  assert.equal(nearestTent(tents, 0.5, 0.5), 0);
+  assert.equal(nearestTent(tents, 2.4, 0), 1, 'between two, the nearer');
+  assert.equal(nearestTent(tents, 0, LIGHTS_OUT.reach + 0.5 + 5), -1, 'just out of reach of the last');
+  assert.equal(nearestTent(tents, 0, 5 + LIGHTS_OUT.reach - 0.1), 2);
+  assert.equal(nearestTent([], 0, 0), -1);
+  assert.ok(LIGHTS_OUT.off < LIGHTS_OUT.on, 'it goes out faster than it comes back');
+  const line = DECK.find((a) => a.id === 'lights-out');
+  assert.ok(line, 'the room is in the deck');
+  assert.equal(line.lights, 'dark');
+  assert.equal(atHome(line, 'forest') > 0 && atHome(line, 'yellow') === 0, true, 'and is dealt in the forest and nowhere else');
 });

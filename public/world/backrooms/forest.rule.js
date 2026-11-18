@@ -1066,3 +1066,21 @@ export function stepEyeGrove(s, dt, sense = {}) {
 }
 
 
+
+/* ---- Lights Out (`lights-out`): the tent beside you goes dark ---------------------------------------------- */
+
+/** reach: how near a tent's middle somebody is for it to be the dark one (m) · off, on: seconds to go out and to come back · pool: its light on the carpet */
+export const LIGHTS_OUT = Object.freeze({ reach: 3.4, off: 0.12, on: 1.6, pool: 0.34 });
+
+/**
+ * Which tent is dark: the nearest one within reach of (x, z), or -1 with nobody near any. One at a time, always, so a
+ * visitor between two tents has one of them lit. Pure. `tents`: [{ x, z }].
+ */
+export function nearestTent(tents, x, z, reach = LIGHTS_OUT.reach) {
+  let best = -1, bd = reach;
+  for (let i = 0; i < tents.length; i++) {
+    const d = Math.hypot(tents[i].x - x, tents[i].z - z);
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
