@@ -5,20 +5,20 @@
 // inside a damp acoustic-ceilinged office bay:
 //   - A sunken seafoam-and-cobalt Jacuzzi swirls around a pried-open glowing cyan
 //     suction drain (`enter the drain` -> spirals down to the next floor when `goesDown`).
-//   - Twin enclosed fiberglass ceiling flumes breach the acoustic tiles: an electric-cyan
-//     feed pipe pouring chlorinated broth into the NW quadrant, and a hot-magenta
-//     reverse-gravity siphon pipe sucking a flaring column of water and glowing foam
-//     rings UPWARD out of the SE quadrant into the dark ceiling plenum.
+//   - Twin enclosed fiberglass ceiling flumes breach the acoustic tiles: a seafoam
+//     feed pipe pouring chlorinated broth into the NW quadrant, and a dusty rose
+//     reverse-gravity siphon pipe pulling loose water and a lost wristband
+//     UPWARD out of the SE quadrant into the dark ceiling plenum.
 //   - Upside-down resort loungers and a striped patio umbrella hang bolted to the
 //     drop-ceiling, a glitched pink pool locker crowned with six inner tubes (top one
 //     sprouting upturned office slacks and dress shoes) stands in the NW corner, and
 //     two occupied inner tubes plus a sideways log-flume boat orbit in the broth.
 //   - Turning the NE hydro-jet valve (`reverse hydro-jets`) flips the vortex spin,
-//     surges the upward magenta siphon, and calms the current for 8.5 s so visitors
+//     surges the upward siphon, and calms the current for 8.5 s so visitors
 //     can wade to the submerged west bench supply.
 
+import { poolSiphon, vortexFoam } from './whirlpool-flume/siphon.js';
 import {finishPoolRoom} from '../pool-finish.js';
-import * as THREE from 'three';
 import { Batch, WHITE } from '../kit.js';
 import { goesDown } from '../seam.js';
 import {
@@ -165,10 +165,10 @@ export function build(c) {
   // Supply reward on the submerged west cobalt spa bench (reachable easily when jets calm!)
   c.leave('battery', -hs + 0.32, 0, { y: -0.42 });
 
-  // ---- 2. Impossible Twin Ceiling Flumes (Shared Translucent `Batch`) -------
+  // ---- 2. Impossible Twin Ceiling Flumes -------
   const flumeBatch = new Batch();
 
-  // Feed Flume (Electric Cyan `#18c9e8`, NW ceiling hole -> NW Jacuzzi quadrant)
+  // Feed flume from the ceiling into the NW corner of the pool
   const holeA = c.hole(-2.0, -1.9, 2);
   c.flat.box(holeA.x - 0.56, H - 0.05, holeA.z - 0.56, holeA.x + 0.56, H + 0.04, holeA.z + 0.56, CHROME);
   const feedPts = [
@@ -179,7 +179,8 @@ export function build(c) {
   ];
   buildFlume(c, 'wp:spa:feed', feedPts, {
     radius: 0.46,
-    color: '#18c9e8',
+    color: '#589d9c',
+    molded: true,
     enclosed: true,
     batch: flumeBatch,
     hangFromCeiling: true,
@@ -188,26 +189,28 @@ export function build(c) {
   });
 
   // Translucent cyan splash column pouring out of the NW feed mouth into the Jacuzzi water
-  addColumnShell(flumeBatch, [
+  const feedWater = new Batch();
+  addColumnShell(feedWater, [
     { x: -1.24, y: waterY - 0.04, z: -1.00, r: 0.36, twist: 0.35, col: [0.78, 0.99, 1.0] },
     { x: -1.29, y: waterY + 0.14, z: -1.05, r: 0.24, twist: 0.22, col: [0.32, 0.94, 0.99] },
     { x: -1.36, y: 0.34, z: -1.12, r: 0.27, twist: 0.10, col: [0.16, 0.86, 0.96] },
     { x: -1.42, y: 0.56, z: -1.18, r: 0.33, twist: 0.0, col: [0.12, 0.80, 0.94] },
   ], 10);
 
-  // Reverse-Gravity Siphon Flume (Hot Magenta `#e83ca8`, SE Jacuzzi -> SE ceiling hole)
+  // Siphon from the SE corner into the ceiling
   const holeB = c.hole(1.95, 1.75, 2);
   c.flat.box(holeB.x - 0.54, H - 0.05, holeB.z - 0.54, holeB.x + 0.54, H + 0.04, holeB.z + 0.54, CHROME);
-  const siphonX = 1.45, siphonZ = 1.18, siphonMouthY = 0.78;
+  const siphonX = 1.45, siphonZ = 1.18, siphonMouthY = 1.68;
   const siphonPts = [
     [siphonX, siphonMouthY, siphonZ],
-    [1.72, 1.68, 1.48],
+    [1.54, 2.16, 1.30],
     [holeB.x, H - 0.68, holeB.z - 0.08],
     [holeB.x, H + 0.16, holeB.z],
   ];
   buildFlume(c, 'wp:spa:siphon', siphonPts, {
     radius: 0.44,
-    color: '#e83ca8',
+    color: '#a7667a',
+    molded: true,
     enclosed: true,
     batch: flumeBatch,
     hangFromCeiling: true,
@@ -215,52 +218,12 @@ export function build(c) {
     struts: [0.24, 0.58],
   });
 
-  // Bake both fiberglass flumes + pouring cyan splash column into 1 translucent mesh
-  addTranslucent(c, flumeBatch, { alpha: 0.76, side: THREE.FrontSide, order: 3 });
+  c.dynamic(flumeBatch, {wet:.35});
+  addTranslucent(c, feedWater, {alpha:.68, order:3});
 
-  // IMPOSSIBLE UPWARD-RUSHING WATER & FOAM SIPHON COLUMN beneath `(1.45, 1.18)`
-  // Narrows at the Jacuzzi surface (`waterY`) and flares wider upward into the magenta pipe mouth (`y = 0.78`).
-  const siphonColBatch = new Batch();
-  addColumnShell(siphonColBatch, [
-    { x: siphonX, y: waterY - 0.03, z: siphonZ, r: 0.15, twist: 0.0, col: [0.68, 0.98, 1.0] },
-    { x: siphonX, y: waterY + 0.14, z: siphonZ, r: 0.11, twist: 0.45, col: [0.34, 0.92, 0.98] },
-    { x: siphonX, y: waterY + 0.36, z: siphonZ, r: 0.18, twist: 0.95, col: [0.62, 0.68, 0.96] },
-    { x: siphonX, y: waterY + 0.60, z: siphonZ, r: 0.29, twist: 1.45, col: [0.92, 0.42, 0.82] },
-    { x: siphonX, y: siphonMouthY + 0.06, z: siphonZ, r: 0.38, twist: 1.95, col: [0.96, 0.34, 0.74] },
-  ], 12);
-  const siphonColMesh = c.dynamic(siphonColBatch, { pivot: [siphonX, waterY, siphonZ] });
-
-  // Rising glowing white/cyan foam rings sucked upward from `waterY` into `(1.45, 0.78, 1.18)`
-  const makeSiphonFoamRing = (tint) => {
-    const rb = new Batch();
-    const segs = 10, rr = 0.15;
-    for (let k = 0; k < segs; k++) {
-      const a = (k / segs) * Math.PI * 2;
-      const px = siphonX + Math.cos(a) * rr;
-      const pz = siphonZ + Math.sin(a) * rr;
-      rb.box(px - 0.042, waterY - 0.018, pz - 0.042, px + 0.042, waterY + 0.022, pz + 0.042, tint);
-    }
-    return c.dynamic(rb, { pivot: [siphonX, waterY, siphonZ], unlit: true });
-  };
-  const siphonRings = [
-    makeSiphonFoamRing([0.88, 0.99, 1.0]),
-    makeSiphonFoamRing([0.98, 0.80, 0.96]),
-  ];
-  c.light(siphonX, 0.42, siphonZ, '#ff48bd', 0.58, { k: 2.8, far: 6.0 });
-
-  // Dynamic swirling turquoise & whitewater vortex rings around the central drain
-  const vortexBatch = new Batch();
-  for (let ring = 0; ring < 3; ring++) {
-    const rr = 0.44 + ring * 0.54;
-    const yy = -0.19 + ring * 0.065;
-    for (let k = 0; k < 10; k++) {
-      const a = (k / 10) * Math.PI * 2 + ring * 0.3;
-      const px = Math.cos(a) * rr, pz = Math.sin(a) * rr;
-      const col = ring === 2 ? [0.90, 0.99, 1.0] : ring === 1 ? [0.42, 0.95, 0.99] : [0.22, 0.88, 0.96];
-      vortexBatch.box(px - 0.13, yy, pz - 0.065, px + 0.13, yy + 0.032, pz + 0.065, col);
-    }
-  }
-  const vortexMesh = c.dynamic(vortexBatch, { pivot: [0, waterY, 0] });
+  const updateSiphon=poolSiphon(c,siphonX,siphonZ,waterY,siphonMouthY);
+  c.light(siphonX, .92, siphonZ, '#addbd2', .68, { k: 2.8, far: 6 });
+  const vortexMesh=vortexFoam(c,waterY);
 
   // ---- 3. Sculpted 3 cm `Vox` Wrongness (Batched into ONE `placeVoxStack`) --
   const neX = hs + 0.38, neZ = -hs - 0.38;
@@ -442,8 +405,6 @@ export function build(c) {
   });
 
   let vortexYaw = 0;
-  let siphonYaw = 0;
-  let siphonCycle = 0;
 
   createBasin(c, {
     x0: -hs, z0: -hs, x1: hs, z1: hs,
@@ -459,26 +420,11 @@ export function build(c) {
       const calmFactor = spaState.calmSec > 0 ? 0.28 : 1.0;
       const surge = spaState.siphonSurge;
 
-      // Spin central vortex rings smoothly with current `spaState.spin`
+      // Spin the arcs of surface foam with current `spaState.spin`
       vortexYaw += dt * 1.95 * calmFactor * spaState.spin;
       vortexMesh.rotation.y = vortexYaw;
 
-      // Spin & surge the impossible upward magenta siphon column + rising glowing foam rings
-      siphonYaw -= dt * 4.2 * surge * spaState.spin;
-      siphonColMesh.rotation.y = siphonYaw;
-      const radSurge = 0.72 + 0.28 * surge;
-      siphonColMesh.scale.set(radSurge, 1.0, radSurge);
-
-      siphonCycle = (siphonCycle + dt * 1.35 * surge) % 1;
-      const riseSpan = siphonMouthY + 0.02 - waterY;
-      for (let i = 0; i < siphonRings.length; i++) {
-        const u = (siphonCycle + i * 0.5) % 1;
-        const ring = siphonRings[i];
-        ring.position.y = waterY + u * riseSpan;
-        const flare = (0.76 + u * 1.55) * radSurge;
-        ring.scale.set(flare, 1.0, flare);
-        ring.rotation.y = siphonYaw * 0.8 + i * 1.1;
-      }
+      updateSiphon(dt,surge);
 
       // Smoothly turn the NE valve handwheel toward target angle
       valveRot += (valveTargetRot - valveRot) * Math.min(1, dt * 8.0);
