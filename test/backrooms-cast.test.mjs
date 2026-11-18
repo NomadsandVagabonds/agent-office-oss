@@ -286,7 +286,8 @@ test('a creature\'s file: named for it, listed, exports create(c), keeps its rul
       assert.ok(!/^\.\.\/(index|world|player|input|hud|vhs|sound|loot|pursuer)\.js$/.test(spec), `cast/${m.id}.js imports ${spec}: what it needs of the level comes through c`);
     }
     // its rule is pure and somewhere a test can run it: its own exports, or a module of rules beside it
-    const pure = [...src.matchAll(/from\s+'(\.\/[a-z.-]+\.js|\.\.\/reach\.js)'/g)].map((k) => k[1]).filter((k) => k !== './index.js');
+    // (a rig or a model — cast/<id>.rig.js, cast/<id>.model.js — draws, and may reach for three.js: it is not a rule)
+    const pure = [...src.matchAll(/from\s+'(\.\/[a-z.-]+\.js|\.\.\/reach\.js)'/g)].map((k) => k[1]).filter((k) => k !== './index.js' && !k.endsWith('.rig.js') && !k.endsWith('.model.js'));
     assert.ok(pure.length > 0, `cast/${m.id}.js: no rule a test could run`);
     for (const k of pure.filter((x) => x.startsWith('./'))) assert.ok(!/from\s+'three'|document\.|window\./.test(fs.readFileSync(new URL('cast/' + k.slice(2), DIR), 'utf8')), `cast/${k.slice(2)} is not pure`);
   }
