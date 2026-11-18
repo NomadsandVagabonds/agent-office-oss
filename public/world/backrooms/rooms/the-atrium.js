@@ -24,13 +24,14 @@ export const ATRIUM = Object.freeze({ gallery: 3.2, deep: 3.0, run: 6.2, wide: 1
 
 /** The fountain: tiers, dry, the coins still in it; and on top, what an office calls water. */
 function fountainVox() {
-  const v = new Vox(), stone = M('#b7a98a', 1), tile = M('#3f7f8f', 0), dark = M('#2c5a66', 0), coin = M('#c9a43a', 0);
+  const v = new Vox(), stone = M('#b7a98a', 1), tile = M('#3f7f8f', 0), dark = M('#2c5a66', 0);
   v.cyl('y', 0, 0, 0, 10, 56, stone); v.cyl('y', 0, 0, 10, 12, 58, stone); for (let y = 4; y < 12; y++) for (let a = 0; a < 6.283; a += 0.02) v.set(Math.round(Math.cos(a) * 50), y, Math.round(Math.sin(a) * 50), (Math.round(a * 8) + y) % 2 ? tile : dark);
   v.carve(-49, 6, -49, 49, 12, 49); v.cyl('y', 0, 0, 0, 5, 50, tile); v.cyl('y', 0, 0, 5, 26, 26, stone); v.cyl('y', 0, 0, 26, 28, 30, stone); v.cyl('y', 0, 0, 28, 46, 12, stone); v.cyl('y', 0, 0, 46, 48, 15, stone);
-  for (let i = 0; i < 46; i++) { const a = i * 2.4, r = 30 + (i * 7) % 18; v.set(Math.round(Math.cos(a) * r), 6, Math.round(Math.sin(a) * r), coin); }
   v.rbox(-7, 48, -7, 7, 62, 7, 2, M('#e9e4d6', 0)); v.box(-2, 54, 7, 2, 56, 8, M('#3a70c9', 0)); v.cyl('y', 0, 0, 62, 86, 6.5, M('#9fd0e8', 0), 6.5); v.cyl('y', 0, 0, 86, 90, 3, M('#9fd0e8', 0)); v.cyl('y', 0, 0, 62, 70, 6.5, glow('#bfe6ff'));
   return v;
 }
+/** What was thrown in: one voxel each, so they are a model of their own, kept fine while the fountain is cut at half. */
+function coinsVox() { const v = new Vox(), coin = M('#c9a43a', 0); for (let i = 0; i < 46; i++) { const a = i * 2.4, r = 30 + (i * 7) % 18; v.set(Math.round(Math.cos(a) * r), 6, Math.round(Math.sin(a) * r), coin); } return v; }
 /** One tread of a moving stair that does not: ribbed, with the yellow edge. */
 const TREAD = [0.34, 0.35, 0.37], EDGE = [0.85, 0.66, 0.12];
 
@@ -64,19 +65,23 @@ export function build(c) {
     sheet(c.flat, [xa, 0.02, zb], [xa, 0.02, zE], [xb, 0.02, zE], [xb, 0.02, zb], 2, 3, null, [0.5, 0.46, 0.4]); sheet(c.flat, [xa, top, zE], [xa, top, zb], [xb, top, zb], [xb, top, zE], 2, 3, null, [0.16, 0.15, 0.18]);
     for (const x of [xa - 0.06, xb]) c.flat.box(x, 0, zE - 0.05, x + 0.06, top, zE + 0.03, [0.66, 0.52, 0.2]); c.flat.box(xa - 0.06, top, zE - 0.05, xb + 0.06, top + 0.08, zE + 0.03, [0.66, 0.52, 0.2]);   // a brass frame, and no glass in it
     c.light(mid, top - 0.5, zE - 0.5, what === 'orange' ? '#ffb02e' : what === 'shoes' ? '#ffe2a8' : '#b46bff', 0.8, { k: 1.4, far: 4 });
+    // two cans in the shop's own ceiling, the shell's (`c.fitting` kind 'can'); its lamp above is what lights it. (A row of cans in the
+    // gallery's soffit used to be drawn at G - 0.22, above these ceilings and behind the shutters, where nothing could see it)
+    for (const f of [1 / 3, 2 / 3]) c.fitting(xa + (xb - xa) * f, zE - 0.62, { kind: 'can', y: top, tube: [1, 0.92, 0.78], power: 1.8, detail: true, light: false });
     const put = (key, make, x, z, o = {}) => c.model(key, make, x, z, { solid: false, shadow: false, ...o });
     if (what === 'orange') {
       c.flat.box(xa + 0.1, 0, zE - 0.5, xb - 0.1, 0.95, zE - 0.14, [0.94, 0.52, 0.12]); c.flat.box(xa + 0.06, 0.95, zE - 0.54, xb - 0.06, 1.0, zE - 0.1, [0.93, 0.9, 0.82]);
       for (let x = xa + 0.1; x < xb - 0.2; x += 0.4) c.flat.box(x, 0.02, zE - 0.14, x + 0.2, 0.9, zE - 0.13, [0.96, 0.94, 0.88]);
       put('orange:juicer', juicerVox, xa + 0.5, zE - 0.34, { y: 1.0, rot: Math.PI }); for (let k = 0; k < 4; k++) put('orange:cup', cupVox, mid - 0.2 + k * 0.17, zE - 0.28 - (k % 2) * 0.1, { y: 1.0 });
-      put('atrium:orange', orangeVox(16, false), xb - 0.55, zE - 0.75, { y: 1.5 }); put('orange:heap:1', heapVox(1), xb - 0.5, zE - 0.85, { scale: 0.9 });
+      put('atrium:orange', () => orangeVox(16, false)().downsample(2), xb - 0.55, zE - 0.75, { y: 1.5, scale: 2 }); put('orange:heap:1', heapVox(1), xb - 0.5, zE - 0.85, { scale: 0.9 });
       put('atrium:server', dummyVox(1, '#f4efe0', 'orange'), mid - 0.1, zE - 0.95, { rot: 0 });
     } else if (what === 'shoes') {
       const cols = ['#3a2a1c', '#17171a', '#7a3a34', '#c9b08a'];
       for (let r = 0; r < 5; r++) { c.flat.box(xa + 0.05, 0.35 + r * 0.42, zb, xb - 0.05, 0.38 + r * 0.42, zb + 0.32, [0.6, 0.46, 0.3]); for (let k = 0; k < 7; k++) put('atrium:shoe:' + ((r + k) % 4), shoeVox(cols[(r + k) % 4]), xa + 0.25 + k * ((xb - xa - 0.5) / 6), zb + 0.17, { y: 0.38 + r * 0.42, rot: -1.5708 }); }
       put('atrium:shoe:0', shoeVox(cols[0]), mid, zE - 0.45, { y: 0.02, scale: 5, rot: -1.2 });                    // …and the one in the window, which is the size they thought a shoe is
     } else {
-      for (let k = 0; k < 7; k++) put('atrium:dummy:' + (k % 4), dummyVox(k % 4, ['#39424f', '#7a3a34', '#4a5a40', '#6a4a8a'][k % 4]), xa + 0.3 + (k % 4) * ((xb - xa - 0.6) / 3) + (k > 3 ? 0.25 : 0), k > 3 ? zE - 0.85 : zE - 0.28, { rot: 0, scale: k === 5 ? 1.25 : 1 });   // a shop full of them, up at the front, as near as they can get
+      for (let k = 0; k < 7; k++) { const dv = dummyVox(k % 4, ['#39424f', '#7a3a34', '#4a5a40', '#6a4a8a'][k % 4]), far = k > 3;   // (the back row cut at half: the budget)
+        put('atrium:dummy:' + (k % 4) + (far ? ':half' : ''), far ? () => dv().downsample(2) : dv, xa + 0.3 + (k % 4) * ((xb - xa - 0.6) / 3) + (far ? 0.25 : 0), far ? zE - 0.85 : zE - 0.28, { rot: 0, scale: (k === 5 ? 1.25 : 1) * (far ? 2 : 1) }); }   // a shop full of them, up at the front, as near as they can get
     }
   };
   for (let i = 0; i < bays; i++) {
@@ -120,20 +125,17 @@ export function build(c) {
 
   /* the concourse: water, palms, and the people who came */
   const cz = Math.min((zTop + D / 2) / 2 + 0.2, D / 2 - 2.6);                                          // (clear of the way in at the front)
-  c.model('atrium:fountain', fountainVox, 0, cz, { solid: false }); c.solid(-1.45, cz - 1.45, 1.45, cz + 1.45, { tall: false }); c.light(0, 2.6, cz, '#bfe6ff', 0.9, { k: 1.2, far: 6 });
+  c.model('atrium:fountain', () => fountainVox().downsample(2), 0, cz, { scale: 2, solid: false }); c.model('atrium:coins', coinsVox, 0, cz, { solid: false, shadow: false }); c.solid(-1.45, cz - 1.45, 1.45, cz + 1.45, { tall: false }); c.light(0, 2.6, cz, '#bfe6ff', 0.9, { k: 1.2, far: 6 });   // (the fountain cut at half: it was 21k triangles; the budget)
   for (const [sx, sz] of [[-1, 1], [1, 1]]) { const x = sx * (W / 2 - 1.3), z = sz > 0 ? D / 2 - 1.3 : zTop + 0.4 + (sx > 0 ? 1.2 : 0); if (Math.abs(z) < 1.3) continue; c.model('atrium:palm', palmVox, x, z, { rot: R.range(0, 6), scale: 1.25, solid: false }); c.solid(x - 0.3, z - 0.3, x + 0.3, z + 0.3, { tall: false }); }
   const dress = ['#39424f', '#7a3a34', '#4a5a40', '#6a4a8a'];
   for (let i = 0; i < 4; i++) { const a = (i < 2 ? -1 : 1) * (1.15 + (i % 2) * 0.55), x = Math.sin(a) * 2.2, z = Math.min(D / 2 - 1.7, cz + Math.cos(a) * 2.2); c.model('atrium:dummy:' + i, dummyVox(i, dress[i]), x, z, { rot: Math.atan2(-x, D / 2 - z), scale: i === 3 ? 0.62 : 1, solid: false }); c.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, { tall: false }); }   // a family, facing the way in
-  for (let i = 0; i < bays; i++) if (upper[i] === 'window') c.model('atrium:dummy:' + (i % 4), dummyVox(i % 4, dress[i % 4]), -W / 2 + (i + 0.5) * bw + R.range(-0.5, 0.5), -D / 2 + 0.5, { y: G, rot: 0, solid: false, shadow: false });        // up on the gallery, at the rail side of the glass, looking down
+  for (let i = 0; i < bays; i++) if (upper[i] === 'window') c.model('atrium:dummy:' + (i % 4) + ':half', () => dummyVox(i % 4, dress[i % 4])().downsample(2), -W / 2 + (i + 0.5) * bw + R.range(-0.5, 0.5), -D / 2 + 0.5, { y: G, rot: 0, scale: 2, solid: false, shadow: false });        // up on the gallery, at the rail side of the glass, looking down
 
   /* the detail: what stands proud and gives the place its depth. In a batch of its own (atrium:detail) so a low setting can leave it out;
      nothing in it is walked into, stood on or read */
   const det = c.mapped('atrium:detail', kit.tex.white(), { detail: true }), steel = [0.42, 0.4, 0.44], brassD = [0.66, 0.52, 0.2], cream = [0.86, 0.82, 0.74];
   // the gallery's underside: a soffit with a fascia, and downlights let into it, every 1.6 m, lit
   det.box(-W / 2, G - 0.36, zE - 0.05, W / 2, G - 0.22, zE + 0.1, [0.2, 0.19, 0.22]);
-  const cans = c.shining('atrium:cans', kit.tex.white(), 1.8, [1, 0.92, 0.78], { detail: true });
-  for (let x = -W / 2 + 0.8; x < W / 2 - 0.4; x += 1.6) { if (Math.abs(x - xUp) < half + 0.2 || Math.abs(x - xDn) < half + 0.2) continue; const z = zE - 0.7;
-    det.box(x - 0.13, G - 0.24, z - 0.13, x + 0.13, G - 0.22, z + 0.13, steel); cans.box(x - 0.08, G - 0.245, z - 0.08, x + 0.08, G - 0.24, z + 0.08, [1, 1, 1]); }
   // the gallery's columns: round, clad in brass bands, with a capital and a plinth; real, so they are walked round
   for (let x = -W / 2 + K.bay; x < W / 2 - 0.5; x += K.bay * 2) { if (Math.abs(x - xUp) < half + 0.8 || Math.abs(x - xDn) < half + 0.8) continue; const z = zE + 0.35;
     c.model('atrium:column', () => { const v = new Vox(), m = M('#c9c0ae', 1), b = M('#a8843a', 0), d = M('#2a2830', 0); const top = Math.round((G - 0.36) / 0.025);
