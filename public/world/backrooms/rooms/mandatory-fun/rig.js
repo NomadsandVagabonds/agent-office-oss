@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { Vox, M, tone } from '../../../vox/vox.js';
 import { buildCharacter, JOINT } from '../../../avatar/build.js';
 import { Batch, lamp } from '../../kit.js';
+import { legsFor } from '../../walk-legs.js';
 import {
   pallorLook, mottleHead, eyelessBrow, carvedSmile, carveCreases,
   slipRows, jointMat, localJointMat,
@@ -204,13 +205,17 @@ export function buildCommitteeMember(kit, variant = 'greeter', idx = 0) {
 
   const group = new THREE.Group();
   group.add(bodyMesh, head, ...arms);
-  if (balloon) group.add(balloon);
+  // The ring's legs walk (walk-legs.js: the body's own vertices below the hip, by how far it has gone, read from where
+  // the room has put it). No meshes added. The greeter keeps the leg it stands on, as it stands.
+  const step = variant !== 'greeter' ? legsFor(bodyMesh, { hip: JOINT.hipL[1] * S[1], knee: JOINT.kneeL[1] * S[1] }) : null;
+  const stride = (time) => step?.(group.position.x, group.position.z, time);
 
   const rig = {
     group,
     head, arms, jaw,
     mesh: bodyMesh,
     aimHead(relYaw = 0, time = 0, mode = 'idle') {
+      stride(time);
       const chasing = mode === 'swarming';
       arms.forEach((arm, i) => {
         const sign = i ? 1 : -1;
