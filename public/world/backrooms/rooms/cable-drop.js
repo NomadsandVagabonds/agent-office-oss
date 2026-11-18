@@ -11,6 +11,7 @@ import { stepWalker, routeToward } from '../denizens.js';
 import { furnitureClear } from '../furniture-rules.js';
 import { CABLE, createCableState, stepCable, releaseCable } from './cable-drop/rule.js';
 import { dormantTendrilsVox, makeTrunkLine } from './cable-drop/rig.js';
+import { fresh, struck, aged, finished } from '../cast/health.rule.js';
 
 function hangFireDoor(c, dr) {
   const { W, D } = c;
@@ -130,17 +131,22 @@ export function build(c) {
   // The Trunk Line itself — hidden in the ceiling until woken, then registered on the floor
   const rig = makeTrunkLine(c.kit);
   const startW = c.toWorld(hole.x, hole.z);
-  let rule = createCableState(), known = false;
+  let rule = createCableState(), known = false, vital = fresh('trunk-line');          // (cast/health.rule.js: medium, two jabs)
 
   const roamer = c.env.denizens?.add({
     id: 'trunk-line',
     x: startW.x, z: startW.z, r: 0.24, tall: 0.62, heading: 0,
     group: rig.group, visible: false, physical: false, lift: H - 0.2,
     light: (rgb) => rig.light(rgb),
-    snipTarget: () => ((rule.phase === 'dropping' || rule.phase === 'hunting') ? { id: 'trunk-line', r: 0.32, priority: 2 } : false),
+    // (a target a hand can find: wide, and tall enough for one still coming down out of the ceiling; and while it is
+    // recoiling from the last jab too, or the second could never follow the first)
+    snipTarget: () => (rule.phase !== 'dormant' && !finished(vital) ? { id: 'trunk-line', r: 0.55, verticalReach: 2.4, priority: 2 } : false),
+    get vital() { return { ...vital }; },
     snip() {
-      if (rule.phase !== 'dropping' && rule.phase !== 'hunting') return false;
+      if (rule.phase === 'dormant' || finished(vital)) return false;
+      vital = struck(vital);
       if (!known) { known = true; c.met('trunk-line'); }
+      if (vital.killed) { roamer.lift = 0; rule = releaseCable(rule); c.env.play('buzz', roamer.x, roamer.z, 9); c.survived('trunk-line'); return { ok: true, target: 'trunk-line' }; }      // (it lies where it fell through its dying: update)
       roamer.lift = 0;
       rule = releaseCable(rule);
       c.env.play('buzz', roamer.x, roamer.z, 7);
@@ -150,6 +156,9 @@ export function build(c) {
     update(dt, time, me) {
       tendrils.rotation.z = Math.sin(time * 1.9) * 0.035;
       tendrils.rotation.x = Math.cos(time * 1.5) * 0.03;
+      // (its health: the mark of the last jab ages; dying, it does nothing and hurts nobody, and then it is gone from this floor)
+      vital = aged(vital, dt);
+      if (vital.dying !== null) { roamer.physical = false; if (vital.gone) roamer.gone = true; return; }
 
       const inRoom = c.world.current() === c.rt;
       const distDrop = Math.hypot(me.x - startW.x, me.z - startW.z);

@@ -760,7 +760,7 @@ export function create(c) {
       } }];
     },
     snipTargets() {
-      if (!pirate || pirate.state === 'caught' || pirate.know?.spent > 0) return [];
+      if (!pirate || pirate.state === 'caught' || (pirate.know?.spent > 0 && !c.vital)) return [];
       const ex = pirate.down ? pirate.down.head.x : pirate.x, ez = pirate.down ? pirate.down.head.z : pirate.z;
       const floorY = W()?.floorY(ex, ez) ?? 0;
       return [{
@@ -772,7 +772,10 @@ export function create(c) {
         priority: 2,
         snip: () => {
           if (!pirate || pirate.state === 'caught' || pirate.know?.spent > 0) return false;
+          const hit = c.struck?.(1);                                  // (cast/health.rule.js: medium, two)
+          if (hit && !hit.ok) return false;
           if (!pirate.known) { pirate.known = true; c.met(); }
+          if (hit?.killed) { env.interfere(1); env.hud.glitch(0.7); env.sound.play('thunk'); pirate.hunted = false; c.survived(); return { ok: true, target: 'pirate' }; }
           if (pirate.state !== 'awake') awaken(pirate, false);
           breakOff(pirate);
           return { ok: true, target: 'pirate' };
@@ -782,6 +785,11 @@ export function create(c) {
     /** Where it is and what it is doing (for the dev page). */
     at() { return pirate ? { x: pirate.x, z: pirate.z, state: pirate.state, know: pirate.know.mode, making: pirate.know.room, down: !!pirate.down, handle: pirate.handle ? pirate.handle.t : null, barricade: pirate.shove ? { id: pirate.shove.id, time: pirate.shove.t } : null, room: W()?.roomAt(pirate.x, pirate.z)?.id ?? null, face: pirate.face, pose: pirate.pose, card: pirate.card ? pirate.card.held : null } : null; },
     get figure() { return pirate; },
+    /**
+     * It has been finished (the conductor, when its dying is over): the body stays where it fell, because of what it may
+     * be holding — the keycard is still on its wrist, and is taken from it there as it was taken from it standing.
+     */
+    fell() { return !!pirate; },
     dispose() { if (pirate) { const i = W()?.bodies.indexOf(pirate.body); if (i >= 0) W().bodies.splice(i, 1); } pirate?.group.removeFromParent(); pirate = null; },
   };
 }

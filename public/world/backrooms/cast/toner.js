@@ -16,6 +16,7 @@ import { makeRng, roomDistances } from '../gen.js';
 import { tonerHomes } from '../cast.js';
 import { clamp, turnTo } from '../bits.js';
 import { FIRE_FEAR, calm as unafraid, afraid, tooNear } from './fire.rule.js';
+import { fresh, struck, aged } from './health.rule.js';
 import { TONER, perched, hatchedBrood, weaveOffset, planTonerLunge, tonerWallGoal, stepToner, strikeToner, snipToner } from './toner.rule.js';
 
 const S = 0.022;                               // 2.2 cm per voxel: sharp, spindly silhouette
@@ -457,6 +458,7 @@ export function create(c) {
       dripT: 0.4 + Math.random() * 0.8,
       away: null,                      // the room it was in has gone, and it with it (takeAway below): which room
     };
+    unit.vital = fresh('toner');                 // (cast/health.rule.js: each of them takes two; a hatchling one — hatchPuddle)
     units.push(unit);
     return unit;
   }
@@ -481,7 +483,8 @@ export function create(c) {
         if (c.walk.stand(probe, cx, cz) && env.world.passable(px, pz, cx, cz)) { sx = cx; sz = cz; break; }
       }
       const sectorGoal = pickSpotInRoom(probe, homeRoom, ang, null);
-      spawnUnit(sx, sz, hatchedBrood(homeRoom), 0.9 + Math.random() * 0.07, sectorGoal, ang);
+      const young = spawnUnit(sx, sz, hatchedBrood(homeRoom), 0.9 + Math.random() * 0.07, sectorGoal, ang);
+      young.vital = fresh('toner-brood');
     }
   }
 
@@ -875,6 +878,7 @@ export function create(c) {
       wadeT = Math.max(0, wadeT - dt);
       const w = env.world, m = me();
       const snapshot = units.slice();
+      for (const unit of snapshot) if (unit.vital) unit.vital = aged(unit.vital, dt);          // (the mark of the last jab ages: health.rule.js)
       for (const unit of snapshot) if (!unit.away) {if(env.withVisitor)env.withVisitor('toner',unit.walker,()=>stepUnit(unit,dt,t,w,me()));else stepUnit(unit, dt, t, w, m);}          // (one that is not here does nothing here)
     },
 
@@ -973,7 +977,9 @@ export function create(c) {
             snip: () => {
               const next = snipToner(u.s);
               if (!next.repelled) return false;
-              u.s = next;
+              u.vital = struck(u.vital);
+              // (finished: it lets go and comes down as a spent crust on the floor under it, and hatches nothing)
+              u.s = u.vital?.killed ? { ...next, mode: 'spent', broodLeft: 0, gestation: 1, hatched: false, spawnCount: 0, glitch: true, repelled: false, ruptured: true } : next;
               u.prowlGoal = null;
               u.emerging = false;
               u.rig.show((u.rig.variant + 1) % u.rig.cores.length, true);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ITEM_DEFS, makeItem, createInventory, normalizeItemType } from '../public/world/backrooms/inventory-state.js';
+import { ITEM_DEFS, SCISSORS_SNAP, makeItem, createInventory, normalizeItemType } from '../public/world/backrooms/inventory-state.js';
 import { createHealth } from '../public/world/backrooms/health-state.js';
 
 const item = (type, id, data) => makeItem(type, id, data);
@@ -247,13 +247,13 @@ test('paper opens combining, scissors need a snip target, and snacks need a heal
       unchanged(model, () => model.useSelected({ canMark: false }), expected);
     }
     if (type === 'scissors') {
-      assert.equal(model.read().slots[added.index].uses, 3);
+      assert.equal(model.read().slots[added.index].uses, 1);                    // (whole: there is no count, inventory-state.js SCISSORS_SNAP)
     } else {
       assert.equal(Object.hasOwn(model.read().slots[added.index], 'uses'), false);
     }
     assert.ok(ITEM_DEFS[type].name && ITEM_DEFS[type].description);
   }
-  assert.equal(ITEM_DEFS.scissors.maxUses, 3);
+  assert.equal(ITEM_DEFS.scissors.maxUses, 1);          // (whole or snapped: no count)
   assert.equal(ITEM_DEFS.scissors.useLabel, 'Snip');
   assert.equal(ITEM_DEFS.snack.healAmount, 1);
   assert.equal(Object.hasOwn(model.read(), 'health'), false);
@@ -377,41 +377,46 @@ test('red balloons use one slot each and have no invented use action', () => {
   assert.equal(model.read().slots[1].id, 'second-balloon');
 });
 
-test('scissors carry three snips, never waste durability on empty air, and snap on the third landed hit', () => {
-  for (const uses of [-1, 4, 1.5, NaN, Infinity, '2', null]) {
+test('scissors: no count, never spent on empty air, and after each jab that lands a 40% chance they snap', () => {
+  for (const uses of [-1, 2, 4, 1.5, NaN, Infinity, '1', null]) {
     assert.throws(() => makeItem('scissors', 'bad', { uses }), RangeError);
   }
-  const model = createInventory();
+  assert.equal(SCISSORS_SNAP, 0.4);
+  assert.ok(!/\b(three|two|\d+)\b/i.test(ITEM_DEFS.scissors.description), 'the description gives no number');
+  // the dice are handed in: these say hold, hold, snap
+  const rolls = [0.9, 0.4, 0.39]; let asked = 0;
+  const model = createInventory({ rng: () => rolls[asked++] });
   model.add(item('scissors', 'warden-blades'));
-  assert.equal(model.read().slots[0].uses, 3);
 
-  // Swinging in thin air or without a target callback never costs a snip
+  // Swinging in thin air or without a target callback costs nothing and rolls nothing
   unchanged(model, () => model.useSelected(), 'no-snip-target');
   unchanged(model, () => model.useSelected({ snip: () => ({ ok: false }) }), 'no-snip-target');
   unchanged(model, () => model.useSelected({ snip: () => ({ ok: false, reason: 'blocked-by-wall' }) }), 'blocked-by-wall');
   unchanged(model, () => model.useSelected({ snip: () => ({ ok: 'yes' }) }), 'no-snip-target');
+  assert.equal(asked, 0);
 
-  // Snip 1: 3 -> 2 uses
-  const first = model.useSelected({ snip: (held) => { assert.equal(held.uses, 3); held.uses = 0; return { ok: true, target: 'toner' }; } });
-  assert.deepEqual(first, { ok: true, action: 'snip', snapped: false, target: 'toner', item: { id: 'warden-blades', type: 'scissors', uses: 2 }, index: 0 });
-  assert.equal(model.read().slots[0].uses, 2);
+  const first = model.useSelected({ snip: (held) => { held.uses = 0; return { ok: true, target: 'toner' }; } });
+  assert.deepEqual(first, { ok: true, action: 'snip', snapped: false, target: 'toner', item: { id: 'warden-blades', type: 'scissors', uses: 1 }, index: 0 });
 
-  // Drop and re-pick preserves remaining uses
+  // Dropped and picked up again they are the same scissors
   const dropped = model.remove('warden-blades');
-  assert.deepEqual(dropped, { id: 'warden-blades', type: 'scissors', uses: 2 });
+  assert.deepEqual(dropped, { id: 'warden-blades', type: 'scissors', uses: 1 });
   assert.equal(model.add(dropped).ok, true);
 
-  // Snip 2: 2 -> 1 use
   const second = model.useSelected({ snip: () => ({ ok: true, target: 'toner-puddle' }) });
-  assert.equal(second.snapped, false);
-  assert.equal(second.item.uses, 1);
-  assert.equal(model.read().slots[0].uses, 1);
-
-  // Snip 3: 1 -> 0 uses -> blades snap and clear the slot
+  assert.equal(second.snapped, false, 'a roll of exactly the chance holds');
   const third = model.useSelected({ snip: () => ({ ok: true, target: 'pirate' }) });
   assert.deepEqual(third, { ok: true, action: 'snip', snapped: true, target: 'pirate', item: { id: 'warden-blades', type: 'scissors', uses: 0 }, index: 0 });
   assert.equal(model.read().slots[0], null);
+  assert.equal(asked, 3, 'one roll for each jab that landed');
   unchanged(model, () => model.useSelected({ snip: () => ({ ok: true }) }), 'empty');
+
+  // the first use can be the last; and over many pairs they last 1 / 0.4 = 2.5 jabs on average
+  const once = createInventory({ rng: () => 0 }); once.add(item('scissors', 's'));
+  assert.equal(once.useSelected({ snip: () => ({ ok: true }) }).snapped, true);
+  let seed = 12345, total = 0; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  for (let k = 0; k < 4000; k++) { const m = createInventory({ rng: rnd }); m.add(item('scissors', 's' + k)); let n = 0; while (m.read().slots[0]) { m.useSelected({ snip: () => ({ ok: true }) }); n++; } total += n; }
+  assert.ok(Math.abs(total / 4000 - 2.5) < 0.15, `about 2.5 jabs a pair (${(total / 4000).toFixed(2)})`);
 });
 
 test('all inventory items sculpt high-detail 3D polygon geometry with outward normals and grounded footprints', async () => {

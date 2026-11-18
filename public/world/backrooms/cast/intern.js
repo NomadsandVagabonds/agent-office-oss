@@ -14,6 +14,7 @@ import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
 import { INTERN, waiting, copies, behind, was } from './intern.rule.js';
 import { SHOVE, slide } from '../shove.rule.js';
+import { HEALTH } from './health.rule.js';
 import { canLeave } from './paths.js';
 import { elbow } from './head-count.rule.js';
 import { S, BACK, NECK, backVox, neckVox, headVox } from './intern.model.js';
@@ -181,6 +182,17 @@ export function create(c) {
         if (to) { walker.x = to.x; walker.z = to.z; }
         c.stall(SHOVE.stagger); c.play('creak', walker.x, walker.z, 10);
         return true;
+      } }];
+    },
+    /** A jab (melee.js): it takes one (cast/health.rule.js). Not finished by it, it flinches: it stands a moment and lands nothing. */
+    snipTargets() {
+      if (!group || over) return [];
+      return [{ id: 'intern', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 0.9, r: I.r, priority: 2, snip: () => {
+        const hit = c.struck(HEALTH.jab); if (!hit.ok) return false;
+        if (!known) { known = true; c.met(); }
+        if (!hit.killed) c.stall(HEALTH.flinch);
+        c.play('thunk', walker.x, walker.z, 12); c.survived();
+        return { ok: true, target: 'intern' };
       } }];
     },
     at: () => ({ x: walker.x, z: walker.z, mode: s.mode, behind: +behind(s.learnt).toFixed(2) }),
