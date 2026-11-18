@@ -181,5 +181,6 @@ could stop sharing.
 | Food court | tables on the roof; a table that rises out of the hole to the empty hook, hangs, and lets go | neon, the hole (atrium, level-p) |
 | Atrium | storeys going up, each smaller | neon, the hole |
 | Level P | one car, stacked to the roof | the hole |
-| Photo booths, receipts, keys-cut, grotto | a booth that flashes; a receipt that follows; doors that are walls; July | neon fascias |
+| Photo booths | a booth that flashes; the one waiting moves only in the flash, nearer each picture, as the strips show; the booths light the hall | neon fascias, a dummy |
+| Receipts, keys-cut, grotto | a receipt that follows; doors that are walls; July | neon fascias |
 | The streets (`concourse`) | `MALL_WRONG`, one wrong thing a room | shopfronts throughout |
