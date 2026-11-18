@@ -1823,41 +1823,17 @@ nothing of the waterpark's is changed for it.
      picture and is clamped: a thin strip there repeats its last row of
      pixels.
 
-### Water (sample: a calmer Classic sheet, the kiddie lagoon only)
+### Water at Classic: the pools' own sheets (decided)
 
-At Classic and Low the waterpark's older pools and the plain rooms' footbaths
-draw their water as `causticWaterTex`: glowing aqua cells in a white web, the
-brightest thing in the room (`docs/WATERPARK-REVIEW-2.md`, section 5). As a
-sample for the owner's eye, one room draws a calm sheet instead.
-
-- **What.** `waterpark.js` `calmWaterTex(kit)` and its palette
-  `CALM_WATER.lagoon`: one deep teal (`#2f7f8e`) with large patches a shade
-  darker or lighter in 4 px texels (seeded value noise from fixed numbers),
-  no web, no pale cells; drawn at the same opacity, 0.52. Nothing else in the
-  helper changed: `createBasin` already takes `waterTex` and `waterAlpha`.
-- **Where.** `rooms/kiddie-lagoon.js` only: `createBasin(c, { …, waterTex:
-  calmWaterTex(kit), waterAlpha: CALM_WATER.lagoon.alpha, … })`. Every other
-  basin and every footbath keeps the caustic cells.
-- **Medium and High.** The water there takes its tint from the sheet
-  picture's average colour and its murk from the opacity. The opacity is
-  unchanged (murk 1.0), and the hue is close to the old one, so how fast
-  each colour goes through the water barely moves (absorb per metre, red /
-  green / blue: 0.715 / 0.277 / 0.150 before, 0.750 / 0.310 / 0.150 after);
-  the water's own colour (`deep`, `scatter`) is a little under half as bright,
-  because the old average had the white web in it: the lagoon at Medium and
-  High is a shade darker and less milky, otherwise the same.
-- **Not tried at large.** Two other looks were pictured beside it and not
-  kept: the return pool's dark green at 0.63 (murk 3.8 at Medium and High,
-  which turns the shallow lagoon into a murky pond there) and a pale clear
-  blue at 0.42 (murk 0.22: near glass at Medium and High).
-- **To roll it out** to another pool: the same two keys on its `createBasin`
-  call (a deeper pool may want its own entry in `CALM_WATER`, darker, as
-  `causticWaterTex` has `deep` and `emerald`); for the footbaths, the `map`
-  of the footbath's `addTranslucent` in `poolroom`. Check each room's Medium
-  and High after, since its tint follows (unless its sheet is pinned: the
-  surface section, "the pinned sheets"). **To remove it:** take the two keys
-  out of the kiddie lagoon's call (it goes back to `waterTone: 'aqua'`), then
-  `calmWaterTex`, `CALM_WATER` and `test/backrooms-waterpark-calm-water.test.mjs`.
+The owner, 18 Nov, shown both side by side: "ripples with light reflections".
+Every pool's Classic and Low water is the waterpark builder's sheet
+(`causticWaterTex`, now muted teal ripples, with the ceiling lamps' reflection
+from `pool-optics.js`). A calm flat teal sheet of ours (`calmWaterTex`) was
+tried in the kiddie lagoon alone as a sample and has been taken out; the lagoon
+draws the default sheet like the rest. "All water is see-through" (the owner,
+the same day): anything drawn as water at Classic, the wave included, is
+translucent like the sheets. At Medium and High the surface keeps the colour
+it was approved with (the surface section, "the pinned sheets").
 
 ### 5 · Air
 
@@ -1934,6 +1910,9 @@ vendored files. It is decided after phases 1 to 7 are measured.
   shines first, then water (the waterpark is a whole kind of floor, so it is
   the bigger unlock), then the mirror floor. The stepped shadows under fixed
   chairs are fine for now; refining them is low priority.
+- **The pools' Classic water (18 Nov):** ripples with light reflections, the
+  waterpark builder's sheet, in every pool; the calm sample is not kept. All
+  water is see-through.
 - **The deep end's drowned monitors (17 Nov):** leave them glowing. Every
   workstation on the bottom of the pool keeps its lit screen, under the old
   sheet and under the new water.

@@ -219,7 +219,7 @@ test('a sheet changed for Classic after its water was approved keeps the approve
   let pics;
   try {
     const wp = await import('../public/world/backrooms/waterpark.js'), kit = createKit();
-    pics = { aqua: wp.causticWaterTex(kit, 'aqua'), emerald: wp.causticWaterTex(kit, 'emerald'), deep: wp.causticWaterTex(kit, 'deep'), calm: wp.calmWaterTex(kit) };
+    pics = { aqua: wp.causticWaterTex(kit, 'aqua'), emerald: wp.causticWaterTex(kit, 'emerald'), deep: wp.causticWaterTex(kit, 'deep') };
   } finally { globalThis.document = was; }
   // each pinned sheet is recognised by its picture as the waterpark draws it now, and stands for the colour it was approved with
   const pinned = Object.fromEntries(SHEET_TINTS.sheets.map((s) => [s.sheet.replace('waterpark ', ''), s]));
@@ -247,10 +247,6 @@ test('a sheet changed for Classic after its water was approved keeps the approve
   // (read as they are, the new pictures gave the deep end a green body: blue going twice as fast, half the deep colour)
   const raw = waterColours(averageColour(pics.emerald).map((v, i) => v * [0.88, 1, 1][i]), 0.54);
   assert.ok(raw.absorb[2] > 1.9 * 0.243 && raw.deep[1] < 0.5 * 0.129);
-  // the kiddie lagoon's calm sheet was approved as it is: read as it is
-  const calm = averageColour(pics.calm);
-  assert.equal(pinnedTint(calm), calm);
-  near(numbers(pics.calm, 0.52), { absorb: [0.75, 0.31, 0.15], deep: [0, 0.071, 0.097], keep: [0, 0.733, 1, 0.3] }, 'the lagoon: unchanged');
   // a pin lets go when its picture changes; nothing to read stays nothing
   const off = pinned.emerald.average.map((v) => v + 1.5 * SHEET_TINTS.within);
   assert.deepEqual(pinnedTint(off), off);
