@@ -191,6 +191,7 @@ handed to the kit when a part is built (`gfx: { contact, bounce, shadows, doorli
 | ceiling lights as sculpted fittings (`fixtures`) | — | — | yes | yes |
 | bloom from what shines only (`glow`), in place of the thresholded bloom | — | — | yes | yes |
 | water: a marked flat sheet drawn as water while in view (`water`) | — | — | yes (1) | yes (2: and the room mirrored in the nearest water level, half size) |
+| floor highlights: the tubes caught as soft streaks on lino, terrazzo and pool decks (`sheen`) | — | — | yes | yes |
 
 - **Classic** draws exactly what the level drew before the setting existed.
 - **The camcorder stays the look.** The tape's lines and the scene's size are
@@ -986,6 +987,113 @@ it helps, one small texture drawn by code:
   a darker path where a carpet has been walked. Placed from a seeded source
   of its own, as the lighting is, so the same seed is the same stain and the
   layout the seed makes does not change.
+
+### Floor highlights (built)
+
+`sheen` in `graphics.js` (its own lines beside the table, as `water`): 0 at
+Classic and Low, 1 at Medium and High (and Auto); `&gfx=sheen` on the dev page.
+The cheap half of "lino, tile: a hard shine and a blurred reflection of the
+tubes" above, and the look-dev lab's round two, 7 ("lino yes"): a floor that
+shines shows each ceiling tube as a soft streak drawn out toward the eye,
+worked out in the floor's own fragment shader from the lamps its room already
+has. No draw, pass, picture or texture is added.
+
+- **Which floors.** One table, `SHEEN_FLOORS` in `graphics.js`: carpet,
+  plush, moss, turf and screed 0; lino (Records) 0.5; terrazzo (the mall) 0.6;
+  pool tile 0.85. A batch's kind is the theme's floor when it is drawn with the
+  floor's own texture (`floorKind` is `kit.js` `T.floor`'s own choice, pinned
+  texture for texture; the waterpark's shell floor is its damp carpet, as
+  `T.floor` draws it), or a key `SHEEN_KEYS` knows (`wp:btile:`, the dry deck
+  round a basin, `waterpark.js` `createBasin`; the basin's bed and walls are
+  under water and keys of their own). A room that draws a floor of its own can
+  say so: `c.mapped(key, texture, { sheen: 'lino' })` or `{ sheen: 0.4 }`
+  (`world.js`, `graphics.js` `sheenOf`), which wins over both; `{ sheen: 0 }`
+  turns a floor off. No room uses it yet. Only surfaces facing up shine, and
+  never a cut-out.
+- **Which lamps** (`sheen.rule.js` `sheenLamps`, chosen when the room is
+  built): every ceiling tube of the room's own (a lamp that shines straight
+  down: a line 0.9 m long along the room's z, as the tube shadows have it) and
+  any other lamp hung 1.6 m up or more, as a point; never the light from next
+  door (`spill`). Nothing seeded is read. **Each draw** (the floor mesh's
+  `onBeforeRender`, `sheen.js`, so the water's mirror gets its own camera's
+  too) takes the 8 nearest the eye, ties in the room's order, and moves them
+  into the camera's space; the farthest of the 8 fades out over 1.5 m as it
+  nears the first one left out, so a lamp handing its place over is not seen.
+- **What it follows.** Each lamp's level is its group's, as the bake keeps
+  them (`sheenGroup`, `sheenLevel`): the room's dimmer, times the flicker for a
+  flickering tube, times its bank for a banked one (`rt.u`, read each draw). A
+  dead panel has no lamp, so no streak. Where the room has a tube-shadow map,
+  each lamp's highlight is multiplied by its group's own channel at that spot
+  (one more lookup of the texel the floor already reads; two with more than
+  two banks): no streak through a desk's shadow.
+- **The shader** (`SHEEN_GLSL`, put into a surface only when it is given
+  `sheen`: `withSheen` inserts it before `main()` and one line before the
+  colour is written, each marked `// --- floor sheen ---`). The colour of the
+  tube (its brightest channel 1: what is mirrored is the tube as drawn, not its
+  share of the room's light) × `SHEEN_STRENGTH` (4, in `graphics.js`: **the one
+  number that turns the whole effect down**, every kind of floor at once) × the
+  floor's shininess × Schlick's fresnel
+  (0.04 straight down: nearly nothing looking at your feet, most at a graze) ×
+  an anisotropic GGX lobe as a share of its own peak, on the point of the tube
+  nearest the mirrored ray: roughness 0.10 − 0.06 × shininess across the line of
+  sight, six times that along it, which draws the tube out into a streak, a
+  little wider for a near tube.
+- **The wax as a whole.** In short rooms the tubes' mirror points mostly fall
+  below the bottom of the picture at standing height (for a tube D ahead under
+  a ceiling at H, the point is D × 1.6 / (1.6 + H) ahead, and the frame's
+  bottom edge is about 2 m out), so the streaks alone barely show. What makes a
+  corridor floor read as polished from there is the lit ceiling and far end of
+  the room mirrored at a graze: the mean of the room's tubes at their level
+  this frame (`uSheenE`), × the same strength and shininess × fresnel on the
+  floor's own facing, growing from 1.5 m to whole at 7 m from the eye, ×
+  the tile's own shade (×2.5, to 1, so dark joints and scuffs take less and the
+  wax lies on the tiles), × the floor's own baked light there (×1.5, to 1: a
+  doorway's unlit strip or a dark corner mirrors the dark, and a first version
+  without it turned the strip of floor in a doorway nearly white), × half to
+  all of the steady tube shadow. Both terms are
+  added last, after the texture and the wet glint (it is white light, not the
+  floor's colour), and rolled off softly toward 0.32 so that it never becomes a
+  flat white bar.
+- **Blocky or smooth.** By default it is worked out once per texel of the
+  floor's own picture (2.5 cm on these floors): the point is moved to its
+  texel's middle by the screen's own derivatives of position and uv, so the
+  streak's edge steps as the floor's pattern does (`SHEEN.blocky`; the
+  uniform's `z`). At this camera height and through the tape the two are hard
+  to tell apart; blocky is kept because it cannot read as a modern smooth
+  specular close up.
+- **Off is as before.** At 0, `world.js` asks for nothing: no material gets the
+  define, the uniforms or the text, and `onBeforeRender` is not set. The kit's
+  `VERT` and `FRAG` are character for character as before (they are not
+  edited: the block lives in `sheen.rule.js` and is put in per surface), and a
+  surface given `sheen` with its two blocks taken out is the shader a surface
+  without it has. Nothing is baked: the bake, the light map and the lamp list
+  are untouched at every tier (`test/backrooms-gfx-sheen.test.mjs` bakes
+  Records at Classic, Low and Medium with and without it, and the plain
+  carpeted floor with it on: the same numbers and, on carpet, the same
+  materials). The switch reaches the kit on a line of its own in `index.js`,
+  so the line `createKit({ gfx: … })` is as it was.
+- **Changing tier during a visit** does not add or remove it from parts already
+  built (as the fixtures and the tube shadows): a part built after the change
+  has the new tier's.
+- **Cost.** No draw, pass, triangle or texture; measured draws and triangles
+  of the level's scene were the same with and without it in every view taken
+  at Medium and High (below). Per floor pixel of a floor that shines: a facing
+  test, four derivatives and a texel snap (about 25 operations), the floor's
+  frame, at most one more light-map lookup, then per lamp slot (8, empty
+  slots skipped by a branch) the tube's nearest point, a normalise for the
+  light and the half vector, the anisotropic lobe, a fifth power for fresnel
+  and the shadow channel: about 60 arithmetic operations, a square root, two
+  inverse square roots and a power; about 500 operations for 8 lamps, and a
+  soft clamp (one exp); the wax as a whole adds one more lookup of the floor's
+  own texel and about 15 operations (a fifth power, a smoothstep, a length).
+  On the CPU, each draw of a shining floor: one 4 × 4 product, a sort of the
+  room's tubes (at most 16) and 8 lamp transforms. Most rooms have one to four tubes. Every other pixel
+  of the level pays nothing; a carpeted floor pays nothing.
+- **Not covered.** Tubes of the room next door (no streak through a doorway);
+  the flashlight's and the camcorder lamp's own highlight; tubes along x (all
+  are taken along the room's z, as the tube shadows do); a room with more than
+  8 tubes shows only the nearest 8 at a time; floors a room draws itself
+  without saying so.
 
 ### 4 · Water and other liquids
 

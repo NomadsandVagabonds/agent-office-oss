@@ -28,6 +28,8 @@ import { SMALLS, binVox, trolleyVox, coolerVox } from './smalls.model.js';
 import { WALLFIT, socketVox, exitBoxVox } from './wallfit.model.js';
 import { markLiquid } from './liquid.mark.js';
 import { shineLights, lampSet } from './shining-lights.rule.js';
+import { sheenOf } from './graphics.js';                  // (floor sheen: kit.gfx.sheen)
+import { createSheen } from './sheen.js';
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
 // and how far along it a local coordinate c is (c is x on the front/back walls, z on the side walls)
@@ -1834,12 +1836,25 @@ function roomContext(world, rt) {
             }
             last = add(new THREE.Mesh(geo, material), order, owner?.group || rt.group);
             if (batch.detail) last.userData.detail = true;            // (c.detail: hidden at a low Graphics setting)
+            if (material.uniforms?.uSheenK) last.onBeforeRender = rt.sheen.frame;   // (floor sheen: the room's tubes, moved into this draw's camera)
           }
         }
         return last;
       };
+      // --- floor sheen ---
+      // (kit.gfx.sheen) the batches that are a floor that shines (graphics.js sheenOf: the theme's floor by its texture, a
+      // pool deck by its key, or what the room said with c.mapped(key, texture, { sheen })) catch the room's tubes. Off, or
+      // on a carpet, nothing of it is made and every material is as it was
+      const sheenFloor = kit.gfx?.sheen > 0 ? mapped.get('floor')?.texture : null;
+      const sheenFor = (key, m) => {
+        if (!(kit.gfx?.sheen > 0) || m.cutout) return 0;
+        return sheenOf(key, key === 'floor' || (!!sheenFloor && m.texture === sheenFloor), look, m);
+      };
+      if ([...mapped].some(([key, m]) => sheenFor(key, m) > 0)) rt.sheen = createSheen(rt);
+      // --- end floor sheen ---
       for (const [key, m] of mapped) {
-        bake(m.batch, (geo, owner) => kit.surface({ map: m.texture, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, cutout: m.cutout, side: m.side, wet: m.wet, lm: owner ? null : rt.lm }), 0, false, key);
+        const sheen = rt.sheen ? rt.sheen.material(sheenFor(key, m)) : null;
+        bake(m.batch, (geo, owner) => kit.surface({ map: m.texture, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, cutout: m.cutout, side: m.side, wet: m.wet, lm: owner ? null : rt.lm, ...(sheen && !owner ? { sheen } : {}) }), 0, false, key);
       }
       bake(c.vox, (geo, owner) => kit.surface({ vox: true, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, lm: owner ? null : rt.lm }), 0, false, 'vox');
       for (const [key, b] of voxed) bake(b, (geo, owner) => kit.surface({ vox: true, room: rt.u, flick: geo.userData.flick, banks: geo.userData.banks, lm: owner ? null : rt.lm }), 0, false, key);
