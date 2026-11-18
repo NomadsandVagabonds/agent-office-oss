@@ -6,8 +6,8 @@ import { createInventory as createModel, makeItem, ITEM_DEFS } from './inventory
 import { createInventoryHud } from './inventory-hud.js';
 import { createInventoryWorld } from './inventory-world.js';
 import { SNIP_TUNING } from './melee.js';
-import { toLocal, makeRng, ARCHETYPES, STASH } from './gen.js';
-import { planSupplies, wantedByRooms } from './supplies.js';
+import { toLocal, makeRng, ARCHETYPES, STASH, wallPoint } from './gen.js';
+import { planSupplies, plentyOfPaper, wantedByRooms } from './supplies.js';
 import { CAST, castFor } from './cast.js';
 import { difficultyOf } from '/core/difficulty.mjs';
 import { starterLoadout } from '/core/perks.mjs';
@@ -265,6 +265,26 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
         for (let i = 0; i < seen.length; i++) if (seen[i]) cells.push(i);
         for (const cell of random.shuffle(cells).slice(0, 256)) {
           const p = walk.at(cell);
+          if (physical.spawn(makeItem(type, id(key), made), { room: rt.id, x: p.x, z: p.z }).ok) { placed = true; break; }
+        }
+        if (placed) break;
+      }
+    }
+    // Paper in plenty (supplies.js plentyOfPaper), after everything else so that nothing else's place moves, and from a stream of
+    // its own: on clear floor in a room's open part, never in a doorway's way and never on a coin's place (the stash zones are
+    // for what a room hides, and are left alone)
+    const rp = makeRng(id('paper-plenty')), coins = env.level.loot?.coins || [];
+    for (const { id: key, type, rooms, plenty, ...made } of plentyOfPaper(env.level)) {
+      let placed = false;
+      for (const roomId of rooms) {
+        const rt = env.world.rooms.find(r => r.id === roomId); if (!rt) continue;
+        const doors = rt.def.doors.map(dr => ({ p: wallPoint(rt.def, dr.side, dr.c, 0.6), r: 0.31 + 0.55 + dr.w / 2 + 0.15 }));
+        const mine = coins.filter(k => k.room === rt.id);
+        const walk = env.world.walkable(rt), seen = walk.flood(rt.def.doors), cells = [];
+        for (let i = 0; i < seen.length; i++) if (seen[i]) cells.push(i);
+        for (const cell of rp.shuffle(cells).slice(0, 256)) {
+          const p = walk.at(cell);
+          if (doors.some(d => Math.hypot(p.x - d.p.x, p.z - d.p.z) < d.r) || mine.some(k => Math.hypot(p.x - k.x, p.z - k.z) < 0.9)) continue;
           if (physical.spawn(makeItem(type, id(key), made), { room: rt.id, x: p.x, z: p.z }).ok) { placed = true; break; }
         }
         if (placed) break;

@@ -26,8 +26,8 @@ const replacements = {
       update() {}, report() { return {}; }, dispose() {},
     };
   }`),
-  './gen.js': moduleUrl('export const toLocal = () => ({}), makeRng = () => ({}), ARCHETYPES = {}, STASH = {};'),
-  './supplies.js': moduleUrl('export const planSupplies = () => [], wantedByRooms = () => [];'),
+  './gen.js': moduleUrl('export const toLocal = () => ({}), makeRng = () => ({}), ARCHETYPES = {}, STASH = {}, wallPoint = () => ({});'),
+  './supplies.js': moduleUrl('export const planSupplies = () => [], plentyOfPaper = () => [], wantedByRooms = () => [];'),
   './cast.js': moduleUrl('export const CAST = [], castFor = () => [];'),
 };
 let source = readFileSync(new URL('../public/world/backrooms/inventory.js', import.meta.url), 'utf8');

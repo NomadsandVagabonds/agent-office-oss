@@ -920,11 +920,12 @@ export const MORE_DECK = [
     }),
   },
   {
-    // the overnight part of the offsite: a dark room of lit tents on office carpet, and the one beside you goes out
+    // the overnight part of the offsite: a campsite in the reserve after lights out, a ring of lit tents round the coals,
+    // and the one beside you goes out
     id: 'lights-out',
     name: 'Lights Out',
-    landmark: 'the dark room of lit tents, where the one beside you goes out',
-    w: [13, 15], d: [13, 15], h: [3.4, 3.8],
+    landmark: 'the dark campsite of lit tents, where the one beside you goes out',
+    w: [11, 13], d: [11, 13], h: [3.4, 3.8],
     ports: ['back', 'left', 'right'],
     weight: 1.1,
     lights: 'dark',

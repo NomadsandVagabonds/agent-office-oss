@@ -159,6 +159,10 @@ Health for the cast (`cast/health.rule.js`, the conductor's `c.struck` / `c.vita
 was written for one visitor. Nothing in it is sent to anybody else. This section says what that means, and how
 much of it has been seen rather than read.
 
+The same holds for somebody a room keeps (`resident.js`): `env.residents` is that page's own list, a jab or a shove
+on one is resolved where the click happened, and its `vital` and its stagger are sent to nobody unless its room puts
+them in its own `coopRead` / `coopApply`. Not run with two visitors.
+
 What the code does, read from `pursuer.js`, `cast/toner.js`, `rooms/cable-drop.js` and `inventory-state.js` on live:
 
 - A creature's health (`hp`, `hurt`, `dying`, `gone`) is a field of the conductor's own note of it, on the page that

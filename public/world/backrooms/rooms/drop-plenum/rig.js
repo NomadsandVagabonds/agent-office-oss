@@ -381,6 +381,7 @@ export function makePlenumTonerRig(kit, seedKey = '0') {
   group.add(drop);
 
   const phaseSeed = (seedKey.charCodeAt(0) || 1) * 1.37;
+  let dyingFrom = null;                                                           // (where it was turned when its dying began: die())
 
   return {
     group,
@@ -391,7 +392,28 @@ export function makePlenumTonerRig(kit, seedKey = '0') {
         Math.max(0.14, rgb[2] * 1.15),
       );
     },
-    pose(time, phase, slabK, speed, bank = 0) {
+    /**
+     * Its dying, 0 → 1 (cast/health.rule.js), wherever the room has it: it comes off the slab the right way up, its legs
+     * flailing, then splays, its legs draw in and twitch, and it melts flat. (How far it falls is the room's: its height.)
+     */
+    die(progress, time = 0) {
+      const k = Math.max(0, Math.min(1, progress)), sec = k * 1.2, ease = (v) => { const u = Math.max(0, Math.min(1, v)); return u * u * (3 - 2 * u); };
+      const torn = sec < 0.25 && Math.floor(sec * 26) % 2 === 0;
+      cores.forEach((c, idx) => { c.whole.visible = idx === 0 && !torn; c.torn.visible = idx === 0 && torn; });
+      if (dyingFrom === null) dyingFrom = orient.rotation.z;
+      const up = ease(k / 0.3), target = dyingFrom > Math.PI ? 2 * Math.PI : 0;
+      orient.rotation.z = dyingFrom + (target - dyingFrom) * up; orient.position.y = 0;
+      const melt = ease((k - 0.5) / 0.5);
+      body.scale.set(1 + 0.55 * melt, Math.max(0.06, 1 - 0.92 * melt), 1 + 0.55 * melt); body.position.x = 0;
+      limbs.forEach((L, idx) => {
+        if (k < 0.3) { L.g.rotation.set(Math.sin(sec * 34 + idx * 1.7) * 0.55, 0, L.sx * 0.5); }
+        else { const curl = ease((k - 0.35) / 0.35), tw = Math.sin(sec * 41 + idx * 2.3) * Math.exp(-sec * 3) * 0.3; L.g.rotation.set(0.25 * curl + tw, 0, L.sx * (0.7 * (1 - curl) - 0.9 * curl) * (1 - 0.6 * melt)); }
+        L.whole.visible = true; L.torn.visible = false;
+      });
+      drop.visible = false;
+    },
+    pose(time, phase, slabK, speed, bank = 0, hurt = Infinity) {
+      dyingFrom = null; body.scale.set(1, 1, 1);
       const t = time + phaseSeed;
       const glitching = phase === 'recoil' || phase === 'dropping' || (phase === 'chasing' && Math.sin(t * 19.3) > 0.62) || Math.sin(t * 7.1) > 0.92;
       const cIdx = Math.floor(t * (glitching ? 18 : 5.5)) % cores.length;
@@ -415,6 +437,12 @@ export function makePlenumTonerRig(kit, seedKey = '0') {
         L.whole.visible = !glitching || (idx % 2 === 0);
         L.torn.visible = glitching && (idx % 2 === 1);
       });
+      // a jab (hurt: seconds since one landed): it jerks, legs flung out, torn
+      if (hurt < 0.6) {
+        const e = Math.exp(-hurt * 7) * Math.min(1, hurt * 30) * (1 - hurt / 0.6);
+        body.position.x = Math.sin(hurt * 60) * 0.04 * e;
+        limbs.forEach((L) => { L.g.rotation.z += L.sx * 0.6 * e; L.whole.visible = e < 0.3; L.torn.visible = e >= 0.3; });
+      }
 
       // Dripping black toner droplet while clinging upside down to the concrete slab
       if (slabK > 0.85 && (phase === 'perched' || phase === 'alert')) {

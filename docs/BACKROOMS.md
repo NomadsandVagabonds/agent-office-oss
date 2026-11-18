@@ -616,50 +616,99 @@ warned before it costs them anything.
 
 ## Bringing a room's resident into health and within reach of a shove
 
-Not built. This is what it would take, written down because the waterpark's review asks for it and it touches the
-conductor. Today three kinds of thing can hurt a visitor, and only the first is whole:
+Built, the shared half: `resident.js`. The owner: "waterpark residents get health too, go ahead". Each room's own
+half is three or four lines, below, and is its room's builder's to put in.
+
+Three kinds of thing can hurt a visitor:
 
 | | jabbed | shoved | health | stagger |
 | --- | --- | --- | --- | --- |
 | the cast (`cast/*.js`, run by the conductor `pursuer.js`) | its `snipTargets()` | its `shoveTargets()` | `c.struck` / `c.vital` | `c.stall` |
-| a denizen (a room's thing registered with `env.denizens.add`: the trunk line) | its `snip()` | no | its own, if it keeps one (the trunk line does) | no |
-| a resident private to its room (the Lane Keeper, the Towel Return's six, the forest's hazards) | no | no | no | no |
+| a denizen (a room's thing registered with `env.denizens.add`) | its `snip()` | no | its own, if it keeps one (the trunk line does) | no |
+| a resident (`resident(c.env, id, spec)`: anybody a room keeps, with a denizen or without) | yes | yes | `life.vital`, from the cast's table | `life.stalled` |
 
-`index.js` asks only `env.pursuer` and `env.denizens` for jab targets and only `env.pursuer` for shove targets, so a
-resident that lives in its room's closure cannot be reached by a hand at all, whatever its room does.
+`index.js` asks `env.pursuer`, `env.denizens` and `env.residents` for what a jab could reach, `env.pursuer` and
+`env.residents` for what a shove could, and gives `env.residents` its time once a frame, beside the denizens.
 
-What it takes, in the order it would be done:
+**What `resident()` does for a room.** It keeps the thing's health (`fresh(id)`: its tier is its line in `TIER`,
+`cast/health.rule.js`), offers it to a jab and to a shove, stands it still when it is shoved or flinching, calls
+`dies(progress, dt)` while it is dying and `flinch(hurt, dt)` while it stands (the same two calls the conductor makes
+on the cast, so the animation session draws both the same way), calls `gone()` once when it has finished going, and
+counts "got away from" once a floor for everybody of that name. It reads exactly as the cast does: `life.vital` is
+`{ hp, max, hurt, dying, gone, takes }`.
 
-1. **Be findable.** One way for a room to say "this is here and can be touched": the room registers its resident as a
-   denizen, or a new `c.resident({ id, at, r, snip, shove })` on the room's toolbox that keeps a list on the room.
-   Then one more line each in `index.js` where the jab and the shove gather their targets, and
-   `denizens.shoveTargets()` beside its `snipTargets()`. This part is the cast session's (`index.js`, `denizens.js`).
-2. **A tier.** A line for each id in `TIER` in `cast/health.rule.js` (basic 1, medium 2, boss 3), or in `UNHITTABLE`
-   with the reason. Which is which is the owner's to say, as it was for the cast.
-3. **Keep its own health.** There is no conductor for a resident, so it does what the trunk line does
-   (`rooms/cable-drop.js`): `let vital = fresh(id)`; `vital = struck(vital)` in its `snip()`; `vital = aged(vital, dt)`
-   at the top of its own tick; and while `vital.dying !== null` it steps no rule and hurts nobody, and at `vital.gone`
-   it takes itself out (its body, its [E], its collider). About eight lines a resident.
-4. **Stand when shoved.** `c.stall` is the conductor's. A resident keeps a number: set to `SHOVE.stagger` (or
-   `SHOVE.heavy.stagger`) by its `shove(dir)`, counted down in its tick, and while it is above nought the rule is not
-   stepped and `c.hurt` is not called. Where it goes when pushed is `slide(at, dir, clear)` with the room's own idea of
-   clear: a Lane Keeper slides along its lane and nowhere else; a thing fixed to a wall does not slide and only stands.
-5. **Say what its death does to the room.** The cast only roam; a resident is often what its room is about. Each room
-   must answer, before any code: with it finished, is every way out still open (never a trap), does the room's own
-   puzzle still resolve (the pump the Lane Keeper guards), and does the room go quiet or stay as it was? A resident
-   whose room needs it alive is `UNHITTABLE`, and is still shovable.
-6. **Count it once.** "Got away from" is once a creature a floor: the room wraps its `c.survived(id)` in a flag, as
-   the trunk line's `escaped()` does.
-7. **Co-op.** A room that already has `coopRead` / `coopApply` carries its resident's state there; `vital` and the
-   stagger number go in the same record. A room without them is in the gap written down in
-   `BACKROOMS-COOP-COVERAGE.md`.
-8. **Tests, each room.** Its tier against the table; a jab takes one and the last starts it dying; shoved it stands
-   and does not hurt; finished, the room's ways out are still open.
+**What the room still does.** Three things: it stops when `life.out` (dying or gone) or `life.stalled` (shoved, or
+flinching from a jab); it says what a jab does to the thing short of finishing it (`hit`); and it says what the
+thing's going does to the room (`gone`).
 
-Whose it is: steps 1 and 2 are the cast session's and small. Steps 3 to 8 are in each room's own file, so they are
-its builder's: the waterpark's through the owner (Codex), the forest's through the owner (Gemini). A helper that
-does 3, 4 and 6 for a room in one call (`resident(id)` → `{ hit(), shoved(seconds), tick(dt), escaped(), vital }`)
-would make each room's part four lines, and would be worth writing before the first of them, not after the third.
+**Worked example: the lifeguard's chair** (`rooms/lazy-river.js`). Today its denizen carries a `snipTarget` and a
+`snip()` of its own. With the helper those two go, and this comes in after the denizen is made:
+
+```js
+import { resident } from '../resident.js';
+
+const life = resident(c.env, 'guard-stand', {
+  of: roamer,                                                   // its denizen: where it is, and gone when it is gone
+  r: 0.48,
+  when: () => rule.mode !== 'chair' && rule.mode !== 'recoil',  // (what its snipTarget said)
+  recoils: true,                                                // it has a stand-down of its own after a jab
+  hit: () => { rule = snipGuardStand(rule); c.env.play?.('clack', roamer.x, roamer.z, 9); c.env.play?.('creak', roamer.x, roamer.z, 8); },
+  move: (to) => { roamer.x = to.x; roamer.z = to.z; },          // a shove slides it (RESIDENT gives the chair 0.8 m)
+  dies: (k, dt) => rig.dies?.(k, dt), flinch: (hurt, dt) => rig.flinch?.(hurt, dt),
+  gone: () => { roamer.gone = true; },                          // the river is as it was, with nobody on the deck
+});
+```
+
+and in its `update`, first thing after `if (over || frozen) return;`:
+
+```js
+if (life.out || life.stalled) return;
+```
+
+and where it lands a hit that is survived, `life.escaped()` in place of `c.survived('guard-stand')`. `c.met` stays
+where the room has it; a jab also calls it. That is the whole of it.
+
+The spec, all of it optional but `of` or `at`:
+
+| | |
+| --- | --- |
+| `of` | its denizen. Where it is; and gone, away with its room or not shown, it is nobody's target |
+| `at()` | `{ x, z, y? }` in the world's coordinates (`c.toWorld`), for one with no denizen |
+| `r`, `verticalReach`, `priority` | of the target, as a denizen's `snipTarget` gives them |
+| `when()` | may a hand reach it at all now |
+| `hit({ killed, hp })` | a jab has landed: what the room always did when it was jabbed |
+| `recoils: true` | it stands down by its own rule after a jab. Without it, it is stood still for `HEALTH.flinch` |
+| `move({ x, z })`, `clear(x0, z0, x1, z1)` | a shove slides it there, if its line in `RESIDENT` gives it a push and `clear` (default: a clear line) lets it |
+| `shoved(dir)` | the room does all of a shove itself (a toner lets go by its own rule) → true if it did anything |
+| `shove: false` | hands do nothing to it |
+| `dies(progress, dt)`, `flinch(hurt, dt)` | the picture |
+| `gone()` | it has finished going |
+
+Several of one name (the Towel Return's Smilers) are one `resident()` each.
+
+**Tiers and what a shove does** (`TIER` in `cast/health.rule.js`; `RESIDENT` in `resident.js`):
+
+| id | room | tier | a shove |
+| --- | --- | --- | --- |
+| `guard-stand` | lazy river | medium, 2 | slid 0.8 m on the deck, stands 0.5 s |
+| `lane-keeper` | channel hall | medium, 2 | stands 0.6 s; not moved (it is in the water) |
+| `flume-toner`, `plenum-toner` | slide maze, drop plenum | medium, 2, as a toner is | stands 0.6 s, or lets go by its own rule (`shoved`) as the cast's toner does; not moved |
+| `inverted-bathers` | kiddie lagoon | basic, 1 | stands 0.6 s; not moved |
+| `towel-return` | dive tower | basic, 1 each | stands 0.5 s; not moved (nothing is pushed off a stair) |
+| `pool-skimmer` | `waterpark.js` (the pools it is put in) | basic, 1 | stands 0.6 s; not moved |
+
+Not residents: the Return Pool's wake, and a pool's own hazard. Those are the room, not somebody.
+
+**Two things a death must never do.** Shut anybody in: with the resident gone, every way out of the room is as open
+as it was. And open what the room keeps shut: a door, a pump or a way down that the room gives for something else is
+not given for a pair of scissors. So `gone()` takes the body, its [E] and its collider out, and nothing else, unless
+the room's builder has thought about it. A resident whose room needs it alive gets no line in `TIER` (it has no
+health and `life.vital` is null) and can still be shoved.
+
+What is left, each room: the four lines; the room's own tests (finished, its ways out are still open); and co-op.
+A room that already has `coopRead` / `coopApply` carries `life.vital` and whether it is stalled in the same record; a
+room without them is in the gap written down in `BACKROOMS-COOP-COVERAGE.md`. The forest's residents have no lines
+yet: when the owner says so, a line each in `TIER` and `RESIDENT` and the same four lines.
 
 ## A room the way out is through
 

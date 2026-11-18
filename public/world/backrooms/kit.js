@@ -19,6 +19,7 @@ import { bankWeights } from './lighting.js';
 import { FLASHLIGHT_GLSL, FLASHLIGHT_POSES } from './flashlight.js';
 import { BEAM_SHADOW_GLSL } from './beam-shadows.rule.js';   // (beam shadows: only compiled where BEAM_SHADOWS is defined, beam-shadows.js)
 import { GLOW_DEPTH_GLSL, glowStrength } from './glow.rule.js';             // (emissive bloom: only compiled in glow.js's stand-ins)
+import { SHEEN, withSheen } from './sheen.rule.js';                         // (floor sheen: only put into a surface given `sheen`)
 
 const GLOW = 2.3;                              // how hard a self-lit voxel shines
 
@@ -188,12 +189,13 @@ export function lamp(x, y, z, rgb, o = {}) {
 export function gfxOf(o) {
   const k = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(1, Number(v))) : 0);
   const contact = k(o?.contact), bounce = k(o?.bounce), shadows = k(o?.shadows), doorlight = k(o?.doorlight), fixtures = k(o?.fixtures) > 0 ? 1 : 0;
+  const sheen = k(o?.sheen) > 0 ? 1 : 0;           // (floor sheen: the tubes caught on floors that shine, on or off; nothing baked)
   // (shadows: the tubes' shadows, baked per room into a small picture of its floor and walls (shadowmap.js), each bank
   // apart. doorlight: the light of the room next door through each doorway, in the same picture. fixtures: each ceiling
   // light the sculpted fitting (world.js shell), on or off. Each only named when it is on, so that what was asked for
   // before they existed reads as it did.)
-  return contact > 0 || bounce > 0 || shadows > 0 || doorlight > 0 || fixtures > 0
-    ? { contact, bounce, ...(shadows > 0 ? { shadows } : {}), ...(doorlight > 0 ? { doorlight } : {}), ...(fixtures > 0 ? { fixtures } : {}) } : null;
+  return contact > 0 || bounce > 0 || shadows > 0 || doorlight > 0 || fixtures > 0 || sheen > 0
+    ? { contact, bounce, ...(shadows > 0 ? { shadows } : {}), ...(doorlight > 0 ? { doorlight } : {}), ...(fixtures > 0 ? { fixtures } : {}), ...(sheen > 0 ? { sheen } : {}) } : null;
 }
 
 /**
@@ -581,6 +583,11 @@ void main() {
   // --- end emissive bloom ---
   gl_FragColor = vec4(c, uAlpha);
 }`;
+// --- floor sheen ---
+// (FRAG with the sheen's two blocks put in (sheen.rule.js withSheen), made the first time a floor that shines asks for it)
+let sheenFrag = null;
+const SHEEN_FRAG = () => (sheenFrag ??= withSheen(FRAG));
+// --- end floor sheen ---
 
 /**
  * Everything a level needs to build rooms, and one place that remembers what
@@ -749,7 +756,7 @@ export function createKit(opt = {}) {
    * its self-lit voxels feed the glow at Medium and High (glow.js); stored as userData.bloom only, and a new material each
    * call, so a strength set on one surface is never another's. It changes nothing of the shader or how it is drawn.
    */
-  function surface({ map = null, room = null, vox = false, cutout = false, flick = false, banks = false, alpha = 1, side = THREE.FrontSide, wet = 0, lm = null, bloom } = {}) {
+  function surface({ map = null, room = null, vox = false, cutout = false, flick = false, banks = false, alpha = 1, side = THREE.FrontSide, wet = 0, lm = null, bloom, sheen = null } = {}) {
     const defines = {};
     if (map) defines.MAPPED = 1;
     if (vox) defines.VOXEL = 1;
@@ -759,8 +766,14 @@ export function createKit(opt = {}) {
     if (banks) defines.BANKS = typeof banks === 'number' ? banks : 2;
     // (lm: a room's light map (world.js, shadowmap.js): only the room's own still meshes are handed one)
     if (lm) { defines.LIGHTMAP = 1; if (lm.shadows) defines.TUBESHADOW = 1; if (lm.doors) defines.DOORLIGHT = 1; }
+    // --- floor sheen ---
+    // (sheen: { uniforms } (sheen.js, world.js; only with kit.gfx.sheen, only on a floor that shines): the tubes caught on it,
+    // the shader's block and its uniforms put in for this surface alone. Without it the shader is FRAG, to the character)
+    if (sheen) defines.SHEEN = SHEEN.lamps;
+    const frag = sheen ? SHEEN_FRAG() : FRAG;
+    // --- end floor sheen ---
     const material = own(new THREE.ShaderMaterial({
-      defines, vertexShader: VERT, fragmentShader: FRAG, side,
+      defines, vertexShader: VERT, fragmentShader: frag, side,
       transparent: alpha < 1, depthWrite: alpha >= 1,
       uniforms: {
         map: { value: map }, uFlick: room ? room.flick : { value: 1 }, uDim: room ? room.dim : { value: 1 },
@@ -771,6 +784,7 @@ export function createKit(opt = {}) {
         ...(wet > 0 ? { uWet: { value: wet } } : {}),
         uCameraLamp: shared.uCameraLamp,
         ...(lm ? lm.uniforms : {}),
+        ...(sheen ? sheen.uniforms : {}),                    // (floor sheen)
       },
     }));
     if (lm) lm.materials.push(material);
