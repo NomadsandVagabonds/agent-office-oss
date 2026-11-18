@@ -30,7 +30,7 @@ import { BACKROOMS_DEFAULTS, cleanBackroomsSettings } from '/core/backrooms-sett
 import { sketch, toWorld, toLocal, DECK, ARCHETYPES } from './gen.js';
 import { planVisit, floorOf, edition, changeVisitDifficulty } from './plan.js';
 import { SHOT, cameraFor, cameraFrom, slumps } from './lastshot.js';
-import { createKit } from './kit.js';
+import { createKit, gfxOf } from './kit.js';
 import { FLASHLIGHT_POSES, camcorderLampPower } from './flashlight.js';
 import { buildWorld, loadCatalogue } from './world.js';
 import { BUILDERS } from './rooms.js';
@@ -315,6 +315,11 @@ async function visit(office, opt) {
   async function build(level, carry, pace) {
     // light worked out once per room, beyond the lamps (kit.js gfxOf): what the Graphics setting's level says, unless the dev page asks for its own
     const kit = createKit({ gfx: opt.dev?.gfx || opt.gfx || { contact: gfx().contact, bounce: gfx().bounce, shadows: gfx().shadows, doorlight: gfx().doorlight, fixtures: gfx().fixtures } });
+    // --- floor sheen ---
+    // (the tier's own switch, on its own line: the tubes caught on floors that shine; nothing of it is baked. The dev page's
+    // &gfx= says its own, sheen included)
+    if (!opt.dev?.gfx && !opt.gfx && gfx().sheen > 0) kit.gfx = gfxOf({ ...kit.gfx, sheen: gfx().sheen });
+    // --- end floor sheen ---
     const f = { level, kit, world: null, player: null, env: null };
     const builders = await buildersFor(level);
     if (opt.barricades !== false && opt.dev?.barricadeStudy && level === first) {

@@ -66,7 +66,41 @@ for (const t of Object.keys(TABLE)) TABLE[t].glow = GLOW[t];
 const WATER = { classic: 0, low: 0, medium: 1, high: 2 };
 for (const t of Object.keys(TABLE)) TABLE[t].water = WATER[t];
 
-export const cleanGraphics = (v) => (GRAPHICS.includes(v) ? v : DEFAULT_GRAPHICS);
+// sheen: the ceiling tubes caught as soft streaks on the floors that shine (lino, terrazzo, a pool deck's tile; never
+// carpet), worked out in the floor's own shader from the room's own lamps (sheen.rule.js, sheen.js; world.js gives it to
+// the batches SHEEN_FLOORS says shine). 0 is off: no define, no uniform, every floor's shader and every baked number as it
+// was. Its own lines, as water's.
+const SHEEN = { classic: 0, low: 0, medium: 1, high: 1 };
+for (const t of Object.keys(TABLE)) TABLE[t].sheen = SHEEN[t];
+/**
+ * How much each kind of floor shines (0…1), the one place it is said. The kind is what kit.js T.floor draws for a look
+ * (floorKind, below: the same choice), or what a room's own batch is (sheenOf). 0: nothing of the sheen is given to it.
+ * Carpet of every sort, moss, turf and bare screed do not shine; Records' vinyl and a shopping centre's terrazzo are
+ * waxed; a pool deck's glazed tile, always a little wet, most.
+ */
+/** The one number that turns the whole effect up or down: how bright what a floor mirrors is, times every kind's shininess. */
+export const SHEEN_STRENGTH = 4;
+export const SHEEN_FLOORS = Object.freeze({ carpet: 0, plush: 0, moss: 0, turf: 0, screed: 0, lino: 0.5, terrazzo: 0.6, pooltile: 0.85 });
+/** What kit.js T.floor(look) draws, as a kind of floor: the kinds it knows, anything else carpet (as T.floor does). */
+export const floorKind = (look) => (['moss', 'terrazzo', 'turf', 'lino', 'screed', 'plush'].includes(look?.floor) ? look.floor : 'carpet');
+// batches a room draws itself that are a kind of floor, by the start of their key: the waterpark's dry deck round a basin
+// (waterpark.js createBasin; the basin's bed and walls are under water and keys of their own). A room may instead say it of
+// a batch: c.mapped(key, texture, { sheen: 'lino' }) or { sheen: 0.4 } (world.js), which wins over both.
+export const SHEEN_KEYS = Object.freeze([Object.freeze(['wp:btile:', 'pooltile'])]);
+/**
+ * How much a room's mapped batch shines (0…1): opt.sheen (a kind, or a number) if the room said; the theme's floor if
+ * the batch is drawn with the floor's own texture (isFloorTexture); a key SHEEN_KEYS knows; else 0.
+ */
+export function sheenOf(key, isFloorTexture, look, opt = {}) {
+  const v = opt?.sheen;
+  if (typeof v === 'number') return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0;
+  if (typeof v === 'string') return SHEEN_FLOORS[v] ?? 0;
+  if (isFloorTexture) return SHEEN_FLOORS[floorKind(look)] ?? 0;
+  const hit = SHEEN_KEYS.find(([prefix]) => String(key).startsWith(prefix));
+  return hit ? SHEEN_FLOORS[hit[1]] ?? 0 : 0;
+}
+
+export const cleanGraphics =(v) => (GRAPHICS.includes(v) ? v : DEFAULT_GRAPHICS);
 
 /** Everything a tier switches, as a fresh plain object. 'auto' reads as where it starts (medium); anything else as classic. */
 export function profile(tier) {
