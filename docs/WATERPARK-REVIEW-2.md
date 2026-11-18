@@ -195,6 +195,8 @@ JACUZZI / ROTATE IN BROTH UNTIL BONELESS`. The art audit's "cut to one anomaly" 
 On my visit it was not offered: E did nothing, and the vortex carried me round the drain for a minute. The
 underwater view from the spa's centre shows bright cyan slabs overhead. 91k + 7k. **Rework:** one anomaly; the
 drain walked into, not pressed.
+*Since:* both done. The drain takes whoever is in its throat; the room is cut to the drain alone (the magenta
+siphon, the ceiling furniture, the tube totem, the mural, the legs and the log boat are gone; 31k + 7k).
 
 **kiddie-lagoon: The Toadstool Lagoon.** Played. *Works:* walking past the floats is safe, hurrying past them cost
 two hearts. That is a rule you learn by doing it, and the sign (`WALK SLOWLY IN BASIN`) is a pool's own rule, which
