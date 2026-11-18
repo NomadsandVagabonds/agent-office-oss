@@ -4,34 +4,23 @@
 // knocks one out of the air (a backhand: env.hand.swat), or wipes the lens (env.hand.wipe) if any are on it. A jab
 // finishes one. Fire takes them. The rule is sticky-notes.rule.js.
 //
-// Each note is drawn by a stand-in here — a small square of paper, written on — until the animation session's
-// cast/sticky-notes.model.js (makeStickyNote) is on live; pose() below has the same shape as its pose().
+// Each note's body and how it moves are the animation session's (cast/sticky-notes.model.js, makeStickyNote): this file
+// places it and says what it is doing.
 import * as THREE from 'three';
-import { Vox, M } from '../../vox/vox.js';
-import { Batch, lamp } from '../kit.js';
+import { makeStickyNote } from './sticky-notes.model.js';
 import { NOTES, onWall, noteStep, fallen, torn, drainOf, nextToPeel } from './sticky-notes.rule.js';
 import { facing } from '../shove.rule.js';
 
-const S = 0.017, SIZE = 8;                  // a note: 8 voxels of 1.7 cm, 13.6 cm a side — bigger than a real one, so it reads from across a room (the lead: at 8.5 cm it was a speck)
 const COLOURS = ['#f2e27a', '#f3a7c4', '#9fd3ea', '#b9e39a', '#f6c26b'];
-
-/** A note: a square of paper, its glued strip along the top, a few lines of somebody's writing. Front on +z; the top edge at y SIZE. */
-function noteVox(colour, k) {
-  const v = new Vox(), paper = M(colour, 0), glue = M(colour, 1), ink = M('#2a2f4a', 0);
-  for (let x = 0; x < SIZE; x++) for (let y = 0; y < SIZE; y++) v.set(x - SIZE / 2, y, 0, y >= SIZE - 2 ? glue : paper);
-  for (let line = 0; line < 3; line++) { const y = SIZE - 3 - line * 2; for (let x = 1; x < SIZE - 1 - ((k + line) % 3); x++) if ((x * 7 + line * 3 + k) % 5 !== 0) v.set(x - SIZE / 2, y, 1, ink); }
-  return v;
-}
 
 export function create(c) {
   const env = c.env, kit = env.kit, notes = [];
   let room = null, rect = null, floor = 0, peelT = 0, diveRest = 0, taken = 0, known = false, wipeAt = -1, clock = 0;
-  const LIGHTS = [lamp(0.4, 2.6, 1.0, [1.1, 1.1, 1.05], { k: 9, wrap: 0.6, far: 30 })];
 
   function ready() {
     if (c.home === null || c.home === undefined) return;          // no room on this floor would do: they are not here
     room = env.world.rooms[c.home]; rect = room.rect; floor = env.world.floorY((rect.x0 + rect.x1) / 2, (rect.z0 + rect.z1) / 2);
-    const mat = kit.surface({ vox: true }), count = Math.round(c.R.range(NOTES.count[0], NOTES.count[1] + 0.999) - 0.499);
+    const count = Math.round(c.R.range(NOTES.count[0], NOTES.count[1] + 0.999) - 0.499);
     const ways = c.walk.doorways((rect.x0 + rect.x1) / 2, (rect.z0 + rect.z1) / 2).ways;
     for (let i = 0; i < count; i++) {
       // on a wall of the room, a hand's height, not by a doorway
@@ -43,28 +32,23 @@ export function create(c) {
         if (ways.every((w) => Math.hypot(w.x - p.x, w.z - p.z) > 1.1) && notes.every((n) => Math.hypot(n.wall.x - p.x, n.wall.z - p.z) > 0.25)) spot = { ...p, y };
       }
       if (!spot) continue;
-      const colour = COLOURS[c.R.int(0, COLOURS.length - 1)], b = new Batch(true);
-      b.addVox(kit.model(`notes:${colour}:${i % 3}`, () => noteVox(colour, i % 3), { ao: false }).solid, new THREE.Matrix4().makeScale(S, S, S));
-      const mesh = new THREE.Mesh(kit.geometry(b, LIGHTS, [0.5, 0.5, 0.5]), mat), group = new THREE.Group(); group.add(mesh); c.add(group);
-      notes.push({ i, id: `note:${env.level.seed}:${env.level.depth ?? 0}:${i}`, colour, group, mesh, wall: spot, p: { x: spot.x, y: spot.y, z: spot.z }, goal: null, heading: spot.yaw, s: onWall(), fallV: 0, mat, stuckFor: c.R.range(NOTES.stuckFor[0], NOTES.stuckFor[1]) });
+      const colour = COLOURS[c.R.int(0, COLOURS.length - 1)], body = makeStickyNote(kit, colour, i), group = body.group; c.add(group);
+      notes.push({ i, id: `note:${env.level.seed}:${env.level.depth ?? 0}:${i}`, colour, body, group, wall: spot, p: { x: spot.x, y: spot.y, z: spot.z }, goal: null, heading: spot.yaw, s: onWall(), fallV: 0, stuckFor: c.R.range(NOTES.stuckFor[0], NOTES.stuckFor[1]) });
     }
-    for (const n of notes) pose(n, 0);
+    for (const n of notes) pose(n);
   }
 
   /** Where the lens is: the visitor's eye. */
   const lens = (m) => ({ x: m.x, y: Number.isFinite(m.y) ? m.y : env.world.floorY(m.x, m.z) + 1.1, z: m.z });          // (me.y is the camera's own height: player.js)
 
-  /** Draw one: where it is and how it is (the same shape as makeStickyNote's pose({ mode, t, time, heading })). */
-  function pose(n, dt) {
-    const g = n.group, s = n.s, t = clock + n.i * 1.37;
-    g.visible = s.mode !== 'lens' && s.mode !== 'gone' && c.drawn(n.p);
-    g.position.set(n.p.x, n.p.y, n.p.z);
-    if (s.mode === 'wall') { g.rotation.set(Math.sin(t * 0.7) * 0.03, n.wall.yaw, 0); n.mesh.position.set(0, -SIZE * S, 0); return; }
-    if (s.mode === 'peel') { const k = Math.min(1, s.t / NOTES.peel); g.rotation.set(-k * 1.1, n.wall.yaw, 0); n.mesh.position.set(0, -SIZE * S, 0); return; }
-    if (s.mode === 'down' || s.mode === 'spent') { g.rotation.set(-Math.PI / 2, n.heading, 0); n.mesh.position.set(0, -SIZE * S / 2, 0); return; }
-    // in the air: it flaps along its edge and twists as it goes; coming at you, it holds flat and comes edge on
-    const flap = s.mode === 'dive' ? 0.15 : Math.sin(t * 11) * 0.7, twist = s.mode === 'dive' ? 0 : Math.sin(t * 2.3) * 0.5;
-    g.rotation.set(-0.9 + flap, n.heading, twist); n.mesh.position.set(0, -SIZE * S / 2, 0);
+  /** What the body is doing (sticky-notes.model.js modes), from what the note is doing. */
+  const MODE = { wall: 'wall', peel: 'peel', flutter: 'flutter', dive: 'dive', lens: 'stuck', down: 'knocked', spent: 'knocked', gone: 'wiped' };
+  /** Place one, turned to its wall, and have its body show what it is doing; it turns itself inside that by its heading. */
+  function pose(n) {
+    const g = n.group, s = n.s;
+    g.visible = s.mode !== 'gone' && (s.mode === 'lens' || c.drawn(n.p));
+    g.position.set(n.p.x, n.p.y, n.p.z); g.rotation.set(0, n.wall.yaw, 0);
+    n.body.pose({ mode: MODE[s.mode] || 'flutter', t: s.t, time: clock, heading: n.heading - n.wall.yaw });
   }
 
   /** Somewhere to go next, going round: about NOTES.round round the visitor if they are in the room, anywhere in it if not. */
@@ -101,7 +85,7 @@ export function create(c) {
         const was = n.s.mode;
         n.s = noteStep(n.s, dt, { d, here, wake: notes.indexOf(n) === next && peelT <= 0, swarm: notes.some((k) => k.s.mode !== 'wall'), dive: !diving && diveRest <= 0, lens: lensD, fire: fd, stuckFor: n.stuckFor });
         if (n.s.mode === 'peel' && was === 'wall') { peelT = NOTES.stagger; c.play('rustle', n.p.x, n.p.z, 6); if (!known && !c.hidden(n.p.x, n.p.z, 0.3)) { known = true; c.met(); } }
-        if (n.s.peeled) { n.goal = goal(n); n.p = { x: n.p.x + Math.sin(n.wall.yaw) * 0.3, y: n.p.y - SIZE * S / 2, z: n.p.z + Math.cos(n.wall.yaw) * 0.3 }; }
+        if (n.s.peeled) { n.goal = goal(n); n.p = { x: n.p.x + Math.sin(n.wall.yaw) * 0.3, y: n.p.y, z: n.p.z + Math.cos(n.wall.yaw) * 0.3 }; }
         if (n.s.dove) c.play('rustle', n.p.x, n.p.z, 7);
         if (n.s.stuck) {
           // on the lens: the hand's view has it now, somewhere on the picture, at a slant
@@ -129,8 +113,8 @@ export function create(c) {
           const g = env.world.floorY(n.p.x, n.p.z) + 0.004; if (n.p.y > g) { n.fallV += 4 * dt; n.p.y = Math.max(g, n.p.y - n.fallV * dt); }
         }
         if (n.s.mode === 'lens') stuck++;
-        pose(n, dt);
-        const Lt = c.light(n.p.x, n.p.z, 1.4); n.mat.uniforms.uTint.value.set(Lt[0] * 1.5 + 0.1, Lt[1] * 1.5 + 0.1, Lt[2] * 1.5 + 0.1);
+        pose(n);
+        n.body.light(c.light(n.p.x, n.p.z, 1.4));          // (the body brightens it as paper: sticky-notes.model.js)
       }
       // stuck, they cost a little charge: never much, never the last of it (sticky-notes.rule.js drainOf)
       const cam = env.camera?.read?.();

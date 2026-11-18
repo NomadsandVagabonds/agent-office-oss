@@ -98,12 +98,14 @@ test('its line: it hunts, roams, is met further down, fears fire; a drawing warn
   assert.equal(rawShare(1), 0); assert.ok(rawShare(2) > 0.05 && rawShare(2) < 0.6, `the smile: blotches (${rawShare(2).toFixed(2)})`); assert.ok(rawShare(3) > 0.7, `the grin: engorged (${rawShare(3).toFixed(2)})`);
   const mother = readFileSync(new URL('../public/world/backrooms/cast/mother.model.js', import.meta.url), 'utf8');
   assert.match(mother, /const RAW = \['#b4756a', '#a5645b', '#c48a7d', '#8f5148'\], BRUISE = '#5e3540'/, 'the same flesh as Mother');
-  assert.match(src, /const turned = swell > 0 \|\| fat >= 0\.8;/, 'its neck and hands turn with it');
+  assert.match(readFileSync(new URL('../public/world/backrooms/cast/middle-manager.rig.js', import.meta.url), 'utf8'), /export const turnedAt = \(fat = 0, swell = 0\) => swell > 0 \|\| fat >= 0\.8;/, 'its neck and hands turn with it');
   assert.ok(has(0, '#2a211e'), 'the dark runs from its eyes, unfed');
   const tones = new Map(); for (const c of heads[1].values()) tones.set(c, (tones.get(c) || 0) + 1);
   const skin = [...tones].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([c]) => c);
   for (const c of skin) { const r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255; assert.ok(r > 170 && g > 145 && b > 125, 'pale'); assert.ok(r - b > 25, 'skin, not white'); }
-  assert.match(src, /const face = swell > 0 \|\| fat >= 0\.8 \? 3 : fat >= 0\.5 \? 2 : fat >= 0\.22 \? 1 : 0;/);
+  // (drawn by the animation session's rig now: it picks the face, the same thresholds)
+  const rig = readFileSync(new URL('../public/world/backrooms/cast/middle-manager.rig.js', import.meta.url), 'utf8');
+  assert.match(rig, /export const faceFor = \(fat = 0, swell = 0\) => \(swell > 0 \|\| fat >= 0\.8 \? 3 : fat >= 0\.5 \? 2 : fat >= 0\.22 \? 1 : 0\);/);
   // its tell is its body: nothing of the picture comes from looking at it or being near it, and nothing grows out of it
   const model = readFileSync(new URL('../public/world/backrooms/cast/middle-manager.model.js', import.meta.url), 'utf8');
   assert.ok(!/interfere/.test(src), 'no static from it'); assert.ok(!/tendril|tentacle/i.test(src + model), 'nothing out of its back');
@@ -119,7 +121,11 @@ test('the bloat: from nothing to bursting it more than doubles, head and arms an
   assert.ok(Math.max(...heave) - Math.min(...heave) > 0.04, 'full, it breathes'); assert.ok(still.every((b) => b === 1), 'thin, it does not');
   const pulse = [0, 0.05, 0.1, 0.15].map((t) => bloat(0.5, 1, t).body); assert.ok(Math.max(...pulse) - Math.min(...pulse) > 0.08, 'swelling, it pulses');
   const src = readFileSync(new URL('../public/world/backrooms/cast/middle-manager.js', import.meta.url), 'utf8');
-  for (const part of ['B.arm', 'B.hand', 'B.leg', 'B.neck', 'B.head', 'B.tall', 'B.body']) assert.ok(src.includes(part), `${part} drives the picture`);
+  // the rig is what draws it, from this rule's bloat(), and the creature hands it the state each frame
+  const rig = readFileSync(new URL('../public/world/backrooms/cast/middle-manager.rig.js', import.meta.url), 'utf8');
+  assert.match(rig, /import \{[^}]*\bbloat\b[^}]*\} from '\.\/middle-manager\.rule\.js'/);
+  assert.match(src, /rig = makeMiddleManager\(env\.kit\); group = rig\.group; mat = rig\.mat;/);
+  assert.match(src, /rig\.pose\(\{ time: clock, speed: dt > 0 \? moved \/ dt : 0, fat: s\.fat, swell:/);
   // its buttons go a third of the way to going off; cut, a puff of paper comes out of it
   assert.match(src, /s\.swell > Mg\.swells \* 0\.35\) \{ popped2 = true;/); assert.match(src, /count: CUT\.puff/);
 });
