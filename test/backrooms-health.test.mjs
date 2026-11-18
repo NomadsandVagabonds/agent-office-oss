@@ -98,8 +98,12 @@ test('every one of the cast that can be hit offers a target and takes health; no
   for (const id of ['head-count', 'intern', 'standing-meeting', 'carried-interest', 'mother', 'the-lines']) assert.match(body(`cast/${id}.js`), /if \(!hit\.killed\) c\.stall\(HEALTH\.flinch\)/, `${id} flinches`);
   // the mascot keeps its break-off on the hit that does not finish it, and falls with what it holds
   const pirate = read('cast/pirate.js');
-  assert.match(body('cast/pirate.js'), /if \(hit\?\.killed\) \{[^\n]*return \{ ok: true, target: 'pirate' \}; \}\s+if \(pirate\.state !== 'awake'\) awaken\(pirate, false\);\s+breakOff\(pirate\);/);
-  assert.match(pirate, /fell\(\) \{ return !!pirate; \}/);
+  assert.match(body('cast/pirate.js'), /if \(hit\?\.killed\) \{[^\n]*return \{ ok: true, target: 'pirate' \}; \}[^\n]*\n\s+if \(pirate\.state !== 'awake'\) awaken\(pirate, false\);\s+breakOff\(pirate\);/);
+  // broken off by the first jab it can still take the second (found in a browser: it could not, and so could not be finished)
+  assert.equal(body('cast/pirate.js').match(/\(pirate\.know\?\.spent > 0 && !c\.vital\)/g).length, 2, 'in the list and in the jab itself');
+  // and the [E] for the card goes to the hand where it fell, at the kill and again when its dying is over
+  assert.match(body('cast/pirate.js'), /if \(hit\?\.killed\) \{[^\n]*if \(pirate\.card\?\.use\) reach\(pirate\);/);
+  assert.match(pirate, /fell\(\) \{ if \(pirate\?\.card\?\.use\) reach\(pirate\); return !!pirate; \}/);
   // the many-bodied keep their own: a toner two and its hatchling one, finished into a spent crust; a small one of Mother's goes at one jab
   const toner = read('cast/toner.js');
   assert.match(toner, /unit\.vital = fresh\('toner'\);/); assert.match(toner, /young\.vital = fresh\('toner-brood'\);/);

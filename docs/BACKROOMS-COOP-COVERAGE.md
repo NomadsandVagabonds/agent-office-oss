@@ -151,3 +151,36 @@ returns 200, and two Chromium clients pass invite/join, exact custom looks,
 readiness, game entry, real generated-microphone audio in both directions, open
 mic/mute/focus behavior, reload protection and disconnect feedback. These are
 remote Railway checks from one test machine, not a London–Argentina playthrough.
+
+## Known gap: the cast's health and deaths (18 November 2026)
+
+Health for the cast (`cast/health.rule.js`, the conductor's `c.struck` / `c.vital`, `claude/backrooms-cast e422c9c`)
+was written for one visitor. Nothing in it is sent to anybody else. This section says what that means, and how
+much of it has been seen rather than read.
+
+What the code does, read from `pursuer.js`, `cast/toner.js`, `rooms/cable-drop.js` and `inventory-state.js` on live:
+
+- A creature's health (`hp`, `hurt`, `dying`, `gone`) is a field of the conductor's own note of it, on the page that
+  runs that conductor. A toner unit keeps its own, and the trunk line its own in its room. No message carries any of
+  these, and neither `pursuer.js` nor any creature file has a `coopRead` / `coopApply` for them.
+- A jab is resolved where the click happened: `index.js` asks that page's conductor for its targets and calls the
+  target's `snip()`. So a hit takes health only from that page's copy of the creature.
+- A creature that has been finished is no longer ticked and is taken off the floor by the page whose conductor
+  finished it. Its `dies(progress, dt)` is called on that page only.
+- The scissors' snap is rolled with that page's own `Math.random`. Two visitors do not share the roll, and need
+  not: each has their own pair.
+
+What a second visitor therefore sees when the first kills something, as far as the code says: whatever their own
+page's conductor says, which has not been told. If each page runs its own copy of the creature, the second visitor's
+copy is unhurt and still hunting while the first visitor's is gone. If one page runs the creature for both and sends
+its picture across, the second visitor sees it stop and vanish with no flinch and no death, or does not see the hit
+at all when the jab was theirs and the creature is run elsewhere: their jab would then take health from a copy nobody
+is drawing. Which of these holds depends on the co-op transport, which is not in the files named above and which I
+did not read or run.
+
+Not tested: any of it with two clients. Nothing here has been seen; all of it is read.
+
+What would have to be carried to close the gap: for each creature by id, `hp`, `hurt` and `dying` from the page that
+runs it to the others; a jab from a visitor's page to the page that runs the creature, answered with whether it
+landed; the same for each toner unit and for the trunk line; and the removal at `gone`. The stagger from a shove
+(`c.stall`) is in the same position: it is kept by the conductor and sent to nobody.

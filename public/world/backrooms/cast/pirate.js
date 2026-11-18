@@ -771,11 +771,11 @@ export function create(c) {
         r: 0.32,
         priority: 2,
         snip: () => {
-          if (!pirate || pirate.state === 'caught' || pirate.know?.spent > 0) return false;
+          if (!pirate || pirate.state === 'caught' || (pirate.know?.spent > 0 && !c.vital)) return false;          // (broken off, it can still be jabbed: or the second could never follow the first)
           const hit = c.struck?.(1);                                  // (cast/health.rule.js: medium, two)
           if (hit && !hit.ok) return false;
           if (!pirate.known) { pirate.known = true; c.met(); }
-          if (hit?.killed) { env.interfere(1); env.hud.glitch(0.7); env.sound.play('thunk'); pirate.hunted = false; c.survived(); return { ok: true, target: 'pirate' }; }
+          if (hit?.killed) { env.interfere(1); env.hud.glitch(0.7); env.sound.play('thunk'); pirate.hunted = false; if (pirate.card?.use) reach(pirate); c.survived(); return { ok: true, target: 'pirate' }; }      // (the [E] for the card goes where the hand is now: it is not ticked again)
           if (pirate.state !== 'awake') awaken(pirate, false);
           breakOff(pirate);
           return { ok: true, target: 'pirate' };
@@ -789,7 +789,7 @@ export function create(c) {
      * It has been finished (the conductor, when its dying is over): the body stays where it fell, because of what it may
      * be holding — the keycard is still on its wrist, and is taken from it there as it was taken from it standing.
      */
-    fell() { return !!pirate; },
+    fell() { if (pirate?.card?.use) reach(pirate); return !!pirate; },
     dispose() { if (pirate) { const i = W()?.bodies.indexOf(pirate.body); if (i >= 0) W().bodies.splice(i, 1); } pirate?.group.removeFromParent(); pirate = null; },
   };
 }
