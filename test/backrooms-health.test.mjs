@@ -43,7 +43,7 @@ async function floor(carry = null) {
     './cast.js': `export * from ${JSON.stringify(rule)};export const CAST=[{id:'pirate',music:'mascot'},{id:'mother'},{id:'moth'}];export const castFor=()=>CAST;export const homeFor=()=>null;`,
     './cast/index.js': `const make=c=>{const it={x:1,z:0,ticks:0,hits:[],died:[],disposed:false,keeps:c.member.id==='pirate',ready(){c.add({removeFromParent(){it.removed=true;}});c.body(it.body={x:1,z:0,r:.3});},at:()=>({x:it.x,z:it.z}),
       update(dt){it.ticks++;it.hits.push(c.hurt(1));it.vital=c.vital;},carry:()=>c.member.id==='pirate'?{awake:true,face:3}:null,dies(p){it.died.push(p);},fell(){return it.keeps;},dispose(){it.disposed=true;},
-      snipTargets:()=>[{id:c.member.id,x:it.x,z:it.z,r:.3,snip:()=>{const hit=c.struck(1);if(!hit.ok)return false;if(!hit.killed)c.stall(0.6);return{ok:true,target:c.member.id};}}],
+      snipTargets:()=>[{id:c.member.id,x:it.x,z:it.z,r:.3,snip:()=>{const hit=c.struck(1);if(!hit.ok)return false;if(!hit.killed)c.stall(0.6);c.survived();return{ok:true,target:c.member.id};}}],
       shoveTargets:()=>[{id:c.member.id,x:it.x,z:it.z,r:.3,shove:()=>true}]};return it;};
       export const MAKERS={pirate:make,mother:make,moth:make};`,
     './cast/walk.js': 'export const createWalk=()=>({});',
@@ -53,7 +53,7 @@ async function floor(carry = null) {
   source = source.replace("'../../../core/difficulty.mjs'", JSON.stringify(new URL('../core/difficulty.mjs', import.meta.url).href));
   const { createStalkers } = await import(url(source));
   const stopped = [], bodies = [];
-  const env = { level: { seed: 'test', depth: 0 }, world: { bodies, scene: { add() {} } }, player: { me: { id: 'a', x: 0, z: 0, yaw: -Math.PI / 2 } }, sees: () => false, clock: 0,
+  const env = { run: { got: [], survived(id) { this.got.push(id); }, met() {} }, level: { seed: 'test', depth: 0 }, world: { bodies, scene: { add() {} } }, player: { me: { id: 'a', x: 0, z: 0, yaw: -Math.PI / 2 } }, sees: () => false, clock: 0,
     health: { damage: () => ({ ok: true, dead: false }) }, sound: { stopMascot: () => stopped.push(1) }, carry };
   createStalkers(env); for (const f of env.ready || []) f();
   return { env, p: env.pursuer, stopped, bodies };
@@ -151,5 +151,20 @@ test('when Mother is finished her small ones go with her, at once', () => {
   // a dead one is nothing to tread on, and offers nothing to jab or push
   assert.match(src, /when:\(\)=>!over && !w\.dead && trodden\(c\.me\(\), \[w\]\)===0/);
   assert.equal(src.match(/worms\.filter\(\(w\) => !w\.dead && !w\.remove && !w\.air\?\.born\)/g).length, 2);
+});
+
+test('"got away from" counts once a creature a floor, however many jabs it took', async () => {
+  const { env, p } = await floor(), dt = 0.05;
+  p.update(dt);
+  for (let i = 0; i < 3; i++) { assert.ok(jab(p, 'mother')); for (let t = 0; t < 0.7; t += dt) p.update(dt); }
+  assert.deepEqual(env.run.got, ['mother'], 'a boss jabbed three times is one escape');
+  assert.ok(jab(p, 'pirate')); for (let t = 0; t < 0.7; t += dt) p.update(dt); assert.ok(jab(p, 'pirate'));
+  assert.deepEqual(env.run.got, ['mother', 'pirate']);
+  // the floor below counts its own
+  const below = await floor(); below.p.update(dt); assert.ok(jab(below.p, 'mother')); assert.deepEqual(below.env.run.got, ['mother']);
+  // and the trunk line, which is its room's and not the conductor's, the same
+  const cable = read('rooms/cable-drop.js');
+  assert.match(cable, /const escaped = \(\) => \{ if \(got\) return; got = true; c\.survived\('trunk-line'\); \};/);
+  assert.equal(cable.match(/c\.survived\('trunk-line'\)/g).length, 1); assert.equal(cable.match(/escaped\(\)/g).length, 3);
 });
 

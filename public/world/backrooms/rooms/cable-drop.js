@@ -131,7 +131,9 @@ export function build(c) {
   // The Trunk Line itself — hidden in the ceiling until woken, then registered on the floor
   const rig = makeTrunkLine(c.kit);
   const startW = c.toWorld(hole.x, hole.z);
-  let rule = createCableState(), known = false, vital = fresh('trunk-line');          // (cast/health.rule.js: medium, two jabs)
+  let rule = createCableState(), known = false, got = false, vital = fresh('trunk-line');          // (cast/health.rule.js: medium, two jabs)
+  /** Got away from it: once, however many jabs it took (as the conductor counts its own: pursuer.js `survived`). */
+  const escaped = () => { if (got) return; got = true; c.survived('trunk-line'); };
 
   const roamer = c.env.denizens?.add({
     id: 'trunk-line',
@@ -146,11 +148,11 @@ export function build(c) {
       if (rule.phase === 'dormant' || finished(vital)) return false;
       vital = struck(vital);
       if (!known) { known = true; c.met('trunk-line'); }
-      if (vital.killed) { roamer.lift = 0; rule = releaseCable(rule); c.env.play('buzz', roamer.x, roamer.z, 9); c.survived('trunk-line'); return { ok: true, target: 'trunk-line' }; }      // (it lies where it fell through its dying: update)
+      if (vital.killed) { roamer.lift = 0; rule = releaseCable(rule); c.env.play('buzz', roamer.x, roamer.z, 9); escaped(); return { ok: true, target: 'trunk-line' }; }      // (it lies where it fell through its dying: update)
       roamer.lift = 0;
       rule = releaseCable(rule);
       c.env.play('buzz', roamer.x, roamer.z, 7);
-      c.survived('trunk-line');
+      escaped();
       return { ok: true, target: 'trunk-line' };
     },
     update(dt, time, me) {
@@ -221,7 +223,7 @@ export function build(c) {
           c.env.interfere(1);
           if (!known) { known = true; c.met('trunk-line'); }
           const hit = c.hurt(CABLE.hurts, roamer);
-          if (!hit.ended) { rule = releaseCable(rule); if (hit.landed) { c.env.hud.glitch(0.5); c.survived('trunk-line'); } }
+          if (!hit.ended) { rule = releaseCable(rule); if (hit.landed) { c.env.hud.glitch(0.5); escaped(); } }
         }
       }
     },
