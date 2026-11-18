@@ -405,7 +405,7 @@ test('the helper lines in the waterpark\'s files: each once, and nothing else of
   // (recorded from origin/blockrooms-live at 21500d9, each file as it was before its line went in. When the waterpark's
   // builder changes one of these files, re-record its hash: the line itself must stay, once)
   const lines = [
-    ['waterpark.js', "  c.liquid?.(waterSurf, { kind: 'water', y: waterY });\n"],
+    ['waterpark.js', "  const water = c.liquid?.(waterSurf, { kind: 'water', y: waterY });\n"],
     ['waterpark.js', "      c.liquid?.(wb, { kind: 'water', y: 0.15 });\n"],
     ['rooms/return-pool/art.js', "  c.liquid?.(group, { kind: 'water', phase, y });\n"],
     ['rooms/bellmouth/art.js', "  c.liquid?.(group,{kind:'water',phase,y:p.water});\n"],
@@ -419,7 +419,7 @@ test('the helper lines in the waterpark\'s files: each once, and nothing else of
   }
   // where each goes: after the basin's sheet, the footbath's sheet, and before each art helper hands its group back
   // (18 Nov: the waterpark's builder put one line of its own between, the lamps the Classic sheet reflects: pool-optics.js)
-  assert.match(B('waterpark.js'), /    order: 4,\n(?:    finishMaterial: [^\n]*\n)?  \}\);\n  c\.liquid\?\.\(waterSurf, \{ kind: 'water', y: waterY \}\);\n/);
+  assert.match(B('waterpark.js'), /    order: 4,\n(?:    finishMaterial: [^\n]*\n)?  \}\);\n  const water = c\.liquid\?\.\(waterSurf, \{ kind: 'water', y: waterY \}\);\n/);
   assert.match(B('waterpark.js'), /alpha: 0\.56, side: THREE\.DoubleSide, order: 4 \}\);\n      c\.liquid\?\.\(wb, \{ kind: 'water', y: 0\.15 \}\);\n/);
   assert.match(B('rooms/return-pool/art.js'), /  c\.liquid\?\.\(group, \{ kind: 'water', phase, y \}\);\n  return \{ group, phase \};/);
   assert.match(B('rooms/bellmouth/art.js'), /  c\.liquid\?\.\(group,\{kind:'water',phase,y:p\.water\}\);\n  return \{phase,group\};/);
@@ -442,3 +442,9 @@ test('what the surface is made of: the kit\'s shader text untouched; the room\'s
   assert.ok(!/Math\.random|\bR\./.test(B('liquid.js') + B('liquid.rule.js')), 'nothing seeded, nothing random: the ripple is timed by the clock');
 });
 
+
+test('a basin keeps its water\'s handle: a room can ring the surface at Medium and High; at Classic and Low it does nothing', () => {
+  const src = B('waterpark.js');
+  assert.match(src, /  const water = c\.liquid\?\.\(waterSurf, \{ kind: 'water', y: waterY \}\);\n/);
+  assert.match(src, /    get swimmer\(\) \{ return swimmer; \},\n    water,[^\n]*\n  \};\n  c\.rt\.basin = info;\n/);
+});

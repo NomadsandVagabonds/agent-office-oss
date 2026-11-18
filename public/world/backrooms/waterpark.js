@@ -1346,7 +1346,7 @@ export function createBasin(c, spec) {
     order: 4,
     finishMaterial: c.rt.poolLampMap && !spec.waterTex ? mat => basinOptics(c, mat, poolClock, waterY) : undefined,
   });
-  c.liquid?.(waterSurf, { kind: 'water', y: waterY });
+  const water = c.liquid?.(waterSurf, { kind: 'water', y: waterY });
 
   // Expanding splash ripple ring + underwater aquamarine camera veil (only visible while camera is below waterY!)
   const rippleGeo = new THREE.RingGeometry(0.18, 0.26, 18);
@@ -1382,6 +1382,7 @@ export function createBasin(c, spec) {
     depth,
     bounds: { x0: bx0, z0: bz0, x1: bx1, z1: bz1 },
     get swimmer() { return swimmer; },
+    water,   // the water's handle (liquid.mark.js): `water?.disturb(x, z, strength)` rings the surface at Medium and High, false at Classic and Low
   };
   c.rt.basin = info;
 

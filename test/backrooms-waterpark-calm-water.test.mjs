@@ -56,7 +56,7 @@ test('only the kiddie lagoon uses it, through createBasin\'s waterTex and waterA
 test('the default sheet: causticWaterTex at 0.52, and the liquid mark is still made', () => {
   const w = src('waterpark.js');
   assert.match(w, /const waterTex = spec\.waterTex \|\| causticWaterTex\(kit, spec\.waterTone \|\| \(depth > 1\.2 \? 'deep' : 'aqua'\)\);/);
-  assert.match(w, /addTranslucent\(c, waterSurf, \{\n\s*map: waterTex,\n\s*alpha: spec\.waterAlpha \?\? 0\.52,\n\s*side: THREE\.FrontSide,\n\s*order: 4,\n(?:\s*finishMaterial: [^\n]*\n)?\s*\}\);\n\s*c\.liquid\?\.\(waterSurf, \{ kind: 'water', y: waterY \}\);/);
+  assert.match(w, /addTranslucent\(c, waterSurf, \{\n\s*map: waterTex,\n\s*alpha: spec\.waterAlpha \?\? 0\.52,\n\s*side: THREE\.FrontSide,\n\s*order: 4,\n(?:\s*finishMaterial: [^\n]*\n)?\s*\}\);\n\s*const water = c\.liquid\?\.\(waterSurf, \{ kind: 'water', y: waterY \}\);/);
   // (18 Nov: the optional line is the waterpark's builder's own, the ceiling lamps the caustic sheet reflects at Classic
   // (pool-optics.js); it is not given to a pool with a sheet of its own, so the calm lagoon is as it was)
   assert.match(w, /finishMaterial: c\.rt\.poolLampMap && !spec\.waterTex \?/);
