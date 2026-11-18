@@ -51,3 +51,19 @@ test('the mascot lying at a crawl hole: furniture meets the whole of it, the vis
   assert.match(world, /&& \(!b\.airborne \|\| box\)/);
   const k = Number(/DOWN_BODY = ([\d.]+)/.exec(src)[1]); assert.ok(1.26 - (1.26 - 0.38) * k - 0.3 > 0.6, 'its feet body stops well short of the hole');
 });
+
+test('the ones that could keep a doorway forever are under the rule: the intern goes a room away, Mother withdraws and settles, the porter\'s locker is never put in one', async () => {
+  const { readFileSync } = await import('node:fs');
+  const read = (p) => readFileSync(new URL(`../public/world/backrooms/cast/${p}`, import.meta.url), 'utf8');
+  const intern = read('intern.js'), mother = read('mother.js'), porter = read('porter.js'), walk = read('walk.js');
+  // the intern: only while it is not copying, and not past the visitor's room
+  assert.match(intern, /if \(s\.mode !== 'copies' && !nearFire\) \{\s+const dw = c\.walk\.doorways\(walker\.x, walker\.z\), way = doorwayAt\(walker, dw\.ways, dw\.down\);\s+kept = camps\(kept, dt, away \? null : way, c\.R\);/);
+  assert.match(intern, /away = c\.walk\.elsewhere\(walker, way, c\.R, \{ not: room \}\);/);
+  // Mother: only while she is not coming; the nearest room that will do, at her own pace; she does not stroll
+  assert.match(mother, /if \(!s\.comes && !nearFire\) \{/); assert.match(mother, /settle = c\.walk\.elsewhere\(walker, way, c\.R, \{ near: true, not: c\.room\(m\.x, m\.z\) \}\);/);
+  assert.match(mother, /walked \+= c\.walk\.go\(walker, settle, G\.speed \* \(c\.speedScale \?\? 1\) \* dt, 0\.1\)\.went;/, 'at her own speed');
+  // the locker: placed clear of every doorway of the room, never moved
+  assert.match(porter, /clearOf = \(x, z, need\) => ways\.every\(\(w\) => Math\.hypot\(w\.x - x, w\.z - z\) >= DOORWAY\.near \+ need\);/); assert.match(porter, /const l = free\(1\.6, 2\.6, 0\.45, clearOf\);/);
+  // and the walker's elsewhere never takes it to the way down, a crawl, or through the visitor's room
+  assert.match(walk, /def\.kind === 'exit' \|\| def\.crawl \|\| rid === not\) continue;/); assert.match(walk, /\(roomPath\(level, here\.id, rid\) \|\| \[\]\)\.slice\(1\)\.includes\(not\)\) continue;/);
+});

@@ -13,6 +13,7 @@ import { Vox, M } from '../../vox/vox.js';
 import { Batch, lamp } from '../kit.js';
 import { turnTo } from '../bits.js';
 import { PORTER, mopping, minds, facesYou } from './porter.rule.js';
+import { DOORWAY } from './doorway.rule.js';
 
 const S = 0.03;
 function man() {
@@ -68,8 +69,11 @@ export function create(c) {
     home = env.world.rooms[c.home];
     const walker = { r: 0.3, tall: 1.9 }, p = c.walk.spotIn(walker, c.home);
     // the bucket a pace from him, the locker a little further, wherever there is floor for them
-    const free = (r0, r1, need) => { for (let k = 0; k < 40; k++) { const a = c.R.range(0, 6.28), r = c.R.range(r0, r1), x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r; if (c.room(x, z) === c.home && c.walk.stand({ r: need, tall: 1.9 }, x, z)) return { x, z }; } return null; };
-    b = free(0.85, 1.2, 0.3); const l = free(1.6, 2.6, 0.45);
+    const free = (r0, r1, need, ok = () => true) => { for (let k = 0; k < 40; k++) { const a = c.R.range(0, 6.28), r = c.R.range(r0, r1), x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r; if (ok(x, z, need) && c.room(x, z) === c.home && c.walk.stand({ r: need, tall: 1.9 }, x, z)) return { x, z }; } return null; };
+    // (and the locker never in a doorway's way: clear of every doorway of the room by a doorway's reach and its own size — the
+    // lead's: "keep it out of every doorway's keep-clear (and the way down) when it is placed". Not a timeout: it never moves)
+    const ways = c.walk.doorways(p.x, p.z).ways, clearOf = (x, z, need) => ways.every((w) => Math.hypot(w.x - x, w.z - z) >= DOORWAY.near + need);
+    b = free(0.85, 1.2, 0.3); const l = free(1.6, 2.6, 0.45, clearOf);
     if (!b || !l) { home = null; return; }
     const mat = kit.surface({ vox: true }), m4 = new THREE.Matrix4().makeScale(S, S, S), lights = [lamp(0.3, 2.6, 0.8, [1.2, 1.2, 1.2], { k: 9, wrap: 0.45, far: 30 })];
     const mesh = (key, make) => { const q = new Batch(true); q.addVox(kit.model('porter6:' + key, make).solid, m4); return new THREE.Mesh(kit.geometry(q, lights, [0.6, 0.6, 0.6]), mat); };
