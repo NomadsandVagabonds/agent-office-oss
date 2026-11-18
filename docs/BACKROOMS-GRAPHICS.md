@@ -1025,7 +1025,8 @@ second-best finding (`BACKROOMS-LOOKDEV.md`, round two, 6), adapted to the real
 rooms: the lab found its surface by a guess, drew one rectangle in a scene of
 its own with no depth test, rippled on the world's grid and had no case for an
 eye under the water; none of that is kept. This is push one of four (the mark
-and the surface); the wake, the currents and the mirror are to come.
+and the surface); push two, the wake, is in the section after this; the currents
+and the mirror are to come.
 
 **No ordinary visit can reach it yet**: the only liquids are the waterpark's,
 and the waterpark is not dealt (`dealt: false`). The dev page reaches it with
@@ -1039,7 +1040,7 @@ and the waterpark is not dealt (`dealt: false`). The dev page reaches it with
   mesh in `c.after`). The mark is kept in `rt.liquids`; once the room is built
   (`c.after`) it finds its mesh(es) and measures them in the room's frame: flat
   (corners within 1 cm up and down) or refused, quietly (the sheet stays as
-  it is). It returns `{ disturb() }`, which does nothing yet (the wake). `phase`
+  it is). It returns `{ disturb(x, z, strength) }` (the wake, next section). `phase`
   (a `{ value }`, the room's own uniform object) drifts the ripple: the return
   pool's drift turns round with its valve. `flow` and `y` are stored and not
   read yet (`flow` is push four's). At every tier the mark is all a room's
@@ -1095,8 +1096,8 @@ and the waterpark is not dealt (`dealt: false`). The dev page reaches it with
   under it; a ripple worked out on 5 cm cells of the room's own frame, its
   slope stepped, laid flat where a cell is under about two pixels (no speckle
   far off); fresnel towards a flat tint of the room's light (one function,
-  `reflection()`, where push three's mirror goes). No wake: the rings'
-  uniforms are there and none is set. The new mesh is never visible outside
+  `reflection()`, where push three's mirror goes). The wake's rings are
+  added to the same height (next section). The new mesh is never visible outside
   the camcorder's own draw, so whatever else draws the scene (the mall's
   television sets, the bloom's picture, the flashlight's shadows) sees each
   room's sheet as it always was. It throws no beam shadow
@@ -1144,6 +1145,8 @@ and the waterpark is not dealt (`dealt: false`). The dev page reaches it with
   3. A pool behind a wall but in the frustum still asks for the split draw: it
      costs the copy and changes nothing seen.
   4. The drowned monitor's screen is no brighter than under the old sheet.
+  5. The wake (next section) has faults of its own, listed there; the first is
+     that from the deck its rings read with dark edges.
 - **Cost class.** While a surface is in view: one full-screen copy of the
   scene's colour and depth (High at Full VHS: 1440 × 1080, half float and
   depth, about 19 MB held while the tier has water and a pool has been seen),
@@ -1171,6 +1174,141 @@ and the waterpark is not dealt (`dealt: false`). The dev page reaches it with
   different on the screen).
 
   Software rendering, so no milliseconds.
+
+### Water (built: the wake)
+
+Push two of four. Rings where something disturbs a surface: Medium and High
+only (where the tier has water), nothing at Classic and Low. No room file, no
+gameplay file and nothing of the waterpark's is changed for it.
+
+- **A ring** (`liquid.rule.js`: `ringLeft`, `wakeHash`, `wakeStart`,
+  `wakeStep`, `wakeFill`; the shader's `wakeRing`). Started at a point on the
+  surface with a strength (0 to 2; 1 is a body wading at about 1.45 m/s), it is
+  a short train of waves whose front spreads at 0.42 m/s from 14 cm out: a
+  leading crest at the front, a trough just behind it, then the rest of its
+  train (1.5 to 3 waves, 25 cm apart near). Each ring is a little its own: its
+  strength ±15 % and how many waves it has come from a hash of where and when
+  it starts (`wakeHash`: no seeded stream and no `Math.random`, so the same
+  call makes the same ring and the tests can pin it), and its front is moved
+  a little by the ripple's height there, so no ring is a true circle. It fades
+  with age (e^-0.5 a second, times the square of what is left of its 2.6 s, so
+  it reaches nothing smoothly and is dropped then with nothing to pop) and with
+  the distance it has gone (1/√(1 + 3 × metres)).
+- **Its own cells, not flattened far off.** The ripple lies flat where its
+  5 cm cells are a pixel or two (no speckle), and the first version of the
+  wake went with it, so from the deck nothing was seen. The ring now has cells
+  of its own, 5 cm near and 10, then 20 cm further off (each at least about
+  five pixels, taken over both sides of a cell seen at a slant), and its waves
+  are never shorter than three of its cells: far off it is a band of blocks,
+  not speckle. Its slope (stepped by 0.04) is added to the ripple's after the
+  ripple's flattening and before the normal, so it bends the bed and the
+  light on the bed in blocks. Right under the eye it is gentler: 45 % of
+  itself nearer than 0.8 m, all of it from 3 m.
+- **Light and dark, which carry across a pool.** Its leading crest brightens
+  the water (to 1.9 times at most; a broken band: 35 % of its cells, a fixed
+  scatter, are left out), the trough just behind it darkens it (by up to
+  35 %), and for its first half second the bed inside a fresh ring is brighter
+  where the caustic light falls (the light stirred). Only brightening and
+  darkening: no colour of its own.
+- **The pool**: eight rings a surface (the shader's array, `uRings[8]`, set
+  with `uRingN`; each surface has its own, not shared), in its room's frame,
+  timed by the camcorder's own clock (the same `now` as the ripple: paused,
+  nothing ages or starts). Full, the faintest at that moment is replaced. Each
+  slot is (x, z, age, waves × 4 + strength). With none, `uRingN` is 0 and every
+  part of the wake (its slope, the stirred bed, the crest and trough) is
+  skipped: the surface is today's to the pixel (below).
+- **The call, for a room or a creature**: `c.liquid` hands back a handle;
+  keep it and, from a tick,
+
+  ```js
+  const water = c.liquid?.(sheet, { kind: 'water', y: waterY });
+  // later, from c.tick: x, z in WORLD coordinates (as c.toWorld gives them)
+  const w = c.toWorld(skimmer.x, skimmer.z);
+  water?.disturb(w.x, w.z, 0.6);          // → true if a ring started
+  ```
+
+  It returns `false` and does nothing where the tier draws no water (Classic,
+  Low, a room built in node, a sheet that was refused): a room need not ask.
+  Nothing calls it yet: the waterpark's Skimmer and Guard-Stand rig are
+  candidates (theirs to write; one ring per stroke or splash, 0.3 to 1).
+- **Who feeds it now: the visitor.** `index.js`, once a frame after the
+  rooms' ticks, while playing and not frozen (a ride freezes the visitor):
+  `vhs.liquids?.feel(world.scene, me.x, me.z, feet, me.y, me.speed)`, the feet
+  being the eye less its height. `feel` (liquid.js) finds the surface of the
+  part they are in whose footprint they stand over with their feet under its
+  plane and their eye no more than 1.4 m under it (a dive to the bottom does
+  not disturb the top); then `wadeStep`: one ring as they go in (1.5, a little
+  more for coming in quick; a jump in starts it as the feet reach the water,
+  not as they leave the deck), then one for each 0.45 m moved through it
+  (faster than 0.25 m/s), as strong as they are quick (speed / 1.45, between
+  0.3 and 1.3): wading at 1.26 m/s lays one about every 0.36 s, running closer
+  in time and as far apart on the water. No `Math.random`, nothing of the
+  room's seeded streams.
+- **Tests**: `test/backrooms-gfx-water-wake.test.mjs` (the pool, the
+  spacing, nothing at 0, the uniforms per surface, `feel`, the feed's line in
+  `index.js`, the shader's text); `test/backrooms-gfx-water.test.mjs` pins the
+  handle's `false` at 0.
+- **The same picture with no ring.** One page load, the page's clock paused,
+  the camcorder drawn by hand, the kiddie lagoon from its doorway, the
+  surfaces drawn with the liquid shader as it was before the wake and with
+  today's: 0 of 576,000 pixels differ at High (plain); at Medium (Full VHS) 0
+  outside the camcorder's blinking REC light (a 40 × 39 pixel box that differs
+  between any two pictures of that load, the old shader's against itself too).
+  Controls: one ring started in view changes 6,098 (High) and 6,713 (Medium)
+  pixels; that ring drawn through the old shader differs from today's (7,830
+  at High: the shader really was swapped); the ring let go, 0. (Seed 7,
+  `themes=waterpark&only=kiddie-lagoon,deep-end`, 960 × 600.)
+- **Cost.** No draw, pass, target or texture read is added: the rings are
+  uniforms of the surface's own material. Counted with `&perf=1` at Full VHS,
+  in one load each, with no ring and then with all eight kept going in view
+  (draws of the level's scene / all passes / triangles), on the
+  `only=kiddie-lagoon,deep-end` floor (not the floor of the table above):
+  kiddie lagoon at High 139 / 155 / 150,366 both ways (on the tree the wake was
+  rebased onto; before that rebase, Medium and High, 137 / 153 / 143,148 both
+  ways, and the deep end 138 / 154 / 165,892 both ways); a dry room (seed 7's
+  landing, office floor) 50 / 65 / 36,670, with no surface and so nothing of the
+  wake run. Per water pixel, per live ring: three evaluations of `wakeRing`
+  (the ring's cell and the next one each way), each a `length`, two `exp`, an
+  `inversesqrt`, a `cos`, four `smoothstep` and some twenty-five multiplies and
+  adds; once a pixel while any ring lives, the ring's cell size (a `log2`, an
+  `exp2`, a `sqrt`), its distance from the eye, one hash for the broken crest
+  and the stirred bed. At most eight rings (24 evaluations). With none: three
+  skipped branches. Software rendering, so no milliseconds.
+- **Who could hide the waterpark's own splash ring, and how.** `createBasin`
+  (`waterpark.js`) adds an unnamed `RingGeometry` (pale, `#dafcff`,
+  see-through) straight to the room's group (`c.add`) and, on each splash,
+  sets its place, scale and opacity, never `.visible`: hidden, it would stay
+  hidden. From this side it can only be found by its shape and colour, which
+  is fishing. The clean way is one line in `createBasin` after `c.add(rippleMesh);`:
+  `rippleMesh.userData.liquidStandIn = true;`, and the camcorder's draw
+  (`liquid.js` `draw`) turning off, for the length of its own draw, whatever
+  in a drawn surface's room carries that mark, as it does the room's sheet.
+  Not done: it is another builder's file.
+- **Known faults (the wake).**
+  1. **From the deck it reads, but as rings with dark edges.** At 3 m (wading)
+     and 3.6 m (a drop into the deep end), High and Medium, plain and Full VHS,
+     the wake is now plainly there: a trail of overlapping rings of lighter and
+     darker blocks behind the visitor, and one ring spreading from where they
+     went in. The trough just behind each crest is what carries, and from
+     afar it reads as a dark outline: nearer a drawn ring than the bent,
+     glinting water it is close up. Lowering `wakeTrough` (1.0) trades that
+     for less legibility.
+  2. The far cells (20 cm) are big blocks; on a slant they can look like
+     square patches more than water.
+  3. The waterpark's own splash ring still shows on each splash (above), much
+     stronger than the wake.
+  4. Rings stop at the surface's edge (they never cross a wall) but do not
+     reflect from it, and they run on under the floats and out the other side:
+     the surface knows nothing of what stands in it, and nothing cheap would
+     tell it.
+  5. Wading steadily lays rings 0.45 m apart; each is a little its own
+     (strength ±15 %, 1.5 to 3 waves, its front bent by the ripple), but a
+     straight walk is still a fairly even row.
+  6. The visitor's footprint test is the surface's box in its room frame: the
+     bellmouth's round fan counts its corners (the feet must also be under the
+     plane, which the deck there is not).
+  7. Under the surface the surface is not drawn (as before), so a swimmer's
+     rings are not seen from below.
 
 ### 5 · Air
 
