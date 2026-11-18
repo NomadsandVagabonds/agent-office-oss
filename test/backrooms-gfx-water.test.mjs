@@ -62,7 +62,7 @@ test('c.liquid at 0, or with no Graphics setting at all: the mark is recorded an
   for (const how of ['holder', 'batch', 'mesh']) {
     const r = sheetRoom({ holder: how !== 'mesh' });
     const handle = markLiquid(r.c, how === 'holder' ? r.holder : how === 'batch' ? r.batch : r.mesh, { kind: 'water', y: -0.05 });
-    assert.equal(typeof handle.disturb, 'function'); assert.equal(handle.disturb(1, 2, 3), undefined, 'the wake is to come: it does nothing');
+    assert.equal(typeof handle.disturb, 'function'); assert.equal(handle.disturb(1, 2, 3), false, 'at 0 the wake does nothing (backrooms-gfx-water-wake)');
     assert.equal(r.rt.liquids.length, 1); assert.equal(r.rt.liquids[0].state, 'marked');
     const before = { material: r.mesh?.material, children: r.rt.group.children.length };
     for (const fn of r.after) fn();
