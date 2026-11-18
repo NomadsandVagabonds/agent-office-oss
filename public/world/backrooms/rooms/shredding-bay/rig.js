@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { Vox, M, glow, tone, mix, toCss } from '../../../vox/vox.js';
 import { buildCharacter, JOINT } from '../../../avatar/build.js';
 import { Batch, lamp, drawText } from '../../kit.js';
+import { legsFor } from '../../walk-legs.js';
 import { P } from '../../bits.js';
 import {
   pallorLook, mottleHead, stretchHead, eraseNose, bulgingEye,
@@ -238,9 +239,14 @@ export function makeRetentionClerk(kit) {
   shadow.rotation.x = -Math.PI / 2; shadow.position.set(0, 0.012, 0.28); shadow.renderOrder = 1;
   group.add(shadow);
 
+  // her legs walk behind the cart, short old steps (walk-legs.js); the front of her skirt hangs as it is
+  const step = legsFor(bodyMesh, { hip: JOINT.hipL[1] * S[1], knee: JOINT.kneeL[1] * S[1], stride: 0.7, swing: 0.4, fold: 0.7,
+    keep: (x, y, z) => (y > 7 * S[1] && z > 4.5 * S[2]) || Math.abs(x) > 7 * S[0] });
+
   return {
     group, confetti,
     animate(dt, time, moving, shredding) {
+      step(group.position.x, group.position.z, time);
       const spin = shredding ? 24 : 7;
       rollerA.rotation.x += dt * spin;
       rollerB.rotation.x -= dt * spin;

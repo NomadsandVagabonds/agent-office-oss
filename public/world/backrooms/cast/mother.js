@@ -68,7 +68,7 @@ export function create(c) {
     }
     // and the feet: short, thick, and more of them than it needs
     const foot = geo('mother:foot', footVox);
-    for (let k = 0; k < 7; k++) { const m = part(group, foot); m.scale.setScalar(0.95 + (k % 3) * 0.12); feet.push({ a: (k / 7) * Math.PI * 2 + (k % 2) * 0.2, m }); }
+    for (let k = 0; k < 7; k++) { const m = part(group, foot); m.scale.setScalar(0.95 + (k % 3) * 0.12); feet.push({ a: (k / 7) * Math.PI * 2 + (k % 2) * 0.2, m, k: 1 }); }
     c.add(group);
     c.body({ get x() { return walker.x; }, get z() { return walker.z; }, r: G.r });
     pose(0);
@@ -133,11 +133,21 @@ export function create(c) {
         ax += sx * dx; ay += dy; az += sz * dx;
       });
     }
-    // the feet shuffle when it goes anywhere, and tread on the spot when it does not
-    for (const f of feet) {
-      const step = Math.max(0, Math.sin(walked * 9 + f.a * 2 + clock * (glad ? 3 : 0.8))) * (0.05 + 0.04 * glad) * alive;
-      f.m.position.set(walker.x + Math.cos(f.a + yaw) * 0.3, floor + step, walker.z + Math.sin(f.a + yaw) * 0.3); f.m.rotation.y = -f.a - yaw + Math.PI / 2;
-    }
+    // the feet: each stays planted where it was put down until she has left it behind, then is picked up and put down
+    // again under her, three at most at once; standing, they tread on the spot as before (she is never quite still)
+    let lifting = feet.filter((f) => f.k < 1).length;
+    feet.forEach((f, n) => {
+      const rx = walker.x + Math.cos(f.a + yaw) * 0.3, rz = walker.z + Math.sin(f.a + yaw) * 0.3;
+      if (f.x === undefined || Math.hypot(rx - f.x, rz - f.z) > 0.9) { f.x = rx; f.z = rz; f.k = 1; }
+      if (f.k >= 1 && lifting < 3 && Math.hypot(rx - f.x, rz - f.z) > 0.16 * alive + (alive < 1 ? 9 : 0)) { f.fx = f.x; f.fz = f.z; f.k = 0; lifting++; }
+      let lift = 0;
+      if (f.k < 1) {
+        f.k = Math.min(1, f.k + dt / 0.2);
+        f.x = f.fx + (rx - f.fx) * f.k; f.z = f.fz + (rz - f.fz) * f.k; lift = Math.sin(f.k * Math.PI) * 0.07;
+      }
+      const tread = Math.max(0, Math.sin(clock * (glad ? 3 : 0.8) + f.a * 2)) * (0.03 + 0.04 * glad) * alive * (f.k >= 1 ? 1 : 0);
+      f.m.position.set(f.x, floor + lift + tread, f.z); f.m.rotation.y = -f.a - yaw + Math.PI / 2;
+    });
     return { x: lips[0].position.x, y: lips[0].position.y + 0.2, z: lips[0].position.z };
   }
 
@@ -152,7 +162,7 @@ export function create(c) {
       jumps: WORM.jumps, life: WORM.life * (0.85 + Math.random() * 0.3), dazed: 0.25 + Math.random() * 0.4, wait: 0, heading: a, phase: Math.random() * 6, dead: false, flat: 0 };
     worms.push(w);
     // One interaction per small one: either visitor may tread on their nearest.
-    w.use = c.use({x:w.x,z:w.z,r:WORM.tread,cone:-1,when:()=>!over && trodden(c.me(), [w])===0,use:()=>tread(w)});
+    w.use = c.use({x:w.x,z:w.z,r:WORM.tread,cone:-1,when:()=>!over && !w.dead && trodden(c.me(), [w])===0,use:()=>tread(w)});
   }
 
   /** E: a foot comes down on the nearest of them. */
@@ -264,6 +274,13 @@ export function create(c) {
       dying = Math.max(0, Math.min(1, progress));
       clock += dt * (1 - 0.85 * dying);
       pose(dt);
+      // her small ones go with her (the cast's rule: orphaned): one on the floor goes flat as a trodden one does, drawn here
+      // because her own update, which drew that, no longer runs; one that was in the air is already hidden
+      for (const w of worms) {
+        if (!w.orphaned || w.remove || w.flat >= 6) continue;
+        w.flat += dt;
+        w.g.position.set(w.x, env.world.floorY(w.x, w.z) + 0.012, w.z); w.g.scale.set(1.5, Math.max(0.08, 0.3 - w.flat), 1.5);
+      }
     },
     update(dt) {
       if (!group || over) return;
@@ -345,6 +362,10 @@ export function create(c) {
       const herself = { id: 'mother', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 0.9, r: G.r, priority: 2, snip: () => {
         const hit = c.struck(HEALTH.jab); if (!hit.ok) return false;
         if (!hit.killed) c.stall(HEALTH.flinch);
+        // (finished, her small ones go with her, at once: one in the air is gone, one on the floor goes flat as a jabbed
+        // one does. They are a danger to nobody from here on: she is not ticked again, and they are hers. For whoever
+        // draws it: each has `orphaned: true`, `dead: true`, and `flat` — 0.001, or 99 for one that was in the air)
+        else for (const w of worms) if (!w.dead && !w.remove) { const flying = !!w.air; w.air = null; w.dead = true; w.orphaned = true; w.flat = flying ? 99 : 0.001; if (flying) w.g.visible = false; }
         c.play('thunk', walker.x, walker.z, 12); c.survived();
         return { ok: true, target: 'mother' };
       } };

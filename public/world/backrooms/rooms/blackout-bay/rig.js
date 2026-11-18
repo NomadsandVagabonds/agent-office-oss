@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { M, glow } from '../../../vox/vox.js';
 import { buildCharacter, JOINT } from '../../../avatar/build.js';
+import { legsFor } from '../../walk-legs.js';
 import { Batch, lamp } from '../../kit.js';
 import {
   pallorLook, mottleHead, eraseNose, bulgingEye, hollowSocket,
@@ -119,6 +120,17 @@ export function buildStandIn(kit, who, idx = 0) {
   const mesh = new THREE.Mesh(kit.geometry(b, lights, amb), mat);
   const group = new THREE.Group();
   group.add(mesh);
+  // Its legs walk while it comes on in the dark (walk-legs.js), by how far the room has moved it: read as it is drawn, so
+  // nothing in the room has to ask (a frame behind, which nobody standing in the dark will see). Still, it is still.
+  const step = legsFor(mesh, { hip: JOINT.hipL[1] * S[1], knee: JOINT.kneeL[1] * S[1], stride: 0.85, swing: 0.5, fold: 0.85,
+    keep: (x) => Math.abs(x) > 7 * S[0] });                                          // (its arms hang past its knees: not legs)
+  let clock = 0, seen = null;
+  mesh.onBeforeRender = () => {
+    const now = (globalThis.performance?.now?.() ?? 0) / 1000;
+    if (seen !== null) clock += Math.min(0.1, Math.max(0, now - seen));
+    seen = now;
+    step(group.position.x, group.position.z, clock);
+  };
 
   return {
     group,
