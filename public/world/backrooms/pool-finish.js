@@ -134,13 +134,6 @@ export function finishPoolRoom(c,kind){
     }
   }else if(kind==='deep-end'){
     overheadRibs(c,b,[-D*.28,D*.28],H-.65);
-    // The submerged partition is a bolted pressure bulkhead with a double
-    // seam and drain mouths, rather than one plain wall stopping in water.
-    for(const sign of [-1,1])for(let x=-W/2+1.8;x<W/2-1.7;x+=.55){
-      const spans=sign>0&&Math.abs(x)<1.08?[[-.76,.50],[1.44,H-.05]]:[[-.76,H-.05]];
-      for(const [lo,hi] of spans)box(b,[x-.016,lo,sign*.15-.012],[x+.016,hi,sign*.15+.012],C.steel);
-      for(const y of [-.62,.25,1.65])box(b,[x-.038,y,sign*.17-.02],[x+.038,y+.07,sign*.17+.02],C.dark);
-    }
     for(const side of [-1,1]){
       const x=side*(W/2-1.72);
       pipe(c.flat,[x,-1.75,-D/2+2],[x,-1.75,D/2-2],.10,C.green);

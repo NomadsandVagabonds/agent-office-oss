@@ -9,10 +9,11 @@
 // kick `Space` to surface at the far diving tower.
 
 import {finishPoolRoom} from '../pool-finish.js';
-import * as THREE from 'three';
-import { Batch, WHITE } from '../kit.js';
+import { observationWall, divingBell } from './deep-end/observation.js';
+import { swimMural } from './deep-end/mural.js';
+import { WHITE } from '../kit.js';
 import {
-  poolTileTex, poolroom, natatoriumLight, createBasin, addTranslucent,
+  poolTileTex, poolroom, natatoriumLight, createBasin,
   poolSign, depthTile, poolLadderVox, lifeRingVox, placeVox,
   COPING, CHROME,
 } from '../waterpark.js';
@@ -67,10 +68,8 @@ export function build(c) {
     },
   });
 
-  // 1. The Submerged Office Partition hanging from the ceiling down to `y = -0.78 m` underwater!
-  c.pillar(0, 0, (bx1 - bx0) + 0.16, 0.24, { y0: wallBottomY, solid: false, skirting: false });
-  // Chrome drip-rail cap along the submerged bottom edge of the partition so you clearly see the gap underwater!
-  c.flat.box(bx0 - 0.05, wallBottomY - 0.04, -0.14, bx1 + 0.05, wallBottomY + 0.02, 0.14, CHROME);
+  observationWall(c, bx0-.08, bx1+.08, wallBottomY);
+  swimMural(c);
 
   // Garbled instruction sign mounted right on the front (+z) face of the hanging partition above the waterline
   const signKey = 'wp:divesign:' + (p.code || '404 FT');
@@ -106,11 +105,7 @@ export function build(c) {
   }
 
   // 4. Inverted Acrylic Air-Pocket Bell suspended underwater at `airBell` (refills breath mid-dive!)
-  const dome = new Batch();
-  const rB = airBell.r, bellY0 = -1.15, bellY1 = -0.52;
-  c.flat.box(airBell.x - rB, bellY1, airBell.z - rB, airBell.x + rB, bellY1 + 0.06, airBell.z + rB, CHROME);
-  dome.box(airBell.x - rB + 0.04, bellY0, airBell.z - rB + 0.04, airBell.x + rB - 0.04, bellY1, airBell.z + rB - 0.04, [0.82, 0.99, 1.0]);
-  addTranslucent(c, dome, { alpha: 0.36, side: THREE.DoubleSide, order: 3 });
+  divingBell(c,airBell);
 
   // 5. High Diving Springboard Platform on the far (-z) deck + Chrome Pool Ladders
   const bSide = p.boardSide || 1;
