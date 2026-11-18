@@ -392,22 +392,19 @@ export function alienMural(c, side, at, y, w = 3.4, h = 2.1, variant = 0, seed =
 /* ---- light-budget ceiling helper for large natatorium rooms --------------- */
 
 export function natatoriumLight(c, cols = 3, rows = 3, every = 1, power = 1.05) {
-  const { W, D, H, kit } = c;
-  const tube = lin(c.look.tube || '#e8fbff');
-  const on = c.shining('panel', kit.tex.panel(true), 2.5, tube);
-  const uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  // Each light is the shell's own (c.fitting): at Classic and Low the flat lit panel it always was, in the shell's batch,
+  // with this helper's lamp to every `every`-th, twelve at most; at Medium and High the sculpted fitting on the ceiling.
+  const { W, D, H } = c;
+  const tube = c.look.tube || '#e8fbff';
   const head = clamp(H / 2.6, 0.4, 2.5);
   let count = 0;
   for (let i = 0; i < cols; i++) {
     for (let j = 0; j < rows; j++) {
       const x = (Math.round((-W / 2 + (i + 0.5) * W / cols) / TILE - 0.5) + 0.5) * TILE;
       const z = Math.round((-D / 2 + (j + 0.5) * D / rows) / TILE) * TILE;
-      const y = H - 0.006;
-      on.quad([x - TILE / 2, y, z - TILE], [x + TILE / 2, y, z - TILE], [x + TILE / 2, y, z + TILE], [x - TILE / 2, y, z + TILE], WHITE, uv);
-      if ((i + j * 2) % every === 0 && count < 12) {
-        c.light(x, H - 0.14, z, tube, power * Math.pow(head, 1.45), { axis: [0, -1, 0], floor: 0.28, k: 3.6 * head, far: 15 * head });
-        count++;
-      }
+      const lit = (i + j * 2) % every === 0 && count < 12;
+      c.fitting(x, z, { y: H, tube, light: lit ? { power: power * Math.pow(head, 1.45), floor: 0.28, k: 3.6 * head, far: 15 * head } : false });
+      if (lit) count++;
     }
   }
 }

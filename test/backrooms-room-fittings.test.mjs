@@ -194,3 +194,67 @@ test('it reads nothing of the room\'s seeded stream and nothing random, and adds
   assert.deepEqual(a.rt.shadowBoxes, b.rt.shadowBoxes, 'nothing of a fitting is gathered as standing');
   assert.deepEqual(a.rt.colliders, b.rt.colliders);
 });
+
+// The waterpark's natatoriumLight() (waterpark.js) places its lights with c.fitting. Its body before, kept here as the
+// reference: the shell's panel by hand in 'panel', a lamp of its own to every `every`-th, twelve at most.
+function natatoriumBefore(c, cols = 3, rows = 3, every = 1, power = 1.05) {
+  const { W, D, H, kit } = c;
+  const tube = lin(c.look.tube || '#e8fbff');
+  const on = c.shining('panel', kit.tex.panel(true), 2.5, tube);
+  const uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  const head = Math.min(2.5, Math.max(0.4, H / 2.6));
+  let count = 0;
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < rows; j++) {
+      const x = (Math.round((-W / 2 + (i + 0.5) * W / cols) / TILE - 0.5) + 0.5) * TILE;
+      const z = Math.round((-D / 2 + (j + 0.5) * D / rows) / TILE) * TILE;
+      const y = H - 0.006;
+      on.quad([x - TILE / 2, y, z - TILE], [x + TILE / 2, y, z - TILE], [x + TILE / 2, y, z + TILE], [x - TILE / 2, y, z + TILE], [1, 1, 1], uv);
+      if ((i + j * 2) % every === 0 && count < 12) {
+        c.light(x, H - 0.14, z, tube, power * Math.pow(head, 1.45), { axis: [0, -1, 0], floor: 0.28, k: 3.6 * head, far: 15 * head });
+        count++;
+      }
+    }
+  }
+}
+
+test('the waterpark\'s natatoriumLight: every room that calls it is, at classic and low, what it was to the byte; at medium and high fitted', async (t) => {
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const { natatoriumLight } = await import(new URL('waterpark.js', B).href);
+  // the rooms that call it, and how (read from their own files, so a new one is not missed)
+  const calls = [];
+  for (const f of readdirSync(new URL('rooms/', B)).filter((n) => n.endsWith('.js')).sort()) {
+    const m = /natatoriumLight\(c(?:,\s*([^)]*))?\)/.exec(readFileSync(new URL(`rooms/${f}`, B), 'utf8'));
+    if (m) calls.push({ arch: f.slice(0, -3), args: (m[1] || '').split(',').filter((s) => s.trim()).map(Number) });
+  }
+  assert.deepEqual(calls.map((r) => r.arch), ['deep-end', 'kiddie-lagoon', 'lazy-river', 'wave-pool', 'whirlpool-flume']);
+  const dealt = (arch) => { for (let seed = 1; seed < 40; seed++) { const lv = generate(seed, { theme: 'waterpark', only: [arch] }), d = lv.rooms.find((r) => r.arch === arch); if (d) return { lv, d }; } return null; };
+  const build = async (lv, d, fn, { gfx, lighting }) => {
+    const kit = gfx ? createKit({ gfx }) : createKit();
+    const def = { ...d, id: 0, x: 0, z: 0, y: 0, rot: 0, doors: [], wins: [] };
+    const world = await buildWorld(kit, { ...lv, rooms: [def], links: [], windows: [] }, { catalogue: catalogueOf(kit), barricadesEnabled: false, lighting,
+      builders: { [d.arch]: (c) => { c.shell({ panels: false }); fn(c); c.crate(0.4, 0, 1, 1, 1); } } });
+    t.after(() => { world.dispose(); kit.dispose(); });
+    return { world, kit, rt: world.rooms[0] };
+  };
+  for (const { arch, args } of calls) {
+    const got = dealt(arch); assert.ok(got, `${arch} is dealt on a waterpark floor`);
+    const { lv, d } = got;
+    assert.ok(typeof d.look.tube === 'string', `${arch}: its look has a tube colour (else the helper's own and c.fitting's default would differ)`);
+    for (const gfx of [CLASSIC, LOW]) for (const lighting of [false, 'failing']) {
+      const was = await build(lv, d, (c) => natatoriumBefore(c, ...args), { gfx, lighting }), now = await build(lv, d, (c) => natatoriumLight(c, ...args), { gfx, lighting });
+      // (a room that is not a plain one is never given lighting banks: lighting.js planLighting)
+      assert.equal(now.rt.lighting, null);
+      assert.deepEqual(room(now), room(was), `${arch} ${JSON.stringify(args)} at ${gfx ? 'low' : 'classic'}, lighting ${lighting}`);
+      assert.equal(now.rt.lights.length, Math.min(12, Array.from({ length: (args[0] ?? 3) * (args[1] ?? 3) }, (_, k) => k).filter((k) => (Math.floor(k / (args[1] ?? 3)) + (k % (args[1] ?? 3)) * 2) % (args[2] ?? 1) === 0).length));
+    }
+    // medium and high: the same lamps, and the fitting in place of every panel (one housing and one louvre mesh)
+    for (const gfx of [MEDIUM, HIGH]) {
+      const was = await build(lv, d, (c) => natatoriumBefore(c, ...args), { gfx, lighting: false }), now = await build(lv, d, (c) => natatoriumLight(c, ...args), { gfx, lighting: false });
+      assert.deepEqual(now.rt.lights, was.rt.lights, `${arch}: the same lamps`);
+      const n = (args[0] ?? 3) * (args[1] ?? 3);
+      assert.equal(vertsOf(now.rt.panelMesh), n * GLOW_VERTS, `${arch}: every panel is a fitting`);
+      assert.equal(vox(now.rt).filter((m) => m.userData.detail).length, 1);
+    }
+  }
+});
