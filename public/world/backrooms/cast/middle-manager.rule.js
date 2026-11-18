@@ -8,8 +8,9 @@
 // what it has put on. When it is near you it stops, swells and goes off; full, it goes off wherever it is. What it goes
 // off with is everything it has put on: a thin one barely reaches you, a full one reaches across a room.
 //
-// So: watch it out of the corner of your eye, never straight at it; a jab finishes it at once (it is barely there), but at
-// arm's length it goes off on you; a shove puts it back a step, and a shove while it is swelling puts it off.
+// So: watch it out of the corner of your eye, never straight at it. It takes two jabs (cast/health.rule.js, medium): the
+// first cuts it, and it reels, lets out a puff of paper and some of what it has put on; the second sets it off, there and
+// then, at arm's length. A shove puts it back a step, and a shove while it is swelling puts it off.
 // It never stands in a doorway for long (doorway.rule.js): after a while there it goes a room away.
 
 export const MANAGER = Object.freeze({
@@ -57,6 +58,41 @@ export function bend(above, body) {
 
 /** How high its crown is, bent this far at the hips. */
 export const crown = (a, body) => body.hip + body.torso * Math.cos(a) + body.neck * Math.cos(a * MANAGER.neck) + body.head * Math.cos(a * MANAGER.head);
+
+/**
+ * Where it may go, and where not — all of it, in one place (the owner: "rues for where it can go and not go"). The walker
+ * (cast/walk.js) and its own file keep to this; a test holds each line.
+ */
+export const GOES = Object.freeze({
+  doors: 'never opens one: a shut door is a wall to it',
+  crawls: 'never: it is far too tall',
+  headroom: 'nowhere lower than MANAGER.ducks (it folds itself to that, and no further)',
+  doorways: 'never keeps one: doorway.rule.js, a room away and out of sight of it',
+  wayDown: 'never stands in it, and never goes there to get out of a doorway',
+  fire: 'backs off from one, and stops coming while it does (fire.rule.js)',
+  firstFloor: 'never on the floor you land on (cast.js deep)',
+  visitor: 'going out of a doorway it never goes into or through the room the visitor is in',
+});
+
+/** A jab that does not finish it: it reels, and some of what it has put on comes out of the cut. */
+export const CUT = Object.freeze({ lets: 0.15, puff: 14 });
+
+/** Cut: it lets out some of what it had put on and stands (the conductor stands it for HEALTH.flinch); swelling, it is put off it. */
+export const cut = (s) => (s.mode === 'gone' ? s : { ...s, mode: 'stands', fat: Math.max(0, s.fat - CUT.lets), speed: 0, swell: 0, looked: 0, t: 0 });
+
+/** How far its body and head are let out: by what it has put on, by how far it has swelled, and by its heaving when it is nearly full. */
+export function bloat(fat, swell = 0, time = 0) {
+  const f = Math.max(0, Math.min(1, fat)), w = Math.max(0, Math.min(1, swell));
+  const heave = f > 0.7 ? Math.sin(time * 3.2) * 0.05 * (f - 0.7) / 0.3 : 0;          // near full it breathes hard, and it shows
+  const pulse = w > 0 ? Math.sin(time * 24) * 0.07 * w : 0;                         // swelling to go off, it pulses, faster than breath
+  return {
+    body: 1 + w * 0.7 + heave + pulse,                                               // over the body it has at this fat
+    head: 1 + f * 0.45 + w * 0.25 + pulse * 0.6,
+    tall: 1 + f * 0.12 + w * 0.1,                                                    // (the head grows up as well as out)
+    arm: 1 + f * f * 1.2 + w * 0.35, hand: 1 + f * f * 0.8 + w * 0.3, leg: 1 + f * f * 1.7 + w * 0.25, neck: 1 + f * 1.4 + w * 0.4,          // (limbs late: they follow the belly)
+    shake: w * 0.04,
+  };
+}
 
 /** Where it starts: alone, standing, thin. */
 export const fresh = () => ({ mode: 'stands', fat: 0, speed: 0, looked: 0, since: Infinity, t: 0, met: false, swell: 0 });

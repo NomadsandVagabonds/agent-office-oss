@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { MANAGER as M, fresh, minds, eyed, off, popped, topSpeed, reach, blastAt, bend, crown as crownAt } from '../public/world/backrooms/cast/middle-manager.rule.js';
+import { MANAGER as M, GOES, CUT, fresh, minds, eyed, off, popped, cut, bloat, topSpeed, reach, blastAt, bend, crown as crownAt } from '../public/world/backrooms/cast/middle-manager.rule.js';
 import * as MODEL from '../public/world/backrooms/cast/middle-manager.model.js';
 import { CAST } from '../public/world/backrooms/cast.js';
 import { TIER, healthOf } from '../public/world/backrooms/cast/health.rule.js';
@@ -49,13 +49,16 @@ test('near you it stops and goes off a moment later; a shove in that moment puts
   f = run(f, M.ripens + 0.1, { eyed: false, d: 30 }); assert.equal(f.mode, 'gone');
 });
 
-test('what it goes off with is what it has put on; a jab sets it off at once, and it takes one', () => {
+test('what it goes off with is what it has put on; it takes two jabs: the first cuts it, the second sets it off', () => {
   assert.ok(reach(0) < reach(0.5) && reach(0.5) < reach(1));
   assert.equal(blastAt(0, M.near), 1, 'thin, near: a heart'); assert.equal(blastAt(0, reach(0) + 0.1), 0);
   assert.equal(blastAt(1, 1), 2); assert.equal(blastAt(1, reach(1) * 0.75), 1); assert.equal(blastAt(1, reach(1) + 0.1), 0);
   assert.ok(blastAt(0, 1.0) >= 1, 'a jab is at arm\'s length: inside even a thin one');
   const p = popped({ ...fresh(), fat: 0.3 }); assert.equal(p.mode, 'gone'); assert.equal(p.bursts, true); assert.equal(p.fat, 0.3);
-  assert.equal(TIER['middle-manager'], 'basic'); assert.equal(healthOf('middle-manager'), 1);
+  assert.equal(TIER['middle-manager'], 'medium'); assert.equal(healthOf('middle-manager'), 2);
+  // cut: it lets some of it out, stands, and is put off swelling; it keeps the rest
+  const c1 = cut({ ...fresh(), fat: 0.6, mode: 'swells', swell: 0.5 }); assert.equal(c1.mode, 'stands'); assert.ok(Math.abs(c1.fat - (0.6 - CUT.lets)) < 1e-9); assert.equal(c1.swell, 0);
+  assert.equal(cut({ ...fresh(), fat: 0.05 }).fat, 0); assert.equal(cut({ ...fresh(), mode: 'gone' }).mode, 'gone');
 });
 
 test('it is three metres and bends under a ceiling, further through a doorway, and its head is never in either', () => {
@@ -94,4 +97,31 @@ test('its line: it hunts, roams, is met further down, fears fire; a drawing warn
   const model = readFileSync(new URL('../public/world/backrooms/cast/middle-manager.model.js', import.meta.url), 'utf8');
   assert.ok(!/interfere/.test(src), 'no static from it'); assert.ok(!/tendril|tentacle/i.test(src + model), 'nothing out of its back');
   assert.match(model, /a size too short/);
+});
+
+test('the bloat: from nothing to bursting it more than doubles, head and arms and all; near full it heaves; swelling it pulses', () => {
+  const thin = bloat(0), full = bloat(1), going = bloat(1, 1, 0.3);
+  assert.deepEqual([thin.body, thin.head, thin.arm, thin.hand, thin.leg, thin.neck, thin.tall], [1, 1, 1, 1, 1, 1, 1]);
+  assert.ok(full.arm > 2 && full.leg > 2.5 && full.neck > 2 && bloat(0.5).arm < 1.4 && full.head >= 1.4, 'fed, every part of it swells');
+  assert.ok(going.body >= 1.6 && going.head > full.head, 'about to go, more still');
+  const heave = [0, 0.5, 1, 1.5].map((t) => bloat(1, 0, t).body), still = [0, 0.5, 1, 1.5].map((t) => bloat(0.4, 0, t).body);
+  assert.ok(Math.max(...heave) - Math.min(...heave) > 0.04, 'full, it breathes'); assert.ok(still.every((b) => b === 1), 'thin, it does not');
+  const pulse = [0, 0.05, 0.1, 0.15].map((t) => bloat(0.5, 1, t).body); assert.ok(Math.max(...pulse) - Math.min(...pulse) > 0.08, 'swelling, it pulses');
+  const src = readFileSync(new URL('../public/world/backrooms/cast/middle-manager.js', import.meta.url), 'utf8');
+  for (const part of ['B.arm', 'B.hand', 'B.leg', 'B.neck', 'B.head', 'B.tall', 'B.body']) assert.ok(src.includes(part), `${part} drives the picture`);
+  // its buttons go a third of the way to going off; cut, a puff of paper comes out of it
+  assert.match(src, /s\.swell > Mg\.swells \* 0\.35\) \{ popped2 = true;/); assert.match(src, /count: CUT\.puff/);
+});
+
+test('where it may go, and where not: one list, and each line is kept', () => {
+  assert.deepEqual(Object.keys(GOES).sort(), ['crawls', 'doors', 'doorways', 'fire', 'firstFloor', 'headroom', 'visitor', 'wayDown']);
+  const src = readFileSync(new URL('../public/world/backrooms/cast/middle-manager.js', import.meta.url), 'utf8'), walk = readFileSync(new URL('../public/world/backrooms/cast/walk.js', import.meta.url), 'utf8');
+  assert.match(src, /const walker = \{ x: 0, z: 0, r: Mg\.r, tall: Mg\.ducks, opens: false \};/, 'doors: it opens none · headroom and crawls: its walker is as tall as it can fold');
+  assert.match(walk, /rt\.def\.crawl && !a\.crawls && !flies\(a\)\) \|\| rt\.def\.H < a\.tall \+ 0\.05/, 'the walker keeps it out of crawls and rooms too low');
+  assert.match(walk, /if \(door\?\.isShut \? !a\.opens : !th\.open\) return Infinity;/, '…and behind shut doors');
+  assert.match(src, /kept = camps\(kept, dt, dw, c\.R\);/, 'doorways');
+  assert.match(src, /level\.rooms\[rid\]\?\.kind === 'exit' \|\| level\.rooms\[rid\]\?\.crawl\) continue;/, 'never out of a doorway into the way down');
+  assert.match(src, /fear = afraid\(fear, dt,/, 'fire');
+  assert.equal(CAST.find((k) => k.id === 'middle-manager').deep, true, 'not the first floor');
+  assert.match(src, /\(roomPath\(level, here\.id, rid\) \|\| \[\]\)\.slice\(1\)\.includes\(mine\)\) continue;/, 'nor through the visitor\'s room');
 });

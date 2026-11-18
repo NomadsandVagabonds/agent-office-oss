@@ -23,8 +23,8 @@ export const HEALTH = Object.freeze({
 /** Who is in which. (The small ones are not of the cast: they are bodies of somebody who is.) */
 export const TIER = Object.freeze({
   'the-lines': 'boss', 'standing-meeting': 'boss', mother: 'boss', 'carried-interest': 'boss', 'head-count': 'boss',
-  pirate: 'medium', 'trunk-line': 'medium', toner: 'medium', intern: 'medium',
-  shadow: 'basic', 'toner-brood': 'basic', 'mother-brood': 'basic', 'middle-manager': 'basic',
+  pirate: 'medium', 'trunk-line': 'medium', toner: 'medium', intern: 'medium', 'middle-manager': 'medium',
+  shadow: 'basic', 'toner-brood': 'basic', 'mother-brood': 'basic',
   // somebody a room keeps (resident.js): the waterpark's
   'guard-stand': 'medium', 'lane-keeper': 'medium', 'flume-toner': 'medium', 'plenum-toner': 'medium',
   'inverted-bathers': 'basic', 'towel-return': 'basic', 'pool-skimmer': 'basic',

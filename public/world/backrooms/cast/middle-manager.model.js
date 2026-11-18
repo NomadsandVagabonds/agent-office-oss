@@ -35,35 +35,46 @@ function lathe(v, len, r, color, depth = 1, x0 = 0, z0 = 0) {
   return v;
 }
 
-/** Its body from the hips (y 0) to the shoulders (y TORSO). `full`: the same suit with too much in it. */
+/**
+ * Its body from the hips (y 0) to the shoulders (y TORSO). `full`: the same suit with far too much in it — the belly has come
+ * through the shirt, the buttons have gone, and the seams have split down both sides, and what it is full of shows through
+ * every split: paper.
+ */
 export function torsoVox(full = false) {
-  const v = new Vox(), suit = M(SUIT, 0), suit2 = M(SUIT2, 0), shirt = M(SHIRT, 0), tie = M(TIE, 0), skin = M(SKIN2, 0), button = M('#08080a', 0);
-  const tie2 = M(TIE2, 0), strap = M(LANYARD, 0), card = M('#ece9df', 0), blank = M('#b9b4a8', 0), band = M(LANYARD, 0), clip = M('#9a9a96', 0);
-  // thin: a waist like a wrist, a narrow chest, and the shoulders squared by the jacket. Full: round, lowest at the belly
-  const w = full ? (k) => 15 + Math.sin(Math.min(1, k * 1.12) * Math.PI) * 17 + (k > 0.86 ? (k - 0.86) * 30 : 0) : (k) => 7 + k * 5 + (k > 0.84 ? (k - 0.84) * 45 : 0);
-  const d = full ? 0.95 : 0.62;
+  const v = new Vox(), suit = M(SUIT, 0), suit2 = M(SUIT2, 0), shirt = M(SHIRT, 0), tie = M(TIE, 0), tie2 = M(TIE2, 0), skin = M(SKIN2, 0), belly = M(SKIN, 0), navel = M(SKIN3, 0), button = M('#08080a', 0);
+  const strap = M(LANYARD, 0), card = M('#ece9df', 0), blank = M('#b9b4a8', 0), band = M(LANYARD, 0), clip = M('#9a9a96', 0), paper = M('#f3f0e6', 0), paper2 = M('#e2dccb', 0);
+  // thin: a waist like a wrist, a narrow chest, and the shoulders squared by the jacket. Full: round as a sack, lowest at the belly
+  const w = full ? (k) => 18 + Math.sin(Math.min(1, k * 1.15) * Math.PI) * 26 + (k > 0.86 ? (k - 0.86) * 40 : 0) : (k) => 7 + k * 5 + (k > 0.84 ? (k - 0.84) * 45 : 0);
+  const d = full ? 1.0 : 0.62;
   lathe(v, TORSO, w, (x, y, z, k) => {
-    const rx = w(k), front = z > rx * d * 0.5;
-    // the jacket opens on the shirt in a long V; full, it does not close at all, and the shirt is open between its buttons
-    const open = full ? Math.abs(x) < 5 + k * 9 : k > 0.42 && Math.abs(x) < (k - 0.42) * 22 + 1;
+    const rx = w(k), front = z > rx * d * 0.45;
     if (y < 3) return suit2;
-    if (front && open) return full && k < 0.7 && Math.abs(x) < 2 && y % 10 > 6 ? skin : shirt;
+    if (!full) return front && k > 0.42 && Math.abs(x) < (k - 0.42) * 22 + 1 ? shirt : Math.abs(x) > rx * 0.82 ? suit2 : suit;
+    // full: the jacket open as far as it will go; between its edges the shirt, and through the shirt, low down, the belly
+    const open = Math.abs(x) < 9 + k * 12, gape = k < 0.62 && Math.abs(x) < 15 - k * 12;
+    // the seams down its sides have gone: paper in the splits
+    if (Math.abs(Math.abs(x) - rx * 0.93) < 1.2 && Math.abs(z) < rx * 0.35 && y % 5 < 3) return y % 2 ? paper : paper2;
+    if (front && gape) return y === 14 && Math.abs(x) < 2 ? navel : belly;
+    if (front && open) return Math.abs(Math.abs(x) - (15 - k * 12)) < 1.5 && y % 3 === 0 ? paper : shirt;          // (and at the torn edge of the shirt)
     return Math.abs(x) > rx * 0.82 ? suit2 : suit;
   }, d);
-  const front = (x, y) => { let z = 60; while (z > -60 && !v.has(x, y, z)) z--; return z; };
-  // the tie: narrow and dark, from the collar down; full, it lies on top of the belly and stops well short
-  const tieFrom = full ? Math.round(TORSO * 0.5) : Math.round(TORSO * 0.18);
+  // full: the belly comes out further in front than the rest of it
+  if (full) v.ellipsoid(0, Math.round(TORSO * 0.32), Math.round(w(0.32) * 0.75), 17, 15, 10, (x, y, z) => (z > 0 && Math.abs(x) < 15 - (y / TORSO) * 12 ? (y === 14 && Math.abs(x) < 2 ? navel : belly) : suit));
+  const front = (x, y) => { let z = 90; while (z > -90 && !v.has(x, y, z)) z--; return z; };
+  // the tie: narrow, from the collar down; full, it lies on top of the belly and stops well short
+  const tieFrom = full ? Math.round(TORSO * 0.55) : Math.round(TORSO * 0.18);
   for (let y = tieFrom; y <= TORSO - 2; y++) { const wd = y > TORSO - 6 ? 2 : y < tieFrom + 4 ? 2 : 1; for (let x = -wd; x <= wd; x++) v.set(x, y, front(x, y) + 1, (x + y) % 5 < 2 ? tie2 : tie); }          // (a dull diagonal stripe)
-  // buttons: done up when it is thin; strained apart when it is full
-  for (const y of full ? [14, 24, 34] : [16, 26]) { if (full) for (const sx of [-1, 1]) v.set(sx * (7 + (y % 3)), y, front(sx * 7, y), button); else v.set(2, y, front(2, y) + 1, button); }
+  // buttons: done up when it is thin; full, one left hanging by a thread at the top of the gape
+  if (full) { v.set(6, Math.round(TORSO * 0.62), front(6, Math.round(TORSO * 0.62)) + 1, button); }
+  else for (const y of [16, 26]) v.set(2, y, front(2, y) + 1, button);
   // the lanyard, round its neck and down, and the badge on it, big, at the middle of its chest: its photograph is as blank
   // as its face. Full, the lanyard is pulled taut over the belly and the badge rides up on it
-  const bx = full ? -5 : -4, by = full ? 44 : 30, bw = 10, bh = 14;
+  const bx = full ? -5 : -4, by = full ? 46 : 30, bw = 10, bh = 14;
   for (const sx of [-1, 1]) for (let y = by + bh; y <= TORSO - 1; y++) { const x = Math.round(sx * (2 + (y - by - bh) * (full ? 0.5 : 0.18))); v.set(x, y, front(x, y) + 1, strap); }
   for (let x = bx; x <= bx + bw - 1; x++) for (let y = by; y <= by + bh - 1; y++) v.set(x, y, front(x, y) + 2, y >= by + bh - 3 ? band : x > bx + 2 && x < bx + 7 && y > by + 3 && y < by + 9 ? blank : card);
   v.set(bx + 4, by + bh, front(bx + 4, by + bh) + 2, clip); v.set(bx + 5, by + bh, front(bx + 5, by + bh) + 2, clip);
-  // the jacket's shoulders: squared, sharp
-  for (const sx of [-1, 1]) v.ellipsoid(sx * (full ? 30 : 13), TORSO - 3, 0, full ? 8 : 6, 4, full ? 10 : 6, suit);
+  // the jacket's shoulders: squared, sharp; full, it has ridden up on them
+  for (const sx of [-1, 1]) v.ellipsoid(sx * (full ? 34 : 13), TORSO - 3, 0, full ? 9 : 6, 4, full ? 11 : 6, suit);
   return v;
 }
 
@@ -116,19 +127,33 @@ export function headVox(face = 0) {
   return v;
 }
 
-/** An arm's length of sleeve, along +y, `len` voxels, narrowing; `cuff`: it is too short — a band of shirt cuff, then the wrist. */
-export function sleeveVox(len, cuff = false, wide = 4.6) {
-  const v = new Vox(), suit = M(SUIT, 0), shirt = M(SHIRT, 0), skin = M(SKIN2, 0);
-  lathe(v, len, (k) => (cuff && k > 0.86 ? 2.6 : wide - k * 1.3), (x, y) => (cuff && y > len * 0.92 ? skin : cuff && y > len * 0.82 ? shirt : suit));
+/**
+ * An arm's length of sleeve, along +y, `len` voxels, narrowing, with the creases a sleeve has at the elbow and a fold or two
+ * between. `cuff`: the forearm. It is too short: two buttons at the cuff, a band of shirt, then the wrist; `watch`: on that
+ * wrist, a cheap watch on a black strap.
+ */
+export function sleeveVox(len, cuff = false, wide = 4.6, watch = false) {
+  const v = new Vox(), suit = M(SUIT, 0), fold = M(SUIT2, 0), shirt = M(SHIRT, 0), skin = M(SKIN2, 0), button = M('#14120f', 0), strap = M('#101012', 0), face = M('#c9c7bd', 0), rim = M('#8f8d86', 0);
+  const r = (k) => (cuff && k > 0.86 ? 2.6 : wide - k * 1.3 + (!cuff && k > 0.9 ? 0.5 : 0) + (cuff && k < 0.08 ? 0.6 : 0));          // (the elbow, where the two meet)
+  lathe(v, len, r, (x, y, z, k) => {
+    if (cuff && y > len * 0.92) return watch && y > len * 0.93 && y < len * 0.97 ? strap : skin;
+    if (cuff && y > len * 0.82) return shirt;
+    // creases: across the inside of the elbow, and a fold or two down the length, a shade darker
+    if (!cuff && k > 0.86 && z < 0) return fold;
+    if (Math.abs(Math.sin(k * 9 + x * 0.4)) < 0.12 && z < 1) return fold;
+    return suit;
+  });
+  if (cuff) { const y = Math.round(len * 0.8); v.set(2, y, -3, button); v.set(2, y - 2, -3, button); }
+  if (cuff && watch) { const y = Math.round(len * 0.95); for (let x = -1; x <= 1; x++) for (let dy = -1; dy <= 1; dy++) v.set(x, y + dy, 3, Math.abs(x) + Math.abs(dy) === 2 ? rim : face); }
   return v;
 }
 
-/** A hand: long, pale, the fingers apart and too long by a joint, a little curled. Along +y from the wrist. */
+/** A hand: long, pale, the fingers apart and too long by a joint, a little curled, the knuckles standing out. Along +y from the wrist. */
 export function handVox() {
-  const v = new Vox(), skin = M(SKIN2, 0), knuckle = M(SKIN3, 0);
+  const v = new Vox(), skin = M(SKIN2, 0), knuckle = M(SKIN3, 0), nail = M('#e3d6c6', 0);
   lathe(v, 7, (k) => 3.2 - k * 0.4, skin, 0.55);
   for (const [x, len, curl] of [[-3, 15, 1], [-1, 19, 2], [1, 19, 2], [3, 16, 1]]) {
-    for (let y = 7; y <= 7 + len; y++) { const z = Math.round(((y - 7) / len) ** 2 * curl * 2); v.set(x, y, z, (y - 7) % 7 === 6 ? knuckle : skin); }
+    for (let y = 7; y <= 7 + len; y++) { const z = Math.round(((y - 7) / len) ** 2 * curl * 2), j = (y - 7) % 7 === 0; v.set(x, y, z, j ? knuckle : y === 7 + len ? nail : skin); if (j) v.set(x, y, z + 1, knuckle); }
   }
   for (let y = 0; y <= 10; y++) v.set(-4 - Math.round(y * 0.25), y + 1, Math.round(y * 0.3), skin);         // the thumb
   return v;

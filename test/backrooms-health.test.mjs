@@ -12,8 +12,8 @@ test('the tiers are the owner\'s: basic 1, medium 2, boss 3; a jab takes 1', () 
   const by = (tier) => Object.keys(TIER).filter((id) => TIER[id] === tier).sort();
   assert.deepEqual(by('boss'), ['carried-interest', 'head-count', 'mother', 'standing-meeting', 'the-lines']);
   // (…and somebody a room keeps, resident.js: the waterpark's, as the owner said, "waterpark residents get health too")
-  assert.deepEqual(by('medium'), ['flume-toner', 'guard-stand', 'intern', 'lane-keeper', 'pirate', 'plenum-toner', 'toner', 'trunk-line']);
-  assert.deepEqual(by('basic'), ['inverted-bathers', 'middle-manager', 'mother-brood', 'pool-skimmer', 'shadow', 'toner-brood', 'towel-return']);
+  assert.deepEqual(by('medium'), ['flume-toner', 'guard-stand', 'intern', 'lane-keeper', 'middle-manager', 'pirate', 'plenum-toner', 'toner', 'trunk-line']);
+  assert.deepEqual(by('basic'), ['inverted-bathers', 'mother-brood', 'pool-skimmer', 'shadow', 'toner-brood', 'towel-return']);
   assert.deepEqual([...UNHITTABLE].sort(), ['dummies', 'moth', 'other-door', 'porter']);
   for (const id of UNHITTABLE) { assert.equal(healthOf(id), 0); assert.equal(fresh(id), null); }
   // every one of the cast is in the table or in the list of those that cannot be hit: nobody is forgotten

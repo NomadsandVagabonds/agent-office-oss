@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { roomDistances, roomPath } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
-import { MANAGER, fresh, minds, eyed, off, popped, blastAt, reach, bend } from './middle-manager.rule.js';
+import { MANAGER, CUT, fresh, minds, eyed, off, popped, cut, bloat, blastAt, reach, bend } from './middle-manager.rule.js';
 import { SHOVE, slide } from '../shove.rule.js';
 import { HEALTH } from './health.rule.js';
 import { canLeave } from './paths.js';
@@ -26,7 +26,7 @@ export function create(c) {
   const env = c.env, level = c.level, Mg = MANAGER;
   const walker = { x: 0, z: 0, r: Mg.r, tall: Mg.ducks, opens: false };
   let s = fresh(), fear = unafraid(), group = null, mat = null, thin = null, full = null, neck = null, head = null, heads = [], limbs = [], shoes = [];
-  let rot = 0, lean = 0, phase = 0, clock = 0, lastX = 0, lastZ = 0, known = false, over = false, wanderT = 0, goal = null, goalT = 0, leaving = false, kept = unkept(c.R), debris = null;
+  let reel = 0, popped2 = false, extras = [], rot = 0, lean = 0, phase = 0, clock = 0, lastX = 0, lastZ = 0, known = false, over = false, wanderT = 0, goal = null, goalT = 0, leaving = false, kept = unkept(c.R), debris = null;
   const doors = new Map();
   const vx = new THREE.Vector3(), vy = new THREE.Vector3(), vz = new THREE.Vector3(), basis = new THREE.Matrix4();
 
@@ -54,13 +54,13 @@ export function create(c) {
     walker.x = lastX = spot.x; walker.z = lastZ = spot.z; rot = c.R.range(0, Math.PI * 2); wanderT = c.R.range(Mg.wanders[0], Mg.wanders[1]);
     mat = env.kit.surface({ vox: true, wet: 0.2 });
     group = new THREE.Group();
-    thin = part(geo('manager:torso:thin3', () => torsoVox(false))); full = part(geo('manager:torso:full3', () => torsoVox(true).downsample(2), 2));          // (big enough to be built at half the grain) full.visible = false;
+    thin = part(geo('manager:torso:thin3', () => torsoVox(false))); full = part(geo('manager:torso:full4', () => torsoVox(true).downsample(2), 2));          // (big enough to be built at half the grain) full.visible = false;
     neck = part(geo('manager:neck', neckVox));
     // its face, as fed as it is: sad, nothing, pleased, the grin (the owner's). One head each; the one it has on is shown
     heads = Array.from({ length: FACES }, (_, f) => part(geo(`manager:head3:${f}`, () => headVox(f)))); head = heads[0];
-    const upper = geo('manager:upper2', () => sleeveVox(UPPER)), fore = geo('manager:fore2', () => sleeveVox(FORE, true)), hand = geo('manager:hand2', handVox);
+    const upper = geo('manager:upper3', () => sleeveVox(UPPER)), fore = geo('manager:fore3', () => sleeveVox(FORE, true)), watch = geo('manager:fore3:watch', () => sleeveVox(FORE, true, 4.6, true)), hand = geo('manager:hand3', handVox);
     const thigh = geo('manager:thigh', () => trouserVox(THIGH)), shin = geo('manager:shin2', () => trouserVox(SHIN, 5.2, true)), shoe = geo('manager:shoe', shoeVox);
-    for (const side of [-1, 1]) limbs.push({ arm: true, side, a: part(upper), b: part(fore), end: part(hand) });
+    for (const side of [-1, 1]) limbs.push({ arm: true, side, a: part(upper), b: part(side < 0 ? watch : fore), end: part(hand) });          // (a watch on its left wrist)
     for (const side of [-1, 1]) { limbs.push({ arm: false, side, a: part(thigh), b: part(shin), end: null }); shoes.push(part(shoe)); }
     c.add(group);
     // (gone off, it is nobody's to walk round: its body is let go)
@@ -102,9 +102,10 @@ export function create(c) {
   /** Stand it: legs from the floor, the body folded under what is above it, the arms hanging, the head down and on them. */
   function pose(dt, moved, m) {
     const floor = env.world.floorY(walker.x, walker.z), fx = Math.sin(rot), fz = Math.cos(rot), px = Math.cos(rot), pz = -Math.sin(rot);
-    const fat = s.fat, swell = s.mode === 'swells' ? Math.min(1, s.swell / Mg.swells) : 0, shake = swell * Math.sin(clock * 38) * 0.03;
+    const fat = s.fat, swell = s.mode === 'swells' ? Math.min(1, s.swell / Mg.swells) : 0, B = bloat(fat, swell, clock), shake = B.shake * Math.sin(clock * 38);
     // how far it has to bend to keep its head under what is above it, and a little more when it is coming for you
-    const want = Math.min(1.45, bend(above(), BODY) + (s.mode === 'comes' ? 0.12 : 0) + swell * 0.15);
+    // (cut, it reels: up and back off the bend, its arms thrown out — flinch())
+    const want = Math.max(-0.35, Math.min(1.45, bend(above(), BODY) + (s.mode === 'comes' ? 0.12 : 0) + swell * 0.15 - reel * 0.7));
     lean += (want - lean) * Math.min(1, dt * 4 || 1);
     // its walk: long, slow strides, whatever its speed; the knees always a little bent
     const stride = 0.55 + 0.25 * (1 - fat);
@@ -113,19 +114,19 @@ export function create(c) {
     const hip = { x: walker.x - fx * hipBack, y: floor + BODY.hip - kneel + Math.abs(Math.sin(phase)) * 0.02, z: walker.z - fz * hipBack };
     const dir = { x: fx * Math.sin(lean), y: Math.cos(lean), z: fz * Math.sin(lean) }, front = { x: fx * Math.cos(lean), y: -Math.sin(lean), z: fz * Math.cos(lean) };
     // the body: thin, let out as it fattens; past half, the full one, let out the rest of the way
-    const widen = 1 + swell * 0.45 + shake;
+    const widen = B.body + shake;
     thin.visible = fat < 0.5; full.visible = !thin.visible;
-    const body = thin.visible ? thin : full, wide = (thin.visible ? 1 + fat * 1.3 : 0.5 + (fat - 0.5)) * widen;
+    const body = thin.visible ? thin : full, wide = (thin.visible ? 1 + fat * 1.3 : 0.375 + (fat - 0.5) * 1.25) * widen;          // (the full body is four times the thin one's width: they meet at half)
     body.position.set(hip.x, hip.y, hip.z); aim(body, dir.x, dir.y, dir.z, front.x, front.y, front.z, T, T, wide);
-    const sh = { x: hip.x + dir.x * T, y: hip.y + dir.y * T, z: hip.z + dir.z * T }, half = 0.17 + fat * 0.22 + swell * 0.06;
+    const sh = { x: hip.x + dir.x * T, y: hip.y + dir.y * T, z: hip.z + dir.z * T }, half = 0.17 + fat * 0.38 + swell * 0.12;
     // the neck and the head: down further than the body, and turned to whoever it is having its meeting with
     const na = lean * Mg.neck, ha = lean * Mg.head, nd = { x: fx * Math.sin(na), y: Math.cos(na), z: fz * Math.sin(na) };
-    neck.position.set(sh.x, sh.y, sh.z); aim(neck, nd.x, nd.y, nd.z, fx * Math.cos(na), -Math.sin(na), fz * Math.cos(na), N, N, 1 + fat * 0.6);
+    neck.position.set(sh.x, sh.y, sh.z); aim(neck, nd.x, nd.y, nd.z, fx * Math.cos(na), -Math.sin(na), fz * Math.cos(na), N, N, B.neck);
     const hb = { x: sh.x + nd.x * N, y: sh.y + nd.y * N, z: sh.z + nd.z * N };
     const look = m ? Math.atan2(m.x - hb.x, m.z - hb.z) : rot, turn = Math.atan2(Math.sin(look - rot), Math.cos(look - rot)), tl = Math.max(-1, Math.min(1, turn));
     const face = swell > 0 || fat >= 0.8 ? 3 : fat >= 0.5 ? 2 : fat >= 0.22 ? 1 : 0;
     heads.forEach((h, f) => { h.visible = f === face; }); head = heads[face];
-    head.position.set(hb.x, hb.y, hb.z); aim(head, Math.sin(rot + tl) * Math.sin(ha), Math.cos(ha), Math.cos(rot + tl) * Math.sin(ha), Math.sin(rot + tl) * Math.cos(ha), -Math.sin(ha), Math.cos(rot + tl) * Math.cos(ha), 1, 1, 1 + fat * 0.25);
+    head.position.set(hb.x, hb.y, hb.z); aim(head, Math.sin(rot + tl) * Math.sin(ha), Math.cos(ha), Math.cos(rot + tl) * Math.sin(ha), Math.sin(rot + tl) * Math.cos(ha), -Math.sin(ha), Math.cos(rot + tl) * Math.cos(ha), 1, 1, B.head); head.scale.y = B.tall;          // (fed, the head swells too)
     head.rotateZ(Math.sin(clock * 0.7) * 0.06 + shake * 2);
     const swing = moved > 0 ? Math.sin(phase) : 0;
     limbs.forEach((l, i) => {
@@ -133,13 +134,13 @@ export function create(c) {
         // its arms hang, long; coming for you they swing; swelling, they lift from its sides
         const j = { x: sh.x + px * l.side * half, y: sh.y - 0.04, z: sh.z + pz * l.side * half };
         const reachOut = s.mode === 'comes' ? 0.35 : 0, sw = -l.side * swing * 0.35;
-        const hand = { x: j.x + fx * (reachOut + sw) + px * l.side * (0.06 + swell * 0.5 + fat * 0.12), y: j.y - (U + F) * (0.97 - swell * 0.35) + reachOut * 0.3, z: j.z + fz * (reachOut + sw) + pz * l.side * (0.06 + swell * 0.5 + fat * 0.12) };
+        const hand = { x: j.x + fx * (reachOut + sw) + px * l.side * (0.06 + swell * 0.5 + fat * 0.3 + reel * 0.6), y: j.y - (U + F) * (0.97 - swell * 0.35 - reel * 0.3) + reachOut * 0.3, z: j.z + fz * (reachOut + sw) + pz * l.side * (0.06 + swell * 0.5 + fat * 0.3 + reel * 0.6) };
         const e = elbow(j, hand, U, F, { x: -fx * 2 + px * l.side, z: -fz * 2 + pz * l.side });
-        l.a.position.set(j.x, j.y, j.z); aim(l.a, e.x - j.x, e.y - j.y, e.z - j.z, fx, 0, fz, U, U, 1 + fat * 0.5);
+        l.a.position.set(j.x, j.y, j.z); aim(l.a, e.x - j.x, e.y - j.y, e.z - j.z, fx, 0, fz, U, U, B.arm);
         const hl = Math.min(F, Math.hypot(hand.x - e.x, hand.y - e.y, hand.z - e.z));
-        l.b.position.set(e.x, e.y, e.z); aim(l.b, hand.x - e.x, hand.y - e.y, hand.z - e.z, fx, 0, fz, F, F, 1 + fat * 0.4);
+        l.b.position.set(e.x, e.y, e.z); aim(l.b, hand.x - e.x, hand.y - e.y, hand.z - e.z, fx, 0, fz, F, F, B.arm * 0.92);
         const hx = e.x + (hand.x - e.x) / (hl || 1) * F, hy = e.y + (hand.y - e.y) / (hl || 1) * F, hz = e.z + (hand.z - e.z) / (hl || 1) * F;
-        l.end.position.set(hx, hy, hz); aim(l.end, hand.x - e.x, hand.y - e.y, hand.z - e.z, fx, 0, fz, HAND * S, HAND * S, 1);
+        l.end.position.set(hx, hy, hz); aim(l.end, hand.x - e.x, hand.y - e.y, hand.z - e.z, fx, 0, fz, HAND * S, HAND * S, B.hand);
       } else {
         // its feet: one in front of the other, the far one lifting
         const ph = phase + (l.side > 0 ? Math.PI : 0), fore = moved > 0 || s.speed > 0 ? Math.sin(ph) * stride * 0.5 : 0, lift = moved > 0 ? Math.max(0, Math.cos(ph)) * 0.12 : 0;
@@ -147,8 +148,8 @@ export function create(c) {
         const ax = walker.x + px * l.side * (0.12 + fat * 0.1) + fx * fore, az = walker.z + pz * l.side * (0.12 + fat * 0.1) + fz * fore;
         const ankle = { x: ax, y: env.world.floorY(ax, az) + FOOT + lift, z: az };
         const e = elbow(j, ankle, TH, SH, { x: fx * 3, z: fz * 3 });
-        l.a.position.set(j.x, j.y, j.z); aim(l.a, e.x - j.x, e.y - j.y, e.z - j.z, fx, 0, fz, TH, TH, 1 + fat * 0.5);
-        l.b.position.set(e.x, e.y, e.z); aim(l.b, ankle.x - e.x, ankle.y - e.y, ankle.z - e.z, fx, 0, fz, SH, SH, 1 + fat * 0.3);
+        l.a.position.set(j.x, j.y, j.z); aim(l.a, e.x - j.x, e.y - j.y, e.z - j.z, fx, 0, fz, TH, TH, B.leg);
+        l.b.position.set(e.x, e.y, e.z); aim(l.b, ankle.x - e.x, ankle.y - e.y, ankle.z - e.z, fx, 0, fz, SH, SH, 1 + (B.leg - 1) * 0.6);
         const shoe = shoes[i - 2]; shoe.position.set(ankle.x, ankle.y, ankle.z); shoe.rotation.set(-lift * 1.5, rot, 0);
       }
     });
@@ -174,15 +175,16 @@ export function create(c) {
   }
 
   /** A burst of paper: torn sheets that fly out as far as it reached, and come down and lie there. */
-  function spill(at, fat) {
-    const count = 40 + Math.round(fat * 60), floor = env.world.floorY(at.x, at.z);
-    const geom = new THREE.PlaneGeometry(0.16, 0.2), paper = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+  /** Things thrown out of it: { count, colours, size [w, h], far (metres they go), y (how high above the floor they start), up } — paper by default. */
+  function spill(at, fat, o = {}) {
+    const count = o.count ?? 40 + Math.round(fat * 60), floor = env.world.floorY(at.x, at.z), colours = o.colours ?? PAPER;
+    const geom = new THREE.PlaneGeometry(...(o.size ?? [0.16, 0.2])), paper = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
     const mesh = new THREE.InstancedMesh(geom, paper, count), bits = [], col = new THREE.Color(), q = new THREE.Quaternion(), e = new THREE.Euler(), one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), mx = new THREE.Matrix4();
-    const out = reach(fat) * 1.4;
+    const out = o.far ?? reach(fat) * 1.4, y0 = o.y ?? 1.6, up = o.up ?? 3;
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2, sp = (0.4 + Math.random()) * out;
-      bits.push({ x: at.x, y: floor + 1.6 + Math.random() * 0.6, z: at.z, vx: Math.sin(a) * sp, vy: 1 + Math.random() * 3, vz: Math.cos(a) * sp, rx: Math.random() * 6, ry: Math.random() * 6, spin: (Math.random() - 0.5) * 18, down: false });
-      mesh.setColorAt(i, col.set(PAPER[i % PAPER.length]));
+      bits.push({ x: at.x, y: floor + y0 + Math.random() * 0.6, z: at.z, vx: Math.sin(a) * sp, vy: 1 + Math.random() * up, vz: Math.cos(a) * sp, rx: Math.random() * 6, ry: Math.random() * 6, spin: (Math.random() - 0.5) * 18, down: false });
+      mesh.setColorAt(i, col.set(colours[i % colours.length]));
     }
     const L = c.light(at.x, at.z, 1); paper.color.setRGB(Math.min(1, L[0] * 1.6 + 0.15), Math.min(1, L[1] * 1.6 + 0.15), Math.min(1, L[2] * 1.6 + 0.15));
     mesh.frustumCulled = false;          // (its sheets fly anywhere in the room; a bound worked out before they flew would hide them)
@@ -234,12 +236,19 @@ export function create(c) {
   return {
     ready,
     /** Its going (cast/health.rule.js): it went off when it was jabbed; what is left of it is the paper, coming down. */
-    dies(progress, dt = 0) { if (debris && dt > 0) debris.tick(dt); },
+    dies(progress, dt = 0) { if (dt > 0) { if (debris) debris.tick(dt); for (const e of extras) e.tick(dt); } },
+    /** Cut and standing (the conductor stands it for HEALTH.flinch): it reels up and back off its stoop, arms thrown out, and comes back. */
+    flinch(hurt, dt = 0) {
+      if (!group || over || hurt == null || !(hurt < HEALTH.flinch)) return;
+      clock += dt; for (const e of extras) e.tick(dt);
+      reel = Math.exp(-hurt * 5) * Math.min(1, hurt * 30); pose(dt, 0, c.me()); reel = 0;
+    },
     /** Finished, the paper lies where it came down. */
     fell() { return !!group; },
     update(dt) {
       if (!group) return;
       clock += dt;
+      for (const e of extras) e.tick(dt);
       if (debris) { debris.tick(dt); return; }
       if (over) return;
       const m = c.me(), dx = walker.x - m.x, dz = walker.z - m.z, d = Math.hypot(dx, dz);
@@ -256,7 +265,9 @@ export function create(c) {
       } else {
         s = minds(s, dt, { eyed: eye, d });
         if (s.meets) c.play('ding', walker.x, walker.z, 10);
-        if (s.swelling) c.play('creak', walker.x, walker.z, 12);
+        if (s.swelling) { c.play('creak', walker.x, walker.z, 12); popped2 = false; }
+        // a third of the way to going off, its buttons go: they fly off it and lie where they land
+        if (s.mode === 'swells' && !popped2 && s.swell > Mg.swells * 0.35) { popped2 = true; c.play('click', walker.x, walker.z, 9); extras.push(spill({ x: walker.x + Math.sin(rot) * 0.3, z: walker.z + Math.cos(rot) * 0.3 }, s.fat, { count: 5, colours: ['#14120f', '#1d1a16'], size: [0.035, 0.035], far: 2.2, y: 1.3, up: 2 })); }
         // (its tell is all in its body: it swells, it shakes, its arms lift, its buttons go, and the cloth creaks. Nothing of the picture)
         if (s.mode === 'swells' && Math.random() < dt * 6) c.play('squeak', walker.x, walker.z, 8);
         if (s.bursts) { burst(); return; }
@@ -280,13 +291,19 @@ export function create(c) {
         return true;
       } }];
     },
-    /** A jab (melee.js): it takes one and that is all it has (cast/health.rule.js, basic). It goes off there and then, on whoever jabbed it. */
+    /** A jab (melee.js): it takes two (cast/health.rule.js, medium). The first cuts it; the second sets it off there and then, on whoever jabbed it. */
     snipTargets() {
       if (!group || over) return [];
       return [{ id: 'middle-manager', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 1.3, r: Mg.r + 0.1, verticalReach: 1.6, priority: 2, snip: () => {
         if (!known) { known = true; c.met(); }
-        s = popped(s); burst();
-        c.struck(HEALTH.jab);          // (it has gone off whatever the count makes of it)
+        // the last of it: it goes off there and then, on whoever jabbed it — before the count takes it, since once it is dying it lands nothing
+        if ((c.vital?.hp ?? 1) <= HEALTH.jab) { s = popped(s); burst(); c.struck(HEALTH.jab); return { ok: true, target: 'middle-manager' }; }
+        // not the last: it is cut. It reels, and a puff of what it is full of comes out of the cut, and some of what it had put on
+        const hit = c.struck(HEALTH.jab); if (!hit.ok) return false;
+        s = cut(s); if (!hit.killed) c.stall(HEALTH.flinch);
+        c.play('shred', walker.x, walker.z, 10); c.play('creak', walker.x, walker.z, 10);
+        extras.push(spill({ x: walker.x + Math.sin(rot) * 0.25, z: walker.z + Math.cos(rot) * 0.25 }, s.fat, { count: CUT.puff, far: 1.2, y: 1.5, up: 1.5 }));
+        c.survived();
         return { ok: true, target: 'middle-manager' };
       } }];
     },
