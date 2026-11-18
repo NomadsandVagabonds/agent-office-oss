@@ -399,6 +399,7 @@ export const MALL_WRONG = {
     c.solid(at.x - 1, at.z - 1, at.x + 1, at.z + 1, { tall: false }); },
   // a ride for a coin, facing the wall, going; nobody on it
   ride(c) { const ws = c.wallSpot(1.4, undefined, 0.5, 1.6); if (!ws) return false; const p = c.wallAt(ws.side, ws.at, 0.7), env = c.env, kit = c.kit;
+    if (!c.clear(p.x, p.z, 0.6)) return false; c.reserve(p.x, p.z, 0.7);                                                                          // (not in a doorway's way in: it was, by a corner door, on mall tape 5)
     const b = new Batch(true); b.addVox(kit.model('mall:ride', rideVox).solid, new THREE.Matrix4().makeScale(kit.VOXEL, kit.VOXEL, kit.VOXEL));
     const mat = kit.surface({ vox: true }), mesh = new THREE.Mesh(kit.geometry(b, [lamp(0.4, 2.4, 1.2, [1.2, 1.2, 1.2], { k: 9, wrap: 0.45, far: 30 })], [0.6, 0.6, 0.6]), mat), g = new THREE.Group(); g.add(mesh);
     g.position.set(p.x, 0, p.z); g.rotation.y = Math.atan2(-p.n[0], -p.n[2]) + Math.PI / 2; g.userData.light = (rgb) => mat.uniforms.uTint.value.set(rgb[0], rgb[1], rgb[2]); c.add(g);
