@@ -383,6 +383,147 @@ export function mirrorLeaves(o, heldOrder = 10000) {
 const f = (n) => Number(n).toFixed(6);
 const v3 = (a) => `vec3(${a.map(f).join(', ')})`;
 
+// ---- the swell: a wave travelling across a surface (the Surge Basin's surge; handle.swell, liquid.mark.js) ----
+// A room that drives a wave across its water tells the surface where the crest is each tick (`water.swell({ at, height,
+// breaking })`, in the room's frame: the crest line at z = at, travelling toward +z). Where the tier has water, liquid.js
+// draws that surface, while a swell is asked for, on a denser copy of its sheet's grid (swellRows along z, swellCols
+// across), each vertex raised by swellAt; the fragment adds the swell's slope to the ripple's (stepped, as the ripple's
+// is), so the face takes the light, the bed through it and the mirror the way the calm water does; its crest breaks into
+// a few of the surface's own cells (foam), more as it breaks on the beach; the trough behind it darkens. Without a swell
+// (no surge, or any other surface) the define SWELL is off and the shader is the one it was, to the character.
+export const SWELL = Object.freeze({
+  scale: 0.85,        // the height drawn, of the height the room asks (the Surge Basin's rule amp: a 0.72 m peak → about 0.6 m)
+  face: 0.55,         // metres: the face ahead of the crest (its gaussian width)
+  back: 1.1,          // metres: the back behind it
+  fore: 0.12,         // the long low swell ahead of the face, of the height, falling off over foreLen
+  foreLen: 2.6,
+  trough: 0.16,       // the short trough behind, of the height, troughAt metres behind the crest, troughW wide
+  troughAt: 1.9,
+  troughW: 0.7,
+  sweep: Object.freeze([0.15, 1.5, 0.07, 3.3, 0.5]),   // the crest line's bend across the pool: a·sin(k·x) + b·sin(l·x + p) (the old crest's own)
+  vary: Object.freeze([0.08, 0.9, 1.7]),                // its height along the crest: 1 + a·sin(k·x + p)
+  wall: 0.7,          // metres: faded out to nothing this near the sheet's sides (x), no skirt
+  ends: Object.freeze([0.6, 0.9]),                      // and near its start (z0) and its far end (z1, the beach)
+  rows: 0.06,         // metres between the dense copy's rows (along the travel) and its columns (across)
+  cols: 0.5,
+  slopeStep: 0.08,    // its slope, stepped (coarser than the ripple's 0.03: broad bands of light down the face)
+  // the eye: the water may never stand over it. Within eyeNear metres of the eye (across the surface) the face is held to
+  // eyeClear under the eye's height, and is its own height again by eyeFar; an eye under the plane (a dive) is left alone
+  eyeNear: 0.5,
+  eyeFar: 1.2,
+  eyeClear: 0.15,
+  // the mirror (High) on raised water: the flat plane's picture would be painted inside the face; weakened from mirrorFrom
+  // metres of rise, gone by mirrorGone (the flat tint there)
+  mirrorFrom: 0.02,
+  mirrorGone: 0.2,
+  // the light down the steep face: the ceiling caught in bands
+  glint: 0.14,
+  troughDark: 0.3,    // how much darker the trough is, at its deepest
+  // foam: cells of the surface's own frame, foamCell wide, halved (to three times) near the eye so none spans more than
+  // foamPx pixels; a few at the crest's top, fewer as the crest stands taller; spilling down the face and trailing behind
+  // only as it breaks; each cell fades in and out on its own slow clock (churn: not scrolling)
+  foamCell: 0.08,
+  foamPx: 9,
+  foamCrest: 0.32,    // the share of the crest's cells that are foam, at most (calm, low crest)
+  foamTall: 0.45,     // less, by this share, at its full height (tallAt metres drawn)
+  tallAt: 0.6,
+  foamFace: 0.32,     // breaking: the face's share
+  foamTrail: 0.24,    // breaking: behind it
+  churn: 0.55,        // radians a second of a cell's own clock
+  foamTone: 0.8,      // its colour: the water's pale contact line, a little under it (off-white, not white)
+  foamMix: 0.5,       // how far a foam cell goes to that colour (low contrast: it stays a broken band through the tape)
+  // rings where it breaks: on a pier's seaward face as the crest reaches it, by its two sides as it passes, and along the
+  // far end (the beach) while it is breaking
+  ringPier: 2,
+  ringLee: 1.5,
+  ringBeach: 1.7,
+  beachFrom: 0.7,     // breaking from this (0…1) on, one ring along the beach every beachEvery seconds
+  beachEvery: 0.3,
+});
+
+/** The crest line's z at x (room frame), for a crest at `at`. */
+export const swellCrestZ = (at, x, k = SWELL) => at + k.sweep[0] * Math.sin(x * k.sweep[1]) + k.sweep[2] * Math.sin(x * k.sweep[3] + k.sweep[4]);
+/** The swell's shape, d metres ahead of the crest (behind: negative), as a share of its height (1 at the crest). */
+export function swellUnit(d, k = SWELL) {
+  const face = d > 0 ? Math.exp(-((d / k.face) ** 2)) : Math.exp(-((d / k.back) ** 2));
+  const fore = d > 0 ? k.fore * Math.exp(-d / k.foreLen) * (1 - Math.exp(-((d / 0.6) ** 2))) : 0;
+  const e = (d + k.troughAt) / k.troughW;
+  return face + fore - k.trough * Math.exp(-e * e);
+}
+const smooth01 = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+/**
+ * The swell's height at (x, z) in the room's frame: `s` { at, height (as drawn: the room's times scale) }, `box` the
+ * sheet's { x0, z0, x1, z1 }, `eye` (optional) { x, y, z } and `plane` its y, for the cap under the eye. Metres over the plane.
+ */
+export function swellAt(x, z, s, box, eye = null, plane = 0, k = SWELL) {
+  if (!s || !(s.height > 0) || !box) return 0;
+  const a = s.height * (1 + k.vary[0] * Math.sin(x * k.vary[1] + k.vary[2]));
+  const fade = smooth01(box.x0, box.x0 + k.wall, x) * smooth01(box.x1, box.x1 - k.wall, x) * smooth01(box.z0, box.z0 + k.ends[0], z) * smooth01(box.z1, box.z1 - k.ends[1], z);
+  let h = a * swellUnit(z - swellCrestZ(s.at, x, k), k) * fade;
+  if (eye && eye.y > plane) {
+    const room = Math.max(eye.y - plane - k.eyeClear, 0), near = smooth01(k.eyeNear, k.eyeFar, Math.hypot(x - eye.x, z - eye.z));
+    h = Math.min(h, room) * (1 - near) + h * near;
+  }
+  return h;
+}
+/** How much of the mirror a point raised h metres keeps (1 flat, 0 from mirrorGone up). */
+export const swellMirror = (h, k = SWELL) => 1 - smooth01(k.mirrorFrom, k.mirrorGone, h);
+/** The handle's ask, cleaned: { at, height (drawn), breaking 0…1 } or null (no surge). */
+export function swellAsk(s, k = SWELL) {
+  if (!s || !Number.isFinite(s.at) || !Number.isFinite(s.height) || !(s.height > 0)) return null;
+  const b = Number.isFinite(s.breaking) ? Math.min(1, Math.max(0, s.breaking)) : 0;
+  return { at: s.at, height: s.height * k.scale, breaking: b };
+}
+/**
+ * The rings a swell starts between two ticks: the crest from `from` to `to` (z, room frame), `breaks` the rectangles it
+ * breaks on ({ x0, z0, x1, z1 }: piers; the wave meets z0 first), `beach` { z, x0, x1 } (the far end) and the clock.
+ * → [{ x, z, strength }]; `state` keeps when the beach last rang.
+ */
+export function swellRings(from, to, breaking, breaks, beach, now, state, k = SWELL) {
+  const out = [];
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return out;
+  for (const b of breaks || []) {
+    const w = b.x1 - b.x0;
+    if (from < b.z0 && to >= b.z0) for (const u of [0.2, 0.8]) out.push({ x: b.x0 + u * w, z: b.z0 - 0.06, strength: k.ringPier });
+    if (from < b.z1 && to >= b.z1) { out.push({ x: b.x0 - 0.1, z: b.z1 + 0.1, strength: k.ringLee }); out.push({ x: b.x1 + 0.1, z: b.z1 + 0.1, strength: k.ringLee }); }
+  }
+  if (beach && breaking >= k.beachFrom && now - (state.beachAt ?? -Infinity) >= k.beachEvery) {
+    state.beachAt = now;
+    const u = wakeHash(to, beach.z, now, 3);
+    out.push({ x: beach.x0 + 0.6 + u * (beach.x1 - beach.x0 - 1.2), z: Math.min(to + 0.3, beach.z - 0.2), strength: k.ringBeach });
+  }
+  return out;
+}
+
+// The swell in GLSL (both stages; only where SWELL is defined). uSwell: crest z, height (drawn), the plane's y, breaking.
+// uSwellBox: the sheet's x0, z0, x1, z1. uEyeRoom: the eye in the room's frame (the cap under it).
+const SWELL_GLSL = `
+#ifdef SWELL
+uniform vec4 uSwell;
+uniform vec4 uSwellBox;
+float swellD(vec2 p) { return p.y - (uSwell.x + ${f(SWELL.sweep[0])} * sin(p.x * ${f(SWELL.sweep[1])}) + ${f(SWELL.sweep[2])} * sin(p.x * ${f(SWELL.sweep[3])} + ${f(SWELL.sweep[4])})); }
+float swellUnit(float d) {
+  float face = d > 0.0 ? exp(-(d / ${f(SWELL.face)}) * (d / ${f(SWELL.face)})) : exp(-(d / ${f(SWELL.back)}) * (d / ${f(SWELL.back)}));
+  float fore = d > 0.0 ? ${f(SWELL.fore)} * exp(-d / ${f(SWELL.foreLen)}) * (1.0 - exp(-(d / 0.6) * (d / 0.6))) : 0.0;
+  float e = (d + ${f(SWELL.troughAt)}) / ${f(SWELL.troughW)};
+  return face + fore - ${f(SWELL.trough)} * exp(-e * e);
+}
+float swellAt(vec2 p) {
+  float a = uSwell.y * (1.0 + ${f(SWELL.vary[0])} * sin(p.x * ${f(SWELL.vary[1])} + ${f(SWELL.vary[2])}));
+  float fade = smoothstep(uSwellBox.x, uSwellBox.x + ${f(SWELL.wall)}, p.x) * (1.0 - smoothstep(uSwellBox.z - ${f(SWELL.wall)}, uSwellBox.z, p.x))
+    * smoothstep(uSwellBox.y, uSwellBox.y + ${f(SWELL.ends[0])}, p.y) * (1.0 - smoothstep(uSwellBox.w - ${f(SWELL.ends[1])}, uSwellBox.w, p.y));
+  float h = a * swellUnit(swellD(p)) * fade;
+  // (never over the eye: within a metre of it the face is held under it; a diver under the plane is left alone)
+  if (uEyeRoom.y > uSwell.z) {
+    float room = max(uEyeRoom.y - uSwell.z - ${f(SWELL.eyeClear)}, 0.0);
+    float near = smoothstep(${f(SWELL.eyeNear)}, ${f(SWELL.eyeFar)}, distance(p, uEyeRoom.xz));
+    h = mix(min(h, room), h, near);
+  }
+  return h;
+}
+#endif
+`;
+
 /** The vertex shader: the sheet's own baked light (kit.js VERT's sum, the same attributes and uniforms), where it is in its room. */
 export const LIQUID_VERT = `
 attribute vec3 aLit;
@@ -408,6 +549,10 @@ uniform mat4 uToRoom;
 varying vec3 vLit;
 varying vec3 vRoom;
 varying vec3 vView;
+#ifdef SWELL
+uniform vec3 uEyeRoom;
+#endif
+${SWELL_GLSL}
 void main() {
   vec3 lit = aLit;
   #ifdef BANKS
@@ -423,8 +568,16 @@ void main() {
   lit += aFlk * uFlick;
   #endif
   vLit = lit * uDim * uTint;
+  #ifdef SWELL
+  // (the swell: each vertex raised by it, up the room's y, which the sheet's own y is: liquid.js only swells such a sheet)
+  vec3 raised = position;
+  raised.y += swellAt((uToRoom * vec4(position, 1.0)).xz);
+  vRoom = (uToRoom * vec4(raised, 1.0)).xyz;
+  vec4 mv = modelViewMatrix * vec4(raised, 1.0);
+  #else
   vRoom = (uToRoom * vec4(position, 1.0)).xyz;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  #endif
   vView = mv.xyz;
   gl_Position = projectionMatrix * mv;
 }`;
@@ -449,6 +602,10 @@ uniform int uRingN;
 varying vec3 vLit;
 varying vec3 vRoom;
 varying vec3 vView;
+${SWELL_GLSL}
+#ifdef SWELL
+float swellRaise = 0.0;                                      // (metres this pixel's cell is raised: the mirror weakens on it)
+#endif
 // one ring of the wake at p, on cells rc wide: (its height, its crest, its trough, the light it stirs inside it). w: x, z,
 // age, waves × 4 + strength (wakeFill). Its front at wakeFrom + wakeSpeed × age, moved a little by the ripple's own height
 // there (base); its leading crest at the front, a trough just behind, then its other waves, as many as it has; its waves
@@ -490,7 +647,12 @@ uniform mat4 uMirror;
 uniform float uMirrorOn;
 vec3 reflection(vec3 n, vec3 v, vec2 uv, vec3 light) {
   vec3 flatTint = light * ${f(LIQUID.sky)};
-  if (uMirrorOn <= 0.0) return flatTint;
+  float mOn = uMirrorOn;
+  #ifdef SWELL
+  // (on raised water the flat plane's picture would be painted inside the face: weakened there, the flat tint)
+  mOn *= 1.0 - smoothstep(${f(SWELL.mirrorFrom)}, ${f(SWELL.mirrorGone)}, swellRaise);
+  #endif
+  if (mOn <= 0.0) return flatTint;
   vec4 m = uMirror * vec4(vView, 1.0);
   vec3 up = normalize(uRoomToView * vec3(0.0, 1.0, 0.0));
   vec2 q = m.xy / max(m.w, 1e-4) * 0.5 + 0.5 + (n - up).xy * ${f(MIRROR.wobble)};
@@ -499,7 +661,7 @@ vec3 reflection(vec3 n, vec3 v, vec2 uv, vec3 light) {
   r *= min(1.0, cap / max(l, 1e-5));
   r *= ${f(MIRROR.dim)} * mix(vec3(1.0), uKeep.rgb, ${f(MIRROR.tint)});
   // (a sliver: faded in toward the flat tint; whole, exactly the mirror)
-  return uMirrorOn >= 1.0 ? r : mix(flatTint, r, uMirrorOn);
+  return mOn >= 1.0 ? r : mix(flatTint, r, mOn);
 }
 #else
 // (Medium, and any surface at High while the mirror is off: a flat tint of the room's light where it is)
@@ -533,6 +695,13 @@ void main() {
   // (far off, where a cell is a pixel or two, the steps would only be speckle: there it lies flat)
   vec2 fw = fwidth(vRoom.xz);
   slope *= clamp((cell / max(max(fw.x, fw.y), 1e-5) - ${f(LIQUID.sharp[0])}) / ${f(LIQUID.sharp[1] - LIQUID.sharp[0])}, 0.0, 1.0);
+  #ifdef SWELL
+  // the swell: its slope on the ripple's own cells, stepped coarser (the face in broad bands), never flattened far off
+  float sw0 = swellAt(c), swd = swellD(c);
+  vec2 sws = vec2(swellAt(c + vec2(cell, 0.0)) - sw0, swellAt(c + vec2(0.0, cell)) - sw0) / cell;
+  slope += floor(sws / ${f(SWELL.slopeStep)} + 0.5) * ${f(SWELL.slopeStep)};
+  swellRaise = sw0;
+  #endif
   // the wake: its own slope, on cells of its own that widen far off (5, 10, 20 cm: at least wakePixels each) instead of
   // lying flat, added to the ripple's; gentler right under the eye. wk: its height, crest, trough and stirred light here
   vec4 wk = vec4(0.0);
@@ -593,6 +762,26 @@ void main() {
   col = mix(col, ${v3(LIQUID.edgeColor)} * seen, edge * ${f(LIQUID.edgeMix)});
   // the wake's light and dark: its crest brighter, the trough just behind it darker (what the eye picks up across a pool)
   if (uRingN > 0) col *= 1.0 + (clamp(wk.y * ${f(LIQUID.wakeCrest)}, 0.0, 0.9) - clamp(wk.z * ${f(LIQUID.wakeTrough)}, 0.0, 0.35)) * (1.0 - edge);
+  #ifdef SWELL
+  {
+    // the swell's light: the steep face catches the ceiling in bands, the trough behind it darkens
+    float sh = sw0 / max(uSwell.y, 1e-3);
+    float steep = clamp(length(sws) / 1.2, 0.0, 1.0);
+    col += light * ${f(SWELL.glint)} * smoothstep(0.88, 0.99, dot(reflect(-v, n), up)) * smoothstep(0.15, 0.6, steep) * (1.0 - edge);
+    col *= 1.0 - ${f(SWELL.troughDark)} * clamp(-sh / ${f(SWELL.trough)}, 0.0, 1.0);
+    // foam: cells of the room's frame, foamCell wide, halved near the eye until none spans more than foamPx pixels; a few
+    // at the crest (fewer as it stands taller), down the face and trailing only as it breaks (uSwell.w); each cell fading
+    // in and out on a slow clock of its own; off-white, a little under the contact line, mixed in at half (low contrast)
+    float fcs = ${f(SWELL.foamCell)} * exp2(-clamp(ceil(log2(${f(SWELL.foamCell)} / (${f(SWELL.foamPx)} * max(max(fw.x, fw.y), 1e-5)))), 0.0, 3.0));
+    vec2 fc = floor(vRoom.xz / fcs);
+    float hz = fract(sin(dot(fc, vec2(127.1, 311.7))) * 43758.5453), ph = fract(sin(dot(fc, vec2(269.5, 183.3))) * 43758.5453);
+    float tall = clamp(uSwell.y / ${f(SWELL.tallAt)}, 0.0, 1.0);
+    float want = smoothstep(0.8, 0.97, sh) * (1.0 - smoothstep(0.0, 0.3, -swd)) * ${f(SWELL.foamCrest)} * (1.0 - ${f(SWELL.foamTall)} * tall)
+      + uSwell.w * (smoothstep(0.25, 0.75, sh) * step(0.0, swd) * ${f(SWELL.foamFace)} + ${f(SWELL.foamTrail)} * exp(-((swd + 0.7) / 0.45) * ((swd + 0.7) / 0.45)));
+    float foam = step(1.0 - clamp(want, 0.0, 0.9), hz) * smoothstep(-0.3, 0.7, sin(uTime * ${f(SWELL.churn)} + ph * 6.2831853));
+    col = mix(col, ${v3(LIQUID.edgeColor)} * ${f(SWELL.foamTone)} * seen, foam * ${f(SWELL.foamMix)} * (1.0 - edge));
+  }
+  #endif
   gl_FragColor = vec4(col, 1.0);
 }`;
 

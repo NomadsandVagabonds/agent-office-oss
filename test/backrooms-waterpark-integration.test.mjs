@@ -288,6 +288,23 @@ test('Surge Basin: the visible crest tracks the hazard from the gates to the bea
   f.tick(90);
   assert.equal(room.wavePool.crestZ, null, 'crest has passed');
 });
+test('Surge Basin: the drawn wave is a see-through strip of the swell, about as light as the old curl, the swell\'s stand-in', async t => {
+  const f = await fixture('wave-pool', 0);
+  t.after(() => f.dispose());
+  const room = f.world.rooms[0], crest = room.group.getObjectByName('surge-crest'), mesh = crest.userData.mesh;
+  assert.equal(crest.userData.liquidStandIn, true, 'hidden for the camcorder\'s draw where the water rises itself');
+  assert.ok(mesh.material.transparent && mesh.material.uniforms.uAlpha.value < 1, 'see-through, as all water is');
+  assert.equal(mesh.material.depthWrite, false);
+  const tris = mesh.geometry.index.count / 3;
+  assert.ok(tris >= 900 && tris <= 1100, `about the old curl's 992: ${tris}`);
+  // the swell's own profile, its height 1 at the crest (the tick scales it to the rule's amp), a trough behind
+  const pos = mesh.geometry.attributes.position;
+  let top = -Infinity, low = Infinity;
+  for (let i = 0; i < pos.count; i++) { top = Math.max(top, pos.getY(i)); low = Math.min(low, pos.getY(i)); }
+  assert.ok(top > 0.95 && top < 1.12 && low < -0.1, `${top} ${low}`);
+  // the room's water handle is kept and the piers handed over (nothing up in node: the handle says so)
+  assert.equal(room.basin.water.swell(null), false);
+});
 
 test('occupied lagoon floats kick both legs independently without replacing the hazard motion',async t=>{
  const f=await fixture('kiddie-lagoon');t.after(()=>f.dispose());

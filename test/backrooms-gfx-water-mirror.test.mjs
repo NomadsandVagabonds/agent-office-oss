@@ -264,8 +264,9 @@ test('the shader: Medium\'s reflection() word for word where MIRROR is not defin
   assert.ok(LIQUID_FRAG.slice(els, end).includes('vec3 reflection(vec3 n, vec3 v, vec2 uv, vec3 light) { return light * 0.100000; }\n'), 'the flat tint, as it was');
   const mir = LIQUID_FRAG.slice(at, els);
   assert.match(mir, /uniform sampler2D tMirror;\nuniform mat4 uMirror;\nuniform float uMirrorOn;\n/);
-  assert.match(mir, /if \(uMirrorOn <= 0\.0\) return flatTint;/, 'a surface without it this frame: the tint');
-  assert.match(mir, /return uMirrorOn >= 1\.0 \? r : mix\(flatTint, r, uMirrorOn\);/, 'whole: exactly the mirror; a sliver: faded toward the tint');
+  // (its weight here: uMirrorOn, and only where a swell is drawn (SWELL) less of it on raised water)
+  assert.match(mir, /float mOn = uMirrorOn;\n  #ifdef SWELL\n[^#]*mOn \*= 1\.0 - smoothstep\([\d.]+, [\d.]+, swellRaise\);\n  #endif\n  if \(mOn <= 0\.0\) return flatTint;/, 'a surface without it this frame: the tint');
+  assert.match(mir, /return mOn >= 1\.0 \? r : mix\(flatTint, r, mOn\);/, 'whole: exactly the mirror; a sliver: faded toward the tint');
   assert.match(mir, /vec4 m = uMirror \* vec4\(vView, 1\.0\);/, 'where this point of the surface is in the mirror');
   assert.match(mir, /\+ \(n - up\)\.xy \* [\d.]+;/, 'moved by the ripple\'s stepped tilt: it wobbles in blocks');
   assert.match(mir, /r \*= min\(1\.0, cap \/ max\(l, 1e-5\)\);/, 'its brightest held down');

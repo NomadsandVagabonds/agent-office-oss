@@ -1823,6 +1823,123 @@ nothing of the waterpark's is changed for it.
      picture and is clamped: a thin strip there repeats its last row of
      pixels.
 
+### Water (built: the swell)
+
+The Surge Basin's wave. The owner said "the wave looks fake compared to the
+rest of our water": it was a solid green-and-cream curl sliding over the
+pool. At Medium and High the pool's own surface now rises into the wave. At
+Classic and Low the room draws a see-through strip of the same shape. The
+surge's rule (`waterpark.rule.js`: `waveState`, `wavePush`, the timing, the
+pier shelter) is not touched, and nor are the swimmer, `rt.floorY` or
+`rt.wavePool.crestZ`.
+
+- **The call** (the toolbox: `docs/BACKROOMS.md`, liquids). The handle
+  `c.liquid` returns (and `createBasin` keeps as `info.water`) has
+  `swell({ at, height, breaking })`. Call it once a tick while there is a wave
+  and with `null` when there is none. `at` is the crest line's z in the room's
+  frame (it travels toward +z), `height` is the room's own (it is drawn at
+  `SWELL.scale`, 0.85, of it: the rule's 0.72 m gives about 0.6 m, today's
+  height), and `breaking` (0 to 1) is how far it is breaking on the far end.
+  `swellBreaks(rects, beach)` is called once at build: the rectangles it breaks
+  on (the piers) and the far end it breaks along. Both only store what they
+  are told and return whether the surface is drawn as water now (false at
+  Classic and Low, in node, or for a refused sheet). If nobody repeats an ask
+  for ten frames (its room no longer ticks), it is let go.
+- **The surface rises for real.** The sheet is a 1 m grid (240 vertices), too
+  coarse for a 0.5 m face. While a swell is asked for, `liquid.js` draws the
+  surface on a denser copy of the sheet's grid (`swellGeometry`: rows 6 cm
+  apart along z and columns 0.5 m apart across, each attribute taken between
+  the sheet's own vertices: its baked light, banks, picture and colour). The
+  copy is made once and swapped in only during a surge. `SWELL` is defined on
+  the surface's material (and on its underside's). The vertex shader raises
+  each vertex by `swellAt`. The shape (liquid.rule.js `swellUnit`) is a steep
+  face 0.55 m ahead of the crest, a gentler back 1.1 m behind it, a long low
+  swell ahead (12 % falling off over 2.6 m) and a short trough 1.9 m behind
+  (16 %). The crest line bends across the pool as the old crest's did. It
+  fades out within 0.7 m of the sheet's sides and near its ends (no skirt). A
+  sheet that is not a whole grid, or whose room frame is turned against its
+  own, is not swelled (`rec.swellRefused`).
+- **It reads as the water it is.** The fragment adds the swell's slope to the
+  ripple's on the ripple's own cells, stepped by 0.08. The refraction, the
+  colour through it (thicker where it stands), the contact line where it meets
+  the piers, the fresnel and the mirror then follow as they do for calm water.
+  The steep face catches the ceiling a little (`glint` 0.14, only where it
+  faces it squarely: a stronger catch read as a white band). The trough
+  darkens by up to 30 %.
+- **Foam.** Foam is the surface's own cells: 8 cm, halved (up to three times)
+  near the eye so that none spans more than 9 pixels. There are a few at the
+  crest (32 % at most, less as it stands taller). They spill down the face and
+  trail behind only as it breaks on the beach. Each cell fades in and out on a
+  slow clock of its own: the foam churns in place and does not scroll. It is
+  off-white, the contact line's colour at 0.8, mixed in at half, so through the
+  tape it stays a broken, low-contrast band.
+- **The eye.** The water never stands over the eye. Within 0.5 m of it the
+  face is held 15 cm under the eye's height, and it is its own height again
+  from 1.2 m. The camera is gameplay's and is not moved. An eye under the
+  plane (a dive) is left alone: the crest passes overhead, because the
+  underside uses the same vertex shader and takes the same slope.
+- **The mirror at High.** On raised water the flat plane's picture would be
+  painted inside the face. The mirror's weight falls from 2 cm of rise and is
+  gone by 20 cm (the flat tint there).
+- **Rings where it breaks** (`swellRings`, into the surface's own eight
+  slots). Two rings (strength 2) on a pier's seaward face as the crest reaches
+  it, one by each side as it passes (1.5), and one along the beach every
+  0.3 s while it breaks (1.7).
+- **The stand-in.** The room's drawn wave carries `liquidStandIn`, so the
+  camcorder's draw hides it while the surface is drawn (and in the mirror's
+  pass) and shows it again in its `finally`. Ticks always see it as the room
+  set it, so `crestZ` still reads it.
+- **Classic and Low** (`rooms/wave-pool.js`). The old curl is gone. The room
+  now draws a see-through strip (`addTranslucent`, alpha 0.7, drawn after the
+  sheet) of `swellUnit`'s shape in the pool water's teal (causticWaterTex's
+  aqua, 61 / 129 / 131, a little lifted toward the crest). It has a broken
+  pale foam top in 4 px texels and a darker trough strip behind. It is
+  1,008 triangles (24 spans × 21 rows; the curl was 992) and is moved and
+  raised by the tick as the curl was.
+- **What did not change.** Measured against the tree before (seed 7,
+  960 × 600, software rendering, every clock the water reads pinned):
+  - Calm water at Medium and High is the same to the pixel: 0 of 576,000
+    pixels differ in the Surge Basin from the beach, the pier and the
+    promenade (before and after a surge in the same load), the kiddie lagoon
+    and the deep end.
+    The control, the same load in a surge, differs in 221,153 (Medium) and
+    241,331 (High) pixels.
+  - Classic: every room of the waterpark floors of seeds 3 and 7 (40 and 32
+    rooms) is the same to the number (geometry, bake, lamps, materials).
+  - The Surge Basin at Classic and Low differs only in the wave's own mesh.
+- **Cost.**
+
+  | | Medium and High | Classic and Low |
+  |---|---|---|
+  | water, outside a surge | the sheet's 420 triangles | the sheet's 420 |
+  | water, during a surge (4.8 s of each 11.5 s) | 14,392 | the sheet's 420 |
+  | the room's drawn wave | not drawn (the stand-in) | 1,008 during a surge (was 992), none outside |
+
+  No new draw call, pass, target or texture read. Per vertex, during a surge:
+  one `swellAt` (about three `exp`, three `sin`, four `smoothstep`). Per water
+  pixel: three of them (the cell and one each way), one `reflect`, two hashes
+  and a `sin` for the foam. Outside a surge none of it is compiled. Software
+  rendering, so no milliseconds.
+- **Tests.** `test/backrooms-gfx-water-swell.test.mjs` covers the numbers, the
+  walls, the eye, the mirror, that every part is behind `SWELL`, the rings,
+  the dense copy, the frame on and off, nothing at water 0, and the room's
+  calls. `test/backrooms-waterpark-integration.test.mjs` covers the strip
+  (see-through, its triangles, its profile) and the crest reading, which is
+  unchanged. `test/backrooms-gfx-water-standin.test.mjs` covers the one mark
+  on the wave.
+- **Known faults.**
+  1. At Classic the strip is faint from the beach, a soft swell of the same
+     teal with a little foam. From in the water the eye can stand inside it:
+     there is no cap at Classic.
+  2. At Classic its lamp reflections are not on it (the sheet's
+     `pool-optics.js` reflection is the sheet's).
+  3. The swell only travels along its room's +z, and only on a sheet whose
+     room frame is not turned against its own (all the waterpark's are not).
+  4. The eye test for the underside is the flat plane: with the cap, an eye
+     is never inside the crest above the plane, but a diver just under the
+     plane sees the crest's underside pass over.
+  5. Rings share the surface's eight slots with the visitor's own wake.
+
 ### Water at Classic: the pools' own sheets (decided)
 
 The owner, 18 Nov, shown both side by side: "ripples with light reflections".
