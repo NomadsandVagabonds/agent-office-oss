@@ -516,6 +516,36 @@ The wait for somebody who goes straight to the way down when play begins
 This wait, tier by tier, is the number wanted from ordinary machines, more
 than their frame times.
 
+**Light through a shop window, in one room** (nothing new; `shadows`). A room
+that builds its own shop (a wall across it, a lit shop behind, a concourse in
+front) already gets light through its glass at Medium and High, from the tube
+shadows' map. The shop's lamp is one of the room's lamps, so the bake lights
+the concourse with it everywhere; the wall, drawn as boxes in the room's own
+batches (`c.flat.box` round the opening), stands in the room and takes that
+light back off the floor and walls behind it, and the opening, with nothing
+standing in it, does not. The pane must not stand: draw it with
+`c.glass.box(…)` or as a flat quad (`c.flat.quad`, `mall.js` `wallFace`),
+never as a box in `c.flat` or a `c.mapped` batch, which casts like the wall
+(`test/backrooms-gfx-panelight.test.mjs` pins all three). Classic and Low have
+no map: there the shop's lamp lights the concourse through the wall as well.
+What it is not, against a doorway's light: it is neutral (the map holds how
+much of each group's light arrives, not a colour, so a tinted pane cannot tint
+it; tint the lamp); it has no gain (`DOOR_GAIN` is the doorway's alone), so in a
+dim concourse with the shop's lamp at 2.2 it is a soft lift in front of the
+window, plainly less than a doorway's patch, and in the mall's bright streets
+it does not show at all; the ceiling and anything standing in the concourse
+are not in the map, so the shop's lamp lights them through the wall at every
+tier; and a lamp's shadows are filled in only to `lampReach` (where its light
+is 4 % of what it is under it), so a strong shop lamp over a dim concourse
+leaks through the wall beyond that, in a stepped arc. A pane with its own
+colour and the doorway's strength needs the bake to know which side of a wall
+a lamp is on, or the shop to be a room of its own with a window between (the
+generator's windows, `hole.win`, pass no doorway light today; `doorLight`
+could take them as doorways with a sill and a head, but that changes the maps
+of every room that has one, so it is the owner's call). Pictures and numbers:
+the study of 18 Nov (map bake for the test room 1–3 ms with the shop, 0–2 ms
+without; no mesh or triangle added).
+
 ### Shining batches that light the room (built)
 
 A room draws what shines (tubes, neon, lamps, signs) with `c.shining`, which is
