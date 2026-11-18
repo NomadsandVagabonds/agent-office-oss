@@ -185,6 +185,53 @@ function makeSharedGeoms(kit, R) {
   };
 }
 
+/**
+ * A toner's leg with a knee: the leg is one piece of voxels (limbVox) from its socket up to a high knee and down to the
+ * claw; this turns what is below the knee about it, so that the claw comes in under it as the foot is lifted and goes
+ * out again as it is put down. The leg is its own copy (the floor's is shared). → fold(angle), radians (0: as modelled).
+ */
+function kneeFor(geo, sx, sz) {
+  const pos = geo.attributes.position, nor = geo.attributes.normal;
+  const rest = Float32Array.from(pos.array), restN = Float32Array.from(nor.array, (v) => v / 127);
+  const K = [sx * 8.5 * S, 11.5 * S, sz * 6.5 * S], kl2 = K[0] * K[0] + K[1] * K[1] + K[2] * K[2];
+  // the axis: level, square to the way the leg goes out from the body
+  let ax = -sz * 6.5, az = sx * 8.5; const al = Math.hypot(ax, az); ax /= al; az /= al;
+  // which way about the axis brings the claw in (toward the socket): try the claw tip
+  const turnAbout = (x, y, z, a) => {                                          // Rodrigues about (ax, 0, az) through the knee
+    const c = Math.cos(a), s = Math.sin(a), px = x - K[0], py = y - K[1], pz = z - K[2], d = ax * px + az * pz;
+    const cx = -az * py, cy = az * px - ax * pz, cz = ax * py;                 // axis × p
+    return [K[0] + px * c + cx * s + ax * d * (1 - c), K[1] + py * c + cy * s, K[2] + pz * c + cz * s + az * d * (1 - c)];
+  };
+  const tip = [sx * 14.5 * S, -10 * S, sz * 11.5 * S], tried = turnAbout(...tip, 0.4);
+  const sign = Math.hypot(tried[0], tried[2]) < Math.hypot(tip[0], tip[2]) ? 1 : -1;
+  // what is below the knee: nearer the shank than the thigh
+  const shank = [];
+  for (let k = 0; k < rest.length; k += 3) {
+    const x = rest[k], y = rest[k + 1], z = rest[k + 2], t = Math.max(0, Math.min(1, (x * K[0] + y * K[1] + z * K[2]) / kl2));
+    const dUp = Math.hypot(x - K[0] * t, y - K[1] * t, z - K[2] * t);
+    const v = [tip[0] - K[0], tip[1] - K[1], tip[2] - K[2]], vl2 = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+    const u = Math.max(0, Math.min(1, ((x - K[0]) * v[0] + (y - K[1]) * v[1] + (z - K[2]) * v[2]) / vl2));
+    const dDown = Math.hypot(x - K[0] - v[0] * u, y - K[1] - v[1] * u, z - K[2] - v[2] * u);
+    if (dDown < dUp && u > 0.02) shank.push(k);
+  }
+  let drawn = 0;
+  return function fold(angle) {
+    const a = sign * Math.round(angle * 100) / 100;
+    if (a === drawn) return;
+    drawn = a;
+    const arr = pos.array, narr = nor.array, c = Math.cos(a), s = Math.sin(a);
+    for (const k of shank) {
+      const p = turnAbout(rest[k], rest[k + 1], rest[k + 2], a);
+      arr[k] = p[0]; arr[k + 1] = p[1]; arr[k + 2] = p[2];
+      const nx = restN[k], ny = restN[k + 1], nz = restN[k + 2], d = ax * nx + az * nz;
+      narr[k] = (nx * c + (-az * ny) * s + ax * d * (1 - c)) * 127;
+      narr[k + 1] = (ny * c + (az * nx - ax * nz) * s) * 127;
+      narr[k + 2] = (nz * c + (ax * ny) * s + az * d * (1 - c)) * 127;
+    }
+    pos.needsUpdate = true; nor.needsUpdate = true;
+  };
+}
+
 /** Instantiate a Waste Toner rig sharing pre-baked geometries with its own tintable surface material. */
 function instantiateRig(kit, geoms, unitScale = 1) {
   const mat = kit.surface({ vox: true });
@@ -206,12 +253,15 @@ function instantiateRig(kit, geoms, unitScale = 1) {
   const limbs = geoms.limbs.map(({ sx, sz, wholeGeo, slippedGeo }) => {
     const g = new THREE.Group();
     g.position.set(sx * 4.8 * S, 10 * S, sz * 5.2 * S);
-    const whole = new THREE.Mesh(wholeGeo, mat);
-    const slipped = new THREE.Mesh(slippedGeo, mat);
+    // (its own copies of the leg, to bend at the knee: kneeFor)
+    const wg = kit.own(wholeGeo.clone()), sg = kit.own(slippedGeo.clone());
+    const whole = new THREE.Mesh(wg, mat);
+    const slipped = new THREE.Mesh(sg, mat);
     slipped.visible = false;
     g.add(whole, slipped);
     body.add(g);
-    return { g, sx, sz, whole, slipped };
+    const kw = kneeFor(wg, sx, sz), ks = kneeFor(sg, sx, sz);
+    return { g, sx, sz, whole, slipped, knee: (a) => { kw(a); ks(a); } };
   });
 
   const streaks = Array.from({ length: 8 }, (_, i) => {
@@ -576,6 +626,7 @@ export function create(c) {
       const swing = Math.sin(unit.gait + diag) * (chasing ? 0.52 : went > 1e-3 ? 0.3 : 0.06);
       const lift = Math.max(0, Math.cos(unit.gait + diag)) * (chasing ? 0.38 : went > 1e-3 ? 0.2 : 0.04);
       l.g.rotation.set(swing * l.sz, swing * 0.22 * l.sx, -lift * l.sx);
+      l.knee(lift * 1.6);                                                       // (the claw comes in under it as it is lifted)
     });
     // the wisps of loose toner drifting round the core
     for (const st of rig.streaks) {

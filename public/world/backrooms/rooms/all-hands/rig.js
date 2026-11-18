@@ -100,6 +100,7 @@ export function makeKeynoteSpeaker(kit) {
   headTorn.visible = false;
   head.add(headWhole, headTorn);
   group.add(bodyMesh, head);
+  group.name = 'keynote-speaker';                                                 // (for the dev page to find)
 
   // Its legs (walk-legs.js; modelled 1.14 long from the hip). Walking up the aisle it walks. In the questions it is only
   // ever seen standing: each blackout it is a step nearer, caught in the middle of it, the other foot ahead each time.
