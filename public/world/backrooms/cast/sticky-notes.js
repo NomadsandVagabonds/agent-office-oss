@@ -12,7 +12,7 @@ import { Batch, lamp } from '../kit.js';
 import { NOTES, onWall, noteStep, fallen, torn, drainOf, nextToPeel } from './sticky-notes.rule.js';
 import { facing } from '../shove.rule.js';
 
-const S = 0.0106, SIZE = 8;                 // a note: 8 voxels of 1.06 cm, 8.5 cm a side
+const S = 0.017, SIZE = 8;                  // a note: 8 voxels of 1.7 cm, 13.6 cm a side — bigger than a real one, so it reads from across a room (the lead: at 8.5 cm it was a speck)
 const COLOURS = ['#f2e27a', '#f3a7c4', '#9fd3ea', '#b9e39a', '#f6c26b'];
 
 /** A note: a square of paper, its glued strip along the top, a few lines of somebody's writing. Front on +z; the top edge at y SIZE. */
@@ -167,7 +167,11 @@ export function create(c) {
       } });
       return out;
     },
-    at: () => (room ? { x: (rect.x0 + rect.x1) / 2, z: (rect.z0 + rect.z1) / 2, notes: notes.map((n) => n.s.mode), taken: +taken.toFixed(4) } : { x: null, z: null }),
+    // (where they are: the first still on its wall — so the dev page's beside stands you within peeling reach of one, facing it —
+    // or, once none is, the middle of their room)
+    at: () => { if (!room) return { x: null, z: null }; const w = notes.find((n) => n.s.mode === 'wall'), p = w ? { x: w.wall.x + Math.sin(w.wall.yaw) * 0.05, z: w.wall.z + Math.cos(w.wall.yaw) * 0.05 } : { x: (rect.x0 + rect.x1) / 2, z: (rect.z0 + rect.z1) / 2 }; return { ...p, notes: notes.map((n) => n.s.mode), taken: +taken.toFixed(4) }; },
+    /** For the dev page's beside: stand two metres off the note, in the room, facing it. */
+    apart: 2,
     /** For the dev page: one of them, now, where it is ({ x, y, z }, mode) — and wake them all. */
     notes: () => notes.map((n) => ({ ...n.p, mode: n.s.mode })),
     wake() { for (const n of notes) if (n.s.mode === 'wall') n.s = { ...n.s, mode: 'peel', t: 0 }; },
