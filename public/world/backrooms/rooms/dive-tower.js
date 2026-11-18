@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Batch, lin, WHITE } from '../kit.js';
 import { pipe } from '../pool-finish.js';
 import { tiledPlane } from './return-pool/art.js';
-import { collisionFlumeVox, FLUME_CELL } from './channel-hall/collision-art.js';
+import { buildOverheadFlumes } from '../waterpark.js';
 import { showerWater } from './locker-showers/water.js';
 import { divePlan, towerSupport, inPool, flightAt, MAZE } from './dive-tower/plan.js';
 
@@ -127,9 +127,9 @@ function architecture(c,p){
   box(c.flat,[ledgeX-.38,landingY+.91,back+.25,ledgeX-.19,landingY+.97,back+.30],steel);
   c.lay(railTop,ledgeX,back+.29,1.17,.07,0,null,WHITE,landingY+2.24,true);
   c.light(ledgeX,landingY+1.98,back+.73,'#f3bd79',1.2,{far:4.3,k:2.6});
-  const flume={color:'#bea254',radius:.49,
+  const flume={id:'tower:yellow-flume',color:'#bea254',radius:.49,
     pts:[[right-.06,2.75,5.05],[6,2.67,4.5],[4.1,2.21,3.9],[2.75,1.71,3.05],[1.64,.97,2.06]]};
-  c.model('tower:yellow-flume',()=>collisionFlumeVox(flume),0,0,{scale:FLUME_CELL/.025,solid:false,shadow:false});
+  buildOverheadFlumes(c,[flume]);
   for(const [x,z] of [[5.2,4.25],[3.2,3.2]])pipe(c.flat,[x,2.7,z],[x,H,z],.038,steel);
   for(const [x,z] of [[0,9],[0,4],[4.8,-2.0],[-4.85,-4.55]]){
     box(c.flat,[x-.21,H-.13,z-.79,x+.21,H,z+.79],dark);

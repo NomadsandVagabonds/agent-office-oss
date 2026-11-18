@@ -568,11 +568,11 @@ test('buildWorld builds all 15 forest deck rooms and all 8 forced WRONG oddities
       const maxOrdTris = isBig(arch) ? 240000 : 120000;
       const maxTotalTris = isBig(arch) ? 500000 : 250000;
       assert.ok(rt.lights.length <= 16, `${id}: lights ${rt.lights.length} > 16`);
-      // (lights-out is the one forest room with no ceiling light and no planting: a dark room of tents on bare carpet)
+      // (lights-out is the one forest room with no ceiling light: its lights are the tents, the coals and the toilet's moon)
       if (id !== 'lights-out') assert.equal(rt.lighting?.bankCount, 4, `${id}: expected 4-bank dynamic woodland lighting`);
       assert.ok(ordMeshes <= 45, `${id}: ordinary meshes ${ordMeshes} > 45`);
       assert.ok(detMeshes <= 12, `${id}: detail meshes ${detMeshes} > 12`);
-      if (id !== 'lights-out') assert.ok(detTris > 0, `${id}: expected detail: true meshes to carry woodland detail`);
+      assert.ok(detTris > 0, `${id}: expected detail: true meshes to carry woodland detail`);
       assert.ok(ordTris <= maxOrdTris, `${id}: ordinary triangles ${Math.round(ordTris)} > ${maxOrdTris}`);
       assert.ok(totalTris <= maxTotalTris, `${id}: total triangles ${Math.round(totalTris)} > ${maxTotalTris}`);
       if (['old-growth', 'tree-farm', 'windthrow', 'nursery-aisles', 'inverted-grove'].includes(id)) {

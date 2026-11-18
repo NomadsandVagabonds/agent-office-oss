@@ -17,6 +17,45 @@ import {
   COPING,
 } from '../waterpark.js';
 
+// A thin, broken bell of water leaves the lip sideways before gravity takes
+// over. The last strip lies flat on the pool and carries the impact ripples.
+function fountainWater(c, lipY, lipRadius, waterY) {
+  const batch = new Batch(), sectors = 64, bands = 7;
+  function point(angle, fall) {
+    const radius = lipRadius + .40*fall - .05*fall*fall;
+    return [radius*Math.cos(angle), lipY+(waterY-lipY)*fall*fall, radius*Math.sin(angle)];
+  }
+  const water = [.62,.86,.81];
+  for (let i=0;i<sectors;i++) {
+    const u=i/sectors, v=(i+1)/sectors, a=u*2*Math.PI, b=v*2*Math.PI;
+    for (let j=0;j<bands;j++) {
+      const from=j/bands, to=(j+1)/bands;
+      batch.quad(point(a,from),point(b,from),point(b,to),point(a,to),water,[[u,from],[v,from],[v,to],[u,to]]);
+    }
+    const impact=(angle,offset)=>[(lipRadius+.35+offset)*Math.cos(angle),waterY+.009,(lipRadius+.35+offset)*Math.sin(angle)];
+    batch.quad(impact(a,-.05),impact(b,-.05),impact(b,.4),impact(a,.4),water,[[u,-1],[v,-1],[v,-2],[u,-2]]);
+  }
+  const clock={value:0};
+  addTranslucent(c,batch,{alpha:.67,order:5,side:THREE.DoubleSide,finishMaterial(mat) {
+    mat.forceSinglePass=true;
+    mat.uniforms.uFountainTime=clock;
+    mat.fragmentShader='uniform float uFountainTime;\n'+mat.fragmentShader.replace('gl_FragColor = vec4(c, uAlpha);',`
+      float angle = vUv.x * 6.2831853;
+      float flow = vUv.y*9. - uFountainTime*4.;
+      float nozzle = .5+.5*cos(20.*angle + .58*sin(flow+3.*angle));
+      float strands = .5+.5*cos(93.*angle + 1.7*sin(flow+11.*angle));
+      float glint = pow(strands,4.) * (.5+.5*sin(2.7*flow+13.*angle));
+      float coverage = (.11 + .71*pow(nozzle,2.))*(.38+.62*strands);
+      if(vUv.y<0.){
+        float dist = -vUv.y-1.;
+        glint = pow(.5+.5*cos(dist*18. - uFountainTime*4.2 + .8*sin(angle*9.)),5.);
+        coverage = glint*(1.-dist)*(.24+.51*nozzle);
+      }
+      gl_FragColor = vec4(c*(1.+glint*.58),uAlpha*coverage);`);
+  }});
+  return clock;
+}
+
 export function build(c) {
   const { W, D, R, kit } = c;
   c.shell({ panels: false, floor: false, wallTex:poolTileTex(c.kit,'white') });
@@ -37,16 +76,7 @@ export function build(c) {
   c.after.push(() => mush.userData.light(c.sample(0, 1.4, 0)));
   c.solid(-0.42, -0.42, 0.42, 0.42);
 
-  // Translucent shimmering water umbrella cascading from the mushroom cap rim (`r = 0.78 m` down to `waterY`)
-  const veil = new Batch();
-  const nSeg = 14, rCap = 0.78, yCap = -depth + 1.92;
-  for (let i = 0; i < nSeg; i++) {
-    const a0 = (i / nSeg) * Math.PI * 2, a1 = ((i + 1) / nSeg) * Math.PI * 2;
-    const x0 = Math.cos(a0) * rCap, z0 = Math.sin(a0) * rCap;
-    const x1 = Math.cos(a1) * rCap, z1 = Math.sin(a1) * rCap;
-    veil.quad([x0, yCap, z0], [x1, yCap, z1], [x1 * 1.12, waterY, z1 * 1.12], [x0 * 1.12, waterY, z0 * 1.12], [0.78, 0.98, 1.0]);
-  }
-  addTranslucent(c, veil, { alpha: 0.28, side: THREE.DoubleSide, order: 3 });
+  const fountainClock = fountainWater(c, mush.position.y + .036*51, .036*32, waterY);
   c.light(0, 0.85, 0, '#6cf4ff', 0.65, { k: 2.6, far: 7.5 });
 
   // 2. Ten Candy-Coloured Inner Tubes — 5 Empty, 5 Occupied by Upside-Down Office Workers' Legs!
@@ -88,6 +118,7 @@ export function build(c) {
     waterAlpha: CALM_WATER.lagoon.alpha,
     stepsSide: 'both',
     onTick: (info, dt, t, me) => {
+      fountainClock.value = t;
       mistTimer -= dt;
       if (mistTimer <= 0 && me.inside) {
         mistTimer = 3.2 + R() * 1.4;

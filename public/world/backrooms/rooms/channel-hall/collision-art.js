@@ -2,38 +2,16 @@
 // playable banks remain clear; the high flumes belong to the sealed galleries.
 import * as THREE from 'three';
 import {Batch,lin,WHITE} from '../../kit.js';
-import {Vox,M} from '../../../vox/vox.js';
-import {evalFlume} from '../../waterpark.rule.js';
-import {innerTubeVox,addTranslucent} from '../../waterpark.js';
+import {innerTubeVox,addTranslucent,buildOverheadFlumes} from '../../waterpark.js';
 import {pipe,poolDetail} from '../../pool-finish.js';
 import {channelFloor} from './rule.js';
 const cream=lin('#cac9b4'),steel=lin('#748c80'),dark=lin('#293b35'),rust=lin('#88694e');
 const box=(b,q,col=cream)=>b.box(...q,col,{step:.7,uv:1.6});
 
-// These are genuinely hollow voxel shells. A 24cm construction grid gives
-// the large flumes the same stepped silhouette as the small office props.
-export const FLUME_CELL=.24;
 export const COLLISION_FLUMES=[
-  {id:'coral',color:'#ce7969',radius:.67,pts:[[-8.65,4.15,5.7],[-6.5,4.15,5.7],[-4.5,3.45,5.9],[-1.6,3.65,5.6],[1.4,4.9,2.3],[4.5,4.2,-1.6],[8.65,4.2,-4.2]]},
-  {id:'yellow',color:'#c1a04b',radius:.57,pts:[[2.8,7.0,6.2],[2.8,6.25,6.2],[2.3,5.4,6.2],[.6,5.25,7.3],[-2.5,5.6,8.3],[-4.9,6.8,6.9],[-8.65,7.35,5.7]]},
+  {id:'coral',color:'#e87b68',radius:.67,pts:[[-8.65,4.15,5.7],[-6.5,4.15,5.7],[-4.5,3.45,5.9],[-1.6,3.65,5.6],[1.4,4.9,2.3],[4.5,4.2,-1.6],[8.65,4.2,-4.2]]},
+  {id:'yellow',color:'#e2b448',radius:.57,pts:[[2.8,7.0,6.2],[2.8,6.25,6.2],[2.3,5.4,6.2],[.6,5.25,7.3],[-2.5,5.6,8.3],[-4.9,6.8,6.9],[-8.65,7.35,5.7]]},
 ];
-export function collisionFlumeVox(spec){
-  const v=new Vox(),base=M(spec.color,0),seam=M(spec.id==='coral'?'#b35e53':'#a3843c',0);
-  const pts=Array.from({length:121},(_,i)=>{const p=evalFlume(spec.pts,i/120);return [p.x/FLUME_CELL,p.y/FLUME_CELL,p.z/FLUME_CELL];});
-  const radius=spec.radius/FLUME_CELL;
-  for(let i=1;i<pts.length;i++)v.tube(...pts[i-1],...pts[i],radius,base);
-  // Narrow reinforced sections, raised from the same shell rather than a
-  // chain of overlapping solid cylinders. Carve the bore after the seams.
-  for(let i=8;i<pts.length-2;i+=12)v.tube(...pts[i-1],...pts[i],radius+.6,seam);
-  const bore=radius-.19/FLUME_CELL;
-  for(let i=1;i<pts.length;i++)v.tube(...pts[i-1],...pts[i],bore,0);
-  for(const [at,dir]of [[0,-1],[120,1]]){
-    const p=evalFlume(spec.pts,at/120),q=pts[at];
-    v.tube(...q,q[0]+p.tx*radius*dir,q[1]+p.ty*radius*dir,q[2]+p.tz*radius*dir,bore,0);
-  }
-  return v;
-}
-
 export function cutSlab(batch,x0,x1,z0,z1,y,thickness,hole){
   const [hx0,hx1,hz0,hz1]=hole;
   for(const [a,b,d,e]of [[x0,hx0,z0,z1],[hx1,x1,z0,z1],[hx0,hx1,z0,hz0],[hx0,hx1,hz1,z1]])
@@ -147,9 +125,7 @@ export function collideOfficeAndPool(c,t,p){
     door(c,side,0,y);door(c,side,5.7,y,{open:side<0});
   }
   door(c,1,-4.2,3.16,{open:true});
-  const tubes=new Batch(true);
-  for(const spec of COLLISION_FLUMES)c.model('channel:collision-flume:'+spec.id,()=>collisionFlumeVox(spec),0,0,{batch:tubes,scale:FLUME_CELL/.025,solid:false,shadow:false});
-  const flumes=c.dynamic(tubes);flumes.name='office-collision-flumes';
+  const flumes=buildOverheadFlumes(c,COLLISION_FLUMES);flumes.name='office-collision-flumes';
   const detail=poolDetail(c).batch;
   for(const [x,y,z]of [[-6,4.7,5.7],[-.4,4.1,5.4],[4.5,4.9,-1.6]]){
     pipe(detail,[x,y,z],[x,6,z],.026,steel);

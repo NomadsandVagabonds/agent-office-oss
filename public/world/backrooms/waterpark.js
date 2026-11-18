@@ -17,6 +17,7 @@
 //   Vox models           3 cm sculpted inner tubes, occupied leg-floats, ladders, loungers, Skimmer, Lifeguard, mushroom
 
 import * as THREE from 'three';
+import {basinOptics,ceilingLampMap} from './pool-optics.js';
 import {basinFinish,poolDetail} from './pool-finish.js';
 import { Vox, M } from '../vox/vox.js';
 import { Batch, lamp, lin, ticks, drawText, WHITE } from './kit.js';
@@ -98,33 +99,18 @@ export function poolTileTex(kit, variant = 'seafoam') {
   });
 }
 
-/** Luminous chlorinated water surface with interlocking caustic light webs. */
+/** Muted, seamless ripples under the office fluorescents. */
 export function causticWaterTex(kit, tone = 'aqua') {
-  const base = tone === 'deep' ? '#0c5c6b' : tone === 'emerald' ? '#0f6d68' : '#138ba1';
-  const mid = tone === 'deep' ? '#1e8da0' : tone === 'emerald' ? '#249e94' : '#32b8cf';
-  const hi = '#e8feff';
-  return kit.tex.custom('wp:water:' + tone, 64, 64, (g, w, h) => {
-    P(g, base, 0, 0, w, h);
-    // tiled caustic cells (seamless wrap across 64x64)
-    const pts = [
-      [11, 9], [34, 13], [55, 8],
-      [8, 31], [27, 29], [48, 34],
-      [16, 52], [39, 50], [58, 56],
-    ];
-    for (let y = 0; y < h; y += 2) {
-      for (let x = 0; x < w; x += 2) {
-        let d1 = 999, d2 = 999;
-        for (const [px, py] of pts) {
-          for (const ox of [-64, 0, 64]) for (const oy of [-64, 0, 64]) {
-            const d = Math.hypot(x - (px + ox), y - (py + oy));
-            if (d < d1) { d2 = d1; d1 = d; }
-            else if (d < d2) d2 = d;
-          }
-        }
-        const edge = d2 - d1;
-        if (edge < 2.5) P(g, hi, x, y, 2, 2);
-        else if (edge < 5.4) P(g, mid, x, y, 2, 2);
-      }
+  const tint = tone === 'emerald' ? [52, 113, 98] : tone === 'deep' ? [37, 87, 99] : [61, 129, 131];
+  return kit.tex.custom('wp:water:' + tone, 96, 96, (g, w, h) => {
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const a = x * Math.PI * 2 / w, b = y * Math.PI * 2 / h;
+      const long = Math.sin(2*a + b + .8*Math.sin(2*b-a));
+      const cross = Math.cos(a - 3*b + .9*Math.cos(2*a+b));
+      const glimmer = Math.max(0, 1 - Math.abs(long + .77*cross)*4);
+      const amount = 6*long + 5*cross + 29*glimmer*glimmer;
+      const [r, green, blue] = tint;
+      P(g, `rgb(${Math.round(r+amount)},${Math.round(green+amount)},${Math.round(blue+amount)})`, x,y,1,1);
     }
   });
 }
@@ -424,16 +410,19 @@ export function natatoriumLight(c, cols = 3, rows = 3, every = 1, power = 1.05) 
   const { W, D, H } = c;
   const tube = c.look.tube || '#e8fbff';
   const head = clamp(H / 2.6, 0.4, 2.5);
+  const fixtures = [];
   let count = 0;
   for (let i = 0; i < cols; i++) {
     for (let j = 0; j < rows; j++) {
       const x = (Math.round((-W / 2 + (i + 0.5) * W / cols) / TILE - 0.5) + 0.5) * TILE;
       const z = Math.round((-D / 2 + (j + 0.5) * D / rows) / TILE) * TILE;
+      fixtures.push([x, z]);                                                  // (the lamps the pools reflect: pool-optics.js)
       const lit = (i + j * 2) % every === 0 && count < 12;
       c.fitting(x, z, { y: H, tube, light: lit ? { power: power * Math.pow(head, 1.45), floor: 0.28, k: 3.6 * head, far: 15 * head } : false });
       if (lit) count++;
     }
   }
+  c.rt.poolLampMap = ceilingLampMap(c, fixtures, TILE, [W, D, cols, rows].join(':'));
 }
 
 /* ---- 3 cm sculpted voxel models (Vox, never plain boxes) ------------------ */
@@ -612,25 +601,44 @@ export function noodleVox(colorHex = '#ff5c8a') {
 export function mushroomVox() {
   return () => {
     const v = new Vox();
-    const stalk = M('#efe8d5', 2), stalkShade = M('#d7ccb4', 2), cap = M('#d6342c', 1), spot = M('#f7f5ee', 1), gill = M('#e3dac2', 2);
+    const stalk = M('#efe8d5', 2), stalkShade = M('#d7ccb4', 2), cap = M('#cd4938', 1), spot = M('#f8ead0', 1), gill = M('#e3dac2', 2);
     // Bulbous base tapering up to the gills
     v.cyl('y', 0, 0, 0, 12, 6.8, stalkShade, 5.4);
     v.cyl('y', 0, 0, 12, 42, 5.4, stalk, 4.4);
     v.cyl('y', 0, 0, 42, 52, 4.4, stalk, 5.6);
-    // Underside gills & domed polka-dot cap
-    v.ellipsoid(0, 53, 0, 21, 3.5, 21, gill);
-    v.ellipsoid(0, 56, 0, 23, 9.5, 23, cap);
-    // Underside relief, drain nozzles and a service collar. Keep the stalk
-    // connected to the cap instead of carving through its neck.
-    for(let i=0;i<16;i++) {
-      const a=i*Math.PI/8,co=Math.cos(a),si=Math.sin(a);
-      v.tube(co*6,50,si*6,co*20,52,si*20,.65,stalkShade);
-      v.cyl('y',co*19,si*19,49,52,1,M('#667c64',0));
+    // Painted spots follow the casting all the way over the brow; several
+    // sit low enough on the lip to be seen from a child's height in the pool.
+    const spots = [[-4,1,5.8],[11,14,5],[-14,19,4.7],[20,-9,4.6],[-17,-12,5.8],[1,-22,3.9]];
+    for (let i=0;i<11;i++) {
+      const angle = i*Math.PI*2/11+.14;
+      spots.push([31*Math.cos(angle),31*Math.sin(angle),i%2 ? 3.5 : 4.2]);
+    }
+    const marks = spots.map(([x,z,radius]) => ({
+      x, z, radius, y: 54 + 15*Math.sqrt(1-(x*x+z*z)/(33*33)),
+    }));
+    for (let z=-33;z<=33;z++) for (let x=-33;x<=33;x++) {
+      const r = Math.hypot(x,z)/33;
+      if (r>1) continue;
+      const top = Math.round(54 + 15*Math.sqrt(1-r*r));
+      const bottom = Math.round(51 + 2*(1-r));
+      v.box(x,bottom,z,x+1,top+1,z+1,cap);
+      for (const mark of marks) {
+        const reach = mark.radius**2 - (x-mark.x)**2 - (z-mark.z)**2;
+        if (reach <= 0) continue;
+        const span = Math.sqrt(reach);
+        const low = Math.max(bottom+1, Math.ceil(mark.y-span));
+        const high = Math.min(top+1, Math.floor(mark.y+span)+1);
+        if (high > low) v.box(x,low,z,x+1,high,z+1,spot);
+      }
+      v.set(x,bottom,z,gill);
+    }
+    for(let i=0;i<20;i++) {
+      const a=i*Math.PI/10,co=Math.cos(a),si=Math.sin(a);
+      v.tube(co*5,50,si*5,co*32,50,si*32,.7,stalkShade);
+      v.cyl('y',co*31.5,si*31.5,48.5,51.5,1,M('#667c64',0));
     }
     v.cyl('y',0,0,9,11,7.2,M('#a2a78a',0),6);
     for(const x of [-3,3])v.box(x,10,6,x+1,13,7,M('#697c65',0));
-    const spots = [[0, 64, 0, 4.2], [11, 61, 6, 3.4], [-12, 60, 5, 3.6], [5, 60, -13, 3.5], [-8, 61, -10, 3.2], [15, 57, -5, 3.0], [-15, 57, 9, 2.8]];
-    for (const [sx, sy, sz, sr] of spots) v.ellipsoid(sx, sy, sz, sr, 2.0, sr, spot);
     return v;
   };
 }
@@ -1026,6 +1034,7 @@ export function addTranslucent(c, batch, opt = {}) {
       alpha: opt.alpha ?? 0.52,
       side: opt.side ?? THREE.DoubleSide,                  // (?? not ||: FrontSide is 0, and a caller asking for it gets it)
     });
+    opt.finishMaterial?.(mat);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.renderOrder = opt.order ?? 3;
     holder.add(mesh);
@@ -1046,12 +1055,15 @@ export function buildFlume(c, key, pts, opt = {}) {
   const enclosed = opt.enclosed !== false;
   // An inward shell for every flume unless a caller says otherwise (`interior: false`): open troughs always had one;
   // an enclosed tube drawn front-side only needs one too, or from inside (or looking up into its mouth) it is a hole.
-  const wantInner = !enclosed || opt.interior !== false;
+  // (A molded flume always has one.)
+  const molded = !!opt.molded;
+  const wantInner = molded || !enclosed || opt.interior !== false;
   const rgb = lin(opt.color || '#1ec8e6');
+  const stripeRgb = molded ? lin('#f2ce97') : null;
   const ribRgb = rgb.map((v) => Math.min(1, v * 0.62 + 0.05));
   const innerRgb = rgb.map((v) => Math.min(1, v * 0.88 + 0.08));
-  const steps = opt.steps || Math.max(18, Math.ceil(flumeLength(pts) / 0.30));
-  const sides = enclosed ? 12 : 8;
+  const steps = opt.steps || Math.max(18, Math.ceil(flumeLength(pts) / (molded ? 0.40 : 0.30)));
+  const sides = molded ? 20 : enclosed ? 12 : 8;
   const arc0 = enclosed ? 0 : -Math.PI * 0.68;
   const arc1 = enclosed ? Math.PI * 2 : Math.PI * 0.68;
 
@@ -1075,10 +1087,26 @@ export function buildFlume(c, key, pts, opt = {}) {
     return out;
   };
 
+  // The gelcoat has one continuous reflection across panel edges. Give each
+  // corner its radial normal while leaving the joint and rim edges faceted.
+  function skinQuad(a, b, d, e, color, f0, f1, inward = false) {
+    const start = shell.nor.length;
+    shell.quad(a, b, d, e, color);
+    if (!molded) return;
+    const centers = inward ? [f0, f1, f1, f0] : [f0, f0, f1, f1];
+    const scale = inward ? -1 / (radius * 0.955) : 1 / radius;
+    for (const [i, point] of [a, b, d, e].entries()) {
+      const frame = centers[i], k = start + 3 * i;
+      shell.nor[k] = (point[0] - frame.x) * scale;
+      shell.nor[k + 1] = (point[1] - frame.y) * scale;
+      shell.nor[k + 2] = (point[2] - frame.z) * scale;
+    }
+  }
+
   for (let i = 0; i < steps; i++) {
     const f0 = frames[i], f1 = frames[i + 1];
     // Every 4th ring is a darker molded fiberglass flange seam on a watertight continuous radius!
-    const isRib = (i % 4 === 2) && i > 0 && i < steps - 1;
+    const isRib = !molded && (i % 4 === 2) && i > 0 && i < steps - 1;
     const baseRgb = isRib ? ribRgb : rgb;
     const ring0 = ringPts(f0, 1.0);
     const ring1 = ringPts(f1, 1.0);
@@ -1086,13 +1114,15 @@ export function buildFlume(c, key, pts, opt = {}) {
     for (let s = 0; s < sides; s++) {
       const aMid = arc0 + ((arc1 - arc0) * (s + 0.5)) / sides;
       const shadeK = 0.78 + 0.32 * (0.5 - 0.5 * Math.cos(aMid));
+      // A faded cream side stripe runs continuously through successive slide sections.
+      const paint = molded && (s === sides / 4 || s === sides * 3 / 4 - 1) ? stripeRgb : baseRgb;
       const colOut = [
-        Math.min(1, baseRgb[0] * shadeK),
-        Math.min(1, baseRgb[1] * shadeK),
-        Math.min(1, baseRgb[2] * shadeK),
+        Math.min(1, paint[0] * shadeK),
+        Math.min(1, paint[1] * shadeK),
+        Math.min(1, paint[2] * shadeK),
       ];
       // Outward-facing radial normal (`U x T = -V` at bottom `a = 0`) for clean FrontSide culling!
-      shell.quad(ring0[s], ring0[s + 1], ring1[s + 1], ring1[s], colOut);
+      skinQuad(ring0[s], ring0[s + 1], ring1[s + 1], ring1[s], colOut, f0, f1);
     }
 
     if (wantInner) {
@@ -1107,7 +1137,7 @@ export function buildFlume(c, key, pts, opt = {}) {
           Math.min(1, innerRgb[2] * shadeK),
         ];
         // Inward-facing radial normal so inside of open troughs / crawl tubes renders cleanly with FrontSide!
-        shell.quad(in0[s], in1[s], in1[s + 1], in0[s + 1], colIn);
+        skinQuad(in0[s], in1[s], in1[s + 1], in0[s + 1], colIn, f0, f1, true);
       }
     }
   }
@@ -1115,7 +1145,27 @@ export function buildFlume(c, key, pts, opt = {}) {
   // Raised bolted collars sit outside the existing tube; the crawling bore
   // and its floor remain unchanged. One shared detail draw for every flume.
   const fittings=poolDetail(c).batch;
-  for(let i=6;i<steps-2;i+=8){
+  const joints = [];
+  if (molded) {
+    // A joint every mould length in metres, including on the long sweeping bends.
+    let distance = 0, nextJoint = 1.6;
+    for (let i = 1; i < steps; i++) {
+      const f = frames[i], prev = frames[i - 1];
+      distance += Math.hypot(f.x - prev.x, f.y - prev.y, f.z - prev.z);
+      if (distance >= nextJoint) { joints.push(i); nextJoint += 2.2; }
+    }
+    // Close just the exposed wall thickness, so the mouth reads as rolled plastic.
+    for (const i of [0, steps]) {
+      const outer = ringPts(frames[i]), inner = ringPts(frames[i], 0.955);
+      for (let j = 0; j < sides; j++) {
+        if (i === 0) shell.quad(outer[j], inner[j], inner[j+1], outer[j+1], ribRgb);
+        else shell.quad(outer[j+1], inner[j+1], inner[j], outer[j], ribRgb);
+      }
+    }
+  } else {
+    for (let i = 6; i < steps - 2; i += 8) joints.push(i);
+  }
+  for(const i of joints){
     const f=frames[i],before=frames[i-1],after=frames[i+1];
     const a={...f,x:f.x+(before.x-after.x)*.06,y:f.y+(before.y-after.y)*.06,z:f.z+(before.z-after.z)*.06};
     const d={...f,x:f.x+(after.x-before.x)*.06,y:f.y+(after.y-before.y)*.06,z:f.z+(after.z-before.z)*.06};
@@ -1124,7 +1174,7 @@ export function buildFlume(c, key, pts, opt = {}) {
       fittings.quad(outerA[j],outerA[j+1],outerD[j+1],outerD[j],ribRgb);
       fittings.quad(innerA[j+1],outerA[j+1],outerA[j],innerA[j],ribRgb);
       fittings.quad(innerD[j],outerD[j],outerD[j+1],innerD[j+1],ribRgb);
-      if(j%2===0){const q=outerA[j];fittings.box(q[0]-.024,q[1]-.024,q[2]-.024,q[0]+.024,q[1]+.024,q[2]+.024,lin('#c3c3a7'));}
+      if(j%(molded?4:2)===0){const q=outerA[j];fittings.box(q[0]-.024,q[1]-.024,q[2]-.024,q[0]+.024,q[1]+.024,q[2]+.024,lin('#c3c3a7'));}
     }
   }
 
@@ -1144,6 +1194,15 @@ export function buildFlume(c, key, pts, opt = {}) {
       if (opt.solidStruts !== false && floorBase === 0) c.solid(p.x - 0.14, p.z - 0.14, p.x + 0.14, p.z + 0.14);
     }
   }
+}
+
+/** Sealed-gallery slides share a wet, opaque gelcoat and a single shell draw per room. */
+export function buildOverheadFlumes(c, specs) {
+  const batch = new Batch();
+  for (const spec of specs) {
+    buildFlume(c, spec.id, spec.pts, { radius: spec.radius, color: spec.color, molded: true, batch });
+  }
+  return c.dynamic(batch, { wet: 0.78 });
 }
 
 /* ---- recessed chlorinated basin + wading + underwater swimming ------------ */
@@ -1279,11 +1338,13 @@ export function createBasin(c, spec) {
     (u, v) => [(bx0 + v) / 1.9, (bz0 + u) / 1.9],
     [0.88, 1.0, 1.0]
   );
+  const poolClock = { value: 0 };
   addTranslucent(c, waterSurf, {
     map: waterTex,
     alpha: spec.waterAlpha ?? 0.52,
     side: THREE.FrontSide,
     order: 4,
+    finishMaterial: c.rt.poolLampMap && !spec.waterTex ? mat => basinOptics(c, mat, poolClock, waterY) : undefined,
   });
   c.liquid?.(waterSurf, { kind: 'water', y: waterY });
 
@@ -1325,6 +1386,7 @@ export function createBasin(c, spec) {
   c.rt.basin = info;
 
   c.tick((dt, t, me) => {
+    poolClock.value = t;
     const inside = me.inside && spec.active?.() !== false && inBasin(me.x, me.z);
     const trueFloor = inside ? baseFloorAt(me.x, me.z) : 0;
     const keys = c.env.player?.input?.keys;
