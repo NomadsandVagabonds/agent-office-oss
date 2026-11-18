@@ -33,7 +33,9 @@ The pictures are in this session's scratchpad and are not committed.
 4. **The floor is two places.** Five older rooms and every plain room are bright aqua with neon caustics at Classic.
    The newer rooms are pale ivory, murky and good. Pick the second and bring the plain rooms to it; the older five
    can follow.
-5. **Then deal it, at a low weight, single-player only**, and keep the Return Pool's valve and the pushing water as
+5. **No way down on E.** The Flume Knot's abyss slide and the Drain Spa's drain took you to the next part on a key
+   press; the owner's rule is no button-press level transitions. (Done, `claude/waterpark-review`, section 9.)
+6. **Then deal it, at a low weight, single-player only**, and keep the Return Pool's valve and the pushing water as
    the owner's two decisions (sections 3 and 4).
 
 **Found on the way, already fixed by the lead:** on a repeat load, 3 of 10 pages never started (`Failed to resolve
@@ -365,7 +367,10 @@ you stand.
 
 1. **Take the words off.** Remove the key names and the rules from the signs in the Surge Basin, Lazy Loop, Diving
    Well (both boards) and Drain Spa. Remove the `ADULT SWIM` and `SUBMERGED` camcorder flags. Keep the pool-rules
-   signs that are a pool's own voice. *Owner's go: not needed; it is their own rule.*
+   signs that are a pool's own voice. *Owner's go: not needed; it is their own rule.* **Done** (`5734bce`, and
+   `WALK SLOWLY IN BASIN` in `8f76e1c`).
+1a. **No way down on E.** The abyss slide and the Drain Spa's drain take you when you step into them. *Owner's go:
+   not needed; it is their own rule ("no button-press level transitions").* **Done** (section 9).
 2. **Make the Towel Return survivable.** Any one of: three figures, not six; one heart for the whole chase; the pack
    stops at the tower door; or make them answer the scissors as basic or medium tier. Also give the room its own
    `resident` id and drawing, not `pit-clerks`. *Owner's go: yes, for which one.*
@@ -426,3 +431,13 @@ same holds here.
 **One more sign line taken off.** `WALK SLOWLY IN BASIN` (Toadstool Lagoon) was struck: walking slowly is exactly
 what keeps you alive among the floats (hurrying past them cost me two hearts), so it was the room's rule, not a
 pool's notice.
+
+**The two ways down no longer need E** (on the lead's ruling, after the play above). The Flume Knot's abyss slide
+starts when you step into its open mouth beside the glowing drain in the lower hall. The Drain Spa's drain takes
+whoever is in its throat (within 0.6 m of its middle; the current carries a wader there). Neither shows a mark or
+takes a key. Both still only go down where the visit goes down: on the last part the abyss slide returns you to
+the gallery as before, and the drain does nothing. Played once each, on a visit whose way down was a hole (abyss)
+and a ledge (drain): walking into the abyss mouth took me to the next part in about 4 s. Wading into the drain's
+throat spiralled me down; it took about 28 s to land, almost all of it waiting while the next part built under
+software rendering. The plunge, the bail-out chute and the sump hatch keep E: they are rides inside one room.
+
