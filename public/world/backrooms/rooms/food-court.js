@@ -10,7 +10,8 @@
 // way up, laid. In the middle the floor was left out, with a brass rail
 // round where it should be and a length of the rail missing. One counter
 // has something on it that can be eaten.
-import { ticks } from '../kit.js';
+import * as THREE from 'three';
+import { ticks, Batch, lamp } from '../kit.js';
 import { P } from '../bits.js';
 import { Vox, M, glow } from '../../vox/vox.js';
 import { upright, sheet } from '../suburb.js';
@@ -59,7 +60,8 @@ export function build(c) {
   for (const [a, b] of [[[-hx, -hz], [hx, -hz]], [[hx, -hz], [hx, hz]], [[hx, hz], [-hx, hz]], [[-hx, hz], [-hx, -hz]]]) sheet(dark, [a[0], -K.seen, a[1]], [b[0], -K.seen, b[1]], [b[0], 0, b[1]], [a[0], 0, a[1]], 1, 6, (s, t) => [s * 3, t * 8], [0.5, 0.5, 0.5], 1);
   c.flat.box(-hx, -K.seen - 0.1, -hz, hx, -K.seen, hz, [0, 0, 0]);
   const seats = ['#c8642d', '#8a5a2c', '#5a7a5a', '#b8922e'];
-  for (let i = 0; i < 5; i++) c.model('court:tbl:' + (i % 4), () => tableVox(seats[i % 4])().downsample(2), R.range(-hx + 0.9, hx - 0.9), R.range(-hz + 0.9, hz - 0.9), { y: -2.2 - i * 2.3, scale: 2, rot: R.range(0, 6), tilt: [R.range(-0.5, 0.5), R.range(-0.5, 0.5)], solid: false, shadow: false });
+  for (let i = 0; i < 5; i++) { const x = R.range(-hx + 0.9, hx - 0.9), z = R.range(-hz + 0.9, hz - 0.9), o = { y: -2.2 - i * 2.3, scale: 2, rot: R.range(0, 6), tilt: [R.range(-0.5, 0.5), R.range(-0.5, 0.5)], solid: false, shadow: false };
+    if (i < 4) c.model('court:tbl:' + (i % 4), () => tableVox(seats[i % 4])().downsample(2), (x < 0 ? -1 : 1) * Math.max(Math.abs(x), hx - 0.9), z, o); }   // (to the sides: the middle is the way up; the deepest one's dice kept, the table not: the budget)
   /* the rail: brass, a tube along the top of it, all the way round but for one length */
   const side = R.int(0, 3), brass = [0.72, 0.56, 0.2], post = (x, z) => c.flat.box(x - 0.03, 0, z - 0.03, x + 0.03, K.rail, z + 0.03, brass), tubeB = c.shining('court:rail', kit.tex.white(), 2.0, [1, 0.69, 0.18]);
   const runs = [[-hx, hz, hx, hz], [hx, hz, hx, -hz], [hx, -hz, -hx, -hz], [-hx, -hz, -hx, hz]];
@@ -139,6 +141,24 @@ export function build(c) {
     det.box(-0.02, y0 - 0.9, -0.02, 0.02, H, 0.02, [0.1, 0.1, 0.1]); det.box(-0.12, y0 - 0.95, -0.12, 0.12, y0 - 0.9, 0.12, [0.72, 0.56, 0.2]);   // (the hook it was meant to hang from: nothing on it)
     // bins at two corners of the hole, for the trays; they are walked into
     for (const [sx, sz] of [[-1, -1], [1, 1]]) { const x = sx * (hx + 0.75), z = sz * (hz + 0.75); c.model('mall:bin:0', binVox(false), x, z, { scale: 1.5, solid: false }); c.solid(x - 0.2, z - 0.2, x + 0.2, z + 0.2, { tall: false }); det.box(x - 0.24, 0.5, z - 0.17, x + 0.24, 0.53, z + 0.17, [0.54, 0.23, 0.17]); } }
+  /* now and then a table comes up out of the hole, slowly, turning, to the hook in the coffer, as if it were what was meant to hang
+     there; it hangs a moment; then it lets go, and a long while after there is the sound of it landing. (The roof's are the ones that stayed) */
+  { const hook = H - 0.55 - 0.95, top = 0.76, S2 = 0.05, surf = kit.surface({ vox: true });
+    const b = new Batch(true); b.addVox(kit.model('court:tbl:rise', () => tableVox(seats[R.int(0, 3)])().downsample(2)).solid, new THREE.Matrix4().makeScale(S2, S2, S2));
+    const geo = kit.geometry(b, [lamp(0, 3.0, 0, [1.1, 0.55, 0.85], { k: 4, wrap: 0.5, far: 30 }), lamp(0.5, -3, 0.5, [0.15, 0.13, 0.12], { k: 9, wrap: 0.6, far: 30 })], [0.32, 0.3, 0.34]);
+    geo.computeBoundingBox(); { const q = geo.boundingBox; geo.translate(-(q.min.x + q.max.x) / 2, -q.min.y, -(q.min.z + q.max.z) / 2); }   // (turned about its own leg)
+    const riser = new THREE.Mesh(geo, surf);
+    riser.visible = false; c.add(riser);
+    const low = -K.seen + 1, at = c.toWorld(0, 0), st = { phase: 'wait', t: 4 + Math.random() * 6, y: low, v: 0, spin: 0 };
+    c.tick((dt, t, me) => {
+      if (st.phase === 'wait') { if (!me.inside) return; st.t -= dt; if (st.t > 0) return; Object.assign(st, { phase: 'up', y: low, spin: Math.random() * 6 }); riser.visible = true; }
+      if (st.phase === 'up') { const left = hook - top - st.y; st.y += Math.min(left, dt * Math.min(2.5, 0.12 + left * 0.3)); if (left < 0.005) Object.assign(st, { phase: 'hang', t: 2.5 + Math.random() * 2 }); }
+      else if (st.phase === 'hang') { st.t -= dt; if (st.t <= 0) Object.assign(st, { phase: 'fall', v: 0, t: 0 }); }
+      else if (st.phase === 'fall') { st.v += 9.8 * dt; st.y -= st.v * dt; st.t += dt;
+        if (st.y < low) { riser.visible = false; Object.assign(st, { phase: 'wait', t: 9 + Math.random() * 12 }); c.env.play?.('thunk', at.x, at.z, 16); } }
+      st.spin += dt * (st.phase === 'fall' ? 0.05 : 0.18); riser.position.set(0, st.y, 0); riser.rotation.set(0, st.spin, 0);
+    });
+  }
   /* FOOD, over the hole, pointing down it */
   upright(lit, -1.3, hz - 0.2, 1.3, hz - 0.2, 3.3, 4.0, neon.uv(6)); upright(lit, 1.3, hz - 0.2, -1.3, hz - 0.2, 3.3, 4.0, neon.uv(6)); for (const x of [-1.25, 1.25]) c.flat.box(x - 0.02, 4.0, hz - 0.22, x + 0.02, H, hz - 0.18, [0.1, 0.1, 0.12]);
   const arrow = c.shining('court:arrow', kit.tex.white(), 2.2, [1, 0.24, 0.6]); for (let i = 0; i < 4; i++) arrow.box(-0.5 + i * 0.12, 3.15 - i * 0.14, hz - 0.22, 0.5 - i * 0.12, 3.25 - i * 0.14, hz - 0.18, [1, 1, 1]);
