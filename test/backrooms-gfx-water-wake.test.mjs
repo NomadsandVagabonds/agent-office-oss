@@ -229,6 +229,8 @@ test('the shader: each ring on cells of its own that widen far off (not flattene
   // none set: every part of it behind uRingN > 0 (the picture is the old one: the page's proof)
   assert.equal(main.split('uRingN > 0').length - 1, 3);
   assert.ok(LIQUID.wakeWave / LIQUID.cell >= 3, 'a wave is several cells long near: it reads as blocks, not speckle');
-  assert.equal(LIQUID_FRAG.split('texture2D(').length - 1, 3, 'its three reads of the copy, as before: no new read');
+  // (the mirror's one read, High only, is behind #ifdef MIRROR: backrooms-gfx-water-mirror.test.mjs)
+  const medium = LIQUID_FRAG.replace(/#ifdef MIRROR[\s\S]*?#else\n/, '');
+  assert.equal(medium.split('texture2D(').length - 1, 3, 'its three reads of the copy, as before: no new read');
   assert.ok(LIQUID.wakeNear[2] > 0 && LIQUID.wakeNear[2] < 1 && LIQUID.wakeNear[0] < LIQUID.wakeNear[1]);
 });

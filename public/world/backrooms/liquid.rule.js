@@ -12,7 +12,8 @@
 //   - a pale line where the surface meets what walls it in or stands in it (the copy's depth just behind the surface);
 //   - a ripple stepped to cells of the room's own frame (not the world's grid): a height worked out at the middle of a
 //     cell and its neighbours, the slope between them stepped, so it moves in blocks; a room's phase drifts it;
-//   - fresnel toward a flat tint of the room's light (reflection(): where the mirror's sample will go, later);
+//   - fresnel toward a flat tint of the room's light (reflection()), or at High toward the room mirrored in it (MIRROR,
+//     below: one planar mirror a frame, for the water level nearest the eye);
 //   - lit by the room's light as the old sheet was, its own baked light with the room's dimmer, flicker and banks: a
 //     pool in a room that has gone dark is dark.
 //   - the wake: rings where something disturbed it (handle.disturb, liquid.mark.js; the visitor wading, liquid.js
@@ -210,6 +211,88 @@ export function waterColours(tint, alpha = LIQUID.absorbAlpha, k = LIQUID) {
   return { deep: c.map((v) => v * k.deep), scatter: c.map((v) => v * k.scatter), keep: c.map((v) => v / top), keepRate: k.keep * murk * murk, absorb: c.map((v) => k.absorb * murk * (1 + k.absorbSpread * (1 - v / top))) };
 }
 
+// ---- the mirror (water 2, High) ----
+// One planar reflection a frame: for the marked surface nearest the eye that is in view, faces up and has the eye above
+// it, the room is drawn once more mirrored about that surface's plane (liquid.js mirrorPass), with an oblique near
+// plane at the water so nothing under the surface is drawn into it, into a picture of its own; every surface on that
+// same plane samples it in reflection(), weighted by the fresnel term the surface already had. No three.js here: plain
+// arrays of sixteen, column by column, as three.js's Matrix4.elements are.
+export const MIRROR = Object.freeze({
+  scale: 0.5,         // the mirror's picture, of the scene's own target each way (High at Full VHS: 1440 × 1080 → 720 × 540,
+                      //  the tape's own size: anything finer is lost to the tape; the ripple's wobble blurs it further)
+  above: 0.05,        // metres: the eye must be this far over the plane (nearer, the clip plane runs through the eye)
+  switchBy: 1,        // metres: another water level takes the mirror only when it is this much nearer (no flicker between two)
+  samePlane: 0.01,    // metres: surfaces this close to the chosen one's plane share its mirror (one water level)
+  wobble: 0.3,        // how far the lookup moves, of the picture, per unit of the ripple's (stepped) tilt
+  cap: 2.5,           // its brightest, as times the room's light at the surface (a tube a patch, not a bar) ...
+  capLeast: 0.4,      //  ... and at least this
+  dim: 0.85,          // what the water gives back of it (on top of fresnel)
+  tint: 0.35,         // how far it is taken toward the water's own colour
+});
+
+/** A plane through `point` facing along `normal` (both [x, y, z]): → [nx, ny, nz, d], n·p + d = 0, n of length 1. */
+export function mirrorPlane(normal, point) {
+  const l = Math.hypot(normal[0], normal[1], normal[2]) || 1, n = normal.map((v) => v / l);
+  return [n[0], n[1], n[2], -(n[0] * point[0] + n[1] * point[1] + n[2] * point[2])];
+}
+
+/** The matrix that mirrors space about a plane [nx, ny, nz, d] (column by column): I − 2nnᵀ, and −2dn. */
+export function reflectMatrix(plane) {
+  const [x, y, z, d] = plane;
+  return [1 - 2 * x * x, -2 * x * y, -2 * x * z, 0, -2 * x * y, 1 - 2 * y * y, -2 * y * z, 0, -2 * x * z, -2 * y * z, 1 - 2 * z * z, 0, -2 * d * x, -2 * d * y, -2 * d * z, 1];
+}
+
+/** A plane [nx, ny, nz, d] taken into a camera's space by its (rigid) view matrix: → the same plane there. */
+export function planeInView(plane, view) {
+  const e = view, [x, y, z, d] = plane;
+  const n = [e[0] * x + e[4] * y + e[8] * z, e[1] * x + e[5] * y + e[9] * z, e[2] * x + e[6] * y + e[10] * z];
+  return [n[0], n[1], n[2], d - (n[0] * e[12] + n[1] * e[13] + n[2] * e[14])];
+}
+
+/**
+ * A perspective projection (sixteen, column by column) with its near plane moved onto `clip` (a plane in the camera's
+ * space, [nx, ny, nz, d], the camera on its far side): what is behind the plane is clipped, as near as the near plane
+ * would be. Only its third row changes, so where a point lands in the picture (x, y and w) is as it was. → a new array.
+ */
+export function obliqueProjection(P, clip) {
+  const q = [(Math.sign(clip[0]) + P[8]) / P[0], (Math.sign(clip[1]) + P[9]) / P[5], -1, (1 + P[10]) / P[14]];
+  const k = 2 / (clip[0] * q[0] + clip[1] * q[1] + clip[2] * q[2] + clip[3] * q[3]);
+  const out = P.slice();
+  out[2] = clip[0] * k; out[6] = clip[1] * k; out[10] = clip[2] * k + 1; out[14] = clip[3] * k;
+  return out;
+}
+
+/** The mirror's picture for a scene target w × h: → [w, h], at least 1 each way. */
+export const mirrorSize = (w, h, k = MIRROR) => [Math.max(1, Math.round(w * k.scale)), Math.max(1, Math.round(h * k.scale))];
+
+/**
+ * Which water level has the mirror this frame. `cands`: the surfaces that may have it ({ rec, dist }: in view, facing
+ * up, the eye at least `above` over it; dist metres from the eye to it), `prev` the one that had it last frame. The
+ * nearest, unless last frame's still may and is not `switchBy` further than it. → a rec, or null.
+ */
+export function pickMirror(cands, prev = null, k = MIRROR) {
+  let best = null;
+  for (const c of cands || []) if (c && Number.isFinite(c.dist) && (!best || c.dist < best.dist)) best = c;
+  if (!best) return null;
+  const kept = prev ? (cands || []).find((c) => c && c.rec === prev) : null;
+  return kept && kept.dist - best.dist < k.switchBy ? kept.rec : best.rec;
+}
+
+/**
+ * Is a thing left out of the mirror: → why ('noReflect', 'liquid', 'held', 'detail'), or null (drawn in it). `noReflect`
+ * (userData.noReflect = true, on a mesh or a group: everything in it) is the mark any builder may set; the rest are the
+ * water itself, what is held in front of the camera (renderOrder from HELD_ORDER: hand.js), and a room's detail batches.
+ */
+export function mirrorLeaves(o, heldOrder = 10000) {
+  if (!o) return null;
+  const u = o.userData || {};
+  if (u.noReflect) return 'noReflect';
+  if (u.liquid) return 'liquid';
+  if ((o.renderOrder || 0) >= heldOrder) return 'held';
+  if (u.detail) return 'detail';
+  return null;
+}
+
 const f = (n) => Number(n).toFixed(6);
 const v3 = (a) => `vec3(${a.map(f).join(', ')})`;
 
@@ -306,9 +389,32 @@ float liquidHeight(vec2 p) {
   float h = ${f(LIQUID.ripple)} * (0.006 * sin(q.x * 3.1 + uTime * 1.3) + 0.005 * sin(q.y * 2.3 - uTime * 1.1) + 0.003 * sin((q.x + q.y) * 5.7 + uTime * 2.1));
   return h;
 }
-// what the surface mirrors, for a normal and the way to the eye (view space), at this pixel: for now a flat tint of the
-// room's light where it is (the mirror's sample takes its place later)
+// what the surface mirrors, for a normal and the way to the eye (view space), at this pixel
+#ifdef MIRROR
+// (High, water 2: the room drawn once more, mirrored about this surface's plane, into a picture of its own: liquid.js
+// mirrorPass. uMirror takes a point in the eye's view space to that picture; uMirrorOn is 1 only on the one water level
+// that has the mirror this frame, and only inside the camcorder's draw. The lookup is moved by the ripple's stepped
+// tilt, so the mirror wobbles in blocks as the bed does; its brightest is held to a few times the room's light here, so
+// a ceiling tube stays a patch and is not drawn out into a white bar; dimmed, and taken a little toward the water's own
+// colour. A surface without the mirror this frame keeps the flat tint)
+uniform sampler2D tMirror;
+uniform mat4 uMirror;
+uniform float uMirrorOn;
+vec3 reflection(vec3 n, vec3 v, vec2 uv, vec3 light) {
+  vec3 flatTint = light * ${f(LIQUID.sky)};
+  if (uMirrorOn < 0.5) return flatTint;
+  vec4 m = uMirror * vec4(vView, 1.0);
+  vec3 up = normalize(uRoomToView * vec3(0.0, 1.0, 0.0));
+  vec2 q = m.xy / max(m.w, 1e-4) * 0.5 + 0.5 + (n - up).xy * ${f(MIRROR.wobble)};
+  vec3 r = texture2D(tMirror, clamp(q, vec2(0.002), vec2(0.998))).rgb;
+  float l = dot(r, vec3(0.299, 0.587, 0.114)), cap = max(dot(light, vec3(0.299, 0.587, 0.114)) * ${f(MIRROR.cap)}, ${f(MIRROR.capLeast)});
+  r *= min(1.0, cap / max(l, 1e-5));
+  return r * ${f(MIRROR.dim)} * mix(vec3(1.0), uKeep.rgb, ${f(MIRROR.tint)});
+}
+#else
+// (Medium, and any surface at High while the mirror is off: a flat tint of the room's light where it is)
 vec3 reflection(vec3 n, vec3 v, vec2 uv, vec3 light) { return light * ${f(LIQUID.sky)}; }
+#endif
 // one layer of the caustics at q (radians), at s: a net of wavy lines (where a warped sum of two waves is near nought)
 // whose warp moves with s, so its lines bend, meet and part and never hold one shape. 1 on a line, falling to 0 off it
 float causticLayer(vec2 q, float s, float sharp) {
@@ -376,7 +482,11 @@ void main() {
   // It only brightens what it lands on: what is under keeps its own colour
   vec3 dir = normalize(vRoom - uEyeRoom);
   float k = caustic(vRoom.xz + dir.xz * thick, slope, thick) * exp(-${f(LIQUID.causticFade / LIQUID.keep)} * uKeep.w * thick);
+  vec3 bare = under;
   under *= 1.0 + uCaustic * k;
+  // (but never past the brighter of itself and the room's light here: a pale step in shallow water is not lit up past
+  // the deck beside it; a darker bed, which it cannot reach, is as it was)
+  under *= min(1.0, max(dot(bare, vec3(0.299, 0.587, 0.114)), dot(light, vec3(0.299, 0.587, 0.114))) / max(dot(under, vec3(0.299, 0.587, 0.114)), 1e-5));
   // (inside a fresh ring the light on the bed is stirred: brighter for its first moments)
   if (uRingN > 0) under *= 1.0 + ${f(LIQUID.wakeStir)} * min(wk.w, 1.5) * (0.35 + k);
   // (uKeep: the water's own colours, scaled to its clearest, and how fast what it lets through at least falls)
@@ -404,4 +514,51 @@ varying vec2 vUv;
 void main() {
   gl_FragColor = texture2D(tColor, vUv);
   gl_FragDepthEXT = texture2D(tDepth, vUv).x;
+}`;
+
+// ---- the surface seen from below (the eye in the water) ----
+// Under a surface that has its water below it, inside its rim, the eye sees the surface's underside: a dim skin, no
+// mirror. Within the cone overhead that light from above gets through (Snell's window: the critical angle of water to
+// air, 48.6 degrees from straight up, tilted by the ripple's stepped cells, so its edge is blocky like the top), what is
+// above, a little bent by the ripple, darkened and tinted by the water between the eye and the surface; outside it, the
+// pool's own colour, lit by the room. The room's veil (the waterpark's) is drawn over it as ever.
+export const UNDERSIDE = Object.freeze({
+  window: 0.661,      // the cosine of the critical angle, water to air: inside the cone, what is above; outside, the pool
+  windowSoft: 0.03,   // its edge, softened by this much of the cosine either way
+  through: 0.55,      // of what is above, at most, that the skin lets through (it is dim)
+  bend: 0.06,         // how far the ripple's tilt moves what is seen through it, of the picture
+  own: 0.7,           // outside the window: the water's deep colour lit by the room, times this
+});
+
+/**
+ * Is the eye under a surface it should see the underside of? `eye` and `rim` in the surface's room frame (rim: the
+ * sheet's extent, { x0, z0, x1, z1 }), `facesUp`: the sheet's water is below it (a pool, not the return pool's
+ * upside-down upper pool, which keeps its own sheet). Under the plane but outside the rim (a lower room beside it): no.
+ */
+export function seesUnderside(eye, planeY, rim, facesUp, k = LIQUID) {
+  return !!facesUp && !!rim && underwater(eye.y, planeY, k) && eye.x >= rim.x0 && eye.x <= rim.x1 && eye.z >= rim.z0 && eye.z <= rim.z1;
+}
+
+/** The underside's fragment shader: the top's own uniforms and functions, and the top's own ripple with the wake's rings
+ * (the same cells, the same stepped slope: the window's edge is blocky as the top is, and a ring tilts it as it passes;
+ * the wake's crest and trough light are the top's alone), then a main of its own. */
+const TOP_MAIN = LIQUID_FRAG.slice(LIQUID_FRAG.lastIndexOf('void main() {'));
+const TOP_SLOPE = TOP_MAIN.slice(0, TOP_MAIN.indexOf('\n', TOP_MAIN.indexOf('  vec3 n = normalize(uRoomToView')) + 1);
+export const LIQUID_UNDER_FRAG = LIQUID_FRAG.slice(0, LIQUID_FRAG.lastIndexOf('void main() {')) + TOP_SLOPE + `  vec3 ray = normalize(vView);                               // from the eye up to the surface
+  float cosUp = dot(ray, n);
+  // the water between the eye and the surface
+  float d = length(vView);
+  vec3 T = max(exp(-uAbsorb * d), uKeep.rgb * exp(-uKeep.w * d));
+  vec3 light = vLit;
+  vec3 own = uDeep * light;
+  // inside the window: what is above, nudged by the ripple's tilt (never to something in the water in front of it)
+  vec2 ruv = clamp(uv + (n - up).xy * ${f(UNDERSIDE.bend)}, vec2(0.5) / uSize, vec2(1.0) - vec2(0.5) / uSize);
+  if (texture2D(tDepth, ruv).x < gl_FragCoord.z) ruv = uv;
+  vec3 above = texture2D(tScene, ruv).rgb * ${f(UNDERSIDE.through)};
+  vec3 inside = above * T + own * (1.0 - T)
+    + uScatter * light * (1.0 - exp(-${f(LIQUID.scatterDepth)} * d)) * exp(-${f(LIQUID.scatterFade)} * d);
+  // outside it: the pool's own colour (what the underside mirrors is the pool, and the pool is that colour)
+  vec3 outside = own * ${f(UNDERSIDE.own)};
+  float w = smoothstep(${f(UNDERSIDE.window - UNDERSIDE.windowSoft)}, ${f(UNDERSIDE.window + UNDERSIDE.windowSoft)}, cosUp);
+  gl_FragColor = vec4(mix(outside, inside, w), 1.0);
 }`;

@@ -207,7 +207,9 @@ export function createVhs(renderer, camera, opt = {}) {
   // --- water ---
   // (liquid.js: made only while a tier's water is on. While a surface of a part that is up has been in view in the last
   // half second, the scene is drawn in two parts, the opaque first and the water over a copy of it; otherwise, and
-  // always at 0, the scene's pass is the one it always was)
+  // always at 0, the scene's pass is the one it always was. At 2 (High) the two-part draw begins with the mirror: the
+  // room drawn once more, mirrored about the nearest surface in view, into a picture of the view's own at half the
+  // scene's size, before anything is drawn into the scene's target; liquid.js mirrorPass)
   let liquids = null, split = false;
   const drawScene = (r, target, under) => (split && liquids ? liquids.draw(r, renderPass.scene, camera, target, under) : under());
   superPass.draw = drawScene;
@@ -261,6 +263,7 @@ export function createVhs(renderer, camera, opt = {}) {
     // --- water --- (graphics.js water: at 0 the view and everything it made are let go, every room's sheet as it was)
     if (p.water > 0 && !liquids) liquids = createLiquidView();
     else if (!(p.water > 0) && liquids) { liquids.release(renderPass.scene); liquids = null; split = false; }
+    liquids?.setLevel(p.water);                          // (2, High: the mirror; 1, Medium: none of it)
     // --- end water ---
     // a tier's own bloom is tighter than the office's: a glow round the tubes, not a wash over the dark end of a corridor
     // (the widest blurs are left out: they are what spread a tube over everything)
