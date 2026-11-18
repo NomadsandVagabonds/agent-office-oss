@@ -180,13 +180,14 @@ export function build(c) {
     if ([bz - bw, bz, bz + bw].every((z) => c.clear(x1 + 0.3, z, 0.3))) {
       flat.box(x0, 0, bz - bw - 0.12, x1 + 0.12, 2.8, bz - bw, fr); flat.box(x0, 0, bz + bw, x1 + 0.12, 2.8, bz + bw + 0.12, fr); flat.box(x0, 2.5, bz - bw, x1 + 0.12, 2.8, bz + bw, fr); flat.box(x0, 0, bz - bw, x1 + 0.12, 0.35, bz + bw, fr);
       for (let k = 0; k < 5; k++) det.box(x1 + 0.12, 2.52 + k * 0.05, bz - bw - 0.12, x1 + 0.13, 2.54 + k * 0.05, bz + bw + 0.12, rgb(PAL.pink));
-      const glass = c.shining('stairs:glass', kit.tex.custom('stairs:glass', 8, 32, (g, w, h) => { g.clearRect(0, 0, w, h); P(g, 'rgba(230,220,240,0.12)', 0, 0, w, h); P(g, 'rgba(255,255,255,0.35)', 2, 4, 1, 10); }, { clamp: true }), 0.5, [0.9, 0.9, 1], { cutout: true });
-      upright(glass, x1 + 0.06, bz + bw, x1 + 0.06, bz - bw, 0.35, 2.5, [0, 0, 3, 1]);
+      // the pane: the room's glass, which the shop's lamp shines through onto the hall's floor at Medium and High (the builder's
+      // recipe: the frame round it in c.flat casts, the pane does not). Before, a shining cut-out drew it as a solid glowing panel
+      c.glass.box(x1 + 0.05, 0.35, bz - bw, x1 + 0.07, 2.5, bz + bw, [0.86, 0.84, 0.92]);
       c.mapped('stairs:bay:floor', kit.tex.white()).box(x0, 0.35, bz - bw, x1, 0.37, bz + bw, rgb('#d8ccb8'));
       c.model('stairs:dummy:0', dummyVox(1, PAL.cloth[0]), x0 + 0.85, bz - 0.7, { y: 0.37, rot: Math.PI / 2, solid: false }); c.model('stairs:dummy:1', dummyVox(2, PAL.cloth[2]), x0 + 0.8, bz + 0.15, { y: 0.37, rot: Math.PI / 2 - 0.3, solid: false });
       det.box(x0 + 0.5, 1.75, bz + 0.6, x0 + 0.53, 1.78, bz + 1.45, [0.78, 0.78, 0.8]); for (let k = 0; k < 6; k++) c.model('stairs:jacket:' + (k % 3), jacketVox(PAL.cloth[(k * 2) % PAL.cloth.length]), x0 + 0.5, bz + 0.68 + k * 0.13, { y: 0.95, rot: Math.PI / 2, solid: false, shadow: false });
       det.box(x0 + 0.02, 0.37, bz - 1.5, x0 + 0.3, 1.6, bz - 0.95, rgb('#6c7684')); det.box(x0 + 0.05, 1.0, bz - 1.45, x0 + 0.45, 1.03, bz - 1.0, rgb('#b0a28c')); det.box(x0 + 0.1, 1.03, bz - 1.35, x0 + 0.38, 1.3, bz - 1.1, rgb('#d6ceb8')); det.box(x0 + 0.38, 1.07, bz - 1.32, x0 + 0.385, 1.26, bz - 1.13, rgb('#3a4a44'));
-      c.solid(x0, bz - bw - 0.12, x1 + 0.12, bz + bw + 0.12, { tall: true }); c.light(x0 + 0.7, 2.2, bz, '#ffe9c2', 0.5, { k: 1.6, far: 3 }); }
+      c.solid(x0, bz - bw - 0.12, x1 + 0.12, bz + bw + 0.12, { tall: true }); c.light(x0 + 0.7, 2.2, bz, '#ffe9c2', 0.8, { k: 1.5, far: 3.4 }); }
     // the column: square, plastered pink; on each face a frame in a frame in a frame, going in
     const px = -W / 2 + 3.4, pz = D / 2 - 2.6, r = 0.75;
     if (c.clear(px, pz, r + 0.3)) {
