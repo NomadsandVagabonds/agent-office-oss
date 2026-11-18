@@ -1,5 +1,5 @@
 import { createWalk } from '../../cast/walk.js';
-import { buildSmilingClimber } from '../cubicle-grid/rig.js';
+import { makeTowelReturn } from './rig.js';
 import { flightAt, TOWER } from './plan.js';
 import { resident } from '../../resident.js';
 
@@ -14,7 +14,7 @@ const turn = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
 
 function buildPack(c) {
   return Array.from({ length: COUNT }, (_, i) => {
-    const rig = buildSmilingClimber(c.kit, i, { swimTrunks: true });
+    const rig = makeTowelReturn(c.kit, i);
     const { group } = rig;
     group.name = 'dive-smiler';
     group.visible = false;
@@ -42,11 +42,13 @@ export function createChase(c) {
   });
   let tower, time = 0, began = null;
   // Health and a shove for each of them (resident.js; basic: one jab each). A shove stands one still on the spot (nothing is
-  // pushed off a stair). One that goes is only gone: the tower and its pool are as they were for whoever is left.
+  // pushed off a stair). One that goes falls on its face where it stood and lies there (dive-tower/rig.js die): not posed
+  // again, nobody's target, in nobody's way — the tower and its pool are as they were for whoever is left.
   for (const actor of pack) actor.life = resident(env, RESIDENT, {
     at: () => ({ x: actor.x, z: actor.z, y: actor.group.position.y + 0.75 }), r: actor.r + 0.12,
     when: () => actor.group.visible && !actor.jump,
-    gone: () => { actor.group.visible = false; actor.gone = true; },
+    dies: (k) => actor.rig.die(k, time),
+    gone: () => { actor.gone = true; },
   });
   const idle = (actor) => actor.gone || actor.life?.out || actor.life?.stalled;
 
@@ -107,7 +109,7 @@ export function createChase(c) {
   function separate(actor, dt) {
     let dx = 0, dz = 0;
     for (const other of pack) {
-      if (other === actor || !other.group.visible || other.jump || other.board !== actor.board) continue;
+      if (other === actor || other.gone || !other.group.visible || other.jump || other.board !== actor.board) continue;
       const gap = distance(actor, other);
       if (gap >= .52) continue;
       const push = (.52 - gap) / Math.max(.04, gap);
