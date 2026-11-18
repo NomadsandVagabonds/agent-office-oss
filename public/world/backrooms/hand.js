@@ -9,6 +9,7 @@ import { INVENTORY_MODELS, sculptTorchGrip } from './inventory-items.js';
 import { Vox, M } from '../vox/vox.js';
 import { KINDS, ITEM_IDS, isPaper, isBalloon, isFlashlight, createHandOver } from './items.js';
 import { heldScissors } from './hand-scissors.js';
+import { wipePose, swatPose } from './hand-moves.rule.js';
 
 export { ITEM_IDS, isPaper, isBalloon, isFlashlight };
 
@@ -64,6 +65,9 @@ export function letGoOfFront(renderer) {
 /** Give a part of the building its hand (env.hand): the selected pocket, in the words its rooms use. */
 export function createHand(env) {
   env.hand = createHandOver(() => env.inventory || null, `hand:${env.level.seed}:${env.level.depth ?? 0}`);
+  // (two moves of the hand that are not a shove, for whatever asks: wiping a thing off the lens, knocking one out of the air)
+  env.hand.wipe = () => env.handView?.wipe?.();
+  env.hand.swat = (dir) => env.handView?.swat?.(dir);
   return env.hand;
 }
 
@@ -75,7 +79,7 @@ export function createHand(env) {
  */
 export function createHandView(env, camera) {
   const kit = env.kit, root = new THREE.Group(), made = new Map(), at = new THREE.Vector3(), rest = new THREE.Vector3();
-  let shown = null, type = null, t = 0, swing = 0, layoutKey = '';
+  let shown = null, type = null, t = 0, swing = 0, layoutKey = '', move = null;
   root.visible = false;
   /** FORM HR-404, as a sheet of paper held up: the one thing down here that is meant to be read. */
   function slip() {
@@ -214,12 +218,21 @@ export function createHandView(env, camera) {
         }
       }
       // a shove: both hands out and back, while the pulse lasts (and not with the scissors in the hand: that click is the jab)
-      const meP = env.player.me, striking = show && showing(meP.punch || 0, { scissors: type === 'scissors' });
+      const meP = env.player.me;
+      // a wipe or a swat (hand-moves.rule.js): one hand, in place of the shove's two, and nothing held shown while it goes
+      let moving = null;
+      if (move) { move.t += dt; moving = move.kind === 'wipe' ? wipePose(move.t) : swatPose(move.t, move.dir); if (!moving) move = null; }
+      const striking = show && (!!moving || showing(meP.punch || 0, { scissors: type === 'scissors' }));
       if (striking && !hands) hands = makeHands();
       if (hands) {
         hands.group.visible = striking;
-        if (striking) for (const h of hands.made) { const a = handAt(meP.punch, h.side); h.mesh.position.set(a.x, a.y, a.z); h.mesh.rotation.set(a.pitch, a.yaw, 0); }
+        if (striking) for (const h of hands.made) {
+          if (moving) { h.mesh.visible = h.side === moving.side; h.mesh.position.set(moving.x, moving.y, moving.z); h.mesh.rotation.set(moving.pitch, moving.yaw, moving.roll); continue; }
+          h.mesh.visible = true;
+          const a = handAt(meP.punch, h.side); h.mesh.position.set(a.x, a.y, a.z); h.mesh.rotation.set(a.pitch, a.yaw, 0);
+        }
       }
+      if (shown) shown.mesh.visible = !moving;
       root.visible = !!shown || striking;
       if (!shown && !striking) return;
       if (!root.parent) env.world.scene.add(root);
@@ -246,6 +259,10 @@ export function createHandView(env, camera) {
       shown.mat.uniforms.uTint.value.set(Math.max(floor, L[0] * k) * (on ? 1.1 : 1), Math.max(floor, L[1] * k), Math.max(floor, L[2] * k) * (on ? 0.85 : 1));
     },
     hide() { root.visible = false; },
+    /** The hand comes up across the lens and wipes what is stuck there off (hand-moves.rule.js). */
+    wipe() { move = { kind: 'wipe', t: 0 }; },
+    /** A quick backhand at something in the air to one side: dir −1 left, +1 right, or anything with a camera-relative x. */
+    swat(dir = 1) { move = { kind: 'swat', t: 0, dir }; },
     /** The scissors' click: a jab starts. */
     jab() { made.get('scissors')?.jab(); },
     /** How the jab went, once it is known (inventory.js): { ok, snapped }. A hit, a miss and a break each look their own. */
