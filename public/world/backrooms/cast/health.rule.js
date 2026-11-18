@@ -25,6 +25,9 @@ export const TIER = Object.freeze({
   'the-lines': 'boss', 'standing-meeting': 'boss', mother: 'boss', 'carried-interest': 'boss', 'head-count': 'boss',
   pirate: 'medium', 'trunk-line': 'medium', toner: 'medium', intern: 'medium',
   shadow: 'basic', 'toner-brood': 'basic', 'mother-brood': 'basic',
+  // somebody a room keeps (resident.js): the waterpark's
+  'guard-stand': 'medium', 'lane-keeper': 'medium', 'flume-toner': 'medium', 'plenum-toner': 'medium',
+  'inverted-bathers': 'basic', 'towel-return': 'basic', 'pool-skimmer': 'basic',
 });
 
 /** Those a pair of scissors does nothing to. */
