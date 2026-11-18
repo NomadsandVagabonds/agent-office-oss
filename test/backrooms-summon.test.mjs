@@ -48,3 +48,21 @@ test('no toner is called up on a visit whose difficulty has none', () => {
   assert.equal(difficultyOf('tourist').toner, 0);
   assert.equal(difficultyOf('training-wheels').toner, 0);
 });
+
+test('for whoever is looking: `beside` puts the visitor a step and a half from the one named, facing it, once it is somewhere', () => {
+  const warps = [], me = { id: 'a', x: 0, z: 0 };
+  const env = { level: { seed: 'test', depth: 0, difficulty: 'normal' }, world: { roomAt: (x) => (Math.abs(x) < 50 ? { id: 0 } : null), free: (x, z) => z > 4.9, los: () => true },
+    player: { me, warp: (x, z, yaw) => warps.push([x, z, yaw]) }, sees: () => false, clock: 0 };
+  createStalkers(env, { beside: 'toner' });
+  const p = env.pursuer;
+  p.update(0.05); assert.equal(warps.length, 0, 'nobody of that name is on the floor yet');
+  const t = p.summon('toner', { x: 10, z: 5 }); t.at = () => ({ x: 10, z: 5 });
+  p.update(0.05); assert.equal(warps.length, 1);
+  const [x, z, yaw] = warps[0];
+  assert.ok(Math.abs(Math.hypot(x - 10, z - 5) - 1.5) < 1e-9, 'a step and a half off'); assert.ok(z > 4.9, 'on a spot that is free');
+  assert.ok(Math.abs(-Math.sin(yaw) * (10 - x) + -Math.cos(yaw) * (5 - z) - 1.5) < 1e-9, 'facing it');
+  p.update(0.05); p.update(0.05); assert.equal(warps.length, 1, 'once: after that the visitor is their own');
+  // and without the switch nobody is moved
+  const quiet = []; const env2 = { ...env, player: { me, warp: (...a) => quiet.push(a) }, pursuer: null, ready: [] };
+  createStalkers(env2); env2.pursuer.summon('toner', { x: 10, z: 5 }); env2.pursuer.update(0.05); assert.equal(quiet.length, 0);
+});

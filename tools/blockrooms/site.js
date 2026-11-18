@@ -153,7 +153,9 @@ async function run() {
       // (Codex's fluorescent banks that fail, and rooms with a dark side: a prototype, off for everybody, on for whoever asks here)
       // (and whoever is looking, or filming, may name who is down there: `cast=mother,intern` puts exactly those on every part)
       dev: (() => { const d = {}; if (['1', 'dim', 'failing', 'travel', 'emergency', 'islands'].includes(q.get('lighting'))) d.lighting = q.get('lighting');
-        const cast = (q.get('cast') || '').split(',').filter(Boolean); if (cast.length) d.cast = cast; return Object.keys(d).length ? d : undefined; })() } : {};
+        const cast = (q.get('cast') || '').split(',').filter(Boolean); if (cast.length) d.cast = cast;
+        // (`beside=toner` puts the visitor next to that one; `wake=1` has the mascot awake: docs/BACKROOMS.md, the cast section)
+        if (q.get('beside')) d.beside = q.get('beside'); if (q.get('wake') === '1') d.wake = true; return Object.keys(d).length ? d : undefined; })() } : {};
     // (and, under ?debug only, the dev page's measuring tape: &perf=1 a read-out, &bench=1 a fixed tour of the floor you
     // land on, &stress=<n>|auto the scene drawn more than once a frame — world/dev/perf.js. Fetched only when asked for, so
     // without them nothing of it is loaded or run. A bench run is the tape's building on the default difficulty and the full
