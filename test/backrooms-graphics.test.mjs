@@ -18,7 +18,8 @@ function before(w, h, ratio, level) {
 
 test('Classic is the level as it was: the same sizes at every Picture level, bloom as the host has it, nothing new switched on', () => {
   const p = profile('classic');
-  assert.deepEqual(p, { tier: 'classic', lines: { 0: null, 1: 660, 2: 540 }, supersample: 1, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: 'host', grade: 0, haze: 0, contact: 0, bounce: 0, detail: true, beamShadows: 0, shadows: 0, doorlight: 0, fixtures: 0, glow: 0, water: 0 });
+  assert.deepEqual(p, { tier: 'classic', lines: { 0: null, 1: 660, 2: 540 }, supersample: 1, sceneCap: 1680, widthCap: 1680, msaa: 4, bloom: 'host', grade: 0, haze: 0, contact: 0, bounce: 0, detail: true, beamShadows: 0, shadows: 0, doorlight: 0, fixtures: 0, glow: 0, water: 0, sheen: 0 });
+  // (sheen 0: no floor is given the tubes' highlight; every shader and baked number as it was: backrooms-gfx-sheen)
   // (glow 0: the bloom is the host's, thresholded as it was; no pass of glow.js is made and the kit's shader is as it was: backrooms-gfx-glow)
   // (water 0: no surface is made, the scene is drawn in one pass and each room's own sheet as it was: backrooms-gfx-water)
   // (detail: true is everything drawn, as it always was: a room's detail batches are hidden only at low)
