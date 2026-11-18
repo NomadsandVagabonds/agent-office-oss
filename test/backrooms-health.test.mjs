@@ -79,6 +79,10 @@ test('the mascot: the first jab hurts it and it stands a moment; the second fini
   assert.equal(it.removed, undefined, 'the mascot says its body stays (fell): what it holds is still there to be taken'); assert.equal(it.disposed, false);
   assert.equal(bodies.includes(it.body), false, 'but nobody walks into it');
   p.update(dt); assert.equal(it.ticks, ticks, 'and it is gone for this floor');
+  // the room it lies in goes away, and comes back: the body goes and comes with it (it would hang in nothing otherwise)
+  const thing = { visible: true, removeFromParent() {} }; it.figure = { group: thing, body: null };
+  assert.ok(p.takeAway((x, z) => Math.abs(x - it.x) < 1 && Math.abs(z - it.z) < 1, 'hall').includes('pirate')); assert.equal(thing.visible, false);
+  assert.ok(p.bringBack('hall').includes('pirate')); assert.equal(thing.visible, true);
 });
 
 test('a boss takes three; gone, it is taken off the floor; what cannot be hit has no health', async () => {
@@ -88,6 +92,7 @@ test('a boss takes three; gone, it is taken off the floor; what cannot be hit ha
   assert.ok(jab(p, 'mother')); assert.equal(p.vital('mother').dying, 0);
   for (let t = 0; t < dyingOf('mother') + 0.1; t += dt) p.update(dt);
   assert.equal(it.removed, true); assert.equal(it.disposed, true); assert.equal(bodies.includes(it.body), false);
+  { const went = p.takeAway(() => true, 'hall'); assert.equal(went.includes('mother'), false, 'one that left no body is not put away with a room'); assert.ok(went.includes('moth')); }
   assert.equal(p.vital('moth'), null); assert.equal(jab(p, 'moth'), false, 'a jab at a moth is a jab at the air');
   assert.equal(p.of('moth').hits.at(-1).landed, true, 'and it is as it was');
 });
