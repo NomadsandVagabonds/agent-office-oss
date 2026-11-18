@@ -997,7 +997,7 @@ export function addTranslucent(c, batch, opt = {}) {
       flick: geo.userData.flick,
       banks: geo.userData.banks,
       alpha: opt.alpha ?? 0.52,
-      side: opt.side || THREE.DoubleSide,
+      side: opt.side ?? THREE.DoubleSide,                  // (?? not ||: FrontSide is 0, and a caller asking for it gets it)
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.renderOrder = opt.order ?? 3;
@@ -1017,7 +1017,9 @@ export function addTranslucent(c, batch, opt = {}) {
 export function buildFlume(c, key, pts, opt = {}) {
   const radius = opt.radius ?? 0.66;
   const enclosed = opt.enclosed !== false;
-  const wantInner = !enclosed || !!opt.interior;
+  // An inward shell for every flume unless a caller says otherwise (`interior: false`): open troughs always had one;
+  // an enclosed tube drawn front-side only needs one too, or from inside (or looking up into its mouth) it is a hole.
+  const wantInner = !enclosed || opt.interior !== false;
   const rgb = lin(opt.color || '#1ec8e6');
   const ribRgb = rgb.map((v) => Math.min(1, v * 0.62 + 0.05));
   const innerRgb = rgb.map((v) => Math.min(1, v * 0.88 + 0.08));
@@ -1250,14 +1252,13 @@ export function createBasin(c, spec) {
     (u, v) => [(bx0 + v) / 1.9, (bz0 + u) / 1.9],
     [0.88, 1.0, 1.0]
   );
-  const waterHolder = addTranslucent(c, waterSurf, {
+  addTranslucent(c, waterSurf, {
     map: waterTex,
     alpha: spec.waterAlpha ?? 0.52,
+    side: THREE.FrontSide,
     order: 4,
   });
   c.liquid?.(waterSurf, { kind: 'water', y: waterY });
-  // (addTranslucent reads `opt.side || DoubleSide`, and FrontSide is 0: so the side is set on the sheet once it is made)
-  c.after.push(() => waterHolder.traverse((o) => { if (o.isMesh) o.material.side = THREE.FrontSide; }));
 
   // Expanding splash ripple ring + underwater aquamarine camera veil (only visible while camera is below waterY!)
   const rippleGeo = new THREE.RingGeometry(0.18, 0.26, 18);
