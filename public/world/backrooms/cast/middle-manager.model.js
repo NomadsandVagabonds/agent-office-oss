@@ -90,39 +90,40 @@ export function neckVox() {
 export const FACES = 4;
 
 /**
- * Its head: an egg, longer than a head, narrower at the bottom, sallow and smooth, and on it a face drawn as a child draws
- * one, small, in the middle of all that egg. Unfed it is sad: a mouth turned down and two streaks of tears. Fed, the mouth
- * straightens, then turns up, and at the last it is a grin from one side of the head to the other, under two eyes gone
- * wide and white. The neck joins underneath at the origin; front on +z.
+ * Its head: an egg, longer than a head, narrower at the bottom, sallow and smooth, and on it a face that is barely one. Unfed:
+ * two small black pupils, a mouth turned down, and the dark running from its eyes like tears. Fed, the pupils grow and run,
+ * the black smearing down its cheeks, and the mouth stretches: a thin black slit, then wider than a mouth, then from one side
+ * of the head nearly to the other. Fed, too, the face has slipped: a band of it is out of true, shifted sideways, as a tape
+ * tears. Nothing white in its eyes and nothing red in its mouth: what is in there is dark. The neck joins underneath at the
+ * origin; front on +z.
  * @param face 0…3 (FACES)
  */
 export function headVox(face = 0) {
   const v = new Vox(), pale = M(SKIN, 0), mid = M(SKIN2, 0), back = M(SKIN3, 0);          // (sallow, not white: somebody's, once)
   lathe(v, HEAD, (k) => { const t = k * 2 - 1; return Math.max(0.5, Math.sqrt(Math.max(0, 1 - t * t)) * (9.5 + k * 1.8)); }, (x, y, z) => (z > 3 ? pale : z > -4 ? mid : back), 1.05);
-  const ink = M('#2a1f1c', 0), tear = M('#9fb4c2', 0), white = M('#f1eee4', 0), tooth = M('#e8e2cf', 0), gum = M('#5a2a2a', 0);
-  // paint onto the front of the egg: the voxel nearest the viewer at (x, y), and the one behind it, so it reads from the side
+  const black = M('#0b0a0a', 0), smear = M('#2a211e', 0), stain = M('#5e5149', 0);
   const front = (x, y) => { for (let z = 20; z > 0; z--) if (v.has(x, y, z)) return z; return null; };
   const dot = (x, y, c, deep = 2) => { const z = front(x, y); if (z === null) return; for (let d = 0; d < deep; d++) v.set(x, y, z - d, c); };
-  const EY = 21, MY = 11;
-  if (face < 3) {
-    // small eyes, close together; sad, the brows go up in the middle and the tears run from them
-    for (const sx of [-1, 1]) {
-      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) dot(sx * 3 + (sx > 0 ? dx : -dx), EY + dy, ink);
-      if (face === 0) { for (let t = 0; t <= 4; t++) dot(sx * (6 - t), EY + 1 + t, ink, 1); for (let y = EY - 1; y >= EY - 9; y--) dot(sx * (4 + ((EY - y) > 5 ? 1 : 0)), y, tear, 1); }
-    }
-    // the mouth: down at the ends, then straight, then up
-    for (let x = -4; x <= 4; x++) {
-      const k = (x / 4) ** 2, y = face === 0 ? MY + Math.round(2 * (1 - k)) : face === 1 ? MY : MY + Math.round(2 * k);
-      dot(x, y, ink);
-    }
-  } else {
-    // the grin, and the eyes: wide, white, a speck of black in each, too high and too far apart
-    for (const sx of [-1, 1]) for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) if (dx * dx + dy * dy <= 10) dot(sx * 4 + dx, EY + 1 + dy, dx === 0 && dy === 0 ? ink : white, 1);
-    for (let x = -8; x <= 8; x++) {
-      const k = (x / 8) ** 2, top = MY + Math.round(3 * k) + 1, bottom = MY - 4 + Math.round(6 * k);
-      for (let y = bottom; y <= top; y++) dot(x, y, y === top ? tooth : y === bottom ? ink : y === top - 1 && x % 2 === 0 ? tooth : gum, 1);
-      dot(x, top + 1, ink, 1);
-    }
+  const EY = 21, MY = 11, eye = [1.6, 2.0, 2.6, 3.4][face], run = [7, 4, 7, 11][face];
+  for (const sx of [-1, 1]) {
+    const cx = sx * 4;
+    // the pupil: black, round, too big for the size of the face as it grows
+    for (let dx = -4; dx <= 4; dx++) for (let dy = -4; dy <= 4; dy++) if (dx * dx + dy * dy <= eye * eye) dot(cx + dx, EY + dy, black, 3);
+    // and what runs from it: a smear down the cheek, narrowing, dark then stained
+    for (let t = 1; t <= run; t++) { const w = Math.max(0, Math.round(eye * (1 - t / (run + 1)) * 0.8)); for (let dx = -w; dx <= w; dx++) dot(cx + dx + (t > run * 0.6 ? sx : 0), EY - Math.round(eye) - t, t < run * 0.5 ? smear : stain, 1); }
+  }
+  // the mouth: a thin black slit — down at the ends; flat; up; and at the last far too wide, and open a little, black inside
+  const half = [3, 4, 6, 9][face], open = [0, 0, 1, 3][face];
+  for (let x = -half; x <= half; x++) {
+    const k = (x / half) ** 2, y = face === 0 ? MY + Math.round(2 * (1 - k)) : face === 1 ? MY : MY + Math.round((face === 3 ? 4 : 2) * k);
+    for (let o = 0; o <= Math.round(open * (1 - k * 0.7)); o++) dot(x, y - o, black, 2);
+  }
+  if (face === 3) for (const sx of [-1, 1]) for (let t = 1; t <= 4; t++) dot(sx * (half - 1), MY + 4 - t - 1, smear, 1);          // (it runs from the corners too)
+  // fed, a band of the face has slipped sideways, out of true
+  if (face >= 2) {
+    const band = face === 3 ? [16, 19] : [17, 18], shift = face === 3 ? 2 : 1, was = new Map();
+    for (let y = band[0]; y <= band[1]; y++) for (let x = -12; x <= 12; x++) { const z = front(x, y); if (z !== null) was.set(`${x},${y}`, [z, v.get(x, y, z)]); }
+    for (const [key, [z, c]] of was) { const [x, y] = key.split(',').map(Number), to = front(x + shift, y); if (to !== null) v.set(x + shift, y, to, c); }
   }
   return v;
 }
@@ -140,6 +141,8 @@ export function sleeveVox(len, cuff = false, wide = 4.6, watch = false) {
     if (cuff && y > len * 0.82) return shirt;
     // creases: across the inside of the elbow, and a fold or two down the length, a shade darker
     if (!cuff && k > 0.86 && z < 0) return fold;
+    // its sides a shade darker than its front and back, so it reads round, not flat
+    if (Math.abs(x) > r(k) * 0.62) return fold;
     if (Math.abs(Math.sin(k * 9 + x * 0.4)) < 0.12 && z < 1) return fold;
     return suit;
   });

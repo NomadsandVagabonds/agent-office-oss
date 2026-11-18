@@ -88,7 +88,11 @@ test('its line: it hunts, roams, is met further down, fears fire; a drawing warn
   const heads = [0, 1, 2, 3].map((f) => { const m = new Map(); MODEL.headVox(f).each((x, y, z, c) => m.set(`${x},${y},${z}`, c & 0xffffff)); return m; });
   for (let f = 1; f < 4; f++) assert.ok([...heads[f]].some(([k, c]) => heads[f - 1].get(k) !== c), `face ${f} is not face ${f - 1}`);
   const has = (f, hex) => [...heads[f].values()].includes(parseInt(hex.slice(1), 16));
-  assert.ok(has(0, '#9fb4c2') && !has(1, '#9fb4c2'), 'tears, only when sad'); assert.ok(has(3, '#f1eee4') && !has(2, '#f1eee4'), 'the eyes gone wide and white, only at the last');
+  // the owner, after the first faces: "too cartoony … more glitch/horror/bakcrooms … smeared growing black pupils instead of cartoon white … ones"
+  const black = heads.map((m) => [...m.values()].filter((c) => c === 0x0b0a0a).length);
+  for (let f = 1; f < 4; f++) assert.ok(black[f] > black[f - 1] * 1.3, `the black grows: ${black}`);
+  for (let f = 0; f < 4; f++) for (const c of heads[f].values()) { const r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255; assert.ok(!(r > 225 && g > 225 && b > 215), 'nothing white in its face'); assert.ok(!(r > g + 60), 'nothing red in its mouth'); }
+  assert.ok(has(0, '#2a211e'), 'the dark runs from its eyes, unfed');
   const tones = new Map(); for (const c of heads[1].values()) tones.set(c, (tones.get(c) || 0) + 1);
   const skin = [...tones].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([c]) => c);
   for (const c of skin) { const r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255; assert.ok(r > 170 && g > 145 && b > 125, 'pale'); assert.ok(r - b > 25, 'skin, not white'); }

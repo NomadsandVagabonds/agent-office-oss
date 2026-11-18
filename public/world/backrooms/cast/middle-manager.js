@@ -118,7 +118,7 @@ export function create(c) {
     thin.visible = fat < 0.5; full.visible = !thin.visible;
     const body = thin.visible ? thin : full, wide = (thin.visible ? 1 + fat * 1.3 : 0.375 + (fat - 0.5) * 1.25) * widen;          // (the full body is four times the thin one's width: they meet at half)
     body.position.set(hip.x, hip.y, hip.z); aim(body, dir.x, dir.y, dir.z, front.x, front.y, front.z, T, T, wide);
-    const sh = { x: hip.x + dir.x * T, y: hip.y + dir.y * T, z: hip.z + dir.z * T }, half = 0.17 + fat * 0.38 + swell * 0.12;
+    const sh = { x: hip.x + dir.x * T, y: hip.y + dir.y * T, z: hip.z + dir.z * T }, half = (thin.visible ? 13 : 34) * S * wide;          // (its shoulders are where the jacket's shoulders are, however far out it has got)
     // the neck and the head: down further than the body, and turned to whoever it is having its meeting with
     const na = lean * Mg.neck, ha = lean * Mg.head, nd = { x: fx * Math.sin(na), y: Math.cos(na), z: fz * Math.sin(na) };
     neck.position.set(sh.x, sh.y, sh.z); aim(neck, nd.x, nd.y, nd.z, fx * Math.cos(na), -Math.sin(na), fz * Math.cos(na), N, N, B.neck);
