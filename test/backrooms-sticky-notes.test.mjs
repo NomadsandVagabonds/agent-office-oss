@@ -71,5 +71,5 @@ test('the hand: on the lens through env.hand.stick, off it with how it went; a s
 test('its line: it hunts, keeps a room, fears fire, can be hit; a drawing warns of it', () => {
   const m = CAST.find((k) => k.id === 'sticky-notes');
   assert.ok(m && m.home === 'room' && m.room && m.fire === 'fears' && m.weight > 0 && !m.caught.hurt, 'a setback, not a hurt');
-  assert.ok(WARNINGS['sticky-notes'].length >= 3);
+  assert.equal(WARNINGS['sticky-notes'], undefined, 'the owner, 18 Nov: no drawing of the notes; they are a hazard, not an enemy');
 });

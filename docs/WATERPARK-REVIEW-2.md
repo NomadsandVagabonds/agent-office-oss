@@ -379,6 +379,10 @@ you stand.
 4. **One look.** Re-skin the plain rooms in the newer rooms' ivory-and-green kit, and use dark water at Classic in
    the older five (the Return Pool's water is the model). Then cut the Drain Spa to one anomaly. *Owner's go: yes; it
    is art direction.*
+   **Overturned, 18 Nov (the owner):** "I reject the one look framework. I think there can be different colors in
+   different rooms." The plain rooms keep their own colours; the water at Classic went the other way too (every pool on
+   the ripple sheet, see BACKROOMS-GRAPHICS.md). And on the Drain Spa: "keep codex, seems like more detailed work": Codex's
+   siphon and wristband stay, and the cut to one anomaly is dropped.
 5. **Bring the residents into the health tiers.** The Lane Keeper, Guard-Stand and wake as medium, the floats and
    skimmer as basic, each answering a jab. Let a shove reach room residents as well as the cast. *Owner's go: yes; it
    touches shared code.*

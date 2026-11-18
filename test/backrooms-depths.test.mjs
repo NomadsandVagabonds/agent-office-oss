@@ -832,8 +832,13 @@ test('a kind of floor that is still being built is in nobody\'s visit, and any k
 test('drawings on the walls: only ever of something that is in this visit, on its part or the one above, in a frightened person\'s own unfinished words', () => {
   // the words: every creature has some, none is the deck's own line, and nobody got to the end of a sentence
   const norm = (t) => t.toLowerCase().replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+  // (the owner, 18 Nov: one drawing is enough for the middle manager, and none for the sticky notes, a hazard more than an
+  // enemy; whoever has no words is never drawn: gen.js)
+  const FEW = { 'middle-manager': 1, 'sticky-notes': 0 };
   for (const m of CAST) {
-    assert.ok(Array.isArray(WARNINGS[m.id]) && WARNINGS[m.id].length >= 2, `nobody has drawn ${m.id}: there is nothing on the walls to learn it from`);
+    const want = FEW[m.id] ?? 2;
+    if (want === 0) { assert.equal(WARNINGS[m.id], undefined, `${m.id}: the owner wants no drawing of it`); continue; }
+    assert.ok(Array.isArray(WARNINGS[m.id]) && WARNINGS[m.id].length >= want, `nobody has drawn ${m.id}: there is nothing on the walls to learn it from`);
     for (const lines of WARNINGS[m.id]) {
       const said = norm(lines.join(' ')), rule = norm(m.rule);
       assert.ok(lines.length >= 2 && lines.length <= 4 && lines.every((l) => l.length <= 22 && l === l.toUpperCase()), `${m.id}: ${JSON.stringify(lines)}`);
@@ -858,6 +863,7 @@ test('drawings on the walls: only ever of something that is in this visit, on it
   const R = { pick: (l) => l[0] };
   assert.deepEqual(warningFor('pirate', R), WARNINGS.pirate[0]);
   assert.ok(warningFor('somebody-new', R).length >= 2, 'a creature nobody has words for yet still gets an honest scrawl');
+  assert.match(readFileSync(new URL('../public/world/backrooms/gen.js', import.meta.url), 'utf8'), /filter\(\(id\) => typeof id === 'string' && id && WARNINGS\[id\]\)/, 'nobody is drawn who has no words of their own');
   // the walls: who is drawn where
   const drawnOf = new Map();
   let parts = 0, withOne = 0;
@@ -896,6 +902,9 @@ test('drawings on the walls: only ever of something that is in this visit, on it
   checkDrawings(waterparkDrawingSeed, generateVisit(waterparkDrawingSeed, { themes: ['waterpark', 'waterpark', 'waterpark', 'waterpark'] }), false);
   // (one that comes with a room — cast.js `withRoom` — is not in what a visit plans from its cast, drawings among it: it has its
   // words in WARNINGS, held to the rules above, and nobody draws it yet)
-  for (const m of CAST) if (!m.withRoom && !m.withTheme) assert.ok(drawnOf.get(m.id) > 0, `${m.id} is never drawn`);
+  for (const m of CAST) if (!m.withRoom && !m.withTheme) {
+    if (FEW[m.id] === 0) assert.ok(!drawnOf.get(m.id), `${m.id} is drawn, though it has no words`);
+    else assert.ok(drawnOf.get(m.id) > 0, `${m.id} is never drawn`);
+  }
   for (const a of residents) assert.ok(drawnOf.get(a.resident) > 0, `${a.resident} is never drawn`);
 });
