@@ -22,7 +22,7 @@ export function create(c) {
   const walker = { x: 0, z: 0, r: G.r, tall: G.tall, opens: false };
   const worms = [];
   let s = swaying(), group = null, segs = [], arms = [], feet = [], lips = [], mat = null, wormMat = null, wormGeo = [], peeping = [];
-  let clock = 0, yaw = 0, lean = 0, walked = 0, known = false, over = false, tookOne = false, hadBrood = false;
+  let dying = null, whip = 0, clock = 0, yaw = 0, lean = 0, walked = 0, known = false, over = false, tookOne = false, hadBrood = false;
 
   // (voxels, lit once from above and in front as the lines are, and tinted every frame by the light where it stands)
   const LIGHTS = [lamp(0.6, 3.2, 1.4, [1.1, 1.05, 1.0], { k: 9, wrap: 0.45, far: 40 })];
@@ -81,23 +81,26 @@ export function create(c) {
 
   /** Lean every ring of it where the sway has it this moment. */
   function pose(dt) {
-    const floor = env.world.floorY(walker.x, walker.z), heave = s.mode === 'heave' ? Math.min(1, s.t / G.heave) : 0, glad = s.mode === 'content' ? 1 : 0;
+    const floor = env.world.floorY(walker.x, walker.z), heave = s.mode === 'heave' && dying === null ? Math.min(1, s.t / G.heave) : 0, glad = s.mode === 'content' && dying === null ? 1 : 0;
+    // (dying: the sway goes out of it, and it goes over from low down and lies along the floor, the rings slack: dies())
+    const slump = dying === null ? 0 : (() => { const t = Math.max(0, Math.min(1, (dying - 0.1) / 0.65)); return t * t * (3 - 2 * t); })(), alive = 1 - slump;
     // how far it swings, and how fast: wider and easier when it is pleased with itself; drawn back and shaking as it heaves
-    const amp = 0.5 + 0.35 * glad - 0.25 * heave, rate = 1.5 + 0.5 * glad;
+    const amp = (0.5 + 0.35 * glad - 0.25 * heave) * alive, rate = 1.5 + 0.5 * glad;
     lean += ((heave ? -0.75 * heave : 0) - lean) * Math.min(1, dt * 5);
     const fx = Math.sin(yaw), fz = Math.cos(yaw), sx = Math.cos(yaw), sz = -Math.sin(yaw);
     let px = 0, pz = 0, py = 0.1, bend = 0, pitch = 0;
     for (let i = 0; i < SEGS; i++) {
       const k = i / (SEGS - 1), sway = Math.sin(clock * rate - i * 0.42) * amp * k * 0.34 + (heave ? (Math.random() - 0.5) * 0.05 * heave : 0);
       const nod = Math.sin(clock * rate * 0.5 - i * 0.3) * 0.12 * k * (1 + glad) + lean * k * 0.5;   // (the top of it curls over, to look at you with what it has)
-      bend += sway * 0.23; pitch += nod * 0.22 + (k > 0.55 ? 0.21 * (1 - heave) : 0);
+      bend += sway * 0.23; pitch += -whip * 0.16 * k + (nod * 0.22 + (k > 0.55 ? 0.21 * (1 - heave) : 0)) * alive + slump * (i < 4 ? 0.44 : 0.08);
+      if (slump > 0 && pitch > Math.PI / 2 && py < 0.16) pitch = Math.PI / 2;               // (what has come down lies along the floor)
       const seg = segs[i].m, h = SEG_H * (1 + (heave ? Math.sin(clock * 22 + i) * 0.05 * heave : 0));
       seg.position.set(walker.x + sx * px + fx * pz, floor + py, walker.z + sz * px + fz * pz);
       seg.rotation.set(0, yaw, 0); seg.rotateZ(-bend); seg.rotateX(pitch); seg.rotateY(segs[i].turn);
       px += Math.sin(bend) * h; pz += Math.sin(pitch) * h; py += Math.cos(bend) * Math.cos(pitch) * h;
       // a swallow goes up it while it heaves
       const gulp = heave ? Math.max(0, 1 - Math.abs(k - heave) * 5) * 0.35 : 0;
-      const breath = 1 + Math.sin(clock * 1.1 - i * 0.5) * 0.025;
+      const breath = (1 + Math.sin(clock * 1.1 - i * 0.5) * 0.025 * alive) * (1 + 0.12 * slump);
       seg.scale.set(segs[i].w * segs[i].wx * (1 + gulp) * breath, (h / RING_H) * 1.25, segs[i].w * segs[i].wz * (1 + gulp) * breath);
     }
     const head = segs[SEGS - 1].m;
@@ -105,16 +108,16 @@ export function create(c) {
     lips[0].scale.setScalar(1 + 0.45 * heave);
     // what is in it looks out, and goes back in; more of them, further, as it heaves
     peeping.forEach((w, n) => {
-      const out = Math.max(0, Math.sin(clock * (0.9 + n * 0.23) + n * 2.1)) * (0.5 + 0.5 * heave) + heave * 0.4, r = 0.07 + 0.03 * n;
+      const out = (1 - whip) * (Math.max(0, Math.sin(clock * (0.9 + n * 0.23) + n * 2.1)) * (0.5 + 0.5 * heave) + heave * 0.4) * alive, r = 0.07 + 0.03 * n;
       w.g.position.set(Math.cos(w.a + clock * 0.2) * r, 0.02 + out * 0.2, Math.sin(w.a + clock * 0.2) * r);
       w.g.rotation.set(-Math.PI / 2 + Math.sin(clock * 3 + n) * 0.5, w.a, 0);
       w.parts.forEach((p, q) => p.position.set(Math.sin(clock * 9 + n * 2 - q * 1.4) * 0.012, 0, -q * 0.05));
     });
     // and what grows round the lip of it feels about
     for (const f of lips[1]) {
-      let x = Math.cos(f.a) * 0.2, y = 0.2, z = Math.sin(f.a) * 0.2, tilt = 0.5 + Math.sin(clock * 1.7 + f.a * 3) * 0.5 - heave * 0.6;
+      let x = Math.cos(f.a) * 0.2, y = 0.2, z = Math.sin(f.a) * 0.2, tilt = (0.5 + Math.sin(clock * 1.7 + f.a * 3) * 0.5) * alive - heave * 0.6 + 1.3 * slump;
       f.joints.forEach((jt, n) => {
-        tilt += Math.sin(clock * (2.4 + n * 0.6) + f.a * 5 + n) * 0.45;
+        tilt += Math.sin(clock * (2.4 + n * 0.6) + f.a * 5 + n) * 0.45 * alive + 0.25 * slump;
         jt.position.set(x, y, z); jt.rotation.set(0, -f.a, 0); jt.rotateZ(-tilt);
         const len = LIMB_H * 0.7; x += Math.cos(f.a) * Math.sin(tilt) * len; z += Math.sin(f.a) * Math.sin(tilt) * len; y += Math.cos(tilt) * len;
       });
@@ -122,9 +125,9 @@ export function create(c) {
     // what it waves, joined on to the trunk
     for (const arm of arms) {
       const sh = segs[Math.floor((SEGS - 1) * arm.at)].m, out = 0.24 * segs[Math.floor((SEGS - 1) * arm.at)].w;
-      let ax = sh.position.x + sx * arm.side * out, ay = sh.position.y + 0.06, az = sh.position.z + sz * arm.side * out, ang = arm.side * (1.25 + 0.4 * glad);
+      let ax = sh.position.x + sx * arm.side * out, ay = sh.position.y + 0.06, az = sh.position.z + sz * arm.side * out, ang = arm.side * (1.25 + 0.4 * glad + 0.35 * slump - 0.6 * whip);
       arm.joints.forEach((jt, n) => {
-        ang += Math.sin(clock * (3.6 + glad * 2) + n * 0.9 + arm.side + arm.at * 7) * (0.5 + 0.25 * glad) - arm.side * heave * 0.3;
+        ang += Math.sin(clock * (3.6 + glad * 2) + n * 0.9 + arm.side + arm.at * 7) * (0.5 + 0.25 * glad) * alive - arm.side * heave * 0.3 + arm.side * 0.06 * slump;
         jt.position.set(ax, ay, az); jt.rotation.set(0, yaw, 0); jt.rotateZ(-ang);
         const dx = Math.sin(ang) * LIMB_H * 0.94, dy = Math.cos(ang) * LIMB_H * 0.94;
         ax += sx * dx; ay += dy; az += sz * dx;
@@ -132,7 +135,7 @@ export function create(c) {
     }
     // the feet shuffle when it goes anywhere, and tread on the spot when it does not
     for (const f of feet) {
-      const step = Math.max(0, Math.sin(walked * 9 + f.a * 2 + clock * (glad ? 3 : 0.8))) * (0.05 + 0.04 * glad);
+      const step = Math.max(0, Math.sin(walked * 9 + f.a * 2 + clock * (glad ? 3 : 0.8))) * (0.05 + 0.04 * glad) * alive;
       f.m.position.set(walker.x + Math.cos(f.a + yaw) * 0.3, floor + step, walker.z + Math.sin(f.a + yaw) * 0.3); f.m.rotation.y = -f.a - yaw + Math.PI / 2;
     }
     return { x: lips[0].position.x, y: lips[0].position.y + 0.2, z: lips[0].position.z };
@@ -238,6 +241,30 @@ export function create(c) {
 
   return {
     ready,
+    /**
+     * Her dying (cast/health.rule.js; the conductor calls this and nothing else of her). The sway goes out of her and
+     * what grows round her lip and what she waves go slack and hang; she goes over from low down, the way she was
+     * facing, and lies along the floor, her rings gone loose. What was in her mouth goes back in. Her clock of dying
+     * only, slowing as she goes. (Her brood are their own: this is only her.)
+     */
+    /**
+     * A jab that did not finish her (the conductor, while she stands stalled after one: hurt, seconds since it). Her
+     * trunk whips back from it, top first, what was looking out of her mouth goes back in, and what she waves is flung
+     * up. After a shove (hurt large, or none) she holds.
+     */
+    flinch(hurt, dt = 0) {
+      if (!group || hurt == null || !(hurt < HEALTH.flinch)) return;
+      whip = Math.exp(-hurt * 5) * Math.min(1, hurt * 25) * (1 - hurt / HEALTH.flinch);
+      clock += dt; pose(dt); whip = 0;
+    },
+    /** Finished, it lies where it fell (the conductor leaves its things when this says so): its last pose, drawn once, nothing more. */
+    fell() { for (const w of worms) if (w.air && !w.dead) w.g.visible = false; return !!group; },      // (none of hers left hanging in the air)
+    dies(progress, dt = 0) {
+      if (!group) return;
+      dying = Math.max(0, Math.min(1, progress));
+      clock += dt * (1 - 0.85 * dying);
+      pose(dt);
+    },
     update(dt) {
       if (!group || over) return;
       clock += dt;

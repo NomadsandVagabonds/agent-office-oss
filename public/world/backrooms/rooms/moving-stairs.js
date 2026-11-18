@@ -234,7 +234,8 @@ export function build(c) {
 
   /* overhead: the roof's own lights, as geometry; what it says, in tube */
   { const tube = c.shining('stairs:panels', kit.tex.white(), 1.1, [0.95, 0.88, 1]);
-    for (let x = -W / 2 + 1.8; x < xS - 0.8; x += 3.2) for (let z = zT + 1.5; z < D / 2 - 0.8; z += 3.2) { det.box(x - 0.62, H - 0.03, z - 0.32, x + 0.62, H - 0.005, z + 0.32, rgb('#c8b8c4')); tube.box(x - 0.56, H - 0.035, z - 0.26, x + 0.56, H - 0.03, z + 0.26, [1, 1, 1]); }
+    // (the hall's ceiling lights: the shell's own fitting, laid along x; the hall is lit by its own lamps, so these give none)
+    for (let x = -W / 2 + 1.8; x < xS - 0.8; x += 3.2) for (let z = zT + 1.5; z < D / 2 - 0.8; z += 3.2) c.fitting(x, z, { rot: Math.PI / 2, tube: '#f2e2ee', light: false });
     for (let z = zs0 + 1.2; z < zs1 - 0.6; z += 2.2) { det.box(xS + 1.0, H - 0.03, z - 0.3, W / 2 - 0.4, H - 0.005, z + 0.3, rgb('#c8b8c4')); tube.box(xS + 1.06, H - 0.035, z - 0.24, W / 2 - 0.46, H - 0.03, z + 0.24, [1, 1, 1]); } }
   const neon = mallNeon(kit, 'stairs:' + p.seed, ['UP', 'ALSO UP', 'TO ALL FLOORS', 'STAND STILL', 'KEEP WALKING', 'DOWN IS UP', 'THIS WAY UP', 'DOWN'], p.seed), lit = c.shining('mall:neon:stairs:' + p.seed, neon.texture, 2.2, undefined, { bloom: 2 });
   for (const [x, i] of [[xA, 3], [xB, 5]]) { upright(lit, x + 1.0, zB + 0.35, x - 1.0, zB + 0.35, 2.3, 2.8, neon.uv(i)); upright(lit, x - 1.0, zB + 0.35, x + 1.0, zB + 0.35, 2.3, 2.8, neon.uv((i + 1) % 8)); for (const s of [-1, 1]) flat.box(x + s - 0.02, 2.8, zB + 0.33, x + s + 0.02, H, zB + 0.37, [0.2, 0.18, 0.2]); }

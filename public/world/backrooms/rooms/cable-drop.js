@@ -158,7 +158,8 @@ export function build(c) {
       tendrils.rotation.x = Math.cos(time * 1.5) * 0.03;
       // (its health: the mark of the last jab ages; dying, it does nothing and hurts nobody, and then it is gone from this floor)
       vital = aged(vital, dt);
-      if (vital.dying !== null) { roamer.physical = false; if (vital.gone) roamer.gone = true; return; }
+      if (vital.dying !== null && !vital.gone) rig.die(vital.dying, time);                 // (going down into a heap of cable: rig.js)
+      if (vital.dying !== null) { roamer.physical = false; return; }                      // (gone, the heap of it stays where it fell: drawn once, then left)
 
       const inRoom = c.world.current() === c.rt;
       const distDrop = Math.hypot(me.x - startW.x, me.z - startW.z);
@@ -194,7 +195,7 @@ export function build(c) {
           const floor = c.world.floorY(roamer.x, roamer.z);
           for (const f of c.world.furniture || []) if (!f.away && f.collider.on !== false && roamer.x + roamer.r > f.x0 && roamer.x - roamer.r < f.x1 && roamer.z + roamer.r > f.z0 && roamer.z - roamer.r < f.z1) roamer.lift = Math.max(roamer.lift, f.top - floor + .05);
         }
-        rig.pose(time, 0.5, 0.55 + 0.45 * k);
+        rig.pose(time, 0.5, 0.55 + 0.45 * k, { hurt: vital.hurt });
         rig.group.rotation.y = Math.atan2(me.x - roamer.x, me.z - roamer.z);
       } else if (rule.phase === 'hunting' || rule.phase === 'recoiling') {
         if (!known && distMe < 9 && c.env.sees(roamer.x, roamer.z, { radius: 0.5 })) { known = true; c.met('trunk-line'); }
@@ -210,7 +211,7 @@ export function build(c) {
         }
         const headRoom = c.world.headroom(roamer.x, roamer.z);
         const crouch = clamp((headRoom - 0.5) / 1.15, 0.46, 1);
-        rig.pose(time, went / Math.max(dt, 1e-3), crouch);
+        rig.pose(time, went / Math.max(dt, 1e-3), crouch, { hurt: vital.hurt, recoil: rule.phase === 'recoiling' ? rule.rattleTimer / CABLE.recoil : 0 });
         const wantYaw = Math.atan2(nav.tx - roamer.x, nav.tz - roamer.z);
         rig.group.rotation.y += clamp(turnTo(rig.group.rotation.y, wantYaw), -dt * 8, dt * 8);
         if (distMe < 2.6 && clearLine) c.env.interfere(clamp((2.6 - distMe) * 0.24, 0, 0.65));

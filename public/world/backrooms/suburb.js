@@ -727,13 +727,12 @@ export function sprinkler(c, x, z, rot = 0) {
  * `cols` × `rows` lit panels, and a lamp to every `every`-th of them (the light budget is sixteen a room).
  */
 export function daylight(c, cols, rows, every = 1, power = 1) {
-  const { W, D, H, kit } = c, tube = lin(c.look.tube), on = c.shining('panel', kit.tex.panel(true), 2.5, tube), uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
-  const head = Math.max(0.3, Math.min(2.5, H / 2.6));
-  let k = 0;
-  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++, k++) {
-    const x = (Math.round((-W / 2 + (i + 0.5) * W / cols) / TILE - 0.5) + 0.5) * TILE, z = Math.round((-D / 2 + (j + 0.5) * D / rows) / TILE) * TILE, y = H - 0.006;
-    on.quad([x - TILE / 2, y, z - TILE], [x + TILE / 2, y, z - TILE], [x + TILE / 2, y, z + TILE], [x - TILE / 2, y, z + TILE], WHITE, uv);
-    if ((i + j * 2) % every === 0) c.light(x, H - 0.14, z, tube, 1.05 * power * Math.pow(head, 1.5), { axis: [0, -1, 0], floor: 0.24, k: 3.4 * head, far: 14 * head });
+  // (each is the shell's own ceiling light, by the shell's own code: the flat panel at Classic and Low, the sculpted fitting at
+  //  Medium and High. The same picture at Classic as the panel and lamp this used to draw by hand)
+  const { W, D, H } = c, head = Math.max(0.3, Math.min(2.5, H / 2.6));
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const x = (Math.round((-W / 2 + (i + 0.5) * W / cols) / TILE - 0.5) + 0.5) * TILE, z = Math.round((-D / 2 + (j + 0.5) * D / rows) / TILE) * TILE;
+    c.fitting(x, z, { light: (i + j * 2) % every === 0 ? { power: 1.05 * power * Math.pow(head, 1.5), floor: 0.24, k: 3.4 * head, far: 14 * head } : false });
   }
 }
 

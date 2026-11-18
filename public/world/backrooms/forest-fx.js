@@ -152,8 +152,6 @@ export function woodlandDynamicLight(c, opt = {}) {
   // a green thing reads as green when the light on it is not. docs/FOREST-REVIEW.md §2)
   const tube = lin(opt.tubeHex || '#fffbe9');
   const warmOfficeTube = lin('#ffbe66');
-  const deadBatch = c.mapped('forest:dead-panel', kit.tex.panel(false));
-  const uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
   const head = clamp(H / 2.8, 0.55, 2.25);
 
   const liveSpots = [];
@@ -163,36 +161,27 @@ export function woodlandDynamicLight(c, opt = {}) {
     for (let j = 0; j < rows; j++) {
       const x = (Math.round((-W / 2 + (i + 0.5) * (W / cols)) / TILE - 0.5) + 0.5) * TILE;
       const z = (Math.round((-D / 2 + (j + 0.5) * (D / rows)) / TILE)) * TILE;
-      const y = H - 0.006;
-      const q = [
-        [x - TILE / 2, y, z - TILE],
-        [x + TILE / 2, y, z - TILE],
-        [x + TILE / 2, y, z + TILE],
-        [x - TILE / 2, y, z + TILE],
-      ];
 
       // Keep at least two well-separated panels live; turn selected others into dead root-choked fixtures
       const hVal = hash(seed + i * 19 + j * 43);
       const centerKeep = (i === Math.floor(cols / 2) && j === Math.floor(rows / 2)) || (i === 0 && j === rows - 1);
       const isDead = !centerKeep && hVal < deadRatio;
 
+      // (the shell's own ceiling light, `c.fitting`: the flat panel at Classic and Low, the sculpted fitting at Medium
+      // and High, its lamp with it. This helper used to draw the panel and throw the lamp itself)
       if (isDead || liveCount >= (opt.maxCeilingLights ?? 10)) {
-        deadBatch.quad(...q, WHITE, uv);
+        c.fitting(x, z, { dead: true });
         c.blot(x, z, 1.45, 2.15, { rgb: [0.02, 0.03, 0.02], a: 0.52, y: H - 0.008, down: true });
       } else {
         const bank = (i + j) % 3;
         // Occasional warm golden-amber office fixture in a corner bay for uncanny office-vs-forest color contrast!
         const isWarmBay = mode !== 'ember' && liveCount === 1 && cols >= 3;
         const pCol = isWarmBay ? warmOfficeTube : tube;
-        const on = c.shining(`panel-bank-${bank}${isWarmBay ? '-warm' : ''}`, kit.tex.panel(true), 2.35, pCol);
-        on.quad(...q, WHITE, uv);
-        // Tighter downward cone (`floor: 0.14, k: 2.35`) carves bright chartreuse pools & deep shadowed corridors!
-        c.light(x, H - 0.14, z, pCol, power * 1.12 * Math.pow(head, 1.28), {
+        // Tighter downward cone (`floor: 0.14, k: 2.35`) carves bright pools & deep shadowed corridors!
+        c.fitting(x, z, {
           bank,
-          axis: [0, -1, 0],
-          floor: opt.floorLeak ?? 0.14,
-          k: 2.35 * head,
-          far: 12.6 * head,
+          tube: pCol,
+          light: { power: power * 1.12 * Math.pow(head, 1.28), k: 2.35 * head, far: 12.6 * head, floor: opt.floorLeak ?? 0.14 },
         });
         liveSpots.push({ x, z, bank });
         liveCount++;
