@@ -744,8 +744,12 @@ export function createKit(opt = {}) {
     live: (w, h, draw, opt) => own(canvasTexture(w, h, draw || (() => {}), opt)),
   };
 
-  /** The one material: baked light × texture, with the per-room dimmer and flicker. */
-  function surface({ map = null, room = null, vox = false, cutout = false, flick = false, banks = false, alpha = 1, side = THREE.FrontSide, wet = 0, lm = null } = {}) {
+  /**
+   * The one material: baked light × texture, with the per-room dimmer and flicker. bloom (0…3, default 1): how strongly
+   * its self-lit voxels feed the glow at Medium and High (glow.js); stored as userData.bloom only, and a new material each
+   * call, so a strength set on one surface is never another's. It changes nothing of the shader or how it is drawn.
+   */
+  function surface({ map = null, room = null, vox = false, cutout = false, flick = false, banks = false, alpha = 1, side = THREE.FrontSide, wet = 0, lm = null, bloom } = {}) {
     const defines = {};
     if (map) defines.MAPPED = 1;
     if (vox) defines.VOXEL = 1;
@@ -770,6 +774,7 @@ export function createKit(opt = {}) {
       },
     }));
     if (lm) lm.materials.push(material);
+    material.userData.bloom = glowStrength(bloom);        // (emissive bloom: glow.js's twin reads it; the scene's draw never does)
     return material;
   }
   /**

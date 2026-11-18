@@ -1,9 +1,11 @@
 // The Backrooms — a vending machine that sells. The rules are vending.rule.js's; this is the metal: the front with its window and its
 // panel, the panel's display (what has gone in, a picture of what it would give, a lit vend button and a return button), and E.
 //
-// No words anywhere on it: what has gone in, and what would come out, are pictures. E at the middle of the panel feeds what is in
-// the hand; E at the left of it vends (when something is wanted of what is in); E at the right gives everything back. Where
-// the vends of the floor are spent, every machine's panel goes dark.
+// No words anywhere on it: what has gone in, and what would come out, are pictures. There is one E to a machine, and where you
+// are LOOKING along its panel says which: the left vends (when something is wanted of what is in), the middle feeds what is in
+// the hand, the right gives everything back; where the thing looked at will not do, the nearest one that will. (Three spots
+// a hand's breadth apart could not be told apart under a thumb.) Where the vends of the floor are spent, every machine goes
+// dark: its panel, and its front.
 import { makeRng } from './gen.js';
 import { makeItem } from './inventory-state.js';
 import { difficultyOf } from '../../../core/difficulty.mjs';
@@ -29,7 +31,7 @@ function icon(g, type, x, y, s) {
 }
 
 /** The front all machines share: no words, a window of goods, a dark recess for the panel, a flap for what drops. */
-function drawFront(g, w, h) {
+function drawFront(g, w, h, spent = false) {
   g.fillStyle = '#15171c'; g.fillRect(0, 0, w, h);
   g.fillStyle = '#3c6a86'; g.fillRect(2, 2, w - 4, 20);                      // the header, unlettered
   g.fillStyle = '#1a2c3a'; g.fillRect(w / 2 - 10, 9, 20, 6); g.fillStyle = '#0a0b0d'; g.fillRect(w / 2 - 8, 11, 16, 2);
@@ -38,6 +40,7 @@ function drawFront(g, w, h) {
   for (let r = 0; r < 5; r++) { g.fillStyle = '#9aa3a8'; g.fillRect(4, 44 + r * 20, 42, 2); for (let k = 0; k < 4; k++) { g.fillStyle = cols[(r + k) % 5]; g.fillRect(7 + k * 10, 29 + r * 20, 6, 14); g.fillStyle = '#ffffff'; g.fillRect(8 + k * 10, 30 + r * 20, 1, 10); } }
   g.fillStyle = '#0a0b0d'; g.fillRect(48, 26, 44, 100);                      // the recess the panel's display sits in (it is drawn live)
   g.fillStyle = '#0a0b0d'; g.fillRect(8, 138, 80, 28); g.fillStyle = '#2a2d34'; g.fillRect(10, 140, 76, 8);   // the flap
+  if (spent) { g.fillStyle = 'rgba(6,7,9,0.9)'; g.fillRect(0, 0, w, h); }                                      // (spent: the front goes out)
 }
 
 /** One cell of the display. */
@@ -51,9 +54,9 @@ function drawCell(g, ox, oy, inputs, ready, spent, want) {
   g.fillStyle = want ? '#6fd6ff' : '#233b49'; g.fillRect(ox + 43, oy + 31, 6, 3); g.fillRect(ox + 44, oy + 34, 4, 2);     // (the arrow: nothing yet, or something wanted)
   g.fillStyle = '#16303f'; g.fillRect(ox + 31, oy + 38, 30, 28); g.fillStyle = '#0a141b'; g.fillRect(ox + 32, oy + 39, 28, 26);
   if (want) icon(g, want, ox + 34, oy + 41, 2); else { g.fillStyle = '#233b49'; for (let k = 0; k < 3; k++) g.fillRect(ox + 40 + k * 5, oy + 51, 2, 2); }
-  g.fillStyle = ready ? '#3ee068' : '#14351f'; g.fillRect(ox + 6, oy + 70, 46, 14);
-  if (ready) { g.fillStyle = '#d8ffe0'; g.fillRect(ox + 10, oy + 72, 38, 2); }
-  g.fillStyle = inputs.length ? '#e05040' : '#3a1612'; g.fillRect(ox + 58, oy + 70, 28, 14);
+  g.fillStyle = ready ? '#3ee068' : '#14351f'; g.fillRect(ox + 6, oy + 70, 34, 14);
+  if (ready) { g.fillStyle = '#d8ffe0'; g.fillRect(ox + 10, oy + 72, 26, 2); }
+  g.fillStyle = inputs.length ? '#e05040' : '#3a1612'; g.fillRect(ox + 52, oy + 70, 34, 14);
 }
 
 /**
@@ -62,8 +65,9 @@ function drawCell(g, ox, oy, inputs, ready, spent, want) {
  */
 export function vendingGear(c, count) {
   const { W } = c, kit = c.kit, floor = floorOf(c.level), machines = [];
-  const front = kit.tex.custom('vendfront2', 96, 176, (g, w, h) => drawFront(g, w, h), { clamp: true });
+  const front = kit.tex.live(96, 176, (g, w, h) => drawFront(g, w, h), { clamp: true });           // (live: it goes dark when the vends are spent)
   const glowB = c.shining('vendfront2', front, 1.25);
+  let frontDark = false;
   const cols = Math.min(count, 4), rows = Math.ceil(Math.max(1, count) / cols);
   const atlas = kit.tex.live(cols * CELL.w, rows * CELL.h, () => {}, { clamp: true });
   const glowD = c.shining('vend:display', atlas, 1.5);
@@ -71,6 +75,7 @@ export function vendingGear(c, count) {
   const nextStream = () => makeRng(`${c.level.seed}/vend/${c.level.depth ?? 0}/${floor.done}`);
   const paint = () => {
     const g = atlas.image.getContext('2d'), spent = floor.done >= VENDS_PER_FLOOR;
+    if (spent !== frontDark) { frontDark = spent; const f = front.image.getContext('2d'); drawFront(f, 96, 176, spent); front.needsUpdate = true; }
     machines.forEach((m, i) => {
       const recipe = recipeFor(m.inputs), next = !spent && recipe ? vend(m.inputs, floor, nextStream(), { exclude: exclusions() }) : null;   // (the picture is the very thing that will drop)
       drawCell(g, (i % cols) * CELL.w, Math.floor(i / cols) * CELL.h, m.inputs, !spent && !!recipe, spent, next?.ok ? next.out : null);
@@ -103,19 +108,33 @@ export function vendingGear(c, count) {
     c.light(xf - sx * 0.45, 1.05, z, '#cfe6ff', 0.42, { k: 1.1, far: 5.5, wrap: 0.5 });
     const stand = xf - sx * 0.3, at = (u) => ({ x: stand, z: zAt(PANEL.u0 + (PANEL.u1 - PANEL.u0) * u) });
     const spent = () => floor.done >= VENDS_PER_FLOOR, ready = () => !spent() && !!recipeFor(m.inputs);
-    // the middle of the panel: what is in the hand goes in
-    const slot = at(0.5);
-    c.use({ x: slot.x, z: slot.z, r: 0.9, cone: 0.5, label: 'the machine',
-      when: () => { const h = inv()?.held?.(); return !spent() && !!h && accepts(h.type) && m.inputs.length < SLOTS; },
-      use: () => {
+    // one E to a machine: where you are looking along its panel says which of the three it is (left: vend, middle: feed what is in
+    // the hand, right: everything back), and where the one looked at will not do, the nearest that will
+    const slotAt = at(0.5), centres = { go: 0.2, slot: 0.5, back: 0.8 };
+    const can = {
+      slot: () => { const h = inv()?.held?.(); return !spent() && !!h && accepts(h.type) && m.inputs.length < SLOTS; },
+      go: ready,
+      back: () => m.items.length > 0,
+    };
+    const lookedAt = () => {                                      // → how far along the panel the line of sight crosses it (0 left … 1 right)
+      const me = c.env.player?.me; if (!me) return 0.5;
+      const p = c.toLocal(me.x, me.z), q = c.toLocal(me.x - Math.sin(me.yaw), me.z - Math.cos(me.yaw)), fx = q.x - p.x, fz = q.z - p.z;      // (the line of sight, in the room's own frame)
+      if (Math.abs(fx) < 0.05) return 0.5;
+      const t = (xf - p.x) / fx; if (t <= 0) return 0.5;
+      const zHit = p.z + t * fz, u = (zHit - a) / (b - a);       // (along the front, from its u = 0 end)
+      return Math.max(0, Math.min(1, (u - PANEL.u0) / (PANEL.u1 - PANEL.u0)));
+    };
+    const pick = () => {
+      const u = lookedAt();
+      return Object.keys(centres).filter((k) => can[k]()).sort((x, y) => Math.abs(centres[x] - u) - Math.abs(centres[y] - u))[0] || null;
+    };
+    const act = {
+      slot: () => {
         const h = inv().held(), next = h && feed(m.inputs, h.type); if (!next) return;
         const took = inv().consumeHeld(h.type, 1); if (!took?.ok) return;
         m.inputs = next; m.items.push(took.item); sound('click', m); paint();
-      } });
-    // the left: the lit button
-    const go = at(0.2);
-    c.use({ x: go.x, z: go.z, r: 0.9, cone: 0.5, label: 'the machine', when: ready,
-      use: () => {
+      },
+      go: () => {
         const R = nextStream(), got = vend(m.inputs, floor, R, { exclude: exclusions() });
         if (!got.ok) return;
         const id = `vend:${c.level.seed}:${c.level.depth ?? 0}:${floor.done}`;
@@ -123,14 +142,16 @@ export function vendingGear(c, count) {
         if (!spawnAt(m, made)) { if (!inv().give(made)?.ok) return; }              // (nowhere to drop it: into the bag, and if that is full it stays unvended)
         floor.done++; m.inputs = []; m.items = [];
         sound('thunk', m); for (const f of floor.redraws) f();
-      } });
-    // the right: everything back
-    const back = at(0.8);
-    c.use({ x: back.x, z: back.z, r: 0.9, cone: 0.5, label: 'the machine', when: () => m.items.length > 0,
-      use: () => {
-        for (const it of m.items) if (!inv().give(it)?.ok) spawnAt(m, it);
+      },
+      back: () => {
+        m.items.forEach((it, k) => {
+          const back = it.type === 'paper' ? { ...it, id: `${it.id}:back${k}:${m.items.length}:${floor.done}` } : it;      // (a sheet is part of a stack that may still be in the bag: the stack's own id would clash)
+          if (!inv().give(back)?.ok) spawnAt(m, back);                                                                      // (a bag that has filled meanwhile: it lands at the tray)
+        });
         m.inputs = []; m.items = []; sound('click', m); paint();
-      } });
+      },
+    };
+    c.use({ x: slotAt.x, z: slotAt.z, r: 1.1, cone: 0.5, label: 'the machine', when: () => pick() !== null, use: () => { const k = pick(); if (k) act[k](); } });
     paint();
     return m;
   };

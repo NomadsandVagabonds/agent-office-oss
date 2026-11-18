@@ -667,6 +667,14 @@ one is made only from what shines by itself, and replaces it at those tiers.
   the copier room at Medium and High, Clean, the same paused frame through the
   old pass and the new one differs in 0 of 576,000 pixels, and draws and
   triangles are unchanged. Pinned by `test/backrooms-gfx-glow-strength.test.mjs`.
+  A voxel surface takes the same number for its self-lit voxels:
+  `kit.surface({ vox: true, …, bloom: 0.6 })` (stored as `userData.bloom`
+  only, a new material each call, the scene's shader and program unchanged), or
+  `mesh.material.userData.bloom = 0.6` on one already made; the glow draws its
+  twin's emitted colour × the number (a twin of its own with one uniform, only
+  for a number other than 1), leaves it out at 0 (one draw fewer), and at 1 is
+  the twin there was (0 of 576,000 pixels differ in campfire-circle at Medium
+  and High).
 - **How it is drawn** (`glow.js`, a pass in the camcorder's chain where the
   tier's bloom is, after the scene and before the tape's signal). Each frame
   what shines is drawn once more, at half the size the scene is drawn at (High:

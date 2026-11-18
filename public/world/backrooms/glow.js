@@ -24,7 +24,10 @@
 // unless given, 0…3; glow.rule.js glowStrength): its stand-in's colour is its colour × that, read every frame, so a neon
 // fascia can bloom harder than a ceiling panel without either being drawn differently. At 1 the stand-ins are exactly
 // the ones there were before the option. At 0 a lamp is not drawn at all (exact; without the scene's depth it is drawn
-// black, as it still hides what is behind it) and a picture is drawn black with its mark (so it stays crisp).
+// black, as it still hides what is behind it) and a picture is drawn black with its mark (so it stays crisp). A kit
+// surface takes it the same way (kit.surface's `bloom`): its twin's emitted colour × that, by a twin of its own (a uniform
+// beside the surface's, only in that twin) that exists only for a strength other than 1; at 0 its twin is left out
+// (exact), or drawn emitting nothing where it must still hide what is behind it.
 // The level's materials are never changed: each is swapped for its stand-in for the length of the one draw, and put back.
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from '/vendor/three-addons/postprocessing/Pass.js';
@@ -47,6 +50,11 @@ export const GLOW_BLOOM = Object.freeze({
   steps: 6,
   scale: 0.5,          // the emissive picture's size, of the size the scene is drawn at (each way)
 });
+
+// (the line of the kit's emissive bloom block that writes what a voxel gives the bloom: a scaled twin multiplies it)
+const EMITTED = 'gl_FragColor = vec4(emitted, plainly);';
+const scaleEmitted = (frag) => frag.replace('void main() {', 'uniform float uGlowStrength;\nvoid main() {')
+  .replace(EMITTED, 'gl_FragColor = vec4(emitted * uGlowStrength, plainly);');
 
 /** Is this a kit surface that can draw its emissive part (kit.js FRAG, the emissive bloom block)? */
 export const isKitSurface = (m) => !!(m && m.isShaderMaterial && m.uniforms?.uTorchOrigin && typeof m.fragmentShader === 'string'
@@ -121,7 +129,7 @@ export function glowFaces(geo, cache = null) {
 export function createGlowMaterials() {
   const made = new Map(), blacks = new Map(), faces = new Map(), skipped = new THREE.MeshBasicMaterial({ visible: false });
   const depthUniforms = { tGlowDepth: { value: null }, uGlowDepth: { value: new THREE.Vector4(1, 1, 0.06, 170) } };
-  const KINDS = ['twin', 'twinX', 'shine', 'shineX', 'picture', 'pictureX'];
+  const KINDS = ['twin', 'twinX', 'twinS', 'twinXS', 'shine', 'shineX', 'picture', 'pictureX'];
   const forget = (e) => {
     const m = e.target, x = made.get(m);
     if (x) { for (const k of KINDS) x[k]?.dispose(); made.delete(m); }
@@ -132,19 +140,27 @@ export function createGlowMaterials() {
   /**
    * The kit surface's twin: its own shader, uniforms (the same objects: the room's dimmer, flicker and banks) and defines,
    * with EMISSIVE_BLOOM (and, exact, EMISSIVE_BLOOM_DEPTH and the depth's uniforms beside the surface's own).
+   * strength (glowStrength of the surface's userData.bloom, this frame): at 1 the twin there always was; otherwise a twin
+   * of its own (twinS / twinXS) whose emitted colour is multiplied by uGlowStrength, a uniform only it has, set here each
+   * frame. A shader the kit did not write (no emitted line to scale) keeps its plain twin.
    */
-  function twin(m, exact) {
+  function twin(m, exact, strength = 1) {
+    const scaled = strength !== 1 && m.fragmentShader.includes(EMITTED) && m.fragmentShader.includes('void main() {');
     const defines = { ...m.defines };
     delete defines.BEAM_SHADOWS;                     // (the beam is light, not emission: its shadow has nothing to do here)
     defines.EMISSIVE_BLOOM = 1;
     if (exact) defines.EMISSIVE_BLOOM_DEPTH = 1;
-    const key = `${JSON.stringify(defines)}|${m.side}|${m.transparent}`, x = entry(m), k = exact ? 'twinX' : 'twin';
-    if (x[k] && x[k + 'Key'] === key && x[k + 'Frag'] === m.fragmentShader && x[k + 'Vert'] === m.vertexShader) return x[k];
+    const key = `${JSON.stringify(defines)}|${m.side}|${m.transparent}`, x = entry(m), k = (exact ? 'twinX' : 'twin') + (scaled ? 'S' : '');
+    if (x[k] && x[k + 'Key'] === key && x[k + 'Frag'] === m.fragmentShader && x[k + 'Vert'] === m.vertexShader) {
+      if (scaled) x[k].uniforms.uGlowStrength.value = strength;
+      return x[k];
+    }
     x[k]?.dispose();
     // (its alpha is a mark, not a coverage: written as it is, in whichever queue the surface is drawn in)
-    const material = new THREE.ShaderMaterial({ defines, uniforms: exact ? { ...m.uniforms, ...depthUniforms } : m.uniforms, vertexShader: m.vertexShader,
-      fragmentShader: m.fragmentShader, side: m.side, transparent: m.transparent, depthWrite: true, blending: THREE.NoBlending });
-    material.name = exact ? 'glow:kit:exact' : 'glow:kit';
+    const uniforms = exact ? { ...m.uniforms, ...depthUniforms } : m.uniforms;
+    const material = new THREE.ShaderMaterial({ defines, uniforms: scaled ? { ...uniforms, uGlowStrength: { value: strength } } : uniforms, vertexShader: m.vertexShader,
+      fragmentShader: scaled ? scaleEmitted(m.fragmentShader) : m.fragmentShader, side: m.side, transparent: m.transparent, depthWrite: true, blending: THREE.NoBlending });
+    material.name = (exact ? 'glow:kit:exact' : 'glow:kit') + (scaled ? ':scaled' : '');
     Object.assign(x, { [k]: material, [k + 'Key']: key, [k + 'Frag']: m.fragmentShader, [k + 'Vert']: m.vertexShader });
     return material;
   }
@@ -196,8 +212,13 @@ export function createGlowMaterials() {
       if (strength === 0 && role === 'shine') return exact ? skipped : black(m);
       return shining(m, role === 'picture', exact, strength);
     }
-    if (exact) return role === 'kit' ? twin(m, true) : skipped;           // (black and depth-only: the scene's depth does their hiding)
-    return role === 'kit' ? twin(m, false) : role === 'black' ? black(m) : m;
+    if (role === 'kit') {
+      const strength = glowStrength(m.userData.bloom);
+      // (at 0: left out where the scene's depth does the hiding; else its twin emitting nothing, so it still hides, cut-outs and all)
+      return exact && strength === 0 ? skipped : twin(m, exact, strength);
+    }
+    if (exact) return skipped;                                           // (black and depth-only: the scene's depth does their hiding)
+    return role === 'black' ? black(m) : m;
   }
   const list = [], stats = { drawn: 0, faces: 0 };
   const facesOf = (geo) => { if (!faces.has(geo)) { glowFaces(geo, faces); geo.addEventListener('dispose', forgetFaces); } return faces.get(geo); };
@@ -212,9 +233,10 @@ export function createGlowMaterials() {
           let now, sub = null;
           if (Array.isArray(was)) now = was.map((m) => standIn(m, exact));
           else if (exact && glowRole(was) === 'kit') {
-            // (only the triangles that light themselves; a mesh with none is not drawn)
-            sub = facesOf(geo);
-            now = sub ? twin(was, true) : skipped;
+            // (only the triangles that light themselves; a mesh with none, or at strength 0, is not drawn)
+            const strength = glowStrength(was.userData.bloom);
+            sub = strength === 0 ? null : facesOf(geo);
+            now = sub ? twin(was, true, strength) : skipped;
           } else now = standIn(was, exact);
           list.push(o, was, sub ? geo : null, true);
           o.material = now;
@@ -231,7 +253,7 @@ export function createGlowMaterials() {
       }
       saved.length = 0;
     },
-    get twins() { let n = 0; for (const x of made.values()) n += (x.twin ? 1 : 0) + (x.twinX ? 1 : 0); return n; },
+    get twins() { let n = 0; for (const x of made.values()) n += (x.twin ? 1 : 0) + (x.twinX ? 1 : 0) + (x.twinS ? 1 : 0) + (x.twinXS ? 1 : 0); return n; },
     get blacks() { return blacks.size; },
     get pictures() { let n = 0; for (const x of made.values()) n += (x.picture ? 1 : 0) + (x.pictureX ? 1 : 0); return n; },
     get faces() { let n = 0; for (const f of faces.values()) if (f) n++; return n; },
