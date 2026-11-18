@@ -342,6 +342,49 @@ export function concourse(c, opt = {}) {
   const chance = opt.wrong ?? (!room.shape && room.kind === 'plain' && Math.min(W, D) >= 3.4 ? (room.quiet ? 0.3 : 0.5) : 0);
   const which = opt.which;
   if ((chance > 0 && R.chance(chance)) || which) { const name = which || R.pick(Object.keys(MALL_WRONG)); if (MALL_WRONG[name](c) !== false) c.rt.weird = name; }
+  // last, so that nothing above is dealt differently: in some streets, the directory
+  if (opt.directory !== false && !room.shape && Math.min(W, D) >= 3.4 && c.level?.rooms && R.fork('directory').chance(0.3)) directory(c);
+}
+
+/**
+ * The directory, YOU ARE HERE: a board on its own foot, lit, with the floor drawn on it as it is (every room, the way you are facing
+ * up, this one picked out) and a red dot where you stand, which follows you. And a second dot, YOU ARE ALSO HERE, in the room
+ * farthest from this one, which goes where you go. It is the only thing in the shopping centre that tells you the truth.
+ */
+function directory(c) {
+  const { W, D, room, kit, level } = c, at = c.spot(0.7, { pad: 0.5 }); if (!at) return false;
+  c.reserve(at.x, at.z, 0.7);
+  // it faces the middle of the room, along whichever axis that is most
+  const tx = -at.x, tz = -at.z, fx = Math.abs(tx) > Math.abs(tz) ? Math.sign(tx) || 1 : 0, fz = fx ? 0 : Math.sign(tz) || 1, rx = -fz, rz = fx;   // f: the way the screen faces; r: along it
+  const hw = 0.38, hd = 0.09, body = [0.16, 0.15, 0.18], brass = [0.66, 0.52, 0.2];
+  const bx = (a0, a1, y0, y1, d0, d1, rgb, batch = c.flat) => { const xs = [at.x + rx * a0 + fx * d0, at.x + rx * a1 + fx * d1], zs = [at.z + rz * a0 + fz * d0, at.z + rz * a1 + fz * d1]; batch.box(Math.min(...xs), y0, Math.min(...zs), Math.max(...xs), y1, Math.max(...zs), rgb); };
+  bx(-hw, hw, 0.08, 2.0, -hd, hd, body); bx(-hw - 0.06, hw + 0.06, 0, 0.08, -hd - 0.08, hd + 0.08, brass); bx(-hw, hw, 1.96, 2.02, -hd - 0.01, hd + 0.01, brass);   // the board, its foot, its cap
+  bx(-hw + 0.04, hw - 0.04, 0.2, 0.9, hd, hd + 0.01, [0.22, 0.21, 0.25], c.detail); bx(-hw + 0.04, hw - 0.04, 0.2, 0.9, -hd - 0.01, -hd, [0.22, 0.21, 0.25], c.detail);   // panels, front and back
+  for (const s of [-1, 1]) bx(s * hw - 0.015, s * hw + 0.015, 0.08, 2.0, -hd - 0.012, hd + 0.012, brass, c.detail);                                                  // brass edges
+  c.solid(at.x - 0.45, at.z - 0.45, at.x + 0.45, at.z + 0.45, { tall: true });
+  // the map: drawn from the floor as dealt, turned so that the way you face it is up
+  const wr = (lx, lz) => c.toWorld(lx, lz), o = wr(at.x, at.z), ahead = wr(at.x - fx, at.z - fz), ux = ahead.x - o.x, uz = ahead.z - o.z, vx = -uz, vz = ux;   // u: up the map; v: across it
+  const rects = level.rooms.filter((r) => !r.crawl).map((r) => { const cs = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => { const COS = [1, 0, -1, 0][r.rot || 0], SIN = [0, 1, 0, -1][r.rot || 0], lx = a * r.W / 2, lz = b * r.D / 2; return { x: r.cx + lx * COS + lz * SIN, z: r.cz - lx * SIN + lz * COS }; }); return { id: r.id, cx: r.cx, cz: r.cz, W: r.W, D: r.D, rot: r.rot || 0, cs }; });
+  let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity; for (const r of rects) for (const p of r.cs) { const pu = p.x * ux + p.z * uz, pv = p.x * vx + p.z * vz; u0 = Math.min(u0, pu); u1 = Math.max(u1, pu); v0 = Math.min(v0, pv); v1 = Math.max(v1, pv); }
+  const MW = 128, MH = 160, top = 22, area = 128, scale = Math.min((MW - 8) / Math.max(1, v1 - v0), (area - 6) / Math.max(1, u1 - u0)), mu = (u0 + u1) / 2, mv = (v0 + v1) / 2;
+  const px = (x, z) => [MW / 2 + ((x * vx + z * vz) - mv) * scale, top + area / 2 - ((x * ux + z * uz) - mu) * scale];
+  const far = rects.reduce((a, r) => (Math.hypot(r.cx - room.cx, r.cz - room.cz) > Math.hypot(a.cx - room.cx, a.cz - room.cz) ? r : a), rects[0]);
+  const tex = kit.tex.live(MW, MH, () => {}), g = tex.image.getContext('2d'); tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter;
+  const paint = (me, blink) => {
+    g.fillStyle = '#10161f'; g.fillRect(0, 0, MW, MH); g.fillStyle = '#e9e4d6'; g.font = 'bold 11px monospace'; g.textAlign = 'center'; g.fillText('DIRECTORY', MW / 2, 14);
+    for (const r of rects) { g.beginPath(); r.cs.forEach((p, i) => { const [x, y] = px(p.x, p.z); if (i) g.lineTo(x, y); else g.moveTo(x, y); }); g.closePath(); g.fillStyle = r.id === room.id ? '#5a7a4a' : r === far ? '#3a4a6a' : '#2c3644'; g.fill(); g.strokeStyle = '#8a9aa8'; g.lineWidth = 1; g.stroke(); }
+    const dot = (wx, wz, col) => { const [x, y] = px(wx, wz); g.fillStyle = col; g.beginPath(); g.arc(x, y, blink ? 3.2 : 2.4, 0, 7); g.fill(); };
+    const p = wr(me.x, me.z); dot(p.x, p.z, '#ff3a2a');
+    { const k = me.x / (room.W / 2), q = me.z / (room.D / 2), COS = [1, 0, -1, 0][far.rot], SIN = [0, 1, 0, -1][far.rot], lx = k * far.W / 2 * 0.8, lz = q * far.D / 2 * 0.8; dot(far.cx + lx * COS + lz * SIN, far.cz - lx * SIN + lz * COS, '#35a0ff'); }
+    g.textAlign = 'left'; g.font = 'bold 8px monospace'; g.fillStyle = '#ff3a2a'; g.fillRect(6, MH - 15, 5, 5); g.fillText('YOU ARE HERE', 14, MH - 10); g.fillStyle = '#35a0ff'; g.fillRect(6, MH - 6, 5, 5); g.fillText('YOU ARE ALSO HERE', 14, MH - 1);
+    g.fillStyle = 'rgba(0,0,0,0.25)'; for (let y = 0; y < MH; y += 2) g.fillRect(0, y, MW, 1); tex.needsUpdate = true; };
+  paint({ x: at.x + fx * 1.2, z: at.z + fz * 1.2 }, false);
+  const scr = c.shining('mall:directory:' + room.id, tex, 1.3, [1, 1, 1], { bloom: 0.6 }), sw = hw - 0.06, a = { x: at.x - rx * sw + fx * (hd + 0.012), z: at.z - rz * sw + fz * (hd + 0.012) }, b = { x: at.x + rx * sw + fx * (hd + 0.012), z: at.z + rz * sw + fz * (hd + 0.012) };
+  upright(scr, b.x, b.z, a.x, a.z, 1.0, 1.0 + 2 * sw * MH / MW, [0, 0, 1, 1]);
+  c.light(at.x + fx * 0.6, 1.4, at.z + fz * 0.6, '#cfe0ff', 0.25, { k: 1.8, far: 2.2 });
+  let last = '', clock = 0;
+  c.tick((dt, t, me) => { if (!me.inside) return; clock += dt; const blink = (clock * 2 | 0) % 2 === 0, key = (me.x * 4 | 0) + ',' + (me.z * 4 | 0) + blink; if (key === last) return; last = key; paint(me, blink); });
+  c.rt.directory = { x: at.x, z: at.z, fx, fz }; return true;
 }
 
 /**
