@@ -110,7 +110,7 @@ test('every one of the cast that can be hit offers a target and takes health; no
   assert.equal(body('cast/pirate.js').match(/\(pirate\.know\?\.spent > 0 && !c\.vital\)/g).length, 2, 'in the list and in the jab itself');
   // and the [E] for the card goes to the hand where it fell, at the kill and again when its dying is over
   assert.match(body('cast/pirate.js'), /if \(hit\?\.killed\) \{[^\n]*if \(pirate\.card\?\.use\) reach\(pirate\);/);
-  assert.match(pirate, /fell\(\) \{ if \(pirate\?\.card\?\.use\) reach\(pirate\); return !!pirate; \}/);
+  assert.match(pirate, /fell\(\) \{\s+if \(pirate\?\.card\?\.use\) reach\(pirate\);\s+if \(pirate\?\.feetBody\) \{[^\n]*\}[^\n]*\n\s+return !!pirate;\s+\}/);
   // the many-bodied keep their own: a toner two and its hatchling one, finished into a spent crust; a small one of Mother's goes at one jab
   const toner = read('cast/toner.js');
   assert.match(toner, /unit\.vital = fresh\('toner'\);/); assert.match(toner, /young\.vital = fresh\('toner-brood'\);/);

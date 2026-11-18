@@ -691,10 +691,15 @@ export function create(c) {
     // Lying at a hole, its body is at the feet end and no further: its head is in the crawl's mouth, and a body there would
     // seal the mouth with something that only moves while unseen, in the one place you must face it to go in (the lead:
     // "the mouth is never sealed"). The head end is a sliver of nothing.
+    // So it has two: its whole length, feet to head, which only furniture meets (airborne: a desk cannot be slid through
+    // it), and one at its feet end, which is the one the visitor meets.
     if (p.down) {
-      p.body.x = p.down.feet.x + (p.down.head.x - p.down.feet.x) * DOWN_BODY; p.body.z = p.down.feet.z + (p.down.head.z - p.down.feet.z) * DOWN_BODY;
-      p.body.r = BODY;
-    } else { p.body.x = p.x; p.body.z = p.z; p.body.r = BODY; }
+      p.body.x = (p.down.feet.x + p.down.head.x) / 2; p.body.z = (p.down.feet.z + p.down.head.z) / 2;
+      p.body.r = BODY + Math.hypot(p.down.head.x - p.down.feet.x, p.down.head.z - p.down.feet.z) / 2; p.body.airborne = true;
+      if (!p.feetBody) p.feetBody = { x: 0, z: 0, r: BODY, on: false };
+      if (!w.bodies.includes(p.feetBody)) w.bodies.push(p.feetBody);
+      p.feetBody.x = p.down.feet.x + (p.down.head.x - p.down.feet.x) * DOWN_BODY; p.feetBody.z = p.down.feet.z + (p.down.head.z - p.down.feet.z) * DOWN_BODY; p.feetBody.on = true;
+    } else { p.body.x = p.x; p.body.z = p.z; p.body.r = BODY; p.body.airborne = false; if (p.feetBody) p.feetBody.on = false; }
     if (p.card?.use && p.card.held) { p.plumb(); reach(p); }
     p.lit -= dt;
     if (p.lit < 0 && p.group.visible) { p.lit = 0.2; p.light(w.lightAt(ex, ez, 1.0)); }
@@ -791,7 +796,11 @@ export function create(c) {
      * It has been finished (the conductor, when its dying is over): the body stays where it fell, because of what it may
      * be holding — the keycard is still on its wrist, and is taken from it there as it was taken from it standing.
      */
-    fell() { if (pirate?.card?.use) reach(pirate); return !!pirate; },
+    fell() {
+      if (pirate?.card?.use) reach(pirate);
+      if (pirate?.feetBody) { const i = env.world.bodies.indexOf(pirate.feetBody); if (i >= 0) env.world.bodies.splice(i, 1); }          // (fallen, nobody walks into it: as its main body, which the conductor takes)
+      return !!pirate;
+    },
     /**
      * Its dying (cast/health.rule.js: 0 → 1 over HEALTH.dying seconds; the conductor calls this and nothing else of it).
      * Standing: its face tears, its head snaps back, its arms fly out — and then, stiff as it always is, it goes over
