@@ -262,7 +262,7 @@ export function makeTrunkLine(kit) {
   const brest = Float32Array.from(bpos.array), brestN = Float32Array.from(bnor.array, (v) => v / 127);
   bg.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.8, 0), 1.6);
 
-  let bodyKey = '', lastHurt = Infinity, lastT = null, phase = 0, moving = 0, fold = 0, lastY = null, falling = false, landT = -1, ground = -Infinity, settled = false;
+  let grab = null, bodyKey = '', lastHurt = Infinity, lastT = null, phase = 0, moving = 0, fold = 0, lastY = null, falling = false, landT = -1, ground = -Infinity, settled = false;
   const wp = new THREE.Vector3(), inv = new THREE.Matrix4(), gq = new THREE.Quaternion(), dirV = new THREE.Vector3();
   const qL = [0, 0, 0, 1], qR = [0, 0, 0, 1], qS = [0, 0, 0, 1], v3 = [0, 0, 0];
   const setQ = (q, ax, ay, az, ang) => { const s = Math.sin(ang / 2); q[0] = ax * s; q[1] = ay * s; q[2] = az * s; q[3] = Math.cos(ang / 2); return q; };
@@ -277,6 +277,11 @@ export function makeTrunkLine(kit) {
   return {
     group, head, armL, armR, mat,
     pose(t, speed, crouch = 1, o = {}) { frame(t, speed, crouch, o.hurt ?? Infinity, o.recoil ?? 0, null); },
+    /**
+     * Its kill (the room's takes(): what the building's camera shows when it has had somebody): both arm cables go for the
+     * neck at (x, y, z), world, and coil round it, hold 0 → 1 how hard. It stands, leaning in. The room moves the victim.
+     */
+    strangle(t, x, y, z, hold = 1) { grab = { x, y, z, k: hold }; frame(t, 0, 1, Infinity, 0, null); grab = null; },
     die(progress, t) { const k = Math.max(0, Math.min(1, progress)); frame(t, 0, 1, k * HEALTH.dying, 0, k); },
     light(rgb) { mat.uniforms.uTint.value.set(rgb[0], rgb[1], rgb[2]); },
   };
@@ -304,7 +309,7 @@ export function makeTrunkLine(kit) {
       const bounce = since < 1.2 ? Math.exp(-since * 5) * Math.cos(since * 17) : 0;
 
       // the legs: each swings from its hip and lifts its foot; the other half a step behind
-      const mv = moving, swing = 0.42 * mv, lean = 0.2 * mv;
+      const mv = moving, swing = 0.42 * mv, lean = 0.2 * mv + (grab ? 0.3 * grab.k : 0);
       // a jab: it snaps back from it (and its cables are whipped, below); hanging back: hunched over and coiled
       const jolt = hurt < 0.6 ? Math.exp(-hurt * 7) * (1 - hurt / 0.6) : 0;
       const coil = recoil > 0 ? Math.min(1, recoil * 5) : 0;
@@ -366,14 +371,19 @@ export function makeTrunkLine(kit) {
         const root = [wp.x, wp.y, wp.z], dir = [dirV.x, dirV.y, dirV.z];
         if (!settled) settleCord(c.cord, wp.x, wp.y, wp.z, dir[0], dir[1], dir[2]);
         let reachTo = null;
-        if (c.arm && mv > 0.3 && dying === null) {
+        if (c.arm && grab) {
+          // round the neck: the plug ends go round it, one each way, and keep going round
+          const a = t * 7 + (c.side < 0 ? 0 : Math.PI);
+          reachTo = [grab.x + Math.cos(a) * 0.12, grab.y + Math.sin(t * 5 + c.side) * 0.03, grab.z + Math.sin(a) * 0.12];
+        } else if (c.arm && mv > 0.3 && dying === null) {
           // the plug claws go for what is in front of it, a little to their own side
           wp.set(c.side * 0.18, 0.95, 1.05); group.localToWorld(wp);
           reachTo = [wp.x, wp.y, wp.z];
         }
         // dying, they are only cable: no shape of their own left, and they lie where they fall
-        const stiff = dying === null ? c.stiff + (c.arm ? 0.35 * coil : 0) : c.stiff * (1 - fall);
-        stepCord(c.cord, dt, { root, dir, stiff, drag: c.drag + 1.5 * fall, reach: reachTo, pull: 5 * mv, floor: ground + 0.02, rough: 0.7 + 0.25 * fall });
+        const stiff = grab && c.arm ? 0.12 : dying === null ? c.stiff + (c.arm ? 0.35 * coil : 0) : c.stiff * (1 - fall);
+        const pull = grab && c.arm ? 10 * grab.k : 5 * mv;
+        stepCord(c.cord, dt, { root, dir, stiff, drag: c.drag + 1.5 * fall, reach: reachTo, pull, floor: ground + 0.02, rough: 0.7 + 0.25 * fall });
         inv.copy(c.holder.matrixWorld).invert();
         const P = c.cord.p, L = c.local;
         for (let i = 0; i <= c.n; i++) {

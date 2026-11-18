@@ -152,7 +152,7 @@ export function create(c) {
       jumps: WORM.jumps, life: WORM.life * (0.85 + Math.random() * 0.3), dazed: 0.25 + Math.random() * 0.4, wait: 0, heading: a, phase: Math.random() * 6, dead: false, flat: 0 };
     worms.push(w);
     // One interaction per small one: either visitor may tread on their nearest.
-    w.use = c.use({x:w.x,z:w.z,r:WORM.tread,cone:-1,when:()=>!over && trodden(c.me(), [w])===0,use:()=>tread(w)});
+    w.use = c.use({x:w.x,z:w.z,r:WORM.tread,cone:-1,when:()=>!over && !w.dead && trodden(c.me(), [w])===0,use:()=>tread(w)});
   }
 
   /** E: a foot comes down on the nearest of them. */
@@ -345,6 +345,10 @@ export function create(c) {
       const herself = { id: 'mother', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 0.9, r: G.r, priority: 2, snip: () => {
         const hit = c.struck(HEALTH.jab); if (!hit.ok) return false;
         if (!hit.killed) c.stall(HEALTH.flinch);
+        // (finished, her small ones go with her, at once: one in the air is gone, one on the floor goes flat as a jabbed
+        // one does. They are a danger to nobody from here on: she is not ticked again, and they are hers. For whoever
+        // draws it: each has `orphaned: true`, `dead: true`, and `flat` — 0.001, or 99 for one that was in the air)
+        else for (const w of worms) if (!w.dead && !w.remove) { const flying = !!w.air; w.air = null; w.dead = true; w.orphaned = true; w.flat = flying ? 99 : 0.001; if (flying) w.g.visible = false; }
         c.play('thunk', walker.x, walker.z, 12); c.survived();
         return { ok: true, target: 'mother' };
       } };

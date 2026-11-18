@@ -268,11 +268,12 @@ software rendering, so this judges the picture, not the frame rate.
   The Diving Well's submerged steps glow pale at Medium and High.
 - **Black:** the row of black dashes along the Diving Tower's far deck edge, at all three settings. A rail base
   strip or a shadow seam, by the look of it; I did not trace it.
-- **Lights as flat squares.** The five older rooms light with `natatoriumLight`: flush panel quads in the ceiling
-  grid, which is right for a suspended ceiling. The squares that want a fitting are the Diving Tower's pool-floor
-  lamps, the Towel Return's floor-level way lights (glowing rectangles on the wall at shin height), and the Flooded
-  Office's single troffer. The newer rooms already hang a steel housing over each tube, and the Return Pool's
-  pendant tubes are the best fitting on the floor. When `c.fitting` lands, these three are the places for it.
+- **Lights as flat squares.** My pictures predate `984ec10`, which moved the five older rooms' ceiling panels
+  (`natatoriumLight`) onto `c.fitting`: the flat panel at Classic and Low, the sculpted fitting at Medium and High
+  (read; not re-photographed). The squares still without a fitting are the Diving Tower's pool-floor lamps, the
+  Towel Return's way lights (glowing rectangles on the wall at shin height) and the Flooded Office's single troffer.
+  The newer rooms already hang a steel housing over each tube, and the Return Pool's pendant tubes are the best
+  fitting on the floor.
 - **Glow.** Nothing on this floor blooms badly at High; the forest's problem is not here.
 
 ---

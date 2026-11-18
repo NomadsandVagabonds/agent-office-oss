@@ -185,6 +185,7 @@ saying what it does. In outline:
 | fine detail (see *What a room may cost*) | `c.detail` a plain-colour batch like `c.flat`, marked as detail · `c.mapped(key, texture, { detail: true })` · `c.shining(key, texture, power, rgb, { detail: true })`: the same batches, marked, and nothing else different. A low Graphics setting hides them. Never anything walked into, read or used |
 | liquids | `c.liquid(target, { kind: 'water', phase, flow, y })` marks a flat sheet the room already drew as a liquid's surface (the mesh, the group it is put in once the room is lit, or the batch it is drawn from; `phase` a `{ value }` that drifts its ripple). It draws nothing and changes nothing of the sheet; where the Graphics setting has water, the sheet is drawn as water while it is in view (`liquid.js`, `docs/BACKROOMS-GRAPHICS.md`). Returns `{ disturb() }`, which does nothing yet. Call it while building, not from a tick |
 | light | `c.light(x, y, z, color, power)`. Light is baked into the room once, when it is built: lights do not move, and things that move are lit by where they started · `c.shining(key, texture, power, rgb, { lights: { power, k, far, axis, floor, wrap, flick, bank, color, offset, cap } })`: what is added to that batch from then on lights the room too, each box (or quad, ball, voxel model) one ordinary lamp at its middle, exactly as `c.light(x, y, z, color ?? rgb, power, { k, far, axis, floor, wrap, flick, bank })` there would (a box at least 0.9 m long and three times longer than its next side: two lamps along it, three from 1.8 m, the power shared; `offset` [dx, dy, dz] moves every lamp). At most 16 lamps a batch (`cap` may lower it; past it the nearest two merge). They count toward the room's 16 lights. Off unless asked for (`shining-lights.rule.js`, BACKROOMS-GRAPHICS.md "Shining batches that light the room") |
+| a shop window lit from inside | nothing new: the wall round the opening as boxes in `c.flat`, the pane as `c.glass.box(x0, y0, z0, x1, y1, z1, rgb)` (or a flat quad), `c.light(…)` in the shop. At Medium and High the shop's light reaches the floor in front through the opening and not through the wall; neutral (tint the lamp), softer than a doorway's, and the ceiling is not shaded. A pane drawn as a box in `c.flat` or a `c.mapped` batch blocks the light like the wall (BACKROOMS-GRAPHICS.md "Light through a shop window, in one room") |
 | a ceiling light, for a room whose shell has `panels: false` | `c.fitting(x, z, { y, rot, dead, flick, bank, tube, light })`: the shell's own light at (x, z), 0.6 m across and 1.2 m along z (`rot: Math.PI / 2` along x). At Classic and Low the shell's flat lit panel to the byte (its batch, power, colour and texture) and the shell's lamp 14 cm under it; at Medium and High the shell's sculpted fitting, mounted on the face of the ceiling. `y` the ceiling it is under (default the shell's; give it with `ceiling: false`, or under a beam) · `dead` out, no lamp · `flick` cannot decide · `bank` its lighting bank (default the shell's for that spot) · `tube` another colour (a batch of its own, not dimmed with the shell's) · `light: false` no lamp, or `{ power, k, far, floor }` those of `c.light` instead of the shell's. Its lamps are kept within 16 as a lit batch's are (past it the nearest two merge) and count toward the room's 16: past that, give some `light: false`. Panel size only: no round lamps, strips or squares (BACKROOMS-GRAPHICS.md "Ceiling fixtures (built)") |
 | where things can go | `c.spot(r)` a free bit of floor · `c.corner()` · `c.wallSpot(need)` a free stretch of wall · `c.spans(side)` · `c.clear(x, z, r)` · `c.reserve(x, z, r)` · `c.doorPoint(door, off)` |
 | things that happen | `c.tick((dt, t, me) => …)` every frame while somebody is in the room or next door (`me.x`, `me.z`, `me.yaw`, `me.inside`, `me.moving`, `me.speed`) · `c.zone({ x0, z0, x1, z1, enter, leave, stay })` · `c.use({ x, z, r, label, use, when })` something `E` does · `c.seen(x, z)` is that spot on their screen · `c.dynamic(batch, { pivot })` a part that moves · `c.rt.onEnter`, `c.rt.onLeave` |
@@ -303,6 +304,27 @@ change to the generator, the player or the toolbox says so in words instead of
 making it.
 
 ## Adding a creature
+
+### Putting a creature next to you (for looking, filming, testing)
+
+On the play page (`/play?debug&…`) and the dev page (`/world/dev/backrooms.html?…`), under `debug` only (the play
+page reads none of this without it, and a visit so made is not scored):
+
+- `&cast=toner,intern` deals exactly those to every part (ids from `cast.js`). It does not put them near you: they
+  start where they always start, which for a hunter is at least two rooms from the landing.
+- `&beside=toner` puts **you** a step and a half from that one, facing it, as soon as it is on the floor. This is
+  the switch that makes one reachable. It works for anybody with an `at()`: `pirate`, `toner`, `shadow` (once it has
+  turned up), `head-count`, `intern`, `standing-meeting`, `carried-interest`, `mother`, `the-lines`.
+- The mascot is not on every part: a seed gives it one part of the visit (on most, the last). `&pursuer=1` only
+  says the visit has one. To have it on the floor you load, make that floor the only one: `&pursuer=1&depths=1`.
+  Add `&wake=1` to have it awake and after you, and `&loot=card` (dev page) to have the keycard on its wrist.
+- A creature that comes with a room needs the room: the lines with `&room=the-culvert&themes=suburb`, the trunk
+  line (a resident of its room, not of the cast) with `&room=cable-drop`.
+
+So: `…?debug&cast=pirate,head-count&beside=head-count`, or `…?debug&pursuer=1&depths=1&wake=1&beside=pirate`.
+From the console, `__backrooms.env.pursuer.cast()` says who is on the floor and where, and
+`__backrooms.env.pursuer.vital('pirate')` its health. `env.pursuer.at()` is the mascot's alone: it is null for
+anybody else, and null when the mascot is on another part.
 
 A creature is three things: a line in the cast, which is pure data; a file
 that builds it and works it; and one rule, kept where a test can run it.

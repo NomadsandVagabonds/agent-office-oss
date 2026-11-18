@@ -226,4 +226,36 @@ export function build(c) {
       }
     },
   });
+
+  /**
+   * What the building's camera shows when it has had the last of somebody (lastshot.js; shot.figure is them). It is at
+   * their throat: both its arm cables go round the neck and coil there, it leans in and lifts them off their feet, holds
+   * them, kicking, and lets go, and they go down on their back. Drawing only (rig.strangle): the rule, its collider and
+   * what it hurt are as they were. Time since the shot only: nothing random.
+   */
+  c.rt.takes = (shot) => {
+    if (!roamer) return undefined;
+    const fig = shot.figure, ease = (v) => { const k = clamp(v, 0, 1); return k * k * (3 - 2 * k); };
+    let dx = roamer.x - shot.x, dz = roamer.z - shot.z, d = Math.hypot(dx, dz);
+    if (d < 0.1) { dx = -Math.sin(shot.yaw); dz = -Math.cos(shot.yaw); d = 1; }
+    dx /= d; dz /= d;
+    const at = { x: shot.x + dx * 0.55, z: shot.z + dz * 0.55 };
+    // (where it is drawn is where the denizens put it from its own place each frame: so it is put at their throat, on the floor, seen)
+    roamer.x = at.x; roamer.z = at.z; roamer.lift = 0; roamer.visible = true;
+    rig.group.visible = true;
+    rig.group.position.set(at.x, shot.y, at.z); rig.group.rotation.y = Math.atan2(-dx, -dz);
+    rig.light(c.world.lightAt(at.x, at.z, 1));
+    return (t) => {
+      const up = ease((t - 0.45) / 0.5) * (1 - ease((t - 2.2) / 0.12)), down = ease((t - 2.25) / 0.45);
+      const lift = 0.3 * up, a = 1.45 * down, kick = up > 0.3 ? Math.sin(t * 11) * 0.07 * up : 0;
+      if (fig) {
+        fig.position.y = shot.y + lift;
+        fig.rotation.y = Math.atan2(dx, dz);
+        fig.rotation.x = -a + kick;
+      }
+      // the neck, wherever the figure has got to (up off the floor, and then over backwards)
+      const neck = 1.35, nx = shot.x - dx * neck * Math.sin(a), nz = shot.z - dz * neck * Math.sin(a), ny = shot.y + lift + neck * Math.cos(a);
+      rig.strangle(1000 + t, nx, ny, nz, 1 - down);
+    };
+  };
 }
