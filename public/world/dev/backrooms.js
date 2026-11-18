@@ -14,6 +14,7 @@
 //   &hallstudy=1       rehearsal controls for the last-light room (use &only=last-light)
 //   &lightstudy=1      comparison controls and a flashlight for reviewing the prototype
 //   &pursuer=1|0       force the thing that follows you in or out; &wake=1 has it already awake, in the room with you
+//   &beside=<id>       put you a step and a half from that one of the cast, facing it (docs/BACKROOMS.md: putting a creature next to you)
 //   &cast=intern,mother   exactly these of the cast on every part, whatever the seed dealt (cast.js has the ids): for looking at them
 //   &name=Robin        who you are                               &live=1     borrow names from the running office (GET only)
 //   &where=Portland    the place on the banner near the landing (banner.js); without it, what such banners say
@@ -147,7 +148,7 @@ async function go() {
     graphics: q.get('graphics') || undefined,
     debug: true, scorecard: q.get('card') !== '0', home: { label: 'Return to homepage' }, where: q.get('where') || undefined,
     inventory: q.get('inventory') !== '0', barricades: q.get('barricades') !== '0',
-    dev: { supplies: q.get('supplies') === '1', cast: (q.get('cast') || '').split(',').filter(Boolean), barricadeStudy: q.get('barricades') === '1' && q.get('study') === '1',
+    dev: { supplies: q.get('supplies') === '1', cast: (q.get('cast') || '').split(',').filter(Boolean), beside: q.get('beside') || null, wake: q.get('wake') === '1', barricadeStudy: q.get('barricades') === '1' && q.get('study') === '1',
       bridgeStudy: q.get('bridgestudy') === '1',
       // &gfx=contact,bounce (each at 1) or &gfx=contact:0.6,bounce:0.5: contact darkening and bounced colour, baked with each room (kit.js gfxOf);
       // &gfx=shadows: the tubes' shadows in each room's light map (shadowmap.js)

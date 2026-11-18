@@ -139,6 +139,7 @@ export function createStalkers(env, options = {}) {
      */
     fire(x, z) { const f = env.inventory?.fire?.threatAt?.(x, z, W().floorY(x, z)); return f ? { x: f.x, z: f.z, remaining: f.remaining } : null; },
   });
+  const staged = { woke: false, beside: false };
   const live = [], dealt = options.members?.map(id => ({ id })) ?? castFor(env.visit, level.depth);
   // …and whoever comes with a room this floor has (cast.js withRoomFor: extra, in nobody's place)
   if (!options.members) { try { for (const id of castList.withRoomFor?.(level) ?? []) if (!dealt.some((k) => k.id === id)) dealt.push({ id }); } catch (err) { console.warn('[backrooms] nobody came with a room on this floor', err); } }
@@ -195,6 +196,21 @@ export function createStalkers(env, options = {}) {
     update(dt, t) {
       if (!env.player || !env.world) return;
       env.clock += dt;
+      // (for whoever is looking, never in a visit that counts — index.js hands these over under ?debug only:
+      //  `wake`: the mascot, once it is on this floor, is awake and knows where the visitor is;
+      //  `beside`: the visitor is put a step and a half from the one named, facing it, as soon as it is somewhere to be put beside)
+      if (options.wake && !staged.woke && pirate?.at?.()) { staged.woke = true; try { pirate.wake(true); } catch { /* it will wake by itself */ } }
+      if (options.beside && !staged.beside) {
+        const who = live.find((k) => k.id === options.beside && !k.dead && !k.away), a = who?.it.at?.();
+        if (a && Number.isFinite(a.x) && Number.isFinite(a.z)) {
+          const w = W();
+          for (let i = 0; i < 16 && !staged.beside; i++) {
+            const ang = (i * Math.PI) / 8, x = a.x + Math.cos(ang) * 1.5, z = a.z + Math.sin(ang) * 1.5;
+            if (!w.roomAt(x, z) || !w.free(x, z, 0.3) || !w.los(x, z, a.x, a.z)) continue;
+            env.player.warp?.(x, z, Math.atan2(-(a.x - x), -(a.z - z))); staged.beside = true;
+          }
+        }
+      }
       env.doors?.update(dt);
       if (follower && !follower.away) {if(options.withVisitor)options.withVisitor('follower',follower,()=>tag(follower,dt));else tag(follower, dt);}
       for (const k of live) {
