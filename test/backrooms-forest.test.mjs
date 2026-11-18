@@ -84,10 +84,9 @@ test('forest.rule.js stays 100% pure (zero imports, no three.js, DOM, or I/O)', 
   assert.ok(!/document\.|window\.|localStorage|fetch\s*\(/i.test(src));
 });
 
-test('Trail Call (`call`) item is registered cleanly in ITEM_DEFS', () => {
-  assert.ok(ITEM_DEFS.call, 'ITEM_DEFS.call exists');
-  assert.equal(ITEM_DEFS.call.name, 'Trail call');
-  assert.equal(ITEM_DEFS.call.useLabel, 'Use');
+test('the Trail Call is cut: no such item, and nothing registers for one', () => {
+  assert.equal(ITEM_DEFS.call, undefined, 'the item is gone');
+  assert.equal(normalizeItemType('call'), null, 'and is not a type a room may leave');
 });
 
 test('stepForestWalker: peat-bog drag/sink, felled bridge support, wet-stone slip, and C-crouch bracken stealth', () => {
@@ -627,4 +626,38 @@ test('buildWorld builds all 15 forest deck rooms and all 8 forced WRONG oddities
     }
   }
   delete globalThis.__forestWrong;
+});
+
+// Whole floors, not one room at a time: a plain forest room is planted by the thicket round its own baffles and
+// partitions (quiet.js), and on tapes 3, 4 and 19 that used to wall a doorway off, after which the level's safety net
+// switched the room's collision off and its trunks could be walked through (found by the lead on a default tape).
+test('whole forest floors build with every doorway of every room reachable (no "could not be reached")', async (t) => {
+  const prevDoc = globalThis.document, prevWarn = console.warn, said = [];
+  const draw = new Proxy({}, {
+    get: (_, k) => k === 'measureText' ? (txt) => ({ width: String(txt).length * 6 }) : /Gradient/.test(k) ? () => ({ addColorStop() {} }) : () => {},
+    set: () => true,
+  });
+  globalThis.document = { createElement: () => ({ getContext: () => draw, width: 128, height: 128 }) };
+  console.warn = (...args) => { said.push(args.join(' ')); };
+  t.after(() => { globalThis.document = prevDoc; console.warn = prevWarn; });
+  const kit = createKit();
+  t.after(() => kit.dispose());
+  const catalogue = await loadCatalogue(kit);
+  const ids = DECK.filter((a) => a.themes?.forest && a.module).map((a) => a.id);
+  const builders = { ...BUILDERS, ...Object.fromEntries(await Promise.all(ids.map(async (id) => [id, (await import(`../public/world/backrooms/rooms/${id}.js`)).build]))) };
+  for (const tape of ['3', '4', '19', '8']) {
+    said.length = 0;
+    const level = generate(tape, { theme: 'forest' });
+    const env = {
+      catalogue, builders, hatches: new Map(), creations: {}, cast: [], sound: new Proxy({}, { get: () => () => {} }),
+      denizens: { add() {}, remove() {} }, inventory: { held: () => null, torchPower: () => 0 },
+      health: { damage: () => ({ ok: true, dead: false }), heal: () => true }, hud: { glitch() {}, flash() {} },
+      run: { met() {}, survived() {}, itemFound() {} }, player: { RADIUS: 0.22, warp() {} },
+      sees: () => false, play() {}, hold: () => () => {}, descend: () => {},
+    };
+    const world = await buildWorld(kit, level, env);
+    try {
+      assert.deepEqual(said.filter((w) => /could not be reached|nor even then|would not build/.test(w)), [], `tape ${tape}: ${level.rooms.length} rooms`);
+    } finally { world.dispose(); }
+  }
 });
