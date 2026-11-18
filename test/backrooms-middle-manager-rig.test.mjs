@@ -70,3 +70,14 @@ test('fed, its head swells and near full its neck and hands turn; cut, it reels 
   r.pose({ time: 0, fat: 0.3, lean: 0.8, hurt: 0.12 }); const reeled = r.group.children.find((k) => k.name === 'body' && k.visible).quaternion.clone();
   assert.ok(reeled.angleTo(bent) > 0.3, 'up and back off its stoop');
 });
+
+test('the cut\'s reel shows at once, not when its stoop has eased round to it', (t) => {
+  const kit = createKit(); t.after(() => kit.dispose());
+  const m = makeMiddleManager(kit), body = () => m.group.children.find((k) => k.name === 'body' && k.visible).quaternion.clone();
+  for (let i = 0; i <= 30; i++) m.pose({ time: i / 30, fat: 0.3, lean: 0.8 });          // (settled into its stoop)
+  const bent = body();
+  m.pose({ time: 1 + 1 / 30, fat: 0.3, lean: 0.8, hurt: 0.05 });                      // one frame after the cut
+  assert.ok(body().angleTo(bent) > 0.5, `reeled ${body().angleTo(bent)}`);
+  for (let i = 2; i < 40; i++) m.pose({ time: 1 + i / 30, fat: 0.3, lean: 0.8, hurt: 0.05 + i / 30 });
+  assert.ok(body().angleTo(bent) < 0.02, 'and back into its stoop');
+});

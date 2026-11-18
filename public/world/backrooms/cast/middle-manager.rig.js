@@ -76,16 +76,18 @@ export function makeMiddleManager(kit) {
     const fx = 0, fz = 1, px = 1, pz = 0, gy = group.position.y, ch = Math.cos(heading), shd = Math.sin(heading);
     const floor = (lx, lz) => (floorAt ? floorAt(group.position.x + lx * ch + lz * shd, group.position.z - lx * shd + lz * ch) - gy : 0);
     const sw = mode === 'swells' ? Math.max(0, Math.min(1, swell)) : 0, B = bloat(fat, sw, time), shake = B.shake * Math.sin(time * 38), reel = reelAt(hurt);
-    // the cast's bend keeps its head under the ceiling; coming for you it stoops a little more, swelling more again; cut, it
-    // reels up and back off its stoop, its arms thrown out
-    const want = Math.max(-0.35, Math.min(1.45, (Number.isFinite(solved) ? solved : 0) + (mode === 'comes' ? 0.12 : 0) + sw * 0.15 - reel * 0.7));
+    // the cast's bend keeps its head under the ceiling; coming for you it stoops a little more, swelling more again (eased
+    // into); cut, it reels up and back off its stoop, its arms thrown out — at once, not eased: a reel that has to wait for
+    // the stoop to come round to it is over before it shows
+    const want = Math.max(-0.35, Math.min(1.45, (Number.isFinite(solved) ? solved : 0) + (mode === 'comes' ? 0.12 : 0) + sw * 0.15));
     lean += (want - lean) * (dt > 0 ? Math.min(1, dt * 4) : 1);
+    const L = Math.max(-0.35, lean - reel * 0.9);
     // its walk: long, slow strides, whatever its speed; the knees always a little bent
     const stride = 0.55 + 0.25 * (1 - fat), moved = Math.max(0, speed) * dt;
     phase += moved / stride * Math.PI;
-    const kneel = 0.06 + sw * 0.1 + fat * 0.04, hipBack = T * Math.sin(lean) * 0.35;
+    const kneel = 0.06 + sw * 0.1 + fat * 0.04, hipBack = T * Math.sin(L) * 0.35;
     const hip = { x: -fx * hipBack, y: BODY.hip - kneel + Math.abs(Math.sin(phase)) * 0.02, z: -fz * hipBack };
-    const dir = { x: fx * Math.sin(lean), y: Math.cos(lean), z: fz * Math.sin(lean) }, front = { x: fx * Math.cos(lean), y: -Math.sin(lean), z: fz * Math.cos(lean) };
+    const dir = { x: fx * Math.sin(L), y: Math.cos(L), z: fz * Math.sin(L) }, front = { x: fx * Math.cos(L), y: -Math.sin(L), z: fz * Math.cos(L) };
     // the body: thin, let out as it fattens; past half, the full one (four times the width: they meet at half), let out the rest of the way
     const widen = B.body + shake;
     thin.visible = fat < 0.5; full.visible = !thin.visible;
@@ -93,7 +95,7 @@ export function makeMiddleManager(kit) {
     body.position.set(hip.x, hip.y, hip.z); aim(body, dir.x, dir.y, dir.z, front.x, front.y, front.z, T, T, wide);
     const sh = { x: hip.x + dir.x * T, y: hip.y + dir.y * T, z: hip.z + dir.z * T }, half = (thin.visible ? 13 : 34) * S * wide;     // (its shoulders are where the jacket's are, however far out it has got)
     // the neck and the head: down further than the body, and turned to whoever it is having its meeting with
-    const na = lean * MANAGER.neck, ha = lean * MANAGER.head, nd = { x: fx * Math.sin(na), y: Math.cos(na), z: fz * Math.sin(na) };
+    const na = L * MANAGER.neck, ha = L * MANAGER.head - reel * 0.5, nd = { x: fx * Math.sin(na), y: Math.cos(na), z: fz * Math.sin(na) };
     const turned = turnedAt(fat, sw); neck.visible = !turned; rawNeck.visible = turned; const nk = turned ? rawNeck : neck;
     nk.position.set(sh.x, sh.y, sh.z); aim(nk, nd.x, nd.y, nd.z, fx * Math.cos(na), -Math.sin(na), fz * Math.cos(na), N, N, B.neck);
     const hb = { x: sh.x + nd.x * N, y: sh.y + nd.y * N, z: sh.z + nd.z * N };
