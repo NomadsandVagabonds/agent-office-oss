@@ -916,6 +916,20 @@ export const MORE_DECK = [
       groveCode: R.pick(['INV-04', 'MIRROR-9', 'SKYROOT-B', 'COPPICE-2']),
     }),
   },
+  {
+    // the overnight part of the offsite: a dark room of lit tents on office carpet, and the one beside you goes out
+    id: 'lights-out',
+    name: 'Lights Out',
+    landmark: 'the dark room of lit tents, where the one beside you goes out',
+    w: [13, 15], d: [13, 15], h: [3.4, 3.8],
+    ports: ['back', 'left', 'right'],
+    weight: 1.1,
+    lights: 'dark',
+    themes: { forest: 1.1, '*': 0 },
+    module: './rooms/lights-out.js',
+    stash: (r) => [r.W / 2 - 1.3, r.D / 2 - 1.3, r.W / 2 - 0.6, r.D / 2 - 0.6],
+    roll: (R) => ({ seed: R.int(1, 9999) }),
+  },
 ];
 
 // Where a tape goes in an entry that does not say so itself: (room, ±1) → [x0, z0, x1, z1] in the room's own frame.
