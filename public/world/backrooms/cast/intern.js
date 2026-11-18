@@ -27,7 +27,7 @@ export function create(c) {
   const env = c.env, level = c.level, I = INTERN;
   const walker = { x: 0, z: 0, r: I.r, tall: I.tall, opens: false };
   let s = waiting(), group = null, mat = null, back = null, neck = null, head = null, tag = null, limbs = [], trail = [];
-  let clock = 0, rot = 0, low = 0, known = false, over = false, lastX = 0, lastZ = 0, sampleT = 0, swing = 0, swingV = 0, nod = 0, look = 0;
+  let dying = null, jolt = 0, clock = 0, rot = 0, low = 0, known = false, over = false, lastX = 0, lastZ = 0, sampleT = 0, swing = 0, swingV = 0, nod = 0, look = 0;
   const vx = new THREE.Vector3(), vy = new THREE.Vector3(), vz = new THREE.Vector3(), basis = new THREE.Matrix4();
 
   const LIGHTS = [lamp(0.6, 3.2, 1.4, [1.1, 1.05, 1.0], { k: 9, wrap: 0.45, far: 40 })];
@@ -71,8 +71,10 @@ export function create(c) {
     // what it carries itself at: lower when the one it is copying is stooped (it stoops too); lower again when it has them
     const want = (m?.duck ?? 0) * 0.3 + (sorry ? 0.25 : 0);
     low += (want - low) * Math.min(1, dt * 3);
-    const sh = { x: walker.x + fx * 0.42, y: floor + (1.02 - low * 0.9) + Math.sin(clock * 1.7) * 0.02, z: walker.z + fz * 0.42 };
-    const hip = { x: walker.x - fx * 0.42, y: floor + (1.24 - low * 0.7) + Math.sin(clock * 1.7 + 1) * 0.025, z: walker.z - fz * 0.42 };
+    // (dying: its hands and feet stay where they are and it comes down between them, front first: dies(). A jab: it jerks back: flinch())
+    const fall = dying === null ? 0 : (() => { const u = Math.max(0, Math.min(1, dying / 0.45)); return u * u; })(), fall2 = dying === null ? 0 : Math.max(0, Math.min(1, (dying - 0.15) / 0.45));
+    const sh = { x: walker.x + fx * (0.42 - 0.12 * jolt), y: floor + ((1.02 - low * 0.9) + Math.sin(clock * 1.7) * 0.02) * (1 - fall) + 0.22 * fall + 0.1 * jolt, z: walker.z + fz * (0.42 - 0.12 * jolt) };
+    const hip = { x: walker.x - fx * 0.42, y: floor + ((1.24 - low * 0.7) + Math.sin(clock * 1.7 + 1) * 0.025) * (1 - fall2) + 0.3 * fall2, z: walker.z - fz * 0.42 };
     const bx = sh.x - hip.x, by = sh.y - hip.y, bz = sh.z - hip.z, bl = Math.hypot(bx, by, bz);
     back.position.set(hip.x, hip.y, hip.z); aim(back, bx, by, bz, 0, 1, 0, bl, BACK * S);            // (its spine is uppermost)
     // the limbs. Two at a time, opposite corners: it has been shown how something on four legs goes
@@ -82,10 +84,10 @@ export function create(c) {
       ? { jx: sh.x + px * l.side * 0.27, jy: sh.y - 0.03, jz: sh.z + pz * l.side * 0.27, x: sh.x + px * l.side * 0.34 + fx * (moving ? 0.5 : 0.22), z: sh.z + pz * l.side * 0.34 + fz * (moving ? 0.5 : 0.22) }
       : { jx: hip.x + px * l.side * 0.14, jy: hip.y - 0.04, jz: hip.z + pz * l.side * 0.14, x: hip.x + px * l.side * 0.3 - fx * (moving ? 0.12 : 0.34), z: hip.z + pz * l.side * 0.3 - fz * (moving ? 0.12 : 0.34) };
     const due = limbs.map((l, n) => { if (!l.placed || l.k < 1) return [0, n]; const r = rest(l); return [Math.hypot(r.x - l.x, r.z - l.z), n]; }).filter(([d]) => d > stride).sort((a, b) => b[0] - a[0]).slice(0, Math.max(0, 2 - stepping));
-    const turn = new Set(due.map(([, n]) => n));
+    const turn = dying !== null ? new Set() : new Set(due.map(([, n]) => n));
     limbs.forEach((l, n) => {
       const r = rest(l);
-      if (!l.placed || Math.hypot(r.x - l.x, r.z - l.z) > 1.5) { l.x = r.x; l.z = r.z; l.k = 1; l.placed = true; }
+      if (!l.placed || (dying === null && Math.hypot(r.x - l.x, r.z - l.z) > 1.5)) { l.x = r.x; l.z = r.z; l.k = 1; l.placed = true; }
       if (l.k >= 1 && turn.has(n)) { l.fx = l.x; l.fz = l.z; l.tx = r.x; l.tz = r.z; l.k = 0; }
       if (l.k < 1) {
         l.k = Math.min(1, l.k + dt / quick); l.x = l.fx + (l.tx - l.fx) * l.k; l.z = l.fz + (l.tz - l.fz) * l.k; l.lift = Math.sin(l.k * Math.PI) * 0.2;
@@ -104,8 +106,8 @@ export function create(c) {
       }
     });
     // the head: it hangs, and swings as it goes, and whatever else it is doing it is looking at them
-    swingV += (-swing * 16 - swingV * 2.4 + (moving ? Math.sin(clock * 8.5) * 5 : 0)) * dt; swing += swingV * dt;
-    nod += ((blank ? 0.9 : sorry ? -0.35 : keen ? 0.15 : 0) - nod) * Math.min(1, dt * 3);
+    swingV += (-swing * 16 - swingV * 2.4 + (moving ? Math.sin(clock * 8.5) * 5 : 0) + jolt * 40) * dt; swing += swingV * dt;
+    nod += ((dying !== null ? -0.9 * fall : blank ? 0.9 : sorry ? -0.35 : keen ? 0.15 : 0) - nod) * Math.min(1, dt * (dying !== null ? 6 : 3));
     const nb = { x: sh.x + fx * 0.1, y: sh.y - 0.06, z: sh.z + fz * 0.1 }, nl = NECK * S;
     const ndx = fx * (0.28 + nod * 0.5) + px * swing * 0.5, ndy = -1 + Math.abs(nod) * 0.25, ndz = fz * (0.28 + nod * 0.5) + pz * swing * 0.5, nn = Math.hypot(ndx, ndy, ndz);
     neck.position.set(nb.x, nb.y, nb.z); aim(neck, ndx, ndy, ndz, fx, 0, fz, nl, nl);
@@ -119,6 +121,23 @@ export function create(c) {
 
   return {
     ready,
+    /** A jab that did not finish it (the conductor, while stalled: hurt, seconds since): its front jerks up and back, its head swings. A shove: it holds. */
+    flinch(hurt, dt = 0) {
+      if (!group || hurt == null || !(hurt < HEALTH.flinch)) return;
+      jolt = Math.exp(-hurt * 7) * Math.min(1, hurt * 30) * (1 - hurt / HEALTH.flinch);
+      clock += dt; pose(dt, false, c.me()); jolt = 0;
+    },
+    /**
+     * Its dying (cast/health.rule.js; the conductor calls this and nothing else of it). Its hands and feet stay where they
+     * are; it comes down between them, the front of it first, and its head hangs down to the floor. Nothing random.
+     */
+    dies(progress, dt = 0) {
+      if (!group) return;
+      dying = Math.max(0, Math.min(1, progress));
+      clock += dt * (1 - 0.85 * dying); pose(dt, false, c.me());
+    },
+    /** Finished, it lies where it came down: its last pose, drawn once. */
+    fell() { return !!group; },
     update(dt) {
       if (!group || over) return;
       clock += dt;

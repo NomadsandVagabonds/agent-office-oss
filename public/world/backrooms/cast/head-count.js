@@ -24,7 +24,7 @@ export function create(c) {
   const env = c.env, level = c.level, H = HEADS;
   const walker = { x: 0, z: 0, r: H.r, tall: H.tall, opens: false };
   let s = counting(), group = null, mat = null, knot = null, torsos = [], arms = [], tags = [];
-  let clock = 0, rot = 0, high = 0.6, goal = null, goalT = 0, known = false, over = false, lastX = 0, lastZ = 0, sweepA = 0, tapT = 0, shudder = 0;
+  let dying = null, jolt = 0, clock = 0, rot = 0, high = 0.6, goal = null, goalT = 0, known = false, over = false, lastX = 0, lastZ = 0, sweepA = 0, tapT = 0, shudder = 0;
   const dir = new THREE.Vector3();
 
   const LIGHTS = [lamp(0.6, 3.2, 1.4, [1.1, 1.05, 1.0], { k: 9, wrap: 0.45, far: 40 })];
@@ -69,17 +69,20 @@ export function create(c) {
   function pose(dt, moving) {
     const floor = env.world.floorY(walker.x, walker.z), coming = s.mode === 'comes', again = s.mode === 'recounts';
     // it carries itself low when it comes, and lower still over somebody it has
-    const want = coming ? 0.5 : again ? 0.42 : 0.62 + Math.sin(clock * 1.3) * 0.03;
-    high += (want - high) * Math.min(1, dt * 4);
-    shudder = Math.max(0, shudder - dt);
+    // (dying: it comes down on its hands and its people go over, one and then another: dies(). A jab: they are flung back: flinch())
+    const gone = dying === null ? 0 : Math.max(0, Math.min(1, dying / 0.6));
+    const want = (coming ? 0.5 : again ? 0.42 : 0.62 + Math.sin(clock * 1.3) * 0.03) * (1 - gone) + 0.14 * gone;
+    high += (want - high) * Math.min(1, dt * (dying === null ? 4 : 7));
+    shudder = dying === null ? Math.max(0, shudder - dt) : 0;
     const jx = shudder ? (Math.random() - 0.5) * 0.02 : 0;
-    knot.position.set(walker.x + jx, floor + high, walker.z); knot.rotation.set(Math.sin(clock * 1.7) * 0.05, rot, Math.sin(clock * 1.1) * 0.06);
+    knot.position.set(walker.x + jx, floor + high + 0.06 * jolt, walker.z); knot.rotation.set(Math.sin(clock * 1.7) * 0.05, rot, Math.sin(clock * 1.1) * 0.06);
     const breath = 1 + Math.sin(clock * 2.4) * 0.03; knot.scale.set(breath, 1 / breath, breath);
     torsos.forEach((t, k) => {
       const a = rot + t.a;
       t.m.position.set(walker.x + Math.sin(a) * 0.4, floor + high + 0.08, walker.z + Math.cos(a) * 0.4);
       // each of them still tries to lift what it has not got, and turns it, feeling
-      t.m.rotation.set(0, a, 0); t.m.rotateX(-(t.tilt + Math.sin(clock * (0.9 + k * 0.23) + k * 2) * 0.12 + (coming ? 0.18 : 0))); t.m.rotateZ(t.roll + Math.sin(clock * (1.4 + k * 0.31) + k) * (again ? 0.3 : 0.16));
+      const over = dying === null ? 0 : (() => { const u = Math.max(0, Math.min(1, (dying - 0.1 - k * 0.18) / 0.35)); return u * u * (3 - 2 * u); })();
+      t.m.rotation.set(0, a, 0); t.m.rotateX(-(t.tilt + Math.sin(clock * (0.9 + k * 0.23) + k * 2) * 0.12 + (coming ? 0.18 : 0)) * (1 - over) + 1.35 * over + 0.5 * jolt); t.m.rotateZ((t.roll + Math.sin(clock * (1.4 + k * 0.31) + k) * (again ? 0.3 : 0.16)) * (1 - over) + (k % 2 ? 0.35 : -0.3) * over);
       const tag = tags[k], nx = walker.x + Math.sin(a) * 0.86, nz = walker.z + Math.cos(a) * 0.86;
       tag.v += (-tag.swing * 18 - tag.v * 2.2 + (moving ? Math.sin(clock * 9 + k) * 6 : Math.sin(clock * 1.9 + k) * 0.6)) * dt; tag.swing += tag.v * dt;
       tag.m.position.set(nx, floor + high + 0.3 + Math.sin(t.tilt) * 0.1, nz); tag.m.rotation.set(tag.swing * 0.5, a, tag.swing);
@@ -88,7 +91,7 @@ export function create(c) {
     const most = coming ? 4 : 3, stride = coming ? 0.42 : 0.3, quick = coming ? 0.09 : again ? 0.4 : 0.22;
     // whichever hands are furthest from where they should be are put down again first: none is left behind
     const due = arms.map((l, i) => { const sh = shoulder(l, floor), far = coming ? 0.78 : 0.86; return l.placed && l.k >= 1 ? Math.hypot(sh.x + Math.sin(sh.out) * far - l.x, sh.z + Math.cos(sh.out) * far - l.z) : 0; });
-    const turn = new Set(due.map((d, i) => [d, i]).filter(([d]) => d > stride).sort((a, b) => b[0] - a[0]).slice(0, Math.max(0, most - stepping)).map(([, i]) => i));
+    const turn = dying !== null ? new Set() : new Set(due.map((d, i) => [d, i]).filter(([d]) => d > stride).sort((a, b) => b[0] - a[0]).slice(0, Math.max(0, most - stepping)).map(([, i]) => i));
     arms.forEach((l, i) => {
       const sh = shoulder(l, floor), far = coming ? 0.78 : 0.86, lead = moving ? (coming ? 0.45 : 0.2) : 0;
       const rx = sh.x + Math.sin(sh.out) * far + Math.sin(rot) * lead, rz = sh.z + Math.cos(sh.out) * far + Math.cos(rot) * lead;
@@ -96,8 +99,8 @@ export function create(c) {
       const off = Math.hypot(rx - l.x, rz - l.z);
       if (off > 2.2) { l.x = rx; l.z = rz; l.k = 1; }                       // (it was somewhere else a moment ago: its hands are where it is)
       // a hand is put down again when it is left behind; and, counting, one is lifted now and then to pat for whatever may be there
-      const pat = !moving && !coming && l.k >= 1 && stepping < 2 && tapT <= 0 && i === Math.floor(clock * 1.9) % arms.length;
-      if (l.k >= 1 && (turn.has(i) || off > 1.1 || (pat && stepping < most))) {
+      const pat = dying === null && !moving && !coming && l.k >= 1 && stepping < 2 && tapT <= 0 && i === Math.floor(clock * 1.9) % arms.length;
+      if (l.k >= 1 && (turn.has(i) || (off > 1.1 && dying === null) || (pat && stepping < most))) {
         l.fx = l.x; l.fz = l.z; l.k = 0; stepping++;
         const a = sh.out + (pat ? (Math.random() - 0.5) * 1.2 : 0), r = pat ? far + 0.25 : 0;
         l.tx = pat ? sh.x + Math.sin(a) * r : rx; l.tz = pat ? sh.z + Math.cos(a) * r : rz; l.pat = pat;
@@ -129,6 +132,26 @@ export function create(c) {
 
   return {
     ready,
+    /**
+     * A jab that did not finish it (the conductor, while it stands stalled: hurt, seconds since). Its people are flung back
+     * from it and it jumps on its hands. After a shove (hurt large, or none) it holds.
+     */
+    flinch(hurt, dt = 0) {
+      if (!group || hurt == null || !(hurt < HEALTH.flinch)) return;
+      jolt = Math.exp(-hurt * 7) * Math.min(1, hurt * 30) * (1 - hurt / HEALTH.flinch);
+      clock += dt; pose(dt, false); jolt = 0;
+    },
+    /**
+     * Its dying (cast/health.rule.js; the conductor calls this and nothing else of it). Its hands stay where they are on the
+     * floor and it comes down between them, and its people go over backwards, one and then the next, and lie. Nothing random.
+     */
+    dies(progress, dt = 0) {
+      if (!group) return;
+      dying = Math.max(0, Math.min(1, progress));
+      clock += dt * (1 - 0.85 * dying); pose(dt, false);
+    },
+    /** Finished, it lies where it fell: its last pose, drawn once. */
+    fell() { return !!group; },
     update(dt) {
       if (!group || over) return;
       clock += dt;
