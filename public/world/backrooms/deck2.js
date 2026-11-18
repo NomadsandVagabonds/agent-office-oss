@@ -439,7 +439,7 @@ export const MORE_DECK = [
   // A shop: the department store, all office clothes; the dummies are having a meeting; fitting rooms along the back, and in the glass of the last one, somebody where you stand.
   { id: 'mens-ladies', name: 'Mens Ladies', landmark: 'the department store', w: [12, 14], d: [11, 13], h: [3.4, 3.9],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
-    module: './rooms/mens-ladies.js', stash: (r) => [-r.W / 2 + 0.3, r.D / 2 - 0.9, -r.W / 2 + 0.9, r.D / 2 - 0.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+    module: './rooms/mens-ladies.js', stash: (r) => [mallZone(-r.W / 4 - 0.25, r.D / 2 - 1.1), mallZone(r.W / 4 - 0.25, r.D / 2 - 1.1), mallZone(-0.25, -r.D / 4 - 0.25), mallZone(-0.25, -0.25), mallZone(-0.25, r.D / 4 - 0.25)], roll: (R) => ({ seed: R.int(1, 9999) }) },
   // A grotto, in July: a cottage of plywood with snow on it, a queue folded five times to its door, a sack in the big chair, a camera that goes off, a present.
   { id: 'the-grotto', name: 'The Grotto', landmark: 'the grotto, in July', w: [10, 12], d: [9, 11], h: [3.3, 3.7],
     ports: ['left', 'right'], weight: 1.1, lights: 'dim', themes: { mall: 1, '*': 0 },
@@ -447,7 +447,7 @@ export const MORE_DECK = [
   // A shop: the place that sells the orange drink. Orange and white, a great many oranges, and somebody serving who has one for a head.
   { id: 'the-orange', name: 'The Orange', landmark: 'the place that sells the orange drink', w: [7, 8], d: [7, 8], h: [2.9, 3.3],
     ports: ['left', 'right'], weight: 1.3, lights: 'dim', themes: { mall: 1, '*': 0 },
-    module: './rooms/the-orange.js', stash: (r) => [-r.W / 2 + 0.35, r.D / 2 - 1.9, -r.W / 2 + 0.95, r.D / 2 - 1.3], roll: (R) => ({ seed: R.int(1, 9999) }) },
+    module: './rooms/the-orange.js', stash: (r) => [mallZone(-r.W / 2 + 0.6, r.D / 4 - 0.25), mallZone(-r.W / 4 - 0.25, r.D / 4 - 0.25), mallZone(r.W / 4 - 0.25, r.D / 4 - 0.25), mallZone(-r.W / 4 - 0.25, r.D / 2 - 1.1), mallZone(r.W / 4 - 0.25, r.D / 2 - 1.1), mallZone(-r.W / 4 - 0.25, -r.D / 2 + 0.6), mallZone(r.W / 4 - 0.25, -r.D / 2 + 0.6)], roll: (R) => ({ seed: R.int(1, 9999) }) },
   // A shop of televisions: every set on demonstration, on as you pass and off behind you, all on the same channel; the big one has a camera on it, and shows the shop a little late, and somebody stood where you were.
   { id: 'the-sets', name: 'The Sets', landmark: 'the shop of televisions', w: [9, 11], d: [8, 10], h: [3.2, 3.6],
     ports: ['left', 'right'], weight: 1.2, lights: 'dim', themes: { mall: 1, '*': 0 },
