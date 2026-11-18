@@ -269,7 +269,7 @@ export function createInventoryHud({ size = 6, host, onSelect, onUse, onDrop, on
   function conditionOf(item) {
     if (item?.type === 'torch') return `${item.id === snapshot.mountedTorch?.id ? 'Mounted · ' : item.prepared ? 'Tape fitted · ' : ''}${percent(item)}% charge · ${isLit(item) ? 'on' : 'off'}`;
     if (item?.type === 'chalk') return `${item.uses} mark${item.uses === 1 ? '' : 's'} left`;
-    if (item?.type === 'scissors') return `${item.uses} snip${item.uses === 1 ? '' : 's'} left`;
+    if (item?.type === 'scissors') return 'Stiff at the pivot';
     if (item?.type === 'battery') return 'Fits flashlight or camera';
     if (item?.type === 'paper') return `${quantity(item)} / ${ITEM_DEFS.paper.maxStack} sheets`;
     if (item?.type === 'snack') {
@@ -363,11 +363,11 @@ export function createInventoryHud({ size = 6, host, onSelect, onUse, onDrop, on
       // The visible caption and inspection panel carry this information;
       // native title popups cannot be kept clear of the world-use prompt.
       if (slot.type !== iconKey(item)) { slot.icon.replaceChildren(...(item ? [itemIcon(item.type, item)] : [])); slot.type = iconKey(item); }
-      text(slot.amount, item?.type === 'chalk' || item?.type === 'scissors' ? String(item.uses) : item?.type === 'paper' ? String(quantity(item)) : '');
+      text(slot.amount, item?.type === 'chalk' ? String(item.uses) : item?.type === 'paper' ? String(quantity(item)) : '');
       slot.power.hidden = item?.type !== 'torch';
       if (item?.type === 'torch') slot.fill.style.transform = `scaleX(${percent(item) / 100})`;
     }
-    text(caption, !snapshot.holstered && selected ? `${nameOf(selected)}${selected.type === 'torch' ? ` · ${percent(selected)}%` : selected.type === 'chalk' || selected.type === 'scissors' ? ' · ' + selected.uses : selected.type === 'paper' ? ' · ' + quantity(selected) + (quantity(selected) === 1 ? ' sheet' : ' sheets') : ''}` : '');
+    text(caption, !snapshot.holstered && selected ? `${nameOf(selected)}${selected.type === 'torch' ? ` · ${percent(selected)}%` : selected.type === 'chalk' ? ' · ' + selected.uses : selected.type === 'paper' ? ' · ' + quantity(selected) + (quantity(selected) === 1 ? ' sheet' : ' sheets') : ''}` : '');
     text(count, crafting ? 'COMBINE' : `POCKETS  ${snapshot.slots.filter(Boolean).length} / ${slotCount}`);
     text(title, nameOf(selected));
     text(description, selected ? ITEM_DEFS[selected.type]?.description || '' : 'Pick up an object to carry it here.');

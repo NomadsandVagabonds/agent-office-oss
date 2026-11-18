@@ -9,7 +9,7 @@ export const ITEM_DEFS = Object.freeze({
   paper: Object.freeze({ name: 'Paper', description: 'Blank office paper, warm from a printer you cannot hear.', useLabel: 'Combine', maxStack: CRAFTING_TUNING.maxPaper }),
   lighter: Object.freeze({ name: 'Lighter', description: 'A scratched metal lighter. The wheel catches on the second turn.', useLabel: 'Combine' }),
   tape: Object.freeze({ name: 'Adhesive tape', description: 'A half-used roll of grey tape. The torn end is folded back.', useLabel: 'Combine' }),
-  scissors: Object.freeze({ name: 'Scissors', description: 'Heavy steel scissors with chipped red handles. Good for three desperate jabs at close range before the stiff pivot snaps.', useLabel: 'Snip', maxUses: 3 }),
+  scissors: Object.freeze({ name: 'Scissors', description: 'Heavy steel scissors with chipped red handles. A desperate jab at close range. The pivot is stiff, and will not take many.', useLabel: 'Snip', maxUses: 1 }),
   snack: Object.freeze({ name: 'Wrapped snack', description: 'A sealed oat bar. The wrapper has no date.', useLabel: 'Eat', healAmount: 1 }),
   'pink-slip': Object.freeze({ name: 'Pink slip', description: 'FORM HR-404, Notice of Redundancy. The name on it is yours; the date is last week.', useLabel: 'Use' }),
   opener: Object.freeze({ name: 'Remote', description: 'A grey remote with one button. Nothing on it says what it is for.', useLabel: 'Use' }),
@@ -64,9 +64,15 @@ export function makeItem(type, id, overrides = {}) {
  * Paper shares a slot up to ten sheets; other objects occupy one slot each.
  * Mutations never leak references. Drops retain charge, uses and quantities.
  */
+/** After each jab of the scissors that lands, the chance that they snap. */
+export const SCISSORS_SNAP = 0.4;
+
 export function createInventory({
   size = 6,
   initial = null,
+  // (the scissors: after each jab that lands, the chance they snap — the first can be the last, and nobody is told how many are left)
+  snapChance = SCISSORS_SNAP,
+  rng = Math.random,
   canMountTorch = true,
   fireSecondsPerSheet = CRAFTING_TUNING.fireSecondsPerSheet,
   batterySeconds,
@@ -182,9 +188,9 @@ export function createInventory({
       const result = snip(copy(item));
       if (result?.ok !== true) return fail(result?.reason || 'no-snip-target');
       if (slots[index]?.id !== item.id) return fail('stale-input');
-      item.uses--;
+      const snapped = rng() < snapChance;
+      if (snapped) item.uses = 0;
       const used = copy(item);
-      const snapped = item.uses === 0;
       if (snapped) slots[index] = null;
       revision++;
       return { ok: true, action: 'snip', snapped, target: result.target || null, item: used, index };

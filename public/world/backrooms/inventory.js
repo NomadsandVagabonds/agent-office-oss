@@ -96,6 +96,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     const result = model.useSelected({
       snip: () => active.env.snip ? active.env.snip() : { ok: false, reason: 'no-snip-target' },
     });
+    active.env.handView?.landed?.({ ok: result.ok, snapped: !!result.snapped });   // (the hand shows a hit, a miss and a snap differently: hand.js)
     if (!result.ok) {
       env.sound.play('snip', { vol: .38 });
       if (!quietMiss) tell(result.reason);
@@ -106,7 +107,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     active.env.interfere?.(result.snapped ? 0.55 : 0.38);
     env.hud?.glitch?.(result.snapped ? 0.42 : 0.26);
     refresh();
-    tell(result.snapped ? 'The scissors snapped' : `${result.item.uses} snip${result.item.uses === 1 ? '' : 's'} left`);
+    // (nothing is said: the crack and the empty hand are the telling, and there is no count to give)
     return result;
   }
   function use() {

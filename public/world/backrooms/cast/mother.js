@@ -13,6 +13,7 @@ import { S, SW, RING, LIMB, ringVox, mouthVox, limbVox, endVox, footVox, wormVox
 import { MOTHER, WORM, swaying, sways, finds, trodden } from './mother.rule.js';
 import { canLeave } from './paths.js';
 import { SHOVE, slide } from '../shove.rule.js';
+import { HEALTH } from './health.rule.js';
 
 const SEGS = 14, SEG_H = MOTHER.height / SEGS, RING_H = RING * S, LIMB_H = LIMB * S;
 
@@ -309,6 +310,21 @@ export function create(c) {
         if (to) { w.x = to.x; w.z = to.z; }
         w.y = env.world.floorY(w.x, w.z) + 0.04; w.dazed = WORM.dazed * 1.6; c.play('squeak', w.x, w.z, 6);
         return true;
+      } }))];
+    },
+    /** A jab (melee.js): Mother takes one (cast/health.rule.js) and flinches; a small one is finished by it, as by a boot. */
+    snipTargets() {
+      if (!group || over) return [];
+      const herself = { id: 'mother', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 0.9, r: G.r, priority: 2, snip: () => {
+        const hit = c.struck(HEALTH.jab); if (!hit.ok) return false;
+        if (!hit.killed) c.stall(HEALTH.flinch);
+        c.play('thunk', walker.x, walker.z, 12); c.survived();
+        return { ok: true, target: 'mother' };
+      } };
+      return [herself, ...worms.filter((w) => !w.dead && !w.remove && !w.air?.born).map((w) => ({ id: 'mother-brood', x: w.x, z: w.z, y: w.y ?? env.world.floorY(w.x, w.z), r: 0.22, priority: 3, snip: () => {
+        if (w.dead) return false;
+        w.air = null; w.dead = true; w.flat = 0.001; c.play('squeak', w.x, w.z, 6);
+        return { ok: true, target: 'mother-brood' };
       } }))];
     },
     at: () => group ? ({ x: walker.x, z: walker.z, mode: s.mode, brood: worms.filter((w) => !w.dead).length }) : null,

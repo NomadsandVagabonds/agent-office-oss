@@ -64,6 +64,21 @@ export function createStalkers(env, options = {}) {
      */
     stall: (seconds) => { if (seconds > 0) { k.stall = Math.max(k.stall || 0, seconds); k.settle = true; } },
     get stalled() { return (k.stall || 0) > 0; },
+    /**
+     * Its health (cast/health.rule.js): { hp, max, hurt: seconds since it was last hit, dying: null or 0…1, gone } — or null:
+     * it has none, and cannot be hit. For the picture to read: a flinch from `hurt`, a death from `dying`.
+     */
+    get vital() { return k.vital ? { ...k.vital } : null; },
+    /**
+     * A jab has reached it (its own snipTargets() says so): it takes `n`. → { ok, killed, hp }. Killed, it is dying from
+     * now: the conductor does not tick it, it lands nothing, and when it has gone it is gone from this floor.
+     */
+    struck: (n) => {
+      if (!k.vital || castList.finished?.(k.vital)) return { ok: false, killed: false, hp: k.vital?.hp ?? 0 };
+      k.vital = castList.struck(k.vital, n); k.settle = true;
+      if (k.vital.killed && k.member.music === 'mascot') env.sound?.stopMascot?.();
+      return { ok: true, killed: !!k.vital.killed, hp: k.vital.hp };
+    },
     room: (x, z) => W().roomAt(x, z)?.id ?? null,
     /** Is there a line of sight between two spots? (walls, tall furniture and shut doors are in the way; a visitor's facing is not) */
     los: (ax, az, bx, bz) => W().los(ax, az, bx, bz),
@@ -84,7 +99,8 @@ export function createStalkers(env, options = {}) {
      * A hit that does land and is survived throws the visitor back from the same place (player.js knock).
      */
     hurt(n = 1, from = null) {
-      if (k.stall > 0) return { landed: false, dead: false, ended: false, stalled: true };            // (shoved a moment ago: its hand is not on anybody)
+      if (k.stall > 0) return { landed: false, dead: false, ended: false, stalled: true };
+      if (castList.finished?.(k.vital)) return { landed: false, dead: false, ended: false, dying: true };       // (it is going: its hand is not on anybody)            // (shoved a moment ago: its hand is not on anybody)
       // (env.blocked is the level's: index.js. A floor without it — a test's, a review's — has no shove, and every hit lands)
       if (!member.heavy && env.blocked) {
         const at = from || k.it?.at?.() || null;
@@ -132,7 +148,7 @@ export function createStalkers(env, options = {}) {
     const member = CAST.find((m) => m.id === cast.id), make = MAKERS[cast.id];
     if (!member || !make) continue;
     // (things: what it has put in the level · bodies: what of it nobody walks through · away: the room it is standing in has gone, and it with it)
-    const k = { id: member.id, member, it: null, things: [], bodies: [], away: null, shown: null };
+    const k = { id: member.id, member, it: null, things: [], bodies: [], away: null, shown: null, vital: castList.fresh?.(member.id) ?? null };
     try { k.it = make(toolbox(k, homeFor(level, member), haunts.get(member.id) ?? null, castList.lairFor?.(level, member) ?? null)); live.push(k); }
     catch (err) { if(env.coopStrict)throw err;console.warn(`[backrooms] ${member.id} would not be made — the floor does without`, err); }
   }
@@ -183,6 +199,22 @@ export function createStalkers(env, options = {}) {
       if (follower && !follower.away) {if(options.withVisitor)options.withVisitor('follower',follower,()=>tag(follower,dt));else tag(follower, dt);}
       for (const k of live) {
         if (k.dead || k.away) continue;                                    // (somebody who is not here does nothing here)
+        // (its health: the mark of the last hit ages; one that is dying is not ticked, and when it has gone it is taken off
+        // the floor — unless it says its body stays where it fell: its own fell(), as the mascot's does, for what it holds)
+        if (k.vital) {
+          k.vital = castList.aged(k.vital, dt);
+          if (k.vital.dying !== null) {
+            try { k.it.dies?.(k.vital.dying, dt); } catch { /* it is going anyway */ }
+            if (k.vital.gone) {
+              k.dead = true; let stays = false;
+              try { stays = !!k.it.fell?.(); } catch { stays = false; }
+              const figure = k.it.figure;
+              for (const b of [...k.bodies, figure?.body].filter(Boolean)) { const i = W().bodies.indexOf(b); if (i >= 0) W().bodies.splice(i, 1); }
+              if (!stays) { try { k.it.dispose?.(); } catch { /* it is going anyway */ } for (const o of k.things) o.removeFromParent?.(); }
+            }
+            continue;
+          }
+        }
         // (shoved: it stands where it was put, c.stall. One tick of no time at all first, so that it is drawn where it was put)
         const settle = !!k.settle; k.settle = false;
         if (k.stall > 0) { k.stall = Math.max(0, k.stall - dt); if (!settle) continue; }
@@ -259,6 +291,8 @@ export function createStalkers(env, options = {}) {
     get follower() { return follower ? { x: follower.x, z: follower.z } : null; },
     get figure() { return pirate?.figure ?? null; },
     of: (id) => live.find((k) => k.id === id)?.it ?? null,
+    /** Somebody's health, for whoever draws them or asks: { hp, max, hurt, dying, gone } — or null: not here, or cannot be hit. */
+    vital: (id) => { const k = live.find((q) => q.id === id); return k?.vital ? { ...k.vital } : null; },
     /**
      * Something on the floor has one of the cast in it (a lift car, say): put them at this spot now. spot: { x, z, yaw? }, world.
      * If they are on the floor already this is one more appearance of theirs; if they were not dealt, they are made here, outside
@@ -275,7 +309,7 @@ export function createStalkers(env, options = {}) {
         if (!k) {
           const member = CAST.find((m) => m.id === id), make = MAKERS[id];
           if (!member || !make) return null;
-          k = { id, member, it: null, things: [], bodies: [], away: null, shown: null, summoned: true }; fresh = true;
+          k = { id, member, it: null, things: [], bodies: [], away: null, shown: null, summoned: true, vital: castList.fresh?.(id) ?? null }; fresh = true;
           k.it = make(Object.assign(toolbox(k, null), { summoned: true }));
           k.it.ready?.();
         }
@@ -287,7 +321,7 @@ export function createStalkers(env, options = {}) {
     snipTargets() {
       const out = [];
       for (const k of live) {
-        if (k.dead || k.away) continue;                                    // (somebody who is away with a room cannot be reached either)
+        if (k.dead || k.away || castList.finished?.(k.vital)) continue;                                    // (somebody who is away with a room cannot be reached either)
         const list = k.it.snipTargets?.();
         if (Array.isArray(list)) out.push(...list);
       }
@@ -297,7 +331,7 @@ export function createStalkers(env, options = {}) {
     shoveTargets() {
       const out = [];
       for (const k of live) {
-        if (k.dead || k.away) continue;
+        if (k.dead || k.away || castList.finished?.(k.vital)) continue;
         const list = k.it.shoveTargets?.();
         if (Array.isArray(list)) out.push(...list);
       }

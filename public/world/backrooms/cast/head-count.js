@@ -11,6 +11,7 @@ import { roomDistances } from '../gen.js';
 import { Batch, lamp } from '../kit.js';
 import { HEADS, counting, counts, pace, elbow } from './head-count.rule.js';
 import { SHOVE, slide } from '../shove.rule.js';
+import { HEALTH } from './health.rule.js';
 import { fitsDoor, canLeave } from './paths.js';
 import { S, UPPER, FORE, knotVox, torsoVox, upperVox, foreVox, handVox, lanyardVox } from './head-count.model.js';
 
@@ -194,6 +195,17 @@ export function create(c) {
         shudder = 0.8; c.stall(SHOVE.stagger);
         c.play('creak', walker.x, walker.z, 10);
         return true;
+      } }];
+    },
+    /** A jab (melee.js): it takes one (cast/health.rule.js). Not finished by it, it flinches: it stands a moment and lands nothing. */
+    snipTargets() {
+      if (!group || over) return [];
+      return [{ id: 'head-count', x: walker.x, z: walker.z, y: env.world.floorY(walker.x, walker.z) + 0.6, r: H.r, priority: 2, snip: () => {
+        const hit = c.struck(HEALTH.jab); if (!hit.ok) return false;
+        if (!known) { known = true; c.met(); }
+        if (!hit.killed) c.stall(HEALTH.flinch); shudder = 0.8;
+        c.play('thunk', walker.x, walker.z, 12); c.survived();
+        return { ok: true, target: 'head-count' };
       } }];
     },
     at: () => ({ x: walker.x, z: walker.z, mode: s.mode }),
