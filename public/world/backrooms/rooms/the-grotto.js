@@ -8,6 +8,7 @@
 // In the chair there is a sack, which is the right shape for whoever sits
 // there. The camera on its legs is pointed at it, and goes off when you go
 // near. There is a present under the chair with something in it.
+import * as THREE from 'three';
 import { P } from '../bits.js';
 import { Vox, M, glow } from '../../vox/vox.js';
 import { upright, sheet, garble } from '../suburb.js';
@@ -35,6 +36,17 @@ function presentVox(paper, ribbon) { return () => { const v = new Vox(), p = M(p
 /** The camera, on its three legs. */
 function cameraVox() { const v = new Vox(), m = M('#2a2f36', 0); for (const a of [0, 2.1, 4.2]) v.tube(0, 50, 0, Math.round(Math.cos(a) * 10), 0, Math.round(Math.sin(a) * 10), 0.6, M('#8d949c', 0)); v.rbox(-5, 50, -4, 5, 58, 4, 1, m); v.cyl('z', 0, 54, 4, 9, 2.6, m); v.box(-2, 58, -2, 2, 61, 2, glow('#f6f3e8')); return v; }
 
+/** The snow machine, on the roof: a hopper of cut paper, the fan in its cage, and the spout it comes out of, toward the queue. */
+function blowerVox() {
+  const v = new Vox(), body = M('#c9ccd0', 0), dark = M('#3a3f46', 0), paper = M('#f4f2ec', 1), red = M('#b3261e', 0);
+  v.rbox(-7, 0, -6, 7, 9, 6, 1, body); v.box(-7, 3, 6, 7, 4, 7, red);                                                          // the box, a red band
+  v.cyl('z', 0, 5, 6, 8, 4.5, dark); for (let a = 0; a < 6.28; a += 1.05) v.tube(0, 5, 8, Math.round(Math.cos(a) * 4), 5 + Math.round(Math.sin(a) * 4), 8, 0.4, body);   // the fan's cage
+  v.cyl('z', 0, 5, -12, -6, 2.4, body); v.cyl('z', 0, 5, -13, -12, 3, dark);                                                   // the spout (the model is turned to point it out)
+  v.box(-5, 9, -4, 5, 16, 4, M('#8d949c', 0)); v.carve(-4, 11, -3, 4, 16, 3); for (let i = 0; i < 18; i++) v.set(-3 + (i * 5) % 7, 11 + (i % 4), -2 + (i * 3) % 5, paper);   // the hopper, full of it
+  v.tube(6, 2, -6, 12, 0, -10, 0.5, dark);                                                                                      // its flex, to nowhere
+  return v;
+}
+
 export function build(c) {
   const { W, D, H, R, params: p, kit } = c, K = GROTTO, env = c.env;
   c.shell({ panels: false, wallAlb: [0.42, 0.4, 0.44], floorAlb: [0.7, 0.7, 0.72] });
@@ -54,6 +66,13 @@ export function build(c) {
   upright(lit, hx - 1.5, z1 + 0.27, hx + 1.5, z1 + 0.27, top + 0.15, top + 0.65, name.uv(1));
   const bulbs = c.shining('grotto:bulbs', kit.tex.white(), 2.4, [1, 0.8, 0.4]); for (let t = 0; t <= 1.001; t += 0.05) { const x = dx0 - 0.1 + t * (doorW + 0.2), y = 2.1 + Math.sin(Math.PI * t) * 0.3; bulbs.box(x - 0.025, y - 0.025, z1 + 0.04, x + 0.025, y + 0.025, z1 + 0.09, [1, 1, 1]); }
   c.light(hx, top - 0.4, z1 + 1.0, '#ffd27a', 0.9, { k: 1.4, far: 5 });
+  /* fairy lights along the eaves and down both corners: the colours of the baubles; they light the snow on the roof a little */
+  { const cols = [[1, 0.24, 0.6], [0.2, 0.88, 1], [1, 0.7, 0.18], [1, 0.9, 0.72], [0.3, 0.86, 0.42]], fl = cols.map((rgb, k) => c.shining('grotto:fairy:' + k, kit.tex.white(), 1.3, rgb, k === 3 ? { bloom: 1.2, lights: { power: 0.1, k: 2, far: 1.8, cap: 3, color: '#ffd9a0' } } : { bloom: 1.2 }));
+    let n = 0; const bulb = (x, y, z) => fl[n++ % 5].box(x - 0.02, y - 0.03, z - 0.02, x + 0.02, y + 0.02, z + 0.02, [1, 1, 1]);   // (a batch a colour: the colour of a lit batch is its own, not its boxes')
+    for (let x = x0 - 0.15; x <= x1 + 0.15; x += 0.18) bulb(x, top - 0.03 - Math.abs(Math.sin((x - x0) * 3.4)) * 0.06, z1 + 0.28);
+    for (const x of [x0 - 0.03, x1 + 0.03]) for (let y = top - 0.25; y > 0.4; y -= 0.22) bulb(x, y, z1 + 0.05);
+    c.detail.box(x0 - 0.15, top - 0.005, z1 + 0.275, x1 + 0.15, top + 0.005, z1 + 0.285, [0.1, 0.25, 0.12]); }               // (and the wire they are on)
+  { const bz = z1 - 0.2, by = top + 0.7 * (z1 + 0.25 - bz) / (z1 + 0.25 - (z0 + z1) / 2); c.model('grotto:blower', blowerVox, x1 - 0.2, bz, { y: by - 0.04, rot: Math.PI, tilt: [-0.4, 0], scale: 1.1, solid: false, shadow: false }); }   // (down the front of the roof, by the sign: the ridge is nearly the ceiling)
   // inside: the chair, the sack in it, the present under it, the camera at it, and the pictures it has taken on the walls
   c.model('grotto:chair', chairVox, hx, z0 + 0.6, { solid: false }); c.solid(hx - 0.45, z0, hx + 0.45, z0 + 1.0, { tall: false });
   c.model('grotto:sack', sackVox, hx, z0 + 0.6, { y: 0.45, solid: false, shadow: false });
@@ -72,7 +91,7 @@ export function build(c) {
     for (let x = xa; x <= xb + 0.001; x += 0.1) { if (ok(x)) { if (a0 === null) a0 = x; } else if (a0 !== null) { runs.push([a0, x - 0.1]); a0 = null; } }
     if (a0 !== null) runs.push([a0, xb]);
     for (const [ra, rb] of runs) { if (rb - ra < 0.6) continue;
-      for (let x = ra, n = Math.max(1, Math.round((rb - ra) / 1.1)); x <= rb + 0.01; x += (rb - ra) / n) { c.flat.box(x - 0.03, 0, z - 0.03, x + 0.03, 0.95, z + 0.03, post); c.flat.box(x - 0.09, 0, z - 0.09, x + 0.09, 0.03, z + 0.09, post); }
+      for (let x = ra, n = Math.max(1, Math.round((rb - ra) / 1.1)); x <= rb + 0.01; x += (rb - ra) / n) { c.flat.box(x - 0.03, 0, z - 0.03, x + 0.03, 0.95, z + 0.03, post); c.flat.box(x - 0.09, 0, z - 0.09, x + 0.09, 0.03, z + 0.09, post); for (let k = 0; k < 4; k++) c.detail.box(x - 0.035, 0.95 + k * 0.03, z - 0.035, x + 0.035, 0.98 + k * 0.03, z + 0.035, k % 2 ? [0.95, 0.94, 0.9] : [0.75, 0.1, 0.1]); }   // a cane's stripes, on every post
       c.flat.box(ra, 0.86, z - 0.012, rb, 0.9, z + 0.012, belt); c.solid(ra, z - 0.05, rb, z + 0.05, { tall: false }); }
     void open; }
   /* the tree, the calendar, the snow that was put down, and the two who help */
@@ -85,9 +104,21 @@ export function build(c) {
   /* tinsel, overhead, in loops */
   const tinsel = c.shining('grotto:tinsel', kit.tex.white(), 0.9, [0.9, 0.62, 0.18]);
   for (let z = z1 + 0.8; z < D / 2 - 0.4; z += 1.7) for (let t = 0; t < 1; t += 1 / 40) { const x = -W / 2 + t * W, y = H - 0.1 - Math.abs(Math.sin(t * Math.PI * 5)) * 0.35; tinsel.box(x, y - 0.012, z - 0.012, x + W / 40, y + 0.012, z + 0.012, [1, 1, 1]); }
-  /* go near the chair and the camera goes off */
-  let last = -9, clock = 0, flash = 0, before = 1;
-  c.tick((dt, t, me) => { clock += dt; if (flash > 0) { flash -= dt; if (flash <= 0) c.world.setLights(c.rt, before); }
-    if (!me.inside || env.player?.me?.frozen) return;
-    if (Math.abs(me.x - hx) < 0.9 && me.z < z0 + 1.7 && clock - last > 4) { last = clock; if (flash <= 0) before = c.rt.lightsK ?? 1; flash = 0.18; c.world.setLights(c.rt, Math.max(before, 0.3) * 4); env.interfere?.(0.3); const w = c.toWorld(cam.x, cam.z); env.play?.('shutter', w.x, w.z, 8); } });
+  /* it snows in here, in July: paper, cut small, out of the machine on the roof. It falls while you stand still, as you do in a queue;
+     move, and every flake of it stops where it is, in the air, and waits for you to stop again */
+  const N = 700, sx0 = -W / 2 + 0.3, sx1 = W / 2 - 0.3, sz0 = z1 + 0.3, sz1 = D / 2 - 0.3, fall = new Float32Array(N * 3), drift = new Float32Array(N * 2);
+  for (let i = 0; i < N; i++) { fall[i * 3] = R.range(sx0, sx1); fall[i * 3 + 1] = R.range(0.05, H - 0.15); fall[i * 3 + 2] = R.range(sz0, sz1); drift[i * 2] = R.range(0.25, 0.5); drift[i * 2 + 1] = R.range(0, 6.28); }
+  const flake = kit.tex.custom('grotto:flake', 8, 8, (g, w, h) => { g.clearRect(0, 0, w, h); P(g, '#ffffff', 1, 1, 6, 6); P(g, '#d8d6d0', 1, 6, 6, 1); g.clearRect(3, 1, 2, 2); g.clearRect(1, 3, 1, 2); }, { clamp: true });
+  const sg = kit.own(new THREE.BufferGeometry()); sg.setAttribute('position', new THREE.BufferAttribute(fall, 3));
+  const snow = new THREE.Points(sg, kit.own(new THREE.PointsMaterial({ size: 0.045, map: flake, alphaTest: 0.5, color: new THREE.Color(0.86, 0.85, 0.82), sizeAttenuation: true })));
+  snow.frustumCulled = false; c.add(snow);
+  /* go near the chair and the camera goes off: its bulb, not the room (the booths are the room that flashes) */
+  const bulb = new THREE.Mesh(kit.own(new THREE.BoxGeometry(0.16, 0.12, 0.05)), kit.own(new THREE.MeshBasicMaterial({ color: 0xfffbf0 }))); bulb.position.set(cam.x, 1.58, cam.z - 0.05); bulb.visible = false; c.add(bulb);
+  let last = -9, clock = 0, flash = 0, k = 0;
+  c.tick((dt, t, me) => { clock += dt; if (flash > 0) { flash -= dt; if (flash <= 0) bulb.visible = false; }
+    if (!me.inside) return;
+    const still = !(me.moving || (me.speed || 0) > 0.05); k += ((still ? 1 : 0) - k) * Math.min(1, dt * (still ? 1.2 : 9));   // (it stops at once; it starts again slowly)
+    if (k > 0.002) { for (let i = 0; i < N; i++) { const j = i * 3; fall[j + 1] -= drift[i * 2] * dt * k; fall[j] += Math.sin(clock * 0.9 + drift[i * 2 + 1]) * 0.06 * dt * k; if (fall[j + 1] < 0.01) { fall[j + 1] = H - 0.12; fall[j] = sx0 + Math.random() * (sx1 - sx0); fall[j + 2] = sz0 + Math.random() * (sz1 - sz0); } } sg.attributes.position.needsUpdate = true; }
+    if (env.player?.me?.frozen) return;
+    if (Math.abs(me.x - hx) < 0.9 && me.z < z0 + 1.7 && clock - last > 4) { last = clock; flash = 0.12; bulb.visible = true; env.interfere?.(0.2); const w = c.toWorld(cam.x, cam.z); env.play?.('shutter', w.x, w.z, 8); } });
 }
