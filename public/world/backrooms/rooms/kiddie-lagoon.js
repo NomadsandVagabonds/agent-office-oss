@@ -11,8 +11,6 @@
 import {finishPoolRoom} from '../pool-finish.js';
 import * as THREE from 'three';
 import { Batch } from '../kit.js';
-import { makeBather } from './kiddie-lagoon/rig.js';
-import { resident } from '../resident.js';
 import {
   poolTileTex, poolroom, natatoriumLight, createBasin, makeVoxGroup, makeInnerTube, placeVox, addTranslucent,
   mushroomVox, noodleVox, poolSign, depthTile, calmWaterTex, CALM_WATER,
@@ -91,25 +89,14 @@ export function build(c) {
     const ang = (i / count) * Math.PI * 2 + 0.25;
     const rad = (i % 3 === 0 ? 1.85 : 2.85) * Math.min(1, (bx1 - 0.8) / 3.4);
     const hx = Math.cos(ang) * rad, hz = Math.sin(ang) * rad;
-    // an occupied tube is a bather (its rig: kicking, a flinch, its going); an empty one is only a tube
-    const b = occupied ? makeBather(kit, col, 0.031) : null;
-    const g = b ? b.group : makeInnerTube(kit, col, false, 0.031);
+    const g = makeInnerTube(kit, col, occupied, 0.031);
     g.position.set(hx, waterY - 0.06, hz);
     g.rotation.y = ang + 1.1;
     c.add(g);
-    const f = { g, b, hx, hz, x: hx, z: hz, occupied, phase: i * 1.37, cooldown: 0, life: null };
-    // Health (resident.js; basic: one jab), reachable at the water's surface. A jab that lands takes it: what is left is
-    // an empty tube like the others, in nobody's way.
-    if (b) f.life = resident(c.env, 'inverted-bathers', {
-      at: () => { const w = c.toWorld(f.x, f.z); return { x: w.x, z: w.z, y: (c.room.y || 0) + waterY + 0.3 }; }, r: 0.35,
-      hit: () => { f.cooldown = 2.6; },
-      dies: (k) => b.die(k, fountainClock.value),
-      gone: () => { f.occupied = false; },
-    });
-    rings.push(f);
+    rings.push({ g, hx, hz, x: hx, z: hz, occupied, phase: i * 1.37, cooldown: 0 });
   }
   c.after.push(() => {
-    for (const r of rings) (r.b ? r.b.light : r.g.userData.light)(c.sample(r.hx, 0.35, r.hz));
+    for (const r of rings) r.g.userData.light(c.sample(r.hx, 0.35, r.hz));
   });
 
   // Scattered pool noodles on the dry coping
@@ -149,11 +136,9 @@ export function build(c) {
       for (const f of rings) {
         f.cooldown = Math.max(0, f.cooldown - dt);
         const dist = me.inside ? Math.hypot(me.x - f.x, me.z - f.z) : 99;
-        const still = f.life && (f.life.out || f.life.stalled);
-        if (f.b) { if (!f.life?.out) f.b.pose(t, f.phase, splashingFast && dist < 1.35 ? 1 : 0, f.life ? f.life.hurt : Infinity); }
-        else f.g.userData.kick?.(t, f.phase, 0);
+        f.g.userData.kick?.(t, f.phase, splashingFast && dist < 1.35 ? 1 : 0);
 
-        if (f.occupied && !still && splashingFast && dist < 1.35 && f.cooldown <= 0) {
+        if (f.occupied && splashingFast && dist < 1.35 && f.cooldown <= 0) {
           // Startled submerged office worker kicks & lunges!
           const dx = (me.x - f.x) / Math.max(0.1, dist);
           const dz = (me.z - f.z) / Math.max(0.1, dist);
@@ -167,8 +152,7 @@ export function build(c) {
             c.env.play?.('glug', w.x, w.z, 8);
             c.env.interfere?.(0.8);
             c.env.hud?.glitch?.(0.45);
-            const hit = c.hurt(1);
-            if (hit?.landed && !hit?.ended) f.life?.escaped();
+            c.hurt(1);
           }
         } else {
           // Drift gently back toward home tether, legs twitching now and then

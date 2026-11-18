@@ -261,10 +261,9 @@ test('Surge Basin: the visible crest tracks the hazard from the gates to the bea
 
 test('occupied lagoon floats kick both legs independently without replacing the hazard motion',async t=>{
  const f=await fixture('kiddie-lagoon');t.after(()=>f.dispose());
- // (each bather is its rig's group, rooms/kiddie-lagoon/rig.js, around the waterpark's occupied tube: the outer one counts)
- const bathers=[];f.world.rooms[0].group.traverse(g=>{if(g.name==='inverted-bather'&&g.parent?.name!=='inverted-bather')bathers.push(g);});
+ const bathers=[];f.world.rooms[0].group.traverse(g=>{if(g.name==='inverted-bather')bathers.push(g);});
  assert.equal(bathers.length,5);
- const a=bathers[0],legs=[];a.traverse(g=>{if(g.name.startsWith('bather-'))legs.push(g);});
+ const a=bathers[0],legs=a.children.filter(g=>g.name.startsWith('bather-'));
  const starts=legs.map(g=>g.quaternion.clone());f.tick(45);
  assert.equal(legs.length,2);assert.ok(legs.every((g,i)=>g.quaternion.angleTo(starts[i])>.01));
  assert.ok(legs[0].quaternion.angleTo(legs[1].quaternion)>.02,'feet do not move in unison');

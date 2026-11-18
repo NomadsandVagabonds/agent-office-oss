@@ -9,7 +9,6 @@ import { stepWalker } from '../denizens.js';
 import { furnitureClear } from '../furniture-rules.js';
 import { roomReturn } from '../room-physics.js';
 import { goesDown } from '../seam.js';
-import { resident } from '../resident.js';
 import { makePlenumTonerRig } from './drop-plenum/rig.js';
 import {
   createBasin, buildFlume, poolSign, depthTile,
@@ -565,8 +564,21 @@ export function build(c) {
       light: () => {
         rig.light(c.world.lightAt(denizen.x, denizen.z, CRAWL_AXIS_Y));
       },
+      snipTarget: () => (
+        tState.phase === 'dropping' || tState.phase === 'chasing'
+          ? { id: 'flume-toner', y: (denizen.y ?? c.room.y + CRAWL_FLOOR_Y) + 0.24, r: 0.40, priority: 3 }
+          : false
+      ),
+      snip() {
+        if (tState.phase !== 'dropping' && tState.phase !== 'chasing') return false;
+        tState = snipTubeToner(tState);
+        c.env.play?.('clack', denizen.x, denizen.z, 9);
+        c.env.play?.('sonarrattle', denizen.x, denizen.z, 10);
+        c.env.interfere?.(0.45);
+        c.survived('flume-toner');
+        return { ok: true, target: 'flume-toner' };
+      },
       update(dt, time, me) {
-        if (life?.out || life?.stalled) return;          // dying, gone, or let go after a shove: it does nothing
         const inRoom = c.world.current() === c.rt;
         const meLoc = c.toLocal(me.x, me.z);
         const playerRelY = me.y - c.room.y;
@@ -634,21 +646,11 @@ export function build(c) {
             tState = releaseTubeToner(tState);
             if (hit.landed) {
               c.env.hud?.glitch?.(0.65);
-              if (life) life.escaped(); else c.survived('flume-toner');
+              c.survived('flume-toner');
             }
           }
         }
       },
-    });
-    // Health and a shove, as a toner has (resident.js; medium). A jab short of the last does what a snip did: it
-    // recoils. A shove makes it let go, by its own rule. Gone, the tubes are only tubes.
-    const life = denizen && resident(c.env, 'flume-toner', {
-      of: denizen, r: 0.40, priority: 3,
-      at: () => ({ x: denizen.x, z: denizen.z, y: (denizen.y ?? c.room.y + CRAWL_FLOOR_Y) + 0.24 }),
-      when: () => tState.phase === 'dropping' || tState.phase === 'chasing', recoils: true,
-      hit: () => { knownToner = true; tState = snipTubeToner(tState); c.env.play?.('clack', denizen.x, denizen.z, 9); c.env.play?.('sonarrattle', denizen.x, denizen.z, 10); c.env.interfere?.(0.45); },
-      shoved: () => { tState = releaseTubeToner(tState); return true; },
-      gone: () => { denizen.gone = true; },
     });
   }
 
