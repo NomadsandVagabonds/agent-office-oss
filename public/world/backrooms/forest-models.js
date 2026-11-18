@@ -1464,3 +1464,197 @@ export function pnwMossyStumpNurseVox() {
 
 
 
+
+/* ---- 7. Lights Out (`lights-out`): the overnight campsite ------------------ */
+// (The campsite of the offsite's overnight component. Each at 3 cm a voxel unless its room says otherwise; every one of
+// them a camp thing an office has bought, and got a little wrong.)
+
+/**
+ * The camp's fire ring, let go out: a ring of river stones round a bed of ash, two half-burnt logs, a few coals still
+ * red, and in the ash what was fed to it: a ring binder's spine and three keycaps.
+ */
+export function firePitVox() {
+  return () => {
+    const v = new Vox();
+    const s1 = M('#77797a', 2), s2 = M('#5a5d5c', 2), s3 = M('#8a8478', 2), ash = M('#3a3836', 3), soot = M('#181716', 3);
+    const coal = glow('#c4421a'), coalDim = glow('#7a2410'), birch = birchBarkMat(), charLog = charMat();
+    const binder = M('#2f4f86', 1), ring = M('#b8bec2', 0), key = M('#d9d5c8', 1);
+    v.cyl('y', 0, 0, 0, 1.6, 16.5, soot);
+    v.cyl('y', 0, 0, 1, 2.6, 13.5, ash, 11);
+    for (let i = 0; i < 15; i++) {
+      const a = (i / 15) * Math.PI * 2 + (i % 3) * 0.06, r = 17 + (i % 2);
+      v.ellipsoid(Math.cos(a) * r, 2.6 + (i % 3) * 0.5, Math.sin(a) * r, 4.2 - (i % 2) * 0.6, 3.0 + (i % 3) * 0.4, 3.6, [s1, s2, s3][i % 3]);
+    }
+    // two logs burnt through in the middle, their ends still birch
+    v.tube(-14, 3.2, -3, -3, 3.6, 1, 2.6, birch);
+    v.tube(-4, 3.6, 0.5, 3, 3.0, 2, 2.3, charLog);
+    v.tube(12, 3.0, 6, 4, 3.4, -1, 2.4, birch);
+    v.tube(5, 3.3, -0.5, -1, 2.8, -2, 2.1, charLog);
+    // the coals: a few red, more nearly not
+    for (const [x, z, hot] of [[0, 0, 1], [2.5, -2, 1], [-2, 2.5, 0], [-3.5, -1.5, 0], [1.5, 3.5, 0], [4, 1, 0]]) v.ellipsoid(x, 2.8, z, 1.6, 0.9, 1.4, hot ? coal : coalDim);
+    // what was put on it after the wood ran out
+    v.rbox(-7, 2.2, 5, 1, 3.4, 8.2, 0.4, binder);
+    for (const x of [-5, -3, -1]) v.ring(x, 3.6, 6.6, 1.1, 0.35, ring, 'x');
+    for (const [x, z] of [[6, -6], [8, -4.5], [4.5, -8]]) v.box(x - 1, 2.4, z - 1, x + 1, 3.6, z + 1, key);
+    return v;
+  };
+}
+
+/**
+ * The camp's portable toilet, in office green: a moulded booth with its vent pipe and its moon cut in the door, lit from
+ * inside; on the door a brass nameplate and a slider that says it is engaged, and beside the door a badge reader.
+ * (~1.1 × 1.1 m, 2.3 m high; the door faces +Z)
+ */
+export function portaPottyVox() {
+  return () => {
+    const v = new Vox();
+    const shell = M('#2f6a52', 2), rib = M('#25563f', 2), roof = M('#d8d8cc', 1), pipe = M('#1e2421', 1);
+    const brass = M('#c9a246', 0), reader = M('#2a2d30', 0), hinge = M('#a4abad', 0);
+    const lit = glow('#ffd894'), red = glow('#e0301c'), green = glow('#42e37a'), base = M('#1c2a22', 2);
+    v.rbox(-18, 0, -18, 18, 3, 18, 1, base);
+    v.rbox(-17, 2, -17, 17, 70, 17, 1.5, shell);
+    v.carve(-15, 4, -15, 15, 66, 15);          // (hollow: nobody sees in, and a solid booth is eighty thousand voxels)
+    // moulded ribs on the sides and back
+    for (const x of [-11, -3, 5, 13]) { v.box(x - 1, 6, -18, x + 1, 64, -17, rib); }
+    for (const z of [-11, -3, 5, 13]) { v.box(-18, 6, z - 1, -17, 64, z + 1, rib); v.box(17, 6, z - 1, 18, 64, z + 1, rib); }
+    // the roof, a shallow white dome, and the vent pipe up the back
+    v.ellipsoid(0, 70, 0, 18.5, 5, 18.5, roof);
+    v.carve(-20, 60, -20, 20, 69.5, 20);
+    v.rbox(-17, 60, -17, 17, 70, 17, 1.5, shell);
+    v.cyl('y', -12, -12, 60, 80, 1.8, pipe);
+    v.cyl('y', -12, -12, 80, 82, 2.6, pipe);
+    // the door: a panel stood proud, hinges, the moon cut through and lit behind
+    v.box(-13, 4, 17, 13, 64, 18.5, shell);
+    for (const y of [12, 34, 56]) v.box(-14.5, y, 17, -13, y + 4, 19, hinge);
+    v.carve(-3, 52, 17, 3, 60, 19);
+    v.box(-3, 52, 16, 3, 60, 17, lit);
+    v.box(0, 53, 16.5, 3, 59, 19, shell);      // (what is left of the circle: a crescent)
+    // the slider says ENGAGED, and the brass plate is somebody's office door's
+    v.box(6, 37, 18.5, 11, 39, 19.4, red);
+    v.box(-8, 44, 18.5, 8, 48, 19.2, brass);
+    v.box(10, 32, 18.5, 12, 35, 19.6, hinge);
+    // the badge reader on the frame, its light green
+    v.box(14, 30, 17.5, 17.5, 38, 19.5, reader);
+    v.box(15, 35, 19.5, 16.5, 36.5, 20, green);
+    return v;
+  };
+}
+
+/** A cedar picnic table with its two benches, a laptop open on it and its screen still on, a coffee airpot and a binder. */
+export function picnicTableVox() {
+  return () => {
+    const v = new Vox();
+    const cedar = M('#9a6a3c', 2), cedarDk = M('#7a5130', 2), bolt = M('#9aa1a3', 0);
+    const lapGrey = M('#3c4044', 0), screen = glow('#9fc4e8'), keysM = M('#24272a', 1);
+    const pot = M('#2b2b2d', 0), potTop = M('#b9bec0', 0), binder = M('#a8392c', 1);
+    // top: five planks, 1.8 m by 0.8 m, at 0.75 m
+    for (let i = 0; i < 5; i++) v.rbox(-30, 23, -13 + i * 5.4, 30, 25, -8.6 + i * 5.4, 0.5, i % 2 ? cedarDk : cedar);
+    // the two A-frames, and the benches they carry
+    for (const x of [-22, 22]) {
+      v.tube(x, 0, -19, x, 23, 3, 1.4, cedarDk);
+      v.tube(x, 0, 19, x, 23, -3, 1.4, cedarDk);
+      v.box(x - 1.2, 13, -21, x + 1.2, 14.6, 21, cedarDk);
+      v.box(x - 1.5, 18, -1, x + 1.5, 21, 1, bolt);
+    }
+    for (const z of [-19, 15]) { v.rbox(-30, 14.5, z, 30, 16.2, z + 4.5, 0.4, cedar); v.rbox(-30, 14.5, z + 4.6, 30, 16.2, z + 4.7, 0, cedarDk); }
+    // the laptop, open toward the far bench
+    v.box(-8, 25, -3, 4, 25.8, 5, lapGrey);
+    v.box(-7, 25.8, -2, 3, 26.1, 3.5, keysM);
+    v.box(-8, 25.8, -3.8, 4, 34, -3, lapGrey);
+    v.box(-7.2, 26.6, -3.1, 3.2, 33.2, -2.9, screen);
+    // an airpot of coffee and a red binder
+    v.cyl('y', 14, -4, 25, 34, 2.6, pot);
+    v.cyl('y', 14, -4, 34, 36, 2.2, potTop);
+    v.box(15, 33, -4.6, 18.5, 34, -3.4, potTop);
+    v.rbox(16, 25, 2, 26, 27.5, 9, 0.3, binder);
+    return v;
+  };
+}
+
+/** A white-lidded camp cooler, the company's, a barcode on it and the drain plug out. */
+export function campCoolerVox(body = '#2a5f9e') {
+  return () => {
+    const v = new Vox();
+    const b = M(body, 1), lid = M('#e8e6df', 1), handle = M('#2b2b2b', 1), tag = M('#d8dcde', 0), bar = M('#1a1a1a', 0);
+    v.rbox(-11, 0, -7, 11, 12, 7, 1.2, b);
+    v.rbox(-11.5, 12, -7.5, 11.5, 15, 7.5, 1.2, lid);
+    v.box(-13, 8, -2, -11, 10, 2, handle);
+    v.box(11, 8, -2, 13, 10, 2, handle);
+    v.box(-4, 4, 7, 4, 9, 7.6, tag);
+    for (let i = -3; i <= 3; i += 2) v.box(i, 5, 7.5, i + 0.6, 8, 8, bar);
+    return v;
+  };
+}
+
+/**
+ * A laundry line between two cedar posts (2.4 m apart, along X), hung with what the overnight component brought:
+ * two white business shirts, a blue one, a tie, and a lanyard with its badge.
+ */
+export function laundryLineVox() {
+  return () => {
+    const v = new Vox();
+    const post = M('#7a5130', 2), cord = M('#d8d2c0', 0), white = M('#e8e8e2', 2), blue = M('#8fb0d6', 2);
+    const tie = M('#7a1e24', 1), lan = M('#2f5fb0', 0), badge = M('#f2f2ee', 0), photo = M('#6a5040', 1), peg = M('#d6b98a', 1);
+    for (const x of [-40, 40]) { v.cyl('y', x, 0, 0, 60, 1.5, post); v.box(x - 3, 56, -0.8, x + 3, 58, 0.8, post); }
+    // the line sags in the middle
+    for (let x = -40; x < 40; x += 2) {
+      const y = 57 - 4 * (1 - (x / 40) ** 2), y2 = 57 - 4 * (1 - ((x + 2) / 40) ** 2);
+      v.tube(x, y, 0, x + 2, y2, 0, 0.4, cord);
+    }
+    const lineY = (x) => 57 - 4 * (1 - (x / 40) ** 2);
+    const shirt = (cx, mat) => {
+      const top = lineY(cx);
+      v.box(cx - 8, top - 26, -0.6, cx + 8, top - 1, 0.6, mat);
+      v.box(cx - 12, top - 12, -0.6, cx - 8, top - 1, 0.6, mat);   // sleeves, hanging
+      v.box(cx + 8, top - 12, -0.6, cx + 12, top - 1, 0.6, mat);
+      v.box(cx - 2.5, top - 4, -0.9, cx + 2.5, top - 0.5, 0.9, mat);  // the collar
+      for (const dx of [-7, 7]) v.box(cx + dx - 0.6, top - 1, -1, cx + dx + 0.6, top + 1.5, 1, peg);
+      for (let y = top - 24; y < top - 5; y += 5) v.set(Math.round(cx), Math.round(y), 1, M('#bdbdb6', 0));
+    };
+    shirt(-25, white); shirt(-3, blue); shirt(20, white);
+    // the tie, pegged by its narrow end, and the lanyard
+    const tx = 33, tt = lineY(tx);
+    v.box(tx - 0.8, tt - 16, -0.5, tx + 0.8, tt, 0.5, tie);
+    v.box(tx - 1.8, tt - 22, -0.5, tx + 1.8, tt - 16, 0.5, tie);
+    const lx = 10, lt = lineY(lx);
+    v.tube(lx - 2, lt, 0, lx, lt - 10, 0, 0.35, lan);
+    v.tube(lx + 2, lt, 0, lx, lt - 10, 0, 0.35, lan);
+    v.box(lx - 2.5, lt - 15, -0.4, lx + 2.5, lt - 10, 0.4, badge);
+    v.box(lx - 1.6, lt - 13.5, 0.4, lx - 0.2, lt - 11.5, 0.6, photo);
+    return v;
+  };
+}
+
+/** A flip chart on its easel, stood at the fire for the morning's debrief: its pad half used, its top sheet in marker. */
+export function campFlipChartVox() {
+  return () => {
+    const v = new Vox();
+    const leg = M('#3a3f44', 0), board = M('#c8ccce', 0), pad = M('#f2f0e8', 1), red = M('#c0392b', 0), blue = M('#2c5aa0', 0), green = M('#2e8a4c', 0);
+    v.tube(-10, 0, 3, -7, 56, 0, 0.9, leg);
+    v.tube(10, 0, 3, 7, 56, 0, 0.9, leg);
+    v.tube(0, 0, -12, 0, 54, -1, 0.9, leg);
+    v.box(-12, 28, -0.5, 12, 58, 1, board);
+    v.box(-11, 30, 1, 11, 58, 1.6, pad);
+    v.box(-12, 28, 1, 12, 30, 3, leg);                // the tray
+    // marker on the top sheet: a heading, three lines and a box round one of them, all leaning
+    v.box(-8, 53, 1.6, 6, 54.5, 2, red);
+    for (const [y, w, m] of [[48, 14, blue], [44, 10, blue], [40, 16, green], [36, 8, blue]]) v.box(-8, y, 1.6, -8 + w, y + 1, 2, m);
+    v.box(-9.5, 38.5, 1.6, 9.5, 39, 2, red); v.box(-9.5, 42, 1.6, 9.5, 42.5, 2, red);
+    v.box(-9.5, 38.5, 1.6, -9, 42.5, 2, red); v.box(9, 38.5, 1.6, 9.5, 42.5, 2, red);
+    // the sheets already torn off, curled over the back
+    v.cyl('x', 59, -1.5, -11, 11, 2.2, pad);
+    return v;
+  };
+}
+
+/** An office power strip set down in the moss, its switch lit red, every socket taken. */
+export function powerStripVox() {
+  return () => {
+    const v = new Vox();
+    const body = M('#e4e2da', 0), plug = M('#2a2a2a', 0), sw = glow('#ff3a22');
+    v.rbox(-11, 0, -3, 11, 3, 3, 0.8, body);
+    for (let x = -8; x <= 6; x += 3.5) v.box(x - 1.2, 3, -1.6, x + 1.2, 5.5, 1.6, plug);
+    v.box(8.5, 3, -1.2, 10.5, 4.2, 1.2, sw);
+    return v;
+  };
+}
