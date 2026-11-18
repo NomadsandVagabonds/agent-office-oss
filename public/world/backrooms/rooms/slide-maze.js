@@ -710,15 +710,11 @@ export function build(c) {
     use: () => startSlide('bailout', 'toLowerBail'),
   });
 
-  // Launch 3: Abyssal Corkscrew Floor-Descent Slide down in the Sunken Lower Hall!
-  c.use({
-    x: 0.35,
-    z: -2.45,
-    r: 1.75,
-    label: 'slide down into lower level',
-    when: () => !ride && inLowerHall(),
-    use: () => startSlide('abyss', 'toNextFloor'),
-  });
+  // Launch 3: Abyssal Corkscrew Floor-Descent Slide down in the Sunken Lower Hall. A way down is walked into, not
+  // pressed (the owner: no button-press level transitions): step into its open mouth by the glowing drain and it has you.
+  const abyssMouth = { x: 0.5, z: -2.4, r: 0.55 };
+  c.rt.flumeMaze.abyssMouth = abyssMouth;
+  c.rt.flumeMaze.rideAbyss = () => { if (!ride && inLowerHall()) startSlide('abyss', 'toNextFloor'); };
 
   // Sump escape valve hatch tucked against the far `-z` cobalt cliff wall so final-floor players never soft-lock
   const hatchX = -0.85, hatchZ = bz0 + 0.08;
@@ -748,6 +744,8 @@ export function build(c) {
     wfPhase = (wfPhase + dt * 0.34) % 1;
     syncWaterfall(wfPhase);
 
+    if (!ride && me.inside && me.world && !me.world.frozen && lowerLatched
+      && Math.hypot(me.x - abyssMouth.x, me.z - abyssMouth.z) < abyssMouth.r) startSlide('abyss', 'toNextFloor');
     if (!ride) return;
     const step = stepSlideRide(ride, dt, rideSegs, 0);
     const pose = step.pose || evalFlume(rideSegs[ride.segId].pts, 1);
