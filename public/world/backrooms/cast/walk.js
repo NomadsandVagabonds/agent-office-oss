@@ -10,7 +10,8 @@
 // its radius, how much headroom it needs, whether it can open a door, and
 // whether it will go into a crawl space (a hole in a wall is anybody's who fits).
 import { furnitureClear } from '../furniture-rules.js';
-import { toWorld, toLocal, T } from '../gen.js';
+import { toWorld, toLocal, T, roomDistances, roomPath } from '../gen.js';
+import { DOORWAY, elsewhere as pickElsewhere } from './doorway.rule.js';
 import { overlaps } from '../furniture-policy.js';
 import { roomRoute, roomCosts, gridPath, straighten } from './paths.js';
 
@@ -44,7 +45,7 @@ export function clearOfAbsorbed(list, x, z, gap = ABSORBED_GAP) {
 }
 
 export function createWalk(env) {
-  const W = () => env.world, level = env.level;
+  const W = () => env.world, level = env.level, doorwayCache = new Map();
   const grids = new Map();                         // room id + who → { nx, nz, ok, floor, version }
   const doorOf = (id) => env.doors?.at(id) || null;
   const furnitureVersion = (id) => env.barricades?.version(id) || 0;
@@ -289,5 +290,32 @@ export function createWalk(env) {
       a.way = null; a.thru = null;
     },
     forget(a) { a.way = null; a.thru = null; },
+    /**
+     * Somewhere for this walker to go instead of the doorway it has kept long enough (cast/doorway.rule.js elsewhere): a room or
+     * two away, where it can stand, out of sight of the doorway, not into or through the room `not` (the visitor's), never the
+     * way down or a crawl. `near`: the nearest room that will do rather than one by the dice (one that withdraws, not strolls).
+     */
+    elsewhere(a, way, rnd, { not = null, near = false } = {}) {
+      const here = W().roomAt(a.x, a.z); if (!here || !way) return null;
+      const dist = roomDistances(level, here.id), spots = [];
+      for (const [rid, n] of dist) {
+        const def = level.rooms[rid];
+        if (n < DOORWAY.away[0] - (near ? 1 : 0) || n > DOORWAY.away[1] || !def || def.kind === 'exit' || def.crawl || rid === not) continue;
+        if (not !== null && (roomPath(level, here.id, rid) || []).slice(1).includes(not)) continue;
+        const p = spotIn(a, rid); if (!p || !stand(a, p.x, p.z)) continue;
+        spots.push({ x: p.x, z: p.z, rooms: Math.max(n, DOORWAY.away[0]), sees: way.down ? false : W().los(p.x, p.z, way.x, way.z), d: Math.hypot(p.x - a.x, p.z - a.z) });
+      }
+      if (near) { const ok = spots.filter((p) => !p.sees && (way.down || Math.hypot(p.x - way.x, p.z - way.z) >= DOORWAY.far)).sort((p, q) => p.d - q.d); return ok[0] || null; }
+      return pickElsewhere(way, spots, rnd);
+    },
+    /**
+     * Where the doorways of the room at (x, z) are, for cast/doorway.rule.js: { ways: [{ x, z, h, to }], down: it is the way
+     * down, the room: its id }. Worked out once a room.
+     */
+    doorways(x, z) {
+      const rt = W().roomAt(x, z); if (!rt) return { ways: [], down: false, room: null };
+      if (!doorwayCache.has(rt.id)) doorwayCache.set(rt.id, (rt.def.doors || []).map((d) => { const p = W().doorway?.(rt.id, d.to); return p ? { x: p.x, z: p.z, h: Number.isFinite(d.h) ? d.h : rt.def.H, to: d.to } : null; }).filter(Boolean));
+      return { ways: doorwayCache.get(rt.id), down: level.rooms[rt.id]?.kind === 'exit', room: rt.id };
+    },
   };
 }

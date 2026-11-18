@@ -12,6 +12,7 @@ import { Batch, lamp } from '../kit.js';
 import { S, SW, RING, LIMB, ringVox, mouthVox, limbVox, endVox, footVox, wormVox } from './mother.model.js';
 import { MOTHER, WORM, swaying, sways, finds, trodden } from './mother.rule.js';
 import { canLeave } from './paths.js';
+import { at as doorwayAt, fresh as unkept, camps } from './doorway.rule.js';
 import { SHOVE, slide } from '../shove.rule.js';
 import { HEALTH } from './health.rule.js';
 
@@ -21,7 +22,7 @@ export function create(c) {
   const env = c.env, level = c.level, G = MOTHER;
   const walker = { x: 0, z: 0, r: G.r, tall: G.tall, opens: false };
   const worms = [];
-  let s = swaying(), group = null, segs = [], arms = [], feet = [], lips = [], mat = null, wormMat = null, wormGeo = [], peeping = [];
+  let kept = unkept(c.R), settle = null, settleT = 0, s = swaying(), group = null, segs = [], arms = [], feet = [], lips = [], mat = null, wormMat = null, wormGeo = [], peeping = [];
   let dying = null, whip = 0, clock = 0, yaw = 0, lean = 0, walked = 0, known = false, over = false, tookOne = false, hadBrood = false;
 
   // (voxels, lit once from above and in front as the lines are, and tinted every frame by the light where it stands)
@@ -299,6 +300,18 @@ export function create(c) {
         if (nearFire) c.walk.go(walker, { x: walker.x * 2 - fire.x, z: walker.z * 2 - fire.z }, G.speed * dt);
         else walked += c.walk.go(walker, m, G.speed * (c.speedScale ?? 1) * dt, G.near * 0.8).went;
       }
+      // never long in a doorway (cast/doorway.rule.js): left swaying in one — she only comes while she can see you — after a
+      // while she withdraws, at her own pace, to the nearest room's floor out of sight of it, and settles there. She does not stroll
+      if (!s.comes && !nearFire) {
+        const dw = c.walk.doorways(walker.x, walker.z), way = doorwayAt(walker, dw.ways, dw.down);
+        kept = camps(kept, dt, settle ? null : way, c.R);
+        if (kept.due && !settle) { settle = c.walk.elsewhere(walker, way, c.R, { near: true, not: c.room(m.x, m.z) }); settleT = 40; if (!settle) kept = unkept(c.R); }
+      } else if (s.comes) { settle = null; kept = unkept(c.R); }
+      if (settle && !s.comes) {
+        settleT -= dt;
+        walked += c.walk.go(walker, settle, G.speed * (c.speedScale ?? 1) * dt, 0.1).went;
+        if (Math.hypot(settle.x - walker.x, settle.z - walker.z) < 0.25 || settleT <= 0) settle = null;
+      }
       group.visible = c.drawn(walker);
       const mouth = pose(dt);
       tint(mat, walker.x, walker.z);
@@ -375,6 +388,8 @@ export function create(c) {
         return { ok: true, target: 'mother-brood' };
       } }))];
     },
+    /** For the dev page: stand her here, now (world coordinates). */
+    put(x, z) { walker.x = x; walker.z = z; return true; },
     at: () => group ? ({ x: walker.x, z: walker.z, mode: s.mode, brood: worms.filter((w) => !w.dead).length }) : null,
     dispose() { for (const w of worms) w.g.removeFromParent(); worms.length = 0; group?.removeFromParent(); group = null; },
   };

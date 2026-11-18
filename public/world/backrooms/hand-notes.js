@@ -13,9 +13,15 @@ export function createStuckNotes(kit, camera, draw = {}) {
   const group = new THREE.Group(), notes = new Map(), colour = new THREE.Color();
   group.name = 'stuck-notes';
   // one texture for all of them, tinted: paper a touch lighter at the glued edge, a faint shadow under the fold
-  const tex = kit.tex.custom('hand:sticky-note:v1', 32, 32, (g) => {
+  // (written on, as the note on the wall is: cast/sticky-notes.model.js, its glue strip and three lines of scribble on an 8 × 8 grid)
+  const tex = kit.tex.custom('hand:sticky-note:v2', 32, 32, (g) => {
     g.fillStyle = '#f2f2ee'; g.fillRect(0, 0, 32, 32);
-    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 32, 6);
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 32, 8);
+    g.fillStyle = '#2a2f4a';
+    for (let line = 0; line < 3; line++) {
+      const y = (2 + line * 2) * 4 + 1, end = 8 - 1 - (line % 3);
+      for (let x = 1; x < end; x++) if ((x * 7 + line * 3) % 5 !== 0) g.fillRect(x * 4, y, 4, 2);
+    }
     g.fillStyle = 'rgba(0,0,0,0.06)'; g.fillRect(0, 31, 32, 1); g.fillRect(31, 0, 1, 32);
   }, { clamp: true });
   const h = NOTE.size / 2;

@@ -59,12 +59,16 @@ test('the mark: set once, in createBasin straight after its splash ring is added
   const src = B('waterpark.js');
   assert.match(src, /  c\.add\(rippleMesh\);\n  rippleMesh\.userData\.liquidStandIn = true;\n/);
   assert.equal(src.split('liquidStandIn').length - 1, 1, 'once in waterpark.js');
+  // and once in the Surge Basin, on its drawn wave (the strip, the swell's stand-in at Medium and High)
+  const wave = B('rooms/wave-pool.js');
+  assert.equal(wave.split('liquidStandIn').length - 1, 1, 'once in wave-pool.js');
+  assert.match(wave, /crestMesh\.name = 'surge-crest';\n  crestMesh\.visible = false;\n  crestMesh\.userData\.liquidStandIn = true;/);
   // nowhere else under public/ sets or reads it, but liquid.js (which reads it)
   const files = [];
   const walk = (d) => { for (const f of readdirSync(d)) { const p = join(d, f); if (statSync(p).isDirectory()) { if (!/vendor|knowledge|transcripts/.test(f)) walk(p); } else if (/\.m?js$/.test(f)) files.push(p); } };
   walk(new URL('../public/', import.meta.url).pathname);
   const using = files.filter((p) => readFileSync(p, 'utf8').includes('liquidStandIn')).map((p) => p.split('/public/')[1]).sort();
-  assert.deepEqual(using, ['world/backrooms/liquid.js', 'world/backrooms/waterpark.js']);
+  assert.deepEqual(using, ['world/backrooms/liquid.js', 'world/backrooms/rooms/wave-pool.js', 'world/backrooms/waterpark.js']);
   // and waterpark.js never sets the ring's .visible: hidden for a draw, it is not fought by the room
   assert.ok(!/rippleMesh\.visible/.test(src));
 });

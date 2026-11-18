@@ -218,7 +218,7 @@ export function createStalkers(env, options = {}) {
         if (a && Number.isFinite(a.x) && Number.isFinite(a.z)) {
           const w = W();
           for (let i = 0; i < 16 && !staged.beside; i++) {
-            const ang = (i * Math.PI) / 8, x = a.x + Math.cos(ang) * 1.5, z = a.z + Math.sin(ang) * 1.5;
+            const ang = (i * Math.PI) / 8, apart = Number(who.it.apart) || 1.5, x = a.x + Math.cos(ang) * apart, z = a.z + Math.sin(ang) * apart;          // (apart: one that goes off when you are near says how far)
             if (!w.roomAt(x, z) || !w.free(x, z, 0.3) || !w.los(x, z, a.x, a.z)) continue;
             env.player.warp?.(x, z, Math.atan2(-(a.x - x), -(a.z - z)) + (Number(who.it.aside) || 0)); staged.beside = true;          // (aside: one that goes off when stared at says how far off it to look)
           }
@@ -254,7 +254,9 @@ export function createStalkers(env, options = {}) {
           const tick = () => k.it.update?.(step, env.clock);
           if (options.withVisitor) options.withVisitor(k.id, k.it.at?.(), tick);
           else tick();
-        } catch (err) { if(env.coopStrict)throw err;console.warn(`[backrooms] ${k.id} has stopped`, err); k.dead = true; if (k.member.music === 'mascot') env.sound?.stopMascot?.(); }
+        } catch (err) { if(env.coopStrict)throw err;console.warn(`[backrooms] ${k.id} has stopped`, err); k.dead = true; if (k.member.music === 'mascot') env.sound?.stopMascot?.();
+          // (and it is nobody's to walk round: a body left standing where it stopped would be an invisible wall, in a doorway as like as not)
+          for (const b of [...k.bodies, k.it.figure?.body].filter(Boolean)) { const i = W().bodies.indexOf(b); if (i >= 0) W().bodies.splice(i, 1); } }
       }
     },
     /** What goes down the stairs with you: the mascot's (as ever: { awake, face, card, lost }), and under `others` whatever anybody else wants kept. */

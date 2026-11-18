@@ -115,33 +115,6 @@ export function causticWaterTex(kit, tone = 'aqua') {
   });
 }
 
-// The calm sheet (a sample, used by the kiddie lagoon only): what causticWaterTex is without its glowing cells and
-// white web. One colour, with a few large, low-contrast patches a shade darker or lighter, in 4 px texels.
-// `alpha` is the opacity the sheet is drawn at (createBasin's `waterAlpha`): the caustic sheet's own 0.52, and the
-// hue near its average, so the water liquid.js draws from this sheet at Medium and High keeps its murk and filtering.
-// (docs/BACKROOMS-GRAPHICS.md, water: the sample, and how to roll it out or remove it.)
-export const CALM_WATER = {
-  lagoon: { base: '#2f7f8e', lo: '#28717f', hi: '#3a8e9a', alpha: 0.52 },
-};
-export function calmWaterTex(kit, tone = 'lagoon') {
-  const t = CALM_WATER[tone] || CALM_WATER.lagoon;
-  return kit.tex.custom('wp:calmwater:' + tone, 64, 64, (g, w, h) => {
-    // value noise on a lattice that wraps (periods 4 and 8 blocks of 4 px across 64), from fixed hashes
-    const hash = (i, j, s) => { let k = (i * 374761393 + j * 668265263 + s * 2147483647) | 0; k = Math.imul(k ^ (k >>> 13), 1274126177); return ((k ^ (k >>> 16)) >>> 0) / 4294967296; };
-    const noise = (x, y, p, s) => {
-      const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
-      const v = (a, b) => hash(((a % p) + p) % p, ((b % p) + p) % p, s);
-      return (v(i, j) * (1 - sx) + v(i + 1, j) * sx) * (1 - sy) + (v(i, j + 1) * (1 - sx) + v(i + 1, j + 1) * sx) * sy;
-    };
-    P(g, t.base, 0, 0, w, h);
-    for (let by = 0; by < 16; by++) for (let bx = 0; bx < 16; bx++) {
-      const n = 0.65 * noise(bx / 4, by / 4, 4, 17) + 0.35 * noise(bx / 2, by / 2, 8, 41);
-      if (n < 0.38) P(g, t.lo, bx * 4, by * 4, 4, 4);
-      else if (n > 0.58) P(g, t.hi, bx * 4, by * 4, 4, 4);
-    }
-  });
-}
-
 /** Hang an artfully garbled natatorium rule sign or depth marker on a wall. */
 export function poolSign(c, side, at, y, lines, opt = {}) {
   const w = opt.w || 1.15, h = opt.h || 0.72, seed = opt.seed || 7;
@@ -1346,7 +1319,7 @@ export function createBasin(c, spec) {
     order: 4,
     finishMaterial: c.rt.poolLampMap && !spec.waterTex ? mat => basinOptics(c, mat, poolClock, waterY) : undefined,
   });
-  c.liquid?.(waterSurf, { kind: 'water', y: waterY });
+  const water = c.liquid?.(waterSurf, { kind: 'water', y: waterY });
 
   // Expanding splash ripple ring + underwater aquamarine camera veil (only visible while camera is below waterY!)
   const rippleGeo = new THREE.RingGeometry(0.18, 0.26, 18);
@@ -1382,6 +1355,7 @@ export function createBasin(c, spec) {
     depth,
     bounds: { x0: bx0, z0: bz0, x1: bx1, z1: bz1 },
     get swimmer() { return swimmer; },
+    water,   // the water's handle (liquid.mark.js): `water?.disturb(x, z, strength)` rings the surface at Medium and High, false at Classic and Low
   };
   c.rt.basin = info;
 
