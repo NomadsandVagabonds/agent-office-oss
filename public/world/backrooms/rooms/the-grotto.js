@@ -117,7 +117,7 @@ export function build(c) {
   let last = -9, clock = 0, flash = 0, k = 0;
   c.tick((dt, t, me) => { clock += dt; if (flash > 0) { flash -= dt; if (flash <= 0) bulb.visible = false; }
     if (!me.inside) return;
-    const still = !(me.moving || (me.speed || 0) > 0.05); k += ((still ? 1 : 0) - k) * Math.min(1, dt * (still ? 1.2 : 9));   // (it stops at once; it starts again slowly)
+    const still = !(me.moving || (me.speed || 0) > 0.05); k = still ? k + (1 - k) * Math.min(1, dt * 1.2) : 0;   // (it stops at once, and nothing is worked out while you walk; it starts again slowly)
     if (k > 0.002) { for (let i = 0; i < N; i++) { const j = i * 3; fall[j + 1] -= drift[i * 2] * dt * k; fall[j] += Math.sin(clock * 0.9 + drift[i * 2 + 1]) * 0.06 * dt * k; if (fall[j + 1] < 0.01) { fall[j + 1] = H - 0.12; fall[j] = sx0 + Math.random() * (sx1 - sx0); fall[j + 2] = sz0 + Math.random() * (sz1 - sz0); } } sg.attributes.position.needsUpdate = true; }
     if (env.player?.me?.frozen) return;
     if (Math.abs(me.x - hx) < 0.9 && me.z < z0 + 1.7 && clock - last > 4) { last = clock; flash = 0.12; bulb.visible = true; env.interfere?.(0.2); const w = c.toWorld(cam.x, cam.z); env.play?.('shutter', w.x, w.z, 8); } });
