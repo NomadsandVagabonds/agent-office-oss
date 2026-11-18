@@ -282,9 +282,11 @@ export function build(c) {
   for (const [sx, sz] of [[-1, 0.15], [1, 0.4], [-1, 0.7], [1, 0.95]]) { const x = sx * (W / 2 - 2.6), z = zBack + 3.4 + sz * (D - 4.6), y = H - 0.95;
     upright(sign, x - 0.4, z, x + 0.4, z, y, y + 0.6, [0, 0, 1, 1]); upright(sign, x + 0.4, z - 0.01, x - 0.4, z - 0.01, y, y + 0.6, [0, 0, 1, 1]); flat.box(x - 0.42, y - 0.02, z - 0.008, x + 0.42, y + 0.62, z - 0.002, rgb('#7a3a40'));
     for (const k of [-0.3, 0.3]) det.box(x + k - 0.006, y + 0.62, z - 0.006, x + k + 0.006, H, z + 0.006, rgb('#3a3a3a')); }
-  { const tube = c.shining('store:panels', kit.tex.white(), 1.1, [0.95, 0.9, 1], { lights: { power: 0.42, k: 1.3, far: 5.5, offset: [0, -0.35, 0], cap: 11 } });   // (each panel lights the room: the builder's B. They were three lamps put by hand)                                                         // fittings: a frame, two tubes behind a diffuser
+  // the ceiling's lights: the shell's own fitting (c.fitting: the flat panel at Classic and Low, the sculpted louvred one at Medium
+  // and High), laid along x, each lighting the room (up to eleven: the tunnel's, the deck's and the lamp's are the rest of the 16)
+  { let lit = 0;
     for (let x = -W / 2 + 2.0; x < W / 2 - 1.5; x += 3.2) for (let z = zBack + 3.2; z < D / 2 - 1.0; z += 3.2) { if (Math.abs(x) < frames[0].w / 2 + 0.4 && z < frames[0].z + 0.6) continue;
-      det.box(x - 0.62, H - 0.03, z - 0.32, x + 0.62, H - 0.005, z + 0.32, rgb('#c8c4cc')); tube.box(x - 0.56, H - 0.035, z - 0.26, x + 0.56, H - 0.03, z + 0.26, [1, 1, 1]); for (const k of [-0.1, 0.1]) det.box(x - 0.56, H - 0.037, z + k - 0.008, x + 0.56, H - 0.035, z + k + 0.008, rgb('#d8d4e0')); } }
+      c.fitting(x, z, { rot: Math.PI / 2, tube: '#f2e6f6', light: lit++ < 11 ? { power: 0.42, k: 1.3, far: 5.5, floor: 0.24 } : false }); } }
   // the skirting and a rail at dado height, in the wall's own colour, darker; round what is left of the walls
   for (const side of ['left', 'right', 'front', 'back']) for (const [a, b] of c.spans(side, 0.05, 1.2)) { wallBox(c, side, a, b, 0, 0.12, 0, 0.02, rgb('#5a4048'), det); wallBox(c, side, a, b, 0.92, 0.96, 0, 0.022, rgb(PAL.seam), det); }
 
