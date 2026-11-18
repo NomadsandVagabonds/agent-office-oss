@@ -613,6 +613,107 @@ wall) the light stays the flat panel.
   deep with a cross blade every 20 cm (cut-off about 3.6°), and a lit fitting
   reads as a bright light from across the copier room.
 
+- **A light a room places itself:** `c.fitting(x, z, opt)` (`world.js`), for a
+  room whose shell has `panels: false` and draws its own ceiling lights. It is the shell's light by the shell's own
+  code (`ceilingLight`, which the shell now calls for each of its panels, and the
+  `fitting` helper it calls in turn): at Classic and Low the flat lit panel, at
+  Medium and High the sculpted fitting with the louvre as detail and the pan's
+  glow. **Like-for-like** means a panel 0.6 m across and 1.2 m along z (or along
+  x, `rot: Math.PI / 2`), its quad 6 mm under the ceiling at each corner, in the
+  shell's batch (`panel`, or `panel-bank-N` under the lighting banks; a light
+  that cannot decide a mesh of its own), `kit.tex.panel(true)` at power 2.5 in the
+  theme's tube colour, and the shell's lamp 14 cm under the ceiling (1.05 × the
+  room's light × head^1.5, k and far as the shell's); a room that draws exactly
+  that by hand today and calls `c.fitting(x, z)` instead has the same picture at
+  Classic to the byte (bake included: `test/backrooms-room-fittings.test.mjs`).
+  `light: { power, k, far, floor }` gives the lamp `c.light` would give instead
+  (`daylight()` and `natatoriumLight()` would pass theirs); `light: false` none;
+  `dead`, `flick`, `bank` and `tube` as the shell's panels have them. **Where it
+  goes:** the room's ceiling sheet is drawn by then and cannot be opened, so the
+  fitting is mounted on its face: the same model, its origin `CEILING.deep`
+  (10 cm) under the ceiling, so the box hangs 10 cm below it with the pan's
+  sloping sides showing as a shallow housing (no new model). `y` puts it under a
+  ceiling of the room's own or a beam. (Declaring fittings to the shell up front so
+  that it opens the sheet would let them be let in, but only on the tile grid and
+  only where the room keeps the shell's ceiling, which few of these rooms do; not
+  built.) **Lamps:** a room's fittings' lamps are kept within 16 by the same
+  merging a lit batch uses (`shining-lights.rule.js` `lampSet`, the core of
+  `shineLights`); with the room's other lights they must still be 16 at most, so
+  a room with many fittings gives some `light: false`. **Cost** at Medium: a lit
+  fitting about 352 ordinary and 240 detail triangles where the flat panel was
+  2; eight in an 8 m room: +4,736 triangles (1,920 of them detail) and 2 ordinary
+  meshes and 1 detail mesh, against +384 and 1 + 1 for eight of the department
+  store's glowing squares. Classic: what the panels cost, 2 triangles each.
+  **Not served:** only the panel. Round cans and pendants, long strips and
+  battens, hung boxes and rings need models of their own.
+
+  The rooms whose shell has `panels: false` (`grep "panels: *false"`; three of
+  the 59 lines are comments) and how each lights its ceiling today (the owner is
+  the floor it is dealt on: `themes` on its deck line;
+  `test/backrooms-room-fittings.test.mjs` pins the call):
+
+  | file | owner | its ceiling lights today |
+  | --- | --- | --- |
+  | `forest.js` | forest | (the helpers' header, not a room) woodlandLight / woodlandDynamicLight: shell-size panels in `panel-bank-N` at power 2.35, their own lamps; some dead |
+  | `rooms.js` | office/other | the coolers' hand-made shell, `ceiling: false`: not looked at |
+  | `rooms2.js` | office/other | the tiny door's corridor, `ceiling: false`: not looked at |
+  | `stairwell.js` | unknown | its own sloping ceiling (`ceiling: false`): not looked at |
+  | `suburb.js` | suburb | (the helper's comment, not a room) daylight(): the shell's panel to the quad, a lamp to every `every`-th |
+  | `world.js` | — | (the shell's own comment, not a room) |
+  | `rooms/back-garden.js` | suburb | daylight() (suburb.js): the shell's panel exactly |
+  | `rooms/bellmouth-baths.js` | waterpark | `ceiling: false`: eight lamps on the panel texture (power 1.35) in a ring 0.75 m under H: not a panel |
+  | `rooms/blackout-bay.js` | office/other (night, fitout) | bulbs (`embulb`): not looked at |
+  | `rooms/blaze-junction.js` | forest | woodlandLight (forest.js → forest-fx.js): shell-size flat panels |
+  | `rooms/bog-boardwalk.js` | forest | woodlandLight (forest.js → forest-fx.js): shell-size flat panels |
+  | `rooms/burn-scar.js` | forest | woodlandLight (forest.js → forest-fx.js): shell-size flat panels |
+  | `rooms/bus-stop.js` | suburb | daylight() (suburb.js): the shell's panel exactly |
+  | `rooms/campfire-circle.js` | forest | woodlandLight (forest.js → forest-fx.js): shell-size flat panels |
+  | `rooms/canopy-walk.js` | forest | woodlandLight (forest.js → forest-fx.js): shell-size flat panels |
+  | `rooms/car-park.js` | suburb | daylight() (suburb.js): the shell's panel exactly |
+  | `rooms/clear-cut.js` | forest | woodlandLight (forest.js → forest-fx.js): shell-size flat panels |
+  | `rooms/compactor-canyon.js` | office/other (archive, yellow, night) | one shell-size panel in key `panel` at power 1.8, green, its own c.light |
+  | `rooms/deep-end.js` | waterpark | natatoriumLight (waterpark.js): the shell's panel |
+  | `rooms/drop-plenum.js` | office/other (every office floor) | panels on the panel texture (`plenum:panel`, 2.1): not looked at closely |
+  | `rooms/fire-lookout.js` | forest | woodlandLight (forest.js → forest-fx.js): shell-size flat panels |
+  | `rooms/food-court.js` | mall | no panels: a pink cove strip round the hole 0.55 m under H (detail), bulbs; lamps by c.light |
+  | `rooms/garage-row.js` | suburb | daylight() (suburb.js): the shell's panel exactly |
+  | `rooms/hanging-changing.js` | waterpark | `ceiling: false`: hung steel boxes 0.32 × 1.16 m with a panel-texture face (1.15): not a panel |
+  | `rooms/hollow-tree.js` | forest | woodlandLight (forest.js → forest-fx.js): shell-size flat panels |
+  | `rooms/inverted-grove.js` | forest | woodlandLight (forest.js → forest-fx.js): shell-size flat panels |
+  | `rooms/keys-cut.js` | mall | nothing overhead: neon, c.light |
+  | `rooms/kiddie-lagoon.js` | waterpark | natatoriumLight (waterpark.js): the shell's panel |
+  | `rooms/lazy-river.js` | waterpark | natatoriumLight (waterpark.js): the shell's panel |
+  | `rooms/lemonade.js` | suburb | daylight() (suburb.js): the shell's panel exactly |
+  | `rooms/level-p.js` | mall | battens 0.07 × 1.12 m, tube boxes hung 0.57–0.7 m under H below the beams (detail, white, 1.6 warm); lamps by c.light |
+  | `rooms/locker-showers.js` | waterpark | natatoriumLight (waterpark.js): the shell's panel |
+  | `rooms/mecha.js` | office/other | `mecha-tubes` (white, 0.65): not looked at |
+  | `rooms/mens-ladies.js` | mall | "glowing squares": white boxes 1.12 × 0.52 m along x, 3 mm under H (1.1, lilac) in a 1.24 × 0.64 frame (detail), lamps through `{ lights }` (0.42, 35 cm down, cap 11) |
+  | `rooms/model-village.js` | suburb | daylight() (suburb.js): the shell's panel exactly |
+  | `rooms/moving-stairs.js` | mall | as the store: 1.12 × 0.52 m white boxes in frames (no lamps of their own), and long strips over the stairs; lamps by c.light |
+  | `rooms/nursery-aisles.js` | forest | woodlandLight (forest.js → forest-fx.js): shell-size flat panels |
+  | `rooms/old-growth.js` | forest | woodlandLight (forest.js → forest-fx.js): shell-size flat panels |
+  | `rooms/photo-booths.js` | mall | nothing overhead: one c.light 0.6 m under H; the booths shine |
+  | `rooms/receipts.js` | mall | nothing overhead: neon, c.light |
+  | `rooms/recess.js` | suburb | daylight() (suburb.js): the shell's panel exactly |
+  | `rooms/return-pool.js` | waterpark | lamps on the panel texture (`return:lamps`, 1.5) along both sides: not looked at closely |
+  | `rooms/server-chasm.js` | office/other (night, fitout, archive) | `ceiling: false`: no ceiling lights; the machines glow |
+  | `rooms/show-home.js` | suburb | daylight() (suburb.js): the shell's panel exactly |
+  | `rooms/slide-maze.js` | waterpark | no ceiling light batch found: not looked at closely |
+  | `rooms/strip-mall.js` | suburb | daylight() (suburb.js): the shell's panel exactly (4 × 2) |
+  | `rooms/the-atrium.js` | mall | can downlights 0.16 m square under a gallery (detail); neon; lamps by c.light |
+  | `rooms/the-close.js` | suburb | daylight() (suburb.js): the shell's panel exactly |
+  | `rooms/the-culvert.js` | suburb | daylight() (suburb.js): the shell's panel exactly |
+  | `rooms/the-green.js` | suburb | daylight() (suburb.js): the shell's panel exactly |
+  | `rooms/the-grotto.js` | mall | fairy bulbs and tinsel: no panels |
+  | `rooms/the-orange.js` | mall | pendants (half an orange) 0.9 m under H |
+  | `rooms/the-sets.js` | mall | spot cans (`sets:cans`): not looked at closely |
+  | `rooms/timber-lot.js` | forest | woodlandLight (forest.js → forest-fx.js): shell-size flat panels |
+  | `rooms/trailhead.js` | forest | woodlandLight (forest.js → forest-fx.js): shell-size flat panels |
+  | `rooms/tree-farm.js` | forest | woodlandLight (forest.js → forest-fx.js): shell-size flat panels |
+  | `rooms/wave-pool.js` | waterpark | natatoriumLight (waterpark.js): the shell's panel |
+  | `rooms/whirlpool-flume.js` | waterpark | natatoriumLight (waterpark.js): the shell's panel |
+  | `rooms/windthrow.js` | forest | woodlandLight (forest.js → forest-fx.js): shell-size flat panels |
+
 `test/backrooms-gfx-fixtures.test.mjs` pins all of the above.
 
 ### Bloom from what shines (built)
