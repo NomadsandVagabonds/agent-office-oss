@@ -71,12 +71,14 @@ export function mayRest(room, placed, one, x, z) {
 
 /**
  * The visitor has come into a room (id) that they have been in before, and left it last time from `spot`: does one more stand
- * there now? Not on the first visit; not past the room's or the floor's share; not where it may not stand.
+ * there now? Not in the way down or a crawl (room.none); not on the first visit; not past the room's or the floor's share; not where it may not stand.
  * → the next state, and `stood`: the one put down this time, or null.
  */
 export function cameBack(s, id, room, spot) {
   const n = { ...s, rooms: new Map(s.rooms), placed: s.placed.slice() }, mine = n.placed.filter((p) => p.room === id);
   const seen = n.rooms.get(id) || 0; n.rooms.set(id, seen + 1);
+  // (never in the way down, nor in a crawl, which may be a dead end with one way in and out: room.none)
+  if (room.none) return { s: n, stood: null };
   if (seen < 1 || !spot || mine.length >= DUMMIES.most || n.placed.length >= DUMMIES.all || !mayStand(spot.x, spot.z, room, mine)) return { s: n, stood: null };
   if (!stillThrough(room, [...mine, spot])) return { s: n, stood: null };                                // (never the one that would wall a way off)
   const stood = { room: id, x: spot.x, z: spot.z, yaw: spot.yaw, crouch: spot.crouch, n: n.placed.length };

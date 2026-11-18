@@ -12,8 +12,8 @@ test('the tiers are the owner\'s: basic 1, medium 2, boss 3; a jab takes 1', () 
   const by = (tier) => Object.keys(TIER).filter((id) => TIER[id] === tier).sort();
   assert.deepEqual(by('boss'), ['carried-interest', 'head-count', 'mother', 'standing-meeting', 'the-lines']);
   // (…and somebody a room keeps, resident.js: the waterpark's, as the owner said, "waterpark residents get health too")
-  assert.deepEqual(by('medium'), ['flume-toner', 'guard-stand', 'intern', 'lane-keeper', 'pirate', 'plenum-toner', 'toner', 'trunk-line']);
-  assert.deepEqual(by('basic'), ['inverted-bathers', 'mother-brood', 'pool-skimmer', 'shadow', 'toner-brood', 'towel-return']);
+  assert.deepEqual(by('medium'), ['flume-toner', 'guard-stand', 'intern', 'lane-keeper', 'middle-manager', 'pirate', 'plenum-toner', 'toner', 'trunk-line']);
+  assert.deepEqual(by('basic'), ['inverted-bathers', 'mother-brood', 'pool-skimmer', 'shadow', 'sticky-notes', 'toner-brood', 'towel-return']);
   assert.deepEqual([...UNHITTABLE].sort(), ['dummies', 'moth', 'other-door', 'porter']);
   for (const id of UNHITTABLE) { assert.equal(healthOf(id), 0); assert.equal(fresh(id), null); }
   // every one of the cast is in the table or in the list of those that cannot be hit: nobody is forgotten
@@ -110,7 +110,7 @@ test('every one of the cast that can be hit offers a target and takes health; no
   assert.equal(body('cast/pirate.js').match(/\(pirate\.know\?\.spent > 0 && !c\.vital\)/g).length, 2, 'in the list and in the jab itself');
   // and the [E] for the card goes to the hand where it fell, at the kill and again when its dying is over
   assert.match(body('cast/pirate.js'), /if \(hit\?\.killed\) \{[^\n]*if \(pirate\.card\?\.use\) reach\(pirate\);/);
-  assert.match(pirate, /fell\(\) \{ if \(pirate\?\.card\?\.use\) reach\(pirate\); return !!pirate; \}/);
+  assert.match(pirate, /fell\(\) \{\s+if \(pirate\?\.card\?\.use\) reach\(pirate\);\s+if \(pirate\?\.feetBody\) \{[^\n]*\}[^\n]*\n\s+return !!pirate;\s+\}/);
   // the many-bodied keep their own: a toner two and its hatchling one, finished into a spent crust; a small one of Mother's goes at one jab
   const toner = read('cast/toner.js');
   assert.match(toner, /unit\.vital = fresh\('toner'\);/); assert.match(toner, /young\.vital = fresh\('toner-brood'\);/);
@@ -169,3 +169,12 @@ test('"got away from" counts once a creature a floor, however many jabs it took'
   assert.equal(cable.match(/c\.survived\('trunk-line'\)/g).length, 1); assert.equal(cable.match(/escaped\(\)/g).length, 3);
 });
 
+
+test('one whose update throws is stopped, and leaves no body standing where it stopped (an invisible wall, in a doorway as like as not)', async () => {
+  const { p, bodies } = await floor(), it = p.of('mother'), dt = 0.05;
+  p.update(dt); assert.ok(bodies.includes(it.body), 'it stands in the way while it is going');
+  const warn = console.warn; console.warn = () => {};
+  try { it.update = () => { throw new Error('broken'); }; p.update(dt); } finally { console.warn = warn; }
+  assert.equal(bodies.includes(it.body), false, 'stopped, nobody walks into it');
+  const n = it.ticks; p.update(dt); assert.equal(it.ticks, n, 'and it is not asked again');
+});

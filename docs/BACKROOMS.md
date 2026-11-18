@@ -319,6 +319,10 @@ page reads none of this without it, and a visit so made is not scored):
 - `&beside=toner` puts **you** a step and a half from that one, facing it, as soon as it is on the floor. This is
   the switch that makes one reachable. It works for anybody with an `at()`: `pirate`, `toner`, `shadow` (once it has
   turned up), `head-count`, `intern`, `standing-meeting`, `carried-interest`, `mother`, `the-lines`.
+- A creature may say how it is to be stood beside: `apart` (metres; default a step and a half) and `aside` (radians
+  the visitor is turned off it). The shadow says `aside: 0.6`, because a stare sets it off; the middle manager says
+  `apart: 5, aside: 0.7`, because near it goes off and in the eye it comes. One that has nowhere to stand yet and can
+  be called up (`appear`) is put in plain sight 2.5 m off first.
 - The mascot is not on every part: a seed gives it one part of the visit (on most, the last). `&pursuer=1` only
   says the visit has one. To have it on the floor you load, make that floor the only one: `&pursuer=1&depths=1`.
   Add `&wake=1` to have it awake and after you, and `&loot=card` (dev page) to have the keycard on its wrist.
