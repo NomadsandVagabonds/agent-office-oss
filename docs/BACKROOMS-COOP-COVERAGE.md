@@ -185,3 +185,10 @@ What would have to be carried to close the gap: for each creature by id, `hp`, `
 runs it to the others; a jab from a visitor's page to the page that runs the creature, answered with whether it
 landed; the same for each toner unit and for the trunk line; and the removal at `gone`. The stagger from a shove
 (`c.stall`) is in the same position: it is kept by the conductor and sent to nobody.
+
+**Lights Out (`rooms/lights-out.js`, the forest): noted, not fixed.** The tent that goes dark is the one nearest the
+visitor the page itself plays (`c.tick`'s `me`). Nothing of it is sent between pages. So in a shared visit each of two
+visitors sees a different tent out, their own nearest, and sees the other's tent lit while the other stands in the dark
+beside it. Nothing depends on which tent is dark (nothing in the room can be used and nothing in it hurts), so no rule
+disagrees between the two pictures; only the pictures do. To close it: the room would take the nearest tent over every
+visitor in the room, which needs the other visitor's place in the room's frame at the tick.
