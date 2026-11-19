@@ -4,17 +4,24 @@
 // is what the card is filled in from (scorecard.js; the rules that score it
 // are core/runs.mjs, and `cleanRun` there is the shape this must give).
 //
-//   run = { seed, seconds, parts: { reached, of }, rooms: { explored, kinds }, cast: { met, survived }, hearts? }
+//   run = { seed, seconds, parts: { reached, of }, rooms: { explored, kinds }, cast: { met, survived }, hearts?, trail }
+//
+// `trail` is where the visitor was, once a second of play (core/trail.mjs): the book builds the same building and
+// checks the route against it, so that a visit that never happened cannot be signed for (tools/blockrooms/visit-check.mjs).
 //
 // A part of the building is counted when it is let go of, because after that
 // it is gone: `part()` is given its rooms then, and the last part's at the end.
 
+import { createTrail } from '../../../core/trail.mjs';
+
 export function createTally({ seed, of }) {
   let seconds = 0, ways = 0, deepest = 1, explored = 0, survived = 0;
-  const kinds = [], met = [], counted = new WeakSet();
+  const kinds = [], met = [], counted = new WeakSet(), trail = createTrail();
   return {
     /** A moment of the tape. Only time in play counts: not the fall in, not a drop between parts, not the ending. */
-    tick(dt, playing) { if (playing && dt > 0) seconds += dt; },
+    tick(dt, playing) { if (playing && dt > 0) { seconds += dt; trail.tick(dt); } },
+    /** Where the visitor is now: which part, and where on it (the world's own metres). Sampled by `tick`. */
+    trace(depth, x, z) { trail.at(depth, x, z); },
     /** Somebody took a way down. */
     way() { ways++; },
     /** Somebody has landed in a part of the building: how far down it is (0: the one under the office). A visit begun lower down has still got that far. */
@@ -40,6 +47,7 @@ export function createTally({ seed, of }) {
     report(hearts) {
       const run = { seed: String(seed), seconds: Math.round(seconds), parts: { reached: Math.min(Math.max(1 + ways, deepest), of), of }, rooms: { explored, kinds: kinds.slice() }, cast: { met: met.slice(), survived } };
       if (hearts && Number.isFinite(hearts.left) && Number.isFinite(hearts.of)) run.hearts = { left: hearts.left, of: hearts.of };
+      run.trail = trail.encode();
       return run;
     },
   };

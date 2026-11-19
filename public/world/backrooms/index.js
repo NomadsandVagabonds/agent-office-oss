@@ -640,6 +640,7 @@ async function visit(office, opt) {
     // --- water --- the visitor wading or swimming leaves a wake (liquid.js feel; only while a tier's water is on)
     if (state === 'play' && !me.frozen) vhs.liquids?.feel(world.scene, me.x, me.z, me.y - player.EYE + me.sink, me.y, me.speed);          // (feet: where the eye is, less its height)
     // --- end water ---
+    if (state === 'play') tally.trace?.(cur.level.depth, me.x, me.z);          // (the route, once a second of play, for the book to check: tally.js)
     if (state !== 'held' && state !== 'drop' && !shot && !shotCam) { env.pursuer?.update(dt, time); env.denizens?.update(dt, time); env.residents?.update(dt); }          // (nothing gets you while the building has you; and once its camera has the picture, nobody is run but whoever took you)
     redWash *= Math.exp(-3.2 * dt); u.uRed.value = clamp(redWash, 0, 1);
     // the part below: begun once you have found your feet in this one, and only drawn from where it could be seen

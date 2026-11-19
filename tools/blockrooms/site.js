@@ -124,10 +124,12 @@ async function tell(body) {
  * the report waits in this browser until they sign or say no.
  */
 const UNSIGNED = 'blockrooms:unsigned';
+let visitTicket = Promise.resolve(null);              // (the ticket the book gave this visit as it went in)
 async function sign(card, report) {
   if (card.replay || card.reason !== 'exit' || !scoreEligible(report)) return null;
-  const name = office.walk?.me?.name || me().name;
-  try { localStorage.setItem(UNSIGNED, JSON.stringify({ name, run: report, score: Number(card.score ?? report?.score) || 0, at: Date.now() })); } catch { return null; }
+  const name = office.walk?.me?.name || me().name, ticket = await visitTicket.catch(() => null);
+  if (!ticket) return null;                           // (a visit the book never heard begin cannot be signed for)
+  try { localStorage.setItem(UNSIGNED, JSON.stringify({ name, run: report, ticket, score: Number(card.score ?? report?.score) || 0, at: Date.now() })); } catch { return null; }
   return { icon: 'fresh', label: 'Guestbook', value: 'Sign it', href: './#sign' };
 }
 
@@ -188,7 +190,9 @@ async function run() {
       office.game.report = (_place, report) => archive.report(report, visitId, visitOwner, playerName);
       const mine = next && !bench ? archive.record(visitOwner).tapes.find((t) => t.seed === seed) : null;
       next = null;
-      if (!mine && !dev.debug) tell({ do: 'in' });        // (he keeps count of who goes in. A tape played back, or a visit for checking the site, is nobody going anywhere)
+      // (he keeps count of who goes in, and gives the visit a ticket for its building: it is handed back to sign the book.
+      // A tape played back, or a visit for checking the site, is nobody going anywhere)
+      visitTicket = !mine && !dev.debug ? tell({ do: 'in', seed }).then((a) => (a && typeof a.ticket === 'string' ? a.ticket : null)) : Promise.resolve(null);
       // a building that was asked to be other than its seed has it (?debug, ?room=) is for looking at, and getting out of
       // one is not a score: the book is not signed for it (it was, by anybody checking the site who walked out)
       const doctored = !!dev.debug || !!room;

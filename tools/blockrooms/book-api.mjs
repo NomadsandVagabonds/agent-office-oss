@@ -4,8 +4,11 @@
 //
 //   GET  /api/book                 → { ok, counter: { hits, in, out }, top: [entries], latest: [entries] }
 //   POST /api/book { do: 'hit' }   somebody opened the home page     → { ok, counter }
-//   POST /api/book { do: 'in' }    somebody went in                  → { ok, counter }
-//   POST /api/book { do: 'sign', name, message?, run }  somebody got out → { ok, entry, place }
+//   POST /api/book { do: 'in', seed? }  somebody went in            → { ok, counter, ticket? } (a ticket for that building:
+//                                                                     visit-ticket.mjs)
+//   POST /api/book { do: 'sign', name, message?, run, ticket }  somebody got out → { ok, entry, place }
+//        (the ticket must be the one this visit was given, the time it claims must have passed since, and its route
+//        is checked against its building: visit-check.mjs. A route that does not fit is kept, marked, for a prize judge)
 //   POST /api/book { do: 'strike', id, key }        a line comes out  → { ok, struck }
 //
 // A name and a short message are what a stranger types into the book. Whoever
@@ -19,12 +22,15 @@
 // (for a few seconds or minutes, so that nobody counts twice or signs a
 // hundred times) a salted hash of it that cannot be turned back into one.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { blocked, checkRun, cleanEntry, cleanMessage, cleanName, entryOf } from '../../core/book.mjs';
+import { blocked, checkRun, cleanEntry, cleanMessage, cleanName, entryOf, shownEntry } from '../../core/book.mjs';
 import { DIFFICULTIES, validDifficulty } from '../../core/difficulty.mjs';
 import { KEEP, AGAIN } from './book-policy.mjs';
+import { checkTicket, issueTicket, ticketKey } from './visit-ticket.mjs';
+import { checkVisit } from './visit-check.mjs';
 
 export { KEEP, AGAIN };
-const MAX_BODY = 4096;
+const MAX_BODY = 4096, MAX_SIGN = 65536;           // (a signing carries the visit's route: core/trail.mjs)
+const SEED = /^[A-Za-z0-9_-]{4,40}$/;
 
 const json = (status, body, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers } });
 const counterOf = ([hits, into, out]) => ({ hits: Number(hits) || 0, in: Number(into) || 0, out: Number(out) || 0 });
@@ -47,7 +53,7 @@ function who(request, salt) {
  * @returns {Promise<Response>}
  */
 export async function handle(request, ctx) {
-  const { store } = ctx, now = ctx.now || (() => Date.now()), salt = ctx.salt || 'blockrooms';
+  const { store } = ctx, now = ctx.now || (() => Date.now()), salt = ctx.salt || 'blockrooms', key = ctx.ticketKey || ticketKey({ salt });
   if (!store) return json(503, { ok: false, why: 'no-store', ...(SETTINGS.has(ctx.settings) ? { settings: ctx.settings } : {}) });
   try {
     if (request.method === 'GET' || request.method === 'HEAD') {
@@ -57,12 +63,12 @@ export async function handle(request, ctx) {
         const { counter, top, latest } = await store.read(difficulty);
         // (a store that has not been brought up to date yet answers every mode with every score: keep to the mode asked for here as well)
         const mode = (e) => !difficulty || (e.difficulty || 'original') === difficulty;
-        return json(200, { ok: true, counter, top: top.map(cleanEntry).filter(Boolean).filter(mode), latest: latest.map(cleanEntry).filter(Boolean) },
+        return json(200, { ok: true, counter, top: top.map(cleanEntry).filter(Boolean).filter(mode).map(shownEntry), latest: latest.map(cleanEntry).filter(Boolean).map(shownEntry) },
           { 'cache-control': 'public, max-age=0, s-maxage=10, stale-while-revalidate=120' });
       }
       const [n, top, latest] = await store.pipeline([COUNTERS, ['ZREVRANGE', difficulty ? `br:top:${difficulty}` : 'br:top', 0, KEEP.showTop - 1], ['LRANGE', 'br:latest', 0, KEEP.showLatest - 1]]);
       // (a reader is shown what was there a moment ago: the edge keeps it for a few seconds, so that a busy day is one read and not thousands)
-      return json(200, { ok: true, counter: counterOf(n), top: (top || []).map(cleanEntry).filter(Boolean), latest: (latest || []).map(cleanEntry).filter(Boolean) },
+      return json(200, { ok: true, counter: counterOf(n), top: (top || []).map(cleanEntry).filter(Boolean).map(shownEntry), latest: (latest || []).map(cleanEntry).filter(Boolean).map(shownEntry) },
         { 'cache-control': 'public, max-age=0, s-maxage=10, stale-while-revalidate=120' });
     }
     if (request.method !== 'POST') return json(405, { ok: false, why: 'method' }, { allow: 'GET, POST' });
@@ -71,17 +77,19 @@ export async function handle(request, ctx) {
     const site = request.headers.get('sec-fetch-site');
     if (site && site !== 'same-origin') return json(403, { ok: false, why: 'elsewhere' });
     const text = await request.text();
-    if (text.length > MAX_BODY) return json(413, { ok: false, why: 'size' });
+    if (text.length > MAX_SIGN || (text.length > MAX_BODY && !/^\s*\{\s*"do"\s*:\s*"sign"/.test(text))) return json(413, { ok: false, why: 'size' });
     let body; try { body = JSON.parse(text); } catch { return json(400, { ok: false, why: 'json' }); }
     if (!body || typeof body !== 'object' || Array.isArray(body)) return json(400, { ok: false, why: 'json' });
     const me = who(request, salt);
 
     if (body.do === 'hit' || body.do === 'in') {
-      if (store.count) return json(200, { ok: true, ...await store.count(body.do, me) });
+      // going in, with the building's seed, is given a ticket for it whether or not it is counted (it is counted once a while)
+      const ticket = body.do === 'in' && typeof body.seed === 'string' && SEED.test(body.seed) ? { ticket: issueTicket(body.seed, { key, now: now() }) } : {};
+      if (store.count) return json(200, { ok: true, ...await store.count(body.do, me), ...ticket });
       const kind = body.do === 'hit' ? 'hits' : 'in';
       const [fresh] = await store.pipeline([['SET', `br:rl:${body.do}:${me}`, 1, 'NX', 'EX', AGAIN[body.do]]]);
       const [, n] = await store.pipeline([fresh ? ['INCR', `br:n:${kind}`] : ['GET', `br:n:${kind}`], COUNTERS]);
-      return json(200, { ok: true, counted: !!fresh, counter: counterOf(n) });
+      return json(200, { ok: true, counted: !!fresh, counter: counterOf(n), ...ticket });
     }
 
     if (body.do === 'sign') {
@@ -93,25 +101,35 @@ export async function handle(request, ctx) {
       if (blocked(message, ctx.blocklist || [])) return json(400, { ok: false, why: 'message', text: 'Message not allowed.' });
       const checked = checkRun(body.run);
       if (!checked.ok) return json(422, { ok: false, why: 'visit', text: checked.why });
+      // the ticket it was given as it went in: this building, this long ago, once; and the route it took, against the
+      // building: one that does not fit is signed, and marked (for whoever judges a prize). On for the site always
+      // (api/book.mjs); only a test of the book's other rules turns them off (ctx.checks === false)
+      const checks = ctx.checks !== false;
+      const ticket = checks ? checkTicket(body.ticket, checked.run, { key, now: now() }) : { ok: true, nonce: `${checked.run.seed}|${name}`, started: null };
+      if (!ticket.ok) return json(422, { ok: false, why: 'ticket', text: ticket.why });
+      const route = checks ? await checkVisit(checked.run, body.run.trail) : { ok: true, verdict: 'ok' };
+      if (!route.ok) return json(422, { ok: false, why: 'route', text: route.why });
+      const check = route.verdict === 'ok' ? 'ok' : `flag: ${route.why.join('; ')}`.slice(0, 400);
       if (store.sign) {
-        const duplicate = createHash('sha256').update(`${checked.run.seed}|${name}`).digest('base64url').slice(0, 22);
-        const entry = entryOf({ id: randomBytes(9).toString('hex'), at: now(), name, message, run: checked.run, score: checked.score });
+        const duplicate = createHash('sha256').update(`ticket|${ticket.nonce}`).digest('base64url').slice(0, 22);
+        const entry = { ...entryOf({ id: randomBytes(9).toString('hex'), at: now(), name, message, run: checked.run, score: checked.score }), check, ...(ticket.started ? { started: ticket.started } : {}) };
         const result = await store.sign(entry, me, duplicate);
         if (!result.ok) {
           if (result.why === 'slow') return json(429, { ok: false, why: 'slow' }, { 'retry-after': String(AGAIN.sign) });
           if (result.why === 'signed') return json(409, { ok: false, why: 'signed' });
           throw new Error('the store did not accept the entry');
         }
-        return json(200, { ok: true, entry, place: result.place });
+        if (check !== 'ok') console.warn(`[book] signed, and flagged: ${entry.id} ${check}`);
+        return json(200, { ok: true, entry: shownEntry(entry), place: result.place });
       }
       // not line after line from the same hand…
       const [mine] = await store.pipeline([['SET', `br:rl:sign:${me}`, 1, 'NX', 'EX', AGAIN.sign]]);
       if (!mine) return json(429, { ok: false, why: 'slow' }, { 'retry-after': String(AGAIN.sign) });
       // …and one line for a building under a name, however often it is sent
-      const same = `br:seen:${createHash('sha256').update(`${checked.run.seed}|${name}`).digest('base64url').slice(0, 22)}`;
+      const same = `br:seen:${createHash('sha256').update(`ticket|${ticket.nonce}`).digest('base64url').slice(0, 22)}`;
       const [first] = await store.pipeline([['SET', same, 1, 'NX', 'EX', AGAIN.same]]);
       if (!first) return json(409, { ok: false, why: 'signed' });
-      const entry = entryOf({ id: randomBytes(9).toString('hex'), at: now(), name, message, run: checked.run, score: checked.score }), line = JSON.stringify(entry);
+      const entry = { ...entryOf({ id: randomBytes(9).toString('hex'), at: now(), name, message, run: checked.run, score: checked.score }), check, ...(ticket.started ? { started: ticket.started } : {}) }, line = JSON.stringify(entry);
       const modeKey = `br:top:${entry.difficulty || 'original'}`;
       let top;
       try {
@@ -125,7 +143,8 @@ export async function handle(request, ctx) {
         throw err;
       }
       const place = (top || []).indexOf(line);
-      return json(200, { ok: true, entry, place: place < 0 ? null : place + 1 });
+      if (check !== 'ok') console.warn(`[book] signed, and flagged: ${entry.id} ${check}`);
+      return json(200, { ok: true, entry: shownEntry(entry), place: place < 0 ? null : place + 1 });
     }
     if (body.do === 'strike') {
       // whoever keeps the book takes a line out of it. Asked for with the wrong key, or with no key set, it is not said which

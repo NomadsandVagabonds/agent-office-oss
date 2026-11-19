@@ -765,7 +765,8 @@ test('what a visit came to: time in play, parts reached, rooms walked into, who 
   t.met('pirate'); t.met('pirate'); t.survived('shadow'); t.survived('pirate'); t.met(''); t.met(7);
   t.part(second); t.part(null);
   const run = t.report({ left: 2, of: 3 });
-  assert.deepEqual(run, { seed: 'visit-9', seconds: 30, parts: { reached: 2, of: 4 }, rooms: { explored: 7, kinds: ['cutouts', 'vending'] }, cast: { met: ['pirate', 'shadow'], survived: 2 }, hearts: { left: 2, of: 3 } });
+  assert.deepEqual(run, { seed: 'visit-9', seconds: 30, parts: { reached: 2, of: 4 }, rooms: { explored: 7, kinds: ['cutouts', 'vending'] }, cast: { met: ['pirate', 'shadow'], survived: 2 }, hearts: { left: 2, of: 3 }, trail: '' });
+  // (the route, once a second of play: nobody was traced here, so it is empty; core/trail.mjs, and the book's check of it)
   assert.equal(JSON.stringify(run), JSON.stringify(t.report({ left: 2, of: 3 })), 'plain data, and the same each time it is asked for');
   assert.equal('hearts' in t.report(), false, 'no health this visit, no line for it');
   // it is what the office's rules expect: nothing in it is cut or changed by them

@@ -128,7 +128,7 @@ test('Hard caps every kit at one heart with no regen, keeps kit battery perks an
 });
 
 test('book API rejects changed/tourist scores and filters each difficulty from its own retained board', async () => {
-  const store = memoryStore(), ctx = { store, salt: 'test' };
+  const store = memoryStore(), ctx = { store, salt: 'test', checks: false };
   const post = (run, ip) => handle(new Request('http://test/api/book', { method: 'POST', headers: { 'content-type': 'application/json', 'x-real-ip': ip }, body: JSON.stringify({ do: 'sign', name: 'Test', run }) }), ctx);
   for (const d of ['training-wheels', 'easy', 'normal', 'hard']) {
     const response = await post(report({ difficulty: d, seed: `test-${d}`, ...(d === 'hard' ? { hearts: { left: 1, of: 1 } } : {}) }), d);

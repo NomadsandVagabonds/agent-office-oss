@@ -173,13 +173,14 @@ test('the page\'s own script: a building nobody has had, a tape from the address
   assert.match(src, /home: \{ label: 'Return to homepage' \}, anew: \{ label: 'Go back in' \}, where, \.\.\.dev,/);
   assert.ok(!/localStorage[^;\n]*where|setItem\([^)]*where/.test(src), 'the page does not keep where anybody is');
   assert.ok(!/XMLHttpRequest|sendBeacon|WebSocket/.test(src));
-  assert.match(src, /if \(!mine && !dev\.debug\) tell\(\{ do: 'in' \}\);/);
+  // (going in asks the book for a ticket for this building: it is handed back to sign, visit-ticket.mjs)
+  assert.match(src, /visitTicket = !mine && !dev\.debug \? tell\(\{ do: 'in', seed \}\)/);
   // the measuring tape is only under ?debug, and only imported when asked for
   assert.match(src, /const bench = !!dev\.debug && q\.get\('bench'\) === '1';\n\s*const perf = dev\.debug && \(bench \|\| q\.get\('perf'\) === '1'\) \? \(await import\('\.\/world\/dev\/perf\.js'\)\)/);
   assert.ok(!/^import[^\n]*perf/m.test(src), 'the measuring tape is not imported up front');
   // (only a visit that got out may sign, and it is asked after, on the front page: the owner, 18 Nov. The card keeps the
   // report in this browser and points there; nothing is signed from the card itself)
-  assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit' \|\| !scoreEligible\(report\)\) return null;\n  const name = office\.walk\?\.me\?\.name \|\| me\(\)\.name;\n  try \{ localStorage\.setItem\(UNSIGNED,/);
+  assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit' \|\| !scoreEligible\(report\)\) return null;\n  const name = office\.walk\?\.me\?\.name \|\| me\(\)\.name, ticket = await visitTicket\.catch\(\(\) => null\);\n  if \(!ticket\) return null;[^\n]*\n  try \{ localStorage\.setItem\(UNSIGNED, JSON\.stringify\(\{ name, run: report, ticket,/);
   assert.ok(!/do: 'sign'/.test(src), 'the card signs the book by itself');
   const front = fs.readFileSync(new URL('../tools/blockrooms/home.js', import.meta.url), 'utf8');
   assert.match(front, /const UNSIGNED = 'blockrooms:unsigned';/);

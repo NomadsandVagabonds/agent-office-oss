@@ -140,5 +140,14 @@ export function cleanEntry(raw) {
     id: e.id, at: whole(e.at, 0, 4e12), name, message: cleanMessage(e.message) || '', score: whole(e.score, 0, 1e6), seconds: whole(e.seconds, 0, 86400), parts: whole(e.parts, 1, 12), rooms: whole(e.rooms, 0, 2000),
     batteries: whole(e.batteries, 0, 200), hearts: whole(e.hearts, 0, 12), card: e.card === true, seed: e.seed,
     ...(typeof e.edition === 'string' && /^[a-z0-9]{1,16}$/.test(e.edition) ? { edition: e.edition } : {}),
+    // (the book's own look at the visit, kept with it for whoever judges a prize, and never shown: `shownEntry`)
+    ...(typeof e.check === 'string' && e.check.length <= 400 ? { check: e.check.replace(/[^\w .,:;()%/-]/g, '') } : {}),
+    ...(Number.isFinite(e.started) ? { started: whole(e.started, 0, 4e12) } : {}),
   };
+}
+/** A line as a reader is shown it: the book's own notes on the visit taken off. */
+export function shownEntry(e) {
+  if (!e) return null;
+  const { check, started, ...shown } = e;
+  return shown;
 }

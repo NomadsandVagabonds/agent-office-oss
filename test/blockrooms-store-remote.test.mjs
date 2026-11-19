@@ -23,7 +23,7 @@ test('book remote: keeps public validation in Vercel, sends only sanitized entri
     calls.push({ url, headers: init.headers, body: init.body, redirect: init.redirect });
     return worker.fetch(new Request(url, init), { DB: {}, BOOK_STORE_KEY: KEY });
   });
-  const ctx = { store, salt: 'a-private-salt', adminKey: 'the-keeper-has-this-key' };
+  const ctx = { store, salt: 'a-private-salt', adminKey: 'the-keeper-has-this-key', checks: false };
   assert.equal((await handle(req({ do: 'sign', name: '<script>', run }), ctx)).status, 400);
   assert.equal(calls.length, 0, 'invalid user input never reaches the storage service');
   const signed = await handle(req({ do: 'sign', name: 'Amber Vireo', message: 'Found the stairs', run }), ctx);
@@ -52,7 +52,7 @@ test('book remote: keeps public validation in Vercel, sends only sanitized entri
 
 test('book remote: duplicate and rate-limit outcomes retain the public API contract', async () => {
   for (const [why, status] of [['slow', 429], ['signed', 409]]) {
-    const res = await handle(req({ do: 'sign', name: 'Amber Vireo', run }), { store: { sign: async () => ({ ok: false, why }) } });
+    const res = await handle(req({ do: 'sign', name: 'Amber Vireo', run }), { store: { sign: async () => ({ ok: false, why }) }, checks: false });
     assert.equal(res.status, status);
     assert.equal((await res.json()).why, why);
     if (why === 'slow') assert.equal(res.headers.get('retry-after'), '20');

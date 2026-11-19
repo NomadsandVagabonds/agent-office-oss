@@ -365,7 +365,7 @@ signForm.addEventListener('submit', async (e) => {
   const go = $('sign-it'); go.disabled = true; signSays.textContent = 'Signing…';
   let answer = null;
   try {
-    const res = await fetch('./api/book', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ do: 'sign', name: cleanName(p.name) || me.name, message: message || '', run: p.run }) });
+    const res = await fetch('./api/book', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ do: 'sign', name: cleanName(p.name) || me.name, message: message || '', run: p.run, ticket: p.ticket }) });
     answer = await res.json();
   } catch { answer = null; }
   go.disabled = false;

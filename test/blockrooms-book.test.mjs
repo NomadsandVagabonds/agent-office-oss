@@ -73,7 +73,7 @@ test('book: a line of the book is what is kept of a visit, and one that comes ba
 const SITE = 'https://example.app';
 function book() {
   let clock = 1794000000000;
-  const store = memoryStore(() => clock), ctx = { store, now: () => clock, salt: 'test', blocklist: ['badword'], adminKey: 'a-key-only-the-keeper-has' };
+  const store = memoryStore(() => clock), ctx = { store, now: () => clock, salt: 'test', checks: false, blocklist: ['badword'], adminKey: 'a-key-only-the-keeper-has' };
   const ask = async (method, body, { ip = '203.0.113.7', headers = {} } = {}) => {
     const res = await handle(new Request(`${SITE}/api/book`, { method, headers: { 'x-forwarded-for': ip, ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...headers }, body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body) }), ctx);
     return { status: res.status, headers: res.headers, data: await res.json() };
@@ -139,7 +139,9 @@ test('book api: what is not a name, a message or a visit is refused, and so is a
   assert.equal((await b.post('{ not json')).status, 400);
   assert.equal((await b.post([1, 2])).status, 400);
   assert.equal((await b.post({ do: 'erase' })).status, 400);
-  assert.equal((await b.post({ do: 'sign', name: 'Amber Vireo', run: visit(), message, pad: 'x'.repeat(5000) })).status, 413);
+  // (a signing may carry a visit's route, up to 64 KB: core/trail.mjs; anything else, 4 KB)
+  assert.equal((await b.post({ do: 'sign', name: 'Amber Vireo', run: visit(), message, pad: 'x'.repeat(70000) })).status, 413);
+  assert.equal((await b.post({ do: 'hit', pad: 'x'.repeat(5000) })).status, 413);
   assert.equal((await b.ask('DELETE')).status, 405);
 });
 
