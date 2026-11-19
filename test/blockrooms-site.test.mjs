@@ -185,7 +185,7 @@ test('the page\'s own script: a building nobody has had, a tape from the address
   assert.ok(!/^import[^\n]*perf/m.test(src), 'the measuring tape is not imported up front');
   // (only a visit that got out may sign, and it is asked after, on the front page: the owner, 18 Nov. The card keeps the
   // report in this browser and points there; nothing is signed from the card itself)
-  assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit' \|\| !scoreEligible\(report\)\) return null;\n  const name = office\.walk\?\.me\?\.name \|\| me\(\)\.name, ticket = await visitTicket\.catch\(\(\) => null\);\n  if \(!ticket\) return null;[^\n]*\n  try \{ localStorage\.setItem\(UNSIGNED, JSON\.stringify\(\{ name, run: report, ticket,/);
+  assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit' \|\| !scoreEligible\(report\)\) return null;\n  const player = office\.walk\?\.me;\n  const name = player\?\.name \|\| me\(\)\.name, ticket = await visitTicket\.catch\(\(\) => null\);\n  if \(!ticket\) return null;[^\n]*\n  try \{ localStorage\.setItem\(UNSIGNED, JSON\.stringify\(\{ name, look: player\?\.look, run: report, ticket,/);
   assert.ok(!/do: 'sign'/.test(src), 'the card signs the book by itself');
   const front = fs.readFileSync(new URL('../tools/blockrooms/home.js', import.meta.url), 'utf8');
   assert.match(front, /const UNSIGNED = 'blockrooms:unsigned';/);

@@ -19,6 +19,7 @@
 //             determined cheat: the level runs in the visitor's own browser.
 import { validDifficulty, scoreEligible, cleanDifficulty } from './difficulty.mjs';
 import { cleanRun, scoreRun } from './runs.mjs';
+import { sanitizeLookPatch } from './look.mjs';
 
 /* ---- names --------------------------------------------------------------------------------------- */
 
@@ -114,15 +115,18 @@ export function checkRun(report) {
   return { ok: true, run, score: scoreRun(run).total };
 }
 
-/**
- * A line of the book: what is kept of a visit, and nothing that says who made it but the name they signed with.
- * { id, at, name, message, score, seconds, parts, rooms, batteries, hearts, card, seed, edition? }
- */
-export function entryOf({ id, at, name, message = '', run, score }) {
+// Public scores keep the in-game appearance at signing. Older entries have no portrait.
+function portraitFields(raw) {
+  const { look } = sanitizeLookPatch(raw);
+  return Object.keys(look).length ? { look } : {};
+}
+
+export function entryOf({ id, at, name, message = '', look, run, score }) {
   return {
     ...(run.difficulty ? { difficulty: run.difficulty, scoring: 1 } : {}),
     id: String(id), at: Math.floor(Number(at)) || 0, name, message, score, seconds: run.seconds, parts: run.parts.of, rooms: run.rooms.explored,
     batteries: run.batteries, hearts: run.hearts.left, card: run.card, seed: run.seed, ...(run.edition ? { edition: run.edition } : {}),
+    ...portraitFields(look),
   };
 }
 
@@ -139,6 +143,7 @@ export function cleanEntry(raw) {
     ...(e.difficulty ? { difficulty: cleanDifficulty(e.difficulty, 'training-wheels'), scoring: 1 } : {}),
     id: e.id, at: whole(e.at, 0, 4e12), name, message: cleanMessage(e.message) || '', score: whole(e.score, 0, 1e6), seconds: whole(e.seconds, 0, 86400), parts: whole(e.parts, 1, 12), rooms: whole(e.rooms, 0, 2000),
     batteries: whole(e.batteries, 0, 200), hearts: whole(e.hearts, 0, 12), card: e.card === true, seed: e.seed,
+    ...portraitFields(e.look),
     ...(typeof e.edition === 'string' && /^[a-z0-9]{1,16}$/.test(e.edition) ? { edition: e.edition } : {}),
     // (the book's own look at the visit, kept with it for whoever judges a prize, and never shown: `shownEntry`)
     ...(typeof e.check === 'string' && e.check.length <= 400 ? { check: e.check.replace(/[^\w .,:;()%/-]/g, '') } : {}),

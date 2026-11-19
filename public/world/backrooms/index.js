@@ -81,7 +81,7 @@ function gather(office, opt) {
   const tasks = [];
   for (const list of st.tasks?.values?.() || []) for (const t of list || []) if (t && t.title) tasks.push(String(t.title));
   const me = office.walk?.me;
-  const customLook = opt.look ? sanitizeLookPatch(opt.look) : null;
+  const customLook = opt.look ? sanitizeLookPatch(opt.look).look : null;
   const lookPatch = customLook && Object.keys(customLook).length ? customLook : (me?.look || { accessory: 'crown' });
   return {
     name: String(opt.name || me?.name || 'Lead'), projects, agents, tasks,

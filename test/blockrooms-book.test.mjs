@@ -101,9 +101,11 @@ test('book api: an empty book reads as an empty book, and a page somebody opens 
 
 test('book api: somebody who got out signs once; the line is what the rules make of what they sent', async () => {
   const b = book();
-  const signed = await b.post({ do: 'sign', name: 'Amber Vireo', run: visit(), message });
+  const signed = await b.post({ do: 'sign', name: 'Amber Vireo', run: visit(), message,
+    look: { species: 'cat', outfitColor: '#AABBCC', hair: 'unknown', email: 'private' } });
   assert.deepEqual([signed.status, signed.data.ok, signed.data.place], [200, true, 1]);
   const { entry } = signed.data;
+  assert.deepEqual(entry.look, { species: 'cat', outfitColor: '#aabbcc' });
   assert.deepEqual([entry.name, entry.score, entry.seed, entry.message, entry.at], ['Amber Vireo', checkRun(visit()).score, 'k3j9x0qa1b', 'cool page', 1794000000000]);
   assert.match(entry.id, /^[a-z0-9]{18}$/);
   const read = (await b.read()).data;

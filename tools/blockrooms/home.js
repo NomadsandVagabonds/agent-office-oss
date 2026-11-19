@@ -413,7 +413,7 @@ signForm.addEventListener('submit', async (e) => {
   const go = $('sign-it'); go.disabled = true; signSays.textContent = 'Signing…';
   let answer = null;
   try {
-    const res = await fetch('./api/book', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ do: 'sign', name: cleanName(p.name) || me.name, message: message || '', run: p.run, ticket: p.ticket }) });
+    const res = await fetch('./api/book', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ do: 'sign', name: cleanName(p.name) || me.name, look: p.look, message: message || '', run: p.run, ticket: p.ticket }) });
     answer = await res.json();
   } catch { answer = null; }
   go.disabled = false;
@@ -421,7 +421,7 @@ signForm.addEventListener('submit', async (e) => {
     store.set(UNSIGNED, null);
     signSays.textContent = answer?.place ? `Signed. You are № ${answer.place}.` : 'Signed.';
     setTimeout(() => { signForm.hidden = true; signSays.textContent = ''; }, 2600);
-    book();
+    refreshBook();
   } else if (answer?.text) signSays.textContent = answer.text;
   else if (answer?.why === 'slow') signSays.textContent = 'Too quick. Try again in a minute.';
   else signSays.textContent = 'The book is not answering. Try again later.';
@@ -1196,6 +1196,32 @@ function guests(latest) {
   const first = FIRST_ENTRIES.map(([who, when, text]) => el('li', '', el('span', 'who', who), el('span', 'when', when), el('span', 'said', text)));
   $('guests').replaceChildren(...real, ...first);
 }
+let posterKey;
+async function employeePoster(entry, online) {
+  $('employee-name').textContent = entry?.name || (online ? 'No scores yet' : 'Scores unavailable');
+  $('employee-score').textContent = entry ? `${num(entry.score)} points` : '';
+  const canvas = $('employee-photo');
+  canvas.hidden = !entry;
+  const key = entry && JSON.stringify([entry.id, entry.look]);
+  if (key === posterKey) return;
+  posterKey = key;
+  if (!entry) return;
+  const look = resolveLook(`visitor:${entry.seed}`, entry.look);
+  canvas.title = entry.look ? 'Visitor photograph' : 'Standard avatar for this tape';
+  const ctx = canvas.getContext('2d');
+  paintBackdrop(ctx, canvas.width, canvas.height, 'paper');
+  blitPixCrop(ctx, paintFlatCharacter(look), { sx: 0, sy: 17, sw: 32, sh: 35, dx: 16, dy: 6, scale: 2 });
+  try {
+    const { characterPreview } = await import('./archive-preview.js');
+    if (key !== posterKey) return;
+    const camera = characterPreview();
+    try {
+      const photo = camera.take(look);
+      paintBackdrop(ctx, canvas.width, canvas.height, 'paper');
+      ctx.drawImage(photo, 12, 34, 336, 308, 0, 0, canvas.width, canvas.height);
+    } finally { camera.dispose(); }
+  } catch { /* The printed sprite also works without WebGL. */ }
+}
 function scores(top, none = 'Nobody yet.') {
   const body = $('scores').tBodies[0];
   if (!top.length) { body.replaceChildren(el('tr', '', Object.assign(el('td', 'empty', none), { colSpan: 7 }))); return; }
@@ -1210,20 +1236,27 @@ const scoreDifficulty = $('score-difficulty');
 for (const d of DIFFICULTIES.filter(d => d.multiplier)) {
   const option = el('option', '', d.label); option.value = d.id; scoreDifficulty.append(option);
 }
-let bookRequest = 0;
-scoreDifficulty.addEventListener('change', () => book());
-async function book() {
+let bookRequest = 0, overallRequest = 0;
+scoreDifficulty.addEventListener('change', () => book(scoreDifficulty.value));
+function refreshBook() {
+  book();
+  if (scoreDifficulty.value) book(scoreDifficulty.value);
+}
+async function book(difficulty = '') {
   const request = ++bookRequest;
+  if (!difficulty) overallRequest = request;
   let data = null;
   try {
-    const bookUrl = './api/book' + (scoreDifficulty.value ? '?difficulty=' + encodeURIComponent(scoreDifficulty.value) : '');
+    const bookUrl = './api/book' + (difficulty ? '?difficulty=' + encodeURIComponent(difficulty) : '');
     const res = await fetch(bookUrl, { headers: { accept: 'application/json' } });
     if (res.ok) data = await res.json();
   } catch { /* no book: this browser's own record, then */ }
+  const top = (data?.ok && Array.isArray(data.top) ? data.top : []).map(cleanEntry).filter(Boolean);
+  if (request === overallRequest) employeePoster(top[0], data?.ok);
   if (request !== bookRequest) return;
   if (!data || !data.ok) { scores([], mine.best ? `Best on this computer: ${num(mine.best)}` : 'Nobody yet.'); return; }
   counter(data.counter);
-  scores((data.top || []).map(cleanEntry).filter(Boolean));
+  scores(top);
   guests((data.latest || []).map(cleanEntry).filter(Boolean));
   // count this visit once per tab (the book itself does not count the same visitor twice in a while)
   try {
@@ -1295,7 +1328,7 @@ for (const slot of document.querySelectorAll('.plug[data-plug]')) {
   slot.replaceWith(node);
 }
 counter(null);
-book();
+refreshBook();
 
 // One more award, for wherever the visitor appears to be: "VOTED 6TH BEST OFFICE PARK / of Portland" (the owner's line).
 // The site's host tells the site which city a connection comes from with every request (api/where); it is said to that

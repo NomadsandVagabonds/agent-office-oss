@@ -80,10 +80,15 @@
   <i class="side r2" data-sprite="door" data-scale="6"></i>
 
   <div class="door-stage">
-    <table class="mini-box">
-      <tr><th class="navy">EMPLOYEE OF THE MONTH</th></tr>
-      <tr><td><i data-sprite="robot_oil" data-scale="3"></i><br><b>Coral Tapir</b><br><small>October 1994</small></td></tr>
-    </table>
+    <a class="mini-box employee-poster" href="#guestbook">
+      <span class="poster-title">EMPLOYEE OF THE MONTH</span>
+      <span class="poster-body">
+        <canvas id="employee-photo" width="96" height="88" aria-hidden="true" hidden></canvas>
+        <strong id="employee-name">High score</strong>
+        <small id="employee-score"></small>
+        <span class="poster-link">Guestbook &darr;</span>
+      </span>
+    </a>
 
     <div class="door-col">
       <p class="arrows" aria-hidden="true"><i data-sprite="arrow" data-fx="bob" data-scale="4"></i><i data-sprite="arrow" data-fx="bob" data-scale="4" data-phase=".3"></i><i data-sprite="arrow" data-fx="bob" data-scale="4" data-phase=".6"></i></p>
@@ -113,6 +118,7 @@
   <form class="signin gotout" id="sign" hidden>
     <p class="gotout-head"><span class="new">YOU GOT OUT!</span> Sign the guestbook</p>
     <p class="gotout-what" id="sign-what"></p>
+    <small>Signing shares your character portrait and score.</small><br>
     <label for="message">MESSAGE:</label>
     <input id="message" type="text" maxlength="60" size="34" autocomplete="off" placeholder="optional">
     <span class="says" id="message-says"></span>
@@ -597,7 +603,7 @@
       </div>
     </div>
     <div class="panel white">
-      <h2><i data-sprite="envelope" data-scale="2"></i> Guestbook</h2>
+      <h2 id="guestbook" tabindex="-1"><i data-sprite="envelope" data-scale="2"></i> Guestbook</h2>
       <ul class="guests" id="guests"><li class="empty">Nobody yet.</li></ul>
     </div>
   </div>
@@ -638,7 +644,7 @@
 
 <footer class="zone bottom" id="bottom">
   <p class="center">&copy; 1998 &middot; Last updated: <span id="updated">recently</span></p>
-  <p class="small center plain">If you sign the guestbook, your nickname, message and score are public. Guest saves stay on this device. Signing in lets you sync your visitor file. Your city comes from your connection and is not kept. <a href="./privacy">Privacy policy</a></p>
+  <p class="small center plain">If you sign the guestbook, your nickname, character portrait, message and score are public. Guest saves stay on this device. Signing in lets you sync your visitor file. Your city comes from your connection and is not kept. <a href="./privacy">Privacy policy</a></p>
   <div id="deeper"></div>
   <div id="sentinel"></div>
 </footer>
