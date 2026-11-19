@@ -16,3 +16,13 @@ wear doing most of the work. Variety is the game: none of these is to be dealt m
 
 The owner's hallway-connector renders (the twist, the crossing, the chain, the accordion partitions, the split level,
 the fins) were shared in chat only; their notes are in the builder's queue, and the images are to follow.
+
+## Vibes, not plans (the owner: "these are not needing to be 1:1. Just capturing vibes and elements to use")
+
+| File | What it is | Elements to use |
+|---|---|---|
+| `sheet-uneven-floors.webp` | Inside Lane, Shear Line, Low Point, The Underside (also in the art-direction folder, with briefs) | the floor itself misbehaving, still walkable |
+| `vibe-printout-atrium.webp` | An atrium of stacked balconies, one chair and one red door on each, a continuous tractor-feed printout zigzagging from a slot in the ceiling down into a huge printer | verticality; the same thing repeated level after level; paper as architecture (a printout you could walk down?); a mail slot with folders in the wall |
+| `vibe-carpet-hills.webp` | An open-plan floor whose carpet rolls in hills, glass offices following the slope, a door half swallowed, chairs sunk to their arms, an ordinary flat corridor alongside with a plant | carpet terrain; furniture sunk into the floor; the normal corridor next to the wrong one |
+| `vibe-office-on-castors.webp` | A whole private office built on giant castors, circular skid tracks in the carpet, a window into its lit interior and its own door | rooms that move (a cousin of the re-org); tracks that tell you it has moved |
+| `vibe-coat-closet.webp` | A coat closet; part the coats and a corridor runs on behind them; a red key fob dropped on the floor | the way on hidden behind ordinary things; a dropped object as the clue |
