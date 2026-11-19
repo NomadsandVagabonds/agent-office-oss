@@ -19,7 +19,7 @@ is the department's reading, to be confirmed.
 Signing is strictly optional for Steam itself (Steam installs unsigned builds), but without it Windows warns
 and macOS refuses to open the app, so both are needed before anybody outside the team gets a build.
 
-## 2. steamworks.js: what it gives, and its caveats
+## 2. steamworks.js: what it gives, and its caveats (see 2b: the recommended binding is now steamworks-ffi-node)
 
 [ceifa/steamworks.js](https://github.com/ceifa/steamworks.js): a native Node module (Rust) over the Steamworks
 SDK. Its API ([client.d.ts](https://github.com/ceifa/steamworks.js/blob/main/client.d.ts)) has: `achievement`,
@@ -40,9 +40,47 @@ SDK. Its API ([client.d.ts](https://github.com/ceifa/steamworks.js/blob/main/cli
 - **Where it runs:** it is native, so it lives in the **main process**, never the page. The README's own
   example turns off context isolation to use it in the page; we will not: the page asks main through the
   preload (C1), and the game never imports it.
-- **Upkeep:** the last npm release is 0.4.0 (Aug 2024). Its Steamworks SDK and Electron support may lag; if it
-  stalls, the fallback is our own small native bridge (more work: P-4 would grow).
+- **Upkeep:** the last npm release is 0.4.0 (Aug 2024). Its Steamworks SDK and Electron support may lag. See 2b.
 - **Redistributables:** the SDK's `steam_api` libraries must be copied next to the app in each OS build.
+
+## 2b. Which binding (asked by the owner, 19 Nov)
+
+Looked at on 19 Nov 2026 from npm and each project's README. Stars and dates are what the pages showed then.
+
+| | **steamworks-ffi-node** ([ArtyProf](https://github.com/ArtyProf/steamworks-ffi-node)) | **steamworks.js** ([ceifa](https://github.com/ceifa/steamworks.js)) | **greenworks** ([greenheartgames](https://github.com/greenheartgames/greenworks)) | **steamworks.ts** ([kyeshmz](https://github.com/kyeshmz/steamworks.ts)) |
+|---|---|---|---|---|
+| How it binds | Koffi FFI over `libsteam_api` (prebuilt Koffi only, **no rebuild per Electron version**) | Rust native addon (N-API prebuilt) | C++ NAN addon: **rebuilt per Electron/NW version** | fork of steamworks.js (Rust) |
+| Maintenance | active: npm 0.11.3 (24 Sep 2026), pushed 12 Nov 2026; 93★, 12 open issues | most used; npm **0.4.0, Aug 2024**; last commit I could see on main, Sep 2025 | "best-effort", 63 open issues; ~1.6k★ but old | pushed 18 Nov 2026, **0★, not on npm**, CI switched off |
+| Steamworks SDK | **1.64** | not stated (older; via the steamworks-rs crate) | 1.62 | not stated |
+| SDK files | **not bundled**: we download the redistributables from the partner site (needs the account) | bundled (`libsteam_api` in the package) | supplied by us | as steamworks.js |
+| Achievements, stats | yes (+ leaderboards) | yes | yes | yes |
+| Cloud | yes (Remote Storage) | yes | yes | yes |
+| Inventory (P-8) | **no** | **no** | partial (old) | claims yes, unverified |
+| Overlay in Electron | its own fix, **experimental**: the page is drawn offscreen and each frame copied to a native window Steam hooks (Metal / OpenGL). Claims 1–3% CPU, 50–100 MB, ~1 frame latency. Linux **X11 only**, no Wayland | `electronEnableSteamOverlay()`; open issues: white overlay (#116), `<video>` breaks it (#148), ghost windows (#95), Linux (#195) | no Electron notes | as steamworks.js |
+| Steam Deck / Linux | Linux x64/ARM64; Deck detection; overlay tried in Deck desktop mode | Linux x64 | Linux | Linux x64 |
+| Licence | MIT (SDK under Valve's agreement) | MIT | MIT | MIT |
+
+**Tried here** (Electron 45.2.3 main process, Linux, Steam not installed; in a scratch folder, not committed):
+- `steamworks.js`: loads (3 ms). `init(480)` **throws** "Failed to load module ~/.steam/sdk64/steamclient.so". It does not crash, so the bridge must wrap it in try/catch.
+- `steamworks-ffi-node`: loads (29 ms). `init({ appId: 480 })` **returns false** and logs why (no SDK files here, then no Steam). It does not crash.
+- I could not go further: no Steam client, no app ID, no SDK download (that needs the partner account). Nothing about the overlay, achievements or Cloud was exercised.
+
+**Recommendation: steamworks-ffi-node, with steamworks.js as the fallback.**
+- Why: it is maintained, on the current SDK, needs no rebuild when Electron moves, and is the only one with
+  a worked answer to the overlay problem.
+- Its risks: one maintainer; the overlay is experimental. The offscreen copy of every frame must be measured
+  with the real game on a real GPU (D9). If it costs frames, ship **without the overlay at first**:
+  achievements and Cloud do not need it.
+- Fallback: steamworks.js. It works today and bundles the SDK, but is ageing.
+- Not greenworks (a rebuild for every Electron version, best-effort upkeep). Not steamworks.ts yet: watch it
+  for Inventory.
+- **Inventory goes through our server either way** (the Web API with a publisher key, S-6), so P-8 does not
+  depend on this choice.
+
+**Keeping it swappable.** The binding lives in one main-process file (`tools/steam/steam.mjs`, to come). It
+answers the preload's few calls (`achieve`, `stat`, `cloudGet`, `cloudSet`, `user`) and does nothing if `init`
+fails. The page only ever sees `platform` (C1, `draft/platform.js`), so changing binding touches that one file
+and `package.json`.
 
 ## 3. Offline (P-5)
 
@@ -66,10 +104,11 @@ runners for them).
 
 ## 5. Open questions for the owner
 
-1. Decision 1: Electron + steamworks.js as shell-only dependencies — yes? (This spike assumes yes.)
+1. Decision 1: Electron + a Steam binding (steamworks-ffi-node recommended, 2b) as shell-only dependencies — yes?
 2. Who holds the Steamworks account and pays the US$100, and when? The app ID unblocks P-4, P-7 and P-8.
 3. Mac at launch, or Windows + Linux (and Deck) first? Mac adds US$99/year and a Mac to sign on.
 4. Windows signing: Azure Artifact Signing (if your country is covered) or an EV certificate?
 5. Steam Cloud: the Cloud API (finer control) or Auto-Cloud (no code)? D1 leans to the API, as the archive
    is already structured data.
 6. Ship the trailer inside the app (31 MB), or only on the store page?
+7. Is launching without the Steam overlay acceptable, if it costs frames (2b)?
