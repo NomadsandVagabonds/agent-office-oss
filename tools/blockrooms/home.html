@@ -285,6 +285,35 @@
   <div class="tape t2"><span>UNDER CONSTRUCTION</span><span>CAUTION</span><span>UNDER CONSTRUCTION</span><span>CAUTION</span><span>UNDER CONSTRUCTION</span><span>CAUTION</span></div>
 </section>
 
+<section class="zone screening" id="trailer" aria-labelledby="trailer-heading">
+  <div class="deck" id="trailer-player">
+    <h2 class="deck-title" id="trailer-heading"><span>BlockRooms Media Player</span></h2>
+    <div class="deck-monitor">
+      <video id="trailer-film" controls playsinline preload="none" width="1280" height="720" poster="./trailer-poster.jpg" aria-label="BlockRooms official release trailer">
+        <source src="./trailer.mp4" type="video/mp4">
+        <a href="./trailer.mp4">Watch the BlockRooms trailer</a>
+      </video>
+    </div>
+    <div class="deck-display">
+      <span class="deck-lamp" aria-hidden="true"></span>
+      <span class="deck-track">BlockRooms &ndash; Release Trailer</span>
+      <span class="deck-clock"><span id="trailer-time">0:00</span><span class="deck-total"> / 2:07</span></span>
+    </div>
+    <div class="deck-controls" id="trailer-controls" hidden>
+      <label class="hide" for="trailer-seek">Trailer position</label>
+      <input id="trailer-seek" type="range" min="0" max="127" step="0.1" value="0" disabled>
+      <div class="deck-keys">
+        <button id="trailer-play" type="button"><i class="key-play" aria-hidden="true"></i><span>Play</span></button>
+        <button id="trailer-stop" type="button"><i class="key-stop" aria-hidden="true"></i>Stop</button>
+        <span class="deck-grille" aria-hidden="true"></span>
+        <button id="trailer-mute" type="button" aria-pressed="false">Mute</button>
+        <button id="trailer-full" type="button">Full screen</button>
+      </div>
+    </div>
+    <p class="deck-error" id="trailer-error" role="status" hidden>Playback unavailable. <a href="./trailer.mp4">Open the trailer file</a></p>
+  </div>
+</section>
+
 <section class="zone board" id="about">
   <div class="cols">
     <div class="panel">
@@ -315,8 +344,8 @@
     </div>
   </div>
 
-  <div class="panel roster-wrap">
-    <h2>Staff</h2>
+  <details class="panel roster-wrap" id="staff">
+    <summary>Staff directory</summary>
     <table class="roster">
       <thead>
         <tr><th>Picture</th><th>Name</th><th>Notes</th></tr>
@@ -479,7 +508,7 @@
         </tr>
       </tbody>
     </table>
-  </div>
+  </details>
 </section>
 
 <section class="zone pink" id="pictures">

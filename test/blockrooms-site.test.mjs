@@ -35,7 +35,7 @@ test('the site is two whole pages with everything they ask for beside them, and 
   }
   assert.ok(page.includes('<script type="module" src="./site.js"></script>') && home.includes('<script type="module" src="./home.js"></script>'));
   assert.ok(!files.some((f) => /^(data|public|server|test|tools|docs|hooks|api)\//.test(f) || /knowledge|transcripts|\.env/.test(f)), 'something of the office\'s own is in the site');
-  const expected = /^(index\.html|privacy\.html|play\.html|site\.js|home\.js|home\.css|art\.js|archive(?:-page|-client|-worker|-storage|-cloud|-preview|-card|-stamps|-charts)?\.js|archive\.css|archive\.html|account-config\.json|robots\.txt|og\.jpg|muzak\.mp3|shots\/[\w-]+\.jpg|(world|core|vendor)\/.+)$/;
+  const expected = /^(index\.html|privacy\.html|play\.html|site\.js|home\.js|home\.css|art\.js|archive(?:-page|-client|-worker|-storage|-cloud|-preview|-card|-stamps|-charts)?\.js|archive\.css|archive\.html|account-config\.json|robots\.txt|og\.jpg|muzak\.mp3|trailer\.mp4|trailer-poster\.jpg|trailer-player\.js|shots\/[\w-]+\.jpg|(world|core|vendor)\/.+)$/;
   assert.ok(files.every((f) => expected.test(f)), `a file nobody expected: ${files.find((f) => !expected.test(f))}`);
 
   assert.ok(home.includes('href="./privacy"') && fs.readFileSync(path.join(out, 'archive.html'), 'utf8').includes('href="./privacy"'));
@@ -95,6 +95,11 @@ test('the front page is the caretaker\'s: every picture it shows is there, every
   assert.ok(!/\?room=/.test(home + script), 'the front page sends somebody to a room');
   // The staff directory has their pictures and their names, and what it knows about each of them is "??????????" (the
   // owner's word). How any of them works is for whoever goes in to find out.
+  const trailer = home.match(/id="construction"[\s\S]*?<\/section>\s*(<section[^>]+id="trailer"[\s\S]*?<\/section>)/)?.[1];
+  assert.match(trailer || '', /<video\b(?=[^>]*\bcontrols\b)(?=[^>]*preload="none")(?=[^>]*poster="\.\/trailer-poster\.jpg")[^>]*>/);
+  assert.doesNotMatch(trailer, /\bautoplay\b/);
+  assert.match(trailer, /<source src="\.\/trailer\.mp4" type="video\/mp4">/);
+  assert.match(home, /<details class="panel roster-wrap" id="staff">\s*<summary>Staff directory<\/summary>\s*<table class="roster">/);
   const roster = home.slice(home.indexOf('<table class="roster">'), home.indexOf('</table>', home.indexOf('<table class="roster">')));
   const staff = [...roster.matchAll(/<tr>\s*<td class="mug">[\s\S]*?<\/td>\s*<td>([\s\S]*?)<\/td>\s*<td>([\s\S]*?)<\/td>\s*<\/tr>/g)];
   assert.ok(staff.length >= 10, 'the staff directory is not there');

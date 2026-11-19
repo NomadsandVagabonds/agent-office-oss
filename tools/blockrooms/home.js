@@ -12,6 +12,7 @@
 //   the rest   a figure that moves when it is off screen, a page that gets
 //              longer at the bottom, a wall that gives when it is held
 import { DIFFICULTIES, cleanDifficulty, difficultyOf, difficultyPerk } from './core/difficulty.mjs';
+import { mountTrailer } from './trailer-player.js';
 import { mount, drawLogo, voidTile } from './art.js';
 import { rollName, cleanName, cleanMessage, cleanEntry } from './core/book.mjs';
 import { GENDER, SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, SKIN, HAIR_COLORS, OUTFIT_COLORS, hashId, humanGenderDefaults, resolveLook, sanitizeLookPatch } from './core/look.mjs';
@@ -1421,11 +1422,14 @@ const says = (on) => { const btn = $('midi'); btn.setAttribute('aria-pressed', S
 function music(on) {
   if (audio) { audio.pause(); audio = null; }
   if (on) {
+    $('trailer-film').pause();
     const a = new Audio('./muzak.mp3');
     a.loop = true; a.volume = 0.5; audio = a; tuneAudio();
     a.play().catch(() => { if (audio === a) { audio = null; says(false); } });       // no sound to be had: the switch goes back
   }
   says(!!audio);
 }
+mountTrailer($('trailer-player'));
+$('trailer-film').addEventListener('play', () => { if (audio) music(false); });
 $('midi').addEventListener('click', () => music(!audio));
 document.addEventListener('visibilitychange', () => { if (document.hidden && audio) music(false); });

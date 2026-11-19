@@ -111,6 +111,83 @@ canvas.sprite { image-rendering: pixelated; image-rendering: crisp-edges; displa
 .sign.s2 { background: #ff9900; }
 .slot { display: inline-block; min-width: 1px; vertical-align: bottom; }
 
+/* The screening room: an old desktop and its metal-skinned player. */
+.screening {
+  background-color: #244a4a;
+  background-image: repeating-linear-gradient(135deg, #173a3b55 0 1px, transparent 1px 4px);
+  border-block: 2px solid #142c30;
+}
+.deck {
+  max-width: 740px; margin: auto; padding: 5px 8px 8px; color: #f0f2e4;
+  background: linear-gradient(105deg, #353949, #53586a 38%, #323545 78%, #424657);
+  border: 3px outset #9c9eae; box-shadow: 4px 5px 0 #142c30;
+  font: bold 14px/1.2 Arial, Helvetica, sans-serif;
+}
+.deck-title {
+  margin: 0 0 6px; padding: 3px 0; display: flex; align-items: center; gap: 8px;
+  color: #fff8d3; font: bold 12px/1.2 Verdana, Arial, sans-serif; letter-spacing: .08em;
+  text-transform: uppercase; text-shadow: 1px 1px #111322;
+}
+.deck-title::before, .deck-title::after {
+  content: ''; height: 10px; flex: 1;
+  background: repeating-linear-gradient(to bottom, #9899a6 0 1px, #272a38 1px 3px);
+}
+.deck-title span::before {
+  content: ''; display: inline-block; width: 12px; height: 13px; margin-right: 6px; vertical-align: -2px;
+  background: #f5c638; clip-path: polygon(48% 0, 100% 0, 61% 42%, 87% 42%, 12% 100%, 38% 56%, 10% 56%);
+}
+.deck-monitor { background: #050605; border: 3px inset #737585; }
+.deck video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; }
+.deck.enhanced video { cursor: pointer; }
+.deck-display {
+  margin-top: 6px; padding: 7px 10px; display: flex; align-items: center; gap: 9px;
+  border: 2px inset #747989; color: #b2e887; background: #141e19;
+  font: bold 15px/1.3 var(--mono); text-transform: uppercase;
+}
+.deck-lamp { flex: 0 0 7px; height: 7px; background: #e3ac36; box-shadow: 0 0 3px #dfaa36; }
+.deck.playing .deck-lamp { background: #a8f76d; box-shadow: 0 0 3px #90dd65; }
+.deck-track { flex: 1; }
+.deck-clock { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.deck:not(.enhanced) #trailer-time, .deck:not(.enhanced) .deck-total { display: none; }
+.deck:not(.enhanced) .deck-clock::after { content: '2:07'; }
+.deck-total { color: #91a980; }
+.deck-controls { padding: 2px 2px 0; }
+.deck input[type=range] {
+  display: block; appearance: none; background: transparent; width: 100%; height: 27px;
+  cursor: pointer; margin: 0; border: 0;
+}
+.deck input:disabled { cursor: default; }
+.deck input::-webkit-slider-runnable-track { background: #20222b; border: 2px inset #727585; height: 8px; }
+.deck input::-moz-range-track { background: #20222b; border: 2px inset #727585; height: 5px; }
+.deck input::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 21px; height: 13px; margin-top: -4px;
+  background: #e6b858; border: 2px outset #ffdf93;
+}
+.deck input::-moz-range-thumb { width: 17px; height: 9px; border-radius: 0; background: #e6b858; border: 2px outset #ffdf93; }
+.deck-keys { display: flex; align-items: stretch; gap: 3px; }
+.deck-keys button {
+  color: #171c2a; background: linear-gradient(#ebedee, #a4abba);
+  border: 2px outset #d0d3da; font: bold 13px Arial, Helvetica, sans-serif;
+  min-height: 34px; padding: 3px 12px; cursor: pointer;
+}
+.deck-keys button:active, .deck-keys button[aria-pressed=true] { border-style: inset; background: #a8b79c; }
+.deck button:focus-visible, .deck input:focus-visible { outline: 2px solid #ffe578; outline-offset: 1px; }
+.deck-keys i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; background: currentColor; }
+.key-play { clip-path: polygon(0 0, 100% 50%, 0 100%); }
+.playing .key-play { clip-path: polygon(0 0, 38% 0, 38% 100%, 62% 100%, 62% 0, 100% 0, 100% 100%, 0 100%); }
+.deck-grille { flex: 1; margin: auto 6px; height: 11px; background: repeating-linear-gradient(#242837 0 1px, #747889 1px 2px, transparent 2px 4px); }
+.deck-error { color: white; margin: 8px 0 0; }
+.deck-error a { color: #ffe786; }
+.deck:fullscreen { max-width: none; width: 100%; height: 100%; display: flex; flex-direction: column; }
+.deck:fullscreen .deck-monitor { flex: 1; min-height: 0; }
+.deck:fullscreen video { width: 100%; height: 100%; object-fit: contain; }
+@media (max-width: 520px) {
+  .deck { padding: 3px 4px 5px; }
+  .deck-display { font-size: 12px; padding: 6px; gap: 6px; }
+  .deck-keys button { min-height: 40px; padding: 3px 8px; }
+  .deck-grille { margin-inline: 1px; }
+}
+
 /* the notice board: painted blockwork, cream over the green every plant room is */
 .board { background:
     linear-gradient(transparent 0 calc(100% - 150px), #1f2a22 calc(100% - 150px) calc(100% - 144px), transparent 0),
@@ -123,6 +200,9 @@ canvas.sprite { image-rendering: pixelated; image-rendering: crisp-edges; displa
 .news li { margin-bottom: .35em; }
 .new { display: inline-block; font: 700 11px/1 Arial, Helvetica, sans-serif; color: #ffff00; background: #cc0000; border: 1px outset #ff8080; padding: 2px 4px; margin-right: 4px; animation: blink 1.3s steps(1) infinite; }
 .roster-wrap { position: relative; margin-top: 18px; background: #ffffef; border: 3px ridge #c0c0c0; }
+.roster-wrap summary { cursor: pointer; padding: 4px 2px; color: #000080; font: bold 1.25em var(--serif); }
+.roster-wrap summary:focus-visible { outline: 2px dotted #000080; outline-offset: 2px; }
+.roster-wrap[open] summary { margin-bottom: 8px; }
 .roster { width: 100%; border-collapse: separate; border-spacing: 2px; background: #c0c0c0; border: 2px outset #dfdfdf; font-size: .95em; }
 .roster th { background: #000080; color: #ffffff; font: 700 12px Arial, Helvetica, sans-serif; padding: 5px 8px; text-align: left; border: 1px inset #808080; }
 .roster td { background: #ffffff; border: 1px inset #808080; padding: 6px 8px; vertical-align: middle; }
