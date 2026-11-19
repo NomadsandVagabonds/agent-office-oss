@@ -53,6 +53,8 @@
 // other surface), the surface has its sheet's geometry and no define: exactly as it was. A sheet that is not a whole grid,
 // or whose room frame is turned or tilted against its own, is not swelled (rec.swellRefused says why).
 import * as THREE from 'three';
+import { gpu } from '../engine/gpu.js';
+import { packSurfaceAttributes } from './kit-node.js';
 import { LIQUID, underwater, holdStep, toLinear, waterColours, pinnedTint, wakeStart, wakeStep, wakeFill, wadeStep, LIQUID_VERT, LIQUID_FRAG, COPY_FRAG, LIQUID_UNDER_FRAG, seesUnderside,
   MIRROR, mirrorPlane, reflectMatrix, planeInView, obliqueProjection, mirrorSize, pickMirror, mirrorLeaves, screenCover, mirrorGate, mirrorWeight, mirrorDue,
   SWELL, swellRings } from './liquid.rule.js';
@@ -152,13 +154,17 @@ export function swellGeometry(geo, rowStep = SWELL.rows, colStep = SWELL.cols) {
       const xx = x0 + (x1 - x0) * q / (cols - 1), [ix, fx] = seg(X, xx), vi = r * cols + q;
       const c00 = at.get(xs[ix] + ',' + zs[iz]), c10 = at.get(xs[ix + 1] + ',' + zs[iz]), c01 = at.get(xs[ix] + ',' + zs[iz + 1]), c11 = at.get(xs[ix + 1] + ',' + zs[iz + 1]);
       for (const k of names) {
-        const A = geo.attributes[k], n = A.itemSize, src = A.array;
-        for (let j = 0; j < n; j++) arrs[k][vi * n + j] = (src[c00 * n + j] * (1 - fx) + src[c10 * n + j] * fx) * (1 - fz) + (src[c01 * n + j] * (1 - fx) + src[c11 * n + j] * fx) * fz;
+        const A = geo.attributes[k], n = A.itemSize;
+        for (let j = 0; j < n; j++) {
+          const g = (idx) => (j === 0 ? A.getX(idx) : j === 1 ? A.getY(idx) : j === 2 ? A.getZ(idx) : A.getW(idx));
+          arrs[k][vi * n + j] = (g(c00) * (1 - fx) + g(c10) * fx) * (1 - fz) + (g(c01) * (1 - fx) + g(c11) * fx) * fz;
+        }
       }
       arrs.position[vi * 3] = xx; arrs.position[vi * 3 + 1] = y; arrs.position[vi * 3 + 2] = zz;
     }
   }
   for (const k of names) out.setAttribute(k, new THREE.BufferAttribute(arrs[k], geo.attributes[k].itemSize));
+  if (gpu.nodes) packSurfaceAttributes(out);
   // facing as the sheet's first triangle does
   const idx = geo.index, a0 = idx ? idx.getX(0) : 0, a1 = idx ? idx.getX(1) : 1, a2 = idx ? idx.getX(2) : 2;
   const ux = pos.getX(a1) - pos.getX(a0), uz = pos.getZ(a1) - pos.getZ(a0), wx = pos.getX(a2) - pos.getX(a0), wz = pos.getZ(a2) - pos.getZ(a0);
