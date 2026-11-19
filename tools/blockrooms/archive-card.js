@@ -61,10 +61,6 @@ export function drawPersonnelCard(canvas, { name, look, best, escapes, rooms, en
   }
   g.drawImage(wordmark, 14, 14, 246, 33);
   type('PERSONNEL  /  ACCESS CONTROL', 16, 56, mono(7), '#c3d6ee');
-  rect(476, 11, 109, 44, '#101f50');
-  rect(480, 15, 2, 36, '#efbc39');
-  type('PHOTO ID', 489, 33, display(19), '#fff6cf');
-  type('1997 SERIES', 490, 46, mono(8), '#a9c1e0');
   rect(4, 61, 592, 3, '#c4a147');
 
   // Crop the actual rig as a badge photograph. Older GPUs can still print the game's flat avatar.
@@ -162,45 +158,18 @@ export function drawPersonnelCard(canvas, { name, look, best, escapes, rooms, en
     'right',
   );
   floors.forEach(([id, label], index) => {
-    const x = 14 + index * 64,
-      y = 240,
-      w = 56,
-      h = 50,
-      active = earned.has(id);
+    const center = 42 + index * 64, active = earned.has(id);
     if (active) {
-      const pic = floorStamp(id);
-      // Scalloped paper, printed registration number and coloured plate are one collectible stamp.
-      rect(x + 1, y + 2, w, h, '#a6a39a');
-      rect(x, y, w, h, '#fff7d6');
-      rect(x + 2, y + 2, w - 4, h - 4, '#384057');
-      rect(x + 3, y + 3, w - 6, h - 6, '#fff3cd');
-      g.drawImage(pic, x + 5, y + 5, 46, 32);
-      type('BR', x + 5, y + 45, mono(7), ink);
-      for (let k = 0; k < 4; k++) rect(x + 19 + k * 3, y + 41, 2, 1, gray);
-      type(String(index + 1).padStart(2, '0'), x + w - 5, y + 45, mono(7), ink, 'right');
-      for (let k = 3; k < w - 1; k += 6) {
-        rect(x + k, y, 2, 2, paper);
-        rect(x + k, y + h - 1, 2, 3, paper);
-      }
-      for (let k = 4; k < h - 1; k += 6) {
-        rect(x, y + k, 2, 2, paper);
-        rect(x + w - 1, y + k, 3, 2, paper);
-      }
+      g.drawImage(floorStamp(id), center - 27, 241, 54, 47.5);
     } else {
-      g.strokeStyle = '#a5a497';
-      g.lineWidth = 1;
-      g.setLineDash([2, 2]);
-      g.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
-      g.setLineDash([]);
-      type(String(index + 1).padStart(2, '0'), x + w / 2, y + 30, display(17), '#94968e', 'center');
+      rect(center - 9, 273, 18, 0.8, '#b8b7a9');
     }
     const words = label.toUpperCase().split(' ');
-    words.forEach((word, line) => type(word, x + w / 2, 303 + line * 9, mono(8.5), active ? ink : gray, 'center'));
+    words.forEach((word, line) => type(word, center, 303 + line * 9, mono(8.5), active ? ink : gray, 'center'));
   });
 
   rule(12, 320, 576);
   type('blockrooms.app', 14, 346, display(22), blue);
-  type('HR  /  FORM 97-C', 586, 345, mono(9), gray, 'right');
   g.restore();
 }
 

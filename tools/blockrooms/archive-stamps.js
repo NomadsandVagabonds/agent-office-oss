@@ -1,262 +1,86 @@
-// Miniatures are drawn on a 46 × 32 grid, like the destination labels on a sheet of postage.
-// Each plate uses four inks. Their silhouettes still distinguish the floors in a monochrome print.
-const inks = {
-  yellow: ['#3b2b29', '#96652b', '#e5b44a', '#fff0a5'],
-  archive: ['#253838', '#44736b', '#84bca1', '#e7e4ba'],
-  night: ['#242347', '#514670', '#a293c3', '#ffe5a5'],
-  fitout: ['#463029', '#9b5740', '#e39b53', '#ffe5a8'],
-  exec: ['#382839', '#754851', '#ca9172', '#ffdaa0'],
-  suburb: ['#28374a', '#526e82', '#bbbd99', '#ffe1a0'],
-  mall: ['#402a50', '#8b538d', '#db90aa', '#ffe8b7'],
-  waterpark: ['#173951', '#287d91', '#7ad1c5', '#fff1b9'],
-  forest: ['#193a39', '#396856', '#94ac6d', '#ffde9a'],
+// Rubber dies, drawn in one ink. Interior openings are cut through to the card stock.
+const dies = {
+  yellow: {
+    // The door stands ajar on a second doorway.
+    face: 'M15 34V10h20v24h-3V13H18v21z M19 15l9-3v23l-9-3z M25 22v3l2-1v-3z',
+    angle: -7,
+  },
+  archive: {
+    // File cabinet with two enamel label pulls.
+    face: 'M15 10h21v24H15z M18 13v7h15v-7z M18 23v8h15v-8z M22 14h7v2h-7z M22 24h7v2h-7z',
+    angle: 4,
+  },
+  night: {
+    // The lit window beside a crescent.
+    face: 'M29 9a12 12 0 1 0 5 20A13 13 0 0 1 29 9z M30 15h3v4h-3z M35 15h3v4h-3z M30 21h3v4h-3z M35 21h3v4h-3z',
+    angle: -4,
+  },
+  fitout: {
+    // Striped barricade on folding legs.
+    face: 'M11 16h29v10H11z M15 18l-2 5h4l3-5z M25 18l-3 5h4l3-5z M34 18l-3 5h4l3-5z M16 26h4l-2 7h-4z M32 26h4l2 7h-4z',
+    angle: 6,
+  },
+  exec: {
+    // The top floor's attaché case, with its handle and brass latch cut out.
+    face: 'M20 15v-4q0-2 2-2h8q2 0 2 2v4h5q2 0 2 2v13q0 2-2 2H14q-2 0-2-2V17q0-2 2-2z M23 12v3h6v-3z M15 19v2l8 2v2h5v-2l8-2v-2l-9 2h-3z',
+    angle: -3,
+  },
+  suburb: {
+    face: 'M11 27l8-8 9 8h-3v6h-4v-5h-4v5h-4v-6z M30 10h3v24h-3z M26 14h11v2H26z',
+    line: 'M9 11q10 7 19 3m7 0q4 2 7 1',
+    angle: 7,
+  },
+  mall: {
+    // The continuous balustrade of an escalator. A little figure rides the diagonal.
+    face: 'M11 27h7l12-12h9v5h-7L20 32h-9z M21 22v-4q0-3 3-3t3 3v1z M26 11a2.3 2.3 0 1 1-4.6 0 2.3 2.3 0 1 1 4.6 0z',
+    angle: -5,
+  },
+  waterpark: {
+    line: 'M12 12h11c8 0 9 8 2 8h-4c-5 0-5 6 1 6h7c4 0 6-2 8-1 M11 32q3-3 7 0t7 0t7 0t7 0',
+    angle: 5,
+  },
+  forest: {
+    // The little door opens through the base of the pine.
+    face: 'M25 7l8 11h-4l7 8h-5l6 6H14l6-6h-5l7-8h-4z M23 26v6h5v-6z',
+    angle: -4,
+  },
 };
 
-function plate(id) {
-  const sheet = document.createElement('canvas');
-  sheet.width = 46;
-  sheet.height = 32;
-  const g = sheet.getContext('2d'),
-    [dark, mid, light, cream] = inks[id];
-  const box = (x, y, w, h, c) => {
-    g.fillStyle = c;
-    g.fillRect(x, y, w, h);
-  };
-  const line = (x, y, tx, ty, c) => {
-    const dx = Math.abs(tx - x),
-      dy = Math.abs(ty - y),
-      sx = x < tx ? 1 : -1,
-      sy = y < ty ? 1 : -1;
-    let err = dx - dy;
-    for (;;) {
-      box(x, y, 1, 1, c);
-      if (x === tx && y === ty) break;
-      const e = 2 * err;
-      if (e > -dy) {
-        err -= dy;
-        x += sx;
-      }
-      if (e < dx) {
-        err += dx;
-        y += sy;
-      }
-    }
-  };
-  const poly = (c, ...points) => {
-    g.fillStyle = c;
-    g.beginPath();
-    g.moveTo(...points[0]);
-    for (const p of points.slice(1)) g.lineTo(...p);
-    g.closePath();
-    g.fill();
-  };
-  box(0, 0, 46, 32, dark);
-  switch (id) {
-    case 'yellow': {
-      // A turn in the wallpapered maze, with the lights shrinking into the corner.
-      box(0, 0, 46, 32, mid);
-      poly(light, [0, 0], [15, 5], [15, 23], [0, 30]);
-      poly(light, [46, 0], [29, 8], [29, 21], [46, 28]);
-      poly(dark, [0, 32], [20, 20], [27, 20], [46, 30], [46, 32]);
-      for (let i = 1; i < 15; i += 4) line(i, Math.floor(i / 3), i, 27 - Math.floor(i / 3), mid);
-      box(20, 10, 7, 11, dark);
-      box(21, 11, 4, 9, light);
-      box(22, 13, 3, 7, dark);
-      box(14, 1, 16, 2, cream);
-      box(19, 5, 8, 1, cream);
-      box(21, 8, 4, 1, cream);
-      line(0, 31, 19, 20, cream);
-      line(45, 29, 28, 21, light);
-      break;
-    }
-    case 'archive': {
-      // A bank of index drawers with enamel label holders. One drawer has been left out.
-      box(0, 4, 41, 26, mid);
-      for (let x = 2; x < 40; x += 13)
-        for (let y = 6; y < 29; y += 8) {
-          box(x, y, 12, 7, dark);
-          box(x, y, 11, 6, light);
-          box(x + 2, y + 1, 7, 2, cream);
-          box(x + 4, y + 4, 4, 1, dark);
-        }
-      poly(dark, [27, 15], [38, 15], [44, 20], [44, 25], [32, 25], [27, 21]);
-      poly(cream, [28, 15], [37, 15], [42, 20], [33, 20]);
-      box(32, 20, 12, 5, mid);
-      box(35, 21, 5, 1, cream);
-      break;
-    }
-    case 'night': {
-      // Office tower, one window still burning under the moon.
-      box(30, 2, 8, 8, cream);
-      box(28, 4, 11, 4, cream);
-      box(34, 1, 7, 6, dark);
-      for (const [x, y] of [
-        [3, 3],
-        [13, 5],
-        [23, 2],
-        [42, 12],
-      ])
-        box(x, y, 1, 1, light);
-      box(0, 19, 10, 13, mid);
-      box(9, 11, 18, 21, mid);
-      box(10, 10, 16, 1, light);
-      box(12, 8, 10, 2, mid);
-      box(16, 6, 1, 3, light);
-      box(29, 20, 17, 12, mid);
-      for (let x = 11; x < 25; x += 4) for (let y = 14; y < 29; y += 5) box(x, y, 2, 2, dark);
-      box(19, 19, 3, 3, cream);
-      box(18, 22, 5, 1, light);
-      line(0, 31, 45, 31, dark);
-      break;
-    }
-    case 'fitout': {
-      // A crane with a load dangling over unfinished steelwork.
-      box(0, 23, 13, 9, mid);
-      box(1, 19, 2, 5, light);
-      box(10, 16, 2, 8, light);
-      box(18, 6, 5, 25, mid);
-      box(18, 6, 1, 25, cream);
-      box(22, 6, 1, 25, light);
-      for (let y = 8; y < 29; y += 5) line(19, y, 21, y + 3, light);
-      line(5, 7, 19, 1, light);
-      line(19, 1, 39, 7, light);
-      box(3, 7, 39, 3, light);
-      box(4, 9, 36, 1, mid);
-      box(7, 10, 6, 3, mid);
-      box(35, 10, 1, 9, cream);
-      line(30, 22, 35, 18, light);
-      line(40, 22, 35, 18, light);
-      box(28, 22, 15, 3, cream);
-      box(0, 30, 46, 2, mid);
-      break;
-    }
-    case 'exec': {
-      // High-backed leather chair under the brass strip of a boardroom lamp.
-      box(0, 0, 46, 32, mid);
-      for (let x = 1; x < 46; x += 7) box(x, 0, 1, 32, dark);
-      box(9, 2, 27, 2, cream);
-      box(11, 4, 23, 1, light);
-      box(16, 8, 14, 13, dark);
-      box(17, 7, 12, 1, dark);
-      box(18, 9, 10, 9, light);
-      box(19, 10, 8, 8, mid);
-      box(20, 12, 1, 1, cream);
-      box(25, 12, 1, 1, cream);
-      box(13, 17, 3, 7, dark);
-      box(30, 17, 3, 7, dark);
-      box(16, 21, 15, 4, dark);
-      box(16, 21, 15, 1, cream);
-      box(22, 25, 2, 4, dark);
-      line(23, 28, 15, 30, dark);
-      line(23, 28, 31, 30, dark);
-      break;
-    }
-    case 'suburb': {
-      // A rooftop dwarfed by the telephone pole and its sagging wires.
-      box(0, 0, 46, 32, light);
-      box(1, 27, 44, 5, mid);
-      box(3, 21, 17, 9, cream);
-      poly(dark, [0, 22], [11, 13], [23, 22]);
-      box(15, 12, 3, 5, dark);
-      box(6, 23, 3, 3, mid);
-      box(13, 22, 4, 8, mid);
-      box(29, 5, 3, 27, dark);
-      box(24, 7, 13, 2, dark);
-      box(26, 5, 2, 3, mid);
-      box(34, 5, 2, 3, mid);
-      line(0, 3, 14, 9, mid);
-      line(14, 9, 26, 7, dark);
-      line(34, 7, 42, 10, dark);
-      line(42, 10, 45, 10, dark);
-      line(0, 7, 14, 13, mid);
-      line(14, 13, 30, 11, dark);
-      break;
-    }
-    case 'mall': {
-      // Escalator with two reflecting handrails below the atrium skylight.
-      box(0, 0, 46, 32, mid);
-      for (let x = -4; x < 46; x += 10) {
-        line(x, 0, x + 4, 5, light);
-        box(x + 4, 6, 1, 8, dark);
-      }
-      box(0, 5, 46, 1, cream);
-      box(0, 14, 46, 2, dark);
-      poly(dark, [0, 25], [11, 25], [29, 10], [45, 10], [45, 17], [32, 17], [14, 32], [0, 32]);
-      for (let i = 0; i < 9; i++) box(12 + i * 2, 25 - i * 2, 3, 1, cream);
-      line(1, 23, 10, 23, light);
-      line(10, 23, 29, 7, cream);
-      box(29, 7, 16, 1, cream);
-      line(14, 30, 33, 14, light);
-      box(33, 14, 12, 1, light);
-      break;
-    }
-    case 'waterpark': {
-      // A waterslide curls out of an upper doorway and discharges at the pool.
-      box(1, 1, 12, 8, mid);
-      box(3, 2, 8, 5, dark);
-      const flume = [
-        [6, 3],
-        [16, 3],
-        [22, 6],
-        [22, 10],
-        [18, 13],
-        [13, 13],
-        [10, 16],
-        [12, 19],
-        [24, 20],
-        [30, 17],
-        [35, 17],
-        [40, 22],
-      ];
-      for (let i = 1; i < flume.length; i++)
-        for (let y = 0; y < 4; y++)
-          line(
-            flume[i - 1][0],
-            flume[i - 1][1] + y,
-            flume[i][0],
-            flume[i][1] + y,
-            y === 0 ? cream : y === 3 ? mid : light,
-          );
-      box(19, 16, 2, 4, mid);
-      box(32, 21, 2, 6, mid);
-      box(0, 27, 46, 5, mid);
-      for (const [x, y] of [
-        [1, 29],
-        [12, 28],
-        [22, 30],
-        [37, 28],
-      ])
-        box(x, y, 6, 1, cream);
-      line(40, 26, 42, 29, light);
-      break;
-    }
-    case 'forest': {
-      // The office exit door gives a square of tungsten light between the pines.
-      box(0, 0, 46, 32, mid);
-      const pine = (x, y, w, h, color) => {
-        for (let i = 0; i < 3; i++) {
-          const half = Math.round((w * (i + 2)) / 8),
-            top = y + Math.round((i * h) / 5);
-          poly(color, [x, top], [x + half + 1, top + Math.ceil(h * 0.47)], [x - half, top + Math.ceil(h * 0.47)]);
-        }
-        box(x - 1, y + h - 4, 3, 5, color);
-      };
-      pine(11, 1, 18, 28, dark);
-      pine(39, 5, 17, 24, dark);
-      pine(1, 6, 17, 25, light);
-      box(21, 12, 10, 17, dark);
-      box(22, 13, 8, 15, cream);
-      box(24, 15, 5, 13, light);
-      box(27, 22, 1, 1, dark);
-      poly(light, [21, 29], [30, 29], [35, 32], [14, 32]);
-      break;
-    }
-  }
-  return sheet;
-}
-
-const cache = new Map();
+const pads = new Map();
 export function floorStamp(id) {
-  if (!cache.has(id)) cache.set(id, plate(id));
-  return cache.get(id);
+  if (pads.has(id)) return pads.get(id);
+  const die = dies[id];
+  const canvas = document.createElement('canvas');
+  canvas.width = 150;
+  canvas.height = 132;
+  const g = canvas.getContext('2d');
+  g.scale(3, 3);
+  g.translate(25, 22);
+  g.rotate(die.angle * Math.PI / 180);
+  g.translate(-25, -22);
+  g.fillStyle = g.strokeStyle = '#594471';
+  g.lineJoin = g.lineCap = 'round';
+  g.lineWidth = 1.65;
+  g.beginPath();
+  g.ellipse(25, 22, 21.8, 17.2, 0, 0, 2 * Math.PI);
+  g.stroke();
+  if (die.face) g.fill(new Path2D(die.face), 'evenodd');
+  if (die.line) {
+    g.lineWidth = id === 'suburb' ? 1.4 : 2.7;
+    g.stroke(new Path2D(die.line));
+  }
+
+  // A few pinholes and a dry edge break the impression. Keep the impression stable on every reprint.
+  g.globalCompositeOperation = 'destination-out';
+  let state = id.charCodeAt(0) + id.length * 97;
+  const random = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+  for (let i = 0; i < 185; i++) {
+    g.globalAlpha = 0.4 + random() * 0.5;
+    g.fillRect(3 + random() * 44, 4 + random() * 36, 0.25 + random() * 0.75, 0.25 + random() * 0.5);
+  }
+  pads.set(id, canvas);
+  return canvas;
 }
