@@ -151,15 +151,21 @@ const SPECIES_DEFAULT_SKIN = {
   cat: '#e0a060',
   alien: '#e0a638',
 };
-const SKIN_SWATCHES = [...SKIN, '#e3aa84', '#e0a638', '#6d4428', '#7fa35a', '#5f8a6a', '#c99a62', '#e0a060', '#9a9aa6', '#3a3a44', '#8a93a8', '#8fd3ff'];
-const HAIR_SWATCHES = [...HAIR_COLORS, '#db7093', '#b53a2a', '#ff5ad6', '#3bd6ff', '#62d94f', '#ff8a1f', '#e8e4f0'];
-const OUTFIT_SWATCHES = [...OUTFIT_COLORS, '#dfa22e', '#e88fb0', '#1f4ea8', '#d9483b', '#d9a426', '#24262e'];
-const WILD_SKINS = ['#e0a638', '#7fa35a', '#8fd3ff', '#f4a8c0', '#ffd83a', '#b695ff', '#e0a060', '#5fd6a8'];
-const WILD_DYES = ['#db7093', '#ff5ad6', '#3bd6ff', '#62d94f', '#ff8a1f', '#ffd83a', '#9c5aff', '#ff3a26', '#ffffff'];
-const WILD_OUTFITS = ['#dfa22e', '#e88fb0', '#ff3a26', '#2a52be', '#ffd83a', '#1f9d55', '#9c3bc9', '#ff7a1f', '#1eb8c9', '#d9388a'];
+const SKIN_SWATCHES = [
+  ...SKIN, '#e3aa84', '#e0a638', '#6d4428', '#7fa35a', '#5f8a6a', '#c99a62', '#e0a060',
+  '#9a9aa6', '#3a3a44', '#8a93a8', '#8fd3ff', '#f4a8c0', '#ffd83a', '#b695ff', '#5fd6a8',
+];
+const HAIR_SWATCHES = [
+  ...HAIR_COLORS, '#db7093', '#b53a2a', '#ff5ad6', '#3bd6ff', '#62d94f', '#ff8a1f', '#e8e4f0',
+  '#ffd83a', '#9c5aff', '#ff3a26', '#ffffff',
+];
+const OUTFIT_SWATCHES = [
+  ...OUTFIT_COLORS, '#dfa22e', '#e88fb0', '#1f4ea8', '#d9483b', '#d9a426', '#24262e',
+  '#ff3a26', '#2a52be', '#ffd83a', '#1f9d55', '#9c3bc9', '#ff7a1f', '#1eb8c9', '#d9388a',
+];
 
 const LABELS = {
-  gender: { male: 'Male (Boy)', female: 'Female (Girl)' },
+  gender: { male: 'Male', female: 'Female' },
   species: { human: 'Human', alien: 'Alien', robot: 'Robot', goblin: 'Goblin', dog: 'Dog', cat: 'Cat' },
   hair: { short: 'Short', side: 'Side Part', long: 'Long', braids: 'Side Braid', bun: 'Top Bun', mohawk: 'Mohawk', bald: 'Bald' },
   facial: { none: 'Clean', lashes: 'Lashes & Hoops', mustache: 'Mustache', beard: 'Beard' },
@@ -455,7 +461,6 @@ const studio = {
   pose: 'idle',
   backdrop: 'paper',
   tab: 'look',
-  pins: new Set(),
   rollCount: 0,
   thumbs: {},
   swatches: {},
@@ -477,30 +482,22 @@ function setCustomLook(patch) {
   syncStudioUI();
 }
 
-/** Compute unpinned human default adaptations when switching between Male (Boy) and Female (Girl). */
-function genderTransitionPatch(cur, nextGender, pins = studio.pins, forceDefaults = false) {
+function genderTransitionPatch(cur, nextGender, forceDefaults = false) {
   const patch = { gender: nextGender };
   if (cur.species !== 'human') return patch;
   const defs = humanGenderDefaults(nextGender);
-  if (forceDefaults) {
-    if (!pins.has('hair')) patch.hair = defs.hair;
-    if (!pins.has('facial')) patch.facial = defs.facial;
-    if (!pins.has('outfit')) patch.outfit = defs.outfit;
-    if (!pins.has('outfitColor')) patch.outfitColor = defs.outfitColor;
-    if (!pins.has('accessory')) patch.accessory = defs.accessory;
-    return patch;
-  }
+  if (forceDefaults) return defs;
   if (nextGender === 'female') {
-    if (!pins.has('hair') && ['short', 'side', 'bald', 'mohawk'].includes(cur.hair)) patch.hair = defs.hair;
-    if (!pins.has('facial') && ['mustache', 'beard'].includes(cur.facial)) patch.facial = 'none';
-    if (!pins.has('outfit') && ['tee', 'suit', 'consul', 'vest'].includes(cur.outfit)) patch.outfit = defs.outfit;
-    if (!pins.has('outfitColor') && String(cur.outfitColor || '').toLowerCase() === '#3f7f9a') patch.outfitColor = defs.outfitColor;
+    if (['short', 'side', 'bald', 'mohawk'].includes(cur.hair)) patch.hair = defs.hair;
+    if (['mustache', 'beard'].includes(cur.facial)) patch.facial = 'none';
+    if (['tee', 'suit', 'consul', 'vest'].includes(cur.outfit)) patch.outfit = defs.outfit;
+    if (String(cur.outfitColor || '').toLowerCase() === '#3f7f9a') patch.outfitColor = defs.outfitColor;
   } else {
-    if (!pins.has('hair') && ['long', 'braids', 'bun'].includes(cur.hair)) patch.hair = defs.hair;
-    if (!pins.has('facial') && cur.facial === 'lashes') patch.facial = 'none';
-    if (!pins.has('outfit') && ['cardigan', 'tunic'].includes(cur.outfit)) patch.outfit = defs.outfit;
-    if (!pins.has('outfitColor') && String(cur.outfitColor || '').toLowerCase() === '#8a5a8f') patch.outfitColor = defs.outfitColor;
-    if (!pins.has('accessory') && cur.accessory === 'hoops') patch.accessory = 'none';
+    if (['long', 'braids', 'bun'].includes(cur.hair)) patch.hair = defs.hair;
+    if (cur.facial === 'lashes') patch.facial = 'none';
+    if (['cardigan', 'tunic'].includes(cur.outfit)) patch.outfit = defs.outfit;
+    if (String(cur.outfitColor || '').toLowerCase() === '#8a5a8f') patch.outfitColor = defs.outfitColor;
+    if (cur.accessory === 'hoops') patch.accessory = 'none';
   }
   return patch;
 }
@@ -510,10 +507,8 @@ function rollRandomLook() {
   const seed = `${Date.now()}:${Math.random()}:${studio.rollCount}`;
   const h = hashId(seed);
   const pickFrom = (arr, shift) => arr[(h >>> shift) % arr.length];
-  const wild = $('wild-colors').checked;
-  const cur = activeLook();
-  const nextGender = studio.pins.has('gender') ? cur.gender : pickFrom(GENDER, 24);
-  const nextSpecies = studio.pins.has('species') ? cur.species : pickFrom(SPECIES, 0);
+  const nextGender = pickFrom(GENDER, 24);
+  const nextSpecies = pickFrom(SPECIES, 0);
   const speciesSkin = SPECIES_DEFAULT_SKIN[nextSpecies] || SKIN[0];
   const humanGirl = nextSpecies === 'human' && nextGender === 'female';
   const humanBoy = nextSpecies === 'human' && nextGender === 'male';
@@ -536,18 +531,18 @@ function rollRandomLook() {
   const next = {
     gender: nextGender,
     species: nextSpecies,
-    skin: studio.pins.has('skin') ? cur.skin : (wild ? pickFrom(WILD_SKINS, 3) : (nextSpecies === 'human' ? pickFrom(SKIN, 3) : speciesSkin)),
-    hair: studio.pins.has('hair') ? cur.hair : pickFrom(hairChoices, 6),
-    hairColor: studio.pins.has('hairColor') ? cur.hairColor : pickFrom(wild ? WILD_DYES : HAIR_COLORS, 9),
-    facial: studio.pins.has('facial') ? cur.facial : pickFrom(facialChoices, 12),
-    outfit: studio.pins.has('outfit') ? cur.outfit : pickFrom(outfitChoices, 15),
-    outfitColor: studio.pins.has('outfitColor') ? cur.outfitColor : pickFrom(wild ? WILD_OUTFITS : OUTFIT_COLORS, 18),
-    accessory: studio.pins.has('accessory') ? cur.accessory : pickFrom(accChoices, 21),
+    skin: nextSpecies === 'human' ? pickFrom(SKIN, 3) : speciesSkin,
+    hair: pickFrom(hairChoices, 6),
+    hairColor: pickFrom(HAIR_COLORS, 9),
+    facial: pickFrom(facialChoices, 12),
+    outfit: pickFrom(outfitChoices, 15),
+    outfitColor: pickFrom(OUTFIT_COLORS, 18),
+    accessory: pickFrom(accChoices, 21),
   };
   setCustomLook(next);
 }
 
-$('quick-roll').addEventListener('click', () => rollRandomLook());
+$('quick-roll').addEventListener('click', rollRandomLook);
 
 function applyAvatarPose3D(avatar, poseName) {
   if (!avatar) return;
@@ -794,7 +789,7 @@ function refreshThumbnails() {
           sample.skin = SPECIES_DEFAULT_SKIN.human;
           Object.assign(sample, humanGenderDefaults(item.val));
         } else {
-          Object.assign(sample, genderTransitionPatch({ ...base, species: sample.species }, item.val, studio.pins));
+          Object.assign(sample, genderTransitionPatch(base, item.val));
         }
       }
       if (trait === 'species' && item.val !== base.species) {
@@ -873,12 +868,7 @@ function buildStudioOnce() {
   $('preset-bar').replaceChildren(...PRESETS.map((pr) => {
     const b = el('button', '', pr.label);
     b.type = 'button';
-    b.addEventListener('click', () => {
-      const cur = activeLook();
-      const next = { ...pr.look };
-      for (const pinned of studio.pins) next[pinned] = cur[pinned];
-      setCustomLook(next);
-    });
+    b.addEventListener('click', () => setCustomLook(pr.look));
     return b;
   }));
 
@@ -893,18 +883,18 @@ function buildStudioOnce() {
         const cur = activeLook();
         if (trait === 'gender') {
           const sameGender = me.customLook && cur.gender === val;
-          setCustomLook(genderTransitionPatch(cur, val, studio.pins, sameGender));
+          setCustomLook(genderTransitionPatch(cur, val, sameGender));
           return;
         }
         const patch = { [trait]: val };
-        if (trait === 'species' && !studio.pins.has('skin')) patch.skin = SPECIES_DEFAULT_SKIN[val] || SKIN[0];
-        if (trait === 'species' && val === 'alien' && !studio.pins.has('hair')) patch.hair = 'bald';
+        if (trait === 'species') patch.skin = SPECIES_DEFAULT_SKIN[val] || SKIN[0];
+        if (trait === 'species' && val === 'alien') patch.hair = 'bald';
         if (trait === 'species' && val === 'human') {
           const defs = humanGenderDefaults(cur.gender);
-          if (!studio.pins.has('hair') && cur.hair === 'bald') patch.hair = defs.hair;
-          if (!studio.pins.has('outfit') && cur.outfit === 'consul') patch.outfit = defs.outfit;
-          if (cur.gender === 'female' && !studio.pins.has('facial') && ['mustache', 'beard'].includes(cur.facial)) patch.facial = 'none';
-          if (cur.gender === 'male' && !studio.pins.has('facial') && cur.facial === 'lashes') patch.facial = 'none';
+          if (cur.hair === 'bald') patch.hair = defs.hair;
+          if (cur.outfit === 'consul') patch.outfit = defs.outfit;
+          if (cur.gender === 'female' && ['mustache', 'beard'].includes(cur.facial)) patch.facial = 'none';
+          if (cur.gender === 'male' && cur.facial === 'lashes') patch.facial = 'none';
         }
         setCustomLook(patch);
       });
@@ -939,14 +929,6 @@ function buildStudioOnce() {
   makeSwatches('pick-skin', 'color-skin', 'skin', SKIN_SWATCHES);
   makeSwatches('pick-hair-color', 'color-hair', 'hairColor', HAIR_SWATCHES);
   makeSwatches('pick-outfit-color', 'color-outfit', 'outfitColor', OUTFIT_SWATCHES);
-
-  for (const pinBtn of $('creator').querySelectorAll('[data-pin]')) {
-    pinBtn.addEventListener('click', () => {
-      const k = pinBtn.dataset.pin;
-      if (studio.pins.has(k)) studio.pins.delete(k); else studio.pins.add(k);
-      syncStudioUI();
-    });
-  }
 
   $('perk-grid').replaceChildren(...PERK_LIST.map((p) => {
     const icon = el('i');
@@ -997,13 +979,7 @@ syncStudioUI = () => {
   );
   drawBarcode(`${me.name}|${me.customLook ? JSON.stringify(look) : 'random'}|${perk.id}`);
 
-  const pill = $('look-mode-pill');
-  pill.textContent = me.customLook ? 'Saved custom pass' : 'Random each visit';
-  pill.classList.toggle('custom', me.customLook);
-  $('use-random-look').disabled = !me.customLook;
-  $('gender-note').textContent = look.species === 'human'
-    ? '(Sets Boy / Girl defaults — all traits stay remixable)'
-    : '(Subtle silhouette & face cues; Human switches full Boy / Girl defaults)';
+  $('gender-note').textContent = look.species === 'human' ? '(Sets your starting hair and outfit)' : '';
   $('hair-note').textContent = look.species === 'robot' ? '(Robot chassis uses steel dome + antenna)' : '';
 
   for (const [trait, list] of Object.entries(studio.thumbs)) {
@@ -1020,12 +996,6 @@ syncStudioUI = () => {
   $('color-skin').value = look.skin;
   $('color-hair').value = look.hairColor;
   $('color-outfit').value = look.outfitColor;
-
-  for (const pinBtn of $('creator').querySelectorAll('[data-pin]')) {
-    const pinned = studio.pins.has(pinBtn.dataset.pin);
-    pinBtn.classList.toggle('on', pinned);
-    pinBtn.textContent = pinned ? 'PINNED' : 'PIN';
-  }
 
   $('tab-perks').textContent = `2. DEPARTMENT KIT (${perk.cost}/1 PT)`;
   const meter = $('perk-meter');
@@ -1138,17 +1108,8 @@ $('view-zoom').addEventListener('click', () => {
   $('view-zoom').textContent = studio.zoom ? 'View: Head' : 'View: Full';
   renderStage(performance.now(), 0);
 });
-$('roll-look').addEventListener('click', () => rollRandomLook());
-$('unpin-all').addEventListener('click', () => { studio.pins.clear(); syncStudioUI(); });
-$('use-random-look').addEventListener('click', () => {
-  me = { ...me, customLook: false, look: {} };
-  keep();
-  refreshPassSummary();
-  syncStudioUI();
-});
 $('perk-clear').addEventListener('click', () => equipPerk(DEFAULT_PERK));
 $('creator-reset').addEventListener('click', () => {
-  studio.pins.clear();
   me = { ...me, customLook: false, look: {}, perk: DEFAULT_PERK };
   keep();
   refreshPassSummary();
