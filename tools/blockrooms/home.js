@@ -18,8 +18,7 @@ import { GENDER, SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, SKIN, HAIR_COLORS, OU
 import { DEFAULT_PERK, PERK_LIST, cleanPerk, resolvePerk } from './core/perks.mjs';
 import { cleanRecord, emptyRecord } from './core/runs.mjs';
 import { paintFlatCharacter } from './world/art/character.js';
-import { archive, onArchive, startAccounts } from './archive-client.js';
-startAccounts().catch(() => {});
+import { archive, onArchive, signInGoogle, startAccounts } from './archive-client.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, ...kids) => { const e = document.createElement(tag); if (cls) e.className = cls; e.append(...kids.filter((k) => k !== null && k !== undefined && k !== false)); return e; };
@@ -29,6 +28,54 @@ const day = (at) => new Date(at).toLocaleDateString('en-GB', { day: 'numeric', m
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* until the page closes */ } } };
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const PLAY = './play';
+
+// The door is always a plain play link. Guests only contact the accounts service when they ask to sign in.
+const provider = $('save-progress').dataset.accounts;
+const saveButton = $('save-sign-in'), saveMessage = $('save-message');
+const returnUrl = new URL(location.href);
+const result = returnUrl.searchParams.get('signin');
+const cloudReturn = provider === 'cloudflare' && (result === 'complete' || result === 'failed');
+const supabaseReturn = provider === 'supabase' && (returnUrl.searchParams.has('code') || returnUrl.searchParams.has('error'));
+let notice = '', opening = false, accountState;
+if (cloudReturn) {
+  returnUrl.searchParams.delete('signin');
+  history.replaceState(history.state, '', returnUrl);
+}
+const retrySignIn = 'Sign-in didn’t finish. Try again when you’re ready.';
+if (cloudReturn && result === 'failed') notice = retrySignIn;
+function renderHomeAccount() {
+  saveButton.hidden = !provider || !!accountState.user;
+  saveButton.disabled = opening;
+  let message = notice;
+  if (accountState.user) {
+    if (accountState.phase === 'error') message = accountState.message;
+    else message = accountState.phase === 'synced' ? 'Signed in · Progress synced' : 'Signed in';
+  }
+  if (saveMessage.textContent !== message) saveMessage.textContent = message;
+}
+onArchive(state => { accountState = state; renderHomeAccount(); });
+const returning = (cloudReturn && result === 'complete') || supabaseReturn;
+startAccounts({ force: returning }).then(() => {
+  if (returning && !accountState.user) { notice = retrySignIn; renderHomeAccount(); }
+  if (supabaseReturn) location.hash = 'enter';
+}).catch(() => { notice = 'Cloud saves are offline. You can still play.'; renderHomeAccount(); });
+saveButton.addEventListener('click', async () => {
+  if (opening) return;
+  opening = true; notice = 'Opening sign-in…'; renderHomeAccount();
+  try {
+    await startAccounts({ force: true });
+    if (accountState.user) { opening = false; notice = ''; renderHomeAccount(); return; }
+    if (!accountState.configured) throw Error('Cloud saves are offline. You can still play.');
+    if (accountState.providers?.google === false) location.assign('./archive#email');
+    else await signInGoogle({ returnTo: 'home' });
+  } catch {
+    opening = false; notice = 'Sign-in is unavailable. Try again or enter as a guest.'; renderHomeAccount();
+  }
+});
+window.addEventListener('pageshow', event => {
+  if (event.persisted && opening) { opening = false; notice = ''; renderHomeAccount(); }
+});
+
 // Difficulty: a row of buttons under the door, one pressed (a radio group: arrow keys move it, as a select did)
 const difficultyRow = $('difficulty'), difficultyButtons = [];
 const difficultyField = { value: cleanDifficulty(store.get('office.backrooms')?.difficulty) };

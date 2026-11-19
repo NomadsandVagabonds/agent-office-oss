@@ -93,8 +93,8 @@ check('codes expire, have a resend cooldown, five attempts, and one concurrent w
 });
 check('Google callback binds PKCE and browser state; only Google-hosted mailboxes link by email',async t=>{
   const f=fixture(t), a=await f.login('test@gmail.com');
-  async function start() {
-    const res=await f.post('google',{}), url=new URL((await res.json()).url);
+  async function start(returnTo) {
+    const res=await f.post('google',{returnTo}), url=new URL((await res.json()).url);
     const cookie=res.headers.getSetCookie()[0].split(';')[0];
     assert.equal(cookie.split('=')[0],FLOW);
     assert.equal(url.searchParams.get('code_challenge_method'),'S256');
@@ -109,6 +109,15 @@ check('Google callback binds PKCE and browser state; only Google-hosted mailboxe
   const session=ok.headers.getSetCookie().find(v=>v.startsWith(SESSION+'='));
   assert.match(session,/HttpOnly; Secure; SameSite=Lax/);
   assert.equal((await (await f.call('?action=session',undefined,session.split(';')[0])).json()).user.id,a.user.id);
+  const home=await start('home');
+  const cancelled=await f.call(home.query.replace('code=google-test','error=access_denied'),undefined,home.cookie);
+  assert.equal(cancelled.headers.get('location'),site+'/?signin=failed#enter');
+  assert.equal(cancelled.headers.getSetCookie().some(v=>v.startsWith(SESSION+'=')),false);
+  const backHome=await f.call(home.query,undefined,home.cookie);
+  assert.equal(backHome.headers.get('location'),site+'/?signin=complete#enter');
+  assert.ok(backHome.headers.getSetCookie().some(v=>v.startsWith(SESSION+'=')));
+  const unrecognised=await start('https://example.invalid/');
+  assert.equal((await f.call(unrecognised.query,undefined,unrecognised.cookie)).headers.get('location'),site+'/archive');
   f.identity({sub:'third-party',email:'me@example.invalid',email_verified:true});
   const other=await start(), rejected=await f.call(other.query,undefined,other.cookie);
   assert.match(rejected.headers.get('location'),/signin=email$/);

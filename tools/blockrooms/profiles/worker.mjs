@@ -27,7 +27,7 @@ export function createWorker({ transport = fetch, clock = nowSeconds } = {}) {
       if (request.method !== 'POST') return json({error:'Method unavailable.'},405);
       const body = await readJson(request, action === 'save' ? MAX_SAVE + 1024 : 2048);
       switch (action) {
-        case 'google': if (providers(env).google) return await startGoogle(env); break;
+        case 'google': if (providers(env).google) return await startGoogle(env,body.returnTo); break;
         case 'email': if (providers(env).email) return await sendCode(request,env,body.email,now,transport); break;
         case 'verify': if (providers(env).email) return await verifyCode(request,env,body,now); break;
         case 'logout': return await signOut(request,env);
