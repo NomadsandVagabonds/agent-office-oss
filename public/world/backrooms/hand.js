@@ -9,6 +9,7 @@ import { INVENTORY_MODELS, sculptTorchGrip } from './inventory-items.js';
 import { Vox, M } from '../vox/vox.js';
 import { KINDS, ITEM_IDS, isPaper, isBalloon, isFlashlight, createHandOver } from './items.js';
 import { heldScissors } from './hand-scissors.js';
+import { heldExtinguisher } from './hand-extinguisher.js';
 import { wipePose, swatPose } from './hand-moves.rule.js';
 import { createStuckNotes } from './hand-notes.js';
 
@@ -110,6 +111,7 @@ export function createHandView(env, camera) {
   function model(kind) {
     if (kind === 'pink-slip') return slip();
     if (kind === 'scissors') return heldScissors(kit, ITEM_LIGHTS(), ITEM_AMB);   // (a fist round them, and two halves on a pin: hand-scissors.js)
+    if (kind === 'extinguisher') return heldExtinguisher(kit, ITEM_LIGHTS(), ITEM_AMB);   // (a fist over its head, its lever and gauge: hand-extinguisher.js)
     const b = new Batch(false), s = (kit.VOXEL || 0.025) * (kind === 'balloon' ? 0.36 : 0.46);
     INVENTORY_MODELS[kind].sculpt(b, s, { grounded: false, held: true });
     const itemBounds = kind === 'torch' || kind === 'balloon' ? boundsFromBatch(b) : null;
@@ -199,8 +201,9 @@ export function createHandView(env, camera) {
     /** Every frame, for the part somebody is in. show: false while the bag is open, somebody is being carried, or the tape is ending. */
     update(dt, show) {
       const item = show ? env.inventory?.held?.() ?? null : null;
-      // (a pair coming apart goes on being shown until the blade has fallen, though the pockets have already let go of it)
-      const want = item && INVENTORY_MODELS[item.type] ? item.type : show && made.get('scissors')?.busy() ? 'scissors' : null;
+      // (a pair coming apart goes on being shown until the blade has fallen, though the pockets have already let go of it;
+      // and an extinguisher run dry, until it has been pumped on nothing and has sagged)
+      const want = item && INVENTORY_MODELS[item.type] ? item.type : show && made.get('scissors')?.busy() ? 'scissors' : show && made.get('extinguisher')?.busy() ? 'extinguisher' : null;
       if (want !== type) {
         if (shown) shown.mesh.visible = false;
         type = want; shown = null;
@@ -227,7 +230,7 @@ export function createHandView(env, camera) {
       // a wipe or a swat (hand-moves.rule.js): one hand, in place of the shove's two, and nothing held shown while it goes
       let moving = null;
       if (move) { move.t += dt; moving = move.kind === 'wipe' ? wipePose(move.t) : swatPose(move.t, move.dir); if (!moving) move = null; }
-      const striking = show && (!!moving || showing(meP.punch || 0, { scissors: type === 'scissors' }));
+      const striking = show && (!!moving || showing(meP.punch || 0, { scissors: type === 'scissors' || type === 'extinguisher' }));
       if (striking && !hands) hands = makeHands();
       if (hands) {
         hands.group.visible = striking;
@@ -259,6 +262,7 @@ export function createHandView(env, camera) {
       root.position.copy(camera.position).sub(env.world.scene.position); root.quaternion.copy(camera.quaternion);
       at.set(rest.x + Math.sin(t * 1.1) * 0.006 * swing, rest.y + Math.abs(Math.sin(t * 1.1)) * 0.014 * swing + Math.sin(t * 0.35) * 0.003, rest.z);
       if (type === 'scissors') shown.update(dt, at);           // (the jab, and how it went: hand-scissors.rule.js)
+      else if (type === 'extinguisher') shown.update(dt, at, item);   // (squeezed or let go, and the gauge: hand-extinguisher.rule.js)
       else shown.mesh.position.copy(at);
       if (hands?.group.visible) { const L2 = env.world.lightAt(me.x, me.z, 1.2); for (const h of hands.made) h.mat.uniforms.uTint.value.set(Math.max(0.16, L2[0] * 1.25), Math.max(0.16, L2[1] * 1.25), Math.max(0.16, L2[2] * 1.25)); }
       if (type === 'balloon') shown.mesh.rotation.z = Math.sin(t * 0.5) * 0.09 + swing * 0.12;
@@ -275,6 +279,11 @@ export function createHandView(env, camera) {
     stick(id, spot) { stuck().stick(id, spot); },
     /** It goes: how 'wiped' | 'swatted' | 'burnt' | 'fell'; dir, for a swat, the side it is knocked to. */
     unstick(id, how, dir) { notes?.unstick(id, how, dir); },
+    /** The extinguisher's lever: squeezed (true) or let go · it has run dry under the hand (hand-extinguisher.js). */
+    spraying(on) { made.get('extinguisher')?.spraying(on); },
+    dried() { made.get('extinguisher')?.dry(); },
+    /** Where the spray leaves the horn, in the world, and which way: → `out`, or null when it is not in the hand. */
+    nozzle(out, dir) { return type === 'extinguisher' && shown ? shown.nozzle(out, dir) : null; },
     /** The scissors' click: a jab starts. */
     jab() { made.get('scissors')?.jab(); },
     /** How the jab went, once it is known (inventory.js): { ok, snapped }. A hit, a miss and a break each look their own. */

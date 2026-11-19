@@ -46,6 +46,7 @@ import { createStalkers } from './pursuer.js';
 import { createHand, createHandView } from './hand.js';
 import { createDenizens } from './denizens.js';
 import { createResidents } from './resident.js';
+import { createExtinguisher } from './extinguisher.js';
 import { hangBanner } from './banner.js';
 import { cleanWhere } from './banner.rule.js';
 import { createLoot, lootLeft } from './loot.js';
@@ -230,6 +231,7 @@ async function visit(office, opt) {
   const clickIt = () => {
     if (!canAct() || inventory?.isOpen) return;
     if (inventory?.held()?.type === 'scissors') { inventory.snip({ quietMiss: true }); return; }
+    if (inventory?.held()?.type === 'extinguisher') { cur?.env.extinguisher?.press(); return; }   // (a burst: held, it goes on)
     cur?.env.shove?.();
   };
   let tipNote = '', tipUntil = 0;
@@ -385,6 +387,7 @@ async function visit(office, opt) {
         const facing = (-Math.sin(me.yaw) * dx - Math.cos(me.yaw) * dz) / d;
         if (facing < Math.cos(Math.min(Math.PI, halfFov() + (o.margin ?? 0.14) + Math.atan2(o.radius ?? 0.4, d)))) return false;
         if (Math.abs(me.pitch) > 1.05 && d > 1.2) return false;
+        if (d > 0.9 && env.extinguisher?.blinds?.()) return false;        // (standing in the white of the extinguisher: extinguisher.rule.js blind)
         return o.walls === false || f.world.los(me.x, me.z, x, z);
       },
       /** How loud and which side a sound from this spot would be. */
@@ -446,6 +449,7 @@ async function visit(office, opt) {
     createStalkers(env, opt.debug ? { ...(opt.dev?.cast?.length ? { members: opt.dev.cast } : {}), beside: opt.dev?.beside || null, wake: !!opt.dev?.wake } : {});
     // the residents of rooms (denizens.js), and the visitor's hand as they ask after it; the picture washed red (0…1) by a room that does that
     createHand(env); createHandView(env, camera); createDenizens(env); createResidents(env);
+    createExtinguisher(env, camera);                    // (the fire extinguisher, when there is one in the hand: extinguisher.js)
     // the banner an office park puts up about itself, near where a visit lands (banner.js): once the part is built
     if ((level.depth | 0) === 0) (env.ready || (env.ready = [])).push(() => { try { hangBanner(env); } catch (err) { console.warn('[backrooms] the banner would not hang', err); } });
     env.red = (k) => { redWash = Math.max(redWash, k); };
@@ -490,7 +494,7 @@ async function visit(office, opt) {
     if (f.player) tally.part(f.world);                    // (a part somebody was in is counted as it goes: after this it is gone)
     inventory?.forget(f.env);
     f.env.pursuer?.dispose?.();
-    f.env.denizens?.dispose?.(); f.env.handView?.dispose?.();
+    f.env.denizens?.dispose?.(); f.env.handView?.dispose?.(); f.env.extinguisher?.dispose?.();
     f.world?.scene.removeFromParent();
     f.world?.dispose(); f.kit.dispose();
   }
@@ -652,6 +656,7 @@ async function visit(office, opt) {
     purse?.update(dt, time, state === 'play');
     inventory?.update(dt, clocksRun());
     env.handView?.update(dt, canAct() && !inventory?.isOpen && !env.grip?.held);          // (what is in the selected pocket, in the corner of the picture)
+    env.extinguisher?.update(dt, !!input.state.firing && canAct() && !inventory?.isOpen);   // (squeezed and held: it goes on spraying past the burst)
     currentUse = canAct() && !inventory?.isOpen ? world.usable(me) : null;
     const grip = env.grip, furniture = grip?.action(currentUse);
     hud.hint(!!currentUse || !!furniture, furniture ? grip.blocked ? 'Find space to set down' : `E · ${grip.held ? 'Set down' : 'Move'} ${furniture.label || furniture.type}` : 'E', !!furniture);

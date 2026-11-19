@@ -48,7 +48,9 @@ test('how much: an early battery then spaced refills, at most one snack and pape
     for (const s of plan) { const { id, type, rooms, ...made } = s; assert.doesNotThrow(() => makeItem(type, id, made), `${id} is something the pockets know`); }
     assert.ok(of('paper').length >= SUPPLY.stacks[0] && of('paper').length <= SUPPLY.stacks[1] && of('lighter').length <= 1 && of('tape').length <= 1);
     for (const p of of('paper')) assert.ok(p.quantity >= SUPPLY.paper[0] && p.quantity <= SUPPLY.paper[1]);
-    assert.ok(plan.every((s) => ['battery', 'snack', 'torch', 'chalk', 'paper', 'lighter', 'tape'].includes(s.type)), 'nothing else, unless somebody wants it');
+    assert.ok(plan.every((s) => ['battery', 'snack', 'torch', 'chalk', 'paper', 'lighter', 'tape', 'extinguisher'].includes(s.type)), 'nothing else, unless somebody wants it');
+    assert.ok(of('extinguisher').length <= 1);
+    for (const x of of('extinguisher')) assert.ok(x.charge > 0 && x.charge <= ITEM_DEFS.extinguisher.maxCharge, 'a found extinguisher is never empty');
   }
 });
 
@@ -86,13 +88,16 @@ test('a typical part has roughly four scattered finds, two of them battery packs
     finds += plan.length; snacks += plan.filter(s => s.type === 'snack').length; stacks += plan.filter(s => s.type === 'paper').length;
     assert.equal(plan.filter(s => s.type === 'battery').length, 2, '24 rooms keep an early pack and one later pack');
   }
-  assert.ok(finds / 1000 >= 3.6 && finds / 1000 <= 4.5, `${finds / 1000} finds per part`);
+  // (and an extinguisher in about a third of them, on top: extinguisher.rule.js)
+  const extinguishers = Array.from({ length: 1000 }, (_, seed) => planSupplies(part(seed, 2)).filter(s => s.type === 'extinguisher').length).reduce((a, b) => a + b, 0);
+  assert.ok(Math.abs(extinguishers / 1000 - SUPPLY.extinguisher) < 0.05, `${extinguishers / 1000} extinguishers per part`);
+  assert.ok((finds - extinguishers) / 1000 >= 3.6 && (finds - extinguishers) / 1000 <= 4.5, `${(finds - extinguishers) / 1000} finds per part`);
   assert.ok(snacks / 1000 >= SUPPLY.snack - .08 && snacks / 1000 <= SUPPLY.snack + .08, `${snacks / 1000} snacks per part`);
   assert.ok(stacks / 1000 >= .4 && stacks / 1000 <= .6, `${stacks / 1000} paper stacks per part`);
 });
 
 test('anything else is only there for somebody: what a creature or a resident on the part cares about, one of each', () => {
-  const level = floors(1)[0], ABOUT = ['battery', 'snack', 'torch', 'chalk', 'paper', 'lighter', 'tape'];
+  const level = floors(1)[0], ABOUT = ['battery', 'snack', 'torch', 'chalk', 'paper', 'lighter', 'tape', 'extinguisher'];
   const types = (wanted) => planSupplies(level, wanted).map((s) => s.type).filter((t) => !ABOUT.includes(t)).sort();
   assert.deepEqual(types([]), []);
   assert.deepEqual(types(['battery', 'torch', 'paper']), [], 'what is about anyway is not left twice');

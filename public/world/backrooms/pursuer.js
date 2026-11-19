@@ -363,6 +363,30 @@ export function createStalkers(env, options = {}) {
       }
       return out;
     },
+    /**
+     * What the extinguisher could reach (extinguisher.js, extinguisher.rule.js): whatever each of them offers (its own
+     * sprayTargets()), or else itself, where it says it is (at()). Each says who it is (`member`, `heavy`) so that what
+     * it does about a face full can be looked up; `douse(dose, from)` does it: its own doused(), if it has one, or it is
+     * stood where it is (c.stall) for the stop and the backing off together. → [{ id, member, heavy, x, z, y?, r, douse }]
+     */
+    sprayTargets() {
+      const out = [];
+      for (const k of live) {
+        if (k.dead || k.away || castList.finished?.(k.vital)) continue;
+        const who = { member: k.member.id, heavy: !!k.member.heavy };
+        const own = k.it.sprayTargets?.();
+        if (Array.isArray(own)) { for (const t of own) out.push({ ...who, ...t }); continue; }
+        const at = whereIs(k);
+        if (!at || !Number.isFinite(at.x) || !Number.isFinite(at.z)) continue;
+        out.push({ id: k.id, ...who, x: at.x, z: at.z, y: Number.isFinite(at.y) ? at.y : undefined, r: at.r ?? 0.4,
+          douse: (dose, from) => {
+            if (typeof k.it.doused === 'function') return k.it.doused(dose, from) !== false;
+            const s = (dose.stop || 0) + (dose.back || 0); if (s > 0) { k.stall = Math.max(k.stall || 0, s); k.settle = true; }
+            return true;
+          } });
+      }
+      return out;
+    },
     /** What a shove could move (shove.rule.js): whatever each of them offers — [{ id, x, z, y?, r, shove(dir) }]. */
     shoveTargets() {
       const out = [];

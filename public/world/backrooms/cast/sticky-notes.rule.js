@@ -7,8 +7,8 @@
 // nuisance, never what ends a visit (the owner: "more annoyance and distraction than lethal threat").
 //
 // A shove knocks one out of the air (a backhand: it goes down and lies a while), and a shove while any are stuck on the
-// lens wipes them off instead. A jab finishes one (basic: one jab, one note). Fire takes them. And one that has been on
-// the lens twice has had its glue: it falls and stays down.
+// lens wipes them off instead. A jab finishes one (basic: one jab, one note). Fire takes them. The extinguisher brings down
+// whatever it catches, wet, for a long while. And one that has been on the lens twice has had its glue: it falls and stays down.
 
 export const NOTES = Object.freeze({
   count: Object.freeze([4, 6]),       // how many to a room, by the floor's dice
@@ -25,6 +25,7 @@ export const NOTES = Object.freeze({
   sticks: 0.38,                       // metres from the lens that is on it
   rest: 4,                            // seconds after one has come at you before the next may (never two at once): mostly they go round
   knocked: 6,                         // seconds one knocked down lies there before it lifts again
+  wet: 20,                            // …and one brought down by the extinguisher, wet through (extinguisher.rule.js)
   stuckFor: Object.freeze([18, 30]),  // seconds one stays on the lens if nobody wipes it, before it peels off and falls
   glue: 2,                            // times one can stick; after that, knocked or wiped or fallen, it stays down
   drain: 0.00025,                     // of a full charge, a second, for each one stuck (a tenth of a second of tape a second)
@@ -58,13 +59,16 @@ export function noteStep(n, dt, sense) {
       if ((sense.lens ?? Infinity) <= N.sticks) return { ...o, mode: 'lens', t: 0, stuck: true, times: (n.times || 0) + 1, until: sense.stuckFor ?? N.stuckFor[0] };
       return o.t >= N.diveFor ? { ...o, mode: 'flutter', t: 0 } : o;
     case 'lens': return o.t >= (n.until ?? N.stuckFor[0]) ? fallen(o) : o;
-    case 'down': return o.t >= N.knocked && (n.times || 0) < N.glue ? { ...o, mode: 'flutter', t: 0 } : o;
+    case 'down': return o.t >= (n.wet ? N.wet : N.knocked) && (n.times || 0) < N.glue ? { ...o, mode: 'flutter', t: 0, wet: false } : o;
     default: return o;
   }
 }
 
 /** It has come off the lens by itself, or been wiped off, or knocked out of the air: it goes down — and stays down once its glue is spent. */
 export function fallen(n) { return { ...n, mode: (n.times || 0) >= NOTES.glue ? 'spent' : 'down', t: 0, fell: true }; }
+
+/** The extinguisher: it comes down wet, and lies stuck to the floor a long while (NOTES.wet) before it can lift. */
+export const wetted = (n) => ({ ...fallen(n), wet: true });
 
 /** A jab: one note, finished (basic). It lies where it falls and is done. */
 export const torn = (n) => ({ ...n, mode: 'spent', t: 0, fell: true });

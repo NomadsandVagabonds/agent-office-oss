@@ -14,10 +14,13 @@
 //                   there is somebody down here who will take it instead of you
 //   a lighter, tape in about a quarter of the parts each: with paper, a fire; with a
 //                   torch, a torch that will stay on the camcorder
+//   an extinguisher in about a third of the parts, part used: it stops a thing a
+//                   moment (extinguisher.rule.js)
 //   anything else   only where somebody on this floor wants it (cast.js: what
 //                   a creature cares about). Nothing is clutter.
 import { difficultyOf } from '../../../core/difficulty.mjs';
 import { makeRng } from './gen.js';
+import { foundCharge } from './extinguisher.rule.js';
 
 /** How much there is. Starting points: this is what play-testing changes. */
 export const SUPPLY = Object.freeze({
@@ -33,11 +36,12 @@ export const SUPPLY = Object.freeze({
   paperRooms: 3.5,                  // PAPER, VERY COMMON (the owner, 18 Nov: it is what the shop is paid in): one more stack of loose paper to about this many rooms of a part, so about one room in three or four has a sheaf to take. Set it higher for less, 0 for none
   lighter: 0.25,                    // the chance of a lighter in a part (it is kept: one is enough for a visit)
   tape: 0.2,                        // the chance of a roll of tape in a part
+  extinguisher: 0.3,                // the chance of a fire extinguisher in a part (extinguisher.rule.js): one every three or so, part used, never refilled
   choices: 4,                       // rooms offered for each thing, in order: the first with clear floor gets it
 });
 /** What is about whether or not anybody wants it: the rest only turns up for somebody. */
-const ALWAYS = new Set(['battery', 'snack', 'torch', 'chalk', 'paper', 'lighter', 'tape']);
-const KNOWN = new Set(['torch', 'battery', 'chalk', 'paper', 'scissors', 'snack', 'balloon', 'lighter', 'tape']);
+const ALWAYS = new Set(['battery', 'snack', 'torch', 'chalk', 'paper', 'lighter', 'tape', 'extinguisher']);
+const KNOWN = new Set(['torch', 'battery', 'chalk', 'paper', 'scissors', 'snack', 'balloon', 'lighter', 'tape', 'extinguisher']);
 
 /**
  * What the residents of a part's rooms care about: the `items` of the deck line of every room on it.
@@ -93,6 +97,9 @@ export function planSupplies(level, wanted = []) {
   if (RC.chance(SUPPLY.lighter)) leave('lighter', 0);
   if (RC.chance(SUPPLY.tape)) leave('tape', 0);
   for (const type of [...new Set(wanted)].filter((t) => KNOWN.has(t) && !ALWAYS.has(t)).sort()) leave(type, 0);
+  // (the extinguisher came later still: a stream of its own and rooms of its own, so that nothing else moves for it)
+  const RX = R.fork('extinguisher');
+  if (RX.chance(SUPPLY.extinguisher)) out.push({ id: 'extinguisher-0', type: 'extinguisher', rooms: RX.shuffle(rooms).slice(0, SUPPLY.choices).map((r) => r.id), charge: foundCharge(RX()) });
   if (d && d.batteryShare < 1) {
     // An independent draw preserves other loot positions. Keep the first pack;
     // thin the rest to ~70% overall, not 70% of only the surplus.
