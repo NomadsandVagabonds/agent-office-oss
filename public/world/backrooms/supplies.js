@@ -16,6 +16,8 @@
 //                   torch, a torch that will stay on the camcorder
 //   an extinguisher in about a third of the parts, part used: it stops a thing a
 //                   moment (extinguisher.rule.js)
+//   a flamingo      on about a third of the neighbourhood's parts: pulled up off a
+//                   lawn, one stab (melee.js STAB)
 //   anything else   only where somebody on this floor wants it (cast.js: what
 //                   a creature cares about). Nothing is clutter.
 import { difficultyOf } from '../../../core/difficulty.mjs';
@@ -37,11 +39,12 @@ export const SUPPLY = Object.freeze({
   lighter: 0.25,                    // the chance of a lighter in a part (it is kept: one is enough for a visit)
   tape: 0.2,                        // the chance of a roll of tape in a part
   extinguisher: 0.3,                // the chance of a fire extinguisher in a part (extinguisher.rule.js): one every three or so, part used, never refilled
+  flamingo: 0.35,                   // the chance of a lawn flamingo that can be pulled up, on a part of the neighbourhood (themes.js suburb) only: one stab (melee.js STAB)
   choices: 4,                       // rooms offered for each thing, in order: the first with clear floor gets it
 });
 /** What is about whether or not anybody wants it: the rest only turns up for somebody. */
-const ALWAYS = new Set(['battery', 'snack', 'torch', 'chalk', 'paper', 'lighter', 'tape', 'extinguisher']);
-const KNOWN = new Set(['torch', 'battery', 'chalk', 'paper', 'scissors', 'snack', 'balloon', 'lighter', 'tape', 'extinguisher']);
+const ALWAYS = new Set(['battery', 'snack', 'torch', 'chalk', 'paper', 'lighter', 'tape', 'extinguisher', 'flamingo']);
+const KNOWN = new Set(['torch', 'battery', 'chalk', 'paper', 'scissors', 'snack', 'balloon', 'lighter', 'tape', 'extinguisher', 'flamingo']);
 
 /**
  * What the residents of a part's rooms care about: the `items` of the deck line of every room on it.
@@ -100,6 +103,8 @@ export function planSupplies(level, wanted = []) {
   // (the extinguisher came later still: a stream of its own and rooms of its own, so that nothing else moves for it)
   const RX = R.fork('extinguisher');
   if (RX.chance(SUPPLY.extinguisher)) out.push({ id: 'extinguisher-0', type: 'extinguisher', rooms: RX.shuffle(rooms).slice(0, SUPPLY.choices).map((r) => r.id), charge: foundCharge(RX()) });
+  // (and the lawn flamingo, only where there are lawns: the neighbourhood's parts. A stream and rooms of its own too)
+  if (level.theme === 'suburb') { const RF = R.fork('flamingo'); if (RF.chance(SUPPLY.flamingo)) out.push({ id: 'flamingo-0', type: 'flamingo', rooms: RF.shuffle(rooms).slice(0, SUPPLY.choices).map((r) => r.id) }); }
   if (d && d.batteryShare < 1) {
     // An independent draw preserves other loot positions. Keep the first pack;
     // thin the rest to ~70% overall, not 70% of only the surplus.

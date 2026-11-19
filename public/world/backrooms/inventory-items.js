@@ -1173,6 +1173,45 @@ function sculptExtinguisher(s) {
   s.pop();
 }
 
+/**
+ * A lawn flamingo: a pink plastic bird on two steel stakes. Its stakes stand from y 0 (their points) up into its belly at about
+ * 14, its body is about 14 to 20, its neck goes up in an S to its head at about 29, and its bill points along +X (it looks
+ * along +X). The points are what stab (FLAMINGO_PARTS.tip): a creature stabbed has the bird standing out of it.
+ */
+export const FLAMINGO_PARTS = Object.freeze({ tip: Object.freeze([0, 0, 0]), height: 30.5 });
+function sculptFlamingo(s) {
+  const pink = '#ef7ea6', pinkHi = '#ffa3c3', pinkLo = '#c95786', faded = '#f2a9c0', bill = '#f1ece0', billTip = '#1e1b1c', steel = '#a3abb3', steelLo = '#6f777f';
+  const blob = (cx, cy, cz, rx, ry, rz, col, hi = null, seg = 16) => {
+    const pts = []; for (let i = 0; i <= 8; i++) { const a = -Math.PI / 2 + (i / 8) * Math.PI; pts.push([Math.max(0, Math.cos(a)), Math.sin(a), col, 0.9 + 0.12 * (i / 8)]); }
+    s.push(); s.translate(cx, cy, cz); s.scale(rx, ry, rz);
+    s.lathe(pts, seg, hi ? { colorFn: (th, y, r, j, i, c) => (Math.cos(th - 0.5) > 0.6 && y > 0 ? hi : c) } : {});
+    s.pop();
+  };
+  s.push();
+  if (s.grounded && !s.held) { s.translate(0, 0, 0); s.rotateY(24 * DEG); }
+  // the stakes: two steel rods, pointed, splayed a little, into the belly
+  for (const z of [-0.55, 0.55]) {
+    s.push(); s.translate(0.2, 0, z); s.rotateX(z * 0.05);
+    s.cyl(0.03, 0.2, 0, 1.4, 8, steelLo, { bevel: 0.01 });
+    s.cyl(0.2, 0.18, 1.4, 14.6, 8, steel, { bevel: 0.03, topColor: steelLo });
+    s.pop();
+  }
+  // the body: a plump oval, the tail tipped up behind (−X), a wing pressed along each side
+  blob(0, 17.2, 0, 4.4, 2.9, 2.6, pink, pinkHi, 18);
+  s.push(); s.translate(-4.1, 18.4, 0); s.rotateZ(-28 * DEG); blob(0, 0, 0, 1.9, 0.9, 1.4, pinkLo, null, 12); s.pop();
+  for (const z of [-1.0, 1.0]) { s.push(); s.translate(-0.6, 17.7, z * 2.15); s.rotateZ(-8 * DEG); blob(0, 0, 0, 3.3, 1.7, 0.55, z < 0 ? pinkLo : faded, null, 12); s.pop(); }
+  // the neck: up from the breast, back, and over in an S to the head
+  s.tube([[3.4, 18.6, 0], [4.2, 21.2, 0], [3.4, 23.8, 0], [2.4, 26.0, 0], [2.8, 28.2, 0], [3.9, 29.1, 0]], (t) => 0.95 - t * 0.3, 10, (t) => (t < 0.5 ? pink : pinkHi), { up: [0, 0, 1] });
+  // the head, the bill turned down at its end, and an eye each side
+  blob(4.3, 29.3, 0, 1.25, 1.1, 0.95, pink, pinkHi, 14);
+  s.push(); s.translate(5.3, 29.1, 0); s.rotateZ(-100 * DEG);
+  s.cyl(0.55, 0.38, 0, 1.4, 10, bill, { bevel: 0.05 });
+  s.cyl(0.38, 0.06, 1.4, 2.5, 10, billTip, { bevel: 0.02, capTop: false });
+  s.pop();
+  for (const z of [-0.78, 0.78]) { s.push(); s.translate(4.65, 29.75, z); s.bevelBox(0.38, 0.38, 0.14, 0.06, billTip); s.pop(); }
+  s.pop();
+}
+
 /** Sculpted 3D right work-glove & jacket sleeve wrapping the held flashlight barrel. */
 export function sculptTorchGrip(batch, scale = 1) {
   const s = new Sculpt(batch, scale, { grounded: false, held: true });
@@ -1223,6 +1262,7 @@ export const tape = makeEntry(sculptTape);
 export const opener = makeEntry(sculptOpener);
 export const camcorder = makeEntry(sculptCamcorder);
 export const extinguisher = makeEntry(sculptExtinguisher);
+export const flamingo = makeEntry(sculptFlamingo);
 
 torch.grip = sculptTorchGrip;
 
@@ -1239,6 +1279,7 @@ export const INVENTORY_MODELS = Object.freeze({
   opener,
   'pink-slip': pinkSlip,
   extinguisher,
+  flamingo,
 });
 
 export const ICON_MODELS = Object.freeze({

@@ -18,6 +18,7 @@ const ICON_YAW = Object.freeze({
   tape: 0.22,
   opener: 0.22,
   extinguisher: 0.5,
+  flamingo: -0.4,
   camera: -0.32,
 });
 
