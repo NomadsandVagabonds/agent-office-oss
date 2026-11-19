@@ -193,8 +193,9 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     const state = model.read(), wasEmpty = !state.holstered && !state.slots[state.selected], result = model.add(item);
     if (result.ok) {
       if (wasEmpty) model.select(result.index);
+      // (no name across the middle of the picture: the pocket shows what it is, and the clack says it was taken. The
+      // owner, 19 Nov. A notice is kept for what went wrong: full pockets, nothing to use it on)
       refresh(); env.sound.play('clack', { vol: .45 });
-      tell(result.item.type === 'paper' ? `Paper +${result.accepted}` : ITEM_DEFS[result.item.type].name);
     }
     return result; // The giver keeps any rejected item or paper remainder.
   }
@@ -320,7 +321,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     const floor = { env: next, id: key => prefix + key, physical: null, facade: null, taken: new Map() };
     floor.physical = createInventoryWorld(next, model, {
       canAct: () => available(floor), onNotice: tell,
-      onPickup: item => { refresh(); try { floor.taken.get(item.id)?.(item); } catch { /* a room's own affair */ } floor.taken.delete(item.id); tell(item.type === 'paper' ? `Paper +${item.quantity}` : ITEM_DEFS[item.type]?.name || 'Picked up'); },
+      onPickup: item => { refresh(); try { floor.taken.get(item.id)?.(item); } catch { /* a room's own affair */ } floor.taken.delete(item.id); },          // (no name across the picture on picking up: give() says why)
     });
     // NPCs keep this floor-scoped handle. A stale handle from the part above
     // cannot inspect or mutate what somebody now carries on the next floor.
