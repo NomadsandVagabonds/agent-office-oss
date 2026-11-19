@@ -1,6 +1,7 @@
 import { archive, onArchive, startAccounts, signInGoogle, emailCode, verifyCode, signOut, sync } from './archive-client.js';
 import { cardExporter, drawPersonnelCard } from './archive-card.js';
 import { CLEARANCE_FLOORS } from './core/archive.mjs';
+import { floorEvidence } from './archive-floors.js';
 import { fileStats, ledgerRows, workbook } from './archive-charts.js';
 const $ = id => document.getElementById(id);
 const node = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
@@ -13,7 +14,7 @@ let typeReady = false;
 let sending = false, cooldown = 0, codeEmail = '', currentState;
 function printCard() {
   drawPersonnelCard(card,currentCard,portrait);
-  card.setAttribute('aria-label', `BlockRooms personnel ID for ${currentCard.name}. ${currentCard.escapes} escapes, ${currentCard.best} best score, ${currentCard.rooms} room types and ${currentCard.entities} entities. Floor clearance: ${currentCard.clearances.length ? currentCard.clearances.map(id => CLEARANCE_FLOORS[id]).join(', ') : 'none'}.`);
+  card.setAttribute('aria-label', `BlockRooms personnel ID for ${currentCard.name}. ${currentCard.escapes} escapes, ${currentCard.best} best score, ${currentCard.rooms} room types and ${currentCard.entities} entities. Floors visited: ${currentCard.visited.length} of 9. Floor clearance: ${currentCard.clearances.length ? currentCard.clearances.map(id => CLEARANCE_FLOORS[id]).join(', ') : 'none'}.`);
   if (typeReady) prepareExport();
 }
 function photograph(look) {
@@ -38,26 +39,30 @@ function render(state) {
   else if (state.ready && !state.configured) $('auth-status').textContent = 'Cloud saves are offline. This file stays on this device.';
   else if (state.ready && oauthMessage) $('auth-status').textContent = oauthMessage;
   else if (state.ready && !codeEmail && !sending) $('auth-status').textContent = 'Signing in is optional.';
-  const r = archive.record(), profile = archive.profile();
-  const nextCard = { name:profile.name, look:profile.look, best:r.best, escapes:r.out, rooms:Object.keys(r.rooms).length, entities:Object.keys(r.cast).length, clearances:archive.document().clearances };
+  const r = archive.record(), profile = archive.profile(), saved = archive.document();
+  const evidence = floorEvidence(r,saved);
+  if (evidence.visited.some(id => !saved.activity.floors.includes(id)) || evidence.clearances.some(id => !saved.clearances.includes(id)))
+    archive.restoreFloors(evidence, archive.owner()).catch(console.error);
+  const nextCard = { name:profile.name, look:profile.look, best:r.best, escapes:r.out, rooms:Object.keys(r.rooms).length, entities:Object.keys(r.cast).length, ...evidence };
   const nextCardKey = JSON.stringify(nextCard);
   if (cardKey !== nextCardKey) {
     currentCard = nextCard; cardKey = nextCardKey;
     const floors = Object.entries(CLEARANCE_FLOORS);
-    $('clearance-summary').textContent = `Floor clearance · ${nextCard.clearances.length} of ${floors.length}`;
+    $('clearance-summary').textContent = `Floors visited · ${nextCard.visited.length} of ${floors.length} · ${nextCard.clearances.length} cleared`;
     $('clearance-floors').replaceChildren(...floors.map(([id,label]) => {
       const earned = nextCard.clearances.includes(id), row = node('li');
-      row.append(node('span',label), node('span',earned ? 'Stamped' : 'Uncleared',earned ? 'earned' : ''));
+      row.append(node('span',label), node('span',earned ? 'Cleared' : nextCard.visited.includes(id) ? 'Visited' : 'No record',earned ? 'earned' : ''));
       return row;
     }));
     const nextLookKey = JSON.stringify(profile.look);
     if (lookKey !== nextLookKey) { lookKey = nextLookKey; photograph(profile.look); }
     printCard();
   }
-  const nextRecordKey = JSON.stringify(r);
+  const olderCards = archive.priorCards();
+  const nextRecordKey = JSON.stringify([r,saved.activity.streams,olderCards.map(c=>[c.runs?.n,c.seen?.rooms])]);
   if (recordKey === nextRecordKey) return;
   recordKey = nextRecordKey;
-  const stats = fileStats(r);
+  const stats = fileStats(r,saved.activity.streams,olderCards);
   showWorkbook(stats);
   $('ledger-rows').replaceChildren(...ledgerRows(r,stats).map(([label,value]) => {
     const line = node('div'); line.append(node('dt',label),node('dd',value)); return line;

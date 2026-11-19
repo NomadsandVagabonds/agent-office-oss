@@ -10,7 +10,7 @@ const blue = '#1b3071',
 let wordmark;
 
 // Lay out in coarse printer dots. Typeset directly on the export canvas so even the small legends print cleanly.
-export function drawPersonnelCard(canvas, { name, look, best, escapes, rooms, entities, clearances = [] }, portrait) {
+export function drawPersonnelCard(canvas, { name, look, best, escapes, rooms, entities, clearances = [], visited = clearances }, portrait) {
   const g = canvas.getContext('2d');
   g.save();
   g.scale(canvas.width / 600, canvas.height / 360);
@@ -163,7 +163,7 @@ export function drawPersonnelCard(canvas, { name, look, best, escapes, rooms, en
   band(557, 209, 8, 25, 10, blue);
   band(571, 209, 7, 25, 10, blue);
   type('FLOOR CLEARANCE', 26, 228, display(20, true), paper);
-  type(`${earned.size} / ${floors.length}`, 523, 228, display(20, true), paper, 'right');
+  type(`${visited.length}/${floors.length} SEEN  ·  ${earned.size} CLEARED`, 523, 226, display(13, true), paper, 'right');
 
   // A single ruled strip leaves the paper visible between all nine ink impressions.
   g.strokeStyle = '#8490a6';
@@ -174,6 +174,8 @@ export function drawPersonnelCard(canvas, { name, look, best, escapes, rooms, en
     if (index) rect(left, 239, 0.7, 78, '#a0a6ae');
     if (active) {
       g.drawImage(floorStamp(id), center - 27, 241, 54, 47.5);
+    } else if (visited.includes(id)) {
+      type('VISITED', center, 271, labelFont(9.2), blue, 'center');
     } else {
       rect(center - 9, 273, 18, 0.8, '#b8b7a9');
     }

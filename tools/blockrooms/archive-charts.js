@@ -9,32 +9,101 @@ const dateFormat = new Intl.DateTimeFormat('en-US', {
 const dayLabel = (day) => dateFormat.format(day * dayMs);
 export const duration = (seconds) => Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
 
-export function fileStats(record) {
-  const days = new Map();
-  for (const field of ['rooms', 'cast'])
-    for (const at of Object.values(record[field])) {
-      if (at <= 0 || !Number.isFinite(new Date(at).getTime())) continue;
-      const day = Math.floor(at / dayMs);
-      const row = days.get(day) || { day, rooms: 0, cast: 0 };
-      row[field]++;
-      days.set(day, row);
+// Existing v1 files retain first-sighting timestamps and sometimes scorecards.
+// Assign a historic run number only when a receipt or a complete sequence proves it.
+export function discoveryRuns(record, streams = {}, cards = []) {
+  const sources = Object.values(streams);
+  const tracked = sources.reduce((sum, s) => sum + s.n, 0);
+  const oldRuns = Math.max(0, record.runs - tracked + sources.reduce((sum, s) => sum + s.replays, 0));
+  const since = sources.reduce((first, s) => Math.min(first, s.since), Infinity);
+  const roomsAt = Object.values(record.rooms).sort((a, b) => a - b);
+  const castAt = Object.values(record.cast).sort((a, b) => a - b);
+  const oldRooms = roomsAt.filter((t) => t < since).length;
+  const oldCast = castAt.filter((t) => t < since).length;
+  const earlier = new Map();
+  const ends = [
+    ...new Set([...roomsAt, ...castAt, ...record.tapes.map((t) => t.at)].filter((t) => t > 0 && t < since)),
+  ].sort((a, b) => a - b);
+  const datedSnapshot = (at) => ({
+    rooms: roomsAt.filter((t) => t > 0 && t <= at).length,
+    cast: castAt.filter((t) => t > 0 && t <= at).length,
+  });
+  if (ends.length === oldRuns && !record.tapes.some((t) => t.plays))
+    ends.forEach((at, i) => earlier.set(i + 1, datedSnapshot(at)));
+  for (const card of cards) {
+    const run = card?.runs?.n;
+    if (!card?.replay && Number.isSafeInteger(run) && run > 0 && run <= oldRuns && card.seen) {
+      const other = earlier.get(run);
+      earlier.set(run, {
+        rooms: Math.max(other?.rooms || 0, card.seen.rooms || 0),
+        cast: Math.max(other?.cast || 0, card.seen.cast || 0),
+        survived: Math.max(other?.survived || 0, card.lines?.find((l) => l.id === 'survived')?.count || 0),
+      });
     }
+  }
+  // When only timestamps survive, use recorded-run order and say how much history is missing.
+  // A discovery or an escape shares exactly one file time with everything else from that visit.
+  let unplaced = 0;
+  if (oldRuns && ends.length && ends.length < oldRuns && !earlier.size) {
+    unplaced = oldRuns - ends.length;
+    ends.forEach((at, i) => earlier.set(i + 1, datedSnapshot(at)));
+  }
+  const lastOld = oldRuns - unplaced;
+  if (oldRuns) earlier.set(lastOld, { ...earlier.get(lastOld), rooms: oldRooms, cast: oldCast });
+  const rows = [];
   let rooms = 0,
-    cast = 0,
-    busiest;
-  const discoveries = [...days.values()]
-    .sort((a, b) => a.day - b.day)
-    .map((row) => {
-      const count = row.rooms + row.cast;
-      if (!busiest || count > busiest.count) busiest = { day: row.day, count };
-      rooms += row.rooms;
-      cast += row.cast;
-      return { day: row.day, rooms, cast };
-    });
+    distinct = 0,
+    encounters = 0;
+  for (const [run, row] of [...earlier].sort((a, b) => a[0] - b[0])) {
+    rooms = Math.max(rooms, row.rooms);
+    encounters += Math.max(0, row.cast - distinct, row.survived || 0);
+    distinct = Math.max(distinct, row.cast);
+    rows.push({ run, rooms, encounters, legacy: true });
+  }
+
+  const points = sources.flatMap((s) => s.points).sort((a, b) => a[0] - b[0]);
+  const omitted = tracked - points.length;
+  encounters += sources.reduce((sum, s) => sum + s.total - s.points.reduce((n, p) => n + p[1], 0), 0);
+  const assigned = new Set();
+  // Two offline devices may finish at the exact same millisecond. The room IDs
+  // break that tie, while dated legacy rooms still count without a run log.
+  const attributed = new Set(
+    points.flatMap(([at, , fresh = []]) => fresh.filter((id) => record.rooms[id] === at)),
+  );
+  const otherDates = Object.entries(record.rooms)
+    .filter(([id]) => !attributed.has(id))
+    .map(([, at]) => at)
+    .sort((a, b) => a - b);
+  let index = 0;
+  for (const [i, [at, delta, fresh = []]] of points.entries()) {
+    while (index < otherDates.length && otherDates[index] <= at) index++;
+    for (const id of fresh) if (record.rooms[id] === at) assigned.add(id);
+    rooms = Math.max(rooms, index + assigned.size);
+    encounters += delta;
+    rows.push({ run: lastOld + omitted + i + 1, rooms, encounters });
+  }
+  return { rows, oldRuns, omitted, unplaced };
+}
+
+export function fileStats(record, streams = {}, cards = []) {
+  const days = new Map();
+  let busiest;
+  for (const at of [...Object.values(record.rooms), ...Object.values(record.cast)]) {
+    if (at <= 0 || !Number.isFinite(new Date(at).getTime())) continue;
+    const day = Math.floor(at / dayMs);
+    days.set(day, (days.get(day) || 0) + 1);
+  }
+  for (const [day, count] of days)
+    if (!busiest || count > busiest.count || (count === busiest.count && day < busiest.day))
+      busiest = { day, count };
+  const { rows: discoveries, oldRuns, omitted, unplaced } = discoveryRuns(record, streams, cards);
   // The shelf is newest first. Missing durations on old imports are unknown.
   const timed = record.tapes.filter((t) => t.seconds > 0).reverse();
   return {
     discoveries,
+    oldRuns,
+    omitted,
+    unplaced,
     timed,
     busiest,
     rate: record.runs ? Math.round((100 * Math.min(record.out, record.runs)) / record.runs) + '%' : '—',
@@ -59,7 +128,10 @@ function drawPlot(canvas, data, sightings) {
     top = 16,
     bottom = height - 34;
   const rows = sightings ? data.discoveries : data.timed;
-  const peak = rows.reduce((n, row) => Math.max(n, sightings ? Math.max(row.rooms, row.cast) : row.seconds), 1);
+  const peak = rows.reduce(
+    (n, row) => Math.max(n, sightings ? Math.max(row.rooms, row.encounters) : row.seconds),
+    1,
+  );
   const unit = Math.pow(10, Math.floor(Math.log10(peak / 4)));
   const step = Math.max(1, ([1, 2, 5, 10].find((t) => t * unit >= peak / 4) || 10) * unit);
   const max = step * Math.ceil(peak / step);
@@ -89,26 +161,34 @@ function drawPlot(canvas, data, sightings) {
   if (!rows.length) return;
   const span = right - left;
   if (sightings) {
-    const first = rows[0].day,
-      last = rows.at(-1).day;
-    const x = (day) =>
-      first === last ? left + span / 2 : left + 5 + ((span - 10) * (day - first)) / (last - first);
+    const first = rows[0].run === 1 ? 0 : rows[0].run,
+      last = rows.at(-1).run;
+    const x = (run) =>
+      first === last ? left + span / 2 : left + 5 + ((span - 10) * (run - first)) / (last - first);
     for (const [field, color] of [
       ['rooms', teal],
-      ['cast', plum],
+      ['encounters', plum],
     ]) {
-      g.lineWidth = 2;
+      g.lineWidth = 2.5;
       g.strokeStyle = color;
       g.fillStyle = color;
-      g.beginPath();
-      g.moveTo(x(first), y(rows[0][field]));
-      for (let i = 1; i < rows.length; i++) {
-        g.lineTo(x(rows[i].day), y(rows[i - 1][field]));
-        g.lineTo(x(rows[i].day), y(rows[i][field]));
-      }
-      g.stroke();
+      let previous = first === 0 ? { run: 0, [field]: 0 } : null;
       for (const row of rows) {
-        const px = x(row.day),
+        if (previous && row.run === previous.run + 1) {
+          g.setLineDash(row.legacy && field === 'encounters' ? [4, 3] : []);
+          g.beginPath();
+          g.moveTo(x(previous.run), y(previous[field]));
+          g.lineTo(x(row.run), y(row[field]));
+          g.stroke();
+        }
+        previous = row;
+      }
+      g.setLineDash([]);
+      // Individual runs keep their values in the data table, even at screen widths too small for markers.
+      const stride = Math.max(1, Math.ceil(rows.length / (span / 12)));
+      rows.forEach((row, i) => {
+        if (i % stride && i !== rows.length - 1) return;
+        const px = x(row.run),
           py = y(row[field]);
         if (field === 'rooms') g.fillRect(px - 3, py - 3, 6, 6);
         else {
@@ -120,14 +200,18 @@ function drawPlot(canvas, data, sightings) {
           g.closePath();
           g.fill();
         }
-      }
+      });
     }
     g.fillStyle = '#38413c';
-    g.textAlign = first === last ? 'center' : 'left';
-    g.fillText(dayLabel(first), first === last ? x(first) : left, bottom + 21);
-    if (first !== last) {
-      g.textAlign = 'right';
-      g.fillText(dayLabel(last), right, bottom + 21);
+    g.font = '12px "Courier New", monospace';
+    const low = rows[0].run;
+    const ticks = new Set([low, last]);
+    const slots = Math.max(2, Math.floor(span / 65));
+    const every = Math.max(1, Math.ceil((last - low) / (slots - 1)));
+    for (let run = low + every; run < last; run += every) if (x(last) - x(run) > 44) ticks.add(run);
+    for (const run of ticks) {
+      g.textAlign = first === last ? 'center' : run === last ? 'right' : run === low ? 'left' : 'center';
+      g.fillText('Run ' + run, x(run), bottom + 20);
     }
   } else {
     const pitch = span / rows.length,
@@ -152,20 +236,31 @@ export function workbook(elements) {
   function render() {
     if (!stats) return;
     const rows = sightings ? stats.discoveries : stats.timed;
-    title.textContent = sightings ? 'First sightings over time' : 'Escape time by recovered tape';
+    title.textContent = sightings ? 'Encounters and discoveries by run' : 'Escape time by recovered tape';
     caption.textContent = sightings
-      ? 'Cumulative room types and entities, by first recorded date (UTC).'
+      ? 'Each run adds its entity encounters. A room type counts once across all runs.' +
+        (stats.oldRuns ? ' Older runs show confirmed sightings only. Repeat encounters may be missing.' : '') +
+        (stats.unplaced
+          ? ` Run numbers follow surviving entries; ${stats.unplaced} earlier visits have no individual entry.`
+          : '') +
+        (stats.omitted ? ' Showing the most recent tracked runs.' : '')
       : 'Recorded duration, oldest to newest on your current tape shelf.';
     legend.hidden = !sightings || !rows.length;
+    if (sightings && rows.length) {
+      const last = rows.at(-1);
+      legend.children[0].textContent = 'Unique room types · ' + number(last.rooms);
+      legend.children[1].textContent =
+        'Entity encounters · ' + (stats.oldRuns ? '≥ ' : '') + number(last.encounters);
+    }
     empty.hidden = !!rows.length;
     details.hidden = !rows.length;
-    empty.textContent = sightings ? 'No dated sightings on file.' : 'No timed escape tapes on file.';
+    empty.textContent = sightings ? 'Finish a run to start your chart.' : 'No timed escape tapes on file.';
     discoveries.setAttribute('aria-pressed', String(sightings));
     escapes.setAttribute('aria-pressed', String(!sightings));
     table.replaceChildren();
     const heading = table.createTHead().insertRow();
     const labels = sightings
-      ? ['First seen (UTC)', 'Room types', 'Entities']
+      ? ['Run', 'Unique room types', 'Entity encounters']
       : ['Tape', 'Building', 'Time (m:ss)'];
     for (const label of labels) {
       const th = document.createElement('th');
@@ -176,7 +271,7 @@ export function workbook(elements) {
     const body = table.createTBody();
     rows.forEach((r, i) => {
       const values = sightings
-        ? [dayLabel(r.day), number(r.rooms), number(r.cast)]
+        ? [number(r.run), number(r.rooms), (stats.oldRuns ? '≥ ' : '') + number(r.encounters)]
         : [String(i + 1), r.seed, duration(r.seconds)];
       const tr = body.insertRow();
       for (const value of values) tr.insertCell().textContent = value;

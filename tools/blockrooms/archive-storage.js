@@ -19,11 +19,13 @@ export function createArchiveStorage({ storage, locks, uuid = () => crypto.rando
   const doc = id => {
     id = resolve(id || owner());
     const record = read(PREFIX + 'save:' + id);
-    return cleanArchive({ ...record, clearances: read(PREFIX + 'stamps:' + id) ?? record?.clearances });
+    return cleanArchive({ ...record, activity: read(PREFIX + 'activity:' + id) ?? record?.activity,
+      clearances: read(PREFIX + 'stamps:' + id) ?? record?.clearances });
   };
   const put = (id, value) => {
     id = resolve(id);
-    const { clearances, ...record } = cleanArchive(value);
+    const { clearances, activity, ...record } = cleanArchive(value);
+    write(PREFIX + 'activity:' + id, activity);
     if (clearances.length) write(PREFIX + 'stamps:' + id, clearances);
     write(PREFIX + 'save:' + id, record);
     changed();
@@ -43,6 +45,28 @@ export function createArchiveStorage({ storage, locks, uuid = () => crypto.rando
       return { name, look: a.character?.value || resolveLook('visitor:' + name) };
     },
     edit(patch, id = owner()) { return atomic(() => put(id, editArchive(doc(id), patch, device, now()))); },
+    restoreFloors({visited,clearances}, id = owner()) { return atomic(() => {
+      const before = doc(id);
+      if (visited.every(f => before.activity.floors.includes(f)) && clearances.every(f => before.clearances.includes(f))) return before;
+      return put(id, {...before, clearances:[...before.clearances,...clearances],
+        activity:{...before.activity, floors:[...before.activity.floors,...visited]}});
+    }); },
+    visitFloor(theme, id = owner()) { return atomic(() => {
+      const before = doc(id);
+      if (!Object.hasOwn(CLEARANCE_FLOORS,theme) || before.activity.floors.includes(theme)) return before;
+      return put(id, { ...before, activity:{...before.activity, floors:[...before.activity.floors,theme]} });
+    }); },
+    // Old scorecards retain run numbers and lifetime room totals even when no tape was kept.
+    priorCards(id = owner()) {
+      id = resolve(id);
+      const owners = [id];
+      const claimPrefix = PREFIX + 'claim:';
+      for (let i = 0; storage && i < storage.length; i++) {
+        const k = storage.key(i);
+        if (k?.startsWith(claimPrefix) && read(k) === id) owners.push(k.slice(claimPrefix.length));
+      }
+      return owners.flatMap(o => Object.values(read(PREFIX + 'receipts:' + o) || {}));
+    },
     clearFloor(theme, id = owner()) { return atomic(() => {
       const before = doc(id);
       if (!Object.hasOwn(CLEARANCE_FLOORS, theme) || before.clearances.includes(theme)) return before;

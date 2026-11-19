@@ -108,7 +108,7 @@ async function buildersFor(level) {
 
 /**
  * @param office  the office object (stage, net, …)
- * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, depths?:number, depth?:number, inventory?:boolean, barricades?:boolean, scorecard?:boolean, replay?:boolean, debug?:boolean, dev?:object, onReady?:Function, onFloorCleared?:(theme:string)=>void}} [opt]
+ * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, depths?:number, depth?:number, inventory?:boolean, barricades?:boolean, scorecard?:boolean, replay?:boolean, debug?:boolean, dev?:object, onReady?:Function, onFloorVisited?:(theme:string)=>void, onFloorCleared?:(theme:string)=>void}} [opt]
  *        depths: how many floors (default: by the seed) · depth: which floor to begin on (default: the top one)
  *        replay: this is a kept tape being played back (seed: the tape's; pursuer: whether the mascot was in it): nothing of the office's is hidden in it
  *        brand, share, also, home, anew: handed to the card at the end (scorecard.js), for a page that is not the office
@@ -446,7 +446,7 @@ async function visit(office, opt) {
       };
     }
     /** What creatures tell the visit, for the card at the end: this one was met; this one was got away from. */
-    env.run = { met: (id) => tally.met(id), survived: (id) => tally.survived(id) };
+    env.run = { met: tally.met, survived: tally.survived };
     // (whoever is looking may name who is down here, be put beside one of them, and have the mascot awake: ?debug only — docs/BACKROOMS.md)
     createStalkers(env, opt.debug ? { ...(opt.dev?.cast?.length ? { members: opt.dev.cast } : {}), beside: opt.dev?.beside || null, wake: !!opt.dev?.wake } : {});
     // the residents of rooms (denizens.js), and the visitor's hand as they ask after it; the picture washed red (0…1) by a room that does that
@@ -511,6 +511,7 @@ async function visit(office, opt) {
     currentUse = null; since = 0; hold = false; landed = -1;
     cur = f;
     purse?.attend(f.env);
+    opt.onFloorVisited?.(f.level.theme);
     tally.at(f.level.depth);                              // how far down somebody has got
     if (!f.world.scene.parent) root.add(f.world.scene);
     f.world.scene.position.set(0, 0, 0); f.world.scene.visible = true;

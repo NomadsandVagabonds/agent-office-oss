@@ -16,13 +16,50 @@ test('HR worksheets count dated first sightings once and time only retained tape
   const record = archiveRecord(importArchive({ runs: 10, out: 3, rooms: { lobby:day, pool:next, imported:0 }, cast: { toner:day+100 },
     tapes:[{ seed:'new', seconds:70, plays:2 }, { seed:'old', seconds:95 }, { seed:'undated' }] }));
   const stats = fileStats(record);
-  assert.deepEqual(stats.discoveries.map(r=>[r.rooms,r.cast]), [[1,1],[2,1]]);
+  assert.deepEqual(stats.discoveries.map(r=>[r.run,r.rooms,r.encounters]), [[1,1,0],[2,1,1],[3,3,1]]);
+  assert.equal(stats.unplaced,7);
   assert.deepEqual(stats.busiest, { day:day/86400000, count:2 });
   assert.equal(stats.rate,'30%');
   assert.equal(stats.fastest,'1:10');
   assert.deepEqual(stats.timed.map(t=>t.seed),['old','new']);
   assert.equal(stats.replays,2);
   assert.equal(fileStats(archiveRecord({})).rate,'—');
+});
+test('each finished visit adds its encounters, while a repeated room counts once across losses, replays and devices', () => {
+  const play = (a,writer,at,seed,rooms,encounters,reason) => archiveRun(a,{...run(seed),reason,
+    rooms:{kinds:rooms},cast:{met:['toner'],encounters}},{writer,at}).document;
+  const first = play({},'a',100,'one',['party'],3,'exit');
+  const repeat = play(first,'a',200,'one',['party'],1,'caught');
+  const other = play(first,'b',200,'two',['party','pool'],2,'quit');
+  const combined = mergeArchive(repeat,other);
+  assert.deepEqual(mergeArchive(combined,other),combined);
+  const stats = fileStats(archiveRecord(combined),combined.activity.streams);
+  assert.deepEqual(stats.discoveries.map(r=>[r.run,r.rooms,r.encounters]), [[1,1,3],[2,1,4],[3,2,6]]);
+  const legacy = importArchive({runs:3,rooms:{party:15,pool:25},cast:{toner:15}});
+  const tracked = play(legacy,'b',100,'three',['party','grove'],2,'quit');
+  const past = [{runs:{n:1},seen:{rooms:1,cast:1},lines:[{id:'survived',count:2}]}];
+  const data = fileStats(archiveRecord(tracked),tracked.activity.streams,past);
+  assert.deepEqual(data.discoveries.map(r=>[r.run,r.rooms,r.encounters]), [[1,1,2],[3,2,2],[4,3,4]]);
+});
+test('floor evidence restores historical escape itineraries and distinguishes visiting a floor from clearing it', async t => {
+  const {dir, createArchiveStorage} = await modules(t);
+  const {floorEvidence, escapedFloors} = await import(pathToFileURL(path.join(dir,'archive-floors.js')));
+  const cases = [
+    ['yntnbj',['yellow','night','archive','fitout']], ['kwr85e',['yellow','archive','suburb','exec']],
+    ['t25noi',['yellow','archive','exec','suburb']], ['36nyx7',['yellow','archive','fitout','exec']]
+  ];
+  for (const [edition,ids] of cases) assert.deepEqual(escapedFloors({edition,seed:'compat0'}).sort(),ids.sort());
+  assert.deepEqual(escapedFloors({edition:'unknown',seed:'compat0'}),[]);
+  const legacy = {runs:7,out:1,rooms:{'channel-hall':33,trailhead:55},tapes:[{seed:'compat0',at:33,edition:'kwr85e'}]};
+  const storage = memory({'office-backrooms:record':JSON.stringify({record:legacy})});
+  let seq=0;
+  const a = createArchiveStorage({storage,uuid:()=> 'id-'+ ++seq});
+  const evidence = floorEvidence(a.record(),a.document());
+  assert.deepEqual(evidence.clearances,['yellow','archive','exec','suburb','waterpark']);
+  assert.ok(evidence.visited.includes('forest') && !evidence.clearances.includes('forest'));
+  await a.restoreFloors(evidence); await a.visitFloor('mall'); await a.claim('alice');
+  assert.ok(a.document().activity.floors.includes('mall') && !a.document().clearances.includes('mall'));
+  await a.signOut(); assert.deepEqual(a.document().activity.floors,[]);
 });
 test('concurrent devices union discoveries/tapes and count visits once across retries', () => {
   const a = visit({}, 'a', 'tape-a'), b = visit({}, 'b', 'tape-b', 'pool');

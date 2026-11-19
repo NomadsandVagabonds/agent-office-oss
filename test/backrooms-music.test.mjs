@@ -206,7 +206,7 @@ test('the mascot\'s music belongs to the mascot: it begins when a part\'s is fir
   const src = (f) => fs.readFileSync(new URL(f, dir), 'utf8');
   assert.deepEqual(ALL_CAST.filter((m) => m.music).map((m) => [m.id, m.music]), [['pirate', 'mascot']]);
   const pursuer = src('pursuer.js'), pirate = src('cast/pirate.js'), sound = src('sound.js');
-  assert.match(pursuer, /met: \(\) => \{ env\.run\?\.met\?\.\(member\.id\); if \(member\.music === 'mascot'\) env\.sound\?\.playMascot\?\.\(\); \},/);
+  assert.match(pursuer, /met: \(\) => \{ env\.run\?\.met\?\.\(member\.id, k\); if \(member\.music === 'mascot'\) env\.sound\?\.playMascot\?\.\(\); \},/);
   // "met" is once for each part's mascot (p.known), after it has been in view and near for a moment: not a glimpse, and never twice in a part
   assert.equal(pirate.match(/if \(!p\.known && p\.met > 0\.4\) \{ p\.known = true; c\.met\(\); \}/g).length, 2);
   assert.match(pursuer, /k\.dead = true; if \(k\.member\.music === 'mascot'\) env\.sound\?\.stopMascot\?\.\(\);/, 'a mascot that is no more takes its music with it');
