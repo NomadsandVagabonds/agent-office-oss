@@ -66,8 +66,17 @@ export function bellWater(c,tex,p) {
   c.after.push(()=>{
     const material=c.kit.surface({map:tex,room:c.rt.u,alpha:.82,side:THREE.DoubleSide});
     material.uniforms.uBellWater=phase;
-    material.fragmentShader='uniform float uBellWater;\n'+material.fragmentShader.replace('texture2D(map, vUv)',
-      'texture2D(map, vUv + vec2(sin(uBellWater * 0.7) * 0.012, uBellWater * 0.008))');
+    if (material.patchNode) {
+      material.patchNode({
+        uv({ T, mapUv, f }) {
+          const t = f('uBellWater');
+          return mapUv.add(T.vec2(T.sin(t.mul(0.7)).mul(0.012), t.mul(0.008)));
+        },
+      });
+    } else {
+      material.fragmentShader='uniform float uBellWater;\n'+material.fragmentShader.replace('texture2D(map, vUv)',
+        'texture2D(map, vUv + vec2(sin(uBellWater * 0.7) * 0.012, uBellWater * 0.008))');
+    }
     const mesh=new THREE.Mesh(c.kit.geometry(batch,c.rt.lights,c.rt.amb),material);mesh.renderOrder=4;group.add(mesh);
   });
   c.liquid?.(group,{kind:'water',phase,y:p.water});

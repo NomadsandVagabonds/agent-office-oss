@@ -28,6 +28,26 @@ export function poolSiphon(c,x,z,waterY,mouthY) {
   addTranslucent(c,water,{alpha:.8,order:5,finishMaterial(mat){
     mat.forceSinglePass=true;
     mat.uniforms.uSiphonFlow=flow;
+    if (mat.patchNode) {
+      mat.patchNode({
+        position({ T, pos, uv, f }) {
+          const { vec3, sin, cos } = T;
+          const t = f('uSiphonFlow');
+          return pos.add(vec3(sin(uv.y.mul(13).sub(t.mul(3))).mul(0.025), 0, cos(uv.y.mul(15).sub(t.mul(2))).mul(0.021)));
+        },
+        color({ T, c, alpha, uv, uAlpha, f, ss }) {
+          const { float, sin, cos, pow, max, min } = T;
+          const t = f('uSiphonFlow');
+          const s = uv.y.mul(27).sub(t.mul(8.2)).add(sin(uv.y.mul(9).sub(t.mul(2.3))).mul(1.2));
+          const fine = sin(uv.x.mul(16).add(sin(s.mul(0.5)).mul(2)));
+          const glint = pow(max(cos(s.add(uv.x.mul(3)).add(fine.mul(0.65))).mul(0.5).add(0.5), 0), 5);
+          const edge = ss(0, 0.19, min(uv.x, float(1).sub(uv.x)));
+          c.mulAssign(float(0.80).add(glint.mul(0.82)).add(fine.mul(0.12)));
+          alpha.assign(uAlpha.mul(edge).mul(float(0.23).add(glint.mul(0.67)).add(fine.mul(0.18)).add(sin(s).mul(0.17))));
+        },
+      });
+      return;
+    }
     mat.vertexShader='uniform float uSiphonFlow;\n'+mat.vertexShader.replace('vec4(position, 1.0)',`
       vec4(position + vec3(.025*sin(13.*uv.y-uSiphonFlow*3.), 0.,
                             .021*cos(15.*uv.y-uSiphonFlow*2.)), 1.)`);

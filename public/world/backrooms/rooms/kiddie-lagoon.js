@@ -41,6 +41,28 @@ function fountainWater(c, lipY, lipRadius, waterY) {
   addTranslucent(c,batch,{alpha:.67,order:5,side:THREE.DoubleSide,finishMaterial(mat) {
     mat.forceSinglePass=true;
     mat.uniforms.uFountainTime=clock;
+    if (mat.patchNode) {
+      mat.patchNode({
+        color({ T, c, alpha, uv, uAlpha, f }) {
+          const { float, sin, cos, pow, max, If } = T;
+          const t = f('uFountainTime');
+          const angle = uv.x.mul(6.2831853);
+          const flow = uv.y.mul(9).sub(t.mul(4));
+          const nozzle = cos(angle.mul(20).add(sin(flow.add(angle.mul(3))).mul(0.58))).mul(0.5).add(0.5);
+          const strands = cos(angle.mul(93).add(sin(flow.add(angle.mul(11))).mul(1.7))).mul(0.5).add(0.5);
+          const glint = pow(max(strands, 0), 4).mul(sin(flow.mul(2.7).add(angle.mul(13))).mul(0.5).add(0.5)).toVar();
+          const coverage = pow(max(nozzle, 0), 2).mul(0.71).add(0.11).mul(strands.mul(0.62).add(0.38)).toVar();
+          If(uv.y.lessThan(0), () => {
+            const dist = uv.y.negate().sub(1);
+            glint.assign(pow(max(cos(dist.mul(18).sub(t.mul(4.2)).add(sin(angle.mul(9)).mul(0.8))).mul(0.5).add(0.5), 0), 5));
+            coverage.assign(glint.mul(float(1).sub(dist)).mul(nozzle.mul(0.51).add(0.24)));
+          });
+          c.mulAssign(glint.mul(0.58).add(1));
+          alpha.assign(uAlpha.mul(coverage));
+        },
+      });
+      return;
+    }
     mat.fragmentShader='uniform float uFountainTime;\n'+mat.fragmentShader.replace('gl_FragColor = vec4(c, uAlpha);',`
       float angle = vUv.x * 6.2831853;
       float flow = vUv.y*9. - uFountainTime*4.;

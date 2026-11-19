@@ -40,6 +40,7 @@ export function createStuckNotes(kit, camera, draw = {}) {
 
   function make(id) {
     const mat = kit.surface({ map: tex, side: THREE.DoubleSide }); mat.transparent = true;
+    mat.setHeldInFront?.(draw.sliver ?? 0.002);
     const g = new THREE.Group(), top = new THREE.Mesh(topGeo, mat), fold = new THREE.Group(), bottom = new THREE.Mesh(bottomGeo, mat);
     front(top); front(bottom); fold.add(bottom); g.add(top, fold); group.add(g);
     return { id, g, fold, mat, spot: placed(), colour: '#f4e04d', t: 0, off: null, dir: 0 };
