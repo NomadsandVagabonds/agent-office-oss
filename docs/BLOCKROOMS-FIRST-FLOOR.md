@@ -41,25 +41,22 @@ do all the work in them. The room itself does none.
 
 **Decisions for the owner:**
 
-1. **The four openers for C9.** server-chasm, keyboard-floor, ceiling-meeting
-   and last-light. blackout-bay is left out on purpose: walk into it without the
-   flashlight and the visit ends, so it must not be a new player's first room.
-2. **When C9 lands.** It changes every building, so every saved tape and board
-   entry is from an older edition (Part 3). Batch it with other changes that
-   alter the edition.
-3. **Keep, fix or move the plain-office rooms.** FF-8 says a weak room is
-   polished or kept off the first floor. I would move cover, nested, lift and
-   phone deeper now, and polish the rest.
-4. **The first floor is short.** On a walk that knows the way, seed 7's whole
+1. **No C9 (decided, 19 Nov).** The owner does not want any room to show up
+   more often: variety is the game. The aim is to raise the plain rooms
+   instead, against the owner's own mood board. The measurement is kept as a
+   note at the end.
+2. **Raise the plain-office rooms.** They will be held against the owner's
+   mood board before any room work starts.
+3. **The first floor is short.** On a walk that knows the way, seed 7's whole
    first floor (five oddities and the way down) is done in **81 seconds**. A
    new player who is lost takes longer, but the pacing has less room than it
    seems.
-5. **The things on screen.** Every frame has the six-slot inventory strip and
+4. **The things on screen.** Every frame has the six-slot inventory strip and
    the heart. Near anything usable an **E** key cap appears in mid-screen, and
    a picked-up item's name shows above the strip ("Pink slip"). Rule 1 says no
    control hints. If those were meant, leave them; if not, they are the first
    thing a new player reads.
-6. **Two likeness risks for the Q-1 sweep.** cubicle-grid's "Smiling Office
+5. **Two likeness risks for the Q-1 sweep.** cubicle-grid's "Smiling Office
    Workers" (ear-to-ear grins, pursuing) and mandatory-fun's staff in party
    hats with red balloons are close to well-known community designs.
 
@@ -98,7 +95,8 @@ do all the work in them. The room itself does none.
   needs, so the plan pulls it up top.
 - Most others are there in 15 to 27% of visits.
 - The weakest are rare: shredding-bay 4%, blackout-bay 7%, cubicle-grid 7%.
-- The four openers (Part 3) are there in 15 to 26% of visits each.
+- The four strongest rooms (server-chasm, keyboard-floor, ceiling-meeting,
+  last-light) are there in 15 to 26% of visits each.
 
 ---
 
@@ -496,8 +494,8 @@ frames were staged one at a time.
 - **First "whoa": none.**
   - Nothing in this deal is in the top five. The dark corridor at 5 to 10 s
     is the nearest thing to one.
-  - In 42% of visits none of the four openers is on the first floor at all (1,000
-    seeds, Part 3).
+  - In 42% of visits none of the four strongest rooms is on the first floor at
+    all (1,000 seeds, the note at the end).
 - **First unease: 10 s**, the black end of the coolers corridor. It is gone
   by 18 s.
 - **First sign of life: 26 s**, the consultant: comic, and handing you a prop
@@ -515,164 +513,33 @@ frames were staged one at a time.
 
 ---
 
-## Part 3 · C9: the first rooms always include a stunning one
+## Note · How often a strong room is near the landing (C9, not adopted)
 
-**The rule (FF-7):** for any seed, within N doorways of the landing on the
-first floor there is at least one room from a short list, the **openers**.
-This is a proposal for the lead; plan.js is the lead's, and the owner decides
-when.
+A rule that the first rooms off the landing always include one of the four
+strongest (C9) was proposed and **turned down by the owner on 19 November**:
+no room should show up more often than another; variety is the game. Nothing
+was built. The measurement is kept because it says how the first floor deals
+today.
 
-### Where the deal happens today
-
-1. `planVisit` (plan.js) makes the visit's source, `makeRng('visit:<seed>')`,
-   and calls `dealHand(R.fork('hand'), themes, story)`.
-2. `dealHand` deals the hand across the parts.
-   - It draws the deck in an order weighted by `weight`.
-   - It puts each room in a part that fits: lessons taught above it, at home
-     on that kind of floor, one set piece and one resident to a part.
-   - Then it shuffles each part's list: `hands.map((h) => R.shuffle(h))`.
-3. Part 0's list goes to `floorOf` → `generate(seed, { hand })` (gen.js).
-4. gen.js places the oddities **in the hand's order**.
-   - The first one placed (`placeSpecial(arch, first = true)`) grows from the
-     landing. `hubs` holds only the landing at that point.
-   - It hangs at the end of a run of 1 to 3 plain rooms (`runLength()`), so it
-     is 2 to 4 doorways from the landing.
-   - Later oddities hang off later rooms.
-
-So **the landing's nearest oddity is, in practice, the first in part 0's
-list.** Measured over 200 seeds:
-
-- it was the nearest 86% of the time;
-- the nearest oddity was 2 to 4 doorways away in 99% of visits (1 doorway in
-  the other 1%).
-
-### What "reachable" means
-
-- **The graph:** `level.rooms` and their `doors`. Each door is a link to
-  another room. `gen.js` `roomDistances(level, level.start.room)` is a
-  breadth-first count of doorways from the landing.
-- Every doorway counts as one step: plain, stepped, or a crawl hole. Rule 5
-  says every doorway can be walked to from every other.
-- **N = 4** is the proposal: two to four doorways is where the first oddity
-  always lands, and at a walk it is under 15 seconds.
-
-### The openers
-
-- The audit's stunning rooms that are safe to meet first: **server-chasm,
-  keyboard-floor, ceiling-meeting, last-light**.
-- Not blackout-bay: without the flashlight, walking in ends the visit.
-- Kept as data, a list D12 owns, e.g. `export const OPENERS = [...]` beside the
-  deck (`deck2.js`), or a flag `opener: true` on a deck line. plan.js only reads
-  it.
-- All four need nothing but `lean`, are at home on the yellow floor, and are
-  never `planned` or `headline`.
-- Two of them are set pieces (last-light `big`, server-chasm `halo`). The rule
-  must respect one set piece to a part.
-
-### The change, in plan.js only
-
-At the end of `dealHand`, after the shuffle, for part 0 only:
-
-1. **If part 0 already holds an opener**, move the first one to the front of
-   part 0's list. That is 58% of visits.
-2. **Else, if a part below holds one that may go in part 0**, swap them.
-   - The opener comes up. One of part 0's rooms that fits that lower part goes
-     down in its place.
-   - The fit checks are those `fits()` already makes: set piece, resident,
-     lessons. Part 0's rooms need nothing but `lean`, so a lower part can
-     always take one.
-   - Then move the opener to the front. That is 26% of visits.
-3. **Else**, put an opener the visit was not dealt in place of part 0's last
-   room (16%), then move it to the front. The hand stays the same size.
-4. Every choice is made from a **fork of its own**: `R.fork('opener')` off the
-   visit's source.
-   - `fork` is by label and moves no other stream, so nothing else a seed
-     rolls changes.
-   - Which opener is picked can be weighted by `weight`, as the deck is.
-
-**Why this keeps seeded determinism:**
-
-- Every step is a pure function of the seed and the deck. The same seed
-  always gives the same opener in the same place.
-- The move to the front uses no randomness at all.
-
-**A safety net, still in plan.js:**
-
-- `floorOf` can check, after `generate`, that an opener is within N doorways.
-- If one ever is not (say a big opener would not fit at the landing in 14
-  tries), it deals the floor again from a deterministic fork,
-  `{ seed: '<seed>/opener:2' }`.
-- In 1,000 seeds the check never fired.
-
-**A test**, beside `test/backrooms-depths.test.mjs`: over 1,000 seeds, the
-nearest opener on part 0 is at most 4 doorways from the landing. Also, every
-seed still deals the same building twice.
-
-### Measured, without changing the code
 
 I simulated it from outside: the planned visit's part 0 hand was edited as
 above before `floorOf` built it. Over 1,000 seeds, doorways from the landing to
-the nearest opener:
+the nearest of the four strongest rooms:
 
-| doorways | today | with C9 |
+| doorways | today | with the rule |
 |---|---|---|
 | 1 | 0.1% | 0.7% |
 | 2 | 2% | 15% |
 | 3 | 9% | 55% |
 | 4 | 6% | 29% |
 | 5 or more | 41% | none |
-| no opener on the floor | 42% | none |
+| none of the four on the floor | 42% | none |
 
-Which opener led with C9:
+Which of the four would have led:
 
-| opener | share |
+| room | share |
 |---|---|
 | ceiling-meeting | 38% |
 | keyboard-floor | 33% |
 | last-light | 18% |
 | server-chasm | 11% |
-
-If the owner wants the big set pieces to lead more often, weight the pick.
-
-**What else it moves:**
-
-- The swap and the replacement must never take out the room the `hall` fork
-  put in part 0 (the planned hallway's teacher, usually cutouts). The hallway
-  is dealt below it, and has to stay below it. My simulation did not hold to
-  this; the real rule must, and the test should check it.
-- The first-floor share of each room shifts toward the four openers. The
-  floor's count of oddities and rooms is unchanged.
-
-### What it does to the edition
-
-- `edition()` (plan.js) hashes a fixed visit's whole plan and every part's
-  rooms. The change moves part 0's order for every seed and swaps rooms
-  between parts in about four visits in ten. So **the edition changes, for
-  every building at once**.
-- The edition is not bumped by hand: it is a hash, and it moves by itself on
-  the merge.
-- **Saved tapes:**
-  - A kept tape says which edition it was shot in (`core/runs.mjs`).
-  - The archive keys tapes by seed and edition (`core/archive.mjs`), so an
-    older tape is kept, and is never confused with a new one of the same
-    seed.
-  - But it cannot be played back as the building it was walked in: that
-    building is no longer what its seed deals.
-- **Boards:**
-  - A score made before C9 and one made after, on the same seed, are of
-    different buildings. A board keyed by seed alone mixes them; a board keyed
-    by seed and edition splits into two.
-  - Once the daily is live (S-1 pins the edition on the day's ticket), the
-    merge must land after midnight UTC (L-4), so no day's board straddles two
-    buildings.
-  - D-4 wants past days to play "as it was (its edition)". Today the code
-    deals only the current edition. Either D-4 accepts that days before C9
-    replay in the new building, or the deal grows a version switch
-    (`planVisit(seed, { edition })`) that keeps the old order. That is the
-    lead's call.
-- **When:** batch it with the next edition change (the library's weekly batch,
-  LB-5, or the FF-8 moves). Then players lose their old buildings once, not
-  twice.
-
-**The owner's call:** the opener list (decision 1), N = 4, and when it lands
-(decision 2).
