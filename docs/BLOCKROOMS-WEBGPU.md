@@ -4,20 +4,18 @@ The plan for moving BlockRooms from three.js's `WebGLRenderer` to `WebGPURendere
 materials, written in TSL. This is task R-5 of the Steam plan, D3 Rendering (`docs/BLOCKROOMS-STEAM-PLAN.md` on
 `claude/backrooms-cast`). It is also the ground the Ultra tier (R-3) and "light that behaves" (R-4) can be built on.
 
-**Status (phase 1):**
-- The switch is in, behind an opt-in flag.
-- Three things are ported:
-  - the room surface (`kit.js`);
-  - the voxel material (`vox/material.js`);
-  - the camcorder, at Classic (`vhs.js`).
-- Everything else is listed below with a size and a port order.
+**Status (phase 2 — Step 2 complete):**
+- The switch is in, behind an opt-in flag (`?gpu=webgpu` on the play page and `/world/dev/backrooms.html`).
+- **Phase 1 (done):** the switch, room surface Classic core (`kit.js` / `kit-node.js`), voxel material (`vox/material.js`), and camcorder at Classic (`vhs.js` / `vhs-node.js`).
+- **Phase 2 / Step 2 (done):** composable `patchNode` hooks on `kit-node.js`, `kit.points` instanced quads (`the-grotto` snow), held-item `depthNode` sliver (`setHeldInFront` on `hand.js` + `hand-notes.js`), `pool-optics.js`, all Classic room shader patches (kiddie-lagoon fountain, locker-showers glaze/curtain/streams + non-mirror water guard, return-pool, bellmouth, flume-connector, whirlpool-flume siphon), extinguisher spray & white-out (`spray.js`), paper-fire floor spill (`inventory-fire.js`), forest water/caustics/shafts (`forest-fx.js`), forest mist veils (`forest-maze.js`), and `the-sets` CCTV feed verified live.
+- **Next:** Step 3 (`locker-showers/water.js` planar mirror via `ReflectorNode`), then Steps 4–6 (Medium, `liquid.js` water, High flashlight shadows).
 - Without the flag, nothing changes: the same renderer, the same shaders, the same pixels.
 
 ## The switch
 
 | | |
 |---|---|
-| Turn it on | `?gpu=webgpu` on the play page (the dev page and the office do not read it yet), or `localStorage['blockrooms.renderer'] = 'webgpu'` (for the Steam shell to set before the page loads) |
+| Turn it on | `?gpu=webgpu` on the play page or `/world/dev/backrooms.html` (the office does not read it yet), or `localStorage['blockrooms.renderer'] = 'webgpu'` (for the Steam shell to set before the page loads) |
 | Force it off | `?gpu=webgl` (the address wins over the stored value) |
 | The rule | `public/world/engine/gpu.js` `rendererChoice()`, tested in `test/blockrooms-webgpu-flag.test.mjs` |
 | What it does | `engine/stage.js` `openStage()` fetches `vendor/three.webgpu.min.js` and makes a `WebGPURenderer`, then `await renderer.init()`. If there is no WebGPU adapter, three.js falls back to its own WebGL 2 backend: node materials still, compiled to GLSL ES 3.0. If even that fails, `openStage` falls back to the old `createStage`. The console says which one it got: `[stage] WebGPURenderer on its WebGPU backend` or `… WebGL 2 backend`. |
@@ -72,30 +70,18 @@ the shell, on the three hardware classes.
 | Piece | File | Notes |
 |---|---|---|
 | The renderer switch | `engine/stage.js` `openStage`, `engine/gpu.js` | `site.js` calls `openStage` with the page's choice. Off: `createStage`, exactly as before. |
-| The room surface | `backrooms/kit-node.js`, one hook in `kit.js surface()` | Baked light (steady, flicker, banks) × dimmer × tint, the flashlight and camcorder-lamp cones, voxel grain and seams, texture with cut-outs, the wet glint. Keeps `uniforms`, `defines`, `vertexShader` and `fragmentShader` on the material, so `uTint` and the rest keep working. The uniforms are read every frame, so a holder that `world.js` swaps is followed too. The defines are read when the material builds, and again on `needsUpdate`. Under the flag, the two byte-triplet attributes (normal, albedo) are padded to four bytes, and kit's own float attributes are packed into one interleaved buffer (`packSurfaceAttributes`): at most 5 vertex buffers instead of up to 12. |
+| The room surface | `backrooms/kit-node.js`, hooks in `kit.js surface()` & `kit.points()` | Baked light (steady, flicker, banks) × dimmer × tint, the flashlight and camcorder-lamp cones, voxel grain and seams, texture with cut-outs, the wet glint. Exposes `m.patchNode({ position?, uv?, wetNormal?, color?, replaceFragment? })` for room shader extensions and `m.setHeldInFront(sliver)` for held-item depth-sliver rendering, plus `pointsNode` (`kit.points`) for world-sized instanced billboard quads. Keeps `uniforms`, `defines`, `vertexShader` and `fragmentShader` on the material, so `uTint` and the rest keep working. Uniforms are read every frame; defines are read at build and on `needsUpdate`. Under the flag, byte-triplet attributes are padded to 4 bytes and float attributes are interleaved (`packSurfaceAttributes`, at most 5 vertex buffers). |
 | The voxel material | `vox/material.js` `nodeVoxel` | `MeshLambertNodeMaterial` with the same grain, seam and glow as the `onBeforeCompile` patch; `voxelUniforms` are read every frame. |
 | The camcorder | `backrooms/vhs-node.js`, one hook in `vhs.js createVhs` | SIGNAL and SCREEN in TSL, with grade and haze (from the scene's depth). The same `uniforms` object, so the battery fade, snow, red, white and tracking from `index.js` and the rooms work. The output colour transform is off while it runs, because the tape does its own gamma, as the GLSL does. |
-| Held things | `hand.js holdInFront` | Under the flag, drawn as they are; no depth clear or depth-range squeeze (no GL to reach into). A held thing can dip into a wall it is pushed against. |
+| Held things | `hand.js`, `hand-notes.js`, `kit-node.js` `setHeldInFront` | Under the flag, every held mesh (torch, scissors, extinguisher, balloon + glove, pink slip, shove hands, stuck notes) writes `clamp(viewZToPerspectiveDepth(positionView.z, cameraNear, cameraFar), 0, 1) * HELD_DEPTH_SLIVER` to `depthNode`: renders cleanly in front of walls without clipping, preserves self-occlusion and sticky-note ordering, and leaves room depth intact for haze. |
+| Classic room patches & effects | `pool-optics.js`, `rooms/kiddie-lagoon.js`, `rooms/locker-showers/{glaze,fold-screen,assets,water}.js`, `rooms/return-pool/art.js`, `rooms/bellmouth/art.js`, `rooms/flume-connector/water.js`, `rooms/whirlpool-flume/siphon.js`, `spray.js`, `inventory-fire.js`, `forest-fx.js`, `forest-maze.js`, `rooms/the-grotto.js` | Every Classic-tier shader and room patch runs on TSL `NodeMaterial`s behind `gpu.nodes` / `mat.patchNode`. Tested by `test/blockrooms-webgpu-step2.test.mjs` and visually verified under `?gpu=webgpu` in Chromium (`kiddie-lagoon`, `bog-boardwalk`, `locker-showers`, `whirlpool-flume`, `the-grotto`, `the-sets`, held flashlight against wall, paper fire). Note: `spray.js` is unit-tested under `gpu.nodes` but was not triggered live in the browser pass; `locker-showers/water.js` renders rippled non-mirror water and guards `onBeforeRender` until Step 3 (`ReflectorNode`). |
 
 ## What looks wrong under the flag
 
-Everything not ported falls back to a blank node material: the right shape, flat colour or black, and a console error
-(`NodeMaterial: Material "ShaderMaterial" is not compatible`). It cannot "stay WebGL" inside a WebGPU frame: one
-renderer draws a frame, and WebGPURenderer cannot run GLSL `ShaderMaterial`s or `onBeforeCompile` patches on either
-backend. String patches of `kit.js`'s GLSL are given the GLSL to patch (so nothing throws), but nothing draws it.
+Everything still unported falls back to plain surface / Classic behaviour:
 
 **Any tier:**
-- **Waterpark and pool rooms:** their animated water, glaze, curtains and fountains are drawn as the plain surface under
-  them, still. These rooms are locker-showers, office-beach-day, dive-tower, flooded-cubicles, flume-connector,
-  whirlpool-flume, kiddie-lagoon, bellmouth-baths, return-pool, hanging-changing, channel-hall, nested-thresholds,
-  lazy-river, wave-pool and deep-end.
-  - The locker-showers floor mirror (also in office-beach-day, dive-tower and flooded-cubicles) is not drawn at all.
-- **Forest rooms:** bog and puddle water and its caustics, and the mist veils, are flat or missing. These are
-  burn-scar, tree-farm, clear-cut, old-growth, inverted-grove, timber-lot, windthrow, blaze-junction, hollow-tree,
-  canopy-walk, fire-lookout, campfire-circle, bog-boardwalk and nursery-aisles.
-- **The Sets:** the CCTV feed on the TV is not checked. It is a WebGLRenderTarget drawn mid-frame, which may work, since
-  WebGPURenderer takes render targets.
-- **The extinguisher's spray and white-out, and the glow under paper fires:** flat quads.
+- **Locker-showers floor mirror** (`rooms/locker-showers/water.js`, also in `office-beach-day`, `dive-tower`, `flooded-cubicles`): renders animated rippled translucent water without the planar room reflection (queued for Step 3 `ReflectorNode`).
 - **The inventory's icons:** unaffected. They are drawn by their own second WebGL renderer with their own Lambert material, onto PNGs.
 - **Co-op:** its client makes its own WebGLRenderer and does not read the flag.
 
@@ -123,18 +109,18 @@ Sizes:
 | Camcorder chain | `vhs.js` EffectComposer, RenderPass, targets | the picture pipeline | own render targets plus `QuadMesh` passes | M | MSAA sample count changed at runtime: WebGPU knows 1 and 4 only (2 → 4 under the flag) | **done (Classic)** |
 | SIGNAL | `vhs.js` | the VHS signal, the floor's grade, haze from depth | TSL `Fn`, 10 taps | M | depth texture from an MSAA target | **done** |
 | SCREEN | `vhs.js` | 4:3 picture, bars, scan lines, vignette | TSL | S | none | **done** |
-| Held things | `hand.js` `holdInFront` | held items in front of the room: mid-pass depth clear, or `gl.depthRange` | a separate pass for held items, or squeeze their clip-space z in the vertex node | M | no mid-pass clears in WebGPU | **guarded** (drawn as is) |
-| Extinguisher spray | `spray.js` (two materials) | instanced soft puffs; full-screen white-out | `SpriteNodeMaterial`-like node or `instancedBufferAttribute` | S | instancing | not started |
-| Paper-fire glow | `inventory-fire.js` | additive orange pool | `MeshBasicNodeMaterial` with an opacity node | S | co-op finds it by name | not started |
+| Held things | `hand.js` `holdInFront`, `hand-notes.js`, `kit-node.js` `setHeldInFront` | held items in front of the room: mid-pass depth clear, or `gl.depthRange` | `depthNode` sliver (`viewZToPerspectiveDepth * HELD_DEPTH_SLIVER`) | M | no mid-pass clears in WebGPU | **done** |
+| Extinguisher spray | `spray.js` (two materials) | instanced soft puffs; full-screen white-out | `NodeMaterial` with `vertexNode` + `fragmentNode` and instanced attributes | S | instancing | **done** (unit-tested; spray not triggered live in browser pass) |
+| Paper-fire glow | `inventory-fire.js` | additive orange pool | `NodeMaterial` with radial alpha | S | co-op finds it by name | **done** |
 | Inventory icons | `inventory-icons.js` | its own WebGLRenderer and its own Lambert material, rendered to PNGs | keep WebGL (separate canvas), or port to save a context | S | none: it shares no material with the stage | **unaffected** |
-| Pool optics | `pool-optics.js` | patch: rippled pool texture plus the ceiling's lamps at grazing angles | a hook in `kit-node` (a `mapUv` and an `extra` node) | S | exact kit text | not started |
-| Room string patches | locker-showers (`glaze`, `fold-screen`, `assets`, `water.js`), `flume-connector/water.js`, `whirlpool-flume/siphon.js`, `kiddie-lagoon.js`, `bellmouth/art.js`, `return-pool/art.js` | moving water, glaze, curtains, fountains, UV drift | give `kit-node` hook points (uv, colour, alpha, position) and port each patch as a small node | S each, M together | each is written against kit's GLSL text | not started |
-| Showers mirror | `locker-showers/water.js` | a floor sheet reflecting the room (oblique clip), drawn from `onBeforeRender` | `ReflectorNode` (three.js ships one in TSL) | L | nested render inside a render; `renderer.state`, `renderer.xr` | not started |
-| Forest water | `forest-fx.js` WATER and CAUSTIC (a kit material with its shaders replaced) | voxel ripples, footstep rings, depth tint, Fresnel, foam; caustic web | own NodeMaterial | M, S | uniform arrays (`uRipples[6]`) | not started |
-| Forest mist | `forest-maze.js` veils | drifting translucent sheets fading near the eye | NodeMaterial | S | `discard` | not started |
-| Forest shafts | `forest-fx.js` | god-ray cones and pollen | NodeMaterial | S | none: not reached (no room asks for it) | not started |
-| The Sets TV | `rooms/the-sets.js` | live CCTV into a 160 × 120 target, 5 fps | `RenderTarget`, probably as is | S | the target is sRGB | **not checked** |
-| `PointsMaterial` | `rooms/the-grotto.js` | 4.5 cm points | `SpriteNodeMaterial` or instanced quads | S | WebGPU draws points 1 px | not started |
+| Pool optics | `pool-optics.js` | patch: rippled pool texture plus the ceiling's lamps at grazing angles | `mat.patchNode({ uv, color })` in `kit-node` | S | exact kit text | **done** |
+| Room string patches | locker-showers (`glaze`, `fold-screen`, `assets`, non-mirror `water.js`), `flume-connector/water.js`, `whirlpool-flume/siphon.js`, `kiddie-lagoon.js`, `bellmouth/art.js`, `return-pool/art.js` | moving water, glaze, curtains, fountains, UV drift | `mat.patchNode({ position, uv, wetNormal, color })` hooks in `kit-node` | S each, M together | each is written against kit's GLSL text | **done** |
+| Showers mirror | `locker-showers/water.js` | a floor sheet reflecting the room (oblique clip), drawn from `onBeforeRender` | `ReflectorNode` (three.js ships one in TSL) | L | nested render inside a render; `renderer.state`, `renderer.xr` | **guarded** (rippled non-mirror water drawn; Step 3) |
+| Forest water | `forest-fx.js` WATER and CAUSTIC (a kit material with its shaders replaced) | voxel ripples, footstep rings, depth tint, Fresnel, foam; caustic web | `mat.patchNode({ position, replaceFragment })` (6 unrolled ripple uniforms) | M, S | uniform arrays (`uRipples[6]`) | **done** |
+| Forest mist | `forest-maze.js` veils | drifting translucent sheets fading near the eye | `NodeMaterial` | S | `discard` | **done** |
+| Forest shafts | `forest-fx.js` | god-ray cones and pollen | `NodeMaterial` | S | none: not reached (no room asks for it) | **done** |
+| The Sets TV | `rooms/the-sets.js` | live CCTV into a 160 × 120 target, 5 fps | `RenderTarget`, works as is | S | the target is sRGB | **verified live** |
+| `PointsMaterial` | `rooms/the-grotto.js` | 4.5 cm points | `kit.points()` → instanced camera-facing quads (`pointsNode`) | S | WebGPU draws points 1 px | **done** |
 
 ### The game, Medium and High only
 
@@ -198,11 +184,12 @@ backend does (see the shots).
 ## Port order
 
 1. **Done:** the switch, `vox/material.js`, the Classic core of `kit.js`, and the camcorder at Classic.
-2. **Every tier looks right, M in all:** the hook points in `kit-node` (uv, colour, alpha, position). Then the room
-   string patches (each S), `pool-optics.js`, spray, the paper-fire glow, forest mist, forest water and its caustics.
-   Then held things in their own pass. Then the-grotto's points, and checking The Sets' TV.
-   After this the flag is playable everywhere at Classic, except the locker-showers mirror.
-3. **The showers mirror, L:** `ReflectorNode`.
+2. **Done (this commit):** the hook points in `kit-node` (`position`, `uv`, `wetNormal`, `color`, `replaceFragment`),
+   `kit.points()` instanced quads (`the-grotto`), `setHeldInFront` depth-sliver (`hand.js` + `hand-notes.js`), all Classic
+   room string patches, `pool-optics.js`, `spray.js`, `inventory-fire.js`, forest mist/shafts/water/caustics, and live
+   verification of The Sets' CCTV TV. The flag is now playable everywhere at Classic (locker-showers floor draws rippled
+   non-mirror water until Step 3).
+3. **Next — The showers mirror, L:** `ReflectorNode`.
 4. **Medium:** supersample (S), light maps (M), sheen (M), and glow (L). For the glow, an emissive MRT output from the
    surface replaces the twin redraw: cheaper than today, not just ported.
 5. **Water, L, the biggest single piece:** `viewportSharedTexture` and `viewportDepthTexture` replace the copy pass;

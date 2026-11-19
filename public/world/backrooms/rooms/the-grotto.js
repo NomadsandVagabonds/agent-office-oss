@@ -109,8 +109,7 @@ export function build(c) {
   const N = 700, sx0 = -W / 2 + 0.3, sx1 = W / 2 - 0.3, sz0 = z1 + 0.3, sz1 = D / 2 - 0.3, fall = new Float32Array(N * 3), drift = new Float32Array(N * 2);
   for (let i = 0; i < N; i++) { fall[i * 3] = R.range(sx0, sx1); fall[i * 3 + 1] = R.range(0.05, H - 0.15); fall[i * 3 + 2] = R.range(sz0, sz1); drift[i * 2] = R.range(0.25, 0.5); drift[i * 2 + 1] = R.range(0, 6.28); }
   const flake = kit.tex.custom('grotto:flake', 8, 8, (g, w, h) => { g.clearRect(0, 0, w, h); P(g, '#ffffff', 1, 1, 6, 6); P(g, '#d8d6d0', 1, 6, 6, 1); g.clearRect(3, 1, 2, 2); g.clearRect(1, 3, 1, 2); }, { clamp: true });
-  const sg = kit.own(new THREE.BufferGeometry()); sg.setAttribute('position', new THREE.BufferAttribute(fall, 3));
-  const snow = new THREE.Points(sg, kit.own(new THREE.PointsMaterial({ size: 0.045, map: flake, alphaTest: 0.5, color: new THREE.Color(0.86, 0.85, 0.82), sizeAttenuation: true })));
+  const { object: snow, attribute: posAttr } = kit.points(fall, { size: 0.045, map: flake, alphaTest: 0.5, color: new THREE.Color(0.86, 0.85, 0.82) });
   snow.frustumCulled = false; c.add(snow);
   /* go near the chair and the camera goes off: its bulb, not the room (the booths are the room that flashes) */
   const bulb = new THREE.Mesh(kit.own(new THREE.BoxGeometry(0.16, 0.12, 0.05)), kit.own(new THREE.MeshBasicMaterial({ color: 0xfffbf0 }))); bulb.position.set(cam.x, 1.58, cam.z - 0.05); bulb.visible = false; c.add(bulb);
@@ -118,7 +117,7 @@ export function build(c) {
   c.tick((dt, t, me) => { clock += dt; if (flash > 0) { flash -= dt; if (flash <= 0) bulb.visible = false; }
     if (!me.inside) return;
     const still = !(me.moving || (me.speed || 0) > 0.05); k = still ? k + (1 - k) * Math.min(1, dt * 1.2) : 0;   // (it stops at once, and nothing is worked out while you walk; it starts again slowly)
-    if (k > 0.002) { for (let i = 0; i < N; i++) { const j = i * 3; fall[j + 1] -= drift[i * 2] * dt * k; fall[j] += Math.sin(clock * 0.9 + drift[i * 2 + 1]) * 0.06 * dt * k; if (fall[j + 1] < 0.01) { fall[j + 1] = H - 0.12; fall[j] = sx0 + Math.random() * (sx1 - sx0); fall[j + 2] = sz0 + Math.random() * (sz1 - sz0); } } sg.attributes.position.needsUpdate = true; }
+    if (k > 0.002) { for (let i = 0; i < N; i++) { const j = i * 3; fall[j + 1] -= drift[i * 2] * dt * k; fall[j] += Math.sin(clock * 0.9 + drift[i * 2 + 1]) * 0.06 * dt * k; if (fall[j + 1] < 0.01) { fall[j + 1] = H - 0.12; fall[j] = sx0 + Math.random() * (sx1 - sx0); fall[j + 2] = sz0 + Math.random() * (sz1 - sz0); } } posAttr.needsUpdate = true; }
     if (env.player?.me?.frozen) return;
     if (Math.abs(me.x - hx) < 0.9 && me.z < z0 + 1.7 && clock - last > 4) { last = clock; flash = 0.12; bulb.visible = true; env.interfere?.(0.2); const w = c.toWorld(cam.x, cam.z); env.play?.('shutter', w.x, w.z, 8); } });
 }

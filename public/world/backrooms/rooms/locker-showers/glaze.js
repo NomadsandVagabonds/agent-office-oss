@@ -6,6 +6,24 @@ export function showerGlaze(c) {
     const mat=mesh.material;
     if(!mat?.defines?.WET||mat.transparent||mat.userData.changingGlaze)return;
     mat.userData.changingGlaze=true;mat.uniforms.uGlazeTime=time;
+    if(mat.patchNode){
+      mat.patchNode({
+        color({T,c,vLit,uWet,localPos,localNormal,f,ss}){
+          const {vec2,vec3,float,sin,cos,abs,min,normalize}=T;
+          const q=localPos(),t=f('uGlazeTime');
+          const p=vec2(q.x.add(q.z.mul(.61)),q.y.add(q.z.mul(.43))).mul(3.4);
+          const wave=sin(p.x.add(sin(p.y.mul(1.31).add(t.mul(.31)))))
+            .add(cos(p.y.add(cos(p.x.mul(.87).sub(t.mul(.27))))));
+          const filament=float(1).sub(ss(.015,.13,abs(wave)));
+          const wetWall=float(1).sub(ss(1.3,2.4,q.y)).mul(ss(-.3,.15,q.y))
+            .mul(float(1).sub(ss(4.9,6.0,abs(q.x))))
+            .mul(float(1).sub(ss(9.5,11.0,abs(q.z))));
+          const facing=float(1).sub(abs(normalize(localNormal()).y).mul(.72));
+          c.addAssign(filament.mul(wetWall).mul(facing).mul(uWet).mul(min(vLit,vec3(1.1))).mul(vec3(.10,.20,.18)));
+        },
+      });
+      return;
+    }
     mat.vertexShader='varying vec3 vGlazePoint;\nvarying vec3 vGlazeNormal;\n'+mat.vertexShader
       .replace('void main() {','void main() {\n vGlazePoint=position; vGlazeNormal=normal;');
     mat.fragmentShader=`uniform float uGlazeTime;

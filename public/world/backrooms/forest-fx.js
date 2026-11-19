@@ -8,9 +8,10 @@
 // atmospheric forest under the 250k / 500k triangle budget.
 
 import * as THREE from 'three';
+import { gpu } from '../engine/gpu.js';
 import { Batch, lin, ticks, WHITE } from './kit.js';
 import { TILE } from './gen.js';
-import { FLASHLIGHT_GLSL } from './flashlight.js';
+import { FLASHLIGHT, FLASHLIGHT_GLSL } from './flashlight.js';
 import {
   stepCanopyBanks,
   makeRippleState,
@@ -363,22 +364,74 @@ export function addLightShafts(c, spots, opt = {}) {
     geo.setIndex(idx);
     geo.computeBoundingSphere();
 
-    const mat = kit.own(new THREE.ShaderMaterial({
-      vertexShader: SHAFT_VERT,
-      fragmentShader: SHAFT_FRAG,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
-      uniforms: {
+    let mat;
+    if (gpu.nodes) {
+      const N = gpu.nodes, T = N.TSL;
+      const { Fn, vec2, vec3, vec4, float, uniform, uv, attribute, varying, floor, dot, length, sin, cos, pow, max, clamp, select, If, Discard, positionGeometry, positionView } = T;
+      const ss = (e0, e1, x) => { const t = clamp(float(x).sub(e0).div(e1 - e0), 0, 1); return t.mul(t).mul(t.mul(-2).add(3)); };
+      mat = kit.own(new N.NodeMaterial());
+      mat.transparent = true; mat.depthWrite = false; mat.blending = THREE.AdditiveBlending; mat.side = THREE.DoubleSide;
+      mat.uniforms = {
         uShaftColor: { value: new THREE.Vector3(tint[0], tint[1], tint[2]) },
         uShaftStrength: { value: opt.strength ?? 0.13 },
         uShaftTime: uTime,
         uDim: c.rt.u.dim,
         uBanks: c.rt.u.banks,
         uMoreBanks: c.rt.u.moreBanks,
-      },
-    }));
+      };
+      const readU = (k) => mat.uniforms[k]?.value;
+      const uCol = uniform(new N.Vector3(tint[0], tint[1], tint[2])).onRenderUpdate(() => { uCol.value.copy(readU('uShaftColor')); });
+      const uStr = uniform(opt.strength ?? 0.13).onRenderUpdate(() => readU('uShaftStrength'));
+      const uT = uniform(0).onRenderUpdate(() => readU('uShaftTime'));
+      const uDim = uniform(1).onRenderUpdate(() => readU('uDim'));
+      const uBanks = uniform(new N.Vector2(1, 1)).onRenderUpdate(() => { const v = readU('uBanks'); if (Array.isArray(v)) uBanks.value.fromArray(v); else if (v?.isVector2) uBanks.value.copy(v); });
+      const uMore = uniform(new N.Vector2(1, 1)).onRenderUpdate(() => { const v = readU('uMoreBanks'); if (Array.isArray(v)) uMore.value.fromArray(v); else if (v?.isVector2) uMore.value.copy(v); });
+      mat.positionNode = Fn(() => {
+        const aPh = attribute('aPhase', 'vec2');
+        const t = uT.mul(0.42).add(aPh.x.mul(6.28318));
+        const drifted = positionGeometry.add(vec3(sin(t.mul(1.3)).mul(0.16), sin(t.mul(0.85).add(aPh.x.mul(3.1))).mul(0.22), cos(t.mul(1.1).add(aPh.x)).mul(0.16)));
+        return select(aPh.y.greaterThan(0.5), drifted, positionGeometry);
+      })();
+      mat.fragmentNode = Fn(() => {
+        const vUv = uv(), vPhase = varying(attribute('aPhase', 'vec2'), 'vShaftPhase');
+        const bankIdx = floor(vPhase.x.mul(3).add(0.001));
+        const bankLv = select(bankIdx.lessThan(0.5), uBanks.x, select(bankIdx.lessThan(1.5), uBanks.y, uMore.x));
+        const distFade = ss(0.65, 2.2, length(positionView));
+        const a = float(0).toVar();
+        If(vPhase.y.greaterThan(0.5), () => {
+          const d = vUv.sub(vec2(0.5));
+          const r = dot(d, d).mul(4);
+          If(r.greaterThan(1.0), () => { Discard(); });
+          const tw = sin(uT.mul(2.4).add(vPhase.x.mul(19))).mul(0.45).add(0.55);
+          const m = float(1).sub(r);
+          a.assign(m.mul(m).mul(uStr).mul(3.4).mul(tw).mul(bankLv).mul(uDim).mul(distFade));
+        }).Else(() => {
+          const across = sin(vUv.x.mul(3.14159265));
+          const along = pow(max(float(1).sub(vUv.y), 1e-5), 1.25).mul(ss(0.0, 0.10, vUv.y));
+          const rays = sin(vUv.x.mul(15).add(uT.mul(0.35)).add(vPhase.x.mul(9))).mul(0.28).add(0.72);
+          a.assign(across.mul(across).mul(along).mul(rays).mul(uStr).mul(bankLv).mul(uDim).mul(distFade));
+          If(a.lessThan(0.0015), () => { Discard(); });
+        });
+        return vec4(uCol.mul(a), a);
+      })();
+    } else {
+      mat = kit.own(new THREE.ShaderMaterial({
+        vertexShader: SHAFT_VERT,
+        fragmentShader: SHAFT_FRAG,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        uniforms: {
+          uShaftColor: { value: new THREE.Vector3(tint[0], tint[1], tint[2]) },
+          uShaftStrength: { value: opt.strength ?? 0.13 },
+          uShaftTime: uTime,
+          uDim: c.rt.u.dim,
+          uBanks: c.rt.u.banks,
+          uMoreBanks: c.rt.u.moreBanks,
+        },
+      }));
+    }
 
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = `forest:detail-shafts:${c.room.id}`;
@@ -769,13 +822,82 @@ export function buildForestWater(c, basins, opt = {}) {
       alpha: opt.alpha ?? 0.92,
       side: THREE.DoubleSide,
     });
-    baseMat.vertexShader = WATER_VERT;
-    baseMat.fragmentShader = WATER_FRAG;
     baseMat.uniforms.uWaterTime = uWaterTime;
     baseMat.uniforms.uShallowCol = { value: new THREE.Vector3(...shallowRgb) };
     baseMat.uniforms.uDeepCol = { value: new THREE.Vector3(...deepRgb) };
     baseMat.uniforms.uFoamCol = { value: new THREE.Vector3(...foamRgb) };
     baseMat.uniforms.uRipples = { value: rippleVecs };
+    if (baseMat.patchNode) {
+      baseMat.patchNode({
+        position({ T, pos, uv, f }) {
+          const { vec3, sin, cos } = T;
+          const t = f('uWaterTime');
+          const bob = sin(pos.x.mul(2.3).add(t.mul(1.45))).mul(cos(pos.z.mul(1.9).sub(t.mul(1.15)))).mul(0.010).mul(uv.x);
+          return vec3(pos.x, pos.y.add(bob), pos.z);
+        },
+        replaceFragment({ T, N, uv, vLit, normal, viewPos, localPos, uAlpha, uTorch, uTorchOrigin, uTorchDirection, read, f, v3, ss, surfaceBeam }) {
+          const { vec2, vec3, vec4, float, uniform, texture, floor, sin, cos, exp, abs, dot, length, normalize, mix, clamp, pow, max, min, If, Discard } = T;
+          const depth = clamp(uv.x, 0, 1);
+          const shoreDist = uv.y;
+          If(shoreDist.lessThan(0), () => { Discard(); });
+          const vLocal = localPos();
+          const cellXz = floor(vLocal.xz.div(0.035)).mul(0.035);
+          const p = mix(cellXz, vLocal.xz, 0.24);
+          const t = f('uWaterTime');
+          const ph1 = p.x.mul(5.2).add(p.y.mul(2.4)).add(t.mul(1.85));
+          const ph2 = p.x.mul(-3.4).add(p.y.mul(5.8)).sub(t.mul(1.42));
+          const w1 = sin(ph1), w2 = cos(ph2), w3 = sin(p.x.add(p.y).mul(9.5).sub(t.mul(2.65))).mul(0.45);
+          const grad = vec2(
+            cos(ph1).mul(0.16).add(sin(ph2).mul(0.11)),
+            cos(ph1).mul(0.08).sub(sin(ph2).mul(0.18)),
+          ).toVar();
+          const crest = w1.add(w2).add(w3).mul(0.33);
+          const ringFoam = float(0).toVar();
+          for (let i = 0; i < 6; i++) {
+            const rp = uniform(new N.Vector4(0, 0, -99, 0)).onRenderUpdate(() => { const arr = read('uRipples'); if (arr?.[i]) rp.value.copy(arr[i]); });
+            const age = t.sub(rp.z);
+            If(age.greaterThan(0).and(age.lessThan(3.4)).and(rp.w.greaterThan(0.01)), () => {
+              const d = cellXz.sub(rp.xy);
+              const dist = length(d).add(0.0001);
+              const front = age.mul(1.32);
+              const env = exp(abs(dist.sub(front)).mul(-5.8)).mul(exp(age.mul(-0.82))).mul(rp.w);
+              const ph = dist.sub(front).mul(26);
+              grad.addAssign(d.div(dist).mul(cos(ph)).mul(env).mul(0.95));
+              ringFoam.addAssign(max(0, sin(ph)).mul(env).mul(0.48));
+            });
+          }
+          const baseN = normalize(normal);
+          const wn = normalize(baseN.add(vec3(grad.x.mul(0.56), 0, grad.y.mul(0.56))));
+          const V = normalize(viewPos.negate());
+          const uShallow = v3('uShallowCol'), uDeep = v3('uDeepCol'), uFoam = v3('uFoamCol');
+          const absorb = mix(uShallow, uDeep, ss(0.04, 0.85, depth));
+          const mapTex = texture(read('map')).onRenderUpdate(() => read('map'));
+          const texSample = mapTex.sample(p.div(1.45).add(grad.mul(0.05))).rgb;
+          const waterBody = mix(absorb, absorb.mul(texSample).mul(2.35), 0.44);
+          const reflLit = min(vLit, vec3(0.82));
+          const ndv = max(dot(V, wn), 0);
+          const fresnel = pow(max(float(1).sub(ndv), 1e-5), 5.4);
+          const facetGlint = ss(0.42, 0.88, crest).mul(0.62).add(ringFoam.mul(1.25));
+          const envReflect = reflLit.mul(float(0.025).add(fresnel.mul(0.30)).add(facetGlint.mul(0.75)));
+          const beam = uTorch.mul(surfaceBeam(viewPos, wn, uTorchOrigin, uTorchDirection, [FLASHLIGHT.edgeCos, FLASHLIGHT.coreCos], [FLASHLIGHT.fadeFrom, FLASHLIGHT.range], FLASHLIGHT.attenuation));
+          const offset = viewPos.sub(uTorchOrigin);
+          const ray = normalize(offset);
+          const Hvec = normalize(ray.negate().add(V));
+          const spec = uTorch.mul(pow(max(dot(wn, Hvec), 0), 32)).mul(ss(0.75, 0.98, dot(ray, uTorchDirection))).div(dot(offset, offset).mul(0.14).add(1));
+          const meniscus = float(1).sub(ss(0, 0.13, shoreDist)).mul(sin(p.x.mul(14).add(p.y.mul(11)).add(t.mul(1.6))).mul(0.55).add(0.45));
+          const foam = clamp(meniscus.mul(0.48).add(ringFoam.mul(0.90)), 0, 1);
+          const col0 = waterBody.mul(vLit.mul(0.88).add(vec3(0.014, 0.024, 0.016))).add(envReflect.mul(0.50));
+          const col1 = mix(col0, uFoam.mul(vLit.mul(0.85).add(vec3(0.10))), foam.mul(0.52));
+          const col = col1.add(waterBody.mul(0.9).add(vec3(0.42, 0.48, 0.40)).mul(beam)).add(vec3(0.95, 0.98, 0.90).mul(spec).mul(0.90));
+          const edgeFeather = ss(0, 0.06, shoreDist);
+          const outAlpha = clamp(mix(0.48, 0.88, ss(0, 0.78, depth)).add(fresnel.mul(0.18)).add(facetGlint.mul(0.15)).add(spec.mul(0.25)), 0.36, 0.95).mul(edgeFeather).mul(uAlpha);
+          return vec4(col, outAlpha);
+        },
+      });
+    } else {
+      baseMat.vertexShader = WATER_VERT;
+      baseMat.fragmentShader = WATER_FRAG;
+    }
 
     const waterMesh = new THREE.Mesh(geo, baseMat);
     waterMesh.name = `forest:water:${c.room.id}`;
@@ -795,11 +917,27 @@ export function buildForestWater(c, basins, opt = {}) {
           banks: cGeo.userData.banks,
           alpha: 0.35,
         });
-        cMat.fragmentShader = CAUSTIC_FRAG;
         cMat.transparent = true;
         cMat.depthWrite = false;
         cMat.blending = THREE.AdditiveBlending;
         cMat.uniforms.uWaterTime = uWaterTime;
+        if (cMat.patchNode) {
+          cMat.patchNode({
+            replaceFragment({ T, uv, vLit, uDim, f }) {
+              const { vec3, vec4, floor, sin, cos, pow, max, If, Discard } = T;
+              const p = floor(uv.div(0.045)).mul(0.045);
+              const t = f('uWaterTime').mul(1.25);
+              const c1 = sin(p.x.mul(7.5).add(sin(p.y.mul(5.2).add(t)).mul(1.4)).sub(t.mul(0.8)));
+              const c2 = cos(p.y.mul(8.1).add(cos(p.x.mul(4.8).sub(t.mul(0.9))).mul(1.4)).add(t.mul(0.7)));
+              const web = pow(max(0, c1.add(c2).mul(0.5)), 4);
+              const a = web.mul(0.24).mul(uDim);
+              If(a.lessThan(0.004), () => { Discard(); });
+              return vec4(vLit.mul(vec3(0.65, 0.92, 0.62)).mul(web).mul(0.55), a);
+            },
+          });
+        } else {
+          cMat.fragmentShader = CAUSTIC_FRAG;
+        }
         const cMesh = new THREE.Mesh(cGeo, cMat);
         cMesh.name = `forest:detail-caustics:${c.room.id}`;
         cMesh.userData.detail = true;

@@ -21,7 +21,7 @@ import { BEAM_SHADOW_GLSL } from './beam-shadows.rule.js';   // (beam shadows: o
 import { GLOW_DEPTH_GLSL, glowStrength } from './glow.rule.js';             // (emissive bloom: only compiled in glow.js's stand-ins)
 import { SHEEN, withSheen } from './sheen.rule.js';                         // (floor sheen: only put into a surface given `sheen`)
 import { gpu } from '../engine/gpu.js';
-import { surfaceNode, packSurfaceAttributes } from './kit-node.js';                                 // (the same surface in TSL, only under ?gpu=webgpu)
+import { surfaceNode, packSurfaceAttributes, pointsNode } from './kit-node.js';                       // (the same surface and points in TSL, only under ?gpu=webgpu)
 
 const GLOW = 2.3;                              // how hard a self-lit voxel shines
 
@@ -863,8 +863,18 @@ export function createKit(opt = {}) {
     return models.get(key);
   }
 
+  /** World-sized points (snow, dust): PointsMaterial on WebGL, instanced camera-facing quads on WebGPU. */
+  function points(positions, { size = 0.05, map = null, alphaTest = 0.5, color = new THREE.Color(1, 1, 1) } = {}) {
+    if (gpu.nodes) return pointsNode(positions, { size, map, alphaTest, color }, own);
+    const geo = own(new THREE.BufferGeometry());
+    const attribute = new THREE.BufferAttribute(positions, 3);
+    geo.setAttribute('position', attribute);
+    const mat = own(new THREE.PointsMaterial({ size, map, alphaTest, color: color?.isColor ? color : new THREE.Color(...color), sizeAttenuation: true }));
+    return { object: new THREE.Points(geo, mat), attribute };
+  }
+
   return {
-    own, shared, tex: T, surface, glowing, geometry, plain, model, VOXEL, gfx,
+    own, shared, tex: T, surface, glowing, geometry, plain, points, model, VOXEL, gfx,
     dispose() { for (const thing of owned) thing.dispose?.(); owned.clear(); textures.clear(); models.clear(); },
   };
 }
