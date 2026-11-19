@@ -240,6 +240,8 @@ async function visit(office, opt) {
     interceptKey: event => paused ? !!menu?.handleKey(event) : !!inventory?.handleKey(event),
     blocked: () => paused || !!inventory?.isOpen,
     menu: () => setPaused(true), use: useIt, light: thumbLight, click: clickIt, wheel: () => {},
+    // the right button: with the extinguisher in the hand, its foot (extinguisher.js smash); otherwise nothing
+    smash: () => { if (canAct() && !inventory?.isOpen && inventory?.held()?.type === 'extinguisher') cur?.env.extinguisher?.smash?.(); },
     key(k) {
       if (k === 'v') setPicture((vhs.level + 2) % 3);
       else if (k === 'm') changeSetting('mute', !sound.muted);

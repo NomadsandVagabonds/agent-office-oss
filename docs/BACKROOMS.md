@@ -993,6 +993,13 @@ part of the building, and they are on unless a visit is started with
   spreads there, and standing in it turns the picture white: past `blind`,
   `env.sees` is false for anything more than 0.9 m off, so for what comes
   when you are not looking, standing in your own cloud is not looking.
+  The right button swings its foot at what is in front (`SMASH`): a shove
+  twice over (the same breath and the same moment of a hit turned aside,
+  each thing reached pushed twice), half a heart off a basic one (two
+  smashes finish it; a sticky note counts its own) and nothing off anything
+  bigger. One that lands splits the canister one time in five: a last gout
+  of white, and it is gone. A swing at the air never splits it. Phones have
+  no smash yet.
 - **Nothing is written on the picture but `E`.** What a thing is, it has to
   look like; its name is said once it is in a pocket.
 

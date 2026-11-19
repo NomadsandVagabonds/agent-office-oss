@@ -11,6 +11,10 @@
 //     ones that come when you are not looking, standing in it is not looking;
 //   · and it puts a fire out (`douses`): your own paper fire too, if you spray across it.
 //
+// And it is a heavy tin (SMASH): the right button swings it foot first at whatever is in front, as a shove does but
+// twice over. It hurts the smallest things (basic, cast/health.rule.js) — two of it finish one — and nothing bigger;
+// and it may not survive it.
+//
 // How each of the cast takes it is in RESPONSES (one line each, held by a test); what it does to one is its own
 // (its `doused()`), and a creature that says nothing is stopped by the conductor (pursuer.js c.stall) like a shove.
 
@@ -38,6 +42,19 @@ export const EXTINGUISHER = Object.freeze({
     blind: 0.28,             // …and from this white on, nothing a little way off can be seen through it
   }),
 });
+
+/** The smash: the canister's foot, swung at what is in front (the owner: "works like a 2x shove", "20% chance of breakage", "could kill level 1 enemies after 2 hits"). */
+export const SMASH = Object.freeze({
+  pushes: 2,               // a shove, this many times over: pushed twice as far (each of the cast's own shove, twice)
+  hurts: 0.5,              // of a heart of health, to a basic one (two smashes finish it); nothing to anything bigger
+  tier: 'basic',           // …the only ones it hurts
+  breaks: 0.2,             // the chance, each smash that lands on something, that the canister splits (and is gone)
+  cooldown: 0.9,           // seconds before the next
+  swing: 0.5,              // seconds the swing takes in the hand (hand-extinguisher.rule.js smashPose)
+});
+
+/** What a smash does to one with this tier (cast/health.rule.js TIER): how much it takes. */
+export const smashHurts = (tier) => (tier === SMASH.tier ? SMASH.hurts : 0);
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const smooth = (v) => { const k = clamp01(v); return k * k * (3 - 2 * k); };

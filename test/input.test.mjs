@@ -27,7 +27,7 @@ function setup(t, extra = {}) {
   const hud = { use:{}, leave:{}, setTouch() {}, ...(extra.hud || {}) };
   const input = createInput({ canvas, hud, stage:{ size:{ w:1000, h:800 } }, sound:{ start:() => calls.sound++ },
     owns:target => target === button, blocked:() => ui.blocked, interceptKey:event => ui.intercept(event), light:extra.light,
-    key:key => calls.keys.push(key), use:() => calls.use++, menu:() => calls.menu++, click:() => calls.click++, wheel:step => calls.wheels.push(step) });
+    key:key => calls.keys.push(key), use:() => calls.use++, menu:() => calls.menu++, click:() => calls.click++, smash:() => calls.smash = (calls.smash || 0) + 1, wheel:step => calls.wheels.push(step) });
   t.after(() => {
     input.dispose();
     for (const key of ['window', 'document']) if (previous[key] === undefined) delete globalThis[key]; else globalThis[key] = previous[key];
@@ -297,4 +297,13 @@ test('the mouse button held while looking is `firing` (the extinguisher goes on 
   assert.equal(h.input.state.firing, true); assert.equal(h.calls.use, 1);
   h.window.emit('pointerup', { pointerType:'touch', pointerId:5, target:h.canvas }); assert.equal(h.input.state.firing, true);
   h.window.emit('pointerup', { pointerType:'touch', pointerId:4, target:h.hud.use }); assert.equal(h.input.state.firing, false);
+});
+
+test("the right button while looking is the smash (what is in the hand's other use); it is not a click and does not fire", t => {
+  const h = setup(t);
+  h.document.pointerLockElement = h.canvas;
+  h.window.emit('pointerdown', { target:h.canvas, button:2 });
+  assert.equal(h.calls.smash, 1); assert.equal(h.calls.click, 0); assert.equal(h.input.state.firing, false);
+  h.document.pointerLockElement = null;
+  h.window.emit('pointerdown', { target:h.canvas, button:2 }); assert.equal(h.calls.smash, 1, 'not before the mouse is held');
 });

@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { Batch, lin } from './kit.js';
 import { INVENTORY_MODELS, EXTINGUISHER_PARTS as P } from './inventory-items.js';
-import { holdPose, leverAt, HOLD } from './hand-extinguisher.rule.js';
+import { holdPose, leverAt, HOLD, smashPose, SMASH_LENGTH } from './hand-extinguisher.rule.js';
 import { EXTINGUISHER } from './extinguisher.rule.js';
 
 const DEG = Math.PI / 180;
@@ -133,7 +133,7 @@ export function heldExtinguisher(kit, lights, amb) {
   { const v = new THREE.Vector3();
     for (let i = 0; i < body.pos.length; i += 3) if (body.pos[i + 1] > 11.5 * unit && body.pos[i + 2] < 8 * unit) fitBounds.expandByPoint(v.set(body.pos[i], body.pos[i + 1], body.pos[i + 2])); }
 
-  let on = false, since = 0, off = Infinity, dry = Infinity, clock = 0, share = 1;
+  let on = false, since = 0, off = Infinity, dry = Infinity, clock = 0, share = 1, swung = -1, split = false;
   const mouth = new THREE.Vector3(...P.nozzle).multiplyScalar(unit), back = new THREE.Vector3(0, P.nozzle[1], 0).multiplyScalar(unit);
   return {
     mesh, mat, fitBounds,
@@ -146,13 +146,20 @@ export function heldExtinguisher(kit, lights, amb) {
     },
     /** It has run dry under the hand: two pumps on nothing, and it sags. */
     dry() { dry = 0; on = false; off = 0; },
-    /** Still showing one that has run dry, after the pockets have already let go of it. */
-    busy() { return Number.isFinite(dry) && dry < HOLD.sputter + 0.25; },
+    /** The smash: swung foot first at what is in front (smashPose); `broke`, it split on it. */
+    smash(broke = false) { swung = 0; split = !!broke; on = false; },
+    /** Still showing one that has run dry, or a swing that split it, after the pockets have already let go of it. */
+    busy() { return (Number.isFinite(dry) && dry < HOLD.sputter + 0.25) || (swung >= 0 && swung < SMASH_LENGTH); },
     /** Every frame it is shown: `at` its place in the picture (moved here), the walking bob already in it · item: what the pockets hold. */
     update(dt, at, item) {
       clock += dt; if (on) since += dt; else off += dt; if (Number.isFinite(dry)) dry += dt;
       if (item?.charge !== undefined) share = Math.max(0, Math.min(1, item.charge / EXTINGUISHER.charge));
       const p = holdPose({ on, since, off, dry, share, time: clock });
+      if (swung >= 0) {
+        swung += dt;
+        const w = smashPose(swung, split);
+        if (w) { p.x += w.x; p.y += w.y; p.z += w.z; p.pitch += w.pitch; p.yaw += w.yaw; p.roll += w.roll; } else swung = -1;
+      }
       at.x += p.x; at.y += p.y; at.z += p.z;
       mesh.position.copy(at);
       mesh.rotation.set(BASE[0] + p.pitch, BASE[1] + p.yaw, BASE[2] + p.roll);

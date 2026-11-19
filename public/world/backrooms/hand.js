@@ -282,6 +282,8 @@ export function createHandView(env, camera) {
     /** The extinguisher's lever: squeezed (true) or let go · it has run dry under the hand (hand-extinguisher.js). */
     spraying(on) { made.get('extinguisher')?.spraying(on); },
     dried() { made.get('extinguisher')?.dry(); },
+    /** …and swung foot first in a smash; `broke`, it split on what it hit (hand-extinguisher.rule.js smashPose). */
+    smashed(broke) { made.get('extinguisher')?.smash(broke); },
     /** Where the spray leaves the horn, in the world, and which way: → `out`, or null when it is not in the hand. */
     nozzle(out, dir) { return type === 'extinguisher' && shown ? shown.nozzle(out, dir) : null; },
     /** The scissors' click: a jab starts. */

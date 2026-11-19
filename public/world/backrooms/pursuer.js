@@ -34,6 +34,14 @@ export function createStalkers(env, options = {}) {
   const hiddenAt = (x, z, r = 0.6) => !env.sees(x, z, { radius: r, margin: 0.2, far: 40 });
   const drawn = (a) => { const rt = W().roomAt(a.x, a.z); return !!rt && rt.group.visible; };
   let follower = null, taker = null;                    // (taker: whoever's hit was the last heart — index.js asks, for the last shot)
+  /** A blow that takes `n` off one's health through the conductor (the extinguisher's smash: extinguisher.js). → { ok, killed, hp } */
+  const strikeOf = (k) => (n) => {
+    if (!(n > 0) || !k.vital || castList.finished?.(k.vital)) return { ok: false, killed: false };
+    k.vital = castList.struck(k.vital, n); k.settle = true;                   // (the health rule's own struck, as a jab's: c.struck)
+    if (!k.vital.killed) k.stall = Math.max(k.stall || 0, castList.HEALTH?.flinch ?? 0.6);      // (it flinches, as from a jab)
+    if (!k.escaped) { k.escaped = true; env.run?.survived?.(k.member.id); }                       // (got away from, as a jab counts it: c.survived)
+    return { ok: true, killed: !!k.vital.killed, hp: k.vital.hp };
+  };
   /** Where a member of the cast says it is (its at(): for which way a blow of its throws the visitor), or null. */
   const whereIs = (k) => { try { return k.it?.at?.() ?? null; } catch { return null; } };
 
@@ -359,7 +367,7 @@ export function createStalkers(env, options = {}) {
       for (const k of live) {
         if (k.dead || k.away || castList.finished?.(k.vital)) continue;                                    // (somebody who is away with a room cannot be reached either)
         const list = k.it.snipTargets?.();
-        if (Array.isArray(list)) out.push(...list);
+        if (Array.isArray(list)) for (const t of list) out.push({ member: k.member.id, tier: castList.TIER?.[k.member.id] ?? null, ...t, smash: t.smash || strikeOf(k) });
       }
       return out;
     },
@@ -388,12 +396,16 @@ export function createStalkers(env, options = {}) {
       return out;
     },
     /** What a shove could move (shove.rule.js): whatever each of them offers — [{ id, x, z, y?, r, shove(dir) }]. */
+    // (each says who it is, `member`, and how a smash with the extinguisher's foot hurts it, `smash(n)`: its own, if it has
+    // one, or else the conductor takes `n` off its health, as a jab does. Whether `n` is anything at all is the smash's
+    // business: extinguisher.rule.js smashHurts)
     shoveTargets() {
       const out = [];
       for (const k of live) {
         if (k.dead || k.away || castList.finished?.(k.vital)) continue;
         const list = k.it.shoveTargets?.();
-        if (Array.isArray(list)) out.push(...list);
+        if (!Array.isArray(list)) continue;
+        for (const t of list) out.push({ member: k.member.id, tier: castList.TIER?.[k.member.id] ?? null, ...t, smash: t.smash || strikeOf(k) });
       }
       return out;
     },

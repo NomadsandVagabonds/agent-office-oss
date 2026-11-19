@@ -2,8 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { EXTINGUISHER, foundCharge, idle, trigger, inSpray, doseOf, tally, stoppedUntil, doused, puffAt, whiteOut, blinds, RESPONSES, responseOf } from '../public/world/backrooms/extinguisher.rule.js';
-import { HOLD, holdPose, leverAt } from '../public/world/backrooms/hand-extinguisher.rule.js';
+import { EXTINGUISHER, SMASH, smashHurts, foundCharge, idle, trigger, inSpray, doseOf, tally, stoppedUntil, doused, puffAt, whiteOut, blinds, RESPONSES, responseOf } from '../public/world/backrooms/extinguisher.rule.js';
+import { HOLD, holdPose, leverAt, smashPose, SMASH_LENGTH } from '../public/world/backrooms/hand-extinguisher.rule.js';
 import { createInventory, makeItem, ITEM_DEFS } from '../public/world/backrooms/inventory-state.js';
 import { NOTES, noteStep, wetted, fallen } from '../public/world/backrooms/cast/sticky-notes.rule.js';
 import { CAST } from '../public/world/backrooms/cast.js';
@@ -118,17 +118,17 @@ async function floor() {
   const rule = new URL('../public/world/backrooms/cast/health.rule.js', import.meta.url).href;
   const swaps = {
     './gen.js': 'export const makeRng=()=>()=>.5; export const roomDistances=()=>new Map();',
-    './cast.js': `export * from ${JSON.stringify(rule)};export const CAST=[{id:'pirate'},{id:'mother'},{id:'moth'},{id:'middle-manager'}];export const castFor=()=>CAST;export const homeFor=()=>null;`,
-    './cast/index.js': `const make=c=>{const it={x:0,z:-2,ticks:0,hits:[],got:[],ready(){},at:()=>({x:it.x,z:it.z}),update(){it.ticks++;it.hits.push(c.hurt(1));}};
+    './cast.js': `export * from ${JSON.stringify(rule)};export const CAST=[{id:'pirate'},{id:'mother'},{id:'moth'},{id:'middle-manager'},{id:'shadow'}];export const castFor=()=>CAST;export const homeFor=()=>null;`,
+    './cast/index.js': `const make=c=>{const it={x:0,z:-2,ticks:0,hits:[],got:[],ready(){},at:()=>({x:it.x,z:it.z}),update(){it.ticks++;it.hits.push(c.hurt(1));},shoveTargets:()=>[{id:c.member.id,x:it.x,z:it.z,r:.3,shove:()=>true}]};
       if(c.member.id==='middle-manager')it.doused=(d)=>{it.got.push(d);return true;};return it;};
-      export const MAKERS={pirate:make,mother:make,moth:make,'middle-manager':make};`,
+      export const MAKERS={pirate:make,mother:make,moth:make,'middle-manager':make,shadow:make};`,
     './cast/walk.js': 'export const createWalk=()=>({});',
     './doorleaf.js': 'export const hangDoors=()=>({update(){}});',
   };
   for (const [name, stub] of Object.entries(swaps)) source = source.replace(`'${name}'`, JSON.stringify(url(stub)));
   source = source.replace("'../../../core/difficulty.mjs'", JSON.stringify(new URL('../core/difficulty.mjs', import.meta.url).href));
   const { createStalkers } = await import(url(source));
-  const env = { run: { survived() {}, met() {} }, level: { seed: 'test', depth: 0 }, world: { bodies: [], scene: { add() {} } }, player: { me: { x: 0, z: 0, yaw: 0 } }, sees: () => false, clock: 0,
+  const env = { run: { got: [], survived(id) { this.got.push(id); }, met() {} }, level: { seed: 'test', depth: 0 }, world: { bodies: [], scene: { add() {} } }, player: { me: { x: 0, z: 0, yaw: 0 } }, sees: () => false, clock: 0,
     health: { damage: () => ({ ok: true, dead: false }) }, sound: {} };
   createStalkers(env); for (const f of env.ready || []) f();
   return { env, p: env.pursuer };
@@ -138,7 +138,7 @@ test('the conductor: everybody can be reached where they say they are; with noth
   const { p } = await floor(), dt = 0.05;
   p.update(dt);
   const targets = p.sprayTargets();
-  assert.deepEqual(targets.map((t) => t.member).sort(), ['middle-manager', 'mother', 'moth', 'pirate'].sort());
+  assert.deepEqual(targets.map((t) => t.member).sort(), ['middle-manager', 'mother', 'moth', 'pirate', 'shadow'].sort());
   const pirate = targets.find((t) => t.member === 'pirate'), it = p.of('pirate'), before = it.ticks;
   assert.equal(pirate.douse({ stop: 1, back: 0.5 }), true);
   for (let t = 0; t < 1.4; t += dt) p.update(dt);
@@ -154,12 +154,14 @@ test('the controller: a press sprays, spends the charge, doses what is in front 
   const swaps = {
     './extinguisher.rule.js': new URL('../public/world/backrooms/extinguisher.rule.js', import.meta.url).href,
     './cast/health.rule.js': new URL('../public/world/backrooms/cast/health.rule.js', import.meta.url).href,
+    './shove.rule.js': new URL('../public/world/backrooms/shove.rule.js', import.meta.url).href,
     './spray.js': url('export const createSpray=()=>({emit(){globalThis.__emitted=(globalThis.__emitted||0)+1;},update(){},whiteOut:()=>0,dispose(){}});'),
     three: new URL('../public/vendor/three.module.min.js', import.meta.url).href,
   };
   let source = read('extinguisher.js');
   for (const [name, to] of Object.entries(swaps)) source = source.replace(`'${name}'`, JSON.stringify(to));
   const { createExtinguisher } = await import(url(source));
+  globalThis.__extinguisher = createExtinguisher;
   let item = { type: 'extinguisher', charge: 3 }, doses = [], hand = [], put = [];
   const target = (member, x, z) => ({ id: member, member, x, z, r: 0.4, douse: (d) => { doses.push([member, d]); return true; } });
   const env = {
@@ -192,4 +194,61 @@ test('the drawing: no dice in the spray, and nothing in the hand over a note on 
   const spray = read('spray.js'), hand = read('hand-extinguisher.js');
   assert.equal(/Math\.random\(/.test(spray), false, 'the same squeeze looks the same on any page');
   for (const m of hand.matchAll(/renderOrder = (\d+)/g)) assert.ok(Number(m[1]) <= 10000, 'stuck notes (10001) stay on top');
+});
+
+test('the smash: a shove twice over; half a heart to the smallest, nothing to anything bigger; one in five splits it', async () => {
+  assert.equal(smashHurts('basic'), 0.5); assert.equal(smashHurts('medium'), 0); assert.equal(smashHurts('boss'), 0); assert.equal(smashHurts(null), 0);
+  assert.equal(SMASH.pushes, 2); assert.equal(SMASH.breaks, 0.2);
+  const createExtinguisher = globalThis.__extinguisher; assert.ok(createExtinguisher, '(the controller test above loads it)');
+  let item = { type: 'extinguisher', charge: 4 }, breaths = 0, hand = [], consumed = 0;
+  const hp = { shadow: 1, pirate: 2 }, shoves = { shadow: 0, pirate: 0 };
+  const target = (member, tier, x, z) => ({ id: member, member, tier, x, z, r: 0.3, shove: () => { shoves[member]++; return true; }, smash: (n) => { hp[member] -= n; return { ok: true, killed: hp[member] <= 0 }; } });
+  const env = {
+    player: { me: { x: 0, z: 0, yaw: 0 }, shove: () => (breaths++, true) }, world: { los: () => true },
+    inventory: { held: () => item, consumeHeld: (type) => { if (type === 'extinguisher') { consumed++; item = null; } return { ok: true }; } },
+    handView: { smashed: (b) => hand.push(b) },
+    pursuer: { shoveTargets: () => [target('shadow', 'basic', 0, -1), target('pirate', 'medium', 0.3, -1.1)] },
+    play() {},
+  };
+  const camera = { position: { x: 0, y: 1.5, z: 0 }, getWorldPosition: (v) => v.set(0, 1.5, 0), getWorldDirection: (v) => v.set(0, 0, -1) };
+  const real = Math.random; Math.random = () => 0.5;            // (no split, these two)
+  try {
+    const x = createExtinguisher(env, camera);
+    let r = x.smash();
+    assert.ok(r.ok && r.landed === 2 && !r.broke); assert.equal(breaths, 1, 'it costs a shove\'s breath');
+    assert.deepEqual(shoves, { shadow: 2, pirate: 2 }, 'each pushed twice'); assert.deepEqual(hp, { shadow: 0.5, pirate: 2 }, 'the small one hurt, the other not');
+    assert.equal(x.smash().ok, false, 'not again at once');
+    for (let i = 0; i < 60; i++) x.update(1 / 60, false);
+    r = x.smash(); assert.equal(r.killed, 1, 'the second finishes the small one'); assert.equal(hp.pirate, 2);
+    Math.random = () => 0.1;
+    for (let i = 0; i < 60; i++) x.update(1 / 60, false);
+    r = x.smash(); assert.equal(r.broke, true); assert.equal(consumed, 1, 'split, it is gone from the pocket'); assert.deepEqual(hand, [false, false, true]);
+    for (let i = 0; i < 60; i++) x.update(1 / 60, false);
+    assert.equal(x.smash().ok, false, 'and with nothing in the hand there is no smash');
+    // into the air: never splits, hurts nothing
+    item = { type: 'extinguisher', charge: 4 }; env.pursuer.shoveTargets = () => [];
+    r = x.smash(); assert.ok(r.ok && r.landed === 0 && !r.broke);
+    x.dispose();
+  } finally { Math.random = real; }
+});
+
+test('the smash in the hand: back, foot first out, back again; over in half a second', () => {
+  const mid = smashPose(0.2), back = smashPose(0.05);
+  assert.ok(mid.pitch > 1 && mid.z < -0.1, 'tipped right over, foot first, out in front');
+  assert.ok(back.z > 0, 'pulled back first');
+  assert.equal(smashPose(SMASH_LENGTH), null); assert.equal(smashPose(-1), null);
+  assert.ok(smashPose(0.45, true).y < smashPose(0.45, false).y, 'split, the hand comes back low');
+});
+
+test('the conductor: what a shove reaches says who it is and its tier, and a smash takes from its health', async () => {
+  const { p, env } = await floor(), dt = 0.05;
+  p.update(dt);
+  const t = Object.fromEntries(p.shoveTargets().map((x) => [x.member, x]));
+  assert.equal(t.shadow.tier, 'basic'); assert.equal(t.pirate.tier, 'medium'); assert.equal(t.mother.tier, 'boss');
+  assert.equal(typeof t.shadow.smash, 'function');
+  assert.deepEqual([t.shadow.smash(0.5).killed, p.vital('shadow').hp], [false, 0.5], 'half a heart off');
+  assert.equal(t.shadow.smash(0.5).killed, true, 'and the second finishes it');
+  assert.equal(p.vital('shadow').dying, 0);
+  assert.ok(env.run.got.includes('shadow'), 'counted as got away from, as a jab counts it');
+  assert.equal(t.pirate.smash(0).ok, false, 'nothing taken is no hit');
 });
