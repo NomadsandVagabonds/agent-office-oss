@@ -94,6 +94,21 @@ the shell, on the three hardware classes.
 | The camcorder | `backrooms/vhs-node.js`, one hook in `vhs.js createVhs` | SIGNAL and SCREEN in TSL, with grade and haze (from the scene's depth). The same `uniforms` object, so the battery fade, snow, red, white and tracking from `index.js` and the rooms work. The output colour transform is off while it runs, because the tape does its own gamma, as the GLSL does. |
 | Held things | `hand.js holdInFront` | Under the flag, drawn as they are; no depth clear or depth-range squeeze (no GL to reach into). A held thing can dip into a wall it is pushed against. |
 
+## Medium and High: what is ported since phase 1
+
+- **Supersampling** (`vhs-node.js`): the scene is drawn at the tier's size and brought down with vhs.js's tent.
+- **Light maps** (`kit-node-light.js`, hooked from `kit-node.js`): tube shadows and doorway light, with kit.js's sums.
+- **Glow** (`glow-node.js`, used by `vhs-node.js`): there is no second draw of every mesh with stand-in materials.
+  - The one scene pass writes what shines into a second output (MRT): a kit surface's self-lit voxels, a lamp or sign's
+    own colour, and black for the rest. The depth test does the hiding.
+  - Then comes glow.js's chain, number for number.
+  - three.js r180 caches a material's shader by a key that ignores the MRT. While the glow pass draws, every
+    material's key gets a suffix, so each material gets a shader for that pass.
+- `medium-glow.jpg` (WebGL 2 fallback) and `medium-glow-webgpu.jpg` (WebGPU, no HUD) compare Medium on the landing
+  room: 0.2 % and 1.9 % of pixels differ by more than 16 levels, at edges. The glow round the tubes matches.
+
+Still missing at Medium and High: the floor's sheen, flashlight shadows (High), and water.
+
 ## What looks wrong under the flag
 
 Everything not ported falls back to a blank node material: the right shape, flat colour or black, and a console error

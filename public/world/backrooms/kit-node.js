@@ -3,8 +3,8 @@
 // banks) times the room's dimmer and tint; the flashlight's and the camcorder lamp's cones; a voxel's grain and the line
 // where voxels meet; the texture (cut out where it says); the wet glint. Every number is kit.js's.
 //
-// Not here yet (docs/BLOCKROOMS-WEBGPU.md), so not drawn under ?gpu=webgpu whatever the tier says: the light maps
-// (LIGHTMAP, TUBESHADOW, DOORLIGHT), the floor's sheen (SHEEN), the flashlight's shadows (BEAM_SHADOWS) and the glow's
+// The light maps (LIGHTMAP, TUBESHADOW, DOORLIGHT) are kit-node-light.js. Not here yet (docs/BLOCKROOMS-WEBGPU.md), so
+// not drawn under ?gpu=webgpu whatever the tier says: the floor's sheen (SHEEN), the flashlight's shadows (BEAM_SHADOWS) and the glow's
 // stand-ins (EMISSIVE_BLOOM). Rooms that patch kit.js's GLSL by text (the waterpark's water and glaze, the pool's
 // optics) are given the GLSL to patch, which nothing draws: those rooms show their plain surface.
 //
@@ -13,6 +13,8 @@
 // are read when the material is built, and again whenever it is marked needsUpdate.
 import { gpu } from '../engine/gpu.js';
 import { FLASHLIGHT, CAMCORDER_LAMP } from './flashlight.js';
+import { lightmapNode } from './kit-node-light.js';
+import { glowStrength } from './glow.rule.js';
 
 /**
  * A kit surface as a node material. `spec`: what kit.js surface() would hand ShaderMaterial (defines, uniforms,
@@ -21,7 +23,7 @@ import { FLASHLIGHT, CAMCORDER_LAMP } from './flashlight.js';
 export function surfaceNode(spec) {
   const N = gpu.nodes, T = N.TSL;
   const { Fn, vec3, vec4, float, uniform, texture, uv, attribute, varying, fract, floor, dot, length, max, mix, clamp, pow, normalize,
-    select, If, Discard, positionView, normalViewGeometry, faceDirection } = T;
+    select, If, Discard, positionView, normalViewGeometry, faceDirection, mrt, step } = T;
   const m = new N.NodeMaterial();
   Object.assign(m, { side: spec.side, transparent: spec.transparent, depthWrite: spec.depthWrite });
   m.uniforms = spec.uniforms; m.defines = spec.defines;
@@ -43,19 +45,19 @@ export function surfaceNode(spec) {
     return cone.mul(fade).mul(incidence).div(d.mul(d).mul(att).add(1));
   };
 
-  m.fragmentNode = Fn(() => {
+  m.fragmentNode = Fn((builder) => {
     const D = m.defines || {};
     const banks = D.BANKS ? Number(D.BANKS) || 2 : 0;
     const uDim = f('uDim', 1), uTint = v3('uTint'), uAlpha = f('uAlpha', 1);
     // (VERT: the light at the vertex)
     const aLit = attribute('aLit', 'vec3');
     let lit = aLit;
+    const uBanks = banks ? v2('uBanks') : null, uMoreBanks = banks > 2 ? v2('uMoreBanks') : null, uFlick = D.FLICK ? f('uFlick', 1) : null;
     if (banks) {
-      const uBanks = v2('uBanks');
       lit = lit.add(attribute('aBank0', 'vec3').mul(uBanks.x)).add(attribute('aBank1', 'vec3').mul(uBanks.y));
-      if (banks > 2) { const more = v2('uMoreBanks'); lit = lit.add(attribute('aBank2', 'vec3').mul(more.x)); if (banks > 3) lit = lit.add(attribute('aBank3', 'vec3').mul(more.y)); }
+      if (banks > 2) { lit = lit.add(attribute('aBank2', 'vec3').mul(uMoreBanks.x)); if (banks > 3) lit = lit.add(attribute('aBank3', 'vec3').mul(uMoreBanks.y)); }
     }
-    if (D.FLICK) lit = lit.add(attribute('aFlk', 'vec3').mul(f('uFlick', 1)));
+    if (D.FLICK) lit = lit.add(attribute('aFlk', 'vec3').mul(uFlick));
     lit = lit.mul(uDim);
     const aSurf = D.VOXEL ? attribute('aSurf', 'vec2') : null;
     if (D.VOXEL) lit = mix(lit, aLit, aSurf.y);
@@ -63,6 +65,9 @@ export function surfaceNode(spec) {
     const vAlb = attribute('aAlb', 'vec3');
     // (FRAG)
     const c = vec3(vLit).toVar();
+    // (Medium, High: the room's light map, kit-node-light.js)
+    const lightmapped = lightmapNode(m, D, { banks, aSurf, uDim, uTint, uFlick, uBanks, uMoreBanks, vAlb });
+    if (lightmapped) c.assign(lightmapped(c));
     const normal = normalViewGeometry.mul(faceDirection);
     const uTorch = f('uTorch'), uLamp = f('uCameraLamp'), uTorchOrigin = v3('uTorchOrigin'), uTorchDirection = v3('uTorchDirection');
     const torchBeam = surfaceBeam(positionView, normal, uTorchOrigin, uTorchDirection, [FLASHLIGHT.edgeCos, FLASHLIGHT.coreCos], [FLASHLIGHT.fadeFrom, FLASHLIGHT.range], FLASHLIGHT.attenuation);
@@ -79,9 +84,10 @@ export function surfaceNode(spec) {
       const edge = ss(0.8, 1.0, max(fr.x, max(fr.y, fr.z)));
       c.mulAssign(float(1).sub(edge.mul(0.06).mul(aSurf.x.mul(6).add(0.4)).mul(aSurf.y.oneMinus())));
     } else c.addAssign(torch);
+    let t = null;
     if (D.MAPPED) {
       const map = texture(read('map')).onRenderUpdate(() => read('map'));
-      const t = map.sample(uv());
+      t = map.sample(uv());
       if (D.CUTOUT) If(t.a.lessThan(0.5), () => { Discard(); });
       c.mulAssign(t.rgb);
     }
@@ -94,8 +100,28 @@ export function surfaceNode(spec) {
       const room = dot(vLit, vec3(0.333));
       c.addAssign(vec3(1.0, 0.97, 0.94).mul(glint.mul(1.1).add(rim.mul(0.22)).mul(f('uWet')).mul(room.add(0.12))));
     }
+    // (Medium, High: the scene pass also writes what shines, glow-node.js. glow.js's twin: a self-lit voxel gives its
+    // light, × the texture, × the surface's own bloom; the rest is black and hides; the alpha is the mark. Made here,
+    // where its parts are, and handed to setupOutput below, which is where three.js takes a material's MRT)
+    glowOut = null;
+    if (builder?.renderer?.getMRT?.()?.has?.('emissive')) {
+      let emitted = vec3(0), plainly = float(1);
+      if (D.VOXEL) { const on = step(0.5, aSurf.y); emitted = vLit.mul(on); plainly = on.oneMinus(); }
+      if (t) emitted = emitted.mul(t.rgb);
+      const strength = uniform(1).onRenderUpdate(() => glowStrength(m.userData.bloom));
+      glowOut = m.transparent && m.depthWrite === false ? vec4(0) : vec4(emitted.mul(strength), plainly);
+    }
     return vec4(c, uAlpha);
   })();
+  // (three.js takes a material's several outputs only from here, not from inside its fragment: the colour as always,
+  // and, while the glow's pass is drawn, what shines beside it)
+  let glowOut = null;
+  const setupOutput = m.setupOutput.bind(m);
+  m.setupOutput = (builder, node) => {
+    const out = setupOutput(builder, node);
+    if (!builder?.renderer?.getMRT?.()?.has?.('emissive')) return out;
+    return mrt({ output: out, emissive: Fn(() => glowOut ?? vec4(0, 0, 0, 1))() });
+  };
   return m;
 }
 
