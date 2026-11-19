@@ -367,9 +367,10 @@ export function addLightShafts(c, spots, opt = {}) {
     let mat;
     if (gpu.nodes) {
       const N = gpu.nodes, T = N.TSL;
-      const { Fn, vec2, vec3, vec4, float, uniform, uv, attribute, varying, floor, dot, length, sin, cos, pow, max, clamp, select, If, Discard, positionGeometry, positionView } = T;
+      const { Fn, vec2, vec3, vec4, float, uniform, uv, attribute, varying, floor, dot, length, sin, cos, pow, max, clamp, select, If, Discard, mrt, positionGeometry, positionView } = T;
       const ss = (e0, e1, x) => { const t = clamp(float(x).sub(e0).div(e1 - e0), 0, 1); return t.mul(t).mul(t.mul(-2).add(3)); };
       mat = kit.own(new N.NodeMaterial());
+      mat.colorNode = vec3(1, 1, 1); mat.opacityNode = float(1);
       mat.transparent = true; mat.depthWrite = false; mat.blending = THREE.AdditiveBlending; mat.side = THREE.DoubleSide;
       mat.uniforms = {
         uShaftColor: { value: new THREE.Vector3(tint[0], tint[1], tint[2]) },
@@ -392,7 +393,7 @@ export function addLightShafts(c, spots, opt = {}) {
         const drifted = positionGeometry.add(vec3(sin(t.mul(1.3)).mul(0.16), sin(t.mul(0.85).add(aPh.x.mul(3.1))).mul(0.22), cos(t.mul(1.1).add(aPh.x)).mul(0.16)));
         return select(aPh.y.greaterThan(0.5), drifted, positionGeometry);
       })();
-      mat.fragmentNode = Fn(() => {
+      mat.outputNode = Fn(() => {
         const vUv = uv(), vPhase = varying(attribute('aPhase', 'vec2'), 'vShaftPhase');
         const bankIdx = floor(vPhase.x.mul(3).add(0.001));
         const bankLv = select(bankIdx.lessThan(0.5), uBanks.x, select(bankIdx.lessThan(1.5), uBanks.y, uMore.x));

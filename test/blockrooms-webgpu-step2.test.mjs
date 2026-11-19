@@ -121,8 +121,8 @@ test('Step 2 effects build NodeMaterials under gpu.nodes and stay ShaderMaterial
   assert.ok(puffMesh && overMesh);
   assert.equal(puffMesh.material.isNodeMaterial, true);
   assert.equal(overMesh.material.isNodeMaterial, true);
-  assert.ok(puffMesh.material.vertexNode && puffMesh.material.fragmentNode);
-  assert.ok(overMesh.material.vertexNode && overMesh.material.fragmentNode);
+  assert.ok(puffMesh.material.vertexNode && puffMesh.material.outputNode);
+  assert.ok(overMesh.material.vertexNode && overMesh.material.outputNode);
   spray.dispose();
 
   // Kit surface patchNode + setHeldInFront + kit.points
@@ -138,7 +138,7 @@ test('Step 2 effects build NodeMaterials under gpu.nodes and stay ShaderMaterial
     wetNormal: ({ wn }) => wn,
     color: ({ c }) => { c.mulAssign(0.9); },
   });
-  assert.ok(surf.positionNode && surf.fragmentNode);
+  assert.ok(surf.positionNode && surf.outputNode);
   surf.setHeldInFront(HELD_DEPTH_SLIVER);
   assert.ok(surf.depthNode, 'setHeldInFront sets depthNode for WebGPU sliver');
 

@@ -71,8 +71,9 @@ export function createBeamShadows(renderer) {
    * camera's space: index.js sets them every frame).
    */
   function draw(res, camera, scenes, shared) {
-    res = beamShadowSize(res);
     stats.drawn = false; stats.calls = stats.triangles = stats.casters = stats.receivers = 0;
+    if (renderer?.isWebGPURenderer) return stats;
+    res = beamShadowSize(res);
     if (!res) { if (target || patched.size) off(); return stats; }
     const frustum = beamFrustum({ origin: shared.uTorchOrigin.value.toArray(), direction: shared.uTorchDirection.value.toArray() }, res);
     if (!frustum || !(shared.uTorch.value > 0.0001)) { uniforms.uBeamShadowK.value.set(1 / res, 0); return stats; }

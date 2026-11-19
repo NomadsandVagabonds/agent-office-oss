@@ -755,9 +755,10 @@ export function addMistVeils(c, segments, opt = {}) {
     let mat;
     if (gpu.nodes) {
       const N = gpu.nodes, T = N.TSL;
-      const { Fn, vec4, float, uniform, uv, length, sin, cos, clamp, If, Discard, positionView } = T;
+      const { Fn, vec3, vec4, float, uniform, uv, length, sin, cos, clamp, If, Discard, mrt, positionView } = T;
       const ss = (e0, e1, x) => { const t = clamp(float(x).sub(e0).div(e1 - e0), 0, 1); return t.mul(t).mul(t.mul(-2).add(3)); };
       mat = kit.own(new N.NodeMaterial());
+      mat.colorNode = vec3(1, 1, 1); mat.opacityNode = float(1);
       mat.transparent = true; mat.depthWrite = false; mat.side = THREE.DoubleSide;
       mat.uniforms = {
         uMistCol: { value: new THREE.Vector3(col[0], col[1], col[2]) },
@@ -769,7 +770,7 @@ export function addMistVeils(c, segments, opt = {}) {
       const uMistAlpha = uniform(opt.alpha ?? 0.64).onRenderUpdate(() => mat.uniforms.uMistAlpha.value);
       const uMistTime = uniform(0).onRenderUpdate(() => mat.uniforms.uMistTime.value);
       const uDim = uniform(1).onRenderUpdate(() => mat.uniforms.uDim.value);
-      mat.fragmentNode = Fn(() => {
+      mat.outputNode = Fn(() => {
         const vUv = uv();
         const nearPart = ss(0.65, 2.85, length(positionView));
         const edgeX = sin(vUv.x.mul(3.14159265)), edgeY = sin(vUv.y.mul(3.14159265));

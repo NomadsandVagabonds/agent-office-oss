@@ -4,11 +4,13 @@ The plan for moving BlockRooms from three.js's `WebGLRenderer` to `WebGPURendere
 materials, written in TSL. This is task R-5 of the Steam plan, D3 Rendering (`docs/BLOCKROOMS-STEAM-PLAN.md` on
 `claude/backrooms-cast`). It is also the ground the Ultra tier (R-3) and "light that behaves" (R-4) can be built on.
 
-**Status (phase 2 — Step 2 complete):**
+**Status (phase 3 — Steps 2, 3 & 4 complete):**
 - The switch is in, behind an opt-in flag (`?gpu=webgpu` on the play page and `/world/dev/backrooms.html`).
 - **Phase 1 (done):** the switch, room surface Classic core (`kit.js` / `kit-node.js`), voxel material (`vox/material.js`), and camcorder at Classic (`vhs.js` / `vhs-node.js`).
-- **Phase 2 / Step 2 (done):** composable `patchNode` hooks on `kit-node.js`, `kit.points` instanced quads (`the-grotto` snow), held-item `depthNode` sliver (`setHeldInFront` on `hand.js` + `hand-notes.js`), `pool-optics.js`, all Classic room shader patches (kiddie-lagoon fountain, locker-showers glaze/curtain/streams + non-mirror water guard, return-pool, bellmouth, flume-connector, whirlpool-flume siphon), extinguisher spray & white-out (`spray.js`), paper-fire floor spill (`inventory-fire.js`), forest water/caustics/shafts (`forest-fx.js`), forest mist veils (`forest-maze.js`), and `the-sets` CCTV feed verified live.
-- **Next:** Step 3 (`locker-showers/water.js` planar mirror via `ReflectorNode`), then Steps 4–6 (Medium, `liquid.js` water, High flashlight shadows).
+- **Step 2 (done):** composable `patchNode` hooks on `kit-node.js`, `kit.points` instanced quads (`the-grotto` snow), held-item `depthNode` sliver (`setHeldInFront` on `hand.js` + `hand-notes.js`), `pool-optics.js`, all Classic room shader patches, extinguisher spray & white-out (`spray.js`), paper-fire floor spill (`inventory-fire.js`), forest water/caustics/shafts (`forest-fx.js`), forest mist veils (`forest-maze.js`), and `the-sets` CCTV feed verified live.
+- **Step 3 (done):** `locker-showers/water.js` planar floor mirror via `ReflectorNode` (oriented `+Y`, `bounces: false`, zeroing camera-space lamps during the mirror draw), visually verified live at Classic and Medium.
+- **Step 4 / Medium tier (done):** `vhs-node.js` supersample (`sw > iw` 4-tap tent downsample), `kit-node.js` light maps (`LIGHTMAP` / `TUBESHADOW` / `DOORLIGHT`) and floor sheen (`SHEEN` with blocky texel derivatives and per-draw `onObjectUpdate`), plus single-pass MRT emissive glow (`EmissiveMrtNode` + `kit.glowing` `MeshBasicNodeMaterial` + 6-step down / 5-step up bloom pyramid in `vhs-node.js` — replacing `glow.js`'s twin scene redraw).
+- **Next:** Step 5 (`liquid.js` refracted/reflective water view) and Step 6 (`beam-shadows.js` flashlight shadows — currently guarded on `WebGPURenderer` so `graphics=high` stays crash-free).
 - Without the flag, nothing changes: the same renderer, the same shaders, the same pixels.
 
 ## The switch
@@ -70,24 +72,24 @@ the shell, on the three hardware classes.
 | Piece | File | Notes |
 |---|---|---|
 | The renderer switch | `engine/stage.js` `openStage`, `engine/gpu.js` | `site.js` calls `openStage` with the page's choice. Off: `createStage`, exactly as before. |
-| The room surface | `backrooms/kit-node.js`, hooks in `kit.js surface()` & `kit.points()` | Baked light (steady, flicker, banks) × dimmer × tint, the flashlight and camcorder-lamp cones, voxel grain and seams, texture with cut-outs, the wet glint. Exposes `m.patchNode({ position?, uv?, wetNormal?, color?, replaceFragment? })` for room shader extensions and `m.setHeldInFront(sliver)` for held-item depth-sliver rendering, plus `pointsNode` (`kit.points`) for world-sized instanced billboard quads. Keeps `uniforms`, `defines`, `vertexShader` and `fragmentShader` on the material, so `uTint` and the rest keep working. Uniforms are read every frame; defines are read at build and on `needsUpdate`. Under the flag, byte-triplet attributes are padded to 4 bytes and float attributes are interleaved (`packSurfaceAttributes`, at most 5 vertex buffers). |
+| The room surface | `backrooms/kit-node.js`, hooks in `kit.js surface()`, `glowing()` & `points()` | Baked light (steady, flicker, banks) × dimmer × tint, light maps (`LIGHTMAP` / `TUBESHADOW` / `DOORLIGHT`), anisotropic floor sheen (`SHEEN`), flashlight and camcorder-lamp cones, voxel grain and seams, texture with cut-outs, wet glint, and MRT emissive descriptor (`userData.emissiveMrt`). Exposes `m.patchNode({ init?, position?, uv?, wetNormal?, color?, replaceFragment? })`, `m.setHeldInFront(sliver)`, `glowingNode`, and `pointsNode` (`kit.points`). Keeps `uniforms`, `defines`, `vertexShader` and `fragmentShader` on the material. Under the flag, byte-triplet attributes are padded to 4 bytes and float attributes are interleaved (`packSurfaceAttributes`, at most 5 vertex buffers). |
 | The voxel material | `vox/material.js` `nodeVoxel` | `MeshLambertNodeMaterial` with the same grain, seam and glow as the `onBeforeCompile` patch; `voxelUniforms` are read every frame. |
-| The camcorder | `backrooms/vhs-node.js`, one hook in `vhs.js createVhs` | SIGNAL and SCREEN in TSL, with grade and haze (from the scene's depth). The same `uniforms` object, so the battery fade, snow, red, white and tracking from `index.js` and the rooms work. The output colour transform is off while it runs, because the tape does its own gamma, as the GLSL does. |
+| The camcorder | `backrooms/vhs-node.js`, one hook in `vhs.js createVhs` | Full Classic & Medium pipeline in TSL: supersample target (`sw > iw`) + 4-tap tent downsample, single-pass MRT emissive glow (`EmissiveMrtNode`, 2-attachment `RenderTarget` named `'output'` / `'emissive'`, 6-step down / 5-step up bloom pyramid combined in resolve), SIGNAL (grade + depth haze + VHS), and SCREEN. The same `uniforms` object, so battery fade, snow, red, white and tracking work. |
 | Held things | `hand.js`, `hand-notes.js`, `kit-node.js` `setHeldInFront` | Under the flag, every held mesh (torch, scissors, extinguisher, balloon + glove, pink slip, shove hands, stuck notes) writes `clamp(viewZToPerspectiveDepth(positionView.z, cameraNear, cameraFar), 0, 1) * HELD_DEPTH_SLIVER` to `depthNode`: renders cleanly in front of walls without clipping, preserves self-occlusion and sticky-note ordering, and leaves room depth intact for haze. |
-| Classic room patches & effects | `pool-optics.js`, `rooms/kiddie-lagoon.js`, `rooms/locker-showers/{glaze,fold-screen,assets,water}.js`, `rooms/return-pool/art.js`, `rooms/bellmouth/art.js`, `rooms/flume-connector/water.js`, `rooms/whirlpool-flume/siphon.js`, `spray.js`, `inventory-fire.js`, `forest-fx.js`, `forest-maze.js`, `rooms/the-grotto.js` | Every Classic-tier shader and room patch runs on TSL `NodeMaterial`s behind `gpu.nodes` / `mat.patchNode`. Tested by `test/blockrooms-webgpu-step2.test.mjs` and visually verified under `?gpu=webgpu` in Chromium (`kiddie-lagoon`, `bog-boardwalk`, `locker-showers`, `whirlpool-flume`, `the-grotto`, `the-sets`, held flashlight against wall, paper fire). Note: `spray.js` is unit-tested under `gpu.nodes` but was not triggered live in the browser pass; `locker-showers/water.js` renders rippled non-mirror water and guards `onBeforeRender` until Step 3 (`ReflectorNode`). |
+| Classic room patches & floor mirror | `pool-optics.js`, `rooms/kiddie-lagoon.js`, `rooms/locker-showers/{glaze,fold-screen,assets,water}.js`, `rooms/return-pool/art.js`, `rooms/bellmouth/art.js`, `rooms/flume-connector/water.js`, `rooms/whirlpool-flume/siphon.js`, `spray.js`, `inventory-fire.js`, `forest-fx.js`, `forest-maze.js`, `rooms/the-grotto.js` | Every Classic-tier shader, room patch, and the locker-showers planar floor mirror (`ReflectorNode`) run on TSL `NodeMaterial`s behind `gpu.nodes` / `mat.patchNode`. Tested by `test/blockrooms-webgpu-step2.test.mjs` and `test/blockrooms-webgpu-step3-4.test.mjs`, and visually verified live under `?gpu=webgpu` at Classic, Medium, and High (`kiddie-lagoon`, `bog-boardwalk`, `locker-showers`, `whirlpool-flume`, `mall`, `the-grotto`, `the-sets`, `office` + VHS, held flashlight against wall, paper fire). Note: `spray.js` is unit-tested under `gpu.nodes` but was not triggered live in the browser pass. |
 
 ## What looks wrong under the flag
 
-Everything still unported falls back to plain surface / Classic behaviour:
+Everything still unported falls back cleanly without crashing:
 
 **Any tier:**
-- **Locker-showers floor mirror** (`rooms/locker-showers/water.js`, also in `office-beach-day`, `dive-tower`, `flooded-cubicles`): renders animated rippled translucent water without the planar room reflection (queued for Step 3 `ReflectorNode`).
 - **The inventory's icons:** unaffected. They are drawn by their own second WebGL renderer with their own Lambert material, onto PNGs.
 - **Co-op:** its client makes its own WebGLRenderer and does not read the flag.
 
-**Medium, High, Auto** (on top of the above): these draw as Classic plus their grade and haze. That means no
-supersample, no bloom or glow, no light maps (tube shadows, doorway light), no floor sheen, no flashlight shadows, and
-no water view.
+**Medium, High, Auto:**
+- **Water view (`liquid.js`, Step 5):** not ported yet; pool/flooded rooms render their Classic water surface instead of the refracted/reflective `liquid.js` pass.
+- **Flashlight shadows (`beam-shadows.js`, High only, Step 6):** guarded on `WebGPURenderer` so High stays crash-free; flashlight illuminates without shadow maps yet.
+- **Host threshold bloom (Classic office only):** off under the flag; Medium/High use the MRT emissive glow chain.
 
 ## Inventory
 
@@ -115,7 +117,7 @@ Sizes:
 | Inventory icons | `inventory-icons.js` | its own WebGLRenderer and its own Lambert material, rendered to PNGs | keep WebGL (separate canvas), or port to save a context | S | none: it shares no material with the stage | **unaffected** |
 | Pool optics | `pool-optics.js` | patch: rippled pool texture plus the ceiling's lamps at grazing angles | `mat.patchNode({ uv, color })` in `kit-node` | S | exact kit text | **done** |
 | Room string patches | locker-showers (`glaze`, `fold-screen`, `assets`, non-mirror `water.js`), `flume-connector/water.js`, `whirlpool-flume/siphon.js`, `kiddie-lagoon.js`, `bellmouth/art.js`, `return-pool/art.js` | moving water, glaze, curtains, fountains, UV drift | `mat.patchNode({ position, uv, wetNormal, color })` hooks in `kit-node` | S each, M together | each is written against kit's GLSL text | **done** |
-| Showers mirror | `locker-showers/water.js` | a floor sheet reflecting the room (oblique clip), drawn from `onBeforeRender` | `ReflectorNode` (three.js ships one in TSL) | L | nested render inside a render; `renderer.state`, `renderer.xr` | **guarded** (rippled non-mirror water drawn; Step 3) |
+| Showers mirror | `locker-showers/water.js` | a floor sheet reflecting the room (oblique clip), drawn from `onBeforeRender` | `ReflectorNode` (`resolutionScale: 0.5, bounces: false`, target rotated `-π/2` around X) | L | nested render inside a render; `renderer.state`, `renderer.xr` | **done** (verified live at Classic & Medium) |
 | Forest water | `forest-fx.js` WATER and CAUSTIC (a kit material with its shaders replaced) | voxel ripples, footstep rings, depth tint, Fresnel, foam; caustic web | `mat.patchNode({ position, replaceFragment })` (6 unrolled ripple uniforms) | M, S | uniform arrays (`uRipples[6]`) | **done** |
 | Forest mist | `forest-maze.js` veils | drifting translucent sheets fading near the eye | `NodeMaterial` | S | `discard` | **done** |
 | Forest shafts | `forest-fx.js` | god-ray cones and pollen | `NodeMaterial` | S | none: not reached (no room asks for it) | **done** |
@@ -124,15 +126,15 @@ Sizes:
 
 ### The game, Medium and High only
 
-| What | Where | What it does | Port to TSL | Size | Risk |
-|---|---|---|---|---|---|
-| Light maps | `kit.js` LIGHTMAP, TUBESHADOW, DOORLIGHT | tube shadows and doorway light from a baked texture | more nodes in `kit-node` | M | flat varying, `uniform vec4 uLm[6]`, region per vertex |
-| Floor sheen | `sheen.rule.js` | the ceiling tubes caught on lino, terrazzo and pool tile | node block in `kit-node` | M | `dFdx`/`dFdy`, `textureSize`, uniforms set per draw in `onBeforeRender` |
-| Supersample | `vhs.js` SupersamplePass | scene at up to 2×, tent down to the tape | one more target and quad in `vhs-node` | S | MSAA plus depth |
-| Bloom | `vhs.js` UnrealBloomPass | the host's threshold bloom (the office's Classic only) | `BloomNode` (three.js addon, TSL) | M | the addon needs `three/webgpu` and `three/tsl` in the import map; `vhs.bloom` is reached into by look2.js |
-| Glow | `glow.js`, `glow.rule.js` | bloom from what shines: twin materials, a 6-level blur chain, depth-tested lamps | MRT (an emissive output from `kit-node` itself) plus `BloomNode`, in place of the twin redraw | L | it swaps every mesh's material, uses `gl_FragCoord` and depth, and `renderer.state` |
-| Water | `liquid.js`, `liquid.rule.js` | refraction of a copy of the scene, absorption, caustics, Fresnel, swell; underside; colour and depth copy; two-part draw; mirror (High) | `viewportSharedTexture`, `viewportDepthTexture` and `ReflectorNode` replace the copy and the mirror | L (the biggest) | `gl_FragDepth`, `fwidth`, layers, shared torch uniforms rewritten during the mirror |
-| Flashlight shadows | `beam-shadows.js`, `.rule.js` | 1024² depth map from the torch, 9-tap PCF | a `SpotLight` with a shadow, or a depth pass plus `textureCompare` | L | `MeshDepthMaterial` swap, `sampler2DShadow`, `renderer.state` |
+| What | Where | What it does | Port to TSL | Size | Risk | Status |
+|---|---|---|---|---|---|---|
+| Light maps | `kit.js` LIGHTMAP, TUBESHADOW, DOORLIGHT | tube shadows and doorway light from a baked texture | `kit-node.js` (`flat` varying `vKitLmReg`, 6 `uLm` + 4 `uDoorL` uniforms, `uLmA/B/C`) | M | flat varying, `uniform vec4 uLm[6]`, region per vertex | **done** |
+| Floor sheen | `sheen.rule.js` | the ceiling tubes caught on lino, terrazzo and pool tile | `kit-node.js` (`dFdx`/`dFdy`, `textureSize`, per-draw `onObjectUpdate`) | M | `dFdx`/`dFdy`, `textureSize`, uniforms set per draw in `onBeforeRender` | **done** |
+| Supersample | `vhs.js` SupersamplePass | scene at up to 2×, tent down to the tape | `drawTarget` (`sw × sh`) + 4-tap tent in `vhs-node.js` `resolvePass` | S | MSAA plus depth | **done** |
+| Bloom | `vhs.js` UnrealBloomPass | the host's threshold bloom (the office's Classic only) | `BloomNode` (three.js addon, TSL) | M | the addon needs `three/webgpu` and `three/tsl` in the import map; `vhs.bloom` is reached into by look2.js | not started |
+| Glow | `glow.js`, `glow.rule.js` | bloom from what shines: twin materials, a 6-level blur chain, depth-tested lamps | Single-pass MRT (`EmissiveMrtNode` + `kit.glowing` `MeshBasicNodeMaterial`) + 6-step down / 5-step up TSL pyramid in `vhs-node.js`, replacing twin redraw | L | named MRT attachments, single-target Classic compatibility | **done** |
+| Water | `liquid.js`, `liquid.rule.js` | refraction of a copy of the scene, absorption, caustics, Fresnel, swell; underside; colour and depth copy; two-part draw; mirror (High) | `viewportSharedTexture`, `viewportDepthTexture` and `ReflectorNode` replace the copy and the mirror | L (the biggest) | `gl_FragDepth`, `fwidth`, layers, shared torch uniforms rewritten during the mirror | not started |
+| Flashlight shadows | `beam-shadows.js`, `.rule.js` | 1024² depth map from the torch, 9-tap PCF | a `SpotLight` with a shadow, or a depth pass plus `textureCompare` | L | `MeshDepthMaterial` swap, `sampler2DShadow`, `renderer.state` | **guarded** (Step 6) |
 
 ### Not the game (the office, co-op, dev pages)
 
@@ -184,15 +186,15 @@ backend does (see the shots).
 ## Port order
 
 1. **Done:** the switch, `vox/material.js`, the Classic core of `kit.js`, and the camcorder at Classic.
-2. **Done (this commit):** the hook points in `kit-node` (`position`, `uv`, `wetNormal`, `color`, `replaceFragment`),
+2. **Done (`baf48c1`):** the hook points in `kit-node` (`position`, `uv`, `wetNormal`, `color`, `replaceFragment`),
    `kit.points()` instanced quads (`the-grotto`), `setHeldInFront` depth-sliver (`hand.js` + `hand-notes.js`), all Classic
    room string patches, `pool-optics.js`, `spray.js`, `inventory-fire.js`, forest mist/shafts/water/caustics, and live
-   verification of The Sets' CCTV TV. The flag is now playable everywhere at Classic (locker-showers floor draws rippled
-   non-mirror water until Step 3).
-3. **Next — The showers mirror, L:** `ReflectorNode`.
-4. **Medium:** supersample (S), light maps (M), sheen (M), and glow (L). For the glow, an emissive MRT output from the
-   surface replaces the twin redraw: cheaper than today, not just ported.
-5. **Water, L, the biggest single piece:** `viewportSharedTexture` and `viewportDepthTexture` replace the copy pass;
+   verification of The Sets' CCTV TV.
+3. **Done (this commit):** `locker-showers/water.js` planar mirror via `ReflectorNode`.
+4. **Done (this commit) — Medium:** supersample (4-tap tent in `vhs-node.js`), light maps (`LIGHTMAP` / `TUBESHADOW` /
+   `DOORLIGHT` in `kit-node.js`), floor sheen (`SHEEN` in `kit-node.js`), and single-pass MRT emissive glow (`EmissiveMrtNode`
+   + `kit.glowing` + 6-step down / 5-step up bloom pyramid in `vhs-node.js`, replacing the twin redraw).
+5. **Next — Water, L, the biggest single piece:** `viewportSharedTexture` and `viewportDepthTexture` replace the copy pass;
    `ReflectorNode` replaces the mirror.
 6. **High:** flashlight shadows (L).
 7. **The office, co-op, dev tools:** M each. These are not needed for the Steam build, which is BlockRooms.

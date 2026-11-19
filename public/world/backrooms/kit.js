@@ -21,7 +21,7 @@ import { BEAM_SHADOW_GLSL } from './beam-shadows.rule.js';   // (beam shadows: o
 import { GLOW_DEPTH_GLSL, glowStrength } from './glow.rule.js';             // (emissive bloom: only compiled in glow.js's stand-ins)
 import { SHEEN, withSheen } from './sheen.rule.js';                         // (floor sheen: only put into a surface given `sheen`)
 import { gpu } from '../engine/gpu.js';
-import { surfaceNode, packSurfaceAttributes, pointsNode } from './kit-node.js';                       // (the same surface and points in TSL, only under ?gpu=webgpu)
+import { surfaceNode, glowingNode, packSurfaceAttributes, pointsNode } from './kit-node.js';         // (the same surface, glowing and points in TSL, only under ?gpu=webgpu)
 
 const GLOW = 2.3;                              // how hard a self-lit voxel shines
 
@@ -800,7 +800,7 @@ export function createKit(opt = {}) {
    * alphaTest, side, depthWrite; bloom (0…3, default 1: how strongly it feeds the Medium/High glow, glow.js; not how it is drawn).
    */
   function glowing(map, power = 1, rgb = WHITE, opt = {}) {
-    const m = own(new THREE.MeshBasicMaterial({ map, transparent: !!opt.transparent, alphaTest: opt.alphaTest || 0, side: opt.side || THREE.FrontSide, depthWrite: opt.depthWrite !== false }));
+    const m = own(gpu.nodes ? glowingNode(map, power, rgb, opt) : new THREE.MeshBasicMaterial({ map, transparent: !!opt.transparent, alphaTest: opt.alphaTest || 0, side: opt.side || THREE.FrontSide, depthWrite: opt.depthWrite !== false }));
     m.color.setRGB(rgb[0] * power, rgb[1] * power, rgb[2] * power);
     // --- emissive bloom ---
     // (it shines: glow.js draws it into the bloom's picture. A plain light, white or the lit panel's picture, is a 'lamp'

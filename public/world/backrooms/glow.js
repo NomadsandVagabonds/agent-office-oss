@@ -31,25 +31,12 @@
 // The level's materials are never changed: each is swapped for its stand-in for the length of the one draw, and put back.
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from '/vendor/three-addons/postprocessing/Pass.js';
-import { GLOW_DEPTH_GLSL, glowStrength } from './glow.rule.js';
+import { GLOW_BLOOM, GLOW_DEPTH_GLSL, glowStrength } from './glow.rule.js';
 
 /**
- * The numbers: how strong, in what colour, how much of each step of the chain comes back up (the lab's, 5 · bloom; mix[0]
- * is how much of the first step itself, the shining thing hardly blurred, is added back over it: less than the lab's
- * whole, so an exit sign's letters are not washed out by their own glow).
+ * The numbers: how strong, in what colour, how much of each step of the chain comes back up (defined in glow.rule.js).
  */
-export const GLOW_BLOOM = Object.freeze({
-  strength: 0.5,
-  // how much of the glow lands on a shining picture itself (0…1), against the whole of it round it: a sign's field and
-  // letters, dark parts included, are left nearly as they are drawn, so its words stay as readable as without the glow,
-  // and the glow goes outward as a halo. Lamps take it in full.
-  over: 0.15,
-  pictureAlpha: 0.25,  // (what a picture writes to the emissive picture's alpha: under 0.5 marks it to be left crisp)
-  tint: Object.freeze([1, 0.97, 0.9]),
-  mix: Object.freeze([0.5, 1, 0.9, 0.8, 0.7, 0.6]),
-  steps: 6,
-  scale: 0.5,          // the emissive picture's size, of the size the scene is drawn at (each way)
-});
+export { GLOW_BLOOM };
 
 // (the line of the kit's emissive bloom block that writes what a voxel gives the bloom: a scaled twin multiplies it)
 const EMITTED = 'gl_FragColor = vec4(emitted, plainly);';

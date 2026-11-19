@@ -12,6 +12,16 @@
 // one of its pixels from the middle, and the nearest kept; and the margin grows with distance, so that a ceiling seen
 // at a slant does not hide its own tubes.
 
+export const GLOW_BLOOM = Object.freeze({
+  strength: 0.5,
+  over: 0.15,
+  pictureAlpha: 0.25,
+  tint: Object.freeze([1, 0.97, 0.9]),
+  mix: Object.freeze([0.5, 1, 0.9, 0.8, 0.7, 0.6]),
+  steps: 6,
+  scale: 0.5,
+});
+
 export const GLOW_DEPTH = Object.freeze({
   share: 0.01,        // of the fragment's own distance: what it may be behind the scene's depth and still shine
   metres: 0.02,       // and this much more, at any distance

@@ -15,22 +15,23 @@ export function showerWater(c, batch, tex) {
   c.after.push(() => {
     const geo = c.kit.geometry(batch,c.rt.lights,c.rt.amb,c.rt.lighting);
     if (!geo) return;
-    const target = c.kit.own(new THREE.WebGLRenderTarget(SIZE,SIZE,{
-      minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,
-      generateMipmaps:false,depthBuffer:true,stencilBuffer:false,samples:0,
-    }));
-    target.texture.name = 'changing-room-reflection';
     const projection = new THREE.Matrix4(), ready = {value:0};
     const mat = c.kit.surface({map:tex,room:c.rt.u,alpha:.79,wet:.8,
       side:THREE.DoubleSide,flick:geo.userData.flick,banks:geo.userData.banks});
+    const target = mat.patchNode ? null : c.kit.own(new THREE.WebGLRenderTarget(SIZE,SIZE,{
+      minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,
+      generateMipmaps:false,depthBuffer:true,stencilBuffer:false,samples:0,
+    }));
+    if (target) target.texture.name = 'changing-room-reflection';
     // Avoid Three's extra back-face pass for transparent DoubleSide materials.
     mat.forceSinglePass = true;
     Object.assign(mat.uniforms,{
-      uChangingTime:time,uChangingReflection:{value:target.texture},
+      uChangingTime:time,uChangingReflection:{value:target?.texture || null},
       uChangingReflectionMatrix:{value:projection},uChangingReflectionReady:ready,
     });
+    let disposed=false;
     if (mat.patchNode) {
-      // Non-mirror rippled water surface under ?gpu=webgpu until Step 3 ports the planar reflector to ReflectorNode.
+      let refl = null;
       const rippleOf = ({ T, localPos, f, shared }) => {
         if (shared.changingRipple) return shared.changingRipple;
         const { vec2, sin, cos } = T;
@@ -44,6 +45,27 @@ export function showerWater(c, batch, tex) {
         return shared.changingRipple;
       };
       mat.patchNode({
+        init({ T }) {
+          refl = T.reflector({ resolutionScale: 0.5, bounces: false });
+          refl.target.position.set(0, batch.pos[1], 0);
+          refl.target.rotation.x = -Math.PI / 2;
+          group.add(refl.target);
+          c.kit.own(refl);
+          const origUpdate = refl.reflector.updateBefore.bind(refl.reflector);
+          refl.reflector.updateBefore = (frame) => {
+            if (disposed) return;
+            const torch = mat.uniforms.uTorch, camLamp = mat.uniforms.uCameraLamp;
+            const tv = torch.value, cv = camLamp.value;
+            torch.value = 0; camLamp.value = 0;
+            try {
+              const res = origUpdate(frame);
+              ready.value = refl.reflector.hasOutput ? 1 : 0;
+              return res;
+            } finally {
+              torch.value = tv; camLamp.value = cv;
+            }
+          };
+        },
         uv(ctx) {
           const { vec2 } = ctx.T;
           const r = rippleOf(ctx);
@@ -57,12 +79,17 @@ export function showerWater(c, batch, tex) {
           return normalize(ctx.wn.add(vx.mul(r.x)).add(vz.mul(r.y)));
         },
         color(ctx) {
-          const { vec3, sin, pow, max } = ctx.T;
-          rippleOf(ctx);
+          const { vec2, vec3, float, sin, pow, max, abs, dot, clamp, mix, normalize, screenUV } = ctx.T;
+          const r = rippleOf(ctx);
           const p = ctx.shared.changingLocal, t = ctx.shared.changingTime;
-          ctx.c.mulAssign(vec3(.79, 1.06, 1.04));
+          refl.uvNode = clamp(screenUV.flipX().add(r.mul(.055)), vec2(.001), vec2(.999));
+          const valid = ctx.f('uChangingReflectionReady');
+          const fresnel = pow(max(float(1).sub(clamp(abs(dot(ctx.normal, normalize(ctx.viewPos.negate()))), 0, 1)), 0), 3);
+          const reflectionAmount = mix(.24, .78, fresnel).mul(valid);
+          ctx.c.assign(mix(ctx.c.mul(vec3(.79, 1.06, 1.04)), refl.rgb.mul(vec3(.94, 1.0, .98)), reflectionAmount));
           const fineRipple = pow(max(0, sin(p.x.mul(19).add(p.y.mul(13)).sub(t.mul(1.2)))), 36);
           ctx.c.addAssign(ctx.vLit.mul(fineRipple.mul(.025)));
+          ctx.alpha.assign(mix(ctx.uAlpha, .96, fresnel.mul(valid)));
         },
       });
     } else {
@@ -115,7 +142,6 @@ vec2 changingRipple() {
     const viewPlane = new THREE.Plane(), eye = new THREE.Vector3(), forward = new THREE.Vector3(), aim = new THREE.Vector3();
     const clip = new THREE.Vector4(), corner = new THREE.Vector4();
     const viewport = new THREE.Vector4();
-    let disposed=false;
     c.kit.own({dispose(){disposed=true;ready.value=0;mesh.onBeforeRender=()=>{};}});
 
     mesh.onBeforeRender = (renderer,renderScene,view) => {

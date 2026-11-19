@@ -37,13 +37,14 @@ function tongue(bend) {
 export function createFireSpillMaterial(){
   if (gpu.nodes) {
     const N = gpu.nodes, T = N.TSL;
-    const { Fn, vec3, vec4, float, uniform, uv, length, clamp } = T;
+    const { Fn, vec3, vec4, float, uniform, uv, length, clamp, mrt } = T;
     const ss = (e0, e1, x) => { const t = clamp(float(x).sub(e0).div(e1 - e0), 0, 1); return t.mul(t).mul(t.mul(-2).add(3)); };
     const material = new N.NodeMaterial();
+    material.colorNode = vec3(1, 1, 1); material.opacityNode = float(1);
     material.transparent = true; material.depthWrite = false; material.blending = THREE.AdditiveBlending;
     material.uniforms = { strength: { value: .6 } };
     const uStrength = uniform(.6).onRenderUpdate(() => material.uniforms.strength.value);
-    material.fragmentNode = Fn(() => {
+    material.outputNode = Fn(() => {
       const r = length(uv().sub(.5)).mul(2);
       const a = float(1).sub(ss(.08, 1.0, r)).mul(uStrength);
       return vec4(vec3(.9, .29, .055), a);

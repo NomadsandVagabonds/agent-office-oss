@@ -1,18 +1,22 @@
-// The Backrooms — kit.js's one surface material, for the WebGPU renderer (?gpu=webgpu: engine/gpu.js). The same sum as
-// kit.js VERT and FRAG, in three.js's node language (TSL): the light baked into the vertices (steady, flicker, the lamp
-// banks) times the room's dimmer and tint; the flashlight's and the camcorder lamp's cones; a voxel's grain and the line
-// where voxels meet; the texture (cut out where it says); the wet glint. Every number is kit.js's.
+// The Backrooms — kit.js's surface, glowing and points materials for the WebGPU renderer (?gpu=webgpu: engine/gpu.js).
+// Written in three.js's node language (TSL):
+//   - baked light (steady, flicker, lamp banks) × dimmer × tint
+//   - light maps (LIGHTMAP: TUBESHADOW and DOORLIGHT, Medium/High)
+//   - floor sheen (SHEEN: anisotropic GGX tube streaks + environment wax, Medium/High)
+//   - flashlight and camcorder-lamp cones
+//   - voxel grain, seams and wet glint
+//   - composable room hooks via `m.patchNode({ position?, uv?, wetNormal?, color?, replaceFragment? })`
+//   - held-item depth sliver via `m.setHeldInFront(sliver)`
+//   - MRT emissive output (`m.mrtNode`, used by vhs-node.js glow bloom on Medium/High without redrawing the scene)
 //
-// Not here yet (docs/BLOCKROOMS-WEBGPU.md), so not drawn under ?gpu=webgpu whatever the tier says: the light maps
-// (LIGHTMAP, TUBESHADOW, DOORLIGHT), the floor's sheen (SHEEN), the flashlight's shadows (BEAM_SHADOWS) and the glow's
-// stand-ins (EMISSIVE_BLOOM). Rooms that extend a kit surface call `m.patchNode(hook)` to plug into position, map UV,
-// wet normal, final colour/alpha, or replace the fragment stage while keeping kit's baked light and uniform readers.
+// Not here yet (docs/BLOCKROOMS-WEBGPU.md): flashlight shadows (BEAM_SHADOWS, Step 6).
 //
 // The material keeps kit.js's `uniforms`, `defines`, `vertexShader` and `fragmentShader`, so that everything that
-// reaches into one (uTint, uDim, uFlick, a room's patch) keeps working; the uniforms are read every frame. The defines
-// are read when the material is built, and again whenever it is marked needsUpdate.
+// reaches into one (uTint, uDim, uFlick, a room's patch, sheen.js) keeps working; uniforms are read every frame / draw.
 import { gpu } from '../engine/gpu.js';
 import { FLASHLIGHT, CAMCORDER_LAMP } from './flashlight.js';
+import { glowStrength } from './glow.rule.js';
+import { SHEEN } from './sheen.rule.js';
 
 /**
  * A kit surface as a node material. `spec`: what kit.js surface() would hand ShaderMaterial (defines, uniforms,
@@ -20,11 +24,13 @@ import { FLASHLIGHT, CAMCORDER_LAMP } from './flashlight.js';
  */
 export function surfaceNode(spec) {
   const N = gpu.nodes, T = N.TSL;
-  const { Fn, vec3, vec4, float, uniform, texture, uv, attribute, varying, fract, floor, dot, length, max, mix, clamp, pow, normalize,
-    select, If, Discard, positionGeometry, positionLocal, positionView, normalGeometry, normalViewGeometry, faceDirection,
+  const { Fn, vec2, vec3, vec4, float, uniform, texture, textureSize, uv, attribute, varying, fract, floor, dot, cross, length,
+    sqrt, exp, max, min, abs, mix, clamp, pow, normalize, reflect, step, select, If, Discard, mrt, dFdx, dFdy,
+    positionGeometry, positionLocal, positionView, normalGeometry, normalViewGeometry, faceDirection,
     modelWorldMatrixInverse, cameraPosition, cameraNear, cameraFar, viewZToPerspectiveDepth } = T;
   const m = new N.NodeMaterial();
   Object.assign(m, { side: spec.side, transparent: spec.transparent, depthWrite: spec.depthWrite });
+  m.colorNode = vec3(1, 1, 1); m.opacityNode = float(1);
   m.uniforms = spec.uniforms; m.defines = spec.defines;
   m.vertexShader = spec.vertexShader; m.fragmentShader = spec.fragmentShader;            // (for whoever patches them; not drawn)
   m.isKitSurface = true;
@@ -35,6 +41,9 @@ export function surfaceNode(spec) {
   const v2 = (key) => { const n = uniform(new N.Vector2()); return n.onRenderUpdate(() => { const v = read(key); if (Array.isArray(v)) n.value.fromArray(v); else if (v?.isVector2) n.value.copy(v); }); };
   const v3 = (key) => { const n = uniform(new N.Vector3(1, 1, 1)); return n.onRenderUpdate(() => { const v = read(key); if (Array.isArray(v)) n.value.fromArray(v); else if (v?.isVector3) n.value.copy(v); else if (v?.isColor) n.value.set(v.r, v.g, v.b); }); };
   const v4 = (key) => { const n = uniform(new N.Vector4()); return n.onRenderUpdate(() => { const v = read(key); if (Array.isArray(v)) n.value.fromArray(v); else if (v?.isVector4) n.value.copy(v); }); };
+  // per-object flat-array uniform readers for sheen.js (updated inside mesh.onBeforeRender just before draw)
+  const v3Obj = (key, def = [0, 0, 0]) => { const n = uniform(new N.Vector3(...def)); return n.onObjectUpdate(() => { const v = read(key); if (v && v.length >= 3) n.value.set(v[0], v[1], v[2]); else if (v?.isVector3) n.value.copy(v); }); };
+  const v4ObjAt = (key, idx) => { const n = uniform(new N.Vector4()); const off = idx * 4; return n.onObjectUpdate(() => { const v = read(key); if (v && v.length >= off + 4) n.value.set(v[off], v[off + 1], v[off + 2], v[off + 3]); }); };
   const ss = (e0, e1, x) => { const t = clamp(float(x).sub(e0).div(e1 - e0), 0, 1); return t.mul(t).mul(t.mul(-2).add(3)); };
   const voxHash = (p0) => { const p = fract(p0.mul(vec3(0.1031, 0.1030, 0.0973))); const q = p.add(dot(p, p.yxz.add(33.33))); return fract(q.x.add(q.y).mul(q.z)); };
   const surfaceBeam = (view, normal, origin, direction, coneCos, reach, att) => {
@@ -60,22 +69,27 @@ export function surfaceNode(spec) {
       m.positionNode = null;
     }
 
-    m.fragmentNode = Fn(() => {
-      const D = m.defines || {};
-      const banks = D.BANKS ? Number(D.BANKS) || 2 : 0;
+    const D = m.defines || {};
+    const replaceHook = hooks.findLast((h) => h.replaceFragment);
+
+    m.outputNode = Fn(() => {
+      const def = m.defines || {};
+      const banks = def.BANKS ? Number(def.BANKS) || 2 : 0;
       const uDim = f('uDim', 1), uTint = v3('uTint'), uAlpha = f('uAlpha', 1);
+      const uFlick = def.FLICK ? f('uFlick', 1) : float(1);
+      const uBanks = banks ? v2('uBanks') : null;
+      const uMoreBanks = banks > 2 ? v2('uMoreBanks') : null;
       // (VERT: the light at the vertex)
       const aLit = attribute('aLit', 'vec3');
       let lit = aLit;
       if (banks) {
-        const uBanks = v2('uBanks');
         lit = lit.add(attribute('aBank0', 'vec3').mul(uBanks.x)).add(attribute('aBank1', 'vec3').mul(uBanks.y));
-        if (banks > 2) { const more = v2('uMoreBanks'); lit = lit.add(attribute('aBank2', 'vec3').mul(more.x)); if (banks > 3) lit = lit.add(attribute('aBank3', 'vec3').mul(more.y)); }
+        if (banks > 2) { lit = lit.add(attribute('aBank2', 'vec3').mul(uMoreBanks.x)); if (banks > 3) lit = lit.add(attribute('aBank3', 'vec3').mul(uMoreBanks.y)); }
       }
-      if (D.FLICK) lit = lit.add(attribute('aFlk', 'vec3').mul(f('uFlick', 1)));
+      if (def.FLICK) lit = lit.add(attribute('aFlk', 'vec3').mul(uFlick));
       lit = lit.mul(uDim);
-      const aSurf = D.VOXEL ? attribute('aSurf', 'vec2') : null;
-      if (D.VOXEL) lit = mix(lit, aLit, aSurf.y);
+      const aSurf = def.VOXEL ? attribute('aSurf', 'vec2') : null;
+      if (def.VOXEL) lit = mix(lit, aLit, aSurf.y);
       const vLit = varying(lit.mul(uTint), 'vKitLit');
       const vAlb = attribute('aAlb', 'vec3');
       // (FRAG)
@@ -89,7 +103,6 @@ export function surfaceNode(spec) {
       // Rigid-transform inverse of `mv.xyz * mat3(modelViewMatrix)` (object-space vector from camera to vertex)
       const viewRayLocal = () => _viewRayLocal || (_viewRayLocal = varying(positionLocal.sub(modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz), 'vKitPoolRay'));
 
-      const replaceHook = hooks.findLast((h) => h.replaceFragment);
       if (replaceHook) {
         return replaceHook.replaceFragment({
           T, N, m, uv: baseUv, vLit, vAlb, normal, viewPos: positionView,
@@ -101,12 +114,89 @@ export function surfaceNode(spec) {
 
       const c = vec3(vLit).toVar();
       const alpha = float(uAlpha).toVar();
+
+      // --- tube shadows & doorway light (LIGHTMAP: Medium / High) ---
+      let lmRegionVar = null, lmUvFn = null, lmTexA = null, lmTexB = null;
+      if (def.LIGHTMAP) {
+        const uLm = Array.from({ length: 6 }, (_, i) => {
+          const u = uniform(new N.Vector4());
+          return u.onRenderUpdate(() => { const arr = read('uLm'); if (arr?.[i]) u.value.copy(arr[i]); });
+        });
+        const lp = positionLocal, ln = normalGeometry;
+        const outOfBounds = abs(lp.x).greaterThan(uLm[5].x.add(0.002)).or(abs(lp.z).greaterThan(uLm[5].y.add(0.002)));
+        let reg = float(0);
+        reg = select(uLm[4].x.greaterThan(0).and(ln.x.lessThan(-0.7)).and(abs(lp.x.sub(uLm[5].x)).lessThan(0.04)), float(5), reg);
+        reg = select(uLm[3].x.greaterThan(0).and(ln.x.greaterThan(0.7)).and(abs(lp.x.add(uLm[5].x)).lessThan(0.04)), float(4), reg);
+        reg = select(uLm[2].x.greaterThan(0).and(ln.z.lessThan(-0.7)).and(abs(lp.z.sub(uLm[5].y)).lessThan(0.04)), float(3), reg);
+        reg = select(uLm[1].x.greaterThan(0).and(ln.z.greaterThan(0.7)).and(abs(lp.z.add(uLm[5].y)).lessThan(0.04)), float(2), reg);
+        reg = select(abs(ln.y).greaterThanEqual(0.3), float(0), reg);
+        reg = select(uLm[0].x.greaterThan(0).and(ln.y.greaterThan(0.7)).and(abs(lp.y).lessThan(0.04)), float(1), reg);
+        reg = select(outOfBounds, float(0), reg);
+        let lmOwn = float(1);
+        if (def.TUBESHADOW && def.VOXEL) {
+          const selfLit = aSurf.y.greaterThan(0.5);
+          reg = select(selfLit, float(0), reg);
+          lmOwn = select(selfLit, float(0), float(1));
+        }
+        const vLmPos = localPos();
+        lmRegionVar = varying(reg, 'vKitLmReg').setInterpolation('flat');
+        lmUvFn = (k) => {
+          const isFloor = k.lessThan(1.5), isBF = k.lessThan(3.5);
+          const q = select(isFloor, vLmPos.xz, select(isBF, vLmPos.xy, vLmPos.zy));
+          const mv = select(isFloor, uLm[0], select(isBF, select(k.lessThan(2.5), uLm[1], uLm[2]), select(k.lessThan(4.5), uLm[3], uLm[4])));
+          const o = select(isFloor, vec2(uLm[5].x.negate(), uLm[5].y.negate()), select(isBF, vec2(uLm[5].x.negate(), 0), vec2(uLm[5].y.negate(), 0)));
+          const hi = select(isFloor, uLm[5].xy, select(isBF, vec2(uLm[5].x, 1e4), vec2(uLm[5].y, 1e4)));
+          const snapped = clamp(floor(q.sub(o).div(uLm[5].z)).add(0.5).mul(uLm[5].z).add(o), o, hi);
+          return snapped.mul(mv.xy).add(mv.zw);
+        };
+        const lmScale = uDim.mul(uTint).mul(lmOwn);
+        const vLmF = (def.TUBESHADOW && def.FLICK) ? varying(attribute('aFlk', 'vec3').mul(uFlick).mul(lmScale), 'vKitLmF') : null;
+        const vLmB0 = (def.TUBESHADOW && banks) ? varying(attribute('aBank0', 'vec3').mul(uBanks.x).mul(lmScale), 'vKitLmB0') : null;
+        const vLmB1 = (def.TUBESHADOW && banks) ? varying(attribute('aBank1', 'vec3').mul(uBanks.y).mul(lmScale), 'vKitLmB1') : null;
+        const vLmB2 = (def.TUBESHADOW && banks > 2) ? varying(attribute('aBank2', 'vec3').mul(uMoreBanks.x).mul(lmScale), 'vKitLmB2') : null;
+        const vLmB3 = (def.TUBESHADOW && banks > 3) ? varying(attribute('aBank3', 'vec3').mul(uMoreBanks.y).mul(lmScale), 'vKitLmB3') : null;
+        if (def.TUBESHADOW) {
+          lmTexA = texture(read('uLmA')).onRenderUpdate(() => read('uLmA'));
+          if (banks > 2) lmTexB = texture(read('uLmB')).onRenderUpdate(() => read('uLmB'));
+        }
+        const lmTexC = def.DOORLIGHT ? texture(read('uLmC')).onRenderUpdate(() => read('uLmC')) : null;
+        const uDoorL = def.DOORLIGHT ? Array.from({ length: 4 }, (_, i) => {
+          const u = uniform(new N.Vector3());
+          return u.onRenderUpdate(() => { const arr = read('uDoorL'); if (arr?.[i]) u.value.copy(arr[i]); });
+        }) : null;
+        const k = floor(lmRegionVar.add(0.5));
+        If(k.greaterThanEqual(0.5), () => {
+          const luv = lmUvFn(k);
+          if (def.TUBESHADOW) {
+            const a = lmTexA.sample(luv);
+            const rest = vec3(c).toVar(), lost = vec3(0).toVar();
+            if (vLmF) { rest.subAssign(vLmF); lost.addAssign(vLmF.mul(a.g.oneMinus())); }
+            if (vLmB0) {
+              rest.subAssign(vLmB0.add(vLmB1));
+              lost.addAssign(vLmB0.mul(a.b.oneMinus()).add(vLmB1.mul(a.a.oneMinus())));
+              if (vLmB2) {
+                const b = lmTexB.sample(luv);
+                rest.subAssign(vLmB2); lost.addAssign(vLmB2.mul(b.r.oneMinus()));
+                if (vLmB3) { rest.subAssign(vLmB3); lost.addAssign(vLmB3.mul(b.g.oneMinus())); }
+              }
+            }
+            c.assign(c.sub(lost).sub(max(rest, vec3(0)).mul(a.r.oneMinus())));
+          }
+          if (def.DOORLIGHT) {
+            const d0 = lmTexC.sample(luv), d = d0.mul(d0);
+            const spill = uDoorL[0].mul(d.r).add(uDoorL[1].mul(d.g)).add(uDoorL[2].mul(d.b)).add(uDoorL[3].mul(d.a));
+            c.addAssign(vAlb.mul(spill));
+          }
+        });
+      }
+      // --- end tube shadows ---
+
       const torchBeam = surfaceBeam(positionView, normal, uTorchOrigin, uTorchDirection, [FLASHLIGHT.edgeCos, FLASHLIGHT.coreCos], [FLASHLIGHT.fadeFrom, FLASHLIGHT.range], FLASHLIGHT.attenuation);
       const lampBeam = surfaceBeam(positionView, normal, vec3(...CAMCORDER_LAMP.origin), vec3(...CAMCORDER_LAMP.direction), [CAMCORDER_LAMP.edgeCos, CAMCORDER_LAMP.coreCos], [CAMCORDER_LAMP.fadeFrom, CAMCORDER_LAMP.range], CAMCORDER_LAMP.attenuation);
       const beam = select(uTorch.greaterThan(0.0001), uTorch.mul(torchBeam), 0).add(select(uLamp.greaterThan(0.0001), uLamp.mul(lampBeam), 0));
       const torch = vAlb.mul(beam);
       let cell = null;
-      if (D.VOXEL) {
+      if (def.VOXEL) {
         const vVox = attribute('aVox', 'vec3');
         c.addAssign(torch.mul(aSurf.y.oneMinus()));
         cell = floor(vVox.add(0.0005));
@@ -115,20 +205,21 @@ export function surfaceNode(spec) {
         const edge = ss(0.8, 1.0, max(fr.x, max(fr.y, fr.z)));
         c.mulAssign(float(1).sub(edge.mul(0.06).mul(aSurf.x.mul(6).add(0.4)).mul(aSurf.y.oneMinus())));
       } else c.addAssign(torch);
-      if (D.MAPPED) {
+      let mapTex = null, mapSample = null;
+      if (def.MAPPED) {
         let mapUv = baseUv;
         for (const h of hooks) {
           if (h.uv) mapUv = h.uv({ T, N, m, mapUv, uv: baseUv, localPos, localNormal, viewRayLocal, read, f, v2, v3, v4, ss, shared });
         }
-        const map = texture(read('map')).onRenderUpdate(() => read('map'));
-        const t = map.sample(mapUv);
-        if (D.CUTOUT) If(t.a.lessThan(0.5), () => { Discard(); });
-        c.mulAssign(t.rgb);
+        mapTex = texture(read('map')).onRenderUpdate(() => read('map'));
+        mapSample = mapTex.sample(mapUv);
+        if (def.CUTOUT) If(mapSample.a.lessThan(0.5), () => { Discard(); });
+        c.mulAssign(mapSample.rgb);
       }
-      const uWet = D.WET ? f('uWet') : float(0);
-      if (D.WET) {
+      const uWet = def.WET ? f('uWet') : float(0);
+      if (def.WET) {
         let wn = normal;
-        if (D.VOXEL) wn = normalize(wn.add(vec3(voxHash(cell), voxHash(cell.add(17)), voxHash(cell.add(31))).sub(0.5).mul(0.55)));
+        if (def.VOXEL) wn = normalize(wn.add(vec3(voxHash(cell), voxHash(cell.add(17)), voxHash(cell.add(31))).sub(0.5).mul(0.55)));
         for (const h of hooks) {
           if (h.wetNormal) wn = h.wetNormal({ T, N, m, wn, normal, uv: baseUv, localPos, localNormal, viewPos: positionView, read, f, v2, v3, v4, ss, shared });
         }
@@ -138,6 +229,86 @@ export function surfaceNode(spec) {
         const room = dot(vLit, vec3(0.333));
         c.addAssign(vec3(1.0, 0.97, 0.94).mul(glint.mul(1.1).add(rim.mul(0.22)).mul(uWet).mul(room.add(0.12))));
       }
+
+      // --- floor sheen (SHEEN: Medium / High) ---
+      if (def.SHEEN) {
+        const count = Number(def.SHEEN) || SHEEN.lamps;
+        const uSheenP = Array.from({ length: count }, (_, i) => v4ObjAt('uSheenP', i));
+        const uSheenT = Array.from({ length: count }, (_, i) => v4ObjAt('uSheenT', i));
+        const uSheenC = Array.from({ length: count }, (_, i) => v4ObjAt('uSheenC', i));
+        const uSheenK = v4ObjAt('uSheenK', 0);
+        const uSheenUp = v3Obj('uSheenUp', [0, 1, 0]);
+        const uSheenE = v3Obj('uSheenE', [0, 0, 0]);
+        const sheenShade = (g, sa, sb) => select(g.lessThan(0.5), sa.r, select(g.lessThan(1.5), sa.g, select(g.lessThan(2.5), sa.b, select(g.lessThan(3.5), sa.a, select(g.lessThan(4.5), sb.r, sb.g)))));
+        If(dot(normal, uSheenUp).greaterThanEqual(SHEEN.up), () => {
+          const P = vec3(positionView).toVar();
+          if (def.MAPPED && mapTex) {
+            If(uSheenK.z.greaterThan(0.5), () => {
+              const ts = vec2(textureSize(mapTex, 0));
+              const uq = floor(baseUv.mul(ts)).add(0.5).div(ts);
+              const px = dFdx(positionView), py = dFdy(positionView);
+              const ux = dFdx(baseUv), uy = dFdy(baseUv);
+              const det = ux.x.mul(uy.y).sub(uy.x.mul(ux.y));
+              If(abs(det).greaterThan(1e-14), () => {
+                const du = uq.sub(baseUv);
+                P.addAssign(px.mul(uy.y).sub(py.mul(ux.y)).mul(du.x).add(py.mul(ux.x).sub(px.mul(uy.x)).mul(du.y)).div(det));
+              });
+            });
+          }
+          const sa = vec4(1, 1, 1, 1).toVar(), sb = vec2(1, 1).toVar();
+          if (def.LIGHTMAP && def.TUBESHADOW && lmRegionVar && lmUvFn && lmTexA) {
+            If(floor(lmRegionVar.add(0.5)).equal(1.0), () => {
+              const luv = lmUvFn(float(1));
+              sa.assign(lmTexA.sample(luv));
+              if (lmTexB) sb.assign(lmTexB.sample(luv).rg);
+            });
+          }
+          const V = normalize(P.negate()), R = reflect(V.negate(), normal), sum = vec3(0).toVar();
+          const a = uSheenK.y;
+          const st0 = V.sub(normal.mul(dot(V, normal)));
+          const st = select(dot(st0, st0).greaterThan(1e-8), normalize(st0), normalize(cross(normal, vec3(1, 0, 0))));
+          const sb2 = cross(normal, st);
+          for (let i = 0; i < count; i++) {
+            const C = uSheenC[i];
+            If(C.r.add(C.g).add(C.b).greaterThan(0), () => {
+              const Tv = uSheenT[i].xyz, a0 = uSheenP[i].xyz.sub(Tv).sub(P), ab = Tv.mul(2);
+              const rab = dot(R, ab), den = dot(ab, ab).sub(rab.mul(rab));
+              const frac = select(den.greaterThan(1e-5), clamp(dot(R, a0).mul(rab).sub(dot(a0, ab)).div(den), 0, 1), float(0.5));
+              const Ld = a0.add(ab.mul(frac));
+              const d2 = dot(Ld, Ld).add(0.02);
+              If(d2.lessThan(C.w), () => {
+                const d = sqrt(d2), L = Ld.div(d), nl = dot(normal, L);
+                If(nl.greaterThan(0), () => {
+                  const fade = float(1).sub(d2.div(C.w));
+                  const s0 = fade.mul(fade).div(d2.mul(SHEEN.falloff).div(max(uSheenT[i].w, 0.01)).add(1));
+                  const s = select(dot(Tv, Tv).greaterThan(1e-6), s0.mul(nl.mul(1 - SHEEN.side).add(SHEEN.side)), s0);
+                  const H = normalize(L.add(V));
+                  const nh = max(dot(normal, H), 1e-3);
+                  const ax = min(1.0, a.add(float(SHEEN.widen).div(d)));
+                  const ay = min(1.0, ax.mul(SHEEN.stretch));
+                  const ht = dot(H, st), hb = dot(H, sb2);
+                  const x = ht.mul(ht).div(ay.mul(ay)).add(hb.mul(hb).div(ax.mul(ax))).div(nh.mul(nh));
+                  const lobe = float(1).div(x.add(1).mul(x.add(1)));
+                  const F = float(SHEEN.f0).add(pow(max(float(1).sub(max(dot(H, V), 0)), 0), 5).mul(1 - SHEEN.f0));
+                  sum.addAssign(C.rgb.mul(s.mul(lobe).mul(F).mul(sheenShade(uSheenP[i].w, sa, sb))));
+                });
+              });
+            });
+          }
+          const fe = float(SHEEN.f0).add(pow(max(float(1).sub(max(dot(normal, V), 0)), 0), 5).mul(1 - SHEEN.f0));
+          const far = ss(SHEEN.envFrom, SHEEN.envTo, length(P));
+          const tile = (def.MAPPED && mapSample) ? clamp(dot(mapSample.rgb, vec3(0.3333)).mul(SHEEN.envTile), 0, 1) : float(1);
+          const litAmt = clamp(dot(vLit, vec3(0.3333)).mul(SHEEN.envLit), 0, 1);
+          sum.addAssign(uSheenE.mul(float(SHEEN.env).mul(fe).mul(far.mul(0.9).add(0.1)).mul(tile).mul(litAmt).mul(sa.r.mul(0.5).add(0.5))));
+          sum.mulAssign(uSheenK.x);
+          const l = dot(sum, vec3(0.3333));
+          If(l.greaterThan(1e-6), () => {
+            c.addAssign(sum.mul(float(SHEEN.knee).mul(float(1).sub(exp(l.negate().div(SHEEN.knee)))).div(l)));
+          });
+        });
+      }
+      // --- end floor sheen ---
+
       for (const h of hooks) {
         if (h.color) {
           h.color({
@@ -150,12 +321,35 @@ export function surfaceNode(spec) {
       }
       return vec4(c, alpha);
     })();
+
+    // --- MRT emissive descriptor (read by vhs-node.js EmissiveMrtNode ONLY while MRT glow is active) ---
+    if (m.transparent && !m.depthWrite) {
+      m.userData.emissiveMrt = vec4(0, 0, 0, 0);
+    } else if (D.VOXEL && !replaceHook) {
+      const uGlowScale = uniform(1).onObjectUpdate(() => glowStrength(m.userData.bloom));
+      m.userData.emissiveMrt = Fn(() => {
+        const def = m.defines || {};
+        const aSurf = attribute('aSurf', 'vec2');
+        const aLit = attribute('aLit', 'vec3');
+        const uTint = v3('uTint');
+        const selfLit = step(0.5, aSurf.y);
+        let emitted = varying(aLit.mul(uTint), 'vKitEmisLit').mul(selfLit).mul(uGlowScale);
+        if (def.MAPPED) {
+          const map = texture(read('map')).onRenderUpdate(() => read('map'));
+          emitted = emitted.mul(map.sample(uv()).rgb);
+        }
+        return vec4(emitted, float(1).sub(selfLit));
+      })();
+    } else {
+      delete m.userData.emissiveMrt;
+    }
   }
 
   rebuild();
 
-  /** Attach a TSL hook ({ position?, uv?, wetNormal?, color?, replaceFragment? }) to this kit surface. */
+  /** Attach a TSL hook ({ init?, position?, uv?, wetNormal?, color?, replaceFragment? }) to this kit surface. */
   m.patchNode = (hook) => {
+    hook.init?.({ T, N, m });
     hooks.push(hook);
     rebuild();
     m.needsUpdate = true;
@@ -169,6 +363,36 @@ export function surfaceNode(spec) {
     return m;
   };
 
+  return m;
+}
+
+/**
+ * Something that shines by itself (kit.glowing), for WebGPURenderer: MeshBasicNodeMaterial with an MRT emissive output
+ * so Medium/High glow bloom reads lamps, signs and screens directly from the scene pass without redrawing the scene.
+ */
+export function glowingNode(map, power, rgb, opt = {}) {
+  const N = gpu.nodes, T = N.TSL;
+  const { Fn, vec3, vec4, float, uniform, texture, uv } = T;
+  const m = new N.MeshBasicNodeMaterial({
+    map,
+    transparent: !!opt.transparent,
+    alphaTest: opt.alphaTest || 0,
+    side: opt.side || N.FrontSide,
+    depthWrite: opt.depthWrite !== false,
+  });
+  m.color.setRGB(rgb[0] * power, rgb[1] * power, rgb[2] * power);
+  if (m.transparent && m.depthWrite === false) {
+    // Painted pool of light or halo: does not feed bloom (matches glow.js glowRole === 'skip').
+    m.userData.emissiveMrt = vec4(0, 0, 0, 0);
+  } else {
+    const uCol = uniform(new N.Vector3(m.color.r, m.color.g, m.color.b)).onObjectUpdate(() => { uCol.value.set(m.color.r, m.color.g, m.color.b); });
+    const uScale = uniform(1).onObjectUpdate(() => glowStrength(m.userData.bloom));
+    m.userData.emissiveMrt = Fn(() => {
+      const pictureMark = (m.userData.glow === 'picture' && !m.transparent) ? 0.25 : 1.0;
+      const texRgb = map ? texture(map, uv()).rgb : vec3(1, 1, 1);
+      return vec4(uCol.mul(texRgb).mul(uScale), float(pictureMark));
+    })();
+  }
   return m;
 }
 
@@ -202,7 +426,7 @@ export function packSurfaceAttributes(geo) {
  */
 export function pointsNode(positions, { size = 0.05, map = null, alphaTest = 0.5, color = [1, 1, 1] } = {}, own = (x) => x) {
   const N = gpu.nodes, T = N.TSL;
-  const { Fn, vec3, vec4, uv, attribute, texture, positionGeometry, modelViewMatrix, cameraProjectionMatrix, If, Discard } = T;
+  const { Fn, vec3, vec4, float, uv, attribute, texture, positionGeometry, modelViewMatrix, cameraProjectionMatrix, If, Discard } = T;
   const count = Math.floor(positions.length / 3);
   const quad = own(new N.PlaneGeometry(size, size));
   const geo = own(new N.InstancedBufferGeometry());
@@ -215,12 +439,13 @@ export function pointsNode(positions, { size = 0.05, map = null, alphaTest = 0.5
   geo.instanceCount = count;
   const col = color?.isColor ? [color.r, color.g, color.b] : Array.isArray(color) ? color : [1, 1, 1];
   const mat = own(new N.NodeMaterial());
+  mat.colorNode = vec3(1, 1, 1); mat.opacityNode = float(1);
   mat.vertexNode = Fn(() => {
     const mv = modelViewMatrix.mul(vec4(attribute('aPos', 'vec3'), 1)).toVar();
     mv.xy.addAssign(positionGeometry.xy);
     return cameraProjectionMatrix.mul(mv);
   })();
-  mat.fragmentNode = Fn(() => {
+  mat.outputNode = Fn(() => {
     const tint = vec3(col[0], col[1], col[2]);
     if (map) {
       const t = texture(map, uv());

@@ -63,7 +63,7 @@ export function createSpray(env) {
   let mat, overMat;
   if (gpu.nodes) {
     const N = gpu.nodes, T = N.TSL;
-    const { Fn, vec2, vec3, vec4, float, uniform, uv, attribute, varying, floor, fract, dot, sin, cos, length, mix, clamp, If, Discard, positionGeometry, modelViewMatrix, cameraProjectionMatrix } = T;
+    const { Fn, vec2, vec3, vec4, float, uniform, uv, attribute, varying, floor, fract, dot, sin, cos, length, mix, clamp, If, Discard, mrt, positionGeometry, modelViewMatrix, cameraProjectionMatrix } = T;
     const ss = (e0, e1, x) => { const t = clamp(float(x).sub(e0).div(e1 - e0), 0, 1); return t.mul(t).mul(t.mul(-2).add(3)); };
     const vnoise = (hvec) => {
       const h = (p) => fract(sin(dot(p, hvec)).mul(43758.5453));
@@ -77,6 +77,7 @@ export function createSpray(env) {
     const overNoise = vnoise(vec2(12.9898, 78.233));
 
     mat = new N.NodeMaterial();
+    mat.colorNode = vec3(1, 1, 1); mat.opacityNode = float(1);
     mat.transparent = true; mat.depthWrite = false;
     mat.uniforms = { uTint: { value: new THREE.Color(0.85, 0.86, 0.86) } };
     const uPuffTint = uniform(new N.Vector3(0.85, 0.86, 0.86)).onRenderUpdate(() => { const c = mat.uniforms.uTint.value; uPuffTint.value.set(c.r, c.g, c.b); });
@@ -88,7 +89,7 @@ export function createSpray(env) {
       mv.y.addAssign(sn.negate().mul(p.x).add(cs.mul(p.y)).mul(aSz));
       return cameraProjectionMatrix.mul(mv);
     })();
-    mat.fragmentNode = Fn(() => {
+    mat.outputNode = Fn(() => {
       const vUv = uv(), vA = varying(attribute('aAlpha', 'float'), 'vSprayA'), vSeed = varying(attribute('aSpin', 'float'), 'vSpraySeed');
       const r = length(vUv.sub(0.5)).mul(2);
       const lump = puffNoise(vUv.mul(4).add(vSeed.mul(7))).mul(0.6).add(puffNoise(vUv.mul(9).sub(vSeed.mul(3))).mul(0.4));
@@ -98,13 +99,14 @@ export function createSpray(env) {
     })();
 
     overMat = new N.NodeMaterial();
+    overMat.colorNode = vec3(1, 1, 1); overMat.opacityNode = float(1);
     overMat.transparent = true; overMat.depthTest = false; overMat.depthWrite = false;
     overMat.uniforms = { uTint: { value: new THREE.Color(0.8, 0.8, 0.8) }, uK: { value: 0 }, uT: { value: 0 } };
     const uOverTint = uniform(new N.Vector3(0.8, 0.8, 0.8)).onRenderUpdate(() => { const c = overMat.uniforms.uTint.value; uOverTint.value.set(c.r, c.g, c.b); });
     const uOverK = uniform(0).onRenderUpdate(() => overMat.uniforms.uK.value);
     const uOverT = uniform(0).onRenderUpdate(() => overMat.uniforms.uT.value);
     overMat.vertexNode = Fn(() => vec4(positionGeometry.xy, 0, 1))();
-    overMat.fragmentNode = Fn(() => {
+    overMat.outputNode = Fn(() => {
       const vUv = uv();
       const patch = overNoise(vUv.mul(3).add(vec2(uOverT.mul(0.11), uOverT.mul(-0.07)))).mul(0.55)
         .add(overNoise(vUv.mul(7).sub(vec2(uOverT.mul(0.05), uOverT.mul(0.13)))).mul(0.45));
