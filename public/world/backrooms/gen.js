@@ -549,7 +549,8 @@ function build(R, o, opt) {
         // a room that is `through` is never a dead end: its back wall opens onto a room of its own, or it is not placed here
         // (the Open-Plan Pit: the far bulkhead you cross the grid to reach has to lead on)
         if (arch.through) {
-          const beyond = attach(room, worldSide(room, 'back'), { kind: 'plain', lw: R.int(4, 5), ld: R.int(4, 5), H: WALL_H, fixed: portSpan(room, 'back', 0, 1.8) });
+          const dw = arch.throughDoor || 1.8;   // (`throughDoor`: that doorway an ordinary door wide, as the Door on the Chain's)
+          const beyond = attach(room, worldSide(room, 'back'), { kind: 'plain', lw: R.int(4, 5), ld: R.int(4, 5), H: WALL_H, ...(arch.throughDoor ? { dw } : {}), fixed: portSpan(room, 'back', 0, dw) });
           if (!beyond) { for (const failed of placed.reverse()) undo(failed); continue; }
           hubs.push(beyond);
         }
@@ -792,7 +793,7 @@ function build(R, o, opt) {
 
 /* ---- dressing: wallpaper, lights, the shape of each plain room, the odd thing left in a corner ---------- */
 
-const DRESSING = ['boxes', 'boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'highdoor', 'highdoor'];
+const DRESSING = ['boxes', 'boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'highdoor', 'highdoor', 'cabinet'];
 // what the plain-room builder (rooms.js) knows how to put down, of everything a theme may ask for; and how many plain rooms have anything
 const KNOWN_THINGS = new Set(['boxes', 'chair', 'plant', 'lamp', 'bin', 'wetsign', 'papers', 'stain', 'poster', 'clock', 'frame', 'ladder', 'coat', 'fan', 'tile', 'highdoor', 'cabinet', 'shelving', 'armchair', 'globe',
   'mailbox', 'flamingo', 'hose', 'floatring', 'noodle', 'lounger',                                          // (the neighbourhood's: suburb.js builds them)

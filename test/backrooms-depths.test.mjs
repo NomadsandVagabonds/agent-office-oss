@@ -874,7 +874,7 @@ test('drawings on the walls: only ever of something that is in this visit, on it
   let parts = 0, withOne = 0;
   // A rare follow-up to the beam lesson: retain a real seed that draws its resident.
   // (which seed that is moves whenever the dealing does: 198 while the cast had a 'greeter', 299 when she became 'mother',
-  // 264 since every visit is four parts with the suburb second or third)
+  // 264 since every visit is four parts with the suburb second or third, 120 since the deck gained door-on-chain)
   const checkDrawings = (seed, { visit, floors }, count = true) => {
     const company = castFor(visit);
     floors.forEach((level, i) => {
@@ -899,7 +899,7 @@ test('drawings on the walls: only ever of something that is in this visit, on it
       }
     });
   };
-  for (const seed of [...SEEDS, 'visit-264']) checkDrawings(seed, visitFor(seed));
+  for (const seed of [...SEEDS, 'visit-120']) checkDrawings(seed, visitFor(seed));
   assert.ok(withOne / parts > 0.3 && withOne / parts < 0.7, `a drawing on ${withOne} of ${parts} parts`);
   // The waterpark is still review-only. Its resident cannot appear in the
   // live mix above, but its drawings obey the same here-or-next-part rule.

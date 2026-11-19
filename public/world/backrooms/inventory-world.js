@@ -54,8 +54,8 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
     return true;
   };
   const fires = createInventoryFire(env, { canAct: available, clearRay, isDry: f => dry(f.rt, f) });
-  const supported = (rt, p, radius, height = .62) => {
-    if (world.roomAt(p.wx, p.wz) !== rt || !world.free(p.wx, p.wz, radius) || world.headroom(p.wx, p.wz) < height) return false;
+  const supported = (rt, p, radius, height = .62, ignore) => {
+    if (world.roomAt(p.wx, p.wz) !== rt || !world.free(p.wx, p.wz, radius, ignore ? { ignoreCollider: ignore } : undefined) || world.headroom(p.wx, p.wz) < height) return false;
     const y = floorAt(p);
     for (const [dx, dz] of [[radius, 0], [-radius, 0], [0, radius], [0, -radius], [radius * .7, radius * .7], [-radius * .7, -radius * .7], [-radius * .7, radius * .7], [radius * .7, -radius * .7]]) {
       if (world.roomAt(p.wx + dx, p.wz + dz) !== rt || world.headroom(p.wx + dx, p.wz + dz) < height
@@ -147,7 +147,7 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
     tint(e.mesh, p.rt, p.x, p.y, p.z);
     return { ok: true, id: item.id };
   }
-  function spawn(item, { room, x, z, y } = {}) {
+  function spawn(item, { room, x, z, y, ignore } = {}) {         // (ignore: a collider it may lie over, as in an open drawer: cabinets.js)
     const rt = roomFor(room);
     if (disposed || !rt || !item?.id || !Number.isFinite(x) || !Number.isFinite(z)) return { ok: false, reason: 'invalid-item' };
     try { item = makeItem(item.type, item.id, item); } catch { return { ok: false, reason: 'invalid-item' }; }
@@ -159,7 +159,7 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
     if (y !== undefined && !Number.isFinite(y)) return { ok: false, reason: 'no-space' };
     const elevation = y === undefined ? 0 : y - p.y;
     if (!Number.isFinite(elevation) || elevation < 0 || elevation > 1.1) return { ok: false, reason: 'no-space' };
-    if (!supported(rt, p, radius, (ITEM_HEIGHT[item.type] ?? .62) + elevation) || [...entries.values()].some(e => e.active && e.rt === rt && Math.hypot(e.x - p.x, e.z - p.z) < radius + ITEM_RADIUS[e.item.type])) return { ok: false, reason: 'no-space' };
+    if (!supported(rt, p, radius, (ITEM_HEIGHT[item.type] ?? .62) + elevation, ignore) || [...entries.values()].some(e => e.active && e.rt === rt && Math.hypot(e.x - p.x, e.z - p.z) < radius + ITEM_RADIUS[e.item.type])) return { ok: false, reason: 'no-space' };
     p.y += elevation;
     return place(item, p);
   }

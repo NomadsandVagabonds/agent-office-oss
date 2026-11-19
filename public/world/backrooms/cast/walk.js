@@ -71,9 +71,10 @@ export function createWalk(env) {
   /**
    * Rooms it will not go into: ones that fold space, ones it could not stand up in, and the crawl spaces — unless it
    * says that it crawls (`crawls` on the walker: the waste toner) or it flies (the moth, whose own height is checked
-   * against every ceiling and lintel above).
+   * against every ceiling and lintel above). And a room whose only way through is lower than it is tall (`rt.headway`,
+   * the room's to say: the chain in door-on-chain) is not one it sets off into.
    */
-  const shy = (a, rt) => !rt || rt.fold || (rt.def.crawl && !a.crawls && !flies(a)) || rt.def.H < a.tall + 0.05;
+  const shy = (a, rt) => !rt || rt.fold || (rt.def.crawl && !a.crawls && !flies(a)) || rt.def.H < a.tall + 0.05 || rt.headway < a.tall;
   /** What a doorway costs this walker (cast/paths.js): Infinity where it cannot go. */
   const cost = (a) => (d, from, to) => {
     const th = W().throats[d.link], door = doorOf(d.link);

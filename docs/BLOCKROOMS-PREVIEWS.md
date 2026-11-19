@@ -79,13 +79,16 @@ that meet there, with only the post where the neighbours' own walls meet left st
 
 Walk it:
 
-- `/world/dev/backrooms.html?seed=7&preview=corners&room=4&x=1.6&z=0&yaw=1.5708&pursuer=0&mute=1`: the dev page's
-  own seed. Room 4 has all three of its doorways in corners. From there, the far right corner opens two ways (into the
-  room you land in, and into the one beside it), and the far left corner has the third. Turn round slowly.
-- `/world/dev/backrooms.html?seed=7&preview=corners&room=4&x=1.2&z=1.2&yaw=0.785&pursuer=0&mute=1`: the same room,
-  looking straight into the corner that opens two ways.
-- `/world/dev/backrooms.html?seed=2&preview=corners&room=9&x=-2.5&z=3.5&yaw=-0.64&pursuer=0&mute=1`: a big room
-  with a corner that opens two ways, seen from the far side.
+(Seeds and rooms as the deck deals them since door-on-chain and the live merge; until then these were seed 7 room 4
+and seed 2 room 9, which the pictures below still show.)
+
+- `/world/dev/backrooms.html?seed=64&preview=corners&room=20&x=0&z=2.2&yaw=0&pursuer=0&mute=1&cast=none`: room 20 has
+  all three of its doorways in corners. From there, the far right corner opens two ways, and the far left corner has
+  the third. Turn round slowly.
+- `/world/dev/backrooms.html?seed=64&preview=corners&room=20&x=0.9&z=-1.4&yaw=-0.785&pursuer=0&mute=1&cast=none`: the
+  same room, looking straight into the corner that opens two ways.
+- `/world/dev/backrooms.html?seed=10&preview=corners&room=8&x=2&z=-2&yaw=2.356&pursuer=0&mute=1&cast=none`: a big room
+  (6.8 m square) with a corner that opens two ways, seen from the far side.
 
 Add `&graphics=medium` (or `classic`) to choose a tier, and `&preview=corners,hallways` for both previews at once.
 
@@ -155,11 +158,15 @@ inside the rectangle the floor's route is still worked out on. There are four ki
 
 Walk it:
 
-- `/world/dev/backrooms.html?seed=32&preview=hallways&room=8&x=-3&z=-0.2&yaw=-1.5708&pursuer=0&mute=1`: the dogleg.
-- `/world/dev/backrooms.html?seed=1&preview=hallways&room=11&x=-2.6&z=0&yaw=-1.5708&pursuer=0&mute=1`: the taper (the
-  same floor's room 2 is a skew: `room=2&x=-3.1&z=0.2`).
-- `/world/dev/backrooms.html?seed=57&preview=hallways&room=32&x=-0.6&z=1.6&yaw=0&pursuer=0&mute=1`: the dead end with
-  the chairs.
+(As the deck deals them since door-on-chain and the live merge; they were seed 32 room 8, seed 1 rooms 11 and 2, and
+seed 57 room 32.)
+
+- `/world/dev/backrooms.html?seed=131&preview=hallways&room=9&x=0&z=2.3&yaw=0&pursuer=0&mute=1&cast=none`: the dogleg
+  (the same floor's room 15 is a skew: `room=15&x=-2.5&z=0&yaw=-1.5708`).
+- `/world/dev/backrooms.html?seed=13&preview=hallways&room=6&x=2.9&z=0&yaw=1.5708&pursuer=0&mute=1&cast=none`: the
+  taper, closing toward its far end.
+- `/world/dev/backrooms.html?seed=16&preview=hallways&room=37&x=-1.6&z=0&yaw=-1.5708&pursuer=0&mute=1&cast=none`: the
+  dead end with the chairs.
 
 **How it works** (`preview.js` `shapeHallways`, `hallShape`, and the builder `hallway`). The floor is changed after it
 is generated, behind the same flag as the corner doors. A corridor that will take a shape is:
@@ -807,19 +814,79 @@ for real: drop `on` and `preview` from its line (weight 1, no favourite kind of 
   per frame) but a crawl of slats is a second wrong thing; the brief's is that the light is there at all.
 - No dust or haze in the beam: the brief says "no mystical haze".
 
+## Filing cabinets
+
+The owner: "Filing cabinets are an asset we should have built by now. Can put them in crazy big piles, sink into
+floors, go into walls etc and added benefit of some drawers sliding open to reveal items."
+
+**Status: a preview.** Only with `&preview=cabinets` on the dev page, in the plain rooms. Without it every room builds
+exactly as before (below), and nothing in the game passes the flag.
+
+### What was built
+
+- `cabinets.model.js`: the family, at the level's half-size voxels: `two`, `three`, `four` (0.5 × 0.55 m; 0.87, 1.26,
+  1.65 m), `tall` (five drawers, 2.04 m) and `lateral` (0.9 × 0.45 m, three wide drawers, a long pull). Five office
+  paints (two greys, a putty, a beige, an olive grey); per cabinet a `wear` (0…7): rust at the foot, the corners rubbed
+  pale, two to four dents in the sides or back, scratches across the lid, the fronts chipped to the primer. Every
+  drawer has a chrome holder with a card written on; the top drawer has the lock (pushed in when the cabinet is
+  locked). A dented drawer has a kick in its front, and that drawer is stuck (`dented(kind, wear)`, about one in seven):
+  what is seen is what happens. Each drawer is two parts, its front and its tray (with what is in it), besides the
+  carcase, which has a shallow dark recess behind each drawer that opens; `whole` is a cabinet in one piece.
+- `cabinets.js`: the placements (the toolbox, docs/BACKROOMS.md) and the drawers.
+  - **Cheap.** Everything goes into the room's own batches (`c.place`, or `clip()` from clipping.js where the
+    structure cuts it), meshed with `ao: false`, baked with the room. Only a drawer that opens is a mesh of its own
+    (its front; its tray only while it is out), at most 12 to a room; past that a cabinet is only furniture.
+  - **Solid** as what is drawn at a body's height (the box round the geometry, `roomBox`), never in a doorway's lane;
+    a placement is only made where, with its colliders in, every doorway is reached as before by the visitor (the
+    level's own walk) and by a body of r = 0.35 (the cast's), so a pile never closes the way through. Nothing is ever
+    `keep`, so the level's no-trap check still has the last word. None of it is furniture to be dragged.
+  - **The drawers.** `E` at a cabinet opens the drawer looked at (by the pitch of the view), or the nearest one still
+    shut: it slides out 36 cm (30 from a wall) in half a second, with `slide` and a `thunk`. A dented one rattles; a
+    locked cabinet clicks and rattles. An open drawer stays open and is not solid (nothing that moves is).
+  - **What is in them.** To look at: hanging files (45 %), a ream and loose sheets (20 %), nothing but dust and a paper
+    clip (the rest), and one drawer in thirty something odd: a drawer of carpet, one papered inside in the yellow
+    diamonds, a lit tube, a heap of keys, one shoe, a telephone. To carry: only what the part was dealt anyway.
+    inventory.js, as it lays out a part's supplies (supplies.js `planSupplies` and `plentyOfPaper`, unchanged), asks a
+    room to hide the thing (`rt.hide(item)`, which cabinets.js gives a room with drawers; inventory.js imports nothing of it): about half the time, by the thing's own id, it goes into
+    one of the room's drawers that opens, is low enough to see into (its floor at 45 cm or less) and is far enough
+    from a wall, instead of onto the floor. When that drawer is opened, the thing is put in it (on top of its files, where it can be seen) as the ordinary pickup
+    (inventory-world.js `spawn`, which now takes `ignore`: the cabinets' colliders it lies over). So paper is as
+    common as it was, a torch as rare: a drawer is a hiding place, as an oddity's stash is.
+  - **Seeded.** A cabinet's paint, wear, lock and contents come from `${seed}/cabinets/${room}/${n}`, where a placement
+    goes from `${seed}/cabinets/${room}/deal/…`; nothing reads the room's own stream or anything unseeded.
+- `rooms.js`: `previewCabinets(c)` at the end of a plain room (one line, and its import). The part's plain rooms take
+  the placements in turn, each the one the part has had least of so far that fits there: pile, sunk row, wall of
+  drawers, one let into a wall, one through the ceiling, one alone in an empty room.
+- `inventory.js`: the two `rt.hide` calls (two lines). `inventory-world.js`: `spawn(…, { ignore })` (four lines).
+- `dev/backrooms.js`: the flag's line in the head of the file.
+
+### The placements
+
+| | |
+|---|---|
+| pile | up to nine, backed onto a wall or standing out in a big room: a row of upright ones (their drawers open), a two-drawer stacked on top back to front, one on its side on top of another, one leaning on the row, a lateral on its back in front with a two-drawer face down on it, a three on its side. Kinds step down to fit under the ceiling. Paper round its foot (detail: Low leaves it out) |
+| sunk row | two to four four-drawer cabinets gone into the carpet to the middle of the second drawer, the ones at the ends crooked; the two drawers above the carpet open |
+| wall of drawers | a stretch of wall of cabinets let into it, side by side and stacked to the ceiling (cut by it); the lowest open |
+| flush | one let into a wall, only its fronts in the room |
+| ceiling | one coming down through the ceiling upside down, clear of the lights |
+| alone | one in the middle of an empty room, facing the way in |
+
 ### Try it
 
 ```
-/world/dev/backrooms.html?seed=7&room=blinds&preview=blinds&pursuer=0&mute=1&cast=none&x=-0.3&z=4.9&yaw=-0.12&pitch=-0.06
-/world/dev/backrooms.html?seed=7&room=blinds&preview=blinds&pursuer=0&mute=1&cast=none&x=-0.6&z=-0.6&yaw=-1.25&pitch=-0.1
-/world/dev/backrooms.html?seed=7&room=blinds&preview=blinds&pursuer=0&mute=1&cast=none&x=-0.5&z=0.7&yaw=-0.55&pitch=-0.55
-/world/dev/backrooms.html?seed=7&room=blinds&preview=blinds&pursuer=0&mute=1&cast=none&x=4.3&z=-3&yaw=3.14
+/world/dev/backrooms.html?seed=7&room=12&preview=cabinets&pursuer=0&mute=1&cast=none&x=1.3&z=-0.9&yaw=1.95&pitch=-0.06
+/world/dev/backrooms.html?seed=7&room=22&preview=cabinets&pursuer=0&mute=1&cast=none&x=0.9&z=2.0&yaw=0.6&pitch=-0.15
+/world/dev/backrooms.html?seed=7&room=20&preview=cabinets&pursuer=0&mute=1&cast=none&x=1.8&z=1.4&yaw=1.22&pitch=0.12
+/world/dev/backrooms.html?seed=7&room=1&preview=cabinets&pursuer=0&mute=1&cast=none&x=1.55&z=1.07&yaw=-1.57&pitch=-0.9
+/world/dev/backrooms.html?seed=7&room=20&preview=cabinets&pursuer=0&mute=1&cast=none&x=1.8&z=1.4&yaw=1.22&pitch=0.12&graphics=high
+/world/dev/backrooms.html?seed=7&room=17&preview=cabinets&pursuer=0&mute=1&cast=none&x=-2.4&z=-0.3&yaw=-1.69&pitch=-0.02
 ```
 
-The first from the way in, the second at the hall's mouth, the third over the cup, the fourth down the hall's leg to
-the doorway; add `&graphics=high` for High. Pictures: `docs/previews/blinds-<door|jamb|cup|hall>-classic.jpg`,
-`blinds-door-high.jpg`, `blinds-jamb-high.jpg`. Without `&preview=blinds`, `room=blinds` is not in the deck and the page
-lands you where it always does.
+On the deal with the Door on the Chain in it (edition 1w72hk5): a pile (room 12, the room's own hanging figure over it),
+a sunk row standing out in the room (22), a wall of drawers (20), a drawer open with the part's paper in it on top of
+its files (1: press `E` looking down at the bottom drawer of the four-drawer at the end of the pile), the wall at High,
+one alone (17). Pictures: `docs/previews/cabinets-<pile|sunk|wall|drawer|wall-high|alone>.jpg` (Classic but the one at
+High; the drawer opened through its own use, the room's ticks run by hand, as the headless page does not play).
 
 ### Proof
 
@@ -867,3 +934,159 @@ warm and correct across floor and walls, we already have.
   end with its dead light, and you leave the way you came.
 - With loot, what the seed leaves goes in the front left corner (the stash), away from the light and the blind.
 - The hall is lit by the room's tube at Classic (no occlusion in the bake), so it is not as dim as the render's.
+
+## The Door on the Chain
+
+The owner's pick from the Yellow Office art direction (`docs/art-direction/yellow-office/README.md`, "The Door on the
+Chain"; the concept is `door-on-the-chain.png` there). Two ends, with a short low passage. What looks like a
+wood-panelled hall is the gap behind one enormous office door standing ajar; a brass security chain the size of the
+corridor is stretched across it from the door to a plate on the wall; you go under its raised end to an ordinary
+office door, which is what gives the scale away.
+
+**Status: in the game.** Unlike the sections above this is not behind a `&preview=` flag: it is a room of the deck
+(`deck2.js`, `door-on-chain`), dealt like any other at the ordinary weight 1, with no theme multiplier (the owner: no
+room shows up more often than another). Adding it changed the make of the building, `edition()`: `yntnbj` before,
+`c9ga4v` after on its own; `1w72hk5` once merged with the live deck, which changed it too.
+
+### What was built
+
+- `rooms/door-on-chain/rule.js` (pure): the plan. The door is the level's ordinary office door (`wooddoor.model.js`,
+  0.9 × 2.03 m) at 6.5 times, so its back face is 5.85 m of the hall's left wall from the latch edge to the hinge, and
+  each of its voxels is 8 cm: its stiles, muntin, bottom rail, sunk panels with their bead and raised fields are the
+  small door's to the voxel (the lock rail is above the ceiling). A slide plate on it, a steel plate on the right wall,
+  and four links between them, hung as a chain of equal rigid links hangs (each joint the same weight, so each link's
+  slope steps up by the same amount), the wall end raised (1.86 m against 0.95 m at the door). Each link is an elongated
+  octagon of square 10 cm brass, each in the next one's hole, alternately upright and flat. Everything over the floor
+  (every bar in 6 cm lengths, the plates, the knob, the latch tongue) is a list of boxes; the headroom anywhere is the
+  underside of the lowest one within a body's reach (0.24 m), and where that is under world.js `HEAD` (0.62 m) the room
+  says there is none, so nobody of any size is sent where the walk would not let them stand.
+- `rooms/door-on-chain.js`: draws from those numbers. Its solids are the plan's and nothing else (the door to the wall
+  behind it, the jamb at the hinge, the wall from it to the way in, the ordinary leaf and its lever); `rt.headY` is the
+  plan's headroom. A crack of light at the hinge, a dark slot behind the latch edge with a pencil of daylight at its end,
+  the latch tongue over everybody's head, the gap under the door and its shadow on the carpet, three fittings (the one
+  over the raised end on the lit side; the one by the way in dead in about a third of rooms), stains on the tiles, the
+  carpet worn under the raised end. 6,500 triangles, 14 meshes, 5 lights.
+- The deck's `through` (the live deck's, made for the Open-Plan Pit, `gen.js` placeSpecial): `through: true,
+  throughDoor: 1`. The back wall always gets a doorway an ordinary door wide (1 m) and high, into a plain room, or the
+  room is put down somewhere else. So the ordinary door always leads on (in 200 floors asked for it, 200 had the back
+  doorway; a back port without `through` is used about 70% of the time).
+- `cast/walk.js`, 1 line: a room may say `rt.headway`, the most headroom its only way through has; a walker taller
+  than that does not set off into it. Here it is the headroom under the raised end for the widest of the cast (0.5 m
+  across): 0.775 m. The toner and the mother's worms go under the chain both ways; the intern, the mascot, the mother,
+  the standing meeting and everything taller stay out (they are not sent in to stand at the chain).
+
+### Walking it
+
+Under the raised end there is 0.62 m at the edge of the gap and 1.29 m at its best, against the wall (the visitor
+stands under 1.3 m): the automatic duck takes the eye down to 0.64 m on a line 0.45 m off the wall, and a little less
+against it. Held W from the way in to the ordinary door and back again, at Classic, seed 7: both ways through, no
+snag. The rest of the chain's line hangs lower than anybody gets under (0.27 to 0.6 m): there is one way, under the
+raised end, from either side.
+
+### Try it
+
+```
+/world/dev/backrooms.html?seed=7&room=door-on-chain&pursuer=0&mute=1&cast=none&x=0.3&z=4.9&yaw=0
+/world/dev/backrooms.html?seed=7&room=door-on-chain&pursuer=0&mute=1&cast=none&x=0.45&z=-0.4&yaw=-0.3&pitch=-0.05
+/world/dev/backrooms.html?seed=7&room=door-on-chain&pursuer=0&mute=1&cast=none&x=1.5&z=-1&yaw=0.12&pitch=0.22
+/world/dev/backrooms.html?seed=7&room=door-on-chain&pursuer=0&mute=1&cast=none&x=0.1&z=-2.75&yaw=3.1416&pitch=-0.05
+/world/dev/backrooms.html?seed=7&room=door-on-chain&pursuer=0&mute=1&cast=none&x=0&z=-4.9&yaw=3.1416
+/world/dev/backrooms.html?seed=7&room=door-on-chain&pursuer=0&mute=1&cast=none&x=0.3&z=4.9&yaw=0&graphics=high
+```
+
+In that order, in `docs/previews/`: `chain-far` (the approach from the way in: the links, the ordinary door beyond and
+the gap under the raised end in one glance), `chain-close-front` (the chain close, from that side), `chain-duck`
+(under the raised end, stooped), `chain-close-back` (the chain close from the ordinary door's side), `chain-return`
+(the way back: the strike plate, the sag, the door's latch edge and its tongue), `chain-high` (the approach at High).
+Add `&inventory=0` for pictures without the pockets.
+
+### Proof
+
+`test/backrooms-door-on-chain.test.mjs`: the plan walks end to end both ways at three sizes, and every crossing of the
+chain's line is under the raised end; the duck gets the visitor under (the eye's sink is within what player.js
+allows) and the best of the gap is a stoop, not standing room; every corner of every bar, and a shoulder's width
+round it, is over the headroom, and the headroom is always the underside of something drawn; built for real (three
+seeds), no doorway is walled off, the colliders are exactly the plan's six, every vertex drawn in the hall at body
+height is inside a solid or overhead, the level's own walking grid floods from each end to the other, and the far
+doorway is a metre wide, 2.05 m high, into a plain room; the cast walk (cast/walk.js) takes the toner and a worm under
+the chain both ways and sends nobody taller in; the entry has weight 1 and nothing that weights it, is as much at home
+on every kind of floor as its peers, and over 400 visits turns up about as often as `tiny-door`.
+
+### Not done, and what our lighting cannot reach
+
+- **The brass.** The concept's chain is polished metal: hard highlights on each facet, dark in the crevices, a glint
+  where the links bear on each other. Ours is lit as everything else is, by the bake at the vertices: each facet is its
+  own shade (and the faces turned up are a little paler, by hand), but there is no specular anywhere at any tier, so it
+  reads as painted yellow-brown wood more than metal, most of all at a distance.
+- **Shadows.** The concept's chain throws soft link-shaped shadows on the carpet and the wall. At Classic and Low the
+  bake has none; at Medium and High the light map's shadows come from what a room says stands in it (`c.place`,
+  `c.pillar`), and the chain is drawn straight into a batch, so it throws none there either. There is a soft dark band
+  on the carpet under it instead. The door slab is a pillar, so it does shade.
+- **Warm against cool.** The concept has cool white tubes and warm brown shadow, the far office brighter than the hall.
+  Ours is lit evenly by three panels; the far office is the same yellow as the hall.
+- **The door reads as panelling first**, which the brief asks for, but from the way in only its lower panels and rails
+  are below the ceiling, at 8 cm voxels, flat-lit: the reveal that it is a door rests on the latch edge, the tongue, the
+  slide plate and the crack at the hinge, and from the far end the hinge crack is a thin line.
+- **The chain hangs lower than the concept's.** The concept has it at shoulder height. Here anything with 0.62 m under
+  it can be ducked under, so for the raised end to be the only way the rest has to hang lower than that: its middle is
+  at about half a metre, under the visitor's eye (1.1 m), seen from above rather than across.
+- The concept's giant door is a six-panel door; ours is the level's own four-panel office door scaled up, so that the
+  ordinary door at the far end is visibly the same door. Under the ceiling only its two lower panels show.
+- The camcorder's noise is strong in some stills (more at High), and the far office is a 3.2 m slice before the
+  doorway, so the ordinary door is near, not down a long hall as in the concept.
+
+/world/dev/backrooms.html?seed=7&room=7&preview=cabinets&pursuer=0&mute=1&cast=none&x=0.6&z=-2.15&yaw=2.95&pitch=0.1
+/world/dev/backrooms.html?seed=7&room=1&preview=cabinets&pursuer=0&mute=1&cast=none&x=1.2&z=1.0&yaw=1.1&pitch=-0.18
+/world/dev/backrooms.html?seed=7&room=22&preview=cabinets&pursuer=0&mute=1&cast=none&x=-0.6&z=1.6&yaw=2.75&pitch=0.12
+/world/dev/backrooms.html?seed=7&room=24&preview=cabinets&pursuer=0&mute=1&cast=none&x=1.75&z=-0.15&yaw=-1.57&pitch=-0.9
+/world/dev/backrooms.html?seed=7&room=22&preview=cabinets&pursuer=0&mute=1&cast=none&x=-0.6&z=1.6&yaw=2.75&pitch=0.12&graphics=high
+/world/dev/backrooms.html?seed=7&room=16&preview=cabinets&pursuer=0&mute=1&cast=none&x=0.9&z=1.75&yaw=0.48&pitch=-0.02
+```
+
+A pile (room 7), a sunk row (1), a wall of drawers (22), a drawer open with the part's paper in it (24: press `E`
+looking down at the lower of the two drawers above the carpet in the second cabinet; the third holds the part's other
+stack), the wall at High, one alone (16). Pictures: `docs/previews/cabinets-<pile|sunk|wall|drawer|wall-high|alone>.jpg`
+(Classic but the one at High; the drawer opened through its own use, the room's ticks run by hand, as the headless page
+does not play).
+
+### Proof
+
+- `test/backrooms-cabinets.test.mjs`: the five kinds inside their measurements, each drawer's front and tray where
+  that drawer is, a recess only behind one that opens, dents pure and about one in seven; for every placement in an
+  8 m room, each cabinet is solid exactly when some of it is at a body's height in the room, its collider the box round
+  what is drawn (within 3 cm), tall when it stands above a head, and nothing else solid; `E` opens the drawer looked at
+  with `slide` and `thunk`, the whole way, its tray drawn, and what it was given is put into it once, on the tray's
+  floor, over the cabinet; dented and locked ones turn up and do not open; on eight seeds with the preview, no room gave
+  up its furniture, nothing stopped being solid, every doorway is reached as before by the visitor and by r = 0.35,
+  nothing solid in a lane, and all six placements turn up; the fills over 12,000 drawers (odd under one in twenty,
+  paper over half); over four seeds no more of any thing in drawers than the part was dealt, each once, only in a
+  drawer that opens and is low; inventory.js hides only what it was about to place, by its id; built twice, the same,
+  and the room's own stream where it was; without the flag (or empty, or `clip,floorlight`) the rooms hash as today's,
+  and with it only plain rooms change.
+- A whole-floor comparison against a `git archive` of fcf4338, without the flag: 16 seeds (7, 21, 3, 11, 40, q, zz,
+  102, 1, 2, 5, 9, 13, 77, abc, 999), whole, at Classic and Medium, with no preview and with `clip,floorlight`: every
+  room's meshes (every attribute and index), colliders, lamps, ambient, level, light maps and uses, and the build's
+  warnings: 449 rooms each time, the same to the byte; `edition()` yntnbj in both.
+
+### Not done, and what looked wrong
+
+- The visitor's eye is 1.1 m: a drawer whose floor is above about half a metre cannot be seen into, so only the low
+  ones are given anything. The upper ones of a tall cabinet open but show only their files from below.
+- An open drawer is not solid, and stays open: walking into one walks through it.
+- In seed 7's small rooms the sunk rows went against a wall, where from across the room they read as short cabinets
+  more than sunk ones (the half drawer at the carpet is the tell); one free-standing in a bigger room reads better.
+- The piles are made of nine set pieces, mirrored, and the kinds swapped to fit under the ceiling: up close one pile
+  looks like another. Their backs are plain steel. The face-down two-drawer on the lateral can read as a grey box.
+- The light on a drawer that opens is baked where it was shut (as on anything that moves): its tray is lit as its
+  front was.
+- Looked at at Classic and High; Low and Medium only through the tests; `vhs=0/1`, a phone, not.
+
+### Dealt as dressing (the second step)
+
+Since the step after the preview, the cabinets are ordinary dressing, with no weighting: `cabinet` is one more of the
+things a plain room may have been left (gen.js `DRESSING`, one entry, as each of the others has one or two; Records
+floors keep their three), and rooms.js's `cabinet` dressing deals one of the placements (`PLACEMENTS[(seed + room) %
+7]`: pile, sunk row, wall of drawers, one let into a wall, one through the ceiling, one alone, one against a wall), or
+one against a wall where that one does not fit, or nothing (as the old cabinet when there was no wall for it). The
+catalogue's `cabinet` (c.prop) is the old model still, for the rooms that place it themselves. The flag still deals
+them into every plain room, for looking at them.

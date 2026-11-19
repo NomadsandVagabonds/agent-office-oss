@@ -39,6 +39,8 @@
 //   &preview=intray    a room not yet in the deck, Interoffice Mail (&room=in-tray)
 //   &preview=chair     a room not yet in the deck, Please Be Seated (&room=giant-chair)
 //   &preview=blinds    a room not yet in the deck, Borrowed Daylight (&room=blinds)
+//   &preview=cabinets  a preview: filing cabinets in the plain rooms, piled, sunk, let into walls, through ceilings; drawers open (E)
+//                      (cabinets.js, docs/BLOCKROOMS-PREVIEWS.md "Filing cabinets")
 //   &loot=1            something to find: the keycard (in the mascot's hand) and coins 1–4; &loot=card,1,3 for some of it. There is no
 //                      office here to keep count, so a stand-in does, in this page's memory, and says so on the console: what you leave
 //                      by the door with is gone the next visit (any key), everything else is down there again. Without it: no loot.

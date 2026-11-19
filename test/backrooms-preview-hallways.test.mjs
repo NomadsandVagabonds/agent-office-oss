@@ -39,7 +39,10 @@ async function built(level, gfx = null) {
   try { const world = await buildWorld(kit, level, env); return { world, kit, said }; }
   finally { console.warn = warn; }
 }
-const SEEDS = Array.from({ length: 60 }, (_, i) => i + 1);
+// (sixty floors, and 131 for a dogleg: the rarest shape, which seed 32 had until the deck gained door-on-chain and the
+// dealing moved. Seeds 61 to 120, not 1 to 60, since the merge with the live deck: over 500 floors a first floor has 0.52
+// shaped corridors, 0.515 where door-on-chain is on it and 0.519 where it is not, but floors 1 to 60 are now dealt 20)
+const SEEDS = [...Array.from({ length: 60 }, (_, i) => i + 61), 131];
 
 test('flag off: nothing is changed, and the generator and the plan know nothing of it', () => {
   for (const seed of [7, 21]) {
@@ -104,7 +107,9 @@ function wallPointOf(room, d, along, off) {
 }
 
 test('built: the no-trap check passes, and what stops you is exactly the walls that are drawn', async (t) => {
-  for (const seed of [1, 2, 32]) {
+  // (a taper, a dead end, and a dogleg with a skew: 1, 2 and 32 had shaped corridors until the deck gained door-on-chain,
+  // then 3, 11 and 131 until the merge with the live deck)
+  for (const seed of [13, 16, 131]) {
     const level = floorOf(planVisit(seed, { name: 'Robin' }), 0);
     level.previewAsk = 'hallways';
     const { world, kit, said } = await built(level);

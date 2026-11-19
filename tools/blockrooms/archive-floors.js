@@ -7,7 +7,7 @@ const themes = Object.keys(CLEARANCE_FLOORS);
 const offices = ['archive', 'night', 'fitout', 'exec'];
 // Fingerprints from shipped generators. These releases changed rooms and enemies
 // more often than the deal. Unknown editions can still use room and escape evidence.
-const nineFloors = new Set(['yntnbj', 'zb9fq5']);
+const nineFloors = new Set(['1w72hk5', 'yntnbj', 'zb9fq5']);   // (1w72hk5: the Door on the Chain and the filing cabinets, the same floor deal)
 const guaranteedSuburb = new Set([
   'dxmyjf',
   'is8gvd',

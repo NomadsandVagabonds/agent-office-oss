@@ -280,6 +280,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
           } catch { /* a room's own arithmetic: the floor will do */ }
           if (placed) break;
         }
+        if (rt.hide?.(makeItem(type, id(key), made))) { placed = true; break; }   // (a room's own hiding place: a filing cabinet's drawer, cabinets.js)
         const walk = env.world.walkable(rt), seen = walk.flood(rt.def.doors), cells = [];
         for (let i = 0; i < seen.length; i++) if (seen[i]) cells.push(i);
         for (const cell of random.shuffle(cells).slice(0, 256)) {
@@ -297,6 +298,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
       let placed = false;
       for (const roomId of rooms) {
         const rt = env.world.rooms.find(r => r.id === roomId); if (!rt) continue;
+        if (rt.hide?.(makeItem(type, id(key), made))) { placed = true; break; }
         const doors = rt.def.doors.map(dr => ({ p: wallPoint(rt.def, dr.side, dr.c, 0.6), r: 0.31 + 0.55 + dr.w / 2 + 0.15 }));
         const mine = coins.filter(k => k.room === rt.id);
         const walk = env.world.walkable(rt), seen = walk.flood(rt.def.doors), cells = [];

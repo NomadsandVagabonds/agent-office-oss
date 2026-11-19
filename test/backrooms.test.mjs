@@ -472,7 +472,10 @@ test('in an oddity a coin has a place of its own, where the builder leaves the f
 
 /* ---- the plain rooms: a small vocabulary that repeats (quiet.js) ------------------------------------------------ */
 
-const QUIET_SEEDS = Array.from({ length: 30 }, (_, i) => `quiet-${i}`);
+// (60 floors of each kind, not 30, since the deck gained door-on-chain: over 300 floors the yellow office's parallel and
+// dogleg rooms are 10.8% of its plain rooms against the archive's 9.1% (10.9% and 9.0% on the floors without that room),
+// but 30 floors were dealt where the archive came out ahead by sampling alone)
+const QUIET_SEEDS = Array.from({ length: 60 }, (_, i) => `quiet-${i}`);
 const quietFloors = new Map();
 const floorsOf = (theme) => { if (!quietFloors.has(theme)) quietFloors.set(theme, QUIET_SEEDS.map((seed) => generate(seed, { theme, way: 'stairs' }))); return quietFloors.get(theme); };
 const walkable = (level) => level.rooms.filter((r) => r.kind === 'plain' && !r.crawl);

@@ -128,9 +128,10 @@ test('deterministic: the same floor bakes the same windows twice', async (t) => 
 
 test('doorways first: a window never takes a doorway\'s place among the openings a room keeps', async (t) => {
   // (rooms with four doorways and a window: seed, room. The doorways a room keeps, and their order, are what they are with
-  // no window in the floor at all; a window is kept only in a place the doorways leave)
+  // no window in the floor at all; a window is kept only in a place the doorways leave. Which rooms those are moves with the
+  // dealing: [2, 5], [10, 7], [17, 10], [18, 1] until the deck gained door-on-chain)
   let full = 0;
-  for (const [seed, id] of [[2, 5], [10, 7], [17, 10], [18, 1]]) {
+  for (const [seed, id] of [[3, 3], [6, 0], [17, 3], [22, 9]]) {
     const [withW, without] = [await build(t, 'medium', { seed }), await build(t, 'medium', { seed, strip: true })];
     const a = withW.world.rooms[id], b = without.world.rooms[id];
     assert.ok(a.def.doors.length >= 4 && a.def.wins.length >= 1, `seed ${seed} room ${id} is the room meant`);
