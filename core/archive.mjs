@@ -8,10 +8,16 @@ const object = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
 const key = s => typeof s === 'string' && /^[a-zA-Z0-9:_-]{1,100}$/.test(s);
 export const archiveLook = v => resolveLook('blockrooms-player', { ...object(v), accessory: ACCESSORY.includes(v?.accessory) ? v.accessory : 'none' });
 const field = (v, clean) => v && typeof v === 'object' && key(v.writer) ? { value: clean(v.value), at: stamp(v.at), writer: v.writer } : null;
+// The printed pass has a fixed position for each floor, independent of the order played.
+export const CLEARANCE_FLOORS = Object.freeze({
+  yellow: 'Yellow Office', archive: 'Records', night: 'After Hours', fitout: 'Fit-Out', exec: 'Executive',
+  suburb: 'Suburbia', mall: 'Mall', waterpark: 'Waterpark', forest: 'Forest',
+});
 export function cleanArchive(v) {
   const a = object(v), r = cleanRecord(a);
   return { v: 1, baseline: { runs: n(a.baseline?.runs), out: n(a.baseline?.out) },
     counts: Object.fromEntries(Object.entries(object(a.counts)).filter(([k]) => key(k)).map(([k, c]) => [k, { runs: n(c?.runs), out: n(c?.out) }])),
+    clearances: Object.keys(CLEARANCE_FLOORS).filter(id => Array.isArray(a.clearances) && a.clearances.includes(id)),
     best: r.best, rooms: r.rooms, cast: r.cast, tapes: r.tapes,
     name: field(a.name, v => cleanName(v) || 'Visitor'), character: field(a.character, archiveLook) };
 }
@@ -36,6 +42,7 @@ export function mergeArchive(left, right) {
     tapes.set(id, { ...first, ...(Math.max(old?.plays || 0, t.plays || 0) ? { plays: Math.max(old?.plays || 0, t.plays || 0) } : {}) });
   }
   return cleanArchive({ v: 1, baseline: { runs: Math.max(a.baseline.runs, b.baseline.runs), out: Math.max(a.baseline.out, b.baseline.out) }, counts,
+    clearances: [...a.clearances, ...b.clearances],
     best: Math.max(a.best, b.best), rooms: seen(a.rooms, b.rooms), cast: seen(a.cast, b.cast),
     tapes: [...tapes.values()].sort((x, y) => y.at - x.at || JSON.stringify(x).localeCompare(JSON.stringify(y))).slice(0, TAPES_KEPT),
     name: latest(a.name, b.name), character: latest(a.character, b.character) });

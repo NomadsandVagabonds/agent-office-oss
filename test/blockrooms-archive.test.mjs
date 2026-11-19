@@ -4,11 +4,26 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { importArchive, mergeArchive, archiveRecord, archiveRun, editArchive, archiveLook } from '../core/archive.mjs';
+import { dealtThemes } from '../public/world/backrooms/themes.js';
+import { CLEARANCE_FLOORS, cleanArchive, importArchive, mergeArchive, archiveRecord, archiveRun, editArchive, archiveLook } from '../core/archive.mjs';
 import { accountConfig } from '../tools/blockrooms/account-config.mjs';
+import { fileStats } from '../tools/blockrooms/archive-charts.js';
 import { build } from '../tools/blockrooms/build.mjs';
 const run = (seed, room = 'lobby') => ({ reason: 'exit', seed, edition: 'v1', mascot: true, rooms: { explored: 4, kinds: [room] }, cast: { met: ['pirate'], survived: 1 }, parts: { of: 2, reached: 2 }, seconds: 100 });
 const visit = (a, writer, seed, room) => archiveRun(a, run(seed, room), { writer, at: 100, by: 'Test' }).document;
+test('HR worksheets count dated first sightings once and time only retained tapes with durations', () => {
+  const day = Date.UTC(1998, 3, 6), next = day + 86400000;
+  const record = archiveRecord(importArchive({ runs: 10, out: 3, rooms: { lobby:day, pool:next, imported:0 }, cast: { toner:day+100 },
+    tapes:[{ seed:'new', seconds:70, plays:2 }, { seed:'old', seconds:95 }, { seed:'undated' }] }));
+  const stats = fileStats(record);
+  assert.deepEqual(stats.discoveries.map(r=>[r.rooms,r.cast]), [[1,1],[2,1]]);
+  assert.deepEqual(stats.busiest, { day:day/86400000, count:2 });
+  assert.equal(stats.rate,'30%');
+  assert.equal(stats.fastest,'1:10');
+  assert.deepEqual(stats.timed.map(t=>t.seed),['old','new']);
+  assert.equal(stats.replays,2);
+  assert.equal(fileStats(archiveRecord({})).rate,'—');
+});
 test('concurrent devices union discoveries/tapes and count visits once across retries', () => {
   const a = visit({}, 'a', 'tape-a'), b = visit({}, 'b', 'tape-b', 'pool');
   const ab = mergeArchive(a, b);
@@ -60,6 +75,29 @@ test('guest import, claim, sign-out and another account are isolated, including 
   await a.signOut(); await a.claim('A'); assert.equal(a.profile().name, 'A name');
   const reopened = createArchiveStorage({ storage, uuid: () => 'id-' + ++serial });
   assert.equal(reopened.record().runs, 5, 'legacy data is not imported again');
+});
+test('floor stamps belong to the visitor who crossed, survive a lost run, and merge across devices', async t => {
+  const { createArchiveStorage } = await modules(t);
+  assert.deepEqual(Object.keys(CLEARANCE_FLOORS).sort(), dealtThemes().sort());
+  const storage = memory(); let i = 0;
+  const a = createArchiveStorage({ storage, uuid: () => 'id-' + ++i });
+  const guest = a.owner();
+  await a.clearFloor('yellow',guest);
+  await a.claim('first'); await a.signOut(); await a.claim('second');
+  await Promise.all([a.clearFloor('waterpark',guest), a.clearFloor('waterpark',guest), a.clearFloor('unbuilt',guest)]);
+  await a.report({ ...run('lost','fitout'), reason:'caught' }, 'attempt', guest);
+  assert.deepEqual(a.document().clearances, []);
+  assert.deepEqual(a.document('user:first').clearances, ['yellow','waterpark']);
+  // An older game tab saves updated visit totals without knowing the stamp field.
+  storage.setItem('blockrooms:archive:save:user:first',JSON.stringify({v:1,baseline:{runs:6,out:1}}));
+  const reopened = createArchiveStorage({ storage, uuid: () => 'id-' + ++i });
+  assert.equal(reopened.record('user:first').runs, 6);
+  const other = { clearances:['forest','__proto__','forest'] };
+  const merged = mergeArchive(other,reopened.document('user:first'));
+  assert.deepEqual(merged.clearances, ['yellow','waterpark','forest']);
+  assert.deepEqual(mergeArchive(merged,other), merged);
+  assert.deepEqual(cleanArchive({clearances:'waterpark'}).clearances, []);
+  assert.deepEqual(importArchive({out:4,rooms:{forest:100}}).clearances, []);
 });
 test('cross-tab report writes share a lock and cannot drop either visit', async t => {
   const { createArchiveStorage } = await modules(t); let q = Promise.resolve(), i = 0;

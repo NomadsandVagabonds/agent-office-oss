@@ -1,6 +1,6 @@
 // Synchronous local reads keep Play independent of auth/network. Writes use a
 // cross-tab lock; namespaces/claims keep another account's cache out of a save.
-import { importArchive, cleanArchive, mergeArchive, archiveRecord, archiveRun, editArchive } from './core/archive.mjs';
+import { CLEARANCE_FLOORS, importArchive, cleanArchive, mergeArchive, archiveRecord, archiveRun, editArchive } from './core/archive.mjs';
 import { rollName } from './core/book.mjs';
 import { hashId, resolveLook } from './core/look.mjs';
 const PREFIX = 'blockrooms:archive:';
@@ -14,8 +14,21 @@ export function createArchiveStorage({ storage, locks, uuid = () => crypto.rando
   const guest = () => { let id = read(PREFIX + 'guest'); if (!id) { id = 'guest:' + uuid(); write(PREFIX + 'guest', id); } return id; };
   const resolve = id => id?.startsWith('guest:') ? read(PREFIX + 'claim:' + id) || id : id;
   const owner = () => read(PREFIX + 'active') || guest();
-  const doc = id => cleanArchive(read(PREFIX + 'save:' + resolve(id || owner())));
-  const put = (id, value) => { write(PREFIX + 'save:' + resolve(id), cleanArchive(value)); changed(); return value; };
+  // Stamps travel with the cloud document. Locally they have their own ledger so a
+  // game tab opened before the pass existed can still write the old save shape.
+  const doc = id => {
+    id = resolve(id || owner());
+    const record = read(PREFIX + 'save:' + id);
+    return cleanArchive({ ...record, clearances: read(PREFIX + 'stamps:' + id) ?? record?.clearances });
+  };
+  const put = (id, value) => {
+    id = resolve(id);
+    const { clearances, ...record } = cleanArchive(value);
+    if (clearances.length) write(PREFIX + 'stamps:' + id, clearances);
+    write(PREFIX + 'save:' + id, record);
+    changed();
+    return value;
+  };
   // Leave the old data intact as a backup; import exactly once into its guest.
   if (!read(PREFIX + 'migrated')) {
     const old = read('office-backrooms:record')?.record, me = read('blockrooms:me');
@@ -27,9 +40,14 @@ export function createArchiveStorage({ storage, locks, uuid = () => crypto.rando
     profile(id = owner()) {
       const a = doc(id); let seed = hashId(resolve(id));
       const name = a.name?.value || rollName(() => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; });
-      return { name, look: a.character?.value || resolveLook('lead:' + name, { accessory: 'crown' }) };
+      return { name, look: a.character?.value || resolveLook('visitor:' + name) };
     },
     edit(patch, id = owner()) { return atomic(() => put(id, editArchive(doc(id), patch, device, now()))); },
+    clearFloor(theme, id = owner()) { return atomic(() => {
+      const before = doc(id);
+      if (!Object.hasOwn(CLEARANCE_FLOORS, theme) || before.clearances.includes(theme)) return before;
+      return put(id, { ...before, clearances: [...before.clearances, theme] });
+    }); },
     merge(value, id = owner()) { return atomic(() => {
       const before = doc(id), after = mergeArchive(before, value);
       return JSON.stringify(before) === JSON.stringify(after) ? before : put(id, after);
