@@ -6,6 +6,8 @@ import { Vox, M } from '../vox/vox.js';
 import { lin, drawText, WHITE } from './kit.js';
 import { headAt } from './gen.js';
 import { P, card, framed, standee, mugVox } from './bits.js';
+import { clip, previewing } from './clipping.js';
+import { uplit } from './floorlight.js';
 
 /* ---- the museum --------------------------------------------------------------------- */
 
@@ -15,7 +17,8 @@ const staplerVox = () => { const v = new Vox(), red = M('#b5342c', 0); v.box(-5,
 /** Ordinary things, on plinths, behind ropes, with labels. */
 function museum(c) {
   const { W, D, R, params: p, kit } = c;
-  c.shell();
+  const up = uplit(c);                               // (preview, &preview=floorlight: null without it, and the room is as it always was)
+  c.shell(up?.shell);
   const rope = lin(p.rope), brass = [0.74, 0.6, 0.28], white = [0.88, 0.86, 0.8];
   const wing = kit.tex.custom('wing' + c.room.id, 256, 60, (g) => {
     P(g, '#25221e', 0, 0, 256, 60); P(g, '#c9a24a', 3, 3, 250, 1); P(g, '#c9a24a', 3, 56, 250, 1);
@@ -36,7 +39,8 @@ function museum(c) {
     if (e.type === 'mug') c.model('mug', mugVox(), x, z, on);
     else if (e.type === 'stapler') c.model('stapler', staplerVox, x, z, on);
     else if (e.type === 'paper') c.lay(c.mapped('paper', kit.tex.paper()), x, z, 0.21, 0.297, 0.4, null, WHITE, top + 0.004);
-    else if (e.type !== 'empty') c.prop(e.type, x, z, { ...on, o: { color: '#4a7a6a' } });
+    else if (e.type !== 'empty') { const it = c.prop(e.type, x, z, { ...on, o: { color: '#4a7a6a' } }); if (up) up.stands(it); }
+    if (up) up.stands({ x0: x - 0.25, z0: z - 0.25, x1: x + 0.25, z1: z + 0.25, y0: 0, y1: top });
     // four posts and the rope that sags between them
     for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
       const px = x + sx * q, pz = z + sz * q;
@@ -58,8 +62,12 @@ function museum(c) {
     c.board(c.mapped(`label${i}`, tex), x, 0.66, lz + 0.012, 0.42, 0.21, 0);
     c.flat.box(x - 0.22, 0.545, lz - 0.012, x + 0.22, 0.775, lz + 0.011, [0.12, 0.11, 0.1]);
     c.flat.box(x - 0.015, 0, lz - 0.015, x + 0.015, 0.55, lz + 0.01, brass, { skip: '-y' });
-    c.light(x, 2.25, z + 0.3, '#ffe2b0', 0.4, { k: 1.5, far: 4.5, axis: [0, -1, 0], floor: 0.2 });
+    // (preview, &preview=floorlight: its light comes up at it from a can let into the floor inside the rope, in front)
+    if (up) up.spot(x, z + 0.66, { tube: '#ffe2b0', light: { power: 0.55, k: 1.5, far: 4.5, floor: 0.2 } });
+    else c.light(x, 2.25, z + 0.3, '#ffe2b0', 0.4, { k: 1.5, far: 4.5, axis: [0, -1, 0], floor: 0.2 });
   });
+  // (preview: the room's tubes in the floor, wherever they miss the roped squares)
+  if (up) { up.panels(slots.slice(0, p.items.length).map(([x, z]) => ({ x0: x - q - 0.1, z0: z - q - 0.1, x1: x + q + 0.1, z1: z + q + 0.4 }))); up.done(); }
 }
 
 /* ---- the team photo ----------------------------------------------------------------- */
@@ -165,6 +173,15 @@ function nested(c) {
   hut(2.3, 1.3, 0.07, s2, 0.62, 1.0, 0.56, p.plates[1]);
   hut(0.96, 0.58, 0.035, s2, 0.24, 0.4, 0.25, p.plates[2], false);
   c.solid(-0.48, p.z - 0.48, 0.48, p.z + 0.48, { keep: true });
+  // (preview, &preview=clip: an office chair most of the way through the meeting room's blank wall, the one the way in
+  // looks at, or its right-hand wall where the way in looks at its door. Cut at the middle of that wall, so nothing of
+  // it is inside the meeting room. Fixed choices, nothing rolled)
+  if (previewing(c, 'clip')) {
+    const b = boxes[0], face = s1 === 'front' ? 'right' : 'front', out = face === 'front' ? [0, 0, 1] : [1, 0, 0];
+    const f = face === 'front' ? b.z1 : b.x1, mid = f - b.t / 2;
+    const x = face === 'front' ? -1.15 : f - 0.08, z = face === 'front' ? f - 0.08 : p.z + 1.05;
+    clip(c, 'chair', x, z, { rot: Math.atan2(out[0], out[2]) + 0.5, cut: [{ n: out.map((v) => -v), d: -mid }] });
+  }
   // through the smallest door: light, and nothing you could get to
   const g = boxes[2], warm = lin('#ffd9a0');
   const glow = c.shining('inner', kit.tex.white(), 2.6, warm);

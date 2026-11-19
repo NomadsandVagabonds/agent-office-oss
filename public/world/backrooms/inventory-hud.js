@@ -75,6 +75,10 @@ function fallbackItemIcon(type, item) {
     rect(12,14,9,8,'#ebe2c8'); rect(13,16,7,1,'#34302a'); rect(13,18,7,1,'#34302a');
     rect(14,4,5,3,'#c9a34e'); rect(13,2,7,3,'#1d1f23'); rect(19,1,7,2,'#c4231b'); rect(19,4,6,1,'#c3cbd3');
     poly('13,3 6,1 5,6 13,5', '#1d1f23'); rect(11,28,11,2,'#1d1f23');
+  } else if (type === 'flamingo') {
+    rect(15,18,1,13,'#8f979e'); rect(18,18,1,13,'#8f979e');
+    poly('6,14 9,10 20,10 24,13 22,18 12,19', '#ef7ea6'); poly('7,14 10,12 19,12 21,15 12,17', '#ffa3c3');
+    poly('20,11 23,6 21,3 24,2 26,4 24,8 22,12', '#ef7ea6'); rect(24,2,3,2,'#ef7ea6'); poly('27,3 30,5 28,6', '#1e1b1c');
   } else if (type === 'opener') {
     rect(10,4,12,24,'#5b605c'); rect(11,5,10,22,'#8b8f8a');
     rect(13,8,6,6,'#7a3229'); rect(14,9,4,4,'#a8473b');
@@ -271,6 +275,7 @@ export function createInventoryHud({ size = 6, host, onSelect, onUse, onDrop, on
     if (item?.type === 'torch') return `${item.id === snapshot.mountedTorch?.id ? 'Mounted · ' : item.prepared ? 'Tape fitted · ' : ''}${percent(item)}% charge · ${isLit(item) ? 'on' : 'off'}`;
     if (item?.type === 'chalk') return `${item.uses} mark${item.uses === 1 ? '' : 's'} left`;
     if (item?.type === 'scissors') return 'Stiff at the pivot';
+    if (item?.type === 'flamingo') return 'One jab: it stays in';
     if (item?.type === 'extinguisher') return `${Math.round(100 * (item.charge ?? 0) / ITEM_DEFS.extinguisher.maxCharge)}% on the gauge`;
     if (item?.type === 'battery') return 'Fits flashlight or camera';
     if (item?.type === 'paper') return `${quantity(item)} / ${ITEM_DEFS.paper.maxStack} sheets`;
@@ -380,7 +385,7 @@ export function createInventoryHud({ size = 6, host, onSelect, onUse, onDrop, on
     // is still fitted by combining
     const recharges = selected?.type === 'battery' && !!snapshot.camera && !snapshot.camera.depleted && snapshot.camera.remaining < snapshot.camera.capacity;
     const label = selected?.type === 'torch' ? snapshot.activeTorch === selected.id ? 'Switch off' : 'Switch on'
-      : selected?.type === 'chalk' ? 'Mark floor' : selected?.type === 'scissors' ? 'Snip' : selected?.type === 'extinguisher' ? 'Spray' : selected?.type === 'snack' ? 'Eat' : recharges ? 'Recharge camera' : 'Use';
+      : selected?.type === 'chalk' ? 'Mark floor' : selected?.type === 'scissors' ? 'Snip' : selected?.type === 'extinguisher' ? 'Spray' : selected?.type === 'flamingo' ? 'Stab' : selected?.type === 'snack' ? 'Eat' : recharges ? 'Recharge camera' : 'Use';
     text(useLabel, label);
     // F prefers the mounted light; Q always acts on this inspected item.
     text(useKey, selected?.type === 'torch' && !snapshot.mountedTorch ? 'F' : 'Q');

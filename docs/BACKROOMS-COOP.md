@@ -3,6 +3,8 @@
 Working branch: `codex/backrooms-coop-full-game`, merging `blockrooms-live`
 through `eadfb5d`. Full-content coverage and remaining differences:
 [BACKROOMS-COOP-COVERAGE.md](BACKROOMS-COOP-COVERAGE.md).
+Other ways for several people to play, on the long-term roadmap (race, one plays the building, the
+hostage, death match): [BACKROOMS-MODES-ROADMAP.md](BACKROOMS-MODES-ROADMAP.md).
 Private alpha: hosted separately on Railway; use the owner's private host
 bookmark. Deployment addresses and host credentials stay in local records.
 This merge is for review; publishing the branch does not redeploy Railway.

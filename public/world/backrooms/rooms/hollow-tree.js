@@ -9,13 +9,18 @@
 // ductwork, and a grey steel filing cabinet wedged in its bark!
 //
 // Surrounded by a dense claustrophobic grove of gnarled pines, birches, mossy
-// boulders, and a silent Barn Owl (`sadOwlVox`) watching from a stump, its
-// glowing amber heartwood archway spirals visitors down to the next floor.
+// boulders, and a silent Barn Owl (`sadOwlVox`) watching from a stump.
+//
+// The way down is not offered. The archway is dark and the hollow inside it
+// is only a hollow: nothing glows, nothing asks to be pressed. In its side wall,
+// out of sight of the archway, low down under a root, a crack in the heartwood goes in
+// further than the trunk is deep, and you only fit if you crouch to it. It
+// takes you down, and the drop down costs a heart. (The owl watches you go in.)
 
 import { goesDown } from '../seam.js';
 import {
   forestRoom, woodlandLight, placeVox, placeVoxStack, trailSign, forestMural,
-  stumpVox, campLanternVox, plenumBreach, ensureForestDetail,
+  stumpVox, plenumBreach, ensureForestDetail,
 } from '../forest.js';
 import { thicket } from '../forest-thicket.js';
 import { buildBlindRingMaze, addMistVeils } from '../forest-maze.js';
@@ -43,9 +48,8 @@ export function build(c) {
   }
 
   // Full per-vertex AO (`~46k` tris) gives deep shadowed bark flutes & glowing sap interior!
-  placeVox(c, `forest:ancient:bole:${tallVox}`, ancientHollowTreeVox(tallVox), cx, cz, {
+  placeVox(c, `forest:ancient:bole:${tallVox}:dark`, ancientHollowTreeVox(tallVox, false), cx, cz, {
     scale: boleScale,
-    bloom: 1,   // (the lit mouth is what the room is seen by)
   });
   c.blot(cx, cz, 4.6, 4.6, { rgb: [0.04, 0.03, 0.02], a: 0.62 });
 
@@ -60,21 +64,25 @@ export function build(c) {
   c.reserve(cx, cz, 2.55);
   c.reserve(cx, cz + 2.1, 1.45);
 
-  // Dynamic Bank-3 warm amber heartwood light radiating out of the hollow portal
-  c.light(cx, 1.05, cz, '#ff9d3b', 1.08, { bank: 3, k: 1.7, far: 7.2 });
+  // (No light inside the trunk. It used to glow amber out of the archway, with a light of its own, and offered the
+  // way down from the middle of the room: the owner found it at once and was dropped a floor for pressing E. A way
+  // down should be found. docs/AUDIT-LOG.md, 19 Nov)
+  c.blot(cx - 0.3, cz, 1.6, 2.0, { rgb: [0.01, 0.01, 0.008], a: 0.7 });
 
   // ---- Themed Way Down (`goesDown` + `c.env.hold` + `c.env.descend`) --------
-  const entryX = cx, entryZ = cz + 1.55;
-  const chuteW = c.toWorld(cx, cz);
+  // The crack in the side of the hollow (`-X`, under the root, out of sight of the archway): reached by going in
+  // through the dark archway and turning, and only offered to someone crouched at it (C), facing it, close.
+  const entryX = cx - 0.72, entryZ = cz;
+  const chuteW = c.toWorld(cx - 0.6, cz);
   const SINK_TIME = 2.45;
-  let sliding = 0;
+  let sliding = 0, low = false;
 
   c.use({
     x: entryX,
     z: entryZ,
-    r: 1.95,
-    label: 'step into hollow trunk',
-    when: () => !sliding,
+    r: 0.75,
+    label: 'squeeze into the crack',
+    when: () => !sliding && low,
     use: () => {
       if (goesDown(c.level.exit.way) && c.env.hold && c.env.descend) {
         c.env.play?.('creak', chuteW.x, chuteW.z, 10);
@@ -83,6 +91,7 @@ export function build(c) {
         c.env.hold(true);
         sliding = 0.001;
       } else {
+        // (not a floor that goes down: the crack stops an arm's length in)
         c.env.play?.('knock', chuteW.x, chuteW.z, 8);
         c.env.play?.('creak', chuteW.x, chuteW.z, 7);
       }
@@ -96,6 +105,7 @@ export function build(c) {
   c.reserve(owlX, owlZ, 0.7);
 
   c.tick((dt, _t, me) => {
+    low = !!(me.inside && me.world?.crouching);
     if (me.inside && !sliding) {
       owl.rotation.y = Math.atan2(me.x - owlX, me.z - owlZ);
     }
@@ -113,17 +123,19 @@ export function build(c) {
     c.env.interfere?.(0.28 + 0.65 * k);
     if (sliding >= SINK_TIME) {
       sliding = SINK_TIME + 1;
+      c.env.hold(false);
+      // (the drop down costs a heart. If it was the last one, that is the end of the visit, and there is no floor below)
+      const hit = c.hurt(1);
+      if (hit.dead) { sliding = 0; if (me.world) me.world.sinkTo = 0; return; }
       if (!c.env.descend({ x: chuteW.x, z: chuteW.z })) {
         sliding = 0;
       }
-      c.env.hold(false);
     }
   });
 
   // Foreground camp lantern, owl's stump, mushroom ring & nurse log (all full AO!)
   const voxEntries = [
     { key: 'forest:hollow:stump', make: stumpVox(5), x: owlX, y: 0, z: owlZ, rot: 0.6, scale: 0.03 },
-    { key: 'forest:hollow:lantern', make: campLanternVox(), x: cx + 1.35, y: 0, z: cz + 1.85, scale: 0.028 },
     { key: 'forest:under:mushrooms', make: mushroomRingVox(), x: cx + 2.05, y: 0, z: cz + 1.35, rot: -0.5, scale: 0.03 },
     { key: 'forest:under:log', make: fallenNurseLogVox(), x: cx - 2.65, y: 0, z: cz - 1.95, rot: 0.75, scale: 0.03 },
   ];

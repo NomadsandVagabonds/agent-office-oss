@@ -399,7 +399,7 @@ export const MORE_DECK = [
   { id: 'garage-row', name: 'The Lock-ups', landmark: 'the room that is all garage doors', w: [11, 13], d: [9, 11], h: [2.9, 3.3],
     ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
     module: './rooms/garage-row.js', stash: (r) => [r.W / 2 - 1.3, r.D / 2 - 1.3, r.W / 2 - 0.65, r.D / 2 - 0.65],
-    roll: (R) => ({ nums: Array.from({ length: 8 }, () => R.pick([1, 2, 3, 4, 4, 7, 11, 12, 12, 40, 404])), empty: R.some([0, 1, 2, 3, 4, 5, 6, 7], 3) }) },
+    roll: (R) => { const nums = Array.from({ length: 8 }, () => R.pick([1, 2, 3, 4, 4, 7, 11, 12, 12, 40, 404])), empty = R.some([0, 1, 2, 3, 4, 5, 6, 7], 3), bays = R.shuffle(['store', 'store', 'store', 'car', 'living', 'picture', 'wall', 'wall', 'picture', 'car']).slice(0, 8); return { nums, empty, bays, items: R.some([0, 1, 2, 3, 4, 5, 6, 7], 3), through: R.chance(0.6) }; } },
   // A lemonade stand, going down, and the child who keeps it. She has a glass for you.
   { id: 'lemonade', name: 'The Stand', landmark: 'the lemonade stand that is going down', w: [9, 11], d: [8, 10], h: [2.9, 3.6],
     ports: ['left', 'right'], weight: 1.2, lights: 'normal', themes: { suburb: 1, '*': 0 },

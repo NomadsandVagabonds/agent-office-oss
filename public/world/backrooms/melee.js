@@ -53,3 +53,26 @@ export function strikeSnip(me, candidates = [], los = () => true) {
   }
   return { ok: false, reason: 'no-snip-target' };
 }
+
+/** The lawn flamingo's stakes (the owner: "~2 damage"): a jab of the scissors' reach, that lands twice. */
+export const STAB = Object.freeze({ hits: 2 });
+
+/**
+ * A stab with the flamingo: the nearest thing in front a jab could reach takes STAB.hits jabs, through its own snip()
+ * (each of the cast does what a jab does to it, twice: a medium one is finished, a boss is not). → { ok, target,
+ * candidate: what it went into (for where the flamingo is left), killed } or { ok: false }.
+ */
+export function strikeStab(me, candidates = [], los = () => true) {
+  for (const c of rankSnipTargets(me, candidates, los)) {
+    let first; try { first = c.snip(); } catch { first = null; }
+    if (!(first === true || first?.ok === true)) continue;
+    let killed = !!first?.killed;
+    for (let i = 1; i < STAB.hits && !killed; i++) {
+      let more; try { more = c.snip(); } catch { more = null; }
+      if (!(more === true || more?.ok === true)) break;
+      killed = !!more?.killed;
+    }
+    return { ok: true, target: first?.target || c.id || 'entity', candidate: c, killed };
+  }
+  return { ok: false, reason: 'no-snip-target' };
+}

@@ -13,6 +13,7 @@ import { Batch, lin, WHITE } from '../kit.js';
 import { card } from '../bits.js';
 import { makeCutout } from '../cutout.js';
 import { COVER, layout, fresh, press, step, open } from './cover/rule.js';
+import { clip, previewing } from '../clipping.js';
 
 const mmss = (t) => `0:${String(Math.max(0, Math.floor(t))).padStart(2, '0')}`;
 
@@ -46,6 +47,14 @@ export function build(c) {
     for (const y of [0.55, 1.1, 1.65]) f.box(Math.min(far, far + s * 0.3), y, cup.z0 + 0.04, Math.max(far, far + s * 0.3), y + 0.03, cup.z1 - 0.3, steel);
     f.box(cup.x0, 2.05, zs - 0.09, cup.x1, H, zs + 0.09, lin('#6c7278'));                                              // the box it rolls up into
     for (const x of [cup.x0 + 0.03, cup.x1 - 0.09]) f.box(x, 0, zs - 0.04, x + 0.06, 2.05, zs + 0.04, steel);        // its guides
+  }
+  // (preview, &preview=clip: a filing cabinet coming down out of the ceiling upside down in front of the shutter, its
+  // drawers to the room, the box that was on top of it hanging under it. Above anybody's head: nothing of it is solid.
+  // Fixed choices, nothing rolled; moved back a tile at a time from any ceiling light it would go through)
+  if (previewing(c, 'clip')) {
+    let z = zs + 0.42;
+    for (let k = 0; k < 6 && c.room.panels.some((q) => Math.abs(q.x - L.mouth.x) < 0.58 && Math.abs(q.z - z) < 0.92); k++) z += 0.3;
+    clip(c, 'cabinet', L.mouth.x, z, { flip: true, y: H + 0.48 });
   }
   const slats = new Batch();
   for (let i = 0; i < 16; i++) slats.box(cup.x0 + 0.09, i * 0.13, zs - 0.015, cup.x1 - 0.09, i * 0.13 + 0.115, zs + 0.015, i % 2 ? lin('#9aa0a6') : lin('#868c92'));

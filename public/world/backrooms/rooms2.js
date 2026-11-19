@@ -8,6 +8,7 @@ import { TILE } from './gen.js';
 import { P, clamp, framed, card, doorLeaf, doorFrame, wetSign } from './bits.js';
 import { MORE2 } from './rooms3.js';
 import { vendingGear } from './vending-machine.js';
+import { clip, previewing } from './clipping.js';
 
 /** A pool, full to the brim with stress balls (or packing peanuts, or shredded paper). You can wade in. */
 function stressPool(c) {
@@ -335,6 +336,13 @@ function phone(c) {
   if (lit) { px = lit.x; pz = lit.z + 0.2; }
   c.reserve(px, pz, 0.8);
   const body = new Batch(true);
+  // (preview, &preview=clip: the desk it was on has gone down into the carpet to its top, and its chair to the seat.
+  // Fixed choices, nothing rolled: square to the room, under the phone, which sits on the desk's top)
+  const sunk = previewing(c, 'clip') ? 0.02 : 0;
+  if (sunk) {
+    clip(c, 'desk', px, pz, { y: sunk - 0.65 });
+    clip(c, 'chair', px, pz - 0.75, { y: sunk - 0.36, o: { color: '#4d5a78' } });
+  }
   c.place(kit.model('phone' + p.color, () => {
     const v = new Vox(), col = M(p.color, 0), dark = M('#26262c', 0), key = M('#e8e2d0', 0);
     v.rbox(-7, 0, -6, 7, 3, 6, 1, col, 'xz'); v.box(-7, 3, -6, 7, 4, 2, col); v.box(-7, 4, -6, 7, 5, -1, col); v.box(-7, 5, -6, 7, 6, -3, col);
@@ -343,7 +351,7 @@ function phone(c) {
     v.rbox(-9, 8, -5, 9, 10, -3, 1, col, 'xyz'); v.rbox(-9, 6, -6, -5, 9, -2, 1, col, 'xyz'); v.rbox(5, 6, -6, 9, 9, -2, 1, col, 'xyz');      // the handset
     v.set(5, 3, 4, glow('#ff3a2a'));
     return v;
-  }), px, pz, { batch: body, rot: R.range(-0.6, 0.6), scale: 1.35, solid: false, shadow: 0.45 });
+  }), px, pz, { batch: body, rot: R.range(-0.6, 0.6), scale: 1.35, solid: false, shadow: 0.45, ...(sunk ? { y: sunk } : {}) });
   const set = c.dynamic(body, { pivot: [px, 0, pz] });
   // the cord, across the carpet to the nearest wall
   const w = [[-W / 2, pz, 'left'], [W / 2, pz, 'right'], [px, -D / 2, 'back']].sort((a, b) => Math.hypot(a[0] - px, a[1] - pz) - Math.hypot(b[0] - px, b[1] - pz))[0];
