@@ -7,7 +7,7 @@ import { DECK, ARCHETYPES, STASH } from './gen.js';
 import { MORE_DECK } from './deck2.js';
 
 /** flag → the id of its room. */
-const WAITING = { mound: 'carpet-mound', intray: 'in-tray', chair: 'giant-chair', blinds: 'blinds' };
+const WAITING = { mound: 'carpet-mound', intray: 'in-tray', chair: 'giant-chair', blinds: 'blinds', lowpoint: 'low-point' };
 
 /** Put the rooms these flags ask for into the deck (once). → the ids added. */
 export function enlist(preview) {
