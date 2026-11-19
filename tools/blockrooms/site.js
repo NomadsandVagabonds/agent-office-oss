@@ -199,6 +199,7 @@ async function run() {
       const result = await enterBackrooms(office, {
         name: playerName, seed, onArchive: () => window.open(new URL('./archive', location.href), '_blank', 'noopener'),
         archive: { href: './archive' }, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: doctored ? undefined : sign,
+        onFloorCleared: doctored ? undefined : theme => archive.clearFloor(theme, visitOwner).catch(console.error),
         look: playerLook, perk: who.perk,
         difficulty: mine ? cleanDifficulty(mine.difficulty, 'training-wheels') : undefined,
         home: { label: 'Return to homepage' }, anew: { label: 'Go back in' }, where, ...dev,

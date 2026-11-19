@@ -63,6 +63,12 @@ check('guest access, OTP verification and private revision-checked archives on t
   assert.equal(second.user.id,a.user.id);
   assert.deepEqual((await (await f.post('read',{owner:a.user.id},second.cookies)).json()).document,input.document);
   assert.equal((await (await f.post('save',input,second.cookies)).json()).accepted,false);
+  const stamped={...input.document,clearances:['forest','waterpark']};
+  assert.equal((await (await f.post('save',{...input,revision:1,document:stamped},a.cookies)).json()).accepted,true);
+  const legacy=await (await f.post('save',{...input,revision:2},second.cookies)).json();
+  assert.equal(legacy.accepted,true);
+  assert.deepEqual(legacy.document.clearances,stamped.clearances);
+  assert.deepEqual((await (await f.post('read',{owner:a.user.id},second.cookies)).json()).document,stamped);
   const other=await f.login('other@example.invalid');
   for (const cookie of [other.cookies,'']) assert.equal((await f.post('save',input,cookie)).status,401);
   assert.equal((await f.post('read',{owner:a.user.id},other.cookies)).status,401);

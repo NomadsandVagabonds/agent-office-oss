@@ -35,7 +35,7 @@ test('the site is two whole pages with everything they ask for beside them, and 
   }
   assert.ok(page.includes('<script type="module" src="./site.js"></script>') && home.includes('<script type="module" src="./home.js"></script>'));
   assert.ok(!files.some((f) => /^(data|public|server|test|tools|docs|hooks|api)\//.test(f) || /knowledge|transcripts|\.env/.test(f)), 'something of the office\'s own is in the site');
-  const expected = /^(index\.html|privacy\.html|play\.html|site\.js|home\.js|home\.css|art\.js|archive(?:-page|-client|-worker|-storage|-cloud|-preview)?\.js|archive\.css|archive\.html|account-config\.json|robots\.txt|og\.jpg|muzak\.mp3|shots\/[\w-]+\.jpg|(world|core|vendor)\/.+)$/;
+  const expected = /^(index\.html|privacy\.html|play\.html|site\.js|home\.js|home\.css|art\.js|archive(?:-page|-client|-worker|-storage|-cloud|-preview|-card|-stamps|-charts)?\.js|archive\.css|archive\.html|account-config\.json|robots\.txt|og\.jpg|muzak\.mp3|shots\/[\w-]+\.jpg|(world|core|vendor)\/.+)$/;
   assert.ok(files.every((f) => expected.test(f)), `a file nobody expected: ${files.find((f) => !expected.test(f))}`);
 
   assert.ok(home.includes('href="./privacy"') && fs.readFileSync(path.join(out, 'archive.html'), 'utf8').includes('href="./privacy"'));
