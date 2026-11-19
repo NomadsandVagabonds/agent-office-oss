@@ -1163,7 +1163,9 @@ function sculptExtinguisher(s) {
   // the gauge: a steel bezel on the head, its face up and back, green to the right of the dial and red to the left
   s.push(); s.translate(...EXTINGUISHER_PARTS.gauge); s.rotateZ(EXTINGUISHER_PARTS.gaugeTilt[1] * DEG); s.rotateX(EXTINGUISHER_PARTS.gaugeTilt[0] * DEG);
   s.cyl(EXTINGUISHER_PARTS.gaugeR, EXTINGUISHER_PARTS.gaugeR, -0.22, 0.12, 18, steel, { bevel: 0.07, topColor: '#f1efe6',
-    colorFn: (th, y, r, j, i, col) => (y > 0.1 && r > 0.35 && r < 0.7 ? (Math.cos(th) > 0.2 && Math.sin(th) < 0.6 ? '#3f9a4a' : Math.cos(th) < -0.4 ? '#c23a2c' : col) : col) });
+    // (a thin arc round the edge, green to the right and a short red to the left, and nothing else on the face: blotches
+    // and a needle on a pale disc read as a little face, and a face is the one thing a gauge must not have)
+    colorFn: (th, y, r, j, i, col) => (y > 0.1 && r > 0.5 && r < 0.66 ? (Math.cos(th) > 0.25 && Math.sin(th) < 0.5 ? '#3f9a4a' : Math.cos(th) < -0.6 ? '#c23a2c' : col) : col) });
   s.pop();
   // the hose: a short black loop from the head to a clip on the side (it is the horn that sprays; this only holds)
   s.tube([[-0.9, 13.6, -0.6], [-2.1, 12.6, -1.2], [-3.05, 10.2, -0.9], [-3.05, 7.2, -0.4]], 0.32, 8, rubber, { ao: 0.92 });
