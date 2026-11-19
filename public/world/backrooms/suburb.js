@@ -447,21 +447,26 @@ function neighbour(c) {
  * frame): what the opener, when there is one, is to call. Behind it: the wall, mostly; or a garage, as a picture of one.
  */
 export function roller(c, side, at, opt = {}) {
-  const w = 2.4, h = 2.1, p = c.wallAt(side, at, 0.03), U = p.U, a = [p.x - U[0] * w / 2, p.z - U[2] * w / 2], b = [p.x + U[0] * w / 2, p.z + U[2] * w / 2], q = c.wallAt(side, at, 0.012);
+  // opt: garage (a picture of an empty one behind it) · depth (how far out from the wall it stands: a lock-up's front) · w · solid
+  // (while it is shut) · auto (it opens for whoever comes near: the one in front of a way through) · onOpen
+  const w = opt.w || 2.4, h = 2.1, dp = opt.depth || 0, p = c.wallAt(side, at, dp + 0.03), U = p.U, a = [p.x - U[0] * w / 2, p.z - U[2] * w / 2], b = [p.x + U[0] * w / 2, p.z + U[2] * w / 2], q = c.wallAt(side, at, dp + 0.012);
   const tex = c.kit.tex.custom('suburb:roller', 16, 16, (g) => { P(g, '#b9bbb8', 0, 0, 16, 16); for (let y = 0; y < 16; y += 4) { P(g, '#8f918e', 0, y + 3, 16, 1); P(g, '#d2d4d0', 0, y, 16, 1); } });
   if (opt.garage) sheet(c.flat, [q.x - U[0] * w / 2, 0.11, q.z - U[2] * w / 2], [q.x + U[0] * w / 2, 0.11, q.z + U[2] * w / 2], [q.x + U[0] * w / 2, h, q.z + U[2] * w / 2], [q.x - U[0] * w / 2, h, q.z - U[2] * w / 2], 2, 2, null, [0.03, 0.03, 0.035]);
-  const leaf = new Batch(); upright(leaf, a[0], a[1], b[0], b[1], 0.02, h, (s, t) => [s * 6, t * 5.25]);
+  const leaf = new Batch(); upright(leaf, a[0], a[1], b[0], b[1], 0.02, h, (s, t) => [s * 6 * w / 2.4, t * 5.25]); if (dp) upright(leaf, b[0], b[1], a[0], a[1], 0.02, h, (s, t) => [s * 6 * w / 2.4, t * 5.25]);   // (out in the room, it has a back)
   const door = c.dynamic(leaf, { pivot: [p.x, 0, p.z], map: tex });
-  { const f0 = c.wallAt(side, at, 0.004); c.model('suburb:rollerframe', rollerFrameVox, f0.x, f0.z, { rot: f0.rot, solid: false, shadow: false }); }
-  c.keepWall(side, at - w / 2 - 0.2, at + w / 2 + 0.2);
+  { const f0 = c.wallAt(side, at, dp + 0.004); c.model('suburb:rollerframe', rollerFrameVox, f0.x, f0.z, { rot: f0.rot, scale: [w / 2.4, 1, 1], solid: false, shadow: false }); }
+  if (!dp) c.keepWall(side, at - w / 2 - 0.2, at + w / 2 + 0.2);
+  const shut = opt.solid ? (() => { const s0 = c.wallAt(side, at - w / 2, dp - 0.05), s1 = c.wallAt(side, at + w / 2, dp + 0.08); return c.solid(Math.min(s0.x, s1.x), Math.min(s0.z, s1.z), Math.max(s0.x, s1.x), Math.max(s0.z, s1.z), { tall: true }); })() : null;
   let up = 0, going = false;
-  c.tick((dt) => { if (!going || up >= 1) return; up = Math.min(1, up + dt * 0.7); door.position.y = up * (h - 0.25); door.scale.y = 1 - up * 0.86; });
-  const f = c.wallAt(side, at, 0.6), it = { x: f.x, z: f.z, open() { going = true; const w2 = c.toWorld(f.x, f.z); c.env.play?.('shuffle', w2.x, w2.z, 9); } };
+  const f = c.wallAt(side, at, dp + 0.6), it = { x: f.x, z: f.z, side, at, depth: dp, open() { if (going) return; going = true; const w2 = c.toWorld(f.x, f.z); c.env.play?.('shuffle', w2.x, w2.z, 9); opt.onOpen?.(); } };
+  c.tick((dt, t, me) => {
+    if (opt.auto && !going && me.inside && Math.hypot(me.x - f.x, me.z - f.z) < 2.5) it.open();
+    if (!going || up >= 1) return; up = Math.min(1, up + dt * 0.7); door.position.y = up * (h - 0.25); door.scale.y = 1 - up * 0.86; if (shut && up > 0.55) shut.on = false; });
   (c.rt.rollers ||= []).push(it);
   // with the remote in the hand, E from anywhere near opens the nearest one that is still shut (the item is the lead's: `opener`)
   const has = () => c.env.inventory?.held?.()?.type === 'opener';
   c.use({ x: f.x, z: f.z, r: 12, cone: -1, label: 'open the door', when: () => has() && !going, use: () => it.open() });
-  c.use({ x: f.x, z: f.z, r: 1.4, label: 'try the door', when: () => !going && !has(), use: () => { const w2 = c.toWorld(f.x, f.z); c.env.play?.('shuffle', w2.x, w2.z, 6); door.position.y = 0.03; setTimeout(() => { if (!going) door.position.y = 0; }, 120); } });
+  c.use({ x: f.x, z: f.z, r: 1.4, label: 'try the door', when: () => !going && !has(), use: () => { if (opt.auto) return it.open(); const w2 = c.toWorld(f.x, f.z); c.env.play?.('shuffle', w2.x, w2.z, 6); door.position.y = 0.03; setTimeout(() => { if (!going) door.position.y = 0; }, 120); } });
   return it;
 }
 
