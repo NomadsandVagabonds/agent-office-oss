@@ -345,3 +345,94 @@ more with their studio lamps under them (the one real cost). Its own few rooms: 
 out and the next is lit, so you walk from pool to pool; a meeting room where the table is a light box and the chairs
 face it; the dummies' kind of floor (themes.js `mall`) is the nearest relation, and the dummies would stand over the
 panels.
+
+## Carpet Allowance
+
+The owner (art direction, `docs/art-direction/yellow-office/README.md` in 0fff96d, "Carpet Allowance", and the render
+`docs/reference/blockrooms/render-carpet-mound.webp`): a wall-to-wall carpet cut several metres too long, the excess
+risen in one great pleat with exposed backing and an opening tall enough to duck into. Two routes: the short blind one
+under the fold, or round its edge. A normal stapler at the entrance for scale; three bright snags at the skirting where
+the carpet pulled free of the wall.
+
+**Status: a preview, and a new room.** Its id is `carpet-mound`. Its line is in `MORE_DECK` with `on: false`, so it is
+out of the deck as a retired room is. Only `&preview=mound` on the dev page puts it in the deck, for that page
+(`preview-deck.js`), and `&room=carpet-mound` then deals it where you land.
+Without the flag the deck, `edition()`, the plan and every floor are exactly as before (below).
+
+### What was built
+
+- `rooms/carpet-mound.js`, the builder; `rooms/carpet-mound/layout.js`, pure: where everything is, the fold's shape, and
+  its deck line `CARPET_MOUND` (w 8–10, d 10–12, ports left/right/back, weight 1, lights normal, a stash in the far corner
+  of the walk round). To deal it like any other room later: drop `on: false` from its line at the end of `MORE_DECK`
+  (`deck2.js`) and its line in `preview-deck.js`. Nothing else changes.
+- **The fold** runs down the room's length, to one side (`side`, rolled), so that from the doorway you look into its mouth
+  at a slant and the walk round is on the open side (2.4 m or more; 1.2 m on its own side). Its profile is a broad
+  sagging crown, steep flanks and a flare at the foot: 1.62 m at the top, 3.8 m across, the crown sagging a few cm
+  halfway along. Two smooth sheets of the carpet's own texture (outside, and the backing underneath, 10 cm apart square
+  to the sheet), each vertex with its real normal, so the flanks turn from the tubes; the worn runner stripe the carpet
+  was laid with runs over it and on across the flat carpet to both walls.
+- **The cut edges** are the sheet's section in 5 cm voxel cubes of tan backing, chequered in two tans, each one or two
+  steps proud of the cut: the outline steps, and a loose cube or two lie on the floor in front.
+- **Under it** the floor is bare screed where the carpet came up, darker the further in (baked into its vertex shade,
+  since Classic has no shadows), with a ragged tan lip where the floor's carpet tore. You can stand up under the crown
+  (1.5 m: the visitor's eye is 1.1); towards its sides `rt.headY` lowers the headroom and the automatic duck takes you
+  under. Solid (two tall colliders) only where the gap is lower than 0.7 m, out to the foot: what stops you is the
+  sheet. The floor stays flat, so nothing snags the visitor or the cast.
+- The stapler (beige, a little scuffed, a pale skid behind it), three snags of cream thread at the skirting with a dark
+  line where the carpet came off its gripper, soft blots along the fold's feet and at its mouths, a stain on the tiles.
+- It reads nothing seeded but its roll and what the shell reads (its sockets). Shared files: `deck2.js` (+4 lines: an
+  import and the line), `dev/backrooms.js` (+3 lines), and the new `preview-deck.js`, which takes the line from
+  `MORE_DECK` for any `&preview=` flag that names a room waiting there.
+
+### Try it
+
+```
+/world/dev/backrooms.html?seed=7&room=carpet-mound&preview=mound&pursuer=0&mute=1&x=2.4&z=4.6&yaw=0.55&pitch=-0.05
+/world/dev/backrooms.html?seed=7&room=carpet-mound&preview=mound&pursuer=0&mute=1&x=-1.8&z=3&yaw=0
+/world/dev/backrooms.html?seed=7&room=carpet-mound&preview=mound&pursuer=0&mute=1&x=2.2&z=-4.3&yaw=2.6
+```
+
+Add `&graphics=high` for High. Pictures in `docs/previews/`: `carpet-mound-door-classic` (from beside the way in, as the
+render), `carpet-mound-under-classic` (the blind route, looking through), `carpet-mound-round-classic` (from the walk
+round, back towards the way in), `carpet-mound-door-high`.
+
+### Proof
+
+- `test/backrooms-carpet-mound.test.mjs`: without the flag the room is in no deck, floor or visit (and the plan is dealt
+  as before); its deck line has no special weighting; the gap is tall enough to stand under the crown and wider than a
+  body where a body gets through, the sheet keeps its thickness, the cut edge is on the voxel step; on six seeds at
+  Classic and Medium every doorway is reached, the way under is reached from mouth to mouth, no body can stand inside
+  the carpet, under its sides the visitor ducks, the walk round is clear its whole length, the light budget holds; built
+  twice it is the same to the byte; nothing in the game imports the preview.
+- A whole-floor comparison against fcf4338 (its `public/` and `core/` exported with `git archive`), without the flag: 16
+  seeds (7, 21, 3, 11, 40, q, zz, 102, 1, 2, 5, 9, 13, 77, abc, 999), each at Classic and at Medium (contact, bounce,
+  shadows, door light, fixtures): every room's meshes (every attribute and index), colliders, lamps, ambient, level and
+  light map, the deck, and `edition()`: the same to the byte.
+
+### What our lighting can't reach
+
+The render's fold sits in the room because of light we do not have. Its underside and the floor beneath go dark by
+occlusion, deepest in the middle and softest at the mouths, and the floor round its feet takes a broad soft contact
+shadow; the flank away from the tubes is darker than the near one by bounce and occlusion, and the crown is lit by the
+whole ceiling, not by one lamp. Here, at Classic, that darkness is painted: the underside and the screed carry a baked
+"how far in" shade, the feet a blot. It reads (the gap is dark, the far mouth bright), but the outside of the fold is lit
+as evenly as the floor, and the cut edge's cubes have no shadow between them. At Medium and High the tube shadows would
+help most, but the fold is not in the light map: its pieces are not boxes standing on the floor, which is what
+`shadowmap.js` takes as occluders, so the floor beside it is lit as if it were not there. Giving the bake the fold's
+flanks as a few occluder columns is a CPU change (world.js / shadowmap.js), not a renderer one.
+
+**WebGPU** (`claude/steam-webgpu`, phase 1 behind `?gpu=webgpu`): no, not by itself. Phase 1 is a port: the room surface,
+the voxel material and the camcorder at Classic, the same baked look on node materials, and Medium's light maps since.
+The things that would close the gap (screen-space AO under and round the fold, more shadow casters, soft contact) are
+the Ultra tier, R-3, which that plan writes on top of the port, once, in TSL. That is where this room would get there.
+
+### Not done, and what looked wrong
+
+- Seed 7 looked at closely (fold to the left); the other side is covered by the tests only. Low, Medium, `vhs`, a phone:
+  not looked at.
+- From the doorway the stapler is small (it is a normal stapler at the chibi scale): it sells the scale close to, less so
+  from where the render stands, whose camera is higher than our eye.
+- The cut edge is coarser than the render's (5 cm cubes against its finer ones) and only at the two mouths; the long
+  edges of the fold flare into the carpet without a seam.
+- The cast walk under it as the visitor does, but nothing ducks them: a tall one's head goes through the backing.
+- With loot, a coin could land in the stash corner only; nothing of the room is in the way of it.

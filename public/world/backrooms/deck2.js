@@ -34,6 +34,7 @@ import { PLAN as HALL_PLAN, partsOf as hallParts } from './rooms/unsure-hall/rul
 import { homeStash } from './rooms/show-home/layout.js';
 import { plenumStash } from './rooms/drop-plenum/rule.js';
 import { cubicleGridStash } from './rooms/cubicle-grid/rule.js';
+import { CARPET_MOUND } from './rooms/carpet-mound/layout.js';
 import { fill } from './words.js';
 /** A shop of the shopping centre's place for a coin: half a metre square from (x, z), in the room's frame. A stash of several of
  * these, apart, keeps one of them more than 1.25 m from every doorway however the doorways fall (gen.js coinFits). */
@@ -934,6 +935,9 @@ export const MORE_DECK = [
     stash: (r) => [r.W / 2 - 1.3, r.D / 2 - 1.3, r.W / 2 - 0.6, r.D / 2 - 0.6],
     roll: (R) => ({ seed: R.int(1, 9999) }),
   },
+  // Carpet Allowance: a preview, not dealt yet. Only the dev page's &preview=mound puts it in the deck (preview-deck.js;
+  // docs/BLOCKROOMS-PREVIEWS.md). To deal it like any other room, drop `on: false` and its line in preview-deck.js
+  { ...CARPET_MOUND, on: false },
 ];
 
 // Where a tape goes in an entry that does not say so itself: (room, ±1) → [x0, z0, x1, z1] in the room's own frame.
