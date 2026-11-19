@@ -73,7 +73,10 @@ test('the conductor: the flamingo goes about with what it went into, and falls o
   p.update(dt);
   const boss = p.snipTargets().find((t) => t.member === 'mother');
   const hit = strikeStab(me, [boss]); assert.ok(hit.ok && !hit.killed, 'a boss lives through it');
-  const f = prop(); assert.equal(p.impale(hit.candidate, f, me), true); assert.ok(added.includes(f));
+  const f = prop(); assert.equal(p.impale(hit.candidate, f, me, { hidden: STAB.handover }), true); assert.ok(added.includes(f));
+  assert.equal(f.visible, false, 'hidden while the hand still has its own');
+  for (let t = 0; t < STAB.handover + dt; t += dt) p.update(dt);
+  assert.equal(f.visible, true, 'and shown once the hand lets go');
   const it = p.of('mother'); it.x = 2; it.z = -3; p.update(dt);
   assert.ok(Math.hypot(f.position.x - 2, f.position.z - -3) < 0.5, 'carried on it as it goes'); assert.ok(f.position.y > 1, 'about where it went in');
   // finished: it falls, lies a while, and is gone
