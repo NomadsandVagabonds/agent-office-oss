@@ -90,8 +90,8 @@ function address(seed) {
 const HOME = './';
 const ME = 'blockrooms:me';
 /**
- * Who this visitor signed in as (or, if they did not, a made-up name), their message, look, perk, and whether they sign
- * the book: all set on the front page. It is who they are in the building too (the card, and the rooms that know a
+ * Who this visitor signed in as (or, if they did not, a made-up name), their message, look and perk: all set on the
+ * front page. It is who they are in the building too (the card, and the rooms that know a
  * visitor's name): a building is the same whoever walks it, so a tape handed on is still the same tape.
  */
 function me() {
@@ -104,7 +104,6 @@ function me() {
     name: cleanName(was.name) || spare,
     spare,
     message: cleanMessage(was.message) || '',
-    sign: was.sign !== false,
     customLook,
     look: customLook ? patch : {},
     perk: cleanPerk(was.perk),
@@ -119,14 +118,17 @@ async function tell(body) {
     return await res.json();
   } catch { return null; }
 }
-/** The line the card gets once the book has answered: that this visit is in it, and where. */
+/**
+ * The line the card gets for a visit that got out: the guestbook, which is asked on the front page, after the fact
+ * (home.js `#sign`). Nobody signs before they have been in, and nobody's name goes in the book without their asking:
+ * the report waits in this browser until they sign or say no.
+ */
+const UNSIGNED = 'blockrooms:unsigned';
 async function sign(card, report) {
   if (card.replay || card.reason !== 'exit' || !scoreEligible(report)) return null;
-  const who = { ...me(), name: office.walk?.me?.name || me().name };
-  if (!who.sign) return null;
-  const answer = await tell({ do: 'sign', name: who.name, message: who.message, run: report });
-  if (answer?.ok) return { icon: 'fresh', label: `High scores: ${who.name}`, value: answer.place ? `№ ${answer.place}` : 'signed', href: './#book' };
-  return answer?.why === 'signed' ? { icon: 'fresh', label: 'High scores', value: 'signed', href: './#book' } : null;
+  const name = office.walk?.me?.name || me().name;
+  try { localStorage.setItem(UNSIGNED, JSON.stringify({ name, run: report, score: Number(card.score ?? report?.score) || 0, at: Date.now() })); } catch { return null; }
+  return { icon: 'fresh', label: 'Guestbook', value: 'Sign it', href: './#sign' };
 }
 
 async function run() {

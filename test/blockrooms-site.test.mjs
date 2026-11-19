@@ -174,8 +174,13 @@ test('the page\'s own script: a building nobody has had, a tape from the address
   // the measuring tape is only under ?debug, and only imported when asked for
   assert.match(src, /const bench = !!dev\.debug && q\.get\('bench'\) === '1';\n\s*const perf = dev\.debug && \(bench \|\| q\.get\('perf'\) === '1'\) \? \(await import\('\.\/world\/dev\/perf\.js'\)\)/);
   assert.ok(!/^import[^\n]*perf/m.test(src), 'the measuring tape is not imported up front');
-  assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit' \|\| !scoreEligible\(report\)\) return null;\n  const who = \{ \.\.\.me\(\), name: office\.walk\?\.me\?\.name \|\| me\(\)\.name \};\n  if \(!who\.sign\) return null;/);
-  assert.match(src, /tell\(\{ do: 'sign', name: who\.name, message: who\.message, run: report \}\)/);
+  // (only a visit that got out may sign, and it is asked after, on the front page: the owner, 18 Nov. The card keeps the
+  // report in this browser and points there; nothing is signed from the card itself)
+  assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit' \|\| !scoreEligible\(report\)\) return null;\n  const name = office\.walk\?\.me\?\.name \|\| me\(\)\.name;\n  try \{ localStorage\.setItem\(UNSIGNED,/);
+  assert.ok(!/do: 'sign'/.test(src), 'the card signs the book by itself');
+  const front = fs.readFileSync(new URL('../tools/blockrooms/home.js', import.meta.url), 'utf8');
+  assert.match(front, /const UNSIGNED = 'blockrooms:unsigned';/);
+  assert.match(src, /const UNSIGNED = 'blockrooms:unsigned';/);
   // a building asked to be other than its seed has it (?debug, ?room=) is for looking at: walking out of one is not a score
   assert.match(src, /const doctored = !!dev\.debug \|\| !!room;\n      const result = await enterBackrooms\(office, \{\n[\s\S]*?also: doctored \? undefined : sign,/, 'the book is not signed for a doctored building');
   assert.ok(!/also: sign,/.test(src));

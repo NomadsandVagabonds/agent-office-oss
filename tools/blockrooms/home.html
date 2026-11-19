@@ -100,22 +100,28 @@
     </table>
   </div>
 
-  <div class="signin">
-    <label for="difficulty">DIFFICULTY:</label>
-    <select id="difficulty" aria-describedby="difficulty-note"></select>
+  <div class="signin diff-box">
+    <p class="diff-label" id="difficulty-label">DIFFICULTY</p>
+    <div class="diffs" id="difficulty" role="radiogroup" aria-labelledby="difficulty-label" aria-describedby="difficulty-note"></div>
     <p id="difficulty-note"></p>
   </div>
   <p class="center"><a href="./archive">Your tape archive &amp; character</a> · optional cloud saves</p>
+  <form class="signin gotout" id="sign" hidden>
+    <p class="gotout-head"><span class="new">YOU GOT OUT!</span> Sign the guestbook</p>
+    <p class="gotout-what" id="sign-what"></p>
+    <label for="message">MESSAGE:</label>
+    <input id="message" type="text" maxlength="60" size="34" autocomplete="off" placeholder="optional">
+    <span class="says" id="message-says"></span>
+    <p class="gotout-btns"><button type="submit" id="sign-it">Sign it</button> <button type="button" id="sign-skip">No thanks</button></p>
+    <p class="says" id="sign-says" aria-live="polite"></p>
+  </form>
   <form class="signin" id="signin">
     <label for="name">NAME:</label>
     <input id="name" type="text" maxlength="16" size="17" autocomplete="nickname" autocapitalize="words" spellcheck="false">
     <button type="button" id="reroll">Random</button>
     <span class="says" id="name-says"></span><br>
-    <label for="message">MESSAGE:</label>
-    <input id="message" type="text" maxlength="60" size="34" autocomplete="off">
-    <span class="says" id="message-says"></span>
     <div class="passstrip">
-      <canvas class="pass-mug" id="pass-mug" width="56" height="56" aria-hidden="true"></canvas>
+      <span class="pass-pic"><canvas class="pass-mug" id="pass-mug" width="56" height="56" aria-hidden="true"></canvas><canvas class="pass-3d" id="pass-3d" width="112" height="112" hidden aria-hidden="true"></canvas></span>
       <div class="pass-meta">
         <span class="pass-kicker" id="pass-mode">RANDOM VISITOR</span>
         <strong class="pass-kit" id="pass-kit">STD-00 &middot; Standard Issue (0/1 PT)</strong>
@@ -123,10 +129,126 @@
       </div>
       <div class="pass-btns">
         <button type="button" id="quick-roll" title="Roll a random character look">Shuffle</button>
-        <button type="button" class="studio-open" id="open-creator">Customize</button>
+        <button type="button" class="studio-open" id="open-creator" aria-expanded="false" aria-controls="creator">Customize &#9662;</button>
       </div>
     </div>
-    <label class="opt"><input type="checkbox" id="optin" checked> Sign the guestbook when I get out</label>
+    <div class="window studio-win inline" id="creator" hidden role="region" aria-labelledby="creator-title">
+  <div class="bar"><span id="creator-title">PERSONNEL PASS &amp; KIT STUDIO &mdash; FORM HR-98</span><button type="button" class="x" id="creator-close" aria-label="Close">&times;</button></div>
+  <div class="body studio-body">
+    <div class="studio-grid">
+      <div class="studio-stage-col">
+        <div class="stage-frame">
+          <div class="stage-viewport" id="stage-viewport">
+            <canvas id="char-stage" width="192" height="216" role="img" aria-label="Character preview"></canvas>
+            <canvas id="char-stage-3d" width="384" height="432" hidden aria-hidden="true"></canvas>
+            <span class="stage-hint" id="stage-hint">3D &middot; drag to spin</span>
+          </div>
+          <div class="stage-tools">
+            <button type="button" id="view-turn">Spin: Auto</button>
+            <button type="button" id="view-zoom">View: Full</button>
+          </div>
+          <div class="chip-row" id="pose-bar" role="group" aria-label="Preview pose"></div>
+          <div class="chip-row" id="backdrop-bar" role="group" aria-label="Floor wallpaper"></div>
+        </div>
+        <div class="id-card">
+          <span class="lanyard-hole" aria-hidden="true"></span>
+          <div class="id-top"><span>BLOCKROOMS CORP &middot; VISITOR PASS</span><b id="card-code">STD-00</b></div>
+          <div class="id-name-row">
+            <label for="creator-name">PASS NAME:</label>
+            <input id="creator-name" type="text" maxlength="16" autocomplete="nickname" autocapitalize="words" spellcheck="false">
+            <button type="button" id="creator-reroll" title="Roll random employee name">Roll</button>
+          </div>
+          <div class="id-vitals" id="card-vitals"></div>
+          <canvas class="id-barcode" id="card-barcode" width="180" height="18" aria-hidden="true"></canvas>
+        </div>
+      </div>
+
+      <div class="studio-work-col">
+        <div class="studio-tabs" role="tablist" aria-label="Pass customization">
+          <button type="button" class="stab on" id="tab-look" role="tab" aria-selected="true" aria-controls="panel-look">1. APPEARANCE</button>
+          <button type="button" class="stab" id="tab-perks" role="tab" aria-selected="false" aria-controls="panel-perks">2. DEPARTMENT KIT (0/1 PT)</button>
+        </div>
+
+        <div class="studio-panel" id="panel-look" role="tabpanel" aria-labelledby="tab-look">
+          <div class="fun-bar">
+            <div class="fun-top">
+              <button type="button" class="dice-btn" id="roll-look">Roll Unpinned</button>
+              <button type="button" id="unpin-all">Unpin All</button>
+              <label class="wild-opt"><input type="checkbox" id="wild-colors"> Wild 90s Dyes</label>
+              <span class="mode-pill" id="look-mode-pill">Random each visit</span>
+              <button type="button" id="use-random-look">Use Random</button>
+            </div>
+            <div class="preset-strip" id="preset-bar" role="group" aria-label="Character archetypes"></div>
+          </div>
+
+          <div class="trait-block">
+            <div class="trait-head"><span>PRESENTATION <small id="gender-note"></small></span><button type="button" class="pin-btn" data-pin="gender">PIN</button></div>
+            <div class="gender-grid" id="pick-gender"></div>
+          </div>
+
+          <div class="trait-block">
+            <div class="trait-head"><span>SPECIES</span><button type="button" class="pin-btn" data-pin="species">PIN</button></div>
+            <div class="thumb-grid" id="pick-species"></div>
+          </div>
+
+          <div class="trait-block">
+            <div class="trait-head"><span>COMPLEXION / FUR</span><button type="button" class="pin-btn" data-pin="skin">PIN</button></div>
+            <div class="swatch-row"><div class="swatches" id="pick-skin"></div><label class="hex-pick" title="Custom hex color">HEX <input type="color" id="color-skin" value="#e6b184"></label></div>
+          </div>
+
+          <div class="trait-block">
+            <div class="trait-head"><span>HAIR / HEADWEAR <small id="hair-note"></small></span><button type="button" class="pin-btn" data-pin="hair">PIN</button></div>
+            <div class="thumb-grid" id="pick-hair"></div>
+          </div>
+
+          <div class="trait-block">
+            <div class="trait-head"><span>HAIR DYE</span><button type="button" class="pin-btn" data-pin="hairColor">PIN</button></div>
+            <div class="swatch-row"><div class="swatches" id="pick-hair-color"></div><label class="hex-pick" title="Custom hair dye">HEX <input type="color" id="color-hair" value="#4a2f1a"></label></div>
+          </div>
+
+          <div class="trait-block">
+            <div class="trait-head"><span>FACIAL FEATURES</span><button type="button" class="pin-btn" data-pin="facial">PIN</button></div>
+            <div class="thumb-grid" id="pick-facial"></div>
+          </div>
+
+          <div class="trait-block">
+            <div class="trait-head"><span>WARDROBE</span><button type="button" class="pin-btn" data-pin="outfit">PIN</button></div>
+            <div class="thumb-grid" id="pick-outfit"></div>
+          </div>
+
+          <div class="trait-block">
+            <div class="trait-head"><span>WARDROBE COLOR</span><button type="button" class="pin-btn" data-pin="outfitColor">PIN</button></div>
+            <div class="swatch-row"><div class="swatches" id="pick-outfit-color"></div><label class="hex-pick" title="Custom outfit color">HEX <input type="color" id="color-outfit" value="#3f7f9a"></label></div>
+          </div>
+
+          <div class="trait-block">
+            <div class="trait-head"><span>HEAD / EYE ACCESSORY</span><button type="button" class="pin-btn" data-pin="accessory">PIN</button></div>
+            <div class="thumb-grid" id="pick-accessory"></div>
+          </div>
+        </div>
+
+        <div class="studio-panel" id="panel-perks" role="tabpanel" aria-labelledby="tab-perks" hidden>
+          <div class="perk-head">
+            <div class="perk-meter-row">
+              <b class="perk-meter" id="perk-meter">0 / 1 PERK POINT ASSIGNED</b>
+              <button type="button" id="perk-clear">Equip Standard Issue (0 PT)</button>
+            </div>
+            <p class="perk-rule">Looks are purely cosmetic. Each Department Kit costs 1 point and trades an upside for a downside &mdash; Standard Issue has zero downsides.</p>
+          </div>
+          <div class="perk-grid" id="perk-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="studio-foot">
+      <button type="button" id="creator-reset">Reset</button>
+      <div class="studio-foot-right">
+        <button type="button" id="creator-done">Save &amp; Close</button>
+        <button type="button" class="go-btn" id="creator-enter">Save &amp; ENTER &gt;&gt;</button>
+      </div>
+    </div>
+  </div>
+</div>
   </form>
 
   <table class="counter" aria-label="Visitor counter">
@@ -513,124 +635,6 @@
       <button type="button" data-hr="Cannot cancel.">Cancel</button>
     </p>
     <p class="center small" id="hr-says">&nbsp;</p>
-  </div>
-</div>
-
-<div class="window studio-win" id="creator" hidden role="dialog" aria-modal="true" aria-labelledby="creator-title">
-  <div class="bar"><span id="creator-title">PERSONNEL PASS &amp; KIT STUDIO &mdash; FORM HR-98</span><button type="button" class="x" id="creator-close" aria-label="Close">&times;</button></div>
-  <div class="body studio-body">
-    <div class="studio-grid">
-      <div class="studio-stage-col">
-        <div class="stage-frame">
-          <div class="stage-viewport" id="stage-viewport">
-            <canvas id="char-stage" width="192" height="216" role="img" aria-label="Character preview"></canvas>
-            <canvas id="char-stage-3d" width="384" height="432" hidden aria-hidden="true"></canvas>
-            <span class="stage-hint" id="stage-hint">3D &middot; drag to spin</span>
-          </div>
-          <div class="stage-tools">
-            <button type="button" id="view-turn">Spin: Auto</button>
-            <button type="button" id="view-zoom">View: Full</button>
-          </div>
-          <div class="chip-row" id="pose-bar" role="group" aria-label="Preview pose"></div>
-          <div class="chip-row" id="backdrop-bar" role="group" aria-label="Floor wallpaper"></div>
-        </div>
-        <div class="id-card">
-          <span class="lanyard-hole" aria-hidden="true"></span>
-          <div class="id-top"><span>BLOCKROOMS CORP &middot; VISITOR PASS</span><b id="card-code">STD-00</b></div>
-          <div class="id-name-row">
-            <label for="creator-name">PASS NAME:</label>
-            <input id="creator-name" type="text" maxlength="16" autocomplete="nickname" autocapitalize="words" spellcheck="false">
-            <button type="button" id="creator-reroll" title="Roll random employee name">Roll</button>
-          </div>
-          <div class="id-vitals" id="card-vitals"></div>
-          <canvas class="id-barcode" id="card-barcode" width="180" height="18" aria-hidden="true"></canvas>
-        </div>
-      </div>
-
-      <div class="studio-work-col">
-        <div class="studio-tabs" role="tablist" aria-label="Pass customization">
-          <button type="button" class="stab on" id="tab-look" role="tab" aria-selected="true" aria-controls="panel-look">1. APPEARANCE</button>
-          <button type="button" class="stab" id="tab-perks" role="tab" aria-selected="false" aria-controls="panel-perks">2. DEPARTMENT KIT (0/1 PT)</button>
-        </div>
-
-        <div class="studio-panel" id="panel-look" role="tabpanel" aria-labelledby="tab-look">
-          <div class="fun-bar">
-            <div class="fun-top">
-              <button type="button" class="dice-btn" id="roll-look">Roll Unpinned</button>
-              <button type="button" id="unpin-all">Unpin All</button>
-              <label class="wild-opt"><input type="checkbox" id="wild-colors"> Wild 90s Dyes</label>
-              <span class="mode-pill" id="look-mode-pill">Random each visit</span>
-              <button type="button" id="use-random-look">Use Random</button>
-            </div>
-            <div class="preset-strip" id="preset-bar" role="group" aria-label="Character archetypes"></div>
-          </div>
-
-          <div class="trait-block">
-            <div class="trait-head"><span>PRESENTATION <small id="gender-note"></small></span><button type="button" class="pin-btn" data-pin="gender">PIN</button></div>
-            <div class="gender-grid" id="pick-gender"></div>
-          </div>
-
-          <div class="trait-block">
-            <div class="trait-head"><span>SPECIES</span><button type="button" class="pin-btn" data-pin="species">PIN</button></div>
-            <div class="thumb-grid" id="pick-species"></div>
-          </div>
-
-          <div class="trait-block">
-            <div class="trait-head"><span>COMPLEXION / FUR</span><button type="button" class="pin-btn" data-pin="skin">PIN</button></div>
-            <div class="swatch-row"><div class="swatches" id="pick-skin"></div><label class="hex-pick" title="Custom hex color">HEX <input type="color" id="color-skin" value="#e6b184"></label></div>
-          </div>
-
-          <div class="trait-block">
-            <div class="trait-head"><span>HAIR / HEADWEAR <small id="hair-note"></small></span><button type="button" class="pin-btn" data-pin="hair">PIN</button></div>
-            <div class="thumb-grid" id="pick-hair"></div>
-          </div>
-
-          <div class="trait-block">
-            <div class="trait-head"><span>HAIR DYE</span><button type="button" class="pin-btn" data-pin="hairColor">PIN</button></div>
-            <div class="swatch-row"><div class="swatches" id="pick-hair-color"></div><label class="hex-pick" title="Custom hair dye">HEX <input type="color" id="color-hair" value="#4a2f1a"></label></div>
-          </div>
-
-          <div class="trait-block">
-            <div class="trait-head"><span>FACIAL FEATURES</span><button type="button" class="pin-btn" data-pin="facial">PIN</button></div>
-            <div class="thumb-grid" id="pick-facial"></div>
-          </div>
-
-          <div class="trait-block">
-            <div class="trait-head"><span>WARDROBE</span><button type="button" class="pin-btn" data-pin="outfit">PIN</button></div>
-            <div class="thumb-grid" id="pick-outfit"></div>
-          </div>
-
-          <div class="trait-block">
-            <div class="trait-head"><span>WARDROBE COLOR</span><button type="button" class="pin-btn" data-pin="outfitColor">PIN</button></div>
-            <div class="swatch-row"><div class="swatches" id="pick-outfit-color"></div><label class="hex-pick" title="Custom outfit color">HEX <input type="color" id="color-outfit" value="#3f7f9a"></label></div>
-          </div>
-
-          <div class="trait-block">
-            <div class="trait-head"><span>HEAD / EYE ACCESSORY</span><button type="button" class="pin-btn" data-pin="accessory">PIN</button></div>
-            <div class="thumb-grid" id="pick-accessory"></div>
-          </div>
-        </div>
-
-        <div class="studio-panel" id="panel-perks" role="tabpanel" aria-labelledby="tab-perks" hidden>
-          <div class="perk-head">
-            <div class="perk-meter-row">
-              <b class="perk-meter" id="perk-meter">0 / 1 PERK POINT ASSIGNED</b>
-              <button type="button" id="perk-clear">Equip Standard Issue (0 PT)</button>
-            </div>
-            <p class="perk-rule">Looks are purely cosmetic. Each Department Kit costs 1 point and trades an upside for a downside &mdash; Standard Issue has zero downsides.</p>
-          </div>
-          <div class="perk-grid" id="perk-grid"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="studio-foot">
-      <button type="button" id="creator-reset">Reset</button>
-      <div class="studio-foot-right">
-        <button type="button" id="creator-done">Save &amp; Close</button>
-        <button type="button" class="go-btn" id="creator-enter">Save &amp; ENTER &gt;&gt;</button>
-      </div>
-    </div>
   </div>
 </div>
 

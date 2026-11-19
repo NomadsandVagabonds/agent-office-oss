@@ -540,3 +540,27 @@ kbd { display: inline-block; min-width: 1.6em; text-align: center; font: 700 12p
 /* The extra difficulty column stays readable on narrow screens. */
 .score-panel { min-width: 0; }
 .score-scroll { max-width: 100%; overflow-x: auto; }
+
+/* ---- the start, made plainer (18 Nov): difficulty as a row of buttons, the studio in place, the guestbook after ---- */
+.diff-box { text-align: center; }
+.diff-label { margin: 0 0 6px; font: 700 13px Arial, Helvetica, sans-serif; letter-spacing: .04em; }
+.diffs { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.signin .diffs button.diff { margin: 0; min-width: 7.5em; padding: 7px 12px 6px; font: 700 14px Arial, Helvetica, sans-serif; background: #c0c0c0; border: 3px outset #ffffff; line-height: 1.15; }
+.signin .diffs button.diff small { display: block; font: 400 10px Arial, Helvetica, sans-serif; color: #14245e; }
+.signin .diffs button.diff.on { border-style: inset; background: #ffff00; color: #000080; }
+.signin .diffs button.diff:focus-visible { outline: 1px dotted #000; outline-offset: 2px; }
+@media (pointer: coarse) { .signin .diffs button.diff { min-height: 44px; } }
+.pass-pic { flex: 0 0 auto; display: inline-block; line-height: 0; }
+.pass-3d { width: 64px; height: 80px; border: 2px inset #777b80; background: #e9dfb8; }
+/* the studio, opened under the pass rather than over the page */
+.signin:has(#creator:not([hidden])) { max-width: 940px; }
+.window.inline { position: static; transform: none; left: auto; top: auto; z-index: auto; width: 100%; max-height: none; margin: 8px 0 4px; box-sizing: border-box; text-align: left; font-weight: 400; }
+.window.studio-win.inline { max-height: none; overflow: visible; }
+.window.studio-win.inline .studio-body { overflow: visible; }
+.window.studio-win.inline .studio-panel { max-height: 60vh; }
+/* signing the book, asked only of somebody who has got out */
+.signin.gotout { background: #ffffcc; border-color: #ffff99; text-align: center; }
+.gotout-head { margin: 0 0 4px; font: 700 16px Arial, Helvetica, sans-serif; }
+.gotout-what { margin: 0 0 8px; font: 400 14px var(--serif); }
+.gotout-btns { margin: 8px 0 2px; }
+.signin.gotout button#sign-it { background: linear-gradient(#ffd83a, #c9a628); border-color: #fff6a8; font-weight: 700; }

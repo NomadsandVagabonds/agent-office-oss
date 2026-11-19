@@ -12,7 +12,6 @@
 //   the rest   a figure that moves when it is off screen, a page that gets
 //              longer at the bottom, a wall that gives when it is held
 import { DIFFICULTIES, cleanDifficulty, difficultyOf, difficultyPerk } from './core/difficulty.mjs';
-import { retroSelect } from './world/ui/retro-select.js';
 import { mount, drawLogo, voidTile } from './art.js';
 import { rollName, cleanName, cleanMessage, cleanEntry } from './core/book.mjs';
 import { GENDER, SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, SKIN, HAIR_COLORS, OUTFIT_COLORS, hashId, humanGenderDefaults, resolveLook, sanitizeLookPatch } from './core/look.mjs';
@@ -30,19 +29,36 @@ const day = (at) => new Date(at).toLocaleDateString('en-GB', { day: 'numeric', m
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* until the page closes */ } } };
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const PLAY = './play';
-const difficultyField = $('difficulty');
-for (const d of DIFFICULTIES) {
-  const option = el('option', '', `${d.label}${d.id === 'easy' ? ' (recommended)' : ''}`);
-  option.value = d.id; difficultyField.append(option);
-}
-difficultyField.value = cleanDifficulty(store.get('office.backrooms')?.difficulty);
+// Difficulty: a row of buttons under the door, one pressed (a radio group: arrow keys move it, as a select did)
+const difficultyRow = $('difficulty'), difficultyButtons = [];
+const difficultyField = { value: cleanDifficulty(store.get('office.backrooms')?.difficulty) };
 const difficultyNote = () => { $('difficulty-note').textContent = difficultyOf(difficultyField.value).note; };
-difficultyField.addEventListener('change', () => {
-  store.set('office.backrooms', { ...store.get('office.backrooms'), difficulty: cleanDifficulty(difficultyField.value) });
-  difficultyNote(); refreshPassSummary(); syncStudioUI();
+function chooseDifficulty(id, focus = false) {
+  difficultyField.value = cleanDifficulty(id);
+  for (const b of difficultyButtons) {
+    const on = b.dataset.id === difficultyField.value;
+    b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; b.classList.toggle('on', on);
+    if (on && focus) b.focus();
+  }
+  store.set('office.backrooms', { ...store.get('office.backrooms'), difficulty: difficultyField.value });
+  difficultyNote();
+}
+for (const d of DIFFICULTIES) {
+  const b = el('button', 'diff', d.label);
+  if (d.id === 'easy') b.append(el('small', '', 'recommended'));
+  Object.assign(b, { type: 'button' }); b.dataset.id = d.id; b.setAttribute('role', 'radio');
+  b.addEventListener('click', () => { chooseDifficulty(d.id); refreshPassSummary(); syncStudioUI(); });
+  difficultyButtons.push(b); difficultyRow.append(b);
+}
+difficultyRow.addEventListener('keydown', (e) => {
+  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+  if (!step) return;
+  e.preventDefault();
+  const at = difficultyButtons.findIndex((b) => b.dataset.id === difficultyField.value);
+  chooseDifficulty(difficultyButtons[(at + step + difficultyButtons.length) % difficultyButtons.length].dataset.id, true);
+  refreshPassSummary(); syncStudioUI();
 });
-difficultyNote();
-retroSelect(difficultyField, 'Difficulty');
+chooseDifficulty(difficultyField.value);
 
 // a link to a tape from before there was a front page goes straight to the level
 if (new URLSearchParams(location.search).has('tape')) location.replace(PLAY + location.search);
@@ -64,7 +80,6 @@ let me = (() => {
     typed: !!typed && typed !== spare,
     spare,
     message: cleanMessage(was.message) || '',
-    sign: was.sign !== false,
     customLook,
     look: customLook ? patch : {},
     perk: cleanPerk(was.perk),
@@ -74,7 +89,6 @@ const keep = () => store.set(ME, {
   name: me.name,
   spare: me.spare,
   message: me.message,
-  sign: me.sign,
   customLook: me.customLook,
   look: me.customLook ? me.look : {},
   perk: me.perk,
@@ -207,6 +221,54 @@ function drawPassMug() {
   blitPixCrop(ctx, pix, { sx: 2, sy: 20, sw: 28, sh: 28, dx: 0, dy: 2, scale: 2 });
 }
 
+// The pass's picture: the real figure, turning, as the studio shows it (the same rig, its own small renderer), drawn only
+// while the pass is on screen. Until it has loaded, or on a machine that cannot, the flat portrait stands in.
+const pass3d = { d: null, failed: false, loading: false, raf: 0, key: '', seen: true, last: 0 };
+function startPass3D() {
+  if (pass3d.d || pass3d.failed || pass3d.loading) return;
+  pass3d.loading = true;
+  Promise.all([import('three'), import('./world/avatar/rig.js'), import('./world/vox/material.js')]).then(([THREE, { Avatar }, { voxelUniforms }]) => {
+    const canvas = $('pass-3d');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(canvas.clientWidth || 64, canvas.clientHeight || 80, false);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(THEMES_3D.paper.bg);
+    const camera = new THREE.PerspectiveCamera(30, (canvas.clientWidth || 64) / (canvas.clientHeight || 80), 0.1, 20);
+    camera.position.set(0, 0.86, 3.1); camera.lookAt(0, 0.78, 0);
+    const sun = new THREE.DirectionalLight('#fff3d1', 2.3); sun.position.set(1.8, 3.2, 2.5);
+    scene.add(new THREE.HemisphereLight('#fff9e2', '#786b42', 1.6), sun, sun.target);
+    const turn = new THREE.Group(); scene.add(turn);
+    pass3d.d = { THREE, Avatar, voxelUniforms, renderer, scene, camera, turn, avatar: null };
+    canvas.hidden = false; $('pass-mug').hidden = true;
+    if (typeof IntersectionObserver === 'function') new IntersectionObserver((seen) => { pass3d.seen = seen.some((x) => x.isIntersecting); if (pass3d.seen) passTick(performance.now()); }).observe(canvas);
+    syncPass3D(); passTick(performance.now());
+  }).catch(() => { pass3d.failed = true; $('pass-3d').hidden = true; $('pass-mug').hidden = false; });
+}
+function syncPass3D() {
+  const d = pass3d.d; if (!d) return;
+  const look = activeLook(), key = JSON.stringify(look);
+  if (key === pass3d.key && d.avatar) return;
+  if (d.avatar) { d.turn.remove(d.avatar.root); d.avatar.dispose(); }
+  d.avatar = new d.Avatar(look, { seed: `visitor:${me.name}` });
+  d.avatar.setPose?.('stand');
+  d.turn.add(d.avatar.root); pass3d.key = key;
+}
+function passTick(ms) {
+  const d = pass3d.d; pass3d.raf = 0;
+  if (!d) return;
+  const dt = Math.min(0.1, Math.max(0, (ms - (pass3d.last || ms)) / 1000)); pass3d.last = ms;
+  d.voxelUniforms.uTime.value = ms / 1000;
+  if (!calm) d.turn.rotation.y += dt * 0.9;
+  d.avatar?.update(calm ? 0 : dt, calm);
+  d.renderer.render(d.scene, d.camera);
+  if (!calm && pass3d.seen && !document.hidden) pass3d.raf = requestAnimationFrame(passTick);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && pass3d.d && !pass3d.raf) pass3d.raf = requestAnimationFrame(passTick); });
+// (after the page has drawn, so that nothing on the front page waits for it)
+(window.requestIdleCallback || ((f) => setTimeout(f, 600)))(() => startPass3D());
+
 function drawBarcode(seedText) {
   const canvas = $('card-barcode');
   const ctx = canvas.getContext('2d');
@@ -231,6 +293,7 @@ function refreshPassSummary() {
   $('pass-kit').textContent = `${p.code} · ${p.name} (${p.cost}/1 PT)`;
   $('pass-stats').textContent = `${p.maxHealth} ♥ · ${p.pockets} POCKETS · ${clock(p.cameraStart)} TAPE`;
   drawPassMug();
+  syncPass3D(); if (pass3d.d && calm) passTick(performance.now());
 }
 
 const nameBox = $('name'), nameSays = $('name-says'), messageBox = $('message'), messageSays = $('message-says');
@@ -274,9 +337,49 @@ messageBox.value = me.message;
 messageBox.addEventListener('input', () => said(messageBox.value));
 $('reroll').addEventListener('click', rollVisitorName);
 $('creator-reroll').addEventListener('click', rollVisitorName);
-$('optin').checked = me.sign;
-$('optin').addEventListener('change', (e) => { me = { ...me, sign: e.target.checked }; keep(); });
 $('signin').addEventListener('submit', async (e) => { e.preventDefault(); await archive.edit({ name: me.name }); location.href = PLAY; });
+
+/* ---- the guestbook, once somebody has got out ------------------------------------------------------ */
+// Nobody is asked to sign before they have been in. A visit that gets out leaves its report here (site.js, at the
+// score card); the next time this page is open it asks, once, with the name they went in under. Signing is what puts
+// a name in the high scores, so it stays a choice made after the fact. (No time limit: the book checks the visit
+// itself, core/book.mjs.)
+const UNSIGNED = 'blockrooms:unsigned';
+const signForm = $('sign'), signSays = $('sign-says');
+function pendingSign() {
+  const p = store.get(UNSIGNED);
+  return p && p.run && typeof p.run === 'object' ? p : null;
+}
+function showSign() {
+  const p = pendingSign();
+  signForm.hidden = !p;
+  if (!p) return;
+  const score = Number(p.score) || 0;
+  $('sign-what').textContent = `${cleanName(p.name) || me.name}${score ? ` · ${num(score)} points` : ''}`;
+}
+signForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const p = pendingSign(); if (!p) { showSign(); return; }
+  const message = cleanMessage(messageBox.value);
+  if (message === null) { said(messageBox.value); return; }
+  const go = $('sign-it'); go.disabled = true; signSays.textContent = 'Signing…';
+  let answer = null;
+  try {
+    const res = await fetch('./api/book', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ do: 'sign', name: cleanName(p.name) || me.name, message: message || '', run: p.run }) });
+    answer = await res.json();
+  } catch { answer = null; }
+  go.disabled = false;
+  if (answer?.ok || answer?.why === 'signed') {
+    store.set(UNSIGNED, null);
+    signSays.textContent = answer?.place ? `Signed. You are № ${answer.place}.` : 'Signed.';
+    setTimeout(() => { signForm.hidden = true; signSays.textContent = ''; }, 2600);
+    book();
+  } else if (answer?.text) signSays.textContent = answer.text;
+  else if (answer?.why === 'slow') signSays.textContent = 'Too quick. Try again in a minute.';
+  else signSays.textContent = 'The book is not answering. Try again later.';
+});
+$('sign-skip').addEventListener('click', () => { store.set(UNSIGNED, null); signForm.hidden = true; });
+showSign();
 
 /* ---- studio workbench (#creator) ------------------------------------------------------------------- */
 const THEMES_3D = {
@@ -891,11 +994,13 @@ function updateTurnButtonLabel() {
   $('view-turn').textContent = labels[studio.spinMode] || 'Spin: Auto';
 }
 
+// The studio opens in place, under the pass (an accordion, not a window over the page): Customize opens and closes it
 function openCreator(open) {
-  const win = $('creator');
+  const win = $('creator'), toggle = $('open-creator');
+  toggle.setAttribute('aria-expanded', String(open));
+  toggle.textContent = open ? 'Done \u25B4' : 'Customize \u25BE';
   if (open) {
     buildStudioOnce();
-    studio.returnFocus = document.activeElement;
     studio.open = true;
     studio.lastMs = performance.now();
     win.hidden = false;
@@ -903,22 +1008,22 @@ function openCreator(open) {
     applyBackdrop3D();
     syncStudioUI();
     ensureStage3D();
-    $('creator-close').focus();
+    try { win.scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' }); } catch { /* it is open; that will do */ }
     if (!studio.raf) studio.raf = requestAnimationFrame(stageTick);
   } else {
     studio.open = false;
     studio.dragging = false;
     if (studio.raf) { cancelAnimationFrame(studio.raf); studio.raf = 0; }
     win.hidden = true;
-    studio.returnFocus?.focus?.();
+    keep(); refreshPassSummary();
   }
 }
 
-$('open-creator').addEventListener('click', () => openCreator(true));
+$('open-creator').addEventListener('click', () => openCreator(!studio.open));
 $('creator-close').addEventListener('click', () => openCreator(false));
 $('creator-done').addEventListener('click', () => openCreator(false));
 $('creator-enter').addEventListener('click', () => { keep(); location.href = PLAY; });
-$('creator').addEventListener('keydown', (e) => { if (e.key === 'Escape') openCreator(false); });
+$('creator').addEventListener('keydown', (e) => { if (e.key === 'Escape') { openCreator(false); $('open-creator').focus(); } });
 $('tab-look').addEventListener('click', () => selectStudioTab('look'));
 $('tab-perks').addEventListener('click', () => selectStudioTab('perks'));
 {
