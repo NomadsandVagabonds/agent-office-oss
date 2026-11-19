@@ -11,6 +11,13 @@ How to read it:
 - Where two departments meet, a **contract** (section 3) says what passes between them. Build to the
   contract, not to the other department's insides.
 
+**Dealt so far** (the lead, 19 Nov). The rest waits for the owner:
+
+| Department | What | Session | Branch |
+|---|---|---|---|
+| D1 · Platform and shell | prep only: the shell spike (P-1) and a prep note | a new session | `claude/steam-shell` |
+| D12 · The first floor | prep only, docs: the 40-room audit (FF-4), the first two minutes (FF-3), a hundred geometries (FF-2), a C9 proposal | builder | `claude/steam-first-floor` |
+
 Related plans:
 - [BACKROOMS-DAILY-PLAN.md](BACKROOMS-DAILY-PLAN.md): the daily tape.
 - [BACKROOMS-MODES-ROADMAP.md](BACKROOMS-MODES-ROADMAP.md): modes for several players.
