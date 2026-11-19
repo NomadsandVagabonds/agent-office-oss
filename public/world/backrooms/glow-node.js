@@ -28,11 +28,23 @@ let keyed = false;
 function keyByPass() {
   if (keyed) return;
   keyed = true;
-  const N = gpu.nodes;
+  const N = gpu.nodes, { mrt, vec4 } = N.TSL;
   for (const proto of new Set([N.Material.prototype, N.NodeMaterial.prototype])) {
     const base = proto.customProgramCacheKey;
     proto.customProgramCacheKey = function () { const k = base.call(this); return glowPass.on ? `${k}|glow-mrt` : k; };
   }
+  // three.js gives a material the pass's outputs only when it has no fragmentNode of its own. One that has one (a kit
+  // surface, water, the points, spray, the paper fire's spill, the forest's water and mist) gets them here: its colour,
+  // and what it gives the glow, its own (glowEmissive(builder), as kit-node.js says) or black that hides, or nothing
+  // where it is see-through and writes no depth, as glow.js's 'skip'
+  const proto = N.NodeMaterial.prototype, setupOutput = proto.setupOutput;
+  proto.setupOutput = function (builder, node) {
+    const out = setupOutput.call(this, builder, node);
+    if (this.fragmentNode === null || out?.isOutputStructNode || !builder?.renderer?.getMRT?.()?.has?.('emissive')) return out;
+    const own = this.glowEmissive?.(builder);
+    const emissive = own || (this.transparent && this.depthWrite === false ? vec4(0) : vec4(0, 0, 0, 1));
+    return mrt({ output: out, emissive });
+  };
 }
 
 /**

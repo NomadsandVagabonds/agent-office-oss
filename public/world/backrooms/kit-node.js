@@ -157,7 +157,7 @@ export function surfaceNode(spec) {
       }
       // (Medium, High: the scene pass also writes what shines, glow-node.js. glow.js's twin: a self-lit voxel gives its
       // light, × the texture, × the surface's own bloom; the rest is black and hides; the alpha is the mark. Made here,
-      // where its parts are, and handed to setupOutput below, which is where three.js takes a material's MRT)
+      // where its parts are, and handed over by glowEmissive below)
       if (builder?.renderer?.getMRT?.()?.has?.('emissive')) {
         let emitted = vec3(0), plainly = float(1);
         if (D.VOXEL) { const on = step(0.5, aSurf.y); emitted = vLit.mul(on); plainly = on.oneMinus(); }
@@ -169,15 +169,11 @@ export function surfaceNode(spec) {
     })();
   }
 
-  // (three.js takes a material's several outputs only from here, not from inside its fragment: the colour as always,
-  // and, while the glow's pass is drawn, what shines beside it; a room's replaced fragment gives black, which hides)
+  // (what it gives the glow while the glow's pass is drawn: glow-node.js puts it beside the colour; a room's replaced
+  // fragment gives black, which hides)
   let glowOut = null;
-  const setupOutput = m.setupOutput.bind(m);
-  m.setupOutput = (builder, node) => {
-    const out = setupOutput(builder, node);
-    if (!builder?.renderer?.getMRT?.()?.has?.('emissive')) return out;
-    return mrt({ output: out, emissive: Fn(() => glowOut ?? vec4(0, 0, 0, 1))() });
-  };
+  // (deferred: it is read when the output is built, after the fragment above has made it)
+  m.glowEmissive = () => Fn(() => glowOut ?? vec4(0, 0, 0, 1))();
 
   rebuild();
 

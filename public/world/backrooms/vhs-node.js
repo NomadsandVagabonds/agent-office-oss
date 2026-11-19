@@ -6,14 +6,16 @@
 //
 // The scene drawn larger than the tape (supersample: Medium, High) and brought down with vhs.js's tent is here too, and
 // so is the glow from what shines (glow.js, Medium and High: glow-node.js, from the scene pass's second picture).
+// Water (liquid.js, Medium and High) is liquid-node.js: one pass, the water reading three.js's copies of the picture.
 // Not here yet, and so not drawn under ?gpu=webgpu whatever the tier says: the tier's and the host's plain bloom (only
-// the office's Classic has it), and water (liquid.js).
+// the office's Classic has it).
 //
 // It takes three.js's WebGPU build from engine/gpu.js (the stage put it there), so nothing on the default path loads it.
 import { gpu } from '../engine/gpu.js';
 import { profile, internalSize } from './graphics.js';
 import { GLOW_BLOOM } from './glow.js';
 import { createGlowChain, sceneGlowMRT, glowPass } from './glow-node.js';
+import { createLiquidViewNode } from './liquid-node.js';
 
 const HAZE_LIGHT = 1.6;                                  // (vhs.js's)
 
@@ -61,6 +63,7 @@ export function createVhsNode(renderer, camera, opt = {}) {
   // (the glow: while a tier has it, the scene pass writes a second picture of what shines, and glow-node.js's chain
   // adds its bloom to the picture the signal reads)
   let glowOn = false, chain = null, glowMRT = null;
+  let liquids = null;                                    // (the water's view while a tier has water: liquid-node.js)
   const routed = () => supersampled || glowOn;
 
   // (three.js's quad has v = 0 at the top of the picture; the passes below count from the bottom, as vhs.js's GLSL does)
@@ -230,6 +233,9 @@ export function createVhsNode(renderer, camera, opt = {}) {
   function setProfile(p) {
     prof = p;
     u.uGrade.value = p.grade; u.uHaze.value = p.haze * hazeK;
+    if (p.water > 0 && !liquids) liquids = createLiquidViewNode();
+    else if (!(p.water > 0) && liquids) { liquids.release(scene); liquids = null; }
+    liquids?.setLevel(p.water);
     const depth = p.haze > 0, samples = samplesOf(p.msaa), glow = p.glow > 0;
     if (glow && !chain) { chain = createGlowChain(GLOW_BLOOM); glowMRT = sceneGlowMRT(); chain.resize(size.sw, size.sh); }
     else if (!glow && chain) { chain.dispose(); chain = null; glowMRT = null; }
@@ -258,7 +264,7 @@ export function createVhsNode(renderer, camera, opt = {}) {
     picture, layout, setLevel, setProfile, setGrade, uniforms: u, bloom: null,
     get level() { return level; },
     get glow() { return null; },
-    get liquids() { return null; },
+    get liquids() { return liquids; },
     get passes() { return []; },
     get profile() { return prof; },
     /** Which renderer draws this camcorder: the node one. */
@@ -268,9 +274,11 @@ export function createVhsNode(renderer, camera, opt = {}) {
     render(dt) {
       time += dt; u.uTime.value = time; u.uNear.value = camera.near; u.uFar.value = camera.far;
       copy(u, node); copy(s, screenNode);
+      liquids?.frame(scene, camera, time);
       renderer.setRenderTarget(sceneTarget);
       if (glowOn) { renderer.setMRT(glowMRT); glowPass.on = true; try { renderer.render(scene, camera); } finally { glowPass.on = false; renderer.setMRT(null); } }
       else renderer.render(scene, camera);
+      liquids?.after();
       if (supersampled) { renderer.setRenderTarget(downTarget); tentQuad.render(renderer); }
       else if (glowOn) { renderer.setRenderTarget(downTarget); copyQuad.render(renderer); }
       if (glowOn) chain.render(renderer, sceneTarget.textures[1], downTarget);
@@ -278,6 +286,7 @@ export function createVhsNode(renderer, camera, opt = {}) {
       renderer.setRenderTarget(null); screenQuad.render(renderer);
     },
     dispose() {
+      liquids?.release(scene); liquids = null;
       sceneTarget.dispose(); tapeTarget.dispose(); downTarget.dispose(); signal.dispose(); tentQuad.material.dispose(); copyQuad.material.dispose(); chain?.dispose(); screenQuad.material.dispose();
       renderer.toneMapping = output.toneMapping; renderer.outputColorSpace = output.colorSpace;
     },

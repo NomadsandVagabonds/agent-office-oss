@@ -108,6 +108,39 @@ the shell, on the three hardware classes.
 
 Still missing at Medium and High: the floor's sheen, flashlight shadows (High), and water.
 
+## One renderer (the owner's decision, 19 Nov)
+
+- The web moves to WebGPURenderer too, once it matches, so there is one code base, not two. The switch-over waits
+  until water is ported and checked.
+- The audience this must not lose: every browser without WebGPU (Firefox, Safari, older machines). For them,
+  WebGPURenderer's WebGL 2 backend has to give today's look at today's speed.
+  - **The look:** the shots here are already taken on that backend.
+  - **The speed is not known yet.** WebGPURenderer's WebGL 2 backend has more CPU work per draw than
+    WebGLRenderer, and BlockRooms has many draws.
+  - The gate for the switch-over is F-5: frame time, WebGL against WebGL 2-backend against WebGPU, on the three
+    hardware classes. It is measured on real GPUs, never in software.
+- Water and glow are redone on nodes, not translated (the owner: "we can both make big gains and make it more
+  efficient for water etc on the new system").
+  - Glow: the scene pass writes what shines (MRT); there is no second draw.
+  - Water: one pass; the water reads three.js's copies of the picture (`liquid-node.js`).
+
+## Water (Medium and High), redone
+
+- `liquid-node.js`, driven from `vhs-node.js`, does one pass. The water is drawn after everything opaque and reads
+  what is behind it from `viewportSharedTexture` and `viewportDepthTexture`. There is no copy pass, no layers moved
+  and no materials swapped for the draw.
+- Kept from liquid.js, number for number (liquid.rule.js): the ripple, the wake rings (the visitor's and a room's
+  `disturb`), refraction by depth, absorption in the sheet's own tint, scatter, caustics on the bed, the stirred light
+  in a fresh ring, the Fresnel flat tint, the contact line, and a ring's crest and trough.
+- Not yet: the wave pool's swell (flat for now), the underside from in the water (the room's sheet is drawn then),
+  and High's mirror (High shows the flat tint).
+- Seen: kiddie-lagoon at Medium against today's WebGL, on the WebGL 2 backend and on real WebGPU (software). The bed
+  through the water, the caustics, the tint and the contact lines round the floats match; the floats drift between
+  shots.
+- Glow: a material with a fragment of its own (water, points, spray, the paper fire, the forest's water and mist) gets
+  the glow's second output from `glow-node.js` (black that hides, or nothing where it is see-through), so Medium's
+  glow pass draws every material.
+
 ## What looks wrong under the flag
 
 Everything still unported falls back to plain surface / Classic behaviour:
