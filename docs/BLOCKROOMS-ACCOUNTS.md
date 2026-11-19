@@ -1,5 +1,7 @@
 # BlockRooms optional accounts — review sprint
 
+For the Cloudflare deployment, see [private profiles on Workers and D1](BLOCKROOMS-CLOUDFLARE-PROFILES.md). The Supabase instructions below describe the original optional provider.
+
 Branch: `codex/blockrooms-cloud-saves`, from Fable's `c9c3eab` on
 `claude/determined-maxwell-ayvlut`. Nothing has been installed in a hosted
 Supabase project or deployed to Vercel by this change.

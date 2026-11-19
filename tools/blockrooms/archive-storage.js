@@ -30,7 +30,10 @@ export function createArchiveStorage({ storage, locks, uuid = () => crypto.rando
       return { name, look: a.character?.value || resolveLook('lead:' + name, { accessory: 'crown' }) };
     },
     edit(patch, id = owner()) { return atomic(() => put(id, editArchive(doc(id), patch, device, now()))); },
-    merge(value, id = owner()) { return atomic(() => put(id, mergeArchive(doc(id), value))); },
+    merge(value, id = owner()) { return atomic(() => {
+      const before = doc(id), after = mergeArchive(before, value);
+      return JSON.stringify(before) === JSON.stringify(after) ? before : put(id, after);
+    }); },
     claim(userId) { return atomic(() => {
       const id = 'user:' + userId, g = guest();
       put(id, mergeArchive(doc(id), doc(g)));

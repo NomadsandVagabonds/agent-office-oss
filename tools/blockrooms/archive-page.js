@@ -31,10 +31,13 @@ function render(state) {
   $('signed-in').hidden = !state.user; $('sign-in').hidden = !!state.user;
   $('email-address').textContent = state.user?.email || '';
   $('sync').hidden = !state.user; $('sync').disabled = state.phase === 'syncing';
+  $('google').hidden = state.providers?.google === false;
+  $('email-form').hidden = state.providers?.email === false;
   $('google').disabled = !state.configured || !state.ready || sending;
   $('send-code').disabled = !state.configured || !state.ready || sending || Date.now() < cooldown;
   if (state.user) $('auth-status').textContent = 'Your archive is private. Public scores and guestbook entries are separate.';
   else if (state.ready && !state.configured) $('auth-status').textContent = 'Cloud saves are not connected in this build. Your local archive and character editor still work.';
+  else if (state.ready && oauthMessage) $('auth-status').textContent = oauthMessage;
   else if (state.ready && !codeEmail && !sending) $('auth-status').textContent = 'Signing in is optional.';
   const owner = archive.owner();
   if (owner !== lastOwner) { dirty = false; lastOwner = owner; }
@@ -51,9 +54,13 @@ function render(state) {
     $(key + '-list').replaceChildren(...(ids.length ? ids.map(id => node('li', pretty(id))) : [node('li', 'Nothing recorded yet.')]));
   }
 }
+const signInResult = new URL(location.href).searchParams.get('signin');
+let oauthMessage = signInResult === 'email' ? 'Please verify this address with an email code.' :
+  signInResult === 'failed' ? 'Google sign-in did not finish. Please try again.' : '';
+if (oauthMessage) history.replaceState(history.state, '', location.pathname);
 onArchive(render);
 async function action(fn) {
-  try { await fn(); } catch (error) { $('auth-status').textContent = error.message || 'Something went wrong. You can still play.'; $('auth-status').classList.add('error'); }
+  try { oauthMessage = ''; await fn(); } catch (error) { $('auth-status').textContent = error.message || 'Something went wrong. You can still play.'; $('auth-status').classList.add('error'); }
 }
 startAccounts({ force: true }).catch(error => { $('auth-status').textContent = error.message; });
 $('google').addEventListener('click', () => action(signInGoogle));
