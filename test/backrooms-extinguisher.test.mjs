@@ -187,3 +187,9 @@ test('the controller: a press sprays, spends the charge, doses what is in front 
   assert.ok(globalThis.__emitted > 100, 'and the white comes out of it all the while');
   x.dispose();
 });
+
+test('the drawing: no dice in the spray, and nothing in the hand over a note on the lens', () => {
+  const spray = read('spray.js'), hand = read('hand-extinguisher.js');
+  assert.equal(/Math\.random\(/.test(spray), false, 'the same squeeze looks the same on any page');
+  for (const m of hand.matchAll(/renderOrder = (\d+)/g)) assert.ok(Number(m[1]) <= 10000, 'stuck notes (10001) stay on top');
+});

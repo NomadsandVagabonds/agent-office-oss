@@ -4,6 +4,7 @@
 // hand-extinguisher.rule.js; this is only the model and putting it there. The skin and sleeve are the shove's hands'
 // (hand.js makeHands), so the hand that holds it is the one that shoves.
 //
+// (all at renderOrder 10000, so that a sticky note on the lens, at 10001, stays over it: hand-notes.js)
 // Cost: three meshes in the hand (the canister with the fist, the lever, the needle). The canister is the pockets' own
 // model (inventory-items.js), with its lever cut out so that it can be squeezed.
 import * as THREE from 'three';
@@ -104,12 +105,12 @@ export function heldExtinguisher(kit, lights, amb) {
   const mesh = new THREE.Mesh(kit.geometry(body, lights, amb), mat);
   mesh.renderOrder = 10000;                                    // (the canister and fist first: it is the one that clears the room's depth)
   const lever = new THREE.Mesh(kit.geometry(leverB, lights, amb), mat);
-  lever.renderOrder = 10001; lever.position.copy(pivot).multiplyScalar(unit); mesh.add(lever);
+  lever.renderOrder = 10000; lever.position.copy(pivot).multiplyScalar(unit); mesh.add(lever);
   const dial = new THREE.Group(); dial.position.set(...P.gauge).multiplyScalar(unit);
   dial.rotation.set(P.gaugeTilt[0] * DEG, 0, P.gaugeTilt[1] * DEG, 'ZXY'); mesh.add(dial);
   const face = new THREE.Group(); face.position.y = 0.13 * unit; face.rotation.x = -Math.PI / 2; dial.add(face);         // (the face of the dial is its +Y; the needle lies on it)
   const needle = new THREE.Mesh(kit.geometry(needleB, [], [0.25, 0.25, 0.25]), mat);
-  needle.renderOrder = 10001; face.add(needle);
+  needle.renderOrder = 10000; face.add(needle);
   // hanging: the head about where a held thing's middle is, the canister below it
   mesh.rotation.set(...BASE);
 

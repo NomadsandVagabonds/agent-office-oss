@@ -4,8 +4,8 @@
 // it, and neither, for what comes when you are not looking, can you see it (index.js sees).
 //
 // One mesh: a pool of camera-facing quads drawn by one instanced draw, a soft disc each, lit by the light where you
-// stand. Then a second, the white over the whole picture when you are in it. Math.random only for how each puff wobbles
-// (nothing of the building is decided by it).
+// stand. Then a second, the white over the whole picture when you are in it. How each puff wobbles is a hash of how
+// many have been sprayed (no Math.random: the same squeeze looks the same on any page).
 import * as THREE from 'three';
 import { EXTINGUISHER, puffAt, whiteOut } from './extinguisher.rule.js';
 
@@ -66,7 +66,9 @@ export function createSpray(env) {
   const overMat = new THREE.ShaderMaterial({ vertexShader: OVER_VERT, fragmentShader: OVER_FRAG, uniforms: { uTint: { value: new THREE.Color(0.8, 0.8, 0.8) }, uK: { value: 0 }, uT: { value: 0 } }, transparent: true, depthTest: false, depthWrite: false });
   const over = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), overMat);
   over.name = 'extinguisher-white'; over.frustumCulled = false; over.renderOrder = 9990; over.visible = false;
-  let added = false, owed = 0, white = 0, clock = 0;
+  let added = false, owed = 0, white = 0, clock = 0, count = 0;
+  /** 0…1 from the puff's number and a channel: the same every time (a hash, not a die). */
+  const roll = (k) => { let h = Math.imul((count * 8 + k) ^ 0x9e3779b9, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16; return (h >>> 0) / 4294967296; };
   const puffs = [];                                     // { o: origin (scene), d: direction, age, stop: metres it can go before the wall, wob, spin, turn }
   const v = new THREE.Vector3(), cam = new THREE.Vector3();
 
@@ -87,11 +89,11 @@ export function createSpray(env) {
       owed += RATE * dt;
       const o = v.copy(from).sub(scene.position);
       while (owed >= 1 && puffs.length < POOL) {
-        owed -= 1;
+        owed -= 1; count++;
         // (a cone of it, not a line: each puff a little off the horn's line, and a little older, so the stream is continuous)
-        const jx = (Math.random() - 0.5) * 0.22, jy = (Math.random() - 0.5) * 0.16, jz = (Math.random() - 0.5) * 0.22;
+        const jx = (roll(0) - 0.5) * 0.22, jy = (roll(1) - 0.5) * 0.16, jz = (roll(2) - 0.5) * 0.22;
         const d = new THREE.Vector3(dir.x + jx, dir.y + jy, dir.z + jz).normalize();
-        const p = { o: o.clone(), d, age: Math.random() * dt, wob: Math.random() * 6.28, spin: Math.random() * 6.28, turn: (Math.random() - 0.5) * 1.6, grow: 0.8 + Math.random() * 0.5 };
+        const p = { o: o.clone(), d, age: roll(3) * dt, wob: roll(4) * 6.28, spin: roll(5) * 6.28, turn: (roll(6) - 0.5) * 1.6, grow: 0.8 + roll(7) * 0.5 };
         p.stop = free(p.o, d);
         puffs.push(p);
       }
