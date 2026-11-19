@@ -27,7 +27,7 @@ function stand(white) {
 export function lightmapNode(m, D, k) {
   if (!D.LIGHTMAP) return null;
   const N = gpu.nodes, T = N.TSL;
-  const { uniform, texture, attribute, varying, positionGeometry, normalGeometry, vec2, vec3, float, abs, floor, clamp, max, select } = T;
+  const { uniform, texture, attribute, varying, positionGeometry, normalGeometry, vec2, vec3, float, abs, floor, clamp, max, select, If, dFdx, dFdy } = T;
   const read = (key) => m.uniforms[key]?.value;
   // uLm: six vec4 (shadowmap.js layoutUniforms), copied before every frame
   const L = [0, 1, 2, 3, 4, 5].map((i) => { const n = uniform(new N.Vector4()); return n.onRenderUpdate(() => { const v = read('uLm')?.[i]; if (v) n.value.copy(v); }); });
@@ -45,6 +45,7 @@ export function lightmapNode(m, D, k) {
   let region = select(inside, floorOrWall, 0);
   let own = float(1);
   if (D.TUBESHADOW && D.VOXEL) { const self = k.aSurf.y.greaterThan(0.5); region = select(self, 0, region); own = select(self, 0, 1); }
+  // (flat, as kit.js's `flat varying float vLmRegion`: a triangle is on one part of the map, never between two)
   const vRegion = varying(float(region), 'vLmRegion');
   const vPos = varying(p, 'vLmPos');
   const share = (a) => varying(a.mul(k.uDim).mul(k.uTint).mul(own), undefined);
@@ -72,23 +73,28 @@ export function lightmapNode(m, D, k) {
 
   return (c) => {
     const r = floor(vRegion.add(0.5));
-    const uv = lmUv(r);
-    let out = c;
-    if (A) {
-      const a = A.sample(uv);
-      let rest = out, lost = vec3(0);
-      if (vF) { rest = rest.sub(vF); lost = lost.add(vF.mul(a.g.oneMinus())); }
-      if (vB) {
-        rest = rest.sub(vB[0].add(vB[1])); lost = lost.add(vB[0].mul(a.b.oneMinus())).add(vB[1].mul(a.a.oneMinus()));
-        if (vB[2]) { const b = B.sample(uv); rest = rest.sub(vB[2]); lost = lost.add(vB[2].mul(b.r.oneMinus()));
-          if (vB[3]) { rest = rest.sub(vB[3]); lost = lost.add(vB[3].mul(b.g.oneMinus())); } }
+    // (no region, nothing read: kit.js's early return. WGSL lets a branch that differs from pixel to pixel read a texture
+    // only with its gradients given, so they are taken here, before it, from where the map is read: the same level of
+    // detail the GLSL's plain read picks)
+    const uv = lmUv(r), gx = dFdx(uv), gy = dFdy(uv);
+    const out = vec3(c).toVar();
+    If(r.greaterThanEqual(0.5), () => {
+      if (A) {
+        const a = A.sample(uv).grad(gx, gy);
+        let rest = vec3(out), lost = vec3(0);
+        if (vF) { rest = rest.sub(vF); lost = lost.add(vF.mul(a.g.oneMinus())); }
+        if (vB) {
+          rest = rest.sub(vB[0].add(vB[1])); lost = lost.add(vB[0].mul(a.b.oneMinus())).add(vB[1].mul(a.a.oneMinus()));
+          if (vB[2]) { const b = B.sample(uv).grad(gx, gy); rest = rest.sub(vB[2]); lost = lost.add(vB[2].mul(b.r.oneMinus()));
+            if (vB[3]) { rest = rest.sub(vB[3]); lost = lost.add(vB[3].mul(b.g.oneMinus())); } }
+        }
+        out.assign(out.sub(lost).sub(max(rest, 0).mul(a.r.oneMinus())));
       }
-      out = out.sub(lost).sub(max(rest, 0).mul(a.r.oneMinus()));
-    }
-    if (C) {
-      const d0 = C.sample(uv), d = d0.mul(d0);
-      out = out.add(k.vAlb.mul(doors[0].mul(d.r).add(doors[1].mul(d.g)).add(doors[2].mul(d.b)).add(doors[3].mul(d.a))));
-    }
-    return select(r.lessThan(0.5), c, out);
+      if (C) {
+        const d0 = C.sample(uv).grad(gx, gy), d = d0.mul(d0);
+        out.addAssign(k.vAlb.mul(doors[0].mul(d.r).add(doors[1].mul(d.g)).add(doors[2].mul(d.b)).add(doors[3].mul(d.a))));
+      }
+    });
+    return out;
   };
 }
