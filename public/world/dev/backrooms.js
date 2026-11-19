@@ -31,6 +31,8 @@
 //                      past its display's refresh rate; &stress=auto with &bench=1 steps it up at the first station first (perf.js)
 //   &preview=clip      a preview, in the rooms that have one: things half inside the structure in phone, nested and cover
 //                      (clipping.js, docs/BLOCKROOMS-PREVIEWS.md). Nothing in the game reads it
+//   &preview=corners   doorways in the corners of rooms; &preview=hallways corridors that are not rectangles; comma'd with others
+//                      (preview.js). The floor is changed after it is generated: nothing else moves
 //   &loot=1            something to find: the keycard (in the mascot's hand) and coins 1–4; &loot=card,1,3 for some of it. There is no
 //                      office here to keep count, so a stand-in does, in this page's memory, and says so on the console: what you leave
 //                      by the door with is gone the next visit (any key), everything else is down there again. Without it: no loot.
@@ -158,7 +160,7 @@ async function go() {
       // &gfx=sheen: the tubes caught on floors that shine (sheen.rule.js)
       gfx: q.get('gfx') ? Object.fromEntries(q.get('gfx').split(',').map((s) => s.split(':')).map(([k, v]) => [k, v ? Number(v) : 1])) : null,
       lighting: ['1', ...LIGHTING_MODES].includes(q.get('lighting')) ? q.get('lighting') : false,
-      // &preview=clip: rooms that have a preview built into them use it (docs/BLOCKROOMS-PREVIEWS.md); nothing in the game does
+      // &preview=clip,corners,hallways: rooms that have a preview built into them use it (docs/BLOCKROOMS-PREVIEWS.md); nothing in the game does
       preview: (q.get('preview') || '').split(',').filter(Boolean),
       owns: target => !!target?.closest?.('[data-lighting-study]') },
     onReady(handle) {
