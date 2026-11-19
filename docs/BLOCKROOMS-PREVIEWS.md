@@ -814,6 +814,63 @@ for real: drop `on` and `preview` from its line (weight 1, no favourite kind of 
   per frame) but a crawl of slats is a second wrong thing; the brief's is that the light is there at all.
 - No dust or haze in the beam: the brief says "no mystical haze".
 
+## Filing cabinets
+
+The owner: "Filing cabinets are an asset we should have built by now. Can put them in crazy big piles, sink into
+floors, go into walls etc and added benefit of some drawers sliding open to reveal items."
+
+**Status: a preview.** Only with `&preview=cabinets` on the dev page, in the plain rooms. Without it every room builds
+exactly as before (below), and nothing in the game passes the flag.
+
+### What was built
+
+- `cabinets.model.js`: the family, at the level's half-size voxels: `two`, `three`, `four` (0.5 × 0.55 m; 0.87, 1.26,
+  1.65 m), `tall` (five drawers, 2.04 m) and `lateral` (0.9 × 0.45 m, three wide drawers, a long pull). Five office
+  paints (two greys, a putty, a beige, an olive grey); per cabinet a `wear` (0…7): rust at the foot, the corners rubbed
+  pale, two to four dents in the sides or back, scratches across the lid, the fronts chipped to the primer. Every
+  drawer has a chrome holder with a card written on; the top drawer has the lock (pushed in when the cabinet is
+  locked). A dented drawer has a kick in its front, and that drawer is stuck (`dented(kind, wear)`, about one in seven):
+  what is seen is what happens. Each drawer is two parts, its front and its tray (with what is in it), besides the
+  carcase, which has a shallow dark recess behind each drawer that opens; `whole` is a cabinet in one piece.
+- `cabinets.js`: the placements (the toolbox, docs/BACKROOMS.md) and the drawers.
+  - **Cheap.** Everything goes into the room's own batches (`c.place`, or `clip()` from clipping.js where the
+    structure cuts it), meshed with `ao: false`, baked with the room. Only a drawer that opens is a mesh of its own
+    (its front; its tray only while it is out), at most 12 to a room; past that a cabinet is only furniture.
+  - **Solid** as what is drawn at a body's height (the box round the geometry, `roomBox`), never in a doorway's lane;
+    a placement is only made where, with its colliders in, every doorway is reached as before by the visitor (the
+    level's own walk) and by a body of r = 0.35 (the cast's), so a pile never closes the way through. Nothing is ever
+    `keep`, so the level's no-trap check still has the last word. None of it is furniture to be dragged.
+  - **The drawers.** `E` at a cabinet opens the drawer looked at (by the pitch of the view), or the nearest one still
+    shut: it slides out 36 cm (30 from a wall) in half a second, with `slide` and a `thunk`. A dented one rattles; a
+    locked cabinet clicks and rattles. An open drawer stays open and is not solid (nothing that moves is).
+  - **What is in them.** To look at: hanging files (45 %), a ream and loose sheets (20 %), nothing but dust and a paper
+    clip (the rest), and one drawer in thirty something odd: a drawer of carpet, one papered inside in the yellow
+    diamonds, a lit tube, a heap of keys, one shoe, a telephone. To carry: only what the part was dealt anyway.
+    inventory.js, as it lays out a part's supplies (supplies.js `planSupplies` and `plentyOfPaper`, unchanged), asks a
+    room to hide the thing (`rt.hide(item)`, which cabinets.js gives a room with drawers; inventory.js imports nothing of it): about half the time, by the thing's own id, it goes into
+    one of the room's drawers that opens, is low enough to see into (its floor at 45 cm or less) and is far enough
+    from a wall, instead of onto the floor. When that drawer is opened, the thing is put in it as the ordinary pickup
+    (inventory-world.js `spawn`, which now takes `ignore`: the cabinets' colliders it lies over). So paper is as
+    common as it was, a torch as rare: a drawer is a hiding place, as an oddity's stash is.
+  - **Seeded.** A cabinet's paint, wear, lock and contents come from `${seed}/cabinets/${room}/${n}`, where a placement
+    goes from `${seed}/cabinets/${room}/deal/…`; nothing reads the room's own stream or anything unseeded.
+- `rooms.js`: `previewCabinets(c)` at the end of a plain room (one line, and its import). The part's plain rooms take
+  the placements in turn, each the one the part has had least of so far that fits there: pile, sunk row, wall of
+  drawers, one let into a wall, one through the ceiling, one alone in an empty room.
+- `inventory.js`: the two `rt.hide` calls (two lines). `inventory-world.js`: `spawn(…, { ignore })` (four lines).
+- `dev/backrooms.js`: the flag's line in the head of the file.
+
+### The placements
+
+| | |
+|---|---|
+| pile | up to nine, backed onto a wall or standing out in a big room: a row of upright ones (their drawers open), a two-drawer stacked on top back to front, one on its side on top of another, one leaning on the row, a lateral on its back in front with a two-drawer face down on it, a three on its side. Kinds step down to fit under the ceiling. Paper round its foot (detail: Low leaves it out) |
+| sunk row | two to four four-drawer cabinets gone into the carpet to the middle of the second drawer, the ones at the ends crooked; the two drawers above the carpet open |
+| wall of drawers | a stretch of wall of cabinets let into it, side by side and stacked to the ceiling (cut by it); the lowest open |
+| flush | one let into a wall, only its fronts in the room |
+| ceiling | one coming down through the ceiling upside down, clear of the lights |
+| alone | one in the middle of an empty room, facing the way in |
+
 ### Try it
 
 ```
@@ -974,3 +1031,49 @@ on every kind of floor as its peers, and over 400 visits turns up about as often
   ordinary door at the far end is visibly the same door. Under the ceiling only its two lower panels show.
 - The camcorder's noise is strong in some stills (more at High), and the far office is a 3.2 m slice before the
   doorway, so the ordinary door is near, not down a long hall as in the concept.
+
+/world/dev/backrooms.html?seed=7&room=7&preview=cabinets&pursuer=0&mute=1&cast=none&x=0.6&z=-2.15&yaw=2.95&pitch=0.1
+/world/dev/backrooms.html?seed=7&room=1&preview=cabinets&pursuer=0&mute=1&cast=none&x=1.2&z=1.0&yaw=1.1&pitch=-0.18
+/world/dev/backrooms.html?seed=7&room=22&preview=cabinets&pursuer=0&mute=1&cast=none&x=-0.6&z=1.6&yaw=2.75&pitch=0.12
+/world/dev/backrooms.html?seed=7&room=24&preview=cabinets&pursuer=0&mute=1&cast=none&x=1.75&z=-0.15&yaw=-1.57&pitch=-0.9
+/world/dev/backrooms.html?seed=7&room=22&preview=cabinets&pursuer=0&mute=1&cast=none&x=-0.6&z=1.6&yaw=2.75&pitch=0.12&graphics=high
+/world/dev/backrooms.html?seed=7&room=16&preview=cabinets&pursuer=0&mute=1&cast=none&x=0.9&z=1.75&yaw=0.48&pitch=-0.02
+```
+
+A pile (room 7), a sunk row (1), a wall of drawers (22), a drawer open with the part's paper in it (24: press `E`
+looking down at the lower of the two drawers above the carpet in the second cabinet; the third holds the part's other
+stack), the wall at High, one alone (16). Pictures: `docs/previews/cabinets-<pile|sunk|wall|drawer|wall-high|alone>.jpg`
+(Classic but the one at High; the drawer opened through its own use, the room's ticks run by hand, as the headless page
+does not play).
+
+### Proof
+
+- `test/backrooms-cabinets.test.mjs`: the five kinds inside their measurements, each drawer's front and tray where
+  that drawer is, a recess only behind one that opens, dents pure and about one in seven; for every placement in an
+  8 m room, each cabinet is solid exactly when some of it is at a body's height in the room, its collider the box round
+  what is drawn (within 3 cm), tall when it stands above a head, and nothing else solid; `E` opens the drawer looked at
+  with `slide` and `thunk`, the whole way, its tray drawn, and what it was given is put into it once, on the tray's
+  floor, over the cabinet; dented and locked ones turn up and do not open; on eight seeds with the preview, no room gave
+  up its furniture, nothing stopped being solid, every doorway is reached as before by the visitor and by r = 0.35,
+  nothing solid in a lane, and all six placements turn up; the fills over 12,000 drawers (odd under one in twenty,
+  paper over half); over four seeds no more of any thing in drawers than the part was dealt, each once, only in a
+  drawer that opens and is low; inventory.js hides only what it was about to place, by its id; built twice, the same,
+  and the room's own stream where it was; without the flag (or empty, or `clip,floorlight`) the rooms hash as today's,
+  and with it only plain rooms change.
+- A whole-floor comparison against a `git archive` of fcf4338, without the flag: 16 seeds (7, 21, 3, 11, 40, q, zz,
+  102, 1, 2, 5, 9, 13, 77, abc, 999), whole, at Classic and Medium, with no preview and with `clip,floorlight`: every
+  room's meshes (every attribute and index), colliders, lamps, ambient, level, light maps and uses, and the build's
+  warnings: 449 rooms each time, the same to the byte; `edition()` yntnbj in both.
+
+### Not done, and what looked wrong
+
+- The visitor's eye is 1.1 m: a drawer whose floor is above about half a metre cannot be seen into, so only the low
+  ones are given anything. The upper ones of a tall cabinet open but show only their files from below.
+- An open drawer is not solid, and stays open: walking into one walks through it.
+- In seed 7's small rooms the sunk rows went against a wall, where from across the room they read as short cabinets
+  more than sunk ones (the half drawer at the carpet is the tell); one free-standing in a bigger room reads better.
+- The piles are made of nine set pieces, mirrored, and the kinds swapped to fit under the ceiling: up close one pile
+  looks like another. Their backs are plain steel. The face-down two-drawer on the lateral can read as a grey box.
+- The light on a drawer that opens is baked where it was shut (as on anything that moves): its tray is lit as its
+  front was.
+- Looked at at Classic and High; Low and Medium only through the tests; `vhs=0/1`, a phone, not.

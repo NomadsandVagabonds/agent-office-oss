@@ -19,6 +19,7 @@ import { concourse } from './mall.js';
 import { forestRoom, forestStanding, FOREST_THINGS } from './forest.js';
 import { siteOf, standMachine } from './vending-machine.js';
 import { uplit } from './floorlight.js';
+import { previewCabinets } from './cabinets.js';
 import { dummyVox } from './cast/dummies.model.js';
 
 /* ---- the plain rooms, and what somebody left in them ------------------------------- */
@@ -275,6 +276,7 @@ function plain(c) {
   if (c.level.thin && c.level.thin.room === room.id) thinWall(c, c.level.thin);
   for (const item of room.dress) if (item.type === 'marks') refuses(c, item.side, item.at, marks(c, item));          // (likewise the other walls somebody tried: all of them only walls)
   for (const item of room.dress) if (item.type !== 'marks') dressing(c, item);
+  previewCabinets(c);                                // (preview, &preview=cabinets: nothing without it; cabinets.js)
   if (c.level.pursuer?.room === room.id) c.env.lair?.(c);
   if (c.level.theme === 'waterpark') poolroom(c);
   if (c.level.theme === 'suburb') lawn(c);
