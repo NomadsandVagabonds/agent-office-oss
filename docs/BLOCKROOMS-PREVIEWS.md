@@ -1090,3 +1090,141 @@ floors keep their three), and rooms.js's `cabinet` dressing deals one of the pla
 one against a wall where that one does not fit, or nothing (as the old cabinet when there was no wall for it). The
 catalogue's `cabinet` (c.prop) is the old model still, for the rooms that place it themselves. The flag still deals
 them into every plain room, for looking at them.
+
+## Low Point
+
+The owner's Yellow Office art direction (`docs/art-direction/yellow-office/README.md`, "Low Point", and the
+"Suggested first playable pair"; the concept is `low-point.png` there): the skirting board runs straight across the
+hall like a ruler, and the carpet dips so far below it that you walk downhill, duck under the wall and climb back up
+into the next office. A pencil rests where everything dropped on this floor would roll. From the owner's vibe sheets
+(`docs/reference/blockrooms/`, b86d5a7) it takes two elements: carpet as terrain with something sunk in it (here the
+partition), and a dropped object as the clue.
+
+**Status: a preview** (id `low-point`). Its line is in `MORE_DECK` (deck2.js) with `on: false`, so it is out of every
+deal and of the building's edition, as a retired room is. Only the dev page's `&preview=lowpoint` puts it in the deck
+(`preview-deck.js`, `WAITING`), for that page. It is then dealt, fetched and built like any other room. To deal it for
+real, drop `on: false`: that is all it takes. It has weight 1, no themes and nothing that puts it first; its `WAITING`
+line then does nothing and can go. The deck line imports nothing (its stash is written out in it), so the site still
+preloads no more room files of their own than the 11 it did.
+
+### What was built
+
+- `rooms/low-point/rule.js` (pure): the plan. A hall 5.8 m across and 10.8–11.8 m long, with a partition 0.6 m thick
+  straight across its middle, floor to ceiling. On each side of it the carpet is an upside-down truncated pyramid: a long
+  facet down the hall (15–17°) and a steeper one at each side (47°). They meet at the foot of the partition, 1.2 m under
+  the hall's floor, where the bottom is 1.3 m across; where the trough meets the partition it is 3.5 m across. 1.2 m of
+  level floor is left at each end, and each side of the trough along the partition there is a level shelf 1.15 m wide,
+  where the partition's doors stand. Under the partition the bottom stays level for the 0.6 m of its thickness. `floorAt` is
+  the world's `rt.floorY`. The headroom is measured to the ceiling, or to the partition's underside (the old floor, y 0)
+  over the passage and for a body's reach (0.24 m) about its mouths. `solids` are the partition on either side of the
+  passage and the four door levers. `facets` lists every face drawn below the old floor, wound by the side it faces, and
+  `headwayOf` is the least headroom kept the whole way under, for the cast.
+- `rooms/low-point.js`: draws from those numbers. `c.shell` is called with no floor, panels or sockets. The level carpet
+  is laid as the shell lays it. The six slopes and the bottom are flat facets of their own:
+  - each is sheeted in 0.3 m cells so that the bake has vertices to light;
+  - each has its own normal, so the creases stay sharp;
+  - a darker seam of pile runs along each crease (detail);
+  - the side facets are a shade darker than the long one, and the right one is darkest;
+  - the carpet darkens toward the bottom and the foot of the wall;
+  - a worn line runs down the middle, door to door.
+- The partition and its fittings:
+  - It is a `c.pillar` (not solid: the plan's solids are). Its skirting is two boxes straight across both faces at the old
+    floor's height, the whole width of the hall, over the trough.
+  - Where the wall comes down to meet the carpet on each side of the passage, it is wallpapered as the face above it is,
+    and its skirting steps down the slope in 5 cm voxel steps to the passage. The passage has skirting at the foot of its
+    own two sides. The underside of the wall is bare board, never papered.
+  - Two ordinary office doors (the level's `woodLeaf`, in cream frames) stand plumb and shut in each face, on the shelves.
+  - The pencil is a 16-voxel model, 19 cm long, at the foot of the near slope in front of the passage. It lies across the
+    hall, as a pencil that rolled there would, and its offset and turn are rolled.
+  - There are four fittings down the middle. The two over the slopes reach further down (power 1.5, k 7), so the carpet at
+    the foot of the far slope is the bright thing past the dark of the passage. The one by the way in is out in about a
+    third of halls.
+  - The tiles have stains.
+  - The room is about 9,900 triangles in 9 meshes at Classic (12,300 in 11 at Medium), with 4 lamps.
+- Shared files: `deck2.js` has 11 new lines, the `MORE_DECK` line with `through: true` (its far end always leads on into
+  a plain room). `preview-deck.js` has 1 changed line (`lowpoint: 'low-point'`), and `dev/backrooms.js` 1 new line in its
+  usage comment. `gen.js`, `world.js`, `player.js`, `cast/walk.js` and `plan.js` are untouched: the world already takes a
+  heightfield floor (`rt.floorY`), a headroom (`rt.headY`) and a room's `rt.headway`.
+
+### Walking it
+
+The visitor: `player.js` puts the camera on the floor where `world.floorY` says it is, easing the eye to it. It allows a
+step wherever `world.passable` does: no more than `STEP`, 0.26 m, between where you stand and where you are put. The
+steepest part of this floor is the side facets, at 0.136 m per 12.5 cm cell; the long slope is 0.034 m per cell. The test
+drives the real `createPlayer` at 60 frames a second with W held, from the way in to the way on and back. It takes 5.3 s
+each way, is never held up for a frame, and goes down to −1.20 m. The automatic duck works at the mouths (1.13 m of
+headroom there, a 0.17 m stoop) and under the wall (1.2 m of headroom, a 0.1 m stoop). The eye passes 0.18 m under the
+underside of the wall, so the skirting passes overhead. On all three seeds tried, the no-trap check (`world.walkable`)
+floods from each doorway to the other.
+
+The cast (`cast/walk.js`, unchanged): the room sets `rt.headway`, the least headroom the widest of the cast keeps all the
+way under. It is 1.137 m in an 11.8 m hall and 1.13 m in a 10.8 m one.
+
+- **Walk it both ways:** the toner (0.5 m), the mother's worms, the standing meeting (0.95 m) and the head count
+  (1.05 m). They go down to the bottom and under the wall, and never meet more than 0.022 m of floor change in a stride.
+- **Never sent in:** the follower (1.3 m), the intern (1.4 m), the mascot and the roaming cast (1.62 m) and the mother
+  (1.9 m).
+- **Depends on size:** a middle manager goes in only while it is under 1.137 m tall.
+
+### Try it
+
+```
+/world/dev/backrooms.html?seed=7&room=low-point&preview=lowpoint&pursuer=0&mute=1&cast=none&x=0.3&z=5.3&yaw=0&pitch=-0.08
+/world/dev/backrooms.html?seed=7&room=low-point&preview=lowpoint&pursuer=0&mute=1&cast=none&x=0.2&z=4.3&yaw=0&pitch=-0.22
+/world/dev/backrooms.html?seed=7&room=low-point&preview=lowpoint&pursuer=0&mute=1&cast=none&x=0.3&z=0.48&yaw=-1.35&pitch=0.2
+/world/dev/backrooms.html?seed=7&room=low-point&preview=lowpoint&pursuer=0&mute=1&cast=none&x=0.15&z=0&yaw=0&pitch=0
+/world/dev/backrooms.html?seed=7&room=low-point&preview=lowpoint&pursuer=0&mute=1&cast=none&x=-0.3&z=-5.3&yaw=3.1416&pitch=-0.08
+/world/dev/backrooms.html?seed=7&room=low-point&preview=lowpoint&pursuer=0&mute=1&cast=none&x=0.3&z=5.3&yaw=0&pitch=-0.08&graphics=high
+```
+
+The shots are in `docs/previews/`, in the same order as the URLs, taken at 960 × 540 with `&card=0&inventory=0` added:
+
+- `low-point-entrance`: from the way in. The partition, its two doors, the skirting straight across over the trough, the
+  passage and the far carpet under it.
+- `low-point-top`: from the top of the slope.
+- `low-point-under`: stooped at the passage's mouth, looking along the partition. The skirting is overhead with the
+  wall's underside, and the wall's lower face goes down to the carpet, with the shelf beyond.
+- `low-point-through`: under the wall, looking at the far slope and the next office.
+- `low-point-return`: from the far landing, the way back.
+- `low-point-high`: the way in, at High.
+
+### The guide's two checks
+
+- **From the top of the trough, can you see a hint of the next office?** A hint, yes; the office itself, no. Under the
+  skirting, past the dark of the passage, there is a band of the far slope climbing away, lit by the tube over it, and
+  the pencil at the bottom on this side. The far office's doorway is at the old floor's height, 5 m beyond the wall. A
+  line from an eye at 1.1 m through a gap whose top is the floor cannot reach it, so the doorway comes into view only
+  once you are under the wall.
+- **From underneath, does the straight skirting board feel like the bottom of a wall?** Mostly. Stooped at the mouth,
+  the board is a hand's width over your head and the wall goes up from it. Along the partition you see the wall's own
+  lower face come down to the carpet, its skirting stepping down after it, while the straight board carries on level
+  over you to the shelf and the door. The underside is plain board, not papered, so it reads as the bottom of a wall
+  rather than a ceiling. What weakens it: at 1.2 m deep you only get under the board in the last half metre, and there
+  you are close enough that it fills the frame. There is no long look up at it from below.
+
+### What our lighting can't reach
+
+- **The dark mouth.** In the concept the passage is a dark slot with one patch of light beyond it. Our bake has no
+  shadows at Classic or Low, and at Medium and High the floor's light map is skipped for a room with its own floor
+  heights. So the tubes light the bottom of the trough and the passage straight through the partition. The dark of the
+  passage is painted in (the vertex shade goes down to 0.28 under the middle of the wall), and the far slope is lit
+  harder than a tube would light it, so there is contrast. But it is a band of grey-green against a band of lighter
+  grey-green, not light against dark.
+- **The facets.** In the concept each facet has its own tone because the light falls across them. Ours are lit by tubes
+  in a line straight over the middle, which light both side facets the same. They are told apart by a shade given to
+  each by hand, and by a darker seam at each crease (detail, so gone at Low).
+- **Contact under the overhang.** No shadow falls from the skirting or the wall onto the slope under it. Instead the foot
+  of the wall is darkened by hand over 0.6 m.
+- **Walls lit through the floor.** Lamps light whatever faces them, through anything, so the lower faces of the
+  partition on one side are lit by the tubes on the other. Those faces point away from the far tubes, so it shows little.
+
+### Not done, and what looked wrong
+
+- The concept's trough is wider and deeper, against a taller wall in a longer hall. This is the hall at our scale, so
+  the slopes are short and the sides steep (47°). You can walk the side facets, which you could not in the concept.
+- The return is the same hall turned round. The far side has no pencil, and differs only in which tube flickers.
+- The wallpaper's diamonds look large at the distances the shots under the wall are taken from, and the bare underside
+  is flat dark grey at every tier.
+- A line of sight (`world.los`, used by the cast to see you) is checked in plan only, so it passes through the partition
+  over the passage. Something on one landing can see you on the other through the wall above the gap.
+- The two doors in each face are shut and do not open, and nothing says so.

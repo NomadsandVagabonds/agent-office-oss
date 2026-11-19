@@ -979,6 +979,17 @@ export const MORE_DECK = [
     module: './rooms/blinds.js', on: false, preview: 'blinds',
     stash: (r) => [-r.W / 2 + 0.6, r.D / 2 - 1.5, -r.W / 2 + 1.3, r.D / 2 - 0.8],
     roll: (R) => ({ az: +R.range(-4, 4).toFixed(1), cup: +R.range(0, 6.28).toFixed(2), along: +R.range(0.3, 0.7).toFixed(2) }) },
+  // Low Point (the owner's yellow-office art direction): a hall with a partition straight across it, its skirting level the
+  // whole width like a ruler, and the carpet sagging so far under it that you walk downhill, stoop under the wall and climb
+  // back up into the next office; a pencil at the bottom, where everything dropped would roll. `through`: the far end always
+  // leads on, into a plain room. A PREVIEW: `on: false` keeps it out of every deal and every edition; only the dev page's
+  // &preview=lowpoint deals it (preview-deck.js). To deal it like any other room, drop `on: false`: that is all (weight 1, no
+  // themes, nothing that puts it first); its line in preview-deck.js then does nothing and can go.
+  { id: 'low-point', name: 'Low Point', landmark: 'the skirting board straight across the hall over the dip in the carpet', w: [6, 6], d: [11, 12], h: [2.9, 3.1],
+    ports: [], through: true, weight: 1, lights: 'normal', module: './rooms/low-point.js', on: false,
+    // (where a tape may hide: on the far landing, in the corner by the way on, clear of the slope and 1.25 m from the doorway)
+    stash: (r, side) => { const s = side < 0 ? -1 : 1, a = s * (r.W / 2 - 1.0), b = s * (r.W / 2 - 0.6); return [Math.min(a, b), -r.D / 2 + 0.6, Math.max(a, b), -r.D / 2 + 1.0]; },
+    roll: (R) => ({ wood: R.pick(['#7a4a2a', '#6f4527', '#835233']), stain: R.int(1, 9999), dead: R.chance(0.3), pencil: +R.range(-0.3, 0.3).toFixed(2), turn: +R.range(-0.15, 0.15).toFixed(2) }) },
 ];
 
 // Where a tape goes in an entry that does not say so itself: (room, ±1) → [x0, z0, x1, z1] in the room's own frame.
