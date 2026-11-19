@@ -107,7 +107,7 @@ async function buildersFor(level) {
 
 /**
  * @param office  the office object (stage, net, …)
- * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, depths?:number, depth?:number, inventory?:boolean, barricades?:boolean, scorecard?:boolean, replay?:boolean, debug?:boolean, dev?:object, onReady?:Function}} [opt]
+ * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, depths?:number, depth?:number, inventory?:boolean, barricades?:boolean, scorecard?:boolean, replay?:boolean, debug?:boolean, dev?:object, onReady?:Function, onFloorCleared?:(theme:string)=>void}} [opt]
  *        depths: how many floors (default: by the seed) · depth: which floor to begin on (default: the top one)
  *        replay: this is a kept tape being played back (seed: the tape's; pursuer: whether the mascot was in it): nothing of the office's is hidden in it
  *        brand, share, also, home, anew: handed to the card at the end (scorecard.js), for a page that is not the office
@@ -565,6 +565,7 @@ async function visit(office, opt) {
     tally.way();
     hud.hint(false);
     land(f, from);
+    if (at) opt.onFloorCleared?.(old.level.theme); // a real descent, after the next floor takes over
     interference = Math.max(interference, 0.7);
   }
 
@@ -782,7 +783,10 @@ async function visit(office, opt) {
     hud.hint(false);
     // carried is only kept by leaving by the way out: the card and the tapes (loot.js), and the spare battery packs in
     // your pockets, which are what the office pays for (core/game.mjs)
-    if (why === 'exit') kept = { ...kept, ...purse?.bank(), batteries: inventory?.count('battery') ?? 0 };
+    if (why === 'exit') {
+      kept = { ...kept, ...purse?.bank(), batteries: inventory?.count('battery') ?? 0 };
+      if (cur && how) opt.onFloorCleared?.(cur.level.theme);
+    }
     if (why === 'caught' && !(shot = beginShot())) sound.play('static', { dur: 1.3 });
     hud.batteryWarning(null);
     if (why === 'battery') { hud.batteryEnding({ opacity: 1 }); sound.play('static', { dur: 1.6, vol: .25 }); }

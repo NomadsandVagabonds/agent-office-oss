@@ -1,5 +1,6 @@
 import { archive, onArchive, startAccounts, signInGoogle, emailCode, verifyCode, signOut, sync } from './archive-client.js';
 import { cardExporter, drawPersonnelCard } from './archive-card.js';
+import { CLEARANCE_FLOORS } from './core/archive.mjs';
 import { fileStats, ledgerRows, workbook } from './archive-charts.js';
 const $ = id => document.getElementById(id);
 const node = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
@@ -8,11 +9,12 @@ const card = $('staff-card');
 const prepareExport = cardExporter(card, $('download-card'), $('share-card'), $('export-status'));
 const showWorkbook = workbook({ canvas:$('plot'), title:$('plot-title'), caption:$('plot-caption'), legend:$('plot-legend'), empty:$('plot-empty'), details:$('chart-data'), table:$('plot-data'), discoveries:$('chart-sightings'), escapes:$('chart-escapes') });
 let photographer, portrait, lookKey, cardKey, currentCard, recordKey;
+let typeReady = false;
 let sending = false, cooldown = 0, codeEmail = '', currentState;
 function printCard() {
   drawPersonnelCard(card,currentCard,portrait);
-  card.setAttribute('aria-label', `BlockRooms personnel ID for ${currentCard.name}. ${currentCard.escapes} escapes, ${currentCard.best} best score, ${currentCard.rooms} room types and ${currentCard.entities} entities.`);
-  prepareExport();
+  card.setAttribute('aria-label', `BlockRooms personnel ID for ${currentCard.name}. ${currentCard.escapes} escapes, ${currentCard.best} best score, ${currentCard.rooms} room types and ${currentCard.entities} entities. Floor clearance: ${currentCard.clearances.length ? currentCard.clearances.map(id => CLEARANCE_FLOORS[id]).join(', ') : 'none'}.`);
+  if (typeReady) prepareExport();
 }
 function photograph(look) {
   portrait = null;
@@ -37,10 +39,17 @@ function render(state) {
   else if (state.ready && oauthMessage) $('auth-status').textContent = oauthMessage;
   else if (state.ready && !codeEmail && !sending) $('auth-status').textContent = 'Signing in is optional.';
   const r = archive.record(), profile = archive.profile();
-  const nextCard = { name:profile.name, look:profile.look, best:r.best, escapes:r.out, rooms:Object.keys(r.rooms).length, entities:Object.keys(r.cast).length };
+  const nextCard = { name:profile.name, look:profile.look, best:r.best, escapes:r.out, rooms:Object.keys(r.rooms).length, entities:Object.keys(r.cast).length, clearances:archive.document().clearances };
   const nextCardKey = JSON.stringify(nextCard);
   if (cardKey !== nextCardKey) {
     currentCard = nextCard; cardKey = nextCardKey;
+    const floors = Object.entries(CLEARANCE_FLOORS);
+    $('clearance-summary').textContent = `Floor clearance · ${nextCard.clearances.length} of ${floors.length}`;
+    $('clearance-floors').replaceChildren(...floors.map(([id,label]) => {
+      const earned = nextCard.clearances.includes(id), row = node('li');
+      row.append(node('span',label), node('span',earned ? 'Stamped' : 'Uncleared',earned ? 'earned' : ''));
+      return row;
+    }));
     const nextLookKey = JSON.stringify(profile.look);
     if (lookKey !== nextLookKey) { lookKey = nextLookKey; photograph(profile.look); }
     printCard();
@@ -98,6 +107,8 @@ setInterval(() => {
   $('send-code').textContent = seconds ? `Resend ${seconds}s` : codeEmail ? 'Resend code' : 'Send code';
   $('send-code').disabled = sending || seconds > 0 || !currentState?.configured || !currentState?.ready;
 }, 1000);
+Promise.allSettled([document.fonts.load('16px "HR Bitmap"'), document.fonts.load('600 9px "HR Mono"')])
+  .then(() => { typeReady = true; printCard(); });
 // A printed pixel portrait is ready immediately, including on machines without WebGL.
 import('./archive-preview.js').then(({ characterPreview }) => {
   photographer = characterPreview(); photograph(currentCard.look); printCard();

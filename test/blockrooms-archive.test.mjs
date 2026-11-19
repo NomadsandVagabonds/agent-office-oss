@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { importArchive, mergeArchive, archiveRecord, archiveRun, editArchive, archiveLook } from '../core/archive.mjs';
+import { dealtThemes } from '../public/world/backrooms/themes.js';
+import { CLEARANCE_FLOORS, cleanArchive, importArchive, mergeArchive, archiveRecord, archiveRun, editArchive, archiveLook } from '../core/archive.mjs';
 import { accountConfig } from '../tools/blockrooms/account-config.mjs';
 import { fileStats } from '../tools/blockrooms/archive-charts.js';
 import { build } from '../tools/blockrooms/build.mjs';
@@ -74,6 +75,29 @@ test('guest import, claim, sign-out and another account are isolated, including 
   await a.signOut(); await a.claim('A'); assert.equal(a.profile().name, 'A name');
   const reopened = createArchiveStorage({ storage, uuid: () => 'id-' + ++serial });
   assert.equal(reopened.record().runs, 5, 'legacy data is not imported again');
+});
+test('floor stamps belong to the visitor who crossed, survive a lost run, and merge across devices', async t => {
+  const { createArchiveStorage } = await modules(t);
+  assert.deepEqual(Object.keys(CLEARANCE_FLOORS).sort(), dealtThemes().sort());
+  const storage = memory(); let i = 0;
+  const a = createArchiveStorage({ storage, uuid: () => 'id-' + ++i });
+  const guest = a.owner();
+  await a.clearFloor('yellow',guest);
+  await a.claim('first'); await a.signOut(); await a.claim('second');
+  await Promise.all([a.clearFloor('waterpark',guest), a.clearFloor('waterpark',guest), a.clearFloor('unbuilt',guest)]);
+  await a.report({ ...run('lost','fitout'), reason:'caught' }, 'attempt', guest);
+  assert.deepEqual(a.document().clearances, []);
+  assert.deepEqual(a.document('user:first').clearances, ['yellow','waterpark']);
+  // An older game tab saves updated visit totals without knowing the stamp field.
+  storage.setItem('blockrooms:archive:save:user:first',JSON.stringify({v:1,baseline:{runs:6,out:1}}));
+  const reopened = createArchiveStorage({ storage, uuid: () => 'id-' + ++i });
+  assert.equal(reopened.record('user:first').runs, 6);
+  const other = { clearances:['forest','__proto__','forest'] };
+  const merged = mergeArchive(other,reopened.document('user:first'));
+  assert.deepEqual(merged.clearances, ['yellow','waterpark','forest']);
+  assert.deepEqual(mergeArchive(merged,other), merged);
+  assert.deepEqual(cleanArchive({clearances:'waterpark'}).clearances, []);
+  assert.deepEqual(importArchive({out:4,rooms:{forest:100}}).clearances, []);
 });
 test('cross-tab report writes share a lock and cannot drop either visit', async t => {
   const { createArchiveStorage } = await modules(t); let q = Promise.resolve(), i = 0;

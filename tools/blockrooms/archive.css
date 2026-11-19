@@ -1,3 +1,5 @@
+@font-face { font-family:'HR Bitmap'; src:url('./vendor/fonts/pixelify-sans-400.woff2') format('woff2'); font-weight:400; }
+@font-face { font-family:'HR Mono'; src:url('./vendor/fonts/ibm-plex-mono-600.woff2') format('woff2'); font-weight:600; }
 /* The caretaker added another page to the same 1998 site. Reuse its paper,
    pixel pictures, system fonts and raised grey controls. */
 body.archive-page { margin:0; padding:20px 12px 40px; border:0; text-align:left; }
@@ -109,3 +111,10 @@ body.archive-page { margin:0; padding:20px 12px 40px; border:0; text-align:left;
   .ledger dl div:last-child dd { text-align:right; }
   .file-menu .play { font-size:14px; padding:3px 8px; }
 }
+
+.clearance-list { margin-top:10px; border-top:1px solid #a4a093; font:13px Arial,sans-serif; }
+.clearance-list summary { cursor:pointer; padding:8px 0 2px; font-weight:bold; }
+.clearance-list p { margin:8px 0; }
+.clearance-list ul { list-style:none; padding:0; margin:0; }
+.clearance-list li { display:flex; justify-content:space-between; gap:12px; padding:4px 0; border-bottom:1px dotted #b2ae9d; }
+.clearance-list .earned { color:#1b3071; font-weight:bold; }

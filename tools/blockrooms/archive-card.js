@@ -1,150 +1,206 @@
 import { paintFlatCharacter } from './world/art/character.js';
 import { drawLogo } from './art.js';
+import { CLEARANCE_FLOORS } from './core/archive.mjs';
+import { floorStamp } from './archive-stamps.js';
 
+const blue = '#1b3071',
+  ink = '#182946',
+  paper = '#ede9d8',
+  gray = '#626777';
 let wordmark;
 
-// The displayed canvas is also the print master. Only these public-facing fields reach the PNG.
-export function drawPersonnelCard(canvas, { name, look, best, escapes, rooms, entities }, portrait) {
-  const g = canvas.getContext('2d'),
-    W = canvas.width,
-    H = canvas.height;
-  const ink = '#163e3b',
-    green = '#125b51',
-    gold = '#eec66d',
-    paper = '#f2e9ca',
-    muted = '#4f5e4f';
+// Lay out in coarse printer dots. Typeset directly on the export canvas so even the small legends print cleanly.
+export function drawPersonnelCard(canvas, { name, look, best, escapes, rooms, entities, clearances = [] }, portrait) {
+  const g = canvas.getContext('2d');
+  g.save();
+  g.scale(canvas.width / 600, canvas.height / 360);
+  g.imageSmoothingEnabled = false;
   const rect = (x, y, w, h, color) => {
     g.fillStyle = color;
     g.fillRect(x, y, w, h);
   };
-  const text = (value, x, y, font, color = ink, maxWidth) => {
+  const type = (value, x, y, font, color = ink, align = 'left') => {
     g.fillStyle = color;
     g.font = font;
-    if (maxWidth) g.fillText(value, x, y, maxWidth);
-    else g.fillText(value, x, y);
+    g.textAlign = align;
+    g.fillText(value, x, y);
+    g.textAlign = 'left';
   };
-  const mono = (size) => 'bold ' + size + 'px "Courier New", monospace';
-  const sans = (size) => 'bold ' + size + 'px Arial, sans-serif';
-  g.save();
-  g.imageSmoothingEnabled = false;
-  rect(0, 0, W, H, ink);
-  rect(10, 10, W - 20, H - 20, paper);
-  // The holes and tear lines are printed continuously, like tractor-feed stationery.
-  for (const x of [33, W - 33]) {
-    rect(x + (x < 50 ? 17 : -19), 12, 2, H - 24, '#bfb599');
-    for (let y = 32; y < H - 16; y += 40) {
-      g.beginPath();
-      g.arc(x, y, 6, 0, Math.PI * 2);
-      g.fillStyle = '#aca58b';
-      g.fill();
-      rect(x - 3, y - 2, 6, 4, '#89856e');
-    }
-  }
-  rect(55, 14, 1090, 122, ink);
-  // A plan of cubicles across the ink band doubles as the department letterhead.
+  const mono = (size) => `600 ${size}px 'HR Mono', 'Courier New', monospace`;
+  const display = (size) => `${size}px 'HR Bitmap', Verdana, sans-serif`;
+  const rule = (x, y, w) => {
+    rect(x, y, w, 1, '#a1a3a4');
+    rect(x, y + 1, w, 1, '#fffdf1');
+  };
+  rect(0, 0, 600, 360, '#101d49');
+  rect(2, 2, 596, 356, paper);
+  rect(4, 4, 592, 57, blue);
+
+  // The header carries an optical security pattern: corridors disappear into an offset door.
   g.save();
   g.beginPath();
-  g.rect(650, 14, 495, 122);
+  g.rect(302, 4, 294, 57);
   g.clip();
-  for (let x = 647; x < 1175; x += 59)
-    for (let y = 9; y < 139; y += 46) {
-      rect(x, y, 42, 3, '#2b5149');
-      rect(x, y, 3, 31, '#2b5149');
-      rect(x + 26, y + 20, 33, 3, '#2b5149');
-      rect(x + 56, y + 20, 3, 27, '#2b5149');
-    }
+  const vanX = 468,
+    vanY = 33;
+  for (let t = 1; t <= 22; t++) {
+    const d = t * t * 0.82,
+      x = Math.round(vanX - d * 0.68),
+      y = Math.round(vanY - d * 0.43);
+    const w = Math.round(1.56 * d),
+      h = Math.round(0.91 * d);
+    rect(x, y, w, 1, '#36538b');
+    rect(x, y, 1, h, '#42608f');
+    rect(x + w, y, 1, h, '#2b4680');
+    rect(x, y + h, w, 1, '#325382');
+  }
   g.restore();
-  rect(82, 40, 53, 65, gold);
-  rect(91, 48, 35, 49, ink);
-  rect(113, 71, 5, 5, gold);
   if (!wordmark) {
     wordmark = document.createElement('canvas');
-    const stopAnimation = drawLogo(wordmark, ['BLOCKROOMS']);
-    stopAnimation();
+    drawLogo(wordmark, ['BLOCKROOMS'])();
   }
-  g.drawImage(wordmark, 154, 40, 497, 67);
-  text('PERSONNEL DEPT.', 846, 68, mono(26), '#fcf4d7');
-  text('FORM HR–31', 846, 101, mono(20), gold);
-  rect(55, 136, 1090, 7, gold);
-  // The photo has the same wallpaper, skirting board and low ceiling as the front door.
-  const x = 83,
-    y = 176,
-    w = 282,
-    h = 373;
-  rect(x - 5, y - 5, w + 10, h + 10, ink);
-  rect(x, y, w, h, '#d3bc72');
+  g.drawImage(wordmark, 14, 14, 246, 33);
+  type('PERSONNEL  /  ACCESS CONTROL', 16, 56, mono(7), '#c3d6ee');
+  rect(476, 11, 109, 44, '#101f50');
+  rect(480, 15, 2, 36, '#efbc39');
+  type('PHOTO ID', 489, 33, display(19), '#fff6cf');
+  type('1997 SERIES', 490, 46, mono(8), '#a9c1e0');
+  rect(4, 61, 592, 3, '#c4a147');
+
+  // Crop the actual rig as a badge photograph. Older GPUs can still print the game's flat avatar.
+  const px = 14,
+    py = 74,
+    pw = 118,
+    ph = 114;
+  rect(px - 2, py - 2, pw + 4, ph + 4, ink);
+  rect(px, py, pw, ph, '#759493');
   g.save();
   g.beginPath();
-  g.rect(x, y, w, h);
+  g.rect(px, py, pw, ph);
   g.clip();
-  for (let col = x + 7; col < x + w; col += 21) {
-    rect(col, y, 3, h, '#c1a963');
-    for (let row = y + 10; row < y + h - 32; row += 38) {
-      g.strokeStyle = '#b39a59';
-      g.lineWidth = 1;
-      g.beginPath();
-      g.moveTo(col + 9, row);
-      g.lineTo(col + 12, row + 5);
-      g.lineTo(col + 9, row + 10);
-      g.lineTo(col + 6, row + 5);
-      g.closePath();
-      g.stroke();
-    }
+  for (let y = py; y < py + ph; y += 2) {
+    for (let x = px + ((y - py) % 4 ? 1 : 0); x < px + pw; x += 2) rect(x, y, 1, 1, '#87a29c');
   }
-  rect(x, y, w, 12, '#c6bca1');
-  rect(x, y + 12, w, 3, '#655e4c');
-  rect(x + 76, y + 1, 131, 8, '#fff6cf');
-  rect(x, y + h - 42, w, 42, '#8d8060');
-  rect(x, y + h - 47, w, 6, '#655e4c');
-  if (portrait) g.drawImage(portrait, x + 11, y + 21, w - 22, h - 32);
-  else {
+  // The photographer's pull-down blind.
+  for (let x = px + 4; x < px + pw; x += 11) rect(x, py, 1, ph, '#6a898c');
+  if (portrait) {
+    const cropH = Math.round(portrait.height * 0.64),
+      cropW = Math.min(portrait.width, Math.round((cropH * pw) / ph));
+    g.drawImage(
+      portrait,
+      Math.floor((portrait.width - cropW) / 2),
+      Math.round(portrait.height * 0.074),
+      cropW,
+      cropH,
+      px,
+      py,
+      pw,
+      ph,
+    );
+  } else {
     const pix = paintFlatCharacter(look, { pose: 'idle' }),
-      bounds = pix.extent();
-    if (bounds) {
-      const pw = bounds.x1 - bounds.x0,
-        ph = bounds.y1 - bounds.y0;
-      const scale = Math.max(1, Math.floor(Math.min((w - 40) / pw, (h - 60) / ph)));
+      b = pix.extent();
+    if (b) {
+      const w = b.x1 - b.x0,
+        h = b.y1 - b.y0,
+        scale = Math.min((pw - 8) / w, ph / (h * 0.73));
       g.drawImage(
         pix.toCanvas(),
-        bounds.x0 - pix.x0,
-        bounds.y0 - pix.y0,
-        pw,
-        ph,
-        x + Math.round((w - pw * scale) / 2),
-        y + h - 18 - ph * scale,
-        pw * scale,
-        ph * scale,
+        b.x0 - pix.x0,
+        b.y0 - pix.y0,
+        w,
+        h,
+        px + Math.round((pw - w * scale) / 2),
+        py + 5,
+        Math.round(w * scale),
+        Math.round(h * scale),
       );
     }
   }
+  for (const dx of [px + 3, px + pw - 8])
+    for (const dy of [py + 3, py + ph - 4]) {
+      rect(dx, dy, 5, 1, '#d4ded0');
+      rect(dx === px + 3 ? dx : dx + 4, dy === py + 3 ? dy : dy - 3, 1, 4, '#d4ded0');
+    }
   g.restore();
-  text('PHOTO ON FILE', 88, 594, mono(25), muted);
-  text('PERSONNEL IDENTIFICATION', 410, 199, mono(30), green);
-  text(name, 408, 292, 'bold 82px Georgia, serif', ink, 700);
-  rect(410, 324, 693, 3, ink);
-  rect(410, 334, 693, 1, '#a29e83');
+  rect(px - 2, py + ph + 2, pw + 4, 13, ink);
+  type('VISITOR PHOTOGRAPH', px + pw / 2, py + ph + 11, mono(8), '#f6f1d9', 'center');
+
+  type('NAME ON FILE', 148, 83, mono(9), blue);
+  let size = 45;
+  g.font = display(size);
+  while (size > 13 && g.measureText(name).width > 433) g.font = display(--size);
+  type(name, 146, 127, display(size));
+  rule(148, 138, 435);
   const fields = [
     ['ESCAPES', escapes],
     ['BEST SCORE', best],
     ['ROOM TYPES', rooms],
     ['ENTITIES SEEN', entities],
   ];
-  for (const [i, [title, value]] of fields.entries()) {
-    const dx = 410 + (i % 2) * 359,
-      dy = 375 + Math.floor(i / 2) * 129;
-    text(title, dx, dy, mono(23), muted);
-    text(value.toLocaleString('en-US'), dx, dy + 62, sans(58), ink, 325);
-  }
-  rect(78, 628, 1041, 3, ink);
-  text('BLOCKROOMS.APP', 82, 686, mono(39), ink);
-  g.save();
-  g.translate(906, 673);
-  g.rotate(-0.045);
-  g.strokeStyle = '#964537';
-  g.lineWidth = 3;
-  g.strokeRect(-142, -27, 303, 45);
-  text('EMPLOYEE COPY', -122, 6, mono(32), '#964537');
-  g.restore();
+  fields.forEach(([label, value], i) => {
+    const x = 148 + i * 110;
+    if (i) rect(x - 6, 151, 1, 42, '#c1bfaf');
+    type(label, x, 158, mono(8), gray);
+    const digits = Number(value).toLocaleString('en-US');
+    let fontSize = 27;
+    g.font = display(fontSize);
+    while (fontSize > 10 && g.measureText(digits).width > 102) g.font = display(--fontSize);
+    type(digits, x, 187, display(fontSize), blue);
+  });
+
+  const floors = Object.entries(CLEARANCE_FLOORS),
+    earned = new Set(clearances);
+  rect(12, 211, 576, 21, blue);
+  type('FLOOR CLEARANCE', 19, 227, display(17), '#fff6d9');
+  type(
+    `${String(earned.size).padStart(2, '0')} / ${String(floors.length).padStart(2, '0')}`,
+    580,
+    226,
+    mono(11),
+    '#fff6d9',
+    'right',
+  );
+  floors.forEach(([id, label], index) => {
+    const x = 14 + index * 64,
+      y = 240,
+      w = 56,
+      h = 50,
+      active = earned.has(id);
+    if (active) {
+      const pic = floorStamp(id);
+      // Scalloped paper, printed registration number and coloured plate are one collectible stamp.
+      rect(x + 1, y + 2, w, h, '#a6a39a');
+      rect(x, y, w, h, '#fff7d6');
+      rect(x + 2, y + 2, w - 4, h - 4, '#384057');
+      rect(x + 3, y + 3, w - 6, h - 6, '#fff3cd');
+      g.drawImage(pic, x + 5, y + 5, 46, 32);
+      type('BR', x + 5, y + 45, mono(7), ink);
+      for (let k = 0; k < 4; k++) rect(x + 19 + k * 3, y + 41, 2, 1, gray);
+      type(String(index + 1).padStart(2, '0'), x + w - 5, y + 45, mono(7), ink, 'right');
+      for (let k = 3; k < w - 1; k += 6) {
+        rect(x + k, y, 2, 2, paper);
+        rect(x + k, y + h - 1, 2, 3, paper);
+      }
+      for (let k = 4; k < h - 1; k += 6) {
+        rect(x, y + k, 2, 2, paper);
+        rect(x + w - 1, y + k, 3, 2, paper);
+      }
+    } else {
+      g.strokeStyle = '#a5a497';
+      g.lineWidth = 1;
+      g.setLineDash([2, 2]);
+      g.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
+      g.setLineDash([]);
+      type(String(index + 1).padStart(2, '0'), x + w / 2, y + 30, display(17), '#94968e', 'center');
+    }
+    const words = label.toUpperCase().split(' ');
+    words.forEach((word, line) => type(word, x + w / 2, 303 + line * 9, mono(8.5), active ? ink : gray, 'center'));
+  });
+
+  rule(12, 320, 576);
+  type('blockrooms.app', 14, 346, display(22), blue);
+  type('HR  /  FORM 97-C', 586, 345, mono(9), gray, 'right');
   g.restore();
 }
 
