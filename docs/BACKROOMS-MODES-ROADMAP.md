@@ -8,7 +8,37 @@ nothing here has been built or tried.
 Today's two-player game is the co-op prototype: [BACKROOMS-COOP.md](BACKROOMS-COOP.md), with what it
 carries and what it does not in [BACKROOMS-COOP-COVERAGE.md](BACKROOMS-COOP-COVERAGE.md).
 
+## Which first, and why (cast's view, for the owner to weigh)
+
+The test applied: what uses what only this game has?
+- **The camcorder:** every run is already a tape with a timestamp.
+- **The seed:** the same seed is the same building, so a run can be shared and compared.
+- **The cast:** creatures with rules you can learn.
+- **The building:** the building is the enemy.
+
+The ranking:
+1. **The mole (4, below).** The plot of the place, and the cheapest step toward one player playing the
+   building, since the mole is a visitor with a few powers, not a creature driver. The tapes make it ours.
+2. **A daily tape (1, below, played asynchronously).** The strongest reason to come back. It needs no
+   live match, so it works with few players, and seeds and tapes become things to share.
+3. **One plays the building (2, below).** The flagship, built up to from the mole in steps:
+   - a mole who can briefly take one creature;
+   - then switching between creatures, with spawn closets.
+4. **Death match or capture the flag (3, below).** Last. It is least like this game: an event, not a mode.
+
+What ties them together:
+- **The cast met and got away from:** already counted per visit, it is a collection kept across modes.
+- **Perks:** `core/perks.mjs` exists, and perks could be earned by play.
+- **New creatures and rooms:** they land in every mode at once.
+- **A new edition:** a change to the building's rules can be a new season of daily tapes.
+
 ## 1. Race (the easy one): 1v1 or 2v2
+
+A variant, likely the stronger one: **the daily tape**, played asynchronously.
+- **One seed a day:** the same building for everyone, with its own board.
+- **Ghosts from tapes:** your run is kept as a tape, and you race the ghosts of other people's tapes, not a
+  live opponent. No matchmaking, so it works with few players.
+- **The live race:** the 1v1 version below stays as a variant of it.
 
 Both play the same building at the same time, each in their own copy of it, and the scores are compared at
 the end. The other player can be seen as a ghost walking your copy.
@@ -82,3 +112,41 @@ What it would need:
 - **More weapons:** offensive ones.
 - **The modes themselves:** flags and respawns.
 - **Creatures as neutral hazards:** creatures that hunt whoever is nearest, not "the visitor".
+
+## 4. The mole (Among Us inspired): one of the team is secretly working for the building
+
+The owner's addition. A co-op visit in which one of the players has been dealt the building's side and
+does not say so. It fits the place: the plot of the films is that the place wants you to stay.
+
+The mole is a visitor, with a few quiet powers, each with a cooldown and each leaving a trace:
+- **a noise:** a sound from where they stand, that draws whatever hears;
+- **a door:** shut quietly behind the others;
+- **a chalk mark:** smudged or moved (`marks`);
+- **a paper fire:** put out (the extinguisher's `douse` path already exists);
+- **a sticky note:** left where it will wake;
+- **a lie:** walking the group the long way, or toward a creature's room, is simply a lie.
+
+The tapes make it ours. Every visitor's camcorder records:
+- **the vote:** at the end, or at a vote partway through, the others scrub through each other's tapes to find
+  who did it;
+- **the mole's glitch:** the mole can glitch a few seconds of their own tape, at a cost (battery, or the
+  glitch itself looking suspicious).
+
+Win conditions to try:
+- **for the team:** the visitors leave with the mole named;
+- **for the mole:** fewer than half get out, or the mole leaves unnamed.
+
+What it stands on:
+- **co-op:** the prototype exists (BACKROOMS-COOP.md);
+- **interference:** the tape's interference (`env.interfere`) and glitch (`hud.glitch`);
+- **record and replay:** what a run keeps and plays back (`core/runs.mjs`, the replay test);
+- **the cast:** creatures with readable rules, so a lure is predictable to the mole and readable afterward to
+  everyone.
+
+What it would need:
+- the role dealt in secret;
+- the mole's powers, networked;
+- a tape review: each visitor's picture kept for the run, not only the count;
+- a vote;
+- balance, so the powers are noticeable on tape but deniable in the moment.
+
