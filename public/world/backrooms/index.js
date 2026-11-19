@@ -335,6 +335,11 @@ async function visit(office, opt) {
       const { prepareBridgeStudy } = await import('./bridge-study.js');
       prepareBridgeStudy(level, builders);
     }
+    // (the dev page's &preview=corners,hallways: doorways in corners, corridors that are not rectangles; preview.js. Never in a visit)
+    if (opt.debug && opt.dev?.preview) {
+      const { preparePreview } = await import('./preview.js');
+      preparePreview(level, builders, opt.dev.preview);
+    }
     const env = f.env = {
       level, cast, who, perk, kit, sound, hud, vhs, renderer, builders, catalogue: await loadCatalogue(kit), Avatar, layout,
       plan: office.net?.state?.world?.plan || {}, visit: plan, carry,
@@ -342,6 +347,8 @@ async function visit(office, opt) {
       // (a part built ahead is ready once its rooms and light maps are; the light through its doorways fills in after: world.js doorPass)
       lateDoorLight: !!pace,
       lighting: opt.dev?.lighting || false,
+      // (the dev page's &preview=clip,…: rooms built with a preview of something not yet in the game; empty everywhere else)
+      preview: new Set(opt.dev?.preview || []),
       steadyLighting: () => settings.steadyLighting,
       difficulty: () => difficulty.current,
       where: cleanWhere(opt.where),             // a place name the page was told (the site's host says a city): the banner's second line, and nothing else's
