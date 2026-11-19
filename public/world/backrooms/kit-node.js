@@ -183,8 +183,9 @@ export function surfaceNode(spec) {
 
   rebuild();
 
-  /** Attach a TSL hook ({ position?, uv?, wetNormal?, color?, replaceFragment? }) to this kit surface. */
+  /** Attach a TSL hook ({ init?, position?, uv?, wetNormal?, color?, replaceFragment? }) to this kit surface. */
   m.patchNode = (hook) => {
+    hook.init?.({ T, N, m });
     hooks.push(hook);
     rebuild();
     m.needsUpdate = true;
