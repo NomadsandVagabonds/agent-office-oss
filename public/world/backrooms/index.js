@@ -341,6 +341,8 @@ async function visit(office, opt) {
       // (a part built ahead is ready once its rooms and light maps are; the light through its doorways fills in after: world.js doorPass)
       lateDoorLight: !!pace,
       lighting: opt.dev?.lighting || false,
+      // (the dev page's &preview=clip,…: rooms built with a preview of something not yet in the game; empty everywhere else)
+      preview: new Set(opt.dev?.preview || []),
       steadyLighting: () => settings.steadyLighting,
       difficulty: () => difficulty.current,
       where: cleanWhere(opt.where),             // a place name the page was told (the site's host says a city): the banner's second line, and nothing else's

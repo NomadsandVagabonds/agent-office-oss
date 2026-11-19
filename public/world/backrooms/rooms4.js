@@ -6,6 +6,7 @@ import { Vox, M } from '../vox/vox.js';
 import { lin, drawText, WHITE } from './kit.js';
 import { headAt } from './gen.js';
 import { P, card, framed, standee, mugVox } from './bits.js';
+import { clip, previewing } from './clipping.js';
 
 /* ---- the museum --------------------------------------------------------------------- */
 
@@ -165,6 +166,15 @@ function nested(c) {
   hut(2.3, 1.3, 0.07, s2, 0.62, 1.0, 0.56, p.plates[1]);
   hut(0.96, 0.58, 0.035, s2, 0.24, 0.4, 0.25, p.plates[2], false);
   c.solid(-0.48, p.z - 0.48, 0.48, p.z + 0.48, { keep: true });
+  // (preview, &preview=clip: an office chair most of the way through the meeting room's blank wall, the one the way in
+  // looks at, or its right-hand wall where the way in looks at its door. Cut at the middle of that wall, so nothing of
+  // it is inside the meeting room. Fixed choices, nothing rolled)
+  if (previewing(c, 'clip')) {
+    const b = boxes[0], face = s1 === 'front' ? 'right' : 'front', out = face === 'front' ? [0, 0, 1] : [1, 0, 0];
+    const f = face === 'front' ? b.z1 : b.x1, mid = f - b.t / 2;
+    const x = face === 'front' ? -1.15 : f - 0.08, z = face === 'front' ? f - 0.08 : p.z + 1.05;
+    clip(c, 'chair', x, z, { rot: Math.atan2(out[0], out[2]) + 0.5, cut: [{ n: out.map((v) => -v), d: -mid }] });
+  }
   // through the smallest door: light, and nothing you could get to
   const g = boxes[2], warm = lin('#ffd9a0');
   const glow = c.shining('inner', kit.tex.white(), 2.6, warm);

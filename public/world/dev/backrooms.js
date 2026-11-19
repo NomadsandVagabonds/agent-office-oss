@@ -29,6 +29,8 @@
 //                      `bench done` (tools/backrooms-bench.mjs runs it for three seeds; docs/BACKROOMS-GRAPHICS.md, phase 0)
 //   &stress=4          with &perf=1 or &bench=1: the level's scene drawn 4 times a frame (1…32), same picture, to measure a machine
 //                      past its display's refresh rate; &stress=auto with &bench=1 steps it up at the first station first (perf.js)
+//   &preview=clip      a preview, in the rooms that have one: things half inside the structure in phone, nested and cover
+//                      (clipping.js, docs/BLOCKROOMS-PREVIEWS.md). Nothing in the game reads it
 //   &loot=1            something to find: the keycard (in the mascot's hand) and coins 1–4; &loot=card,1,3 for some of it. There is no
 //                      office here to keep count, so a stand-in does, in this page's memory, and says so on the console: what you leave
 //                      by the door with is gone the next visit (any key), everything else is down there again. Without it: no loot.
@@ -156,6 +158,8 @@ async function go() {
       // &gfx=sheen: the tubes caught on floors that shine (sheen.rule.js)
       gfx: q.get('gfx') ? Object.fromEntries(q.get('gfx').split(',').map((s) => s.split(':')).map(([k, v]) => [k, v ? Number(v) : 1])) : null,
       lighting: ['1', ...LIGHTING_MODES].includes(q.get('lighting')) ? q.get('lighting') : false,
+      // &preview=clip: rooms that have a preview built into them use it (docs/BLOCKROOMS-PREVIEWS.md); nothing in the game does
+      preview: (q.get('preview') || '').split(',').filter(Boolean),
       owns: target => !!target?.closest?.('[data-lighting-study]') },
     onReady(handle) {
       if (room) handle.goto(/^\d+$/.test(room) ? Number(room) : room, q.has('x') ? num('x', 0) : undefined, q.has('z') ? num('z', 0) : undefined, num('yaw', 0), num('pitch', 0));

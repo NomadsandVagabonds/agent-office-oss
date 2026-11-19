@@ -1415,6 +1415,12 @@ function roomContext(world, rt) {
       return c.crate(x, z, w, h, d, opt.rot || 0, [0.6, 0.55, 0.45], opt);
     },
     hasProp: (type) => env.catalogue.has(type),
+    /** What c.prop would put down for `type`, without putting it down: { geo, scale } (the level's own, or the catalogue's at 1), or null (clipping.js). */
+    propModel(type, o = {}) {
+      const own = env.catalogue.has(type) ? levelProp(kit, env.catalogue, type, o) : null;
+      const geo = own ? own.geo : env.catalogue.geo(type, o);
+      return geo ? { geo, scale: own ? own.scale : 1 } : null;
+    },
     /** A voxel model sculpted for this level: `make()` → Vox, meshed once per key. */
     model(key, make, x, z, opt = {}) { return c.place(kit.model(key, make), x, z, opt); },
     /** A plain painted block standing on the floor (or at opt.y), turned by rot. */
