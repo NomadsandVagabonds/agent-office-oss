@@ -27,10 +27,18 @@ export function drawPersonnelCard(canvas, { name, look, best, escapes, rooms, en
     g.textAlign = 'left';
   };
   const mono = (size) => `600 ${size}px 'HR Mono', 'Courier New', monospace`;
-  const display = (size) => `${size}px 'HR Bitmap', Verdana, sans-serif`;
-  const rule = (x, y, w) => {
-    rect(x, y, w, 1, '#a1a3a4');
-    rect(x, y + 1, w, 1, '#fffdf1');
+  const labelFont = (size) => `700 ${size}px "Helvetica Neue", Arial, sans-serif`;
+  const display = (size, italic = false) =>
+    `${italic ? 'italic ' : ''}900 ${size}px "Arial Black", "Helvetica Neue", Arial, sans-serif`;
+  const band = (x, y, width, height, rake, color) => {
+    g.fillStyle = color;
+    g.beginPath();
+    g.moveTo(x + rake, y);
+    g.lineTo(x + rake + width, y);
+    g.lineTo(x + width, y + height);
+    g.lineTo(x, y + height);
+    g.closePath();
+    g.fill();
   };
   rect(0, 0, 600, 360, '#101d49');
   rect(2, 2, 596, 356, paper);
@@ -41,7 +49,7 @@ export function drawPersonnelCard(canvas, { name, look, best, escapes, rooms, en
   g.beginPath();
   g.rect(302, 4, 294, 57);
   g.clip();
-  const vanX = 468,
+  const vanX = 426,
     vanY = 33;
   for (let t = 1; t <= 22; t++) {
     const d = t * t * 0.82,
@@ -55,6 +63,9 @@ export function drawPersonnelCard(canvas, { name, look, best, escapes, rooms, en
     rect(x, y + h, w, 1, '#325382');
   }
   g.restore();
+  // Six offset inks echo the diagonal die-cut at the other end of the pass.
+  const spectrum = ['#db6264', '#ef9759', '#f3ce68', '#78bc92', '#68b1cf', '#a48bca'];
+  spectrum.forEach((color, i) => band(502 + i * 11, 4, 8.5, 57, 24, color));
   if (!wordmark) {
     wordmark = document.createElement('canvas');
     drawLogo(wordmark, ['BLOCKROOMS'])();
@@ -123,11 +134,11 @@ export function drawPersonnelCard(canvas, { name, look, best, escapes, rooms, en
   type('VISITOR PHOTOGRAPH', px + pw / 2, py + ph + 11, mono(8), '#f6f1d9', 'center');
 
   type('NAME ON FILE', 148, 83, mono(9), blue);
-  let size = 45;
-  g.font = display(size);
-  while (size > 13 && g.measureText(name).width > 433) g.font = display(--size);
-  type(name, 146, 127, display(size));
-  rule(148, 138, 435);
+  let size = 48;
+  g.font = display(size, true);
+  while (g.measureText(name).width > 430 && size > 12) g.font = display(--size, true);
+  type(name, 146, 125, display(size, true), blue);
+  rect(148, 138, 437, 2, blue);
   const fields = [
     ['ESCAPES', escapes],
     ['BEST SCORE', best],
@@ -136,40 +147,48 @@ export function drawPersonnelCard(canvas, { name, look, best, escapes, rooms, en
   ];
   fields.forEach(([label, value], i) => {
     const x = 148 + i * 110;
-    if (i) rect(x - 6, 151, 1, 42, '#c1bfaf');
-    type(label, x, 158, mono(8), gray);
+    if (i) rect(x - 6, 152, 0.85, 43, '#7e88a2');
+    type(label, x, 160, labelFont(10.8), blue);
     const digits = Number(value).toLocaleString('en-US');
-    let fontSize = 27;
+    let fontSize = 32;
     g.font = display(fontSize);
     while (fontSize > 10 && g.measureText(digits).width > 102) g.font = display(--fontSize);
-    type(digits, x, 187, display(fontSize), blue);
+    type(digits, x, 192, display(fontSize), blue);
   });
 
   const floors = Object.entries(CLEARANCE_FLOORS),
     earned = new Set(clearances);
-  rect(12, 211, 576, 21, blue);
-  type('FLOOR CLEARANCE', 19, 227, display(17), '#fff6d9');
-  type(
-    `${String(earned.size).padStart(2, '0')} / ${String(floors.length).padStart(2, '0')}`,
-    580,
-    226,
-    mono(11),
-    '#fff6d9',
-    'right',
-  );
+  band(12, 209, 524, 25, 10, blue);
+  band(541, 209, 10, 25, 10, blue);
+  band(557, 209, 8, 25, 10, blue);
+  band(571, 209, 7, 25, 10, blue);
+  type('FLOOR CLEARANCE', 26, 228, display(20, true), paper);
+  type(`${earned.size} / ${floors.length}`, 523, 228, display(20, true), paper, 'right');
+
+  // A single ruled strip leaves the paper visible between all nine ink impressions.
+  g.strokeStyle = '#8490a6';
+  g.lineWidth = 0.8;
+  g.strokeRect(12, 239, 576, 78);
   floors.forEach(([id, label], index) => {
-    const center = 42 + index * 64, active = earned.has(id);
+    const left = 12 + index * 64, center = left + 32, active = earned.has(id);
+    if (index) rect(left, 239, 0.7, 78, '#a0a6ae');
     if (active) {
       g.drawImage(floorStamp(id), center - 27, 241, 54, 47.5);
     } else {
       rect(center - 9, 273, 18, 0.8, '#b8b7a9');
     }
     const words = label.toUpperCase().split(' ');
-    words.forEach((word, line) => type(word, center, 303 + line * 9, mono(8.5), active ? ink : gray, 'center'));
+    words.forEach((word, line) => type(word, center, 302 + line * 10, labelFont(9.2), active ? ink : gray, 'center'));
   });
 
-  rule(12, 320, 576);
-  type('blockrooms.app', 14, 346, display(22), blue);
+  const website = 'blockrooms.app', addressFont = display(18, true);
+  g.font = addressFont;
+  const rulesEnd = 586 - g.measureText(website).width - 12;
+  for (let i = 0; i < 4; i++) {
+    // The four strokes meet the same diagonal cut as the slash on the lettering.
+    rect(12, 331 + i * 3.5, rulesEnd - 12 - i * 1.4, 1.6, blue);
+  }
+  type(website, 585, 343, addressFont, blue, 'right');
   g.restore();
 }
 

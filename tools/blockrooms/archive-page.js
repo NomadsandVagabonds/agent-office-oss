@@ -107,7 +107,7 @@ setInterval(() => {
   $('send-code').textContent = seconds ? `Resend ${seconds}s` : codeEmail ? 'Resend code' : 'Send code';
   $('send-code').disabled = sending || seconds > 0 || !currentState?.configured || !currentState?.ready;
 }, 1000);
-Promise.allSettled([document.fonts.load('16px "HR Bitmap"'), document.fonts.load('600 9px "HR Mono"')])
+Promise.allSettled([document.fonts.load('600 9px "HR Mono"')])
   .then(() => { typeReady = true; printCard(); });
 // A printed pixel portrait is ready immediately, including on machines without WebGL.
 import('./archive-preview.js').then(({ characterPreview }) => {
