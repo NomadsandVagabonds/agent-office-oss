@@ -160,12 +160,12 @@ const WILD_OUTFITS = ['#dfa22e', '#e88fb0', '#ff3a26', '#2a52be', '#ffd83a', '#1
 const LABELS = {
   gender: { male: 'Male (Boy)', female: 'Female (Girl)' },
   species: { human: 'Human', alien: 'Alien', robot: 'Robot', goblin: 'Goblin', dog: 'Dog', cat: 'Cat' },
-  hair: { short: 'Short', side: 'Side Part', long: 'Long', braids: 'Side Braid', bun: 'Top Bun', mohawk: 'Mohawk', bald: 'Bald', cap: 'Cap', beanie: 'Beanie' },
+  hair: { short: 'Short', side: 'Side Part', long: 'Long', braids: 'Side Braid', bun: 'Top Bun', mohawk: 'Mohawk', bald: 'Bald' },
   facial: { none: 'Clean', lashes: 'Lashes & Hoops', mustache: 'Mustache', beard: 'Beard' },
   outfit: { tee: 'T-Shirt', hoodie: 'Hoodie', suit: 'Suit & Tie', consul: 'Consul Suit', vest: 'Vest', cardigan: 'Cardigan', tunic: 'Choker Tunic' },
   accessory: {
     none: 'None', goggles: 'Goggles', cowboy: 'Cowboy Hat', hoops: 'Hoop Rings', glasses: 'Glasses', shades: 'Shades', monocle: 'Monocle', eyepatch: 'Eyepatch', headphones: 'Phones',
-    flower: 'Flower', partyhat: 'Party Hat', propeller: 'Propeller', tophat: 'Top Hat', crown: 'Crown', halo: 'Halo',
+    flower: 'Flower', partyhat: 'Party Hat', propeller: 'Propeller', tophat: 'Top Hat', crown: 'Crown', halo: 'Halo', cap: 'Cap', beanie: 'Beanie',
   },
 };
 
@@ -177,7 +177,7 @@ const PRESETS = [
   { label: 'Exec Suit', look: { gender: 'male', species: 'human', skin: '#cd8d5e', hair: 'short', hairColor: '#9aa0ac', facial: 'mustache', outfit: 'suit', outfitColor: '#5a5a66', accessory: 'monocle' } },
   { label: 'Goblin Clerk', look: { gender: 'male', species: 'goblin', skin: '#6b9460', hair: 'short', hairColor: '#241608', facial: 'mustache', outfit: 'cardigan', outfitColor: '#8a5a8f', accessory: 'glasses' } },
   { label: 'CRT Bot', look: { gender: 'male', species: 'robot', skin: '#8a93a8', hair: 'short', hairColor: '#15151c', facial: 'none', outfit: 'hoodie', outfitColor: '#b5483f', accessory: 'headphones' } },
-  { label: 'Night Cat', look: { gender: 'female', species: 'cat', skin: '#3a3a44', hair: 'beanie', hairColor: '#15151c', facial: 'none', outfit: 'hoodie', outfitColor: '#3f8a72', accessory: 'shades' } },
+  { label: 'Night Cat', look: { gender: 'female', species: 'cat', skin: '#3a3a44', hair: 'short', hairColor: '#15151c', facial: 'none', outfit: 'hoodie', outfitColor: '#3f8a72', accessory: 'beanie' } },
   { label: 'Party Dog', look: { gender: 'male', species: 'dog', skin: '#e3c79a', hair: 'short', hairColor: '#7d5836', facial: 'none', outfit: 'tee', outfitColor: '#c9893f', accessory: 'partyhat' } },
   { label: 'Propeller IT', look: { gender: 'male', species: 'human', skin: '#dcab8b', hair: 'bald', hairColor: '#4a2f1a', facial: 'beard', outfit: 'tee', outfitColor: '#5a6fa8', accessory: 'propeller' } },
   { label: 'VIP Cat', look: { gender: 'female', species: 'cat', skin: '#f1e6d2', hair: 'bun', hairColor: '#caa05a', facial: 'none', outfit: 'suit', outfitColor: '#8a5a8f', accessory: 'crown' } },
@@ -335,10 +335,15 @@ function drawBarcode(seedText) {
 function refreshPassSummary() {
   const p = difficultyPerk(resolvePerk(me.perk), difficultyField.value);
   const mode = $('pass-mode');
-  mode.textContent = me.customLook ? 'CUSTOM EMPLOYEE PASS' : 'RANDOM VISITOR (DEFAULT)';
+  mode.textContent = me.customLook ? 'CUSTOM' : 'RANDOM';
   mode.classList.toggle('custom', me.customLook);
-  $('pass-kit').textContent = `${p.code} · ${p.name} (${p.cost}/1 PT)`;
-  $('pass-stats').textContent = `${p.maxHealth} ♥ · ${p.pockets} POCKETS · ${clock(p.cameraStart)} TAPE`;
+  $('pass-kit').textContent = p.name;
+  // Only what is different from walking in on a standard pass: the kit's trades, and what the difficulty changes.
+  const plain = difficultyPerk(resolvePerk('none'), 'easy'), kit = resolvePerk(me.perk), changed = [...kit.upsides, ...kit.downsides];
+  if (p.maxHealth !== kit.maxHealth) changed.push(`${p.maxHealth} ♥`);
+  if (p.cameraStart !== plain.cameraStart && p.cameraStart !== kit.cameraStart) changed.push(`${clock(p.cameraStart)} tape`);
+  const stats = $('pass-stats');
+  stats.textContent = changed.join(' · '); stats.hidden = !changed.length; stats.title = stats.textContent;
   drawPassMug();
   syncPass3D(); if (pass3d.d && calm) passTick(performance.now());
 }
@@ -412,7 +417,7 @@ signForm.addEventListener('submit', async (e) => {
   const go = $('sign-it'); go.disabled = true; signSays.textContent = 'Signing…';
   let answer = null;
   try {
-    const res = await fetch('./api/book', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ do: 'sign', name: cleanName(p.name) || me.name, message: message || '', run: p.run, ticket: p.ticket }) });
+    const res = await fetch('./api/book', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ do: 'sign', name: cleanName(p.name) || me.name, message: message || '', run: p.run, ticket: p.ticket, look: activeLook() }) });
     answer = await res.json();
   } catch { answer = null; }
   go.disabled = false;
@@ -485,7 +490,7 @@ function genderTransitionPatch(cur, nextGender, pins = studio.pins, forceDefault
     return patch;
   }
   if (nextGender === 'female') {
-    if (!pins.has('hair') && ['short', 'side', 'bald', 'mohawk', 'cap'].includes(cur.hair)) patch.hair = defs.hair;
+    if (!pins.has('hair') && ['short', 'side', 'bald', 'mohawk'].includes(cur.hair)) patch.hair = defs.hair;
     if (!pins.has('facial') && ['mustache', 'beard'].includes(cur.facial)) patch.facial = 'none';
     if (!pins.has('outfit') && ['tee', 'suit', 'consul', 'vest'].includes(cur.outfit)) patch.outfit = defs.outfit;
     if (!pins.has('outfitColor') && String(cur.outfitColor || '').toLowerCase() === '#3f7f9a') patch.outfitColor = defs.outfitColor;
@@ -512,10 +517,10 @@ function rollRandomLook() {
   const humanGirl = nextSpecies === 'human' && nextGender === 'female';
   const humanBoy = nextSpecies === 'human' && nextGender === 'male';
   const hairChoices = humanGirl
-    ? ['long', 'braids', 'bun', 'side', 'short', 'beanie']
+    ? ['long', 'braids', 'bun', 'side', 'short']
     : humanBoy
-      ? ['short', 'side', 'cap', 'beanie', 'mohawk', 'bald']
-      : (nextSpecies === 'alien' ? ['bald', 'bald', 'cap', 'beanie'] : HAIR);
+      ? ['short', 'side', 'mohawk', 'bald']
+      : (nextSpecies === 'alien' ? ['bald', 'bald', 'mohawk'] : HAIR);
   const facialChoices = humanGirl
     ? ['none', 'none', 'lashes']
     : humanBoy
@@ -1190,9 +1195,24 @@ const FIRST_ENTRIES = [
   ['Ember Numbat', '29 Aug 98', 'Great site!! Found it on Yahoo.'],
   ['Webmaster', '11 Nov 98', 'testing guestbook'],
 ];
+// A little portrait beside each name: the look it signed in, or, for a line from before (or the page's own first
+// entries), the random visitor its name walks in as.
+const mugs = new Map();
+function mugOf(name, look) {
+  const key = `${name}|${JSON.stringify(look || null)}`;
+  let url = mugs.get(key);
+  if (!url) {
+    const canvas = document.createElement('canvas'); canvas.width = 26; canvas.height = 26;     // the head and whatever is on it
+    const ctx = canvas.getContext('2d');
+    try { blitPixCrop(ctx, paintFlatCharacter(resolveLook(`visitor:${name}`, look || undefined), { pose: 'idle' }), { sx: 3, sy: 19, sw: 26, sh: 26, scale: 1 }); } catch { /* a blank face, then */ }
+    url = canvas.toDataURL(); mugs.set(key, url);
+  }
+  const img = el('img', 'mug'); img.src = url; img.alt = ''; img.width = 28; img.height = 28;
+  return img;
+}
 function guests(latest) {
-  const real = latest.map((e) => el('li', '', el('span', 'who', e.name), el('span', 'when', day(e.at)), e.message ? el('span', 'said', e.message) : null, el('span', 'sc', `${num(e.score)} pts`)));
-  const first = FIRST_ENTRIES.map(([who, when, text]) => el('li', '', el('span', 'who', who), el('span', 'when', when), el('span', 'said', text)));
+  const real = latest.map((e) => el('li', '', mugOf(e.name, e.look), el('span', 'who', e.name), el('span', 'when', day(e.at)), e.message ? el('span', 'said', e.message) : null, el('span', 'sc', `${num(e.score)} pts`)));
+  const first = FIRST_ENTRIES.map(([who, when, text]) => el('li', '', mugOf(who), el('span', 'who', who), el('span', 'when', when), el('span', 'said', text)));
   $('guests').replaceChildren(...real, ...first);
 }
 function scores(top, none = 'Nobody yet.') {
@@ -1201,7 +1221,7 @@ function scores(top, none = 'Nobody yet.') {
   body.replaceChildren(...top.slice(0, 10).map((e, i) => {
     // (no way into somebody else's building from here: the number of a tape is its owner's to give out — the card they came out with has it)
     const td = (cls, text) => el('td', cls, text);
-    return el('tr', i ? '' : 'first', td('n', String(i + 1)), td('', e.name), td('', e.difficulty ? difficultyOf(e.difficulty).label : 'Original'), td('n', num(e.score)), td('n', clock(e.seconds)), td('n', String(e.batteries)), td('n', String(e.hearts)));
+    return el('tr', i ? '' : 'first', td('n', String(i + 1)), el('td', 'who', mugOf(e.name, e.look), el('span', '', e.name)), td('', e.difficulty ? difficultyOf(e.difficulty).label : 'Original'), td('n', num(e.score)), td('n', clock(e.seconds)), td('n', String(e.batteries)), td('n', String(e.hearts)));
   }));
 }
 guests([]);

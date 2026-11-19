@@ -112,7 +112,7 @@ export async function handle(request, ctx) {
       const check = route.verdict === 'ok' ? 'ok' : `flag: ${route.why.join('; ')}`.slice(0, 400);
       if (store.sign) {
         const duplicate = createHash('sha256').update(`ticket|${ticket.nonce}`).digest('base64url').slice(0, 22);
-        const entry = { ...entryOf({ id: randomBytes(9).toString('hex'), at: now(), name, message, run: checked.run, score: checked.score }), check, ...(ticket.started ? { started: ticket.started } : {}) };
+        const entry = { ...entryOf({ id: randomBytes(9).toString('hex'), at: now(), name, message, run: checked.run, score: checked.score, look: body.look }), check, ...(ticket.started ? { started: ticket.started } : {}) };
         const result = await store.sign(entry, me, duplicate);
         if (!result.ok) {
           if (result.why === 'slow') return json(429, { ok: false, why: 'slow' }, { 'retry-after': String(AGAIN.sign) });
@@ -129,7 +129,7 @@ export async function handle(request, ctx) {
       const same = `br:seen:${createHash('sha256').update(`ticket|${ticket.nonce}`).digest('base64url').slice(0, 22)}`;
       const [first] = await store.pipeline([['SET', same, 1, 'NX', 'EX', AGAIN.same]]);
       if (!first) return json(409, { ok: false, why: 'signed' });
-      const entry = { ...entryOf({ id: randomBytes(9).toString('hex'), at: now(), name, message, run: checked.run, score: checked.score }), check, ...(ticket.started ? { started: ticket.started } : {}) }, line = JSON.stringify(entry);
+      const entry = { ...entryOf({ id: randomBytes(9).toString('hex'), at: now(), name, message, run: checked.run, score: checked.score, look: body.look }), check, ...(ticket.started ? { started: ticket.started } : {}) }, line = JSON.stringify(entry);
       const modeKey = `br:top:${entry.difficulty || 'original'}`;
       let top;
       try {

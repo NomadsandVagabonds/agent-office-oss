@@ -9,10 +9,21 @@ export const SKIN = Object.freeze(['#f3cda8', '#e6b184', '#cd8d5e', '#9c6442', '
 export const HAIR_COLORS = Object.freeze(['#241608', '#4a2f1a', '#15151c', '#7d5836', '#caa05a', '#9aa0ac']);
 export const OUTFIT_COLORS = Object.freeze(['#b5483f', '#3f8a72', '#5a6fa8', '#8a5a8f', '#6f8a4a', '#c9893f',
   '#3f7f9a', '#5a5a66']);
-export const HAIR = Object.freeze(['short', 'side', 'long', 'bun', 'mohawk', 'bald', 'cap', 'beanie', 'braids']);
+export const HAIR = Object.freeze(['short', 'side', 'long', 'bun', 'mohawk', 'bald', 'braids']);
 export const OUTFIT = Object.freeze(['tee', 'hoodie', 'suit', 'vest', 'cardigan', 'tunic', 'consul']);
 export const ACCESSORY = Object.freeze(['none', 'glasses', 'headphones', 'monocle', 'halo', 'partyhat',
-  'crown', 'tophat', 'flower', 'eyepatch', 'shades', 'propeller', 'cowboy', 'hoops', 'goggles']);
+  'crown', 'tophat', 'flower', 'eyepatch', 'shades', 'propeller', 'cowboy', 'hoops', 'goggles', 'cap', 'beanie']);
+// The cap and the beanie were hair styles once, so a beanie could be worn under a top hat. They are headwear now, and one
+// thing is worn on the head. Older looks that wear one as hair are moved: the hat to the accessory if nothing is worn
+// there, and short hair under it (bald, on an alien). A renderer draws them through wornLook(), which hands the hat to its hair code.
+export const HAT_HAIR = Object.freeze(['cap', 'beanie']);
+function movedHat(hair, accessory, species) {
+  return { hair: species === 'alien' ? 'bald' : 'short', accessory: accessory && accessory !== 'none' ? accessory : hair };
+}
+/** The look as a renderer draws it: a cap or beanie covers the head as the old hair styles did. */
+export function wornLook(look) {
+  return look && HAT_HAIR.includes(look.accessory) ? { ...look, hair: look.accessory } : look;
+}
 export const FACIAL = Object.freeze(['none', 'mustache', 'beard', 'lashes']);
 export const PLANTS = Object.freeze(['monstera', 'succulent', 'cactus', 'bonsai', 'terrarium']);
 export const DESK_ITEMS = Object.freeze(['mug', 'figdragon', 'figrobot', 'duck', 'books', 'globe', 'stickies',
@@ -85,11 +96,11 @@ export function resolveLook(seed, character) {
   const outfitPool = humanFemale ? HUMAN_FEMALE_OUTFIT_POOL : humanMale ? HUMAN_MALE_OUTFIT_POOL : OUTFIT_POOL;
   const outfitColorPool = humanFemale ? HUMAN_FEMALE_OUTFIT_COLORS : OUTFIT_COLORS;
   const accPool = humanFemale ? HUMAN_FEMALE_ACC_POOL : ACC_POOL;
-  return {
+  const look = {
     gender,
     species,
     skin: isHexColor(c.skin) ? c.skin : pick(skinPool, h),
-    hair: HAIR.includes(c.hair) ? c.hair : pick(hairPool, h >>> 3),
+    hair: HAIR.includes(c.hair) || HAT_HAIR.includes(c.hair) ? c.hair : pick(hairPool, h >>> 3),
     hairColor: isHexColor(c.hairColor) ? c.hairColor : pick(HAIR_COLORS, h >>> 6),
     outfit: OUTFIT.includes(c.outfit) ? c.outfit : pick(outfitPool, h >>> 9),
     outfitColor: isHexColor(c.outfitColor) ? c.outfitColor : pick(outfitColorPool, h >>> 12),
@@ -97,6 +108,11 @@ export function resolveLook(seed, character) {
       ? c.accessory : pick(accPool, h >>> 15),
     facial: FACIAL.includes(c.facial) ? c.facial : pick(facePool, h >>> 18),
   };
+  // the random roll's pools still hold the cap and beanie as hair, so a visitor rolled before looks the same now
+  // (a hat chosen as hair is worn over an accessory the look did not choose)
+  const chose = ACCESSORY.includes(c.accessory) || isCreationId(c.accessory);
+  if (HAT_HAIR.includes(look.hair)) Object.assign(look, movedHat(look.hair, HAT_HAIR.includes(c.hair) && !chose ? 'none' : look.accessory, species));
+  return look;
 }
 
 /** Up to five desk items for `seed`, or the provided list if it is usable. */
@@ -139,7 +155,12 @@ export function sanitizeLookPatch(patch) {
   };
   enumField('gender', GENDER);
   enumField('species', SPECIES);
-  enumField('hair', HAIR);
+  if (HAT_HAIR.includes(patch.hair)) {
+    // an older patch that wears its hat as hair: one hat, on the head, with short hair under it
+    const moved = movedHat(patch.hair, ACCESSORY.includes(patch.accessory) || isCreationId(patch.accessory) ? patch.accessory : 'none', patch.species);
+    look.hair = moved.hair;
+    if (!('accessory' in patch) || moved.accessory === patch.hair) look.accessory = moved.accessory;
+  } else enumField('hair', HAIR);
   enumField('outfit', OUTFIT);
   enumField('facial', FACIAL);
   colorField('skin');

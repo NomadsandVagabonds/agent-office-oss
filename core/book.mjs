@@ -19,6 +19,7 @@
 //             determined cheat: the level runs in the visitor's own browser.
 import { validDifficulty, scoreEligible, cleanDifficulty } from './difficulty.mjs';
 import { cleanRun, scoreRun } from './runs.mjs';
+import { sanitizeLookPatch, isCreationId } from './look.mjs';
 
 /* ---- names --------------------------------------------------------------------------------------- */
 
@@ -118,8 +119,21 @@ export function checkRun(report) {
  * A line of the book: what is kept of a visit, and nothing that says who made it but the name they signed with.
  * { id, at, name, message, score, seconds, parts, rooms, batteries, hearts, card, seed, edition? }
  */
-export function entryOf({ id, at, name, message = '', run, score }) {
+/**
+ * The look a visitor signed in, for the little portrait beside their name: only the fields the look rules take (no
+ * made hat, which only its maker's office can draw), or nothing. A line without one is drawn from its name.
+ */
+export function cleanLook(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const { look } = sanitizeLookPatch(raw);
+  if (isCreationId(look.accessory)) delete look.accessory;
+  return Object.keys(look).length ? look : null;
+}
+
+export function entryOf({ id, at, name, message = '', run, score, look }) {
+  const worn = cleanLook(look);
   return {
+    ...(worn ? { look: worn } : {}),
     ...(run.difficulty ? { difficulty: run.difficulty, scoring: 1 } : {}),
     id: String(id), at: Math.floor(Number(at)) || 0, name, message, score, seconds: run.seconds, parts: run.parts.of, rooms: run.rooms.explored,
     batteries: run.batteries, hearts: run.hearts.left, card: run.card, seed: run.seed, ...(run.edition ? { edition: run.edition } : {}),
@@ -143,6 +157,7 @@ export function cleanEntry(raw) {
     // (the book's own look at the visit, kept with it for whoever judges a prize, and never shown: `shownEntry`)
     ...(typeof e.check === 'string' && e.check.length <= 400 ? { check: e.check.replace(/[^\w .,:;()%/-]/g, '') } : {}),
     ...(Number.isFinite(e.started) ? { started: whole(e.started, 0, 4e12) } : {}),
+    ...(cleanLook(e.look) ? { look: cleanLook(e.look) } : {}),
   };
 }
 /** A line as a reader is shown it: the book's own notes on the visit taken off. */

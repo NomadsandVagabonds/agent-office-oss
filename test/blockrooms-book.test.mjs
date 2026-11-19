@@ -191,3 +191,16 @@ test('book api: with nowhere to keep it there is no book, and the site is told s
   const refuses = createStore({ KV_REST_API_URL: 'https://store.example', KV_REST_API_TOKEN: 't' }, async () => new Response(JSON.stringify([{ error: 'ERR wrong kind' }])));
   await assert.rejects(refuses.pipeline([['INCR', 'k']]), /refused/);
 });
+
+test('a signing keeps the look it was signed in, cleaned, for the portrait beside the name; a line without one has none', async () => {
+  // the owner, 19 Nov: "a little character portrait next to each player's name in the high scores and guestbook"
+  const { entryOf: of, cleanEntry: clean, cleanLook } = await import('../core/book.mjs');
+  const run = { seed: 'abcd1234', seconds: 60, parts: { of: 4 }, rooms: { explored: 9 }, batteries: 1, hearts: { left: 2 }, card: false };
+  const e = of({ id: 'abc123def456', at: 1, name: 'Robin', run, score: 10, look: { species: 'cat', hair: 'beanie', outfitColor: '#ABCDEF', onclick: 'x' } });
+  assert.deepEqual(e.look, { species: 'cat', hair: 'short', accessory: 'beanie', outfitColor: '#abcdef' });
+  assert.deepEqual(clean(JSON.stringify(e)).look, e.look);
+  assert.equal(of({ id: 'abc123def456', at: 1, name: 'Robin', run, score: 10 }).look, undefined);
+  assert.equal(cleanLook('<img>'), null);
+  assert.deepEqual(cleanLook({ accessory: 'c_mine', hair: 'long' }), { hair: 'long' }, 'a made hat only its maker can draw');
+  assert.equal(clean(JSON.stringify({ ...e, look: { skin: 'red' } })).look, undefined);
+});

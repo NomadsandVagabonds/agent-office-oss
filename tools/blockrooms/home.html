@@ -29,11 +29,10 @@
   <a href="#enter" data-floor="B1">B1</a>
   <a href="#about" data-floor="B2">B2</a>
   <a href="#pictures" data-floor="B3">B3</a>
-  <a href="#howto" data-floor="B4">B4</a>
-  <a href="#backers" data-floor="B5">B5</a>
-  <a href="#book" data-floor="B6">B6</a>
-  <a href="#tapes" data-floor="B7">B7</a>
-  <a href="#ring" data-floor="B8">B8</a>
+  <a href="#backers" data-floor="B4">B4</a>
+  <a href="#book" data-floor="B5">B5</a>
+  <a href="#tapes" data-floor="B6">B6</a>
+  <a href="#ring" data-floor="B7">B7</a>
 </nav>
 
 <button class="midi" id="midi" type="button" aria-pressed="false">MUSIC: OFF</button>
@@ -127,9 +126,9 @@
     <div class="passstrip">
       <span class="pass-pic"><canvas class="pass-mug" id="pass-mug" width="56" height="56" aria-hidden="true"></canvas><canvas class="pass-3d" id="pass-3d" width="112" height="112" hidden aria-hidden="true"></canvas></span>
       <div class="pass-meta">
-        <span class="pass-kicker" id="pass-mode">RANDOM VISITOR</span>
-        <strong class="pass-kit" id="pass-kit">STD-00 &middot; Standard Issue (0/1 PT)</strong>
-        <span class="pass-stats" id="pass-stats">4 &hearts; &middot; 6 POCKETS &middot; 5:00 TAPE</span>
+        <span class="pass-kicker" id="pass-mode">RANDOM</span>
+        <strong class="pass-kit" id="pass-kit">Standard Issue</strong>
+        <span class="pass-stats" id="pass-stats" hidden></span>
       </div>
       <div class="pass-btns">
         <button type="button" id="quick-roll" title="Roll a random character look">Shuffle</button>
@@ -499,45 +498,6 @@
     <li><figure><img src="./shots/gallery-mailroom.jpg" width="1200" height="900" loading="lazy" alt="A brass dispatch tube rises from a central pedestal in the tiled mailroom."></figure></li>
     <li><figure><img src="./shots/gallery-vestibule.jpg" width="1200" height="900" loading="lazy" alt="Glass revolving doors stand in a wood-panelled lobby with green carpet."></figure></li>
   </ul>
-</section>
-
-<section class="zone stores" id="howto">
-  <h2 class="banner">HOW TO PLAY</h2>
-  <div class="cols">
-    <div class="panel white">
-      <h3>Controls</h3>
-      <table class="keys">
-        <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>walk</td></tr>
-        <tr><td>mouse</td><td>look</td></tr>
-        <tr><td><kbd>Shift</kbd></td><td>run</td></tr>
-        <tr><td><kbd>C</kbd> &nbsp; <kbd>Space</kbd></td><td>crouch &nbsp; jump</td></tr>
-        <tr><td><kbd>E</kbd></td><td>use</td></tr>
-        <tr><td>click</td><td>shove</td></tr>
-        <tr><td><kbd>1</kbd>&ndash;<kbd>6</kbd> &nbsp; <kbd>I</kbd></td><td>inventory</td></tr>
-        <tr><td><kbd>Q</kbd> &nbsp; <kbd>G</kbd></td><td>use item &nbsp; drop item</td></tr>
-        <tr><td><kbd>F</kbd></td><td>torch</td></tr>
-        <tr><td><kbd>V</kbd> &nbsp; <kbd>M</kbd></td><td>picture &nbsp; sound</td></tr>
-        <tr><td><kbd>Esc</kbd></td><td>menu</td></tr>
-        <tr><td>phone</td><td>left thumb walks, right thumb looks</td></tr>
-      </table>
-    </div>
-    <div class="panel white">
-      <h3>Items</h3>
-      <table class="finds">
-        <tr><td><i data-sprite="battery" data-fx="spin" data-scale="3"></i></td><td><b>Battery</b> +2 minutes</td></tr>
-        <tr><td><i data-sprite="torch" data-scale="3"></i></td><td><b>Torch</b></td></tr>
-        <tr><td><i data-sprite="pinkslip" data-scale="3"></i></td><td><b>Pink form</b></td></tr>
-        <tr><td><i data-sprite="chalk" data-scale="3"></i></td><td><b>Chalk</b></td></tr>
-        <tr><td><i data-sprite="scissors" data-scale="4"></i></td><td><b>Scissors</b></td></tr>
-        <tr><td><i data-sprite="paper" data-scale="4"></i></td><td><b>Paper</b></td></tr>
-        <tr><td><i data-sprite="snack" data-scale="3"></i></td><td><b>Snack</b> +1 heart</td></tr>
-        <tr><td><i data-sprite="balloon" data-fx="bob" data-scale="2"></i></td><td><b>Balloon</b></td></tr>
-        <tr><td><i data-sprite="keycard" data-fx="spin" data-scale="3"></i></td><td><b>Keycard</b></td></tr>
-        <tr><td><i data-sprite="heart" data-fx="pulse" data-scale="3"></i></td><td><b>Hearts</b> 4</td></tr>
-      </table>
-    </div>
-  </div>
-  <p class="center"><a class="btn" href="./play">ENTER</a></p>
 </section>
 
 <section class="zone backers" id="backers">
