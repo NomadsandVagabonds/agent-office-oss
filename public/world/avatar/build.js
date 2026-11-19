@@ -177,7 +177,12 @@ function buildHead(L, seed) {
     return v;
   }
 
-  skull(v, sk);
+  if (L.species === 'frog') {
+    v.rbox(-9, 36, -7, 9, 50, 6, 5, sk);
+    v.ellipsoid(0, 47, -2.5, 7.8, 4.2, 5.5, sk);
+  } else {
+    skull(v, sk);
+  }
   v.paint(-HX, HY0, -HZ, HX, HY0 + 2, HZ, tone(sk, -0.06));           // a little weight under the chin
 
   if (L.species === 'goblin') {
@@ -191,6 +196,38 @@ function buildHead(L, seed) {
     v.box(-1, 41, HZ, 1, 44, HZ + 2, skD);                            // a proper nose
     v.box(-4, 37, HZ, -3, 39, HZ + 1, M('#f3ead2', 0));               // tusks
     v.box(3, 37, HZ, 4, 39, HZ + 1, M('#f3ead2', 0));
+  } else if (L.species === 'frog') {
+    // One continuous shovel-shaped snout under two raised eye sockets.
+    v.ellipsoid(0, 39, 3, 10.8, 4.5, 7.6, mix(sk, '#f0dc99', 0.52));
+    v.ellipsoid(0, 41.5, 4.5, 11.5, 3.6, 7.8, sk);
+    for (const side of [-1, 1]) {
+      v.ellipsoid(side * 7.3, 46.8, 4, 4.2, 5.3, 4.8, sk);
+      v.ellipsoid(side * 10.2, 42, -1, 1.8, 2.1, 2.1, skD); // tympanum behind the eye
+      v.decal('+z', side < 0 ? -4 : 3, 43, side < 0 ? -3 : 4, 44, skD);
+      v.decal('+z', side < 0 ? -9 : 8, 42, side < 0 ? -8 : 9, 43, skL);
+    }
+  } else if (L.species === 'demon') {
+    const root = M('#49312e', 2), horn = M('#a78967', 2), tip = M('#dfc9a2', 1);
+    for (const side of [-1, 1]) {
+      // Ram horns sweep out and back, then hook inward to a bone-coloured point.
+      v.tube(side * 6, 49, -1, side * 10, 52, -2, 3.1, root);
+      v.tube(side * 10, 52, -2, side * 11.5, 56, -3, 2.45, horn);
+      v.tube(side * 11.5, 56, -3, side * 10.5, 59, -3, 1.65, horn);
+      v.tube(side * 10.5, 59, -3, side * 8.5, 60, -2, 0.9, tip);
+      v.tube(side * 8, 42, 0, side * 12, 45, -1, 1.5, skD);
+      v.box(side < 0 ? -4 : 3, 37, 7, side < 0 ? -3 : 4, 39, 9, tip);
+    }
+    v.box(-1, 40, 7, 1, 43, 9, skD);
+  } else if (L.species === 'bear') {
+    const muzzle = mix(sk, '#edcf93', 0.6), nose = M('#302526', 0);
+    for (const side of [-1, 1]) {
+      v.ellipsoid(side * 8.1, 50.6, -1, 4.4, 4.7, 2.7, sk);
+      v.ellipsoid(side * 8.1, 50.8, 0.9, 2.5, 2.8, 1, skD);
+      v.ellipsoid(side * 7.2, 40.4, 2, 3.2, 4.1, 4.1, sk);
+      v.ellipsoid(side * 2.4, 39.7, 7.7, 4, 3.3, 4.2, muzzle);
+    }
+    v.rbox(-3, 41, 9, 3, 44, 13, 1, nose);
+    v.box(-1, 39, 11, 1, 42, 12, nose);
   } else if (L.species === 'dog') {
     const light = tone(sk, 0.22), dark = tone(sk, -0.3);
     v.rbox(-4, 36, HZ - 1, 4, 42, HZ + 4, 1, light);                  // snout
@@ -410,6 +447,17 @@ function buildHoopEarrings(v, color = '#e58ea6', glint = '#ffdbe6', alien = fals
 function buildFacialHair(v, L, cranium = null) {
   if (L.species === 'robot' || !L.facial || L.facial === 'none') return;
   const hc = M(L.hairColor, 2);
+  if ((L.species === 'frog' || L.species === 'bear') && (L.facial === 'beard' || L.facial === 'mustache')) {
+    // Paint on the projecting muzzle; the usual human moustache would sit inside it.
+    const y = L.species === 'frog' ? 41 : 40;
+    v.decal('+z', -4, y, 4, y + 1, hc);
+    for (const x of [-5, 3]) v.decal('+z', x, y - 1, x + 2, y, hc);
+    if (L.facial === 'beard') {
+      v.decal('+z', -5, 36, 5, 38, hc);
+      for (const x of [-6, 4]) v.decal('+z', x, 37, x + 2, y, hc);
+    }
+    return;
+  }
   if (L.species === 'alien' && cranium) {
     if (L.facial === 'mustache') {
       for (let x = -5; x <= 4; x++) {
@@ -455,9 +503,10 @@ export function facePixels(L, expression = 'neutral') {
   const px = [];
   const robot = L.species === 'robot';
   const alien = L.species === 'alien';
-  const animal = L.species === 'dog' || L.species === 'cat';
-  const ey = animal ? 45 : alien ? 45 : 43;          // eye line
-  const ex = animal ? 5 : 5;                         // eye centre offset
+  const frog = L.species === 'frog', demon = L.species === 'demon';
+  const animal = L.species === 'dog' || L.species === 'cat' || L.species === 'bear';
+  const ey = frog ? 47 : animal || alien ? 45 : 43;
+  const ex = frog ? 7 : 5;
   const eyeC = robot ? (expression === 'worried' ? '#f3b34c' : '#86e0a8') : alien ? '#10131a' : INK;
   const put = (x, y, c, g) => px.push({ x, y, c, glow: !!g });
   const mirror = (fn) => { fn(-1); fn(1); };
@@ -468,6 +517,25 @@ export function facePixels(L, expression = 'neutral') {
     if (expression === 'blink' || expression === 'sleep') { for (let d = -1; d <= 1; d++) cell(d, 0); return; }
     if (expression === 'happy') { cell(-1, 0); cell(0, 1); cell(1, 0); return; }                  // ^ ^
     if (expression === 'dizzy') { cell(-1, -1); cell(1, 1); cell(0, 0); cell(-1, 1); cell(1, -1); return; }   // x x
+    if (frog) {
+      for (let dx = -2; dx <= 2; dx++) {
+        cell(dx, 0);
+        cell(dx, 1, '#ebc776');
+        if (Math.abs(dx) < 2) cell(dx, -1, '#b28a48');
+      }
+      cell(-1, 1, '#fff4d9');
+      return;
+    }
+    if (demon) {
+      for (let dx = -2; dx <= 2; dx++) {
+        const tilt = s * dx > 0 ? 1 : 0;
+        cell(dx, tilt + 2, '#542c31');
+        cell(dx, tilt + 1, dx === 0 ? '#352028' : '#f6c068');
+        cell(dx, tilt, dx === 0 ? '#352028' : '#d58b48');
+      }
+      if (expression === 'worried' || expression === 'talk') cell(0, -1, '#d58b48');
+      return;
+    }
     const tall = expression === 'focus' ? 3 : 4;
     for (let dy = 0; dy < tall; dy++) for (let dx = -1; dx <= 1; dx++) {
       if (!robot && tall === 4 && (dy === 0 || dy === 3) && dx !== 0 && false) continue;
@@ -494,7 +562,14 @@ export function facePixels(L, expression = 'neutral') {
     }
   });
 
-  if (alien) {
+  if (frog) {
+    const open = expression === 'worried' || expression === 'talk';
+    for (let x = -9; x < 9; x++) {
+      const y = Math.abs(x + 0.5) > 6 ? 41 : 40;
+      put(x, y, '#454334');
+      if (open && Math.abs(x + 0.5) < 4) put(x, y - 1, '#994f4a');
+    }
+  } else if (alien) {
     const seam = '#6b4918';
     if (expression === 'happy') {
       for (let x = -2; x < 2; x++) put(x, 39, seam);
@@ -789,6 +864,15 @@ export function buildAccessory(L) {
     default:
       return { model: null, spin: null };
   }
+  if (L.species === 'frog' && ['glasses', 'shades', 'monocle', 'eyepatch', 'goggles'].includes(acc)) {
+    // Fit the frame across the raised, wide-set sockets. Stretch its bridge along with the lenses.
+    const fitted = new Vox(), lift = acc === 'goggles' ? 2 : 4;
+    v.each((x, y, z, c) => {
+      const left = Math.round(x * 1.3), right = Math.round((x + 1) * 1.3);
+      for (let xx = left; xx < right; xx++) fitted.set(xx, y + lift, z + 1, c);
+    });
+    return { model: fitted, spin };
+  }
   return { model: v, spin };
 }
 
@@ -932,6 +1016,14 @@ function buildTorso(L, opt) {
     if (L.species === 'dog') { v.tube(0, 20, -4, 0, 24, -8, 1.3, fur); v.tube(0, 24, -8, 0, 29, -9, 1.2, fur); }
     else { v.tube(0, 20, -4, 0, 21, -10, 1.1, fur); v.tube(0, 21, -10, 0, 28, -12, 1.1, fur); v.tube(0, 28, -12, 0, 31, -10, 1.0, tone(fur, 0.25)); }
   }
+  if (L.species === 'bear') v.sphere(0, 18.5, -6, 3.1, M(L.skin, 2));
+  if (L.species === 'demon') {
+    const tail = M(L.skin, 1);
+    v.tube(0, 20, -3, 2, 16, -9, 1.7, tail);
+    v.tube(2, 16, -9, 7, 17, -12, 1.4, tail);
+    v.tube(7, 17, -12, 9, 23, -11, 1.2, tail);
+    v.cyl('y', 9, -11, 22, 27, 2.6, tone(tail, -0.18), 0.6);
+  }
   return v;
 }
 
@@ -961,6 +1053,9 @@ function buildArm(L, side, part) {
       v.paint(x0, 22, -2, x1, 23, 2, ocL);
     }
     v.rbox(x0, 14, -2, x1, 19, 3, 2, sk);                              // hand
+    if (L.species === 'frog') {
+      for (const offset of [-2, 0, 2]) v.sphere(x0 + 2 + offset, 14.3, 2, 1.2, tone(sk, 0.18));
+    }
     if (robot) v.paint(x0, 18, -2, x1, 19, 3, M(STEEL_D, 0));
   }
   return v;

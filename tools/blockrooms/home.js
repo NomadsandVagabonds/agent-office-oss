@@ -15,7 +15,7 @@ import { DIFFICULTIES, cleanDifficulty, difficultyOf, difficultyPerk } from './c
 import { mountTrailer } from './trailer-player.js';
 import { mount, drawLogo, voidTile } from './art.js';
 import { rollName, cleanName, cleanMessage, cleanEntry } from './core/book.mjs';
-import { GENDER, SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, SKIN, HAIR_COLORS, OUTFIT_COLORS, hashId, humanGenderDefaults, resolveLook, sanitizeLookPatch } from './core/look.mjs';
+import { GENDER, SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, SKIN, HAIR_COLORS, OUTFIT_COLORS, hashId, humanGenderDefaults, speciesDefaultSkin, resolveLook, sanitizeLookPatch } from './core/look.mjs';
 import { DEFAULT_PERK, PERK_LIST, cleanPerk, resolvePerk } from './core/perks.mjs';
 import { cleanRecord, emptyRecord } from './core/runs.mjs';
 import { paintFlatCharacter } from './world/art/character.js';
@@ -143,17 +143,10 @@ const keep = () => store.set(ME, {
 });
 keep();
 
-const SPECIES_DEFAULT_SKIN = {
-  human: '#e6b184',
-  robot: '#8a93a8',
-  goblin: '#7fa35a',
-  dog: '#c99a62',
-  cat: '#e0a060',
-  alien: '#e0a638',
-};
 const SKIN_SWATCHES = [
   ...SKIN, '#e3aa84', '#e0a638', '#6d4428', '#7fa35a', '#5f8a6a', '#c99a62', '#e0a060',
   '#9a9aa6', '#3a3a44', '#8a93a8', '#8fd3ff', '#f4a8c0', '#ffd83a', '#b695ff', '#5fd6a8',
+  ...['frog', 'demon', 'bear'].map(speciesDefaultSkin),
 ];
 const HAIR_SWATCHES = [
   ...HAIR_COLORS, '#db7093', '#b53a2a', '#ff5ad6', '#3bd6ff', '#62d94f', '#ff8a1f', '#e8e4f0',
@@ -166,7 +159,7 @@ const OUTFIT_SWATCHES = [
 
 const LABELS = {
   gender: { male: 'Male', female: 'Female' },
-  species: { human: 'Human', alien: 'Alien', robot: 'Robot', goblin: 'Goblin', dog: 'Dog', cat: 'Cat' },
+  species: { human: 'Human', alien: 'Alien', robot: 'Robot', goblin: 'Goblin', dog: 'Dog', cat: 'Cat', frog: 'Frog', demon: 'Demon', bear: 'Bear' },
   hair: { short: 'Short', side: 'Side Part', long: 'Long', braids: 'Side Braid', bun: 'Top Bun', mohawk: 'Mohawk', bald: 'Bald' },
   facial: { none: 'Clean', lashes: 'Lashes & Hoops', mustache: 'Mustache', beard: 'Beard' },
   outfit: { tee: 'T-Shirt', hoodie: 'Hoodie', suit: 'Suit & Tie', consul: 'Consul Suit', vest: 'Vest', cardigan: 'Cardigan', tunic: 'Choker Tunic' },
@@ -509,7 +502,7 @@ function rollRandomLook() {
   const pickFrom = (arr, shift) => arr[(h >>> shift) % arr.length];
   const nextGender = pickFrom(GENDER, 24);
   const nextSpecies = pickFrom(SPECIES, 0);
-  const speciesSkin = SPECIES_DEFAULT_SKIN[nextSpecies] || SKIN[0];
+  const speciesSkin = speciesDefaultSkin(nextSpecies);
   const humanGirl = nextSpecies === 'human' && nextGender === 'female';
   const humanBoy = nextSpecies === 'human' && nextGender === 'male';
   const hairChoices = humanGirl
@@ -786,14 +779,14 @@ function refreshThumbnails() {
       if (trait === 'gender') {
         if (base.species !== 'human' && base.species !== 'goblin') {
           sample.species = 'human';
-          sample.skin = SPECIES_DEFAULT_SKIN.human;
+          sample.skin = speciesDefaultSkin('human');
           Object.assign(sample, humanGenderDefaults(item.val));
         } else {
           Object.assign(sample, genderTransitionPatch(base, item.val));
         }
       }
       if (trait === 'species' && item.val !== base.species) {
-        sample.skin = SPECIES_DEFAULT_SKIN[item.val] || base.skin;
+        sample.skin = speciesDefaultSkin(item.val);
         if (item.val === 'alien') {
           sample.hair = 'bald';
           sample.facial = 'none';
@@ -803,8 +796,8 @@ function refreshThumbnails() {
           if (sample.outfit === 'consul') sample.outfit = defs.outfit;
         }
       }
-      if (trait === 'hair' && sample.species === 'robot') { sample.species = 'human'; sample.skin = SPECIES_DEFAULT_SKIN.human; }
-      if (trait === 'facial' && sample.species === 'robot') { sample.species = 'human'; sample.skin = SPECIES_DEFAULT_SKIN.human; }
+      if (trait === 'hair' && sample.species === 'robot') { sample.species = 'human'; sample.skin = speciesDefaultSkin('human'); }
+      if (trait === 'facial' && sample.species === 'robot') { sample.species = 'human'; sample.skin = speciesDefaultSkin('human'); }
       const ctx = item.canvas.getContext('2d');
       ctx.imageSmoothingEnabled = false;
       ctx.fillStyle = '#e6dec2';
@@ -887,7 +880,7 @@ function buildStudioOnce() {
           return;
         }
         const patch = { [trait]: val };
-        if (trait === 'species') patch.skin = SPECIES_DEFAULT_SKIN[val] || SKIN[0];
+        if (trait === 'species') patch.skin = speciesDefaultSkin(val);
         if (trait === 'species' && val === 'alien') patch.hair = 'bald';
         if (trait === 'species' && val === 'human') {
           const defs = humanGenderDefaults(cur.gender);
