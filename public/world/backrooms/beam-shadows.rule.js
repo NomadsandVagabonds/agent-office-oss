@@ -91,7 +91,7 @@ export function castsBeamShadow(o) {
 export function receivesBeamShadow(o) {
   if (!o || !o.isMesh || (o.renderOrder || 0) >= HELD_ORDER || Array.isArray(o.material)) return false;
   const m = o.material;
-  return !!(m && m.isShaderMaterial && m.uniforms?.uTorchOrigin && typeof m.fragmentShader === 'string' && m.fragmentShader.includes('beamShadow('));
+  return !!(m && (m.isShaderMaterial || m.isKitSurface) && m.uniforms?.uTorchOrigin && typeof m.fragmentShader === 'string' && m.fragmentShader.includes('beamShadow('));
 }
 
 const gl = (n) => Number(n).toFixed(8);
