@@ -4,19 +4,19 @@
 // where voxels meet; the texture (cut out where it says); the wet glint. Every number is kit.js's.
 //
 // The light maps (LIGHTMAP, TUBESHADOW, DOORLIGHT) are kit-node-light.js, the floor's sheen (SHEEN) is
-// kit-node-sheen.js, and what a surface gives the glow (glow.js's twin) is its second output while the glow's pass
-// draws (glow-node.js). Not here yet (docs/BLOCKROOMS-WEBGPU.md), so not drawn under ?gpu=webgpu whatever the tier
-// says: the flashlight's shadows (BEAM_SHADOWS). Rooms that extend a kit surface call `m.patchNode(hook)` to plug into
-// position, map UV, wet normal, final colour/alpha, or replace the fragment stage while keeping kit's baked light and
-// uniform readers.
+// kit-node-sheen.js, the flashlight's shadows (BEAM_SHADOWS) are kit-node-shadow.js, and what a surface gives the
+// glow (glow.js's twin) is its second output while the glow's pass draws (glow-node.js). Rooms that extend a kit
+// surface call `m.patchNode(hook)` to plug into init, position, map UV, wet normal, final colour/alpha, or replace
+// the fragment stage while keeping kit's baked light and uniform readers.
 //
 // The material keeps kit.js's `uniforms`, `defines`, `vertexShader` and `fragmentShader`, so that everything that
 // reaches into one (uTint, uDim, uFlick, a room's patch) keeps working; the uniforms are read every frame. The defines
-// are read when the material is built, and again whenever it is marked needsUpdate.
+// are read when the material is built, and again whenever it is rebuilt (`m.rebuildNode()`).
 import { gpu } from '../engine/gpu.js';
 import { FLASHLIGHT, CAMCORDER_LAMP } from './flashlight.js';
 import { lightmapNode } from './kit-node-light.js';
 import { sheenNode } from './kit-node-sheen.js';
+import { beamShadowNode } from './kit-node-shadow.js';
 import { glowStrength } from './glow.rule.js';
 
 /**
@@ -112,7 +112,11 @@ export function surfaceNode(spec) {
       if (lightmapped) c.assign(lightmapped(c));
       const torchBeam = surfaceBeam(positionView, normal, uTorchOrigin, uTorchDirection, [FLASHLIGHT.edgeCos, FLASHLIGHT.coreCos], [FLASHLIGHT.fadeFrom, FLASHLIGHT.range], FLASHLIGHT.attenuation);
       const lampBeam = surfaceBeam(positionView, normal, vec3(...CAMCORDER_LAMP.origin), vec3(...CAMCORDER_LAMP.direction), [CAMCORDER_LAMP.edgeCos, CAMCORDER_LAMP.coreCos], [CAMCORDER_LAMP.fadeFrom, CAMCORDER_LAMP.range], CAMCORDER_LAMP.attenuation);
-      const beam = select(uTorch.greaterThan(0.0001), uTorch.mul(torchBeam), 0).add(select(uLamp.greaterThan(0.0001), uLamp.mul(lampBeam), 0));
+      let torchPart = select(uTorch.greaterThan(0.0001), uTorch.mul(torchBeam), 0);
+      // (High: the flashlight's shadow, kit-node-shadow.js; only the torch's share is shadowed, never the camcorder lamp)
+      const shadowed = beamShadowNode(m, D, uTorchOrigin);
+      if (shadowed) torchPart = select(torchPart.greaterThan(0), torchPart.mul(shadowed(positionView, normal)), torchPart);
+      const beam = torchPart.add(select(uLamp.greaterThan(0.0001), uLamp.mul(lampBeam), 0));
       const torch = vAlb.mul(beam);
       let cell = null;
       if (D.VOXEL) {
@@ -182,6 +186,13 @@ export function surfaceNode(spec) {
   m.glowEmissive = () => Fn(() => glowOut ?? vec4(0, 0, 0, 1))();
 
   rebuild();
+
+  /** Rebuild the node graph after runtime define changes (e.g. BEAM_SHADOWS) so WebGPURenderer sees a fresh cache key. */
+  m.rebuildNode = () => {
+    rebuild();
+    m.needsUpdate = true;
+    return m;
+  };
 
   /** Attach a TSL hook ({ init?, position?, uv?, wetNormal?, color?, replaceFragment? }) to this kit surface. */
   m.patchNode = (hook) => {

@@ -9,6 +9,7 @@
 //   - the matrix from the camera's space to the picture is handed to the shader.
 // The emitter is fixed to the camera (flashlight.js FLASHLIGHT_POSES), so that matrix only changes with the pose.
 import * as THREE from 'three';
+import { gpu } from '../engine/gpu.js';
 import { BEAM_SHADOW, beamFrustum, beamShadowSize, castsBeamShadow, receivesBeamShadow } from './beam-shadows.rule.js';
 
 export function createBeamShadows(renderer) {
@@ -21,6 +22,9 @@ export function createBeamShadows(renderer) {
   const pose = new THREE.Matrix4(), world = new THREE.Matrix4(), scale = new THREE.Vector3();
   const eye = new THREE.Vector3(), aim = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const toPicture = new THREE.Matrix4().set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
+  // WebGPU clip-space z is already [0, 1] (vs WebGL [-1, 1]), so only x and y are biased into [0, 1].
+  const toPictureGPU = new THREE.Matrix4().set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 1, 0, 0, 0, 0, 1);
+  const isNode = () => !!(renderer?.isWebGPURenderer && gpu.nodes);
   let target = null, size = 0;
   const patched = new Set(), depths = new Map(), list = [], swapped = [], hidden = [];
   const forget = (e) => patched.delete(e.target);
@@ -28,6 +32,17 @@ export function createBeamShadows(renderer) {
 
   function make(res) {
     target?.dispose(); target?.depthTexture?.dispose();
+    if (isNode()) {
+      const N = gpu.nodes;
+      const depth = new N.DepthTexture(res, res);
+      depth.type = N.UnsignedIntType;
+      depth.compareFunction = N.LessEqualCompare;
+      depth.minFilter = depth.magFilter = N.LinearFilter;
+      target = new N.RenderTarget(res, res, { depthBuffer: true, depthTexture: depth, generateMipmaps: false });
+      size = res;
+      uniforms.uBeamShadowMap.value = depth;
+      return;
+    }
     const depth = new THREE.DepthTexture(res, res);
     depth.type = THREE.UnsignedIntType;
     depth.compareFunction = THREE.LessEqualCompare;
@@ -40,11 +55,12 @@ export function createBeamShadows(renderer) {
     m.defines = m.defines || {};
     m.defines.BEAM_SHADOWS = 1;
     Object.assign(m.uniforms, uniforms);
+    m.rebuildNode?.();
     m.needsUpdate = true;
     patched.add(m); m.addEventListener('dispose', forget);
   }
   function off() {
-    for (const m of patched) { delete m.defines.BEAM_SHADOWS; m.needsUpdate = true; m.removeEventListener('dispose', forget); }
+    for (const m of patched) { delete m.defines.BEAM_SHADOWS; m.rebuildNode?.(); m.needsUpdate = true; m.removeEventListener('dispose', forget); }
     patched.clear();
     for (const m of depths.values()) m.dispose();
     depths.clear();
@@ -58,8 +74,14 @@ export function createBeamShadows(renderer) {
     const key = `${m.side}|${cut ? cut.uuid : ''}|${alphaTest}`;
     let d = depths.get(key);
     if (!d) {
-      d = new THREE.MeshDepthMaterial({ side: m.side, map: cut || null, alphaTest, colorWrite: false,
-        polygonOffset: true, polygonOffsetFactor: BEAM_SHADOW.polygonOffset[0], polygonOffsetUnits: BEAM_SHADOW.polygonOffset[1] });
+      if (isNode()) {
+        const N = gpu.nodes;
+        d = new N.MeshBasicNodeMaterial({ side: m.side, map: cut || null, alphaTest, colorWrite: false,
+          polygonOffset: true, polygonOffsetFactor: BEAM_SHADOW.polygonOffset[0], polygonOffsetUnits: BEAM_SHADOW.polygonOffset[1] });
+      } else {
+        d = new THREE.MeshDepthMaterial({ side: m.side, map: cut || null, alphaTest, colorWrite: false,
+          polygonOffset: true, polygonOffsetFactor: BEAM_SHADOW.polygonOffset[0], polygonOffsetUnits: BEAM_SHADOW.polygonOffset[1] });
+      }
       depths.set(key, d);
     }
     return d;
@@ -92,28 +114,38 @@ export function createBeamShadows(renderer) {
     pose.lookAt(eye, aim, up).setPosition(eye);
     camera.updateMatrixWorld();
     world.multiplyMatrices(camera.matrixWorld, pose).decompose(cam.position, cam.quaternion, scale);
-    if (cam.fov !== frustum.fov) { cam.fov = frustum.fov; cam.updateProjectionMatrix(); }
+    const coord = renderer.coordinateSystem;
+    let projDirty = false;
+    if (coord && cam.coordinateSystem !== coord) { cam.coordinateSystem = coord; projDirty = true; }
+    if (cam.fov !== frustum.fov) { cam.fov = frustum.fov; projDirty = true; }
+    if (projDirty) cam.updateProjectionMatrix();
     cam.updateMatrixWorld();
-    uniforms.uBeamShadowMatrix.value.multiplyMatrices(toPicture, cam.projectionMatrix).multiply(world.copy(pose).invert());
+    const toPic = coord === THREE.WebGPUCoordinateSystem ? toPictureGPU : toPicture;
+    uniforms.uBeamShadowMatrix.value.multiplyMatrices(toPic, cam.projectionMatrix).multiply(world.copy(pose).invert());
     uniforms.uBeamShadowK.value.set(1 / res, 1);
 
     const was = renderer.getRenderTarget(), autoClear = renderer.autoClear, info = renderer.info, c0 = info.render.calls, t0 = info.render.triangles;
-    renderer.setRenderTarget(target);
-    renderer.autoClear = false;
-    renderer.state.buffers.depth.setMask(true);            // (a see-through mesh drawn before may have left depth writes off)
-    renderer.clear(false, true, false);
-    for (const s of scenes) {
-      const bg = s.background; s.background = null;
-      renderer.render(s, cam);
-      s.background = bg;
+    const wasMrt = renderer.getMRT?.() ?? null;
+    try {
+      if (wasMrt) renderer.setMRT(null);
+      renderer.setRenderTarget(target);
+      renderer.autoClear = false;
+      renderer.state?.buffers?.depth?.setMask?.(true);       // (a see-through mesh drawn before may have left depth writes off)
+      renderer.clear(false, true, false);
+      for (const s of scenes) {
+        const bg = s.background; s.background = null;
+        try { renderer.render(s, cam); } finally { s.background = bg; }
+      }
+      if (!info.autoReset) { stats.calls = info.render.calls - c0; stats.triangles = info.render.triangles - t0; }
+      stats.drawn = true;
+    } finally {
+      if (wasMrt) renderer.setMRT(wasMrt);
+      renderer.autoClear = autoClear;
+      renderer.setRenderTarget(was);
+      for (let i = 0; i < swapped.length; i += 2) swapped[i].material = swapped[i + 1];
+      for (const o of hidden) o.visible = true;
+      swapped.length = hidden.length = 0;
     }
-    renderer.autoClear = autoClear;
-    renderer.setRenderTarget(was);
-    if (!info.autoReset) { stats.calls = info.render.calls - c0; stats.triangles = info.render.triangles - t0; }
-    for (let i = 0; i < swapped.length; i += 2) swapped[i].material = swapped[i + 1];
-    for (const o of hidden) o.visible = true;
-    swapped.length = hidden.length = 0;
-    stats.drawn = true;
     return stats;
   }
 

@@ -141,6 +141,23 @@ Still missing at Medium and High: the floor's sheen, flashlight shadows (High), 
   the glow's second output from `glow-node.js` (black that hides, or nothing where it is see-through), so Medium's
   glow pass draws every material.
 
+## Flashlight shadows (High, Step 6)
+
+- `kit-node-shadow.js` (hooked from `kit-node.js`), `beam-shadows.rule.js` (`receivesBeamShadow` recognises `m.isKitSurface`),
+  and `beam-shadows.js`:
+  - `beam-shadows.js` allocates a `RenderTarget` + comparison `DepthTexture` (`LessEqualCompare`, `LinearFilter`) on
+    `WebGPURenderer`, swaps casters to `MeshBasicNodeMaterial` (`colorWrite: false`, `polygonOffset`, preserving `map` and
+    `alphaTest` for cutouts), syncs `cam.coordinateSystem`, uses WebGPU `[0, 1]` clip-Z `toPictureGPU` when on
+    `WebGPUCoordinateSystem`, clears MRT during the depth pass, and restores everything in `finally`.
+  - `kit-node-shadow.js` reproduces `BEAM_SHADOW_GLSL` number for number (normal + slope bias, `uBeamShadowMatrix`,
+    border fade, and 9-tap hardware PCF depth comparison in uniform control flow for WGSL validation). Only the
+    flashlight's share is shadowed, never the camcorder lamp.
+  - `kit-node.js` exposes `m.rebuildNode()` so runtime `BEAM_SHADOWS` toggles (`patch` / `off`) build a fresh
+    `fragmentNode` cache key while preserving `glow-node.js`'s `|glow-mrt` prototype suffix.
+- Checked: unit tests (`test/blockrooms-webgpu-step6.test.mjs`) and live browser side-by-side at High in a dark
+  ceiling-off room (`&lighting=1&lightstudy=1`, WebGL vs `?gpu=webgpu` + runtime High → Medium → High toggle, plus
+  `copiers`, `cubicle-grid`, and `kiddie-lagoon` at High with zero HUD console errors).
+
 ## What looks wrong under the flag
 
 Everything still unported falls back to plain surface / Classic behaviour:
