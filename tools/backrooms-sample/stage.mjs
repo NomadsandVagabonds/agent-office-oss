@@ -51,7 +51,13 @@ export function stage(out, opt = {}) {
     if (spec.startsWith('/vendor/')) { vendored.add(spec.slice('/vendor/'.length)); return null; }
     if (spec.startsWith('/core/')) return path.join(ROOT, spec.slice(1));
     if (spec.startsWith('/')) return path.join(ROOT, 'public', spec.slice(1));
-    if (spec.startsWith('.')) return path.resolve(path.dirname(from), spec);
+    if (spec.startsWith('.')) {
+      // (a module beside the vendored three.js asked for by where it is, as the stage asks for the WebGPU build only
+      // when a page wants it: vendored, not walked)
+      const to = path.resolve(path.dirname(from), spec), vendor = path.join(ROOT, 'public/vendor') + path.sep;
+      if (to.startsWith(vendor)) { vendored.add(to.slice(vendor.length).split(path.sep).join('/')); return null; }
+      return to;
+    }
     return null;
   }
   function walk(file, into = seen) {
@@ -115,7 +121,8 @@ export function stage(out, opt = {}) {
       need.add(name);
       for (const m of fs.readFileSync(path.join(dir, name), 'utf8').matchAll(IMPORTS)) { const spec = m[1] || m[2]; if (spec.startsWith('.')) more(path.posix.normalize(path.posix.join(path.posix.dirname(name), spec))); }
     };
-    for (const name of [...vendored].filter((n) => n.startsWith('three-addons/')).sort()) more(name);
+    // (and the WebGPU build, three.webgpu.min.js, which the stage imports by its place beside the page only under ?gpu=webgpu)
+    for (const name of [...vendored].filter((n) => n.startsWith('three-addons/') || /^three\.[\w.]+\.js$/.test(n)).sort()) more(name);
     for (const name of [...need].sort()) {
       fs.mkdirSync(path.dirname(path.join(out, 'vendor', name)), { recursive: true });
       fs.copyFileSync(path.join(dir, name), path.join(out, 'vendor', name));
