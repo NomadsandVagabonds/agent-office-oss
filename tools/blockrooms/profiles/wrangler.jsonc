@@ -1,0 +1,16 @@
+{
+  "name": "blockrooms-profiles",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "vars": { "SITE_ORIGIN": "https://blockrooms.app" },
+  "triggers": { "crons": ["17 4 * * *"] },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "blockrooms-profiles",
+    "database_id": "af55c417-4466-4135-a2fb-b70143c70777",
+    "migrations_dir": "migrations"
+  }]
+}

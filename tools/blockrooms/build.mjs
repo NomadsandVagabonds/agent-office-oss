@@ -88,7 +88,7 @@ export function build(out, opt = {}) {
   const put = (name, text) => { fs.writeFileSync(path.join(out, name), text); extra.push(name); };
   const copy = (name) => { if (!fs.existsSync(path.join(HERE, name))) return false; fs.copyFileSync(path.join(HERE, name), path.join(out, name)); extra.push(name); return true; };
 
-  for (const name of ['site.js', 'home.js', 'home.css', 'art.js', 'archive-page.js', 'archive.css', 'archive-client.js', 'archive-storage.js', 'archive-cloud.js', 'archive-preview.js']) if (!copy(name)) throw new Error(`tools/blockrooms/${name} is not there`);
+  for (const name of ['site.js', 'home.js', 'home.css', 'art.js', 'archive-page.js', 'archive.css', 'archive-client.js', 'archive-worker.js', 'archive-storage.js', 'archive-cloud.js', 'archive-preview.js']) if (!copy(name)) throw new Error(`tools/blockrooms/${name} is not there`);
   // (the rules of the book, looks and perks, and of the archive: shared by the pages)
   for (const coreName of ['core/book.mjs', 'core/look.mjs', 'core/perks.mjs', 'core/guest-presets.mjs', 'core/archive.mjs']) {
     if (!files.includes(coreName)) {
@@ -141,6 +141,7 @@ export function build(out, opt = {}) {
   const day = (opt.now || new Date()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' });
   put('index.html', fill('home.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor(IMPORT_MAP, accounts)}">`, OG: og(''), IMPORTMAP: IMPORT_MAP })
     .replace('<span id="updated">recently</span>', `<span id="updated">${day} 1998</span>`));
+  put('privacy.html', fill('privacy.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor(null)}">` }));
   put('archive.html', fill('archive.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor(IMPORT_MAP, accounts)}">`, IMPORTMAP: IMPORT_MAP }));
   return { files: [...extra, ...files].sort(), origin, preloaded: first.length };
 }

@@ -6,6 +6,7 @@ export async function syncArchive({ read, merge, remote, allowed = () => true })
     if (!allowed()) return false;
     await merge(current.document);
     const sent = mergeArchive(current.document, read());
+    if (current.revision > 0 && JSON.stringify(sent) === JSON.stringify(mergeArchive(current.document, current.document))) return allowed();
     const result = await remote.save(current.revision, sent);
     if (!allowed()) return false;
     if (result.accepted) {

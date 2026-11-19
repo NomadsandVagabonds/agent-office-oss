@@ -1,6 +1,7 @@
 // Only public browser configuration goes into the static build. A privileged
 // Supabase key must never become a deployed asset (even by mistaken env name).
 export function accountConfig(env = process.env, { local = false } = {}) {
+  if (env.BLOCKROOMS_ACCOUNTS === 'cloudflare') return { enabled: true, provider: 'cloudflare' };
   const url = env.BLOCKROOMS_SUPABASE_URL || '', key = env.BLOCKROOMS_SUPABASE_PUBLISHABLE_KEY || '';
   if (!url && !key) return { enabled: false };
   if (!url || !key) throw Error('Set both BLOCKROOMS_SUPABASE_URL and BLOCKROOMS_SUPABASE_PUBLISHABLE_KEY.');
