@@ -33,7 +33,7 @@ import { serverChasmStash } from './rooms/server-chasm/rule.js';
 import { PLAN as HALL_PLAN, partsOf as hallParts } from './rooms/unsure-hall/rule.js';
 import { homeStash } from './rooms/show-home/layout.js';
 import { plenumStash } from './rooms/drop-plenum/rule.js';
-import { cubicleGridStash } from './rooms/cubicle-grid/rule.js';
+import { cubicleGridStash, dealBreaks } from './rooms/cubicle-grid/rule.js';
 import { fill } from './words.js';
 /** A shop of the shopping centre's place for a coin: half a metre square from (x, z), in the room's frame. A stash of several of
  * these, apart, keeps one of them more than 1.25 m from every doorway however the doorways fall (gen.js coinFits). */
@@ -494,6 +494,7 @@ export const MORE_DECK = [
     roll: R => ({face:R.int(0,7)}) },
   {
     id: 'cubicle-grid',
+    through: true,
     resident: 'pit-clerks', items: ['paper'], caught: 2, fire: 'fears',
     doors: 'own',
     name: 'The Open-Plan Pit',
@@ -509,6 +510,7 @@ export const MORE_DECK = [
     roll: (R, o) => ({
       dept: (o.projects.length ? R.pick(o.projects) : R.pick(['RETENTION', 'BILLING', 'COMPLIANCE', 'QA'])).slice(0, 12).toUpperCase(),
       brokenSide: R.pick([-1, 1]),
+      breaks: dealBreaks(R.fork('pit-breaks')),          // (which caps are down: from a stream of its own, so nothing else on the floor moves)
     }),
   },
   // The channel hall and quiet threshold connector extend the review wing.
