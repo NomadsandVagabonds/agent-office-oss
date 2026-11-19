@@ -30,3 +30,19 @@ test('without dev (every visit that is not ?debug) nothing changes, and the menu
   assert.match(index, /\.\.\.\(opt\.debug \? \{ tape: /, 'the tape number is handed to the menu only under ?debug');
   assert.match(index, /dev: opt\.debug \? devState : null/);
 });
+
+test('the dev mode is ours: open on a server on this machine, on the live site only for the code it was given', async () => {
+  const { handle } = await import('../tools/blockrooms/book-api.mjs');
+  const ask = (ctx, code, site = 'same-origin') => handle(new Request('https://example.test/api/book', { method: 'POST', headers: { 'content-type': 'application/json', 'sec-fetch-site': site }, body: JSON.stringify({ do: 'dev', code }) }), ctx).then((r) => r.status);
+  assert.equal(await ask({ store: null, devOpen: true }), 200, 'serve.mjs, on this machine');
+  assert.equal(await ask({ store: null }), 403, 'no code set: no dev mode');
+  const live = { store: null, devCode: 'a-long-dev-code-9' };
+  assert.equal(await ask(live, 'a-long-dev-code-9'), 200);
+  assert.equal(await ask(live, 'a-long-dev-code-8'), 403);
+  assert.equal(await ask(live, ''), 403);
+  assert.equal(await ask({ store: null, devCode: 'short' }, 'short'), 403, 'a code too short to be one');
+  assert.equal(await ask({ store: null, devOpen: true }, '', 'cross-site'), 403, 'asked from another site');
+  const site = readFileSync(new URL('../tools/blockrooms/site.js', import.meta.url), 'utf8');
+  assert.match(site, /const dev = devOk \? \{/, 'the page asks the server before ?debug does anything');
+  assert.match(site, /let room = devOk && /, 'room= by name is a dev thing too');
+});

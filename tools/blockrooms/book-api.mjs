@@ -44,6 +44,17 @@ function who(request, salt) {
   return createHash('sha256').update(`${salt}|${ip}`).digest('base64url').slice(0, 22);
 }
 
+/** May this page have the dev mode? → 200 { ok: true }, or 403 (with the wrong code, or with no code set, it is not said which). */
+async function devAnswer(request, ctx) {
+  const site = request.headers.get('sec-fetch-site');
+  if (site && site !== 'same-origin') return json(403, { ok: false, why: 'elsewhere' });
+  if (ctx.devOpen === true) return json(200, { ok: true });
+  let body = null; try { body = JSON.parse(await request.text()); } catch { /* nothing */ }
+  const code = Buffer.from(String(body?.code || '').slice(0, 200)), right = Buffer.from(String(ctx.devCode || ''));
+  if (right.length < 12 || code.length !== right.length || !timingSafeEqual(code, right)) return json(403, { ok: false, why: 'code' });
+  return json(200, { ok: true });
+}
+
 /**
  * Answer a request for the book.
  * @param {Request} request
@@ -54,6 +65,10 @@ function who(request, salt) {
  */
 export async function handle(request, ctx) {
   const { store } = ctx, now = ctx.now || (() => Date.now()), salt = ctx.salt || 'blockrooms', key = ctx.ticketKey || ticketKey({ salt });
+  // the dev mode (?debug: the tape's number, god mode, give and spawn) is ours, not the players' (the owner, 19 Nov): open
+  // on a host that says so (a server on this machine: serve.mjs), else only for the code the host was given
+  // (BLOCKROOMS_DEV_CODE, api/book.mjs). Answered before the book is looked for, since it needs none.
+  if (request.method === 'POST' && /^\s*\{\s*"do"\s*:\s*"dev"/.test(await request.clone().text().catch(() => ''))) return devAnswer(request, ctx);
   if (!store) return json(503, { ok: false, why: 'no-store', ...(SETTINGS.has(ctx.settings) ? { settings: ctx.settings } : {}) });
   try {
     if (request.method === 'GET' || request.method === 'HEAD') {

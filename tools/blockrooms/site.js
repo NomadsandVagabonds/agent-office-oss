@@ -152,7 +152,17 @@ async function run() {
     // (for whoever is checking the site and not playing it: ?debug hands a script the level's own handle, and lets it ask
     // for a shorter building, a part to begin on, a quiet one, particular kinds of floor)
     const whole = (k) => (q.has(k) && Number.isFinite(Number(q.get(k))) ? Math.floor(Number(q.get(k))) : undefined);
-    const dev = q.has('debug') ? { debug: true, depths: whole('depths'), depth: whole('depth'), mute: q.has('mute') ? true : undefined, pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined,
+    // ?debug is ours, not the players' (the owner, 19 Nov): the server says whether this page may have it (open on a
+    // server on our own machine; on the live site only for the code, given once as &code=… and kept in this browser)
+    let devOk = false;
+    if (q.has('debug')) {
+      if (q.get('code')) { try { localStorage.setItem('blockrooms:dev', q.get('code')); } catch { /* asked for each time, then */ }
+        q.delete('code'); try { history.replaceState(null, '', `${here()}?${String(q).replace(/=(?=&|$)/g, '')}`); } catch { /* the address keeps it, then */ } }
+      let code = ''; try { code = localStorage.getItem('blockrooms:dev') || ''; } catch { /* none */ }
+      devOk = !!(await tell({ do: 'dev', code }))?.ok;
+      if (!devOk) console.info('[blockrooms] no dev mode here');
+    }
+    const dev = devOk ? { debug: true, depths: whole('depths'), depth: whole('depth'), mute: q.has('mute') ? true : undefined, pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined,
       themes: q.get('themes') ? q.get('themes').split(',').filter(Boolean) : undefined,
       // (Codex's furniture that can be dragged, and put in a creature's way, is on for everybody; whoever is checking can have a building without it)
       barricades: q.get('barricades') === '0' ? false : undefined,
@@ -173,7 +183,7 @@ async function run() {
     if (bench) Object.assign(dev, { mute: true, pursuer: dev.pursuer ?? false, difficulty: DEFAULT_DIFFICULTY, vhs: ['0', '1', '2'].includes(q.get('vhs')) ? Number(q.get('vhs')) : 2 });
     // ?room=<a room of the deck> is a building with that room where you land (for looking at one room; nothing on
     // the front page leads here. A room nobody has built yet is no room, and the door is an ordinary door)
-    let room = !next && q.get('room') && Object.hasOwn(ARCHETYPES, q.get('room')) ? q.get('room') : null;
+    let room = devOk && !next && q.get('room') && Object.hasOwn(ARCHETYPES, q.get('room')) ? q.get('room') : null;   // (one room asked for by name: a dev thing too)
     // where the visitor appears to be, as the site's host tells the site (api/where): the second line of a banner in the
     // building. Asked once, not waited for long, not kept; with no answer the banner says what such banners say
     const where = await Promise.race([asked, pause(1500).then(() => '')]);

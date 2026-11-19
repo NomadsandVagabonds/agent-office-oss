@@ -14,7 +14,8 @@ import { memoryStore } from './book-store.mjs';
 
 const root = path.resolve(process.argv[2] || 'dist'), port = Number(process.argv[3]) || 4478;
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8', '.mp3': 'audio/mpeg', '.mp4': 'video/mp4', '.woff2': 'font/woff2', '.jpg': 'image/jpeg', '.png': 'image/png' };
-const ctx = { store: process.env.BOOK === '0' ? null : memoryStore(), salt: 'local' };
+// (on this machine the dev mode, ?debug, is open; BLOCKROOMS_DEV=0 locks it as the live site is, for the code in BLOCKROOMS_DEV_CODE)
+const ctx = { store: process.env.BOOK === '0' ? null : memoryStore(), salt: 'local', devOpen: process.env.BLOCKROOMS_DEV !== '0', devCode: process.env.BLOCKROOMS_DEV_CODE || '' };
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);

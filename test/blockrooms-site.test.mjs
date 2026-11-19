@@ -195,7 +195,8 @@ test('the page\'s own script: a building nobody has had, a tape from the address
   // a building asked to be other than its seed has it (?debug, ?room=) is for looking at: walking out of one is not a score
   assert.match(src, /const doctored = !!dev\.debug \|\| !!room;\n      const result = await enterBackrooms\(office, \{\n[\s\S]*?also: doctored \? undefined : sign,/, 'the book is not signed for a doctored building');
   assert.ok(!/also: sign,/.test(src));
-  assert.match(src, /let room = !next && q\.get\('room'\) && Object\.hasOwn\(ARCHETYPES, q\.get\('room'\)\) \? q\.get\('room'\) : null;/, 'a room asked for by name is a room of the deck, or it is an ordinary door');
+  // (and only in the dev mode: the owner, 19 Nov, ?debug and its kin are ours, not the players')
+  assert.match(src, /let room = devOk && !next && q\.get\('room'\) && Object\.hasOwn\(ARCHETYPES, q\.get\('room'\)\) \? q\.get\('room'\) : null;/, 'a room asked for by name is a room of the deck, or it is an ordinary door');
 });
 
 test('what the host is told matches what is built, and only the branch that is for the public is deployed', () => {
