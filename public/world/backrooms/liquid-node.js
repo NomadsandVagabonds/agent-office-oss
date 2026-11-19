@@ -14,21 +14,24 @@
 // the Fresnel share of the room's light as a flat tint; the line where it meets what walls it in; the crest and trough
 // of a ring. The visitor's wake (feel) and a room's disturb() are liquid.js's.
 //
-// Not here yet: the wave pool's swell (the sheet stays flat), the underside seen from in the water (the room's own sheet
+// The wave pool's swell is here too (liquid.rule.js SWELL: the dense copy of the sheet, raised; its slope in bands, the
+// light down its face, the dark trough, the foam; the rings where it breaks), on a material of its own that a sheet
+// takes only while a room asks for a swell. Not here yet: the underside seen from in the water (the room's own sheet
 // is drawn then, as liquid.js does outside a rim), and High's mirror (High draws the flat tint, as Medium does).
 import { gpu } from '../engine/gpu.js';
-import { LIQUID, underwater, holdStep, wakeStart, wakeStep, wakeFill, waterColours, wadeStep } from './liquid.rule.js';
+import { LIQUID, SWELL, underwater, holdStep, wakeStart, wakeStep, wakeFill, waterColours, wadeStep, swellRings } from './liquid.rule.js';
 import { collectLiquids } from './liquid.mark.js';
-import { sheetTint } from './liquid.js';
+import { sheetTint, sheetRim, swellGeometry } from './liquid.js';
 
-const f = (n) => Number(n);
-
-/** The water's node material for one sheet `old` (a kit surface) of `rec`, toRoom its matrix into the room's frame. */
-function waterNode(old, rec, toRoom, shared) {
+/**
+ * The water's node material for one sheet `old` (a kit surface) of `rec`, toRoom its matrix into the room's frame;
+ * `swell`: the wave pool's version (raised, banded, foam), for while its room asks for a swell.
+ */
+function waterNode(old, rec, toRoom, shared, swell = false) {
   const N = gpu.nodes, T = N.TSL;
   const { Fn, vec2, vec3, vec4, float, int, uniform, uniformArray, attribute, varying, positionGeometry, positionView, screenUV, screenSize,
     viewportSharedTexture, viewportDepthTexture, floor, fract, sin, cos, exp, exp2, log2, ceil, sqrt, inverseSqrt, pow, abs, dot, length, distance,
-    normalize, mix, clamp, max, min, step, select, fwidth, mat3, Loop, If } = T;
+    normalize, mix, clamp, max, min, step, select, fwidth, reflect, Loop, If } = T;
   const u = old.material.uniforms || {};
   const read = (k) => old.material.uniforms?.[k]?.value;
   const num = (k, d) => uniform(d).onRenderUpdate(() => { const v = read(k); return typeof v === 'number' ? v : d; });
@@ -57,7 +60,29 @@ function waterNode(old, rec, toRoom, shared) {
   }
   if (D.FLICK) lit = lit.add(attribute('aFlk', 'vec3').mul(num('uFlick', 1)));
   const vLit = varying(lit.mul(num('uDim', 1)).mul(vec3u('uTint')), 'vWaterLit');
-  const vRoom = varying(toRoomU.mul(vec4(positionGeometry, 1)).xyz, 'vWaterRoom');
+  // (the swell: the sheet's own y raised by it, which is its room's y: liquid.js swells only such a sheet)
+  const SW = swell ? {
+    s: uniform(new N.Vector4()).onRenderUpdate(function () { if (rec.swellU) this.value.copy(rec.swellU.uSwell.value); }),
+    box: uniform(new N.Vector4()).onRenderUpdate(function () { if (rec.swellU) this.value.copy(rec.swellU.uSwellBox.value); }),
+  } : null;
+  const swellD = (p) => p.y.sub(SW.s.x.add(sin(p.x.mul(SWELL.sweep[1])).mul(SWELL.sweep[0])).add(sin(p.x.mul(SWELL.sweep[3]).add(SWELL.sweep[4])).mul(SWELL.sweep[2])));
+  const swellUnit = (d) => {
+    const ahead = d.greaterThan(0);
+    const fa = d.div(SWELL.face), ba = d.div(SWELL.back), q = d.div(0.6), e = d.add(SWELL.troughAt).div(SWELL.troughW);
+    const face = select(ahead, exp(fa.mul(fa).negate()), exp(ba.mul(ba).negate()));
+    const fore = select(ahead, exp(d.negate().div(SWELL.foreLen)).mul(exp(q.mul(q).negate()).oneMinus()).mul(SWELL.fore), 0);
+    return face.add(fore).sub(exp(e.mul(e).negate()).mul(SWELL.trough));
+  };
+  const swellAt = (p) => {
+    const b = SW.box, a = SW.s.y.mul(sin(p.x.mul(SWELL.vary[1]).add(SWELL.vary[2])).mul(SWELL.vary[0]).add(1));
+    const fade = ss(b.x, b.x.add(SWELL.wall), p.x).mul(ss(b.z.sub(SWELL.wall), b.z, p.x).oneMinus())
+      .mul(ss(b.y, b.y.add(SWELL.ends[0]), p.y)).mul(ss(b.w.sub(SWELL.ends[1]), b.w, p.y).oneMinus());
+    const h = a.mul(swellUnit(swellD(p))).mul(fade);
+    const room = max(own.eyeRoom.y.sub(SW.s.z).sub(SWELL.eyeClear), 0), near = ss(SWELL.eyeNear, SWELL.eyeFar, distance(p, own.eyeRoom.xz));
+    return select(own.eyeRoom.y.greaterThan(SW.s.z), mix(min(h, room), h, near), h);
+  };
+  const raised = swell ? positionGeometry.add(vec3(0, swellAt(toRoomU.mul(vec4(positionGeometry, 1)).xz), 0)) : positionGeometry;
+  const vRoom = varying(toRoomU.mul(vec4(raised, 1)).xyz, 'vWaterRoom');
 
   const height = (p) => {
     const q = p.sub(vec2(...LIQUID.drift).mul(own.phase));
@@ -103,6 +128,13 @@ function waterNode(old, rec, toRoom, shared) {
     const slope = floor(vec2(hx.sub(h0), hz.sub(h0)).div(cell).div(LIQUID.slopeStep).add(0.5)).mul(LIQUID.slopeStep).toVar();
     const fw = fwidth(vRoom.xz);
     slope.mulAssign(clamp(float(cell).div(max(max(fw.x, fw.y), 1e-5)).sub(LIQUID.sharp[0]).div(LIQUID.sharp[1] - LIQUID.sharp[0]), 0, 1));
+    // the swell: its slope on the ripple's own cells, stepped coarser (the face in broad bands), never flattened far off
+    let sw0 = null, swd = null, sws = null;
+    if (swell) {
+      sw0 = swellAt(c); swd = swellD(c);
+      sws = vec2(swellAt(c.add(vec2(cell, 0))).sub(sw0), swellAt(c.add(vec2(0, cell))).sub(sw0)).div(cell);
+      slope.addAssign(floor(sws.div(SWELL.slopeStep).add(0.5)).mul(SWELL.slopeStep));
+    }
     // the wake: its own slope on cells that widen far off, gentler right under the eye
     const wk = vec4(0).toVar(), wx = float(0).toVar(), wz = float(0).toVar();
     const rc = float(cell).mul(exp2(clamp(ceil(log2(sqrt(max(fw.x.mul(fw.y), 1e-10)).mul(LIQUID.wakePixels).div(cell))), 0, 2)));
@@ -155,10 +187,26 @@ function waterNode(old, rec, toRoom, shared) {
     const seen = clamp(dot(light, vec3(0.333)).mul(0.7).add(dot(under, vec3(0.4)).mul(0.5)), 0, 1.5);
     colour.assign(mix(colour, vec3(...LIQUID.edgeColor).mul(seen), edge.mul(LIQUID.edgeMix)));
     colour.mulAssign(clamp(wk.y.mul(LIQUID.wakeCrest), 0, 0.9).sub(clamp(wk.z.mul(LIQUID.wakeTrough), 0, 0.35)).mul(edge.oneMinus()).add(1));
+    if (swell) {
+      // the swell's light: the steep face catches the ceiling in bands, the trough behind it darkens; then the foam
+      const sh = sw0.div(max(SW.s.y, 1e-3)), steep = clamp(length(sws).div(1.2), 0, 1);
+      colour.addAssign(light.mul(SWELL.glint).mul(ss(0.88, 0.99, dot(reflect(v.negate(), n), up))).mul(ss(0.15, 0.6, steep)).mul(edge.oneMinus()));
+      colour.mulAssign(clamp(sh.negate().div(SWELL.trough), 0, 1).mul(-SWELL.troughDark).add(1));
+      const fcs = float(SWELL.foamCell).mul(exp2(clamp(ceil(log2(float(SWELL.foamCell).div(max(max(fw.x, fw.y), 1e-5).mul(SWELL.foamPx)))), 0, 3).negate()));
+      const fc = floor(vRoom.xz.div(fcs));
+      const hz2 = fract(sin(dot(fc, vec2(127.1, 311.7))).mul(43758.5453)), ph = fract(sin(dot(fc, vec2(269.5, 183.3))).mul(43758.5453));
+      const tall = clamp(SW.s.y.div(SWELL.tallAt), 0, 1);
+      const tr = swd.add(0.7).div(0.45);
+      const want = ss(0.8, 0.97, sh).mul(ss(0, 0.3, swd.negate()).oneMinus()).mul(SWELL.foamCrest).mul(tall.mul(-SWELL.foamTall).add(1))
+        .add(SW.s.w.mul(ss(0.25, 0.75, sh).mul(step(0, swd)).mul(SWELL.foamFace).add(exp(tr.mul(tr).negate()).mul(SWELL.foamTrail))));
+      const foam = step(clamp(want, 0, 0.9).oneMinus(), hz2).mul(ss(-0.3, 0.7, sin(uTime.mul(SWELL.churn).add(ph.mul(6.2831853)))));
+      colour.assign(mix(colour, vec3(...LIQUID.edgeColor).mul(SWELL.foamTone).mul(seen), foam.mul(SWELL.foamMix).mul(edge.oneMinus())));
+    }
     return vec4(colour, 1);
   })();
   // (drawn after everything opaque, so that three.js's copy of the picture has all of it; opaque itself, writing its depth)
   Object.assign(m, { transparent: true, blending: N.NoBlending, depthWrite: true, depthTest: true, side: N.DoubleSide });
+  if (swell) m.positionNode = raised;
   m.name = `liquid:${rec.kind}`;
   return { material: m, own };
 }
@@ -189,6 +237,8 @@ export function createLiquidViewNode() {
       return wakeStart(rec.wake.pool, p.x, p.z, strength, clock);
     };
     rec.pairs = [];
+    rec.swellU = { uSwell: { value: new N.Vector4() }, uSwellBox: { value: new N.Vector4() } };
+    rec.swellOn = false; rec.swellLast = null; rec.swellState = {};
     rec.meshes.forEach((old, i) => {
       if (!old.parent || !old.geometry?.attributes?.aLit || !old.material?.isKitSurface) return;
       const { material, own } = waterNode(old, rec, rec.toRoom[i], shared);
@@ -200,9 +250,41 @@ export function createLiquidViewNode() {
       water.renderOrder = old.renderOrder; water.frustumCulled = old.frustumCulled;
       water.visible = false; water.userData.noBeamShadow = true; water.userData.liquid = rec;
       old.parent.add(water);
-      rec.pairs.push({ old, water, material, own, rec });
+      rec.pairs.push({ old, water, material, own, rec, index: i });
     });
     if (rec.pairs.length) rec.state = 'up'; else { rec.state = 'refused'; rec.reason = 'not a kit sheet'; rec.pairs = null; rec.wake = null; rec.disturb = null; }
+  }
+
+  // the swell, once a frame for a surface that is up (liquid.js swellFrame): the dense copy and the swell's material on
+  // while a room asks for one, the sheet's own geometry and the flat material while none does; its uniforms; the rings
+  // where it breaks
+  const ROOM_UP = (e) => Math.abs(e[4]) < 1e-6 && Math.abs(e[5] - 1) < 1e-6 && Math.abs(e[6]) < 1e-6 && Math.abs(e[1]) < 1e-6 && Math.abs(e[9]) < 1e-6 && Math.abs(e[10] - 1) < 1e-6;
+  function swellFrame(rec, now) {
+    rec.swellStale = rec.swellFresh ? 0 : (rec.swellStale || 0) + 1; rec.swellFresh = false;
+    const ask = rec.swellStale > 10 ? null : rec.swell;
+    let on = !!ask && !rec.swellRefused;
+    if (on) for (const p of rec.pairs) {
+      if (p.dense === undefined) {
+        if (!ROOM_UP(rec.toRoom[p.index] || [])) { p.dense = null; rec.swellRefused = 'turned in its room'; }
+        else { const g = swellGeometry(p.old.geometry); p.dense = g.geometry; if (!g.geometry) rec.swellRefused = g.why; }
+      }
+      if (!p.dense) on = false;
+    }
+    for (const p of rec.pairs) {
+      if (on && !p.swellMaterial) { p.swellMaterial = waterNode(p.old, rec, rec.toRoom[p.index], shared, true); rec.kit?.own?.(p.swellMaterial.material); }
+      const g = on ? p.dense : p.old.geometry, mat = on ? p.swellMaterial.material : p.material;
+      if (p.water.geometry !== g) p.water.geometry = g;
+      if (p.water.material !== mat) p.water.material = mat;
+      p.live = on ? p.swellMaterial.own : p.own;
+    }
+    rec.swellOn = on;
+    if (!on) { rec.swellLast = null; return; }
+    rec.edge ||= sheetRim(rec);
+    const r = rec.edge.rim;
+    rec.swellU.uSwell.value.set(ask.at, ask.height, rec.plane.y, ask.breaking);
+    rec.swellU.uSwellBox.value.set(r.x0, r.z0, r.x1, r.z1);
+    for (const ring of swellRings(rec.swellLast, ask.at, ask.breaking, rec.swellBreaks, rec.swellBeach, now, rec.swellState)) wakeStart(rec.wake.pool, ring.x, ring.z, ring.strength, now);
+    rec.swellLast = ask.at;
   }
 
   const view = {
@@ -228,6 +310,7 @@ export function createLiquidViewNode() {
         rec.live = false; rec.under = false; rec.below = false;
         if (rec.state !== 'up') continue;
         stats.up++;
+        swellFrame(rec, now);
         const w = rec.wake;
         w.u.uRingN.value = wakeFill(wakeStep(w.pool, now), now, w.u.uRings.value);
         stats.rings += w.u.uRingN.value;
@@ -239,11 +322,12 @@ export function createLiquidViewNode() {
         mv.multiplyMatrices(camera.matrixWorldInverse, rec.rt.group.matrixWorld);
         for (const p of rec.pairs) {
           if (!shown(p.old)) continue;
-          p.own.roomToView.value.setFromMatrix4(mv);
-          p.own.eyeRoom.value.copy(at);
+          const u = p.live || p.own;
+          u.roomToView.value.setFromMatrix4(mv);
+          u.eyeRoom.value.copy(at);
           p.water.visible = true; p.old.visible = false; swapped.push(p);
           box.copy(p.old.geometry.boundingBox).applyMatrix4(p.old.matrixWorld);
-          box.min.y -= LIQUID.margin; box.max.y += LIQUID.margin;
+          box.min.y -= LIQUID.margin; box.max.y += LIQUID.margin + (rec.swellOn ? rec.swell.height : 0);
           if (frustum.intersectsBox(box)) { seen = true; stats.inView++; }
         }
         rooms.add(rec.rt.group);
@@ -281,8 +365,9 @@ export function createLiquidViewNode() {
       view.after();
       for (const rec of collectLiquids(scene)) {
         if (rec.state !== 'up') continue;
-        for (const p of rec.pairs) { p.water.parent?.remove(p.water); p.material.dispose(); }
+        for (const p of rec.pairs) { p.water.parent?.remove(p.water); p.material.dispose(); p.swellMaterial?.material.dispose(); p.dense?.dispose(); }
         rec.pairs = null; rec.state = 'marked'; rec.live = false; rec.wake = null; rec.disturb = null;
+        rec.swellU = null; rec.swellOn = false; rec.swellLast = null; rec.swellRefused = undefined;
       }
       body = null;
     },
