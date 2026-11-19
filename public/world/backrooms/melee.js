@@ -55,7 +55,10 @@ export function strikeSnip(me, candidates = [], los = () => true) {
 }
 
 /** The lawn flamingo's stakes (the owner: "~2 damage"): a jab of the scissors' reach, that lands twice. */
-export const STAB = Object.freeze({ hits: 2 });
+export const STAB = Object.freeze({
+  hits: 2,
+  handover: 0.19,       // seconds from the click until the hand lets go of it (hand-flamingo.rule.js STAB.draw + STAB.drive): the one left in the creature shows from then
+});
 
 /**
  * A stab with the flamingo: the nearest thing in front a jab could reach takes STAB.hits jabs, through its own snip()

@@ -210,7 +210,7 @@ export function createStalkers(env, options = {}) {
       const p = stuck[i], o = p.obj;
       if (!p.down) {
         const k = p.k, at = k && !k.dead && !k.away && !castList.finished?.(k.vital) && !(k.vital && k.vital.dying !== null) ? whereIs(k) : null;
-        p.t += dt;
+        p.t += dt; if (p.hidden > 0 && p.t >= p.hidden) { o.visible = true; p.hidden = 0; }
         if (!at || !Number.isFinite(at.x) || p.t > p.loose) { p.down = { t: 0, v: 0 }; continue; }
         o.position.set(at.x + Math.sin(p.yaw) * p.r * 0.7, floorOf(at.x, at.z) + p.dy, at.z + Math.cos(p.yaw) * p.r * 0.7);
         o.rotation.set(Math.PI / 2 - 0.35, p.yaw, 0, 'YXZ');            // (its stakes in them, the bird standing out toward where the stab came from)
@@ -231,14 +231,14 @@ export function createStalkers(env, options = {}) {
      * The lawn flamingo has gone into one of the cast (index.js stab, melee.js strikeStab): `c` the target it went into, `obj` the
      * flamingo, `me` where the stab came from. It is carried on them (carryStuck). → false if it cannot be (nobody of the cast there).
      */
-    impale(c, obj, me) {
+    impale(c, obj, me, { hidden = 0 } = {}) {
       // (into the creature itself: a body that is only one of its own, a brood or a note, takes it down with it)
       if (c?.id && c.member && c.id !== c.member) return false;
       const k = live.find((k) => k.member.id === c?.member && !k.dead && !k.away), at = k && whereIs(k);
       if (!k || !at || !Number.isFinite(at.x) || Math.hypot(at.x - c.x, at.z - c.z) > 1.5 || castList.finished?.(k.vital)) return false;
       W().scene.add(obj);
-      stuck.push({ k, obj, dy: Number.isFinite(c.y) ? Math.max(0.5, c.y - floorOf(at.x, at.z)) : 1.1, yaw: Math.atan2((me?.x ?? at.x) - at.x, (me?.z ?? at.z + 1) - at.z), r: c.r ?? 0.3, t: 0, loose: 25 + Math.random() * 20, down: null });
-      carryStuck(0);
+      stuck.push({ k, obj, dy: Number.isFinite(c.y) ? Math.max(0.5, c.y - floorOf(at.x, at.z)) : 1.1, yaw: Math.atan2((me?.x ?? at.x) - at.x, (me?.z ?? at.z + 1) - at.z), r: c.r ?? 0.3, t: 0, loose: 25 + Math.random() * 20, down: null, hidden });
+      obj.visible = !(hidden > 0); carryStuck(0);
       return true;
     },
     /** …or it went into something the conductor does not carry: it falls where that is. */

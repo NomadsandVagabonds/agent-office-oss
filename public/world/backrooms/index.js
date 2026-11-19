@@ -54,7 +54,7 @@ import { leaving } from './leaving.js';
 import { middle, THIN_BEHIND } from './marks.js';
 import { hangBelow, goesDown } from './seam.js';
 import { createInventory } from './inventory.js';
-import { strikeSnip, strikeStab } from './melee.js';
+import { strikeSnip, strikeStab, STAB } from './melee.js';
 import { shoveWindow, strikeShove, blocks } from './shove.rule.js';
 import { createSurvival } from './survival.js';
 import { batteryEnding, batteryWarning } from './battery-ending.js';
@@ -447,7 +447,8 @@ async function visit(office, opt) {
         if (hit.ok) {
           const prop = buildItemProp(env.kit, 'flamingo'), c = hit.candidate;
           prop.userData.light?.(f.world.lightAt(c.x, c.z, 1.2));
-          if (!env.pursuer?.impale?.(c, prop, me)) env.pursuer?.dropped?.(prop, c);
+          // (shown once the hand has let go of its own: the stab's drive, hand-flamingo.rule.js)
+          if (!env.pursuer?.impale?.(c, prop, me, { hidden: STAB.handover })) env.pursuer?.dropped?.(prop, c);
         }
         return hit;
       },

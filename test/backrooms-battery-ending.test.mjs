@@ -75,7 +75,7 @@ async function visit(t, options = {}) {
     createVhs: () => vhs, createHud: () => hud, createSound: () => sound, createInput: () => input,
     createStalkers(env) { env.pursuer = { update: noop, dispose: noop, carry: () => null }; },
     createHand: noop, createHandView(env) { env.handView = { update: noop, hide: noop, dispose: noop }; },
-    buildItemProp: () => ({ userData: {}, position: { set: noop }, rotation: { set: noop } }), strikeStab: () => ({ ok: false }),   // (the lawn flamingo: index.js stab)
+    buildItemProp: () => ({ userData: {}, position: { set: noop }, rotation: { set: noop } }), strikeStab: () => ({ ok: false }), STAB: { hits: 2, handover: 0.19 },   // (the lawn flamingo: index.js stab)
     createDenizens(env) { env.denizens = { update: noop, sync: noop, dispose: noop }; },
     createResidents(env) { env.residents = { update: noop, snipTargets: () => [], shoveTargets: () => [], dispose: noop }; },          // (somebody a room keeps: resident.js)
     createExtinguisher(env) { env.extinguisher = { press: noop, update: noop, blinds: () => false, whiteOut: () => 0, dispose: noop }; },   // (the fire extinguisher: extinguisher.js)
