@@ -16,7 +16,7 @@ How to read it:
 | Department | What | Session | Branch |
 |---|---|---|---|
 | D1 · Platform and shell | prep only: the shell spike (P-1) and a prep note | a new session | `claude/steam-shell` |
-| D12 · The first floor | prep only, docs: the 40-room audit (FF-4), the first two minutes (FF-3), a hundred geometries (FF-2), a C9 proposal | builder | `claude/steam-first-floor` |
+| D12 · The first floor | prep only, docs: the 40-room audit (FF-4), the first two minutes (FF-3), a hundred geometries (FF-2). (The C9 proposal is withdrawn: the owner, 19 Nov) | builder | `claude/steam-first-floor` |
 | D3 · Rendering (WebGPU) | R-5 phase 1: the shader and pass inventory, `?gpu=webgpu` with the WebGL2 fallback, `vox/material.js` ported, today's look unchanged without the flag | a new session | `claude/steam-webgpu` |
 
 Related plans:
@@ -55,10 +55,16 @@ Related plans:
 6. **The first floor has to be stunning.** The owner: *"We will have only a couple minutes to grip a new
    player so our first floor has to be stunning if we ever want them to see suburbia or water park later on
    in the game."*
-   - A department of its own does nothing else (D12).
+   - A department of its own does nothing else (D12). It **raises the weakest rooms**, so every first floor is
+     good, whatever it deals. Nothing is dealt more often than anything else. The owner: *"the whole idea and
+     really only selling point of the game is it's always different. I don't want any one room to show more
+     often, I want to raise the caliber of other rooms."*
    - It is the first thing on the store page, and the first two minutes of every new player's first visit.
    - **As many set pieces as possible** (the owner, 19 Nov, on FF-5).
-7. **Every visit should feel unique, through a huge library of compelling content.** The owner: *"I'm also
+7. **No new rules without an extremely compelling reason** (the owner: *"unless there is an extremely
+   compelling reason, we don't make more 'rules'"*). This plan only adds what the work needs: who owns which
+   files, and the contracts where departments meet.
+8. **Every visit should feel unique, through a huge library of compelling content.** The owner: *"I'm also
    wanting just the quality of connector and more simple 'filler' rooms to be much more diverse and
    compelling … we want each play to feel totally unique and this is achieved by a huge library of
    compelling content."*
@@ -100,9 +106,9 @@ directly:
 
 | ID | Task | Done when |
 |---|---|---|
-| L-1 | Deal every department below to a session, and post this table with names filled in | each department has a named session, and that session has acknowledged its scope |
+| L-1 | Deal every department below to a session, and post this table with names filled in | each department has a named session |
 | L-2 | Add the game-side hooks the contracts need to `index.js`: `env.platform` (C1); input actions passed through (C4) | the hooks are on live, with web no-ops and test stand-ins; the suite is green |
-| L-3 | Keep the milestone board (section 4) and gate each milestone | each milestone is closed by a written check against its exit criteria |
+| L-3 | Keep the milestone board (section 4) | it says where each milestone stands |
 | L-4 | Edition discipline: merges that change the edition land after midnight UTC once the daily is live (daily plan, section 1) | written in the merge checklist |
 
 ### D1 · Platform and shell
@@ -231,7 +237,7 @@ the light, and better silhouettes where the eye lands.
 |---|---|---|
 | W-1 | Wear as data: a seeded, per-room wear pass (grime at the base of walls, scuffs at doors, stains under fittings, worn paths between doors) | the same seed gives the same wear; it can be switched off below Medium |
 | W-2 | Dust in the light: motes in tube light and in the torch's beam | seen at Medium and above; costs measured by D9 |
-| W-3 | Silhouettes: a list of the ten most-seen props, and bevelled or sculpted versions of each | each one shown before and after, and agreed by the lead |
+| W-3 | Silhouettes: a list of the ten most-seen props, and bevelled or sculpted versions of each | each one shown before and after |
 | W-4 | A pass over the starting floors with all of it, for the store shots | the shots in M2 are taken there |
 
 ### D6 · Cast and creatures
@@ -278,7 +284,7 @@ saves.
 | ID | Task | Done when |
 |---|---|---|
 | S-1 | Today's seed from the server: `HMAC(secret, date)`, a day number, the edition pinned on the ticket (C6) | `POST /api/book { do: 'in', daily: true }` returns the day's seed, number and edition; there are tests |
-| S-2 | The daily board: every take signed (getting out or not), one ranked take per account or browser, place and percentile | the endpoints in C6, a D1 migration, rate limits; there are tests |
+| S-2 | The daily board: every take signed (getting out or not), place and percentile; one ranked take a day, or best of the day, as the owner decides (daily plan, decision 2) | the endpoints in C6, a D1 migration, rate limits; there are tests |
 | S-3 | Trails kept: the day's top twenty, your best, and those either side of you | `GET /api/book/trail?id=`; storage sized and capped |
 | S-4 | Steam identity: accept a Steam session ticket as the account, if the owner says yes **(owner)** | a Steam player's daily takes are theirs across machines |
 | S-5 | Load: the Free-plan limits (BLOCKROOMS-STORE.md) checked against a launch-day guess | written; the plan agreed with the owner before launch |
@@ -333,7 +339,7 @@ reads everything and changes only its own tools. It hands findings to the owning
 |---|---|---|
 | F-1 | Profile the five heaviest floors with `/play?debug&bench=1`: time per frame split into JavaScript (the game's update), draw calls, GPU, at each tier | a table in `BLOCKROOMS-PERF.md`, with the top ten costs named by file |
 | F-2 | The budgets (C8): a frame-time target for each tier on three hardware classes (Deck, mid laptop, desktop) | agreed with the lead and the owner |
-| F-3 | A benchmark that runs in CI on the software renderer, as a regression alarm (not an absolute measure) | a red result when a merge adds more than X% to a fixed scene |
+| F-3 | A benchmark anyone can run on the software renderer, to see whether a change made a fixed scene slower (not an absolute measure) | it runs in one command and prints the difference |
 | F-4 | Findings to their owners: each costly item filed to its department, with the measurement | each one acknowledged by its owner |
 | F-5 | WebGPU against WebGL in the shell, scene for scene, as R-5's phases land: to decide their order, and when WebGPU becomes the shell's default | a table; the decision written down |
 
@@ -357,7 +363,7 @@ reads everything and changes only its own tools. It hands findings to the owning
 | M-1 | Capsule art in every size Valve asks for, from in-game renders with the logo | all sizes exported and checked against Valve's current list |
 | M-2 | Screenshots: about ten, at High or Ultra, from W-4's dressed floors | chosen by the owner |
 | M-3 | A trailer of 60–90 s, filmed from real play a frame at a time, cut to music the project owns. A frame-stepping rig (Playwright on a stepped clock) was used in the cast session's scratch for this; bring it into `tools/steam/store/` first | approved by the owner |
-| M-4 | Store text: a short and a long description that sell the camcorder, the daily and creatures with rules you can learn; tags | approved by the owner, and checked by D11 for names |
+| M-4 | Store text: a short and a long description that sell the camcorder, the daily and creatures with rules you can learn; tags | approved by the owner |
 | M-5 | Drafts of the early access answers (why, how long, what changes, price during and after) **(owner)** | the owner has filled them in |
 
 ### D11 · QA, release and compliance
@@ -384,9 +390,10 @@ reads everything and changes only its own tools. It hands findings to the owning
 **Who:** a new team: a lead designer agent, a brainstorming agent and builder agents, working with the
 builder session (D5), which owns the shared dressing systems.
 
-**Job:** the first floor, every time, for a player who has never seen the game. Its rooms, its plain rooms
-between, the landing, and the first two minutes. **(owner)** It is the department the store page and every
-first visit depend on.
+**Job:** the first floor, every time, for a player who has never seen the game: its rooms, its plain rooms
+between, the landing, and the first two minutes. The store page and every first visit depend on it.
+- **The goal:** raise the weakest rooms, so every first floor is good, whatever the seed deals.
+- **Not the goal:** dealing the best rooms more often. Every room is as likely as it is today (the owner).
 
 **Owns:**
 - **The brief:** `docs/BLOCKROOMS-FIRST-FLOOR.md` (new): what the first floor is for, the first two minutes
@@ -399,7 +406,6 @@ first visit depend on.
 **Must not touch:**
 - **Other floors' rooms.**
 - **The shared systems:** wear and motes (D5), the surface shader (D3), the tape (D4). Ask for what is needed.
-- **How the first floor is dealt** (`plan.js`): the lead's, through C9.
 
 **The reference board, and the rule on it:**
 - **What goes on it:**
@@ -411,9 +417,7 @@ first visit depend on.
   pictures, not even as reference. The board is kept privately, outside the repository.
   - What comes into the repository is written notes in our own words: *"a hall too long for its width, lit
     only at the far end; the carpet seam runs dead straight to it"*.
-- **Inspired by, never copied.** No room recognizable from a film, a series, the wiki or another game: not
-  its layout, its signature props, or its name. The team's rule already says so (no wiki, film or game names
-  or looks), and the Q-1 sweep checks the first floor first.
+- The project's existing rule applies (no wiki, film or game names or looks).
 
 **Tasks:**
 
@@ -421,12 +425,11 @@ first visit depend on.
 |---|---|---|
 | FF-1 | The reference board (private, outside the repository) and the written notes on it: what makes each picture eerie, in words | about forty notes in the brief, each one a sentence or two, no pictures |
 | FF-2 | A brainstorming agent: a hundred strange geometries and eerie, surreal office set-ups (a meeting room set for one; a corridor whose doors are all the same door; a ceiling that lowers so slowly you only notice at the end; a cubicle farm with one chair still warm), each with what would make it cheap or costly to build | the list in the brief, ranked by the lead designer and the owner |
-| FF-3 | The first two minutes: storyboarded second by second, from the fall in to the first time something is there (the first room seen, the first sound, the first sign of the cast) | written and agreed by the owner before FF-5's building starts |
+| FF-3 | The first two minutes: storyboarded second by second, from the fall in to the first time something is there (the first room seen, the first sound, the first sign of the cast) | written, and agreed by the owner |
 | FF-4 | An audit of what the first floor is today: the landing, the plain rooms, the 40 yellow-floor rooms, each one shot at High and marked stunning, fine or weak | a table and a sheet of shots; the weak ones are named first |
 | FF-5 | Set pieces: **as many as possible** (the owner) from FF-2's best, built to FF-3's beats; six to ten is the floor for M2, not the ceiling | each on live, staged, shot, with tests as every room has; the count keeps growing after M2 |
 | FF-6 | The plain rooms between (most of the first floor is these): a variety pass with D5, covering ceiling heights, lighting that fails in patterns, odd proportions, doorways that do not line up | a walk of three seeds shows no two plain rooms alike enough to notice |
-| FF-7 | The first rooms after the landing are always among the best: a rule for how the first floor is dealt (C9) | for any seed, the first rooms a new player can reach from the landing include at least one of FF-4's "stunning" |
-| FF-8 | Weak rooms: polished, or kept off the first floor (moved deeper, or out of the deck) | no room marked weak in FF-4 is left as it was on the first floor |
+| FF-8 | Raise the weak rooms: each room marked weak in FF-4 is reworked with its author until it is fine or better, wherever it is dealt | no room is left marked weak |
 | FF-9 | New players tried: the first two minutes played cold by someone who has not seen it (the owner, a friend, or a fresh agent playing blind); what they looked at, where they stopped, where they were bored | written up; FF-3 revised where it failed |
 
 ### D13 · The library: connectors and filler, on every floor
@@ -474,31 +477,27 @@ doorways between, which is most of every visit.
 **Owns:**
 - **New:** `public/world/backrooms/fill/`, one small file per piece, each with what it fits and what it
   builds.
-- **New:** `docs/BLOCKROOMS-LIBRARY.md`: the catalogue (every piece, a shot, its floors, its weight), the
-  template for writing one, and the gate a piece passes.
+- **New:** `docs/BLOCKROOMS-LIBRARY.md`: the catalogue (every piece, a shot, its floors) and a template
+  to copy.
 
 **Must not touch:**
 - **The generator's shape of a floor** (`gen.js`): D5's and the lead's. It reaches the library through C10.
 - **The deck's oddities:** each room's author. The first floor's set pieces are D12's.
 - **The shared systems:** wear (D5), the surface (D3), the tape (D4).
 
-**The gate every piece passes before it is dealt:**
-- **Built from the template:** it says what it fits, its floors, its weight and its cost.
-- **Tests:** it fits where it says, every seed builds it the same, it never blocks a doorway or traps a
-  visitor, it carries a walkable route, and creatures can walk it.
-- **A shot at High** in the catalogue, and an "is it compelling?" note: what makes you look.
-- **Within the performance budget** (C8). D9 measures a sample of pieces each week.
-- **The names-and-likenesses rule** (Q-1): inspired by, never copied.
+**The tests every piece has** (what the game needs, and nothing more): it fits where it says, every seed
+builds it the same, it never blocks a doorway or traps a visitor, and it can be walked through, by a visitor and by
+the cast.
 
 **Tasks:**
 
 | ID | Task | Done when |
 |---|---|---|
 | LB-1 | The hook (C10, with D5 and the lead): plain rooms and corridors can be dealt a filler or a connector from the library, by the seed, with the repetition guard; with an empty library the generator builds exactly what it does today | the hook is on live; empty, the suite is green and every seed's building is unchanged |
-| LB-2 | The template and the gate: one file to copy, the tests every piece runs, the catalogue's format | a sample piece goes through it from blank to dealt in under an hour of an agent's work |
-| LB-3 | The first hundred fillers and fifty connectors, spread across every floor, the first floor first (with D12) | catalogued, gated, dealt |
-| LB-4 | A variety measure: over a hundred seeded visits, how often a player would meet the same part twice, and how many of each kind a visit uses | a number in the catalogue, watched as the library grows; a red mark when a kind is thin |
-| LB-5 | Keep growing: a steady stream of pieces from as many agents as are useful, batched so the edition changes once a week (L-4), not every merge | the catalogue's count, by week; the variety measure improving |
+| LB-2 | The template: one file to copy, with the tests every piece has, and the catalogue's format | a sample piece is written from it and dealt |
+| LB-3 | The first hundred fillers and fifty connectors, spread across every floor, the first floor first (with D12) | catalogued and dealt |
+| LB-4 | A variety measure: over a hundred seeded visits, how often a player would meet the same part twice, and how many of each kind a visit uses | a number in the catalogue, watched as the library grows |
+| LB-5 | Keep growing: a steady stream of pieces from as many agents as are useful | the catalogue's count, by week; the variety measure improving |
 | LB-6 | Small events: a shared set of one-off moments a filler can carry (a phone rings once, a printer wakes, a light dies as you pass, a door drifts shut, a chair is still turning), timed so no two come together | at least twenty events; each says what it costs and that nothing in it hurts |
 
 ---
@@ -530,7 +529,7 @@ platform = {
 |---|---|---|
 | … | … | … |
 
-- IDs are kebab-case and never reused.
+- An ID is never reused (Steam keeps them).
 - They are registered in Steamworks by D1.
 
 **C3 · Graphics defaults** (owner D3).
@@ -556,31 +555,25 @@ platform = {
 - D5 proposes its shape, and the lead adds the hook.
 
 **C8 · Performance budgets** (owner D9).
-- Frame-time targets for each tier on each hardware class.
-- A merge that breaks one is held by the lead until it is fixed, or the budget is changed on purpose.
-
-**C9 · How the first floor is dealt** (owner: the lead; asked for by D12).
-- A rule in `plan.js`'s dealing: which rooms may be near the landing on the first floor, drawn from a list
-  D12 keeps (the "stunning" ones).
-- It changes what a seed deals, so it **changes the edition**, and it lands as such (L-4).
+- Frame-time targets for each tier on each hardware class: what to aim for, reported by D9, not a gate.
 
 **C10 · The library hook** (owner: D5 and the lead; asked for by D13).
 - How the generator asks the library for a filler or a connector:
   - what it passes: the room's size, its floor, its doors, the floor's dice;
   - what comes back: the chosen piece, or none.
-- **An empty library builds today's building exactly.** Every piece added changes what a seed deals, so
-  additions are **batched into a weekly edition** (L-4) once the daily is live.
+- **An empty library builds today's building exactly.** Every piece added changes what a seed deals, so it
+  changes the edition (L-4 says when such merges land once the daily is live).
 
 ---
 
 ## 4. Milestones
 
-| Milestone | What it is | Exit criteria (the lead checks) | Needs |
+| Milestone | What it is | What is in it | Needs |
 |---|---|---|---|
 | **M0 · Ground** | decisions and facts | the owner's decisions (section 6) answered; F-1 profile written; Q-1 sweep listed; Q-2 started; P-1 spike plays; FF-1 to FF-3 begun | L-1, F-1, Q-1, P-1, FF-1 |
 | **M1 · Internal build** | a Steam build the team can play | P-2, P-3, P-5, P-6; D-0 (the launcher); R-1; R-5 phase 1 (behind its flag); I-1, I-2; suite green | D1, D2, D3 |
-| **M2 · Coming Soon** | the store page live | M-1 to M-4; W-4; FF-4; LB-1, LB-2; the first of FF-5's set pieces (the store's shots are taken on the first floor); Q-1's fixes merged; Q-2 answered; the owner's sign-off | D5, D10, D11, D12 |
-| **M3 · Release candidate** | everything early access promises | FF-5 to FF-9 (the first floor done); LB-3, LB-4, LB-6 (the first library); P-4, P-7, P-8; I-3 to I-6; O-1 to O-6; W-1 to W-3; R-3, R-4; R-5 as far as F-5 says is ready (WebGPU the shell's default only if it measures better); C-1 to C-4; S-1, S-2, S-6; D-1 to D-4; F-2, F-3; Q-3 to Q-5 | all |
+| **M2 · Coming Soon** | the store page live | M-1 to M-4; W-4; FF-4; LB-1, LB-2; the first of FF-5's set pieces (the store's shots are taken on the first floor); Q-2 answered; the owner's sign-off | D5, D10, D11, D12 |
+| **M3 · Release candidate** | everything early access promises | FF-5, FF-6, FF-8, FF-9 (the first floor done); LB-3, LB-4, LB-6 (the first library); P-4, P-7, P-8; I-3 to I-6; O-1 to O-6; W-1 to W-3; R-3, R-4; R-5 as far as F-5 says is ready (WebGPU the shell's default only if it measures better); C-1 to C-4; S-1, S-2, S-6; D-1 to D-4; F-2, F-3; Q-3 to Q-5 | all |
 | **M4 · Early access** | released | M3 closed; the two weeks of Coming Soon done; the owner's go | owner |
 | **M5 · After launch** | the roadmap | LB-5 (the library keeps growing, every week); FF-5 (more set pieces); S-3, D-5 (ghosts); the rest of R-5 (every material on TSL, GPU particles); co-op; the modes roadmap | — |
 
@@ -588,20 +581,11 @@ M2 can run alongside M1 once M0 is closed. The store page needs shots and the tr
 
 ---
 
-## 5. Working rules for every department
+## 5. Working rules (the ones the project already has, and one more)
 
-- **Branches:** one per department, `claude/steam-<department>` (for example, `claude/steam-shell`). The
-  lead merges into `blockrooms-live`. Never push to another department's branch.
-- **Files:** only edit what your department owns (section 2). For anything else, ask the owner, through the
-  lead if unsure.
-- **Contracts first:** if your work needs something from another department, write against the contract with
-  a no-op stand-in, so neither waits on the other.
-- **The project's rules hold** (`docs/BACKROOMS.md`, `CLAUDE.md`):
-  - no npm in the game;
-  - no model names in code or docs;
-  - never commit `data/`, `public/knowledge/` or `public/transcripts/`;
-  - the same seed gives the same building;
-  - no wiki, film or game names or looks.
+- **Files:** only edit what your department owns (section 2). For anything else, ask its owner. This is the
+  one thing this plan adds: it is what stops departments stepping on each other.
+- **The project's rules hold, as they are** (`docs/BACKROOMS.md`, `CLAUDE.md`). This plan adds none.
 - **Every push:**
   - merge `blockrooms-live` first;
   - run the whole suite on the merged tree;
