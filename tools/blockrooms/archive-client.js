@@ -99,13 +99,14 @@ export async function sync() {
   }
   finally { busy = false; if (again) schedule(); }
 }
-export async function signInGoogle() {
+export async function signInGoogle({ returnTo = 'archive' } = {}) {
   const c = await startAccounts({ force: true }); if (!c) throw Error('Cloud saves are not configured yet.');
   if (publicConfig.provider === 'cloudflare') {
-    const { url } = await archiveRequest('google', {});
+    const { url } = await archiveRequest('google', { returnTo });
     location.assign(url); return;
   }
-  const { error } = await c.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: new URL('./archive', location.href).href } });
+  const redirectTo = new URL(returnTo === 'home' ? './' : './archive', location.href).href;
+  const { error } = await c.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
   if (error) throw error;
 }
 export async function emailCode(email) {

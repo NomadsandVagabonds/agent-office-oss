@@ -89,11 +89,12 @@ export async function verifyCode(request, env, body, now) {
   if (link) res.headers.append('set-cookie',setCookie(LINK,'',0));
   return res;
 }
-export async function startGoogle(env) {
+export async function startGoogle(env, returnTo) {
   const verifier = randomToken();
+  const state = await hash((returnTo === 'home' ? 'state/home/' : 'state/') + verifier);
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   url.search = new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID, redirect_uri: env.SITE_ORIGIN + '/api/archive',
-    response_type: 'code', scope: 'openid email', prompt: 'select_account', state: await hash('state/' + verifier),
+    response_type: 'code', scope: 'openid email', prompt: 'select_account', state,
     code_challenge_method: 'S256', code_challenge: await hash(verifier) });
   const res = json({ url: url.href });
   res.headers.append('set-cookie',setCookie(FLOW,verifier,600));
@@ -103,7 +104,12 @@ export async function finishGoogle(request, env, now, transport) {
   const res = new Response(null, { status: 303, headers: { location: env.SITE_ORIGIN + '/archive?signin=failed', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } });
   res.headers.append('set-cookie',setCookie(FLOW,'',0));
   const params = new URL(request.url).searchParams, verifier = cookie(request,FLOW);
-  if (!providers(env).google || !/^[\w-]{43}$/.test(verifier) || params.get('state') !== await hash('state/' + verifier) || !params.get('code')) return res;
+  if (!providers(env).google || !/^[\w-]{43}$/.test(verifier)) return res;
+  const state = params.get('state');
+  const home = state === await hash('state/home/' + verifier);
+  if (home) res.headers.set('location',env.SITE_ORIGIN + '/?signin=failed#enter');
+  else if (state !== await hash('state/' + verifier)) return res;
+  if (!params.get('code')) return res;
   try {
     const tokens = await transport('https://oauth2.googleapis.com/token', { method: 'POST', body: new URLSearchParams({
       grant_type: 'authorization_code', code: params.get('code'), code_verifier: verifier, client_id: env.GOOGLE_CLIENT_ID,
@@ -130,7 +136,7 @@ export async function finishGoogle(request, env, now, transport) {
       }
     }
     await signIn(env,email,identity.sub,now,res);
-    res.headers.set('location',env.SITE_ORIGIN + '/archive');
+    res.headers.set('location',env.SITE_ORIGIN + (home ? '/?signin=complete#enter' : '/archive'));
   } catch { /* keep the generic failure redirect, without exposing a code or token */ }
   return res;
 }

@@ -187,6 +187,10 @@ canvas.sprite { image-rendering: pixelated; image-rendering: crisp-edges; displa
 kbd { display: inline-block; min-width: 1.6em; text-align: center; font: 700 12px/1.4 var(--mono); background: #d4d0c8; border: 2px outset #ffffff; padding: 0 4px; margin: 1px; }
 .btn { display: inline-block; margin-top: 16px; font: 700 16px Arial, Helvetica, sans-serif; color: #000000 !important; background: #c0c0c0; border: 3px outset #ffffff; padding: 6px 20px; text-decoration: none; }
 .btn:active { border-style: inset; }
+.home-account { display: grid; justify-items: center; gap: 4px; max-width: 15rem; margin: 0 auto; font-size: 14px; }
+.home-account .btn { margin: 0; padding: 6px 12px; font-size: 14px; cursor: pointer; }
+.home-account .btn[hidden], .home-account [role="status"]:empty { display: none; }
+.home-account [role="status"] { font: 700 13px/1.4 Arial, Helvetica, sans-serif; }
 
 /* the backers (SPONSORS, on the page): somebody else's idea of a good time */
 .backers { color: #ffffff; text-align: center; background: #000033; border-top: 4px ridge #808080; border-bottom: 4px ridge #808080; }
