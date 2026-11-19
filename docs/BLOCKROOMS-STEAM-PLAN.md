@@ -17,6 +17,7 @@ How to read it:
 |---|---|---|---|
 | D1 · Platform and shell | prep only: the shell spike (P-1) and a prep note | a new session | `claude/steam-shell` |
 | D12 · The first floor | prep only, docs: the 40-room audit (FF-4), the first two minutes (FF-3), a hundred geometries (FF-2), a C9 proposal | builder | `claude/steam-first-floor` |
+| D3 · Rendering (WebGPU) | R-5 phase 1: the shader and pass inventory, `?gpu=webgpu` with the WebGL2 fallback, `vox/material.js` ported, today's look unchanged without the flag | a new session | `claude/steam-webgpu` |
 
 Related plans:
 - [BACKROOMS-DAILY-PLAN.md](BACKROOMS-DAILY-PLAN.md): the daily tape.
@@ -32,7 +33,11 @@ Related plans:
 
 1. **A light web wrapper, not a port.**
    - The game stays one codebase: three.js, no build step, zero npm dependencies in the game.
-   - The Steam build is the site build (`node tools/blockrooms/build.mjs <folder>`) in an Electron shell.
+   - The Steam build is the site build's game (`node tools/blockrooms/build.mjs <folder>`: the play page,
+     every module, the vendored three.js) in an Electron shell.
+   - **Not the web site's front page.** The 1998 GeoCities home page stays on the web only. The app opens on a
+     launcher of its own: an intro, then a start menu (the owner, 19 Nov). D8 owns the launcher, and D1 hosts it
+     (D-0).
    - Electron, not Tauri: one fixed Chromium on every machine.
 2. **Early access first.**
    - The store page goes up early, to gather wishlists.
@@ -44,8 +49,9 @@ Related plans:
    - The camcorder stays the look, and the tape keeps about 540 lines.
    - The Steam build adds a richer scene under the tape: light, wear, the camcorder's optics. It is voxel
      and found footage, never a Minecraft knockoff.
-5. **Measure before optimizing.** The heaviest floors are profiled before any rendering rework, and before
-   WebGPU.
+5. **Measure before optimizing.** The heaviest floors are profiled before any rendering rework.
+   - **WebGPU starts now, not after launch** (the owner, 19 Nov). Its phase 1 runs alongside the profiling,
+     and is safe because nothing changes without its flag (R-5).
 6. **The first floor has to be stunning.** The owner: *"We will have only a couple minutes to grip a new
    player so our first floor has to be stunning if we ever want them to see suburbia or water park later on
    in the game."*
@@ -119,7 +125,7 @@ that this is acceptable under the zero-npm rule.
 
 | ID | Task | Done when |
 |---|---|---|
-| P-1 | Spike: Electron loads the site build from disk and plays a visit start to finish | a visit can be played to its end in the shell on Windows, Mac and Linux; it has a frame rate counter |
+| P-1 | Spike: Electron loads the site build's play page (not its front page) from disk, and plays a visit start to finish | a visit can be played to its end in the shell on Windows, Mac and Linux; it has a frame rate counter |
 | P-2 | Packaging: one script makes a Steam depot for each OS from a clean checkout | `tools/steam/package.mjs` makes the three builds reproducibly; the file sizes are written down |
 | P-3 | `platform.js` (C1): `kind`, `online()`, `achieve`, `stat`, `cloud`, `user`, as no-ops on the web | the web build behaves exactly as before (suite green), and the shell supplies the real ones |
 | P-4 | Steamworks: overlay, achievements (C2), Steam Cloud for the archive | an achievement unlocks in a test app ID, and a save made on one machine appears on another |
@@ -178,7 +184,7 @@ cast; and so on).
 | R-2 | Side-by-side shots: the same five rooms at Classic, Medium and High, for the owner to agree the look | a sheet of shots in `docs/`, with the owner's notes |
 | R-3 | The Ultra tier: about 3× supersample under the tape, screen-space ambient occlusion, light shafts through doorways and dust, more fittings casting shadows, sharper light maps | Ultra is in `graphics.js`, and its cost is measured by D9 against the budget (C8) |
 | R-4 | Phase 2 of the graphics plan, "light that behaves", for the Steam build | per that plan's own phase notes |
-| R-5 | Later: materials to TSL (three.js node shading), `kit.js` first, with shots matched, then the rest; the WebGPU renderer in the shell, the WebGL fallback on the web | every material renders the same within a tolerance in both renderers, and the frame time is measured on both |
+| R-5 | **Now, by phases** (the owner: WebGPU started now). Phase 1, dealt: an inventory of every shader and pass; a `?gpu=webgpu` flag on three.js's WebGPURenderer with its WebGL2 fallback; a port of `vox/material.js`, with today's look unchanged without the flag. Then materials to TSL (three.js node shading), `kit.js` first, with shots matched, then the rest; the WebGPU renderer in the shell, the WebGL fallback on the web | every material renders the same within a tolerance in both renderers, and the frame time is measured on both |
 
 ### D4 · Camcorder: the tape and its optics
 
@@ -282,12 +288,16 @@ saves.
 
 **Who:** a new agent, working with D7.
 
-**Job:** what a player sees of the daily and of their progress: the front page's daily, the scorecard's
-place and share card, streaks, past days, and ghosts in play.
+**Job:** what a player sees around the game:
+- **in the app,** the launcher (intro and start menu);
+- **on the web,** the front page's daily;
+- **on both,** the scorecard's place and share card, streaks, past days, and ghosts in play.
 
 **Owns:**
-- `tools/blockrooms/home.js` / `home.html` / `home.css`;
+- `tools/blockrooms/home.js` / `home.html` / `home.css` (the web's front page only);
 - `tools/blockrooms/site.js`;
+- new: `tools/steam/launcher/`, the app's launcher. It is D8's, inside D1's `tools/steam/` (D1 hosts and
+  packages it, and does not change it);
 - `public/world/backrooms/scorecard.js`;
 - new: `public/world/backrooms/ghost.js`.
 
@@ -297,7 +307,8 @@ place and share card, streaks, past days, and ghosts in play.
 
 | ID | Task | Done when |
 |---|---|---|
-| D-1 | The front page: today's tape, the day number, yesterday's winner, your streak | it plays from the front page; offline it says so |
+| D-0 | The app's launcher (the owner: not the GeoCities page): an intro (a short cold open on tape), then a start menu with New visit, Today's tape (the daily), Past days, Settings (graphics, controls, audio), Credits and Quit; a gamepad and the Deck work it from the first frame. Its look is the camcorder's and the office's, not the 1998 web page's | the shell opens on it; every item works with mouse, keyboard and pad; offline, the daily items say so and the rest work |
+| D-1 | The daily on the web's front page and on the launcher: today's tape, the day number, yesterday's winner, your streak | it plays from both; offline it says so |
 | D-2 | The scorecard: place, percentile, the runs either side of yours, the top ten | it appears after the ranked take only |
 | D-3 | The share card (no seed in it), copied with one click | the text matches the daily plan's sample |
 | D-4 | Past days: playable, unranked, from a list | any day since launch plays as it was (its edition) |
@@ -324,7 +335,7 @@ reads everything and changes only its own tools. It hands findings to the owning
 | F-2 | The budgets (C8): a frame-time target for each tier on three hardware classes (Deck, mid laptop, desktop) | agreed with the lead and the owner |
 | F-3 | A benchmark that runs in CI on the software renderer, as a regression alarm (not an absolute measure) | a red result when a merge adds more than X% to a fixed scene |
 | F-4 | Findings to their owners: each costly item filed to its department, with the measurement | each one acknowledged by its owner |
-| F-5 | Later: WebGPU against WebGL in the shell, scene for scene, to decide R-5's order | a table; the decision written down |
+| F-5 | WebGPU against WebGL in the shell, scene for scene, as R-5's phases land: to decide their order, and when WebGPU becomes the shell's default | a table; the decision written down |
 
 ### D10 · Store, marketing and trailer
 
@@ -567,11 +578,11 @@ platform = {
 | Milestone | What it is | Exit criteria (the lead checks) | Needs |
 |---|---|---|---|
 | **M0 · Ground** | decisions and facts | the owner's decisions (section 6) answered; F-1 profile written; Q-1 sweep listed; Q-2 started; P-1 spike plays; FF-1 to FF-3 begun | L-1, F-1, Q-1, P-1, FF-1 |
-| **M1 · Internal build** | a Steam build the team can play | P-2, P-3, P-5, P-6; R-1; I-1, I-2; suite green | D1, D2, D3 |
+| **M1 · Internal build** | a Steam build the team can play | P-2, P-3, P-5, P-6; D-0 (the launcher); R-1; R-5 phase 1 (behind its flag); I-1, I-2; suite green | D1, D2, D3 |
 | **M2 · Coming Soon** | the store page live | M-1 to M-4; W-4; FF-4; LB-1, LB-2; the first of FF-5's set pieces (the store's shots are taken on the first floor); Q-1's fixes merged; Q-2 answered; the owner's sign-off | D5, D10, D11, D12 |
-| **M3 · Release candidate** | everything early access promises | FF-5 to FF-9 (the first floor done); LB-3, LB-4, LB-6 (the first library); P-4, P-7, P-8; I-3 to I-6; O-1 to O-6; W-1 to W-3; R-3; C-1 to C-4; S-1, S-2, S-6; D-1 to D-4; F-2, F-3; Q-3 to Q-5 | all |
+| **M3 · Release candidate** | everything early access promises | FF-5 to FF-9 (the first floor done); LB-3, LB-4, LB-6 (the first library); P-4, P-7, P-8; I-3 to I-6; O-1 to O-6; W-1 to W-3; R-3, R-4; R-5 as far as F-5 says is ready (WebGPU the shell's default only if it measures better); C-1 to C-4; S-1, S-2, S-6; D-1 to D-4; F-2, F-3; Q-3 to Q-5 | all |
 | **M4 · Early access** | released | M3 closed; the two weeks of Coming Soon done; the owner's go | owner |
-| **M5 · After launch** | the roadmap | LB-5 (the library keeps growing, every week); FF-5 (more set pieces); S-3, D-5 (ghosts); R-4, R-5 (WebGPU); F-5; co-op; the modes roadmap | — |
+| **M5 · After launch** | the roadmap | LB-5 (the library keeps growing, every week); FF-5 (more set pieces); S-3, D-5 (ghosts); the rest of R-5 (every material on TSL, GPU particles); co-op; the modes roadmap | — |
 
 M2 can run alongside M1 once M0 is closed. The store page needs shots and the trailer, not a finished build.
 
