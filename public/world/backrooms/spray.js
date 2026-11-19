@@ -7,6 +7,7 @@
 // stand. Then a second, the white over the whole picture when you are in it. How each puff wobbles is a hash of how
 // many have been sprayed (no Math.random: the same squeeze looks the same on any page).
 import * as THREE from 'three';
+import { gpu } from '../engine/gpu.js';
 import { EXTINGUISHER, puffAt, whiteOut } from './extinguisher.rule.js';
 
 const POOL = 220, RATE = 70;            // puffs at most at once · puffs a second while it sprays
@@ -59,11 +60,63 @@ export function createSpray(env) {
   for (const a of [aPos, aSize, aAlpha, aSpin]) a.setUsage(THREE.DynamicDrawUsage);
   geo.setAttribute('aPos', aPos); geo.setAttribute('aSize', aSize); geo.setAttribute('aAlpha', aAlpha); geo.setAttribute('aSpin', aSpin);
   geo.instanceCount = 0;
-  const mat = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: { uTint: { value: new THREE.Color(0.85, 0.86, 0.86) } }, transparent: true, depthWrite: false });
+  let mat, overMat;
+  if (gpu.nodes) {
+    const N = gpu.nodes, T = N.TSL;
+    const { Fn, vec2, vec3, vec4, float, uniform, uv, attribute, varying, floor, fract, dot, sin, cos, length, mix, clamp, If, Discard, positionGeometry, modelViewMatrix, cameraProjectionMatrix } = T;
+    const ss = (e0, e1, x) => { const t = clamp(float(x).sub(e0).div(e1 - e0), 0, 1); return t.mul(t).mul(t.mul(-2).add(3)); };
+    const vnoise = (hvec) => {
+      const h = (p) => fract(sin(dot(p, hvec)).mul(43758.5453));
+      return (p) => {
+        const i = floor(p), f = fract(p);
+        const s = f.mul(f).mul(float(3).sub(f.mul(2)));
+        return mix(mix(h(i), h(i.add(vec2(1, 0))), s.x), mix(h(i.add(vec2(0, 1))), h(i.add(vec2(1, 1))), s.x), s.y);
+      };
+    };
+    const puffNoise = vnoise(vec2(41.3, 289.1));
+    const overNoise = vnoise(vec2(12.9898, 78.233));
+
+    mat = new N.NodeMaterial();
+    mat.transparent = true; mat.depthWrite = false;
+    mat.uniforms = { uTint: { value: new THREE.Color(0.85, 0.86, 0.86) } };
+    const uPuffTint = uniform(new N.Vector3(0.85, 0.86, 0.86)).onRenderUpdate(() => { const c = mat.uniforms.uTint.value; uPuffTint.value.set(c.r, c.g, c.b); });
+    mat.vertexNode = Fn(() => {
+      const aP = attribute('aPos', 'vec3'), aSz = attribute('aSize', 'float'), aSp = attribute('aSpin', 'float');
+      const mv = modelViewMatrix.mul(vec4(aP, 1)).toVar();
+      const cs = cos(aSp), sn = sin(aSp), p = positionGeometry.xy;
+      mv.x.addAssign(cs.mul(p.x).add(sn.mul(p.y)).mul(aSz));
+      mv.y.addAssign(sn.negate().mul(p.x).add(cs.mul(p.y)).mul(aSz));
+      return cameraProjectionMatrix.mul(mv);
+    })();
+    mat.fragmentNode = Fn(() => {
+      const vUv = uv(), vA = varying(attribute('aAlpha', 'float'), 'vSprayA'), vSeed = varying(attribute('aSpin', 'float'), 'vSpraySeed');
+      const r = length(vUv.sub(0.5)).mul(2);
+      const lump = puffNoise(vUv.mul(4).add(vSeed.mul(7))).mul(0.6).add(puffNoise(vUv.mul(9).sub(vSeed.mul(3))).mul(0.4));
+      const a = float(1).sub(ss(0.3, 0.95, r.add(lump.sub(0.5).mul(0.45)))).mul(float(1).sub(ss(0.7, 1.0, r))).mul(vA);
+      If(a.lessThan(0.01), () => { Discard(); });
+      return vec4(uPuffTint.mul(lump.mul(0.1).add(0.9)), a);
+    })();
+
+    overMat = new N.NodeMaterial();
+    overMat.transparent = true; overMat.depthTest = false; overMat.depthWrite = false;
+    overMat.uniforms = { uTint: { value: new THREE.Color(0.8, 0.8, 0.8) }, uK: { value: 0 }, uT: { value: 0 } };
+    const uOverTint = uniform(new N.Vector3(0.8, 0.8, 0.8)).onRenderUpdate(() => { const c = overMat.uniforms.uTint.value; uOverTint.value.set(c.r, c.g, c.b); });
+    const uOverK = uniform(0).onRenderUpdate(() => overMat.uniforms.uK.value);
+    const uOverT = uniform(0).onRenderUpdate(() => overMat.uniforms.uT.value);
+    overMat.vertexNode = Fn(() => vec4(positionGeometry.xy, 0, 1))();
+    overMat.fragmentNode = Fn(() => {
+      const vUv = uv();
+      const patch = overNoise(vUv.mul(3).add(vec2(uOverT.mul(0.11), uOverT.mul(-0.07)))).mul(0.55)
+        .add(overNoise(vUv.mul(7).sub(vec2(uOverT.mul(0.05), uOverT.mul(0.13)))).mul(0.45));
+      return vec4(uOverTint, clamp(uOverK.mul(patch.mul(0.7).add(0.65)), 0, 1));
+    })();
+  } else {
+    mat = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: { uTint: { value: new THREE.Color(0.85, 0.86, 0.86) } }, transparent: true, depthWrite: false });
+    overMat = new THREE.ShaderMaterial({ vertexShader: OVER_VERT, fragmentShader: OVER_FRAG, uniforms: { uTint: { value: new THREE.Color(0.8, 0.8, 0.8) }, uK: { value: 0 }, uT: { value: 0 } }, transparent: true, depthTest: false, depthWrite: false });
+  }
   const mesh = new THREE.Mesh(geo, mat);
   mesh.name = 'extinguisher-spray'; mesh.frustumCulled = false; mesh.renderOrder = 5;
   // the white over the picture, standing in it: drawn after the room and before what is in the hand (held things are 10000)
-  const overMat = new THREE.ShaderMaterial({ vertexShader: OVER_VERT, fragmentShader: OVER_FRAG, uniforms: { uTint: { value: new THREE.Color(0.8, 0.8, 0.8) }, uK: { value: 0 }, uT: { value: 0 } }, transparent: true, depthTest: false, depthWrite: false });
   const over = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), overMat);
   over.name = 'extinguisher-white'; over.frustumCulled = false; over.renderOrder = 9990; over.visible = false;
   let added = false, owed = 0, white = 0, clock = 0, count = 0;

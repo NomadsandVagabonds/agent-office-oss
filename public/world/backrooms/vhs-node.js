@@ -4,13 +4,16 @@
 // tape's size, then the SCREEN (4:3 between black bars, scan lines, vignette) onto the window. Every number is vhs.js's;
 // a change to the look there wants the same change here until vhs.js is this file (docs/BLOCKROOMS-WEBGPU.md).
 //
-// Not here yet, and so not drawn under ?gpu=webgpu whatever the tier says: the scene drawn larger than the tape
-// (supersample), bloom (the tier's and the host's), the glow from what shines (glow.js), and water (liquid.js). Those
-// tiers draw as Classic does, plus their grade and haze.
+// The scene drawn larger than the tape (supersample: Medium, High) and brought down with vhs.js's tent is here too, and
+// so is the glow from what shines (glow.js, Medium and High: glow-node.js, from the scene pass's second picture).
+// Not here yet, and so not drawn under ?gpu=webgpu whatever the tier says: the tier's and the host's plain bloom (only
+// the office's Classic has it), and water (liquid.js).
 //
 // It takes three.js's WebGPU build from engine/gpu.js (the stage put it there), so nothing on the default path loads it.
 import { gpu } from '../engine/gpu.js';
 import { profile, internalSize } from './graphics.js';
+import { GLOW_BLOOM } from './glow.js';
+import { createGlowChain, sceneGlowMRT, glowPass } from './glow-node.js';
 
 const HAZE_LIGHT = 1.6;                                  // (vhs.js's)
 
@@ -43,13 +46,22 @@ export function createVhsNode(renderer, camera, opt = {}) {
 
   // the scene's picture and the tape: the tape's size, half float, multisampled as the tier says (WebGPU knows 1 and 4)
   const samplesOf = (msaa) => (msaa > 1 ? 4 : 1);
-  const makeTarget = (w, h, samples, depth) => {
-    const rt = new N.RenderTarget(w, h, { type: N.HalfFloatType, samples });
+  const makeTarget = (w, h, samples, depth, count = 1) => {
+    const rt = new N.RenderTarget(w, h, { type: N.HalfFloatType, samples, count });
+    rt.textures[0].name = 'output'; if (count > 1) rt.textures[1].name = 'emissive';     // (the glow's MRT, by name)
     if (depth) rt.depthTexture = new N.DepthTexture(w, h);
     return rt;
   };
   let sceneTarget = makeTarget(4, 4, 4, false);
   const tapeTarget = new N.RenderTarget(4, 4, { type: N.HalfFloatType });
+  // (supersample: the scene is drawn sw × sh into sceneTarget, and the tent brings it down into this, the tape's size)
+  const downTarget = new N.RenderTarget(4, 4, { type: N.HalfFloatType });
+  const uStep = uniform(new N.Vector2(0.375 / 640, 0.375 / 480));
+  let supersampled = false;
+  // (the glow: while a tier has it, the scene pass writes a second picture of what shines, and glow-node.js's chain
+  // adds its bloom to the picture the signal reads)
+  let glowOn = false, chain = null, glowMRT = null;
+  const routed = () => supersampled || glowOn;
 
   // (three.js's quad has v = 0 at the top of the picture; the passes below count from the bottom, as vhs.js's GLSL does)
   const up = () => vec2(uv().x, uv().y.oneMinus());
@@ -82,7 +94,7 @@ export function createVhsNode(renderer, camera, opt = {}) {
     };
     const see = (p) => {
       const q = clamp(p, 0.001, 0.999);
-      let c = at(sceneTarget.texture, q).rgb;
+      let c = at(routed() ? downTarget.texture : sceneTarget.texture, q).rgb;
       if (withDepth) c = select(U.uHaze.greaterThan(0), haze(c, q), c);
       c = pow(film(c), vec3(0.4545));
       return select(U.uGrade.greaterThan(0), grade(c), c);
@@ -154,23 +166,48 @@ export function createVhsNode(renderer, camera, opt = {}) {
     return m;
   }
 
+  /** vhs.js SupersamplePass: four bilinear taps, each a little under half a tape pixel from the middle. */
+  function tentMaterial() {
+    const main = Fn(() => {
+      const p = up(), t = sceneTarget.texture;
+      const c = at(t, p.add(vec2(uStep.x.negate(), uStep.y.negate()))).rgb.add(at(t, p.add(vec2(uStep.x, uStep.y.negate()))).rgb)
+        .add(at(t, p.add(vec2(uStep.x.negate(), uStep.y))).rgb).add(at(t, p.add(vec2(uStep.x, uStep.y))).rgb);
+      return vec4(c.mul(0.25), 1);
+    });
+    const m = new N.NodeMaterial();
+    m.fragmentNode = main();
+    m.depthTest = false; m.depthWrite = false;
+    return m;
+  }
   let withDepth = false;
   let signal = signalMaterial(false);
+  const tentQuad = new N.QuadMesh(tentMaterial());
+  const copyMaterial = () => { const m = new N.NodeMaterial(); m.fragmentNode = Fn(() => vec4(texture(sceneTarget.texture, uv()).rgb, 1))(); m.depthTest = false; m.depthWrite = false; return m; };
+  const copyQuad = new N.QuadMesh(copyMaterial());
+  // (the passes hold the targets' textures: made again when a target is, or when supersampling starts or stops)
+  function remake() {
+    signal.dispose(); signal = signalMaterial(withDepth); signalQuad.material = signal;
+    tentQuad.material.dispose(); tentQuad.material = tentMaterial();
+    copyQuad.material.dispose(); copyQuad.material = copyMaterial();
+  }
   const signalQuad = new N.QuadMesh(signal), screenQuad = new N.QuadMesh(screenMaterial());
   let scene = new N.Scene();
 
   let level = opt.level ?? 2, last = '', time = 0, prof = profile('classic'), hazeK = 1;
   const picture = { x: 0, y: 0, w: 1, h: 1 };
-  const size = { iw: 4, ih: 4 };
+  const size = { iw: 4, ih: 4, sw: 4, sh: 4 };
 
   function layout(w, h, top = null) {
     const ratio = renderer.getPixelRatio(), key = `${w}x${h}@${ratio}/${level}/${top ?? ''}/${prof.tier}`;
     if (key === last) return picture;
     last = key;
-    const { cw, ch, pw, ph, iw, ih } = internalSize(w, h, ratio, level, prof);
-    size.iw = iw; size.ih = ih;
-    sceneTarget.setSize(iw, ih); tapeTarget.setSize(iw, ih);
-    if (sceneTarget.depthTexture) Object.assign(sceneTarget.depthTexture.image, { width: iw, height: ih });
+    const { cw, ch, pw, ph, iw, ih, sw, sh } = internalSize(w, h, ratio, level, prof);
+    size.iw = iw; size.ih = ih; size.sw = sw; size.sh = sh;
+    sceneTarget.setSize(sw, sh); tapeTarget.setSize(iw, ih); downTarget.setSize(iw, ih);
+    if (sceneTarget.depthTexture) Object.assign(sceneTarget.depthTexture.image, { width: sw, height: sh });
+    uStep.value.set(0.375 / iw, 0.375 / ih);
+    chain?.resize(sw, sh);
+    if ((sw > iw) !== supersampled) { supersampled = sw > iw; remake(); }
     camera.aspect = iw / ih; camera.updateProjectionMatrix();
     u.uRes.value.set(iw, ih);
     s.uPicture.value.set(pw / cw, ph / ch);
@@ -193,12 +230,14 @@ export function createVhsNode(renderer, camera, opt = {}) {
   function setProfile(p) {
     prof = p;
     u.uGrade.value = p.grade; u.uHaze.value = p.haze * hazeK;
-    const depth = p.haze > 0, samples = samplesOf(p.msaa);
-    if (depth !== withDepth || samples !== sceneTarget.samples) {
+    const depth = p.haze > 0, samples = samplesOf(p.msaa), glow = p.glow > 0;
+    if (glow && !chain) { chain = createGlowChain(GLOW_BLOOM); glowMRT = sceneGlowMRT(); chain.resize(size.sw, size.sh); }
+    else if (!glow && chain) { chain.dispose(); chain = null; glowMRT = null; }
+    if (depth !== withDepth || samples !== sceneTarget.samples || glow !== glowOn) {
+      glowOn = glow;
       sceneTarget.dispose();
-      sceneTarget = makeTarget(Math.max(4, size.iw), Math.max(4, size.ih), samples, depth);
-      if (depth !== withDepth) { withDepth = depth; signal.dispose(); signal = signalMaterial(depth); signalQuad.material = signal; }
-      else { signal.dispose(); signal = signalMaterial(depth); signalQuad.material = signal; }   // (its textures are the new target's)
+      sceneTarget = makeTarget(Math.max(4, size.sw), Math.max(4, size.sh), samples, depth, glow ? 2 : 1);
+      withDepth = depth; remake();                                                   // (its textures are the new target's)
     }
     last = '';
   }
@@ -229,12 +268,17 @@ export function createVhsNode(renderer, camera, opt = {}) {
     render(dt) {
       time += dt; u.uTime.value = time; u.uNear.value = camera.near; u.uFar.value = camera.far;
       copy(u, node); copy(s, screenNode);
-      renderer.setRenderTarget(sceneTarget); renderer.render(scene, camera);
+      renderer.setRenderTarget(sceneTarget);
+      if (glowOn) { renderer.setMRT(glowMRT); glowPass.on = true; try { renderer.render(scene, camera); } finally { glowPass.on = false; renderer.setMRT(null); } }
+      else renderer.render(scene, camera);
+      if (supersampled) { renderer.setRenderTarget(downTarget); tentQuad.render(renderer); }
+      else if (glowOn) { renderer.setRenderTarget(downTarget); copyQuad.render(renderer); }
+      if (glowOn) chain.render(renderer, sceneTarget.textures[1], downTarget);
       renderer.setRenderTarget(tapeTarget); signalQuad.render(renderer);
       renderer.setRenderTarget(null); screenQuad.render(renderer);
     },
     dispose() {
-      sceneTarget.dispose(); tapeTarget.dispose(); signal.dispose(); screenQuad.material.dispose();
+      sceneTarget.dispose(); tapeTarget.dispose(); downTarget.dispose(); signal.dispose(); tentQuad.material.dispose(); copyQuad.material.dispose(); chain?.dispose(); screenQuad.material.dispose();
       renderer.toneMapping = output.toneMapping; renderer.outputColorSpace = output.colorSpace;
     },
   };

@@ -43,8 +43,17 @@ export function waterMesh(c, tex, x0, z0, x1, z1, y, down = false) {
   c.after.push(() => {
     const material = c.kit.surface({ map: tex, room: c.rt.u, alpha: .63, side: THREE.DoubleSide });
     material.uniforms.uPoolTime = phase;
-    material.fragmentShader = 'uniform float uPoolTime;\n' + material.fragmentShader.replace('texture2D(map, vUv)',
-      'texture2D(map, vUv + vec2(uPoolTime * 0.018, sin(uPoolTime * 0.22) * 0.035))');
+    if (material.patchNode) {
+      material.patchNode({
+        uv({ T, mapUv, f }) {
+          const t = f('uPoolTime');
+          return mapUv.add(T.vec2(t.mul(0.018), T.sin(t.mul(0.22)).mul(0.035)));
+        },
+      });
+    } else {
+      material.fragmentShader = 'uniform float uPoolTime;\n' + material.fragmentShader.replace('texture2D(map, vUv)',
+        'texture2D(map, vUv + vec2(uPoolTime * 0.018, sin(uPoolTime * 0.22) * 0.035))');
+    }
     const mesh = new THREE.Mesh(c.kit.geometry(batch, c.rt.lights, c.rt.amb), material);
     mesh.renderOrder = 4; group.add(mesh);
   });
