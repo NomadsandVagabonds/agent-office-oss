@@ -34,6 +34,8 @@ What ties them together:
 
 ## 1. Race (the easy one): 1v1 or 2v2
 
+The daily tape has a plan of its own: [BACKROOMS-DAILY-PLAN.md](BACKROOMS-DAILY-PLAN.md).
+
 A variant, likely the stronger one: **the daily tape**, played asynchronously.
 - **One seed a day:** the same building for everyone, with its own board.
 - **Ghosts from tapes:** your run is kept as a tape, and you race the ghosts of other people's tapes, not a
