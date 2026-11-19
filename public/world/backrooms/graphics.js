@@ -115,16 +115,17 @@ export const bloomOn = (p, hostBloom) => (p.bloom === 'host' ? !!hostBloom : !!p
 /**
  * The size the camcorder draws the level at, and the picture's size in the window (device pixels), for a window of
  * w × h CSS pixels at `ratio` device pixels to one. Level 2 and 1: a 4:3 picture of at most `lines` lines (never fewer
- * than 300); level 0: the whole window, at most widthCap across. sw × sh: the size the scene is drawn at under the tape
+ * than 300); level 0: the same 4:3 picture, sharp, at most widthCap across. sw × sh: the size the scene is drawn at under the tape
  * (iw × ih unless the profile supersamples, and then never smaller and at most sceneCap across).
  */
 export function internalSize(w, h, ratio, level, p = profile(DEFAULT_GRAPHICS)) {
   const cw = w * ratio, ch = h * ratio;
-  let pw = cw, ph = ch, iw, ih;
-  if (level > 0) {
-    pw = Math.min(cw, (ch * 4) / 3); ph = (pw * 3) / 4;
-    ih = Math.round(Math.max(300, Math.min(ph, p.lines[level === 2 ? 2 : 1]))); iw = Math.round((ih * 4) / 3);
-  } else { const k = Math.min(1, p.widthCap / cw); iw = Math.round(cw * k); ih = Math.round(ch * k); }
+  // every level is the camcorder's 4:3 picture (the owner: Clean takes the tape's look off, not its frame: a wider view
+  // would see more of the building than the camcorder does, and that is one kit's to give, not a setting's)
+  const pw = Math.min(cw, (ch * 4) / 3), ph = (pw * 3) / 4;
+  let iw, ih;
+  if (level > 0) { ih = Math.round(Math.max(300, Math.min(ph, p.lines[level === 2 ? 2 : 1]))); iw = Math.round((ih * 4) / 3); }
+  else { const k = Math.min(1, p.widthCap / pw); iw = Math.round(pw * k); ih = Math.round(ph * k); }
   let sw = iw, sh = ih;
   if (level > 0 && p.supersample > 1) { sw = Math.max(iw, Math.min(Math.round(iw * p.supersample), p.sceneCap)); sh = Math.round((sw * ih) / iw); }
   return { cw, ch, pw, ph, iw, ih, sw, sh };

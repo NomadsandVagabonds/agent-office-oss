@@ -5,7 +5,7 @@
 // that gets worse in the dark, a band of bad tracking, a ragged bottom edge —
 // then the SCREEN: a 4:3 picture between black bars, scan lines, a vignette.
 // setLevel(2) is the full effect, 1 keeps the frame and softness but holds
-// the picture still and quiet, 0 is a clean full-window image.
+// the picture still and quiet, 0 is the same 4:3 picture, clean and sharp.
 import * as THREE from 'three';
 import { EffectComposer } from '/vendor/three-addons/postprocessing/EffectComposer.js';
 import { RenderPass } from '/vendor/three-addons/postprocessing/RenderPass.js';
@@ -228,7 +228,7 @@ export function createVhs(renderer, camera, opt = {}) {
     const ratio = renderer.getPixelRatio(), key = `${w}x${h}@${ratio}/${level}/${top ?? ''}/${prof.tier}`;
     if (key === last) return picture;
     last = key;
-    // a 4:3 picture a few hundred lines tall (levels 2 and 1), or the whole window (0): graphics.js internalSize
+    // a 4:3 picture: a few hundred lines tall (levels 2 and 1), or sharp (0): graphics.js internalSize
     const { cw, ch, pw, ph, iw, ih, sw, sh } = internalSize(w, h, ratio, level, prof);
     composer.setSize(iw, ih);
     superPass.enabled = sw > iw; renderPass.enabled = !superPass.enabled;

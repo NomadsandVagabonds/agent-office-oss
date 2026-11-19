@@ -50,6 +50,9 @@ export const MENU_CSS = `
 .br-menu .br-menu-close { flex: none; width: 44px; height: 44px; margin: -7px -9px 0 0; font-size: 30px; line-height: 1; }
 .br-menu-content { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 22px 5px 12px; scrollbar-color: var(--menu-rule) transparent; scrollbar-width: thin; }
 .br-menu-main { display: grid; gap: 3px; }
+.br-menu-tape { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px dashed currentColor; font: 600 13px/1.3 ui-monospace, Menlo, Consolas, monospace; opacity: .85; }
+.br-menu-tape[hidden] { display: none; }
+.br-menu-tape-copy { font: inherit; padding: 3px 10px; cursor: pointer; }
 .br-menu .br-menu-choice {
   position: relative; display: flex; align-items: center; justify-content: space-between; gap: 20px;
   width: 100%; min-height: 57px; padding: 9px 13px 9px 33px; text-align: left; font-size: 30px;

@@ -67,7 +67,6 @@ const CSS = `
 .backrooms .br-focus[hidden] { display: none; }
 .backrooms .br-leave { position: absolute; right: 10px; top: 8px; width: 34px; height: 34px; display: none; place-items: center; pointer-events: auto; font: 400 18px/1 ui-monospace, Menlo, Consolas, monospace; color: #fff; opacity: .28; }
 .backrooms.touch .br-leave { display: grid; }
-.backrooms.clean .br-osd { display: none; }
 @media (prefers-reduced-motion: reduce) { .backrooms .br-dot, .backrooms .br-batt i, .backrooms .br-batt.is-managed.is-low i, .backrooms .br-carry i, .backrooms .br-battery-glyph { animation: none; } }
 `;
 

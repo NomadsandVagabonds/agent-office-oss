@@ -5,16 +5,25 @@ import { GRAPHICS, DEFAULT_GRAPHICS, profile, bloomOn, internalSize, cost, autoS
 import { THEMES, THEME_IDS } from '../public/world/backrooms/themes.js';
 import { BACKROOMS_DEFAULTS, BACKROOMS_GRAPHICS, cleanBackroomsSettings } from '../core/backrooms-settings.mjs';
 
-// The camcorder's size as vhs.js worked it out before there was a Graphics setting (copied from it, unchanged).
+// The camcorder's size as vhs.js worked it out before there was a Graphics setting (copied from it), but for Clean (level
+// 0): the owner, 19 Nov, "it should keep the ui but just remove the VHS effects and still be 3:4 etc not widescreen". A
+// wider view saw more of the building than the camcorder does; that is a kit's to give, not a setting's.
 function before(w, h, ratio, level) {
   const cw = w * ratio, ch = h * ratio;
-  let pw = cw, ph = ch, iw, ih;
-  if (level > 0) {
-    pw = Math.min(cw, (ch * 4) / 3); ph = (pw * 3) / 4;
-    ih = Math.round(Math.max(300, Math.min(ph, level === 2 ? 540 : 660))); iw = Math.round((ih * 4) / 3);
-  } else { const k = Math.min(1, 1680 / cw); iw = Math.round(cw * k); ih = Math.round(ch * k); }
+  const pw = Math.min(cw, (ch * 4) / 3), ph = (pw * 3) / 4;
+  let iw, ih;
+  if (level > 0) { ih = Math.round(Math.max(300, Math.min(ph, level === 2 ? 540 : 660))); iw = Math.round((ih * 4) / 3); }
+  else { const k = Math.min(1, 1680 / pw); iw = Math.round(pw * k); ih = Math.round(ph * k); }
   return { cw, ch, pw, ph, iw, ih };
 }
+
+test('Clean is the same 4:3 frame as the tape, never the whole window, and keeps the camcorder\'s screen', () => {
+  for (const [w, h] of [[1920, 1080], [390, 844], [2560, 1080]]) for (const level of [0, 1, 2]) {
+    const { pw, ph, iw, ih } = internalSize(w, h, 2, level, profile('classic'));
+    assert.ok(Math.abs(pw / ph - 4 / 3) < 1e-9 && Math.abs(iw / ih - 4 / 3) < 0.01, `${w}x${h} level ${level} is ${iw}x${ih}`);
+  }
+  assert.doesNotMatch(readFileSync(new URL('../public/world/backrooms/hud.js', import.meta.url), 'utf8'), /\.clean \.br-osd\s*\{\s*display:\s*none/, 'Clean hides the battery, the time and REC');
+});
 
 test('Classic is the level as it was: the same sizes at every Picture level, bloom as the host has it, nothing new switched on', () => {
   const p = profile('classic');

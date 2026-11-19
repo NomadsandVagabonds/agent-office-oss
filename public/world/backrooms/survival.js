@@ -5,7 +5,9 @@ import { difficultyOf, difficultyPerk } from '../../../core/difficulty.mjs';
 import { createHealth } from './health-state.js';
 import { createCameraBattery } from './camera-state.js';
 
-export function createSurvival(env, { canAct, onEnd, perk, difficulty = () => 'training-wheels' }) {
+// dev: under ?debug only (index.js), { god, stopClock }: nothing hurts, and the battery does not run down. Never in a visit
+// that can be scored: a debug visit never signs the book.
+export function createSurvival(env, { canAct, onEnd, perk, difficulty = () => 'training-wheels', dev = null }) {
   const basePerk = perk;
   perk = difficultyPerk(perk, difficulty());
   const healthState = createHealth({
@@ -32,6 +34,7 @@ export function createSurvival(env, { canAct, onEnd, perk, difficulty = () => 't
     damage(amount = 1) {
       if (unavailable()) return healthFailure('unavailable');
       if (difficultyOf(difficulty()).immune) return healthFailure('tourist');
+      if (dev?.god) return healthFailure('god');
       const result = healthState.damage(amount);
       if (result.ok) {
         env.sound.play('thunk', { vol: .55 }); env.interfere(.55); env.hud.glitch(.18);
@@ -58,6 +61,7 @@ export function createSurvival(env, { canAct, onEnd, perk, difficulty = () => 't
     drain(share) {
       if (unavailable()) return { ok: false, reason: 'unavailable' };
       if (difficultyOf(difficulty()).immune) return { ok: false, reason: 'tourist' };
+      if (dev?.god || dev?.stopClock) return { ok: false, reason: 'god' };
       const result = cameraState.drain(share);
       if (result.ok) env.hud.battery(cameraState.read());
       return result;
@@ -74,7 +78,7 @@ export function createSurvival(env, { canAct, onEnd, perk, difficulty = () => 't
       if (disposed) return;
       if (running && !ended) {
         healthState.tick(dt);
-        if (!difficultyOf(difficulty()).immune && cameraState.tick(dt).depleted) finish('battery');
+        if (!difficultyOf(difficulty()).immune && !dev?.stopClock && cameraState.tick(dt).depleted) finish('battery');
       }
       env.hud.battery(cameraState.read());
     },

@@ -19,7 +19,7 @@ const CONTROLS = [
  * Camcorder controls over the frozen picture. onChange(key, value) is immediate;
  * the caller applies and saves it. setOpen never invokes pause/resume callbacks.
  */
-export function createMenu({ host, settings = {}, furniture = false, graphics: offerGraphics = true, onRequestOpen, onResume, onGiveUp, onChange, onArchive } = {}) {
+export function createMenu({ host, settings = {}, furniture = false, graphics: offerGraphics = true, onRequestOpen, onResume, onGiveUp, onChange, onArchive, tape, onReport } = {}) {
   const id = ++instance, prefix = `br-menu-${id}`;
   let opened = false, disposed = false, page = 'main', previousFocus = null;
   let values = { ...DEFAULTS, ...settings };
@@ -55,6 +55,14 @@ export function createMenu({ host, settings = {}, furniture = false, graphics: o
   const settingsButton = button('Settings', '02', () => show('settings'));
   if (onArchive) button('Your archive', 'Opens in a new tab', onArchive);
   const giveUpButton = button('Give up', '■', () => show('giveup'), '.br-menu-giveup');
+  // (dev only, ?debug: this visit's tape number and a line for a bug report, copied. The owner, 19 Nov: "if I have
+  // questions, suggestions, bug reports, I can give you a concrete thing to look at", and not for everybody, since a
+  // number shown is a building anyone can walk again)
+  const tapeNo = h('span.br-menu-tape-no'), copied = h('small.br-menu-tape-said', { 'aria-live': 'polite' });
+  const copyReport = h('button.br-menu-tape-copy', { type: 'button' }, 'Copy report');
+  const tapeLine = h('div.br-menu-tape', { hidden: true }, tapeNo, copyReport, copied);
+  main.append(tapeLine);
+  copyReport.addEventListener('click', async () => { copied.textContent = (await onReport?.()) ? 'Copied' : 'Could not copy'; });
   const stay = h('button', { type: 'button' }, 'Keep recording');
   const giveUp = h('button.br-menu-confirm-end', { type: 'button' }, 'Give up');
   confirm.append(h('div.br-menu-confirm-actions', stay, giveUp));
@@ -119,6 +127,8 @@ export function createMenu({ host, settings = {}, furniture = false, graphics: o
   function update(next = {}) {
     values = { ...values, ...next };
     for (const key of fields.keys()) syncField(key);
+    const number = tape?.() || null;
+    tapeLine.hidden = !number; tapeNo.textContent = number ? `Tape № ${number}` : ''; if (!number) copied.textContent = '';
     difficultyNote.textContent = difficultyOf(values.difficulty).note;
     difficultyWarning.textContent = values.scoreEligible === false
       ? 'UNSCORED RECORDING'

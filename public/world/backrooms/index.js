@@ -253,13 +253,22 @@ async function visit(office, opt) {
       }
     } });
   input.state.sensitivity = settings.sensitivity; input.state.invertY = settings.invertY;
+  // (dev only, ?debug: the tape's number and a bug report in the pause menu, and nothing hurts or runs down when asked: the
+  // handle's `dev`. A debug visit never signs the book, so none of it can be scored. The owner, 19 Nov.)
+  const devState = { god: false, stopClock: false };
+  const devReport = () => {
+    let at = {}; try { at = handle.where() || {}; } catch { /* (the handle is made once the first floor is down) */ }
+    return [`BlockRooms tape ${seed}`, `edition ${edition()}`, difficulty.current, `floor ${at.floor ?? '?'} (${cur?.level?.theme || '?'})`,
+      `room ${at.room || '?'} #${at.id ?? '?'} at ${at.x ?? '?'}, ${at.z ?? '?'} facing ${at.yaw ?? '?'}`, `${Math.floor(tally?.report?.()?.seconds ?? 0)} s on tape`].join(' · ');
+  };
   menu = createMenu({ host: hud.el, settings: { ...settings, scoreEligible: difficulty.report().ranked }, furniture: opt.barricades !== false, graphics: true, onRequestOpen: () => setPaused(true), onResume: resume,
-    onArchive: opt.onArchive, onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting });
+    onArchive: opt.onArchive, onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting,
+    ...(opt.debug ? { tape: () => String(seed), onReport: async () => { try { await navigator.clipboard.writeText(devReport()); return true; } catch { return false; } } } : {}) });
   // Six pockets, four hearts, and a camcorder battery that runs down (inventory.js, survival.js): the visit's, not any
   // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.
   if (opt.inventory !== false) {
     survival = createSurvival({ hud, sound, interfere(k) { interference = Math.max(interference, k); }, red(k) { redWash = Math.max(redWash, k); } }, {
-      canAct, onEnd: why => finish(why), perk, difficulty: () => difficulty.current,
+      canAct, onEnd: why => finish(why), perk, difficulty: () => difficulty.current, dev: opt.debug ? devState : null,
     });
     inventory = createInventory({ hud, sound, health: survival.health, camera: survival.camera }, {
       canAct, review: !!opt.dev?.supplies, perk, seed: String(seed), difficulty: () => difficulty.current,
@@ -879,6 +888,20 @@ async function visit(office, opt) {
     get ahead() { return ahead?.f ? { level: ahead.f.level, world: ahead.f.world, env: ahead.f.env, at: ahead.f.world.scene.position } : null; },
     root,
     finish: (why) => finish(why),
+    // ?debug only: __backrooms.dev.help() lists these
+    ...(opt.debug ? { dev: {
+      help: () => 'god(on) · clock(on) · give(type, more) · spawn(id) · tape() · report() · where() is on the handle · &perf=1 in the address for the frame rate',
+      god(on = !devState.god) { devState.god = !!on; return devState.god; },
+      clock(on = devState.stopClock) { devState.stopClock = !on; return !devState.stopClock; },
+      give: (type, more = {}) => inventory?.give({ id: `dev-${type}-${Date.now().toString(36)}`, type, ...more }),
+      spawn(id) {
+        const me = cur?.player?.me; if (!me || !cur.env.pursuer?.summon) return false;
+        for (const d of [3, 1.5, 0.3]) { const k = cur.env.pursuer.summon(id, { x: me.x - Math.sin(me.yaw) * d, z: me.z - Math.cos(me.yaw) * d }); if (k) return true; }
+        return false;   // (only those who can be called up after a floor is built come: the rest are dealt with it: &cast=)
+      },
+      tape: () => String(seed),
+      report: devReport,
+    } } : {}),
   };
   if (opt.debug) window.__backrooms = handle;
   opt.onReady?.(handle);
