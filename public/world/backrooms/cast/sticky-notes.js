@@ -44,6 +44,14 @@ export function create(c) {
   /** What the body is doing (sticky-notes.model.js modes), from what the note is doing. */
   const MODE = { wall: 'wall', peel: 'peel', flutter: 'flutter', dive: 'dive', lens: 'stuck', down: 'knocked', spent: 'knocked', gone: 'wiped' };
   /** Place one, turned to its wall, and have its body show what it is doing; it turns itself inside that by its heading. */
+  /** The extinguisher's foot (extinguisher.rule.js SMASH): each note its own, and the second it has had finishes it. */
+  function smashNote(n, k) {
+    if (!(k > 0) || n.s.mode === 'spent' || n.s.mode === 'gone') return { ok: false, killed: false };
+    n.smashed = (n.smashed || 0) + k;
+    if (n.smashed < 1 - 1e-9) return { ok: true, killed: false };
+    n.s = torn(n.s); n.fallV = 0; c.play('shred', n.p.x, n.p.z, 6); if (!known) { known = true; c.met(); }
+    return { ok: true, killed: true };
+  }
   function pose(n) {
     const g = n.group, s = n.s;
     g.visible = s.mode !== 'gone' && (s.mode === 'lens' || c.drawn(n.p));
@@ -134,7 +142,7 @@ export function create(c) {
         if (!(n.s.mode === 'flutter' || n.s.mode === 'dive' || n.s.mode === 'peel')) return false;
         n.s = torn(n.s); n.fallV = 0; c.play('shred', n.p.x, n.p.z, 6); if (!known) { known = true; c.met(); }
         return { ok: true, target: 'sticky-notes' };
-      } }));
+      }, smash: (k) => smashNote(n, k) }));
     },
     /** The extinguisher (extinguisher.rule.js): whatever notes in the air the spray catches come down wet (wetted), each its own. */
     sprayTargets() {
@@ -161,7 +169,8 @@ export function create(c) {
         if (wipeAt < 0) env.hand?.swat?.(side);
         n.s = fallen(n.s); n.fallV = 0; n.heading += side; c.play('rustle', n.p.x, n.p.z, 6);
         return true;
-      } });
+      },
+      smash: (k) => smashNote(n, k) });
       return out;
     },
     // (where they are: the first still on its wall — so the dev page's beside stands you within peeling reach of one, facing it —

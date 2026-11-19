@@ -10,9 +10,9 @@
 import { THUMBS, stickOf, inZone } from './touch.rule.js';
 
 /**
- * @param {{ canvas, stage, hud, sound, key(k), use(), light()?, menu(), click(), wheel(step), owns(target)?, interceptKey(event)?, blocked()? }} o
+ * @param {{ canvas, stage, hud, sound, key(k), use(), light()?, menu(), click(), smash()?, wheel(step), owns(target)?, interceptKey(event)?, blocked()? }} o
  *        key: a key went down (once, not on repeat) · use: E, Enter, or a tap on the [E] (or the hand) · light: a tap on the light
- *        click: the mouse button, while it is looking · wheel: ±1 for each notch · owns: native UI events pass through to their target
+ *        click: the mouse button, while it is looking · smash: the right button, while it is looking (what is in the hand's other use) · wheel: ±1 for each notch · owns: native UI events pass through to their target
  *        interceptKey: UI consumed this key · blocked: UI owns the hands, while the visit keeps running
  * @returns {{ state: {keys:Set, dx:number, dy:number, stick:{x:number,y:number}, hurry:boolean, firing:boolean}, clear(), capture(), release(), dispose() }}
  *          stick: a thumb's push, x right and y forward, together never longer than 1 · hurry: that thumb is past the ring, which is running
@@ -115,7 +115,7 @@ export function createInput(o) {
     if (e.target === hud.tip) { o.key('r'); return; }
     // the first click only takes hold of the mouse; after that a click is a click. (Where the mouse cannot be held —
     // it is dragged to look instead — a click is a press that went nowhere: see onPointerUp.)
-    if (document.pointerLockElement === canvas) { if (e.button === 0) { state.firing = true; o.click(); } press = null; }
+    if (document.pointerLockElement === canvas) { if (e.button === 0) { state.firing = true; o.click(); } else if (e.button === 2) o.smash?.(); press = null; }
     else press = e.button === 0 ? { x: e.clientX, y: e.clientY, t: performance.now(), first: !press } : null;
     dragging = true;
     capture();

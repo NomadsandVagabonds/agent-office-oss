@@ -61,3 +61,22 @@ export function holdPose({ on = false, since = 0, off = Infinity, dry = Infinity
 
 /** The lever, in degrees, at this much squeeze. */
 export const leverAt = (squeeze) => HOLD.lever[0] + (HOLD.lever[1] - HOLD.lever[0]) * clamp01(squeeze);
+
+/**
+ * The smash (extinguisher.rule.js SMASH): pulled back and up, the canister swung forward foot first — tipped right over
+ * so its foot is what goes out — and brought back. `t` seconds in; → offsets and turns to add to the hold, or null once over.
+ * `broke`: it split on what it hit; the hand comes back empty-feeling, low.
+ */
+export function smashPose(t, broke = false) {
+  const L = SMASH_LENGTH;
+  if (!(t >= 0) || t >= L) return null;
+  const back = smooth(t / 0.1) * (1 - smooth((t - 0.1) / 0.06));
+  const out = smooth((t - 0.1) / 0.08) * (1 - smooth((t - 0.24) / (L - 0.24)));
+  const jolt = t > 0.18 && t < 0.3 ? Math.sin((t - 0.18) / 0.12 * Math.PI) * 0.012 : 0;
+  return {
+    x: -0.05 * out, y: 0.03 * back + 0.09 * out - (broke ? 0.03 * smooth((t - 0.2) / 0.2) : 0),
+    z: 0.05 * back - 0.2 * out + jolt,
+    pitch: -0.25 * back + 1.25 * out, yaw: 0.15 * out, roll: -0.2 * out,
+  };
+}
+export const SMASH_LENGTH = 0.5;

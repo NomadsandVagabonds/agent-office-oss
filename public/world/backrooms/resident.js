@@ -29,7 +29,7 @@
 //   …and in its update:   if (life.out || life.stalled) return;      // dying, gone or shoved: it does nothing, lands nothing
 //   …where it lands a hit that is survived:   life.escaped();
 
-import { HEALTH, fresh, struck, aged, finished } from './cast/health.rule.js';
+import { HEALTH, TIER, fresh, struck, aged, finished } from './cast/health.rule.js';
 import { SHOVE, slide } from './shove.rule.js';
 
 /**
@@ -129,11 +129,19 @@ export function resident(env, id, spec = {}) {
       if (!killed && !spec.recoils) me.stall(HEALTH.flinch);
       return { ok: true, killed, hp: vital.hp };
     },
+    /** The extinguisher's foot (extinguisher.rule.js SMASH): it takes `n`, as a jab takes its share. → { ok, killed, hp } */
+    smash(n) {
+      if (!(n > 0) || !vital || !reachable()) return { ok: false, killed: false };
+      const hit = me.strike(n); if (!hit.ok) return hit;
+      me.met(); try { spec.hit?.({ killed: hit.killed, hp: hit.hp }); } catch { /* the room's own affair */ }
+      me.escaped();                                        // (got away from, as a jab counts it)
+      return hit;
+    },
     snipTarget() {
       if (!vital || !reachable()) return null;
       const p = where(); if (!p) return null;
       return {
-        id, x: p.x, z: p.z, y: p.y, r: spec.r ?? 0.3, priority: spec.priority ?? 2,
+        id, member: id, tier: TIER[id] ?? null, smash: me.smash, x: p.x, z: p.z, y: p.y, r: spec.r ?? 0.3, priority: spec.priority ?? 2,
         ...(spec.verticalReach !== undefined ? { verticalReach: spec.verticalReach } : {}),
         snip: () => {
           if (!reachable()) return false;
@@ -149,7 +157,7 @@ export function resident(env, id, spec = {}) {
       if (spec.shove === false || !reachable()) return null;
       const p = where(); if (!p) return null;
       return {
-        id, x: p.x, z: p.z, y: p.y, r: spec.r ?? 0.3,
+        id, member: id, tier: TIER[id] ?? null, x: p.x, z: p.z, y: p.y, r: spec.r ?? 0.3, smash: me.smash,
         shove: (dir) => {
           if (!reachable()) return false;
           if (spec.shoved) return !!spec.shoved(dir);
