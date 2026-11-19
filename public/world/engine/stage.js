@@ -9,6 +9,7 @@ import { RenderPass } from '/vendor/three-addons/postprocessing/RenderPass.js';
 import { ShaderPass } from '/vendor/three-addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from '/vendor/three-addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from '/vendor/three-addons/postprocessing/OutputPass.js';
+import { setGpu } from './gpu.js';
 
 const TiltShift = {
   uniforms: {
@@ -44,12 +45,42 @@ const TiltShift = {
 };
 
 /**
+ * A stage with the renderer the page asked for (engine/gpu.js rendererChoice): `opt.renderer` 'webgpu' fetches the
+ * three.js WebGPU build and draws with WebGPURenderer (on its WebGL 2 backend where there is no WebGPU adapter);
+ * anything else is createStage, exactly as it always was. If the WebGPU build cannot start at all, the old renderer.
  * @param {HTMLElement} container
- * @param {{fx?:boolean, shadows?:boolean, pixelRatio?:number}} [opt]
+ * @param {{renderer?:'webgl'|'webgpu', fx?:boolean, shadows?:boolean, pixelRatio?:number}} [opt]
+ */
+export async function openStage(container, opt = {}) {
+  if (opt.renderer !== 'webgpu') return createStage(container, opt);
+  let stage = null;
+  try {
+    const nodes = await import('../../vendor/three.webgpu.min.js');
+    stage = createStage(container, { ...opt, nodes });
+    await stage.renderer.init();
+    const backend = stage.renderer.backend?.isWebGPUBackend ? 'webgpu' : 'webgl2';
+    setGpu({ renderer: 'webgpu', backend, nodes });
+    console.info(`[stage] WebGPURenderer on its ${backend === 'webgpu' ? 'WebGPU' : 'WebGL 2'} backend (?gpu=webgpu)`);
+    return stage;
+  } catch (err) {
+    console.warn('[stage] WebGPURenderer could not start; the WebGL renderer instead', err);
+    if (stage) { stage.dispose?.(); stage.renderer.domElement.remove(); }
+    return createStage(container, opt);
+  }
+}
+
+/**
+ * @param {HTMLElement} container
+ * @param {{fx?:boolean, shadows?:boolean, pixelRatio?:number, nodes?:object}} [opt]  nodes: the three.js WebGPU build
+ *        (openStage passes it): draw with its WebGPURenderer. The office's own post-processing (bloom, tilt-shift) is
+ *        WebGL only, so it is off there
  */
 export function createStage(container, opt = {}) {
-  const fx = opt.fx !== false;
-  const renderer = new THREE.WebGLRenderer({ antialias: !fx, powerPreference: 'high-performance', preserveDrawingBuffer: !!opt.preserve });
+  const nodes = opt.nodes || null;
+  const fx = opt.fx !== false && !nodes;
+  const renderer = nodes
+    ? new nodes.WebGPURenderer({ antialias: !fx, powerPreference: 'high-performance' })
+    : new THREE.WebGLRenderer({ antialias: !fx, powerPreference: 'high-performance', preserveDrawingBuffer: !!opt.preserve });
   const pixelRatio = Math.min(opt.pixelRatio || window.devicePixelRatio || 1, 2);
   renderer.setPixelRatio(pixelRatio);
   renderer.shadowMap.enabled = opt.shadows !== false;
@@ -91,6 +122,7 @@ export function createStage(container, opt = {}) {
   }
   resize();
   window.addEventListener('resize', resize);
+  const dispose = () => { running = false; window.removeEventListener('resize', resize); renderer.dispose(); };
 
   const frameFns = [];
   const clock = new THREE.Clock();
@@ -122,7 +154,7 @@ export function createStage(container, opt = {}) {
   }
 
   return {
-    renderer, scene, camera, composer, bloom, tilt, size,
+    renderer, scene, camera, composer, bloom, tilt, size, dispose,
     get frame() { return frame; },
     /** Smoothed milliseconds per frame. */
     get frameMs() { return lastMs; },

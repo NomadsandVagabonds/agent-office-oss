@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { VOXEL } from './vox.js';
 import { meshVox } from './mesher.js';
+import { gpu } from '../engine/gpu.js';
 
 const shared = { uGrid: { value: 0.06 }, uGlow: { value: 1.6 }, uTime: { value: 0 } };
 export const voxelUniforms = shared;
@@ -58,17 +59,41 @@ function inject(material) {
   return material;
 }
 
+/**
+ * The same material for the WebGPU renderer (?gpu=webgpu: engine/gpu.js), in three.js's node language: Lambert with
+ * vertex colours, and on top the same three things as inject() above, with the same numbers. The uniforms are the
+ * shared ones above, read before every frame (lighting.js and levels/kit.js set uGlow).
+ */
+function nodeVoxel(params) {
+  const N = gpu.nodes, T = N.TSL;
+  const { uniform, attribute, varying, positionGeometry, normalGeometry, floor, fract, dot, vec3, float, max, clamp, materialColor, diffuseColor } = T;
+  const m = new N.MeshLambertNodeMaterial(params);
+  const uGrid = uniform(shared.uGrid.value).onRenderUpdate(() => shared.uGrid.value);
+  const uGlow = uniform(shared.uGlow.value).onRenderUpdate(() => shared.uGlow.value);
+  const vox = varying(positionGeometry.sub(normalGeometry.mul(0.5)), 'vVoxPos');
+  const tex = attribute('aTex', 'float'), emis = attribute('aEmis', 'float');
+  const hash = (p0) => { const p = fract(p0.mul(vec3(0.1031, 0.1030, 0.0973))); const q = p.add(dot(p, p.yxz.add(33.33))); return fract(q.x.add(q.y).mul(q.z)); };
+  const n = hash(floor(vox.add(0.0005)));
+  const fr = fract(vox).sub(0.5).abs().mul(2);
+  const t = clamp(max(fr.x, max(fr.y, fr.z)).sub(0.8).div(0.2), 0, 1), edge = t.mul(t).mul(t.mul(-2).add(3));
+  const grain = n.sub(0.5).mul(2).mul(tex).add(1);
+  const line = float(1).sub(uGrid.mul(edge).mul(tex.mul(6).add(0.4)).mul(emis.oneMinus()));
+  m.colorNode = materialColor.mul(grain).mul(line);                       // (× the vertex colour, which the material adds)
+  m.emissiveNode = diffuseColor.rgb.mul(emis).mul(uGlow);
+  return m;
+}
+
 let solidMaterial = null;
 let glassMaterial = null;
 export function voxelMaterial() {
-  if (!solidMaterial) solidMaterial = inject(new THREE.MeshLambertMaterial({ vertexColors: true }));
+  if (!solidMaterial) solidMaterial = gpu.nodes ? nodeVoxel({ vertexColors: true }) : inject(new THREE.MeshLambertMaterial({ vertexColors: true }));
   return solidMaterial;
 }
 export function voxelGlassMaterial() {
   if (!glassMaterial) {
-    glassMaterial = inject(new THREE.MeshLambertMaterial({
-      vertexColors: true, transparent: true, opacity: 0.42, depthWrite: false,
-    }));
+    const params = { vertexColors: true, transparent: true, opacity: 0.42, depthWrite: false };
+    if (gpu.nodes) return (glassMaterial = nodeVoxel(params));
+    glassMaterial = inject(new THREE.MeshLambertMaterial(params));
     glassMaterial.customProgramCacheKey = () => 'office-voxel-glass';
   }
   return glassMaterial;

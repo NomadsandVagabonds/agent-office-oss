@@ -51,6 +51,9 @@ export const HELD_DEPTH_SLIVER = 0.002;
 let squeezed = false;
 /** Before a held mesh draws. `first`: the mesh that, as before, clears the room's depth when nothing reads it. */
 export function holdInFront(renderer, first = true) {
+  // (?gpu=webgpu: no GL state to reach into, and no clearing the depth halfway through a pass. Drawn as it is, for now:
+  // it can dip into a wall it is held against. docs/BLOCKROOMS-WEBGPU.md)
+  if (renderer.isWebGPURenderer) return 'as-drawn';
   if (renderer.getRenderTarget?.()?.depthTexture) { renderer.getContext().depthRange(0, HELD_DEPTH_SLIVER); squeezed = true; return 'sliver'; }
   if (!first) return 'as-drawn';
   // The previous transparent room mesh may have disabled depth writes;

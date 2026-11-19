@@ -1,0 +1,124 @@
+// The Backrooms — kit.js's one surface material, for the WebGPU renderer (?gpu=webgpu: engine/gpu.js). The same sum as
+// kit.js VERT and FRAG, in three.js's node language (TSL): the light baked into the vertices (steady, flicker, the lamp
+// banks) times the room's dimmer and tint; the flashlight's and the camcorder lamp's cones; a voxel's grain and the line
+// where voxels meet; the texture (cut out where it says); the wet glint. Every number is kit.js's.
+//
+// Not here yet (docs/BLOCKROOMS-WEBGPU.md), so not drawn under ?gpu=webgpu whatever the tier says: the light maps
+// (LIGHTMAP, TUBESHADOW, DOORLIGHT), the floor's sheen (SHEEN), the flashlight's shadows (BEAM_SHADOWS) and the glow's
+// stand-ins (EMISSIVE_BLOOM). Rooms that patch kit.js's GLSL by text (the waterpark's water and glaze, the pool's
+// optics) are given the GLSL to patch, which nothing draws: those rooms show their plain surface.
+//
+// The material keeps kit.js's `uniforms`, `defines`, `vertexShader` and `fragmentShader`, so that everything that
+// reaches into one (uTint, uDim, uFlick, a room's patch) keeps working; the uniforms are read every frame. The defines
+// are read when the material is built, and again whenever it is marked needsUpdate.
+import { gpu } from '../engine/gpu.js';
+import { FLASHLIGHT, CAMCORDER_LAMP } from './flashlight.js';
+
+/**
+ * A kit surface as a node material. `spec`: what kit.js surface() would hand ShaderMaterial (defines, uniforms,
+ * vertexShader, fragmentShader, side, transparent, depthWrite).
+ */
+export function surfaceNode(spec) {
+  const N = gpu.nodes, T = N.TSL;
+  const { Fn, vec3, vec4, float, uniform, texture, uv, attribute, varying, fract, floor, dot, length, max, mix, clamp, pow, normalize,
+    select, If, Discard, positionView, normalViewGeometry, faceDirection } = T;
+  const m = new N.NodeMaterial();
+  Object.assign(m, { side: spec.side, transparent: spec.transparent, depthWrite: spec.depthWrite });
+  m.uniforms = spec.uniforms; m.defines = spec.defines;
+  m.vertexShader = spec.vertexShader; m.fragmentShader = spec.fragmentShader;            // (for whoever patches them; not drawn)
+  m.isKitSurface = true;
+
+  // each uniform as kit.js holds it, read before every frame (a holder may be shared by a room: uFlick, uDim, uBanks)
+  const read = (key) => m.uniforms[key]?.value;
+  const f = (key, d = 0) => uniform(d).onRenderUpdate(() => { const v = read(key); return typeof v === 'number' ? v : d; });
+  const v2 = (key) => { const n = uniform(new N.Vector2()); return n.onRenderUpdate(() => { const v = read(key); if (Array.isArray(v)) n.value.fromArray(v); else if (v?.isVector2) n.value.copy(v); }); };
+  const v3 = (key) => { const n = uniform(new N.Vector3(1, 1, 1)); return n.onRenderUpdate(() => { const v = read(key); if (Array.isArray(v)) n.value.fromArray(v); else if (v?.isVector3) n.value.copy(v); }); };
+  const ss = (e0, e1, x) => { const t = clamp(float(x).sub(e0).div(e1 - e0), 0, 1); return t.mul(t).mul(t.mul(-2).add(3)); };
+  const voxHash = (p0) => { const p = fract(p0.mul(vec3(0.1031, 0.1030, 0.0973))); const q = p.add(dot(p, p.yxz.add(33.33))); return fract(q.x.add(q.y).mul(q.z)); };
+  const surfaceBeam = (view, normal, origin, direction, coneCos, reach, att) => {
+    const offset = view.sub(origin), d = length(offset), ray = offset.div(max(d, 0.0001));
+    const cone = ss(coneCos[0], coneCos[1], dot(ray, direction));
+    const fade = float(1).sub(ss(reach[0], reach[1], d));
+    const incidence = max(dot(normal, ray.negate()), 0);
+    return cone.mul(fade).mul(incidence).div(d.mul(d).mul(att).add(1));
+  };
+
+  m.fragmentNode = Fn(() => {
+    const D = m.defines || {};
+    const banks = D.BANKS ? Number(D.BANKS) || 2 : 0;
+    const uDim = f('uDim', 1), uTint = v3('uTint'), uAlpha = f('uAlpha', 1);
+    // (VERT: the light at the vertex)
+    const aLit = attribute('aLit', 'vec3');
+    let lit = aLit;
+    if (banks) {
+      const uBanks = v2('uBanks');
+      lit = lit.add(attribute('aBank0', 'vec3').mul(uBanks.x)).add(attribute('aBank1', 'vec3').mul(uBanks.y));
+      if (banks > 2) { const more = v2('uMoreBanks'); lit = lit.add(attribute('aBank2', 'vec3').mul(more.x)); if (banks > 3) lit = lit.add(attribute('aBank3', 'vec3').mul(more.y)); }
+    }
+    if (D.FLICK) lit = lit.add(attribute('aFlk', 'vec3').mul(f('uFlick', 1)));
+    lit = lit.mul(uDim);
+    const aSurf = D.VOXEL ? attribute('aSurf', 'vec2') : null;
+    if (D.VOXEL) lit = mix(lit, aLit, aSurf.y);
+    const vLit = varying(lit.mul(uTint), 'vKitLit');
+    const vAlb = attribute('aAlb', 'vec3');
+    // (FRAG)
+    const c = vec3(vLit).toVar();
+    const normal = normalViewGeometry.mul(faceDirection);
+    const uTorch = f('uTorch'), uLamp = f('uCameraLamp'), uTorchOrigin = v3('uTorchOrigin'), uTorchDirection = v3('uTorchDirection');
+    const torchBeam = surfaceBeam(positionView, normal, uTorchOrigin, uTorchDirection, [FLASHLIGHT.edgeCos, FLASHLIGHT.coreCos], [FLASHLIGHT.fadeFrom, FLASHLIGHT.range], FLASHLIGHT.attenuation);
+    const lampBeam = surfaceBeam(positionView, normal, vec3(...CAMCORDER_LAMP.origin), vec3(...CAMCORDER_LAMP.direction), [CAMCORDER_LAMP.edgeCos, CAMCORDER_LAMP.coreCos], [CAMCORDER_LAMP.fadeFrom, CAMCORDER_LAMP.range], CAMCORDER_LAMP.attenuation);
+    const beam = select(uTorch.greaterThan(0.0001), uTorch.mul(torchBeam), 0).add(select(uLamp.greaterThan(0.0001), uLamp.mul(lampBeam), 0));
+    const torch = vAlb.mul(beam);
+    let cell = null;
+    if (D.VOXEL) {
+      const vVox = attribute('aVox', 'vec3');
+      c.addAssign(torch.mul(aSurf.y.oneMinus()));
+      cell = floor(vVox.add(0.0005));
+      c.mulAssign(voxHash(cell).sub(0.5).mul(2).mul(aSurf.x).add(1));
+      const fr = fract(vVox).sub(0.5).abs().mul(2);
+      const edge = ss(0.8, 1.0, max(fr.x, max(fr.y, fr.z)));
+      c.mulAssign(float(1).sub(edge.mul(0.06).mul(aSurf.x.mul(6).add(0.4)).mul(aSurf.y.oneMinus())));
+    } else c.addAssign(torch);
+    if (D.MAPPED) {
+      const map = texture(read('map')).onRenderUpdate(() => read('map'));
+      const t = map.sample(uv());
+      if (D.CUTOUT) If(t.a.lessThan(0.5), () => { Discard(); });
+      c.mulAssign(t.rgb);
+    }
+    if (D.WET) {
+      let wn = normal;
+      if (D.VOXEL) wn = normalize(wn.add(vec3(voxHash(cell), voxHash(cell.add(17)), voxHash(cell.add(31))).sub(0.5).mul(0.55)));
+      const wv = normalize(positionView.negate());
+      const glint = pow(max(dot(wn, normalize(wv.add(vec3(0.2, 0.85, 0.35)))), 0), 34);
+      const rim = pow(float(1).sub(max(dot(wn, wv), 0)), 3);
+      const room = dot(vLit, vec3(0.333));
+      c.addAssign(vec3(1.0, 0.97, 0.94).mul(glint.mul(1.1).add(rim.mul(0.22)).mul(f('uWet')).mul(room.add(0.12))));
+    }
+    return vec4(c, uAlpha);
+  })();
+  return m;
+}
+
+const PACKED = /^a(Lit|Flk|Bank\d|Vox|Surf)$/;
+/**
+ * WebGPU lets a draw read from 8 vertex buffers at most, and a kit geometry with four lamp banks has up to 12. Under
+ * the flag, kit.js geometry() hands its own float attributes (the baked light, flicker, banks, voxel position and
+ * surface) to this, which puts them into one interleaved buffer: position, normal, uv, the pack and the albedo, 5 in
+ * all. Nothing outside kit.js reads these on the CPU. → the geometry.
+ */
+export function packSurfaceAttributes(geo) {
+  const N = gpu.nodes;
+  const names = Object.keys(geo.attributes).filter((n) => PACKED.test(n) && geo.attributes[n].array instanceof Float32Array && !geo.attributes[n].normalized);
+  if (names.length < 2) return geo;
+  const count = geo.attributes[names[0]].count, stride = names.reduce((s, n) => s + geo.attributes[n].itemSize, 0);
+  const data = new Float32Array(count * stride);
+  let offset = 0;
+  const placed = names.map((n) => {
+    const a = geo.attributes[n], size = a.itemSize, src = a.array;
+    for (let i = 0; i < count; i++) for (let k = 0; k < size; k++) data[i * stride + offset + k] = src[i * size + k];
+    const at = { n, size, offset }; offset += size; return at;
+  });
+  const buffer = new N.InterleavedBuffer(data, stride);
+  for (const { n, size, offset: o } of placed) geo.setAttribute(n, new N.InterleavedBufferAttribute(buffer, size, o));
+  return geo;
+}
