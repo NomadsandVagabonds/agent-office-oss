@@ -121,7 +121,7 @@ function hangOuterDoor(c, dr) {
 
 export function build(c) {
   const { W, D, H, R, look, params: p } = c;
-  const plan = buildGridPlan(W, D, H, p.brokenSide ?? 1);
+  const plan = buildGridPlan(W, D, H, p.brokenSide ?? 1, p.breaks);
   const tex = makeGridTextures(c, p);
 
   let roomState = createGridRoomState();
