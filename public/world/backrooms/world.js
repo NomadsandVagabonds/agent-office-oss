@@ -1541,7 +1541,7 @@ function roomContext(world, rt) {
       env.end('caught'); return { landed: true, dead: true, ended: true };
     },
     /** For the count kept of a visit: the resident (its own id) has really been seen, once · it had the visitor and they got away, each time. */
-    met: (id) => env.run?.met?.(id), survived: (id) => env.run?.survived?.(id),
+    met: (id) => env.run?.met?.(id, rt), survived: (id) => env.run?.survived?.(id, rt),
     /**
      * The fire a spot of this room is within sight and reach of (paper the visitor has lit): { x, z, remaining } in the room's own
      * frame — or null: none, or a visit without pockets. (As a creature's c.fire: pursuer.js.)

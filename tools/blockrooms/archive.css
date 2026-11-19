@@ -89,10 +89,10 @@ body.archive-page { margin:0; padding:20px 12px 40px; border:0; text-align:left;
 .plot-sheet { position:relative; border:2px inset #eee; margin:0 6px; background:#fffef5; padding:12px 8px 2px; }
 .archive-page .plot-sheet h3 { font:bold 18px Georgia,"Times New Roman",serif; margin:0 6px 4px; }
 #plot-caption,.plot-legend { margin:0 6px 4px; font:13px/1.4 Arial,sans-serif; }
-.plot-legend { display:flex; gap:14px; color:#273d36; font-size:12px; }
+.plot-legend { display:flex; flex-wrap:wrap; gap:4px 18px; color:#273d36; font-size:13px; font-weight:bold; }
 .plot-legend span::before { content:""; display:inline-block; margin-right:5px; width:8px; height:8px; background:#08786e; }
 .plot-legend span+span::before { background:#71335d; transform:rotate(45deg); }
-#plot { display:block; width:100%; height:174px; }
+#plot { display:block; width:100%; height:clamp(180px,24vw,234px); }
 #plot-empty { position:absolute; left:50%; bottom:50px; transform:translateX(-50%); max-width:85%; width:max-content; background:#fffef5; color:#38423c; padding:5px 8px; font:13px "Courier New",monospace; text-align:center; }
 #chart-data { padding:6px 9px; font:13px Arial,sans-serif; }
 #chart-data summary { cursor:pointer; width:fit-content; }

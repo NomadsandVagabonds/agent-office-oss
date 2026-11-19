@@ -118,9 +118,9 @@ export function resident(env, id, spec = {}) {
     get stalled() { return stall > 0; },
     stall(seconds) { if (seconds > 0) { stall = Math.max(stall, seconds); settle = true; } },
     /** It has been seen for what it is: once (c.met). */
-    met() { if (known) return; known = true; env?.run?.met?.(id); },
+    met() { if (known) return; known = true; env?.run?.met?.(id, me); },
     /** Got away from: once a floor for all of that name, however it happened (c.survived). */
-    escaped() { if (residents.counted.has(id)) return; residents.counted.add(id); env?.run?.survived?.(id); },
+    escaped() { if (residents.counted.has(id)) return; residents.counted.add(id); env?.run?.survived?.(id, me); },
     /** It takes `n` (a jab is HEALTH.jab). → { ok, killed, hp } */
     strike(n = HEALTH.jab) {
       if (!vital || me.out) return { ok: false, killed: false, hp: vital?.hp ?? 0 };

@@ -15,8 +15,20 @@
 import { createTrail } from '../../../core/trail.mjs';
 
 export function createTally({ seed, of }) {
-  let seconds = 0, ways = 0, deepest = 1, explored = 0, survived = 0;
+  let seconds = 0, ways = 0, deepest = 1, explored = 0, survived = 0, encounters = 0;
   const kinds = [], met = [], counted = new WeakSet(), trail = createTrail();
+  const sightings = new WeakMap();
+  function meet(id, source) {
+    if (typeof id !== 'string' || !id) return;
+    if (source) {
+      const known = sightings.get(source) || new Set();
+      if (known.has(id)) return;
+      known.add(id);
+      sightings.set(source, known);
+    }
+    encounters++;
+    if (!met.includes(id)) met.push(id);
+  }
   return {
     /** A moment of the tape. Only time in play counts: not the fall in, not a drop between parts, not the ending. */
     tick(dt, playing) { if (playing && dt > 0) { seconds += dt; trail.tick(dt); } },
@@ -41,11 +53,15 @@ export function createTally({ seed, of }) {
       }
     },
     /** What creatures tell the visit (env.run): this one was met; this one was got away from. */
-    met(id) { if (typeof id === 'string' && id && !met.includes(id)) met.push(id); },
-    survived(id) { if (typeof id === 'string' && id) { survived++; if (!met.includes(id)) met.push(id); } },
+    met: meet,
+    survived(id, source) {
+      if (typeof id !== 'string' || !id) return;
+      survived++;
+      if (source || !met.includes(id)) meet(id, source);
+    },
     /** The whole of it. hearts: { left, of } if there is such a thing as health this visit. */
     report(hearts) {
-      const run = { seed: String(seed), seconds: Math.round(seconds), parts: { reached: Math.min(Math.max(1 + ways, deepest), of), of }, rooms: { explored, kinds: kinds.slice() }, cast: { met: met.slice(), survived } };
+      const run = { seed: String(seed), seconds: Math.round(seconds), parts: { reached: Math.min(Math.max(1 + ways, deepest), of), of }, rooms: { explored, kinds: kinds.slice() }, cast: { met: met.slice(), survived, encounters } };
       if (hearts && Number.isFinite(hearts.left) && Number.isFinite(hearts.of)) run.hearts = { left: hearts.left, of: hearts.of };
       run.trail = trail.encode();
       return run;

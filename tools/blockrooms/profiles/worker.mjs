@@ -8,9 +8,11 @@ async function profile(db, userId, body, write, now) {
     const payload = JSON.stringify(doc);
     if (new TextEncoder().encode(payload).length > MAX_SAVE) throw new Problem(413, 'Archive too large.');
     // An open tab running the previous release writes a v1 save without the stamp field.
-    const updated = await db.prepare(`UPDATE players SET document=CASE
-      WHEN json_type(?1,'$.clearances') IS NULL AND json_type(document,'$.clearances')='array'
-      THEN json_set(?1,'$.clearances',json_extract(document,'$.clearances')) ELSE ?1 END,
+    const updated = await db.prepare(`UPDATE players SET document=json_patch(?1, json_patch(
+      CASE WHEN json_type(?1,'$.clearances') IS NULL AND json_type(document,'$.clearances')='array'
+        THEN json_object('clearances',json_extract(document,'$.clearances')) ELSE '{}' END,
+      CASE WHEN json_type(?1,'$.activity') IS NULL AND json_type(document,'$.activity')='object'
+        THEN json_object('activity',json_extract(document,'$.activity')) ELSE '{}' END)),
       revision=revision+1,last_save=?2 WHERE id=?3 AND revision=?4 RETURNING revision,document`)
       .bind(payload,now,userId,body.revision).first();
     if (updated) return json({ accepted: true, revision: updated.revision, document: JSON.parse(updated.document) });

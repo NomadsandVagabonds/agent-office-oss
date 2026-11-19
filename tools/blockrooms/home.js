@@ -12,6 +12,7 @@
 //   the rest   a figure that moves when it is off screen, a page that gets
 //              longer at the bottom, a wall that gives when it is held
 import { DIFFICULTIES, cleanDifficulty, difficultyOf, difficultyPerk } from './core/difficulty.mjs';
+import { mountTrailer } from './trailer-player.js';
 import { mount, drawLogo, voidTile } from './art.js';
 import { rollName, cleanName, cleanMessage, cleanEntry } from './core/book.mjs';
 import { GENDER, SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, SKIN, HAIR_COLORS, OUTFIT_COLORS, hashId, humanGenderDefaults, resolveLook, sanitizeLookPatch } from './core/look.mjs';
@@ -417,7 +418,7 @@ signForm.addEventListener('submit', async (e) => {
   const go = $('sign-it'); go.disabled = true; signSays.textContent = 'Signing…';
   let answer = null;
   try {
-    const res = await fetch('./api/book', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ do: 'sign', name: cleanName(p.name) || me.name, message: message || '', run: p.run, ticket: p.ticket, look: activeLook() }) });
+    const res = await fetch('./api/book', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ do: 'sign', name: cleanName(p.name) || me.name, look: p.look || activeLook(), message: message || '', run: p.run, ticket: p.ticket }) });
     answer = await res.json();
   } catch { answer = null; }
   go.disabled = false;
@@ -425,7 +426,7 @@ signForm.addEventListener('submit', async (e) => {
     store.set(UNSIGNED, null);
     signSays.textContent = answer?.place ? `Signed. You are № ${answer.place}.` : 'Signed.';
     setTimeout(() => { signForm.hidden = true; signSays.textContent = ''; }, 2600);
-    book();
+    refreshBook();
   } else if (answer?.text) signSays.textContent = answer.text;
   else if (answer?.why === 'slow') signSays.textContent = 'Too quick. Try again in a minute.';
   else signSays.textContent = 'The book is not answering. Try again later.';
@@ -1195,25 +1196,51 @@ const FIRST_ENTRIES = [
   ['Ember Numbat', '29 Aug 98', 'Great site!! Found it on Yahoo.'],
   ['Webmaster', '11 Nov 98', 'testing guestbook'],
 ];
-// A little portrait beside each name: the look it signed in, or, for a line from before (or the page's own first
-// entries), the random visitor its name walks in as.
+// A little portrait beside each name: the look it signed in, or, for a line from before, the standard visitor for its
+// tape, as the Employee of the Month poster draws it (the page's own first entries: for their names).
 const mugs = new Map();
-function mugOf(name, look) {
-  const key = `${name}|${JSON.stringify(look || null)}`;
+function mugOf(seed, look) {
+  const key = `${seed}|${JSON.stringify(look || null)}`;
   let url = mugs.get(key);
   if (!url) {
     const canvas = document.createElement('canvas'); canvas.width = 26; canvas.height = 26;     // the head and whatever is on it
     const ctx = canvas.getContext('2d');
-    try { blitPixCrop(ctx, paintFlatCharacter(resolveLook(`visitor:${name}`, look || undefined), { pose: 'idle' }), { sx: 3, sy: 19, sw: 26, sh: 26, scale: 1 }); } catch { /* a blank face, then */ }
+    try { blitPixCrop(ctx, paintFlatCharacter(resolveLook(`visitor:${seed}`, look || undefined), { pose: 'idle' }), { sx: 3, sy: 19, sw: 26, sh: 26, scale: 1 }); } catch { /* a blank face, then */ }
     url = canvas.toDataURL(); mugs.set(key, url);
   }
   const img = el('img', 'mug'); img.src = url; img.alt = ''; img.width = 28; img.height = 28;
   return img;
 }
 function guests(latest) {
-  const real = latest.map((e) => el('li', '', mugOf(e.name, e.look), el('span', 'who', e.name), el('span', 'when', day(e.at)), e.message ? el('span', 'said', e.message) : null, el('span', 'sc', `${num(e.score)} pts`)));
+  const real = latest.map((e) => el('li', '', mugOf(e.seed, e.look), el('span', 'who', e.name), el('span', 'when', day(e.at)), e.message ? el('span', 'said', e.message) : null, el('span', 'sc', `${num(e.score)} pts`)));
   const first = FIRST_ENTRIES.map(([who, when, text]) => el('li', '', mugOf(who), el('span', 'who', who), el('span', 'when', when), el('span', 'said', text)));
   $('guests').replaceChildren(...real, ...first);
+}
+let posterKey;
+async function employeePoster(entry, online) {
+  $('employee-name').textContent = entry?.name || (online ? 'No scores yet' : 'Scores unavailable');
+  $('employee-score').textContent = entry ? `${num(entry.score)} points` : '';
+  const canvas = $('employee-photo');
+  canvas.hidden = !entry;
+  const key = entry && JSON.stringify([entry.id, entry.look]);
+  if (key === posterKey) return;
+  posterKey = key;
+  if (!entry) return;
+  const look = resolveLook(`visitor:${entry.seed}`, entry.look);
+  canvas.title = entry.look ? 'Visitor photograph' : 'Standard avatar for this tape';
+  const ctx = canvas.getContext('2d');
+  paintBackdrop(ctx, canvas.width, canvas.height, 'paper');
+  blitPixCrop(ctx, paintFlatCharacter(look), { sx: 0, sy: 17, sw: 32, sh: 35, dx: 16, dy: 6, scale: 2 });
+  try {
+    const { characterPreview } = await import('./archive-preview.js');
+    if (key !== posterKey) return;
+    const camera = characterPreview();
+    try {
+      const photo = camera.take(look);
+      paintBackdrop(ctx, canvas.width, canvas.height, 'paper');
+      ctx.drawImage(photo, 12, 34, 336, 308, 0, 0, canvas.width, canvas.height);
+    } finally { camera.dispose(); }
+  } catch { /* The printed sprite also works without WebGL. */ }
 }
 function scores(top, none = 'Nobody yet.') {
   const body = $('scores').tBodies[0];
@@ -1221,7 +1248,7 @@ function scores(top, none = 'Nobody yet.') {
   body.replaceChildren(...top.slice(0, 10).map((e, i) => {
     // (no way into somebody else's building from here: the number of a tape is its owner's to give out — the card they came out with has it)
     const td = (cls, text) => el('td', cls, text);
-    return el('tr', i ? '' : 'first', td('n', String(i + 1)), el('td', 'who', mugOf(e.name, e.look), el('span', '', e.name)), td('', e.difficulty ? difficultyOf(e.difficulty).label : 'Original'), td('n', num(e.score)), td('n', clock(e.seconds)), td('n', String(e.batteries)), td('n', String(e.hearts)));
+    return el('tr', i ? '' : 'first', td('n', String(i + 1)), el('td', 'who', mugOf(e.seed, e.look), el('span', '', e.name)), td('', e.difficulty ? difficultyOf(e.difficulty).label : 'Original'), td('n', num(e.score)), td('n', clock(e.seconds)), td('n', String(e.batteries)), td('n', String(e.hearts)));
   }));
 }
 guests([]);
@@ -1229,20 +1256,27 @@ const scoreDifficulty = $('score-difficulty');
 for (const d of DIFFICULTIES.filter(d => d.multiplier)) {
   const option = el('option', '', d.label); option.value = d.id; scoreDifficulty.append(option);
 }
-let bookRequest = 0;
-scoreDifficulty.addEventListener('change', () => book());
-async function book() {
+let bookRequest = 0, overallRequest = 0;
+scoreDifficulty.addEventListener('change', () => book(scoreDifficulty.value));
+function refreshBook() {
+  book();
+  if (scoreDifficulty.value) book(scoreDifficulty.value);
+}
+async function book(difficulty = '') {
   const request = ++bookRequest;
+  if (!difficulty) overallRequest = request;
   let data = null;
   try {
-    const bookUrl = './api/book' + (scoreDifficulty.value ? '?difficulty=' + encodeURIComponent(scoreDifficulty.value) : '');
+    const bookUrl = './api/book' + (difficulty ? '?difficulty=' + encodeURIComponent(difficulty) : '');
     const res = await fetch(bookUrl, { headers: { accept: 'application/json' } });
     if (res.ok) data = await res.json();
   } catch { /* no book: this browser's own record, then */ }
+  const top = (data?.ok && Array.isArray(data.top) ? data.top : []).map(cleanEntry).filter(Boolean);
+  if (request === overallRequest) employeePoster(top[0], data?.ok);
   if (request !== bookRequest) return;
   if (!data || !data.ok) { scores([], mine.best ? `Best on this computer: ${num(mine.best)}` : 'Nobody yet.'); return; }
   counter(data.counter);
-  scores((data.top || []).map(cleanEntry).filter(Boolean));
+  scores(top);
   guests((data.latest || []).map(cleanEntry).filter(Boolean));
   // count this visit once per tab (the book itself does not count the same visitor twice in a while)
   try {
@@ -1314,7 +1348,7 @@ for (const slot of document.querySelectorAll('.plug[data-plug]')) {
   slot.replaceWith(node);
 }
 counter(null);
-book();
+refreshBook();
 
 // One more award, for wherever the visitor appears to be: "VOTED 6TH BEST OFFICE PARK / of Portland" (the owner's line).
 // The site's host tells the site which city a connection comes from with every request (api/where); it is said to that
@@ -1441,11 +1475,14 @@ const says = (on) => { const btn = $('midi'); btn.setAttribute('aria-pressed', S
 function music(on) {
   if (audio) { audio.pause(); audio = null; }
   if (on) {
+    $('trailer-film').pause();
     const a = new Audio('./muzak.mp3');
     a.loop = true; a.volume = 0.5; audio = a; tuneAudio();
     a.play().catch(() => { if (audio === a) { audio = null; says(false); } });       // no sound to be had: the switch goes back
   }
   says(!!audio);
 }
+mountTrailer($('trailer-player'));
+$('trailer-film').addEventListener('play', () => { if (audio) music(false); });
 $('midi').addEventListener('click', () => music(!audio));
 document.addEventListener('visibilitychange', () => { if (document.hidden && audio) music(false); });
