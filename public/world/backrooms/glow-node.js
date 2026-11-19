@@ -55,16 +55,21 @@ function keyByPass() {
  */
 export function sceneGlowMRT() {
   const { TSL: T } = gpu.nodes;
-  const { Fn, mrt, vec4, uniform, output } = T;
+  const { Fn, mrt, vec4, uniform, output, select } = T;
   return mrt({
     output,
     emissive: Fn((builder) => {
       const mat = builder.material;
-      if (!mat || (mat.transparent && mat.depthWrite === false)) return vec4(0);
-      if (!mat.userData?.glow) return vec4(0, 0, 0, 1);
-      const strength = uniform(1).onRenderUpdate(() => glowStrength(mat.userData.bloom));
-      const picture = mat.userData.glow === 'picture' && !mat.transparent;
-      return vec4(output.rgb.mul(strength), picture ? pictureAlpha : output.a);
+      if (!mat || (mat.transparent && mat.depthWrite === false)) return vec4(0);           // (in the shader's key: built per kind)
+      // (whether it shines, as a lamp or a picture, and how strongly, are the material's userData, which three.js r180 leaves
+      // out of a shader's key: two materials alike but for those share one shader. So they are read for each object drawn)
+      const mark = uniform(-2).onObjectUpdate(({ material: m }) => {
+        if (!m?.userData?.glow) return -2;                                               // (nothing that shines: black, hiding)
+        return m.userData.glow === 'picture' && !m.transparent ? pictureAlpha : -1;      // (a picture's mark; -1 a lamp, its own alpha)
+      });
+      const strength = uniform(1).onObjectUpdate(({ material: m }) => (m?.userData?.glow ? glowStrength(m.userData.bloom) : 0));
+      const shines = vec4(output.rgb.mul(strength), select(mark.lessThan(-0.5), output.a, mark));
+      return select(mark.lessThan(-1.5), vec4(0, 0, 0, 1), shines);
     })(),
   });
 }

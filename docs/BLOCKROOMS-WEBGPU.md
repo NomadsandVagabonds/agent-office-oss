@@ -158,6 +158,28 @@ Still missing at Medium and High: the floor's sheen, flashlight shadows (High), 
   ceiling-off room (`&lighting=1&lightstudy=1`, WebGL vs `?gpu=webgpu` + runtime High → Medium → High toggle, plus
   `copiers`, `cubicle-grid`, and `kiddie-lagoon` at High with zero HUD console errors).
 
+## Two ports of the same pieces, judged (19 Nov)
+
+Two agents ported Medium's supersample, light maps and glow separately (this branch, and `gemini/steam-webgpu-phase3`).
+The owner asked for a judge.
+- **The renders:** `docs/webgpu/judge-*.jpg`. Each is today's WebGL | this branch | the other, at Medium built from
+  the start, the same seed and spot, on the WebGL 2 backend.
+- **The judge:** an independent reviewer, blind to which was whose.
+- **Supersample:** the two are the same filter. Combining the glow's add with it saves a pass, but it was taken out
+  again: with it on, the copier room measured differently from run to run.
+- **Light maps:** near-equal. Skip the map's reads off the map, as kit.js does. Taken, with gradients so that WGSL
+  allows it (no change to the picture). The flat region was tried and measured worse, so it was left out.
+- **Glow: this branch's.**
+  - The other's chain starts one level finer than glow.js, so its halo is half as wide and its core brighter.
+  - It also renders black after a tier switch in-game: its shaders' key does not know the MRT.
+  - Fixed here from the judge's finding: a lamp's or sign's mark and strength are read per object drawn (three.js r180
+    leaves userData out of a shader's key, so two materials could share one). The grotto sign was washed out; now
+    1.5 % of pixels >16 against today's, down from 4.8 %.
+- **Open:**
+  - Runs of the same code in the copier room differ by 0.7 to 1.5 % of pixels. Shader compile order varies from run to
+    run, and materials alike but for what the key leaves out share a shader.
+  - Real-GPU timing of either chain.
+
 ## What looks wrong under the flag
 
 Everything still unported falls back to plain surface / Classic behaviour:
