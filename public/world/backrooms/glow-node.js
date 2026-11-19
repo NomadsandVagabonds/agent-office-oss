@@ -33,7 +33,7 @@ function keyByPass() {
     const base = proto.customProgramCacheKey;
     proto.customProgramCacheKey = function () { const k = base.call(this); return glowPass.on ? `${k}|glow-mrt` : k; };
   }
-  // Keep glowPass.on aligned with renderer.setMRT() so nested single-target passes (e.g. ReflectorNode) that
+  // Keep glowPass.on aligned with renderer.setMRT() so nested single-target passes (ReflectorNode) that
   // temporarily clear MRT during the glow pass never pick up cached 2-output |glow-mrt shaders.
   const rendererProto = N.WebGPURenderer?.prototype;
   if (rendererProto && typeof rendererProto.setMRT === 'function') {
