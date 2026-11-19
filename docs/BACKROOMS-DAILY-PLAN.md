@@ -226,7 +226,7 @@ rules:
 - **How it works:** our server stays the one that decides. When it gives a thing to a player who is on
   Steam, it also grants the matching Steam item to that player's Steam inventory (the item definitions are
   made in Steamworks).
-- **(owner)** Tradeable or not? Recommended:
+- **Tradeable:** yes, the owner says (19 Nov). When is still open. Recommended:
   - **at first, not tradeable or marketable.** That keeps clear of real-money value, loot-box rules and the
     cheating that value invites.
   - **later, if wanted,** trading could be switched on for cosmetic things only. Never sold by us, and never
@@ -269,4 +269,5 @@ rules:
    everyone is the point.)
 7. Experiments: one pilot day a week, or a small one on most days? And may an experimental day's results
    count toward a season board?
-8. Lost property: tradeable on Steam ever, or shown only? (Recommended: shown only, at first.)
+8. ~~Lost property: tradeable on Steam ever?~~ **Answered (19 Nov): yes.** Open: from the start, or after the
+   first weeks of real finds? (Recommended: after; cosmetic only, never sold.)

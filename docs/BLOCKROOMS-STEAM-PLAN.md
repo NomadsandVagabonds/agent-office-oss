@@ -44,6 +44,13 @@ Related plans:
    in the game."*
    - A department of its own does nothing else (D12).
    - It is the first thing on the store page, and the first two minutes of every new player's first visit.
+   - **As many set pieces as possible** (the owner, 19 Nov, on FF-5).
+7. **Every visit should feel unique, through a huge library of compelling content.** The owner: *"I'm also
+   wanting just the quality of connector and more simple 'filler' rooms to be much more diverse and
+   compelling … we want each play to feel totally unique and this is achieved by a huge library of
+   compelling content."*
+   - The connective tissue (plain rooms, corridors, crawl spaces, stairs between) is most of what a player
+     walks through. A department of its own (D13) turns it into a library.
 
 ---
 
@@ -398,11 +405,83 @@ first visit depend on.
 | FF-2 | A brainstorming agent: a hundred strange geometries and eerie, surreal office set-ups (a meeting room set for one; a corridor whose doors are all the same door; a ceiling that lowers so slowly you only notice at the end; a cubicle farm with one chair still warm), each with what would make it cheap or costly to build | the list in the brief, ranked by the lead designer and the owner |
 | FF-3 | The first two minutes: storyboarded second by second, from the fall in to the first time something is there (the first room seen, the first sound, the first sign of the cast) | written and agreed by the owner before FF-5's building starts |
 | FF-4 | An audit of what the first floor is today: the landing, the plain rooms, the 40 yellow-floor rooms, each one shot at High and marked stunning, fine or weak | a table and a sheet of shots; the weak ones are named first |
-| FF-5 | Set pieces: six to ten new first-floor rooms from FF-2's best, built to FF-3's beats | each on live, staged, shot, with tests as every room has |
+| FF-5 | Set pieces: **as many as possible** (the owner) from FF-2's best, built to FF-3's beats; six to ten is the floor for M2, not the ceiling | each on live, staged, shot, with tests as every room has; the count keeps growing after M2 |
 | FF-6 | The plain rooms between (most of the first floor is these): a variety pass with D5, covering ceiling heights, lighting that fails in patterns, odd proportions, doorways that do not line up | a walk of three seeds shows no two plain rooms alike enough to notice |
 | FF-7 | The first rooms after the landing are always among the best: a rule for how the first floor is dealt (C9) | for any seed, the first rooms a new player can reach from the landing include at least one of FF-4's "stunning" |
 | FF-8 | Weak rooms: polished, or kept off the first floor (moved deeper, or out of the deck) | no room marked weak in FF-4 is left as it was on the first floor |
 | FF-9 | New players tried: the first two minutes played cold by someone who has not seen it (the owner, a friend, or a fresh agent playing blind); what they looked at, where they stopped, where they were bored | written up; FF-3 revised where it failed |
+
+### D13 · The library: connectors and filler, on every floor
+
+**Who:** a new team that grows over time: a library lead agent, and as many builder agents as are useful at
+once. They work with the builder session (D5), which owns the generator and the shared dressing.
+
+**Job:** the connective tissue of every floor: the plain rooms and the corridors, crawl spaces, stairs and
+doorways between, which is most of every visit.
+
+**Where it stands today** (`gen.js`, `rooms.js plain()`, `quiet.js`):
+- Six to nine oddities are dealt from the deck to a floor.
+- The rest is plain rooms and corridors. They come from a few size classes (crawl, two corridors, room,
+  hall), two ceiling heights and two widths, plus a few features: a pit, a beam to duck, a sloping ceiling,
+  stairs to nowhere, sunken floors, and the quiet halls' motifs.
+- It is good tissue, but it is a small vocabulary, and on a second or third visit it shows.
+
+**The aim:**
+- No two plain rooms in a visit are alike enough to notice.
+- Over ten visits, a player keeps meeting connectors and fillers they have not seen.
+- Every one of them is *compelling*: it has something to look at, a reason to pause, or a reason to hurry.
+
+**How: a library, not more parameters.**
+- **Fillers are a library of small, self-contained pieces**, dealt by the seed in place of the bare plain
+  room. Lighter than a deck room (no resident, no story), and far more numerous. Each one is:
+  - a layout;
+  - a ceiling;
+  - a lighting state;
+  - a dressing set;
+  - perhaps one small event (a phone that rings once, a printer that starts, a door that drifts shut).
+- **Connectors are a library too:**
+  - corridor shapes: L, dogleg, T, a ramp, half-height, a long hall with a bend;
+  - mouths: a door, a fire door, an arch, a curtain of strip PVC, a hatch;
+  - lengths and widths that are not round numbers;
+  - transitions between kinds of floor: carpet to tile, a step up, a threshold strip.
+- **Combinatorial on purpose.** A filler's parts combine (layout × ceiling × light × dressing × event), so
+  fifty pieces of each give tens of thousands of rooms that are not the same. The variety comes from the
+  library's size and from the combinations, both.
+- **Seeded and repeatable,** like everything here: the same seed gives the same building. Each part is
+  chosen by the floor's dice. A repetition guard stops any part showing twice in a visit until every one
+  of its kind has.
+- **At home by floor:** every piece says which kinds of floor it belongs on (yellow, waterpark, suburbia,
+  …, through `themes.js` `atHome`), so each floor's tissue is its own.
+
+**Owns:**
+- **New:** `public/world/backrooms/fill/`, one small file per piece, each with what it fits and what it
+  builds.
+- **New:** `docs/BLOCKROOMS-LIBRARY.md`: the catalogue (every piece, a shot, its floors, its weight), the
+  template for writing one, and the gate a piece passes.
+
+**Must not touch:**
+- **The generator's shape of a floor** (`gen.js`): D5's and the lead's. It reaches the library through C10.
+- **The deck's oddities:** each room's author. The first floor's set pieces are D12's.
+- **The shared systems:** wear (D5), the surface (D3), the tape (D4).
+
+**The gate every piece passes before it is dealt:**
+- **Built from the template:** it says what it fits, its floors, its weight and its cost.
+- **Tests:** it fits where it says, every seed builds it the same, it never blocks a doorway or traps a
+  visitor, it carries a walkable route, and creatures can walk it.
+- **A shot at High** in the catalogue, and an "is it compelling?" note: what makes you look.
+- **Within the performance budget** (C8). D9 measures a sample of pieces each week.
+- **The names-and-likenesses rule** (Q-1): inspired by, never copied.
+
+**Tasks:**
+
+| ID | Task | Done when |
+|---|---|---|
+| LB-1 | The hook (C10, with D5 and the lead): plain rooms and corridors can be dealt a filler or a connector from the library, by the seed, with the repetition guard; with an empty library the generator builds exactly what it does today | the hook is on live; empty, the suite is green and every seed's building is unchanged |
+| LB-2 | The template and the gate: one file to copy, the tests every piece runs, the catalogue's format | a sample piece goes through it from blank to dealt in under an hour of an agent's work |
+| LB-3 | The first hundred fillers and fifty connectors, spread across every floor, the first floor first (with D12) | catalogued, gated, dealt |
+| LB-4 | A variety measure: over a hundred seeded visits, how often a player would meet the same part twice, and how many of each kind a visit uses | a number in the catalogue, watched as the library grows; a red mark when a kind is thin |
+| LB-5 | Keep growing: a steady stream of pieces from as many agents as are useful, batched so the edition changes once a week (L-4), not every merge | the catalogue's count, by week; the variety measure improving |
+| LB-6 | Small events: a shared set of one-off moments a filler can carry (a phone rings once, a printer wakes, a light dies as you pass, a door drifts shut, a chair is still turning), timed so no two come together | at least twenty events; each says what it costs and that nothing in it hurts |
 
 ---
 
@@ -467,6 +546,13 @@ platform = {
   D12 keeps (the "stunning" ones).
 - It changes what a seed deals, so it **changes the edition**, and it lands as such (L-4).
 
+**C10 · The library hook** (owner: D5 and the lead; asked for by D13).
+- How the generator asks the library for a filler or a connector:
+  - what it passes: the room's size, its floor, its doors, the floor's dice;
+  - what comes back: the chosen piece, or none.
+- **An empty library builds today's building exactly.** Every piece added changes what a seed deals, so
+  additions are **batched into a weekly edition** (L-4) once the daily is live.
+
 ---
 
 ## 4. Milestones
@@ -475,10 +561,10 @@ platform = {
 |---|---|---|---|
 | **M0 · Ground** | decisions and facts | the owner's decisions (section 6) answered; F-1 profile written; Q-1 sweep listed; Q-2 started; P-1 spike plays; FF-1 to FF-3 begun | L-1, F-1, Q-1, P-1, FF-1 |
 | **M1 · Internal build** | a Steam build the team can play | P-2, P-3, P-5, P-6; R-1; I-1, I-2; suite green | D1, D2, D3 |
-| **M2 · Coming Soon** | the store page live | M-1 to M-4; W-4; FF-4; the first of FF-5's set pieces (the store's shots are taken on the first floor); Q-1's fixes merged; Q-2 answered; the owner's sign-off | D5, D10, D11, D12 |
-| **M3 · Release candidate** | everything early access promises | FF-5 to FF-9 (the first floor done); P-4, P-7, P-8; I-3 to I-6; O-1 to O-6; W-1 to W-3; R-3; C-1 to C-4; S-1, S-2, S-6; D-1 to D-4; F-2, F-3; Q-3 to Q-5 | all |
+| **M2 · Coming Soon** | the store page live | M-1 to M-4; W-4; FF-4; LB-1, LB-2; the first of FF-5's set pieces (the store's shots are taken on the first floor); Q-1's fixes merged; Q-2 answered; the owner's sign-off | D5, D10, D11, D12 |
+| **M3 · Release candidate** | everything early access promises | FF-5 to FF-9 (the first floor done); LB-3, LB-4, LB-6 (the first library); P-4, P-7, P-8; I-3 to I-6; O-1 to O-6; W-1 to W-3; R-3; C-1 to C-4; S-1, S-2, S-6; D-1 to D-4; F-2, F-3; Q-3 to Q-5 | all |
 | **M4 · Early access** | released | M3 closed; the two weeks of Coming Soon done; the owner's go | owner |
-| **M5 · After launch** | the roadmap | S-3, D-5 (ghosts); R-4, R-5 (WebGPU); F-5; co-op; the modes roadmap | — |
+| **M5 · After launch** | the roadmap | LB-5 (the library keeps growing, every week); FF-5 (more set pieces); S-3, D-5 (ghosts); R-4, R-5 (WebGPU); F-5; co-op; the modes roadmap | — |
 
 M2 can run alongside M1 once M0 is closed. The store page needs shots and the trailer, not a finished build.
 
@@ -519,6 +605,10 @@ M2 can run alongside M1 once M0 is closed. The store page needs shots and the tr
 5. The default tier on Steam: High, or Auto from High (R-1)?
 6. How far Ultra goes: agreed from R-2's side-by-side shots before R-3 is built.
 7. Crash reporting in the shell: none, Steam's own, or a service (Q-4)?
-8. Lost property on Steam: tradeable ever, or shown only (P-8, S-6)? (Recommended: shown only, at first.)
-9. The first floor (D12): how many new set pieces before early access (FF-5: six to ten proposed), and who plays
-   the first two minutes cold (FF-9)?
+8. ~~Lost property on Steam: tradeable ever?~~ **Answered (19 Nov): yes, it may be tradeable.** Open: from the
+   start, or once the server's checks have been tried on real finds? (Recommended: shown only for the first
+   weeks, then tradeable, cosmetic only, never sold by us.)
+9. ~~How many set pieces?~~ **Answered (19 Nov): as many as possible.** Still open: who plays the first two
+   minutes cold (FF-9)?
+10. The library (D13): how many builder agents at once to begin with, and the first-hundred target per floor:
+    the first floor first, then evenly, or weighted toward the floors a new player reaches soonest?
