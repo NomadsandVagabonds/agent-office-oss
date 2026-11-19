@@ -34,6 +34,7 @@ import { PLAN as HALL_PLAN, partsOf as hallParts } from './rooms/unsure-hall/rul
 import { homeStash } from './rooms/show-home/layout.js';
 import { plenumStash } from './rooms/drop-plenum/rule.js';
 import { cubicleGridStash, dealBreaks } from './rooms/cubicle-grid/rule.js';
+import { CARPET_MOUND } from './rooms/carpet-mound/layout.js';
 import { fill } from './words.js';
 /** A shop of the shopping centre's place for a coin: half a metre square from (x, z), in the room's frame. A stash of several of
  * these, apart, keeps one of them more than 1.25 m from every doorway however the doorways fall (gen.js coinFits). */
@@ -936,6 +937,38 @@ export const MORE_DECK = [
     stash: (r) => [r.W / 2 - 1.3, r.D / 2 - 1.3, r.W / 2 - 0.6, r.D / 2 - 0.6],
     roll: (R) => ({ seed: R.int(1, 9999) }),
   },
+  // Carpet Allowance: a preview, not dealt yet. Only the dev page's &preview=mound puts it in the deck (preview-deck.js;
+  // docs/BLOCKROOMS-PREVIEWS.md). To deal it like any other room, drop `on: false` and its line in preview-deck.js
+  { ...CARPET_MOUND, on: false },
+  // Interoffice Mail: a preview, not dealt yet (&preview=intray; preview-deck.js). Three letter trays the size of offices,
+  // each with an office in it; the middle one is the way in, the lower one out. To deal it, drop `on: false` and its line in preview-deck.js
+  { id: 'in-tray', name: 'Interoffice Mail', landmark: 'the letter trays the size of offices', w: [13, 15], d: [14, 15], h: [6.9, 7.2],
+    ports: ['back'], weight: 1, lights: 'normal', module: './rooms/in-tray.js',
+    // (where a tape may hide: behind the lower office's sidewall, as rooms/in-tray/layout.js inTrayStash, written out so the site fetches no extra file)
+    stash: (r) => { const s = r.params?.side === -1 ? -1 : 1, uo = -(r.W / 2 - 0.4), a = s * (uo + 0.35), b = s * (uo + 1.05); return [Math.min(a, b), -r.D / 2 + 0.45, Math.max(a, b), -r.D / 2 + 1.15]; },
+    roll: (R) => ({ side: R.pick([-1, 1]) }), on: false },
+  // Please Be Seated: a preview, not dealt yet (&preview=chair; preview-deck.js). A long straight hall that ends in a dark-brown
+  // doorway, the space under one enormous chair. To deal it, drop `on: false` and its line in preview-deck.js
+  {
+    id: 'giant-chair', name: 'Please Be Seated', landmark: 'the chair at the end of the hall',
+    w: [8, 9], d: [26, 28], h: [4.4, 4.4], ports: ['back'], weight: 1, lights: 'normal', big: true,
+    module: './rooms/giant-chair.js',
+    stash: (r) => [-r.W / 2 + 0.6, -r.D / 2 + 0.6, -r.W / 2 + 1.3, -r.D / 2 + 1.3],     // the chamber's far left corner
+    roll: (R) => ({
+      flick: R.int(0, 3),                                                               // which of the hall's panels cannot decide
+      stains: Array.from({ length: R.int(3, 6) }, () => [R.range(-0.9, 0.9), R.range(0.08, 0.92), R.range(0.25, 0.6)]),   // on the hall's tiles: x, how far along, size
+      scuffs: R.int(0, 9999),                                                           // which way the vinyl has worn
+      tile: R.range(-0.5, 0.5),                                                         // the piece of ceiling tile that came down, how it lies
+    }),
+    on: false },
+  // Borrowed Daylight (the owner's yellow-office art direction): a wheeled Venetian blind standing by itself in a windowless
+  // room, still throwing late sun across the carpet and up the false wall, into the recessed hall that is the way on; a paper
+  // cup in the light. A PREVIEW: `on: false` keeps it out of every deal and every edition; only the dev page's
+  // &preview=blinds deals it (preview-deck.js). To deal it like any other room, drop `on` and `preview`, and its line in preview-deck.js.
+  { id: 'blinds', name: 'Borrowed Daylight', landmark: 'the blind with no window behind it', w: [10, 11], d: [9, 11], ports: ['right'], weight: 1, lights: 'one',
+    module: './rooms/blinds.js', on: false, preview: 'blinds',
+    stash: (r) => [-r.W / 2 + 0.6, r.D / 2 - 1.5, -r.W / 2 + 1.3, r.D / 2 - 0.8],
+    roll: (R) => ({ az: +R.range(-4, 4).toFixed(1), cup: +R.range(0, 6.28).toFixed(2), along: +R.range(0.3, 0.7).toFixed(2) }) },
 ];
 
 // Where a tape goes in an entry that does not say so itself: (room, ±1) → [x0, z0, x1, z1] in the room's own frame.

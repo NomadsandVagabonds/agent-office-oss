@@ -35,6 +35,10 @@
 //                      (preview.js). The floor is changed after it is generated: nothing else moves
 //   &preview=floorlight   a preview: the tubes let into the floor shining up, the ceiling dark, in party and museum
 //                      (floorlight.js, docs/BLOCKROOMS-PREVIEWS.md). Several at once: Both at once: &preview=clip,floorlightpreview=clip,floorlight
+//   &preview=mound     a room not yet in the deck, Carpet Allowance (&room=carpet-mound; preview-deck.js)
+//   &preview=intray    a room not yet in the deck, Interoffice Mail (&room=in-tray)
+//   &preview=chair     a room not yet in the deck, Please Be Seated (&room=giant-chair)
+//   &preview=blinds    a room not yet in the deck, Borrowed Daylight (&room=blinds)
 //   &loot=1            something to find: the keycard (in the mascot's hand) and coins 1–4; &loot=card,1,3 for some of it. There is no
 //                      office here to keep count, so a stand-in does, in this page's memory, and says so on the console: what you leave
 //                      by the door with is gone the next visit (any key), everything else is down there again. Without it: no loot.
@@ -141,6 +145,8 @@ if (q.get('list')) dev.innerHTML = DECK.map((a) => `<a href="?seed=${num('seed',
 let seed = q.get('seed') ?? 7;
 const room = q.get('room');
 const only = (q.get('only') || '').split(',').filter(Boolean);
+// (&preview=mound: a room not yet in the deck is put in it for this page only, preview-deck.js; nothing in the game reads it)
+if (q.get('preview')) (await import('../backrooms/preview-deck.js')).enlist(q.get('preview').split(','));
 if (room && DECK.some((a) => a.id === room) && !only.includes(room)) only.unshift(room);
 
 async function go() {
