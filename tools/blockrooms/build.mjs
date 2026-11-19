@@ -141,6 +141,7 @@ export function build(out, opt = {}) {
   const day = (opt.now || new Date()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' });
   put('index.html', fill('home.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor(IMPORT_MAP, accounts)}">`, OG: og(''), IMPORTMAP: IMPORT_MAP })
     .replace('<span id="updated">recently</span>', `<span id="updated">${day} 1998</span>`));
+  put('privacy.html', fill('privacy.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor(null)}">` }));
   put('archive.html', fill('archive.html', { CSP: `<meta http-equiv="Content-Security-Policy" content="${policyFor(IMPORT_MAP, accounts)}">`, IMPORTMAP: IMPORT_MAP }));
   return { files: [...extra, ...files].sort(), origin, preloaded: first.length };
 }
