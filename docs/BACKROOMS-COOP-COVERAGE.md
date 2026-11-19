@@ -188,6 +188,17 @@ did not read or run.
 
 Not tested: any of it with two clients. Nothing here has been seen; all of it is read.
 
+The fire extinguisher (`extinguisher.js`), read and not run with two clients, works the same way as the jab:
+- The trigger, the charge, the hand and the spray are all on the page whose visitor holds it. The charge is a field
+  of that visitor's pockets (`inventory-state.js` `spray`), so it goes wherever the pockets' state goes.
+- A dose is handed to that page's conductor only: `env.pursuer.sprayTargets()` and each target's `douse()`, which
+  stalls that page's copy of the creature (`c.stall`). No message carries it, so a second visitor's copy is not stopped
+  unless one page runs the creature for both.
+- The white is drawn on the spraying page only (`spray.js`, puffs from `Math.random`), and only that page's `sees`
+  goes blind in it: the other visitor sees no cloud and is not blinded by it.
+- A paper fire it puts out is put out through that page's fire pool (`inventory-fire.js` `douse`), so it is out for the
+  other visitor as far as the fire pool is shared (it is part of the pockets' world, `inventory-world.js`).
+
 What would have to be carried to close the gap: for each creature by id, `hp`, `hurt` and `dying` from the page that
 runs it to the others; a jab from a visitor's page to the page that runs the creature, answered with whether it
 landed; the same for each toner unit and for the trunk line; and the removal at `gone`. The stagger from a shove

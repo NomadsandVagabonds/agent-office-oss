@@ -8,7 +8,7 @@
 // places it and says what it is doing.
 import * as THREE from 'three';
 import { makeStickyNote } from './sticky-notes.model.js';
-import { NOTES, onWall, noteStep, fallen, torn, drainOf, nextToPeel } from './sticky-notes.rule.js';
+import { NOTES, onWall, noteStep, fallen, torn, wetted, drainOf, nextToPeel } from './sticky-notes.rule.js';
 import { facing } from '../shove.rule.js';
 
 const COLOURS = ['#f2e27a', '#f3a7c4', '#9fd3ea', '#b9e39a', '#f6c26b'];
@@ -134,6 +134,15 @@ export function create(c) {
         if (!(n.s.mode === 'flutter' || n.s.mode === 'dive' || n.s.mode === 'peel')) return false;
         n.s = torn(n.s); n.fallV = 0; c.play('shred', n.p.x, n.p.z, 6); if (!known) { known = true; c.met(); }
         return { ok: true, target: 'sticky-notes' };
+      } }));
+    },
+    /** The extinguisher (extinguisher.rule.js): whatever notes in the air the spray catches come down wet (wetted), each its own. */
+    sprayTargets() {
+      if (!room) return [];
+      return notes.filter((n) => n.s.mode === 'flutter' || n.s.mode === 'dive' || n.s.mode === 'peel').map((n) => ({ id: n.id, x: n.p.x, z: n.p.z, y: n.p.y, r: 0.16, douse: () => {
+        if (!(n.s.mode === 'flutter' || n.s.mode === 'dive' || n.s.mode === 'peel')) return false;
+        n.s = wetted(n.s); n.fallV = 0; c.play('rustle', n.p.x, n.p.z, 5);
+        return true;
       } }));
     },
     /**

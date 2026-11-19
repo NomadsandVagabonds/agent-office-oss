@@ -1,6 +1,7 @@
 // Visit-local supplies. Reward coins and the escape keycard remain in loot.js.
 // No rendering, world effects, storage or clocks live in this model.
 import { CRAFTING_TUNING, previewCraft } from './crafting.js';
+import { EXTINGUISHER } from './extinguisher.rule.js';
 
 export const ITEM_DEFS = Object.freeze({
   torch: Object.freeze({ name: 'Flashlight', description: 'A worn hand torch. Its narrow beam reaches into the unlit corners.', useLabel: 'Switch on', maxCharge: CRAFTING_TUNING.torchCharge }),
@@ -13,6 +14,7 @@ export const ITEM_DEFS = Object.freeze({
   snack: Object.freeze({ name: 'Wrapped snack', description: 'A sealed oat bar. The wrapper has no date.', useLabel: 'Eat', healAmount: 1 }),
   'pink-slip': Object.freeze({ name: 'Pink slip', description: 'FORM HR-404, Notice of Redundancy. The name on it is yours; the date is last week.', useLabel: 'Use' }),
   opener: Object.freeze({ name: 'Remote', description: 'A grey remote with one button. Nothing on it says what it is for.', useLabel: 'Use' }),
+  extinguisher: Object.freeze({ name: 'Fire extinguisher', description: 'A small red extinguisher off a wall bracket. The pin is gone and the gauge is short of green. It stops a thing for a moment; it does not stop it for good.', useLabel: 'Spray', maxCharge: EXTINGUISHER.charge }),
   balloon: Object.freeze({ name: 'Red balloon', description: 'A red balloon on a curling string. It tugs upward without a breeze.', useLabel: 'Use' }),
 });
 const ITEM_ALIASES = Object.freeze({
@@ -43,6 +45,10 @@ export function makeItem(type, id, overrides = {}) {
     const prepared = overrides.prepared === undefined ? false : overrides.prepared;
     if (typeof prepared !== 'boolean') throw new TypeError('Invalid flashlight preparation.');
     item.prepared = prepared;
+  } else if (type === 'extinguisher') {
+    const charge = overrides.charge ?? definition.maxCharge;
+    if (!Number.isFinite(charge) || charge < 0 || charge > definition.maxCharge) throw new RangeError('Invalid extinguisher charge.');
+    item.charge = charge;
   } else if (type === 'chalk') {
     const uses = overrides.uses ?? definition.maxUses;
     if (!Number.isInteger(uses) || uses < 0 || uses > definition.maxUses) throw new RangeError('Invalid chalk uses.');
@@ -348,13 +354,30 @@ export function createInventory({
     revision++;
     return { changed: true, depleted };
   }
+  /**
+   * The extinguisher in the hand sprays for `seconds` (extinguisher.rule.js: the trigger says how long). It is spent from
+   * its charge; once there is none left it is empty, and goes (an empty one is only a red tin).
+   * → { ok, charge: seconds left, empty: this was the last of it, item }
+   */
+  function spray(seconds) {
+    if (crafting) return fail('busy');
+    const item = slots[selected], index = selected;
+    if (holstered || item?.type !== 'extinguisher') return fail('wrong-item');
+    if (!(item.charge > 0)) return fail('empty-extinguisher');
+    if (!Number.isFinite(seconds) || seconds <= 0) return fail('invalid-amount');
+    item.charge = Math.max(0, +(item.charge - seconds).toFixed(4));
+    const empty = item.charge === 0, used = copy(item);
+    if (empty) slots[index] = null;
+    revision++;
+    return { ok: true, charge: used.charge, empty, item: used, index };
+  }
   function clear() {
     if (crafting) return;
     if (!slots.some(Boolean) && selected === 0 && !holstered && activeTorch === null && mountedTorch === null) return;
     slots.fill(null); selected = 0; holstered = false; activeTorch = null; mountedTorch = null; revision++;
   }
   return {
-    add, remove, select, useSelected, consumeSelected, combine, craft, mount, toggleLight, torchPower, tick, clear, read,
+    add, remove, select, useSelected, consumeSelected, combine, craft, mount, toggleLight, torchPower, tick, spray, clear, read,
     torchMounted: () => !!mountedTorch && activeTorch === mountedTorch.id,
   };
 }

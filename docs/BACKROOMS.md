@@ -943,7 +943,9 @@ part of the building, and they are on unless a visit is started with
   rooms, then one per eight rooms. A part has zero or one snack and zero or
   one stack of 3–5 sheets. A torch is still likely in the first part (70%),
   rarer below (20%); chalk and a reusable lighter each have a 25% chance,
-  tape 20%. Scissors and balloons are only scattered where somebody wants
+  tape 20%. A fire extinguisher turns up in about a third of the parts, part
+  used (its own stream and rooms: nothing else moves for it). Scissors and
+  balloons are only scattered where somebody wants
   them. These rates roughly halve common scattered pickups; authored room
   props and creature gifts stay separate. Nothing is scattered where you
   land, at the way down, or in a room an earlier visitor left something in.
@@ -972,6 +974,25 @@ part of the building, and they are on unless a visit is started with
   continuing offscreen. Only the held torch gets this grip; floor pickups
   and pocket icons keep their ordinary model. The grip draws after the room
   so standing against a wall cannot cut it away.
+- **The fire extinguisher** (`extinguisher.rule.js`, pure; `extinguisher.js`
+  does it; `spray.js` draws it; `hand-extinguisher*.js` holds it). It hurts
+  nothing. A click sprays a burst (0.45 s) and holding the button keeps it
+  going; Q or a finger on the [E] is a burst. There are 8 s in a full one,
+  one is found 45–100% full, the gauge on its head reads what is left, and
+  an empty one goes from the pocket. What the cone catches in the face
+  (2.6 m, about 17° plus its own width, after 0.15 s of it) stands 4 s and
+  backs off 2 s; the same one again 2.5 + 1.4, then 1.2 + 0.8 every time
+  after, until it has been left alone for 30 s. A heavy one or a boss stands
+  half as long and does not back off; a moth, the porter, a door and the
+  dummies do not care (`RESPONSES`, one line each for the whole cast). The
+  middle manager is put off swelling and stands, though aiming at it is a
+  meeting until the white is up; sticky notes it catches come down wet and
+  lie 20 s. Without a `doused()` of its own a creature is stood where it is
+  (`c.stall`) for both together. It puts a paper fire out in 0.3 s, yours
+  too. What comes out hangs in the air for about 3 s, stops at walls and
+  spreads there, and standing in it turns the picture white: past `blind`,
+  `env.sees` is false for anything more than 0.9 m off, so for what comes
+  when you are not looking, standing in your own cloud is not looking.
 - **Nothing is written on the picture but `E`.** What a thing is, it has to
   look like; its name is said once it is in a pocket.
 

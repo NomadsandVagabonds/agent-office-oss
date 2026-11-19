@@ -216,6 +216,15 @@ export function create(c) {
         return true;
       } }];
     },
+    /**
+     * The extinguisher (extinguisher.rule.js): put off swelling, it stands in the white for the stop and the backing off
+     * together (it does not back off: it stands its ground, as it does). What it has put on, it keeps.
+     */
+    doused(dose) {
+      if (!group || over) return false;
+      s = off(s); c.stall((dose?.stop || 0) + (dose?.back || 0)); c.play('creak', walker.x, walker.z, 10);
+      return true;
+    },
     /** A jab (melee.js): it takes two (cast/health.rule.js, medium). The first cuts it; the second sets it off there and then, on whoever jabbed it. */
     snipTargets() {
       if (!group || over) return [];

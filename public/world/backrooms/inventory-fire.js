@@ -166,6 +166,12 @@ export function createInventoryFire(env, { canAct = () => true, clearRay, isDry 
       }
       return nearest ? { x: nearest.wx, z: nearest.wz, y: nearest.wy, radius: FIRE.radius, remaining: nearest.remaining } : null;
     },
+    /** Sprayed out (extinguisher.rule.js): it goes as one in the wet does, over its last moment. → whether there was one to put out. */
+    douse(id) {
+      const f = pool.find(fire => fire.id === id && fire.remaining > 0 && !fire.away);
+      if (!f || disposed) return false;
+      f.remaining = Math.min(f.remaining, 0.6); draw(f); return true;
+    },
     update(dt) {
       if (disposed || !Number.isFinite(dt) || dt <= 0) return;
       for (const f of pool) if (f.remaining > 0 && !f.away) {

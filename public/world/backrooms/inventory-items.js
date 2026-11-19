@@ -1099,6 +1099,78 @@ function sculptCamcorder(s) {
   s.pop();
 }
 
+/**
+ * A small red fire extinguisher, as off a wall bracket: the cylinder standing on its black foot ring, a cream label round
+ * the back (toward whoever holds it), the brass neck and black head, the fixed carry handle under the squeeze lever, both
+ * running back over the hand (+Z), a short black horn pointing forward (-Z, the way the camcorder looks) and a pressure
+ * gauge on the head, its face turned up and back so that the one holding it can read it. Stands from y 0 to about 15.6.
+ */
+export const EXTINGUISHER_PARTS = Object.freeze({
+  gauge: Object.freeze([-1.3, 14.4, -0.15]), gaugeTilt: Object.freeze([70, 38]),   // its centre, and its face turned (degrees: back about X, then left about Z)
+  gaugeR: 0.72,
+  nozzle: Object.freeze([0, 13.95, -4.6]),                                         // the mouth of the horn
+  pivot: Object.freeze([0, 14.82, 0.05]), leverOpen: -12,                         // the lever's pin, and how far up it stands (degrees) let go
+  lever: (x, y, z) => y > 14.66 && z > -0.25 && Math.abs(x) < 0.8,                // which of the model's triangles are the lever (by their middle)
+});
+function sculptExtinguisher(s) {
+  const red = '#c4231b', redHi = '#e24a3b', redLo = '#8c1812', black = '#1d1f23', rubber = '#2a2c31', brass = '#c9a34e', brassHi = '#e8c873';
+  const cream = '#ebe2c8', ink = '#34302a', steel = '#c3cbd3', steelLo = '#7d8690';
+  s.push();
+  if (s.grounded && !s.held) { s.translate(0, 0.02, 0); s.rotateY(-28 * DEG); }
+  // the foot ring, and the cylinder: domed at the top into a short neck
+  s.cyl(2.98, 2.98, 0, 0.62, 24, black, { bevel: 0.18, bevelColor: rubber });
+  s.lathe([
+    [0, 0.5, redLo, 0.8, true],
+    [2.55, 0.5, redLo, 0.85, true],
+    [2.82, 0.72, red, 0.92],
+    [2.86, 1.4, red, 0.98],
+    [2.86, 10.6, red, 1.0],
+    [2.74, 11.45, red, 1.02],
+    [2.32, 12.15, redHi, 1.05],
+    [1.55, 12.62, red, 1.04],
+    [0.95, 12.82, redLo, 0.96, true],
+    [0.95, 12.95, brass, 1.0, true],
+    [0, 12.95, brass, 1.0, true],
+  ], 24, {
+    colorFn: (th, y, r, j, i, col) => {
+      // the label, on the side toward the hand (+Z: th about 3π/2), with lines of instruction on it and a hazard band
+      const back = Math.abs(th - 4.712) < 1.15;
+      if (back && y > 4.2 && y < 9.6 && col === red) {
+        if (y > 8.7) return '#2e6b3a';
+        if ((y > 5.0 && y < 5.3) || (y > 6.0 && y < 6.3) || (y > 7.0 && y < 7.3) || (y > 7.9 && y < 8.2)) return Math.abs(th - 4.712) < 0.8 ? ink : cream;
+        return cream;
+      }
+      if (col === red && Math.cos(th - 0.6) > 0.72) return redHi;               // where the light catches the curve
+      if (col === red && Math.cos(th - 3.7) > 0.8) return redLo;
+      return col;
+    },
+  });
+  // the brass neck and the black valve head
+  s.cyl(0.86, 0.82, 12.9, 13.55, 16, brass, { bevel: 0.08, topColor: brassHi });
+  s.push(); s.translate(0, 14.05, 0.2); s.bevelBox(1.9, 1.15, 2.6, 0.28, black, { seg: 2, topColor: rubber }); s.pop();
+  // the horn: a short black cone forward, its mouth flared
+  s.push(); s.translate(0, 13.95, -1.0); s.rotateX(-90 * DEG);
+  s.cyl(0.42, 0.5, 0, 2.3, 14, black, { bevel: 0.06 });
+  s.cyl(0.5, 0.92, 2.25, 3.6, 16, rubber, { bevel: 0.08, topColor: '#0c0d0f', capTop: false });
+  s.pop();
+  // the carry handle (fixed) and the squeeze lever above it, both running back over the hand
+  s.push(); s.translate(0, 13.75, 3.1); s.rotateX(4 * DEG); s.bevelBox(1.35, 0.42, 5.0, 0.16, steel, { seg: 2, topColor: '#dde3e9', bottomColor: steelLo }); s.pop();
+  s.push(); s.translate(...EXTINGUISHER_PARTS.pivot); s.rotateX(EXTINGUISHER_PARTS.leverOpen * DEG); s.translate(0, 0.13, 2.75);
+  s.bevelBox(1.45, 0.38, 5.4, 0.15, red, { seg: 2, topColor: redHi, bottomColor: redLo }); s.pop();
+  // the pin: a ring at the side, through the head, and its broken plastic tag (somebody has used this one)
+  s.tube(Array.from({ length: 12 }, (_, i) => { const a = (i / 12) * TAU; return [1.25 + Math.cos(a) * 0.55, 14.05 + Math.sin(a) * 0.55, 0.9]; }), 0.1, 6, steel, { closed: true });
+  s.tube([[1.3, 13.6, 0.9], [1.55, 12.9, 1.15], [1.5, 12.3, 1.45]], 0.07, 5, '#d9c94a');
+  // the gauge: a steel bezel on the head, its face up and back, green to the right of the dial and red to the left
+  s.push(); s.translate(...EXTINGUISHER_PARTS.gauge); s.rotateZ(EXTINGUISHER_PARTS.gaugeTilt[1] * DEG); s.rotateX(EXTINGUISHER_PARTS.gaugeTilt[0] * DEG);
+  s.cyl(EXTINGUISHER_PARTS.gaugeR, EXTINGUISHER_PARTS.gaugeR, -0.22, 0.12, 18, steel, { bevel: 0.07, topColor: '#f1efe6',
+    colorFn: (th, y, r, j, i, col) => (y > 0.1 && r > 0.35 && r < 0.7 ? (Math.cos(th) > 0.2 && Math.sin(th) < 0.6 ? '#3f9a4a' : Math.cos(th) < -0.4 ? '#c23a2c' : col) : col) });
+  s.pop();
+  // the hose: a short black loop from the head to a clip on the side (it is the horn that sprays; this only holds)
+  s.tube([[-0.9, 13.6, -0.6], [-2.1, 12.6, -1.2], [-3.05, 10.2, -0.9], [-3.05, 7.2, -0.4]], 0.32, 8, rubber, { ao: 0.92 });
+  s.push(); s.translate(-2.98, 7.0, -0.35); s.bevelBox(0.5, 0.9, 0.9, 0.12, steelLo); s.pop();
+  s.pop();
+}
+
 /** Sculpted 3D right work-glove & jacket sleeve wrapping the held flashlight barrel. */
 export function sculptTorchGrip(batch, scale = 1) {
   const s = new Sculpt(batch, scale, { grounded: false, held: true });
@@ -1148,6 +1220,7 @@ export const lighter = makeEntry(sculptLighter);
 export const tape = makeEntry(sculptTape);
 export const opener = makeEntry(sculptOpener);
 export const camcorder = makeEntry(sculptCamcorder);
+export const extinguisher = makeEntry(sculptExtinguisher);
 
 torch.grip = sculptTorchGrip;
 
@@ -1163,6 +1236,7 @@ export const INVENTORY_MODELS = Object.freeze({
   tape,
   opener,
   'pink-slip': pinkSlip,
+  extinguisher,
 });
 
 export const ICON_MODELS = Object.freeze({

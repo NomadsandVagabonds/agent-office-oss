@@ -50,8 +50,11 @@ test('weighted scores are recomputed from counts, and unscored discoveries still
 test('Training Wheels preserves the frozen live supply plan, including seeded item positions', () => {
   // SHA-256 of 60 complete supply plans from live c9c3eab. This fixture also
   // works in shallow CI checkouts; it does not need that commit's Git history.
-  const plans = Array.from({ length: 60 }, (_, i) => planSupplies({ ...mockLevel('balance-' + i), difficulty: 'training-wheels' }));
+  // (the fire extinguisher came after, on a stream and rooms of its own: everything else is where it was, to the byte)
+  const whole = Array.from({ length: 60 }, (_, i) => planSupplies({ ...mockLevel('balance-' + i), difficulty: 'training-wheels' }));
+  const plans = whole.map(plan => plan.filter(s => s.type !== 'extinguisher'));
   assert.equal(createHash('sha256').update(JSON.stringify(plans)).digest('hex'), 'c7b3c204af209048f7879274cb182c21ffa79f4fa4b79a112baceb5fd936bc36');
+  assert.ok(whole.some(plan => plan.some(s => s.type === 'extinguisher')), 'and an extinguisher in some of them');
 });
 
 test('Normal has about 30% fewer packs than Easy, no snacks, and always an early refill', () => {

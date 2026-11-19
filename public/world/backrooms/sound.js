@@ -252,6 +252,9 @@ export function createSound(level, opt = {}) {
     // A steady, locally audible shower behind a changing partition. Overlap
     // soft envelopes; no recording or global soundtrack transition required.
     changingShower: (o = {}) => burst({ vol: .075 * (o.vol ?? 1), pan: o.pan, dur: 1.1, freq: 3400, q: .65, type: 'bandpass', attack: .15 }),
+    // the extinguisher (extinguisher.js plays it a quarter second at a time while it sprays, overlapping: one steady hiss)
+    hiss: (o = {}) => { burst({ vol: 0.2 * (o.vol ?? 1), pan: o.pan, dur: 0.34, freq: 4800 + Math.random() * 600, q: 0.45, type: 'highpass', attack: 0.03 }); burst({ vol: 0.06 * (o.vol ?? 1), pan: o.pan, dur: 0.34, freq: 900, q: 0.6, type: 'bandpass', attack: 0.03 }); },
+    sputter: (o = {}) => { for (let i = 0; i < 4; i++) burst({ vol: 0.12 * (o.vol ?? 1), pan: o.pan, dur: 0.05 + Math.random() * 0.04, freq: 3000 + Math.random() * 1500, q: 0.7, type: 'bandpass', attack: 0.004, when: i * (0.09 + Math.random() * 0.06) }); },
     rustle: (o = {}) => burst({ vol: 0.07 * (o.vol ?? 1), pan: o.pan, dur: 0.12, freq: 3200 + Math.random() * 1500, q: 0.9, type: 'bandpass' }),
     tick: (o = {}) => burst({ vol: 0.05 * (o.vol ?? 1), pan: o.pan, dur: 0.025, freq: 3800, q: 2, type: 'highpass', attack: 0.001 }),
     shuffle: (o = {}) => burst({ vol: 0.12 * (o.vol ?? 1), pan: o.pan, dur: 0.22, freq: 620, q: 1.4, type: 'bandpass', attack: 0.03 }),

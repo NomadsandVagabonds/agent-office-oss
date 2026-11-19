@@ -70,6 +70,11 @@ function fallbackItemIcon(type, item) {
       rect(x,22,1,4,'#c06850'); rect(x + 2,26,5,1,'#b45845');
     }
     rect(14,14,4,4,'#535e58'); rect(15,14,2,2,'#c9cfbb');
+  } else if (type === 'extinguisher') {
+    rect(11,8,10,22,'#7c1610'); rect(12,7,9,22,'#c4231b'); rect(13,7,3,22,'#e24a3b');
+    rect(12,14,9,8,'#ebe2c8'); rect(13,16,7,1,'#34302a'); rect(13,18,7,1,'#34302a');
+    rect(14,4,5,3,'#c9a34e'); rect(13,2,7,3,'#1d1f23'); rect(19,1,7,2,'#c4231b'); rect(19,4,6,1,'#c3cbd3');
+    poly('13,3 6,1 5,6 13,5', '#1d1f23'); rect(11,28,11,2,'#1d1f23');
   } else if (type === 'opener') {
     rect(10,4,12,24,'#5b605c'); rect(11,5,10,22,'#8b8f8a');
     rect(13,8,6,6,'#7a3229'); rect(14,9,4,4,'#a8473b');
@@ -266,6 +271,7 @@ export function createInventoryHud({ size = 6, host, onSelect, onUse, onDrop, on
     if (item?.type === 'torch') return `${item.id === snapshot.mountedTorch?.id ? 'Mounted · ' : item.prepared ? 'Tape fitted · ' : ''}${percent(item)}% charge · ${isLit(item) ? 'on' : 'off'}`;
     if (item?.type === 'chalk') return `${item.uses} mark${item.uses === 1 ? '' : 's'} left`;
     if (item?.type === 'scissors') return 'Stiff at the pivot';
+    if (item?.type === 'extinguisher') return `${Math.round(100 * (item.charge ?? 0) / ITEM_DEFS.extinguisher.maxCharge)}% on the gauge`;
     if (item?.type === 'battery') return 'Fits flashlight or camera';
     if (item?.type === 'paper') return `${quantity(item)} / ${ITEM_DEFS.paper.maxStack} sheets`;
     if (item?.type === 'snack') {
@@ -374,13 +380,13 @@ export function createInventoryHud({ size = 6, host, onSelect, onUse, onDrop, on
     // is still fitted by combining
     const recharges = selected?.type === 'battery' && !!snapshot.camera && !snapshot.camera.depleted && snapshot.camera.remaining < snapshot.camera.capacity;
     const label = selected?.type === 'torch' ? snapshot.activeTorch === selected.id ? 'Switch off' : 'Switch on'
-      : selected?.type === 'chalk' ? 'Mark floor' : selected?.type === 'scissors' ? 'Snip' : selected?.type === 'snack' ? 'Eat' : recharges ? 'Recharge camera' : 'Use';
+      : selected?.type === 'chalk' ? 'Mark floor' : selected?.type === 'scissors' ? 'Snip' : selected?.type === 'extinguisher' ? 'Spray' : selected?.type === 'snack' ? 'Eat' : recharges ? 'Recharge camera' : 'Use';
     text(useLabel, label);
     // F prefers the mounted light; Q always acts on this inspected item.
     text(useKey, selected?.type === 'torch' && !snapshot.mountedTorch ? 'F' : 'Q');
     use.hidden = ['paper', 'lighter', 'tape'].includes(selected?.type) || (selected?.type === 'battery' && !recharges);
     use.disabled = blocked() || snapshot.holstered || !selected || ['paper', 'pink-slip', 'balloon', 'lighter', 'tape'].includes(selected.type)
-      || (selected.type === 'battery' && !recharges) || (selected.type === 'snack' && !canEat()) || (selected.type === 'torch' && selected.charge <= 0) || (selected.type === 'scissors' && selected.uses <= 0);
+      || (selected.type === 'battery' && !recharges) || (selected.type === 'snack' && !canEat()) || (selected.type === 'torch' && selected.charge <= 0) || (selected.type === 'scissors' && selected.uses <= 0) || (selected.type === 'extinguisher' && !(selected.charge > 0));
     combine.hidden = !craftIngredient(selected); combine.disabled = blocked(); combine.classList.toggle('primary', use.hidden);
     drop.disabled = blocked() || snapshot.holstered || !selected;
     if (crafting) redrawCraft();

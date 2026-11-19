@@ -62,13 +62,13 @@ test('opening UI clears all pending input and blocks new world gestures', t => {
   h.window.emit('wheel', { deltaY:30 });
   assert.ok(h.input.state.dx > 0 && h.input.state.stick.x > 0);
   h.ui.blocked = true; h.input.clear();
-  assert.deepEqual({ ...h.input.state, keys:[...h.input.state.keys] }, { keys:[], dx:0, dy:0, stick:{ x:0, y:0 }, hurry:false });
+  assert.deepEqual({ ...h.input.state, keys:[...h.input.state.keys] }, { keys:[], dx:0, dy:0, stick:{ x:0, y:0 }, hurry:false, firing:false });
   h.window.emit('keydown', { key:'w' }); h.window.emit('keydown', { key:'Enter' });
   h.window.emit('mousemove', { target:h.canvas, movementX:200, movementY:100 });
   h.window.emit('pointerdown', { pointerType:'touch', pointerId:3, clientX:100, clientY:600 });
   h.window.emit('pointermove', { pointerType:'touch', pointerId:3, clientX:200, clientY:500 });
   h.window.emit('wheel', { deltaY:80 });
-  assert.deepEqual({ ...h.input.state, keys:[...h.input.state.keys] }, { keys:[], dx:0, dy:0, stick:{ x:0, y:0 }, hurry:false });
+  assert.deepEqual({ ...h.input.state, keys:[...h.input.state.keys] }, { keys:[], dx:0, dy:0, stick:{ x:0, y:0 }, hurry:false, firing:false });
   assert.deepEqual(h.calls.wheels, []); assert.equal(h.calls.use, 0); assert.equal(h.calls.lock, 1);
   h.ui.blocked = false;
   h.window.emit('pointerup', { target:h.canvas }); assert.equal(h.calls.click, 0);
@@ -281,4 +281,20 @@ test('before a finger has ever been used there is nothing drawn, and a thumb low
   assert.equal(h.input.state.stick.y, 1); assert.equal(h.input.state.hurry, false, 'a hundred and ten pixels is past the ring\'s edge on a screen this size, and still not a run');
   h.window.emit('pointermove', { pointerType:'touch', pointerId:2, clientX:100, clientY:430 });
   assert.equal(h.input.state.hurry, true);
+});
+
+test('the mouse button held while looking is `firing` (the extinguisher goes on while it is down); let go, or the UI taking the hands, it is not', t => {
+  const h = setup(t);
+  h.document.pointerLockElement = h.canvas;
+  h.window.emit('pointerdown', { target:h.canvas });
+  assert.equal(h.calls.click, 1); assert.equal(h.input.state.firing, true);
+  h.window.emit('pointerup', { target:h.canvas }); assert.equal(h.input.state.firing, false);
+  h.window.emit('pointerdown', { target:h.canvas }); assert.equal(h.input.state.firing, true);
+  h.input.clear(); assert.equal(h.input.state.firing, false, 'cleared with everything else');
+  // a finger on the [E] holds it too, until that finger lifts (another finger lifting does not)
+  h.document.pointerLockElement = null;
+  h.window.emit('pointerdown', { pointerType:'touch', pointerId:4, target:h.hud.use });
+  assert.equal(h.input.state.firing, true); assert.equal(h.calls.use, 1);
+  h.window.emit('pointerup', { pointerType:'touch', pointerId:5, target:h.canvas }); assert.equal(h.input.state.firing, true);
+  h.window.emit('pointerup', { pointerType:'touch', pointerId:4, target:h.hud.use }); assert.equal(h.input.state.firing, false);
 });

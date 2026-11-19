@@ -14,14 +14,15 @@ import { THUMBS, stickOf, inZone } from './touch.rule.js';
  *        key: a key went down (once, not on repeat) · use: E, Enter, or a tap on the [E] (or the hand) · light: a tap on the light
  *        click: the mouse button, while it is looking · wheel: ±1 for each notch · owns: native UI events pass through to their target
  *        interceptKey: UI consumed this key · blocked: UI owns the hands, while the visit keeps running
- * @returns {{ state: {keys:Set, dx:number, dy:number, stick:{x:number,y:number}, hurry:boolean}, clear(), capture(), release(), dispose() }}
+ * @returns {{ state: {keys:Set, dx:number, dy:number, stick:{x:number,y:number}, hurry:boolean, firing:boolean}, clear(), capture(), release(), dispose() }}
  *          stick: a thumb's push, x right and y forward, together never longer than 1 · hurry: that thumb is past the ring, which is running
+ *          firing: the mouse button is down while it is looking (or a finger on the [E]): what is in the hand goes on (the extinguisher)
  */
 export function createInput(o) {
   const { canvas, stage, hud, sound } = o;
-  const state = { keys: new Set(), dx: 0, dy: 0, stick: { x: 0, y: 0 }, hurry: false };
+  const state = { keys: new Set(), dx: 0, dy: 0, stick: { x: 0, y: 0 }, hurry: false, firing: false };
   const keys = state.keys;
-  let dragging = false, stickId = null, stickAt = null, wheel = 0, live = true, press = null, held = false;
+  let firingId = null, dragging = false, stickId = null, stickAt = null, wheel = 0, live = true, press = null, held = false;
   const looks = new Map(), pressing = new Map();         // fingers that are looking · fingers that are on a button (which one)
   const owns = e => !!o.owns?.(e.target);
   const blocked = () => !!o.blocked?.();
@@ -31,7 +32,7 @@ export function createInput(o) {
     thumbs()?.stick(null);
   }
   function clear() {
-    keys.clear(); state.dx = state.dy = 0; dropStick();
+    keys.clear(); state.dx = state.dy = 0; state.firing = false; dropStick();
     dragging = false; press = null; wheel = 0; looks.clear();
     for (const name of pressing.values()) thumbs()?.down(name, false);
     pressing.clear(); thumbs()?.set({ crouched: false });
@@ -99,7 +100,7 @@ export function createInput(o) {
     if (blocked()) { clear(); return; }
     if (e.pointerType === 'touch') {
       if (e.target === hud.leave) { o.menu(); return; }
-      if (e.target === hud.use) { o.use({ finger: true }); return; }
+      if (e.target === hud.use) { state.firing = true; firingId = e.pointerId; o.use({ finger: true }); return; }
       if (e.target === hud.tip) { o.key('r'); return; }
       const t = thumbs(), name = t?.act(e.target);
       if (name) { pressButton(name, e.pointerId); return; }
@@ -114,7 +115,7 @@ export function createInput(o) {
     if (e.target === hud.tip) { o.key('r'); return; }
     // the first click only takes hold of the mouse; after that a click is a click. (Where the mouse cannot be held —
     // it is dragged to look instead — a click is a press that went nowhere: see onPointerUp.)
-    if (document.pointerLockElement === canvas) { if (e.button === 0) o.click(); press = null; }
+    if (document.pointerLockElement === canvas) { if (e.button === 0) { state.firing = true; o.click(); } press = null; }
     else press = e.button === 0 ? { x: e.clientX, y: e.clientY, t: performance.now(), first: !press } : null;
     dragging = true;
     capture();
@@ -141,7 +142,7 @@ export function createInput(o) {
     // place would be silent until the second tap)
     if (e.type !== 'pointercancel') sound.start();
     const pendingPress = press; press = null;
-    dragging = false;
+    dragging = false; if (e.pointerType !== 'touch' || e.pointerId === firingId) { state.firing = false; firingId = null; }
     if (e.pointerId === stickId) dropStick();
     looks.delete(e.pointerId);
     const name = pressing.get(e.pointerId);

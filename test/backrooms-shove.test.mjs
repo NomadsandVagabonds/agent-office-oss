@@ -163,7 +163,7 @@ test('every one of the cast answers a shove, or cannot be reached by one', () =>
 
 test('a click is the scissors if they are in the hand and a shove if not; a thumb\'s hand shoves when there is nothing to use', () => {
   const index = read('index.js'), input = read('input.js'), player = read('player.js');
-  assert.match(index, /if \(inventory\?\.held\(\)\?\.type === 'scissors'\) \{ inventory\.snip\(\{ quietMiss: true \}\); return; \}\s+cur\?\.env\.shove\?\.\(\);/);
+  assert.match(index, /if \(inventory\?\.held\(\)\?\.type === 'scissors'\) \{ inventory\.snip\(\{ quietMiss: true \}\); return; \}\s+if \(inventory\?\.held\(\)\?\.type === 'extinguisher'\) \{ cur\?\.env\.extinguisher\?\.press\(\); return; \}[^\n]*\s+cur\?\.env\.shove\?\.\(\);/, '(and the extinguisher sprays: extinguisher.js)');
   assert.match(index, /if \(currentUse\) \{[^\n]*return; \}\s+if \(how\?\.finger\) clickIt\(\);/);
   assert.match(index, /if \(!me \|\| !f\.world \|\| !f\.player\.shove \|\| env\.grip\?\.held\) return \{ ok: false, reason: 'unavailable' \};/, 'no hands for it with something carried');
   assert.match(index, /f\.player\.shove\(shoveWindow\(env\.difficulty\?\.\(\)\)\)/);

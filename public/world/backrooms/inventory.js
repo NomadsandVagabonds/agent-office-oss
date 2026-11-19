@@ -15,7 +15,7 @@ import { starterLoadout } from '/core/perks.mjs';
 const MESSAGES = {
   empty: 'Empty slot', full: 'All six slots are full', duplicate: 'Already carrying that',
   'empty-charge': 'The flashlight needs batteries', 'empty-chalk': 'No chalk left',
-  'no-snip-target': 'Nothing within reach', 'broken-scissors': 'The scissors have snapped',
+  'no-snip-target': 'Nothing within reach', 'broken-scissors': 'The scissors have snapped', 'empty-extinguisher': 'The extinguisher is empty',
   incompatible: 'Those items do not fit together', 'full-charge': 'Already fully charged',
   'no-mark-space': 'No dry, clear floor here', 'no-drop-space': 'No clear place to set this down',
   'no-mark': 'No dry, clear floor here', 'no-space': 'No clear place to set this down',
@@ -118,6 +118,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     // camcorder full there is only a torch to put it in, and that is a combination: the bag opens on it, as it did.
     if (item?.type === 'battery' && cameraTakes()) return rechargeCamera(snapshot.selected);
     if (item?.type === 'scissors') return snip({ quietMiss: !view.isOpen });
+    if (item?.type === 'extinguisher') { if (!(item.charge > 0)) { tell('empty-extinguisher'); return { ok: false, reason: 'empty-extinguisher' }; } active.env.extinguisher?.press?.(); return { ok: true, action: 'spray' }; }
     // Put the mark into the world before spending chalk. A bad floor or failed
     // placement never consumes a use. This synchronous action cannot race UI.
     if (item?.type === 'chalk' && item.uses > 0) {
@@ -325,7 +326,11 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     // cannot inspect or mutate what somebody now carries on the next floor.
     floor.facade = {
       physical: floor.physical,
-      fire: { threatAt: (...point) => !disposed && active === floor ? floor.physical.fire.threatAt(...point) : null },
+      fire: { threatAt: (...point) => !disposed && active === floor ? floor.physical.fire.threatAt(...point) : null,
+        burning: () => !disposed && active === floor ? floor.physical.fire.burning?.() || [] : [],
+        douse: id => !disposed && active === floor && !!floor.physical.fire.douse?.(id) },
+      /** The extinguisher in the hand sprays for `seconds` (inventory-state.js spray). → { ok, charge, empty } */
+      spray: seconds => { if (!available(floor)) return unavailable(); const r = model.spray(seconds); if (r.ok) refresh(); return r; },
       held: () => available(floor) ? held() : null,
       torchPower: () => !disposed && active === floor ? torchPower() : 0,
       torchMounted: () => !disposed && active === floor && torchMounted(),
