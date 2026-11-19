@@ -39,7 +39,6 @@ export function createStalkers(env, options = {}) {
     if (!(n > 0) || !k.vital || castList.finished?.(k.vital)) return { ok: false, killed: false };
     k.vital = castList.struck(k.vital, n); k.settle = true;                   // (the health rule's own struck, as a jab's: c.struck)
     if (!k.vital.killed) k.stall = Math.max(k.stall || 0, castList.HEALTH?.flinch ?? 0.6);      // (it flinches, as from a jab)
-    if (k.vital.killed && k.member.music === 'mascot') env.sound?.stopMascot?.();
     if (!k.escaped) { k.escaped = true; env.run?.survived?.(k.member.id); }                       // (got away from, as a jab counts it: c.survived)
     return { ok: true, killed: !!k.vital.killed, hp: k.vital.hp };
   };
