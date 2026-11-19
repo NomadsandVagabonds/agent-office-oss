@@ -24,6 +24,8 @@ import { Vox, M, glow, tone, glass } from '../vox/vox.js';
 import { TILE } from './gen.js';
 import { FENCE, FLAT } from './quiet.js';
 import { LEAN, REFUSE, lean, pressing } from './marks.js';
+import { clip } from './clipping.js';
+import { flamingo as flamingoSculpt } from './inventory-items.js';
 
 const P = (g, col, x, y, w, h) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
 const PPM = 40;                                    // painted pixels to the metre, as everywhere down here
@@ -393,6 +395,8 @@ export function lawn(c, opt = {}) {
   const chance = opt.wrong ?? (!room.quiet && !s && room.kind === 'plain' && Math.min(W, D) >= 3.4 ? 0.4 : 0);
   const asked = opt.which;
   if ((chance > 0 && R.chance(chance)) || (asked && room.kind === 'plain' && !s)) { const name = asked || R.pick([...Object.keys(WRONG), 'melting', 'melting']); if (WRONG[name](c) !== false) c.rt.weird = name; }
+  // and now and then, in a lawn of any kind, a flamingo or three gone into the structure (the owner: in walls, ceilings, floors)
+  if (room.kind === 'plain' && !s && opt.flamingos !== false) { const F = R.fork('flamingos'); if (F.chance(0.25)) { const k = F.int(1, 3); for (let i = 0; i < k; i++) flamingoIn(c, F.pick(['wall', 'wall', 'ceiling', 'sunk', 'head']), F); } }
 }
 
 /* ---- the neighbour ------------------------------------------------------------------------------------------------ */
@@ -632,6 +636,45 @@ export const gnomeVox = () => {
   v.cyl('y', 0, -0.4, 15.6, 25, 4.4, M('#b3261e', 1), 0.6); v.cyl('y', 0, -0.4, 15.2, 16.4, 4.7, M('#8f1d17', 1));
   return v;
 };
+/* ---- the flamingo, everywhere: the cast's lawn flamingo (inventory-items.js, the one model), half in the structure ---------- */
+
+const FLAMINGO = new WeakMap();
+/** The lawn flamingo as a meshed model in voxel units, as c.place and clip() take one: the cast's own sculpt, once a kit. Bill along +X. */
+export function flamingoModel(kit) {
+  if (FLAMINGO.has(kit)) return FLAMINGO.get(kit);
+  const b = new Batch(false); flamingoSculpt.sculpt(b, 1, { grounded: true });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(b.nor, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(b.alb, 3)); g.setIndex(b.idx);
+  const bounds = { x0: Infinity, y0: Infinity, z0: Infinity, x1: -Infinity, y1: -Infinity, z1: -Infinity };
+  for (let i = 0; i < b.pos.length; i += 3) { bounds.x0 = Math.min(bounds.x0, b.pos[i]); bounds.x1 = Math.max(bounds.x1, b.pos[i]); bounds.y0 = Math.min(bounds.y0, b.pos[i + 1]); bounds.y1 = Math.max(bounds.y1, b.pos[i + 1]); bounds.z0 = Math.min(bounds.z0, b.pos[i + 2]); bounds.z1 = Math.max(bounds.z1, b.pos[i + 2]); }
+  const m = { solid: g, glass: null, bounds }; FLAMINGO.set(kit, m); return m;
+}
+export const FLAMINGO_H = 0.76;        // (30.4 voxels: its stakes' points to the top of its head)
+const turnUp = (to, spin) => new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...to).normalize()).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), spin));
+/**
+ * One flamingo half in the structure, where `how` says: 'wall' (stakes first into a wall, at a stretch with nothing in it),
+ * 'ceiling' (hanging out of it upside down), 'sunk' (into the floor to its neck), 'head' (head first into the floor, its stakes up).
+ * Where it goes is drawn from R, the caller's own stream. → clip()'s report, or null when there was nowhere.
+ */
+export function flamingoIn(c, how, R) {
+  const { W, D, H } = c, model = flamingoModel(c.kit);
+  if (how === 'wall') {
+    const sides = ['back', 'front', 'left', 'right'], side = R.pick(sides), sp = c.spans(side, 0.4, Math.min(H, 2.4)); if (!sp.length) return null;
+    const [a, b] = R.pick(sp), at = R.range(a + 0.2, b - 0.2), depth = R.range(0.1, 0.45), q = c.wallAt(side, at, -depth), n = q.n, lean = [n[0] + R.range(-0.35, 0.35), R.range(-0.3, 0.45), n[2] + R.range(-0.35, 0.35)];
+    return clip(c, model, q.x, q.z, { y: R.range(0.7, Math.min(2.1, H - 0.6)), quat: turnUp(lean, R.range(0, 6.28)) });
+  }
+  const p = c.spot(0.4, { pad: 0.3 }); if (!p) return null;
+  if (how === 'ceiling') return clip(c, model, p.x, p.z, { y: H + R.range(0.08, 0.4), quat: turnUp([R.range(-0.3, 0.3), -1, R.range(-0.3, 0.3)], R.range(0, 6.28)) });
+  if (how === 'head') return clip(c, model, p.x, p.z, { y: FLAMINGO_H - R.range(0.15, 0.32), quat: turnUp([R.range(-0.4, 0.4), -1, R.range(-0.4, 0.4)], R.range(0, 6.28)) });
+  return clip(c, model, p.x, p.z, { y: -R.range(0.25, 0.5), quat: turnUp([R.range(-0.25, 0.25), 1, R.range(-0.25, 0.25)], R.range(0, 6.28)) });
+}
+/** A heap of them in a corner, into both walls and the floor, every way up. */
+export function flamingoPile(c, R, n = 12) {
+  const k = c.corner(1.0); if (!k) return false; const model = flamingoModel(c.kit);
+  for (let i = 0; i < n; i++) { const r = Math.sqrt(R.range(0, 1)) * 1.1, a = R.range(0, 1.5708), x = k.x + k.sx * (0.4 - Math.cos(a) * r * 0.9), z = k.z + k.sz * (0.4 - Math.sin(a) * r * 0.9);
+    clip(c, model, x, z, { y: R.range(-0.25, 0.25) + (i > n * 0.55 ? 0.45 * (1.2 - r) : 0), quat: turnUp([R.range(-1, 1), R.range(-1, 1), R.range(-1, 1)], R.range(0, 6.28)), solid: false }); }
+  c.solid(k.x - 1.0, k.z - 1.0, k.x + 1.0, k.z + 1.0, { tall: false }); c.reserve(k.x, k.z, 1.1);
+}
+
 export const WRONG = {
   // one sprinkler head (the one thing here that is where it should be)
   sprinkler(c) { const at = c.spot(0.3, { pad: 1 }); if (!at) return false; sprinkler(c, at.x, at.z); },
@@ -720,9 +763,14 @@ export const WRONG = {
   flock(c) {
     const { W, D } = c, d = c.room.doors[0], p = d ? c.doorPoint(d, 0) : { x: 0, z: D / 2 };
     let n = 0;
-    for (let x = -W / 2 + 1.2; x <= W / 2 - 1.2; x += 0.95) for (let z = -D / 2 + 1.2; z <= D / 2 - 1.2; z += 0.95) { if (!c.clear(x, z, 0.3, 1.2)) continue; flamingoAt(c, x, z, Math.atan2(x - p.x, p.z - z)); n++; }
+    const model = flamingoModel(c.kit);
+    for (let x = -W / 2 + 1.2; x <= W / 2 - 1.2; x += 0.95) for (let z = -D / 2 + 1.2; z <= D / 2 - 1.2; z += 0.95) { if (n >= 24 || !c.clear(x, z, 0.3, 1.2)) continue; c.place(model, x, z, { rot: Math.atan2(-(p.z - z), p.x - x), solid: false, shadow: false }); c.solid(x - 0.14, z - 0.14, x + 0.14, z + 0.14, { tall: false }); c.shadow(x, z, 0.3, 0.3, 0.3); n++; }   // (the cast's flamingo, each looking at the way in; two dozen at most)
     return n > 3 ? undefined : false;
   },
+  // flamingos, stuck in everything: through the walls stakes first, out of the ceiling, in the floor
+  stuck(c) { const R = c.R.fork('flamingos:stuck'); let n = 0; for (const how of ['wall', 'wall', 'wall', 'wall', 'ceiling', 'ceiling', 'sunk', 'head', 'wall', 'ceiling']) if (flamingoIn(c, how, R)) n++; return n > 4 ? undefined : false; },
+  // a heap of them, in a corner, as if they had been put there to be out of the way
+  pile(c) { return flamingoPile(c, c.R.fork('flamingos:pile'), 14); },
   // a garage door, on a wall with no garage behind it (suburb.js roller)
   garage(c) { const spot = c.wallSpot(3.2, undefined, 0.5, 2.4); if (!spot) return false; roller(c, spot.side, spot.at, { garage: c.R.chance(0.5) }); },
   // a car, most of the way down
