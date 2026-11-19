@@ -48,7 +48,8 @@ test('how much: an early battery then spaced refills, at most one snack and pape
     for (const s of plan) { const { id, type, rooms, ...made } = s; assert.doesNotThrow(() => makeItem(type, id, made), `${id} is something the pockets know`); }
     assert.ok(of('paper').length >= SUPPLY.stacks[0] && of('paper').length <= SUPPLY.stacks[1] && of('lighter').length <= 1 && of('tape').length <= 1);
     for (const p of of('paper')) assert.ok(p.quantity >= SUPPLY.paper[0] && p.quantity <= SUPPLY.paper[1]);
-    assert.ok(plan.every((s) => ['battery', 'snack', 'torch', 'chalk', 'paper', 'lighter', 'tape', 'extinguisher'].includes(s.type)), 'nothing else, unless somebody wants it');
+    assert.ok(plan.every((s) => ['battery', 'snack', 'torch', 'chalk', 'paper', 'lighter', 'tape', 'extinguisher', 'flamingo'].includes(s.type)), 'nothing else, unless somebody wants it');
+    assert.ok(of('flamingo').length === 0 || level.theme === 'suburb', 'a flamingo only where there are lawns');
     assert.ok(of('extinguisher').length <= 1);
     for (const x of of('extinguisher')) assert.ok(x.charge > 0 && x.charge <= ITEM_DEFS.extinguisher.maxCharge, 'a found extinguisher is never empty');
   }
@@ -97,7 +98,7 @@ test('a typical part has roughly four scattered finds, two of them battery packs
 });
 
 test('anything else is only there for somebody: what a creature or a resident on the part cares about, one of each', () => {
-  const level = floors(1)[0], ABOUT = ['battery', 'snack', 'torch', 'chalk', 'paper', 'lighter', 'tape', 'extinguisher'];
+  const level = floors(1)[0], ABOUT = ['battery', 'snack', 'torch', 'chalk', 'paper', 'lighter', 'tape', 'extinguisher', 'flamingo'];
   const types = (wanted) => planSupplies(level, wanted).map((s) => s.type).filter((t) => !ABOUT.includes(t)).sort();
   assert.deepEqual(types([]), []);
   assert.deepEqual(types(['battery', 'torch', 'paper']), [], 'what is about anyway is not left twice');

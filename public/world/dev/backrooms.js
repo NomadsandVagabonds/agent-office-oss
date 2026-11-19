@@ -47,7 +47,8 @@
 // ahead (the part below, once it is built: level, world, and where it hangs), root (the one scene everything hangs in),
 // loot (loot.report(): where the coins are, what is carried). window.__loot is what the stand-in still has down there.
 // Nothing on screen says how to play, on purpose: WASD/arrows, mouse, Shift (hurry), Space (hop), C (crouch, held), E, V (picture), M (sound), Esc.
-import { createStage } from '../engine/stage.js';
+import { openStage } from '../engine/stage.js';
+import { pageRendererChoice } from '../engine/gpu.js';
 import { enterBackrooms } from '../backrooms/index.js';
 import { LIGHTING_MODES } from '../backrooms/lighting.js';
 import { lightingStudy } from './lighting-study.js';
@@ -92,7 +93,7 @@ import { DECK } from '../backrooms/gen.js';
 
 const q = new URLSearchParams(location.search);
 const num = (k, d) => (q.has(k) && q.get(k) !== '' && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : d);
-const stage = createStage(document.getElementById('stage'), { fx: q.get('fx') === '1', shadows: false, preserve: true, pixelRatio: num('dpr', 1) });
+const stage = await openStage(document.getElementById('stage'), { renderer: pageRendererChoice(), fx: q.get('fx') === '1', shadows: false, preserve: true, pixelRatio: num('dpr', 1) });
 stage.start();
 window.__stage = stage;              // renderer.info, for checking that a visit leaves nothing behind
 // &perf=1 / &bench=1: the measuring tape, only fetched when asked for

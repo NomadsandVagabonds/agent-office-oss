@@ -10,6 +10,7 @@ import { Vox, M } from '../vox/vox.js';
 import { KINDS, ITEM_IDS, isPaper, isBalloon, isFlashlight, createHandOver } from './items.js';
 import { heldScissors } from './hand-scissors.js';
 import { heldExtinguisher } from './hand-extinguisher.js';
+import { heldFlamingo } from './hand-flamingo.js';
 import { wipePose, swatPose } from './hand-moves.rule.js';
 import { createStuckNotes } from './hand-notes.js';
 
@@ -51,6 +52,9 @@ export const HELD_DEPTH_SLIVER = 0.002;
 let squeezed = false;
 /** Before a held mesh draws. `first`: the mesh that, as before, clears the room's depth when nothing reads it. */
 export function holdInFront(renderer, first = true) {
+  // (?gpu=webgpu: no GL state to reach into, and no clearing the depth halfway through a pass. Held kit-node materials
+  // instead write into the nearest depth sliver [0, HELD_DEPTH_SLIVER] via mat.setHeldInFront(HELD_DEPTH_SLIVER).)
+  if (renderer.isWebGPURenderer) return 'as-drawn';
   if (renderer.getRenderTarget?.()?.depthTexture) { renderer.getContext().depthRange(0, HELD_DEPTH_SLIVER); squeezed = true; return 'sliver'; }
   if (!first) return 'as-drawn';
   // The previous transparent room mesh may have disabled depth writes;
@@ -86,7 +90,7 @@ export function createHandView(env, camera) {
   const kit = env.kit, root = new THREE.Group(), made = new Map(), at = new THREE.Vector3(), rest = new THREE.Vector3();
   let shown = null, type = null, t = 0, swing = 0, layoutKey = '', move = null, notes = null;
   root.visible = false;
-  const stuck = () => notes || (notes = createStuckNotes(kit, camera, { mine: () => camera.userData.hand === view, before: holdInFront, after: letGoOfFront }), root.add(notes.group), notes);
+  const stuck = () => notes || (notes = createStuckNotes(kit, camera, { mine: () => camera.userData.hand === view, before: holdInFront, after: letGoOfFront, sliver: HELD_DEPTH_SLIVER }), root.add(notes.group), notes);
   /** FORM HR-404, as a sheet of paper held up: the one thing down here that is meant to be read. */
   function slip() {
     const tex = kit.tex.custom('hand:pink-slip:' + (env.who?.name || ''), 128, 168, (g) => {
@@ -111,7 +115,8 @@ export function createHandView(env, camera) {
   function model(kind) {
     if (kind === 'pink-slip') return slip();
     if (kind === 'scissors') return heldScissors(kit, ITEM_LIGHTS(), ITEM_AMB);   // (a fist round them, and two halves on a pin: hand-scissors.js)
-    if (kind === 'extinguisher') return heldExtinguisher(kit, ITEM_LIGHTS(), ITEM_AMB);   // (a fist over its head, its lever and gauge: hand-extinguisher.js)
+    if (kind === 'extinguisher') return heldExtinguisher(kit, ITEM_LIGHTS(), ITEM_AMB);
+    if (kind === 'flamingo') return heldFlamingo(kit, ITEM_LIGHTS(), ITEM_AMB);         // (held by the neck, stakes forward: hand-flamingo.js)   // (a fist over its head, its lever and gauge: hand-extinguisher.js)
     const b = new Batch(false), s = (kit.VOXEL || 0.025) * (kind === 'balloon' ? 0.36 : 0.46);
     INVENTORY_MODELS[kind].sculpt(b, s, { grounded: false, held: true });
     const itemBounds = kind === 'torch' || kind === 'balloon' ? boundsFromBatch(b) : null;
@@ -156,7 +161,7 @@ export function createHandView(env, camera) {
     const group = new THREE.Group(), made = [];
     for (const side of [-1, 1]) {
       const mat = kit.surface({ vox: false, side: THREE.DoubleSide }), mesh = new THREE.Mesh(kit.geometry(b, ITEM_LIGHTS(), ITEM_AMB), mat);
-      mat.transparent = true; mesh.renderOrder = 10000; mesh.scale.x = side;                      // (the left is the right, turned over)
+      mat.transparent = true; mat.setHeldInFront?.(HELD_DEPTH_SLIVER); mesh.renderOrder = 10000; mesh.scale.x = side;                      // (the left is the right, turned over)
       mesh.onBeforeRender = (renderer) => { if (camera.userData.hand !== view) root.visible = false; else holdInFront(renderer); };
       mesh.onAfterRender = letGoOfFront;
       group.add(mesh); made.push({ side, mesh, mat });
@@ -203,7 +208,7 @@ export function createHandView(env, camera) {
       const item = show ? env.inventory?.held?.() ?? null : null;
       // (a pair coming apart goes on being shown until the blade has fallen, though the pockets have already let go of it;
       // and an extinguisher run dry, until it has been pumped on nothing and has sagged)
-      const want = item && INVENTORY_MODELS[item.type] ? item.type : show && made.get('scissors')?.busy() ? 'scissors' : show && made.get('extinguisher')?.busy() ? 'extinguisher' : null;
+      const want = item && INVENTORY_MODELS[item.type] ? item.type : show && made.get('scissors')?.busy() ? 'scissors' : show && made.get('extinguisher')?.busy() ? 'extinguisher' : show && made.get('flamingo')?.busy() ? 'flamingo' : null;
       if (want !== type) {
         if (shown) shown.mesh.visible = false;
         type = want; shown = null;
@@ -219,7 +224,11 @@ export function createHandView(env, camera) {
             };
             m.mesh.onAfterRender = letGoOfFront;
             // (a part of it with a mesh of its own, the balloon's glove: in front of the room too, while the haze reads its depth)
-            m.mesh.traverse((o) => { if (o !== m.mesh && o.isMesh) { o.onBeforeRender = (renderer) => holdInFront(renderer, false); o.onAfterRender = letGoOfFront; } });
+            m.mesh.traverse((o) => {
+              if (!o.isMesh) return;
+              o.material?.setHeldInFront?.(HELD_DEPTH_SLIVER);
+              if (o !== m.mesh) { o.onBeforeRender = (renderer) => holdInFront(renderer, false); o.onAfterRender = letGoOfFront; }
+            });
             made.set(want, m); root.add(m.mesh);
           }
           shown = made.get(want); shown.mesh.visible = true;
@@ -230,7 +239,7 @@ export function createHandView(env, camera) {
       // a wipe or a swat (hand-moves.rule.js): one hand, in place of the shove's two, and nothing held shown while it goes
       let moving = null;
       if (move) { move.t += dt; moving = move.kind === 'wipe' ? wipePose(move.t) : swatPose(move.t, move.dir); if (!moving) move = null; }
-      const striking = show && (!!moving || showing(meP.punch || 0, { scissors: type === 'scissors' || type === 'extinguisher' }));
+      const striking = show && (!!moving || showing(meP.punch || 0, { scissors: type === 'scissors' || type === 'extinguisher' || type === 'flamingo' }));
       if (striking && !hands) hands = makeHands();
       if (hands) {
         hands.group.visible = striking;
@@ -262,7 +271,8 @@ export function createHandView(env, camera) {
       root.position.copy(camera.position).sub(env.world.scene.position); root.quaternion.copy(camera.quaternion);
       at.set(rest.x + Math.sin(t * 1.1) * 0.006 * swing, rest.y + Math.abs(Math.sin(t * 1.1)) * 0.014 * swing + Math.sin(t * 0.35) * 0.003, rest.z);
       if (type === 'scissors') shown.update(dt, at);           // (the jab, and how it went: hand-scissors.rule.js)
-      else if (type === 'extinguisher') shown.update(dt, at, item);   // (squeezed or let go, and the gauge: hand-extinguisher.rule.js)
+      else if (type === 'extinguisher') shown.update(dt, at, item);
+      else if (type === 'flamingo') shown.update(dt, at);       // (the stab, and letting go of it: hand-flamingo.rule.js)   // (squeezed or let go, and the gauge: hand-extinguisher.rule.js)
       else shown.mesh.position.copy(at);
       if (hands?.group.visible) { const L2 = env.world.lightAt(me.x, me.z, 1.2); for (const h of hands.made) h.mat.uniforms.uTint.value.set(Math.max(0.16, L2[0] * 1.25), Math.max(0.16, L2[1] * 1.25), Math.max(0.16, L2[2] * 1.25)); }
       if (type === 'balloon') shown.mesh.rotation.z = Math.sin(t * 0.5) * 0.09 + swing * 0.12;
@@ -286,6 +296,9 @@ export function createHandView(env, camera) {
     smashed(broke) { made.get('extinguisher')?.smash(broke); },
     /** Where the spray leaves the horn, in the world, and which way: → `out`, or null when it is not in the hand. */
     nozzle(out, dir) { return type === 'extinguisher' && shown ? shown.nozzle(out, dir) : null; },
+    /** The flamingo's click: a stab starts · and how it went: { ok } it went in (and stays there), or it missed. */
+    stab() { made.get('flamingo')?.stab(); },
+    stabbed(result) { made.get('flamingo')?.stabbed(result); },
     /** The scissors' click: a jab starts. */
     jab() { made.get('scissors')?.jab(); },
     /** How the jab went, once it is known (inventory.js): { ok, snapped }. A hit, a miss and a break each look their own. */

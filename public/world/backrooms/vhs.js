@@ -15,6 +15,7 @@ import { Pass, FullScreenQuad } from '/vendor/three-addons/postprocessing/Pass.j
 import { profile, bloomOn, internalSize } from './graphics.js';
 import { GlowPass } from './glow.js';
 import { createLiquidView } from './liquid.js';
+import { createVhsNode } from './vhs-node.js';
 
 const HAZE_LIGHT = 1.6;                                  // the haze's brightness for each unit of the room's light
 
@@ -182,6 +183,8 @@ class SupersamplePass extends Pass {
  *        profile: graphics.js profile(tier); Classic if none
  */
 export function createVhs(renderer, camera, opt = {}) {
+  // (under ?gpu=webgpu the stage draws with WebGPURenderer, which cannot run these GLSL passes: the same camcorder in TSL)
+  if (renderer.isWebGPURenderer) return createVhsNode(renderer, camera, opt);
   const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
   const composer = new EffectComposer(renderer, target);
   composer.setPixelRatio(1);

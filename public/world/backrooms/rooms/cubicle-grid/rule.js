@@ -21,6 +21,51 @@ export const GRID = Object.freeze({
   doorHalfW: 0.68,       // 1.36 m centered doorway in the North Bulkhead partition
 });
 
+/**
+ * Which partition caps are broken, dealt per visit (the owner, 18 Nov: "the current grid allows you to sprint in a straight
+ * line"). A segment is `col:row` (col 1..3 west to east, row 0 at the bulkhead to 3 at the foyer). Always solvable: every row
+ * keeps at least one cap, so the way across is a chain of caps with a turn between them; and no column keeps more than
+ * `maxRun` caps in a row, so no straight line runs far enough to sprint, and the shortest way across takes at least `minTurns` turns. The transverse caps are never broken, so a turn
+ * can be made at any row. `rng` is `{ int(lo, hi) }`.
+ * @returns {string[]} the broken segments, sorted
+ */
+export const PIT_BREAKS = Object.freeze({ min: 5, max: 7, maxRun: 2, minTurns: 4, fallback: ['1:1', '1:3', '2:2', '3:0', '3:2'] });
+
+/** The checks a deal has to pass; → { ok, reason?, turns } (turns: the fewest turns of any way across, counting the first step north as none). */
+export function pitBreaksOk(broken) {
+  const set = new Set(broken);
+  for (let r = 0; r < 4; r++) if (![1, 2, 3].some((c) => !set.has(`${c}:${r}`))) return { ok: false, reason: `row ${r} has no cap left` };
+  for (let c = 1; c <= 3; c++) {
+    let run = 0, longest = 0;
+    for (let r = 0; r < 4; r++) { run = set.has(`${c}:${r}`) ? 0 : run + 1; longest = Math.max(longest, run); }
+    if (longest > PIT_BREAKS.maxRun) return { ok: false, reason: `column ${c} keeps ${longest} caps in a row` };
+  }
+  // fewest turns, over states (column 1..3, graph row 0..4 with 4 the foyer, heading 'N' or 'E')
+  const key = (c, r, h) => `${c}:${r}:${h}`, best = new Map(), queue = [];
+  for (let c = 1; c <= 3; c++) { best.set(key(c, 4, 'N'), 0); queue.push([c, 4, 'N']); }
+  let turns = Infinity;
+  while (queue.length) {
+    queue.sort((a, b) => best.get(key(...a)) - best.get(key(...b)));
+    const [c, r, h] = queue.shift(), t = best.get(key(c, r, h));
+    if (r === 0) { turns = Math.min(turns, t); continue; }
+    const go = (nc, nr, nh) => { const nt = t + (nh === h ? 0 : 1), k = key(nc, nr, nh); if (nt < (best.get(k) ?? 1e9)) { best.set(k, nt); queue.push([nc, nr, nh]); } };
+    if (r > 0 && !set.has(`${c}:${r - 1}`)) go(c, r - 1, 'N');                     // one cap north (the cap between graph rows r and r - 1 is row r - 1)
+    if (r >= 1 && r <= 3) { if (c > 1) go(c - 1, r, 'E'); if (c < 3) go(c + 1, r, 'E'); }                  // across, at a transverse cap (rows 1..3)
+  }
+  if (!Number.isFinite(turns)) return { ok: false, reason: 'no way across' };
+  if (turns < PIT_BREAKS.minTurns) return { ok: false, reason: `a way across with only ${turns} turns`, turns };
+  return { ok: true, turns };
+}
+
+export function dealBreaks(rng) {
+  for (let tries = 0; tries < 80; tries++) {
+    const set = new Set(), want = rng.int(PIT_BREAKS.min, PIT_BREAKS.max);
+    while (set.size < want) set.add(`${rng.int(1, 3)}:${rng.int(0, 3)}`);
+    if (pitBreaksOk([...set]).ok) return [...set].sort();
+  }
+  return [...PIT_BREAKS.fallback];
+}
+
 const snap = (v) => Math.round(v / 0.125) * 0.125;
 
 /** Safe tape hiding spots on the North Safe Sanctuary across the cubicle pit. */
@@ -43,7 +88,7 @@ function rectDist(x, z, b) {
  * `world.walkable(rt)` verifies 100% doorway-to-doorway reachability while
  * keeping open cubicle pits isolated from flood-fill and item placement.
  */
-export function buildGridPlan(W, D, H, brokenSide = 1) {
+export function buildGridPlan(W, D, H, brokenSide = 1, breaks = null) {
   const gridZ0 = snap(-D / 2 + 2.25); // North Bulkhead partition line
   const gridZ1 = snap(D / 2 - 2.25);  // South Foyer lip
   const spanD = gridZ1 - gridZ0;
@@ -65,7 +110,8 @@ export function buildGridPlan(W, D, H, brokenSide = 1) {
   // Two interior segments are buckled/collapsed so players cannot hold W blindly down x = 0:
   //   - Center column (col 2, x = 0) in row 2 (between z2 and z3)
   //   - One side column (col 1 or 3) in row 1 (between z1 and z2)
-  const brokenLong = new Set([`2:2`, `${sideBreakCol}:1`]);
+  // (dealt per visit when the room asks for it: `breaks` is the list dealBreaks gives; asked for nothing it is the two it always was)
+  const brokenLong = new Set(Array.isArray(breaks) ? breaks : [`2:2`, `${sideBreakCol}:1`]);
   const brokenSpans = [];
   const beams = [];
 

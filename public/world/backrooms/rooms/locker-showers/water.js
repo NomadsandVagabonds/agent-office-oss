@@ -29,6 +29,43 @@ export function showerWater(c, batch, tex) {
       uChangingTime:time,uChangingReflection:{value:target.texture},
       uChangingReflectionMatrix:{value:projection},uChangingReflectionReady:ready,
     });
+    if (mat.patchNode) {
+      // Non-mirror rippled water surface under ?gpu=webgpu until Step 3 ports the planar reflector to ReflectorNode.
+      const rippleOf = ({ T, localPos, f, shared }) => {
+        if (shared.changingRipple) return shared.changingRipple;
+        const { vec2, sin, cos } = T;
+        const p = localPos().xz, t = f('uChangingTime');
+        shared.changingLocal = p;
+        shared.changingTime = t;
+        shared.changingRipple = vec2(
+          sin(p.x.mul(13).add(t.mul(.7)).add(sin(p.y.mul(2)))),
+          cos(p.y.mul(17).sub(t.mul(.55)).add(cos(p.x.mul(3)))),
+        ).mul(.028);
+        return shared.changingRipple;
+      };
+      mat.patchNode({
+        uv(ctx) {
+          const { vec2 } = ctx.T;
+          const r = rippleOf(ctx);
+          return ctx.shared.changingLocal.div(1.6).add(r.mul(.13)).add(vec2(ctx.shared.changingTime.mul(.004), 0));
+        },
+        wetNormal(ctx) {
+          const { vec4, normalize, modelViewMatrix, varying } = ctx.T;
+          const r = rippleOf(ctx);
+          const vx = varying(normalize(modelViewMatrix.mul(vec4(1, 0, 0, 0)).xyz), 'vChX');
+          const vz = varying(normalize(modelViewMatrix.mul(vec4(0, 0, 1, 0)).xyz), 'vChZ');
+          return normalize(ctx.wn.add(vx.mul(r.x)).add(vz.mul(r.y)));
+        },
+        color(ctx) {
+          const { vec3, sin, pow, max } = ctx.T;
+          rippleOf(ctx);
+          const p = ctx.shared.changingLocal, t = ctx.shared.changingTime;
+          ctx.c.mulAssign(vec3(.79, 1.06, 1.04));
+          const fineRipple = pow(max(0, sin(p.x.mul(19).add(p.y.mul(13)).sub(t.mul(1.2)))), 36);
+          ctx.c.addAssign(ctx.vLit.mul(fineRipple.mul(.025)));
+        },
+      });
+    } else {
     mat.vertexShader = `uniform mat4 uChangingReflectionMatrix;
 varying vec4 vChangingReflection;
 varying vec2 vChangingLocal;
@@ -69,6 +106,7 @@ vec2 changingRipple() {
   float fineRipple = pow(max(0.0,sin(vChangingLocal.x*19.0+vChangingLocal.y*13.0-uChangingTime*1.2)),36.0);
   c += fineRipple*.025*vLit;
   gl_FragColor = vec4(c,mix(uAlpha,.96,fresnel*valid));`);
+    }
 
     const mesh = new THREE.Mesh(geo,mat); mesh.name='changing-water-sheet';
     mesh.renderOrder=4; group.add(mesh);
@@ -81,7 +119,7 @@ vec2 changingRipple() {
     c.kit.own({dispose(){disposed=true;ready.value=0;mesh.onBeforeRender=()=>{};}});
 
     mesh.onBeforeRender = (renderer,renderScene,view) => {
-      if (disposed || reflecting || !view?.isPerspectiveCamera || !renderer?.getRenderTarget) return;
+      if (disposed || reflecting || renderer?.isWebGPURenderer || !view?.isPerspectiveCamera || !renderer?.getRenderTarget) return;
       // The world scene excludes the picture's HUD and held-item overlay. Its
       // parent can translate a whole connected part; use full matrixWorlds.
       const scene = c.world?.scene || renderScene;

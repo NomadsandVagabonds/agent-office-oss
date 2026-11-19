@@ -40,8 +40,17 @@ function context(c){
     const geo=c.kit.geometry(water,c.rt.lights,c.rt.amb,c.rt.lighting);
     const mat=c.kit.surface({map:c.kit.tex.white(),room:c.rt.u,alpha:.4,side:THREE.DoubleSide,flick:geo.userData.flick,banks:geo.userData.banks});
     mat.uniforms.uShowerTime=time;
-    mat.fragmentShader='uniform float uShowerTime;\n'+mat.fragmentShader.replace('gl_FragColor = vec4(c, uAlpha);',
-      'float drop = smoothstep(0.38, 0.73, fract(vUv.y * 17.0 + uShowerTime * 2.8 + vUv.x * 11.0));\n gl_FragColor = vec4(c, uAlpha * (0.17 + 0.83 * drop));');
+    if(mat.patchNode){
+      mat.patchNode({
+        color({T,alpha,uv,uAlpha,f,ss}){
+          const drop=ss(.38,.73,T.fract(uv.y.mul(17).add(f('uShowerTime').mul(2.8)).add(uv.x.mul(11))));
+          alpha.assign(uAlpha.mul(drop.mul(.83).add(.17)));
+        },
+      });
+    }else{
+      mat.fragmentShader='uniform float uShowerTime;\n'+mat.fragmentShader.replace('gl_FragColor = vec4(c, uAlpha);',
+        'float drop = smoothstep(0.38, 0.73, fract(vUv.y * 17.0 + uShowerTime * 2.8 + vUv.x * 11.0));\n gl_FragColor = vec4(c, uAlpha * (0.17 + 0.83 * drop));');
+    }
     const mesh=new THREE.Mesh(geo,mat);mesh.renderOrder=4;streams.add(mesh);
   });
   c.tick((dt,t)=>{time.value=t;});

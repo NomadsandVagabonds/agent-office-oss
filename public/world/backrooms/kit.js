@@ -20,6 +20,8 @@ import { FLASHLIGHT_GLSL, FLASHLIGHT_POSES } from './flashlight.js';
 import { BEAM_SHADOW_GLSL } from './beam-shadows.rule.js';   // (beam shadows: only compiled where BEAM_SHADOWS is defined, beam-shadows.js)
 import { GLOW_DEPTH_GLSL, glowStrength } from './glow.rule.js';             // (emissive bloom: only compiled in glow.js's stand-ins)
 import { SHEEN, withSheen } from './sheen.rule.js';                         // (floor sheen: only put into a surface given `sheen`)
+import { gpu } from '../engine/gpu.js';
+import { surfaceNode, packSurfaceAttributes, pointsNode } from './kit-node.js';                       // (the same surface and points in TSL, only under ?gpu=webgpu)
 
 const GLOW = 2.3;                              // how hard a self-lit voxel shines
 
@@ -772,7 +774,7 @@ export function createKit(opt = {}) {
     if (sheen) defines.SHEEN = SHEEN.lamps;
     const frag = sheen ? SHEEN_FRAG() : FRAG;
     // --- end floor sheen ---
-    const material = own(new THREE.ShaderMaterial({
+    const spec = {
       defines, vertexShader: VERT, fragmentShader: frag, side,
       transparent: alpha < 1, depthWrite: alpha >= 1,
       uniforms: {
@@ -786,7 +788,9 @@ export function createKit(opt = {}) {
         ...(lm ? lm.uniforms : {}),
         ...(sheen ? sheen.uniforms : {}),                    // (floor sheen)
       },
-    }));
+    };
+    // (under ?gpu=webgpu the stage's renderer draws node materials only: the same surface in TSL, kit-node.js)
+    const material = own(gpu.nodes ? surfaceNode(spec) : new THREE.ShaderMaterial(spec));
     if (lm) lm.materials.push(material);
     material.userData.bloom = glowStrength(bloom);        // (emissive bloom: glow.js's twin reads it; the scene's draw never does)
     return material;
@@ -819,16 +823,19 @@ export function createKit(opt = {}) {
     // Flat face normals already exist for the bake; retain them in three bytes
     // per vertex for the moving beam, rather than another float triplet.
     const normal = Int8Array.from(batch.nor, n => Math.round(Math.max(-1, Math.min(1, n)) * 127));
-    geo.setAttribute('normal', new THREE.BufferAttribute(normal, 3, true));
+    // (WebGPU, ?gpu=webgpu: a vertex is read in steps of four bytes, so the two byte triplets get a fourth byte each)
+    const four = (a) => { const out = new a.constructor(a.length / 3 * 4); for (let i = 0, j = 0; i < a.length; i += 3, j += 4) { out[j] = a[i]; out[j + 1] = a[i + 1]; out[j + 2] = a[i + 2]; } return out; };
+    geo.setAttribute('normal', gpu.nodes ? new THREE.BufferAttribute(four(normal), 4, true) : new THREE.BufferAttribute(normal, 3, true));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(batch.vox ? new Float32Array(batch.verts * 2) : batch.uv, 2));
     geo.setAttribute('aLit', new THREE.BufferAttribute(lit, 3));
     if (flk) geo.setAttribute('aFlk', new THREE.BufferAttribute(flk, 3));
     if (banks) for (let b = 0; b < banks.length; b++) geo.setAttribute(`aBank${b}`, new THREE.BufferAttribute(banks[b], 3));
     const alb = new Uint8Array(batch.alb.length);
     for (let i = 0; i < alb.length; i++) alb[i] = Math.max(0, Math.min(255, Math.round(batch.alb[i] * 255)));
-    geo.setAttribute('aAlb', new THREE.BufferAttribute(alb, 3, true));
+    geo.setAttribute('aAlb', gpu.nodes ? new THREE.BufferAttribute(four(alb), 4, true) : new THREE.BufferAttribute(alb, 3, true));
     if (batch.vox) { geo.setAttribute('aVox', new THREE.Float32BufferAttribute(batch.vx, 3)); geo.setAttribute('aSurf', new THREE.Float32BufferAttribute(batch.sf, 2)); }
     geo.setIndex(batch.idx);
+    if (gpu.nodes) packSurfaceAttributes(geo);                 // (WebGPU: 8 vertex buffers at most, kit-node.js)
     geo.computeBoundingSphere();
     geo.userData.flick = !!flk;
     geo.userData.banks = banks?.length || 0;
@@ -856,8 +863,18 @@ export function createKit(opt = {}) {
     return models.get(key);
   }
 
+  /** World-sized points (snow, dust): PointsMaterial on WebGL, instanced camera-facing quads on WebGPU. */
+  function points(positions, { size = 0.05, map = null, alphaTest = 0.5, color = new THREE.Color(1, 1, 1) } = {}) {
+    if (gpu.nodes) return pointsNode(positions, { size, map, alphaTest, color }, own);
+    const geo = own(new THREE.BufferGeometry());
+    const attribute = new THREE.BufferAttribute(positions, 3);
+    geo.setAttribute('position', attribute);
+    const mat = own(new THREE.PointsMaterial({ size, map, alphaTest, color: color?.isColor ? color : new THREE.Color(...color), sizeAttenuation: true }));
+    return { object: new THREE.Points(geo, mat), attribute };
+  }
+
   return {
-    own, shared, tex: T, surface, glowing, geometry, plain, model, VOXEL, gfx,
+    own, shared, tex: T, surface, glowing, geometry, plain, points, model, VOXEL, gfx,
     dispose() { for (const thing of owned) thing.dispose?.(); owned.clear(); textures.clear(); models.clear(); },
   };
 }

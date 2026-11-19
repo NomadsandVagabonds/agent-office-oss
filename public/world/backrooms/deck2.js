@@ -33,7 +33,7 @@ import { serverChasmStash } from './rooms/server-chasm/rule.js';
 import { PLAN as HALL_PLAN, partsOf as hallParts } from './rooms/unsure-hall/rule.js';
 import { homeStash } from './rooms/show-home/layout.js';
 import { plenumStash } from './rooms/drop-plenum/rule.js';
-import { cubicleGridStash } from './rooms/cubicle-grid/rule.js';
+import { cubicleGridStash, dealBreaks } from './rooms/cubicle-grid/rule.js';
 import { CARPET_MOUND } from './rooms/carpet-mound/layout.js';
 import { fill } from './words.js';
 /** A shop of the shopping centre's place for a coin: half a metre square from (x, z), in the room's frame. A stash of several of
@@ -400,7 +400,7 @@ export const MORE_DECK = [
   { id: 'garage-row', name: 'The Lock-ups', landmark: 'the room that is all garage doors', w: [11, 13], d: [9, 11], h: [2.9, 3.3],
     ports: ['back', 'left', 'right'], weight: 1, lights: 'normal', themes: { suburb: 1, '*': 0 },
     module: './rooms/garage-row.js', stash: (r) => [r.W / 2 - 1.3, r.D / 2 - 1.3, r.W / 2 - 0.65, r.D / 2 - 0.65],
-    roll: (R) => ({ nums: Array.from({ length: 8 }, () => R.pick([1, 2, 3, 4, 4, 7, 11, 12, 12, 40, 404])), empty: R.some([0, 1, 2, 3, 4, 5, 6, 7], 3) }) },
+    roll: (R) => { const nums = Array.from({ length: 8 }, () => R.pick([1, 2, 3, 4, 4, 7, 11, 12, 12, 40, 404])), empty = R.some([0, 1, 2, 3, 4, 5, 6, 7], 3), bays = R.shuffle(['store', 'store', 'store', 'car', 'living', 'picture', 'wall', 'wall', 'picture', 'car']).slice(0, 8); return { nums, empty, bays, items: R.some([0, 1, 2, 3, 4, 5, 6, 7], 3), through: R.chance(0.6) }; } },
   // A lemonade stand, going down, and the child who keeps it. She has a glass for you.
   { id: 'lemonade', name: 'The Stand', landmark: 'the lemonade stand that is going down', w: [9, 11], d: [8, 10], h: [2.9, 3.6],
     ports: ['left', 'right'], weight: 1.2, lights: 'normal', themes: { suburb: 1, '*': 0 },
@@ -495,6 +495,7 @@ export const MORE_DECK = [
     roll: R => ({face:R.int(0,7)}) },
   {
     id: 'cubicle-grid',
+    through: true,
     resident: 'pit-clerks', items: ['paper'], caught: 2, fire: 'fears',
     doors: 'own',
     name: 'The Open-Plan Pit',
@@ -510,6 +511,7 @@ export const MORE_DECK = [
     roll: (R, o) => ({
       dept: (o.projects.length ? R.pick(o.projects) : R.pick(['RETENTION', 'BILLING', 'COMPLIANCE', 'QA'])).slice(0, 12).toUpperCase(),
       brokenSide: R.pick([-1, 1]),
+      breaks: dealBreaks(R.fork('pit-breaks')),          // (which caps are down: from a stream of its own, so nothing else on the floor moves)
     }),
   },
   // The channel hall and quiet threshold connector extend the review wing.

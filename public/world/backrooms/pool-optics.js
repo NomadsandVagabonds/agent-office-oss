@@ -26,6 +26,37 @@ export function basinOptics(c, mat, time, waterY) {
   mat.uniforms.uPoolClock = time;
   mat.uniforms.uPoolCeiling = { value: c.rt.poolLampMap };
   mat.uniforms.uPoolExtent = { value: new THREE.Vector3(c.W, c.H - waterY, c.D) };
+  if (mat.patchNode) {
+    mat.patchNode({
+      uv({ T, mapUv, localPos, f, shared }) {
+        const { vec2, sin, cos } = T;
+        const p = localPos().xz, t0 = f('uPoolClock');
+        const slope = vec2(
+          sin(p.x.mul(5.1).add(p.y.mul(2.3)).add(t0.mul(1.2))).add(sin(p.y.mul(11.1).sub(t0.mul(1.6))).mul(0.45)),
+          cos(p.y.mul(6.3).sub(p.x.mul(2.6)).sub(t0.mul(0.95))).add(sin(p.x.mul(9.3).add(t0.mul(1.4))).mul(0.45)),
+        ).mul(0.029);
+        shared.poolP = p; shared.poolSlope = slope;
+        return mapUv.add(slope.mul(0.55)).add(vec2(0.009, -0.005).mul(t0));
+      },
+      color({ T, c, alpha, vLit, uAlpha, frontFacing, localPos, viewRayLocal, read, v3, shared }) {
+        const { vec2, vec3, float, normalize, reflect, pow, max, min, abs, clamp, dot, step, select, texture } = T;
+        const p = shared.poolP || localPos().xz;
+        const slope = shared.poolSlope || vec2(0, 0);
+        const ray = normalize(viewRayLocal());
+        const bounce = reflect(ray, normalize(vec3(slope.x, 1, slope.y)));
+        const grazing = pow(max(float(1).sub(abs(ray.y)), 0), 3);
+        const ext = v3('uPoolExtent');
+        const ceiling = p.add(bounce.xz.mul(ext.y.div(max(bounce.y, 0.04)))).div(ext.xz).add(0.5);
+        const ceilTex = texture(read('uPoolCeiling')).onRenderUpdate(() => read('uPoolCeiling'));
+        const light = ceilTex.sample(clamp(ceiling, 0, 1)).g;
+        const roomLight = clamp(dot(vLit, vec3(0.3, 0.5, 0.2)), 0, 1);
+        const front = select(frontFacing, float(1), float(0));
+        c.addAssign(vec3(0.77, 0.88, 0.82).mul(light).mul(grazing.mul(0.95).add(0.22)).mul(roomLight).mul(step(0.04, bounce.y)).mul(front));
+        alpha.assign(min(0.88, uAlpha.mul(grazing.mul(0.76).add(0.72))));
+      },
+    });
+    return;
+  }
   mat.vertexShader = 'varying vec3 vPoolRay;\nvarying vec2 vPoolPoint;\n' + mat.vertexShader.replace(
     'vView = mv.xyz;', `vView = mv.xyz;
     vPoolPoint = position.xz;
