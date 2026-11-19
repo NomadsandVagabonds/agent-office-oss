@@ -149,6 +149,57 @@ says so (`core/book.mjs`).
 It is enough for a game nobody wins money from. If a prize is ever attached, the flagged runs are reviewed by
 hand, as the book already allows.
 
+### 7. The daily as a proving ground
+
+The owner: *"use daily games to test new or experimental rooms, items and entities."*
+
+Why the daily is the right place for it:
+- **Everybody meets the same thing on the same day.** What one player found unfair, a thousand others met
+  too.
+- **One floor, one day.** A new creature or room is first tried by many people at once, for one day, in a
+  building nobody has seen. Nobody's ordinary visit or record is touched by it.
+
+How it would work:
+- **What is on trial is part of the day.** A day can carry a short list of experiments with its seed:
+  - a room from the deck that is not dealt yet;
+  - a creature not yet in the ordinary cast;
+  - an item at a different rate;
+  - a tuning (a number in a rule).
+
+  The list is published with the day, and it is fixed for the whole day.
+- **Built by both sides alike.** The list goes to the building the same way a difficulty does: an option
+  of `planVisit` (which already takes `themes` and `difficulty`). The book's route check then builds the
+  same building from the same seed and list, so that `visit-check.mjs` and the player agree.
+- **Its own edition.** A day with experiments is a different make of building from the same seed. The day's
+  ticket carries the list, and the edition is worked out with it, so an experimental day never mixes with
+  an ordinary one.
+- **Said on the board, but not what it is.** A day with something new on it is marked as such, a mark only
+  ("something here is new"). It keeps the surprise and warns that the day may be rougher than most. Records
+  made on it are kept like any day's.
+
+What is learned, counted for the whole day and never about anybody:
+- per experiment:
+  - how many met it;
+  - how many got away from it;
+  - how many it caught, and on which floor;
+- for a room: how long people spent in it;
+- for an item: how often it was picked up and used.
+
+These are counts the run already reports (`run.met`, `run.survived`, `caught`, rooms explored), summed by
+the day. No address, no route of a single person beyond what the book already keeps.
+
+A one-tap question after the take, optional and about the new thing only: *"that was: fair / unfair /
+dull / great"*.
+
+What happens next:
+- **Promoted:** it joins the ordinary game.
+- **Tuned:** it is tried again on a later day with the numbers changed.
+- **Retired:** it goes back in the drawer. A day it was on stays playable as it was, since that day's
+  edition is that day's.
+
+How often: **(owner)** One experimental day a week (a "pilot Friday"), or a small experiment on most
+days?
+
 ## Order of work
 
 | Step | What | Where | Size |
@@ -160,6 +211,7 @@ hand, as the book already allows.
 | 5 | Trails kept for the top and for you; `GET` a trail | book API, D1 | small |
 | 6 | Ghosts: playback, drawn as tape ghosting, untouchable | a new `ghost.js` in the level, read through `env` | medium |
 | 7 | Past days, seasons, firsts | book API, home | medium |
+| 8 | Experiments: a day's list as a `planVisit` option, built the same by the route check; edition with it; counts summed by day; the one-tap question | plan.js (lead), book API, scorecard | medium |
 
 - **Steps 1–4** are a complete daily without ghosts, and could ship on their own.
 - **Steps 5–6** are what makes it a race.
@@ -180,3 +232,5 @@ hand, as the book already allows.
    should be the game.)
 6. Reset at midnight UTC for everybody, or local midnight? (Recommended: UTC. One building at a time for
    everyone is the point.)
+7. Experiments: one pilot day a week, or a small one on most days? And may an experimental day's results
+   count toward a season board?
