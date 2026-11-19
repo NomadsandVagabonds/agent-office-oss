@@ -10,12 +10,12 @@ Supabase project or deployed to Vercel by this change.
 
 - Play still starts without an account. Guests do not create Supabase users,
   load its SDK, or wait for an auth request.
-- The homepage, pause menu and score page link to **Visitor files** (`/archive`).
+- The homepage has an **HR File** button beside sign-in. It opens the same private record (`/archive`) as the pause menu and score page. The visit ledger and charts use existing saves. Players can download a personnel ID as a PNG or share the file through a supported device.
   The pause-menu link opens a new tab so OAuth cannot destroy a live visit.
 - Google OAuth (PKCE) or a six-digit email code; no game passwords.
 - Room/creature discoveries, personal best, visit/escape counts and the latest
   twelve escaped tapes sync. Tape seed, edition and mascot settings survive.
-- Character editing uses `core/look.mjs` and the real `Avatar` rig. Species,
+- Character editing lives in **Customize** on the homepage and uses `core/look.mjs` and the real `Avatar` rig. Species,
   clothing, hair, built-in accessories and colours save locally and sync. The
   selected appearance is passed through `office.walk.me` on the next visit.
 - Every completed visit saves locally first. Cloud errors leave local play
@@ -40,7 +40,7 @@ mid-request from uploading one person's document as another person.
 The legacy `office-backrooms:record` and `blockrooms:me` are imported once into
 the initial guest file, then left as a backup. Nickname and a stored `look` or
 `character`, if present, are imported too. Previously generated appearances
-still derive from the nickname with the existing crown default.
+derive from the nickname for the personnel ID and homepage pass.
 
 Discovery IDs are unioned, first-seen dates take the earliest, best score takes
 the maximum, tapes deduplicate by seed + edition, and new visit counters merge

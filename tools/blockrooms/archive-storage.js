@@ -27,7 +27,7 @@ export function createArchiveStorage({ storage, locks, uuid = () => crypto.rando
     profile(id = owner()) {
       const a = doc(id); let seed = hashId(resolve(id));
       const name = a.name?.value || rollName(() => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; });
-      return { name, look: a.character?.value || resolveLook('lead:' + name, { accessory: 'crown' }) };
+      return { name, look: a.character?.value || resolveLook('visitor:' + name) };
     },
     edit(patch, id = owner()) { return atomic(() => put(id, editArchive(doc(id), patch, device, now()))); },
     merge(value, id = owner()) { return atomic(() => {

@@ -5,22 +5,36 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!--CSP-->
 <meta name="robots" content="noindex">
-<title>BlockRooms — Your tape archive</title>
+<title>BlockRooms — HR File</title>
 <link rel="stylesheet" href="./home.css">
 <link rel="stylesheet" href="./archive.css">
 <script type="importmap"><!--IMPORTMAP--></script>
 <script type="module" src="./archive-page.js"></script>
 </head>
 <body class="paper archive-page">
-<a class="skip" href="#archive-main">Skip to archive</a>
-<div class="cabinet">
-<nav aria-label="Archive navigation"><a href="./">[ HOME ]</a><a class="play" href="./play">ENTER</a></nav>
-<header class="archive-header"><canvas id="archive-logo" role="img" aria-label="BlockRooms"></canvas><h1>VISITOR FILES</h1><p>Recovered tapes &middot; sightings &middot; visitor photograph</p><div class="header-pictures" aria-hidden="true"><i data-sprite="tape" data-scale="3"></i><i data-sprite="camcorder" data-scale="3"></i><i data-sprite="floppy" data-scale="3"></i></div></header>
-<hr class="rainbow">
+<a class="skip" href="#archive-main">Skip to HR File</a>
+<div class="cabinet hr-window">
+<header class="file-bar"><span class="file-icon" aria-hidden="true"></span><h1>BlockRooms &mdash; HR File</h1></header>
+<nav class="file-menu" aria-label="File navigation"><a href="./#enter">Home</a><a href="#workbook">Charts</a><a href="#shelf-title">Tapes</a><a href="#connection-title">Account</a><a class="play" href="./play">ENTER</a></nav>
 <main id="archive-main">
-<div class="status-strip"><span id="save-status" role="status" aria-live="polite">Saved on this device</span><button id="sync" type="button" hidden>Sync now</button></div>
+<div class="file-overview">
+<section class="id-copy" aria-label="Personnel ID">
+<canvas id="staff-card" width="1200" height="720" role="img" aria-label="Your BlockRooms personnel ID"></canvas>
+<div class="card-tools"><button type="button" id="download-card" disabled>Save ID as PNG</button><button type="button" id="share-card" hidden>Share ID…</button><a href="./#open-creator">Edit appearance</a><span role="status" id="export-status"></span></div>
+</section>
+<section class="ledger" aria-labelledby="ledger-title"><h2 id="ledger-title">Visit ledger</h2><dl id="ledger-rows"></dl></section>
+</div>
+<section class="workbook" id="workbook" aria-labelledby="workbook-title">
+<div class="workbook-bar"><span class="sheet-icon" aria-hidden="true"></span><h2 id="workbook-title">FIELDWORK.XLS</h2></div>
+<div class="sheet-tabs" role="group" aria-label="Choose a worksheet"><button type="button" id="chart-sightings" aria-pressed="true">Discoveries</button><button type="button" id="chart-escapes" aria-pressed="false">Escape times</button></div>
+<div class="plot-sheet"><h3 id="plot-title"></h3><p id="plot-caption"></p><div id="plot-legend" class="plot-legend" hidden><span>Room types</span><span>Entities</span></div><canvas id="plot" role="img" aria-labelledby="plot-title" aria-describedby="plot-caption"></canvas><p id="plot-empty" hidden></p></div>
+<details id="chart-data"><summary>View worksheet data</summary><div class="data-scroll"><table id="plot-data"></table></div></details>
+</section>
+
+<section aria-labelledby="shelf-title" class="records"><p class="index">TAPE LIBRARY</p><div class="section-head"><h2 id="shelf-title">Recovered tapes</h2></div><p class="fine">Up to twelve recovered tapes. Play one back to revisit its building in the current edition.</p><ol id="tape-list" class="tapes"></ol></section>
+<section class="discoveries" aria-labelledby="seen-title"><p class="index">SIGHTINGS LOG</p><h2 id="seen-title">Recorded sightings</h2><div class="discovery-columns"><div><h3 id="rooms-title">Rooms</h3><ul id="rooms-list" aria-labelledby="rooms-title"></ul></div><div><h3 id="cast-title">Residents</h3><ul id="cast-list" aria-labelledby="cast-title"></ul></div></div></section>
 <section class="connection" aria-labelledby="connection-title">
-<div><p class="index">VISITORS’ REGISTER</p><h2 id="connection-title">Save your file</h2><p>Sign in to open your file on another computer. Tapes and sightings already on this computer will be added.</p><p class="fine">You can play without signing in. Your email is private. The guestbook uses your nickname. <a href="./privacy">Privacy policy</a></p></div>
+<div><p class="index">VISITORS’ REGISTER</p><h2 id="connection-title">Account &amp; saves</h2><p id="sign-in-hint">Sign in to carry this file between computers.</p><p class="fine">Your email is private. <a href="./privacy">Privacy policy</a></p></div>
 <div class="connection-form">
 <div id="signed-in" hidden><p>Signed in as <strong id="email-address"></strong></p><button id="sign-out" type="button">Sign out on this device</button></div>
 <div id="sign-in">
@@ -31,13 +45,7 @@
 <p id="auth-status" role="status" aria-live="polite">Checking cloud saves…</p>
 </div>
 </section>
-<section class="identity" aria-labelledby="identity-title">
-<div class="portrait"><p class="index">VISITOR PHOTOGRAPH</p><div id="portrait" role="img" aria-label="Your voxel character preview"></div><p class="portrait-caption">PLEASE KEEP PHOTOGRAPH UP TO DATE</p></div>
-<div class="identity-form"><h2 id="identity-title">Your visitor file</h2><p>Name and appearance for your next visit.</p>
-<form id="character-form"><label for="nickname">Nickname <small>(shown in game)</small></label><input id="nickname" maxlength="16" autocomplete="nickname" required><div id="look-fields" class="look-fields"></div><div class="form-actions"><button type="submit">Save changes</button><button id="random-look" type="button">Random</button></div><p id="look-status" role="status"></p></form></div>
-</section>
-<section aria-labelledby="shelf-title" class="records"><p class="index">TAPE LIBRARY</p><div class="section-head"><h2 id="shelf-title">Recovered tapes</h2><span id="record-counts"></span></div><p class="fine">Your twelve most recent escapes. Replays use the current build; older tapes may lead to a changed building.</p><ol id="tape-list" class="tapes"></ol></section>
-<section class="discoveries" aria-labelledby="seen-title"><p class="index">SIGHTINGS LOG</p><h2 id="seen-title">Recorded sightings</h2><div class="discovery-columns"><div><h3 id="rooms-title">Rooms</h3><ul id="rooms-list" aria-labelledby="rooms-title"></ul></div><div><h3 id="cast-title">Residents</h3><ul id="cast-list" aria-labelledby="cast-title"></ul></div></div></section>
+<div class="status-strip"><span id="save-status" role="status">Saved on this device</span><button id="sync" type="button" hidden>Sync now</button></div>
 </main>
 <footer>Progress saves at the end of each visit. A visit in progress stays on its current device.<br><a href="./play">Just play →</a> · <a href="./">Return to homepage</a></footer>
 </div>

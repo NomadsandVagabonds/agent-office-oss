@@ -6,9 +6,23 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { importArchive, mergeArchive, archiveRecord, archiveRun, editArchive, archiveLook } from '../core/archive.mjs';
 import { accountConfig } from '../tools/blockrooms/account-config.mjs';
+import { fileStats } from '../tools/blockrooms/archive-charts.js';
 import { build } from '../tools/blockrooms/build.mjs';
 const run = (seed, room = 'lobby') => ({ reason: 'exit', seed, edition: 'v1', mascot: true, rooms: { explored: 4, kinds: [room] }, cast: { met: ['pirate'], survived: 1 }, parts: { of: 2, reached: 2 }, seconds: 100 });
 const visit = (a, writer, seed, room) => archiveRun(a, run(seed, room), { writer, at: 100, by: 'Test' }).document;
+test('HR worksheets count dated first sightings once and time only retained tapes with durations', () => {
+  const day = Date.UTC(1998, 3, 6), next = day + 86400000;
+  const record = archiveRecord(importArchive({ runs: 10, out: 3, rooms: { lobby:day, pool:next, imported:0 }, cast: { toner:day+100 },
+    tapes:[{ seed:'new', seconds:70, plays:2 }, { seed:'old', seconds:95 }, { seed:'undated' }] }));
+  const stats = fileStats(record);
+  assert.deepEqual(stats.discoveries.map(r=>[r.rooms,r.cast]), [[1,1],[2,1]]);
+  assert.deepEqual(stats.busiest, { day:day/86400000, count:2 });
+  assert.equal(stats.rate,'30%');
+  assert.equal(stats.fastest,'1:10');
+  assert.deepEqual(stats.timed.map(t=>t.seed),['old','new']);
+  assert.equal(stats.replays,2);
+  assert.equal(fileStats(archiveRecord({})).rate,'—');
+});
 test('concurrent devices union discoveries/tapes and count visits once across retries', () => {
   const a = visit({}, 'a', 'tape-a'), b = visit({}, 'b', 'tape-b', 'pool');
   const ab = mergeArchive(a, b);

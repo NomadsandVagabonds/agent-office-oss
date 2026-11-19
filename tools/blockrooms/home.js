@@ -119,7 +119,7 @@ document.querySelector('.plugrow').style.backgroundImage = $('top').style.backgr
 const ME = 'blockrooms:me';
 // (a name is typed; until one is, the visitor is down under a made-up one; looks & kits stay optional)
 let me = (() => {
-  const was = store.get(ME) || {}, typed = cleanName(was.name), spare = cleanName(was.spare) || rollName();
+  const was = store.get(ME) || {}, typed = cleanName(was.name), spare = cleanName(was.spare) || archive.profile().name;
   const patch = sanitizeLookPatch(was.look).look;
   const customLook = !!was.customLook && Object.keys(patch).length > 0;
   return {
@@ -1067,6 +1067,7 @@ function openCreator(open) {
 }
 
 $('open-creator').addEventListener('click', () => openCreator(!studio.open));
+if (location.hash === '#open-creator') openCreator(true);
 $('creator-close').addEventListener('click', () => openCreator(false));
 $('creator-done').addEventListener('click', () => openCreator(false));
 $('creator-enter').addEventListener('click', () => { keep(); location.href = PLAY; });
