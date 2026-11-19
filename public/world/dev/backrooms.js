@@ -33,6 +33,8 @@
 //                      (clipping.js, docs/BLOCKROOMS-PREVIEWS.md). Nothing in the game reads it
 //   &preview=corners   doorways in the corners of rooms; &preview=hallways corridors that are not rectangles; comma'd with others
 //                      (preview.js). The floor is changed after it is generated: nothing else moves
+//   &preview=floorlight   a preview: the tubes let into the floor shining up, the ceiling dark, in party and museum
+//                      (floorlight.js, docs/BLOCKROOMS-PREVIEWS.md). Several at once: Both at once: &preview=clip,floorlightpreview=clip,floorlight
 //   &loot=1            something to find: the keycard (in the mascot's hand) and coins 1–4; &loot=card,1,3 for some of it. There is no
 //                      office here to keep count, so a stand-in does, in this page's memory, and says so on the console: what you leave
 //                      by the door with is gone the next visit (any key), everything else is down there again. Without it: no loot.

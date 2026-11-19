@@ -232,3 +232,116 @@ floor behind the new walls still takes doorway light, out of sight, and the door
 ignores the new walls: in a dogleg the jog casts no shadow from a doorway's light. The tube shadows are right, since
 no lamp is ever behind a new wall. Fixing this means giving the bake the angled walls as faces and occluders
 (`world.js` / `shadowmap.js`), which is beyond a preview.
+
+
+## Floor lights
+
+The owner: "what about one level where the florecent lights are on the floor facing up?" The lead's spec: fluorescent
+panels set into the floor shining up, the ceiling dark, shadows thrown upward, so that faces and things are lit from
+below.
+
+**Status: a preview.** Only with `&preview=floorlight` on the dev page, in two rooms that are plain in both play and
+look (docs/BLOCKROOMS-FIRST-FLOOR.md): **party** and **museum**. Without it both build exactly as before (below), and
+nothing in the game passes the flag. It can be asked for with the other one: `&preview=clip,floorlight`.
+
+### What was built
+
+- `world.js`: `c.fitting(x, z, { mount: 'floor' })`. The fitting is let into the floor instead of hung from the
+  ceiling: its flat form 4 mm over the carpet, the same corners wound the other way so it faces up, at every tier
+  (there is no sculpted fitting for a floor: at Medium and High it stays the flat panel); its baked lamp 12 cm over it
+  with the lobe turned up (`axis: [0, 1, 0]`). Everything else (power, colour, flicker, dead, banks, `light`) is as
+  `c.fitting` always had it, for any `kind`. The ceiling path is the same code with the same numbers.
+- `world.js`: `rt.uplit`, set by a room lit from its floor. A body there (the cast, the visitor's hands, a cut-out,
+  anything tinted by `world.lightAt` or `c.sample` without a normal) is tinted by what reaches its underside, not its
+  top; otherwise it would be nearly black. And `c.blot(…, { wall: side })`: a soft stain on a wall (it had the floor
+  and the ceiling).
+- `floorlight.js`: `uplit(c)` → null without the flag; else what the room needs to light itself from the floor:
+  - `shell`: the shell without its panels (the ceiling sheet whole), the ceiling tiles' albedo at 0.2, the wallpaper's
+    at 0.7 (a little darker, so the light low on it and a face against it read).
+  - `panels(avoid)`: each of the room's own ceiling panels (what gen.js rolled: lit, dead, flickering) let into the
+    floor under where it hung, or the nearest place half a tile at a time across or along where it misses `avoid`
+    and the other panels, on flat floor, off the stairs of a raised doorway. Each in a steel frame a centimetre proud.
+  - Each panel's lamp is brighter than a ceiling panel's (×3.4) but falls off much sooner (k 0.12 against 3.4) and is
+    nearly as bright sideways as up (lobe floor 0.8): the walls are lit low down by the panels near them and go dark
+    towards a dark ceiling, with a pale pool over each panel. The room's ambient light is at 8 %, the light spilling in
+    from a brighter room next door at half.
+  - `spot(x, z, o)`: a small uplight (a `can`, let into the floor) for one thing.
+  - **Shadows thrown up.** The bake has no shadows at Classic and Low, and the light map at Medium and High covers only
+    the floor and walls. So, once, at build time: each thing the room says stands in it (`stands(box)`), seen from each
+    lit panel within 2.4 m, is pushed onto the ceiling (its top, by similar triangles) and, where there is no light
+    map, its upper part onto the wall behind it, as soft blots, darker the nearer the panel and fainter the bigger the
+    shadow. At Medium and High the light map throws the walls' shadows itself, from the panels' real lamps.
+  - It reads no seeded stream: where the panels go is where the ceiling's were, everything else is a fixed choice.
+- **The camcorder.** The room's `level` is left as it was, so the camera's gain and its little lamp behave as in a lit
+  room: the lamp stays off (it would light every face from the front and undo the look), the gain stays near 1, and
+  the room is darker than today's by what it lost overhead. Nothing is blown out at Classic; at Medium and High the
+  glow (glow.js) blooms the panels in the floor as it did the ones in the ceiling.
+
+### The two rooms
+
+| room | under the flag |
+|---|---|
+| party | the tubes in the floor, under the table among them, so the table's underside and the chairs' fronts are lit and its top is dark; the balloons on a dark ceiling. And one more guest, who came early: a shop's dummy (the dummies' own model, cast/dummies.model.js), baked with the room, stood over a panel of its own at the end of the banner (or the end of the table: the first of four places that is clear), facing the cake, lit from under its chin, its shadow up the wall behind it and onto the ceiling. Solid; it does not move |
+| museum | each exhibit's light comes up at it from a can in the floor inside its rope, in front, instead of down from 2.25 m; the room's panels in the aisles between the roped squares. Plinths, labels and posts lit from below, the wing's sign over them in the dark |
+
+### Try it
+
+```
+/world/dev/backrooms.html?seed=7&room=party&preview=floorlight&pursuer=0&mute=1
+/world/dev/backrooms.html?seed=7&room=party&preview=floorlight&pursuer=0&mute=1&x=1.8&z=-2&yaw=-0.2&pitch=0.12
+/world/dev/backrooms.html?seed=7&room=museum&preview=floorlight&pursuer=0&mute=1
+/world/dev/backrooms.html?seed=7&room=party&preview=floorlight&pursuer=0&mute=1&graphics=high
+```
+
+Drop `&preview=floorlight` for today's room. Pictures in `docs/previews/`: `floorlight-<room>-door-<classic|high|low>`
+(the room from where you come in), `floorlight-party-guest-<classic|high>` (the dummy, lit from below),
+`floorlight-museum-close-<classic|high>`, and `floorlight-<room>-door-today` (no flag) to compare.
+
+### Proof
+
+- `test/backrooms-floorlight.test.mjs`: a floor fitting is one quad at the carpet facing up, 0.6 × 1.2 m, with its lamp
+  just over it shining up, at Classic and at Medium (no sculpted fitting), and otherwise the same lamp as the ceiling
+  one; over a floor panel a downward face is lit many times more than an upward one; the shadow projection by similar
+  triangles, and nothing when the thing is not between; on six seeds with both rooms dealt, at Classic and Medium,
+  nothing shines down from the ceiling, both are lit from the floor within the 16-light budget, the ambient is down,
+  the room's level (the camcorder's) is unchanged, a body in the room is lit, the underside of a thing over a panel is
+  lit and its top is not, every doorway is still reached; no two panels overlap, none lands on a roped square, and
+  something throws its shadow up in each; without the flag (or with an empty one, or `clip`) the rooms hash the same
+  as today's and are not `uplit`; the rooms' seeded streams are where they were, flag or not; the preview code rolls
+  nothing.
+- A whole-floor comparison against the commit before this change, without the flag: 16 seeds (7, 21, 3, 11, 40, q, zz,
+  102, 1, 2, 5, 9, 13, 77, abc, 999), each whole and with party, museum and kanban dealt, each at Classic and at Medium
+  (contact, bounce, shadows, door light, fixtures): every room's meshes (every vertex attribute and index), colliders,
+  lamps, ambient, level, light maps and shadow boxes, and the build's warnings: 1,818 rooms, the same to the byte.
+
+### Not done, and what looked wrong
+
+- Only party and museum, seed 7 looked at closely; Medium only through the tests, `vhs=0/1`, a phone, not.
+- The cast keep their own shading: each creature's model is baked once against its own studio lamps overhead, then
+  tinted by the room. Here the tint is what reaches its underside, so it is not left in the dark, but its face is
+  still lit from above. Lighting the cast from below would mean baking each one's model a second time with those lamps
+  turned under it (one line in each of about fifteen cast files), not done.
+- The dummy has no face (it is the shop's dummy); what lights from below is its brow, nose and chin, and the steps of
+  its head go dark on top. It reads best from a few metres; close to, it is coarse.
+- The walls: the gradient (bright low near a panel, dark under the ceiling) is there in the bake, three to one, but the
+  tape and the picture's curve flatten it to about one and a half to one on screen; on the party's yellow paper it is
+  subtle. The ceiling is the strongest tell: about a third as bright as today's.
+- The shadows thrown up at Classic are blots of a thing's box, not its shape: soft rectangles. Dragged furniture leaves
+  its blot where it was.
+- The museum loses some of its ceiling panels to the roped squares (seed 7: three of five lit ones find a place),
+  which the exhibits' cans make up; the left of the room is darker than the right.
+- With loot, a coin could land under the dummy (the party's stash is behind the table, under the banner).
+
+### Recommendation: a whole floor, not a room
+
+One room lit from the floor between ordinary ones reads as a dim room with odd lights; the look is the inversion, and
+an inversion needs a whole floor of it to become the rule, so that the visitor stops expecting a ceiling to light
+anything. **Sketch, not built:** a kind of floor in `themes.js` (say *Underlit*), dealt deep, where `c.shell` reads the
+theme and puts every plain room's panels in the carpet through `c.fitting`'s `mount: 'floor'` with the dark ceiling,
+and the corridors' too, so that the floor's own plain rooms need no code of their own; the oddities keep theirs or say
+`uplit` and take `floorlight.js` as party and museum do. Its grade a little warmer and lower in the highlights, the
+haze from below; the camcorder's level as a lit floor's, so its lamp never comes on. The cast dealt there baked once
+more with their studio lamps under them (the one real cost). Its own few rooms: a corridor where a run of panels is
+out and the next is lit, so you walk from pool to pool; a meeting room where the table is a light box and the chairs
+face it; the dummies' kind of floor (themes.js `mall`) is the nearest relation, and the dummies would stand over the
+panels.

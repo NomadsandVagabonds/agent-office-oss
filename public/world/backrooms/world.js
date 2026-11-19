@@ -30,6 +30,7 @@ import { markLiquid } from './liquid.mark.js';
 import { shineLights, lampSet } from './shining-lights.rule.js';
 import { sheenOf } from './graphics.js';                  // (floor sheen: kit.gfx.sheen)
 import { createSheen } from './sheen.js';
+import { FLOOR_LIT } from './floorlight.js';               // (a preview: c.fitting's mount 'floor')
 
 // each local wall: the way it faces, the direction it runs (U = up × normal), where it starts,
 // and how far along it a local coordinate c is (c is x on the front/back walls, z on the side walls)
@@ -763,7 +764,8 @@ export async function buildWorld(kit, level, env, tick) {
     const rt = world.roomAt(x, z);
     if (!rt) return [0.2, 0.2, 0.2];
     const p = toLocal(rt.def, x, z), k = rt.u.dim.value;
-    return lightAt(rt.lights, rt.amb, p.x, y, p.z, 0, 1, 0,
+    // (a room lit from the floor, rt.uplit (floorlight.js): what reaches a body is what reaches its underside)
+    return lightAt(rt.lights, rt.amb, p.x, y, p.z, 0, rt.uplit ? -1 : 1, 0,
       { lighting: rt.lighting, banks: rt.lightLevels, flick: rt.u.flick.value, ...(rt.lm?.shadows ? { shade: world.shadeAt(rt, p.x, p.z) } : {}) }).map((v, c) => v * k + (rt.doorLight ? world.doorAt(rt, p.x, p.z)[c] : 0));
   };
   /** (kit.gfx.doorlight) The light from next door on the floor here, for a body standing on it (as the shade, at 75 %). */
@@ -935,8 +937,10 @@ function roomContext(world, rt) {
   const ceilingLight = (x, z, top, o) => {
     const [hx, hz] = o.flat || [TILE / 2, TILE], sh = o.shine || null;
     const at = (dx, dz) => (o.turn ? [dz, -dx] : [dx, dz]);
-    const corner = (dx, dz) => { const [a, b] = at(dx, dz); return [x + a, top(x + a * 0.98, z + b * 0.98) - 0.006, z + b]; };
-    const q = [corner(-hx, -hz), corner(hx, -hz), corner(hx, hz), corner(-hx, hz)];
+    // (o.mount 'floor': let into the floor, FLOOR_LIT.lift over it, facing up — the same corners wound the other way)
+    const up = o.mount === 'floor', ground = (u, v) => floorAt(def, u, v) + FLOOR_LIT.lift;
+    const corner = (dx, dz) => { const [a, b] = at(dx, dz); return up ? [x + a, ground(x + a * 0.98, z + b * 0.98), z + b] : [x + a, top(x + a * 0.98, z + b * 0.98) - 0.006, z + b]; };
+    const q = up ? [corner(-hx, hz), corner(hx, hz), corner(hx, -hz), corner(-hx, -hz)] : [corner(-hx, -hz), corner(hx, -hz), corner(hx, hz), corner(-hx, hz)];
     const fit = o.fit !== null && o.fit !== undefined;
     const lay = (b, alb = WHITE) => (fit ? fitting(x, o.fit, z, !!o.turn, o.state === 'dead', b, o.kind, o) : b.quad(q[0], q[1], q[2], q[3], alb, PANEL_UV));
     const tube = o.tube, key = o.key || '', texture = sh ? sh.texture : kit.tex.panel(true), power = sh ? sh.power : 2.5;
@@ -945,8 +949,8 @@ function roomContext(world, rt) {
     const y = top(x, z), head = clamp((y - floorAt(def, x, z)) / 2.6, 0.3, 2.5), bank = o.bank, L = o.light || {};
     if (o.lamp) {
       const power = L.power !== undefined ? L.power : null;
-      o.lamp(x, y - 0.14, z, power === null ? tube.map((v) => v * 1.05 * def.light.power * Math.pow(head, 1.5)) : tube.map((v) => v * power),
-        { axis: [0, -1, 0], floor: L.floor ?? 0.24, flick: o.state === 'flicker' && !rt.lighting, bank, k: L.k ?? 3.4 * (head < 1 ? head * head : head), far: L.far ?? 14 * Math.max(0.5, head) },
+      o.lamp(x, up ? ground(x, z) + FLOOR_LIT.lamp : y - 0.14, z, power === null ? tube.map((v) => v * 1.05 * def.light.power * Math.pow(head, 1.5)) : tube.map((v) => v * power),
+        { axis: up ? [0, 1, 0] : [0, -1, 0], floor: L.floor ?? 0.24, flick: o.state === 'flicker' && !rt.lighting, bank, k: L.k ?? 3.4 * (head < 1 ? head * head : head), far: L.far ?? 14 * Math.max(0.5, head) },
         power === null ? 1.05 * def.light.power * Math.pow(head, 1.5) : power);
     }
     if (rt.lighting) { lay(shining(key ? `panel-bank-${key}-${bank}` : `panel-bank-${bank}`)); return; }
@@ -1236,6 +1240,9 @@ function roomContext(world, rt) {
      * within 16 as a shining batch keeps its own (shining-lights.rule.js lampSet: past it the nearest two become one);
      * with the room's other lights they must still be 16 at most (budget.js), so a room with many fittings gives some
      * `light: false`. Nothing is read from the room's seeded stream; nothing of it is solid or stands in the room.
+     * mount: 'floor' (a preview, floorlight.js): let into the floor instead, shining up — its flat form FLOOR_LIT.lift
+     * over the carpet facing up at every tier (there is no sculpted fitting for a floor), its lamp FLOOR_LIT.lamp over it
+     * with the lobe turned up; everything else as above.
      */
     fitting(x, z, opt = {}) {
       const kind = ['pool', 'batten', 'can'].includes(opt.kind) ? opt.kind : 'troffer', panel = kind === 'troffer' || kind === 'pool';
@@ -1255,13 +1262,14 @@ function roomContext(world, rt) {
       const key = panel ? tag : (opt.key ?? (tag ? `${kind}:${tag}` : kind));
       if (light !== false && !fitLamps) fitLamps = lampSet({}, (lx, ly, lz, l, o) => { const L = lamp(lx, ly, lz, l, o); rt.lights.push(L); return L; },
         (L) => { const i = rt.lights.indexOf(L); if (i >= 0) rt.lights.splice(i, 1); });
+      const floor = opt.mount === 'floor';
       ceilingLight(x, z, top, { state, turn, tube, key, kind, surface: kind === 'troffer' && !!opt.surface, len, flat, shine,
-        fit: kit.gfx?.fixtures > 0 ? top(x, z) - deep : null,
+        fit: !floor && kit.gfx?.fixtures > 0 ? top(x, z) - deep : null, ...(floor ? { mount: 'floor' } : {}),
         bank: rt.lighting ? (opt.bank ?? panelBank(rt.lighting, { x, z })) : undefined,
         light: typeof light === 'object' ? light : null, lamp: light === false ? null : (lx, ly, lz, rgb, o, w) => fitLamps.put(lx, ly, lz, rgb, w, o) });
     },
     /** The light at a spot, for things that are added after the bake. */
-    sample: (x, y, z, nx = 0, ny = 1, nz = 0) => lightAt(rt.lights, rt.amb, x, y, z, nx, ny, nz),
+    sample: (x, y, z, nx = 0, ny = rt.uplit ? -1 : 1, nz = 0) => lightAt(rt.lights, rt.amb, x, y, z, nx, ny, nz),
 
     /* ---- where things can go ---------------------------------------------------- */
     /** A point on a wall, `off` metres into the room, and the turn that makes a thing there face the room. */
@@ -1334,11 +1342,13 @@ function roomContext(world, rt) {
     },
     /** A dark soft patch on the floor under something. */
     shadow(x, z, w, d, strength = 0.5, y = 0.006) { c.blot(x, z, w + 0.24, d + 0.24, { a: strength, y }); },
-    /** A soft-edged stain: on the floor, or (down: true) on the underside of the ceiling. */
+    /** A soft-edged stain: on the floor, or (down: true) on the underside of the ceiling, or (wall: a side) on a wall —
+     * there x is where along it (as c.wallAt), z the height of its middle, w its width and d its height. */
     blot(x, z, w, d, o = {}) {
       const q = c.decals, base = q.pos.length / 3, hw = w / 2, hd = d / 2, y = o.y ?? 0.006, rgb = o.rgb || [0, 0, 0];
       const first = q.idx.length;
-      if (o.down) q.pos.push(x - hw, y, z - hd, x + hw, y, z - hd, x + hw, y, z + hd, x - hw, y, z + hd);
+      if (o.wall) { const p = c.wallAt(o.wall, x, 0.004), U = p.U; q.pos.push(p.x - U[0] * hw, z - hd, p.z - U[2] * hw, p.x + U[0] * hw, z - hd, p.z + U[2] * hw, p.x + U[0] * hw, z + hd, p.z + U[2] * hw, p.x - U[0] * hw, z + hd, p.z - U[2] * hw); }
+      else if (o.down) q.pos.push(x - hw, y, z - hd, x + hw, y, z - hd, x + hw, y, z + hd, x - hw, y, z + hd);
       else q.pos.push(x - hw, y, z + hd, x + hw, y, z + hd, x + hw, y, z - hd, x - hw, y, z - hd);
       q.uv.push(0, 0, 1, 0, 1, 1, 0, 1);
       for (let i = 0; i < 4; i++) q.col.push(rgb[0], rgb[1], rgb[2], o.a ?? 0.5);

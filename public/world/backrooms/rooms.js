@@ -18,6 +18,8 @@ import { poolroom, poolStanding, POOL_THINGS } from './waterpark.js';
 import { concourse } from './mall.js';
 import { forestRoom, forestStanding, FOREST_THINGS } from './forest.js';
 import { siteOf, standMachine } from './vending-machine.js';
+import { uplit } from './floorlight.js';
+import { dummyVox } from './cast/dummies.model.js';
 
 /* ---- the plain rooms, and what somebody left in them ------------------------------- */
 
@@ -451,7 +453,8 @@ function coolers(c) {
 /** A party for you. It has been ready for some time. */
 function party(c) {
   const { W, D, H, R, params: p } = c, kit = c.kit;
-  c.shell();
+  const up = uplit(c);                               // (preview, &preview=floorlight: null without it, and the room is as it always was)
+  c.shell(up?.shell);
   const cols = p.flags.map((h) => lin(h));
   // the banner
   const tex = kit.tex.custom('banner' + c.room.id, 320, 72, (g, w, h) => {
@@ -472,7 +475,7 @@ function party(c) {
     }
   }
   // the table: a cake, plates, cups, and chairs pushed in
-  const tz = -0.3, top = c.prop('hottable', 0, tz, { fallback: [2.4, 0.75, 0.9] }).top;
+  const tz = -0.3, table = c.prop('hottable', 0, tz, { fallback: [2.4, 0.75, 0.9] }), top = table.top;
   c.model('cake' + p.candles, () => {
     const v = new Vox(), cream = M('#f3e7d3', 1), pink = M('#e8a0b4', 1);
     v.cyl('y', 0, 0, 0, 1, 12, M('#e8e2d0', 0)); v.cyl('y', 0, 0, 1, 7, 9, cream); v.cyl('y', 0, 0, 7, 8, 9, pink); v.cyl('y', 0, 0, 8, 13, 6, cream); v.cyl('y', 0, 0, 13, 14, 6, pink);
@@ -508,6 +511,24 @@ function party(c) {
     c.reserve(x, z, 0.45);
     standee(c, 'party:' + who.name, { ...who.look, accessory: 'partyhat' }, x, z, Math.atan2(-x, 1));
   });
+  // (preview, &preview=floorlight: the tubes are in the floor and the ceiling is dark. And one more guest, who came early: a
+  // shop's dummy stood over a panel of its own, by the end of the banner or at the end of the table, facing the cake, lit
+  // from under its chin. Fixed choices, nothing rolled: the first of four places that is clear)
+  if (up) {
+    const avoid = [];
+    up.stands({ ...table, y0: top - 0.05 });
+    const at = [[2.1, -D / 2 + 0.65, 0, 1], [-2.1, -D / 2 + 0.65, 0, 1], [-1.8, tz, 1, 0], [1.8, tz, -1, 0]].find(([x, z]) => c.clear(x, z, 0.4));
+    if (at) {
+      const [x, z, fx, fz] = at, px = x + fx * 0.45, pz = z + fz * 0.45;
+      c.reserve(x, z, 0.45);
+      const foot = c.place(kit.model('floorlight:dummy', dummyVox(false, 1)), x, z, { rot: Math.atan2(-fx, -fz), shadow: 0.4 });
+      up.stands(foot);
+      up.panel(px, pz, { rot: fz ? Math.PI / 2 : 0 });
+      avoid.push(up.panelsAt[up.panelsAt.length - 1], { x0: x - 0.4, z0: z - 0.4, x1: x + 0.4, z1: z + 0.4 });
+    }
+    up.panels(avoid);
+    up.done();
+  }
 }
 
 /** A room of doors. Each has a status. One of them is OK. */
