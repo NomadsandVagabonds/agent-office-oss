@@ -26,6 +26,23 @@ materials, written in TSL. This is task R-5 of the Steam plan, D3 Rendering (`do
 | Size | 580 KB (159 KB gzipped). Fetched only under the flag. The site build copies it (`tools/backrooms-sample/stage.mjs`) and never preloads it (`test/blockrooms-site.test.mjs`). |
 | Office | `createStage` under `opt.nodes` switches off the office's bloom and tilt-shift composer (WebGL only). The office's `main.js` does not read the flag yet. |
 
+### A lost device
+- A WebGPU device can be lost at the start (a driver or software adapter that cannot show a picture on the page, as
+  here) or at any time after (a driver reset, a GPU switch). Either way the visit goes on.
+- `engine/stage.js` stops drawing (the game keeps running) and tries `engine/gpu-recover.js RECOVERY_STEPS` in order:
+  1. a fresh WebGPU device on the same canvas;
+  2. the WebGL 2 backend on a new canvas put under the old one;
+  3. that once more.
+- The renderer object, its materials and the visit stay the same: only the renderer's backend is swapped. The old canvas
+  stays on top, unseen, because the game's input and pointer lock are bound to it.
+- If nothing holds at the start, it is today's renderer instead. If nothing holds mid-visit, the picture stays black
+  and the console says to reload with `?gpu=webgl`.
+- Checked:
+  - unit tests (`test/blockrooms-webgpu-device-lost.test.mjs`);
+  - in a browser, at the start: SwiftShader's adapter loses its device at the first frame, and it recovers onto WebGL 2
+    with the same picture as the plain fallback.
+- Mid-visit has not been seen in a browser yet.
+
 ## What renders under the flag today
 
 Shots are side by side, today on the left and the flag on the right, in `docs/webgpu/`. All were taken in headless
