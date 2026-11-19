@@ -3,10 +3,12 @@
 // banks) times the room's dimmer and tint; the flashlight's and the camcorder lamp's cones; a voxel's grain and the line
 // where voxels meet; the texture (cut out where it says); the wet glint. Every number is kit.js's.
 //
-// The light maps (LIGHTMAP, TUBESHADOW, DOORLIGHT) are kit-node-light.js, and what a surface gives the glow (glow.js's
-// twin) is its second output while the glow's pass draws (glow-node.js). Not here yet (docs/BLOCKROOMS-WEBGPU.md), so
-// not drawn under ?gpu=webgpu whatever the tier says: the floor's sheen (SHEEN) and the flashlight's shadows (BEAM_SHADOWS). Rooms that extend a kit surface call `m.patchNode(hook)` to plug into position, map UV,
-// wet normal, final colour/alpha, or replace the fragment stage while keeping kit's baked light and uniform readers.
+// The light maps (LIGHTMAP, TUBESHADOW, DOORLIGHT) are kit-node-light.js, the floor's sheen (SHEEN) is
+// kit-node-sheen.js, and what a surface gives the glow (glow.js's twin) is its second output while the glow's pass
+// draws (glow-node.js). Not here yet (docs/BLOCKROOMS-WEBGPU.md), so not drawn under ?gpu=webgpu whatever the tier
+// says: the flashlight's shadows (BEAM_SHADOWS). Rooms that extend a kit surface call `m.patchNode(hook)` to plug into
+// position, map UV, wet normal, final colour/alpha, or replace the fragment stage while keeping kit's baked light and
+// uniform readers.
 //
 // The material keeps kit.js's `uniforms`, `defines`, `vertexShader` and `fragmentShader`, so that everything that
 // reaches into one (uTint, uDim, uFlick, a room's patch) keeps working; the uniforms are read every frame. The defines
@@ -14,6 +16,7 @@
 import { gpu } from '../engine/gpu.js';
 import { FLASHLIGHT, CAMCORDER_LAMP } from './flashlight.js';
 import { lightmapNode } from './kit-node-light.js';
+import { sheenNode } from './kit-node-sheen.js';
 import { glowStrength } from './glow.rule.js';
 
 /**
@@ -121,14 +124,14 @@ export function surfaceNode(spec) {
         const edge = ss(0.8, 1.0, max(fr.x, max(fr.y, fr.z)));
         c.mulAssign(float(1).sub(edge.mul(0.06).mul(aSurf.x.mul(6).add(0.4)).mul(aSurf.y.oneMinus())));
       } else c.addAssign(torch);
-      let t = null;
+      let mapTex = null, t = null;
       if (D.MAPPED) {
         let mapUv = baseUv;
         for (const h of hooks) {
           if (h.uv) mapUv = h.uv({ T, N, m, mapUv, uv: baseUv, localPos, localNormal, viewRayLocal, read, f, v2, v3, v4, ss, shared });
         }
-        const map = texture(read('map')).onRenderUpdate(() => read('map'));
-        t = map.sample(mapUv);
+        mapTex = texture(read('map')).onRenderUpdate(() => read('map'));
+        t = mapTex.sample(mapUv);
         if (D.CUTOUT) If(t.a.lessThan(0.5), () => { Discard(); });
         c.mulAssign(t.rgb);
       }
@@ -145,6 +148,9 @@ export function surfaceNode(spec) {
         const room = dot(vLit, vec3(0.333));
         c.addAssign(vec3(1.0, 0.97, 0.94).mul(glint.mul(1.1).add(rim.mul(0.22)).mul(uWet).mul(room.add(0.12))));
       }
+      // (Medium, High: the ceiling tubes caught on a floor that shines, kit-node-sheen.js)
+      const sheen = sheenNode(m, D, { baseUv, mapTex, mapSample: t, vLit, lightmapped });
+      if (sheen) c.addAssign(sheen(normal));
       for (const h of hooks) {
         if (h.color) {
           h.color({

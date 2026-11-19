@@ -70,7 +70,7 @@ export function lightmapNode(m, D, k) {
   const C = D.DOORLIGHT ? tex('uLmC', false) : null;
   const doors = D.DOORLIGHT ? [0, 1, 2, 3].map((i) => { const u = uniform(new N.Vector3()); return u.onRenderUpdate(() => { const v = read('uDoorL')?.[i]; if (v) u.value.copy(v); }); }) : null;
 
-  return (c) => {
+  const apply = (c) => {
     const r = floor(vRegion.add(0.5));
     const uv = lmUv(r);
     let out = c;
@@ -91,4 +91,14 @@ export function lightmapNode(m, D, k) {
     }
     return select(r.lessThan(0.5), c, out);
   };
+  /** Floor tube-shadow channels for kit-node-sheen.js, sampled in uniform control flow. */
+  apply.floorShade = () => {
+    if (!A) return { sa: T.vec4(1, 1, 1, 1), sb: vec2(1, 1) };
+    const isFloor = floor(vRegion.add(0.5)).equal(1.0);
+    const luv = lmUv(float(1));
+    const sa = select(isFloor, A.sample(luv), T.vec4(1, 1, 1, 1));
+    const sb = B ? select(isFloor, B.sample(luv).rg, vec2(1, 1)) : vec2(1, 1);
+    return { sa, sb };
+  };
+  return apply;
 }
