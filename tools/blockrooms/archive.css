@@ -1,3 +1,4 @@
+@font-face { font-family:'HR Mono'; src:url('./vendor/fonts/ibm-plex-mono-600.woff2') format('woff2'); font-weight:600; }
 /* The caretaker added another page to the same 1998 site. Reuse its paper,
    pixel pictures, system fonts and raised grey controls. */
 body.archive-page { margin:0; padding:20px 12px 40px; border:0; text-align:left; }
@@ -5,10 +6,7 @@ body.archive-page { margin:0; padding:20px 12px 40px; border:0; text-align:left;
 .archive-page nav { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:8px 12px; background:#c0c0c0; border-bottom:2px ridge #eee; font:bold 14px "Times New Roman",serif; }
 .archive-page nav .play { color:#fff; background:#008040; border:3px outset #66cc99; padding:3px 18px; text-decoration:none; font:bold 18px Arial,sans-serif; }
 .archive-header { position:relative; padding:18px 12px 12px; text-align:center; background-color:#050507; color:#ffffcc; }
-#archive-logo { display:block; max-width:min(75vw,290px); height:auto; margin:0 auto 10px; image-rendering:pixelated; }
 .archive-header h1 { font:bold 24px "Comic Sans MS","Chalkboard SE",cursive; color:#00ff00; margin:4px 0; }
-.archive-header p { font:14px "Times New Roman",serif; margin:6px 0; }
-.header-pictures { display:flex; justify-content:center; align-items:center; gap:28px; margin-top:12px; }
 .archive-page main { padding:12px; }
 .archive-page h2 { font:bold 22px "Times New Roman",serif; margin:0 0 10px; }
 .archive-page h3 { font:bold 16px "Times New Roman",serif; }
@@ -21,7 +19,7 @@ body.archive-page { margin:0; padding:20px 12px 40px; border:0; text-align:left;
 .archive-page button:focus-visible,.archive-page input:focus-visible,.archive-page select:focus-visible,.archive-page a:focus-visible { outline:2px solid #0000ee; outline-offset:3px; }
 .archive-page [hidden] { display:none!important; }
 .status-strip { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; padding:7px 10px; margin-bottom:14px; border:2px inset #c0c0c0; background:#ffffcc; font:12px "Courier New",monospace; }
-.connection,.identity,.records,.discoveries { position:relative; margin-bottom:16px; padding:38px 12px 12px; border:3px ridge #c0c0c0; background:#ffffef; }
+.connection,.records,.discoveries { position:relative; margin-bottom:16px; padding:38px 12px 12px; border:3px ridge #c0c0c0; background:#ffffef; }
 .archive-page .index { position:absolute; left:0; right:0; top:0; margin:0; padding:4px 8px; background:#000080; color:#fff; font:bold 12px Arial,sans-serif; }
 .connection { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
 .connection-form { align-self:center; min-width:0; }
@@ -29,25 +27,12 @@ body.archive-page { margin:0; padding:20px 12px 40px; border:0; text-align:left;
 .input-row { display:flex; gap:5px; }
 .input-row button { white-space:nowrap; }
 .fine { font-size:13px; }
-#auth-status,#look-status { font:12px/1.4 "Courier New",monospace; min-height:17px; margin:9px 0 0; overflow-wrap:anywhere; }
+#auth-status { font:12px/1.4 "Courier New",monospace; min-height:17px; margin:9px 0 0; overflow-wrap:anywhere; }
 .error { color:#a00000; }
 #code-form { margin-top:12px; }
 #code-address,#email-address { overflow-wrap:anywhere; }
 .archive-page .text-button { color:#0000ee; background:none; border:0; padding:8px 0; text-decoration:underline; font:13px "Times New Roman",serif; }
-.identity { display:grid; grid-template-columns:190px 1fr; gap:20px; padding-top:12px; background:#e5e5ff; }
-.portrait { padding:28px 8px 8px; border:2px inset #c0c0c0; background:#c0c0c0; align-self:start; position:relative; }
-.portrait .index { font-size:10px; background:#800000; }
-#portrait { height:230px; background:#000; }
-#portrait canvas { display:block; width:100%; height:100%; }
-.portrait-caption { font:9px/1.5 "Courier New",monospace; text-align:center; margin:7px 0 0; }
-.identity-form { min-width:0; }
-.identity-form>p { font-size:13px; }
-.look-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px 8px; margin:12px 0; }
-.look-fields label { font-size:12px; }
-.look-fields input[type=color] { height:34px; padding:2px; }
-.form-actions { display:flex; flex-wrap:wrap; gap:8px; }
 .section-head { display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px; }
-#record-counts { font:12px "Courier New",monospace; }
 .archive-page .tapes { display:block; list-style:none; padding:0; margin:10px 0 0; border:2px outset #ddd; background:#c0c0c0; }
 .archive-page .tape { display:flex; align-items:center; justify-content:space-between; gap:10px; white-space:normal; padding:7px 8px; margin:2px; border:1px inset #aaa; background:#fff; color:#000; font:14px "Times New Roman",serif; }
 .archive-page .tape a { overflow-wrap:anywhere; font:13px "Courier New",monospace; }
@@ -63,12 +48,72 @@ body.archive-page { margin:0; padding:20px 12px 40px; border:0; text-align:left;
   body.archive-page { padding:8px; }
   .archive-page main { padding:8px; }
   .connection { grid-template-columns:1fr; gap:8px; }
-  .identity { grid-template-columns:1fr; gap:14px; }
-  .portrait { width:185px; justify-self:center; }
-  #portrait { height:215px; }
   .discovery-columns ul { columns:1; }
   .archive-page .tape { flex-wrap:wrap; }
   .archive-header h1 { font-size:22px; }
-  .look-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
 @media(prefers-reduced-motion:reduce) { .archive-page .rainbow { animation:none; } }
+
+/* Personnel keeps the print stock beside the workbook. Navigation and charts share the desktop chrome. */
+.archive-page .hr-window { max-width:1000px; background:#d4d0c8; border:3px outset #e9e7df; box-shadow:4px 5px 0 #695e31; }
+.file-bar,.workbook-bar { display:flex; align-items:center; gap:8px; background:#080b76; color:#fff; padding:5px 8px; }
+.file-bar h1,.archive-page .workbook-bar h2 { margin:0; font:bold 16px/1.2 Arial,Helvetica,sans-serif; }
+.file-icon,.sheet-icon { position:relative; display:inline-block; flex:0 0 auto; width:17px; height:12px; background:#efcc65; border:1px solid #322e14; box-shadow:inset 1px 1px #fff2ac; }
+.file-icon::before { content:""; position:absolute; left:0; top:-4px; width:7px; height:3px; background:#efcc65; border:1px solid #322e14; border-bottom:0; }
+.archive-page nav.file-menu { justify-content:flex-start; flex-wrap:wrap; gap:2px 14px; padding:4px 10px; font:14px Arial,sans-serif; }
+.file-menu a:not(.play) { color:#151a18; padding:3px 1px; }
+.file-menu .play { margin-left:auto; }
+.hr-window main { padding:14px; }
+.file-overview { display:grid; grid-template-columns:minmax(0,1.95fr) minmax(238px,1fr); gap:16px; align-items:start; margin-bottom:16px; }
+.id-copy,.ledger { min-width:0; }
+#staff-card { display:block; width:100%; height:auto; background:#eee5c8; box-shadow:2px 3px 0 #817e6e; }
+.card-tools { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:10px; }
+.card-tools a { margin-left:4px; font:13px Arial,sans-serif; }
+#export-status { font:13px Arial,sans-serif; }
+.ledger { padding:0 10px 8px; border:2px inset #eee; background:#f7f6eb; }
+.archive-page .ledger h2 { margin:0 -10px; padding:7px 10px; font:bold 17px Georgia,"Times New Roman",serif; color:#203c36; border-bottom:3px double #688176; }
+.ledger dl { margin:0; }
+.ledger dl div { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:baseline; padding:6px 0; gap:8px; border-bottom:1px dotted #adae98; }
+.ledger dl div:last-child { border-bottom:none; }
+.ledger dt { font:13px/1.25 Arial,sans-serif; }
+.ledger dd { margin:0; text-align:right; font:bold 14px/1.25 "Courier New",monospace; }
+.ledger dl div:last-child { grid-template-columns:1fr; gap:3px; }
+.ledger dl div:last-child dd { text-align:left; }
+.workbook { margin-bottom:16px; border:3px outset #eee; background:#c0c0c0; }
+.workbook-bar { background:#17564e; }
+.archive-page .workbook-bar h2 { font-size:14px; letter-spacing:.035em; }
+.sheet-icon { height:16px; width:13px; background:repeating-linear-gradient(to bottom,transparent 0 3px,#508072 3px 4px),repeating-linear-gradient(to right,#f7f3d4 0 5px,#508072 5px 6px); }
+.sheet-tabs { display:flex; gap:3px; padding:7px 8px 0; }
+.sheet-tabs button { border-width:2px; font-size:13px; padding:5px 12px; }
+.sheet-tabs button[aria-pressed=true] { color:#103e37; background:#fffef5; border-bottom-color:#fffef5; }
+.plot-sheet { position:relative; border:2px inset #eee; margin:0 6px; background:#fffef5; padding:12px 8px 2px; }
+.archive-page .plot-sheet h3 { font:bold 18px Georgia,"Times New Roman",serif; margin:0 6px 4px; }
+#plot-caption,.plot-legend { margin:0 6px 4px; font:13px/1.4 Arial,sans-serif; }
+.plot-legend { display:flex; flex-wrap:wrap; gap:4px 18px; color:#273d36; font-size:13px; font-weight:bold; }
+.plot-legend span::before { content:""; display:inline-block; margin-right:5px; width:8px; height:8px; background:#08786e; }
+.plot-legend span+span::before { background:#71335d; transform:rotate(45deg); }
+#plot { display:block; width:100%; height:clamp(180px,24vw,234px); }
+#plot-empty { position:absolute; left:50%; bottom:50px; transform:translateX(-50%); max-width:85%; width:max-content; background:#fffef5; color:#38423c; padding:5px 8px; font:13px "Courier New",monospace; text-align:center; }
+#chart-data { padding:6px 9px; font:13px Arial,sans-serif; }
+#chart-data summary { cursor:pointer; width:fit-content; }
+.data-scroll { max-height:260px; overflow:auto; margin-top:6px; }
+#plot-data { border-collapse:collapse; width:100%; background:#fff; }
+#plot-data th,#plot-data td { text-align:left; padding:4px 8px; border:1px solid #9fa396; font-size:13px; overflow-wrap:anywhere; }
+#plot-data th { background:#e5e5d8; position:sticky; top:0; }
+#plot-data td { font-family:"Courier New",monospace; }
+.hr-window .records,.hr-window .discoveries,.hr-window .connection { background:#f7f6ec; }
+.hr-window .discoveries .index { background:#17564e; }
+@media(max-width:690px) {
+  .hr-window main { padding:8px; }
+  .file-overview { grid-template-columns:minmax(0,1fr); gap:12px; }
+  .ledger dl div:last-child { grid-template-columns:1fr auto; }
+  .ledger dl div:last-child dd { text-align:right; }
+  .file-menu .play { font-size:14px; padding:3px 8px; }
+}
+
+.clearance-list { margin-top:10px; border-top:1px solid #a4a093; font:13px Arial,sans-serif; }
+.clearance-list summary { cursor:pointer; padding:8px 0 2px; font-weight:bold; }
+.clearance-list p { margin:8px 0; }
+.clearance-list ul { list-style:none; padding:0; margin:0; }
+.clearance-list li { display:flex; justify-content:space-between; gap:12px; padding:4px 0; border-bottom:1px dotted #b2ae9d; }
+.clearance-list .earned { color:#1b3071; font-weight:bold; }

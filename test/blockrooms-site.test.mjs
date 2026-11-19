@@ -35,7 +35,7 @@ test('the site is two whole pages with everything they ask for beside them, and 
   }
   assert.ok(page.includes('<script type="module" src="./site.js"></script>') && home.includes('<script type="module" src="./home.js"></script>'));
   assert.ok(!files.some((f) => /^(data|public|server|test|tools|docs|hooks|api)\//.test(f) || /knowledge|transcripts|\.env/.test(f)), 'something of the office\'s own is in the site');
-  const expected = /^(index\.html|privacy\.html|play\.html|site\.js|home\.js|home\.css|art\.js|archive(?:-page|-client|-worker|-storage|-cloud|-preview)?\.js|archive\.css|archive\.html|account-config\.json|robots\.txt|og\.jpg|muzak\.mp3|shots\/[\w-]+\.jpg|(world|core|vendor)\/.+)$/;
+  const expected = /^(index\.html|privacy\.html|play\.html|site\.js|home\.js|home\.css|art\.js|archive(?:-page|-client|-worker|-storage|-cloud|-preview|-card|-stamps|-charts|-floors)?\.js|archive\.css|archive\.html|account-config\.json|robots\.txt|og\.jpg|muzak\.mp3|trailer\.mp4|trailer-poster\.jpg|trailer-player\.js|shots\/[\w-]+\.jpg|(world|core|vendor)\/.+)$/;
   assert.ok(files.every((f) => expected.test(f)), `a file nobody expected: ${files.find((f) => !expected.test(f))}`);
 
   assert.ok(home.includes('href="./privacy"') && fs.readFileSync(path.join(out, 'archive.html'), 'utf8').includes('href="./privacy"'));
@@ -56,6 +56,8 @@ test('the site is two whole pages with everything they ask for beside them, and 
   for (const f of preloads) assert.ok(files.includes(f), `asked for at once, and not there: ${f}`);
   // (the measuring tape, for ?debug&bench=1, is there to be imported when asked for, and is not asked for at once)
   for (const f of PERF) assert.ok(files.includes(f) && !preloads.includes(f), `${f} is not there, or is preloaded`);
+  // (and the WebGPU build, for ?gpu=webgpu: there to be imported by the stage when asked for, never fetched otherwise)
+  assert.ok(files.includes('vendor/three.webgpu.min.js') && !preloads.includes('vendor/three.webgpu.min.js'), 'the WebGPU build is not there, or is preloaded');
   for (const f of files.filter((n) => /\.m?js$/.test(n))) {
     const src = fs.readFileSync(path.join(out, f), 'utf8');
     // (less its block comments: three.js's add-ons show how to import them in theirs, by a name only a bundler knows)
@@ -95,6 +97,11 @@ test('the front page is the caretaker\'s: every picture it shows is there, every
   assert.ok(!/\?room=/.test(home + script), 'the front page sends somebody to a room');
   // The staff directory has their pictures and their names, and what it knows about each of them is "??????????" (the
   // owner's word). How any of them works is for whoever goes in to find out.
+  const trailer = home.match(/id="construction"[\s\S]*?<\/section>\s*(<section[^>]+id="trailer"[\s\S]*?<\/section>)/)?.[1];
+  assert.match(trailer || '', /<video\b(?=[^>]*\bcontrols\b)(?=[^>]*preload="none")(?=[^>]*poster="\.\/trailer-poster\.jpg")[^>]*>/);
+  assert.doesNotMatch(trailer, /\bautoplay\b/);
+  assert.match(trailer, /<source src="\.\/trailer\.mp4" type="video\/mp4">/);
+  assert.match(home, /<details class="panel roster-wrap" id="staff">\s*<summary>Staff directory<\/summary>\s*<table class="roster">/);
   const roster = home.slice(home.indexOf('<table class="roster">'), home.indexOf('</table>', home.indexOf('<table class="roster">')));
   const staff = [...roster.matchAll(/<tr>\s*<td class="mug">[\s\S]*?<\/td>\s*<td>([\s\S]*?)<\/td>\s*<td>([\s\S]*?)<\/td>\s*<\/tr>/g)];
   assert.ok(staff.length >= 10, 'the staff directory is not there');
@@ -180,7 +187,7 @@ test('the page\'s own script: a building nobody has had, a tape from the address
   assert.ok(!/^import[^\n]*perf/m.test(src), 'the measuring tape is not imported up front');
   // (only a visit that got out may sign, and it is asked after, on the front page: the owner, 18 Nov. The card keeps the
   // report in this browser and points there; nothing is signed from the card itself)
-  assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit' \|\| !scoreEligible\(report\)\) return null;\n  const name = office\.walk\?\.me\?\.name \|\| me\(\)\.name, ticket = await visitTicket\.catch\(\(\) => null\);\n  if \(!ticket\) return null;[^\n]*\n  try \{ localStorage\.setItem\(UNSIGNED, JSON\.stringify\(\{ name, run: report, ticket,/);
+  assert.match(src, /if \(card\.replay \|\| card\.reason !== 'exit' \|\| !scoreEligible\(report\)\) return null;\n  const player = office\.walk\?\.me;\n  const name = player\?\.name \|\| me\(\)\.name, ticket = await visitTicket\.catch\(\(\) => null\);\n  if \(!ticket\) return null;[^\n]*\n  try \{ localStorage\.setItem\(UNSIGNED, JSON\.stringify\(\{ name, look: player\?\.look, run: report, ticket,/);
   assert.ok(!/do: 'sign'/.test(src), 'the card signs the book by itself');
   const front = fs.readFileSync(new URL('../tools/blockrooms/home.js', import.meta.url), 'utf8');
   assert.match(front, /const UNSIGNED = 'blockrooms:unsigned';/);

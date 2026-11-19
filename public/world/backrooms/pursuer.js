@@ -133,9 +133,9 @@ export function createStalkers(env, options = {}) {
     /** For the count kept of a visit: the visitor has really seen it, for the first time (say so once) · it had them, and they got away (each time). */
     // (a member of the cast with music of its own — `music` on its line of cast.js — has it begin here: each part's is
     // met once, so it is once a part, and a piece already playing is not begun again)
-    met: () => { env.run?.met?.(member.id); if (member.music === 'mascot') env.sound?.playMascot?.(); },
+    met: () => { env.run?.met?.(member.id, k); if (member.music === 'mascot') env.sound?.playMascot?.(); },
     // (once a creature a floor: got away from is an escape, not a count of jabs — a boss jabbed three times is one)
-    survived: () => { if (k.escaped) return; k.escaped = true; env.run?.survived?.(member.id); },
+    survived: () => { if (k.escaped) return; k.escaped = true; env.run?.survived?.(member.id, k); },
     /** Take a share (0…1) of whatever charge the camcorder's battery has left, where it has one. → { ok } */
     drain: (share) => env.camera?.drain?.(share) ?? { ok: false },
     /** What the visitor is holding (inventory, when there is one): { type, … } or null · take n of it: → whether that was done. */

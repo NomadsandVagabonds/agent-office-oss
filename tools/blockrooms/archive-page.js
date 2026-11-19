@@ -1,34 +1,34 @@
-import { mount, drawLogo, voidTile } from './art.js';
 import { archive, onArchive, startAccounts, signInGoogle, emailCode, verifyCode, signOut, sync } from './archive-client.js';
-import { SPECIES, HAIR, OUTFIT, ACCESSORY, FACIAL, resolveLook } from './core/look.mjs';
-import { cleanName } from './core/book.mjs';
+import { cardExporter, drawPersonnelCard } from './archive-card.js';
+import { CLEARANCE_FLOORS } from './core/archive.mjs';
+import { floorEvidence } from './archive-floors.js';
+import { fileStats, ledgerRows, workbook } from './archive-charts.js';
 const $ = id => document.getElementById(id);
 const node = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
 const pretty = s => s.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-drawLogo($('archive-logo'));
-document.querySelector('.archive-header').style.backgroundImage = `url(${voidTile()})`;
-mount();
-let preview, lastLook, lastOwner, dirty = false, formLook, sending = false, cooldown = 0, codeEmail = '', currentState;
-const fields = {};
-for (const [key, values] of Object.entries({ species: SPECIES, hair: HAIR, outfit: OUTFIT, accessory: ACCESSORY, facial: FACIAL, skin: null, hairColor: null, outfitColor: null })) {
-  const box = node('div'), label = node('label', pretty(key.replace(/Color$/, ' colour'))); label.htmlFor = 'look-' + key;
-  const input = node(values ? 'select' : 'input'); input.id = label.htmlFor;
-  if (values) for (const value of values) { const option = node('option', pretty(value)); option.value = value; input.append(option); }
-  else input.type = 'color';
-  fields[key] = input; input.addEventListener('input', () => { dirty = true; formLook = { ...formLook, [key]: input.value }; preview?.show(formLook); $('look-status').textContent = 'Not saved. Choose Save changes to keep this appearance.'; });
-  box.append(label, input); $('look-fields').append(box);
+const card = $('staff-card');
+const prepareExport = cardExporter(card, $('download-card'), $('share-card'), $('export-status'));
+const showWorkbook = workbook({ canvas:$('plot'), title:$('plot-title'), caption:$('plot-caption'), legend:$('plot-legend'), empty:$('plot-empty'), details:$('chart-data'), table:$('plot-data'), discoveries:$('chart-sightings'), escapes:$('chart-escapes') });
+let photographer, portrait, lookKey, cardKey, currentCard, recordKey;
+let typeReady = false;
+let sending = false, cooldown = 0, codeEmail = '', currentState;
+function printCard() {
+  drawPersonnelCard(card,currentCard,portrait);
+  card.setAttribute('aria-label', `BlockRooms personnel ID for ${currentCard.name}. ${currentCard.escapes} escapes, ${currentCard.best} best score, ${currentCard.rooms} room types and ${currentCard.entities} entities. Floors visited: ${currentCard.visited.length} of 9. Floor clearance: ${currentCard.clearances.length ? currentCard.clearances.map(id => CLEARANCE_FLOORS[id]).join(', ') : 'none'}.`);
+  if (typeReady) prepareExport();
 }
-$('nickname').addEventListener('input', () => { dirty = true; });
-function form(profile) {
-  formLook = profile.look; $('nickname').value = profile.name;
-  for (const [key, input] of Object.entries(fields)) input.value = formLook[key];
-  const signature = JSON.stringify(formLook); if (lastLook !== signature) preview?.show(formLook); lastLook = signature;
+function photograph(look) {
+  portrait = null;
+  if (!photographer) return;
+  try { portrait = photographer.take(look); }
+  catch { photographer.dispose(); photographer = null; }
 }
 function render(state) {
   currentState = state;
   $('save-status').textContent = state.durable ? state.message : 'Browser storage is unavailable. This archive lasts only until this tab closes.';
   $('save-status').classList.toggle('error', !state.durable || state.phase === 'error');
   $('signed-in').hidden = !state.user; $('sign-in').hidden = !!state.user;
+  $('sign-in-hint').hidden = !!state.user;
   $('email-address').textContent = state.user?.email || '';
   $('sync').hidden = !state.user; $('sync').disabled = state.phase === 'syncing';
   $('google').hidden = state.providers?.google === false;
@@ -36,14 +36,37 @@ function render(state) {
   $('google').disabled = !state.configured || !state.ready || sending;
   $('send-code').disabled = !state.configured || !state.ready || sending || Date.now() < cooldown;
   if (state.user) $('auth-status').textContent = 'Your archive is private. Public scores and guestbook entries are separate.';
-  else if (state.ready && !state.configured) $('auth-status').textContent = 'Cloud saves are not connected in this build. Your local archive and character editor still work.';
+  else if (state.ready && !state.configured) $('auth-status').textContent = 'Cloud saves are offline. This file stays on this device.';
   else if (state.ready && oauthMessage) $('auth-status').textContent = oauthMessage;
   else if (state.ready && !codeEmail && !sending) $('auth-status').textContent = 'Signing in is optional.';
-  const owner = archive.owner();
-  if (owner !== lastOwner) { dirty = false; lastOwner = owner; }
-  if (!dirty) form(archive.profile());
-  const r = archive.record();
-  $('record-counts').textContent = `${r.runs} visit${r.runs === 1 ? "" : "s"} / ${r.out} escape${r.out === 1 ? "" : "s"} / best ${r.best.toLocaleString()}`;
+  const r = archive.record(), profile = archive.profile(), saved = archive.document();
+  const evidence = floorEvidence(r,saved);
+  if (evidence.visited.some(id => !saved.activity.floors.includes(id)) || evidence.clearances.some(id => !saved.clearances.includes(id)))
+    archive.restoreFloors(evidence, archive.owner()).catch(console.error);
+  const nextCard = { name:profile.name, look:profile.look, best:r.best, escapes:r.out, rooms:Object.keys(r.rooms).length, entities:Object.keys(r.cast).length, ...evidence };
+  const nextCardKey = JSON.stringify(nextCard);
+  if (cardKey !== nextCardKey) {
+    currentCard = nextCard; cardKey = nextCardKey;
+    const floors = Object.entries(CLEARANCE_FLOORS);
+    $('clearance-summary').textContent = `Floors visited · ${nextCard.visited.length} of ${floors.length} · ${nextCard.clearances.length} cleared`;
+    $('clearance-floors').replaceChildren(...floors.map(([id,label]) => {
+      const earned = nextCard.clearances.includes(id), row = node('li');
+      row.append(node('span',label), node('span',earned ? 'Cleared' : nextCard.visited.includes(id) ? 'Visited' : 'No record',earned ? 'earned' : ''));
+      return row;
+    }));
+    const nextLookKey = JSON.stringify(profile.look);
+    if (lookKey !== nextLookKey) { lookKey = nextLookKey; photograph(profile.look); }
+    printCard();
+  }
+  const olderCards = archive.priorCards();
+  const nextRecordKey = JSON.stringify([r,saved.activity.streams,olderCards.map(c=>[c.runs?.n,c.seen?.rooms])]);
+  if (recordKey === nextRecordKey) return;
+  recordKey = nextRecordKey;
+  const stats = fileStats(r,saved.activity.streams,olderCards);
+  showWorkbook(stats);
+  $('ledger-rows').replaceChildren(...ledgerRows(r,stats).map(([label,value]) => {
+    const line = node('div'); line.append(node('dt',label),node('dd',value)); return line;
+  }));
   $('tape-list').replaceChildren(...(r.tapes.length ? r.tapes.map(t => {
     const li = node('li', undefined, 'tape'), a = node('a', `▶ ${t.seed}`), meta = node('small', `${t.score.toLocaleString()} pts · ${t.at ? new Date(t.at).toLocaleDateString() : 'Imported'}`);
     a.href = './play?tape=' + encodeURIComponent(t.seed); a.setAttribute('aria-label', 'Replay tape ' + t.seed);
@@ -57,7 +80,10 @@ function render(state) {
 const signInResult = new URL(location.href).searchParams.get('signin');
 let oauthMessage = signInResult === 'email' ? 'Please verify this address with an email code.' :
   signInResult === 'failed' ? 'Google sign-in did not finish. Please try again.' : '';
-if (oauthMessage) history.replaceState(history.state, '', location.pathname);
+if (oauthMessage) {
+  history.replaceState(history.state, '', location.pathname + '#connection-title');
+  $('connection-title').scrollIntoView();
+}
 onArchive(render);
 async function action(fn) {
   try { oauthMessage = ''; await fn(); } catch (error) { $('auth-status').textContent = error.message || 'Something went wrong. You can still play.'; $('auth-status').classList.add('error'); }
@@ -86,15 +112,10 @@ setInterval(() => {
   $('send-code').textContent = seconds ? `Resend ${seconds}s` : codeEmail ? 'Resend code' : 'Send code';
   $('send-code').disabled = sending || seconds > 0 || !currentState?.configured || !currentState?.ready;
 }, 1000);
-$('character-form').addEventListener('submit', async e => {
-  e.preventDefault(); const name = cleanName($('nickname').value);
-  if (!name) { $('look-status').textContent = 'Use a nickname of up to 16 characters: letters, numbers, spaces or punctuation.'; return; }
-  await archive.edit({ name, character: formLook }); dirty = false;
-  $('look-status').textContent = 'Saved. This appearance applies to your next visit.'; render(currentState);
-});
-$('random-look').addEventListener('click', () => {
-  dirty = true; form({ name: $('nickname').value, look: resolveLook(crypto.randomUUID()) }); $('look-status').textContent = 'Not saved. Choose Save changes to keep this appearance.';
-});
-import('./archive-preview.js').then(({ characterPreview }) => { preview = characterPreview($('portrait')); preview.show(formLook); })
-  .catch(() => { $('portrait').textContent = '3D preview unavailable. You can still edit and save your look.'; });
-window.addEventListener('pagehide', () => preview?.dispose());
+Promise.allSettled([document.fonts.load('600 9px "HR Mono"')])
+  .then(() => { typeReady = true; printCard(); });
+// A printed pixel portrait is ready immediately, including on machines without WebGL.
+import('./archive-preview.js').then(({ characterPreview }) => {
+  photographer = characterPreview(); photograph(currentCard.look); printCard();
+}).catch(() => {});
+window.addEventListener('pagehide', event => { if (!event.persisted) photographer?.dispose(); });

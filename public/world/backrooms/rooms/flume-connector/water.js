@@ -37,8 +37,26 @@ function flowing(c, name, batch) {
     });
     mat.forceSinglePass = true;
     mat.uniforms.uFlowTime = time;
-    mat.fragmentShader = 'uniform float uFlowTime;\n' + mat.fragmentShader.replace(
-      'gl_FragColor = vec4(c, uAlpha);', `
+    if (mat.patchNode) {
+      mat.patchNode({
+        color({ T, c, alpha, uv, uAlpha, f, ss }) {
+          const { vec3, float, sin, abs, pow, max, mix } = T;
+          const t = f('uFlowTime');
+          const run = uv.y.mul(4.9).sub(t.mul(2.8));
+          const drift = sin(run.mul(2.4).add(uv.y.mul(2.7))).mul(0.045);
+          const across = uv.x.add(drift);
+          const edge = float(1).sub(abs(across.mul(2).sub(1)));
+          const film = ss(0.0, 0.28, edge);
+          const current = sin(run.mul(6.283).add(across.mul(11))).add(sin(run.mul(3.18).sub(across.mul(15))).mul(0.48));
+          const thread = pow(max(sin(across.mul(23).add(sin(run.mul(0.8)))).mul(0.5).add(0.5), 0), 6);
+          const glint = ss(0.58, 1.4, current).mul(mix(0.2, 1.0, thread));
+          c.addAssign(vec3(0.16, 0.24, 0.25).mul(glint.add(0.48)));
+          alpha.assign(uAlpha.mul(film).mul(float(0.38).add(thread.mul(0.16)).add(glint.mul(0.46))));
+        },
+      });
+    } else {
+      mat.fragmentShader = 'uniform float uFlowTime;\n' + mat.fragmentShader.replace(
+        'gl_FragColor = vec4(c, uAlpha);', `
   float run = vUv.y * 4.9 - uFlowTime * 2.8;
   float drift = sin(run * 2.4 + vUv.y * 2.7) * 0.045;
   float across = vUv.x + drift;
@@ -50,6 +68,7 @@ function flowing(c, name, batch) {
   float glint = smoothstep(0.58, 1.4, current) * mix(0.2, 1.0, thread);
   gl_FragColor = vec4(c + vec3(0.16, 0.24, 0.25) * (0.48 + glint),
                       uAlpha * film * (0.38 + thread * 0.16 + glint * 0.46));`);
+    }
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = name;
     mesh.renderOrder = 5;

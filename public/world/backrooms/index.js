@@ -81,7 +81,7 @@ function gather(office, opt) {
   const tasks = [];
   for (const list of st.tasks?.values?.() || []) for (const t of list || []) if (t && t.title) tasks.push(String(t.title));
   const me = office.walk?.me;
-  const customLook = opt.look ? sanitizeLookPatch(opt.look) : null;
+  const customLook = opt.look ? sanitizeLookPatch(opt.look).look : null;
   const lookPatch = customLook && Object.keys(customLook).length ? customLook : (me?.look || { accessory: 'crown' });
   return {
     name: String(opt.name || me?.name || 'Lead'), projects, agents, tasks,
@@ -108,7 +108,7 @@ async function buildersFor(level) {
 
 /**
  * @param office  the office object (stage, net, …)
- * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, depths?:number, depth?:number, inventory?:boolean, barricades?:boolean, scorecard?:boolean, replay?:boolean, debug?:boolean, dev?:object, onReady?:Function}} [opt]
+ * @param {{name?:string, seed?:number|string, only?:string|string[], pursuer?:boolean, vhs?:number, mute?:boolean, depths?:number, depth?:number, inventory?:boolean, barricades?:boolean, scorecard?:boolean, replay?:boolean, debug?:boolean, dev?:object, onReady?:Function, onFloorVisited?:(theme:string)=>void, onFloorCleared?:(theme:string)=>void}} [opt]
  *        depths: how many floors (default: by the seed) · depth: which floor to begin on (default: the top one)
  *        replay: this is a kept tape being played back (seed: the tape's; pursuer: whether the mascot was in it): nothing of the office's is hidden in it
  *        brand, share, also, home, anew: handed to the card at the end (scorecard.js), for a page that is not the office
@@ -446,7 +446,7 @@ async function visit(office, opt) {
       };
     }
     /** What creatures tell the visit, for the card at the end: this one was met; this one was got away from. */
-    env.run = { met: (id) => tally.met(id), survived: (id) => tally.survived(id) };
+    env.run = { met: tally.met, survived: tally.survived };
     // (whoever is looking may name who is down here, be put beside one of them, and have the mascot awake: ?debug only — docs/BACKROOMS.md)
     createStalkers(env, opt.debug ? { ...(opt.dev?.cast?.length ? { members: opt.dev.cast } : {}), beside: opt.dev?.beside || null, wake: !!opt.dev?.wake } : {});
     // the residents of rooms (denizens.js), and the visitor's hand as they ask after it; the picture washed red (0…1) by a room that does that
@@ -511,6 +511,7 @@ async function visit(office, opt) {
     currentUse = null; since = 0; hold = false; landed = -1;
     cur = f;
     purse?.attend(f.env);
+    opt.onFloorVisited?.(f.level.theme);
     tally.at(f.level.depth);                              // how far down somebody has got
     if (!f.world.scene.parent) root.add(f.world.scene);
     f.world.scene.position.set(0, 0, 0); f.world.scene.visible = true;
@@ -571,6 +572,7 @@ async function visit(office, opt) {
     tally.way();
     hud.hint(false);
     land(f, from);
+    if (at) opt.onFloorCleared?.(old.level.theme); // a real descent, after the next floor takes over
     interference = Math.max(interference, 0.7);
   }
 
@@ -790,7 +792,10 @@ async function visit(office, opt) {
     hud.hint(false);
     // carried is only kept by leaving by the way out: the card and the tapes (loot.js), and the spare battery packs in
     // your pockets, which are what the office pays for (core/game.mjs)
-    if (why === 'exit') kept = { ...kept, ...purse?.bank(), batteries: inventory?.count('battery') ?? 0 };
+    if (why === 'exit') {
+      kept = { ...kept, ...purse?.bank(), batteries: inventory?.count('battery') ?? 0 };
+      if (cur && how) opt.onFloorCleared?.(cur.level.theme);
+    }
     if (why === 'caught' && !(shot = beginShot())) sound.play('static', { dur: 1.3 });
     hud.batteryWarning(null);
     if (why === 'battery') { hud.batteryEnding({ opacity: 1 }); sound.play('static', { dur: 1.6, vol: .25 }); }

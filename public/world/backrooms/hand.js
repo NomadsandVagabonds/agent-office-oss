@@ -51,6 +51,9 @@ export const HELD_DEPTH_SLIVER = 0.002;
 let squeezed = false;
 /** Before a held mesh draws. `first`: the mesh that, as before, clears the room's depth when nothing reads it. */
 export function holdInFront(renderer, first = true) {
+  // (?gpu=webgpu: no GL state to reach into, and no clearing the depth halfway through a pass. Held kit-node materials
+  // instead write into the nearest depth sliver [0, HELD_DEPTH_SLIVER] via mat.setHeldInFront(HELD_DEPTH_SLIVER).)
+  if (renderer.isWebGPURenderer) return 'as-drawn';
   if (renderer.getRenderTarget?.()?.depthTexture) { renderer.getContext().depthRange(0, HELD_DEPTH_SLIVER); squeezed = true; return 'sliver'; }
   if (!first) return 'as-drawn';
   // The previous transparent room mesh may have disabled depth writes;
@@ -86,7 +89,7 @@ export function createHandView(env, camera) {
   const kit = env.kit, root = new THREE.Group(), made = new Map(), at = new THREE.Vector3(), rest = new THREE.Vector3();
   let shown = null, type = null, t = 0, swing = 0, layoutKey = '', move = null, notes = null;
   root.visible = false;
-  const stuck = () => notes || (notes = createStuckNotes(kit, camera, { mine: () => camera.userData.hand === view, before: holdInFront, after: letGoOfFront }), root.add(notes.group), notes);
+  const stuck = () => notes || (notes = createStuckNotes(kit, camera, { mine: () => camera.userData.hand === view, before: holdInFront, after: letGoOfFront, sliver: HELD_DEPTH_SLIVER }), root.add(notes.group), notes);
   /** FORM HR-404, as a sheet of paper held up: the one thing down here that is meant to be read. */
   function slip() {
     const tex = kit.tex.custom('hand:pink-slip:' + (env.who?.name || ''), 128, 168, (g) => {
@@ -156,7 +159,7 @@ export function createHandView(env, camera) {
     const group = new THREE.Group(), made = [];
     for (const side of [-1, 1]) {
       const mat = kit.surface({ vox: false, side: THREE.DoubleSide }), mesh = new THREE.Mesh(kit.geometry(b, ITEM_LIGHTS(), ITEM_AMB), mat);
-      mat.transparent = true; mesh.renderOrder = 10000; mesh.scale.x = side;                      // (the left is the right, turned over)
+      mat.transparent = true; mat.setHeldInFront?.(HELD_DEPTH_SLIVER); mesh.renderOrder = 10000; mesh.scale.x = side;                      // (the left is the right, turned over)
       mesh.onBeforeRender = (renderer) => { if (camera.userData.hand !== view) root.visible = false; else holdInFront(renderer); };
       mesh.onAfterRender = letGoOfFront;
       group.add(mesh); made.push({ side, mesh, mat });
@@ -219,7 +222,11 @@ export function createHandView(env, camera) {
             };
             m.mesh.onAfterRender = letGoOfFront;
             // (a part of it with a mesh of its own, the balloon's glove: in front of the room too, while the haze reads its depth)
-            m.mesh.traverse((o) => { if (o !== m.mesh && o.isMesh) { o.onBeforeRender = (renderer) => holdInFront(renderer, false); o.onAfterRender = letGoOfFront; } });
+            m.mesh.traverse((o) => {
+              if (!o.isMesh) return;
+              o.material?.setHeldInFront?.(HELD_DEPTH_SLIVER);
+              if (o !== m.mesh) { o.onBeforeRender = (renderer) => holdInFront(renderer, false); o.onAfterRender = letGoOfFront; }
+            });
             made.set(want, m); root.add(m.mesh);
           }
           shown = made.get(want); shown.mesh.visible = true;

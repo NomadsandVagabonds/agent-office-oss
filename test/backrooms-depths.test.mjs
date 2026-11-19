@@ -765,7 +765,7 @@ test('what a visit came to: time in play, parts reached, rooms walked into, who 
   t.met('pirate'); t.met('pirate'); t.survived('shadow'); t.survived('pirate'); t.met(''); t.met(7);
   t.part(second); t.part(null);
   const run = t.report({ left: 2, of: 3 });
-  assert.deepEqual(run, { seed: 'visit-9', seconds: 30, parts: { reached: 2, of: 4 }, rooms: { explored: 7, kinds: ['cutouts', 'vending'] }, cast: { met: ['pirate', 'shadow'], survived: 2 }, hearts: { left: 2, of: 3 }, trail: '' });
+  assert.deepEqual(run, { seed: 'visit-9', seconds: 30, parts: { reached: 2, of: 4 }, rooms: { explored: 7, kinds: ['cutouts', 'vending'] }, cast: { met: ['pirate', 'shadow'], survived: 2, encounters: 3 }, hearts: { left: 2, of: 3 }, trail: '' });
   // (the route, once a second of play: nobody was traced here, so it is empty; core/trail.mjs, and the book's check of it)
   assert.equal(JSON.stringify(run), JSON.stringify(t.report({ left: 2, of: 3 })), 'plain data, and the same each time it is asked for');
   assert.equal('hearts' in t.report(), false, 'no health this visit, no line for it');
@@ -775,6 +775,10 @@ test('what a visit came to: time in play, parts reached, rooms walked into, who 
     for (const k of ['seed', 'seconds', 'parts', 'rooms', 'cast', 'hearts']) assert.deepEqual(clean[k], run[k], `${reason}: ${k}`);
   }
   // however many ways down the conductor reports, nobody reaches more parts than there are
+  const seen = createTally({seed:1,of:3}), firstResident = {}, secondResident = {};
+  seen.met('toner',firstResident); seen.met('toner',firstResident); seen.survived('toner',firstResident);
+  seen.met('toner',secondResident); seen.survived('pirate',{});
+  assert.equal(seen.report().cast.encounters,3);
   const far = createTally({ seed: 1, of: 3 }); for (let i = 0; i < 9; i++) far.way();
   assert.deepEqual(far.report().parts, { reached: 3, of: 3 });
   assert.equal(far.report().seed, '1');

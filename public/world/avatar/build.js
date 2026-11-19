@@ -11,7 +11,7 @@
 // about 52 voxels (1.3 m) tall before hair and hats — big-headed on purpose.
 // Every part is modelled in figure coordinates and meshed around its joint.
 import { Vox, M, C, glow, glass, tone, mix, noise3 } from '../vox/vox.js';
-import { hashId } from '/core/look.mjs';
+import { hashId, wornLook } from '/core/look.mjs';
 
 /** Joint positions, in voxels, in the figure's rest pose. */
 export const JOINT = Object.freeze({
@@ -993,6 +993,7 @@ function buildLeg(L, side, part, seed) {
  * @returns {object} { head, torso, armUpperL/R, armLowerL/R, legUpperL/R, legLowerL/R, accessory, spin }
  */
 export function buildCharacter(look, opt = {}) {
+  look = wornLook(look);                           // a cap or beanie is headwear, drawn over the head like the old hair styles
   const seed = hashId(String(opt.seed || 'x'));
   const { model: accessory, spin } = buildAccessory(look);
   return {

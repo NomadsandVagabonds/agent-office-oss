@@ -500,7 +500,8 @@ function paintTorso(g, L) {
  * @returns {{legL:Pix, legR:Pix, torso:Pix, armL:Pix, armR:Pix, head:Pix}}
  */
 export function paintCharacter(look, opt = {}) {
-  const L = look;
+  // a cap or beanie is headwear (core/look.mjs wornLook), drawn over the head as the old hair styles were
+  const L = look && ['cap', 'beanie'].includes(look.accessory) ? { ...look, hair: look.accessory } : look;
   const robot = L.species === 'robot';
   const sk = robot ? PAL.steel : L.skin;
   const oc = L.outfitColor;

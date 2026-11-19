@@ -13,7 +13,7 @@ import { handle as where } from './where-api.mjs';
 import { memoryStore } from './book-store.mjs';
 
 const root = path.resolve(process.argv[2] || 'dist'), port = Number(process.argv[3]) || 4478;
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8', '.mp3': 'audio/mpeg', '.woff2': 'font/woff2', '.jpg': 'image/jpeg', '.png': 'image/png' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8', '.mp3': 'audio/mpeg', '.mp4': 'video/mp4', '.woff2': 'font/woff2', '.jpg': 'image/jpeg', '.png': 'image/png' };
 const ctx = { store: process.env.BOOK === '0' ? null : memoryStore(), salt: 'local' };
 
 http.createServer(async (req, res) => {
@@ -35,6 +35,26 @@ http.createServer(async (req, res) => {
   if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
   if (!fs.existsSync(file) && fs.existsSync(`${file}.html`)) file = `${file}.html`;
   if (!fs.existsSync(file)) { res.writeHead(404, { 'content-type': 'text/plain' }).end('not found'); return; }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' });
-  fs.createReadStream(file).pipe(res);
+  const ext = path.extname(file);
+  const headers = { 'content-type': TYPES[ext] || 'application/octet-stream', 'cache-control': 'no-store' };
+  let slice;
+  if (ext === '.mp4') {
+    const size = fs.statSync(file).size;
+    headers['accept-ranges'] = 'bytes';
+    headers['content-length'] = size;
+    const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+    if (range && (range[1] || range[2])) {
+      const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+      const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+      if (start > end) { res.writeHead(416, { 'content-range': `bytes */${size}` }).end(); return; }
+      slice = { start, end };
+      headers['content-range'] = `bytes ${start}-${end}/${size}`;
+      headers['content-length'] = end - start + 1;
+    }
+  }
+  res.writeHead(slice ? 206 : 200, headers);
+  if (req.method === 'HEAD') { res.end(); return; }
+  const body = fs.createReadStream(file, slice);
+  res.on('close', () => body.destroy());
+  body.pipe(res);
 }).listen(port, '127.0.0.1', () => console.log(`BlockRooms: http://127.0.0.1:${port}/  (${root}${ctx.store ? ', with a book that is only a Map' : ', with no book'})`));

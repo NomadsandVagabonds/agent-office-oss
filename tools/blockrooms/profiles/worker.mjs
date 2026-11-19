@@ -7,9 +7,15 @@ async function profile(db, userId, body, write, now) {
     if (!doc || doc.v !== 1 || !Number.isSafeInteger(body.revision) || body.revision < 0) throw new Problem(400, 'Invalid archive.');
     const payload = JSON.stringify(doc);
     if (new TextEncoder().encode(payload).length > MAX_SAVE) throw new Problem(413, 'Archive too large.');
-    const updated = await db.prepare(`UPDATE players SET document=?,revision=revision+1,last_save=? WHERE id=? AND revision=? RETURNING revision`)
+    // An open tab running the previous release writes a v1 save without the stamp field.
+    const updated = await db.prepare(`UPDATE players SET document=json_patch(?1, json_patch(
+      CASE WHEN json_type(?1,'$.clearances') IS NULL AND json_type(document,'$.clearances')='array'
+        THEN json_object('clearances',json_extract(document,'$.clearances')) ELSE '{}' END,
+      CASE WHEN json_type(?1,'$.activity') IS NULL AND json_type(document,'$.activity')='object'
+        THEN json_object('activity',json_extract(document,'$.activity')) ELSE '{}' END)),
+      revision=revision+1,last_save=?2 WHERE id=?3 AND revision=?4 RETURNING revision,document`)
       .bind(payload,now,userId,body.revision).first();
-    if (updated) return json({ accepted: true, revision: updated.revision, document: doc });
+    if (updated) return json({ accepted: true, revision: updated.revision, document: JSON.parse(updated.document) });
   }
   const current = await db.prepare('SELECT document,revision FROM players WHERE id=?').bind(userId).first();
   return json({ accepted: false, document: JSON.parse(current.document), revision: current.revision });

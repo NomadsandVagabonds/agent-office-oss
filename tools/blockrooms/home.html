@@ -29,11 +29,10 @@
   <a href="#enter" data-floor="B1">B1</a>
   <a href="#about" data-floor="B2">B2</a>
   <a href="#pictures" data-floor="B3">B3</a>
-  <a href="#howto" data-floor="B4">B4</a>
-  <a href="#backers" data-floor="B5">B5</a>
-  <a href="#book" data-floor="B6">B6</a>
-  <a href="#tapes" data-floor="B7">B7</a>
-  <a href="#ring" data-floor="B8">B8</a>
+  <a href="#backers" data-floor="B4">B4</a>
+  <a href="#book" data-floor="B5">B5</a>
+  <a href="#tapes" data-floor="B6">B6</a>
+  <a href="#ring" data-floor="B7">B7</a>
 </nav>
 
 <button class="midi" id="midi" type="button" aria-pressed="false">MUSIC: OFF</button>
@@ -80,10 +79,15 @@
   <i class="side r2" data-sprite="door" data-scale="6"></i>
 
   <div class="door-stage">
-    <table class="mini-box">
-      <tr><th class="navy">EMPLOYEE OF THE MONTH</th></tr>
-      <tr><td><i data-sprite="robot_oil" data-scale="3"></i><br><b>Coral Tapir</b><br><small>October 1994</small></td></tr>
-    </table>
+    <a class="mini-box employee-poster" href="#guestbook">
+      <span class="poster-title">EMPLOYEE OF THE MONTH</span>
+      <span class="poster-body">
+        <canvas id="employee-photo" width="96" height="88" aria-hidden="true" hidden></canvas>
+        <strong id="employee-name">High score</strong>
+        <small id="employee-score"></small>
+        <span class="poster-link">Guestbook &darr;</span>
+      </span>
+    </a>
 
     <div class="door-col">
       <p class="arrows" aria-hidden="true"><i data-sprite="arrow" data-fx="bob" data-scale="4"></i><i data-sprite="arrow" data-fx="bob" data-scale="4" data-phase=".3"></i><i data-sprite="arrow" data-fx="bob" data-scale="4" data-phase=".6"></i></p>
@@ -94,8 +98,8 @@
       </a>
       <div class="home-account" id="save-progress" data-accounts="<!--ACCOUNTS-->">
         <button class="btn" type="button" id="save-sign-in" hidden>Sign in to save progress</button>
+        <a class="btn hr-file-button" href="./archive">HR File</a>
         <span id="save-message" role="status"></span>
-        <a href="./archive">My visitor file</a>
       </div>
     </div>
 
@@ -113,6 +117,7 @@
   <form class="signin gotout" id="sign" hidden>
     <p class="gotout-head"><span class="new">YOU GOT OUT!</span> Sign the guestbook</p>
     <p class="gotout-what" id="sign-what"></p>
+    <small>Signing shares your character portrait and score.</small><br>
     <label for="message">MESSAGE:</label>
     <input id="message" type="text" maxlength="60" size="34" autocomplete="off" placeholder="optional">
     <span class="says" id="message-says"></span>
@@ -127,9 +132,9 @@
     <div class="passstrip">
       <span class="pass-pic"><canvas class="pass-mug" id="pass-mug" width="56" height="56" aria-hidden="true"></canvas><canvas class="pass-3d" id="pass-3d" width="112" height="112" hidden aria-hidden="true"></canvas></span>
       <div class="pass-meta">
-        <span class="pass-kicker" id="pass-mode">RANDOM VISITOR</span>
-        <strong class="pass-kit" id="pass-kit">STD-00 &middot; Standard Issue (0/1 PT)</strong>
-        <span class="pass-stats" id="pass-stats">4 &hearts; &middot; 6 POCKETS &middot; 5:00 TAPE</span>
+        <span class="pass-kicker" id="pass-mode">RANDOM</span>
+        <strong class="pass-kit" id="pass-kit">Standard Issue</strong>
+        <span class="pass-stats" id="pass-stats" hidden></span>
       </div>
       <div class="pass-btns">
         <button type="button" id="quick-roll" title="Roll a random character look">Shuffle</button>
@@ -285,6 +290,35 @@
   <div class="tape t2"><span>UNDER CONSTRUCTION</span><span>CAUTION</span><span>UNDER CONSTRUCTION</span><span>CAUTION</span><span>UNDER CONSTRUCTION</span><span>CAUTION</span></div>
 </section>
 
+<section class="zone screening" id="trailer" aria-labelledby="trailer-heading">
+  <div class="deck" id="trailer-player">
+    <h2 class="deck-title" id="trailer-heading"><span>BlockRooms Media Player</span></h2>
+    <div class="deck-monitor">
+      <video id="trailer-film" controls playsinline preload="none" width="1280" height="720" poster="./trailer-poster.jpg" aria-label="BlockRooms official release trailer">
+        <source src="./trailer.mp4" type="video/mp4">
+        <a href="./trailer.mp4">Watch the BlockRooms trailer</a>
+      </video>
+    </div>
+    <div class="deck-display">
+      <span class="deck-lamp" aria-hidden="true"></span>
+      <span class="deck-track">BlockRooms &ndash; Release Trailer</span>
+      <span class="deck-clock"><span id="trailer-time">0:00</span><span class="deck-total"> / 2:07</span></span>
+    </div>
+    <div class="deck-controls" id="trailer-controls" hidden>
+      <label class="hide" for="trailer-seek">Trailer position</label>
+      <input id="trailer-seek" type="range" min="0" max="127" step="0.1" value="0" disabled>
+      <div class="deck-keys">
+        <button id="trailer-play" type="button"><i class="key-play" aria-hidden="true"></i><span>Play</span></button>
+        <button id="trailer-stop" type="button"><i class="key-stop" aria-hidden="true"></i>Stop</button>
+        <span class="deck-grille" aria-hidden="true"></span>
+        <button id="trailer-mute" type="button" aria-pressed="false">Mute</button>
+        <button id="trailer-full" type="button">Full screen</button>
+      </div>
+    </div>
+    <p class="deck-error" id="trailer-error" role="status" hidden>Playback unavailable. <a href="./trailer.mp4">Open the trailer file</a></p>
+  </div>
+</section>
+
 <section class="zone board" id="about">
   <div class="cols">
     <div class="panel">
@@ -315,8 +349,8 @@
     </div>
   </div>
 
-  <div class="panel roster-wrap">
-    <h2>Staff</h2>
+  <details class="panel roster-wrap" id="staff">
+    <summary>Staff directory</summary>
     <table class="roster">
       <thead>
         <tr><th>Picture</th><th>Name</th><th>Notes</th></tr>
@@ -479,7 +513,7 @@
         </tr>
       </tbody>
     </table>
-  </div>
+  </details>
 </section>
 
 <section class="zone pink" id="pictures">
@@ -499,45 +533,6 @@
     <li><figure><img src="./shots/gallery-mailroom.jpg" width="1200" height="900" loading="lazy" alt="A brass dispatch tube rises from a central pedestal in the tiled mailroom."></figure></li>
     <li><figure><img src="./shots/gallery-vestibule.jpg" width="1200" height="900" loading="lazy" alt="Glass revolving doors stand in a wood-panelled lobby with green carpet."></figure></li>
   </ul>
-</section>
-
-<section class="zone stores" id="howto">
-  <h2 class="banner">HOW TO PLAY</h2>
-  <div class="cols">
-    <div class="panel white">
-      <h3>Controls</h3>
-      <table class="keys">
-        <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>walk</td></tr>
-        <tr><td>mouse</td><td>look</td></tr>
-        <tr><td><kbd>Shift</kbd></td><td>run</td></tr>
-        <tr><td><kbd>C</kbd> &nbsp; <kbd>Space</kbd></td><td>crouch &nbsp; jump</td></tr>
-        <tr><td><kbd>E</kbd></td><td>use</td></tr>
-        <tr><td>click</td><td>shove</td></tr>
-        <tr><td><kbd>1</kbd>&ndash;<kbd>6</kbd> &nbsp; <kbd>I</kbd></td><td>inventory</td></tr>
-        <tr><td><kbd>Q</kbd> &nbsp; <kbd>G</kbd></td><td>use item &nbsp; drop item</td></tr>
-        <tr><td><kbd>F</kbd></td><td>torch</td></tr>
-        <tr><td><kbd>V</kbd> &nbsp; <kbd>M</kbd></td><td>picture &nbsp; sound</td></tr>
-        <tr><td><kbd>Esc</kbd></td><td>menu</td></tr>
-        <tr><td>phone</td><td>left thumb walks, right thumb looks</td></tr>
-      </table>
-    </div>
-    <div class="panel white">
-      <h3>Items</h3>
-      <table class="finds">
-        <tr><td><i data-sprite="battery" data-fx="spin" data-scale="3"></i></td><td><b>Battery</b> +2 minutes</td></tr>
-        <tr><td><i data-sprite="torch" data-scale="3"></i></td><td><b>Torch</b></td></tr>
-        <tr><td><i data-sprite="pinkslip" data-scale="3"></i></td><td><b>Pink form</b></td></tr>
-        <tr><td><i data-sprite="chalk" data-scale="3"></i></td><td><b>Chalk</b></td></tr>
-        <tr><td><i data-sprite="scissors" data-scale="4"></i></td><td><b>Scissors</b></td></tr>
-        <tr><td><i data-sprite="paper" data-scale="4"></i></td><td><b>Paper</b></td></tr>
-        <tr><td><i data-sprite="snack" data-scale="3"></i></td><td><b>Snack</b> +1 heart</td></tr>
-        <tr><td><i data-sprite="balloon" data-fx="bob" data-scale="2"></i></td><td><b>Balloon</b></td></tr>
-        <tr><td><i data-sprite="keycard" data-fx="spin" data-scale="3"></i></td><td><b>Keycard</b></td></tr>
-        <tr><td><i data-sprite="heart" data-fx="pulse" data-scale="3"></i></td><td><b>Hearts</b> 4</td></tr>
-      </table>
-    </div>
-  </div>
-  <p class="center"><a class="btn" href="./play">ENTER</a></p>
 </section>
 
 <section class="zone backers" id="backers">
@@ -568,7 +563,7 @@
       </div>
     </div>
     <div class="panel white">
-      <h2><i data-sprite="envelope" data-scale="2"></i> Guestbook</h2>
+      <h2 id="guestbook" tabindex="-1"><i data-sprite="envelope" data-scale="2"></i> Guestbook</h2>
       <ul class="guests" id="guests"><li class="empty">Nobody yet.</li></ul>
     </div>
   </div>
@@ -609,7 +604,7 @@
 
 <footer class="zone bottom" id="bottom">
   <p class="center">&copy; 1998 &middot; Last updated: <span id="updated">recently</span></p>
-  <p class="small center plain">If you sign the guestbook, your nickname, message and score are public. Guest saves stay on this device. Signing in lets you sync your visitor file. Your city comes from your connection and is not kept. <a href="./privacy">Privacy policy</a></p>
+  <p class="small center plain">If you sign the guestbook, your nickname, character portrait, message and score are public. Guest saves stay on this device. Signing in lets you sync your visitor file. Your city comes from your connection and is not kept. <a href="./privacy">Privacy policy</a></p>
   <div id="deeper"></div>
   <div id="sentinel"></div>
 </footer>

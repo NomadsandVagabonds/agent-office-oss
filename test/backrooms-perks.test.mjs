@@ -410,7 +410,7 @@ test('alien hair & headwear: all hair styles, facial hair, and accessories fit t
   for (let i = 0; i < 60; i++) {
     const rolled = resolveLook(`alien-roll-${i}`, { species: 'alien' });
     assert.equal(rolled.facial, 'none');
-    assert.ok(['bald', 'cap', 'beanie', 'mohawk'].includes(rolled.hair));
+    assert.ok(['bald', 'mohawk'].includes(rolled.hair), `alien roll ${i}: ${rolled.hair}`);   // a cap or beanie is worn as headwear now
   }
   assert.equal(resolveLook('alien-custom', { species: 'alien', hair: 'braids', facial: 'beard' }).hair, 'braids');
   assert.equal(resolveLook('alien-custom', { species: 'alien', hair: 'braids', facial: 'beard' }).facial, 'beard');
@@ -437,6 +437,15 @@ test('alien hair & headwear: all hair styles, facial hair, and accessories fit t
     assert.ok(front2d.extent() && back2d.extent(), `2D alien sprite renders with accessory ${acc}`);
 
     if (acc === 'none') continue;
+    if (acc === 'cap' || acc === 'beanie') {
+      // worn over the head as the old hair styles were (core/look.mjs wornLook): no bald patch on the upper dome
+      const { head, accessory } = buildCharacter(look, { seed: 'alien-fit' });
+      assert.equal(accessory, null);
+      let bareTopExposed = 0;
+      bare.each((x, y, z) => { if (y >= 53 && !head.has(x, y + 1, z)) bareTopExposed++; });
+      assert.equal(bareTopExposed, 0, `alien ${acc} covers the upper dome`);
+      continue;
+    }
     const { accessory } = buildCharacter(look, { seed: 'alien-fit' });
     assert.ok(accessory && accessory.map.size > 0, `3D alien accessory ${acc} builds voxels`);
 
@@ -496,5 +505,27 @@ test('alien hair & headwear: all hair styles, facial hair, and accessories fit t
     assert.ok(paintFlatCharacter(look, { back: false }).extent());
     const { head } = buildCharacter(look, { seed: 'alien-fit' });
     assert.ok(head.map.size > bare.map.size, `alien facial ${facial} adds sculpted voxels`);
+  }
+});
+
+test('one thing on the head: the cap and beanie are headwear, not hair, and older looks that wore one as hair are moved', async () => {
+  // the owner, 19 Nov: "hats and beanies are in the hair section which allows double hats like beanie+top hat"
+  assert.ok(!HAIR.includes('cap') && !HAIR.includes('beanie'));
+  assert.ok(ACCESSORY.includes('cap') && ACCESSORY.includes('beanie'));
+  assert.deepEqual(sanitizeLookPatch({ hair: 'beanie' }), { look: { hair: 'short', accessory: 'beanie' }, errors: [] });
+  assert.deepEqual(sanitizeLookPatch({ hair: 'cap', accessory: 'tophat' }).look, { hair: 'short', accessory: 'tophat' }, 'a beanie under a top hat keeps one hat');
+  const old = resolveLook('old-pass', { species: 'human', hair: 'cap', accessory: 'none' });
+  assert.deepEqual([old.hair, old.accessory], ['short', 'cap']);
+  assert.equal(resolveLook('old-pass', { species: 'human', hair: 'cap' }).accessory, 'cap', 'a chosen hat beats a rolled accessory');
+  for (let i = 0; i < 300; i++) assert.ok(!['cap', 'beanie'].includes(resolveLook(`roll-${i}`).hair));
+  // drawn as it was: a cap worn as headwear is the same head as the old cap hair style
+  const { buildCharacter } = await import('../public/world/avatar/build.js');
+  const base = { gender: 'male', species: 'human', skin: '#e6b184', hairColor: '#4a2f1a', facial: 'none', outfit: 'tee', outfitColor: '#3f7f9a' };
+  for (const hat of ['cap', 'beanie']) {
+    const now = buildCharacter({ ...base, hair: 'short', accessory: hat }, { seed: 'h' }), was = buildCharacter({ ...base, hair: hat, accessory: 'none' }, { seed: 'h' });
+    assert.equal(now.head.map.size, was.head.map.size, `${hat}: the head is not the old ${hat}`);
+    assert.equal(now.accessory, null);
+    const flat = paintFlatCharacter({ ...base, hair: 'short', accessory: hat }), flatWas = paintFlatCharacter({ ...base, hair: hat, accessory: 'none' });
+    assert.deepEqual(flat.extent(), flatWas.extent());
   }
 });

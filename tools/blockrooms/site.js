@@ -127,9 +127,10 @@ const UNSIGNED = 'blockrooms:unsigned';
 let visitTicket = Promise.resolve(null);              // (the ticket the book gave this visit as it went in)
 async function sign(card, report) {
   if (card.replay || card.reason !== 'exit' || !scoreEligible(report)) return null;
-  const name = office.walk?.me?.name || me().name, ticket = await visitTicket.catch(() => null);
+  const player = office.walk?.me;
+  const name = player?.name || me().name, ticket = await visitTicket.catch(() => null);
   if (!ticket) return null;                           // (a visit the book never heard begin cannot be signed for)
-  try { localStorage.setItem(UNSIGNED, JSON.stringify({ name, run: report, ticket, score: Number(card.score ?? report?.score) || 0, at: Date.now() })); } catch { return null; }
+  try { localStorage.setItem(UNSIGNED, JSON.stringify({ name, look: player?.look, run: report, ticket, score: Number(card.score ?? report?.score) || 0, at: Date.now() })); } catch { return null; }
   return { icon: 'fresh', label: 'Guestbook', value: 'Sign it', href: './#sign' };
 }
 
@@ -137,9 +138,10 @@ async function run() {
   // (asked for while the level is being fetched, so that nobody waits for it)
   const asked = fetch('./api/where', { headers: { accept: 'application/json' }, cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && typeof d.city === 'string' ? d.city : '')).catch(() => '');
   try {
-    const [{ createStage }, { enterBackrooms }, { ARCHETYPES }] = await Promise.all([
-      import('./world/engine/stage.js'), import('./world/backrooms/index.js'), import('./world/backrooms/gen.js')]);
-    office.stage = createStage(document.getElementById('stage'), { fx: false, shadows: false, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5) });
+    const [{ openStage }, { pageRendererChoice }, { enterBackrooms }, { ARCHETYPES }] = await Promise.all([
+      import('./world/engine/stage.js'), import('./world/engine/gpu.js'), import('./world/backrooms/index.js'), import('./world/backrooms/gen.js')]);
+    // (the renderer: WebGL, as always, unless ?gpu=webgpu or a shell's stored choice asks for WebGPU: engine/gpu.js)
+    office.stage = await openStage(document.getElementById('stage'), { renderer: pageRendererChoice(), fx: false, shadows: false, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5) });
     office.stage.start();
     // the tape this address names, if it names one, is the building walked; with none, one nobody has had. When it
     // is over the card comes up, and after the card the front page — unless the card for a kept tape is put down by
@@ -199,6 +201,8 @@ async function run() {
       const result = await enterBackrooms(office, {
         name: playerName, seed, onArchive: () => window.open(new URL('./archive', location.href), '_blank', 'noopener'),
         archive: { href: './archive' }, brand: { over: 'OUT OF OFFICE', title: 'BlockRooms', jar: false }, share: address, also: doctored ? undefined : sign,
+        onFloorVisited: doctored ? undefined : theme => archive.visitFloor(theme, visitOwner).catch(console.error),
+        onFloorCleared: doctored ? undefined : theme => archive.clearFloor(theme, visitOwner).catch(console.error),
         look: playerLook, perk: who.perk,
         difficulty: mine ? cleanDifficulty(mine.difficulty, 'training-wheels') : undefined,
         home: { label: 'Return to homepage' }, anew: { label: 'Go back in' }, where, ...dev,

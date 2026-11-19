@@ -25,6 +25,23 @@ export function foldScreens(c, folds) {
     const mat=c.kit.surface({room:c.rt.u,alpha:.975,side:THREE.DoubleSide,
       flick:geo.userData.flick,banks:geo.userData.banks});
     mat.forceSinglePass=true;mat.uniforms.uFoldWaterTime=time;
+    if(mat.patchNode){
+      mat.patchNode({
+        color({T,c,uv,f,ss}){
+          const {vec2,vec3,float,fract,floor,dot,sin,abs,pow,max}=T;
+          const waterGrain=(p0)=>{const p=fract(p0.mul(vec2(.1031,.11369)));const q=p.add(dot(p,p.yx.add(19.19)));return fract(q.x.mul(q.y));};
+          const t=f('uFoldWaterTime');
+          const down=uv.y.add(t.mul(2.9));
+          const jet=uv.x.mul(78).add(sin(down.mul(5.9).add(uv.x.mul(54))).mul(.3));
+          const stream=pow(max(float(1).sub(abs(fract(jet).mul(2).sub(1))),0),4);
+          const glint=waterGrain(vec2(floor(jet),floor(down.mul(72))));
+          const mist=waterGrain(floor(vec2(uv.x.mul(211),down.mul(137))));
+          const foam=float(1).sub(ss(0,.19,uv.y)).mul(mist);
+          const shine=stream.mul(glint.mul(.86).add(.14)).mul(.47).add(mist.mul(.08)).add(foam.mul(.30));
+          c.assign(c.mul(vec3(.25,.49,.47)).add(vec3(.23,.38,.36).mul(shine.add(.16))));
+        },
+      });
+    }else{
     mat.fragmentShader=`
       uniform float uFoldWaterTime;
       float waterGrain(vec2 p) {
@@ -42,6 +59,7 @@ export function foldScreens(c, folds) {
       float shine = stream*(.14+.86*glint)*.47+mist*.08+foam*.30;
       c=c*vec3(.25,.49,.47)+vec3(.23,.38,.36)*(.16+shine);
       gl_FragColor=vec4(c,uAlpha);`);
+    }
     const mesh=new THREE.Mesh(geo,mat);mesh.name='fold-water-screen';mesh.renderOrder=5;group.add(mesh);
   });
   c.tick((dt,t)=>{time.value=t;});

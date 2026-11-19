@@ -12,6 +12,7 @@
 // never warns (`said: []`).
 
 import * as THREE from 'three';
+import { gpu } from '../engine/gpu.js';
 import { fitsAt } from './gen.js';
 import { Batch, WHITE, ticks } from './kit.js';
 import { ensureForestDetail } from './forest-fx.js';
@@ -751,19 +752,47 @@ export function addMistVeils(c, segments, opt = {}) {
     geo.setIndex(idx);
     geo.computeBoundingSphere();
 
-    const mat = kit.own(new THREE.ShaderMaterial({
-      vertexShader: VEIL_VERT,
-      fragmentShader: VEIL_FRAG,
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      uniforms: {
+    let mat;
+    if (gpu.nodes) {
+      const N = gpu.nodes, T = N.TSL;
+      const { Fn, vec4, float, uniform, uv, length, sin, cos, clamp, If, Discard, positionView } = T;
+      const ss = (e0, e1, x) => { const t = clamp(float(x).sub(e0).div(e1 - e0), 0, 1); return t.mul(t).mul(t.mul(-2).add(3)); };
+      mat = kit.own(new N.NodeMaterial());
+      mat.transparent = true; mat.depthWrite = false; mat.side = THREE.DoubleSide;
+      mat.uniforms = {
         uMistCol: { value: new THREE.Vector3(col[0], col[1], col[2]) },
         uMistAlpha: { value: opt.alpha ?? 0.64 },
         uMistTime: uTime,
         uDim: c.rt.u.dim,
-      },
-    }));
+      };
+      const uMistCol = uniform(new N.Vector3(col[0], col[1], col[2])).onRenderUpdate(() => { uMistCol.value.copy(mat.uniforms.uMistCol.value); });
+      const uMistAlpha = uniform(opt.alpha ?? 0.64).onRenderUpdate(() => mat.uniforms.uMistAlpha.value);
+      const uMistTime = uniform(0).onRenderUpdate(() => mat.uniforms.uMistTime.value);
+      const uDim = uniform(1).onRenderUpdate(() => mat.uniforms.uDim.value);
+      mat.fragmentNode = Fn(() => {
+        const vUv = uv();
+        const nearPart = ss(0.65, 2.85, length(positionView));
+        const edgeX = sin(vUv.x.mul(3.14159265)), edgeY = sin(vUv.y.mul(3.14159265));
+        const swirl = sin(vUv.x.mul(9).add(uMistTime.mul(0.55))).mul(cos(vUv.y.mul(7).sub(uMistTime.mul(0.42)))).mul(0.38).add(0.62);
+        const a = edgeX.mul(edgeY).mul(swirl).mul(uMistAlpha).mul(nearPart).mul(clamp(uDim.add(0.25), 0.35, 1.0));
+        If(a.lessThan(0.01), () => { Discard(); });
+        return vec4(uMistCol, a);
+      })();
+    } else {
+      mat = kit.own(new THREE.ShaderMaterial({
+        vertexShader: VEIL_VERT,
+        fragmentShader: VEIL_FRAG,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        uniforms: {
+          uMistCol: { value: new THREE.Vector3(col[0], col[1], col[2]) },
+          uMistAlpha: { value: opt.alpha ?? 0.64 },
+          uMistTime: uTime,
+          uDim: c.rt.u.dim,
+        },
+      }));
+    }
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = `forest:detail-mist:${c.room.id}`;
     mesh.userData.detail = true;

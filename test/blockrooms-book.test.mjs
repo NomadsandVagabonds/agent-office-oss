@@ -101,9 +101,11 @@ test('book api: an empty book reads as an empty book, and a page somebody opens 
 
 test('book api: somebody who got out signs once; the line is what the rules make of what they sent', async () => {
   const b = book();
-  const signed = await b.post({ do: 'sign', name: 'Amber Vireo', run: visit(), message });
+  const signed = await b.post({ do: 'sign', name: 'Amber Vireo', run: visit(), message,
+    look: { species: 'cat', outfitColor: '#AABBCC', hair: 'unknown', email: 'private' } });
   assert.deepEqual([signed.status, signed.data.ok, signed.data.place], [200, true, 1]);
   const { entry } = signed.data;
+  assert.deepEqual(entry.look, { species: 'cat', outfitColor: '#aabbcc' });
   assert.deepEqual([entry.name, entry.score, entry.seed, entry.message, entry.at], ['Amber Vireo', checkRun(visit()).score, 'k3j9x0qa1b', 'cool page', 1794000000000]);
   assert.match(entry.id, /^[a-z0-9]{18}$/);
   const read = (await b.read()).data;
@@ -190,4 +192,17 @@ test('book api: with nowhere to keep it there is no book, and the site is told s
   assert.deepEqual(calls, [['https://store.example/pipeline', 'POST', 'Bearer secret', '[["INCR","k"],["GET","k"]]']]);
   const refuses = createStore({ KV_REST_API_URL: 'https://store.example', KV_REST_API_TOKEN: 't' }, async () => new Response(JSON.stringify([{ error: 'ERR wrong kind' }])));
   await assert.rejects(refuses.pipeline([['INCR', 'k']]), /refused/);
+});
+
+test('a signing keeps the look it was signed in, cleaned, for the portrait beside the name; a line without one has none', async () => {
+  // the owner, 19 Nov: "a little character portrait next to each player's name in the high scores and guestbook"
+  const { entryOf: of, cleanEntry: clean, cleanLook } = await import('../core/book.mjs');
+  const run = { seed: 'abcd1234', seconds: 60, parts: { of: 4 }, rooms: { explored: 9 }, batteries: 1, hearts: { left: 2 }, card: false };
+  const e = of({ id: 'abc123def456', at: 1, name: 'Robin', run, score: 10, look: { species: 'cat', hair: 'beanie', outfitColor: '#ABCDEF', onclick: 'x' } });
+  assert.deepEqual(e.look, { species: 'cat', hair: 'short', accessory: 'beanie', outfitColor: '#abcdef' });
+  assert.deepEqual(clean(JSON.stringify(e)).look, e.look);
+  assert.equal(of({ id: 'abc123def456', at: 1, name: 'Robin', run, score: 10 }).look, undefined);
+  assert.equal(cleanLook('<img>'), null);
+  assert.deepEqual(cleanLook({ accessory: 'c_mine', hair: 'long' }), { hair: 'long' }, 'a made hat only its maker can draw');
+  assert.equal(clean(JSON.stringify({ ...e, look: { skin: 'red' } })).look, undefined);
 });

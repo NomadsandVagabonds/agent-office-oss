@@ -4,11 +4,63 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { importArchive, mergeArchive, archiveRecord, archiveRun, editArchive, archiveLook } from '../core/archive.mjs';
+import { dealtThemes } from '../public/world/backrooms/themes.js';
+import { CLEARANCE_FLOORS, cleanArchive, importArchive, mergeArchive, archiveRecord, archiveRun, editArchive, archiveLook } from '../core/archive.mjs';
 import { accountConfig } from '../tools/blockrooms/account-config.mjs';
+import { fileStats } from '../tools/blockrooms/archive-charts.js';
 import { build } from '../tools/blockrooms/build.mjs';
 const run = (seed, room = 'lobby') => ({ reason: 'exit', seed, edition: 'v1', mascot: true, rooms: { explored: 4, kinds: [room] }, cast: { met: ['pirate'], survived: 1 }, parts: { of: 2, reached: 2 }, seconds: 100 });
 const visit = (a, writer, seed, room) => archiveRun(a, run(seed, room), { writer, at: 100, by: 'Test' }).document;
+test('HR worksheets count dated first sightings once and time only retained tapes with durations', () => {
+  const day = Date.UTC(1998, 3, 6), next = day + 86400000;
+  const record = archiveRecord(importArchive({ runs: 10, out: 3, rooms: { lobby:day, pool:next, imported:0 }, cast: { toner:day+100 },
+    tapes:[{ seed:'new', seconds:70, plays:2 }, { seed:'old', seconds:95 }, { seed:'undated' }] }));
+  const stats = fileStats(record);
+  assert.deepEqual(stats.discoveries.map(r=>[r.run,r.rooms,r.encounters]), [[1,1,0],[2,1,1],[3,3,1]]);
+  assert.equal(stats.unplaced,7);
+  assert.deepEqual(stats.busiest, { day:day/86400000, count:2 });
+  assert.equal(stats.rate,'30%');
+  assert.equal(stats.fastest,'1:10');
+  assert.deepEqual(stats.timed.map(t=>t.seed),['old','new']);
+  assert.equal(stats.replays,2);
+  assert.equal(fileStats(archiveRecord({})).rate,'—');
+});
+test('each finished visit adds its encounters, while a repeated room counts once across losses, replays and devices', () => {
+  const play = (a,writer,at,seed,rooms,encounters,reason) => archiveRun(a,{...run(seed),reason,
+    rooms:{kinds:rooms},cast:{met:['toner'],encounters}},{writer,at}).document;
+  const first = play({},'a',100,'one',['party'],3,'exit');
+  const repeat = play(first,'a',200,'one',['party'],1,'caught');
+  const other = play(first,'b',200,'two',['party','pool'],2,'quit');
+  const combined = mergeArchive(repeat,other);
+  assert.deepEqual(mergeArchive(combined,other),combined);
+  const stats = fileStats(archiveRecord(combined),combined.activity.streams);
+  assert.deepEqual(stats.discoveries.map(r=>[r.run,r.rooms,r.encounters]), [[1,1,3],[2,1,4],[3,2,6]]);
+  const legacy = importArchive({runs:3,rooms:{party:15,pool:25},cast:{toner:15}});
+  const tracked = play(legacy,'b',100,'three',['party','grove'],2,'quit');
+  const past = [{runs:{n:1},seen:{rooms:1,cast:1},lines:[{id:'survived',count:2}]}];
+  const data = fileStats(archiveRecord(tracked),tracked.activity.streams,past);
+  assert.deepEqual(data.discoveries.map(r=>[r.run,r.rooms,r.encounters]), [[1,1,2],[3,2,2],[4,3,4]]);
+});
+test('floor evidence restores historical escape itineraries and distinguishes visiting a floor from clearing it', async t => {
+  const {dir, createArchiveStorage} = await modules(t);
+  const {floorEvidence, escapedFloors} = await import(pathToFileURL(path.join(dir,'archive-floors.js')));
+  const cases = [
+    ['yntnbj',['yellow','night','archive','fitout']], ['kwr85e',['yellow','archive','suburb','exec']],
+    ['t25noi',['yellow','archive','exec','suburb']], ['36nyx7',['yellow','archive','fitout','exec']]
+  ];
+  for (const [edition,ids] of cases) assert.deepEqual(escapedFloors({edition,seed:'compat0'}).sort(),ids.sort());
+  assert.deepEqual(escapedFloors({edition:'unknown',seed:'compat0'}),[]);
+  const legacy = {runs:7,out:1,rooms:{'channel-hall':33,trailhead:55},tapes:[{seed:'compat0',at:33,edition:'kwr85e'}]};
+  const storage = memory({'office-backrooms:record':JSON.stringify({record:legacy})});
+  let seq=0;
+  const a = createArchiveStorage({storage,uuid:()=> 'id-'+ ++seq});
+  const evidence = floorEvidence(a.record(),a.document());
+  assert.deepEqual(evidence.clearances,['yellow','archive','exec','suburb','waterpark']);
+  assert.ok(evidence.visited.includes('forest') && !evidence.clearances.includes('forest'));
+  await a.restoreFloors(evidence); await a.visitFloor('mall'); await a.claim('alice');
+  assert.ok(a.document().activity.floors.includes('mall') && !a.document().clearances.includes('mall'));
+  await a.signOut(); assert.deepEqual(a.document().activity.floors,[]);
+});
 test('concurrent devices union discoveries/tapes and count visits once across retries', () => {
   const a = visit({}, 'a', 'tape-a'), b = visit({}, 'b', 'tape-b', 'pool');
   const ab = mergeArchive(a, b);
@@ -60,6 +112,29 @@ test('guest import, claim, sign-out and another account are isolated, including 
   await a.signOut(); await a.claim('A'); assert.equal(a.profile().name, 'A name');
   const reopened = createArchiveStorage({ storage, uuid: () => 'id-' + ++serial });
   assert.equal(reopened.record().runs, 5, 'legacy data is not imported again');
+});
+test('floor stamps belong to the visitor who crossed, survive a lost run, and merge across devices', async t => {
+  const { createArchiveStorage } = await modules(t);
+  assert.deepEqual(Object.keys(CLEARANCE_FLOORS).sort(), dealtThemes().sort());
+  const storage = memory(); let i = 0;
+  const a = createArchiveStorage({ storage, uuid: () => 'id-' + ++i });
+  const guest = a.owner();
+  await a.clearFloor('yellow',guest);
+  await a.claim('first'); await a.signOut(); await a.claim('second');
+  await Promise.all([a.clearFloor('waterpark',guest), a.clearFloor('waterpark',guest), a.clearFloor('unbuilt',guest)]);
+  await a.report({ ...run('lost','fitout'), reason:'caught' }, 'attempt', guest);
+  assert.deepEqual(a.document().clearances, []);
+  assert.deepEqual(a.document('user:first').clearances, ['yellow','waterpark']);
+  // An older game tab saves updated visit totals without knowing the stamp field.
+  storage.setItem('blockrooms:archive:save:user:first',JSON.stringify({v:1,baseline:{runs:6,out:1}}));
+  const reopened = createArchiveStorage({ storage, uuid: () => 'id-' + ++i });
+  assert.equal(reopened.record('user:first').runs, 6);
+  const other = { clearances:['forest','__proto__','forest'] };
+  const merged = mergeArchive(other,reopened.document('user:first'));
+  assert.deepEqual(merged.clearances, ['yellow','waterpark','forest']);
+  assert.deepEqual(mergeArchive(merged,other), merged);
+  assert.deepEqual(cleanArchive({clearances:'waterpark'}).clearances, []);
+  assert.deepEqual(importArchive({out:4,rooms:{forest:100}}).clearances, []);
 });
 test('cross-tab report writes share a lock and cannot drop either visit', async t => {
   const { createArchiveStorage } = await modules(t); let q = Promise.resolve(), i = 0;
