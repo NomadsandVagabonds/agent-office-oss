@@ -422,10 +422,13 @@ export function cellophaneFireVox() {
  * Gnarled fluted trunk, arched root buttresses, cavernous carved `+Z` hollow
  * doorway, giant shelf fungi, embedded steel filing drawers & galvanized HVAC duct!
  */
-export function ancientHollowTreeVox(tallVoxels = 96) {
+export function ancientHollowTreeVox(tallVoxels = 96, lit = true) {
   return () => {
     const v = new Vox();
-    const bark = pineBarkMat(), heart = M('#8f592c', 2), sapLit = glow('#ff9b2e');
+    // (`lit: false`: the sap is not lit, only wet and dark, and at the back of the hollow, low down, a crack between the
+    // roots goes in further than the trunk is deep: the Windfall Shaft's way down, for whoever looks. It is in the side
+    // of the hollow (`-X`), not the back, so it cannot be seen from the archway: only by going in and turning)
+    const bark = pineBarkMat(), heart = M(lit ? '#8f592c' : '#3b2414', 2), sapLit = lit ? glow('#ff9b2e') : M('#2b1a0e', 3);
     const moss = mossMat(), fungus = M('#cf6b24', 2), gill = M('#eddab4', 2);
     const duct = M('#9aa3a8', 0), cab = M('#6e7573', 1), handle = M('#d8dde0', 0);
 
@@ -458,6 +461,18 @@ export function ancientHollowTreeVox(tallVoxels = 96) {
     for (let s = 0; s < 6; s++) {
       const a = (s / 6) * Math.PI * 2;
       v.ellipsoid(Math.cos(a) * 17.5, 8 + s * 5, Math.sin(a) * 17.5, 2.6, 1.8, 2.6, sapLit);
+    }
+    if (!lit) {
+      // the crack: a low, narrow split in the side of the heartwood (`-X`), under a root, black all the way in
+      const black = M('#060504', 0);
+      for (let y = 0; y <= 13; y++) {
+        const hw = 5.5 * (1 - y / 15);
+        v.carve(-25, y, -hw, -17, y + 1, hw);
+      }
+      v.box(-26, 0, -6, -25, 14, 6, black);
+      v.cyl('y', -22, 0, 0, 0.6, 5.5, black);
+      v.tube(-20, 14, -10, -21, 15, 10, 2.4, bark);
+      v.ellipsoid(-17.5, 2.2, -4, 2.4, 1.6, 3.2, moss);
     }
 
     // Giant bracket polypore fungi shelves on `-X` and `+X` bark
