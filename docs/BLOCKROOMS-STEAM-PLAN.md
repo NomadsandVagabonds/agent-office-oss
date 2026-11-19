@@ -39,6 +39,11 @@ Related plans:
      and found footage, never a Minecraft knockoff.
 5. **Measure before optimizing.** The heaviest floors are profiled before any rendering rework, and before
    WebGPU.
+6. **The first floor has to be stunning.** The owner: *"We will have only a couple minutes to grip a new
+   player so our first floor has to be stunning if we ever want them to see suburbia or water park later on
+   in the game."*
+   - A department of its own does nothing else (D12).
+   - It is the first thing on the store page, and the first two minutes of every new player's first visit.
 
 ---
 
@@ -107,6 +112,7 @@ that this is acceptable under the zero-npm rule.
 | P-5 | Offline: what needs the network says so and stands aside | with the network cut, a full visit plays, and the book and daily show "offline" without errors |
 | P-6 | Window, fullscreen, pointer lock and frame cap behave; the GPU switch prefers the discrete GPU | checked on a laptop with two GPUs; no throttling when the window is unfocused-then-refocused |
 | P-7 | Updates: the Steam branch layout (default, beta) and the version shown in game | a beta branch build is installable and shows its version |
+| P-8 | Steam Inventory Service: item definitions for lost property ([daily plan, section 8](BACKROOMS-DAILY-PLAN.md)), granted to the player when the server says so (S-6); shown in game through `platform` (C1 grows `inventory()`) | a lost-property item given on the test app ID appears in that Steam inventory, not tradeable unless the owner says |
 
 ### D2 · Input and controls
 
@@ -256,6 +262,7 @@ saves.
 | S-3 | Trails kept: the day's top twenty, your best, and those either side of you | `GET /api/book/trail?id=`; storage sized and capped |
 | S-4 | Steam identity: accept a Steam session ticket as the account, if the owner says yes **(owner)** | a Steam player's daily takes are theirs across machines |
 | S-5 | Load: the Free-plan limits (BLOCKROOMS-STORE.md) checked against a launch-day guess | written; the plan agreed with the owner before launch |
+| S-6 | Lost property (daily plan, section 8): the day's one-of-one placed by the seed, given to the first who carries it out (route checked; flagged runs looked at by a person first), kept with the account, granted on Steam through P-8 | issued once and only once a day, kept, listed; there are tests |
 
 ### D8 · Daily and meta (the client)
 
@@ -347,6 +354,56 @@ reads everything and changes only its own tools. It hands findings to the owning
 | Q-4 | The release checklist: version, edition, branch, achievements registered, cloud, store page, crash reporting **(owner: what crash reporting, if any)** | used for M3 and M4 |
 | Q-5 | Deck: aim for "Playable" or better under Valve's review criteria | self-checked against Valve's list before submitting |
 
+### D12 · The first floor
+
+**Who:** a new team: a lead designer agent, a brainstorming agent and builder agents, working with the
+builder session (D5), which owns the shared dressing systems.
+
+**Job:** the first floor, every time, for a player who has never seen the game. Its rooms, its plain rooms
+between, the landing, and the first two minutes. **(owner)** It is the department the store page and every
+first visit depend on.
+
+**Owns:**
+- **The brief:** `docs/BLOCKROOMS-FIRST-FLOOR.md` (new): what the first floor is for, the first two minutes
+  second by second, the audit, the list of what is being built.
+- **New rooms it writes for the first floor:** new files in `rooms/`. Their deck lines are added with D5,
+  which keeps the deck.
+- **The polish of the existing rooms at home on the yellow floor:** 40 of the deck's 97 today (`themes.js`
+  `atHome(room, 'yellow')`). Each one is done with that room's author.
+
+**Must not touch:**
+- **Other floors' rooms.**
+- **The shared systems:** wear and motes (D5), the surface shader (D3), the tape (D4). Ask for what is needed.
+- **How the first floor is dealt** (`plan.js`): the lead's, through C9.
+
+**The reference board, and the rule on it:**
+- **What goes on it:**
+  - the films and series about the place;
+  - pictures from the internet;
+  - real empty offices.
+  The board is gathered so the team knows the mood exactly.
+- **This repository is open source. Nothing on the board is committed to it:** no film frames and no found
+  pictures, not even as reference. The board is kept privately, outside the repository.
+  - What comes into the repository is written notes in our own words: *"a hall too long for its width, lit
+    only at the far end; the carpet seam runs dead straight to it"*.
+- **Inspired by, never copied.** No room recognizable from a film, a series, the wiki or another game: not
+  its layout, its signature props, or its name. The team's rule already says so (no wiki, film or game names
+  or looks), and the Q-1 sweep checks the first floor first.
+
+**Tasks:**
+
+| ID | Task | Done when |
+|---|---|---|
+| FF-1 | The reference board (private, outside the repository) and the written notes on it: what makes each picture eerie, in words | about forty notes in the brief, each one a sentence or two, no pictures |
+| FF-2 | A brainstorming agent: a hundred strange geometries and eerie, surreal office set-ups (a meeting room set for one; a corridor whose doors are all the same door; a ceiling that lowers so slowly you only notice at the end; a cubicle farm with one chair still warm), each with what would make it cheap or costly to build | the list in the brief, ranked by the lead designer and the owner |
+| FF-3 | The first two minutes: storyboarded second by second, from the fall in to the first time something is there (the first room seen, the first sound, the first sign of the cast) | written and agreed by the owner before FF-5's building starts |
+| FF-4 | An audit of what the first floor is today: the landing, the plain rooms, the 40 yellow-floor rooms, each one shot at High and marked stunning, fine or weak | a table and a sheet of shots; the weak ones are named first |
+| FF-5 | Set pieces: six to ten new first-floor rooms from FF-2's best, built to FF-3's beats | each on live, staged, shot, with tests as every room has |
+| FF-6 | The plain rooms between (most of the first floor is these): a variety pass with D5, covering ceiling heights, lighting that fails in patterns, odd proportions, doorways that do not line up | a walk of three seeds shows no two plain rooms alike enough to notice |
+| FF-7 | The first rooms after the landing are always among the best: a rule for how the first floor is dealt (C9) | for any seed, the first rooms a new player can reach from the landing include at least one of FF-4's "stunning" |
+| FF-8 | Weak rooms: polished, or kept off the first floor (moved deeper, or out of the deck) | no room marked weak in FF-4 is left as it was on the first floor |
+| FF-9 | New players tried: the first two minutes played cold by someone who has not seen it (the owner, a friend, or a fresh agent playing blind); what they looked at, where they stopped, where they were bored | written up; FF-3 revised where it failed |
+
 ---
 
 ## 3. Contracts between departments
@@ -363,6 +420,7 @@ platform = {
   stat(id, n): void,              // a no-op on the web
   cloud: { get(key), set(key, value) },   // Steam Cloud in the shell, the site's archive on the web
   user(): { name, id } | null,    // the Steam user in the shell, the signed-in account (or null) on the web
+  inventory(): [items],           // lost property the player holds (Steam's Inventory Service in the shell; the account on the web): P-8
 }
 ```
 
@@ -404,16 +462,21 @@ platform = {
 - Frame-time targets for each tier on each hardware class.
 - A merge that breaks one is held by the lead until it is fixed, or the budget is changed on purpose.
 
+**C9 · How the first floor is dealt** (owner: the lead; asked for by D12).
+- A rule in `plan.js`'s dealing: which rooms may be near the landing on the first floor, drawn from a list
+  D12 keeps (the "stunning" ones).
+- It changes what a seed deals, so it **changes the edition**, and it lands as such (L-4).
+
 ---
 
 ## 4. Milestones
 
 | Milestone | What it is | Exit criteria (the lead checks) | Needs |
 |---|---|---|---|
-| **M0 · Ground** | decisions and facts | the owner's decisions (section 6) answered; F-1 profile written; Q-1 sweep listed; Q-2 started; P-1 spike plays | L-1, F-1, Q-1, P-1 |
+| **M0 · Ground** | decisions and facts | the owner's decisions (section 6) answered; F-1 profile written; Q-1 sweep listed; Q-2 started; P-1 spike plays; FF-1 to FF-3 begun | L-1, F-1, Q-1, P-1, FF-1 |
 | **M1 · Internal build** | a Steam build the team can play | P-2, P-3, P-5, P-6; R-1; I-1, I-2; suite green | D1, D2, D3 |
-| **M2 · Coming Soon** | the store page live | M-1 to M-4; W-4; Q-1's fixes merged; Q-2 answered; the owner's sign-off | D5, D10, D11 |
-| **M3 · Release candidate** | everything early access promises | P-4, P-7; I-3 to I-6; O-1 to O-6; W-1 to W-3; R-3; C-1 to C-4; S-1, S-2; D-1 to D-4; F-2, F-3; Q-3 to Q-5 | all |
+| **M2 · Coming Soon** | the store page live | M-1 to M-4; W-4; FF-4; the first of FF-5's set pieces (the store's shots are taken on the first floor); Q-1's fixes merged; Q-2 answered; the owner's sign-off | D5, D10, D11, D12 |
+| **M3 · Release candidate** | everything early access promises | FF-5 to FF-9 (the first floor done); P-4, P-7, P-8; I-3 to I-6; O-1 to O-6; W-1 to W-3; R-3; C-1 to C-4; S-1, S-2, S-6; D-1 to D-4; F-2, F-3; Q-3 to Q-5 | all |
 | **M4 · Early access** | released | M3 closed; the two weeks of Coming Soon done; the owner's go | owner |
 | **M5 · After launch** | the roadmap | S-3, D-5 (ghosts); R-4, R-5 (WebGPU); F-5; co-op; the modes roadmap | — |
 
@@ -456,3 +519,6 @@ M2 can run alongside M1 once M0 is closed. The store page needs shots and the tr
 5. The default tier on Steam: High, or Auto from High (R-1)?
 6. How far Ultra goes: agreed from R-2's side-by-side shots before R-3 is built.
 7. Crash reporting in the shell: none, Steam's own, or a service (Q-4)?
+8. Lost property on Steam: tradeable ever, or shown only (P-8, S-6)? (Recommended: shown only, at first.)
+9. The first floor (D12): how many new set pieces before early access (FF-5: six to ten proposed), and who plays
+   the first two minutes cold (FF-9)?

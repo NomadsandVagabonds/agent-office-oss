@@ -200,6 +200,40 @@ What happens next:
 How often: **(owner)** One experimental day a week (a "pilot Friday"), or a small experiment on most
 days?
 
+### 8. Lost property: one of one
+
+A later step, the owner's (19 Nov), in place of anything on a blockchain. Steam does not allow blockchain or
+NFT games, and a chain would not stop a cheat: what decides who found a thing is our server's check of the
+run, and nothing else.
+
+**What it is:**
+- **The day can hide one.** The day's seed may put a single one-of-a-kind object in the day's building,
+  somewhere hard: a desk fan, a name plate, a mug, a lanyard.
+- **The first to carry it out keeps it,** numbered and named: *"Desk fan · № 0047 · found on Daily №37 by
+  Quiet Heron"*. Nobody else gets that one, ever. On a later day there is another.
+- **Kept by our own server.** It is issued and signed as the visit tickets are (`visit-ticket.mjs`), and
+  kept with the account (D1 database). The finder's run is checked like any signing; a flagged run is looked
+  at by a person before the thing is given.
+- **The lost-and-found:** a page listing every one of them ever found, by whom and on which day. It is the
+  community's history, next to the daily's firsts.
+- **What it is for:** something to show, nothing to win.
+  - It is never sold, and never makes anybody stronger.
+  - It can be shown in the office or on the camcorder: a sticker, a trinket on the desk.
+
+**On Steam: the Inventory Service** (see [BLOCKROOMS-STEAM-PLAN.md](BLOCKROOMS-STEAM-PLAN.md), P-8 and S-6).
+Steam has its own system for items that belong to a player, with serial numbers, and it is within Valve's
+rules:
+- **How it works:** our server stays the one that decides. When it gives a thing to a player who is on
+  Steam, it also grants the matching Steam item to that player's Steam inventory (the item definitions are
+  made in Steamworks).
+- **(owner)** Tradeable or not? Recommended:
+  - **at first, not tradeable or marketable.** That keeps clear of real-money value, loot-box rules and the
+    cheating that value invites.
+  - **later, if wanted,** trading could be switched on for cosmetic things only. Never sold by us, and never
+    from random drops that are paid for.
+- **On the web:** a finder without Steam keeps theirs in the account. If they later link Steam, it is
+  granted there too.
+
 ## Order of work
 
 | Step | What | Where | Size |
@@ -212,6 +246,7 @@ days?
 | 6 | Ghosts: playback, drawn as tape ghosting, untouchable | a new `ghost.js` in the level, read through `env` | medium |
 | 7 | Past days, seasons, firsts | book API, home | medium |
 | 8 | Experiments: a day's list as a `planVisit` option, built the same by the route check; edition with it; counts summed by day; the one-tap question | plan.js (lead), book API, scorecard | medium |
+| 9 | Lost property: a seeded one-of-one in the day's building; issued and kept by the server; the lost-and-found page; on Steam, granted through the Inventory Service | book API, D1, home; Steamworks item definitions | medium |
 
 - **Steps 1–4** are a complete daily without ghosts, and could ship on their own.
 - **Steps 5–6** are what makes it a race.
@@ -234,3 +269,4 @@ days?
    everyone is the point.)
 7. Experiments: one pilot day a week, or a small one on most days? And may an experimental day's results
    count toward a season board?
+8. Lost property: tradeable on Steam ever, or shown only? (Recommended: shown only, at first.)
