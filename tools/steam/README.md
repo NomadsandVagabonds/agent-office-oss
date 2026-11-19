@@ -28,7 +28,7 @@ read from disk through a scheme of its own, `app://blockrooms/`:
 cd tools/steam
 npm install                 # Electron 45.2.3, here only
 npm run site                # = node ../blockrooms/build.mjs site   (site/ is ignored by git)
-npx electron .              # the front page; or: npx electron . --start play
+npx electron . --start play # the play page (the app never shows the front page: PREP.md, section 0)
 ```
 
 Flags: `--site <folder>`, `--start <page>`, `--fullscreen`, `--no-fps`, `--software-gl` (no GPU).

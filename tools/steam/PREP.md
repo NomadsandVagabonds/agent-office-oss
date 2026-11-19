@@ -3,6 +3,17 @@
 Short and plain. Checked against primary docs on 19 Nov 2026 where a link is given; anything without a link
 is the department's reading, to be confirmed.
 
+## 0. Decided (owner, 19 Nov): no website in the app
+
+The 1998 home page (the front page, `index.html`) is **not** in the Steam app, and neither is the trailer and its
+`<video>`. The app gets a launcher of its own: an intro and a start menu (its own task, not built yet). So:
+- the shell opens the play page (`play`), later the launcher, and never the front page;
+- `package.mjs` (P-2) leaves out the front page and its parts (`index.html`, `home.*`, `art.js`, the
+  trailer files, `shots/`, `og.jpg`, `muzak.mp3` unless the launcher wants the lift music), and the shell
+  sends the play page's "return to homepage" to the launcher instead;
+- the spike still opens the front page when run with no `--start`. Changing that default is a one-line change for
+  the next shell task (the check already opens `play`).
+
 ## 1. Only the owner can do (or pay for) these
 
 | What | Why it is needed | Cost / notes |
@@ -31,7 +42,7 @@ SDK. Its API ([client.d.ts](https://github.com/ceifa/steamworks.js/blob/main/cli
   all: Steam **Auto-Cloud**, which syncs a folder at launch and exit. The byte and file quotas per user are set
   by us in the app admin. [Steam Cloud](https://partner.steamgames.com/doc/features/cloud)
 - **Overlay:** `electronEnableSteamOverlay()` in main. Known open issues in Electron: overlay drawn white
-  (#116), a `<video>` breaking it (#148, the front page has a trailer), ghost windows on alt-tab (#95), and
+  (#116), a `<video>` breaking it (#148; no longer our problem, as the trailer is not in the app: section 0), ghost windows on alt-tab (#95), and
   Linux trouble (#195). Treat the overlay as **unproven until tried on each OS** with a real app ID.
 - **Inventory Service (P-8): not in steamworks.js.** Two ways: grant items from our server through the Web
   API (a trusted server with a publisher key, which fits S-6 "granted when the server says so"), and read
@@ -56,7 +67,7 @@ Looked at on 19 Nov 2026 from npm and each project's README. Stars and dates are
 | Achievements, stats | yes (+ leaderboards) | yes | yes | yes |
 | Cloud | yes (Remote Storage) | yes | yes | yes |
 | Inventory (P-8) | **no** | **no** | partial (old) | claims yes, unverified |
-| Overlay in Electron | its own fix, **experimental**: the page is drawn offscreen and each frame copied to a native window Steam hooks (Metal / OpenGL). Claims 1–3% CPU, 50–100 MB, ~1 frame latency. Linux **X11 only**, no Wayland | `electronEnableSteamOverlay()`; open issues: white overlay (#116), `<video>` breaks it (#148), ghost windows (#95), Linux (#195) | no Electron notes | as steamworks.js |
+| Overlay in Electron | its own fix, **experimental**: the page is drawn offscreen and each frame copied to a native window Steam hooks (Metal / OpenGL). Claims 1–3% CPU, 50–100 MB, ~1 frame latency. Linux **X11 only**, no Wayland | `electronEnableSteamOverlay()`; open issues: white overlay (#116), `<video>` breaks it (#148: moot for us, no video in the app), ghost windows (#95), Linux (#195) | no Electron notes | as steamworks.js |
 | Steam Deck / Linux | Linux x64/ARM64; Deck detection; overlay tried in Deck desktop mode | Linux x64 | Linux | Linux x64 |
 | Licence | MIT (SDK under Valve's agreement) | MIT | MIT | MIT |
 
@@ -93,8 +104,8 @@ the web's), and keep the daily's edition working with no network.
 ## 4. Packaging per OS (P-2), rough sizes
 
 Measured here (Linux x64): Electron 45 unpacked is **275 MB** (its zip is 124 MB); the built site is
-**60 MB**, half of it the front page's trailer (31 MB), which the shell may not need. So a Linux depot is
-about **335 MB** unpacked, roughly **150–180 MB** to download once compressed. Windows and Mac should be in
+**60 MB**, of which the front page's trailer is 31 MB. Without the front page (section 0) the site is under
+**~29 MB**, so a Linux depot is about **305 MB** unpacked, roughly **130–160 MB** to download once compressed. Windows and Mac should be in
 the same range (Mac a little larger, as a universal build doubles the binary) — **not measured**.
 
 Plan: `tools/steam/package.mjs` builds the site, copies it into the app, adds the Steamworks
@@ -110,5 +121,5 @@ runners for them).
 4. Windows signing: Azure Artifact Signing (if your country is covered) or an EV certificate?
 5. Steam Cloud: the Cloud API (finer control) or Auto-Cloud (no code)? D1 leans to the API, as the archive
    is already structured data.
-6. Ship the trailer inside the app (31 MB), or only on the store page?
+6. ~~Ship the trailer inside the app?~~ **Answered (19 Nov): no website and no trailer in the app** (section 0).
 7. Is launching without the Steam overlay acceptable, if it costs frames (2b)?
