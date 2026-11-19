@@ -110,6 +110,22 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     // (nothing is said: the crack and the empty hand are the telling, and there is no count to give)
     return result;
   }
+  /** The lawn flamingo: a stab that lands twice, and the flamingo stays in what it went into (env.stab, index.js). A miss keeps it. */
+  function stab({ quietMiss = false } = {}) {
+    if (!available()) return unavailable();
+    const state = model.read(), item = state.slots[state.selected];
+    if (item?.type !== 'flamingo') return { ok: false, reason: 'wrong-item' };
+    if (snipCooldown > 0) return { ok: false, reason: 'cooldown' };
+    snipCooldown = SNIP_TUNING.cooldown;
+    active.env.handView?.stab?.();                          // (the hand's stab, where it is drawn: hand.js)
+    const result = model.useSelected({ stab: () => active.env.stab ? active.env.stab() : { ok: false, reason: 'no-snip-target' } });
+    active.env.handView?.stabbed?.({ ok: result.ok });
+    if (!result.ok) { env.sound.play('shuffle', { vol: .5 }); if (!quietMiss) tell(result.reason); return result; }
+    env.sound.play('thunk', { vol: .9 }); env.sound.play('snip', { vol: .6 });
+    active.env.interfere?.(0.45); env.hud?.glitch?.(0.3);
+    refresh();
+    return result;
+  }
   function use() {
     if (!available()) return unavailable();
     const snapshot = model.read(), item = snapshot.slots[snapshot.selected];
@@ -118,6 +134,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     // camcorder full there is only a torch to put it in, and that is a combination: the bag opens on it, as it did.
     if (item?.type === 'battery' && cameraTakes()) return rechargeCamera(snapshot.selected);
     if (item?.type === 'scissors') return snip({ quietMiss: !view.isOpen });
+    if (item?.type === 'flamingo') return stab({ quietMiss: !view.isOpen });
     if (item?.type === 'extinguisher') { if (!(item.charge > 0)) { tell('empty-extinguisher'); return { ok: false, reason: 'empty-extinguisher' }; } active.env.extinguisher?.press?.(); return { ok: true, action: 'spray' }; }
     // Put the mark into the world before spending chalk. A bad floor or failed
     // placement never consumes a use. This synchronous action cannot race UI.
@@ -365,7 +382,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     if (next.inventory === floor.facade) delete next.inventory;
   }
   return {
-    model, view, use, snip, drop, combine, rechargeCamera, craft, toggleLight, select, held, give, consumeHeld, count, hang, attend, forget,
+    model, view, use, snip, stab, drop, combine, rechargeCamera, craft, toggleLight, select, held, give, consumeHeld, count, hang, attend, forget,
     get physical() { return active?.physical || null; },
     get isOpen() { return view.isOpen; },
     owns: target => target instanceof Node && view.el.contains(target),

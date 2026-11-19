@@ -1000,6 +1000,18 @@ part of the building, and they are on unless a visit is started with
   bigger. One that lands splits the canister one time in five: a last gout
   of white, and it is gone. A swing at the air never splits it. Phones have
   no smash yet.
+- **The lawn flamingo** (the owner's play-test). On the neighbourhood's parts
+  only (about a third of them, `SUPPLY.flamingo`), pulled up off a lawn. A
+  click with it in the hand is one stab of its steel stakes, at the
+  scissors' reach: what it goes into takes two jabs (`melee.js` `STAB`,
+  through each one's own `snip()`, so a medium one is finished and a boss is
+  not), and the flamingo is gone from the hand. A miss keeps it. In one of
+  the cast it stays in, the bird standing out of them toward where the stab
+  came from, and goes about with them (`pursuer.js` `impale`) until they die
+  or it works loose (25–45 s). Then it falls, lies a while and is gone. Into
+  anything else (a brood, a note, a resident) it falls where it went. The
+  model is `inventory-items.js` `flamingo` (`buildItemProp(kit,
+  'flamingo')`), for the neighbourhood's dressing too.
 - **Nothing is written on the picture but `E`.** What a thing is, it has to
   look like; its name is said once it is in a pocket.
 

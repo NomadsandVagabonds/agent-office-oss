@@ -15,6 +15,7 @@ export const ITEM_DEFS = Object.freeze({
   'pink-slip': Object.freeze({ name: 'Pink slip', description: 'FORM HR-404, Notice of Redundancy. The name on it is yours; the date is last week.', useLabel: 'Use' }),
   opener: Object.freeze({ name: 'Remote', description: 'A grey remote with one button. Nothing on it says what it is for.', useLabel: 'Use' }),
   extinguisher: Object.freeze({ name: 'Fire extinguisher', description: 'A small red extinguisher off a wall bracket. The pin is gone and the gauge is short of green. It stops a thing for a moment; it does not stop it for good.', useLabel: 'Spray', maxCharge: EXTINGUISHER.charge }),
+  flamingo: Object.freeze({ name: 'Lawn flamingo', description: 'A pink plastic flamingo on two steel stakes, pulled out of somebody\'s lawn. One good jab with the stakes, and it stays where it went.', useLabel: 'Stab' }),
   balloon: Object.freeze({ name: 'Red balloon', description: 'A red balloon on a curling string. It tugs upward without a breeze.', useLabel: 'Use' }),
 });
 const ITEM_ALIASES = Object.freeze({
@@ -163,7 +164,7 @@ export function createInventory({
     if (selected !== index || holstered !== stow) { selected = index; holstered = stow; revision++; }
     return true;
   }
-  function useSelected({ canMark = true, heal, snip } = {}) {
+  function useSelected({ canMark = true, heal, snip, stab } = {}) {
     if (crafting) return fail('busy');
     const item = slots[selected];
     if (holstered || !item) return fail('empty');
@@ -199,6 +200,18 @@ export function createInventory({
       if (snapped) slots[index] = null;
       revision++;
       return { ok: true, action: 'snip', snapped, target: result.target || null, item: used, index };
+    }
+    if (item.type === 'flamingo') {
+      // (one jab, and it stays in what it went into: a miss keeps it in the hand)
+      if (typeof stab !== 'function') return fail('no-snip-target');
+      const index = selected;
+      const result = stab(copy(item));
+      if (result?.ok !== true) return fail(result?.reason || 'no-snip-target');
+      if (slots[index]?.id !== item.id) return fail('stale-input');
+      const used = copy(item);
+      slots[index] = null;
+      revision++;
+      return { ok: true, action: 'stab', target: result.target || null, killed: !!result.killed, item: used, index };
     }
     if (item.type === 'snack') {
       if (typeof heal !== 'function') return fail('health-unavailable');

@@ -43,7 +43,7 @@ import { createHud } from './hud.js';
 import { createSound } from './sound.js';
 import { createInput } from './input.js';
 import { createStalkers } from './pursuer.js';
-import { createHand, createHandView } from './hand.js';
+import { createHand, createHandView, buildItemProp } from './hand.js';
 import { createDenizens } from './denizens.js';
 import { createResidents } from './resident.js';
 import { createExtinguisher } from './extinguisher.js';
@@ -54,7 +54,7 @@ import { leaving } from './leaving.js';
 import { middle, THIN_BEHIND } from './marks.js';
 import { hangBelow, goesDown } from './seam.js';
 import { createInventory } from './inventory.js';
-import { strikeSnip } from './melee.js';
+import { strikeSnip, strikeStab } from './melee.js';
 import { shoveWindow, strikeShove, blocks } from './shove.rule.js';
 import { createSurvival } from './survival.js';
 import { batteryEnding, batteryWarning } from './battery-ending.js';
@@ -232,6 +232,7 @@ async function visit(office, opt) {
     if (!canAct() || inventory?.isOpen) return;
     if (inventory?.held()?.type === 'scissors') { inventory.snip({ quietMiss: true }); return; }
     if (inventory?.held()?.type === 'extinguisher') { cur?.env.extinguisher?.press(); return; }   // (a burst: held, it goes on)
+    if (inventory?.held()?.type === 'flamingo') { inventory.stab({ quietMiss: true }); return; }     // (one stab, and it stays in)
     cur?.env.shove?.();
   };
   let tipNote = '', tipUntil = 0;
@@ -426,6 +427,22 @@ async function visit(office, opt) {
           ...(env.residents?.snipTargets?.() || []),          // (somebody a room keeps: resident.js)
         ];
         return strikeSnip(me, targets, (ax, az, bx, bz) => f.world.los(ax, az, bx, bz));
+      },
+      /**
+       * The lawn flamingo (melee.js strikeStab): what a jab would reach takes two, and the flamingo stays in it. The conductor
+       * carries it on whoever it went into until they die or it falls out (pursuer.js impale); anybody else, it falls at their feet.
+       */
+      stab() {
+        const me = f.player?.me;
+        if (!me || !f.world) return { ok: false, reason: 'unavailable' };
+        const targets = [...(env.pursuer?.snipTargets?.() || []), ...(env.denizens?.snipTargets?.() || []), ...(env.residents?.snipTargets?.() || [])];
+        const hit = strikeStab(me, targets, (ax, az, bx, bz) => f.world.los(ax, az, bx, bz));
+        if (hit.ok) {
+          const prop = buildItemProp(env.kit, 'flamingo'), c = hit.candidate;
+          prop.userData.light?.(f.world.lightAt(c.x, c.z, 1.2));
+          if (!env.pursuer?.impale?.(c, prop, me)) env.pursuer?.dropped?.(prop, c);
+        }
+        return hit;
       },
     };
     if (survival) {
