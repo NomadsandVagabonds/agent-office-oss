@@ -1,12 +1,12 @@
-// The Backrooms — the fire extinguisher as it is held: a right fist over the head of it, the palm down on the squeeze
-// lever and the fingers curled under the carry handle, the canister hanging below out of the bottom of the picture, the
+// The Backrooms — the fire extinguisher as it is held: a right hand round the head of it, the palm against the right side
+// of the handle and lever, the fingers curled down and under the carry handle, the thumb over the lever, the forearm in
+// line behind, and the canister hanging below out of the bottom of the picture, the
 // horn forward and the gauge turned up where it can be read. Where it all is a given time into a burst is
 // hand-extinguisher.rule.js; this is only the model and putting it there. The skin and sleeve are the shove's hands'
 // (hand.js makeHands), so the hand that holds it is the one that shoves.
 //
 // (all at renderOrder 10000, so that a sticky note on the lens, at 10001, stays over it: hand-notes.js)
-// Cost: three meshes in the hand (the canister with the fist's lower half, the lever with the back of the hand and the
-// knuckles on it, the needle). The canister is the pockets' own
+// Cost: three meshes in the hand (the canister with the hand and arm, the lever with the thumb on it, the needle). The canister is the pockets' own
 // model (inventory-items.js), with its lever cut out so that it can be squeezed.
 import * as THREE from 'three';
 import { Batch, lin } from './kit.js';
@@ -57,37 +57,40 @@ function limb(dst, a, c, w, h, col, unit, up = [0, 1, 0]) {
 }
 
 /**
- * The fist round the head, in the canister's own units, in two parts, so that a squeeze shows in the hand and not only in
- * the lever. `grip`: what moves with the lever, about its pin. The back of the hand lies down on the lever, which runs back
- * from its pin at z 0 to about z 5.5 (modelled lying flat: it takes the lever's turn); the knuckles stand up in a ridge along its front edge; and the first joints of four
- * fingers turn down over its left side. `hold`: what stays with the canister. The rest of each finger curls on down and
- * under the carry handle (y 13.75), the thumb lies along the right side, and a wrist, a short forearm, the cuff and the
- * sleeve come up into the picture from below and behind, as the shove's hands do (hand.js makeHands).
+ * The right hand round the head, in the canister's own units (x to the right of the picture, y up, z back toward the camera;
+ * the carry handle runs back at y 13.75 from z 0.6 to 5.6, the lever over it at y 15). As the owner has it: "for right hand
+ * your palm would be on the right side with fingers down". The palm stands against the right side of the handle and the
+ * lever; the fingers come down off it and curl round under the handle to its left side; the thumb lies over the top of the
+ * lever toward its left, and it is the thumb that squeezes: it is built on the lever (`grip`), and goes down with it. The
+ * wrist is straight, and the forearm runs on in line with the hand, back toward the camcorder and down to the bottom right
+ * corner, mostly seen end on, the cuff and the sleeve last (`hold`, with the canister), as the shove's hands are.
  */
 function fist(unit) {
   const skin = lin('#d6a883'), knuckle = lin('#c4916c'), shade = lin('#b98563'), sleeve = lin('#6f7681'), cuff = lin('#9aa0a8');
   const grip = new Batch(false), hold = new Batch(false);
   const box = (dst, x0, y0, z0, x1, y1, z1, col) => { const t = new Batch(false); t.box(x0, y0, z0, x1, y1, z1, col); addThrough(dst, t, new THREE.Matrix4().makeScale(unit, unit, unit)); };
-  // the back of the hand, a little domed: a broad block on the lever, and a narrower one on top of it
-  box(grip, -1.05, 15.15, 1.7, 1.1, 15.95, 5.6, skin);
-  box(grip, -0.8, 15.9, 2.1, 0.85, 16.3, 5.2, shade);
-  // the knuckles, four of them, a ridge along the front edge
-  for (let k = 0; k < 4; k++) { const z = 2.05 + k * 0.9; box(grip, -1.2, 15.3, z - 0.4, -0.55, 16.15, z + 0.4, knuckle); }
-  const Z = [2.05, 2.95, 3.85, 4.75];            // (from just behind the gauge, so it stays in sight)
-  Z.forEach((z, k) => {
-    const w = k === 3 ? 0.4 : 0.47;
-    limb(grip, [-1.05, 15.9, z], [-1.5, 14.75, z], w, w, skin, unit);          // over the lever's left edge (moves with it)
-    limb(hold, [-1.5, 14.75 + z * 0.1, z], [-1.25, 13.45, z + 0.05], w, w, knuckle, unit); // down the side of the head (from about where the lever's tilt carries the first joint, half-squeezed)
-    limb(hold, [-1.25, 13.45, z + 0.05], [0.25, 13.15, z + 0.1], w * 0.92, w * 0.85, shade, unit);   // and under the handle, the tips just past its middle
+  // the palm, upright against the right side of the handle and the lever, and the back of the hand outside it
+  box(hold, 0.72, 13.05, 1.55, 1.25, 15.85, 5.65, skin);
+  box(hold, 1.2, 13.25, 1.8, 1.6, 15.6, 5.45, shade);
+  // the knuckles, a ridge along its bottom edge, where the fingers turn under
+  for (let k = 0; k < 4; k++) { const z = 2.0 + k * 1.0; box(hold, 0.8, 12.75, z - 0.42, 1.5, 13.25, z + 0.42, knuckle); }
+  // four fingers: down off the knuckles, round under the handle, and the tips up its left side
+  [2.0, 3.0, 4.0, 4.95].forEach((z, k) => {
+    const w = k === 3 ? 0.4 : 0.46;
+    limb(hold, [1.05, 12.95, z], [0.25, 12.95, z], w, w, skin, unit);
+    limb(hold, [0.25, 12.95, z], [-0.75, 13.15, z], w * 0.95, w * 0.9, knuckle, unit);
+    limb(hold, [-0.75, 13.15, z], [-1.0, 13.75, z], w * 0.88, w * 0.85, shade, unit);
   });
-  // the thumb, along the right side of the lever toward the pin
-  limb(grip, [1.15, 15.55, 5.0], [1.25, 15.25, 3.0], 0.5, 0.45, skin, unit);
-  limb(grip, [1.25, 15.25, 3.0], [1.1, 15.15, 2.0], 0.44, 0.4, knuckle, unit);
-  // the wrist going back off the hand and down, a short forearm, the cuff and the sleeve, out of the bottom of the picture
-  limb(hold, [0.25, 15.55, 5.4], [0.9, 13.6, 8.6], 1.0, 0.82, skin, unit);
-  limb(hold, [0.9, 13.6, 8.6], [1.5, 11.0, 11.6], 1.1, 0.9, skin, unit);
-  limb(hold, [1.5, 11.0, 11.6], [1.7, 10.2, 12.5], 1.28, 1.05, cuff, unit);
-  limb(hold, [1.7, 10.2, 12.5], [2.6, 0.5, 19.5], 1.36, 1.12, sleeve, unit);
+  // the thumb, from the top of the palm over the lever toward its left: on the lever, so a squeeze is the thumb pressing
+  limb(grip, [1.0, 15.45, 4.9], [0.05, 15.55, 3.7], 0.5, 0.45, skin, unit);
+  limb(grip, [0.05, 15.55, 3.7], [-0.6, 15.45, 2.75], 0.44, 0.4, knuckle, unit);
+  // the wrist, straight, and the forearm in line with the hand: back toward the camcorder and down to the bottom right
+  // (steeply: near the lens, anything that runs back toward it spreads out across the picture, so an arm that ran back level
+  // would cross to the right edge at the height of the head, as if the elbow were up at the shoulder)
+  limb(hold, [1.2, 13.9, 5.0], [1.7, 11.4, 7.0], 1.0, 0.85, skin, unit);
+  limb(hold, [1.7, 11.4, 7.0], [2.4, 6.4, 9.6], 1.08, 0.92, skin, unit);
+  limb(hold, [2.4, 6.4, 9.6], [2.55, 5.4, 10.1], 1.26, 1.06, cuff, unit);
+  limb(hold, [2.55, 5.4, 10.1], [3.4, -6.0, 15.5], 1.36, 1.14, sleeve, unit);
   return { grip, hold };
 }
 
@@ -107,7 +110,7 @@ export function heldExtinguisher(kit, lights, amb) {
   const flat = new THREE.Matrix4().makeRotationX(-P.leverOpen * DEG);
   const aboutPin = scale.clone().multiply(flat).multiply(new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z));
   const leverB = addThrough(new Batch(false), whole, aboutPin, P.lever);
-  // the hand's grip goes down with the lever: modelled on it lying flat, so it takes the lever's own turn from there
+  // the thumb goes down with the lever: modelled on it lying flat, so it takes the lever's own turn from there
   addThrough(leverB, hand.grip, scale.clone().multiply(new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z)));
   // the needle: a thin dark sliver from the middle of the dial outward, along its own +Y, turned by the pose about the dial's axis
   const needleB = new Batch(false); needleB.box(-0.06 * unit, 0, 0, 0.06 * unit, P.gaugeR * 0.78 * unit, 0.05 * unit, lin('#1a1a1a'));
