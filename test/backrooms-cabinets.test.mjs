@@ -234,18 +234,34 @@ test('deterministic: the same seed, the same cabinets, drawers and contents; and
   assert.ok(!/Math\.random|\bc\.R\b|\.spot\(|\.wallSpot\(|\.corner\(/.test(src), 'no Math.random, and nothing of the room\'s own stream');
 });
 
-test('(the preview) without &preview=cabinets nothing of it is built: today\'s rooms', async () => {
+const dealt = (rt) => (rt.def.dress || []).some((d) => d.type === 'cabinet');
+test('(the preview) without &preview=cabinets nothing of it is built: today\'s rooms, but for the cabinets the dressing deals', async () => {
   for (const seed of [7, 3, 21]) {
     const none = await floor(seed), empty = await floor(seed, new Set()), other = await floor(seed, new Set(['clip', 'floorlight'])), on = await floor(seed, new Set(['cabinets']));
     let changed = 0;
     none.world.rooms.forEach((rt, i) => {
-      for (const f of [none, empty, other]) assert.equal(f.world.rooms[i].cabinets, undefined);
+      for (const f of [none, empty, other]) if (!dealt(f.world.rooms[i])) assert.equal(f.world.rooms[i].cabinets, undefined, `room ${i}: no cabinets unless its dressing has one`);
       assert.equal(hash(empty.world.rooms[i], empty.world), hash(rt, none.world), `room ${i}: an empty preview is today's room`);
       if (!['phone', 'nested', 'cover', 'party', 'museum'].includes(rt.def.arch)) assert.equal(hash(other.world.rooms[i], other.world), hash(rt, none.world), `room ${i}: another preview is today's room`);
-      if (on.world.rooms[i].cabinets) { changed++; assert.equal(rt.def.kind, 'plain'); }
+      if (on.world.rooms[i].cabinets && !dealt(rt)) { changed++; assert.equal(rt.def.kind, 'plain'); }
+      else if (on.world.rooms[i].cabinets) changed++;
       else assert.equal(hash(on.world.rooms[i], on.world), hash(rt, none.world), `room ${i}: a room without cabinets is untouched by the preview`);
     });
     assert.ok(changed >= 3, `seed ${seed}: the preview put cabinets in plain rooms (${changed})`);
     done(none, empty, other, on);
   }
+});
+
+test('ordinary dressing: a plain room dealt a cabinet puts one of the placements down, the family in place of the old one', async () => {
+  let found = null;
+  for (let seed = 1; seed < 400 && !found; seed++) { const level = generate(seed, {}); if (level.rooms.some((r) => r.kind === 'plain' && (r.dress || []).some((d) => d.type === 'cabinet'))) found = seed; }
+  assert.ok(found, 'some floor deals a cabinet');
+  const f = await floor(found), rooms = f.world.rooms.filter((rt) => rt.def.kind === 'plain' && dealt(rt));
+  assert.ok(rooms.length, `seed ${found}`);
+  for (const rt of rooms) {
+    if (!rt.cabinets) continue;                                                   // (no wall or floor for any of them: nothing, as the old one did)
+    assert.ok(rt.cabinets.every((k) => M.CABINETS.kinds.includes(k.kind) && K.PLACEMENTS.includes(k.how === 'stand' ? 'against' : k.how)), JSON.stringify(rt.cabinets.map((k) => k.how)));
+    assert.ok(rt.colliders.every((q) => q.on !== false), 'nothing had to stop being solid');
+  }
+  done(f);
 });

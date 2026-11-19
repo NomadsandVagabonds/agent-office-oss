@@ -50,7 +50,7 @@ export const DRAWERS = Object.freeze({
   creature: 0.35,    // the body that must still get through, besides the visitor's
   wall: 0.34,        // how far from a wall a drawer's tray must be to be given something (the widest pickup's radius, and a little)
 });
-const VS = CABINETS.voxel, SC = CABINETS.scale;
+const VS = CABINETS.voxel, SC = CABINETS.scale, PITCH_TOP = CABINETS.pitch - 8;      // (how high in a drawer the tops of its hanging files are, in voxels)
 const meets = (a, b, pad = 0) => a.x0 < b.x1 + pad && b.x0 < a.x1 + pad && a.z0 < b.z1 + pad && b.z0 < a.z1 + pad;
 const hashOf = (s) => { let h = 2166136261; for (const ch of String(s)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
 
@@ -156,7 +156,7 @@ export function put(c, kind, x, z, o = {}) {
     Object.assign(dr, { n: nrm, pivot, slide, lenM: len * VS, hidden: o.hidden ?? Infinity, t: 0,
       front: c.dynamic(front, { pivot }), body: c.dynamic(body, { pivot }),
       // where a thing given to it is put once it is out: in the front of the tray, on its floor (the room's frame)
-      at: { x: x + nrm[0] * (face + slide - (len * VS) / 2), z: z + nrm[2] * (face + slide - (len * VS) / 2), y: y + (b.y0 + 2) * VS },
+      at: { x: x + nrm[0] * (face + slide - (len * VS) / 2), z: z + nrm[2] * (face + slide - (len * VS) / 2), y: y + (b.y0 + 2 + (dr.fill === 'files' || dr.fill === 'carpet' ? PITCH_TOP : dr.fill === 'paper' ? 9 : 0)) * VS },   // (on the floor of the tray, or on top of what fills it)
       holds: y + (b.y0 + 2) * VS <= DRAWERS.holds });
     // (and far enough from the room's walls for a pickup to lie there: inventory-world.js keeps one its radius off them)
     if (Math.min(c.W / 2 - Math.abs(dr.at.x), c.D / 2 - Math.abs(dr.at.z)) < DRAWERS.wall) dr.holds = false;

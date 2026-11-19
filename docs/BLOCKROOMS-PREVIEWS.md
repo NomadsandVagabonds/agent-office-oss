@@ -849,7 +849,7 @@ exactly as before (below), and nothing in the game passes the flag.
     inventory.js, as it lays out a part's supplies (supplies.js `planSupplies` and `plentyOfPaper`, unchanged), asks a
     room to hide the thing (`rt.hide(item)`, which cabinets.js gives a room with drawers; inventory.js imports nothing of it): about half the time, by the thing's own id, it goes into
     one of the room's drawers that opens, is low enough to see into (its floor at 45 cm or less) and is far enough
-    from a wall, instead of onto the floor. When that drawer is opened, the thing is put in it as the ordinary pickup
+    from a wall, instead of onto the floor. When that drawer is opened, the thing is put in it (on top of its files, where it can be seen) as the ordinary pickup
     (inventory-world.js `spawn`, which now takes `ignore`: the cabinets' colliders it lies over). So paper is as
     common as it was, a torch as rare: a drawer is a hiding place, as an oddity's stash is.
   - **Seeded.** A cabinet's paint, wear, lock and contents come from `${seed}/cabinets/${room}/${n}`, where a placement
@@ -874,16 +874,19 @@ exactly as before (below), and nothing in the game passes the flag.
 ### Try it
 
 ```
-/world/dev/backrooms.html?seed=7&room=blinds&preview=blinds&pursuer=0&mute=1&cast=none&x=-0.3&z=4.9&yaw=-0.12&pitch=-0.06
-/world/dev/backrooms.html?seed=7&room=blinds&preview=blinds&pursuer=0&mute=1&cast=none&x=-0.6&z=-0.6&yaw=-1.25&pitch=-0.1
-/world/dev/backrooms.html?seed=7&room=blinds&preview=blinds&pursuer=0&mute=1&cast=none&x=-0.5&z=0.7&yaw=-0.55&pitch=-0.55
-/world/dev/backrooms.html?seed=7&room=blinds&preview=blinds&pursuer=0&mute=1&cast=none&x=4.3&z=-3&yaw=3.14
+/world/dev/backrooms.html?seed=7&room=12&preview=cabinets&pursuer=0&mute=1&cast=none&x=1.3&z=-0.9&yaw=1.95&pitch=-0.06
+/world/dev/backrooms.html?seed=7&room=22&preview=cabinets&pursuer=0&mute=1&cast=none&x=0.9&z=2.0&yaw=0.6&pitch=-0.15
+/world/dev/backrooms.html?seed=7&room=20&preview=cabinets&pursuer=0&mute=1&cast=none&x=1.8&z=1.4&yaw=1.22&pitch=0.12
+/world/dev/backrooms.html?seed=7&room=1&preview=cabinets&pursuer=0&mute=1&cast=none&x=1.55&z=1.07&yaw=-1.57&pitch=-0.9
+/world/dev/backrooms.html?seed=7&room=20&preview=cabinets&pursuer=0&mute=1&cast=none&x=1.8&z=1.4&yaw=1.22&pitch=0.12&graphics=high
+/world/dev/backrooms.html?seed=7&room=17&preview=cabinets&pursuer=0&mute=1&cast=none&x=-2.4&z=-0.3&yaw=-1.69&pitch=-0.02
 ```
 
-The first from the way in, the second at the hall's mouth, the third over the cup, the fourth down the hall's leg to
-the doorway; add `&graphics=high` for High. Pictures: `docs/previews/blinds-<door|jamb|cup|hall>-classic.jpg`,
-`blinds-door-high.jpg`, `blinds-jamb-high.jpg`. Without `&preview=blinds`, `room=blinds` is not in the deck and the page
-lands you where it always does.
+On the deal with the Door on the Chain in it (edition 1w72hk5): a pile (room 12, the room's own hanging figure over it),
+a sunk row standing out in the room (22), a wall of drawers (20), a drawer open with the part's paper in it on top of
+its files (1: press `E` looking down at the bottom drawer of the four-drawer at the end of the pile), the wall at High,
+one alone (17). Pictures: `docs/previews/cabinets-<pile|sunk|wall|drawer|wall-high|alone>.jpg` (Classic but the one at
+High; the drawer opened through its own use, the room's ticks run by hand, as the headless page does not play).
 
 ### Proof
 
@@ -1077,3 +1080,13 @@ does not play).
 - The light on a drawer that opens is baked where it was shut (as on anything that moves): its tray is lit as its
   front was.
 - Looked at at Classic and High; Low and Medium only through the tests; `vhs=0/1`, a phone, not.
+
+### Dealt as dressing (the second step)
+
+Since the step after the preview, the cabinets are ordinary dressing, with no weighting: `cabinet` is one more of the
+things a plain room may have been left (gen.js `DRESSING`, one entry, as each of the others has one or two; Records
+floors keep their three), and rooms.js's `cabinet` dressing deals one of the placements (`PLACEMENTS[(seed + room) %
+7]`: pile, sunk row, wall of drawers, one let into a wall, one through the ceiling, one alone, one against a wall), or
+one against a wall where that one does not fit, or nothing (as the old cabinet when there was no wall for it). The
+catalogue's `cabinet` (c.prop) is the old model still, for the rooms that place it themselves. The flag still deals
+them into every plain room, for looking at them.

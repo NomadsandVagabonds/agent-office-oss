@@ -19,7 +19,7 @@ import { concourse } from './mall.js';
 import { forestRoom, forestStanding, FOREST_THINGS } from './forest.js';
 import { siteOf, standMachine } from './vending-machine.js';
 import { uplit } from './floorlight.js';
-import { previewCabinets } from './cabinets.js';
+import { previewCabinets, deal as dealCabinets, PLACEMENTS as CABINET_PLACEMENTS } from './cabinets.js';
 import { dummyVox } from './cast/dummies.model.js';
 
 /* ---- the plain rooms, and what somebody left in them ------------------------------- */
@@ -186,6 +186,7 @@ function dressing(c, item) {
   } else if (item.type === 'floordoor') floorDoor(c, item);
   else if (item.type === 'ceildoor') ceilDoor(c);
   else if (item.type === 'map') floorPlan(c);
+  else if (item.type === 'cabinet') { if (!dealCabinets(c, CABINET_PLACEMENTS[(item.seed + c.room.id) % CABINET_PLACEMENTS.length], item.seed)) dealCabinets(c, 'against', item.seed); }   // (filing cabinets: cabinets.js)
   else if (item.type === 'cabinet' || item.type === 'shelving') {
     // against a wall, backed onto it, the way they always are
     const w = c.wallSpot(item.type === 'cabinet' ? 0.7 : 1.4, undefined, 0.35, 2.1); if (!w) return;
