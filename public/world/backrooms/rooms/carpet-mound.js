@@ -36,6 +36,24 @@ const snagVox = (k) => () => {
 export function build(c) {
   const { W, D, H, kit, look, params: p } = c, L = layout(W, D, p), { ro, t, v } = MOUND;
   c.shell();
+  // (the shell gives every lit panel a lamp, and each doorway a brighter room spills through another: at the room's largest,
+  // 10 × 12 m, sixteen panels and three doorways, that can come to seventeen. Past the sixteen a room may have, the nearest
+  // two of the ceiling's become one, weighted by power, as a lit batch keeps its own: shining-lights.rule.js lampSet)
+  const lamps = c.rt.lights, power = (q) => q.r + q.g + q.b;
+  while (lamps.length > 16) {
+    let bi = -1, bj = -1, best = Infinity;
+    for (let i = 0; i < lamps.length; i++) for (let j = i + 1; j < lamps.length; j++) {
+      const a = lamps[i], b = lamps[j];
+      if (a.spill !== undefined || b.spill !== undefined || a.flick !== b.flick || a.bank !== b.bank) continue;
+      const d = (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2;
+      if (d < best) { best = d; bi = i; bj = j; }
+    }
+    if (bi < 0) break;
+    const a = lamps[bi], b = lamps[bj], wa = power(a), wb = power(b), w = wa + wb || 1;
+    a.x = (a.x * wa + b.x * wb) / w; a.y = (a.y * wa + b.y * wb) / w; a.z = (a.z * wa + b.z * wb) / w;
+    a.r += b.r; a.g += b.g; a.b += b.b;
+    lamps.splice(bj, 1);
+  }
   c.reserve(L.stapler.x, L.stapler.z, 0.5); c.reserve(L.reward.x, L.reward.z, 0.6);
 
   const pile = c.mapped('mound:pile', kit.tex.floor(look)), screed = c.mapped('mound:screed', kit.tex.screed('#7a766c'));

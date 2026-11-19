@@ -137,6 +137,7 @@ New rooms go in `MORE_DECK` in `deck2.js`.
 | `halo` | | `{ back, side, lip }`: metres of the plan kept empty behind and beside the room, for a room that is a balcony over a view drawn there. Makes it a set piece |
 | `planned` | | `true`: never dealt by chance, only where the visit's plan puts it |
 | `headline` | | `true`: staged from the news. The owner's call, nobody else's |
+| `through` | | `true`: the back wall always leads on, into a plain room, so the room is always a way through and never a dead end there; if no such room fits, the room is put down somewhere else (`gen.js` placeSpecial). With `throughDoor` (metres) that doorway is an ordinary door wide (door-on-chain: 1), not the default 1.8 m. The Open-Plan Pit, door-on-chain |
 | `gate` | | `(room) => where along a side wall the way on goes`. The way out of the part is through this room and nowhere else: see "A room the way out is through" |
 | `on` | | `false`: retired. It is out of the deck and nothing else has to change. Leave the line and the file: it may come back |
 

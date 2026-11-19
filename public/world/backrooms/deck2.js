@@ -20,6 +20,8 @@
 //   doors    'own': the room hangs doors of its own on its doorways, so the floor's fire doors (doors.js) keep off them
 //   headline true: the place has half-remembered something from the news and staged it wrongly. Which stories become
 //            rooms is the owner's choice, nobody else's; the plan puts at most one in a visit, never on its first floor.
+//   through  true: the back wall always leads on, into a plain room, or the room is not placed (gen.js placeSpecial);
+//            `throughDoor` (metres) makes that doorway an ordinary door wide, not the default 1.8 m
 //   gate     (room) → where along a side wall the way on goes, in the room's own frame. The way out of the part is
 //            through this room and nowhere else: it is not dealt with the others but put down last, off the deepest
 //            room there is, and the lobby and the fire exit are hung off it (gen.js, throughGate). The two doorways are
@@ -348,6 +350,14 @@ export const MORE_DECK = [
       tableSide: R.pick([-1, 1]),
     }),
   },
+  // The Door on the Chain (docs/art-direction/yellow-office, the owner's pick): a hall that is the gap behind one
+  // enormous door standing ajar, a brass security chain the size of the corridor across it, and under its raised end the
+  // way to an ordinary door. `through` with `throughDoor: 1`: the back wall always has that doorway, an ordinary door wide, into a plain room (gen.js placeSpecial).
+  // An ordinary weight, as every room has: no room is to show up more often than another (the owner, 19 November).
+  { id: 'door-on-chain', name: 'The Door on the Chain', landmark: 'the brass chain across the hall behind the big door',
+    w: [4, 4], d: [10, 11], h: [2.9, 3.1], ports: [], through: true, throughDoor: 1, weight: 1, lights: 'normal', doors: 'own',
+    module: './rooms/door-on-chain.js', stash: (r) => [r.W / 2 - 1.0, -r.D / 2 + 1.5, r.W / 2 - 0.6, -r.D / 2 + 2.1],   // (in the office past the chain, by its right wall: room for a coin's 0.35 m, 1.25 m clear of the ordinary door)
+    roll: (R) => ({ wood: R.pick(['#7a4a2a', '#6f4527', '#835233']), stain: R.int(1, 9999), dead: R.chance(0.3) }) },
   // The tape rooms (docs/backrooms-lab/TAPE.md). Optional, dead ends, nobody has to work them out. Cover: a desk that
   // wants somebody at it and looking at its screen, a shutter that is up while it has that, and a deck that plays you back.
   { id: 'cover', name: 'Cover', landmark: 'the desk that wants looking at', w: [10, 11], d: [8, 9], ports: [], weight: 0.9, lights: 'normal',

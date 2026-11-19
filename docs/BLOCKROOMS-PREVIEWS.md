@@ -79,13 +79,16 @@ that meet there, with only the post where the neighbours' own walls meet left st
 
 Walk it:
 
-- `/world/dev/backrooms.html?seed=7&preview=corners&room=4&x=1.6&z=0&yaw=1.5708&pursuer=0&mute=1`: the dev page's
-  own seed. Room 4 has all three of its doorways in corners. From there, the far right corner opens two ways (into the
-  room you land in, and into the one beside it), and the far left corner has the third. Turn round slowly.
-- `/world/dev/backrooms.html?seed=7&preview=corners&room=4&x=1.2&z=1.2&yaw=0.785&pursuer=0&mute=1`: the same room,
-  looking straight into the corner that opens two ways.
-- `/world/dev/backrooms.html?seed=2&preview=corners&room=9&x=-2.5&z=3.5&yaw=-0.64&pursuer=0&mute=1`: a big room
-  with a corner that opens two ways, seen from the far side.
+(Seeds and rooms as the deck deals them since door-on-chain and the live merge; until then these were seed 7 room 4
+and seed 2 room 9, which the pictures below still show.)
+
+- `/world/dev/backrooms.html?seed=64&preview=corners&room=20&x=0&z=2.2&yaw=0&pursuer=0&mute=1&cast=none`: room 20 has
+  all three of its doorways in corners. From there, the far right corner opens two ways, and the far left corner has
+  the third. Turn round slowly.
+- `/world/dev/backrooms.html?seed=64&preview=corners&room=20&x=0.9&z=-1.4&yaw=-0.785&pursuer=0&mute=1&cast=none`: the
+  same room, looking straight into the corner that opens two ways.
+- `/world/dev/backrooms.html?seed=10&preview=corners&room=8&x=2&z=-2&yaw=2.356&pursuer=0&mute=1&cast=none`: a big room
+  (6.8 m square) with a corner that opens two ways, seen from the far side.
 
 Add `&graphics=medium` (or `classic`) to choose a tier, and `&preview=corners,hallways` for both previews at once.
 
@@ -155,11 +158,15 @@ inside the rectangle the floor's route is still worked out on. There are four ki
 
 Walk it:
 
-- `/world/dev/backrooms.html?seed=32&preview=hallways&room=8&x=-3&z=-0.2&yaw=-1.5708&pursuer=0&mute=1`: the dogleg.
-- `/world/dev/backrooms.html?seed=1&preview=hallways&room=11&x=-2.6&z=0&yaw=-1.5708&pursuer=0&mute=1`: the taper (the
-  same floor's room 2 is a skew: `room=2&x=-3.1&z=0.2`).
-- `/world/dev/backrooms.html?seed=57&preview=hallways&room=32&x=-0.6&z=1.6&yaw=0&pursuer=0&mute=1`: the dead end with
-  the chairs.
+(As the deck deals them since door-on-chain and the live merge; they were seed 32 room 8, seed 1 rooms 11 and 2, and
+seed 57 room 32.)
+
+- `/world/dev/backrooms.html?seed=131&preview=hallways&room=9&x=0&z=2.3&yaw=0&pursuer=0&mute=1&cast=none`: the dogleg
+  (the same floor's room 15 is a skew: `room=15&x=-2.5&z=0&yaw=-1.5708`).
+- `/world/dev/backrooms.html?seed=13&preview=hallways&room=6&x=2.9&z=0&yaw=1.5708&pursuer=0&mute=1&cast=none`: the
+  taper, closing toward its far end.
+- `/world/dev/backrooms.html?seed=16&preview=hallways&room=37&x=-1.6&z=0&yaw=-1.5708&pursuer=0&mute=1&cast=none`: the
+  dead end with the chairs.
 
 **How it works** (`preview.js` `shapeHallways`, `hallShape`, and the builder `hallway`). The floor is changed after it
 is generated, behind the same flag as the corner doors. A corridor that will take a shape is:
@@ -867,3 +874,103 @@ warm and correct across floor and walls, we already have.
   end with its dead light, and you leave the way you came.
 - With loot, what the seed leaves goes in the front left corner (the stash), away from the light and the blind.
 - The hall is lit by the room's tube at Classic (no occlusion in the bake), so it is not as dim as the render's.
+
+## The Door on the Chain
+
+The owner's pick from the Yellow Office art direction (`docs/art-direction/yellow-office/README.md`, "The Door on the
+Chain"; the concept is `door-on-the-chain.png` there). Two ends, with a short low passage. What looks like a
+wood-panelled hall is the gap behind one enormous office door standing ajar; a brass security chain the size of the
+corridor is stretched across it from the door to a plate on the wall; you go under its raised end to an ordinary
+office door, which is what gives the scale away.
+
+**Status: in the game.** Unlike the sections above this is not behind a `&preview=` flag: it is a room of the deck
+(`deck2.js`, `door-on-chain`), dealt like any other at the ordinary weight 1, with no theme multiplier (the owner: no
+room shows up more often than another). Adding it changed the make of the building, `edition()`: `yntnbj` before,
+`c9ga4v` after on its own; `1w72hk5` once merged with the live deck, which changed it too.
+
+### What was built
+
+- `rooms/door-on-chain/rule.js` (pure): the plan. The door is the level's ordinary office door (`wooddoor.model.js`,
+  0.9 × 2.03 m) at 6.5 times, so its back face is 5.85 m of the hall's left wall from the latch edge to the hinge, and
+  each of its voxels is 8 cm: its stiles, muntin, bottom rail, sunk panels with their bead and raised fields are the
+  small door's to the voxel (the lock rail is above the ceiling). A slide plate on it, a steel plate on the right wall,
+  and four links between them, hung as a chain of equal rigid links hangs (each joint the same weight, so each link's
+  slope steps up by the same amount), the wall end raised (1.86 m against 0.95 m at the door). Each link is an elongated
+  octagon of square 10 cm brass, each in the next one's hole, alternately upright and flat. Everything over the floor
+  (every bar in 6 cm lengths, the plates, the knob, the latch tongue) is a list of boxes; the headroom anywhere is the
+  underside of the lowest one within a body's reach (0.24 m), and where that is under world.js `HEAD` (0.62 m) the room
+  says there is none, so nobody of any size is sent where the walk would not let them stand.
+- `rooms/door-on-chain.js`: draws from those numbers. Its solids are the plan's and nothing else (the door to the wall
+  behind it, the jamb at the hinge, the wall from it to the way in, the ordinary leaf and its lever); `rt.headY` is the
+  plan's headroom. A crack of light at the hinge, a dark slot behind the latch edge with a pencil of daylight at its end,
+  the latch tongue over everybody's head, the gap under the door and its shadow on the carpet, three fittings (the one
+  over the raised end on the lit side; the one by the way in dead in about a third of rooms), stains on the tiles, the
+  carpet worn under the raised end. 6,500 triangles, 14 meshes, 5 lights.
+- The deck's `through` (the live deck's, made for the Open-Plan Pit, `gen.js` placeSpecial): `through: true,
+  throughDoor: 1`. The back wall always gets a doorway an ordinary door wide (1 m) and high, into a plain room, or the
+  room is put down somewhere else. So the ordinary door always leads on (in 200 floors asked for it, 200 had the back
+  doorway; a back port without `through` is used about 70% of the time).
+- `cast/walk.js`, 1 line: a room may say `rt.headway`, the most headroom its only way through has; a walker taller
+  than that does not set off into it. Here it is the headroom under the raised end for the widest of the cast (0.5 m
+  across): 0.775 m. The toner and the mother's worms go under the chain both ways; the intern, the mascot, the mother,
+  the standing meeting and everything taller stay out (they are not sent in to stand at the chain).
+
+### Walking it
+
+Under the raised end there is 0.62 m at the edge of the gap and 1.29 m at its best, against the wall (the visitor
+stands under 1.3 m): the automatic duck takes the eye down to 0.64 m on a line 0.45 m off the wall, and a little less
+against it. Held W from the way in to the ordinary door and back again, at Classic, seed 7: both ways through, no
+snag. The rest of the chain's line hangs lower than anybody gets under (0.27 to 0.6 m): there is one way, under the
+raised end, from either side.
+
+### Try it
+
+```
+/world/dev/backrooms.html?seed=7&room=door-on-chain&pursuer=0&mute=1&cast=none&x=0.3&z=4.9&yaw=0
+/world/dev/backrooms.html?seed=7&room=door-on-chain&pursuer=0&mute=1&cast=none&x=0.45&z=-0.4&yaw=-0.3&pitch=-0.05
+/world/dev/backrooms.html?seed=7&room=door-on-chain&pursuer=0&mute=1&cast=none&x=1.5&z=-1&yaw=0.12&pitch=0.22
+/world/dev/backrooms.html?seed=7&room=door-on-chain&pursuer=0&mute=1&cast=none&x=0.1&z=-2.75&yaw=3.1416&pitch=-0.05
+/world/dev/backrooms.html?seed=7&room=door-on-chain&pursuer=0&mute=1&cast=none&x=0&z=-4.9&yaw=3.1416
+/world/dev/backrooms.html?seed=7&room=door-on-chain&pursuer=0&mute=1&cast=none&x=0.3&z=4.9&yaw=0&graphics=high
+```
+
+In that order, in `docs/previews/`: `chain-far` (the approach from the way in: the links, the ordinary door beyond and
+the gap under the raised end in one glance), `chain-close-front` (the chain close, from that side), `chain-duck`
+(under the raised end, stooped), `chain-close-back` (the chain close from the ordinary door's side), `chain-return`
+(the way back: the strike plate, the sag, the door's latch edge and its tongue), `chain-high` (the approach at High).
+Add `&inventory=0` for pictures without the pockets.
+
+### Proof
+
+`test/backrooms-door-on-chain.test.mjs`: the plan walks end to end both ways at three sizes, and every crossing of the
+chain's line is under the raised end; the duck gets the visitor under (the eye's sink is within what player.js
+allows) and the best of the gap is a stoop, not standing room; every corner of every bar, and a shoulder's width
+round it, is over the headroom, and the headroom is always the underside of something drawn; built for real (three
+seeds), no doorway is walled off, the colliders are exactly the plan's six, every vertex drawn in the hall at body
+height is inside a solid or overhead, the level's own walking grid floods from each end to the other, and the far
+doorway is a metre wide, 2.05 m high, into a plain room; the cast walk (cast/walk.js) takes the toner and a worm under
+the chain both ways and sends nobody taller in; the entry has weight 1 and nothing that weights it, is as much at home
+on every kind of floor as its peers, and over 400 visits turns up about as often as `tiny-door`.
+
+### Not done, and what our lighting cannot reach
+
+- **The brass.** The concept's chain is polished metal: hard highlights on each facet, dark in the crevices, a glint
+  where the links bear on each other. Ours is lit as everything else is, by the bake at the vertices: each facet is its
+  own shade (and the faces turned up are a little paler, by hand), but there is no specular anywhere at any tier, so it
+  reads as painted yellow-brown wood more than metal, most of all at a distance.
+- **Shadows.** The concept's chain throws soft link-shaped shadows on the carpet and the wall. At Classic and Low the
+  bake has none; at Medium and High the light map's shadows come from what a room says stands in it (`c.place`,
+  `c.pillar`), and the chain is drawn straight into a batch, so it throws none there either. There is a soft dark band
+  on the carpet under it instead. The door slab is a pillar, so it does shade.
+- **Warm against cool.** The concept has cool white tubes and warm brown shadow, the far office brighter than the hall.
+  Ours is lit evenly by three panels; the far office is the same yellow as the hall.
+- **The door reads as panelling first**, which the brief asks for, but from the way in only its lower panels and rails
+  are below the ceiling, at 8 cm voxels, flat-lit: the reveal that it is a door rests on the latch edge, the tongue, the
+  slide plate and the crack at the hinge, and from the far end the hinge crack is a thin line.
+- **The chain hangs lower than the concept's.** The concept has it at shoulder height. Here anything with 0.62 m under
+  it can be ducked under, so for the raised end to be the only way the rest has to hang lower than that: its middle is
+  at about half a metre, under the visitor's eye (1.1 m), seen from above rather than across.
+- The concept's giant door is a six-panel door; ours is the level's own four-panel office door scaled up, so that the
+  ordinary door at the far end is visibly the same door. Under the ceiling only its two lower panels show.
+- The camcorder's noise is strong in some stills (more at High), and the far office is a 3.2 m slice before the
+  doorway, so the ordinary door is near, not down a long hall as in the concept.

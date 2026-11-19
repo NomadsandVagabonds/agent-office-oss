@@ -549,7 +549,8 @@ function build(R, o, opt) {
         // a room that is `through` is never a dead end: its back wall opens onto a room of its own, or it is not placed here
         // (the Open-Plan Pit: the far bulkhead you cross the grid to reach has to lead on)
         if (arch.through) {
-          const beyond = attach(room, worldSide(room, 'back'), { kind: 'plain', lw: R.int(4, 5), ld: R.int(4, 5), H: WALL_H, fixed: portSpan(room, 'back', 0, 1.8) });
+          const dw = arch.throughDoor || 1.8;   // (`throughDoor`: that doorway an ordinary door wide, as the Door on the Chain's)
+          const beyond = attach(room, worldSide(room, 'back'), { kind: 'plain', lw: R.int(4, 5), ld: R.int(4, 5), H: WALL_H, ...(arch.throughDoor ? { dw } : {}), fixed: portSpan(room, 'back', 0, dw) });
           if (!beyond) { for (const failed of placed.reverse()) undo(failed); continue; }
           hubs.push(beyond);
         }
