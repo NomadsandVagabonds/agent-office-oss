@@ -20,7 +20,7 @@
 import * as THREE from 'three';
 import { Batch, lin, ticks, WHITE } from './kit.js';
 import { makeCutout } from './cutout.js';
-import { Vox, M, glow, tone } from '../vox/vox.js';
+import { Vox, M, glow, tone, glass } from '../vox/vox.js';
 import { TILE } from './gen.js';
 import { FENCE, FLAT } from './quiet.js';
 import { LEAN, REFUSE, lean, pressing } from './marks.js';
@@ -479,25 +479,47 @@ function flamingoAt(c, x, z, turn) {
 export function carVox(paint, door) {
   return () => {
     const v = new Vox(), body = M(paint, 1), dark = M(tone(paint, -0.25), 1), chrome = M('#c9ccd0', 0), glassy = M('#1f2a33', 0), wood = M('#7a4f2a', 3), woodL = M('#a57a48', 3), tyre = M('#17171a', 2);
+    const trim = M('#2a2522', 2), vinyl = M('#6b4a30', 2), vinylD = M('#4e3522', 2), dash = M('#26221f', 1), seam = M(tone(paint, -0.45), 1), screen = glass('#9fb6c2');
     v.rbox(-84, 12, -34, 84, 32, 34, 5, body); v.rbox(-80, 8, -32, 80, 14, 32, 2, dark);
     v.rbox(-58, 30, -31, 34, 56, 31, 6, body);                                                             // the cabin, long: it is an estate
     for (let i = 0; i < 26; i++) v.box(34 + i * 0.5, 32, -30, 35 + i * 0.5, 55 - i, 30, body);             // the windscreen's rake
-    // glass all round, with pillars
-    v.paint(-54, 38, -32, 30, 52, -30, glassy); v.paint(-54, 38, 30, 30, 52, 32, glassy); v.paint(-60, 38, -27, -56, 52, 27, glassy); v.paint(34, 34, -27, 48, 54, 27, glassy);
-    for (const x of [-26, 2]) { v.paint(x, 36, -32, x + 3, 54, -30, body); v.paint(x, 36, 30, x + 3, 54, 32, body); }
+    // inside it, hollow: its windows wound down, so that there is something to see when you look in (the owner: at least the front)
+    v.carve(-55, 31, -28, 33, 53, 28); v.carve(34, 34, -27, 48, 55, 27);
+    for (const z of [-31, 28]) v.carve(-54, 38, z, 30, 52, z + 3);
+    for (const x of [-26, 2]) for (const z of [-31, 28]) v.box(x, 36, z, x + 3, 54, z + 3, body);           // the pillars, left standing
+    for (let i = 0; i < 24; i++) v.box(34 + (i >> 1), 54 - i, -27, 35 + (i >> 1), 55 - i, 27, screen);     // the windscreen, glass (where the car stands still)
+    v.paint(-60, 38, -27, -56, 52, 27, glassy);                                                            // the tailgate's, dark
+    v.box(-55, 30, -28, 33, 31, 28, trim); for (const z of [-28, 27]) v.box(-54, 31, z, 30, 37, z + 1, vinylD);   // carpet; the doors' cards
+    v.box(-55, 52, -28, 33, 53, 28, M('#d8cfbc', 1));                                                      // the headlining
+    // the front: two seats, buttoned vinyl, a headrest on each; the wheel on the right (the driver's door is that side)
+    for (const z0 of [-24, 8]) { v.rbox(4, 31, z0, 18, 37, z0 + 16, 1.5, vinyl); v.rbox(1, 36, z0, 6, 50, z0 + 16, 1.5, vinyl); v.rbox(1, 50, z0 + 4, 5, 53, z0 + 12, 1, vinylD); for (let y = 39; y < 49; y += 3) v.box(5, y, z0 + 2, 6, y + 1, z0 + 14, vinylD); }
+    v.rbox(-32, 31, -26, -14, 36, 26, 1.5, vinyl); v.rbox(-34, 35, -26, -29, 48, 26, 1.5, vinyl);            // the bench behind
+    v.box(-52, 31, -20, -40, 38, -6, M('#b39a6a', 2)); v.box(-50, 31, 2, -38, 35, 22, M('#7a2a22', 2)); v.tube(-46, 38, -13, -46, 42, -13, 0.6, M('#5a3a20', 0));   // in the back: a basket, a rug
+    v.box(26, 31, -28, 34, 41, 28, dash); v.box(23, 40, -28, 34, 43, 28, dash); v.box(23, 43, -28, 33, 44, 28, woodL);     // the dash, its top, a strip of wood
+    v.box(22, 41, 10, 24, 45, 22, dash); for (const z of [13, 18]) v.cyl('x', 41.5 + 1.5, z, 21.6, 22.2, 1.6, glow('#e8d9a0'));   // the binnacle, two dials lit
+    v.tube(27, 38, 16, 21, 42, 16, 0.7, dash); v.ring(20, 42, 16, 5, 0.8, M('#1b1614', 0), 'x'); v.box(20, 41, 15, 21, 43, 17, chrome);   // the column, the wheel, its boss
+    v.box(10, 31, -4, 26, 36, 4, dash); v.tube(16, 36, 0, 15, 41, 0, 0.5, chrome); v.ellipsoid(15, 42, 0, 1.2, 1.2, 1.2, M('#1b1614', 0)); v.tube(6, 36, 2, 2, 39, 2, 0.5, chrome);   // console, gear stick, handbrake
+    v.box(31, 50, -3, 33, 52, 3, M('#1b1614', 0)); v.box(30, 50, -2, 31, 52, 2, chrome); v.box(32, 52, -1, 33, 53, 1, dark);   // the mirror
+    for (const z of [-24, 8]) v.box(29, 51, z, 33, 52, z + 16, M('#cbbfa6', 1));                                               // the visors
+    // the doors: their seams, their handles
+    for (const x of [-27, 3, 31]) for (const z of [-35, 34]) v.box(x, 13, z, x + 1, 37, z + 1, seam);
+    for (const [x0, x1] of [[-24, -20], [6, 10]]) for (const z of [-36, 35]) v.box(x0, 30, z, x1, 31, z + 1, chrome);
     // the wood, framed in paler wood
     for (const z of [-35, 34]) { v.box(-72, 15, z, 70, 29, z + 1, wood); v.box(-72, 15, z, 70, 16, z + 1, woodL); v.box(-72, 28, z, 70, 29, z + 1, woodL); for (const x of [-72, -26, 2, 30, 69]) v.box(x, 15, z, x + 1, 29, z + 1, woodL); for (const x of [-12, 14]) v.box(x, 30, z, x + 5, 31.4, z + 1, chrome); }
-    // wheels, in arches, with caps
-    for (const x of [-52, 50]) for (const s of [-1, 1]) { v.carve(x - 15, 0, s > 0 ? 26 : -35, x + 15, 22, s > 0 ? 35 : -26); v.cyl('z', x, 12, s > 0 ? 25 : -33, s > 0 ? 33 : -25, 12.5, tyre); v.cyl('z', x, 12, s > 0 ? 32.4 : -33.6, s > 0 ? 33.6 : -32.4, 6.5, chrome); v.cyl('z', x, 12, s > 0 ? 33 : -34, s > 0 ? 34 : -33, 2.2, dark); }
+    // wheels, in arches, with caps (and the five bolts on each)
+    for (const x of [-52, 50]) for (const s of [-1, 1]) { v.carve(x - 15, 0, s > 0 ? 26 : -35, x + 15, 22, s > 0 ? 35 : -26); v.cyl('z', x, 12, s > 0 ? 25 : -33, s > 0 ? 33 : -25, 12.5, tyre); v.cyl('z', x, 12, s > 0 ? 32.4 : -33.6, s > 0 ? 33.6 : -32.4, 6.5, chrome); v.cyl('z', x, 12, s > 0 ? 33 : -34, s > 0 ? 34 : -33, 2.2, dark); for (let a = 0; a < 6.28; a += 1.257) v.set(Math.round(x + Math.cos(a) * 4), Math.round(12 + Math.sin(a) * 4), s > 0 ? 34 : -35, dark); }
     // chrome: bumpers with overriders, a grille, mirrors, a rack
     for (const x of [-88, 84]) { v.rbox(x, 12, -35, x + 4, 18, 35, 1.5, chrome); for (const z of [-18, 16]) v.box(x + (x > 0 ? 3 : -1), 11, z, x + (x > 0 ? 5 : 1), 21, z + 2, chrome); }
     v.box(84, 19, -20, 85, 28, 20, M('#2b2f33', 0)); for (let z = -19; z < 20; z += 3) v.box(85, 19, z, 86, 28, z + 1, chrome); v.box(85, 23, -20, 86, 24, 20, chrome);
     for (const z of [-29, 23]) { v.rbox(84, 20, z, 86, 28, z + 6, 1.5, glow('#fff0b8')); v.box(84, 19, z - 1, 85, 29, z + 7, chrome); v.box(-85, 19, z, -84, 28, z + 6, glow('#c21f1a')); }
-    v.box(-86, 13, -8, -85, 18, 8, M('#e8d9a0', 0)); v.box(86, 13, -8, 87, 18, 8, M('#e8d9a0', 0)); for (const z of [-5, -1, 3]) { v.set(-87, 15, z, dark); v.set(87, 15, z, dark); }
+    for (const z of [-33, 31]) { v.box(84, 15, z, 86, 18, z + 2, glow('#ffb02e')); v.box(-86, 15, z, -84, 18, z + 2, glow('#ffb02e')); v.box(60, 22, z < 0 ? -35 : 34, 63, 24, z < 0 ? -34 : 35, glow('#ffb02e')); }   // indicators, front, back and on the wings
+    v.box(-89, 13, -8, -88, 17, 8, M('#e8c040', 0)); v.box(88, 13, -8, 89, 17, 8, M('#efece2', 0)); for (const z of [-6, -3, 0, 3, 6]) { v.box(-90, 14, z, -89, 16, z + 1, dark); v.box(89, 14, z, 90, 16, z + 1, dark); }   // the plates: yellow behind, white in front
+    v.tube(-80, 9, 18, -90, 9, 18, 1.2, M('#55595f', 0));                                                    // the exhaust
+    for (const z of [-20, 4]) v.tube(36, 35, z, 38, 34, z + 16, 0.4, M('#1b1614', 0));                        // the wipers, parked
     for (const s of [-1, 1]) { v.tube(30, 36, s * 32, 32, 38, s * 37, 0.8, chrome); v.rbox(31, 37, s > 0 ? 36 : -39, 34, 41, s > 0 ? 39 : -36, 1, chrome); }
     for (const z of [-26, 24]) { v.box(-50, 57, z, 26, 58.4, z + 2, chrome); for (const x of [-48, -12, 22]) v.box(x, 55, z, x + 2, 57, z + 2, chrome); } for (const x of [-40, -12, 16]) v.box(x, 57.4, -26, x + 1.4, 58.4, 26, chrome);
     v.tube(-70, 32, 20, -78, 56, 24, 0.5, chrome);                                                          // an aerial
-    if (door) { v.carve(4, 16, 30, 30, 54, 35); v.box(28, 16, 34, 30, 54, 60, body); v.paint(28, 38, 36, 30, 52, 58, glassy); v.box(27, 15, 34, 28, 29, 60, wood); v.box(4, 14, 22, 28, 30, 30, M('#5a3a26', 2)); v.rbox(8, 26, 10, 22, 34, 26, 2, M('#6b4a30', 2)); v.ring(20, 40, 14, 5, 0.9, M('#1b1614', 0), 'x'); }
+    if (door) { v.carve(4, 16, 30, 30, 54, 35); v.box(28, 16, 34, 30, 54, 60, body); v.box(28, 16, 34, 29, 38, 58, vinylD); v.box(27, 15, 34, 28, 29, 60, wood); v.box(29, 30, 52, 30, 31, 56, chrome); }   // the driver's door, open: its card inside, its handle
     return v;
   };
 }
