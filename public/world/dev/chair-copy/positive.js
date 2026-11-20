@@ -1,28 +1,30 @@
-import { chairVox } from '../../backrooms/workstation.model.js';
-import { CLOTH } from './misprint.js';
-
-// Develop the study's actual chair voxels onto one small piece of instant film.
-// The projection is cached by the floor kit and does not need another WebGL camera or render pass.
-export function chairPositive(kit) {
-  return kit.tex.custom('carbon-camera:teal-chair', 128, 128, g => {
-    g.fillStyle = '#efe8d8'; g.fillRect(0,0,128,128);
-    g.fillStyle = '#bcb4a5'; g.fillRect(7,7,114,104);
-    const vox = chairVox({ colour: CLOTH }), visible = [];
-    vox.each((x,y,z,ink) => {
-      const top = !vox.has(x,y+1,z), front = !vox.has(x,y,z+1), side = !vox.has(x+1,y,z);
-      if (top || front || side) visible.push({ x,y,z,ink, shade: top ? 1.16 : front ? 1.01 : .78 });
-    });
-    visible.sort((a,b) => (a.x-b.x)*.40 + (a.y-b.y)*.24 + a.z-b.z);
-    function draw(ghost) {
-      for (const {x,y,z,ink,shade} of visible) {
-        const u = Math.round(65 + .99*x - .42*z), v = Math.round(92 - .98*y + .24*z + .11*x);
-        if (!ghost) {
-          const channel = shift => Math.min(255, Math.round(((ink >>> shift) & 255)*shade+12));
-          g.fillStyle = 'rgb('+channel(16)+','+channel(8)+','+channel(0)+')';
-        }
-        g.fillRect(u + (ghost ? 3 : 0),v,2,2);
-      }
+// Orthographic contact prints. The depth buffer keeps even thin overlapping legs and handles legible.
+// Faces are filled in a tiny fixed-size raster, once per plate; gameplay never takes a second render pass.
+export function drawPositive(g,stock) {
+  const W=128,H=128,{vox,bounds:b}=stock;
+  const data=g.createImageData(W,H), px=data.data, depth=new Float32Array(W*H).fill(-Infinity);
+  const left=7,right=120,top=7,bottom=108;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++) {
+    const inside=x>=left&&x<=right&&y>=top&&y<=bottom;
+    const grain=((x*47+y*61+x*y*13)%9)-4, v=inside?grain-9*y/H:grain*.32;
+    const k=(y*W+x)*4;
+    px[k]=(inside?185:244)+v;px[k+1]=(inside?180:238)+v;px[k+2]=(inside?158:219)+v;px[k+3]=255;
+  }
+  const cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2,cz=(b.z0+b.z1)/2;
+  const w=b.x1-b.x0,h=b.y1-b.y0,d=b.z1-b.z0;
+  const scale=Math.min(102/(.91*w+.42*d),88/(.93*h+.16*w+.30*d));
+  vox.each((x,y,z,ink)=>{
+    const tx=!vox.has(x+1,y,z),ty=!vox.has(x,y+1,z),tz=!vox.has(x,y,z+1);
+    if(!tx&&!ty&&!tz)return;
+    const u=64+((x+.5-cx)*.91-(z+.5-cz)*.42)*scale;
+    const v=57+(-(y+.5-cy)*.93+(x+.5-cx)*.16+(z+.5-cz)*.30)*scale;
+    const range=Math.max(.56,.69*scale), row=Math.max(.56,.70*scale), order=.42*x+.35*y+.91*z;
+    const shade=ty?1.09:tz?.94:.72;
+    const R=((ink>>>16)&255)*shade+5,G=((ink>>>8)&255)*shade+4,B=(ink&255)*shade+3;
+    for(let yy=Math.max(top,Math.ceil(v-row));yy<=Math.min(bottom,v+row);yy++)for(let xx=Math.max(left,Math.ceil(u-range));xx<=Math.min(right,u+range);xx++){
+      const i=yy*W+xx;if(depth[i]>order)continue;depth[i]=order;
+      px[i*4]=R;px[i*4+1]=G;px[i*4+2]=B;
     }
-    g.fillStyle = '#ab608a'; draw(true); draw(false);
-  }, { clamp: true });
+  });
+  g.putImageData(data,0,0);
 }

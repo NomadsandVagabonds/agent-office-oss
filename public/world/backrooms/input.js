@@ -22,7 +22,7 @@ export function createInput(o) {
   const { canvas, stage, hud, sound } = o;
   const state = { keys: new Set(), dx: 0, dy: 0, stick: { x: 0, y: 0 }, hurry: false, firing: false };
   const keys = state.keys;
-  let firingId = null, dragging = false, stickId = null, stickAt = null, wheel = 0, live = true, press = null, held = false;
+  let viewPointer = null, firingId = null, dragging = false, stickId = null, stickAt = null, wheel = 0, live = true, press = null, held = false;
   const looks = new Map(), pressing = new Map();         // fingers that are looking · fingers that are on a button (which one)
   const owns = e => !!o.owns?.(e.target);
   const blocked = () => !!o.blocked?.();
@@ -31,7 +31,18 @@ export function createInput(o) {
     stickId = null; stickAt = null; state.stick.x = state.stick.y = 0; state.hurry = false;
     thumbs()?.stick(null);
   }
+  function endView(commit) {
+    if (viewPointer === null) return;
+    viewPointer = null;
+    o.lowerView?.(commit);
+  }
+  function pressView(e) {
+    if (!o.raiseView?.()) return false;
+    viewPointer = e.pointerId;
+    return true;
+  }
   function clear() {
+    endView(false);
     keys.clear(); state.dx = state.dy = 0; state.firing = false; dropStick();
     dragging = false; press = null; wheel = 0; looks.clear();
     for (const name of pressing.values()) thumbs()?.down(name, false);
@@ -100,6 +111,7 @@ export function createInput(o) {
     if (blocked()) { clear(); return; }
     if (e.pointerType === 'touch') {
       if (e.target === hud.leave) { o.menu(); return; }
+      if ((e.target === hud.use || thumbs()?.act(e.target) === 'use') && pressView(e)) return;
       if (e.target === hud.use) { state.firing = true; firingId = e.pointerId; o.use({ finger: true }); return; }
       if (e.target === hud.tip) { o.key('r'); return; }
       const t = thumbs(), name = t?.act(e.target);
@@ -112,6 +124,9 @@ export function createInput(o) {
       return;
     }
     if (e.target === hud.use) { o.use(); return; }
+    if (e.button === 0 && pressView(e)) {
+      press = null; dragging = true; capture(); return;
+    }
     if (e.target === hud.tip) { o.key('r'); return; }
     // the first click only takes hold of the mouse; after that a click is a click. (Where the mouse cannot be held —
     // it is dragged to look instead — a click is a press that went nowhere: see onPointerUp.)
@@ -141,6 +156,9 @@ export function createInput(o) {
     // (a phone does not count a finger coming down as having been touched, only one that is lifted: without this the
     // place would be silent until the second tap)
     if (e.type !== 'pointercancel') sound.start();
+    if (viewPointer !== null && viewPointer === e.pointerId && (e.button === 0 || e.type === 'pointercancel')) {
+      endView(e.type === 'pointerup' && !blocked() && !owns(e));
+    }
     const pendingPress = press; press = null;
     dragging = false; if (e.pointerType !== 'touch' || e.pointerId === firingId) { state.firing = false; firingId = null; }
     if (e.pointerId === stickId) dropStick();

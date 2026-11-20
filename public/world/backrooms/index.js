@@ -230,7 +230,7 @@ async function visit(office, opt) {
   // A click: the scissors, if they are in the hand; otherwise both hands, out in front (shove.rule.js).
   const clickIt = () => {
     if (!canAct() || inventory?.isOpen) return;
-    if (inventory?.held()?.type === 'carbon-camera') { cur?.env.carbonCopy?.action(); return; }
+    if (inventory?.held()?.type === 'carbon-camera') return;
     if (inventory?.held()?.type === 'scissors') { inventory.snip({ quietMiss: true }); return; }
     if (inventory?.held()?.type === 'extinguisher') { cur?.env.extinguisher?.press(); return; }   // (a burst: held, it goes on)
     if (inventory?.held()?.type === 'flamingo') { inventory.stab({ quietMiss: true }); return; }     // (one stab, and it stays in)
@@ -242,6 +242,8 @@ async function visit(office, opt) {
     interceptKey: event => paused ? !!menu?.handleKey(event) : !!inventory?.handleKey(event),
     blocked: () => paused || !!inventory?.isOpen,
     menu: () => setPaused(true), use: useIt, light: thumbLight, click: clickIt, wheel: () => {},
+    raiseView: () => canAct() && !inventory?.isOpen && inventory?.held()?.type === 'carbon-camera' && cur?.env.carbonCopy?.raise('pointer'),
+    lowerView: commit => cur?.env.carbonCopy?.lower('pointer', commit),
     // the right button: with the extinguisher in the hand, its foot (extinguisher.js smash); otherwise nothing
     smash: () => { if (canAct() && !inventory?.isOpen && inventory?.held()?.type === 'extinguisher') cur?.env.extinguisher?.smash?.(); },
     key(k) {
@@ -892,6 +894,7 @@ async function visit(office, opt) {
     finish: (why) => finish(why),
     // ?debug only: __backrooms.dev.help() lists these
     ...(opt.debug ? { dev: {
+      viewCamera: camera,
       help: () => 'god(on) · clock(on) · give(type, more) · spawn(id) · tape() · report() · where() is on the handle · &perf=1 in the address for the frame rate',
       god(on = !devState.god) { devState.god = !!on; return devState.god; },
       clock(on = devState.stopClock) { devState.stopClock = !on; return !devState.stopClock; },

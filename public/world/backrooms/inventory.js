@@ -136,7 +136,8 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     if (item?.type === 'scissors') return snip({ quietMiss: !view.isOpen });
     if (item?.type === 'carbon-camera') {
       if (view.isOpen) view.setOpen(false);
-      return active.env.carbonCopy?.action();
+      tell('Hold the shutter or X to aim, then release.');
+      return;
     }
     if (item?.type === 'flamingo') return stab({ quietMiss: !view.isOpen });
     if (item?.type === 'extinguisher') { if (!(item.charge > 0)) { tell('empty-extinguisher'); return { ok: false, reason: 'empty-extinguisher' }; } active.env.extinguisher?.press?.(); return { ok: true, action: 'spray' }; }

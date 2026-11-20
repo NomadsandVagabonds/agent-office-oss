@@ -273,7 +273,11 @@ export function createHandView(env, camera) {
       root.position.copy(camera.position).sub(env.world.scene.position); root.quaternion.copy(camera.quaternion);
       at.set(rest.x + Math.sin(t * 1.1) * 0.006 * swing, rest.y + Math.abs(Math.sin(t * 1.1)) * 0.014 * swing + Math.sin(t * 0.35) * 0.003, rest.z);
       if (type === 'scissors') shown.update(dt, at);           // (the jab, and how it went: hand-scissors.rule.js)
-      else if (type === 'carbon-camera') shown.update(dt, at, item, env.carbonCopy?.exposure(item.id));
+      else if (type === 'carbon-camera') {
+        const copier = env.carbonCopy;
+        shown.update(dt, at, item, copier?.exposure(item.id), copier?.lift);
+        if (copier?.lift === 1) copier.sighted();
+      }
       else if (type === 'extinguisher') shown.update(dt, at, item);
       else if (type === 'flamingo') shown.update(dt, at);       // (the stab, and letting go of it: hand-flamingo.rule.js)   // (squeezed or let go, and the gauge: hand-extinguisher.rule.js)
       else shown.mesh.position.copy(at);

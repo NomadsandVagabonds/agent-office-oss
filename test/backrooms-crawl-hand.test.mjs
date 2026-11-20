@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
+import { createHash } from 'node:crypto';
 const root = new URL('../', import.meta.url);
 register(`data:text/javascript,${encodeURIComponent(`export function resolve(s,c,next){if(s==='three')return {url:new URL('public/vendor/three.module.min.js',${JSON.stringify(root.href)}).href,shortCircuit:true};if(s.startsWith('/core/'))return {url:new URL(s.slice(1),${JSON.stringify(root.href)}).href,shortCircuit:true};return next(s,c);}`)}`, import.meta.url);
 const [{ createKit }, { buildWorld }, { generate, toWorld }, { createPlayer }, { createHandView }, THREE] = await Promise.all([
@@ -11,6 +12,32 @@ const previousDocument = globalThis.document;
 const draw = new Proxy({}, { get: (_, k) => k === 'measureText' ? s => ({ width: String(s).length * 6 }) : /Gradient/.test(k) ? () => ({ addColorStop() {} }) : () => {}, set: () => true });
 globalThis.document = { createElement: () => ({ getContext: () => draw }) };
 test.after(() => { globalThis.document = previousDocument; });
+
+test('Carbon Camera stocks every prop and pickup, with four distinct prints for furniture and pocket items', async () => {
+  const [{stockIds,readStock},{editionNames,developEdition},{drawPositive},{PROPS},{ICON_MODELS}] = await Promise.all([
+    import('../public/world/dev/chair-copy/stock.js'), import('../public/world/dev/chair-copy/editions.js'),
+    import('../public/world/dev/chair-copy/positive.js'), import('../public/world/props/index.js'), import('../public/world/backrooms/inventory-items.js'),
+  ]);
+  for (const id of [...Object.keys(PROPS), ...Object.keys(ICON_MODELS), 'coin', 'keycard', 'file-two', 'file-three', 'file-four', 'file-tall', 'file-lateral']) {
+    assert.ok(stockIds.includes(id), id);
+  }
+  function photograph(stock) {
+    let digest;
+    drawPositive({
+      createImageData: (w,h) => ({data:new Uint8ClampedArray(w*h*4)}),
+      putImageData: image => { digest=createHash('sha256').update(image.data).digest('hex'); },
+    }, stock);
+    return digest;
+  }
+  for (const id of ['desk','file-four','chair','scissors','battery','paper']) {
+    const stock=readStock(id);
+    assert.equal(new Set(editionNames(stock)).size,4);
+    const prints=[stock, ...[0,1,2,3].map(index=>developEdition(stock,index))];
+    assert.equal(new Set(prints.map(photograph)).size,5,id);
+    assert.equal(photograph(stock),photograph(readStock(id)),'developing twins preserves the original '+id);
+    if(id==='file-four')assert.ok(prints[2].bounds.y1>stock.bounds.y1,'extra compartment increases physical height');
+  }
+});
 
 for (const rot of [0, 1, 2, 3]) test(`runtime clearance: crawl openings and auto-duck survive bridge support, rotation ${rot}`, async t => {
   const kit = createKit(), generated = generate('crawl-runtime');
@@ -81,6 +108,22 @@ test('the Carbon Camera pickup has no film and the scanned print feeds toward th
   assert.ok(film.position.z>start+.07);
   shot=0;view.update(.016,true);
   assert.equal(film.visible,false);
+});
+
+test('the raised optical finder stays centred at both picture sizes, including while walking', t => {
+  const kit=createKit(), camera=new THREE.PerspectiveCamera(62,4/3,.06,170);
+  const mode={lift:0,exposure:()=>0,sighted:()=>{}};
+  const env={kit,carbonCopy:mode,vhs:{picture:{w:1280,h:800}},inventory:{held:()=>({type:'carbon-camera',id:'cam',charge:4})},
+    player:{me:{x:0,z:0,speed:2.5}},world:{scene:new THREE.Group(),lightAt:()=>[1,1,1]}};
+  const view=createHandView(env,camera);t.after(()=>{view.dispose();kit.dispose();});
+  for(const [w,h] of [[1280,800],[390,844]]){
+    env.vhs.picture={w,h};camera.aspect=w/h;camera.updateProjectionMatrix();
+    camera.position.set(2,1.1,-3);camera.rotation.set(-.3,.7,.015,'YXZ');camera.updateMatrixWorld();
+    const centre=()=>env.world.scene.getObjectByName('carbon-wire-centre').getWorldPosition(new THREE.Vector3()).project(camera);
+    mode.lift=0;view.update(.1,true);assert.ok(centre().x>.15);
+    mode.lift=1;view.update(.1,true);const p=centre();
+    assert.ok(Math.abs(p.x)<1e-6&&Math.abs(p.y)<1e-6);
+  }
 });
 
 test('everything that can be held is drawn over the room, so that a wall close to the visitor never hides it', async t => {
