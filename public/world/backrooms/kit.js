@@ -22,6 +22,17 @@ import { GLOW_DEPTH_GLSL, glowStrength } from './glow.rule.js';             // (
 import { SHEEN, withSheen } from './sheen.rule.js';                         // (floor sheen: only put into a surface given `sheen`)
 import { gpu } from '../engine/gpu.js';
 import { surfaceNode, packSurfaceAttributes, pointsNode } from './kit-node.js';                       // (the same surface and points in TSL, only under ?gpu=webgpu)
+import {
+  OFFICE_PAPER_PATTERNS,
+  makeWallpaperTexture,
+  makeCarpetTexture,
+  makeCeilingTexture,
+  makeWaterCeilingTileTexture,
+  makeSkirtingTexture,
+  makeStainAtlasTexture,
+  makePeelTexture,
+  makePuddleMaskTexture,
+} from './office-textures.js';
 
 const GLOW = 2.3;                              // how hard a self-lit voxel shines
 
@@ -612,7 +623,11 @@ export function createKit(opt = {}) {
   const T = {
     white: () => tex('white', () => canvasTexture(2, 2, (g) => P(g, '#ffffff', 0, 0, 2, 2))),
     /** Wallpaper: a 0.8 m repeat of a small motif, a little uneven, the way old paper is. */
-    wallpaper: (look) => tex(`wp${look.wall}${look.ink}${look.pattern}`, () => canvasTexture(32, 32, (g, w, h) => {
+    wallpaper: (look) => {
+      if (gfx && OFFICE_PAPER_PATTERNS.has(look.pattern)) {
+        return tex(`wp2:${look.wall}${look.ink}${look.pale || ''}${look.pattern || ''}`, () => makeWallpaperTexture(look));
+      }
+      return tex(`wp${look.wall}${look.ink}${look.pattern}`, () => canvasTexture(32, 32, (g, w, h) => {
       const { wall, ink, pale } = look;
       P(g, wall, 0, 0, w, h);
       const r = lcg(look.wall.length * 977 + parseInt(look.wall.slice(1), 16));
@@ -638,14 +653,17 @@ export function createKit(opt = {}) {
       }
       else if (look.pattern === 'sprigs') { for (let y = 5; y < h; y += 16) for (let x = ((y - 5) / 16) % 2 ? 13 : 5; x < w; x += 16) { P(g, ink, x, y, 1, 4); P(g, ink, x - 1, y + 1, 3, 1); P(g, pale, x - 1, y - 1, 1, 1); P(g, pale, x + 1, y - 1, 1, 1); P(g, pale, x, y - 2, 1, 1); } }
       else { for (let y = 3; y < h; y += 8) for (let x = 0; x < w; x++) { const k = x % 8; P(g, ink, x, y + (k < 4 ? k : 7 - k), 1, 1); } }
-    })),
+    }));
+    },
     /** Carpet: 1.6 m of speckle, slightly darker in patches, as if it never quite dried. */
-    carpet: (color) => tex('cp' + color, () => canvasTexture(64, 64, (g, w, h) => {
-      P(g, color, 0, 0, w, h);
-      const r = lcg(parseInt(color.slice(1), 16));
-      for (let i = 0; i < 9; i++) { g.fillStyle = shade(color, -0.05); g.beginPath(); g.ellipse(r() * w, r() * h, 5 + r() * 9, 3 + r() * 6, r() * 3, 0, 7); g.fill(); }
-      for (let y = 0; y < h; y += 2) for (let x = (y / 2) & 1 ? 1 : 0; x < w; x += 2) { const n = r(); if (n > 0.66) P(g, shade(color, 0.08), x, y, 1, 1); else if (n < 0.3) P(g, shade(color, -0.1), x, y, 1, 1); }
-    })),
+    carpet: (color) => (gfx
+      ? tex('cp2:' + color, () => makeCarpetTexture(color))
+      : tex('cp' + color, () => canvasTexture(64, 64, (g, w, h) => {
+        P(g, color, 0, 0, w, h);
+        const r = lcg(parseInt(color.slice(1), 16));
+        for (let i = 0; i < 9; i++) { g.fillStyle = shade(color, -0.05); g.beginPath(); g.ellipse(r() * w, r() * h, 5 + r() * 9, 3 + r() * 6, r() * 3, 0, 7); g.fill(); }
+        for (let y = 0; y < h; y += 2) for (let x = (y / 2) & 1 ? 1 : 0; x < w; x += 2) { const n = r(); if (n > 0.66) P(g, shade(color, 0.08), x, y, 1, 1); else if (n < 0.3) P(g, shade(color, -0.1), x, y, 1, 1); }
+      }))),
     /** What is underfoot on this floor of the building: carpet, mostly — but lino in Records, screed where they are still fitting out, and something deeper upstairs. */
     floor: (look) => (look.floor === 'moss' ? T.moss(look.carpet) : look.floor === 'terrazzo' ? T.terrazzo(look.carpet) : look.floor === 'turf' ? T.turf(look.carpet) : look.floor === 'lino' ? T.lino(look.carpet) : look.floor === 'screed' ? T.screed(look.carpet) : look.floor === 'plush' ? T.plush(look.carpet, look.pale) : T.carpet(look.carpet)),
     /** Ceramic pool mosaic. */
@@ -712,13 +730,21 @@ export function createKit(opt = {}) {
       for (let y = 8; y < h; y += 16) for (let x = ((y - 8) / 16) % 2 ? 16 : 8; x < w; x += 16) { P(g, shade(motif, -0.25), x, y - 1, 1, 3); P(g, shade(motif, -0.25), x - 1, y, 3, 1); }
     })),
     /** One 0.6 m ceiling tile: pinholes, and the dark T-bar it rests on. */
-    ceiling: (color) => tex('ct' + color, () => canvasTexture(24, 24, (g, w, h) => {
-      P(g, color, 0, 0, w, h);
-      const r = lcg(parseInt(color.slice(1), 16) + 5);
-      for (let i = 0; i < 34; i++) P(g, shade(color, -0.1 - r() * 0.1), 2 + ((r() * 21) | 0), 2 + ((r() * 21) | 0), 1, 1);
-      P(g, shade(color, 0.1), 1, 1, w - 1, 1); P(g, shade(color, -0.12), 1, h - 1, w - 1, 1);
-      P(g, '#39362c', 0, 0, w, 1); P(g, '#39362c', 0, 0, 1, h);
-    })),
+    ceiling: (color) => (gfx
+      ? tex('ct2:' + color, () => makeCeilingTexture(color))
+      : tex('ct' + color, () => canvasTexture(24, 24, (g, w, h) => {
+        P(g, color, 0, 0, w, h);
+        const r = lcg(parseInt(color.slice(1), 16) + 5);
+        for (let i = 0; i < 34; i++) P(g, shade(color, -0.1 - r() * 0.1), 2 + ((r() * 21) | 0), 2 + ((r() * 21) | 0), 1, 1);
+        P(g, shade(color, 0.1), 1, 1, w - 1, 1); P(g, shade(color, -0.12), 1, h - 1, w - 1, 1);
+        P(g, '#39362c', 0, 0, w, 1); P(g, '#39362c', 0, 0, 1, h);
+      }))),
+    /** Water-ringed office ceiling tile, rubber-cove skirting, organic stain atlas, peeling wallpaper & wet puddle mask. */
+    waterTile: (color) => tex('wct:' + color, () => makeWaterCeilingTileTexture(color)),
+    skirting: (trimHex) => tex('skirt:' + trimHex, () => makeSkirtingTexture(trimHex)),
+    stainAtlas: () => tex('stain-atlas', () => makeStainAtlasTexture()),
+    peel: (look) => tex(`peel:${look.wall}${look.ink}${look.pale || ''}${look.pattern || ''}`, () => makePeelTexture(look)),
+    puddle: () => tex('puddle-mask', () => makePuddleMaskTexture()),
     /** A fluorescent troffer, two tiles long: lit, or dead. */
     panel: (lit) => tex('pn' + lit, () => canvasTexture(24, 48, (g, w, h) => {
       P(g, lit ? '#3d3b33' : '#34322b', 0, 0, w, h);

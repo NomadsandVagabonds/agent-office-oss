@@ -15,9 +15,11 @@ import { emergencyFixtures } from './lighting-fixtures.js';
 import { CEILING, lightVox } from './ceiling.model.js';
 import { FITTINGS, poolLightVox, battenVox, canVox } from './fittings.model.js';
 import { planFloorLighting, panelBank, bankLevels, localLightScale } from './lighting.js';
+import { planFloorOfficeLighting, ballastTint, deadStarterGlow } from './office-lighting.js';
 import { registerMovable } from './movable-props.js';
 import { surfaceAt } from './bridge-rules.js';
-import { mapLayout, bakeShadows, packShadows, layoutUniforms, sampleMap, bakeDoorway, packDoorways, lampPoints, groupOf, groupCount, SHADOWS } from './shadowmap.js';
+import { mapLayout, bakeShadows, packShadows, layoutUniforms, sampleMap, bakeDoorway, packDoorways, lampPoints, groupOf, groupCount, blurLightmap, SMOOTH_SHADOW_PASSES, SHADOWS } from './shadowmap.js';
+import { gpu } from '../engine/gpu.js';
 import { doorPlan, DOORS } from './doors.js';
 import { bridgeReachable } from './bridge-puzzles.js';
 import { LEVEL_DESK, deskVox } from './desk.model.js';
@@ -300,7 +302,7 @@ function doorLight(world, rt, leaves) {
   if (kept.length) {
     const packed = packDoorways(m.layout, kept.map((k) => k.res));
     m.C = packed; m.doors = true;
-    m.uniforms.uLmC.value = mapTexture(world.kit, m.layout, packed);
+    m.uniforms.uLmC.value = mapTexture(world.kit, m.layout, packed, world.kit.gfx?.shadows > 0 ? SMOOTH_SHADOW_PASSES.doors : 0);
     rt.doorLight = kept.map((k, d) => ({ link: k.dr.link, throat: k.th, other: k.N, peak: k.res.peak, share: k.share, tint: k.tint, u: m.uniforms.uDoorL.value[d] }));
     for (const mat of m.materials) { mat.defines.DOORLIGHT = 1; mat.needsUpdate = true; }
     rt.doorStats.bytes = packed.data.length;
@@ -312,9 +314,13 @@ function doorLight(world, rt, leaves) {
   rt.doorStats.ms = Math.round(performance.now() - t0);
 }
 /** Bytes of a room's light map (shadowmap.js) → a texture the kit owns: read with linear filtering, no mipmaps. */
-function mapTexture(kit, layout, q) {
-  const t = kit.own(new THREE.DataTexture(q.data, layout.width, layout.height, q.channels === 2 ? THREE.RGFormat : THREE.RGBAFormat));
+function mapTexture(kit, layout, q, smoothPasses = 0) {
+  const bytes = smoothPasses > 0 ? blurLightmap(q.data, layout, q.channels, smoothPasses) : q.data;
+  const t = kit.own(new THREE.DataTexture(bytes, layout.width, layout.height, q.channels === 2 ? THREE.RGFormat : THREE.RGBAFormat));
   t.magFilter = t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.unpackAlignment = 1; t.needsUpdate = true;
+  // Stash raw & soft buffers so dev showcase can live-toggle Blocky <-> Smooth without re-baking
+  t.__rawData = q.data;
+  if (smoothPasses > 0) { t.__softData = bytes; t.__appliedSmooth = true; }
   return t;
 }
 
@@ -380,7 +386,9 @@ export async function loadCatalogue(kit) {
 export async function buildWorld(kit, level, env, tick) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
-  const lightingPlans = planFloorLighting(level, env.lighting);
+  const lightingPlans = env.lighting === 'office'
+    ? planFloorOfficeLighting(level, 'office')
+    : planFloorLighting(level, env.lighting);
   const rooms = level.rooms.map((def,i) => ({
     def, id: def.id, group: new THREE.Group(), u: { flick: { value: 1 }, dim: { value: 1 }, banks: { value: [1, 1] }, moreBanks: { value: [0,0] } },
     lighting: lightingPlans[i], bankPanels: [], lightLevels: [1,1],
@@ -1033,13 +1041,15 @@ function roomContext(world, rt) {
     const res = layout && shadowsOn && boxes.length ? bakeShadows({ layout, lights: rt.lights, amb: rt.amb, lighting: rt.lighting, boxes }) : null;
     rt.shadowStats = { ms: 0, boxes: boxes.length, floor: floorOk, walls: walls.size, bytes: 0, texels: 0, touched: 0 };
     // (with the doorways' light to come, every room that has a floor or walls to take it is handed the map's uniforms now)
-    if (layout && doorOn && !res) rt.lm = { layout, shadows: false, materials: [], uniforms: { uLm: { value: layoutUniforms(layout, W, D).map((v) => new THREE.Vector4(...v)) } } };
+    const lmOpt = kit.gfx?.shadows > 0 ? { smooth: true, gpu: !!gpu.nodes } : null;
+    if (layout && doorOn && !res) rt.lm = { layout, shadows: false, materials: [], uniforms: { uLm: { value: layoutUniforms(layout, W, D, lmOpt).map((v) => new THREE.Vector4(...v)) } } };
     if (rt.lm) Object.assign(rt.lm.uniforms, { uLmC: { value: null }, uDoorL: { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) } });
     if (res) {
       const packed = packShadows(layout, res.ratio);
-      const A = mapTexture(kit, layout, packed.A), B = packed.B ? mapTexture(kit, layout, packed.B) : null;
+      const passes = kit.gfx?.shadows > 0 ? SMOOTH_SHADOW_PASSES.tubes : 0;
+      const A = mapTexture(kit, layout, packed.A, passes), B = packed.B ? mapTexture(kit, layout, packed.B, passes) : null;
       rt.lm = { layout, shadows: true, A: packed.A, B: packed.B, materials: [],
-        uniforms: { uLm: { value: layoutUniforms(layout, W, D).map((v) => new THREE.Vector4(...v)) }, uLmA: { value: A }, uLmB: { value: B || A },
+        uniforms: { uLm: { value: layoutUniforms(layout, W, D, lmOpt).map((v) => new THREE.Vector4(...v)) }, uLmA: { value: A }, uLmB: { value: B || A },
           ...(doorOn ? { uLmC: { value: null }, uDoorL: { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) } } : {}) } };
       // where a still thing's shadow is baked now, the round blot under it is mostly not needed
       const q = c.decals;
@@ -1677,7 +1687,16 @@ function roomContext(world, rt) {
               (u, v) => bot + v * (here(u) - bot));
             if (skirt && opt.skirting !== false) {
               const e0 = at(p), e1 = at(q), k = 0.022;
-              c.flat.box(Math.min(e0[0], e1[0] + n[0] * k), 0, Math.min(e0[2], e1[2] + n[2] * k), Math.max(e0[0], e1[0] + n[0] * k), 0.11, Math.max(e0[2], e1[2] + n[2] * k), trim, { skip: '-y' });
+              if (env.officePolish && !opt.trim && kit.tex.skirting) {
+                const sb = c.mapped('skirting', kit.tex.skirting(look.trim)), slen = q - p;
+                // Cove baseboard face (textured with beveled top lip & bottom mop-scuff) + subtle top ledge & end caps
+                sb.quad(at(p, 0, -k), at(q, 0, -k), at(q, 0.11, -k), at(p, 0.11, -k), WHITE, [[0, 0], [slen / 0.8, 0], [slen / 0.8, 1], [0, 1]]);
+                c.flat.quad(at(p, 0.11, -k), at(q, 0.11, -k), at(q, 0.11, 0), at(p, 0.11, 0), trim);
+                c.flat.quad(at(p, 0, 0), at(p, 0, -k), at(p, 0.11, -k), at(p, 0.11, 0), trim);
+                c.flat.quad(at(q, 0, -k), at(q, 0, 0), at(q, 0.11, 0), at(q, 0.11, -k), trim);
+              } else {
+                c.flat.box(Math.min(e0[0], e1[0] + n[0] * k), 0, Math.min(e0[2], e1[2] + n[2] * k), Math.max(e0[0], e1[0] + n[0] * k), 0.11, Math.max(e0[2], e1[2] + n[2] * k), trim, { skip: '-y' });
+              }
             }
           }
         };
@@ -1725,10 +1744,24 @@ function roomContext(world, rt) {
         // (the lit and the dead panels' batches made first, whether or not a panel is put in them: the order of the room's meshes)
         const tube = lin(look.tube);
         c.shining('panel', kit.tex.panel(true), 2.5, tube); c.mapped('dead', kit.tex.panel(false));
+        const officeBallast = env.officePolish && (!level.theme || level.theme === 'yellow');
+        const seedKey = `${level.seed}:room:${def.id}`;
         // (each through ceilingLight, as a room's own c.fitting is: lit, dead or flickering, its lamp, its bank; a fitting
         // where its two tiles were left out of the sheet, else the flat panel)
-        for (const p of def.panels) ceilingLight(p.x, p.z, top, { state: p.state, fit: opened.get(p) === 2 ? top(p.x, p.z) : null, tube,
-          bank: rt.lighting ? panelBank(rt.lighting, p) : undefined, lamp: (x, y, z, rgb, o) => rt.lights.push(lamp(x, y, z, rgb, o)) });
+        def.panels.forEach((p, idx) => {
+          const lampTube = officeBallast && p.state !== 'dead' ? ballastTint(tube, seedKey, idx) : tube;
+          ceilingLight(p.x, p.z, top, { state: p.state, fit: opened.get(p) === 2 ? top(p.x, p.z) : null, tube: lampTube,
+            bank: rt.lighting ? panelBank(rt.lighting, p) : undefined, lamp: (x, y, z, rgb, o) => rt.lights.push(lamp(x, y, z, rgb, o)) });
+          if (officeBallast && p.state === 'dead') {
+            const starter = deadStarterGlow(seedKey, idx);
+            if (starter) {
+              const py = top(p.x, p.z) - 0.008;
+              const gz = p.z + starter.end * (TILE * 0.72);
+              const sb = c.shining('starter-glow', kit.tex.white(), 1.35, lin(starter.color), { detail: true, bloom: 1.3 });
+              sb.quad([p.x - 0.14, py, gz - 0.05], [p.x + 0.14, py, gz - 0.05], [p.x + 0.14, py, gz + 0.05], [p.x - 0.14, py, gz + 0.05], WHITE);
+            }
+          }
+        });
       }
       // light spilling in from a brighter room next door
       for (const dr of def.doors) {

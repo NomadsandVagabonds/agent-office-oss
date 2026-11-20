@@ -156,7 +156,7 @@ async function go() {
       // &gfx=fixtures: each ceiling light the sculpted fitting (ceiling.model.js), its tubes lit as the flat panel's were
       // &gfx=sheen: the tubes caught on floors that shine (sheen.rule.js)
       gfx: q.get('gfx') ? Object.fromEntries(q.get('gfx').split(',').map((s) => s.split(':')).map(([k, v]) => [k, v ? Number(v) : 1])) : null,
-      lighting: ['1', ...LIGHTING_MODES].includes(q.get('lighting')) ? q.get('lighting') : false,
+      lighting: q.has('lighting') ? (['1', 'office', ...LIGHTING_MODES].includes(q.get('lighting')) ? q.get('lighting') : false) : undefined,
       owns: target => !!target?.closest?.('[data-lighting-study]') },
     onReady(handle) {
       if (room) handle.goto(/^\d+$/.test(room) ? Number(room) : room, q.has('x') ? num('x', 0) : undefined, q.has('z') ? num('z', 0) : undefined, num('yaw', 0), num('pitch', 0));

@@ -387,32 +387,96 @@ export function packShadows(layout, ratio) {
   return { A: { data: A, channels: cA }, B: B ? { data: B, channels: 2 } : null };
 }
 
+export const SMOOTH_SHADOW_PASSES = Object.freeze({ tubes: 1, doors: 2 });
+
 /** Fill each region's gutter with its edge texels (so a bilinear lookup at its edge reads only itself). */
 export function gutter(layout, data, ch) {
-  const w = layout.width, pad = SHADOWS.pad;
+  const w = layout.width, h = layout.height, pad = SHADOWS.pad;
   for (const r of layout.list) {
     for (let j = -pad; j < r.nv + pad; j++) for (let i = -pad; i < r.nu + pad; i++) {
       if (i >= 0 && j >= 0 && i < r.nu && j < r.nv) continue;
+      const dx = r.px + i, dy = r.py + j;
+      if (dx < 0 || dx >= w || dy < 0 || dy >= h) continue;
       const si = Math.max(0, Math.min(r.nu - 1, i)), sj = Math.max(0, Math.min(r.nv - 1, j));
-      const d = ((r.py + j) * w + r.px + i) * ch, s = ((r.py + sj) * w + r.px + si) * ch;
+      const d = (dy * w + dx) * ch, s = ((r.py + sj) * w + r.px + si) * ch;
       for (let c = 0; c < ch; c++) data[d + c] = data[s + c];
     }
   }
 }
 
 /**
+ * Separable [1, 2, 1] / 4 soft-penumbra filter applied strictly inside each atlas region { px, py, nu, nv }.
+ * Clamps neighbor reads to each region's bounds so shadows never bleed across floor/wall boundaries, then
+ * refreshes the 1-texel gutter around every region for hardware LinearFilter. Works for 1..4 channels.
+ * Pure by default (returns a fresh Uint8Array); pass { inPlace: true } to mutate `data` in place.
+ */
+export function blurLightmap(data, layout, channels, passes = 1, opt = null) {
+  let nPasses = passes;
+  let inPlace = !!(opt && opt.inPlace);
+  if (passes && typeof passes === 'object') {
+    nPasses = passes.passes ?? 1;
+    inPlace = !!passes.inPlace;
+  }
+  const W = layout?.width || 0, H = layout?.height || 0;
+  const ch = channels || (W && H ? Math.round(data.length / (W * H)) : 0);
+  const out = inPlace ? data : new Uint8Array(data);
+  if (!W || !H || !layout?.list?.length || ch < 1 || ch > 4 || data.length < W * H * ch || nPasses <= 0) return out;
+  const tmp = new Uint8Array(out.length);
+  for (let pass = 0; pass < nPasses; pass++) {
+    for (const r of layout.list) {
+      if (r.nu <= 0 || r.nv <= 0) continue;
+      const x0 = r.px, x1 = r.px + r.nu - 1, y0 = r.py, y1 = r.py + r.nv - 1;
+      for (let y = y0; y <= y1; y++) {
+        const row = y * W;
+        for (let x = x0; x <= x1; x++) {
+          const xl = x > x0 ? x - 1 : x0, xr = x < x1 ? x + 1 : x1;
+          const o = (row + x) * ch, ol = (row + xl) * ch, or = (row + xr) * ch;
+          for (let c = 0; c < ch; c++) tmp[o + c] = (out[ol + c] + (out[o + c] << 1) + out[or + c] + 2) >> 2;
+        }
+      }
+      for (let y = y0; y <= y1; y++) {
+        const yu = y > y0 ? y - 1 : y0, yd = y < y1 ? y + 1 : y1;
+        const row = y * W, rowU = yu * W, rowD = yd * W;
+        for (let x = x0; x <= x1; x++) {
+          const o = (row + x) * ch, ou = (rowU + x) * ch, od = (rowD + x) * ch;
+          for (let c = 0; c < ch; c++) out[o + c] = (tmp[ou + c] + (tmp[o + c] << 1) + tmp[od + c] + 2) >> 2;
+        }
+      }
+    }
+  }
+  gutter(layout, out, ch);
+  return out;
+}
+
+/**
  * The shader's numbers for a layout: per region (floor, back, front, left, right) uv = (coord − origin) × scale +
  * offset as [scaleU, scaleV, offsetU, offsetV] in the room's own units (0s for a region that is not there), and the
  * room's half-size and the step. Matches kit.js's `tube shadows (lightmap)` block.
+ * Pass `opt = { smooth: true, gpu?: boolean }` for continuous bilinear sampling (`0` on WebGPU, `1e-4` on WebGL);
+ * omitting `opt` or `{ smooth: false }` keeps classic `SHADOWS.step` (0.05 m).
  */
-export function layoutUniforms(layout, W, D) {
+export function layoutUniforms(layout, W, D, opt = null) {
+  let opts = opt;
+  if (W && typeof W === 'object') {
+    opts = W;
+    W = undefined;
+    D = undefined;
+  }
+  if (typeof W !== 'number' || typeof D !== 'number') {
+    const fl = layout?.regions?.floor;
+    const bk = layout?.regions?.back || layout?.regions?.front;
+    const lt = layout?.regions?.left || layout?.regions?.right;
+    W = typeof W === 'number' ? W : (fl ? -fl.o[0] * 2 : bk ? -bk.o[0] * 2 : lt ? Math.abs(lt.at) * 2 : 0);
+    D = typeof D === 'number' ? D : (fl ? -fl.o[1] * 2 : lt ? -lt.o[0] * 2 : bk ? Math.abs(bk.at) * 2 : 0);
+  }
+  const step = opts?.smooth ? (opts.gpu ? 0 : 1e-4) : SHADOWS.step;
   const out = REGIONS.map((name) => {
     const r = layout?.regions[name];
     if (!r) return [0, 0, 0, 0];
     // texel i's middle (coord o + (i + .5) cell) at uv (px + i + .5) / width
     return [1 / (r.cell * layout.width), 1 / (r.cell * layout.height), (r.px - r.o[0] / r.cell) / layout.width, (r.py - r.o[1] / r.cell) / layout.height];
   });
-  out.push([W / 2, D / 2, SHADOWS.step, 0]);
+  out.push([W / 2, D / 2, step, 0]);
   return out;
 }
 

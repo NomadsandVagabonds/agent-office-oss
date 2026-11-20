@@ -342,7 +342,8 @@ async function visit(office, opt) {
       barricadesEnabled: opt.barricades !== false,
       // (a part built ahead is ready once its rooms and light maps are; the light through its doorways fills in after: world.js doorPass)
       lateDoorLight: !!pace,
-      lighting: opt.dev?.lighting || false,
+      lighting: opt.dev?.lighting !== undefined ? opt.dev.lighting : (gfx().shadows > 0 && (!level.theme || level.theme === 'yellow') ? 'office' : false),
+      officePolish: gfx().shadows > 0,
       steadyLighting: () => settings.steadyLighting,
       difficulty: () => difficulty.current,
       where: cleanWhere(opt.where),             // a place name the page was told (the site's host says a city): the banner's second line, and nothing else's

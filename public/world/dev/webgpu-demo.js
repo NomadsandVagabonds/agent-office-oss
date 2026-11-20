@@ -10,10 +10,10 @@ const PRESETS = [
   {
     id: 'flashlight-shadows',
     key: '1',
-    title: 'Flashlight Shadows',
-    sub: 'Dark room · PCF shadows · doorway bloom',
-    desc: 'Ceiling banks killed in this room while the next room stays lit: High real-time flashlight shadows across desks & CRTs plus warm doorway spill.',
-    query: { seed: '7', lighting: '1' },
+    title: 'Yellow Office · Floor 1',
+    sub: '256px voxel textures · drips · smooth spill',
+    desc: 'Upgraded Floor 1 yellow office: 256×256 wallpaper seams & damp carpet tiles, beveled ceiling & cove skirting, peeling seams, puddles & live drips, smooth doorway spill, and 1980s camcorder optics.',
+    query: { seed: '7', lighting: 'office' },
     torch: true,
     lights: 'dark-here',
     setup(handle) {
@@ -666,6 +666,19 @@ function copyPose(srcHandle, dstHandle) {
   }
   const rt = dstHandle.world.roomAt(d.x, d.z);
   if (rt && rt !== dstHandle.world.current()) dstHandle.world.enter(rt);
+  // Keep camcorder auto-iris, white-balance & autofocus phase-locked across the wipe seam
+  const sc = srcHandle.camcorder, dc = dstHandle.camcorder;
+  if (sc && dc && sc.ready) {
+    dc.ready = true;
+    dc.fastLogL = sc.fastLogL;
+    dc.irisLogL = sc.irisLogL;
+    dc.awb[0] = sc.awb[0]; dc.awb[1] = sc.awb[1]; dc.awb[2] = sc.awb[2];
+    dc.roomId = sc.roomId;
+    dc.afT = sc.afT; dc.afAmp = sc.afAmp; dc.afCool = sc.afCool;
+    dc.exposure = sc.exposure;
+    dc.balance[0] = sc.balance[0]; dc.balance[1] = sc.balance[1]; dc.balance[2] = sc.balance[2];
+    dc.defocus = sc.defocus;
+  }
 }
 
 /* ---- Doorway Threshold Walk (demonstrates camcorder iris / AWB / AF) - */
@@ -784,8 +797,8 @@ function stepWalkDemo(now) {
 }
 
 function renderCamStatus() {
-  const pane = panes.right.ready ? panes.right : panes.left;
-  const c = pane?.handle?.camcorder;
+  const pane = (state.mode === 'single' ? panes.right : panes.left);
+  const c = (pane?.ready ? pane : panes.right)?.handle?.camcorder;
   if (!c) return;
   const exp = c.exposure ?? 1;
   const b = c.balance || [1, 1, 1];

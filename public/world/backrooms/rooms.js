@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { Vox, M } from '../vox/vox.js';
 import { Batch, lin, atlas, drawText, WHITE } from './kit.js';
 import { makeCutout, drawPortrait } from './cutout.js';
-import { TILE, RISE, RUN, wallPoint, pinchHalf } from './gen.js';
+import { TILE, RISE, RUN, wallPoint, pinchHalf, makeRng } from './gen.js';
 import { P, clamp, turnTo, framed, card, scatter, doorLeaf, doorFrame, woodLeaf, wetSign, standee, mugVox, floorPlan } from './bits.js';
 import { marks, trace } from './traces.js';
 import { thinWall, refuses } from './thin.js';
@@ -17,6 +17,7 @@ import { lawn, standing, THINGS } from './suburb.js';
 import { poolroom, poolStanding, POOL_THINGS } from './waterpark.js';
 import { concourse } from './mall.js';
 import { forestRoom, forestStanding, FOREST_THINGS } from './forest.js';
+import { dressOfficeWear, buildLeakSpot } from './office-wear.js';
 import { siteOf, standMachine } from './vending-machine.js';
 
 /* ---- the plain rooms, and what somebody left in them ------------------------------- */
@@ -142,7 +143,11 @@ function dressing(c, item) {
     c.flat.box(s.x - 0.11, 0.2, s.z - 0.11, s.x + 0.11, 0.221, s.z + 0.11, [0.12, 0.16, 0.2]);
     c.solid(s.x - 0.13, s.z - 0.13, s.x + 0.13, s.z + 0.13);
     let wait = 1 + R() * 2;
-    c.tick((dt, t, me) => { wait -= dt; if (wait < 0 && me.inside) { wait = 1.6 + Math.random() * 2.2; const p = c.toWorld(s.x, s.z); c.env.play('click', p.x, p.z, 3); } });
+    if (c.env?.officePolish) {
+      buildLeakSpot(c, s.x, s.z, makeRng(`${c.level.seed}:stain-drip:${c.room.id}`), { hitY: 0.225 });
+    } else {
+      c.tick((dt, t, me) => { wait -= dt; if (wait < 0 && me.inside) { wait = 1.6 + Math.random() * 2.2; const p = c.toWorld(s.x, s.z); c.env.play('click', p.x, p.z, 3); } });
+    }
   } else if (item.type === 'poster') {
     const w = c.wallSpot(1.3); if (!w) return;
     const tex = c.kit.tex.custom('poster' + item.text, 72, 96, (g, tw, th) => {
@@ -279,6 +284,7 @@ function plain(c) {
   if (c.level.theme === 'mall') concourse(c);
   if (c.level.theme === 'forest' && siteOf(c.level).has(room.id)) standMachine(c);          // (the moss would take every wall: the machine first)
   if (c.level.theme === 'forest') forestRoom(c);          // the offsite reserve: carpet & outlets round the moss, gravel trail, spotter, and woodland wrongness
+  if (c.env?.officePolish && (!c.level.theme || c.level.theme === 'yellow')) dressOfficeWear(c);
   if (siteOf(c.level).has(room.id)) standMachine(c);          // (a floor with no Refreshments room: its one machine; vending-machine.js)
 }
 
