@@ -18,7 +18,7 @@ export function showerGlaze(c) {
           const wetWall=float(1).sub(ss(1.3,2.4,q.y)).mul(ss(-.3,.15,q.y))
             .mul(float(1).sub(ss(4.9,6.0,abs(q.x))))
             .mul(float(1).sub(ss(9.5,11.0,abs(q.z))));
-          const facing=float(1).sub(abs(normalize(localNormal()).y).mul(.72));
+          const facing=float(1).sub(ss(.35,.78,abs(normalize(localNormal()).y)));
           c.addAssign(filament.mul(wetWall).mul(facing).mul(uWet).mul(min(vLit,vec3(1.1))).mul(vec3(.10,.20,.18)));
         },
       });
@@ -38,7 +38,7 @@ varying vec3 vGlazeNormal;
   float wetWall=(1.0-smoothstep(1.3,2.4,q.y))*smoothstep(-.3,.15,q.y);
   wetWall*=1.0-smoothstep(4.9,6.0,abs(q.x));
   wetWall*=1.0-smoothstep(9.5,11.0,abs(q.z));
-  float facing=1.0-abs(normalize(vGlazeNormal).y)*.72;
+  float facing=1.0-smoothstep(.35,.78,abs(normalize(vGlazeNormal).y));
   c+=filament*wetWall*facing*uWet*min(vLit,vec3(1.1))*vec3(.10,.20,.18);
   gl_FragColor = vec4(c,uAlpha);`);
   }));

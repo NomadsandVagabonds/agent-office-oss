@@ -16,14 +16,16 @@ import {showerPlan,showerFloor,showerCeiling,showerCuts,foldCrossing} from './lo
 import {showerTextures,lockerBank,officeDoor,shower,hangingTowel,wetBenchSegment} from './locker-showers/assets.js';
 
 const steel=lin('#a4aaa3'),dark=lin('#354744'),cream=lin('#d4c7b6'),rust=lin('#845e4b');
-const box=(b,q,col=WHITE)=>b.box(...q,col,{step:.8,uv:1.6});
+const brass=lin('#b89b6a'),wetWoodDark=lin('#593b2d'),wetRail=lin('#6f4c3c');
+const slatTints=['#f5e8da','#e2cebc','#cfb7a2','#ead9c7','#c4ab95','#dcc7b3'].map(c=>lin(c));
+const box=(b,q,col=WHITE,uv=1.6)=>b.box(...q,col,{step:.8,uv});
 
 export function build(c){
   const {W,D,H,rt,env}=c,p=showerPlan(c.room),t=showerTextures(c.kit);
   rt.amb=lin('#c8b2b0',.13);rt.level=.96;
   c.shell({floor:false,ceiling:false,panels:false,sockets:false,skirting:false,wallTex:t.pink});
   const pink=c.mapped('showers:pink',t.pink,{wet:.8}),floor=c.mapped('showers:floor',t.floor,{wet:.88});
-  const ceiling=c.mapped('showers:ceiling',t.ceiling),wood=c.mapped('showers:walkway',t.wood,{wet:.85});
+  const ceiling=c.mapped('showers:ceiling',t.ceiling),wood=c.mapped('showers:walkway',t.wood,{wet:.88,sheen:.32});
   const mauve=c.mapped('showers:mauve',t.mauve,{wet:.65}),grime=c.mapped('showers:grime',t.grime,{cutout:true,side:THREE.DoubleSide});
   rt.floorY=(x,z)=>Math.abs(z)>D/2-.9?c.floorAt(x,z):showerFloor(p,x,z);
   rt.headY=(x,z)=>showerCeiling(p,x,z)-rt.floorY(x,z);
@@ -36,22 +38,38 @@ export function build(c){
       const n=Math.max(1,Math.ceil((z1-z0)/.18));
       for(let k=0;k<n;k++){
         const a=z0+k*(z1-z0)/n,b=z0+(k+1)*(z1-z0)/n;
-        box(wood,[x0,y-.075,a+.006,x1,y,b-.006]);
+        const h=((i*73+j*131+k*37)>>>0);
+        const tint=slatTints[h%slatTints.length];
+        const lift=((h%5)-2)*.0018;
+        box(wood,[x0,y-.050,a+.009,x1,y+lift,b-.009],tint,.85);
       }
     }else tiledPlane(floor,x0,z0,x1,z1,y);
     if(y<p.water)tiledPlane(water,x0,z0,x1,z1,p.water);
     for(const [nx,nz,a,b]of [[x1+.00001,z,[x1,y,z1],[x1,y,z0]],[x,z1+.00001,[x0,y,z1],[x1,y,z1]]]){
-      const other=showerFloor(p,nx,nz);if(Math.abs(other-y)>.001)face(y===p.bench?wood:floor,[[a[0],other,a[2]],[b[0],other,b[2]],b,a]);
+      const other=showerFloor(p,nx,nz);
+      if(Math.abs(other-y)>.001){
+        const topY=y===p.bench?y-.050:y;
+        face(y===p.bench?wood:floor,[[a[0],other,a[2]],[b[0],other,b[2]],[b[0],topY,b[2]],[a[0],topY,a[2]]],
+          y===p.bench?{color:wetRail,repeat:.9}:{});
+      }
     }
   }
   for(const a of p.spans){
+    // Twin dark waterlogged cedar stringer beams running beneath the slats
+    const alongZ=a.x1===a.x0;
+    for(const side of [-1,1]){
+      if(alongZ)box(wood,[a.x0+side*.52-.055,p.bench-.105,a.z0-.58,a.x0+side*.52+.055,p.bench-.051,a.z1+.58],wetWoodDark,.9);
+      else box(wood,[a.x0-.58,p.bench-.105,a.z0+side*.52-.055,a.x1+.58,p.bench-.051,a.z0+side*.52+.055],wetWoodDark,.9);
+    }
     const length=Math.hypot(a.x1-a.x0,a.z1-a.z0),n=Math.max(1,Math.ceil(length/.8));
     for(let i=0;i<=n;i++){
       const x=a.x0+(a.x1-a.x0)*i/n,z=a.z0+(a.z1-a.z0)*i/n;
       for(const side of [-1,1]){
-        const px=x+(a.x1===a.x0?side*.52:0),pz=z+(a.z1===a.z0?side*.52:0);
-        box(wood,[px-.055,-p.depth,pz-.055,px+.055,p.bench-.075,pz+.055],lin('#9a7662'));
-        box(c.flat,[px-.016,p.bench+.002,pz-.018,px+.016,p.bench+.008,pz+.018],steel);
+        const px=x+(alongZ?side*.52:0),pz=z+(alongZ?0:side*.52);
+        box(wood,[px-.055,-p.depth,pz-.055,px+.055,p.bench-.105,pz+.055],wetWoodDark,.9);
+        // Recessed damp stain collar + flush twin brass carriage heads
+        box(c.flat,[px-.022,p.bench+.001,pz-.022,px+.022,p.bench+.0035,pz+.022],wetWoodDark);
+        box(c.flat,[px-.011,p.bench+.0035,pz-.011,px+.011,p.bench+.006,pz+.011],brass);
       }
     }
   }

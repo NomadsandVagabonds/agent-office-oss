@@ -1,6 +1,7 @@
 // Procedural surfaces for the folded changing rooms. Texture scale is metric:
 // pink/floor repeat at 1.2m (six 20cm tiles), ceiling at 1.2m (four 60cm panels).
 // The small highlights describe glaze and wear; they do not claim reflections.
+import { LinearFilter } from 'three';
 const hash=(x,y,s=0)=>{let n=Math.imul(x+913,s+374761393)^Math.imul(y+719,668265263);n=Math.imul(n^(n>>>13),1274126177);return (n^(n>>>16))>>>0;};
 const fill=(g,color,x,y,w,h)=>{g.fillStyle=color;g.fillRect(x,y,w,h);};
 export function showerTextures(kit){
@@ -79,15 +80,55 @@ export function showerTextures(kit){
     }
   });
   const wood=kit.tex.custom('folded-shower:wet-wood',256,256,g=>{
-    fill(g,'#a87661',0,0,256,256);
-    for(let i=0;i<110;i++){
-      const n=hash(i,8),y=n%256;
-      fill(g,i%3?'#e5b79333':'#603d3545',0,y,256,1+(n>>>10)%2);
+    // Chunky 4px voxel-grid bathhouse cedar/teak slats: warm soaked heartwood,
+    // stepped grain ribs, pixel knots, bevelled slat edges and damp footstep patches.
+    const base=['#8f593c','#865035','#986042','#7d4930'];
+    fill(g,'#3b2217',0,0,256,256);
+    for(let board=0;board<4;board++){
+      const by=board*64,bh=62,bhHash=hash(board,19,5);
+      fill(g,base[board],0,by+1,256,bh);
+      // Chunky voxel woodgrain bands running along the plank length (x)
+      for(let row=0;row<15;row++){
+        const py=by+2+row*4;
+        for(let col=0;col<64;col++){
+          const px=col*4,h=hash(col,row+board*17,31);
+          const wave=Math.sin(col*.19+board*1.7+row*.45)+Math.cos(col*.09-row*.6+board);
+          if(wave>.75)fill(g,'#b9815955',px,py,4,4);
+          else if(wave<-.65)fill(g,'#4b2b1d68',px,py,4,4);
+          else if(h%5===0)fill(g,h%2?'#a9714d3d':'#5b352445',px,py,4,4);
+          // Fine pore flecks snapped to 2px sub-voxels
+          if(h%11===0)fill(g,'#381e1466',px+(h%2)*2,py+((h>>>2)%2)*2,4,2);
+        }
+      }
+      // Occasional chunky voxel knot ring per plank
+      const kx=24+(bhHash%196),ky=by+16+((bhHash>>>8)%30);
+      fill(g,'#5a342377',kx-8,ky-4,20,12);
+      fill(g,'#3f2317a8',kx-4,ky-2,12,8);
+      fill(g,'#2b160ec0',kx,ky,4,4);
+      fill(g,'#c68f6642',kx-8,ky-6,16,2);
+      // Crisp pixel bevel: warm top catch-light, deep wet underside shadow & joint
+      fill(g,'#dba97e52',0,by+2,256,2);
+      fill(g,'#2e18106e',0,by+bh-1,256,2);
+      // Subtle transverse plank butt-joint with darker end-grain wicking
+      const jx=32+((hash(board,41,9)%48)*4);
+      fill(g,'#2c170fa8',jx,by+1,2,bh);
+      fill(g,'#4a2a1c55',jx-6,by+1,6,bh);
+      fill(g,'#4a2a1c48',jx+2,by+1,6,bh);
+      fill(g,'#d4a27930',jx+2,by+2,2,bh-3);
     }
-    for(let i=0;i<32;i++){
-      const n=hash(i,6);fill(g,'#fff1d93a',n%256,(n>>>8)%256,9+(n>>>20)%38,1);
+    // Irregular water-soaked damp patches & mineral/chlorine edges
+    for(let i=0;i<18;i++){
+      const n=hash(i,67,13),px=(n%60)*4,py=((n>>>8)%60)*4;
+      const w=(4+(n>>>16)%9)*4,h=(3+(n>>>20)%6)*4;
+      fill(g,'#361d1344',px,py,w,h);
+      fill(g,'#2c170f30',px+4,py+4,Math.max(4,w-8),Math.max(4,h-8));
+      if(i%3===0)fill(g,'#f2dec42a',px+2,py+2,Math.max(4,w-6),2);
+      if(i%4===0)fill(g,'#6477652c',px,py+h-2,w,2);
     }
   });
+  // Chunky 4px voxel blocks stay crisp under LinearFilter, and WebGPU requires linear magFilter to enable anisotropic filtering on grazing floors.
+  wood.magFilter = LinearFilter;
+  wood.anisotropy = 8;
   const grime=kit.tex.custom('folded-shower:grime',256,256,g=>{
     g.clearRect(0,0,256,256);
     // CUTOUT discards alpha below .5. Use opaque broken islands for soft
