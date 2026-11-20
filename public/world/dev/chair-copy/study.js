@@ -277,7 +277,7 @@ export function attachStudy(h, stage) {
       committedTwin.away='carbon-lab-printing';
       committedTwin.group.visible=false;
     }
-    transfer.start(source,p,v.turn,!!committedTwin);
+    transfer.start(source,p,v.turn,!!committedTwin,quiet.matches);
     if(committedTwin)setConsumed(source,true);
     flight={source,p,v,paid,committedTwin,t:0,x:source.x,z:source.z};return true;
   }
@@ -292,7 +292,7 @@ export function attachStudy(h, stage) {
     const twin=committedTwin||(paid?paidCopy(source,p,v):makeCopy(p,source,v));
     stopFlight();
     if(!twin){say('Print failed. Check the landing and battery.');return;}
-    if(paid){scanned=plate=null;doneUntil=elapsed+.55;}
+    if(paid){scanned=plate=null;doneUntil=elapsed+.55;env.sound.carbonCamera('land');}
     say(v.name+' · E to move the copy.');
   }
   function clearView(){if(owner!==null)h.hud.el.classList.remove('carbon-finder');owner=null;aligned=false;selected=landing=null;}

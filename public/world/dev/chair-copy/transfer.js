@@ -1,6 +1,6 @@
 import * as T from 'three';
 
-export const GRAINS = 512, SECONDS = 1.65;
+export const GRAINS = 1536, SECONDS = 2.1;
 
 // Windows into the normal room mesh. Sort once so revealing a band only changes a draw range.
 function bands(base, above = false) {
@@ -51,30 +51,65 @@ function shell(stock, twin) {
     const end=dest[Math.floor(i*dest.length/sample.length)]; ends.push(end.x,end.y,end.z);
     positions.push(cell.x,cell.y,cell.z);color.setHex(cell.c&0xffffff);colors.push(color.r,color.g,color.b);
     color.setHex(end.c&0xffffff);print.push(color.r,color.g,color.b);
-    seeds.push(rnd(),rnd());
+    seeds.push(rnd(),rnd(),rnd(),rnd());
   }
-  for(const [name,values,n] of [['cell',positions,3],['pigment',colors,3],['salt',seeds,2],['misprint',print,3],['destination',ends,3]])
+  for(const [name,values,n] of [['cell',positions,3],['pigment',colors,3],['salt',seeds,4],['misprint',print,3],['destination',ends,3]])
     g.setAttribute(name,new T.InstancedBufferAttribute(new Float32Array(values),n));
   g.instanceCount=sample.length;
-  const uniforms={clock:{value:0},height:{value:Math.max(.01,stock.bounds.y1*scale)},grain:{value:Math.min(.04,Math.max(.009,scale*1.7))},from:{value:new T.Vector3()},to:{value:new T.Vector3()},turn:{value:new T.Vector2(1,0)},exitTurn:{value:new T.Vector2(1,0)}};
+  const bounds=stock.bounds, width=(bounds.x1-bounds.x0)*scale, depth=(bounds.z1-bounds.z0)*scale;
+  const height=Math.max(.01,(bounds.y1-bounds.y0)*scale);
+  const span=Math.max(width,depth,height);
+  // Mesh density varies by recipe. Size printed chunks from the object's world-space
+  // dimensions so a finely sculpted cabinet doesn't turn into dust at playing distance.
+  const uniforms={
+    clock:{value:0},height:{value:height},grain:{value:T.MathUtils.clamp(span*.034,.016,.063)},
+    radius:{value:T.MathUtils.clamp(span*.30,.14,.49)},motion:{value:1},
+    from:{value:new T.Vector3()},to:{value:new T.Vector3()},turn:{value:new T.Vector2(1,0)},exitTurn:{value:new T.Vector2(1,0)}
+  };
   const mat=new T.ShaderMaterial({uniforms,vertexShader:`
-    attribute vec3 cell, pigment, misprint, destination; attribute vec2 salt;
-    uniform vec3 from, to; uniform float clock, height, grain; uniform vec2 turn, exitTurn;
+    attribute vec3 cell, pigment, misprint, destination; attribute vec4 salt;
+    uniform vec3 from, to; uniform float clock, height, grain, radius, motion; uniform vec2 turn, exitTurn;
     varying vec3 ink;
     void main(){
       float h=clamp(cell.y/height,0.,1.);
-      float u=clamp((clock-(1.-h)*.40)/.56,0.,1.);
-      float s=smoothstep(0.,1.,u), arch=sin(3.141593*u), phase=salt.x*6.283;
+      // Top surfaces peel off in waves, including broad flat worktops.
+      float feed=mix(1.-h,salt.z,.32);
+      float u=clamp((clock-feed*.40)/.56,0.,1.);
+      float travel=smoothstep(0.,1.,u), arch=sin(3.141593*u);
       vec3 entry=vec3(cell.x*turn.x+cell.z*turn.y,cell.y,cell.z*turn.x-cell.x*turn.y);
       vec3 exitCell=vec3(destination.x*exitTurn.x+destination.z*exitTurn.y,destination.y,destination.z*exitTurn.x-destination.x*exitTurn.y);
-      vec3 axis=mix(entry,exitCell,s);
-      vec3 path=mix(from,to,s)+axis;
-      float spread=arch*(.07+.20*salt.y);
-      path+=vec3(spread*cos(phase+u*5.),arch*(.26+.38*salt.y),spread*sin(phase+u*5.));
-      float a=arch*(1.+salt.y)*2.3, cs=cos(a),sn=sin(a);
-      vec3 p=vec3(position.x*cs+position.z*sn,position.y,-position.x*sn+position.z*cs);
-      float size=(u>0. && u<1.) ? (grain*(.8+.4*salt.y)) : 0.;
-      ink=mix(pigment,misprint,s)*(.57+.26*normal.y+.13*normal.z)+vec3(.033,.043,.031)*arch;
+      vec3 section=mix(entry,exitCell,travel);
+      float gather=arch*motion;
+      section.xz*=1.-.73*gather;
+      section.y=mix(section.y,height*.46,.62*gather);
+      vec3 path=mix(from,to,travel)+section;
+
+      // Three ropes of matter roll around the line of travel. Keep both ends
+      // pinned to their actual surface voxels as the ropes open, then cinch shut.
+      vec2 delta=to.xz-from.xz;
+      vec2 side=length(delta)>.001 ? normalize(vec2(-delta.y,delta.x)) : vec2(1.,0.);
+      float strand=floor(salt.x*3.);
+      float angle=strand*2.0944+(salt.y-.5)*1.18+u*7.3;
+      float spread=arch*radius*mix(.26,1.,motion)*(.56+.75*salt.w);
+      path.xz+=side*(cos(angle)*spread);
+      path.y+=arch*radius*mix(.36,1.48,motion)+sin(angle)*spread;
+      float spin=motion*arch*(1.4+3.3*salt.y);
+      float cs=cos(spin),sn=sin(spin);
+      mat2 tumble=mat2(cs,sn,-sn,cs);
+      vec3 p=position, face=normal;
+      p.xz=tumble*p.xz;face.xz=tumble*face.xz;
+      float roll=spin*(salt.x-.5);
+      mat2 tip=mat2(cos(roll),sin(roll),-sin(roll),cos(roll));
+      p.yz=tip*p.yz;face.yz=tip*face.yz;
+      float size=grain*(.45+1.5*salt.w*salt.w);
+      size*=smoothstep(0.,.065,u)*(1.-smoothstep(.94,1.,u));
+      float light=.70+.38*face.y+.20*face.x-.09*face.z;
+      vec3 color=mix(pigment,misprint,travel);
+      // Isolated registration colours among the source inks keep dark chunks
+      // legible against the carpet and pale chunks legible against the walls.
+      if(salt.z>.87)color=mix(color,salt.w>.55?vec3(.72,.33,.09):vec3(.10,.57,.49),.60*arch);
+      if(salt.z<.10)color*=1.-.55*arch;
+      ink=color*light+vec3(.045,.039,.026)*arch;
       gl_Position=projectionMatrix*modelViewMatrix*vec4(path+p*size,1.);
     }`,fragmentShader:`
     varying vec3 ink; void main(){gl_FragColor=vec4(ink,1.);
@@ -93,7 +128,7 @@ export function createTransfer(scene,template,rot,printGeometry,stock,twin,arriv
   function stop(){arriving.visible=departing.visible=swarm.visible=false;}
   stop();
   return {
-    start(source,target,endTurn=rot,consume=false){
+    start(source,target,endTurn=rot,consume=false,reducedMotion=false){
       stop();
       // Only a spent original leaves a silhouette behind. The first print samples its
       // surface for flying grains without ever touching the actual source mesh.
@@ -105,6 +140,7 @@ export function createTransfer(scene,template,rot,printGeometry,stock,twin,arriv
         departing.matrix.copy(scene.matrixWorld).invert().multiply(template.matrixWorld);
         departing.matrixWorldNeedsUpdate=true;departing.visible=true;
       }
+      uniforms.motion.value=reducedMotion?0:1;
       uniforms.turn.value.set(Math.cos(source.turn),Math.sin(source.turn));
       arriving.position.set(target.x,target.y,target.z);arriving.rotation.y=endTurn;
       uniforms.exitTurn.value.set(Math.cos(endTurn),Math.sin(endTurn));
