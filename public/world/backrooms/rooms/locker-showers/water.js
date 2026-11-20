@@ -56,13 +56,23 @@ export function showerWater(c, batch, tex) {
             if (disposed || reflecting) return;
             const torch = mat.uniforms.uTorch, camLamp = mat.uniforms.uCameraLamp;
             const tv = torch.value, cv = camLamp.value, prevVis = mesh ? mesh.visible : true;
+            const hidden = [];
             reflecting = true; torch.value = 0; camLamp.value = 0;
             if (mesh) mesh.visible = false;
+            // Skip liquid water sheets (which read viewportDepthTexture at the main pass's MSAA sample count)
+            // and noReflect meshes during this single-sample reflection pass.
+            frame?.scene?.traverseVisible?.((o) => {
+              if (o !== mesh && (o.userData?.liquid || o.userData?.noReflect)) {
+                hidden.push(o);
+                o.visible = false;
+              }
+            });
             try {
               const res = origUpdate(frame);
               ready.value = refl.reflector.hasOutput ? 1 : 0;
               return res;
             } finally {
+              for (const o of hidden) o.visible = true;
               if (mesh) mesh.visible = prevVis;
               torch.value = tv; camLamp.value = cv; reflecting = false;
             }
@@ -138,7 +148,7 @@ vec2 changingRipple() {
     }
 
     mesh = new THREE.Mesh(geo,mat); mesh.name='changing-water-sheet';
-    mesh.renderOrder=4; group.add(mesh);
+    mesh.renderOrder=4; mesh.userData.noReflect=true; group.add(mesh);
     const camera = new THREE.PerspectiveCamera(), plane = new THREE.Plane();
     const localPlane = new THREE.Plane(new THREE.Vector3(0,1,0),-batch.pos[1]);
     const viewPlane = new THREE.Plane(), eye = new THREE.Vector3(), forward = new THREE.Vector3(), aim = new THREE.Vector3();

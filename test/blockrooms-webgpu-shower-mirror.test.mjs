@@ -36,6 +36,9 @@ test('rooms/locker-showers/water.js keeps room isolation (no engine/gpu or three
 test('showerWater builds ReflectorNode mirror eagerly under gpu.nodes and guards nested MRT', () => {
   withNodes(() => {
     const kit = createKit();
+    const owned = [];
+    const origOwn = kit.own;
+    kit.own = (x) => { owned.push(x); return origOwn(x); };
     const room = new THREE.Group();
     const batch = new Batch();
     batch.quad([-2, -0.12, 2], [2, -0.12, 2], [2, -0.12, -2], [-2, -0.12, -2]);
@@ -58,8 +61,40 @@ test('showerWater builds ReflectorNode mirror eagerly under gpu.nodes and guards
     assert.equal(mesh.name, 'changing-water-sheet');
     assert.equal(mesh.material.isNodeMaterial, true);
     assert.equal(mesh.material.uniforms.uChangingReflection.value, null, 'no unused WebGLRenderTarget allocated on WebGPU');
+    assert.equal(mesh.userData.noReflect, true, 'changing-water-sheet marks noReflect so pool mirrors skip it');
     assert.ok(Math.abs(targetObj.position.y - (-0.12)) < 1e-6, 'reflector target sits at water plane height');
     assert.ok(Math.abs(targetObj.rotation.x - (-Math.PI / 2)) < 1e-6, 'reflector target faces +Y');
+
+    // ReflectorNode updateBefore skips adjacent liquid:surface meshes so single-sample reflection never compiles MSAA depth readers
+    const reflObj = owned.find((o) => o?.reflector?.updateBefore);
+    assert.ok(reflObj, 'kit owns the ReflectorNode');
+    const adjPool = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    adjPool.userData.liquid = { id: 1 };
+    const fakeScene = new THREE.Scene();
+    fakeScene.add(mesh, adjPool);
+    let sawPoolVisible = null, sawSheetVisible = null;
+    const prevOrig = reflObj.reflector.updateBefore;
+    // Wrap renderer inside updateBefore via a minimal fake frame (throws inside origUpdate after our pre-pass, still exercises finally)
+    try {
+      reflObj.reflector.updateBefore({
+        scene: {
+          traverseVisible(fn) {
+            fn(mesh);
+            fn(adjPool);
+            sawSheetVisible = mesh.visible;
+            sawPoolVisible = adjPool.visible;
+          },
+        },
+        camera: null,
+        renderer: null,
+        material: mesh.material,
+      });
+    } catch { /* expected: fake frame has null renderer */ }
+    assert.equal(sawSheetVisible, false, 'shower sheet hidden during its own reflection pass');
+    assert.equal(sawPoolVisible, false, 'adjacent liquid:surface hidden during shower reflection pass');
+    assert.equal(mesh.visible, true, 'shower sheet visibility restored in finally');
+    assert.equal(adjPool.visible, true, 'adjacent liquid:surface visibility restored in finally');
+    void prevOrig;
 
     // WebGL onBeforeRender is inert on WebGPURenderer
     mesh.onBeforeRender({ isWebGPURenderer: true }, new THREE.Scene(), new THREE.PerspectiveCamera());
