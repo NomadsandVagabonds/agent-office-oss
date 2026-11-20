@@ -4,8 +4,9 @@ import { CAMERA_TUNING } from './camera-state.js';
 
 export const CAMERA_INPUT = Object.freeze({ device: 'camera' });
 export const FIRE_SECONDS_PER_SHEET = 8;
-export const CRAFTING_TUNING = Object.freeze({ torchCharge: 180, maxPaper: 10, fireSecondsPerSheet: FIRE_SECONDS_PER_SHEET });
+export const CRAFTING_TUNING = Object.freeze({ torchCharge: 180, copierCharge: 4, maxPaper: 10, fireSecondsPerSheet: FIRE_SECONDS_PER_SHEET });
 export const RECIPES = Object.freeze({
+  'copier-battery': Object.freeze({ label: 'Recharge copier', description: 'Fit a fresh pack into the Carbon Camera.' }),
   'torch-battery': Object.freeze({ label: 'Fit battery', description: 'Fit a fresh pack into the flashlight.' }),
   'camera-battery': Object.freeze({ label: 'Recharge camera', description: 'Add up to two minutes of recording time.' }),
   'paper-fire': Object.freeze({ label: 'Light paper', description: 'Burn a few sheets on the floor. Keep the lighter.' }),
@@ -71,6 +72,11 @@ export function previewCraft(snapshot, refs, { paperCount = 1, canMountTorch, fi
   const camSeconds = Number.isFinite(rawBattSec) && rawBattSec > 0 ? rawBattSec : CAMERA_TUNING.batterySeconds;
   const of = type => inputs.find(input => input.type === type);
   const plan = recipe => ({ ok: true, recipe, ...RECIPES[recipe], inputs });
+  if (of('battery') && of('carbon-camera')) {
+    const out = plan('copier-battery'), charge = of('carbon-camera').item.charge;
+    if (!Number.isInteger(charge) || charge < 0 || charge > CRAFTING_TUNING.copierCharge) return failure('invalid-item', out);
+    return charge === CRAFTING_TUNING.copierCharge ? failure('full-charge', out) : out;
+  }
   if (of('battery') && of('torch')) {
     const out = plan('torch-battery'), charge = of('torch').item.charge;
     if (!Number.isFinite(charge) || charge < 0 || charge > CRAFTING_TUNING.torchCharge) return failure('invalid-item', out);

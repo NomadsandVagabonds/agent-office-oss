@@ -230,6 +230,7 @@ async function visit(office, opt) {
   // A click: the scissors, if they are in the hand; otherwise both hands, out in front (shove.rule.js).
   const clickIt = () => {
     if (!canAct() || inventory?.isOpen) return;
+    if (inventory?.held()?.type === 'carbon-camera') { cur?.env.carbonCopy?.action(); return; }
     if (inventory?.held()?.type === 'scissors') { inventory.snip({ quietMiss: true }); return; }
     if (inventory?.held()?.type === 'extinguisher') { cur?.env.extinguisher?.press(); return; }   // (a burst: held, it goes on)
     if (inventory?.held()?.type === 'flamingo') { inventory.stab({ quietMiss: true }); return; }     // (one stab, and it stays in)

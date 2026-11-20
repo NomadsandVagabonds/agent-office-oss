@@ -240,6 +240,12 @@ export function createSound(level, opt = {}) {
 
   // the small vocabulary of the place; each takes { vol 0..1, pan -1..1 } from how far and which side
   const voice = {
+    filmFeed: () => {
+      burst({ vol:.11,dur:.028,freq:2200,q:2.4,type:'bandpass',attack:.001 });
+      tone({ vol:.034,dur:.38,freq:178,to:234,type:'sawtooth',attack:.035,when:.07 });
+      burst({ vol:.065,dur:.34,freq:1600,q:1.3,type:'bandpass',attack:.05,when:.09 });
+      burst({ vol:.07,dur:.04,freq:850,q:1.8,type:'bandpass',when:.48 });
+    },
     step: (o = {}) => burst({ vol: 0.07 * (o.vol ?? 1), dur: 0.09, freq: 300 + Math.random() * 120, q: 0.5 }),
     stone: (o = {}) => { burst({ vol: 0.09 * (o.vol ?? 1), dur: 0.07, freq: 900 + Math.random() * 300, q: 0.7 }); burst({ vol: 0.03 * (o.vol ?? 1), dur: 0.5, freq: 600, q: 0.5, attack: 0.05, when: 0.04 }); },
     wade: (o = {}) => burst({ vol: 0.08 * (o.vol ?? 1), dur: 0.16, freq: 1400 + Math.random() * 900, q: 1.2, type: 'bandpass' }),
@@ -434,6 +440,7 @@ export function createSound(level, opt = {}) {
       if (paused) { music?.pause(); theme?.pause(); ctx.suspend().catch(() => {}); }
       else { ctx.resume().catch(() => {}); if (music?.paused) music.play().catch(() => {}); if (themeOn && theme?.paused) theme.play().catch(() => {}); }
     },
+    carbonCamera(action) { this.play(action === 'scan' ? 'filmFeed' : 'clack', { vol: .65 }); },
     /** Play one of the small sounds by name. */
     play(name, o) { if (ctx && !muted && !paused && voice[name]) { try { if (!playTonerClip(name, o)) voice[name](o); } catch { /* a sound is never worth an error */ } } },
     /**

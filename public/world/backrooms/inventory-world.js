@@ -8,7 +8,7 @@ import { makeItem, ITEM_DEFS } from './inventory-state.js';
 import { createInventoryFire, FIRE } from './inventory-fire.js';
 
 const REACH = 1.35, MARK_R = .33, MAX_MARKS = 24;
-const ITEM_RADIUS = Object.freeze({ torch: .30, battery: .19, chalk: .16, paper: .31, 'pink-slip': .28, scissors: .29, snack: .23, balloon: .26, lighter: .20, tape: .26, opener: .2, extinguisher: .2, flamingo: .3 });
+const ITEM_RADIUS = Object.freeze({ torch: .30, battery: .19, chalk: .16, paper: .31, 'pink-slip': .28, scissors: .29, snack: .23, balloon: .26, lighter: .20, tape: .26, opener: .2, extinguisher: .2, flamingo: .3, 'carbon-camera': .22 });
 const ITEM_HEIGHT = Object.freeze({ balloon: 1.4, flamingo: .85 });
 const copy = item => ({ ...item });
 /**

@@ -134,6 +134,10 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     // camcorder full there is only a torch to put it in, and that is a combination: the bag opens on it, as it did.
     if (item?.type === 'battery' && cameraTakes()) return rechargeCamera(snapshot.selected);
     if (item?.type === 'scissors') return snip({ quietMiss: !view.isOpen });
+    if (item?.type === 'carbon-camera') {
+      if (view.isOpen) view.setOpen(false);
+      return active.env.carbonCopy?.action();
+    }
     if (item?.type === 'flamingo') return stab({ quietMiss: !view.isOpen });
     if (item?.type === 'extinguisher') { if (!(item.charge > 0)) { tell('empty-extinguisher'); return { ok: false, reason: 'empty-extinguisher' }; } active.env.extinguisher?.press?.(); return { ok: true, action: 'spray' }; }
     // Put the mark into the world before spending chalk. A bad floor or failed

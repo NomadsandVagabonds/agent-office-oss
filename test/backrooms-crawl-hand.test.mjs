@@ -61,6 +61,28 @@ test('balloon has a visible FPS model, with a grip, phone framing and wall-safe 
   selected=null;view.update(.1,true);assert.equal(group.visible,false);
 });
 
+test('the Carbon Camera pickup has no film and the scanned print feeds toward the holder', async t => {
+  const kit=createKit(), camera=new THREE.PerspectiveCamera(62,4/3,.06,170);
+  const {buildItemProp}=await import('../public/world/backrooms/hand.js');
+  const pickup=buildItemProp(kit,'carbon-camera');
+  assert.equal(pickup.getObjectByName('carbon-camera-positive'),undefined);
+  let shot=0;
+  const env={kit, vhs:{picture:{w:1280,h:720}}, inventory:{held:()=>({type:'carbon-camera',id:'cc',charge:3})},
+    carbonCopy:{exposure:id=>id==='cc'&&shot},player:{me:{x:0,z:0,speed:0}},world:{scene:new THREE.Group(),lightAt:()=>[.7,.7,.7]}};
+  const view=createHandView(env,camera);
+  t.after(()=>{view.dispose();kit.dispose();});
+  view.update(.016,true);
+  const film=env.world.scene.getObjectByName('carbon-camera-positive');
+  assert.equal(film.visible,false);
+  shot=1;view.update(.016,true);
+  assert.equal(film.visible,true);
+  const start=film.position.z;
+  view.update(.6,true);
+  assert.ok(film.position.z>start+.07);
+  shot=0;view.update(.016,true);
+  assert.equal(film.visible,false);
+});
+
 test('everything that can be held is drawn over the room, so that a wall close to the visitor never hides it', async t => {
   const { INVENTORY_MODELS } = await import('../public/world/backrooms/inventory-items.js');
   const kit=createKit(), camera=new THREE.PerspectiveCamera(62,16/9,.06,170); camera.updateProjectionMatrix();

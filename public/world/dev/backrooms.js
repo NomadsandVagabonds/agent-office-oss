@@ -165,7 +165,7 @@ async function go() {
     pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined, vhs: q.has('vhs') ? num('vhs', 2) : undefined, mute: q.has('mute') ? q.get('mute') !== '0' : undefined,
     graphics: q.get('graphics') || undefined,
     debug: true, scorecard: q.get('card') !== '0', home: { label: 'Return to homepage' }, where: q.get('where') || undefined,
-    inventory: q.get('inventory') !== '0', barricades: q.get('barricades') !== '0',
+    inventory: !!chairLab || q.get('inventory') !== '0', barricades: !!chairLab || q.get('barricades') !== '0',
     dev: { supplies: q.get('supplies') === '1', cast: (q.get('cast') || '').split(',').filter(Boolean), beside: q.get('beside') || null, wake: q.get('wake') === '1', barricadeStudy: q.get('barricades') === '1' && q.get('study') === '1',
       prepareRoom: chairLab?.prepareRoom,
       bridgeStudy: q.get('bridgestudy') === '1',

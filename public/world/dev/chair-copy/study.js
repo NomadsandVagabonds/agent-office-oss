@@ -5,16 +5,26 @@ import { registerMovable } from '../../backrooms/movable-props.js';
 import { CLOTH, makePrintPoses } from './misprint.js';
 import { SECONDS, createTransfer } from './transfer.js';
 import { frameTest } from './timing.js';
+import { buildItemProp } from '../../backrooms/hand.js';
+import { chairPositive } from './positive.js';
 
 const LIMIT=8, REACH=4.8;
 export function prepareRoom(level,builders){
   const def=level.rooms[level.start.room];
   builders.start=c=>{
     c.shell();
-    const x=-c.W*.215,z=-c.D*.315;
+    const x=-c.W*.215,z=Math.min(1,c.D*.15);
     const desk=c.prop('desk',x,z,{fixed:true});
     c.prop('crt',x,z,{y:desk.top,solid:false});
     c.prop('keyboard',x,z+.22,{y:desk.top,solid:false});
+    const camera=buildItemProp(c.kit,'carbon-camera'), px=x+.49, pz=z+.10;
+    camera.name='carbon-camera-pickup';
+    camera.position.set(px,desk.top+.003,pz);camera.rotation.y=2.63;c.add(camera);
+    c.after.push(()=>camera.userData.light(c.sample(px,desk.top+.12,pz)));
+    const use=c.use({x:px,z:pz,r:1.38,inventoryItem:true,label:'Carbon Camera',
+      when:()=>camera.visible,use:()=>c.env.carbonCopy?.take()});
+    c.rt.carbonDesk={camera,use};
+    c.leave('battery',1.65,1.70);
     c.prop('chair',0,0,{o:{color:CLOTH}});
   };
   const p=toWorld(def,0,Math.min(2,def.D/2-.55));
@@ -30,9 +40,9 @@ function panel(){
   #chair-copy .controls{display:flex;gap:5px;margin:6px 0}#chair-copy output{display:block;font-size:11px;color:#e6e7ac}
   #chair-aim{position:fixed;left:50%;top:50%;width:6px;height:6px;border:1px solid #f4f3dd;transform:translate(-50%,-50%);pointer-events:none;z-index:22;box-shadow:0 0 2px #172018}
   @media(max-height:490px){#chair-copy{padding:5px 8px;font-size:10px;bottom:4px}#chair-copy p{margin:2px}}
-  </style><header><b>CARBON COPY</b><span data-count>0 / 8</span></header>
-  <p data-hint>Locate the teal swivel chair.</p>
-  <div class="controls"><button data-use>X · Scan</button><button data-bench title="Resets the chairs and runs a fixed-view test">B · Test FPS</button><button data-reset>Reset</button></div>
+  </style><header><b>CARBON CAMERA</b><span data-count></span></header>
+  <p data-hint>Pick up the copier beside the monitor.</p>
+  <div class="controls"><button data-use>E · Pick up</button><button data-bench title="Resets the chairs and runs a fixed-view test">B · Test FPS</button><button data-reset>Reset chairs</button></div>
   <small>WASD move · mouse look · E carry / set down</small>
   <output data-timing></output><button data-save hidden>Save benchmark</button>`;
   const dot=document.createElement('div');dot.id='chair-aim';document.body.append(el,dot);
@@ -58,9 +68,21 @@ export function attachStudy(h,stage){
   marker.scale.set(half.x,1,half.z);world.scene.add(marker);
   const ray=new T.Ray(),bounds=new T.Box3(),hit=new T.Vector3();
   let scanned=null,flight=null,aim=null,ready=false,notice='',noticeUntil=0,dead=false,uiTime=0;
+  const env=h.env, {camera:pickup,use:pickupUse}=rt.carbonDesk;
+  const cameraId='chair-study:carbon-camera';
+  const photo=chairPositive(env.kit);
+  let shotNumber=0;
+  const inHand=()=>h.inventory?.held()?.id===cameraId;
   const canAct=()=>!dead && h.world===world && h.state==='play' && !h.paused && !h.inventory?.isOpen;
   function say(s){notice=s;noticeUntil=performance.now()+1600;}
   function home(){h.goto(rt.id,0,Math.min(2,def.D/2-.55),0,-.34);}
+  function take(){
+    if(!canAct()||!pickup.visible||world.usable(h.player.me)!==pickupUse||h.env.grip?.held)return;
+    const result=h.inventory.give({id:cameraId,type:'carbon-camera'});
+    if(!result.ok){say('Make room in a pocket first.');return;}
+    h.inventory.select(result.index);pickup.visible=false;
+    say('Sight the teal chair and click the shutter.');
+  }
   function direction(){
     const me=h.player.me,cp=Math.cos(me.pitch);
     ray.origin.set(me.x,me.y,me.z);
@@ -140,10 +162,18 @@ export function attachStudy(h,stage){
   }
   function step(dt){
     if(!flight)return;
-    const {source,p,x,z}=flight;
+    const {source,p,x,z,handheld}=flight;
+    if(handheld&&!inHand()){cancel();say('Print interrupted.');return;}
     if(source.carried||source.away||source.x!==x||source.z!==z||source.room!==rt.id){cancel();say('Source moved. Scan ready.');return;}
     flight.elapsed+=dt;const t=Math.min(1,flight.elapsed/SECONDS);transfer.at(t);
-    if(t>=1){cancel();const f=makeCopy(p);say(f?'Copy placed. E to pick it up.':'Landing occupied. Aim and paste again.');}
+    if(t>=1){
+      cancel();const f=makeCopy(p);
+      if(f&&handheld){
+        if(!h.inventory.model.spendPrint(cameraId)){remove(f);return;}
+        scanned=null;
+      }
+      say(f?'Twin printed. E to move it.':'Landing occupied. Aim and print again.');
+    }
   }
   function reset(){
     cancel();if(h.env.grip?.held)h.env.grip.release();
@@ -153,14 +183,18 @@ export function attachStudy(h,stage){
   }
   function action(){
     if(!canAct()||bench.active||flight)return;
+    if(!inHand()){say('Equip the Carbon Camera first.');return;}
     if(h.env.grip?.held){say('Set down the chair with E first.');return;}
+    if(copies.size){say('This chair already has a twin.');return;}
+    if(!h.inventory.held().charge){say('Fit a battery pack in your pockets.');return;}
     direction();const target=aimChair();
-    if(target){scanned=target;say('Chair scanned. Aim at open carpet.');return;}
+    if(target){scanned=target;shotNumber++;env.sound.carbonCamera('scan');say('Chair scanned. Aim at open carpet.');return;}
     if(!scanned){say('Center the reticle on a chair, then press X.');return;}
     const p=floorTarget();
-    if(copies.size===LIMIT)say('Eight copies placed. Reset for another run.');
-    else if(!p?.valid||!start(scanned,p))say('Needs clear carpet within reach.');
+    if(!p?.valid||!start(scanned,p))say('Needs clear carpet within reach.');
+    else {flight.handheld=true;env.sound.carbonCamera('print');}
   }
+  env.carbonCopy={take,action,photo,exposure:id=>id===cameraId&&scanned?shotNumber:0};
   const bench=frameTest({h,stage,world,original,copies,point,start,makeCopy,remove,reset,canAct,
     running:()=>!!flight,alive:()=>!dead,setText:s=>{ui.timing.textContent=s;}});
   const save=ui.el.querySelector('[data-save]');
@@ -180,13 +214,17 @@ export function attachStudy(h,stage){
     if(e.repeat||e.ctrlKey||e.altKey||e.metaKey||!canAct())return;
     if(e.code==='KeyX')action();else if(e.code==='KeyB')run();
   };
-  window.addEventListener('keydown',key,true);ui.action.onclick=action;
+  window.addEventListener('keydown',key,true);ui.action.onclick=()=>pickup.visible?take():action();
   ui.el.querySelector('[data-bench]').onclick=run;
   ui.el.querySelector('[data-reset]').onclick=()=>{if(canAct()&&!bench.active){reset();ui.timing.textContent='';save.hidden=true;}};
   const off=stage.onFrame(dt=>{
     if(!canAct()||document.hidden){marker.visible=false;ui.dot.hidden=true;if(h.world!==world)cancel();return;}
     ui.dot.hidden=false;
-    if(!ready){ready=true;home();h.dev.clock(false);}
+    if(!ready){
+      ready=true;
+      h.goto(rt.id,pickupUse.x,Math.min(def.D/2-.40,pickupUse.z+1.16),0,-.24);
+      h.dev.clock(false);
+    }
     step(dt);
     elapsed+=dt;
     for(const f of copies){
@@ -195,15 +233,19 @@ export function attachStudy(h,stage){
       f.printBody.geometry=slips?print.slip:print.rest;
     }
     if(performance.now()<uiTime)return;uiTime=performance.now()+70;
-    direction();const chair=aimChair();aim=scanned&&!chair&&!flight&&!bench.active?floorTarget():null;
+    direction();const chair=aimChair();aim=inHand()&&scanned&&!chair&&!flight&&!bench.active?floorTarget():null;
     marker.visible=!!aim;
     if(aim){marker.position.set(aim.x,aim.y+.014,aim.z);marker.material.color.setHex(aim.valid?0xbfea74:0xf57868);}
-    ui.count.textContent=copies.size+' / '+LIMIT;
-    ui.action.textContent=chair||!scanned?'X · Scan':'X · Paste';
+    ui.count.textContent=bench.active?copies.size+' / '+LIMIT:copies.size===1?'1 twin':'';
+    ui.action.textContent=pickup.visible?'E · Pick up':chair||!scanned?'X · Scan':'X · Print';
+    ui.action.disabled=bench.active||!!flight||(pickup.visible?world.usable(h.player.me)!==pickupUse:!inHand());
     ui.hint.textContent=bench.active?'Measuring from the same camera position…':flight?'Reading and rebuilding the chair…':performance.now()<noticeUntil?notice:
-      chair?(chair===original?'Teal swivel chair':'Misprinted chair')+' · X to copy its shape.':!scanned?'Aim at the teal chair and press X.':aim?.valid?'X to print here. E moves a finished chair.':'Aim down at clear carpet within reach.';
+      pickup.visible?'E to take the Carbon Camera beside the monitor.':!inHand()?'Select the pocket holding the Carbon Camera.':
+      copies.size?'E to move a chair. Reset chairs for another print.':
+      !h.inventory.held().charge?'Combine a battery pack with the copier in your pockets.':
+      chair&&scanned?'Aim at open carpet to print this chair.':chair?'Teal swivel chair · click or press X to scan.':!scanned?'Sight the teal chair and click the shutter.':aim?.valid?'Click to print here.':'Aim down at clear carpet within reach.';
   });
   // Browser automation uses the same transfer, registry and frame test as the panel.
   window.__chairCopy={get copies(){return [...copies];},get flight(){return !!flight;},get scanned(){return scanned;},get result(){return bench.result;},run,reset,action};
-  return ()=>{dead=true;bench.stop();off();cancel();for(const f of [...copies])remove(f);marker.removeFromParent();geom.dispose();marker.material.dispose();transfer.dispose();window.removeEventListener('keydown',key,true);ui.el.remove();ui.dot.remove();delete window.__chairCopy;};
+  return ()=>{dead=true;delete env.carbonCopy;bench.stop();off();cancel();for(const f of [...copies])remove(f);marker.removeFromParent();geom.dispose();marker.material.dispose();transfer.dispose();window.removeEventListener('keydown',key,true);ui.el.remove();ui.dot.remove();delete window.__chairCopy;};
 }
