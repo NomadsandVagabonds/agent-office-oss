@@ -2,7 +2,8 @@ import * as T from 'three';
 import { toLocal, toWorld } from '../../backrooms/frame.js';
 import { boxHits } from '../../backrooms/furniture-policy.js';
 import { registerMovable } from '../../backrooms/movable-props.js';
-import { CLOTH, SECONDS, createTransfer } from './transfer.js';
+import { CLOTH, makePrintPoses } from './misprint.js';
+import { SECONDS, createTransfer } from './transfer.js';
 import { frameTest } from './timing.js';
 
 const LIMIT=8, REACH=4.8;
@@ -44,7 +45,12 @@ export function attachStudy(h,stage){
   const parts=original.group.children.filter(o=>o.isMesh).map(o=>({geo:o.geometry,mat:o.material,order:o.renderOrder}));
   const body=f=>f.group.children.find(o=>o.isMesh&&!o.material.transparent);
   const rot=def.rot*Math.PI/2, half={x:original.placement.foot.w/2,z:original.placement.foot.d/2};
-  const transfer=createTransfer(world.scene,body(original),rot);
+  const originalBody=body(original);
+  const originalGeometry=originalBody.geometry;
+  const print=makePrintPoses(h.env.kit,rt,!!original.lightTint);
+  const transfer=createTransfer(world.scene,originalBody,rot,print.rest);
+  const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
+  let elapsed=0, serial=0;
   const copies=new Set(), ui=panel(), footHeight=original.top-original.y;
   const corners=new Float32Array([-1,0,-1,1,0,-1, 1,0,-1,1,0,1, 1,0,1,-1,0,1, -1,0,1,-1,0,-1]);
   const geom=new T.BufferGeometry();geom.setAttribute('position',new T.BufferAttribute(corners,3));
@@ -113,11 +119,14 @@ export function attachStudy(h,stage){
     const l=toLocal(def,p.x,p.z);
     const group=new T.Group();group.position.set(l.x,p.y-(def.y||0),l.z);rt.group.add(group);
     for(const part of parts){
-      const mesh=new T.Mesh(part.geo,part.mat);mesh.renderOrder=part.order;group.add(mesh);
+      const mesh=new T.Mesh(part.geo===originalGeometry?print.rest:part.geo,part.mat);mesh.renderOrder=part.order;group.add(mesh);
     }
     const y=group.position.y;
     const foot={x:l.x,z:l.z,x0:l.x-half.x,x1:l.x+half.x,z0:l.z-half.z,z1:l.z+half.z,bottom:y,top:y+footHeight};
     const f=registerMovable(world,rt,group,{foot,type:'chair',label:'Copied chair'});
+    // A few frames of bad registration, at a different time on each print.
+    f.printPhase=(++serial*1.73)%5.3;
+    f.printBody=body(f);
     world.scene.attach(group);world.touchFurniture(f);world.refreshFurniture();copies.add(f);
     return f;
   }
@@ -125,7 +134,7 @@ export function attachStudy(h,stage){
   function cancel(){transfer.stop();flight=null;}
   function start(source,p){
     if(flight||!fits(p)||copies.size>=LIMIT||source.carried||source.away||source.room!==rt.id)return false;
-    transfer.start(source,body(source),p);
+    transfer.start(source,body(source),p,source!==original);
     flight={source,p,elapsed:0,x:source.x,z:source.z};marker.visible=false;
     return true;
   }
@@ -179,6 +188,12 @@ export function attachStudy(h,stage){
     ui.dot.hidden=false;
     if(!ready){ready=true;home();h.dev.clock(false);}
     step(dt);
+    elapsed+=dt;
+    for(const f of copies){
+      if(f===flight?.source)continue;
+      const slips=!reducedMotion.matches&&(elapsed+f.printPhase)%5.3<.19;
+      f.printBody.geometry=slips?print.slip:print.rest;
+    }
     if(performance.now()<uiTime)return;uiTime=performance.now()+70;
     direction();const chair=aimChair();aim=scanned&&!chair&&!flight&&!bench.active?floorTarget():null;
     marker.visible=!!aim;
@@ -186,7 +201,7 @@ export function attachStudy(h,stage){
     ui.count.textContent=copies.size+' / '+LIMIT;
     ui.action.textContent=chair||!scanned?'X · Scan':'X · Paste';
     ui.hint.textContent=bench.active?'Measuring from the same camera position…':flight?'Reading and rebuilding the chair…':performance.now()<noticeUntil?notice:
-      chair?'Teal swivel chair · X to copy its shape.':!scanned?'Aim at the teal chair and press X.':aim?.valid?'X to print here. E moves a finished chair.':'Aim down at clear carpet within reach.';
+      chair?(chair===original?'Teal swivel chair':'Misprinted chair')+' · X to copy its shape.':!scanned?'Aim at the teal chair and press X.':aim?.valid?'X to print here. E moves a finished chair.':'Aim down at clear carpet within reach.';
   });
   // Browser automation uses the same transfer, registry and frame test as the panel.
   window.__chairCopy={get copies(){return [...copies];},get flight(){return !!flight;},get scanned(){return scanned;},get result(){return bench.result;},run,reset,action};
