@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backrooms — Lighting &amp; WebGPU Tech Demo</title>
+<style>
+  :root {
+    color-scheme: only dark;
+    --bg: #080a0d;
+    --surface: rgba(12, 16, 20, 0.84);
+    --surface-strong: rgba(16, 21, 27, 0.94);
+    --border: rgba(235, 226, 198, 0.16);
+    --border-bright: rgba(240, 196, 108, 0.55);
+    --text: #efe9d8;
+    --muted: #a9a495;
+    --accent: #f0b860;
+    --accent-cool: #6ee7d8;
+    --danger: #ff6b6b;
+    --split: 50%;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    font-family: var(--sans);
+    font-size: 13px;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* ---- Stage viewport ------------------------------------------------ */
+  #stage-wrap {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    overflow: hidden;
+  }
+
+  .pane {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+  }
+
+  /* Wipe mode (default): stacked full-bleed frames, right clipped at --split */
+  #stage-wrap[data-mode="wipe"] #frame-left {
+    z-index: 1;
+    pointer-events: auto;
+  }
+  #stage-wrap[data-mode="wipe"] #frame-right {
+    z-index: 2;
+    clip-path: inset(0 0 0 var(--split));
+    pointer-events: none;
+  }
+
+  /* Side-by-side mode: 50 / 50 live viewports */
+  #stage-wrap[data-mode="split"] #frame-left {
+    z-index: 1;
+    width: 50%;
+    left: 0;
+    right: auto;
+    pointer-events: auto;
+  }
+  #stage-wrap[data-mode="split"] #frame-right {
+    z-index: 1;
+    width: 50%;
+    left: 50%;
+    right: 0;
+    clip-path: none;
+    pointer-events: auto;
+  }
+
+  /* Single full-screen showcase (Right pane — WebGPU by default) */
+  #stage-wrap[data-mode="single"] #frame-left {
+    display: none;
+  }
+  #stage-wrap[data-mode="single"] #frame-right {
+    z-index: 2;
+    width: 100%;
+    left: 0;
+    clip-path: none;
+    pointer-events: auto;
+  }
+
+  /* ---- Wipe curtain line & handle ------------------------------------ */
+  #wipe-curtain {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--split);
+    width: 2px;
+    transform: translateX(-1px);
+    background: linear-gradient(
+      to bottom,
+      rgba(240, 184, 96, 0.35),
+      rgba(240, 184, 96, 0.95) 20%,
+      rgba(110, 231, 216, 0.95) 80%,
+      rgba(110, 231, 216, 0.35)
+    );
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.85), 0 0 2px rgba(255, 255, 255, 0.7);
+    z-index: 6;
+    pointer-events: none;
+  }
+
+  #stage-wrap:not([data-mode="wipe"]) #wipe-curtain {
+    display: none;
+  }
+
+  #stage-wrap[data-mode="split"]::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    background: rgba(239, 233, 216, 0.25);
+    z-index: 6;
+    pointer-events: none;
+  }
+
+  #wipe-handle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 38px;
+    height: 64px;
+    border-radius: 999px;
+    border: 1.5px solid rgba(239, 233, 216, 0.65);
+    background: rgba(10, 14, 18, 0.86);
+    color: var(--text);
+    display: grid;
+    place-items: center;
+    font: 600 13px/1 var(--mono);
+    letter-spacing: -1px;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+    pointer-events: auto;
+    cursor: ew-resize;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+  }
+  #wipe-handle:hover {
+    border-color: var(--accent);
+    background: rgba(16, 22, 28, 0.94);
+  }
+  #wipe-handle.dragging {
+    cursor: grabbing;
+    border-color: var(--accent-cool);
+    transform: translate(-50%, -50%) scale(1.06);
+  }
+  #wipe-handle:focus-visible {
+    outline: 2px solid var(--accent-cool);
+    outline-offset: 4px;
+  }
+
+  /* ---- Top HUD Bar --------------------------------------------------- */
+  #topbar {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    z-index: 20;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    transition: opacity 180ms ease, transform 180ms ease;
+  }
+
+  body.chrome-hidden #topbar,
+  body.chrome-hidden #deck-bar,
+  body.chrome-hidden .telemetry-badge {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-6px);
+  }
+  body.chrome-hidden #deck-bar {
+    transform: translateY(6px);
+  }
+
+  #unhide-btn {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 25;
+    display: none;
+  }
+  body.chrome-hidden #unhide-btn {
+    display: inline-flex;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 10px;
+    border-right: 1px solid var(--border);
+    font: 700 11px/1.2 var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .brand-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-cool);
+    box-shadow: 0 0 8px var(--accent-cool);
+  }
+
+  .control-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding-right: 8px;
+    border-right: 1px solid var(--border);
+  }
+  .control-group:last-child {
+    border-right: 0;
+    padding-right: 0;
+    margin-left: auto;
+  }
+
+  .lbl {
+    font: 600 10px/1 var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-right: 2px;
+  }
+
+  button, select {
+    font: 500 12px/1 var(--mono);
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 6px 9px;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  }
+  button:hover, select:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(239, 233, 216, 0.34);
+  }
+  button:focus-visible, select:focus-visible {
+    outline: 2px solid var(--accent-cool);
+    outline-offset: 2px;
+  }
+  select {
+    color-scheme: only dark;
+    background-color: #13181f;
+    padding-right: 22px;
+  }
+
+  .seg {
+    display: inline-flex;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+  }
+  .seg button {
+    border: 0;
+    background: transparent;
+    padding: 5px 8px;
+    border-radius: 6px;
+    color: var(--muted);
+  }
+  .seg button[aria-pressed="true"] {
+    background: rgba(240, 184, 96, 0.2);
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1px rgba(240, 184, 96, 0.45);
+  }
+
+  .toggle-btn[aria-pressed="true"] {
+    background: rgba(110, 231, 216, 0.18);
+    border-color: rgba(110, 231, 216, 0.55);
+    color: var(--accent-cool);
+  }
+
+  /* Native accessible range slider for the wipe split */
+  .wipe-slider-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .wipe-slider-wrap.hidden {
+    display: none;
+  }
+
+  #wipe-range {
+    --slider-track-size: 6px;
+    --slider-thumb-size: 16px;
+    --slider-track-radius: 999px;
+    --slider-thumb-radius: 50%;
+    --slider-track-color: rgba(239, 233, 216, 0.26);
+    --slider-fill-color: #f0b860;
+    --slider-thumb-color: #6ee7d8;
+    --attr-min: 0;
+    --attr-max: 100;
+    --control-value: 50;
+    --slider-progress: calc(
+      (var(--control-value) - var(--attr-min)) /
+      (var(--attr-max) - var(--attr-min)) * 100%
+    );
+
+    appearance: none;
+    inline-size: 96px;
+    block-size: 24px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  #wipe-range::-webkit-slider-runnable-track {
+    block-size: var(--slider-track-size);
+    border: 0;
+    border-radius: var(--slider-track-radius);
+    background: linear-gradient(
+      to right,
+      var(--slider-fill-color) var(--slider-progress),
+      var(--slider-track-color) var(--slider-progress)
+    );
+  }
+  #wipe-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    inline-size: var(--slider-thumb-size);
+    block-size: var(--slider-thumb-size);
+    margin-block-start: calc((var(--slider-track-size) - var(--slider-thumb-size)) / 2);
+    border: 2px solid #0b0e12;
+    border-radius: var(--slider-thumb-radius);
+    background: var(--slider-thumb-color);
+  }
+  #wipe-range::-moz-range-track {
+    block-size: var(--slider-track-size);
+    border: 0;
+    border-radius: var(--slider-track-radius);
+    background: var(--slider-track-color);
+  }
+  #wipe-range::-moz-range-progress {
+    block-size: var(--slider-track-size);
+    border-radius: var(--slider-track-radius);
+    background: var(--slider-fill-color);
+  }
+  #wipe-range::-moz-range-thumb {
+    inline-size: var(--slider-thumb-size);
+    block-size: var(--slider-thumb-size);
+    border: 2px solid #0b0e12;
+    border-radius: var(--slider-thumb-radius);
+    background: var(--slider-thumb-color);
+  }
+  #wipe-range:focus-visible {
+    outline: 2px solid var(--accent-cool);
+    outline-offset: 4px;
+  }
+
+  /* ---- Live Telemetry & Error Badges --------------------------------- */
+  .telemetry-badge {
+    position: fixed;
+    top: 66px;
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 7px 11px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: rgba(9, 12, 16, 0.78);
+    backdrop-filter: blur(10px);
+    font: 500 11px/1.35 var(--mono);
+    pointer-events: auto;
+    max-width: 340px;
+    transition: opacity 180ms ease;
+  }
+  #badge-left {
+    left: 12px;
+    border-left: 3px solid var(--accent);
+  }
+  #badge-right {
+    right: 12px;
+    text-align: right;
+    border-right: 3px solid var(--accent-cool);
+  }
+  #stage-wrap[data-mode="single"] ~ #badge-left {
+    display: none;
+  }
+  .badge-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  #badge-right .badge-head {
+    flex-direction: row-reverse;
+  }
+  .badge-tag-left { color: var(--accent); }
+  .badge-tag-right { color: var(--accent-cool); }
+  .badge-meta { color: var(--muted); font-size: 10.5px; }
+  .badge-err {
+    color: var(--danger);
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .badge-ok { color: #7ce89e; }
+
+  /* ---- Bottom Showcase Deck ------------------------------------------ */
+  #deck-bar {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    transition: opacity 180ms ease, transform 180ms ease;
+  }
+
+  .deck-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+  }
+  #preset-desc {
+    color: var(--text);
+  }
+  #preset-desc strong {
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-right: 6px;
+  }
+  .controls-hint {
+    font: 500 10.5px/1.2 var(--mono);
+    color: var(--muted);
+  }
+
+  #preset-pills {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+  }
+  .preset-pill {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    text-align: left;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+  }
+  .preset-pill .p-title {
+    font: 700 11.5px/1.2 var(--mono);
+    color: var(--text);
+  }
+  .preset-pill .p-sub {
+    font: 500 10px/1.2 var(--sans);
+    color: var(--muted);
+  }
+  .preset-pill[aria-current="true"] {
+    background: rgba(240, 184, 96, 0.16);
+    border-color: var(--border-bright);
+    box-shadow: 0 0 0 1px rgba(240, 184, 96, 0.25);
+  }
+  .preset-pill[aria-current="true"] .p-title {
+    color: var(--accent);
+  }
+  .preset-pill[aria-current="true"] .p-sub {
+    color: #e4d8bb;
+  }
+
+  /* ---- Error Drawer -------------------------------------------------- */
+  #err-drawer {
+    position: fixed;
+    left: 50%;
+    top: 120px;
+    transform: translateX(-50%);
+    z-index: 30;
+    width: min(760px, calc(100vw - 32px));
+    max-height: 55vh;
+    overflow: auto;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 107, 107, 0.55);
+    background: var(--surface-strong);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.75);
+    font: 12px/1.45 var(--mono);
+  }
+  #err-drawer[hidden] { display: none; }
+  #err-drawer pre {
+    margin: 8px 0 0;
+    white-space: pre-wrap;
+    color: #ffb8b8;
+  }
+</style>
+</head>
+<body>
+
+<main id="stage-wrap" data-mode="wipe" aria-label="Side-by-side renderer comparison stage">
+  <iframe id="frame-left" class="pane" title="Left renderer viewport" allow="pointer-lock"></iframe>
+  <iframe id="frame-right" class="pane" title="Right renderer viewport" allow="pointer-lock"></iframe>
+  <div id="wipe-curtain">
+    <button
+      id="wipe-handle"
+      type="button"
+      aria-label="Comparison wipe divider. Drag horizontally or press Left and Right arrow keys to reveal WebGL vs WebGPU."
+    >◀▶</button>
+  </div>
+</main>
+
+<header id="topbar" aria-label="Tech demo controls">
+  <div class="brand">
+    <span class="brand-dot" aria-hidden="true"></span>
+    <span>Lighting &amp; WebGPU Showcase</span>
+  </div>
+
+  <div class="control-group" role="group" aria-label="Comparison layout">
+    <div class="seg">
+      <button type="button" data-mode-btn="wipe" aria-pressed="true">Wipe</button>
+      <button type="button" data-mode-btn="split" aria-pressed="false">Side by Side</button>
+      <button type="button" data-mode-btn="single" aria-pressed="false">WebGPU Full</button>
+    </div>
+    <span class="wipe-slider-wrap" id="wipe-slider-wrap">
+      <label class="lbl" for="wipe-range">Split</label>
+      <input id="wipe-range" type="range" min="0" max="100" step="0.5" value="50" aria-valuetext="50% split">
+    </span>
+  </div>
+
+  <div class="control-group" role="group" aria-label="Renderer engines and tiers">
+    <label class="lbl" for="sel-left">Left</label>
+    <select id="sel-left" aria-label="Left renderer and graphics tier">
+      <option value="webgl:high" selected>WebGL · High</option>
+      <option value="webgl:medium">WebGL · Medium</option>
+      <option value="webgl:classic">WebGL · Classic</option>
+      <option value="webgpu:high">WebGPU · High</option>
+      <option value="webgpu:medium">WebGPU · Medium</option>
+      <option value="webgpu:classic">WebGPU · Classic</option>
+    </select>
+    <label class="lbl" for="sel-right">Right</label>
+    <select id="sel-right" aria-label="Right renderer and graphics tier">
+      <option value="webgpu:high" selected>WebGPU · High</option>
+      <option value="webgpu:medium">WebGPU · Medium</option>
+      <option value="webgpu:classic">WebGPU · Classic</option>
+      <option value="webgl:high">WebGL · High</option>
+      <option value="webgl:medium">WebGL · Medium</option>
+      <option value="webgl:classic">WebGL · Classic</option>
+    </select>
+  </div>
+
+  <div class="control-group" role="group" aria-label="Lighting and camera controls">
+    <button type="button" id="btn-torch" class="toggle-btn" aria-pressed="false" title="Toggle flashlight in both viewports (L or F in-game)">Torch: Off</button>
+    <label class="lbl" for="sel-lights">Lights</label>
+    <select id="sel-lights" aria-label="Room overhead lights override">
+      <option value="preset" selected>Scene Default</option>
+      <option value="blackout">Blackout (0%)</option>
+      <option value="dim">Dim (20%)</option>
+      <option value="full">All On (100%)</option>
+    </select>
+    <label class="lbl" for="sel-vhs">Tape</label>
+    <select id="sel-vhs" aria-label="VHS picture mode">
+      <option value="0" selected>Clean</option>
+      <option value="1">Steady</option>
+      <option value="2">Full VHS</option>
+    </select>
+    <button type="button" id="btn-dive" class="toggle-btn" aria-pressed="false" hidden>Dive: Off</button>
+  </div>
+
+  <div class="control-group">
+    <button type="button" id="btn-reset" title="Reset camera to preset framing">Reframe</button>
+    <button type="button" id="btn-hide" title="Hide HUD chrome (H)">Hide UI</button>
+  </div>
+</header>
+
+<button type="button" id="unhide-btn" title="Show HUD chrome (H)">Show UI (H)</button>
+
+<aside id="badge-left" class="telemetry-badge" aria-label="Left renderer telemetry">
+  <div class="badge-head">
+    <span class="badge-tag-left" id="lbl-left-name">WEBGL · HIGH</span>
+    <span id="lbl-left-fps">loading…</span>
+  </div>
+  <div class="badge-meta" id="lbl-left-meta">Waiting for scene…</div>
+</aside>
+
+<aside id="badge-right" class="telemetry-badge" aria-label="Right renderer telemetry">
+  <div class="badge-head">
+    <span class="badge-tag-right" id="lbl-right-name">WEBGPU · HIGH</span>
+    <span id="lbl-right-fps">loading…</span>
+  </div>
+  <div class="badge-meta" id="lbl-right-meta">Waiting for scene…</div>
+</aside>
+
+<section id="err-drawer" hidden aria-label="Captured runtime errors">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+    <strong>Captured Runtime Console Errors</strong>
+    <button type="button" id="btn-close-err">Close</button>
+  </div>
+  <pre id="err-log"></pre>
+</section>
+
+<footer id="deck-bar" aria-label="Showcase scene presets">
+  <div class="deck-meta">
+    <div id="preset-desc"><strong>Loading</strong> Preparing showcase scenes…</div>
+    <div class="controls-hint">Click scene to look &amp; walk (WASD · Shift · C crouch/dive · F torch · Esc release) · Keys 1–9 switch scenes · Drag ◀▶ to wipe</div>
+  </div>
+  <nav id="preset-pills" aria-label="Lighting showcase scenes"></nav>
+</footer>
+
+<div id="live-status" class="visually-hidden" aria-live="polite"></div>
+
+<script type="module" src="/world/dev/webgpu-demo.js"></script>
+</body>
+</html>
