@@ -712,11 +712,16 @@ function findDoorwayWalk(handle) {
     }
     if (!a || !b) continue;
     const yawA = Math.atan2(-(b.x - a.x), -(b.z - a.z));
-    // Gently turn toward the centre of the lit room once across the threshold so the camera looks into the space
-    const yawB = Math.hypot(nb.def.cx - b.x, nb.def.cz - b.z) > 0.6
-      ? Math.atan2(-(nb.def.cx - b.x), -(nb.def.cz - b.z))
-      : yawA;
-    const score = Math.abs(nbL - hereL) + (dr.door ? -0.05 : 0.05);
+    // Measure open sightline into nb from b toward nb's centre (prefer wide rooms over tight walls)
+    const dirX = nb.def.cx - b.x, dirZ = nb.def.cz - b.z, dirLen = Math.hypot(dirX, dirZ) || 1;
+    let sight = 0;
+    for (let dist = 0.8; dist <= 5.0; dist += 0.6) {
+      const sx = b.x + (dirX / dirLen) * dist, sz = b.z + (dirZ / dirLen) * dist;
+      if (world.free(sx, sz, 0.24)) sight = dist;
+      else break;
+    }
+    const yawB = dirLen > 0.6 ? Math.atan2(-dirX, -dirZ) : yawA;
+    const score = Math.abs(nbL - hereL) * 4 + Math.min(sight, 4.5) * 0.25 + (dr.door ? -0.3 : 0.15);
     if (!best || score > best.score) {
       best = { score, ax: a.x, az: a.z, bx: b.x, bz: b.z, yawA, yawB };
     }
@@ -749,13 +754,13 @@ function stepWalkDemo(now) {
   const dt = Math.min(0.1, Math.max(0, (now - walkDemo.lastNow) / 1000));
   walkDemo.lastNow = now;
   walkDemo.t += dt;
-  // 8.4 s cycle: 0.5s pause in A -> 1.8s glide A->B -> 2.1s settle in B -> 1.8s glide B->A -> 2.2s settle in A
-  const cyc = walkDemo.t % 8.4;
+  // 11.8 s relaxed cycle: 0.6s pause in A -> 2.0s walk A->B -> 3.6s settle in B -> 2.0s walk B->A -> 3.6s settle in A
+  const cyc = walkDemo.t % 11.8;
   let u = 0;
-  if (cyc < 0.5) u = 0;
-  else if (cyc < 2.3) u = (cyc - 0.5) / 1.8;
-  else if (cyc < 4.4) u = 1;
-  else if (cyc < 6.2) u = 1 - (cyc - 4.4) / 1.8;
+  if (cyc < 0.6) u = 0;
+  else if (cyc < 2.6) u = (cyc - 0.6) / 2.0;
+  else if (cyc < 6.2) u = 1;
+  else if (cyc < 8.2) u = 1 - (cyc - 6.2) / 2.0;
   else u = 0;
   const s = u * u * (3 - 2 * u);
   const x = walkDemo.ax + (walkDemo.bx - walkDemo.ax) * s;

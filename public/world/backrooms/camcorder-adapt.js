@@ -16,21 +16,21 @@ const luma = (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b;
 
 export const CAMCORDER_ADAPT = Object.freeze({
   minLight: 0.014,
-  fastTau: 0.11,         // s — instantaneous sensor metering
-  irisCloseTau: 0.55,    // s — iris stops down dark -> bright
-  irisOpenTau: 0.95,     // s — AGC boosts bright -> dark
-  irisStrength: 0.46,    // stops of transient exposure lag per stop of luminance jump
-  irisMin: 0.62,
-  irisMax: 1.72,
-  awbTau: 1.55,          // s — white-balance convergence time constant
-  awbStrength: 0.68,     // transient chroma shift strength (always settles to 1, 1, 1)
-  awbMin: 0.84,
-  awbMax: 1.18,
-  afTriggerStops: 0.36,  // luminance shock (stops) to trigger an autofocus hunt anywhere
-  afRoomTrigger: 0.16,   // lower luminance shock threshold when crossing a room threshold
-  afChromaTrigger: 0.10, // colour-temperature shift threshold when crossing rooms
-  afDuration: 0.78,      // s — two-bump contrast-detect focus hunt
-  afCooldown: 0.95,      // s — minimum gap between new hunts
+  fastTau: 0.28,         // s — smooth sensor ramp-in (avoids twitchy strobe flashes)
+  irisCloseTau: 1.45,    // s — 1980s motorized iris gradually stops down dark -> bright
+  irisOpenTau: 2.10,     // s — analog AGC slowly opens back up bright -> dark
+  irisStrength: 0.66,    // stops of transient exposure lag (lets bright rooms briefly blow near-white)
+  irisMin: 0.46,
+  irisMax: 2.55,
+  awbTau: 2.85,          // s — slow 1980s auto white-balance colour-temperature glide
+  awbStrength: 0.72,     // transient chroma shift strength (always settles to 1, 1, 1)
+  awbMin: 0.82,
+  awbMax: 1.20,
+  afTriggerStops: 0.34,  // luminance shock (stops) to trigger a motorized focus glide
+  afRoomTrigger: 0.14,   // lower threshold when crossing a room threshold
+  afChromaTrigger: 0.09, // colour-temperature shift threshold when crossing rooms
+  afDuration: 1.85,      // s — gradual 1980s motorized lens focus pull & confirmation settle
+  afCooldown: 2.20,      // s — prevents jitter during continuous flicker
   torchLight: 0.065,     // small bounce contribution when the flashlight snaps on/off
   darkTint: Object.freeze([0.84, 0.97, 1.18]),
   litFallback: Object.freeze([1.06, 1.01, 0.86]),
@@ -65,17 +65,17 @@ export function targetChroma(light, rgb = null) {
 }
 
 /**
- * Two-bump contrast-detect autofocus curve for normalized time u in [0, 1].
- * Starts and ends smoothly at 0: main search pulse peaking around u = 0.28,
- * quick pull near sharp around u = 0.58, then a subtle confirmation pulse before locking.
+ * Gradual 1980s motorized-lens focus curve for normalized time u in [0, 1].
+ * Smoothly eases soft as the lens searches (~u = 0.30), glides back near sharp (~u = 0.62),
+ * then performs a gentle confirmation settle (~u = 0.78) before locking cleanly at 0.
  * @param {number} u
  * @returns {number}
  */
 export function focusHuntCurve(u) {
   if (u <= 0 || u >= 1) return 0;
-  const main = Math.exp(-Math.pow((u - 0.27) / 0.16, 2));
-  const check = 0.34 * Math.exp(-Math.pow((u - 0.74) / 0.11, 2));
-  const env = smoothstep(0, 0.08, u) * smoothstep(1, 0.90, u);
+  const main = Math.exp(-Math.pow((u - 0.30) / 0.21, 2));
+  const check = 0.26 * Math.exp(-Math.pow((u - 0.78) / 0.11, 2));
+  const env = smoothstep(0, 0.14, u) * smoothstep(1, 0.86, u);
   return clamp((main + check) * env, 0, 1);
 }
 

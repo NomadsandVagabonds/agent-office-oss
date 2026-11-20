@@ -82,12 +82,18 @@ export function createVhsNode(renderer, camera, opt = {}) {
   /** The SIGNAL pass, with the haze (reading the scene's depth) or without it. */
   function signalMaterial(withDepth) {
     const U = node;
-    const film = (c) => float(1).sub(exp(c.mul(U.uBalance).negate().mul(U.uExposure.mul(U.uGain).mul(1.3))));
+    const film = (c) => {
+      const s = float(1).sub(exp(c.mul(U.uBalance).negate().mul(U.uExposure.mul(U.uGain).mul(1.3))));
+      const over = max(U.uExposure.sub(1.05), 0);
+      const t = clamp(s.sub(0.28).div(0.60), 0, 1);
+      const knee = t.mul(t).mul(t.mul(-2).add(3));
+      return clamp(s.add(knee.mul(over.mul(0.44))), 0, 1);
+    };
     const srcTex = routed() ? downTarget.texture : sceneTarget.texture;
     const sampleOptical = Fn(([q]) => {
       const out = at(srcTex, q).rgb.toVar();
       If(U.uDefocus.greaterThan(0.001), () => {
-        const r = vec2(U.uRes.y.div(max(U.uRes.x, 1)), 1).mul(U.uDefocus.mul(0.0044));
+        const r = vec2(U.uRes.y.div(max(U.uRes.x, 1)), 1).mul(U.uDefocus.mul(0.0058));
         const d = r.mul(0.56);
         const tap = (dx, dy) => at(srcTex, clamp(q.add(vec2(dx, dy)), 0.001, 0.999)).rgb;
         out.assign(

@@ -42,7 +42,7 @@ test('camcorder adaptation starts settled on the first sample and resets cleanly
   assert.equal(s.defocus, 0);
 });
 
-test('dark -> bright room triggers auto-iris bloom, warm white-balance lag, and 2-bump autofocus hunt that settles to neutral', () => {
+test('dark -> bright room triggers gradual 1980s blown-white iris bloom, slow warm AWB lag, and motorized focus glide', () => {
   const s = createCamcorderAdapt();
   const dark = { light: 0.02, rgb: [0.02, 0.02, 0.02], roomId: 1, torch: 0 };
   const lit = { light: 0.72, rgb: [0.84, 0.77, 0.54], roomId: 2, torch: 0 };
@@ -50,15 +50,17 @@ test('dark -> bright room triggers auto-iris bloom, warm white-balance lag, and 
   stepCamcorderAdapt(s, dark, 1 / 60);
   runFrames(s, dark, 0.5);
 
-  const peak = runFrames(s, lit, 0.85);
-  assert.ok(peak.maxExp > 1.25 && peak.maxExp <= CAMCORDER_ADAPT.irisMax, `expected overexposure bloom, got ${peak.maxExp}`);
+  const peak = runFrames(s, lit, 1.4);
+  assert.ok(peak.maxExp > 1.85 && peak.maxExp <= CAMCORDER_ADAPT.irisMax, `expected strong creamy-white bloom, got ${peak.maxExp}`);
   assert.ok(peak.maxWarm > 0.06, `expected warm fluorescent AWB lag, got ${peak.maxWarm}`);
-  assert.ok(peak.maxDef > 0.45, `expected autofocus hunt, got ${peak.maxDef}`);
+  assert.ok(peak.maxDef > 0.45, `expected motorized focus glide, got ${peak.maxDef}`);
+  // Still gradually settling at 1.4 s (not a twitchy strobe that vanishes immediately)
+  assert.ok(s.exposure > 1.25, `expected gradual iris stop-down still active at 1.4 s, got ${s.exposure}`);
 
   // Settle cleanly back to neutral after staying in the lit room
-  runFrames(s, lit, 8.0);
-  assert.ok(Math.abs(s.exposure - 1) < 0.01, `expected exposure settled to 1, got ${s.exposure}`);
-  for (let i = 0; i < 3; i++) assert.ok(Math.abs(s.balance[i] - 1) < 0.015, `expected balance[${i}] settled to 1, got ${s.balance[i]}`);
+  runFrames(s, lit, 14.0);
+  assert.ok(Math.abs(s.exposure - 1) < 0.015, `expected exposure settled to 1, got ${s.exposure}`);
+  for (let i = 0; i < 3; i++) assert.ok(Math.abs(s.balance[i] - 1) < 0.02, `expected balance[${i}] settled to 1, got ${s.balance[i]}`);
   assert.equal(s.defocus, 0, 'autofocus locks cleanly at 0');
 });
 
@@ -70,26 +72,26 @@ test('bright -> dark room briefly underexposes, cools white balance, hunts focus
   stepCamcorderAdapt(s, lit, 1 / 60);
   runFrames(s, lit, 0.5);
 
-  const dip = runFrames(s, dark, 0.9);
-  assert.ok(dip.minExp < 0.82 && dip.minExp >= CAMCORDER_ADAPT.irisMin, `expected temporary dark crush, got ${dip.minExp}`);
+  const dip = runFrames(s, dark, 1.4);
+  assert.ok(dip.minExp < 0.65 && dip.minExp >= CAMCORDER_ADAPT.irisMin, `expected temporary dark crush, got ${dip.minExp}`);
   assert.ok(dip.minWarm < -0.06, `expected cool low-light AWB lag, got ${dip.minWarm}`);
-  assert.ok(dip.maxDef > 0.45, `expected autofocus hunt entering dark room, got ${dip.maxDef}`);
+  assert.ok(dip.maxDef > 0.45, `expected autofocus glide entering dark room, got ${dip.maxDef}`);
   assert.ok(CAMCORDER_ADAPT.irisOpenTau > CAMCORDER_ADAPT.irisCloseTau, 'AGC opens slower than iris stops down');
 
-  runFrames(s, dark, 8.0);
-  assert.ok(Math.abs(s.exposure - 1) < 0.01);
+  runFrames(s, dark, 14.0);
+  assert.ok(Math.abs(s.exposure - 1) < 0.015);
   assert.equal(s.defocus, 0);
 });
 
 test('focusHuntCurve has a smooth two-bump profile bounded in [0, 1] and zero at endpoints', () => {
   assert.equal(focusHuntCurve(0), 0);
   assert.equal(focusHuntCurve(1), 0);
-  const peak1 = focusHuntCurve(0.27);
-  const valley = focusHuntCurve(0.56);
-  const peak2 = focusHuntCurve(0.74);
+  const peak1 = focusHuntCurve(0.30);
+  const valley = focusHuntCurve(0.64);
+  const peak2 = focusHuntCurve(0.78);
   assert.ok(peak1 > 0.85, `main search peak ${peak1}`);
   assert.ok(valley < peak1 * 0.4 && valley < peak2, `valley ${valley} between peaks ${peak1} and ${peak2}`);
-  assert.ok(peak2 > 0.25 && peak2 < peak1 * 0.6, `confirmation micro-pulse ${peak2}`);
+  assert.ok(peak2 > 0.20 && peak2 < peak1 * 0.5, `confirmation micro-pulse ${peak2}`);
 });
 
 test('targetChroma blends cool CCD bias in darkness and preserves room colour in bright rooms', () => {

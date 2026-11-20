@@ -42,13 +42,18 @@ const Signal = {
     const mat3 YIQ = mat3(0.299, 0.596, 0.211, 0.587, -0.274, -0.523, 0.114, -0.322, 0.312);
     const mat3 RGB = mat3(1.0, 1.0, 1.0, 0.956, -0.272, -1.106, 0.621, -0.647, 1.703);
     float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
-    // a gentle shoulder: bright things wash out toward white, the way cheap video does
-    vec3 film(vec3 c) { return 1.0 - exp(-c * uBalance * (1.3 * uExposure * uGain)); }
-    // subtle circular lens defocus while the camcorder's contrast-detect autofocus hunts (0 when locked)
+    // a gentle shoulder: bright things wash out toward white, the way cheap video does;
+    // when the slow 1980s iris is momentarily overexposed (> 1.05), brights bloom smoothly into creamy hot white
+    vec3 film(vec3 c) {
+      vec3 s = 1.0 - exp(-c * uBalance * (1.3 * uExposure * uGain));
+      float over = max(uExposure - 1.05, 0.0);
+      return clamp(s + smoothstep(0.28, 0.88, s) * (over * 0.44), 0.0, 1.0);
+    }
+    // subtle circular lens defocus while the camcorder's motorized autofocus glides (0 when locked)
     vec3 sampleOptical(vec2 at) {
       vec3 c = texture2D(tDiffuse, at).rgb;
       if (uDefocus <= 0.001) return c;
-      vec2 r = vec2(uRes.y / max(uRes.x, 1.0), 1.0) * (uDefocus * 0.0044);
+      vec2 r = vec2(uRes.y / max(uRes.x, 1.0), 1.0) * (uDefocus * 0.0058);
       vec2 d = r * 0.56;
       vec3 sum = c * 0.20;
       sum += (texture2D(tDiffuse, clamp(at + vec2(r.x, 0.0), 0.001, 0.999)).rgb
