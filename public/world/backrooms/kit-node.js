@@ -3,11 +3,11 @@
 // banks) times the room's dimmer and tint; the flashlight's and the camcorder lamp's cones; a voxel's grain and the line
 // where voxels meet; the texture (cut out where it says); the wet glint. Every number is kit.js's.
 //
-// The light maps (LIGHTMAP, TUBESHADOW, DOORLIGHT) are kit-node-light.js, the flashlight's shadows (BEAM_SHADOWS)
-// are kit-node-shadow.js, and what a surface gives the glow (glow.js's twin) is its second output while the glow's
-// pass draws (glow-node.js). Not here yet (docs/BLOCKROOMS-WEBGPU.md), so not drawn under ?gpu=webgpu whatever the
-// tier says: the floor's sheen (SHEEN). Rooms that extend a kit surface call `m.patchNode(hook)` to plug into position,
-// map UV, wet normal, final colour/alpha, or replace the fragment stage while keeping kit's baked light and uniform readers.
+// The light maps (LIGHTMAP, TUBESHADOW, DOORLIGHT) are kit-node-light.js, the floor's sheen (SHEEN) is
+// kit-node-sheen.js, the flashlight's shadows (BEAM_SHADOWS) are kit-node-shadow.js, and what a surface gives the
+// glow (glow.js's twin) is its second output while the glow's pass draws (glow-node.js). Rooms that extend a kit
+// surface call `m.patchNode(hook)` to plug into init, position, map UV, wet normal, final colour/alpha, or replace
+// the fragment stage while keeping kit's baked light and uniform readers.
 //
 // The material keeps kit.js's `uniforms`, `defines`, `vertexShader` and `fragmentShader`, so that everything that
 // reaches into one (uTint, uDim, uFlick, a room's patch) keeps working; the uniforms are read every frame. The defines
@@ -15,6 +15,7 @@
 import { gpu } from '../engine/gpu.js';
 import { FLASHLIGHT, CAMCORDER_LAMP } from './flashlight.js';
 import { lightmapNode } from './kit-node-light.js';
+import { sheenNode } from './kit-node-sheen.js';
 import { beamShadowNode } from './kit-node-shadow.js';
 import { glowStrength } from './glow.rule.js';
 
@@ -39,10 +40,10 @@ export function surfaceNode(spec) {
   const v2 = (key) => { const n = uniform(new N.Vector2()); return n.onRenderUpdate(() => { const v = read(key); if (Array.isArray(v)) n.value.fromArray(v); else if (v?.isVector2) n.value.copy(v); }); };
   const v3 = (key) => { const n = uniform(new N.Vector3(1, 1, 1)); return n.onRenderUpdate(() => { const v = read(key); if (Array.isArray(v)) n.value.fromArray(v); else if (v?.isVector3) n.value.copy(v); else if (v?.isColor) n.value.set(v.r, v.g, v.b); }); };
   const v4 = (key) => { const n = uniform(new N.Vector4()); return n.onRenderUpdate(() => { const v = read(key); if (Array.isArray(v)) n.value.fromArray(v); else if (v?.isVector4) n.value.copy(v); }); };
-  const ss = (e0, e1, x) => { const t = clamp(float(x).sub(e0).div(e1 - e0), 0, 1); return t.mul(t).mul(t.mul(-2).add(3)); };
+  const ss = (e0, e1, x) => { const t = clamp(float(x).sub(e0).div(e1 - e0), 0, 1).toVar(); return t.mul(t).mul(t.mul(-2).add(3)); };
   const voxHash = (p0) => { const p = fract(p0.mul(vec3(0.1031, 0.1030, 0.0973))); const q = p.add(dot(p, p.yxz.add(33.33))); return fract(q.x.add(q.y).mul(q.z)); };
   const surfaceBeam = (view, normal, origin, direction, coneCos, reach, att) => {
-    const offset = view.sub(origin), d = length(offset), ray = offset.div(max(d, 0.0001));
+    const offset = view.sub(origin).toVar(), d = length(offset).toVar(), ray = offset.div(max(d, 0.0001));
     const cone = ss(coneCos[0], coneCos[1], dot(ray, direction));
     const fade = float(1).sub(ss(reach[0], reach[1], d));
     const incidence = max(dot(normal, ray.negate()), 0);
@@ -84,7 +85,9 @@ export function surfaceNode(spec) {
       const vLit = varying(lit.mul(uTint), 'vKitLit');
       const vAlb = attribute('aAlb', 'vec3');
       // (FRAG)
-      const normal = normalViewGeometry.mul(faceDirection);
+      // Materialize normal at top level before select() branches: TSL would otherwise emit normalViewGeometry
+      // inside the first uTorch/uLamp branch, leaving it vec3(0) for WET/SHEEN whenever both beams are off!
+      const normal = normalViewGeometry.mul(faceDirection).toVar('kitNormal');
       const uTorch = f('uTorch'), uLamp = f('uCameraLamp'), uTorchOrigin = v3('uTorchOrigin'), uTorchDirection = v3('uTorchDirection');
       const baseUv = uv();
       const shared = {};
@@ -109,13 +112,18 @@ export function surfaceNode(spec) {
       // (Medium, High: the room's light map, kit-node-light.js)
       const lightmapped = lightmapNode(m, D, { banks, aSurf, uDim, uTint, uFlick, uBanks, uMoreBanks, vAlb });
       if (lightmapped) c.assign(lightmapped(c));
-      const torchBeam = surfaceBeam(positionView, normal, uTorchOrigin, uTorchDirection, [FLASHLIGHT.edgeCos, FLASHLIGHT.coreCos], [FLASHLIGHT.fadeFrom, FLASHLIGHT.range], FLASHLIGHT.attenuation);
-      const lampBeam = surfaceBeam(positionView, normal, vec3(...CAMCORDER_LAMP.origin), vec3(...CAMCORDER_LAMP.direction), [CAMCORDER_LAMP.edgeCos, CAMCORDER_LAMP.coreCos], [CAMCORDER_LAMP.fadeFrom, CAMCORDER_LAMP.range], CAMCORDER_LAMP.attenuation);
-      let torchPart = select(uTorch.greaterThan(0.0001), uTorch.mul(torchBeam), 0);
       // (High: the flashlight's shadow, kit-node-shadow.js; only the torch's share is shadowed, never the camcorder lamp)
       const shadowed = beamShadowNode(m, D, uTorchOrigin);
-      if (shadowed) torchPart = select(torchPart.greaterThan(0), torchPart.mul(shadowed(positionView, normal)), torchPart);
-      const beam = torchPart.add(select(uLamp.greaterThan(0.0001), uLamp.mul(lampBeam), 0));
+      const beam = float(0).toVar();
+      // Uniform branch: skips beam math AND all 9 shadow PCF taps when torch is off; keeps textureSampleCompare in uniform control flow.
+      If(uTorch.greaterThan(0.0001), () => {
+        const torchPart = uTorch.mul(surfaceBeam(positionView, normal, uTorchOrigin, uTorchDirection, [FLASHLIGHT.edgeCos, FLASHLIGHT.coreCos], [FLASHLIGHT.fadeFrom, FLASHLIGHT.range], FLASHLIGHT.attenuation)).toVar();
+        if (shadowed) torchPart.mulAssign(shadowed(positionView, normal));
+        beam.addAssign(torchPart);
+      });
+      If(uLamp.greaterThan(0.0001), () => {
+        beam.addAssign(uLamp.mul(surfaceBeam(positionView, normal, vec3(...CAMCORDER_LAMP.origin), vec3(...CAMCORDER_LAMP.direction), [CAMCORDER_LAMP.edgeCos, CAMCORDER_LAMP.coreCos], [CAMCORDER_LAMP.fadeFrom, CAMCORDER_LAMP.range], CAMCORDER_LAMP.attenuation)));
+      });
       const torch = vAlb.mul(beam);
       let cell = null;
       if (D.VOXEL) {
@@ -127,14 +135,14 @@ export function surfaceNode(spec) {
         const edge = ss(0.8, 1.0, max(fr.x, max(fr.y, fr.z)));
         c.mulAssign(float(1).sub(edge.mul(0.06).mul(aSurf.x.mul(6).add(0.4)).mul(aSurf.y.oneMinus())));
       } else c.addAssign(torch);
-      let t = null;
+      let mapTex = null, t = null;
       if (D.MAPPED) {
         let mapUv = baseUv;
         for (const h of hooks) {
           if (h.uv) mapUv = h.uv({ T, N, m, mapUv, uv: baseUv, localPos, localNormal, viewRayLocal, read, f, v2, v3, v4, ss, shared });
         }
-        const map = texture(read('map')).onRenderUpdate(() => read('map'));
-        t = map.sample(mapUv);
+        mapTex = texture(read('map')).onRenderUpdate(() => read('map'));
+        t = mapTex.sample(mapUv).toVar();
         if (D.CUTOUT) If(t.a.lessThan(0.5), () => { Discard(); });
         c.mulAssign(t.rgb);
       }
@@ -151,6 +159,9 @@ export function surfaceNode(spec) {
         const room = dot(vLit, vec3(0.333));
         c.addAssign(vec3(1.0, 0.97, 0.94).mul(glint.mul(1.1).add(rim.mul(0.22)).mul(uWet).mul(room.add(0.12))));
       }
+      // (Medium, High: the ceiling tubes caught on a floor that shines, kit-node-sheen.js)
+      const sheen = sheenNode(m, D, { baseUv, mapTex, mapSample: t, vLit, lightmapped });
+      if (sheen) c.addAssign(sheen(normal));
       for (const h of hooks) {
         if (h.color) {
           h.color({
@@ -190,8 +201,9 @@ export function surfaceNode(spec) {
     return m;
   };
 
-  /** Attach a TSL hook ({ position?, uv?, wetNormal?, color?, replaceFragment? }) to this kit surface. */
+  /** Attach a TSL hook ({ init?, position?, uv?, wetNormal?, color?, replaceFragment? }) to this kit surface. */
   m.patchNode = (hook) => {
+    hook.init?.({ T, N, m });
     hooks.push(hook);
     rebuild();
     m.needsUpdate = true;

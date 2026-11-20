@@ -103,7 +103,7 @@ export function create(c) {
   /** Things thrown out of it: { count, colours, size [w, h], far (metres they go), y (how high above the floor they start), up } — paper by default. */
   function spill(at, fat, o = {}) {
     const count = o.count ?? 40 + Math.round(fat * 60), floor = env.world.floorY(at.x, at.z), colours = o.colours ?? PAPER;
-    const geom = new THREE.PlaneGeometry(...(o.size ?? [0.16, 0.2])), paper = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+    const geom = env.kit.own(new THREE.PlaneGeometry(...(o.size ?? [0.16, 0.2]))), paper = env.kit.own(new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
     const mesh = new THREE.InstancedMesh(geom, paper, count), bits = [], col = new THREE.Color(), q = new THREE.Quaternion(), e = new THREE.Euler(), one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), mx = new THREE.Matrix4();
     const out = o.far ?? reach(fat) * 1.4, y0 = o.y ?? 1.6, up = o.up ?? 3;
     for (let i = 0; i < count; i++) {
@@ -134,6 +134,7 @@ export function create(c) {
         settled = moving === 0;
         return moving;
       },
+      dispose() { mesh.removeFromParent(); mesh.dispose?.(); geom.dispose(); paper.dispose(); },
     };
   }
 
@@ -246,6 +247,6 @@ export function create(c) {
     /** For the dev page's beside: stand this far off it and look this far aside (near, it goes off; in the eye, it comes). */
     apart: 5, aside: 0.7,
     at: () => ({ x: walker.x, z: walker.z, mode: s.mode, fat: +s.fat.toFixed(2), speed: +s.speed.toFixed(2) }),
-    dispose() { group?.removeFromParent(); group = null; },
+    dispose() { group?.removeFromParent(); group = null; debris?.dispose?.(); debris = null; for (const e of extras) e.dispose?.(); extras.length = 0; },
   };
 }

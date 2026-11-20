@@ -31,7 +31,22 @@ function keyByPass() {
   const N = gpu.nodes, { mrt, vec4 } = N.TSL;
   for (const proto of new Set([N.Material.prototype, N.NodeMaterial.prototype])) {
     const base = proto.customProgramCacheKey;
-    proto.customProgramCacheKey = function () { const k = base.call(this); return glowPass.on ? `${k}|glow-mrt` : k; };
+    proto.customProgramCacheKey = function () {
+      const k = base.call(this);
+      if (!glowPass.on) return k;
+      const role = this.transparent && this.depthWrite === false ? 'skip' : !this.userData?.glow ? 'none' : (this.userData.glow === 'picture' && !this.transparent ? 'pic' : 'lamp');
+      return `${k}|glow-mrt:${role}`;
+    };
+  }
+  // Keep glowPass.on aligned with renderer.setMRT() so nested single-target passes (ReflectorNode) that
+  // temporarily clear MRT during the glow pass never pick up cached 2-output |glow-mrt shaders.
+  const rendererProto = N.WebGPURenderer?.prototype;
+  if (rendererProto && typeof rendererProto.setMRT === 'function') {
+    const baseSetMRT = rendererProto.setMRT;
+    rendererProto.setMRT = function (node) {
+      glowPass.on = !!node?.has?.('emissive');
+      return baseSetMRT.call(this, node);
+    };
   }
   // three.js gives a material the pass's outputs only when it has no fragmentNode of its own. One that has one (a kit
   // surface, water, the points, spray, the paper fire's spill, the forest's water and mist) gets them here: its colour,

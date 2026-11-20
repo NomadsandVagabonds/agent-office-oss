@@ -25,6 +25,7 @@ const Signal = {
   uniforms: {
     tDiffuse: { value: null }, uRes: { value: new THREE.Vector2(640, 480) }, uTime: { value: 0 },
     uAmt: { value: 1 }, uSoft: { value: 1 }, uTrack: { value: 0 }, uGain: { value: 1 }, uExposure: { value: 1 },
+    uBalance: { value: new THREE.Vector3(1, 1, 1) }, uDefocus: { value: 0 },
     uBlack: { value: 0 }, uWhite: { value: 0 }, uRed: { value: 0 }, uSnow: { value: 0 }, uStaticDark: { value: 0 }, uRoll: { value: 0 },
     // the Graphics setting (graphics.js): both 0 at Classic, and then the picture is exactly what it was before them
     uGrade: { value: 0 }, uHaze: { value: 0 },
@@ -35,14 +36,36 @@ const Signal = {
   vertexShader: QUAD,
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform vec2 uRes;
-    uniform float uTime, uAmt, uSoft, uTrack, uGain, uExposure, uBlack, uWhite, uRed, uSnow, uStaticDark, uRoll;
-    uniform float uGrade, uHaze, uSat, uNear, uFar, uHazeLight, uHazeFrom; uniform vec3 uLift, uGamma, uGainRGB, uHazeColor; uniform sampler2D tDepth;
+    uniform float uTime, uAmt, uSoft, uTrack, uGain, uExposure, uDefocus, uBlack, uWhite, uRed, uSnow, uStaticDark, uRoll;
+    uniform float uGrade, uHaze, uSat, uNear, uFar, uHazeLight, uHazeFrom; uniform vec3 uBalance, uLift, uGamma, uGainRGB, uHazeColor; uniform sampler2D tDepth;
     varying vec2 vUv;
     const mat3 YIQ = mat3(0.299, 0.596, 0.211, 0.587, -0.274, -0.523, 0.114, -0.322, 0.312);
     const mat3 RGB = mat3(1.0, 1.0, 1.0, 0.956, -0.272, -1.106, 0.621, -0.647, 1.703);
     float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
-    // a gentle shoulder: bright things wash out toward white, the way cheap video does
-    vec3 film(vec3 c) { return 1.0 - exp(-c * (1.3 * uExposure * uGain)); }
+    // a gentle shoulder: bright things wash out toward white, the way cheap video does;
+    // when the slow 1980s iris is momentarily overexposed (> 1.05), brights bloom smoothly into creamy hot white
+    vec3 film(vec3 c) {
+      vec3 s = 1.0 - exp(-c * uBalance * (1.3 * uExposure * uGain));
+      float over = max(uExposure - 1.05, 0.0);
+      return clamp(s + smoothstep(0.28, 0.88, s) * (over * 0.44), 0.0, 1.0);
+    }
+    // subtle circular lens defocus while the camcorder's motorized autofocus glides (0 when locked)
+    vec3 sampleOptical(vec2 at) {
+      vec3 c = texture2D(tDiffuse, at).rgb;
+      if (uDefocus <= 0.001) return c;
+      vec2 r = vec2(uRes.y / max(uRes.x, 1.0), 1.0) * (uDefocus * 0.0058);
+      vec2 d = r * 0.56;
+      vec3 sum = c * 0.20;
+      sum += (texture2D(tDiffuse, clamp(at + vec2(r.x, 0.0), 0.001, 0.999)).rgb
+            + texture2D(tDiffuse, clamp(at - vec2(r.x, 0.0), 0.001, 0.999)).rgb
+            + texture2D(tDiffuse, clamp(at + vec2(0.0, r.y), 0.001, 0.999)).rgb
+            + texture2D(tDiffuse, clamp(at - vec2(0.0, r.y), 0.001, 0.999)).rgb) * 0.09;
+      sum += (texture2D(tDiffuse, clamp(at + vec2(d.x, d.y), 0.001, 0.999)).rgb
+            + texture2D(tDiffuse, clamp(at + vec2(-d.x, d.y), 0.001, 0.999)).rgb
+            + texture2D(tDiffuse, clamp(at + vec2(d.x, -d.y), 0.001, 0.999)).rgb
+            + texture2D(tDiffuse, clamp(at + vec2(-d.x, -d.y), 0.001, 0.999)).rgb) * 0.11;
+      return sum;
+    }
     // the air: nothing nearer than uHazeFrom (8 m unless the kind of floor says), then exponentially toward the floor's colour; never more than about half way.
     // The air is only as bright as what is behind it (and the room it hangs in): a dark end of a corridor stays dark,
     // it is not fogged grey. Where nothing was drawn (the depth is the far plane) it is left alone: the void stays black
@@ -61,9 +84,17 @@ const Signal = {
       g = mix(vec3(dot(g, vec3(0.299, 0.587, 0.114))), g, uSat);
       return mix(c, g, uGrade);
     }
-    vec3 see(vec2 uv) {
+    vec3 seeRaw(vec2 uv) {
       vec2 at = clamp(uv, 0.001, 0.999);
       vec3 c = texture2D(tDiffuse, at).rgb;
+      if (uHaze > 0.0) c = haze(c, at);
+      c = pow(film(c), vec3(0.4545));
+      if (uGrade > 0.0) c = grade(c);
+      return c;
+    }
+    vec3 see(vec2 uv) {
+      vec2 at = clamp(uv, 0.001, 0.999);
+      vec3 c = sampleOptical(at);
       if (uHaze > 0.0) c = haze(c, at);
       c = pow(film(c), vec3(0.4545));
       if (uGrade > 0.0) c = grade(c);
@@ -88,14 +119,19 @@ const Signal = {
       float px = uSoft / uRes.x;
       vec3 c0 = see(uv);
       vec3 q0 = YIQ * c0;
-      // luma: soft; chroma: softer, and late — it lands to the right of where it belongs
-      float y = q0.x * 0.5 + 0.25 * (dot(see(uv + vec2(px * 1.25, 0.0)), vec3(0.299, 0.587, 0.114)) + dot(see(uv - vec2(px * 1.25, 0.0)), vec3(0.299, 0.587, 0.114)));
-      vec2 iq = q0.yz * 0.26;
-      iq += (YIQ * see(uv - vec2(px * 2.5, 0.0))).yz * 0.28;
-      iq += (YIQ * see(uv - vec2(px * 5.0, 0.0))).yz * 0.22;
-      iq += (YIQ * see(uv - vec2(px * 7.5, 0.0))).yz * 0.15;
-      iq += (YIQ * see(uv - vec2(px * 10.5, 0.0))).yz * 0.09;
-      iq *= 1.0 + 0.16 * uSoft;
+      float y = q0.x;
+      vec2 iq = q0.yz;
+      if (uSoft > 0.001) {
+        // luma: soft; chroma: softer, and late — it lands to the right of where it belongs
+        // (side taps stay single-tap while c0 carries the optical lens bokeh: 15 taps total instead of 63)
+        y = q0.x * 0.5 + 0.25 * (dot(seeRaw(uv + vec2(px * 1.25, 0.0)), vec3(0.299, 0.587, 0.114)) + dot(seeRaw(uv - vec2(px * 1.25, 0.0)), vec3(0.299, 0.587, 0.114)));
+        iq = q0.yz * 0.26;
+        iq += (YIQ * seeRaw(uv - vec2(px * 2.5, 0.0))).yz * 0.28;
+        iq += (YIQ * seeRaw(uv - vec2(px * 5.0, 0.0))).yz * 0.22;
+        iq += (YIQ * seeRaw(uv - vec2(px * 7.5, 0.0))).yz * 0.15;
+        iq += (YIQ * seeRaw(uv - vec2(px * 10.5, 0.0))).yz * 0.09;
+        iq *= 1.0 + 0.16 * uSoft;
+      }
       // noise: fine in the brightness, coarse in the colour, both worse when the gain is up
       float grain = uAmt * (0.6 + 0.9 * (uGain - 1.0) + 1.5 * uTrack);
       y += (hash(vec2(uv.x * uRes.x, line) + frame * 17.0) - 0.5) * 0.06 * grain;
@@ -187,6 +223,8 @@ export function createVhs(renderer, camera, opt = {}) {
   if (renderer.isWebGPURenderer) return createVhsNode(renderer, camera, opt);
   const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
   const composer = new EffectComposer(renderer, target);
+  composer.readBuffer = composer.renderTarget1;
+  composer.writeBuffer = composer.renderTarget2;
   composer.setPixelRatio(1);
   const renderPass = new RenderPass(new THREE.Scene(), camera);
   const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.55, 0.92);
@@ -220,6 +258,24 @@ export function createVhs(renderer, camera, opt = {}) {
   renderPass.render = (r, write, read, dt, mask) => drawScene(r, read, () => renderPassRender(r, write, read, dt, mask));
   // --- end water ---
 
+  /** Keep MSAA + depthTexture strictly on the single active scene target (renderTarget2 and inactive scene targets stay plain). */
+  function syncTargets(depth, msaa) {
+    const sceneRT = superPass.enabled ? superPass.target : composer.renderTarget1;
+    for (const rt of [composer.renderTarget1, composer.renderTarget2, superPass.target]) {
+      const active = rt === sceneRT;
+      const wantSamples = active ? msaa : 0;
+      const wantDepth = active && depth;
+      let dirty = false;
+      if (rt.samples !== wantSamples) { rt.samples = wantSamples; dirty = true; }
+      if (wantDepth !== !!rt.depthTexture) {
+        rt.depthTexture?.dispose();
+        rt.depthTexture = wantDepth ? new THREE.DepthTexture(rt.width, rt.height) : null;
+        dirty = true;
+      }
+      if (dirty) rt.dispose();
+    }
+  }
+
   /**
    * Fit the picture to the window. w, h in CSS pixels. `top`: where its top edge goes, px from the window's (a phone held
    * upright has the picture at the top and its thumbs under it); with none, or no room to spare, it sits in the middle.
@@ -233,6 +289,7 @@ export function createVhs(renderer, camera, opt = {}) {
     composer.setSize(iw, ih);
     superPass.enabled = sw > iw; renderPass.enabled = !superPass.enabled;
     if (superPass.enabled) superPass.resize(sw, sh, iw, ih);
+    syncTargets(prof.haze > 0, prof.msaa);
     if (glow) glow.resize(sw, sh);
     for (const rt of [composer.renderTarget1, composer.renderTarget2, superPass.target]) if (rt.depthTexture) Object.assign(rt.depthTexture.image, { width: rt.width, height: rt.height });
     camera.aspect = iw / ih; camera.updateProjectionMatrix();
@@ -274,19 +331,10 @@ export function createVhs(renderer, camera, opt = {}) {
     bloom.strength = own ? 0.3 : 0.32; bloom.radius = own ? 0 : 0.55;
     bloom.compositeMaterial.uniforms.bloomFactors.value = own ? [1, 0.5, 0, 0, 0] : [1, 0.8, 0.6, 0.4, 0.2];
     u.uGrade.value = p.grade; u.uHaze.value = p.haze * hazeK;
-    // haze needs the depth of the picture: a depth texture on both of the composer's targets (resolved from the
-    // multisampled one by three.js), only while some haze is asked for. Classic leaves the targets as they were
+    // haze needs the depth of the picture: a depth texture on the active scene target only (resolved from the
+    // multisampled one by three.js), only while some haze is asked for. Classic leaves the active target as it was
     const depth = p.haze > 0;
-    for (const rt of [composer.renderTarget1, composer.renderTarget2, superPass.target]) {
-      let dirty = false;
-      if (rt.samples !== p.msaa) { rt.samples = p.msaa; dirty = true; }
-      if (depth !== !!rt.depthTexture) {
-        rt.depthTexture?.dispose();
-        rt.depthTexture = depth ? new THREE.DepthTexture(rt.width, rt.height) : null;
-        dirty = true;
-      }
-      if (dirty) rt.dispose();
-    }
+    syncTargets(depth, p.msaa);
     last = '';
   }
   /** The kind of floor's grade, haze colour, haze strength (times the tier's) and where the haze begins (graphics.js gradeOf). */
@@ -298,6 +346,7 @@ export function createVhs(renderer, camera, opt = {}) {
     u.uHazeFrom.value = Number.isFinite(g.hazeFrom) ? g.hazeFrom : 8;
   }
   if (opt.profile) setProfile(opt.profile);
+  else syncTargets(false, prof.msaa);
 
   return {
     picture, layout, setLevel, setProfile, setGrade, uniforms: u, bloom,

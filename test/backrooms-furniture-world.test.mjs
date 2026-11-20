@@ -21,6 +21,7 @@ const browserModule = (file, replacements = {}) => {
 const kitUrl = browserModule('../public/world/backrooms/kit.js', {
   '../scene/textures.js': browserModule('../public/world/scene/textures.js'),
   '../vox/mesher.js': browserModule('../public/world/vox/mesher.js'),
+  './office-textures.js': browserModule('../public/world/backrooms/office-textures.js'),
 });
 const [{ buildWorld }, { createKit, Batch }] = await Promise.all([
   import(browserModule('../public/world/backrooms/world.js', { './kit.js': kitUrl, './lighting-fixtures.js': browserModule('../public/world/backrooms/lighting-fixtures.js', { './kit.js': kitUrl }) })), import(kitUrl),

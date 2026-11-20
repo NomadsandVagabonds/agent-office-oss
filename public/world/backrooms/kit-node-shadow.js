@@ -34,41 +34,48 @@ function standDepth() {
 export function beamShadowNode(m, D, uTorchOrigin) {
   if (!D.BEAM_SHADOWS) return null;
   const N = gpu.nodes, T = N.TSL;
-  const { vec2, vec4, float, uniform, texture, dot, length, sqrt, max, min, clamp, mix, select } = T;
+  const { vec2, vec4, float, uniform, texture, dot, length, sqrt, max, min, clamp, mix, select, If } = T;
   const read = (key) => m.uniforms[key]?.value;
 
   const shadowMap = texture(read('uBeamShadowMap') || standDepth()).onRenderUpdate(() => read('uBeamShadowMap') || standDepth());
   const uMatrix = uniform(new N.Matrix4()).onRenderUpdate(() => { const v = read('uBeamShadowMatrix'); if (v?.isMatrix4) uMatrix.value.copy(v); });
   const uK = uniform(new N.Vector2(0, 0)).onRenderUpdate(() => { const v = read('uBeamShadowK'); if (v?.isVector2) uK.value.copy(v); });
-  const ss = (e0, e1, x) => { const t = clamp(float(x).sub(e0).div(e1 - e0), 0, 1); return t.mul(t).mul(t.mul(-2).add(3)); };
+  const ss = (e0, e1, x) => { const t = clamp(float(x).sub(e0).div(e1 - e0), 0, 1).toVar(); return t.mul(t).mul(t.mul(-2).add(3)); };
 
   return (p, n) => {
-    const l = uTorchOrigin.sub(p);
-    const d = length(l);
-    const ci = clamp(dot(n, l.div(max(d, 0.0001))), 0.001, 1.0);
-    const slope = min(sqrt(max(float(1).sub(ci.mul(ci)), 0)).div(ci), BEAM_SHADOW.slopeCap);
-    const texel = d.mul(TEXEL_SCALE).mul(uK.x);
-    const biased = p.add(n.mul(texel.mul(float(BEAM_SHADOW.normalBias).add(slope.mul(BEAM_SHADOW.slopeBias)))));
-    const sp = uMatrix.mul(vec4(biased, 1));
-    const s = sp.xyz.div(max(sp.w, 1e-5));
-    const active = uK.y.greaterThanEqual(0.5).and(sp.w.greaterThan(0)).and(s.z.lessThan(1.0));
+    const res = float(1).toVar();
+    // Guard the 9 PCF textureSampleCompare taps strictly inside uniform control flow (uK.y >= 0.5)
+    // and materialize `v` BEFORE the fragment-varying `active` select so WGSL uniformity passes.
+    If(uK.y.greaterThanEqual(0.5), () => {
+      const l = uTorchOrigin.sub(p).toVar();
+      const d = length(l).toVar();
+      const ci = clamp(dot(n, l.div(max(d, 0.0001))), 0.001, 1.0).toVar();
+      const slope = min(sqrt(max(float(1).sub(ci.mul(ci)), 0)).div(ci), BEAM_SHADOW.slopeCap);
+      const texel = d.mul(TEXEL_SCALE).mul(uK.x);
+      const biased = p.add(n.mul(texel.mul(float(BEAM_SHADOW.normalBias).add(slope.mul(BEAM_SHADOW.slopeBias)))));
+      const sp = uMatrix.mul(vec4(biased, 1)).toVar();
+      const s = sp.xyz.div(max(sp.w, 1e-5)).toVar();
+      const active = sp.w.greaterThan(0).and(s.z.lessThan(1.0));
 
-    // uBeamShadowMatrix maps NDC y ∈ [-1, +1] (+1 top) to s.y ∈ [0, 1] (1 top, GLSL convention).
-    // TSL texture() uses top-left (0, 0) on both WebGPU and WebGL 2 backends (WebGL 2 auto-flips depth textures),
-    // so we flip s.y once here and negate the y kernel offset to match GLSL tap directions.
-    const baseUv = vec2(s.x, s.y.oneMinus());
-    const stepK = uK.x.mul(BEAM_SHADOW.kernel);
-    const refZ = clamp(s.z, 0.0, 1.0);
-    const tap = (ox, oy) => {
-      const q = clamp(baseUv.add(vec2(stepK.mul(ox), stepK.mul(-oy))), 0.0, 1.0);
-      return shadowMap.sample(q).compare(refZ);
-    };
+      // uBeamShadowMatrix maps NDC y ∈ [-1, +1] (+1 top) to s.y ∈ [0, 1] (1 top, GLSL convention).
+      // TSL texture() uses top-left (0, 0) on both WebGPU and WebGL 2 backends (WebGL 2 auto-flips depth textures),
+      // so we flip s.y once here and negate the y kernel offset to match GLSL tap directions.
+      const baseUv = vec2(s.x, s.y.oneMinus()).toVar();
+      const stepK = uK.x.mul(BEAM_SHADOW.kernel).toVar();
+      const refZ = clamp(s.z, 0.0, 1.0).toVar();
+      const tap = (ox, oy) => {
+        const q = clamp(baseUv.add(vec2(stepK.mul(ox), stepK.mul(-oy))), 0.0, 1.0);
+        return shadowMap.sample(q).compare(refZ);
+      };
 
-    const v = tap(0, 0).mul(0.25)
-      .add(tap(-1, 0).add(tap(1, 0)).add(tap(0, -1)).add(tap(0, 1)).mul(0.125))
-      .add(tap(-1, -1).add(tap(1, -1)).add(tap(-1, 1)).add(tap(1, 1)).mul(0.0625));
-    const e = ss(0, BEAM_SHADOW.edge, s.x).mul(ss(0, BEAM_SHADOW.edge, s.x.oneMinus()))
-      .mul(ss(0, BEAM_SHADOW.edge, s.y)).mul(ss(0, BEAM_SHADOW.edge, s.y.oneMinus()));
-    return select(active, mix(1, v, e), float(1));
+      const v = tap(0, 0).mul(0.25)
+        .add(tap(-1, 0).add(tap(1, 0)).add(tap(0, -1)).add(tap(0, 1)).mul(0.125))
+        .add(tap(-1, -1).add(tap(1, -1)).add(tap(-1, 1)).add(tap(1, 1)).mul(0.0625))
+        .toVar();
+      const e = ss(0, BEAM_SHADOW.edge, s.x).mul(ss(0, BEAM_SHADOW.edge, s.x.oneMinus()))
+        .mul(ss(0, BEAM_SHADOW.edge, s.y)).mul(ss(0, BEAM_SHADOW.edge, s.y.oneMinus()));
+      res.assign(select(active, mix(1, v, e), float(1)));
+    });
+    return res;
   };
 }

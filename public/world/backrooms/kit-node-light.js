@@ -14,7 +14,14 @@ function stand(white) {
   const N = gpu.nodes;
   blank ??= {};
   const k = white ? 'white' : 'black';
-  if (!blank[k]) { const v = white ? 255 : 0; blank[k] = new N.DataTexture(new Uint8Array([v, v, v, v]), 1, 1); blank[k].needsUpdate = true; }
+  if (!blank[k]) {
+    const v = white ? 255 : 0;
+    const t = new N.DataTexture(new Uint8Array([v, v, v, v]), 1, 1);
+    t.magFilter = t.minFilter = N.LinearFilter;
+    t.generateMipmaps = false;
+    t.needsUpdate = true;
+    blank[k] = t;
+  }
   return blank[k];
 }
 
@@ -27,7 +34,7 @@ function stand(white) {
 export function lightmapNode(m, D, k) {
   if (!D.LIGHTMAP) return null;
   const N = gpu.nodes, T = N.TSL;
-  const { uniform, texture, attribute, varying, positionGeometry, normalGeometry, vec2, vec3, float, abs, floor, clamp, max, select, If, dFdx, dFdy } = T;
+  const { uniform, texture, attribute, varying, positionGeometry, normalGeometry, vec2, vec3, vec4, float, abs, floor, clamp, max, select, If } = T;
   const read = (key) => m.uniforms[key]?.value;
   // uLm: six vec4 (shadowmap.js layoutUniforms), copied before every frame
   const L = [0, 1, 2, 3, 4, 5].map((i) => { const n = uniform(new N.Vector4()); return n.onRenderUpdate(() => { const v = read('uLm')?.[i]; if (v) n.value.copy(v); }); });
@@ -46,7 +53,7 @@ export function lightmapNode(m, D, k) {
   let own = float(1);
   if (D.TUBESHADOW && D.VOXEL) { const self = k.aSurf.y.greaterThan(0.5); region = select(self, 0, region); own = select(self, 0, 1); }
   // (flat, as kit.js's `flat varying float vLmRegion`: a triangle is on one part of the map, never between two)
-  const vRegion = varying(float(region), 'vLmRegion');
+  const vRegion = varying(float(region), 'vLmRegion').setInterpolation('flat');
   const vPos = varying(p, 'vLmPos');
   const share = (a) => varying(a.mul(k.uDim).mul(k.uTint).mul(own), undefined);
   const vF = D.TUBESHADOW && D.FLICK ? share(attribute('aFlk', 'vec3').mul(k.uFlick)) : null;
@@ -59,11 +66,11 @@ export function lightmapNode(m, D, k) {
   // (FRAG) where in the map: snapped to the step grid and kept inside the room
   const lmUv = (r) => {
     const floorQ = vPos.xz, wallQ = vPos.xy, sideQ = vPos.zy;
-    const q = select(r.lessThan(1.5), floorQ, select(r.lessThan(3.5), wallQ, sideQ));
-    const mm = select(r.lessThan(1.5), L[0], select(r.lessThan(2.5), L[1], select(r.lessThan(3.5), L[2], select(r.lessThan(4.5), L[3], L[4]))));
-    const o = select(r.lessThan(1.5), L5.xy.negate(), select(r.lessThan(3.5), vec2(L5.x.negate(), 0), vec2(L5.y.negate(), 0)));
-    const hi = select(r.lessThan(1.5), L5.xy, select(r.lessThan(3.5), vec2(L5.x, 1e4), vec2(L5.y, 1e4)));
-    const snapped = clamp(floor(q.sub(o).div(L5.z)).add(0.5).mul(L5.z).add(o), o, hi);
+    const q = select(r.lessThan(1.5), floorQ, select(r.lessThan(3.5), wallQ, sideQ)).toVar();
+    const mm = select(r.lessThan(1.5), L[0], select(r.lessThan(2.5), L[1], select(r.lessThan(3.5), L[2], select(r.lessThan(4.5), L[3], L[4])))).toVar();
+    const o = select(r.lessThan(1.5), L5.xy.negate(), select(r.lessThan(3.5), vec2(L5.x.negate(), 0), vec2(L5.y.negate(), 0))).toVar();
+    const hi = select(r.lessThan(1.5), L5.xy, select(r.lessThan(3.5), vec2(L5.x, 1e4), vec2(L5.y, 1e4))).toVar();
+    const snapped = select(L5.z.greaterThan(0), clamp(floor(q.sub(o).div(L5.z)).add(0.5).mul(L5.z).add(o), o, hi), clamp(q, o, hi));
     return snapped.mul(mm.xy).add(mm.zw);
   };
   const A = D.TUBESHADOW ? tex('uLmA', true) : null;
@@ -71,30 +78,53 @@ export function lightmapNode(m, D, k) {
   const C = D.DOORLIGHT ? tex('uLmC', false) : null;
   const doors = D.DOORLIGHT ? [0, 1, 2, 3].map((i) => { const u = uniform(new N.Vector3()); return u.onRenderUpdate(() => { const v = read('uDoorL')?.[i]; if (v) u.value.copy(v); }); }) : null;
 
-  return (c) => {
-    const r = floor(vRegion.add(0.5));
-    // (no region, nothing read: kit.js's early return. WGSL lets a branch that differs from pixel to pixel read a texture
-    // only with its gradients given, so they are taken here, before it, from where the map is read: the same level of
-    // detail the GLSL's plain read picks)
-    const uv = lmUv(r), gx = dFdx(uv), gy = dFdy(uv);
+  // Cache materialized lightmap samples so kit-node-sheen.js reuses them with zero extra texture fetches.
+  let cachedR = null, cachedA = null, cachedB = null;
+  const apply = (c) => {
+    const r = floor(vRegion.add(0.5)).toVar();
     const out = vec3(c).toVar();
+    const a = A ? vec4(1, 1, 1, 1).toVar() : null;
+    const b = B ? vec4(1, 1, 1, 1).toVar() : null;
+    cachedR = r; cachedA = a; cachedB = b;
+    // (no region, nothing read: kit.js's early return. WGSL lets a branch that differs from pixel to pixel read a texture
+    // only at a level given by name: level 0, the only level the maps have (world.js mapTexture: no mipmaps, linear))
     If(r.greaterThanEqual(0.5), () => {
+      const uv = lmUv(r).toVar();
       if (A) {
-        const a = A.sample(uv).grad(gx, gy);
+        a.assign(A.sample(uv).level(0));
         let rest = vec3(out), lost = vec3(0);
         if (vF) { rest = rest.sub(vF); lost = lost.add(vF.mul(a.g.oneMinus())); }
         if (vB) {
           rest = rest.sub(vB[0].add(vB[1])); lost = lost.add(vB[0].mul(a.b.oneMinus())).add(vB[1].mul(a.a.oneMinus()));
-          if (vB[2]) { const b = B.sample(uv).grad(gx, gy); rest = rest.sub(vB[2]); lost = lost.add(vB[2].mul(b.r.oneMinus()));
-            if (vB[3]) { rest = rest.sub(vB[3]); lost = lost.add(vB[3].mul(b.g.oneMinus())); } }
+          if (vB[2]) {
+            b.assign(B.sample(uv).level(0));
+            rest = rest.sub(vB[2]); lost = lost.add(vB[2].mul(b.r.oneMinus()));
+            if (vB[3]) { rest = rest.sub(vB[3]); lost = lost.add(vB[3].mul(b.g.oneMinus())); }
+          }
         }
         out.assign(out.sub(lost).sub(max(rest, 0).mul(a.r.oneMinus())));
       }
       if (C) {
-        const d0 = C.sample(uv).grad(gx, gy), d = d0.mul(d0);
+        const d0 = C.sample(uv).level(0).toVar(), d = d0.mul(d0);
         out.addAssign(k.vAlb.mul(doors[0].mul(d.r).add(doors[1].mul(d.g)).add(doors[2].mul(d.b)).add(doors[3].mul(d.a))));
       }
     });
     return out;
   };
+  /** Floor tube-shadow channels for kit-node-sheen.js: reuses apply()'s cached level-0 fetches with zero redundant samples. */
+  apply.floorShade = () => {
+    if (!A) return { sa: vec4(1, 1, 1, 1), sb: vec2(1, 1) };
+    if (cachedA && cachedR) {
+      const isFloor = cachedR.equal(1.0);
+      const sa = select(isFloor, cachedA, vec4(1, 1, 1, 1)).toVar();
+      const sb = cachedB ? select(isFloor, cachedB.rg, vec2(1, 1)).toVar() : vec2(1, 1);
+      return { sa, sb };
+    }
+    const isFloor = floor(vRegion.add(0.5)).equal(1.0);
+    const luv = lmUv(float(1)).toVar();
+    const sa = select(isFloor, A.sample(luv).level(0), vec4(1, 1, 1, 1)).toVar();
+    const sb = B ? select(isFloor, B.sample(luv).level(0).rg, vec2(1, 1)).toVar() : vec2(1, 1);
+    return { sa, sb };
+  };
+  return apply;
 }

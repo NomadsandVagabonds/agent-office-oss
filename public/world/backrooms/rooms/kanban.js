@@ -52,8 +52,8 @@ export function build(c) {
   for (let i = 0; i < p.spill; i++, k++) {
     const b = notes[k % notes.length], where = i % 4;
     if (where === 0) c.lay(b, R.range(-bw / 2, bw / 2), -D / 2 + R.range(0.15, 1.5), N, N, R.range(-0.5, 0.5), null, WHITE, 0.007 + (i % 5) * 0.001);
-    else if (where === 1) c.lay(b, R.range(-bw / 2, bw / 2), -D / 2 + R.range(0.15, 1.1), N, N, R.range(-0.4, 0.4), null, WHITE, H - 0.008, true);
-    else { const side = where === 2 ? 'left' : 'right', spans = c.spans(side, 0.3).filter(([a]) => a < -D / 2 + 2.2); if (!spans.length) continue; c.hang(b, side, R.range(spans[0][0] + 0.15, Math.min(spans[0][1], -D / 2 + 2.4) - 0.15), R.range(0.4, 2.3), N, N, null, WHITE, 0.012); }
+    else if (where === 1) c.lay(b, R.range(-bw / 2, bw / 2), -D / 2 + R.range(0.15, 1.1), N, N, R.range(-0.4, 0.4), null, WHITE, H - 0.008 - (i % 5) * 0.0006, true);
+    else { const side = where === 2 ? 'left' : 'right', spans = c.spans(side, 0.3).filter(([a]) => a < -D / 2 + 2.2); if (!spans.length) continue; c.hang(b, side, R.range(spans[0][0] + 0.15, Math.min(spans[0][1], -D / 2 + 2.4) - 0.15), R.range(0.4, 2.3), N, N, null, WHITE, 0.012 + (i % 5) * 0.0006); }
   }
   // a stool, a pad of the same note, a pen
   const tz = -D / 2 + 2.3;

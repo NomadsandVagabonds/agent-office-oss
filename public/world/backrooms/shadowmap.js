@@ -244,6 +244,11 @@ export function bakeShadows({ layout, lights, amb, lighting = null, boxes }) {
   // the light each group brings, where any of it is hidden, and so the share that still arrives
   const ratio = hidden.map((H) => (H ? new Float32Array(N).fill(1) : null));
   const count = lighting ? lighting.bankCount || 2 : 0, ceiling = lighting ? lighting.ceilingBanks || count : 0;
+  const activeLights = [];
+  for (let i = 0; i < lights.length; i++) {
+    const L = lights[i], g = groupOf(L, lighting);
+    if (hidden[g]) activeLights.push({ L, g });
+  }
   const U = new Float64Array(G);
   for (const r of layout.list) {
     const nn = r.n, hemi = 0.8 + 0.2 * nn[1];
@@ -253,7 +258,10 @@ export function bakeShadows({ layout, lights, amb, lighting = null, boxes }) {
       touched++;
       texelPoint(r, i, j, P);
       U.fill(0);
-      for (const L of lights) { const g = groupOf(L, lighting); if (hidden[g]) U[g] += lampLum(L, P[0], P[1], P[2], nn[0], nn[1], nn[2]); }
+      for (let m = 0; m < activeLights.length; m++) {
+        const al = activeLights[m];
+        U[al.g] += lampLum(al.L, P[0], P[1], P[2], nn[0], nn[1], nn[2]);
+      }
       const weights = lighting ? bankWeights(lights, P[0], P[2], count, ceiling) : null;
       for (let g = 0; g < G; g++) {
         const H = hidden[g]; if (!H || !(H[a] > 0)) continue;
@@ -387,32 +395,198 @@ export function packShadows(layout, ratio) {
   return { A: { data: A, channels: cA }, B: B ? { data: B, channels: 2 } : null };
 }
 
+export const SMOOTH_SHADOW_PASSES = Object.freeze({ tubes: 1, doors: 2 });
+
 /** Fill each region's gutter with its edge texels (so a bilinear lookup at its edge reads only itself). */
 export function gutter(layout, data, ch) {
-  const w = layout.width, pad = SHADOWS.pad;
+  const w = layout.width, h = layout.height, pad = SHADOWS.pad;
   for (const r of layout.list) {
     for (let j = -pad; j < r.nv + pad; j++) for (let i = -pad; i < r.nu + pad; i++) {
       if (i >= 0 && j >= 0 && i < r.nu && j < r.nv) continue;
+      const dx = r.px + i, dy = r.py + j;
+      if (dx < 0 || dx >= w || dy < 0 || dy >= h) continue;
       const si = Math.max(0, Math.min(r.nu - 1, i)), sj = Math.max(0, Math.min(r.nv - 1, j));
-      const d = ((r.py + j) * w + r.px + i) * ch, s = ((r.py + sj) * w + r.px + si) * ch;
+      const d = (dy * w + dx) * ch, s = ((r.py + sj) * w + r.px + si) * ch;
       for (let c = 0; c < ch; c++) data[d + c] = data[s + c];
     }
   }
 }
 
 /**
+ * Separable [1, 2, 1] / 4 soft-penumbra filter applied strictly inside each atlas region { px, py, nu, nv }.
+ * Clamps neighbor reads to each region's bounds so shadows never bleed across floor/wall boundaries, then
+ * refreshes the 1-texel gutter around every region for hardware LinearFilter. Works for 1..4 channels.
+ * Pure by default (returns a fresh Uint8Array); pass { inPlace: true } to mutate `data` in place.
+ */
+export function blurLightmap(data, layout, channels, passes = 1, opt = null) {
+  let nPasses = passes;
+  let inPlace = !!(opt && opt.inPlace);
+  if (passes && typeof passes === 'object') {
+    nPasses = passes.passes ?? 1;
+    inPlace = !!passes.inPlace;
+  }
+  const W = layout?.width || 0, H = layout?.height || 0;
+  const ch = channels || (W && H ? Math.round(data.length / (W * H)) : 0);
+  const out = inPlace ? data : new Uint8Array(data);
+  if (!W || !H || !layout?.list?.length || ch < 1 || ch > 4 || data.length < W * H * ch || nPasses <= 0) return out;
+  const tmp = new Uint8Array(out.length);
+  const stride = W * ch;
+  for (let pass = 0; pass < nPasses; pass++) {
+    for (const r of layout.list) {
+      if (r.nu <= 0 || r.nv <= 0) continue;
+      const x0 = r.px, x1 = r.px + r.nu - 1, y0 = r.py, y1 = r.py + r.nv - 1;
+      if (ch === 4) {
+        for (let y = y0; y <= y1; y++) {
+          const row = y * W;
+          const o0 = (row + x0) * 4, or0 = (row + (x0 < x1 ? x0 + 1 : x0)) * 4;
+          tmp[o0]     = (out[o0]     + (out[o0]     << 1) + out[or0]     + 2) >> 2;
+          tmp[o0 + 1] = (out[o0 + 1] + (out[o0 + 1] << 1) + out[or0 + 1] + 2) >> 2;
+          tmp[o0 + 2] = (out[o0 + 2] + (out[o0 + 2] << 1) + out[or0 + 2] + 2) >> 2;
+          tmp[o0 + 3] = (out[o0 + 3] + (out[o0 + 3] << 1) + out[or0 + 3] + 2) >> 2;
+          for (let o = o0 + 4, oEnd = (row + x1) * 4; o < oEnd; o += 4) {
+            tmp[o]     = (out[o - 4] + (out[o]     << 1) + out[o + 4] + 2) >> 2;
+            tmp[o + 1] = (out[o - 3] + (out[o + 1] << 1) + out[o + 5] + 2) >> 2;
+            tmp[o + 2] = (out[o - 2] + (out[o + 2] << 1) + out[o + 6] + 2) >> 2;
+            tmp[o + 3] = (out[o - 1] + (out[o + 3] << 1) + out[o + 7] + 2) >> 2;
+          }
+          if (x1 > x0) {
+            const o1 = (row + x1) * 4, ol1 = o1 - 4;
+            tmp[o1]     = (out[ol1]     + (out[o1]     << 1) + out[o1]     + 2) >> 2;
+            tmp[o1 + 1] = (out[ol1 + 1] + (out[o1 + 1] << 1) + out[o1 + 1] + 2) >> 2;
+            tmp[o1 + 2] = (out[ol1 + 2] + (out[o1 + 2] << 1) + out[o1 + 2] + 2) >> 2;
+            tmp[o1 + 3] = (out[ol1 + 3] + (out[o1 + 3] << 1) + out[o1 + 3] + 2) >> 2;
+          }
+        }
+        const row0 = y0 * W, rowD0 = (y0 < y1 ? y0 + 1 : y0) * W;
+        for (let x = x0; x <= x1; x++) {
+          const o = (row0 + x) * 4, od = (rowD0 + x) * 4;
+          out[o]     = (tmp[o]     + (tmp[o]     << 1) + tmp[od]     + 2) >> 2;
+          out[o + 1] = (tmp[o + 1] + (tmp[o + 1] << 1) + tmp[od + 1] + 2) >> 2;
+          out[o + 2] = (tmp[o + 2] + (tmp[o + 2] << 1) + tmp[od + 2] + 2) >> 2;
+          out[o + 3] = (tmp[o + 3] + (tmp[o + 3] << 1) + tmp[od + 3] + 2) >> 2;
+        }
+        for (let y = y0 + 1; y < y1; y++) {
+          for (let o = (y * W + x0) * 4, oEnd = (y * W + x1 + 1) * 4; o < oEnd; o += 4) {
+            const ou = o - stride, od = o + stride;
+            out[o]     = (tmp[ou]     + (tmp[o]     << 1) + tmp[od]     + 2) >> 2;
+            out[o + 1] = (tmp[ou + 1] + (tmp[o + 1] << 1) + tmp[od + 1] + 2) >> 2;
+            out[o + 2] = (tmp[ou + 2] + (tmp[o + 2] << 1) + tmp[od + 2] + 2) >> 2;
+            out[o + 3] = (tmp[ou + 3] + (tmp[o + 3] << 1) + tmp[od + 3] + 2) >> 2;
+          }
+        }
+        if (y1 > y0) {
+          const row1 = y1 * W, rowU1 = (y1 - 1) * W;
+          for (let x = x0; x <= x1; x++) {
+            const o = (row1 + x) * 4, ou = (rowU1 + x) * 4;
+            out[o]     = (tmp[ou]     + (tmp[o]     << 1) + tmp[o]     + 2) >> 2;
+            out[o + 1] = (tmp[ou + 1] + (tmp[o + 1] << 1) + tmp[o + 1] + 2) >> 2;
+            out[o + 2] = (tmp[ou + 2] + (tmp[o + 2] << 1) + tmp[o + 2] + 2) >> 2;
+            out[o + 3] = (tmp[ou + 3] + (tmp[o + 3] << 1) + tmp[o + 3] + 2) >> 2;
+          }
+        }
+      } else if (ch === 2) {
+        for (let y = y0; y <= y1; y++) {
+          const row = y * W;
+          const o0 = (row + x0) * 2, or0 = (row + (x0 < x1 ? x0 + 1 : x0)) * 2;
+          tmp[o0]     = (out[o0]     + (out[o0]     << 1) + out[or0]     + 2) >> 2;
+          tmp[o0 + 1] = (out[o0 + 1] + (out[o0 + 1] << 1) + out[or0 + 1] + 2) >> 2;
+          for (let o = o0 + 2, oEnd = (row + x1) * 2; o < oEnd; o += 2) {
+            tmp[o]     = (out[o - 2] + (out[o]     << 1) + out[o + 2] + 2) >> 2;
+            tmp[o + 1] = (out[o - 1] + (out[o + 1] << 1) + out[o + 3] + 2) >> 2;
+          }
+          if (x1 > x0) {
+            const o1 = (row + x1) * 2, ol1 = o1 - 2;
+            tmp[o1]     = (out[ol1]     + (out[o1]     << 1) + out[o1]     + 2) >> 2;
+            tmp[o1 + 1] = (out[ol1 + 1] + (out[o1 + 1] << 1) + out[o1 + 1] + 2) >> 2;
+          }
+        }
+        const row0 = y0 * W, rowD0 = (y0 < y1 ? y0 + 1 : y0) * W;
+        for (let x = x0; x <= x1; x++) {
+          const o = (row0 + x) * 2, od = (rowD0 + x) * 2;
+          out[o]     = (tmp[o]     + (tmp[o]     << 1) + tmp[od]     + 2) >> 2;
+          out[o + 1] = (tmp[o + 1] + (tmp[o + 1] << 1) + tmp[od + 1] + 2) >> 2;
+        }
+        for (let y = y0 + 1; y < y1; y++) {
+          for (let o = (y * W + x0) * 2, oEnd = (y * W + x1 + 1) * 2; o < oEnd; o += 2) {
+            const ou = o - stride, od = o + stride;
+            out[o]     = (tmp[ou]     + (tmp[o]     << 1) + tmp[od]     + 2) >> 2;
+            out[o + 1] = (tmp[ou + 1] + (tmp[o + 1] << 1) + tmp[od + 1] + 2) >> 2;
+          }
+        }
+        if (y1 > y0) {
+          const row1 = y1 * W, rowU1 = (y1 - 1) * W;
+          for (let x = x0; x <= x1; x++) {
+            const o = (row1 + x) * 2, ou = (rowU1 + x) * 2;
+            out[o]     = (tmp[ou]     + (tmp[o]     << 1) + tmp[o]     + 2) >> 2;
+            out[o + 1] = (tmp[ou + 1] + (tmp[o + 1] << 1) + tmp[o + 1] + 2) >> 2;
+          }
+        }
+      } else {
+        for (let y = y0; y <= y1; y++) {
+          const row = y * W;
+          const o0 = (row + x0) * ch, or0 = (row + (x0 < x1 ? x0 + 1 : x0)) * ch;
+          for (let c = 0; c < ch; c++) tmp[o0 + c] = (out[o0 + c] + (out[o0 + c] << 1) + out[or0 + c] + 2) >> 2;
+          for (let o = o0 + ch, oEnd = (row + x1) * ch; o < oEnd; o += ch) {
+            for (let c = 0; c < ch; c++) tmp[o + c] = (out[o - ch + c] + (out[o + c] << 1) + out[o + ch + c] + 2) >> 2;
+          }
+          if (x1 > x0) {
+            const o1 = (row + x1) * ch, ol1 = o1 - ch;
+            for (let c = 0; c < ch; c++) tmp[o1 + c] = (out[ol1 + c] + (out[o1 + c] << 1) + out[o1 + c] + 2) >> 2;
+          }
+        }
+        const row0 = y0 * W, rowD0 = (y0 < y1 ? y0 + 1 : y0) * W;
+        for (let x = x0; x <= x1; x++) {
+          const o = (row0 + x) * ch, od = (rowD0 + x) * ch;
+          for (let c = 0; c < ch; c++) out[o + c] = (tmp[o + c] + (tmp[o + c] << 1) + tmp[od + c] + 2) >> 2;
+        }
+        for (let y = y0 + 1; y < y1; y++) {
+          for (let o = (y * W + x0) * ch, oEnd = (y * W + x1 + 1) * ch; o < oEnd; o += ch) {
+            for (let c = 0; c < ch; c++) out[o + c] = (tmp[o - stride + c] + (tmp[o + c] << 1) + tmp[o + stride + c] + 2) >> 2;
+          }
+        }
+        if (y1 > y0) {
+          const row1 = y1 * W, rowU1 = (y1 - 1) * W;
+          for (let x = x0; x <= x1; x++) {
+            const o = (row1 + x) * ch, ou = (rowU1 + x) * ch;
+            for (let c = 0; c < ch; c++) out[o + c] = (tmp[ou + c] + (tmp[o + c] << 1) + tmp[o + c] + 2) >> 2;
+          }
+        }
+      }
+    }
+  }
+  gutter(layout, out, ch);
+  return out;
+}
+
+/**
  * The shader's numbers for a layout: per region (floor, back, front, left, right) uv = (coord − origin) × scale +
  * offset as [scaleU, scaleV, offsetU, offsetV] in the room's own units (0s for a region that is not there), and the
  * room's half-size and the step. Matches kit.js's `tube shadows (lightmap)` block.
+ * Pass `opt = { smooth: true, gpu?: boolean }` for continuous bilinear sampling (`0` on WebGPU, `1e-4` on WebGL);
+ * omitting `opt` or `{ smooth: false }` keeps classic `SHADOWS.step` (0.05 m).
  */
-export function layoutUniforms(layout, W, D) {
+export function layoutUniforms(layout, W, D, opt = null) {
+  let opts = opt;
+  if (W && typeof W === 'object') {
+    opts = W;
+    W = undefined;
+    D = undefined;
+  }
+  if (typeof W !== 'number' || typeof D !== 'number') {
+    const fl = layout?.regions?.floor;
+    const bk = layout?.regions?.back || layout?.regions?.front;
+    const lt = layout?.regions?.left || layout?.regions?.right;
+    W = typeof W === 'number' ? W : (fl ? -fl.o[0] * 2 : bk ? -bk.o[0] * 2 : lt ? Math.abs(lt.at) * 2 : 0);
+    D = typeof D === 'number' ? D : (fl ? -fl.o[1] * 2 : lt ? -lt.o[0] * 2 : bk ? Math.abs(bk.at) * 2 : 0);
+  }
+  const step = opts?.smooth ? (opts.gpu ? 0 : 1e-4) : SHADOWS.step;
   const out = REGIONS.map((name) => {
     const r = layout?.regions[name];
     if (!r) return [0, 0, 0, 0];
     // texel i's middle (coord o + (i + .5) cell) at uv (px + i + .5) / width
     return [1 / (r.cell * layout.width), 1 / (r.cell * layout.height), (r.px - r.o[0] / r.cell) / layout.width, (r.py - r.o[1] / r.cell) / layout.height];
   });
-  out.push([W / 2, D / 2, SHADOWS.step, 0]);
+  out.push([W / 2, D / 2, step, 0]);
   return out;
 }
 

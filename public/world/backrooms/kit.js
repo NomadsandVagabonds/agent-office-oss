@@ -22,6 +22,17 @@ import { GLOW_DEPTH_GLSL, glowStrength } from './glow.rule.js';             // (
 import { SHEEN, withSheen } from './sheen.rule.js';                         // (floor sheen: only put into a surface given `sheen`)
 import { gpu } from '../engine/gpu.js';
 import { surfaceNode, packSurfaceAttributes, pointsNode } from './kit-node.js';                       // (the same surface and points in TSL, only under ?gpu=webgpu)
+import {
+  OFFICE_PAPER_PATTERNS,
+  makeWallpaperTexture,
+  makeCarpetTexture,
+  makeCeilingTexture,
+  makeWaterCeilingTileTexture,
+  makeSkirtingTexture,
+  makeStainAtlasTexture,
+  makePeelTexture,
+  makePuddleMaskTexture,
+} from './office-textures.js';
 
 const GLOW = 2.3;                              // how hard a self-lit voxel shines
 
@@ -281,11 +292,52 @@ export function bake(batch, lights, amb, lighting = null, extra = null) {
  * shadowmap.js); without it, every share is whole.
  */
 export function lightAt(lights, amb, x, y, z, nx = 0, ny = 1, nz = 0, runtime = {}) {
-  const probe = { verts: 1, pos: [x, y, z], nor: [nx, ny, nz], alb: [1, 1, 1], ao: [1], sf: [0, 0], vox: false };
-  const { lit, flk, banks } = bake(probe, lights, amb, runtime.lighting);
-  const s = runtime.shade || NO_SHADE;
-  return [0, 1, 2].map((c) => lit[c] * (s[0] ?? 1) + (flk ? flk[c] * (runtime.flick ?? 1) * (s[1] ?? 1) : 0)
-    + (banks ? banks.reduce((sum,bank,b) => sum + bank[c] * (runtime.banks?.[b] ?? 1) * (s[2 + b] ?? 1),0) : 0));
+  const lighting = runtime.lighting || null;
+  const count = lighting ? lighting.bankCount || 2 : 0;
+  const shade = runtime.shade || NO_SHADE;
+  const s0 = shade[0] ?? 1;
+  const rBanks = runtime.banks;
+  const hemi = 0.8 + 0.2 * ny;
+  const base = 1 - (lighting?.ambientShare || 0);
+  let sr = amb[0] * hemi * base, sg = amb[1] * hemi * base, sb = amb[2] * hemi * base;
+  let fr = 0, fg = 0, fb = 0;
+  let br = 0, bg = 0, bb = 0;
+  for (let i = 0; i < lights.length; i++) {
+    const L = lights[i];
+    const dx = L.x - x, dy = L.y - y, dz = L.z - z, d2 = dx * dx + dy * dy + dz * dz + 0.02;
+    if (d2 > L.far2) continue;
+    const inv = 1 / Math.sqrt(d2);
+    let s = ((nx * dx + ny * dy + nz * dz) * inv + L.wrap) / (1 + L.wrap);
+    if (s <= 0) continue;
+    if (L.lobe) s *= L.floor + (1 - L.floor) * Math.max(0, -(dx * L.ax + dy * L.ay + dz * L.az) * inv);
+    const fade = 1 - d2 / L.far2;
+    s *= fade * fade / (1 + d2 / L.k);
+    const bk = L.bank;
+    if (lighting && Number.isInteger(bk) && bk >= 0 && bk < count) {
+      const w = (rBanks?.[bk] ?? 1) * (shade[2 + bk] ?? 1);
+      br += L.r * s * w; bg += L.g * s * w; bb += L.b * s * w;
+    } else if (L.flick) {
+      fr += L.r * s; fg += L.g * s; fb += L.b * s;
+    } else {
+      sr += L.r * s; sg += L.g * s; sb += L.b * s;
+    }
+  }
+  let r = sr * s0 + br, g = sg * s0 + bg, b = sb * s0 + bb;
+  if (fr + fg + fb > 1e-4) {
+    const fk = (runtime.flick ?? 1) * (shade[1] ?? 1);
+    r += fr * fk; g += fg * fk; b += fb * fk;
+  }
+  if (lighting) {
+    const ambShare = lighting.ambientShare || 0;
+    if (ambShare) {
+      const weights = bankWeights(lights, x, z, count, lighting.ceilingBanks || count);
+      let bankAmb = 0;
+      for (let k = 0; k < count; k++) bankAmb += weights[k] * (rBanks?.[k] ?? 1) * (shade[2 + k] ?? 1);
+      const kAmb = hemi * ambShare * bankAmb;
+      r += amb[0] * kAmb; g += amb[1] * kAmb; b += amb[2] * kAmb;
+    }
+  }
+  return [r, g, b];
 }
 const NO_SHADE = [];
 
@@ -612,7 +664,11 @@ export function createKit(opt = {}) {
   const T = {
     white: () => tex('white', () => canvasTexture(2, 2, (g) => P(g, '#ffffff', 0, 0, 2, 2))),
     /** Wallpaper: a 0.8 m repeat of a small motif, a little uneven, the way old paper is. */
-    wallpaper: (look) => tex(`wp${look.wall}${look.ink}${look.pattern}`, () => canvasTexture(32, 32, (g, w, h) => {
+    wallpaper: (look) => {
+      if (gfx && OFFICE_PAPER_PATTERNS.has(look.pattern)) {
+        return tex(`wp2:${look.wall}${look.ink}${look.pale || ''}${look.pattern || ''}`, () => makeWallpaperTexture(look));
+      }
+      return tex(`wp${look.wall}${look.ink}${look.pattern}`, () => canvasTexture(32, 32, (g, w, h) => {
       const { wall, ink, pale } = look;
       P(g, wall, 0, 0, w, h);
       const r = lcg(look.wall.length * 977 + parseInt(look.wall.slice(1), 16));
@@ -638,14 +694,17 @@ export function createKit(opt = {}) {
       }
       else if (look.pattern === 'sprigs') { for (let y = 5; y < h; y += 16) for (let x = ((y - 5) / 16) % 2 ? 13 : 5; x < w; x += 16) { P(g, ink, x, y, 1, 4); P(g, ink, x - 1, y + 1, 3, 1); P(g, pale, x - 1, y - 1, 1, 1); P(g, pale, x + 1, y - 1, 1, 1); P(g, pale, x, y - 2, 1, 1); } }
       else { for (let y = 3; y < h; y += 8) for (let x = 0; x < w; x++) { const k = x % 8; P(g, ink, x, y + (k < 4 ? k : 7 - k), 1, 1); } }
-    })),
+    }));
+    },
     /** Carpet: 1.6 m of speckle, slightly darker in patches, as if it never quite dried. */
-    carpet: (color) => tex('cp' + color, () => canvasTexture(64, 64, (g, w, h) => {
-      P(g, color, 0, 0, w, h);
-      const r = lcg(parseInt(color.slice(1), 16));
-      for (let i = 0; i < 9; i++) { g.fillStyle = shade(color, -0.05); g.beginPath(); g.ellipse(r() * w, r() * h, 5 + r() * 9, 3 + r() * 6, r() * 3, 0, 7); g.fill(); }
-      for (let y = 0; y < h; y += 2) for (let x = (y / 2) & 1 ? 1 : 0; x < w; x += 2) { const n = r(); if (n > 0.66) P(g, shade(color, 0.08), x, y, 1, 1); else if (n < 0.3) P(g, shade(color, -0.1), x, y, 1, 1); }
-    })),
+    carpet: (color) => (gfx
+      ? tex('cp2:' + color, () => makeCarpetTexture(color))
+      : tex('cp' + color, () => canvasTexture(64, 64, (g, w, h) => {
+        P(g, color, 0, 0, w, h);
+        const r = lcg(parseInt(color.slice(1), 16));
+        for (let i = 0; i < 9; i++) { g.fillStyle = shade(color, -0.05); g.beginPath(); g.ellipse(r() * w, r() * h, 5 + r() * 9, 3 + r() * 6, r() * 3, 0, 7); g.fill(); }
+        for (let y = 0; y < h; y += 2) for (let x = (y / 2) & 1 ? 1 : 0; x < w; x += 2) { const n = r(); if (n > 0.66) P(g, shade(color, 0.08), x, y, 1, 1); else if (n < 0.3) P(g, shade(color, -0.1), x, y, 1, 1); }
+      }))),
     /** What is underfoot on this floor of the building: carpet, mostly — but lino in Records, screed where they are still fitting out, and something deeper upstairs. */
     floor: (look) => (look.floor === 'moss' ? T.moss(look.carpet) : look.floor === 'terrazzo' ? T.terrazzo(look.carpet) : look.floor === 'turf' ? T.turf(look.carpet) : look.floor === 'lino' ? T.lino(look.carpet) : look.floor === 'screed' ? T.screed(look.carpet) : look.floor === 'plush' ? T.plush(look.carpet, look.pale) : T.carpet(look.carpet)),
     /** Ceramic pool mosaic. */
@@ -712,13 +771,21 @@ export function createKit(opt = {}) {
       for (let y = 8; y < h; y += 16) for (let x = ((y - 8) / 16) % 2 ? 16 : 8; x < w; x += 16) { P(g, shade(motif, -0.25), x, y - 1, 1, 3); P(g, shade(motif, -0.25), x - 1, y, 3, 1); }
     })),
     /** One 0.6 m ceiling tile: pinholes, and the dark T-bar it rests on. */
-    ceiling: (color) => tex('ct' + color, () => canvasTexture(24, 24, (g, w, h) => {
-      P(g, color, 0, 0, w, h);
-      const r = lcg(parseInt(color.slice(1), 16) + 5);
-      for (let i = 0; i < 34; i++) P(g, shade(color, -0.1 - r() * 0.1), 2 + ((r() * 21) | 0), 2 + ((r() * 21) | 0), 1, 1);
-      P(g, shade(color, 0.1), 1, 1, w - 1, 1); P(g, shade(color, -0.12), 1, h - 1, w - 1, 1);
-      P(g, '#39362c', 0, 0, w, 1); P(g, '#39362c', 0, 0, 1, h);
-    })),
+    ceiling: (color) => (gfx
+      ? tex('ct2:' + color, () => makeCeilingTexture(color))
+      : tex('ct' + color, () => canvasTexture(24, 24, (g, w, h) => {
+        P(g, color, 0, 0, w, h);
+        const r = lcg(parseInt(color.slice(1), 16) + 5);
+        for (let i = 0; i < 34; i++) P(g, shade(color, -0.1 - r() * 0.1), 2 + ((r() * 21) | 0), 2 + ((r() * 21) | 0), 1, 1);
+        P(g, shade(color, 0.1), 1, 1, w - 1, 1); P(g, shade(color, -0.12), 1, h - 1, w - 1, 1);
+        P(g, '#39362c', 0, 0, w, 1); P(g, '#39362c', 0, 0, 1, h);
+      }))),
+    /** Water-ringed office ceiling tile, rubber-cove skirting, organic stain atlas, peeling wallpaper & wet puddle mask. */
+    waterTile: (color) => tex('wct:' + color, () => makeWaterCeilingTileTexture(color)),
+    skirting: (trimHex) => tex('skirt:' + trimHex, () => makeSkirtingTexture(trimHex)),
+    stainAtlas: () => tex('stain-atlas', () => makeStainAtlasTexture()),
+    peel: (look) => tex(`peel:${look.wall}${look.ink}${look.pale || ''}${look.pattern || ''}`, () => makePeelTexture(look)),
+    puddle: () => tex('puddle-mask', () => makePuddleMaskTexture()),
     /** A fluorescent troffer, two tiles long: lit, or dead. */
     panel: (lit) => tex('pn' + lit, () => canvasTexture(24, 48, (g, w, h) => {
       P(g, lit ? '#3d3b33' : '#34322b', 0, 0, w, h);

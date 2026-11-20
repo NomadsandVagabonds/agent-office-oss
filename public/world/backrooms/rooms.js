@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { Vox, M } from '../vox/vox.js';
 import { Batch, lin, atlas, drawText, WHITE } from './kit.js';
 import { makeCutout, drawPortrait } from './cutout.js';
-import { TILE, RISE, RUN, wallPoint, pinchHalf } from './gen.js';
+import { TILE, RISE, RUN, wallPoint, pinchHalf, makeRng } from './gen.js';
 import { P, clamp, turnTo, framed, card, scatter, doorLeaf, doorFrame, woodLeaf, wetSign, standee, mugVox, floorPlan } from './bits.js';
 import { marks, trace } from './traces.js';
 import { thinWall, refuses } from './thin.js';
@@ -17,6 +17,7 @@ import { lawn, standing, THINGS } from './suburb.js';
 import { poolroom, poolStanding, POOL_THINGS } from './waterpark.js';
 import { concourse } from './mall.js';
 import { forestRoom, forestStanding, FOREST_THINGS } from './forest.js';
+import { dressOfficeWear, buildLeakSpot } from './office-wear.js';
 import { siteOf, standMachine } from './vending-machine.js';
 import { uplit } from './floorlight.js';
 import { previewCabinets, deal as dealCabinets, PLACEMENTS as CABINET_PLACEMENTS } from './cabinets.js';
@@ -137,15 +138,21 @@ function dressing(c, item) {
     const s = c.spot(0.5); if (s) scatter(c, s.x, s.z, item.n + 3, 1.0);
   } else if (item.type === 'stain') {
     const s = c.spot(0.5, { head: 0.5 }); if (!s) return;
-    const y = c.ceilAt(s.x, s.z);
-    c.blot(s.x, s.z, 1.5, 1.2, { rgb: [0.2, 0.12, 0.03], a: 0.5, y: y - 0.004, down: true });
-    c.blot(s.x, s.z, 0.7, 0.6, { rgb: [0.14, 0.08, 0.02], a: 0.5, y: y - 0.005, down: true });
-    c.blot(s.x, s.z, 1.1, 1.0, { rgb: [0.03, 0.03, 0.02], a: 0.42 });
+    if (!c.env?.officePolish) {
+      const y = c.ceilAt(s.x, s.z);
+      c.blot(s.x, s.z, 1.5, 1.2, { rgb: [0.2, 0.12, 0.03], a: 0.5, y: y - 0.004, down: true });
+      c.blot(s.x, s.z, 0.7, 0.6, { rgb: [0.14, 0.08, 0.02], a: 0.5, y: y - 0.005, down: true });
+      c.blot(s.x, s.z, 1.1, 1.0, { rgb: [0.03, 0.03, 0.02], a: 0.42 });
+    }
     c.flat.box(s.x - 0.13, 0, s.z - 0.13, s.x + 0.13, 0.22, s.z + 0.13, [0.25, 0.4, 0.6]);
     c.flat.box(s.x - 0.11, 0.2, s.z - 0.11, s.x + 0.11, 0.221, s.z + 0.11, [0.12, 0.16, 0.2]);
     c.solid(s.x - 0.13, s.z - 0.13, s.x + 0.13, s.z + 0.13);
     let wait = 1 + R() * 2;
-    c.tick((dt, t, me) => { wait -= dt; if (wait < 0 && me.inside) { wait = 1.6 + Math.random() * 2.2; const p = c.toWorld(s.x, s.z); c.env.play('click', p.x, p.z, 3); } });
+    if (c.env?.officePolish) {
+      buildLeakSpot(c, s.x, s.z, makeRng(`${c.level.seed}:stain-drip:${c.room.id}`), { hitY: 0.225 });
+    } else {
+      c.tick((dt, t, me) => { wait -= dt; if (wait < 0 && me.inside) { wait = 1.6 + Math.random() * 2.2; const p = c.toWorld(s.x, s.z); c.env.play('click', p.x, p.z, 3); } });
+    }
   } else if (item.type === 'poster') {
     const w = c.wallSpot(1.3); if (!w) return;
     const tex = c.kit.tex.custom('poster' + item.text, 72, 96, (g, tw, th) => {
@@ -285,6 +292,7 @@ function plain(c) {
   if (c.level.theme === 'forest' && siteOf(c.level).has(room.id)) standMachine(c);          // (the moss would take every wall: the machine first)
   if (c.level.theme === 'forest') forestRoom(c);          // the offsite reserve: carpet & outlets round the moss, gravel trail, spotter, and woodland wrongness
   if (siteOf(c.level).has(room.id)) standMachine(c);          // (a floor with no Refreshments room: its one machine; vending-machine.js)
+  if (c.env?.officePolish && (!c.level.theme || c.level.theme === 'yellow')) dressOfficeWear(c);
 }
 
 /** Where you land: a hole in the ceiling above you, and the tiles you brought down. */
@@ -505,7 +513,7 @@ function party(c) {
     if (down) { c.flat.ball(s.x, 0.09, s.z, 0.15, col.map((v) => v * 0.8), 0.6); c.shadow(s.x, s.z, 0.2, 0.2, 0.3); }
     else { const y = H - 0.19 - (i % 3) * 0.01; c.flat.ball(s.x, y, s.z, 0.17, col, 1.12); c.flat.box(s.x - 0.004, y - 0.19 - 0.8, s.z - 0.004, s.x + 0.004, y - 0.19, s.z + 0.004, [0.85, 0.85, 0.8]); }
   }
-  for (let i = 0; i < 70; i++) { const x = R.range(-W / 2 + 0.3, W / 2 - 0.3), z = R.range(-D / 2 + 0.3, D / 2 - 0.3), a = R.range(0, 3); c.flat.quad([x, 0.007, z], [x + Math.cos(a) * 0.035, 0.007, z + Math.sin(a) * 0.035], [x + Math.cos(a) * 0.035 - Math.sin(a) * 0.02, 0.007, z + Math.sin(a) * 0.035 + Math.cos(a) * 0.02], [x - Math.sin(a) * 0.02, 0.007, z + Math.cos(a) * 0.02], cols[i % cols.length]); }
+  for (let i = 0; i < 70; i++) { const x = R.range(-W / 2 + 0.3, W / 2 - 0.3), z = R.range(-D / 2 + 0.3, D / 2 - 0.3), a = R.range(0, 3), cy = 0.0068 + (i % 7) * 0.0004; c.flat.quad([x, cy, z], [x + Math.cos(a) * 0.035, cy, z + Math.sin(a) * 0.035], [x + Math.cos(a) * 0.035 - Math.sin(a) * 0.02, cy, z + Math.sin(a) * 0.035 + Math.cos(a) * 0.02], [x - Math.sin(a) * 0.02, cy, z + Math.cos(a) * 0.02], cols[i % cols.length]); }
   // a guest or two, in a paper hat, who were not facing that way a moment ago
   p.guests.forEach((idx, i) => {
     const who = c.env.cast[idx % c.env.cast.length]; if (!who) return;

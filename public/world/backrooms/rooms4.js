@@ -99,17 +99,19 @@ function photo(c) {
   c.crate(0, zBack, Math.min(dw - 0.3, p.back * 0.66 + 0.2), 0.42, 0.42, 0, [0.42, 0.3, 0.2], { tall: false });
   let n = 0;
   const who = () => cast[p.who[n++ % p.who.length] % cast.length];
-  for (let i = 0; i < p.back; i++) { const w = who(), x = (i - (p.back - 1) / 2) * 0.66; people.push(standee(c, 'who:' + w.name, w.look, x, zBack, 0, { watch: false, y: 0.42, name: w.name })); }
+  // Stagger adjacent standees slightly in Z so overlapping cardboard borders never coplanar Z-fight
+  for (let i = 0; i < p.back; i++) { const w = who(), x = (i - (p.back - 1) / 2) * 0.66, z = zBack + (i % 2 ? 0.024 : -0.024); people.push(standee(c, 'who:' + w.name, w.look, x, z, 0, { watch: false, y: 0.42, name: w.name })); }
   const gap = Math.floor(p.front / 2);
   for (let i = 0; i <= p.front; i++) {
-    const x = (i - p.front / 2) * 0.68;
+    const x = (i - p.front / 2) * 0.68, z = zFront + (i % 2 ? 0.032 : -0.032);
     if (i === gap) continue;
-    const w = who(); people.push(standee(c, 'who:' + w.name, w.look, x, zFront, 0, { watch: false, name: w.name }));
+    const w = who(); people.push(standee(c, 'who:' + w.name, w.look, x, z, 0, { watch: false, name: w.name }));
     c.reserve(x, zFront, 0.3);
   }
   // your place: a cross of tape and your name
   const mx = (gap - p.front / 2) * 0.68, tape = [0.9, 0.86, 0.72];
-  for (const rot of [0.785, -0.785]) c.lay(c.flat, mx, zFront, 0.5, 0.05, rot, null, tape, 0.012);
+  c.lay(c.flat, mx, zFront, 0.5, 0.05, 0.785, null, tape, 0.012);
+  c.lay(c.flat, mx, zFront, 0.5, 0.05, -0.785, null, tape, 0.0126);
   const name = card(c, 'spot' + c.level.name, [c.level.name.toUpperCase()], { w: 96, h: 28, bg: '#f4f0e2', edge: '#b9ad8a', size: 16 });
   c.lay(c.mapped('spot', name), mx, zFront + 0.42, 0.36, 0.105, 0, null, WHITE, 0.013);
   // the camera

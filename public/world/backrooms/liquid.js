@@ -53,6 +53,8 @@
 // other surface), the surface has its sheet's geometry and no define: exactly as it was. A sheet that is not a whole grid,
 // or whose room frame is turned or tilted against its own, is not swelled (rec.swellRefused says why).
 import * as THREE from 'three';
+import { gpu } from '../engine/gpu.js';
+import { packSurfaceAttributes } from './kit-node.js';
 import { LIQUID, underwater, holdStep, toLinear, waterColours, pinnedTint, wakeStart, wakeStep, wakeFill, wadeStep, LIQUID_VERT, LIQUID_FRAG, COPY_FRAG, LIQUID_UNDER_FRAG, seesUnderside,
   MIRROR, mirrorPlane, reflectMatrix, planeInView, obliqueProjection, mirrorSize, pickMirror, mirrorLeaves, screenCover, mirrorGate, mirrorWeight, mirrorDue,
   SWELL, swellRings } from './liquid.rule.js';
@@ -152,13 +154,17 @@ export function swellGeometry(geo, rowStep = SWELL.rows, colStep = SWELL.cols) {
       const xx = x0 + (x1 - x0) * q / (cols - 1), [ix, fx] = seg(X, xx), vi = r * cols + q;
       const c00 = at.get(xs[ix] + ',' + zs[iz]), c10 = at.get(xs[ix + 1] + ',' + zs[iz]), c01 = at.get(xs[ix] + ',' + zs[iz + 1]), c11 = at.get(xs[ix + 1] + ',' + zs[iz + 1]);
       for (const k of names) {
-        const A = geo.attributes[k], n = A.itemSize, src = A.array;
-        for (let j = 0; j < n; j++) arrs[k][vi * n + j] = (src[c00 * n + j] * (1 - fx) + src[c10 * n + j] * fx) * (1 - fz) + (src[c01 * n + j] * (1 - fx) + src[c11 * n + j] * fx) * fz;
+        const A = geo.attributes[k], n = A.itemSize;
+        for (let j = 0; j < n; j++) {
+          const g = (idx) => (j === 0 ? A.getX(idx) : j === 1 ? A.getY(idx) : j === 2 ? A.getZ(idx) : A.getW(idx));
+          arrs[k][vi * n + j] = (g(c00) * (1 - fx) + g(c10) * fx) * (1 - fz) + (g(c01) * (1 - fx) + g(c11) * fx) * fz;
+        }
       }
       arrs.position[vi * 3] = xx; arrs.position[vi * 3 + 1] = y; arrs.position[vi * 3 + 2] = zz;
     }
   }
   for (const k of names) out.setAttribute(k, new THREE.BufferAttribute(arrs[k], geo.attributes[k].itemSize));
+  if (gpu.nodes) packSurfaceAttributes(out);
   // facing as the sheet's first triangle does
   const idx = geo.index, a0 = idx ? idx.getX(0) : 0, a1 = idx ? idx.getX(1) : 1, a2 = idx ? idx.getX(2) : 2;
   const ux = pos.getX(a1) - pos.getX(a0), uz = pos.getZ(a1) - pos.getZ(a0), wx = pos.getX(a2) - pos.getX(a0), wz = pos.getZ(a2) - pos.getZ(a0);
@@ -373,7 +379,12 @@ export function createLiquidView() {
       if (!old.geometry.boundingBox) old.geometry.computeBoundingBox();
       rec.pairs.push({ old, water, material, rec });
     });
-    if (rec.pairs.length) rec.state = 'up'; else { rec.state = 'refused'; rec.reason = 'not a kit sheet'; rec.pairs = null; rec.wake = null; rec.disturb = null; }
+    if (rec.pairs.length) {
+      rec.state = 'up';
+      const standIns = [];
+      rec.rt.group.traverse((o) => { if (o.userData?.liquidStandIn) standIns.push(o); });
+      rec.standIns = standIns;
+    } else { rec.state = 'refused'; rec.reason = 'not a kit sheet'; rec.pairs = null; rec.wake = null; rec.disturb = null; rec.standIns = null; }
   }
   // the swell, once a frame for a surface that is up: its geometry and define on while one is asked for, off (the sheet's
   // own, no define: as it was) while none is; its uniforms; the rings where it breaks
@@ -394,7 +405,7 @@ export function createLiquidView() {
       if (p.dense === undefined) {
         const i = rec.meshes.indexOf(p.old);
         if (!ROOM_UP(rec.toRoom[i] || [])) { p.dense = null; rec.swellRefused = 'turned in its room'; }
-        else { const g = swellGeometry(p.old.geometry); p.dense = g.geometry; if (!g.geometry) rec.swellRefused = g.why; else rec.swellCost = { cols: g.cols, rows: g.rows, triangles: g.triangles }; }
+        else { const g = swellGeometry(p.old.geometry); p.dense = g.geometry; if (!g.geometry) rec.swellRefused = g.why; else { rec.kit?.own?.(p.dense); rec.swellCost = { cols: g.cols, rows: g.rows, triangles: g.triangles }; } }
       }
       if (!p.dense) on = false;
     }
@@ -517,8 +528,10 @@ export function createLiquidView() {
         // what a room draws itself in place of what the water now does (userData.liquidStandIn: the waterpark's pale splash
         // ring), hidden in each room whose surface is drawn this frame, before anything is drawn (the mirror too)
         const rooms = new Set();
-        for (const rec of list) if (rec.live && (!rec.under || rec.below) && rec.pairs?.some((p) => shown(p.old))) rooms.add(rec.rt.group);
-        for (const g of rooms) g.traverse((o) => { if (o.userData?.liquidStandIn && o.visible) { o.visible = false; stood.push(o); } });
+        for (const rec of list) if (rec.live && (!rec.under || rec.below) && rec.pairs?.some((p) => shown(p.old)) && !rooms.has(rec.rt.group)) {
+          rooms.add(rec.rt.group);
+          for (const o of rec.standIns || []) if (o.visible) { o.visible = false; stood.push(o); }
+        }
         // the mirror first (water 2, a surface chosen this frame): into its own picture, everything it changed put back
         stats.mirror.surfaces = 0;
         if (mirrorRec && level >= 2) {
@@ -608,7 +621,7 @@ export function createLiquidView() {
       for (const rec of collectLiquids(scene)) {
         if (rec.state !== 'up') continue;
         for (const p of rec.pairs) { p.water.parent?.remove(p.water); p.material.dispose(); p.under?.dispose(); p.dense?.dispose(); }
-        rec.pairs = null; rec.state = 'marked'; rec.live = false; rec.wake = null; rec.disturb = null;
+        rec.pairs = null; rec.state = 'marked'; rec.live = false; rec.wake = null; rec.disturb = null; rec.standIns = null;
         rec.swellU = null; rec.swellOn = false; rec.swellLast = null; rec.swellRefused = undefined;
       }
       body = null;

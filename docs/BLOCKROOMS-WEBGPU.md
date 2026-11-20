@@ -4,12 +4,17 @@ The plan for moving BlockRooms from three.js's `WebGLRenderer` to `WebGPURendere
 materials, written in TSL. This is task R-5 of the Steam plan, D3 Rendering (`docs/BLOCKROOMS-STEAM-PLAN.md` on
 `claude/backrooms-cast`). It is also the ground the Ultra tier (R-3) and "light that behaves" (R-4) can be built on.
 
-**Status (phase 2 — Step 2 complete):**
-- The switch is in, behind an opt-in flag (`?gpu=webgpu` on the play page and `/world/dev/backrooms.html`).
+**Status (Steps 1–6 complete + GPU/WGSL optimization pass landed — ready for lead review):**
+- The switch is in, behind an opt-in flag (`?gpu=webgpu` on the play page and `/world/dev/backrooms.html`), plus a live side-by-side split-wipe showcase at `/world/dev/webgpu-demo.html`.
 - **Phase 1 (done):** the switch, room surface Classic core (`kit.js` / `kit-node.js`), voxel material (`vox/material.js`), and camcorder at Classic (`vhs.js` / `vhs-node.js`).
-- **Phase 2 / Step 2 (done):** composable `patchNode` hooks on `kit-node.js`, `kit.points` instanced quads (`the-grotto` snow), held-item `depthNode` sliver (`setHeldInFront` on `hand.js` + `hand-notes.js`), `pool-optics.js`, all Classic room shader patches (kiddie-lagoon fountain, locker-showers glaze/curtain/streams + non-mirror water guard, return-pool, bellmouth, flume-connector, whirlpool-flume siphon), extinguisher spray & white-out (`spray.js`), paper-fire floor spill (`inventory-fire.js`), forest water/caustics/shafts (`forest-fx.js`), forest mist veils (`forest-maze.js`), and `the-sets` CCTV feed verified live.
-- **Next:** Step 3 (`locker-showers/water.js` planar mirror via `ReflectorNode`), then Steps 4–6 (Medium, `liquid.js` water, High flashlight shadows).
-- Without the flag, nothing changes: the same renderer, the same shaders, the same pixels.
+- **Step 2 (done):** composable `patchNode` hooks on `kit-node.js`, `kit.points` instanced quads (`the-grotto` snow), held-item `depthNode` sliver (`setHeldInFront` on `hand.js` + `hand-notes.js`), `pool-optics.js`, all Classic room shader patches, `spray.js`, `inventory-fire.js`, `forest-fx.js`, `forest-maze.js`, and WebGPU-safe `the-sets` CCTV feed (`THREE.RenderTarget` with MRT/liquid guard).
+- **Step 3 (done):** `locker-showers/water.js` planar floor mirror via `ReflectorNode` (hiding `liquid:surface` meshes & guarding MRT).
+- **Step 4 (done):** Medium supersampling, light maps (`kit-node-light.js`, with smooth soft-penumbra `blurLightmap`), MRT glow (`glow-node.js`), and floor sheen (`kit-node-sheen.js`).
+- **Step 5 (done):** Complete one-pass `liquid-node.js` water — refraction, absorption, caustics, wave-pool swell (`swellGeometry` interleaved repack), underwater underside (Snell's window + overhead refraction), and High planar mirror (`ReflectorNode`, sized to `mirrorSize(sceneTarget)`).
+- **Step 6 (done):** High flashlight shadows (`kit-node-shadow.js` + `beam-shadows.js`, 9-tap hardware PCF in uniform WGSL control flow, `uTorch` & `uK.y` uniform skip gates, `warm()` pre-patching).
+- **GPU & WGSL Optimization Pass (done, verified at 104–120 fps on real Chromium WebGPU & WebGL 2):** full sheen-floor WGSL shrunk 13.1× (`292 KB → 22 KB`, lightmap fetches `41 → 4`), VHS Signal texture ops `118 → 22` (`14` runtime fetches/px with focus locked), flat water depth loads `9 → 2/px`, unused Retina 4× MSAA swapchain disabled on standalone BlockRooms, `test/blockrooms-webgpu-perf.test.mjs` guards compiled WGSL budgets.
+- **Next:** Step 7 (the office, co-op, dev tools — not needed for Steam BlockRooms), F-5 hardware benchmark matrix (WebGL vs WebGPU-WebGL2 vs WebGPU), and owner/lead sign-off before switching the web default.
+- Without the flag, Classic stays untouched (`antialias: false` on the unused swapchain only; same shaders and scene targets).
 
 ## The switch
 
@@ -106,7 +111,11 @@ the shell, on the three hardware classes.
 - `medium-glow.jpg` (WebGL 2 fallback) and `medium-glow-webgpu.jpg` (WebGPU, no HUD) compare Medium on the landing
   room: 0.2 % and 1.9 % of pixels differ by more than 16 levels, at edges. The glow round the tubes matches.
 
-Still missing at Medium and High: the floor's sheen, flashlight shadows (High), and water.
+- **Floor sheen** (`kit-node-sheen.js`, hooked from `kit-node.js`): anisotropic GGX tube streaks, Fresnel, reach fade, environment wax, soft-knee compression, and shared lightmap `floorShade()` in uniform WGSL control flow (`22 KB` compiled WGSL, 4 lightmap fetches/px).
+- **Water (Medium & High)** (`liquid-node.js`): full one-pass water including wave-pool swell, underwater underside (Snell's window + overhead refraction), and High planar mirror (`ReflectorNode`).
+- **Flashlight shadows (High)** (`kit-node-shadow.js` + `beam-shadows.js`): 9-tap hardware PCF depth comparison in uniform WGSL control flow, zero taps when torch is off.
+- **Smooth baked shadows & Floor 1 polish** (`shadowmap.js` `blurLightmap()`, `office-textures.js`, `office-wear.js`, `office-lighting.js`): active on Medium & High (`gfx().shadows > 0`), with Classic/Low untouched.
+- **1980s camcorder adaptation** (`camcorder-adapt.js` + `vhs.js` / `vhs-node.js`): gradual blown-white auto-iris bloom, slow white-balance drift, and motorized lens focus glide across dark/bright room transitions on both WebGL and WebGPU.
 
 ## One renderer (the owner's decision, 19 Nov)
 
@@ -132,11 +141,8 @@ Still missing at Medium and High: the floor's sheen, flashlight shadows (High), 
 - Kept from liquid.js, number for number (liquid.rule.js): the ripple, the wake rings (the visitor's and a room's
   `disturb`), refraction by depth, absorption in the sheet's own tint, scatter, caustics on the bed, the stirred light
   in a fresh ring, the Fresnel flat tint, the contact line, and a ring's crest and trough.
-- Not yet: the wave pool's swell (flat for now), the underside from in the water (the room's sheet is drawn then),
-  and High's mirror (High shows the flat tint).
-- Seen: kiddie-lagoon at Medium against today's WebGL, on the WebGL 2 backend and on real WebGPU (software). The bed
-  through the water, the caustics, the tint and the contact lines round the floats match; the floats drift between
-  shots.
+- Completed since initial water port: the wave pool's swell (`swellGeometry` interleaved repack), the underwater underside (`UNDERSIDE` / Snell's window + overhead refraction, flat & swelled), High's shared planar mirror (`ReflectorNode` sized to `mirrorSize(sceneTarget)`), `water.renderOrder = -1` draw ordering, and `.toVar()` depth-load compaction (`9 → 2` depth loads/px on flat water).
+- Seen: `kiddie-lagoon`, `wave-pool`, `deep-end`, and `locker-showers` side-by-side in Chromium (`1720×960`, WebGL High vs WebGPU High at `104–115 fps`, `0 err`).
 - Glow: a material with a fragment of its own (water, points, spray, the paper fire, the forest's water and mist) gets
   the glow's second output from `glow-node.js` (black that hides, or nothing where it is see-through), so Medium's
   glow pass draws every material.
@@ -167,8 +173,9 @@ The owner asked for a judge.
 - **The judge:** an independent reviewer, blind to which was whose.
 - **Supersample:** the two are the same filter. Combining the glow's add with it saves a pass, but it was taken out
   again: with it on, the copier room measured differently from run to run.
-- **Light maps:** near-equal. Skip the map's reads off the map, as kit.js does. Taken, with gradients so that WGSL
-  allows it (no change to the picture). The flat region was tried and measured worse, so it was left out.
+- **Light maps:** near-equal. Skip the map's reads off the map, as kit.js does. Taken, read at level 0 so that WGSL
+  allows it (the maps have no mipmaps, so this is the same picture). The region is flat, as kit.js's GLSL has it
+  (an earlier reading here that flat looked worse was within the run-to-run noise below).
 - **Glow: this branch's.**
   - The other's chain starts one level finer than glow.js, so its halo is half as wide and its core brighter.
   - It also renders black after a tier switch in-game: its shaders' key does not know the MRT.
@@ -180,20 +187,15 @@ The owner asked for a judge.
     run, and materials alike but for what the key leaves out share a shader.
   - Real-GPU timing of either chain.
 
-## What looks wrong under the flag
+## What looks wrong or remains unported under the flag
 
-Everything still unported falls back to plain surface / Classic behaviour:
+BlockRooms itself (Classic, Low, Medium, High, Auto) is now at full feature parity on WebGPU. Only non-Steam / edge pieces remain:
 
-**Any tier:**
-- **Locker-showers floor mirror** (`rooms/locker-showers/water.js`, also in `office-beach-day`, `dive-tower`, `flooded-cubicles`): renders animated rippled translucent water without the planar room reflection (queued for Step 3 `ReflectorNode`).
 - **The inventory's icons:** unaffected. They are drawn by their own second WebGL renderer with their own Lambert material, onto PNGs.
 - **Co-op:** its client makes its own WebGLRenderer and does not read the flag.
-
 - **Held things:** only kit surfaces are drawn into the nearest sliver of depth (`setHeldInFront`). A held item's other
   parts (plain three.js materials) are drawn as they are and can dip into a wall.
-
-**Medium, High, Auto** (on top of the above): supersampling, the light maps and the glow are ported (above). There is
-still no floor sheen, no flashlight shadows (High) and no water view.
+- **The Office & look-dev pages:** still on WebGL (`createStage` under `opt.nodes` switches off the office's WebGL post composer).
 
 ## Inventory
 
@@ -290,18 +292,15 @@ backend does (see the shots).
 ## Port order
 
 1. **Done:** the switch, `vox/material.js`, the Classic core of `kit.js`, and the camcorder at Classic.
-2. **Done (this commit):** the hook points in `kit-node` (`position`, `uv`, `wetNormal`, `color`, `replaceFragment`),
+2. **Done:** the hook points in `kit-node` (`position`, `uv`, `wetNormal`, `color`, `replaceFragment`),
    `kit.points()` instanced quads (`the-grotto`), `setHeldInFront` depth-sliver (`hand.js` + `hand-notes.js`), all Classic
-   room string patches, `pool-optics.js`, `spray.js`, `inventory-fire.js`, forest mist/shafts/water/caustics, and live
-   verification of The Sets' CCTV TV. The flag is now playable everywhere at Classic (locker-showers floor draws rippled
-   non-mirror water until Step 3).
-3. **Next — The showers mirror, L:** `ReflectorNode`.
-4. **Medium:** supersample (S), light maps (M), sheen (M), and glow (L). For the glow, an emissive MRT output from the
-   surface replaces the twin redraw: cheaper than today, not just ported.
-5. **Water, L, the biggest single piece:** `viewportSharedTexture` and `viewportDepthTexture` replace the copy pass;
-   `ReflectorNode` replaces the mirror.
-6. **High:** flashlight shadows (L).
-7. **The office, co-op, dev tools:** M each. These are not needed for the Steam build, which is BlockRooms.
+   room string patches, `pool-optics.js`, `spray.js`, `inventory-fire.js`, forest mist/shafts/water/caustics, and
+   WebGPU-safe `the-sets` CCTV (`THREE.RenderTarget` with MRT/liquid guard).
+3. **Done:** The showers mirror (`rooms/locker-showers/water.js` via `ReflectorNode`).
+4. **Done:** Medium — supersample, light maps (with smooth soft-penumbra `blurLightmap`), floor sheen (`kit-node-sheen.js`), and MRT glow (`glow-node.js`).
+5. **Done:** Water (`liquid-node.js`) — one-pass refraction/absorption/caustics, wave-pool swell, underwater underside, and High `ReflectorNode` mirror.
+6. **Done:** High — flashlight shadows (`kit-node-shadow.js` + `beam-shadows.js`), plus the full WGSL/VRAM optimization pass (`test/blockrooms-webgpu-perf.test.mjs`).
+7. **Remaining (non-Steam):** The office, co-op, dev tools — M each. Not needed for the Steam BlockRooms build.
 
 Then R-3's Ultra (SSAO via three.js's `ao()` node, light shafts, more shadow casters) is written once, in TSL, on top.
 

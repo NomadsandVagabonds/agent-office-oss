@@ -104,7 +104,7 @@ export function build(c) {
   const z0 = -D / 2, sd = K.shelf, steel = [0.42, 0.44, 0.48], edge = [0.78, 0.2, 0.16];
   const levels = [0.18, 0.98, 1.78, 2.58].filter((y) => y + 0.75 < H - 0.15);
   c.flat.box(-W / 2 + 0.1, 0, z0, W / 2 - 0.1, 0.18, z0 + sd, [0.16, 0.16, 0.18]);
-  for (const y of levels.slice(1)) { c.flat.box(-W / 2 + 0.1, y - 0.04, z0, W / 2 - 0.1, y, z0 + sd, steel); c.flat.box(-W / 2 + 0.1, y - 0.07, z0 + sd - 0.02, W / 2 - 0.1, y, z0 + sd, edge); }
+  for (const y of levels.slice(1)) { c.flat.box(-W / 2 + 0.1, y - 0.04, z0, W / 2 - 0.1, y, z0 + sd, steel); c.flat.box(-W / 2 + 0.1, y - 0.07, z0 + sd, W / 2 - 0.1, y - 0.002, z0 + sd + 0.004, edge); }
   for (let x = -W / 2 + 0.1; x <= W / 2 - 0.09; x += (W - 0.2) / Math.round((W - 0.2) / 1.6)) c.flat.box(x - 0.03, 0, z0 + sd - 0.05, x + 0.03, levels[levels.length - 1] + 0.7, z0 + sd, steel);
   c.solid(-W / 2, z0, W / 2, z0 + sd + 0.05, { tall: true });
   for (const y of levels) {
@@ -210,7 +210,8 @@ export function build(c) {
   let target = null, cam = null, figure = null;
   const renderer = env?.renderer;
   if (feed && renderer) {
-    target = kit.own(new THREE.WebGLRenderTarget(K.feed[0], K.feed[1], { magFilter: THREE.NearestFilter, minFilter: THREE.LinearFilter, depthBuffer: true }));
+    const rtOpts = { magFilter: THREE.NearestFilter, minFilter: THREE.LinearFilter, depthBuffer: true };
+    target = kit.own(renderer.isWebGPURenderer ? new THREE.RenderTarget(K.feed[0], K.feed[1], rtOpts) : new THREE.WebGLRenderTarget(K.feed[0], K.feed[1], rtOpts));
     target.texture.colorSpace = THREE.SRGBColorSpace;
     const fb = c.shining('sets:feed', target.texture, 1.3, [0.92, 1, 0.94]);
     upright(fb, feed.ax, feed.az, feed.bx, feed.bz, feed.y0, feed.y1, [0, 0, 1, 1]);
@@ -244,9 +245,22 @@ export function build(c) {
     if (figure.visible) { figure.position.set(then.x, 0, then.z); figure.rotation.y = Math.atan2(feed.kx - then.x, feed.kz - then.z); }
     const scene = env.world?.scene; if (!scene) return;
     if (!own) c.rt.group.traverse((o) => { if (o.isMesh && (o.material?.map === target.texture || o.material?.uniforms?.map?.value === target.texture)) own = o; });     // (its own screen is not drawn into itself)
+    const hidden = [];
+    scene.traverse((o) => { if (o.visible && o.userData?.liquid) { o.visible = false; hidden.push(o); } });
     if (own) own.visible = false;
-    const prev = renderer.getRenderTarget(); renderer.setRenderTarget(target); renderer.render(scene, cam); renderer.setRenderTarget(prev);
-    if (own) own.visible = true;
-    figure.visible = false;
+    const prev = renderer.getRenderTarget(), autoClear = renderer.autoClear, mrt = renderer.getMRT?.() ?? null;
+    try {
+      if (mrt) renderer.setMRT(null);
+      renderer.autoClear = true;
+      renderer.setRenderTarget(target);
+      renderer.render(scene, cam);
+    } finally {
+      if (mrt) renderer.setMRT(mrt);
+      renderer.autoClear = autoClear;
+      renderer.setRenderTarget(prev);
+      if (own) own.visible = true;
+      for (const o of hidden) o.visible = true;
+      figure.visible = false;
+    }
   });
 }

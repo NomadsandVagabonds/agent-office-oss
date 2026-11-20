@@ -41,6 +41,6 @@ export function build(c) {
   { const tex = kit.tex.custom('stop:times:' + p.route + p.rows.join('|'), 96, 128, (g, w, h) => { P(g, '#f4f1e4', 0, 0, w, h); P(g, '#27406b', 0, 0, w, 22); drawText(g, [p.route], 0, 0, w, 22, { color: '#f4f1e4', size: 14 }); p.rows.forEach((row, i) => { const y = 26 + i * 20; P(g, i % 2 ? '#e7e3d3' : '#f4f1e4', 0, y, w, 20); drawText(g, [row], 2, y, w - 30, 20, { color: '#22201c', size: 7, pad: 4 }); drawText(g, ['DUE'], w - 28, y, 26, 20, { color: '#b3261e', size: 9, pad: 2 }); }); }, { clamp: true });
     const px = sx + 2.1; beam(c.flat, [px, 0, sz], [px, 2.5, sz], 0.06, [0.3, 0.33, 0.36]); c.solid(px - 0.05, sz - 0.05, px + 0.05, sz + 0.05);
     c.mapped('stop:times', tex).quad([px - 0.3, 1.1, sz + 0.035], [px + 0.3, 1.1, sz + 0.035], [px + 0.3, 1.9, sz + 0.035], [px - 0.3, 1.9, sz + 0.035], WHITE); c.flat.box(px - 0.32, 1.08, sz - 0.01, px + 0.32, 1.92, sz + 0.03, [0.3, 0.33, 0.36]); }
-  // the queue
-  for (let i = 0; i < Math.min(p.queue, cast.length ? 6 : 0); i++) { const who = cast[p.who[i % p.who.length] % cast.length], x = sx + 2.9 + i * 0.7; if (x > W / 2 - 0.8) break; standee(c, 'who:' + who.name, who.look, x, sz + 0.5, 0, { name: who.name }); c.reserve(x, sz + 0.5, 0.4); }
+  // the queue (alternating slight Z stagger prevents coplanar Z-fighting where standee borders overlap)
+  for (let i = 0; i < Math.min(p.queue, cast.length ? 6 : 0); i++) { const who = cast[p.who[i % p.who.length] % cast.length], x = sx + 2.9 + i * 0.7, z = sz + 0.5 + (i % 2 ? 0.028 : -0.028); if (x > W / 2 - 0.8) break; standee(c, 'who:' + who.name, who.look, x, z, 0, { name: who.name }); c.reserve(x, sz + 0.5, 0.4); }
 }

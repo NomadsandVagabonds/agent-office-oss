@@ -159,10 +159,11 @@ function guardDevice(stage, nodes, container) {
 export function createStage(container, opt = {}) {
   const nodes = opt.nodes || null;
   const fx = opt.fx !== false && !nodes;
-  const gpuParams = nodes ? { antialias: !fx, powerPreference: 'high-performance' } : null;
+  const antialias = opt.antialias ?? !fx;
+  const gpuParams = nodes ? { antialias, powerPreference: 'high-performance' } : null;
   const renderer = nodes
     ? new nodes.WebGPURenderer(gpuParams)
-    : new THREE.WebGLRenderer({ antialias: !fx, powerPreference: 'high-performance', preserveDrawingBuffer: !!opt.preserve });
+    : new THREE.WebGLRenderer({ antialias, powerPreference: 'high-performance', preserveDrawingBuffer: !!opt.preserve });
   const pixelRatio = Math.min(opt.pixelRatio || window.devicePixelRatio || 1, 2);
   renderer.setPixelRatio(pixelRatio);
   renderer.shadowMap.enabled = opt.shadows !== false;

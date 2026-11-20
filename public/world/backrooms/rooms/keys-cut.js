@@ -86,7 +86,8 @@ export function build(c) {
     const turn = side === 'left' || side === 'front', hinge = c.wallAt(side, turn ? b : a, 0.036), far = c.wallAt(side, turn ? a : b, 0.036),   // (the knob is at the texture's right: hinged on its left)
       swing = c.dynamic(leaf, { pivot: [hinge.x, 0, hinge.z], map: doorTex });
     const vx = far.x - hinge.x, vz = far.z - hinge.z, sign = (vx * Math.cos(0.5) + vz * Math.sin(0.5) - vx) * hinge.n[0] + (-vx * Math.sin(0.5) + vz * Math.cos(0.5) - vz) * hinge.n[2] > 0 ? 1 : -1;
-    const hole = (s, y, d) => { const q = c.wallAt(side, s, d); const m3 = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.05, 0.03), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.75, 0.3) })); m3.position.set(q.x, y, q.z); m3.visible = false; c.add(m3); return m3; };
+    const holeGeo = c.kit.own(new THREE.BoxGeometry(0.035, 0.05, 0.03));
+    const hole = (s, y, d) => { const q = c.wallAt(side, s, d); const m3 = new THREE.Mesh(holeGeo, c.kit.own(new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.75, 0.3) }))); m3.position.set(q.x, y, q.z); m3.visible = false; c.add(m3); return m3; };
     const uS = (u, l, r) => (turn ? r - (r - l) * u : l + (r - l) * u), big = hole(uS(0.75, a, b), inset + (y1 - 1.5 * inset) * (1 - 37 / 64), 0.06), small = hole(uS(0.75, m - sw, m + sw), inset + (sy - inset) * (1 - 37 / 64), 0.034);
     const st = { now: 'none', t: 0, ang: 0 }, sound = (name, s0, vol) => { const q = c.toWorld(s0.x, s0.z); env.play?.(name, q.x, q.z, vol); };
     c.use({ x: mx, z: zc + 0.45, r: 0.9, label: 'have a key cut', when: () => st.now === 'none', use: () => { st.now = 'cutting'; st.t = 3.2; sound('whir', { x: mx, z: zc }, 7); } });
@@ -105,7 +106,7 @@ export function build(c) {
   const strand = kit.tex.custom('keys:strand', 16, 128, (g, w, h) => { g.clearRect(0, 0, w, h); P(g, '#55504a', 7, 0, 1, h); for (let y = 6; y < h; y += 11) { const gold = (y / 11) % 3 === 0; P(g, gold ? '#c9a43a' : '#a8adb3', 4, y, 7, 5); P(g, gold ? '#8a7020' : '#6e7378', 6, y + 1, 3, 3); P(g, gold ? '#c9a43a' : '#a8adb3', 6, y + 5, 3, 5); P(g, gold ? '#c9a43a' : '#a8adb3', 8, y + 7, 2, 1); } }, { clamp: true });
   const curtain = new Batch();
   for (let x = -W / 2 + 0.4; x < W / 2 - 0.3; x += K.every) for (let z = -D / 2 + 0.3; z < zc + 0.6; z += K.every * 1.3) { const low = K.low + R.range(-0.08, 0.25), j = R.range(-0.04, 0.04), a = R.range(0, 3.14); const dx = Math.cos(a) * 0.04, dz = Math.sin(a) * 0.04;
-    sheet(curtain, [x + j - dx, low, z - dz], [x + j + dx, low, z + dz], [x + j + dx, H, z + dz], [x + j - dx, H, z - dz], 1, 1, [0, 0, 1, (H - low) / 1.4]); sheet(curtain, [x + j + dx, low, z + dz], [x + j - dx, low, z - dz], [x + j - dx, H, z - dz], [x + j + dx, H, z + dz], 1, 1, [0, 0, 1, (H - low) / 1.4]); }
+    sheet(curtain, [x + j - dx, low, z - dz], [x + j + dx, low, z + dz], [x + j + dx, H, z + dz], [x + j - dx, H, z - dz], 1, 1, [0, 0, 1, (H - low) / 1.4]); }
   const hang = c.dynamic(curtain, { pivot: [0, H, (zc - D / 2) / 2], map: strand, cutout: true, side: 2 });
   let t0 = 0, push = 0;
   c.tick((dt, t, me) => {

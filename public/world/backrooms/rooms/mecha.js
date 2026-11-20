@@ -1,5 +1,6 @@
 // MECHA — a local, optional set piece. The room keeps no state beyond this visit.
 // One rule: turn an observing camera away and its worker can stop performing.
+import * as THREE from 'three';
 import { Batch, lin, WHITE } from '../kit.js';
 import { createWorker } from './mecha/actors.js';
 import { createTrainingDesk, createConditioningSeat, createTaskMonitor } from './mecha/props.js';
@@ -23,7 +24,7 @@ function cog(g, x, y, radius, color) {
 }
 function fitText(g, text, x, y, max, size, family = 'monospace') {
   g.font = `bold ${size}px ${family}`;
-  while (g.measureText(text).width > max && size > 9) g.font = `bold ${--size}px ${family}`;
+  while (g.measureText(text).width > max && size > 6) g.font = `bold ${--size}px ${family}`;
   g.fillText(text, x, y);
 }
 
@@ -35,7 +36,7 @@ export function build(c) {
     wallTex:kit.tex.wallpaper({...c.look,wall:'#777468',ink:'#575b4b',pale:'#8b8979'}),
     floorTex:kit.tex.carpet('#34372d'),ceilTex:kit.tex.ceiling('#676b5b'),
     wallAlb:[.61,.59,.52],floorAlb:[.48,.49,.40],ceilAlb:[.52,.54,.46] });
-  let state = createState(p.percentages), lastSecond = -1, lastBeat = -1;
+  let state = createState(p.percentages), lastSecond = -1, lastBeat = -1, wasInside = false;
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const stations=[],actors=[],background=[],cameras=[],cells=[];
   const rows=Array.from({length:6},(_,i)=>D/2-4.7-i*2.8);
@@ -49,7 +50,9 @@ export function build(c) {
       x:side*(bank?W/2-4.4:centerX),z:rows[row],rot:-side*Math.PI/2});
   }
   cells.sort((a,b)=>a.id-b.id);
-  const panels = kit.tex.live(3072, 768);
+  const panels = kit.tex.live(1536, 384);
+  panels.generateMipmaps = false;
+  panels.minFilter = THREE.LinearFilter;
   const display = c.shining('mecha-displays', panels, .67);
   const paper = c.mapped('mecha-paperwork', panels);
   const uv = (i) => {
@@ -88,13 +91,13 @@ export function build(c) {
   }
 
   // A single immense sign, a perfectly ordinary company identity.
-  const brand = kit.tex.custom('mecha-brand',2048,320,(g,w,h)=>{
+  const brand = kit.tex.custom('mecha-brand',1024,160,(g,w,h)=>{
     g.fillStyle='#263d35';g.fillRect(0,0,w,h);
-    g.strokeStyle='#89927b';g.lineWidth=8;g.strokeRect(10,10,w-20,h-20);
-    cog(g,162,147,108,'#d7d6bb');
-    g.fillStyle='#e5e0c4';g.font='900 210px Helvetica, sans-serif';
-    g.save();g.translate(330,0);g.scale(1.9,1);g.fillText('MECHA',0,207);g.restore();
-    fitText(g,"Profiting from the world's misery so you don't have to",330,277,w-400,44,'Helvetica, sans-serif');
+    g.strokeStyle='#89927b';g.lineWidth=4;g.strokeRect(5,5,w-10,h-10);
+    cog(g,81,73.5,54,'#d7d6bb');
+    g.fillStyle='#e5e0c4';g.font='900 105px Helvetica, sans-serif';
+    g.save();g.translate(165,0);g.scale(1.9,1);g.fillText('MECHA',0,103.5);g.restore();
+    fitText(g,"Profiting from the world's misery so you don't have to",165,138.5,w-200,22,'Helvetica, sans-serif');
   },{clamp:true});
   c.hang(c.shining('mecha-brand',brand,.72),'back',0,4.45,17.3,2.05);
   // The company sign glows above a room it does not illuminate.
@@ -242,32 +245,32 @@ export function build(c) {
   for(const x of [visitor.x-.17,visitor.x+.17])box(x-.07,.078,visitor.z+.15,x+.07,.081,visitor.z+.5,C.cream);
 
   function redraw() {
-    const g=panels.image.getContext('2d');g.clearRect(0,0,3072,768);
+    const g=panels.image.getContext('2d');g.clearRect(0,0,1536,384);
     for(let i=0;i<27;i++){
-      g.save();g.translate((i%8)*384,Math.floor(i/8)*192);
-      g.fillStyle=i===26?'#bdb48e':'#263b32';g.fillRect(0,0,384,192);
-      g.strokeStyle='#889a7d';g.lineWidth=3;g.strokeRect(5,5,374,182);
+      g.save();g.translate((i%8)*192,Math.floor(i/8)*96);
+      g.fillStyle=i===26?'#bdb48e':'#263b32';g.fillRect(0,0,192,96);
+      g.strokeStyle='#889a7d';g.lineWidth=1.5;g.strokeRect(2.5,2.5,187,91);
       g.textAlign='center';
       if(i<24){
         const cell=cells[i],w=state.workers[cell.master];
-        g.fillStyle='#d7dfbd';fitText(g,LABELS[w.role],192,51,342,38);
-        g.fillStyle=w.diverted?'#e2ca87':'#e1e4bd';g.font='bold 73px monospace';g.fillText(`${w.percent.toFixed(1)}%`,192,136);
-        g.fillStyle='#576e55';g.fillRect(22,160,340,9);g.fillStyle='#adbc8c';g.fillRect(22,160,340*w.percent/100,9);
+        g.fillStyle='#d7dfbd';fitText(g,LABELS[w.role],96,25.5,171,19);
+        g.fillStyle=w.diverted?'#e2ca87':'#e1e4bd';g.font='bold 36px monospace';g.fillText(`${w.percent.toFixed(1)}%`,96,68);
+        g.fillStyle='#576e55';g.fillRect(11,80,170,4.5);g.fillStyle='#adbc8c';g.fillRect(11,80,170*w.percent/100,4.5);
       }else if(i===24){
         const security=patrol.state(),caught=security.phase==='captured'||security.phase==='gameover';
         g.fillStyle=caught?'#e99a69':'#d7dfbd';
         if(caught){
           // Capture timing stays internal. The cage only identifies its occupant.
-          g.font='bold 73px monospace';g.fillText('YOU',192,122);
+          g.font='bold 36px monospace';g.fillText('YOU',96,61);
         }else{
-          g.font='bold 38px monospace';g.fillText(state.visitor.awake?'YOU':'VACANT',192,52);
-          g.font='bold 73px monospace';g.fillText(`${state.visitor.percent.toFixed(1)}%`,192,144);
+          g.font='bold 19px monospace';g.fillText(state.visitor.awake?'YOU':'VACANT',96,26);
+          g.font='bold 36px monospace';g.fillText(`${state.visitor.percent.toFixed(1)}%`,96,72);
         }
       }else if(i===25){
-        g.fillStyle='#cddab2';fitText(g,'TECHNODETERMINISM',192,52,342,32);
-        g.fillStyle=state.complete?'#9ca98a':'#e0c395';g.font='bold 88px monospace';g.fillText(state.complete?'OFF':'ON',192,151);
+        g.fillStyle='#cddab2';fitText(g,'TECHNODETERMINISM',96,26,171,16);
+        g.fillStyle=state.complete?'#9ca98a':'#e0c395';g.font='bold 44px monospace';g.fillText(state.complete?'OFF':'ON',96,75.5);
       }else{
-        g.fillStyle='#38483a';g.font='bold 92px sans-serif';g.fillText('↶',117,127);g.fillText('↷',267,127);
+        g.fillStyle='#38483a';g.font='bold 46px sans-serif';g.fillText('↶',58.5,63.5);g.fillText('↷',133.5,63.5);
       }
       g.restore();
     }
@@ -315,9 +318,11 @@ export function build(c) {
     const inside=me.inside&&Math.abs(me.x-visitor.x)<visitor.w/2-.1&&Math.abs(me.z-visitor.z)<visitor.d/2-.1;
     const wasAwake=state.visitor.awake;
     state=step(state,dt,{inside:me.inside,visitorNear:near,visitorInside:inside});
-    if(!wasAwake&&state.visitor.awake){play('shutter',visitor.x,visitor.z);redraw();}
+    let dirty=me.inside&&!wasInside;
+    wasInside=!!me.inside;
+    if(!wasAwake&&state.visitor.awake){play('shutter',visitor.x,visitor.z);dirty=true;}
     const second=Math.floor(state.elapsed);
-    if(second!==lastSecond){lastSecond=second;redraw();}
+    if(me.inside&&(dirty||second!==lastSecond)){lastSecond=second;redraw();}
     actors.forEach((actor,i)=>actor.update({time:t,working:working(state,i),relief:clamp(state.workers[i].restTime/2,0,1),playerX:me.x,playerZ:me.z}));
     for(const cam of cameras){
       let target=cam.rot;

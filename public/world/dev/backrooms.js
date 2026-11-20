@@ -96,7 +96,7 @@ import { DECK } from '../backrooms/gen.js';
 
 const q = new URLSearchParams(location.search);
 const num = (k, d) => (q.has(k) && q.get(k) !== '' && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : d);
-const stage = await openStage(document.getElementById('stage'), { renderer: pageRendererChoice(), fx: q.get('fx') === '1', shadows: false, preserve: true, pixelRatio: num('dpr', 1) });
+const stage = await openStage(document.getElementById('stage'), { renderer: pageRendererChoice(), fx: q.get('fx') === '1', antialias: false, shadows: false, preserve: true, pixelRatio: num('dpr', 1) });
 stage.start();
 window.__stage = stage;              // renderer.info, for checking that a visit leaves nothing behind
 // &perf=1 / &bench=1: the measuring tape, only fetched when asked for
@@ -171,7 +171,7 @@ async function go() {
       // &gfx=fixtures: each ceiling light the sculpted fitting (ceiling.model.js), its tubes lit as the flat panel's were
       // &gfx=sheen: the tubes caught on floors that shine (sheen.rule.js)
       gfx: q.get('gfx') ? Object.fromEntries(q.get('gfx').split(',').map((s) => s.split(':')).map(([k, v]) => [k, v ? Number(v) : 1])) : null,
-      lighting: ['1', ...LIGHTING_MODES].includes(q.get('lighting')) ? q.get('lighting') : false,
+      lighting: q.has('lighting') ? (['1', 'office', ...LIGHTING_MODES].includes(q.get('lighting')) ? q.get('lighting') : false) : undefined,
       // &preview=clip,corners,hallways: rooms that have a preview built into them use it (docs/BLOCKROOMS-PREVIEWS.md); nothing in the game does
       preview: (q.get('preview') || '').split(',').filter(Boolean),
       owns: target => !!target?.closest?.('[data-lighting-study]') },

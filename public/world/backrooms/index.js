@@ -36,6 +36,7 @@ import { buildWorld, loadCatalogue } from './world.js';
 import { BUILDERS } from './rooms.js';
 import { createPlayer } from './player.js';
 import { createVhs } from './vhs.js';
+import { createCamcorderAdapt, resetCamcorderAdapt, stepCamcorderAdapt } from './camcorder-adapt.js';
 import { profile as graphicsProfile, autoStart, autoStep, gradeOf, showDetail } from './graphics.js';
 import { createBeamShadows } from './beam-shadows.js';
 import { themeOf } from './themes.js';
@@ -174,6 +175,7 @@ async function visit(office, opt) {
   let going = null;
   let out = null;                                         // by the way out: where the camera was when the wall gave, and which way is out
   let pictureKey = '', currentUse = null, light = 0.3, torch = 0, cameraLamp = 0, interference = 0, redWash = 0, pendingQuit = false, kept = { card: false, coins: [], batteries: 0 };
+  const camAdapt = createCamcorderAdapt();
   let inventory = null, survival = null, menu = null, paused = false, gaveUp = false;
   const canAct = () => !paused && state === 'play' && !hold && !going;
   // A real fall and a chute consume recording time. Waiting for a part to
@@ -299,7 +301,7 @@ async function visit(office, opt) {
       if (cur?.player) cur.player.me.shake = lv === 2 ? 1 : lv === 1 ? 0.5 : 0.25;
       pictureKey = '';
     }
-    if (key === 'graphics') { gfxAuto = settings.graphics === 'auto' ? autoStart() : null; vhs.setProfile(gfx()); pictureKey = ''; showDetail(root, gfx()); }
+    if (key === 'graphics') { gfxAuto = settings.graphics === 'auto' ? autoStart() : null; vhs.setProfile(gfx()); pictureKey = ''; showDetail(root, gfx()); if (gfx().beamShadows > 0 && cur?.world?.scene) beamShadows.warm?.(gfx().beamShadows, cur.world.scene); }
     prefs.save(settings); menu?.update({ ...settings, scoreEligible: difficulty.report().ranked });
   }
   function setPicture(lv) { changeSetting('vhs', lv); }
@@ -355,7 +357,10 @@ async function visit(office, opt) {
       barricadesEnabled: opt.barricades !== false,
       // (a part built ahead is ready once its rooms and light maps are; the light through its doorways fills in after: world.js doorPass)
       lateDoorLight: !!pace,
-      lighting: opt.dev?.lighting || false,
+      // (the dev page's &lighting= wins; otherwise Medium and High light Floor 1's yellow office as an office (Gemini's
+      // 'office' lighting), and Classic is as it always was: false)
+      lighting: opt.dev?.lighting || (gfx().shadows > 0 && (!level.theme || level.theme === 'yellow') ? 'office' : false),
+      officePolish: gfx().shadows > 0,
       // (the dev page's &preview=clip,…: rooms built with a preview of something not yet in the game; empty everywhere else)
       preview: new Set(opt.dev?.preview || []),
       steadyLighting: () => settings.steadyLighting,
@@ -499,6 +504,14 @@ async function visit(office, opt) {
       env.grip = createFurnitureGrip(f.world, env.barricades, { sound });
     }
     inventory?.hang(env);
+    // Pre-patch beam shadows & asynchronously warm WebGPU pipelines during load static so sprinting across doorways never hitches
+    if (gfx().beamShadows > 0) beamShadows.warm?.(gfx().beamShadows, f.world.scene);
+    if (!pace && vhs.warm) {
+      const prevVis = f.world.rooms.map((r) => r.group.visible);
+      for (const r of f.world.rooms) r.group.visible = true;
+      await vhs.warm(f.world.scene);
+      f.world.rooms.forEach((r, i) => { r.group.visible = prevVis[i]; });
+    }
     return f;
   }
   /** The part below this one, built while somebody is still finding their way to it: a room, then a breath, then a room. */
@@ -567,6 +580,7 @@ async function visit(office, opt) {
     f.env.denizens?.sync();                              // (their picture is ready even while the fall holds their behaviour)
     vhs.setScene(root);
     vhs.setGrade(gradeOf(themeOf(f.level.theme)));          // (the camcorder's grade is the kind of floor's: graphics.js)
+    resetCamcorderAdapt(camAdapt);
     if (f.level !== first) hud.setStamp(f.level.stamp);
     sound.setDepth?.(f.level.depth);                          // (further down the music is another piece, and quieter: sound.js)
     sound.setMains(f.level.hum);
@@ -707,6 +721,14 @@ async function visit(office, opt) {
     light += (lvl - light) * (1 - Math.exp(-2.2 * dt));
     u.uGain.value = clamp(Math.pow(0.3 / Math.max(light, 0.04), 0.55), 0.9, variedLight ? LIGHTING.gainMax : 2.3);
     vhs.setAmbient(light);
+    // camcorder auto-iris overshoot, white-balance drift & contrast-detect autofocus hunt across light/room transitions
+    const probeRgb = here ? world.lightAt(me.x, me.z, 1.3) : null;
+    const probeL = probeRgb ? 0.299 * probeRgb[0] + 0.587 * probeRgb[1] + 0.114 * probeRgb[2] : lvl;
+    if (state === 'play') stepCamcorderAdapt(camAdapt, { light: Math.max(lvl, probeL), rgb: probeRgb, roomId: here?.id ?? null, torch }, dt);
+    else resetCamcorderAdapt(camAdapt);
+    u.uExposure.value = camAdapt.exposure;
+    u.uBalance.value?.fromArray(camAdapt.balance);
+    u.uDefocus.value = camAdapt.defocus;
     if (gfxAuto && (gfxAuto = autoStep(gfxAuto, time, stage.frameMs, !!ahead && (!ahead.f || !!ahead.f.world.doorsPending))).changed) { vhs.setProfile(gfx()); pictureKey = ''; showDetail(root, gfx()); }
     // The camera only reveals nearby surfaces. Its broad lamp is independent
     // of the narrow inventory flashlight and never supplies creature power.
@@ -861,7 +883,7 @@ async function visit(office, opt) {
   // a way for the dev page (and the curious) to poke at it: always the floor you are on
   const handle = {
     settings: () => settings, setSetting: changeSetting,
-    vhs, hud, perk, plan: () => plan, deck: DECK.map((a) => a.id),
+    vhs, hud, perk, camcorder: camAdapt, resetCamcorder: () => resetCamcorderAdapt(camAdapt), plan: () => plan, deck: DECK.map((a) => a.id),
     get level() { return cur?.level; }, get world() { return cur?.world; }, get player() { return cur?.player; }, get env() { return cur?.env; },
     get state() { return state; }, get paused() { return paused; }, menu, loot: purse, inventory, health: survival?.health, camera: survival?.camera, survival,
     sketch: () => (cur ? sketch(cur.level) : ''),
@@ -875,6 +897,7 @@ async function visit(office, opt) {
       player.warp(p.x, p.z, (yaw ?? 0) + (def.rot * Math.PI) / 2);
       player.me.pitch = pitch; player.me.drop = 0; player.me.dropV = 0;
       world.enter(world.roomAt(p.x, p.z));
+      resetCamcorderAdapt(camAdapt);
       return true;
     },
     where() {

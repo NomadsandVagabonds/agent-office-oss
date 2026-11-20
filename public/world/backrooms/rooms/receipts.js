@@ -85,9 +85,9 @@ export function build(c) {
   const start = tills.reduce((a, b) => (Math.abs(b) < Math.abs(a) ? b : a)), trail = [[start, zc + 0.15]], crumbs = [];
   const print = kit.tex.custom('receipts:long', 32, 128, (g, w, h) => { P(g, '#efece2', 0, 0, w, h); for (let y = 5; y < h; y += 8) { garble(g, ['1 STEP', 'WHERE YOU WENT', 'AGAIN', 'BACK', 'TOTAL', 'YOU', 'STOOD', 'TURNED'][(y / 8) % 8 | 0], 2, y - 2, w - 10, 6, { color: '#55524a', mess: 0.3, weight: 400 }, y + 3); P(g, '#6a665c', w - 7, y, 5, 2); } P(g, '#c9c5b8', 0, 0, 1, h); P(g, '#c9c5b8', w - 1, 0, 1, h); });
   print.wrapT = THREE.RepeatWrapping; print.needsUpdate = true;
-  const geo = new THREE.BufferGeometry(), pos = new Float32Array(K.most * 6 * 3), uvs = new Float32Array(K.most * 6 * 2), mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.8, 0.78, 0.72), map: print, side: THREE.DoubleSide });
+  const geo = c.kit.own(new THREE.BufferGeometry()), pos = new Float32Array(K.most * 6 * 3), uvs = new Float32Array(K.most * 6 * 2), mat = c.kit.own(new THREE.MeshBasicMaterial({ color: new THREE.Color(0.8, 0.78, 0.72), map: print, side: THREE.DoubleSide }));
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2)); geo.setDrawRange(0, 0);
-  const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; c.add(mesh);
+  const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; mesh.userData.noBeamShadow = true; c.add(mesh);
   let len = 0;
   const draw = () => {
     let i = 0, j = 0, left = len, run = 0; const put = (x, y, z, u, v) => { pos[i++] = x; pos[i++] = y; pos[i++] = z; uvs[j++] = u; uvs[j++] = v; };

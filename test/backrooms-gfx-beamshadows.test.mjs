@@ -160,6 +160,32 @@ test('beam-shadows.js: switched off it makes nothing and touches nothing; on, it
   bs.dispose(); kit.dispose();
 });
 
+test('beam-shadows.js: warm() allocates and clears the WebGL2 depth target before the torch is ever lit', () => {
+  const prevTarget = { id: 'prev' };
+  const bound = [];
+  let clears = 0;
+  const renderer = {
+    getRenderTarget: () => prevTarget,
+    setRenderTarget(t) { bound.push(t); },
+    clear(c, d) { if (!c && d) clears++; },
+    autoClear: true,
+    state: { buffers: { depth: { setMask() {} } } },
+  };
+  const kit = createKit(), scene = new THREE.Scene();
+  const wall = new THREE.Mesh(new THREE.BufferGeometry(), kit.surface({ vox: true }));
+  scene.add(wall);
+  const bs = createBeamShadows(renderer);
+  bs.warm(1024, scene);
+  assert.equal(bs.size, 1024);
+  assert.equal(wall.material.defines.BEAM_SHADOWS, 1);
+  assert.equal(clears, 1, 'depth target is cleared once during allocation');
+  assert.equal(bound.length, 2, 'depth target is bound to allocate WebGL2 storage and previous target restored');
+  assert.ok(bound[0]?.depthTexture?.isDepthTexture);
+  assert.equal(bound[1], prevTarget);
+  assert.equal(renderer.autoClear, true);
+  bs.dispose(); kit.dispose();
+});
+
 test('index.js draws the pass before the picture, from the profile, and graphics.js keeps the switch on its own lines', () => {
   const index = B('index.js');
   assert.match(index, /\/\/ --- beam shadows ---[^\n]*\n[^\n]*gfx\(\)\.beamShadows[^\n]*\n[^\n]*beamShadows\.draw\([^\n]*\n {4}\/\/ --- end beam shadows ---\n {4}vhs\.render\(paused \? 0 : dt\);/);
