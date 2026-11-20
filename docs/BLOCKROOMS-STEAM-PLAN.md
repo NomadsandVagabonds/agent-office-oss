@@ -5,6 +5,10 @@ that several agents can work at once without editing each other's files.
 
 **Status:** a plan. Nothing in it is built yet. The decisions marked **(owner)** are open.
 
+**Where it lives:** BlockRooms is moving to a private repository of its own, "Blockrooms", with its history
+(the owner, 20 Nov). The move happens once the packs now in flight have landed. The office's basement will
+then link out to the site. Paths in this plan are today's; they carry over as they are.
+
 How to read it:
 - Every department has a list of files it **owns**. Only that department edits them.
 - Every task has an ID, the department that does it, and a **done when**.
@@ -52,6 +56,17 @@ Related plans:
 5. **Measure before optimizing.** The heaviest floors are profiled before any rendering rework.
    - **WebGPU starts now, not after launch** (the owner, 19 Nov). Its phase 1 runs alongside the profiling,
      and is safe because nothing changes without its flag (R-5).
+   - **WebGPU is the default renderer once the reconcile lands** (the owner, 20 Nov): *"I would rather some
+     percentage of people not be able to play than to lower the experience for those that do. Especially for
+     a Steam audience who is used to graphics restrictions."*
+     - So there is a **minimum spec**.
+     - A machine below it gets a clear screen saying it can't run the game, not a worse game.
+   - **The tier is chosen at first launch** (the owner, 20 Nov). A graphics screen comes up: static, then a tier
+     selector with **Auto** preselected.
+     - Auto measures the machine and picks the highest tier that holds, biased upward. The owner: *"I really
+       want more people to experience high if possible."*
+   - **The camcorder's adaptation is gameplay, on every tier** (the owner, 20 Nov): the iris, the white
+     balance and the focus (O-1 to O-3). It is not decoration, and no tier turns it off.
 6. **The first floor has to be stunning.** The owner: *"We will have only a couple minutes to grip a new
    player so our first floor has to be stunning if we ever want them to see suburbia or water park later on
    in the game."*
@@ -186,7 +201,8 @@ cast; and so on).
 
 | ID | Task | Done when |
 |---|---|---|
-| R-1 | The default tier by platform: High (or Auto from High) when `platform.kind === 'steam'`; the web unchanged | the shell starts at the Steam default; the web still starts at Classic; there are tests |
+| R-1 | The tier at first launch (the owner, 20 Nov). The screen: static, then a tier selector with Auto preselected. It is drawn in the launcher (D8, D-0) and only once (the choice is kept, and can be changed in Settings). Auto is D3's: a short benchmark of the machine, then the highest tier that holds its frame budget (C8), biased upward (when it is close, it takes the higher). The web is unchanged | a first launch shows the screen; Auto's pick and why are logged; a second launch skips the screen; there are tests of the pick against stand-in timings |
+| R-6 | The minimum spec and the can't-run screen (the owner, 20 Nov): WebGPU is the shell's renderer, and a machine without a WebGPU adapter that meets the minimum is told so plainly, at launch, in the launcher's look, with the minimum listed. No WebGL fallback in the shell | an under-spec machine (or a forced flag) gets the screen, not a game; the minimum is in the store page's system requirements (M-4); **the Steam Deck is checked against it early** (WebGPU on Linux through Electron's Chromium): if the Deck falls below, that goes to the owner before M1, since I-6 and Q-5 assume it plays |
 | R-2 | Side-by-side shots: the same five rooms at Classic, Medium and High, for the owner to agree the look | a sheet of shots in `docs/`, with the owner's notes |
 | R-3 | The Ultra tier: about 3× supersample under the tape, screen-space ambient occlusion, light shafts through doorways and dust, more fittings casting shadows, sharper light maps | Ultra is in `graphics.js`, and its cost is measured by D9 against the budget (C8) |
 | R-4 | Phase 2 of the graphics plan, "light that behaves", for the Steam build | per that plan's own phase notes |
@@ -210,9 +226,9 @@ lens and the camera's electronics are new.
 
 | ID | Task | Done when |
 |---|---|---|
-| O-1 | Auto-exposure that lags: a dark room into a lit one blooms, then settles, and the other way | seen on a walk between rooms; tunable; off at Classic |
-| O-2 | White balance under the tubes: a slow drift green, corrected by "the camera" over seconds | seen in long rooms of tubes; subtle |
-| O-3 | Focus hunting: something close (a creature, a held item raised) pulls focus, and it breathes | `optics.event('focus', k)` from C5 drives it |
+| O-1 | Auto-exposure that lags (the iris): a dark room into a lit one blooms, then settles, and the other way. On every tier: it is gameplay (the owner) | seen on a walk between rooms, at every tier; tunable |
+| O-2 | White balance under the tubes: a slow drift green, corrected by "the camera" over seconds. On every tier | seen in long rooms of tubes, at every tier; subtle |
+| O-3 | Focus hunting: something close (a creature, a held item raised) pulls focus, and it breathes. On every tier | `optics.event('focus', k)` from C5 drives it, at every tier |
 | O-4 | Bright-light smear: the vertical streak old camcorders draw from a bare tube | seen when looking at a tube |
 | O-5 | Lens: vignetting and a little barrel distortion, tied to the Picture level | Clean has none, Full VHS the most |
 | O-6 | Events: a hit, a creature close, a fall, each with its own short optical response, through C5 | the cast and gameplay call C5; nothing in `vhs.js` knows about creatures |
@@ -341,7 +357,7 @@ reads everything and changes only its own tools. It hands findings to the owning
 | F-2 | The budgets (C8): a frame-time target for each tier on three hardware classes (Deck, mid laptop, desktop) | agreed with the lead and the owner |
 | F-3 | A benchmark anyone can run on the software renderer, to see whether a change made a fixed scene slower (not an absolute measure) | it runs in one command and prints the difference |
 | F-4 | Findings to their owners: each costly item filed to its department, with the measurement | each one acknowledged by its owner |
-| F-5 | WebGPU against WebGL in the shell, scene for scene, as R-5's phases land: to decide their order, and when WebGPU becomes the shell's default | a table; the decision written down |
+| F-5 | WebGPU against WebGL in the shell, scene for scene, as R-5's phases land: to decide their order, and to set the minimum spec (R-6). (When WebGPU becomes the default is decided: once the reconcile lands) | a table; the minimum spec written down |
 
 ### D10 · Store, marketing and trailer
 
@@ -381,7 +397,7 @@ reads everything and changes only its own tools. It hands findings to the owning
 |---|---|---|
 | Q-1 | The names-and-likenesses sweep (read-only): every room, creature, item, string, image and alt text against the community wiki's entity and level names and well-known designs | a list with file and line; fixes dealt by the lead to the owners. Known already: "partygoers" in `tools/blockrooms/home.html`'s alt text; check the look of the figure in `smiler-maze` |
 | Q-2 | Trademark search and a lawyer's read: "Backrooms", "The Backrooms", "BlockRooms", in the game classes **(owner)** | a written answer |
-| Q-3 | The test matrix: Windows, Mac and Linux builds; Steam Deck; a laptop with two GPUs; offline; a slow network | each cell played to the end of a visit, and the results written down |
+| Q-3 | The test matrix: Windows, Mac and Linux builds; Steam Deck; a laptop with two GPUs; a machine below the minimum spec (it gets R-6's screen); offline; a slow network | each cell played to the end of a visit, and the results written down |
 | Q-4 | The release checklist: version, edition, branch, achievements registered, cloud, store page, crash reporting **(owner: what crash reporting, if any)** | used for M3 and M4 |
 | Q-5 | Deck: aim for "Playable" or better under Valve's review criteria | self-checked against Valve's list before submitting |
 
@@ -571,9 +587,9 @@ platform = {
 | Milestone | What it is | What is in it | Needs |
 |---|---|---|---|
 | **M0 · Ground** | decisions and facts | the owner's decisions (section 6) answered; F-1 profile written; Q-1 sweep listed; Q-2 started; P-1 spike plays; FF-1 to FF-3 begun | L-1, F-1, Q-1, P-1, FF-1 |
-| **M1 · Internal build** | a Steam build the team can play | P-2, P-3, P-5, P-6; D-0 (the launcher); R-1; R-5 phase 1 (behind its flag); I-1, I-2; suite green | D1, D2, D3 |
+| **M1 · Internal build** | a Steam build the team can play | P-2, P-3, P-5, P-6; D-0 (the launcher); R-5 phase 1 (behind its flag); I-1, I-2; suite green | D1, D2, D3 |
 | **M2 · Coming Soon** | the store page live | M-1 to M-4; W-4; FF-4; LB-1, LB-2; the first of FF-5's set pieces (the store's shots are taken on the first floor); Q-2 answered; the owner's sign-off | D5, D10, D11, D12 |
-| **M3 · Release candidate** | everything early access promises | FF-5, FF-6, FF-8, FF-9 (the first floor done); LB-3, LB-4, LB-6 (the first library); P-4, P-7, P-8; I-3 to I-6; O-1 to O-6; W-1 to W-3; R-3, R-4; R-5 as far as F-5 says is ready (WebGPU the shell's default only if it measures better); C-1 to C-4; S-1, S-2, S-6; D-1 to D-4; F-2, F-3; Q-3 to Q-5 | all |
+| **M3 · Release candidate** | everything early access promises | FF-5, FF-6, FF-8, FF-9 (the first floor done); LB-3, LB-4, LB-6 (the first library); P-4, P-7, P-8; I-3 to I-6; O-1 to O-6; W-1 to W-3; R-1, R-3, R-4, R-6; R-5 through the reconcile (WebGPU the shell's default renderer); C-1 to C-4; S-1, S-2, S-6; D-1 to D-4; F-2, F-3; Q-3 to Q-5 | all |
 | **M4 · Early access** | released | M3 closed; the two weeks of Coming Soon done; the owner's go | owner |
 | **M5 · After launch** | the roadmap | LB-5 (the library keeps growing, every week); FF-5 (more set pieces); S-3, D-5 (ghosts); the rest of R-5 (every material on TSL, GPU particles); co-op; the modes roadmap | — |
 
@@ -604,7 +620,7 @@ M2 can run alongside M1 once M0 is closed. The store page needs shots and the tr
 2. Is co-op in early access, or later?
 3. Steam names on the boards, or typed names as now? Should a Steam login be the account (S-4)?
 4. The early access answers: price, how long, what is promised (M-5).
-5. The default tier on Steam: High, or Auto from High (R-1)?
+5. ~~The default tier on Steam~~ **Answered (20 Nov):** a graphics screen at first launch, Auto preselected, biased upward (R-1). WebGPU is the default once the reconcile lands, with a minimum spec and a can't-run screen (R-6). The camcorder's adaptation runs on every tier (O-1 to O-3).
 6. How far Ultra goes: agreed from R-2's side-by-side shots before R-3 is built.
 7. Crash reporting in the shell: none, Steam's own, or a service (Q-4)?
 8. ~~Lost property on Steam: tradeable ever?~~ **Answered (19 Nov): yes, it may be tradeable.** Open: from the
