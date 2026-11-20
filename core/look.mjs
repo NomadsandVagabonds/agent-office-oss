@@ -4,7 +4,7 @@
 // used, so an agent keeps its face when it steps into three dimensions.
 
 export const GENDER = Object.freeze(['male', 'female']);
-export const SPECIES = Object.freeze(['human', 'robot', 'goblin', 'dog', 'cat', 'alien']);
+export const SPECIES = Object.freeze(['human', 'robot', 'goblin', 'dog', 'cat', 'alien', 'frog', 'demon', 'bear']);
 export const SKIN = Object.freeze(['#f3cda8', '#e6b184', '#cd8d5e', '#9c6442', '#dcab8b']);
 export const HAIR_COLORS = Object.freeze(['#241608', '#4a2f1a', '#15151c', '#7d5836', '#caa05a', '#9aa0ac']);
 export const OUTFIT_COLORS = Object.freeze(['#b5483f', '#3f8a72', '#5a6fa8', '#8a5a8f', '#6f8a4a', '#c9893f',
@@ -58,7 +58,12 @@ const SPECIES_SKIN = {
   dog: ['#c99a62', '#a8794a', '#e3c79a', '#8a6a4a', '#d9d2c4'],
   cat: ['#e0a060', '#9a9aa6', '#f1e6d2', '#3a3a44', '#d98a4a'],
   alien: ['#e0a638', '#79c28a', '#7aa9d6', '#b68ad9'],
+  frog: ['#78a854', '#519273', '#b0ac56'],
+  demon: ['#a74649', '#964e60', '#79577e'],
+  bear: ['#926445', '#aa7b4d', '#64534a'],
 };
+
+export const speciesDefaultSkin = species => SPECIES_SKIN[species]?.[0] ?? SKIN[1];
 
 /** FNV-1a, 32-bit — identical to the 2D client's hashId(). */
 export function hashId(s) {

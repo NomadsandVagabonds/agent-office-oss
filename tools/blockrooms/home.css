@@ -447,10 +447,10 @@ kbd { display: inline-block; min-width: 1.6em; text-align: center; font: 700 12p
 #char-stage-3d { position: absolute; inset: 0; }
 .stage-hint { position: absolute; left: 5px; bottom: 4px; padding: 1px 5px; font: 700 9px/1.2 var(--mono); color: #fffbe6; background: rgba(16, 18, 28, .58); border-radius: 2px; pointer-events: none; letter-spacing: .03em; }
 .stage-tools { display: flex; gap: 5px; justify-content: center; margin-bottom: 5px; flex-wrap: wrap; }
-.stage-tools button, .chip-row button, .fun-top button, .preset-strip button, .pin-btn, .studio-foot button, #perk-clear, .id-name-row button {
+.stage-tools button, .chip-row button, .preset-strip button, .studio-foot button, #perk-clear, .id-name-row button {
   font: 700 11.5px/1.15 Arial, Helvetica, sans-serif; background: #c9c4a6; color: #111; border: 2px outset #fff; padding: 4px 7px; cursor: pointer; touch-action: manipulation;
 }
-.stage-tools button:active, .chip-row button:active, .fun-top button:active, .preset-strip button:active, .studio-foot button:active, #perk-clear:active, .id-name-row button:active { border-style: inset; }
+.stage-tools button:active, .chip-row button:active, .preset-strip button:active, .studio-foot button:active, #perk-clear:active, .id-name-row button:active { border-style: inset; }
 .chip-row { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; margin-top: 4px; }
 .chip-row button { font-size: 10.5px; padding: 3px 6px; }
 .chip-row button.on, .preset-strip button.on { border-style: inset; background: #fff3a8; color: #14245e; }
@@ -476,20 +476,12 @@ kbd { display: inline-block; min-width: 1.6em; text-align: center; font: 700 12p
 .studio-panel { flex: 1 1 0; min-height: 0; min-width: 0; background: #fffdf2; border: 3px outset #fff; padding: 10px; max-height: 64vh; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
 .studio-panel[hidden] { display: none; }
 
-.fun-bar { background: #f3eed6; border: 2px groove #c9c4a6; padding: 7px 8px; margin-bottom: 9px; min-width: 0; }
-.fun-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px; min-width: 0; }
-.fun-top .dice-btn { background: linear-gradient(#ffd83a, #c9a628); font-weight: 700; }
-.wild-opt { font: 700 11.5px Arial, Helvetica, sans-serif; color: #5a2a8a; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
-.mode-pill { margin-left: auto; font: 700 10.5px var(--mono); padding: 2px 6px; background: #e2dbc0; border: 1px inset #c9c4a6; color: #4a3a14; max-width: 100%; }
-.mode-pill.custom { background: #dff5df; color: #165416; }
-.preset-strip { display: flex; flex-wrap: wrap; gap: 4px; }
+.preset-strip { display: flex; flex-wrap: wrap; gap: 4px; background: #f3eed6; border: 2px groove #c9c4a6; padding: 7px 8px; margin-bottom: 9px; min-width: 0; }
 .preset-strip button { font: 700 11px var(--comic); padding: 3px 7px; background: #e9e4cf; }
 
 .trait-block { border-top: 1px dotted #b8b296; padding: 7px 0 4px; min-width: 0; }
-.trait-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; font: 700 11px Arial, Helvetica, sans-serif; letter-spacing: .06em; color: #14245e; margin-bottom: 5px; }
+.trait-head { font: 700 11px Arial, Helvetica, sans-serif; letter-spacing: .06em; color: #14245e; margin-bottom: 5px; }
 .trait-head small { font-weight: 400; letter-spacing: 0; color: #7a4a2a; margin-left: 4px; }
-.pin-btn { flex: 0 0 auto; font-size: 9.5px; padding: 2px 6px; letter-spacing: .06em; }
-.pin-btn.on { border-style: inset; background: #ffd83a; color: #8a1410; }
 
 .gender-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .gender-grid .thumb-btn { flex-direction: row; justify-content: center; gap: 8px; padding: 5px 8px; font-size: 12px; }
@@ -603,8 +595,6 @@ kbd { display: inline-block; min-width: 1.6em; text-align: center; font: 700 12p
   .studio-work-col { flex: 1 1 0; min-height: 0; }
   .stab { font-size: 11.5px; padding: 6px 6px 5px; }
   .studio-panel { max-height: none; padding: 8px; }
-  .fun-top { gap: 5px; }
-  .mode-pill { margin-left: 0; font-size: 9.5px; }
   .preset-strip button { padding: 5px 7px; font-size: 11px; }
   .gender-grid { gap: 5px; }
   .gender-grid .thumb-btn { padding: 4px 6px; font-size: 11px; gap: 6px; }

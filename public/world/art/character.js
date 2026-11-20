@@ -50,6 +50,7 @@ function paintHeadFront(g, L, o) {
   const hc = L.hairColor, hcH = shade(hc, 30), hcS = shade(hc, -28);
   const oc = L.outfitColor;
   const open = !o.blink;
+  const animalFace = ['cat', 'dog', 'frog', 'bear'].includes(L.species);
   if (L.species === 'robot') {
     g.z(-HD, HD);
     g.fill(PAL.steelS); g.rect(-4, -27, 8, 9);
@@ -143,6 +144,35 @@ function paintHeadFront(g, L, o) {
       g.z(HD, HD + 1.4); g.fill(shade(sk, -34)); g.rect(-1, -21, 3, 3);
       g.z(-HD, HD); eyes(g, skS, open);
       g.z(HD - 1, HD + 0.6); g.fill('#f3ead2'); g.rect(1, -18, 2, 1);
+    } else if (L.species === 'frog') {
+      g.fill(sk); g.rect(-6, -25, 12, 6);
+      for (const side of [-1, 1]) {
+        g.fill(skS); g.ellipse(side * 4.6, -25.5, 5, 6);
+        g.fill(sk); g.ellipse(side * 4.6, -26, 4, 5);
+      }
+      g.z(HD, HD + 2);
+      g.fill(shade(sk, 42)); g.ellipse(0, -20.5, 13, 5);
+      g.fill(sk); g.ellipse(0, -22, 14, 5);
+      g.fill('#454334'); g.rect(-5, -21, 10, 1); g.rect(-6, -22, 1, 1); g.rect(5, -22, 1, 1);
+    } else if (L.species === 'demon') {
+      for (const side of [-1, 1]) {
+        g.z(-2, 1); g.fill(skS); g.triangle(side * 3, -23, side * 8, -26, side * 4, -21);
+        g.fill('#49312e'); g.ellipse(side * 4.5, -27.5, 5, 5);
+        g.fill('#a78967'); g.rect(side < 0 ? -7 : 5, -32, 2, 5);
+        g.fill('#dfc9a2'); g.rect(side < 0 ? -6 : 4, -33, 2, 2);
+        g.z(HD, HD + 1); g.fill('#44292e'); g.rect(side < 0 ? -4 : 1, -24, 3, 2);
+        if (open) { g.fill('#f3ba58'); g.rect(side < 0 ? -4 : 2, -23, 2, 1); }
+        g.fill('#dfc9a2'); g.rect(side < 0 ? -2 : 1, -19, 1, 2);
+      }
+    } else if (L.species === 'bear') {
+      for (const side of [-1, 1]) {
+        g.z(-2, 2); g.fill(sk); g.ellipse(side * 4.6, -27, 5.5, 6);
+        g.fill(skS); g.ellipse(side * 4.6, -27, 3, 3);
+      }
+      g.z(-HD, HD); g.fill(sk); g.rect(-5, -24, 10, 5);
+      eyes(g, skS, open);
+      g.z(HD, HD + 2); g.fill(shade(sk, 54)); g.ellipse(0, -20, 8, 5);
+      g.fill('#302526'); g.rect(-2, -22, 4, 2); g.rect(-1, -20, 2, 1);
     } else if (L.species === 'dog') {
       g.z(-2, 2); g.fill(shade(sk, -30)); g.rect(-6, -28, 3, 6); g.rect(3, -28, 3, 6);
       g.z(HD, HD + 2.2); g.fill(sk); g.rect(-2, -21, 5, 4);
@@ -196,6 +226,14 @@ function paintHeadFront(g, L, o) {
       g.fill(shade(oc, -26)); g.rect(-5, -27, 10, 2);
       g.fill(shade(oc, 30)); g.rect(-4, -31, 2, 4);
     }
+    if (L.species === 'frog') {
+      g.z(HD, HD + 1.2);
+      for (const x of [-6, 3]) {
+        if (open) { g.fill('#ebc776'); g.rect(x, -27, 4, 3); }
+        g.fill(open ? '#302c25' : skS); g.rect(x, -26, 4, 1);
+        if (open) { g.fill('#fff4d9'); g.rect(x + 1, -27, 1, 1); }
+      }
+    }
     if (L.facial === 'mustache') { g.z(HD, HD + 0.7); g.fill(hc); g.rect(-3, -20, 6, 2); }
     else if (L.facial === 'beard') {
       g.z(HD - 1.4, HD + 0.7);
@@ -205,15 +243,15 @@ function paintHeadFront(g, L, o) {
     } else if (L.facial === 'lashes') {
       paintHoops(g, '#e58ea6', '#ffdbe6');
       g.z(HD, HD + 0.7);
-      if (open && L.species !== 'dog' && L.species !== 'cat') {
+      if (open && !animalFace && L.species !== 'demon') {
         g.fill('#221816'); g.rect(-4, -23, 1, 1); g.rect(4, -23, 1, 1);
         g.fill('#5a3836'); g.rect(-3, -25, 2, 1); g.rect(2, -25, 2, 1);
       }
-      if (L.species !== 'dog' && L.species !== 'cat') {
+      if (!animalFace) {
         g.fill('#c95266'); g.rect(-1, -19, 3, 1);
         g.fill('#e88396'); g.rect(0, -19, 1, 1);
       }
-    } else if (L.gender === 'female' && L.species !== 'dog' && L.species !== 'cat') {
+    } else if (L.gender === 'female' && !animalFace && L.species !== 'demon') {
       // Natural feminine brows, subtle outer corner lash & warm rose lip when facial === 'none'
       g.z(HD, HD + 0.7);
       if (open) {
@@ -231,8 +269,8 @@ function paintAccessory(g, L, o) {
   if (!acc || acc === 'none') return;
   const alien = L.species === 'alien';
   const hy = alien ? -4 : 0;            // top-of-head offset for the taller alien cranium
-  const ey = alien ? -2 : 0;            // eye-level offset for alien obsidian eyes
-  const wx = alien ? 1 : 0;             // temple half-width offset
+  const ey = L.species === 'frog' ? -4 : alien ? -2 : 0;
+  const wx = L.species === 'frog' ? 2 : alien ? 1 : 0; // temple half-width offset
   g.noStroke();
   if (acc === 'glasses') {
     g.z(HD, HD + 0.8);
@@ -317,7 +355,7 @@ function paintAccessory(g, L, o) {
   } else if (acc === 'hoops') {
     paintHoops(g, '#e8c45a', '#fff3c0', alien);
   } else if (acc === 'goggles') {
-    const gy = alien ? -27 : -25;
+    const gy = -25 + ey;
     g.z(HD, HD + 1.4);
     // Side silver straps + bridge
     g.fill('#69717e'); g.rect(-7, gy + 2, 14, 2);
@@ -490,6 +528,14 @@ function paintTorso(g, L) {
     g.fill(shade(oc, -18)); g.rect(-3, -18, 6, 1);
   }
   g.fill(ocS); g.rect(-5, -8, 10, 2);
+  if (L.species === 'bear') {
+    g.z(-5, -3); g.fill(shade(L.skin, -16)); g.ellipse(0, -8, 4, 4);
+    g.fill(L.skin); g.rect(-1, -10, 2, 1);
+  } else if (L.species === 'demon') {
+    g.z(-6, -3); g.fill(L.skin);
+    g.rect(0, -9, 2, 3); g.rect(1, -7, 5, 2); g.rect(5, -10, 2, 4);
+    g.fill(shade(L.skin, -26)); g.triangle(4, -10, 8, -10, 7, -14);
+  }
   g.back(false);
 }
 
@@ -520,7 +566,7 @@ export function paintCharacter(look, opt = {}) {
   legR.z(-2, 2); legR.fill(pantC); legR.rect(1, -7, 3, 7);
   if (tunic) { legR.fill('#a8895e'); legR.rect(1, -2, 3, 2); }
 
-  const torso = mk({ x0: -6, y0: -19, x1: 6, y1: -5 });
+  const torso = mk({ x0: -6, y0: -19, x1: L.species === 'demon' ? 9 : 6, y1: -5 });
   paintTorso(torso, L);
 
   const armL = mk({ x0: -8, y0: -17, x1: -3, y1: -3 });

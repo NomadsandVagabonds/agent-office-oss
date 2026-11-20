@@ -137,7 +137,7 @@
         <span class="pass-stats" id="pass-stats" hidden></span>
       </div>
       <div class="pass-btns">
-        <button type="button" id="quick-roll" title="Roll a random character look">Shuffle</button>
+        <button type="button" id="quick-roll" title="Shuffle your whole appearance">Shuffle</button>
         <button type="button" class="studio-open" id="open-creator" aria-expanded="false" aria-controls="creator">Customize &#9662;</button>
       </div>
     </div>
@@ -179,59 +179,50 @@
         </div>
 
         <div class="studio-panel" id="panel-look" role="tabpanel" aria-labelledby="tab-look">
-          <div class="fun-bar">
-            <div class="fun-top">
-              <button type="button" class="dice-btn" id="roll-look">Roll Unpinned</button>
-              <button type="button" id="unpin-all">Unpin All</button>
-              <label class="wild-opt"><input type="checkbox" id="wild-colors"> Wild 90s Dyes</label>
-              <span class="mode-pill" id="look-mode-pill">Random each visit</span>
-              <button type="button" id="use-random-look">Use Random</button>
-            </div>
-            <div class="preset-strip" id="preset-bar" role="group" aria-label="Character archetypes"></div>
-          </div>
+          <div class="preset-strip" id="preset-bar" role="group" aria-label="Character archetypes"></div>
 
           <div class="trait-block">
-            <div class="trait-head"><span>PRESENTATION <small id="gender-note"></small></span><button type="button" class="pin-btn" data-pin="gender">PIN</button></div>
+            <div class="trait-head"><span>PRESENTATION <small id="gender-note"></small></span></div>
             <div class="gender-grid" id="pick-gender"></div>
           </div>
 
           <div class="trait-block">
-            <div class="trait-head"><span>SPECIES</span><button type="button" class="pin-btn" data-pin="species">PIN</button></div>
+            <div class="trait-head"><span>SPECIES</span></div>
             <div class="thumb-grid" id="pick-species"></div>
           </div>
 
           <div class="trait-block">
-            <div class="trait-head"><span>COMPLEXION / FUR</span><button type="button" class="pin-btn" data-pin="skin">PIN</button></div>
+            <div class="trait-head"><span>COMPLEXION / FUR</span></div>
             <div class="swatch-row"><div class="swatches" id="pick-skin"></div><label class="hex-pick" title="Custom hex color">HEX <input type="color" id="color-skin" value="#e6b184"></label></div>
           </div>
 
           <div class="trait-block">
-            <div class="trait-head"><span>HAIR / HEADWEAR <small id="hair-note"></small></span><button type="button" class="pin-btn" data-pin="hair">PIN</button></div>
+            <div class="trait-head"><span>HAIR / HEADWEAR <small id="hair-note"></small></span></div>
             <div class="thumb-grid" id="pick-hair"></div>
           </div>
 
           <div class="trait-block">
-            <div class="trait-head"><span>HAIR DYE</span><button type="button" class="pin-btn" data-pin="hairColor">PIN</button></div>
+            <div class="trait-head"><span>HAIR DYE</span></div>
             <div class="swatch-row"><div class="swatches" id="pick-hair-color"></div><label class="hex-pick" title="Custom hair dye">HEX <input type="color" id="color-hair" value="#4a2f1a"></label></div>
           </div>
 
           <div class="trait-block">
-            <div class="trait-head"><span>FACIAL FEATURES</span><button type="button" class="pin-btn" data-pin="facial">PIN</button></div>
+            <div class="trait-head"><span>FACIAL FEATURES</span></div>
             <div class="thumb-grid" id="pick-facial"></div>
           </div>
 
           <div class="trait-block">
-            <div class="trait-head"><span>WARDROBE</span><button type="button" class="pin-btn" data-pin="outfit">PIN</button></div>
+            <div class="trait-head"><span>WARDROBE</span></div>
             <div class="thumb-grid" id="pick-outfit"></div>
           </div>
 
           <div class="trait-block">
-            <div class="trait-head"><span>WARDROBE COLOR</span><button type="button" class="pin-btn" data-pin="outfitColor">PIN</button></div>
+            <div class="trait-head"><span>WARDROBE COLOR</span></div>
             <div class="swatch-row"><div class="swatches" id="pick-outfit-color"></div><label class="hex-pick" title="Custom outfit color">HEX <input type="color" id="color-outfit" value="#3f7f9a"></label></div>
           </div>
 
           <div class="trait-block">
-            <div class="trait-head"><span>HEAD / EYE ACCESSORY</span><button type="button" class="pin-btn" data-pin="accessory">PIN</button></div>
+            <div class="trait-head"><span>HEAD / EYE ACCESSORY</span></div>
             <div class="thumb-grid" id="pick-accessory"></div>
           </div>
         </div>

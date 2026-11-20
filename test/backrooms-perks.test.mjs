@@ -288,6 +288,26 @@ test('Records Purge: 3/3 max hearts, starter lighter + 3 paper, 12s/sheet fires,
   assert.equal(blockedMount.reason, 'mount-disabled');
 });
 
+test('alpha visitors keep distinct silhouettes in game and in small portraits with the same outfit and dyes', async () => {
+  const { buildCharacter, facePixels } = await import('../public/world/avatar/build.js');
+  const { cleanLook } = await import('../core/book.mjs');
+  const { archiveLook } = await import('../core/archive.mjs');
+  const portraits = new Set(), sculpts = new Set();
+  for (const species of ['human', 'cat', 'dog', 'goblin', 'frog', 'demon', 'bear']) {
+    const look = resolveLook('visitor', { species, skin: '#888888', hair: 'bald', facial: 'none', accessory: 'none', outfit: 'tee' });
+    assert.equal(cleanLook(look).species, species);
+    assert.equal(archiveLook(look).species, species);
+    portraits.add(paintFlatCharacter(look).cells.map(cell => cell ? '1' : '0').join(''));
+    const { head } = buildCharacter(look);
+    const outline = new Set();
+    head.each((x, y) => outline.add(x + ',' + y));
+    sculpts.add([...outline].sort().join('|'));
+    assert.notDeepEqual(facePixels(look, 'blink'), facePixels(look, 'neutral'));
+  }
+  assert.equal(portraits.size, 7);
+  assert.equal(sculpts.size, 7);
+});
+
 test('character creator looks: all species, hairstyles, outfits, facial hair & accessories paint cleanly front and back while decoupled from perks', async () => {
   for (const species of SPECIES) {
     const patch = sanitizeLookPatch({
