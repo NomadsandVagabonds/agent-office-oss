@@ -4,6 +4,7 @@
 // shadow, bloom, sheen, mirror, water, and forest scenes.
 import { makeItem } from '../backrooms/inventory-state.js';
 import { toWorld } from '../backrooms/gen.js';
+import { SHADOWS } from '../backrooms/shadowmap.js';
 
 const PRESETS = [
   {
@@ -145,6 +146,7 @@ const wipeSliderWrap = document.getElementById('wipe-slider-wrap');
 const selLeft = document.getElementById('sel-left');
 const selRight = document.getElementById('sel-right');
 const selLights = document.getElementById('sel-lights');
+const selShadows = document.getElementById('sel-shadows');
 const selVhs = document.getElementById('sel-vhs');
 const btnTorch = document.getElementById('btn-torch');
 const btnDive = document.getElementById('btn-dive');
@@ -180,6 +182,7 @@ const state = {
   left: urlParams.get('left') || 'webgl:high',
   right: urlParams.get('right') || 'webgpu:high',
   vhs: [0, 1, 2].includes(Number(urlParams.get('vhs'))) ? Number(urlParams.get('vhs')) : 0,
+  shadows: ['compare', 'smooth', 'blocky'].includes(urlParams.get('shadows')) ? urlParams.get('shadows') : 'compare',
   lights: 'preset',
   torch: true,
   dive: false,
@@ -239,6 +242,7 @@ function syncUrl() {
   u.searchParams.set('left', state.left);
   u.searchParams.set('right', state.right);
   u.searchParams.set('vhs', String(state.vhs));
+  u.searchParams.set('shadows', state.shadows);
   if (Math.round(state.split) !== 50) u.searchParams.set('split', String(Math.round(state.split)));
   else u.searchParams.delete('split');
   history.replaceState(null, '', u);
@@ -523,6 +527,80 @@ function hookPane(pane, gen) {
   poll();
 }
 
+/** Separable [1,2,1]/4 soft-penumbra blur strictly inside each lightmap atlas region (never bleeds across gutters). */
+function blurLightmapData(src, layout, passes = 2) {
+  const W = layout.width, H = layout.height;
+  const ch = src.length / (W * H);
+  if (ch !== 4 && ch !== 2) return new Uint8Array(src);
+  let cur = new Uint8Array(src);
+  let tmp = new Uint8Array(src);
+  for (let pass = 0; pass < passes; pass++) {
+    for (const r of layout.list) {
+      const x0 = r.px, x1 = r.px + r.nu - 1, y0 = r.py, y1 = r.py + r.nv - 1;
+      // Horizontal pass
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const xl = Math.max(x0, x - 1), xr = Math.min(x1, x + 1);
+          const o = (y * W + x) * ch, ol = (y * W + xl) * ch, or = (y * W + xr) * ch;
+          for (let c = 0; c < ch; c++) tmp[o + c] = (cur[ol + c] + cur[o + c] * 2 + cur[or + c] + 2) >> 2;
+        }
+      }
+      // Vertical pass
+      for (let y = y0; y <= y1; y++) {
+        const yu = Math.max(y0, y - 1), yd = Math.min(y1, y + 1);
+        for (let x = x0; x <= x1; x++) {
+          const o = (y * W + x) * ch, ou = (yu * W + x) * ch, od = (yd * W + x) * ch;
+          for (let c = 0; c < ch; c++) cur[o + c] = (tmp[ou + c] + tmp[o + c] * 2 + tmp[od + c] + 2) >> 2;
+        }
+      }
+      // Refresh 1-texel gutter so hardware bilinear never reads unblurred border
+      const copyPx = (sx, sy, dx, dy) => {
+        if (dx < 0 || dx >= W || dy < 0 || dy >= H) return;
+        const s = (sy * W + sx) * ch, d = (dy * W + dx) * ch;
+        for (let c = 0; c < ch; c++) cur[d + c] = cur[s + c];
+      };
+      for (let x = x0; x <= x1; x++) { copyPx(x, y0, x, y0 - 1); copyPx(x, y1, x, y1 + 1); }
+      for (let y = y0 - 1; y <= y1 + 1; y++) {
+        const cy = Math.max(y0, Math.min(y1, y));
+        copyPx(x0, cy, x0 - 1, y);
+        copyPx(x1, cy, x1 + 1, y);
+      }
+    }
+  }
+  return cur;
+}
+
+function applyTextureSoftness(tex, layout, smooth, passes) {
+  if (!tex?.image?.data || !layout?.list) return;
+  if (!tex.__rawData) tex.__rawData = new Uint8Array(tex.image.data);
+  if (smooth && !tex.__softData) tex.__softData = blurLightmapData(tex.__rawData, layout, passes);
+  const want = smooth ? tex.__softData : tex.__rawData;
+  if (tex.__appliedSmooth === smooth) return;
+  tex.image.data.set(want);
+  tex.needsUpdate = true;
+  tex.__appliedSmooth = smooth;
+}
+
+function applyShadowsToPane(pane) {
+  const world = pane.handle?.world;
+  if (!world) return;
+  const smooth = state.shadows === 'smooth' || (state.shadows === 'compare' && pane.side === 'right');
+  // 1e-4 m (0.1 mm) keeps classic WebGL's untouched lmUv() free of /0 while eliminating 5 cm texel stepping;
+  // WebGPU (kit-node-light.js) bypasses quantization directly at 0.
+  const step = smooth ? (pane.actualBackend === 'WebGPU' ? 0 : 1e-4) : SHADOWS.step;
+  for (const rt of world.rooms) {
+    const lm = rt.lm;
+    if (!lm?.uniforms) continue;
+    const uLm = lm.uniforms.uLm?.value;
+    if (uLm?.[5]) uLm[5].z = step;
+    applyTextureSoftness(lm.uniforms.uLmA?.value, lm.layout, smooth, 1);
+    if (lm.uniforms.uLmB?.value && lm.uniforms.uLmB.value !== lm.uniforms.uLmA?.value) {
+      applyTextureSoftness(lm.uniforms.uLmB.value, lm.layout, smooth, 1);
+    }
+    applyTextureSoftness(lm.uniforms.uLmC?.value, lm.layout, smooth, 2);
+  }
+}
+
 function applyPresetToPane(pane) {
   const h = pane.handle;
   if (!h) return;
@@ -533,6 +611,7 @@ function applyPresetToPane(pane) {
     h.player.me.shake = 0;
   }
   applyLightsToPane(pane);
+  applyShadowsToPane(pane);
   setPaneTorch(pane, state.torch);
   setPaneDive(pane, state.dive);
   pane.lastPose = snapshotPose(h.player.me);
@@ -668,15 +747,18 @@ function tick(now) {
 
   if (now - lastTelemetryAt >= 280) {
     lastTelemetryAt = now;
-    if (L.ready) renderTelemetry(L);
-    if (R.ready) renderTelemetry(R);
+    if (L.ready) { applyShadowsToPane(L); renderTelemetry(L); }
+    if (R.ready) { applyShadowsToPane(R); renderTelemetry(R); }
   }
 }
 
 function renderTelemetry(pane) {
   const b = badges[pane.side];
   const s = pane.stats;
-  b.name.textContent = specLabel(state[pane.side]);
+  const shadowTag = state.shadows === 'compare'
+    ? (pane.side === 'right' ? ' · SMOOTH' : ' · BLOCKY')
+    : (state.shadows === 'smooth' ? ' · SMOOTH' : '');
+  b.name.textContent = specLabel(state[pane.side]) + shadowTag;
   if (!pane.ready) return;
 
   b.fps.textContent = s.fps > 0 ? `${Math.round(s.fps)} fps · ${s.ms.toFixed(1)} ms` : 'ready';
@@ -766,6 +848,7 @@ function selectPreset(id) {
 /* ---- Control Listeners ---------------------------------------------- */
 selLeft.value = state.left;
 selRight.value = state.right;
+selShadows.value = state.shadows;
 selVhs.value = String(state.vhs);
 
 selLeft.addEventListener('change', () => {
@@ -782,6 +865,13 @@ selLights.addEventListener('change', () => {
   state.lights = selLights.value;
   if (panes.left.ready) applyLightsToPane(panes.left);
   if (panes.right.ready) applyLightsToPane(panes.right);
+});
+
+selShadows.addEventListener('change', () => {
+  state.shadows = selShadows.value;
+  if (panes.left.ready) { applyShadowsToPane(panes.left); renderTelemetry(panes.left); }
+  if (panes.right.ready) { applyShadowsToPane(panes.right); renderTelemetry(panes.right); }
+  syncUrl();
 });
 
 selVhs.addEventListener('change', () => {
@@ -835,6 +925,16 @@ window.addEventListener('keydown', (event) => {
     setSplit(state.split + 10, true);
   }
 });
+
+/* ---- Keep telemetry badges positioned cleanly below topbar ---------- */
+const topbar = document.getElementById('topbar');
+const positionBadges = () => {
+  const top = Math.ceil(topbar.getBoundingClientRect().bottom) + 8;
+  document.getElementById('badge-left').style.top = `${top}px`;
+  document.getElementById('badge-right').style.top = `${top}px`;
+};
+new ResizeObserver(positionBadges).observe(topbar);
+positionBadges();
 
 /* ---- Boot ----------------------------------------------------------- */
 buildDeck();

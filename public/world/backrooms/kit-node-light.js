@@ -62,7 +62,7 @@ export function lightmapNode(m, D, k) {
     const mm = select(r.lessThan(1.5), L[0], select(r.lessThan(2.5), L[1], select(r.lessThan(3.5), L[2], select(r.lessThan(4.5), L[3], L[4]))));
     const o = select(r.lessThan(1.5), L5.xy.negate(), select(r.lessThan(3.5), vec2(L5.x.negate(), 0), vec2(L5.y.negate(), 0)));
     const hi = select(r.lessThan(1.5), L5.xy, select(r.lessThan(3.5), vec2(L5.x, 1e4), vec2(L5.y, 1e4)));
-    const snapped = clamp(floor(q.sub(o).div(L5.z)).add(0.5).mul(L5.z).add(o), o, hi);
+    const snapped = select(L5.z.greaterThan(0), clamp(floor(q.sub(o).div(L5.z)).add(0.5).mul(L5.z).add(o), o, hi), clamp(q, o, hi));
     return snapped.mul(mm.xy).add(mm.zw);
   };
   const A = D.TUBESHADOW ? tex('uLmA', true) : null;

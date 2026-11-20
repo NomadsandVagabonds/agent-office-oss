@@ -187,8 +187,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
+    gap: 6px;
+    padding: 6px 10px;
     border-radius: 12px;
     border: 1px solid var(--border);
     background: var(--surface);
@@ -338,7 +338,7 @@
     );
 
     appearance: none;
-    inline-size: 96px;
+    inline-size: 72px;
     block-size: 24px;
     margin: 0;
     padding: 0;
@@ -566,14 +566,14 @@
 <header id="topbar" aria-label="Tech demo controls">
   <div class="brand">
     <span class="brand-dot" aria-hidden="true"></span>
-    <span>Lighting &amp; WebGPU Showcase</span>
+    <span>Lighting Showcase</span>
   </div>
 
   <div class="control-group" role="group" aria-label="Comparison layout">
     <div class="seg">
       <button type="button" data-mode-btn="wipe" aria-pressed="true">Wipe</button>
-      <button type="button" data-mode-btn="split" aria-pressed="false">Side by Side</button>
-      <button type="button" data-mode-btn="single" aria-pressed="false">WebGPU Full</button>
+      <button type="button" data-mode-btn="split" aria-pressed="false">Split</button>
+      <button type="button" data-mode-btn="single" aria-pressed="false">WebGPU</button>
     </div>
     <span class="wipe-slider-wrap" id="wipe-slider-wrap">
       <label class="lbl" for="wipe-range">Split</label>
@@ -610,6 +610,12 @@
       <option value="blackout">Blackout (0%)</option>
       <option value="dim">Dim (20%)</option>
       <option value="full">All On (100%)</option>
+    </select>
+    <label class="lbl" for="sel-shadows">Shadows</label>
+    <select id="sel-shadows" aria-label="Baked lightmap shadow filtering">
+      <option value="compare" selected>Blocky ◀▶ Smooth</option>
+      <option value="smooth">Smooth (Both)</option>
+      <option value="blocky">Blocky (Both)</option>
     </select>
     <label class="lbl" for="sel-vhs">Tape</label>
     <select id="sel-vhs" aria-label="VHS picture mode">
