@@ -2,10 +2,10 @@
 //
 // First launch (site.js, before the first visit; the dev page with &launch=1): tape static, and over it the tiers, Auto
 // first and chosen. Behind the static the level is drawn for real: a visit to a fixed building (launch.rule.js BENCH),
-// quiet, with nobody in it, built at High; once it has landed, High is measured while the view turns round the room,
-// then Medium only if High did not hold. Auto shows what it picked; the player may take it or another tier, and the
-// choice is the Graphics setting from then on, remembered (launch.rule.js LAUNCH_KEY) so that the screen does not come
-// back. Settings offers it again (menu.js Test, by Graphics): then it is measured on the paused picture of the visit
+// quiet, with nobody in it, built at the top tier (High, or Ultra once there is one); once it has landed, that tier is
+// measured while the view turns round the room, then each lower one only while none has held. Auto shows what it
+// picked; the player may take it or another tier, and the choice is the Graphics setting from then on, remembered
+// (launch.rule.js LAUNCH_KEY) so that the screen does not come back. Settings offers it again (menu.js Test, by Graphics): then it is measured on the paused picture of the visit
 // itself, and the choice is applied there and then.
 //
 // No words but the tiers' names and what Auto chose: words live in the world (the owner's rule).
@@ -221,13 +221,13 @@ export async function firstLaunch({ office, enterBackrooms, host = document.body
   const release = hold(list, { all: true });
   const shown = pause(900).then(() => list.show());
 
-  // the visit behind the static: quiet, nobody following, no card, at High; gone as soon as it is not needed
+  // the visit behind the static: quiet, nobody following, no card, at the top tier; gone as soon as it is not needed
   let handle = null, choice = null, stopped = false;
   const stop = () => stopped || (choice !== null && choice !== 'auto');
   const quit = () => { stopped = true; if (handle && handle.state !== 'done') handle.finish('quit'); };
   const stage = office.stage;
   const visit = Promise.resolve().then(() => enterBackrooms({ stage, creations: office.creations || {}, net: office.net }, {
-    name: 'Employee', seed: BENCH.tape, mute: true, pursuer: false, scorecard: false, graphics: 'high',
+    name: 'Employee', seed: BENCH.tape, mute: true, pursuer: false, scorecard: false, graphics: BENCH_ORDER[0],
     onReady(h) { handle = h; if (stopped) h.finish('quit'); },
   })).catch((err) => { console.warn('[graphics] the benchmark could not be run', err); return null; });
   let over = false; visit.then(() => { over = true; });

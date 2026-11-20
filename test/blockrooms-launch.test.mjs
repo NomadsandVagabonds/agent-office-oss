@@ -9,8 +9,10 @@ import { GRAPHICS } from '../public/world/backrooms/graphics.js';
 const steady = (ms, n = 120) => Array.from({ length: n }, () => ms);
 
 test('it offers Low, Medium and High after Auto, measures High first, and every tier is a Graphics setting', () => {
-  assert.deepEqual([...LAUNCH_TIERS], ['low', 'medium', 'high']);
-  assert.deepEqual([...BENCH_ORDER], ['high', 'medium']);
+  // (and Ultra, on the end and measured first, once graphics.js has it)
+  const ultra = GRAPHICS.includes('ultra') ? ['ultra'] : [];
+  assert.deepEqual([...LAUNCH_TIERS], ['low', 'medium', 'high', ...ultra]);
+  assert.deepEqual([...BENCH_ORDER], [...ultra, 'high', 'medium']);
   for (const t of [...LAUNCH_TIERS, ...BENCH_ORDER]) assert.ok(GRAPHICS.includes(t), t);
   assert.equal(LAUNCH_KEY, 'blockrooms:graphics');
   assert.ok(BENCH.settleS + BENCH.measureS <= 3, 'a few seconds a tier');

@@ -45,6 +45,8 @@ stage cannot be opened.
 - **No words** but the tiers' names and what Auto chose.
 - **Not shown** for `?debug&bench=1`, or under `?debug` unless `&launch=1` asks for it, which shows it every time. The
   dev page shows it with `&launch=1`.
+- **Ultra**, once `graphics.js` has it (Gemini, `gemini/steam-webgpu-ultra`), is offered on the end and measured
+  first, with the benchmark's floor built at Ultra; nothing in the screen needs changing for it.
 - Each tier measured is logged to the console: `[graphics] high: median … ms, 9 in 10 under … ms, … fps`.
 
 Shots, on this container's software renderer, which picks Low (about 1 fps; it never lands in 20 s):
