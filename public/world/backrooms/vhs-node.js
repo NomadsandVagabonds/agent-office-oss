@@ -27,12 +27,13 @@ const HAZE_LIGHT = 1.6;                                  // (vhs.js's)
  */
 export function createVhsNode(renderer, camera, opt = {}) {
   const N = gpu.nodes, T = N.TSL;
-  const { Fn, vec2, vec3, vec4, float, uniform, texture, uv, fract, floor, dot, sin, cos, exp, pow, mix, clamp, step, abs, max, min, length, select } = T;
+  const { Fn, If, vec2, vec3, vec4, float, uniform, texture, uv, fract, floor, dot, sin, cos, exp, pow, mix, clamp, step, abs, max, min, length, select } = T;
 
   // the uniforms, as vhs.js has them (index.js and the rooms set these by name: uBlack, uSnow, uWhite, uRed, uTrack...)
   const u = {
     uRes: { value: new N.Vector2(640, 480) }, uTime: { value: 0 },
     uAmt: { value: 1 }, uSoft: { value: 1 }, uTrack: { value: 0 }, uGain: { value: 1 }, uExposure: { value: 1 },
+    uBalance: { value: new N.Vector3(1, 1, 1) }, uDefocus: { value: 0 },
     uBlack: { value: 0 }, uWhite: { value: 0 }, uRed: { value: 0 }, uSnow: { value: 0 }, uStaticDark: { value: 0 }, uRoll: { value: 0 },
     uGrade: { value: 0 }, uHaze: { value: 0 },
     uLift: { value: new N.Vector3(0, 0, 0) }, uGamma: { value: new N.Vector3(1, 1, 1) }, uGainRGB: { value: new N.Vector3(1, 1, 1) }, uSat: { value: 1 },
@@ -81,7 +82,22 @@ export function createVhsNode(renderer, camera, opt = {}) {
   /** The SIGNAL pass, with the haze (reading the scene's depth) or without it. */
   function signalMaterial(withDepth) {
     const U = node;
-    const film = (c) => float(1).sub(exp(c.negate().mul(U.uExposure.mul(U.uGain).mul(1.3))));
+    const film = (c) => float(1).sub(exp(c.mul(U.uBalance).negate().mul(U.uExposure.mul(U.uGain).mul(1.3))));
+    const srcTex = routed() ? downTarget.texture : sceneTarget.texture;
+    const sampleOptical = Fn(([q]) => {
+      const out = at(srcTex, q).rgb.toVar();
+      If(U.uDefocus.greaterThan(0.001), () => {
+        const r = vec2(U.uRes.y.div(max(U.uRes.x, 1)), 1).mul(U.uDefocus.mul(0.0044));
+        const d = r.mul(0.56);
+        const tap = (dx, dy) => at(srcTex, clamp(q.add(vec2(dx, dy)), 0.001, 0.999)).rgb;
+        out.assign(
+          out.mul(0.20)
+            .add(tap(r.x, 0).add(tap(r.x.negate(), 0)).add(tap(0, r.y)).add(tap(0, r.y.negate())).mul(0.09))
+            .add(tap(d.x, d.y).add(tap(d.x.negate(), d.y)).add(tap(d.x, d.y.negate())).add(tap(d.x.negate(), d.y.negate())).mul(0.11))
+        );
+      });
+      return out;
+    });
     const haze = (c, p) => {
       const d = at(sceneTarget.depthTexture, p).x;
       const z = U.uNear.mul(U.uFar).div(U.uFar.sub(d.mul(U.uFar.sub(U.uNear))));
@@ -97,7 +113,7 @@ export function createVhsNode(renderer, camera, opt = {}) {
     };
     const see = (p) => {
       const q = clamp(p, 0.001, 0.999);
-      let c = at(routed() ? downTarget.texture : sceneTarget.texture, q).rgb;
+      let c = sampleOptical(q);
       if (withDepth) c = select(U.uHaze.greaterThan(0), haze(c, q), c);
       c = pow(film(c), vec3(0.4545));
       return select(U.uGrade.greaterThan(0), grade(c), c);
@@ -118,14 +134,20 @@ export function createVhsNode(renderer, camera, opt = {}) {
 
       const px = U.uSoft.div(U.uRes.x);
       const side = (k) => vec2(px.mul(k), 0);
-      const c0 = see(p);
-      const y = luma(c0).mul(0.5).add(luma(see(p.add(side(1.25)))).add(luma(see(p.sub(side(1.25))))).mul(0.25)).toVar();
-      const iq = toIQ(c0).mul(0.26)
-        .add(toIQ(see(p.sub(side(2.5)))).mul(0.28))
-        .add(toIQ(see(p.sub(side(5.0)))).mul(0.22))
-        .add(toIQ(see(p.sub(side(7.5)))).mul(0.15))
-        .add(toIQ(see(p.sub(side(10.5)))).mul(0.09))
-        .mul(U.uSoft.mul(0.16).add(1)).toVar();
+      const c0 = see(p).toVar();
+      const y = luma(c0).toVar();
+      const iq = toIQ(c0).toVar();
+      If(U.uSoft.greaterThan(0.001), () => {
+        y.assign(luma(c0).mul(0.5).add(luma(see(p.add(side(1.25)))).add(luma(see(p.sub(side(1.25))))).mul(0.25)));
+        iq.assign(
+          toIQ(c0).mul(0.26)
+            .add(toIQ(see(p.sub(side(2.5)))).mul(0.28))
+            .add(toIQ(see(p.sub(side(5.0)))).mul(0.22))
+            .add(toIQ(see(p.sub(side(7.5)))).mul(0.15))
+            .add(toIQ(see(p.sub(side(10.5)))).mul(0.09))
+            .mul(U.uSoft.mul(0.16).add(1))
+        );
+      });
       const grain = U.uAmt.mul(U.uGain.sub(1).mul(0.9).add(0.6).add(U.uTrack.mul(1.5)));
       y.addAssign(hash(vec2(p.x.mul(U.uRes.x), line).add(frame.mul(17))).sub(0.5).mul(0.06).mul(grain));
       const cell = vec2(floor(p.x.mul(U.uRes.x).div(6)), line);

@@ -25,6 +25,7 @@ const Signal = {
   uniforms: {
     tDiffuse: { value: null }, uRes: { value: new THREE.Vector2(640, 480) }, uTime: { value: 0 },
     uAmt: { value: 1 }, uSoft: { value: 1 }, uTrack: { value: 0 }, uGain: { value: 1 }, uExposure: { value: 1 },
+    uBalance: { value: new THREE.Vector3(1, 1, 1) }, uDefocus: { value: 0 },
     uBlack: { value: 0 }, uWhite: { value: 0 }, uRed: { value: 0 }, uSnow: { value: 0 }, uStaticDark: { value: 0 }, uRoll: { value: 0 },
     // the Graphics setting (graphics.js): both 0 at Classic, and then the picture is exactly what it was before them
     uGrade: { value: 0 }, uHaze: { value: 0 },
@@ -35,14 +36,31 @@ const Signal = {
   vertexShader: QUAD,
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform vec2 uRes;
-    uniform float uTime, uAmt, uSoft, uTrack, uGain, uExposure, uBlack, uWhite, uRed, uSnow, uStaticDark, uRoll;
-    uniform float uGrade, uHaze, uSat, uNear, uFar, uHazeLight, uHazeFrom; uniform vec3 uLift, uGamma, uGainRGB, uHazeColor; uniform sampler2D tDepth;
+    uniform float uTime, uAmt, uSoft, uTrack, uGain, uExposure, uDefocus, uBlack, uWhite, uRed, uSnow, uStaticDark, uRoll;
+    uniform float uGrade, uHaze, uSat, uNear, uFar, uHazeLight, uHazeFrom; uniform vec3 uBalance, uLift, uGamma, uGainRGB, uHazeColor; uniform sampler2D tDepth;
     varying vec2 vUv;
     const mat3 YIQ = mat3(0.299, 0.596, 0.211, 0.587, -0.274, -0.523, 0.114, -0.322, 0.312);
     const mat3 RGB = mat3(1.0, 1.0, 1.0, 0.956, -0.272, -1.106, 0.621, -0.647, 1.703);
     float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
     // a gentle shoulder: bright things wash out toward white, the way cheap video does
-    vec3 film(vec3 c) { return 1.0 - exp(-c * (1.3 * uExposure * uGain)); }
+    vec3 film(vec3 c) { return 1.0 - exp(-c * uBalance * (1.3 * uExposure * uGain)); }
+    // subtle circular lens defocus while the camcorder's contrast-detect autofocus hunts (0 when locked)
+    vec3 sampleOptical(vec2 at) {
+      vec3 c = texture2D(tDiffuse, at).rgb;
+      if (uDefocus <= 0.001) return c;
+      vec2 r = vec2(uRes.y / max(uRes.x, 1.0), 1.0) * (uDefocus * 0.0044);
+      vec2 d = r * 0.56;
+      vec3 sum = c * 0.20;
+      sum += (texture2D(tDiffuse, clamp(at + vec2(r.x, 0.0), 0.001, 0.999)).rgb
+            + texture2D(tDiffuse, clamp(at - vec2(r.x, 0.0), 0.001, 0.999)).rgb
+            + texture2D(tDiffuse, clamp(at + vec2(0.0, r.y), 0.001, 0.999)).rgb
+            + texture2D(tDiffuse, clamp(at - vec2(0.0, r.y), 0.001, 0.999)).rgb) * 0.09;
+      sum += (texture2D(tDiffuse, clamp(at + vec2(d.x, d.y), 0.001, 0.999)).rgb
+            + texture2D(tDiffuse, clamp(at + vec2(-d.x, d.y), 0.001, 0.999)).rgb
+            + texture2D(tDiffuse, clamp(at + vec2(d.x, -d.y), 0.001, 0.999)).rgb
+            + texture2D(tDiffuse, clamp(at + vec2(-d.x, -d.y), 0.001, 0.999)).rgb) * 0.11;
+      return sum;
+    }
     // the air: nothing nearer than uHazeFrom (8 m unless the kind of floor says), then exponentially toward the floor's colour; never more than about half way.
     // The air is only as bright as what is behind it (and the room it hangs in): a dark end of a corridor stays dark,
     // it is not fogged grey. Where nothing was drawn (the depth is the far plane) it is left alone: the void stays black
@@ -63,7 +81,7 @@ const Signal = {
     }
     vec3 see(vec2 uv) {
       vec2 at = clamp(uv, 0.001, 0.999);
-      vec3 c = texture2D(tDiffuse, at).rgb;
+      vec3 c = sampleOptical(at);
       if (uHaze > 0.0) c = haze(c, at);
       c = pow(film(c), vec3(0.4545));
       if (uGrade > 0.0) c = grade(c);
@@ -88,14 +106,18 @@ const Signal = {
       float px = uSoft / uRes.x;
       vec3 c0 = see(uv);
       vec3 q0 = YIQ * c0;
-      // luma: soft; chroma: softer, and late — it lands to the right of where it belongs
-      float y = q0.x * 0.5 + 0.25 * (dot(see(uv + vec2(px * 1.25, 0.0)), vec3(0.299, 0.587, 0.114)) + dot(see(uv - vec2(px * 1.25, 0.0)), vec3(0.299, 0.587, 0.114)));
-      vec2 iq = q0.yz * 0.26;
-      iq += (YIQ * see(uv - vec2(px * 2.5, 0.0))).yz * 0.28;
-      iq += (YIQ * see(uv - vec2(px * 5.0, 0.0))).yz * 0.22;
-      iq += (YIQ * see(uv - vec2(px * 7.5, 0.0))).yz * 0.15;
-      iq += (YIQ * see(uv - vec2(px * 10.5, 0.0))).yz * 0.09;
-      iq *= 1.0 + 0.16 * uSoft;
+      float y = q0.x;
+      vec2 iq = q0.yz;
+      if (uSoft > 0.001) {
+        // luma: soft; chroma: softer, and late — it lands to the right of where it belongs
+        y = q0.x * 0.5 + 0.25 * (dot(see(uv + vec2(px * 1.25, 0.0)), vec3(0.299, 0.587, 0.114)) + dot(see(uv - vec2(px * 1.25, 0.0)), vec3(0.299, 0.587, 0.114)));
+        iq = q0.yz * 0.26;
+        iq += (YIQ * see(uv - vec2(px * 2.5, 0.0))).yz * 0.28;
+        iq += (YIQ * see(uv - vec2(px * 5.0, 0.0))).yz * 0.22;
+        iq += (YIQ * see(uv - vec2(px * 7.5, 0.0))).yz * 0.15;
+        iq += (YIQ * see(uv - vec2(px * 10.5, 0.0))).yz * 0.09;
+        iq *= 1.0 + 0.16 * uSoft;
+      }
       // noise: fine in the brightness, coarse in the colour, both worse when the gain is up
       float grain = uAmt * (0.6 + 0.9 * (uGain - 1.0) + 1.5 * uTrack);
       y += (hash(vec2(uv.x * uRes.x, line) + frame * 17.0) - 0.5) * 0.06 * grain;

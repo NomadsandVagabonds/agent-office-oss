@@ -463,10 +463,37 @@
   .deck-meta {
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: 8px;
     font-size: 12px;
+  }
+  .cam-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  #cam-status {
+    font: 600 10.5px/1 var(--mono);
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    white-space: nowrap;
+    transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
+  }
+  #cam-status.active {
+    color: var(--accent);
+    border-color: rgba(240, 184, 96, 0.45);
+    background: rgba(240, 184, 96, 0.12);
+  }
+  #btn-walk {
+    height: 24px;
+    padding: 0 9px;
+    font-size: 11px;
   }
   #preset-desc {
     color: var(--text);
@@ -661,6 +688,10 @@
 <footer id="deck-bar" aria-label="Showcase scene presets">
   <div class="deck-meta">
     <div id="preset-desc"><strong>Loading</strong> Preparing showcase scenes…</div>
+    <div class="cam-tools">
+      <span id="cam-status" title="Live camcorder auto-iris, auto white balance, and contrast-detect autofocus">CAM · IRIS 1.00× · AWB OK · AF LOCK</span>
+      <button type="button" id="btn-walk" class="toggle-btn" aria-pressed="false" title="Glide smoothly across a dark-to-lit doorway threshold to watch camcorder iris, white balance, and refocus live">▶ Walk Door</button>
+    </div>
     <div class="controls-hint">Click scene to look &amp; walk (WASD · Shift · C crouch/dive · F torch · Esc release) · Keys 1–9 switch scenes · Drag ◀▶ to wipe</div>
   </div>
   <nav id="preset-pills" aria-label="Lighting showcase scenes"></nav>

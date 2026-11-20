@@ -159,6 +159,8 @@ const liveStatus = document.getElementById('live-status');
 const errDrawer = document.getElementById('err-drawer');
 const errLog = document.getElementById('err-log');
 const btnCloseErr = document.getElementById('btn-close-err');
+const camStatus = document.getElementById('cam-status');
+const btnWalk = document.getElementById('btn-walk');
 
 const badges = {
   left: {
@@ -612,6 +614,7 @@ function applyPresetToPane(pane) {
   }
   applyLightsToPane(pane);
   applyShadowsToPane(pane);
+  h.resetCamcorder?.();
   setPaneTorch(pane, state.torch);
   setPaneDive(pane, state.dive);
   pane.lastPose = snapshotPose(h.player.me);
@@ -665,8 +668,134 @@ function copyPose(srcHandle, dstHandle) {
   if (rt && rt !== dstHandle.world.current()) dstHandle.world.enter(rt);
 }
 
+/* ---- Doorway Threshold Walk (demonstrates camcorder iris / AWB / AF) - */
+const walkDemo = { active: false, t: 0, lastNow: 0, ax: 0, az: 0, bx: 0, bz: 0, yawA: 0, yawB: 0 };
+
+function stopWalkDemo() {
+  walkDemo.active = false;
+  btnWalk.textContent = '▶ Walk Door';
+  btnWalk.setAttribute('aria-pressed', 'false');
+}
+
+function findDoorwayWalk(handle) {
+  const world = handle?.world;
+  const r = world?.current?.();
+  if (!r?.def?.doors?.length) return null;
+  const hereL = r.level * (r.u?.dim?.value ?? 1);
+  let best = null;
+  for (const dr of r.def.doors) {
+    if (dr.kind === 'crawl') continue;
+    const nb = world.rooms[dr.to];
+    if (!nb) continue;
+    const nbL = nb.level * (nb.u?.dim?.value ?? 1);
+    let dx = 0, dz = 0, nx = 0, nz = 0;
+    if (dr.side === 'front') { dx = dr.c; dz = r.def.D / 2; nz = 1; }
+    else if (dr.side === 'back') { dx = dr.c; dz = -r.def.D / 2; nz = -1; }
+    else if (dr.side === 'right') { dx = r.def.W / 2; dz = dr.c; nx = 1; }
+    else if (dr.side === 'left') { dx = -r.def.W / 2; dz = dr.c; nx = -1; }
+    let a = null, b = null;
+    for (const d of [2.1, 1.7, 1.35]) {
+      const p = toWorld(r.def, dx - nx * d, dz - nz * d);
+      if (!a && world.roomAt(p.x, p.z) === r && world.free(p.x, p.z, 0.24)) a = p;
+    }
+    // Keep at least ~1.1 m of open room sightline beyond B so the walk never ends nose-to-wall
+    for (const d of [1.45, 1.15, 0.9]) {
+      const q = toWorld(r.def, dx + nx * d, dz + nz * d);
+      const ahead = toWorld(r.def, dx + nx * (d + 1.1), dz + nz * (d + 1.1));
+      if (!b && world.roomAt(q.x, q.z) === nb && world.free(q.x, q.z, 0.24) && world.roomAt(ahead.x, ahead.z) === nb) b = q;
+    }
+    if (!b) {
+      for (const d of [1.1, 0.85]) {
+        const q = toWorld(r.def, dx + nx * d, dz + nz * d);
+        if (!b && world.roomAt(q.x, q.z) === nb && world.free(q.x, q.z, 0.24)) b = q;
+      }
+    }
+    if (!a || !b) continue;
+    const yawA = Math.atan2(-(b.x - a.x), -(b.z - a.z));
+    // Gently turn toward the centre of the lit room once across the threshold so the camera looks into the space
+    const yawB = Math.hypot(nb.def.cx - b.x, nb.def.cz - b.z) > 0.6
+      ? Math.atan2(-(nb.def.cx - b.x), -(nb.def.cz - b.z))
+      : yawA;
+    const score = Math.abs(nbL - hereL) + (dr.door ? -0.05 : 0.05);
+    if (!best || score > best.score) {
+      best = { score, ax: a.x, az: a.z, bx: b.x, bz: b.z, yawA, yawB };
+    }
+  }
+  return best;
+}
+
+function startWalkDemo() {
+  const driver = (state.mode === 'single' ? panes.right : panes.left);
+  if (!driver.ready) return;
+  const path = findDoorwayWalk(driver.handle);
+  if (!path) return;
+  Object.assign(walkDemo, path, { active: true, t: 0, lastNow: performance.now() });
+  btnWalk.textContent = '■ Stop Walk';
+  btnWalk.setAttribute('aria-pressed', 'true');
+  // Place both panes at start point A and reset camcorder so the dark-room baseline is clean
+  for (const p of [panes.left, panes.right]) {
+    if (!p.ready) continue;
+    p.handle.player.warp(path.ax, path.az, path.yawA);
+    p.handle.player.me.pitch = -0.05;
+    const rt = p.handle.world.roomAt(path.ax, path.az);
+    if (rt) p.handle.world.enter(rt);
+    p.handle.resetCamcorder?.();
+    p.lastPose = snapshotPose(p.handle.player.me);
+  }
+}
+
+function stepWalkDemo(now) {
+  if (!walkDemo.active) return;
+  const dt = Math.min(0.1, Math.max(0, (now - walkDemo.lastNow) / 1000));
+  walkDemo.lastNow = now;
+  walkDemo.t += dt;
+  // 8.4 s cycle: 0.5s pause in A -> 1.8s glide A->B -> 2.1s settle in B -> 1.8s glide B->A -> 2.2s settle in A
+  const cyc = walkDemo.t % 8.4;
+  let u = 0;
+  if (cyc < 0.5) u = 0;
+  else if (cyc < 2.3) u = (cyc - 0.5) / 1.8;
+  else if (cyc < 4.4) u = 1;
+  else if (cyc < 6.2) u = 1 - (cyc - 4.4) / 1.8;
+  else u = 0;
+  const s = u * u * (3 - 2 * u);
+  const x = walkDemo.ax + (walkDemo.bx - walkDemo.ax) * s;
+  const z = walkDemo.az + (walkDemo.bz - walkDemo.az) * s;
+  const driver = state.mode === 'single' ? panes.right : panes.left;
+  if (!driver.ready) return;
+  const me = driver.handle.player.me;
+  // Cancel auto-walk if the user actively steers with keyboard
+  if (driver.handle.player.input?.keys?.size > 0) { stopWalkDemo(); return; }
+  // Smooth shortest-angle yaw interpolation from doorway gaze into the room interior
+  const turn = Math.max(0, Math.min(1, (s - 0.55) / 0.45));
+  const turnS = turn * turn * (3 - 2 * turn);
+  let dyaw = ((walkDemo.yawB - walkDemo.yawA + Math.PI) % (Math.PI * 2)) - Math.PI;
+  if (dyaw < -Math.PI) dyaw += Math.PI * 2;
+  me.x = x;
+  me.z = z;
+  me.yaw = walkDemo.yawA + dyaw * turnS;
+  me.pitch = -0.05;
+  const rt = driver.handle.world.roomAt(x, z);
+  if (rt && rt !== driver.handle.world.current()) driver.handle.world.enter(rt);
+}
+
+function renderCamStatus() {
+  const pane = panes.right.ready ? panes.right : panes.left;
+  const c = pane?.handle?.camcorder;
+  if (!c) return;
+  const exp = c.exposure ?? 1;
+  const b = c.balance || [1, 1, 1];
+  const def = c.defocus ?? 0;
+  const wbDelta = b[0] - b[2];
+  const wbLabel = Math.abs(wbDelta) < 0.03 ? 'AWB OK' : (wbDelta > 0 ? 'AWB WARM' : 'AWB COOL');
+  const afLabel = def > 0.03 ? 'AF HUNT' : 'AF LOCK';
+  const active = def > 0.03 || Math.abs(exp - 1) > 0.04 || Math.abs(wbDelta) >= 0.03;
+  camStatus.textContent = `CAM · IRIS ${exp.toFixed(2)}× · ${wbLabel} · ${afLabel}`;
+  camStatus.classList.toggle('active', active);
+}
+
 /* ---- Load preset into both iframes ---------------------------------- */
 function loadBoth({ resetPresetDefaults = false } = {}) {
+  stopWalkDemo();
   const preset = currentPreset();
   if (resetPresetDefaults) {
     state.torch = !!preset.torch;
@@ -703,6 +832,7 @@ function loadBoth({ resetPresetDefaults = false } = {}) {
 
 /* ---- Lockstep rAF sync & telemetry redraw --------------------------- */
 let lastTelemetryAt = 0;
+let lastCamAt = 0;
 
 function tick(now) {
   requestAnimationFrame(tick);
@@ -712,6 +842,7 @@ function tick(now) {
 
   if (L.ready && L.pendingTorch !== null) setPaneTorch(L, L.pendingTorch);
   if (R.ready && R.pendingTorch !== null) setPaneTorch(R, R.pendingTorch);
+  stepWalkDemo(now);
 
   if (L.ready && R.ready && state.mode !== 'single') {
     const lPose = snapshotPose(L.handle.player.me);
@@ -743,6 +874,11 @@ function tick(now) {
     R.lastPose = snapshotPose(R.handle.player.me);
   } else if (R.ready && state.mode === 'single') {
     if (state.vhs === 0) R.handle.player.me.shake = 0;
+  }
+
+  if (now - lastCamAt >= 80) {
+    lastCamAt = now;
+    renderCamStatus();
   }
 
   if (now - lastTelemetryAt >= 280) {
@@ -898,7 +1034,13 @@ btnDive.addEventListener('click', () => {
   if (panes.right.ready) setPaneDive(panes.right, state.dive);
 });
 
+btnWalk.addEventListener('click', () => {
+  if (walkDemo.active) stopWalkDemo();
+  else startWalkDemo();
+});
+
 btnReset.addEventListener('click', () => {
+  stopWalkDemo();
   if (panes.left.ready) applyPresetToPane(panes.left);
   if (panes.right.ready) applyPresetToPane(panes.right);
 });
