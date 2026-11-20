@@ -116,3 +116,30 @@ test('kit-node-sheen: builds SHEEN node material with room tubes and lightmap fl
     kit.dispose();
   });
 });
+
+test('kit-node: initializes kitNormal unconditionally before beam if-branches in compiled WGSL', () => {
+  const prevDoc = globalThis.document;
+  globalThis.document = { createElementNS: () => ({ style: {}, getContext: () => null }) };
+  try {
+    withNodes(() => {
+      const kit = createKit();
+      const mat = kit.surface({ map: new THREE.Texture(), wet: 0.88 });
+      const mesh = new N.Mesh(new N.BoxGeometry(1, 1, 1), mat);
+      const r = new N.WebGPURenderer();
+      const b = r.backend.createNodeBuilder(mesh, r);
+      b.camera = new N.PerspectiveCamera();
+      b.scene = new N.Scene();
+      b.build();
+      const mainBody = b.fragmentShader.slice(b.fragmentShader.indexOf('fn main'));
+      const normalInit = mainBody.indexOf('normalViewGeometry = normalize(');
+      const kitNormalInit = mainBody.indexOf('kitNormal =');
+      const firstIf = mainBody.indexOf('if (');
+      assert.ok(normalInit > 0 && kitNormalInit > 0 && firstIf > 0, 'WGSL main contains normal init and beam branch');
+      assert.ok(normalInit < firstIf && kitNormalInit < firstIf, 'normalViewGeometry and kitNormal must initialize before any beam if-branch');
+      kit.dispose();
+    });
+  } finally {
+    if (prevDoc === undefined) delete globalThis.document;
+    else globalThis.document = prevDoc;
+  }
+});

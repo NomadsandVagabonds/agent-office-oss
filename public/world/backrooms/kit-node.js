@@ -85,7 +85,9 @@ export function surfaceNode(spec) {
       const vLit = varying(lit.mul(uTint), 'vKitLit');
       const vAlb = attribute('aAlb', 'vec3');
       // (FRAG)
-      const normal = normalViewGeometry.mul(faceDirection);
+      // Materialize normal at top level before select() branches: TSL would otherwise emit normalViewGeometry
+      // inside the first uTorch/uLamp branch, leaving it vec3(0) for WET/SHEEN whenever both beams are off!
+      const normal = normalViewGeometry.mul(faceDirection).toVar('kitNormal');
       const uTorch = f('uTorch'), uLamp = f('uCameraLamp'), uTorchOrigin = v3('uTorchOrigin'), uTorchDirection = v3('uTorchDirection');
       const baseUv = uv();
       const shared = {};
