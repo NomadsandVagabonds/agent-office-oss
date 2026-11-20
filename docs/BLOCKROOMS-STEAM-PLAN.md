@@ -153,6 +153,7 @@ that this is acceptable under the zero-npm rule.
 | P-5 | Offline: what needs the network says so and stands aside | with the network cut, a full visit plays, and the book and daily show "offline" without errors |
 | P-6 | Window, fullscreen, pointer lock and frame cap behave; the GPU switch prefers the discrete GPU | checked on a laptop with two GPUs; no throttling when the window is unfocused-then-refocused |
 | P-7 | Updates: the Steam branch layout (default, beta) and the version shown in game | a beta branch build is installable and shows its version |
+| P-9 | WebGPU on Linux and the Deck: in the Electron app on Linux, turn on Chromium's WebGPU-on-Vulkan switches if the bundled Chromium needs them | before M1, a test build reaches WebGPU (not the can't-run screen) on the Deck, under Proton and on native Linux; which switches were needed is written down |
 | P-8 | Steam Inventory Service: item definitions for lost property ([daily plan, section 8](BACKROOMS-DAILY-PLAN.md)), granted to the player when the server says so (S-6); shown in game through `platform` (C1 grows `inventory()`) | a lost-property item given on the test app ID appears in that Steam inventory, not tradeable unless the owner says |
 
 ### D2 · Input and controls
@@ -202,7 +203,7 @@ cast; and so on).
 | ID | Task | Done when |
 |---|---|---|
 | R-1 | The tier at first launch (the owner, 20 Nov). The screen: static, then a tier selector with Auto preselected. It comes first on the web's play page (being built on `claude/steam-webgpu-default`), and the app's launcher (D8, D-0) reuses it. It is shown once: the choice is kept, and can be changed in Settings. Auto is D3's: a short benchmark of the machine, then the highest tier that holds its frame budget (C8), biased upward (when it is close, it takes the higher) | a first visit (web) and a first launch (app) show the screen; Auto's pick and why are logged; the next time skips the screen; there are tests of the pick against stand-in timings |
-| R-6 | The minimum spec and the can't-run screen (the owner, 20 Nov): WebGPU is the shell's renderer, and a machine without a WebGPU adapter that meets the minimum is told so plainly, at launch, in the launcher's look, with the minimum listed. No WebGL fallback in the shell | an under-spec machine (or a forced flag) gets the screen, not a game; the minimum is in the store page's system requirements (M-4); **the Steam Deck is checked against it early** (WebGPU on Linux through Electron's Chromium): if the Deck falls below, that goes to the owner before M1, since I-6 and Q-5 assume it plays |
+| R-6 | The minimum spec and the can't-run screen (the owner, 20 Nov): WebGPU is the shell's renderer, and a machine without a WebGPU adapter that meets the minimum is told so plainly, at launch, in the launcher's look, with the minimum listed. No WebGL fallback in the shell | an under-spec machine (or a forced flag) gets the screen, not a game; the minimum is in the store page's system requirements (M-4); the Steam Deck's hardware is above the minimum, by the owner's word (20 Nov: *"I guarantee it will not fall below minimum spec"*); what is left is software (P-9) |
 | R-2 | Side-by-side shots: the same five rooms at Classic, Medium and High, for the owner to agree the look | a sheet of shots in `docs/`, with the owner's notes |
 | R-3 | The Ultra tier: about 3× supersample under the tape, screen-space ambient occlusion, light shafts through doorways and dust, more fittings casting shadows, sharper light maps | Ultra is in `graphics.js`, and its cost is measured by D9 against the budget (C8) |
 | R-4 | Phase 2 of the graphics plan, "light that behaves", for the Steam build | per that plan's own phase notes |
@@ -587,7 +588,7 @@ platform = {
 | Milestone | What it is | What is in it | Needs |
 |---|---|---|---|
 | **M0 · Ground** | decisions and facts | the owner's decisions (section 6) answered; F-1 profile written; Q-1 sweep listed; Q-2 started; P-1 spike plays; FF-1 to FF-3 begun | L-1, F-1, Q-1, P-1, FF-1 |
-| **M1 · Internal build** | a Steam build the team can play | P-2, P-3, P-5, P-6; D-0 (the launcher); R-5 phase 1 (behind its flag); I-1, I-2; suite green | D1, D2, D3 |
+| **M1 · Internal build** | a Steam build the team can play | P-2, P-3, P-5, P-6, P-9; D-0 (the launcher); R-5 phase 1 (behind its flag); I-1, I-2; suite green | D1, D2, D3 |
 | **M2 · Coming Soon** | the store page live | M-1 to M-4; W-4; FF-4; LB-1, LB-2; the first of FF-5's set pieces (the store's shots are taken on the first floor); Q-2 answered; the owner's sign-off | D5, D10, D11, D12 |
 | **M3 · Release candidate** | everything early access promises | FF-5, FF-6, FF-8, FF-9 (the first floor done); LB-3, LB-4, LB-6 (the first library); P-4, P-7, P-8; I-3 to I-6; O-1 to O-6; W-1 to W-3; R-1, R-3, R-4, R-6; R-5 through the reconcile (WebGPU the shell's default renderer); C-1 to C-4; S-1, S-2, S-6; D-1 to D-4; F-2, F-3; Q-3 to Q-5 | all |
 | **M4 · Early access** | released | M3 closed; the two weeks of Coming Soon done; the owner's go | owner |
